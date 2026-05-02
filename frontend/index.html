@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Email Enricher — B2B Lead Email Finder</title>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="header">
+  <div class="wrap header__inner">
+    <div class="logo">
+      <div class="logo__mark">✉</div>
+      <span class="logo__name">Enricher</span>
+      <span class="logo__tag">B2B</span>
+    </div>
+    <nav class="nav-links">
+      <a href="#howit">How it works</a>
+      <a href="https://enricher-ix3b.onrender.com/api/template" id="dlTemplate">⬇ Download template</a>
+    </nav>
+  </div>
+</header>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="wrap">
+    <h1>B2B Email Enrichment<br>without third-party APIs</h1>
+    <p>Enter a lead or upload a list. We resolve the domain, generate email patterns, check DNS MX records and score each candidate.</p>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab active" data-tab="single">Single lead</button>
+      <button class="tab"        data-tab="batch">Batch upload</button>
+    </div>
+  </div>
+</section>
+
+<!-- MAIN -->
+<main class="section">
+  <div class="wrap">
+
+    <!-- ── SINGLE LEAD PANE ───────────────────────────────── -->
+    <div class="pane active" id="pane-single">
+      <div class="split">
+
+        <!-- Input card -->
+        <div class="card card--lift">
+          <div class="card__title"><span>👤</span> Lead information</div>
+
+          <div id="singleErr" class="alert alert--err hidden"></div>
+
+          <div class="col3">
+            <div class="field">
+              <label for="s_fn">First name(s)</label>
+              <input id="s_fn" type="text" placeholder="Ana María" autocomplete="off"/>
+            </div>
+            <div class="field">
+              <label for="s_ln">Last name(s)</label>
+              <input id="s_ln" type="text" placeholder="López García" autocomplete="off"/>
+            </div>
+            <div class="field">
+              <label for="s_co">Company website / URL</label>
+              <input id="s_co" type="text" placeholder="acme.com or https://acme.com" autocomplete="off"/>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="s_li">LinkedIn profile URL <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
+            <input id="s_li" type="text" placeholder="https://linkedin.com/in/johndoe" autocomplete="off"/>
+          </div>
+
+          <div class="btn-row">
+            <button class="btn btn--primary" id="btnSingle">
+              <span class="btn__text">🔍 Find emails</span>
+              <span class="spin hidden"></span>
+            </button>
+            <button class="btn btn--ghost" id="btnClearSingle">Clear</button>
+          </div>
+        </div>
+
+        <!-- Single results -->
+        <div id="singleResult" class="card hidden">
+          <div class="card__title"><span>📊</span> Results</div>
+          <div id="singleResultContent"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── BATCH PANE ──────────────────────────────────────── -->
+    <div class="pane" id="pane-batch">
+
+      <div class="split">
+        <!-- Upload card -->
+        <div class="card card--lift">
+          <div class="card__title"><span>📤</span> Upload leads file</div>
+
+          <div id="batchErr" class="alert alert--err hidden"></div>
+          <div id="batchWarn" class="alert alert--warn hidden"></div>
+
+          <div class="upload-zone" id="uploadZone">
+            <div class="upload-zone__icon">📄</div>
+            <div class="upload-zone__label">Drag &amp; drop your Excel file here</div>
+            <div class="upload-zone__sub">or click to browse · .xlsx, .xls, .csv · max 10 MB</div>
+            <div class="upload-zone__file" id="fileLabel"></div>
+          </div>
+          <input type="file" id="fileInput" accept=".xlsx,.xls,.csv"/>
+
+          <div style="margin-top:14px;font-size:.78rem;color:var(--muted)">
+            Required columns: <strong>firstName</strong>, <strong>lastName</strong>, <strong>company</strong> (website URL)<br>
+            Optional: <strong>linkedinUrl</strong>
+            &nbsp;·&nbsp;
+            <a href="https://enricher-ix3b.onrender.com/api/template" style="color:var(--brand);font-weight:600">Download template →</a>
+          </div>
+
+          <div class="progress" id="batchProgress">
+            <div class="progress__bar"><div class="progress__fill" id="batchFill"></div></div>
+            <div class="progress__label" id="batchLabel">Processing…</div>
+          </div>
+
+          <div class="btn-row" style="margin-top:16px">
+            <button class="btn btn--primary" id="btnBatch" disabled>
+              <span class="btn__text">⚡ Enrich &amp; download Excel</span>
+              <span class="spin hidden"></span>
+            </button>
+            <button class="btn btn--outline" id="btnBatchPreview" disabled>
+              Preview in table
+            </button>
+          </div>
+        </div>
+
+        <!-- Batch info card -->
+        <div class="card">
+          <div class="card__title"><span>ℹ️</span> How batch works</div>
+          <div class="how">
+            <div class="how-step">
+              <div class="how-step__n">1</div>
+              <div class="how-step__t">Upload Excel</div>
+              <p class="how-step__b">With firstName, lastName, company columns</p>
+            </div>
+            <div class="how-step">
+              <div class="how-step__n">2</div>
+              <div class="how-step__t">DNS check</div>
+              <p class="how-step__b">MX records verified per domain (cached)</p>
+            </div>
+            <div class="how-step">
+              <div class="how-step__n">3</div>
+              <div class="how-step__t">Scoring</div>
+              <p class="how-step__b">Each pattern ranked 0–100 by probability</p>
+            </div>
+            <div class="how-step">
+              <div class="how-step__n">4</div>
+              <div class="how-step__t">Excel export</div>
+              <p class="how-step__b">Summary + all candidates sheets</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Batch preview table -->
+      <div id="batchPreview" class="card hidden">
+        <div class="results-header">
+          <h3 id="previewTitle">Results preview</h3>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input type="text" id="searchBox" placeholder="Search name or domain…"
+              style="padding:6px 10px;border:1.5px solid var(--border);border-radius:var(--rs);font-size:.82rem;outline:none;width:200px"/>
+            <button class="btn btn--green btn--sm" id="btnDownloadResult">⬇ Download Excel</button>
+          </div>
+        </div>
+        <div class="stats" id="batchStats"></div>
+        <div class="tbl-wrap">
+          <table class="tbl" id="previewTable">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Lead</th>
+                <th>Domain</th>
+                <th>MX</th>
+                <th>Best email</th>
+                <th>Score</th>
+                <th>Confidence</th>
+                <th>Candidates</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="previewBody"></tbody>
+          </table>
+        </div>
+        <div class="pagination" id="pagination"></div>
+      </div>
+
+    </div><!-- /pane-batch -->
+  </div>
+</main>
+
+<!-- HOW IT WORKS -->
+<section id="howit" style="padding:40px 0;background:#fff;border-top:1px solid var(--border)">
+  <div class="wrap">
+    <h2 style="font-size:1.2rem;font-weight:800;margin-bottom:20px">How the scoring works</h2>
+    <div class="how">
+      <div class="how-step">
+        <div class="how-step__n">①</div>
+        <div class="how-step__t">Pattern generation</div>
+        <p class="how-step__b">Up to 30 patterns per lead ranked by global frequency (firstname.lastname, flastname, etc.)</p>
+      </div>
+      <div class="how-step">
+        <div class="how-step__n">②</div>
+        <div class="how-step__t">DNS MX validation</div>
+        <p class="how-step__b">If the domain has no MX records, score drops to ≤5. Results cached 60 min.</p>
+      </div>
+      <div class="how-step">
+        <div class="how-step__n">③</div>
+        <div class="how-step__t">Name quality</div>
+        <p class="how-step__b">Compound names and surnames generate more specific patterns with higher specificity scores.</p>
+      </div>
+      <div class="how-step">
+        <div class="how-step__n">④</div>
+        <div class="how-step__t">Honest scoring</div>
+        <p class="how-step__b">Max score 97. Without SMTP probing we never claim certainty — use as probability, not fact.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="wrap footer__inner">
+    <span class="logo__name">Enricher</span>
+    <p class="footer__copy">DNS-based enrichment · No external APIs · Scores are probabilistic</p>
+  </div>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>
