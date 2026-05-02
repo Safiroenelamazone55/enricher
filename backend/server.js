@@ -31,7 +31,24 @@ const BATCH_LIMIT = parseInt(process.env.BATCH_LIMIT) || 500;
 
 // ── Middleware ───────────────────────────────────────────────
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
-app.use(cors({ origin: '*' }));
+const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
+  : ['*'];
+
+app.use(cors({
+  origin: (origin, cb) => {
+    // Allow requests with no origin (Postman, curl, server-to-server)
+    if (!origin) return cb(null, true);
+    if (ALLOWED_ORIGINS.includes('*') || ALLOWED_ORIGINS.includes(origin)) {
+      return cb(null, true);
+    }
+    cb(new Error(`CORS: origin ${origin} not allowed`));
+  },
+  methods:          ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders:   ['Content-Type', 'Authorization'],
+  exposedHeaders:   ['X-Parse-Warnings'],
+  credentials:      false,
+}));
 app.use(morgan(ENV === 'production' ? 'combined' : 'dev'));
 app.use(express.json({ limit: '2mb' }));
 
@@ -193,4 +210,24 @@ app.listen(PORT, () => {
   console.log(`  ─────────────────────────────────`);
   console.log(`  API  → http://localhost:${PORT}`);
   console.log(`  Mode → ${ENV}\n`);
+
+  // Keep-alive ping (Render free tier sleeps after 15 min inactivity)
+  if (ENV === 'production' && process.env.RENDER_EXTERNAL_URL) {
+    const url      = `${process.env.RENDER_EXTERNAL_URL}/health`;
+    const interval = 14 * 60 * 1000; // every 14 minutes
+    const https    = require('https');
+    const http     = require('http');
+    const driver   = url.startsWith('https') ? https : http;
+
+    setInterval(() => {
+      driver.get(url, res => {
+        console.log(`[keep-alive] ${url} → ${res.statusCode}`);
+        res.resume();
+      }).on('error', err => {
+        console.warn(`[keep-alive] ping failed: ${err.message}`);
+      });
+    }, interval);
+
+    console.log(`  Keep-alive → pinging every 14 min\n`);
+  }
 });
