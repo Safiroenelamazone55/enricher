@@ -10,7 +10,7 @@
  *   4.  Detect domain pattern (cached / learned)
  *   5.  Base score all candidates (legacy DNS scoring for SMTP selection)
  *   6.  Select up to SMTP_MIN_TOP + high-base-score candidates for probing
- *   7.  Parallel: catch-all detection + SMTP probes + website scrape + search scrape
+ *   7.  Parallel: catch-all + SMTP probes + website scrape + search scrape + GitHub
  *   8.  Learn confirmed patterns from SMTP + scraper
  *   9.  Final consensus score for every candidate
  *   10. Decision: gap-based confidence (high / medium / none)
@@ -34,6 +34,7 @@ const { detectDomainPattern,
         patternMatchDelta } = require('./domainPatternService');
 const { findEmailsFromWebsite } = require('./emailScraperService');
 const { findEmailsBySearch }    = require('./searchScraperService');
+const { findEmailOnGitHub }     = require('./githubService');
 const { decideBestEmail }   = require('./decisionEngine');
 
 const SMTP_BASE_THRESHOLD = 60;
@@ -83,14 +84,15 @@ async function enrichOneLead(lead) {
 
   // ── No MX → finalize without SMTP ────────────────────────
   if (!mxFound || !mxHost) {
-    const [scrape, searchResult] = await Promise.all([
+    const [scrape, searchResult, ghResult] = await Promise.all([
       _safeScrape(domain),
       _safeSearch(firstName, lastName, domain),
+      _safeGitHub(firstName, lastName, domain),
     ]);
     const merged = _mergeScrape(scrape, searchResult);
     const scored = withBase.map(c =>
       _finalScore(c, firstName, lastName, domain, mxFound,
-                  'not-checked', false, null, domainPattern, merged)
+                  'not-checked', false, null, domainPattern, merged, ghResult)
     );
     const decision = decideBestEmail({ candidates: scored, scrapedEmails: merged.emails, catchAll: false });
     return _buildResult(lead, domain, mxFound, mxHost, false,
@@ -104,11 +106,12 @@ async function enrichOneLead(lead) {
   withBase.forEach((c, i) => { if (c.baseScore >= SMTP_BASE_THRESHOLD) smtpSet.add(i); });
   const smtpIndexes = [...smtpSet];
 
-  // ── 7. Parallel: catch-all + SMTP probes + website scrape + search scrape ─
-  const [isCatchAll, scrape, searchResult, ...smtpResultsArr] = await Promise.all([
+  // ── 7. Parallel: catch-all + SMTP probes + website scrape + search + GitHub ─
+  const [isCatchAll, scrape, searchResult, ghResult, ...smtpResultsArr] = await Promise.all([
     _safeCatchAll(domain, mxHost),
     _safeScrape(domain),
     _safeSearch(firstName, lastName, domain),
+    _safeGitHub(firstName, lastName, domain),
     ...smtpIndexes.map(i => _safeSmtpProbe(withBase[i].email, mxHost)),
   ]);
   const merged = _mergeScrape(scrape, searchResult);
@@ -131,7 +134,7 @@ async function enrichOneLead(lead) {
   const candidates = withBase.map((c, i) => {
     const smtp = smtpMap.get(i) ?? { status: 'not-checked', code: null };
     return _finalScore(c, firstName, lastName, domain, mxFound,
-                       smtp.status, isCatchAll, smtp.code, domainPattern, merged);
+                       smtp.status, isCatchAll, smtp.code, domainPattern, merged, ghResult);
   });
 
   // ── 10. Decision ───────────────────────────────────────────
@@ -168,15 +171,19 @@ async function enrichBatch(leads) {
  * Replaces the old multi-factor linear scoring for the output.
  */
 function _finalScore(candidate, firstName, lastName, domain, mxFound,
-                     smtpStatus, catchAll, smtpCode, domainPattern, scrape) {
+                     smtpStatus, catchAll, smtpCode, domainPattern, scrape, ghResult = null) {
 
   // ── Scraper signals ───────────────────────────────────────
   const { scraperSignal } = _computeScraperSignal(candidate, scrape, firstName, lastName);
   const scraperExact      = scraperSignal === 'exact-match';
   const scraperPattern    = scraperSignal === 'pattern-match';
 
+  // ── GitHub signal ─────────────────────────────────────────
+  // True only when the GitHub result email exactly matches this candidate
+  const githubExact = !!(ghResult?.email &&
+                         ghResult.email.toLowerCase() === candidate.email.toLowerCase());
+
   // ── Pattern signal ────────────────────────────────────────
-  // Only count if the pattern is confirmed by real data or very high confidence
   const patternMatch     = candidate.pattern === domainPattern.likelyPattern;
   const patternConfirmed = domainPattern.source === 'memory' ||
                            domainPattern.source === 'smtp-confirmed' ||
@@ -185,7 +192,7 @@ function _finalScore(candidate, firstName, lastName, domain, mxFound,
   const patternSignal    = patternMatch && (patternConfirmed || patternStrong);
 
   // ── Generic / freemail check ──────────────────────────────
-  const isGeneric  = isGenericEmail(candidate.email);
+  const isGeneric = isGenericEmail(candidate.email);
 
   // ── Consensus score ───────────────────────────────────────
   const { consensusScore, verifiedBy, flags, disqualified } = computeConsensusScore({
@@ -193,6 +200,7 @@ function _finalScore(candidate, firstName, lastName, domain, mxFound,
     catchAll:      !!catchAll,
     scraperExact,
     scraperPattern,
+    githubExact,
     patternSignal,
     isGeneric,
     mxFound,
@@ -207,13 +215,14 @@ function _finalScore(candidate, firstName, lastName, domain, mxFound,
     score >= 50 ? 'high'      :
     score >= 20 ? 'medium'    : 'low';
 
-  // Tier (for internal use and API consumers who want richer metadata)
+  // Tier
   const signals = {
     smtpValid:     flags.smtpValid,
     smtpInvalid:   flags.smtpInvalid || smtpStatus === 'invalid',
     catchAll:      !!catchAll,
     scraperExact,
     scraperPattern,
+    githubExact,
     patternMemory:  patternConfirmed,
     patternStrong,
     mxFound:       !!mxFound,
@@ -239,6 +248,8 @@ function _finalScore(candidate, firstName, lastName, domain, mxFound,
     catchAll,
     patternMatch,
     scraperSignal,
+    githubExact,
+    githubProfile:  githubExact ? ghResult?.profileUrl : null,
   };
 }
 
@@ -329,6 +340,17 @@ async function _safeSearch(firstName, lastName, domain) {
   catch (err) {
     console.warn(`[search-scraper] ${domain}: ${err.message}`);
     return { emails: [], count: 0, queries: [] };
+  }
+}
+
+async function _safeGitHub(firstName, lastName, domain) {
+  try {
+    const r = await findEmailOnGitHub(firstName, lastName, domain);
+    if (r) console.log(`[github] ${firstName} ${lastName} @ ${domain} → ${r.email} (${r.source})`);
+    return r;
+  } catch (err) {
+    console.warn(`[github] ${domain}: ${err.message}`);
+    return null;
   }
 }
 

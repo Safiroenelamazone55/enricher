@@ -12,6 +12,16 @@
  *   isGenericEmail(email)        → boolean
  *   isFreemailDomain(domain)     → boolean
  *   confidenceLabel(score)       → string
+ *
+ * Signal weights (consensus):
+ *   SMTP valid + non-catch-all  → +50
+ *   SMTP valid + catch-all      → +15
+ *   Scraper exact               → +60
+ *   Scraper pattern             → +20
+ *   GitHub exact                → +40   ← NEW
+ *   Domain pattern confirmed    → +30
+ *   Generic prefix              → −40
+ *   SMTP invalid                → disqualified
  */
 
 // ── A. Pattern weights ────────────────────────────────────────
@@ -113,6 +123,7 @@ function confidenceLabel(score) {
  *   catchAll:       boolean,
  *   scraperExact:   boolean,
  *   scraperPattern: boolean,
+ *   githubExact:    boolean,   email found on a GitHub profile matching domain
  *   patternSignal:  boolean,   confirmed/strong domain pattern matches candidate
  *   isGeneric:      boolean,
  *   mxFound:        boolean,
@@ -129,6 +140,7 @@ function computeConsensusScore({
   catchAll       = false,
   scraperExact   = false,
   scraperPattern = false,
+  githubExact    = false,
   patternSignal  = false,
   isGeneric      = false,
   mxFound        = false,
@@ -139,6 +151,7 @@ function computeConsensusScore({
     smtpInvalid:    false,
     scraperExact:   false,
     scraperPattern: false,
+    githubExact:    false,
     patternMatch:   false,
     isGeneric:      false,
   };
@@ -183,6 +196,13 @@ function computeConsensusScore({
     flags.scraperPattern = true;
   }
 
+  // ── GitHub vote ───────────────────────────────────────────────
+  if (githubExact) {
+    score += 40;
+    flags.githubExact = true;
+    verifiedBy.push('github');
+  }
+
   // ── Pattern vote ──────────────────────────────────────────────
   if (patternSignal) {
     score += 30;
@@ -200,7 +220,7 @@ function computeConsensusScore({
 /**
  * @param {{
  *   smtpValid, smtpInvalid, catchAll, scraperExact, scraperPattern,
- *   patternMemory, patternStrong, mxFound
+ *   githubExact, patternMemory, patternStrong, mxFound
  * }} signals
  * @returns {'verified'|'likely'|'uncertain'|'invalid'}
  */
@@ -211,15 +231,18 @@ function assignTier(signals) {
     catchAll       = false,
     scraperExact   = false,
     scraperPattern = false,
+    githubExact    = false,
     patternMemory  = false,
     patternStrong  = false,
     mxFound        = false,
   } = signals;
 
-  if (smtpInvalid)               return 'invalid';
-  if (!mxFound && !scraperExact) return 'invalid';
-  if (scraperExact)              return 'verified';
-  if (smtpValid && !catchAll)    return 'verified';
+  if (smtpInvalid)                        return 'invalid';
+  if (!mxFound && !scraperExact
+               && !githubExact)           return 'invalid';
+  if (scraperExact)                       return 'verified';
+  if (smtpValid && !catchAll)             return 'verified';
+  if (githubExact)                        return 'verified';   // public GitHub email = verified
 
   const softCount = [smtpValid, scraperPattern, patternMemory, patternStrong]
     .filter(Boolean).length;
