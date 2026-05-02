@@ -108,11 +108,11 @@ async function enrichOneLead(lead) {
 
   // ── 7. Parallel: catch-all + SMTP probes + website scrape + search + GitHub ─
   const [isCatchAll, scrape, searchResult, ghResult, ...smtpResultsArr] = await Promise.all([
-    _safeCatchAll(domain, mxHost),
+    _safeCatchAll(domain, mxHost, mxRecords),
     _safeScrape(domain),
     _safeSearch(firstName, lastName, domain),
     _safeGitHub(firstName, lastName, domain),
-    ...smtpIndexes.map(i => _safeSmtpProbe(withBase[i].email, mxHost)),
+    ...smtpIndexes.map(i => _safeSmtpProbe(withBase[i].email, mxHost, mxRecords)),
   ]);
   const merged = _mergeScrape(scrape, searchResult);
 
@@ -324,9 +324,9 @@ async function _safeScrape(domain) {
   }
 }
 
-async function _safeCatchAll(domain, mxHost) {
+async function _safeCatchAll(domain, mxHost, allMxRecords = []) {
   try {
-    const result = await detectCatchAll(domain, mxHost);
+    const result = await detectCatchAll(domain, mxHost, allMxRecords);
     console.log(`[catch-all] ${domain}: ${result}`);
     return result;
   } catch (err) {
@@ -367,10 +367,11 @@ function _mergeScrape(scrape, search) {
   };
 }
 
-async function _safeSmtpProbe(email, mxHost) {
+async function _safeSmtpProbe(email, mxHost, allMxRecords = []) {
   try {
-    const r = await verifyEmailSMTP(email, mxHost);
-    console.log(`[SMTP] ${email} → ${r.status} (${r.code ?? '—'})`);
+    const r = await verifyEmailSMTP(email, mxHost, allMxRecords);
+    const tlsTag = r.tls ? ' TLS' : '';
+    console.log(`[SMTP] ${email} → ${r.status} (${r.code ?? '—'}) port=${r.port ?? '?'}${tlsTag}`);
     return r;
   } catch (err) {
     console.warn(`[SMTP] ${email}: ${err.message}`);
