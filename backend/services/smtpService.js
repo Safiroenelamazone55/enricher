@@ -37,7 +37,7 @@ const tls = require('tls');
 const SMTP_TIMEOUT_MS    = parseInt(process.env.SMTP_TIMEOUT)       || 10_000;
 const SMTP_FROM          = process.env.SMTP_FROM_EMAIL              || 'probe@verifycheck.internal';
 const SMTP_EHLO_DOMAIN   = process.env.SMTP_EHLO_DOMAIN             || 'verifycheck.internal';
-const MAX_CONCURRENT     = parseInt(process.env.MAX_CONCURRENT_SMTP) || 6;
+const MAX_CONCURRENT     = parseInt(process.env.MAX_CONCURRENT_SMTP) || 20;
 const MX_FALLBACK_LIMIT  = 2;   // try at most N MX hosts per probe
 const DOMAIN_MAX_CONNS   = 2;   // max simultaneous connections to one domain
 

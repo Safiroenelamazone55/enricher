@@ -37,8 +37,7 @@ const { findEmailsBySearch }    = require('./searchScraperService');
 const { findEmailOnGitHub }     = require('./githubService');
 const { decideBestEmail }   = require('./decisionEngine');
 
-const SMTP_BASE_THRESHOLD = 60;
-const SMTP_MIN_TOP        = 5;   // always probe at least this many candidates
+// All candidates are probed via SMTP in parallel — no threshold cutoff.
 
 // ═══════════════════════════════════════════════════════════════
 // PUBLIC
@@ -99,14 +98,13 @@ async function enrichOneLead(lead) {
                         decision, warning, domainPattern, merged.count);
   }
 
-  // ── 6. Select SMTP candidates ─────────────────────────────
-  // Probe top SMTP_MIN_TOP + any with high base score
-  const smtpSet = new Set();
-  withBase.slice(0, SMTP_MIN_TOP).forEach((_, i) => smtpSet.add(i));
-  withBase.forEach((c, i) => { if (c.baseScore >= SMTP_BASE_THRESHOLD) smtpSet.add(i); });
-  const smtpIndexes = [...smtpSet];
+  // ── 6. Probe ALL candidates via SMTP ─────────────────────
+  // Every candidate gets a probe — the verified one (250 OK) wins
+  // regardless of its statistical rank. Runs fully in parallel so
+  // total wall-clock time = single probe timeout, not N × timeout.
+  const smtpIndexes = withBase.map((_, i) => i);
 
-  // ── 7. Parallel: catch-all + SMTP probes + website scrape + search + GitHub ─
+  // ── 7. Parallel: catch-all + ALL SMTP probes + scrapers + GitHub ─
   const [isCatchAll, scrape, searchResult, ghResult, ...smtpResultsArr] = await Promise.all([
     _safeCatchAll(domain, mxHost, mxRecords),
     _safeScrape(domain),
