@@ -39,24 +39,39 @@ const PORT = parseInt(process.env.PORT) || 3001;
 const ENV  = process.env.NODE_ENV || 'development';
 const BATCH_LIMIT = parseInt(process.env.BATCH_LIMIT) || 500;
 
+// ── CORS manual — MUST be first, before helmet and every route ────
+// Allows any *.kiwoc.com or *.pages.dev origin.
+// Also reads ALLOWED_ORIGINS env var for extra explicit origins.
+const _extraOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim().toLowerCase())
+  : [];
+
+app.use((req, res, next) => {
+  const origin = req.headers.origin || '';
+
+  const allowed =
+    origin === '' ||                                    // server-to-server (no Origin)
+    origin.endsWith('.kiwoc.com') ||                    // *.kiwoc.com
+    origin === 'https://kiwoc.com' ||                   // apex domain
+    origin.endsWith('.pages.dev') ||                    // Cloudflare Pages previews
+    origin.endsWith('.onrender.com') ||                 // Render preview deploys
+    _extraOrigins.includes('*') ||                      // wildcard in env var
+    _extraOrigins.includes(origin.toLowerCase());       // exact match in env var
+
+  if (allowed) {
+    res.setHeader('Access-Control-Allow-Origin',  origin || '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader('Access-Control-Expose-Headers','X-Parse-Warnings');
+  }
+
+  // Preflight — answer immediately with 200 and stop processing
+  if (req.method === 'OPTIONS') return res.sendStatus(200);
+
+  next();
+});
+
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
-
-const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
-  ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
-  : ['*'];
-
-app.use(cors({
-  origin: (origin, cb) => {
-    if (!origin) return cb(null, true);
-    if (ALLOWED_ORIGINS.includes('*') || ALLOWED_ORIGINS.includes(origin))
-      return cb(null, true);
-    cb(new Error(`CORS: origin ${origin} not allowed`));
-  },
-  methods:        ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  exposedHeaders: ['X-Parse-Warnings'],
-  credentials:    false,
-}));
 
 app.use(morgan(ENV === 'production' ? 'combined' : 'dev'));
 app.use(express.json({ limit: '2mb' }));
