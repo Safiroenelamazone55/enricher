@@ -7,7 +7,7 @@
 
 const API = 'https://enricher-ix3b.onrender.com/api';
 
-// ── Helpers ──────────────────────────────────────────────────
+// ── Helpers ──────────────────────────────────────────────────────
 const $   = id => document.getElementById(id);
 const esc = s => String(s ?? '')
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -40,14 +40,56 @@ function renderScoreBar(score) {
   </div>`;
 }
 
+/**
+ * Returns an HTML badge for a confidence value.
+ * Handles all values the API can return:
+ *   guaranteed | very-high | high | medium | low | pending | unverifiable
+ * Plus legacy candidate-level values (very-low, etc.)
+ */
 function confBadge(c) {
-  const map = { 'very-high': 'vh', 'high': 'h', 'medium': 'm', 'low': 'l', 'very-low': 'vl' };
-  const cls = map[c] ?? 'vl';
-  const lbl = { 'very-high': 'Very high', 'high': 'High', 'medium': 'Medium', 'low': 'Low', 'very-low': 'Very low' }[c] ?? c;
-  return `<span class="badge badge--${cls}">${lbl}</span>`;
+  const map = {
+    'guaranteed':   { cls: 'guaranteed', label: 'Verificado ✓' },
+    'very-high':    { cls: 'vh',         label: 'Verificación alta' },
+    'high':         { cls: 'h',          label: 'Alta probabilidad' },
+    'medium':       { cls: 'm',          label: 'Probable (revisar)' },
+    'low':          { cls: 'l',          label: 'Baja certeza' },
+    'pending':      { cls: 'pending',    label: 'Pendiente…' },
+    'unverifiable': { cls: 'unverifiable', label: 'No verificable' },
+    // legacy / candidate-level fallbacks
+    'very-low':     { cls: 'vl',         label: 'Muy baja' },
+    'none':         { cls: 'vl',         label: 'Sin datos' },
+  };
+  const entry = map[c] ?? { cls: 'vl', label: c ?? '—' };
+  return `<span class="badge badge--${entry.cls}">${entry.label}</span>`;
 }
 
-// ── Tab switching ─────────────────────────────────────────────
+/**
+ * Small pill showing where the email was found.
+ * source: 'smtp' | 'bounce' | 'scraped' | 'github' | 'inferred'
+ */
+function sourcePill(source, verifiedBy = []) {
+  if (!source || source === 'inferred') return '';
+  const icons = {
+    'smtp':    '📡 SMTP',
+    'bounce':  '📧 Correo real',
+    'scraped': '🔍 Web',
+    'github':  '🐙 GitHub',
+  };
+  const label = icons[source] ?? source;
+  return `<span class="source-pill">${label}</span>`;
+}
+
+/**
+ * Catch-all warning icon with CSS tooltip.
+ * Shows when the domain accepts any email (can't distinguish valid/invalid).
+ */
+function catchAllWarn() {
+  return `<span class="warn-icon">⚠️
+    <span class="tip">El dominio acepta cualquier correo —<br>no se puede verificar completamente.</span>
+  </span>`;
+}
+
+// ── Tab switching ─────────────────────────────────────────────────
 document.querySelectorAll('.tab').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -57,9 +99,9 @@ document.querySelectorAll('.tab').forEach(btn => {
   });
 });
 
-// ═════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════
 // SINGLE LEAD
-// ═════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════
 
 $('btnSingle').addEventListener('click', async () => {
   const fn = $('s_fn').value.trim();
@@ -103,8 +145,17 @@ $('btnClearSingle').addEventListener('click', () => {
 });
 
 function renderSingleResult(d) {
-  const best = d.candidates?.[0];
-  const mx   = d.mxFound
+  // ── Use result-level bestEmail + confidence ─────────────────
+  const bestEmail  = d.bestEmail;
+  const confidence = d.confidence || 'low';
+  const catchAll   = d.isCatchAll;
+  const hasBounce  = !!(d.bounceVerifyId && d.bounceVerificationPending);
+
+  // Find the full candidate object for the best email (for score bar + pattern)
+  const bestCand = d.candidates?.find(c => c.email === bestEmail) ?? d.candidates?.[0];
+
+  // Domain + MX header
+  const mx = d.mxFound
     ? `<span class="mx-ok">✓ MX found</span> <span class="mono" style="font-size:.72rem;color:var(--muted)">${esc(d.mxHost || '')}</span>`
     : `<span class="mx-no">✗ No MX records</span>`;
 
@@ -116,56 +167,86 @@ function renderSingleResult(d) {
       ${d.warning ? `<div class="alert alert--warn" style="margin-top:8px;padding:7px 12px">${esc(d.warning)}</div>` : ''}
     </div>`;
 
-  if (!d.candidates || d.candidates.length === 0) {
-    html += `<div style="color:var(--muted);font-size:.85rem">No candidates could be generated.</div>`;
+  if (!bestEmail) {
+    html += `<div style="color:var(--muted);font-size:.85rem">No email could be found for this lead.</div>`;
   } else {
-    if (best) {
+    // ── Best-match block ──────────────────────────────────────
+    const blockClass = catchAll ? 'catchall'
+                     : (confidence === 'low' || confidence === 'unverifiable' || confidence === 'none') ? 'low-conf'
+                     : '';
+
+    html += `
+      <div class="best-email-block ${blockClass}">
+        <div class="best-email-label">⭐ Mejor coincidencia</div>
+        <div class="best-email-addr">${esc(bestEmail)}</div>
+        <div class="best-email-meta">
+          ${confBadge(confidence)}
+          ${sourcePill(d.bestSource, d.verifiedBy)}
+          ${catchAll ? catchAllWarn() : ''}
+          ${bestCand ? `<span style="font-size:.72rem;color:var(--muted)">${esc(bestCand.pattern)}</span>` : ''}
+        </div>
+        ${bestCand ? `<div style="margin-top:8px">${renderScoreBar(bestCand.score)}</div>` : ''}
+      </div>`;
+
+    // ── Bounce verification pending notice ────────────────────
+    if (hasBounce) {
       html += `
-        <div style="background:var(--ok-bg);border:1px solid var(--ok-b);border-radius:var(--rs);padding:12px 16px;margin-bottom:14px">
-          <div style="font-size:.72rem;font-weight:700;color:var(--ok);margin-bottom:4px">⭐ BEST MATCH</div>
-          <div style="font-family:ui-monospace,monospace;font-size:1rem;font-weight:700;word-break:break-all">${esc(best.email)}</div>
-          <div style="display:flex;gap:10px;margin-top:6px;align-items:center">
-            ${renderScoreBar(best.score)}
-            ${confBadge(best.confidence)}
-            <span style="font-size:.72rem;color:var(--muted)">${esc(best.pattern)}</span>
-          </div>
+        <div class="bounce-notice">
+          <div class="bounce-notice__spin"></div>
+          Verificación por correo real en curso — resultado disponible en ~1 hora.
+          <span style="font-size:.68rem;color:#64748b;margin-left:auto">ID: ${esc(d.bounceVerifyId.slice(0,8))}…</span>
         </div>`;
     }
 
-    html += `<div style="font-size:.78rem;font-weight:700;color:var(--muted);margin-bottom:8px">ALL CANDIDATES (${d.candidates.length})</div>
-      <div style="display:flex;flex-direction:column;gap:6px;max-height:340px;overflow-y:auto">`;
-
-    d.candidates.forEach((c, i) => {
+    // ── All candidates ────────────────────────────────────────
+    if (d.candidates?.length > 0) {
       html += `
-        <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--bg);border-radius:var(--rs);border:1px solid var(--border)">
-          <span style="font-size:.72rem;color:var(--muted);min-width:18px;text-align:center">${i + 1}</span>
-          <span class="mono" style="flex:1;word-break:break-all">${esc(c.email)}</span>
-          ${renderScoreBar(c.score)}
-          ${confBadge(c.confidence)}
-        </div>`;
-    });
+        <div style="font-size:.78rem;font-weight:700;color:var(--muted);margin:14px 0 8px">
+          TODOS LOS CANDIDATOS (${d.candidates.length})
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;max-height:340px;overflow-y:auto">`;
 
-    html += `</div>
-      <button class="btn btn--ghost btn--sm" id="copySingle" style="margin-top:12px">📋 Copy best email</button>`;
+      d.candidates.forEach((c, i) => {
+        const isBest = c.email === bestEmail;
+        const smtpDot = c.smtpStatus === 'valid'   ? '🟢'
+                      : c.smtpStatus === 'invalid' ? '🔴'
+                      : c.smtpStatus === 'unknown' ? '⚪'
+                      : '';
+        html += `
+          <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;
+            background:${isBest ? 'var(--ok-bg)' : 'var(--bg)'};
+            border-radius:var(--rs);
+            border:1px solid ${isBest ? 'var(--ok-b)' : 'var(--border)'}">
+            <span style="font-size:.72rem;color:var(--muted);min-width:18px;text-align:center">${i + 1}</span>
+            <span class="mono" style="flex:1;word-break:break-all;font-weight:${isBest ? '700' : '400'}">${esc(c.email)}</span>
+            <span style="font-size:.75rem">${smtpDot}</span>
+            ${renderScoreBar(c.score)}
+            ${confBadge(c.confidence)}
+          </div>`;
+      });
+
+      html += `</div>
+        <button class="btn btn--ghost btn--sm" id="copySingle" style="margin-top:12px">📋 Copiar mejor email</button>`;
+    }
   }
 
   $('singleResultContent').innerHTML = html;
   $('singleResult').classList.remove('hidden');
 
   const copyBtn = $('copySingle');
-  if (copyBtn && best) {
+  if (copyBtn && bestEmail) {
     copyBtn.addEventListener('click', () => {
-      navigator.clipboard.writeText(best.email).then(() => {
-        copyBtn.textContent = '✓ Copied!';
-        setTimeout(() => { copyBtn.textContent = '📋 Copy best email'; }, 2000);
+      navigator.clipboard.writeText(bestEmail).then(() => {
+        copyBtn.textContent = '✓ ¡Copiado!';
+        setTimeout(() => { copyBtn.textContent = '📋 Copiar mejor email'; }, 2000);
       });
     });
   }
 }
 
-// ═════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════
 // BATCH UPLOAD
-// ═════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════
 
 let uploadedFile  = null;
 let batchResults  = [];
@@ -190,16 +271,13 @@ $('fileInput').addEventListener('change', e => { if (e.target.files[0]) setFile(
 function setFile(f) {
   uploadedFile = f;
   $('fileLabel').textContent = `📎 ${f.name} (${(f.size / 1024).toFixed(1)} KB)`;
-  $('btnBatch').disabled         = false;
-  $('btnBatchPreview').disabled  = false;
+  $('btnBatch').disabled        = false;
+  $('btnBatchPreview').disabled = false;
   hideAlert($('batchErr'));
   hideAlert($('batchWarn'));
 }
 
-// ── Enrich + download Excel directly ─────────────────────────
 $('btnBatch').addEventListener('click', () => runBatch('download'));
-
-// ── Enrich + show preview table ───────────────────────────────
 $('btnBatchPreview').addEventListener('click', () => runBatch('preview'));
 
 async function runBatch(mode) {
@@ -231,7 +309,6 @@ async function runBatch(mode) {
 
   try {
     if (mode === 'preview') {
-      // JSON path — single request, no double upload
       const res = await fetch(`${API}/enrich/upload-json`, { method: 'POST', body: formData });
       clearInterval(timer);
       fill.style.width = '100%';
@@ -252,7 +329,6 @@ async function runBatch(mode) {
       $('batchPreview').scrollIntoView({ behavior: 'smooth', block: 'start' });
 
     } else {
-      // Excel download path
       const res = await fetch(`${API}/enrich/upload`, { method: 'POST', body: formData });
       clearInterval(timer);
       fill.style.width = '100%';
@@ -294,12 +370,10 @@ function downloadBuffer(buffer, filename) {
   URL.revokeObjectURL(url);
 }
 
-// ── Download result again ─────────────────────────────────────
 $('btnDownloadResult').addEventListener('click', () => {
   if (lastXlsBuffer) downloadBuffer(lastXlsBuffer, `enriched_${Date.now()}.xlsx`);
 });
 
-// ── Search ────────────────────────────────────────────────────
 $('searchBox').addEventListener('input', () => {
   const q = $('searchBox').value.toLowerCase();
   filteredRows = q
@@ -310,38 +384,49 @@ $('searchBox').addEventListener('input', () => {
   renderPreviewTable();
 });
 
-// ── Render table ──────────────────────────────────────────────
+// ── Render batch preview table ────────────────────────────────────
 function renderPreviewTable() {
   const total    = filteredRows.length;
   const pages    = Math.ceil(total / PAGE_SIZE);
   const start    = (currentPage - 1) * PAGE_SIZE;
   const pageRows = filteredRows.slice(start, start + PAGE_SIZE);
 
-  const counts = { ok: 0, warn: 0, err: 0, muted: 0 };
+  // Stats using result-level confidence
+  const counts = { verified: 0, probable: 0, low: 0, none: 0 };
   batchResults.forEach(r => {
-    const s = r.candidates?.[0]?.score ?? 0;
-    if      (s >= 70) counts.ok++;
-    else if (s >= 45) counts.warn++;
-    else if (s >= 20) counts.err++;
-    else              counts.muted++;
+    const c = r.confidence || 'none';
+    if      (c === 'guaranteed' || c === 'very-high') counts.verified++;
+    else if (c === 'high' || c === 'medium')          counts.probable++;
+    else if (c === 'low' || c === 'pending')          counts.low++;
+    else                                              counts.none++;
   });
 
   $('batchStats').innerHTML = `
-    <div class="stat stat--ok">  <span class="num">${counts.ok}</span>   High confidence</div>
-    <div class="stat stat--warn"><span class="num">${counts.warn}</span>  Medium</div>
-    <div class="stat stat--err"> <span class="num">${counts.err}</span>   Low</div>
-    <div class="stat stat--muted"><span class="num">${counts.muted}</span> No MX / unresolved</div>
-    <div class="stat" style="margin-left:auto"><span class="num">${batchResults.length}</span> Total leads</div>
+    <div class="stat stat--ok">  <span class="num">${counts.verified}</span> Verificados</div>
+    <div class="stat stat--warn"><span class="num">${counts.probable}</span> Probables</div>
+    <div class="stat stat--err"> <span class="num">${counts.low}</span>      Baja certeza</div>
+    <div class="stat stat--muted"><span class="num">${counts.none}</span>    Sin datos</div>
+    <div class="stat" style="margin-left:auto"><span class="num">${batchResults.length}</span> Total</div>
   `;
 
-  $('previewTitle').textContent = `Results: ${total} leads${total !== batchResults.length ? ` (filtered from ${batchResults.length})` : ''}`;
+  $('previewTitle').textContent =
+    `Results: ${total} leads${total !== batchResults.length ? ` (filtered from ${batchResults.length})` : ''}`;
 
   const tbody = $('previewBody');
   tbody.innerHTML = '';
 
   pageRows.forEach((r, i) => {
-    const best    = r.candidates?.[0];
-    const globalI = start + i;
+    // Use result-level bestEmail and confidence (not candidate[0])
+    const bestEmail  = r.bestEmail || r.candidates?.[0]?.email || null;
+    const confidence = r.confidence || r.candidates?.[0]?.confidence || 'none';
+    const bestScore  = r.bestScore  ?? r.candidates?.[0]?.score ?? 0;
+    const catchAll   = r.isCatchAll;
+    const globalI    = start + i;
+
+    // Email cell: bold + catch-all warning if needed
+    const emailCell = bestEmail
+      ? `<span class="mono" style="font-weight:700">${esc(bestEmail)}</span>${catchAll ? ' ' + catchAllWarn() : ''}`
+      : '<span style="color:var(--muted)">—</span>';
 
     const tr = document.createElement('tr');
     tr.id = `row-${globalI}`;
@@ -353,19 +438,19 @@ function renderPreviewTable() {
       </td>
       <td><span class="mono">${esc(r.domain || '—')}</span></td>
       <td>${r.mxFound ? '<span class="mx-ok">✓</span>' : '<span class="mx-no">✗</span>'}</td>
-      <td><span class="mono">${esc(best?.email || '—')}</span></td>
-      <td>${best ? renderScoreBar(best.score) : '—'}</td>
-      <td>${best ? confBadge(best.confidence) : '—'}</td>
+      <td>${emailCell}</td>
+      <td>${confBadge(confidence)}</td>
+      <td>${bestEmail ? renderScoreBar(bestScore) : '—'}</td>
       <td>${r.candidates?.length ?? 0}</td>
       <td>
-        ${r.candidates?.length > 1
+        ${(r.candidates?.length ?? 0) > 1
           ? `<button class="expand-btn" data-idx="${globalI}">▾ More</button>`
           : ''}
       </td>
     `;
     tbody.appendChild(tr);
 
-    if (r.candidates?.length > 1) {
+    if ((r.candidates?.length ?? 0) > 1) {
       const expandRow = document.createElement('tr');
       expandRow.id = `expand-${globalI}`;
       expandRow.className = 'candidates-row hidden';
@@ -405,15 +490,15 @@ function renderPagination(pages) {
   if (pages <= 1) return;
 
   const prev = document.createElement('button');
-  prev.className  = 'page-btn';
+  prev.className   = 'page-btn';
   prev.textContent = '←';
-  prev.disabled   = currentPage === 1;
+  prev.disabled    = currentPage === 1;
   prev.addEventListener('click', () => { currentPage--; renderPreviewTable(); });
   pag.appendChild(prev);
 
-  const start = Math.max(1, currentPage - 2);
-  const end   = Math.min(pages, start + 4);
-  for (let p = start; p <= end; p++) {
+  const rangeStart = Math.max(1, currentPage - 2);
+  const rangeEnd   = Math.min(pages, rangeStart + 4);
+  for (let p = rangeStart; p <= rangeEnd; p++) {
     const btn = document.createElement('button');
     btn.className   = `page-btn${p === currentPage ? ' active' : ''}`;
     btn.textContent = p;

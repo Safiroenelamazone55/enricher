@@ -178,8 +178,8 @@
                 <th>Domain</th>
                 <th>MX</th>
                 <th>Best email</th>
+                <th>Estado</th>
                 <th>Score</th>
-                <th>Confidence</th>
                 <th>Candidates</th>
                 <th></th>
               </tr>
@@ -211,13 +211,13 @@
       </div>
       <div class="how-step">
         <div class="how-step__n">③</div>
-        <div class="how-step__t">Name quality</div>
-        <p class="how-step__b">Compound names and surnames generate more specific patterns with higher specificity scores.</p>
+        <div class="how-step__t">SMTP + real send</div>
+        <p class="how-step__b">All candidates probed in parallel. Real email sent via SES when SMTP is inconclusive.</p>
       </div>
       <div class="how-step">
         <div class="how-step__n">④</div>
         <div class="how-step__t">Honest scoring</div>
-        <p class="how-step__b">Max score 97. Without SMTP probing we never claim certainty — use as probability, not fact.</p>
+        <p class="how-step__b">Verified = confirmed by server. Probable = best pattern match. Always shown with confidence level.</p>
       </div>
     </div>
   </div>
@@ -226,7 +226,7 @@
 <footer class="footer">
   <div class="wrap footer__inner">
     <span class="logo__name">Enricher</span>
-    <p class="footer__copy">DNS-based enrichment · No external APIs · Scores are probabilistic</p>
+    <p class="footer__copy">DNS · SMTP · SES verification · No external APIs · Scores are probabilistic</p>
   </div>
 </footer>
 

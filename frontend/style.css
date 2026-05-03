@@ -131,13 +131,85 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);line-height:
 .score-b{flex:1;height:5px;background:var(--border);border-radius:3px;min-width:40px;overflow:hidden}
 .score-b__f{height:100%;border-radius:3px}
 
-/* Badge */
-.badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:.72rem;font-weight:700;white-space:nowrap}
-.badge--vh{background:var(--ok-bg);color:var(--ok)}
-.badge--h {background:#d1fae5;color:#065f46}
-.badge--m {background:var(--warn-bg);color:var(--warn)}
-.badge--l {background:var(--err-bg);color:var(--err)}
+/* ── Badges ─────────────────────────────────────────────── */
+.badge{display:inline-block;padding:2px 9px;border-radius:12px;font-size:.7rem;font-weight:700;white-space:nowrap;letter-spacing:.1px}
+
+/* guaranteed — bright green, filled */
+.badge--guaranteed{background:#166534;color:#fff}
+/* very-high — medium green */
+.badge--vh{background:var(--ok-bg);color:#166534;border:1px solid #bbf7d0}
+/* high — teal/blue */
+.badge--h{background:#dbeafe;color:#1e40af;border:1px solid #bfdbfe}
+/* medium — amber */
+.badge--m{background:var(--warn-bg);color:#92400e;border:1px solid #fde68a}
+/* low — orange */
+.badge--l{background:#ffedd5;color:#c2410c;border:1px solid #fed7aa}
+/* pending — slate gray */
+.badge--pending{background:#f1f5f9;color:#475569;border:1px solid #cbd5e1}
+/* unverifiable — muted red */
+.badge--unverifiable{background:#fee2e2;color:#991b1b;border:1px solid #fecaca}
+/* fallback / very-low */
 .badge--vl{background:#f3f4f6;color:var(--muted)}
+
+/* ── Best email display in single result ─────────────────── */
+.best-email-block{
+  background:var(--ok-bg);border:1.5px solid var(--ok-b);
+  border-radius:var(--rs);padding:14px 18px;margin-bottom:14px
+}
+.best-email-block.catchall{
+  background:var(--warn-bg);border-color:#fde68a
+}
+.best-email-block.low-conf{
+  background:#f8f8f8;border-color:var(--border)
+}
+.best-email-label{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px}
+.best-email-addr{
+  font-family:ui-monospace,monospace;
+  font-size:1.05rem;font-weight:800;
+  word-break:break-all;color:var(--text);margin-bottom:8px
+}
+.best-email-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+
+/* ── Catch-all warning icon + tooltip ───────────────────── */
+.warn-icon{
+  display:inline-flex;align-items:center;gap:3px;
+  font-size:.72rem;color:var(--warn);font-weight:600;
+  cursor:default;position:relative
+}
+.warn-icon .tip{
+  display:none;position:absolute;bottom:calc(100% + 6px);left:50%;
+  transform:translateX(-50%);
+  background:#1f2937;color:#fff;font-size:.7rem;font-weight:400;
+  padding:5px 9px;border-radius:5px;white-space:nowrap;
+  pointer-events:none;z-index:10;line-height:1.4;
+  box-shadow:0 2px 8px rgba(0,0,0,.25)
+}
+.warn-icon .tip::after{
+  content:'';position:absolute;top:100%;left:50%;
+  transform:translateX(-50%);
+  border:5px solid transparent;border-top-color:#1f2937
+}
+.warn-icon:hover .tip{display:block}
+
+/* ── Bounce-pending notice ───────────────────────────────── */
+.bounce-notice{
+  display:flex;align-items:center;gap:7px;
+  background:#f0f9ff;border:1px solid #bae6fd;border-radius:var(--rs);
+  padding:8px 12px;font-size:.75rem;color:#0369a1;font-weight:500;
+  margin-top:10px
+}
+.bounce-notice__spin{
+  width:11px;height:11px;border:2px solid #bae6fd;border-top-color:#0369a1;
+  border-radius:50%;animation:spin .9s linear infinite;flex-shrink:0
+}
+
+/* ── Source pill ─────────────────────────────────────────── */
+.source-pill{
+  display:inline-flex;align-items:center;gap:4px;
+  font-size:.68rem;font-weight:600;color:var(--muted);
+  background:var(--bg);border:1px solid var(--border);
+  border-radius:10px;padding:1px 7px
+}
 
 /* MX pill */
 .mx-ok{color:var(--ok);font-weight:700;font-size:.78rem}
