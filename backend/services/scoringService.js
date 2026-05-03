@@ -14,17 +14,19 @@
  *   confidenceLabel(score)       → string
  *
  * Signal weights (consensus):
- *   SMTP valid + non-catch-all  → +50
- *   SMTP valid + catch-all      → +15
- *   Scraper exact               → +60
- *   Scraper pattern             → +20
- *   GitHub exact                → +40   ← NEW
- *   Domain pattern confirmed    → +30
- *   Generic prefix              → −40
- *   SMTP invalid                → disqualified
+ *   SMTP valid + non-catch-all    → +50
+ *   SMTP valid + catch-all        → +15
+ *   Scraper exact                 → +60
+ *   Scraper pattern               → +20
+ *   GitHub exact                  → +40
+ *   Bounce verified (real send)   → +40   ← NEW: SES sent, no bounce in 1h
+ *   Domain pattern confirmed      → +30
+ *   Generic prefix                → −40
+ *   SMTP invalid                  → disqualified
+ *   Bounce hard-bounce            → disqualified
  */
 
-// ── A. Pattern weights ────────────────────────────────────────
+// ── A. Pattern weights ────────────────────────────────────────────
 const PATTERN_WEIGHT = {
   'firstname.lastname':    40,
   'f+lastname':            36,
@@ -58,7 +60,7 @@ const PATTERN_WEIGHT = {
 };
 const PATTERN_WEIGHT_DEFAULT = 6;
 
-// ── B. Freemail domains ───────────────────────────────────────
+// ── B. Freemail domains ───────────────────────────────────────────
 const FREEMAIL = new Set([
   'gmail.com','googlemail.com','outlook.com','hotmail.com',
   'live.com','msn.com','yahoo.com','yahoo.es','yahoo.co.uk',
@@ -68,7 +70,7 @@ const FREEMAIL = new Set([
   'gmx.de','web.de','t-online.de','orange.fr','laposte.net',
 ]);
 
-// ── C. Generic / role-based prefixes ─────────────────────────
+// ── C. Generic / role-based prefixes ─────────────────────────────
 const GENERIC_PREFIXES = new Set([
   'info','contact','support','hello','admin','sales','help','team',
   'office','mail','email','noreply','no-reply','postmaster','webmaster',
@@ -78,7 +80,7 @@ const GENERIC_PREFIXES = new Set([
   'enquiry','questions','reception','accounts','partnerships','partners',
 ]);
 
-// ── Helpers ───────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────
 
 function isFreemailDomain(domain) {
   return FREEMAIL.has((domain || '').toLowerCase());
@@ -101,65 +103,80 @@ function confidenceLabel(score) {
   return 'low';
 }
 
-// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
 // CONSENSUS SIGNAL SYSTEM
-// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
 
 /**
  * Consensus voting — each independent data source casts a weighted vote.
  * Returns a raw consensus score (not clamped to 0–100).
  *
  * Signal weights:
- *   SMTP valid + non-catch-all  → +50   (hard proof from mail server)
- *   SMTP valid + catch-all      → +15   (weak — server accepts everything)
- *   Scraper exact match         → +60   (address seen on company website)
- *   Scraper pattern match       → +20   (website emails use same pattern)
- *   Domain pattern confirmed    → +30   (pattern learned from real probes)
- *   Generic role-based prefix   → −40   (not a personal address)
- *   SMTP explicit rejection     → disqualified (score −999)
+ *   SMTP valid + non-catch-all    → +50   (RCPT TO accepted, no catch-all)
+ *   SMTP valid + catch-all        → +15   (server accepts everything — weak)
+ *   Scraper exact match           → +60   (email found on company website)
+ *   Scraper pattern match         → +20   (website emails use same pattern)
+ *   GitHub exact                  → +40   (email on public GitHub profile)
+ *   Bounce verified               → +40   (sent real email, no bounce in 1h)
+ *   Domain pattern confirmed      → +30   (pattern learned from real probes)
+ *   Generic role-based prefix     → −40   (not a personal address)
+ *   SMTP explicit rejection       → disqualified
+ *   Hard bounce                   → disqualified
  *
  * @param {{
- *   smtpStatus:     'valid'|'invalid'|'unknown'|'not-checked',
- *   catchAll:       boolean,
- *   scraperExact:   boolean,
- *   scraperPattern: boolean,
- *   githubExact:    boolean,   email found on a GitHub profile matching domain
- *   patternSignal:  boolean,   confirmed/strong domain pattern matches candidate
- *   isGeneric:      boolean,
- *   mxFound:        boolean,
+ *   smtpStatus:      'valid'|'invalid'|'unknown'|'not-checked',
+ *   catchAll:        boolean,
+ *   scraperExact:    boolean,
+ *   scraperPattern:  boolean,
+ *   githubExact:     boolean,
+ *   bounceVerified:  boolean,   real SES send confirmed deliverable
+ *   bounceFailed:    boolean,   hard bounce → definitely invalid
+ *   patternSignal:   boolean,
+ *   isGeneric:       boolean,
+ *   mxFound:         boolean,
  * }} input
  * @returns {{
  *   consensusScore: number,
- *   verifiedBy:     string[],   'smtp' | 'scraper' | 'pattern'
+ *   verifiedBy:     string[],
  *   flags:          Object,
  *   disqualified:   boolean,
  * }}
  */
 function computeConsensusScore({
-  smtpStatus     = 'not-checked',
-  catchAll       = false,
-  scraperExact   = false,
-  scraperPattern = false,
-  githubExact    = false,
-  patternSignal  = false,
-  isGeneric      = false,
-  mxFound        = false,
+  smtpStatus      = 'not-checked',
+  catchAll        = false,
+  scraperExact    = false,
+  scraperPattern  = false,
+  githubExact     = false,
+  bounceVerified  = false,
+  bounceFailed    = false,
+  patternSignal   = false,
+  isGeneric       = false,
+  mxFound         = false,
 }) {
   const flags = {
-    smtpValid:      false,
-    smtpCatchAll:   false,
-    smtpInvalid:    false,
-    scraperExact:   false,
-    scraperPattern: false,
-    githubExact:    false,
-    patternMatch:   false,
-    isGeneric:      false,
+    smtpValid:       false,
+    smtpCatchAll:    false,
+    smtpInvalid:     false,
+    scraperExact:    false,
+    scraperPattern:  false,
+    githubExact:     false,
+    bounceVerified:  false,
+    bounceFailed:    false,
+    patternMatch:    false,
+    isGeneric:       false,
   };
 
   // ── Generic role address → heavy penalty, still shown ────────
   if (isGeneric) {
     flags.isGeneric = true;
     return { consensusScore: -40, verifiedBy: [], flags, disqualified: false };
+  }
+
+  // ── Hard bounce → address does NOT exist ─────────────────────
+  if (bounceFailed) {
+    flags.bounceFailed = true;
+    return { consensusScore: -999, verifiedBy: [], flags, disqualified: true };
   }
 
   // ── SMTP explicit rejection → remove from results ─────────────
@@ -203,6 +220,13 @@ function computeConsensusScore({
     verifiedBy.push('github');
   }
 
+  // ── Bounce verification vote ──────────────────────────────────
+  if (bounceVerified) {
+    score += 40;
+    flags.bounceVerified = true;
+    verifiedBy.push('bounce');
+  }
+
   // ── Pattern vote ──────────────────────────────────────────────
   if (patternSignal) {
     score += 30;
@@ -213,36 +237,40 @@ function computeConsensusScore({
   return { consensusScore: score, verifiedBy, flags, disqualified: false };
 }
 
-// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
 // TIER ASSIGNMENT  (used for internal enrichment decision)
-// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
 
 /**
  * @param {{
  *   smtpValid, smtpInvalid, catchAll, scraperExact, scraperPattern,
- *   githubExact, patternMemory, patternStrong, mxFound
+ *   githubExact, bounceVerified, bounceFailed, patternMemory, patternStrong, mxFound
  * }} signals
  * @returns {'verified'|'likely'|'uncertain'|'invalid'}
  */
 function assignTier(signals) {
   const {
-    smtpValid      = false,
-    smtpInvalid    = false,
-    catchAll       = false,
-    scraperExact   = false,
-    scraperPattern = false,
-    githubExact    = false,
-    patternMemory  = false,
-    patternStrong  = false,
-    mxFound        = false,
+    smtpValid       = false,
+    smtpInvalid     = false,
+    catchAll        = false,
+    scraperExact    = false,
+    scraperPattern  = false,
+    githubExact     = false,
+    bounceVerified  = false,
+    bounceFailed    = false,
+    patternMemory   = false,
+    patternStrong   = false,
+    mxFound         = false,
   } = signals;
 
-  if (smtpInvalid)                        return 'invalid';
+  if (smtpInvalid || bounceFailed)              return 'invalid';
   if (!mxFound && !scraperExact
-               && !githubExact)           return 'invalid';
-  if (scraperExact)                       return 'verified';
-  if (smtpValid && !catchAll)             return 'verified';
-  if (githubExact)                        return 'verified';   // public GitHub email = verified
+               && !githubExact
+               && !bounceVerified)              return 'invalid';
+  if (scraperExact)                             return 'verified';
+  if (smtpValid && !catchAll)                   return 'verified';
+  if (githubExact)                              return 'verified';
+  if (bounceVerified)                           return 'verified';
 
   const softCount = [smtpValid, scraperPattern, patternMemory, patternStrong]
     .filter(Boolean).length;
@@ -251,9 +279,9 @@ function assignTier(signals) {
   return 'uncertain';
 }
 
-// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
 // LEGACY MULTI-FACTOR SCORING  (used only for pre-SMTP baseScore)
-// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
 
 function calculateScore(input) {
   const {

@@ -12,22 +12,25 @@
  *
  * Decision rules (applied in order):
  *
- *   1. Disqualified candidates (SMTP 5xx/4xx rejection) are removed.
+ *   1. Disqualified candidates (SMTP 5xx rejection, hard bounce) are removed.
  *   2. Remaining candidates are sorted by consensusScore DESC.
- *   3. Gap check on the top two scores:
- *        gap ≥ 15  →  confidence "high",   return top 1
- *        gap <  15  →  confidence "medium", return top 2–3
- *   4. If no candidate has consensusScore > 0:
- *        confidence "none", bestEmail null
+ *   3. Confidence assignment:
+ *        bounceVerified = true                 →  'guaranteed'
+ *        gap ≥ 15 between rank-1 and rank-2   →  'high'
+ *        gap <  15                             →  'medium'
+ *        no candidate with score > 0           →  'none'
  *
  * ── Consensus score weights (set in scoringService) ──────────
- *   SMTP valid (no catch-all)  +50
- *   SMTP valid (catch-all)     +15
- *   Scraper exact match        +60
- *   Scraper pattern match      +20
- *   Domain pattern confirmed   +30
- *   Generic role-based prefix  −40
- *   SMTP explicit rejection    disqualified
+ *   SMTP valid (no catch-all)       +50
+ *   SMTP valid (catch-all)          +15
+ *   Scraper exact match             +60
+ *   Scraper pattern match           +20
+ *   GitHub exact                    +40
+ *   Bounce verified (real send)     +40   ← NEW
+ *   Domain pattern confirmed        +30
+ *   Generic role-based prefix       −40
+ *   SMTP explicit rejection         disqualified
+ *   Hard bounce                     disqualified
  *
  * Exports:
  *   decideBestEmail({ candidates, scrapedEmails, catchAll })
@@ -87,10 +90,16 @@ function decideBestEmail({ candidates = [], scrapedEmails = [], catchAll = false
 
   let confidence, topCandidates;
 
-  if (gap >= CLEAR_WIN_GAP) {
-    // Clear winner — one email, high confidence
+  // ── Bounce-verified → highest confidence level ────────────
+  if (best.bounceVerified) {
+    confidence    = 'guaranteed';
+    topCandidates = [best];
+
+  } else if (gap >= CLEAR_WIN_GAP) {
+    // Clear statistical winner
     confidence    = 'high';
     topCandidates = [best];
+
   } else {
     // No clear winner — surface top 3 with honest medium confidence
     confidence    = 'medium';
@@ -100,13 +109,16 @@ function decideBestEmail({ candidates = [], scrapedEmails = [], catchAll = false
   // ── 4. Derive metadata for the best candidate ────────────
   const verifiedBy = best.verifiedBy ?? [];
   const bestTier   = best.tier ?? 'uncertain';
+
   const bestSource =
-    verifiedBy.includes('smtp')    ? 'smtp'     :
-    verifiedBy.includes('scraper') ? 'scraped'  : 'inferred';
+    verifiedBy.includes('bounce')  ? 'bounce'   :
+    verifiedBy.includes('smtp')    ? 'smtp'      :
+    verifiedBy.includes('scraper') ? 'scraped'   : 'inferred';
 
   const bestConfidence =
-    confidence === 'high'   ? 'very-high' :
-    confidence === 'medium' ? 'medium'    : 'low';
+    confidence === 'guaranteed' ? 'guaranteed' :
+    confidence === 'high'       ? 'very-high'  :
+    confidence === 'medium'     ? 'medium'     : 'low';
 
   return {
     candidates:     allSorted,

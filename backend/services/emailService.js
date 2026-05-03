@@ -32,10 +32,14 @@ const { verifyEmailSMTP,
 const { detectDomainPattern,
         learnPattern,
         patternMatchDelta } = require('./domainPatternService');
-const { findEmailsFromWebsite } = require('./emailScraperService');
-const { findEmailsBySearch }    = require('./searchScraperService');
-const { findEmailOnGitHub }     = require('./githubService');
-const { decideBestEmail }   = require('./decisionEngine');
+const { findEmailsFromWebsite }   = require('./emailScraperService');
+const { findEmailsBySearch }      = require('./searchScraperService');
+const { findEmailOnGitHub }       = require('./githubService');
+const { decideBestEmail }         = require('./decisionEngine');
+const {
+  verifyEmail:           bounceVerify,
+  getBounceStatusByEmail,
+} = require('./bounceVerifierService');
 
 // All candidates are probed via SMTP in parallel — no threshold cutoff.
 
@@ -130,16 +134,43 @@ async function enrichOneLead(lead) {
 
   // ── 9. Final consensus score for every candidate ──────────
   const candidates = withBase.map((c, i) => {
-    const smtp = smtpMap.get(i) ?? { status: 'not-checked', code: null };
+    const smtp        = smtpMap.get(i) ?? { status: 'not-checked', code: null };
+    const bounceState = getBounceStatusByEmail(c.email);  // null | 'pending' | 'valid' | 'bounced'
     return _finalScore(c, firstName, lastName, domain, mxFound,
-                       smtp.status, isCatchAll, smtp.code, domainPattern, merged, ghResult);
+                       smtp.status, isCatchAll, smtp.code, domainPattern, merged, ghResult, bounceState);
   });
 
   // ── 10. Decision ───────────────────────────────────────────
   const decision = decideBestEmail({ candidates, scrapedEmails: merged.emails, catchAll: isCatchAll });
 
+  // ── 11. Fire bounce verification for best unknown candidate ─
+  // Runs in the background — does NOT delay the API response.
+  // On the NEXT enrichment of the same lead the resolved status will be used.
+  let bounceVerifyId = null;
+  if (decision.bestEmail) {
+    const best = candidates.find(c => c.email === decision.bestEmail);
+    const shouldVerify =
+      best &&
+      best.smtpStatus === 'unknown' &&
+      !best.bounceVerified &&
+      !best.disqualified;
+
+    if (shouldVerify) {
+      const leadId = `${firstName}_${lastName}_${domain}`;
+      bounceVerify(decision.bestEmail, leadId)
+        .then(r => {
+          if (r.status === 'sent') {
+            console.log(`[bounce-verifier] fired for best candidate ${decision.bestEmail} verifyId=${r.verifyId}`);
+            decision._bounceVerifyId = r.verifyId;
+            bounceVerifyId = r.verifyId;
+          }
+        })
+        .catch(err => console.warn(`[bounce-verifier] fire failed: ${err.message}`));
+    }
+  }
+
   return _buildResult(lead, domain, mxFound, mxHost, isCatchAll,
-                      decision, warning, domainPattern, merged.count);
+                      decision, warning, domainPattern, merged.count, bounceVerifyId);
 }
 
 async function enrichBatch(leads) {
@@ -169,7 +200,7 @@ async function enrichBatch(leads) {
  * Replaces the old multi-factor linear scoring for the output.
  */
 function _finalScore(candidate, firstName, lastName, domain, mxFound,
-                     smtpStatus, catchAll, smtpCode, domainPattern, scrape, ghResult = null) {
+                     smtpStatus, catchAll, smtpCode, domainPattern, scrape, ghResult = null, bounceState = null) {
 
   // ── Scraper signals ───────────────────────────────────────
   const { scraperSignal } = _computeScraperSignal(candidate, scrape, firstName, lastName);
@@ -180,6 +211,10 @@ function _finalScore(candidate, firstName, lastName, domain, mxFound,
   // True only when the GitHub result email exactly matches this candidate
   const githubExact = !!(ghResult?.email &&
                          ghResult.email.toLowerCase() === candidate.email.toLowerCase());
+
+  // ── Bounce verification signal ────────────────────────────
+  const bounceVerified = bounceState === 'valid';    // real send confirmed deliverable
+  const bounceFailed   = bounceState === 'bounced';  // hard bounce → disqualify
 
   // ── Pattern signal ────────────────────────────────────────
   const patternMatch     = candidate.pattern === domainPattern.likelyPattern;
@@ -195,10 +230,12 @@ function _finalScore(candidate, firstName, lastName, domain, mxFound,
   // ── Consensus score ───────────────────────────────────────
   const { consensusScore, verifiedBy, flags, disqualified } = computeConsensusScore({
     smtpStatus,
-    catchAll:      !!catchAll,
+    catchAll:       !!catchAll,
     scraperExact,
     scraperPattern,
     githubExact,
+    bounceVerified,
+    bounceFailed,
     patternSignal,
     isGeneric,
     mxFound,
@@ -215,15 +252,17 @@ function _finalScore(candidate, firstName, lastName, domain, mxFound,
 
   // Tier
   const signals = {
-    smtpValid:     flags.smtpValid,
-    smtpInvalid:   flags.smtpInvalid || smtpStatus === 'invalid',
-    catchAll:      !!catchAll,
+    smtpValid:      flags.smtpValid,
+    smtpInvalid:    flags.smtpInvalid || smtpStatus === 'invalid',
+    catchAll:       !!catchAll,
     scraperExact,
     scraperPattern,
     githubExact,
+    bounceVerified,
+    bounceFailed,
     patternMemory:  patternConfirmed,
     patternStrong,
-    mxFound:       !!mxFound,
+    mxFound:        !!mxFound,
   };
   const tier = assignTier(signals);
 
@@ -242,12 +281,15 @@ function _finalScore(candidate, firstName, lastName, domain, mxFound,
     disqualified,
     isGeneric,
     smtpStatus,
-    smtpCode:       smtpCode ?? null,
+    smtpCode:         smtpCode ?? null,
     catchAll,
     patternMatch,
     scraperSignal,
     githubExact,
-    githubProfile:  githubExact ? ghResult?.profileUrl : null,
+    githubProfile:    githubExact ? ghResult?.profileUrl : null,
+    bounceVerified,
+    bounceFailed,
+    bounceState:      bounceState ?? null,
   };
 }
 
@@ -382,7 +424,7 @@ async function _safeSmtpProbe(email, mxHost, allMxRecords = []) {
 // ═══════════════════════════════════════════════════════════════
 
 function _buildResult(lead, domain, mxFound, mxHost, isCatchAll,
-                      decision, warning, domainPattern, scrapedEmailsFound) {
+                      decision, warning, domainPattern, scrapedEmailsFound, bounceVerifyId = null) {
   return {
     // ── Lead info ────────────────────────────────────────────
     firstName:           lead.firstName || '',
@@ -413,6 +455,12 @@ function _buildResult(lead, domain, mxFound, mxHost, isCatchAll,
 
     // ── Full ranked candidate list ────────────────────────────
     candidates:          decision.candidates,          // all, sorted by consensusScore
+
+    // ── Bounce verification ───────────────────────────────────
+    // verifyId to poll GET /api/bounce-status/:verifyId
+    // null = not fired (SMTP already gave a clear answer, or no MX)
+    bounceVerifyId:      bounceVerifyId ?? null,
+    bounceVerificationPending: !!bounceVerifyId,
 
     warning,
   };

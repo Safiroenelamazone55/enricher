@@ -16,6 +16,10 @@ const path         = require('path');
 
 const { enrichOneLead,
         enrichBatch }       = require('./services/emailService');
+const {
+  markBounced,
+  getBounceStatus,
+}                           = require('./services/bounceVerifierService');
 const { getMxRecords,
         cacheStats }        = require('./services/dnsService');
 const { getCacheStats: patternCacheStats } = require('./services/domainPatternService');
@@ -189,6 +193,81 @@ app.get('/api/domain-info', async (req, res) => {
 // ── GET /health  ──────────────────────────────────────────
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
+});
+
+// ── POST /api/bounce-handler  ─────────────────────────────
+// Receives SES bounce notifications forwarded by SNS.
+// Set this URL as the SNS subscription endpoint in AWS Console.
+//
+// SNS sends two types of messages:
+//   SubscriptionConfirmation  → we must GET the SubscribeURL to activate
+//   Notification              → contains the SES event (Bounce, Delivery, etc.)
+app.post('/api/bounce-handler', express.text({ type: '*/*', limit: '512kb' }), (req, res) => {
+  try {
+    // SNS may send body as text/plain or application/json
+    const raw  = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
+    const sns  = JSON.parse(raw);
+    const type = sns.Type || sns.type;
+
+    // ── 1. SNS subscription confirmation ─────────────────────
+    if (type === 'SubscriptionConfirmation') {
+      const url = sns.SubscribeURL;
+      if (!url) return res.sendStatus(400);
+
+      // Confirm by GETting the URL (SNS requirement)
+      const driver = url.startsWith('https') ? require('https') : require('http');
+      driver.get(url, r => { r.resume(); });
+      console.log(`[bounce-handler] SNS subscription confirmed: ${url}`);
+      return res.sendStatus(200);
+    }
+
+    // ── 2. Regular notification ───────────────────────────────
+    if (type !== 'Notification') return res.sendStatus(200);  // ignore other types
+
+    const message = JSON.parse(sns.Message || '{}');
+    if (message.notificationType !== 'Bounce') return res.sendStatus(200);
+
+    const bounce = message.bounce || {};
+    const mail   = message.mail   || {};
+
+    // Only handle permanent (hard) bounces
+    if (bounce.bounceType !== 'Permanent') {
+      console.log(`[bounce-handler] soft bounce ignored (${bounce.bounceType})`);
+      return res.sendStatus(200);
+    }
+
+    const messageId = mail.messageId || '';
+
+    // Find the verification record by original SES messageId
+    const { findByMessageId } = require('./services/bounceVerifierService');
+    const record = findByMessageId(messageId);
+
+    if (record) {
+      markBounced(record.verifyId);
+      console.log(`[bounce-handler] hard bounce → verifyId=${record.verifyId} email=${record.email}`);
+    } else {
+      // Fallback: match by recipient email
+      const recipients = (bounce.bouncedRecipients || []).map(r => r.emailAddress);
+      console.log(`[bounce-handler] no record for msgId=${messageId} recipients=${recipients.join(',')}`);
+    }
+
+    res.sendStatus(200);
+  } catch (err) {
+    console.error('[bounce-handler] parse error:', err.message);
+    res.sendStatus(200);  // always 200 so SNS doesn't retry indefinitely
+  }
+});
+
+// ── GET /api/bounce-status/:verifyId  ─────────────────────
+// Poll for the result of a bounce verification.
+// Returns:  { verifyId, status, email }
+//   status: 'pending'   → waiting (check again in a few minutes)
+//   status: 'valid'     → no bounce in 1 hour → address is deliverable
+//   status: 'bounced'   → hard bounce → address does NOT exist
+//   status: 'not-found' → verifyId unknown
+app.get('/api/bounce-status/:verifyId', (req, res) => {
+  const result = getBounceStatus(req.params.verifyId);
+  res.json({ verifyId: req.params.verifyId, ...result });
 });
 
 // ── 404 / error  ──────────────────────────────────────────
