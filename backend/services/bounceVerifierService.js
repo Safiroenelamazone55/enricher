@@ -5,107 +5,107 @@
  *
  * Strategy:
  *   1. Send a minimal real email to the candidate address via SES.
- *   2. SES delivers (or fails) asynchronously:
- *        - Hard bounce within minutes  →  mailbox does NOT exist  →  invalid
- *        - No bounce after 1 hour      →  assumed deliverable     →  valid
- *   3. SES → SNS → POST /api/bounce-handler carries the bounce notification.
- *      We match it back by the original SES MessageId (carried in SNS payload).
+ *   2. SES delivers asynchronously:
+ *        - Hard bounce within minutes → mailbox absent  → status='bounced'
+ *        - No bounce after 1 hour     → assumed live    → status='verified'
+ *   3. SES → SNS → POST /api/bounce-handler routes the bounce back.
+ *      We match it by the original SES MessageId stored in the DB.
  *
- * Why this works where SMTP probing fails:
- *   Google / O365 block RCPT TO probing but STILL accept the DATA phase of a
- *   real SMTP session, then generate an NDR (bounce) if the mailbox is absent.
- *   SES handles the actual SMTP delivery; we only need to listen for the SNS
- *   notification.
+ * Persistence: PostgreSQL (via db.js / pool).
+ *   No files are written to disk — safe for Render ephemeral filesystem.
  *
- * @aws-sdk/client-ses is required LAZILY (inside _client()) so the server
- * starts normally even if the package is not yet installed.
+ * In-memory cache: a Map mirrors recent rows so getBounceStatusByEmail()
+ *   doesn't hit the DB on every enrichment call.  Cache entries expire
+ *   after CACHE_TTL_MS (2 h) or are invalidated on status change.
  *
- * State persistence:
- *   In-memory Map + backend/data/bounceVerifications.json
- *   Entries older than 2 hours are pruned on load.
+ * @aws-sdk/client-ses is required LAZILY so the server starts normally
+ * even if the package is not installed yet.
  *
  * Exports:
  *   verifyEmail(email, leadId)       → Promise<SendResult>
- *   markBounced(verifyId)            → boolean
- *   getBounceStatus(verifyId)        → StatusResult
- *   getBounceStatusByEmail(email)    → 'valid'|'bounced'|'pending'|null
- *   findByMessageId(messageId)       → record | null
+ *   markBounced(verifyId)            → Promise<boolean>
+ *   getBounceStatus(verifyId)        → Promise<StatusResult>
+ *   getBounceStatusByEmail(email)    → Promise<'verified'|'bounced'|'pending'|null>
+ *   findByMessageId(messageId)       → Promise<record | null>
  */
 
 const crypto = require('crypto');
-const fs     = require('fs');
-const path   = require('path');
+const { pool } = require('../db');
 
-// ── Config ────────────────────────────────────────────────────────
-const BOUNCE_TIMEOUT_MS = 60 * 60 * 1000;    // 1 hour → auto-mark valid
-const MAX_AGE_MS        = 2  * 60 * 60 * 1000;
-const DATA_DIR          = path.join(__dirname, '..', 'data');
-const STORE_FILE        = path.join(DATA_DIR, 'bounceVerifications.json');
+// ── Config ─────────────────────────────────────────────────────────
+const BOUNCE_TIMEOUT_MS = 60 * 60 * 1000;   // 1 h → auto-mark verified
+const CACHE_TTL_MS      = 2  * 60 * 60 * 1000;
 
-// ── SES client — LAZY so missing package doesn't crash the server ─
+// ── In-memory cache (email.toLowerCase() → { verifyId, status, ts }) ──
+const _cache = new Map();
+
+// ── SES client (lazy) ──────────────────────────────────────────────
 let _sesClient = null;
 
-function _client() {
+function _sesClientGet() {
   if (_sesClient) return _sesClient;
-  try {
-    // Require is intentionally inside the function (lazy load).
-    // If @aws-sdk/client-ses is not installed, verifyEmail() returns
-    // { status: 'error' } instead of crashing the process at startup.
-    const { SESClient } = require('@aws-sdk/client-ses');
-    _sesClient = new SESClient({
-      region:      process.env.AWS_REGION || 'us-east-1',
-      credentials: {
-        accessKeyId:     process.env.AWS_ACCESS_KEY_ID     || '',
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
-      },
-    });
-    return _sesClient;
-  } catch (err) {
-    throw new Error(`@aws-sdk/client-ses not available: ${err.message}`);
-  }
+  const { SESClient } = require('@aws-sdk/client-ses');   // lazy
+  _sesClient = new SESClient({
+    region:      process.env.AWS_REGION || 'us-east-1',
+    credentials: {
+      accessKeyId:     process.env.AWS_ACCESS_KEY_ID     || '',
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
+    },
+  });
+  return _sesClient;
 }
-
-// ── In-memory state ───────────────────────────────────────────────
-// verifyId → { email, leadId, verifyId, messageId, sentAt, status, resolvedAt }
-const _store      = new Map();
-const _emailIndex = new Map();   // email (lowercase) → verifyId
-
-_loadFromDisk();
 
 // ═══════════════════════════════════════════════════════════════════
 // PUBLIC
 // ═══════════════════════════════════════════════════════════════════
 
 /**
- * Send a minimal verification email to `email`.
- * Non-blocking — the caller does not await the bounce result.
+ * Send a minimal verification email and insert a row in `verifications`.
  *
- * @param {string} email   Candidate address to verify
- * @param {string} leadId  Opaque ID for cross-referencing
  * @returns {Promise<{
- *   status:     'sent'|'error'|'already-pending'|'already-resolved',
- *   verifyId?:  string,
+ *   status:    'sent'|'error'|'already-pending'|'already-resolved',
+ *   verifyId?: string,
  *   messageId?: string,
- *   message?:   string,
+ *   message?:  string,
  * }>}
  */
 async function verifyEmail(email, leadId = '') {
   if (!email) return { status: 'error', message: 'email required' };
 
-  const key = email.toLowerCase();
+  const emailLower = email.toLowerCase();
 
-  // ── Skip if we already have a result for this address ─────────
-  if (_emailIndex.has(key)) {
-    const existingId = _emailIndex.get(key);
-    const rec        = _store.get(existingId);
-    if (rec) {
-      if (rec.status === 'pending')
-        return { status: 'already-pending',  verifyId: existingId };
-      return   { status: 'already-resolved', verifyId: existingId, resolvedStatus: rec.status };
+  // ── 1. Check cache first (fast path) ────────────────���───────────
+  const cached = _cache.get(emailLower);
+  if (cached && Date.now() - cached.ts < CACHE_TTL_MS) {
+    if (cached.status === 'pending')
+      return { status: 'already-pending',  verifyId: cached.verifyId };
+    return   { status: 'already-resolved', verifyId: cached.verifyId,
+               resolvedStatus: cached.status };
+  }
+
+  // ── 2. Check DB (covers post-restart lookups) ────────────────────
+  if (process.env.DATABASE_URL) {
+    try {
+      const { rows } = await pool.query(
+        `SELECT bounceVerifyId, status FROM verifications
+          WHERE lower(email) = $1
+          ORDER BY created_at DESC LIMIT 1`,
+        [emailLower]
+      );
+      if (rows.length) {
+        const row = rows[0];
+        _cache.set(emailLower, { verifyId: row.bounceverifyid, status: row.status, ts: Date.now() });
+        if (row.status === 'pending')
+          return { status: 'already-pending',  verifyId: row.bounceverifyid };
+        return   { status: 'already-resolved', verifyId: row.bounceverifyid,
+                   resolvedStatus: row.status };
+      }
+    } catch (err) {
+      console.warn('[bounce-verifier] DB lookup failed:', err.message);
     }
   }
 
-  // ── Guard: credentials + from address ─────────────────────────
+  // ── 3. Guard: env vars ───────────────────────────────────────────
   const fromEmail = process.env.SES_FROM_EMAIL;
   if (!fromEmail)
     return { status: 'error', message: 'SES_FROM_EMAIL env var not set' };
@@ -114,7 +114,7 @@ async function verifyEmail(email, leadId = '') {
 
   const verifyId = crypto.randomUUID();
 
-  // ── Build raw MIME with X-Verify-ID header ─────────────────────
+  // ── 4. Build and send raw MIME email ────────────────────────────
   const rawEmail = [
     `From: ${fromEmail}`,
     `To: ${email}`,
@@ -126,85 +126,163 @@ async function verifyEmail(email, leadId = '') {
     `This is an automated deliverability test. You may disregard this message.`,
   ].join('\r\n');
 
+  let messageId = '';
   try {
-    const { SendRawEmailCommand } = require('@aws-sdk/client-ses');
-    const cmd = new SendRawEmailCommand({
-      RawMessage: { Data: Buffer.from(rawEmail, 'utf8') },
-    });
-
-    const response  = await _client().send(cmd);
-    const messageId = response.MessageId || '';
-
-    const record = {
-      email,
-      leadId,
-      verifyId,
-      messageId,
-      sentAt: Date.now(),
-      status: 'pending',
-    };
-    _store.set(verifyId, record);
-    _emailIndex.set(key, verifyId);
-    _saveToDisk();
-
-    // Auto-mark valid after 1 hour if no bounce arrives
-    const timer = setTimeout(() => _autoMarkValid(verifyId), BOUNCE_TIMEOUT_MS);
-    timer.unref();
-    record._timer = timer;
-
-    console.log(`[bounce-verifier] SENT verifyId=${verifyId} to=${email} msgId=${messageId}`);
-    return { status: 'sent', verifyId, messageId };
-
+    const { SendRawEmailCommand } = require('@aws-sdk/client-ses');   // lazy
+    const response = await _sesClientGet().send(
+      new SendRawEmailCommand({ RawMessage: { Data: Buffer.from(rawEmail, 'utf8') } })
+    );
+    messageId = response.MessageId || '';
   } catch (err) {
     console.error(`[bounce-verifier] SES send failed for ${email}: ${err.message}`);
     return { status: 'error', message: err.message };
   }
+
+  // ── 5. Persist to PostgreSQL ─────────────────────────────────────
+  if (process.env.DATABASE_URL) {
+    try {
+      await pool.query(
+        `INSERT INTO verifications
+           (bounceVerifyId, email, leadId, messageId, status, confidence)
+         VALUES ($1, $2, $3, $4, 'pending', 'pending')
+         ON CONFLICT (bounceVerifyId) DO NOTHING`,
+        [verifyId, email, leadId, messageId]
+      );
+    } catch (err) {
+      console.warn('[bounce-verifier] DB insert failed:', err.message);
+      // Continue — in-memory timer still works as fallback
+    }
+  }
+
+  // ── 6. Update in-memory cache ────────────────────────────────────
+  _cache.set(emailLower, { verifyId, status: 'pending', ts: Date.now() });
+
+  // ── 7. Auto-mark verified after 1 h (no bounce = deliverable) ────
+  const timer = setTimeout(() => _autoMarkVerified(verifyId, emailLower), BOUNCE_TIMEOUT_MS);
+  timer.unref();
+
+  console.log(`[bounce-verifier] SENT verifyId=${verifyId} to=${email} msgId=${messageId}`);
+  return { status: 'sent', verifyId, messageId };
 }
 
 /**
  * Mark a verification as hard-bounced.
  * Called by the SNS bounce handler in server.js.
+ *
+ * @param {string} verifyId
+ * @returns {Promise<boolean>}
  */
-function markBounced(verifyId) {
-  const record = _store.get(verifyId);
-  if (!record) return false;
+async function markBounced(verifyId) {
+  let email = null;
 
-  if (record._timer) clearTimeout(record._timer);
-  record.status     = 'bounced';
-  record.resolvedAt = Date.now();
-  _saveToDisk();
-
-  console.log(`[bounce-verifier] HARD BOUNCE verifyId=${verifyId} email=${record.email}`);
-  return true;
-}
-
-/** @returns {{ status, email?, leadId?, sentAt? }} */
-function getBounceStatus(verifyId) {
-  const r = _store.get(verifyId);
-  if (!r) return { status: 'not-found' };
-  return { status: r.status, email: r.email, leadId: r.leadId, sentAt: r.sentAt };
-}
-
-/**
- * Fast lookup by email address — used during enrichment scoring.
- * @returns {'valid'|'bounced'|'pending'|null}
- */
-function getBounceStatusByEmail(email) {
-  const verifyId = _emailIndex.get((email || '').toLowerCase());
-  if (!verifyId) return null;
-  const record = _store.get(verifyId);
-  return record ? record.status : null;
-}
-
-/**
- * Find a record by SES MessageId (for SNS bounce matching).
- * SNS bounce notifications include mail.messageId.
- */
-function findByMessageId(messageId) {
-  for (const record of _store.values()) {
-    if (record.messageId === messageId) return record;
+  if (process.env.DATABASE_URL) {
+    try {
+      const { rows } = await pool.query(
+        `UPDATE verifications
+            SET status = 'bounced', confidence = 'invalid', resolved_at = NOW()
+          WHERE bounceVerifyId = $1
+          RETURNING email`,
+        [verifyId]
+      );
+      if (rows.length) email = rows[0].email;
+    } catch (err) {
+      console.warn('[bounce-verifier] DB markBounced failed:', err.message);
+    }
   }
-  return null;
+
+  // Invalidate cache entry
+  if (email) {
+    _cache.set(email.toLowerCase(), { verifyId, status: 'bounced', ts: Date.now() });
+  }
+
+  console.log(`[bounce-verifier] HARD BOUNCE verifyId=${verifyId} email=${email ?? '?'}`);
+  return !!email;
+}
+
+/**
+ * Get status of a verification by verifyId.
+ * Returns the row from PostgreSQL (or a not-found stub if DB is unavailable).
+ *
+ * @param {string} verifyId
+ * @returns {Promise<{ status, confidence, email?, created_at? }>}
+ */
+async function getBounceStatus(verifyId) {
+  if (!process.env.DATABASE_URL) {
+    return { status: 'not-found' };
+  }
+  try {
+    const { rows } = await pool.query(
+      `SELECT bounceVerifyId, email, status, confidence, created_at, resolved_at
+         FROM verifications WHERE bounceVerifyId = $1`,
+      [verifyId]
+    );
+    if (!rows.length) return { status: 'not-found' };
+    const r = rows[0];
+    return {
+      status:     r.status,
+      confidence: r.confidence,
+      email:      r.email,
+      createdAt:  r.created_at,
+      resolvedAt: r.resolved_at,
+    };
+  } catch (err) {
+    console.warn('[bounce-verifier] getBounceStatus DB error:', err.message);
+    return { status: 'not-found' };
+  }
+}
+
+/**
+ * Fast lookup by email — used during enrichment scoring.
+ * Checks cache first, then DB.
+ *
+ * @returns {Promise<'verified'|'bounced'|'pending'|null>}
+ */
+async function getBounceStatusByEmail(email) {
+  const emailLower = (email || '').toLowerCase();
+
+  // Cache hit
+  const cached = _cache.get(emailLower);
+  if (cached && Date.now() - cached.ts < CACHE_TTL_MS) return cached.status;
+
+  if (!process.env.DATABASE_URL) return null;
+
+  try {
+    const { rows } = await pool.query(
+      `SELECT bounceVerifyId, status FROM verifications
+        WHERE lower(email) = $1
+        ORDER BY created_at DESC LIMIT 1`,
+      [emailLower]
+    );
+    if (!rows.length) return null;
+    const row = rows[0];
+    _cache.set(emailLower, { verifyId: row.bounceverifyid, status: row.status, ts: Date.now() });
+    return row.status;
+  } catch (err) {
+    console.warn('[bounce-verifier] getBounceStatusByEmail DB error:', err.message);
+    return null;
+  }
+}
+
+/**
+ * Find a verification record by SES MessageId.
+ * Used by the SNS bounce handler to match back to the verifyId.
+ *
+ * @param {string} messageId  SES MessageId from SNS notification
+ * @returns {Promise<{ verifyId, email } | null>}
+ */
+async function findByMessageId(messageId) {
+  if (!messageId || !process.env.DATABASE_URL) return null;
+  try {
+    const { rows } = await pool.query(
+      `SELECT bounceVerifyId, email FROM verifications WHERE messageId = $1 LIMIT 1`,
+      [messageId]
+    );
+    if (!rows.length) return null;
+    return { verifyId: rows[0].bounceverifyid, email: rows[0].email };
+  } catch (err) {
+    console.warn('[bounce-verifier] findByMessageId DB error:', err.message);
+    return null;
+  }
 }
 
 module.exports = {
@@ -219,53 +297,19 @@ module.exports = {
 // INTERNAL
 // ═══════════════════════════════════════════════════════════════════
 
-function _autoMarkValid(verifyId) {
-  const record = _store.get(verifyId);
-  if (!record || record.status !== 'pending') return;
-
-  record.status     = 'valid';
-  record.resolvedAt = Date.now();
-  _saveToDisk();
-
-  console.log(`[bounce-verifier] AUTO-VALID (no bounce in 1h) verifyId=${verifyId} email=${record.email}`);
-}
-
-function _saveToDisk() {
-  try {
-    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-    const obj = {};
-    for (const [k, v] of _store) {
-      const { _timer, ...rest } = v;
-      obj[k] = rest;
+async function _autoMarkVerified(verifyId, emailLower) {
+  if (process.env.DATABASE_URL) {
+    try {
+      await pool.query(
+        `UPDATE verifications
+            SET status = 'verified', confidence = 'guaranteed', resolved_at = NOW()
+          WHERE bounceVerifyId = $1 AND status = 'pending'`,
+        [verifyId]
+      );
+    } catch (err) {
+      console.warn('[bounce-verifier] _autoMarkVerified DB error:', err.message);
     }
-    fs.writeFileSync(STORE_FILE, JSON.stringify(obj, null, 2));
-  } catch (err) {
-    console.warn(`[bounce-verifier] disk write failed: ${err.message}`);
   }
-}
-
-function _loadFromDisk() {
-  try {
-    if (!fs.existsSync(STORE_FILE)) return;
-    const data = JSON.parse(fs.readFileSync(STORE_FILE, 'utf8'));
-    const now  = Date.now();
-
-    for (const [verifyId, record] of Object.entries(data)) {
-      if (now - record.sentAt > MAX_AGE_MS) continue;   // prune stale
-
-      _store.set(verifyId, record);
-      _emailIndex.set(record.email.toLowerCase(), verifyId);
-
-      if (record.status === 'pending') {
-        const remaining = Math.max(0, BOUNCE_TIMEOUT_MS - (now - record.sentAt));
-        const timer = setTimeout(() => _autoMarkValid(verifyId), remaining);
-        timer.unref();
-        record._timer = timer;
-      }
-    }
-
-    if (_store.size) console.log(`[bounce-verifier] loaded ${_store.size} records from disk`);
-  } catch (err) {
-    console.warn(`[bounce-verifier] disk load failed: ${err.message}`);
-  }
+  _cache.set(emailLower, { verifyId, status: 'verified', ts: Date.now() });
+  console.log(`[bounce-verifier] AUTO-VERIFIED (no bounce in 1h) verifyId=${verifyId}`);
 }

@@ -5,7 +5,6 @@
 require('dotenv').config();
 
 const express   = require('express');
-const cors      = require('cors');
 const helmet    = require('helmet');
 const morgan    = require('morgan');
 const rateLimit = require('express-rate-limit');
@@ -13,66 +12,63 @@ const multer    = require('multer');
 const https     = require('https');
 const http      = require('http');
 
-// ── Service imports (all wrapped so a single missing file
-//    never prevents the rest of the server from starting) ─────────
+// ── Database (PostgreSQL) — imported early so initDb() runs at startup ──
+const { initDb } = require('./db');
+
+// ── Service imports (defensive — a broken service never kills the server) ──
 const { enrichOneLead, enrichBatch } = require('./services/emailService');
 
-let _markBounced    = () => false;
-let _getBounceStatus = () => ({ status: 'not-found' });
-let _findByMessageId = () => null;
+let _markBounced         = async () => false;
+let _getBounceStatus     = async () => ({ status: 'not-found' });
+let _findByMessageId     = async () => null;
 try {
   const bv = require('./services/bounceVerifierService');
-  _markBounced     = bv.markBounced;
-  _getBounceStatus = bv.getBounceStatus;
-  _findByMessageId = bv.findByMessageId;
+  _markBounced         = bv.markBounced;
+  _getBounceStatus     = bv.getBounceStatus;
+  _findByMessageId     = bv.findByMessageId;
 } catch (e) {
   console.warn('[server] bounceVerifierService unavailable:', e.message);
 }
 
-const { getMxRecords }                       = require('./services/dnsService');
+const { getMxRecords }                    = require('./services/dnsService');
 const { parseLeadsFile, buildResultsExcel,
-        buildTemplateExcel }                 = require('./services/excelService');
+        buildTemplateExcel }              = require('./services/excelService');
 
-// ── App setup ─────────────────────────────────────────────────────
+// ── App ───────────────────────────────────────────────────────────
 const app  = express();
 const PORT = parseInt(process.env.PORT) || 3001;
 const ENV  = process.env.NODE_ENV || 'development';
 const BATCH_LIMIT = parseInt(process.env.BATCH_LIMIT) || 500;
 
-// ── CORS manual — MUST be first, before helmet and every route ────
-// Allows any *.kiwoc.com or *.pages.dev origin.
-// Also reads ALLOWED_ORIGINS env var for extra explicit origins.
+// ── CORS — first middleware, before everything else ───────────────
+// Allows any *.kiwoc.com, *.pages.dev, *.onrender.com origin.
+// Also honours the ALLOWED_ORIGINS env var for additional origins.
 const _extraOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim().toLowerCase())
   : [];
 
 app.use((req, res, next) => {
   const origin = req.headers.origin || '';
-
   const allowed =
-    origin === '' ||                                    // server-to-server (no Origin)
-    origin.endsWith('.kiwoc.com') ||                    // *.kiwoc.com
-    origin === 'https://kiwoc.com' ||                   // apex domain
-    origin.endsWith('.pages.dev') ||                    // Cloudflare Pages previews
-    origin.endsWith('.onrender.com') ||                 // Render preview deploys
-    _extraOrigins.includes('*') ||                      // wildcard in env var
-    _extraOrigins.includes(origin.toLowerCase());       // exact match in env var
+    origin === '' ||
+    origin.endsWith('.kiwoc.com') ||
+    origin === 'https://kiwoc.com' ||
+    origin.endsWith('.pages.dev') ||
+    origin.endsWith('.onrender.com') ||
+    _extraOrigins.includes('*') ||
+    _extraOrigins.includes(origin.toLowerCase());
 
   if (allowed) {
-    res.setHeader('Access-Control-Allow-Origin',  origin || '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    res.setHeader('Access-Control-Expose-Headers','X-Parse-Warnings');
+    res.setHeader('Access-Control-Allow-Origin',   origin || '*');
+    res.setHeader('Access-Control-Allow-Methods',  'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers',  'Content-Type, Authorization');
+    res.setHeader('Access-Control-Expose-Headers', 'X-Parse-Warnings');
   }
-
-  // Preflight — answer immediately with 200 and stop processing
   if (req.method === 'OPTIONS') return res.sendStatus(200);
-
   next();
 });
 
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
-
 app.use(morgan(ENV === 'production' ? 'combined' : 'dev'));
 app.use(express.json({ limit: '2mb' }));
 app.use(express.text({ type: 'text/plain', limit: '512kb' }));
@@ -99,26 +95,22 @@ const upload = multer({
 });
 
 // =================================================================
-// ROUTES — bounce-handler is FIRST so it can never be shadowed
+// ROUTES
 // =================================================================
 
 // ── POST /api/bounce-handler ──────────────────────────────────────
-// Receives SES bounce notifications from SNS.
-// Registered before every other route and before the 404 handler.
-app.post('/api/bounce-handler', (req, res) => {
+// Receives SES bounce notifications forwarded by Amazon SNS.
+// Registered FIRST — never shadowed by any other route.
+app.post('/api/bounce-handler', async (req, res) => {
   try {
     console.log('[bounce-handler] received');
 
-    // Body parsing: express.json() handles application/json,
-    // express.text() handles text/plain (SNS default).
-    // Either way we need a plain JS object.
-    const sns = typeof req.body === 'string'
+    const sns  = typeof req.body === 'string'
       ? JSON.parse(req.body)
       : (req.body || {});
-
     const type = sns.Type || sns.type || '';
 
-    // SNS subscription confirmation — must GET the SubscribeURL
+    // SNS subscription confirmation
     if (type === 'SubscriptionConfirmation') {
       const url = sns.SubscribeURL;
       if (url) {
@@ -129,7 +121,7 @@ app.post('/api/bounce-handler', (req, res) => {
       return res.json({ status: 'ok' });
     }
 
-    // Regular notification
+    // Regular delivery notification
     if (type === 'Notification') {
       const message = typeof sns.Message === 'string'
         ? JSON.parse(sns.Message)
@@ -140,10 +132,13 @@ app.post('/api/bounce-handler', (req, res) => {
         const mail   = message.mail   || {};
 
         if (bounce.bounceType === 'Permanent') {
-          const record = _findByMessageId(mail.messageId || '');
+          // Find the verification record by SES MessageId → update DB
+          const record = await _findByMessageId(mail.messageId || '');
           if (record) {
-            _markBounced(record.verifyId);
+            await _markBounced(record.verifyId);
             console.log(`[bounce-handler] hard bounce verifyId=${record.verifyId} email=${record.email}`);
+          } else {
+            console.warn(`[bounce-handler] no record for msgId=${mail.messageId}`);
           }
         } else {
           console.log(`[bounce-handler] soft bounce ignored (${bounce.bounceType})`);
@@ -154,13 +149,24 @@ app.post('/api/bounce-handler', (req, res) => {
     res.json({ status: 'ok' });
   } catch (err) {
     console.error('[bounce-handler] error:', err.message);
-    res.json({ status: 'ok' }); // always 200 so SNS does not retry
+    res.json({ status: 'ok' });   // always 200 so SNS does not retry
   }
 });
 
 // ── GET /api/bounce-status/:verifyId ─────────────────────────────
-app.get('/api/bounce-status/:verifyId', (req, res) => {
-  res.json({ verifyId: req.params.verifyId, ..._getBounceStatus(req.params.verifyId) });
+// Query current status of a bounce verification from PostgreSQL.
+// Response:
+//   { verifyId, status: 'pending'|'verified'|'bounced', confidence, ... }
+//   or { error: 'ID not found' } with HTTP 404
+app.get('/api/bounce-status/:verifyId', async (req, res) => {
+  const { verifyId } = req.params;
+  const result = await _getBounceStatus(verifyId);
+
+  if (result.status === 'not-found') {
+    return res.status(404).json({ error: 'ID not found' });
+  }
+
+  res.json({ verifyId, ...result });
 });
 
 // ── GET /health ───────────────────────────────────────────────────
@@ -262,22 +268,35 @@ app.use((err, _req, res, _next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
-// ── Start ─────────────────────────────────────────────────────────
-app.listen(PORT, () => {
-  console.log(`\n  ✉  B2B Email Enricher`);
-  console.log(`  ─────────────────────────────────`);
-  console.log(`  API  → http://localhost:${PORT}`);
-  console.log(`  Mode → ${ENV}\n`);
+// =================================================================
+// STARTUP — init DB then start HTTP server
+// =================================================================
+async function start() {
+  // Create PostgreSQL tables if they don't exist (idempotent)
+  await initDb();
 
-  if (ENV === 'production' && process.env.RENDER_EXTERNAL_URL) {
-    const url    = `${process.env.RENDER_EXTERNAL_URL}/health`;
-    const driver = url.startsWith('https') ? https : http;
-    setInterval(() => {
-      driver.get(url, r => {
-        console.log(`[keep-alive] ${url} → ${r.statusCode}`);
-        r.resume();
-      }).on('error', e => console.warn(`[keep-alive] ping failed: ${e.message}`));
-    }, 14 * 60 * 1000);
-    console.log(`  Keep-alive → pinging every 14 min\n`);
-  }
+  app.listen(PORT, () => {
+    console.log(`\n  ✉  B2B Email Enricher`);
+    console.log(`  ─────────────────────────────────`);
+    console.log(`  API  → http://localhost:${PORT}`);
+    console.log(`  Mode → ${ENV}`);
+    console.log(`  DB   → ${process.env.DATABASE_URL ? 'PostgreSQL ✓' : 'no DATABASE_URL'}\n`);
+
+    if (ENV === 'production' && process.env.RENDER_EXTERNAL_URL) {
+      const url    = `${process.env.RENDER_EXTERNAL_URL}/health`;
+      const driver = url.startsWith('https') ? https : http;
+      setInterval(() => {
+        driver.get(url, r => {
+          console.log(`[keep-alive] ${url} → ${r.statusCode}`);
+          r.resume();
+        }).on('error', e => console.warn(`[keep-alive] ping failed: ${e.message}`));
+      }, 14 * 60 * 1000);
+      console.log(`  Keep-alive → pinging every 14 min\n`);
+    }
+  });
+}
+
+start().catch(err => {
+  console.error('[startup] fatal error:', err.message);
+  process.exit(1);
 });
