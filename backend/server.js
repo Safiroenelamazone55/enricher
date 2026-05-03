@@ -1,29 +1,24 @@
 /**
  * server.js — B2B Email Enricher API
- * Runs entirely on Node.js built-ins + minimal npm deps.
- * No external verification APIs.
  */
 
 require('dotenv').config();
 
-const express      = require('express');
-const cors         = require('cors');
-const helmet       = require('helmet');
-const morgan       = require('morgan');
-const rateLimit    = require('express-rate-limit');
-const multer       = require('multer');
-const path         = require('path');
+const express   = require('express');
+const cors      = require('cors');
+const helmet    = require('helmet');
+const morgan    = require('morgan');
+const rateLimit = require('express-rate-limit');
+const multer    = require('multer');
+const https     = require('https');
+const http      = require('http');
 
 const { enrichOneLead,
         enrichBatch }       = require('./services/emailService');
-const {
-  markBounced,
-  getBounceStatus,
-}                           = require('./services/bounceVerifierService');
-const { getMxRecords,
-        cacheStats }        = require('./services/dnsService');
-const { getCacheStats: patternCacheStats } = require('./services/domainPatternService');
-const { resolveDomain }     = require('./services/domainResolver');
+const { markBounced,
+        getBounceStatus,
+        findByMessageId }   = require('./services/bounceVerifierService');
+const { getMxRecords }      = require('./services/dnsService');
 const { parseLeadsFile,
         buildResultsExcel,
         buildTemplateExcel } = require('./services/excelService');
@@ -33,30 +28,29 @@ const PORT = parseInt(process.env.PORT) || 3001;
 const ENV  = process.env.NODE_ENV || 'development';
 const BATCH_LIMIT = parseInt(process.env.BATCH_LIMIT) || 500;
 
-// ── Middleware ───────────────────────────────────────────────
+// ── Middleware ────────────────────────────────────────────────────
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+
 const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
   : ['*'];
 
 app.use(cors({
   origin: (origin, cb) => {
-    // Allow requests with no origin (Postman, curl, server-to-server)
     if (!origin) return cb(null, true);
-    if (ALLOWED_ORIGINS.includes('*') || ALLOWED_ORIGINS.includes(origin)) {
+    if (ALLOWED_ORIGINS.includes('*') || ALLOWED_ORIGINS.includes(origin))
       return cb(null, true);
-    }
     cb(new Error(`CORS: origin ${origin} not allowed`));
   },
-  methods:          ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders:   ['Content-Type', 'Authorization'],
-  exposedHeaders:   ['X-Parse-Warnings'],
-  credentials:      false,
+  methods:        ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  exposedHeaders: ['X-Parse-Warnings'],
+  credentials:    false,
 }));
 app.use(morgan(ENV === 'production' ? 'combined' : 'dev'));
 app.use(express.json({ limit: '2mb' }));
 
-// ── Rate limiting ────────────────────────────────────────────
+// ── Rate limiting ─────────────────────────────────────────────────
 const limiter = rateLimit({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 60_000,
   max:      parseInt(process.env.RATE_LIMIT_MAX)       || 100,
@@ -65,10 +59,10 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
-// ── Multer (file uploads — memory storage) ───────────────────
+// ── Multer (file uploads — memory storage) ────────────────────────
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits:  { fileSize: 10 * 1024 * 1024 }, // 10 MB
+  limits:  { fileSize: 10 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const ok = /\.(xlsx|xls|csv)$/i.test(file.originalname) ||
                file.mimetype.includes('spreadsheet') ||
@@ -79,41 +73,113 @@ const upload = multer({
   },
 });
 
-// ═══════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════
 // ROUTES
-// ═══════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════
 
-// ── POST /api/enrich  ─────────────────────────────────────
-// Single lead enrichment (JSON body)
+// ── POST /api/bounce-handler  ─────────────────────────────────────
+// MUST be registered FIRST — before express.json() parses anything
+// for this route, and before the 404 catch-all.
+//
+// SNS sends two message types:
+//   SubscriptionConfirmation  →  GET the SubscribeURL to activate
+//   Notification              →  contains the SES bounce event
+//
+// SNS Content-Type varies (text/plain or application/json).
+// express.text({ type: '*/*' }) handles both; if express.json()
+// already parsed the body it falls back to the object form.
+app.post(
+  '/api/bounce-handler',
+  express.text({ type: '*/*', limit: '512kb' }),
+  (req, res) => {
+    try {
+      // Body may already be an object (parsed by global express.json)
+      // or a raw string (parsed by the route-level express.text above).
+      const sns = typeof req.body === 'string'
+        ? JSON.parse(req.body)
+        : req.body;
+
+      const type = sns.Type || sns.type || '';
+
+      // ── 1. SNS subscription confirmation ──────────────────────
+      if (type === 'SubscriptionConfirmation') {
+        const url = sns.SubscribeURL;
+        if (!url) return res.sendStatus(400);
+        const driver = url.startsWith('https') ? https : http;
+        driver.get(url, r => { r.resume(); });
+        console.log(`[bounce-handler] SNS subscription confirmed`);
+        return res.sendStatus(200);
+      }
+
+      // ── 2. Regular notification ────────────────────────────────
+      if (type !== 'Notification') return res.sendStatus(200);
+
+      const message = typeof sns.Message === 'string'
+        ? JSON.parse(sns.Message)
+        : (sns.Message || {});
+
+      if (message.notificationType !== 'Bounce') return res.sendStatus(200);
+
+      const bounce = message.bounce || {};
+      const mail   = message.mail   || {};
+
+      // Only handle permanent (hard) bounces
+      if (bounce.bounceType !== 'Permanent') {
+        console.log(`[bounce-handler] soft bounce ignored (${bounce.bounceType})`);
+        return res.sendStatus(200);
+      }
+
+      const messageId = mail.messageId || '';
+      const record    = findByMessageId(messageId);
+
+      if (record) {
+        markBounced(record.verifyId);
+        console.log(`[bounce-handler] hard bounce verifyId=${record.verifyId} email=${record.email}`);
+      } else {
+        const recipients = (bounce.bouncedRecipients || []).map(r => r.emailAddress);
+        console.warn(`[bounce-handler] no record for msgId=${messageId} recipients=${recipients.join(',')}`);
+      }
+
+      res.sendStatus(200);
+    } catch (err) {
+      console.error('[bounce-handler] parse error:', err.message);
+      res.sendStatus(200);  // always 200 so SNS does not retry
+    }
+  }
+);
+
+// ── GET /api/bounce-status/:verifyId  ────────────────────────────
+// Poll for the result of a pending bounce verification.
+//   status: 'pending'   → no answer yet (check again in ~5 min)
+//   status: 'valid'     → no bounce after 1 h → address is deliverable
+//   status: 'bounced'   → hard bounce → address does NOT exist
+//   status: 'not-found' → unknown verifyId
+app.get('/api/bounce-status/:verifyId', (req, res) => {
+  res.json({ verifyId: req.params.verifyId, ...getBounceStatus(req.params.verifyId) });
+});
+
+// ── POST /api/enrich  ────────────────────────────────────────────
 // Body: { firstName, lastName, company }
 app.post('/api/enrich', async (req, res) => {
   const { firstName, lastName, company } = req.body ?? {};
-
-  if (!firstName || !lastName || !company) {
+  if (!firstName || !lastName || !company)
     return res.status(400).json({ error: 'firstName, lastName and company are required.' });
-  }
-
   try {
-    const result = await enrichOneLead({ firstName, lastName, company });
-    res.json(result);
+    res.json(await enrichOneLead({ firstName, lastName, company }));
   } catch (err) {
     console.error('[/api/enrich]', err.message);
     res.status(500).json({ error: err.message });
   }
 });
 
-// ── POST /api/enrich/batch  ───────────────────────────────
-// Batch enrichment from JSON array
+// ── POST /api/enrich/batch  ──────────────────────────────────────
 // Body: { leads: [{firstName, lastName, company}, ...] }
 app.post('/api/enrich/batch', async (req, res) => {
   const leads = req.body?.leads;
-  if (!Array.isArray(leads) || leads.length === 0) {
+  if (!Array.isArray(leads) || leads.length === 0)
     return res.status(400).json({ error: '`leads` array is required.' });
-  }
-  if (leads.length > BATCH_LIMIT) {
+  if (leads.length > BATCH_LIMIT)
     return res.status(400).json({ error: `Max ${BATCH_LIMIT} leads per request.` });
-  }
-
   try {
     const results = await enrichBatch(leads);
     res.json({ count: results.length, results });
@@ -123,19 +189,16 @@ app.post('/api/enrich/batch', async (req, res) => {
   }
 });
 
-// ── POST /api/enrich/upload  ──────────────────────────────
-// Upload Excel → enrich → return Excel
+// ── POST /api/enrich/upload  ─────────────────────────────────────
+// Upload Excel/CSV → enrich → return Excel
 app.post('/api/enrich/upload', upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
-
   try {
     const { leads, warnings } = parseLeadsFile(req.file.buffer, req.file.mimetype);
-    if (leads.length === 0) {
+    if (leads.length === 0)
       return res.status(400).json({ error: 'No leads found in file.', warnings });
-    }
-    if (leads.length > BATCH_LIMIT) {
+    if (leads.length > BATCH_LIMIT)
       return res.status(400).json({ error: `File has ${leads.length} rows, max is ${BATCH_LIMIT}.` });
-    }
 
     console.log(`[upload] Processing ${leads.length} leads from "${req.file.originalname}"`);
     const results  = await enrichBatch(leads);
@@ -152,15 +215,14 @@ app.post('/api/enrich/upload', upload.single('file'), async (req, res) => {
   }
 });
 
-// ── POST /api/enrich/upload-json  ────────────────────────
-// Same as /upload but returns JSON — used by preview table
+// ── POST /api/enrich/upload-json  ───────────────────────────────
+// Same as /upload but returns JSON — used by the preview table
 app.post('/api/enrich/upload-json', upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
   try {
     const { leads, warnings } = parseLeadsFile(req.file.buffer, req.file.mimetype);
-    if (leads.length > BATCH_LIMIT) {
+    if (leads.length > BATCH_LIMIT)
       return res.status(400).json({ error: `Max ${BATCH_LIMIT} leads per request.` });
-    }
     const results = await enrichBatch(leads);
     res.json({ count: results.length, warnings, results });
   } catch (err) {
@@ -168,8 +230,7 @@ app.post('/api/enrich/upload-json', upload.single('file'), async (req, res) => {
   }
 });
 
-// ── GET /api/template  ────────────────────────────────────
-// Download a blank template Excel
+// ── GET /api/template  ───────────────────────────────────────────
 app.get('/api/template', (_req, res) => {
   const buf = buildTemplateExcel();
   res.setHeader('Content-Disposition', 'attachment; filename="enricher-template.xlsx"');
@@ -177,8 +238,7 @@ app.get('/api/template', (_req, res) => {
   res.send(buf);
 });
 
-// ── GET /api/domain-info  ─────────────────────────────────
-// Quick MX check for a single domain
+// ── GET /api/domain-info  ────────────────────────────────────────
 app.get('/api/domain-info', async (req, res) => {
   const { domain } = req.query;
   if (!domain) return res.status(400).json({ error: 'domain param required.' });
@@ -190,100 +250,20 @@ app.get('/api/domain-info', async (req, res) => {
   }
 });
 
-// ── GET /health  ──────────────────────────────────────────
-app.get('/health', (_req, res) => {
-  res.json({ status: 'ok' });
-});
+// ── GET /health  ─────────────────────────────────────────────────
+app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
-// ── POST /api/bounce-handler  ─────────────────────────────
-// Receives SES bounce notifications forwarded by SNS.
-// Set this URL as the SNS subscription endpoint in AWS Console.
-//
-// SNS sends two types of messages:
-//   SubscriptionConfirmation  → we must GET the SubscribeURL to activate
-//   Notification              → contains the SES event (Bounce, Delivery, etc.)
-app.post('/api/bounce-handler', express.text({ type: '*/*', limit: '512kb' }), (req, res) => {
-  try {
-    // SNS may send body as text/plain or application/json
-    const raw  = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
-    const sns  = JSON.parse(raw);
-    const type = sns.Type || sns.type;
-
-    // ── 1. SNS subscription confirmation ─────────────────────
-    if (type === 'SubscriptionConfirmation') {
-      const url = sns.SubscribeURL;
-      if (!url) return res.sendStatus(400);
-
-      // Confirm by GETting the URL (SNS requirement)
-      const driver = url.startsWith('https') ? require('https') : require('http');
-      driver.get(url, r => { r.resume(); });
-      console.log(`[bounce-handler] SNS subscription confirmed: ${url}`);
-      return res.sendStatus(200);
-    }
-
-    // ── 2. Regular notification ───────────────────────────────
-    if (type !== 'Notification') return res.sendStatus(200);  // ignore other types
-
-    const message = JSON.parse(sns.Message || '{}');
-    if (message.notificationType !== 'Bounce') return res.sendStatus(200);
-
-    const bounce = message.bounce || {};
-    const mail   = message.mail   || {};
-
-    // Only handle permanent (hard) bounces
-    if (bounce.bounceType !== 'Permanent') {
-      console.log(`[bounce-handler] soft bounce ignored (${bounce.bounceType})`);
-      return res.sendStatus(200);
-    }
-
-    const messageId = mail.messageId || '';
-
-    // Find the verification record by original SES messageId
-    const { findByMessageId } = require('./services/bounceVerifierService');
-    const record = findByMessageId(messageId);
-
-    if (record) {
-      markBounced(record.verifyId);
-      console.log(`[bounce-handler] hard bounce → verifyId=${record.verifyId} email=${record.email}`);
-    } else {
-      // Fallback: match by recipient email
-      const recipients = (bounce.bouncedRecipients || []).map(r => r.emailAddress);
-      console.log(`[bounce-handler] no record for msgId=${messageId} recipients=${recipients.join(',')}`);
-    }
-
-    res.sendStatus(200);
-  } catch (err) {
-    console.error('[bounce-handler] parse error:', err.message);
-    res.sendStatus(200);  // always 200 so SNS doesn't retry indefinitely
-  }
-});
-
-// ── GET /api/bounce-status/:verifyId  ─────────────────────
-// Poll for the result of a bounce verification.
-// Returns:  { verifyId, status, email }
-//   status: 'pending'   → waiting (check again in a few minutes)
-//   status: 'valid'     → no bounce in 1 hour → address is deliverable
-//   status: 'bounced'   → hard bounce → address does NOT exist
-//   status: 'not-found' → verifyId unknown
-app.get('/api/bounce-status/:verifyId', (req, res) => {
-  const result = getBounceStatus(req.params.verifyId);
-  res.json({ verifyId: req.params.verifyId, ...result });
-});
-
-// ── 404 / error  ──────────────────────────────────────────
+// ── 404 / global error  ──────────────────────────────────────────
 app.use((_req, res) => res.status(404).json({ error: 'Route not found' }));
 // eslint-disable-next-line no-unused-vars
 app.use((err, _req, res, _next) => {
-  if (err.message?.includes('Only .xlsx')) return res.status(400).json({ error: err.message });
+  if (err.message?.includes('Only .xlsx'))
+    return res.status(400).json({ error: err.message });
   console.error('[unhandled]', err);
   res.status(500).json({ error: 'Internal server error' });
 });
 
-// ═══════════════════════════════════════════════════════════
-// enrichOneLead + enrichBatch are now in services/emailService.js
-// ═══════════════════════════════════════════════════════════
-
-// ── Start ─────────────────────────────────────────────────
+// ── Start ────────────────────────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`\n  ✉  B2B Email Enricher`);
   console.log(`  ─────────────────────────────────`);
@@ -293,18 +273,14 @@ app.listen(PORT, () => {
   // Keep-alive ping (Render free tier sleeps after 15 min inactivity)
   if (ENV === 'production' && process.env.RENDER_EXTERNAL_URL) {
     const url      = `${process.env.RENDER_EXTERNAL_URL}/health`;
-    const interval = 14 * 60 * 1000; // every 14 minutes
-    const https    = require('https');
-    const http     = require('http');
+    const interval = 14 * 60 * 1000;
     const driver   = url.startsWith('https') ? https : http;
 
     setInterval(() => {
-      driver.get(url, res => {
-        console.log(`[keep-alive] ${url} → ${res.statusCode}`);
-        res.resume();
-      }).on('error', err => {
-        console.warn(`[keep-alive] ping failed: ${err.message}`);
-      });
+      driver.get(url, r => {
+        console.log(`[keep-alive] ${url} → ${r.statusCode}`);
+        r.resume();
+      }).on('error', e => console.warn(`[keep-alive] ping failed: ${e.message}`));
     }, interval);
 
     console.log(`  Keep-alive → pinging every 14 min\n`);
