@@ -30,9 +30,23 @@ function _setupPassport() {
     },
     async (_accessToken, _refreshToken, profile, done) => {
       try {
-        const email  = profile.emails?.[0]?.value  || '';
-        const avatar = profile.photos?.[0]?.value   || '';
-        const user   = await findOrCreateUser({
+        const email  = (profile.emails?.[0]?.value || '').toLowerCase();
+        const avatar = profile.photos?.[0]?.value  || '';
+
+        // ── Whitelist check ──────────────────────────────────────
+        const allowedRaw = process.env.ALLOWED_EMAILS || '';
+        if (allowedRaw.trim()) {
+          const whitelist = allowedRaw
+            .split(',')
+            .map(e => e.trim().toLowerCase())
+            .filter(Boolean);
+          if (!whitelist.includes(email)) {
+            console.warn(`[auth] blocked login attempt: ${email} not in ALLOWED_EMAILS`);
+            return done(null, false, { message: 'unauthorized' });
+          }
+        }
+
+        const user = await findOrCreateUser({
           googleId: profile.id,
           email,
           name:   profile.displayName || '',
@@ -267,13 +281,15 @@ app.get('/api/auth/google',
 // ── GET /api/auth/google/callback ─────────────────────────────────
 // Google redirects here after consent. Creates/finds user, starts
 // session, then redirects browser to the frontend.
+// If the strategy calls done(null, false) (whitelist rejection) the
+// failureRedirect fires with ?error=unauthorized so the frontend can
+// show a meaningful message.
 app.get('/api/auth/google/callback',
   passport.authenticate('google', {
-    failureRedirect: 'https://enricher.kiwoc.com?auth=failed',
+    failureRedirect: 'https://enricher.kiwoc.com?error=unauthorized',
     session: true,
   }),
-  (req, res) => {
-    // Successful auth — send user to the frontend
+  (_req, res) => {
     res.redirect('https://enricher.kiwoc.com?auth=ok');
   }
 );

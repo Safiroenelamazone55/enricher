@@ -154,6 +154,35 @@ async function initAuth() {
   }
 }
 
+// ── Show error banner if redirected back with ?error= ─────────────
+(function checkUrlError() {
+  const params = new URLSearchParams(window.location.search);
+  const error  = params.get('error');
+  if (!error) return;
+
+  // Clean the query string from the URL without reloading
+  history.replaceState(null, '', window.location.pathname);
+
+  const messages = {
+    unauthorized: '⛔ Tu cuenta de Google no tiene acceso a esta herramienta. Contactá al administrador.',
+  };
+  const msg = messages[error] || `Error de autenticación: ${error}`;
+
+  // Inject a dismissible banner above the auth wall
+  const banner = document.createElement('div');
+  banner.style.cssText = [
+    'position:fixed;top:0;left:0;right:0;z-index:300',
+    'background:#7f1d1d;color:#fff;font-size:.85rem;font-weight:600',
+    'padding:13px 20px;display:flex;align-items:center;justify-content:space-between',
+    'gap:12px;box-shadow:0 2px 8px rgba(0,0,0,.25)',
+  ].join(';');
+  banner.innerHTML = `<span>${msg}</span>
+    <button style="background:rgba(255,255,255,.2);border:none;border-radius:6px;
+      color:#fff;padding:4px 12px;cursor:pointer;font-size:.8rem;font-weight:600"
+      onclick="this.parentElement.remove()">Cerrar</button>`;
+  document.body.prepend(banner);
+})();
+
 // Run auth check immediately
 initAuth();
 
