@@ -9,11 +9,54 @@ const helmet    = require('helmet');
 const morgan    = require('morgan');
 const rateLimit = require('express-rate-limit');
 const multer    = require('multer');
+const session   = require('express-session');
+const passport  = require('passport');
 const https     = require('https');
 const http      = require('http');
 
 // ── Database (PostgreSQL) — imported early so initDb() runs at startup ──
-const { initDb } = require('./db');
+const { initDb, findOrCreateUser, findUserById } = require('./db');
+
+// ── Passport Google OAuth strategy ───────────────────────────────
+// Loaded lazily so the server starts even if credentials are absent.
+function _setupPassport() {
+  const { Strategy: GoogleStrategy } = require('passport-google-oauth20');
+
+  passport.use(new GoogleStrategy(
+    {
+      clientID:     process.env.GOOGLE_CLIENT_ID     || '',
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
+      callbackURL:  'https://enricher-ix3b.onrender.com/api/auth/google/callback',
+    },
+    async (_accessToken, _refreshToken, profile, done) => {
+      try {
+        const email  = profile.emails?.[0]?.value  || '';
+        const avatar = profile.photos?.[0]?.value   || '';
+        const user   = await findOrCreateUser({
+          googleId: profile.id,
+          email,
+          name:   profile.displayName || '',
+          avatar,
+        });
+        done(null, user);
+      } catch (err) {
+        done(err, null);
+      }
+    }
+  ));
+
+  // Store only the integer user id in the session
+  passport.serializeUser((user, done) => done(null, user.id));
+
+  passport.deserializeUser(async (id, done) => {
+    try {
+      const user = await findUserById(id);
+      done(null, user ?? false);
+    } catch (err) {
+      done(err, null);
+    }
+  });
+}
 
 // ── Service imports (defensive — a broken service never kills the server) ──
 const { enrichOneLead, enrichBatch } = require('./services/emailService');
@@ -40,29 +83,39 @@ const PORT = parseInt(process.env.PORT) || 3001;
 const ENV  = process.env.NODE_ENV || 'development';
 const BATCH_LIMIT = parseInt(process.env.BATCH_LIMIT) || 500;
 
+// Trust Render's reverse proxy (required for secure cookies + correct IP)
+app.set('trust proxy', 1);
+
 // ── CORS — first middleware, before everything else ───────────────
 // Allows any *.kiwoc.com, *.pages.dev, *.onrender.com origin.
 // Also honours the ALLOWED_ORIGINS env var for additional origins.
+// When credentials:true the origin must be explicit (never '*').
 const _extraOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim().toLowerCase())
   : [];
 
+function _isAllowedOrigin(origin) {
+  if (!origin) return true;
+  const o = origin.toLowerCase();
+  return (
+    o === 'https://kiwoc.com'        ||
+    o.endsWith('.kiwoc.com')         ||
+    o.endsWith('.pages.dev')         ||
+    o.endsWith('.onrender.com')      ||
+    _extraOrigins.includes('*')      ||
+    _extraOrigins.includes(o)
+  );
+}
+
 app.use((req, res, next) => {
   const origin = req.headers.origin || '';
-  const allowed =
-    origin === '' ||
-    origin.endsWith('.kiwoc.com') ||
-    origin === 'https://kiwoc.com' ||
-    origin.endsWith('.pages.dev') ||
-    origin.endsWith('.onrender.com') ||
-    _extraOrigins.includes('*') ||
-    _extraOrigins.includes(origin.toLowerCase());
-
-  if (allowed) {
-    res.setHeader('Access-Control-Allow-Origin',   origin || '*');
-    res.setHeader('Access-Control-Allow-Methods',  'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers',  'Content-Type, Authorization');
-    res.setHeader('Access-Control-Expose-Headers', 'X-Parse-Warnings');
+  if (_isAllowedOrigin(origin)) {
+    // Must be the exact origin (not '*') when credentials are involved
+    res.setHeader('Access-Control-Allow-Origin',      origin || '*');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Methods',     'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers',     'Content-Type, Authorization');
+    res.setHeader('Access-Control-Expose-Headers',    'X-Parse-Warnings');
   }
   if (req.method === 'OPTIONS') return res.sendStatus(200);
   next();
@@ -73,6 +126,33 @@ app.use(morgan(ENV === 'production' ? 'combined' : 'dev'));
 app.use(express.json({ limit: '2mb' }));
 app.use(express.text({ type: 'text/plain', limit: '512kb' }));
 
+// ── Session ───────────────────────────────────────────────────────
+// sameSite:'none' + secure:true are required for cross-site cookies
+// (Cloudflare Pages frontend ↔ Render backend).
+const SESSION_SECRET = process.env.SESSION_SECRET || 'enricher-dev-secret-change-in-prod';
+app.use(session({
+  secret:            SESSION_SECRET,
+  resave:            false,
+  saveUninitialized: false,
+  cookie: {
+    httpOnly: true,
+    secure:   ENV === 'production',   // HTTPS only in prod
+    sameSite: ENV === 'production' ? 'none' : 'lax',
+    maxAge:   7 * 24 * 60 * 60 * 1000,  // 7 days
+  },
+}));
+
+// ── Passport ──────────────────────────────────────────────────────
+try {
+  _setupPassport();
+  app.use(passport.initialize());
+  app.use(passport.session());
+  console.log('[auth] Passport + Google OAuth configured');
+} catch (e) {
+  console.warn('[auth] passport setup failed (GOOGLE_CLIENT_ID/SECRET missing?):', e.message);
+}
+
+// ── Rate limiter ──────────────────────────────────────────────────
 const limiter = rateLimit({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 60_000,
   max:      parseInt(process.env.RATE_LIMIT_MAX)       || 100,
@@ -81,6 +161,7 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
+// ── File upload ───────────────────────────────────────────────────
 const upload = multer({
   storage: multer.memoryStorage(),
   limits:  { fileSize: 10 * 1024 * 1024 },
@@ -93,6 +174,12 @@ const upload = multer({
     cb(ok ? null : new Error('Only .xlsx, .xls or .csv files allowed'), ok);
   },
 });
+
+// ── Auth middleware ───────────────────────────────────────────────
+function requireAuth(req, res, next) {
+  if (req.isAuthenticated && req.isAuthenticated()) return next();
+  res.status(401).json({ error: 'Authentication required. Please log in.' });
+}
 
 // =================================================================
 // ROUTES
@@ -132,7 +219,6 @@ app.post('/api/bounce-handler', async (req, res) => {
         const mail   = message.mail   || {};
 
         if (bounce.bounceType === 'Permanent') {
-          // Find the verification record by SES MessageId → update DB
           const record = await _findByMessageId(mail.messageId || '');
           if (record) {
             await _markBounced(record.verifyId);
@@ -154,10 +240,6 @@ app.post('/api/bounce-handler', async (req, res) => {
 });
 
 // ── GET /api/bounce-status/:verifyId ─────────────────────────────
-// Query current status of a bounce verification from PostgreSQL.
-// Response:
-//   { verifyId, status: 'pending'|'verified'|'bounced', confidence, ... }
-//   or { error: 'ID not found' } with HTTP 404
 app.get('/api/bounce-status/:verifyId', async (req, res) => {
   const { verifyId } = req.params;
   const result = await _getBounceStatus(verifyId);
@@ -172,8 +254,57 @@ app.get('/api/bounce-status/:verifyId', async (req, res) => {
 // ── GET /health ───────────────────────────────────────────────────
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
+// =================================================================
+// AUTH ROUTES
+// =================================================================
+
+// ── GET /api/auth/google ──────────────────────────────────────────
+// Redirects to Google consent screen.
+app.get('/api/auth/google',
+  passport.authenticate('google', { scope: ['profile', 'email'] })
+);
+
+// ── GET /api/auth/google/callback ─────────────────────────────────
+// Google redirects here after consent. Creates/finds user, starts
+// session, then redirects browser to the frontend.
+app.get('/api/auth/google/callback',
+  passport.authenticate('google', {
+    failureRedirect: 'https://enricher.kiwoc.com?auth=failed',
+    session: true,
+  }),
+  (req, res) => {
+    // Successful auth — send user to the frontend
+    res.redirect('https://enricher.kiwoc.com?auth=ok');
+  }
+);
+
+// ── GET /api/auth/me ──────────────────────────────────────────────
+// Returns the authenticated user or { loggedIn: false }.
+app.get('/api/auth/me', (req, res) => {
+  if (req.isAuthenticated && req.isAuthenticated() && req.user) {
+    const { id, email, name, avatar } = req.user;
+    return res.json({ loggedIn: true, id, email, name, avatar });
+  }
+  res.json({ loggedIn: false });
+});
+
+// ── GET /api/auth/logout ──────────────────────────────────────────
+app.get('/api/auth/logout', (req, res, next) => {
+  req.logout(err => {
+    if (err) return next(err);
+    req.session.destroy(() => {
+      res.clearCookie('connect.sid');
+      res.json({ loggedIn: false });
+    });
+  });
+});
+
+// =================================================================
+// ENRICHMENT ROUTES  (protected — require authentication)
+// =================================================================
+
 // ── POST /api/enrich ──────────────────────────────────────────────
-app.post('/api/enrich', async (req, res) => {
+app.post('/api/enrich', requireAuth, async (req, res) => {
   const { firstName, lastName, company } = req.body ?? {};
   if (!firstName || !lastName || !company)
     return res.status(400).json({ error: 'firstName, lastName and company are required.' });
@@ -186,7 +317,7 @@ app.post('/api/enrich', async (req, res) => {
 });
 
 // ── POST /api/enrich/batch ────────────────────────────────────────
-app.post('/api/enrich/batch', async (req, res) => {
+app.post('/api/enrich/batch', requireAuth, async (req, res) => {
   const leads = req.body?.leads;
   if (!Array.isArray(leads) || leads.length === 0)
     return res.status(400).json({ error: '`leads` array is required.' });
@@ -202,7 +333,7 @@ app.post('/api/enrich/batch', async (req, res) => {
 });
 
 // ── POST /api/enrich/upload ───────────────────────────────────────
-app.post('/api/enrich/upload', upload.single('file'), async (req, res) => {
+app.post('/api/enrich/upload', requireAuth, upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
   try {
     const { leads, warnings } = parseLeadsFile(req.file.buffer, req.file.mimetype);
@@ -225,7 +356,7 @@ app.post('/api/enrich/upload', upload.single('file'), async (req, res) => {
 });
 
 // ── POST /api/enrich/upload-json ─────────────────────────────────
-app.post('/api/enrich/upload-json', upload.single('file'), async (req, res) => {
+app.post('/api/enrich/upload-json', requireAuth, upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
   try {
     const { leads, warnings } = parseLeadsFile(req.file.buffer, req.file.mimetype);
@@ -239,6 +370,7 @@ app.post('/api/enrich/upload-json', upload.single('file'), async (req, res) => {
 });
 
 // ── GET /api/template ─────────────────────────────────────────────
+// Template download is public (no auth required)
 app.get('/api/template', (_req, res) => {
   const buf = buildTemplateExcel();
   res.setHeader('Content-Disposition', 'attachment; filename="enricher-template.xlsx"');
@@ -280,7 +412,8 @@ async function start() {
     console.log(`  ─────────────────────────────────`);
     console.log(`  API  → http://localhost:${PORT}`);
     console.log(`  Mode → ${ENV}`);
-    console.log(`  DB   → ${process.env.DATABASE_URL ? 'PostgreSQL ✓' : 'no DATABASE_URL'}\n`);
+    console.log(`  DB   → ${process.env.DATABASE_URL ? 'PostgreSQL ✓' : 'no DATABASE_URL'}`);
+    console.log(`  Auth → ${process.env.GOOGLE_CLIENT_ID ? 'Google OAuth ✓' : 'no GOOGLE_CLIENT_ID'}\n`);
 
     if (ENV === 'production' && process.env.RENDER_EXTERNAL_URL) {
       const url    = `${process.env.RENDER_EXTERNAL_URL}/health`;

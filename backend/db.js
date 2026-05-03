@@ -41,7 +41,7 @@ pool.on('error', err => {
 
 // ── Schema migration ───────────────────────────────────────────────
 /**
- * Creates the `verifications` table if it does not already exist.
+ * Creates all required tables if they do not already exist.
  * Safe to call on every startup (idempotent).
  */
 async function initDb() {
@@ -51,6 +51,23 @@ async function initDb() {
   }
 
   try {
+    // ── users table (Google OAuth) ─────────────────────────────
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id          SERIAL      PRIMARY KEY,
+        google_id   TEXT        UNIQUE NOT NULL,
+        email       TEXT        NOT NULL,
+        name        TEXT        NOT NULL DEFAULT '',
+        avatar      TEXT        NOT NULL DEFAULT '',
+        created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS users_google_id_idx ON users (google_id);
+    `);
+
+    // ── verifications table ────────────────────────────────────
     await pool.query(`
       CREATE TABLE IF NOT EXISTS verifications (
         bounceVerifyId  TEXT        PRIMARY KEY,
@@ -61,9 +78,16 @@ async function initDb() {
                           CHECK (status IN ('pending', 'verified', 'bounced'))
                           DEFAULT 'pending',
         confidence      TEXT        NOT NULL DEFAULT 'pending',
+        user_id         INTEGER     REFERENCES users(id) ON DELETE SET NULL,
         created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         resolved_at     TIMESTAMPTZ
       );
+    `);
+
+    // Add user_id column if the table already existed without it
+    await pool.query(`
+      ALTER TABLE verifications
+        ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
     `);
 
     // Index on email for fast getBounceStatusByEmail() lookups
@@ -78,11 +102,44 @@ async function initDb() {
         ON verifications (messageId);
     `);
 
-    console.log('[db] verifications table ready');
+    console.log('[db] tables ready (users, verifications)');
   } catch (err) {
     console.error('[db] initDb failed:', err.message);
     throw err;
   }
+}
+
+// ── User helpers ───────────────────────────────────────────────────
+
+/**
+ * Find an existing user by Google ID, or create one.
+ * Returns the full user row.
+ */
+async function findOrCreateUser({ googleId, email, name, avatar }) {
+  // Upsert: insert if not exists, update name/avatar/email on conflict
+  const { rows } = await pool.query(
+    `INSERT INTO users (google_id, email, name, avatar)
+       VALUES ($1, $2, $3, $4)
+     ON CONFLICT (google_id) DO UPDATE
+       SET email  = EXCLUDED.email,
+           name   = EXCLUDED.name,
+           avatar = EXCLUDED.avatar
+     RETURNING id, google_id, email, name, avatar, created_at`,
+    [googleId, email, name || '', avatar || '']
+  );
+  return rows[0];
+}
+
+/**
+ * Find a user by internal integer id.
+ */
+async function findUserById(id) {
+  const { rows } = await pool.query(
+    `SELECT id, google_id, email, name, avatar, created_at
+       FROM users WHERE id = $1`,
+    [id]
+  );
+  return rows[0] ?? null;
 }
 
 // ── Graceful shutdown ──────────────────────────────────────────────
@@ -98,4 +155,4 @@ async function closeDb() {
 process.on('SIGINT',  () => closeDb().finally(() => process.exit(0)));
 process.on('SIGTERM', () => closeDb().finally(() => process.exit(0)));
 
-module.exports = { pool, initDb, closeDb };
+module.exports = { pool, initDb, closeDb, findOrCreateUser, findUserById };

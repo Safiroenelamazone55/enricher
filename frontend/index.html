@@ -20,8 +20,30 @@
       <a href="#howit">How it works</a>
       <a href="https://enricher-ix3b.onrender.com/api/template" id="dlTemplate">⬇ Download template</a>
     </nav>
+    <!-- Auth bar — populated by app.js after /api/auth/me -->
+    <div id="authBar" class="auth-bar">
+      <!-- Skeleton shown while loading -->
+      <div class="auth-bar__skeleton"></div>
+    </div>
   </div>
 </header>
+
+<!-- AUTH WALL — shown when not logged in -->
+<div id="authWall" class="auth-wall hidden">
+  <div class="auth-wall__card">
+    <div class="auth-wall__icon">✉</div>
+    <h2 class="auth-wall__title">B2B Email Enricher</h2>
+    <p class="auth-wall__sub">Sign in with your Google account to start finding verified B2B email addresses.</p>
+    <a href="https://enricher-ix3b.onrender.com/api/auth/google" class="btn btn--google">
+      <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" width="18" height="18"/>
+      Sign in with Google
+    </a>
+    <p class="auth-wall__note">Your data is never shared with third parties.</p>
+  </div>
+</div>
+
+<!-- APP SHELL — hidden until authenticated -->
+<div id="appShell" class="hidden">
 
 <!-- HERO -->
 <section class="hero">
@@ -229,6 +251,8 @@
     <p class="footer__copy">DNS · SMTP · SES verification · No external APIs · Scores are probabilistic</p>
   </div>
 </footer>
+
+</div><!-- /appShell -->
 
 <script src="app.js"></script>
 </body>

@@ -243,6 +243,29 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);line-height:
 .footer__inner{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
 .footer__copy{font-size:.78rem;color:var(--muted)}
 
+/* ── Auth bar (header) ──────────────────────────────────── */
+.auth-bar{display:flex;align-items:center}
+.auth-bar__skeleton{width:90px;height:30px;background:var(--border);border-radius:var(--rs);animation:pulse 1.2s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
+.auth-user{display:flex;align-items:center;gap:9px}
+.auth-user__avatar{width:30px;height:30px;border-radius:50%;object-fit:cover;border:2px solid var(--border)}
+.auth-user__initials{width:30px;height:30px;border-radius:50%;background:var(--brand);color:#fff;font-size:.75rem;font-weight:700;display:grid;place-items:center;flex-shrink:0}
+.auth-user__name{font-size:.82rem;font-weight:600;color:var(--text);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* Google sign-in button */
+.btn--google{background:#fff;color:#3c4043;border:1.5px solid #dadce0;gap:9px;font-weight:600}
+.btn--google:hover:not(:disabled){background:#f8f9fa;border-color:#c6c6c6}
+.btn--google img{flex-shrink:0}
+
+/* ── Auth wall ───────────────────────────────────────────── */
+.auth-wall{position:fixed;inset:0;background:linear-gradient(135deg,#eef2ff 0%,#f5f3ff 100%);display:flex;align-items:center;justify-content:center;z-index:200;padding:20px}
+.auth-wall__card{background:var(--white);border:1px solid var(--border);border-radius:16px;padding:48px 40px;text-align:center;max-width:400px;width:100%;box-shadow:0 20px 60px rgba(79,70,229,.15)}
+.auth-wall__icon{width:56px;height:56px;background:var(--brand);border-radius:14px;display:grid;place-items:center;color:#fff;font-size:26px;margin:0 auto 20px}
+.auth-wall__title{font-size:1.4rem;font-weight:800;margin-bottom:10px;letter-spacing:-.3px}
+.auth-wall__sub{font-size:.88rem;color:var(--muted);margin-bottom:28px;line-height:1.6}
+.auth-wall__card .btn--google{padding:12px 24px;font-size:.9rem;width:100%;justify-content:center;margin-bottom:16px}
+.auth-wall__note{font-size:.72rem;color:var(--muted)}
+
 /* ── Responsive ─────────────────────────────────────────── */
 @media(max-width:700px){
   .split,.col3{grid-template-columns:1fr}
