@@ -416,6 +416,36 @@ app.post('/api/enrich/upload-json', requireAuth, upload.single('file'), async (r
   }
 });
 
+// ── GET /api/user/verifications ──────────────────────────────────
+// Returns all bounce-verification rows for the authenticated user,
+// ordered by most recent first.
+app.get('/api/user/verifications', requireAuth, async (req, res) => {
+  const { pool } = require('./db');
+  try {
+    const { rows } = await pool.query(
+      `SELECT bounceVerifyId, email, status, confidence, created_at, resolved_at
+         FROM verifications
+        WHERE user_id = $1
+        ORDER BY created_at DESC`,
+      [req.user.id]
+    );
+    res.json({
+      count: rows.length,
+      verifications: rows.map(r => ({
+        bounceVerifyId: r.bounceverifyid,
+        email:          r.email,
+        status:         r.status,
+        confidence:     r.confidence,
+        createdAt:      r.created_at,
+        resolvedAt:     r.resolved_at,
+      })),
+    });
+  } catch (err) {
+    console.error('[/api/user/verifications]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── GET /api/template ─────────────────────────────────────────────
 // Template download is public (no auth required)
 app.get('/api/template', (_req, res) => {

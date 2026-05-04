@@ -55,6 +55,7 @@
     <div class="tabs">
       <button class="tab active" data-tab="single">Single lead</button>
       <button class="tab"        data-tab="batch">Batch upload</button>
+      <button class="tab"        data-tab="verifications">Mis Verificaciones</button>
     </div>
   </div>
 </section>
@@ -213,6 +214,27 @@
       </div>
 
     </div><!-- /pane-batch -->
+
+    <!-- ── VERIFICACIONES PANE ───────────────────────────────── -->
+    <div class="pane" id="pane-verifications">
+      <div class="card card--lift">
+        <div class="verif-header">
+          <div class="card__title" style="margin-bottom:0"><span>📬</span> Mis Verificaciones por envío real</div>
+          <button class="btn btn--outline btn--sm" id="btnRefreshVerif">
+            <span class="btn__text">🔄 Actualizar</span>
+            <span class="spin hidden"></span>
+          </button>
+        </div>
+        <p style="font-size:.8rem;color:var(--muted);margin:8px 0 18px">
+          Emails verificados mediante envío real (SES). Un correo sin rebote en 1 hora se marca como Verificado.
+        </p>
+        <div id="verifErr" class="alert alert--err hidden"></div>
+        <div id="verifBody">
+          <div class="verif-empty">Cargando…</div>
+        </div>
+      </div>
+    </div><!-- /pane-verifications -->
+
   </div>
 </main>
 

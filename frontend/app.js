@@ -526,6 +526,86 @@ function initApp() {
     pag.appendChild(next);
   }
 
+
+  // ═══════════════════════════════════════════════════════════════
+  // MIS VERIFICACIONES
+  // ═══════════════════════════════════════════════════════════════
+
+  async function loadVerifications() {
+    const body    = $('verifBody');
+    const errEl   = $('verifErr');
+    const btn     = $('btnRefreshVerif');
+
+    hideAlert(errEl);
+    setBtn(btn, true);
+    body.innerHTML = '<div class="verif-empty">Cargando…</div>';
+
+    try {
+      const res  = await apiFetch(`${API}/user/verifications`);
+      if (res.status === 401) { location.reload(); return; }
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+
+      const rows = data.verifications || [];
+
+      if (rows.length === 0) {
+        body.innerHTML = '<div class="verif-empty">No tenés verificaciones registradas.</div>';
+        return;
+      }
+
+      const statusMeta = {
+        pending:  { icon: '🟡', label: 'Pendiente',  cls: 'vstatus--pending'  },
+        verified: { icon: '🟢', label: 'Verificado', cls: 'vstatus--verified' },
+        bounced:  { icon: '🔴', label: 'Rebote',     cls: 'vstatus--bounced'  },
+      };
+
+      const rowsHtml = rows.map(r => {
+        const s   = statusMeta[r.status] ?? { icon: '⚪', label: r.status, cls: '' };
+        const date = r.createdAt
+          ? new Date(r.createdAt).toLocaleString('es-AR', {
+              day: '2-digit', month: '2-digit', year: 'numeric',
+              hour: '2-digit', minute: '2-digit',
+            })
+          : '—';
+        return `<tr>
+          <td><span class="mono">${esc(r.email)}</span></td>
+          <td><span class="badge ${esc(s.cls)}">${s.icon} ${s.label}</span></td>
+          <td style="white-space:nowrap;font-size:.78rem;color:var(--muted)">${date}</td>
+        </tr>`;
+      }).join('');
+
+      body.innerHTML = `
+        <div class="tbl-wrap">
+          <table class="verif-table">
+            <thead><tr><th>Email</th><th>Estado</th><th>Fecha</th></tr></thead>
+            <tbody>${rowsHtml}</tbody>
+          </table>
+        </div>
+        <p style="font-size:.75rem;color:var(--muted);margin-top:10px;text-align:right">
+          ${rows.length} verificación${rows.length !== 1 ? 'es' : ''}
+        </p>`;
+
+    } catch (err) {
+      showAlert(errEl, `Error al cargar verificaciones: ${err.message}`);
+      body.innerHTML = '';
+    } finally {
+      setBtn(btn, false);
+    }
+  }
+
+  // Load when the tab is first activated
+  let _verifLoaded = false;
+  document.querySelectorAll('.tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (btn.dataset.tab === 'verifications' && !_verifLoaded) {
+        _verifLoaded = true;
+        loadVerifications();
+      }
+    });
+  });
+
+  $('btnRefreshVerif').addEventListener('click', loadVerifications);
+
 } // end initApp()
 
 
