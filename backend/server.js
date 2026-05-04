@@ -22,11 +22,14 @@ const { initDb, findOrCreateUser, findUserById } = require('./db');
 function _setupPassport() {
   const { Strategy: GoogleStrategy } = require('passport-google-oauth20');
 
+  const callbackURL = 'https://enricher-t04s.onrender.com/api/auth/google/callback';
+  console.log('[auth] callbackURL usado:', callbackURL);
+
   passport.use(new GoogleStrategy(
     {
       clientID:     process.env.GOOGLE_CLIENT_ID     || '',
       clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
-      callbackURL:  'https://enricher-ix3b.onrender.com/api/auth/google/callback',
+      callbackURL,
     },
     async (_accessToken, _refreshToken, profile, done) => {
       try {
