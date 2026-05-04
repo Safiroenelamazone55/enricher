@@ -3,56 +3,112 @@
 /**
  * db.js — PostgreSQL connection pool (singleton)
  *
- * Reads DATABASE_URL from the environment. If the variable is absent the
- * process exits immediately with a clear message — there is no fallback to
- * localhost and the server never starts in a broken state.
+ * CONNECTION STRATEGY
+ * ───────────────────
+ * We parse DATABASE_URL manually and pass every parameter explicitly to
+ * the pg Pool constructor. This prevents the pg library from falling back
+ * to its own environment-variable defaults (PGHOST, PGPORT, PGDATABASE,
+ * PGUSER, PGPASSWORD) which can silently redirect connections to
+ * 127.0.0.1:5432 when the primary host is unreachable.
  *
- * Usage:
- *   const { pool, initDb } = require('./db');
- *   await initDb();                          // call once at startup
- *   const { rows } = await pool.query(...); // run any query
+ * If DATABASE_URL is missing or unparseable the process exits immediately
+ * with a clear message — there is no localhost fallback, ever.
+ *
+ * RENDER INTERNAL vs EXTERNAL URL
+ * ────────────────────────────────
+ * Use the "Internal Database URL" shown in Render's database info page.
+ * It looks like:
+ *   postgresql://user:pass@dpg-xxxxxxxx-a/dbname
+ *
+ * That hostname (dpg-…-a) is only resolvable from Render services in the
+ * SAME REGION. If you see ENOTFOUND, verify both the web service and the
+ * database are in the same region (Render dashboard → Settings → Region).
+ * If they differ, change the web service region to match, then redeploy.
+ *
+ * The "External Database URL" (…ohio.render.com:5432) works from anywhere
+ * but is slower; use it only as a temporary fallback during debugging.
  */
 
 const { Pool } = require('pg');
 
-// ── Fail fast if DATABASE_URL is missing ──────────────────────────
-// pg silently connects to 127.0.0.1:5432 when connectionString is
-// undefined. We prevent that by crashing early with a clear message.
-const DATABASE_URL = process.env.DATABASE_URL;
+// ── 1. Require DATABASE_URL ────────────────────────────────────────
+const RAW_URL = process.env.DATABASE_URL;
 
-if (!DATABASE_URL) {
+if (!RAW_URL) {
   console.error(
-    '[db] FATAL: DATABASE_URL environment variable is not set.\n' +
-    '     Set it in Render → Environment before starting the server.'
+    '[db] FATAL: DATABASE_URL is not set.\n' +
+    '     Add it in Render → Environment (use the Internal Database URL).'
   );
   process.exit(1);
 }
 
-// ── Connection pool ────────────────────────────────────────────────
-// ssl.rejectUnauthorized:false is required for Render's managed
-// Postgres (self-signed cert on the internal network).
+// ── 2. Parse the URL — crash clearly if it is malformed ───────────
+let _parsed;
+try {
+  _parsed = new URL(RAW_URL);
+} catch (_) {
+  console.error('[db] FATAL: DATABASE_URL is not a valid URL:', RAW_URL);
+  process.exit(1);
+}
+
+const DB_HOST = _parsed.hostname;
+const DB_PORT = parseInt(_parsed.port, 10) || 5432;
+const DB_USER = decodeURIComponent(_parsed.username);
+const DB_PASS = decodeURIComponent(_parsed.password);
+const DB_NAME = _parsed.pathname.replace(/^\//, '');
+
+if (!DB_HOST || !DB_USER || !DB_NAME) {
+  console.error(
+    `[db] FATAL: DATABASE_URL is incomplete.\n` +
+    `     host="${DB_HOST}" user="${DB_USER}" db="${DB_NAME}"\n` +
+    `     Expected format: postgresql://user:pass@hostname/dbname`
+  );
+  process.exit(1);
+}
+
+console.log(`[db] resolved → host=${DB_HOST} port=${DB_PORT} db=${DB_NAME} user=${DB_USER}`);
+
+// ── 3. Create pool with explicit params — no pg env-var fallback ───
+// Passing each field individually means pg has nothing to infer from
+// PGHOST / PGPORT / etc., eliminating the 127.0.0.1 fallback path.
 const pool = new Pool({
-  connectionString: DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
-  max:                     10,
-  idleTimeoutMillis:       30_000,
-  connectionTimeoutMillis:  5_000,
+  host:     DB_HOST,
+  port:     DB_PORT,
+  user:     DB_USER,
+  password: DB_PASS,
+  database: DB_NAME,
+  ssl:      { rejectUnauthorized: false },  // required for Render managed Postgres
+  max:                      10,
+  idleTimeoutMillis:        30_000,
+  connectionTimeoutMillis:   5_000,
 });
 
 pool.on('error', err => {
   console.error('[db] unexpected pool error:', err.message);
 });
 
-// ── Schema migration ───────────────────────────────────────────────
-/**
- * Creates all required tables if they do not already exist.
- * Safe to call on every startup (idempotent).
- */
+// ── 4. Schema migration ────────────────────────────────────────────
 async function initDb() {
-  console.log('[db] connecting to:', DATABASE_URL.replace(/:([^:@]+)@/, ':***@'));
+  // Smoke-test the connection before running DDL so the error message
+  // names the real host instead of a pg internal address.
+  let client;
+  try {
+    client = await pool.connect();
+    console.log('[db] connection established');
+  } catch (err) {
+    console.error(
+      `[db] FATAL: cannot connect to ${DB_HOST}:${DB_PORT} — ${err.message}\n` +
+      `     If you see ENOTFOUND, check that the Render web service and the\n` +
+      `     database are in the SAME region (Render dashboard → Settings → Region).\n` +
+      `     Then paste the "Internal Database URL" into the DATABASE_URL env var.`
+    );
+    throw err;
+  } finally {
+    client?.release();
+  }
 
   try {
-    // ── users table (Google OAuth) ─────────────────────────────
+    // ── users table (Google OAuth) ───────────────────────────
     await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
         id          SERIAL      PRIMARY KEY,
@@ -68,7 +124,7 @@ async function initDb() {
       CREATE INDEX IF NOT EXISTS users_google_id_idx ON users (google_id);
     `);
 
-    // ── verifications table ────────────────────────────────────
+    // ── verifications table ──────────────────────────────────
     await pool.query(`
       CREATE TABLE IF NOT EXISTS verifications (
         bounceVerifyId  TEXT        PRIMARY KEY,
@@ -85,19 +141,16 @@ async function initDb() {
       );
     `);
 
-    // Add user_id column if the table already existed without it
     await pool.query(`
       ALTER TABLE verifications
         ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
     `);
 
-    // Index on email for fast getBounceStatusByEmail() lookups
     await pool.query(`
       CREATE INDEX IF NOT EXISTS verifications_email_idx
         ON verifications (lower(email));
     `);
 
-    // Index on messageId for fast SNS bounce matching
     await pool.query(`
       CREATE INDEX IF NOT EXISTS verifications_messageid_idx
         ON verifications (messageId);
@@ -112,9 +165,6 @@ async function initDb() {
 
 // ── User helpers ───────────────────────────────────────────────────
 
-/**
- * Upsert a Google user — insert on first login, update name/avatar on return.
- */
 async function findOrCreateUser({ googleId, email, name, avatar }) {
   const { rows } = await pool.query(
     `INSERT INTO users (google_id, email, name, avatar)
@@ -129,7 +179,6 @@ async function findOrCreateUser({ googleId, email, name, avatar }) {
   return rows[0];
 }
 
-/** Find a user by internal integer id (used by Passport deserializeUser). */
 async function findUserById(id) {
   const { rows } = await pool.query(
     `SELECT id, google_id, email, name, avatar, created_at
@@ -141,12 +190,8 @@ async function findUserById(id) {
 
 // ── Graceful shutdown ──────────────────────────────────────────────
 async function closeDb() {
-  try {
-    await pool.end();
-    console.log('[db] pool closed');
-  } catch (err) {
-    console.error('[db] pool close error:', err.message);
-  }
+  try { await pool.end(); console.log('[db] pool closed'); }
+  catch (err) { console.error('[db] pool close error:', err.message); }
 }
 
 process.on('SIGINT',  () => closeDb().finally(() => process.exit(0)));
