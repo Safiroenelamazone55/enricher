@@ -356,7 +356,7 @@ app.post('/api/enrich', requireAuth, async (req, res) => {
   if (!firstName || !lastName || !company)
     return res.status(400).json({ error: 'firstName, lastName and company are required.' });
   try {
-    res.json(await enrichOneLead({ firstName, lastName, company }));
+    res.json(await enrichOneLead({ firstName, lastName, company }, req.user?.id ?? null));
   } catch (err) {
     console.error('[/api/enrich]', err.message);
     res.status(500).json({ error: err.message });
@@ -371,7 +371,7 @@ app.post('/api/enrich/batch', requireAuth, async (req, res) => {
   if (leads.length > BATCH_LIMIT)
     return res.status(400).json({ error: `Max ${BATCH_LIMIT} leads per request.` });
   try {
-    const results = await enrichBatch(leads);
+    const results = await enrichBatch(leads, req.user?.id ?? null);
     res.json({ count: results.length, results });
   } catch (err) {
     console.error('[/api/enrich/batch]', err.message);
@@ -389,7 +389,7 @@ app.post('/api/enrich/upload', requireAuth, upload.single('file'), async (req, r
     if (leads.length > BATCH_LIMIT)
       return res.status(400).json({ error: `File has ${leads.length} rows, max is ${BATCH_LIMIT}.` });
     console.log(`[upload] Processing ${leads.length} leads from "${req.file.originalname}"`);
-    const results  = await enrichBatch(leads);
+    const results  = await enrichBatch(leads, req.user?.id ?? null);
     const xlsBuf   = buildResultsExcel(results);
     const filename = `enriched_${Date.now()}.xlsx`;
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
@@ -409,7 +409,7 @@ app.post('/api/enrich/upload-json', requireAuth, upload.single('file'), async (r
     const { leads, warnings } = parseLeadsFile(req.file.buffer, req.file.mimetype);
     if (leads.length > BATCH_LIMIT)
       return res.status(400).json({ error: `Max ${BATCH_LIMIT} leads per request.` });
-    const results = await enrichBatch(leads);
+    const results = await enrichBatch(leads, req.user?.id ?? null);
     res.json({ count: results.length, warnings, results });
   } catch (err) {
     res.status(500).json({ error: err.message });

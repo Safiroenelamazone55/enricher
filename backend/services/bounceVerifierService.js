@@ -69,7 +69,7 @@ function _sesClientGet() {
  *   message?:  string,
  * }>}
  */
-async function verifyEmail(email, leadId = '') {
+async function verifyEmail(email, leadId = '', userId = null) {
   if (!email) return { status: 'error', message: 'email required' };
 
   const emailLower = email.toLowerCase();
@@ -143,10 +143,10 @@ async function verifyEmail(email, leadId = '') {
     try {
       await pool.query(
         `INSERT INTO verifications
-           (bounceVerifyId, email, leadId, messageId, status, confidence)
-         VALUES ($1, $2, $3, $4, 'pending', 'pending')
+           (bounceVerifyId, email, leadId, messageId, status, confidence, user_id)
+         VALUES ($1, $2, $3, $4, 'pending', 'pending', $5)
          ON CONFLICT (bounceVerifyId) DO NOTHING`,
-        [verifyId, email, leadId, messageId]
+        [verifyId, email, leadId, messageId, userId ?? null]
       );
     } catch (err) {
       console.warn('[bounce-verifier] DB insert failed:', err.message);

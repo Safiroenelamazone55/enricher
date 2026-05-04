@@ -47,7 +47,7 @@ const {
 // PUBLIC
 // ═══════════════════════════════════════════════════════════════
 
-async function enrichOneLead(lead) {
+async function enrichOneLead(lead, userId = null) {
   const { firstName, lastName, company = '', linkedinUrl = '' } = lead;
 
   // ── 1. Domain ────────────────────────────────────────────
@@ -132,10 +132,17 @@ async function enrichOneLead(lead) {
   });
   _learnFromScraper(domain, merged);
 
+  // ── 9a. Pre-fetch bounce statuses in parallel ─────────────
+  // getBounceStatusByEmail is async — must be awaited before the
+  // synchronous .map() below, or every bounceState would be a Promise.
+  const bounceStatuses = await Promise.all(
+    withBase.map(c => getBounceStatusByEmail(c.email).catch(() => null))
+  );
+
   // ── 9. Final consensus score for every candidate ──────────
   const candidates = withBase.map((c, i) => {
     const smtp        = smtpMap.get(i) ?? { status: 'not-checked', code: null };
-    const bounceState = getBounceStatusByEmail(c.email);  // null | 'pending' | 'valid' | 'bounced'
+    const bounceState = bounceStatuses[i];   // resolved: null | 'pending' | 'verified' | 'bounced'
     return _finalScore(c, firstName, lastName, domain, mxFound,
                        smtp.status, isCatchAll, smtp.code, domainPattern, merged, ghResult, bounceState);
   });
@@ -143,29 +150,41 @@ async function enrichOneLead(lead) {
   // ── 10. Decision ───────────────────────────────────────────
   const decision = decideBestEmail({ candidates, scrapedEmails: merged.emails, catchAll: isCatchAll });
 
-  // ── 11. Fire bounce verification for best unknown candidate ─
-  // Runs in the background — does NOT delay the API response.
-  // On the NEXT enrichment of the same lead the resolved status will be used.
+  // ── 11. Fire bounce verification for best candidate ────────
+  // Triggers whenever confidence is not already conclusive:
+  //   - 'guaranteed' means SMTP confirmed valid  → no need to send
+  //   - 'very-high'  means strong multi-signal   → skip to save quota
+  //   - everything else (high / medium / low / none) → send real email
+  // Also skips if: already bounced/verified, or candidate disqualified.
+  // Runs fire-and-forget — does NOT delay the API response.
   let bounceVerifyId = null;
   if (decision.bestEmail) {
     const best = candidates.find(c => c.email === decision.bestEmail);
+    const conclusive = decision.confidence === 'guaranteed' || decision.confidence === 'very-high';
     const shouldVerify =
       best &&
-      best.smtpStatus === 'unknown' &&
+      !conclusive &&
       !best.bounceVerified &&
-      !best.disqualified;
+      !best.disqualified &&
+      best.bounceState !== 'pending';   // already queued → skip duplicate
 
     if (shouldVerify) {
       const leadId = `${firstName}_${lastName}_${domain}`;
-      bounceVerify(decision.bestEmail, leadId)
+      bounceVerify(decision.bestEmail, leadId, userId)
         .then(r => {
           if (r.status === 'sent') {
-            console.log(`[bounce-verifier] fired for best candidate ${decision.bestEmail} verifyId=${r.verifyId}`);
-            decision._bounceVerifyId = r.verifyId;
+            console.log(`[bounceVerifier] enviado para ${decision.bestEmail} (id: ${r.verifyId})`);
             bounceVerifyId = r.verifyId;
+          } else if (r.status === 'already-pending') {
+            console.log(`[bounceVerifier] ya pendiente para ${decision.bestEmail} (id: ${r.verifyId})`);
+            bounceVerifyId = r.verifyId;
+          } else {
+            console.log(`[bounceVerifier] ${r.status} para ${decision.bestEmail}`);
           }
         })
-        .catch(err => console.warn(`[bounce-verifier] fire failed: ${err.message}`));
+        .catch(err => console.warn(`[bounceVerifier] error para ${decision.bestEmail}: ${err.message}`));
+    } else if (best) {
+      console.log(`[bounceVerifier] omitido para ${decision.bestEmail} — confidence=${decision.confidence} bounceState=${best.bounceState ?? 'none'}`);
     }
   }
 
@@ -173,7 +192,7 @@ async function enrichOneLead(lead) {
                       decision, warning, domainPattern, merged.count, bounceVerifyId);
 }
 
-async function enrichBatch(leads) {
+async function enrichBatch(leads, userId = null) {
   const uniqueDomains = [...new Set(
     leads.map(l => resolveDomain(l.company || l.linkedinUrl || '').domain).filter(Boolean)
   )];
@@ -182,7 +201,7 @@ async function enrichBatch(leads) {
   const results = [];
   for (const lead of leads) {
     try {
-      results.push(await enrichOneLead(lead));
+      results.push(await enrichOneLead(lead, userId));
     } catch (err) {
       console.error(`[enrichBatch] ${lead.firstName} ${lead.lastName}: ${err.message}`);
       results.push(_emptyResult(lead, null, false, `Processing error: ${err.message}`));
