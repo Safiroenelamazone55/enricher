@@ -3,36 +3,40 @@
 /**
  * db.js — PostgreSQL connection pool (singleton)
  *
- * Uses the `pg` package (node-postgres).
- * Reads DATABASE_URL from the environment — Render injects it
- * automatically when a Postgres database is attached to the service.
+ * Reads DATABASE_URL from the environment. If the variable is absent the
+ * process exits immediately with a clear message — there is no fallback to
+ * localhost and the server never starts in a broken state.
  *
  * Usage:
  *   const { pool, initDb } = require('./db');
- *
- *   // Call once at startup (creates tables if they don't exist):
- *   await initDb();
- *
- *   // Run any query:
- *   const { rows } = await pool.query('SELECT ...', [params]);
- *
- * The pool is closed gracefully on SIGINT / SIGTERM so Render's
- * zero-downtime deploys don't leave dangling connections.
+ *   await initDb();                          // call once at startup
+ *   const { rows } = await pool.query(...); // run any query
  */
 
 const { Pool } = require('pg');
 
+// ── Fail fast if DATABASE_URL is missing ──────────────────────────
+// pg silently connects to 127.0.0.1:5432 when connectionString is
+// undefined. We prevent that by crashing early with a clear message.
+const DATABASE_URL = process.env.DATABASE_URL;
+
+if (!DATABASE_URL) {
+  console.error(
+    '[db] FATAL: DATABASE_URL environment variable is not set.\n' +
+    '     Set it in Render → Environment before starting the server.'
+  );
+  process.exit(1);
+}
+
 // ── Connection pool ────────────────────────────────────────────────
-// ssl: rejectUnauthorized:false  is required for Render's managed
-// Postgres (uses a self-signed cert on the internal network).
+// ssl.rejectUnauthorized:false is required for Render's managed
+// Postgres (self-signed cert on the internal network).
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL
-    ? { rejectUnauthorized: false }
-    : false,
-  max:              10,
-  idleTimeoutMillis: 30_000,
-  connectionTimeoutMillis: 5_000,
+  connectionString: DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
+  max:                     10,
+  idleTimeoutMillis:       30_000,
+  connectionTimeoutMillis:  5_000,
 });
 
 pool.on('error', err => {
@@ -45,10 +49,7 @@ pool.on('error', err => {
  * Safe to call on every startup (idempotent).
  */
 async function initDb() {
-  if (!process.env.DATABASE_URL) {
-    console.warn('[db] DATABASE_URL not set — PostgreSQL storage disabled');
-    return;
-  }
+  console.log('[db] connecting to:', DATABASE_URL.replace(/:([^:@]+)@/, ':***@'));
 
   try {
     // ── users table (Google OAuth) ─────────────────────────────
@@ -112,11 +113,9 @@ async function initDb() {
 // ── User helpers ───────────────────────────────────────────────────
 
 /**
- * Find an existing user by Google ID, or create one.
- * Returns the full user row.
+ * Upsert a Google user — insert on first login, update name/avatar on return.
  */
 async function findOrCreateUser({ googleId, email, name, avatar }) {
-  // Upsert: insert if not exists, update name/avatar/email on conflict
   const { rows } = await pool.query(
     `INSERT INTO users (google_id, email, name, avatar)
        VALUES ($1, $2, $3, $4)
@@ -130,9 +129,7 @@ async function findOrCreateUser({ googleId, email, name, avatar }) {
   return rows[0];
 }
 
-/**
- * Find a user by internal integer id.
- */
+/** Find a user by internal integer id (used by Passport deserializeUser). */
 async function findUserById(id) {
   const { rows } = await pool.query(
     `SELECT id, google_id, email, name, avatar, created_at
