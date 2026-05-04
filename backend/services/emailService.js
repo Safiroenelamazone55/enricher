@@ -170,7 +170,14 @@ async function enrichOneLead(lead, userId = null) {
 
     if (shouldVerify) {
       const leadId = `${firstName}_${lastName}_${domain}`;
-      bounceVerify(decision.bestEmail, leadId, userId)
+      // Build ordered list of fallback candidates to try if this one bounces.
+      // Excludes the best email itself, disqualified candidates, and zero-score ones.
+      const remainingCandidates = candidates
+        .filter(c => c.email !== decision.bestEmail && !c.disqualified && c.consensusScore > 0)
+        .sort((a, b) => b.consensusScore - a.consensusScore)
+        .map(c => ({ email: c.email, score: c.consensusScore, pattern: c.pattern }));
+
+      bounceVerify(decision.bestEmail, leadId, userId, remainingCandidates)
         .then(r => {
           if (r.status === 'sent') {
             console.log(`[bounceVerifier] enviado para ${decision.bestEmail} (id: ${r.verifyId})`);

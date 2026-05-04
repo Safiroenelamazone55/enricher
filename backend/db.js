@@ -146,6 +146,12 @@ async function initDb() {
         ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
     `);
 
+    // Ordered list of remaining candidates to try after a hard bounce (cascade)
+    await pool.query(`
+      ALTER TABLE verifications
+        ADD COLUMN IF NOT EXISTS remaining_candidates JSONB NOT NULL DEFAULT '[]'::jsonb;
+    `);
+
     await pool.query(`
       CREATE INDEX IF NOT EXISTS verifications_email_idx
         ON verifications (lower(email));

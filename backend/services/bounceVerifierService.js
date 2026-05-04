@@ -11,22 +11,22 @@
  *   3. SES → SNS → POST /api/bounce-handler routes the bounce back.
  *      We match it by the original SES MessageId stored in the DB.
  *
+ * CASCADE VERIFICATION
+ *   When a hard bounce arrives the handler calls cascadeVerification().
+ *   It reads the `remaining_candidates` JSON array stored with the
+ *   original verification, pops the first entry, and fires verifyEmail()
+ *   for that address with the rest of the list — continuing until either
+ *   an address is verified or the list is exhausted.
+ *
  * Persistence: PostgreSQL (via db.js / pool).
- *   No files are written to disk — safe for Render ephemeral filesystem.
- *
- * In-memory cache: a Map mirrors recent rows so getBounceStatusByEmail()
- *   doesn't hit the DB on every enrichment call.  Cache entries expire
- *   after CACHE_TTL_MS (2 h) or are invalidated on status change.
- *
- * @aws-sdk/client-ses is required LAZILY so the server starts normally
- * even if the package is not installed yet.
  *
  * Exports:
- *   verifyEmail(email, leadId)       → Promise<SendResult>
- *   markBounced(verifyId)            → Promise<boolean>
- *   getBounceStatus(verifyId)        → Promise<StatusResult>
- *   getBounceStatusByEmail(email)    → Promise<'verified'|'bounced'|'pending'|null>
- *   findByMessageId(messageId)       → Promise<record | null>
+ *   verifyEmail(email, leadId, userId, remainingCandidates)
+ *   cascadeVerification(bouncedVerifyId)
+ *   markBounced(verifyId)        → Promise<{ email, leadId, userId, remaining }>
+ *   getBounceStatus(verifyId)
+ *   getBounceStatusByEmail(email)
+ *   findByMessageId(messageId)
  */
 
 const crypto = require('crypto');
@@ -44,7 +44,7 @@ let _sesClient = null;
 
 function _sesClientGet() {
   if (_sesClient) return _sesClient;
-  const { SESClient } = require('@aws-sdk/client-ses');   // lazy
+  const { SESClient } = require('@aws-sdk/client-ses');
   _sesClient = new SESClient({
     region:      process.env.AWS_REGION || 'us-east-1',
     credentials: {
@@ -62,6 +62,11 @@ function _sesClientGet() {
 /**
  * Send a minimal verification email and insert a row in `verifications`.
  *
+ * @param {string}   email
+ * @param {string}   leadId             — composite key e.g. "Ana_López_acme.com"
+ * @param {number|null} userId          — req.user.id (stored for /api/user/verifications)
+ * @param {Array}    remainingCandidates — [{email, score, pattern}] to try after a bounce
+ *
  * @returns {Promise<{
  *   status:    'sent'|'error'|'already-pending'|'already-resolved',
  *   verifyId?: string,
@@ -69,12 +74,12 @@ function _sesClientGet() {
  *   message?:  string,
  * }>}
  */
-async function verifyEmail(email, leadId = '', userId = null) {
+async function verifyEmail(email, leadId = '', userId = null, remainingCandidates = []) {
   if (!email) return { status: 'error', message: 'email required' };
 
   const emailLower = email.toLowerCase();
 
-  // ── 1. Check cache first (fast path) ────────────────���───────────
+  // ── 1. Cache fast path ───────────────────────────────────────────
   const cached = _cache.get(emailLower);
   if (cached && Date.now() - cached.ts < CACHE_TTL_MS) {
     if (cached.status === 'pending')
@@ -83,7 +88,7 @@ async function verifyEmail(email, leadId = '', userId = null) {
                resolvedStatus: cached.status };
   }
 
-  // ── 2. Check DB (covers post-restart lookups) ────────────────────
+  // ── 2. DB lookup (covers post-restart state) ─────────────────────
   if (process.env.DATABASE_URL) {
     try {
       const { rows } = await pool.query(
@@ -128,7 +133,7 @@ async function verifyEmail(email, leadId = '', userId = null) {
 
   let messageId = '';
   try {
-    const { SendRawEmailCommand } = require('@aws-sdk/client-ses');   // lazy
+    const { SendRawEmailCommand } = require('@aws-sdk/client-ses');
     const response = await _sesClientGet().send(
       new SendRawEmailCommand({ RawMessage: { Data: Buffer.from(rawEmail, 'utf8') } })
     );
@@ -138,42 +143,100 @@ async function verifyEmail(email, leadId = '', userId = null) {
     return { status: 'error', message: err.message };
   }
 
-  // ── 5. Persist to PostgreSQL ─────────────────────────────────────
+  // ── 5. Persist to PostgreSQL (includes remaining_candidates) ─────
   if (process.env.DATABASE_URL) {
     try {
       await pool.query(
         `INSERT INTO verifications
-           (bounceVerifyId, email, leadId, messageId, status, confidence, user_id)
-         VALUES ($1, $2, $3, $4, 'pending', 'pending', $5)
+           (bounceVerifyId, email, leadId, messageId, status, confidence,
+            user_id, remaining_candidates)
+         VALUES ($1, $2, $3, $4, 'pending', 'pending', $5, $6)
          ON CONFLICT (bounceVerifyId) DO NOTHING`,
-        [verifyId, email, leadId, messageId, userId ?? null]
+        [
+          verifyId, email, leadId, messageId,
+          userId ?? null,
+          JSON.stringify(Array.isArray(remainingCandidates) ? remainingCandidates : []),
+        ]
       );
     } catch (err) {
       console.warn('[bounce-verifier] DB insert failed:', err.message);
-      // Continue — in-memory timer still works as fallback
     }
   }
 
-  // ── 6. Update in-memory cache ────────────────────────────────────
+  // ── 6. Cache ─────────────────────────────────────────────────────
   _cache.set(emailLower, { verifyId, status: 'pending', ts: Date.now() });
 
-  // ── 7. Auto-mark verified after 1 h (no bounce = deliverable) ────
+  // ── 7. Auto-mark verified after 1 h ──────────────────────────────
   const timer = setTimeout(() => _autoMarkVerified(verifyId, emailLower), BOUNCE_TIMEOUT_MS);
   timer.unref();
 
-  console.log(`[bounce-verifier] SENT verifyId=${verifyId} to=${email} msgId=${messageId}`);
+  console.log(`[bounce-verifier] SENT verifyId=${verifyId} to=${email} msgId=${messageId} remaining=${remainingCandidates.length}`);
   return { status: 'sent', verifyId, messageId };
 }
 
 /**
+ * Cascade verification after a hard bounce.
+ *
+ * Reads `remaining_candidates` from the bounced row, pops the first
+ * entry and fires verifyEmail() with the rest of the list.  Repeats
+ * automatically on every subsequent bounce via the same bounce-handler.
+ *
+ * @param {string} bouncedVerifyId
+ */
+async function cascadeVerification(bouncedVerifyId) {
+  if (!process.env.DATABASE_URL) return;
+
+  let row;
+  try {
+    const { rows } = await pool.query(
+      `SELECT email, leadid AS "leadId", user_id AS "userId",
+              remaining_candidates AS "remaining"
+         FROM verifications WHERE bounceVerifyId = $1`,
+      [bouncedVerifyId]
+    );
+    if (!rows.length) return;
+    row = rows[0];
+  } catch (err) {
+    console.warn('[cascade] DB read failed:', err.message);
+    return;
+  }
+
+  const remaining = Array.isArray(row.remaining) ? row.remaining : [];
+
+  if (remaining.length === 0) {
+    console.log(`[cascade] sin más candidatos para leadId="${row.leadId}" (bounced: ${row.email})`);
+    return;
+  }
+
+  const [next, ...rest] = remaining;
+  console.log(`[cascade] probando siguiente candidato: ${next.email} (score=${next.score ?? '?'}, pattern=${next.pattern ?? '?'}) — quedan ${rest.length} tras este`);
+
+  try {
+    const result = await verifyEmail(next.email, row.leadId, row.userId, rest);
+    if (result.status === 'sent') {
+      console.log(`[cascade] SENT verifyId=${result.verifyId} para ${next.email}`);
+    } else {
+      console.log(`[cascade] ${result.status} para ${next.email} — ${result.message ?? result.resolvedStatus ?? ''}`);
+      // If already resolved/pending, try the next one immediately
+      if (result.status === 'already-resolved' && rest.length > 0) {
+        console.log(`[cascade] ${next.email} ya resuelto, saltando al siguiente`);
+        await cascadeVerification(bouncedVerifyId);
+      }
+    }
+  } catch (err) {
+    console.warn(`[cascade] error enviando a ${next.email}: ${err.message}`);
+  }
+}
+
+/**
  * Mark a verification as hard-bounced.
- * Called by the SNS bounce handler in server.js.
+ * Returns the full relevant row so the caller can trigger cascade.
  *
  * @param {string} verifyId
- * @returns {Promise<boolean>}
+ * @returns {Promise<{ email, leadId, userId, remaining } | null>}
  */
 async function markBounced(verifyId) {
-  let email = null;
+  let result = null;
 
   if (process.env.DATABASE_URL) {
     try {
@@ -181,35 +244,31 @@ async function markBounced(verifyId) {
         `UPDATE verifications
             SET status = 'bounced', confidence = 'invalid', resolved_at = NOW()
           WHERE bounceVerifyId = $1
-          RETURNING email`,
+          RETURNING email,
+                    leadid               AS "leadId",
+                    user_id              AS "userId",
+                    remaining_candidates AS "remaining"`,
         [verifyId]
       );
-      if (rows.length) email = rows[0].email;
+      if (rows.length) result = rows[0];
     } catch (err) {
       console.warn('[bounce-verifier] DB markBounced failed:', err.message);
     }
   }
 
-  // Invalidate cache entry
-  if (email) {
-    _cache.set(email.toLowerCase(), { verifyId, status: 'bounced', ts: Date.now() });
+  if (result?.email) {
+    _cache.set(result.email.toLowerCase(), { verifyId, status: 'bounced', ts: Date.now() });
   }
 
-  console.log(`[bounce-verifier] HARD BOUNCE verifyId=${verifyId} email=${email ?? '?'}`);
-  return !!email;
+  console.log(`[bounce-verifier] HARD BOUNCE verifyId=${verifyId} email=${result?.email ?? '?'}`);
+  return result;
 }
 
 /**
  * Get status of a verification by verifyId.
- * Returns the row from PostgreSQL (or a not-found stub if DB is unavailable).
- *
- * @param {string} verifyId
- * @returns {Promise<{ status, confidence, email?, created_at? }>}
  */
 async function getBounceStatus(verifyId) {
-  if (!process.env.DATABASE_URL) {
-    return { status: 'not-found' };
-  }
+  if (!process.env.DATABASE_URL) return { status: 'not-found' };
   try {
     const { rows } = await pool.query(
       `SELECT bounceVerifyId, email, status, confidence, created_at, resolved_at
@@ -232,15 +291,12 @@ async function getBounceStatus(verifyId) {
 }
 
 /**
- * Fast lookup by email — used during enrichment scoring.
- * Checks cache first, then DB.
- *
+ * Fast lookup by email — checks cache first, then DB.
  * @returns {Promise<'verified'|'bounced'|'pending'|null>}
  */
 async function getBounceStatusByEmail(email) {
   const emailLower = (email || '').toLowerCase();
 
-  // Cache hit
   const cached = _cache.get(emailLower);
   if (cached && Date.now() - cached.ts < CACHE_TTL_MS) return cached.status;
 
@@ -265,9 +321,6 @@ async function getBounceStatusByEmail(email) {
 
 /**
  * Find a verification record by SES MessageId.
- * Used by the SNS bounce handler to match back to the verifyId.
- *
- * @param {string} messageId  SES MessageId from SNS notification
  * @returns {Promise<{ verifyId, email } | null>}
  */
 async function findByMessageId(messageId) {
@@ -287,6 +340,7 @@ async function findByMessageId(messageId) {
 
 module.exports = {
   verifyEmail,
+  cascadeVerification,
   markBounced,
   getBounceStatus,
   getBounceStatusByEmail,

@@ -78,14 +78,16 @@ function _setupPassport() {
 // ── Service imports (defensive — a broken service never kills the server) ──
 const { enrichOneLead, enrichBatch } = require('./services/emailService');
 
-let _markBounced         = async () => false;
-let _getBounceStatus     = async () => ({ status: 'not-found' });
-let _findByMessageId     = async () => null;
+let _markBounced          = async () => null;
+let _getBounceStatus      = async () => ({ status: 'not-found' });
+let _findByMessageId      = async () => null;
+let _cascadeVerification  = async () => {};
 try {
   const bv = require('./services/bounceVerifierService');
-  _markBounced         = bv.markBounced;
-  _getBounceStatus     = bv.getBounceStatus;
-  _findByMessageId     = bv.findByMessageId;
+  _markBounced          = bv.markBounced;
+  _getBounceStatus      = bv.getBounceStatus;
+  _findByMessageId      = bv.findByMessageId;
+  _cascadeVerification  = bv.cascadeVerification;
 } catch (e) {
   console.warn('[server] bounceVerifierService unavailable:', e.message);
 }
@@ -240,6 +242,9 @@ app.post('/api/bounce-handler', async (req, res) => {
           if (record) {
             await _markBounced(record.verifyId);
             console.log(`[bounce-handler] hard bounce verifyId=${record.verifyId} email=${record.email}`);
+            // Cascade: try next candidate for this lead in the background
+            _cascadeVerification(record.verifyId)
+              .catch(err => console.warn('[cascade] unhandled error:', err.message));
           } else {
             console.warn(`[bounce-handler] no record for msgId=${mail.messageId}`);
           }
