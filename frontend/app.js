@@ -5,7 +5,7 @@
  * Vanilla JS · no framework
  */
 
-const API = 'https://enricher-ix3b.onrender.com/api';
+const API = 'https://enricher-t04s.onrender.com/api';
 
 // ── Helpers ──────────────────────────────────────────────────────
 const $   = id => document.getElementById(id);
