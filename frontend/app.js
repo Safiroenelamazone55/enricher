@@ -165,6 +165,7 @@ async function initAuth() {
 
   const messages = {
     unauthorized: '⛔ Tu cuenta de Google no tiene acceso a esta herramienta. Contactá al administrador.',
+    auth_failed:  '⚠️ Hubo un problema al iniciar sesión. Intentá de nuevo.',
   };
   const msg = messages[error] || `Error de autenticación: ${error}`;
 

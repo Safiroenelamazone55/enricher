@@ -279,20 +279,48 @@ app.get('/api/auth/google',
 );
 
 // ── GET /api/auth/google/callback ─────────────────────────────────
-// Google redirects here after consent. Creates/finds user, starts
-// session, then redirects browser to the frontend.
-// If the strategy calls done(null, false) (whitelist rejection) the
-// failureRedirect fires with ?error=unauthorized so the frontend can
-// show a meaningful message.
-app.get('/api/auth/google/callback',
-  passport.authenticate('google', {
-    failureRedirect: 'https://enricher.kiwoc.com?error=unauthorized',
-    session: true,
-  }),
-  (_req, res) => {
-    res.redirect('https://enricher.kiwoc.com?auth=ok');
+// Uses a custom callback instead of the shorthand middleware so we can
+// handle two edge cases gracefully:
+//
+//   1. invalid_grant (TokenError) — Google authorization codes are
+//      single-use. If the browser retries the callback URL (network
+//      hiccup, Render health-check redirect, etc.) the second attempt
+//      fails with invalid_grant. We check whether a valid session
+//      already exists and, if so, redirect to the frontend as if the
+//      login just succeeded — no error shown to the user.
+//
+//   2. Whitelist rejection — strategy calls done(null, false) →
+//      redirect with ?error=unauthorized.
+app.get('/api/auth/google/callback', (req, res, next) => {
+  // Fast path: code already redeemed and session is live
+  if (req.isAuthenticated && req.isAuthenticated()) {
+    console.log('[auth] callback hit with live session — skipping OAuth exchange');
+    return res.redirect('https://enricher.kiwoc.com?auth=ok');
   }
-);
+
+  passport.authenticate('google', { session: true }, (err, user) => {
+    if (err) {
+      // Log the error but don't crash — check if a session was established
+      // by an earlier attempt (race condition / double-callback)
+      console.warn('[auth] OAuth error:', err.message);
+      if (req.isAuthenticated && req.isAuthenticated()) {
+        return res.redirect('https://enricher.kiwoc.com?auth=ok');
+      }
+      return res.redirect('https://enricher.kiwoc.com?error=auth_failed');
+    }
+
+    if (!user) {
+      // done(null, false) — whitelist rejection
+      return res.redirect('https://enricher.kiwoc.com?error=unauthorized');
+    }
+
+    req.login(user, loginErr => {
+      if (loginErr) return next(loginErr);
+      console.log(`[auth] login ok — user ${user.email}`);
+      res.redirect('https://enricher.kiwoc.com?auth=ok');
+    });
+  })(req, res, next);
+});
 
 // ── GET /api/auth/me ──────────────────────────────────────────────
 // Returns the authenticated user or { loggedIn: false }.
@@ -423,12 +451,14 @@ async function start() {
   // Create PostgreSQL tables if they don't exist (idempotent)
   await initDb();
 
-  app.listen(PORT, () => {
+  // Bind explicitly to 0.0.0.0 so Render's port scanner detects the
+  // server regardless of which network interface it probes.
+  app.listen(PORT, '0.0.0.0', () => {
     console.log(`\n  ✉  B2B Email Enricher`);
     console.log(`  ─────────────────────────────────`);
-    console.log(`  API  → http://localhost:${PORT}`);
+    console.log(`  Port → ${PORT} (0.0.0.0)`);
     console.log(`  Mode → ${ENV}`);
-    console.log(`  DB   → ${process.env.DATABASE_URL ? 'PostgreSQL ✓' : 'no DATABASE_URL'}`);
+    console.log(`  DB   → PostgreSQL ✓`);
     console.log(`  Auth → ${process.env.GOOGLE_CLIENT_ID ? 'Google OAuth ✓' : 'no GOOGLE_CLIENT_ID'}\n`);
 
     if (ENV === 'production' && process.env.RENDER_EXTERNAL_URL) {
