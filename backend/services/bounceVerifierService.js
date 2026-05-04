@@ -74,7 +74,7 @@ function _sesClientGet() {
  *   message?:  string,
  * }>}
  */
-async function verifyEmail(email, leadId = '', userId = null, remainingCandidates = []) {
+async function verifyEmail(email, leadId = '', userId = null, remainingCandidates = [], tag = null) {
   if (!email) return { status: 'error', message: 'email required' };
 
   const emailLower = email.toLowerCase();
@@ -149,13 +149,14 @@ async function verifyEmail(email, leadId = '', userId = null, remainingCandidate
       await pool.query(
         `INSERT INTO verifications
            (bounceVerifyId, email, leadId, messageId, status, confidence,
-            user_id, remaining_candidates)
-         VALUES ($1, $2, $3, $4, 'pending', 'pending', $5, $6)
+            user_id, remaining_candidates, tag)
+         VALUES ($1, $2, $3, $4, 'pending', 'pending', $5, $6, $7)
          ON CONFLICT (bounceVerifyId) DO NOTHING`,
         [
           verifyId, email, leadId, messageId,
           userId ?? null,
           JSON.stringify(Array.isArray(remainingCandidates) ? remainingCandidates : []),
+          tag ?? null,
         ]
       );
     } catch (err) {
@@ -190,7 +191,7 @@ async function cascadeVerification(bouncedVerifyId) {
   try {
     const { rows } = await pool.query(
       `SELECT email, leadid AS "leadId", user_id AS "userId",
-              remaining_candidates AS "remaining"
+              remaining_candidates AS "remaining", tag
          FROM verifications WHERE bounceVerifyId = $1`,
       [bouncedVerifyId]
     );
@@ -212,7 +213,7 @@ async function cascadeVerification(bouncedVerifyId) {
   console.log(`[cascade] probando siguiente candidato: ${next.email} (score=${next.score ?? '?'}, pattern=${next.pattern ?? '?'}) — quedan ${rest.length} tras este`);
 
   try {
-    const result = await verifyEmail(next.email, row.leadId, row.userId, rest);
+    const result = await verifyEmail(next.email, row.leadId, row.userId, rest, row.tag ?? null);
     if (result.status === 'sent') {
       console.log(`[cascade] SENT verifyId=${result.verifyId} para ${next.email}`);
     } else {

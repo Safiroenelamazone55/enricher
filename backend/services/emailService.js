@@ -47,7 +47,7 @@ const {
 // PUBLIC
 // ═══════════════════════════════════════════════════════════════
 
-async function enrichOneLead(lead, userId = null) {
+async function enrichOneLead(lead, userId = null, tag = null) {
   const { firstName, lastName, company = '', linkedinUrl = '' } = lead;
 
   // ── 1. Domain ────────────────────────────────────────────
@@ -177,7 +177,7 @@ async function enrichOneLead(lead, userId = null) {
         .sort((a, b) => b.consensusScore - a.consensusScore)
         .map(c => ({ email: c.email, score: c.consensusScore, pattern: c.pattern }));
 
-      bounceVerify(decision.bestEmail, leadId, userId, remainingCandidates)
+      bounceVerify(decision.bestEmail, leadId, userId, remainingCandidates, tag)
         .then(r => {
           if (r.status === 'sent') {
             console.log(`[bounceVerifier] enviado para ${decision.bestEmail} (id: ${r.verifyId})`);
@@ -199,7 +199,7 @@ async function enrichOneLead(lead, userId = null) {
                       decision, warning, domainPattern, merged.count, bounceVerifyId);
 }
 
-async function enrichBatch(leads, userId = null) {
+async function enrichBatch(leads, userId = null, defaultTag = null) {
   const uniqueDomains = [...new Set(
     leads.map(l => resolveDomain(l.company || l.linkedinUrl || '').domain).filter(Boolean)
   )];
@@ -207,8 +207,12 @@ async function enrichBatch(leads, userId = null) {
 
   const results = [];
   for (const lead of leads) {
+    // Per-lead tag from the lead object takes priority over the batch-level default
+    const leadTag = (typeof lead.tag === 'string' && lead.tag.trim())
+      ? lead.tag.trim()
+      : defaultTag;
     try {
-      results.push(await enrichOneLead(lead, userId));
+      results.push(await enrichOneLead(lead, userId, leadTag));
     } catch (err) {
       console.error(`[enrichBatch] ${lead.firstName} ${lead.lastName}: ${err.message}`);
       results.push(_emptyResult(lead, null, false, `Processing error: ${err.message}`));

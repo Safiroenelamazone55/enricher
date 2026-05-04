@@ -94,6 +94,11 @@
             <input id="s_li" type="text" placeholder="https://linkedin.com/in/johndoe" autocomplete="off"/>
           </div>
 
+          <div class="field">
+            <label for="s_tag">Etiqueta <span style="font-weight:400;color:var(--muted)">(opcional — ej: campaña-q2, cliente-abc)</span></label>
+            <input id="s_tag" type="text" placeholder="ej: campaña-q2" autocomplete="off"/>
+          </div>
+
           <div class="btn-row">
             <button class="btn btn--primary" id="btnSingle">
               <span class="btn__text">🔍 Find emails</span>
@@ -220,14 +225,26 @@
       <div class="card card--lift">
         <div class="verif-header">
           <div class="card__title" style="margin-bottom:0"><span>📬</span> Mis Verificaciones por envío real</div>
-          <button class="btn btn--outline btn--sm" id="btnRefreshVerif">
-            <span class="btn__text">🔄 Actualizar</span>
-            <span class="spin hidden"></span>
-          </button>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <button class="btn btn--outline btn--sm" id="btnRefreshVerif">
+              <span class="btn__text">🔄 Actualizar</span>
+              <span class="spin hidden"></span>
+            </button>
+          </div>
         </div>
-        <p style="font-size:.8rem;color:var(--muted);margin:8px 0 18px">
+        <p style="font-size:.8rem;color:var(--muted);margin:8px 0 14px">
           Emails verificados mediante envío real (SES). Un correo sin rebote en 1 hora se marca como Verificado.
         </p>
+
+        <!-- Filter + export row -->
+        <div class="verif-filter-row">
+          <input type="text" id="filterTag" placeholder="Filtrar por etiqueta…"
+            style="flex:1;min-width:160px;padding:7px 10px;border:1.5px solid var(--border);
+                   border-radius:var(--rs);font-size:.82rem;outline:none"/>
+          <button class="btn btn--outline btn--sm" id="btnFilterVerif">🔍 Filtrar</button>
+          <button class="btn btn--ghost btn--sm" id="btnExportVerif">⬇ Exportar CSV</button>
+        </div>
+
         <div id="verifErr" class="alert alert--err hidden"></div>
         <div id="verifBody">
           <div class="verif-empty">Cargando…</div>

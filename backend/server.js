@@ -357,11 +357,12 @@ app.get('/api/auth/logout', (req, res, next) => {
 
 // ── POST /api/enrich ──────────────────────────────────────────────
 app.post('/api/enrich', requireAuth, async (req, res) => {
-  const { firstName, lastName, company } = req.body ?? {};
+  const { firstName, lastName, company, tag } = req.body ?? {};
   if (!firstName || !lastName || !company)
     return res.status(400).json({ error: 'firstName, lastName and company are required.' });
   try {
-    res.json(await enrichOneLead({ firstName, lastName, company }, req.user?.id ?? null));
+    const cleanTag = (typeof tag === 'string' && tag.trim()) ? tag.trim() : null;
+    res.json(await enrichOneLead({ firstName, lastName, company }, req.user?.id ?? null, cleanTag));
   } catch (err) {
     console.error('[/api/enrich]', err.message);
     res.status(500).json({ error: err.message });
@@ -370,13 +371,14 @@ app.post('/api/enrich', requireAuth, async (req, res) => {
 
 // ── POST /api/enrich/batch ────────────────────────────────────────
 app.post('/api/enrich/batch', requireAuth, async (req, res) => {
-  const leads = req.body?.leads;
+  const { leads, tag } = req.body ?? {};
   if (!Array.isArray(leads) || leads.length === 0)
     return res.status(400).json({ error: '`leads` array is required.' });
   if (leads.length > BATCH_LIMIT)
     return res.status(400).json({ error: `Max ${BATCH_LIMIT} leads per request.` });
   try {
-    const results = await enrichBatch(leads, req.user?.id ?? null);
+    const cleanTag = (typeof tag === 'string' && tag.trim()) ? tag.trim() : null;
+    const results = await enrichBatch(leads, req.user?.id ?? null, cleanTag);
     res.json({ count: results.length, results });
   } catch (err) {
     console.error('[/api/enrich/batch]', err.message);
@@ -394,7 +396,8 @@ app.post('/api/enrich/upload', requireAuth, upload.single('file'), async (req, r
     if (leads.length > BATCH_LIMIT)
       return res.status(400).json({ error: `File has ${leads.length} rows, max is ${BATCH_LIMIT}.` });
     console.log(`[upload] Processing ${leads.length} leads from "${req.file.originalname}"`);
-    const results  = await enrichBatch(leads, req.user?.id ?? null);
+    const batchTag = (typeof req.body?.tag === 'string' && req.body.tag.trim()) ? req.body.tag.trim() : null;
+    const results  = await enrichBatch(leads, req.user?.id ?? null, batchTag);
     const xlsBuf   = buildResultsExcel(results);
     const filename = `enriched_${Date.now()}.xlsx`;
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
@@ -414,7 +417,8 @@ app.post('/api/enrich/upload-json', requireAuth, upload.single('file'), async (r
     const { leads, warnings } = parseLeadsFile(req.file.buffer, req.file.mimetype);
     if (leads.length > BATCH_LIMIT)
       return res.status(400).json({ error: `Max ${BATCH_LIMIT} leads per request.` });
-    const results = await enrichBatch(leads, req.user?.id ?? null);
+    const jsonTag = (typeof req.body?.tag === 'string' && req.body.tag.trim()) ? req.body.tag.trim() : null;
+    const results = await enrichBatch(leads, req.user?.id ?? null, jsonTag);
     res.json({ count: results.length, warnings, results });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -423,17 +427,27 @@ app.post('/api/enrich/upload-json', requireAuth, upload.single('file'), async (r
 
 // ── GET /api/user/verifications ──────────────────────────────────
 // Returns all bounce-verification rows for the authenticated user,
-// ordered by most recent first.
+// ordered by most recent first.  Accepts optional ?tag= filter.
 app.get('/api/user/verifications', requireAuth, async (req, res) => {
   const { pool } = require('./db');
+  const filterTag = (typeof req.query.tag === 'string' && req.query.tag.trim())
+    ? req.query.tag.trim() : null;
   try {
-    const { rows } = await pool.query(
-      `SELECT bounceVerifyId, email, status, confidence, created_at, resolved_at
-         FROM verifications
-        WHERE user_id = $1
-        ORDER BY created_at DESC`,
-      [req.user.id]
-    );
+    const { rows } = filterTag
+      ? await pool.query(
+          `SELECT bounceVerifyId, email, status, confidence, tag, created_at, resolved_at
+             FROM verifications
+            WHERE user_id = $1 AND tag = $2
+            ORDER BY created_at DESC`,
+          [req.user.id, filterTag]
+        )
+      : await pool.query(
+          `SELECT bounceVerifyId, email, status, confidence, tag, created_at, resolved_at
+             FROM verifications
+            WHERE user_id = $1
+            ORDER BY created_at DESC`,
+          [req.user.id]
+        );
     res.json({
       count: rows.length,
       verifications: rows.map(r => ({
@@ -441,12 +455,66 @@ app.get('/api/user/verifications', requireAuth, async (req, res) => {
         email:          r.email,
         status:         r.status,
         confidence:     r.confidence,
+        tag:            r.tag ?? null,
         createdAt:      r.created_at,
         resolvedAt:     r.resolved_at,
       })),
     });
   } catch (err) {
     console.error('[/api/user/verifications]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/user/verifications/export ───────────────────────────
+// Downloads a CSV of the user's verifications.  Accepts optional ?tag=.
+app.get('/api/user/verifications/export', requireAuth, async (req, res) => {
+  const { pool } = require('./db');
+  const filterTag = (typeof req.query.tag === 'string' && req.query.tag.trim())
+    ? req.query.tag.trim() : null;
+  try {
+    const { rows } = filterTag
+      ? await pool.query(
+          `SELECT email, status, confidence, tag, created_at, resolved_at
+             FROM verifications
+            WHERE user_id = $1 AND tag = $2
+            ORDER BY created_at DESC`,
+          [req.user.id, filterTag]
+        )
+      : await pool.query(
+          `SELECT email, status, confidence, tag, created_at, resolved_at
+             FROM verifications
+            WHERE user_id = $1
+            ORDER BY created_at DESC`,
+          [req.user.id]
+        );
+
+    // Build CSV
+    const csvEscape = v => {
+      const s = String(v ?? '');
+      return s.includes(',') || s.includes('"') || s.includes('\n')
+        ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const header = ['email', 'status', 'confidence', 'tag', 'createdAt', 'resolvedAt'];
+    const lines  = [header.join(',')];
+    for (const r of rows) {
+      lines.push([
+        csvEscape(r.email),
+        csvEscape(r.status),
+        csvEscape(r.confidence),
+        csvEscape(r.tag ?? ''),
+        csvEscape(r.created_at ? new Date(r.created_at).toISOString() : ''),
+        csvEscape(r.resolved_at ? new Date(r.resolved_at).toISOString() : ''),
+      ].join(','));
+    }
+    const csv      = lines.join('\r\n');
+    const filename = `verificaciones_${Date.now()}.csv`;
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    // BOM so Excel opens UTF-8 correctly
+    res.send('﻿' + csv);
+  } catch (err) {
+    console.error('[/api/user/verifications/export]', err.message);
     res.status(500).json({ error: err.message });
   }
 });

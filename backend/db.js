@@ -152,6 +152,12 @@ async function initDb() {
         ADD COLUMN IF NOT EXISTS remaining_candidates JSONB NOT NULL DEFAULT '[]'::jsonb;
     `);
 
+    // User-defined label for grouping / filtering verifications
+    await pool.query(`
+      ALTER TABLE verifications
+        ADD COLUMN IF NOT EXISTS tag TEXT;
+    `);
+
     await pool.query(`
       CREATE INDEX IF NOT EXISTS verifications_email_idx
         ON verifications (lower(email));

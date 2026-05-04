@@ -227,10 +227,11 @@ function initApp() {
     $('singleResult').classList.add('hidden');
 
     try {
+      const tag = $('s_tag').value.trim() || undefined;
       const res  = await apiFetch(`${API}/enrich`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ firstName: fn, lastName: ln, company: co, linkedinUrl: $('s_li').value.trim() }),
+        body:    JSON.stringify({ firstName: fn, lastName: ln, company: co, linkedinUrl: $('s_li').value.trim(), tag }),
       });
       const data = await res.json();
       if (res.status === 401) {
@@ -248,7 +249,7 @@ function initApp() {
   });
 
   $('btnClearSingle').addEventListener('click', () => {
-    [$('s_fn'), $('s_ln'), $('s_co'), $('s_li')].forEach(el => { el.value = ''; el.classList.remove('err'); });
+    [$('s_fn'), $('s_ln'), $('s_co'), $('s_li'), $('s_tag')].forEach(el => { el.value = ''; el.classList.remove('err'); });
     hideAlert($('singleErr'));
     $('singleResult').classList.add('hidden');
   });
@@ -531,7 +532,7 @@ function initApp() {
   // MIS VERIFICACIONES
   // ═══════════════════════════════════════════════════════════════
 
-  async function loadVerifications() {
+  async function loadVerifications(tag = '') {
     const body    = $('verifBody');
     const errEl   = $('verifErr');
     const btn     = $('btnRefreshVerif');
@@ -541,7 +542,10 @@ function initApp() {
     body.innerHTML = '<div class="verif-empty">Cargando…</div>';
 
     try {
-      const res  = await apiFetch(`${API}/user/verifications`);
+      const url = tag
+        ? `${API}/user/verifications?tag=${encodeURIComponent(tag)}`
+        : `${API}/user/verifications`;
+      const res  = await apiFetch(url);
       if (res.status === 401) { location.reload(); return; }
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
@@ -549,7 +553,10 @@ function initApp() {
       const rows = data.verifications || [];
 
       if (rows.length === 0) {
-        body.innerHTML = '<div class="verif-empty">No tienes verificaciones pendientes.</div>';
+        const emptyMsg = tag
+          ? `No hay verificaciones con la etiqueta "<strong>${esc(tag)}</strong>".`
+          : 'No tienes verificaciones pendientes.';
+        body.innerHTML = `<div class="verif-empty">${emptyMsg}</div>`;
         return;
       }
 
@@ -569,19 +576,26 @@ function initApp() {
           : '—';
         return `<tr>
           <td><span class="mono">${esc(r.email)}</span></td>
+          <td>${r.tag ? `<span class="verif-tag">${esc(r.tag)}</span>` : '<span style="color:var(--muted)">—</span>'}</td>
           <td><span class="badge ${esc(s.cls)}">${s.icon} ${s.label}</span></td>
           <td style="white-space:nowrap;font-size:.78rem;color:var(--muted)">${date}</td>
         </tr>`;
       }).join('');
 
+      const filterNote = tag
+        ? `<span style="background:var(--ok-bg);border:1px solid var(--ok-b);border-radius:4px;
+             padding:2px 8px;font-size:.73rem;color:var(--ok-t)">🏷 ${esc(tag)}</span>`
+        : '';
+
       body.innerHTML = `
         <div class="tbl-wrap">
           <table class="verif-table">
-            <thead><tr><th>Email</th><th>Estado</th><th>Fecha</th></tr></thead>
+            <thead><tr><th>Email</th><th>Etiqueta</th><th>Estado</th><th>Fecha</th></tr></thead>
             <tbody>${rowsHtml}</tbody>
           </table>
         </div>
-        <p style="font-size:.75rem;color:var(--muted);margin-top:10px;text-align:right">
+        <p style="font-size:.75rem;color:var(--muted);margin-top:10px;text-align:right;display:flex;align-items:center;gap:8px;justify-content:flex-end">
+          ${filterNote}
           ${rows.length} verificación${rows.length !== 1 ? 'es' : ''}
         </p>`;
 
@@ -604,7 +618,45 @@ function initApp() {
     });
   });
 
-  $('btnRefreshVerif').addEventListener('click', loadVerifications);
+  $('btnRefreshVerif').addEventListener('click', () => {
+    loadVerifications($('filterTag').value.trim());
+  });
+
+  $('btnFilterVerif').addEventListener('click', () => {
+    _verifLoaded = true;
+    loadVerifications($('filterTag').value.trim());
+  });
+
+  // Allow pressing Enter in the filter input
+  $('filterTag').addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      _verifLoaded = true;
+      loadVerifications($('filterTag').value.trim());
+    }
+  });
+
+  $('btnExportVerif').addEventListener('click', async () => {
+    const tag = $('filterTag').value.trim();
+    const url = tag
+      ? `${API}/user/verifications/export?tag=${encodeURIComponent(tag)}`
+      : `${API}/user/verifications/export`;
+    try {
+      const res = await apiFetch(url);
+      if (res.status === 401) { location.reload(); return; }
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+      const blob = await res.blob();
+      const a    = document.createElement('a');
+      a.href     = URL.createObjectURL(blob);
+      a.download = `verificaciones_${Date.now()}.csv`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch (err) {
+      showAlert($('verifErr'), `Error al exportar: ${err.message}`);
+    }
+  });
 
 } // end initApp()
 
