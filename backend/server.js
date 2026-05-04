@@ -358,8 +358,6 @@ app.get('/api/auth/logout', (req, res, next) => {
 // =================================================================
 
 // ── GET /api/debug/bounce-test ────────────────────────────────────
-// Forces a real bounce-verification send for a fixed test address and
-// returns the raw result as JSON.  No auth required — REMOVE IN PROD.
 app.get('/api/debug/bounce-test', async (req, res) => {
   const testEmail = req.query.email || 'test@kiwoc.com';
   const testLeadId = 'debug_test_lead';
@@ -371,6 +369,35 @@ app.get('/api/debug/bounce-test', async (req, res) => {
   } catch (err) {
     console.error(`[debug/bounce-test] error:`, err.message);
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/debug/bounce ─────────────────────────────────────────
+// Alias simplificado. Acepta ?email= opcional (default: debug@kiwoc.com).
+// Devuelve diagnóstico completo: resultado de verifyEmail + env vars presentes.
+// Sin autenticación — ELIMINAR ANTES DE GA.
+app.get('/api/debug/bounce', async (req, res) => {
+  const testEmail  = req.query.email || 'debug@kiwoc.com';
+  const testLeadId = 'debug_bounce_lead';
+
+  const envCheck = {
+    SES_FROM_EMAIL:       !!process.env.SES_FROM_EMAIL,
+    AWS_ACCESS_KEY_ID:    !!process.env.AWS_ACCESS_KEY_ID,
+    AWS_SECRET_ACCESS_KEY:!!process.env.AWS_SECRET_ACCESS_KEY,
+    AWS_REGION:           process.env.AWS_REGION || '(no seteado — usará us-east-1)',
+    DATABASE_URL:         !!process.env.DATABASE_URL,
+  };
+
+  console.log(`[debug/bounce] env check:`, envCheck);
+  console.log(`[debug/bounce] calling verifyEmail for ${testEmail}`);
+
+  try {
+    const result = await _verifyEmail(testEmail, testLeadId, null, []);
+    console.log(`[debug/bounce] result:`, result);
+    res.json({ testEmail, envCheck, result });
+  } catch (err) {
+    console.error(`[debug/bounce] error:`, err.message);
+    res.status(500).json({ testEmail, envCheck, error: err.message });
   }
 });
 
