@@ -48,6 +48,7 @@ const {
 // ═══════════════════════════════════════════════════════════════
 
 async function enrichOneLead(lead, userId = null, tag = null) {
+  console.log('ENRICH-V4 ejecutándose');
   const { firstName, lastName, company = '', linkedinUrl = '' } = lead;
 
   // ── 1. Domain ────────────────────────────────────────────
