@@ -549,7 +549,7 @@ function initApp() {
       const rows = data.verifications || [];
 
       if (rows.length === 0) {
-        body.innerHTML = '<div class="verif-empty">No tenés verificaciones registradas.</div>';
+        body.innerHTML = '<div class="verif-empty">No tienes verificaciones pendientes.</div>';
         return;
       }
 
