@@ -82,12 +82,14 @@ let _markBounced          = async () => null;
 let _getBounceStatus      = async () => ({ status: 'not-found' });
 let _findByMessageId      = async () => null;
 let _cascadeVerification  = async () => {};
+let _verifyEmail          = async () => ({ status: 'error', message: 'bounceVerifierService unavailable' });
 try {
   const bv = require('./services/bounceVerifierService');
   _markBounced          = bv.markBounced;
   _getBounceStatus      = bv.getBounceStatus;
   _findByMessageId      = bv.findByMessageId;
   _cascadeVerification  = bv.cascadeVerification;
+  _verifyEmail          = bv.verifyEmail;
 } catch (e) {
   console.warn('[server] bounceVerifierService unavailable:', e.message);
 }
@@ -349,6 +351,27 @@ app.get('/api/auth/logout', (req, res, next) => {
       res.json({ loggedIn: false });
     });
   });
+});
+
+// =================================================================
+// DEBUG ROUTES  (temporary — remove before GA)
+// =================================================================
+
+// ── GET /api/debug/bounce-test ────────────────────────────────────
+// Forces a real bounce-verification send for a fixed test address and
+// returns the raw result as JSON.  No auth required — REMOVE IN PROD.
+app.get('/api/debug/bounce-test', async (req, res) => {
+  const testEmail = req.query.email || 'test@kiwoc.com';
+  const testLeadId = 'debug_test_lead';
+  console.log(`[debug/bounce-test] forcing verifyEmail for ${testEmail}`);
+  try {
+    const result = await _verifyEmail(testEmail, testLeadId, null, []);
+    console.log(`[debug/bounce-test] result:`, result);
+    res.json({ testEmail, result });
+  } catch (err) {
+    console.error(`[debug/bounce-test] error:`, err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // =================================================================
