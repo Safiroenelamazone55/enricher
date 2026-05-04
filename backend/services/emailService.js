@@ -151,27 +151,41 @@ async function enrichOneLead(lead, userId = null, tag = null) {
   const decision = decideBestEmail({ candidates, scrapedEmails: merged.emails, catchAll: isCatchAll });
 
   // ── 11. Fire bounce verification for best candidate ────────
-  // Triggers whenever confidence is not already conclusive:
-  //   - 'guaranteed' means SMTP confirmed valid  → no need to send
-  //   - 'very-high'  means strong multi-signal   → skip to save quota
-  //   - everything else (high / medium / low / none) → send real email
-  // Also skips if: already bounced/verified, or candidate disqualified.
-  // Runs fire-and-forget — does NOT delay the API response.
+  // Solo se omite si SMTP confirmó explícitamente como válido ('guaranteed').
+  // 'very-high' puede venir de señales de patrón/scraper con SMTP unknown,
+  // en ese caso sí queremos el envío real para confirmar.
+  // También se omite si: ya bounced/verified, candidato descalificado,
+  // o ya hay una verificación pendiente para ese email.
+  // Corre fire-and-forget — NO retrasa la respuesta de la API.
   let bounceVerifyId = null;
   if (decision.bestEmail) {
     const best = candidates.find(c => c.email === decision.bestEmail);
-    const conclusive = decision.confidence === 'guaranteed' || decision.confidence === 'very-high';
+
+    // Solo 'guaranteed' (SMTP 250 OK) es razón suficiente para no enviar
+    const conclusive = decision.confidence === 'guaranteed';
+
     const shouldVerify =
       best &&
       !conclusive &&
       !best.bounceVerified &&
       !best.disqualified &&
-      best.bounceState !== 'pending';   // already queued → skip duplicate
+      best.bounceState !== 'pending';   // ya encolado → evitar duplicado
+
+    // ── Log de diagnóstico ────────────────────────────────
+    console.log(
+      `[bounceVerifier] decision: email=${decision.bestEmail}` +
+      ` confidence=${decision.confidence}` +
+      ` conclusive=${conclusive}` +
+      ` bounceVerified=${best?.bounceVerified}` +
+      ` disqualified=${best?.disqualified}` +
+      ` bounceState=${best?.bounceState ?? 'none'}` +
+      ` shouldVerify=${shouldVerify}`
+    );
 
     if (shouldVerify) {
       const leadId = `${firstName}_${lastName}_${domain}`;
-      // Build ordered list of fallback candidates to try if this one bounces.
-      // Excludes the best email itself, disqualified candidates, and zero-score ones.
+      // Lista ordenada de candidatos alternativos para cascade si este rebota.
+      // Excluye el mejor, descalificados y score cero.
       const remainingCandidates = candidates
         .filter(c => c.email !== decision.bestEmail && !c.disqualified && c.consensusScore > 0)
         .sort((a, b) => b.consensusScore - a.consensusScore)
@@ -190,8 +204,6 @@ async function enrichOneLead(lead, userId = null, tag = null) {
           }
         })
         .catch(err => console.warn(`[bounceVerifier] error para ${decision.bestEmail}: ${err.message}`));
-    } else if (best) {
-      console.log(`[bounceVerifier] omitido para ${decision.bestEmail} — confidence=${decision.confidence} bounceState=${best.bounceState ?? 'none'}`);
     }
   }
 
