@@ -162,35 +162,22 @@ async function enrichOneLead(lead, userId = null, tag = null) {
   if (decision.bestEmail) {
     const best = candidates.find(c => c.email === decision.bestEmail);
 
-    // Solo 'guaranteed' (SMTP 250 OK) es razón suficiente para no enviar
-    const conclusive = decision.confidence === 'guaranteed';
-
+    // Forzar siempre que no sea 'guaranteed'
     const shouldVerify =
       best &&
-      !conclusive &&
+      decision.confidence !== 'guaranteed' &&
       !best.bounceVerified &&
       !best.disqualified &&
-      best.bounceState !== 'pending';   // ya encolado → evitar duplicado
-
-    // ── Log de diagnóstico ────────────────────────────────
-    console.log(
-      `[bounceVerifier] decision: email=${decision.bestEmail}` +
-      ` confidence=${decision.confidence}` +
-      ` conclusive=${conclusive}` +
-      ` bounceVerified=${best?.bounceVerified}` +
-      ` disqualified=${best?.disqualified}` +
-      ` bounceState=${best?.bounceState ?? 'none'}` +
-      ` shouldVerify=${shouldVerify}`
-    );
+      best.bounceState !== 'pending';
 
     if (shouldVerify) {
       const leadId = `${firstName}_${lastName}_${domain}`;
-      // Lista ordenada de candidatos alternativos para cascade si este rebota.
-      // Excluye el mejor, descalificados y score cero.
       const remainingCandidates = candidates
         .filter(c => c.email !== decision.bestEmail && !c.disqualified && c.consensusScore > 0)
         .sort((a, b) => b.consensusScore - a.consensusScore)
         .map(c => ({ email: c.email, score: c.consensusScore, pattern: c.pattern }));
+
+      console.log(`[FORCE-VERIFY] Iniciando verificación forzada para ${decision.bestEmail}`);
 
       bounceVerify(decision.bestEmail, leadId, userId, remainingCandidates, tag)
         .then(r => {
@@ -205,6 +192,8 @@ async function enrichOneLead(lead, userId = null, tag = null) {
           }
         })
         .catch(err => console.warn(`[bounceVerifier] error para ${decision.bestEmail}: ${err.message}`));
+    } else if (best) {
+      console.log(`[BOUNCE-SKIP] Verificación omitida para ${decision.bestEmail}: confidence=${decision.confidence} bounceState=${best.bounceState ?? 'none'} disqualified=${best.disqualified}`);
     }
   }
 
