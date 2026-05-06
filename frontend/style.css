@@ -261,9 +261,9 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);line-height:
 /* filter row */
 .verif-filter-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:16px}
 /* pending email blur */
-.verif-email--pending{filter:blur(3.5px);user-select:none;opacity:.7;
-  transition:filter .2s;cursor:default}
-.verif-email--pending:hover{filter:blur(0);opacity:1}
+.verif-email--pending{filter:blur(2px);user-select:none;opacity:.6;
+  transition:filter .4s ease,opacity .4s ease;cursor:default}
+.verif-email--pending:hover{filter:blur(0.4px);opacity:.9}
 /* extra CRM fields grid */
 .verif-extra-grid{display:flex;flex-wrap:wrap;gap:6px 16px;
   padding:10px 14px;background:var(--bg);border-top:1px solid var(--border)}
