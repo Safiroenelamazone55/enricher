@@ -498,6 +498,72 @@ app.post('/api/enrich/upload-json', requireAuth, upload.single('file'), async (r
   }
 });
 
+// ── Async job store (in-memory) ──────────────────────────────────
+// jobId → { status:'pending'|'done'|'error', userId, results, warnings, xlsBuffer, error, createdAt }
+const _jobs = new Map();
+// Clean up jobs older than 2 hours every 30 min
+setInterval(() => {
+  const cutoff = Date.now() - 2 * 60 * 60 * 1000;
+  for (const [id, job] of _jobs) { if (job.createdAt < cutoff) _jobs.delete(id); }
+}, 30 * 60 * 1000).unref();
+
+// ── POST /api/enrich/upload-async ────────────────────────────────
+// Starts full enrichment in the background; returns jobId immediately.
+app.post('/api/enrich/upload-async', requireAuth, upload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
+  try {
+    let customMapping = null;
+    if (req.body?.mapping) { try { customMapping = JSON.parse(req.body.mapping); } catch (_) {} }
+    const { leads, warnings } = parseLeadsFile(req.file.buffer, req.file.mimetype, customMapping);
+    if (leads.length > BATCH_LIMIT)
+      return res.status(400).json({ error: `Max ${BATCH_LIMIT} leads per request.` });
+
+    const jobId  = require('crypto').randomUUID();
+    const userId = req.user?.id ?? null;
+    const tag    = (typeof req.body?.tag === 'string' && req.body.tag.trim()) ? req.body.tag.trim() : null;
+
+    _jobs.set(jobId, { status: 'pending', userId, createdAt: Date.now() });
+
+    // Fire and forget — do NOT await
+    enrichBatch(leads, userId, tag, false)
+      .then(results => {
+        const xlsBuffer = buildResultsExcel(results);
+        _jobs.set(jobId, { status: 'done', userId, results, warnings, xlsBuffer, createdAt: Date.now() });
+        console.log(`[async-job] ${jobId} done — ${results.length} leads`);
+      })
+      .catch(err => {
+        _jobs.set(jobId, { status: 'error', userId, error: err.message, createdAt: Date.now() });
+        console.error(`[async-job] ${jobId} error:`, err.message);
+      });
+
+    res.json({ jobId, count: leads.length, warnings });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/enrich/job/:jobId ───────────────────────────────────
+// Poll job status. Returns results when done, or triggers Excel download.
+app.get('/api/enrich/job/:jobId', requireAuth, (req, res) => {
+  const job = _jobs.get(req.params.jobId);
+  if (!job) return res.status(404).json({ error: 'Job not found or expired.' });
+  if (job.userId !== null && job.userId !== req.user?.id)
+    return res.status(403).json({ error: 'Forbidden.' });
+
+  if (job.status === 'pending') return res.json({ status: 'pending' });
+  if (job.status === 'error')   return res.json({ status: 'error', error: job.error });
+
+  // Done — check if client wants JSON (preview) or Excel (download)
+  const format = req.query.format || 'json';
+  if (format === 'xlsx') {
+    const filename = `enriched_${Date.now()}.xlsx`;
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    return res.send(Buffer.from(job.xlsBuffer));
+  }
+  res.json({ status: 'done', count: job.results.length, warnings: job.warnings, results: job.results });
+});
+
 // ── GET /api/user/verifications/tags ─────────────────────────────
 // Returns the distinct non-null tags used by the authenticated user,
 // sorted alphabetically. Used to populate the filter datalist.

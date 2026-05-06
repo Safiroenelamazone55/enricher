@@ -521,28 +521,81 @@ function initApp() {
         $('batchPreview')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
       } else {
-        const res = await apiFetch(`${API}/enrich/upload`, { method: 'POST', body: formData });
+        // ── Async background job ───────────────────────────────
         clearInterval(timer);
-        fill.style.width = '100%';
-
-        if (res.status === 401) { location.reload(); return; }
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
-          throw new Error(err.error || `HTTP ${res.status}`);
+        const startRes = await apiFetch(`${API}/enrich/upload-async`, { method: 'POST', body: formData });
+        if (startRes.status === 401) { location.reload(); return; }
+        if (!startRes.ok) {
+          const err = await startRes.json().catch(() => ({ error: `HTTP ${startRes.status}` }));
+          throw new Error(err.error || `HTTP ${startRes.status}`);
         }
+        const { jobId, count } = await startRes.json();
 
-        const warnings = res.headers.get('X-Parse-Warnings');
-        if (warnings) {
+        // Show async progress bar while polling
+        prog.classList.add('show');
+        fill.style.width = '5%';
+        label.textContent = `⏳ Procesando ${count} leads en segundo plano…`;
+        showAlert($('batchWarn'),
+          `✅ Enriquecimiento iniciado (${count} leads). Puedes seguir usando el dashboard — te avisamos cuando termine.`,
+          'ok');
+
+        // Poll every 4 seconds
+        let dots = 0;
+        const pollTimer = setInterval(async () => {
           try {
-            const w = JSON.parse(warnings);
-            if (w.length) showAlert($('batchWarn'), w.join(' · '), 'warn');
-          } catch (_) {}
-        }
+            const pollRes = await apiFetch(`${API}/enrich/job/${jobId}`);
+            if (!pollRes.ok) { clearInterval(pollTimer); return; }
+            const pollData = await pollRes.json();
 
-        const xlsBuffer = await res.arrayBuffer();
-        lastXlsBuffer   = xlsBuffer;
-        downloadBuffer(xlsBuffer, `enriched_${Date.now()}.xlsx`);
-        showAlert($('batchWarn'), '✓ File enriched and downloaded. Use "Preview in table" to see results here.', 'ok');
+            dots = (dots + 1) % 4;
+            const dotStr = '.'.repeat(dots + 1);
+            label.textContent = `⏳ Procesando${dotStr}`;
+            fill.style.width = pollData.status === 'done' ? '100%' : `${Math.min(90, parseInt(fill.style.width || 5) + 3)}%`;
+
+            if (pollData.status === 'done') {
+              clearInterval(pollTimer);
+              fill.style.width = '100%';
+              label.textContent = '✅ ¡Listo!';
+
+              // Show results in table
+              batchResults = pollData.results || [];
+              filteredRows = [...batchResults];
+              currentPage  = 1;
+              if (pollData.warnings?.length) showAlert($('batchWarn'), pollData.warnings.join(' · '), 'warn');
+              else showAlert($('batchWarn'), `✅ ${batchResults.length} leads enriquecidos. Descarga lista.`, 'ok');
+
+              renderPreviewTable();
+              $('batchPreview')?.classList.remove('hidden');
+              $('batchPreview')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+              // Offer Excel download via job endpoint
+              const dlBtn = $('btnDownloadResult');
+              if (dlBtn) {
+                dlBtn.onclick = async () => {
+                  const xlsRes = await apiFetch(`${API}/enrich/job/${jobId}?format=xlsx`);
+                  if (xlsRes.ok) {
+                    const buf = await xlsRes.arrayBuffer();
+                    lastXlsBuffer = buf;
+                    downloadBuffer(buf, `enriched_${Date.now()}.xlsx`);
+                  }
+                };
+              }
+
+              setTimeout(() => { prog.classList.remove('show'); fill.style.width = '0%'; }, 1500);
+              setBtn($('btnBatch'), false);
+              setBtn($('btnBatchPreview'), false);
+            } else if (pollData.status === 'error') {
+              clearInterval(pollTimer);
+              throw new Error(pollData.error || 'Job failed');
+            }
+          } catch (pollErr) {
+            clearInterval(pollTimer);
+            showAlert($('batchErr'), `Error: ${pollErr.message}`);
+            setBtn($('btnBatch'), false);
+            setBtn($('btnBatchPreview'), false);
+          }
+        }, 4000);
+        return; // skip the finally re-enable (pollTimer handles it)
       }
 
     } catch (err) {
