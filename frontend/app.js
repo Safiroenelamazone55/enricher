@@ -277,13 +277,85 @@ function initApp() {
   });
   $('fileInput').addEventListener('change', e => { if (e.target.files[0]) setFile(e.target.files[0]); });
 
-  function setFile(f) {
+  // Field labels for the mapping UI
+  const FIELD_OPTIONS = [
+    { value: '',            label: '— ignorar —' },
+    { value: 'firstname',   label: 'Nombre (firstName)' },
+    { value: 'lastname',    label: 'Apellido (lastName)' },
+    { value: 'company',     label: 'Empresa / URL (company)' },
+    { value: 'linkedinurl', label: 'LinkedIn URL' },
+  ];
+
+  async function setFile(f) {
     uploadedFile = f;
     $('fileLabel').textContent = `📎 ${f.name} (${(f.size / 1024).toFixed(1)} KB)`;
     $('btnBatch').disabled        = false;
     $('btnBatchPreview').disabled = false;
     hideAlert($('batchErr'));
     hideAlert($('batchWarn'));
+
+    // ── Fetch column headers and auto-suggestions ──────────
+    const panel = $('colMapPanel');
+    panel.classList.add('hidden');
+    $('colMapRows').innerHTML = '';
+    $('colMapExtra').classList.add('hidden');
+    $('colMapExtra').textContent = '';
+
+    try {
+      const fd = new FormData();
+      fd.append('file', f);
+      const res = await apiFetch(`${API}/enrich/parse-headers`, { method: 'POST', body: fd });
+      if (!res.ok) throw new Error('parse-headers failed');
+      const { headers, suggestions } = await res.json();
+      if (!headers || headers.length === 0) return;
+
+      // Build one row per header with a <select>
+      const rowsDiv = $('colMapRows');
+      headers.forEach((h, idx) => {
+        const suggested = suggestions[idx] || '';
+        const row = document.createElement('div');
+        row.className = 'col-map-row';
+
+        const label = document.createElement('span');
+        label.className = 'col-map-col-name';
+        label.textContent = h || `(columna ${idx + 1})`;
+
+        const arrow = document.createElement('span');
+        arrow.className = 'col-map-arrow';
+        arrow.textContent = '→';
+
+        const sel = document.createElement('select');
+        sel.className = 'col-map-select';
+        sel.dataset.colIdx = idx;
+        FIELD_OPTIONS.forEach(opt => {
+          const o = document.createElement('option');
+          o.value = opt.value;
+          o.textContent = opt.label;
+          if (opt.value === suggested) o.selected = true;
+          sel.appendChild(o);
+        });
+
+        row.appendChild(label);
+        row.appendChild(arrow);
+        row.appendChild(sel);
+        rowsDiv.appendChild(row);
+      });
+
+      panel.classList.remove('hidden');
+    } catch (e) {
+      // Non-fatal: if parse-headers fails the user can still upload
+      // with auto-detection
+      console.warn('[setFile] parse-headers error:', e.message);
+    }
+  }
+
+  /** Read the current state of the mapping panel → { colIndex: fieldName } */
+  function getColumnMapping() {
+    const mapping = {};
+    document.querySelectorAll('#colMapRows .col-map-select').forEach(sel => {
+      if (sel.value) mapping[sel.dataset.colIdx] = sel.value;
+    });
+    return mapping;
   }
 
   $('btnBatch').addEventListener('click', () => runBatch('download'));
@@ -317,6 +389,8 @@ function initApp() {
     formData.append('file', uploadedFile);
     const batchTag = $('b_tag').value.trim();
     if (batchTag) formData.append('tag', batchTag);
+    const mapping = getColumnMapping();
+    if (Object.keys(mapping).length) formData.append('mapping', JSON.stringify(mapping));
 
     try {
       if (mode === 'preview') {

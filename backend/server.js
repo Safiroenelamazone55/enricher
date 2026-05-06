@@ -95,7 +95,8 @@ try {
 }
 
 const { getMxRecords }                    = require('./services/dnsService');
-const { parseLeadsFile, buildResultsExcel,
+const { parseLeadsFile, parseHeaders,
+        buildResultsExcel,
         buildTemplateExcel }              = require('./services/excelService');
 
 // ── App ───────────────────────────────────────────────────────────
@@ -436,11 +437,28 @@ app.post('/api/enrich/batch', requireAuth, async (req, res) => {
   }
 });
 
+// ── POST /api/enrich/parse-headers ───────────────────────────────
+// Reads only the first row of an uploaded file and returns column
+// names plus auto-detected field suggestions.
+app.post('/api/enrich/parse-headers', requireAuth, upload.single('file'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
+  try {
+    const result = parseHeaders(req.file.buffer);
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 // ── POST /api/enrich/upload ───────────────────────────────────────
 app.post('/api/enrich/upload', requireAuth, upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
   try {
-    const { leads, warnings } = parseLeadsFile(req.file.buffer, req.file.mimetype);
+    let customMapping = null;
+    if (req.body?.mapping) {
+      try { customMapping = JSON.parse(req.body.mapping); } catch (_) {}
+    }
+    const { leads, warnings } = parseLeadsFile(req.file.buffer, req.file.mimetype, customMapping);
     if (leads.length === 0)
       return res.status(400).json({ error: 'No leads found in file.', warnings });
     if (leads.length > BATCH_LIMIT)
@@ -464,7 +482,11 @@ app.post('/api/enrich/upload', requireAuth, upload.single('file'), async (req, r
 app.post('/api/enrich/upload-json', requireAuth, upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
   try {
-    const { leads, warnings } = parseLeadsFile(req.file.buffer, req.file.mimetype);
+    let customMapping = null;
+    if (req.body?.mapping) {
+      try { customMapping = JSON.parse(req.body.mapping); } catch (_) {}
+    }
+    const { leads, warnings } = parseLeadsFile(req.file.buffer, req.file.mimetype, customMapping);
     if (leads.length > BATCH_LIMIT)
       return res.status(400).json({ error: `Max ${BATCH_LIMIT} leads per request.` });
     const jsonTag = (typeof req.body?.tag === 'string' && req.body.tag.trim()) ? req.body.tag.trim() : null;

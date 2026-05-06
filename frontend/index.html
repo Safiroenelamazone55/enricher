@@ -135,11 +135,16 @@
           </div>
           <input type="file" id="fileInput" accept=".xlsx,.xls,.csv"/>
 
+          <!-- Column mapping panel — shown after a file is selected -->
+          <div id="colMapPanel" class="col-map-panel hidden">
+            <div class="col-map-panel__title">🗂 Asigna las columnas de tu archivo</div>
+            <div class="col-map-panel__hint">El sistema detectó las columnas abajo. Ajusta si alguna no es correcta. Las columnas sin asignar se guardan como campos extra.</div>
+            <div id="colMapRows" class="col-map-rows"></div>
+            <div id="colMapExtra" class="col-map-extra hidden"></div>
+          </div>
+
           <div style="margin-top:14px;font-size:.78rem;color:var(--muted)">
-            Required columns: <strong>firstName</strong>, <strong>lastName</strong>, <strong>company</strong> (website URL)<br>
-            Optional: <strong>linkedinUrl</strong>
-            &nbsp;·&nbsp;
-            <a href="https://enricher-ix3b.onrender.com/api/template" style="color:var(--brand);font-weight:600">Download template →</a>
+            <a href="https://enricher-ix3b.onrender.com/api/template" style="color:var(--brand);font-weight:600">Descargar plantilla →</a>
           </div>
 
           <div class="field" style="margin-top:14px">

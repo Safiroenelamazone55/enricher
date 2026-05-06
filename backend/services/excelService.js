@@ -29,13 +29,41 @@ function mapHeader(raw) {
 }
 
 /**
+ * Read only the header row of a file and return column names + auto-suggestions.
+ *
+ * @param {Buffer} buffer
+ * @returns {{ headers: string[], suggestions: Object.<number,string> }}
+ */
+function parseHeaders(buffer) {
+  const workbook = XLSX.read(buffer, { type: 'buffer', cellText: true });
+  const sheetName = workbook.SheetNames[0];
+  if (!sheetName) throw new Error('File has no sheets.');
+  const sheet = workbook.Sheets[sheetName];
+  const rows  = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+  if (!rows.length) throw new Error('File is empty.');
+
+  const headers = rows[0].map(h => String(h).trim());
+  const suggestions = {};
+  const usedFields  = new Set();
+  headers.forEach((h, i) => {
+    const field = mapHeader(h);
+    if (field && !usedFields.has(field)) {
+      suggestions[i] = field;
+      usedFields.add(field);
+    }
+  });
+  return { headers, suggestions };
+}
+
+/**
  * Parse an uploaded Excel or CSV file buffer into an array of lead objects.
  *
  * @param {Buffer} buffer
  * @param {string} mimetype
+ * @param {Object|null} customMapping  colIndex(string) → field ('firstname'|'lastname'|'company'|'linkedinurl')
  * @returns {{ leads: Array, warnings: string[] }}
  */
-function parseLeadsFile(buffer, mimetype) {
+function parseLeadsFile(buffer, mimetype, customMapping = null) {
   const workbook = XLSX.read(buffer, { type: 'buffer', cellText: true, cellDates: true });
   const sheetName = workbook.SheetNames[0];
   if (!sheetName) throw new Error('Excel file has no sheets.');
@@ -50,12 +78,27 @@ function parseLeadsFile(buffer, mimetype) {
   const colMap    = {};   // colIndex → internal field name
   const warnings  = [];
 
-  headerRow.forEach((h, i) => {
-    const field = mapHeader(h);
-    if (field && !(field in Object.fromEntries(Object.entries(colMap).map(([k,v])=>[v,k])))) {
-      colMap[i] = field;
+  if (customMapping && typeof customMapping === 'object' && Object.keys(customMapping).length) {
+    // Use caller-supplied mapping (from column-mapping UI)
+    const usedFields = new Set();
+    for (const [idxStr, field] of Object.entries(customMapping)) {
+      const idx = parseInt(idxStr);
+      const norm = (field || '').toLowerCase().trim().replace(/[^a-z]/g, '');
+      if (!isNaN(idx) && norm && !usedFields.has(norm)) {
+        colMap[idx] = norm;
+        usedFields.add(norm);
+      }
     }
-  });
+  } else {
+    const usedFields = new Set();
+    headerRow.forEach((h, i) => {
+      const field = mapHeader(h);
+      if (field && !usedFields.has(field)) {
+        colMap[i] = field;
+        usedFields.add(field);
+      }
+    });
+  }
 
   const found = new Set(Object.values(colMap));
   if (!found.has('firstname')) warnings.push('Column "firstName" not found — will be empty.');
@@ -186,4 +229,4 @@ function buildTemplateExcel() {
   return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 }
 
-module.exports = { parseLeadsFile, buildResultsExcel, buildTemplateExcel };
+module.exports = { parseLeadsFile, parseHeaders, buildResultsExcel, buildTemplateExcel, FIELD_ALIASES };

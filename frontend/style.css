@@ -271,6 +271,22 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);line-height:
 .verif-extra-key{color:var(--muted);font-weight:600;white-space:nowrap}
 .verif-extra-val{color:var(--text)}
 
+/* ── Column mapping panel ───────────────────────────────── */
+.col-map-panel{margin-top:14px;border:1px solid var(--border);border-radius:var(--rs);
+  background:var(--bg);padding:14px 16px}
+.col-map-panel__title{font-weight:700;font-size:.85rem;margin-bottom:4px}
+.col-map-panel__hint{font-size:.75rem;color:var(--muted);margin-bottom:12px}
+.col-map-rows{display:flex;flex-direction:column;gap:8px}
+.col-map-row{display:grid;grid-template-columns:1fr 24px 1fr;align-items:center;gap:8px}
+.col-map-col-name{font-size:.8rem;font-weight:600;background:#fff;border:1px solid var(--border);
+  border-radius:var(--rs);padding:5px 10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.col-map-arrow{text-align:center;color:var(--muted);font-size:.9rem}
+.col-map-select{font-size:.78rem;border:1px solid var(--border);border-radius:var(--rs);
+  padding:5px 8px;background:#fff;color:var(--text);cursor:pointer}
+.col-map-select:focus{outline:2px solid var(--brand);border-color:transparent}
+.col-map-extra{margin-top:10px;font-size:.76rem;color:var(--muted);
+  border-top:1px dashed var(--border);padding-top:8px}
+
 /* ── Auth bar (header) ──────────────────────────────────── */
 .auth-bar{display:flex;align-items:center}
 .auth-bar__skeleton{width:90px;height:30px;background:var(--border);border-radius:var(--rs);animation:pulse 1.2s ease-in-out infinite}
