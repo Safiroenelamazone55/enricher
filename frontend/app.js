@@ -468,7 +468,7 @@ function initApp() {
     setBtn($('btnBatchPreview'), true);
     hideAlert($('batchErr'));
     hideAlert($('batchWarn'));
-    $('batchPreview').classList.add('hidden');
+    $('batchPreview')?.classList.add('hidden');
 
     const prog  = $('batchProgress');
     const fill  = $('batchFill');
@@ -487,7 +487,7 @@ function initApp() {
 
     const formData = new FormData();
     formData.append('file', uploadedFile);
-    const batchTag = $('b_tag').value.trim();
+    const batchTag = ($('b_tag')?.value || '').trim();
     if (batchTag) formData.append('tag', batchTag);
     const mapping = getColumnMapping();
     if (Object.keys(mapping).length) formData.append('mapping', JSON.stringify(mapping));
@@ -511,8 +511,8 @@ function initApp() {
         if (data.warnings?.length) showAlert($('batchWarn'), data.warnings.join(' · '), 'warn');
 
         renderPreviewTable();
-        $('batchPreview').classList.remove('hidden');
-        $('batchPreview').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        $('batchPreview')?.classList.remove('hidden');
+        $('batchPreview')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
       } else {
         const res = await apiFetch(`${API}/enrich/upload`, { method: 'POST', body: formData });
