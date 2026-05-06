@@ -290,12 +290,18 @@ function initApp() {
   const CLIENT_ALIASES = {
     firstname:   ['firstname','first_name','first name','nombre','prenom','given name','givenname'],
     lastname:    ['lastname','last_name','last name','apellido','surname','family name','familyname','nom'],
-    company:     ['company','empresa','organisation','organization','compañia','companyurl','company url','website','site','url'],
-    linkedinurl: ['linkedin','linkedinurl','linkedin url','linkedin_url','perfil linkedin','profile'],
+    company:     ['company','empresa','organisation','organization','compañia','companyurl','company url','website','site','url','web','webpage','web page','company website','company web','domain','dominio','sitio web','sitio'],
+    linkedinurl: ['linkedin','linkedinurl','linkedin url','linkedin_url','perfil linkedin','profile','linkedin profile','linkedin profile url','personal linkedin','linkedin personal'],
   };
 
   function guessField(raw) {
     const h = String(raw).toLowerCase().trim().replace(/\s+/g,' ');
+    // LinkedIn personal profile URLs → linkedinurl
+    if (/linkedin\.com\/(in\/|pub\/)/.test(h)) return 'linkedinurl';
+    // LinkedIn company URLs → ignore (not useful as domain)
+    if (/linkedin\.com\/company/.test(h)) return '';
+    // Any http URL that is NOT linkedin → likely company website
+    if (/^https?:\/\//.test(h) && !h.includes('linkedin.com')) return 'company';
     for (const [field, aliases] of Object.entries(CLIENT_ALIASES)) {
       if (aliases.includes(h)) return field;
     }

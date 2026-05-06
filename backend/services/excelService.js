@@ -79,15 +79,13 @@ function parseLeadsFile(buffer, mimetype, customMapping = null) {
   const warnings  = [];
 
   if (customMapping && typeof customMapping === 'object' && Object.keys(customMapping).length) {
-    // Use caller-supplied mapping (from column-mapping UI)
-    const usedFields = new Set();
+    // Use caller-supplied mapping (from column-mapping UI).
+    // When multiple columns map to the same field (e.g. two "company" cols),
+    // keep ALL of them — conflict resolution happens per-row below.
     for (const [idxStr, field] of Object.entries(customMapping)) {
       const idx = parseInt(idxStr);
       const norm = (field || '').toLowerCase().trim().replace(/[^a-z]/g, '');
-      if (!isNaN(idx) && norm && !usedFields.has(norm)) {
-        colMap[idx] = norm;
-        usedFields.add(norm);
-      }
+      if (!isNaN(idx) && norm) colMap[idx] = norm;
     }
   } else {
     const usedFields = new Set();
@@ -119,10 +117,20 @@ function parseLeadsFile(buffer, mimetype, customMapping = null) {
     for (const [idxStr, field] of Object.entries(colMap)) {
       const idx = parseInt(idxStr);
       const val = String(row[idx] ?? '').trim();
+      if (!val) continue;
       if (field === 'firstname')   lead.firstName   = val;
       if (field === 'lastname')    lead.lastName    = val;
-      if (field === 'company')     lead.company     = val;
       if (field === 'linkedinurl') lead.linkedinUrl = val;
+      if (field === 'company') {
+        // Prefer a non-LinkedIn URL over a LinkedIn company URL.
+        // If we already have a good company value, only override if
+        // the current value is better (not a linkedin.com URL).
+        const isLinkedin = /linkedin\.com/i.test(val);
+        const currentIsLinkedin = /linkedin\.com/i.test(lead.company);
+        if (!lead.company || (currentIsLinkedin && !isLinkedin)) {
+          lead.company = val;
+        }
+      }
     }
     // ── Extra columns (phone, position, CRM id, etc.) ─────
     // Stored under lead._extra so they survive through enrichment
