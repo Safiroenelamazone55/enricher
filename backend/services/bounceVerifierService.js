@@ -369,3 +369,37 @@ async function _autoMarkVerified(verifyId, emailLower) {
   _cache.set(emailLower, { verifyId, status: 'verified', ts: Date.now() });
   console.log(`[bounce-verifier] AUTO-VERIFIED (no bounce in 1h) verifyId=${verifyId}`);
 }
+
+/**
+ * Periodic sweep: mark any verifications that have been 'pending'
+ * for more than BOUNCE_TIMEOUT_MS as 'verified'.
+ *
+ * This is the reliable fallback for when setTimeout timers are lost
+ * on server restart (e.g. Render free tier spin-down).
+ */
+async function _sweepExpiredPending() {
+  if (!process.env.DATABASE_URL) return;
+  try {
+    const { rows } = await pool.query(
+      `UPDATE verifications
+          SET status = 'verified', confidence = 'guaranteed', resolved_at = NOW()
+        WHERE status = 'pending'
+          AND created_at < NOW() - INTERVAL '1 hour'
+        RETURNING bounceVerifyId, email`
+    );
+    if (rows.length > 0) {
+      console.log(`[bounce-verifier] SWEEP: auto-verified ${rows.length} expired pending row(s)`);
+      rows.forEach(r => {
+        _cache.set(r.email.toLowerCase(), { verifyId: r.bounceverifyid, status: 'verified', ts: Date.now() });
+      });
+    }
+  } catch (err) {
+    console.warn('[bounce-verifier] _sweepExpiredPending error:', err.message);
+  }
+}
+
+// Run the sweep every 5 minutes so no verification stays stuck even after a restart
+const _sweepInterval = setInterval(_sweepExpiredPending, 5 * 60 * 1000);
+if (_sweepInterval.unref) _sweepInterval.unref();
+// Also run once shortly after startup to catch anything missed during downtime
+setTimeout(_sweepExpiredPending, 10 * 1000).unref();
