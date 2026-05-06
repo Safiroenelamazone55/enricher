@@ -152,48 +152,56 @@ async function enrichOneLead(lead, userId = null, tag = null) {
   const decision = decideBestEmail({ candidates, scrapedEmails: merged.emails, catchAll: isCatchAll });
 
   // ── 11. Fire bounce verification for best candidate ────────
-  // Solo se omite si SMTP confirmó explícitamente como válido ('guaranteed').
-  // 'very-high' puede venir de señales de patrón/scraper con SMTP unknown,
-  // en ese caso sí queremos el envío real para confirmar.
-  // También se omite si: ya bounced/verified, candidato descalificado,
-  // o ya hay una verificación pendiente para ese email.
+  // Si decision.bestEmail es null (todos SMTP unknown, sin scraper ni GitHub)
+  // igual intentamos verificar el candidato de mayor consensusScore.
   // Corre fire-and-forget — NO retrasa la respuesta de la API.
   let bounceVerifyId = null;
-  if (decision.bestEmail) {
-    const best = candidates.find(c => c.email === decision.bestEmail);
+  {
+    // Candidato objetivo: bestEmail del motor de decisión, o el top por score
+    const targetEmail = decision.bestEmail ||
+      candidates
+        .filter(c => !c.disqualified)
+        .sort((a, b) => b.consensusScore - a.consensusScore)[0]?.email || null;
 
-    // Forzar siempre que no sea 'guaranteed'
-    const shouldVerify =
-      best &&
-      decision.confidence !== 'guaranteed' &&
-      !best.bounceVerified &&
-      !best.disqualified &&
-      best.bounceState !== 'pending';
+    console.log(`[bounceVerifier] targetEmail=${targetEmail ?? 'null'} bestEmail=${decision.bestEmail ?? 'null'} confidence=${decision.confidence}`);
 
-    if (shouldVerify) {
-      const leadId = `${firstName}_${lastName}_${domain}`;
-      const remainingCandidates = candidates
-        .filter(c => c.email !== decision.bestEmail && !c.disqualified && c.consensusScore > 0)
-        .sort((a, b) => b.consensusScore - a.consensusScore)
-        .map(c => ({ email: c.email, score: c.consensusScore, pattern: c.pattern }));
+    if (targetEmail) {
+      const best = candidates.find(c => c.email === targetEmail);
 
-      console.log(`[FORCE-VERIFY] Iniciando verificación forzada para ${decision.bestEmail}`);
+      const shouldVerify =
+        best &&
+        decision.confidence !== 'guaranteed' &&
+        !best.bounceVerified &&
+        !best.disqualified &&
+        best.bounceState !== 'pending';
 
-      bounceVerify(decision.bestEmail, leadId, userId, remainingCandidates, tag)
-        .then(r => {
-          if (r.status === 'sent') {
-            console.log(`[bounceVerifier] enviado para ${decision.bestEmail} (id: ${r.verifyId})`);
-            bounceVerifyId = r.verifyId;
-          } else if (r.status === 'already-pending') {
-            console.log(`[bounceVerifier] ya pendiente para ${decision.bestEmail} (id: ${r.verifyId})`);
-            bounceVerifyId = r.verifyId;
-          } else {
-            console.log(`[bounceVerifier] ${r.status} para ${decision.bestEmail}`);
-          }
-        })
-        .catch(err => console.warn(`[bounceVerifier] error para ${decision.bestEmail}: ${err.message}`));
-    } else if (best) {
-      console.log(`[BOUNCE-SKIP] Verificación omitida para ${decision.bestEmail}: confidence=${decision.confidence} bounceState=${best.bounceState ?? 'none'} disqualified=${best.disqualified}`);
+      if (shouldVerify) {
+        const leadId = `${firstName}_${lastName}_${domain}`;
+        const remainingCandidates = candidates
+          .filter(c => c.email !== targetEmail && !c.disqualified && c.consensusScore > 0)
+          .sort((a, b) => b.consensusScore - a.consensusScore)
+          .map(c => ({ email: c.email, score: c.consensusScore, pattern: c.pattern }));
+
+        console.log(`[FORCE-VERIFY] Iniciando verificación para ${targetEmail} (remaining=${remainingCandidates.length})`);
+
+        bounceVerify(targetEmail, leadId, userId, remainingCandidates, tag)
+          .then(r => {
+            if (r.status === 'sent') {
+              console.log(`[bounceVerifier] enviado para ${targetEmail} (id: ${r.verifyId})`);
+              bounceVerifyId = r.verifyId;
+            } else if (r.status === 'already-pending') {
+              console.log(`[bounceVerifier] ya pendiente para ${targetEmail} (id: ${r.verifyId})`);
+              bounceVerifyId = r.verifyId;
+            } else {
+              console.log(`[bounceVerifier] ${r.status} para ${targetEmail}`);
+            }
+          })
+          .catch(err => console.warn(`[bounceVerifier] error para ${targetEmail}: ${err.message}`));
+      } else if (best) {
+        console.log(`[BOUNCE-SKIP] Omitido para ${targetEmail}: confidence=${decision.confidence} bounceState=${best.bounceState ?? 'none'} disqualified=${best.disqualified} bounceVerified=${best.bounceVerified}`);
+      }
+    } else {
+      console.log(`[bounceVerifier] sin candidatos válidos para verificar en ${domain}`);
     }
   }
 
