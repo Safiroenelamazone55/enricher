@@ -195,8 +195,11 @@ async function enrichOneLead(lead, userId = null, tag = null, quickMode = false)
 
       if (shouldVerify) {
         const leadId = `${firstName}_${lastName}_${domain}`;
+        // Keep ALL non-disqualified candidates as fallbacks for cascade.
+        // Do NOT filter by consensusScore > 0 — when SMTP returns 'unknown'
+        // scores are near-zero but the emails are still valid cascade targets.
         const remainingCandidates = candidates
-          .filter(c => c.email !== targetEmail && !c.disqualified && c.consensusScore > 0)
+          .filter(c => c.email !== targetEmail && !c.disqualified)
           .sort((a, b) => b.consensusScore - a.consensusScore)
           .map(c => ({ email: c.email, score: c.consensusScore, pattern: c.pattern }));
 
