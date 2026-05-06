@@ -248,10 +248,10 @@ function initApp() {
     }
   });
 
-  $('btnClearSingle').addEventListener('click', () => {
-    [$('s_fn'), $('s_ln'), $('s_co'), $('s_li'), $('s_tag')].forEach(el => { el.value = ''; el.classList.remove('err'); });
+  $('btnClearSingle')?.addEventListener('click', () => {
+    [$('s_fn'), $('s_ln'), $('s_co'), $('s_li'), $('s_tag')].forEach(el => { if (el) { el.value = ''; el.classList.remove('err'); } });
     hideAlert($('singleErr'));
-    $('singleResult').classList.add('hidden');
+    $('singleResult')?.classList.add('hidden');
   });
 
   // ═══════════════════════════════════════════════════════════════
@@ -850,26 +850,27 @@ function initApp() {
     });
   });
 
-  $('btnRefreshVerif').addEventListener('click', () => {
+  function _getFilterTag() { return ($('filterTag')?.value || '').trim(); }
+
+  $('btnRefreshVerif')?.addEventListener('click', () => {
     loadTagSuggestions();
-    loadVerifications($('filterTag').value.trim());
+    loadVerifications(_getFilterTag());
   });
 
-  $('btnFilterVerif').addEventListener('click', () => {
+  $('btnFilterVerif')?.addEventListener('click', () => {
     _verifLoaded = true;
-    loadVerifications($('filterTag').value.trim());
+    loadVerifications(_getFilterTag());
   });
 
-  // Allow pressing Enter in the filter input
-  $('filterTag').addEventListener('keydown', e => {
+  $('filterTag')?.addEventListener('keydown', e => {
     if (e.key === 'Enter') {
       _verifLoaded = true;
-      loadVerifications($('filterTag').value.trim());
+      loadVerifications(_getFilterTag());
     }
   });
 
-  $('btnExportVerif').addEventListener('click', async () => {
-    const tag = $('filterTag').value.trim();
+  $('btnExportVerif')?.addEventListener('click', async () => {
+    const tag = _getFilterTag();
     const url = tag
       ? `${API}/user/verifications/export?tag=${encodeURIComponent(tag)}`
       : `${API}/user/verifications/export`;
