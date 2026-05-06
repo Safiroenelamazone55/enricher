@@ -496,28 +496,39 @@ app.get('/api/user/verifications/tags', requireAuth, async (req, res) => {
 });
 
 // ── GET /api/user/verifications ──────────────────────────────────
-// Returns all bounce-verification rows for the authenticated user,
-// ordered by most recent first.  Accepts optional ?tag= filter (case-insensitive).
+// Returns ONE row per lead (grouped by leadId), showing the best result:
+//   verified > pending > bounced
+// So cascade attempts (multiple bounced + one verified) collapse into
+// a single row showing the verified email — no confusion.
+// Accepts optional ?tag= filter (case-insensitive).
 app.get('/api/user/verifications', requireAuth, async (req, res) => {
   const { pool } = require('./db');
   const filterTag = (typeof req.query.tag === 'string' && req.query.tag.trim())
     ? req.query.tag.trim() : null;
+
+  // DISTINCT ON (leadid) keeps one row per lead.
+  // The ORDER BY inside picks the row with best status first:
+  //   1 = verified, 2 = pending, 3 = bounced
+  // then most recent created_at as tiebreaker.
+  // The outer ORDER BY sorts the final list newest-first.
+  const baseQuery = `
+    SELECT * FROM (
+      SELECT DISTINCT ON (leadid)
+        bounceVerifyId, email, leadid, status, confidence, tag, lead_data, created_at, resolved_at
+      FROM verifications
+      WHERE user_id = $1
+        ${filterTag ? 'AND lower(tag) = lower($2)' : ''}
+      ORDER BY leadid,
+        CASE status WHEN 'verified' THEN 1 WHEN 'pending' THEN 2 ELSE 3 END,
+        created_at DESC
+    ) t
+    ORDER BY created_at DESC`;
+
   try {
-    const { rows } = filterTag
-      ? await pool.query(
-          `SELECT bounceVerifyId, email, status, confidence, tag, lead_data, created_at, resolved_at
-             FROM verifications
-            WHERE user_id = $1 AND lower(tag) = lower($2)
-            ORDER BY created_at DESC`,
-          [req.user.id, filterTag]
-        )
-      : await pool.query(
-          `SELECT bounceVerifyId, email, status, confidence, tag, lead_data, created_at, resolved_at
-             FROM verifications
-            WHERE user_id = $1
-            ORDER BY created_at DESC`,
-          [req.user.id]
-        );
+    const { rows } = await pool.query(
+      baseQuery,
+      filterTag ? [req.user.id, filterTag] : [req.user.id]
+    );
     res.json({
       count: rows.length,
       verifications: rows.map(r => ({
@@ -525,7 +536,7 @@ app.get('/api/user/verifications', requireAuth, async (req, res) => {
         email:          r.email,
         status:         r.status,
         confidence:     r.confidence,
-        tag:            r.tag      ?? null,
+        tag:            r.tag       ?? null,
         leadData:       r.lead_data ?? null,
         createdAt:      r.created_at,
         resolvedAt:     r.resolved_at,
@@ -544,37 +555,43 @@ app.get('/api/user/verifications/export', requireAuth, async (req, res) => {
   const filterTag = (typeof req.query.tag === 'string' && req.query.tag.trim())
     ? req.query.tag.trim() : null;
   try {
-    const { rows } = filterTag
-      ? await pool.query(
-          `SELECT email, status, confidence, tag, created_at, resolved_at
-             FROM verifications
-            WHERE user_id = $1 AND lower(tag) = lower($2)
-            ORDER BY created_at DESC`,
-          [req.user.id, filterTag]
-        )
-      : await pool.query(
-          `SELECT email, status, confidence, tag, created_at, resolved_at
-             FROM verifications
-            WHERE user_id = $1
-            ORDER BY created_at DESC`,
-          [req.user.id]
-        );
+    // Same DISTINCT ON logic as the main endpoint — one row per lead, best status first
+    const exportQuery = `
+      SELECT * FROM (
+        SELECT DISTINCT ON (leadid)
+          email, leadid, status, confidence, tag, lead_data, created_at, resolved_at
+        FROM verifications
+        WHERE user_id = $1
+          ${filterTag ? 'AND lower(tag) = lower($2)' : ''}
+        ORDER BY leadid,
+          CASE status WHEN 'verified' THEN 1 WHEN 'pending' THEN 2 ELSE 3 END,
+          created_at DESC
+      ) t
+      ORDER BY created_at DESC`;
 
-    // Build CSV
+    const { rows } = await pool.query(
+      exportQuery,
+      filterTag ? [req.user.id, filterTag] : [req.user.id]
+    );
+
+    // Build CSV — include firstName/lastName from lead_data when available
     const csvEscape = v => {
       const s = String(v ?? '');
       return s.includes(',') || s.includes('"') || s.includes('\n')
         ? `"${s.replace(/"/g, '""')}"` : s;
     };
-    const header = ['email', 'status', 'confidence', 'tag', 'createdAt', 'resolvedAt'];
+    const header = ['firstName', 'lastName', 'email', 'status', 'confidence', 'tag', 'createdAt', 'resolvedAt'];
     const lines  = [header.join(',')];
     for (const r of rows) {
+      const ld = r.lead_data || {};
       lines.push([
+        csvEscape(ld.firstName ?? ''),
+        csvEscape(ld.lastName  ?? ''),
         csvEscape(r.email),
         csvEscape(r.status),
         csvEscape(r.confidence),
         csvEscape(r.tag ?? ''),
-        csvEscape(r.created_at ? new Date(r.created_at).toISOString() : ''),
+        csvEscape(r.created_at  ? new Date(r.created_at).toISOString()  : ''),
         csvEscape(r.resolved_at ? new Date(r.resolved_at).toISOString() : ''),
       ].join(','));
     }
