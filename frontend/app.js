@@ -374,8 +374,10 @@ function initApp() {
   async function setFile(f) {
     uploadedFile = f;
     $('fileLabel').textContent = `📎 ${f.name} (${(f.size / 1024).toFixed(1)} KB)`;
-    $('btnBatch').disabled        = false;
-    $('btnBatchPreview').disabled = false;
+
+    // Keep buttons disabled until mapping is resolved
+    $('btnBatch').disabled        = true;
+    $('btnBatchPreview').disabled = true;
     hideAlert($('batchErr'));
     hideAlert($('batchWarn'));
 
@@ -384,20 +386,16 @@ function initApp() {
 
     const isCsv = /\.(csv|tsv|txt)$/i.test(f.name);
 
-    if (isCsv) {
-      try {
+    try {
+      if (isCsv) {
         const headers = await readCsvHeaders(f);
         if (headers.length > 0) {
           renderMappingPanel(headers, {});
         } else {
           _showMappingError('No se encontraron columnas en la primera fila del archivo.');
         }
-      } catch (e) {
-        _showMappingError('Error leyendo el archivo: ' + e.message);
-      }
-    } else {
-      // Excel — call server
-      try {
+      } else {
+        // Excel — call server
         const fd = new FormData();
         fd.append('file', f);
         const res = await apiFetch(`${API}/enrich/parse-headers`, { method: 'POST', body: fd });
@@ -412,9 +410,13 @@ function initApp() {
           const err = await res.json().catch(() => ({}));
           _showMappingError(`Error del servidor (${res.status}): ${err.error || 'desconocido'}`);
         }
-      } catch (e) {
-        _showMappingError('No se pudo conectar al servidor: ' + e.message);
       }
+    } catch (e) {
+      _showMappingError('Error leyendo el archivo: ' + e.message);
+    } finally {
+      // Enable buttons only after mapping panel is ready
+      $('btnBatch').disabled        = false;
+      $('btnBatchPreview').disabled = false;
     }
   }
 
