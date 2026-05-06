@@ -184,9 +184,14 @@ async function enrichOneLead(lead, userId = null, tag = null, quickMode = false)
       const shouldVerify =
         best &&
         decision.confidence !== 'guaranteed' &&
+        !isCatchAll &&           // catch-all domains accept everything → bounce verify is meaningless
         !best.bounceVerified &&
         !best.disqualified &&
         best.bounceState !== 'pending';
+
+      if (isCatchAll) {
+        console.log(`[bounceVerifier] SKIP (catch-all domain) para ${targetEmail}`);
+      }
 
       if (shouldVerify) {
         const leadId = `${firstName}_${lastName}_${domain}`;
@@ -201,6 +206,7 @@ async function enrichOneLead(lead, userId = null, tag = null, quickMode = false)
       const leadData = {
         firstName:  firstName || '',
         lastName:   lastName  || '',
+        isCatchAll: isCatchAll || false,
         company:    lead.company    || '',
         linkedinUrl: lead.linkedinUrl || '',
         ...(lead._extra ? { _extra: lead._extra } : {}),
