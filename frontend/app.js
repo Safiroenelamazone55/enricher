@@ -821,10 +821,9 @@ function initApp() {
           ? `<span class="mono verif-email--pending" title="Verificación en curso…">${esc(r.email)}</span>`
           : `<span class="mono">${esc(r.email)}</span>`;
 
-        // Catch-all badge (shown instead of or alongside status)
-        const catchAllBadge = isCatchAll
-          ? `<span class="badge badge--catchall" title="Este dominio acepta cualquier email — la verificación no es concluyente">⚠️ Acepta todo</span>`
-          : '';
+        const catchAllCell = isCatchAll
+          ? `<span class="badge badge--catchall" title="Acepta cualquier email — resultado no concluyente">⚠️ Sí</span>`
+          : `<span style="color:var(--muted);font-size:.8rem">—</span>`;
 
         const expandBtn = extra
           ? `<button class="expand-btn verif-expand-btn" data-vidx="${idx}">▾ +${Object.keys(extra).length}</button>`
@@ -835,13 +834,14 @@ function initApp() {
           <td>${lastName  || '<span style="color:var(--muted)">—</span>'}</td>
           <td>${emailCell}</td>
           <td>${r.tag ? `<span class="verif-tag">${esc(r.tag)}</span>` : '<span style="color:var(--muted)">—</span>'}</td>
-          <td><span class="badge ${esc(s.cls)}">${s.icon} ${s.label}</span>${catchAllBadge}</td>
+          <td><span class="badge ${esc(s.cls)}">${s.icon} ${s.label}</span></td>
+          <td style="text-align:center">${catchAllCell}</td>
           <td style="white-space:nowrap;font-size:.78rem;color:var(--muted)">${date}</td>
           <td>${expandBtn}</td>
         </tr>`;
 
         const extraRow = extra ? `<tr id="verif-extra-${idx}" class="hidden">
-          <td colspan="7" style="padding:0">
+          <td colspan="8" style="padding:0">
             <div class="verif-extra-grid">
               ${Object.entries(extra).map(([k, v]) =>
                 `<div class="verif-extra-item"><span class="verif-extra-key">${esc(k)}</span><span class="verif-extra-val">${esc(v)}</span></div>`
@@ -863,7 +863,7 @@ function initApp() {
           <table class="verif-table">
             <thead><tr>
               <th>Nombre</th><th>Apellido</th><th>Email</th>
-              <th>Etiqueta</th><th>Estado</th><th>Fecha</th><th></th>
+              <th>Etiqueta</th><th>Estado</th><th style="text-align:center">Acepta todo</th><th>Fecha</th><th></th>
             </tr></thead>
             <tbody>${rowsHtml}</tbody>
           </table>
