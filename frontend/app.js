@@ -315,6 +315,8 @@ function initApp() {
 
     const formData = new FormData();
     formData.append('file', uploadedFile);
+    const batchTag = $('b_tag').value.trim();
+    if (batchTag) formData.append('tag', batchTag);
 
     try {
       if (mode === 'preview') {
