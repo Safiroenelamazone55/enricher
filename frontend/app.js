@@ -322,32 +322,9 @@ function initApp() {
   }
 
   function renderMappingPanel(headers, suggestions) {
-    // Get or CREATE the panel — works even if index.html is outdated
-    let panel = $('colMapPanel');
-    if (!panel) {
-      panel = document.createElement('div');
-      panel.id = 'colMapPanel';
-      panel.className = 'col-map-panel';
-      // Insert right after the file input
-      const fileInput = $('fileInput');
-      if (fileInput && fileInput.parentNode) {
-        fileInput.parentNode.insertBefore(panel, fileInput.nextSibling);
-      } else {
-        // Fallback: append to upload card
-        const card = document.querySelector('#pane-batch .card--lift');
-        if (card) card.appendChild(panel);
-      }
-    }
-
-    let rowsDiv = $('colMapRows');
-    if (!rowsDiv) {
-      rowsDiv = document.createElement('div');
-      rowsDiv.id = 'colMapRows';
-      rowsDiv.className = 'col-map-rows';
-    }
-
-    // Build the panel content from scratch
+    const panel = _getMappingContainer();
     panel.innerHTML = '';
+
     const title = document.createElement('div');
     title.className = 'col-map-panel__title';
     title.textContent = '🗂 Asigna las columnas de tu archivo';
@@ -356,7 +333,10 @@ function initApp() {
     hint.textContent = 'El sistema detectó las columnas abajo. Ajusta si alguna no es correcta. Las columnas sin asignar se guardan como campos extra.';
     panel.appendChild(title);
     panel.appendChild(hint);
-    rowsDiv.innerHTML = '';
+
+    const rowsDiv = document.createElement('div');
+    rowsDiv.id = 'colMapRows';
+    rowsDiv.className = 'col-map-rows';
     panel.appendChild(rowsDiv);
 
     headers.forEach((h, idx) => {
@@ -389,8 +369,6 @@ function initApp() {
       rowsDiv.appendChild(row);
     });
 
-    panel.style.display = 'block';
-    panel.classList.remove('hidden');
   }
 
   async function setFile(f) {
@@ -401,36 +379,72 @@ function initApp() {
     hideAlert($('batchErr'));
     hideAlert($('batchWarn'));
 
-    // Hide panel while loading
-    const panel = $('colMapPanel');
-    if (panel) panel.classList.add('hidden');
+    // Show "loading" panel immediately (synchronous, before any async)
+    _showMappingLoading();
 
-    const isCsv = /\.(csv)$/i.test(f.name);
+    const isCsv = /\.(csv|tsv|txt)$/i.test(f.name);
 
     if (isCsv) {
-      // ── CSV: parse headers directly in the browser (no server needed) ──
       try {
         const headers = await readCsvHeaders(f);
-        if (headers.length > 0) renderMappingPanel(headers, {});
+        if (headers.length > 0) {
+          renderMappingPanel(headers, {});
+        } else {
+          _showMappingError('No se encontraron columnas en la primera fila del archivo.');
+        }
       } catch (e) {
-        console.warn('[setFile] CSV header read error:', e.message);
+        _showMappingError('Error leyendo el archivo: ' + e.message);
       }
     } else {
-      // ── Excel: ask the server to read the header row ──────────────────
+      // Excel — call server
       try {
         const fd = new FormData();
         fd.append('file', f);
         const res = await apiFetch(`${API}/enrich/parse-headers`, { method: 'POST', body: fd });
         if (res.ok) {
-          const { headers, suggestions } = await res.json();
-          if (headers && headers.length > 0) renderMappingPanel(headers, suggestions || {});
+          const data = await res.json();
+          if (data.headers && data.headers.length > 0) {
+            renderMappingPanel(data.headers, data.suggestions || {});
+          } else {
+            _showMappingError('El archivo no tiene encabezados.');
+          }
         } else {
-          console.warn('[setFile] parse-headers returned', res.status);
+          const err = await res.json().catch(() => ({}));
+          _showMappingError(`Error del servidor (${res.status}): ${err.error || 'desconocido'}`);
         }
       } catch (e) {
-        console.warn('[setFile] parse-headers error:', e.message);
+        _showMappingError('No se pudo conectar al servidor: ' + e.message);
       }
     }
+  }
+
+  function _getMappingContainer() {
+    let panel = $('colMapPanel');
+    if (!panel) {
+      panel = document.createElement('div');
+      panel.id = 'colMapPanel';
+      panel.className = 'col-map-panel';
+      const fileInput = $('fileInput');
+      if (fileInput && fileInput.parentNode) {
+        fileInput.parentNode.insertBefore(panel, fileInput.nextSibling);
+      } else {
+        document.querySelector('#pane-batch .card--lift')?.appendChild(panel);
+      }
+    }
+    panel.style.display = 'block';
+    panel.classList.remove('hidden');
+    return panel;
+  }
+
+  function _showMappingLoading() {
+    const panel = _getMappingContainer();
+    panel.innerHTML = '<div class="col-map-panel__title">🗂 Detectando columnas…</div>';
+  }
+
+  function _showMappingError(msg) {
+    const panel = _getMappingContainer();
+    panel.innerHTML = `<div class="col-map-panel__title">⚠️ ${esc(msg)}</div>
+      <div class="col-map-panel__hint">Puedes continuar y el sistema intentará detectar las columnas automáticamente.</div>`;
   }
 
   /** Read the current state of the mapping panel → { colIndex: fieldName } */
