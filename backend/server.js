@@ -522,6 +522,7 @@ app.get('/api/user/verifications', requireAuth, async (req, res) => {
         CASE status WHEN 'verified' THEN 1 WHEN 'pending' THEN 2 ELSE 3 END,
         created_at DESC
     ) t
+    WHERE status != 'bounced'
     ORDER BY created_at DESC`;
 
   try {
@@ -567,6 +568,7 @@ app.get('/api/user/verifications/export', requireAuth, async (req, res) => {
           CASE status WHEN 'verified' THEN 1 WHEN 'pending' THEN 2 ELSE 3 END,
           created_at DESC
       ) t
+      WHERE status != 'bounced'
       ORDER BY created_at DESC`;
 
     const { rows } = await pool.query(
