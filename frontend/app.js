@@ -286,6 +286,80 @@ function initApp() {
     { value: 'linkedinurl', label: 'LinkedIn URL' },
   ];
 
+  // Known aliases for client-side auto-detection (mirrors backend FIELD_ALIASES)
+  const CLIENT_ALIASES = {
+    firstname:   ['firstname','first_name','first name','nombre','prenom','given name','givenname'],
+    lastname:    ['lastname','last_name','last name','apellido','surname','family name','familyname','nom'],
+    company:     ['company','empresa','organisation','organization','compañia','companyurl','company url','website','site','url'],
+    linkedinurl: ['linkedin','linkedinurl','linkedin url','linkedin_url','perfil linkedin','profile'],
+  };
+
+  function guessField(raw) {
+    const h = String(raw).toLowerCase().trim().replace(/\s+/g,' ');
+    for (const [field, aliases] of Object.entries(CLIENT_ALIASES)) {
+      if (aliases.includes(h)) return field;
+    }
+    return '';
+  }
+
+  /** Read first row of a CSV/TSV file purely in the browser */
+  function readCsvHeaders(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = e => {
+        const text = e.target.result || '';
+        const firstLine = text.split(/\r?\n/)[0] || '';
+        // Detect delimiter: comma, semicolon, or tab
+        const delim = firstLine.includes('\t') ? '\t'
+                    : firstLine.includes(';')  ? ';' : ',';
+        const headers = firstLine.split(delim).map(h => h.replace(/^["']|["']$/g,'').trim());
+        resolve(headers);
+      };
+      reader.onerror = () => reject(new Error('FileReader error'));
+      // Read only first 4 KB — enough for the header row
+      reader.readAsText(file.slice(0, 4096));
+    });
+  }
+
+  function renderMappingPanel(headers, suggestions) {
+    const panel   = $('colMapPanel');
+    const rowsDiv = $('colMapRows');
+    if (!panel || !rowsDiv) return;
+
+    rowsDiv.innerHTML = '';
+    headers.forEach((h, idx) => {
+      const suggested = suggestions[idx] || guessField(h) || '';
+      const row = document.createElement('div');
+      row.className = 'col-map-row';
+
+      const label = document.createElement('span');
+      label.className = 'col-map-col-name';
+      label.textContent = h || `columna ${idx + 1}`;
+
+      const arrow = document.createElement('span');
+      arrow.className = 'col-map-arrow';
+      arrow.textContent = '→';
+
+      const sel = document.createElement('select');
+      sel.className = 'col-map-select';
+      sel.dataset.colIdx = idx;
+      FIELD_OPTIONS.forEach(opt => {
+        const o = document.createElement('option');
+        o.value = opt.value;
+        o.textContent = opt.label;
+        if (opt.value === suggested) o.selected = true;
+        sel.appendChild(o);
+      });
+
+      row.appendChild(label);
+      row.appendChild(arrow);
+      row.appendChild(sel);
+      rowsDiv.appendChild(row);
+    });
+
+    panel.classList.remove('hidden');
+  }
+
   async function setFile(f) {
     uploadedFile = f;
     $('fileLabel').textContent = `📎 ${f.name} (${(f.size / 1024).toFixed(1)} KB)`;
@@ -294,58 +368,35 @@ function initApp() {
     hideAlert($('batchErr'));
     hideAlert($('batchWarn'));
 
-    // ── Fetch column headers and auto-suggestions ──────────
+    // Hide panel while loading
     const panel = $('colMapPanel');
-    panel.classList.add('hidden');
-    $('colMapRows').innerHTML = '';
-    $('colMapExtra').classList.add('hidden');
-    $('colMapExtra').textContent = '';
+    if (panel) panel.classList.add('hidden');
 
-    try {
-      const fd = new FormData();
-      fd.append('file', f);
-      const res = await apiFetch(`${API}/enrich/parse-headers`, { method: 'POST', body: fd });
-      if (!res.ok) throw new Error('parse-headers failed');
-      const { headers, suggestions } = await res.json();
-      if (!headers || headers.length === 0) return;
+    const isCsv = /\.(csv)$/i.test(f.name);
 
-      // Build one row per header with a <select>
-      const rowsDiv = $('colMapRows');
-      headers.forEach((h, idx) => {
-        const suggested = suggestions[idx] || '';
-        const row = document.createElement('div');
-        row.className = 'col-map-row';
-
-        const label = document.createElement('span');
-        label.className = 'col-map-col-name';
-        label.textContent = h || `(columna ${idx + 1})`;
-
-        const arrow = document.createElement('span');
-        arrow.className = 'col-map-arrow';
-        arrow.textContent = '→';
-
-        const sel = document.createElement('select');
-        sel.className = 'col-map-select';
-        sel.dataset.colIdx = idx;
-        FIELD_OPTIONS.forEach(opt => {
-          const o = document.createElement('option');
-          o.value = opt.value;
-          o.textContent = opt.label;
-          if (opt.value === suggested) o.selected = true;
-          sel.appendChild(o);
-        });
-
-        row.appendChild(label);
-        row.appendChild(arrow);
-        row.appendChild(sel);
-        rowsDiv.appendChild(row);
-      });
-
-      panel.classList.remove('hidden');
-    } catch (e) {
-      // Non-fatal: if parse-headers fails the user can still upload
-      // with auto-detection
-      console.warn('[setFile] parse-headers error:', e.message);
+    if (isCsv) {
+      // ── CSV: parse headers directly in the browser (no server needed) ──
+      try {
+        const headers = await readCsvHeaders(f);
+        if (headers.length > 0) renderMappingPanel(headers, {});
+      } catch (e) {
+        console.warn('[setFile] CSV header read error:', e.message);
+      }
+    } else {
+      // ── Excel: ask the server to read the header row ──────────────────
+      try {
+        const fd = new FormData();
+        fd.append('file', f);
+        const res = await apiFetch(`${API}/enrich/parse-headers`, { method: 'POST', body: fd });
+        if (res.ok) {
+          const { headers, suggestions } = await res.json();
+          if (headers && headers.length > 0) renderMappingPanel(headers, suggestions || {});
+        } else {
+          console.warn('[setFile] parse-headers returned', res.status);
+        }
+      } catch (e) {
+        console.warn('[setFile] parse-headers error:', e.message);
+      }
     }
   }
 
