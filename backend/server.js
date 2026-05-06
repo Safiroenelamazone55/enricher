@@ -490,7 +490,8 @@ app.post('/api/enrich/upload-json', requireAuth, upload.single('file'), async (r
     if (leads.length > BATCH_LIMIT)
       return res.status(400).json({ error: `Max ${BATCH_LIMIT} leads per request.` });
     const jsonTag = (typeof req.body?.tag === 'string' && req.body.tag.trim()) ? req.body.tag.trim() : null;
-    const results = await enrichBatch(leads, req.user?.id ?? null, jsonTag);
+    // upload-json is used for preview only → quickMode skips SMTP/scraper/GitHub
+    const results = await enrichBatch(leads, req.user?.id ?? null, jsonTag, true);
     res.json({ count: results.length, warnings, results });
   } catch (err) {
     res.status(500).json({ error: err.message });

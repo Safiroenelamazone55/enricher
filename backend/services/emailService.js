@@ -47,7 +47,10 @@ const {
 // PUBLIC
 // ═══════════════════════════════════════════════════════════════
 
-async function enrichOneLead(lead, userId = null, tag = null) {
+/**
+ * @param {boolean} quickMode  Skip SMTP/scraper/GitHub — fast preview only.
+ */
+async function enrichOneLead(lead, userId = null, tag = null, quickMode = false) {
   console.log('ENRICH-V4 ejecutándose');
   const { firstName, lastName, company = '', linkedinUrl = '' } = lead;
 
@@ -85,6 +88,16 @@ async function enrichOneLead(lead, userId = null, tag = null) {
     const delta = patternMatchDelta(c.pattern, domainPattern.likelyPattern, domainPattern.confidence);
     return { ...c, baseScore: Math.max(0, Math.min(dns + delta, 72)) };
   }).sort((a, b) => b.baseScore - a.baseScore);
+
+  // ── Quick mode: return pattern-only results immediately ──────
+  if (quickMode) {
+    const scored = withBase.map(c =>
+      _finalScore(c, firstName, lastName, domain, mxFound,
+                  'not-checked', false, null, domainPattern, { emails:[], count:0 }, null, null)
+    );
+    const decision = decideBestEmail({ candidates: scored, scrapedEmails: [], catchAll: false });
+    return _buildResult(lead, domain, mxFound, mxHost, false, decision, warning, domainPattern, 0);
+  }
 
   // ── No MX → finalize without SMTP ────────────────────────
   if (!mxFound || !mxHost) {
@@ -218,15 +231,28 @@ async function enrichOneLead(lead, userId = null, tag = null) {
                       decision, warning, domainPattern, merged.count, bounceVerifyId);
 }
 
-const LEAD_TIMEOUT_MS = 25_000; // max 25 s per lead
+const LEAD_TIMEOUT_MS = 25_000; // max 25 s per lead in full mode
 
-async function enrichBatch(leads, userId = null, defaultTag = null) {
+async function enrichBatch(leads, userId = null, defaultTag = null, quickMode = false) {
   const uniqueDomains = [...new Set(
     leads.map(l => resolveDomain(l.company || l.linkedinUrl || '').domain).filter(Boolean)
   )];
+  // Pre-warm MX cache for all domains in parallel
   await Promise.allSettled(uniqueDomains.map(d => getMxRecords(d)));
 
-  // Process all leads in parallel, each capped at LEAD_TIMEOUT_MS
+  if (quickMode) {
+    // Preview: all leads in parallel, no SMTP/scraper/GitHub — very fast
+    const results = await Promise.all(leads.map(lead => {
+      const leadTag = (typeof lead.tag === 'string' && lead.tag.trim()) ? lead.tag.trim() : defaultTag;
+      return enrichOneLead(lead, userId, leadTag, true).catch(err => {
+        console.error(`[enrichBatch/quick] ${lead.firstName} ${lead.lastName}: ${err.message}`);
+        return _emptyResult(lead, null, false, `Processing error: ${err.message}`);
+      });
+    }));
+    return results;
+  }
+
+  // Full mode: parallel with per-lead timeout
   const results = await Promise.all(leads.map(lead => {
     const leadTag = (typeof lead.tag === 'string' && lead.tag.trim())
       ? lead.tag.trim()
@@ -237,7 +263,7 @@ async function enrichBatch(leads, userId = null, defaultTag = null) {
     );
 
     return Promise.race([
-      enrichOneLead(lead, userId, leadTag).catch(err => {
+      enrichOneLead(lead, userId, leadTag, false).catch(err => {
         console.error(`[enrichBatch] ${lead.firstName} ${lead.lastName}: ${err.message}`);
         return _emptyResult(lead, null, false, `Processing error: ${err.message}`);
       }),
