@@ -244,8 +244,10 @@
         <!-- Filter + export row -->
         <div class="verif-filter-row">
           <input type="text" id="filterTag" placeholder="Filtrar por etiqueta…"
+            list="tagSuggestions"
             style="flex:1;min-width:160px;padding:7px 10px;border:1.5px solid var(--border);
                    border-radius:var(--rs);font-size:.82rem;outline:none"/>
+          <datalist id="tagSuggestions"></datalist>
           <button class="btn btn--outline btn--sm" id="btnFilterVerif">🔍 Filtrar</button>
           <button class="btn btn--ghost btn--sm" id="btnExportVerif">⬇ Exportar CSV</button>
         </div>

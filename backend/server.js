@@ -475,9 +475,29 @@ app.post('/api/enrich/upload-json', requireAuth, upload.single('file'), async (r
   }
 });
 
+// ── GET /api/user/verifications/tags ─────────────────────────────
+// Returns the distinct non-null tags used by the authenticated user,
+// sorted alphabetically. Used to populate the filter datalist.
+app.get('/api/user/verifications/tags', requireAuth, async (req, res) => {
+  const { pool } = require('./db');
+  try {
+    const { rows } = await pool.query(
+      `SELECT DISTINCT tag
+         FROM verifications
+        WHERE user_id = $1 AND tag IS NOT NULL AND tag <> ''
+        ORDER BY tag`,
+      [req.user.id]
+    );
+    res.json({ tags: rows.map(r => r.tag) });
+  } catch (err) {
+    console.error('[/api/user/verifications/tags]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── GET /api/user/verifications ──────────────────────────────────
 // Returns all bounce-verification rows for the authenticated user,
-// ordered by most recent first.  Accepts optional ?tag= filter.
+// ordered by most recent first.  Accepts optional ?tag= filter (case-insensitive).
 app.get('/api/user/verifications', requireAuth, async (req, res) => {
   const { pool } = require('./db');
   const filterTag = (typeof req.query.tag === 'string' && req.query.tag.trim())
@@ -487,7 +507,7 @@ app.get('/api/user/verifications', requireAuth, async (req, res) => {
       ? await pool.query(
           `SELECT bounceVerifyId, email, status, confidence, tag, created_at, resolved_at
              FROM verifications
-            WHERE user_id = $1 AND tag = $2
+            WHERE user_id = $1 AND lower(tag) = lower($2)
             ORDER BY created_at DESC`,
           [req.user.id, filterTag]
         )
@@ -527,7 +547,7 @@ app.get('/api/user/verifications/export', requireAuth, async (req, res) => {
       ? await pool.query(
           `SELECT email, status, confidence, tag, created_at, resolved_at
              FROM verifications
-            WHERE user_id = $1 AND tag = $2
+            WHERE user_id = $1 AND lower(tag) = lower($2)
             ORDER BY created_at DESC`,
           [req.user.id, filterTag]
         )

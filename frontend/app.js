@@ -609,18 +609,33 @@ function initApp() {
     }
   }
 
+  // Populate the datalist with the user's existing tags
+  async function loadTagSuggestions() {
+    try {
+      const res  = await apiFetch(`${API}/user/verifications/tags`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const dl   = $('tagSuggestions');
+      dl.innerHTML = (data.tags || [])
+        .map(t => `<option value="${esc(t)}">`)
+        .join('');
+    } catch (_) { /* non-critical */ }
+  }
+
   // Load when the tab is first activated
   let _verifLoaded = false;
   document.querySelectorAll('.tab').forEach(btn => {
     btn.addEventListener('click', () => {
       if (btn.dataset.tab === 'verifications' && !_verifLoaded) {
         _verifLoaded = true;
+        loadTagSuggestions();
         loadVerifications();
       }
     });
   });
 
   $('btnRefreshVerif').addEventListener('click', () => {
+    loadTagSuggestions();
     loadVerifications($('filterTag').value.trim());
   });
 
