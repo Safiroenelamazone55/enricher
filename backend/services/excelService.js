@@ -62,6 +62,9 @@ function parseLeadsFile(buffer, mimetype) {
   if (!found.has('lastname'))  warnings.push('Column "lastName" not found — will be empty.');
   if (!found.has('company'))   warnings.push('Column "company/website" not found — domain resolution skipped.');
 
+  // ── Index of known columns (to detect extras) ───────────
+  const knownIndexes = new Set(Object.keys(colMap).map(Number));
+
   // ── Build lead objects ───────────────────────────────────
   const leads = [];
   for (let i = 1; i < rows.length; i++) {
@@ -78,6 +81,19 @@ function parseLeadsFile(buffer, mimetype) {
       if (field === 'company')     lead.company     = val;
       if (field === 'linkedinurl') lead.linkedinUrl = val;
     }
+    // ── Extra columns (phone, position, CRM id, etc.) ─────
+    // Stored under lead._extra so they survive through enrichment
+    // and get persisted in verifications.lead_data
+    const extra = {};
+    headerRow.forEach((h, idx) => {
+      if (!knownIndexes.has(idx) && h && String(h).trim()) {
+        const key = String(h).trim();
+        const val = String(row[idx] ?? '').trim();
+        if (val) extra[key] = val;
+      }
+    });
+    if (Object.keys(extra).length > 0) lead._extra = extra;
+
     leads.push(lead);
   }
 

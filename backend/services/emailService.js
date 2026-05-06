@@ -184,7 +184,16 @@ async function enrichOneLead(lead, userId = null, tag = null) {
 
         console.log(`[FORCE-VERIFY] Iniciando verificación para ${targetEmail} (remaining=${remainingCandidates.length})`);
 
-        bounceVerify(targetEmail, leadId, userId, remainingCandidates, tag)
+        // Build a clean lead_data snapshot (no internal fields like _row)
+      const leadData = {
+        firstName:  firstName || '',
+        lastName:   lastName  || '',
+        company:    lead.company    || '',
+        linkedinUrl: lead.linkedinUrl || '',
+        ...(lead._extra ? { _extra: lead._extra } : {}),
+      };
+
+      bounceVerify(targetEmail, leadId, userId, remainingCandidates, tag, leadData)
           .then(r => {
             if (r.status === 'sent') {
               console.log(`[bounceVerifier] enviado para ${targetEmail} (id: ${r.verifyId})`);

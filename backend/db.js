@@ -158,6 +158,12 @@ async function initDb() {
         ADD COLUMN IF NOT EXISTS tag TEXT;
     `);
 
+    // Full lead data snapshot (firstName, lastName, company, + any extra CRM fields)
+    await pool.query(`
+      ALTER TABLE verifications
+        ADD COLUMN IF NOT EXISTS lead_data JSONB;
+    `);
+
     await pool.query(`
       CREATE INDEX IF NOT EXISTS verifications_email_idx
         ON verifications (lower(email));

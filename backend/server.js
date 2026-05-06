@@ -505,14 +505,14 @@ app.get('/api/user/verifications', requireAuth, async (req, res) => {
   try {
     const { rows } = filterTag
       ? await pool.query(
-          `SELECT bounceVerifyId, email, status, confidence, tag, created_at, resolved_at
+          `SELECT bounceVerifyId, email, status, confidence, tag, lead_data, created_at, resolved_at
              FROM verifications
             WHERE user_id = $1 AND lower(tag) = lower($2)
             ORDER BY created_at DESC`,
           [req.user.id, filterTag]
         )
       : await pool.query(
-          `SELECT bounceVerifyId, email, status, confidence, tag, created_at, resolved_at
+          `SELECT bounceVerifyId, email, status, confidence, tag, lead_data, created_at, resolved_at
              FROM verifications
             WHERE user_id = $1
             ORDER BY created_at DESC`,
@@ -525,7 +525,8 @@ app.get('/api/user/verifications', requireAuth, async (req, res) => {
         email:          r.email,
         status:         r.status,
         confidence:     r.confidence,
-        tag:            r.tag ?? null,
+        tag:            r.tag      ?? null,
+        leadData:       r.lead_data ?? null,
         createdAt:      r.created_at,
         resolvedAt:     r.resolved_at,
       })),

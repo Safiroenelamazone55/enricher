@@ -568,7 +568,7 @@ function initApp() {
         bounced:  { icon: '🔴', label: 'Rebote',     cls: 'vstatus--bounced'  },
       };
 
-      const rowsHtml = rows.map(r => {
+      const rowsHtml = rows.map((r, idx) => {
         const s   = statusMeta[r.status] ?? { icon: '⚪', label: r.status, cls: '' };
         const date = r.createdAt
           ? new Date(r.createdAt).toLocaleString('es-AR', {
@@ -576,12 +576,42 @@ function initApp() {
               hour: '2-digit', minute: '2-digit',
             })
           : '—';
-        return `<tr>
-          <td><span class="mono">${esc(r.email)}</span></td>
+
+        const ld        = r.leadData || {};
+        const firstName = esc(ld.firstName || '');
+        const lastName  = esc(ld.lastName  || '');
+        const extra     = ld._extra && Object.keys(ld._extra).length > 0 ? ld._extra : null;
+
+        // Email borroso mientras está pendiente
+        const emailCell = r.status === 'pending'
+          ? `<span class="mono verif-email--pending" title="Verificación en curso…">${esc(r.email)}</span>`
+          : `<span class="mono">${esc(r.email)}</span>`;
+
+        const expandBtn = extra
+          ? `<button class="expand-btn verif-expand-btn" data-vidx="${idx}">▾ +${Object.keys(extra).length}</button>`
+          : '';
+
+        const mainRow = `<tr>
+          <td>${firstName || '<span style="color:var(--muted)">—</span>'}</td>
+          <td>${lastName  || '<span style="color:var(--muted)">—</span>'}</td>
+          <td>${emailCell}</td>
           <td>${r.tag ? `<span class="verif-tag">${esc(r.tag)}</span>` : '<span style="color:var(--muted)">—</span>'}</td>
           <td><span class="badge ${esc(s.cls)}">${s.icon} ${s.label}</span></td>
           <td style="white-space:nowrap;font-size:.78rem;color:var(--muted)">${date}</td>
+          <td>${expandBtn}</td>
         </tr>`;
+
+        const extraRow = extra ? `<tr id="verif-extra-${idx}" class="hidden">
+          <td colspan="7" style="padding:0">
+            <div class="verif-extra-grid">
+              ${Object.entries(extra).map(([k, v]) =>
+                `<div class="verif-extra-item"><span class="verif-extra-key">${esc(k)}</span><span class="verif-extra-val">${esc(v)}</span></div>`
+              ).join('')}
+            </div>
+          </td>
+        </tr>` : '';
+
+        return mainRow + extraRow;
       }).join('');
 
       const filterNote = tag
@@ -592,7 +622,10 @@ function initApp() {
       body.innerHTML = `
         <div class="tbl-wrap">
           <table class="verif-table">
-            <thead><tr><th>Email</th><th>Etiqueta</th><th>Estado</th><th>Fecha</th></tr></thead>
+            <thead><tr>
+              <th>Nombre</th><th>Apellido</th><th>Email</th>
+              <th>Etiqueta</th><th>Estado</th><th>Fecha</th><th></th>
+            </tr></thead>
             <tbody>${rowsHtml}</tbody>
           </table>
         </div>
@@ -600,6 +633,17 @@ function initApp() {
           ${filterNote}
           ${rows.length} verificación${rows.length !== 1 ? 'es' : ''}
         </p>`;
+
+      // Wire expand buttons for extra fields
+      body.querySelectorAll('.verif-expand-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const idx  = btn.dataset.vidx;
+          const row  = document.getElementById(`verif-extra-${idx}`);
+          const open = !row.classList.contains('hidden');
+          row.classList.toggle('hidden', open);
+          btn.textContent = open ? `▾ +${btn.textContent.match(/\d+/)?.[0] ?? ''}` : `▴ menos`;
+        });
+      });
 
     } catch (err) {
       showAlert(errEl, `Error al cargar verificaciones: ${err.message}`);

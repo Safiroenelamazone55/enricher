@@ -260,6 +260,16 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);line-height:
   border:1px solid #c4b5fd;border-radius:20px;font-size:.72rem;font-weight:600;white-space:nowrap}
 /* filter row */
 .verif-filter-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+/* pending email blur */
+.verif-email--pending{filter:blur(3.5px);user-select:none;opacity:.7;
+  transition:filter .2s;cursor:default}
+.verif-email--pending:hover{filter:blur(0);opacity:1}
+/* extra CRM fields grid */
+.verif-extra-grid{display:flex;flex-wrap:wrap;gap:6px 16px;
+  padding:10px 14px;background:var(--bg);border-top:1px solid var(--border)}
+.verif-extra-item{display:flex;align-items:baseline;gap:5px;font-size:.76rem}
+.verif-extra-key{color:var(--muted);font-weight:600;white-space:nowrap}
+.verif-extra-val{color:var(--text)}
 
 /* ── Auth bar (header) ──────────────────────────────────── */
 .auth-bar{display:flex;align-items:center}
