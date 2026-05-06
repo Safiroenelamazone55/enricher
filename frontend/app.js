@@ -322,11 +322,43 @@ function initApp() {
   }
 
   function renderMappingPanel(headers, suggestions) {
-    const panel   = $('colMapPanel');
-    const rowsDiv = $('colMapRows');
-    if (!panel || !rowsDiv) return;
+    // Get or CREATE the panel — works even if index.html is outdated
+    let panel = $('colMapPanel');
+    if (!panel) {
+      panel = document.createElement('div');
+      panel.id = 'colMapPanel';
+      panel.className = 'col-map-panel';
+      // Insert right after the file input
+      const fileInput = $('fileInput');
+      if (fileInput && fileInput.parentNode) {
+        fileInput.parentNode.insertBefore(panel, fileInput.nextSibling);
+      } else {
+        // Fallback: append to upload card
+        const card = document.querySelector('#pane-batch .card--lift');
+        if (card) card.appendChild(panel);
+      }
+    }
 
+    let rowsDiv = $('colMapRows');
+    if (!rowsDiv) {
+      rowsDiv = document.createElement('div');
+      rowsDiv.id = 'colMapRows';
+      rowsDiv.className = 'col-map-rows';
+    }
+
+    // Build the panel content from scratch
+    panel.innerHTML = '';
+    const title = document.createElement('div');
+    title.className = 'col-map-panel__title';
+    title.textContent = '🗂 Asigna las columnas de tu archivo';
+    const hint = document.createElement('div');
+    hint.className = 'col-map-panel__hint';
+    hint.textContent = 'El sistema detectó las columnas abajo. Ajusta si alguna no es correcta. Las columnas sin asignar se guardan como campos extra.';
+    panel.appendChild(title);
+    panel.appendChild(hint);
     rowsDiv.innerHTML = '';
+    panel.appendChild(rowsDiv);
+
     headers.forEach((h, idx) => {
       const suggested = suggestions[idx] || guessField(h) || '';
       const row = document.createElement('div');
@@ -357,6 +389,7 @@ function initApp() {
       rowsDiv.appendChild(row);
     });
 
+    panel.style.display = 'block';
     panel.classList.remove('hidden');
   }
 
