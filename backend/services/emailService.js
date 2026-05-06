@@ -218,25 +218,33 @@ async function enrichOneLead(lead, userId = null, tag = null) {
                       decision, warning, domainPattern, merged.count, bounceVerifyId);
 }
 
+const LEAD_TIMEOUT_MS = 25_000; // max 25 s per lead
+
 async function enrichBatch(leads, userId = null, defaultTag = null) {
   const uniqueDomains = [...new Set(
     leads.map(l => resolveDomain(l.company || l.linkedinUrl || '').domain).filter(Boolean)
   )];
   await Promise.allSettled(uniqueDomains.map(d => getMxRecords(d)));
 
-  const results = [];
-  for (const lead of leads) {
-    // Per-lead tag from the lead object takes priority over the batch-level default
+  // Process all leads in parallel, each capped at LEAD_TIMEOUT_MS
+  const results = await Promise.all(leads.map(lead => {
     const leadTag = (typeof lead.tag === 'string' && lead.tag.trim())
       ? lead.tag.trim()
       : defaultTag;
-    try {
-      results.push(await enrichOneLead(lead, userId, leadTag));
-    } catch (err) {
-      console.error(`[enrichBatch] ${lead.firstName} ${lead.lastName}: ${err.message}`);
-      results.push(_emptyResult(lead, null, false, `Processing error: ${err.message}`));
-    }
-  }
+
+    const timeout = new Promise(resolve =>
+      setTimeout(() => resolve(_emptyResult(lead, null, false, 'Timeout')), LEAD_TIMEOUT_MS)
+    );
+
+    return Promise.race([
+      enrichOneLead(lead, userId, leadTag).catch(err => {
+        console.error(`[enrichBatch] ${lead.firstName} ${lead.lastName}: ${err.message}`);
+        return _emptyResult(lead, null, false, `Processing error: ${err.message}`);
+      }),
+      timeout,
+    ]);
+  }));
+
   return results;
 }
 

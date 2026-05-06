@@ -29,12 +29,12 @@ const https = require('https');
 const http  = require('http');
 
 // ── Config ────────────────────────────────────────────────────
-const FETCH_TIMEOUT_MS    = 6_000;
+const FETCH_TIMEOUT_MS    = 3_000;                 // 3 s per page (was 6 s)
 const CACHE_TTL_MS        = 24 * 60 * 60 * 1000;  // 24 hours
-const MAX_BODY_BYTES      = 400 * 1024;            // 400 KB per page
+const MAX_BODY_BYTES      = 200 * 1024;            // 200 KB per page (was 400 KB)
 const MAX_EMAILS          = 50;                    // cap returned emails
-const EARLY_STOP_PERSONAL = 5;                     // stop after this many personal emails
-const MAX_URLS_PER_DOMAIN = 12;                    // never fetch more than this
+const EARLY_STOP_PERSONAL = 3;                     // stop after this many personal emails (was 5)
+const MAX_URLS_PER_DOMAIN = 4;                     // never fetch more than this (was 12)
 
 // ── Cache: domain → { emails, count, urls, ts } ──────────────
 const cache = new Map();
