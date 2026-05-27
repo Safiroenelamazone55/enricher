@@ -223,6 +223,30 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);line-height:
 .cand-card__email{font-family:ui-monospace,monospace;font-size:.82rem;font-weight:600;color:var(--text);margin-bottom:4px;word-break:break-all}
 .cand-card__meta{font-size:.72rem;color:var(--muted);display:flex;gap:10px;flex-wrap:wrap}
 
+/* ── Single-lead candidates table ───────────────────────── */
+.cand-table-wrap{max-height:320px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--rs)}
+.cand-table{width:100%;border-collapse:collapse;font-size:.82rem}
+.cand-table thead th{
+  position:sticky;top:0;z-index:1;
+  background:var(--bg);border-bottom:1.5px solid var(--border);
+  padding:7px 10px;font-size:.72rem;font-weight:700;color:var(--muted);
+  text-align:left;letter-spacing:.04em;white-space:nowrap}
+.cand-table tbody tr{border-bottom:1px solid var(--border);transition:background .1s}
+.cand-table tbody tr:last-child{border-bottom:none}
+.cand-table tbody tr:hover{background:#f8faff}
+.cand-table td{padding:8px 10px;vertical-align:middle}
+.cand-row--best td{background:var(--ok-bg)!important}
+.cand-row--best:hover td{background:#d1fae5!important}
+.cand-num{color:var(--muted);font-size:.72rem;text-align:center;width:28px}
+.cand-email{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:240px}
+.cand-email--best{font-weight:700;color:var(--text)}
+/* SMTP status dots */
+.smtp-dot{font-size:.9rem;line-height:1}
+.smtp-dot--valid{color:#16a34a}
+.smtp-dot--invalid{color:#dc2626}
+.smtp-dot--unknown{color:#94a3b8}
+.smtp-dot--none{color:var(--muted);font-size:.72rem}
+
 /* ── Pagination ─────────────────────────────────────────── */
 .pagination{display:flex;justify-content:center;align-items:center;gap:8px;margin-top:16px}
 .page-btn{padding:5px 13px;border:1.5px solid var(--border);border-radius:var(--rs);background:var(--white);font-size:.82rem;cursor:pointer;font-weight:600;color:var(--text);transition:all .15s}

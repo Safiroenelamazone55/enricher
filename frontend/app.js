@@ -1076,31 +1076,42 @@ function renderSingleResult(d) {
 
     if (d.candidates?.length > 0) {
       html += `
-        <div style="font-size:.78rem;font-weight:700;color:var(--muted);margin:14px 0 8px">
+        <div style="font-size:.72rem;font-weight:700;color:var(--muted);letter-spacing:.06em;margin:18px 0 8px">
           TODOS LOS CANDIDATOS (${d.candidates.length})
         </div>
-        <div style="display:flex;flex-direction:column;gap:6px;max-height:340px;overflow-y:auto">`;
+        <div class="cand-table-wrap">
+          <table class="cand-table">
+            <thead>
+              <tr>
+                <th style="width:28px">#</th>
+                <th>Email</th>
+                <th style="width:48px">SMTP</th>
+                <th style="width:80px">Score</th>
+                <th>Confianza</th>
+              </tr>
+            </thead>
+            <tbody>`;
 
       d.candidates.forEach((c, i) => {
-        const isBest = c.email === bestEmail;
-        const smtpDot = c.smtpStatus === 'valid'   ? '🟢'
-                      : c.smtpStatus === 'invalid' ? '🔴'
-                      : c.smtpStatus === 'unknown' ? '⚪'
-                      : '';
+        const isBest  = c.email === bestEmail;
+        const smtpDot = c.smtpStatus === 'valid'   ? '<span class="smtp-dot smtp-dot--valid"  title="SMTP válido">●</span>'
+                      : c.smtpStatus === 'invalid' ? '<span class="smtp-dot smtp-dot--invalid" title="SMTP inválido">●</span>'
+                      : c.smtpStatus === 'unknown' ? '<span class="smtp-dot smtp-dot--unknown" title="SMTP desconocido">●</span>'
+                      : '<span class="smtp-dot smtp-dot--none">—</span>';
         html += `
-          <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;
-            background:${isBest ? 'var(--ok-bg)' : 'var(--bg)'};
-            border-radius:var(--rs);
-            border:1px solid ${isBest ? 'var(--ok-b)' : 'var(--border)'}">
-            <span style="font-size:.72rem;color:var(--muted);min-width:18px;text-align:center">${i + 1}</span>
-            <span class="mono" style="flex:1;word-break:break-all;font-weight:${isBest ? '700' : '400'}">${esc(c.email)}</span>
-            <span style="font-size:.75rem">${smtpDot}</span>
-            ${renderScoreBar(c.score)}
-            ${confBadge(c.confidence)}
-          </div>`;
+              <tr class="${isBest ? 'cand-row--best' : ''}">
+                <td class="cand-num">${i + 1}</td>
+                <td class="cand-email mono${isBest ? ' cand-email--best' : ''}">${esc(c.email)}</td>
+                <td style="text-align:center">${smtpDot}</td>
+                <td>${renderScoreBar(c.score)}</td>
+                <td>${confBadge(c.confidence)}</td>
+              </tr>`;
       });
 
-      html += `</div>
+      html += `
+            </tbody>
+          </table>
+        </div>
         <button class="btn btn--ghost btn--sm" id="copySingle" style="margin-top:12px">📋 Copiar mejor email</button>`;
     }
   }
