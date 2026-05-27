@@ -200,6 +200,7 @@ function initApp() {
       document.querySelectorAll('.pane').forEach(p => p.classList.remove('active'));
       btn.classList.add('active');
       $(`pane-${btn.dataset.tab}`).classList.add('active');
+      if (btn.dataset.tab === 'batch') _checkPersistedJob();
     });
   });
 
@@ -464,32 +465,170 @@ function initApp() {
     return mapping;
   }
 
-  $('btnBatch').addEventListener('click', () => runBatch('download'));
-  $('btnBatchPreview').addEventListener('click', () => runBatch('preview'));
+  $('btnBatch').addEventListener('click', () => runBatch());
+  // Hide preview button if it still exists in old HTML
+  $('btnBatchPreview')?.style && ($('btnBatchPreview').style.display = 'none');
 
-  async function runBatch(mode) {
-    if (!uploadedFile) return;
+  // ── Job banner helpers ─────────────────────────────────────────
+  function _setBanner(html, cls = '') {
+    const b = $('batchJobBanner');
+    if (!b) return;
+    b.innerHTML = html;
+    b.className = cls;
+    b.classList.remove('hidden');
+  }
+  function _hideBanner() {
+    const b = $('batchJobBanner');
+    if (b) { b.classList.add('hidden'); b.innerHTML = ''; }
+  }
 
-    setBtn($('btnBatch'), true);
-    setBtn($('btnBatchPreview'), true);
-    hideAlert($('batchErr'));
-    hideAlert($('batchWarn'));
-    $('batchPreview')?.classList.add('hidden');
+  // ── Poll a running/done job ────────────────────────────────────
+  let _activePollTimer = null;
+  function _startPolling(jobId, count) {
+    if (_activePollTimer) clearInterval(_activePollTimer);
 
     const prog  = $('batchProgress');
     const fill  = $('batchFill');
     const label = $('batchLabel');
-    prog.classList.add('show');
-    fill.style.width = '0%';
-    label.textContent = 'Uploading file…';
+    if (prog) prog.classList.add('show');
+    if (fill)  fill.style.width = '5%';
+    if (label) label.textContent = `⏳ Procesando ${count ?? '…'} leads en segundo plano…`;
 
-    let pct = 0;
-    const timer = setInterval(() => {
-      const inc = pct < 40 ? 5 : pct < 75 ? 2 : pct < 90 ? 0.5 : 0.1;
-      pct = Math.min(pct + inc, 93);
-      fill.style.width = pct + '%';
-      label.textContent = pct < 30 ? 'Uploading file…' : pct < 60 ? 'Resolving domains…' : 'Scoring candidates…';
-    }, 250);
+    _setBanner(
+      `<div class="alert alert--warn" style="margin:0">⏳ Enriquecimiento en curso — puedes cerrar esta pestaña y volver más tarde.</div>`
+    );
+
+    let dots = 0;
+    _activePollTimer = setInterval(async () => {
+      try {
+        const pollRes = await apiFetch(`${API}/enrich/job/${jobId}`);
+        if (!pollRes.ok) { clearInterval(_activePollTimer); return; }
+        const pollData = await pollRes.json();
+
+        dots = (dots + 1) % 4;
+        if (label) label.textContent = `⏳ Procesando${'.'.repeat(dots + 1)}`;
+        if (fill)  fill.style.width = pollData.status === 'done'
+          ? '100%'
+          : `${Math.min(90, parseInt(fill.style.width || '5') + 3)}%`;
+
+        if (pollData.status === 'done') {
+          clearInterval(_activePollTimer);
+          _activePollTimer = null;
+          localStorage.removeItem('enricher_jobId');
+
+          if (fill)  fill.style.width = '100%';
+          if (label) label.textContent = '✅ ¡Listo!';
+          setTimeout(() => { prog?.classList.remove('show'); if (fill) fill.style.width = '0%'; }, 1500);
+
+          batchResults = pollData.results || [];
+          filteredRows = [...batchResults];
+          currentPage  = 1;
+
+          if (pollData.warnings?.length) showAlert($('batchWarn'), pollData.warnings.join(' · '), 'warn');
+
+          renderPreviewTable();
+          $('batchPreview')?.classList.remove('hidden');
+          $('batchPreview')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+          // Wire download button to job xlsx
+          _wireDownloadBtn(jobId, batchResults.length);
+          _setBanner(
+            `<div class="alert alert--ok" style="margin:0">✅ ${batchResults.length} leads enriquecidos. <a href="#" id="bannerDlLink" style="font-weight:700;color:var(--brand)">⬇ Descargar Excel</a></div>`
+          );
+          document.getElementById('bannerDlLink')?.addEventListener('click', e => {
+            e.preventDefault(); _downloadJobXlsx(jobId);
+          });
+
+          setBtn($('btnBatch'), false);
+
+        } else if (pollData.status === 'error') {
+          clearInterval(_activePollTimer);
+          _activePollTimer = null;
+          localStorage.removeItem('enricher_jobId');
+          showAlert($('batchErr'), `Error en el trabajo: ${pollData.error || 'desconocido'}`);
+          _hideBanner();
+          if (prog) prog.classList.remove('show');
+          setBtn($('btnBatch'), false);
+        }
+      } catch (pollErr) {
+        clearInterval(_activePollTimer);
+        _activePollTimer = null;
+        showAlert($('batchErr'), `Error al consultar estado: ${pollErr.message}`);
+        _hideBanner();
+        setBtn($('btnBatch'), false);
+      }
+    }, 4000);
+  }
+
+  function _wireDownloadBtn(jobId, total) {
+    const dlBtn = $('btnDownloadResult');
+    if (!dlBtn) return;
+    dlBtn.onclick = e => { e.preventDefault(); _downloadJobXlsx(jobId); };
+  }
+
+  async function _downloadJobXlsx(jobId) {
+    try {
+      const xlsRes = await apiFetch(`${API}/enrich/job/${jobId}?format=xlsx`);
+      if (xlsRes.ok) {
+        const buf = await xlsRes.arrayBuffer();
+        lastXlsBuffer = buf;
+        downloadBuffer(buf, `enriched_${Date.now()}.xlsx`);
+      }
+    } catch(e) { alert('No se pudo descargar: ' + e.message); }
+  }
+
+  // ── On batch-tab activate: check for persisted job ─────────────
+  function _checkPersistedJob() {
+    try {
+      const raw = localStorage.getItem('enricher_jobId');
+      if (!raw) return;
+      const { jobId, count, ts } = JSON.parse(raw);
+      // Ignore jobs older than 2 hours
+      if (Date.now() - ts > 2 * 60 * 60 * 1000) { localStorage.removeItem('enricher_jobId'); return; }
+
+      // Quick status check before resuming poll
+      apiFetch(`${API}/enrich/job/${jobId}`).then(async r => {
+        if (!r.ok) { localStorage.removeItem('enricher_jobId'); return; }
+        const d = await r.json();
+        if (d.status === 'done') {
+          localStorage.removeItem('enricher_jobId');
+          batchResults = d.results || [];
+          filteredRows = [...batchResults];
+          currentPage  = 1;
+          renderPreviewTable();
+          $('batchPreview')?.classList.remove('hidden');
+          _wireDownloadBtn(jobId, batchResults.length);
+          _setBanner(
+            `<div class="alert alert--ok" style="margin:0">✅ ${batchResults.length} leads enriquecidos. <a href="#" id="bannerDlLink" style="font-weight:700;color:var(--brand)">⬇ Descargar Excel</a></div>`
+          );
+          document.getElementById('bannerDlLink')?.addEventListener('click', e => {
+            e.preventDefault(); _downloadJobXlsx(jobId);
+          });
+        } else if (d.status === 'running' || d.status === 'pending') {
+          _startPolling(jobId, count);
+        } else {
+          localStorage.removeItem('enricher_jobId');
+        }
+      }).catch(() => { localStorage.removeItem('enricher_jobId'); });
+    } catch(e) { /* ignore parse errors */ }
+  }
+
+  // ── Main runBatch: always async background ─────────────────────
+  async function runBatch() {
+    if (!uploadedFile) return;
+
+    setBtn($('btnBatch'), true);
+    hideAlert($('batchErr'));
+    hideAlert($('batchWarn'));
+    $('batchPreview')?.classList.add('hidden');
+    _hideBanner();
+
+    const prog  = $('batchProgress');
+    const fill  = $('batchFill');
+    const label = $('batchLabel');
+    if (prog)  prog.classList.add('show');
+    if (fill)  fill.style.width = '0%';
+    if (label) label.textContent = 'Subiendo archivo…';
 
     const formData = new FormData();
     formData.append('file', uploadedFile);
@@ -499,112 +638,25 @@ function initApp() {
     if (Object.keys(mapping).length) formData.append('mapping', JSON.stringify(mapping));
 
     try {
-      if (mode === 'preview') {
-        const res = await apiFetch(`${API}/enrich/upload-json`, { method: 'POST', body: formData });
-        clearInterval(timer);
-        fill.style.width = '100%';
-
-        if (res.status === 401) { location.reload(); return; }
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
-          throw new Error(err.error || `HTTP ${res.status}`);
-        }
-        const data = await res.json();
-        batchResults = data.results || [];
-        filteredRows = [...batchResults];
-        currentPage  = 1;
-
-        if (data.warnings?.length) showAlert($('batchWarn'), data.warnings.join(' · '), 'warn');
-
-        renderPreviewTable();
-        $('batchPreview')?.classList.remove('hidden');
-        $('batchPreview')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-
-      } else {
-        // ── Async background job ───────────────────────────────
-        clearInterval(timer);
-        const startRes = await apiFetch(`${API}/enrich/upload-async`, { method: 'POST', body: formData });
-        if (startRes.status === 401) { location.reload(); return; }
-        if (!startRes.ok) {
-          const err = await startRes.json().catch(() => ({ error: `HTTP ${startRes.status}` }));
-          throw new Error(err.error || `HTTP ${startRes.status}`);
-        }
-        const { jobId, count } = await startRes.json();
-
-        // Show async progress bar while polling
-        prog.classList.add('show');
-        fill.style.width = '5%';
-        label.textContent = `⏳ Procesando ${count} leads en segundo plano…`;
-        showAlert($('batchWarn'),
-          `✅ Enriquecimiento iniciado (${count} leads). Puedes seguir usando el dashboard — te avisamos cuando termine.`,
-          'ok');
-
-        // Poll every 4 seconds
-        let dots = 0;
-        const pollTimer = setInterval(async () => {
-          try {
-            const pollRes = await apiFetch(`${API}/enrich/job/${jobId}`);
-            if (!pollRes.ok) { clearInterval(pollTimer); return; }
-            const pollData = await pollRes.json();
-
-            dots = (dots + 1) % 4;
-            const dotStr = '.'.repeat(dots + 1);
-            label.textContent = `⏳ Procesando${dotStr}`;
-            fill.style.width = pollData.status === 'done' ? '100%' : `${Math.min(90, parseInt(fill.style.width || 5) + 3)}%`;
-
-            if (pollData.status === 'done') {
-              clearInterval(pollTimer);
-              fill.style.width = '100%';
-              label.textContent = '✅ ¡Listo!';
-
-              // Show results in table
-              batchResults = pollData.results || [];
-              filteredRows = [...batchResults];
-              currentPage  = 1;
-              if (pollData.warnings?.length) showAlert($('batchWarn'), pollData.warnings.join(' · '), 'warn');
-              else showAlert($('batchWarn'), `✅ ${batchResults.length} leads enriquecidos. Descarga lista.`, 'ok');
-
-              renderPreviewTable();
-              $('batchPreview')?.classList.remove('hidden');
-              $('batchPreview')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-
-              // Offer Excel download via job endpoint
-              const dlBtn = $('btnDownloadResult');
-              if (dlBtn) {
-                dlBtn.onclick = async () => {
-                  const xlsRes = await apiFetch(`${API}/enrich/job/${jobId}?format=xlsx`);
-                  if (xlsRes.ok) {
-                    const buf = await xlsRes.arrayBuffer();
-                    lastXlsBuffer = buf;
-                    downloadBuffer(buf, `enriched_${Date.now()}.xlsx`);
-                  }
-                };
-              }
-
-              setTimeout(() => { prog.classList.remove('show'); fill.style.width = '0%'; }, 1500);
-              setBtn($('btnBatch'), false);
-              setBtn($('btnBatchPreview'), false);
-            } else if (pollData.status === 'error') {
-              clearInterval(pollTimer);
-              throw new Error(pollData.error || 'Job failed');
-            }
-          } catch (pollErr) {
-            clearInterval(pollTimer);
-            showAlert($('batchErr'), `Error: ${pollErr.message}`);
-            setBtn($('btnBatch'), false);
-            setBtn($('btnBatchPreview'), false);
-          }
-        }, 4000);
-        return; // skip the finally re-enable (pollTimer handles it)
+      const startRes = await apiFetch(`${API}/enrich/upload-async`, { method: 'POST', body: formData });
+      if (startRes.status === 401) { location.reload(); return; }
+      if (!startRes.ok) {
+        const err = await startRes.json().catch(() => ({ error: `HTTP ${startRes.status}` }));
+        throw new Error(err.error || `HTTP ${startRes.status}`);
       }
+      const { jobId, count } = await startRes.json();
+
+      // Persist so user can close laptop and come back
+      localStorage.setItem('enricher_jobId', JSON.stringify({ jobId, count, ts: Date.now() }));
+
+      _startPolling(jobId, count);
+      // _startPolling re-enables btnBatch when done; return here to skip finally re-enable
+      return;
 
     } catch (err) {
-      clearInterval(timer);
       showAlert($('batchErr'), `Error: ${err.message}`);
-    } finally {
-      setTimeout(() => { prog.classList.remove('show'); fill.style.width = '0%'; }, 700);
+      if (prog) prog.classList.remove('show');
       setBtn($('btnBatch'), false);
-      setBtn($('btnBatchPreview'), false);
     }
   }
 
@@ -958,6 +1010,9 @@ function initApp() {
       showAlert($('verifErr'), `Error al exportar: ${err.message}`);
     }
   });
+
+  // Check for a persisted job from a previous session on initial load
+  _checkPersistedJob();
 
 } // end initApp()
 
