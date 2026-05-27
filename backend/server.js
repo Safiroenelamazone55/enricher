@@ -671,15 +671,19 @@ app.get('/api/user/verifications/export', requireAuth, async (req, res) => {
       return s.includes(',') || s.includes('"') || s.includes('\n')
         ? `"${s.replace(/"/g, '""')}"` : s;
     };
-    const header = ['firstName', 'lastName', 'email', 'status', 'confidence', 'tag', 'createdAt', 'resolvedAt'];
+    const header = ['firstName', 'lastName', 'email', 'status', 'aceptaTodo', 'confidence', 'tag', 'createdAt', 'resolvedAt'];
     const lines  = [header.join(',')];
     for (const r of rows) {
-      const ld = r.lead_data || {};
+      const ld         = r.lead_data || {};
+      const isCatchAll = !!(ld.isCatchAll);
+      // Human-readable status: catch-all records are 'verified' in DB but show 'acepta-todo' in CSV
+      const statusLabel = isCatchAll ? 'acepta-todo' : r.status;
       lines.push([
         csvEscape(ld.firstName ?? ''),
         csvEscape(ld.lastName  ?? ''),
         csvEscape(r.email),
-        csvEscape(r.status),
+        csvEscape(statusLabel),
+        csvEscape(isCatchAll ? 'Sí' : 'No'),
         csvEscape(r.confidence),
         csvEscape(r.tag ?? ''),
         csvEscape(r.created_at  ? new Date(r.created_at).toISOString()  : ''),

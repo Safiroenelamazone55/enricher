@@ -39,6 +39,7 @@ const { decideBestEmail }         = require('./decisionEngine');
 const {
   verifyEmail:           bounceVerify,
   getBounceStatusByEmail,
+  recordCatchAll:        bounceCatchAllRecord,
 } = require('./bounceVerifierService');
 
 // All candidates are probed via SMTP in parallel — no threshold cutoff.
@@ -190,7 +191,18 @@ async function enrichOneLead(lead, userId = null, tag = null, quickMode = false)
         best.bounceState !== 'pending';
 
       if (isCatchAll) {
-        console.log(`[bounceVerifier] SKIP (catch-all domain) para ${targetEmail}`);
+        console.log(`[bounceVerifier] SKIP SES (catch-all domain) para ${targetEmail} — recording for dashboard`);
+        // Record in verifications so the user sees this lead with "⚠️ Acepta todo" badge
+        const leadData = {
+          firstName:   firstName || '',
+          lastName:    lastName  || '',
+          isCatchAll:  true,
+          company:     lead.company     || '',
+          linkedinUrl: lead.linkedinUrl || '',
+          ...(lead._extra ? { _extra: lead._extra } : {}),
+        };
+        bounceCatchAllRecord(targetEmail, `${firstName}_${lastName}_${domain}`, userId, tag, leadData)
+          .catch(err => console.warn('[catch-all-record] error:', err.message));
       }
 
       if (shouldVerify) {

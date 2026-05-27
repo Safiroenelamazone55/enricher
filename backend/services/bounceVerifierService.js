@@ -340,6 +340,56 @@ async function findByMessageId(messageId) {
   }
 }
 
+/**
+ * Record a catch-all lead in the verifications table WITHOUT sending SES.
+ * Catch-all domains accept every email address — SMTP/SES bounce verification
+ * is meaningless for them. We still record the result so the user can see
+ * these leads in the verifications dashboard with the "⚠️ Acepta todo" badge.
+ *
+ * @param {string}      email
+ * @param {string}      leadId
+ * @param {number|null} userId
+ * @param {string|null} tag
+ * @param {object|null} leadData   — must include { isCatchAll: true }
+ */
+async function recordCatchAll(email, leadId, userId, tag, leadData) {
+  if (!email || !process.env.DATABASE_URL) return;
+
+  const emailLower = email.toLowerCase();
+
+  // Skip if already recorded (prevents duplicates on repeated enrichments)
+  try {
+    const { rows } = await pool.query(
+      `SELECT 1 FROM verifications WHERE lower(email) = $1 LIMIT 1`,
+      [emailLower]
+    );
+    if (rows.length) {
+      console.log(`[catch-all-record] already exists for ${email} — skipping`);
+      return;
+    }
+  } catch (_) { /* ignore — proceed with insert */ }
+
+  const verifyId = crypto.randomUUID();
+  try {
+    await pool.query(
+      `INSERT INTO verifications
+         (bounceVerifyId, email, leadId, messageId, status, confidence,
+          user_id, remaining_candidates, tag, lead_data)
+       VALUES ($1, $2, $3, '', 'verified', 'catch-all', $4, '[]'::jsonb, $5, $6)
+       ON CONFLICT (bounceVerifyId) DO NOTHING`,
+      [
+        verifyId, email, leadId,
+        userId ?? null,
+        tag    ?? null,
+        leadData ? JSON.stringify(leadData) : null,
+      ]
+    );
+    console.log(`[catch-all-record] recorded ${email} (leadId=${leadId})`);
+  } catch (err) {
+    console.warn('[catch-all-record] DB insert failed:', err.message);
+  }
+}
+
 module.exports = {
   verifyEmail,
   cascadeVerification,
@@ -347,6 +397,7 @@ module.exports = {
   getBounceStatus,
   getBounceStatusByEmail,
   findByMessageId,
+  recordCatchAll,
 };
 
 // ═══════════════════════════════════════════════════════════════════

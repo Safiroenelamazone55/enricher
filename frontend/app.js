@@ -854,7 +854,11 @@ function initApp() {
       };
 
       const rowsHtml = rows.map((r, idx) => {
-        const s   = statusMeta[r.status] ?? { icon: '⚪', label: r.status, cls: '' };
+        const isCatchAll_ = !!(r.leadData?.isCatchAll);
+        // Catch-all records have status='verified' but should display differently
+        const s = isCatchAll_
+          ? { icon: '⚠️', label: 'Acepta todo', cls: 'vstatus--catchall' }
+          : (statusMeta[r.status] ?? { icon: '⚪', label: r.status, cls: '' });
         const date = r.createdAt
           ? new Date(r.createdAt).toLocaleString('es-AR', {
               day: '2-digit', month: '2-digit', year: 'numeric',
@@ -865,7 +869,7 @@ function initApp() {
         const ld        = r.leadData || {};
         const firstName = esc(ld.firstName || '');
         const lastName  = esc(ld.lastName  || '');
-        const isCatchAll = !!ld.isCatchAll;
+        // isCatchAll_ already computed above for status badge
         const extra     = ld._extra && Object.keys(ld._extra).length > 0 ? ld._extra : null;
 
         // Email borroso mientras está pendiente
@@ -873,7 +877,7 @@ function initApp() {
           ? `<span class="mono verif-email--pending" title="Verificación en curso…">${esc(r.email)}</span>`
           : `<span class="mono">${esc(r.email)}</span>`;
 
-        const catchAllCell = isCatchAll
+        const catchAllCell = isCatchAll_
           ? `<span class="badge badge--catchall" title="Acepta cualquier email — resultado no concluyente">⚠️ Sí</span>`
           : `<span style="color:var(--muted);font-size:.8rem">—</span>`;
 
