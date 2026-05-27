@@ -165,86 +165,84 @@ async function enrichOneLead(lead, userId = null, tag = null, quickMode = false)
   // ── 10. Decision ───────────────────────────────────────────
   const decision = decideBestEmail({ candidates, scrapedEmails: merged.emails, catchAll: isCatchAll });
 
-  // ── 11. Fire bounce verification for best candidate ────────
-  // Si decision.bestEmail es null (todos SMTP unknown, sin scraper ni GitHub)
-  // igual intentamos verificar el candidato de mayor consensusScore.
-  // Corre fire-and-forget — NO retrasa la respuesta de la API.
+  // ── 11. Fire bounce verification — multi-probe strategy ───────────
+  //
+  // Problem with single-probe: if the domain silently accepts everything
+  // (not detected as catch-all via SMTP), the first candidate never bounces
+  // and gets wrongly marked "verified".
+  //
+  // Solution: send SES to the top MAX_SES_PROBES candidates simultaneously.
+  //   • If only ONE survives without a bounce → reliable: that's the real email.
+  //   • If MULTIPLE survive → domain accepts everything → auto-flagged catch-all
+  //     by the DB sweep (_sweepExpiredPending detects 2+ verified per leadId).
+  //
+  // Cascade still applies for candidates beyond MAX_SES_PROBES (if all probes
+  // bounce, the last probe's remainingCandidates list continues the search).
+  //
+  // Runs fire-and-forget — does NOT delay the API response.
   let bounceVerifyId = null;
   {
-    // Candidato objetivo: bestEmail del motor de decisión, o el top por score
-    const targetEmail = decision.bestEmail ||
-      candidates
-        .filter(c => !c.disqualified)
-        .sort((a, b) => b.consensusScore - a.consensusScore)[0]?.email || null;
+    // All non-disqualified candidates sorted by score (best first)
+    const nonDisq = candidates
+      .filter(c => !c.disqualified)
+      .sort((a, b) => b.consensusScore - a.consensusScore);
 
-    console.log(`[bounceVerifier] targetEmail=${targetEmail ?? 'null'} bestEmail=${decision.bestEmail ?? 'null'} confidence=${decision.confidence}`);
+    const targetEmail = decision.bestEmail || nonDisq[0]?.email || null;
+    console.log(`[bounceVerifier] bestEmail=${decision.bestEmail ?? 'null'} confidence=${decision.confidence} domain=${domain} catchAll=${isCatchAll}`);
 
-    if (targetEmail) {
-      const best = candidates.find(c => c.email === targetEmail);
-
-      const shouldVerify =
-        best &&
-        decision.confidence !== 'guaranteed' &&
-        !isCatchAll &&           // catch-all domains accept everything → bounce verify is meaningless
-        !best.bounceVerified &&
-        !best.disqualified &&
-        best.bounceState !== 'pending';
-
-      if (isCatchAll) {
-        console.log(`[bounceVerifier] SKIP SES (catch-all domain) para ${targetEmail} — recording for dashboard`);
-        // Record in verifications so the user sees this lead with "⚠️ Acepta todo" badge
+    if (isCatchAll) {
+      // Catch-all detected via SMTP — record for dashboard without sending SES
+      console.log(`[bounceVerifier] SKIP SES (catch-all domain) para ${targetEmail ?? domain} — recording for dashboard`);
+      if (targetEmail) {
         const leadData = {
-          firstName:   firstName || '',
-          lastName:    lastName  || '',
-          isCatchAll:  true,
-          company:     lead.company     || '',
-          linkedinUrl: lead.linkedinUrl || '',
+          firstName: firstName || '', lastName: lastName || '', isCatchAll: true,
+          company: lead.company || '', linkedinUrl: lead.linkedinUrl || '',
           ...(lead._extra ? { _extra: lead._extra } : {}),
         };
         bounceCatchAllRecord(targetEmail, `${firstName}_${lastName}_${domain}`, userId, tag, leadData)
           .catch(err => console.warn('[catch-all-record] error:', err.message));
       }
+    } else if (targetEmail && decision.confidence !== 'guaranteed') {
+      // ── Multi-probe: send SES to top N candidates in parallel ──────────
+      const MAX_PROBES  = parseInt(process.env.MAX_SES_PROBES) || 3;
+      const probeList   = nonDisq.slice(0, MAX_PROBES);
+      // Candidates beyond the probe list become the cascade fallback for the
+      // LAST probe (if every probe bounces, cascade continues from there).
+      const cascadeTail = nonDisq.slice(MAX_PROBES).map(c => ({
+        email: c.email, score: c.consensusScore, pattern: c.pattern,
+      }));
 
-      if (shouldVerify) {
-        const leadId = `${firstName}_${lastName}_${domain}`;
-        // Keep ALL non-disqualified candidates as fallbacks for cascade.
-        // Do NOT filter by consensusScore > 0 — when SMTP returns 'unknown'
-        // scores are near-zero but the emails are still valid cascade targets.
-        const remainingCandidates = candidates
-          .filter(c => c.email !== targetEmail && !c.disqualified)
-          .sort((a, b) => b.consensusScore - a.consensusScore)
-          .map(c => ({ email: c.email, score: c.consensusScore, pattern: c.pattern }));
-
-        console.log(`[FORCE-VERIFY] Iniciando verificación para ${targetEmail} (remaining=${remainingCandidates.length})`);
-
-        // Build a clean lead_data snapshot (no internal fields like _row)
+      const leadId  = `${firstName}_${lastName}_${domain}`;
       const leadData = {
-        firstName:  firstName || '',
-        lastName:   lastName  || '',
-        isCatchAll: isCatchAll || false,
-        company:    lead.company    || '',
-        linkedinUrl: lead.linkedinUrl || '',
+        firstName: firstName || '', lastName: lastName || '', isCatchAll: false,
+        company: lead.company || '', linkedinUrl: lead.linkedinUrl || '',
         ...(lead._extra ? { _extra: lead._extra } : {}),
       };
 
-      bounceVerify(targetEmail, leadId, userId, remainingCandidates, tag, leadData)
+      console.log(`[MULTI-PROBE] enviando a ${probeList.length} candidatos para ${domain} (cascade tail: ${cascadeTail.length})`);
+
+      probeList.forEach((cand, i) => {
+        // Skip candidates already pending or resolved
+        if (cand.bounceState === 'pending' || cand.bounceState === 'verified') {
+          console.log(`[MULTI-PROBE] skip ${cand.email} (ya ${cand.bounceState})`);
+          return;
+        }
+        // Only the LAST probe carries the cascade tail — prevents duplicate cascades
+        const remaining = (i === probeList.length - 1) ? cascadeTail : [];
+        bounceVerify(cand.email, leadId, userId, remaining, tag, leadData)
           .then(r => {
             if (r.status === 'sent') {
-              console.log(`[bounceVerifier] enviado para ${targetEmail} (id: ${r.verifyId})`);
-              bounceVerifyId = r.verifyId;
-            } else if (r.status === 'already-pending') {
-              console.log(`[bounceVerifier] ya pendiente para ${targetEmail} (id: ${r.verifyId})`);
-              bounceVerifyId = r.verifyId;
+              console.log(`[MULTI-PROBE] sent probe ${i + 1}/${probeList.length}: ${cand.email} (id: ${r.verifyId})`);
+              if (i === 0) bounceVerifyId = r.verifyId; // show first probe ID in response
             } else {
-              console.log(`[bounceVerifier] ${r.status} para ${targetEmail}`);
+              console.log(`[MULTI-PROBE] ${r.status} para ${cand.email}`);
             }
-          })
-          .catch(err => console.warn(`[bounceVerifier] error para ${targetEmail}: ${err.message}`));
-      } else if (best) {
-        console.log(`[BOUNCE-SKIP] Omitido para ${targetEmail}: confidence=${decision.confidence} bounceState=${best.bounceState ?? 'none'} disqualified=${best.disqualified} bounceVerified=${best.bounceVerified}`);
-      }
-    } else {
+          .catch(err => console.warn(`[MULTI-PROBE] error para ${cand.email}: ${err.message}`));
+      });
+    } else if (!targetEmail) {
       console.log(`[bounceVerifier] sin candidatos válidos para verificar en ${domain}`);
+    } else {
+      console.log(`[bounceVerifier] SKIP (confidence=guaranteed) para ${targetEmail}`);
     }
   }
 

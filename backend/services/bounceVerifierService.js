@@ -431,6 +431,7 @@ async function _autoMarkVerified(verifyId, emailLower) {
 async function _sweepExpiredPending() {
   if (!process.env.DATABASE_URL) return;
   try {
+    // ── Step 1: mark expired pending as verified ───────────────────
     const { rows } = await pool.query(
       `UPDATE verifications
           SET status = 'verified', confidence = 'guaranteed', resolved_at = NOW()
@@ -444,6 +445,38 @@ async function _sweepExpiredPending() {
         _cache.set(r.email.toLowerCase(), { verifyId: r.bounceverifyid, status: 'verified', ts: Date.now() });
       });
     }
+
+    // ── Step 2: detect multi-probe catch-all ──────────────────────
+    // If 2+ distinct emails for the same leadId are all verified (and not already
+    // flagged as catch-all), it means the domain accepted every probe → catch-all.
+    // Update all matching rows to confidence='catch-all' and isCatchAll=true in lead_data.
+    const { rows: catchAllRows } = await pool.query(`
+      UPDATE verifications
+        SET confidence = 'catch-all',
+            lead_data  = jsonb_set(
+              COALESCE(lead_data, '{}'::jsonb),
+              '{isCatchAll}', 'true'::jsonb
+            )
+      WHERE leadid IN (
+        SELECT leadid FROM verifications
+        WHERE status    = 'verified'
+          AND confidence NOT IN ('catch-all', 'guaranteed')
+          AND leadid    IS NOT NULL
+          AND leadid    != ''
+        GROUP BY leadid
+        HAVING COUNT(DISTINCT lower(email)) >= 2
+      )
+      AND status    = 'verified'
+      AND confidence NOT IN ('catch-all', 'guaranteed')
+      RETURNING bounceVerifyId, email, leadid
+    `);
+    if (catchAllRows.length > 0) {
+      console.log(`[bounce-verifier] SWEEP: flagged ${catchAllRows.length} row(s) as catch-all (${[...new Set(catchAllRows.map(r => r.leadid))].length} leads)`);
+      catchAllRows.forEach(r => {
+        _cache.set(r.email.toLowerCase(), { verifyId: r.bounceverifyid, status: 'verified', ts: Date.now() });
+      });
+    }
+
   } catch (err) {
     console.warn('[bounce-verifier] _sweepExpiredPending error:', err.message);
   }
