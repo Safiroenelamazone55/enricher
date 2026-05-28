@@ -102,23 +102,18 @@ async function enrichOneLead(lead, userId = null, tag = null, quickMode = false)
     return _buildResult(lead, domain, mxFound, mxHost, false, decision, warning, domainPattern, 0);
   }
 
-  // ── No MX → scrape + search, then still try SES ──────────
+  // ── No MX → score patterns only (no scraper to avoid timeout) ──
+  // Domains without MX rarely yield emails via scraping.
+  // Skipping scraper/search/github prevents the 25s timeout that was
+  // causing domain="—" and candidates=0 in results.
   if (!mxFound || !mxHost) {
-    const [scrape, searchResult, ghResult] = await Promise.all([
-      _safeScrape(domain),
-      _safeSearch(firstName, lastName, domain),
-      _safeGitHub(firstName, lastName, domain),
-    ]);
-    const merged = _mergeScrape(scrape, searchResult);
     const scored = withBase.map(c =>
       _finalScore(c, firstName, lastName, domain, mxFound,
-                  'not-checked', false, null, domainPattern, merged, ghResult)
+                  'not-checked', false, null, domainPattern, { emails:[], count:0 }, null)
     );
-    const decision = decideBestEmail({ candidates: scored, scrapedEmails: merged.emails, catchAll: false });
+    const decision = decideBestEmail({ candidates: scored, scrapedEmails: [], catchAll: false });
 
-    // Even with no MX, attempt SES bounce verification — domain may have
-    // a mail relay not reflected in MX records (SPF/redirect setups).
-    // SES will hard-bounce instantly if truly undeliverable.
+    // Still attempt SES — domain may have a mail relay not in MX records
     let bounceVerifyId = null;
     const targetEmail = decision.bestEmail ||
       scored.filter(c => !c.disqualified).sort((a,b) => b.consensusScore - a.consensusScore)[0]?.email;
@@ -128,7 +123,7 @@ async function enrichOneLead(lead, userId = null, tag = null, quickMode = false)
         firstName: firstName || '', lastName: lastName || '', isCatchAll: false,
         company: lead.company || '', linkedinUrl: lead.linkedinUrl || '',
         noMxWarning: true,
-        ...(lead._extra ? { _extra: lead._extra } : {}),
+        ...(lead._extra      ? { _extra:      lead._extra      } : {}),
         ...(lead._rawColumns ? { _rawColumns: lead._rawColumns } : {}),
       };
       const remaining = scored
@@ -141,7 +136,7 @@ async function enrichOneLead(lead, userId = null, tag = null, quickMode = false)
     }
 
     return _buildResult(lead, domain, mxFound, mxHost, false,
-                        decision, warning, domainPattern, merged.count, bounceVerifyId);
+                        decision, warning, domainPattern, 0, bounceVerifyId);
   }
 
   // ── 6. Probe ALL candidates via SMTP ─────────────────────
@@ -280,7 +275,7 @@ async function enrichOneLead(lead, userId = null, tag = null, quickMode = false)
                       decision, warning, domainPattern, merged.count, bounceVerifyId);
 }
 
-const LEAD_TIMEOUT_MS = 25_000; // max 25 s per lead in full mode
+const LEAD_TIMEOUT_MS = 45_000; // max 45 s per lead in full mode
 
 async function enrichBatch(leads, userId = null, defaultTag = null, quickMode = false) {
   const uniqueDomains = [...new Set(
