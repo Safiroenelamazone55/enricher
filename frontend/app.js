@@ -1030,8 +1030,15 @@ function initApp() {
 
       if (statusDiv) {
         statusDiv.className = 'alert alert--ok';
-        statusDiv.textContent = `✅ ${data.sent} email${data.sent !== 1 ? 's' : ''} enviados a verificación${data.catchAll ? ` · ${data.catchAll} catch-all registrados` : ''}${data.skipped ? ` · ${data.skipped} sin email` : ''}. Revisá "Mis Verificaciones" en ~1 hora.`;
+        statusDiv.textContent = `✅ ${data.sent} enviados · aparecen ahora como 🟡 Pendiente. Cambian a 🟢 Verificado en ~1 h si no rebotan.`;
       }
+      // Go to Mis Verificaciones immediately and reload
+      setTimeout(() => {
+        _switchTab('verifications');
+        _verifLoaded = true;
+        loadTagSuggestions();
+        loadVerifications({});
+      }, 1000);
     } catch (err) {
       if (statusDiv) { statusDiv.className = 'alert alert--err'; statusDiv.textContent = `Error: ${err.message}`; statusDiv.classList.remove('hidden'); }
     } finally {
