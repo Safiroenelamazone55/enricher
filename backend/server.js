@@ -711,18 +711,26 @@ app.get('/api/user/verifications/tags', requireAuth, async (req, res) => {
 // Accepts optional ?tag= filter (case-insensitive).
 app.get('/api/user/verifications', requireAuth, async (req, res) => {
   const { pool } = require('./db');
-  const filterTag  = (typeof req.query.tag  === 'string' && req.query.tag.trim())  ? req.query.tag.trim()  : null;
-  const filterFrom = (typeof req.query.from === 'string' && req.query.from.trim()) ? req.query.from.trim() : null;
-  const filterTo   = (typeof req.query.to   === 'string' && req.query.to.trim())   ? req.query.to.trim()   : null;
+  const filterTag    = (typeof req.query.tag    === 'string' && req.query.tag.trim())    ? req.query.tag.trim()    : null;
+  const filterFrom   = (typeof req.query.from   === 'string' && req.query.from.trim())   ? req.query.from.trim()   : null;
+  const filterTo     = (typeof req.query.to     === 'string' && req.query.to.trim())     ? req.query.to.trim()     : null;
+  const filterStatus = (typeof req.query.status === 'string' && req.query.status.trim()) ? req.query.status.trim() : null;
+  // catch-all is stored as status='verified' + confidence='catch-all'
+  const isCatchAllFilter = filterStatus === 'catch-all';
+  const realStatusFilter = isCatchAllFilter ? null
+    : (filterStatus && ['pending','verified','error'].includes(filterStatus) ? filterStatus : null);
 
-  // Build dynamic WHERE clauses and params
   const params  = [req.user.id];
   const clauses = [];
-  if (filterTag)  { params.push(filterTag);              clauses.push(`lower(tag) = lower($${params.length})`); }
-  if (filterFrom) { params.push(filterFrom + ' 00:00:00'); clauses.push(`created_at >= $${params.length}::timestamptz`); }
-  if (filterTo)   { params.push(filterTo   + ' 23:59:59'); clauses.push(`created_at <= $${params.length}::timestamptz`); }
+  if (filterTag)        { params.push(filterTag);                clauses.push(`lower(tag) = lower($${params.length})`); }
+  if (filterFrom)       { params.push(filterFrom + ' 00:00:00'); clauses.push(`created_at >= $${params.length}::timestamptz`); }
+  if (filterTo)         { params.push(filterTo   + ' 23:59:59'); clauses.push(`created_at <= $${params.length}::timestamptz`); }
+  if (realStatusFilter) { params.push(realStatusFilter);         clauses.push(`status = $${params.length}`); }
+  if (isCatchAllFilter) { clauses.push(`confidence = 'catch-all'`); }
 
   const whereExtra = clauses.length ? 'AND ' + clauses.join(' AND ') : '';
+  // Status filter controls outer WHERE too
+  const outerWhere = realStatusFilter || isCatchAllFilter ? '' : `WHERE status != 'bounced'`;
 
   const baseQuery = `
     SELECT * FROM (
@@ -734,7 +742,7 @@ app.get('/api/user/verifications', requireAuth, async (req, res) => {
         CASE status WHEN 'verified' THEN 1 WHEN 'pending' THEN 2 ELSE 3 END,
         created_at DESC
     ) t
-    WHERE status != 'bounced'
+    ${outerWhere}
     ORDER BY created_at DESC`;
 
   try {

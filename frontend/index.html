@@ -272,27 +272,65 @@
           Emails verificados mediante envío real (SES). Un correo sin rebote en 1 hora se marca como Verificado.
         </p>
 
-        <!-- Filter + export row -->
-        <div class="verif-filter-row">
-          <!-- Tag filter -->
-          <div class="vf-group">
-            <label class="vf-label">Etiqueta</label>
-            <input type="text" id="filterTag" placeholder="Todas las etiquetas"
-              list="tagSuggestions" class="vf-input" style="min-width:150px"/>
+        <!-- Filter bar -->
+        <div class="vf-bar">
+          <button class="btn btn--outline btn--sm" id="btnToggleFilter">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
+            Filtrar
+            <span id="filterBadge" class="vf-badge hidden">0</span>
+          </button>
+          <div id="activeFilterPills" class="vf-active-pills"></div>
+          <button class="btn btn--ghost btn--sm" id="btnExportVerif" style="margin-left:auto">⬇ Exportar CSV</button>
+        </div>
+
+        <!-- Collapsible filter panel -->
+        <div id="filterPanel" class="vf-panel hidden">
+          <!-- Estado -->
+          <div class="vf-section">
+            <div class="vf-section__label">Estado</div>
+            <div class="vf-chips" id="statusChips">
+              <button class="vf-chip active" data-status="">Todos</button>
+              <button class="vf-chip" data-status="verified">🟢 Verificado</button>
+              <button class="vf-chip" data-status="pending">🟡 Pendiente</button>
+              <button class="vf-chip" data-status="error">⛔ Con error</button>
+              <button class="vf-chip" data-status="catch-all">⚠️ Acepta todo</button>
+            </div>
+          </div>
+          <!-- Etiqueta -->
+          <div class="vf-section">
+            <div class="vf-section__label">Etiqueta</div>
+            <select id="filterTag" class="vf-select">
+              <option value="">Todas las etiquetas</option>
+            </select>
             <datalist id="tagSuggestions"></datalist>
           </div>
-          <!-- Date range -->
-          <div class="vf-group">
-            <label class="vf-label">Desde</label>
-            <input type="date" id="filterFrom" class="vf-input"/>
+          <!-- Fecha -->
+          <div class="vf-section">
+            <div class="vf-section__label">Fecha de subida</div>
+            <div class="vf-chips" id="dateChips">
+              <button class="vf-chip active" data-preset="">Todas</button>
+              <button class="vf-chip" data-preset="today">Hoy</button>
+              <button class="vf-chip" data-preset="yesterday">Ayer</button>
+              <button class="vf-chip" data-preset="7d">Últimos 7 días</button>
+              <button class="vf-chip" data-preset="30d">Últimos 30 días</button>
+              <button class="vf-chip" data-preset="custom">Rango personalizado</button>
+            </div>
+            <div id="customDateRange" class="vf-date-range hidden">
+              <div class="vf-group">
+                <label class="vf-label">Desde</label>
+                <input type="date" id="filterFrom" class="vf-input"/>
+              </div>
+              <div class="vf-group">
+                <label class="vf-label">Hasta</label>
+                <input type="date" id="filterTo" class="vf-input"/>
+              </div>
+            </div>
           </div>
-          <div class="vf-group">
-            <label class="vf-label">Hasta</label>
-            <input type="date" id="filterTo" class="vf-input"/>
+          <!-- Actions -->
+          <div class="vf-actions">
+            <button class="btn btn--primary btn--sm" id="btnFilterVerif">Aplicar filtros</button>
+            <button class="btn btn--ghost btn--sm" id="btnClearFilter">Limpiar todo</button>
           </div>
-          <button class="btn btn--primary btn--sm" id="btnFilterVerif">Filtrar</button>
-          <button class="btn btn--ghost btn--sm" id="btnClearFilter">Limpiar</button>
-          <button class="btn btn--ghost btn--sm" id="btnExportVerif" style="margin-left:auto">⬇ Exportar CSV</button>
         </div>
 
         <div id="verifErr" class="alert alert--err hidden"></div>

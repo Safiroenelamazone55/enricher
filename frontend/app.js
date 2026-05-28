@@ -915,7 +915,7 @@ function initApp() {
 
         const ld        = r.leadData || {};
         const extra     = ld._extra || {};
-        const canRetry  = r.status === 'error';
+        const canRetry  = r.status === 'error';  // only errors can be re-sent
 
         const emailCell = r.status === 'pending'
           ? `<span class="mono verif-email--pending" title="Verificación en curso…">${esc(r.email)}</span>`
@@ -929,7 +929,7 @@ function initApp() {
         const frozenCells = `
           <td class="vt-frozen vt-frozen--cb verif-cb-cell">
             <input type="checkbox" class="verif-cb" data-vid="${esc(r.bounceVerifyId)}"
-              ${canRetry ? '' : 'disabled title="Solo errores de envío pueden reintentarse"'}/>
+              data-status="${esc(r.status)}"/>
           </td>
           <td class="vt-frozen vt-frozen--status">
             <span class="badge ${esc(s.cls)}">${s.icon} ${s.label}</span>
@@ -968,12 +968,13 @@ function initApp() {
       const filterNote = filterPills
         ? `<span style="display:flex;gap:4px;flex-wrap:wrap">${filterPills}</span>` : '';
 
-      // Floating retry bar (hidden until checkboxes are ticked)
+      // Floating action bar — appears when any row is selected
       const retryBarHtml = `
         <div class="verif-retry-bar hidden" id="verifRetryBar">
           <span class="verif-retry-bar__count" id="retryCount">0 seleccionadas</span>
-          <button class="btn btn--primary btn--sm" id="btnRetrySelected">⟳ Revivir y re-enviar</button>
-          <button class="btn btn--danger btn--sm"  id="btnDismissSelected">✕ Descartar</button>
+          <button class="btn btn--green btn--sm"   id="btnExportSelected">⬇ Exportar seleccionadas</button>
+          <button class="btn btn--primary btn--sm" id="btnRetrySelected">⟳ Revivir errores</button>
+          <button class="btn btn--danger btn--sm"  id="btnDismissSelected">✕ Descartar errores</button>
           <button class="btn btn--ghost btn--sm"   id="btnRetryClear">Cancelar</button>
         </div>`;
 
@@ -1047,14 +1048,19 @@ function initApp() {
       const selectPendingB = body.querySelector('#btnSelectPending');
       const btnRetry       = body.querySelector('#btnRetrySelected');
       const btnDismiss     = body.querySelector('#btnDismissSelected');
+      const btnExportSel   = body.querySelector('#btnExportSelected');
       const btnRetryClear  = body.querySelector('#btnRetryClear');
-      const allCbs         = () => [...body.querySelectorAll('.verif-cb:not(:disabled)')];
+      const allCbs         = () => [...body.querySelectorAll('.verif-cb')];
 
       function _updateRetryBar() {
-        const checked = allCbs().filter(c => c.checked);
+        const checked     = allCbs().filter(c => c.checked);
+        const errorCount  = checked.filter(c => c.dataset.status === 'error').length;
         if (checked.length > 0) {
           retryCountEl.textContent = `${checked.length} seleccionada${checked.length !== 1 ? 's' : ''}`;
           retryBar?.classList.remove('hidden');
+          // Show retry/dismiss only when errors are selected
+          if (btnRetry)   btnRetry.style.display   = errorCount > 0 ? '' : 'none';
+          if (btnDismiss) btnDismiss.style.display  = errorCount > 0 ? '' : 'none';
         } else {
           retryBar?.classList.add('hidden');
           if (selectAllCb) selectAllCb.checked = false;
@@ -1071,9 +1077,37 @@ function initApp() {
       });
 
       selectPendingB?.addEventListener('click', () => {
-        // Select all error rows (retryable ones)
-        allCbs().forEach(cb => { cb.checked = true; });
+        // Select all error rows only
+        allCbs().forEach(cb => { cb.checked = cb.dataset.status === 'error'; });
         _updateRetryBar();
+      });
+
+      btnExportSel?.addEventListener('click', async () => {
+        const checked = allCbs().filter(c => c.checked);
+        if (!checked.length) return;
+        // Build a mini CSV from the visible row data
+        const vids = new Set(checked.map(c => c.dataset.vid));
+        // Find verif data from rows array (stored in closure)
+        const selected = rows.filter(r => vids.has(r.bounceVerifyId));
+        // Use same export endpoint but with IDs filter — simplest: client-side CSV
+        const colHeadersAll = colHeaders.length ? ['emailVerificado','estado','etiqueta','fecha',...colHeaders] : ['emailVerificado','estado','etiqueta','fecha'];
+        const csvEscCl = v => { const s = String(v??''); return s.includes(',') || s.includes('"') ? `"${s.replace(/"/g,'""')}"` : s; };
+        const lines = [colHeadersAll.join(',')];
+        selected.forEach(r => {
+          const ld = r.leadData || {};
+          const rawMap = {};
+          if (Array.isArray(ld._rawColumns)) ld._rawColumns.forEach(({header,value}) => { rawMap[header]=value; });
+          else Object.assign(rawMap, ld._extra || {});
+          const fixed = [
+            csvEscCl(r.email), csvEscCl(r.status), csvEscCl(r.tag||''),
+            csvEscCl(r.createdAt ? new Date(r.createdAt).toLocaleDateString('es') : ''),
+          ];
+          const extras = colHeaders.map(h => csvEscCl(rawMap[h] ?? ''));
+          lines.push([...fixed, ...extras].join(','));
+        });
+        const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+        a.download = `seleccion_${Date.now()}.csv`; a.click(); URL.revokeObjectURL(a.href);
       });
 
       btnRetryClear?.addEventListener('click', () => {
@@ -1169,59 +1203,145 @@ function initApp() {
       const res  = await apiFetch(`${API}/user/verifications/tags`);
       if (!res.ok) return;
       const data = await res.json();
-      const dl   = $('tagSuggestions');
-      dl.innerHTML = (data.tags || [])
-        .map(t => `<option value="${esc(t)}">`)
-        .join('');
+      const tags = data.tags || [];
+      // Populate <select> dropdown
+      const sel = $('filterTag');
+      if (sel) {
+        const current = sel.value;
+        sel.innerHTML = `<option value="">Todas las etiquetas</option>` +
+          tags.map(t => `<option value="${esc(t)}"${t === current ? ' selected' : ''}>${esc(t)}</option>`).join('');
+      }
     } catch (_) { /* non-critical */ }
   }
 
   // _verifLoaded declared at top of initApp, tab switching handled by _switchTab
 
-  // Collect all active filter values
-  function _getFilters() {
-    return {
-      tag:  ($('filterTag')?.value  || '').trim(),
-      from: ($('filterFrom')?.value || '').trim(),
-      to:   ($('filterTo')?.value   || '').trim(),
-    };
-  }
+  // ── Filter state ──────────────────────────────────────────────
+  let _activeFilters = { tag: '', from: '', to: '', status: '' };
 
-  // Build query string from filters
   function _filtersToQS(f) {
     const p = new URLSearchParams();
-    if (f.tag)  p.set('tag',  f.tag);
-    if (f.from) p.set('from', f.from);
-    if (f.to)   p.set('to',   f.to);
+    if (f.tag)    p.set('tag',    f.tag);
+    if (f.from)   p.set('from',   f.from);
+    if (f.to)     p.set('to',     f.to);
+    if (f.status) p.set('status', f.status);
     const qs = p.toString();
     return qs ? '?' + qs : '';
   }
 
-  $('btnRefreshVerif')?.addEventListener('click', () => {
-    loadTagSuggestions();
-    loadVerifications(_getFilters());
+  function _countActiveFilters(f) {
+    return [f.tag, f.from || f.to, f.status].filter(Boolean).length;
+  }
+
+  function _updateFilterBadge() {
+    const n = _countActiveFilters(_activeFilters);
+    const badge = $('filterBadge');
+    if (!badge) return;
+    if (n > 0) { badge.textContent = n; badge.classList.remove('hidden'); }
+    else        { badge.classList.add('hidden'); }
+  }
+
+  function _updateActivePills() {
+    const container = $('activeFilterPills');
+    if (!container) return;
+    const f = _activeFilters;
+    const pills = [];
+    if (f.status) pills.push(`<span class="vf-pill">${f.status === 'catch-all' ? '⚠️ Acepta todo' : f.status === 'error' ? '⛔ Con error' : f.status === 'pending' ? '🟡 Pendiente' : '🟢 Verificado'}</span>`);
+    if (f.tag)    pills.push(`<span class="vf-pill">🏷 ${esc(f.tag)}</span>`);
+    if (f.from && f.to) pills.push(`<span class="vf-pill">📅 ${esc(f.from)} → ${esc(f.to)}</span>`);
+    else if (f.from)    pills.push(`<span class="vf-pill">📅 Desde ${esc(f.from)}</span>`);
+    else if (f.to)      pills.push(`<span class="vf-pill">📅 Hasta ${esc(f.to)}</span>`);
+    container.innerHTML = pills.join('');
+  }
+
+  // ── Filter panel toggle ────────────────────────────────────────
+  $('btnToggleFilter')?.addEventListener('click', () => {
+    $('filterPanel')?.classList.toggle('hidden');
   });
 
+  // ── Status chips ───────────────────────────────────────────────
+  $('statusChips')?.querySelectorAll('.vf-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      $('statusChips').querySelectorAll('.vf-chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      _activeFilters.status = chip.dataset.status || '';
+    });
+  });
+
+  // ── Date preset chips ──────────────────────────────────────────
+  $('dateChips')?.querySelectorAll('.vf-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      $('dateChips').querySelectorAll('.vf-chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      const preset = chip.dataset.preset;
+      const today  = new Date();
+      const fmt    = d => d.toISOString().slice(0, 10);
+
+      $('customDateRange')?.classList.toggle('hidden', preset !== 'custom');
+
+      if (preset === 'today') {
+        _activeFilters.from = _activeFilters.to = fmt(today);
+      } else if (preset === 'yesterday') {
+        const y = new Date(today); y.setDate(y.getDate() - 1);
+        _activeFilters.from = _activeFilters.to = fmt(y);
+      } else if (preset === '7d') {
+        const s = new Date(today); s.setDate(s.getDate() - 6);
+        _activeFilters.from = fmt(s); _activeFilters.to = fmt(today);
+      } else if (preset === '30d') {
+        const s = new Date(today); s.setDate(s.getDate() - 29);
+        _activeFilters.from = fmt(s); _activeFilters.to = fmt(today);
+      } else if (preset === 'custom') {
+        // will be set by date inputs
+      } else {
+        _activeFilters.from = _activeFilters.to = '';
+      }
+
+      if (preset !== 'custom') {
+        if ($('filterFrom')) $('filterFrom').value = _activeFilters.from;
+        if ($('filterTo'))   $('filterTo').value   = _activeFilters.to;
+      }
+    });
+  });
+
+  $('filterFrom')?.addEventListener('change', () => { _activeFilters.from = $('filterFrom').value; });
+  $('filterTo')?.addEventListener('change',   () => { _activeFilters.to   = $('filterTo').value;   });
+
+  // ── Tag select (populated by loadTagSuggestions) ───────────────
+  $('filterTag')?.addEventListener('change', () => {
+    _activeFilters.tag = $('filterTag')?.value || '';
+  });
+
+  // ── Apply / Clear ──────────────────────────────────────────────
   $('btnFilterVerif')?.addEventListener('click', () => {
     _verifLoaded = true;
-    loadVerifications(_getFilters());
+    _updateFilterBadge();
+    _updateActivePills();
+    $('filterPanel')?.classList.add('hidden');
+    loadVerifications(_activeFilters);
   });
 
   $('btnClearFilter')?.addEventListener('click', () => {
+    _activeFilters = { tag: '', from: '', to: '', status: '' };
     if ($('filterTag'))  $('filterTag').value  = '';
     if ($('filterFrom')) $('filterFrom').value = '';
     if ($('filterTo'))   $('filterTo').value   = '';
+    $('statusChips')?.querySelectorAll('.vf-chip').forEach((c, i) => c.classList.toggle('active', i === 0));
+    $('dateChips')?.querySelectorAll('.vf-chip').forEach((c, i)   => c.classList.toggle('active', i === 0));
+    $('customDateRange')?.classList.add('hidden');
+    _updateFilterBadge();
+    _updateActivePills();
+    $('filterPanel')?.classList.add('hidden');
     _verifLoaded = true;
     loadVerifications({});
   });
 
-  $('filterTag')?.addEventListener('keydown', e => {
-    if (e.key === 'Enter') { _verifLoaded = true; loadVerifications(_getFilters()); }
+  $('btnRefreshVerif')?.addEventListener('click', () => {
+    loadTagSuggestions();
+    loadVerifications(_activeFilters);
   });
 
   $('btnExportVerif')?.addEventListener('click', async () => {
-    const f   = _getFilters();
-    const url = `${API}/user/verifications/export${_filtersToQS(f)}`;
+    const url = `${API}/user/verifications/export${_filtersToQS(_activeFilters)}`;
     try {
       const res = await apiFetch(url);
       if (res.status === 401) { location.reload(); return; }

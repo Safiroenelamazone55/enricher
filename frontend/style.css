@@ -419,14 +419,48 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);line-height:
 /* tag pill */
 .verif-tag{display:inline-block;padding:2px 8px;background:#ede9fe;color:#4f46e5;
   border:1px solid #c4b5fd;border-radius:20px;font-size:.72rem;font-weight:600;white-space:nowrap}
-/* filter row */
+/* ── Verifications filter bar ────────────────────────────── */
 .verif-filter-row{display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+
+/* Top bar: toggle button + active pills + export */
+.vf-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.vf-badge{background:var(--brand);color:#fff;border-radius:99px;
+  font-size:.62rem;font-weight:700;padding:1px 6px;margin-left:4px}
+.vf-active-pills{display:flex;gap:4px;flex-wrap:wrap;flex:1}
+
+/* Collapsible panel */
+.vf-panel{
+  background:var(--bg);border:1.5px solid var(--border);
+  border-radius:var(--r);padding:16px 18px;margin-bottom:14px;
+  display:flex;flex-direction:column;gap:14px;
+  animation:fadeUp .15s ease;
+}
+.vf-section{display:flex;flex-direction:column;gap:6px}
+.vf-section__label{font-size:.7rem;font-weight:700;text-transform:uppercase;
+  letter-spacing:.06em;color:var(--muted)}
+
+/* Chip buttons */
+.vf-chips{display:flex;flex-wrap:wrap;gap:6px}
+.vf-chip{padding:5px 14px;border-radius:99px;border:1.5px solid var(--border);
+  background:var(--white);font-size:.78rem;font-weight:600;color:var(--muted);
+  cursor:pointer;transition:all .12s;white-space:nowrap}
+.vf-chip:hover:not(.active){border-color:var(--brand);color:var(--brand)}
+.vf-chip.active{background:var(--brand);border-color:var(--brand);color:#fff}
+
+/* Select + date inputs */
+.vf-select{padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--rs);
+  font-size:.82rem;outline:none;background:var(--white);color:var(--text);min-width:180px}
+.vf-select:focus{border-color:var(--brand)}
 .vf-group{display:flex;flex-direction:column;gap:3px}
-.vf-label{font-size:.68rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;padding-left:2px}
+.vf-label{font-size:.68rem;font-weight:700;color:var(--muted);text-transform:uppercase;
+  letter-spacing:.04em;padding-left:2px}
 .vf-input{padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--rs);
   font-size:.82rem;outline:none;background:var(--white);color:var(--text);min-width:130px}
 .vf-input:focus{border-color:var(--brand)}
-/* Active filter pills shown in table footer */
+.vf-date-range{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}
+.vf-actions{display:flex;gap:8px;padding-top:4px;border-top:1px solid var(--border)}
+
+/* Active filter pills */
 .vf-pill{display:inline-flex;align-items:center;gap:4px;
   background:#eef2ff;color:var(--brand);border:1px solid #c7d2fe;
   border-radius:20px;padding:2px 9px;font-size:.72rem;font-weight:600}
