@@ -720,24 +720,34 @@ app.get('/api/user/verifications', requireAuth, async (req, res) => {
   const realStatusFilter = isCatchAllFilter ? null
     : (filterStatus && ['pending','verified','error'].includes(filterStatus) ? filterStatus : null);
 
-  const params  = [req.user.id];
-  const clauses = [];
-  if (filterTag)        { params.push(filterTag);                clauses.push(`lower(tag) = lower($${params.length})`); }
-  if (filterFrom)       { params.push(filterFrom + ' 00:00:00'); clauses.push(`created_at >= $${params.length}::timestamptz`); }
-  if (filterTo)         { params.push(filterTo   + ' 23:59:59'); clauses.push(`created_at <= $${params.length}::timestamptz`); }
-  if (realStatusFilter) { params.push(realStatusFilter);         clauses.push(`status = $${params.length}`); }
-  if (isCatchAllFilter) { clauses.push(`confidence = 'catch-all'`); }
+  // ── Inner query: dedup by leadid + filter by date/tag ────────────
+  const params       = [req.user.id];
+  const innerClauses = [];
+  if (filterTag)  { params.push(filterTag);                innerClauses.push(`lower(tag) = lower($${params.length})`); }
+  if (filterFrom) { params.push(filterFrom + ' 00:00:00'); innerClauses.push(`created_at >= $${params.length}::timestamptz`); }
+  if (filterTo)   { params.push(filterTo   + ' 23:59:59'); innerClauses.push(`created_at <= $${params.length}::timestamptz`); }
+  const innerWhere = innerClauses.length ? 'AND ' + innerClauses.join(' AND ') : '';
 
-  const whereExtra = clauses.length ? 'AND ' + clauses.join(' AND ') : '';
-  // Status filter controls outer WHERE too
-  const outerWhere = realStatusFilter || isCatchAllFilter ? '' : `WHERE status != 'bounced'`;
+  // ── Outer query: status filter (applied AFTER dedup) ─────────────
+  // Putting status in the outer WHERE ensures DISTINCT ON first collapses
+  // multiple rows per lead, THEN we filter by the chosen status.
+  const outerClauses = [];
+  if (realStatusFilter) {
+    params.push(realStatusFilter);
+    outerClauses.push(`status = $${params.length}`);
+  } else if (isCatchAllFilter) {
+    outerClauses.push(`confidence = 'catch-all'`);
+  } else {
+    outerClauses.push(`status != 'bounced'`);  // default: hide bounced rows
+  }
+  const outerWhere = 'WHERE ' + outerClauses.join(' AND ');
 
   const baseQuery = `
     SELECT * FROM (
       SELECT DISTINCT ON (leadid)
         bounceVerifyId, email, leadid, status, confidence, tag, lead_data, created_at, resolved_at
       FROM verifications
-      WHERE user_id = $1 ${whereExtra}
+      WHERE user_id = $1 ${innerWhere}
       ORDER BY leadid,
         CASE status WHEN 'verified' THEN 1 WHEN 'pending' THEN 2 ELSE 3 END,
         created_at DESC
@@ -885,12 +895,23 @@ app.get('/api/user/verifications/export', requireAuth, async (req, res) => {
   const filterFrom = (typeof req.query.from === 'string' && req.query.from.trim()) ? req.query.from.trim() : null;
   const filterTo   = (typeof req.query.to   === 'string' && req.query.to.trim())   ? req.query.to.trim()   : null;
 
-  const params  = [req.user.id];
-  const clauses = [];
-  if (filterTag)  { params.push(filterTag);              clauses.push(`lower(tag) = lower($${params.length})`); }
-  if (filterFrom) { params.push(filterFrom + ' 00:00:00'); clauses.push(`created_at >= $${params.length}::timestamptz`); }
-  if (filterTo)   { params.push(filterTo   + ' 23:59:59'); clauses.push(`created_at <= $${params.length}::timestamptz`); }
-  const whereExtra = clauses.length ? 'AND ' + clauses.join(' AND ') : '';
+  const filterStatus = (typeof req.query.status === 'string' && req.query.status.trim()) ? req.query.status.trim() : null;
+  const isCatchAllFilterExp = filterStatus === 'catch-all';
+  const realStatusFilterExp = isCatchAllFilterExp ? null
+    : (filterStatus && ['pending','verified','error'].includes(filterStatus) ? filterStatus : null);
+
+  const params       = [req.user.id];
+  const innerClauses = [];
+  if (filterTag)  { params.push(filterTag);                innerClauses.push(`lower(tag) = lower($${params.length})`); }
+  if (filterFrom) { params.push(filterFrom + ' 00:00:00'); innerClauses.push(`created_at >= $${params.length}::timestamptz`); }
+  if (filterTo)   { params.push(filterTo   + ' 23:59:59'); innerClauses.push(`created_at <= $${params.length}::timestamptz`); }
+  const innerWhere = innerClauses.length ? 'AND ' + innerClauses.join(' AND ') : '';
+
+  const expOuterClauses = [];
+  if (realStatusFilterExp)  { params.push(realStatusFilterExp); expOuterClauses.push(`status = $${params.length}`); }
+  else if (isCatchAllFilterExp) { expOuterClauses.push(`confidence = 'catch-all'`); }
+  else { expOuterClauses.push(`status != 'bounced'`); }
+  const expOuterWhere = 'WHERE ' + expOuterClauses.join(' AND ');
 
   try {
     const exportQuery = `
@@ -898,12 +919,12 @@ app.get('/api/user/verifications/export', requireAuth, async (req, res) => {
         SELECT DISTINCT ON (leadid)
           email, leadid, status, confidence, tag, lead_data, created_at, resolved_at
         FROM verifications
-        WHERE user_id = $1 ${whereExtra}
+        WHERE user_id = $1 ${innerWhere}
         ORDER BY leadid,
           CASE status WHEN 'verified' THEN 1 WHEN 'pending' THEN 2 ELSE 3 END,
           created_at DESC
       ) t
-      WHERE status != 'bounced'
+      ${expOuterWhere}
       ORDER BY created_at DESC`;
 
     const { rows } = await pool.query(exportQuery, params);
