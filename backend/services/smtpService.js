@@ -142,14 +142,46 @@ async function verifyEmailSMTP(email, primaryMxHost, allMxRecords = []) {
  * @param {Array}    [allMxRecords]
  * @returns {Promise<boolean>}
  */
+/**
+ * Detect catch-all using 3 probes with different patterns.
+ *
+ * A single probe can give false results — some servers reject obviously-fake
+ * addresses (zzznnn) but accept plausible-looking ones. We probe 3 different
+ * styles and require 2+ 'valid' responses before declaring catch-all.
+ *
+ *   Probe 1: zzz_random  — clearly fake, no real-name pattern
+ *   Probe 2: firstname.random — looks like a real person
+ *   Probe 3: noreply.random  — looks like a service address
+ *
+ * Result table:
+ *   0/3 valid → not catch-all
+ *   1/3 valid → inconclusive (treat as not catch-all, but log warning)
+ *   2/3 valid → catch-all
+ *   3/3 valid → catch-all (strong)
+ */
 async function detectCatchAll(domain, primaryMxHost, allMxRecords = []) {
   const cached = catchAllCache.get(domain);
   if (cached && Date.now() - cached.ts < CATCH_ALL_TTL) return cached.isCatchAll;
 
-  const random     = `zzz${Math.random().toString(36).slice(2, 14)}@${domain}`;
-  const result     = await verifyEmailSMTP(random, primaryMxHost, allMxRecords).catch(() => ({ status: 'unknown' }));
-  const isCatchAll = result.status === 'valid';
+  const rnd = () => Math.random().toString(36).slice(2, 10);
+  const probeAddresses = [
+    `zzz_${rnd()}@${domain}`,                   // clearly fake
+    `firstname.${rnd()}@${domain}`,             // plausible person
+    `noreply.${rnd()}@${domain}`,               // plausible service
+  ];
 
+  // Run all 3 probes in parallel
+  const results = await Promise.all(
+    probeAddresses.map(addr =>
+      verifyEmailSMTP(addr, primaryMxHost, allMxRecords)
+        .catch(() => ({ status: 'unknown' }))
+    )
+  );
+
+  const validCount = results.filter(r => r.status === 'valid').length;
+  const isCatchAll = validCount >= 2;  // require 2+ to avoid false positives
+
+  console.log(`[catch-all] ${domain}: ${validCount}/3 probes valid → isCatchAll=${isCatchAll}`);
   catchAllCache.set(domain, { isCatchAll, ts: Date.now() });
   return isCatchAll;
 }

@@ -174,7 +174,34 @@ async function initDb() {
         ON verifications (messageId);
     `);
 
-    console.log('[db] tables ready (users, verifications)');
+    // ── batch_jobs table ─────────────────────────────────────────
+    // Persists background enrichment jobs so they survive server restarts.
+    // Previously stored in-memory (_jobs Map) which was lost on Render restart.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS batch_jobs (
+        job_id      TEXT        PRIMARY KEY,
+        user_id     INTEGER     REFERENCES users(id) ON DELETE SET NULL,
+        status      TEXT        NOT NULL DEFAULT 'running'
+                      CHECK (status IN ('running','done','error')),
+        total       INTEGER     NOT NULL DEFAULT 0,
+        results     JSONB,
+        warnings    JSONB,
+        error       TEXT,
+        created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        finished_at TIMESTAMPTZ
+      );
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS batch_jobs_user_idx ON batch_jobs (user_id);
+    `);
+
+    // Auto-clean jobs older than 7 days to keep the table small
+    await pool.query(`
+      DELETE FROM batch_jobs WHERE created_at < NOW() - INTERVAL '7 days';
+    `);
+
+    console.log('[db] tables ready (users, verifications, batch_jobs)');
   } catch (err) {
     console.error('[db] initDb failed:', err.message);
     throw err;

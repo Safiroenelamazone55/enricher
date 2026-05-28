@@ -255,6 +255,25 @@ app.post('/api/bounce-handler', async (req, res) => {
           console.log(`[bounce-handler] soft bounce ignored (${bounce.bounceType})`);
         }
       }
+
+      // ── DSN delivery confirmation ─────────────────────────────────
+      // When the receiving server sends a delivery receipt (DSN), SES forwards
+      // it as a 'Delivery' notification. This means the email was confirmed
+      // delivered — mark immediately as 'guaranteed' without waiting 1 hour.
+      if (message.notificationType === 'Delivery') {
+        const mail = message.mail || {};
+        const record = await _findByMessageId(mail.messageId || '');
+        if (record) {
+          const { pool } = require('./db');
+          await pool.query(
+            `UPDATE verifications
+                SET status='verified', confidence='guaranteed', resolved_at=NOW()
+              WHERE bounceVerifyId=$1 AND status='pending'`,
+            [record.verifyId]
+          );
+          console.log(`[bounce-handler] DSN delivery confirmed verifyId=${record.verifyId} email=${record.email}`);
+        }
+      }
     }
 
     res.json({ status: 'ok' });
@@ -498,17 +517,53 @@ app.post('/api/enrich/upload-json', requireAuth, upload.single('file'), async (r
   }
 });
 
-// ── Async job store (in-memory) ──────────────────────────────────
-// jobId → { status:'pending'|'done'|'error', userId, results, warnings, xlsBuffer, error, createdAt }
-const _jobs = new Map();
-// Clean up jobs older than 2 hours every 30 min
-setInterval(() => {
-  const cutoff = Date.now() - 2 * 60 * 60 * 1000;
-  for (const [id, job] of _jobs) { if (job.createdAt < cutoff) _jobs.delete(id); }
-}, 30 * 60 * 1000).unref();
+// ── Async job store — DB-backed ──────────────────────────────────
+// Jobs are persisted in batch_jobs table so they survive server restarts.
+// In-memory xlsBuffer cache: jobId → Buffer (lost on restart, rebuilt on demand)
+const _xlsCache = new Map();
+
+async function _jobCreate(jobId, userId, total) {
+  const { pool } = require('./db');
+  await pool.query(
+    `INSERT INTO batch_jobs (job_id, user_id, status, total)
+     VALUES ($1, $2, 'running', $3)
+     ON CONFLICT (job_id) DO NOTHING`,
+    [jobId, userId ?? null, total]
+  );
+}
+
+async function _jobDone(jobId, results, warnings, xlsBuffer) {
+  const { pool } = require('./db');
+  _xlsCache.set(jobId, xlsBuffer);
+  await pool.query(
+    `UPDATE batch_jobs
+        SET status='done', results=$2, warnings=$3, finished_at=NOW()
+      WHERE job_id=$1`,
+    [jobId, JSON.stringify(results), JSON.stringify(warnings ?? [])]
+  );
+}
+
+async function _jobError(jobId, errMsg) {
+  const { pool } = require('./db');
+  await pool.query(
+    `UPDATE batch_jobs SET status='error', error=$2, finished_at=NOW() WHERE job_id=$1`,
+    [jobId, errMsg]
+  );
+}
+
+async function _jobGet(jobId) {
+  const { pool } = require('./db');
+  const { rows } = await pool.query(
+    `SELECT job_id, user_id, status, total, results, warnings, error, created_at
+       FROM batch_jobs WHERE job_id=$1`,
+    [jobId]
+  );
+  return rows[0] ?? null;
+}
 
 // ── POST /api/enrich/upload-async ────────────────────────────────
 // Starts full enrichment in the background; returns jobId immediately.
+// Job state is persisted in DB — survives server restarts.
 app.post('/api/enrich/upload-async', requireAuth, upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
   try {
@@ -522,17 +577,17 @@ app.post('/api/enrich/upload-async', requireAuth, upload.single('file'), async (
     const userId = req.user?.id ?? null;
     const tag    = (typeof req.body?.tag === 'string' && req.body.tag.trim()) ? req.body.tag.trim() : null;
 
-    _jobs.set(jobId, { status: 'pending', userId, createdAt: Date.now() });
+    await _jobCreate(jobId, userId, leads.length);
 
     // Fire and forget — do NOT await
     enrichBatch(leads, userId, tag, false)
-      .then(results => {
+      .then(async results => {
         const xlsBuffer = buildResultsExcel(results);
-        _jobs.set(jobId, { status: 'done', userId, results, warnings, xlsBuffer, createdAt: Date.now() });
+        await _jobDone(jobId, results, warnings, xlsBuffer);
         console.log(`[async-job] ${jobId} done — ${results.length} leads`);
       })
-      .catch(err => {
-        _jobs.set(jobId, { status: 'error', userId, error: err.message, createdAt: Date.now() });
+      .catch(async err => {
+        await _jobError(jobId, err.message);
         console.error(`[async-job] ${jobId} error:`, err.message);
       });
 
@@ -544,24 +599,38 @@ app.post('/api/enrich/upload-async', requireAuth, upload.single('file'), async (
 
 // ── GET /api/enrich/job/:jobId ───────────────────────────────────
 // Poll job status. Returns results when done, or triggers Excel download.
-app.get('/api/enrich/job/:jobId', requireAuth, (req, res) => {
-  const job = _jobs.get(req.params.jobId);
-  if (!job) return res.status(404).json({ error: 'Job not found or expired.' });
-  if (job.userId !== null && job.userId !== req.user?.id)
-    return res.status(403).json({ error: 'Forbidden.' });
+app.get('/api/enrich/job/:jobId', requireAuth, async (req, res) => {
+  try {
+    const job = await _jobGet(req.params.jobId);
+    if (!job) return res.status(404).json({ error: 'Job not found or expired.' });
+    if (job.user_id !== null && job.user_id !== req.user?.id)
+      return res.status(403).json({ error: 'Forbidden.' });
 
-  if (job.status === 'pending') return res.json({ status: 'pending' });
-  if (job.status === 'error')   return res.json({ status: 'error', error: job.error });
+    if (job.status === 'running') return res.json({ status: 'running' });
+    if (job.status === 'error')   return res.json({ status: 'error', error: job.error });
 
-  // Done — check if client wants JSON (preview) or Excel (download)
-  const format = req.query.format || 'json';
-  if (format === 'xlsx') {
-    const filename = `enriched_${Date.now()}.xlsx`;
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    return res.send(Buffer.from(job.xlsBuffer));
+    // Done — check if client wants JSON or Excel
+    const format = req.query.format || 'json';
+    if (format === 'xlsx') {
+      // Try in-memory cache first; rebuild from DB results if cache was lost (restart)
+      let xlsBuf = _xlsCache.get(job.job_id);
+      if (!xlsBuf && job.results) {
+        xlsBuf = buildResultsExcel(Array.isArray(job.results) ? job.results : []);
+        _xlsCache.set(job.job_id, xlsBuf);
+      }
+      if (!xlsBuf) return res.status(404).json({ error: 'Excel not available.' });
+      const filename = `enriched_${Date.now()}.xlsx`;
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      return res.send(Buffer.from(xlsBuf));
+    }
+
+    const results  = Array.isArray(job.results)  ? job.results  : [];
+    const warnings = Array.isArray(job.warnings) ? job.warnings : [];
+    res.json({ status: 'done', count: results.length, warnings, results });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
-  res.json({ status: 'done', count: job.results.length, warnings: job.warnings, results: job.results });
 });
 
 // ── GET /api/user/verifications/tags ─────────────────────────────

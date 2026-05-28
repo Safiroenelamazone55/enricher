@@ -120,15 +120,36 @@ async function verifyEmail(email, leadId = '', userId = null, remainingCandidate
   const verifyId = crypto.randomUUID();
 
   // ── 4. Build and send raw MIME email ────────────────────────────
+  // DSN (Delivery Status Notification): request explicit delivery confirmation.
+  // When the receiving server supports DSN, we get a 'Delivered' notification
+  // immediately instead of waiting 1 hour for the timeout.
+  // NOTIFY=SUCCESS,FAILURE — ask for both delivery and failure notifications.
+  // Not all servers support DSN, but major ones (Google Workspace, M365) do.
+  const boundary = `----=_Part_${verifyId.replace(/-/g,'').slice(0,16)}`;
   const rawEmail = [
     `From: ${fromEmail}`,
     `To: ${email}`,
-    `Subject: Delivery Test`,
+    `Subject: Delivery Verification`,
     `MIME-Version: 1.0`,
     `X-Verify-ID: ${verifyId}`,
+    // DSN headers — request delivery receipt from the receiving server
+    `Disposition-Notification-To: ${fromEmail}`,
+    `Return-Receipt-To: ${fromEmail}`,
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    ``,
+    `--${boundary}`,
     `Content-Type: text/plain; charset=UTF-8`,
     ``,
-    `This is an automated deliverability test. You may disregard this message.`,
+    `This is an automated deliverability verification message.`,
+    `You may safely disregard this email.`,
+    ``,
+    `--${boundary}`,
+    `Content-Type: text/html; charset=UTF-8`,
+    ``,
+    `<html><body style="font-family:sans-serif;color:#374151;padding:20px">`,
+    `<p style="color:#6b7280;font-size:13px">This is an automated deliverability verification message. You may safely disregard this email.</p>`,
+    `</body></html>`,
+    `--${boundary}--`,
   ].join('\r\n');
 
   let messageId = '';
