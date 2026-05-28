@@ -1194,22 +1194,25 @@ function initApp() {
       // Only 'error' rows are retryable — pending = still being verified normally
       const errorCount = rows.filter(r => r.status === 'error').length;
 
-      // Build column headers using _rawColumns with strict priority:
-      // 1. Find the FIRST row that has _rawColumns (most complete, in file order)
-      // 2. Use ONLY its headers as the template — ignore _extra keys from old records
-      //    (old records have wrong _extra keys like "SPAIN", "CORDOWARE")
-      // 3. If NO row has _rawColumns, fall back to _extra keys
+      // Build column headers: use the record with the MOST _rawColumns entries
+      // as the template (most complete = most likely from latest upload).
       const colHeaderSet = new Set();
       const colHeaders   = [];
 
-      // Pass 1: find template from first row with _rawColumns
-      const templateRow = rows.find(r => Array.isArray(r.leadData?._rawColumns));
-      if (templateRow) {
+      const rowsWithRaw = rows.filter(r =>
+        Array.isArray(r.leadData?._rawColumns) && r.leadData._rawColumns.length > 0
+      );
+
+      if (rowsWithRaw.length > 0) {
+        // Pick the record with the most columns
+        const templateRow = rowsWithRaw.reduce((best, r) =>
+          r.leadData._rawColumns.length > best.leadData._rawColumns.length ? r : best
+        );
         templateRow.leadData._rawColumns.forEach(({ header }) => {
           if (header && !colHeaderSet.has(header)) { colHeaderSet.add(header); colHeaders.push(header); }
         });
       } else {
-        // Pass 2: no _rawColumns at all — use _extra keys as fallback
+        // Fallback: no _rawColumns — use _extra keys
         rows.forEach(r => {
           Object.keys(r.leadData?._extra || {}).forEach(k => {
             if (!colHeaderSet.has(k)) { colHeaderSet.add(k); colHeaders.push(k); }
