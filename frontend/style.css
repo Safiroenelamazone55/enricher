@@ -297,6 +297,25 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);line-height:
 .verif-email--pending{filter:blur(2px);user-select:none;opacity:.6;
   transition:filter .4s ease,opacity .4s ease;cursor:default}
 .verif-email--pending:hover{filter:blur(0.4px);opacity:.9}
+
+/* ── Retry / re-verification UI ─────────────────────────── */
+/* Checkbox column */
+.verif-cb-cell{width:32px;text-align:center;padding:0 6px!important}
+.verif-cb{width:15px;height:15px;cursor:pointer;accent-color:var(--brand)}
+.verif-cb:disabled{cursor:not-allowed;opacity:.3}
+/* Highlight retryable (pending) rows */
+.verif-row--retryable{background:#fffbeb}
+.verif-row--retryable:hover td{background:#fef3c7!important}
+/* Floating action bar */
+.verif-retry-bar{
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  position:sticky;top:66px;z-index:20;
+  background:#1e293b;color:#fff;
+  padding:10px 16px;border-radius:var(--rs);margin-bottom:12px;
+  box-shadow:0 4px 16px rgba(0,0,0,.18);
+  animation:fadeUp .15s ease
+}
+.verif-retry-bar__count{font-size:.85rem;font-weight:600;flex:1}
 /* extra CRM fields grid */
 .verif-extra-grid{display:flex;flex-wrap:wrap;gap:6px 16px;
   padding:10px 14px;background:var(--bg);border-top:1px solid var(--border)}

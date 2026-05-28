@@ -866,9 +866,11 @@ function initApp() {
         bounced:  { icon: '🔴', label: 'Rebote',     cls: 'vstatus--bounced'  },
       };
 
+      // Count retryable rows (pending = stuck, can be re-sent)
+      const pendingCount = rows.filter(r => r.status === 'pending').length;
+
       const rowsHtml = rows.map((r, idx) => {
         const isCatchAll_ = !!(r.leadData?.isCatchAll);
-        // Catch-all records have status='verified' but should display differently
         const s = isCatchAll_
           ? { icon: '⚠️', label: 'Acepta todo', cls: 'vstatus--catchall' }
           : (statusMeta[r.status] ?? { icon: '⚪', label: r.status, cls: '' });
@@ -882,10 +884,9 @@ function initApp() {
         const ld        = r.leadData || {};
         const firstName = esc(ld.firstName || '');
         const lastName  = esc(ld.lastName  || '');
-        // isCatchAll_ already computed above for status badge
         const extra     = ld._extra && Object.keys(ld._extra).length > 0 ? ld._extra : null;
+        const canRetry  = r.status === 'pending';
 
-        // Email borroso mientras está pendiente
         const emailCell = r.status === 'pending'
           ? `<span class="mono verif-email--pending" title="Verificación en curso…">${esc(r.email)}</span>`
           : `<span class="mono">${esc(r.email)}</span>`;
@@ -898,7 +899,11 @@ function initApp() {
           ? `<button class="expand-btn verif-expand-btn" data-vidx="${idx}">▾ +${Object.keys(extra).length}</button>`
           : '';
 
-        const mainRow = `<tr>
+        const mainRow = `<tr class="${canRetry ? 'verif-row--retryable' : ''}" data-vid="${esc(r.bounceVerifyId)}" data-retryable="${canRetry}">
+          <td class="verif-cb-cell">
+            <input type="checkbox" class="verif-cb" data-vid="${esc(r.bounceVerifyId)}"
+              ${canRetry ? '' : 'disabled title="Solo se pueden re-verificar los pendientes"'}/>
+          </td>
           <td>${firstName || '<span style="color:var(--muted)">—</span>'}</td>
           <td>${lastName  || '<span style="color:var(--muted)">—</span>'}</td>
           <td>${emailCell}</td>
@@ -910,7 +915,7 @@ function initApp() {
         </tr>`;
 
         const extraRow = extra ? `<tr id="verif-extra-${idx}" class="hidden">
-          <td colspan="8" style="padding:0">
+          <td colspan="9" style="padding:0">
             <div class="verif-extra-grid">
               ${Object.entries(extra).map(([k, v]) =>
                 `<div class="verif-extra-item"><span class="verif-extra-key">${esc(k)}</span><span class="verif-extra-val">${esc(v)}</span></div>`
@@ -927,10 +932,33 @@ function initApp() {
              padding:2px 8px;font-size:.73rem;color:var(--ok-t)">🏷 ${esc(tag)}</span>`
         : '';
 
+      // Floating retry bar (hidden until checkboxes are ticked)
+      const retryBar = `
+        <div class="verif-retry-bar hidden" id="verifRetryBar">
+          <span class="verif-retry-bar__count" id="retryCount">0 seleccionadas</span>
+          <button class="btn btn--primary btn--sm" id="btnRetrySelected">⟳ Re-verificar</button>
+          <button class="btn btn--ghost btn--sm" id="btnRetryClear">✕ Cancelar</button>
+        </div>`;
+
+      // "Select all pending" quick action shown only when there are pending rows
+      const selectPendingBtn = pendingCount > 0
+        ? `<button class="btn btn--outline btn--sm" id="btnSelectPending" style="margin-left:8px">
+             🟡 Seleccionar ${pendingCount} pendiente${pendingCount !== 1 ? 's' : ''}
+           </button>`
+        : '';
+
       body.innerHTML = `
+        ${retryBar}
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+          <label style="display:flex;align-items:center;gap:6px;font-size:.8rem;color:var(--muted);cursor:pointer">
+            <input type="checkbox" id="verifSelectAll"/> Seleccionar todas
+          </label>
+          ${selectPendingBtn}
+        </div>
         <div class="tbl-wrap">
           <table class="verif-table">
             <thead><tr>
+              <th style="width:32px"></th>
               <th>Nombre</th><th>Apellido</th><th>Email</th>
               <th>Etiqueta</th><th>Estado</th><th style="text-align:center">Acepta todo</th><th>Fecha</th><th></th>
             </tr></thead>
@@ -951,6 +979,79 @@ function initApp() {
           row.classList.toggle('hidden', open);
           btn.textContent = open ? `▾ +${btn.textContent.match(/\d+/)?.[0] ?? ''}` : `▴ menos`;
         });
+      });
+
+      // ── Checkbox + retry logic ────────────────────────────────────
+      const retryBar       = body.querySelector('#verifRetryBar');
+      const retryCountEl   = body.querySelector('#retryCount');
+      const selectAllCb    = body.querySelector('#verifSelectAll');
+      const selectPendingB = body.querySelector('#btnSelectPending');
+      const btnRetry       = body.querySelector('#btnRetrySelected');
+      const btnRetryClear  = body.querySelector('#btnRetryClear');
+      const allCbs         = () => [...body.querySelectorAll('.verif-cb:not(:disabled)')];
+
+      function _updateRetryBar() {
+        const checked = allCbs().filter(c => c.checked);
+        if (checked.length > 0) {
+          retryCountEl.textContent = `${checked.length} seleccionada${checked.length !== 1 ? 's' : ''}`;
+          retryBar?.classList.remove('hidden');
+        } else {
+          retryBar?.classList.add('hidden');
+          if (selectAllCb) selectAllCb.checked = false;
+        }
+      }
+
+      body.querySelectorAll('.verif-cb').forEach(cb => {
+        cb.addEventListener('change', _updateRetryBar);
+      });
+
+      selectAllCb?.addEventListener('change', () => {
+        allCbs().forEach(cb => { cb.checked = selectAllCb.checked; });
+        _updateRetryBar();
+      });
+
+      selectPendingB?.addEventListener('click', () => {
+        allCbs().forEach(cb => {
+          const tr = cb.closest('tr');
+          cb.checked = tr?.dataset.retryable === 'true';
+        });
+        _updateRetryBar();
+      });
+
+      btnRetryClear?.addEventListener('click', () => {
+        allCbs().forEach(cb => { cb.checked = false; });
+        if (selectAllCb) selectAllCb.checked = false;
+        retryBar?.classList.add('hidden');
+      });
+
+      btnRetry?.addEventListener('click', async () => {
+        const checked = allCbs().filter(c => c.checked);
+        if (!checked.length) return;
+        const verifyIds = checked.map(c => c.dataset.vid);
+
+        btnRetry.disabled = true;
+        btnRetry.textContent = `Enviando…`;
+
+        try {
+          const res = await apiFetch(`${API}/user/verifications/retry`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ verifyIds }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+
+          // Flash success, then reload
+          retryBar.innerHTML = `<span style="color:#16a34a;font-weight:600">
+            ✅ ${data.sent} email${data.sent !== 1 ? 's' : ''} re-enviados${data.failed ? ` · ${data.failed} fallaron` : ''} — recargando…
+          </span>`;
+          setTimeout(() => loadVerifications(tag), 1800);
+
+        } catch (err) {
+          btnRetry.disabled = false;
+          btnRetry.textContent = '⟳ Re-verificar';
+          showAlert(errEl, `Error al re-verificar: ${err.message}`);
+        }
       });
 
     } catch (err) {

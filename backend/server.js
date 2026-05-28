@@ -757,6 +757,92 @@ app.get('/api/user/verifications', requireAuth, async (req, res) => {
   }
 });
 
+// ── POST /api/user/verifications/retry ───────────────────────────
+// Re-sends SES verification for a list of bounceVerifyIds owned by the user.
+// Resets each record to pending so the 1-hour bounce window restarts fresh.
+app.post('/api/user/verifications/retry', requireAuth, async (req, res) => {
+  const { pool } = require('./db');
+  const ids = Array.isArray(req.body?.verifyIds) ? req.body.verifyIds : [];
+  if (!ids.length) return res.status(400).json({ error: 'verifyIds array required' });
+  if (ids.length > 200) return res.status(400).json({ error: 'Max 200 per retry batch' });
+
+  const fromEmail = process.env.SES_FROM_EMAIL;
+  if (!fromEmail) return res.status(500).json({ error: 'SES_FROM_EMAIL not configured' });
+
+  // Load records — only the ones belonging to this user
+  let rows;
+  try {
+    const { rows: r } = await pool.query(
+      `SELECT bounceVerifyId, email, leadId, tag, lead_data, remaining_candidates
+         FROM verifications
+        WHERE bounceVerifyId = ANY($1::text[])
+          AND user_id = $2`,
+      [ids, req.user.id]
+    );
+    rows = r;
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+
+  const { SendRawEmailCommand } = require('@aws-sdk/client-ses');
+  const { SESClient } = require('@aws-sdk/client-ses');
+  const ses = new SESClient({
+    region: process.env.AWS_REGION || 'us-east-1',
+    credentials: {
+      accessKeyId:     process.env.AWS_ACCESS_KEY_ID     || '',
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
+    },
+  });
+
+  let sent = 0, failed = 0;
+  for (const row of rows) {
+    try {
+      const verifyId  = row.bounceverifyid;
+      const boundary  = `----=_Part_${verifyId.replace(/-/g,'').slice(0,16)}`;
+      const rawEmail  = [
+        `From: ${fromEmail}`,
+        `To: ${row.email}`,
+        `Subject: Delivery Verification`,
+        `MIME-Version: 1.0`,
+        `X-Verify-ID: ${verifyId}`,
+        ...(process.env.SES_CONFIG_SET ? [`X-SES-CONFIGURATION-SET: ${process.env.SES_CONFIG_SET}`] : []),
+        `Disposition-Notification-To: ${fromEmail}`,
+        `Return-Receipt-To: ${fromEmail}`,
+        `Content-Type: multipart/alternative; boundary="${boundary}"`,
+        ``,
+        `--${boundary}`,
+        `Content-Type: text/plain; charset=UTF-8`,
+        ``,
+        `This is an automated deliverability verification message. You may safely disregard this email.`,
+        `--${boundary}--`,
+      ].join('\r\n');
+
+      const response = await ses.send(
+        new SendRawEmailCommand({ RawMessage: { Data: Buffer.from(rawEmail, 'utf8') } })
+      );
+      const newMessageId = response.MessageId || '';
+
+      // Reset the record: new messageId, back to pending, fresh timestamp
+      await pool.query(
+        `UPDATE verifications
+            SET status      = 'pending',
+                confidence  = 'pending',
+                messageId   = $2,
+                created_at  = NOW(),
+                resolved_at = NULL
+          WHERE bounceVerifyId = $1`,
+        [verifyId, newMessageId]
+      );
+      sent++;
+    } catch (err) {
+      console.warn(`[retry] failed for ${row.email}: ${err.message}`);
+      failed++;
+    }
+  }
+
+  res.json({ sent, failed, total: rows.length });
+});
+
 // ── GET /api/user/verifications/export ───────────────────────────
 // Downloads a CSV of the user's verifications.  Accepts optional ?tag=.
 app.get('/api/user/verifications/export', requireAuth, async (req, res) => {
