@@ -148,17 +148,27 @@ function parseLeadsFile(buffer, mimetype, customMapping = null) {
         }
       }
     }
-    // ── Extra columns (phone, position, CRM id, etc.) ─────
-    // Stored under lead._extra so they survive through enrichment
-    // and get persisted in verifications.lead_data
+    // ── Extra columns ────────────────────────────────────────
+    // Mapped non-core fields use their mapped key (e.g. 'cargo', 'pais').
+    // Unmapped columns use the original header. Ignored columns are skipped.
+    const CORE_FIELDS = new Set(['firstname','lastname','company','linkedinurl','__ignore__']);
     const extra = {};
-    // ignoredIndexes: skip these columns entirely
+
+    // 1. Explicitly mapped non-core fields → use mapped key as label
+    for (const [idxStr, field] of Object.entries(colMap)) {
+      if (CORE_FIELDS.has(field)) continue;
+      const idx = parseInt(idxStr);
+      const val = String(row[idx] ?? '').trim();
+      if (val) extra[field] = val;
+    }
+
+    // 2. Unmapped columns → use original header as key
     headerRow.forEach((h, idx) => {
-      if (!knownIndexes.has(idx) && h && String(h).trim()) {
-        const key = String(h).trim();
-        const val = String(row[idx] ?? '').trim();
-        if (val) extra[key] = val;
-      }
+      if (knownIndexes.has(idx)) return;   // already handled above or ignored
+      if (!h || !String(h).trim()) return;
+      const key = String(h).trim();
+      const val = String(row[idx] ?? '').trim();
+      if (val) extra[key] = val;
     });
     if (Object.keys(extra).length > 0) lead._extra = extra;
 
@@ -168,8 +178,12 @@ function parseLeadsFile(buffer, mimetype, customMapping = null) {
     // to display columns without reordering.
     lead._rawColumns = headerRow
       .map((h, idx) => {
-        const header = String(h).trim();
-        if (!header) return null;
+        if (ignoredIndexes.has(idx)) return null;  // skip ignored columns
+        const rawHeader = String(h).trim();
+        if (!rawHeader) return null;
+        // Use mapped label as header when it's a non-core mapped field
+        const mapped = colMap[idx];
+        const header = (mapped && !CORE_FIELDS.has(mapped)) ? mapped : rawHeader;
         const val = String(row[idx] ?? '').trim();
         return { header, value: val };
       })
