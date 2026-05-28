@@ -842,7 +842,9 @@ function initApp() {
   // MIS VERIFICACIONES
   // ═══════════════════════════════════════════════════════════════
 
-  async function loadVerifications(tag = '') {
+  async function loadVerifications(filters = {}) {
+    // Accept both old string (tag only) and new object {tag, from, to}
+    if (typeof filters === 'string') filters = { tag: filters };
     const body    = $('verifBody');
     const errEl   = $('verifErr');
     const btn     = $('btnRefreshVerif');
@@ -852,9 +854,8 @@ function initApp() {
     body.innerHTML = '<div class="verif-empty">Cargando…</div>';
 
     try {
-      const url = tag
-        ? `${API}/user/verifications?tag=${encodeURIComponent(tag)}`
-        : `${API}/user/verifications`;
+      const qs  = _filtersToQS(filters);
+      const url = `${API}/user/verifications${qs}`;
       const res  = await apiFetch(url);
       if (res.status === 401) { location.reload(); return; }
       const data = await res.json();
@@ -863,9 +864,10 @@ function initApp() {
       const rows = data.verifications || [];
 
       if (rows.length === 0) {
-        const emptyMsg = tag
-          ? `No hay verificaciones con la etiqueta "<strong>${esc(tag)}</strong>".`
-          : 'No tienes verificaciones pendientes.';
+        const hasFilters = filters.tag || filters.from || filters.to;
+        const emptyMsg = hasFilters
+          ? `No hay verificaciones con los filtros aplicados.`
+          : 'No tienes verificaciones aún.';
         body.innerHTML = `<div class="verif-empty">${emptyMsg}</div>`;
         return;
       }
@@ -958,10 +960,13 @@ function initApp() {
         </tr>`;
       }).join('');
 
-      const filterNote = tag
-        ? `<span style="background:var(--ok-bg);border:1px solid var(--ok-b);border-radius:4px;
-             padding:2px 8px;font-size:.73rem;color:var(--ok-t)">🏷 ${esc(tag)}</span>`
-        : '';
+      const filterPills = [
+        filters.tag  ? `<span class="vf-pill">🏷 ${esc(filters.tag)}</span>`  : '',
+        filters.from ? `<span class="vf-pill">📅 Desde ${esc(filters.from)}</span>` : '',
+        filters.to   ? `<span class="vf-pill">📅 Hasta ${esc(filters.to)}</span>`   : '',
+      ].filter(Boolean).join('');
+      const filterNote = filterPills
+        ? `<span style="display:flex;gap:4px;flex-wrap:wrap">${filterPills}</span>` : '';
 
       // Floating retry bar (hidden until checkboxes are ticked)
       const retryBarHtml = `
@@ -1098,7 +1103,7 @@ function initApp() {
           retryBar.innerHTML = `<span style="color:#16a34a;font-weight:600">
             ✅ ${data.sent} email${data.sent !== 1 ? 's' : ''} re-enviados${data.failed ? ` · ${data.failed} fallaron` : ''} — recargando…
           </span>`;
-          setTimeout(() => loadVerifications(tag), 1800);
+          setTimeout(() => loadVerifications(filters), 1800);
 
         } catch (err) {
           btnRetry.disabled = false;
@@ -1173,30 +1178,50 @@ function initApp() {
 
   // _verifLoaded declared at top of initApp, tab switching handled by _switchTab
 
-  function _getFilterTag() { return ($('filterTag')?.value || '').trim(); }
+  // Collect all active filter values
+  function _getFilters() {
+    return {
+      tag:  ($('filterTag')?.value  || '').trim(),
+      from: ($('filterFrom')?.value || '').trim(),
+      to:   ($('filterTo')?.value   || '').trim(),
+    };
+  }
+
+  // Build query string from filters
+  function _filtersToQS(f) {
+    const p = new URLSearchParams();
+    if (f.tag)  p.set('tag',  f.tag);
+    if (f.from) p.set('from', f.from);
+    if (f.to)   p.set('to',   f.to);
+    const qs = p.toString();
+    return qs ? '?' + qs : '';
+  }
 
   $('btnRefreshVerif')?.addEventListener('click', () => {
     loadTagSuggestions();
-    loadVerifications(_getFilterTag());
+    loadVerifications(_getFilters());
   });
 
   $('btnFilterVerif')?.addEventListener('click', () => {
     _verifLoaded = true;
-    loadVerifications(_getFilterTag());
+    loadVerifications(_getFilters());
+  });
+
+  $('btnClearFilter')?.addEventListener('click', () => {
+    if ($('filterTag'))  $('filterTag').value  = '';
+    if ($('filterFrom')) $('filterFrom').value = '';
+    if ($('filterTo'))   $('filterTo').value   = '';
+    _verifLoaded = true;
+    loadVerifications({});
   });
 
   $('filterTag')?.addEventListener('keydown', e => {
-    if (e.key === 'Enter') {
-      _verifLoaded = true;
-      loadVerifications(_getFilterTag());
-    }
+    if (e.key === 'Enter') { _verifLoaded = true; loadVerifications(_getFilters()); }
   });
 
   $('btnExportVerif')?.addEventListener('click', async () => {
-    const tag = _getFilterTag();
-    const url = tag
-      ? `${API}/user/verifications/export?tag=${encodeURIComponent(tag)}`
-      : `${API}/user/verifications/export`;
+    const f   = _getFilters();
+    const url = `${API}/user/verifications/export${_filtersToQS(f)}`;
     try {
       const res = await apiFetch(url);
       if (res.status === 401) { location.reload(); return; }

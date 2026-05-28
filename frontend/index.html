@@ -274,13 +274,25 @@
 
         <!-- Filter + export row -->
         <div class="verif-filter-row">
-          <input type="text" id="filterTag" placeholder="Filtrar por etiqueta…"
-            list="tagSuggestions"
-            style="flex:1;min-width:160px;padding:7px 10px;border:1.5px solid var(--border);
-                   border-radius:var(--rs);font-size:.82rem;outline:none"/>
-          <datalist id="tagSuggestions"></datalist>
-          <button class="btn btn--outline btn--sm" id="btnFilterVerif">🔍 Filtrar</button>
-          <button class="btn btn--ghost btn--sm" id="btnExportVerif">⬇ Exportar CSV</button>
+          <!-- Tag filter -->
+          <div class="vf-group">
+            <label class="vf-label">Etiqueta</label>
+            <input type="text" id="filterTag" placeholder="Todas las etiquetas"
+              list="tagSuggestions" class="vf-input" style="min-width:150px"/>
+            <datalist id="tagSuggestions"></datalist>
+          </div>
+          <!-- Date range -->
+          <div class="vf-group">
+            <label class="vf-label">Desde</label>
+            <input type="date" id="filterFrom" class="vf-input"/>
+          </div>
+          <div class="vf-group">
+            <label class="vf-label">Hasta</label>
+            <input type="date" id="filterTo" class="vf-input"/>
+          </div>
+          <button class="btn btn--primary btn--sm" id="btnFilterVerif">Filtrar</button>
+          <button class="btn btn--ghost btn--sm" id="btnClearFilter">Limpiar</button>
+          <button class="btn btn--ghost btn--sm" id="btnExportVerif" style="margin-left:auto">⬇ Exportar CSV</button>
         </div>
 
         <div id="verifErr" class="alert alert--err hidden"></div>

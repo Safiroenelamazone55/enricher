@@ -420,7 +420,16 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);line-height:
 .verif-tag{display:inline-block;padding:2px 8px;background:#ede9fe;color:#4f46e5;
   border:1px solid #c4b5fd;border-radius:20px;font-size:.72rem;font-weight:600;white-space:nowrap}
 /* filter row */
-.verif-filter-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+.verif-filter-row{display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+.vf-group{display:flex;flex-direction:column;gap:3px}
+.vf-label{font-size:.68rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;padding-left:2px}
+.vf-input{padding:7px 10px;border:1.5px solid var(--border);border-radius:var(--rs);
+  font-size:.82rem;outline:none;background:var(--white);color:var(--text);min-width:130px}
+.vf-input:focus{border-color:var(--brand)}
+/* Active filter pills shown in table footer */
+.vf-pill{display:inline-flex;align-items:center;gap:4px;
+  background:#eef2ff;color:var(--brand);border:1px solid #c7d2fe;
+  border-radius:20px;padding:2px 9px;font-size:.72rem;font-weight:600}
 /* catch-all domain warning badge */
 .badge--catchall{background:#fef3c7;color:#92400e;border:1px solid #fcd34d;
   font-size:.7rem;padding:2px 7px;border-radius:99px;margin-left:6px;

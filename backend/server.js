@@ -711,21 +711,25 @@ app.get('/api/user/verifications/tags', requireAuth, async (req, res) => {
 // Accepts optional ?tag= filter (case-insensitive).
 app.get('/api/user/verifications', requireAuth, async (req, res) => {
   const { pool } = require('./db');
-  const filterTag = (typeof req.query.tag === 'string' && req.query.tag.trim())
-    ? req.query.tag.trim() : null;
+  const filterTag  = (typeof req.query.tag  === 'string' && req.query.tag.trim())  ? req.query.tag.trim()  : null;
+  const filterFrom = (typeof req.query.from === 'string' && req.query.from.trim()) ? req.query.from.trim() : null;
+  const filterTo   = (typeof req.query.to   === 'string' && req.query.to.trim())   ? req.query.to.trim()   : null;
 
-  // DISTINCT ON (leadid) keeps one row per lead.
-  // The ORDER BY inside picks the row with best status first:
-  //   1 = verified, 2 = pending, 3 = bounced
-  // then most recent created_at as tiebreaker.
-  // The outer ORDER BY sorts the final list newest-first.
+  // Build dynamic WHERE clauses and params
+  const params  = [req.user.id];
+  const clauses = [];
+  if (filterTag)  { params.push(filterTag);              clauses.push(`lower(tag) = lower($${params.length})`); }
+  if (filterFrom) { params.push(filterFrom + ' 00:00:00'); clauses.push(`created_at >= $${params.length}::timestamptz`); }
+  if (filterTo)   { params.push(filterTo   + ' 23:59:59'); clauses.push(`created_at <= $${params.length}::timestamptz`); }
+
+  const whereExtra = clauses.length ? 'AND ' + clauses.join(' AND ') : '';
+
   const baseQuery = `
     SELECT * FROM (
       SELECT DISTINCT ON (leadid)
         bounceVerifyId, email, leadid, status, confidence, tag, lead_data, created_at, resolved_at
       FROM verifications
-      WHERE user_id = $1
-        ${filterTag ? 'AND lower(tag) = lower($2)' : ''}
+      WHERE user_id = $1 ${whereExtra}
       ORDER BY leadid,
         CASE status WHEN 'verified' THEN 1 WHEN 'pending' THEN 2 ELSE 3 END,
         created_at DESC
@@ -734,10 +738,7 @@ app.get('/api/user/verifications', requireAuth, async (req, res) => {
     ORDER BY created_at DESC`;
 
   try {
-    const { rows } = await pool.query(
-      baseQuery,
-      filterTag ? [req.user.id, filterTag] : [req.user.id]
-    );
+    const { rows } = await pool.query(baseQuery, params);
     res.json({
       count: rows.length,
       verifications: rows.map(r => ({
@@ -872,17 +873,24 @@ app.post('/api/user/verifications/dismiss', requireAuth, async (req, res) => {
 // Downloads a CSV of the user's verifications.  Accepts optional ?tag=.
 app.get('/api/user/verifications/export', requireAuth, async (req, res) => {
   const { pool } = require('./db');
-  const filterTag = (typeof req.query.tag === 'string' && req.query.tag.trim())
-    ? req.query.tag.trim() : null;
+  const filterTag  = (typeof req.query.tag  === 'string' && req.query.tag.trim())  ? req.query.tag.trim()  : null;
+  const filterFrom = (typeof req.query.from === 'string' && req.query.from.trim()) ? req.query.from.trim() : null;
+  const filterTo   = (typeof req.query.to   === 'string' && req.query.to.trim())   ? req.query.to.trim()   : null;
+
+  const params  = [req.user.id];
+  const clauses = [];
+  if (filterTag)  { params.push(filterTag);              clauses.push(`lower(tag) = lower($${params.length})`); }
+  if (filterFrom) { params.push(filterFrom + ' 00:00:00'); clauses.push(`created_at >= $${params.length}::timestamptz`); }
+  if (filterTo)   { params.push(filterTo   + ' 23:59:59'); clauses.push(`created_at <= $${params.length}::timestamptz`); }
+  const whereExtra = clauses.length ? 'AND ' + clauses.join(' AND ') : '';
+
   try {
-    // Same DISTINCT ON logic as the main endpoint — one row per lead, best status first
     const exportQuery = `
       SELECT * FROM (
         SELECT DISTINCT ON (leadid)
           email, leadid, status, confidence, tag, lead_data, created_at, resolved_at
         FROM verifications
-        WHERE user_id = $1
-          ${filterTag ? 'AND lower(tag) = lower($2)' : ''}
+        WHERE user_id = $1 ${whereExtra}
         ORDER BY leadid,
           CASE status WHEN 'verified' THEN 1 WHEN 'pending' THEN 2 ELSE 3 END,
           created_at DESC
@@ -890,10 +898,7 @@ app.get('/api/user/verifications/export', requireAuth, async (req, res) => {
       WHERE status != 'bounced'
       ORDER BY created_at DESC`;
 
-    const { rows } = await pool.query(
-      exportQuery,
-      filterTag ? [req.user.id, filterTag] : [req.user.id]
-    );
+    const { rows } = await pool.query(exportQuery, params);
 
     // Build CSV — include firstName/lastName from lead_data when available
     const csvEscape = v => {
