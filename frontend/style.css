@@ -272,7 +272,62 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);line-height:
 /* ── Verificaciones panel ───────────────────────────────── */
 .verif-header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:6px}
 .verif-empty{padding:40px 0;text-align:center;color:var(--muted);font-size:.88rem}
-.verif-table{width:100%;border-collapse:collapse;font-size:.82rem;margin-top:4px}
+.verif-controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.verif-col-search{margin-left:auto}
+
+/* ── Frozen + scrollable table layout ───────────────────── */
+/* Outer wrapper: clips horizontal overflow, shows scrollbar only on data area */
+.vt-wrap{
+  position:relative;
+  overflow-x:auto;
+  border:1px solid var(--border);
+  border-radius:var(--rs);
+  max-height:70vh;
+  overflow-y:auto;
+}
+.vt-table{
+  width:max-content;   /* grows with columns */
+  min-width:100%;
+  border-collapse:collapse;
+  font-size:.82rem;
+}
+/* All cells */
+.vt-table th,.vt-table td{
+  padding:8px 12px;
+  border-bottom:1px solid var(--border);
+  vertical-align:middle;
+  white-space:nowrap;
+}
+.vt-table tr:last-child td{border-bottom:none}
+.vt-table thead th{
+  position:sticky;top:0;z-index:3;
+  font-size:.7rem;font-weight:700;text-transform:uppercase;
+  letter-spacing:.4px;color:var(--muted);
+  background:var(--bg);
+  border-bottom:1.5px solid var(--border);
+  transition:background .15s;
+}
+.vt-table tbody tr:hover td{background:#f8faff}
+
+/* Frozen columns — stick to left, always visible */
+.vt-frozen{
+  position:sticky;
+  z-index:2;
+  background:var(--white);
+}
+.vt-table thead .vt-frozen{z-index:4;background:var(--bg)}
+.vt-frozen--cb    {left:0;    width:36px;min-width:36px}
+.vt-frozen--status{left:36px; min-width:130px;border-right:2px solid var(--border)}
+.vt-frozen--email {left:166px;min-width:200px;border-right:2px solid var(--border)}
+/* Scrollable columns */
+.vt-scroll{min-width:120px;max-width:240px;overflow:hidden;text-overflow:ellipsis}
+
+/* Retryable (error) row tint */
+.verif-row--retryable .vt-frozen{background:#fff5f5}
+.verif-row--retryable .vt-scroll{background:#fff5f5}
+.verif-row--retryable:hover .vt-frozen,.verif-row--retryable:hover .vt-scroll{background:#fee2e2!important}
+
+/* Legacy verif-table (keep for backwards compat) */
 .verif-table th{text-align:left;padding:9px 12px;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);background:var(--bg);border-bottom:1px solid var(--border);white-space:nowrap}
 .verif-table td{padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
 .verif-table tr:last-child td{border-bottom:none}

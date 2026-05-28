@@ -870,6 +870,14 @@ function initApp() {
       // Only 'error' rows are retryable — pending = still being verified normally
       const errorCount = rows.filter(r => r.status === 'error').length;
 
+      // Collect ALL extra field keys across all rows (original file columns)
+      const extraKeySet = new Set();
+      rows.forEach(r => {
+        const ex = r.leadData?._extra || {};
+        Object.keys(ex).forEach(k => extraKeySet.add(k));
+      });
+      const extraKeys = [...extraKeySet];
+
       const rowsHtml = rows.map((r, idx) => {
         const isCatchAll_ = !!(r.leadData?.isCatchAll);
         const s = isCatchAll_
@@ -883,49 +891,43 @@ function initApp() {
           : '—';
 
         const ld        = r.leadData || {};
-        const firstName = esc(ld.firstName || '');
-        const lastName  = esc(ld.lastName  || '');
-        const extra     = ld._extra && Object.keys(ld._extra).length > 0 ? ld._extra : null;
-        const canRetry  = r.status === 'error';   // only failed sends can be retried
+        const extra     = ld._extra || {};
+        const canRetry  = r.status === 'error';
 
         const emailCell = r.status === 'pending'
           ? `<span class="mono verif-email--pending" title="Verificación en curso…">${esc(r.email)}</span>`
           : `<span class="mono">${esc(r.email)}</span>`;
 
-        const catchAllCell = isCatchAll_
-          ? `<span class="badge badge--catchall" title="Acepta cualquier email — resultado no concluyente">⚠️ Sí</span>`
-          : `<span style="color:var(--muted);font-size:.8rem">—</span>`;
-
-        const expandBtn = extra
-          ? `<button class="expand-btn verif-expand-btn" data-vidx="${idx}">▾ +${Object.keys(extra).length}</button>`
+        const catchAllBadge = isCatchAll_
+          ? `<span class="badge badge--catchall" title="Acepta cualquier email">⚠️ Sí</span>`
           : '';
 
-        const mainRow = `<tr class="${canRetry ? 'verif-row--retryable' : ''}" data-vid="${esc(r.bounceVerifyId)}" data-retryable="${canRetry}">
-          <td class="verif-cb-cell">
+        // ── Frozen columns (always visible, don't scroll) ──────────
+        const frozenCells = `
+          <td class="vt-frozen vt-frozen--cb verif-cb-cell">
             <input type="checkbox" class="verif-cb" data-vid="${esc(r.bounceVerifyId)}"
-              ${canRetry ? '' : 'disabled title="Solo se pueden revivir los que tuvieron error de envío"'}/>
+              ${canRetry ? '' : 'disabled title="Solo errores de envío pueden reintentarse"'}/>
           </td>
-          <td>${firstName || '<span style="color:var(--muted)">—</span>'}</td>
-          <td>${lastName  || '<span style="color:var(--muted)">—</span>'}</td>
-          <td>${emailCell}</td>
-          <td>${r.tag ? `<span class="verif-tag">${esc(r.tag)}</span>` : '<span style="color:var(--muted)">—</span>'}</td>
-          <td><span class="badge ${esc(s.cls)}">${s.icon} ${s.label}</span></td>
-          <td style="text-align:center">${catchAllCell}</td>
-          <td style="white-space:nowrap;font-size:.78rem;color:var(--muted)">${date}</td>
-          <td>${expandBtn}</td>
+          <td class="vt-frozen vt-frozen--status">
+            <span class="badge ${esc(s.cls)}">${s.icon} ${s.label}</span>
+            ${catchAllBadge}
+          </td>
+          <td class="vt-frozen vt-frozen--email">${emailCell}</td>`;
+
+        // ── Scrollable columns (all lead data) ─────────────────────
+        const scrollCells = `
+          <td class="vt-scroll">${esc(ld.firstName || '')}</td>
+          <td class="vt-scroll">${esc(ld.lastName  || '')}</td>
+          <td class="vt-scroll">${esc(ld.company   || '')}</td>
+          ${extraKeys.map(k =>
+            `<td class="vt-scroll">${esc(extra[k] ?? '')}</td>`
+          ).join('')}
+          <td class="vt-scroll" style="white-space:nowrap;font-size:.75rem;color:var(--muted)">${date}</td>
+          <td class="vt-scroll">${r.tag ? `<span class="verif-tag">${esc(r.tag)}</span>` : ''}</td>`;
+
+        return `<tr class="${canRetry ? 'verif-row--retryable' : ''}" data-vid="${esc(r.bounceVerifyId)}" data-retryable="${canRetry}">
+          ${frozenCells}${scrollCells}
         </tr>`;
-
-        const extraRow = extra ? `<tr id="verif-extra-${idx}" class="hidden">
-          <td colspan="9" style="padding:0">
-            <div class="verif-extra-grid">
-              ${Object.entries(extra).map(([k, v]) =>
-                `<div class="verif-extra-item"><span class="verif-extra-key">${esc(k)}</span><span class="verif-extra-val">${esc(v)}</span></div>`
-              ).join('')}
-            </div>
-          </td>
-        </tr>` : '';
-
-        return mainRow + extraRow;
       }).join('');
 
       const filterNote = tag
@@ -949,20 +951,37 @@ function initApp() {
            </button>`
         : '';
 
+      // Dynamic extra column headers (searchable in the UI)
+      const extraHeadersHtml = extraKeys.map(k =>
+        `<th class="vt-scroll">${esc(k)}</th>`
+      ).join('');
+
       body.innerHTML = `
         ${retryBar}
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+        <div class="verif-controls">
           <label style="display:flex;align-items:center;gap:6px;font-size:.8rem;color:var(--muted);cursor:pointer">
             <input type="checkbox" id="verifSelectAll"/> Seleccionar todas
           </label>
           ${selectPendingBtn}
+          ${extraKeys.length > 0 ? `
+            <div class="verif-col-search">
+              <input type="text" id="verifColSearch" placeholder="🔍 Buscar columna…"
+                style="padding:5px 10px;border:1.5px solid var(--border);border-radius:var(--rs);
+                       font-size:.78rem;outline:none;width:160px"/>
+            </div>` : ''}
         </div>
-        <div class="tbl-wrap">
-          <table class="verif-table">
+        <div class="vt-wrap">
+          <table class="verif-table vt-table">
             <thead><tr>
-              <th style="width:32px"></th>
-              <th>Nombre</th><th>Apellido</th><th>Email</th>
-              <th>Etiqueta</th><th>Estado</th><th style="text-align:center">Acepta todo</th><th>Fecha</th><th></th>
+              <th class="vt-frozen vt-frozen--cb" style="width:32px"></th>
+              <th class="vt-frozen vt-frozen--status">Estado</th>
+              <th class="vt-frozen vt-frozen--email">Email</th>
+              <th class="vt-scroll">Nombre</th>
+              <th class="vt-scroll">Apellido</th>
+              <th class="vt-scroll">Empresa</th>
+              ${extraHeadersHtml}
+              <th class="vt-scroll">Fecha</th>
+              <th class="vt-scroll">Etiqueta</th>
             </tr></thead>
             <tbody>${rowsHtml}</tbody>
           </table>
@@ -972,15 +991,22 @@ function initApp() {
           <span class="verif-footer-count">${rows.length} verificación${rows.length !== 1 ? 'es' : ''}</span>
         </p>`;
 
-      // Wire expand buttons for extra fields
-      body.querySelectorAll('.verif-expand-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const idx  = btn.dataset.vidx;
-          const row  = document.getElementById(`verif-extra-${idx}`);
-          const open = !row.classList.contains('hidden');
-          row.classList.toggle('hidden', open);
-          btn.textContent = open ? `▾ +${btn.textContent.match(/\d+/)?.[0] ?? ''}` : `▴ menos`;
+      // ── Column search: highlight matching headers ─────────────────
+      body.querySelector('#verifColSearch')?.addEventListener('input', function() {
+        const q = this.value.toLowerCase().trim();
+        body.querySelectorAll('.vt-table thead th.vt-scroll').forEach((th, i) => {
+          const match = !q || th.textContent.toLowerCase().includes(q);
+          th.style.background = match && q ? '#fef3c7' : '';
+          // Also highlight body cells in same column
+          body.querySelectorAll(`.vt-table tbody tr td.vt-scroll:nth-child(${i + 4})`).forEach(td => {
+            td.style.background = match && q ? '#fefce8' : '';
+          });
         });
+        // Scroll to first matching column
+        if (q) {
+          const firstMatch = body.querySelector('.vt-table thead th.vt-scroll[style*="fef3c7"]');
+          firstMatch?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        }
       });
 
       // ── Checkbox + retry logic ────────────────────────────────────

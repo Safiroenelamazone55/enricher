@@ -901,14 +901,29 @@ app.get('/api/user/verifications/export', requireAuth, async (req, res) => {
       return s.includes(',') || s.includes('"') || s.includes('\n')
         ? `"${s.replace(/"/g, '""')}"` : s;
     };
-    const header = ['firstName', 'lastName', 'email', 'status', 'aceptaTodo', 'confidence', 'tag', 'createdAt', 'resolvedAt'];
+    // Collect ALL extra field keys across all rows — preserves every column
+    // from the original uploaded file (CRM fields, UTMs, custom columns, etc.)
+    const extraKeys = [];
+    const extraKeySet = new Set();
+    for (const r of rows) {
+      const extra = (r.lead_data || {})._extra || {};
+      for (const k of Object.keys(extra)) {
+        if (!extraKeySet.has(k)) { extraKeySet.add(k); extraKeys.push(k); }
+      }
+    }
+
+    // Fixed columns first, then all dynamic extra columns from the original file
+    const fixedHeaders = ['firstName', 'lastName', 'email', 'status', 'aceptaTodo', 'confidence', 'tag', 'createdAt', 'resolvedAt'];
+    const header = [...fixedHeaders, ...extraKeys];
     const lines  = [header.join(',')];
+
     for (const r of rows) {
       const ld         = r.lead_data || {};
+      const extra      = ld._extra   || {};
       const isCatchAll = !!(ld.isCatchAll);
-      // Human-readable status: catch-all records are 'verified' in DB but show 'acepta-todo' in CSV
       const statusLabel = isCatchAll ? 'acepta-todo' : r.status;
-      lines.push([
+
+      const fixedValues = [
         csvEscape(ld.firstName ?? ''),
         csvEscape(ld.lastName  ?? ''),
         csvEscape(r.email),
@@ -918,7 +933,10 @@ app.get('/api/user/verifications/export', requireAuth, async (req, res) => {
         csvEscape(r.tag ?? ''),
         csvEscape(r.created_at  ? new Date(r.created_at).toISOString()  : ''),
         csvEscape(r.resolved_at ? new Date(r.resolved_at).toISOString() : ''),
-      ].join(','));
+      ];
+      // Append extra fields in the same order as the header
+      const extraValues = extraKeys.map(k => csvEscape(extra[k] ?? ''));
+      lines.push([...fixedValues, ...extraValues].join(','));
     }
     const csv      = lines.join('\r\n');
     const filename = `verificaciones_${Date.now()}.csv`;
