@@ -60,6 +60,8 @@ async function enrichOneLead(lead, userId = null, tag = null, quickMode = false)
   const domain   = resolved.domain;
   const warning  = resolved.warning ?? null;
 
+  console.log(`[enrich] ${firstName} ${lastName} | company="${company}" → domain="${domain ?? 'NULL'}"`);
+
   if (!domain) return _emptyResult(lead, null, false, warning ?? 'Could not resolve domain.');
 
   // ── 2. DNS MX ─────────────────────────────────────────────
@@ -100,7 +102,7 @@ async function enrichOneLead(lead, userId = null, tag = null, quickMode = false)
     return _buildResult(lead, domain, mxFound, mxHost, false, decision, warning, domainPattern, 0);
   }
 
-  // ── No MX → finalize without SMTP ────────────────────────
+  // ── No MX → scrape + search, then still try SES ──────────
   if (!mxFound || !mxHost) {
     const [scrape, searchResult, ghResult] = await Promise.all([
       _safeScrape(domain),
@@ -113,8 +115,33 @@ async function enrichOneLead(lead, userId = null, tag = null, quickMode = false)
                   'not-checked', false, null, domainPattern, merged, ghResult)
     );
     const decision = decideBestEmail({ candidates: scored, scrapedEmails: merged.emails, catchAll: false });
+
+    // Even with no MX, attempt SES bounce verification — domain may have
+    // a mail relay not reflected in MX records (SPF/redirect setups).
+    // SES will hard-bounce instantly if truly undeliverable.
+    let bounceVerifyId = null;
+    const targetEmail = decision.bestEmail ||
+      scored.filter(c => !c.disqualified).sort((a,b) => b.consensusScore - a.consensusScore)[0]?.email;
+    if (targetEmail) {
+      const leadId  = `${firstName}_${lastName}_${domain}`;
+      const leadData = {
+        firstName: firstName || '', lastName: lastName || '', isCatchAll: false,
+        company: lead.company || '', linkedinUrl: lead.linkedinUrl || '',
+        noMxWarning: true,
+        ...(lead._extra ? { _extra: lead._extra } : {}),
+        ...(lead._rawColumns ? { _rawColumns: lead._rawColumns } : {}),
+      };
+      const remaining = scored
+        .filter(c => c.email !== targetEmail && !c.disqualified)
+        .sort((a,b) => b.consensusScore - a.consensusScore)
+        .map(c => ({ email: c.email, score: c.consensusScore, pattern: c.pattern }));
+      bounceVerify(targetEmail, leadId, userId, remaining, tag, leadData)
+        .then(r => { if (r.status === 'sent') bounceVerifyId = r.verifyId; })
+        .catch(err => console.warn(`[bounceVerify/noMX] ${targetEmail}: ${err.message}`));
+    }
+
     return _buildResult(lead, domain, mxFound, mxHost, false,
-                        decision, warning, domainPattern, merged.count);
+                        decision, warning, domainPattern, merged.count, bounceVerifyId);
   }
 
   // ── 6. Probe ALL candidates via SMTP ─────────────────────

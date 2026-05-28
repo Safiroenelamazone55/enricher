@@ -457,6 +457,61 @@ app.post('/api/enrich/batch', requireAuth, async (req, res) => {
 });
 
 // ── POST /api/enrich/parse-headers ───────────────────────────────
+// ── POST /api/enrich/verify-batch ────────────────────────────────
+// Sends SES verification for the best email of each enriched lead.
+// Accepts the results array from a completed batch job.
+app.post('/api/enrich/verify-batch', requireAuth, async (req, res) => {
+  const results = Array.isArray(req.body?.results) ? req.body.results : [];
+  const tag     = (typeof req.body?.tag === 'string' && req.body.tag.trim()) ? req.body.tag.trim() : null;
+  if (!results.length) return res.status(400).json({ error: 'results array required' });
+
+  const { verifyEmail, recordCatchAll } = require('./services/bounceVerifierService');
+  const userId = req.user?.id ?? null;
+  let sent = 0, skipped = 0, catchAll = 0;
+
+  for (const r of results) {
+    const email = r.bestEmail;
+    if (!email) { skipped++; continue; }
+
+    // Catch-all domains: record without SES send
+    if (r.isCatchAll) {
+      const leadData = {
+        firstName: r.firstName || '', lastName: r.lastName || '',
+        isCatchAll: true, company: r.company || '',
+        ...(r.leadData || {}),
+      };
+      await recordCatchAll(email, `${r.firstName}_${r.lastName}_${r.domain}`, userId, r.tag || tag, leadData)
+        .catch(() => {});
+      catchAll++;
+      continue;
+    }
+
+    const leadData = {
+      firstName: r.firstName || '', lastName: r.lastName || '',
+      isCatchAll: false, company: r.company || '',
+      noMxWarning: !r.mxFound,
+    };
+    const remaining = (r.candidates || [])
+      .filter(c => c.email !== email && !c.disqualified)
+      .sort((a,b) => (b.score||0) - (a.score||0))
+      .map(c => ({ email: c.email, score: c.score, pattern: c.pattern }));
+
+    const result = await verifyEmail(
+      email,
+      `${r.firstName}_${r.lastName}_${r.domain}`,
+      userId,
+      remaining,
+      r.tag || tag,
+      leadData
+    ).catch(() => ({ status: 'error' }));
+
+    if (result.status === 'sent' || result.status === 'already-pending') sent++;
+    else skipped++;
+  }
+
+  res.json({ sent, skipped, catchAll, total: results.length });
+});
+
 // Reads only the first row of an uploaded file and returns column
 // names plus auto-detected field suggestions.
 app.post('/api/enrich/parse-headers', requireAuth, upload.single('file'), (req, res) => {

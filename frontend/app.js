@@ -1005,6 +1005,40 @@ function initApp() {
     if (lastXlsBuffer) downloadBuffer(lastXlsBuffer, `enriched_${Date.now()}.xlsx`);
   });
 
+  // ── Verificar emails batch ─────────────────────────────────────
+  $('btnVerifyBatch')?.addEventListener('click', async () => {
+    const results = batchResults.filter(r => r.bestEmail);
+    if (!results.length) {
+      showAlert($('batchErr'), 'No hay emails para verificar en los resultados actuales.');
+      return;
+    }
+    const btn = $('btnVerifyBatch');
+    setBtn(btn, true);
+    const statusDiv = $('verifyBatchStatus');
+    if (statusDiv) { statusDiv.className = 'alert alert--warn'; statusDiv.textContent = `⏳ Enviando verificaciones para ${results.length} emails…`; statusDiv.classList.remove('hidden'); }
+
+    try {
+      const tag = ($('b_tag')?.value || '').trim() || null;
+      const res = await apiFetch(`${API}/enrich/verify-batch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ results, tag }),
+      });
+      if (res.status === 401) { location.reload(); return; }
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+
+      if (statusDiv) {
+        statusDiv.className = 'alert alert--ok';
+        statusDiv.textContent = `✅ ${data.sent} email${data.sent !== 1 ? 's' : ''} enviados a verificación${data.catchAll ? ` · ${data.catchAll} catch-all registrados` : ''}${data.skipped ? ` · ${data.skipped} sin email` : ''}. Revisá "Mis Verificaciones" en ~1 hora.`;
+      }
+    } catch (err) {
+      if (statusDiv) { statusDiv.className = 'alert alert--err'; statusDiv.textContent = `Error: ${err.message}`; statusDiv.classList.remove('hidden'); }
+    } finally {
+      setBtn(btn, false);
+    }
+  });
+
   $('searchBox').addEventListener('input', () => {
     const q = $('searchBox').value.toLowerCase();
     filteredRows = q
