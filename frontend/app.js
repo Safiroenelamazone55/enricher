@@ -289,34 +289,60 @@ function initApp() {
   $('fileInput').addEventListener('change', e => { if (e.target.files[0]) setFile(e.target.files[0]); });
 
   // Field labels for the mapping UI
+  // ── Field options for mapping dropdown ──────────────────────────
   const FIELD_OPTIONS = [
-    { value: '',            label: '— ignorar —' },
-    { value: 'firstname',   label: 'Nombre (firstName)' },
-    { value: 'lastname',    label: 'Apellido (lastName)' },
-    { value: 'company',     label: 'Empresa / URL (company)' },
-    { value: 'linkedinurl', label: 'LinkedIn URL' },
+    { value: '',            label: '— Campo extra (se conserva) —', group: '' },
+    { value: '__ignore__',  label: '✕ Ignorar (no incluir)',        group: '' },
+    { value: 'firstname',   label: '👤 Nombre',                     group: 'Enriquecimiento' },
+    { value: 'lastname',    label: '👤 Apellido',                   group: 'Enriquecimiento' },
+    { value: 'company',     label: '🌐 Empresa / Sitio web',        group: 'Enriquecimiento' },
+    { value: 'linkedinurl', label: '🔗 LinkedIn URL',              group: 'Enriquecimiento' },
   ];
 
-  // Known aliases for client-side auto-detection (mirrors backend FIELD_ALIASES)
+  // ── Extended aliases for client-side auto-detection ──────────────
   const CLIENT_ALIASES = {
-    firstname:   ['firstname','first_name','first name','nombre','prenom','given name','givenname'],
-    lastname:    ['lastname','last_name','last name','apellido','surname','family name','familyname','nom'],
-    company:     ['company','empresa','organisation','organization','compañia','companyurl','company url','website','site','url','web','webpage','web page','company website','company web','domain','dominio','sitio web','sitio'],
-    linkedinurl: ['linkedin','linkedinurl','linkedin url','linkedin_url','perfil linkedin','profile','linkedin profile','linkedin profile url','personal linkedin','linkedin personal'],
+    firstname:   ['firstname','first_name','first name','nombre','prenom','given name','givenname',
+                  'nombres','nombre del contacto','first','fname','nombre(s)','name','nombre completo'],
+    lastname:    ['lastname','last_name','last name','apellido','surname','family name','familyname',
+                  'nom','apellidos','apellido(s)','last','lname'],
+    company:     ['company','empresa','organisation','organization','companyurl','company url',
+                  'website','site','url','web','domain','dominio','sitio web','company website',
+                  'company name','nombre de la empresa','org','account','employer','web de empresa',
+                  'company domain','company web','webpage'],
+    linkedinurl: ['linkedin','linkedinurl','linkedin url','linkedin_url','perfil linkedin','profile',
+                  'linkedin profile','linkedin profile url','personal linkedin','linkedin personal',
+                  'url de linkedin','linkedin del contacto','linkedin contact'],
   };
 
-  function guessField(raw) {
-    const h = String(raw).toLowerCase().trim().replace(/\s+/g,' ');
-    // LinkedIn personal profile URLs → linkedinurl
-    if (/linkedin\.com\/(in\/|pub\/)/.test(h)) return 'linkedinurl';
-    // LinkedIn company URLs → ignore (not useful as domain)
-    if (/linkedin\.com\/company/.test(h)) return '';
-    // Any http URL that is NOT linkedin → likely company website
+  // ── Smart field guesser: header name + data sample ──────────────
+  function guessField(headerRaw, sampleValues = []) {
+    const h = String(headerRaw).toLowerCase().trim().replace(/\s+/g,' ');
+
+    // Data-based hints: look at sample values
+    const samples = sampleValues.map(v => String(v).trim()).filter(Boolean);
+    const firstSample = samples[0] || '';
+
+    // LinkedIn URL patterns in header or data
+    if (/linkedin\.com\/(in\/|pub\/)/.test(h) || samples.some(v => /linkedin\.com\/(in\/|pub\/)/.test(v)))
+      return 'linkedinurl';
+    if (/linkedin\.com\/company/.test(h)) return '__ignore__';
+
+    // URL in header or data → likely company website
+    if (/^https?:\/\//.test(firstSample) && !firstSample.includes('linkedin.com')) return 'company';
     if (/^https?:\/\//.test(h) && !h.includes('linkedin.com')) return 'company';
+
+    // Alias match on header name
     for (const [field, aliases] of Object.entries(CLIENT_ALIASES)) {
       if (aliases.includes(h)) return field;
     }
-    return '';
+
+    // Heuristic: if header contains keywords
+    if (/first|nombre|prenom|given/i.test(h) && !/last|apellido|family/i.test(h)) return 'firstname';
+    if (/last|apellido|surname|family/i.test(h)) return 'lastname';
+    if (/company|empresa|domain|dominio|website|sitio|org\b/i.test(h)) return 'company';
+    if (/linkedin/i.test(h)) return 'linkedinurl';
+
+    return ''; // extra field
   }
 
   /** Read first row of a CSV/TSV file purely in the browser */
@@ -338,41 +364,63 @@ function initApp() {
     });
   }
 
-  function renderMappingPanel(headers, suggestions) {
+  function renderMappingPanel(headers, suggestions, sampleRows = []) {
     const panel = _getMappingContainer();
     panel.innerHTML = '';
 
-    const title = document.createElement('div');
-    title.className = 'col-map-panel__title';
-    title.textContent = '🗂 Asigna las columnas de tu archivo';
-    const hint = document.createElement('div');
-    hint.className = 'col-map-panel__hint';
-    hint.textContent = 'El sistema detectó las columnas abajo. Ajusta si alguna no es correcta. Las columnas sin asignar se guardan como campos extra.';
-    panel.appendChild(title);
-    panel.appendChild(hint);
+    // Header
+    panel.insertAdjacentHTML('beforeend', `
+      <div class="col-map-panel__title">🗂 Asigna las columnas de tu archivo</div>
+      <div class="col-map-panel__hint">
+        El sistema detectó las columnas automáticamente. Ajusta si alguna está mal.
+        <strong>Campo extra</strong> = se conserva tal cual. <strong>Ignorar</strong> = no se incluye.
+      </div>
+    `);
 
-    const rowsDiv = document.createElement('div');
-    rowsDiv.id = 'colMapRows';
-    rowsDiv.className = 'col-map-rows';
-    panel.appendChild(rowsDiv);
+    // Table-style layout for clarity
+    const table = document.createElement('div');
+    table.className = 'col-map-table';
+    table.innerHTML = `
+      <div class="col-map-table__head">
+        <span>Columna del archivo</span>
+        <span>Ejemplo de datos</span>
+        <span>Asignar como</span>
+      </div>`;
+    panel.appendChild(table);
 
     headers.forEach((h, idx) => {
-      const suggested = suggestions[idx] || guessField(h) || '';
+      // Get sample values for this column
+      const sampleVals = sampleRows.map(row => row[idx] || '').filter(Boolean);
+      const suggested  = suggestions[idx] || guessField(h, sampleVals) || '';
+
       const row = document.createElement('div');
-      row.className = 'col-map-row';
+      row.className = 'col-map-table__row';
 
-      const label = document.createElement('span');
-      label.className = 'col-map-col-name';
-      label.textContent = h || `columna ${idx + 1}`;
+      // Column name
+      const nameCell = document.createElement('div');
+      nameCell.className = 'col-map-col-name';
+      nameCell.title = h;
+      nameCell.textContent = h || `columna ${idx + 1}`;
 
-      const arrow = document.createElement('span');
-      arrow.className = 'col-map-arrow';
-      arrow.textContent = '→';
+      // Sample data preview
+      const sampleCell = document.createElement('div');
+      sampleCell.className = 'col-map-sample';
+      sampleCell.textContent = sampleVals.slice(0, 2).join(' · ') || '—';
+      sampleCell.title = sampleVals.join(', ');
 
+      // Select
       const sel = document.createElement('select');
       sel.className = 'col-map-select';
       sel.dataset.colIdx = idx;
+
+      let lastGroup = null;
       FIELD_OPTIONS.forEach(opt => {
+        if (opt.group !== lastGroup && opt.group) {
+          const og = document.createElement('optgroup');
+          og.label = opt.group;
+          sel.appendChild(og);
+          lastGroup = opt.group;
+        }
         const o = document.createElement('option');
         o.value = opt.value;
         o.textContent = opt.label;
@@ -380,46 +428,47 @@ function initApp() {
         sel.appendChild(o);
       });
 
-      row.appendChild(label);
-      row.appendChild(arrow);
-      row.appendChild(sel);
-      rowsDiv.appendChild(row);
-    });
+      // Visual cue: highlight auto-detected key fields
+      if (['firstname','lastname','company','linkedinurl'].includes(suggested)) {
+        row.classList.add('col-map-table__row--detected');
+      }
 
+      row.appendChild(nameCell);
+      row.appendChild(sampleCell);
+      row.appendChild(sel);
+      table.appendChild(row);
+    });
   }
 
   async function setFile(f) {
     uploadedFile = f;
     $('fileLabel').textContent = `📎 ${f.name} (${(f.size / 1024).toFixed(1)} KB)`;
 
-    // Keep buttons disabled until mapping is resolved
-    $('btnBatch').disabled        = true;
-    $('btnBatchPreview').disabled = true;
+    $('btnBatch').disabled = true;
     hideAlert($('batchErr'));
     hideAlert($('batchWarn'));
-
-    // Show "loading" panel immediately (synchronous, before any async)
     _showMappingLoading();
 
     const isCsv = /\.(csv|tsv|txt)$/i.test(f.name);
 
     try {
       if (isCsv) {
+        // For CSV: read headers client-side (no sample rows from server)
         const headers = await readCsvHeaders(f);
         if (headers.length > 0) {
-          renderMappingPanel(headers, {});
+          renderMappingPanel(headers, {}, []);
         } else {
           _showMappingError('No se encontraron columnas en la primera fila del archivo.');
         }
       } else {
-        // Excel — call server
+        // Excel: call server to get headers + suggestions + sample rows
         const fd = new FormData();
         fd.append('file', f);
         const res = await apiFetch(`${API}/enrich/parse-headers`, { method: 'POST', body: fd });
         if (res.ok) {
           const data = await res.json();
           if (data.headers && data.headers.length > 0) {
-            renderMappingPanel(data.headers, data.suggestions || {});
+            renderMappingPanel(data.headers, data.suggestions || {}, data.sampleRows || []);
           } else {
             _showMappingError('El archivo no tiene encabezados.');
           }
@@ -431,9 +480,7 @@ function initApp() {
     } catch (e) {
       _showMappingError('Error leyendo el archivo: ' + e.message);
     } finally {
-      // Enable buttons only after mapping panel is ready
-      $('btnBatch').disabled        = false;
-      $('btnBatchPreview').disabled = false;
+      $('btnBatch').disabled = false;
     }
   }
 
@@ -469,8 +516,9 @@ function initApp() {
   /** Read the current state of the mapping panel → { colIndex: fieldName } */
   function getColumnMapping() {
     const mapping = {};
-    document.querySelectorAll('#colMapRows .col-map-select').forEach(sel => {
+    document.querySelectorAll('.col-map-select').forEach(sel => {
       if (sel.value) mapping[sel.dataset.colIdx] = sel.value;
+      // __ignore__ columns are sent to backend which will skip them
     });
     return mapping;
   }

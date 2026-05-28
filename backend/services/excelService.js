@@ -10,10 +10,16 @@ const XLSX = require('xlsx');
 // ── Column name aliases (case-insensitive, trimmed) ──────────
 // Maps user column names → internal field names
 const FIELD_ALIASES = {
-  firstname:    ['firstname','first_name','first name','nombre','prenom','given name','givenname'],
-  lastname:     ['lastname','last_name','last name','apellido','surname','family name','familyname','nom'],
-  company:      ['company','empresa','organisation','organization','compañia','companyurl','company url','website','site','url'],
-  linkedinurl:  ['linkedin','linkedinurl','linkedin url','linkedin_url','perfil linkedin','profile'],
+  firstname:   ['firstname','first_name','first name','nombre','prenom','given name','givenname',
+                'nombres','nombre del contacto','first','fname','nombre(s)'],
+  lastname:    ['lastname','last_name','last name','apellido','surname','family name','familyname',
+                'nom','apellidos','apellido(s)','last','lname'],
+  company:     ['company','empresa','organisation','organization','companyurl','company url',
+                'website','site','url','web','domain','dominio','sitio web','company website',
+                'company name','nombre de la empresa','org','account','empleador','employer'],
+  linkedinurl: ['linkedin','linkedinurl','linkedin url','linkedin_url','perfil linkedin','profile',
+                'linkedin profile','linkedin profile url','personal linkedin','linkedin personal',
+                'url de linkedin','linkedin del contacto','linkedin contact'],
 };
 
 /**
@@ -43,6 +49,12 @@ function parseHeaders(buffer) {
   if (!rows.length) throw new Error('File is empty.');
 
   const headers = rows[0].map(h => String(h).trim());
+
+  // Return up to 3 sample data rows so the UI can show a preview
+  const sampleRows = rows.slice(1, 4).map(row =>
+    headers.map((_, i) => String(row[i] ?? '').trim())
+  );
+
   const suggestions = {};
   const usedFields  = new Set();
   headers.forEach((h, i) => {
@@ -52,7 +64,7 @@ function parseHeaders(buffer) {
       usedFields.add(field);
     }
   });
-  return { headers, suggestions };
+  return { headers, suggestions, sampleRows };
 }
 
 /**
@@ -104,6 +116,10 @@ function parseLeadsFile(buffer, mimetype, customMapping = null) {
   if (!found.has('company'))   warnings.push('Column "company/website" not found — domain resolution skipped.');
 
   // ── Index of known columns (to detect extras) ───────────
+  // __ignore__ columns: included in knownIndexes so they don't appear in _extra
+  const ignoredIndexes = new Set(
+    Object.entries(colMap).filter(([,v]) => v === '__ignore__').map(([k]) => Number(k))
+  );
   const knownIndexes = new Set(Object.keys(colMap).map(Number));
 
   // ── Build lead objects ───────────────────────────────────
@@ -136,6 +152,7 @@ function parseLeadsFile(buffer, mimetype, customMapping = null) {
     // Stored under lead._extra so they survive through enrichment
     // and get persisted in verifications.lead_data
     const extra = {};
+    // ignoredIndexes: skip these columns entirely
     headerRow.forEach((h, idx) => {
       if (!knownIndexes.has(idx) && h && String(h).trim()) {
         const key = String(h).trim();
