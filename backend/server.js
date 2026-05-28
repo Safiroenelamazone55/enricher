@@ -901,31 +901,43 @@ app.get('/api/user/verifications/export', requireAuth, async (req, res) => {
       return s.includes(',') || s.includes('"') || s.includes('\n')
         ? `"${s.replace(/"/g, '""')}"` : s;
     };
-    // Collect ALL extra field keys across all rows — preserves every column
-    // from the original uploaded file (CRM fields, UTMs, custom columns, etc.)
-    const extraKeys = [];
-    const extraKeySet = new Set();
+    // Collect original column headers in original file order using _rawColumns.
+    // Falls back to _extra keys for older records that don't have _rawColumns.
+    const colHeaderSet = new Set();
+    const colHeaders   = [];
     for (const r of rows) {
-      const extra = (r.lead_data || {})._extra || {};
-      for (const k of Object.keys(extra)) {
-        if (!extraKeySet.has(k)) { extraKeySet.add(k); extraKeys.push(k); }
+      const ld  = r.lead_data || {};
+      const raw = Array.isArray(ld._rawColumns) ? ld._rawColumns : null;
+      if (raw) {
+        raw.forEach(({ header }) => {
+          if (!colHeaderSet.has(header)) { colHeaderSet.add(header); colHeaders.push(header); }
+        });
+      } else {
+        Object.keys(ld._extra || {}).forEach(k => {
+          if (!colHeaderSet.has(k)) { colHeaderSet.add(k); colHeaders.push(k); }
+        });
       }
     }
 
-    // Fixed columns first, then all dynamic extra columns from the original file
-    const fixedHeaders = ['firstName', 'lastName', 'email', 'status', 'aceptaTodo', 'confidence', 'tag', 'createdAt', 'resolvedAt'];
-    const header = [...fixedHeaders, ...extraKeys];
+    // Enrichment result columns first, then ALL original file columns in order
+    const fixedHeaders = ['emailVerificado', 'estado', 'aceptaTodo', 'confianza', 'etiqueta', 'fechaCreacion', 'fechaResolucion'];
+    const header = [...fixedHeaders, ...colHeaders];
     const lines  = [header.join(',')];
 
     for (const r of rows) {
       const ld         = r.lead_data || {};
-      const extra      = ld._extra   || {};
       const isCatchAll = !!(ld.isCatchAll);
       const statusLabel = isCatchAll ? 'acepta-todo' : r.status;
 
+      // Build a map of header→value from _rawColumns (original order + values)
+      const rawMap = {};
+      if (Array.isArray(ld._rawColumns)) {
+        ld._rawColumns.forEach(({ header, value }) => { rawMap[header] = value; });
+      } else {
+        Object.assign(rawMap, ld._extra || {});
+      }
+
       const fixedValues = [
-        csvEscape(ld.firstName ?? ''),
-        csvEscape(ld.lastName  ?? ''),
         csvEscape(r.email),
         csvEscape(statusLabel),
         csvEscape(isCatchAll ? 'Sí' : 'No'),
@@ -934,9 +946,8 @@ app.get('/api/user/verifications/export', requireAuth, async (req, res) => {
         csvEscape(r.created_at  ? new Date(r.created_at).toISOString()  : ''),
         csvEscape(r.resolved_at ? new Date(r.resolved_at).toISOString() : ''),
       ];
-      // Append extra fields in the same order as the header
-      const extraValues = extraKeys.map(k => csvEscape(extra[k] ?? ''));
-      lines.push([...fixedValues, ...extraValues].join(','));
+      const originalValues = colHeaders.map(h => csvEscape(rawMap[h] ?? ''));
+      lines.push([...fixedValues, ...originalValues].join(','));
     }
     const csv      = lines.join('\r\n');
     const filename = `verificaciones_${Date.now()}.csv`;

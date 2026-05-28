@@ -197,7 +197,8 @@ async function enrichOneLead(lead, userId = null, tag = null, quickMode = false)
         const leadData = {
           firstName: firstName || '', lastName: lastName || '', isCatchAll: true,
           company: lead.company || '', linkedinUrl: lead.linkedinUrl || '',
-          ...(lead._extra ? { _extra: lead._extra } : {}),
+          ...(lead._extra      ? { _extra:      lead._extra      } : {}),
+          ...(lead._rawColumns ? { _rawColumns: lead._rawColumns } : {}),
         };
         bounceCatchAllRecord(targetEmail, `${firstName}_${lastName}_${domain}`, userId, tag, leadData)
           .catch(err => console.warn('[catch-all-record] error:', err.message));
@@ -216,7 +217,8 @@ async function enrichOneLead(lead, userId = null, tag = null, quickMode = false)
       const leadData = {
         firstName: firstName || '', lastName: lastName || '', isCatchAll: false,
         company: lead.company || '', linkedinUrl: lead.linkedinUrl || '',
-        ...(lead._extra ? { _extra: lead._extra } : {}),
+        ...(lead._extra       ? { _extra:       lead._extra       } : {}),
+        ...(lead._rawColumns  ? { _rawColumns:  lead._rawColumns  } : {}),
       };
 
       console.log(`[MULTI-PROBE] enviando a ${probeList.length} candidatos para ${domain} (cascade tail: ${cascadeTail.length})`);

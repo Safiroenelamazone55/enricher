@@ -870,13 +870,24 @@ function initApp() {
       // Only 'error' rows are retryable — pending = still being verified normally
       const errorCount = rows.filter(r => r.status === 'error').length;
 
-      // Collect ALL extra field keys across all rows (original file columns)
-      const extraKeySet = new Set();
+      // Collect ALL column headers in original file order using _rawColumns.
+      // _rawColumns = [{header, value}, ...] — exact order from the uploaded file.
+      // Falls back to _extra keys if _rawColumns not available (older records).
+      const colHeaderSet = new Set();
+      const colHeaders   = [];   // ordered list of original column headers
       rows.forEach(r => {
-        const ex = r.leadData?._extra || {};
-        Object.keys(ex).forEach(k => extraKeySet.add(k));
+        const raw = r.leadData?._rawColumns;
+        if (Array.isArray(raw)) {
+          raw.forEach(({ header }) => {
+            if (!colHeaderSet.has(header)) { colHeaderSet.add(header); colHeaders.push(header); }
+          });
+        } else {
+          // Fallback: _extra keys (unordered but better than nothing)
+          Object.keys(r.leadData?._extra || {}).forEach(k => {
+            if (!colHeaderSet.has(k)) { colHeaderSet.add(k); colHeaders.push(k); }
+          });
+        }
       });
-      const extraKeys = [...extraKeySet];
 
       const rowsHtml = rows.map((r, idx) => {
         const isCatchAll_ = !!(r.leadData?.isCatchAll);
@@ -914,14 +925,21 @@ function initApp() {
           </td>
           <td class="vt-frozen vt-frozen--email">${emailCell}</td>`;
 
-        // ── Scrollable columns (all lead data) ─────────────────────
+        // ── Scrollable columns — exact original file order ─────────
+        // Use _rawColumns if available (preserves original order),
+        // otherwise fall back to colHeaders derived from _extra.
+        const rawCols = Array.isArray(ld._rawColumns) ? ld._rawColumns : null;
+        const rawMap  = rawCols
+          ? Object.fromEntries(rawCols.map(c => [c.header, c.value]))
+          : {};
+
+        const dataCells = colHeaders.map(h => {
+          const val = rawMap[h] ?? (ld._extra?.[h] ?? '');
+          return `<td class="vt-scroll" title="${esc(val)}">${esc(val)}</td>`;
+        }).join('');
+
         const scrollCells = `
-          <td class="vt-scroll">${esc(ld.firstName || '')}</td>
-          <td class="vt-scroll">${esc(ld.lastName  || '')}</td>
-          <td class="vt-scroll">${esc(ld.company   || '')}</td>
-          ${extraKeys.map(k =>
-            `<td class="vt-scroll">${esc(extra[k] ?? '')}</td>`
-          ).join('')}
+          ${dataCells}
           <td class="vt-scroll" style="white-space:nowrap;font-size:.75rem;color:var(--muted)">${date}</td>
           <td class="vt-scroll">${r.tag ? `<span class="verif-tag">${esc(r.tag)}</span>` : ''}</td>`;
 
@@ -951,9 +969,9 @@ function initApp() {
            </button>`
         : '';
 
-      // Dynamic extra column headers (searchable in the UI)
-      const extraHeadersHtml = extraKeys.map(k =>
-        `<th class="vt-scroll">${esc(k)}</th>`
+      // Dynamic column headers — original file order
+      const colHeadersHtml = colHeaders.map(h =>
+        `<th class="vt-scroll vt-col-header">${esc(h)}</th>`
       ).join('');
 
       body.innerHTML = `
@@ -963,7 +981,7 @@ function initApp() {
             <input type="checkbox" id="verifSelectAll"/> Seleccionar todas
           </label>
           ${selectPendingBtn}
-          ${extraKeys.length > 0 ? `
+          ${colHeaders.length > 0 ? `
             <div class="verif-col-search">
               <input type="text" id="verifColSearch" placeholder="🔍 Buscar columna…"
                 style="padding:5px 10px;border:1.5px solid var(--border);border-radius:var(--rs);
@@ -975,11 +993,8 @@ function initApp() {
             <thead><tr>
               <th class="vt-frozen vt-frozen--cb" style="width:32px"></th>
               <th class="vt-frozen vt-frozen--status">Estado</th>
-              <th class="vt-frozen vt-frozen--email">Email</th>
-              <th class="vt-scroll">Nombre</th>
-              <th class="vt-scroll">Apellido</th>
-              <th class="vt-scroll">Empresa</th>
-              ${extraHeadersHtml}
+              <th class="vt-frozen vt-frozen--email">Email verificado</th>
+              ${colHeadersHtml}
               <th class="vt-scroll">Fecha</th>
               <th class="vt-scroll">Etiqueta</th>
             </tr></thead>
@@ -994,17 +1009,18 @@ function initApp() {
       // ── Column search: highlight matching headers ─────────────────
       body.querySelector('#verifColSearch')?.addEventListener('input', function() {
         const q = this.value.toLowerCase().trim();
-        body.querySelectorAll('.vt-table thead th.vt-scroll').forEach((th, i) => {
+        body.querySelectorAll('.vt-col-header').forEach((th, colIdx) => {
           const match = !q || th.textContent.toLowerCase().includes(q);
-          th.style.background = match && q ? '#fef3c7' : '';
-          // Also highlight body cells in same column
-          body.querySelectorAll(`.vt-table tbody tr td.vt-scroll:nth-child(${i + 4})`).forEach(td => {
-            td.style.background = match && q ? '#fefce8' : '';
+          th.style.background = (match && q) ? '#fef3c7' : '';
+          // Highlight corresponding body cells (col offset: 3 frozen cols + colIdx + 1)
+          const nthChild = colIdx + 4;
+          body.querySelectorAll(`.vt-table tbody tr td:nth-child(${nthChild})`).forEach(td => {
+            td.style.background = (match && q) ? '#fefce8' : '';
           });
         });
-        // Scroll to first matching column
         if (q) {
-          const firstMatch = body.querySelector('.vt-table thead th.vt-scroll[style*="fef3c7"]');
+          const firstMatch = [...body.querySelectorAll('.vt-col-header')]
+            .find(th => th.textContent.toLowerCase().includes(q));
           firstMatch?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
         }
       });

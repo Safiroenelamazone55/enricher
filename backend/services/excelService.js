@@ -145,6 +145,19 @@ function parseLeadsFile(buffer, mimetype, customMapping = null) {
     });
     if (Object.keys(extra).length > 0) lead._extra = extra;
 
+    // ── Preserve original column order ────────────────────
+    // _rawColumns stores ALL columns (mapped + unmapped) in the exact
+    // order they appeared in the file. Used by the verifications table
+    // to display columns without reordering.
+    lead._rawColumns = headerRow
+      .map((h, idx) => {
+        const header = String(h).trim();
+        if (!header) return null;
+        const val = String(row[idx] ?? '').trim();
+        return { header, value: val };
+      })
+      .filter(Boolean);
+
     leads.push(lead);
   }
 
