@@ -1,4 +1,5 @@
 'use strict';
+console.log('[Enricher] app.js v2026-05-28-B loaded');
 
 /**
  * app.js — B2B Email Enricher Frontend
@@ -1574,6 +1575,7 @@ function initApp() {
       $('statusChips').querySelectorAll('.vf-chip').forEach(c => c.classList.remove('active'));
       chip.classList.add('active');
       _activeFilters.status = chip.dataset.status || '';
+      console.log('[filter] status chip clicked:', _activeFilters.status);
     });
   });
 
