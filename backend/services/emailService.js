@@ -262,10 +262,11 @@ async function enrichOneLead(lead, userId = null, tag = null, quickMode = false)
           .then(r => {
             if (r.status === 'sent') {
               console.log(`[MULTI-PROBE] sent probe ${i + 1}/${probeList.length}: ${cand.email} (id: ${r.verifyId})`);
-              if (i === 0) bounceVerifyId = r.verifyId; // show first probe ID in response
+              if (i === 0) bounceVerifyId = r.verifyId;
             } else {
               console.log(`[MULTI-PROBE] ${r.status} para ${cand.email}`);
             }
+          })
           .catch(err => console.warn(`[MULTI-PROBE] error para ${cand.email}: ${err.message}`));
       });
     } else if (!targetEmail) {
