@@ -1005,46 +1005,7 @@ function initApp() {
     if (lastXlsBuffer) downloadBuffer(lastXlsBuffer, `enriched_${Date.now()}.xlsx`);
   });
 
-  // ── Verificar emails batch ─────────────────────────────────────
-  $('btnVerifyBatch')?.addEventListener('click', async () => {
-    const results = batchResults.filter(r => r.bestEmail);
-    if (!results.length) {
-      showAlert($('batchErr'), 'No hay emails para verificar en los resultados actuales.');
-      return;
-    }
-    const btn = $('btnVerifyBatch');
-    setBtn(btn, true);
-    const statusDiv = $('verifyBatchStatus');
-    if (statusDiv) { statusDiv.className = 'alert alert--warn'; statusDiv.textContent = `⏳ Enviando verificaciones para ${results.length} emails…`; statusDiv.classList.remove('hidden'); }
-
-    try {
-      const tag = ($('b_tag')?.value || '').trim() || null;
-      const res = await apiFetch(`${API}/enrich/verify-batch`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ results, tag }),
-      });
-      if (res.status === 401) { location.reload(); return; }
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-
-      if (statusDiv) {
-        statusDiv.className = 'alert alert--ok';
-        statusDiv.textContent = `✅ ${data.sent} enviados · aparecen ahora como 🟡 Pendiente. Cambian a 🟢 Verificado en ~1 h si no rebotan.`;
-      }
-      // Go to Mis Verificaciones immediately and reload
-      setTimeout(() => {
-        _switchTab('verifications');
-        _verifLoaded = true;
-        loadTagSuggestions();
-        loadVerifications({});
-      }, 1000);
-    } catch (err) {
-      if (statusDiv) { statusDiv.className = 'alert alert--err'; statusDiv.textContent = `Error: ${err.message}`; statusDiv.classList.remove('hidden'); }
-    } finally {
-      setBtn(btn, false);
-    }
-  });
+  // verify-batch button removed — enrichment now triggers SES automatically
 
   $('searchBox').addEventListener('input', () => {
     const q = $('searchBox').value.toLowerCase();
@@ -1233,24 +1194,28 @@ function initApp() {
       // Only 'error' rows are retryable — pending = still being verified normally
       const errorCount = rows.filter(r => r.status === 'error').length;
 
-      // Collect ALL column headers in original file order using _rawColumns.
-      // _rawColumns = [{header, value}, ...] — exact order from the uploaded file.
-      // Falls back to _extra keys if _rawColumns not available (older records).
+      // Build column headers using _rawColumns with strict priority:
+      // 1. Find the FIRST row that has _rawColumns (most complete, in file order)
+      // 2. Use ONLY its headers as the template — ignore _extra keys from old records
+      //    (old records have wrong _extra keys like "SPAIN", "CORDOWARE")
+      // 3. If NO row has _rawColumns, fall back to _extra keys
       const colHeaderSet = new Set();
-      const colHeaders   = [];   // ordered list of original column headers
-      rows.forEach(r => {
-        const raw = r.leadData?._rawColumns;
-        if (Array.isArray(raw)) {
-          raw.forEach(({ header }) => {
-            if (!colHeaderSet.has(header)) { colHeaderSet.add(header); colHeaders.push(header); }
-          });
-        } else {
-          // Fallback: _extra keys (unordered but better than nothing)
+      const colHeaders   = [];
+
+      // Pass 1: find template from first row with _rawColumns
+      const templateRow = rows.find(r => Array.isArray(r.leadData?._rawColumns));
+      if (templateRow) {
+        templateRow.leadData._rawColumns.forEach(({ header }) => {
+          if (header && !colHeaderSet.has(header)) { colHeaderSet.add(header); colHeaders.push(header); }
+        });
+      } else {
+        // Pass 2: no _rawColumns at all — use _extra keys as fallback
+        rows.forEach(r => {
           Object.keys(r.leadData?._extra || {}).forEach(k => {
             if (!colHeaderSet.has(k)) { colHeaderSet.add(k); colHeaders.push(k); }
           });
-        }
-      });
+        });
+      }
 
       const rowsHtml = rows.map((r, idx) => {
         const isCatchAll_ = !!(r.leadData?.isCatchAll);
