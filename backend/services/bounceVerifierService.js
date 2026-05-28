@@ -92,7 +92,7 @@ async function verifyEmail(email, leadId = '', userId = null, remainingCandidate
   if (process.env.DATABASE_URL) {
     try {
       const { rows } = await pool.query(
-        `SELECT bounceVerifyId, status FROM verifications
+        `SELECT bounceVerifyId, status, lead_data FROM verifications
           WHERE lower(email) = $1
           ORDER BY created_at DESC LIMIT 1`,
         [emailLower]
@@ -100,6 +100,23 @@ async function verifyEmail(email, leadId = '', userId = null, remainingCandidate
       if (rows.length) {
         const row = rows[0];
         _cache.set(emailLower, { verifyId: row.bounceverifyid, status: row.status, ts: Date.now() });
+
+        // If the existing record is missing _rawColumns but we have them now → patch it
+        const existingRaw = row.lead_data?._rawColumns;
+        if (!existingRaw && leadData?._rawColumns) {
+          const patch = {};
+          if (leadData._rawColumns) patch._rawColumns = leadData._rawColumns;
+          if (leadData._extra)      patch._extra      = leadData._extra;
+          if (leadData.firstName)   patch.firstName   = leadData.firstName;
+          if (leadData.lastName)    patch.lastName    = leadData.lastName;
+          if (leadData.company)     patch.company     = leadData.company;
+          pool.query(
+            `UPDATE verifications SET lead_data = COALESCE(lead_data,'{}') || $1::jsonb
+              WHERE bounceVerifyId = $2`,
+            [JSON.stringify(patch), row.bounceverifyid]
+          ).catch(e => console.warn('[bounce-verifier] patch lead_data failed:', e.message));
+        }
+
         if (row.status === 'pending')
           return { status: 'already-pending',  verifyId: row.bounceverifyid };
         return   { status: 'already-resolved', verifyId: row.bounceverifyid,
