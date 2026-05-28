@@ -861,13 +861,14 @@ function initApp() {
       }
 
       const statusMeta = {
-        pending:  { icon: '🟡', label: 'Pendiente',  cls: 'vstatus--pending'  },
-        verified: { icon: '🟢', label: 'Verificado', cls: 'vstatus--verified' },
-        bounced:  { icon: '🔴', label: 'Rebote',     cls: 'vstatus--bounced'  },
+        pending:  { icon: '🟡', label: 'Verificando…', cls: 'vstatus--pending'  },
+        verified: { icon: '🟢', label: 'Verificado',   cls: 'vstatus--verified' },
+        bounced:  { icon: '🔴', label: 'Rebote',       cls: 'vstatus--bounced'  },
+        error:    { icon: '⛔', label: 'Error de envío', cls: 'vstatus--error'  },
       };
 
-      // Count retryable rows (pending = stuck, can be re-sent)
-      const pendingCount = rows.filter(r => r.status === 'pending').length;
+      // Only 'error' rows are retryable — pending = still being verified normally
+      const errorCount = rows.filter(r => r.status === 'error').length;
 
       const rowsHtml = rows.map((r, idx) => {
         const isCatchAll_ = !!(r.leadData?.isCatchAll);
@@ -885,7 +886,7 @@ function initApp() {
         const firstName = esc(ld.firstName || '');
         const lastName  = esc(ld.lastName  || '');
         const extra     = ld._extra && Object.keys(ld._extra).length > 0 ? ld._extra : null;
-        const canRetry  = r.status === 'pending';
+        const canRetry  = r.status === 'error';   // only failed sends can be retried
 
         const emailCell = r.status === 'pending'
           ? `<span class="mono verif-email--pending" title="Verificación en curso…">${esc(r.email)}</span>`
@@ -902,7 +903,7 @@ function initApp() {
         const mainRow = `<tr class="${canRetry ? 'verif-row--retryable' : ''}" data-vid="${esc(r.bounceVerifyId)}" data-retryable="${canRetry}">
           <td class="verif-cb-cell">
             <input type="checkbox" class="verif-cb" data-vid="${esc(r.bounceVerifyId)}"
-              ${canRetry ? '' : 'disabled title="Solo se pueden re-verificar los pendientes"'}/>
+              ${canRetry ? '' : 'disabled title="Solo se pueden revivir los que tuvieron error de envío"'}/>
           </td>
           <td>${firstName || '<span style="color:var(--muted)">—</span>'}</td>
           <td>${lastName  || '<span style="color:var(--muted)">—</span>'}</td>
@@ -936,14 +937,14 @@ function initApp() {
       const retryBar = `
         <div class="verif-retry-bar hidden" id="verifRetryBar">
           <span class="verif-retry-bar__count" id="retryCount">0 seleccionadas</span>
-          <button class="btn btn--primary btn--sm" id="btnRetrySelected">⟳ Re-verificar</button>
+          <button class="btn btn--primary btn--sm" id="btnRetrySelected">⟳ Revivir y re-enviar</button>
           <button class="btn btn--ghost btn--sm" id="btnRetryClear">✕ Cancelar</button>
         </div>`;
 
-      // "Select all pending" quick action shown only when there are pending rows
-      const selectPendingBtn = pendingCount > 0
+      // "Select all errors" quick action — only shown when there are error rows
+      const selectPendingBtn = errorCount > 0
         ? `<button class="btn btn--outline btn--sm" id="btnSelectPending" style="margin-left:8px">
-             🟡 Seleccionar ${pendingCount} pendiente${pendingCount !== 1 ? 's' : ''}
+             ⛔ Seleccionar ${errorCount} con error${errorCount !== 1 ? 'es' : ''}
            </button>`
         : '';
 
@@ -1011,10 +1012,8 @@ function initApp() {
       });
 
       selectPendingB?.addEventListener('click', () => {
-        allCbs().forEach(cb => {
-          const tr = cb.closest('tr');
-          cb.checked = tr?.dataset.retryable === 'true';
-        });
+        // Select all error rows (retryable ones)
+        allCbs().forEach(cb => { cb.checked = true; });
         _updateRetryBar();
       });
 

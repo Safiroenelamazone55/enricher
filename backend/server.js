@@ -776,7 +776,8 @@ app.post('/api/user/verifications/retry', requireAuth, async (req, res) => {
       `SELECT bounceVerifyId, email, leadId, tag, lead_data, remaining_candidates
          FROM verifications
         WHERE bounceVerifyId = ANY($1::text[])
-          AND user_id = $2`,
+          AND user_id = $2
+          AND status = 'error'`,   // only allow retrying failed sends, not pending/verified
       [ids, req.user.id]
     );
     rows = r;

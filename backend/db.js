@@ -132,13 +132,24 @@ async function initDb() {
         leadId          TEXT        NOT NULL DEFAULT '',
         messageId       TEXT        NOT NULL DEFAULT '',
         status          TEXT        NOT NULL
-                          CHECK (status IN ('pending', 'verified', 'bounced'))
+                          CHECK (status IN ('pending', 'verified', 'bounced', 'error'))
                           DEFAULT 'pending',
         confidence      TEXT        NOT NULL DEFAULT 'pending',
         user_id         INTEGER     REFERENCES users(id) ON DELETE SET NULL,
         created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         resolved_at     TIMESTAMPTZ
       );
+    `);
+
+    // Allow 'error' status on existing tables (safe: IF NOT EXISTS equivalent via DO block)
+    await pool.query(`
+      DO $$
+      BEGIN
+        ALTER TABLE verifications DROP CONSTRAINT IF EXISTS verifications_status_check;
+        ALTER TABLE verifications ADD CONSTRAINT verifications_status_check
+          CHECK (status IN ('pending','verified','bounced','error'));
+      EXCEPTION WHEN others THEN NULL;
+      END $$;
     `);
 
     await pool.query(`

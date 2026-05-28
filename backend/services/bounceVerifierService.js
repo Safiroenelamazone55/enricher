@@ -158,6 +158,7 @@ async function verifyEmail(email, leadId = '', userId = null, remainingCandidate
   ].join('\r\n');
 
   let messageId = '';
+  let sesError  = null;
   try {
     const { SendRawEmailCommand } = require('@aws-sdk/client-ses');
     const response = await _sesClientGet().send(
@@ -166,20 +167,25 @@ async function verifyEmail(email, leadId = '', userId = null, remainingCandidate
     messageId = response.MessageId || '';
   } catch (err) {
     console.error(`[bounce-verifier] SES send failed for ${email}: ${err.message}`);
-    return { status: 'error', message: err.message };
+    sesError = err.message;
+    // Fall through — still save to DB with status='error' so user can retry from dashboard
   }
 
-  // ── 5. Persist to PostgreSQL (includes remaining_candidates) ─────
+  // ── 5. Persist to PostgreSQL ──────────────────────────────────────
+  // status='error' when SES failed — visible in dashboard with retry button
+  // status='pending' when SES succeeded — waiting for bounce response
   if (process.env.DATABASE_URL) {
     try {
+      const insertStatus = sesError ? 'error' : 'pending';
       await pool.query(
         `INSERT INTO verifications
            (bounceVerifyId, email, leadId, messageId, status, confidence,
             user_id, remaining_candidates, tag, lead_data)
-         VALUES ($1, $2, $3, $4, 'pending', 'pending', $5, $6, $7, $8)
+         VALUES ($1, $2, $3, $4, $5, $5, $6, $7, $8, $9)
          ON CONFLICT (bounceVerifyId) DO NOTHING`,
         [
           verifyId, email, leadId, messageId,
+          insertStatus,
           userId ?? null,
           JSON.stringify(Array.isArray(remainingCandidates) ? remainingCandidates : []),
           tag ?? null,
@@ -191,7 +197,12 @@ async function verifyEmail(email, leadId = '', userId = null, remainingCandidate
     }
   }
 
-  // ── 6. Cache ─────────────────────────────────────────────────────
+  // ── 6. Cache + return ────────────────────────────────────────────
+  if (sesError) {
+    _cache.set(emailLower, { verifyId, status: 'error', ts: Date.now() });
+    return { status: 'error', verifyId, message: sesError };
+  }
+
   _cache.set(emailLower, { verifyId, status: 'pending', ts: Date.now() });
 
   // ── 7. Auto-mark verified after 1 h ──────────────────────────────
