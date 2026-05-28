@@ -8,7 +8,7 @@
 </head>
 <body>
 
-<!-- HEADER -->
+<!-- HEADER — slim top bar, just auth -->
 <header class="header">
   <div class="wrap header__inner">
     <div class="logo">
@@ -16,13 +16,8 @@
       <span class="logo__name">Enricher</span>
       <span class="logo__tag">B2B</span>
     </div>
-    <nav class="nav-links">
-      <a href="#howit">How it works</a>
-      <a href="https://enricher-ix3b.onrender.com/api/template" id="dlTemplate">⬇ Download template</a>
-    </nav>
     <!-- Auth bar — populated by app.js after /api/auth/me -->
     <div id="authBar" class="auth-bar">
-      <!-- Skeleton shown while loading -->
       <div class="auth-bar__skeleton"></div>
     </div>
   </div>
@@ -45,24 +40,52 @@
 <!-- APP SHELL — hidden until authenticated -->
 <div id="appShell" class="hidden">
 
-<!-- HERO -->
-<section class="hero">
-  <div class="wrap">
-    <h1>B2B Email Enrichment<br>without third-party APIs</h1>
-    <p>Enter a lead or upload a list. We resolve the domain, generate email patterns, check DNS MX records and score each candidate.</p>
+<!-- APP LAYOUT: sidebar + content -->
+<div class="app-layout">
 
-    <!-- Tabs -->
-    <div class="tabs">
-      <button class="tab active" data-tab="single">Single lead</button>
-      <button class="tab"        data-tab="batch">Batch upload</button>
-      <button class="tab"        data-tab="verifications">Mis Verificaciones</button>
+  <!-- ── LEFT SIDEBAR ─────────────────────────────────────── -->
+  <aside class="sidebar">
+    <div class="sidebar__brand">
+      <div class="sidebar__brand-icon">✉</div>
+      <div>
+        <div class="sidebar__brand-name">Enricher</div>
+        <div class="sidebar__brand-tag">B2B Email Finder</div>
+      </div>
     </div>
-  </div>
-</section>
 
-<!-- MAIN -->
-<main class="section">
-  <div class="wrap">
+    <nav class="sidebar__nav">
+      <button class="snav-item active" data-tab="single">
+        <span class="snav-item__icon">🔍</span>
+        <span class="snav-item__body">
+          <span class="snav-item__label">Lead individual</span>
+          <span class="snav-item__desc">Verifica un prospecto</span>
+        </span>
+      </button>
+      <button class="snav-item" data-tab="batch">
+        <span class="snav-item__icon">⚡</span>
+        <span class="snav-item__body">
+          <span class="snav-item__label">Carga masiva</span>
+          <span class="snav-item__desc">Sube tu lista en Excel o CSV</span>
+        </span>
+      </button>
+      <button class="snav-item" data-tab="verifications">
+        <span class="snav-item__icon">📬</span>
+        <span class="snav-item__body">
+          <span class="snav-item__label">Mis Verificaciones</span>
+          <span class="snav-item__desc">Historial de envíos reales</span>
+        </span>
+      </button>
+    </nav>
+
+    <div class="sidebar__footer">
+      <a href="#howit" class="sidebar__link">Cómo funciona</a>
+      <a href="https://enricher-ix3b.onrender.com/api/template" class="sidebar__link">⬇ Plantilla</a>
+    </div>
+  </aside>
+
+  <!-- ── MAIN CONTENT ──────────────────────────────────────── -->
+  <main class="app-main">
+    <div class="wrap">
 
     <!-- ── SINGLE LEAD PANE ───────────────────────────────── -->
     <div class="pane active" id="pane-single">
@@ -263,8 +286,10 @@
       </div>
     </div><!-- /pane-verifications -->
 
-  </div>
-</main>
+    </div><!-- /wrap -->
+  </main><!-- /app-main -->
+
+</div><!-- /app-layout -->
 
 <!-- HOW IT WORKS -->
 <section id="howit" style="padding:40px 0;background:#fff;border-top:1px solid var(--border)">

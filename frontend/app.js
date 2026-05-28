@@ -194,14 +194,24 @@ initAuth();
 function initApp() {
 
   // ── Tab switching ───────────────────────────────────────────────
-  document.querySelectorAll('.tab').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-      document.querySelectorAll('.pane').forEach(p => p.classList.remove('active'));
-      btn.classList.add('active');
-      $(`pane-${btn.dataset.tab}`).classList.add('active');
-      if (btn.dataset.tab === 'batch') _checkPersistedJob();
-    });
+  let _verifLoaded = false;
+
+  // Wire both old .tab buttons and new .snav-item sidebar buttons
+  function _switchTab(tabName) {
+    document.querySelectorAll('.tab,.snav-item').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.pane').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll(`[data-tab="${tabName}"]`).forEach(t => t.classList.add('active'));
+    $(`pane-${tabName}`)?.classList.add('active');
+    if (tabName === 'batch') _checkPersistedJob();
+    if (tabName === 'verifications' && !_verifLoaded) {
+      _verifLoaded = true;
+      loadTagSuggestions();
+      loadVerifications();
+    }
+  }
+
+  document.querySelectorAll('.tab, .snav-item').forEach(btn => {
+    btn.addEventListener('click', () => _switchTab(btn.dataset.tab));
   });
 
   // ═══════════════════════════════════════════════════════════════
@@ -1161,17 +1171,7 @@ function initApp() {
     } catch (_) { /* non-critical */ }
   }
 
-  // Load when the tab is first activated
-  let _verifLoaded = false;
-  document.querySelectorAll('.tab').forEach(btn => {
-    btn.addEventListener('click', () => {
-      if (btn.dataset.tab === 'verifications' && !_verifLoaded) {
-        _verifLoaded = true;
-        loadTagSuggestions();
-        loadVerifications();
-      }
-    });
-  });
+  // _verifLoaded declared at top of initApp, tab switching handled by _switchTab
 
   function _getFilterTag() { return ($('filterTag')?.value || '').trim(); }
 
