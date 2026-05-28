@@ -319,34 +319,6 @@
 
 </div><!-- /app-layout -->
 
-<!-- HOW IT WORKS -->
-<section id="howit" style="padding:40px 0;background:#fff;border-top:1px solid var(--border)">
-  <div class="wrap">
-    <h2 style="font-size:1.2rem;font-weight:800;margin-bottom:20px">How the scoring works</h2>
-    <div class="how">
-      <div class="how-step">
-        <div class="how-step__n">①</div>
-        <div class="how-step__t">Pattern generation</div>
-        <p class="how-step__b">Up to 30 patterns per lead ranked by global frequency (firstname.lastname, flastname, etc.)</p>
-      </div>
-      <div class="how-step">
-        <div class="how-step__n">②</div>
-        <div class="how-step__t">DNS MX validation</div>
-        <p class="how-step__b">If the domain has no MX records, score drops to ≤5. Results cached 60 min.</p>
-      </div>
-      <div class="how-step">
-        <div class="how-step__n">③</div>
-        <div class="how-step__t">SMTP + real send</div>
-        <p class="how-step__b">All candidates probed in parallel. Real email sent via SES when SMTP is inconclusive.</p>
-      </div>
-      <div class="how-step">
-        <div class="how-step__n">④</div>
-        <div class="how-step__t">Honest scoring</div>
-        <p class="how-step__b">Verified = confirmed by server. Probable = best pattern match. Always shown with confidence level.</p>
-      </div>
-    </div>
-  </div>
-</section>
 
 <footer class="footer">
   <div class="wrap footer__inner">
