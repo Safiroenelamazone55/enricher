@@ -584,13 +584,14 @@ function initApp() {
       input.value = '';
       input.focus();
 
-      // Smart positioning: open upward if not enough space below
+      // Smart positioning: open toward the side with MORE space
       requestAnimationFrame(() => {
-        const rect      = wrap.getBoundingClientRect();
-        const listH     = list.offsetHeight || 220;
+        const rect       = wrap.getBoundingClientRect();
+        const LIST_H     = 200; // max-height of dropdown
         const spaceBelow = window.innerHeight - rect.bottom;
         const spaceAbove = rect.top;
-        if (spaceBelow < listH + 8 && spaceAbove > spaceBelow) {
+        // Open upward only when there's MORE space above than below
+        if (spaceAbove > spaceBelow && spaceBelow < LIST_H) {
           list.classList.add('cm-sel__list--up');
         } else {
           list.classList.remove('cm-sel__list--up');
@@ -672,9 +673,9 @@ function initApp() {
       // Sample data — show first 3 values as chips
       const sampleCell = document.createElement('div');
       sampleCell.className = 'col-map-sample';
-      const top3 = sampleVals.slice(0, 3);
+      const top3 = sampleVals.slice(0, 2);
       sampleCell.innerHTML = top3.length
-        ? top3.map(v => `<span class="col-map-sample-chip">${esc(v.length > 20 ? v.slice(0,18)+'…' : v)}</span>`).join('')
+        ? top3.map(v => `<span class="col-map-sample-chip">${esc(v.length > 16 ? v.slice(0,14)+'…' : v)}</span>`).join('')
         : '<span style="color:var(--muted);font-style:italic;font-size:.72rem">sin datos</span>';
       sampleCell.title = sampleVals.join(' · ');
 
