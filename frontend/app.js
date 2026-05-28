@@ -495,23 +495,115 @@ function initApp() {
     return ''; // extra field, preserve as-is
   }
 
-  /** Read first row of a CSV/TSV file purely in the browser */
+  /** Read headers + sample rows from a CSV/TSV file in the browser */
   function readCsvHeaders(file) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = e => {
-        const text = e.target.result || '';
-        const firstLine = text.split(/\r?\n/)[0] || '';
-        // Detect delimiter: comma, semicolon, or tab
+        const text  = e.target.result || '';
+        const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+        if (!lines.length) { resolve({ headers: [], sampleRows: [] }); return; }
+        const firstLine = lines[0];
         const delim = firstLine.includes('\t') ? '\t'
                     : firstLine.includes(';')  ? ';' : ',';
-        const headers = firstLine.split(delim).map(h => h.replace(/^["']|["']$/g,'').trim());
-        resolve(headers);
+        const parseRow = l => l.split(delim).map(h => h.replace(/^["']|["']$/g,'').trim());
+        const headers    = parseRow(firstLine);
+        const sampleRows = lines.slice(1, 6).map(parseRow);
+        resolve({ headers, sampleRows });
       };
       reader.onerror = () => reject(new Error('FileReader error'));
-      // Read only first 4 KB — enough for the header row
-      reader.readAsText(file.slice(0, 4096));
+      reader.readAsText(file.slice(0, 32768)); // 32 KB — enough for 5+ rows
     });
+  }
+
+  // ── Searchable custom select for column mapping ───────────────────
+  function _buildSearchableSelect(colIdx, selectedValue) {
+    const wrap = document.createElement('div');
+    wrap.className = 'cm-sel';
+    wrap.dataset.colIdx = colIdx;
+    wrap.dataset.value  = selectedValue;
+
+    const getLabel = v => (FIELD_OPTIONS.find(o => o.value === v) || {}).label || '— Campo extra —';
+
+    // Trigger (shows current selection)
+    const trigger = document.createElement('div');
+    trigger.className = 'cm-sel__trigger';
+    trigger.innerHTML = `<span class="cm-sel__label">${esc(getLabel(selectedValue))}</span><span class="cm-sel__arrow">▾</span>`;
+
+    // Search input
+    const input = document.createElement('input');
+    input.className  = 'cm-sel__search hidden';
+    input.type       = 'text';
+    input.placeholder= 'Buscar campo…';
+    input.autocomplete = 'off';
+
+    // Dropdown list
+    const list = document.createElement('div');
+    list.className = 'cm-sel__list hidden';
+
+    function renderList(q = '') {
+      list.innerHTML = '';
+      const query = q.toLowerCase().trim();
+      let lastGroup = null;
+      FIELD_OPTIONS.forEach(opt => {
+        const matchLabel = opt.label.toLowerCase().includes(query);
+        const matchVal   = opt.value.toLowerCase().includes(query);
+        if (query && !matchLabel && !matchVal) return;
+        if (opt.group && opt.group !== lastGroup) {
+          const g = document.createElement('div');
+          g.className   = 'cm-sel__group';
+          g.textContent = opt.group;
+          list.appendChild(g);
+          lastGroup = opt.group;
+        }
+        const item = document.createElement('div');
+        item.className    = 'cm-sel__item' + (opt.value === wrap.dataset.value ? ' cm-sel__item--active' : '');
+        item.textContent  = opt.label;
+        item.dataset.value = opt.value;
+        item.addEventListener('mousedown', e => {
+          e.preventDefault();
+          wrap.dataset.value   = opt.value;
+          trigger.querySelector('.cm-sel__label').textContent = opt.label;
+          // Update active state
+          list.querySelectorAll('.cm-sel__item').forEach(el => el.classList.toggle('cm-sel__item--active', el.dataset.value === opt.value));
+          close();
+        });
+        list.appendChild(item);
+      });
+      if (!list.children.length) {
+        list.innerHTML = '<div style="padding:8px 12px;font-size:.75rem;color:var(--muted)">Sin resultados</div>';
+      }
+    }
+
+    function open() {
+      renderList('');
+      trigger.classList.add('hidden');
+      input.classList.remove('hidden');
+      list.classList.remove('hidden');
+      input.value = '';
+      input.focus();
+    }
+    function close() {
+      list.classList.add('hidden');
+      input.classList.add('hidden');
+      trigger.classList.remove('hidden');
+    }
+
+    trigger.addEventListener('click', open);
+    input.addEventListener('input', () => renderList(input.value));
+    input.addEventListener('blur', () => setTimeout(close, 160));
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Escape') close();
+      if (e.key === 'Enter') {
+        const first = list.querySelector('.cm-sel__item');
+        if (first) first.dispatchEvent(new MouseEvent('mousedown'));
+      }
+    });
+
+    wrap.appendChild(trigger);
+    wrap.appendChild(input);
+    wrap.appendChild(list);
+    return wrap;
   }
 
   // Store raw file data for toggling header mode
@@ -562,34 +654,17 @@ function initApp() {
       nameCell.title = h;
       nameCell.textContent = h || `columna ${idx + 1}`;
 
-      // Sample data preview — show first 2 values as distinct chips
+      // Sample data — show first 3 values as chips
       const sampleCell = document.createElement('div');
       sampleCell.className = 'col-map-sample';
-      const top2 = sampleVals.slice(0, 2);
-      sampleCell.innerHTML = top2.length
-        ? top2.map(v => `<span class="col-map-sample-chip">${esc(v.length > 22 ? v.slice(0,20)+'…' : v)}</span>`).join('')
-        : '<span style="color:var(--muted);font-style:italic">sin datos</span>';
+      const top3 = sampleVals.slice(0, 3);
+      sampleCell.innerHTML = top3.length
+        ? top3.map(v => `<span class="col-map-sample-chip">${esc(v.length > 20 ? v.slice(0,18)+'…' : v)}</span>`).join('')
+        : '<span style="color:var(--muted);font-style:italic;font-size:.72rem">sin datos</span>';
       sampleCell.title = sampleVals.join(' · ');
 
-      // Select
-      const sel = document.createElement('select');
-      sel.className = 'col-map-select';
-      sel.dataset.colIdx = idx;
-
-      let lastGroup = null;
-      FIELD_OPTIONS.forEach(opt => {
-        if (opt.group !== lastGroup && opt.group) {
-          const og = document.createElement('optgroup');
-          og.label = opt.group;
-          sel.appendChild(og);
-          lastGroup = opt.group;
-        }
-        const o = document.createElement('option');
-        o.value = opt.value;
-        o.textContent = opt.label;
-        if (opt.value === suggested) o.selected = true;
-        sel.appendChild(o);
-      });
+      // Searchable custom select
+      const sel = _buildSearchableSelect(idx, suggested);
 
       // Visual cue: highlight auto-detected key fields
       if (['firstname','lastname','company','linkedinurl'].includes(suggested)) {
@@ -630,11 +705,11 @@ function initApp() {
     try {
       if (isCsv) {
         // For CSV: read headers client-side (no sample rows from server)
-        const headers = await readCsvHeaders(f);
+        const { headers, sampleRows: csvSamples } = await readCsvHeaders(f);
         if (headers.length > 0) {
           _rawFileHeaders = headers;
-          _rawFileSamples = [];
-          renderMappingPanel(headers, {}, [], true);
+          _rawFileSamples = csvSamples;
+          renderMappingPanel(headers, {}, csvSamples, true);
         } else {
           _showMappingError('No se encontraron columnas en la primera fila del archivo.');
         }
@@ -697,9 +772,14 @@ function initApp() {
   /** Read the current state of the mapping panel → { colIndex: fieldName } */
   function getColumnMapping() {
     const mapping = {};
+    // Read from new custom searchable selects
+    document.querySelectorAll('.cm-sel').forEach(sel => {
+      const v = sel.dataset.value;
+      if (v) mapping[sel.dataset.colIdx] = v;
+    });
+    // Fallback: legacy native selects
     document.querySelectorAll('.col-map-select').forEach(sel => {
-      if (sel.value) mapping[sel.dataset.colIdx] = sel.value;
-      // __ignore__ columns are sent to backend which will skip them
+      if (sel.value && !mapping[sel.dataset.colIdx]) mapping[sel.dataset.colIdx] = sel.value;
     });
     return mapping;
   }
