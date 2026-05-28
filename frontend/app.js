@@ -1620,8 +1620,33 @@ function initApp() {
     _activeFilters.tag = $('filterTag')?.value || '';
   });
 
-  // ── Apply / Clear ──────────────────────────────────────────────
+  // ── Apply: read state directly from UI at click time ──────────
   $('btnFilterVerif')?.addEventListener('click', () => {
+    // Read from UI elements, not from _activeFilters (avoids stale state)
+    const activeStatusChip = $('statusChips')?.querySelector('.vf-chip.active');
+    const activeDateChip   = $('dateChips')?.querySelector('.vf-chip.active');
+    const preset           = activeDateChip?.dataset.preset || '';
+
+    _activeFilters.status = activeStatusChip?.dataset.status || '';
+    _activeFilters.tag    = ($('filterTag')?.value  || '').trim();
+    _activeFilters.from   = ($('filterFrom')?.value || '').trim();
+    _activeFilters.to     = ($('filterTo')?.value   || '').trim();
+
+    // If a non-custom preset is active, recalculate dates from today
+    const today = new Date();
+    const fmt   = d => d.toISOString().slice(0, 10);
+    if (preset === 'today')     { _activeFilters.from = _activeFilters.to = fmt(today); }
+    else if (preset === 'yesterday') {
+      const y = new Date(today); y.setDate(y.getDate() - 1);
+      _activeFilters.from = _activeFilters.to = fmt(y);
+    }
+    else if (preset === '7d')  { const s = new Date(today); s.setDate(s.getDate()-6); _activeFilters.from = fmt(s); _activeFilters.to = fmt(today); }
+    else if (preset === '30d') { const s = new Date(today); s.setDate(s.getDate()-29); _activeFilters.from = fmt(s); _activeFilters.to = fmt(today); }
+    else if (preset === '')    { _activeFilters.from = _activeFilters.to = ''; }
+    // 'custom' → keep whatever is in filterFrom/filterTo inputs
+
+    console.log('[filter] applying:', JSON.stringify(_activeFilters));
+
     _verifLoaded = true;
     _updateFilterBadge();
     _updateActivePills();
