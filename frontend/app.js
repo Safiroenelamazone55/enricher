@@ -433,35 +433,66 @@ function initApp() {
                   'url de linkedin','linkedin del contacto','linkedin contact'],
   };
 
-  // ── Smart field guesser: header name + data sample ──────────────
+  // ── Smart field guesser: header name + data pattern analysis ────
   function guessField(headerRaw, sampleValues = []) {
-    const h = String(headerRaw).toLowerCase().trim().replace(/\s+/g,' ');
-
-    // Data-based hints: look at sample values
+    const h       = String(headerRaw).toLowerCase().trim().replace(/\s+/g,' ');
     const samples = sampleValues.map(v => String(v).trim()).filter(Boolean);
-    const firstSample = samples[0] || '';
+    const total   = samples.length;
 
-    // LinkedIn URL patterns in header or data
-    if (/linkedin\.com\/(in\/|pub\/)/.test(h) || samples.some(v => /linkedin\.com\/(in\/|pub\/)/.test(v)))
-      return 'linkedinurl';
-    if (/linkedin\.com\/company/.test(h)) return '__ignore__';
+    // ── Pattern matchers ──────────────────────────────────────
+    const isEmail    = v => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v);
+    const isLinkedIn = v => /linkedin\.com\/(in\/|pub\/)/.test(v);
+    const isLinkedInCo = v => /linkedin\.com\/company/.test(v);
+    const isUrl      = v => /^https?:\/\//i.test(v);
+    const isDomain   = v => /^[a-z0-9][a-z0-9\-]*\.[a-z]{2,}(\.[a-z]{2,})?$/i.test(v) && !v.includes('@');
+    const isPhone    = v => /^[\+\d][\d\s\-\(\)\.]{5,18}$/.test(v.replace(/\s/g,''));
+    const isSingleWord = v => /^\S+$/.test(v) && v.length < 30;
+    const isCapName  = v => /^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+$/.test(v);
 
-    // URL in header or data → likely company website
-    if (/^https?:\/\//.test(firstSample) && !firstSample.includes('linkedin.com')) return 'company';
-    if (/^https?:\/\//.test(h) && !h.includes('linkedin.com')) return 'company';
+    // ── Score-based data pattern analysis ─────────────────────
+    if (total >= 2) {
+      const pct = fn => samples.filter(fn).length / total;
 
-    // Alias match on header name
+      if (pct(isLinkedIn) >= 0.5)   return 'linkedinurl';
+      if (pct(isLinkedInCo) >= 0.5) return '__ignore__';
+      if (pct(isEmail) >= 0.5)      return 'email';
+      if (pct(v => isUrl(v) && !isLinkedIn(v)) >= 0.5) return 'company';
+      if (pct(isDomain) >= 0.6)     return 'company';
+      if (pct(isPhone) >= 0.5)      return 'telefono';
+
+      // If all values are single capitalized words → likely firstname or lastname
+      if (pct(v => isSingleWord(v) && isCapName(v)) >= 0.7) {
+        // Disambiguate: if header hints at last, pick lastname
+        if (/last|apellido|surname|family/i.test(h)) return 'lastname';
+        if (/first|nombre|given|prenom/i.test(h))    return 'firstname';
+        // Can't tell from data alone — leave for header check below
+      }
+    }
+
+    // ── Header-based: LinkedIn URLs ───────────────────────────
+    if (isLinkedIn(h))   return 'linkedinurl';
+    if (isLinkedInCo(h)) return '__ignore__';
+    if (isUrl(h) && !h.includes('linkedin.com')) return 'company';
+
+    // ── Header alias lookup ───────────────────────────────────
     for (const [field, aliases] of Object.entries(CLIENT_ALIASES)) {
       if (aliases.includes(h)) return field;
     }
 
-    // Heuristic: if header contains keywords
-    if (/first|nombre|prenom|given/i.test(h) && !/last|apellido|family/i.test(h)) return 'firstname';
-    if (/last|apellido|surname|family/i.test(h)) return 'lastname';
-    if (/company|empresa|domain|dominio|website|sitio|org\b/i.test(h)) return 'company';
+    // ── Keyword heuristics on header ─────────────────────────
+    if (/\bfirst\b|nombre(?! de|.*empresa)|prenom|\bgiven\b/i.test(h) &&
+        !/last|apellido|family|empresa|company/i.test(h)) return 'firstname';
+    if (/\blast\b|apellido|surname|\bfamily\b/i.test(h)) return 'lastname';
+    if (/company|empresa|domain|dominio|website|sitio web|org\b|web\b/i.test(h)) return 'company';
     if (/linkedin/i.test(h)) return 'linkedinurl';
+    if (/\bemail\b|correo|mail\b/i.test(h)) return 'email';
+    if (/\bphone\b|tel[eé]fono|\btel\b|celular|m[oó]vil|whatsapp/i.test(h)) return 'telefono';
+    if (/\btitle\b|cargo|puesto|position|job title/i.test(h)) return 'cargo';
+    if (/country|pa[ií]s\b/i.test(h)) return 'pais';
+    if (/city|ciudad/i.test(h)) return 'ciudad';
+    if (/industry|industria|sector/i.test(h)) return 'industria';
 
-    return ''; // extra field
+    return ''; // extra field, preserve as-is
   }
 
   /** Read first row of a CSV/TSV file purely in the browser */
@@ -483,16 +514,26 @@ function initApp() {
     });
   }
 
-  function renderMappingPanel(headers, suggestions, sampleRows = []) {
+  // Store raw file data for toggling header mode
+  let _rawFileHeaders = [];
+  let _rawFileSamples = [];
+
+  function renderMappingPanel(headers, suggestions, sampleRows = [], hasHeader = true) {
     const panel = _getMappingContainer();
     panel.innerHTML = '';
 
-    // Header
+    // Header + toggle
     panel.insertAdjacentHTML('beforeend', `
-      <div class="col-map-panel__title">🗂 Asigna las columnas de tu archivo</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px">
+        <div class="col-map-panel__title" style="margin-bottom:0">🗂 Asigna las columnas</div>
+        <label class="col-map-header-toggle" title="Si tu archivo no tiene una fila de títulos, desactiva esto">
+          <input type="checkbox" id="toggleHasHeader" ${hasHeader ? 'checked' : ''}/>
+          <span>Primera fila = encabezado</span>
+        </label>
+      </div>
       <div class="col-map-panel__hint">
-        El sistema detectó las columnas automáticamente. Ajusta si alguna está mal.
-        <strong>Campo extra</strong> = se conserva tal cual. <strong>Ignorar</strong> = no se incluye.
+        Detectado automáticamente — ajusta si alguno está mal.
+        <strong>Campo extra</strong> = se conserva. <strong>✕ Ignorar</strong> = se descarta.
       </div>
     `);
 
@@ -521,11 +562,14 @@ function initApp() {
       nameCell.title = h;
       nameCell.textContent = h || `columna ${idx + 1}`;
 
-      // Sample data preview
+      // Sample data preview — show first 2 values as distinct chips
       const sampleCell = document.createElement('div');
       sampleCell.className = 'col-map-sample';
-      sampleCell.textContent = sampleVals.slice(0, 2).join(' · ') || '—';
-      sampleCell.title = sampleVals.join(', ');
+      const top2 = sampleVals.slice(0, 2);
+      sampleCell.innerHTML = top2.length
+        ? top2.map(v => `<span class="col-map-sample-chip">${esc(v.length > 22 ? v.slice(0,20)+'…' : v)}</span>`).join('')
+        : '<span style="color:var(--muted);font-style:italic">sin datos</span>';
+      sampleCell.title = sampleVals.join(' · ');
 
       // Select
       const sel = document.createElement('select');
@@ -557,6 +601,19 @@ function initApp() {
       row.appendChild(sel);
       table.appendChild(row);
     });
+
+    // ── "Primera fila = encabezado" toggle ────────────────────
+    panel.querySelector('#toggleHasHeader')?.addEventListener('change', function() {
+      if (this.checked) {
+        // Treat row 0 as header again
+        renderMappingPanel(_rawFileHeaders, {}, _rawFileSamples, true);
+      } else {
+        // Row 0 is data — generate column names, include row 0 in samples
+        const genHeaders = _rawFileHeaders.map((_, i) => `Columna ${i + 1}`);
+        const samplesWithRow0 = [_rawFileHeaders, ..._rawFileSamples];
+        renderMappingPanel(genHeaders, {}, samplesWithRow0, false);
+      }
+    });
   }
 
   async function setFile(f) {
@@ -575,7 +632,9 @@ function initApp() {
         // For CSV: read headers client-side (no sample rows from server)
         const headers = await readCsvHeaders(f);
         if (headers.length > 0) {
-          renderMappingPanel(headers, {}, []);
+          _rawFileHeaders = headers;
+          _rawFileSamples = [];
+          renderMappingPanel(headers, {}, [], true);
         } else {
           _showMappingError('No se encontraron columnas en la primera fila del archivo.');
         }
@@ -587,7 +646,10 @@ function initApp() {
         if (res.ok) {
           const data = await res.json();
           if (data.headers && data.headers.length > 0) {
-            renderMappingPanel(data.headers, data.suggestions || {}, data.sampleRows || []);
+            // Store raw data for header toggle
+            _rawFileHeaders = data.headers;
+            _rawFileSamples = data.sampleRows || [];
+            renderMappingPanel(data.headers, data.suggestions || {}, data.sampleRows || [], true);
           } else {
             _showMappingError('El archivo no tiene encabezados.');
           }

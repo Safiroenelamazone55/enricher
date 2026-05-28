@@ -50,10 +50,16 @@ function parseHeaders(buffer) {
 
   const headers = rows[0].map(h => String(h).trim());
 
-  // Return up to 3 sample data rows so the UI can show a preview
-  const sampleRows = rows.slice(1, 4).map(row =>
+  // Return up to 5 sample data rows — more rows = smarter pattern detection
+  const sampleRows = rows.slice(1, 6).map(row =>
     headers.map((_, i) => String(row[i] ?? '').trim())
   );
+
+  // Also return the raw first row values so frontend can toggle "no header" mode
+  // (treat row 0 as data, not headers)
+  const firstDataRow = rows[1]
+    ? headers.map((_, i) => String(rows[1][i] ?? '').trim())
+    : [];
 
   const suggestions = {};
   const usedFields  = new Set();
@@ -64,7 +70,7 @@ function parseHeaders(buffer) {
       usedFields.add(field);
     }
   });
-  return { headers, suggestions, sampleRows };
+  return { headers, suggestions, sampleRows, firstDataRow };
 }
 
 /**

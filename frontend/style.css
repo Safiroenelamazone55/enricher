@@ -532,10 +532,21 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);line-height:
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
 .col-map-sample{
-  font-size:.75rem;color:var(--muted);
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-  font-style:italic;
+  display:flex;flex-wrap:wrap;gap:4px;align-items:center;min-width:0;
 }
+.col-map-sample-chip{
+  display:inline-block;padding:2px 8px;
+  background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;
+  font-size:.72rem;color:var(--text);white-space:nowrap;max-width:120px;
+  overflow:hidden;text-overflow:ellipsis;
+}
+/* Header toggle */
+.col-map-header-toggle{
+  display:flex;align-items:center;gap:6px;
+  font-size:.75rem;font-weight:600;color:var(--muted);cursor:pointer;
+  user-select:none;
+}
+.col-map-header-toggle input{cursor:pointer;accent-color:var(--brand)}
 .col-map-select{
   font-size:.78rem;border:1.5px solid var(--border);border-radius:var(--rs);
   padding:5px 8px;background:#fff;color:var(--text);cursor:pointer;width:100%;
