@@ -457,6 +457,44 @@ app.post('/api/enrich/batch', requireAuth, async (req, res) => {
 });
 
 // ── POST /api/enrich/parse-headers ───────────────────────────────
+// ── POST /api/enrich/repair-lead-data ────────────────────────────
+// Patches verifications records that are missing _rawColumns / _extra.
+// The client sends the batchResults (which now include _rawColumns from
+// _buildResult) and we find matching DB records by email+userId and update
+// their lead_data to add the missing columns.
+app.post('/api/enrich/repair-lead-data', requireAuth, async (req, res) => {
+  const { pool } = require('./db');
+  const results = Array.isArray(req.body?.results) ? req.body.results : [];
+  if (!results.length) return res.status(400).json({ error: 'results required' });
+
+  let updated = 0;
+  for (const r of results) {
+    if (!r.bestEmail || (!r._rawColumns && !r._extra)) continue;
+    try {
+      const patch = {};
+      if (r._rawColumns) patch._rawColumns = r._rawColumns;
+      if (r._extra)      patch._extra      = r._extra;
+      patch.firstName = r.firstName || '';
+      patch.lastName  = r.lastName  || '';
+      patch.company   = r.company   || '';
+
+      // Only update records that have no _rawColumns in lead_data yet
+      const { rowCount } = await pool.query(
+        `UPDATE verifications
+            SET lead_data = lead_data || $1::jsonb
+          WHERE lower(email) = $2
+            AND user_id = $3
+            AND (lead_data->>'_rawColumns') IS NULL`,
+        [JSON.stringify(patch), r.bestEmail.toLowerCase(), req.user.id]
+      );
+      updated += rowCount;
+    } catch (err) {
+      console.warn('[repair-lead-data] error for', r.bestEmail, err.message);
+    }
+  }
+  res.json({ updated, total: results.length });
+});
+
 // ── POST /api/enrich/verify-batch ────────────────────────────────
 // Sends SES verification for the best email of each enriched lead.
 // Accepts the results array from a completed batch job.
@@ -490,6 +528,9 @@ app.post('/api/enrich/verify-batch', requireAuth, async (req, res) => {
       firstName: r.firstName || '', lastName: r.lastName || '',
       isCatchAll: false, company: r.company || '',
       noMxWarning: !r.mxFound,
+      // Include original file columns so verifications table shows all fields
+      ...( r._rawColumns ? { _rawColumns: r._rawColumns } : {}),
+      ...( r._extra      ? { _extra:      r._extra      } : {}),
     };
     const remaining = (r.candidates || [])
       .filter(c => c.email !== email && !c.disqualified)

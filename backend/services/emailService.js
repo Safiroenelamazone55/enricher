@@ -588,10 +588,13 @@ function _buildResult(lead, domain, mxFound, mxHost, isCatchAll,
     candidates:          decision.candidates,          // all, sorted by consensusScore
 
     // ── Bounce verification ───────────────────────────────────
-    // verifyId to poll GET /api/bounce-status/:verifyId
-    // null = not fired (SMTP already gave a clear answer, or no MX)
     bounceVerifyId:      bounceVerifyId ?? null,
     bounceVerificationPending: !!bounceVerifyId,
+
+    // ── Original file columns (for display in verifications table) ──
+    // Passed through so verify-batch and other consumers can store them
+    _rawColumns: lead._rawColumns || null,
+    _extra:      lead._extra      || null,
 
     warning,
   };

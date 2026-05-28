@@ -850,6 +850,9 @@ function initApp() {
           $('batchPreview')?.classList.remove('hidden');
           $('batchPreview')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
+          // Silently repair any verifications records missing _rawColumns
+          _repairLeadData(batchResults);
+
           // Wire download button to job xlsx
           _wireDownloadBtn(jobId, batchResults.length);
           _setBanner(
@@ -924,6 +927,7 @@ function initApp() {
           renderPreviewTable();
           $('batchPreview')?.classList.remove('hidden');
           _wireDownloadBtn(jobId, batchResults.length);
+          _repairLeadData(batchResults);
           _setBanner(
             `<div class="alert alert--ok" style="margin:0">✅ ${batchResults.length} leads enriquecidos. <a href="#" id="bannerDlLink" style="font-weight:700;color:var(--brand)">⬇ Descargar Excel</a></div>`
           );
@@ -1005,7 +1009,18 @@ function initApp() {
     if (lastXlsBuffer) downloadBuffer(lastXlsBuffer, `enriched_${Date.now()}.xlsx`);
   });
 
-  // verify-batch button removed — enrichment now triggers SES automatically
+  // ── Silently repair verifications records missing _rawColumns ──
+  function _repairLeadData(results) {
+    const toRepair = results.filter(r => r.bestEmail && (r._rawColumns || r._extra));
+    if (!toRepair.length) return;
+    apiFetch(`${API}/enrich/repair-lead-data`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ results: toRepair }),
+    }).then(r => r.json()).then(d => {
+      if (d.updated > 0) console.log(`[repair] updated ${d.updated} verifications with _rawColumns`);
+    }).catch(() => {});
+  }
 
   $('searchBox').addEventListener('input', () => {
     const q = $('searchBox').value.toLowerCase();
