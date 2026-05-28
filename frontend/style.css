@@ -475,9 +475,9 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);line-height:
 .vstatus--catchall{background:#fef3c7;color:#92400e;border:1px solid #fcd34d}
 .vstatus--error    {background:#fee2e2;color:#991b1b;border:1px solid #fca5a5}
 /* pending email blur */
-.verif-email--pending{filter:blur(2px);user-select:none;opacity:.6;
-  transition:filter .4s ease,opacity .4s ease;cursor:default}
-.verif-email--pending:hover{filter:blur(0.4px);opacity:.9}
+.verif-email--pending{filter:blur(0.5px);user-select:none;opacity:.75;
+  transition:filter .3s ease,opacity .3s ease;cursor:default}
+.verif-email--pending:hover{filter:blur(0);opacity:1}
 
 /* ── Retry / re-verification UI ─────────────────────────── */
 /* Checkbox column */
