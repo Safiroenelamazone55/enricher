@@ -844,6 +844,30 @@ app.post('/api/user/verifications/retry', requireAuth, async (req, res) => {
   res.json({ sent, failed, total: rows.length });
 });
 
+// ── POST /api/user/verifications/dismiss ─────────────────────────
+// Immediately marks error rows as 'bounced' (confidence='dismissed') so
+// they disappear from the dashboard. No waiting, no re-send.
+app.post('/api/user/verifications/dismiss', requireAuth, async (req, res) => {
+  const { pool } = require('./db');
+  const ids = Array.isArray(req.body?.verifyIds) ? req.body.verifyIds : [];
+  if (!ids.length) return res.status(400).json({ error: 'verifyIds array required' });
+  if (ids.length > 200) return res.status(400).json({ error: 'Max 200 per batch' });
+
+  try {
+    const { rowCount } = await pool.query(
+      `UPDATE verifications
+          SET status = 'bounced', confidence = 'dismissed', resolved_at = NOW()
+        WHERE bounceVerifyId = ANY($1::text[])
+          AND user_id = $2
+          AND status  = 'error'`,
+      [ids, req.user.id]
+    );
+    res.json({ dismissed: rowCount });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── GET /api/user/verifications/export ───────────────────────────
 // Downloads a CSV of the user's verifications.  Accepts optional ?tag=.
 app.get('/api/user/verifications/export', requireAuth, async (req, res) => {

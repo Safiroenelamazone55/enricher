@@ -71,6 +71,8 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);line-height:
 .btn--ghost:hover:not(:disabled){background:#e5e7eb}
 .btn--green{background:var(--ok);color:#fff}
 .btn--green:hover:not(:disabled){background:#15803d}
+.btn--danger{background:#dc2626;color:#fff;border-color:#dc2626}
+.btn--danger:hover:not(:disabled){background:#b91c1c}
 .btn--sm{padding:6px 13px;font-size:.78rem}
 .btn-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:4px}
 .spin{width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .65s linear infinite}

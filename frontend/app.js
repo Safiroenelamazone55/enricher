@@ -938,7 +938,8 @@ function initApp() {
         <div class="verif-retry-bar hidden" id="verifRetryBar">
           <span class="verif-retry-bar__count" id="retryCount">0 seleccionadas</span>
           <button class="btn btn--primary btn--sm" id="btnRetrySelected">⟳ Revivir y re-enviar</button>
-          <button class="btn btn--ghost btn--sm" id="btnRetryClear">✕ Cancelar</button>
+          <button class="btn btn--danger btn--sm"  id="btnDismissSelected">✕ Descartar</button>
+          <button class="btn btn--ghost btn--sm"   id="btnRetryClear">Cancelar</button>
         </div>`;
 
       // "Select all errors" quick action — only shown when there are error rows
@@ -968,7 +969,7 @@ function initApp() {
         </div>
         <p style="font-size:.75rem;color:var(--muted);margin-top:10px;text-align:right;display:flex;align-items:center;gap:8px;justify-content:flex-end">
           ${filterNote}
-          ${rows.length} verificación${rows.length !== 1 ? 'es' : ''}
+          <span class="verif-footer-count">${rows.length} verificación${rows.length !== 1 ? 'es' : ''}</span>
         </p>`;
 
       // Wire expand buttons for extra fields
@@ -988,6 +989,7 @@ function initApp() {
       const selectAllCb    = body.querySelector('#verifSelectAll');
       const selectPendingB = body.querySelector('#btnSelectPending');
       const btnRetry       = body.querySelector('#btnRetrySelected');
+      const btnDismiss     = body.querySelector('#btnDismissSelected');
       const btnRetryClear  = body.querySelector('#btnRetryClear');
       const allCbs         = () => [...body.querySelectorAll('.verif-cb:not(:disabled)')];
 
@@ -1048,8 +1050,51 @@ function initApp() {
 
         } catch (err) {
           btnRetry.disabled = false;
-          btnRetry.textContent = '⟳ Re-verificar';
+          btnRetry.textContent = '⟳ Revivir y re-enviar';
           showAlert(errEl, `Error al re-verificar: ${err.message}`);
+        }
+      });
+
+      btnDismiss?.addEventListener('click', async () => {
+        const checked = allCbs().filter(c => c.checked);
+        if (!checked.length) return;
+        const verifyIds = checked.map(c => c.dataset.vid);
+
+        btnDismiss.disabled = true;
+        btnDismiss.textContent = 'Descartando…';
+
+        try {
+          const res = await apiFetch(`${API}/user/verifications/dismiss`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ verifyIds }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+
+          // Remove dismissed rows from DOM immediately — no need to reload
+          checked.forEach(cb => {
+            const tr = cb.closest('tr');
+            // Also remove the extra-fields row if it exists
+            const nextTr = tr?.nextElementSibling;
+            if (nextTr?.classList.contains('hidden') && nextTr.id?.startsWith('verif-extra-')) {
+              nextTr.remove();
+            }
+            tr?.remove();
+          });
+
+          retryBar?.classList.add('hidden');
+          if (selectAllCb) selectAllCb.checked = false;
+
+          // Update the counter at the bottom
+          const remaining = body.querySelectorAll('.verif-cb').length;
+          body.querySelector('.verif-footer-count') &&
+            (body.querySelector('.verif-footer-count').textContent = `${remaining} verificación${remaining !== 1 ? 'es' : ''}`);
+
+        } catch (err) {
+          btnDismiss.disabled = false;
+          btnDismiss.textContent = '✕ Descartar';
+          showAlert(errEl, `Error al descartar: ${err.message}`);
         }
       });
 
