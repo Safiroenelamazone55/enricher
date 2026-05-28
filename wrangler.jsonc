@@ -2,6 +2,6 @@
   "name": "enricher-frontend",
   "compatibility_date": "2026-05-28",
   "assets": {
-    "directory": "./"
+    "directory": "./frontend"
   }
 }
