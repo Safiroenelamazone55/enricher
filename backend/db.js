@@ -201,6 +201,31 @@ async function initDb() {
       DELETE FROM batch_jobs WHERE created_at < NOW() - INTERVAL '7 days';
     `);
 
+    // ── Dolor 1: mark stuck jobs as error on startup ──────────────
+    // If the server restarted while a job was running, it stays 'running'
+    // forever. Mark any job older than 2 hours as error so the frontend
+    // shows a clear message instead of spinning indefinitely.
+    const { rows: stuckJobs } = await pool.query(`
+      UPDATE batch_jobs
+         SET status = 'error',
+             error  = 'El servidor se reinició durante el procesamiento. Vuelve a subir el archivo.',
+             finished_at = NOW()
+       WHERE status = 'running'
+         AND created_at < NOW() - INTERVAL '2 hours'
+       RETURNING job_id
+    `);
+    if (stuckJobs.length > 0)
+      console.log(`[db] cleared ${stuckJobs.length} stuck job(s) from previous run`);
+
+    // ── Dolor 5: index on leadid for sweep performance ────────────
+    // The catch-all sweep does GROUP BY leadid — without an index it
+    // does a full table scan. Partial index (non-null leadid only).
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS verifications_leadid_status_idx
+        ON verifications (leadid, status)
+        WHERE leadid IS NOT NULL AND leadid != '';
+    `);
+
     console.log('[db] tables ready (users, verifications, batch_jobs)');
   } catch (err) {
     console.error('[db] initDb failed:', err.message);

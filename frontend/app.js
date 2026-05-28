@@ -583,13 +583,19 @@ function initApp() {
       const raw = localStorage.getItem('enricher_jobId');
       if (!raw) return;
       const { jobId, count, ts } = JSON.parse(raw);
-      // Ignore jobs older than 2 hours
-      if (Date.now() - ts > 2 * 60 * 60 * 1000) { localStorage.removeItem('enricher_jobId'); return; }
+
+      // Jobs older than 2 hours: clear silently (server already marked as error)
+      if (Date.now() - ts > 2 * 60 * 60 * 1000) {
+        localStorage.removeItem('enricher_jobId');
+        _setBanner(`<div class="alert alert--err" style="margin:0">⚠️ El procesamiento anterior expiró (el servidor se reinició). Vuelve a subir el archivo.</div>`);
+        return;
+      }
 
       // Quick status check before resuming poll
       apiFetch(`${API}/enrich/job/${jobId}`).then(async r => {
         if (!r.ok) { localStorage.removeItem('enricher_jobId'); return; }
         const d = await r.json();
+
         if (d.status === 'done') {
           localStorage.removeItem('enricher_jobId');
           batchResults = d.results || [];
@@ -604,8 +610,15 @@ function initApp() {
           document.getElementById('bannerDlLink')?.addEventListener('click', e => {
             e.preventDefault(); _downloadJobXlsx(jobId);
           });
-        } else if (d.status === 'running' || d.status === 'pending') {
+
+        } else if (d.status === 'running') {
           _startPolling(jobId, count);
+
+        } else if (d.status === 'error') {
+          // Server restarted mid-job or other failure
+          localStorage.removeItem('enricher_jobId');
+          _setBanner(`<div class="alert alert--err" style="margin:0">⚠️ ${d.error || 'El procesamiento falló. Vuelve a subir el archivo.'}</div>`);
+
         } else {
           localStorage.removeItem('enricher_jobId');
         }

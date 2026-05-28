@@ -551,6 +551,54 @@ async function _jobError(jobId, errMsg) {
   );
 }
 
+async function _notifyBatchDone(userId, count, jobId) {
+  const fromEmail = process.env.SES_FROM_EMAIL;
+  if (!fromEmail || !userId) return;
+  try {
+    const user = await findUserById(userId);
+    if (!user?.email) return;
+    const { SendEmailCommand } = require('@aws-sdk/client-ses');
+    const { SESClient } = require('@aws-sdk/client-ses');
+    const ses = new SESClient({
+      region: process.env.AWS_REGION || 'us-east-1',
+      credentials: {
+        accessKeyId:     process.env.AWS_ACCESS_KEY_ID     || '',
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
+      },
+    });
+    const appUrl = process.env.APP_URL || 'https://enricher-ix3b.onrender.com';
+    await ses.send(new SendEmailCommand({
+      Source: fromEmail,
+      Destination: { ToAddresses: [user.email] },
+      Message: {
+        Subject: { Data: `✅ Tu batch de ${count} leads está listo — Enricher` },
+        Body: {
+          Html: { Data: `
+            <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#1f2937">
+              <h2 style="margin:0 0 12px;font-size:1.1rem;color:#111827">Tu enriquecimiento terminó 🎉</h2>
+              <p style="margin:0 0 16px;color:#374151">
+                Se procesaron <strong>${count} leads</strong> correctamente.
+                Entra al dashboard para ver y descargar los resultados.
+              </p>
+              <a href="${appUrl}" style="display:inline-block;background:#4f46e5;color:#fff;
+                 padding:10px 22px;border-radius:8px;text-decoration:none;font-weight:600;font-size:.9rem">
+                Ver resultados →
+              </a>
+              <p style="margin:20px 0 0;font-size:.75rem;color:#9ca3af">
+                Enricher B2B · Este mensaje es automático, no respondas.
+              </p>
+            </div>
+          `},
+          Text: { Data: `Tu batch de ${count} leads terminó. Entra a ${appUrl} para descargar los resultados.` },
+        },
+      },
+    }));
+    console.log(`[notify] email enviado a ${user.email} — ${count} leads`);
+  } catch (err) {
+    console.warn('[notify] email failed:', err.message);
+  }
+}
+
 async function _jobGet(jobId) {
   const { pool } = require('./db');
   const { rows } = await pool.query(
@@ -585,6 +633,8 @@ app.post('/api/enrich/upload-async', requireAuth, upload.single('file'), async (
         const xlsBuffer = buildResultsExcel(results);
         await _jobDone(jobId, results, warnings, xlsBuffer);
         console.log(`[async-job] ${jobId} done — ${results.length} leads`);
+        // ── Dolor 4: notify user by email when batch finishes ──────
+        _notifyBatchDone(userId, results.length, jobId).catch(() => {});
       })
       .catch(async err => {
         await _jobError(jobId, err.message);
