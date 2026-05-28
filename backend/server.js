@@ -103,7 +103,7 @@ const { parseLeadsFile, parseHeaders,
 const app  = express();
 const PORT = parseInt(process.env.PORT) || 3001;
 const ENV  = process.env.NODE_ENV || 'development';
-const BATCH_LIMIT = parseInt(process.env.BATCH_LIMIT) || 500;
+const BATCH_LIMIT = parseInt(process.env.BATCH_LIMIT) || 2000;
 
 // Trust Render's reverse proxy (required for secure cookies + correct IP)
 app.set('trust proxy', 1);
