@@ -964,7 +964,7 @@ function initApp() {
         : '';
 
       // Floating retry bar (hidden until checkboxes are ticked)
-      const retryBar = `
+      const retryBarHtml = `
         <div class="verif-retry-bar hidden" id="verifRetryBar">
           <span class="verif-retry-bar__count" id="retryCount">0 seleccionadas</span>
           <button class="btn btn--primary btn--sm" id="btnRetrySelected">⟳ Revivir y re-enviar</button>
@@ -985,7 +985,7 @@ function initApp() {
       ).join('');
 
       body.innerHTML = `
-        ${retryBar}
+        ${retryBarHtml}
         <div class="verif-controls">
           <label style="display:flex;align-items:center;gap:6px;font-size:.8rem;color:var(--muted);cursor:pointer">
             <input type="checkbox" id="verifSelectAll"/> Seleccionar todas
