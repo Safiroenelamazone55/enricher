@@ -583,9 +583,23 @@ function initApp() {
       list.classList.remove('hidden');
       input.value = '';
       input.focus();
+
+      // Smart positioning: open upward if not enough space below
+      requestAnimationFrame(() => {
+        const rect      = wrap.getBoundingClientRect();
+        const listH     = list.offsetHeight || 220;
+        const spaceBelow = window.innerHeight - rect.bottom;
+        const spaceAbove = rect.top;
+        if (spaceBelow < listH + 8 && spaceAbove > spaceBelow) {
+          list.classList.add('cm-sel__list--up');
+        } else {
+          list.classList.remove('cm-sel__list--up');
+        }
+      });
     }
     function close() {
       list.classList.add('hidden');
+      list.classList.remove('cm-sel__list--up');
       input.classList.add('hidden');
       trigger.classList.remove('hidden');
     }
