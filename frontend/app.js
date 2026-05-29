@@ -1833,6 +1833,9 @@ function initApp() {
               const verifyBtn = j.status === 'done'
                 ? `<button class="btn btn--primary btn--sm" onclick="_verifyHistoryJob('${esc(j.jobId)}', ${j.total ?? 0})">🎯 Verificar</button>`
                 : '';
+              const cleanBtn = j.status === 'done'
+                ? `<button class="btn btn--ghost btn--sm" onclick="_downloadCleanJob('${esc(j.jobId)}')" title="Exportar con datos limpios">🧹 Exportar limpio</button>`
+                : '';
               const dlBtn = j.status === 'done'
                 ? `<button class="btn btn--outline btn--sm" onclick="_downloadHistoryJob('${esc(j.jobId)}')">⬇ Descargar</button>`
                 : '';
@@ -1840,7 +1843,7 @@ function initApp() {
                 <td style="padding:7px 10px">${date}</td>
                 <td style="padding:7px 10px">${j.total ?? '—'}</td>
                 <td style="padding:7px 10px">${statusBadge}</td>
-                <td style="padding:7px 10px;display:flex;gap:6px">${dlBtn}${verifyBtn}</td>
+                <td style="padding:7px 10px;display:flex;gap:6px">${dlBtn}${cleanBtn}${verifyBtn}</td>
               </tr>`;
             }).join('')}
           </tbody>
@@ -1851,6 +1854,16 @@ function initApp() {
   }
 
   // Expose download function globally for inline onclick
+  window._downloadCleanJob = async (jobId) => {
+    try {
+      const res = await apiFetch(`${API}/enrich/job/${jobId}?format=xlsx-clean`);
+      if (res.ok) {
+        const buf = await res.arrayBuffer();
+        downloadBuffer(buf, `limpio_${jobId.slice(0,8)}.xlsx`);
+      }
+    } catch(e) { alert('Error al descargar: ' + e.message); }
+  };
+
   window._downloadHistoryJob = async (jobId) => {
     try {
       const res = await apiFetch(`${API}/enrich/job/${jobId}?format=xlsx`);

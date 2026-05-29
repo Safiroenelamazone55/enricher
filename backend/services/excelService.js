@@ -201,6 +201,146 @@ function parseLeadsFile(buffer, mimetype, customMapping = null) {
   return { leads, warnings };
 }
 
+// ── Data cleaning helpers ─────────────────────────────────────
+
+const CARGO_KEYWORDS = [
+  'especialista','director','gerente','jefe','coordinador','analista',
+  'manager','consultor','supervisor','presidente','vicepresidente',
+  'subgerente','asistente','ejecutivo','ingeniero','técnico','licenciado',
+  'contador','abogado','economista','arquitecto','médico','doctor',
+  'ceo','cto','cfo','coo','ciso','vp','svp','evp',
+  'head','lead','chief','officer','founder','co-founder','cofundador',
+  'socio','asociado','encargado','responsable','operador','investigador',
+  'agente','asesor','promotor','representante','delegado','intendente',
+];
+
+const LEGAL_SUFFIXES = /\b(s\.?a\.?a?\.?|s\.?r\.?l\.?|s\.?a\.?c\.?|e\.?i\.?r\.?l\.?|s\.?a\.?s\.?|ltda?\.?|inc\.?|corp\.?|llc\.?|gmbh|bv|nv|plc|pty)\b\.?/gi;
+
+function _toTitleCase(str) {
+  if (!str) return '';
+  const minorWords = new Set(['de','del','la','las','los','el','y','e','a','en','con','por','para','sin','sobre']);
+  return str.toLowerCase().trim()
+    .split(/\s+/)
+    .map((w, i) => (i === 0 || !minorWords.has(w)) ? w.charAt(0).toUpperCase() + w.slice(1) : w)
+    .join(' ');
+}
+
+function cleanCargo(raw) {
+  if (!raw) return '';
+  return _toTitleCase(
+    raw.replace(/[|/\\&+]+/g, ' y ')
+       .replace(/\s{2,}/g, ' ')
+       .trim()
+  );
+}
+
+function cleanEmpresa(raw) {
+  if (!raw) return '';
+  return _toTitleCase(
+    raw.replace(LEGAL_SUFFIXES, '')
+       .replace(/[.,;|]+$/g, '')
+       .replace(/\s{2,}/g, ' ')
+       .trim()
+  );
+}
+
+function cleanNombre(raw) {
+  if (!raw) return { clean: '', original: raw || '' };
+  const original = raw.trim();
+  const words = original.split(/\s+/);
+
+  // Find first word that looks like a job title keyword
+  let cutAt = words.length;
+  for (let i = 2; i < words.length; i++) {
+    const w = words[i].toLowerCase().replace(/[^a-záéíóúñü]/g, '');
+    if (CARGO_KEYWORDS.includes(w)) { cutAt = i; break; }
+  }
+
+  const clean = _toTitleCase(words.slice(0, cutAt).join(' '));
+  const wasChanged = clean.toLowerCase() !== original.toLowerCase();
+  return { clean, original: wasChanged ? original : '' };
+}
+
+/**
+ * Build a CLEAN version of the results Excel.
+ * Applies data normalization: Title Case names, clean job titles,
+ * remove legal suffixes from company names.
+ */
+function buildCleanExcel(results) {
+  const validResults = (results || []).filter(r => r && (r.firstName || r.lastName || r.domain || r.company));
+
+  // Collect original file columns
+  const origColSet = new Set();
+  const origCols   = [];
+  for (const r of validResults) {
+    if (Array.isArray(r._rawColumns)) {
+      r._rawColumns.forEach(({ header }) => {
+        if (header && !origColSet.has(header)) { origColSet.add(header); origCols.push(header); }
+      });
+    }
+  }
+
+  // Column name mappings for cleaning
+  const CARGO_COLS   = new Set(['cargo','job title','jobtitle','título','puesto','position','role']);
+  const EMPRESA_COLS = new Set(['empresa','company','organization','organisation','nombreempresa','nombre de la empresa','company name']);
+  const NOMBRE_COLS  = new Set(['nombre completo','full name','fullname','nombre','first name','firstname','nombre de pila','last name','lastname','apellido']);
+
+  const cleanCols = [...origCols, 'Email encontrado','Dominio','MX','Score','Confianza','Patrón','# Candidatos'];
+  // Add nombre_original only if we have a name column
+  const hasNameCol = origCols.some(h => NOMBRE_COLS.has(h.toLowerCase()));
+  if (hasNameCol) cleanCols.push('nombre_original');
+
+  const sheetData = [cleanCols];
+
+  for (const r of validResults) {
+    const rawMap = {};
+    if (Array.isArray(r._rawColumns)) {
+      r._rawColumns.forEach(({ header, value }) => { rawMap[header] = value; });
+    }
+
+    let nombreOriginal = '';
+    const cleanedMap = {};
+
+    origCols.forEach(h => {
+      const val = rawMap[h] ?? '';
+      const hLow = h.toLowerCase();
+      if (CARGO_COLS.has(hLow)) {
+        cleanedMap[h] = cleanCargo(val);
+      } else if (EMPRESA_COLS.has(hLow)) {
+        cleanedMap[h] = cleanEmpresa(val);
+      } else if (NOMBRE_COLS.has(hLow)) {
+        const { clean, original } = cleanNombre(val);
+        cleanedMap[h] = clean;
+        if (original) nombreOriginal = original;
+      } else {
+        cleanedMap[h] = val;
+      }
+    });
+
+    const best = r.candidates?.[0] ?? null;
+    const origValues  = origCols.map(h => cleanedMap[h] ?? '');
+    const enrichValues = [
+      best?.email ?? r.bestEmail ?? '',
+      r.domain    ?? '',
+      r.mxFound   ? 'Sí' : 'No',
+      best?.score ?? '',
+      best?.confidence ?? '',
+      best?.pattern ?? '',
+      r.candidates?.length ?? 0,
+    ];
+
+    const row = [...origValues, ...enrichValues];
+    if (hasNameCol) row.push(nombreOriginal);
+    sheetData.push(row);
+  }
+
+  const wb = XLSX.utils.book_new();
+  const ws  = XLSX.utils.aoa_to_sheet(sheetData);
+  _styleSheet(ws, sheetData[0].length);
+  XLSX.utils.book_append_sheet(wb, ws, 'Limpio');
+  return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+}
+
 /**
  * Build an Excel workbook buffer from enrichment results.
  *
@@ -318,4 +458,4 @@ function buildTemplateExcel() {
   return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 }
 
-module.exports = { parseLeadsFile, parseHeaders, buildResultsExcel, buildTemplateExcel, FIELD_ALIASES };
+module.exports = { parseLeadsFile, parseHeaders, buildResultsExcel, buildCleanExcel, buildTemplateExcel, FIELD_ALIASES };

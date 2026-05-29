@@ -98,7 +98,7 @@ try {
 
 const { getMxRecords }                    = require('./services/dnsService');
 const { parseLeadsFile, parseHeaders,
-        buildResultsExcel,
+        buildResultsExcel, buildCleanExcel,
         buildTemplateExcel }              = require('./services/excelService');
 
 // ── App ───────────────────────────────────────────────────────────
@@ -775,6 +775,16 @@ app.get('/api/enrich/job/:jobId', requireAuth, async (req, res) => {
       res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       return res.send(Buffer.from(xlsBuf));
+    }
+
+    // Clean download
+    if (format === 'xlsx-clean') {
+      const results = Array.isArray(job.results) ? job.results : [];
+      const cleanBuf = buildCleanExcel(results);
+      const filename = `limpio_${Date.now()}.xlsx`;
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      return res.send(Buffer.from(cleanBuf));
     }
 
     const results  = Array.isArray(job.results)  ? job.results  : [];
