@@ -880,7 +880,7 @@ app.post('/api/user/verifications/retry', requireAuth, async (req, res) => {
   const { pool } = require('./db');
   const ids = Array.isArray(req.body?.verifyIds) ? req.body.verifyIds : [];
   if (!ids.length) return res.status(400).json({ error: 'verifyIds array required' });
-  if (ids.length > 200) return res.status(400).json({ error: 'Max 200 per retry batch' });
+  if (ids.length > 5000) return res.status(400).json({ error: 'Max 5000 per retry batch' });
 
   const fromEmail = process.env.SES_FROM_EMAIL;
   if (!fromEmail) return res.status(500).json({ error: 'SES_FROM_EMAIL not configured' });
@@ -967,7 +967,7 @@ app.post('/api/user/verifications/dismiss', requireAuth, async (req, res) => {
   const { pool } = require('./db');
   const ids = Array.isArray(req.body?.verifyIds) ? req.body.verifyIds : [];
   if (!ids.length) return res.status(400).json({ error: 'verifyIds array required' });
-  if (ids.length > 200) return res.status(400).json({ error: 'Max 200 per batch' });
+  if (ids.length > 5000) return res.status(400).json({ error: 'Max 5000 per batch' });
 
   try {
     const { rowCount } = await pool.query(
