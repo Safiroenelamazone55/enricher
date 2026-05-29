@@ -11,7 +11,7 @@
  */
 
 const REOON_API_KEY = process.env.REOON_API_KEY || '';
-const REOON_TIMEOUT = 15_000; // 15s per verification
+const REOON_TIMEOUT = 25_000; // 25s per verification
 
 // Simple in-memory cache to avoid re-verifying same email
 const _cache = new Map();
@@ -55,6 +55,7 @@ async function verifyEmailReoon(email) {
     let result;
     switch (data.status) {
       case 'valid':
+      case 'safe':          // Reoon uses "safe" for deliverable emails
         result = 'valid';
         break;
       case 'invalid':
