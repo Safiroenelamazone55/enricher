@@ -1615,7 +1615,15 @@ function initApp() {
     if (!container) return;
     const f = _activeFilters;
     const pills = [];
-    if (f.status) pills.push(`<span class="vf-pill">${f.status === 'catch-all' ? '⚠️ Acepta todo' : f.status === 'error' ? '⛔ Con error' : f.status === 'pending' ? '🟡 Pendiente' : '🟢 Verificado'}</span>`);
+    const statusLabels = {
+      'reoon':     '🎯 Verificado ~90%',
+      'ses':       '✉️ Verificado ~65%',
+      'pending':   '🟡 Verificando…',
+      'catch-all': '⚠️ Acepta todo · 0%',
+      'bounced':   '🔴 Rebote',
+      'error':     '⛔ Con error',
+    };
+    if (f.status) pills.push(`<span class="vf-pill">${statusLabels[f.status] || f.status}</span>`);
     if (f.tag)    pills.push(`<span class="vf-pill">🏷 ${esc(f.tag)}</span>`);
     if (f.from && f.to) pills.push(`<span class="vf-pill">📅 ${esc(f.from)} → ${esc(f.to)}</span>`);
     else if (f.from)    pills.push(`<span class="vf-pill">📅 Desde ${esc(f.from)}</span>`);

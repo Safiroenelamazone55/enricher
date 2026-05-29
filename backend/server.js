@@ -810,11 +810,14 @@ app.get('/api/user/verifications', requireAuth, async (req, res) => {
   const filterTag    = (typeof req.query.tag    === 'string' && req.query.tag.trim())    ? req.query.tag.trim()    : null;
   const filterFrom   = (typeof req.query.from   === 'string' && req.query.from.trim())   ? req.query.from.trim()   : null;
   const filterTo     = (typeof req.query.to     === 'string' && req.query.to.trim())     ? req.query.to.trim()     : null;
-  const filterStatus = (typeof req.query.status === 'string' && req.query.status.trim()) ? req.query.status.trim() : null;
-  // catch-all is stored as status='verified' + confidence='catch-all'
+  const filterStatus     = (typeof req.query.status === 'string' && req.query.status.trim()) ? req.query.status.trim() : null;
   const isCatchAllFilter = filterStatus === 'catch-all';
-  const realStatusFilter = isCatchAllFilter ? null
-    : (filterStatus && ['pending','verified','error'].includes(filterStatus) ? filterStatus : null);
+  const isBouncedFilter  = filterStatus === 'bounced';
+  const isReoonFilter    = filterStatus === 'reoon';
+  const isSesFilter      = filterStatus === 'ses';
+  const realStatusFilter = (!isCatchAllFilter && !isBouncedFilter && !isReoonFilter && !isSesFilter)
+    ? (filterStatus && ['pending','verified','error'].includes(filterStatus) ? filterStatus : null)
+    : null;
 
   // ── Inner query: dedup by leadid + filter by date/tag ────────────
   const params       = [req.user.id];
@@ -824,18 +827,14 @@ app.get('/api/user/verifications', requireAuth, async (req, res) => {
   if (filterTo)   { params.push(filterTo   + ' 23:59:59'); innerClauses.push(`created_at <= $${params.length}::timestamptz`); }
   const innerWhere = innerClauses.length ? 'AND ' + innerClauses.join(' AND ') : '';
 
-  // ── Outer query: status filter (applied AFTER dedup) ─────────────
-  // Putting status in the outer WHERE ensures DISTINCT ON first collapses
-  // multiple rows per lead, THEN we filter by the chosen status.
+  // ── Outer query: status filter ────────────────────────────────────
   const outerClauses = [];
-  if (realStatusFilter) {
-    params.push(realStatusFilter);
-    outerClauses.push(`status = $${params.length}`);
-  } else if (isCatchAllFilter) {
-    outerClauses.push(`confidence = 'catch-all'`);
-  } else {
-    outerClauses.push(`status != 'bounced'`);  // default: hide bounced rows
-  }
+  if (realStatusFilter)      { params.push(realStatusFilter); outerClauses.push(`status = $${params.length}`); }
+  else if (isCatchAllFilter) { outerClauses.push(`confidence = 'catch-all'`); }
+  else if (isBouncedFilter)  { outerClauses.push(`status = 'bounced'`); }
+  else if (isReoonFilter)    { outerClauses.push(`status = 'verified' AND (lead_data->>'verifiedByReoon')::boolean = true`); }
+  else if (isSesFilter)      { outerClauses.push(`status = 'verified' AND (lead_data->>'verifiedByReoon' IS NULL OR lead_data->>'verifiedByReoon' = 'false') AND confidence != 'catch-all'`); }
+  else                       { outerClauses.push(`status != 'bounced'`); }
   const outerWhere = 'WHERE ' + outerClauses.join(' AND ');
 
   const baseQuery = `
