@@ -92,7 +92,7 @@ async function verifyEmail(email, leadId = '', userId = null, remainingCandidate
   if (process.env.DATABASE_URL) {
     try {
       const { rows } = await pool.query(
-        `SELECT bounceVerifyId, status, lead_data FROM verifications
+        `SELECT bounceVerifyId, status, confidence, lead_data FROM verifications
           WHERE lower(email) = $1
           ORDER BY created_at DESC LIMIT 1`,
         [emailLower]
@@ -117,10 +117,18 @@ async function verifyEmail(email, leadId = '', userId = null, remainingCandidate
           ).catch(e => console.warn('[bounce-verifier] patch lead_data failed:', e.message));
         }
 
-        if (row.status === 'pending')
+        // Dismissed rows (confidence='dismissed') should be re-verifiable.
+        // When user discards a row, it gets bounced+dismissed.
+        // On next batch, treat it as new so SES re-sends.
+        if (row.confidence === 'dismissed') {
+          _cache.delete(emailLower);
+          // Fall through to re-send
+        } else if (row.status === 'pending') {
           return { status: 'already-pending',  verifyId: row.bounceverifyid };
-        return   { status: 'already-resolved', verifyId: row.bounceverifyid,
+        } else {
+          return { status: 'already-resolved', verifyId: row.bounceverifyid,
                    resolvedStatus: row.status };
+        }
       }
     } catch (err) {
       console.warn('[bounce-verifier] DB lookup failed:', err.message);
