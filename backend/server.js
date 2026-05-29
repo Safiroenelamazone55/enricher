@@ -785,6 +785,32 @@ app.get('/api/enrich/job/:jobId', requireAuth, async (req, res) => {
   }
 });
 
+// ── GET /api/enrich/jobs ─────────────────────────────────────────
+// Returns the last 20 batch jobs for the authenticated user.
+app.get('/api/enrich/jobs', requireAuth, async (req, res) => {
+  const { pool } = require('./db');
+  try {
+    const { rows } = await pool.query(
+      `SELECT job_id, status, total, error, created_at, finished_at
+         FROM batch_jobs
+        WHERE user_id = $1
+        ORDER BY created_at DESC
+        LIMIT 20`,
+      [req.user.id]
+    );
+    res.json({ jobs: rows.map(r => ({
+      jobId:      r.job_id,
+      status:     r.status,
+      total:      r.total,
+      error:      r.error ?? null,
+      createdAt:  r.created_at,
+      finishedAt: r.finished_at ?? null,
+    }))});
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── GET /api/user/verifications/tags ─────────────────────────────
 // Returns the distinct non-null tags used by the authenticated user,
 // sorted alphabetically. Used to populate the filter datalist.

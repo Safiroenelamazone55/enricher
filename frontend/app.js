@@ -203,7 +203,7 @@ function initApp() {
     document.querySelectorAll('.pane').forEach(p => p.classList.remove('active'));
     document.querySelectorAll(`[data-tab="${tabName}"]`).forEach(t => t.classList.add('active'));
     $(`pane-${tabName}`)?.classList.add('active');
-    if (tabName === 'batch') _checkPersistedJob();
+    if (tabName === 'batch') { _checkPersistedJob(); _loadBatchHistory(); }
     if (tabName === 'verifications' && !_verifLoaded) {
       _verifLoaded = true;
       loadTagSuggestions();
@@ -1791,6 +1791,75 @@ function initApp() {
       showAlert($('verifErr'), `Error al exportar: ${err.message}`);
     }
   });
+
+  // Check for a persisted job from a previous session on initial load
+  _checkPersistedJob();
+
+  // ── Historial de cargas ────────────────────────────────────────
+  async function _loadBatchHistory() {
+    const body = $('historyBody');
+    if (!body) return;
+    try {
+      const res  = await apiFetch(`${API}/enrich/jobs`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const jobs = data.jobs || [];
+
+      if (!jobs.length) {
+        body.innerHTML = `<div style="color:var(--muted);font-size:.82rem;padding:8px 0">No hay cargas anteriores.</div>`;
+        return;
+      }
+
+      body.innerHTML = `
+        <table style="width:100%;border-collapse:collapse;font-size:.8rem">
+          <thead>
+            <tr style="border-bottom:1.5px solid var(--border)">
+              <th style="padding:6px 10px;text-align:left;color:var(--muted);font-weight:700">Fecha</th>
+              <th style="padding:6px 10px;text-align:left;color:var(--muted);font-weight:700">Leads</th>
+              <th style="padding:6px 10px;text-align:left;color:var(--muted);font-weight:700">Estado</th>
+              <th style="padding:6px 10px"></th>
+            </tr>
+          </thead>
+          <tbody>
+            ${jobs.map(j => {
+              const date = j.createdAt
+                ? new Date(j.createdAt).toLocaleString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' })
+                : '—';
+              const statusBadge = j.status === 'done'
+                ? `<span style="color:var(--ok);font-weight:600">✅ Listo</span>`
+                : j.status === 'running'
+                ? `<span style="color:var(--warn);font-weight:600">⏳ Procesando</span>`
+                : `<span style="color:var(--err);font-weight:600">❌ Error</span>`;
+              const dlBtn = j.status === 'done'
+                ? `<button class="btn btn--outline btn--sm" onclick="_downloadHistoryJob('${esc(j.jobId)}')">⬇ Descargar</button>`
+                : '';
+              return `<tr style="border-bottom:1px solid var(--border)">
+                <td style="padding:7px 10px">${date}</td>
+                <td style="padding:7px 10px">${j.total ?? '—'}</td>
+                <td style="padding:7px 10px">${statusBadge}</td>
+                <td style="padding:7px 10px">${dlBtn}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>`;
+    } catch (_) {
+      body.innerHTML = `<div style="color:var(--muted);font-size:.82rem">No se pudo cargar el historial.</div>`;
+    }
+  }
+
+  // Expose download function globally for inline onclick
+  window._downloadHistoryJob = async (jobId) => {
+    try {
+      const res = await apiFetch(`${API}/enrich/job/${jobId}?format=xlsx`);
+      if (res.ok) {
+        const buf = await res.arrayBuffer();
+        downloadBuffer(buf, `enrichment_${jobId.slice(0,8)}.xlsx`);
+      }
+    } catch(e) { alert('Error al descargar: ' + e.message); }
+  };
+
+  $('btnRefreshHistory')?.addEventListener('click', _loadBatchHistory);
+  _loadBatchHistory(); // load on init
 
   // Check for a persisted job from a previous session on initial load
   _checkPersistedJob();
