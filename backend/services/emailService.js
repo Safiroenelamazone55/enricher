@@ -303,6 +303,7 @@ async function enrichOneLead(lead, userId = null, tag = null, quickMode = false)
       const leadData = {
         firstName: firstName || '', lastName: lastName || '', isCatchAll: false,
         company: lead.company || '', linkedinUrl: lead.linkedinUrl || '',
+        verifiedByReoon: !!reoonValidCandidate,   // true = Reoon confirmed, false = SES only
         ...(lead._extra       ? { _extra:       lead._extra       } : {}),
         ...(lead._rawColumns  ? { _rawColumns:  lead._rawColumns  } : {}),
       };

@@ -1251,10 +1251,20 @@ function initApp() {
       }
 
       const rowsHtml = rows.map((r, idx) => {
-        const isCatchAll_ = !!(r.leadData?.isCatchAll);
+        const isCatchAll_     = !!(r.leadData?.isCatchAll);
+        const verifiedByReoon = !!(r.leadData?.verifiedByReoon);
+
         const s = isCatchAll_
           ? { icon: '⚠️', label: 'Acepta todo', cls: 'vstatus--catchall' }
           : (statusMeta[r.status] ?? { icon: '⚪', label: r.status, cls: '' });
+
+        // Confidence badge — shows HOW the email was verified
+        const confidenceBadge = r.status === 'verified'
+          ? (verifiedByReoon
+              ? `<span class="verif-method verif-method--reoon" title="Reoon confirmó + SES no rebotó (~90% confiable)">🎯 Alta</span>`
+              : `<span class="verif-method verif-method--ses"   title="Solo SES sin confirmación previa (~60-70% confiable)">✉️ Media</span>`)
+          : '';
+
         const date = r.createdAt
           ? new Date(r.createdAt).toLocaleString('es-AR', {
               day: '2-digit', month: '2-digit', year: 'numeric',
@@ -1264,7 +1274,7 @@ function initApp() {
 
         const ld        = r.leadData || {};
         const extra     = ld._extra || {};
-        const canRetry  = r.status === 'error';  // only errors can be re-sent
+        const canRetry  = r.status === 'error';
 
         const emailCell = r.status === 'pending'
           ? `<span class="mono verif-email--pending" title="Verificación en curso…">${esc(r.email)}</span>`
@@ -1282,6 +1292,7 @@ function initApp() {
           </td>
           <td class="vt-frozen vt-frozen--status">
             <span class="badge ${esc(s.cls)}">${s.icon} ${s.label}</span>
+            ${confidenceBadge}
             ${catchAllBadge}
           </td>
           <td class="vt-frozen vt-frozen--email">${emailCell}</td>`;
