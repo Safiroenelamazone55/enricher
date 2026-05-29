@@ -1343,7 +1343,7 @@ function initApp() {
           <span class="verif-retry-bar__count" id="retryCount">0 seleccionadas</span>
           <button class="btn btn--green btn--sm"   id="btnExportSelected">⬇ Exportar seleccionadas</button>
           <button class="btn btn--primary btn--sm" id="btnRetrySelected">⟳ Revivir errores</button>
-          <button class="btn btn--danger btn--sm"  id="btnDismissSelected">✕ Descartar errores</button>
+          <button class="btn btn--danger btn--sm"  id="btnDismissSelected">✕ Descartar seleccionadas</button>
           <button class="btn btn--ghost btn--sm"   id="btnRetryClear">Cancelar</button>
         </div>`;
 
@@ -1429,7 +1429,7 @@ function initApp() {
           retryBar?.classList.remove('hidden');
           // Show retry/dismiss only when errors are selected
           if (btnRetry)   btnRetry.style.display   = errorCount > 0 ? '' : 'none';
-          if (btnDismiss) btnDismiss.style.display  = errorCount > 0 ? '' : 'none';
+          // Dismiss always visible when rows selected
         } else {
           retryBar?.classList.add('hidden');
           if (selectAllCb) selectAllCb.checked = false;

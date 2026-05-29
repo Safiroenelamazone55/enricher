@@ -974,8 +974,7 @@ app.post('/api/user/verifications/dismiss', requireAuth, async (req, res) => {
       `UPDATE verifications
           SET status = 'bounced', confidence = 'dismissed', resolved_at = NOW()
         WHERE bounceVerifyId = ANY($1::text[])
-          AND user_id = $2
-          AND status  = 'error'`,
+          AND user_id = $2`,
       [ids, req.user.id]
     );
     res.json({ dismissed: rowCount });
