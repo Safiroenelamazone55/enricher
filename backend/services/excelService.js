@@ -212,7 +212,9 @@ function buildResultsExcel(results) {
   // Preserves the exact order and names from the uploaded file.
   const origColSet = new Set();
   const origCols   = [];
-  for (const r of results) {
+  const validResults = (results || []).filter(r => r && (r.firstName || r.lastName || r.domain || r.company));
+
+  for (const r of validResults) {
     const raw = r._rawColumns;
     if (Array.isArray(raw)) {
       raw.forEach(({ header }) => {
@@ -229,7 +231,7 @@ function buildResultsExcel(results) {
     [...origCols, ...enrichCols],
   ];
 
-  for (const r of results) {
+  for (const r of validResults) {
     const best = r.candidates?.[0] ?? null;
 
     // Original file columns in order
@@ -264,7 +266,7 @@ function buildResultsExcel(results) {
     ['First Name','Last Name','Company','Domain','Email','Pattern','Rank','Score','Confidence'],
   ];
 
-  for (const r of results) {
+  for (const r of validResults) {
     for (const c of (r.candidates ?? [])) {
       candidatesData.push([
         r.firstName,
