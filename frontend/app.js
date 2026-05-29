@@ -1540,6 +1540,13 @@ function initApp() {
       btnDismiss?.addEventListener('click', async () => {
         const checked = allCbs().filter(c => c.checked);
         if (!checked.length) return;
+
+        // Confirmation dialog
+        const confirmed = confirm(
+          `⚠️ ¿Confirmas descartar ${checked.length} verificación${checked.length !== 1 ? 'es' : ''}?\n\nEsta acción las eliminará del dashboard. No se puede deshacer.`
+        );
+        if (!confirmed) return;
+
         const verifyIds = checked.map(c => c.dataset.vid);
 
         btnDismiss.disabled = true;
