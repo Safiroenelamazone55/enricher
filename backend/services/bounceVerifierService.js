@@ -162,9 +162,6 @@ async function verifyEmail(email, leadId = '', userId = null, remainingCandidate
     // AWS Console → SES → Configuration Sets → [your set] → Event destinations
     // → enable Deliveries + Bounces + Complaints → SNS topic.
     ...(process.env.SES_CONFIG_SET ? [`X-SES-CONFIGURATION-SET: ${process.env.SES_CONFIG_SET}`] : []),
-    // DSN headers — request delivery receipt from the receiving server
-    `Disposition-Notification-To: ${fromEmail}`,
-    `Return-Receipt-To: ${fromEmail}`,
     `Content-Type: multipart/alternative; boundary="${boundary}"`,
     ``,
     `--${boundary}`,
