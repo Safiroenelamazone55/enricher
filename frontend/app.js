@@ -1830,6 +1830,9 @@ function initApp() {
                 : j.status === 'running'
                 ? `<span style="color:var(--warn);font-weight:600">⏳ Procesando</span>`
                 : `<span style="color:var(--err);font-weight:600">❌ Error</span>`;
+              const verifyBtn = j.status === 'done'
+                ? `<button class="btn btn--primary btn--sm" onclick="_verifyHistoryJob('${esc(j.jobId)}', ${j.total ?? 0})">🎯 Verificar</button>`
+                : '';
               const dlBtn = j.status === 'done'
                 ? `<button class="btn btn--outline btn--sm" onclick="_downloadHistoryJob('${esc(j.jobId)}')">⬇ Descargar</button>`
                 : '';
@@ -1837,7 +1840,7 @@ function initApp() {
                 <td style="padding:7px 10px">${date}</td>
                 <td style="padding:7px 10px">${j.total ?? '—'}</td>
                 <td style="padding:7px 10px">${statusBadge}</td>
-                <td style="padding:7px 10px">${dlBtn}</td>
+                <td style="padding:7px 10px;display:flex;gap:6px">${dlBtn}${verifyBtn}</td>
               </tr>`;
             }).join('')}
           </tbody>
@@ -1856,6 +1859,37 @@ function initApp() {
         downloadBuffer(buf, `enrichment_${jobId.slice(0,8)}.xlsx`);
       }
     } catch(e) { alert('Error al descargar: ' + e.message); }
+  };
+
+  window._verifyHistoryJob = async (jobId, total) => {
+    const confirmed = confirm(
+      `🎯 ¿Enviar ${total} leads a verificación real?\n\nSe enviarán emails reales vía SES a los mejores candidatos de este grupo.\nAparecerán en "Mis Verificaciones" en ~1 hora.\n\n⚠️ Requiere que AWS SES esté activo.`
+    );
+    if (!confirmed) return;
+
+    try {
+      // Get job results first
+      const resJob = await apiFetch(`${API}/enrich/job/${jobId}`);
+      if (!resJob.ok) { alert('No se pudo obtener los resultados del job.'); return; }
+      const jobData = await resJob.json();
+      const results = jobData.results || [];
+      const withEmail = results.filter(r => r.bestEmail || r.candidates?.[0]?.email);
+
+      if (!withEmail.length) { alert('No hay emails para verificar en esta carga.'); return; }
+
+      // Send to verify-batch
+      const res = await apiFetch(`${API}/enrich/verify-batch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ results: withEmail }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+
+      alert(`✅ ${data.sent} emails enviados a verificación.\nAparecerán en "Mis Verificaciones" en ~1 hora.`);
+    } catch(e) {
+      alert('Error al verificar: ' + e.message);
+    }
   };
 
   $('btnRefreshHistory')?.addEventListener('click', _loadBatchHistory);
