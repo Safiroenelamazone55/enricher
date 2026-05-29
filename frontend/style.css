@@ -415,6 +415,8 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);line-height:
 /* status badges inside verif table */
 .vstatus--pending  {background:#fef9c3;color:#854d0e;border:1px solid #fde68a}
 .vstatus--verified {background:#dcfce7;color:#166534;border:1px solid #bbf7d0}
+.vstatus--reoon    {background:#d1fae5;color:#065f46;border:1px solid #34d399;font-weight:700}
+.vstatus--ses      {background:#fefce8;color:#854d0e;border:1px solid #fde68a}
 .vstatus--bounced  {background:#fee2e2;color:#991b1b;border:1px solid #fecaca}
 /* tag pill */
 .verif-tag{display:inline-block;padding:2px 8px;background:#ede9fe;color:#4f46e5;

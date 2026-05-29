@@ -1224,6 +1224,7 @@ function initApp() {
       // Only 'error' rows are retryable — pending = still being verified normally
       const errorCount = rows.filter(r => r.status === 'error').length;
 
+
       // Build column headers: use the record with the MOST _rawColumns entries
       // as the template (most complete = most likely from latest upload).
       const colHeaderSet = new Set();
@@ -1254,16 +1255,24 @@ function initApp() {
         const isCatchAll_     = !!(r.leadData?.isCatchAll);
         const verifiedByReoon = !!(r.leadData?.verifiedByReoon);
 
-        const s = isCatchAll_
-          ? { icon: '⚠️', label: 'Acepta todo', cls: 'vstatus--catchall' }
-          : (statusMeta[r.status] ?? { icon: '⚪', label: r.status, cls: '' });
+        // Status + confidence combined
+        let s, confidenceBadge;
 
-        // Confidence badge — shows HOW the email was verified
-        const confidenceBadge = r.status === 'verified'
-          ? (verifiedByReoon
-              ? `<span class="verif-method verif-method--reoon" title="Reoon confirmó + SES no rebotó (~90% confiable)">🎯 Alta</span>`
-              : `<span class="verif-method verif-method--ses"   title="Solo SES sin confirmación previa (~60-70% confiable)">✉️ Media</span>`)
-          : '';
+        if (isCatchAll_) {
+          s = { icon: '⚠️', label: 'Acepta todo · 0%', cls: 'vstatus--catchall' };
+          confidenceBadge = '';
+        } else if (r.status === 'verified') {
+          if (verifiedByReoon) {
+            s = { icon: '🎯', label: 'Verificado · ~90%', cls: 'vstatus--reoon' };
+            confidenceBadge = '';
+          } else {
+            s = { icon: '✉️', label: 'Verificado · ~65%', cls: 'vstatus--ses' };
+            confidenceBadge = '';
+          }
+        } else {
+          s = statusMeta[r.status] ?? { icon: '⚪', label: r.status, cls: '' };
+          confidenceBadge = '';
+        }
 
         const date = r.createdAt
           ? new Date(r.createdAt).toLocaleString('es-AR', {
