@@ -29,6 +29,7 @@ const {
 }                           = require('./scoringService');
 const { verifyEmailSMTP,
         detectCatchAll }    = require('./smtpService');
+const { verifyEmailReoon }  = require('./reoonService');
 const { detectDomainPattern,
         learnPattern,
         patternMatchDelta } = require('./domainPatternService');
@@ -168,6 +169,33 @@ async function enrichOneLead(lead, userId = null, tag = null, quickMode = false)
     }
   });
   _learnFromScraper(domain, merged);
+
+  // ── 8b. Reoon fallback for SMTP unknowns ──────────────────
+  // When SMTP returns 'unknown' (Render IP blocked by server),
+  // call Reoon API which uses clean IPs for definitive answer.
+  if (process.env.REOON_API_KEY) {
+    const unknownIndexes = smtpIndexes.filter(i => smtpMap.get(i)?.status === 'unknown');
+    if (unknownIndexes.length > 0) {
+      const reoonResults = await Promise.all(
+        unknownIndexes.map(async i => {
+          const result = await verifyEmailReoon(withBase[i].email).catch(() => 'unknown');
+          return { i, result };
+        })
+      );
+      reoonResults.forEach(({ i, result }) => {
+        if (result !== 'unknown') {
+          // Override the SMTP unknown with Reoon's definitive answer
+          smtpMap.set(i, {
+            ...smtpMap.get(i),
+            status: result === 'catch-all' ? 'unknown' : result,  // treat catch-all as unknown for scoring
+            _reoon: result,
+            _reoonCatchAll: result === 'catch-all',
+          });
+          console.log(`[reoon] ${withBase[i].email}: ${result}`);
+        }
+      });
+    }
+  }
 
   // ── 9a. Pre-fetch bounce statuses in parallel ─────────────
   // getBounceStatusByEmail is async — must be awaited before the
