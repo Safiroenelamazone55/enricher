@@ -800,6 +800,27 @@ function initApp() {
     return mapping;
   }
 
+  // ── Mode selector ─────────────────────────────────────────────
+  let _batchMode = 'discovery'; // default: discovery (no SES)
+
+  function _updateModeBtn() {
+    const btnLabel = $('btnBatch')?.querySelector('.btn__text');
+    if (_batchMode === 'discovery') {
+      if (btnLabel) btnLabel.textContent = '🔍 Descubrir emails';
+    } else {
+      if (btnLabel) btnLabel.textContent = '🎯 Verificar emails';
+    }
+  }
+
+  document.querySelectorAll('.mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      _batchMode = btn.dataset.mode;
+      _updateModeBtn();
+    });
+  });
+
   $('btnBatch').addEventListener('click', () => runBatch());
   // Hide preview button if it still exists in old HTML
   $('btnBatchPreview')?.style && ($('btnBatchPreview').style.display = 'none');
@@ -984,6 +1005,7 @@ function initApp() {
 
     const formData = new FormData();
     formData.append('file', uploadedFile);
+    formData.append('batchMode', _batchMode); // 'discovery' | 'verify'
     const batchTag = ($('b_tag')?.value || '').trim();
     if (batchTag) formData.append('tag', batchTag);
     const mapping = getColumnMapping();

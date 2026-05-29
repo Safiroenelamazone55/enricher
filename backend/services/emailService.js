@@ -52,7 +52,7 @@ const {
 /**
  * @param {boolean} quickMode  Skip SMTP/scraper/GitHub — fast preview only.
  */
-async function enrichOneLead(lead, userId = null, tag = null, quickMode = false) {
+async function enrichOneLead(lead, userId = null, tag = null, quickMode = false, discoveryMode = false) {
   console.log('ENRICH-V4 ejecutándose');
   const { firstName, lastName, company = '', linkedinUrl = '' } = lead;
 
@@ -104,7 +104,7 @@ async function enrichOneLead(lead, userId = null, tag = null, quickMode = false)
                   'not-checked', false, null, domainPattern, { emails:[], count:0 }, null, null)
     );
     const decision = decideBestEmail({ candidates: scored, scrapedEmails: [], catchAll: false });
-    if (!quickMode) {
+    if (!quickMode && !discoveryMode) {
       // Multi-probe: send top 3 candidates to SES simultaneously.
       // If 2+ survive without bounce → sweep detects catch-all.
       // If only 1 survives → that's the real email.
@@ -279,6 +279,13 @@ async function enrichOneLead(lead, userId = null, tag = null, quickMode = false)
   const decision = decideBestEmail({ candidates, scrapedEmails: merged.emails, catchAll: isCatchAll });
 
   // ── 11. Fire bounce verification — multi-probe strategy ───────────
+  // DISCOVERY MODE: skip all SES sends — just return pattern results.
+  if (discoveryMode) {
+    console.log(`[discovery] ${firstName} ${lastName} @ ${domain} — skipping SES`);
+    return _buildResult(lead, domain, mxFound, mxHost, isCatchAll,
+                        decision, warning, domainPattern, merged?.count ?? 0, null);
+  }
+
   //
   // Problem with single-probe: if the domain silently accepts everything
   // (not detected as catch-all via SMTP), the first candidate never bounces
@@ -395,7 +402,7 @@ async function enrichOneLead(lead, userId = null, tag = null, quickMode = false)
 
 const LEAD_TIMEOUT_MS = 45_000; // max 45 s per lead in full mode
 
-async function enrichBatch(leads, userId = null, defaultTag = null, quickMode = false) {
+async function enrichBatch(leads, userId = null, defaultTag = null, quickMode = false, discoveryMode = false) {
   const uniqueDomains = [...new Set(
     leads.map(l => resolveDomain(l.company || l.linkedinUrl || '').domain).filter(Boolean)
   )];
@@ -430,7 +437,7 @@ async function enrichBatch(leads, userId = null, defaultTag = null, quickMode = 
     );
 
     return Promise.race([
-      enrichOneLead(lead, userId, leadTag, false).catch(err => {
+      enrichOneLead(lead, userId, leadTag, false, discoveryMode).catch(err => {
         console.error(`[enrichBatch] ${lead.firstName} ${lead.lastName}: ${err.message}`);
         return _emptyResult(lead, null, false, `Processing error: ${err.message}`);
       }),

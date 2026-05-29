@@ -184,9 +184,27 @@
             <div class="progress__label" id="batchLabel">Processing…</div>
           </div>
 
-          <div class="btn-row" style="margin-top:16px">
+          <!-- Selector de modo -->
+          <div class="mode-selector" style="margin-top:16px">
+            <button class="mode-btn active" id="modeDiscovery" data-mode="discovery">
+              <span class="mode-btn__icon">🔍</span>
+              <span class="mode-btn__body">
+                <span class="mode-btn__label">Modo Descubrimiento</span>
+                <span class="mode-btn__desc">Encuentra emails · Solo descarga Excel</span>
+              </span>
+            </button>
+            <button class="mode-btn" id="modeVerify" data-mode="verify">
+              <span class="mode-btn__icon">🎯</span>
+              <span class="mode-btn__body">
+                <span class="mode-btn__label">Modo Verificación</span>
+                <span class="mode-btn__desc">Encuentra + verifica con envío real SES</span>
+              </span>
+            </button>
+          </div>
+
+          <div class="btn-row" style="margin-top:12px">
             <button class="btn btn--primary" id="btnBatch" disabled>
-              <span class="btn__text">⚡ Enriquecer</span>
+              <span class="btn__text">🔍 Descubrir emails</span>
               <span class="spin hidden"></span>
             </button>
           </div>

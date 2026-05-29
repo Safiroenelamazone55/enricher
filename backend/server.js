@@ -719,14 +719,18 @@ app.post('/api/enrich/upload-async', requireAuth, upload.single('file'), async (
     if (leads.length > BATCH_LIMIT)
       return res.status(400).json({ error: `Max ${BATCH_LIMIT} leads per request.` });
 
-    const jobId  = require('crypto').randomUUID();
-    const userId = req.user?.id ?? null;
-    const tag    = (typeof req.body?.tag === 'string' && req.body.tag.trim()) ? req.body.tag.trim() : null;
+    const jobId        = require('crypto').randomUUID();
+    const userId       = req.user?.id ?? null;
+    const tag          = (typeof req.body?.tag       === 'string' && req.body.tag.trim())       ? req.body.tag.trim()       : null;
+    const discoveryMode = req.body?.batchMode === 'discovery'; // true = skip SES verification
+
+    if (discoveryMode) console.log(`[batch] Modo Descubrimiento — SES desactivado`);
+    else               console.log(`[batch] Modo Verificación — SES activo`);
 
     await _jobCreate(jobId, userId, leads.length);
 
     // Fire and forget — do NOT await
-    enrichBatch(leads, userId, tag, false)
+    enrichBatch(leads, userId, tag, false, discoveryMode)
       .then(async results => {
         const xlsBuffer = buildResultsExcel(results);
         await _jobDone(jobId, results, warnings, xlsBuffer);
