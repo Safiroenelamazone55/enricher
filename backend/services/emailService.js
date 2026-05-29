@@ -104,21 +104,27 @@ async function enrichOneLead(lead, userId = null, tag = null, quickMode = false)
                   'not-checked', false, null, domainPattern, { emails:[], count:0 }, null, null)
     );
     const decision = decideBestEmail({ candidates: scored, scrapedEmails: [], catchAll: false });
-    if (!quickMode && decision.bestEmail && decision.confidence !== 'guaranteed') {
-      // Still send SES for final confirmation even without SMTP
-      const leadId = `${firstName}_${lastName}_${domain}`;
-      const leadData = {
-        firstName: firstName || '', lastName: lastName || '', isCatchAll: false,
-        company: lead.company || '', linkedinUrl: lead.linkedinUrl || '',
-        ...(lead._extra ? { _extra: lead._extra } : {}),
-        ...(lead._rawColumns ? { _rawColumns: lead._rawColumns } : {}),
-      };
-      const remaining = scored
-        .filter(c => c.email !== decision.bestEmail && !c.disqualified)
-        .sort((a,b) => b.consensusScore - a.consensusScore)
-        .map(c => ({ email: c.email, score: c.consensusScore, pattern: c.pattern }));
-      bounceVerify(decision.bestEmail, leadId, userId, remaining, tag, leadData)
-        .catch(err => console.warn(`[skipSmtp-SES] ${decision.bestEmail}: ${err.message}`));
+    if (!quickMode) {
+      // Force top candidate for SES — pattern scores alone are low but the
+      // top-ranked pattern IS our best guess. SES bounce will confirm/reject.
+      const targetEmail = decision.bestEmail ||
+        scored.filter(c => !c.disqualified).sort((a,b) => b.consensusScore - a.consensusScore)[0]?.email;
+
+      if (targetEmail) {
+        const leadId = `${firstName}_${lastName}_${domain}`;
+        const leadData = {
+          firstName: firstName || '', lastName: lastName || '', isCatchAll: false,
+          company: lead.company || '', linkedinUrl: lead.linkedinUrl || '',
+          ...(lead._extra ? { _extra: lead._extra } : {}),
+          ...(lead._rawColumns ? { _rawColumns: lead._rawColumns } : {}),
+        };
+        const remaining = scored
+          .filter(c => c.email !== targetEmail && !c.disqualified)
+          .sort((a,b) => b.consensusScore - a.consensusScore)
+          .map(c => ({ email: c.email, score: c.consensusScore, pattern: c.pattern }));
+        bounceVerify(targetEmail, leadId, userId, remaining, tag, leadData)
+          .catch(err => console.warn(`[skipSmtp-SES] ${targetEmail}: ${err.message}`));
+      }
     }
     return _buildResult(lead, domain, mxFound, mxHost, false, decision, warning, domainPattern, 0);
   }
