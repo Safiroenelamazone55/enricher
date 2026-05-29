@@ -22,7 +22,9 @@ const { initDb, findOrCreateUser, findUserById } = require('./db');
 function _setupPassport() {
   const { Strategy: GoogleStrategy } = require('passport-google-oauth20');
 
-  const callbackURL = 'https://enricher-t04s.onrender.com/api/auth/google/callback';
+  const callbackURL = process.env.RENDER_EXTERNAL_URL
+    ? `${process.env.RENDER_EXTERNAL_URL}/api/auth/google/callback`
+    : 'https://api.enricher.kiwoc.com/api/auth/google/callback';
   console.log('[auth] callbackURL usado:', callbackURL);
 
   passport.use(new GoogleStrategy(
