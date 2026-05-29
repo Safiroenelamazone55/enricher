@@ -105,25 +105,34 @@ async function enrichOneLead(lead, userId = null, tag = null, quickMode = false)
     );
     const decision = decideBestEmail({ candidates: scored, scrapedEmails: [], catchAll: false });
     if (!quickMode) {
-      // Force top candidate for SES — pattern scores alone are low but the
-      // top-ranked pattern IS our best guess. SES bounce will confirm/reject.
-      const targetEmail = decision.bestEmail ||
-        scored.filter(c => !c.disqualified).sort((a,b) => b.consensusScore - a.consensusScore)[0]?.email;
+      // Multi-probe: send top 3 candidates to SES simultaneously.
+      // If 2+ survive without bounce → sweep detects catch-all.
+      // If only 1 survives → that's the real email.
+      // Cascade tail covers candidates 4-21 if all 3 bounce.
+      const MAX_PROBES = parseInt(process.env.MAX_SES_PROBES) || 3;
+      const nonDisq = scored
+        .filter(c => !c.disqualified)
+        .sort((a,b) => b.consensusScore - a.consensusScore);
+      const probeList  = nonDisq.slice(0, MAX_PROBES);
+      const cascadeTail = nonDisq.slice(MAX_PROBES).map(c => ({
+        email: c.email, score: c.consensusScore, pattern: c.pattern,
+      }));
 
-      if (targetEmail) {
-        const leadId = `${firstName}_${lastName}_${domain}`;
+      if (probeList.length > 0) {
+        const leadId  = `${firstName}_${lastName}_${domain}`;
         const leadData = {
           firstName: firstName || '', lastName: lastName || '', isCatchAll: false,
           company: lead.company || '', linkedinUrl: lead.linkedinUrl || '',
-          ...(lead._extra ? { _extra: lead._extra } : {}),
+          ...(lead._extra      ? { _extra:      lead._extra      } : {}),
           ...(lead._rawColumns ? { _rawColumns: lead._rawColumns } : {}),
         };
-        const remaining = scored
-          .filter(c => c.email !== targetEmail && !c.disqualified)
-          .sort((a,b) => b.consensusScore - a.consensusScore)
-          .map(c => ({ email: c.email, score: c.consensusScore, pattern: c.pattern }));
-        bounceVerify(targetEmail, leadId, userId, remaining, tag, leadData)
-          .catch(err => console.warn(`[skipSmtp-SES] ${targetEmail}: ${err.message}`));
+        console.log(`[skipSmtp-MULTI] enviando ${probeList.length} probes para ${domain}`);
+        probeList.forEach((cand, i) => {
+          if (cand.bounceState === 'pending' || cand.bounceState === 'verified') return;
+          const remaining = (i === probeList.length - 1) ? cascadeTail : [];
+          bounceVerify(cand.email, leadId, userId, remaining, tag, leadData)
+            .catch(err => console.warn(`[skipSmtp-SES] ${cand.email}: ${err.message}`));
+        });
       }
     }
     return _buildResult(lead, domain, mxFound, mxHost, false, decision, warning, domainPattern, 0);
