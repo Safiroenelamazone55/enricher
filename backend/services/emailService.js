@@ -93,13 +93,33 @@ async function enrichOneLead(lead, userId = null, tag = null, quickMode = false)
     return { ...c, baseScore: Math.max(0, Math.min(dns + delta, 72)) };
   }).sort((a, b) => b.baseScore - a.baseScore);
 
-  // ── Quick mode: return pattern-only results immediately ──────
-  if (quickMode) {
+  // ── Quick mode OR SMTP disabled: return pattern-only results ──
+  // SKIP_SMTP=true is used when port 25 is blocked (e.g. waiting for
+  // Hetzner port 25 approval). Avoids SMTP semaphore queue timeouts
+  // when processing large batches (2000+ leads in parallel).
+  const skipSmtp = quickMode || process.env.SKIP_SMTP === 'true';
+  if (skipSmtp) {
     const scored = withBase.map(c =>
       _finalScore(c, firstName, lastName, domain, mxFound,
                   'not-checked', false, null, domainPattern, { emails:[], count:0 }, null, null)
     );
     const decision = decideBestEmail({ candidates: scored, scrapedEmails: [], catchAll: false });
+    if (!quickMode && decision.bestEmail && decision.confidence !== 'guaranteed') {
+      // Still send SES for final confirmation even without SMTP
+      const leadId = `${firstName}_${lastName}_${domain}`;
+      const leadData = {
+        firstName: firstName || '', lastName: lastName || '', isCatchAll: false,
+        company: lead.company || '', linkedinUrl: lead.linkedinUrl || '',
+        ...(lead._extra ? { _extra: lead._extra } : {}),
+        ...(lead._rawColumns ? { _rawColumns: lead._rawColumns } : {}),
+      };
+      const remaining = scored
+        .filter(c => c.email !== decision.bestEmail && !c.disqualified)
+        .sort((a,b) => b.consensusScore - a.consensusScore)
+        .map(c => ({ email: c.email, score: c.consensusScore, pattern: c.pattern }));
+      bounceVerify(decision.bestEmail, leadId, userId, remaining, tag, leadData)
+        .catch(err => console.warn(`[skipSmtp-SES] ${decision.bestEmail}: ${err.message}`));
+    }
     return _buildResult(lead, domain, mxFound, mxHost, false, decision, warning, domainPattern, 0);
   }
 
