@@ -6,7 +6,7 @@ console.log('[Enricher] app.js v2026-05-28-B loaded');
  * Vanilla JS · no framework
  */
 
-const API = 'https://api.enricher.kiwoc.com/api';
+const API = 'http://api.kiwoc.com/api';
 
 // ── Helpers ──────────────────────────────────────────────────────
 const $   = id => document.getElementById(id);
