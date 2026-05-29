@@ -140,11 +140,17 @@ async function enrichOneLead(lead, userId = null, tag = null, quickMode = false)
                         decision, warning, domainPattern, 0, bounceVerifyId);
   }
 
-  // ── 6. Probe ALL candidates via SMTP ─────────────────────
-  // Every candidate gets a probe — the verified one (250 OK) wins
-  // regardless of its statistical rank. Runs fully in parallel so
-  // total wall-clock time = single probe timeout, not N × timeout.
-  const smtpIndexes = withBase.map((_, i) => i);
+  // ── 6. Probe TOP 5 candidates via SMTP ───────────────────
+  // With Reoon handling verification of unknowns, we only need SMTP
+  // for the top 5 highest-scoring candidates. This reduces SMTP load
+  // from 21 → 5 probes per lead, preventing semaphore bottleneck
+  // (168 probes for 8 leads → was causing 45s timeouts).
+  // Reoon checks top 7 after SMTP, covering the remaining candidates.
+  const SMTP_PROBE_LIMIT = process.env.REOON_API_KEY ? 5 : withBase.length;
+  const smtpIndexes = withBase
+    .map((_, i) => i)
+    .sort((a, b) => (withBase[b].baseScore || 0) - (withBase[a].baseScore || 0))
+    .slice(0, SMTP_PROBE_LIMIT);
 
   // ── 7. Parallel: catch-all + ALL SMTP probes + scrapers + GitHub ─
   const [isCatchAll, scrape, searchResult, ghResult, ...smtpResultsArr] = await Promise.all([
@@ -378,8 +384,13 @@ async function enrichBatch(leads, userId = null, defaultTag = null, quickMode = 
       ? lead.tag.trim()
       : defaultTag;
 
+    // Resolve domain early so timeout can include it (instead of null)
+    const preResolved = resolveDomain(lead.company || lead.linkedinUrl || '');
     const timeout = new Promise(resolve =>
-      setTimeout(() => resolve(_emptyResult(lead, null, false, 'Timeout')), LEAD_TIMEOUT_MS)
+      setTimeout(() => {
+        console.warn(`[timeout] ${lead.firstName} ${lead.lastName} @ ${preResolved.domain ?? 'unknown'}`);
+        resolve(_emptyResult(lead, preResolved.domain || null, false, 'Timeout'));
+      }, LEAD_TIMEOUT_MS)
     );
 
     return Promise.race([
