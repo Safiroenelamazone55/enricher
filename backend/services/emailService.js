@@ -170,30 +170,52 @@ async function enrichOneLead(lead, userId = null, tag = null, quickMode = false)
   });
   _learnFromScraper(domain, merged);
 
-  // ── 8b. Reoon fallback for SMTP unknowns ──────────────────
-  // When SMTP returns 'unknown' (Render IP blocked by server),
-  // call Reoon API which uses clean IPs for definitive answer.
+  // ── 8b. Reoon — verify top 7 candidates (Option B strategy) ─
+  // Instead of waiting for SES bounce cascade, Reoon checks the top
+  // 7 candidates in parallel BEFORE scoring. This finds the correct
+  // email pattern upfront, reducing false positives and cascade waste.
+  //
+  // Priority:
+  //   1. If SMTP already returned 'valid' → skip Reoon for that candidate
+  //   2. For 'unknown' candidates in top 7 → call Reoon
+  //   3. Reoon 'valid' → override smtpMap → scores high → wins decision
+  //   4. Reoon 'invalid' → candidate disqualified → not sent to SES
+  //   5. Reoon 'catch-all' → domain flagged → no SES for any candidate
   if (process.env.REOON_API_KEY) {
-    const unknownIndexes = smtpIndexes.filter(i => smtpMap.get(i)?.status === 'unknown');
-    if (unknownIndexes.length > 0) {
+    const REOON_TOP = 7;
+    // Sort by baseScore, take top 7 that SMTP didn't already confirm
+    const topByScore = [...smtpIndexes]
+      .sort((a, b) => (withBase[b].baseScore || 0) - (withBase[a].baseScore || 0))
+      .slice(0, REOON_TOP)
+      .filter(i => smtpMap.get(i)?.status !== 'valid'); // skip already-confirmed
+
+    if (topByScore.length > 0) {
+      console.log(`[reoon] checking top ${topByScore.length} candidates for ${domain}`);
       const reoonResults = await Promise.all(
-        unknownIndexes.map(async i => {
-          const result = await verifyEmailReoon(withBase[i].email).catch(() => 'unknown');
-          return { i, result };
-        })
+        topByScore.map(async i => ({
+          i,
+          result: await verifyEmailReoon(withBase[i].email).catch(() => 'unknown'),
+        }))
       );
+
+      let reoonCatchAll = false;
       reoonResults.forEach(({ i, result }) => {
+        console.log(`[reoon] ${withBase[i].email} → ${result}`);
+        if (result === 'catch-all') { reoonCatchAll = true; }
         if (result !== 'unknown') {
-          // Override the SMTP unknown with Reoon's definitive answer
           smtpMap.set(i, {
             ...smtpMap.get(i),
-            status: result === 'catch-all' ? 'unknown' : result,  // treat catch-all as unknown for scoring
+            status: result === 'catch-all' ? 'unknown' : result,
             _reoon: result,
             _reoonCatchAll: result === 'catch-all',
           });
-          console.log(`[reoon] ${withBase[i].email}: ${result}`);
         }
       });
+
+      // If Reoon says domain is catch-all, mark and skip SES
+      if (reoonCatchAll) {
+        console.log(`[reoon] catch-all confirmed for ${domain} — skipping SES`);
+      }
     }
   }
 
@@ -240,8 +262,24 @@ async function enrichOneLead(lead, userId = null, tag = null, quickMode = false)
     const targetEmail = decision.bestEmail || nonDisq[0]?.email || null;
     console.log(`[bounceVerifier] bestEmail=${decision.bestEmail ?? 'null'} confidence=${decision.confidence} domain=${domain} catchAll=${isCatchAll}`);
 
-    if (isCatchAll) {
-      // Catch-all detected via SMTP — record for dashboard without sending SES
+    // Check if Reoon already confirmed catch-all
+    const reoonConfirmedCatchAll = candidates.some(c => {
+      const idx = withBase.findIndex(w => w.email === c.email);
+      return smtpMap.get(idx)?._reoonCatchAll === true;
+    });
+
+    // Check if Reoon confirmed a specific valid email → use only that for SES
+    const reoonValidCandidate = candidates.find(c => {
+      const idx = withBase.findIndex(w => w.email === c.email);
+      return smtpMap.get(idx)?._reoon === 'valid';
+    });
+
+    if (reoonValidCandidate) {
+      console.log(`[reoon] confirmed valid: ${reoonValidCandidate.email} — sending single SES (no cascade needed)`);
+    }
+
+    if (isCatchAll || reoonConfirmedCatchAll) {
+      // Catch-all detected via SMTP or Reoon — record for dashboard without sending SES
       console.log(`[bounceVerifier] SKIP SES (catch-all domain) para ${targetEmail ?? domain} — recording for dashboard`);
       if (targetEmail) {
         const leadData = {
@@ -255,14 +293,6 @@ async function enrichOneLead(lead, userId = null, tag = null, quickMode = false)
       }
     } else if (targetEmail && decision.confidence !== 'guaranteed') {
       // ── Multi-probe: send SES to top N candidates in parallel ──────────
-      const MAX_PROBES  = parseInt(process.env.MAX_SES_PROBES) || 3;
-      const probeList   = nonDisq.slice(0, MAX_PROBES);
-      // Candidates beyond the probe list become the cascade fallback for the
-      // LAST probe (if every probe bounces, cascade continues from there).
-      const cascadeTail = nonDisq.slice(MAX_PROBES).map(c => ({
-        email: c.email, score: c.consensusScore, pattern: c.pattern,
-      }));
-
       const leadId  = `${firstName}_${lastName}_${domain}`;
       const leadData = {
         firstName: firstName || '', lastName: lastName || '', isCatchAll: false,
@@ -270,6 +300,24 @@ async function enrichOneLead(lead, userId = null, tag = null, quickMode = false)
         ...(lead._extra       ? { _extra:       lead._extra       } : {}),
         ...(lead._rawColumns  ? { _rawColumns:  lead._rawColumns  } : {}),
       };
+
+      // ── Reoon confirmed a valid email → send SES to just that one ──
+      // No cascade needed — Reoon already identified the correct email.
+      if (reoonValidCandidate) {
+        const remaining = nonDisq
+          .filter(c => c.email !== reoonValidCandidate.email && !c.disqualified)
+          .map(c => ({ email: c.email, score: c.consensusScore, pattern: c.pattern }));
+        bounceVerify(reoonValidCandidate.email, leadId, userId, [], tag, leadData)
+          .then(r => { if (r.status === 'sent') bounceVerifyId = r.verifyId; })
+          .catch(err => console.warn(`[reoon-SES] ${reoonValidCandidate.email}: ${err.message}`));
+        return; // skip the multi-probe block below
+      }
+
+      const MAX_PROBES  = parseInt(process.env.MAX_SES_PROBES) || 3;
+      const probeList   = nonDisq.slice(0, MAX_PROBES);
+      const cascadeTail = nonDisq.slice(MAX_PROBES).map(c => ({
+        email: c.email, score: c.consensusScore, pattern: c.pattern,
+      }));
 
       console.log(`[MULTI-PROBE] enviando a ${probeList.length} candidatos para ${domain} (cascade tail: ${cascadeTail.length})`);
 
