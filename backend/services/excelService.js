@@ -208,26 +208,55 @@ function parseLeadsFile(buffer, mimetype, customMapping = null) {
  * @returns {Buffer}
  */
 function buildResultsExcel(results) {
+  // ── Collect original file columns from _rawColumns ────────
+  // Preserves the exact order and names from the uploaded file.
+  const origColSet = new Set();
+  const origCols   = [];
+  for (const r of results) {
+    const raw = r._rawColumns;
+    if (Array.isArray(raw)) {
+      raw.forEach(({ header }) => {
+        if (header && !origColSet.has(header)) { origColSet.add(header); origCols.push(header); }
+      });
+    }
+  }
+
+  // Enrichment result columns (always present)
+  const enrichCols = ['Email encontrado','Dominio','MX','Score','Confianza','Patrón','# Candidatos','Aviso'];
+
   // ── Sheet 1: Summary (one row per lead, best email) ──────
   const summaryData = [
-    ['First Name','Last Name','Company','Domain','MX Found','Best Email','Score','Confidence','Pattern','# Candidates','Warning'],
+    [...origCols, ...enrichCols],
   ];
 
   for (const r of results) {
     const best = r.candidates?.[0] ?? null;
-    summaryData.push([
-      r.firstName,
-      r.lastName,
-      r.company,
+
+    // Original file columns in order
+    const rawMap = {};
+    if (Array.isArray(r._rawColumns)) {
+      r._rawColumns.forEach(({ header, value }) => { rawMap[header] = value; });
+    } else if (r._extra) {
+      Object.assign(rawMap, r._extra);
+      rawMap['First Name'] = r.firstName || '';
+      rawMap['Last Name']  = r.lastName  || '';
+      rawMap['Company']    = r.company   || '';
+    }
+    const origValues = origCols.map(h => rawMap[h] ?? '');
+
+    // Enrichment values
+    const enrichValues = [
+      best?.email      ?? r.bestEmail ?? '',
       r.domain         ?? '',
-      r.mxFound        ? 'YES' : 'NO',
-      best?.email      ?? '',
+      r.mxFound        ? 'Sí' : 'No',
       best?.score      ?? '',
       best?.confidence ?? '',
       best?.pattern    ?? '',
       r.candidates?.length ?? 0,
       r.warning        ?? '',
-    ]);
+    ];
+
+    summaryData.push([...origValues, ...enrichValues]);
   }
 
   // ── Sheet 2: All candidates (one row per email candidate) ─
