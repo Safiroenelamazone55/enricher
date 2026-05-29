@@ -69,6 +69,13 @@ function resolveDomain(input) {
     const { hostname } = new URL(urlStr);
     if (!hostname || hostname.length < 3) throw new Error('empty hostname');
     const domain = stripWww(hostname.toLowerCase());
+    // Never use social/public platforms as email domains
+    const BLOCKED_DOMAINS = ['linkedin.com','facebook.com','twitter.com','instagram.com',
+      'youtube.com','apollo.io','salesforce.com','hubspot.com','crunchbase.com',
+      'zoominfo.com','google.com','microsoft.com','app.apollo.io'];
+    if (BLOCKED_DOMAINS.some(b => domain === b || domain.endsWith('.'+b))) {
+      return { domain: null, source: 'blocked-platform', warning: `Platform domain ignored: ${domain}` };
+    }
     return { domain, source: 'url' };
   } catch (_) {
     // Fallback: manual strip
