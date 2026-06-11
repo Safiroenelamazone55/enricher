@@ -1,243 +1,286 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-  <title>Email Enricher — B2B Lead Email Finder</title>
+  <title>Enricher — B2B Email Finder</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css"/>
 </head>
 <body>
 
-<!-- HEADER — slim top bar, just auth -->
-<header class="header">
-  <div class="wrap header__inner">
-    <div class="logo">
-      <div class="logo__mark">✉</div>
-      <span class="logo__name">Enricher</span>
-      <span class="logo__tag">B2B</span>
-    </div>
-    <!-- Auth bar — populated by app.js after /api/auth/me -->
-    <div id="authBar" class="auth-bar">
-      <div class="auth-bar__skeleton"></div>
-    </div>
-  </div>
-</header>
-
-<!-- AUTH WALL — shown when not logged in -->
+<!-- AUTH WALL -->
 <div id="authWall" class="auth-wall hidden">
   <div class="auth-wall__card">
-    <div class="auth-wall__icon">✉</div>
-    <h2 class="auth-wall__title">B2B Email Enricher</h2>
-    <p class="auth-wall__sub">Sign in with your Google account to start finding verified B2B email addresses.</p>
-    <a href="https://api.kiwoc.com/api/auth/google" class="btn btn--google">
-      <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" width="18" height="18"/>
-      Sign in with Google
+    <div class="auth-wall__logo">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>
+      </svg>
+    </div>
+    <h1 class="auth-wall__title">Enricher</h1>
+    <p class="auth-wall__sub">Encuentra emails B2B verificados para tus prospectos</p>
+    <a href="https://api.kiwoc.com/api/auth/google" class="btn btn--google btn--lg">
+      <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" width="20" height="20"/>
+      Continuar con Google
     </a>
-    <p class="auth-wall__note">Your data is never shared with third parties.</p>
+    <p class="auth-wall__note">Solo cuentas autorizadas · Tus datos no se comparten</p>
   </div>
 </div>
 
-<!-- APP SHELL — hidden until authenticated -->
+<!-- APP SHELL -->
 <div id="appShell" class="hidden">
-
-<!-- APP LAYOUT: sidebar + content -->
 <div class="app-layout">
 
-  <!-- ── LEFT SIDEBAR ─────────────────────────────────────── -->
-  <aside class="sidebar">
-    <div class="sidebar__brand">
-      <div class="sidebar__brand-icon">✉</div>
-      <div>
-        <div class="sidebar__brand-name">Enricher</div>
-        <div class="sidebar__brand-tag">B2B Email Finder</div>
+  <!-- ── SIDEBAR ──────────────────────────────────────────── -->
+  <aside class="sidebar" id="sidebar">
+
+    <!-- Brand + toggle -->
+    <div class="sidebar__top">
+      <div class="sidebar__brand">
+        <div class="sidebar__brand-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>
+          </svg>
+        </div>
+        <div class="sidebar__brand-text">
+          <div class="sidebar__brand-name">Enricher</div>
+          <div class="sidebar__brand-tag">B2B Email Finder</div>
+        </div>
       </div>
+      <button class="sidebar__toggle" id="sidebarToggle" title="Colapsar menú">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="15 18 9 12 15 6"/>
+        </svg>
+      </button>
     </div>
 
+    <!-- Navigation -->
     <nav class="sidebar__nav">
-      <button class="snav-item active" data-tab="single">
+      <div class="snav-label">Principal</div>
+
+      <button class="snav-item active" data-tab="single" data-tooltip="Lead individual">
         <span class="snav-item__icon">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
           </svg>
         </span>
         <span class="snav-item__label">Lead individual</span>
       </button>
-      <button class="snav-item" data-tab="batch">
+
+      <button class="snav-item" data-tab="batch" data-tooltip="Carga masiva">
         <span class="snav-item__icon">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
             <line x1="9" y1="15" x2="15" y2="15"/><line x1="9" y1="12" x2="12" y2="12"/>
           </svg>
         </span>
         <span class="snav-item__label">Carga masiva</span>
       </button>
-      <button class="snav-item" data-tab="verifications">
+
+      <button class="snav-item" data-tab="verifications" data-tooltip="Verificaciones">
         <span class="snav-item__icon">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.72 12 19.79 19.79 0 0 1 1.72 3.4 2 2 0 0 1 3.69 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.84a16 16 0 0 0 6.29 6.29l1.41-1.41a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
           </svg>
         </span>
-        <span class="snav-item__label">Mis Verificaciones</span>
+        <span class="snav-item__label">Verificaciones</span>
       </button>
     </nav>
 
+    <!-- Footer links -->
     <div class="sidebar__footer">
-      <a href="#howit" class="sidebar__link">Cómo funciona</a>
-      <a href="https://api.kiwoc.com/api/template" class="sidebar__link">⬇ Plantilla</a>
+      <a href="#howit" class="snav-item snav-item--sm" data-tooltip="Cómo funciona">
+        <span class="snav-item__icon">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+        </span>
+        <span class="snav-item__label">Cómo funciona</span>
+      </a>
+      <a href="https://api.kiwoc.com/api/template" class="snav-item snav-item--sm" data-tooltip="Plantilla CSV">
+        <span class="snav-item__icon">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+        </span>
+        <span class="snav-item__label">Plantilla CSV</span>
+      </a>
     </div>
-  </aside>
+
+    <!-- User / auth bar -->
+    <div id="authBar" class="sidebar__user">
+      <div class="auth-bar__skeleton"></div>
+    </div>
+
+  </aside><!-- /sidebar -->
 
   <!-- ── MAIN CONTENT ──────────────────────────────────────── -->
   <main class="app-main">
-    <div class="wrap">
+    <div class="content-wrap">
 
-    <!-- ── SINGLE LEAD PANE ───────────────────────────────── -->
+    <!-- ── SINGLE LEAD PANE ─────────────────────────────────── -->
     <div class="pane active" id="pane-single">
-      <div class="split">
+      <div class="pane-header">
+        <h1 class="pane-title">Lead individual</h1>
+        <p class="pane-sub">Ingresa los datos del contacto y encontramos su email B2B verificado</p>
+      </div>
 
+      <div class="split">
         <!-- Input card -->
         <div class="card card--lift">
-          <div class="card__title"><span>👤</span> Lead information</div>
+          <div class="card__title">
+            <span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            </span>
+            Datos del contacto
+          </div>
 
           <div id="singleErr" class="alert alert--err hidden"></div>
 
           <div class="col3">
             <div class="field">
-              <label for="s_fn">First name(s)</label>
+              <label for="s_fn">Nombre(s)</label>
               <input id="s_fn" type="text" placeholder="Ana María" autocomplete="off"/>
             </div>
             <div class="field">
-              <label for="s_ln">Last name(s)</label>
+              <label for="s_ln">Apellido(s)</label>
               <input id="s_ln" type="text" placeholder="López García" autocomplete="off"/>
             </div>
             <div class="field">
-              <label for="s_co">Company website / URL</label>
-              <input id="s_co" type="text" placeholder="acme.com or https://acme.com" autocomplete="off"/>
+              <label for="s_co">Empresa / URL</label>
+              <input id="s_co" type="text" placeholder="acme.com" autocomplete="off"/>
             </div>
           </div>
 
           <div class="field">
-            <label for="s_li">LinkedIn profile URL <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
+            <label for="s_li">LinkedIn <span style="font-weight:400;color:var(--muted)">(opcional)</span></label>
             <input id="s_li" type="text" placeholder="https://linkedin.com/in/johndoe" autocomplete="off"/>
           </div>
 
           <div class="field">
-            <label for="s_tag">Etiqueta <span style="font-weight:400;color:var(--muted)">(opcional — ej: campaña-q2, cliente-abc)</span></label>
-            <input id="s_tag" type="text" placeholder="ej: campaña-q2" autocomplete="off"/>
+            <label for="s_tag">Etiqueta <span style="font-weight:400;color:var(--muted)">(opcional)</span></label>
+            <input id="s_tag" type="text" placeholder="campaña-q2" autocomplete="off"/>
           </div>
 
           <div class="btn-row">
             <button class="btn btn--primary" id="btnSingle">
-              <span class="btn__text">🔍 Find emails</span>
+              <span class="btn__text">Buscar email</span>
               <span class="spin hidden"></span>
             </button>
-            <button class="btn btn--ghost" id="btnClearSingle">Clear</button>
+            <button class="btn btn--ghost" id="btnClearSingle">Limpiar</button>
           </div>
         </div>
 
         <!-- Single results -->
         <div id="singleResult" class="card hidden">
-          <div class="card__title"><span>📊</span> Results</div>
+          <div class="card__title">
+            <span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            </span>
+            Resultados
+          </div>
           <div id="singleResultContent"></div>
         </div>
       </div>
-    </div>
+    </div><!-- /pane-single -->
 
-    <!-- ── BATCH PANE ──────────────────────────────────────── -->
+    <!-- ── BATCH PANE ────────────────────────────────────────── -->
     <div class="pane" id="pane-batch">
-
-      <div>
-        <!-- Upload card — full width -->
-        <div class="card card--lift">
-          <div class="card__title"><span>📤</span> Upload leads file</div>
-
-          <div id="batchErr" class="alert alert--err hidden"></div>
-          <div id="batchWarn" class="alert alert--warn hidden"></div>
-
-          <div class="upload-zone" id="uploadZone">
-            <div class="upload-zone__icon">📄</div>
-            <div class="upload-zone__label">Drag &amp; drop your Excel file here</div>
-            <div class="upload-zone__sub">or click to browse · .xlsx, .xls, .csv · max 10 MB</div>
-            <div class="upload-zone__file" id="fileLabel"></div>
-          </div>
-          <input type="file" id="fileInput" accept=".xlsx,.xls,.csv"/>
-
-          <!-- Column mapping panel — shown after a file is selected -->
-          <div id="colMapPanel" class="col-map-panel hidden">
-            <div class="col-map-panel__title">🗂 Asigna las columnas de tu archivo</div>
-            <div class="col-map-panel__hint">El sistema detectó las columnas abajo. Ajusta si alguna no es correcta. Las columnas sin asignar se guardan como campos extra.</div>
-            <div id="colMapRows" class="col-map-rows"></div>
-            <div id="colMapExtra" class="col-map-extra hidden"></div>
-          </div>
-
-          <div style="margin-top:14px;font-size:.78rem;color:var(--muted)">
-            <a href="https://api.kiwoc.com/api/template" style="color:var(--brand);font-weight:600">Descargar plantilla →</a>
-          </div>
-
-          <div class="field" style="margin-top:14px">
-            <label for="b_tag">Etiqueta del batch <span style="font-weight:400;color:var(--muted)">(opcional — se aplica a todos los leads del archivo)</span></label>
-            <input id="b_tag" type="text" placeholder="ej: campaña-q2, cliente-abc" autocomplete="off"/>
-          </div>
-
-          <div class="progress" id="batchProgress">
-            <div class="progress__bar"><div class="progress__fill" id="batchFill"></div></div>
-            <div class="progress__label" id="batchLabel">Processing…</div>
-          </div>
-
-          <!-- Selector de modo -->
-          <div class="mode-selector" style="margin-top:16px">
-            <button class="mode-btn active" id="modeDiscovery" data-mode="discovery">
-              <span class="mode-btn__icon">🔍</span>
-              <span class="mode-btn__body">
-                <span class="mode-btn__label">Modo Descubrimiento</span>
-                <span class="mode-btn__desc">Encuentra emails · Solo descarga Excel</span>
-              </span>
-            </button>
-            <button class="mode-btn" id="modeVerify" data-mode="verify">
-              <span class="mode-btn__icon">🎯</span>
-              <span class="mode-btn__body">
-                <span class="mode-btn__label">Modo Verificación</span>
-                <span class="mode-btn__desc">Encuentra + verifica con envío real SES</span>
-              </span>
-            </button>
-          </div>
-
-          <div class="btn-row" style="margin-top:12px">
-            <button class="btn btn--primary" id="btnBatch" disabled>
-              <span class="btn__text">🔍 Descubrir emails</span>
-              <span class="spin hidden"></span>
-            </button>
-          </div>
-          <!-- Job status banner — shown when a background job is active/done -->
-          <div id="batchJobBanner" class="hidden" style="margin-top:14px"></div>
-        </div>
-
+      <div class="pane-header">
+        <h1 class="pane-title">Carga masiva</h1>
+        <p class="pane-sub">Sube un Excel o CSV con tus prospectos y enriquece hasta 2,000 leads</p>
       </div>
 
-      <!-- Batch preview table -->
+      <!-- Upload card -->
+      <div class="card card--lift">
+        <div class="card__title">
+          <span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          </span>
+          Subir archivo
+        </div>
+
+        <div id="batchErr"  class="alert alert--err  hidden"></div>
+        <div id="batchWarn" class="alert alert--warn hidden"></div>
+
+        <div class="upload-zone" id="uploadZone">
+          <div class="upload-zone__icon">📄</div>
+          <div class="upload-zone__label">Arrastra tu archivo aquí</div>
+          <div class="upload-zone__sub">o haz click · .xlsx, .xls, .csv · máx 10 MB</div>
+          <div class="upload-zone__file" id="fileLabel"></div>
+        </div>
+        <input type="file" id="fileInput" accept=".xlsx,.xls,.csv"/>
+
+        <!-- Column mapping -->
+        <div id="colMapPanel" class="col-map-panel hidden">
+          <div class="col-map-panel__title">🗂 Asigna las columnas de tu archivo</div>
+          <div class="col-map-panel__hint">El sistema detectó las columnas abajo. Ajusta si alguna no es correcta.</div>
+          <div id="colMapRows" class="col-map-rows"></div>
+          <div id="colMapExtra" class="col-map-extra hidden"></div>
+        </div>
+
+        <div style="margin-top:14px;font-size:.78rem;color:var(--muted)">
+          <a href="https://api.kiwoc.com/api/template" style="color:var(--brand);font-weight:600">Descargar plantilla →</a>
+        </div>
+
+        <div class="field" style="margin-top:14px">
+          <label for="b_tag">Etiqueta del batch <span style="font-weight:400;color:var(--muted)">(opcional)</span></label>
+          <input id="b_tag" type="text" placeholder="campaña-q2, cliente-abc" autocomplete="off"/>
+        </div>
+
+        <div class="progress" id="batchProgress">
+          <div class="progress__bar"><div class="progress__fill" id="batchFill"></div></div>
+          <div class="progress__label" id="batchLabel">Procesando…</div>
+        </div>
+
+        <!-- Mode selector -->
+        <div class="mode-selector" style="margin-top:16px">
+          <button class="mode-btn active" id="modeDiscovery" data-mode="discovery">
+            <span class="mode-btn__icon">🔍</span>
+            <span class="mode-btn__body">
+              <span class="mode-btn__label">Modo Descubrimiento</span>
+              <span class="mode-btn__desc">Encuentra emails · Solo descarga Excel</span>
+            </span>
+          </button>
+          <button class="mode-btn" id="modeVerify" data-mode="verify">
+            <span class="mode-btn__icon">🎯</span>
+            <span class="mode-btn__body">
+              <span class="mode-btn__label">Modo Verificación</span>
+              <span class="mode-btn__desc">Encuentra + verifica con envío real SES</span>
+            </span>
+          </button>
+        </div>
+
+        <div class="btn-row" style="margin-top:14px">
+          <button class="btn btn--primary" id="btnBatch" disabled>
+            <span class="btn__text">Descubrir emails</span>
+            <span class="spin hidden"></span>
+          </button>
+        </div>
+
+        <div id="batchJobBanner" class="hidden" style="margin-top:14px"></div>
+      </div>
+
+      <!-- Results preview -->
       <div id="batchPreview" class="card hidden">
         <div class="results-header">
-          <h3 id="previewTitle">Results preview</h3>
+          <h3 id="previewTitle">Resultados</h3>
           <div style="display:flex;gap:8px;align-items:center">
-            <input type="text" id="searchBox" placeholder="Search name or domain…"
-              style="padding:6px 10px;border:1.5px solid var(--border);border-radius:var(--rs);font-size:.82rem;outline:none;width:200px"/>
-            <button class="btn btn--green btn--sm" id="btnDownloadResult">⬇ Download Excel</button>
+            <input type="text" id="searchBox" placeholder="Buscar nombre o dominio…"
+              style="padding:6px 12px;border:1.5px solid var(--border);border-radius:var(--rs);font-size:.82rem;outline:none;width:200px;font-family:var(--font)"/>
+            <button class="btn btn--green btn--sm" id="btnDownloadResult">⬇ Descargar Excel</button>
           </div>
         </div>
-<div class="stats" id="batchStats"></div>
+        <div class="stats" id="batchStats"></div>
         <div class="tbl-wrap">
           <table class="tbl" id="previewTable">
             <thead>
               <tr>
-                <th>#</th>
-                <th>Lead</th>
-                <th>Domain</th>
-                <th>MX</th>
-                <th>Best email</th>
-                <th>Estado</th>
-                <th>Score</th>
-                <th>Candidates</th>
-                <th></th>
+                <th>#</th><th>Lead</th><th>Dominio</th><th>MX</th>
+                <th>Mejor email</th><th>Estado</th><th>Score</th><th>Candidatos</th><th></th>
               </tr>
             </thead>
             <tbody id="previewBody"></tbody>
@@ -246,37 +289,57 @@
         <div class="pagination" id="pagination"></div>
       </div>
 
-    <!-- ── HISTORIAL DE CARGAS ──────────────────────────────────── -->
-    <div class="card" id="batchHistory" style="margin-top:0">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-        <div class="card__title" style="margin-bottom:0">📂 Historial de cargas</div>
-        <button class="btn btn--ghost btn--sm" id="btnRefreshHistory">🔄 Actualizar</button>
+      <!-- Upload history -->
+      <div class="card" id="batchHistory">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <div class="card__title" style="margin-bottom:0">
+            <span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            </span>
+            Historial de cargas
+          </div>
+          <button class="btn btn--ghost btn--sm" id="btnRefreshHistory">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            Actualizar
+          </button>
+        </div>
+        <div id="historyBody"><div style="color:var(--muted);font-size:.82rem;padding:8px 0">Cargando historial…</div></div>
       </div>
-      <div id="historyBody"><div style="color:var(--muted);font-size:.82rem;padding:8px 0">Cargando historial…</div></div>
-    </div>
 
     </div><!-- /pane-batch -->
 
     <!-- ── VERIFICACIONES PANE ───────────────────────────────── -->
     <div class="pane" id="pane-verifications">
+      <div class="pane-header">
+        <h1 class="pane-title">Mis Verificaciones</h1>
+        <p class="pane-sub">Emails verificados mediante Reoon API y envío real SES</p>
+      </div>
+
       <div class="card card--lift">
         <div class="verif-header">
-          <div class="card__title" style="margin-bottom:0"><span>📬</span> Mis Verificaciones por envío real</div>
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-            <button class="btn btn--outline btn--sm" id="btnRefreshVerif">
-              <span class="btn__text">🔄 Actualizar</span>
-              <span class="spin hidden"></span>
-            </button>
+          <div class="card__title" style="margin-bottom:0">
+            <span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.72 12 19.79 19.79 0 0 1 1.72 3.4 2 2 0 0 1 3.69 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.84a16 16 0 0 0 6.29 6.29l1.41-1.41a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+            </span>
+            Verificaciones por envío real
           </div>
+          <button class="btn btn--outline btn--sm" id="btnRefreshVerif">
+            <span class="btn__text">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:middle"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+              Actualizar
+            </span>
+            <span class="spin hidden"></span>
+          </button>
         </div>
+
         <p style="font-size:.8rem;color:var(--muted);margin:8px 0 14px">
-          Emails verificados mediante envío real (SES). Un correo sin rebote en 1 hora se marca como Verificado.
+          Un correo sin rebote en 1 hora se marca como Verificado.
         </p>
 
         <!-- Filter bar -->
         <div class="vf-bar">
           <button class="btn btn--outline btn--sm" id="btnToggleFilter">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
             Filtrar
             <span id="filterBadge" class="vf-badge hidden">0</span>
           </button>
@@ -284,9 +347,8 @@
           <button class="btn btn--ghost btn--sm" id="btnExportVerif" style="margin-left:auto">⬇ Exportar CSV</button>
         </div>
 
-        <!-- Collapsible filter panel -->
+        <!-- Filter panel -->
         <div id="filterPanel" class="vf-panel hidden">
-          <!-- Estado -->
           <div class="vf-section">
             <div class="vf-section__label">Estado</div>
             <div class="vf-chips" id="statusChips">
@@ -299,7 +361,6 @@
               <button class="vf-chip" data-status="error">⛔ Con error</button>
             </div>
           </div>
-          <!-- Etiqueta -->
           <div class="vf-section">
             <div class="vf-section__label">Etiqueta</div>
             <select id="filterTag" class="vf-select">
@@ -307,7 +368,6 @@
             </select>
             <datalist id="tagSuggestions"></datalist>
           </div>
-          <!-- Fecha -->
           <div class="vf-section">
             <div class="vf-section__label">Fecha de subida</div>
             <div class="vf-chips" id="dateChips">
@@ -329,7 +389,6 @@
               </div>
             </div>
           </div>
-          <!-- Actions -->
           <div class="vf-actions">
             <button class="btn btn--primary btn--sm" id="btnFilterVerif">Aplicar filtros</button>
             <button class="btn btn--ghost btn--sm" id="btnClearFilter">Limpiar todo</button>
@@ -343,20 +402,27 @@
       </div>
     </div><!-- /pane-verifications -->
 
-    </div><!-- /wrap -->
-  </main><!-- /app-main -->
+    </div><!-- /content-wrap -->
+  </main>
 
 </div><!-- /app-layout -->
-
-
-<footer class="footer">
-  <div class="wrap footer__inner">
-    <span class="logo__name">Enricher</span>
-    <p class="footer__copy">DNS · SMTP · SES verification · No external APIs · Scores are probabilistic</p>
-  </div>
-</footer>
-
 </div><!-- /appShell -->
+
+<!-- Sidebar toggle script -->
+<script>
+(function() {
+  var sidebar = document.getElementById('sidebar');
+  var toggle  = document.getElementById('sidebarToggle');
+  if (!sidebar || !toggle) return;
+  if (localStorage.getItem('sb-collapsed') === '1') {
+    sidebar.classList.add('sidebar--collapsed');
+  }
+  toggle.addEventListener('click', function() {
+    sidebar.classList.toggle('sidebar--collapsed');
+    localStorage.setItem('sb-collapsed', sidebar.classList.contains('sidebar--collapsed') ? '1' : '0');
+  });
+})();
+</script>
 
 <script src="app.js"></script>
 </body>

@@ -24,7 +24,7 @@ function _setupPassport() {
 
   const callbackURL = process.env.RENDER_EXTERNAL_URL
     ? `${process.env.RENDER_EXTERNAL_URL}/api/auth/google/callback`
-    : 'https://api.enricher.kiwoc.com/api/auth/google/callback';
+    : `${process.env.API_BASE_URL || 'https://api.kiwoc.com'}/api/auth/google/callback`;
   console.log('[auth] callbackURL usado:', callbackURL);
 
   passport.use(new GoogleStrategy(
