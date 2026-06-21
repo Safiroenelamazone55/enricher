@@ -237,7 +237,299 @@ async function initDb() {
         WHERE leadid IS NOT NULL AND leadid != '';
     `);
 
-    console.log('[db] tables ready (users, verifications, batch_jobs)');
+    // ── clients table ────────────────────────────────────────────
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS clients (
+        id               SERIAL      PRIMARY KEY,
+        user_id          INTEGER     REFERENCES users(id) ON DELETE SET NULL,
+        nombre           TEXT        NOT NULL,
+        empresa          TEXT        NOT NULL DEFAULT '',
+        email            TEXT        NOT NULL DEFAULT '',
+        telefono         TEXT        NOT NULL DEFAULT '',
+        pais             TEXT        NOT NULL DEFAULT '',
+        estado           TEXT        NOT NULL DEFAULT 'activo',
+        notas            TEXT        NOT NULL DEFAULT '',
+        comision_default NUMERIC(5,2),
+        created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS clients_user_idx ON clients (user_id);
+    `);
+
+    // ── client_contacts table ─────────────────────────────────────
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS client_contacts (
+        id         SERIAL      PRIMARY KEY,
+        client_id  INTEGER     NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        nombre     TEXT        NOT NULL DEFAULT '',
+        email      TEXT        NOT NULL DEFAULT '',
+        telefono   TEXT        NOT NULL DEFAULT '',
+        cargo      TEXT        NOT NULL DEFAULT '',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS client_contacts_client_idx ON client_contacts(client_id);
+    `);
+
+    // ── projects table ───────────────────────────────────────────
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS projects (
+        id               SERIAL      PRIMARY KEY,
+        user_id          INTEGER     REFERENCES users(id) ON DELETE SET NULL,
+        client_id        INTEGER     REFERENCES clients(id) ON DELETE SET NULL,
+        nombre           TEXT        NOT NULL,
+        descripcion      TEXT        NOT NULL DEFAULT '',
+        estado           TEXT        NOT NULL DEFAULT 'activo',
+        responsable      TEXT        NOT NULL DEFAULT '',
+        fecha_inicio     DATE,
+        fecha_fin        DATE,
+        valor_total      NUMERIC(12,2),
+        prioridad        TEXT        NOT NULL DEFAULT 'media',
+        created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS projects_user_idx   ON projects (user_id);
+    `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS projects_client_idx ON projects (client_id);
+    `);
+    await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS comision NUMERIC(5,2);`);
+
+    // ── tasks table ──────────────────────────────────────────────
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS tasks (
+        id          SERIAL      PRIMARY KEY,
+        user_id     INTEGER     REFERENCES users(id) ON DELETE SET NULL,
+        project_id  INTEGER     REFERENCES projects(id) ON DELETE SET NULL,
+        titulo      TEXT        NOT NULL,
+        descripcion TEXT        NOT NULL DEFAULT '',
+        estado      TEXT        NOT NULL DEFAULT 'pendiente',
+        prioridad   TEXT        NOT NULL DEFAULT 'media',
+        responsable TEXT        NOT NULL DEFAULT '',
+        deadline    DATE,
+        notas       TEXT        NOT NULL DEFAULT '',
+        created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS tasks_user_idx    ON tasks (user_id);
+    `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS tasks_project_idx ON tasks (project_id);
+    `);
+    await pool.query(`
+      ALTER TABLE tasks ADD COLUMN IF NOT EXISTS parent_task_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE;
+    `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS tasks_parent_idx ON tasks (parent_task_id);
+    `);
+    await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS monto NUMERIC(12,2);`);
+    await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS cobrado BOOLEAN NOT NULL DEFAULT FALSE;`);
+    await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS cobrado_at TIMESTAMPTZ;`);
+    await pool.query(`UPDATE tasks SET cobrado_at=updated_at WHERE cobrado=true AND cobrado_at IS NULL;`);
+    await pool.query(`ALTER TABLE tasks    ADD COLUMN IF NOT EXISTS responsables TEXT[] NOT NULL DEFAULT '{}';`);
+    await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS responsables TEXT[] NOT NULL DEFAULT '{}';`);
+    await pool.query(`UPDATE tasks    SET responsables = ARRAY[responsable] WHERE responsable <> '' AND responsables = '{}';`);
+    await pool.query(`UPDATE projects SET responsables = ARRAY[responsable] WHERE responsable <> '' AND responsables = '{}';`);
+
+    // ── meetings table ────────────────────────────────────────────────
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS meetings (
+        id          SERIAL       PRIMARY KEY,
+        user_id     INTEGER      REFERENCES users(id) ON DELETE SET NULL,
+        titulo      TEXT         NOT NULL DEFAULT '',
+        fecha       DATE         NOT NULL,
+        hora_inicio TIME,
+        hora_fin    TIME,
+        descripcion TEXT         NOT NULL DEFAULT '',
+        link        TEXT         NOT NULL DEFAULT '',
+        attendees   TEXT         NOT NULL DEFAULT '[]',
+        estado      TEXT         NOT NULL DEFAULT 'programada',
+        created_at  TIMESTAMPTZ  DEFAULT NOW()
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS meetings_user_idx  ON meetings (user_id);`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS meetings_fecha_idx ON meetings (fecha);`);
+
+    // ── time_off table ────────────────────────────────────────────────
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS time_off (
+        id           SERIAL       PRIMARY KEY,
+        user_id      INTEGER      REFERENCES users(id)         ON DELETE SET NULL,
+        member_id    INTEGER      REFERENCES team_members(id)  ON DELETE CASCADE,
+        fecha_inicio DATE         NOT NULL,
+        fecha_fin    DATE         NOT NULL,
+        motivo       TEXT         NOT NULL DEFAULT 'Vacaciones',
+        notas        TEXT         NOT NULL DEFAULT '',
+        created_at   TIMESTAMPTZ  DEFAULT NOW()
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS time_off_user_idx ON time_off (user_id);`);
+
+    // ── payments table ───────────────────────────────────────────────
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS payments (
+        id             SERIAL        PRIMARY KEY,
+        user_id        INTEGER       REFERENCES users(id)    ON DELETE SET NULL,
+        client_id      INTEGER       REFERENCES clients(id)  ON DELETE SET NULL,
+        project_id     INTEGER       REFERENCES projects(id) ON DELETE SET NULL,
+        concepto       TEXT          NOT NULL DEFAULT '',
+        monto_bruto    NUMERIC(12,2) NOT NULL DEFAULT 0,
+        porcentaje     NUMERIC(5,2),
+        monto_neto     NUMERIC(12,2),
+        fecha_esperada DATE,
+        fecha_pagada   DATE,
+        estado         TEXT          NOT NULL DEFAULT 'pendiente',
+        notas          TEXT          NOT NULL DEFAULT '',
+        created_at     TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+        updated_at     TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+      );
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS payments_user_idx   ON payments (user_id);`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS payments_client_idx ON payments (client_id);`);
+
+    // ── team_members table ───────────────────────────────────────────
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS team_members (
+        id         SERIAL      PRIMARY KEY,
+        user_id    INTEGER     REFERENCES users(id) ON DELETE SET NULL,
+        nombre     TEXT        NOT NULL,
+        email      TEXT        NOT NULL DEFAULT '',
+        rol        TEXT        NOT NULL DEFAULT 'miembro',
+        estado     TEXT        NOT NULL DEFAULT 'activo',
+        notas      TEXT        NOT NULL DEFAULT '',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS team_user_idx ON team_members (user_id);`);
+    await pool.query(`ALTER TABLE team_members ADD COLUMN IF NOT EXISTS cargo TEXT NOT NULL DEFAULT '';`);
+    await pool.query(`ALTER TABLE team_members ADD COLUMN IF NOT EXISTS estado TEXT NOT NULL DEFAULT 'activo';`);
+
+    // ── workspace_id on users (null = owner, set = member) ────────────
+    await pool.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS workspace_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
+    `);
+
+    // ── workspaces table ─────────────────────────────────────────────
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS workspaces (
+        id             SERIAL      PRIMARY KEY,
+        owner_id       INTEGER     REFERENCES users(id) ON DELETE CASCADE UNIQUE,
+        name           TEXT        NOT NULL DEFAULT 'Mi Workspace',
+        company_name   TEXT        NOT NULL DEFAULT '',
+        company_logo   TEXT        NOT NULL DEFAULT '',
+        created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+    await pool.query(`ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS company_name TEXT NOT NULL DEFAULT '';`);
+    await pool.query(`ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS company_logo TEXT NOT NULL DEFAULT '';`);
+
+    // ── workspace_invites table ──────────────────────────────────────
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS workspace_invites (
+        id                   SERIAL      PRIMARY KEY,
+        workspace_owner_id   INTEGER     REFERENCES users(id) ON DELETE CASCADE,
+        email                TEXT        NOT NULL,
+        token                TEXT        NOT NULL UNIQUE,
+        expires_at           TIMESTAMPTZ NOT NULL,
+        used                 BOOLEAN     NOT NULL DEFAULT FALSE,
+        created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS ws_invites_token_idx ON workspace_invites (token);`);
+    await pool.query(`ALTER TABLE workspace_invites ADD COLUMN IF NOT EXISTS nombre TEXT NOT NULL DEFAULT '';`);
+    await pool.query(`ALTER TABLE workspace_invites ADD COLUMN IF NOT EXISTS cargo  TEXT NOT NULL DEFAULT '';`);
+    await pool.query(`ALTER TABLE workspace_invites ADD COLUMN IF NOT EXISTS nivel  TEXT NOT NULL DEFAULT 'miembro';`);
+
+    // ── chat_messages table ──────────────────────────────────────────
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS chat_messages (
+        id                   SERIAL      PRIMARY KEY,
+        workspace_owner_id   INTEGER     REFERENCES users(id) ON DELETE CASCADE,
+        channel              TEXT        NOT NULL,
+        sender_id            INTEGER     REFERENCES users(id) ON DELETE SET NULL,
+        content              TEXT        NOT NULL,
+        created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS chat_msgs_ws_ch_idx
+        ON chat_messages (workspace_owner_id, channel, created_at DESC);
+    `);
+    await pool.query(`ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS reply_to JSONB;`);
+    await pool.query(`ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS pinned BOOLEAN NOT NULL DEFAULT FALSE;`);
+    await pool.query(`ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS pinned_at TIMESTAMPTZ;`);
+
+    // ── projects — nuevas columnas (tipo, moneda, horas) ─────────────
+    await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS tipo_proyecto TEXT NOT NULL DEFAULT 'fijo';`);
+    await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS moneda TEXT NOT NULL DEFAULT 'USD';`);
+    await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS tarifa_hora NUMERIC(10,2);`);
+    await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS horas_estimadas NUMERIC(8,2);`);
+    await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS horas_semanales NUMERIC(6,2);`);
+    await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS horario_semanal TEXT NOT NULL DEFAULT '';`);
+    await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS responsable_id INTEGER REFERENCES team_members(id) ON DELETE SET NULL;`);
+
+    // ── leads table ──────────────────────────────────────────────────
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS leads (
+        id             SERIAL        PRIMARY KEY,
+        user_id        INTEGER       REFERENCES users(id) ON DELETE SET NULL,
+        nombre         TEXT          NOT NULL,
+        empresa        TEXT          NOT NULL DEFAULT '',
+        email          TEXT          NOT NULL DEFAULT '',
+        telefono       TEXT          NOT NULL DEFAULT '',
+        pais           TEXT          NOT NULL DEFAULT '',
+        cargo          TEXT          NOT NULL DEFAULT '',
+        stage          TEXT          NOT NULL DEFAULT 'nuevo'
+                         CHECK (stage IN ('nuevo','contactado','propuesta','negociacion','ganado','perdido')),
+        fuente         TEXT          NOT NULL DEFAULT 'manual',
+        valor_estimado NUMERIC(12,2),
+        notas          TEXT          NOT NULL DEFAULT '',
+        created_at     TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+        updated_at     TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+      );
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS leads_user_idx ON leads (user_id);`);
+
+    // ── Time Tracking ────────────────────────────────────────────────
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS time_entries (
+        id              SERIAL PRIMARY KEY,
+        user_id         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        task_id         INTEGER REFERENCES tasks(id) ON DELETE SET NULL,
+        task_titulo     TEXT NOT NULL DEFAULT '',
+        project_nombre  TEXT NOT NULL DEFAULT '',
+        started_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        ended_at        TIMESTAMPTZ,
+        duration_s      INTEGER NOT NULL DEFAULT 0,
+        active_s        INTEGER NOT NULL DEFAULT 0,
+        idle_s          INTEGER NOT NULL DEFAULT 0,
+        notes           TEXT NOT NULL DEFAULT '',
+        created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS time_entries_user_idx ON time_entries (user_id, started_at DESC);`);
+
+    // ── Google Calendar integration ───────────────────────────────────
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS google_access_token  TEXT;`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS google_refresh_token TEXT;`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS google_token_expiry  TIMESTAMPTZ;`);
+    await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS gcal_event_id TEXT;`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS exchange_rates JSONB NOT NULL DEFAULT '{}';`);
+    await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS links JSONB NOT NULL DEFAULT '[]';`);
+
+    console.log('[db] tables ready (users, verifications, batch_jobs, clients, projects, tasks, payments, team_members, workspaces, workspace_invites, chat_messages, leads, meetings)');
   } catch (err) {
     console.error('[db] initDb failed:', err.message);
     throw err;
@@ -262,7 +554,7 @@ async function findOrCreateUser({ googleId, email, name, avatar }) {
 
 async function findUserById(id) {
   const { rows } = await pool.query(
-    `SELECT id, google_id, email, name, avatar, created_at
+    `SELECT id, google_id, email, name, avatar, workspace_id, created_at
        FROM users WHERE id = $1`,
     [id]
   );

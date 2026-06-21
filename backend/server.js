@@ -1,4 +1,4 @@
-/**
+﻿/**
  * server.js — B2B Email Enricher API
  */
 
@@ -13,9 +13,10 @@ const session   = require('express-session');
 const passport  = require('passport');
 const https     = require('https');
 const http      = require('http');
+const { Server: SocketIOServer } = require('socket.io');
 
 // ── Database (PostgreSQL) — imported early so initDb() runs at startup ──
-const { initDb, findOrCreateUser, findUserById } = require('./db');
+const { pool, initDb, findOrCreateUser, findUserById } = require('./db');
 
 // ── Passport Google OAuth strategy ───────────────────────────────
 // Loaded lazily so the server starts even if credentials are absent.
@@ -29,16 +30,90 @@ function _setupPassport() {
 
   passport.use(new GoogleStrategy(
     {
-      clientID:     process.env.GOOGLE_CLIENT_ID     || '',
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
+      clientID:          process.env.GOOGLE_CLIENT_ID     || '',
+      clientSecret:      process.env.GOOGLE_CLIENT_SECRET || '',
       callbackURL,
+      passReqToCallback: true,
     },
-    async (_accessToken, _refreshToken, profile, done) => {
+    async (req, _accessToken, _refreshToken, profile, done) => {
       try {
         const email  = (profile.emails?.[0]?.value || '').toLowerCase();
         const avatar = profile.photos?.[0]?.value  || '';
+        const joinToken = req.session?.pendingJoinToken;
 
-        // ── Whitelist check ──────────────────────────────────────
+        // ── Invite-based join: bypass whitelist ──────────────────
+        if (joinToken) {
+          const { rows: invites } = await pool.query(
+            `SELECT * FROM workspace_invites
+              WHERE token=$1 AND used=false AND expires_at > NOW()`,
+            [joinToken]
+          );
+          if (invites.length > 0) {
+            const invite = invites[0];
+            const user = await findOrCreateUser({
+              googleId: profile.id, email,
+              name: profile.displayName || '', avatar,
+            });
+            if (!user.workspace_id) {
+              await pool.query(
+                `UPDATE users SET workspace_id=$1 WHERE id=$2`,
+                [invite.workspace_owner_id, user.id]
+              );
+            }
+            await pool.query(
+              `UPDATE workspace_invites SET used=true WHERE id=$1`,
+              [invite.id]
+            );
+            // Auto-create team_member using invite metadata (nombre, cargo, nivel)
+            const { rows: tmExist } = await pool.query(
+              `SELECT id FROM team_members WHERE user_id=$1 AND email=$2`,
+              [invite.workspace_owner_id, email]
+            );
+            if (!tmExist.length) {
+              const tmNombre = invite.nombre || profile.displayName || email.split('@')[0];
+              const tmCargo  = invite.cargo  || '';
+              const tmRol    = invite.nivel  || 'miembro';
+              await pool.query(
+                `INSERT INTO team_members (user_id, nombre, email, rol, cargo, estado)
+                 VALUES ($1,$2,$3,$4,$5,'activo')`,
+                [invite.workspace_owner_id, tmNombre, email, tmRol, tmCargo]
+              );
+            }
+            req.session.pendingJoinToken = null;
+            const updated = await findUserById(user.id);
+            console.log(`[auth] workspace join ok — ${email} joined workspace ${invite.workspace_owner_id}`);
+            return done(null, updated);
+          }
+          // Token invalid/expired — fall through to normal auth
+          req.session.pendingJoinToken = null;
+        }
+
+        // ── Existing workspace member re-login (no token needed) ─
+        const { rows: memberRows } = await pool.query(
+          `SELECT id, workspace_id FROM users WHERE google_id=$1 AND workspace_id IS NOT NULL`,
+          [profile.id]
+        );
+        if (memberRows.length > 0) {
+          const user = memberRows[0];
+          // Repair: if team_member record was never created (e.g. due to old bug), create it now
+          const { rows: tmCheck } = await pool.query(
+            `SELECT id FROM team_members WHERE user_id=$1 AND email=$2`,
+            [user.workspace_id, email]
+          );
+          if (!tmCheck.length) {
+            await pool.query(
+              `INSERT INTO team_members (user_id, nombre, email, rol, estado)
+               VALUES ($1,$2,$3,'miembro','activo')`,
+              [user.workspace_id, profile.displayName || email.split('@')[0], email]
+            );
+            console.log(`[auth] auto-repaired missing team_member for ${email}`);
+          }
+          const freshUser = await findUserById(user.id);
+          console.log(`[auth] workspace member re-login: ${email}`);
+          return done(null, freshUser);
+        }
+
+        // ── Whitelist check (only for new/owner logins) ──────────
         const allowedRaw = process.env.ALLOWED_EMAILS || '';
         if (allowedRaw.trim()) {
           const whitelist = allowedRaw
@@ -57,6 +132,16 @@ function _setupPassport() {
           name:   profile.displayName || '',
           avatar,
         });
+        // Auto-create admin team_member for owner on first login
+        await pool.query(`
+          INSERT INTO team_members (user_id, nombre, email, rol, cargo, estado)
+          SELECT $1,
+                 COALESCE(NULLIF($2,''), split_part($3,'@',1)),
+                 $3, 'admin', 'Propietario', 'activo'
+          WHERE NOT EXISTS (
+            SELECT 1 FROM team_members WHERE user_id=$1 AND LOWER(email)=LOWER($3)
+          )
+        `, [user.id, profile.displayName || '', email]);
         done(null, user);
       } catch (err) {
         done(err, null);
@@ -137,7 +222,7 @@ app.use((req, res, next) => {
     // Must be the exact origin (not '*') when credentials are involved
     res.setHeader('Access-Control-Allow-Origin',      origin || '*');
     res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Access-Control-Allow-Methods',     'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods',     'GET, POST, PUT, DELETE, PATCH, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers',     'Content-Type, Authorization');
     res.setHeader('Access-Control-Expose-Headers',    'X-Parse-Warnings');
   }
@@ -154,17 +239,18 @@ app.use(express.text({ type: 'text/plain', limit: '512kb' }));
 // sameSite:'none' + secure:true are required for cross-site cookies
 // (Cloudflare Pages frontend ↔ Render backend).
 const SESSION_SECRET = process.env.SESSION_SECRET || 'enricher-dev-secret-change-in-prod';
-app.use(session({
+const sessionMiddleware = session({
   secret:            SESSION_SECRET,
   resave:            false,
   saveUninitialized: false,
   cookie: {
     httpOnly: true,
-    secure:   ENV === 'production',   // HTTPS only in prod
+    secure:   ENV === 'production',
     sameSite: ENV === 'production' ? 'none' : 'lax',
-    maxAge:   7 * 24 * 60 * 60 * 1000,  // 7 days
+    maxAge:   7 * 24 * 60 * 60 * 1000,
   },
-}));
+});
+app.use(sessionMiddleware);
 
 // ── Passport ──────────────────────────────────────────────────────
 try {
@@ -201,7 +287,11 @@ const upload = multer({
 
 // ── Auth middleware ───────────────────────────────────────────────
 function requireAuth(req, res, next) {
-  if (req.isAuthenticated && req.isAuthenticated()) return next();
+  if (req.isAuthenticated && req.isAuthenticated()) {
+    // workspace_id set = member; null = workspace owner
+    req.workspaceOwnerId = req.user.workspace_id || req.user.id;
+    return next();
+  }
   res.status(401).json({ error: 'Authentication required. Please log in.' });
 }
 
@@ -306,9 +396,11 @@ app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
 // ── GET /api/auth/google ──────────────────────────────────────────
 // Redirects to Google consent screen.
-app.get('/api/auth/google',
-  passport.authenticate('google', { scope: ['profile', 'email'] })
-);
+// Captures ?join=TOKEN into session so the strategy can process it.
+app.get('/api/auth/google', (req, res, next) => {
+  if (req.query.join) req.session.pendingJoinToken = req.query.join;
+  passport.authenticate('google', { scope: ['profile', 'email'] })(req, res, next);
+});
 
 // ── GET /api/auth/google/callback ─────────────────────────────────
 // Uses a custom callback instead of the shorthand middleware so we can
@@ -355,11 +447,41 @@ app.get('/api/auth/google/callback', (req, res, next) => {
 });
 
 // ── GET /api/auth/me ──────────────────────────────────────────────
-// Returns the authenticated user or { loggedIn: false }.
-app.get('/api/auth/me', (req, res) => {
+// Returns the authenticated user with workspace info.
+app.get('/api/auth/me', async (req, res) => {
   if (req.isAuthenticated && req.isAuthenticated() && req.user) {
-    const { id, email, name, avatar } = req.user;
-    return res.json({ loggedIn: true, id, email, name, avatar });
+    const { id, email, name, avatar, workspace_id } = req.user;
+    const workspaceOwnerId = workspace_id || id;
+    const isOwner = !workspace_id;
+    let workspaceName = name;
+    let companyName   = '';
+    let companyLogo   = '';
+    let memberNombre = name;
+    let memberRol    = isOwner ? 'admin' : 'miembro';
+    let memberId     = null;
+    try {
+      const { rows } = await pool.query(
+        `SELECT name, company_name, company_logo FROM workspaces WHERE owner_id = $1`,
+        [workspaceOwnerId]
+      );
+      if (rows.length) {
+        workspaceName = rows[0].name;
+        companyName   = rows[0].company_name || '';
+        companyLogo   = rows[0].company_logo || '';
+      }
+    } catch (_) {}
+    try {
+      const { rows: tm } = await pool.query(
+        `SELECT id, nombre, rol FROM team_members WHERE user_id=$1 AND LOWER(email)=LOWER($2) LIMIT 1`,
+        [workspaceOwnerId, email]
+      );
+      if (tm.length) {
+        memberNombre = tm[0].nombre || name;
+        memberRol    = tm[0].rol    || memberRol;
+        memberId     = tm[0].id;
+      }
+    } catch (_) {}
+    return res.json({ loggedIn: true, id, email, name, avatar, workspace_id, workspaceName, companyName, companyLogo, isOwner, memberNombre, memberRol, memberId });
   }
   res.json({ loggedIn: false });
 });
@@ -705,6 +827,150 @@ async function _jobGet(jobId) {
     [jobId]
   );
   return rows[0] ?? null;
+}
+
+// ─── Chat channel email notifications (2-minute debounce) ─────────────────
+const _chatNotifPending = new Map();
+// Key: `${wid}:${channel}` → { timer, msgs: [{senderName, content, at}], senderIds: Set }
+
+function _scheduleChatNotif(pool, wid, channel, senderUserId, senderName, content) {
+  if (!process.env.SES_FROM_EMAIL || !process.env.AWS_ACCESS_KEY_ID) return;
+  const key     = `${wid}:${channel}`;
+  const pending = _chatNotifPending.get(key) || { msgs: [], senderIds: new Set() };
+  if (pending.timer) clearTimeout(pending.timer);
+  pending.msgs.push({ senderName, content, at: new Date() });
+  pending.senderIds.add(senderUserId);
+  pending.timer = setTimeout(() => {
+    _chatNotifPending.delete(key);
+    _sendChatNotifEmail(pool, wid, channel, pending.msgs, pending.senderIds)
+      .catch(e => console.warn('[chat-notif]', e.message));
+  }, 2 * 60 * 1000);
+  _chatNotifPending.set(key, pending);
+}
+
+async function _sendChatNotifEmail(pool, wid, channel, msgs, senderIds) {
+  const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
+  const ses = new SESClient({
+    region:      process.env.AWS_REGION      || 'us-east-1',
+    credentials: {
+      accessKeyId:     process.env.AWS_ACCESS_KEY_ID,
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+    },
+  });
+
+  // Workspace members to notify (only those with an email)
+  const { rows: members } = await pool.query(
+    `SELECT email, nombre FROM team_members
+      WHERE user_id=$1 AND estado='activo' AND email IS NOT NULL AND email <> ''`,
+    [wid]
+  );
+
+  // Sender emails → exclude from recipients
+  const { rows: sndUsers } = await pool.query(
+    `SELECT email FROM users WHERE id = ANY($1::int[])`,
+    [[...senderIds]]
+  );
+  const sndEmails = new Set(sndUsers.map(u => (u.email || '').toLowerCase()));
+  const recipients = members.filter(m => !sndEmails.has((m.email || '').toLowerCase()));
+  if (!recipients.length) return;
+
+  // Friendly channel label
+  let channelLabel = `#${channel}`;
+  if (channel.startsWith('project:')) {
+    const pid = Number(channel.split(':')[1]);
+    const { rows: p } = await pool.query(`SELECT nombre FROM projects WHERE id=$1 AND user_id=$2`, [pid, wid]);
+    if (p[0]) channelLabel = `#${p[0].nombre}`;
+  } else if (channel.startsWith('client:')) {
+    const cid = Number(channel.split(':')[1]);
+    const { rows: c } = await pool.query(`SELECT nombre FROM clients WHERE id=$1 AND user_id=$2`, [cid, wid]);
+    if (c[0]) channelLabel = `#${c[0].nombre}`;
+  }
+
+  const uniqueSenders = [...new Set(msgs.map(m => m.senderName))];
+  const sendersLabel  = uniqueSenders.length === 1
+    ? uniqueSenders[0]
+    : `${uniqueSenders.slice(0, -1).join(', ')} y ${uniqueSenders.at(-1)}`;
+
+  const appUrl    = process.env.APP_URL || 'https://enricher.kiwoc.com';
+  const fromEmail = process.env.SES_FROM_EMAIL;
+  const esc       = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  const previewRows = msgs.slice(-5).map(m => {
+    const initials = m.senderName.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
+    const time     = m.at.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+    return `
+      <tr><td style="padding:7px 0;vertical-align:top">
+        <div style="display:flex;gap:10px;align-items:flex-start">
+          <div style="width:30px;height:30px;background:#F8B13F;border-radius:50%;color:#fff;
+                      font-weight:700;font-size:.68rem;text-align:center;line-height:30px;flex-shrink:0">
+            ${initials}
+          </div>
+          <div style="flex:1">
+            <span style="font-size:.72rem;font-weight:600;color:#78716C">${esc(m.senderName)}</span>
+            <span style="font-size:.68rem;color:#A8A29E;margin-left:5px">${time}</span>
+            <div style="font-size:.85rem;color:#1C1917;line-height:1.5;margin-top:2px;word-break:break-word">
+              ${esc(m.content)}
+            </div>
+          </div>
+        </div>
+      </td></tr>`;
+  }).join('');
+
+  const subject = `💬 ${sendersLabel} en ${channelLabel} — Kiwoc`;
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
+  <body style="margin:0;padding:0;background:#F9F5F2;font-family:-apple-system,BlinkMacSystemFont,'Inter',sans-serif">
+    <div style="max-width:520px;margin:32px auto;border-radius:14px;overflow:hidden;
+                box-shadow:0 4px 24px rgba(0,0,0,.08);background:#fff;border:1px solid #E5E1D8">
+      <div style="background:linear-gradient(135deg,#F8B13F 0%,#E8921A 100%);padding:22px 28px">
+        <div style="display:flex;align-items:center;gap:14px">
+          <div style="width:44px;height:44px;background:rgba(255,255,255,.25);border-radius:11px;
+                      text-align:center;line-height:44px;font-size:22px">💬</div>
+          <div>
+            <div style="color:#fff;font-weight:700;font-size:1.05rem">Nuevo mensaje en Kiwoc</div>
+            <div style="color:rgba(255,255,255,.85);font-size:.78rem;margin-top:2px">${channelLabel}</div>
+          </div>
+        </div>
+      </div>
+      <div style="padding:24px 28px">
+        <p style="margin:0 0 18px;font-size:.9rem;color:#57534E;line-height:1.5">
+          <strong style="color:#1C1917">${esc(sendersLabel)}</strong>
+          envió${msgs.length > 1 ? ` ${msgs.length} mensajes` : ' un mensaje'} en
+          <strong style="color:#1C1917">${channelLabel}</strong>
+        </p>
+        <div style="background:#FAFAF8;border:1px solid #EDEAE4;border-radius:10px;padding:14px 18px;margin-bottom:20px">
+          <table style="width:100%;border-collapse:collapse">${previewRows}</table>
+        </div>
+        <a href="${appUrl}"
+           style="display:inline-block;background:#F8B13F;color:#fff;padding:11px 24px;
+                  border-radius:8px;text-decoration:none;font-weight:600;font-size:.88rem">
+          Ver conversación →
+        </a>
+      </div>
+      <div style="background:#F9F5F2;border-top:1px solid #EDEAE4;padding:14px 28px;text-align:center">
+        <p style="margin:0;font-size:.72rem;color:#A8A29E">
+          Kiwoc · Notificación automática de ${channelLabel}<br>No respondas a este correo.
+        </p>
+      </div>
+    </div>
+  </body></html>`;
+
+  const text = `${sendersLabel} en ${channelLabel}:\n\n${msgs.slice(-5).map(m=>`[${m.senderName}] ${m.content}`).join('\n')}\n\nVer: ${appUrl}`;
+
+  for (const m of recipients) {
+    try {
+      await ses.send(new SendEmailCommand({
+        Source:      fromEmail,
+        Destination: { ToAddresses: [m.email] },
+        Message: {
+          Subject: { Data: subject },
+          Body: { Html: { Data: html }, Text: { Data: text } },
+        },
+      }));
+      console.log(`[chat-notif] → ${m.email} (${channelLabel})`);
+    } catch (err) {
+      console.warn(`[chat-notif] failed ${m.email}:`, err.message);
+    }
+  }
 }
 
 // ── POST /api/enrich/upload-async ────────────────────────────────
@@ -1152,6 +1418,1929 @@ app.get('/api/domain-info', async (req, res) => {
   }
 });
 
+// =================================================================
+// MANAGEMENT — CLIENTS
+// =================================================================
+
+// ── GET /api/mgmt/clients ─────────────────────────────────────────
+app.get('/api/mgmt/clients', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT * FROM clients WHERE user_id = $1 ORDER BY created_at DESC`,
+      [req.workspaceOwnerId]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('[mgmt/clients] GET error:', err.message);
+    res.status(500).json({ error: 'Error al obtener clientes' });
+  }
+});
+
+// ── POST /api/mgmt/clients ────────────────────────────────────────
+app.post('/api/mgmt/clients', requireAuth, async (req, res) => {
+  const { nombre, empresa, email, telefono, pais, estado, notas, comision_default } = req.body;
+  if (!nombre?.trim()) return res.status(400).json({ error: 'El nombre es requerido' });
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO clients (user_id, nombre, empresa, email, telefono, pais, estado, notas, comision_default)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       RETURNING *`,
+      [req.workspaceOwnerId, nombre.trim(), empresa || '', email || '', telefono || '', pais || '',
+       estado || 'activo', notas || '', comision_default || null]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    console.error('[mgmt/clients] POST error:', err.message);
+    res.status(500).json({ error: 'Error al crear cliente' });
+  }
+});
+
+// ── GET /api/mgmt/clients/:id ─────────────────────────────────────
+app.get('/api/mgmt/clients/:id', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT * FROM clients WHERE id = $1 AND user_id = $2`,
+      [req.params.id, req.workspaceOwnerId]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Cliente no encontrado' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[mgmt/clients] GET/:id error:', err.message);
+    res.status(500).json({ error: 'Error al obtener cliente' });
+  }
+});
+
+// ── PUT /api/mgmt/clients/:id ─────────────────────────────────────
+app.put('/api/mgmt/clients/:id', requireAuth, async (req, res) => {
+  const { nombre, empresa, email, telefono, pais, estado, notas, comision_default } = req.body;
+  if (!nombre?.trim()) return res.status(400).json({ error: 'El nombre es requerido' });
+  try {
+    const { rows } = await pool.query(
+      `UPDATE clients
+          SET nombre=$3, empresa=$4, email=$5, telefono=$6, pais=$7,
+              estado=$8, notas=$9, comision_default=$10, updated_at=NOW()
+        WHERE id=$1 AND user_id=$2
+        RETURNING *`,
+      [req.params.id, req.workspaceOwnerId, nombre.trim(), empresa || '', email || '',
+       telefono || '', pais || '', estado || 'activo', notas || '', comision_default || null]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Cliente no encontrado' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[mgmt/clients] PUT error:', err.message);
+    res.status(500).json({ error: 'Error al actualizar cliente' });
+  }
+});
+
+// ── DELETE /api/mgmt/clients/:id ──────────────────────────────────
+app.delete('/api/mgmt/clients/:id', requireAuth, async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(
+      `DELETE FROM clients WHERE id = $1 AND user_id = $2`,
+      [req.params.id, req.workspaceOwnerId]
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Cliente no encontrado' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[mgmt/clients] DELETE error:', err.message);
+    res.status(500).json({ error: 'Error al eliminar cliente' });
+  }
+});
+
+// ── GET /api/mgmt/clients/:id/contacts ───────────────────────────
+app.get('/api/mgmt/clients/:id/contacts', requireAuth, async (req, res) => {
+  try {
+    const clientId = parseInt(req.params.id);
+    const { rows: client } = await pool.query(
+      `SELECT id FROM clients WHERE id=$1 AND user_id=$2`, [clientId, req.workspaceOwnerId]
+    );
+    if (!client.length) return res.status(404).json({ error: 'Cliente no encontrado' });
+    const { rows } = await pool.query(
+      `SELECT * FROM client_contacts WHERE client_id=$1 ORDER BY created_at ASC`, [clientId]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('[clients/contacts] GET error:', err.message);
+    res.status(500).json({ error: 'Error al obtener contactos' });
+  }
+});
+
+// ── POST /api/mgmt/clients/:id/contacts ──────────────────────────
+app.post('/api/mgmt/clients/:id/contacts', requireAuth, async (req, res) => {
+  try {
+    const clientId = parseInt(req.params.id);
+    const { rows: client } = await pool.query(
+      `SELECT id FROM clients WHERE id=$1 AND user_id=$2`, [clientId, req.workspaceOwnerId]
+    );
+    if (!client.length) return res.status(404).json({ error: 'Cliente no encontrado' });
+    const { nombre = '', email = '', telefono = '', cargo = '' } = req.body;
+    const { rows } = await pool.query(
+      `INSERT INTO client_contacts(client_id,nombre,email,telefono,cargo)
+       VALUES($1,$2,$3,$4,$5) RETURNING *`,
+      [clientId, nombre, email, telefono, cargo]
+    );
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[clients/contacts] POST error:', err.message);
+    res.status(500).json({ error: 'Error al crear contacto' });
+  }
+});
+
+// ── PUT /api/mgmt/clients/:id/contacts/:contactId ────────────────
+app.put('/api/mgmt/clients/:id/contacts/:contactId', requireAuth, async (req, res) => {
+  try {
+    const clientId   = parseInt(req.params.id);
+    const contactId  = parseInt(req.params.contactId);
+    const { rows: client } = await pool.query(
+      `SELECT id FROM clients WHERE id=$1 AND user_id=$2`, [clientId, req.workspaceOwnerId]
+    );
+    if (!client.length) return res.status(404).json({ error: 'Cliente no encontrado' });
+    const { nombre = '', email = '', telefono = '', cargo = '' } = req.body;
+    const { rows } = await pool.query(
+      `UPDATE client_contacts SET nombre=$1,email=$2,telefono=$3,cargo=$4
+       WHERE id=$5 AND client_id=$6 RETURNING *`,
+      [nombre, email, telefono, cargo, contactId, clientId]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Contacto no encontrado' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[clients/contacts] PUT error:', err.message);
+    res.status(500).json({ error: 'Error al actualizar contacto' });
+  }
+});
+
+// ── DELETE /api/mgmt/clients/:id/contacts/:contactId ─────────────
+app.delete('/api/mgmt/clients/:id/contacts/:contactId', requireAuth, async (req, res) => {
+  try {
+    const clientId   = parseInt(req.params.id);
+    const contactId  = parseInt(req.params.contactId);
+    const { rows: client } = await pool.query(
+      `SELECT id FROM clients WHERE id=$1 AND user_id=$2`, [clientId, req.workspaceOwnerId]
+    );
+    if (!client.length) return res.status(404).json({ error: 'Cliente no encontrado' });
+    await pool.query(
+      `DELETE FROM client_contacts WHERE id=$1 AND client_id=$2`, [contactId, clientId]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[clients/contacts] DELETE error:', err.message);
+    res.status(500).json({ error: 'Error al eliminar contacto' });
+  }
+});
+
+// =================================================================
+// MANAGEMENT — PROJECTS
+// =================================================================
+
+// ── GET /api/mgmt/projects ────────────────────────────────────────
+app.get('/api/mgmt/projects', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT p.*, c.nombre AS client_nombre, c.empresa AS client_empresa
+         FROM projects p
+         LEFT JOIN clients c ON p.client_id = c.id
+        WHERE p.user_id = $1
+        ORDER BY p.created_at DESC`,
+      [req.workspaceOwnerId]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('[mgmt/projects] GET error:', err.message);
+    res.status(500).json({ error: 'Error al obtener proyectos' });
+  }
+});
+
+// ── POST /api/mgmt/projects ───────────────────────────────────────
+app.post('/api/mgmt/projects', requireAuth, async (req, res) => {
+  const { nombre, client_id, descripcion, estado, responsable, responsable_id, responsables,
+          fecha_inicio, fecha_fin, valor_total, prioridad,
+          tipo_proyecto, moneda, tarifa_hora, horas_estimadas, horas_semanales, horario_semanal,
+          comision } = req.body;
+  if (!nombre?.trim()) return res.status(400).json({ error: 'El nombre es requerido' });
+  if (!client_id)      return res.status(400).json({ error: 'El cliente es requerido' });
+  const respArr = Array.isArray(responsables) ? responsables : (responsable ? [responsable] : []);
+  const respFirst = respArr[0] || '';
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO projects
+         (user_id, client_id, nombre, descripcion, estado, responsable, responsable_id, responsables,
+          fecha_inicio, fecha_fin, valor_total, prioridad,
+          tipo_proyecto, moneda, tarifa_hora, horas_estimadas, horas_semanales, horario_semanal,
+          comision)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+       RETURNING *`,
+      [req.workspaceOwnerId, client_id, nombre.trim(), descripcion || '', estado || 'activo',
+       respFirst, responsable_id || null, respArr,
+       fecha_inicio || null, fecha_fin || null, valor_total || null, prioridad || 'media',
+       tipo_proyecto || 'fijo', moneda || 'USD',
+       tarifa_hora || null, horas_estimadas || null, horas_semanales || null, horario_semanal || '',
+       comision || null]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    console.error('[mgmt/projects] POST error:', err.message);
+    res.status(500).json({ error: 'Error al crear proyecto' });
+  }
+});
+
+// ── GET /api/mgmt/projects/:id ────────────────────────────────────
+app.get('/api/mgmt/projects/:id', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT p.*, c.nombre AS client_nombre, c.empresa AS client_empresa
+         FROM projects p
+         LEFT JOIN clients c ON p.client_id = c.id
+        WHERE p.id = $1 AND p.user_id = $2`,
+      [req.params.id, req.workspaceOwnerId]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Proyecto no encontrado' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[mgmt/projects] GET/:id error:', err.message);
+    res.status(500).json({ error: 'Error al obtener proyecto' });
+  }
+});
+
+// ── PUT /api/mgmt/projects/:id ────────────────────────────────────
+app.put('/api/mgmt/projects/:id', requireAuth, async (req, res) => {
+  const { nombre, client_id, descripcion, estado, responsable, responsable_id, responsables,
+          fecha_inicio, fecha_fin, valor_total, prioridad,
+          tipo_proyecto, moneda, tarifa_hora, horas_estimadas, horas_semanales, horario_semanal,
+          comision } = req.body;
+  if (!nombre?.trim()) return res.status(400).json({ error: 'El nombre es requerido' });
+  if (!client_id)      return res.status(400).json({ error: 'El cliente es requerido' });
+  const respArr = Array.isArray(responsables) ? responsables : (responsable ? [responsable] : []);
+  const respFirst = respArr[0] || '';
+  try {
+    const { rows } = await pool.query(
+      `UPDATE projects
+          SET client_id=$3, nombre=$4, descripcion=$5, estado=$6,
+              responsable=$7, responsable_id=$8, responsables=$9,
+              fecha_inicio=$10, fecha_fin=$11,
+              valor_total=$12, prioridad=$13, tipo_proyecto=$14, moneda=$15,
+              tarifa_hora=$16, horas_estimadas=$17, horas_semanales=$18, horario_semanal=$19,
+              comision=$20, updated_at=NOW()
+        WHERE id=$1 AND user_id=$2
+        RETURNING *`,
+      [req.params.id, req.workspaceOwnerId, client_id, nombre.trim(),
+       descripcion || '', estado || 'activo', respFirst, responsable_id || null, respArr,
+       fecha_inicio || null, fecha_fin || null, valor_total || null, prioridad || 'media',
+       tipo_proyecto || 'fijo', moneda || 'USD',
+       tarifa_hora || null, horas_estimadas || null, horas_semanales || null, horario_semanal || '',
+       comision || null]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Proyecto no encontrado' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[mgmt/projects] PUT error:', err.message);
+    res.status(500).json({ error: 'Error al actualizar proyecto' });
+  }
+});
+
+// ── PATCH /api/mgmt/projects/:id/links — archivos / enlaces ───────
+app.patch('/api/mgmt/projects/:id/links', requireAuth, async (req, res) => {
+  const { links } = req.body;
+  if (!Array.isArray(links)) return res.status(400).json({ error: 'links debe ser un arreglo' });
+  try {
+    const { rows } = await pool.query(
+      `UPDATE projects SET links=$3, updated_at=NOW() WHERE id=$1 AND user_id=$2 RETURNING *`,
+      [req.params.id, req.workspaceOwnerId, JSON.stringify(links)]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Proyecto no encontrado' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[mgmt/projects] PATCH links error:', err.message);
+    res.status(500).json({ error: 'Error al guardar enlaces' });
+  }
+});
+
+// ── DELETE /api/mgmt/projects/:id ─────────────────────────────────
+app.delete('/api/mgmt/projects/:id', requireAuth, async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(
+      `DELETE FROM projects WHERE id = $1 AND user_id = $2`,
+      [req.params.id, req.workspaceOwnerId]
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Proyecto no encontrado' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[mgmt/projects] DELETE error:', err.message);
+    res.status(500).json({ error: 'Error al eliminar proyecto' });
+  }
+});
+
+// =================================================================
+// MANAGEMENT — TASKS
+// =================================================================
+
+// ── GET /api/mgmt/tasks ───────────────────────────────────────────
+app.get('/api/mgmt/tasks', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT t.*,
+              p.nombre AS project_nombre,
+              c.nombre AS client_nombre
+         FROM tasks t
+         LEFT JOIN projects p ON t.project_id = p.id
+         LEFT JOIN clients  c ON p.client_id  = c.id
+        WHERE t.user_id = $1
+        ORDER BY
+          CASE t.estado
+            WHEN 'bloqueado'   THEN 1
+            WHEN 'pendiente'   THEN 2
+            WHEN 'en_progreso' THEN 3
+            WHEN 'completado'  THEN 4
+            ELSE 5
+          END,
+          t.deadline ASC NULLS LAST,
+          t.created_at DESC`,
+      [req.workspaceOwnerId]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('[mgmt/tasks] GET error:', err.message);
+    res.status(500).json({ error: 'Error al obtener tareas' });
+  }
+});
+
+// ── POST /api/mgmt/tasks ──────────────────────────────────────────
+app.post('/api/mgmt/tasks', requireAuth, async (req, res) => {
+  const { titulo, project_id, descripcion, estado, prioridad,
+          responsable, responsables, deadline, notas, monto, cobrado, parent_task_id } = req.body;
+  if (!titulo?.trim())  return res.status(400).json({ error: 'El título es requerido' });
+  if (!project_id)      return res.status(400).json({ error: 'El proyecto es requerido' });
+  const respArr = Array.isArray(responsables) ? responsables : (responsable ? [responsable] : []);
+  const respFirst = respArr[0] || '';
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO tasks
+         (user_id, project_id, titulo, descripcion, estado, prioridad, responsable, responsables, deadline, notas, monto, cobrado, parent_task_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+       RETURNING *`,
+      [req.workspaceOwnerId, project_id, titulo.trim(), descripcion || '',
+       estado || 'pendiente', prioridad || 'media',
+       respFirst, respArr, deadline || null, notas || '',
+       monto != null ? +monto : null, cobrado ? true : false,
+       parent_task_id || null]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    console.error('[mgmt/tasks] POST error:', err.message);
+    res.status(500).json({ error: 'Error al crear tarea' });
+  }
+});
+
+// ── GET /api/mgmt/tasks/:id ───────────────────────────────────────
+app.get('/api/mgmt/tasks/:id', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT t.*, p.nombre AS project_nombre, c.nombre AS client_nombre
+         FROM tasks t
+         LEFT JOIN projects p ON t.project_id = p.id
+         LEFT JOIN clients  c ON p.client_id  = c.id
+        WHERE t.id = $1 AND t.user_id = $2`,
+      [req.params.id, req.workspaceOwnerId]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Tarea no encontrada' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[mgmt/tasks] GET/:id error:', err.message);
+    res.status(500).json({ error: 'Error al obtener tarea' });
+  }
+});
+
+// ── PUT /api/mgmt/tasks/:id ───────────────────────────────────────
+app.put('/api/mgmt/tasks/:id', requireAuth, async (req, res) => {
+  const { titulo, project_id, descripcion, estado, prioridad,
+          responsable, responsables, deadline, notas, monto, cobrado, parent_task_id } = req.body;
+  if (!titulo?.trim())  return res.status(400).json({ error: 'El título es requerido' });
+  if (!project_id)      return res.status(400).json({ error: 'El proyecto es requerido' });
+  if (parent_task_id && String(parent_task_id) === String(req.params.id))
+    return res.status(400).json({ error: 'Una tarea no puede ser subtarea de sí misma' });
+  const respArr = Array.isArray(responsables) ? responsables : (responsable ? [responsable] : []);
+  const respFirst = respArr[0] || '';
+  try {
+    const { rows } = await pool.query(
+      `UPDATE tasks
+          SET project_id=$3, titulo=$4, descripcion=$5, estado=$6,
+              prioridad=$7, responsable=$8, responsables=$9, deadline=$10, notas=$11,
+              monto=$12, cobrado=$13, parent_task_id=$14, updated_at=NOW()
+        WHERE id=$1 AND user_id=$2
+        RETURNING *`,
+      [req.params.id, req.workspaceOwnerId, project_id, titulo.trim(),
+       descripcion || '', estado || 'pendiente', prioridad || 'media',
+       respFirst, respArr, deadline || null, notas || '',
+       monto != null ? +monto : null, cobrado ? true : false,
+       parent_task_id || null]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Tarea no encontrada' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[mgmt/tasks] PUT error:', err.message);
+    res.status(500).json({ error: 'Error al actualizar tarea' });
+  }
+});
+
+// ── PATCH /api/mgmt/tasks/:id/status ─────────────────────────────
+app.patch('/api/mgmt/tasks/:id/status', requireAuth, async (req, res) => {
+  const { estado } = req.body;
+  const VALID = ['pendiente', 'en_progreso', 'bloqueado', 'completado'];
+  if (!VALID.includes(estado)) return res.status(400).json({ error: 'Estado inválido' });
+  try {
+    const { rows } = await pool.query(
+      `UPDATE tasks SET estado=$3, updated_at=NOW() WHERE id=$1 AND user_id=$2 RETURNING *`,
+      [req.params.id, req.workspaceOwnerId, estado]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Tarea no encontrada' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[tasks/status] PATCH error:', err.message);
+    res.status(500).json({ error: 'Error al actualizar estado' });
+  }
+});
+
+// ── PATCH /api/mgmt/tasks/:id/deadline ───────────────────────────
+app.patch('/api/mgmt/tasks/:id/deadline', requireAuth, async (req, res) => {
+  const { deadline } = req.body;
+  try {
+    const { rows } = await pool.query(
+      `UPDATE tasks SET deadline=$1, updated_at=NOW()
+       WHERE id=$2 AND user_id=$3 RETURNING id, titulo, deadline`,
+      [deadline || null, req.params.id, req.workspaceOwnerId]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Tarea no encontrada' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[tasks/deadline] PATCH error:', err.message);
+    res.status(500).json({ error: 'Error al actualizar deadline' });
+  }
+});
+
+// ── PATCH /api/mgmt/tasks/:id/responsable ────────────────────────
+app.patch('/api/mgmt/tasks/:id/responsable', requireAuth, async (req, res) => {
+  const { responsable } = req.body;
+  try {
+    const respArr = responsable ? [responsable] : [];
+    const { rows } = await pool.query(
+      `UPDATE tasks SET responsable=$1, responsables=$2, updated_at=NOW()
+       WHERE id=$3 AND user_id=$4 RETURNING id, titulo, responsable`,
+      [responsable || '', respArr, req.params.id, req.workspaceOwnerId]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Tarea no encontrada' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[tasks/responsable] PATCH error:', err.message);
+    res.status(500).json({ error: 'Error al asignar responsable' });
+  }
+});
+
+// ── PATCH /api/mgmt/tasks/:id/billing ────────────────────────────
+app.patch('/api/mgmt/tasks/:id/billing', requireAuth, async (req, res) => {
+  const { monto, cobrado } = req.body;
+  try {
+    const sets = [];
+    const vals = [req.params.id, req.workspaceOwnerId];
+    if (monto !== undefined) sets.push(`monto=$${vals.push(monto === null || monto === '' ? null : +monto)}`);
+    if (cobrado !== undefined) {
+      sets.push(`cobrado=$${vals.push(!!cobrado)}`);
+      sets.push(cobrado ? `cobrado_at=NOW()` : `cobrado_at=NULL`);
+    }
+    if (!sets.length) return res.json({ ok: true });
+    sets.push('updated_at=NOW()');
+    const { rows } = await pool.query(
+      `UPDATE tasks SET ${sets.join(',')} WHERE id=$1 AND user_id=$2 RETURNING *`,
+      vals
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Tarea no encontrada' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[tasks/billing] PATCH error:', err.message);
+    res.status(500).json({ error: 'Error al actualizar facturación' });
+  }
+});
+
+// ── DELETE /api/mgmt/tasks/:id ────────────────────────────────────
+app.delete('/api/mgmt/tasks/:id', requireAuth, async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(
+      `DELETE FROM tasks WHERE id = $1 AND user_id = $2`,
+      [req.params.id, req.workspaceOwnerId]
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Tarea no encontrada' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[mgmt/tasks] DELETE error:', err.message);
+    res.status(500).json({ error: 'Error al eliminar tarea' });
+  }
+});
+
+// =================================================================
+// MANAGEMENT — MEETINGS
+// =================================================================
+
+// ── GET /api/mgmt/meetings ────────────────────────────────────────
+app.get('/api/mgmt/meetings', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT * FROM meetings WHERE user_id=$1 ORDER BY fecha ASC, hora_inicio ASC NULLS LAST`,
+      [req.workspaceOwnerId]
+    );
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── POST /api/mgmt/meetings ───────────────────────────────────────
+app.post('/api/mgmt/meetings', requireAuth, async (req, res) => {
+  const { titulo, fecha, hora_inicio, hora_fin, descripcion, link, attendees, estado } = req.body;
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO meetings (user_id, titulo, fecha, hora_inicio, hora_fin, descripcion, link, attendees, estado)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+      [req.workspaceOwnerId, titulo||'', fecha,
+       hora_inicio||null, hora_fin||null,
+       descripcion||'', link||'',
+       JSON.stringify(Array.isArray(attendees) ? attendees : []),
+       estado||'programada']
+    );
+    res.json(rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── PUT /api/mgmt/meetings/:id ────────────────────────────────────
+app.put('/api/mgmt/meetings/:id', requireAuth, async (req, res) => {
+  const { titulo, fecha, hora_inicio, hora_fin, descripcion, link, attendees, estado } = req.body;
+  try {
+    const { rows } = await pool.query(
+      `UPDATE meetings
+       SET titulo=$1, fecha=$2, hora_inicio=$3, hora_fin=$4,
+           descripcion=$5, link=$6, attendees=$7, estado=$8
+       WHERE id=$9 AND user_id=$10 RETURNING *`,
+      [titulo||'', fecha,
+       hora_inicio||null, hora_fin||null,
+       descripcion||'', link||'',
+       JSON.stringify(Array.isArray(attendees) ? attendees : []),
+       estado||'programada',
+       req.params.id, req.workspaceOwnerId]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'No encontrada' });
+    res.json(rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── DELETE /api/mgmt/meetings/:id ─────────────────────────────────
+app.delete('/api/mgmt/meetings/:id', requireAuth, async (req, res) => {
+  try {
+    await pool.query(`DELETE FROM meetings WHERE id=$1 AND user_id=$2`,
+      [req.params.id, req.workspaceOwnerId]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// =================================================================
+// MANAGEMENT — TIME OFF
+// =================================================================
+
+// ── GET /api/mgmt/time-off ────────────────────────────────────────
+app.get('/api/mgmt/time-off', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT t.*, tm.nombre AS member_nombre, tm.cargo AS member_cargo
+       FROM   time_off t
+       JOIN   team_members tm ON tm.id = t.member_id
+       WHERE  t.user_id = $1
+       ORDER  BY t.fecha_inicio ASC`,
+      [req.workspaceOwnerId]
+    );
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── POST /api/mgmt/time-off ───────────────────────────────────────
+app.post('/api/mgmt/time-off', requireAuth, async (req, res) => {
+  const { member_id, fecha_inicio, fecha_fin, motivo, notas } = req.body;
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO time_off (user_id, member_id, fecha_inicio, fecha_fin, motivo, notas)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [req.workspaceOwnerId, member_id, fecha_inicio, fecha_fin,
+       motivo || 'Vacaciones', notas || '']
+    );
+    res.json(rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── PUT /api/mgmt/time-off/:id ────────────────────────────────────
+app.put('/api/mgmt/time-off/:id', requireAuth, async (req, res) => {
+  const { member_id, fecha_inicio, fecha_fin, motivo, notas } = req.body;
+  try {
+    const { rows } = await pool.query(
+      `UPDATE time_off
+       SET member_id=$1, fecha_inicio=$2, fecha_fin=$3, motivo=$4, notas=$5
+       WHERE id=$6 AND user_id=$7 RETURNING *`,
+      [member_id, fecha_inicio, fecha_fin,
+       motivo || 'Vacaciones', notas || '',
+       req.params.id, req.workspaceOwnerId]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'No encontrado' });
+    res.json(rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── DELETE /api/mgmt/time-off/:id ─────────────────────────────────
+app.delete('/api/mgmt/time-off/:id', requireAuth, async (req, res) => {
+  try {
+    await pool.query(`DELETE FROM time_off WHERE id=$1 AND user_id=$2`,
+      [req.params.id, req.workspaceOwnerId]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// =================================================================
+// MANAGEMENT — TEAM
+// =================================================================
+
+// ── GET /api/mgmt/team ────────────────────────────────────────────
+app.get('/api/mgmt/team', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT tm.*,
+             COUNT(t.id) FILTER (WHERE t.estado != 'completado') AS tareas_activas,
+             COUNT(t.id)                                          AS tareas_total
+      FROM   team_members tm
+      LEFT JOIN tasks t ON LOWER(TRIM(t.responsable)) = LOWER(TRIM(tm.nombre))
+                        AND t.user_id = $1
+      WHERE  tm.user_id = $1
+      GROUP  BY tm.id
+      ORDER  BY LOWER(tm.nombre)
+    `, [req.workspaceOwnerId]);
+    res.json(rows);
+  } catch (err) {
+    console.error('[mgmt/team] GET error:', err.message);
+    res.status(500).json({ error: 'Error al cargar equipo' });
+  }
+});
+
+// ── POST /api/mgmt/team ───────────────────────────────────────────
+app.post('/api/mgmt/team', requireAuth, async (req, res) => {
+  const { nombre, email, rol, cargo, estado, notas } = req.body;
+  if (!nombre?.trim()) return res.status(400).json({ error: 'El nombre es requerido' });
+  try {
+    const { rows } = await pool.query(`
+      INSERT INTO team_members (user_id, nombre, email, rol, cargo, estado, notas)
+      VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *
+    `, [req.workspaceOwnerId, nombre.trim(), email || '', rol || 'miembro', cargo || '', estado || 'activo', notas || '']);
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    console.error('[mgmt/team] POST error:', err.message);
+    res.status(500).json({ error: 'Error al crear miembro' });
+  }
+});
+
+// ── PUT /api/mgmt/team/:id ────────────────────────────────────────
+app.put('/api/mgmt/team/:id', requireAuth, async (req, res) => {
+  const { nombre, email, rol, cargo, estado, notas } = req.body;
+  if (!nombre?.trim()) return res.status(400).json({ error: 'El nombre es requerido' });
+  try {
+    const { rows } = await pool.query(`
+      UPDATE team_members
+      SET nombre=$1, email=$2, rol=$3, cargo=$4, estado=$5, notas=$6, updated_at=NOW()
+      WHERE id=$7 AND user_id=$8 RETURNING *
+    `, [nombre.trim(), email || '', rol || 'miembro', cargo || '', estado || 'activo', notas || '', req.params.id, req.workspaceOwnerId]);
+    if (!rows.length) return res.status(404).json({ error: 'Miembro no encontrado' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[mgmt/team] PUT error:', err.message);
+    res.status(500).json({ error: 'Error al actualizar miembro' });
+  }
+});
+
+// ── DELETE /api/mgmt/team/:id ─────────────────────────────────────
+app.delete('/api/mgmt/team/:id', requireAuth, async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(
+      `DELETE FROM team_members WHERE id=$1 AND user_id=$2`,
+      [req.params.id, req.workspaceOwnerId]
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Miembro no encontrado' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[mgmt/team] DELETE error:', err.message);
+    res.status(500).json({ error: 'Error al eliminar miembro' });
+  }
+});
+
+// =================================================================
+// LEADS — LEAD MANAGER
+// =================================================================
+
+app.get('/api/leads', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT * FROM leads WHERE user_id=$1 ORDER BY created_at DESC`,
+      [req.workspaceOwnerId]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('[leads] GET error:', err.message);
+    res.status(500).json({ error: 'Error al cargar leads' });
+  }
+});
+
+app.post('/api/leads', requireAuth, async (req, res) => {
+  const { nombre, empresa, email, telefono, pais, cargo, stage, fuente, valor_estimado, notas } = req.body;
+  if (!nombre?.trim()) return res.status(400).json({ error: 'El nombre es requerido' });
+  try {
+    const { rows } = await pool.query(`
+      INSERT INTO leads (user_id,nombre,empresa,email,telefono,pais,cargo,stage,fuente,valor_estimado,notas)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *
+    `, [req.workspaceOwnerId, nombre.trim(), empresa||'', email||'', telefono||'', pais||'', cargo||'',
+        stage||'nuevo', fuente||'manual', valor_estimado||null, notas||'']);
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    console.error('[leads] POST error:', err.message);
+    res.status(500).json({ error: 'Error al crear lead' });
+  }
+});
+
+app.put('/api/leads/:id', requireAuth, async (req, res) => {
+  const { nombre, empresa, email, telefono, pais, cargo, stage, fuente, valor_estimado, notas } = req.body;
+  if (!nombre?.trim()) return res.status(400).json({ error: 'El nombre es requerido' });
+  try {
+    const { rows } = await pool.query(`
+      UPDATE leads SET nombre=$1,empresa=$2,email=$3,telefono=$4,pais=$5,cargo=$6,
+        stage=$7,fuente=$8,valor_estimado=$9,notas=$10,updated_at=NOW()
+      WHERE id=$11 AND user_id=$12 RETURNING *
+    `, [nombre.trim(), empresa||'', email||'', telefono||'', pais||'', cargo||'',
+        stage||'nuevo', fuente||'manual', valor_estimado||null, notas||'',
+        req.params.id, req.workspaceOwnerId]);
+    if (!rows.length) return res.status(404).json({ error: 'Lead no encontrado' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[leads] PUT error:', err.message);
+    res.status(500).json({ error: 'Error al actualizar lead' });
+  }
+});
+
+app.delete('/api/leads/:id', requireAuth, async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(
+      `DELETE FROM leads WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId]
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Lead no encontrado' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[leads] DELETE error:', err.message);
+    res.status(500).json({ error: 'Error al eliminar lead' });
+  }
+});
+
+app.post('/api/leads/:id/convert', requireAuth, async (req, res) => {
+  try {
+    const { rows: lr } = await pool.query(
+      `SELECT * FROM leads WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId]
+    );
+    if (!lr.length) return res.status(404).json({ error: 'Lead no encontrado' });
+    const l = lr[0];
+    const { rows: cr } = await pool.query(`
+      INSERT INTO clients (user_id,nombre,empresa,email,telefono,pais,notas)
+      VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *
+    `, [req.workspaceOwnerId, l.nombre, l.empresa, l.email, l.telefono, l.pais, l.notas]);
+    await pool.query(`UPDATE leads SET stage='ganado',updated_at=NOW() WHERE id=$1`, [req.params.id]);
+    res.json({ client: cr[0] });
+  } catch (err) {
+    console.error('[leads] convert error:', err.message);
+    res.status(500).json({ error: 'Error al convertir lead' });
+  }
+});
+
+// =================================================================
+// MANAGEMENT — PAYMENTS (FINANZAS)
+// =================================================================
+
+// ── GET /api/mgmt/payments ────────────────────────────────────────
+app.get('/api/mgmt/payments', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT * FROM (
+        SELECT
+          pm.id               AS id,
+          NULL::int           AS task_id,
+          'manual'            AS source,
+          pm.concepto         AS concepto,
+          pm.client_id        AS client_id,
+          pm.project_id       AS project_id,
+          pm.estado           AS estado,
+          pm.fecha_esperada   AS fecha_esperada,
+          pm.fecha_pagada     AS fecha_pagada,
+          pm.monto_bruto      AS monto_bruto,
+          pm.porcentaje       AS porcentaje,
+          pm.monto_neto       AS monto_neto,
+          pm.notas            AS notas,
+          pm.created_at       AS created_at,
+          c.nombre            AS client_nombre,
+          c.empresa           AS client_empresa,
+          c.comision_default  AS client_comision,
+          p.nombre            AS project_nombre,
+          p.moneda            AS project_moneda
+        FROM   payments pm
+        LEFT JOIN clients  c ON pm.client_id  = c.id
+        LEFT JOIN projects p ON pm.project_id = p.id
+        WHERE  pm.user_id = $1
+
+        UNION ALL
+
+        SELECT
+          NULL::int            AS id,
+          t.id                 AS task_id,
+          'task'               AS source,
+          t.titulo             AS concepto,
+          p2.client_id         AS client_id,
+          t.project_id         AS project_id,
+          'cobrado'            AS estado,
+          NULL::date           AS fecha_esperada,
+          t.cobrado_at::date   AS fecha_pagada,
+          t.monto              AS monto_bruto,
+          NULL::numeric        AS porcentaje,
+          t.monto              AS monto_neto,
+          t.notas              AS notas,
+          t.created_at         AS created_at,
+          c2.nombre            AS client_nombre,
+          c2.empresa           AS client_empresa,
+          c2.comision_default  AS client_comision,
+          p2.nombre            AS project_nombre,
+          p2.moneda            AS project_moneda
+        FROM   tasks t
+        LEFT JOIN projects p2 ON t.project_id = p2.id
+        LEFT JOIN clients  c2 ON p2.client_id = c2.id
+        WHERE  t.user_id = $1 AND t.cobrado = true AND t.monto IS NOT NULL AND t.monto > 0
+      ) combined
+      ORDER BY
+        CASE estado
+          WHEN 'pendiente' THEN 1
+          WHEN 'vencido'   THEN 2
+          WHEN 'cobrado'   THEN 3
+          ELSE 4
+        END,
+        fecha_esperada ASC NULLS LAST,
+        created_at DESC
+    `, [req.workspaceOwnerId]);
+    res.json(rows);
+  } catch (err) {
+    console.error('[mgmt/payments] GET error:', err.message);
+    res.status(500).json({ error: 'Error al cargar pagos' });
+  }
+});
+
+// ── POST /api/mgmt/payments ───────────────────────────────────────
+app.post('/api/mgmt/payments', requireAuth, async (req, res) => {
+  const { concepto, client_id, project_id, monto_bruto, porcentaje,
+          monto_neto, fecha_esperada, fecha_pagada, estado, notas } = req.body;
+  try {
+    const { rows } = await pool.query(`
+      INSERT INTO payments
+        (user_id, client_id, project_id, concepto, monto_bruto, porcentaje,
+         monto_neto, fecha_esperada, fecha_pagada, estado, notas)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+      RETURNING *
+    `, [req.workspaceOwnerId, client_id || null, project_id || null,
+        concepto || '', monto_bruto || 0, porcentaje || null,
+        monto_neto || null, fecha_esperada || null, fecha_pagada || null,
+        estado || 'pendiente', notas || '']);
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    console.error('[mgmt/payments] POST error:', err.message);
+    res.status(500).json({ error: 'Error al crear pago' });
+  }
+});
+
+// ── PUT /api/mgmt/payments/:id ────────────────────────────────────
+app.put('/api/mgmt/payments/:id', requireAuth, async (req, res) => {
+  const { concepto, client_id, project_id, monto_bruto, porcentaje,
+          monto_neto, fecha_esperada, fecha_pagada, estado, notas } = req.body;
+  try {
+    const { rows } = await pool.query(`
+      UPDATE payments
+      SET concepto=$1, client_id=$2, project_id=$3, monto_bruto=$4,
+          porcentaje=$5, monto_neto=$6, fecha_esperada=$7, fecha_pagada=$8,
+          estado=$9, notas=$10, updated_at=NOW()
+      WHERE id=$11 AND user_id=$12
+      RETURNING *
+    `, [concepto || '', client_id || null, project_id || null, monto_bruto || 0,
+        porcentaje || null, monto_neto || null, fecha_esperada || null,
+        fecha_pagada || null, estado || 'pendiente', notas || '',
+        req.params.id, req.workspaceOwnerId]);
+    if (!rows.length) return res.status(404).json({ error: 'Pago no encontrado' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[mgmt/payments] PUT error:', err.message);
+    res.status(500).json({ error: 'Error al actualizar pago' });
+  }
+});
+
+// ── DELETE /api/mgmt/payments/:id ─────────────────────────────────
+app.delete('/api/mgmt/payments/:id', requireAuth, async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(
+      `DELETE FROM payments WHERE id=$1 AND user_id=$2`,
+      [req.params.id, req.workspaceOwnerId]
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Pago no encontrado' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[mgmt/payments] DELETE error:', err.message);
+    res.status(500).json({ error: 'Error al eliminar pago' });
+  }
+});
+
+// =================================================================
+// MANAGEMENT — DASHBOARD
+// =================================================================
+
+// ── GET /api/mgmt/dashboard ───────────────────────────────────────
+app.get('/api/mgmt/dashboard', requireAuth, async (req, res) => {
+  const uid          = req.workspaceOwnerId;
+  const userDispName = req.user.name || null;   // display name from users table
+  try {
+    // Resolve team_member record by email (case-insensitive)
+    let memberNombre = null;
+    let memberId     = null;
+    try {
+      const { rows: tm } = await pool.query(
+        `SELECT id, nombre FROM team_members WHERE user_id=$1 AND LOWER(email)=LOWER($2) LIMIT 1`,
+        [uid, req.user.email]
+      );
+      if (tm.length) { memberNombre = tm[0].nombre || null; memberId = tm[0].id || null; }
+    } catch (_) {}
+    // Always have at least the display name as fallback
+    if (!memberNombre) memberNombre = userDispName;
+
+    console.log('[dashboard] uid=%s email=%s memberId=%s memberNombre=%j userDispName=%j',
+      uid, req.user.email, memberId, memberNombre, userDispName);
+
+    // Quick diagnostic: see what responsable values actually exist for this workspace
+    const { rows: respSample } = await pool.query(
+      `SELECT DISTINCT responsable FROM tasks WHERE user_id=$1 AND responsable IS NOT NULL LIMIT 20`,
+      [uid]
+    );
+    console.log('[dashboard] responsable values in DB:', respSample.map(r => r.responsable));
+
+    const [cntRes, todayRes, urgentRes, projCntRes] = await Promise.all([
+
+      // Count ALL pending tasks for this member (case-insensitive, dual-name)
+      pool.query(`
+        SELECT COUNT(*) AS total
+        FROM tasks
+        WHERE user_id = $1
+          AND estado != 'completado'
+          AND (
+            ($2::text IS NOT NULL AND LOWER(responsable) = LOWER($2))
+            OR ($3::text IS NOT NULL AND LOWER(responsable) = LOWER($3))
+          )
+      `, [uid, memberNombre, userDispName]),
+
+      // Tasks due TODAY for this member
+      pool.query(`
+        SELECT t.id, t.titulo, t.estado, t.prioridad, t.deadline, t.responsable,
+               p.nombre AS project_nombre, c.nombre AS client_nombre
+        FROM   tasks t
+        LEFT JOIN projects p ON t.project_id = p.id
+        LEFT JOIN clients  c ON p.client_id  = c.id
+        WHERE  t.user_id = $1
+          AND  t.estado != 'completado'
+          AND  t.deadline = CURRENT_DATE
+          AND  (
+            ($2::text IS NOT NULL AND LOWER(t.responsable) = LOWER($2))
+            OR ($3::text IS NOT NULL AND LOWER(t.responsable) = LOWER($3))
+          )
+        ORDER BY t.created_at DESC
+        LIMIT 20
+      `, [uid, memberNombre, userDispName]),
+
+      // Overdue / blocked tasks for this member
+      pool.query(`
+        SELECT t.id, t.titulo, t.estado, t.prioridad, t.deadline, t.responsable,
+               p.nombre AS project_nombre, c.nombre AS client_nombre
+        FROM   tasks t
+        LEFT JOIN projects p ON t.project_id = p.id
+        LEFT JOIN clients  c ON p.client_id  = c.id
+        WHERE  t.user_id = $1
+          AND  t.estado != 'completado'
+          AND  ((t.deadline IS NOT NULL AND t.deadline < CURRENT_DATE) OR t.estado = 'bloqueado')
+          AND  (
+            ($2::text IS NOT NULL AND LOWER(t.responsable) = LOWER($2))
+            OR ($3::text IS NOT NULL AND LOWER(t.responsable) = LOWER($3))
+          )
+        ORDER BY
+          CASE t.estado WHEN 'bloqueado' THEN 1 ELSE 2 END,
+          t.deadline ASC NULLS LAST
+        LIMIT 12
+      `, [uid, memberNombre, userDispName]),
+
+      // Count active projects for this member (by ID or name, case-insensitive, dual-name)
+      pool.query(`
+        SELECT COUNT(*) AS total
+        FROM projects
+        WHERE user_id = $1
+          AND estado = 'activo'
+          AND (
+            ($2::int IS NOT NULL AND responsable_id = $2)
+            OR ($3::text IS NOT NULL AND LOWER(responsable) = LOWER($3))
+            OR ($4::text IS NOT NULL AND LOWER(responsable) = LOWER($4))
+          )
+      `, [uid, memberId, memberNombre, userDispName])
+    ]);
+
+    res.json({
+      tareas_count:    parseInt(cntRes.rows[0].total)     || 0,
+      tareas_hoy:      todayRes.rows,
+      tareas_urgentes: urgentRes.rows,
+      proyectos_count: parseInt(projCntRes.rows[0].total) || 0,
+    });
+  } catch (err) {
+    console.error('[mgmt/dashboard] error:', err.message);
+    res.status(500).json({ error: 'Error al cargar dashboard' });
+  }
+});
+
+// ── GET /api/mgmt/integrity ───────────────────────────────────────
+app.get('/api/mgmt/integrity', requireAuth, async (req, res) => {
+  const wid = req.workspaceOwnerId;
+  try {
+    const [clientsNoProj, projNoTasks, tasksNoDeadline, tasksNoResp] = await Promise.all([
+      pool.query(
+        `SELECT c.id, c.nombre, c.empresa
+         FROM clients c
+         WHERE c.user_id = $1
+         AND NOT EXISTS (
+           SELECT 1 FROM projects p
+           WHERE p.client_id = c.id AND p.user_id = $1
+         )
+         ORDER BY c.nombre`,
+        [wid]
+      ),
+      pool.query(
+        `SELECT p.id, p.nombre, c.nombre AS client_nombre
+         FROM projects p
+         LEFT JOIN clients c ON p.client_id = c.id
+         WHERE p.user_id = $1 AND p.estado = 'activo'
+         AND NOT EXISTS (
+           SELECT 1 FROM tasks t
+           WHERE t.project_id = p.id AND t.user_id = $1
+         )
+         ORDER BY p.nombre`,
+        [wid]
+      ),
+      pool.query(
+        `SELECT t.id, t.titulo, t.responsable,
+                p.nombre AS project_nombre, c.nombre AS client_nombre
+         FROM tasks t
+         LEFT JOIN projects p ON t.project_id = p.id
+         LEFT JOIN clients  c ON p.client_id  = c.id
+         WHERE t.user_id = $1
+         AND t.estado NOT IN ('completado','cancelado')
+         AND t.deadline IS NULL
+         ORDER BY t.created_at DESC`,
+        [wid]
+      ),
+      pool.query(
+        `SELECT t.id, t.titulo, t.deadline
+         FROM tasks t
+         WHERE t.user_id = $1
+         AND t.estado NOT IN ('completado','cancelado')
+         AND (t.responsable IS NULL OR t.responsable = '')
+         AND (t.responsables IS NULL OR array_length(t.responsables, 1) IS NULL)
+         ORDER BY t.created_at DESC`,
+        [wid]
+      ),
+    ]);
+    res.json({
+      clientes_sin_proyecto: clientsNoProj.rows,
+      proyectos_sin_tareas:  projNoTasks.rows,
+      tareas_sin_deadline:   tasksNoDeadline.rows,
+      tareas_sin_responsable: tasksNoResp.rows,
+      total: clientsNoProj.rows.length + projNoTasks.rows.length +
+             tasksNoDeadline.rows.length + tasksNoResp.rows.length,
+    });
+  } catch (err) {
+    console.error('[mgmt/integrity] error:', err.message);
+    res.status(500).json({ error: 'Error al calcular integridad' });
+  }
+});
+
+// =================================================================
+// WORKSPACE
+// =================================================================
+
+// ── GET /api/workspace ────────────────────────────────────────────
+app.get('/api/workspace', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT * FROM workspaces WHERE owner_id = $1`,
+      [req.workspaceOwnerId]
+    );
+    if (!rows.length) {
+      const owner = await findUserById(req.workspaceOwnerId);
+      const { rows: created } = await pool.query(
+        `INSERT INTO workspaces (owner_id, name) VALUES ($1, $2)
+         ON CONFLICT (owner_id) DO UPDATE SET name = EXCLUDED.name
+         RETURNING *`,
+        [req.workspaceOwnerId, owner?.name || 'Mi Workspace']
+      );
+      return res.json(created[0]);
+    }
+    res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── PUT /api/workspace ────────────────────────────────────────────
+app.put('/api/workspace', requireAuth, async (req, res) => {
+  if (req.user.workspace_id) return res.status(403).json({ error: 'Solo el admin puede modificar el workspace' });
+  const { name, company_name, company_logo } = req.body;
+  if (!name?.trim()) return res.status(400).json({ error: 'El nombre es requerido' });
+  // Limit logo size to 2MB (base64 ~2.7M chars)
+  if (company_logo && company_logo.length > 2_800_000)
+    return res.status(400).json({ error: 'El logo no puede superar 2 MB' });
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO workspaces (owner_id, name, company_name, company_logo)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (owner_id) DO UPDATE
+         SET name=$2, company_name=$3, company_logo=$4, updated_at=NOW()
+       RETURNING *`,
+      [req.user.id, name.trim(), (company_name || '').trim(), company_logo || '']
+    );
+    res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/workspace/members ────────────────────────────────────
+app.get('/api/workspace/members', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, name, email, avatar, workspace_id
+         FROM users
+        WHERE id = $1 OR workspace_id = $1
+        ORDER BY id`,
+      [req.workspaceOwnerId]
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── POST /api/workspace/invite ────────────────────────────────────
+app.post('/api/workspace/invite', requireAuth, async (req, res) => {
+  if (req.user.workspace_id) return res.status(403).json({ error: 'Solo el admin puede invitar' });
+  const { email, nombre, cargo, nivel } = req.body;
+  if (!email?.trim())  return res.status(400).json({ error: 'El email es requerido' });
+  if (!nombre?.trim()) return res.status(400).json({ error: 'El nombre es requerido' });
+  try {
+    const crypto  = require('crypto');
+    const token   = crypto.randomBytes(24).toString('hex');
+    const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    await pool.query(
+      `INSERT INTO workspace_invites (workspace_owner_id, email, token, expires_at, nombre, cargo, nivel)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [req.user.id, email.trim().toLowerCase(), token, expires,
+       nombre.trim(), (cargo || '').trim(), nivel || 'miembro']
+    );
+    const inviteUrl = `https://enricher.kiwoc.com?join=${token}`;
+    res.json({ ok: true, invite_url: inviteUrl, expires_at: expires });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── POST /api/workspace/accept-invite ────────────────────────────
+// For users already logged in who click an invite link.
+app.post('/api/workspace/accept-invite', requireAuth, async (req, res) => {
+  const { token } = req.body;
+  if (!token) return res.status(400).json({ error: 'Token requerido' });
+  if (req.user.workspace_id) return res.json({ ok: true, already_member: true });
+  try {
+    const { rows: invites } = await pool.query(
+      `SELECT * FROM workspace_invites WHERE token=$1 AND used=false AND expires_at > NOW()`,
+      [token]
+    );
+    if (!invites.length) return res.status(400).json({ error: 'Invitación inválida o expirada' });
+    const invite = invites[0];
+    await pool.query(`UPDATE users SET workspace_id=$1 WHERE id=$2`, [invite.workspace_owner_id, req.user.id]);
+    await pool.query(`UPDATE workspace_invites SET used=true WHERE id=$1`, [invite.id]);
+    const { rows: tmExist } = await pool.query(
+      `SELECT id FROM team_members WHERE user_id=$1 AND email=$2`,
+      [invite.workspace_owner_id, req.user.email]
+    );
+    if (!tmExist.length) {
+      await pool.query(
+        `INSERT INTO team_members (user_id, nombre, email, rol, estado)
+         VALUES ($1,$2,$3,'miembro','activo')`,
+        [invite.workspace_owner_id, req.user.name || req.user.email.split('@')[0], req.user.email]
+      );
+    }
+    const updated = await findUserById(req.user.id);
+    await new Promise((resolve, reject) => req.logIn(updated, e => e ? reject(e) : resolve()));
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// =================================================================
+// CHAT — REST (history) + Socket.io (real-time)
+// =================================================================
+
+// ── GET /api/chat/messages/:channel ──────────────────────────────
+app.get('/api/chat/messages/:channel', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT m.*, u.name AS sender_name, u.avatar AS sender_avatar
+        FROM chat_messages m
+        LEFT JOIN users u ON m.sender_id = u.id
+       WHERE m.workspace_owner_id = $1 AND m.channel = $2
+       ORDER BY m.created_at ASC
+       LIMIT 120
+    `, [req.workspaceOwnerId, req.params.channel]);
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── PATCH /api/chat/messages/:id/pin — toggle pin ────────────────
+app.patch('/api/chat/messages/:id/pin', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `UPDATE chat_messages
+          SET pinned    = NOT pinned,
+              pinned_at = CASE WHEN NOT pinned THEN NOW() ELSE NULL END
+        WHERE id = $1 AND workspace_owner_id = $2
+        RETURNING *`,
+      [req.params.id, req.workspaceOwnerId]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/chat/pinned/:channel — list pinned messages ──────────
+app.get('/api/chat/pinned/:channel', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT m.*, u.name AS sender_name
+        FROM chat_messages m
+        LEFT JOIN users u ON m.sender_id = u.id
+       WHERE m.workspace_owner_id = $1 AND m.channel = $2 AND m.pinned = TRUE
+       ORDER BY m.pinned_at DESC
+       LIMIT 50
+    `, [req.workspaceOwnerId, req.params.channel]);
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// GOOGLE CALENDAR INTEGRATION
+// ═══════════════════════════════════════════════════════════════════
+
+const GCAL_SCOPES   = ['https://www.googleapis.com/auth/calendar.events'];
+const GCAL_CALLBACK = (process.env.API_BASE_URL || 'https://api.kiwoc.com') + '/api/gcal/callback';
+const FRONTEND_URL  = 'https://enricher.kiwoc.com';
+
+function _gcalOAuth2() {
+  const { google } = require('googleapis');
+  return new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+    GCAL_CALLBACK
+  );
+}
+
+async function _gcalClient(userId) {
+  const { google } = require('googleapis');
+  const { rows } = await pool.query(
+    `SELECT google_access_token, google_refresh_token, google_token_expiry FROM users WHERE id=$1`,
+    [userId]
+  );
+  if (!rows[0]?.google_refresh_token) return null;
+  const auth = _gcalOAuth2();
+  auth.setCredentials({
+    access_token:  rows[0].google_access_token,
+    refresh_token: rows[0].google_refresh_token,
+    expiry_date:   rows[0].google_token_expiry ? new Date(rows[0].google_token_expiry).getTime() : null,
+  });
+  auth.on('tokens', async tokens => {
+    if (tokens.access_token) {
+      await pool.query(
+        `UPDATE users SET google_access_token=$1, google_token_expiry=$2 WHERE id=$3`,
+        [tokens.access_token, tokens.expiry_date ? new Date(tokens.expiry_date) : null, userId]
+      );
+    }
+  });
+  return google.calendar({ version: 'v3', auth });
+}
+
+app.get('/api/gcal/status', requireAuth, async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT google_refresh_token IS NOT NULL AS connected FROM users WHERE id=$1`,
+    [req.user.id]
+  );
+  res.json({ connected: !!rows[0]?.connected });
+});
+
+app.get('/api/gcal/connect', requireAuth, (req, res) => {
+  const auth = _gcalOAuth2();
+  const url  = auth.generateAuthUrl({
+    access_type: 'offline',
+    scope: GCAL_SCOPES,
+    prompt: 'consent',
+    state: String(req.user.id),
+  });
+  res.redirect(url);
+});
+
+app.get('/api/gcal/callback', async (req, res) => {
+  const { code, state: userId } = req.query;
+  if (!code || !userId) return res.redirect(`${FRONTEND_URL}?gcal=error`);
+  try {
+    const auth = _gcalOAuth2();
+    const { tokens } = await auth.getToken(code);
+    await pool.query(
+      `UPDATE users SET google_access_token=$1, google_refresh_token=$2, google_token_expiry=$3 WHERE id=$4`,
+      [tokens.access_token, tokens.refresh_token,
+       tokens.expiry_date ? new Date(tokens.expiry_date) : null, userId]
+    );
+    res.redirect(`${FRONTEND_URL}?gcal=ok`);
+  } catch (e) {
+    console.error('[gcal] callback error:', e.message);
+    res.redirect(`${FRONTEND_URL}?gcal=error`);
+  }
+});
+
+app.post('/api/gcal/disconnect', requireAuth, async (req, res) => {
+  await pool.query(
+    `UPDATE users SET google_access_token=NULL, google_refresh_token=NULL, google_token_expiry=NULL WHERE id=$1`,
+    [req.user.id]
+  );
+  res.json({ ok: true });
+});
+
+app.get('/api/gcal/events', requireAuth, async (req, res) => {
+  try {
+    const cal = await _gcalClient(req.user.id);
+    if (!cal) return res.json({ connected: false, events: [] });
+    const { start, end } = req.query;
+    const response = await cal.events.list({
+      calendarId: 'primary',
+      timeMin: start || new Date().toISOString(),
+      timeMax: end   || new Date(Date.now() + 7 * 86400000).toISOString(),
+      singleEvents: true,
+      orderBy: 'startTime',
+      maxResults: 100,
+    });
+    const events = (response.data.items || []).map(ev => ({
+      id:     ev.id,
+      title:  ev.summary || '(Sin título)',
+      start:  ev.start?.dateTime || ev.start?.date,
+      end:    ev.end?.dateTime   || ev.end?.date,
+      allDay: !ev.start?.dateTime,
+      link:   ev.hangoutLink || ev.htmlLink || null,
+    }));
+    res.json({ connected: true, events });
+  } catch (e) {
+    console.error('[gcal] events error:', e.message);
+    res.json({ connected: true, events: [] });
+  }
+});
+
+app.post('/api/gcal/sync-task', requireAuth, async (req, res) => {
+  const { taskId } = req.body;
+  if (!taskId) return res.status(400).json({ error: 'taskId required' });
+  try {
+    const cal = await _gcalClient(req.user.id);
+    if (!cal) return res.json({ connected: false });
+    const { rows } = await pool.query(
+      `SELECT t.*, p.nombre as project_nombre, c.nombre as client_nombre
+         FROM tasks t
+         LEFT JOIN projects p ON p.id = t.project_id
+         LEFT JOIN clients c ON c.id = p.client_id
+        WHERE t.id=$1 AND t.user_id=$2`,
+      [taskId, req.workspaceOwnerId]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Tarea no encontrada' });
+    const t = rows[0];
+    const deadline = t.deadline ? String(t.deadline).split('T')[0] : null;
+    const eventBody = {
+      summary: t.titulo,
+      description: [t.descripcion, t.project_nombre && `Proyecto: ${t.project_nombre}`, t.client_nombre && `Cliente: ${t.client_nombre}`].filter(Boolean).join('\n'),
+      start: deadline ? { date: deadline } : { dateTime: new Date().toISOString(), timeZone: 'America/Bogota' },
+      end:   deadline ? { date: deadline } : { dateTime: new Date(Date.now() + 3600000).toISOString(), timeZone: 'America/Bogota' },
+      colorId: t.estado === 'completado' ? '8' : t.estado === 'bloqueado' ? '11' : '5',
+    };
+    let gcalEventId = t.gcal_event_id;
+    if (gcalEventId) {
+      try { await cal.events.update({ calendarId: 'primary', eventId: gcalEventId, requestBody: eventBody }); }
+      catch (_) { const c = await cal.events.insert({ calendarId: 'primary', requestBody: eventBody }); gcalEventId = c.data.id; }
+    } else {
+      const c = await cal.events.insert({ calendarId: 'primary', requestBody: eventBody });
+      gcalEventId = c.data.id;
+    }
+    await pool.query(`UPDATE tasks SET gcal_event_id=$1 WHERE id=$2`, [gcalEventId, taskId]);
+    res.json({ ok: true, gcalEventId });
+  } catch (e) {
+    console.error('[gcal] sync-task error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete('/api/gcal/sync-task/:taskId', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`SELECT gcal_event_id FROM tasks WHERE id=$1 AND user_id=$2`, [req.params.taskId, req.workspaceOwnerId]);
+    const eventId = rows[0]?.gcal_event_id;
+    if (eventId) {
+      const cal = await _gcalClient(req.user.id);
+      if (cal) await cal.events.delete({ calendarId: 'primary', eventId }).catch(() => {});
+      await pool.query(`UPDATE tasks SET gcal_event_id=NULL WHERE id=$1`, [req.params.taskId]);
+    }
+    res.json({ ok: true });
+  } catch (e) { res.json({ ok: true }); }
+});
+
+// ══════════════════════════════════════════════════════════════════
+// TIME TRACKING
+// ══════════════════════════════════════════════════════════════════
+
+// GET /api/timer/running — restore active timer on page load
+app.get('/api/timer/running', requireAuth, async (req, res) => {
+  try {
+    const uid = req.user.id;
+    const r = await pool.query(
+      `SELECT id, started_at, active_s, idle_s, task_id, task_titulo
+       FROM time_entries WHERE user_id=$1 AND ended_at IS NULL
+       ORDER BY started_at DESC LIMIT 1`, [uid]);
+    if (r.rows.length === 0) return res.json({ running: false });
+    const e = r.rows[0];
+    res.json({ running: true, entryId: e.id, startedAt: e.started_at,
+               activeS: e.active_s, idleS: e.idle_s,
+               taskId: e.task_id, taskTitle: e.task_titulo });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/timer/start
+app.post('/api/timer/start', requireAuth, async (req, res) => {
+  try {
+    const uid = req.user.id;
+    // Close any running entries first
+    await pool.query(
+      `UPDATE time_entries SET ended_at=NOW(),
+         duration_s=EXTRACT(EPOCH FROM (NOW()-started_at))::INTEGER
+       WHERE user_id=$1 AND ended_at IS NULL`, [uid]);
+
+    const { task_id } = req.body;
+    let taskTitulo = '', projectNombre = '';
+    if (task_id) {
+      const tr = await pool.query(
+        `SELECT t.titulo, p.nombre FROM tasks t
+         LEFT JOIN projects p ON p.id=t.project_id
+         WHERE t.id=$1`, [task_id]);
+      if (tr.rows.length) { taskTitulo = tr.rows[0].titulo || ''; projectNombre = tr.rows[0].nombre || ''; }
+    }
+    const ins = await pool.query(
+      `INSERT INTO time_entries (user_id,task_id,task_titulo,project_nombre,started_at,active_s,idle_s)
+       VALUES ($1,$2,$3,$4,NOW(),0,0) RETURNING id, started_at`,
+      [uid, task_id || null, taskTitulo, projectNombre]);
+    const e = ins.rows[0];
+    res.json({ entryId: e.id, startedAt: e.started_at, taskTitulo, projectNombre });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// PATCH /api/timer/:id/pulse — heartbeat every 30s
+app.patch('/api/timer/:id/pulse', requireAuth, async (req, res) => {
+  try {
+    const uid = req.user.id;
+    const { active_s, idle_s } = req.body;
+    await pool.query(
+      `UPDATE time_entries SET active_s=$3, idle_s=$4,
+         duration_s=EXTRACT(EPOCH FROM (NOW()-started_at))::INTEGER
+       WHERE id=$1 AND user_id=$2 AND ended_at IS NULL`,
+      [req.params.id, uid, active_s || 0, idle_s || 0]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/timer/:id/stop
+app.post('/api/timer/:id/stop', requireAuth, async (req, res) => {
+  try {
+    const uid = req.user.id;
+    const { active_s, idle_s } = req.body;
+    await pool.query(
+      `UPDATE time_entries SET ended_at=NOW(), active_s=$3, idle_s=$4,
+         duration_s=EXTRACT(EPOCH FROM (NOW()-started_at))::INTEGER
+       WHERE id=$1 AND user_id=$2 AND ended_at IS NULL`,
+      [req.params.id, uid, active_s || 0, idle_s || 0]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/timer/today
+app.get('/api/timer/today', requireAuth, async (req, res) => {
+  try {
+    const uid = req.user.id;
+    const r = await pool.query(
+      `SELECT id, task_id, task_titulo, project_nombre,
+              started_at, ended_at, duration_s, active_s, idle_s, notes
+       FROM time_entries
+       WHERE user_id=$1 AND started_at::date = CURRENT_DATE
+       ORDER BY started_at DESC`, [uid]);
+    res.json(r.rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/timer/report?start=&end=
+app.get('/api/timer/report', requireAuth, async (req, res) => {
+  try {
+    const uid = req.user.id;
+    const { start, end } = req.query;
+    if (!start || !end) return res.status(400).json({ error: 'start and end required' });
+
+    const [totalR, byDayR, byTaskR] = await Promise.all([
+      pool.query(
+        `SELECT COALESCE(SUM(duration_s),0) AS total_s FROM time_entries
+         WHERE user_id=$1 AND started_at>=$2 AND started_at<=$3 AND ended_at IS NOT NULL`,
+        [uid, start, end]),
+      pool.query(
+        `SELECT DATE(started_at) AS day, COALESCE(SUM(duration_s),0) AS duration_s,
+                COALESCE(SUM(active_s),0) AS active_s
+         FROM time_entries
+         WHERE user_id=$1 AND started_at>=$2 AND started_at<=$3 AND ended_at IS NOT NULL
+         GROUP BY day ORDER BY day`, [uid, start, end]),
+      pool.query(
+        `SELECT task_id, task_titulo, COALESCE(SUM(duration_s),0) AS total_s,
+                COALESCE(SUM(active_s),0) AS active_s
+         FROM time_entries
+         WHERE user_id=$1 AND started_at>=$2 AND started_at<=$3 AND ended_at IS NOT NULL
+         GROUP BY task_id, task_titulo ORDER BY total_s DESC LIMIT 20`,
+        [uid, start, end]),
+    ]);
+
+    // Build full 7-day array (Mon-Sun)
+    const startDate = new Date(start);
+    const byDayMap = {};
+    for (const row of byDayR.rows) byDayMap[row.day.toISOString().split('T')[0]] = row;
+    const today = new Date().toISOString().split('T')[0];
+    const byDay = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(startDate.getTime() + i * 86400000);
+      const key = d.toISOString().split('T')[0];
+      const row = byDayMap[key] || {};
+      return { day: key, duration_s: Number(row.duration_s || 0),
+               active_s: Number(row.active_s || 0), isToday: key === today };
+    });
+
+    res.json({
+      totalS: Number(totalR.rows[0].total_s),
+      byDay,
+      byTask: byTaskR.rows.map(r => ({ ...r, total_s: Number(r.total_s), active_s: Number(r.active_s) })),
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/timer/entries?start=&end=  — individual entries for calendar
+app.get('/api/timer/entries', requireAuth, async (req, res) => {
+  try {
+    const uid = req.user.id;
+    const { start, end } = req.query;
+    if (!start || !end) return res.status(400).json({ error: 'start and end required' });
+    const r = await pool.query(
+      `SELECT id, task_id, task_titulo, project_nombre,
+              started_at, ended_at, duration_s, active_s, notes
+       FROM time_entries
+       WHERE user_id=$1 AND started_at>=$2 AND started_at<$3
+       ORDER BY started_at ASC`,
+      [uid, start, end]
+    );
+    res.json(r.rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/timer/team — admin only (workspace owner or admin member)
+app.get('/api/timer/team', requireAuth, async (req, res) => {
+  try {
+    const uid = req.user.id;
+    const wid = req.workspaceOwnerId;
+    // Allow workspace owner or members with admin/manager role
+    if (uid !== wid) {
+      const roleRow = await pool.query(
+        `SELECT rol FROM team_members WHERE user_id=$1 AND email=(SELECT email FROM users WHERE id=$2)`,
+        [wid, uid]);
+      const rol = roleRow.rows[0]?.rol || '';
+      if (!['admin', 'manager'].includes(rol)) return res.status(403).json({ error: 'Admin only' });
+    }
+
+    const { start, end } = req.query;
+    if (!start || !end) return res.status(400).json({ error: 'start and end required' });
+
+    const r = await pool.query(
+      `SELECT u.id AS user_id,
+              COALESCE(tm.nombre, u.name, u.email) AS nombre,
+              COALESCE(SUM(te.duration_s),0) AS total_s,
+              COALESCE(SUM(te.active_s),0) AS active_s,
+              COUNT(te.id) AS sessions
+       FROM users u
+       LEFT JOIN time_entries te ON te.user_id=u.id
+         AND te.started_at>=$2 AND te.started_at<=$3 AND te.ended_at IS NOT NULL
+       LEFT JOIN team_members tm ON tm.email=u.email AND tm.user_id=$1
+       WHERE u.workspace_id=$1 OR u.id=$1
+       GROUP BY u.id, tm.nombre, u.name, u.email
+       ORDER BY total_s DESC`, [wid, start, end]);
+
+    res.json(r.rows.map(r => ({
+      userId: r.user_id, nombre: r.nombre,
+      totalS: Number(r.total_s), activeS: Number(r.active_s), sessions: Number(r.sessions),
+    })));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /api/timer/:id — delete an entry
+app.delete('/api/timer/:id', requireAuth, async (req, res) => {
+  try {
+    await pool.query(`DELETE FROM time_entries WHERE id=$1 AND user_id=$2`,
+      [req.params.id, req.user.id]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── GET /api/analytics/summary?start=&end=&prev_start=&prev_end= ──
+app.get('/api/analytics/summary', requireAuth, async (req, res) => {
+  try {
+    const uid = req.user.id;
+    const wid = req.workspaceOwnerId;
+    const { start, end, prev_start, prev_end } = req.query;
+    if (!start || !end) return res.status(400).json({ error: 'start and end required' });
+
+    const hasPrev = !!(prev_start && prev_end);
+
+    const [
+      revCur, revPrev,
+      tasksDoneSeries, tasksDonePrevTotal,
+      tasksCreatedSeries,
+      tasksByMember,
+      timeByCur,
+      timeDailyCur, timePrevTotal,
+      pipelineRes, pendingRes, cobradoCountRes,
+    ] = await Promise.all([
+      // Revenue — tasks marked cobrado in current period, grouped by day+currency
+      pool.query(
+        `SELECT DATE(t.cobrado_at AT TIME ZONE 'UTC')::text AS day,
+                COALESCE(p.moneda, 'USD') AS moneda,
+                COALESCE(SUM(t.monto), 0) AS total
+         FROM tasks t
+         LEFT JOIN projects p ON t.project_id = p.id
+         WHERE t.user_id=$1 AND t.cobrado=true
+           AND t.cobrado_at >= $2 AND t.cobrado_at < $3
+         GROUP BY 1, 2 ORDER BY 1, 2`,
+        [wid, start, end]
+      ),
+      // Revenue — previous period total per currency (for badge)
+      hasPrev
+        ? pool.query(
+            `SELECT COALESCE(p.moneda, 'USD') AS moneda,
+                    COALESCE(SUM(t.monto), 0) AS total
+             FROM tasks t
+             LEFT JOIN projects p ON t.project_id = p.id
+             WHERE t.user_id=$1 AND t.cobrado=true
+               AND t.cobrado_at >= $2 AND t.cobrado_at < $3
+             GROUP BY 1`,
+            [wid, prev_start, prev_end]
+          )
+        : Promise.resolve({ rows: [] }),
+      // Tasks completed — daily series (current)
+      pool.query(
+        `SELECT DATE(updated_at AT TIME ZONE 'UTC')::text AS day,
+                COUNT(*) AS count
+         FROM tasks
+         WHERE user_id=$1 AND estado='completado'
+           AND updated_at >= $2 AND updated_at < $3
+         GROUP BY 1 ORDER BY 1`,
+        [wid, start, end]
+      ),
+      // Tasks completed — previous period total
+      hasPrev
+        ? pool.query(
+            `SELECT COUNT(*) AS count
+             FROM tasks
+             WHERE user_id=$1 AND estado='completado'
+               AND updated_at >= $2 AND updated_at < $3`,
+            [wid, prev_start, prev_end]
+          )
+        : Promise.resolve({ rows: [{ count: 0 }] }),
+      // Tasks created — daily series (current)
+      pool.query(
+        `SELECT DATE(created_at AT TIME ZONE 'UTC')::text AS day,
+                COUNT(*) AS count
+         FROM tasks
+         WHERE user_id=$1
+           AND created_at >= $2 AND created_at < $3
+         GROUP BY 1 ORDER BY 1`,
+        [wid, start, end]
+      ),
+      // Tasks by team member (completed this period + overdue)
+      pool.query(
+        `SELECT NULLIF(TRIM(responsable), '') AS nombre,
+                COUNT(*) FILTER (WHERE estado='completado'
+                  AND updated_at >= $2 AND updated_at < $3) AS completed,
+                COUNT(*) FILTER (WHERE deadline < NOW()::date
+                  AND estado NOT IN ('completado')) AS overdue
+         FROM tasks
+         WHERE user_id=$1
+           AND NULLIF(TRIM(responsable), '') IS NOT NULL
+         GROUP BY 1
+         HAVING COUNT(*) FILTER (WHERE estado='completado'
+                    AND updated_at >= $2 AND updated_at < $3) > 0
+             OR COUNT(*) FILTER (WHERE deadline < NOW()::date
+                    AND estado NOT IN ('completado')) > 0
+         ORDER BY completed DESC`,
+        [wid, start, end]
+      ),
+      // Time — by member (workspace team)
+      pool.query(
+        `SELECT COALESCE(tm.nombre, u.name, u.email) AS nombre,
+                COALESCE(SUM(te.active_s), 0)   AS active_s,
+                COALESCE(SUM(te.duration_s), 0) AS total_s
+         FROM users u
+         LEFT JOIN time_entries te ON te.user_id = u.id
+           AND te.started_at >= $2 AND te.started_at < $3
+           AND te.ended_at IS NOT NULL
+         LEFT JOIN team_members tm ON tm.email = u.email AND tm.user_id = $1
+         WHERE u.workspace_id = $1 OR u.id = $1
+         GROUP BY 1
+         HAVING COALESCE(SUM(te.duration_s), 0) > 0
+         ORDER BY active_s DESC`,
+        [wid, start, end]
+      ),
+      // Time — daily series (workspace total)
+      pool.query(
+        `SELECT DATE(te.started_at AT TIME ZONE 'UTC')::text AS day,
+                COALESCE(SUM(te.active_s), 0) AS active_s
+         FROM time_entries te
+         JOIN users u ON u.id = te.user_id
+         WHERE (u.workspace_id = $1 OR u.id = $1)
+           AND te.started_at >= $2 AND te.started_at < $3
+           AND te.ended_at IS NOT NULL
+         GROUP BY 1 ORDER BY 1`,
+        [wid, start, end]
+      ),
+      // Time — previous period total (for badge)
+      hasPrev
+        ? pool.query(
+            `SELECT COALESCE(SUM(te.active_s), 0) AS total_active_s
+             FROM time_entries te
+             JOIN users u ON u.id = te.user_id
+             WHERE (u.workspace_id = $1 OR u.id = $1)
+               AND te.started_at >= $2 AND te.started_at < $3
+               AND te.ended_at IS NOT NULL`,
+            [wid, prev_start, prev_end]
+          )
+        : Promise.resolve({ rows: [{ total_active_s: 0 }] }),
+      // Pipeline — active projects grouped by currency
+      pool.query(
+        `SELECT COALESCE(moneda, 'USD') AS moneda,
+                COALESCE(SUM(valor_total), 0) AS pipeline,
+                COUNT(*) AS count
+         FROM projects
+         WHERE user_id=$1 AND estado='activo'
+         GROUP BY 1`,
+        [wid]
+      ),
+      // Pending billing — tasks with monto set but not yet cobrado, grouped by currency
+      pool.query(
+        `SELECT COALESCE(p.moneda, 'USD') AS moneda,
+                COALESCE(SUM(t.monto), 0) AS total
+         FROM tasks t
+         LEFT JOIN projects p ON t.project_id = p.id
+         WHERE t.user_id=$1 AND t.cobrado IS NOT TRUE AND t.monto IS NOT NULL AND t.monto > 0
+         GROUP BY 1`,
+        [wid]
+      ),
+      // Cobrado count — tasks marked cobrado in current period (regardless of monto)
+      pool.query(
+        `SELECT COUNT(*) AS cobrado_count
+         FROM tasks
+         WHERE user_id=$1 AND cobrado=true
+           AND cobrado_at >= $2 AND cobrado_at < $3`,
+        [wid, start, end]
+      ),
+    ]);
+
+    // Aggregate revenue by currency
+    const revByCur = {}, prevRevByCur = {}, revByDay = {};
+    for (const r of revCur.rows) {
+      const mon = r.moneda || 'USD', amt = parseFloat(r.total) || 0;
+      revByCur[mon] = (revByCur[mon] || 0) + amt;
+      revByDay[r.day] = (revByDay[r.day] || 0) + amt;
+    }
+    for (const r of revPrev.rows) {
+      const mon = r.moneda || 'USD';
+      prevRevByCur[mon] = (prevRevByCur[mon] || 0) + (parseFloat(r.total) || 0);
+    }
+    const revTotal    = Object.values(revByCur).reduce((s, v) => s + v, 0);
+    const revSeries   = Object.entries(revByDay).sort(([a],[b]) => a.localeCompare(b))
+                          .map(([day, total]) => ({ date: day, total }));
+
+    // Aggregate pipeline by currency
+    const pipByCur = {}, pendByCur = {};
+    let pipelineCount = 0;
+    for (const r of pipelineRes.rows) {
+      const mon = r.moneda || 'USD';
+      pipByCur[mon] = (pipByCur[mon] || 0) + (parseFloat(r.pipeline) || 0);
+      pipelineCount += parseInt(r.count) || 0;
+    }
+    for (const r of pendingRes.rows) {
+      const mon = r.moneda || 'USD';
+      pendByCur[mon] = (pendByCur[mon] || 0) + (parseFloat(r.total) || 0);
+    }
+    const pipelineTotal = Object.values(pipByCur).reduce((s, v) => s + v, 0);
+    const pendingTotal  = Object.values(pendByCur).reduce((s, v) => s + v, 0);
+
+    const tasksDoneTotal    = tasksDoneSeries.rows.reduce((s, r) => s + parseInt(r.count), 0);
+    const tasksDonePrevTot  = parseInt(tasksDonePrevTotal.rows[0]?.count || 0);
+    const teamActiveS  = timeByCur.rows.reduce((s, r) => s + parseInt(r.active_s), 0);
+    const teamPrevS    = parseInt(timePrevTotal.rows[0]?.total_active_s || 0);
+    const cobradoCount = parseInt(cobradoCountRes.rows[0]?.cobrado_count || 0);
+
+    res.json({
+      revenue: {
+        series:        revSeries,
+        total:         revTotal,
+        by_currency:   revByCur,
+        prev_by_currency: prevRevByCur,
+        cobrado_count: cobradoCount,
+      },
+      pipeline: {
+        total:          pipelineTotal,
+        by_currency:    pipByCur,
+        count:          pipelineCount,
+        pending:        pendingTotal,
+        pending_by_currency: pendByCur,
+      },
+      tasks: {
+        completed_series: tasksDoneSeries.rows.map(r => ({ date: r.day, count: parseInt(r.count) })),
+        created_series:   tasksCreatedSeries.rows.map(r => ({ date: r.day, count: parseInt(r.count) })),
+        by_member:        tasksByMember.rows.map(r => ({
+          nombre:    r.nombre,
+          completed: parseInt(r.completed),
+          overdue:   parseInt(r.overdue),
+        })),
+        total_completed: tasksDoneTotal,
+        prev_completed:  tasksDonePrevTot,
+      },
+      time: {
+        by_member: timeByCur.rows.map(r => ({
+          nombre:   r.nombre,
+          active_s: parseInt(r.active_s),
+          total_s:  parseInt(r.total_s),
+        })),
+        daily_series:   timeDailyCur.rows.map(r => ({ date: r.day, active_s: parseInt(r.active_s) })),
+        total_active_s: teamActiveS,
+        prev_active_s:  teamPrevS,
+      },
+    });
+  } catch (e) {
+    console.error('[analytics/summary] error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── GET /api/mgmt/exchange-rates ─────────────────────────────────
+app.get('/api/mgmt/exchange-rates', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT exchange_rates FROM users WHERE id=$1', [req.workspaceOwnerId]
+    );
+    res.json(rows[0]?.exchange_rates || {});
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── PUT /api/mgmt/exchange-rates ─────────────────────────────────
+app.put('/api/mgmt/exchange-rates', requireAuth, async (req, res) => {
+  try {
+    const rates = req.body;
+    if (typeof rates !== 'object' || Array.isArray(rates))
+      return res.status(400).json({ error: 'Invalid rates object' });
+    await pool.query(
+      'UPDATE users SET exchange_rates=$1 WHERE id=$2',
+      [JSON.stringify(rates), req.workspaceOwnerId]
+    );
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── 404 / global error ────────────────────────────────────────────
 app.use((_req, res) => res.status(404).json({ error: 'Route not found' }));
 // eslint-disable-next-line no-unused-vars
@@ -1163,21 +3352,100 @@ app.use((err, _req, res, _next) => {
 });
 
 // =================================================================
-// STARTUP — init DB then start HTTP server
+// STARTUP — init DB, wire Socket.io, start HTTP server
 // =================================================================
+
+// Wrap Express in a raw HTTP server so Socket.io can share it
+const httpServer = http.createServer(app);
+
 async function start() {
-  // Create PostgreSQL tables if they don't exist (idempotent)
   await initDb();
 
-  // Bind explicitly to 0.0.0.0 so Render's port scanner detects the
-  // server regardless of which network interface it probes.
-  app.listen(PORT, '0.0.0.0', () => {
+  // ── Socket.io setup ──────────────────────────────────────────
+  const io = new SocketIOServer(httpServer, {
+    cors: {
+      origin: (origin, cb) => cb(null, _isAllowedOrigin(origin) ? (origin || '*') : false),
+      credentials: true,
+    },
+    // Fall back to long-polling if WebSocket upgrade is blocked by nginx
+    transports: ['polling', 'websocket'],
+  });
+
+  // Auth middleware: parse session cookie → look up user
+  const wrap = mw => (socket, next) => mw(socket.request, {}, next);
+  io.use(wrap(sessionMiddleware));
+  io.use(async (socket, next) => {
+    try {
+      const userId = socket.request.session?.passport?.user;
+      if (!userId) return next(new Error('Not authenticated'));
+      const user = await findUserById(userId);
+      if (!user) return next(new Error('User not found'));
+      socket.workspaceOwnerId = user.workspace_id || user.id;
+      socket.userId   = user.id;
+      socket.userName = user.name || user.email;
+      socket.userAvatar = user.avatar || '';
+      next();
+    } catch (err) {
+      next(new Error('Auth error'));
+    }
+  });
+
+  io.on('connection', socket => {
+    const wid = socket.workspaceOwnerId;
+    // Auto-join workspace room so owner can broadcast to all members
+    socket.join(`ws:${wid}`);
+
+    // Client subscribes to a specific channel
+    socket.on('join_channel', channel => {
+      // Leave previously joined channel rooms
+      [...socket.rooms]
+        .filter(r => r.startsWith(`ch:${wid}:`))
+        .forEach(r => socket.leave(r));
+      socket.join(`ch:${wid}:${channel}`);
+    });
+
+    // Client sends a message
+    socket.on('send_message', async ({ channel, content, reply_to }) => {
+      if (!channel || !content?.trim()) return;
+      try {
+        const replyJson = reply_to ? JSON.stringify(reply_to) : null;
+        const { rows } = await pool.query(
+          `INSERT INTO chat_messages (workspace_owner_id, channel, sender_id, content, reply_to)
+           VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+          [wid, channel, socket.userId, content.trim(), replyJson]
+        );
+        const msg = {
+          ...rows[0],
+          sender_name:   socket.userName,
+          sender_avatar: socket.userAvatar,
+        };
+        // Emit to all workspace members so anyone gets notified,
+        // even if viewing a different channel right now
+        io.to(`ws:${wid}`).emit('new_message', msg);
+
+        // Schedule a 2-minute delayed email to members who aren't the sender
+        _scheduleChatNotif(pool, wid, channel, socket.userId, socket.userName, content.trim());
+      } catch (err) {
+        socket.emit('chat_error', { message: err.message });
+      }
+    });
+
+    socket.on('disconnect', () => {
+      console.log(`[socket] disconnected uid=${socket.userId}`);
+    });
+
+    console.log(`[socket] connected uid=${socket.userId} ws=${wid}`);
+  });
+
+  // ── HTTP server listen ───────────────────────────────────────
+  httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`\n  ✉  B2B Email Enricher`);
     console.log(`  ─────────────────────────────────`);
     console.log(`  Port → ${PORT} (0.0.0.0)`);
     console.log(`  Mode → ${ENV}`);
     console.log(`  DB   → PostgreSQL ✓`);
-    console.log(`  Auth → ${process.env.GOOGLE_CLIENT_ID ? 'Google OAuth ✓' : 'no GOOGLE_CLIENT_ID'}\n`);
+    console.log(`  Auth → ${process.env.GOOGLE_CLIENT_ID ? 'Google OAuth ✓' : 'no GOOGLE_CLIENT_ID'}`);
+    console.log(`  WS   → Socket.io ✓\n`);
 
     if (ENV === 'production' && process.env.RENDER_EXTERNAL_URL) {
       const url    = `${process.env.RENDER_EXTERNAL_URL}/health`;

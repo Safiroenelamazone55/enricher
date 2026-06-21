@@ -2,5 +2,11 @@ node_modules/
 backend/data/domainPatterns.json
 backend/data/domainPatterns.tmp.json
 .env
+.env.*
 *.log
 .DS_Store
+.claude/
+.wrangler/
+frontend/.wrangler/
+check_deploy.py
+deploy_backend.py
