@@ -11978,6 +11978,12 @@ const LeadManagerModule = (() => {
   let _activities = [];       // actividades / tareas comerciales (Fase 4)
   let _lmTpls = [];           // biblioteca de plantillas / assets
   let _tplFilter = 'all';     // filtro de canal en la vista Plantillas
+  let _tplTagFilter = '';     // filtro por etiqueta en la vista Plantillas
+  let _tplTags = [];          // etiquetas en edición (drawer plantilla)
+  let _tplTagOpts = [];       // sugerencias del autocompletar de etiquetas
+  let _tplSeqFilter = '';     // filtro por secuencia vinculada
+  let _tplSeqSel = [];        // secuencias vinculadas en edición (ids)
+  let _tplSeqOpts = [];       // sugerencias del selector de secuencias
   let _repCharts = [];        // instancias Chart.js de Reportes (para destruir al re-render)
   let _repChartData = null;   // datos calculados para los charts de Reportes
   let _taskView = 'list';     // 'list' | 'calendar' en Tareas comerciales
@@ -12288,9 +12294,16 @@ const LeadManagerModule = (() => {
   function _suggestHour(seqTz) { return seqTz ? _prospToHer(seqTz, '10:00') : null; }
   function _tzShort(tz) { return (tz || '').split('/').pop().replace(/_/g, ' '); }
   function _seqTzChip(s) {
-    if (!s || !s.timezone) return '';
-    const w = _suggestWindow(s.timezone);
-    return `<span class="seq-tz-chip" title="Zona del prospecto: ${esc(s.timezone)}. Ventana recomendada 9–11 h de su hora local.">🕐 ${esc(_tzShort(s.timezone))} · envía ≈ ${w.her} tu hora</span>`;
+    if (!s) return '';
+    let out = '';
+    const so = (s.starts_on || '').slice(0, 10);
+    if (so) {
+      const d = new Date(so + 'T00:00:00'), today = _dayOf(new Date());
+      const future = d > today;
+      out += `<span class="seq-start-chip" title="Fecha de inicio de la secuencia">📅 ${future ? 'Arranca' : 'Inició'} ${d.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}</span>`;
+    }
+    if (s.timezone) { const w = _suggestWindow(s.timezone); out += `<span class="seq-tz-chip" title="Zona del prospecto: ${esc(s.timezone)}. Ventana recomendada 9–11 h de su hora local.">🕐 ${esc(_tzShort(s.timezone))} · envía ≈ ${w.her} tu hora</span>`; }
+    return out;
   }
   function tzSearch() {
     const inp = document.getElementById('seq-tz-search'), list = document.getElementById('seq-tz-list'); if (!inp || !list) return;
@@ -12598,6 +12611,7 @@ const LeadManagerModule = (() => {
       company_website: s.company_website, company_industry: s.company_industria, company_industria: s.company_industria,
       company_size: s.company_tamano, company_tamano: s.company_tamano, company_revenue: s.company_ingresos, company_ingresos: s.company_ingresos,
       company_city: s.company_ciudad, company_country: s.company_pais, company_target_tier: s.company_target_tier,
+      company_segmento: s.company_segmento, company_segment: s.company_segmento, segmento: s.company_segmento, icp: s.company_segmento,
     };
     return String(tpl || '').replace(/\{\{\s*([^}]+?)\s*\}\}/g, (m, tok) => {
       const k = tok.trim().toLowerCase().replace(/[\s-]+/g, '_');
@@ -13373,21 +13387,51 @@ const LeadManagerModule = (() => {
   }
 
   // ── Plantillas / Assets (biblioteca reutilizable) ──
-  const _TPL_CANALES = [['linkedin', 'LinkedIn'], ['email', 'Email'], ['general', 'General']];
+  const _TPL_CANALES = [
+    ['email', 'Email'], ['linkedin_nota', 'LinkedIn · Nota'], ['linkedin_msg', 'LinkedIn · Mensaje'],
+    ['whatsapp_msg', 'WhatsApp · Mensaje'], ['whatsapp_call', 'WhatsApp · Llamada'],
+    ['call', 'Llamada'], ['sms', 'SMS'], ['general', 'General'],
+  ];
+  // Config del formulario por canal: subj = req|opt|no, etiquetas y placeholders.
+  const _TPL_CFG = {
+    email:         { subj: 'req', subjLbl: 'Asunto', subjPh: 'Asunto del email', bodyLbl: 'Cuerpo del email', chip: 'email' },
+    linkedin_nota: { subj: 'no',  bodyLbl: 'Nota de conexión', bodyPh: 'Máx. ~300 caracteres. Ej. Hola {{first_name}}…', chip: 'linkedin' },
+    linkedin_msg:  { subj: 'opt', subjLbl: 'Título (opcional)', subjPh: 'Opcional', bodyLbl: 'Mensaje', chip: 'linkedin' },
+    whatsapp_msg:  { subj: 'no',  bodyLbl: 'Mensaje', chip: 'whatsapp' },
+    whatsapp_call: { subj: 'no',  bodyLbl: 'Guion de llamada', chip: 'whatsapp' },
+    call:          { subj: 'no',  bodyLbl: 'Guion de llamada', chip: 'call' },
+    sms:           { subj: 'no',  bodyLbl: 'Mensaje (máx. 160)', chip: 'sms' },
+    general:       { subj: 'opt', subjLbl: 'Título (opcional)', subjPh: 'Opcional', bodyLbl: 'Contenido', chip: 'general' },
+    // compat con valores antiguos
+    linkedin:      { subj: 'opt', subjLbl: 'Título (opcional)', subjPh: 'Opcional', bodyLbl: 'Mensaje', chip: 'linkedin' },
+    whatsapp:      { subj: 'no',  bodyLbl: 'Mensaje', chip: 'whatsapp' },
+  };
+  function _tplCfg(c) { return _TPL_CFG[c] || _TPL_CFG.general; }
   const _TPL_TIPOS = [['plantilla', 'Plantilla'], ['snippet', 'Snippet'], ['angulo', 'Ángulo'], ['objecion', 'Objeción']];
-  function _tplCanalLabel(c) { return (_TPL_CANALES.find(x => x[0] === c) || ['', 'General'])[1]; }
+  function _tplCanalLabel(c) { const f = _TPL_CANALES.find(x => x[0] === c); return f ? f[1] : (c ? c.charAt(0).toUpperCase() + c.slice(1) : 'General'); }
   function _tplTipoLabel(t) { return (_TPL_TIPOS.find(x => x[0] === t) || ['', 'Plantilla'])[1]; }
+  function _tplTagsOf(t) { return String(t.tags || '').split(',').map(s => s.trim()).filter(Boolean); }
+  function _tplAllTags() { const m = new Map(); (_lmTpls || []).forEach(t => _tplTagsOf(t).forEach(s => { const k = _lmNorm(s); if (!m.has(k)) m.set(k, s); })); return [...m.values()].sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' })); }
+  function _tplSeqsOf(t) { return String(t.sequence_ids || '').split(',').map(s => s.trim()).filter(Boolean); }
+  function _seqNameById(id) { const s = (_sequences || []).find(x => String(x.id) === String(id)); return s ? s.nombre : ('Secuencia ' + id); }
   function _vTemplates() {
-    const list = _tplFilter === 'all' ? _lmTpls : _lmTpls.filter(t => (t.canal || 'general') === _tplFilter);
-    const fils = [['all', 'Todas'], ..._TPL_CANALES].map(f => `<button class="lm-tpl-fil${_tplFilter === f[0] ? ' on' : ''}" onclick="LeadManagerModule.tplSetFilter('${f[0]}')">${f[1]}</button>`).join('');
+    let list = _tplFilter === 'all' ? _lmTpls : _lmTpls.filter(t => (t.canal || 'general') === _tplFilter);
+    if (_tplTagFilter) list = list.filter(t => _tplTagsOf(t).some(x => _lmNorm(x) === _lmNorm(_tplTagFilter)));
+    if (_tplSeqFilter) list = list.filter(t => _tplSeqsOf(t).some(x => String(x) === String(_tplSeqFilter)));
+    const canalSel = `<select class="lm-tpl-tagsel" onchange="LeadManagerModule.tplSetFilter(this.value)"><option value="all">Todos los canales</option>${_TPL_CANALES.map(c => `<option value="${c[0]}"${_tplFilter === c[0] ? ' selected' : ''}>${c[1]}</option>`).join('')}</select>`;
+    const allTags = _tplAllTags();
+    const tagSel = allTags.length ? `<select class="lm-tpl-tagsel" onchange="LeadManagerModule.tplSetTag(this.value)"><option value="">🏷 Todas las etiquetas</option>${allTags.map(tg => `<option value="${esc(tg)}"${_tplTagFilter === tg ? ' selected' : ''}>${esc(tg)}</option>`).join('')}</select>` : '';
+    const linkedSeq = new Set(); (_lmTpls || []).forEach(t => _tplSeqsOf(t).forEach(id => linkedSeq.add(String(id))));
+    const seqOptsList = (_sequences || []).filter(s => linkedSeq.has(String(s.id)));
+    const seqSel = seqOptsList.length ? `<select class="lm-tpl-tagsel" onchange="LeadManagerModule.tplSetSeq(this.value)"><option value="">🔗 Todas las secuencias</option>${seqOptsList.map(s => `<option value="${s.id}"${String(_tplSeqFilter) === String(s.id) ? ' selected' : ''}>${esc(s.nombre)}</option>`).join('')}</select>` : '';
     const cards = list.length
       ? list.map(_tplCard).join('')
-      : `<div class="cp-empty2" style="grid-column:1/-1;padding:26px;text-align:center">No hay plantillas${_tplFilter !== 'all' ? ' en este canal' : ''} todavía. Crea la primera con “＋ Nueva plantilla”.</div>`;
+      : `<div class="cp-empty2" style="grid-column:1/-1;padding:26px;text-align:center">No hay plantillas${(_tplFilter !== 'all' || _tplTagFilter || _tplSeqFilter) ? ' con ese filtro' : ''} todavía. Crea la primera con “＋ Nueva plantilla”.</div>`;
     return `<div class="lm-sec-head">
         <div><h2 class="lm-sec-title">Plantillas / Assets</h2><p class="lm-sec-sub">Plantillas de Email y LinkedIn con variables — reutilízalas en tus secuencias</p></div>
         <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openTemplate()">＋ Nueva plantilla</button>
       </div>
-      <div class="lm-toolbar"><div class="lm-tpl-fils">${fils}</div><span class="lm-count">${list.length} ${list.length === 1 ? 'plantilla' : 'plantillas'}</span></div>
+      <div class="lm-toolbar">${canalSel}${seqSel}${tagSel}<span class="lm-count">${list.length} ${list.length === 1 ? 'plantilla' : 'plantillas'}</span></div>
       <div class="lm-tpl-grid">${cards}</div>`;
   }
   function _tplCard(t) {
@@ -13395,14 +13439,17 @@ const LeadManagerModule = (() => {
     const body = (t.cuerpo || '').replace(/\s+/g, ' ').trim();
     const prev = body.length > 170 ? body.slice(0, 170) + '…' : (body || '—');
     return `<div class="lm-tpl-card" onclick="LeadManagerModule.openTemplate(${t.id})">
-      <div class="lm-tpl-card__hd"><span class="lm-tpl-chip lm-tpl-chip--${esc(canal)}">${esc(_tplCanalLabel(canal))}</span><span class="lm-tpl-tipo">${esc(_tplTipoLabel(t.tipo))}</span>
+      <div class="lm-tpl-card__hd"><span class="lm-tpl-chip lm-tpl-chip--${esc(_tplCfg(canal).chip)}">${esc(_tplCanalLabel(canal))}</span><span class="lm-tpl-tipo">${esc(_tplTipoLabel(t.tipo))}</span>
         <button class="lm-tpl-del" title="Eliminar" onclick="event.stopPropagation();LeadManagerModule.deleteTemplate(${t.id})">✕</button></div>
       <div class="lm-tpl-card__t">${esc(t.nombre || 'Sin título')}</div>
       ${t.asunto ? `<div class="lm-tpl-card__subj">✉ ${esc(t.asunto)}</div>` : ''}
       <div class="lm-tpl-card__body">${esc(prev)}</div>
+      ${(_tplSeqsOf(t).length || _tplTagsOf(t).length) ? `<div class="lm-tpl-tags">${_tplSeqsOf(t).map(id => `<span class="lm-tpl-tag lm-tpl-tag--seq">🔗 ${esc(_seqNameById(id))}</span>`).join('')}${_tplTagsOf(t).map(tg => `<span class="lm-tpl-tag">${esc(tg)}</span>`).join('')}</div>` : ''}
     </div>`;
   }
   function tplSetFilter(f) { _tplFilter = f; _renderBody(); }
+  function tplSetTag(v) { _tplTagFilter = v || ''; _renderBody(); }
+  function tplSetSeq(v) { _tplSeqFilter = v || ''; _renderBody(); }
   function stepUseTpl(tplId) {
     const t = _lmTpls.find(x => String(x.id) === String(tplId)); if (!t) return;
     const ta = document.getElementById(_stepFocusTa || 'step-var-0');
@@ -13420,19 +13467,23 @@ const LeadManagerModule = (() => {
   }
   function openTemplate(id) {
     const t = id ? _lmTpls.find(x => x.id === id) : null;
+    _tplTags = t ? _tplTagsOf(t) : [];
+    _tplSeqSel = t ? _tplSeqsOf(t) : [];
     document.getElementById('lm-tpl-modal')?.remove();
     const m = document.createElement('div'); m.id = 'lm-tpl-modal'; m.className = 'fin-pi-backdrop';
     m.onclick = e => { if (e.target === m) closeTemplate(); };
-    const canalOpts = _TPL_CANALES.map(c => `<option value="${c[0]}"${(t?.canal || 'linkedin') === c[0] ? ' selected' : ''}>${c[1]}</option>`).join('');
+    const canalOpts = _TPL_CANALES.map(c => `<option value="${c[0]}"${(t?.canal || 'email') === c[0] ? ' selected' : ''}>${c[1]}</option>`).join('');
     const tipoOpts = _TPL_TIPOS.map(c => `<option value="${c[0]}"${(t?.tipo || 'plantilla') === c[0] ? ' selected' : ''}>${c[1]}</option>`).join('');
     m.innerHTML = `<div class="fin-pi-box lm-drawer-box">
       ${_impHd(t ? 'Editar plantilla' : 'Nueva plantilla').replace('closeImport', 'closeTemplate')}
       <div class="fin-pi-form">
         ${_lmFld('tpl-nombre', 'Nombre', t?.nombre, 'Ej. Conexión LinkedIn — intro', true)}
-        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Canal</span><select class="form-input" id="tpl-canal">${canalOpts}</select></label>
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Canal</span><select class="form-input" id="tpl-canal" onchange="LeadManagerModule.tplCanalChange()">${canalOpts}</select></label>
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Tipo</span><select class="form-input" id="tpl-tipo">${tipoOpts}</select></label>
-        ${_lmFld('tpl-asunto', 'Asunto (solo email)', t?.asunto, 'Asunto del email', true)}
-        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Mensaje / cuerpo</span><textarea class="form-input" id="tpl-cuerpo" rows="6" placeholder="Ej. Hola {{first_name}}, vi que eres {{title}} en {{company}}…">${t ? esc(t.cuerpo) : ''}</textarea>
+        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Secuencias relacionadas</span><div class="step-tags-wrap"><div class="step-tags"><span class="step-chips" id="tpl-seq-chips">${_tplSeqChipsHtml()}</span><input class="step-tags-inp" id="tpl-seq-inp" autocomplete="off" placeholder="Busca y elige una secuencia…" oninput="LeadManagerModule.tplSeqInput()" onfocus="LeadManagerModule.tplSeqInput()" onkeydown="LeadManagerModule.tplSeqKey(event)" onblur="LeadManagerModule.tplSeqBlur()"></div><div class="step-tags-pop" id="tpl-seq-pop"></div></div><span class="step-vars__hint">Vincula la plantilla a una o varias secuencias para ubicarla al instante con el filtro de arriba. No limita dónde puedes usarla.</span></label>
+        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Etiquetas</span><div class="step-tags-wrap"><div class="step-tags"><span class="step-chips" id="tpl-chips">${_tplChipsHtml()}</span><input class="step-tags-inp" id="tpl-tags-inp" autocomplete="off" placeholder="Escribe una etiqueta y Enter (ej. ángulo, segmento)…" oninput="LeadManagerModule.tplTagInput()" onfocus="LeadManagerModule.tplTagInput()" onkeydown="LeadManagerModule.tplTagKey(event)" onblur="LeadManagerModule.tplTagBlur()"></div><div class="step-tags-pop" id="tpl-tags-pop"></div></div><span class="step-vars__hint">Etiqueta libre para organizar y filtrar tu biblioteca. No limita en qué secuencia puedes usarla.</span></label>
+        <label class="fin-cfg-field fin-pi-full" id="tpl-asunto-wrap"><span class="fin-cfg-lbl" id="tpl-asunto-lbl">Asunto</span><input class="form-input" id="tpl-asunto" value="${t?.asunto ? esc(t.asunto) : ''}" placeholder="Asunto del email"></label>
+        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl" id="tpl-cuerpo-lbl">Mensaje / cuerpo</span><textarea class="form-input" id="tpl-cuerpo" rows="6" placeholder="Ej. Hola {{first_name}}, vi que eres {{title}} en {{company}}…">${t ? esc(t.cuerpo) : ''}</textarea>
           ${_varSelectHtml('tplInsertVar')}
           <span class="step-vars__hint">Las variables se reemplazan por los datos del contacto al hacer la tarea.</span></label>
       </div>
@@ -13442,12 +13493,71 @@ const LeadManagerModule = (() => {
         <button class="btn btn--primary btn--sm" id="tpl-save" onclick="LeadManagerModule.saveTemplate(${t ? t.id : 'null'})">${t ? 'Guardar' : 'Crear'}</button>
       </div></div></div>`;
     document.body.appendChild(m);
+    tplCanalChange();
     setTimeout(() => $('tpl-nombre')?.focus(), 60);
   }
+  // Adapta el formulario al canal: muestra/oculta el asunto y ajusta etiquetas.
+  function tplCanalChange() {
+    const cfg = _tplCfg($('tpl-canal')?.value || 'email');
+    const wrap = $('tpl-asunto-wrap'), lbl = $('tpl-asunto-lbl'), inp = $('tpl-asunto');
+    if (wrap) {
+      if (cfg.subj === 'no') { wrap.style.display = 'none'; if (inp) inp.value = ''; }
+      else { wrap.style.display = ''; if (lbl) lbl.textContent = cfg.subjLbl || 'Asunto'; if (inp) inp.placeholder = cfg.subjPh || ''; }
+    }
+    const blbl = $('tpl-cuerpo-lbl'); if (blbl) blbl.textContent = cfg.bodyLbl || 'Mensaje / cuerpo';
+    const bta = $('tpl-cuerpo'); if (bta && cfg.bodyPh) bta.placeholder = cfg.bodyPh;
+  }
   function closeTemplate() { document.getElementById('lm-tpl-modal')?.remove(); }
+  // ── Etiquetas de plantilla (tag-input con autocomplete de etiquetas ya usadas) ──
+  function _tplChipsHtml() { return _tplTags.map((t, i) => `<span class="step-tag">${esc(t)}<button type="button" tabindex="-1" onmousedown="event.preventDefault()" onclick="LeadManagerModule.tplTagRemove(${i})" title="Quitar">✕</button></span>`).join(''); }
+  function _tplRefreshChips() { const c = $('tpl-chips'); if (c) c.innerHTML = _tplChipsHtml(); }
+  function tplTagInput() {
+    const inp = $('tpl-tags-inp'), pop = $('tpl-tags-pop'); if (!inp || !pop) return;
+    const chosen = new Set(_tplTags.map(_lmNorm));
+    const all = _tplAllTags().filter(v => !chosen.has(_lmNorm(v)));
+    const q = _lmNorm(inp.value);
+    _tplTagOpts = (q ? all.filter(v => _lmNorm(v).includes(q)) : all).slice(0, 8);
+    let html = _tplTagOpts.map((v, i) => `<button type="button" class="step-tags-opt" onmousedown="event.preventDefault();LeadManagerModule.tplTagPick(${i})">${esc(v)}</button>`).join('');
+    const typed = inp.value.trim();
+    if (typed && !all.some(v => _lmNorm(v) === _lmNorm(typed)) && !chosen.has(_lmNorm(typed)))
+      html += `<button type="button" class="step-tags-opt step-tags-opt--new" onmousedown="event.preventDefault();LeadManagerModule.tplTagAddTyped()">＋ Añadir “${esc(typed)}”</button>`;
+    if (!html) html = `<div class="step-tags-empty">${all.length ? 'Sin coincidencias' : 'Escribe una etiqueta y pulsa Enter'}</div>`;
+    pop.innerHTML = html; pop.classList.add('open');
+  }
+  function tplTagKey(ev) {
+    if (ev.key === 'Enter') { ev.preventDefault(); tplTagAddTyped(); }
+    else if (ev.key === 'Backspace') { const inp = $('tpl-tags-inp'); if (inp && !inp.value && _tplTags.length) { _tplTags.pop(); _tplRefreshChips(); tplTagInput(); } }
+    else if (ev.key === 'Escape') { $('tpl-tags-pop')?.classList.remove('open'); }
+  }
+  function tplTagPick(i) { tplTagAdd(_tplTagOpts[i]); }
+  function tplTagAddTyped() { const inp = $('tpl-tags-inp'); if (inp) tplTagAdd(inp.value); }
+  function tplTagAdd(v) { v = (v || '').trim(); if (!v) return; if (!_tplTags.some(x => _lmNorm(x) === _lmNorm(v))) _tplTags.push(v); _tplRefreshChips(); const inp = $('tpl-tags-inp'); if (inp) { inp.value = ''; inp.focus(); } tplTagInput(); }
+  function tplTagRemove(i) { _tplTags.splice(i, 1); _tplRefreshChips(); tplTagInput(); }
+  function tplTagBlur() { setTimeout(() => $('tpl-tags-pop')?.classList.remove('open'), 130); }
+  // ── Secuencias vinculadas (selector desde la lista real de secuencias) ──
+  function _tplSeqChipsHtml() { return _tplSeqSel.map((id, i) => `<span class="step-tag step-tag--seq">${esc(_seqNameById(id))}<button type="button" tabindex="-1" onmousedown="event.preventDefault()" onclick="LeadManagerModule.tplSeqRemove(${i})" title="Quitar">✕</button></span>`).join(''); }
+  function _tplSeqRefresh() { const c = $('tpl-seq-chips'); if (c) c.innerHTML = _tplSeqChipsHtml(); }
+  function tplSeqInput() {
+    const inp = $('tpl-seq-inp'), pop = $('tpl-seq-pop'); if (!inp || !pop) return;
+    const chosen = new Set(_tplSeqSel.map(String));
+    const all = (_sequences || []).filter(s => !chosen.has(String(s.id)));
+    const q = _lmNorm(inp.value);
+    _tplSeqOpts = (q ? all.filter(s => _lmNorm(s.nombre).includes(q)) : all).slice(0, 8);
+    let html = _tplSeqOpts.map((s, i) => `<button type="button" class="step-tags-opt" onmousedown="event.preventDefault();LeadManagerModule.tplSeqPick(${i})">${esc(s.nombre)}</button>`).join('');
+    if (!html) html = `<div class="step-tags-empty">${all.length ? 'Sin coincidencias' : 'No tienes más secuencias'}</div>`;
+    pop.innerHTML = html; pop.classList.add('open');
+  }
+  function tplSeqKey(ev) {
+    if (ev.key === 'Backspace') { const inp = $('tpl-seq-inp'); if (inp && !inp.value && _tplSeqSel.length) { _tplSeqSel.pop(); _tplSeqRefresh(); tplSeqInput(); } }
+    else if (ev.key === 'Escape') { $('tpl-seq-pop')?.classList.remove('open'); }
+  }
+  function tplSeqPick(i) { const s = _tplSeqOpts[i]; if (s) tplSeqAdd(s.id); }
+  function tplSeqAdd(id) { if (!_tplSeqSel.some(x => String(x) === String(id))) _tplSeqSel.push(String(id)); _tplSeqRefresh(); const inp = $('tpl-seq-inp'); if (inp) { inp.value = ''; inp.focus(); } tplSeqInput(); }
+  function tplSeqRemove(i) { _tplSeqSel.splice(i, 1); _tplSeqRefresh(); tplSeqInput(); }
+  function tplSeqBlur() { setTimeout(() => $('tpl-seq-pop')?.classList.remove('open'), 130); }
   async function saveTemplate(id) {
     const g = fid => ($(fid)?.value || '').trim();
-    const payload = { nombre: g('tpl-nombre'), canal: $('tpl-canal')?.value || 'linkedin', tipo: $('tpl-tipo')?.value || 'plantilla', asunto: g('tpl-asunto'), cuerpo: g('tpl-cuerpo') };
+    const payload = { nombre: g('tpl-nombre'), canal: $('tpl-canal')?.value || 'email', tipo: $('tpl-tipo')?.value || 'plantilla', asunto: g('tpl-asunto'), cuerpo: g('tpl-cuerpo'), tags: _tplTags.join(', '), sequence_ids: _tplSeqSel.join(',') };
     const hint = $('tpl-hint');
     if (!payload.nombre) { if (hint) { hint.textContent = 'Ponle un nombre a la plantilla'; hint.style.color = '#C4342B'; } return; }
     const btn = $('tpl-save'); if (btn) btn.disabled = true;
@@ -13845,6 +13955,7 @@ const LeadManagerModule = (() => {
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Campaña (opcional)</span><select class="form-input" id="seq-campaign">${cmpOpts}</select></label>
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Estado</span><select class="form-input" id="seq-estado">${_SEQ_OPTS.map(([v, l]) => `<option value="${v}"${s?.estado === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Zona horaria del prospecto</span><div class="tz-combo"><input class="form-input" id="seq-tz-search" autocomplete="off" placeholder="Ciudad, estado o país (ej. Dallas, New York, Lima)…" value="${esc(_tzLabelFor(s?.timezone || ''))}" oninput="LeadManagerModule.tzSearch()" onfocus="LeadManagerModule.tzSearch()" onblur="LeadManagerModule.tzBlur()"><input type="hidden" id="seq-tz" value="${esc(s?.timezone || '')}"><div class="tz-list" id="seq-tz-list"></div></div></label>
+        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Fecha de inicio (opcional)</span><input class="form-input" type="date" id="seq-starts" value="${esc((s?.starts_on || '').slice(0, 10))}"><span class="seq-drip-hint">La secuencia arranca (día 1 de los contactos que enroles) en esta fecha. Vacío = arranca al momento de enrolar. Si cae en un día no permitido, se mueve al siguiente de cadencia.</span></label>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Días de cadencia</span><input type="hidden" id="seq-senddays" value="${_sanSendDays(s?.send_days)}"><div class="seq-days" id="seq-days">${['L', 'M', 'X', 'J', 'V', 'S', 'D'].map((lbl, i) => `<button type="button" class="seq-day${_sanSendDays(s?.send_days)[i] === '1' ? ' on' : ''}" data-d="${i}" onclick="LeadManagerModule.seqDayToggle(${i})">${lbl}</button>`).join('')}<span class="seq-days-sp"></span><button type="button" class="seq-days-preset" onclick="LeadManagerModule.seqDaysPreset('week')">L–V</button><button type="button" class="seq-days-preset" onclick="LeadManagerModule.seqDaysPreset('all')">Todos</button></div><span class="seq-drip-hint">Los pasos y tareas caen solo en los días marcados. Si un “día N” cae en un día no marcado, se mueve al siguiente permitido (ej. sáb/dom → lunes).</span></label>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Arranque escalonado · contactos por día</span><input class="form-input" type="number" id="seq-drip" min="0" step="1" value="${s?.drip_per_day ? s.drip_per_day : ''}" placeholder="0 = todos arrancan el mismo día"><span class="seq-drip-hint">Al enrolar muchos contactos a la vez, reparte su “día 1” en tandas (ej. 20/día) para no saturarte de tareas ni de envíos. Se distribuyen automáticamente en los días de cadencia permitidos.</span></label>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Objetivo</span><input class="form-input" id="seq-objetivo" value="${s ? esc(s.objetivo) : ''}" placeholder="Ej. Agendar demo"></label>
@@ -13866,7 +13977,7 @@ const LeadManagerModule = (() => {
     const fail = m => { if (hint) { hint.textContent = m; hint.className = 'fin-cfg-hint fin-cfg-hint--err'; } };
     if (!nombre) return fail('El nombre es requerido');
     if (!clientId) return fail('Selecciona el cliente outbound');
-    const body = { nombre, outbound_client_id: Number(clientId), campaign_id: $('seq-campaign')?.value ? Number($('seq-campaign').value) : null, estado: $('seq-estado')?.value || 'draft', objetivo: $('seq-objetivo')?.value.trim() || '', timezone: $('seq-tz')?.value || '', drip_per_day: Math.max(0, parseInt($('seq-drip')?.value) || 0), send_days: _sanSendDays($('seq-senddays')?.value) };
+    const body = { nombre, outbound_client_id: Number(clientId), campaign_id: $('seq-campaign')?.value ? Number($('seq-campaign').value) : null, estado: $('seq-estado')?.value || 'draft', objetivo: $('seq-objetivo')?.value.trim() || '', timezone: $('seq-tz')?.value || '', drip_per_day: Math.max(0, parseInt($('seq-drip')?.value) || 0), send_days: _sanSendDays($('seq-senddays')?.value), starts_on: $('seq-starts')?.value || null };
     const btn = $('seq-save'); if (btn) btn.disabled = true;
     try {
       const res = await apiFetch(`${API}/sequences${id ? '/' + id : ''}`, { method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -14119,7 +14230,7 @@ const LeadManagerModule = (() => {
   // Variables agrupadas para el desplegable (mismos campos que la importación)
   const _VAR_GROUPS = [
     ['Contacto', [['first_name', 'Nombre'], ['last_name', 'Apellido'], ['full_name', 'Nombre completo'], ['email', 'Email'], ['personal_email', 'Email personal'], ['phone', 'Teléfono'], ['mobile', 'Móvil'], ['title', 'Cargo'], ['seniority', 'Seniority'], ['department', 'Departamento'], ['buyer_role', 'Buyer Role'], ['contact_priority', 'Contact Priority'], ['linkedin', 'LinkedIn'], ['city', 'Ciudad'], ['region', 'Región'], ['country', 'País'], ['stage', 'Estado'], ['source', 'Fuente']]],
-    ['Empresa', [['company', 'Nombre empresa'], ['company_domain', 'Dominio'], ['company_website', 'Website'], ['company_industry', 'Industria'], ['company_size', 'Nº empleados'], ['company_revenue', 'Ingresos'], ['company_city', 'Ciudad'], ['company_country', 'País'], ['company_target_tier', 'Target Tier / Focus']]],
+    ['Empresa', [['company', 'Nombre empresa'], ['company_domain', 'Dominio'], ['company_website', 'Website'], ['company_industry', 'Industria'], ['company_size', 'Nº empleados'], ['company_revenue', 'Ingresos'], ['company_city', 'Ciudad'], ['company_country', 'País'], ['company_target_tier', 'Target Tier / Focus'], ['company_segmento', 'Segmento / ICP']]],
   ];
   function _varSelectHtml(fn) {
     return `<div class="step-vars"><span class="step-vars__l">Insertar variable</span><select class="step-varsel" onchange="LeadManagerModule.${fn}(this.value); this.selectedIndex=0;"><option value="">＋ Elegir campo…</option>${_VAR_GROUPS.map(g => `<optgroup label="${g[0]}">${g[1].map(v => `<option value="${v[0]}">${v[1]}  ·  {{${v[0]}}}</option>`).join('')}</optgroup>`).join('')}</select></div>`;
@@ -14148,7 +14259,7 @@ const LeadManagerModule = (() => {
         ['co_ciudad', 'Empresa · Ciudad'], ['co_region', 'Empresa · Región/Estado'], ['co_pais', 'Empresa · País'],
         ['co_direccion', 'Empresa · Dirección'], ['co_cp', 'Empresa · Código postal'], ['co_fundada', 'Empresa · Año fundación'],
         ['co_descripcion', 'Empresa · Descripción'], ['co_tecnologias', 'Empresa · Tecnologías'], ['co_funding', 'Empresa · Funding'],
-        ['co_target_tier', 'Empresa · Target Tier / Focus'],
+        ['co_target_tier', 'Empresa · Target Tier / Focus'], ['co_segmento', 'Empresa · Segmento / ICP'],
       ] },
     ],
     companies: [
@@ -14205,6 +14316,7 @@ const LeadManagerModule = (() => {
     tecnologias: ['technologies', 'tech stack', 'company technologies', 'tecnologias'],
     funding: ['total funding', 'funding', 'company total funding'],
     target_tier: ['target tier', 'target tier focus', 'target account tier', 'account tier', 'tier', 'target focus', 'account focus', 'focus'],
+    segmento: ['segmento', 'segment', 'icp', 'ideal customer profile', 'segmento icp', 'segment icp', 'segmento cliente', 'customer segment', 'buyer segment', 'perfil', 'perfil cliente', 'nicho'],
   };
   function _lmNorm(s) { return String(s || '').toLowerCase().trim().replace(/[_\-./]+/g, ' ').replace(/\s+/g, ' ').replace(/[áàä]/g, 'a').replace(/[éèë]/g, 'e').replace(/[íìï]/g, 'i').replace(/[óòö]/g, 'o').replace(/[úùü]/g, 'u').replace(/ñ/g, 'n'); }
   function _lmWord(h, s) { return new RegExp('(^| )' + s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '( |$)').test(h); }
@@ -14241,8 +14353,8 @@ const LeadManagerModule = (() => {
   // ── Filtrado avanzado de Contactos / Empresas (por campo importado) ──
   const _FLT_ICON = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>';
   const _FLT_OPS = [['in', 'es uno de'], ['nin', 'no es ninguno de'], ['contains', 'contiene'], ['starts', 'empieza por'], ['empty', 'está vacío'], ['nempty', 'tiene valor']];
-  const _CT_FILTER_FIELDS = [['nombre', 'Nombre'], ['apellido', 'Apellido'], ['email', 'Email'], ['email_personal', 'Email personal'], ['telefono', 'Teléfono'], ['movil', 'Móvil'], ['cargo', 'Cargo'], ['seniority', 'Seniority'], ['departamento', 'Departamento'], ['buyer_role', 'Buyer Role'], ['contact_priority', 'Contact Priority'], ['linkedin', 'LinkedIn'], ['company_nombre', 'Empresa'], ['ciudad', 'Ciudad'], ['region', 'Región'], ['pais', 'País'], ['estado', 'Estado'], ['fuente', 'Fuente']];
-  const _CO_FILTER_FIELDS = [['nombre', 'Nombre'], ['dominio', 'Dominio'], ['website', 'Website'], ['industria', 'Industria'], ['tamano', 'Nº empleados'], ['ingresos', 'Ingresos'], ['telefono', 'Teléfono'], ['linkedin', 'LinkedIn'], ['ciudad', 'Ciudad'], ['region', 'Región'], ['pais', 'País'], ['direccion', 'Dirección'], ['codigo_postal', 'Código postal'], ['fundada', 'Año fundación'], ['descripcion', 'Descripción'], ['tecnologias', 'Tecnologías'], ['funding', 'Funding'], ['target_tier', 'Target Tier / Focus']];
+  const _CT_FILTER_FIELDS = [['nombre', 'Nombre'], ['apellido', 'Apellido'], ['email', 'Email'], ['email_personal', 'Email personal'], ['telefono', 'Teléfono'], ['movil', 'Móvil'], ['cargo', 'Cargo'], ['seniority', 'Seniority'], ['departamento', 'Departamento'], ['buyer_role', 'Buyer Role'], ['contact_priority', 'Contact Priority'], ['linkedin', 'LinkedIn'], ['company_nombre', 'Empresa'], ['company_segmento', 'Segmento / ICP (empresa)'], ['company_target_tier', 'Target Tier / Focus (empresa)'], ['company_industria', 'Industria (empresa)'], ['ciudad', 'Ciudad'], ['region', 'Región'], ['pais', 'País'], ['estado', 'Estado'], ['fuente', 'Fuente']];
+  const _CO_FILTER_FIELDS = [['nombre', 'Nombre'], ['dominio', 'Dominio'], ['website', 'Website'], ['industria', 'Industria'], ['tamano', 'Nº empleados'], ['ingresos', 'Ingresos'], ['telefono', 'Teléfono'], ['linkedin', 'LinkedIn'], ['ciudad', 'Ciudad'], ['region', 'Región'], ['pais', 'País'], ['direccion', 'Dirección'], ['codigo_postal', 'Código postal'], ['fundada', 'Año fundación'], ['descripcion', 'Descripción'], ['tecnologias', 'Tecnologías'], ['funding', 'Funding'], ['target_tier', 'Target Tier / Focus'], ['segmento', 'Segmento / ICP']];
   function _fltFields(entity) { return entity === 'contacts' ? _CT_FILTER_FIELDS : _CO_FILTER_FIELDS; }
   function _fltFieldLabel(entity, key) { return (_fltFields(entity).find(x => x[0] === key) || ['', key])[1]; }
   function _fltOpLabel(op) { return (_FLT_OPS.find(x => x[0] === op) || ['', op])[1]; }
@@ -15046,7 +15158,7 @@ const LeadManagerModule = (() => {
     const rows = isCo ? _companies : _contacts;
     if (!rows.length) { alert('No hay nada para exportar.'); return; }
     const cols = isCo
-      ? [['nombre', 'Nombre'], ['dominio', 'Dominio'], ['website', 'Website'], ['industria', 'Industria'], ['tamano', 'Nº empleados'], ['ingresos', 'Ingresos'], ['telefono', 'Teléfono'], ['linkedin', 'LinkedIn'], ['ciudad', 'Ciudad'], ['region', 'Región'], ['pais', 'País'], ['direccion', 'Dirección'], ['codigo_postal', 'Código postal'], ['fundada', 'Fundada'], ['descripcion', 'Descripción'], ['tecnologias', 'Tecnologías'], ['funding', 'Funding'], ['target_tier', 'Target Tier / Focus'], ['notas', 'Notas']]
+      ? [['nombre', 'Nombre'], ['dominio', 'Dominio'], ['website', 'Website'], ['industria', 'Industria'], ['tamano', 'Nº empleados'], ['ingresos', 'Ingresos'], ['telefono', 'Teléfono'], ['linkedin', 'LinkedIn'], ['ciudad', 'Ciudad'], ['region', 'Región'], ['pais', 'País'], ['direccion', 'Dirección'], ['codigo_postal', 'Código postal'], ['fundada', 'Fundada'], ['descripcion', 'Descripción'], ['tecnologias', 'Tecnologías'], ['funding', 'Funding'], ['target_tier', 'Target Tier / Focus'], ['segmento', 'Segmento / ICP'], ['notas', 'Notas']]
       : [['nombre', 'Nombre'], ['apellido', 'Apellido'], ['email', 'Email'], ['email_personal', 'Email personal'], ['telefono', 'Teléfono'], ['movil', 'Móvil'], ['cargo', 'Cargo'], ['seniority', 'Seniority'], ['departamento', 'Departamento'], ['buyer_role', 'Buyer Role'], ['linkedin', 'LinkedIn'], ['company_nombre', 'Empresa'], ['ciudad', 'Ciudad'], ['region', 'Región'], ['pais', 'País'], ['estado', 'Estado'], ['contact_priority', 'Contact Priority'], ['fuente', 'Fuente'], ['notas', 'Notas']];
     const cell = v => { v = v == null ? '' : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
     const csv = '﻿' + cols.map(c => c[1]).join(',') + '\n' + rows.map(r => cols.map(c => cell(r[c[0]] != null ? r[c[0]] : r[c[0] === 'company_nombre' ? 'empresa_nombre' : c[0]])).join(',')).join('\n');
@@ -15369,6 +15481,7 @@ const LeadManagerModule = (() => {
         ${_lmFld('co-codigo_postal', 'Código postal', c?.codigo_postal)}
         ${_lmFld('co-funding', 'Funding', c?.funding)}
         ${_lmFld('co-target_tier', 'Target Tier / Focus', c?.target_tier)}
+        ${_lmFld('co-segmento', 'Segmento / ICP', c?.segmento)}
         ${_lmFld('co-descripcion', 'Descripción', c?.descripcion, '', true)}
         ${_lmFld('co-tecnologias', 'Tecnologías', c?.tecnologias, '', true)}
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Notas</span><textarea class="form-input" id="co-notas" rows="2">${c ? esc(c.notas) : ''}</textarea></label>
@@ -15388,7 +15501,7 @@ const LeadManagerModule = (() => {
       nombre: g('co-nombre'), dominio: g('co-dominio'), website: g('co-website'), industria: g('co-industria'),
       tamano: g('co-tamano'), ingresos: g('co-ingresos'), telefono: g('co-telefono'), linkedin: g('co-linkedin'),
       ciudad: g('co-ciudad'), region: g('co-region'), pais: g('co-pais'), fundada: g('co-fundada'),
-      direccion: g('co-direccion'), codigo_postal: g('co-codigo_postal'), descripcion: g('co-descripcion'), tecnologias: g('co-tecnologias'), funding: g('co-funding'), target_tier: g('co-target_tier'), notas: g('co-notas'),
+      direccion: g('co-direccion'), codigo_postal: g('co-codigo_postal'), descripcion: g('co-descripcion'), tecnologias: g('co-tecnologias'), funding: g('co-funding'), target_tier: g('co-target_tier'), segmento: g('co-segmento'), notas: g('co-notas'),
     };
     const hint = $('co-hint');
     if (!payload.nombre && !payload.dominio) { if (hint) { hint.textContent = 'Nombre o dominio requerido'; hint.style.color = '#C4342B'; } return; }
@@ -15856,7 +15969,9 @@ const LeadManagerModule = (() => {
     stepSetMode, stepSetField, stepAddVariant, stepDelVariant, stepFocusTa,
     stepTagInput, stepTagKey, stepTagPick, stepTagAddTyped, stepTagRemove, stepTagBlur,
     seqDayToggle, seqDaysPreset, stepUseSuggestedHour,
-    openTemplate, closeTemplate, saveTemplate, deleteTemplate, tplInsertVar, tplSetFilter,
+    openTemplate, closeTemplate, saveTemplate, deleteTemplate, tplInsertVar, tplSetFilter, tplSetTag, tplSetSeq, tplCanalChange,
+    tplTagInput, tplTagKey, tplTagPick, tplTagAddTyped, tplTagRemove, tplTagBlur,
+    tplSeqInput, tplSeqKey, tplSeqPick, tplSeqRemove, tplSeqBlur,
     openFilters, closeFilters, fltSet, fltAddRow, fltDelRow, fltApply, clearFilters, removeFilter,
     fmsToggle, fmsFilter, fmsPick,
     openViews, applyView, saveView, deleteView, clearAllViews,

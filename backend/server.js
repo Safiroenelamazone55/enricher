@@ -2494,7 +2494,7 @@ function _lmNormDomain(raw) {
 }
 
 // ── Empresas (lm_companies) ────────────────────────────────────────
-const LM_CO_COLS = ['nombre','dominio','website','industria','tamano','ingresos','telefono','linkedin','ciudad','region','pais','fundada','direccion','codigo_postal','descripcion','tecnologias','funding','target_tier','notas'];
+const LM_CO_COLS = ['nombre','dominio','website','industria','tamano','ingresos','telefono','linkedin','ciudad','region','pais','fundada','direccion','codigo_postal','descripcion','tecnologias','funding','target_tier','segmento','notas'];
 app.get('/api/lm/companies', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(`
@@ -2567,7 +2567,7 @@ app.get('/api/lm/contacts', requireAuth, async (req, res) => {
     const { rows } = await pool.query(`
       SELECT k.*, co.nombre AS company_nombre, co.dominio AS company_dominio,
         co.website AS company_website, co.industria AS company_industria, co.tamano AS company_tamano,
-        co.ingresos AS company_ingresos, co.ciudad AS company_ciudad, co.pais AS company_pais, co.target_tier AS company_target_tier,
+        co.ingresos AS company_ingresos, co.ciudad AS company_ciudad, co.pais AS company_pais, co.target_tier AS company_target_tier, co.segmento AS company_segmento,
         COALESCE((SELECT json_agg(json_build_object('id', s.id, 'nombre', s.nombre, 'paso', cs.paso, 'estado', cs.estado, 'enrolled_at', COALESCE((cs.start_date + TIME '12:00')::timestamptz, cs.created_at)) ORDER BY s.nombre)
                   FROM lm_contact_sequences cs JOIN sequences s ON s.id = cs.sequence_id
                   WHERE cs.contact_id = k.id), '[]') AS sequences,
@@ -2648,6 +2648,7 @@ app.post('/api/lm/contacts/bulk-delete', requireAuth, async (req, res) => {
 // ── Días de cadencia permitidos (Lun→Dom, '1'=permitido) ──
 function _sanSendDays(v) { const s = String(v || ''); return (/^[01]{7}$/.test(s) && s.includes('1')) ? s : '1111100'; }
 function _sanHora(v) { const s = String(v || '').trim(); const m = s.match(/^(\d{1,2}):(\d{2})$/); if (!m) return ''; const h = +m[1], mi = +m[2]; return (h >= 0 && h < 24 && mi >= 0 && mi < 60) ? String(h).padStart(2, '0') + ':' + m[2] : ''; }
+function _sanDate(v) { const s = String(v || '').trim(); return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null; }
 // today (fecha local del server como UTC-midnight, para aritmética de días sin tz-shift)
 function _todayUTC() { const t = new Date(); return new Date(Date.UTC(t.getFullYear(), t.getMonth(), t.getDate())); }
 // avanza una fecha (UTC-midnight) hasta caer en un día permitido por la máscara
@@ -2678,7 +2679,7 @@ async function _lmAddMembership(req, res, kind) {
       return res.json({ added: r.rowCount, requested: ids.length });
     }
     // ── Secuencia: arranque escalonado (drip) + días de cadencia ──
-    const sq = (await pool.query(`SELECT drip_per_day, send_days FROM sequences WHERE id=$1 AND user_id=$2`, [targetId, uid])).rows[0] || {};
+    const sq = (await pool.query(`SELECT drip_per_day, send_days, starts_on::text AS starts_on FROM sequences WHERE id=$1 AND user_id=$2`, [targetId, uid])).rows[0] || {};
     const drip = Math.max(0, parseInt(sq.drip_per_day) || 0);
     const mask = _sanSendDays(sq.send_days);
     // Solo contactos que existen y que NO estén ya enrolados (para no gastar cupos ni reiniciar su reloj).
@@ -2691,12 +2692,18 @@ async function _lmAddMembership(req, res, kind) {
     const usedByDate = {};
     (await pool.query(`SELECT start_date::text d, COUNT(*)::int n FROM lm_contact_sequences WHERE user_id=$1 AND sequence_id=$2 AND start_date >= CURRENT_DATE GROUP BY start_date`, [uid, targetId]))
       .rows.forEach(r => { usedByDate[r.d] = r.n; });
-    const today = _todayUTC();
+    // Base de arranque = hoy, o la fecha de inicio de la secuencia si es futura.
+    let base = _todayUTC();
+    if (sq.starts_on && /^\d{4}-\d{2}-\d{2}$/.test(sq.starts_on)) {
+      const [y, mo, d] = sq.starts_on.split('-').map(Number);
+      const so = new Date(Date.UTC(y, mo - 1, d));
+      if (so > base) base = so;
+    }
     const perDay = drip > 0 ? drip : Infinity;
     const dates = [];
-    let slot = 0, cur = _nthAllowed(today, 0, mask), curStr = _ymd(cur), inDay = usedByDate[curStr] || 0;
+    let slot = 0, cur = _nthAllowed(base, 0, mask), curStr = _ymd(cur), inDay = usedByDate[curStr] || 0;
     for (let i = 0; i < toAdd.length; i++) {
-      while (inDay >= perDay) { slot++; cur = _nthAllowed(today, slot, mask); curStr = _ymd(cur); inDay = usedByDate[curStr] || 0; }
+      while (inDay >= perDay) { slot++; cur = _nthAllowed(base, slot, mask); curStr = _ymd(cur); inDay = usedByDate[curStr] || 0; }
       dates.push(curStr); inDay++;
     }
     // next_action_at = medianoche del día de arranque → el motor de envío toma los de hoy de inmediato y difiere los futuros.
@@ -3117,11 +3124,11 @@ app.post('/api/lm/import', requireAuth, upload.single('file'), async (req, res) 
     else         found = (await pool.query(`SELECT id FROM lm_companies WHERE user_id=$1 AND dominio='' AND LOWER(nombre)=$2 LIMIT 1`, [uid, nombre.toLowerCase()])).rows[0];
     if (found) { coCache.set(key, found.id); summary.companiesMatched++; return found.id; }
     const ins = await pool.query(`
-      INSERT INTO lm_companies (user_id,nombre,dominio,website,industria,tamano,ingresos,telefono,linkedin,ciudad,region,pais,fundada,direccion,codigo_postal,descripcion,tecnologias,funding,target_tier,outbound_client_id,notas)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21) RETURNING id
+      INSERT INTO lm_companies (user_id,nombre,dominio,website,industria,tamano,ingresos,telefono,linkedin,ciudad,region,pais,fundada,direccion,codigo_postal,descripcion,tecnologias,funding,target_tier,segmento,outbound_client_id,notas)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22) RETURNING id
     `, [uid, nombre || dominio, dominio, _lmS(f.website), _lmS(f.industria), _lmS(f.tamano), _lmS(f.ingresos),
         _lmS(f.telefono), _lmS(f.linkedin), _lmS(f.ciudad), _lmS(f.region), _lmS(f.pais), _lmS(f.fundada),
-        _lmS(f.direccion), _lmS(f.codigo_postal), _lmS(f.descripcion), _lmS(f.tecnologias), _lmS(f.funding), _lmS(f.target_tier), obcId, _lmS(f.notas)]);
+        _lmS(f.direccion), _lmS(f.codigo_postal), _lmS(f.descripcion), _lmS(f.tecnologias), _lmS(f.funding), _lmS(f.target_tier), _lmS(f.segmento), obcId, _lmS(f.notas)]);
     coCache.set(key, ins.rows[0].id); summary.companiesCreated++; return ins.rows[0].id;
   }
 
@@ -3155,7 +3162,7 @@ app.post('/api/lm/import', requireAuth, upload.single('file'), async (req, res) 
           tamano: f.co_tamano, ingresos: f.co_ingresos, telefono: f.co_telefono, linkedin: f.co_linkedin,
           ciudad: f.co_ciudad, region: f.co_region, pais: f.co_pais, direccion: f.co_direccion,
           codigo_postal: f.co_cp, fundada: f.co_fundada, descripcion: f.co_descripcion,
-          tecnologias: f.co_tecnologias, funding: f.co_funding, target_tier: f.co_target_tier,
+          tecnologias: f.co_tecnologias, funding: f.co_funding, target_tier: f.co_target_tier, segmento: f.co_segmento,
         });
         await pool.query(`
           INSERT INTO lm_contacts (user_id,company_id,nombre,apellido,email,email_personal,telefono,movil,cargo,seniority,departamento,linkedin,empresa_nombre,ciudad,region,pais,estado,fuente,contact_priority,buyer_role,outbound_client_id,notas,raw)
@@ -3172,7 +3179,7 @@ app.post('/api/lm/import', requireAuth, upload.single('file'), async (req, res) 
 });
 
 // ── Plantillas / Assets (lm_templates) ─────────────────────────────
-const LM_TPL_COLS = ['nombre', 'canal', 'tipo', 'asunto', 'cuerpo'];
+const LM_TPL_COLS = ['nombre', 'canal', 'tipo', 'asunto', 'cuerpo', 'tags', 'sequence_ids'];
 app.get('/api/lm/templates', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(`SELECT * FROM lm_templates WHERE user_id=$1 ORDER BY updated_at DESC, id DESC`, [req.workspaceOwnerId]);
@@ -3276,7 +3283,7 @@ const STEP_CANALES = ['email', 'linkedin', 'call', 'task', 'whatsapp'];
 
 app.get('/api/sequences', requireAuth, async (req, res) => {
   try {
-    const { rows } = await pool.query(`SELECT * FROM sequences WHERE user_id=$1 ORDER BY created_at DESC`, [req.workspaceOwnerId]);
+    const { rows } = await pool.query(`SELECT *, starts_on::text AS starts_on FROM sequences WHERE user_id=$1 ORDER BY created_at DESC`, [req.workspaceOwnerId]);
     res.json(rows);
   } catch (err) { console.error('[seq] GET error:', err.message); res.status(500).json({ error: 'Error al cargar secuencias' }); }
 });
@@ -3288,9 +3295,9 @@ app.post('/api/sequences', requireAuth, async (req, res) => {
     const drip = Math.max(0, parseInt(b.drip_per_day) || 0);
     const sendDays = _sanSendDays(b.send_days);
     const { rows } = await pool.query(`
-      INSERT INTO sequences (user_id,outbound_client_id,campaign_id,nombre,objetivo,estado,timezone,drip_per_day,send_days)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *
-    `, [req.workspaceOwnerId, b.outbound_client_id || null, b.campaign_id || null, b.nombre.trim(), b.objetivo || '', estado, b.timezone || '', drip, sendDays]);
+      INSERT INTO sequences (user_id,outbound_client_id,campaign_id,nombre,objetivo,estado,timezone,drip_per_day,send_days,starts_on)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *
+    `, [req.workspaceOwnerId, b.outbound_client_id || null, b.campaign_id || null, b.nombre.trim(), b.objetivo || '', estado, b.timezone || '', drip, sendDays, _sanDate(b.starts_on)]);
     res.status(201).json(rows[0]);
   } catch (err) { console.error('[seq] POST error:', err.message); res.status(500).json({ error: 'Error al crear secuencia' }); }
 });
@@ -3302,9 +3309,9 @@ app.put('/api/sequences/:id', requireAuth, async (req, res) => {
     const drip = Math.max(0, parseInt(b.drip_per_day) || 0);
     const sendDays = _sanSendDays(b.send_days);
     const { rows } = await pool.query(`
-      UPDATE sequences SET outbound_client_id=$1,campaign_id=$2,nombre=$3,objetivo=$4,estado=$5,timezone=$6,drip_per_day=$7,send_days=$8,updated_at=NOW()
-      WHERE id=$9 AND user_id=$10 RETURNING *
-    `, [b.outbound_client_id || null, b.campaign_id || null, b.nombre.trim(), b.objetivo || '', estado, b.timezone || '', drip, sendDays, req.params.id, req.workspaceOwnerId]);
+      UPDATE sequences SET outbound_client_id=$1,campaign_id=$2,nombre=$3,objetivo=$4,estado=$5,timezone=$6,drip_per_day=$7,send_days=$8,starts_on=$9,updated_at=NOW()
+      WHERE id=$10 AND user_id=$11 RETURNING *
+    `, [b.outbound_client_id || null, b.campaign_id || null, b.nombre.trim(), b.objetivo || '', estado, b.timezone || '', drip, sendDays, _sanDate(b.starts_on), req.params.id, req.workspaceOwnerId]);
     if (!rows.length) return res.status(404).json({ error: 'Secuencia no encontrada' });
     res.json(rows[0]);
   } catch (err) { console.error('[seq] PUT error:', err.message); res.status(500).json({ error: 'Error al actualizar secuencia' }); }

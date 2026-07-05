@@ -624,6 +624,8 @@ async function initDb() {
     await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS drip_per_day INTEGER NOT NULL DEFAULT 0;`);
     // Días de cadencia permitidos (Lun→Dom, '1'=sí). Default L–V. Los pasos/tareas caen solo en estos días.
     await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS send_days TEXT NOT NULL DEFAULT '1111100';`);
+    // Fecha de inicio (calendario): el "día 1" de los contactos que enroles no arranca antes de esta fecha. NULL = arranca al enrolar.
+    await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS starts_on DATE;`);
 
     // ── activities (Lead Manager Fase 4: touches registrados + tareas comerciales) ──
     await pool.query(`
@@ -733,6 +735,12 @@ async function initDb() {
       );
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS lm_templates_user_idx ON lm_templates (user_id);`);
+    // Etiquetas libres (CSV) para organizar/filtrar la biblioteca sin restringir reutilización.
+    await pool.query(`ALTER TABLE lm_templates ADD COLUMN IF NOT EXISTS tags TEXT NOT NULL DEFAULT '';`);
+    // Secuencias vinculadas (CSV de ids) — solo para ubicar/filtrar rápido, NO restringe el uso.
+    await pool.query(`ALTER TABLE lm_templates ADD COLUMN IF NOT EXISTS sequence_ids TEXT NOT NULL DEFAULT '';`);
+    // Segmento / ICP de la empresa — parámetro típico para ángulos por segmento en las secuencias.
+    await pool.query(`ALTER TABLE lm_companies ADD COLUMN IF NOT EXISTS segmento TEXT NOT NULL DEFAULT '';`);
     // Pertenencias muchos-a-muchos: contacto ↔ secuencia / campaña (la membresía se agrega, el contacto NO se duplica).
     await pool.query(`
       CREATE TABLE IF NOT EXISTS lm_contact_sequences (
