@@ -11059,6 +11059,9 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .step-var-nm { border: 1px solid var(--border, #E4E7DD); border-radius: 7px; padding: 5px 9px; font-size: .82rem; font-weight: 700; color: var(--brand-d, #006B3F); width: 90px; font-family: inherit; }
 .step-var-sp { flex: 1; }
 .step-var-targets { font-size: .8rem; }
+.step-var-asunto { font-size: .84rem; font-weight: 600; margin-bottom: 2px; }
+.step-var-tplsel { font-family: inherit; font-size: .74rem; padding: 4px 8px; border: 1px solid var(--border, #E4E7DD); border-radius: 7px; background: #fff; color: var(--brand-d, #006B3F); cursor: pointer; max-width: 200px; }
+.step-var-tplsel:hover { border-color: var(--brand-l, #BFE0CC); }
 /* Tag-input con autocomplete para valores del segmento */
 .step-tags-wrap { position: relative; }
 .step-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; border: 1px solid var(--border, #E4E7DD); border-radius: 8px; padding: 5px 7px; background: #fff; min-height: 34px; }

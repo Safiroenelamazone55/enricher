@@ -12408,7 +12408,7 @@ const LeadManagerModule = (() => {
       const segSteps = d.steps.filter(st => st.variant_mode === 'segment');
       anglesSec = `<table class="tbl"><thead><tr><th>${esc(L.day)}</th><th>${esc(L.channel)}</th><th>${esc(L.segment)} / ${esc(L.variants)}</th></tr></thead><tbody>` +
         segSteps.map(st => {
-          const vs = _stepVariants(st).map(v => `<div class="segline"><b>${esc(v.nombre || '?')}</b> → ${esc((Array.isArray(v.targets) ? v.targets : []).join(', ') || '—')}${v.cuerpo ? `<div class="segmsg">${esc((v.cuerpo || '').replace(/\s+/g, ' ').slice(0, 220))}${(v.cuerpo || '').length > 220 ? '…' : ''}</div>` : ''}</div>`).join('');
+          const vs = _stepVariants(st).map(v => `<div class="segline"><b>${esc(v.nombre || '?')}</b> → ${esc((Array.isArray(v.targets) ? v.targets : []).join(', ') || '—')}${v.asunto ? `<div class="segmsg"><b>${esc(L.time === 'Hora' ? 'Asunto' : L.time === 'Time' ? 'Subject' : 'Assunto')}:</b> ${esc(v.asunto)}</div>` : ''}${v.cuerpo ? `<div class="segmsg">${esc((v.cuerpo || '').replace(/\s+/g, ' ').slice(0, 200))}${(v.cuerpo || '').length > 200 ? '…' : ''}</div>` : ''}</div>`).join('');
           return `<tr><td class="c">${st.dia || 1}</td><td><span class="chip">${esc(_rptChan(st.canal, lang))}</span></td><td>${vs}</td></tr>`;
         }).join('') + `</tbody></table>`;
     }
@@ -12820,11 +12820,13 @@ table{width:100%;border-collapse:collapse;font-size:13px}
       .sort((a, b) => (a.dia || 0) - (b.dia || 0) || (a.orden || 0) - (b.orden || 0) || a.id - b.id);
     const first = emails[0];
     const isFirst = !first || first.id === st.id;
+    // Asunto propio de la variante/ángulo que le toca a este contacto (si lo tiene).
+    const vAsun = s => { const v = _stepVariant(s, src); return (v && v.asunto) ? _seqRenderTpl(v.asunto, src).trim() : ''; };
     if (isFirst) {
       return (draft && draft.asunto) ? draft.asunto
-           : (_seqRenderTpl(st.titulo || '', src).trim() || 'Seguimiento');
+           : (vAsun(st) || _seqRenderTpl(st.titulo || '', src).trim() || 'Seguimiento');
     }
-    const base = _seqRenderTpl((first && first.titulo) || '', src).trim()
+    const base = (first && vAsun(first)) || _seqRenderTpl((first && first.titulo) || '', src).trim()
               || _seqRenderTpl(st.titulo || '', src).trim() || 'Seguimiento';
     return /^re\s*:/i.test(base) ? base : 'Re: ' + base;
   }
@@ -14155,7 +14157,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}
     _stepDraft = {
       mode: (st && st.variant_mode) || 'off',
       field: (st && st.variant_field) || 'buyer_role',
-      variants: (st && Array.isArray(st.variants) && st.variants.length) ? st.variants.map(v => ({ nombre: v.nombre || '', cuerpo: v.cuerpo || '', targets: Array.isArray(v.targets) ? v.targets.slice() : [] })) : [{ nombre: 'A', cuerpo: (st && st.plantilla) || '', targets: [] }],
+      variants: (st && Array.isArray(st.variants) && st.variants.length) ? st.variants.map(v => ({ nombre: v.nombre || '', asunto: v.asunto || '', cuerpo: v.cuerpo || '', targets: Array.isArray(v.targets) ? v.targets.slice() : [] })) : [{ nombre: 'A', asunto: '', cuerpo: (st && st.plantilla) || '', targets: [] }],
     };
     const existing = _seqSteps(seqId);
     const nextDia = st ? st.dia : ((existing.slice(-1)[0]?.dia || 0) + (existing.length ? 2 : 1));
@@ -14167,7 +14169,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}
       <div class="fin-pi-box__hd"><h3>${st ? 'Editar paso' : 'Nuevo paso'}</h3><button class="fin-pi-x" onclick="LeadManagerModule.closeStepDrawer()">✕</button></div>
       <div class="fin-pi-form">
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Día (relativo)</span><input class="form-input" type="number" id="step-dia" min="1" value="${st ? st.dia : nextDia}"></label>
-        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Canal / touch</span><select class="form-input" id="step-canal">${canalOpts}</select></label>
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Canal / touch</span><select class="form-input" id="step-canal" onchange="LeadManagerModule.stepCanalChange()">${canalOpts}</select></label>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Hora (opcional)</span><input class="form-input" type="time" id="step-hora" value="${st && st.hora ? esc(st.hora) : ''}"><span class="seq-drip-hint" id="step-hora-hint">${_stepHoraHint(seqId)}</span></label>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Título del paso</span><input class="form-input" id="step-titulo" value="${st ? esc(st.titulo) : ''}" placeholder="Ej. Email 1 — intro"></label>
         ${_lmTpls.length ? `<label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Usar plantilla guardada</span><select class="form-input" onchange="LeadManagerModule.stepUseTpl(this.value)"><option value="">— Elegir de la biblioteca —</option>${_lmTpls.map(tp => `<option value="${tp.id}">${esc(tp.nombre)} · ${esc((tp.canal || '').toUpperCase())}</option>`).join('')}</select></label>` : ''}
@@ -14198,11 +14200,15 @@ table{width:100%;border-collapse:collapse;font-size:13px}
       const opts = _CT_FILTER_FIELDS.map(f => `<option value="${f[0]}"${d.field === f[0] ? ' selected' : ''}>${f[1]}</option>`).join('');
       fieldSel = `<label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Campo del segmento</span><select class="form-input" onchange="LeadManagerModule.stepSetField(this.value)">${opts}</select></label>`;
     }
+    const canal = $('step-canal')?.value || 'email';
+    const usesSubject = canal === 'email';
+    const tplOpts = _lmTpls.length ? `<select class="step-var-tplsel" onchange="LeadManagerModule.stepVarUseTpl(${'IDX'},this.value);this.selectedIndex=0;"><option value="">↧ Usar plantilla…</option>${_lmTpls.map(tp => `<option value="${tp.id}">${esc(tp.nombre)} · ${esc(_tplCanalLabel(tp.canal))}</option>`).join('')}</select>` : '';
     const vars = single ? d.variants.slice(0, 1) : d.variants;
     const varsHtml = vars.map((v, i) => {
-      const head = single ? '' : `<div class="step-var-hd"><input class="step-var-nm" value="${esc(v.nombre || String.fromCharCode(65 + i))}" data-i="${i}" placeholder="Nombre"><span class="step-var-sp"></span>${d.variants.length > 1 ? `<button type="button" class="flt-del" onclick="LeadManagerModule.stepDelVariant(${i})" title="Quitar variante">✕</button>` : ''}</div>`;
+      const head = single ? '' : `<div class="step-var-hd"><input class="step-var-nm" value="${esc(v.nombre || String.fromCharCode(65 + i))}" data-i="${i}" placeholder="Nombre"><span class="step-var-sp"></span>${tplOpts ? tplOpts.replace('IDX', i) : ''}${d.variants.length > 1 ? `<button type="button" class="flt-del" onclick="LeadManagerModule.stepDelVariant(${i})" title="Quitar variante">✕</button>` : ''}</div>`;
+      const asunto = (!single && usesSubject) ? `<input class="form-input step-var-asunto" data-i="${i}" placeholder="Asunto del email" value="${esc(v.asunto || '')}">` : '';
       const targets = (!single && d.mode === 'segment') ? _stepTargetsHtml(i) : '';
-      return `<div class="step-var-box">${head}<textarea class="form-input step-var-ta" id="step-var-${i}" data-i="${i}" rows="${single ? 4 : 3}" placeholder="Ej. Hola {{first_name}}…" onfocus="LeadManagerModule.stepFocusTa('step-var-${i}')">${esc(v.cuerpo || '')}</textarea>${targets}</div>`;
+      return `<div class="step-var-box">${head}${asunto}<textarea class="form-input step-var-ta" id="step-var-${i}" data-i="${i}" rows="${single ? 4 : 3}" placeholder="Ej. Hola {{first_name}}…" onfocus="LeadManagerModule.stepFocusTa('step-var-${i}')">${esc(v.cuerpo || '')}</textarea>${targets}</div>`;
     }).join('');
     const addBtn = single ? '' : `<button type="button" class="flt-add" onclick="LeadManagerModule.stepAddVariant()">＋ Añadir variante</button>`;
     el.innerHTML = `${modeSel}${fieldSel}${varsHtml}${_varSelectHtml('seqInsertVar')}${addBtn}<span class="step-vars__hint">Las variables ({{first_name}}…) se reemplazan al hacer la tarea.${single ? '' : ' El sistema le muestra a cada contacto la variante que le toca.'}</span>`;
@@ -14211,6 +14217,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}
     if (!_stepDraft) return;
     document.querySelectorAll('#step-msg .step-var-ta').forEach(ta => { const i = +ta.dataset.i; if (_stepDraft.variants[i]) _stepDraft.variants[i].cuerpo = ta.value; });
     document.querySelectorAll('#step-msg .step-var-nm').forEach(inp => { const i = +inp.dataset.i; if (_stepDraft.variants[i]) _stepDraft.variants[i].nombre = inp.value.trim(); });
+    document.querySelectorAll('#step-msg .step-var-asunto').forEach(inp => { const i = +inp.dataset.i; if (_stepDraft.variants[i]) _stepDraft.variants[i].asunto = inp.value; });
     // targets (segmento) se mantienen vivos en _stepDraft vía el tag-input (stepTagAdd/Remove), no se leen de un input.
   }
   // ── Tag-input con autocomplete para los valores del segmento (detecta lo ya cargado en la base) ──
@@ -14259,10 +14266,20 @@ table{width:100%;border-collapse:collapse;font-size:13px}
   }
   function stepTagRemove(i, ti) { if (!_stepDraft || !_stepDraft.variants[i]) return; (_stepDraft.variants[i].targets || []).splice(ti, 1); _stepRefreshChips(i); stepTagInput(i); }
   function stepTagBlur(i) { setTimeout(() => document.getElementById(`step-tags-pop-${i}`)?.classList.remove('open'), 130); }
-  function stepSetMode(mode) { _stepSyncDraft(); _stepDraft.mode = mode; if (mode !== 'off') { while (_stepDraft.variants.length < 2) _stepDraft.variants.push({ nombre: String.fromCharCode(65 + _stepDraft.variants.length), cuerpo: '', targets: [] }); } _stepRenderMsg(); }
+  function stepSetMode(mode) { _stepSyncDraft(); _stepDraft.mode = mode; if (mode !== 'off') { while (_stepDraft.variants.length < 2) _stepDraft.variants.push({ nombre: String.fromCharCode(65 + _stepDraft.variants.length), asunto: '', cuerpo: '', targets: [] }); } _stepRenderMsg(); }
   function stepSetField(f) { _stepSyncDraft(); _stepDraft.field = f; _stepRenderMsg(); }
-  function stepAddVariant() { _stepSyncDraft(); _stepDraft.variants.push({ nombre: String.fromCharCode(65 + _stepDraft.variants.length), cuerpo: '', targets: [] }); _stepRenderMsg(); }
-  function stepDelVariant(i) { _stepSyncDraft(); _stepDraft.variants.splice(i, 1); if (!_stepDraft.variants.length) _stepDraft.variants.push({ nombre: 'A', cuerpo: '', targets: [] }); _stepRenderMsg(); }
+  function stepAddVariant() { _stepSyncDraft(); _stepDraft.variants.push({ nombre: String.fromCharCode(65 + _stepDraft.variants.length), asunto: '', cuerpo: '', targets: [] }); _stepRenderMsg(); }
+  function stepDelVariant(i) { _stepSyncDraft(); _stepDraft.variants.splice(i, 1); if (!_stepDraft.variants.length) _stepDraft.variants.push({ nombre: 'A', asunto: '', cuerpo: '', targets: [] }); _stepRenderMsg(); }
+  function stepCanalChange() { _stepSyncDraft(); _stepRenderMsg(); }
+  function stepVarUseTpl(i, tplId) {
+    if (!tplId || !_stepDraft || !_stepDraft.variants[i]) return;
+    const t = _lmTpls.find(x => String(x.id) === String(tplId)); if (!t) return;
+    _stepSyncDraft();
+    _stepDraft.variants[i].cuerpo = t.cuerpo || '';
+    if (($('step-canal')?.value || 'email') === 'email' && t.asunto) _stepDraft.variants[i].asunto = t.asunto;
+    if (!$('step-titulo')?.value.trim() && t.nombre) { const ti = $('step-titulo'); if (ti) ti.value = t.nombre; }
+    _stepRenderMsg();
+  }
   function stepFocusTa(id) { _stepFocusTa = id; }
   function seqInsertVar(tok) {
     if (!tok) return;
@@ -16120,6 +16137,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}
     openStepDrawer, closeStepDrawer, saveStep, confirmDeleteStep, seqInsertVar, stepUseTpl, tzSearch, tzPick, tzBlur,
     stepSetMode, stepSetField, stepAddVariant, stepDelVariant, stepFocusTa,
     stepTagInput, stepTagKey, stepTagPick, stepTagAddTyped, stepTagRemove, stepTagBlur,
+    stepCanalChange, stepVarUseTpl,
     seqDayToggle, seqDaysPreset, stepUseSuggestedHour, seqReportOpen, seqReportGen,
     openTemplate, closeTemplate, saveTemplate, deleteTemplate, tplInsertVar, tplSetFilter, tplSetTag, tplSetSeq, tplCanalChange,
     tplTagInput, tplTagKey, tplTagPick, tplTagAddTyped, tplTagRemove, tplTagBlur,
