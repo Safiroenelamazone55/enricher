@@ -14172,7 +14172,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Canal / touch</span><select class="form-input" id="step-canal" onchange="LeadManagerModule.stepCanalChange()">${canalOpts}</select></label>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Hora (opcional)</span><input class="form-input" type="time" id="step-hora" value="${st && st.hora ? esc(st.hora) : ''}"><span class="seq-drip-hint" id="step-hora-hint">${_stepHoraHint(seqId)}</span></label>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Título del paso</span><input class="form-input" id="step-titulo" value="${st ? esc(st.titulo) : ''}" placeholder="Ej. Email 1 — intro"></label>
-        ${_lmTpls.length ? `<label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Usar plantilla guardada</span><select class="form-input" onchange="LeadManagerModule.stepUseTpl(this.value)"><option value="">— Elegir de la biblioteca —</option>${_lmTpls.map(tp => `<option value="${tp.id}">${esc(tp.nombre)} · ${esc((tp.canal || '').toUpperCase())}</option>`).join('')}</select></label>` : ''}
+        ${_lmTpls.length ? `<label class="fin-cfg-field fin-pi-full" id="step-tpl-top"><span class="fin-cfg-lbl">Usar plantilla guardada</span><select class="form-input" onchange="LeadManagerModule.stepUseTpl(this.value)"><option value="">— Elegir de la biblioteca —</option>${_lmTpls.map(tp => `<option value="${tp.id}">${esc(tp.nombre)} · ${esc(_tplCanalLabel(tp.canal))}</option>`).join('')}</select></label>` : ''}
         <div id="step-msg" class="fin-pi-full step-msg"></div>
       </div>
       <div class="fin-pi-box__ft"><span class="fin-cfg-hint" id="step-hint"></span><div class="fin-pi-ft-btns">
@@ -14211,7 +14211,9 @@ table{width:100%;border-collapse:collapse;font-size:13px}
       return `<div class="step-var-box">${head}${asunto}<textarea class="form-input step-var-ta" id="step-var-${i}" data-i="${i}" rows="${single ? 4 : 3}" placeholder="Ej. Hola {{first_name}}…" onfocus="LeadManagerModule.stepFocusTa('step-var-${i}')">${esc(v.cuerpo || '')}</textarea>${targets}</div>`;
     }).join('');
     const addBtn = single ? '' : `<button type="button" class="flt-add" onclick="LeadManagerModule.stepAddVariant()">＋ Añadir variante</button>`;
-    el.innerHTML = `${modeSel}${fieldSel}${varsHtml}${_varSelectHtml('seqInsertVar')}${addBtn}<span class="step-vars__hint">Las variables ({{first_name}}…) se reemplazan al hacer la tarea.${single ? '' : ' El sistema le muestra a cada contacto la variante que le toca.'}</span>`;
+    el.innerHTML = `${modeSel}${fieldSel}${varsHtml}${_varSelectHtml('seqInsertVar')}${addBtn}<span class="step-vars__hint">Las variables ({{first_name}}…) se reemplazan al hacer la tarea.${single ? '' : ' Cada variante tiene su propia plantilla, asunto y valores de segmento. El sistema le muestra a cada contacto la variante que le toca.'}</span>`;
+    // El selector de plantilla de arriba solo aplica a "un solo mensaje"; en A/B o segmento cada variante usa el suyo.
+    const topTpl = document.getElementById('step-tpl-top'); if (topTpl) topTpl.style.display = single ? '' : 'none';
   }
   function _stepSyncDraft() {
     if (!_stepDraft) return;
