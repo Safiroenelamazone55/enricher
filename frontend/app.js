@@ -12275,6 +12275,17 @@ const LeadManagerModule = (() => {
     const fmt = (h, m) => { const t = ((h * 60 + m + diff) % 1440 + 1440) % 1440; return String(Math.floor(t / 60)).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0'); };
     return { prosp: '09:00–11:00', her: fmt(9, 0) + '–' + fmt(11, 0) };
   }
+  // Convierte una hora local del PROSPECTO (HH:MM) a la hora local de la usuaria.
+  function _prospToHer(seqTz, hhmm) {
+    if (!seqTz) return null;
+    const at = new Date();
+    const diff = _tzOffsetMin(_herTz(), at) - _tzOffsetMin(seqTz, at);
+    const [h, m] = String(hhmm || '10:00').split(':').map(Number);
+    const t = (((h || 0) * 60 + (m || 0) + diff) % 1440 + 1440) % 1440;
+    return String(Math.floor(t / 60)).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0');
+  }
+  // Hora sugerida (tu hora local) = 10:00 hora local del prospecto (centro de la ventana 9–11).
+  function _suggestHour(seqTz) { return seqTz ? _prospToHer(seqTz, '10:00') : null; }
   function _tzShort(tz) { return (tz || '').split('/').pop().replace(/_/g, ' '); }
   function _seqTzChip(s) {
     if (!s || !s.timezone) return '';
@@ -12506,11 +12517,20 @@ const LeadManagerModule = (() => {
   function _seqTasks(id) {
     const steps = _seqSteps(id);
     const list = Array.isArray(_seqContacts) ? _seqContacts : [];
+    const mask = _seqSendDays(id);
     return list.filter(e => e.estado === 'activo' && steps[(e.paso || 1) - 1]).map(e => {
       const st = steps[(e.paso || 1) - 1];
-      const due = new Date(e.enrolled_at); due.setHours(0, 0, 0, 0); due.setDate(due.getDate() + ((st.dia || 1) - 1));
+      let due = new Date(e.enrolled_at); due.setHours(0, 0, 0, 0); due.setDate(due.getDate() + ((st.dia || 1) - 1));
+      due = _rollFwdLocal(due, mask);
       return { e, st, due };
-    }).sort((a, b) => a.due - b.due);
+    }).sort((a, b) => a.due - b.due || (a.st.hora || '99:99').localeCompare(b.st.hora || '99:99'));
+  }
+  // Etiqueta de hora: la hora fija del paso, o si no hay, la sugerida por la zona del prospecto.
+  function _taskTimeHtml(st, seqId) {
+    const s = (_sequences || []).find(x => x.id === seqId); const tz = s && s.timezone;
+    if (st && st.hora) return `<span class="seq-task__hora" title="Hora asignada para esta tarea">🕐 ${esc(st.hora)}</span>`;
+    if (tz) { const sug = _suggestHour(tz); return `<span class="seq-task__sug" title="Hora sugerida en tu horario para caer en la mañana del prospecto (${esc(_tzShort(tz))})">sug. ${sug}</span>`; }
+    return '';
   }
   function _seqTaskRow(t, seqId, today) {
     const { e, st, due } = t;
@@ -12522,6 +12542,7 @@ const LeadManagerModule = (() => {
       <button class="seq-task__ck" onclick="event.stopPropagation();LeadManagerModule.seqTaskDone(${seqId},${e.contact_id})" title="Marcar hecho sin abrir"></button>
       <span class="seq-task__ico" style="background:${touch[1]}1a;color:${touch[1]}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${touch[2]}</svg></span>
       <div class="seq-task__body"><div class="seq-task__t">${esc(st.titulo || touch[0])}<span class="seq-task__ch" style="color:${touch[1]}">${touch[0]}</span></div><div class="seq-task__who">${esc(full)}${e.company_nombre ? ` · ${esc(e.company_nombre)}` : ''}</div></div>
+      ${_taskTimeHtml(st, seqId)}
       <span class="seq-task__go">Hacer ›</span>
       <span class="seq-task__due">${dLabel}</span>
     </div>`;
@@ -12898,12 +12919,17 @@ const LeadManagerModule = (() => {
         const steps = _seqSteps(sq.id);
         const st = steps[((sq.paso || 1) - 1)];
         if (!st) return;
-        const due = new Date(sq.enrolled_at || Date.now()); due.setHours(0, 0, 0, 0); due.setDate(due.getDate() + ((st.dia || 1) - 1));
+        let due = new Date(sq.enrolled_at || Date.now()); due.setHours(0, 0, 0, 0); due.setDate(due.getDate() + ((st.dia || 1) - 1));
+        due = _rollFwdLocal(due, _seqSendDays(sq.id));
         out.push({ c: c, sq: sq, st: st, due: due });
       });
     });
-    return out.sort((a, b) => a.due - b.due);
+    return out.sort((a, b) => a.due - b.due || (a.st.hora || '99:99').localeCompare(b.st.hora || '99:99'));
   }
+  // ── Días de cadencia permitidos por secuencia (Lun→Dom, '1'=permitido) ──
+  function _sanSendDays(v) { const s = String(v || ''); return (/^[01]{7}$/.test(s) && s.includes('1')) ? s : '1111100'; }
+  function _seqSendDays(seqId) { const s = (_sequences || []).find(x => x.id === seqId); return _sanSendDays(s && s.send_days); }
+  function _rollFwdLocal(date, mask) { const x = new Date(date); for (let i = 0; i < 7; i++) { if (mask[(x.getDay() + 6) % 7] === '1') return x; x.setDate(x.getDate() + 1); } return x; }
   function _dayOf(d) { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; }
   function _relDay(due) {
     const today = _dayOf(new Date());
@@ -12933,6 +12959,7 @@ const LeadManagerModule = (() => {
       <button class="seq-task__ck" onclick="event.stopPropagation();LeadManagerModule.seqTaskDone(${sq.id},${c.id})" title="Marcar hecho sin abrir"></button>
       <span class="seq-task__ico" style="background:${touch[1]}1a;color:${touch[1]}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${touch[2]}</svg></span>
       <div class="seq-task__body"><div class="seq-task__t">${esc(st.titulo || touch[0])}<span class="seq-task__ch" style="color:${touch[1]}">${touch[0]}</span></div><div class="seq-task__who">${esc(full)}${c.company_nombre ? ` · ${esc(c.company_nombre)}` : ''} · <span class="seq-task__seq">${esc(sq.nombre)}</span></div></div>
+      ${_taskTimeHtml(st, sq.id)}
       <span class="seq-task__go">Hacer ›</span>
       <span class="seq-task__due">${dLabel}</span>
     </div>`;
@@ -13656,7 +13683,7 @@ const LeadManagerModule = (() => {
       <div class="fin-pi-form">
         ${fld('obc-nombre', 'Nombre del cliente *', c?.nombre, 'Ej. Tent Softlab', true)}
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Estado</span><select class="form-input" id="obc-estado">${_OBC_OPTS.map(([v, l]) => `<option value="${v}"${c?.estado === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
-        ${fld('obc-responsable', 'Responsable', c?.responsable, '')}
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Responsable</span><select class="form-input" id="obc-responsable"><option value="">— Sin asignar —</option>${c?.responsable ? `<option value="${esc(c.responsable)}" selected>${esc(c.responsable)}</option>` : ''}</select></label>
         ${fld('obc-canal', 'Canal principal', c?.canal, 'Email · LinkedIn')}
         ${fld('obc-website', 'Website', c?.website, '')}
         ${fld('obc-mercado', 'Mercado objetivo', c?.mercado, '')}
@@ -13673,7 +13700,22 @@ const LeadManagerModule = (() => {
         </div>
       </div></div>`;
     document.body.appendChild(m);
+    _obcLoadResp(c?.responsable || '');
     setTimeout(() => $('obc-nombre')?.focus(), 60);
+  }
+  // Puebla el <select> de Responsable con los miembros del workspace (/mgmt/team).
+  async function _obcLoadResp(current) {
+    const sel = document.getElementById('obc-responsable'); if (!sel) return;
+    let members = [];
+    try { const res = await apiFetch(`${API}/mgmt/team`); members = res.ok ? await res.json() : []; } catch (_) {}
+    if (!document.getElementById('obc-responsable')) return; // drawer cerrado mientras cargaba
+    const cur = current || '';
+    let html = '<option value="">— Sin asignar —</option>';
+    let found = false;
+    html += (members || []).map(mb => { const on = mb.nombre === cur; if (on) found = true; return `<option value="${esc(mb.nombre)}"${on ? ' selected' : ''}>${esc(mb.nombre)}</option>`; }).join('');
+    if (cur && !found) html += `<option value="${esc(cur)}" selected>${esc(cur)} (fuera del equipo)</option>`;
+    if (!(members || []).length && !cur) html += `<option value="" disabled>Sin miembros — agrégalos en Equipo</option>`;
+    sel.innerHTML = html;
   }
   function closeClientDrawer() { document.getElementById('lm-obc-modal')?.remove(); }
   async function saveClient(id) {
@@ -13803,6 +13845,8 @@ const LeadManagerModule = (() => {
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Campaña (opcional)</span><select class="form-input" id="seq-campaign">${cmpOpts}</select></label>
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Estado</span><select class="form-input" id="seq-estado">${_SEQ_OPTS.map(([v, l]) => `<option value="${v}"${s?.estado === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Zona horaria del prospecto</span><div class="tz-combo"><input class="form-input" id="seq-tz-search" autocomplete="off" placeholder="Ciudad, estado o país (ej. Dallas, New York, Lima)…" value="${esc(_tzLabelFor(s?.timezone || ''))}" oninput="LeadManagerModule.tzSearch()" onfocus="LeadManagerModule.tzSearch()" onblur="LeadManagerModule.tzBlur()"><input type="hidden" id="seq-tz" value="${esc(s?.timezone || '')}"><div class="tz-list" id="seq-tz-list"></div></div></label>
+        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Días de cadencia</span><input type="hidden" id="seq-senddays" value="${_sanSendDays(s?.send_days)}"><div class="seq-days" id="seq-days">${['L', 'M', 'X', 'J', 'V', 'S', 'D'].map((lbl, i) => `<button type="button" class="seq-day${_sanSendDays(s?.send_days)[i] === '1' ? ' on' : ''}" data-d="${i}" onclick="LeadManagerModule.seqDayToggle(${i})">${lbl}</button>`).join('')}<span class="seq-days-sp"></span><button type="button" class="seq-days-preset" onclick="LeadManagerModule.seqDaysPreset('week')">L–V</button><button type="button" class="seq-days-preset" onclick="LeadManagerModule.seqDaysPreset('all')">Todos</button></div><span class="seq-drip-hint">Los pasos y tareas caen solo en los días marcados. Si un “día N” cae en un día no marcado, se mueve al siguiente permitido (ej. sáb/dom → lunes).</span></label>
+        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Arranque escalonado · contactos por día</span><input class="form-input" type="number" id="seq-drip" min="0" step="1" value="${s?.drip_per_day ? s.drip_per_day : ''}" placeholder="0 = todos arrancan el mismo día"><span class="seq-drip-hint">Al enrolar muchos contactos a la vez, reparte su “día 1” en tandas (ej. 20/día) para no saturarte de tareas ni de envíos. Se distribuyen automáticamente en los días de cadencia permitidos.</span></label>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Objetivo</span><input class="form-input" id="seq-objetivo" value="${s ? esc(s.objetivo) : ''}" placeholder="Ej. Agendar demo"></label>
       </div>
       <div class="fin-pi-box__ft"><span class="fin-cfg-hint" id="seq-hint"></span><div class="fin-pi-ft-btns">
@@ -13813,13 +13857,16 @@ const LeadManagerModule = (() => {
     document.body.appendChild(m);
     setTimeout(() => $('seq-nombre')?.focus(), 60);
   }
+  function _seqDaysRender() { const inp = $('seq-senddays'); const m = _sanSendDays(inp?.value); document.querySelectorAll('#seq-days .seq-day').forEach(b => { const i = +b.dataset.d; b.classList.toggle('on', m[i] === '1'); }); }
+  function seqDayToggle(i) { const inp = $('seq-senddays'); if (!inp) return; const m = _sanSendDays(inp.value).split(''); m[i] = m[i] === '1' ? '0' : '1'; if (!m.includes('1')) m[i] = '1'; inp.value = m.join(''); _seqDaysRender(); }
+  function seqDaysPreset(k) { const inp = $('seq-senddays'); if (!inp) return; inp.value = k === 'all' ? '1111111' : '1111100'; _seqDaysRender(); }
   function closeSequenceDrawer() { document.getElementById('lm-seq-modal')?.remove(); }
   async function saveSequence(id) {
     const nombre = $('seq-nombre')?.value.trim(); const clientId = $('seq-client')?.value; const hint = $('seq-hint');
     const fail = m => { if (hint) { hint.textContent = m; hint.className = 'fin-cfg-hint fin-cfg-hint--err'; } };
     if (!nombre) return fail('El nombre es requerido');
     if (!clientId) return fail('Selecciona el cliente outbound');
-    const body = { nombre, outbound_client_id: Number(clientId), campaign_id: $('seq-campaign')?.value ? Number($('seq-campaign').value) : null, estado: $('seq-estado')?.value || 'draft', objetivo: $('seq-objetivo')?.value.trim() || '', timezone: $('seq-tz')?.value || '' };
+    const body = { nombre, outbound_client_id: Number(clientId), campaign_id: $('seq-campaign')?.value ? Number($('seq-campaign').value) : null, estado: $('seq-estado')?.value || 'draft', objetivo: $('seq-objetivo')?.value.trim() || '', timezone: $('seq-tz')?.value || '', drip_per_day: Math.max(0, parseInt($('seq-drip')?.value) || 0), send_days: _sanSendDays($('seq-senddays')?.value) };
     const btn = $('seq-save'); if (btn) btn.disabled = true;
     try {
       const res = await apiFetch(`${API}/sequences${id ? '/' + id : ''}`, { method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -13858,6 +13905,7 @@ const LeadManagerModule = (() => {
       <div class="fin-pi-form">
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Día (relativo)</span><input class="form-input" type="number" id="step-dia" min="1" value="${st ? st.dia : nextDia}"></label>
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Canal / touch</span><select class="form-input" id="step-canal">${canalOpts}</select></label>
+        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Hora (opcional)</span><input class="form-input" type="time" id="step-hora" value="${st && st.hora ? esc(st.hora) : ''}"><span class="seq-drip-hint" id="step-hora-hint">${_stepHoraHint(seqId)}</span></label>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Título del paso</span><input class="form-input" id="step-titulo" value="${st ? esc(st.titulo) : ''}" placeholder="Ej. Email 1 — intro"></label>
         ${_lmTpls.length ? `<label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Usar plantilla guardada</span><select class="form-input" onchange="LeadManagerModule.stepUseTpl(this.value)"><option value="">— Elegir de la biblioteca —</option>${_lmTpls.map(tp => `<option value="${tp.id}">${esc(tp.nombre)} · ${esc((tp.canal || '').toUpperCase())}</option>`).join('')}</select></label>` : ''}
         <div id="step-msg" class="fin-pi-full step-msg"></div>
@@ -13871,6 +13919,12 @@ const LeadManagerModule = (() => {
     setTimeout(() => $('step-titulo')?.focus(), 60);
   }
   function closeStepDrawer() { document.getElementById('lm-step-modal')?.remove(); }
+  function _stepHoraHint(seqId) {
+    const s = (_sequences || []).find(x => x.id === seqId); const tz = s && s.timezone;
+    if (tz) { const sug = _suggestHour(tz); return `Vacío = tarea para todo el día. Sugerida <b>${sug}</b> tu hora (10:00 en ${esc(_tzShort(tz))}) <button type="button" class="seq-days-preset" onclick="LeadManagerModule.stepUseSuggestedHour('${sug}')">Usar</button>`; }
+    return 'Vacío = tarea para todo el día. Define la zona horaria del prospecto en la secuencia para ver la hora sugerida.';
+  }
+  function stepUseSuggestedHour(hhmm) { const inp = $('step-hora'); if (inp) inp.value = hhmm; }
   function _stepRenderMsg() {
     const el = document.getElementById('step-msg'); if (!el || !_stepDraft) return;
     const d = _stepDraft;
@@ -13962,7 +14016,7 @@ const LeadManagerModule = (() => {
     const d = _stepDraft || { mode: 'off', field: '', variants: [{ cuerpo: '' }] };
     const variants = d.mode === 'off' ? [] : d.variants.filter(v => (v.cuerpo || '').trim() || (v.nombre || '').trim());
     const plantilla = ((d.variants[0] && d.variants[0].cuerpo) || '').trim();
-    const body = { sequence_id: seqId, dia, canal: $('step-canal')?.value || 'email', titulo: $('step-titulo')?.value.trim() || '', plantilla, variants, variant_mode: d.mode, variant_field: d.field, orden: dia };
+    const body = { sequence_id: seqId, dia, canal: $('step-canal')?.value || 'email', titulo: $('step-titulo')?.value.trim() || '', plantilla, variants, variant_mode: d.mode, variant_field: d.field, orden: dia, hora: $('step-hora')?.value || '' };
     const btn = $('step-save'); if (btn) btn.disabled = true;
     try {
       const res = await apiFetch(`${API}/sequence-steps${stepId ? '/' + stepId : ''}`, { method: stepId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -14635,7 +14689,8 @@ const LeadManagerModule = (() => {
       if (!res.ok) throw new Error(d.error || 'Error');
       await load();
       const dup = (d.requested || ids.length) - (d.added || 0);
-      showBanner(`✓ ${d.added || 0} contacto(s) añadido(s)${dup > 0 ? ` · ${dup} ya pertenecían` : ''}`, 'success');
+      const spread = (kind === 'sequence' && d.spread_days > 1) ? ` · repartidos en ${d.spread_days} días (${d.per_day}/día)` : '';
+      showBanner(`✓ ${d.added || 0} contacto(s) añadido(s)${dup > 0 ? ` · ${dup} ya pertenecían` : ''}${spread}`, 'success');
     } catch (e) { alert('Error: ' + e.message); }
   }
 
@@ -15800,6 +15855,7 @@ const LeadManagerModule = (() => {
     openStepDrawer, closeStepDrawer, saveStep, confirmDeleteStep, seqInsertVar, stepUseTpl, tzSearch, tzPick, tzBlur,
     stepSetMode, stepSetField, stepAddVariant, stepDelVariant, stepFocusTa,
     stepTagInput, stepTagKey, stepTagPick, stepTagAddTyped, stepTagRemove, stepTagBlur,
+    seqDayToggle, seqDaysPreset, stepUseSuggestedHour,
     openTemplate, closeTemplate, saveTemplate, deleteTemplate, tplInsertVar, tplSetFilter,
     openFilters, closeFilters, fltSet, fltAddRow, fltDelRow, fltApply, clearFilters, removeFilter,
     fmsToggle, fmsFilter, fmsPick,

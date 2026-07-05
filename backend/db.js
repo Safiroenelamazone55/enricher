@@ -616,8 +616,14 @@ async function initDb() {
     await pool.query(`ALTER TABLE sequence_steps ADD COLUMN IF NOT EXISTS variants      JSONB NOT NULL DEFAULT '[]';`);
     await pool.query(`ALTER TABLE sequence_steps ADD COLUMN IF NOT EXISTS variant_mode  TEXT  NOT NULL DEFAULT 'off';`);
     await pool.query(`ALTER TABLE sequence_steps ADD COLUMN IF NOT EXISTS variant_field TEXT  NOT NULL DEFAULT '';`);
+    // Hora opcional para hacer la tarea de este paso (HH:MM en hora local de quien la ejecuta). '' = todo el día.
+    await pool.query(`ALTER TABLE sequence_steps ADD COLUMN IF NOT EXISTS hora TEXT NOT NULL DEFAULT '';`);
     // Zona horaria del prospecto por secuencia (IANA, p. ej. America/New_York) → ventana de envío sugerida.
     await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS timezone TEXT NOT NULL DEFAULT '';`);
+    // Arranque escalonado (drip): nº de contactos nuevos a arrancar por día al enrolar. 0 = todos el mismo día.
+    await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS drip_per_day INTEGER NOT NULL DEFAULT 0;`);
+    // Días de cadencia permitidos (Lun→Dom, '1'=sí). Default L–V. Los pasos/tareas caen solo en estos días.
+    await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS send_days TEXT NOT NULL DEFAULT '1111100';`);
 
     // ── activities (Lead Manager Fase 4: touches registrados + tareas comerciales) ──
     await pool.query(`
@@ -981,6 +987,8 @@ async function initDb() {
     // estado (ya existe): activo | pausado | respondido | completado | bounce
     await pool.query(`ALTER TABLE lm_contact_sequences ADD COLUMN IF NOT EXISTS next_action_at TIMESTAMPTZ;`);
     await pool.query(`ALTER TABLE lm_contact_sequences ADD COLUMN IF NOT EXISTS paused_reason  TEXT NOT NULL DEFAULT '';`);
+    // Día efectivo de arranque (día 1) de ESTE contacto en la secuencia. NULL → se usa created_at (compat).
+    await pool.query(`ALTER TABLE lm_contact_sequences ADD COLUMN IF NOT EXISTS start_date DATE;`);
     await pool.query(`CREATE INDEX IF NOT EXISTS lm_cseq_next_idx ON lm_contact_sequences (estado, next_action_at);`);
     // Espera relativa entre pasos (días desde el paso anterior; complementa 'dia' absoluto).
     await pool.query(`ALTER TABLE sequence_steps ADD COLUMN IF NOT EXISTS espera_dias INTEGER NOT NULL DEFAULT 0;`);

@@ -2568,7 +2568,7 @@ app.get('/api/lm/contacts', requireAuth, async (req, res) => {
       SELECT k.*, co.nombre AS company_nombre, co.dominio AS company_dominio,
         co.website AS company_website, co.industria AS company_industria, co.tamano AS company_tamano,
         co.ingresos AS company_ingresos, co.ciudad AS company_ciudad, co.pais AS company_pais, co.target_tier AS company_target_tier,
-        COALESCE((SELECT json_agg(json_build_object('id', s.id, 'nombre', s.nombre, 'paso', cs.paso, 'estado', cs.estado, 'enrolled_at', cs.created_at) ORDER BY s.nombre)
+        COALESCE((SELECT json_agg(json_build_object('id', s.id, 'nombre', s.nombre, 'paso', cs.paso, 'estado', cs.estado, 'enrolled_at', COALESCE((cs.start_date + TIME '12:00')::timestamptz, cs.created_at)) ORDER BY s.nombre)
                   FROM lm_contact_sequences cs JOIN sequences s ON s.id = cs.sequence_id
                   WHERE cs.contact_id = k.id), '[]') AS sequences,
         COALESCE((SELECT json_agg(json_build_object('id', cp.id, 'nombre', cp.nombre) ORDER BY cp.nombre)
@@ -2645,6 +2645,17 @@ app.post('/api/lm/contacts/bulk-delete', requireAuth, async (req, res) => {
 });
 
 // ── Pertenencias en lote: añadir contactos a secuencia / campaña ──
+// ── Días de cadencia permitidos (Lun→Dom, '1'=permitido) ──
+function _sanSendDays(v) { const s = String(v || ''); return (/^[01]{7}$/.test(s) && s.includes('1')) ? s : '1111100'; }
+function _sanHora(v) { const s = String(v || '').trim(); const m = s.match(/^(\d{1,2}):(\d{2})$/); if (!m) return ''; const h = +m[1], mi = +m[2]; return (h >= 0 && h < 24 && mi >= 0 && mi < 60) ? String(h).padStart(2, '0') + ':' + m[2] : ''; }
+// today (fecha local del server como UTC-midnight, para aritmética de días sin tz-shift)
+function _todayUTC() { const t = new Date(); return new Date(Date.UTC(t.getFullYear(), t.getMonth(), t.getDate())); }
+// avanza una fecha (UTC-midnight) hasta caer en un día permitido por la máscara
+function _rollFwd(d, mask) { const x = new Date(d.getTime()); for (let i = 0; i < 7; i++) { if (mask[(x.getUTCDay() + 6) % 7] === '1') return x; x.setUTCDate(x.getUTCDate() + 1); } return x; }
+// el k-ésimo (0-based) día permitido a partir de 'start'
+function _nthAllowed(start, k, mask) { let x = _rollFwd(start, mask); for (let c = 0; c < k; c++) { x.setUTCDate(x.getUTCDate() + 1); x = _rollFwd(x, mask); } return x; }
+function _ymd(d) { return d.toISOString().slice(0, 10); }
+
 async function _lmAddMembership(req, res, kind) {
   const uid = req.workspaceOwnerId;
   const b = req.body || {};
@@ -2658,15 +2669,45 @@ async function _lmAddMembership(req, res, kind) {
   try {
     const ok = (await pool.query(`SELECT 1 FROM ${parent} WHERE id=$1 AND user_id=$2`, [targetId, uid])).rowCount;
     if (!ok) return res.status(404).json({ error: (kind === 'sequence' ? 'Secuencia' : 'Campaña') + ' no encontrada' });
-    // Al enrolar en secuencia: next_action_at=NOW() para que el motor de envío lo tome.
-    const extraCols = kind === 'sequence' ? ', next_action_at' : '';
-    const extraVals = kind === 'sequence' ? ', NOW()' : '';
+    if (kind !== 'sequence') {
+      const r = await pool.query(`
+        INSERT INTO ${table} (user_id, contact_id, ${col})
+        SELECT $1, c.id, $2 FROM lm_contacts c WHERE c.user_id=$1 AND c.id = ANY($3::int[])
+        ON CONFLICT (contact_id, ${col}) DO NOTHING
+      `, [uid, targetId, ids]);
+      return res.json({ added: r.rowCount, requested: ids.length });
+    }
+    // ── Secuencia: arranque escalonado (drip) + días de cadencia ──
+    const sq = (await pool.query(`SELECT drip_per_day, send_days FROM sequences WHERE id=$1 AND user_id=$2`, [targetId, uid])).rows[0] || {};
+    const drip = Math.max(0, parseInt(sq.drip_per_day) || 0);
+    const mask = _sanSendDays(sq.send_days);
+    // Solo contactos que existen y que NO estén ya enrolados (para no gastar cupos ni reiniciar su reloj).
+    const already = new Set((await pool.query(`SELECT contact_id FROM lm_contact_sequences WHERE user_id=$1 AND sequence_id=$2 AND contact_id = ANY($3::int[])`, [uid, targetId, ids])).rows.map(r => r.contact_id));
+    const exist = new Set((await pool.query(`SELECT id FROM lm_contacts WHERE user_id=$1 AND id = ANY($2::int[])`, [uid, ids])).rows.map(r => r.id));
+    const toAdd = ids.filter(id => exist.has(id) && !already.has(id));
+    if (!toAdd.length) return res.json({ added: 0, requested: ids.length, spread_days: 0 });
+
+    // Cupos ya usados por fecha (para encadenar tandas sin pasar el límite/día permitido).
+    const usedByDate = {};
+    (await pool.query(`SELECT start_date::text d, COUNT(*)::int n FROM lm_contact_sequences WHERE user_id=$1 AND sequence_id=$2 AND start_date >= CURRENT_DATE GROUP BY start_date`, [uid, targetId]))
+      .rows.forEach(r => { usedByDate[r.d] = r.n; });
+    const today = _todayUTC();
+    const perDay = drip > 0 ? drip : Infinity;
+    const dates = [];
+    let slot = 0, cur = _nthAllowed(today, 0, mask), curStr = _ymd(cur), inDay = usedByDate[curStr] || 0;
+    for (let i = 0; i < toAdd.length; i++) {
+      while (inDay >= perDay) { slot++; cur = _nthAllowed(today, slot, mask); curStr = _ymd(cur); inDay = usedByDate[curStr] || 0; }
+      dates.push(curStr); inDay++;
+    }
+    // next_action_at = medianoche del día de arranque → el motor de envío toma los de hoy de inmediato y difiere los futuros.
     const r = await pool.query(`
-      INSERT INTO ${table} (user_id, contact_id, ${col}${extraCols})
-      SELECT $1, c.id, $2${extraVals} FROM lm_contacts c WHERE c.user_id=$1 AND c.id = ANY($3::int[])
+      INSERT INTO ${table} (user_id, contact_id, ${col}, start_date, next_action_at)
+      SELECT $1, t.cid, $2, t.sd::date, t.sd::timestamptz
+      FROM unnest($3::int[], $4::text[]) AS t(cid, sd)
       ON CONFLICT (contact_id, ${col}) DO NOTHING
-    `, [uid, targetId, ids]);
-    res.json({ added: r.rowCount, requested: ids.length });
+    `, [uid, targetId, toAdd, dates]);
+    const spreadDays = new Set(dates).size;
+    res.json({ added: r.rowCount, requested: ids.length, spread_days: spreadDays, per_day: drip });
   } catch (err) { console.error('[lm-mem]', err.message); res.status(500).json({ error: 'Error al añadir' }); }
 }
 app.post('/api/lm/contacts/add-to-sequence', requireAuth, (req, res) => _lmAddMembership(req, res, 'sequence'));
@@ -2700,7 +2741,7 @@ app.post('/api/lm/contacts/:id/disposition', requireAuth, async (req, res) => {
 app.get('/api/lm/sequences/:id/contacts', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(`
-      SELECT cs.contact_id, cs.paso, cs.estado, cs.created_at AS enrolled_at,
+      SELECT cs.contact_id, cs.paso, cs.estado, COALESCE((cs.start_date + TIME '12:00')::timestamptz, cs.created_at) AS enrolled_at,
         k.nombre, k.apellido, k.email, k.cargo, k.company_id, co.nombre AS company_nombre
       FROM lm_contact_sequences cs
       JOIN lm_contacts k ON k.id = cs.contact_id
@@ -3244,10 +3285,12 @@ app.post('/api/sequences', requireAuth, async (req, res) => {
   if (!b.nombre?.trim()) return res.status(400).json({ error: 'El nombre es requerido' });
   const estado = SEQ_ESTADOS.includes(b.estado) ? b.estado : 'draft';
   try {
+    const drip = Math.max(0, parseInt(b.drip_per_day) || 0);
+    const sendDays = _sanSendDays(b.send_days);
     const { rows } = await pool.query(`
-      INSERT INTO sequences (user_id,outbound_client_id,campaign_id,nombre,objetivo,estado,timezone)
-      VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *
-    `, [req.workspaceOwnerId, b.outbound_client_id || null, b.campaign_id || null, b.nombre.trim(), b.objetivo || '', estado, b.timezone || '']);
+      INSERT INTO sequences (user_id,outbound_client_id,campaign_id,nombre,objetivo,estado,timezone,drip_per_day,send_days)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *
+    `, [req.workspaceOwnerId, b.outbound_client_id || null, b.campaign_id || null, b.nombre.trim(), b.objetivo || '', estado, b.timezone || '', drip, sendDays]);
     res.status(201).json(rows[0]);
   } catch (err) { console.error('[seq] POST error:', err.message); res.status(500).json({ error: 'Error al crear secuencia' }); }
 });
@@ -3256,10 +3299,12 @@ app.put('/api/sequences/:id', requireAuth, async (req, res) => {
   if (!b.nombre?.trim()) return res.status(400).json({ error: 'El nombre es requerido' });
   const estado = SEQ_ESTADOS.includes(b.estado) ? b.estado : 'draft';
   try {
+    const drip = Math.max(0, parseInt(b.drip_per_day) || 0);
+    const sendDays = _sanSendDays(b.send_days);
     const { rows } = await pool.query(`
-      UPDATE sequences SET outbound_client_id=$1,campaign_id=$2,nombre=$3,objetivo=$4,estado=$5,timezone=$6,updated_at=NOW()
-      WHERE id=$7 AND user_id=$8 RETURNING *
-    `, [b.outbound_client_id || null, b.campaign_id || null, b.nombre.trim(), b.objetivo || '', estado, b.timezone || '', req.params.id, req.workspaceOwnerId]);
+      UPDATE sequences SET outbound_client_id=$1,campaign_id=$2,nombre=$3,objetivo=$4,estado=$5,timezone=$6,drip_per_day=$7,send_days=$8,updated_at=NOW()
+      WHERE id=$9 AND user_id=$10 RETURNING *
+    `, [b.outbound_client_id || null, b.campaign_id || null, b.nombre.trim(), b.objetivo || '', estado, b.timezone || '', drip, sendDays, req.params.id, req.workspaceOwnerId]);
     if (!rows.length) return res.status(404).json({ error: 'Secuencia no encontrada' });
     res.json(rows[0]);
   } catch (err) { console.error('[seq] PUT error:', err.message); res.status(500).json({ error: 'Error al actualizar secuencia' }); }
@@ -3284,9 +3329,9 @@ app.post('/api/sequence-steps', requireAuth, async (req, res) => {
   const canal = STEP_CANALES.includes(b.canal) ? b.canal : 'email';
   try {
     const { rows } = await pool.query(`
-      INSERT INTO sequence_steps (user_id,sequence_id,dia,canal,titulo,plantilla,variants,variant_mode,variant_field,orden)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *
-    `, [req.workspaceOwnerId, b.sequence_id, parseInt(b.dia) || 1, canal, b.titulo || '', b.plantilla || '', JSON.stringify(Array.isArray(b.variants) ? b.variants : []), b.variant_mode || 'off', b.variant_field || '', parseInt(b.orden) || 0]);
+      INSERT INTO sequence_steps (user_id,sequence_id,dia,canal,titulo,plantilla,variants,variant_mode,variant_field,orden,hora)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *
+    `, [req.workspaceOwnerId, b.sequence_id, parseInt(b.dia) || 1, canal, b.titulo || '', b.plantilla || '', JSON.stringify(Array.isArray(b.variants) ? b.variants : []), b.variant_mode || 'off', b.variant_field || '', parseInt(b.orden) || 0, _sanHora(b.hora)]);
     res.status(201).json(rows[0]);
   } catch (err) { console.error('[step] POST error:', err.message); res.status(500).json({ error: 'Error al crear paso' }); }
 });
@@ -3295,8 +3340,8 @@ app.put('/api/sequence-steps/:id', requireAuth, async (req, res) => {
   const canal = STEP_CANALES.includes(b.canal) ? b.canal : 'email';
   try {
     const { rows } = await pool.query(`
-      UPDATE sequence_steps SET dia=$1,canal=$2,titulo=$3,plantilla=$4,variants=$5,variant_mode=$6,variant_field=$7,orden=$8 WHERE id=$9 AND user_id=$10 RETURNING *
-    `, [parseInt(b.dia) || 1, canal, b.titulo || '', b.plantilla || '', JSON.stringify(Array.isArray(b.variants) ? b.variants : []), b.variant_mode || 'off', b.variant_field || '', parseInt(b.orden) || 0, req.params.id, req.workspaceOwnerId]);
+      UPDATE sequence_steps SET dia=$1,canal=$2,titulo=$3,plantilla=$4,variants=$5,variant_mode=$6,variant_field=$7,orden=$8,hora=$9 WHERE id=$10 AND user_id=$11 RETURNING *
+    `, [parseInt(b.dia) || 1, canal, b.titulo || '', b.plantilla || '', JSON.stringify(Array.isArray(b.variants) ? b.variants : []), b.variant_mode || 'off', b.variant_field || '', parseInt(b.orden) || 0, _sanHora(b.hora), req.params.id, req.workspaceOwnerId]);
     if (!rows.length) return res.status(404).json({ error: 'Paso no encontrado' });
     res.json(rows[0]);
   } catch (err) { console.error('[step] PUT error:', err.message); res.status(500).json({ error: 'Error al actualizar paso' }); }

@@ -82,6 +82,7 @@ function buildHtml({ text, firma, trackToken, apiBase, trackOpens, trackClicks }
 }
 
 // Hora y día actuales en el timezone del workspace.
+const _WDX = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 };
 function _localNow(tz) {
   try {
     const parts = new Intl.DateTimeFormat('en-US', {
@@ -89,9 +90,13 @@ function _localNow(tz) {
     }).formatToParts(new Date());
     const hour = parseInt(parts.find(p => p.type === 'hour')?.value ?? '12');
     const wd   = parts.find(p => p.type === 'weekday')?.value || 'Mon';
-    return { hour: hour === 24 ? 0 : hour, weekend: wd === 'Sat' || wd === 'Sun' };
-  } catch { return { hour: 12, weekend: false }; }
+    return { hour: hour === 24 ? 0 : hour, weekend: wd === 'Sat' || wd === 'Sun', wdIdx: _WDX[wd] ?? 0 };
+  } catch { return { hour: 12, weekend: false, wdIdx: 0 }; }
 }
+// ── Días de cadencia permitidos (Lun→Dom, '1'=permitido) ──
+function _sanSendDays(v) { const s = String(v || ''); return (/^[01]{7}$/.test(s) && s.includes('1')) ? s : '1111100'; }
+function _todayUTC() { const t = new Date(); return new Date(Date.UTC(t.getFullYear(), t.getMonth(), t.getDate())); }
+function _rollFwd(d, mask) { const x = new Date(d.getTime()); for (let i = 0; i < 7; i++) { if (mask[(x.getUTCDay() + 6) % 7] === '1') return x; x.setUTCDate(x.getUTCDate() + 1); } return x; }
 
 // Días de espera hasta el próximo paso (espera_dias relativo > diff de 'dia' absoluto).
 function _delayDays(cur, next) {
@@ -126,18 +131,20 @@ async function _advance(pool, enr, steps, curIdx) {
     return;
   }
   const days = _delayDays(steps[curIdx], next);
+  const mask = _sanSendDays(enr.send_days);
+  // fecha base = hoy + days, rodada al próximo día de cadencia permitido
+  const base = _todayUTC(); base.setUTCDate(base.getUTCDate() + days);
+  const target = _rollFwd(base, mask);
   await pool.query(
-    `UPDATE lm_contact_sequences
-        SET paso=$1, next_action_at = NOW() + ($2 || ' days')::interval + interval '5 minutes'
-      WHERE id=$3`,
-    [curIdx + 2, String(days), enr.enr_id]
+    `UPDATE lm_contact_sequences SET paso=$1, next_action_at=$2 WHERE id=$3`,
+    [curIdx + 2, target.toISOString(), enr.enr_id]
   );
 }
 
 // Procesa UN workspace: devuelve true si envió un email (para logging).
 async function _tickWorkspace(pool, cfg, apiBase, gmailCallback) {
   const uid = cfg.user_id;
-  const { hour, weekend } = _localNow(cfg.timezone);
+  const { hour, weekend, wdIdx } = _localNow(cfg.timezone);
   if (hour < cfg.window_start || hour >= cfg.window_end) return false;
   if (weekend && !cfg.send_weekends) return false;
 
@@ -162,7 +169,7 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback) {
     SELECT cs.id AS enr_id, cs.user_id, cs.contact_id, cs.sequence_id, cs.paso,
            k.nombre, k.apellido, k.email, k.cargo, k.empresa_nombre, k.ciudad, k.pais,
            k.seniority, k.departamento, k.buyer_role, k.region, k.contact_priority,
-           k.email_status, k.disposition, co.nombre AS company_nombre, s.nombre AS seq_nombre
+           k.email_status, k.disposition, co.nombre AS company_nombre, s.nombre AS seq_nombre, s.send_days
       FROM lm_contact_sequences cs
       JOIN sequences   s  ON s.id = cs.sequence_id AND s.estado = 'activa'
       JOIN lm_contacts k  ON k.id = cs.contact_id
@@ -173,6 +180,15 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback) {
      LIMIT 1
   `, [uid]);
   if (!enr) return false;
+
+  // Días de cadencia de la secuencia: si hoy no es día permitido, reprograma al próximo día permitido.
+  const seqMask = _sanSendDays(enr.send_days);
+  if (seqMask[wdIdx] !== '1') {
+    const base = _todayUTC(); base.setUTCDate(base.getUTCDate() + 1); // desde mañana → garantiza día futuro
+    const nextDay = _rollFwd(base, seqMask);
+    await pool.query(`UPDATE lm_contact_sequences SET next_action_at=$1 WHERE id=$2`, [nextDay.toISOString(), enr.enr_id]);
+    return false;
+  }
 
   // Opt-out / no contactar: nunca tocar.
   if (['no_contactar', 'no_interesado'].includes(enr.disposition)) {

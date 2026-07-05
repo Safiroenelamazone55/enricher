@@ -10967,6 +10967,8 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .seq-task__due { font-size: .74rem; font-weight: 600; color: var(--muted, #8C97A3); white-space: nowrap; flex-shrink: 0; }
 .seq-task.over .seq-task__due { color: #C4342B; }
 .seq-task.today .seq-task__due { color: var(--brand-d, #006B3F); }
+.seq-task__hora { font-size: .74rem; font-weight: 700; color: var(--brand-d, #006B3F); background: var(--brand-l, #BFE0CC); padding: 2px 8px; border-radius: 999px; white-space: nowrap; flex-shrink: 0; }
+.seq-task__sug { font-size: .7rem; font-weight: 600; color: var(--muted, #8C97A3); background: var(--bg2, #ECEEE0); padding: 2px 7px; border-radius: 999px; white-space: nowrap; flex-shrink: 0; }
 .seq-task { cursor: pointer; transition: border-color .12s, box-shadow .12s, transform .04s; }
 .seq-task:hover { border-color: var(--brand-l, #BFE0CC); box-shadow: 0 2px 10px rgba(0,31,63,.06); }
 .seq-task:active { transform: translateY(1px); }
@@ -11075,6 +11077,14 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .step-tags-lbl { font-size: .7rem; color: var(--muted, #8C97A3); margin-top: 4px; }
 .cp-var-tag { display: inline-block; font-size: .64rem; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; background: var(--lime, #DBE64C); color: #4d5400; padding: 1px 7px; border-radius: 999px; margin-left: 6px; vertical-align: middle; }
 .step-vars__hint { display: block; font-size: .72rem; color: var(--muted, #8C97A3); margin-top: 6px; }
+.seq-drip-hint { display: block; font-size: .72rem; color: var(--muted, #8C97A3); margin-top: 5px; line-height: 1.4; }
+.seq-days { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.seq-day { width: 32px; height: 32px; border: 1px solid var(--border, #E4E7DD); border-radius: 8px; background: #fff; font-family: inherit; font-size: .8rem; font-weight: 700; color: var(--muted, #8C97A3); cursor: pointer; transition: background .12s, border-color .12s, color .12s; }
+.seq-day:hover { border-color: var(--brand-l, #BFE0CC); }
+.seq-day.on { background: var(--brand, #00804C); border-color: var(--brand, #00804C); color: #fff; }
+.seq-days-sp { flex: 1; min-width: 8px; }
+.seq-days-preset { border: 1px solid var(--border, #E4E7DD); border-radius: 8px; background: #fff; font-family: inherit; font-size: .74rem; font-weight: 600; color: var(--text2, #45586A); padding: 6px 10px; cursor: pointer; }
+.seq-days-preset:hover { background: var(--bg, #F6F7ED); border-color: var(--brand-l, #BFE0CC); }
 /* Barra de tarea del día dentro de la ficha del contacto */
 .cp-taskbar { background: var(--brand-ll, #EAF5EE); border: 1px solid var(--brand-l, #BFE0CC); border-radius: 14px; padding: 14px 16px; margin-bottom: 16px; }
 .cp-taskbar__top { display: flex; align-items: center; gap: 11px; }
