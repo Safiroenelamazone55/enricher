@@ -6,8 +6,8 @@
   <title>Nova</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css"/>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css?v=20260705d"/>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -196,34 +196,47 @@
 <div id="appShell" class="hidden">
 <div class="app-layout">
 
-  <!-- ── SIDEBAR ──────────────────────────────────────────── -->
+  <!-- ── PRIMARY RAIL: módulos + configuración general ── -->
+  <div class="snav-rail" id="snav-rail">
+    <div class="snav-rail__brand" id="sidebar-brand" title="Nova">
+      <div class="sidebar__brand-icon" id="brand-icon-wrap">
+        <svg width="52" height="52" viewBox="0 0 100 100" fill="none"><path d="M50 3 L63 38 L97 50 L63 62 L50 97 L37 62 L3 50 L37 38 Z" fill="currentColor"/></svg>
+      </div>
+      <span id="brand-company-name" class="hidden">Nova</span>
+      <span id="ws-name-tag" class="hidden">Business Platform</span>
+    </div>
+    <div class="snav-rail__sep"></div>
+    <div class="snav-rail__mods">
+      <button class="snav-mod active" data-module="management" onclick="selectModule('management')" data-tip="Management" aria-label="Management">
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg>
+      </button>
+      <button class="snav-mod" data-module="enricher" onclick="selectModule('enricher')" data-tip="Enricher" aria-label="Enricher"><span class="snav-mod__badge">E</span></button>
+      <button class="snav-mod" data-module="leadmanagement" onclick="selectModule('leadmanagement')" data-tip="Lead Management" aria-label="Lead Management"><span class="snav-mod__badge snav-mod__badge--lead">L</span></button>
+    </div>
+    <div class="snav-rail__spacer"></div>
+    <button class="snav-rail__btn" onclick="WorkspaceModule.openNameModal()" data-tip="Configuración" aria-label="Configuración general">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </button>
+    <div id="authBar" class="snav-rail__user"><div class="auth-bar__skeleton"></div></div>
+  </div>
+
+  <!-- ── SECONDARY PANEL: subsecciones del módulo activo ── -->
   <aside class="sidebar" id="sidebar">
 
-    <!-- Brand + toggle -->
-    <div class="sidebar__top">
-      <div class="sidebar__brand" id="sidebar-brand" title="Personalizar branding">
-        <div class="sidebar__brand-icon" id="brand-icon-wrap">
-          <svg width="52" height="52" viewBox="0 0 100 100" fill="none">
-            <path d="M50 3 L63 38 L97 50 L63 62 L50 97 L37 62 L3 50 L37 38 Z" fill="currentColor"/>
-          </svg>
-        </div>
-        <div class="sidebar__brand-text">
-          <div class="sidebar__brand-name" id="brand-company-name">Nova</div>
-          <div class="sidebar__brand-tag" id="ws-name-tag">Business Platform</div>
-        </div>
-      </div>
-      <button class="sidebar__toggle" id="sidebarToggle" title="Colapsar menú">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Panel header: nombre del módulo + colapsar -->
+    <div class="snav-panel__hd">
+      <span class="snav-panel__title" id="snav-panel-title">Management</span>
+      <button class="sidebar__toggle" id="sidebarToggle" title="Ocultar panel" onclick="toggleNavPanel()">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
           <polyline points="15 18 9 12 15 6"/>
         </svg>
       </button>
     </div>
 
-    <!-- Navigation -->
+    <!-- Navigation: un grupo por módulo, solo el activo visible -->
     <nav class="sidebar__nav">
 
-      <!-- ── MANAGEMENT ──────────────────────── -->
-      <div class="snav-label">Management</div>
+      <div class="snav-group mod-on" data-module="management" id="snav-body-management">
 
       <button class="snav-item active" data-tab="mgmt-dashboard" data-tooltip="Dashboard">
         <span class="snav-item__icon">
@@ -236,6 +249,15 @@
         </span>
         <span class="snav-item__label">Dashboard</span>
         <span class="snav-badge" style="display:none"></span>
+      </button>
+
+      <button class="snav-item" data-tab="mgmt-opportunities" data-tooltip="Oportunidades">
+        <span class="snav-item__icon">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/>
+          </svg>
+        </span>
+        <span class="snav-item__label">Oportunidades</span>
       </button>
 
       <button class="snav-item" data-tab="mgmt-clients" data-tooltip="Clientes">
@@ -299,15 +321,14 @@
         <span class="snav-item__label">Finanzas</span>
       </button>
 
-      <button class="snav-item" data-tab="mgmt-blocks" data-tooltip="Bloqueos">
+      <button class="snav-item" data-tab="mgmt-timetracking" data-tooltip="Time Tracking">
         <span class="snav-item__icon">
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 2.5L3.5 7v5C3.5 16.5 7 20 12 21.5c5-1.5 8.5-5 8.5-9.5V7L12 2.5z"/>
-            <line x1="12" y1="9.5" x2="12" y2="13.5"/>
-            <circle cx="12" cy="16" r="1" fill="currentColor" stroke="none"/>
+            <circle cx="12" cy="12" r="9"/>
+            <polyline points="12 7 12 12 15.5 12"/>
           </svg>
         </span>
-        <span class="snav-item__label">Bloqueos</span>
+        <span class="snav-item__label">Time Tracking</span>
       </button>
 
       <button class="snav-item" data-tab="mgmt-team" data-tooltip="Equipo">
@@ -334,75 +355,58 @@
         <span class="snav-item__label">Chat <span class="snav-soon-badge hidden" id="chat-badge">0</span></span>
       </button>
 
-      <button class="snav-item" data-tab="mgmt-timetracking" data-tooltip="Time Tracking">
+      <button class="snav-item" data-tab="mgmt-blocks" data-tooltip="Bloqueos">
         <span class="snav-item__icon">
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="9"/>
-            <polyline points="12 7 12 12 15.5 12"/>
+            <path d="M12 2.5L3.5 7v5C3.5 16.5 7 20 12 21.5c5-1.5 8.5-5 8.5-9.5V7L12 2.5z"/>
+            <line x1="12" y1="9.5" x2="12" y2="13.5"/>
+            <circle cx="12" cy="16" r="1" fill="currentColor" stroke="none"/>
           </svg>
         </span>
-        <span class="snav-item__label">Time Tracking</span>
+        <span class="snav-item__label">Bloqueos</span>
       </button>
 
-      <!-- ── HERRAMIENTAS (collapsible) ──────── -->
-      <button class="snav-section-hdr snav-label--gap" id="snav-hdr-herramientas"
-              onclick="snavToggle('herramientas')" aria-expanded="false">
-        <span class="snav-label snav-label--inline">Herramientas</span>
-        <svg class="snav-section-chevron" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="6 9 12 15 18 9"/>
-        </svg>
-      </button>
+      </div>
 
-      <div class="snav-section-body snav-section-body--collapsed" id="snav-body-herramientas">
+      <div class="snav-group" data-module="enricher" id="snav-body-enricher">
 
-        <!-- Enricher group -->
-        <div class="snav-tool-group">
-          <div class="snav-tool-group__header">
-            <span class="snav-item__icon">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="3"/>
-                <path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21"/>
-                <path d="M6.2 6.2l1.8 1.8M16 16l1.8 1.8M6.2 17.8l1.8-1.8M16 8l1.8-1.8"/>
-              </svg>
-            </span>
-            <span class="snav-tool-group__label">Enricher</span>
-          </div>
+        <button class="snav-item" data-tab="single" data-tooltip="Lead individual">
+          <span class="snav-item__icon">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="10.5" cy="10.5" r="7.5"/>
+              <circle cx="10.5" cy="9" r="2.5"/>
+              <path d="M6.5 17c.6-2.8 2.2-4.5 4-4.5s3.4 1.7 4 4.5"/>
+              <line x1="21" y1="21" x2="16.2" y2="16.2"/>
+            </svg>
+          </span>
+          <span class="snav-item__label">Lead individual</span>
+        </button>
 
-          <button class="snav-item snav-item--sub" data-tab="single" data-tooltip="Lead individual">
-            <span class="snav-item__icon">
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="10.5" cy="10.5" r="7.5"/>
-                <circle cx="10.5" cy="9" r="2.5"/>
-                <path d="M6.5 17c.6-2.8 2.2-4.5 4-4.5s3.4 1.7 4 4.5"/>
-                <line x1="21" y1="21" x2="16.2" y2="16.2"/>
-              </svg>
-            </span>
-            <span class="snav-item__label">Lead individual</span>
-          </button>
+        <button class="snav-item" data-tab="batch" data-tooltip="Carga masiva">
+          <span class="snav-item__icon">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 5a2 2 0 0 1 2-2h8.5L20 8.5V19a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5z"/>
+              <polyline points="14 3 14 9 20 9"/>
+              <line x1="12" y1="18.5" x2="12" y2="12.5"/>
+              <polyline points="9.5 15 12 12.5 14.5 15"/>
+            </svg>
+          </span>
+          <span class="snav-item__label">Carga masiva</span>
+        </button>
 
-          <button class="snav-item snav-item--sub" data-tab="batch" data-tooltip="Carga masiva">
-            <span class="snav-item__icon">
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M4 5a2 2 0 0 1 2-2h8.5L20 8.5V19a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5z"/>
-                <polyline points="14 3 14 9 20 9"/>
-                <line x1="12" y1="18.5" x2="12" y2="12.5"/>
-                <polyline points="9.5 15 12 12.5 14.5 15"/>
-              </svg>
-            </span>
-            <span class="snav-item__label">Carga masiva</span>
-          </button>
+        <button class="snav-item" data-tab="verifications" data-tooltip="Verificaciones">
+          <span class="snav-item__icon">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="2 12 6.5 12 9.5 4 13.5 20 16.5 12 22 12"/>
+            </svg>
+          </span>
+          <span class="snav-item__label">Verificaciones</span>
+        </button>
 
-          <button class="snav-item snav-item--sub" data-tab="verifications" data-tooltip="Verificaciones">
-            <span class="snav-item__icon">
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="2 12 6.5 12 9.5 4 13.5 20 16.5 12 22 12"/>
-              </svg>
-            </span>
-            <span class="snav-item__label">Verificaciones</span>
-          </button>
-        </div>
+      </div>
 
-        <!-- Lead Manager -->
+      <div class="snav-group" data-module="leadmanagement" id="snav-body-leadmanagement">
+
         <button class="snav-item" data-tab="lead-manager" data-tooltip="Lead Manager">
           <span class="snav-item__icon">
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -416,54 +420,7 @@
 
     </nav>
 
-    <!-- Timer widget — shown when a timer is running -->
-    <div class="tt-widget tt-widget--hidden" id="tt-widget">
-      <div class="tt-widget__header">
-        <span class="tt-widget__status tt-widget__status--active" id="tt-widget-status">● Activo</span>
-        <button class="tt-widget__stop" onclick="TimerModule.stop()" title="Detener timer">
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
-          Detener
-        </button>
-      </div>
-      <div class="tt-widget__time" id="tt-widget-time">00:00</div>
-      <div class="tt-widget__task" id="tt-widget-task">Sin tarea</div>
-      <div class="tt-widget__activity">
-        <div class="tt-widget__bar-track">
-          <div class="tt-widget__bar-fill" id="tt-widget-bar" style="width:100%"></div>
-        </div>
-        <span class="tt-widget__pct" id="tt-widget-pct">100% activo</span>
-      </div>
-    </div>
-
-    <!-- Footer links -->
-    <div class="sidebar__footer">
-      <a href="#howit" class="snav-item snav-item--sm" data-tooltip="Cómo funciona">
-        <span class="snav-item__icon">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10"/>
-            <path d="M12 16v-4M12 8h.01"/>
-          </svg>
-        </span>
-        <span class="snav-item__label">Cómo funciona</span>
-      </a>
-      <a href="https://api.kiwoc.com/api/template" class="snav-item snav-item--sm" data-tooltip="Plantilla CSV">
-        <span class="snav-item__icon">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-            <polyline points="7 10 12 15 17 10"/>
-            <line x1="12" y1="15" x2="12" y2="3"/>
-          </svg>
-        </span>
-        <span class="snav-item__label">Plantilla CSV</span>
-      </a>
-    </div>
-
-    <!-- User / auth bar -->
-    <div id="authBar" class="sidebar__user">
-      <div class="auth-bar__skeleton"></div>
-    </div>
-
-  </aside><!-- /sidebar -->
+  </aside><!-- /sidebar (panel secundario) -->
 
   <!-- ── MAIN CONTENT ──────────────────────────────────────── -->
   <main class="app-main">
@@ -509,65 +466,15 @@
       <!-- Body -->
       <div class="d3-body hidden" id="dash2-body">
         <div class="d3-grid" id="d3-grid">
+          <!-- Col 1: Mis tareas -->
           <div class="d3-card" id="dash2-tasks"></div>
-          <div class="d3-sidebar-col" id="dash2-analytics-mini"></div>
+          <!-- Col 2: Tareas de oportunidades (arriba) + Horas de trabajo -->
+          <div class="d3-sidebar-col">
+            <div class="d3-card d3-card--opp" id="dash2-opp-tasks" style="display:none"></div>
+            <div class="d3-card" id="dash2-hours"></div>
+          </div>
         </div>
         <div class="an-pane-wrap hidden" id="dash2-analytics-pane"></div>
-      </div>
-    </div>
-
-    <!-- ── CLIENTES ────────────────────────────────────────── -->
-    <div class="pane" id="pane-mgmt-clients">
-      <div class="pane-header">
-        <div class="pane-header__row">
-          <div>
-            <h1 class="pane-title">Clientes</h1>
-            <p class="pane-sub">Empresas y personas con las que ya tienes relación de trabajo activa</p>
-          </div>
-          <button class="btn btn--primary btn--sm" onclick="ClientsModule.openDrawer()">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            Nuevo cliente
-          </button>
-        </div>
-        <div class="clients-toolbar">
-          <div class="clients-search-wrap">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            <input type="text" id="clients-search" placeholder="Buscar por nombre, empresa o email…" oninput="ClientsModule.filter()">
-          </div>
-          <div class="clients-filters">
-            <button class="filter-pill active" data-estado="" onclick="ClientsModule.setFilter('')">Todos</button>
-            <button class="filter-pill" data-estado="activo" onclick="ClientsModule.setFilter('activo')">Activos</button>
-            <button class="filter-pill" data-estado="potencial" onclick="ClientsModule.setFilter('potencial')">Potenciales</button>
-            <button class="filter-pill" data-estado="pausado" onclick="ClientsModule.setFilter('pausado')">Pausados</button>
-            <button class="filter-pill" data-estado="inactivo" onclick="ClientsModule.setFilter('inactivo')">Inactivos</button>
-          </div>
-        </div>
-      </div>
-      <div class="clients-body">
-        <div class="clients-loading" id="clients-loading">
-          <div class="clients-spin"></div>
-          <span>Cargando clientes…</span>
-        </div>
-        <div class="clients-empty" id="clients-empty" style="display:none">
-          <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-          <p>Aún no tienes clientes guardados.</p>
-          <button class="btn btn--primary btn--sm" onclick="ClientsModule.openDrawer()">Agregar el primero</button>
-        </div>
-        <div class="clients-table-wrap" id="clients-table-wrap" style="display:none">
-          <table class="clients-table">
-            <thead>
-              <tr>
-                <th>Cliente</th>
-                <th>Email</th>
-                <th>Teléfono</th>
-                <th>País</th>
-                <th>Estado</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody id="clients-tbody"></tbody>
-          </table>
-        </div>
       </div>
     </div>
 
@@ -627,17 +534,15 @@
         </div>
         <!-- Timeline cards view -->
         <div id="projects-cards"></div>
-        <!-- Lista / table view -->
-        <div class="clients-table-wrap" id="projects-table-wrap" style="display:none">
-          <table class="clients-table">
-            <thead>
-              <tr>
-                <th>Proyecto</th><th>Cliente</th><th>Estado</th>
-                <th>Tipo</th><th>Fecha fin</th><th>Valor</th><th></th>
-              </tr>
-            </thead>
-            <tbody id="projects-tbody"></tbody>
-          </table>
+        <!-- Lista view (CSS grid — not <table>, see PROJECTS LISTA GRID in style.css) -->
+        <div class="pv-table-wrap" id="projects-table-wrap" style="display:none">
+          <div class="projects-list-table">
+            <div class="projects-list-header projects-list-grid">
+              <div>Proyecto</div><div>Cliente</div><div>Estado</div>
+              <div>Tipo</div><div>Fecha fin</div><div>Valor</div><div></div>
+            </div>
+            <div id="projects-tbody"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -721,13 +626,14 @@
               <thead>
                 <tr>
                   <th>Tarea</th>
-                  <th>Proyecto · Cliente</th>
-                  <th>Estado</th>
-                  <th>Prioridad</th>
-                  <th>Deadline</th>
-                  <th>Responsable</th>
-                  <th style="width:36px"></th>
-                  <th style="width:60px"></th>
+                  <th style="width:150px">Proyecto · Cliente</th>
+                  <th style="width:116px">Estado</th>
+                  <th style="width:88px">Prioridad</th>
+                  <th style="width:78px">Deadline</th>
+                  <th style="width:104px">Responsable</th>
+                  <th style="width:64px">Progreso</th>
+                  <th style="width:56px">Timer</th>
+                  <th style="width:104px"></th>
                 </tr>
               </thead>
               <tbody id="tasks-tbody"></tbody>
@@ -738,39 +644,43 @@
         <!-- Kanban view -->
         <div id="tasks-view-kanban" style="display:none">
           <div class="kanban-board">
-            <div class="kanban-col">
+            <div class="kanban-col" data-kanban-status="bloqueado">
               <div class="kanban-col__head" data-status="bloqueado">
                 <div class="kanban-col__title">
                   <span class="kanban-col__dot"></span>Bloqueado
+                  <span class="kanban-count" id="kanban-count-bloqueado">0</span>
                 </div>
-                <span class="kanban-count" id="kanban-count-bloqueado">0</span>
+                <button class="kanban-col__add" onclick="TasksModule.openDrawerWithStatus('bloqueado')" title="Nueva tarea">+</button>
               </div>
               <div class="kanban-cards" id="kanban-col-bloqueado"></div>
             </div>
-            <div class="kanban-col">
+            <div class="kanban-col" data-kanban-status="pendiente">
               <div class="kanban-col__head" data-status="pendiente">
                 <div class="kanban-col__title">
                   <span class="kanban-col__dot"></span>Pendiente
+                  <span class="kanban-count" id="kanban-count-pendiente">0</span>
                 </div>
-                <span class="kanban-count" id="kanban-count-pendiente">0</span>
+                <button class="kanban-col__add" onclick="TasksModule.openDrawerWithStatus('pendiente')" title="Nueva tarea">+</button>
               </div>
               <div class="kanban-cards" id="kanban-col-pendiente"></div>
             </div>
-            <div class="kanban-col">
+            <div class="kanban-col" data-kanban-status="en_progreso">
               <div class="kanban-col__head" data-status="en_progreso">
                 <div class="kanban-col__title">
                   <span class="kanban-col__dot"></span>En progreso
+                  <span class="kanban-count" id="kanban-count-en_progreso">0</span>
                 </div>
-                <span class="kanban-count" id="kanban-count-en_progreso">0</span>
+                <button class="kanban-col__add" onclick="TasksModule.openDrawerWithStatus('en_progreso')" title="Nueva tarea">+</button>
               </div>
               <div class="kanban-cards" id="kanban-col-en_progreso"></div>
             </div>
-            <div class="kanban-col">
+            <div class="kanban-col" data-kanban-status="completado">
               <div class="kanban-col__head" data-status="completado">
                 <div class="kanban-col__title">
                   <span class="kanban-col__dot"></span>Completado
+                  <span class="kanban-count" id="kanban-count-completado">0</span>
                 </div>
-                <span class="kanban-count" id="kanban-count-completado">0</span>
+                <button class="kanban-col__add" onclick="TasksModule.openDrawerWithStatus('completado')" title="Nueva tarea">+</button>
               </div>
               <div class="kanban-cards" id="kanban-col-completado"></div>
             </div>
@@ -815,9 +725,25 @@
         <div class="pane-header__row">
           <div>
             <h1 class="pane-title">Finanzas</h1>
-            <p class="pane-sub">Pagos, comisiones y estado de cobro por proyecto</p>
+            <p class="pane-sub">Control financiero interno — cobros, distribución y pagos del equipo</p>
           </div>
-          <div style="display:flex;gap:8px">
+        </div>
+        <div class="fin-tabs" id="fin-tabs">
+          <button class="fin-tab active" data-fintab="resumen"        onclick="FinanceModule.setTab('resumen')">Resumen</button>
+          <button class="fin-tab"        data-fintab="conciliacion"   onclick="FinanceModule.setTab('conciliacion')">Conciliación</button>
+          <button class="fin-tab"        data-fintab="cobros"         onclick="FinanceModule.setTab('cobros')">Cobros</button>
+          <button class="fin-tab"        data-fintab="pagos-internos" onclick="FinanceModule.setTab('pagos-internos')">Pagos internos</button>
+          <button class="fin-tab"        data-fintab="gastos"         onclick="FinanceModule.setTab('gastos')">Gastos / Caja</button>
+          <button class="fin-tab"        data-fintab="distribucion"   onclick="FinanceModule.setTab('distribucion')">Distribución</button>
+          <button class="fin-tab"        data-fintab="config"         onclick="FinanceModule.setTab('config')">Configuración</button>
+        </div>
+      </div>
+
+      <div class="fin-panels">
+
+        <!-- ── COBROS (pagos recibidos de clientes) ───────────────── -->
+        <div class="fin-panel" id="fin-panel-cobros">
+          <div class="fin-panel-actions">
             <button class="btn btn--ghost btn--sm" onclick="FinanceModule.exportPdf()">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
               Exportar PDF
@@ -827,66 +753,144 @@
               Nuevo pago
             </button>
           </div>
-        </div>
-        <div class="clients-toolbar">
-          <div class="clients-search-wrap">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            <input type="text" id="fin-search" placeholder="Buscar concepto o cliente…" oninput="FinanceModule.filter()">
+          <div class="clients-toolbar">
+            <div class="clients-search-wrap">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input type="text" id="fin-search" placeholder="Buscar concepto o cliente…" oninput="FinanceModule.filter()">
+            </div>
+            <div class="clients-filters">
+              <button class="filter-pill active" data-estado="" onclick="FinanceModule.setFilter('')">Todos</button>
+              <button class="filter-pill" data-estado="pendiente" onclick="FinanceModule.setFilter('pendiente')">Pendientes</button>
+              <button class="filter-pill" data-estado="cobrado" onclick="FinanceModule.setFilter('cobrado')">Cobrados</button>
+              <button class="filter-pill" data-estado="vencido" onclick="FinanceModule.setFilter('vencido')">Vencidos</button>
+            </div>
           </div>
-          <div class="clients-filters">
-            <button class="filter-pill active" data-estado="" onclick="FinanceModule.setFilter('')">Todos</button>
-            <button class="filter-pill" data-estado="pendiente" onclick="FinanceModule.setFilter('pendiente')">Pendientes</button>
-            <button class="filter-pill" data-estado="cobrado" onclick="FinanceModule.setFilter('cobrado')">Cobrados</button>
-            <button class="filter-pill" data-estado="vencido" onclick="FinanceModule.setFilter('vencido')">Vencidos</button>
+          <div class="fin-period-row">
+            <span class="fin-period-lbl">Período de facturación:</span>
+            <button class="an-period an-period--on" data-period="semana" onclick="FinanceModule.setPeriod('semana')">Semana</button>
+            <button class="an-period" data-period="mes" onclick="FinanceModule.setPeriod('mes')">Mes</button>
+            <button class="an-period" data-period="rango" onclick="FinanceModule.setPeriod('rango')">Rango personalizado</button>
+            <span id="fin-range-inputs" class="fin-range-inputs" style="display:none">
+              <input type="date" class="form-input fin-range-input" id="fin-range-from" onchange="FinanceModule.applyRange()">
+              <span class="fin-range-sep">a</span>
+              <input type="date" class="form-input fin-range-input" id="fin-range-to" onchange="FinanceModule.applyRange()">
+            </span>
+          </div>
+          <div class="clients-body">
+            <div class="fin-stats" id="fin-stats">
+              <div class="fin-stat"><div class="fin-stat__label" id="fin-stat-neto-lbl">Cobrado neto (semana)</div><div class="fin-stat__val" id="fin-stat-neto">—</div></div>
+              <div class="fin-stat"><div class="fin-stat__label" id="fin-stat-bruto-lbl">Cobrado bruto (semana)</div><div class="fin-stat__val" id="fin-stat-bruto">—</div></div>
+              <div class="fin-stat fin-stat--warn"><div class="fin-stat__label">Por cobrar</div><div class="fin-stat__val" id="fin-stat-pending">—</div></div>
+              <div class="fin-stat fin-stat--danger"><div class="fin-stat__label">Vencido</div><div class="fin-stat__val" id="fin-stat-overdue">—</div></div>
+            </div>
+            <div class="clients-loading" id="fin-loading">
+              <div class="clients-spin"></div>
+              <span>Cargando pagos…</span>
+            </div>
+            <div class="clients-empty" id="fin-empty" style="display:none">
+              <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+              <p>Aún no has registrado ningún pago.</p>
+              <button class="btn btn--primary btn--sm" onclick="FinanceModule.openDrawer()">Registrar el primero</button>
+            </div>
+            <!-- Finanzas — CSS grid (no <table>, ver FINANZAS GRID en style.css) -->
+            <div class="finance-table-wrapper" id="fin-table-wrap" style="display:none">
+              <div class="finance-table">
+                <div class="finance-table-header finance-grid">
+                  <div>Concepto · Cliente</div>
+                  <div>Proyecto</div>
+                  <div>Canal</div>
+                  <div>Bruto</div>
+                  <div>Comisión</div>
+                  <div>Neto recibido</div>
+                  <div>F. Esperada</div>
+                  <div>Estado</div>
+                  <div></div>
+                </div>
+                <div id="fin-tbody"></div>
+              </div>
+            </div>
           </div>
         </div>
-        <div class="fin-period-row">
-          <span class="fin-period-lbl">Período de facturación:</span>
-          <button class="an-period an-period--on" data-period="semana" onclick="FinanceModule.setPeriod('semana')">Semana</button>
-          <button class="an-period" data-period="mes" onclick="FinanceModule.setPeriod('mes')">Mes</button>
-          <button class="an-period" data-period="rango" onclick="FinanceModule.setPeriod('rango')">Rango personalizado</button>
-          <span id="fin-range-inputs" class="fin-range-inputs" style="display:none">
-            <input type="date" class="form-input fin-range-input" id="fin-range-from" onchange="FinanceModule.applyRange()">
-            <span class="fin-range-sep">a</span>
-            <input type="date" class="form-input fin-range-input" id="fin-range-to" onchange="FinanceModule.applyRange()">
-          </span>
+
+        <!-- ── RESUMEN (cards + filtros) ──────────────────────────── -->
+        <div class="fin-panel active" id="fin-panel-resumen">
+          <div id="fin-resumen-body">
+            <div class="clients-loading"><div class="clients-spin"></div><span>Cargando resumen…</span></div>
+          </div>
+        </div>
+
+        <!-- ── CONCILIACIÓN (cuadre proyecto ↔ tareas) ─────────────── -->
+        <div class="fin-panel" id="fin-panel-conciliacion">
+          <div id="fin-concil-body">
+            <div class="clients-loading"><div class="clients-spin"></div><span>Cargando conciliación…</span></div>
+          </div>
+        </div>
+
+        <!-- ── GASTOS / CAJA (gastos operativos + aportes a caja) ──── -->
+        <div class="fin-panel" id="fin-panel-gastos">
+          <div id="fin-gastos-body">
+            <div class="clients-loading"><div class="clients-spin"></div><span>Cargando gastos / caja…</span></div>
+          </div>
+        </div>
+
+        <!-- ── DISTRIBUCIÓN (reparto del dinero) ──────────────────── -->
+        <div class="fin-panel" id="fin-panel-distribucion">
+          <div id="fin-distrib-body">
+            <div class="clients-loading"><div class="clients-spin"></div><span>Cargando distribución…</span></div>
+          </div>
+        </div>
+
+        <!-- ── PAGOS INTERNOS (abonos a personas) ─────────────────── -->
+        <div class="fin-panel" id="fin-panel-pagos-internos">
+          <div id="fin-pagos-body">
+            <div class="clients-loading"><div class="clients-spin"></div><span>Cargando pagos internos…</span></div>
+          </div>
+        </div>
+
+        <!-- ── CONFIGURACIÓN FINANCIERA ───────────────────────────── -->
+        <div class="fin-panel" id="fin-panel-config">
+          <div id="fin-config-body">
+            <div class="clients-loading"><div class="clients-spin"></div><span>Cargando configuración…</span></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ── OPORTUNIDADES (procesos pre-proyecto) ─────────────── -->
+    <div class="pane" id="pane-mgmt-opportunities">
+      <div id="opp-list-view">
+        <div class="pane-header">
+          <div class="pane-header__row">
+            <div>
+              <h1 class="pane-title">Oportunidades</h1>
+              <p class="pane-sub">Procesos pre-proyecto: aplicaciones, invitaciones, entrevistas y propuestas — aún no son proyectos</p>
+            </div>
+            <button class="btn btn--primary btn--sm" onclick="OpportunitiesModule.openModal()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Nueva oportunidad
+            </button>
+          </div>
+          <div class="opp-tabs" id="opp-tabs"></div>
+          <div class="clients-toolbar">
+            <div class="clients-search-wrap">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input type="text" id="opp-search" placeholder="Buscar por título, cliente o canal…" oninput="OpportunitiesModule.filter()">
+            </div>
+          </div>
+        </div>
+        <div class="clients-body">
+          <div class="clients-loading" id="opp-loading"><div class="clients-spin"></div><span>Cargando oportunidades…</span></div>
+          <div class="clients-empty" id="opp-empty" style="display:none">
+            <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/></svg>
+            <p>Aún no tienes oportunidades. Registra la primera aplicación o invitación.</p>
+            <button class="btn btn--primary btn--sm" onclick="OpportunitiesModule.openModal()">Crear la primera</button>
+          </div>
+          <div id="opp-cards" class="opp-cards"></div>
         </div>
       </div>
-      <div class="clients-body">
-        <div class="fin-stats" id="fin-stats">
-          <div class="fin-stat"><div class="fin-stat__label" id="fin-stat-neto-lbl">Cobrado neto (semana)</div><div class="fin-stat__val" id="fin-stat-neto">—</div></div>
-          <div class="fin-stat"><div class="fin-stat__label" id="fin-stat-bruto-lbl">Cobrado bruto (semana)</div><div class="fin-stat__val" id="fin-stat-bruto">—</div></div>
-          <div class="fin-stat fin-stat--warn"><div class="fin-stat__label">Por cobrar</div><div class="fin-stat__val" id="fin-stat-pending">—</div></div>
-          <div class="fin-stat fin-stat--danger"><div class="fin-stat__label">Vencido</div><div class="fin-stat__val" id="fin-stat-overdue">—</div></div>
-        </div>
-        <div class="clients-loading" id="fin-loading">
-          <div class="clients-spin"></div>
-          <span>Cargando pagos…</span>
-        </div>
-        <div class="clients-empty" id="fin-empty" style="display:none">
-          <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-          <p>Aún no has registrado ningún pago.</p>
-          <button class="btn btn--primary btn--sm" onclick="FinanceModule.openDrawer()">Registrar el primero</button>
-        </div>
-        <div class="clients-table-wrap" id="fin-table-wrap" style="display:none">
-          <table class="clients-table">
-            <thead>
-              <tr>
-                <th>Concepto · Cliente</th>
-                <th>Proyecto</th>
-                <th>Moneda</th>
-                <th>Bruto</th>
-                <th>Neto</th>
-                <th>Equiv. USD</th>
-                <th>F. Esperada</th>
-                <th>Estado</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody id="fin-tbody"></tbody>
-          </table>
-        </div>
-      </div>
+      <!-- DETAIL VIEW (Bloque 2: pipeline + tareas internas) -->
+      <div id="opp-detail-view" style="display:none"></div>
     </div>
 
     <!-- ── BLOQUEOS ────────────────────────────────────────── -->
@@ -1408,46 +1412,69 @@
       </div>
     </div><!-- /pane-verifications -->
 
-    <!-- ── LEAD MANAGER PANE ─────────────────────────────────── -->
-    <div class="pane" id="pane-lead-manager">
-      <div class="pane-header">
-        <div>
-          <h1 class="pane-title">Lead Manager</h1>
-          <p class="pane-sub">Pipeline de prospectos — de primer contacto a cliente</p>
-        </div>
-        <button class="btn btn--primary" onclick="LeadManagerModule.openDrawer()">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Nuevo lead
-        </button>
-      </div>
-      <div class="clients-toolbar">
-        <div class="clients-search-wrap">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input type="text" id="lm-search" placeholder="Buscar por nombre, empresa o email…" oninput="LeadManagerModule.filter()">
-        </div>
-        <div class="clients-filters" id="lm-filter-bar">
-          <button class="filter-pill active" data-stage="" onclick="LeadManagerModule.setFilter('')">Todos</button>
-          <button class="filter-pill" data-stage="nuevo" onclick="LeadManagerModule.setFilter('nuevo')">Nuevo</button>
-          <button class="filter-pill" data-stage="contactado" onclick="LeadManagerModule.setFilter('contactado')">Contactado</button>
-          <button class="filter-pill" data-stage="propuesta" onclick="LeadManagerModule.setFilter('propuesta')">Propuesta</button>
-          <button class="filter-pill" data-stage="negociacion" onclick="LeadManagerModule.setFilter('negociacion')">Negociación</button>
-          <button class="filter-pill" data-stage="ganado" onclick="LeadManagerModule.setFilter('ganado')">Ganado</button>
-          <button class="filter-pill" data-stage="perdido" onclick="LeadManagerModule.setFilter('perdido')">Perdido</button>
-        </div>
-      </div>
-      <div class="clients-loading" id="lm-loading"><div class="clients-spin"></div></div>
-      <div class="clients-empty hidden" id="lm-empty">Sin leads aún. ¡Agrega el primero!</div>
-      <div class="clients-table-wrap hidden" id="lm-table-wrap">
-        <table class="clients-table">
-          <thead><tr>
-            <th>Nombre</th><th>Empresa</th><th>Email</th><th>Fuente</th><th>Stage</th><th>Valor est.</th>
-          </tr></thead>
-          <tbody id="lm-tbody"></tbody>
-        </table>
-      </div>
-    </div><!-- /pane-lead-manager -->
+    <!-- Lead Manager vive FUERA de .content-wrap (full-width workspace) — ver abajo -->
+
 
     </div><!-- /content-wrap -->
+
+    <!-- ── LEAD MANAGER (workspace full-width; lo arma LeadManagerModule.load()) ── -->
+    <div class="pane" id="pane-lead-manager"></div>
+
+    <!-- ── CLIENTES (sibling of .content-wrap — wider, Clay-style, not
+         capped at 1060px; see #pane-mgmt-clients in style.css) ────── -->
+    <div class="pane" id="pane-mgmt-clients">
+      <div class="pane-header">
+        <div class="pane-header__row">
+          <div>
+            <h1 class="pane-title">Clientes</h1>
+            <p class="pane-sub">Empresas y personas con las que ya tienes relación de trabajo activa</p>
+          </div>
+          <button class="btn btn--primary btn--sm" id="clients-new-btn" onclick="ClientsModule.openDrawer()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <span id="clients-new-label">Nuevo contacto</span>
+          </button>
+        </div>
+        <div class="cl-view-tabs">
+          <button class="cl-view-tab active" data-tab="contactos" onclick="ClientsModule.setViewTab('contactos')">Contactos</button>
+          <button class="cl-view-tab" data-tab="empresas" onclick="ClientsModule.setViewTab('empresas')">Empresas</button>
+        </div>
+        <div class="clients-toolbar">
+          <div class="clients-search-wrap">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" id="clients-search" placeholder="Buscar por nombre, empresa o email…" oninput="ClientsModule.filter()">
+          </div>
+          <div class="clients-filters">
+            <button class="filter-pill active" data-estado="" onclick="ClientsModule.setFilter('')">Todos</button>
+            <button class="filter-pill" data-estado="activo" onclick="ClientsModule.setFilter('activo')">Activos</button>
+            <button class="filter-pill" data-estado="potencial" onclick="ClientsModule.setFilter('potencial')">Potenciales</button>
+            <button class="filter-pill" data-estado="pausado" onclick="ClientsModule.setFilter('pausado')">Pausados</button>
+            <button class="filter-pill" data-estado="inactivo" onclick="ClientsModule.setFilter('inactivo')">Inactivos</button>
+          </div>
+        </div>
+      </div>
+      <div class="clients-body">
+        <div class="clients-loading" id="clients-loading">
+          <div class="clients-spin"></div>
+          <span>Cargando clientes…</span>
+        </div>
+        <div class="clients-empty" id="clients-empty" style="display:none">
+          <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          <p>Aún no tienes clientes guardados.</p>
+          <button class="btn btn--primary btn--sm" onclick="ClientsModule.openDrawer()">Agregar el primero</button>
+        </div>
+        <div class="cl-table-wrap" id="clients-table-wrap" style="display:none">
+          <div class="cl-grid cl-grid-header" id="clients-thead">
+            <div>Contacto</div>
+            <div>Email</div>
+            <div>Teléfono</div>
+            <div>País</div>
+            <div>Estado</div>
+            <div></div>
+          </div>
+          <div id="clients-tbody"></div>
+        </div>
+      </div>
+    </div>
   </main>
 
   <!-- ── RIGHT PANEL (chat + alertas) ─────────────────────────── -->
@@ -1545,6 +1572,7 @@
         <div class="rnotif__scroll" id="rnotif-content">
           <div style="text-align:center;color:var(--muted);font-size:.82rem;padding:40px 0">Cargando alertas…</div>
         </div>
+        <div class="rnf-footer hidden" id="rnotif-footer"></div>
       </div>
 
       <!-- VISTA NOTAS -->
@@ -1571,37 +1599,53 @@
 <div class="drawer-overlay" id="clients-drawer-overlay" onclick="ClientsModule.closeDrawer()"></div>
 <aside class="drawer" id="clients-drawer">
   <div class="drawer__header">
-    <h2 class="drawer__title" id="clients-drawer-title">Nuevo cliente</h2>
+    <h2 class="drawer__title" id="clients-drawer-title">Nuevo contacto</h2>
     <button class="drawer__close" onclick="ClientsModule.closeDrawer()">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
     </button>
   </div>
   <form class="drawer__form" id="clients-form" onsubmit="ClientsModule.save(event)">
-    <div class="form-row">
-      <label class="form-label">Nombre completo <span class="form-required">*</span></label>
-      <input class="form-input" type="text" name="nombre" required placeholder="Ana García">
-    </div>
-    <div class="form-row">
-      <label class="form-label">Empresa</label>
-      <input class="form-input" type="text" name="empresa" placeholder="Acme Corp">
-    </div>
-    <div class="form-row form-row--2col">
-      <div>
-        <label class="form-label">Email</label>
-        <input class="form-input" type="email" name="email" placeholder="ana@acme.com">
+
+    <!-- ── EMPRESA (siempre visible) ────────────────────────────── -->
+    <div class="cr-section">
+      <div class="cr-section-label">Empresa</div>
+      <input class="form-input" type="text" name="empresa" placeholder="Acme Corp *" list="clients-empresa-list" autocomplete="off">
+      <datalist id="clients-empresa-list"></datalist>
+      <div class="cr-2col">
+        <input class="form-input" type="url" name="sitio_web" placeholder="https://acme.com">
+        <input class="form-input" type="url" name="linkedin" placeholder="linkedin.com/company/…">
       </div>
-      <div>
-        <label class="form-label">Teléfono</label>
-        <input class="form-input" type="tel" name="telefono" placeholder="+52 55 1234 5678">
+      <div class="cr-2col">
+        <div class="cargo-combo">
+          <input class="form-input" type="text" name="industria" autocomplete="off"
+                 placeholder="Buscar o escribir industria…"
+                 oninput="IndustriaCombo.filter(this)" onfocus="IndustriaCombo.open(this)"
+                 onkeydown="IndustriaCombo.key(event,this)" onblur="IndustriaCombo.close(this)">
+          <div class="cargo-drop" onmousedown="event.preventDefault()"></div>
+        </div>
+        <input class="form-input" type="text" name="pais_empresa" placeholder="País empresa">
       </div>
+      <input class="form-input" type="text" name="ciudad" placeholder="Ciudad">
+      <textarea class="form-input form-textarea cr-textarea-sm" name="notas_empresa" rows="2" placeholder="Notas de empresa (opcional)"></textarea>
     </div>
-    <div class="form-row form-row--2col">
-      <div>
-        <label class="form-label">País</label>
-        <input class="form-input" type="text" name="pais" placeholder="México">
+
+    <!-- ── CONTACTO — modo edición: contacto único ───────────────── -->
+    <div id="cr-single-fields" class="cr-section">
+      <div class="cr-section-label">Contacto</div>
+      <input class="form-input" type="text" name="nombre" placeholder="Nombre completo *">
+      <div class="cargo-combo">
+        <input class="form-input" type="text" name="cargo" autocomplete="off"
+               placeholder="Buscar o escribir cargo…"
+               oninput="CargoCombo.filter(this)" onfocus="CargoCombo.open(this)"
+               onkeydown="CargoCombo.key(event,this)" onblur="CargoCombo.close(this)">
+        <div class="cargo-drop" onmousedown="event.preventDefault()"></div>
       </div>
-      <div>
-        <label class="form-label">Estado</label>
+      <div class="cr-2col">
+        <input class="form-input" type="email" name="email" placeholder="Email">
+        <input class="form-input" type="tel" name="telefono" placeholder="Teléfono">
+      </div>
+      <div class="cr-2col">
+        <input class="form-input" type="text" name="pais" placeholder="País">
         <select class="form-input form-select" name="estado">
           <option value="potencial">Potencial</option>
           <option value="activo" selected>Activo</option>
@@ -1609,11 +1653,11 @@
           <option value="inactivo">Inactivo</option>
         </select>
       </div>
+      <textarea class="form-input form-textarea cr-textarea-sm" name="notas" rows="2" placeholder="Notas del contacto (opcional)"></textarea>
     </div>
-    <div class="form-row">
-      <label class="form-label">Notas</label>
-      <textarea class="form-input form-textarea" name="notas" rows="3" placeholder="Contexto, preferencias, datos adicionales…"></textarea>
-    </div>
+
+    <!-- ── CONTACTOS — modo nuevo: bloques multi-contacto ────────── -->
+    <div id="cr-multi-new" style="display:none"></div>
 
     <!-- Contacts section — only shown when editing an existing client -->
     <div id="clients-contacts-section" style="display:none">
@@ -1645,7 +1689,7 @@
 
     <div class="drawer__footer">
       <button type="button" class="btn btn--ghost" onclick="ClientsModule.closeDrawer()">Cancelar</button>
-      <button type="submit" class="btn btn--primary" id="clients-save-btn">Crear cliente</button>
+      <button type="submit" class="btn btn--primary" id="clients-save-btn">Crear contacto</button>
     </div>
   </form>
 </aside>
@@ -1668,7 +1712,7 @@
     </div>
     <div class="form-row">
       <label class="form-label">Proyecto <span class="form-required">*</span></label>
-      <select class="form-input form-select" name="project_id" required id="tasks-project-select">
+      <select class="form-input form-select" name="project_id" required id="tasks-project-select" onchange="TasksModule.onProjectDateChange()">
         <option value="">Seleccionar proyecto…</option>
       </select>
     </div>
@@ -1691,17 +1735,21 @@
         </select>
       </div>
     </div>
+    <div class="form-row">
+      <label class="form-label">Responsable</label>
+      <div class="cdd" id="task-resp-dd">
+        <button type="button" class="cdd__btn" id="task-resp-btn" onclick="TasksModule.toggleRespDd()">
+          <span id="task-resp-label">Sin asignar</span>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="cdd__list" id="task-resp-list" style="display:none"></div>
+        <input type="hidden" id="task-responsable-select" name="responsable" value="">
+      </div>
+    </div>
     <div class="form-row form-row--2col">
       <div>
-        <label class="form-label">Responsable</label>
-        <div class="cdd" id="task-resp-dd">
-          <button type="button" class="cdd__btn" id="task-resp-btn" onclick="TasksModule.toggleRespDd()">
-            <span id="task-resp-label">Sin asignar</span>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-          </button>
-          <div class="cdd__list" id="task-resp-list" style="display:none"></div>
-          <input type="hidden" id="task-responsable-select" name="responsable" value="">
-        </div>
+        <label class="form-label">Fecha de inicio</label>
+        <input class="form-input" type="date" name="fecha_inicio">
       </div>
       <div>
         <label class="form-label">Deadline</label>
@@ -1715,6 +1763,45 @@
     <div class="form-row">
       <label class="form-label">Notas / bloqueos</label>
       <textarea class="form-input form-textarea" name="notas" rows="2" placeholder="Dependencias, bloqueos, contexto adicional…"></textarea>
+    </div>
+    <div class="form-row" id="tasks-plan-row">
+      <label class="form-label">Plan de trabajo <span class="tpl__opt">opcional · se sugiere en el calendario</span></label>
+      <div class="tpl" id="tpl-editor">
+        <div class="tpl__days" id="tpl-days" role="group" aria-label="Días de la semana">
+          <button type="button" class="tpl-day" data-d="0" onclick="TasksModule.plDay(0)">L</button>
+          <button type="button" class="tpl-day" data-d="1" onclick="TasksModule.plDay(1)">M</button>
+          <button type="button" class="tpl-day" data-d="2" onclick="TasksModule.plDay(2)">X</button>
+          <button type="button" class="tpl-day" data-d="3" onclick="TasksModule.plDay(3)">J</button>
+          <button type="button" class="tpl-day" data-d="4" onclick="TasksModule.plDay(4)">V</button>
+          <button type="button" class="tpl-day" data-d="5" onclick="TasksModule.plDay(5)">S</button>
+          <button type="button" class="tpl-day" data-d="6" onclick="TasksModule.plDay(6)">D</button>
+        </div>
+        <div class="tpl__grid">
+          <div class="tpl__field">
+            <span class="tpl__flbl">Horas por semana</span>
+            <div class="tpl__hours">
+              <input type="number" id="tpl-hours" min="0" max="999" step="0.5" placeholder="0" inputmode="decimal" oninput="TasksModule.plHours(this.value)">
+              <span class="tpl__unit">h</span>
+            </div>
+          </div>
+          <div class="tpl__field">
+            <span class="tpl__flbl">Hora de inicio</span>
+            <div class="tpl__time" id="tpl-time" tabindex="0" title="Rueda del mouse o ↑ ↓ para cambiar la hora" onwheel="TasksModule.plWheel(event)" onkeydown="TasksModule.plKey(event)">
+              <span class="tpl__tnum" id="tpl-thour">8</span>
+              <button type="button" class="tpl__ampm" id="tpl-ampm" onclick="TasksModule.plAmpm()">AM</button>
+              <span class="tpl__tarrows">
+                <button type="button" class="tpl__tarr" tabindex="-1" aria-label="Subir hora" onclick="TasksModule.plStep(1)"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
+                <button type="button" class="tpl__tarr" tabindex="-1" aria-label="Bajar hora" onclick="TasksModule.plStep(-1)"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+              </span>
+            </div>
+          </div>
+        </div>
+        <div class="tpl__hint" id="tpl-hint"></div>
+      </div>
+      <div class="tpl__subnote" id="tpl-subnote" style="display:none">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+        <span>Esta tarea tiene subtareas — el plan de trabajo se define en cada <b>subtarea</b>.</span>
+      </div>
     </div>
     <div class="drawer__footer">
       <button type="button" class="btn btn--ghost btn--danger" id="tasks-delete-btn" style="display:none" onclick="TasksModule.confirmDelete()">Eliminar</button>
@@ -1922,18 +2009,43 @@
         <input class="form-input" type="date" name="fecha_esperada">
       </div>
     </div>
+    <div class="form-row">
+      <label class="form-label">Canal / plataforma de cobro</label>
+      <select class="form-input form-select" name="canal" id="pay-canal" onchange="FinanceModule.onCanalChange(this)">
+        <option value="">— Sin especificar —</option>
+        <option value="Upwork">Upwork</option>
+        <option value="Freelancer">Freelancer</option>
+        <option value="Fiverr">Fiverr</option>
+        <option value="Global66">Global66</option>
+        <option value="PayPal">PayPal</option>
+        <option value="Wise">Wise</option>
+        <option value="Transferencia bancaria">Transferencia bancaria</option>
+        <option value="Banco local">Banco local</option>
+        <option value="Otro">Otro</option>
+      </select>
+    </div>
     <div class="form-row form-row--3col">
       <div>
         <label class="form-label">Monto bruto ($)</label>
-        <input class="form-input" type="number" name="monto_bruto" id="pay-monto-bruto" min="0" step="0.01" placeholder="10000" oninput="FinanceModule.calcNeto()">
+        <input class="form-input" type="number" name="monto_bruto" id="pay-monto-bruto" min="0" step="0.01" placeholder="1000" oninput="FinanceModule.calcNeto()">
       </div>
       <div>
         <label class="form-label">Comisión (%)</label>
-        <input class="form-input" type="number" name="porcentaje" id="pay-porcentaje" min="0" max="100" step="0.1" placeholder="20" oninput="FinanceModule.calcNeto()">
+        <input class="form-input" type="number" name="porcentaje" id="pay-porcentaje" min="0" max="100" step="0.1" placeholder="10" oninput="FinanceModule.calcNeto()">
       </div>
       <div>
-        <label class="form-label">Ganancia neta ($)</label>
-        <input class="form-input" type="number" name="monto_neto" id="pay-monto-neto" min="0" step="0.01" placeholder="2000">
+        <label class="form-label">Comisión fija ($)</label>
+        <input class="form-input" type="number" name="comision_monto" id="pay-comision-monto" min="0" step="0.01" placeholder="0" oninput="FinanceModule.calcNeto()">
+      </div>
+    </div>
+    <div class="form-row form-row--2col">
+      <div>
+        <label class="form-label">Neto recibido ($)</label>
+        <input class="form-input" type="number" name="monto_neto" id="pay-monto-neto" min="0" step="0.01" placeholder="900">
+      </div>
+      <div>
+        <label class="form-label" style="opacity:.65">Comisión calculada</label>
+        <input class="form-input" type="text" id="pay-comision-calc" disabled style="background:#FAFAF8;color:var(--muted)">
       </div>
     </div>
     <div class="form-row" id="pay-fecha-pagada-row" style="display:none">
@@ -2309,6 +2421,14 @@
       </select>
     </div>
     <div class="form-row">
+      <label class="form-label">Cliente outbound</label>
+      <select id="lm-outbound-client" class="form-input" onchange="LeadManagerModule.onLeadClientChange()"><option value="">— Sin cliente outbound —</option></select>
+    </div>
+    <div class="form-row">
+      <label class="form-label">Campaña</label>
+      <select id="lm-campaign" class="form-input"><option value="">— Sin campaña —</option></select>
+    </div>
+    <div class="form-row">
       <label class="form-label">Notas</label>
       <textarea id="lm-notas" class="form-input form-textarea" rows="3" placeholder="Contexto, intereses, próximos pasos…"></textarea>
     </div>
@@ -2320,23 +2440,14 @@
   </form>
 </aside>
 
-<!-- Sidebar toggle script -->
+<!-- Restaura el panel colapsado antes de app.js (evita flash) -->
 <script>
 (function() {
-  var sidebar = document.getElementById('sidebar');
-  var toggle  = document.getElementById('sidebarToggle');
-  if (!sidebar || !toggle) return;
-  if (localStorage.getItem('sb-collapsed') === '1') {
-    sidebar.classList.add('sidebar--collapsed');
-  }
-  toggle.addEventListener('click', function() {
-    sidebar.classList.toggle('sidebar--collapsed');
-    localStorage.setItem('sb-collapsed', sidebar.classList.contains('sidebar--collapsed') ? '1' : '0');
-  });
+  try { if (localStorage.getItem('sb-collapsed') === '1') { var a = document.getElementById('appShell'); if (a) a.classList.add('nav-collapsed'); } } catch (_) {}
 })();
 </script>
 
-<script src="app.js"></script>
+<script src="app.js?v=20260705d"></script>
 <div id="task-quick-edit" style="display:none;position:fixed;z-index:9999"></div>
 </body>
 </html>

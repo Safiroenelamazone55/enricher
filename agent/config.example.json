@@ -1,0 +1,10 @@
+{
+  "apiBase": "https://api.kiwoc.com/api",
+  "webUrl": "https://enricher.kiwoc.com",
+  "token": "PEGA_AQUI_TU_TOKEN_de_Nova",
+  "pollSeconds": 15,
+  "idleThresholdSeconds": 60,
+  "minSegmentSeconds": 15,
+  "flushSeconds": 60,
+  "tray": true
+}

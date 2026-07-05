@@ -10,3 +10,11 @@ backend/data/domainPatterns.tmp.json
 frontend/.wrangler/
 check_deploy.py
 deploy_backend.py
+.env.deploy
+
+# Artefactos de compilación del agente (se regeneran; no versionar binarios pesados)
+agent/dist/
+agent/Output/
+agent/sea-prep.blob
+*.exe
+extension/*.zip

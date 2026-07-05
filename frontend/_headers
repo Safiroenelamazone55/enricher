@@ -1,0 +1,7 @@
+# El HTML de entrada NO se cachea en el navegador: siempre revalida y toma la última
+# versión (que referencia app.js/style.css con ?v=…). Así los deploys aparecen sin
+# tener que forzar Ctrl+Shift+R. Los assets versionados sí se cachean (URL cambia por ?v=).
+/
+  Cache-Control: no-cache, must-revalidate
+/index.html
+  Cache-Control: no-cache, must-revalidate

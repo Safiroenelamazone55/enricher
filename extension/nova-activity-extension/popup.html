@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="hd">
+    <div class="logo">N</div>
+    <div>
+      <div class="title">Nova Activity</div>
+      <div class="sub">Time tracking · websites</div>
+    </div>
+    <span class="pill pill--soon" id="conn">Comprobando…</span>
+  </div>
+
+  <div class="row">
+    <div class="row__l">
+      <div class="row__t">Enviar actividad web a Nova</div>
+      <div class="row__s">Detecta dominio activo + idle real</div>
+    </div>
+    <label class="switch"><input type="checkbox" id="enabled"><span class="track"></span></label>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><div class="stat__v" id="today">0m</div><div class="stat__l">Web hoy</div></div>
+    <div class="stat"><div class="stat__v" id="pending">0</div><div class="stat__l">Por enviar</div></div>
+  </div>
+
+  <label class="field">
+    <span class="field__l">Token de Nova</span>
+    <input id="token" type="password" spellcheck="false" placeholder="nova_ext_…">
+  </label>
+
+  <label class="field">
+    <span class="field__l">API de Nova</span>
+    <input id="api" type="text" spellcheck="false" placeholder="https://api.kiwoc.com/api">
+  </label>
+
+  <div class="sync" id="sync"><span class="sync__dot"></span><span id="sync-txt">Sincronización automática activa</span></div>
+  <button class="flush" id="flush">Forzar envío ahora</button>
+
+  <p class="note">Se envía solo, automáticamente (al cambiar de pestaña y cada minuto). Solo dominio, título y tiempo — nunca el contenido de las páginas.</p>
+
+  <script src="popup.js"></script>
+</body>
+</html>

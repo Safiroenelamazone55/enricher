@@ -14,6 +14,44 @@ const esc = s => String(s ?? '')
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   .replace(/"/g, '&quot;');
 
+// ── Estados de tareas de oportunidad (idénticos a las tareas normales) ──
+const OPP_TASK_STATES = [
+  ['pendiente',   'Pendiente',   '#C8BCAC', false, 'pendiente'],
+  ['en_progreso', 'En progreso', '#6366F1', true,  'inprogress'],
+  ['completado',  'Completado',  '#22C55E', true,  'done'],
+  ['bloqueado',   'Bloqueado',   '#EF4444', true,  'blocked'],
+];
+function oppTaskNorm(v) {
+  if (v === 'completada') v = 'completado';   // legacy
+  return OPP_TASK_STATES.some(s => s[0] === v) ? v : 'pendiente';
+}
+function oppTaskMeta(v) { const n = oppTaskNorm(v); return OPP_TASK_STATES.find(s => s[0] === n) || OPP_TASK_STATES[0]; }
+function oppTaskStatusSvg(v) {
+  const ic = {
+    pendiente:   '<circle cx="8" cy="8" r="5.5" stroke="#C8BCAC" stroke-width="1.5" fill="none"/>',
+    en_progreso: '<circle cx="8" cy="8" r="6.5" fill="#6366F1"/><path d="M5.5 8a2.5 2.5 0 0 1 4.5-1.5" stroke="#fff" stroke-width="1.5" stroke-linecap="round" fill="none"/>',
+    completado:  '<circle cx="8" cy="8" r="6.5" fill="#22C55E"/><path d="M5 8 L7.2 10.5 L11 6" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>',
+    bloqueado:   '<circle cx="8" cy="8" r="6.5" fill="#EF4444"/><line x1="5.5" y1="8" x2="10.5" y2="8" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/>',
+  }[oppTaskNorm(v)];
+  return `<svg width="16" height="16" viewBox="0 0 16 16" fill="none">${ic}</svg>`;
+}
+let _oppStatusMenuClose = null;
+function openOppTaskStatusMenu(e, id, current, fnName) {
+  if (_oppStatusMenuClose) { _oppStatusMenuClose(); return; }
+  const rect = e.currentTarget.getBoundingClientRect();
+  const cur = oppTaskNorm(current);
+  const menu = document.createElement('div');
+  menu.className = 'd3-status-menu';
+  menu.innerHTML = OPP_TASK_STATES.map(([v, l, dot, fill]) => `
+    <button class="d3-status-opt" onclick="${fnName}(${id},'${v}')">
+      <span class="d3-status-opt__dot" style="background:${fill ? dot : 'transparent'};border:1.5px solid ${dot}"></span>${l}${cur === v ? '<span style="margin-left:auto;color:#A8A29E">✓</span>' : ''}
+    </button>`).join('');
+  menu.style.cssText = `position:fixed;z-index:10000;top:${rect.bottom + 6}px;left:${Math.min(rect.left - 4, window.innerWidth - 180)}px`;
+  document.body.appendChild(menu);
+  _oppStatusMenuClose = () => { menu.remove(); document.removeEventListener('click', _oppStatusMenuClose); _oppStatusMenuClose = null; };
+  setTimeout(() => document.addEventListener('click', _oppStatusMenuClose), 0);
+}
+
 function showAlert(el, msg, type = 'err') {
   el.className = `alert alert--${type}`;
   el.textContent = msg;
@@ -96,14 +134,11 @@ function apiFetch(url, opts = {}) {
   return fetch(url, { credentials: 'include', ...opts });
 }
 
-function applyBranding({ companyName, companyLogo, workspaceName } = {}) {
+function applyBranding({ companyLogo, workspaceName } = {}) {
   const wsTag      = $('ws-name-tag');
-  const nameEl     = $('brand-company-name');
   const iconWrap   = $('brand-icon-wrap');
 
   if (wsTag && workspaceName) wsTag.textContent = workspaceName;
-
-  if (nameEl) nameEl.textContent = companyName || 'Nova';
 
   if (iconWrap) {
     if (companyLogo) {
@@ -112,6 +147,78 @@ function applyBranding({ companyName, companyLogo, workspaceName } = {}) {
       iconWrap.innerHTML = `<svg width="68" height="68" viewBox="0 0 100 100" fill="none"><path d="M50 3 L63 38 L97 50 L63 62 L50 97 L37 62 L3 50 L37 38 Z" fill="currentColor"/></svg>`;
     }
   }
+}
+
+/* ── Workspace launcher: Google-Workspace-style app picker, opened
+   by clicking the sidebar logo/brand. ────────────────────────── */
+const WS_LAUNCHER_ITEMS = [
+  { tab: 'mgmt-dashboard', area: 'management', name: 'Management', desc: 'Proyectos, tareas, clientes y finanzas',
+    icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="11" height="9" rx="2"/><rect x="16" y="3" width="5" height="9" rx="2"/><rect x="3" y="14" width="5" height="7" rx="2"/><rect x="10" y="14" width="11" height="7" rx="2"/></svg>' },
+  { tab: 'single', area: 'enricher', name: 'Enricher', desc: 'Preparación, verificación y scoring de leads',
+    icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21"/><path d="M6.2 6.2l1.8 1.8M16 16l1.8 1.8M6.2 17.8l1.8-1.8M16 8l1.8-1.8"/></svg>' },
+  { tab: 'lead-manager', area: 'leadmanagement', name: 'Lead Management', desc: 'CRM, campañas, actividades y seguimiento',
+    icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 3H2l8 9.5v7.5l4 2v-9.5L22 3z"/></svg>' },
+];
+
+let _wsLauncherClose = null;
+
+function toggleWorkspaceLauncher(e) {
+  e.stopPropagation();
+  if (_wsLauncherClose) { _wsLauncherClose(); return; }
+
+  const trigger = $('sidebar-brand');
+  const sidebar = $('sidebar');
+  if (!trigger || !sidebar) return;
+  const triggerRect = trigger.getBoundingClientRect();
+  const sidebarRect = sidebar.getBoundingClientRect();
+
+  const panel = document.createElement('div');
+  panel.className = 'ws-launcher';
+  panel.innerHTML = WS_LAUNCHER_ITEMS.map(it => `
+    <button class="ws-launcher__item" data-target-tab="${it.tab}" data-target-area="${it.area}">
+      <span class="ws-launcher__icon">${it.icon}</span>
+      <span class="ws-launcher__body">
+        <span class="ws-launcher__name">${it.name}</span>
+        <span class="ws-launcher__desc">${it.desc}</span>
+      </span>
+    </button>
+  `).join('');
+  document.body.appendChild(panel);
+
+  const top  = Math.max(8, Math.min(triggerRect.top, window.innerHeight - panel.offsetHeight - 8));
+  const left = sidebarRect.right + 8;
+  panel.style.top  = top + 'px';
+  panel.style.left = left + 'px';
+
+  panel.querySelectorAll('.ws-launcher__item').forEach(btn => {
+    btn.addEventListener('click', () => {
+      selectWorkspaceArea(btn.dataset.targetArea);
+      const navBtn = document.querySelector(`.snav-item[data-tab="${btn.dataset.targetTab}"]`);
+      if (navBtn) navBtn.click();
+      if (_wsLauncherClose) _wsLauncherClose();
+    });
+  });
+
+  const onDocClick = (ev) => {
+    if (!panel.contains(ev.target) && !trigger.contains(ev.target)) _wsLauncherClose();
+  };
+  const onKeydown = (ev) => { if (ev.key === 'Escape') _wsLauncherClose(); };
+  const onScrollOrResize = () => _wsLauncherClose();
+
+  _wsLauncherClose = () => {
+    panel.remove();
+    document.removeEventListener('click', onDocClick);
+    document.removeEventListener('keydown', onKeydown);
+    window.removeEventListener('scroll', onScrollOrResize, true);
+    window.removeEventListener('resize', onScrollOrResize);
+    _wsLauncherClose = null;
+  };
+  setTimeout(() => {
+    document.addEventListener('click', onDocClick);
+    document.addEventListener('keydown', onKeydown);
+    window.addEventListener('scroll', onScrollOrResize, true);
+    window.addEventListener('resize', onScrollOrResize);
+  }, 0);
 }
 
 /**
@@ -153,13 +260,11 @@ async function initAuth() {
       // ── Apply workspace branding to sidebar ───────────────
       applyBranding(data);
 
-      // ── Make brand clickable for owners ───────────────────
+      // ── Brand/logo opens the workspace launcher (all users) ─
+      const brand = $('sidebar-brand');
+      if (brand) { brand.style.cursor = 'default'; brand.onclick = null; }
+
       if (data.isOwner) {
-        const brand = $('sidebar-brand');
-        if (brand) {
-          brand.style.cursor = 'pointer';
-          brand.onclick = () => WorkspaceModule.openNameModal();
-        }
         const invBtn = $('invite-btn');
         if (invBtn) invBtn.style.display = '';
       }
@@ -168,14 +273,10 @@ async function initAuth() {
       window._authUser = data;
 
       authBar.innerHTML = `
-        <div class="auth-user" style="cursor:${data.isOwner ? 'pointer' : 'default'}" ${data.isOwner ? 'onclick="WorkspaceModule.openNameModal()" title="Cambiar nombre del workspace"' : ''}>
-          <img src="${data.avatar || `https://api.dicebear.com/9.x/lorelei/svg?seed=${encodeURIComponent(data.name || data.email || 'user')}`}" alt="" class="auth-user__avatar"/>
-          <div style="flex:1;min-width:0">
-            <div class="auth-user__name">${esc(data.name || data.email)}</div>
-            ${!data.isOwner ? `<div style="font-size:.68rem;color:#A8A29E">Miembro</div>` : ''}
-          </div>
-          <a href="${API}/auth/logout" class="btn btn--ghost btn--sm" id="btnLogout" onclick="event.stopPropagation()">Salir</a>
-        </div>`;
+        <img src="${data.avatar || `https://api.dicebear.com/9.x/lorelei/svg?seed=${encodeURIComponent(data.name || data.email || 'user')}`}" alt="" class="rail-user__av" title="${esc(data.name || data.email)}${data.isOwner ? ' · Configuración' : ''}" ${data.isOwner ? 'style="cursor:pointer" onclick="WorkspaceModule.openNameModal()"' : ''}/>
+        <a href="${API}/auth/logout" class="rail-user__out" id="btnLogout" title="Salir" aria-label="Salir" onclick="event.stopPropagation()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </a>`;
 
       const logoutBtn = $('btnLogout');
       if (logoutBtn) {
@@ -189,8 +290,17 @@ async function initAuth() {
       authWall.classList.add('hidden');
       appShell.classList.remove('hidden');
       initApp();
+      // Restaurar la última sección visitada (en vez de volver siempre al Dashboard al recargar).
+      // Activamos el pane/nav SÍNCRONAMENTE aquí (antes del await) para que la 1ª pintura ya sea
+      // la sección correcta → sin "flash" del Dashboard. Los datos se cargan después de FxRates.
+      const _initTab = (() => {
+        try { const s = localStorage.getItem('kw_activeTab'); if (s && document.getElementById('pane-' + s) && document.querySelector(`[data-tab="${s}"]`)) return s; } catch (_) {}
+        return 'mgmt-dashboard';
+      })();
+      document.querySelectorAll('.tab,.snav-item').forEach(t => t.classList.toggle('active', t.dataset.tab === _initTab));
+      document.querySelectorAll('.pane').forEach(p => p.classList.toggle('active', p.id === 'pane-' + _initTab));
       await FxRatesModule.load();
-      DashboardModule.load();
+      if (typeof window._novaSwitchTab === 'function') window._novaSwitchTab(_initTab); else DashboardModule.load();
       ChatModule.init();
       TimerModule.init();
 
@@ -305,6 +415,68 @@ function _respVal(hiddenId) {
   catch { return []; }
 }
 
+// Sidebar workspace groups: Management / Enricher / Lead Management.
+// Manual toggle (chevron click) only opens/closes that one group.
+// Selecting an area from the logo launcher (selectWorkspaceArea) instead
+// expands that group and collapses the other two — see toggleWorkspaceLauncher.
+const SNAV_GROUPS = ['management', 'enricher', 'leadmanagement'];
+
+function _loadExpandedGroups() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('sb-expanded-groups') || 'null');
+    if (saved && typeof saved === 'object') return saved;
+  } catch (_) {}
+  return { management: true, enricher: false, leadmanagement: false };
+}
+
+function _applyExpandedGroups(state) {
+  SNAV_GROUPS.forEach(id => {
+    const body = document.getElementById('snav-body-' + id);
+    const hdr  = document.getElementById('snav-hdr-' + id);
+    if (!body || !hdr) return;
+    const expanded = !!state[id];
+    body.classList.toggle('snav-section-body--collapsed', !expanded);
+    hdr.setAttribute('aria-expanded', String(expanded));
+  });
+}
+
+function selectWorkspaceArea(area) {
+  const state = { management: area === 'management', enricher: area === 'enricher', leadmanagement: area === 'leadmanagement' };
+  _applyExpandedGroups(state);
+  localStorage.setItem('sb-expanded-groups', JSON.stringify(state));
+}
+
+// ── Doble sidebar: rail de módulos + panel de secciones ──
+let _activeModule = 'management';
+const _MOD_TITLES = { management: 'Management', enricher: 'Enricher', leadmanagement: 'Lead Management' };
+function _moduleOf(tab) {
+  return document.querySelector(`.snav-item[data-tab="${tab}"]`)?.closest('.snav-group')?.dataset.module || 'management';
+}
+function _setActiveModule(mod) {
+  _activeModule = mod;
+  document.querySelectorAll('.snav-mod').forEach(b => b.classList.toggle('active', b.dataset.module === mod));
+  document.querySelectorAll('.snav-group').forEach(g => g.classList.toggle('mod-on', g.dataset.module === mod));
+  const t = document.getElementById('snav-panel-title'); if (t) t.textContent = _MOD_TITLES[mod] || '';
+  // Lead Management usa su barra interna → oculta el panel redundante del rail
+  document.getElementById('appShell')?.classList.toggle('lm-active', mod === 'leadmanagement');
+}
+function _navCollapsed() { return !!document.getElementById('appShell')?.classList.contains('nav-collapsed'); }
+function _setNavCollapsed(on) {
+  document.getElementById('appShell')?.classList.toggle('nav-collapsed', on);
+  try { localStorage.setItem('sb-collapsed', on ? '1' : '0'); } catch (_) {}
+}
+function toggleNavPanel() { _setNavCollapsed(!_navCollapsed()); }
+function selectModule(mod) {
+  if (_activeModule === mod && !_navCollapsed()) { _setNavCollapsed(true); return; }
+  if (_navCollapsed()) _setNavCollapsed(false);
+  _setActiveModule(mod);
+  let target = null;
+  try { target = localStorage.getItem('kw_lastTab_' + mod); } catch (_) {}
+  const group = document.getElementById('snav-body-' + mod);
+  if (!target || !group?.querySelector(`.snav-item[data-tab="${target}"]`)) target = group?.querySelector('.snav-item')?.dataset.tab;
+  if (target && typeof window._novaSwitchTab === 'function') window._novaSwitchTab(target);
+}
+
 // Simple top toast
 function snavToggle(id) {
   const body = document.getElementById('snav-body-' + id);
@@ -313,6 +485,11 @@ function snavToggle(id) {
   const isOpen = !body.classList.contains('snav-section-body--collapsed');
   body.classList.toggle('snav-section-body--collapsed', isOpen);
   hdr.setAttribute('aria-expanded', String(!isOpen));
+  if (SNAV_GROUPS.includes(id)) {
+    const state = _loadExpandedGroups();
+    state[id] = !isOpen;
+    localStorage.setItem('sb-expanded-groups', JSON.stringify(state));
+  }
 }
 
 function showBanner(msg, type) {
@@ -328,6 +505,142 @@ function showBanner(msg, type) {
 initAuth();
 
 // =================================================================
+// SEARCHABLE COMBOBOX (cargo / industria — shared factory)
+// =================================================================
+
+const CARGO_LIST = [
+  'CEO / Director Ejecutivo','Fundador','Cofundador','Dueño','Propietario',
+  'Presidente','Director General','Gerente General','Socio','Socio Director',
+  'Director Comercial','Gerente Comercial','Gerente de Ventas','Director de Ventas',
+  'Jefe de Ventas','Ejecutivo de Ventas','Representante de Ventas','SDR','BDR',
+  'Ejecutivo de Desarrollo de Negocio','Gerente de Desarrollo de Negocio',
+  'Director de Marketing','Gerente de Marketing','Jefe de Marketing',
+  'CMO / Director de Marketing','Growth Manager','Responsable de Crecimiento',
+  'Gerente de Operaciones','Director de Operaciones','COO / Director de Operaciones',
+  'Project Manager','Gerente de Proyecto','Coordinador de Proyecto',
+  'Account Manager','Gerente de Cuenta','Customer Success Manager',
+  'Gerente de Éxito del Cliente','Atención al Cliente',
+  'Gerente de Recursos Humanos','Director de Recursos Humanos','Reclutador',
+  'Talent Acquisition Manager','Gerente de Finanzas','Director Financiero',
+  'CFO / Director Financiero','Asistente Administrativo','Asistente Ejecutivo',
+  'Asistente Virtual','Coordinador Administrativo','Gerente de Oficina',
+  'Product Manager','Gerente de Producto','CTO / Director de Tecnología',
+  'Gerente de Tecnología','Ingeniero de Software','Desarrollador','Analista de Datos',
+  'Consultor','Asesor','Director','Coordinador','Especialista','Asistente',
+];
+
+const INDUSTRIA_LIST = [
+  'Tecnología','Software / SaaS','Inteligencia Artificial','Automatización',
+  'Ciberseguridad','Desarrollo Web','Desarrollo de Software',
+  'Marketing Digital','Agencia de Marketing','Publicidad','Diseño Gráfico','Branding',
+  'Consultoría','Consultoría Empresarial','Consultoría Financiera',
+  'Recursos Humanos','Reclutamiento / Staffing',
+  'Educación','Cursos Online','Coaching',
+  'Salud','Clínica Médica','Odontología','Psicología','Bienestar / Wellness',
+  'Belleza / Estética','Moda','Retail','E-commerce',
+  'Alimentos y Bebidas','Restaurante','Hotelería','Turismo','Agencia de Viajes',
+  'Bienes Raíces','Inmobiliaria','Construcción','Arquitectura','Diseño de Interiores',
+  'Legal / Abogados','Contabilidad','Finanzas','Seguros','Banca',
+  'Logística','Transporte','Comercio Internacional',
+  'Manufactura','Industria Textil','Agricultura','Agroindustria',
+  'Energía','Telecomunicaciones','Medios / Comunicación','Entretenimiento','Eventos',
+  'Deporte / Fitness','ONG / Fundación','Gobierno',
+  'Servicios Profesionales','Servicios Administrativos','Servicios B2B','Servicios Locales',
+  'Otro',
+];
+
+function _comboFactory(list, selfName) {
+  function _drop(inp) { return inp?.nextElementSibling; }
+
+  function _render(inp) {
+    const drop = _drop(inp);
+    if (!drop) return;
+    const q      = (inp.value || '').trim().toLowerCase();
+    const matches = q ? list.filter(c => c.toLowerCase().includes(q)) : list;
+    const exact   = list.some(c => c.toLowerCase() === q);
+    const custom  = inp.value.trim();
+
+    let html = matches.map(c =>
+      `<div class="cargo-opt" tabindex="-1" onclick="${selfName}.pick(this)"
+            onkeydown="${selfName}.optKey(event,this)" data-v="${esc(c)}">${esc(c)}</div>`
+    ).join('');
+
+    if (q && !exact && custom) {
+      html += `<div class="cargo-opt cargo-opt--create" tabindex="-1"
+                   onclick="${selfName}.pick(this)" onkeydown="${selfName}.optKey(event,this)"
+                   data-v="${esc(custom)}">Crear: <strong>${esc(custom)}</strong></div>`;
+    }
+    if (!html) html = `<div class="cargo-opt cargo-opt--empty">Sin resultados</div>`;
+
+    drop.innerHTML = html;
+    drop.style.display = '';
+    drop.classList.add('open');
+  }
+
+  function open(inp)   { _render(inp); }
+  function filter(inp) { _render(inp); }
+
+  function close(inp) {
+    const drop = _drop(inp);
+    if (!drop) return;
+    drop.style.display = 'none';
+    drop.classList.remove('open');
+  }
+
+  function pick(optEl) {
+    if (optEl.classList.contains('cargo-opt--empty')) return;
+    const drop = optEl.closest('.cargo-drop');
+    const inp  = drop?.previousElementSibling;
+    if (!inp) return;
+    inp.value = optEl.dataset.v;
+    drop.style.display = 'none';
+    drop.classList.remove('open');
+    inp.focus();
+  }
+
+  function key(e, inp) {
+    const drop = _drop(inp);
+    if (!drop?.classList.contains('open')) return;
+    if (e.key === 'Escape') { close(inp); }
+    else if (e.key === 'Enter') {
+      const first = drop.querySelector('.cargo-opt:not(.cargo-opt--empty)');
+      if (first) { e.preventDefault(); pick(first); }
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      drop.querySelector('.cargo-opt:not(.cargo-opt--empty)')?.focus();
+    }
+  }
+
+  function optKey(e, optEl) {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(optEl); }
+    else if (e.key === 'ArrowDown') { e.preventDefault(); (optEl.nextElementSibling || optEl)?.focus(); }
+    else if (e.key === 'ArrowUp')   {
+      e.preventDefault();
+      const prev = optEl.previousElementSibling;
+      if (prev) prev.focus();
+      else { const i2 = optEl.closest('.cargo-drop')?.previousElementSibling; i2?.focus(); }
+    } else if (e.key === 'Escape') {
+      const i2 = optEl.closest('.cargo-drop')?.previousElementSibling;
+      close(i2); i2?.focus();
+    }
+  }
+
+  return { open, filter, close, pick, key, optKey };
+}
+
+// Single outside-click handler shared by all combo instances
+document.addEventListener('mousedown', e => {
+  if (!e.target.closest('.cargo-combo')) {
+    document.querySelectorAll('.cargo-drop.open').forEach(d => {
+      d.style.display = 'none'; d.classList.remove('open');
+    });
+  }
+});
+
+const CargoCombo     = _comboFactory(CARGO_LIST,     'CargoCombo');
+const IndustriaCombo = _comboFactory(INDUSTRIA_LIST, 'IndustriaCombo');
+
+// =================================================================
 // CLIENTS MODULE
 // =================================================================
 
@@ -336,6 +649,10 @@ const ClientsModule = (() => {
   let _editId  = null;
   let _filterEstado = '';
   let _contacts = [];
+  let _viewTab = 'contactos';
+  let _sortKey = 'nombre', _sortDir = 1;   // orden de la tabla de contactos (col + dirección)
+  let _mcnCount = 1;
+  let _mcnData  = [{ nombre:'', email:'', telefono:'', pais:'', estado:'activo' }];
 
   const AVATAR_COLORS = ['#C4B5FD','#FBBFB0','#A7F3D0','#BAE6FD','#FDE68A','#FDBA74','#5EEAD4'];
 
@@ -361,6 +678,126 @@ const ClientsModule = (() => {
     return `<span class="client-badge" style="background:${m.bg};color:${m.color}">${m.label}</span>`;
   }
 
+  function setViewTab(tab) {
+    _viewTab = tab;
+    document.querySelectorAll('#pane-mgmt-clients .cl-view-tab').forEach(b =>
+      b.classList.toggle('active', b.dataset.tab === tab)
+    );
+    const label = $('clients-new-label');
+    if (label) label.textContent = tab === 'empresas' ? 'Nueva empresa' : 'Nuevo contacto';
+    const newBtn = $('clients-new-btn');
+    if (newBtn) newBtn.onclick = tab === 'empresas'
+      ? () => openDrawerForEmpresa('')
+      : () => openDrawer();
+    render();
+  }
+
+  function filterByEmpresa(nombre) {
+    const search = $('clients-search');
+    if (search) search.value = nombre;
+    setViewTab('contactos');
+  }
+
+  function openDrawerForEmpresa(nombre) {
+    openDrawer();
+    if (nombre) setTimeout(() => {
+      const inp = document.querySelector('#clients-form [name="empresa"]');
+      if (inp) inp.value = nombre;
+    }, 60);
+  }
+
+  function _updateEmpresaDatalist() {
+    const dl = document.getElementById('clients-empresa-list');
+    if (!dl) return;
+    const names = [...new Set(_clients.map(c => c.empresa).filter(Boolean))].sort();
+    dl.innerHTML = names.map(n => `<option value="${esc(n)}">`).join('');
+  }
+
+  function _renderEmpresas() {
+    const tbody    = $('clients-tbody');
+    const empty    = $('clients-empty');
+    const tableWrap = $('clients-table-wrap');
+    const thead    = $('clients-thead');
+    if (!tbody) return;
+
+    const q = ($('clients-search')?.value || '').toLowerCase();
+    const grouped = new Map();
+    _clients.forEach(c => {
+      const key = (c.empresa || '').trim();
+      if (!key) return;
+      const lk = key.toLowerCase();
+      if (!grouped.has(lk)) grouped.set(lk, { nombre: key, contactos: [] });
+      grouped.get(lk).contactos.push(c);
+    });
+    let list = [...grouped.values()];
+    if (_filterEstado) list = list.filter(e => e.contactos.some(c => c.estado === _filterEstado));
+    if (q) list = list.filter(e => e.nombre.toLowerCase().includes(q));
+
+    // Datos derivados (país + estado dominante) para ordenar y pintar
+    list.forEach(e => {
+      const sc = e.contactos.reduce((acc, c) => { acc[c.estado || 'activo'] = (acc[c.estado || 'activo'] || 0) + 1; return acc; }, {});
+      e._top = Object.entries(sc).sort((a, b) => b[1] - a[1])[0]?.[0] || 'activo';
+      e._country = e.contactos.map(c => c.pais).find(Boolean) || '';
+    });
+    // Orden por columna (clic en la cabecera)
+    const key = ['nombre', 'contactos', 'pais', 'estado'].includes(_sortKey) ? _sortKey : 'nombre';
+    list.sort((a, b) => {
+      let c;
+      if (key === 'contactos') c = a.contactos.length - b.contactos.length;
+      else {
+        const va = key === 'pais' ? a._country : key === 'estado' ? a._top : a.nombre;
+        const vb = key === 'pais' ? b._country : key === 'estado' ? b._top : b.nombre;
+        c = String(va || '').localeCompare(String(vb || ''), 'es');
+      }
+      return c * _sortDir;
+    });
+
+    if (thead) {
+      thead.className = 'cl-grid cl-grid-header cl-grid--empresa';
+      const _sc = k => key === k ? ' cl-th--active' : '';
+      const _ca = k => key === k ? `<span class="cl-th-car">${_sortDir > 0 ? '↑' : '↓'}</span>` : '';
+      thead.innerHTML =
+        `<div class="cl-th cl-th--sort${_sc('nombre')}" onclick="ClientsModule.sortBy('nombre')">Empresa${_ca('nombre')}</div>` +
+        `<div class="cl-th cl-th--sort${_sc('contactos')}" onclick="ClientsModule.sortBy('contactos')">Contactos${_ca('contactos')}</div>` +
+        `<div class="cl-th cl-th--sort${_sc('pais')}" onclick="ClientsModule.sortBy('pais')">País${_ca('pais')}</div>` +
+        `<div class="cl-th cl-th--sort${_sc('estado')}" onclick="ClientsModule.sortBy('estado')">Estado${_ca('estado')}</div>` +
+        `<div class="cl-th-count" title="Resultados">${list.length}</div>`;
+    }
+
+    if (!list.length) {
+      tableWrap.style.display = 'none';
+      empty.style.display = 'flex';
+      return;
+    }
+    empty.style.display = 'none';
+    tableWrap.style.display = '';
+
+    tbody.innerHTML = list.map(e => {
+      return `
+      <div class="cl-grid cl-grid--empresa cl-row" data-emp="${esc(e.nombre)}">
+        <div class="client-cell-name">
+          <div class="cl-emp-avatar" style="background:${_avatarColor(e.nombre)}">${_initials(e.nombre)}</div>
+          <span class="client-nombre">${esc(e.nombre)}</span>
+        </div>
+        <div class="client-meta">${e.contactos.length}</div>
+        <div class="client-meta">${e._country ? esc(e._country) : '<span class="muted">—</span>'}</div>
+        <div>${_estadoBadge(e._top)}</div>
+        <div>
+          <div class="client-actions-cell">
+            <button class="client-action-btn" title="Ver contactos"
+              onclick="event.stopPropagation();ClientsModule.filterByEmpresa(this.closest('[data-emp]').dataset.emp)">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            </button>
+            <button class="client-action-btn" title="Nuevo contacto"
+              onclick="event.stopPropagation();ClientsModule.openDrawerForEmpresa(this.closest('[data-emp]').dataset.emp)">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
   async function load() {
     const loading  = $('clients-loading');
     const empty    = $('clients-empty');
@@ -374,6 +811,7 @@ const ClientsModule = (() => {
       if (res.status === 401) { location.reload(); return; }
       if (!res.ok) throw new Error(await res.text());
       _clients = await res.json();
+      _updateEmpresaDatalist();
       render();
     } catch (e) {
       console.error('[clients] load error:', e);
@@ -395,7 +833,35 @@ const ClientsModule = (() => {
     render();
   }
 
+  function _copyClient(btn) {
+    const text = btn.dataset.v || '';
+    if (!text) return;
+    const done = () => {
+      const prev = btn.innerHTML;
+      btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#22C55E" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+      setTimeout(() => { btn.innerHTML = prev; }, 1400);
+    };
+    navigator.clipboard.writeText(text).then(done).catch(() => {
+      try {
+        const ta = Object.assign(document.createElement('textarea'), { value: text });
+        ta.style.cssText = 'position:fixed;opacity:0';
+        document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+      } catch(_) {}
+      done();
+    });
+  }
+
+  function sortBy(key) {
+    if (_sortKey === key) _sortDir = -_sortDir; else { _sortKey = key; _sortDir = 1; }
+    render();
+  }
+
   function render() {
+    if (_viewTab === 'empresas') { _renderEmpresas(); return; }
+    _renderContactos();
+  }
+
+  function _renderContactos() {
     const tbody     = $('clients-tbody');
     const empty     = $('clients-empty');
     const tableWrap = $('clients-table-wrap');
@@ -407,6 +873,26 @@ const ClientsModule = (() => {
     if (q) list = list.filter(c =>
       (c.nombre + ' ' + c.empresa + ' ' + c.email).toLowerCase().includes(q)
     );
+    // Orden por columna (clic en la cabecera)
+    const _sv = c => _sortKey === 'email' ? (c.email || '').toLowerCase()
+                   : _sortKey === 'pais'  ? (c.pais  || '').toLowerCase()
+                   : _sortKey === 'estado' ? (c.estado || '')
+                   : (c.nombre || '').toLowerCase();
+    list = [...list].sort((a, b) => _sv(a).localeCompare(_sv(b), 'es') * _sortDir);
+
+    const thead = $('clients-thead');
+    if (thead) {
+      thead.className = 'cl-grid cl-grid-header';
+      const _sc = k => _sortKey === k ? ' cl-th--active' : '';
+      const _ca = k => _sortKey === k ? `<span class="cl-th-car">${_sortDir > 0 ? '↑' : '↓'}</span>` : '';
+      thead.innerHTML =
+        `<div class="cl-th cl-th--sort${_sc('nombre')}" onclick="ClientsModule.sortBy('nombre')">Contacto${_ca('nombre')}</div>` +
+        `<div class="cl-th cl-th--sort${_sc('email')}" onclick="ClientsModule.sortBy('email')">Email${_ca('email')}</div>` +
+        `<div class="cl-th">Teléfono</div>` +
+        `<div class="cl-th cl-th--sort${_sc('pais')}" onclick="ClientsModule.sortBy('pais')">País${_ca('pais')}</div>` +
+        `<div class="cl-th cl-th--sort${_sc('estado')}" onclick="ClientsModule.sortBy('estado')">Estado${_ca('estado')}</div>` +
+        `<div class="cl-th-count" title="Resultados">${list.length}</div>`;
+    }
 
     if (!list.length) {
       tableWrap.style.display = 'none';
@@ -416,34 +902,127 @@ const ClientsModule = (() => {
     empty.style.display = 'none';
     tableWrap.style.display = '';
 
-    tbody.innerHTML = list.map(c => `
-      <tr class="clients-table__row" onclick="ClientsModule.openDrawer(${c.id})">
-        <td class="client-col--name">
+    const _svgCopy  = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
+    const _svgMail  = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>`;
+    const _svgWA    = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13.5 19.79 19.79 0 0 1 1.6 4.9 2 2 0 0 1 3.59 2.72h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 10.36a16 16 0 0 0 6 6l.94-.94a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>`;
+
+    tbody.innerHTML = list.map(c => {
+      const waPhone = (c.telefono || '').replace(/\D/g, '');
+      return `
+      <div class="cl-grid cl-row">
+        <div class="client-col--name">
           <div class="client-cell-name">
             <img class="client-avatar" src="https://api.dicebear.com/9.x/lorelei/svg?seed=${encodeURIComponent(c.nombre)}" alt=""/>
             <div class="client-name-line">
               <span class="client-nombre">${esc(c.nombre)}</span>${c.empresa ? `<span class="client-empresa-inline"> · ${esc(c.empresa)}</span>` : ''}
             </div>
           </div>
-        </td>
-        <td class="client-col--email client-meta">${c.email ? `<span class="cell-clip">${esc(c.email)}</span>` : '<span class="muted">—</span>'}</td>
-        <td class="client-col--phone client-meta">${c.telefono ? esc(c.telefono) : '<span class="muted">—</span>'}</td>
-        <td class="client-col--country client-meta">${c.pais ? esc(c.pais) : '<span class="muted">—</span>'}</td>
-        <td class="client-col--status">${_estadoBadge(c.estado)}</td>
-        <td class="client-col--actions">
+        </div>
+        <div class="client-col--email client-meta cl-data-cell">
+          ${c.email ? `
+            <span class="cl-data-text">${esc(c.email)}</span>
+            <div class="cl-cell-actions">
+              <a class="cl-cell-btn" title="Enviar email" href="mailto:${esc(c.email)}" onclick="event.stopPropagation()">${_svgMail}</a>
+              <button class="cl-cell-btn" title="Copiar email" data-v="${esc(c.email)}" onclick="event.stopPropagation();ClientsModule.copyClient(this)">${_svgCopy}</button>
+            </div>
+          ` : '<span class="muted">—</span>'}
+        </div>
+        <div class="client-col--phone client-meta cl-data-cell">
+          ${c.telefono ? `
+            <span class="cl-data-text">${esc(c.telefono)}</span>
+            <div class="cl-cell-actions">
+              ${waPhone ? `<a class="cl-cell-btn" title="WhatsApp" href="https://wa.me/${waPhone}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${_svgWA}</a>` : ''}
+              <button class="cl-cell-btn" title="Copiar teléfono" data-v="${esc(c.telefono)}" onclick="event.stopPropagation();ClientsModule.copyClient(this)">${_svgCopy}</button>
+            </div>
+          ` : '<span class="muted">—</span>'}
+        </div>
+        <div class="client-col--country client-meta">${c.pais ? esc(c.pais) : '<span class="muted">—</span>'}</div>
+        <div class="client-col--status">${_estadoBadge(c.estado)}</div>
+        <div class="client-col--actions">
           <div class="client-actions-cell">
-            <button class="client-action-btn" title="Editar"
-              onclick="event.stopPropagation();ClientsModule.openDrawer(${c.id})">
+            <button class="client-action-btn" title="Editar" onclick="event.stopPropagation();ClientsModule.openDrawer(${c.id})">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
             </button>
-            <button class="client-action-btn client-action-btn--danger" title="Eliminar"
-              onclick="event.stopPropagation();ClientsModule.confirmDelete(${c.id})">
+            <button class="client-action-btn client-action-btn--danger" title="Eliminar" onclick="event.stopPropagation();ClientsModule.confirmDelete(${c.id})">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
             </button>
           </div>
-        </td>
-      </tr>
-    `).join('');
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function _mcnBlockHtml(i, count, d) {
+    const estados = ['potencial','activo','pausado','inactivo'];
+    const sel = () => estados.map(v =>
+      `<option value="${v}"${(d.estado||'activo')===v?' selected':''}>${v.charAt(0).toUpperCase()+v.slice(1)}</option>`
+    ).join('');
+    return `<div class="mcn-block">
+      <div class="mcn-block-hdr">
+        <span class="mcn-block-num">Contacto ${i+1}</span>
+        ${count > 1 ? `<button type="button" class="mcn-remove" title="Eliminar" onclick="ClientsModule.removeMcn(${i})">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>` : ''}
+      </div>
+      <input id="mcn-${i}-nombre" class="form-input" type="text" placeholder="Nombre completo *" value="${esc(d.nombre||'')}">
+      <div class="cargo-combo">
+        <input id="mcn-${i}-cargo" class="form-input" type="text" autocomplete="off"
+               placeholder="Buscar o escribir cargo…" value="${esc(d.cargo||'')}"
+               oninput="CargoCombo.filter(this)" onfocus="CargoCombo.open(this)"
+               onkeydown="CargoCombo.key(event,this)" onblur="CargoCombo.close(this)">
+        <div class="cargo-drop" onmousedown="event.preventDefault()"></div>
+      </div>
+      <div class="mcn-2col">
+        <input id="mcn-${i}-email"    class="form-input" type="email" placeholder="Email"     value="${esc(d.email||'')}">
+        <input id="mcn-${i}-telefono" class="form-input" type="tel"   placeholder="Teléfono"  value="${esc(d.telefono||'')}">
+      </div>
+      <div class="mcn-2col">
+        <input id="mcn-${i}-pais"   class="form-input" type="text" placeholder="País"   value="${esc(d.pais||'')}">
+        <select id="mcn-${i}-estado" class="form-input form-select">${sel()}</select>
+      </div>
+    </div>`;
+  }
+
+  function _saveMcnData() {
+    _mcnData = Array.from({ length: _mcnCount }, (_, i) => ({
+      nombre:   ($(`mcn-${i}-nombre`)?.value   || '').trim(),
+      cargo:    ($(`mcn-${i}-cargo`)?.value     || '').trim(),
+      email:    ($(`mcn-${i}-email`)?.value     || '').trim(),
+      telefono: ($(`mcn-${i}-telefono`)?.value  || '').trim(),
+      pais:     ($(`mcn-${i}-pais`)?.value      || '').trim(),
+      estado:   ($(`mcn-${i}-estado`)?.value    || 'activo'),
+    }));
+  }
+
+  function _renderMcnBlocks() {
+    const container = $('cr-multi-new');
+    if (!container) return;
+    let html = `<div class="mcn-label">Contactos</div><div class="mcn-list">`;
+    for (let i = 0; i < _mcnCount; i++) {
+      html += _mcnBlockHtml(i, _mcnCount, _mcnData[i] || {});
+    }
+    html += `</div>
+    <button type="button" class="mcn-add-btn" onclick="ClientsModule.addMcn()">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Agregar contacto
+    </button>`;
+    container.innerHTML = html;
+  }
+
+  function addMcn() {
+    _saveMcnData();
+    _mcnData.push({ nombre:'', email:'', telefono:'', pais:'', estado:'activo' });
+    _mcnCount++;
+    _renderMcnBlocks();
+    setTimeout(() => $(`mcn-${_mcnCount-1}-nombre`)?.focus(), 40);
+  }
+
+  function removeMcn(idx) {
+    if (_mcnCount <= 1) return;
+    _saveMcnData();
+    _mcnData.splice(idx, 1);
+    _mcnCount--;
+    _renderMcnBlocks();
   }
 
   async function openDrawer(id = null) {
@@ -456,28 +1035,47 @@ const ClientsModule = (() => {
     if (!form) return;
     form.reset();
     closeContactForm();
+    const singleFields = $('cr-single-fields');
+    const multiNew     = $('cr-multi-new');
     if (_editId) {
       const c = _clients.find(x => x.id === _editId);
       if (!c) return;
-      title.textContent   = 'Editar cliente';
+      title.textContent   = 'Editar contacto';
       saveBtn.textContent = 'Guardar cambios';
-      form.nombre.value   = c.nombre;
-      form.empresa.value  = c.empresa;
-      form.email.value    = c.email;
-      form.telefono.value = c.telefono;
-      form.pais.value     = c.pais;
-      form.estado.value   = c.estado;
-      form.notas.value    = c.notas;
-      if (section) section.style.display = '';
+      form.nombre.value        = c.nombre;
+      form.empresa.value       = c.empresa;
+      form.email.value         = c.email;
+      form.telefono.value      = c.telefono;
+      form.pais.value          = c.pais;
+      form.estado.value        = c.estado;
+      form.notas.value         = c.notas;
+      form.cargo.value         = c.cargo        || '';
+      form.sitio_web.value     = c.sitio_web    || '';
+      form.linkedin.value      = c.linkedin     || '';
+      form.industria.value     = c.industria    || '';
+      form.pais_empresa.value  = c.pais_empresa || '';
+      form.ciudad.value        = c.ciudad       || '';
+      form.notas_empresa.value = c.notas_empresa|| '';
+      if (singleFields) singleFields.style.display = '';
+      if (multiNew)     multiNew.style.display     = 'none';
+      if (section)      section.style.display      = '';
       _loadContacts();
     } else {
-      title.textContent   = 'Nuevo cliente';
-      saveBtn.textContent = 'Crear cliente';
-      if (section) section.style.display = 'none';
+      title.textContent   = 'Nuevo contacto';
+      saveBtn.textContent = 'Crear contactos';
+      if (singleFields) singleFields.style.display = 'none';
+      if (multiNew)     multiNew.style.display     = '';
+      if (section)      section.style.display      = 'none';
+      _mcnCount = 1;
+      _mcnData  = [{ nombre:'', email:'', telefono:'', pais:'', estado:'activo' }];
+      _renderMcnBlocks();
     }
     $('clients-drawer').classList.add('open');
     $('clients-drawer-overlay').classList.add('open');
-    setTimeout(() => form.nombre.focus(), 150);
+    setTimeout(() => {
+      if (_editId) form.nombre?.focus();
+      else         $('mcn-0-nombre')?.focus();
+    }, 150);
   }
 
   async function _loadContacts() {
@@ -609,27 +1207,77 @@ const ClientsModule = (() => {
     e.preventDefault();
     const form    = e.target;
     const saveBtn = $('clients-save-btn');
+    const orig    = saveBtn.textContent;
+
+    // ── Modo nuevo: multi-contacto ──────────────────────────────────
+    if (!_editId) {
+      const empresa = form.empresa.value.trim();
+      if (!empresa) { alert('La empresa es requerida.'); form.empresa.focus(); return; }
+      _saveMcnData();
+      const contacts = _mcnData.filter(d => d.nombre);
+      if (!contacts.length) {
+        alert('Agrega al menos un contacto con nombre.');
+        $('mcn-0-nombre')?.focus();
+        return;
+      }
+      // Datos compartidos de empresa
+      const empData = {
+        empresa,
+        sitio_web:    form.sitio_web.value.trim(),
+        linkedin:     form.linkedin.value.trim(),
+        industria:    form.industria.value.trim(),
+        pais_empresa: form.pais_empresa.value.trim(),
+        ciudad:       form.ciudad.value.trim(),
+        notas_empresa: form.notas_empresa.value.trim(),
+      };
+      saveBtn.disabled    = true;
+      saveBtn.textContent = `Guardando ${contacts.length > 1 ? contacts.length + ' contactos' : 'contacto'}…`;
+      try {
+        const results = await Promise.all(contacts.map(c =>
+          apiFetch(`${API}/mgmt/clients`, {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ ...empData, ...c }),
+          })
+        ));
+        const failed = results.filter(r => !r.ok);
+        if (failed.length) throw new Error(`${failed.length} contacto(s) no se pudieron guardar.`);
+        closeDrawer();
+        await load();
+      } catch (err) {
+        alert('Error: ' + err.message);
+      } finally {
+        saveBtn.disabled    = false;
+        saveBtn.textContent = orig;
+      }
+      return;
+    }
+
+    // ── Modo edición: contacto único ───────────────────────────────
     const data = {
-      nombre:           form.nombre.value.trim(),
-      empresa:          form.empresa.value.trim(),
-      email:            form.email.value.trim(),
-      telefono:         form.telefono.value.trim(),
-      pais:             form.pais.value.trim(),
-      estado:           form.estado.value,
-      notas:            form.notas.value.trim(),
+      nombre:        form.nombre.value.trim(),
+      empresa:       form.empresa.value.trim(),
+      email:         form.email.value.trim(),
+      telefono:      form.telefono.value.trim(),
+      pais:          form.pais.value.trim(),
+      estado:        form.estado.value,
+      notas:         form.notas.value.trim(),
+      cargo:         form.cargo.value.trim(),
+      sitio_web:     form.sitio_web.value.trim(),
+      linkedin:      form.linkedin.value.trim(),
+      industria:     form.industria.value.trim(),
+      pais_empresa:  form.pais_empresa.value.trim(),
+      ciudad:        form.ciudad.value.trim(),
+      notas_empresa: form.notas_empresa.value.trim(),
     };
-    const orig = saveBtn.textContent;
     saveBtn.disabled    = true;
     saveBtn.textContent = 'Guardando…';
     try {
-      const res = await apiFetch(
-        `${API}/mgmt/clients${_editId ? '/' + _editId : ''}`,
-        {
-          method:  _editId ? 'PUT' : 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify(data),
-        }
-      );
+      const res = await apiFetch(`${API}/mgmt/clients/${_editId}`, {
+        method:  'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(data),
+      });
       if (!res.ok) { const err = await res.json(); throw new Error(err.error || `HTTP ${res.status}`); }
       closeDrawer();
       await load();
@@ -652,9 +1300,12 @@ const ClientsModule = (() => {
   }
 
   return {
-    load, filter, setFilter, render,
+    load, filter, setFilter, render, sortBy,
+    setViewTab, filterByEmpresa, openDrawerForEmpresa,
     openDrawer, closeDrawer, save, confirmDelete,
+    addMcn, removeMcn,
     openAddContact, openEditContact, closeContactForm, saveContact, deleteContact,
+    copyClient: _copyClient,
   };
 })();
 
@@ -671,6 +1322,95 @@ const FinanceModule = (() => {
   let _period       = 'semana';   // 'semana' | 'mes' | 'rango'
   let _rangeFrom    = null;
   let _rangeTo      = null;
+
+  // ── Tabs + financial config ──────────────────────────────────────
+  let _currentTab      = 'resumen';
+  let _finConfig       = null;
+  let _finMembers      = [];
+  let _finConfigLoaded = false;
+
+  // ── Gastos / Caja tab ────────────────────────────────────────────
+  let _gxLoaded    = false;
+  let _gxMovs      = [];   // fin_movimientos (gastos + aportes)
+  let _gxProjects  = [];
+  let _gxClients   = [];
+  let _gxTeam      = [];
+  let _gxPeriod    = 'mes';
+  let _gxRangeFrom = null;
+  let _gxRangeTo   = null;
+  const GX_CATEGORIAS = ['Herramientas / Software','IA / Automatización','Dominios / Hosting','Comisiones bancarias','Suscripciones','Servicios externos','Equipo / Freelancers','Marketing','Operación','Otro'];
+  const GX_PROVEEDORES = ['Claude','ChatGPT','Google Workspace','Apify','LinkedIn','Make','Zapier','Dominio','Hosting','Otro'];
+  const GX_ESTADOS = [['pendiente','Pendiente','#F59E0B'],['pagado','Pagado','#22C55E'],['reembolsable','Reembolsable','#6366F1'],['reembolsado','Reembolsado','#0EA5E9'],['cancelado','Cancelado','#9CA3AF']];
+  const GX_PAGADO_DESDE = [['caja','Caja'],['cobro','Cobro del periodo'],['socio_a','Socio A'],['socio_b','Socio B'],['personal','Cuenta personal'],['otro','Otro']];
+  const GX_ORIGEN = [['cobro','Cobro del periodo'],['aporte_socio','Aporte de socio'],['ajuste','Ajuste manual'],['otro','Otro']];
+
+  // ── Resumen tab ──────────────────────────────────────────────────
+  let _rsLoaded    = false;
+  let _rsProjects  = [];
+  let _rsConfig    = null;
+  let _rsMembers   = [];
+  let _rsPeriod    = 'mes';
+  let _rsRangeFrom = null;
+  let _rsRangeTo   = null;
+  let _rsClient    = '';   // client_id (string)
+  let _rsProject   = '';   // project_id (string)
+  let _rsMember    = '';   // member name
+  let _rsTasks     = [];   // tasks (for "Por conciliar" card)
+  let _rsPagos     = [];   // pagos internos (for the 2 internal-payment cards)
+
+  // ── Conciliación tab ─────────────────────────────────────────────
+  let _cnLoaded   = false;
+  let _cnProjects = [];
+  let _cnTasks    = [];
+  let _cnExpanded = new Set();
+  let _cnFilter   = 'all';  // 'all' | 'descuadre' | 'por_conciliar'
+  let _cnComCtx   = null;   // contexto del popover de comisión inline { tid, bruto, cur }
+  // estado financiero: [valor, etiqueta, color]
+  const FIN_EF_STATES = [
+    ['sin_revisar',   'Sin revisar',  '#A8A29E'],
+    ['por_conciliar', 'Por conciliar', '#F59E0B'],
+    ['conciliado',    'Conciliado',   '#0EA5E9'],
+    ['facturable',     'Facturable',     '#6366F1'],
+    ['facturado',      'Facturado',      '#8B5CF6'],
+    ['cobro_pendiente','Cobro pendiente','#EA580C'],
+    ['cobrado',        'Cobrado',        '#22C55E'],
+    ['observado',      'Observado',      '#EF4444'],
+  ];
+  const FIN_EF_PORCONCILIAR = ['sin_revisar', 'por_conciliar'];
+
+  // ── Distribución tab ─────────────────────────────────────────────
+  let _dsLoaded    = false;
+  let _dsConfig    = null;
+  let _dsMembers   = [];
+  let _dsProjects  = [];
+  let _dsTasks     = [];
+  let _dsPagos     = [];
+  let _dsPeriod    = 'mes';
+  let _dsRangeFrom = null;
+  let _dsRangeTo   = null;
+
+  // ── Pagos internos tab ───────────────────────────────────────────
+  let _piLoaded  = false;
+  let _piList    = [];
+  let _piMembers = [];
+  let _piFilter  = '';
+  let _piEditId  = null;
+  const FIN_PI_TIPOS = [
+    ['socio', 'Socio'], ['equipo', 'Equipo fijo'], ['colaborador', 'Colaborador'],
+    ['comision', 'Comisión'], ['bono', 'Bono'], ['reembolso', 'Reembolso'],
+  ];
+  const FIN_PI_ESTADOS = [
+    ['pendiente', 'Pendiente', '#F59E0B'], ['programado', 'Programado', '#0EA5E9'],
+    ['pagado', 'Pagado', '#22C55E'], ['observado', 'Observado', '#EF4444'],
+  ];
+  const FIN_CURRENCIES = ['USD', 'EUR', 'PEN', 'COP', 'MXN', 'ARS', 'CLP', 'BRL'];
+  const FIN_TIPO_PAGO  = [
+    ['sueldo_mensual', 'Sueldo fijo mensual'],
+    ['sueldo_semanal', 'Sueldo fijo semanal'],
+    ['por_proyecto',   'Por proyecto'],
+    ['comision',       'Comisión'],
+    ['manual',         'Manual'],
+  ];
 
   function _money(n, cur, decimals = 2) {
     if (n == null || n === '' || isNaN(parseFloat(n))) return '—';
@@ -707,33 +1447,42 @@ const FinanceModule = (() => {
     return totalUSD > 0 ? `${_money(totalUSD, 'USD', 0)} + ${rawStr}` : rawStr;
   }
 
-  function _periodBounds() {
+  function _periodBounds(period = _period, rangeFrom = _rangeFrom, rangeTo = _rangeTo) {
     const today = new Date(); today.setHours(0, 0, 0, 0);
-    if (_period === 'semana') {
+    if (period === 'semana') {
       const dow   = (today.getDay() + 6) % 7; // Monday = 0
       const start = new Date(today); start.setDate(today.getDate() - dow);
       const end   = new Date(start); end.setDate(start.getDate() + 7);
       return { start, end };
     }
-    if (_period === 'mes') {
+    if (period === 'mes') {
       const start = new Date(today.getFullYear(), today.getMonth(), 1);
       const end   = new Date(today.getFullYear(), today.getMonth() + 1, 1);
       return { start, end };
     }
-    if (_rangeFrom && _rangeTo) {
-      const start = new Date(_rangeFrom + 'T00:00:00');
-      const end   = new Date(_rangeTo   + 'T00:00:00'); end.setDate(end.getDate() + 1);
+    if (period === 'trimestre') {
+      const q = Math.floor(today.getMonth() / 3);
+      return { start: new Date(today.getFullYear(), q * 3, 1), end: new Date(today.getFullYear(), q * 3 + 3, 1) };
+    }
+    if (period === 'anio') {
+      return { start: new Date(today.getFullYear(), 0, 1), end: new Date(today.getFullYear() + 1, 0, 1) };
+    }
+    if (rangeFrom && rangeTo) {
+      const start = new Date(rangeFrom + 'T00:00:00');
+      const end   = new Date(rangeTo   + 'T00:00:00'); end.setDate(end.getDate() + 1);
       return { start, end };
     }
     return null;
   }
 
-  function _periodLabel() {
-    if (_period === 'semana') return 'esta semana';
-    if (_period === 'mes')    return 'este mes';
-    if (_rangeFrom && _rangeTo) {
-      const f = new Date(_rangeFrom + 'T00:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit' });
-      const t = new Date(_rangeTo   + 'T00:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit' });
+  function _periodLabel(period = _period, rangeFrom = _rangeFrom, rangeTo = _rangeTo) {
+    if (period === 'semana') return 'esta semana';
+    if (period === 'mes')    return 'este mes';
+    if (period === 'trimestre') return 'este trimestre';
+    if (period === 'anio')   return 'este año';
+    if (rangeFrom && rangeTo) {
+      const f = new Date(rangeFrom + 'T00:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit' });
+      const t = new Date(rangeTo   + 'T00:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit' });
       return `${f} – ${t}`;
     }
     return 'rango sin definir';
@@ -777,7 +1526,7 @@ const FinanceModule = (() => {
     for (const p of _payments) {
       const net   = parseFloat(p.monto_neto ?? p.monto_bruto ?? 0);
       const bruto = parseFloat(p.monto_bruto ?? 0);
-      const cur   = p.project_moneda || 'USD';
+      const cur   = p.moneda || p.project_moneda || 'USD';
       if (p.estado === 'cobrado' && p.fecha_pagada && bounds) {
         const d = new Date(String(p.fecha_pagada).split('T')[0] + 'T00:00:00');
         if (d >= bounds.start && d < bounds.end) {
@@ -817,6 +1566,7 @@ const FinanceModule = (() => {
       _payments = await res.json();
       _updateStats();
       render();
+      if (_currentTab === 'resumen') { _rsLoaded ? _renderResumenCards() : _loadResumen(); }
     } catch (e) {
       console.error('[finance] load error:', e);
       loading.innerHTML = '<span style="color:var(--err)">Error al cargar pagos.</span>';
@@ -887,7 +1637,7 @@ const FinanceModule = (() => {
     tableWrap.style.display = '';
 
     tbody.innerHTML = list.map(p => {
-      const cur    = p.project_moneda || 'USD';
+      const cur    = p.moneda || p.project_moneda || 'USD';
       const bruto  = parseFloat(p.monto_bruto ?? 0);
       const net    = parseFloat(p.monto_neto ?? p.monto_bruto ?? 0);
       const usdEq  = _toUsdEquiv(net, cur);
@@ -918,23 +1668,20 @@ const FinanceModule = (() => {
             </button>
           </div>`;
 
-      return `<tr class="clients-table__row" onclick="${rowClick}">
-        <td>
+      return `<div class="finance-row finance-grid" onclick="${rowClick}">
+        <div class="fin-cell">
           <div class="client-nombre">${esc(p.concepto || '—')}</div>
           <div class="client-meta" style="font-size:.73rem">${p.client_nombre ? esc(p.client_nombre) + (p.client_empresa ? ' · ' + esc(p.client_empresa) : '') : '<span class="muted">Sin cliente</span>'}</div>
-        </td>
-        <td class="client-meta">${p.project_nombre ? esc(p.project_nombre) : '<span class="muted">—</span>'}</td>
-        <td class="client-meta">${esc(cur)}</td>
-        <td class="client-meta">${_money(bruto, cur)}</td>
-        <td>
-          <div class="${amtCls}">${_money(net, cur)}</div>
-          ${p.porcentaje ? `<div class="fin-comision">${p.porcentaje}%</div>` : ''}
-        </td>
-        <td class="client-meta">${usdEq != null ? _money(usdEq, 'USD') : '<span class="muted" title="Configura la tasa de cambio en el Dashboard">—</span>'}</td>
-        <td class="client-meta">${dlHtml}</td>
-        <td>${_estadoBadge(p)}</td>
-        <td>${actionsHtml}</td>
-      </tr>`;
+        </div>
+        <div class="fin-cell client-meta">${p.project_nombre ? esc(p.project_nombre) : '<span class="muted">—</span>'}</div>
+        <div class="fin-cell client-meta">${p.canal ? esc(p.canal) : '<span class="muted">—</span>'}</div>
+        <div class="fin-cell client-meta">${_money(bruto, cur)}</div>
+        <div class="fin-cell client-meta">${(bruto - net) > 0.005 ? `<span class="fin-comision-amt">−${_money(bruto - net, cur)}</span>${p.porcentaje ? ` <span class="fin-comision">${p.porcentaje}%</span>` : ''}` : '<span class="muted">—</span>'}</div>
+        <div class="fin-cell"><div class="${amtCls}">${_money(net, cur)}</div></div>
+        <div class="fin-cell client-meta">${dlHtml}</div>
+        <div class="fin-cell">${_estadoBadge(p)}${isCob ? _dispBadge(p, isTask) : ''}</div>
+        <div class="fin-cell">${actionsHtml}</div>
+      </div>`;
     }).join('');
   }
 
@@ -980,11 +1727,28 @@ const FinanceModule = (() => {
     }
   }
 
+  const CANAL_DEFAULT_PCT = {
+    Upwork: 10, Freelancer: 10, Fiverr: 20, Global66: 0, PayPal: 5,
+    Wise: 1, 'Transferencia bancaria': 0, 'Banco local': 0, Otro: 0,
+  };
+
+  function onCanalChange(sel) {
+    const def = CANAL_DEFAULT_PCT[sel.value];
+    if (def != null) { const pctEl = $('pay-porcentaje'); if (pctEl) pctEl.value = def; }
+    calcNeto();
+  }
+
+  // neto recibido = bruto − comisión (%, + fija). Editable a mano si se sobreescribe.
   function calcNeto() {
     const bruto = parseFloat($('pay-monto-bruto')?.value) || 0;
     const pct   = parseFloat($('pay-porcentaje')?.value)  || 0;
+    const fija  = parseFloat($('pay-comision-monto')?.value) || 0;
+    const comision = bruto * pct / 100 + fija;
+    const neto = Math.max(0, bruto - comision);
     const netoEl = $('pay-monto-neto');
-    if (netoEl && bruto && pct) netoEl.value = (bruto * pct / 100).toFixed(2);
+    if (netoEl) netoEl.value = bruto ? neto.toFixed(2) : '';
+    const calcEl = $('pay-comision-calc');
+    if (calcEl) calcEl.value = comision ? '−' + comision.toFixed(2) : '0.00';
   }
 
   function onEstadoChange(sel) {
@@ -1001,6 +1765,7 @@ const FinanceModule = (() => {
     form.reset();
     const fechaRow = $('pay-fecha-pagada-row');
     if (fechaRow) fechaRow.style.display = 'none';
+    const ccEl = $('pay-comision-calc'); if (ccEl) ccEl.value = '';
 
     await _loadClients();
     await _loadProjects(null, null);
@@ -1014,7 +1779,11 @@ const FinanceModule = (() => {
       form.estado.value              = p.estado;
       form.monto_bruto.value         = p.monto_bruto ?? '';
       form.porcentaje.value          = p.porcentaje ?? '';
+      form.comision_monto.value      = p.comision_monto ?? '';
       form.monto_neto.value          = p.monto_neto ?? '';
+      form.canal.value               = p.canal ?? '';
+      const _cm = parseFloat(p.monto_bruto || 0) - parseFloat(p.monto_neto ?? p.monto_bruto ?? 0);
+      const _ccEl = $('pay-comision-calc'); if (_ccEl) _ccEl.value = _cm > 0.005 ? '−' + _cm.toFixed(2) : '0.00';
       if (p.fecha_esperada) form.fecha_esperada.value = p.fecha_esperada.split('T')[0];
       if (p.fecha_pagada)   form.fecha_pagada.value   = p.fecha_pagada.split('T')[0];
       if (p.estado === 'cobrado' && fechaRow) fechaRow.style.display = '';
@@ -1045,6 +1814,24 @@ const FinanceModule = (() => {
     _editId = null;
   }
 
+  // badge/toggle de disponibilidad (solo cobros) — 'liberacion' no entra en base distribuible
+  function _dispBadge(p, isTask) {
+    const lib = p.disponibilidad === 'liberacion';
+    const lbl = lib ? 'En liberación' : 'Disponible';
+    if (isTask) return `<span class="fin-disp ${lib ? 'fin-disp--lib' : 'fin-disp--disp'}">${lbl}</span>`;
+    const next = lib ? 'disponible' : 'liberacion';
+    return `<button class="fin-disp fin-disp--btn ${lib ? 'fin-disp--lib' : 'fin-disp--disp'}" title="Clic para marcar ${lib ? 'Disponible' : 'En liberación'}" onclick="event.stopPropagation();FinanceModule.togglePayDisp(${p.id},'${next}')">${lbl}</button>`;
+  }
+  async function togglePayDisp(id, next) {
+    try {
+      const res = await apiFetch(`${API}/mgmt/payments/${id}/disponibilidad`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ disponibilidad: next }) });
+      if (!res.ok) throw new Error(await res.text());
+      const p = _payments.find(x => x.id === id); if (p) p.disponibilidad = next;
+      _rsLoaded = false; _dsLoaded = false;
+      render();
+    } catch (e) { console.error('[finance] togglePayDisp:', e); }
+  }
+
   async function save(e) {
     e.preventDefault();
     const form    = e.target;
@@ -1055,11 +1842,14 @@ const FinanceModule = (() => {
       project_id:     form.project_id.value ? parseInt(form.project_id.value) : null,
       monto_bruto:    parseFloat(form.monto_bruto.value)  || 0,
       porcentaje:     form.porcentaje.value ? parseFloat(form.porcentaje.value) : null,
+      comision_monto: form.comision_monto.value ? parseFloat(form.comision_monto.value) : null,
       monto_neto:     form.monto_neto.value ? parseFloat(form.monto_neto.value) : null,
+      canal:          form.canal.value || '',
       fecha_esperada: form.fecha_esperada.value || null,
       fecha_pagada:   form.fecha_pagada.value   || null,
       estado:         form.estado.value,
       notas:          form.notas.value.trim(),
+      disponibilidad: _editId ? (_payments.find(p => p.id === _editId)?.disponibilidad || 'disponible') : 'disponible',
     };
     const orig = saveBtn.textContent;
     saveBtn.disabled = true; saveBtn.textContent = 'Guardando…';
@@ -1103,7 +1893,7 @@ const FinanceModule = (() => {
     doc.text(`Período: ${_periodLabel()}  ·  Generado: ${new Date().toLocaleDateString('es-MX')}`, 14, 21);
 
     const rows = list.map(p => {
-      const cur   = p.project_moneda || 'USD';
+      const cur   = p.moneda || p.project_moneda || 'USD';
       const bruto = parseFloat(p.monto_bruto ?? 0);
       const net   = parseFloat(p.monto_neto ?? p.monto_bruto ?? 0);
       const usdEq = _toUsdEquiv(net, cur);
@@ -1125,13 +1915,2001 @@ const FinanceModule = (() => {
       head: [['Concepto', 'Cliente', 'Proyecto', 'Moneda', 'Bruto', 'Neto', 'Equiv. USD', 'F. Esperada', 'Estado']],
       body: rows,
       styles: { fontSize: 8 },
-      headStyles: { fillColor: [248, 143, 34] },
+      headStyles: { fillColor: [0, 128, 76] },
     });
 
     doc.save(`finanzas_${_periodLabel().replace(/[^\w]+/g, '_')}.pdf`);
   }
 
-  return { load, filter, setFilter, setPeriod, applyRange, render, openDrawer, closeDrawer, save, confirmDelete, onClientChange, onProjectChange, calcNeto, onEstadoChange, exportPdf };
+  // ── Tabs ───────────────────────────────────────────────────────────
+
+  // ════════════════ GASTOS / CAJA ════════════════
+  function _movUsd(m) {
+    const amt = parseFloat(m.monto || 0);
+    if (!amt) return 0;
+    if (!m.moneda || m.moneda === 'USD') return amt;
+    const tc = parseFloat(m.tipo_cambio || 0);
+    if (tc > 0) return amt / tc;
+    return _toUsdEquiv(amt, m.moneda) || amt;
+  }
+  function _gxInPeriod(m, bounds) {
+    if (!bounds) return true;
+    if (!m.fecha) return false;
+    const d = new Date(String(m.fecha).split('T')[0] + 'T00:00:00');
+    return d >= bounds.start && d < bounds.end;
+  }
+  // saldo de caja (histórico): aportes − gastos pagados desde caja
+  function _cajaSaldo() {
+    let s = 0;
+    for (const m of _gxMovs) {
+      if (m.tipo === 'aporte') s += _movUsd(m);
+      else if (m.tipo === 'gasto' && m.pagado_desde === 'caja' && m.estado === 'pagado') s -= _movUsd(m);
+    }
+    return s;
+  }
+  // ajustes que reducen la base distribuible del período (usado también por Distribución y Resumen)
+  function _gxBaseAdjust(bounds) {
+    let gastosCobro = 0, aporteCobro = 0;
+    for (const m of _gxMovs) {
+      if (!_gxInPeriod(m, bounds)) continue;
+      if (m.tipo === 'gasto' && m.pagado_desde === 'cobro' && m.estado !== 'cancelado') gastosCobro += _movUsd(m);
+      else if (m.tipo === 'aporte' && m.origen === 'cobro') aporteCobro += _movUsd(m);
+    }
+    return { gastosCobro, aporteCobro };
+  }
+  function _gxNetoCobrado(bounds) {
+    let neto = 0;
+    for (const p of (_payments || [])) {
+      if (p.estado !== 'cobrado') continue;
+      const cur = p.moneda || p.project_moneda || 'USD';
+      const usd = _toUsdEquiv(parseFloat(p.monto_neto ?? p.monto_bruto ?? 0), cur) || 0;
+      if (!bounds) neto += usd;
+      else if (p.fecha_pagada) {
+        const d = new Date(String(p.fecha_pagada).split('T')[0] + 'T00:00:00');
+        if (d >= bounds.start && d < bounds.end) neto += usd;
+      }
+    }
+    return neto;
+  }
+
+  async function _loadGastos() {
+    const body = $('fin-gastos-body');
+    if (!body) return;
+    body.innerHTML = '<div class="clients-loading"><div class="clients-spin"></div><span>Cargando gastos / caja…</span></div>';
+    try {
+      const [mRes, pRes, cRes, tRes, payRes] = await Promise.all([
+        apiFetch(`${API}/mgmt/fin-movimientos`),
+        apiFetch(`${API}/mgmt/projects`),
+        apiFetch(`${API}/mgmt/clients`),
+        apiFetch(`${API}/mgmt/team`),
+        apiFetch(`${API}/mgmt/payments`),
+      ]);
+      _gxMovs     = mRes.ok ? await mRes.json() : [];
+      _gxProjects = pRes.ok ? await pRes.json() : [];
+      _gxClients  = cRes.ok ? await cRes.json() : [];
+      _gxTeam     = tRes.ok ? await tRes.json() : [];
+      if (payRes.ok) _payments = await payRes.json();
+      _gxLoaded = true;
+      _renderGastos();
+    } catch (e) {
+      console.error('[finance] gastos load error:', e);
+      body.innerHTML = '<div class="fin-placeholder"><p class="fin-placeholder__s" style="color:var(--err)">Error al cargar Gastos / Caja.</p></div>';
+    }
+  }
+
+  function _gxEstadoMeta(v) { return GX_ESTADOS.find(s => s[0] === v) || GX_ESTADOS[0]; }
+  function _gxPagadoLbl(v) { const x = GX_PAGADO_DESDE.find(s => s[0] === v); return x ? x[1] : '—'; }
+  function _gxOrigenLbl(v) { const x = GX_ORIGEN.find(s => s[0] === v); return x ? x[1] : '—'; }
+
+  function _renderGastos() {
+    const body = $('fin-gastos-body');
+    if (!body) return;
+    const m0 = v => _money(v, 'USD', 0);
+    const bounds = _periodBounds(_gxPeriod, _gxRangeFrom, _gxRangeTo);
+    const lbl = _periodLabel(_gxPeriod, _gxRangeFrom, _gxRangeTo);
+
+    const caja = _cajaSaldo();
+    let gastosPagados = 0, gastosPend = 0, aportesPer = 0;
+    for (const m of _gxMovs) {
+      if (m.tipo === 'gasto') {
+        if (m.estado === 'pagado' && _gxInPeriod(m, bounds)) gastosPagados += _movUsd(m);
+        else if (m.estado === 'pendiente') gastosPend += _movUsd(m);
+      } else if (m.tipo === 'aporte' && _gxInPeriod(m, bounds)) {
+        aportesPer += _movUsd(m);
+      }
+    }
+    const neto = _gxNetoCobrado(bounds);
+    const { gastosCobro, aporteCobro } = _gxBaseAdjust(bounds);
+    const base = neto - gastosCobro - aporteCobro;
+
+    const card = (t, v, cls, sub) => `<div class="fin-rs-card fin-rs-card--${cls}"><div class="fin-rs-card__lbl">${t}</div><div class="fin-rs-card__val">${v}</div>${sub ? `<div class="fin-rs-card__sub">${sub}</div>` : ''}</div>`;
+    const cards = `<div class="fin-rs-grid" style="margin-top:14px">
+      ${card('Caja disponible', m0(caja), caja >= 0 ? 'green' : 'red', 'Aportes − gastos desde caja')}
+      ${card('Gastos pagados', m0(gastosPagados), 'amber', `Período · ${lbl}`)}
+      ${card('Gastos pendientes', m0(gastosPend), 'orange', 'Compromisos por pagar')}
+      ${card('Aportes a caja', m0(aportesPer), 'blue', `Período · ${lbl}`)}
+      ${card('Base distribuible estimada', m0(base), base >= 0 ? 'green' : 'red', `Neto ${m0(neto)} − ${m0(gastosCobro)} gastos − ${m0(aporteCobro)} caja`)}
+    </div>`;
+
+    const rows = _gxMovs.map(_gxRow).join('');
+    const table = _gxMovs.length
+      ? `<div class="fin-gx-tablewrap"><table class="fin-gx-table">
+          <thead><tr>
+            <th>Fecha</th><th>Tipo</th><th>Concepto</th><th>Categoría</th><th class="fin-gx-num">Monto</th>
+            <th>Pagado desde / Origen</th><th>Estado</th><th>Proyecto / Cliente</th><th>Resp.</th><th></th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table></div>`
+      : '<div class="fin-placeholder"><p class="fin-placeholder__s">Aún no hay gastos ni aportes. Registra el primero.</p></div>';
+
+    const periodBar = `<div class="fin-rs-filters">
+      <div class="fin-rs-period">
+        <span class="fin-period-lbl">Período:</span>
+        <button class="an-period${_gxPeriod==='semana'?' an-period--on':''}" onclick="FinanceModule.setGxPeriod('semana')">Semana</button>
+        <button class="an-period${_gxPeriod==='mes'?' an-period--on':''}" onclick="FinanceModule.setGxPeriod('mes')">Mes</button>
+        <button class="an-period${_gxPeriod==='rango'?' an-period--on':''}" onclick="FinanceModule.setGxPeriod('rango')">Rango</button>
+        <span id="fin-gx-range" class="fin-range-inputs" style="display:${_gxPeriod==='rango'?'inline-flex':'none'}">
+          <input type="date" class="form-input fin-range-input" id="fin-gx-from" value="${_gxRangeFrom||''}" onchange="FinanceModule.applyGxRange()">
+          <span class="fin-range-sep">a</span>
+          <input type="date" class="form-input fin-range-input" id="fin-gx-to" value="${_gxRangeTo||''}" onchange="FinanceModule.applyGxRange()">
+        </span>
+      </div>
+      <div style="flex:1"></div>
+      <button class="btn btn--ghost btn--sm" onclick="FinanceModule.openMovModal('aporte')">+ Aporte a caja</button>
+      <button class="btn btn--primary btn--sm" onclick="FinanceModule.openMovModal('gasto')">+ Nuevo gasto</button>
+    </div>`;
+
+    body.innerHTML = periodBar + cards
+      + `<div class="fin-note" style="margin:14px 0 6px">Caja con montos manuales (sin %). Gastos pagados desde <b>cobro</b> y aportes desde <b>cobro</b> reducen la base distribuible; los pagados desde <b>caja</b> reducen el saldo de caja.</div>`
+      + table;
+  }
+
+  function _gxRow(m) {
+    const isG = m.tipo === 'gasto';
+    const est = _gxEstadoMeta(m.estado);
+    const fecha = m.fecha ? new Date(String(m.fecha).split('T')[0]+'T00:00:00').toLocaleDateString('es-ES',{day:'2-digit',month:'short'}) : '—';
+    const usd = _movUsd(m);
+    const montoTxt = (m.moneda && m.moneda !== 'USD')
+      ? `${_money(m.monto, m.moneda, 2)} <span class="fin-gx-usd">≈ ${_money(usd,'USD',0)}</span>`
+      : _money(usd, 'USD', 2);
+    const fuente = isG ? _gxPagadoLbl(m.pagado_desde) : _gxOrigenLbl(m.origen);
+    const pc = [m.project_nombre, m.client_nombre].filter(Boolean).join(' · ') || '—';
+    const estadoCell = isG
+      ? `<span class="fin-gx-badge" style="--c:${est[2]}">${est[1]}</span>`
+      : '<span class="fin-gx-badge" style="--c:#0EA5E9">Registrado</span>';
+    const markPaid  = (isG && m.estado === 'pendiente')    ? `<button class="fin-gx-act" title="Marcar pagado" onclick="FinanceModule.gxSetEstado(${m.id},'pagado')">✓</button>` : '';
+    const markReemb = (isG && m.estado === 'reembolsable') ? `<button class="fin-gx-act" title="Marcar reembolsado" onclick="FinanceModule.gxSetEstado(${m.id},'reembolsado')">↩</button>` : '';
+    return `<tr class="fin-gx-tr${m.estado==='cancelado'?' fin-gx-tr--cancel':''}">
+      <td>${fecha}</td>
+      <td><span class="fin-gx-type fin-gx-type--${m.tipo}">${isG?'Gasto':'Aporte'}</span></td>
+      <td class="fin-gx-concepto" title="${esc(m.concepto)}">${esc(m.concepto||'—')}${m.proveedor?`<span class="fin-gx-prov"> · ${esc(m.proveedor)}</span>`:''}</td>
+      <td class="fin-gx-cat">${esc(isG ? (m.categoria||'—') : 'Caja')}</td>
+      <td class="fin-gx-num">${montoTxt}</td>
+      <td>${esc(fuente)}</td>
+      <td>${estadoCell}</td>
+      <td class="fin-gx-pc" title="${esc(pc)}">${esc(pc)}</td>
+      <td>${esc(m.responsable||'—')}</td>
+      <td class="fin-gx-acts">
+        ${markPaid}${markReemb}
+        <button class="fin-gx-act" title="Editar" onclick="FinanceModule.openMovModal('${m.tipo}',${m.id})">✎</button>
+        <button class="fin-gx-act fin-gx-act--danger" title="Eliminar" onclick="FinanceModule.gxDelete(${m.id})">✕</button>
+      </td>
+    </tr>`;
+  }
+
+  function setGxPeriod(p) { _gxPeriod = p; _renderGastos(); }
+  function applyGxRange() { _gxRangeFrom = $('fin-gx-from')?.value || null; _gxRangeTo = $('fin-gx-to')?.value || null; _renderGastos(); }
+
+  function openMovModal(tipo, id) {
+    const m = id ? _gxMovs.find(x => x.id === id) : null;
+    const isG = tipo === 'gasto';
+    const sel = (cond) => cond ? ' selected' : '';
+    const projOpts = '<option value="">— Proyecto (opcional) —</option>' + _gxProjects.map(p => `<option value="${p.id}"${sel(m && m.project_id == p.id)}>${esc(p.nombre)}</option>`).join('');
+    const cliOpts  = '<option value="">— Cliente (opcional) —</option>' + _gxClients.map(c => `<option value="${c.id}"${sel(m && m.client_id == c.id)}>${esc(c.nombre)}</option>`).join('');
+    const teamOpts = '<option value="">— Responsable —</option>' + _gxTeam.map(t => `<option value="${esc(t.nombre)}"${sel(m && m.responsable === t.nombre)}>${esc(t.nombre)}</option>`).join('');
+    const catOpts  = GX_CATEGORIAS.map(c => `<option value="${c}"${sel(m && m.categoria === c)}>${c}</option>`).join('');
+    const provOpts = '<option value="">— Proveedor / herramienta —</option>' + GX_PROVEEDORES.map(p => `<option value="${p}"${sel(m && m.proveedor === p)}>${p}</option>`).join('');
+    const estadoOpts = GX_ESTADOS.map(s => `<option value="${s[0]}"${sel(m ? m.estado === s[0] : s[0] === 'pagado')}>${s[1]}</option>`).join('');
+    const desdeOpts  = GX_PAGADO_DESDE.map(s => `<option value="${s[0]}"${sel(m ? m.pagado_desde === s[0] : s[0] === 'caja')}>${s[1]}</option>`).join('');
+    const origenOpts = GX_ORIGEN.map(s => `<option value="${s[0]}"${sel(m ? m.origen === s[0] : s[0] === 'ajuste')}>${s[1]}</option>`).join('');
+    const monedas = ['USD','PEN','EUR','MXN','COP','ARS','CLP','BRL'];
+    const monedaOpts = monedas.map(c => `<option value="${c}"${sel(m ? m.moneda === c : c === 'USD')}>${c}</option>`).join('');
+    const today = new Date().toISOString().split('T')[0];
+
+    const gastoFields = `
+      <label class="fin-cfg-field"><span class="fin-cfg-lbl">Concepto</span><input class="form-input" id="mov-concepto" value="${m?esc(m.concepto):''}" placeholder="Ej. Suscripción Claude"></label>
+      <div class="fin-mov-row2">
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Categoría</span><select class="form-input" id="mov-categoria">${catOpts}</select></label>
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Proveedor</span><select class="form-input" id="mov-proveedor">${provOpts}</select></label>
+      </div>
+      <div class="fin-mov-row2">
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Estado</span><select class="form-input" id="mov-estado">${estadoOpts}</select></label>
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Pagado desde</span><select class="form-input" id="mov-pagado" onchange="FinanceModule.gxMovWarn()">${desdeOpts}</select></label>
+      </div>`;
+    const aporteFields = `
+      <label class="fin-cfg-field"><span class="fin-cfg-lbl">Concepto</span><input class="form-input" id="mov-concepto" value="${m?esc(m.concepto):''}" placeholder="Ej. Aporte a caja"></label>
+      <label class="fin-cfg-field"><span class="fin-cfg-lbl">Origen</span><select class="form-input" id="mov-origen">${origenOpts}</select></label>`;
+
+    const back = document.createElement('div');
+    back.className = 'fin-pi-backdrop';
+    back.id = 'mov-backdrop';
+    back.innerHTML = `<div class="fin-pi-box">
+      <div class="fin-pi-box__hd"><h3>${id?'Editar':'Nuevo'} ${isG?'gasto':'aporte a caja'}</h3><button class="fin-pi-x" onclick="FinanceModule.closeMovModal()">✕</button></div>
+      <div class="fin-pi-box__bd">
+        ${isG ? gastoFields : aporteFields}
+        <div class="fin-mov-row2">
+          <label class="fin-cfg-field"><span class="fin-cfg-lbl">Monto</span><input class="form-input" type="number" min="0" step="0.01" id="mov-monto" value="${m?m.monto:''}" oninput="FinanceModule.gxMovUsd();FinanceModule.gxMovWarn()"></label>
+          <label class="fin-cfg-field"><span class="fin-cfg-lbl">Moneda</span><select class="form-input" id="mov-moneda" onchange="FinanceModule.gxMovUsd()">${monedaOpts}</select></label>
+        </div>
+        <div class="fin-mov-row2" id="mov-fx-row" style="display:${m&&m.moneda&&m.moneda!=='USD'?'grid':'none'}">
+          <label class="fin-cfg-field"><span class="fin-cfg-lbl">Tipo de cambio (x USD)</span><input class="form-input" type="number" min="0" step="0.0001" id="mov-tc" value="${m&&m.tipo_cambio?m.tipo_cambio:''}" oninput="FinanceModule.gxMovUsd()" placeholder="Ej. 3.75"></label>
+          <div class="fin-cfg-field"><span class="fin-cfg-lbl">Equivalente USD</span><div class="fin-mov-usd" id="mov-usd">—</div></div>
+        </div>
+        <div class="fin-mov-row2">
+          <label class="fin-cfg-field"><span class="fin-cfg-lbl">Fecha</span><input class="form-input" type="date" id="mov-fecha" value="${m&&m.fecha?String(m.fecha).split('T')[0]:today}"></label>
+          <label class="fin-cfg-field"><span class="fin-cfg-lbl">Responsable</span><select class="form-input" id="mov-resp">${teamOpts}</select></label>
+        </div>
+        ${isG ? `<div class="fin-mov-row2">
+          <label class="fin-cfg-field"><span class="fin-cfg-lbl">Proyecto</span><select class="form-input" id="mov-proj">${projOpts}</select></label>
+          <label class="fin-cfg-field"><span class="fin-cfg-lbl">Cliente</span><select class="form-input" id="mov-cli">${cliOpts}</select></label>
+        </div>` : ''}
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Nota</span><input class="form-input" id="mov-nota" value="${m?esc(m.nota):''}"></label>
+        <div class="fin-mov-warn" id="mov-warn" style="display:none"></div>
+      </div>
+      <div class="fin-pi-box__ft">
+        <button class="btn btn--ghost btn--sm" onclick="FinanceModule.closeMovModal()">Cancelar</button>
+        <button class="btn btn--primary btn--sm" onclick="FinanceModule.saveMov(${id||'null'},'${tipo}')">${id?'Guardar cambios':'Registrar'}</button>
+      </div>
+    </div>`;
+    document.body.appendChild(back);
+    gxMovUsd(); gxMovWarn();
+  }
+  function closeMovModal() { document.getElementById('mov-backdrop')?.remove(); }
+  function gxMovUsd() {
+    const cur = $('mov-moneda')?.value || 'USD';
+    const fxRow = $('mov-fx-row'); if (fxRow) fxRow.style.display = cur === 'USD' ? 'none' : 'grid';
+    const usdEl = $('mov-usd'); if (!usdEl) return;
+    const amt = parseFloat($('mov-monto')?.value || 0);
+    if (cur === 'USD') { usdEl.textContent = _money(amt, 'USD', 2); return; }
+    const tc = parseFloat($('mov-tc')?.value || 0);
+    usdEl.textContent = tc > 0 ? _money(amt / tc, 'USD', 2) : '—';
+  }
+  function gxMovWarn() {
+    const warn = $('mov-warn'); if (!warn) return;
+    if (($('mov-pagado')?.value) === 'caja') {
+      const amt = parseFloat($('mov-monto')?.value || 0);
+      const cur = $('mov-moneda')?.value || 'USD';
+      const tc  = parseFloat($('mov-tc')?.value || 0);
+      const usd = cur === 'USD' ? amt : (tc > 0 ? amt / tc : 0);
+      const saldo = _cajaSaldo();
+      if (usd > saldo + 0.005) { warn.style.display = ''; warn.textContent = `⚠ La caja (${_money(saldo,'USD',0)}) no alcanza. Puedes registrarlo igual, marcarlo Pendiente o pagarlo desde el cobro.`; return; }
+    }
+    warn.style.display = 'none';
+  }
+
+  async function saveMov(id, tipo) {
+    const isG = tipo === 'gasto';
+    const monto = parseFloat($('mov-monto')?.value || 0);
+    if (!(monto >= 0)) return alert('El monto no puede ser negativo.');
+    const cur = $('mov-moneda')?.value || 'USD';
+    const tc = cur !== 'USD' ? parseFloat($('mov-tc')?.value || 0) : null;
+    if (cur !== 'USD' && !(tc > 0)) return alert('Indica el tipo de cambio referencial para esa moneda.');
+    const payload = {
+      tipo, concepto: $('mov-concepto')?.value || '',
+      monto, moneda: cur, tipo_cambio: tc,
+      fecha: $('mov-fecha')?.value || null,
+      responsable: $('mov-resp')?.value || '',
+      nota: $('mov-nota')?.value || '',
+    };
+    if (isG) {
+      payload.categoria = $('mov-categoria')?.value || '';
+      payload.proveedor = $('mov-proveedor')?.value || '';
+      payload.estado = $('mov-estado')?.value || 'pagado';
+      payload.pagado_desde = $('mov-pagado')?.value || 'caja';
+      payload.project_id = $('mov-proj')?.value || null;
+      payload.client_id = $('mov-cli')?.value || null;
+    } else {
+      payload.origen = $('mov-origen')?.value || 'ajuste';
+    }
+    try {
+      const res = await apiFetch(`${API}/mgmt/fin-movimientos${id?'/'+id:''}`, {
+        method: id ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (res.status === 401) return alert('Sesión expirada. Recarga la página (Ctrl+R).');
+      if (!res.ok) throw new Error(await res.text());
+      closeMovModal();
+      _rsLoaded = false; _dsLoaded = false;
+      await _loadGastos();
+    } catch (e) { console.error('[finance] saveMov:', e); alert('No se pudo guardar el movimiento.'); }
+  }
+
+  async function gxSetEstado(id, estado) {
+    try {
+      const res = await apiFetch(`${API}/mgmt/fin-movimientos/${id}/estado`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ estado }) });
+      if (!res.ok) throw new Error(await res.text());
+      const m = _gxMovs.find(x => x.id === id); if (m) m.estado = estado;
+      _rsLoaded = false; _dsLoaded = false; _renderGastos();
+    } catch (e) { console.error('[finance] gxSetEstado:', e); }
+  }
+  async function gxDelete(id) {
+    if (!confirm('¿Eliminar este movimiento? No se puede deshacer.')) return;
+    try {
+      const res = await apiFetch(`${API}/mgmt/fin-movimientos/${id}`, { method:'DELETE' });
+      if (!res.ok) throw new Error(await res.text());
+      _gxMovs = _gxMovs.filter(x => x.id !== id);
+      _rsLoaded = false; _dsLoaded = false; _renderGastos();
+    } catch (e) { console.error('[finance] gxDelete:', e); }
+  }
+
+  function setTab(tab) {
+    _currentTab = tab;
+    document.querySelectorAll('#fin-tabs .fin-tab').forEach(b =>
+      b.classList.toggle('active', b.dataset.fintab === tab));
+    document.querySelectorAll('.fin-panels .fin-panel').forEach(p =>
+      p.classList.toggle('active', p.id === 'fin-panel-' + tab));
+    if (tab === 'config' && !_finConfigLoaded) _loadConfig();
+    if (tab === 'resumen') { _rsLoaded ? _renderResumenCards() : _loadResumen(); }
+    if (tab === 'conciliacion') { _cnLoaded ? _renderConciliacion() : _loadConciliacion(); }
+    if (tab === 'distribucion') { _dsLoaded ? _renderDistribucion() : _loadDistribucion(); }
+    if (tab === 'pagos-internos') { _piLoaded ? _renderPagos() : _loadPagos(); }
+    if (tab === 'gastos') { _gxLoaded ? _renderGastos() : _loadGastos(); }
+  }
+
+  // ── Configuración financiera ───────────────────────────────────────
+
+  async function _loadConfig() {
+    const body = $('fin-config-body');
+    if (!body) return;
+    body.innerHTML = '<div class="clients-loading"><div class="clients-spin"></div><span>Cargando configuración…</span></div>';
+    try {
+      const res = await apiFetch(`${API}/mgmt/fin-config`);
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      _finConfig       = data.config  || {};
+      _finMembers      = data.members || [];
+      _finConfigLoaded = true;
+      _renderConfig();
+    } catch (e) {
+      console.error('[finance] config load error:', e);
+      body.innerHTML = '<div class="fin-placeholder"><p class="fin-placeholder__s" style="color:var(--err)">Error al cargar la configuración financiera.</p></div>';
+    }
+  }
+
+  function _renderConfig() {
+    const body = $('fin-config-body');
+    if (!body) return;
+    const c = _finConfig || {};
+    const curOpts = sel => FIN_CURRENCIES.map(x => `<option value="${x}"${x === sel ? ' selected' : ''}>${x}</option>`).join('');
+
+    const generalCard = `
+      <div class="fin-cfg-card">
+        <div class="fin-cfg-card__hd">
+          <h3 class="fin-cfg-card__title">General</h3>
+          <p class="fin-cfg-card__sub">Reservas y supuestos para estimar la utilidad. No son impuestos legales — es control interno.</p>
+        </div>
+        <div class="fin-cfg-grid">
+          <label class="fin-cfg-field"><span class="fin-cfg-lbl">Impuesto estimado (%)</span>
+            <input type="number" id="cfg-impuesto" class="form-input" min="0" max="100" step="0.5" value="${c.impuesto_pct ?? 0}"></label>
+          <label class="fin-cfg-field"><span class="fin-cfg-lbl">Reserva de caja (%)</span>
+            <input type="number" id="cfg-reserva" class="form-input" min="0" max="100" step="0.5" value="${c.reserva_pct ?? 0}"></label>
+          <label class="fin-cfg-field"><span class="fin-cfg-lbl">Comisión plataforma (%)</span>
+            <input type="number" id="cfg-comision" class="form-input" min="0" max="100" step="0.5" value="${c.comision_pct ?? 0}"></label>
+          <label class="fin-cfg-field"><span class="fin-cfg-lbl">Costos operativos (monto)</span>
+            <input type="number" id="cfg-costos" class="form-input" min="0" step="1" value="${c.costos_operativos ?? 0}"></label>
+          <label class="fin-cfg-field"><span class="fin-cfg-lbl">Moneda principal</span>
+            <select id="cfg-moneda" class="form-input">${curOpts(c.moneda_principal || 'USD')}</select></label>
+          <label class="fin-cfg-field"><span class="fin-cfg-lbl">Período por defecto</span>
+            <select id="cfg-periodo" class="form-input">
+              <option value="semana"${c.periodo_default === 'semana' ? ' selected' : ''}>Semanal</option>
+              <option value="mes"${c.periodo_default !== 'semana' ? ' selected' : ''}>Mensual</option>
+            </select></label>
+          <label class="fin-cfg-field"><span class="fin-cfg-lbl">Tasas de cambio</span>
+            <button type="button" class="fin-cfg-fxbtn" onclick="FxRatesModule.open()" title="Configurar tasas de cambio (multi-moneda)">⚙ Configurar tasas</button></label>
+        </div>
+        <div class="fin-cfg-actions">
+          <span class="fin-cfg-hint" id="cfg-general-hint"></span>
+          <button class="btn btn--primary btn--sm" onclick="FinanceModule.saveConfig()">Guardar configuración</button>
+        </div>
+      </div>`;
+
+    let membersCard;
+    if (!_finMembers.length) {
+      membersCard = `
+        <div class="fin-cfg-card">
+          <div class="fin-cfg-card__hd"><h3 class="fin-cfg-card__title">Socios y equipo</h3></div>
+          <div class="fin-placeholder" style="padding:24px 12px">
+            <p class="fin-placeholder__s">No hay miembros del equipo todavía. Agrégalos en Equipo para configurar socios y sueldos.</p>
+          </div>
+        </div>`;
+    } else {
+      const tipoOpts = sel => FIN_TIPO_PAGO.map(([v, l]) => `<option value="${v}"${v === sel ? ' selected' : ''}>${l}</option>`).join('');
+      const socios = _finMembers.filter(m => m.es_socio);
+      const totalPct = socios.reduce((s, m) => s + parseFloat(m.socio_pct || 0), 0);
+      const warn = socios.length && Math.round(totalPct) !== 100
+        ? `<span class="fin-cfg-warn">⚠ La suma de % de socios es ${totalPct}% (debería sumar 100%).</span>` : '';
+      const rows = _finMembers.map(m => `
+        <div class="fin-cfg-mrow" data-member="${m.member_id}">
+          <div class="fin-cfg-mname">
+            <span class="fin-cfg-mname__n">${esc(m.nombre)}</span>
+            ${m.cargo ? `<span class="fin-cfg-mname__c">${esc(m.cargo)}</span>` : ''}
+          </div>
+          <label class="fin-cfg-check">
+            <input type="checkbox" class="cfg-m-socio" ${m.es_socio ? 'checked' : ''} onchange="FinanceModule._toggleSocioRow(${m.member_id})">
+            <span>Socio</span>
+          </label>
+          <input type="number" class="form-input cfg-m-pct" min="0" max="100" step="1" value="${m.socio_pct ?? 0}" placeholder="%" ${m.es_socio ? '' : 'disabled'} title="% de distribución">
+          <select class="form-input cfg-m-regla" ${m.es_socio ? '' : 'disabled'} title="Regla de reparto">
+            <option value="despues"${m.socio_regla !== 'antes' ? ' selected' : ''}>Después de imp.</option>
+            <option value="antes"${m.socio_regla === 'antes' ? ' selected' : ''}>Antes de imp.</option>
+          </select>
+          <select class="form-input cfg-m-tipo" title="Tipo de pago">${tipoOpts(m.tipo_pago)}</select>
+          <input type="number" class="form-input cfg-m-monto" min="0" step="1" value="${m.monto_pago ?? 0}" placeholder="Monto" title="Sueldo o monto de comisión">
+          <select class="form-input cfg-m-moneda" title="Moneda del pago">${curOpts(m.moneda_pago || 'USD')}</select>
+          <button class="btn btn--ghost btn--xs fin-cfg-msave" onclick="FinanceModule.saveMemberConfig(${m.member_id})">Guardar</button>
+        </div>`).join('');
+      membersCard = `
+        <div class="fin-cfg-card">
+          <div class="fin-cfg-card__hd">
+            <div class="fin-cfg-hd-row">
+              <h3 class="fin-cfg-card__title">Socios y equipo</h3>
+              <button class="btn btn--ghost btn--xs" onclick="FinanceModule.repartirSociosIgual()" title="Reparte 100% en partes iguales entre los socios marcados">Repartir 50/50</button>
+            </div>
+            <p class="fin-cfg-card__sub">Marca quién es socio y su % de reparto; define el tipo de pago de cada miembro. ${warn}</p>
+          </div>
+          <div class="fin-cfg-mtable">
+            <div class="fin-cfg-mhdr">
+              <div>Miembro</div><div>Socio</div><div>% socio</div><div>Regla</div><div>Tipo de pago</div><div>Monto</div><div>Moneda</div><div></div>
+            </div>
+            ${rows}
+          </div>
+        </div>`;
+    }
+
+    body.innerHTML = generalCard + membersCard;
+  }
+
+  function _toggleSocioRow(memberId) {
+    const row = document.querySelector(`.fin-cfg-mrow[data-member="${memberId}"]`);
+    if (!row) return;
+    const on = row.querySelector('.cfg-m-socio').checked;
+    row.querySelector('.cfg-m-pct').disabled   = !on;
+    row.querySelector('.cfg-m-regla').disabled = !on;
+  }
+
+  // Reparte 100% en partes iguales entre los socios marcados (default 50/50). Llena inputs; el usuario guarda cada fila.
+  function repartirSociosIgual() {
+    const socioRows = [...document.querySelectorAll('.fin-cfg-mrow')].filter(r => r.querySelector('.cfg-m-socio')?.checked);
+    if (!socioRows.length) return;
+    const pctNum = 100 / socioRows.length;
+    const val = Number.isInteger(pctNum) ? String(pctNum) : pctNum.toFixed(2);
+    socioRows.forEach(r => {
+      const i = r.querySelector('.cfg-m-pct');
+      if (i) { i.disabled = false; i.value = val; }
+    });
+  }
+
+  async function saveConfig() {
+    const hint = $('cfg-general-hint');
+    const data = {
+      impuesto_pct:      parseFloat($('cfg-impuesto')?.value) || 0,
+      reserva_pct:       parseFloat($('cfg-reserva')?.value)  || 0,
+      comision_pct:      parseFloat($('cfg-comision')?.value) || 0,
+      costos_operativos: parseFloat($('cfg-costos')?.value)   || 0,
+      moneda_principal:  $('cfg-moneda')?.value  || 'USD',
+      periodo_default:   $('cfg-periodo')?.value || 'mes',
+    };
+    if (hint) { hint.textContent = 'Guardando…'; hint.className = 'fin-cfg-hint'; }
+    try {
+      const res = await apiFetch(`${API}/mgmt/fin-config`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      _finConfig = await res.json();
+      if (hint) { hint.textContent = 'Guardado ✓'; hint.className = 'fin-cfg-hint fin-cfg-hint--ok'; setTimeout(() => { if (hint) hint.textContent = ''; }, 2500); }
+    } catch (e) {
+      console.error('[finance] saveConfig error:', e);
+      if (hint) { hint.textContent = 'Error al guardar'; hint.className = 'fin-cfg-hint fin-cfg-hint--err'; }
+    }
+  }
+
+  async function saveMemberConfig(memberId) {
+    const row = document.querySelector(`.fin-cfg-mrow[data-member="${memberId}"]`);
+    if (!row) return;
+    const btn  = row.querySelector('.fin-cfg-msave');
+    const data = {
+      es_socio:    row.querySelector('.cfg-m-socio').checked,
+      socio_pct:   parseFloat(row.querySelector('.cfg-m-pct').value) || 0,
+      socio_regla: row.querySelector('.cfg-m-regla').value,
+      tipo_pago:   row.querySelector('.cfg-m-tipo').value,
+      monto_pago:  parseFloat(row.querySelector('.cfg-m-monto').value) || 0,
+      moneda_pago: row.querySelector('.cfg-m-moneda').value,
+    };
+    const orig = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = '…'; }
+    try {
+      const res = await apiFetch(`${API}/mgmt/fin-config/member/${memberId}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const saved = await res.json();
+      const m = _finMembers.find(x => x.member_id === memberId);
+      if (m) Object.assign(m, {
+        es_socio: saved.es_socio, socio_pct: saved.socio_pct, socio_regla: saved.socio_regla,
+        tipo_pago: saved.tipo_pago, monto_pago: saved.monto_pago, moneda_pago: saved.moneda_pago,
+      });
+      if (btn) { btn.textContent = '✓'; setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 1500); }
+    } catch (e) {
+      console.error('[finance] saveMemberConfig error:', e);
+      if (btn) { btn.textContent = 'Error'; setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 2000); }
+    }
+  }
+
+  // ── Resumen ────────────────────────────────────────────────────────
+
+  async function _loadResumen() {
+    const body = $('fin-resumen-body');
+    if (!body) return;
+    body.innerHTML = '<div class="clients-loading"><div class="clients-spin"></div><span>Cargando resumen…</span></div>';
+    try {
+      const [pRes, cRes, tRes, piRes, mRes, payRes] = await Promise.all([
+        apiFetch(`${API}/mgmt/projects`),
+        apiFetch(`${API}/mgmt/fin-config`),
+        apiFetch(`${API}/mgmt/tasks`),
+        apiFetch(`${API}/mgmt/pagos-internos`),
+        apiFetch(`${API}/mgmt/fin-movimientos`),
+        apiFetch(`${API}/mgmt/payments`),
+      ]);
+      _rsProjects = pRes.ok ? await pRes.json() : [];
+      if (cRes.ok) { const d = await cRes.json(); _rsConfig = d.config || {}; _rsMembers = d.members || []; }
+      _rsTasks  = tRes.ok  ? await tRes.json()  : [];
+      _rsPagos  = piRes.ok ? await piRes.json() : [];
+      if (mRes.ok) _gxMovs = await mRes.json();
+      if (payRes.ok) _payments = await payRes.json();
+      if (!_rsLoaded) _rsPeriod = (_rsConfig && _rsConfig.periodo_default === 'semana') ? 'semana' : 'mes';
+      _rsLoaded = true;
+      _renderResumen();
+    } catch (e) {
+      console.error('[finance] resumen load error:', e);
+      body.innerHTML = '<div class="fin-placeholder"><p class="fin-placeholder__s" style="color:var(--err)">Error al cargar el resumen.</p></div>';
+    }
+  }
+
+  function _rsProjMap() {
+    const m = {};
+    _rsProjects.forEach(p => { m[p.id] = p; });
+    return m;
+  }
+
+  function _renderResumen() {
+    const body = $('fin-resumen-body');
+    if (!body) return;
+    const m0 = v => _money(v, 'USD', 0);
+    const projMap = _rsProjMap();
+    const bounds  = _periodBounds(_rsPeriod, _rsRangeFrom, _rsRangeTo);
+    const lbl     = _periodLabel(_rsPeriod, _rsRangeFrom, _rsRangeTo);
+    const today   = new Date(); today.setHours(0,0,0,0);
+    const inP = (ds) => { if (!bounds) return true; if (!ds) return false; const d = new Date(String(ds).split('T')[0] + 'T00:00:00'); return d >= bounds.start && d < bounds.end; };
+
+    // ── Cobros ──
+    let cobradoBruto = 0, cobradoNeto = 0, enLiberacion = 0, pendiente = 0, vencido = 0;
+    const byCanal = {};
+    for (const p of _payments) {
+      if (!_rsMatchPay(p, projMap)) continue;
+      const cur = p.moneda || p.project_moneda || 'USD';
+      const net = _toUsdEquiv(parseFloat(p.monto_neto ?? p.monto_bruto ?? 0), cur) || 0;
+      const brt = _toUsdEquiv(parseFloat(p.monto_bruto ?? 0), cur) || 0;
+      if (p.estado === 'cobrado') {
+        if (!inP(p.fecha_pagada)) continue;
+        cobradoNeto += net; cobradoBruto += brt;
+        if (p.disponibilidad === 'liberacion') enLiberacion += net;
+        const c = p.canal || 'Otro'; byCanal[c] = (byCanal[c] || 0) + net;
+      } else {
+        const dl = p.fecha_esperada ? new Date(String(p.fecha_esperada).split('T')[0] + 'T00:00:00') : null;
+        if (p.estado === 'vencido' || (dl && dl < today)) vencido += net; else pendiente += net;
+      }
+    }
+    const cobradoDisp = cobradoNeto - enLiberacion;
+    const comisiones  = Math.max(0, cobradoBruto - cobradoNeto);
+
+    // ── Gastos / Caja ──
+    const caja = _cajaSaldo();
+    let gastosPer = 0; const byCat = {};
+    for (const mv of _gxMovs) {
+      if (mv.tipo === 'gasto' && mv.estado === 'pagado' && inP(mv.fecha)) {
+        const u = _movUsd(mv); gastosPer += u; const c = mv.categoria || 'Otro'; byCat[c] = (byCat[c] || 0) + u;
+      }
+    }
+    const { gastosCobro, aporteCobro } = _gxBaseAdjust(bounds);
+    const base = cobradoDisp - gastosCobro - aporteCobro;
+
+    // ── Pagos internos ──
+    let pagosPend = 0, pagosReal = 0;
+    for (const pg of _rsPagos) {
+      if (_rsMember && (pg.persona || '').toLowerCase() !== _rsMember.toLowerCase()) continue;
+      const u = _toUsdEquiv(parseFloat(pg.monto || 0), pg.moneda || 'USD') || 0;
+      if (pg.estado === 'pagado') { if (inP(pg.fecha_pago)) pagosReal += u; }
+      else if (pg.estado === 'pendiente' || pg.estado === 'programado') pagosPend += u;
+    }
+
+    // ── Evolución (últimos períodos) ──
+    const t0 = new Date(); t0.setHours(0,0,0,0);
+    const buckets = [];
+    if (_rsPeriod === 'semana') { const dow=(t0.getDay()+6)%7, mon=new Date(t0); mon.setDate(t0.getDate()-dow);
+      for (let i=5;i>=0;i--){ const s=new Date(mon); s.setDate(mon.getDate()-i*7); const e=new Date(s); e.setDate(s.getDate()+7); buckets.push({s,e,label:`${s.getDate()}/${s.getMonth()+1}`}); } }
+    else if (_rsPeriod === 'trimestre') { const q=Math.floor(t0.getMonth()/3);
+      for (let i=3;i>=0;i--){ const s=new Date(t0.getFullYear(),(q-i)*3,1); const e=new Date(s.getFullYear(),s.getMonth()+3,1); buckets.push({s,e,label:`T${Math.floor(s.getMonth()/3)+1}`}); } }
+    else if (_rsPeriod === 'anio') { for (let i=2;i>=0;i--){ const s=new Date(t0.getFullYear()-i,0,1); const e=new Date(s.getFullYear()+1,0,1); buckets.push({s,e,label:String(s.getFullYear())}); } }
+    else { for (let i=5;i>=0;i--){ const s=new Date(t0.getFullYear(),t0.getMonth()-i,1); const e=new Date(s.getFullYear(),s.getMonth()+1,1); buckets.push({s,e,label:s.toLocaleDateString('es-ES',{month:'short'})}); } }
+    const evol = buckets.map(b => { let neto=0; for (const p of _payments){ if (p.estado!=='cobrado'||!_rsMatchPay(p,projMap)||!p.fecha_pagada) continue; const d=new Date(String(p.fecha_pagada).split('T')[0]+'T00:00:00'); if (d>=b.s&&d<b.e) neto += _toUsdEquiv(parseFloat(p.monto_neto??p.monto_bruto??0), p.moneda||p.project_moneda||'USD')||0; } return {label:b.label, neto}; });
+
+    // ── Filtros / selects ──
+    const clientMap = {};
+    _rsProjects.forEach(p => { if (p.client_id) clientMap[p.client_id] = p.client_nombre || ('Cliente #' + p.client_id); });
+    _payments.forEach(p => { if (p.client_id && !clientMap[p.client_id]) clientMap[p.client_id] = p.client_nombre || ('Cliente #' + p.client_id); });
+    const clientOpts = '<option value="">Todos los clientes</option>' + Object.entries(clientMap).sort((a,b)=>a[1].localeCompare(b[1])).map(([id,n])=>`<option value="${id}"${_rsClient===String(id)?' selected':''}>${esc(n)}</option>`).join('');
+    const projOpts = '<option value="">Todos los proyectos</option>' + _rsProjects.slice().sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||'')).map(p=>`<option value="${p.id}"${_rsProject===String(p.id)?' selected':''}>${esc(p.nombre||('Proyecto #'+p.id))}</option>`).join('');
+    const memberOpts = '<option value="">Todos los miembros</option>' + _rsMembers.map(m=>`<option value="${esc(m.nombre)}"${_rsMember===m.nombre?' selected':''}>${esc(m.nombre)}</option>`).join('');
+    const perBtn = (v,l)=>`<button class="an-period${_rsPeriod===v?' an-period--on':''}" data-rsperiod="${v}" onclick="FinanceModule.setResPeriod('${v}')">${l}</button>`;
+
+    // ── HERO ──
+    const tot = cobradoNeto || 1;
+    const wpct = v => Math.max(0, Math.min(100, v / tot * 100));
+    const segBar = cobradoNeto > 0 ? `<div class="fin-d-seg">
+        <span class="fin-d-seg__f fin-d-seg__f--base" style="width:${wpct(Math.max(0,base))}%"></span>
+        <span class="fin-d-seg__f fin-d-seg__f--ded" style="width:${wpct(gastosCobro+aporteCobro)}%"></span>
+        <span class="fin-d-seg__f fin-d-seg__f--lib" style="width:${wpct(enLiberacion)}%"></span>
+      </div>
+      <div class="fin-d-seg__leg">
+        <span><i class="fin-d-dot fin-d-dot--base"></i>Base ${m0(base)}</span>
+        <span><i class="fin-d-dot fin-d-dot--ded"></i>Gastos/caja ${m0(gastosCobro+aporteCobro)}</span>
+        ${enLiberacion>0?`<span><i class="fin-d-dot fin-d-dot--lib"></i>En liberación ${m0(enLiberacion)}</span>`:''}
+      </div>` : '<div class="fin-d-empty">Sin cobros netos en el período.</div>';
+
+    const hero = `<div class="fin-d-hero">
+      <div class="fin-d-hero__l">
+        <div class="fin-d-hero__title">Resumen financiero</div>
+        <div class="fin-d-periodsel">${perBtn('semana','Semana')}${perBtn('mes','Mes')}${perBtn('trimestre','Trimestre')}${perBtn('anio','Año')}${perBtn('rango','Rango')}</div>
+        <span id="fin-rs-range" class="fin-range-inputs" style="display:${_rsPeriod==='rango'?'inline-flex':'none'};margin-top:8px">
+          <input type="date" class="form-input fin-range-input" id="fin-rs-from" value="${_rsRangeFrom||''}" onchange="FinanceModule.applyResRange()">
+          <span class="fin-range-sep">a</span>
+          <input type="date" class="form-input fin-range-input" id="fin-rs-to" value="${_rsRangeTo||''}" onchange="FinanceModule.applyResRange()">
+        </span>
+        <div class="fin-d-selects">
+          <select class="filter-select" onchange="FinanceModule.setResFilter('client',this.value)">${clientOpts}</select>
+          <select class="filter-select" onchange="FinanceModule.setResFilter('project',this.value)">${projOpts}</select>
+          <select class="filter-select" onchange="FinanceModule.setResFilter('member',this.value)">${memberOpts}</select>
+        </div>
+        <p class="fin-d-context">Lo que realmente puedes repartir ${lbl}, después de lo retenido en liberación, gastos y aportes a caja.</p>
+      </div>
+      <div class="fin-d-hero__r">
+        <div class="fin-d-hero__lbl">BASE DISTRIBUIBLE</div>
+        <div class="fin-d-hero__big">${base < 0 ? '−' : ''}$${Math.abs(base).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+        ${segBar}
+      </div>
+    </div>`;
+
+    // ── KPIs ──
+    const kpi = (l, v, cls, sub) => `<div class="fin-d-kpi"><div class="fin-d-kpi__l">${l}</div><div class="fin-d-kpi__v ${cls||''}">${v}</div>${sub?`<div class="fin-d-kpi__s">${sub}</div>`:''}</div>`;
+    const kpis = `<div class="fin-d-kpis">
+      ${kpi('Cobrado neto', m0(cobradoNeto), '', `Bruto ${m0(cobradoBruto)}`)}
+      ${kpi('Disponible', m0(cobradoDisp), 'fin-d-pos', 'Listo para distribuir')}
+      ${kpi('En liberación', m0(enLiberacion), enLiberacion>0?'fin-d-warn':'', 'Aún retenido')}
+      ${kpi('Por cobrar', m0(pendiente), '', 'Pagos pendientes')}
+      ${kpi('Vencido', m0(vencido), vencido>0?'fin-d-neg':'', 'Atrasados')}
+      ${kpi('Gastos del período', m0(gastosPer), '', 'Operativos pagados')}
+      ${kpi('Pagos internos', m0(pagosPend), '', `Pend. · ${m0(pagosReal)} pagado`)}
+      ${kpi('Caja disponible', m0(caja), caja>=0?'fin-d-pos':'fin-d-neg', 'Saldo manual')}
+    </div>`;
+
+    // ── helpers de barras ──
+    const hbars = (obj, cls) => {
+      const ents = Object.entries(obj).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]).slice(0,6);
+      if (!ents.length) return '<div class="fin-d-empty">No hay datos suficientes para este gráfico en el período seleccionado.</div>';
+      const mx = ents[0][1];
+      return ents.map(([k,v])=>`<div class="fin-d-bar"><span class="fin-d-bar__l" title="${esc(k)}">${esc(k)}</span><span class="fin-d-bar__t"><span class="fin-d-bar__f fin-d-bar__f--${cls}" style="width:${Math.max(3,v/mx*100)}%"></span></span><span class="fin-d-bar__v">${m0(v)}</span></div>`).join('');
+    };
+
+    // waterfall (flujo)
+    const wfSteps = [
+      ['Cobrado neto', cobradoNeto, 'base'],
+      ['− En liberación', -enLiberacion, 'lib'],
+      ['− Gastos (del cobro)', -gastosCobro, 'ded'],
+      ['− Aporte a caja', -aporteCobro, 'ded'],
+      ['= Base distribuible', base, 'tot'],
+    ].filter((s,i)=> i===0 || i===4 || Math.abs(s[1])>0.005);
+    const wfMax = Math.max(cobradoNeto, Math.abs(base), 1);
+    const waterfall = wfSteps.map(([l,v,c])=>`<div class="fin-d-wf-row"><span class="fin-d-wf-l">${l}</span><span class="fin-d-wf-t"><span class="fin-d-wf-f fin-d-wf-f--${c}" style="width:${Math.max(2,Math.abs(v)/wfMax*100)}%"></span></span><span class="fin-d-wf-v">${v<0?'−':''}${m0(Math.abs(v))}</span></div>`).join('');
+
+    // estado de cobros
+    const estObj = { 'Disponible': cobradoDisp, 'En liberación': enLiberacion, 'Por cobrar': pendiente, 'Vencido': vencido };
+
+    // evolución bars
+    const evMax = Math.max(...evol.map(e=>e.neto), 1);
+    const evolHtml = evol.some(e=>e.neto>0)
+      ? `<div class="fin-d-evol">${evol.map(e=>`<div class="fin-d-evol__col"><div class="fin-d-evol__barwrap"><div class="fin-d-evol__bar" style="height:${Math.max(3,e.neto/evMax*100)}%" title="${m0(e.neto)}"></div></div><span class="fin-d-evol__lbl">${esc(e.label)}</span></div>`).join('')}</div>`
+      : '<div class="fin-d-empty">No hay datos suficientes para este gráfico en el período seleccionado.</div>';
+
+    // ── Movimientos recientes ──
+    const movs = [];
+    for (const p of _payments) { if (p.estado!=='cobrado'||!_rsMatchPay(p,projMap)) continue; const cur=p.moneda||p.project_moneda||'USD'; movs.push({date:p.fecha_pagada,tipo:'Cobro',concepto:p.concepto||'Cobro',ref:[p.client_nombre,p.project_nombre].filter(Boolean).join(' · '),canal:p.canal||'—',estado:p.disponibilidad==='liberacion'?'En liberación':'Disponible',monto:_toUsdEquiv(parseFloat(p.monto_neto??p.monto_bruto??0),cur)||0,sign:1}); }
+    for (const mv of _gxMovs) { const u=_movUsd(mv); movs.push({date:mv.fecha,tipo:mv.tipo==='aporte'?'Aporte a caja':'Gasto',concepto:mv.concepto||(mv.tipo==='aporte'?'Aporte':'Gasto'),ref:[mv.project_nombre,mv.client_nombre].filter(Boolean).join(' · ')||(mv.proveedor||''),canal:mv.tipo==='gasto'?_gxPagadoLbl(mv.pagado_desde):_gxOrigenLbl(mv.origen),estado:mv.tipo==='aporte'?'Registrado':_gxEstadoMeta(mv.estado)[1],monto:u,sign:mv.tipo==='aporte'?1:-1}); }
+    for (const pg of _rsPagos) { if (_rsMember&&(pg.persona||'').toLowerCase()!==_rsMember.toLowerCase()) continue; movs.push({date:pg.fecha_pago||pg.created_at,tipo:'Pago interno',concepto:pg.persona||'Pago interno',ref:pg.periodo_ref||'',canal:pg.metodo||'—',estado:pg.estado,monto:_toUsdEquiv(parseFloat(pg.monto||0),pg.moneda||'USD')||0,sign:-1}); }
+    movs.sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
+    const movRows = movs.slice(0,12).map(mvm=>{
+      const f = mvm.date ? new Date(String(mvm.date).split('T')[0]+'T00:00:00').toLocaleDateString('es-ES',{day:'2-digit',month:'short'}) : '—';
+      return `<tr><td>${f}</td><td><span class="fin-d-mtype fin-d-mtype--${mvm.sign>0?'in':'out'}">${esc(mvm.tipo)}</span></td><td class="fin-d-mc" title="${esc(mvm.concepto)}">${esc(mvm.concepto||'—')}</td><td class="fin-d-mr" title="${esc(mvm.ref)}">${esc(mvm.ref||'—')}</td><td>${esc(mvm.canal||'—')}</td><td>${esc(mvm.estado||'—')}</td><td class="fin-d-mnum ${mvm.sign>0?'fin-d-pos':'fin-d-neg'}">${mvm.sign>0?'+':'−'}${m0(mvm.monto)}</td></tr>`;
+    }).join('');
+    const movTable = movs.length
+      ? `<div class="fin-d-tablewrap"><table class="fin-d-table"><thead><tr><th>Fecha</th><th>Tipo</th><th>Concepto</th><th>Cliente / Proyecto</th><th>Canal</th><th>Estado</th><th class="fin-d-mnum">Impacto</th></tr></thead><tbody>${movRows}</tbody></table></div>`
+      : '<div class="fin-d-empty">Sin movimientos en el período.</div>';
+
+    const chartCard = (title, inner) => `<div class="fin-d-card"><div class="fin-d-card__t">${title}</div>${inner}</div>`;
+
+    body.innerHTML = hero + kpis
+      + `<div class="fin-d-2col">
+          ${chartCard('Flujo del dinero', `<div class="fin-d-wf">${waterfall}</div>`)}
+          ${chartCard('Estado de cobros', `<div class="fin-d-bars">${hbars(estObj,'est')}</div>`)}
+        </div>`
+      + `<div class="fin-d-2col">
+          ${chartCard('Cobros por canal', `<div class="fin-d-bars">${hbars(byCanal,'canal')}</div>`)}
+          ${chartCard('Gastos por categoría', `<div class="fin-d-bars">${hbars(byCat,'cat')}</div>`)}
+        </div>`
+      + chartCard(`Evolución (cobrado neto)`, evolHtml)
+      + chartCard('Movimientos recientes', movTable)
+      + `<p class="fin-rs-note">Cifras en equivalente USD aproximado. La <b>Distribución</b> se calcula en su pestaña sobre esta base distribuible.</p>`;
+  }
+
+  function _rsMatchProj(pr) {
+    if (_rsClient && String(pr.client_id) !== _rsClient) return false;
+    if (_rsProject && String(pr.id) !== _rsProject) return false;
+    if (_rsMember) {
+      const resp = (pr.responsables && pr.responsables.length) ? pr.responsables : (pr.responsable ? [pr.responsable] : []);
+      if (!resp.some(r => (r || '').toLowerCase() === _rsMember.toLowerCase())) return false;
+    }
+    return true;
+  }
+
+  function _rsMatchPay(p, projMap) {
+    if (_rsClient && String(p.client_id) !== _rsClient) return false;
+    if (_rsProject && String(p.project_id) !== _rsProject) return false;
+    if (_rsMember) {
+      const pr = projMap[p.project_id];
+      const resp = pr ? ((pr.responsables && pr.responsables.length) ? pr.responsables : (pr.responsable ? [pr.responsable] : [])) : [];
+      if (!resp.some(r => (r || '').toLowerCase() === _rsMember.toLowerCase())) return false;
+    }
+    return true;
+  }
+
+  function _rsMatchTask(t, projMap) {
+    const pr = projMap[t.project_id];
+    if (_rsClient && (!pr || String(pr.client_id) !== _rsClient)) return false;
+    if (_rsProject && String(t.project_id) !== _rsProject) return false;
+    if (_rsMember) {
+      const resp = (t.responsables && t.responsables.length) ? t.responsables : (t.responsable ? [t.responsable] : []);
+      if (!resp.some(r => (r || '').toLowerCase() === _rsMember.toLowerCase())) return false;
+    }
+    return true;
+  }
+
+  // USD del sueldo fijo de un miembro prorrateado al período (0 si no es sueldo fijo)
+  function _proratedSalaryUsd(m, period, rangeFrom, rangeTo) {
+    const amt = _toUsdEquiv(parseFloat(m.monto_pago || 0), m.moneda_pago || 'USD') || 0;
+    if (!amt) return 0;
+    let days = 0;
+    if (period === 'rango' && rangeFrom && rangeTo) {
+      days = Math.max(1, Math.round((new Date(rangeTo + 'T00:00:00') - new Date(rangeFrom + 'T00:00:00')) / 86400000) + 1);
+    }
+    if (m.tipo_pago === 'sueldo_mensual') {
+      return period === 'mes' ? amt : period === 'semana' ? amt / 4.333 : amt * (days / 30.44);
+    }
+    if (m.tipo_pago === 'sueldo_semanal') {
+      return period === 'semana' ? amt : period === 'mes' ? amt * 4.333 : amt * (days / 7);
+    }
+    return 0; // por_proyecto / comision / manual: variable, no es costo fijo
+  }
+
+  function _rsEquipoFijoUsd(members = _rsMembers, period = _rsPeriod, rangeFrom = _rsRangeFrom, rangeTo = _rsRangeTo) {
+    return members.reduce((s, m) => s + _proratedSalaryUsd(m, period, rangeFrom, rangeTo), 0);
+  }
+
+  function _renderResumenCards() { _renderResumen(); }
+  function _renderResumenCardsOLD() {
+    const grid = $('fin-rs-grid');
+    if (!grid) return;
+    const projMap = _rsProjMap();
+    const bounds  = _periodBounds(_rsPeriod, _rsRangeFrom, _rsRangeTo);
+
+    let contratado = 0, cobrado = 0, cobradoBruto = 0, pendiente = 0;
+    for (const pr of _rsProjects) {
+      if (!_rsMatchProj(pr)) continue;
+      contratado += _toUsdEquiv(parseFloat(pr.valor_total || 0), pr.moneda || 'USD') || 0;
+    }
+    for (const p of _payments) {
+      if (!_rsMatchPay(p, projMap)) continue;
+      const cur  = p.moneda || p.project_moneda || 'USD';
+      const net  = parseFloat(p.monto_neto ?? p.monto_bruto ?? 0);
+      const usd  = _toUsdEquiv(net, cur) || 0;
+      const usdB = _toUsdEquiv(parseFloat(p.monto_bruto ?? net), cur) || 0;
+      if (p.estado === 'cobrado') {
+        if (!bounds) { cobrado += usd; cobradoBruto += usdB; }
+        else if (p.fecha_pagada) {
+          const d = new Date(String(p.fecha_pagada).split('T')[0] + 'T00:00:00');
+          if (d >= bounds.start && d < bounds.end) { cobrado += usd; cobradoBruto += usdB; }
+        }
+      } else {
+        pendiente += usd; // pendiente + vencido
+      }
+    }
+
+    let porConciliar = 0;
+    for (const t of _rsTasks) {
+      if (t.parent_task_id) continue;
+      if (!FIN_EF_PORCONCILIAR.includes(t.estado_financiero || 'sin_revisar')) continue;
+      if (!_rsMatchTask(t, projMap)) continue;
+      const prc = projMap[t.project_id];
+      porConciliar += _toUsdEquiv(parseFloat(t.monto || 0), (prc && prc.moneda) || 'USD') || 0;
+    }
+
+    const cfg = _rsConfig || {};
+    const filteredSlice = !!(_rsClient || _rsProject);
+    const anyFilter     = filteredSlice || !!_rsMember;
+    const comisiones = Math.max(0, cobradoBruto - cobrado);   // comisión de plataforma por cobro
+    const impuestos = cobrado * (parseFloat(cfg.impuesto_pct || 0) / 100);
+    const reserva   = cobrado * (parseFloat(cfg.reserva_pct || 0) / 100);
+    const costosOp  = filteredSlice ? 0 : (_toUsdEquiv(parseFloat(cfg.costos_operativos || 0), cfg.moneda_principal || 'USD') || 0);
+    const equipo    = filteredSlice ? 0 : _rsEquipoFijoUsd();
+    const utilDistrib = cobrado - reserva - costosOp - equipo - impuestos;
+
+    const m0  = v => _money(v, 'USD', 0);
+    const lbl = _periodLabel(_rsPeriod, _rsRangeFrom, _rsRangeTo);
+    const utilSub = filteredSlice
+      ? 'neto − impuestos (sin costos fijos en vista filtrada)'
+      : 'neto − reserva, costos, equipo e impuestos';
+
+    // pagos internos (solo respetan el filtro de miembro; no son por cliente/proyecto)
+    let pagosPend = 0, pagosReal = 0;
+    for (const pg of _rsPagos) {
+      if (_rsMember && (pg.persona || '').toLowerCase() !== _rsMember.toLowerCase()) continue;
+      const usd = _toUsdEquiv(parseFloat(pg.monto || 0), pg.moneda || 'USD') || 0;
+      if (pg.estado === 'pagado') {
+        if (!bounds) { pagosReal += usd; }
+        else if (pg.fecha_pago) {
+          const d = new Date(String(pg.fecha_pago).split('T')[0] + 'T00:00:00');
+          if (d >= bounds.start && d < bounds.end) pagosReal += usd;
+        }
+      } else if (pg.estado === 'pendiente' || pg.estado === 'programado') {
+        pagosPend += usd;
+      }
+    }
+
+    // Gastos / Caja
+    const caja = _cajaSaldo();
+    let gastosPer = 0;
+    for (const mv of _gxMovs) {
+      if (mv.tipo !== 'gasto' || mv.estado !== 'pagado') continue;
+      if (!bounds) { gastosPer += _movUsd(mv); continue; }
+      if (!mv.fecha) continue;
+      const d = new Date(String(mv.fecha).split('T')[0] + 'T00:00:00');
+      if (d >= bounds.start && d < bounds.end) gastosPer += _movUsd(mv);
+    }
+    const gxAdj = _gxBaseAdjust(bounds);
+    const baseEstimada = cobrado - gxAdj.gastosCobro - gxAdj.aporteCobro;
+
+    const card = (title, valHtml, cls, sub) => `
+      <div class="fin-rs-card fin-rs-card--${cls}">
+        <div class="fin-rs-card__lbl">${title}</div>
+        <div class="fin-rs-card__val">${valHtml}</div>
+        ${sub ? `<div class="fin-rs-card__sub">${sub}</div>` : ''}
+      </div>`;
+    grid.innerHTML =
+      card('Total contratado',     m0(contratado),   'blue',  'Valor de proyectos' + (anyFilter ? ' (filtrado)' : '')) +
+      card('Cobrado bruto',        m0(cobradoBruto), 'green', `Bruto · ${lbl}`) +
+      card('Comisiones / descuentos', m0(comisiones), 'amber', 'Plataforma / transacción por cobro') +
+      card('Neto recibido',        m0(cobrado),      'green', `Neto · ${lbl}`) +
+      card('Pendiente por cobrar', m0(pendiente),    'amber', 'Pagos no cobrados') +
+      card('Por conciliar',        m0(porConciliar), 'orange', 'Tareas sin revisar / por conciliar') +
+      card('Utilidad antes de distribución', m0(utilDistrib), utilDistrib >= 0 ? 'green' : 'red', utilSub) +
+      card('Pagos internos pendientes', m0(pagosPend), 'amber', 'Por abonar (pend. + progr.)') +
+      card('Pagos internos realizados', m0(pagosReal), 'green', `Abonado · ${lbl}`) +
+      card('Caja disponible',      m0(caja),         caja >= 0 ? 'green' : 'red', 'Saldo manual de caja') +
+      card('Gastos operativos',    m0(gastosPer),    'amber', `Pagados · ${lbl}`) +
+      card('Base distribuible',    m0(baseEstimada), baseEstimada >= 0 ? 'green' : 'red', 'Neto − gastos/aportes del cobro');
+  }
+
+  function setResPeriod(p) {
+    _rsPeriod = p;
+    document.querySelectorAll('#fin-panel-resumen .an-period').forEach(b => b.classList.toggle('an-period--on', b.dataset.rsperiod === p));
+    const r = $('fin-rs-range'); if (r) r.style.display = p === 'rango' ? 'inline-flex' : 'none';
+    _renderResumenCards();
+  }
+
+  function applyResRange() {
+    _rsRangeFrom = $('fin-rs-from')?.value || null;
+    _rsRangeTo   = $('fin-rs-to')?.value   || null;
+    _renderResumenCards();
+  }
+
+  function setResFilter(kind, val) {
+    if (kind === 'client') _rsClient = val;
+    else if (kind === 'project') _rsProject = val;
+    else if (kind === 'member') _rsMember = val;
+    _renderResumenCards();
+  }
+
+  // ── Conciliación ───────────────────────────────────────────────────
+
+  async function _loadConciliacion() {
+    const body = $('fin-concil-body');
+    if (!body) return;
+    body.innerHTML = '<div class="fin-cn-skel">' + Array.from({ length: 4 }).map(() => '<div class="fin-cn-skel-row"></div>').join('') + '</div>';
+    try {
+      const [pRes, tRes, payRes] = await Promise.all([
+        apiFetch(`${API}/mgmt/projects`),
+        apiFetch(`${API}/mgmt/tasks`),
+        apiFetch(`${API}/mgmt/payments`),
+      ]);
+      _cnProjects = pRes.ok ? await pRes.json() : [];
+      _cnTasks    = tRes.ok ? await tRes.json() : [];
+      if (payRes.ok) _payments = await payRes.json();
+      _cnLoaded = true;
+      _renderConciliacion();
+    } catch (e) {
+      console.error('[finance] conciliacion load error:', e);
+      body.innerHTML = '<div class="fin-placeholder"><p class="fin-placeholder__s" style="color:var(--err)">Error al cargar la conciliación.</p></div>';
+    }
+  }
+
+  function _efColor(v) { const s = FIN_EF_STATES.find(x => x[0] === v); return s ? s[2] : '#A8A29E'; }
+
+  function _cnTaskPaid(t) { return t.cobrado || (t.estado_financiero || 'sin_revisar') === 'cobrado'; }
+  function _cnTaskPrio(t) { return (t.estado === 'completado' && !_cnTaskPaid(t)) ? 0 : (_cnTaskPaid(t) ? 2 : 1); }
+
+  // prioridad de proyecto: 0 completadas no cobradas · 1 descuadre · 2 por conciliar · 3 resto
+  function _cnRank(r) {
+    if (r.mains.some(t => t.estado === 'completado' && !_cnTaskPaid(t))) return 0;
+    if (r.valor > 0 && !r.cuadra) return 1;
+    if (r.hasPorConc) return 2;
+    return 3;
+  }
+
+  function _renderConciliacion() {
+    const body = $('fin-concil-body');
+    if (!body) return;
+
+    const mainsByProj = {};
+    _cnTasks.forEach(t => {
+      if (t.parent_task_id) return;
+      (mainsByProj[t.project_id] = mainsByProj[t.project_id] || []).push(t);
+    });
+
+    const rows = _cnProjects.map(pr => {
+      const mains = mainsByProj[pr.id] || [];
+      const sum   = mains.reduce((s, t) => s + parseFloat(t.monto || 0), 0);
+      const valor = parseFloat(pr.valor_total || 0);
+      const cur   = pr.moneda || 'USD';
+      const diff  = valor - sum;
+      const cuadra = Math.abs(diff) < 0.01;
+      const hasData = mains.length > 0 || valor > 0;
+      const hasPorConc = mains.some(t => FIN_EF_PORCONCILIAR.includes(t.estado_financiero || 'sin_revisar'));
+      return { pr, mains, sum, valor, cur, diff, cuadra, hasData, hasPorConc };
+    }).filter(r => r.hasData);
+
+    let shown = rows;
+    if (_cnFilter === 'descuadre') shown = rows.filter(r => !r.cuadra && r.valor > 0);
+    else if (_cnFilter === 'por_conciliar') shown = rows.filter(r => r.hasPorConc);
+    else if (_cnFilter === 'completadas') shown = rows.filter(r => _cnRank(r) === 0);
+    // Prioridad: 0 completadas no cobradas · 1 descuadres · 2 por conciliar · 3 conciliados
+    shown = shown.slice().sort((a, b) => {
+      const ra = _cnRank(a), rb = _cnRank(b);
+      return ra !== rb ? ra - rb : (a.pr.nombre || '').localeCompare(b.pr.nombre || '');
+    });
+
+    // ── Resumen superior (desde los rows YA calculados; sin lógica financiera nueva) ──
+    const nPorConc   = rows.filter(r => r.hasPorConc).length;
+    const nDescuadre = rows.filter(r => !r.cuadra && r.valor > 0).length;
+    let nComplSinCobro = 0, montoPend = 0;
+    for (const r of rows) {
+      nComplSinCobro += r.mains.filter(t => t.estado === 'completado' && !_cnTaskPaid(t)).length;
+      if (!r.cuadra && r.valor > 0) montoPend += (_toUsdEquiv(Math.abs(r.diff), r.cur) || Math.abs(r.diff));
+    }
+    const sumCard = (v, l, tone) => `<div class="fin-cn-card-sum fin-cn-card-sum--${tone}"><div class="fin-cn-card-sum__v">${v}</div><div class="fin-cn-card-sum__l">${l}</div></div>`;
+    const seg = (f, lbl) => `<button class="fin-cn-seg__btn${_cnFilter === f ? ' active' : ''}" onclick="FinanceModule.setCnFilter('${f}')">${lbl}</button>`;
+    const header = `
+      <div class="fin-cn-sec">
+        <div class="fin-cn-sec__head">
+          <h2 class="fin-cn-sec__title">Conciliación de proyectos</h2>
+          <p class="fin-cn-sec__sub">Cuadra el valor de cada proyecto contra sus tareas principales antes de registrar cobros y distribuir ingresos.</p>
+        </div>
+        <div class="fin-cn-cards">
+          ${sumCard(nPorConc, 'Proyectos por conciliar', nPorConc ? 'amber' : 'green')}
+          ${sumCard(nComplSinCobro, 'Completadas sin cobro', nComplSinCobro ? 'orange' : 'green')}
+          ${sumCard(nDescuadre, 'Descuadres detectados', nDescuadre ? 'red' : 'green')}
+          ${sumCard(_money(montoPend, 'USD', 0), 'Pendiente de cuadrar', 'neutral')}
+        </div>
+        <div class="fin-cn-seg">${seg('all', 'Todos')}${seg('completadas', 'Completadas s/ cobro')}${seg('descuadre', 'Descuadres')}${seg('por_conciliar', 'Por conciliar')}</div>
+      </div>`;
+
+    if (!shown.length) {
+      const eT = _cnFilter !== 'all' ? 'No hay proyectos en este filtro' : 'Nada por conciliar';
+      const eS = _cnFilter !== 'all' ? 'Prueba con otro filtro o limpia la selección.' : 'Cuando tus proyectos tengan valor y tareas facturables, aparecerán aquí para cuadrarlos.';
+      body.innerHTML = header + `<div class="fin-cn-empty-state"><div class="fin-cn-empty-state__ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div><p class="fin-cn-empty-state__t">${eT}</p><p class="fin-cn-empty-state__s">${eS}</p></div>`;
+      return;
+    }
+    const payByTask = {};
+    for (const p of (_payments || [])) { if (p.task_id) payByTask[p.task_id] = p; }
+    body.innerHTML = header + '<div class="fin-cn-list">' + shown.map(r => _cnProjHtml(r, payByTask)).join('') + '</div>';
+  }
+
+  const _CN_PENCIL = '<svg class="fin-cn-pencil" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
+
+  function _cnProjHtml(r, payByTask) {
+    const { pr, mains, sum, valor, cur, diff, cuadra } = r;
+    const open  = _cnExpanded.has(pr.id);
+    const money = v => _money(v, cur, 2);
+
+    let chipLbl, state;
+    if (valor === 0)   { chipLbl = 'Sin valor';              state = 'muted'; }
+    else if (cuadra)   { chipLbl = 'Cuadrado';               state = 'ok'; }
+    else if (diff > 0) { chipLbl = `Faltan ${money(diff)}`;  state = 'warn'; }
+    else               { chipLbl = `Sobran ${money(-diff)}`; state = 'err'; }
+    const chip = `<span class="fin-cn-chip fin-cn-chip--${state}">${chipLbl}</span>`;
+    const diffTxt = valor === 0 ? '—' : (cuadra ? '$0' : (diff > 0 ? money(diff) : '−' + money(-diff)));
+    const diffCls = (valor > 0 && diff > 0) ? ' fin-cn-mval--neg' : (diff < 0 ? ' fin-cn-mval--over' : '');
+    const nDone = mains.filter(t => t.estado === 'completado').length;
+
+    const distribBtn = mains.length
+      ? `<button class="fin-cn-ghost" onclick="event.stopPropagation();FinanceModule.cnDistribuir(${pr.id})" title="Reparte el valor del proyecto entre sus tareas principales"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>Distribuir</button>`
+      : '';
+
+    const tasks = open ? `<div class="fin-cn2-tasks">
+      ${mains.length ? `<div class="fin-cn2-thead">
+          <span>Tarea principal</span>
+          <span class="fin-cn2-tnum">Bruto</span><span class="fin-cn2-tnum">Comisión</span><span class="fin-cn2-tnum">Neto</span>
+          <span>Canal</span><span>Estado fin.</span><span class="fin-cn2-tact"></span>
+        </div>${[...mains].sort((a, b) => _cnTaskPrio(a) - _cnTaskPrio(b)).map(t => _cnTaskHtml(t, cur, payByTask[t.id])).join('')}`
+        : '<div class="fin-cn-empty">Agrega tareas principales para distribuir el valor.</div>'}
+    </div>` : '';
+
+    return `<div class="fin-cn-card fin-cn-card--${state}${open ? ' fin-cn-card--open' : ''}">
+      <div class="fin-cn-card__hd" onclick="FinanceModule.cnToggleProject(${pr.id})">
+        <svg class="fin-cn2-chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        <div class="fin-cn-card__title">
+          <div class="fin-cn-card__name">${esc(pr.nombre || ('Proyecto #' + pr.id))}</div>
+          ${pr.client_nombre ? `<div class="fin-cn-card__cli">${esc(pr.client_nombre)}</div>` : ''}
+        </div>
+        <div class="fin-cn-metrics">
+          <div class="fin-cn-metric"><span class="fin-cn-metric__l">Valor</span><span class="fin-cn-metric__v fin-cn-edit fin-cn-edit--val" data-pid="${pr.id}" title="Editar valor" onclick="event.stopPropagation();FinanceModule.cnEditProjValor(${pr.id})">${money(valor)}${_CN_PENCIL}</span></div>
+          <div class="fin-cn-metric"><span class="fin-cn-metric__l">Tareas · ${mains.length}${nDone ? ` · ${nDone}✓` : ''}</span><span class="fin-cn-metric__v">${money(sum)}</span></div>
+          <div class="fin-cn-metric"><span class="fin-cn-metric__l">Diferencia</span><span class="fin-cn-metric__v fin-cn-mval${diffCls}">${diffTxt}</span></div>
+        </div>
+        ${chip}
+        <div class="fin-cn-card__acts">${distribBtn}<span class="fin-cn-flash" data-flash="${pr.id}"></span></div>
+      </div>
+      ${tasks}
+    </div>`;
+  }
+
+  function _cnTaskHtml(t, cur, pay) {
+    const ef   = t.estado_financiero || 'sin_revisar';
+    const opts = FIN_EF_STATES.map(([v, l]) => `<option value="${v}"${v === ef ? ' selected' : ''}>${l}</option>`).join('');
+    const paid = _cnTaskPaid(t);
+    const completedUnpaid = t.estado === 'completado' && !paid;
+    const opLbl = { pendiente: 'Pendiente', en_progreso: 'En progreso', bloqueado: 'Bloqueado', completado: 'Completado' }[t.estado] || '';
+    const opBadge = completedUnpaid
+      ? '<span class="fin-cn-tbadge fin-cn-tbadge--pend">Completada sin cobro</span>'
+      : (opLbl ? `<span class="fin-cn2-op">${opLbl}</span>` : '');
+    const cbruto = pay ? parseFloat(pay.monto_bruto || 0) : 0;
+    const com  = pay ? Math.max(0, cbruto - parseFloat(pay.monto_neto ?? cbruto)) : null;
+    const neto = pay ? parseFloat(pay.monto_neto ?? cbruto) : null;
+    const comPct = (pay && cbruto > 0) ? (com / cbruto * 100) : 0;
+    // Comisión editable inline (% ↔ monto) cuando ya hay cobro; si no, "—".
+    const comCell = pay
+      ? `<span class="fin-cn2-tnum fin-cn2-com fin-cn-edit" data-tid="${t.id}" title="Editar comisión (% o monto)" onclick="event.stopPropagation();FinanceModule.cnEditComision(${t.id})"><span class="fin-cn2-com__main"><span class="fin-cn2-com__v">${com > 0.005 ? '−' + _money(com, cur, 2) : _money(0, cur, 0)}</span>${_CN_PENCIL}</span><span class="fin-cn2-com__pct">${com > 0.005 ? (+comPct.toFixed(comPct < 10 ? 1 : 0)) + '%' : '0%'}</span></span>`
+      : `<span class="fin-cn2-tnum">—</span>`;
+    const netoTxt = neto != null ? _money(neto, cur, 2) : '—';
+    const canal = pay && pay.canal ? esc(pay.canal) : '—';
+    const cobroBtn = paid
+      ? '<span class="fin-cn-paid"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Cobrado</span>'
+      : `<button class="fin-cn-cobro-btn" onclick="event.stopPropagation();FinanceModule.cnOpenCobroModal(${t.id})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Registrar cobro</button>`;
+    return `<div class="fin-cn2-task${completedUnpaid ? ' fin-cn2-task--pend' : ''}">
+      <span class="fin-cn2-tname"><span class="fin-cn2-dot" style="background:${_efColor(ef)}"></span><span class="fin-cn2-tt" title="${esc(t.titulo)}">${esc(t.titulo)}</span>${opBadge}</span>
+      <span class="fin-cn2-tnum fin-cn-edit fin-cn-edit--monto" data-tid="${t.id}" title="Editar bruto" onclick="event.stopPropagation();FinanceModule.cnEditTaskMonto(${t.id})">${_money(parseFloat(t.monto || 0), cur, 2)}${_CN_PENCIL}</span>
+      ${comCell}
+      <span class="fin-cn2-tnum">${netoTxt}</span>
+      <span class="fin-cn2-tcanal" title="${canal}">${canal}</span>
+      <span class="fin-cn-efwrap"><select class="fin-cn-ef" onclick="event.stopPropagation()" onchange="FinanceModule.setTaskEstadoFin(${t.id}, this.value)">${opts}</select></span>
+      <span class="fin-cn2-tact">${cobroBtn}</span>
+    </div>`;
+  }
+
+  function cnToggleProject(pid) {
+    if (_cnExpanded.has(pid)) _cnExpanded.delete(pid);
+    else _cnExpanded.add(pid);
+    _renderConciliacion();
+  }
+
+  function setCnFilter(f) {
+    _cnFilter = f;
+    _renderConciliacion();
+  }
+
+  async function setTaskEstadoFin(taskId, estado) {
+    const t  = _cnTasks.find(x => x.id === taskId);
+    const rt = _rsTasks.find(x => x.id === taskId);
+    const prev = t ? t.estado_financiero : null;
+    if (t)  t.estado_financiero  = estado;   // optimistic
+    if (rt) rt.estado_financiero = estado;
+    _renderConciliacion();
+    try {
+      const res = await apiFetch(`${API}/mgmt/tasks/${taskId}/estado-financiero`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ estado_financiero: estado }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+    } catch (e) {
+      console.error('[finance] setTaskEstadoFin error:', e);
+      if (t)  t.estado_financiero  = prev;
+      if (rt) rt.estado_financiero = prev;
+      _renderConciliacion();
+    }
+  }
+
+  // ── Conciliación: edición inline ───────────────────────────────────
+
+  function _cnEditKey(e) {
+    if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); }
+    else if (e.key === 'Escape') { e.preventDefault(); e.target._cancelled = true; e.target.blur(); }
+  }
+
+  function _cnFlash(pid, msg, ok = true) {
+    const el = document.querySelector(`.fin-cn-flash[data-flash="${pid}"]`);
+    if (!el) return;
+    el.textContent = msg;
+    el.className = `fin-cn-flash fin-cn-flash--show${ok ? '' : ' fin-cn-flash--err'}`;
+    clearTimeout(el._t);
+    el._t = setTimeout(() => {
+      const e2 = document.querySelector(`.fin-cn-flash[data-flash="${pid}"]`);
+      if (e2) { e2.textContent = ''; e2.className = 'fin-cn-flash'; }
+    }, 2200);
+  }
+
+  function _cnSwapToInput(el, current, onblur) {
+    if (!el || el.querySelector('input')) return;
+    el.innerHTML = `<input type="number" class="fin-cn-input" min="0" step="0.01" value="${current || ''}" onclick="event.stopPropagation()" onkeydown="FinanceModule._cnEditKey(event)" onblur="${onblur}">`;
+    const input = el.querySelector('input');
+    input.focus(); input.select();
+  }
+
+  function cnEditProjValor(pid) {
+    const pr = _cnProjects.find(x => x.id === pid);
+    _cnSwapToInput(document.querySelector(`.fin-cn-edit--val[data-pid="${pid}"]`),
+      parseFloat(pr?.valor_total || 0), `FinanceModule.cnSaveProjValor(this,${pid})`);
+  }
+
+  async function cnSaveProjValor(input, pid) {
+    if (input._cancelled) { _renderConciliacion(); return; }
+    const pr = _cnProjects.find(x => x.id === pid);
+    if (!pr) { _renderConciliacion(); return; }
+    const raw = (input.value || '').trim();
+    const val = raw === '' ? 0 : Math.max(0, parseFloat(raw) || 0);
+    const prev = parseFloat(pr.valor_total || 0);
+    if (val === prev) { _renderConciliacion(); return; }
+    pr.valor_total = val;                       // optimistic
+    _renderConciliacion();
+    try {
+      const res = await apiFetch(`${API}/mgmt/projects/${pid}/valor`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ valor_total: val }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      _cnFlash(pid, 'Guardado');
+    } catch (e) {
+      console.error('[finance] cnSaveProjValor error:', e);
+      pr.valor_total = prev;                    // revert
+      _renderConciliacion();
+      _cnFlash(pid, 'No se pudo guardar', false);
+    }
+  }
+
+  function cnEditTaskMonto(tid) {
+    const t = _cnTasks.find(x => x.id === tid);
+    _cnSwapToInput(document.querySelector(`.fin-cn-edit--monto[data-tid="${tid}"]`),
+      parseFloat(t?.monto || 0), `FinanceModule.cnSaveTaskMonto(this,${tid})`);
+  }
+
+  function _cnSetTaskMonto(tid, val) {
+    const t  = _cnTasks.find(x => x.id === tid); if (t)  t.monto  = val;
+    const rt = _rsTasks.find(x => x.id === tid); if (rt) rt.monto = val;
+    const dt = _dsTasks.find(x => x.id === tid); if (dt) dt.monto = val;
+  }
+
+  async function cnSaveTaskMonto(input, tid) {
+    if (input._cancelled) { _renderConciliacion(); return; }
+    const t = _cnTasks.find(x => x.id === tid);
+    if (!t) { _renderConciliacion(); return; }
+    const pid = t.project_id;
+    const raw = (input.value || '').trim();
+    const val = raw === '' ? 0 : Math.max(0, parseFloat(raw) || 0);
+    const prev = parseFloat(t.monto || 0);
+    if (val === prev) { _renderConciliacion(); return; }
+    _cnSetTaskMonto(tid, val);                  // optimistic
+    _renderConciliacion();
+    try {
+      const res = await apiFetch(`${API}/mgmt/tasks/${tid}/billing`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ monto: val }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      _cnFlash(pid, 'Guardado');
+    } catch (e) {
+      console.error('[finance] cnSaveTaskMonto error:', e);
+      _cnSetTaskMonto(tid, prev);               // revert
+      _renderConciliacion();
+      _cnFlash(pid, 'No se pudo guardar', false);
+    }
+  }
+
+  // ── Conciliación: comisión editable inline (% ↔ monto, recíproco) ──
+  // Solo para tareas con cobro registrado (la comisión vive en el payment).
+  function cnEditComision(tid) {
+    cnCloseComision();
+    const t   = _cnTasks.find(x => x.id === tid);
+    const pay = (_payments || []).find(p => p.task_id === tid);
+    if (!t || !pay) return;
+    const bruto = parseFloat(pay.monto_bruto || 0);
+    const cur   = (_cnProjects.find(x => x.id === t.project_id)?.moneda) || pay.moneda || 'USD';
+    if (!(bruto > 0)) { _cnFlash(t.project_id, 'El cobro no tiene bruto', false); return; }
+    const com = Math.max(0, bruto - parseFloat(pay.monto_neto ?? bruto));
+    const pct = bruto > 0 ? com / bruto * 100 : 0;
+    _cnComCtx = { tid, bruto, cur };
+    const anchor = document.querySelector(`.fin-cn2-com[data-tid="${tid}"]`)?.getBoundingClientRect();
+
+    const pop = document.createElement('div');
+    pop.id = 'fin-cncom-pop';
+    pop.className = 'fin-cncom-pop';
+    pop.innerHTML = `
+      <div class="fin-cncom-hd"><span>Comisión</span><span class="fin-cncom-bruto">Bruto ${_money(bruto, cur, 2)}</span></div>
+      <div class="fin-cncom-row">
+        <label class="fin-cncom-f"><span>%</span><input id="cncom-pct" type="number" min="0" max="100" step="0.1" value="${pct > 0.005 ? (+pct.toFixed(2)) : ''}" oninput="FinanceModule.cnComRecalc('pct')" placeholder="0"></label>
+        <span class="fin-cncom-eq">=</span>
+        <label class="fin-cncom-f"><span>${esc(cur)}</span><input id="cncom-mon" type="number" min="0" step="0.01" value="${com > 0.005 ? com.toFixed(2) : ''}" oninput="FinanceModule.cnComRecalc('mon')" placeholder="0.00"></label>
+      </div>
+      <div class="fin-cncom-neto">Neto recibido: <b id="cncom-neto">${_money(bruto - com, cur, 2)}</b></div>
+      <div class="fin-cncom-acts">
+        <button class="fin-cncom-btn fin-cncom-btn--ghost" onclick="FinanceModule.cnCloseComision()">Cancelar</button>
+        <button class="fin-cncom-btn fin-cncom-btn--primary" onclick="FinanceModule.cnSaveComision(${tid})">Guardar</button>
+      </div>`;
+    document.body.appendChild(pop);
+    if (anchor) {
+      const pw = 244, ph = pop.offsetHeight || 150;
+      let left = anchor.left + anchor.width / 2 - pw / 2;
+      left = Math.max(8, Math.min(left, window.innerWidth - pw - 8));
+      let top = anchor.bottom + 6;
+      if (top + ph > window.innerHeight - 8) top = Math.max(8, anchor.top - ph - 6);
+      pop.style.left = left + 'px';
+      pop.style.top  = top + 'px';
+    }
+    setTimeout(() => { const el = $('cncom-pct'); if (el) { el.focus(); el.select(); } }, 30);
+    setTimeout(() => document.addEventListener('mousedown', _cnComOutside), 0);
+  }
+
+  function _cnComOutside(e) {
+    if (!e.target.closest('#fin-cncom-pop') && !e.target.closest('.fin-cn2-com')) cnCloseComision();
+  }
+
+  function cnComRecalc(source) {
+    if (!_cnComCtx) return;
+    const { bruto, cur } = _cnComCtx;
+    let pct = parseFloat($('cncom-pct')?.value) || 0;
+    let mon = parseFloat($('cncom-mon')?.value) || 0;
+    if (source === 'pct') { mon = bruto * pct / 100; if ($('cncom-mon')) $('cncom-mon').value = mon ? mon.toFixed(2) : ''; }
+    if (source === 'mon') { pct = bruto ? mon / bruto * 100 : 0; if ($('cncom-pct')) $('cncom-pct').value = pct ? (+pct.toFixed(2)) : ''; }
+    mon = Math.min(Math.max(0, mon), bruto);
+    if ($('cncom-neto')) $('cncom-neto').textContent = _money(Math.max(0, bruto - mon), cur, 2);
+  }
+
+  function cnCloseComision() {
+    document.removeEventListener('mousedown', _cnComOutside);
+    document.getElementById('fin-cncom-pop')?.remove();
+    _cnComCtx = null;
+  }
+
+  async function cnSaveComision(tid) {
+    const pay = (_payments || []).find(p => p.task_id === tid);
+    if (!pay || !_cnComCtx) { cnCloseComision(); return; }
+    const bruto = _cnComCtx.bruto;
+    let mon = parseFloat($('cncom-mon')?.value) || 0;
+    let pct = parseFloat($('cncom-pct')?.value) || 0;
+    mon = Math.max(0, Math.min(mon, bruto));
+    const neto = Math.max(0, bruto - mon);
+    // PUT completo del pago (la ruta es full-update): conservo todo y solo piso comisión/neto.
+    const body = {
+      concepto: pay.concepto || '', client_id: pay.client_id || null, project_id: pay.project_id || null,
+      monto_bruto: bruto, porcentaje: pct || null, comision_monto: null, monto_neto: neto,
+      canal: pay.canal || '', fecha_esperada: pay.fecha_esperada || null, fecha_pagada: pay.fecha_pagada || null,
+      estado: pay.estado || 'pendiente', notas: pay.notas || '',
+      moneda: pay.moneda || '', tipo_cambio: pay.tipo_cambio ?? null, costo_extra: pay.costo_extra ?? null,
+      disponibilidad: pay.disponibilidad || 'disponible',
+    };
+    const prev = { neto: pay.monto_neto, pct: pay.porcentaje, com: pay.comision_monto };
+    const pid = pay.project_id;
+    pay.monto_neto = neto; pay.porcentaje = pct || null; pay.comision_monto = null;   // optimista
+    cnCloseComision();
+    _renderConciliacion();
+    try {
+      const res = await apiFetch(`${API}/mgmt/payments/${pay.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (!res.ok) throw new Error(await res.text());
+      _cnFlash(pid, 'Comisión actualizada');
+    } catch (e) {
+      console.error('[finance] cnSaveComision error:', e);
+      pay.monto_neto = prev.neto; pay.porcentaje = prev.pct; pay.comision_monto = prev.com;   // revertir
+      _renderConciliacion();
+      _cnFlash(pid, 'No se pudo guardar', false);
+    }
+  }
+
+  async function cnDistribuir(pid) {
+    const pr = _cnProjects.find(x => x.id === pid);
+    if (!pr) return;
+    const mains = _cnTasks.filter(t => !t.parent_task_id && t.project_id === pid);
+    if (!mains.length) { _cnFlash(pid, 'No hay tareas principales', false); return; }
+    const valor = parseFloat(pr.valor_total || 0);
+    if (valor <= 0) { _cnFlash(pid, 'Define primero el valor del proyecto', false); return; }
+    if (mains.some(t => parseFloat(t.monto || 0) > 0) &&
+        !confirm('Esto reemplaza los montos actuales de las tareas principales por el reparto equitativo. ¿Continuar?')) return;
+    const n = mains.length;
+    const base = Math.floor((valor / n) * 100) / 100;
+    const amounts = mains.map((_, i) => i === n - 1 ? Math.round((valor - base * (n - 1)) * 100) / 100 : base);
+    const prevs = mains.map(t => parseFloat(t.monto || 0));
+    mains.forEach((t, i) => _cnSetTaskMonto(t.id, amounts[i]));   // optimistic
+    _renderConciliacion();
+    try {
+      await Promise.all(mains.map((t, i) => apiFetch(`${API}/mgmt/tasks/${t.id}/billing`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ monto: amounts[i] }),
+      }).then(r => { if (!r.ok) throw new Error('fail'); })));
+      _cnFlash(pid, `Repartido ${_money(base, pr.moneda || 'USD', 2)} c/u`);
+    } catch (e) {
+      console.error('[finance] cnDistribuir error:', e);
+      mains.forEach((t, i) => _cnSetTaskMonto(t.id, prevs[i]));   // revert
+      _renderConciliacion();
+      _cnFlash(pid, 'No se pudo distribuir', false);
+    }
+  }
+
+  // ── Conciliación: registrar cobro manual ───────────────────────────
+
+  function _cnSetTaskEF(tid, ef) {
+    const t  = _cnTasks.find(x => x.id === tid); if (t)  t.estado_financiero  = ef;
+    const rt = _rsTasks.find(x => x.id === tid); if (rt) rt.estado_financiero = ef;
+    const dt = _dsTasks.find(x => x.id === tid); if (dt) dt.estado_financiero = ef;
+  }
+
+  const FIN_CANALES = ['Upwork', 'Freelancer', 'Fiverr', 'Global66', 'Wise', 'PayPal', 'Banco local', 'Transferencia bancaria', 'Otro'];
+
+  function cnOpenCobroModal(taskId) {
+    const t = _cnTasks.find(x => x.id === taskId);
+    if (!t) return;
+    const pr = _cnProjects.find(x => x.id === t.project_id);
+    const moneda = pr?.moneda || 'USD';
+    const today = new Date().toISOString().split('T')[0];
+    const canalOpts  = '<option value="">— Sin especificar —</option>' + FIN_CANALES.map(c => `<option value="${c}">${c}</option>`).join('');
+    const monedaOpts = FIN_CURRENCIES.map(c => `<option value="${c}"${c === moneda ? ' selected' : ''}>${c}</option>`).join('');
+
+    document.getElementById('fin-cobro-modal')?.remove();
+    const modal = document.createElement('div');
+    modal.id = 'fin-cobro-modal';
+    modal.className = 'fin-pi-backdrop';
+    modal.onclick = e => { if (e.target === modal) closeCobroModal(); };
+    modal.innerHTML = `
+      <div class="fin-pi-box">
+        <div class="fin-pi-box__hd">
+          <h3>Registrar cobro</h3>
+          <button class="fin-pi-x" onclick="FinanceModule.closeCobroModal()" title="Cerrar">✕</button>
+        </div>
+        <div class="fin-pi-form">
+          <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Concepto</span>
+            <input class="form-input" id="co-concepto" value="${esc(t.titulo)}"></label>
+          <label class="fin-cfg-field"><span class="fin-cfg-lbl">Canal / plataforma</span>
+            <select class="form-input" id="co-canal" onchange="FinanceModule.cnCobroOnCanal()">${canalOpts}</select></label>
+          <label class="fin-cfg-field"><span class="fin-cfg-lbl">Moneda</span>
+            <select class="form-input" id="co-moneda" onchange="FinanceModule.cnCobroOnMoneda()">${monedaOpts}</select></label>
+          <label class="fin-cfg-field"><span class="fin-cfg-lbl">Monto bruto</span>
+            <input class="form-input" type="number" id="co-bruto" min="0" step="0.01" value="${t.monto ?? ''}" oninput="FinanceModule.cnCobroRecalc('bruto')"></label>
+          <label class="fin-cfg-field"><span class="fin-cfg-lbl">Comisión %</span>
+            <input class="form-input" type="number" id="co-pct" min="0" max="100" step="0.1" oninput="FinanceModule.cnCobroRecalc('pct')"></label>
+          <label class="fin-cfg-field"><span class="fin-cfg-lbl">Comisión monto</span>
+            <input class="form-input" type="number" id="co-commonto" min="0" step="0.01" oninput="FinanceModule.cnCobroRecalc('monto')"></label>
+          <label class="fin-cfg-field"><span class="fin-cfg-lbl">Costo adicional (transacción)</span>
+            <input class="form-input" type="number" id="co-costo" min="0" step="0.01" oninput="FinanceModule.cnCobroRecalc('costo')"></label>
+          <label class="fin-cfg-field"><span class="fin-cfg-lbl">Neto recibido</span>
+            <input class="form-input" type="number" id="co-neto" min="0" step="0.01"></label>
+          <div class="fin-pi-full fin-co-fxrow" id="co-fx-row" style="display:none">
+            <label class="fin-cfg-field"><span class="fin-cfg-lbl">Tipo de cambio referencial</span>
+              <input class="form-input" type="number" id="co-fx" min="0" step="0.0001" oninput="FinanceModule.cnCobroRecalc('fx')"></label>
+            <label class="fin-cfg-field"><span class="fin-cfg-lbl">USD equivalente referencial</span>
+              <input class="form-input" type="text" id="co-usd" disabled style="background:#FAFAF8;color:var(--muted)"></label>
+          </div>
+          <label class="fin-cfg-field"><span class="fin-cfg-lbl">Fecha de cobro</span>
+            <input class="form-input" type="date" id="co-fecha" value="${today}"></label>
+          <label class="fin-cfg-field"><span class="fin-cfg-lbl">Referencia</span>
+            <input class="form-input" id="co-ref" placeholder="N.º operación, etc."></label>
+          <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Nota</span>
+            <textarea class="form-input" id="co-nota" rows="2"></textarea></label>
+        </div>
+        <div class="fin-pi-box__ft">
+          <span class="fin-cfg-hint" id="co-hint"></span>
+          <div class="fin-pi-ft-btns">
+            <button class="btn btn--ghost btn--sm" onclick="FinanceModule.closeCobroModal()">Cancelar</button>
+            <button class="btn btn--primary btn--sm" onclick="FinanceModule.cnSaveCobro(${taskId})">Registrar cobro</button>
+          </div>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    cnCobroOnMoneda();                       // prefila FX si la moneda no es USD + recalcula
+    setTimeout(() => $('co-bruto')?.focus(), 100);
+  }
+
+  function cnCobroOnCanal() {
+    const def = CANAL_DEFAULT_PCT[$('co-canal')?.value];
+    if (def != null && $('co-pct')) $('co-pct').value = def;
+    cnCobroRecalc('pct');
+  }
+
+  function cnCobroOnMoneda() {
+    const moneda = $('co-moneda')?.value || 'USD';
+    if (moneda !== 'USD') {
+      const fxEl = $('co-fx');
+      if (fxEl && !parseFloat(fxEl.value)) {
+        const rate = (window._fxRates || {})[moneda];
+        if (rate > 0) fxEl.value = rate;
+      }
+    }
+    cnCobroRecalc('moneda');
+  }
+
+  function cnCobroRecalc(source) {
+    const bruto = parseFloat($('co-bruto')?.value) || 0;
+    let pct = parseFloat($('co-pct')?.value) || 0;
+    let mon = parseFloat($('co-commonto')?.value) || 0;
+    if (source === 'pct')   { mon = bruto * pct / 100; if ($('co-commonto')) $('co-commonto').value = mon ? mon.toFixed(2) : ''; }
+    if (source === 'monto') { pct = bruto ? (mon / bruto * 100) : 0; if ($('co-pct')) $('co-pct').value = pct ? (+pct.toFixed(2)) : ''; }
+    const costo = parseFloat($('co-costo')?.value) || 0;
+    const neto = Math.max(0, bruto - mon - costo);
+    if ($('co-neto')) $('co-neto').value = bruto ? neto.toFixed(2) : '';
+    const moneda = $('co-moneda')?.value || 'USD';
+    const fxRow = $('co-fx-row');
+    if (moneda !== 'USD') {
+      if (fxRow) fxRow.style.display = '';
+      const fx = parseFloat($('co-fx')?.value) || 0;
+      if ($('co-usd')) $('co-usd').value = fx > 0 ? ('≈ USD ' + (neto / fx).toFixed(2)) : '—';
+    } else if (fxRow) { fxRow.style.display = 'none'; }
+    const hint = $('co-hint');
+    if (hint) {
+      if (bruto > 0 && (mon + costo) > bruto) { hint.textContent = 'La comisión + costos superan el bruto.'; hint.className = 'fin-cfg-hint fin-cfg-hint--err'; }
+      else { hint.textContent = ''; hint.className = 'fin-cfg-hint'; }
+    }
+  }
+
+  function closeCobroModal() { document.getElementById('fin-cobro-modal')?.remove(); }
+
+  async function cnSaveCobro(taskId) {
+    const t = _cnTasks.find(x => x.id === taskId);
+    if (!t) return;
+    const pr = _cnProjects.find(x => x.id === t.project_id);
+    const moneda = $('co-moneda')?.value || 'USD';
+    const bruto = parseFloat($('co-bruto')?.value) || 0;
+    const pct   = parseFloat($('co-pct')?.value) || 0;
+    const com   = parseFloat($('co-commonto')?.value) || 0;
+    const costo = parseFloat($('co-costo')?.value) || 0;
+    const neto  = parseFloat($('co-neto')?.value) || 0;
+    const fx    = parseFloat($('co-fx')?.value) || 0;
+    const hint  = $('co-hint');
+    const fail = m => { if (hint) { hint.textContent = m; hint.className = 'fin-cfg-hint fin-cfg-hint--err'; } };
+    if (bruto <= 0) return fail('Indica el monto bruto cobrado.');
+    if ((com + costo) > bruto) return fail('La comisión + costos superan el bruto.');
+    if (moneda !== 'USD' && fx <= 0) return fail('Indica el tipo de cambio referencial.');
+    const ref  = $('co-ref')?.value.trim() || '';
+    const nota = $('co-nota')?.value.trim() || '';
+    const data = {
+      concepto: $('co-concepto')?.value.trim() || t.titulo,
+      client_id: pr?.client_id || null,
+      project_id: t.project_id,
+      monto_bruto: bruto,
+      porcentaje: pct || null,
+      comision_monto: com || null,
+      costo_extra: costo || null,
+      monto_neto: neto,
+      canal: $('co-canal')?.value || '',
+      moneda,
+      tipo_cambio: moneda !== 'USD' ? fx : null,
+      fecha_pagada: $('co-fecha')?.value || new Date().toISOString().split('T')[0],
+      estado: 'cobrado',
+      notas: [nota, ref ? 'Ref: ' + ref : ''].filter(Boolean).join(' · '),
+    };
+    if (hint) { hint.textContent = 'Registrando…'; hint.className = 'fin-cfg-hint'; }
+    try {
+      const res = await apiFetch(`${API}/mgmt/payments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+      if (!res.ok) throw new Error(await res.text());
+      await apiFetch(`${API}/mgmt/tasks/${taskId}/estado-financiero`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ estado_financiero: 'cobrado' }),
+      }).catch(() => {});
+      _cnSetTaskEF(taskId, 'cobrado');
+      closeCobroModal();
+      _rsLoaded = false; _dsLoaded = false;   // Resumen/Distribución stale
+      await load();                            // refresca _payments → Cobros + stats
+      _renderConciliacion();
+      _cnFlash(t.project_id, 'Cobro registrado');
+    } catch (e) {
+      console.error('[finance] cnSaveCobro error:', e);
+      fail('No se pudo registrar el cobro.');
+    }
+  }
+
+  // ── Distribución ───────────────────────────────────────────────────
+
+  async function _loadDistribucion() {
+    const body = $('fin-distrib-body');
+    if (!body) return;
+    body.innerHTML = '<div class="clients-loading"><div class="clients-spin"></div><span>Cargando distribución…</span></div>';
+    try {
+      const [pRes, cRes, tRes, piRes, mRes] = await Promise.all([
+        apiFetch(`${API}/mgmt/projects`),
+        apiFetch(`${API}/mgmt/fin-config`),
+        apiFetch(`${API}/mgmt/tasks`),
+        apiFetch(`${API}/mgmt/pagos-internos`),
+        apiFetch(`${API}/mgmt/fin-movimientos`),
+      ]);
+      _dsProjects = pRes.ok ? await pRes.json() : [];
+      if (cRes.ok) { const d = await cRes.json(); _dsConfig = d.config || {}; _dsMembers = d.members || []; }
+      _dsTasks = tRes.ok ? await tRes.json() : [];
+      _dsPagos = piRes.ok ? await piRes.json() : [];
+      if (mRes.ok) _gxMovs = await mRes.json();
+      if (!_dsLoaded) _dsPeriod = (_dsConfig && _dsConfig.periodo_default === 'semana') ? 'semana' : 'mes';
+      _dsLoaded = true;
+      _renderDistribucion();
+    } catch (e) {
+      console.error('[finance] distribucion load error:', e);
+      body.innerHTML = '<div class="fin-placeholder"><p class="fin-placeholder__s" style="color:var(--err)">Error al cargar la distribución.</p></div>';
+    }
+  }
+
+  function _dsCard(title, val, cls, sub) {
+    return `<div class="fin-rs-card fin-rs-card--${cls}">
+      <div class="fin-rs-card__lbl">${title}</div>
+      <div class="fin-rs-card__val">${val}</div>
+      ${sub ? `<div class="fin-rs-card__sub">${sub}</div>` : ''}
+    </div>`;
+  }
+
+  // abonado a un miembro (pagos internos 'pagado') dentro del período
+  function _dsAbonado(memberId, bounds) {
+    let total = 0;
+    for (const pg of _dsPagos) {
+      if (pg.member_id !== memberId || pg.estado !== 'pagado') continue;
+      const usd = _toUsdEquiv(parseFloat(pg.monto || 0), pg.moneda || 'USD') || 0;
+      if (!bounds) { total += usd; }
+      else if (pg.fecha_pago) {
+        const d = new Date(String(pg.fecha_pago).split('T')[0] + 'T00:00:00');
+        if (d >= bounds.start && d < bounds.end) total += usd;
+      }
+    }
+    return total;
+  }
+
+  function _renderDistribucion() {
+    const body = $('fin-distrib-body');
+    if (!body) return;
+    const cfg = _dsConfig || {};
+    const m0  = v => _money(v, 'USD', 0);
+    const m2  = v => _money(v, 'USD', 2);
+    const pct = v => parseFloat(v || 0) / 100;
+
+    const bounds = _periodBounds(_dsPeriod, _dsRangeFrom, _dsRangeTo);
+    let cobrado = 0, cobradoBruto = 0, enLiberacion = 0;
+    for (const p of _payments) {
+      if (p.estado !== 'cobrado') continue;
+      const cur  = p.moneda || p.project_moneda || 'USD';
+      const net  = parseFloat(p.monto_neto ?? p.monto_bruto ?? 0);
+      const usd  = _toUsdEquiv(net, cur) || 0;
+      const usdB = _toUsdEquiv(parseFloat(p.monto_bruto ?? net), cur) || 0;
+      let inP = !bounds;
+      if (bounds && p.fecha_pagada) {
+        const d = new Date(String(p.fecha_pagada).split('T')[0] + 'T00:00:00');
+        inP = d >= bounds.start && d < bounds.end;
+      }
+      if (inP) { cobrado += usd; cobradoBruto += usdB; if (p.disponibilidad === 'liberacion') enLiberacion += usd; }
+    }
+    const projMap = {}; _dsProjects.forEach(p => { projMap[p.id] = p; });
+    let facturable = 0;
+    for (const t of _dsTasks) {
+      if (t.parent_task_id) continue;
+      if ((t.estado_financiero || 'sin_revisar') !== 'facturable') continue;
+      const pr = projMap[t.project_id];
+      facturable += _toUsdEquiv(parseFloat(t.monto || 0), (pr && pr.moneda) || 'USD') || 0;
+    }
+
+    const comisionesPlat = Math.max(0, cobradoBruto - cobrado); // comisión real por cobro (bruto − neto)
+    // Solo lo DISPONIBLE entra en la base (lo "en liberación" no se distribuye)
+    const cobradoDisp = cobrado - enLiberacion;
+    // Gastos / Caja: gastos pagados desde el cobro y aportes a caja desde el cobro reducen la base distribuible
+    const { gastosCobro, aporteCobro } = _gxBaseAdjust(bounds);
+    const baseDistribuible = cobradoDisp - gastosCobro - aporteCobro;
+    const ajusteGx = gastosCobro + aporteCobro;
+    const impuestos = baseDistribuible * pct(cfg.impuesto_pct);
+    const reserva   = baseDistribuible * pct(cfg.reserva_pct);
+    const costosOp  = _toUsdEquiv(parseFloat(cfg.costos_operativos || 0), cfg.moneda_principal || 'USD') || 0;
+    const equipo    = _rsEquipoFijoUsd(_dsMembers, _dsPeriod, _dsRangeFrom, _dsRangeTo);
+    const deducciones = impuestos + reserva + costosOp;
+    const utilAntes   = baseDistribuible - reserva - costosOp - equipo;  // sobre la BASE DISTRIBUIBLE
+    const utilDespues = utilAntes - impuestos;
+
+    const per = _dsPeriod;
+    const periodBar = `
+      <div class="fin-rs-filters">
+        <div class="fin-rs-period">
+          <span class="fin-period-lbl">Período:</span>
+          <button class="an-period${per === 'semana' ? ' an-period--on' : ''}" data-dsperiod="semana" onclick="FinanceModule.setDsPeriod('semana')">Semana</button>
+          <button class="an-period${per === 'mes' ? ' an-period--on' : ''}" data-dsperiod="mes" onclick="FinanceModule.setDsPeriod('mes')">Mes</button>
+          <button class="an-period${per === 'rango' ? ' an-period--on' : ''}" data-dsperiod="rango" onclick="FinanceModule.setDsPeriod('rango')">Rango</button>
+          <span id="fin-ds-range" class="fin-range-inputs" style="display:${per === 'rango' ? 'inline-flex' : 'none'}">
+            <input type="date" class="form-input fin-range-input" id="fin-ds-from" value="${_dsRangeFrom || ''}" onchange="FinanceModule.applyDsRange()">
+            <span class="fin-range-sep">a</span>
+            <input type="date" class="form-input fin-range-input" id="fin-ds-to" value="${_dsRangeTo || ''}" onchange="FinanceModule.applyDsRange()">
+          </span>
+        </div>
+      </div>`;
+
+    const cards = `
+      <div class="fin-rs-grid" style="margin-top:18px">
+        ${_dsCard('Neto recibido', m0(cobrado), 'green', `${_periodLabel(_dsPeriod, _dsRangeFrom, _dsRangeTo)}${ajusteGx > 0 ? ` · base ${m0(baseDistribuible)}` : ''}${comisionesPlat > 0 ? ` · ${m0(comisionesPlat)} comis.` : ''}`)}
+        ${_dsCard('Deducciones', m0(deducciones), 'amber', 'Impuestos, reserva, costos op.')}
+        ${_dsCard('Costos equipo', m0(equipo), 'blue', 'Sueldos fijos del período')}
+        ${_dsCard('Utilidad distribuible', m0(utilDespues), utilDespues >= 0 ? 'green' : 'red', 'Después de impuestos')}
+      </div>`;
+
+    const wfLine = (lbl, val, cls = '') => `<div class="fin-ds-wf-row ${cls}"><span>${lbl}</span><span>${val}</span></div>`;
+    const waterfall = `
+      <div class="fin-ds-block">
+        <h3 class="fin-ds-h">Cascada del período</h3>
+        <div class="fin-ds-wf">
+          ${wfLine('Ingreso bruto cobrado', m2(cobradoBruto), 'fin-ds-wf-row--base')}
+          ${wfLine('− Comisiones de plataforma', '−' + m2(comisionesPlat))}
+          ${wfLine('= Neto recibido', m2(cobrado), 'fin-ds-wf-row--sub')}
+          ${enLiberacion > 0 ? wfLine('− En liberación (no disponible)', '−' + m2(enLiberacion)) : ''}
+          ${enLiberacion > 0 ? wfLine('= Neto disponible', m2(cobradoDisp), 'fin-ds-wf-row--sub') : ''}
+          ${ajusteGx > 0 ? wfLine('− Gastos operativos (del cobro)', '−' + m2(gastosCobro)) : ''}
+          ${ajusteGx > 0 ? wfLine('− Aporte manual a caja', '−' + m2(aporteCobro)) : ''}
+          ${(enLiberacion > 0 || ajusteGx > 0) ? wfLine('= Base distribuible', m2(baseDistribuible), 'fin-ds-wf-row--sub') : ''}
+          ${wfLine('− Costos operativos', '−' + m2(costosOp))}
+          ${wfLine(`− Reserva de caja (${parseFloat(cfg.reserva_pct || 0)}%)`, '−' + m2(reserva))}
+          ${wfLine('− Equipo fijo', '−' + m2(equipo))}
+          ${wfLine('= Utilidad antes de impuestos', m2(utilAntes), 'fin-ds-wf-row--sub')}
+          ${wfLine(`− Impuestos (${parseFloat(cfg.impuesto_pct || 0)}%)`, '−' + m2(impuestos))}
+          ${wfLine('= Utilidad distribuible', m2(utilDespues), 'fin-ds-wf-row--total')}
+        </div>
+      </div>`;
+
+    const socios = _dsMembers.filter(m => m.es_socio && parseFloat(m.socio_pct || 0) > 0);
+    let sociosBlock;
+    if (!socios.length) {
+      sociosBlock = `<div class="fin-ds-block"><h3 class="fin-ds-h">Socios</h3><p class="fin-ds-note">No hay socios configurados. Márcalos en Configuración → Socios y equipo.</p></div>`;
+    } else {
+      const totalPct = socios.reduce((s, m) => s + parseFloat(m.socio_pct || 0), 0);
+      const warn = Math.round(totalPct) !== 100 ? `<span class="fin-cfg-warn"> · suma ${totalPct}% (≠100%)</span>` : '';
+      const rows = socios.map(m => {
+        const p = pct(m.socio_pct);
+        const antes = p * utilAntes;
+        const desp  = p * utilDespues;
+        const aplicado = m.socio_regla === 'antes' ? antes : desp;
+        const abonado = _dsAbonado(m.member_id, bounds);
+        const pendiente = aplicado - abonado;
+        const antesCls = m.socio_regla === 'antes' ? ' fin-ds-snum--pay' : '';
+        const despCls  = m.socio_regla !== 'antes' ? ' fin-ds-snum--pay' : '';
+        return `
+          <div class="fin-ds-srow">
+            <span class="fin-ds-sname">${esc(m.nombre)}</span>
+            <span class="fin-ds-spct">${parseFloat(m.socio_pct || 0)}%</span>
+            <span class="fin-ds-snum${antesCls}">${m2(antes)}</span>
+            <span class="fin-ds-snum${despCls}">${m2(desp)}</span>
+            <span class="fin-ds-snum">${m2(abonado)}</span>
+            <span class="fin-ds-snum${pendiente > 0.01 ? ' fin-ds-snum--pend' : ''}">${m2(pendiente)}</span>
+            <span class="fin-ds-sact"><button class="btn btn--ghost btn--xs" onclick="FinanceModule.registrarPagoSocio(${m.member_id}, ${pendiente.toFixed(2)})">Registrar</button></span>
+          </div>`;
+      }).join('');
+      sociosBlock = `
+        <div class="fin-ds-block">
+          <h3 class="fin-ds-h">Socios <span class="fin-ds-h-sub">${socios.length} · la regla de cada socio resalta su monto a pagar${warn}</span></h3>
+          <div class="fin-ds-stable">
+            <div class="fin-ds-shdr"><span>Socio</span><span>%</span><span>Antes imp.</span><span>Después imp.</span><span>Abonado</span><span>Pendiente</span><span></span></div>
+            ${rows}
+          </div>
+        </div>`;
+    }
+
+    const equipoMembers = _dsMembers.filter(m => parseFloat(m.monto_pago || 0) > 0);
+    let equipoBlock;
+    if (!equipoMembers.length) {
+      equipoBlock = `<div class="fin-ds-block"><h3 class="fin-ds-h">Equipo</h3><p class="fin-ds-note">No hay pagos de equipo configurados.</p></div>`;
+    } else {
+      const tipoLbl = { sueldo_mensual: 'Sueldo mensual', sueldo_semanal: 'Sueldo semanal', por_proyecto: 'Por proyecto', comision: 'Comisión', manual: 'Manual' };
+      const rows = equipoMembers.map(m => {
+        const fixed = m.tipo_pago === 'sueldo_mensual' || m.tipo_pago === 'sueldo_semanal';
+        const monto = fixed ? _proratedSalaryUsd(m, _dsPeriod, _dsRangeFrom, _dsRangeTo)
+                            : (_toUsdEquiv(parseFloat(m.monto_pago || 0), m.moneda_pago || 'USD') || 0);
+        return `
+          <div class="fin-ds-erow">
+            <span class="fin-ds-ename">${esc(m.nombre)}</span>
+            <span class="fin-ds-etipo">${tipoLbl[m.tipo_pago] || m.tipo_pago}</span>
+            <span class="fin-ds-enum">${m2(monto)}${fixed ? '' : ' <span class="fin-ds-var">(var.)</span>'}</span>
+          </div>`;
+      }).join('');
+      equipoBlock = `
+        <div class="fin-ds-block">
+          <h3 class="fin-ds-h">Equipo <span class="fin-ds-h-sub">pagos del período</span></h3>
+          <div class="fin-ds-etable">
+            <div class="fin-ds-ehdr"><span>Miembro</span><span>Tipo de pago</span><span>Monto período</span></div>
+            ${rows}
+          </div>
+        </div>`;
+    }
+
+    const note = `<p class="fin-rs-note">Cifras en equivalente USD aproximado. Los abonos reales y el pendiente por pagar a cada persona se gestionan en <b>Pagos internos</b>.</p>`;
+    const libWarn = enLiberacion > 0
+      ? `<div class="fin-ds-warn">⚠ Hay <b>${m0(enLiberacion)}</b> en cobros registrados que aún no están disponibles (en liberación). No se incluyen en la base distribuible.</div>`
+      : '';
+
+    body.innerHTML = periodBar + libWarn + cards + waterfall + sociosBlock + equipoBlock + note;
+  }
+
+  function setDsPeriod(p) {
+    _dsPeriod = p;
+    _renderDistribucion();
+  }
+
+  function applyDsRange() {
+    _dsRangeFrom = $('fin-ds-from')?.value || null;
+    _dsRangeTo   = $('fin-ds-to')?.value   || null;
+    _renderDistribucion();
+  }
+
+  function registrarPagoSocio(memberId, pendiente) {
+    const m = _dsMembers.find(x => x.member_id === memberId);
+    openPagoModal(null, {
+      member_id: memberId,
+      persona: m ? m.nombre : '',
+      tipo: 'socio',
+      monto: pendiente > 0 ? Math.round(pendiente * 100) / 100 : '',
+      estado: 'pagado',
+      fecha_pago: new Date().toISOString().split('T')[0],
+    });
+  }
+
+  // ── Pagos internos ─────────────────────────────────────────────────
+
+  async function _loadPagos() {
+    const body = $('fin-pagos-body');
+    if (!body) return;
+    body.innerHTML = '<div class="clients-loading"><div class="clients-spin"></div><span>Cargando pagos internos…</span></div>';
+    try {
+      const [piRes, tRes] = await Promise.all([
+        apiFetch(`${API}/mgmt/pagos-internos`),
+        apiFetch(`${API}/mgmt/team`),
+      ]);
+      _piList    = piRes.ok ? await piRes.json() : [];
+      _piMembers = tRes.ok  ? await tRes.json()  : [];
+      _piLoaded = true;
+      _renderPagos();
+    } catch (e) {
+      console.error('[finance] pagos load error:', e);
+      body.innerHTML = '<div class="fin-placeholder"><p class="fin-placeholder__s" style="color:var(--err)">Error al cargar los pagos internos.</p></div>';
+    }
+  }
+
+  function _piEstadoMeta(v) { return FIN_PI_ESTADOS.find(x => x[0] === v) || FIN_PI_ESTADOS[0]; }
+  function _piTipoLabel(v)  { const t = FIN_PI_TIPOS.find(x => x[0] === v); return t ? t[1] : v; }
+
+  function _renderPagos() {
+    const body = $('fin-pagos-body');
+    if (!body) return;
+    const m0 = v => _money(v, 'USD', 0);
+
+    let pend = 0, prog = 0, pag = 0;
+    _piList.forEach(p => {
+      const usd = _toUsdEquiv(parseFloat(p.monto || 0), p.moneda || 'USD') || 0;
+      if (p.estado === 'pendiente') pend += usd;
+      else if (p.estado === 'programado') prog += usd;
+      else if (p.estado === 'pagado') pag += usd;
+    });
+
+    const filtered = _piFilter ? _piList.filter(p => p.estado === _piFilter) : _piList;
+    const pill = (f, lbl) => `<button class="filter-pill${_piFilter === f ? ' active' : ''}" onclick="FinanceModule.setPiFilter('${f}')">${lbl}</button>`;
+
+    const head = `
+      <div class="fin-panel-actions">
+        <button class="btn btn--primary btn--sm" onclick="FinanceModule.openPagoModal()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Nuevo pago interno
+        </button>
+      </div>
+      <div class="fin-rs-grid" style="margin-top:8px;grid-template-columns:repeat(3,minmax(0,1fr))">
+        ${_dsCard('Pendiente', m0(pend), 'amber', 'Por abonar')}
+        ${_dsCard('Programado', m0(prog), 'blue', 'Agendado')}
+        ${_dsCard('Pagado', m0(pag), 'green', 'Abonado (histórico)')}
+      </div>
+      <div class="clients-filters" style="margin-top:16px">
+        ${pill('', 'Todos')}${pill('pendiente', 'Pendientes')}${pill('programado', 'Programados')}${pill('pagado', 'Pagados')}${pill('observado', 'Observados')}
+      </div>`;
+
+    if (!filtered.length) {
+      body.innerHTML = head + `<div class="fin-placeholder" style="padding:40px 12px"><p class="fin-placeholder__s">No hay pagos internos${_piFilter ? ' en este filtro' : ' registrados'}. Usa "Nuevo pago interno".</p></div>`;
+      return;
+    }
+
+    const rows = filtered.map(p => _piRowHtml(p)).join('');
+    body.innerHTML = head + `
+      <div class="fin-pi-table">
+        <div class="fin-pi-hdr"><span>Persona</span><span>Tipo</span><span>Período</span><span>Monto</span><span>Fecha</span><span>Estado</span><span></span></div>
+        ${rows}
+      </div>`;
+  }
+
+  function _piRowHtml(p) {
+    const [, estLbl, estColor] = _piEstadoMeta(p.estado);
+    const fecha = p.fecha_pago ? new Date(String(p.fecha_pago).split('T')[0] + 'T00:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: 'short' }) : '—';
+    const perLbl = { semana: 'Semana', mes: 'Mes', proyecto: 'Proyecto' }[p.periodo_tipo] || p.periodo_tipo;
+    return `
+      <div class="fin-pi-row" onclick="FinanceModule.openPagoModal(${p.id})">
+        <span class="fin-pi-persona">${esc(p.persona || p.member_nombre || '—')}</span>
+        <span class="fin-pi-tipo">${_piTipoLabel(p.tipo)}</span>
+        <span class="fin-pi-per">${perLbl}${p.periodo_ref ? ' · ' + esc(p.periodo_ref) : ''}</span>
+        <span class="fin-pi-monto">${_money(parseFloat(p.monto || 0), p.moneda || 'USD', 2)}</span>
+        <span class="fin-pi-fecha">${fecha}</span>
+        <span><span class="fin-pi-badge" style="background:${estColor}22;color:${estColor}">${estLbl}</span></span>
+        <span class="fin-pi-actions">
+          <button class="client-action-btn client-action-btn--danger" title="Eliminar" onclick="event.stopPropagation();FinanceModule.deletePago(${p.id})">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+          </button>
+        </span>
+      </div>`;
+  }
+
+  function setPiFilter(f) { _piFilter = f; _renderPagos(); }
+
+  function openPagoModal(id = null, prefill = null) {
+    _piEditId = id;
+    const p = id ? _piList.find(x => x.id === id) : null;
+    const data = p || prefill || {};
+    const memberList = _piMembers.length ? _piMembers.map(m => ({ id: m.id, nombre: m.nombre }))
+                                         : _dsMembers.map(m => ({ id: m.member_id, nombre: m.nombre }));
+    const memberOpts = '<option value="">— Sin vincular —</option>' +
+      memberList.map(m => `<option value="${m.id}"${String(data.member_id) === String(m.id) ? ' selected' : ''}>${esc(m.nombre)}</option>`).join('');
+    const tipoOpts   = FIN_PI_TIPOS.map(([v, l]) => `<option value="${v}"${(data.tipo || 'equipo') === v ? ' selected' : ''}>${l}</option>`).join('');
+    const estadoOpts = FIN_PI_ESTADOS.map(([v, l]) => `<option value="${v}"${(data.estado || 'pendiente') === v ? ' selected' : ''}>${l}</option>`).join('');
+    const curOpts    = FIN_CURRENCIES.map(x => `<option value="${x}"${(data.moneda || 'USD') === x ? ' selected' : ''}>${x}</option>`).join('');
+    const perOpts    = [['mes', 'Mes'], ['semana', 'Semana'], ['proyecto', 'Proyecto']].map(([v, l]) => `<option value="${v}"${(data.periodo_tipo || 'mes') === v ? ' selected' : ''}>${l}</option>`).join('');
+
+    document.getElementById('fin-pi-modal')?.remove();
+    const modal = document.createElement('div');
+    modal.id = 'fin-pi-modal';
+    modal.className = 'fin-pi-backdrop';
+    modal.onclick = e => { if (e.target === modal) closePagoModal(); };
+    modal.innerHTML = `
+      <div class="fin-pi-box">
+        <div class="fin-pi-box__hd">
+          <h3>${id ? 'Editar pago interno' : 'Nuevo pago interno'}</h3>
+          <button class="fin-pi-x" onclick="FinanceModule.closePagoModal()" title="Cerrar">✕</button>
+        </div>
+        <div class="fin-pi-form">
+          <label class="fin-cfg-field"><span class="fin-cfg-lbl">Miembro (opcional)</span>
+            <select class="form-input" id="pi-member" onchange="FinanceModule._piOnMember()">${memberOpts}</select></label>
+          <label class="fin-cfg-field"><span class="fin-cfg-lbl">Persona *</span>
+            <input class="form-input" id="pi-persona" value="${esc(data.persona || '')}" placeholder="Nombre de la persona"></label>
+          <label class="fin-cfg-field"><span class="fin-cfg-lbl">Tipo</span>
+            <select class="form-input" id="pi-tipo">${tipoOpts}</select></label>
+          <label class="fin-cfg-field"><span class="fin-cfg-lbl">Período</span>
+            <select class="form-input" id="pi-pertipo">${perOpts}</select></label>
+          <label class="fin-cfg-field"><span class="fin-cfg-lbl">Ref. del período</span>
+            <input class="form-input" id="pi-perref" value="${esc(data.periodo_ref || '')}" placeholder="Ej: Junio 2026"></label>
+          <label class="fin-cfg-field"><span class="fin-cfg-lbl">Monto</span>
+            <input class="form-input" type="number" id="pi-monto" value="${data.monto ?? ''}" min="0" step="0.01"></label>
+          <label class="fin-cfg-field"><span class="fin-cfg-lbl">Moneda</span>
+            <select class="form-input" id="pi-moneda">${curOpts}</select></label>
+          <label class="fin-cfg-field"><span class="fin-cfg-lbl">Fecha de pago</span>
+            <input class="form-input" type="date" id="pi-fecha" value="${data.fecha_pago ? String(data.fecha_pago).split('T')[0] : ''}"></label>
+          <label class="fin-cfg-field"><span class="fin-cfg-lbl">Método</span>
+            <input class="form-input" id="pi-metodo" value="${esc(data.metodo || '')}" placeholder="Transferencia, efectivo…"></label>
+          <label class="fin-cfg-field"><span class="fin-cfg-lbl">Referencia</span>
+            <input class="form-input" id="pi-ref" value="${esc(data.referencia || '')}"></label>
+          <label class="fin-cfg-field"><span class="fin-cfg-lbl">Estado</span>
+            <select class="form-input" id="pi-estado">${estadoOpts}</select></label>
+          <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Nota</span>
+            <textarea class="form-input" id="pi-nota" rows="2">${esc(data.nota || '')}</textarea></label>
+        </div>
+        <div class="fin-pi-box__ft">
+          <span class="fin-cfg-hint" id="pi-hint"></span>
+          <div class="fin-pi-ft-btns">
+            ${id ? `<button class="btn btn--ghost btn--sm fin-pi-del" onclick="FinanceModule.deletePago(${id})">Eliminar</button>` : ''}
+            <button class="btn btn--ghost btn--sm" onclick="FinanceModule.closePagoModal()">Cancelar</button>
+            <button class="btn btn--primary btn--sm" onclick="FinanceModule.savePago()">${id ? 'Guardar' : 'Registrar'}</button>
+          </div>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    setTimeout(() => $('pi-persona')?.focus(), 100);
+  }
+
+  function _piOnMember() {
+    const sel = $('pi-member');
+    if (!sel || !sel.value) return;
+    const opt = sel.options[sel.selectedIndex];
+    const personaEl = $('pi-persona');
+    if (personaEl && !personaEl.value.trim()) personaEl.value = opt.textContent;
+  }
+
+  function closePagoModal() {
+    document.getElementById('fin-pi-modal')?.remove();
+    _piEditId = null;
+  }
+
+  async function savePago() {
+    const persona = $('pi-persona')?.value.trim() || '';
+    const hint = $('pi-hint');
+    if (!persona) { if (hint) { hint.textContent = 'Indica la persona.'; hint.className = 'fin-cfg-hint fin-cfg-hint--err'; } return; }
+    const data = {
+      member_id:    $('pi-member')?.value ? parseInt($('pi-member').value) : null,
+      persona,
+      tipo:         $('pi-tipo')?.value || 'equipo',
+      periodo_tipo: $('pi-pertipo')?.value || 'mes',
+      periodo_ref:  $('pi-perref')?.value.trim() || '',
+      monto:        parseFloat($('pi-monto')?.value) || 0,
+      moneda:       $('pi-moneda')?.value || 'USD',
+      fecha_pago:   $('pi-fecha')?.value || null,
+      metodo:       $('pi-metodo')?.value.trim() || '',
+      referencia:   $('pi-ref')?.value.trim() || '',
+      nota:         $('pi-nota')?.value.trim() || '',
+      estado:       $('pi-estado')?.value || 'pendiente',
+    };
+    if (hint) { hint.textContent = 'Guardando…'; hint.className = 'fin-cfg-hint'; }
+    try {
+      const url = `${API}/mgmt/pagos-internos${_piEditId ? '/' + _piEditId : ''}`;
+      const res = await apiFetch(url, { method: _piEditId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+      if (!res.ok) throw new Error(await res.text());
+      closePagoModal();
+      _rsLoaded = false; _dsLoaded = false;  // dependent views stale
+      if (_piLoaded) await _loadPagos();
+      if (_currentTab === 'distribucion') _loadDistribucion();
+      else if (_currentTab === 'resumen') _loadResumen();
+    } catch (e) {
+      console.error('[finance] savePago error:', e);
+      if (hint) { hint.textContent = 'Error al guardar'; hint.className = 'fin-cfg-hint fin-cfg-hint--err'; }
+    }
+  }
+
+  async function deletePago(id) {
+    if (!confirm('¿Eliminar este pago interno? No se puede deshacer.')) return;
+    try {
+      const res = await apiFetch(`${API}/mgmt/pagos-internos/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(await res.text());
+      closePagoModal();
+      _rsLoaded = false; _dsLoaded = false;
+      if (_piLoaded) await _loadPagos();
+      if (_currentTab === 'distribucion') _loadDistribucion();
+      else if (_currentTab === 'resumen') _loadResumen();
+    } catch (e) {
+      console.error('[finance] deletePago error:', e);
+      alert('Error al eliminar el pago interno.');
+    }
+  }
+
+  return { load, filter, setFilter, setPeriod, applyRange, render, openDrawer, closeDrawer, save, confirmDelete, onClientChange, onProjectChange, calcNeto, onCanalChange, onEstadoChange, exportPdf, togglePayDisp,
+    setTab, saveConfig, saveMemberConfig, _toggleSocioRow, repartirSociosIgual,
+    setResPeriod, applyResRange, setResFilter,
+    cnToggleProject, setCnFilter, setTaskEstadoFin,
+    cnEditProjValor, cnSaveProjValor, cnEditTaskMonto, cnSaveTaskMonto, _cnEditKey, cnDistribuir,
+    cnEditComision, cnComRecalc, cnSaveComision, cnCloseComision,
+    cnOpenCobroModal, cnCobroOnCanal, cnCobroOnMoneda, cnCobroRecalc, closeCobroModal, cnSaveCobro,
+    setDsPeriod, applyDsRange, registrarPagoSocio,
+    setPiFilter, openPagoModal, _piOnMember, closePagoModal, savePago, deletePago,
+    setGxPeriod, applyGxRange, openMovModal, closeMovModal, saveMov, gxSetEstado, gxDelete, gxMovUsd, gxMovWarn };
 })();
 
 // =================================================================
@@ -1203,7 +3981,6 @@ const FxRatesModule = (() => {
       if (!res.ok) throw new Error('Error al guardar');
       window._fxRates = rates;
       close();
-      AnalyticsModule.load();
       FinanceModule.load();
       DashboardModule.load();
     } catch (e) { alert('Error: ' + e.message); }
@@ -1232,6 +4009,15 @@ const DashboardModule = (() => {
     'Lo que se mide, se mejora.',
     'Haz hoy lo que tu yo de mañana te agradecerá.',
   ];
+
+  let _allTasksCache  = [];
+  let _expandedTaskId = null;
+  // Edición inline de la tarjeta expandida (quick-edit premium)
+  let _expTeam = null;                 // cache de /mgmt/team para el selector de responsable
+  let _expCalY = 0, _expCalM = 0;      // mes visible del calendario
+  let _expCalTask = null, _expCalSel = null;
+  let _expCalField = 'deadline';        // 'deadline' (fin) | 'fecha_inicio' (inicio del rango)
+  let _expToastT = null;
 
   function _myName() {
     return window._authUser?.memberNombre || window._authUser?.name || '';
@@ -1338,6 +4124,15 @@ const DashboardModule = (() => {
   function openAvatarPicker() {
     if ($('av-picker-modal')) return;
     const saved = localStorage.getItem('kw_avatar') || '';
+    const u = window._authUser || {};
+    const name = u.memberNombre || u.name || '';
+    const photoUrl = u.avatar || '';
+    const ini = name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() || '?';
+    const hue = name ? (name.charCodeAt(0) * 47 % 360) : 30;
+    const defPic = photoUrl
+      ? `<img src="${photoUrl}" alt="${esc(name)}" onerror="this.style.display='none';this.parentElement.textContent='${ini}'">`
+      : ini;
+    const defStyle = photoUrl ? '' : `background:hsl(${hue},40%,88%);color:hsl(${hue},50%,32%)`;
     const modal = document.createElement('div');
     modal.id = 'av-picker-modal';
     modal.className = 'av-picker-backdrop';
@@ -1348,6 +4143,11 @@ const DashboardModule = (() => {
           <span class="av-picker-title">Elige tu avatar</span>
           <button class="av-picker-close" onclick="DashboardModule.closeAvatarPicker()">✕</button>
         </div>
+        <button class="av-default${saved ? '' : ' av-default--on'}" onclick="DashboardModule.resetAvatar()" title="Volver a la foto de tu cuenta">
+          <span class="av-default__pic" style="${defStyle}">${defPic}</span>
+          <span class="av-default__txt">Usar la foto de mi cuenta</span>
+          <span class="av-default__chk">${saved ? '' : '✓'}</span>
+        </button>
         <div class="av-picker-tabs">
           <button class="av-ptab av-ptab--on" onclick="DashboardModule._avSwitchTab('combat',this)">⚔️ Combate</button>
           <button class="av-ptab" onclick="DashboardModule._avSwitchTab('robo',this)">🤖 Robots</button>
@@ -1390,28 +4190,48 @@ const DashboardModule = (() => {
     if (el) el.remove();
   }
 
+  // Vuelve al avatar por defecto de la cuenta: borra el override local y re-renderiza.
+  function resetAvatar() {
+    localStorage.removeItem('kw_avatar');
+    _applyDefaultAvatar();
+    closeAvatarPicker();
+  }
+
+  // Aplica el avatar por defecto: foto de la cuenta (u.avatar, p. ej. la de Google) o iniciales.
+  function _applyDefaultAvatar() {
+    const avatarEl = $('d3-avatar');
+    if (!avatarEl) return;
+    const u = window._authUser || {};
+    const name = u.memberNombre || u.name || '';
+    const photoUrl = u.avatar || '';
+    const ini = name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() || '?';
+    const hue = name ? (name.charCodeAt(0) * 47 % 360) : 30;
+    avatarEl.className = 'd3-avatar';   // quita el modificador --character si venía de un avatar pixel
+    avatarEl.style.color = '';
+    avatarEl.textContent = '';
+    if (photoUrl) {
+      avatarEl.style.background = '';
+      avatarEl.innerHTML = `<img src="${photoUrl}" alt="${esc(name)}" onerror="this.parentElement.style.background='hsl(${hue},40%,88%)';this.parentElement.style.color='hsl(${hue},50%,32%)';this.parentElement.textContent='${ini}'">`;
+    } else {
+      avatarEl.style.background = `hsl(${hue},40%,88%)`;
+      avatarEl.style.color = `hsl(${hue},50%,32%)`;
+      avatarEl.textContent = ini;
+    }
+  }
+
   // ── Hero render ───────────────────────────────────────────────
   function _renderHero(todayCount, overdueCount, projectsCount, alertCount) {
     const u = window._authUser || {};
     const name     = u.memberNombre || u.name || '';
-    const photoUrl = u.avatar || '';
     const rolLabel = u.isOwner ? 'Propietaria · Admin' : (u.memberRol === 'admin' ? 'Administrador' : 'Miembro');
 
     const avatarEl = $('d3-avatar');
     if (avatarEl) {
       const savedAvatar = localStorage.getItem('kw_avatar');
-      if (savedAvatar) {
+      if (savedAvatar && _allAvatars().some(a => a.id === savedAvatar)) {
         _applyAvatarById(savedAvatar);
-      } else if (photoUrl) {
-        const ini = name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() || '?';
-        const hue = name.charCodeAt(0) * 47 % 360;
-        avatarEl.innerHTML = `<img src="${photoUrl}" alt="${esc(name)}" onerror="this.parentElement.style.background='hsl(${hue},40%,88%)';this.parentElement.style.color='hsl(${hue},50%,32%)';this.parentElement.textContent='${ini}'">`;
       } else {
-        const ini = name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() || '?';
-        const hue = name ? (name.charCodeAt(0) * 47 % 360) : 30;
-        avatarEl.style.background = `hsl(${hue},40%,88%)`;
-        avatarEl.style.color = `hsl(${hue},50%,32%)`;
-        avatarEl.textContent = ini;
+        _applyDefaultAvatar();   // foto de la cuenta (u.avatar) o iniciales
       }
     }
     const nameEl = $('d3-profile-name');
@@ -1434,15 +4254,17 @@ const DashboardModule = (() => {
     bodyEl.classList.add('hidden');
 
     try {
-      const [dashRes, clientsRes] = await Promise.all([
+      const [dashRes, clientsRes, tasksRes] = await Promise.all([
         apiFetch(`${API}/mgmt/dashboard`),
         apiFetch(`${API}/mgmt/clients`),
+        apiFetch(`${API}/mgmt/tasks`),
       ]);
       if (dashRes.status === 401) { location.reload(); return; }
       if (!dashRes.ok) throw new Error(await dashRes.text());
 
-      const dash    = await dashRes.json();
-      const clients = clientsRes.ok ? await clientsRes.json() : [];
+      const dash     = await dashRes.json();
+      const clients  = clientsRes.ok ? await clientsRes.json() : [];
+      const allTasks = tasksRes.ok   ? await tasksRes.json()   : [];
 
       const tareasCount    = dash.tareas_count    || 0;
       const todayTasks     = dash.tareas_hoy      || [];
@@ -1450,8 +4272,9 @@ const DashboardModule = (() => {
       const proyectosCount = dash.proyectos_count || 0;
 
       _renderHero(tareasCount, proyectosCount, 0, 0);
-      _renderTasks(tareasCount, todayTasks, overdue);
-      AnalyticsModule.load();
+      _renderTasks(tareasCount, todayTasks, overdue, allTasks);
+      _renderOppTasks();
+      _renderHours();
 
       loadEl.classList.add('hidden');
       bodyEl.classList.remove('hidden');
@@ -1461,16 +4284,457 @@ const DashboardModule = (() => {
     }
   }
 
-  function _renderTasks(count, todayTasks, overdue) {
+  function _subtaskRow(t, isOverdue) {
+    const dl = t.deadline
+      ? new Date(String(t.deadline).split('T')[0] + 'T00:00:00')
+          .toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })
+      : null;
+    const estado = t.estado || 'pendiente';
+    return `<div class="d3-task-row d3-task-row--sub${isOverdue ? ' d3-task-row--overdue' : ''}" data-task-id="${t.id}" onclick="DashboardModule.toggleExpand(${t.id})">
+      <button class="d3-status-btn d3-status-btn--${(_STATUS_CFG[estado]||_STATUS_CFG.pendiente).dot}"
+              onclick="event.stopPropagation();DashboardModule.openStatusMenu(event,${t.id})"
+              title="Cambiar estado">${_statusSvg(estado)}</button>
+      <div class="d3-task-body">
+        <span class="d3-task-name d3-task-name--sub${isOverdue ? ' d3-task-name--overdue' : ''}">${esc(t.titulo)}</span>
+      </div>
+      ${dl ? `<span class="d3-task-date${isOverdue ? ' d3-task-date--overdue' : ''}">${dl}</span>` : ''}
+      <button class="d3-play-btn" data-timer-task="${t.id}" title="Iniciar timer"
+              onclick="event.stopPropagation();TimerModule.toggleTask(${t.id})">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      </button>
+      <span class="task-elapsed" data-timer-display="${t.id}" hidden></span>
+    </div>`;
+  }
+
+  // ── Working Hours (seguimiento personal del día · cada miembro ve el suyo) ──
+  let _hrsTimer    = null;
+  let _hrsRunStart = null;   // Date si hay un timer corriendo
+  let _hrsBaseSec  = 0;      // segundos trabajados hoy SIN el timer activo
+  let _hrsCtx      = null;   // {taskId, kind, titulo, ctx, ctxLabel, cliente} de la tarea en curso
+  let _hrsPaused   = false;
+  let _hrsRunEntry = null;   // entry corriendo (fallback de contexto tras recargar)
+  const HRS_WORKDAY = 8 * 3600;
+  const HRS_START_H = 8, HRS_END_H = 17;   // 8 AM – 5 PM
+
+  function _fmtHrs(sec) {
+    const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60);
+    return h > 0 ? `${h} h ${m} min` : `${m} min`;
+  }
+  function _fmtClock(sec) {
+    const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  }
+  function _hrsMe() { return (window._authUser?.memberNombre || window._authUser?.name || '').toLowerCase(); }
+  function _setHrsCtx(ctx) { _hrsCtx = ctx; _hrsPaused = false; _renderHours(); }
+
+  async function _renderHours() {
+    const el = $('dash2-hours');
+    if (!el) return;
+    let entries = [], daily = [];
+    try {
+      const dStart = new Date(Date.now() - 34 * 86400000).toISOString();
+      const _dayStart = new Date(); _dayStart.setHours(0, 0, 0, 0);   // hoy 00:00 local (UTC-5)
+      const [tRes, dRes] = await Promise.all([
+        apiFetch(`${API}/timer/entries?start=${_dayStart.toISOString()}&end=${new Date().toISOString()}`),  // superset de /timer/today: incluye tarifa/moneda/tipo
+        apiFetch(`${API}/timer/daily?start=${dStart}&end=${new Date().toISOString()}&active_only=1`),
+      ]);
+      if (tRes.status === 401) return;
+      if (tRes.ok) entries = await tRes.json();
+      if (dRes.ok) daily = await dRes.json();
+    } catch (e) { console.error('[dashboard] hours:', e); el.style.display = 'none'; return; }
+    el.style.display = '';
+
+    const now = new Date();
+    _hrsBaseSec = 0; _hrsRunStart = null; _hrsRunEntry = null;
+
+    for (const e of entries) {
+      // "Horas de trabajo" = trabajo ACTIVO (timer manual / apps del agente). La navegación web
+      // de la extensión NO cuenta como horas trabajadas (se ve en "Apps y websites usados").
+      if ((e.activity_type || 'active_work') === 'website_usage') continue;
+      const s  = new Date(e.started_at);
+      const running = !e.ended_at;
+      const en = running ? now : new Date(e.ended_at);
+      if (running) { _hrsRunStart = s; _hrsRunEntry = e; }
+      else _hrsBaseSec += (e.duration_s != null ? +e.duration_s : Math.max(0, Math.round((en - s) / 1000)));
+    }
+    const running = !!_hrsRunStart;
+    const paused  = !running && _hrsPaused && !!_hrsCtx;
+    const totalSec = _hrsBaseSec + (running ? Math.round((now - _hrsRunStart) / 1000) : 0);
+
+    // ── Métricas útiles: Facturable hoy ($) · Esta semana (h) · Foco activo (%) · Racha (días) ──
+    const _num = v => { const n = parseFloat(v); return isFinite(n) ? n : 0; };
+    const _dur = e => e.ended_at ? (+e.duration_s || 0) : Math.max(0, Math.round((now - new Date(e.started_at)) / 1000));
+    const _isoD = d => d.toISOString().split('T')[0];
+    const billByCur = {};
+    let focusAct = 0, focusTot = 0;
+    for (const e of entries) {
+      if ((e.activity_type || 'active_work') === 'website_usage') continue;   // navegación no es hora trabajada
+      const dur = _dur(e);
+      focusTot += dur; focusAct += e.ended_at ? (+e.active_s || 0) : dur;      // el que corre se cuenta activo
+      if (e.tipo_proyecto === 'horas' && _num(e.tarifa_hora) > 0) {
+        const cur = e.moneda || 'USD';
+        billByCur[cur] = (billByCur[cur] || 0) + (dur / 3600) * _num(e.tarifa_hora);
+      }
+    }
+    const _curs = Object.keys(billByCur).sort((a, b) => billByCur[b] - billByCur[a]);
+    const _money = (v, cur) => { try { return new Intl.NumberFormat('es', { style: 'currency', currency: cur, maximumFractionDigits: 0 }).format(v); } catch { return (cur || 'USD') + ' ' + Math.round(v); } };
+    const billStr  = _curs.length ? _money(billByCur[_curs[0]], _curs[0]) + (_curs.length > 1 ? ' +' : '') : '—';
+    const focusPct = focusTot > 0 ? Math.round(focusAct / focusTot * 100) : 0;
+    const _wk = new Date(now); _wk.setDate(_wk.getDate() - ((_wk.getDay() + 6) % 7)); _wk.setHours(0, 0, 0, 0);
+    const _wkKey = _isoD(_wk), _todayKey = _isoD(now);
+    const weekSec = (daily || []).filter(d => d.day >= _wkKey && d.day < _todayKey).reduce((a, d) => a + (+d.duration_s || 0), 0) + totalSec;
+    const weekPct = Math.round(weekSec / (5 * HRS_WORKDAY) * 100);
+    const _daysSet = new Set((daily || []).filter(d => (+d.duration_s || 0) > 0).map(d => d.day));
+    if (totalSec > 0) _daysSet.add(_todayKey);
+    let streak = 0; const _c = new Date(now); _c.setHours(0, 0, 0, 0);
+    if (!_daysSet.has(_isoD(_c))) _c.setDate(_c.getDate() - 1);
+    while (_daysSet.has(_isoD(_c))) { streak++; _c.setDate(_c.getDate() - 1); }
+    const metricsStrip = `<div class="d3-hrs-metrics">
+      <div class="d3-hrs-metric"><div class="d3-hrs-metric__v">${billStr}</div><div class="d3-hrs-metric__l">Facturable hoy</div></div>
+      <div class="d3-hrs-metric"><div class="d3-hrs-metric__v">${_fmtHrs(weekSec)} <span class="d3-hrs-metric__x">${weekPct}%</span></div><div class="d3-hrs-metric__l">Esta semana</div></div>
+      <div class="d3-hrs-metric"><div class="d3-hrs-metric__v">${focusPct}%</div><div class="d3-hrs-metric__l">Foco activo</div></div>
+      <div class="d3-hrs-metric"><div class="d3-hrs-metric__v">${streak}</div><div class="d3-hrs-metric__l">Días seguidos</div></div>
+    </div>`;
+
+    // Heatmap por DÍA: cada cuadro = un día (últimos 35), coloreado por horas trabajadas ese día.
+    const HRS_DAYS = 35;
+    const _MESH = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+    const dayMap = {};
+    for (const d of (daily || [])) dayMap[d.day] = +d.duration_s || 0;
+    const todayKey = new Date().toISOString().split('T')[0];
+    const cells = Array.from({ length: HRS_DAYS }, (_, i) => {
+      const d   = new Date(Date.now() - (HRS_DAYS - 1 - i) * 86400000);
+      const key = d.toISOString().split('T')[0];
+      const sec = dayMap[key] || 0;
+      const h   = sec / 3600;
+      let lvl = 0;
+      if (h > 0)    lvl = 1;
+      if (h >= 2)   lvl = 2;
+      if (h >= 4)   lvl = 3;
+      if (h >= 6.5) lvl = 4;
+      const isToday = key === todayKey;
+      const label = `${d.getUTCDate()} ${_MESH[d.getUTCMonth()]}: ${sec ? _fmtHrs(sec) : 'sin registro'}`;
+      return `<span class="d3-hrs-cell d3-hrs-cell--l${lvl}${isToday ? ' d3-hrs-cell--now' : ''}" title="${label}"></span>`;
+    }).join('');
+
+    const clock = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/></svg>';
+
+    // Bloque de contexto activo (tarea en curso): de _hrsCtx (sesión) o del entry corriendo (tras recargar)
+    let ctxBlock = '';
+    if (running || paused) {
+      const c = _hrsCtx || (_hrsRunEntry ? { titulo: _hrsRunEntry.task_titulo, ctxLabel: _hrsRunEntry.project_nombre, cliente: '' } : null);
+      const titulo   = (c && c.titulo) ? esc(c.titulo) : 'Seguimiento general';
+      const ctxLabel = (c && c.ctxLabel) ? esc(c.ctxLabel) : '';
+      const cliente  = (c && c.cliente)  ? esc(c.cliente)  : '';
+      const elapsed  = running ? Math.round((now - _hrsRunStart) / 1000) : 0;
+      ctxBlock = `<div class="d3-hrs-now${paused ? ' d3-hrs-now--paused' : ''}">
+        <div class="d3-hrs-now__lbl">${paused ? 'En pausa' : 'Trabajando ahora'}</div>
+        <div class="d3-hrs-now__task">${titulo}</div>
+        ${(ctxLabel || cliente) ? `<div class="d3-hrs-now__ctx">${ctxLabel}${ctxLabel && cliente ? ' · ' : ''}${cliente}</div>` : ''}
+        <div class="d3-hrs-now__time" id="dash2-hrs-elapsed">${_fmtClock(elapsed)}</div>
+      </div>`;
+    }
+
+    let actions;
+    if (running) {
+      actions = `<div class="d3-hrs-actions">
+        <button class="d3-hrs-act d3-hrs-act--pause" onclick="DashboardModule.hrsPause()"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>Pausar</button>
+        <button class="d3-hrs-act d3-hrs-act--stop" onclick="DashboardModule.hrsStop()"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>Detener</button>
+        <button class="d3-hrs-changetask" onclick="DashboardModule.hrsChangeTask()">Cambiar tarea</button>
+      </div>`;
+    } else if (paused) {
+      actions = `<div class="d3-hrs-actions">
+        <button class="d3-hrs-act d3-hrs-act--resume" onclick="DashboardModule.hrsResume()"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg>Reanudar</button>
+        <button class="d3-hrs-act d3-hrs-act--stop" onclick="DashboardModule.hrsStop()"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>Detener</button>
+        <button class="d3-hrs-changetask" onclick="DashboardModule.hrsChangeTask()">Cambiar tarea</button>
+      </div>`;
+    } else {
+      actions = `<button class="d3-hrs-btn" onclick="DashboardModule.openTrackPicker()">
+        <span class="d3-hrs-btn__ico"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg></span>Iniciar seguimiento
+      </button>`;
+    }
+
+    el.innerHTML = `
+      <div class="d3-card-header"><span class="d3-card-ico">${clock}</span><span class="d3-card-title">Horas de trabajo</span>${running ? '<span class="d3-hrs-live">● en curso</span>' : (paused ? '<span class="d3-hrs-live d3-hrs-live--paused">⏸ en pausa</span>' : '')}</div>
+      ${ctxBlock}
+      <div class="d3-hrs-body">
+        <div class="d3-hrs-gridwrap">
+          <div class="d3-hrs-grid">${cells}</div>
+          <div class="d3-hrs-cap">Últimos 35 días · cada cuadro = 1 día</div>
+        </div>
+        <div class="d3-hrs-stats">
+          <div class="d3-hrs-total" id="dash2-hrs-total">${_fmtHrs(totalSec)}</div>
+          <div class="d3-hrs-sub">Tiempo trabajado hoy</div>
+          <div class="d3-hrs-pct" id="dash2-hrs-pct">${Math.round(totalSec / HRS_WORKDAY * 100)}%<span> de 8 h</span></div>
+          <div class="d3-hrs-sub">Horario: 8 AM – 5 PM</div>
+        </div>
+      </div>
+      ${metricsStrip}
+      ${actions}`;
+
+    clearInterval(_hrsTimer);
+    if (running) _hrsTimer = setInterval(_hoursTick, 1000);
+  }
+
+  function _hoursTick() {
+    if (!_hrsRunStart) { clearInterval(_hrsTimer); return; }
+    const t = $('dash2-hrs-total');
+    if (!t) { clearInterval(_hrsTimer); return; }
+    const elapsed  = Math.round((Date.now() - _hrsRunStart.getTime()) / 1000);
+    const totalSec = _hrsBaseSec + elapsed;
+    t.textContent = _fmtHrs(totalSec);
+    const p = $('dash2-hrs-pct');
+    if (p) p.innerHTML = `${Math.round(totalSec / HRS_WORKDAY * 100)}%<span> de 8 h</span>`;
+    const el = $('dash2-hrs-elapsed');
+    if (el) el.textContent = _fmtClock(elapsed);
+  }
+
+  // Acciones del estado activo
+  async function hrsStop()  { _hrsPaused = false; _hrsCtx = null; try { await TimerModule.stop(); } catch {} _renderHours(); }
+  async function hrsPause() { _hrsPaused = true;  try { await TimerModule.stop(); } catch {} _renderHours(); }
+  async function hrsResume(){ const c = _hrsCtx; if (!c) { _hrsPaused = false; return _renderHours(); } _hrsPaused = false; try { await TimerModule.start(c.taskId || null, c); } catch {} }
+  async function hrsChangeTask() { _hrsPaused = false; _hrsCtx = null; try { await TimerModule.stop(); } catch {} openTrackPicker(); }
+
+  // ── Modal selector de tarea (premium) ───────────────────────────
+  let _tpTasks = [], _tpOpp = [], _tpSel = null;
+
+  async function openTrackPicker() {
+    _tpSel = null;
+    let back = $('tp-backdrop');
+    if (!back) { back = document.createElement('div'); back.id = 'tp-backdrop'; back.className = 'tp-backdrop'; document.body.appendChild(back); }
+    back.innerHTML = `
+      <div class="tp-modal" onclick="event.stopPropagation()">
+        <div class="tp-head">
+          <div><h3 class="tp-title">¿En qué vas a trabajar?</h3><p class="tp-sub">Selecciona una tarea para asociar correctamente tu tiempo de trabajo.</p></div>
+          <button class="tp-x" onclick="DashboardModule.closeTrackPicker()" aria-label="Cerrar">✕</button>
+        </div>
+        <div class="tp-search">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input id="tp-search-input" placeholder="Buscar tarea, proyecto, cliente u oportunidad…" oninput="DashboardModule._tpFilter()" autocomplete="off">
+        </div>
+        <div class="tp-list" id="tp-list"><div class="tp-skel">${Array.from({length:4}).map(()=>'<div class="tp-skel-row"></div>').join('')}</div></div>
+        <div class="tp-foot">
+          <button class="tp-btn tp-btn--ghost" onclick="DashboardModule.closeTrackPicker()">Cancelar</button>
+          <button class="tp-btn tp-btn--primary" id="tp-start" disabled onclick="DashboardModule.trackPickerStart()"><svg viewBox="0 0 24 24" fill="currentColor" width="13" height="13"><polygon points="6 4 20 12 6 20 6 4"/></svg> Iniciar seguimiento</button>
+        </div>
+      </div>`;
+    back.onclick = () => closeTrackPicker();
+    back.style.display = 'flex';
+    requestAnimationFrame(() => back.classList.add('tp-backdrop--in'));
+    setTimeout(() => $('tp-search-input')?.focus(), 60);
+    document.addEventListener('keydown', _tpEsc);
+    await _tpLoad();
+  }
+  function _tpEsc(e) { if (e.key === 'Escape') closeTrackPicker(); }
+  function closeTrackPicker() {
+    const back = $('tp-backdrop');
+    if (back) { back.classList.remove('tp-backdrop--in'); setTimeout(() => back.remove(), 160); }
+    document.removeEventListener('keydown', _tpEsc);
+  }
+
+  async function _tpLoad() {
+    try {
+      const [tr, or] = await Promise.all([apiFetch(`${API}/mgmt/tasks`), apiFetch(`${API}/mgmt/opportunity-tasks`)]);
+      const tasks = tr.ok ? await tr.json() : [];
+      const opp   = or.ok ? await or.json() : [];
+      const me = _hrsMe();
+      const today = new Date(); today.setHours(0,0,0,0);
+      const due = (ds) => { if (!ds) return false; const d = new Date(String(ds).split('T')[0] + 'T00:00:00'); return d <= today; };
+      _tpTasks = tasks.filter(t => (t.estado || 'pendiente') !== 'completado').map(t => {
+        const resp = (t.responsables && t.responsables.length) ? t.responsables : (t.responsable ? [t.responsable] : []);
+        return { kind:'proyecto', id:t.id, titulo:t.titulo, ctx:t.project_nombre || 'Sin proyecto', cliente:t.client_nombre || '', deadline:t.deadline, prioridad:t.prioridad, mine: resp.some(r => (r||'').toLowerCase() === me), today: due(t.deadline) };
+      });
+      _tpOpp = opp.filter(t => (t.estado === 'completada' ? 'completado' : t.estado) !== 'completado').map(t => ({
+        kind:'oportunidad', id:t.id, titulo:t.titulo, ctx:t.opp_titulo || 'Oportunidad', cliente:t.opp_cliente || '', deadline:t.fecha_limite, prioridad:t.prioridad, mine:(t.responsable||'').toLowerCase() === me, today: due(t.fecha_limite) }));
+      _tpRenderList('');
+    } catch (e) {
+      console.error('[dashboard] tp load:', e);
+      const list = $('tp-list'); if (list) list.innerHTML = '<div class="tp-empty">No se pudieron cargar las tareas.</div>';
+    }
+  }
+
+  function _tpRenderList(q) {
+    const list = $('tp-list'); if (!list) return;
+    q = (q || '').toLowerCase().trim();
+    const all = [..._tpTasks, ..._tpOpp];
+    const filtered = all.filter(it => !q || (it.titulo + ' ' + it.ctx + ' ' + it.cliente).toLowerCase().includes(q));
+    if (!filtered.length) {
+      list.innerHTML = `<div class="tp-empty"><div class="tp-empty__ico">🔍</div><p>${all.length ? 'Sin resultados para tu búsqueda.' : 'No tienes tareas activas. Crea una tarea o una oportunidad para empezar a registrar tiempo.'}</p></div>`;
+      return;
+    }
+    const g1 = filtered.filter(it => it.mine || it.today);
+    const g1ids = new Set(g1.map(it => it.kind + it.id));
+    const g2 = filtered.filter(it => it.kind === 'proyecto'   && !g1ids.has(it.kind + it.id));
+    const g3 = filtered.filter(it => it.kind === 'oportunidad' && !g1ids.has(it.kind + it.id));
+    let html = '';
+    if (g1.length) html += _tpGroup('Para ti y para hoy', g1);
+    if (g2.length) html += _tpGroup('Proyectos', g2);
+    if (g3.length) html += _tpGroup('Oportunidades', g3);
+    list.innerHTML = html;
+  }
+  function _tpGroup(title, items) {
+    return `<div class="tp-group"><div class="tp-group__hdr">${esc(title)}<span class="tp-group__n">${items.length}</span></div>${items.map(_tpCard).join('')}</div>`;
+  }
+  function _tpCard(it) {
+    const sel = _tpSel && _tpSel.kind === it.kind && _tpSel.id === it.id;
+    const isOpp = it.kind === 'oportunidad';
+    const dl = it.deadline ? new Date(String(it.deadline).split('T')[0] + 'T00:00:00').toLocaleDateString('es-ES', { day:'2-digit', month:'short' }) : '';
+    const prioMap = { alta:'Alta', media:'Media', baja:'Baja' };
+    const prio = (it.prioridad && prioMap[it.prioridad]) ? `<span class="tp-prio tp-prio--${it.prioridad}">${prioMap[it.prioridad]}</span>` : '';
+    const sub = [];
+    if (it.cliente) sub.push(`${isOpp ? 'Prospecto' : 'Cliente'}: ${esc(it.cliente)}`);
+    if (dl) sub.push(`Vence ${dl}`);
+    return `<button class="tp-card${sel ? ' tp-card--sel' : ''}" data-k="${it.kind}" data-i="${it.id}" onclick="DashboardModule._tpSelect('${it.kind}',${it.id})">
+      <span class="tp-radio"></span>
+      <span class="tp-card__body">
+        <span class="tp-card__name">${esc(it.titulo)}</span>
+        <span class="tp-card__meta"><span class="tp-tag tp-tag--${isOpp ? 'opp' : 'proj'}">${isOpp ? 'Oportunidad' : 'Proyecto'}</span><span class="tp-card__ctx">${esc(it.ctx)}</span>${prio}</span>
+        ${sub.length ? `<span class="tp-card__sub">${sub.join(' · ')}</span>` : ''}
+      </span>
+    </button>`;
+  }
+  function _tpFilter() { _tpRenderList($('tp-search-input')?.value || ''); }
+  function _tpSelect(kind, id) {
+    _tpSel = { kind, id };
+    document.querySelectorAll('#tp-list .tp-card').forEach(c => c.classList.toggle('tp-card--sel', c.dataset.k === kind && +c.dataset.i === id));
+    const btn = $('tp-start'); if (btn) btn.disabled = false;
+  }
+  async function trackPickerStart() {
+    if (!_tpSel) return;
+    const it = [..._tpTasks, ..._tpOpp].find(x => x.kind === _tpSel.kind && x.id === _tpSel.id);
+    if (!it) return;
+    const ctxLabel = (it.kind === 'oportunidad' ? 'Oportunidad · ' : 'Proyecto · ') + it.ctx;
+    const ctx = { taskId: it.kind === 'proyecto' ? it.id : null, kind: it.kind, titulo: it.titulo, ctx: it.ctx, ctxLabel, cliente: it.cliente };
+    closeTrackPicker();
+    try { await TimerModule.start(ctx.taskId, ctx); } catch (e) { console.error('[dashboard] start tracking:', e); }
+    // _setHrsCtx + _renderHours se disparan desde TimerModule.start
+  }
+
+  // ── Tareas de oportunidades (sidebar · simples · solo del miembro logueado) ──
+  async function _renderOppTasks() {
+    const el = $('dash2-opp-tasks');
+    if (!el) return;
+    try {
+      const res = await apiFetch(`${API}/mgmt/opportunity-tasks`);
+      if (!res.ok) { el.style.display = 'none'; return; }
+      const tasks = await res.json();
+      const me = (window._authUser?.memberNombre || window._authUser?.name || '').toLowerCase();
+      const pending = (Array.isArray(tasks) ? tasks : []).filter(t =>
+        oppTaskNorm(t.estado) !== 'completado' && (!me || (t.responsable || '').toLowerCase() === me));
+      if (!pending.length) { el.style.display = 'none'; return; }
+      el.style.display = '';
+      const rows = pending.slice(0, 14).map(t => {
+        const fecha = t.fecha_limite ? new Date(String(t.fecha_limite).split('T')[0] + 'T00:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }) : '';
+        const sub = [t.opp_titulo, fecha].filter(Boolean).map(esc).join(' · ');
+        return `<div class="d3-opp-row" onclick="document.querySelector('[data-tab=mgmt-opportunities]').click()">
+          <button class="d3-status-btn d3-status-btn--${oppTaskMeta(t.estado)[4]}" title="Cambiar estado" onclick="event.stopPropagation();openOppTaskStatusMenu(event,${t.id},'${oppTaskNorm(t.estado)}','DashboardModule.setOppTaskStatus')">${oppTaskStatusSvg(t.estado)}</button>
+          <div class="d3-opp-body">
+            <span class="d3-opp-name">${esc(t.titulo)}</span>
+            ${sub ? `<span class="d3-opp-sub">${sub}</span>` : ''}
+          </div>
+        </div>`;
+      }).join('');
+      el.innerHTML = `
+        <div class="d3-card-header">
+          <span class="d3-card-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/></svg></span>
+          <span class="d3-card-title">Tareas de oportunidades</span>
+          <span class="d3-card-count">${pending.length}</span>
+          <span class="d3-card-link" onclick="document.querySelector('[data-tab=mgmt-opportunities]').click()">Ver →</span>
+        </div>
+        <div class="d3-opp-list">${rows}</div>`;
+    } catch (e) { console.error('[dashboard] opp tasks error:', e); el.style.display = 'none'; }
+  }
+
+  async function setOppTaskStatus(id, estado) {
+    try {
+      const res = await apiFetch(`${API}/mgmt/opportunity-tasks/${id}/estado`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ estado }) });
+      if (!res.ok) throw new Error(await res.text());
+      _renderOppTasks();
+    } catch (e) { console.error('[dashboard] setOppTaskStatus:', e); }
+  }
+
+  function _parentCtxRow(parent) {
+    if (!parent) return '';
+    const meta = [parent.project_nombre, parent.client_nombre].filter(Boolean).join(' · ');
+    return `<div class="d3-task-row d3-task-row--parent-ctx">
+      <div class="d3-task-body">
+        <span class="d3-task-name--ctx">${esc(parent.titulo)}</span>
+        ${meta ? `<span class="d3-task-meta">${esc(meta)}</span>` : ''}
+      </div>
+    </div>`;
+  }
+
+  // Build display groups from a flat list of tasks+subtasks for a section.
+  // Each subtask is evaluated by its OWN deadline — parent doesn't need to be in this section.
+  // Returns [ { parent, isParentInSection, subs[] }, … ]
+  function _buildSectionGroups(sectionItems, allTasksById) {
+    const mains     = sectionItems.filter(t => !t.parent_task_id);
+    const subs      = sectionItems.filter(t =>  t.parent_task_id);
+    const mainIdSet = new Set(mains.map(t => t.id));
+
+    // Collect subtasks per parent
+    const subsByParent = new Map();
+    subs.forEach(s => {
+      if (!subsByParent.has(s.parent_task_id)) subsByParent.set(s.parent_task_id, []);
+      subsByParent.get(s.parent_task_id).push(s);
+    });
+
+    const result = [];
+    // Main tasks in section (with any of their subtasks also in section)
+    mains.forEach(t => {
+      result.push({ parent: t, isParentInSection: true, subs: subsByParent.get(t.id) || [] });
+      subsByParent.delete(t.id); // consumed — won't be shown again as orphan
+    });
+    // Remaining subtasks whose parent is NOT in this section → parent as context header
+    subsByParent.forEach((kids, pid) => {
+      result.push({ parent: allTasksById.get(pid) || null, isParentInSection: false, subs: kids });
+    });
+    return result;
+  }
+
+  function _renderSectionGroups(groups, isOverdue) {
+    return groups.map(g => {
+      if (g.isParentInSection) {
+        return _taskRow(g.parent, isOverdue) + g.subs.map(s => _subtaskRow(s, isOverdue)).join('');
+      }
+      return _parentCtxRow(g.parent) + g.subs.map(s => _subtaskRow(s, isOverdue)).join('');
+    }).join('');
+  }
+
+  function _renderTasks(_apiCount, _todayApi, _overdueApi, allTasks) {
     const el = $('dash2-tasks');
     if (!el) return;
+
+    // Always compute from allTasks filtered by current user — never trust API count alone
+    _allTasksCache = allTasks || [];
+    _expandedTaskId = null;
+    const allTasksById = new Map((allTasks || []).map(t => [t.id, t]));
+    const _d0 = new Date();
+    const todayStr    = _d0.toISOString().split('T')[0];
+    const _d1 = new Date(_d0); _d1.setDate(_d1.getDate() + 1);
+    const tomorrowStr = _d1.toISOString().split('T')[0];
+    const _me = (window._authUser?.memberNombre || window._authUser?.name || '').toLowerCase();
+    const active = (allTasks || []).filter(t =>
+      t.estado !== 'completado' &&
+      _me &&
+      ((t.responsables || []).some(r => r.toLowerCase() === _me) ||
+       (t.responsable  || '').toLowerCase() === _me)
+    );
+
+    // Igual que el calendario: una tarea padre con subtareas es un CONTENEDOR (el trabajo son sus
+    // subtareas) → no cuenta como pendiente. Se cuentan tareas-hoja + subtareas asignadas a mí.
+    const _parentIds = new Set((allTasks || []).filter(t => t.parent_task_id).map(t => t.parent_task_id));
+    const _isActionable = t => !!t.parent_task_id || !_parentIds.has(t.id);   // subtarea o tarea-hoja; el padre-contenedor solo aparece como CONTEXTO de sus subtareas (no como tarea propia)
+    const myCount = active.filter(_isActionable).length;
+
     const header = `
       <div class="d3-card-header">
+        <span class="d3-card-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2.5"/><path d="M8 12.5l2.5 2.5L16 9"/></svg></span>
         <span class="d3-card-title">Mis tareas</span>
-        ${count > 0 ? `<span class="d3-card-count">${count}</span>` : ''}
+        ${myCount > 0 ? `<span class="d3-card-count">${myCount}</span>` : ''}
         <span class="d3-card-link" onclick="document.querySelector('[data-tab=mgmt-tasks]').click()">Ver todo →</span>
       </div>`;
-    if (count === 0) {
+    if (active.length === 0) {
       el.innerHTML = header + `
         <div class="d3-clients-total" onclick="document.querySelector('[data-tab=mgmt-tasks]').click()">
           <span class="d3-clients-num">0</span>
@@ -1478,21 +4742,51 @@ const DashboardModule = (() => {
         </div>`;
       return;
     }
-    const todayHtml = todayTasks.length === 0
+
+    // Ventana de la tarea: PADRE usa [fecha_inicio, deadline] (rango); subtarea/legacy usa deadline (fecha fija).
+    // Vencida solo cuando el FIN (deadline) ya pasó; activa (Hoy) mientras hoy esté dentro del rango.
+    const _win = t => {
+      const end = t.deadline ? String(t.deadline).split('T')[0] : null;
+      const start = (!t.parent_task_id && t.fecha_inicio) ? String(t.fecha_inicio).split('T')[0] : end;
+      return { start, end };
+    };
+    // Vencida: solo si el FIN (deadline) ya pasó. Hoy: activa desde su fecha de inicio y aún no vencida
+    // (incluye tareas con fecha de inicio pero SIN deadline → "empieza hoy"). Mañana: arranca mañana.
+    const sectionOverdue  = active.filter(t => { const w = _win(t); return w.end && w.end < todayStr && _isActionable(t); });
+    const sectionToday    = active.filter(t => { const w = _win(t); return w.start && w.start <= todayStr && (!w.end || w.end >= todayStr) && _isActionable(t); });
+    const sectionTomorrow = active.filter(t => { const w = _win(t); return w.start === tomorrowStr && (!w.end || w.end >= todayStr) && _isActionable(t); });
+
+    const todayGroups    = _buildSectionGroups(sectionToday,    allTasksById);
+    const overdueGroups  = _buildSectionGroups(sectionOverdue,  allTasksById);
+    const tomorrowGroups = _buildSectionGroups(sectionTomorrow, allTasksById);
+
+    const todayHtml = sectionToday.length === 0
       ? `<div class="d3-empty"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Sin tareas para hoy</div>`
-      : todayTasks.map(t => _taskRow(t, false)).join('');
-    const overdueHtml = overdue.length === 0 ? '' : `
+      : _renderSectionGroups(todayGroups, false);
+
+    const overdueHtml = sectionOverdue.length === 0 ? '' : `
       <div class="d3-section-label d3-section-label--warn">
         <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 100 20A10 10 0 0012 2zm1 14h-2v-2h2v2zm0-4h-2V7h2v5z"/></svg>
-        Vencidas · ${overdue.length}
+        Vencidas · ${sectionOverdue.length}
       </div>
-      ${overdue.map(t => _taskRow(t, true)).join('')}`;
+      ${_renderSectionGroups(overdueGroups, true)}`;
+
+    const tomorrowHtml = sectionTomorrow.length === 0 ? '' : `
+      <details class="d3-section-details">
+        <summary class="d3-section-label d3-section-label--muted">
+          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 16 12"/></svg>
+          Mañana · ${sectionTomorrow.length}
+          <svg class="d3-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </summary>
+        ${_renderSectionGroups(tomorrowGroups, false)}
+      </details>`;
+
     el.innerHTML = header + `
       <div class="d3-section-label">
         <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
         Hoy
       </div>
-      ${todayHtml}${overdueHtml}`;
+      ${todayHtml}${overdueHtml}${tomorrowHtml}`;
   }
 
   const _STATUS_CFG = {
@@ -1508,13 +4802,15 @@ const DashboardModule = (() => {
   }
 
   function _taskRow(t, isOverdue) {
-    const dl = t.deadline
-      ? new Date(String(t.deadline).split('T')[0] + 'T00:00:00')
-          .toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })
+    const _fmtD = d => new Date(d + 'T00:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
+    const _end = t.deadline ? String(t.deadline).split('T')[0] : null;
+    const _start = (!t.parent_task_id && t.fecha_inicio) ? String(t.fecha_inicio).split('T')[0] : null;
+    const dl = _end
+      ? (_start && _start !== _end ? `${_fmtD(_start)} – ${_fmtD(_end)}` : _fmtD(_end))
       : null;
     const meta = [t.project_nombre, t.client_nombre].filter(Boolean).join(' · ');
     const estado = t.estado || 'pendiente';
-    return `<div class="d3-task-row${isOverdue ? ' d3-task-row--overdue' : ''}" data-task-id="${t.id}" onclick="TasksModule.openDrawer(${t.id})">
+    return `<div class="d3-task-row${isOverdue ? ' d3-task-row--overdue' : ''}" data-task-id="${t.id}" onclick="DashboardModule.toggleExpand(${t.id})">
       <button class="d3-status-btn d3-status-btn--${(_STATUS_CFG[estado]||_STATUS_CFG.pendiente).dot}"
               onclick="event.stopPropagation();DashboardModule.openStatusMenu(event,${t.id})"
               title="Cambiar estado">${_statusSvg(estado)}</button>
@@ -1570,6 +4866,9 @@ const DashboardModule = (() => {
       const row = document.querySelector(`[data-task-id="${taskId}"]`);
       if (!row) return;
       if (newStatus === 'completado') {
+        const expEl = document.getElementById(`d3-expand-${taskId}`);
+        if (expEl) expEl.remove();
+        if (_expandedTaskId === taskId) _expandedTaskId = null;
         row.style.transition = 'opacity .35s, transform .35s';
         row.style.opacity = '0';
         row.style.transform = 'translateX(8px)';
@@ -1668,7 +4967,405 @@ const DashboardModule = (() => {
     badge.style.display = count > 0 ? 'flex' : 'none';
   }
 
-  return { load, openStatusMenu, setTaskStatus, _onAvatarClick, openAvatarPicker, closeAvatarPicker, selectAvatar, _avSwitchTab };
+  function toggleExpand(id) {
+    // Collapse currently open (toggle off if same id)
+    if (_expandedTaskId !== null) {
+      const prevRow = document.querySelector(`[data-task-id="${_expandedTaskId}"]`);
+      if (prevRow) prevRow.classList.remove('d3-task-row--expanded');
+      const prevPanel = document.getElementById(`d3-expand-${_expandedTaskId}`);
+      if (prevPanel) prevPanel.remove();
+      const wasSame = _expandedTaskId === id;
+      _expandedTaskId = null;
+      if (wasSame) return;
+    }
+
+    const t = _allTasksCache.find(x => x.id === id);
+    const row = document.querySelector(`[data-task-id="${id}"]`);
+    if (!t || !row) return;
+
+    row.classList.add('d3-task-row--expanded');
+    _expandedTaskId = id;
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const deadlineStr = t.deadline ? String(t.deadline).split('T')[0] : null;
+    const isOverdue   = deadlineStr && deadlineStr < todayStr;
+    const dl = deadlineStr
+      ? new Date(deadlineStr + 'T00:00:00')
+          .toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })
+      : null;
+
+    const estadoMap = {
+      pendiente:   { label: 'Pendiente',   cls: 'd3-expand-pill--pendiente' },
+      en_progreso: { label: 'En progreso', cls: 'd3-expand-pill--inprogress' },
+      completado:  { label: 'Completado',  cls: 'd3-expand-pill--done' },
+      bloqueado:   { label: 'Bloqueado',   cls: 'd3-expand-pill--blocked' },
+    };
+    const estadoCfg = estadoMap[t.estado] || estadoMap.pendiente;
+    const prioLabel = { alta: 'Alta', media: 'Media', baja: 'Baja' }[t.prioridad] || t.prioridad;
+
+    const parent = t.parent_task_id ? _allTasksCache.find(x => x.id === t.parent_task_id) : null;
+    const assignees = ((t.responsables || []).length > 0 ? t.responsables : (t.responsable ? [t.responsable] : []));
+    const ctx = [t.project_nombre, t.client_nombre].filter(Boolean).join(' · ');
+    const notes = [t.descripcion, t.notas].filter(x => x && x.trim()).join('\n').trim();
+
+    const panel = document.createElement('div');
+    panel.className = 'd3-task-expand' + (t.parent_task_id ? ' d3-task-expand--sub' : '');
+    panel.id = `d3-expand-${id}`;
+    const estado  = t.estado || 'pendiente';
+    const asgName = assignees.length ? assignees[0] : '';
+    const _p = asgName.split(' ');
+    const asgShort = asgName ? (_p[0] + (_p[1] ? ' ' + _p[1][0] + '.' : '')) : '';
+    const dlShort = deadlineStr ? new Date(deadlineStr + 'T00:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }) : null;
+    const isParent = !t.parent_task_id;   // padre = rango [inicio, fin]; subtarea = fecha fija
+    const startStr = t.fecha_inicio ? String(t.fecha_inicio).split('T')[0] : null;
+    const startShort = startStr ? new Date(startStr + 'T00:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }) : null;
+    const _icoCal = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="17" rx="2.5"/><line x1="16" y1="2.5" x2="16" y2="6.5"/><line x1="8" y1="2.5" x2="8" y2="6.5"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
+    const _icoUsr = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>';
+    panel.innerHTML = `
+      <div class="d3xp">
+        ${parent ? `<div class="d3xp__crumb"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>${esc(parent.titulo)}</div>` : ''}
+        <div class="d3xp__chips">
+          <button class="d3xp-chip" title="Cambiar estado" onclick="event.stopPropagation();DashboardModule.expEditStatus(${id},this)"><span class="d3xp__dot d3xp__dot--${estado}"></span><span class="d3xp-chip__tx">${esc(estadoCfg.label)}</span></button>
+          ${isParent
+            ? `<button class="d3xp-chip${startShort ? '' : ' d3xp-chip--empty'}" title="Fecha de inicio" onclick="event.stopPropagation();DashboardModule.expEditStart(${id},this)">${_icoCal}<span class="d3xp-chip__tx">${startShort ? 'Inicio ' + esc(startShort) : 'Inicio'}</span></button>
+          <button class="d3xp-chip${dlShort ? (isOverdue ? ' d3xp-chip--over' : '') : ' d3xp-chip--empty'}" title="Fecha de fin (vence)" onclick="event.stopPropagation();DashboardModule.expEditDate(${id},this)">${_icoCal}<span class="d3xp-chip__tx">${dlShort ? 'Fin ' + esc(dlShort) : 'Fin'}</span></button>`
+            : `<button class="d3xp-chip${dlShort ? (isOverdue ? ' d3xp-chip--over' : '') : ' d3xp-chip--empty'}" title="Cambiar fecha" onclick="event.stopPropagation();DashboardModule.expEditDate(${id},this)">${_icoCal}<span class="d3xp-chip__tx">${dlShort ? esc(dlShort) : 'Fecha'}</span></button>`}
+          <button class="d3xp-chip${asgShort ? '' : ' d3xp-chip--empty'}" title="Cambiar responsable" onclick="event.stopPropagation();DashboardModule.expEditAssignee(${id},this)">${asgShort ? _expAvatar(asgName) : _icoUsr}<span class="d3xp-chip__tx">${asgShort ? esc(asgShort) : 'Asignar'}</span></button>
+          ${t.prioridad === 'alta' ? '<span class="d3xp-chip d3xp-chip--prio">Alta</span>' : ''}
+        </div>
+        <div class="d3xp__meta">
+          ${ctx ? `<span class="d3xp__ctx"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg><span class="d3xp__ctx-t">${esc(ctx)}</span></span>` : '<span></span>'}
+          <button class="d3xp__open" onclick="event.stopPropagation();TasksModule.openDrawer(${id})">Abrir tarea<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>
+        </div>
+      </div>`;
+
+    row.insertAdjacentElement('afterend', panel);
+  }
+
+  // ══ Edición inline de la tarjeta expandida (quick-edit premium) ═════
+  const _expChk = '<svg class="d3xp-ck" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+
+  function _expAvatar(name) {
+    const ini = (name || '?').split(' ').map(w => w[0]).filter(Boolean).join('').slice(0, 2).toUpperCase() || '?';
+    const hue = name ? (name.charCodeAt(0) * 47 % 360) : 30;
+    return `<span class="d3xp-av" style="background:hsl(${hue},52%,90%);color:hsl(${hue},42%,37%)">${esc(ini)}</span>`;
+  }
+
+  // Popover flotante reutilizable, anclado al chip clicado (con flip si no cabe).
+  function _expOpenPop(anchor, html, cls) {
+    _expClosePop();
+    const p = document.createElement('div');
+    p.id = 'd3xp-pop';
+    p.className = 'd3xp-pop ' + (cls || '');
+    p.innerHTML = html;
+    document.body.appendChild(p);
+    const r = anchor.getBoundingClientRect();
+    const pw = p.offsetWidth, ph = p.offsetHeight;
+    let left = r.left, top = r.bottom + 7;
+    if (left + pw > window.innerWidth - 12) left = window.innerWidth - pw - 12;
+    if (left < 12) left = 12;
+    if (top + ph > window.innerHeight - 12) top = Math.max(12, r.top - ph - 7);
+    p.style.left = left + 'px';
+    p.style.top = top + 'px';
+    requestAnimationFrame(() => p.classList.add('d3xp-pop--in'));
+    setTimeout(() => document.addEventListener('mousedown', _expPopOutside), 0);
+  }
+  function _expPopOutside(e) {
+    const p = document.getElementById('d3xp-pop');
+    if (p && !p.contains(e.target)) _expClosePop();
+  }
+  function _expClosePop() {
+    document.removeEventListener('mousedown', _expPopOutside);
+    const p = document.getElementById('d3xp-pop');
+    if (p) p.remove();
+  }
+
+  function _expToast(msg, err) {
+    let el = document.getElementById('d3xp-toast');
+    if (!el) { el = document.createElement('div'); el.id = 'd3xp-toast'; document.body.appendChild(el); }
+    const ico = err
+      ? '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="13"/><line x1="12" y1="16.5" x2="12" y2="16.6"/></svg>'
+      : '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+    el.innerHTML = ico + '<span>' + esc(msg) + '</span>';
+    el.className = 'd3xp-toast' + (err ? ' d3xp-toast--err' : '') + ' d3xp-toast--in';
+    clearTimeout(_expToastT);
+    _expToastT = setTimeout(() => { el.classList.remove('d3xp-toast--in'); }, 1900);
+  }
+
+  // Re-render del widget desde cache + re-abrir el mismo expand (refleja sección/estado nuevos).
+  function _expRefresh(id) {
+    _expandedTaskId = null;
+    _renderTasks(0, [], [], _allTasksCache);
+    toggleExpand(id);
+  }
+
+  // Guardado genérico: PATCH → actualiza cache → cierra popover → toast → re-render+re-expand.
+  async function _expSave(id, url, body, apply, okMsg) {
+    try {
+      const res = await apiFetch(url, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (!res.ok) throw new Error('bad');
+      const t = _allTasksCache.find(x => x.id === id); if (t) apply(t);
+      _expClosePop();
+      _expToast(okMsg);
+      _expRefresh(id);
+    } catch (e) { console.error('[dashboard] quick-edit:', e); _expToast('No se pudo guardar. Reintenta.', true); }
+  }
+
+  // ── Estado ──
+  function expEditStatus(id, anchor) {
+    const t = _allTasksCache.find(x => x.id === id) || {};
+    _expOpenPop(anchor, _expStatusHtml(id, t.estado || 'pendiente'), 'd3xp-pop--menu');
+  }
+  function _expStatusHtml(id, cur) {
+    const opts = [['pendiente', 'Pendiente'], ['en_progreso', 'En progreso'], ['completado', 'Completado'], ['bloqueado', 'Bloqueado']];
+    return `<div class="d3xp-pop__hd">Cambiar estado</div><div class="d3xp-pop__list">${opts.map(([v, l]) =>
+      `<button class="d3xp-opt${v === cur ? ' d3xp-opt--on' : ''}" onclick="DashboardModule.expPickStatus(${id},'${v}')"><span class="d3xp__dot d3xp__dot--${v}"></span><span class="d3xp-opt__nm">${l}</span>${v === cur ? _expChk : ''}</button>`).join('')}</div>`;
+  }
+  function expPickStatus(id, estado) { _expSave(id, `${API}/mgmt/tasks/${id}/status`, { estado }, t => { t.estado = estado; }, 'Estado actualizado'); }
+
+  // ── Fecha (calendario propio): fin (deadline) o inicio (fecha_inicio) ──
+  function _expOpenCal(id, anchor, field) {
+    const t = _allTasksCache.find(x => x.id === id); if (!t) return;
+    _expCalField = field;
+    _expCalTask = id;
+    const cur = field === 'fecha_inicio' ? t.fecha_inicio : t.deadline;
+    _expCalSel = cur ? String(cur).split('T')[0] : null;
+    const base = _expCalSel ? new Date(_expCalSel + 'T00:00:00') : new Date();
+    _expCalY = base.getFullYear(); _expCalM = base.getMonth();
+    _expOpenPop(anchor, _expCalHtml(), 'd3xp-pop--cal');
+  }
+  function expEditDate(id, anchor)  { _expOpenCal(id, anchor, 'deadline'); }
+  function expEditStart(id, anchor) { _expOpenCal(id, anchor, 'fecha_inicio'); }
+  function _expCalHtml() {
+    const MES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+    const y = _expCalY, m = _expCalM;
+    const startDow = (new Date(y, m, 1).getDay() + 6) % 7;
+    const gs = new Date(y, m, 1 - startDow);
+    const todayStr = new Date().toISOString().split('T')[0];
+    let days = '';
+    for (let i = 0; i < 42; i++) {
+      const d = new Date(gs.getFullYear(), gs.getMonth(), gs.getDate() + i);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const cls = (d.getMonth() !== m ? ' d3xp-cal__d--out' : '') + (key === todayStr ? ' d3xp-cal__d--today' : '') + (key === _expCalSel ? ' d3xp-cal__d--sel' : '');
+      days += `<button class="d3xp-cal__d${cls}" data-date="${key}" onclick="DashboardModule.expPickDate(this.dataset.date)">${d.getDate()}</button>`;
+    }
+    return `
+      <div class="d3xp-cal__hd">
+        <button class="d3xp-cal__nav" onclick="DashboardModule.expCalNav(-1)" aria-label="Mes anterior"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
+        <span class="d3xp-cal__mo">${MES[m]} ${y}</span>
+        <button class="d3xp-cal__nav" onclick="DashboardModule.expCalNav(1)" aria-label="Mes siguiente"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>
+      </div>
+      <div class="d3xp-cal__wd"><span>L</span><span>M</span><span>X</span><span>J</span><span>V</span><span>S</span><span>D</span></div>
+      <div class="d3xp-cal__grid">${days}</div>
+      <div class="d3xp-cal__ft">
+        <button class="d3xp-cal__q" onclick="DashboardModule.expPickDate('${todayStr}')">Hoy</button>
+        <button class="d3xp-cal__q d3xp-cal__q--clear" onclick="DashboardModule.expClearDate()">Quitar fecha</button>
+      </div>`;
+  }
+  function expCalNav(dir) {
+    _expCalM += dir;
+    if (_expCalM < 0) { _expCalM = 11; _expCalY--; }
+    if (_expCalM > 11) { _expCalM = 0; _expCalY++; }
+    const p = document.getElementById('d3xp-pop'); if (p) p.innerHTML = _expCalHtml();
+  }
+  function _expSaveDate(val) {
+    const id = _expCalTask;
+    if (_expCalField === 'fecha_inicio')
+      _expSave(id, `${API}/mgmt/tasks/${id}/fecha-inicio`, { fecha_inicio: val }, t => { t.fecha_inicio = val; }, val ? 'Inicio actualizado' : 'Inicio quitado');
+    else
+      _expSave(id, `${API}/mgmt/tasks/${id}/deadline`, { deadline: val }, t => { t.deadline = val; }, val ? 'Fecha fin actualizada' : 'Fecha fin quitada');
+  }
+  function expPickDate(str) { _expSaveDate(str); }
+  function expClearDate() { _expSaveDate(null); }
+
+  // ── Responsable ──
+  async function expEditAssignee(id, anchor) {
+    const t = _allTasksCache.find(x => x.id === id); if (!t) return;
+    if (!_expTeam) { try { const r = await apiFetch(`${API}/mgmt/team`); _expTeam = r.ok ? await r.json() : []; } catch (_) { _expTeam = []; } }
+    _expOpenPop(anchor, _expAsgHtml(id, ''), 'd3xp-pop--asg');
+    setTimeout(() => { const q = document.getElementById('d3xp-asg-q'); if (q) q.focus(); }, 60);
+  }
+  function _expAsgHtml(id, filter) {
+    return `<div class="d3xp-pop__hd">Responsable</div>
+      <div class="d3xp-pop__search"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input id="d3xp-asg-q" placeholder="Buscar miembro…" autocomplete="off" oninput="DashboardModule.expAsgFilter(${id},this.value)"></div>
+      <div class="d3xp-pop__list" id="d3xp-asg-list">${_expAsgListHtml(id, filter)}</div>`;
+  }
+  function _expAsgListHtml(id, filter) {
+    const t = _allTasksCache.find(x => x.id === id) || {};
+    const cur = (t.responsables || []).length ? t.responsables[0] : (t.responsable || '');
+    const f = (filter || '').toLowerCase();
+    const list = (_expTeam || []).filter(m => !f || (m.nombre || '').toLowerCase().includes(f));
+    let html = `<button class="d3xp-opt${!cur ? ' d3xp-opt--on' : ''}" data-name="" onclick="DashboardModule.expPickAssignee(${id},this.dataset.name)"><span class="d3xp-av d3xp-av--none"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg></span><span class="d3xp-opt__nm">Sin responsable</span>${!cur ? _expChk : ''}</button>`;
+    html += list.map(m => `<button class="d3xp-opt${m.nombre === cur ? ' d3xp-opt--on' : ''}" data-name="${esc(m.nombre)}" onclick="DashboardModule.expPickAssignee(${id},this.dataset.name)">${_expAvatar(m.nombre)}<span class="d3xp-opt__nm">${esc(m.nombre)}</span>${m.nombre === cur ? _expChk : ''}</button>`).join('');
+    if (!list.length) html += `<div class="d3xp-pop__empty">Sin miembros que coincidan</div>`;
+    return html;
+  }
+  function expAsgFilter(id, val) { const l = document.getElementById('d3xp-asg-list'); if (l) l.innerHTML = _expAsgListHtml(id, val); }
+  function expPickAssignee(id, name) { _expSave(id, `${API}/mgmt/tasks/${id}/responsable`, { responsable: name || null }, t => { t.responsable = name || ''; t.responsables = name ? [name] : []; }, name ? 'Responsable actualizado' : 'Responsable quitado'); }
+
+  // ── Acciones pendientes (cards financieras/operativas) ─────────────
+  // Reutiliza los MISMOS datos y lógica de Finanzas (Conciliación, Cobros,
+  // Pagos internos) + los vencimientos del propio dashboard. No inventa datos:
+  // si una fuente no está disponible o está vacía, la card muestra empty state.
+  function _opsUsd(amt, cur) {
+    if (amt == null || amt === '' || isNaN(parseFloat(amt))) return 0;
+    amt = parseFloat(amt);
+    if (!cur || cur === 'USD') return amt;
+    const r = (window._fxRates || {})[cur];
+    return r > 0 ? amt / r : amt;   // sin tasa configurada: usa el monto crudo (no inventa conversión)
+  }
+  function _opsM0(n) {
+    try { return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n || 0); }
+    catch { return 'USD ' + Math.round(n || 0).toLocaleString('es-MX'); }
+  }
+
+  async function _loadOpsCards(allTasks, todayCount, overdue) {
+    const el = $('dash2-analytics-mini');
+    if (!el) return;
+    el.innerHTML = `<div class="d3-ops">${
+      Array.from({ length: 4 }).map(() => '<div class="d3-ops-card d3-ops-card--skel"><div class="d3-ops-sk-l"></div><div class="d3-ops-sk-v"></div></div>').join('')
+    }</div>`;
+
+    // Carga resiliente: si Finanzas no está disponible (p. ej. sin permiso) → empty states.
+    let projects = [], payments = [], pagos = [];
+    try {
+      const [pjR, pyR, piR] = await Promise.all([
+        apiFetch(`${API}/mgmt/projects`).catch(() => null),
+        apiFetch(`${API}/mgmt/payments`).catch(() => null),
+        apiFetch(`${API}/mgmt/pagos-internos`).catch(() => null),
+      ]);
+      if (pjR && pjR.ok) projects = await pjR.json();
+      if (pyR && pyR.ok) payments = await pyR.json();
+      if (piR && piR.ok) pagos    = await piR.json();
+    } catch (e) { console.warn('[dashboard] ops cards data:', e); }
+
+    // 1+2 · Conciliación — misma lógica que Finanzas → Conciliación (valor proyecto vs tareas).
+    const EF_PORCONC = ['sin_revisar', 'por_conciliar'];
+    const taskPaid = t => t.cobrado || (t.estado_financiero || 'sin_revisar') === 'cobrado';
+    const mainsByProj = {};
+    (allTasks || []).forEach(t => { if (t.parent_task_id) return; (mainsByProj[t.project_id] = mainsByProj[t.project_id] || []).push(t); });
+    let nPorConc = 0, nDescuadre = 0, montoDiff = 0, nComplSinCobro = 0, montoComplSinCobro = 0;
+    projects.forEach(pr => {
+      const mains = mainsByProj[pr.id] || [];
+      const sum   = mains.reduce((s, t) => s + parseFloat(t.monto || 0), 0);
+      const valor = parseFloat(pr.valor_total || 0);
+      const cur   = pr.moneda || 'USD';
+      const diff  = valor - sum;
+      if (!(mains.length > 0 || valor > 0)) return;
+      if (mains.some(t => EF_PORCONC.includes(t.estado_financiero || 'sin_revisar'))) nPorConc++;
+      if (Math.abs(diff) >= 0.01 && valor > 0) { nDescuadre++; montoDiff += _opsUsd(Math.abs(diff), cur); }
+      mains.forEach(t => { if (t.estado === 'completado' && !taskPaid(t)) { nComplSinCobro++; montoComplSinCobro += _opsUsd(parseFloat(t.monto || 0), cur); } });
+    });
+
+    // 3 · Cobros → disponible para distribuir (cobrado neto − en liberación).
+    let cobradoNeto = 0, enLiberacion = 0;
+    payments.forEach(p => {
+      if (p.estado !== 'cobrado') return;
+      const cur = p.moneda || p.project_moneda || 'USD';
+      const net = _opsUsd(parseFloat(p.monto_neto ?? p.monto_bruto ?? 0), cur);
+      cobradoNeto += net;
+      if (p.disponibilidad === 'liberacion') enLiberacion += net;
+    });
+    const disponible = cobradoNeto - enLiberacion;
+
+    // 3 · Pagos internos pendientes.
+    let pagosCount = 0, pagosMonto = 0;
+    pagos.forEach(pg => {
+      if (pg.estado === 'pendiente' || pg.estado === 'programado') { pagosCount++; pagosMonto += _opsUsd(parseFloat(pg.monto || 0), pg.moneda || 'USD'); }
+    });
+
+    // 4 · Vencimientos — datos del propio dashboard (por miembro).
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const vencidas = (overdue || []).filter(t => t.deadline && new Date(String(t.deadline).split('T')[0] + 'T00:00:00') < today).length;
+
+    _renderOpsCards({
+      cobros:  { count: nComplSinCobro, monto: montoComplSinCobro },
+      concil:  { porConc: nPorConc, descuadre: nDescuadre, diff: montoDiff },
+      distrib: { disponible, pagosCount, pagosMonto },
+      venc:    { hoy: todayCount || 0, vencidas },
+    });
+  }
+
+  function _renderOpsCards(d) {
+    const el = $('dash2-analytics-mini');
+    if (!el) return;
+    const card = (label, valHtml, sub, ctaLabel, onclick, done) =>
+      `<button class="d3-ops-card${done ? ' d3-ops-card--done' : ''}"${onclick ? ` onclick="${onclick}"` : ' tabindex="-1"'}>
+        <div class="d3-ops-card__l">${label}</div>
+        <div class="d3-ops-card__v">${valHtml}</div>
+        ${sub ? `<div class="d3-ops-card__s">${sub}</div>` : ''}
+        ${ctaLabel ? `<div class="d3-ops-card__cta">${ctaLabel} <span>→</span></div>` : ''}
+      </button>`;
+
+    // 1 · Cobros pendientes
+    const c1 = d.cobros.count > 0
+      ? card('Cobros pendientes', _opsM0(d.cobros.monto),
+          `${d.cobros.count} ${d.cobros.count === 1 ? 'tarea completada sin cobro' : 'tareas completadas sin cobro'}`,
+          'Registrar cobro', "DashboardModule.goFinance('conciliacion','completadas')")
+      : card('Cobros pendientes', '<span class="d3-ops-ok">Al día</span>', 'Sin cobros por registrar', '', '', true);
+
+    // 2 · Por conciliar
+    let c2;
+    if (d.concil.porConc > 0 || d.concil.descuadre > 0) {
+      const n   = d.concil.porConc || d.concil.descuadre;
+      const sub = d.concil.diff > 0
+        ? `${_opsM0(d.concil.diff)} en diferencias`
+        : `${n} ${n === 1 ? 'proyecto' : 'proyectos'} por revisar`;
+      const flt = d.concil.porConc > 0 ? 'por_conciliar' : 'descuadre';
+      c2 = card('Por conciliar', `${n} <span class="d3-ops-unit">pendiente${n === 1 ? '' : 's'}</span>`, sub,
+          'Ir a conciliación', `DashboardModule.goFinance('conciliacion','${flt}')`);
+    } else {
+      c2 = card('Por conciliar', '<span class="d3-ops-ok">Todo cuadra</span>', 'Sin proyectos por conciliar', '', '', true);
+    }
+
+    // 3 · Por distribuir / pagos internos
+    let c3;
+    if (d.distrib.disponible > 0.01) {
+      c3 = card('Por distribuir', _opsM0(d.distrib.disponible),
+          d.distrib.pagosCount > 0
+            ? `${d.distrib.pagosCount} ${d.distrib.pagosCount === 1 ? 'pago interno pendiente' : 'pagos internos pendientes'}`
+            : 'Listo para distribuir',
+          'Ver distribución', "DashboardModule.goFinance('distribucion')");
+    } else if (d.distrib.pagosCount > 0) {
+      c3 = card('Pagos internos', _opsM0(d.distrib.pagosMonto),
+          `${d.distrib.pagosCount} ${d.distrib.pagosCount === 1 ? 'pago pendiente' : 'pagos pendientes'}`,
+          'Ver pagos', "DashboardModule.goFinance('pagos-internos')");
+    } else {
+      c3 = card('Por distribuir', '<span class="d3-ops-ok">Nada pendiente</span>', 'Sin saldo por distribuir', '', '', true);
+    }
+
+    // 4 · Próximos vencimientos
+    let c4;
+    if (d.venc.hoy > 0 || d.venc.vencidas > 0) {
+      const sub = d.venc.vencidas > 0
+        ? `<span class="d3-ops-danger">${d.venc.vencidas} vencida${d.venc.vencidas === 1 ? '' : 's'}</span>`
+        : 'Sin tareas vencidas';
+      c4 = card('Próximos vencimientos', `${d.venc.hoy} <span class="d3-ops-unit">hoy</span>`, sub,
+          'Ver tareas', 'DashboardModule.goTasks()');
+    } else {
+      c4 = card('Próximos vencimientos', '<span class="d3-ops-ok">Sin vencimientos</span>', 'Nada vence hoy', '', '', true);
+    }
+
+    // Sin título ni chip de Tasas: las cards arrancan directo y se alinean arriba con "Horas de trabajo".
+    el.innerHTML = `<div class="d3-ops">${c1}${c2}${c3}${c4}</div>`;
+  }
+
+  // CTAs: navegan a la sección/sub-tab correspondiente (deep-link).
+  function goFinance(subtab, filter) {
+    const nav = document.querySelector('[data-tab=mgmt-finance]');
+    if (nav) nav.click();
+    try {
+      if (subtab) FinanceModule.setTab(subtab);
+      if (filter) FinanceModule.setCnFilter(filter);
+    } catch (e) { console.warn('[dashboard] goFinance:', e); }
+  }
+  function goTasks() { document.querySelector('[data-tab=mgmt-tasks]')?.click(); }
+
+  return { load, openStatusMenu, setTaskStatus, toggleExpand, setOppTaskStatus, _renderHours, _setHrsCtx,
+    openTrackPicker, closeTrackPicker, _tpFilter, _tpSelect, trackPickerStart, hrsPause, hrsResume, hrsStop, hrsChangeTask,
+    goFinance, goTasks,
+    _onAvatarClick, openAvatarPicker, closeAvatarPicker, selectAvatar, resetAvatar, _avSwitchTab,
+    expEditStatus, expPickStatus, expEditDate, expEditStart, expCalNav, expPickDate, expClearDate, expEditAssignee, expAsgFilter, expPickAssignee };
 })();
 
 // =================================================================
@@ -1885,7 +5582,7 @@ const AnalyticsModule = (() => {
     const rPct = _pct(revenue.total, revenue.prev_total);
     const tPct = _pct(tasks.total_completed, tasks.prev_completed);
 
-    const revSpark  = _svgLine(_fillDays(revenue.series || [], 'total'), '#F88F22');
+    const revSpark  = _svgLine(_fillDays(revenue.series || [], 'total'), '#00804C');
     const taskSpark = _svgBars(_fillDays(tasks.completed_series || [], 'count'), '#1D9E75');
 
     const pip = pipeline || { total: 0, count: 0, pending: 0 };
@@ -2131,19 +5828,19 @@ const AnalyticsModule = (() => {
       { l:'Por cobrar',      v: pendingStr,  s: pip2.pending > 0 ? 'tareas con monto sin cobrar' : 'Todo cobrado ✓' },
       { l:'Promedio / hora', v: avgPerHStr,  s: avgPerHSub },
     ]);
-    _leg('an-legend1', [{ c:'#F88F22', l:'Facturación' }]);
-    _leg('an-legend2', [{ c:'#F88F22', l:'Cobrado diario' }, { c:'rgba(180,178,169,.5)', l:'Sin cobro' }], 'desglose por día');
+    _leg('an-legend1', [{ c:'#00804C', l:'Facturación' }]);
+    _leg('an-legend2', [{ c:'#00804C', l:'Cobrado diario' }, { c:'rgba(180,178,169,.5)', l:'Sin cobro' }], 'desglose por día');
 
     $('an-c1-wrap').style.height = '210px';
     _mkChart('an-c1', {
       type: 'line',
       data: { labels, datasets: [{
-        data: cur, borderColor: '#F88F22',
-        backgroundColor: _gradFn(248, 143, 34, 0.30),
+        data: cur, borderColor: '#00804C',
+        backgroundColor: _gradFn(0, 128, 76, 0.30),
         fill: true, tension: .4, borderWidth: 2.5,
         pointRadius: 4, pointHoverRadius: 6,
-        pointBackgroundColor: '#F88F22', pointHoverBackgroundColor: '#fff',
-        pointHoverBorderColor: '#F88F22', pointHoverBorderWidth: 2.5,
+        pointBackgroundColor: '#00804C', pointHoverBackgroundColor: '#fff',
+        pointHoverBorderColor: '#00804C', pointHoverBorderWidth: 2.5,
       }]},
       options: {
         responsive: true, maintainAspectRatio: false,
@@ -2315,9 +6012,18 @@ const TasksModule = (() => {
   let _editId       = null;
   let _filterEstado = '';
   let _filterPrio   = '';
-  let _filterMember = '';
+  let _filterMember    = '';
+  let _filterMemberSet = false; // true once default or user interaction applied
   let _filterFecha  = '';
   let _teamMembers  = [];
+  let _projectsForDateLimit = [];
+  let _tlExpanded    = new Set((() => { try { return JSON.parse(localStorage.getItem('nova_tl_expanded') || '[]'); } catch { return []; } })());
+  let _tlSubExpanded = new Set();
+  let _tlGroupCollapsed = new Set((() => { try { return JSON.parse(localStorage.getItem('nova_tl_groups') || '[]'); } catch { return []; } })());
+  let _kcSubsOpen    = new Set();
+  let _kcSubItemOpen = new Set();   // individual subtask rows expanded in card
+  let _kcMenuClose   = null;
+  let _kcPopClose    = null;      // cleanup fn for open quick-action popover
   let _currentView  = 'list';
   let _calYear      = new Date().getFullYear();
   let _qeTaskId     = null;
@@ -2335,7 +6041,7 @@ const TasksModule = (() => {
   function _estadoBadge(estado) {
     const icons = {
       pendiente:   `<svg width="12" height="12" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5.5" stroke="#9CA3AF" stroke-width="1.5" stroke-dasharray="2.8 1.8"/></svg>`,
-      en_progreso: `<svg width="12" height="12" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5.5" stroke="#F97316" stroke-width="1.5"/><path d="M7 1.5 A5.5 5.5 0 0 0 7 12.5 Z" fill="#F97316"/></svg>`,
+      en_progreso: `<svg width="12" height="12" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5.5" stroke="#2E7BD6" stroke-width="1.5"/><path d="M7 1.5 A5.5 5.5 0 0 0 7 12.5 Z" fill="#2E7BD6"/></svg>`,
       bloqueado:   `<svg width="12" height="12" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5.5" stroke="#EF4444" stroke-width="1.5"/><line x1="4.5" y1="4.5" x2="9.5" y2="9.5" stroke="#EF4444" stroke-width="1.5" stroke-linecap="round"/><line x1="9.5" y1="4.5" x2="4.5" y2="9.5" stroke="#EF4444" stroke-width="1.5" stroke-linecap="round"/></svg>`,
       completado:  `<svg width="12" height="12" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5.5" fill="#22C55E"/><polyline points="4.5,7.5 6.5,9.5 9.5,5" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
     };
@@ -2345,24 +6051,22 @@ const TasksModule = (() => {
   }
 
   function _prioridadBadge(prioridad) {
-    const map = {
-      alta:  { bg: '#FBBFB0', color: '#9F1239', label: '↑ Alta' },
-      media: { bg: '#FDE68A', color: '#78350F', label: '→ Media' },
-      baja:  { bg: '#E7E5E0', color: '#57534E', label: '↓ Baja' },
-    };
-    const m = map[prioridad] || map.media;
-    return `<span class="client-badge" style="background:${m.bg};color:${m.color}">${m.label}</span>`;
+    const L = { urgente: 'Urgente', alta: 'Alta', media: 'Media', baja: 'Baja' };
+    const key = L[prioridad] ? prioridad : 'media';
+    const flag = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 22V4"/><path d="M5 4h11l-1.6 3.6L16 11H5z"/></svg>`;
+    return `<span class="tl-prio tl-prio--${key}">${flag}${L[key]}</span>`;
   }
 
   function _deadlineCell(d, estado) {
-    if (!d) return '<span class="muted">—</span>';
-    const date    = new Date(String(d).split('T')[0] + 'T00:00:00');
-    const today   = new Date(); today.setHours(0,0,0,0);
-    const overdue = date < today && estado !== 'completado';
-    const label   = date.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
-    return overdue
-      ? `<span style="color:#DC2626;font-weight:600">⚠ ${label}</span>`
-      : label;
+    if (!d) return '<span class="tl-due tl-due--none">—</span>';
+    const date  = new Date(String(d).split('T')[0] + 'T00:00:00');
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const diff  = Math.round((date - today) / 86400000);
+    const label = date.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
+    if (estado !== 'completado' && diff < 0)   return `<span class="tl-due tl-due--over"><span class="tl-due-dot"></span>${label}</span>`;
+    if (estado !== 'completado' && diff === 0) return `<span class="tl-due tl-due--today">Hoy</span>`;
+    if (estado !== 'completado' && diff === 1) return `<span class="tl-due tl-due--soon">Mañana</span>`;
+    return `<span class="tl-due">${label}</span>`;
   }
 
   // ── Load ───────────────────────────────────────────────────────────
@@ -2399,7 +6103,17 @@ const TasksModule = (() => {
       if (m.nombre === prev) opt.selected = true;
       sel.appendChild(opt);
     });
-    if (prev) sel.value = prev;
+    if (prev) {
+      sel.value = prev;
+    } else if (!_filterMemberSet) {
+      const myName = window._authUser?.memberNombre || window._authUser?.name || '';
+      if (myName) {
+        _filterMember    = myName;
+        _filterMemberSet = true;
+        sel.value        = myName;
+        sel.classList.add('filter-select--active');
+      }
+    }
   }
 
   async function load() {
@@ -2439,6 +6153,7 @@ const TasksModule = (() => {
   // ── Lista / Kanban shared ───────────────────────────────────────────
 
   let _dragTaskId = null;
+  let _dndInit    = false;
 
   function _rerender() {
     if (_currentView === 'kanban') _renderKanban();
@@ -2493,7 +6208,8 @@ const TasksModule = (() => {
   }
 
   function setFilterMember(member) {
-    _filterMember = member;
+    _filterMember    = member;
+    _filterMemberSet = true;
     const sel = $('tasks-member-filter');
     if (sel) sel.classList.toggle('filter-select--active', !!member);
     _rerender();
@@ -2504,6 +6220,193 @@ const TasksModule = (() => {
     const sel = $('tasks-fecha-select');
     if (sel) { sel.value = fecha; sel.classList.toggle('filter-select--active', !!fecha); }
     _rerender();
+  }
+
+  function _tlChevron(tid, hasKids, isOpen) {
+    if (!hasKids) return '<span class="tl-chevron-ph"></span>';
+    return `<button class="tl-chevron${isOpen ? ' tl-chevron--open' : ''}" onclick="event.stopPropagation();TasksModule.toggleTaskExpand(${tid})">
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+    </button>`;
+  }
+
+  // anillo de progreso de subtareas (0/4 → 4/4 con check verde al completar)
+  function _tlProgress(done, total) {
+    if (!total) return '';
+    const complete = done >= total;
+    const c = 37.7;                              // 2·π·r con r=6
+    const off = (c * (1 - done / total)).toFixed(1);
+    return `<span class="tl-prog${complete ? ' tl-prog--done' : ''}" title="${done}/${total} subtareas completadas">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+        <circle cx="8" cy="8" r="6" stroke="#E7E3DD" stroke-width="2"/>
+        ${done > 0 ? `<circle cx="8" cy="8" r="6" stroke="${complete ? '#22C55E' : 'var(--brand,#00804C)'}" stroke-width="2" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${off}" transform="rotate(-90 8 8)"/>` : ''}
+        ${complete ? '<path d="M5.4 8 L7 9.6 L10.6 5.8" stroke="#22C55E" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>' : ''}
+      </svg>
+      <span class="tl-prog-txt">${done}/${total}</span>
+    </span>`;
+  }
+
+  // Responsables como avatares apilados (estilo ClickUp), reemplaza los pills de texto.
+  function _tlResp(respArr) {
+    if (!respArr.length) return '<span class="muted">—</span>';
+    const av = respArr.slice(0, 3).map(r => {
+      const ini = r.split(' ').map(w => w[0] || '').join('').slice(0, 2).toUpperCase();
+      return `<span class="tl-who" title="${esc(r)}">${ini}</span>`;
+    }).join('');
+    return `<span class="tl-who-wrap">${av}${respArr.length > 3 ? `<span class="tl-who tl-who--more">+${respArr.length - 3}</span>` : ''}</span>`;
+  }
+
+  // Chip "Espera: X" si la tarea tiene bloqueadores NO completados (dependencias, estilo ClickUp).
+  function _tlDepChip(t) {
+    const w = (t.waiting_on || []).filter(d => d && oppTaskNorm(d.estado) !== 'completado');
+    if (!w.length) return '';
+    const first = w[0].titulo || '';
+    const label = first.length > 20 ? first.slice(0, 19) + '…' : first;
+    const more  = w.length > 1 ? ` +${w.length - 1}` : '';
+    return `<span class="tl-dep" title="Espera a: ${esc(w.map(d => d.titulo).join(', '))}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 0 1 0 10h-2"/><line x1="8" y1="12" x2="16" y2="12"/></svg>Espera: ${esc(label)}${more}</span>`;
+  }
+
+  // Cabecera de grupo por estado (colapsable) — estilo ClickUp.
+  function _tlGroupRow(gk, count, collapsed) {
+    const meta = oppTaskMeta(gk);   // [key, label, color, ...]
+    return `<tr class="tl-group-row"><td colspan="9" class="tl-group-cell${collapsed ? ' tl-group-cell--collapsed' : ''}" onclick="TasksModule.toggleTlGroup('${gk}')">
+      <span class="tl-group-chev"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
+      <span class="tl-group-dot" style="background:${meta[2]}"></span>
+      <span class="tl-group-name">${meta[1]}</span>
+      <span class="tl-group-count">${count}</span>
+      <button class="tl-group-add" title="Nueva tarea" onclick="event.stopPropagation();TasksModule.openDrawer(null)"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Tarea</button>
+    </td></tr>`;
+  }
+  function toggleTlGroup(gk) {
+    if (_tlGroupCollapsed.has(gk)) _tlGroupCollapsed.delete(gk); else _tlGroupCollapsed.add(gk);
+    try { localStorage.setItem('nova_tl_groups', JSON.stringify([..._tlGroupCollapsed])); } catch {}
+    render();
+  }
+
+  // Botón de timer compartido (Lista + Kanban) — premium, reutiliza TimerModule.toggleTask
+  function _timerBtn(taskId, extra) {
+    return `<button class="tt-task-play-btn${extra ? ' ' + extra : ''}" data-timer-task="${taskId}" draggable="false"
+      aria-label="Iniciar o detener seguimiento de tiempo" title="Iniciar seguimiento"
+      onclick="event.stopPropagation();TimerModule.toggleTask(${taskId})">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+    </button>`;
+  }
+  function _timerCell(taskId) {
+    return `<td class="tl-timer-cell" onclick="event.stopPropagation()">
+      <span class="tl-timer-wrap"><span class="task-elapsed" data-timer-display="${taskId}" hidden></span>${_timerBtn(taskId)}</span>
+    </td>`;
+  }
+
+  function _tlMainRow(t, allKidsCount, isOpen) {
+    const completedKids = _tasks.filter(x => x.parent_task_id === t.id && x.estado === 'completado').length;
+    const done     = t.estado === 'completado';
+    const prog     = _tlProgress(completedKids, allKidsCount);
+    const respArr  = t.responsables?.length ? t.responsables : (t.responsable ? [t.responsable] : []);
+    const respHtml = _tlResp(respArr);
+    return `<tr class="clients-table__row tl-row tl-row--main${done ? ' tl-row--done-main' : ''}" data-task-id="${t.id}" onclick="TasksModule.toggleTaskExpand(${t.id})">
+      <td class="ct-name-cell tl-name-cell">
+        <div class="tl-name-wrap">
+          ${_tlChevron(t.id, allKidsCount > 0, isOpen)}
+          <span class="ct-name">${esc(t.titulo)}</span>
+          ${_tlDepChip(t)}
+        </div>
+      </td>
+      <td class="client-meta ct-proj-cell tl-proj-cell">
+        ${t.project_nombre ? `<span class="tl-proj-txt">${esc(t.project_nombre)}${t.client_nombre ? `<span class="tl-client-txt"> · ${esc(t.client_nombre)}</span>` : ''}</span>` : '<span class="muted">—</span>'}
+      </td>
+      <td class="tl-tip-cell" onclick="event.stopPropagation();TasksModule.tlOpenEstadoPop(event,${t.id})">${_estadoBadge(t.estado)}</td>
+      <td class="tl-tip-cell" onclick="event.stopPropagation();TasksModule.openKcPrioPopover(event,${t.id})">${_prioridadBadge(t.prioridad)}</td>
+      <td class="tl-tip-cell" onclick="event.stopPropagation();TasksModule.openKcDatePopover(event,${t.id})">${_deadlineCell(t.deadline, t.estado)}</td>
+      <td class="tl-tip-cell tl-resp-cell" onclick="event.stopPropagation();TasksModule.openKcRespPopover(event,${t.id})">${respHtml}</td>
+      <td class="tl-prog-cell">${prog || '<span class="muted">—</span>'}</td>
+      ${_timerCell(t.id)}
+      <td onclick="event.stopPropagation()" class="tl-actions-cell">
+        <div class="client-actions-cell">
+          <button class="client-action-btn" title="Dependencias (esperando a)" onclick="event.stopPropagation();TasksModule.tlOpenDepPop(event,${t.id})">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 0 1 0 10h-2"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+          </button>
+          <button class="client-action-btn" title="Nueva subtarea"
+            onclick="event.stopPropagation();TasksModule.openDrawer(null,${t.project_id},${t.id})">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
+          <button class="client-action-btn" title="Editar tarea completa"
+            onclick="event.stopPropagation();TasksModule.openDrawer(${t.id})">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </button>
+          <button class="client-action-btn client-action-btn--danger" title="Eliminar"
+            onclick="event.stopPropagation();TasksModule.confirmDelete(${t.id})">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+          </button>
+        </div>
+      </td>
+    </tr>`;
+  }
+
+  function _tlSubRow(t, isLast) {
+    const expanded = _tlSubExpanded.has(t.id);
+    const done     = t.estado === 'completado';
+    const chkIcon  = done
+      ? `<svg width="13" height="13" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6" fill="#22C55E"/><polyline points="4.5,7.5 6.5,9.5 9.5,5" stroke="#fff" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+      : `<svg width="13" height="13" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5.5" stroke="#C0BAB4" stroke-width="1.4"/></svg>`;
+    const respArr  = t.responsables?.length ? t.responsables : (t.responsable ? [t.responsable] : []);
+    const respHtml = _tlResp(respArr);
+    return `<tr class="clients-table__row tl-row tl-row--sub${isLast ? ' tl-row--sub-last' : ''}${done ? ' tl-row--done' : ''}" data-task-id="${t.id}">
+      <td class="ct-name-cell tl-name-cell--sub">
+        <div class="tl-sub-row-wrap">
+          <span class="tl-sub-chk${done ? ' tl-sub-chk--done' : ''}"
+            onclick="event.stopPropagation();TasksModule._tlToggleSubStatus(${t.id})">${chkIcon}</span>
+          <span class="tl-sub-name${expanded ? ' tl-sub-name--exp' : ''}"
+            onclick="event.stopPropagation();TasksModule.toggleSubExpand(${t.id})">${esc(t.titulo)}</span>
+          ${_tlDepChip(t)}
+        </div>
+      </td>
+      <td class="client-meta tl-proj-cell tl-sub-proj"></td>
+      <td class="tl-tip-cell" onclick="event.stopPropagation();TasksModule.tlOpenEstadoPop(event,${t.id})">${_estadoBadge(t.estado)}</td>
+      <td class="tl-tip-cell" onclick="event.stopPropagation();TasksModule.openKcPrioPopover(event,${t.id})">${_prioridadBadge(t.prioridad)}</td>
+      <td class="tl-tip-cell" onclick="event.stopPropagation();TasksModule.openKcDatePopover(event,${t.id})">${_deadlineCell(t.deadline, t.estado)}</td>
+      <td class="tl-tip-cell tl-resp-cell" onclick="event.stopPropagation();TasksModule.openKcRespPopover(event,${t.id})">${respHtml}</td>
+      <td class="tl-prog-cell"></td>
+      ${_timerCell(t.id)}
+      <td onclick="event.stopPropagation()" class="tl-actions-cell">
+        <div class="client-actions-cell">
+          <button class="client-action-btn" title="Dependencias (esperando a)" onclick="event.stopPropagation();TasksModule.tlOpenDepPop(event,${t.id})">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 0 1 0 10h-2"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+          </button>
+          <button class="client-action-btn" title="Editar subtarea"
+            onclick="event.stopPropagation();TasksModule.openDrawer(${t.id})">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </button>
+          <button class="client-action-btn client-action-btn--danger" title="Eliminar"
+            onclick="event.stopPropagation();TasksModule.confirmDelete(${t.id})">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+          </button>
+        </div>
+      </td>
+    </tr>`;
+  }
+
+  function _tlCtxRow(parent) {
+    if (!parent) return '';
+    const meta = [parent.project_nombre, parent.client_nombre].filter(Boolean).join(' · ');
+    return `<tr class="clients-table__row tl-row tl-row--ctx">
+      <td colspan="9" class="tl-ctx-cell">
+        <span class="tl-ctx-name">${esc(parent.titulo)}</span>
+        ${meta ? `<span class="tl-ctx-meta">· ${esc(meta)}</span>` : ''}
+      </td>
+    </tr>`;
+  }
+
+  function toggleTaskExpand(tid) {
+    if (_tlExpanded.has(tid)) _tlExpanded.delete(tid);
+    else _tlExpanded.add(tid);
+    try { localStorage.setItem('nova_tl_expanded', JSON.stringify([..._tlExpanded])); } catch {}
+    render();
+  }
+
+  function toggleSubExpand(tid) {
+    if (_tlSubExpanded.has(tid)) _tlSubExpanded.delete(tid);
+    else _tlSubExpanded.add(tid);
+    const el = document.querySelector(`.tl-row--sub[data-task-id="${tid}"] .tl-sub-name`);
+    if (el) el.classList.toggle('tl-sub-name--exp');
   }
 
   function render() {
@@ -2542,6 +6445,19 @@ const TasksModule = (() => {
       (t.titulo + ' ' + (t.project_nombre || '') + ' ' + (t.client_nombre || '') + ' ' + (t.responsable || '') + ' ' + (t.responsables || []).join(' ')).toLowerCase().includes(q)
     );
 
+    // Si una SUBTAREA matchea el filtro pero su PADRE no (p. ej. filtrando por miembro): incluir al
+    // padre para anidar la subtarea bajo él (arriba, en su grupo), no suelta al final. El padre
+    // "traído por contexto" se auto-expande y solo muestra las subtareas que sí matchean.
+    const _matchedIds = new Set(list.map(t => t.id));
+    const _pulledParents = new Set();
+    list.forEach(t => {
+      if (t.parent_task_id && !_matchedIds.has(t.parent_task_id)) {
+        const p = _tasks.find(x => x.id === t.parent_task_id);
+        if (p) _pulledParents.add(p.id);
+      }
+    });
+    if (_pulledParents.size) list = list.concat([..._pulledParents].map(id => _tasks.find(x => x.id === id)).filter(Boolean));
+
     if (!list.length) {
       tableWrap.style.display = 'none';
       empty.style.display     = 'flex';
@@ -2550,51 +6466,169 @@ const TasksModule = (() => {
     empty.style.display     = 'none';
     tableWrap.style.display = '';
 
-    const prioColors = { alta: '#F87171', media: '#FBBF24', baja: '#6EE7B7' };
+    // Build hierarchy
+    const allById = new Map(_tasks.map(t => [t.id, t]));
+    const mainInList = list.filter(t => !t.parent_task_id);
+    const subsInList = list.filter(t => !!t.parent_task_id);
 
-    tbody.innerHTML = list.map(t => `
-      <tr class="clients-table__row" onclick="TasksModule.openDrawer(${t.id})">
-        <td class="ct-name-cell">
-          <div style="display:flex;align-items:center;gap:8px;min-width:0">
-            <div style="width:8px;height:8px;border-radius:2px;background:${prioColors[t.prioridad] || '#FBBF24'};flex-shrink:0"></div>
-            <span class="ct-name">${esc(t.titulo)}</span>
-          </div>
-        </td>
-        <td class="client-meta ct-proj-cell">
-          ${t.project_nombre ? `<span style="white-space:nowrap">${esc(t.project_nombre)}${t.client_nombre ? ' <span style="color:var(--muted)">· ' + esc(t.client_nombre) + '</span>' : ''}</span>` : '<span class="muted">—</span>'}
-        </td>
-        <td class="tip-cell" onclick="event.stopPropagation();TasksModule.openQuickEdit(event,${t.id})">${_estadoBadge(t.estado)}</td>
-        <td class="tip-cell" onclick="event.stopPropagation();TasksModule.openQuickEdit(event,${t.id})">${_prioridadBadge(t.prioridad)}</td>
-        <td class="tip-cell" onclick="event.stopPropagation();TasksModule.openQuickEdit(event,${t.id})">${_deadlineCell(t.deadline, t.estado)}</td>
-        <td class="tip-cell" onclick="event.stopPropagation();TasksModule.openQuickEdit(event,${t.id})">${(t.responsables?.length ? t.responsables : t.responsable ? [t.responsable] : []).map(r=>`<span class="resp-pill">${esc(r)}</span>`).join(' ') || '<span class="muted">—</span>'}</td>
-        <td onclick="event.stopPropagation()" class="tt-task-timer-cell">
-          <span class="task-elapsed" data-timer-display="${t.id}" hidden></span>
-          <button class="tt-task-play-btn" data-timer-task="${t.id}" title="Iniciar timer"
-            onclick="TimerModule.toggleTask(${t.id})">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-          </button>
-        </td>
-        <td>
-          <div class="client-actions-cell">
-            <button class="client-action-btn" title="Editar"
-              onclick="event.stopPropagation();TasksModule.openDrawer(${t.id})">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-            </button>
-            <button class="client-action-btn client-action-btn--danger" title="Eliminar"
-              onclick="event.stopPropagation();TasksModule.confirmDelete(${t.id})">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
-            </button>
-          </div>
-        </td>
-      </tr>
-    `).join('');
+    const subsByParent = new Map();
+    subsInList.forEach(s => {
+      if (!subsByParent.has(s.parent_task_id)) subsByParent.set(s.parent_task_id, []);
+      subsByParent.get(s.parent_task_id).push(s);
+    });
+
+    // Búsqueda: auto-desplegar tareas cuyas subtareas coinciden con la query
+    const effExpanded = new Set(_tlExpanded);
+    if (q) mainInList.forEach(t => {
+      if (_tasks.some(x => x.parent_task_id === t.id &&
+        (x.titulo + ' ' + (x.responsable || '') + ' ' + (x.responsables || []).join(' ')).toLowerCase().includes(q)))
+        effExpanded.add(t.id);
+    });
+    _pulledParents.forEach(id => effExpanded.add(id));   // padres traídos por contexto: expandidos para ver sus subs
+
+    const rows = [];
+    mainInList.forEach(t => subsByParent.delete(t.id));   // estos padres están en la lista; sus subs no son huérfanas
+
+    // Agrupar tareas raíz por estado (estilo ClickUp), grupos colapsables.
+    const GROUP_ORDER = ['pendiente', 'en_progreso', 'bloqueado', 'completado'];
+    const byGroup = new Map(GROUP_ORDER.map(k => [k, []]));
+    mainInList.forEach(t => (byGroup.get(oppTaskNorm(t.estado)) || byGroup.get('pendiente')).push(t));
+
+    // Subtareas COMPLETADAS de tareas NO completadas → se sacan de bajo su padre y se muestran
+    // al final del grupo "Completado" (con el padre como contexto). No ocupan espacio arriba.
+    const movedDone = [];   // { parent, sub }
+    mainInList.forEach(t => {
+      if (oppTaskNorm(t.estado) === 'completado') return;   // si el padre ya está completado, sus subs quedan con él
+      const pulled = _pulledParents.has(t.id);
+      _tasks.filter(x => x.parent_task_id === t.id && oppTaskNorm(x.estado) === 'completado' && (!pulled || _matchedIds.has(x.id)))
+            .forEach(sub => movedDone.push({ parent: t, sub }));
+    });
+
+    GROUP_ORDER.forEach(gk => {
+      const gtasks = byGroup.get(gk);
+      const isDone = gk === 'completado';
+      const extra  = isDone ? movedDone.length : 0;
+      if (!gtasks.length && !extra) return;
+      const collapsed = _tlGroupCollapsed.has(gk);
+      rows.push(_tlGroupRow(gk, gtasks.length + extra, collapsed));
+      if (collapsed) return;
+      gtasks.forEach(t => {
+        const allKids = _tasks.filter(x => x.parent_task_id === t.id);
+        const open = effExpanded.has(t.id);
+        rows.push(_tlMainRow(t, allKids.length, open));   // allKids.length mantiene el progreso "3/4" correcto
+        if (open) {
+          // en grupos NO completados, ocultar las subtareas completadas (se muestran abajo en "Completado")
+          let kids = isDone ? allKids : allKids.filter(s => oppTaskNorm(s.estado) !== 'completado');
+          if (_pulledParents.has(t.id)) kids = kids.filter(s => _matchedIds.has(s.id));   // padre por contexto: solo sus subs que matchean
+          kids.forEach((s, i) => rows.push(_tlSubRow(s, i === kids.length - 1)));
+        }
+      });
+      // al final del grupo Completado: las subtareas completadas movidas, agrupadas por su padre
+      if (isDone && movedDone.length) {
+        const byParent = new Map();
+        movedDone.forEach(({ parent, sub }) => {
+          if (!byParent.has(parent.id)) byParent.set(parent.id, { parent, subs: [] });
+          byParent.get(parent.id).subs.push(sub);
+        });
+        byParent.forEach(({ parent, subs }) => {
+          rows.push(_tlCtxRow(parent));
+          subs.forEach((s, i) => rows.push(_tlSubRow(s, i === subs.length - 1)));
+        });
+      }
+    });
+
+    // Orphan subtasks (parent not in filtered list) → show parent as context
+    subsByParent.forEach((kids, pid) => {
+      rows.push(_tlCtxRow(allById.get(pid)));
+      kids.forEach((s, i) => rows.push(_tlSubRow(s, i === kids.length - 1)));
+    });
+
+    tbody.innerHTML = rows.join('');
+    TimerModule.syncButtons();
   }
 
   // ── Kanban view ────────────────────────────────────────────────────
 
+  function _kcCard(t) {
+    const allKids  = _tasks.filter(x => x.parent_task_id === t.id);
+    const doneKids = allKids.filter(x => x.estado === 'completado').length;
+    const today    = new Date().toISOString().split('T')[0];
+    const dl       = t.deadline ? String(t.deadline).split('T')[0] : null;
+    const isOverdue = dl && dl < today && t.estado !== 'completado';
+    const dlFmt = dl ? (() => {
+      const d = new Date(dl + 'T00:00:00');
+      const m = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'][d.getMonth()];
+      return `${d.getDate()} ${m}`;
+    })() : null;
+
+    const respArr = t.responsables?.length ? t.responsables : (t.responsable ? [t.responsable] : []);
+    const whoHtml = respArr.slice(0,2).map(r => {
+      const ini = r.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
+      return `<span class="kc-who" title="${esc(r)}">${ini}</span>`;
+    }).join('');
+
+    const prio      = t.prioridad || 'media';
+    const prioLabel = { urgente:'Urgente', alta:'Alta', media:'Media', baja:'Baja' }[prio] || prio;
+    const subsOpen  = _kcSubsOpen.has(t.id);
+    const MAX_S     = 3;
+
+    let subsHtml = '';
+    if (allKids.length > 0) {
+      const pct      = Math.round(doneKids / allKids.length * 100);
+      const _subRow = s => {
+        const done    = s.estado === 'completado';
+        const subExp  = _kcSubItemOpen.has(s.id);
+        const icon = done
+          ? `<svg width="11" height="11" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="5.5" fill="#22C55E"/><polyline points="3.5,6.5 5.5,8.5 8.5,4" stroke="#fff" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+          : `<svg width="11" height="11" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="5.5" stroke="#C0BAB4" stroke-width="1.3"/></svg>`;
+        return `<div class="kc-sub-item${done ? ' kc-sub-item--done' : ''}${subExp ? ' kc-sub-item--exp' : ''}" data-sub-id="${s.id}">
+          <span class="kc-sub-chk" onclick="event.stopPropagation();TasksModule.toggleSubtaskStatus(${s.id},${t.id})">${icon}</span>
+          <span class="kc-sub-txt${subExp ? ' kc-sub-txt--exp' : ''}"
+            onclick="event.stopPropagation();TasksModule._kcToggleSubItem(${s.id})">${esc(s.titulo)}</span>
+          <span class="kc-sub-elapsed task-elapsed" data-timer-display="${s.id}" hidden></span>
+          ${_timerBtn(s.id, 'kc-sub-play')}
+        </div>`;
+      };
+      const listHtml = subsOpen
+        ? `<div class="kc-subs-list">${allKids.map(_subRow).join('')}</div>`
+        : '';
+      subsHtml = `<div class="kc-subs">
+        <div class="kc-subs-hdr" onclick="event.stopPropagation();TasksModule.toggleCardSubs(${t.id})">
+          <div class="kc-subs-track"><div class="kc-subs-bar" style="width:${pct}%"></div></div>
+          <span class="kc-subs-lbl">${doneKids}/${allKids.length} subtareas</span>
+          <svg class="kc-subs-chev${subsOpen ? ' kc-subs-chev--open' : ''}" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        ${listHtml}
+      </div>`;
+    }
+
+    return `<div class="kanban-card" data-task-id="${t.id}" draggable="true"
+      ondragstart="TasksModule.kanbanDragStart(event,${t.id})"
+      ondragend="TasksModule.kanbanDragEnd(event)">
+      <div class="kc-hdr">
+        <span class="kc-title">${esc(t.titulo)}</span>
+        <div class="kc-hdr-actions">
+          <span class="kc-elapsed task-elapsed" data-timer-display="${t.id}" hidden></span>
+          ${_timerBtn(t.id, 'tt-play--kc')}
+          <button class="kc-menu-btn" onclick="event.stopPropagation();TasksModule.openKanbanMenu(event,${t.id})" title="Opciones">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="currentColor"><circle cx="4" cy="10" r="1.5"/><circle cx="10" cy="10" r="1.5"/><circle cx="16" cy="10" r="1.5"/></svg>
+          </button>
+        </div>
+      </div>
+      ${(t.project_nombre || t.client_nombre) ? `<div class="kc-meta">${t.project_nombre ? `<span class="kc-project" title="${esc(t.project_nombre)}">${esc(t.project_nombre)}</span>` : ''}${t.client_nombre ? `<span class="kc-client" title="${esc(t.client_nombre)}">${esc(t.client_nombre)}</span>` : ''}</div>` : ''}
+      <div class="kc-foot">
+        <span class="kc-prio kc-prio--${prio}">${prioLabel}</span>
+        ${dlFmt ? `<span class="kc-dl${isOverdue ? ' kc-dl--ov' : ''}">
+          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          ${dlFmt}</span>` : ''}
+        <div class="kc-who-wrap">${whoHtml}</div>
+      </div>
+      ${subsHtml}
+    </div>`;
+  }
+
   function _renderKanban() {
-    const prioColor = { alta: '#EF4444', media: '#F59E0B', baja: '#22C55E' };
-    const filtered  = _getFilteredTasks();
+    const filtered = _getFilteredTasks().filter(t => !t.parent_task_id);
 
     for (const estado of ['bloqueado', 'pendiente', 'en_progreso', 'completado']) {
       const colEl   = $('kanban-col-' + estado);
@@ -2604,71 +6638,128 @@ const TasksModule = (() => {
       const tasks = filtered.filter(t => t.estado === estado);
       if (countEl) countEl.textContent = tasks.length;
 
-      if (!tasks.length) {
-        colEl.innerHTML = '<div class="kanban-empty">Sin tareas</div>';
-      } else {
-        colEl.innerHTML = tasks.map(t => {
-          const dot = prioColor[t.prioridad] || prioColor.media;
-          const respArr = t.responsables?.length ? t.responsables : (t.responsable ? [t.responsable] : []);
-          const whoHtml = respArr.map(r => {
-            const ini = r.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
-            return `<span class="kc-who" title="${esc(r)}">${ini}</span>`;
-          }).join('');
-          return `<div class="kanban-card" draggable="true"
-            ondragstart="TasksModule.kanbanDragStart(event,${t.id})"
-            ondragend="TasksModule.kanbanDragEnd(event)"
-            onclick="TasksModule.openDrawer(${t.id})">
-            <div class="kc-top">
-              <span class="kc-dot" style="background:${dot}"></span>
-              <span class="kc-title">${esc(t.titulo)}</span>
-            </div>
-            <div class="kc-meta">
-              ${t.project_nombre ? `<span class="kc-proj">${esc(t.project_nombre)}</span>` : '<span></span>'}
-              <div class="kc-actions">
-                ${whoHtml}
-                <span class="task-elapsed" data-timer-display="${t.id}" hidden></span>
-                <button class="kc-play-btn" data-timer-task="${t.id}" title="Iniciar timer"
-                        onclick="event.stopPropagation();TimerModule.toggleTask(${t.id})">
-                  <svg viewBox="0 0 24 24" fill="currentColor" style="width:100%;height:100%"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                </button>
-              </div>
-            </div>
-          </div>`;
-        }).join('');
-      }
+      colEl.innerHTML = tasks.length
+        ? tasks.map(t => _kcCard(t)).join('')
+        : '<div class="kanban-empty">Sin tareas</div>';
 
-      // drop zone — set after innerHTML (element-level, survives children changes)
-      const _e = estado;
-      colEl.ondragover  = ev => { ev.preventDefault(); ev.dataTransfer.dropEffect = 'move'; colEl.classList.add('kanban-cards--over'); };
-      colEl.ondragleave = ev => { if (!colEl.contains(ev.relatedTarget)) colEl.classList.remove('kanban-cards--over'); };
-      colEl.ondrop      = ev => {
-        ev.preventDefault();
-        colEl.classList.remove('kanban-cards--over');
-        const id = _dragTaskId ?? parseInt(ev.dataTransfer.getData('text/plain'), 10);
-        if (id) TasksModule.moveTaskToStatus(id, _e);
-      };
     }
+    _initKanbanDnD();
     TimerModule.syncButtons();
+  }
+
+  // ── D&D ────────────────────────────────────────────────────────────
+
+  function _initKanbanDnD() {
+    if (_dndInit) return;
+    _dndInit = true;
+    const board = document.querySelector('.kanban-board');
+    if (!board) return;
+
+    board.addEventListener('dragover', ev => {
+      if (!_dragTaskId) return;
+      ev.preventDefault();
+      ev.dataTransfer.dropEffect = 'move';
+      const col   = ev.target.closest?.('[data-kanban-status]');
+      if (!col) return;
+      const colEl = col.querySelector('.kanban-cards');
+      if (!colEl) return;
+      _kcUpsertPlaceholder(colEl, _getDragInsertPos(colEl, ev.clientY));
+    });
+
+    board.addEventListener('dragleave', ev => {
+      if (!_dragTaskId) return;
+      // Only clear when cursor leaves ALL columns (not just moving between cards)
+      const newCol = ev.relatedTarget?.closest?.('[data-kanban-status]');
+      if (!newCol) _kcClearPlaceholder();
+    });
+
+    board.addEventListener('drop', ev => {
+      ev.preventDefault();
+      if (!_dragTaskId) return;
+      const col       = ev.target.closest?.('[data-kanban-status]');
+      const newStatus = col?.dataset?.kanbanStatus;
+      if (!newStatus) { _kcClearPlaceholder(); return; }
+      const id             = _dragTaskId;
+      const ph             = document.getElementById('kc-dnd-ph');
+      const nxt            = ph?.nextElementSibling;
+      const insertBeforeId = (nxt && nxt.dataset?.taskId) ? parseInt(nxt.dataset.taskId) : null;
+      _kcClearPlaceholder();
+      _kcDropTask(id, newStatus, insertBeforeId);
+    });
+  }
+
+  function _getDragInsertPos(colEl, clientY) {
+    const cards = [...colEl.querySelectorAll('.kanban-card:not(.kanban-card--dragging)')];
+    for (const card of cards) {
+      const r = card.getBoundingClientRect();
+      if (clientY < r.top + r.height / 2) return card;
+    }
+    return null;
+  }
+
+  function _kcUpsertPlaceholder(colEl, insertBeforeEl) {
+    let ph = document.getElementById('kc-dnd-ph');
+    if (!ph) {
+      ph = document.createElement('div');
+      ph.id = 'kc-dnd-ph';
+      ph.className = 'kc-dnd-ph';
+    }
+    const anchor = insertBeforeEl || colEl.querySelector('.kanban-empty');
+    if (anchor) colEl.insertBefore(ph, anchor);
+    else colEl.appendChild(ph);
+  }
+
+  function _kcClearPlaceholder() {
+    document.getElementById('kc-dnd-ph')?.remove();
+  }
+
+  function _kcDropTask(taskId, newStatus, insertBeforeId) {
+    const task = _tasks.find(t => t.id === taskId);
+    if (!task) return;
+    const oldStatus = task.estado;
+    // Reorder _tasks array: remove then re-insert at target position
+    const idx = _tasks.indexOf(task);
+    _tasks.splice(idx, 1);
+    if (insertBeforeId != null) {
+      const bi = _tasks.findIndex(t => t.id === insertBeforeId);
+      _tasks.splice(bi >= 0 ? bi : _tasks.length, 0, task);
+    } else {
+      // Insert after last main task in target status
+      let insertAt = _tasks.length;
+      for (let i = _tasks.length - 1; i >= 0; i--) {
+        if (_tasks[i].estado === newStatus && !_tasks[i].parent_task_id) { insertAt = i + 1; break; }
+      }
+      _tasks.splice(insertAt, 0, task);
+    }
+    task.estado = newStatus;
+    _renderKanban();
+    if (oldStatus !== newStatus) {
+      apiFetch(`${API}/mgmt/tasks/${taskId}/status`, {
+        method: 'PATCH', body: JSON.stringify({ estado: newStatus })
+      }).catch(() => { task.estado = oldStatus; _renderKanban(); });
+    }
   }
 
   function kanbanDragStart(e, taskId) {
     _dragTaskId = taskId;
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', String(taskId));
-    const card = e.target.closest ? e.target.closest('.kanban-card') : e.target;
-    setTimeout(() => { if (card) card.classList.add('kanban-card--dragging'); }, 0);
+    // Delay opacity so browser snapshots the card at full opacity for its drag image
+    const card = e.target.closest?.('.kanban-card') ?? e.target;
+    setTimeout(() => { card?.classList.add('kanban-card--dragging'); }, 0);
   }
 
   function kanbanDragEnd(e) {
-    const card = e.target.closest ? e.target.closest('.kanban-card') : e.target;
-    if (card) card.classList.remove('kanban-card--dragging');
-    document.querySelectorAll('.kanban-cards--over').forEach(el => el.classList.remove('kanban-cards--over'));
+    document.querySelectorAll('.kanban-card--dragging')
+      .forEach(c => c.classList.remove('kanban-card--dragging'));
+    _kcClearPlaceholder();
     _dragTaskId = null;
   }
 
   async function moveTaskToStatus(taskId, estado) {
     const task = _tasks.find(t => t.id === taskId);
     if (!task || task.estado === estado) return;
+    const prev = task.estado;
     task.estado = estado;
     _renderKanban();
     try {
@@ -2676,8 +6767,532 @@ const TasksModule = (() => {
         method: 'PATCH', body: JSON.stringify({ estado })
       });
     } catch {
-      task.estado = task.estado; // already mutated; silent fail
+      task.estado = prev;
+      _renderKanban();
     }
+  }
+
+  function openKanbanMenu(e, tid) {
+    e.stopPropagation();
+    closeKanbanMenu();
+
+    // currentTarget can be null after async rescheduling in some browsers; fall back to closest
+    const btn = e.currentTarget || (e.target && e.target.closest('.kc-menu-btn')) || e.target;
+
+    let menu = document.getElementById('kc-ctxmenu');
+    if (!menu) {
+      menu = document.createElement('div');
+      menu.id        = 'kc-ctxmenu';
+      menu.className = 'kc-ctxmenu';
+      document.body.appendChild(menu);
+    }
+
+    const statuses = [
+      ['bloqueado','Bloqueado'],['pendiente','Pendiente'],
+      ['en_progreso','En progreso'],['completado','Completado'],
+    ];
+    menu.innerHTML = `
+      <button class="kc-ctx-item" onclick="TasksModule.openDrawer(${tid});TasksModule.closeKanbanMenu()">Abrir tarea</button>
+      <button class="kc-ctx-item" onclick="TasksModule.openDrawer(${tid});TasksModule.closeKanbanMenu()">Editar</button>
+      <div class="kc-ctx-sep"></div>
+      <button class="kc-ctx-item kc-ctx-item--arrow" onclick="TasksModule.openKcPrioPopover(event,${tid});TasksModule.closeKanbanMenu()">Cambiar prioridad</button>
+      <button class="kc-ctx-item kc-ctx-item--arrow" onclick="TasksModule.openKcRespPopover(event,${tid});TasksModule.closeKanbanMenu()">Cambiar responsable</button>
+      <button class="kc-ctx-item kc-ctx-item--arrow" onclick="TasksModule.openKcDatePopover(event,${tid});TasksModule.closeKanbanMenu()">Editar fecha</button>
+      <div class="kc-ctx-sep"></div>
+      <div class="kc-ctx-sublabel">Mover a estado</div>
+      ${statuses.map(([v,l]) => `<button class="kc-ctx-item kc-ctx-item--sub" onclick="TasksModule.moveTaskToStatus(${tid},'${v}');TasksModule.closeKanbanMenu()">${l}</button>`).join('')}
+      <div class="kc-ctx-sep"></div>
+      <button class="kc-ctx-item" onclick="TasksModule.openDrawer(null,null,${tid});TasksModule.closeKanbanMenu()">Nueva subtarea</button>
+      <button class="kc-ctx-item" onclick="TasksModule.duplicateTask(${tid});TasksModule.closeKanbanMenu()">Duplicar tarea</button>
+      <button class="kc-ctx-item" onclick="TasksModule.archiveTask(${tid});TasksModule.closeKanbanMenu()">Archivar</button>
+      <div class="kc-ctx-sep"></div>
+      <button class="kc-ctx-item kc-ctx-item--danger" onclick="TasksModule.confirmDelete(${tid});TasksModule.closeKanbanMenu()">Eliminar</button>`;
+
+    // Render invisible first so we can measure actual dimensions
+    menu.style.cssText = 'display:block;visibility:hidden;position:fixed;top:-9999px;left:-9999px';
+
+    const rect = btn.getBoundingClientRect();
+    const mW   = menu.offsetWidth  || 210;
+    const mH   = menu.offsetHeight || 360;
+    const vW   = window.innerWidth;
+    const vH   = window.innerHeight;
+    const GAP  = 8;
+
+    // Right-align to button's right edge, open below
+    let left = rect.right - mW;
+    let top  = rect.bottom + GAP;
+
+    // Clamp horizontal
+    if (left < GAP)              left = GAP;
+    if (left + mW > vW - GAP)   left = vW - mW - GAP;
+
+    // Flip upward if not enough space below
+    if (top + mH > vH - GAP) {
+      top = rect.top - mH - GAP;
+      if (top < GAP) top = GAP;
+    }
+
+    menu.style.cssText = `display:block;visibility:visible;position:fixed;top:${top}px;left:${left}px`;
+
+    function _cleanup() {
+      menu.style.display = 'none';
+      document.removeEventListener('mousedown', _onOutside);
+      document.removeEventListener('keydown',   _onKey);
+      window.removeEventListener('scroll',      _cleanup, true);
+      window.removeEventListener('resize',      _cleanup);
+      _kcMenuClose = null;
+    }
+    function _onOutside(ev) { if (!menu.contains(ev.target)) _cleanup(); }
+    function _onKey(ev)     { if (ev.key === 'Escape') { ev.stopPropagation(); _cleanup(); } }
+
+    _kcMenuClose = _cleanup;
+    setTimeout(() => {
+      document.addEventListener('mousedown', _onOutside);
+      document.addEventListener('keydown',   _onKey);
+      window.addEventListener('scroll',      _cleanup, true);
+      window.addEventListener('resize',      _cleanup);
+    }, 0);
+  }
+
+  function closeKanbanMenu() { if (_kcMenuClose) _kcMenuClose(); }
+
+  // ── Quick-action popover helpers ──────────────────────────────────
+
+  function _kcClosePopover() { if (_kcPopClose) _kcPopClose(); }
+
+  function _kcOpenPopover(anchor, html, popId) {
+    _kcClosePopover();
+
+    let pop = document.getElementById(popId);
+    if (!pop) {
+      pop = document.createElement('div');
+      pop.id        = popId;
+      pop.className = 'kcp-pop';
+      document.body.appendChild(pop);
+    }
+
+    pop.innerHTML = html;
+    // Measure while invisible
+    pop.style.cssText = 'display:block;visibility:hidden;position:fixed;top:-9999px;left:-9999px';
+
+    const rect = anchor.getBoundingClientRect();
+    const pW = pop.offsetWidth  || 240;
+    const pH = pop.offsetHeight || 220;
+    const vW = window.innerWidth;
+    const vH = window.innerHeight;
+    const G  = 8;
+
+    // Align left edge to anchor's left, open below
+    let left = rect.left;
+    let top  = rect.bottom + G;
+
+    if (left + pW > vW - G) left = vW - pW - G;
+    if (left < G)           left = G;
+    if (top  + pH > vH - G) { top = rect.top - pH - G; if (top < G) top = G; }
+
+    pop.style.cssText = `display:block;visibility:visible;position:fixed;top:${top}px;left:${left}px`;
+
+    function _cleanup() {
+      pop.style.display = 'none';
+      document.removeEventListener('mousedown', _onOut);
+      document.removeEventListener('keydown',   _onKey);
+      window.removeEventListener('scroll',      _cleanup, true);
+      window.removeEventListener('resize',      _cleanup);
+      _kcPopClose = null;
+    }
+    function _onOut(ev) { if (!pop.contains(ev.target)) _cleanup(); }
+    function _onKey(ev) { if (ev.key === 'Escape') { ev.stopPropagation(); _cleanup(); } }
+
+    _kcPopClose = _cleanup;
+    setTimeout(() => {
+      document.addEventListener('mousedown', _onOut);
+      document.addEventListener('keydown',   _onKey);
+      window.addEventListener('scroll',      _cleanup, true);
+      window.addEventListener('resize',      _cleanup);
+    }, 0);
+    return pop;
+  }
+
+  function closeKcPopover() { _kcClosePopover(); }
+
+  // ── Priority popover ──────────────────────────────────────────────
+
+  function openKcPrioPopover(e, tid) {
+    e.stopPropagation();
+    const anchor = e.currentTarget || (e.target && e.target.closest('.kc-ctx-item')) || e.target;
+    const t      = _tasks.find(x => x.id === tid);
+    const cur    = t?.prioridad || 'media';
+    const chk    = `<svg class="kcp-check" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+    const items  = [
+      ['baja',    'Baja',    '#A8A29E'],
+      ['media',   'Media',   '#D97706'],
+      ['alta',    'Alta',    '#EF4444'],
+      ['urgente', 'Urgente', '#7C3AED'],
+    ];
+    const html = `<div class="kcp-list">${items.map(([v, l, col]) =>
+      `<button class="kcp-list-item${cur===v?' kcp-list-item--active':''}"
+        onclick="event.stopPropagation();TasksModule.saveKcPrio(${tid},'${v}')">
+        <span class="kcp-prio-dot" style="background:${col}"></span>
+        <span>${l}</span>
+        ${cur===v?chk:''}
+      </button>`).join('')}
+    </div>`;
+    _kcOpenPopover(anchor, html, 'kcp-prio');
+  }
+
+  async function saveKcPrio(tid, prioridad) {
+    _kcClosePopover();
+    const t = _tasks.find(x => x.id === tid);
+    if (!t) return;
+    const prev = t.prioridad;
+    t.prioridad = prioridad;
+    _rerender();
+    try {
+      await apiFetch(`${API}/mgmt/tasks/${tid}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          titulo: t.titulo, project_id: t.project_id, descripcion: t.descripcion || '',
+          estado: t.estado, prioridad, responsable: t.responsable || '',
+          responsables: t.responsables || [], deadline: t.deadline || null,
+          notas: t.notas || '', parent_task_id: t.parent_task_id || null,
+        }),
+      });
+    } catch { t.prioridad = prev; _rerender(); }
+  }
+
+  // ── Date popover ──────────────────────────────────────────────────
+
+  function openKcDatePopover(e, tid) {
+    e.stopPropagation();
+    const anchor = e.currentTarget || (e.target && e.target.closest('.kc-ctx-item')) || e.target;
+    const t      = _tasks.find(x => x.id === tid);
+    const cur    = t?.deadline ? String(t.deadline).split('T')[0] : '';
+
+    let minDate = '', maxDate = '';
+    if (t?.parent_task_id) {
+      const par = _tasks.find(x => x.id === t.parent_task_id);
+      maxDate = par?.deadline ? String(par.deadline).split('T')[0] : '';
+    } else {
+      const proj = _projectsForDateLimit.find(x => x.id === t?.project_id);
+      minDate = proj?.fecha_inicio ? String(proj.fecha_inicio).split('T')[0] : '';
+      maxDate = proj?.fecha_fin    ? String(proj.fecha_fin).split('T')[0]    : '';
+    }
+    const rangeHint = (minDate || maxDate) ? `Rango: ${minDate||'sin inicio'} → ${maxDate||'sin fin'}` : '';
+    const curLabel  = cur ? `Actual: ${cur}` : 'Sin fecha asignada';
+
+    const html = `<div class="kcp-date-wrap">
+      <div class="kcp-date-cur">${curLabel}</div>
+      <input type="date" id="kcp-date-inp" class="kcp-date-inp" value="${cur}"
+        ${minDate?`min="${minDate}"`:''}${maxDate?` max="${maxDate}"`:''}
+        onkeydown="if(event.key==='Enter'){event.preventDefault();TasksModule.saveKcDate(${tid})}"
+        onchange="TasksModule.saveKcDate(${tid})">
+      <div class="kcp-hint" id="kcp-date-hint">${rangeHint}</div>
+      <div class="kcp-date-btns">
+        <button class="kcp-btn kcp-btn--ghost" onclick="TasksModule.closeKcPopover()">Cancelar</button>
+        <button class="kcp-btn kcp-btn--brand" onclick="TasksModule.saveKcDate(${tid})">Guardar</button>
+      </div>
+    </div>`;
+    _kcOpenPopover(anchor, html, 'kcp-date');
+    setTimeout(() => {
+      const inp = document.getElementById('kcp-date-inp');
+      if (!inp) return;
+      inp.focus();
+      try { inp.showPicker?.(); } catch {}
+    }, 60);
+  }
+
+  async function saveKcDate(tid) {
+    const inp    = document.getElementById('kcp-date-inp');
+    const hint   = document.getElementById('kcp-date-hint');
+    if (!inp) return;
+    const deadline = inp.value || null;
+    const t = _tasks.find(x => x.id === tid);
+    if (!t) return;
+
+    const _showErr = msg => {
+      if (hint) { hint.textContent = '⚠ ' + msg; hint.classList.add('kcp-hint--err'); }
+    };
+
+    if (deadline) {
+      if (t.parent_task_id) {
+        const par   = _tasks.find(x => x.id === t.parent_task_id);
+        const parDl = par?.deadline ? String(par.deadline).split('T')[0] : '';
+        if (parDl && deadline > parDl) { _showErr('Fecha posterior a la tarea padre'); return; }
+      } else {
+        const proj = _projectsForDateLimit.find(x => x.id === t.project_id);
+        const ps   = proj?.fecha_inicio ? String(proj.fecha_inicio).split('T')[0] : '';
+        const pe   = proj?.fecha_fin    ? String(proj.fecha_fin).split('T')[0]    : '';
+        if ((ps && deadline < ps) || (pe && deadline > pe)) { _showErr('Fuera del rango del proyecto'); return; }
+      }
+    }
+
+    _kcClosePopover();
+    const prev = t.deadline;
+    t.deadline = deadline;
+    _rerender();
+    try {
+      await apiFetch(`${API}/mgmt/tasks/${tid}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          titulo: t.titulo, project_id: t.project_id, descripcion: t.descripcion || '',
+          estado: t.estado, prioridad: t.prioridad, responsable: t.responsable || '',
+          responsables: t.responsables || [], deadline,
+          notas: t.notas || '', parent_task_id: t.parent_task_id || null,
+        }),
+      });
+    } catch { t.deadline = prev; _rerender(); }
+  }
+
+  // ── Responsable popover ───────────────────────────────────────────
+
+  function openKcRespPopover(e, tid) {
+    e.stopPropagation();
+    const anchor  = e.currentTarget || (e.target && e.target.closest('.kc-ctx-item')) || e.target;
+    const t       = _tasks.find(x => x.id === tid);
+    const cur     = t?.responsable || '';
+    const members = _teamMembers || [];
+    const chk     = `<svg class="kcp-check" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+
+    const _row = (val, label, isActive, ini) =>
+      `<button class="kcp-list-item${isActive?' kcp-list-item--active':''}" data-resp-name="${val}"
+        onclick="event.stopPropagation();TasksModule.saveKcResp(${tid},'${val.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')">
+        <span class="kcp-av${!val?' kcp-av--none':''}">${ini}</span>
+        <span>${label}</span>${isActive?chk:''}
+      </button>`;
+
+    const rows = [
+      _row('', 'Sin asignar', !cur, '–'),
+      ...members.map(m => _row(m.nombre, esc(m.nombre), cur===m.nombre,
+        m.nombre.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase())),
+    ].join('');
+
+    const showSearch = members.length > 4;
+    const html = `<div class="kcp-resp-wrap">
+      ${showSearch ? `<div class="kcp-search-wrap">
+        <input type="text" id="kcp-resp-search" class="kcp-search-inp" placeholder="Buscar…"
+          autocomplete="off"
+          oninput="TasksModule._kcFilterResp(this.value)">
+      </div>` : ''}
+      <div class="kcp-resp-list-wrap">
+        <div class="kcp-list" id="kcp-resp-list">${rows}</div>
+      </div>
+    </div>`;
+    _kcOpenPopover(anchor, html, 'kcp-resp');
+    if (showSearch) setTimeout(() => document.getElementById('kcp-resp-search')?.focus(), 40);
+  }
+
+  function _kcFilterResp(q) {
+    const lower  = q.toLowerCase();
+    const listEl = document.getElementById('kcp-resp-list');
+    if (!listEl) return;
+    listEl.querySelectorAll('.kcp-list-item').forEach(btn => {
+      const name = (btn.dataset.respName || '').toLowerCase();
+      btn.style.display = name.includes(lower) || !q ? '' : 'none';
+    });
+  }
+
+  async function saveKcResp(tid, responsable) {
+    _kcClosePopover();
+    const t = _tasks.find(x => x.id === tid);
+    if (!t) return;
+    const prev = { r: t.responsable, rs: t.responsables };
+    t.responsable  = responsable;
+    t.responsables = responsable ? [responsable] : [];
+    _rerender();
+    try {
+      await apiFetch(`${API}/mgmt/tasks/${tid}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          titulo: t.titulo, project_id: t.project_id, descripcion: t.descripcion || '',
+          estado: t.estado, prioridad: t.prioridad, responsable,
+          responsables: responsable ? [responsable] : [],
+          deadline: t.deadline || null,
+          notas: t.notas || '', parent_task_id: t.parent_task_id || null,
+        }),
+      });
+    } catch {
+      t.responsable = prev.r; t.responsables = prev.rs;
+      _rerender();
+    }
+  }
+
+  // ── List-view estado popover ───────────────────────────────────────
+
+  function tlOpenEstadoPop(e, tid) {
+    e.stopPropagation();
+    const anchor = e.currentTarget || (e.target && e.target.closest('td')) || e.target;
+    const t      = _tasks.find(x => x.id === tid);
+    const cur    = t?.estado || 'pendiente';
+    const chk    = `<svg class="kcp-check" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+    const items  = [
+      ['pendiente',   'Pendiente',   '#9CA3AF'],
+      ['en_progreso', 'En progreso', '#F97316'],
+      ['bloqueado',   'Bloqueado',   '#EF4444'],
+      ['completado',  'Completado',  '#22C55E'],
+    ];
+    const html = `<div class="kcp-list">${items.map(([v, l, col]) =>
+      `<button class="kcp-list-item${cur===v?' kcp-list-item--active':''}"
+        onclick="event.stopPropagation();TasksModule.tlSaveEstado(${tid},'${v}')">
+        <span class="kcp-prio-dot" style="background:${col}"></span>
+        <span>${l}</span>${cur===v?chk:''}
+      </button>`).join('')}
+    </div>`;
+    _kcOpenPopover(anchor, html, 'kcp-estado');
+  }
+
+  async function tlSaveEstado(tid, estado) {
+    _kcClosePopover();
+    const t = _tasks.find(x => x.id === tid);
+    if (!t) return;
+    if (estado === 'completado') { const b = _blockedBy(t); if (b.length && !confirm(`Esta tarea espera a: ${b.map(d => d.titulo).join(', ')}.\nAún no está(n) completa(s). ¿Marcar completada igual?`)) return; }
+    const prev = t.estado;
+    t.estado = estado;
+    _rerender();
+    try {
+      await apiFetch(`${API}/mgmt/tasks/${tid}/status`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ estado }),
+      });
+    } catch { t.estado = prev; _rerender(); }
+  }
+
+  // ── Dependencias entre tareas: bloqueadores no completados + popover crear/quitar ──
+  function _blockedBy(t) { return (t.waiting_on || []).filter(d => d && oppTaskNorm(d.estado) !== 'completado'); }
+  function _depInner(tid) {
+    const t = _tasks.find(x => x.id === tid); if (!t) return '';
+    const deps = t.waiting_on || [];
+    const depIds = new Set(deps.map(d => d.id));
+    const cur = deps.length ? deps.map(d => {
+      const done = oppTaskNorm(d.estado) === 'completado';
+      return `<div class="tl-deprow"><span class="tl-depdot" style="background:${done ? '#22C55E' : '#B7791F'}"></span><span class="tl-depname"${done ? ' style="text-decoration:line-through;opacity:.6"' : ''}>${esc(d.titulo)}</span><button class="tl-depx" title="Quitar" onclick="event.stopPropagation();TasksModule.tlRemoveDep(${tid},${d.id})">×</button></div>`;
+    }).join('') : '<div class="tl-depempty">Sin dependencias todavía</div>';
+    const cands = _tasks.filter(x => x.id !== tid && !depIds.has(x.id))
+      .sort((a, b) => (a.titulo || '').localeCompare(b.titulo || '', 'es'))
+      .map(x => `<option value="${x.id}">${esc((x.titulo || '').slice(0, 48))}</option>`).join('');
+    return `<div class="tl-dephdr">Esperando a</div>${cur}<select class="tl-depsel" onclick="event.stopPropagation()" onchange="if(this.value)TasksModule.tlAddDep(${tid},+this.value)"><option value="">+ Añadir tarea…</option>${cands}</select>`;
+  }
+  function tlOpenDepPop(e, tid) {
+    e.stopPropagation();
+    const anchor = e.currentTarget || (e.target && e.target.closest('button,td')) || e.target;
+    _kcOpenPopover(anchor, `<div id="tl-deppop" class="tl-deppop">${_depInner(tid)}</div>`, 'kcp-dep');
+  }
+  async function tlAddDep(tid, depId) {
+    try {
+      const r = await apiFetch(`${API}/mgmt/tasks/${tid}/deps`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ depends_on_id: depId }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) { alert(d.error || 'No se pudo añadir la dependencia'); return; }
+      const t = _tasks.find(x => x.id === tid); if (t) t.waiting_on = d.waiting_on || [];
+      const box = document.getElementById('tl-deppop'); if (box) box.innerHTML = _depInner(tid);
+      _rerender();
+    } catch { alert('Error de red al añadir la dependencia'); }
+  }
+  async function tlRemoveDep(tid, depId) {
+    try {
+      const r = await apiFetch(`${API}/mgmt/tasks/${tid}/deps/${depId}`, { method: 'DELETE' });
+      const d = await r.json().catch(() => ({}));
+      if (r.ok) { const t = _tasks.find(x => x.id === tid); if (t) t.waiting_on = d.waiting_on || []; }
+      const box = document.getElementById('tl-deppop'); if (box) box.innerHTML = _depInner(tid);
+      _rerender();
+    } catch {}
+  }
+
+  async function _tlToggleSubStatus(sid) {
+    const s = _tasks.find(x => x.id === sid);
+    if (!s) return;
+    const newEstado = s.estado === 'completado' ? 'pendiente' : 'completado';
+    if (newEstado === 'completado') { const b = _blockedBy(s); if (b.length && !confirm(`Esta subtarea espera a: ${b.map(d => d.titulo).join(', ')}.\n¿Marcar completada igual?`)) return; }
+    const prev = s.estado;
+    s.estado = newEstado;
+    render();
+    try {
+      await apiFetch(`${API}/mgmt/tasks/${sid}/status`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ estado: newEstado }),
+      });
+    } catch { s.estado = prev; render(); }
+  }
+
+  async function archiveTask(tid) {
+    if (!confirm('¿Archivar esta tarea? Se marcará como completada.')) return;
+    await moveTaskToStatus(tid, 'completado');
+  }
+
+  function toggleCardSubs(tid) {
+    if (_kcSubsOpen.has(tid)) _kcSubsOpen.delete(tid);
+    else _kcSubsOpen.add(tid);
+    _renderKanban();
+  }
+
+  function _kcToggleSubItem(sid) {
+    if (_kcSubItemOpen.has(sid)) _kcSubItemOpen.delete(sid);
+    else _kcSubItemOpen.add(sid);
+    const isExp  = _kcSubItemOpen.has(sid);
+    const itemEl = document.querySelector(`.kc-sub-item[data-sub-id="${sid}"]`);
+    if (!itemEl) return;
+    itemEl.classList.toggle('kc-sub-item--exp', isExp);
+    const txtEl = itemEl.querySelector('.kc-sub-txt');
+    if (txtEl) txtEl.classList.toggle('kc-sub-txt--exp', isExp);
+  }
+
+  function _kcRefreshCard(parentId) {
+    const t      = _tasks.find(x => x.id === parentId);
+    const cardEl = document.querySelector(`.kanban-card[data-task-id="${parentId}"]`);
+    if (!t || !cardEl) return;
+    const tmp = document.createElement('div');
+    tmp.innerHTML = _kcCard(t);
+    const newCard = tmp.firstElementChild;
+    if (newCard) cardEl.parentNode.replaceChild(newCard, cardEl);
+  }
+
+  async function toggleSubtaskStatus(sid, parentId) {
+    const s = _tasks.find(x => x.id === sid);
+    if (!s) return;
+    const newEstado = s.estado === 'completado' ? 'pendiente' : 'completado';
+    const prev = s.estado;
+    s.estado = newEstado;
+    _kcRefreshCard(parentId);
+    try {
+      await apiFetch(`${API}/mgmt/tasks/${sid}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ estado: newEstado }),
+      });
+    } catch {
+      s.estado = prev;
+      _kcRefreshCard(parentId);
+    }
+  }
+
+  async function duplicateTask(tid) {
+    const t = _tasks.find(x => x.id === tid);
+    if (!t) return;
+    try {
+      await apiFetch(`${API}/mgmt/tasks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          titulo: t.titulo + ' (copia)',
+          project_id: t.project_id || null,
+          descripcion: t.descripcion || '',
+          estado: 'pendiente',
+          prioridad: t.prioridad || 'media',
+          responsable: t.responsable || '',
+          responsables: t.responsables || [],
+          deadline: t.deadline || null,
+          notas: t.notas || '',
+          parent_task_id: null,
+        })
+      });
+      await load();
+    } catch(err) { alert('Error al duplicar: ' + err.message); }
+  }
+
+  function openDrawerWithStatus(estado) {
+    openDrawer();
+    setTimeout(() => {
+      const form = document.getElementById('tasks-form');
+      if (form?.estado) form.estado.value = estado;
+    }, 120);
   }
 
   // ── Calendar view ──────────────────────────────────────────────────
@@ -2913,9 +7528,13 @@ const TasksModule = (() => {
     try {
       const res = await apiFetch(`${API}/mgmt/projects`);
       const projects = res.ok ? await res.json() : [];
+      _projectsForDateLimit = projects;
       sel.innerHTML = '<option value="">Seleccionar proyecto…</option>' +
         projects.map(p =>
-          `<option value="${p.id}" ${selectedId == p.id ? 'selected' : ''}>${esc(p.nombre)}${p.client_nombre ? ' · ' + esc(p.client_nombre) : ''}</option>`
+          `<option value="${p.id}" ${selectedId == p.id ? 'selected' : ''}` +
+          `${p.fecha_inicio ? ` data-start="${String(p.fecha_inicio).split('T')[0]}"` : ''}` +
+          `${p.fecha_fin    ? ` data-end="${String(p.fecha_fin).split('T')[0]}"` : ''}` +
+          `>${esc(p.nombre)}${p.client_nombre ? ' · ' + esc(p.client_nombre) : ''}</option>`
         ).join('');
     } catch {
       sel.innerHTML = '<option value="">Error al cargar proyectos</option>';
@@ -2996,6 +7615,31 @@ const TasksModule = (() => {
     badge.style.display = '';
   }
 
+  function _applyProjectDateLimits() {
+    const sel     = $('tasks-project-select');
+    const dlInput = document.querySelector('#tasks-form [name="deadline"]');
+    const fiInput = document.querySelector('#tasks-form [name="fecha_inicio"]');
+    if (!sel) return;
+    const opt = sel.options[sel.selectedIndex];
+    const start = opt?.dataset.start || '';
+    const end   = opt?.dataset.end   || '';
+    if (dlInput) { dlInput.min = start; dlInput.max = end; }
+    if (fiInput) { fiInput.min = start; fiInput.max = end; }
+  }
+
+  function onProjectDateChange() {
+    _applyProjectDateLimits();
+    const dlInput = document.querySelector('#tasks-form [name="deadline"]');
+    if (!dlInput?.value) return;
+    const sel = $('tasks-project-select');
+    const opt = sel?.options[sel.selectedIndex];
+    const start = opt?.dataset.start || '';
+    const end   = opt?.dataset.end   || '';
+    if ((start && dlInput.value < start) || (end && dlInput.value > end)) {
+      dlInput.value = '';
+    }
+  }
+
   async function openDrawer(id = null, presetProjectId = null, presetParentTaskId = null) {
     _editId = id ?? null;
     const form    = $('tasks-form');
@@ -3009,7 +7653,15 @@ const TasksModule = (() => {
     await _applyParentBadge(null);
 
     if (_editId) {
-      const t = _tasks.find(x => x.id === _editId);
+      let t = _tasks.find(x => x.id === _editId);
+      if (!t) {
+        // _tasks puede no estar cargado (p. ej. al abrir desde el Dashboard sin haber visitado Tareas)
+        // → cárgalo bajo demanda y reintenta, en vez de salir sin hacer nada.
+        try {
+          const res = await apiFetch(`${API}/mgmt/tasks`);
+          if (res.ok) { _tasks = await res.json(); t = _tasks.find(x => x.id === _editId); }
+        } catch (e) { console.error('[tasks] openDrawer load:', e); }
+      }
       if (!t) return;
       title.textContent       = 'Editar tarea';
       saveBtn.textContent     = 'Guardar cambios';
@@ -3020,20 +7672,25 @@ const TasksModule = (() => {
       form.descripcion.value  = t.descripcion;
       form.notas.value        = t.notas;
       if (t.deadline) form.deadline.value = t.deadline.split('T')[0];
+      if (t.fecha_inicio) form.fecha_inicio.value = t.fecha_inicio.split('T')[0];
+      _plLoad(t);
       await _applyParentBadge(t.parent_task_id);
       await Promise.all([
         _fetchAndPopulateProjects(t.project_id),
         _fetchAndPopulateTeam(t.responsable || ''),
       ]);
+      _applyProjectDateLimits();
     } else {
       title.textContent   = presetParentTaskId ? 'Nueva subtarea' : 'Nueva tarea';
       saveBtn.textContent  = presetParentTaskId ? 'Crear subtarea' : 'Crear tarea';
       if (delBtn) delBtn.style.display = 'none';
+      _plReset();
       await _applyParentBadge(presetParentTaskId);
       await Promise.all([
         _fetchAndPopulateProjects(presetProjectId),
         _fetchAndPopulateTeam(''),
       ]);
+      _applyProjectDateLimits();
       if (projSel) projSel.disabled = !!presetParentTaskId;
     }
 
@@ -3046,6 +7703,90 @@ const TasksModule = (() => {
     $('tasks-drawer')?.classList.remove('open');
     $('tasks-drawer-overlay')?.classList.remove('open');
     _editId = null;
+  }
+
+  /* ── plan de trabajo recurrente ──────────────────── */
+  const _PL_DAYS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+  let _plDays  = new Set();   // índices 0=Lun … 6=Dom
+  let _plHours = '';          // meta total de horas (string)
+  let _plHour24 = 8;          // hora de inicio 0-23
+  let _plSaveT = null;
+
+  function _plReset() {
+    _plDays = new Set(); _plHours = ''; _plHour24 = 8;
+    _plShowEditor(true); _plRender();
+  }
+
+  function _plLoad(t) {
+    _plDays = new Set(String(t.plan_dias || '').split(',')
+      .map(s => s.trim()).filter(s => s !== '').map(Number)
+      .filter(n => n >= 0 && n <= 6));
+    _plHours  = (t.plan_horas != null && t.plan_horas !== '') ? String(+t.plan_horas) : '';
+    _plHour24 = (t.plan_hora  != null && t.plan_hora  !== '') ? ((+t.plan_hora % 24) + 24) % 24 : 8;
+    // regla jerárquica: si la tarea tiene subtareas, el plan se define en ellas
+    const hasSubs = _tasks.some(x => x.parent_task_id === t.id);
+    _plShowEditor(!hasSubs); _plRender();
+  }
+
+  function _plShowEditor(show) {
+    const ed = $('tpl-editor'), note = $('tpl-subnote');
+    if (ed)   ed.style.display   = show ? '' : 'none';
+    if (note) note.style.display = show ? 'none' : '';
+  }
+
+  function _plRender() {
+    document.querySelectorAll('#tpl-days .tpl-day')
+      .forEach(b => b.classList.toggle('active', _plDays.has(+b.dataset.d)));
+    const hIn = $('tpl-hours'); if (hIn && hIn.value !== _plHours) hIn.value = _plHours;
+    const num = $('tpl-thour'); if (num) num.textContent = (_plHour24 % 12) || 12;
+    const ap  = $('tpl-ampm');  if (ap)  ap.textContent  = _plHour24 < 12 ? 'AM' : 'PM';
+    _plHint();
+  }
+
+  function _plHint() {
+    const el = $('tpl-hint'); if (!el) return;
+    const goal = parseFloat(_plHours);
+    if (!_plDays.size || !goal) { el.innerHTML = ''; return; }
+    const names = [..._plDays].sort((a, b) => a - b).map(d => _PL_DAYS[d]).join(' · ');
+    const perDay = Math.round(goal / _plDays.size * 10) / 10;
+    el.innerHTML = `<b>${goal}h</b>/semana en <b>${names}</b> ≈ <b>${perDay}h/día</b>, desde las <b>${(_plHour24 % 12) || 12} ${_plHour24 < 12 ? 'AM' : 'PM'}</b>.`;
+  }
+
+  function plDay(d)   { _plDays.has(d) ? _plDays.delete(d) : _plDays.add(d); _plRender(); _plAutosave(); }
+  function plHours(v) { _plHours = (v === '' ? '' : String(v)); _plHint(); _plAutosave(); }
+  function plStep(dir){ _plHour24 = ((_plHour24 + dir) % 24 + 24) % 24; _plRender(); _plAutosave(); }
+  function plWheel(e) { e.preventDefault(); plStep(e.deltaY < 0 ? 1 : -1); }
+  function plKey(e)   {
+    if (e.key === 'ArrowUp')   { e.preventDefault(); plStep(1);  }
+    if (e.key === 'ArrowDown') { e.preventDefault(); plStep(-1); }
+  }
+  function plAmpm()   { _plHour24 = (_plHour24 + 12) % 24; _plRender(); _plAutosave(); }
+
+  function _plCollect() {
+    return {
+      plan_dias:  [..._plDays].sort((a, b) => a - b).join(','),
+      plan_horas: _plHours === '' ? null : parseFloat(_plHours),
+      plan_hora:  _plDays.size ? _plHour24 : null,
+    };
+  }
+
+  function _plAutosave() {
+    if (!_editId) return;                 // tarea nueva → se guarda en el POST
+    clearTimeout(_plSaveT);
+    _plSaveT = setTimeout(async () => {
+      const body = _plCollect();
+      try {
+        const res = await apiFetch(`${API}/mgmt/tasks/${_editId}/plan`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (res.ok) {
+          const t = _tasks.find(x => x.id === _editId);
+          if (t) { t.plan_dias = body.plan_dias; t.plan_horas = body.plan_horas; t.plan_hora = body.plan_hora; }
+          if (typeof CalendarModule !== 'undefined' && CalendarModule.refreshPlans) CalendarModule.refreshPlans();
+        }
+      } catch (err) { console.error('[plan] autosave:', err); }
+    }, 500);
   }
 
   async function save(e) {
@@ -3062,9 +7803,25 @@ const TasksModule = (() => {
       responsable,
       responsables:  responsable ? [responsable] : [],
       deadline:      form.deadline.value || null,
+      fecha_inicio:  form.fecha_inicio.value || null,
       notas:         form.notas.value.trim(),
       parent_task_id: form.parent_task_id.value ? parseInt(form.parent_task_id.value) : null,
     };
+    if (!_editId) Object.assign(data, _plCollect());   // el plan viaja en el POST (nueva tarea); en edición se guarda vía PATCH /plan
+    if (data.fecha_inicio && data.deadline && data.fecha_inicio > data.deadline) {
+      alert('La fecha de inicio no puede ser posterior al deadline.');
+      return;
+    }
+    if (data.deadline && !data.parent_task_id) {
+      const sel = $('tasks-project-select');
+      const opt = sel?.options[sel.selectedIndex];
+      const projStart = opt?.dataset.start || '';
+      const projEnd   = opt?.dataset.end   || '';
+      if ((projStart && data.deadline < projStart) || (projEnd && data.deadline > projEnd)) {
+        alert('La tarea debe estar dentro del rango de fechas del proyecto.');
+        return;
+      }
+    }
     const orig = saveBtn.textContent;
     saveBtn.disabled    = true;
     saveBtn.textContent = 'Guardando…';
@@ -3139,6 +7896,18 @@ const TasksModule = (() => {
     ).join('');
 
     const dl = t.deadline ? String(t.deadline).split('T')[0] : '';
+    const qeParent = t.parent_task_id ? _tasks.find(x => x.id === t.parent_task_id) : null;
+    let qeDateMin, qeDateMax;
+    if (qeParent) {
+      // Subtask: constrained by parent task (existing logic)
+      qeDateMin = new Date().toISOString().split('T')[0];
+      qeDateMax = qeParent.deadline ? String(qeParent.deadline).split('T')[0] : '';
+    } else {
+      // Main task: constrained by project dates
+      const qeProj = _projectsForDateLimit.find(x => x.id === t.project_id);
+      qeDateMin = qeProj?.fecha_inicio ? String(qeProj.fecha_inicio).split('T')[0] : '';
+      qeDateMax = qeProj?.fecha_fin    ? String(qeProj.fecha_fin).split('T')[0]    : '';
+    }
 
     qe.innerHTML = `
       <div class="tqe-hdr">
@@ -3157,7 +7926,7 @@ const TasksModule = (() => {
       </div>
       <div class="tqe-row">
         <span class="tqe-lbl">Deadline</span>
-        <input type="date" id="tqe-deadline" class="tqe-input" value="${dl}" onclick="event.stopPropagation()">
+        <input type="date" id="tqe-deadline" class="tqe-input" value="${dl}" onclick="event.stopPropagation()" ${qeDateMin ? `min="${qeDateMin}"` : ''} ${qeDateMax ? `max="${qeDateMax}"` : ''}>
       </div>
       <div class="tqe-row">
         <span class="tqe-lbl">Responsable</span>
@@ -3207,6 +7976,27 @@ const TasksModule = (() => {
     const prioridad  = $('tqe-prio')?.querySelector('.tqe-chip--on')?.dataset.val  || t.prioridad;
     const deadline   = $('tqe-deadline')?.value || null;
     const responsable = $('tqe-resp')?.value || '';
+    if (deadline && t.parent_task_id) {
+      const qeParentTask = _tasks.find(x => x.id === t.parent_task_id);
+      if (qeParentTask?.deadline) {
+        const parentMax = String(qeParentTask.deadline).split('T')[0];
+        if (deadline > parentMax) {
+          alert('La subtarea debe estar dentro del rango de la tarea padre.');
+          return;
+        }
+      }
+    }
+    if (deadline && !t.parent_task_id) {
+      const qeProj = _projectsForDateLimit.find(x => x.id === t.project_id);
+      if (qeProj) {
+        const projStart = qeProj.fecha_inicio ? String(qeProj.fecha_inicio).split('T')[0] : '';
+        const projEnd   = qeProj.fecha_fin    ? String(qeProj.fecha_fin).split('T')[0]    : '';
+        if ((projStart && deadline < projStart) || (projEnd && deadline > projEnd)) {
+          alert('La tarea debe estar dentro del rango de fechas del proyecto.');
+          return;
+        }
+      }
+    }
     closeQuickEdit();
     t.estado = estado; t.prioridad = prioridad;
     t.deadline = deadline; t.responsable = responsable;
@@ -3229,10 +8019,19 @@ const TasksModule = (() => {
   return {
     load, filter, setFilter, setFilterPrio, setFilterMember, setFilterFecha, render,
     setView, calPrev, calNext, setCalView, loadForCalPane,
-    openDrawer, closeDrawer, save, confirmDelete,
+    openDrawer, closeDrawer, save, confirmDelete, onProjectDateChange,
     openQuickEdit, closeQuickEdit, qeChip, saveQuickEdit,
+    toggleTaskExpand, toggleSubExpand, toggleTlGroup,
+    tlOpenDepPop, tlAddDep, tlRemoveDep,
     kanbanDragStart, kanbanDragEnd, moveTaskToStatus,
+    openKanbanMenu, closeKanbanMenu, toggleCardSubs, _kcToggleSubItem, toggleSubtaskStatus, duplicateTask, archiveTask, openDrawerWithStatus,
+    openKcPrioPopover, saveKcPrio,
+    openKcDatePopover, saveKcDate,
+    openKcRespPopover, saveKcResp, _kcFilterResp,
+    closeKcPopover,
+    tlOpenEstadoPop, tlSaveEstado, _tlToggleSubStatus,
     toggleRespDd, _pickResp,
+    plDay, plHours, plStep, plWheel, plKey, plAmpm,
   };
 })();
 
@@ -3249,10 +8048,12 @@ const CalendarModule = (() => {
   let _timeEntries  = [];
   let _tab          = 'all';
   let _weekOf     = null;
+  let _calMember  = 'me';   // filtro de calendario: 'me' | 'all' | nombre del miembro
+  let _calTeam    = [];     // /mgmt/team para el selector (solo admin)
 
   const HOUR_H = 56;
-  const GRID_S = 8;
-  const GRID_E = 20;
+  let GRID_S = 8;   // límites del grid — dinámicos: se expanden si hay bloques/sesiones fuera de 8–20
+  let GRID_E = 20;
 
   const _WKS  = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
   const _DOMF = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
@@ -3279,6 +8080,53 @@ const CalendarModule = (() => {
     const { h, m } = _parseT(t);
     return `${h % 12 || 12}:${_pad(m)} ${h < 12 ? 'AM' : 'PM'}`;
   }
+  // Día en que la tarea vive en el calendario: día programado, o el deadline como fallback
+  function _taskDay(t) {
+    if (t.prog_fecha) return String(t.prog_fecha).split('T')[0];
+    if (t.deadline)   return String(t.deadline).split('T')[0];
+    return null;
+  }
+  function _addMin(hhmm, min) {
+    const p = _parseT(hhmm); if (!p) return hhmm;
+    let tot = p.h * 60 + p.m + (min || 0);
+    tot = Math.max(0, Math.min(tot, 24 * 60 - 1));
+    return `${_pad(Math.floor(tot / 60))}:${_pad(tot % 60)}`;
+  }
+  function _dlShort(ds) {
+    const d = new Date(ds + 'T00:00:00');
+    return `${d.getDate()} ${_MONS[d.getMonth()]}`;
+  }
+  const _ESTADO_COL = { pendiente: '#C8BCAC', en_progreso: '#6366F1', completado: '#22C55E', bloqueado: '#EF4444' };
+
+  // ── Filtro por miembro (admin puede ver el calendario de otro) ──────
+  function _calIsAdmin() {
+    const u = window._authUser;
+    return !!(u && (u.isOwner || ['admin', 'manager'].includes(u.memberRol)));
+  }
+  function _calMyName() { return (window._authUser?.memberNombre || window._authUser?.name || '').toLowerCase(); }
+  function _taskForMember(t) {
+    if (_calMember === 'all') return true;
+    const who  = (_calMember === 'me' ? _calMyName() : _calMember).toLowerCase();
+    if (!who) return true;                         // sin identidad → no ocultar nada
+    const resp = (t.responsables && t.responsables.length ? t.responsables
+                 : (t.responsable ? [t.responsable] : [])).map(r => String(r).toLowerCase());
+    return resp.includes(who);
+  }
+  function _memberWho() { return (_calMember === 'me' ? _calMyName() : _calMember).toLowerCase(); }
+  // Ausencias: por member_nombre. 'all' → todas; 'me' → las mías; otro → las suyas.
+  function _offForMember(o) {
+    if (_calMember === 'all') return true;
+    const who = _memberWho(); if (!who) return true;
+    return String(o.member_nombre || '').toLowerCase() === who;
+  }
+  // Reuniones: 'me'/'all' → todas (son de equipo); miembro concreto → solo si es asistente.
+  function _mtgForMember(m) {
+    if (_calMember === 'all' || _calMember === 'me') return true;
+    const who = _calMember.toLowerCase();
+    let att = []; try { att = JSON.parse(m.attendees || '[]'); } catch (_) { att = []; }
+    return att.map(a => String(a && typeof a === 'object' ? (a.nombre || a.name || a.email || '') : a).toLowerCase()).includes(who);
+  }
+  function switchMember(v) { _calMember = v || 'me'; render(); }
 
   // ── Load ───────────────────────────────────────────────────────────
   async function load() {
@@ -3302,7 +8150,12 @@ const CalendarModule = (() => {
       if (tr.ok)  _tasks       = await tr.json();
       if (tor.ok) _timeOff     = await tor.json();
       if (gcr.ok) { const gd = await gcr.json(); _gcalConn = gd.connected; _gcalEvents = gd.events || []; }
-      if (ter.ok) _timeEntries = await ter.json();
+      // Solo sesiones del timer MANUAL en el calendario. El uso web/app de la extensión/agente
+      // (cientos de micro-bloques "Sin tarea") se resume en Time Tracking → "Apps y websites usados", no aquí.
+      if (ter.ok) _timeEntries = (await ter.json()).filter(e => (e.source || 'manual_timer') === 'manual_timer');
+      if (_calIsAdmin() && !_calTeam.length) {
+        try { const r = await apiFetch(`${API}/mgmt/team`); if (r.ok) _calTeam = await r.json(); } catch (_) {}
+      }
     } catch (e) { console.error('[cal] load:', e); }
     spin.style.display = 'none';
     cont.style.display = '';
@@ -3330,10 +8183,45 @@ const CalendarModule = (() => {
     } catch (e) { console.warn('[gcal] sync failed:', e.message); }
   }
 
+  // Límites horarios del grid: por defecto 8–20, pero se EXPANDEN para incluir cualquier
+  // sesión/bloque/reunión fuera de ese rango (p. ej. tiempo registrado a las 6 AM o 10 PM).
+  // Solo cuenta lo que realmente se renderiza (respeta el filtro por miembro).
+  function _computeGridBounds() {
+    let minH = 8, maxH = 20;
+    const ws = _weekOf || _monday(new Date());
+    const weekDs = new Set(Array.from({ length: 7 }, (_, i) => _iso(new Date(ws.getTime() + i * 86400000))));
+    const personal = (_calMember === 'me');
+    const lo = h => { if (h != null && !isNaN(h) && h < minH) minH = Math.floor(h); };
+    const hi = h => { if (h != null && !isNaN(h) && h > maxH) maxH = Math.ceil(h); };
+    if (personal) for (const e of _timeEntries) {
+      const s = new Date(e.started_at); if (!weekDs.has(_iso(s))) continue;
+      const en = e.ended_at ? new Date(e.ended_at) : new Date();
+      lo(s.getHours() + s.getMinutes() / 60); hi(en.getHours() + en.getMinutes() / 60);
+    }
+    for (const t of _tasks) {
+      if (!t.prog_inicio || !weekDs.has(_taskDay(t)) || !_taskForMember(t)) continue;
+      const p = _parseT(t.prog_inicio); if (!p) continue;
+      const sh = p.h + p.m / 60; lo(sh); hi(sh + (t.prog_min || 60) / 60);
+    }
+    for (const m of _meetings) {
+      if (!m.hora_inicio || !weekDs.has(String(m.fecha).split('T')[0]) || !_mtgForMember(m)) continue;
+      const s = _parseT(m.hora_inicio); if (!s) continue; const e = _parseT(m.hora_fin);
+      lo(s.h + s.m / 60); hi(e ? e.h + e.m / 60 : s.h + s.m / 60 + 1);
+    }
+    if (personal) for (const ev of _gcalEvents) {
+      if (ev.allDay || !ev.start) continue; const s = new Date(ev.start); if (!weekDs.has(_iso(s))) continue;
+      const e = new Date(ev.end || ev.start); lo(s.getHours() + s.getMinutes() / 60); hi(e.getHours() + e.getMinutes() / 60);
+    }
+    for (const p of _recurPlans()) { lo(p.hour); hi(p.hour + p.perMin / 60); }
+    GRID_S = Math.max(0, Math.min(8, minH));
+    GRID_E = Math.min(24, Math.max(20, maxH));
+  }
+
   // ── Render ─────────────────────────────────────────────────────────
   function render() {
     const cont = $('cal-pane-container');
     if (!cont) return;
+    _computeGridBounds();
     const today   = new Date(); today.setHours(0,0,0,0);
     const todayDs = _iso(today);
     const weekDays = Array.from({length:7}, (_,i) => {
@@ -3341,14 +8229,14 @@ const CalendarModule = (() => {
       return { d, ds: _iso(d), isToday: _iso(d) === todayDs };
     });
     const wDs = new Set(weekDays.map(x => x.ds));
-    const tMtgs  = _meetings.filter(m => String(m.fecha).split('T')[0] === todayDs);
-    const tTasks = _tasks.filter(t => t.deadline && String(t.deadline).split('T')[0] === todayDs);
-    const wMtgs  = _meetings.filter(m => wDs.has(String(m.fecha).split('T')[0]));
-    const wTasks = _tasks.filter(t => t.deadline && wDs.has(String(t.deadline).split('T')[0]));
+    const tMtgs  = _meetings.filter(m => String(m.fecha).split('T')[0] === todayDs && _mtgForMember(m));
+    const tTasks = _tasks.filter(t => t.deadline && String(t.deadline).split('T')[0] === todayDs && _taskForMember(t));
+    const wMtgs  = _meetings.filter(m => wDs.has(String(m.fecha).split('T')[0]) && _mtgForMember(m));
+    const wTasks = _tasks.filter(t => t.deadline && wDs.has(String(t.deadline).split('T')[0]) && _taskForMember(t));
     const wTOff  = _timeOff.filter(o => {
       const s = String(o.fecha_inicio).split('T')[0];
       const e = String(o.fecha_fin).split('T')[0];
-      return [...wDs].some(ds => ds >= s && ds <= e);
+      return _offForMember(o) && [...wDs].some(ds => ds >= s && ds <= e);
     });
     const s = weekDays[0].d, e = weekDays[6].d;
     const rangeLabel = s.getMonth() === e.getMonth()
@@ -3413,6 +8301,16 @@ const CalendarModule = (() => {
   function _fbar(rangeLabel) {
     const today    = new Date(); today.setHours(0,0,0,0);
     const thisWeek = _monday(today).getTime() === _weekOf.getTime();
+    const memberSel = _calIsAdmin() ? `
+      <div style="flex:1"></div>
+      <div class="cal2__member" title="Ver el calendario de un miembro del equipo">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <select class="cal2__member-sel" onchange="CalendarModule.switchMember(this.value)">
+          <option value="me"${_calMember === 'me' ? ' selected' : ''}>Mi calendario (yo)</option>
+          <option value="all"${_calMember === 'all' ? ' selected' : ''}>Todo el equipo</option>
+          ${_calTeam.filter(m => String(m.nombre || '').trim().toLowerCase() !== _calMyName()).map(m => `<option value="${esc(m.nombre)}"${_calMember === m.nombre ? ' selected' : ''}>${esc(m.nombre)}</option>`).join('')}
+        </select>
+      </div>` : '';
     return `<div class="cal2__fbar">
       <button class="cal2__fbtn${thisWeek ? ' cal2__fbtn--on' : ''}" onclick="CalendarModule.goToday()">Hoy</button>
       <div class="cal2__fnav">
@@ -3427,6 +8325,7 @@ const CalendarModule = (() => {
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
         ${esc(rangeLabel)}
       </div>
+      ${memberSel}
     </div>`;
   }
 
@@ -3458,7 +8357,7 @@ const CalendarModule = (() => {
       const list = _timeOff.filter(o => {
         const s = String(o.fecha_inicio).split('T')[0];
         const e = String(o.fecha_fin).split('T')[0];
-        return [...wDs].some(ds => ds >= s && ds <= e);
+        return _offForMember(o) && [...wDs].some(ds => ds >= s && ds <= e);
       });
       if (!list.length) return `<div class="cal2__empty-cards">Sin ausencias registradas esta semana</div>`;
       const motivos = { 'Vacaciones':'🏖','Enfermedad':'🤒','Personal':'🏠','Feriado':'📅','Otro':'📌' };
@@ -3489,7 +8388,7 @@ const CalendarModule = (() => {
 
     // ── Meeting cards ─────────────────────────────────────────────────
     const list = _meetings
-      .filter(m => wDs.has(String(m.fecha).split('T')[0]) && m.estado !== 'cancelada')
+      .filter(m => wDs.has(String(m.fecha).split('T')[0]) && m.estado !== 'cancelada' && _mtgForMember(m))
       .sort((a, b) => {
         const da = String(a.fecha).split('T')[0], db = String(b.fecha).split('T')[0];
         return da !== db ? da < db ? -1 : 1 : (a.hora_inicio || '') < (b.hora_inicio || '') ? -1 : 1;
@@ -3531,6 +8430,210 @@ const CalendarModule = (() => {
     return `<div class="cal2__cards-wrap"><div class="cal2__cards">${html}</div></div>`;
   }
 
+  // Panel "Sin hora asignada": tareas/subtareas con día (prog o deadline) en la semana, sin hora
+  // Popover por día: SOLO las tareas sin hora de ese día → asignar hora rápido (sin bandeja global)
+  // ── Popover "Pendientes sin hora" — jerárquico + programar 1h con chips ──
+  let _dpDs = null, _dpQuery = '', _dpSched = null;   // día abierto · búsqueda · {taskId,dur,hour} del mini-scheduler
+
+  function openDayUnscheduled(e, ds) {
+    e.stopPropagation();
+    const anchor = e.currentTarget.getBoundingClientRect();
+    if (_popClose) { _popClose(); }
+    _dpDs = ds; _dpQuery = ''; _dpSched = null;
+    const d = new Date(ds + 'T00:00:00');
+    const W = 480;
+    const pop = document.createElement('div');
+    pop.className = 'cal2-dpop';
+    pop.innerHTML = `
+      <div class="cal2-dpop__hd">
+        <div class="cal2-dpop__hdtxt">
+          <div class="cal2-dpop__title">Pendientes sin hora</div>
+          <div class="cal2-dpop__sub">Tareas con fecha, pero todavía sin bloque de trabajo asignado.</div>
+        </div>
+        <button class="cal2-dpop__x" onclick="CalendarModule.closeDayPop()" aria-label="Cerrar">✕</button>
+      </div>
+      <div class="cal2-dpop__day">${_WKS[(d.getDay()+6)%7]} ${d.getDate()} ${_MONS[d.getMonth()]}</div>
+      <div class="cal2-dpop__search">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input id="cal-dp-search" placeholder="Buscar tarea, proyecto o cliente…" oninput="CalendarModule._dpSearch()" autocomplete="off">
+      </div>
+      <div class="cal2-dpop__list" id="cal-dp-list"></div>`;
+    document.body.appendChild(pop);
+    pop.style.cssText += `;position:fixed;z-index:10001;width:${W}px;top:${Math.min(anchor.bottom + 6, Math.max(12, window.innerHeight - 460))}px;left:${Math.min(Math.max(8, anchor.left - 30), window.innerWidth - W - 8)}px`;
+    const onDoc = ev => { if (!pop.contains(ev.target)) _closePop(); };
+    _popClose = () => { pop.remove(); document.removeEventListener('mousedown', onDoc); _popClose = null; _dpDs = null; _dpSched = null; };
+    setTimeout(() => document.addEventListener('mousedown', onDoc), 0);
+    _renderDayPop();
+  }
+  function closeDayPop() { if (_popClose) _popClose(); }
+  function _dpSearch() { _dpQuery = ($('cal-dp-search')?.value || '').toLowerCase().trim(); _dpSched = null; _renderDayPop(); }
+
+  function _renderDayPop() {
+    const listEl = $('cal-dp-list'); if (!listEl || !_dpDs) return;
+    const ds = _dpDs;
+    const scroll = listEl.scrollTop;
+    const byId = {}; _tasks.forEach(t => byId[t.id] = t);
+    let items = _tasks.filter(t => !t.prog_inicio && t.estado !== 'completado' && _taskDay(t) === ds && _taskForMember(t));
+    if (_dpQuery) items = items.filter(t => (t.titulo + ' ' + (t.project_nombre || '') + ' ' + (t.client_nombre || '')).toLowerCase().includes(_dpQuery));
+    if (!items.length) {
+      listEl.innerHTML = `<div class="cal2-dpop__empty">${_dpQuery ? 'Sin resultados para tu búsqueda.' : '🎉 Todo este día ya tiene su hora asignada.'}</div>`;
+      return;
+    }
+    const groups = {};
+    for (const t of items) {
+      const key = t.project_id || '_none';
+      (groups[key] = groups[key] || { nombre: t.project_nombre, cliente: t.client_nombre, items: [] }).items.push(t);
+    }
+    let html = '';
+    for (const key of Object.keys(groups)) {
+      const g = groups[key];
+      const mains = g.items.filter(t => !t.parent_task_id);
+      const subsByParent = {};
+      g.items.filter(t => t.parent_task_id).forEach(s => (subsByParent[s.parent_task_id] = subsByParent[s.parent_task_id] || []).push(s));
+      const usedSub = new Set();
+      let body = '';
+      for (const m of mains) {
+        const subs = subsByParent[m.id] || [];
+        // Padre con subtareas pero ninguna vence este día → no es agendable aquí (sus subtareas se
+        // programan en sus propias fechas). Se omite para que el conteo cuadre con lo realmente agendable.
+        if (subs.length === 0 && _tasks.some(x => x.parent_task_id === m.id)) continue;
+        subs.forEach(s => usedSub.add(s.id));
+        body += _dpRow(m, false, subs.length, '');
+        if (subs.length) body += `<div class="cal2-dpsubs" id="cal-dp-subs-${m.id}">${subs.map(s => _dpRow(s, true, 0, '')).join('')}</div>`;
+      }
+      const orphans = g.items.filter(t => t.parent_task_id && !usedSub.has(t.id));
+      if (orphans.length) body += `<div class="cal2-dpsubs">${orphans.map(s => _dpRow(s, true, 0, byId[s.parent_task_id]?.titulo || '')).join('')}</div>`;
+      if (!body) continue;   // grupo sin nada agendable este día → omitir (evita header de proyecto vacío)
+      html += `<div class="cal2-dpgrp">
+        <div class="cal2-dpgrp__hd"><span class="cal2-dptag cal2-dptag--proj">Proyecto</span><span class="cal2-dpgrp__nm" title="${esc(g.nombre || '')}">${esc(g.nombre || 'Sin proyecto')}</span>${g.cliente ? `<span class="cal2-dpgrp__cli">· ${esc(g.cliente)}</span>` : ''}</div>${body}</div>`;
+    }
+    if (!html) { listEl.innerHTML = `<div class="cal2-dpop__empty">No hay tareas por programar este día.</div>`; return; }
+    listEl.innerHTML = html;
+    listEl.scrollTop = scroll;
+  }
+
+  function _dpRow(t, isSub, nSubs, parentName) {
+    const accent = _ESTADO_COL[t.estado] || '#C8BCAC';
+    const dl   = t.deadline ? _dlShort(String(t.deadline).split('T')[0]) : '';
+    const prio = (t.prioridad === 'alta' || t.prioridad === 'urgente') ? `<span class="cal2-dprio">${t.prioridad === 'urgente' ? 'Urgente' : 'Alta'}</span>` : '';
+    const resp = (t.responsables?.length ? t.responsables[0] : t.responsable) || '';
+    // Si una tarea tiene subtareas, lo que se programa son ELLAS (la tarea = conjunto). La tarea
+    // padre solo es contexto (sin botón). Subtareas y tareas-hoja sí se programan.
+    const nGlobalSubs = isSub ? 0 : _tasks.filter(x => x.parent_task_id === t.id).length;
+    const schedulable = isSub || nGlobalSubs === 0;
+    const schedOpen = schedulable && _dpSched && _dpSched.taskId === t.id;
+    const chev = (!isSub && nSubs)
+      ? `<button class="cal2-dpchev" id="cal-dp-chev-${t.id}" onclick="event.stopPropagation();CalendarModule._dpToggleSubs(${t.id})"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>`
+      : '<span class="cal2-dprow__sp"></span>';
+    const meta = [];
+    meta.push(isSub ? '<span class="cal2-dptag cal2-dptag--sub">SUB</span>' : '<span class="cal2-dptag cal2-dptag--task">Tarea</span>');
+    if (prio) meta.push(prio);
+    if (parentName) meta.push(`<span class="cal2-dpmeta cal2-dpmeta--ctx">↳ ${esc(parentName)}</span>`);
+    if (dl) meta.push(`<span class="cal2-dpmeta" title="Fecha límite">⚑ ${dl}</span>`);
+    if (resp) meta.push(`<span class="cal2-dpmeta">${esc(resp)}</span>`);
+    if (!schedulable) meta.push(`<span class="cal2-dpmeta cal2-dpmeta--ctx">${nGlobalSubs} subtarea${nGlobalSubs > 1 ? 's' : ''} · programa las subtareas</span>`);
+    return `<div class="cal2-dprow${isSub ? ' cal2-dprow--sub' : ''}${schedulable ? '' : ' cal2-dprow--parent'}${schedOpen ? ' cal2-dprow--sched' : ''}" style="--dp-accent:${accent}">
+      <div class="cal2-dprow__main">
+        ${chev}<span class="cal2-dprow__dot"></span>
+        <div class="cal2-dprow__body">
+          <div class="cal2-dprow__t" title="${esc(t.titulo)}">${esc(t.titulo)}</div>
+          <div class="cal2-dprow__meta">${meta.join('')}</div>
+        </div>
+        ${schedulable ? `<button class="cal2-dpprog${schedOpen ? ' cal2-dpprog--on' : ''}" onclick="event.stopPropagation();CalendarModule._dpSchedule(${t.id})">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 8 12 12 14.5 13.5"/></svg>${schedOpen ? 'Programar' : 'Programar 1h'}
+        </button>` : ''}
+      </div>
+      ${schedOpen ? _dpSchedPanel(t) : ''}
+    </div>`;
+  }
+
+  function _dpSchedPanel(t) {
+    const hLbl = h => h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h - 12} PM`;
+    const durChips = [[30,'30 min'],[60,'1 h'],[90,'1½ h'],[120,'2 h']]
+      .map(([v,l]) => `<button class="cal2-chip cal2-durchip${(!_dpSched.custom && _dpSched.dur === v) ? ' active' : ''}" data-dur="${v}" onclick="event.stopPropagation();CalendarModule._dpPickDur(${v})">${l}</button>`).join('');
+    const customH = _dpSched.custom ? +(_dpSched.dur / 60).toFixed(2) : '';
+    const customChip = `<label class="cal2-durcustom${_dpSched.custom ? ' active' : ''}" title="Duración personalizada (horas)" onclick="event.stopPropagation()"><input type="number" id="cal-dp-cdur" step="0.5" min="0.5" max="12" placeholder="Otra" value="${customH}" oninput="CalendarModule._dpCustomDur(this.value)"><span class="cal2-durcustom__u">h</span></label>`;
+    let hourChips = '';
+    for (let h = GRID_S; h < GRID_E; h++) hourChips += `<button class="cal2-chip cal2-hourchip${_dpSched.hour === h ? ' active' : ''}" onclick="event.stopPropagation();CalendarModule._dpPickHour(${h})">${hLbl(h)}</button>`;
+    const endMin = Math.min(24 * 60, _dpSched.hour * 60 + _dpSched.dur);
+    const endLbl = _fmtT(_pad(Math.floor(endMin / 60) % 24) + ':' + _pad(endMin % 60));
+    return `<div class="cal2-dpsched">
+      <div class="cal2-dpsched__row"><span class="cal2-dpsched__l">Duración</span><div class="cal2-chips">${durChips}${customChip}</div></div>
+      <div class="cal2-dpsched__row"><span class="cal2-dpsched__l">Hora inicio</span><div class="cal2-chips cal2-chips--hours">${hourChips}</div></div>
+      <div class="cal2-dpsched__acts">
+        <button class="cal2-dpsched__cancel" onclick="event.stopPropagation();CalendarModule._dpSchedCancel()">Cancelar</button>
+        <button class="cal2-dpsched__go" onclick="event.stopPropagation();CalendarModule._dpConfirm(${t.id})"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg>${_fmtT(_pad(_dpSched.hour) + ':00')}<span class="cal2-dpsched__goend">– ${endLbl}</span></button>
+      </div>
+    </div>`;
+  }
+
+  function _dpSchedule(taskId) {
+    if (_dpSched && _dpSched.taskId === taskId) { _dpSched = null; _renderDayPop(); return; }
+    const t = _tasks.find(x => x.id === taskId);
+    let h = new Date().getHours() + 1;
+    if (h < GRID_S || h >= GRID_E) h = 9;
+    _dpSched = { taskId, dur: (t && t.prog_min) || 60, hour: h };
+    _renderDayPop();
+  }
+  function _dpPickDur(v)  { if (_dpSched) { _dpSched.dur = v; _dpSched.custom = false; _renderDayPop(); } }
+  function _dpPickHour(h) { if (_dpSched) { _dpSched.hour = h; _renderDayPop(); } }
+  // Duración personalizada (horas). Sin re-render para no perder el foco del input.
+  function _dpCustomDur(val) {
+    if (!_dpSched) return;
+    const h = parseFloat(val);
+    if (!isNaN(h) && h > 0) { _dpSched.dur = Math.round(h * 60); _dpSched.custom = true; }
+    else { _dpSched.custom = false; }
+    document.querySelectorAll('.cal2-durchip').forEach(c => c.classList.toggle('active', !_dpSched.custom && +c.dataset.dur === _dpSched.dur));
+    const wrap = document.querySelector('.cal2-durcustom'); if (wrap) wrap.classList.toggle('active', _dpSched.custom);
+    const end = document.querySelector('.cal2-dpsched__goend');
+    if (end) { const em = Math.min(24 * 60, _dpSched.hour * 60 + _dpSched.dur); end.textContent = '– ' + _fmtT(_pad(Math.floor(em / 60) % 24) + ':' + _pad(em % 60)); }
+  }
+  function _dpSchedCancel() { _dpSched = null; _renderDayPop(); }
+  async function _dpConfirm(taskId) {
+    if (!_dpSched) return;
+    const ds = _dpDs, inicio = `${_pad(_dpSched.hour)}:00`, dur = _dpSched.dur;
+    _dpSched = null;
+    await _assignSchedule(taskId, ds, inicio, dur);   // PATCH prog_* + render() (grid se actualiza)
+    _renderDayPop();                                   // refresca: la tarea ya tiene hora → sale de "Sin hora"
+  }
+  function _dpToggleSubs(mid) {
+    $('cal-dp-subs-' + mid)?.classList.toggle('cal2-dpsubs--collapsed');
+    $('cal-dp-chev-' + mid)?.classList.toggle('cal2-dpchev--collapsed');
+  }
+
+  // Planes de trabajo recurrentes → bloques sugeridos en el grid.
+  // plan_horas = META SEMANAL; se reparte por igual entre los días elegidos de una
+  // semana COMPLETA (p. ej. 20h ÷ Lun-Vie = 4h/día). Una semana parcial (la tarea
+  // arranca a mitad de semana) simplemente tiene menos días esa semana, cada uno con
+  // la misma carga. Plan abierto: no requiere deadline; si lo hay, se corta ahí.
+  function _recurPlans() {
+    const out = [];
+    const todayStr = _iso(new Date());
+    for (const t of _tasks) {
+      if (t.estado === 'completado') continue;
+      if (!_taskForMember(t)) continue;                 // respeta el filtro por miembro
+      const days = String(t.plan_dias || '').split(',').map(s => s.trim())
+        .filter(s => s !== '').map(Number).filter(n => n >= 0 && n <= 6);
+      const weekly = (t.plan_horas != null && t.plan_horas !== '') ? +t.plan_horas : 0;
+      const hour   = (t.plan_hora  != null && t.plan_hora  !== '') ? +t.plan_hora  : null;
+      if (!days.length || !(weekly > 0) || hour == null) continue;
+      // regla jerárquica: si la tarea tiene subtareas, el plan vive en ellas (no en la padre)
+      if (_tasks.some(x => x.parent_task_id === t.id)) continue;
+      // ancla de inicio: fecha_inicio propia → la del padre (subtarea) → hoy (plan abierto)
+      let start = t.fecha_inicio ? String(t.fecha_inicio).split('T')[0] : null;
+      if (!start && t.parent_task_id) {
+        const par = _tasks.find(x => x.id === t.parent_task_id);
+        if (par && par.fecha_inicio) start = String(par.fecha_inicio).split('T')[0];
+      }
+      if (!start) start = todayStr;
+      const end = t.deadline ? String(t.deadline).split('T')[0] : null;   // opcional
+      const perMin = Math.max(15, Math.round(weekly / days.length * 60)); // meta ÷ días de semana completa
+      out.push({ id: t.id, titulo: t.titulo, isSub: !!t.parent_task_id,
+                 daysSet: new Set(days), hour, start, end, perMin, weekly, nDays: days.length });
+    }
+    return out;
+  }
+
   function _grid(weekDays, todayDs) {
     const hours = Array.from({length: GRID_E - GRID_S}, (_, i) => GRID_S + i);
     const _now   = new Date();
@@ -3544,18 +8647,61 @@ const CalendarModule = (() => {
       ${hours.map(h => `<div class="cal2-tlabel">${h > 12 ? (h - 12) + ' PM' : h === 12 ? '12 PM' : h + ' AM'}</div>`).join('')}
     </div>`;
 
+    const _plans = (_tab === 'all' || _tab === 'tasks') ? _recurPlans() : [];
+    const _personal = (_calMember === 'me');   // sesiones del cronómetro y Google Calendar son del usuario logueado
+    const _parentIds = new Set(_tasks.filter(t => t.parent_task_id).map(t => t.parent_task_id));
+    const _isSchedulable = t => !!t.parent_task_id || !_parentIds.has(t.id);   // agendable: subtarea o tarea-hoja (sin subtareas)
+
     const cols = weekDays.map((day, i) => {
       const { d, ds, isToday } = day;
 
-      const dayTasks = (_tab === 'all' || _tab === 'tasks')
-        ? _tasks.filter(t => t.deadline && String(t.deadline).split('T')[0] === ds)
-        : [];
-      const taskChips = dayTasks.map(t =>
-        `<div class="cal2-tchip" onclick="TasksModule.openDrawer(${t.id})" title="${esc(t.titulo)}">${esc(t.titulo)}</div>`
-      ).join('');
+      const showTasks = (_tab === 'all' || _tab === 'tasks');
+      const taskBlocks = (showTasks ? _tasks.filter(t => t.prog_inicio && _taskDay(t) === ds && _taskForMember(t)) : []).map(t => {
+        const st = _parseT(t.prog_inicio);
+        if (!st || st.h < GRID_S || st.h >= GRID_E) return '';
+        const stMin  = (st.h - GRID_S) * 60 + st.m;
+        const dur    = t.prog_min || 60;
+        const topPx  = stMin / 60 * HOUR_H;
+        const hPx    = Math.max(24, dur / 60 * HOUR_H - 2);
+        const accent = _ESTADO_COL[t.estado] || '#C8BCAC';
+        const done   = t.estado === 'completado';
+        const proj   = t.project_nombre ? esc(t.project_nombre) : '';
+        const dl     = t.deadline ? String(t.deadline).split('T')[0] : null;
+        const dlHint = (dl && dl !== ds) ? ` <span class="cal2-tblock__dl" title="Fecha límite de entrega">⚑ ${_dlShort(dl)}</span>` : '';
+        const endT   = _addMin(t.prog_inicio, dur);
+        return `<div class="cal2-tblock${done ? ' cal2-tblock--done' : ''}" style="top:${topPx}px;height:${hPx}px;border-left-color:${accent}"
+            onclick="event.stopPropagation();CalendarModule.openSchedulePopover(event,${t.id})" title="${esc(t.titulo)} — clic para reprogramar">
+          <div class="cal2-tblock__t">${t.parent_task_id ? '<span class="cal2-tblock__sub">SUB</span>' : ''}${esc(t.titulo)}</div>
+          <div class="cal2-tblock__meta">${_fmtT(t.prog_inicio)}–${_fmtT(endT)}${proj ? ` · ${proj}` : ''}${dlHint}</div>
+        </div>`;
+      }).join('');
+
+      const planBlocks = _plans.map(p => {
+        if (ds < p.start || (p.end && ds > p.end) || !p.daysSet.has((d.getDay() + 6) % 7)) return '';
+        if (p.hour < GRID_S || p.hour >= GRID_E) return '';
+        const topPx = (p.hour - GRID_S) * HOUR_H;
+        const hPx   = Math.max(22, p.perMin / 60 * HOUR_H - 2);
+        const ini   = `${_pad(p.hour)}:00`;
+        const fin   = _addMin(ini, p.perMin);
+        const hrs   = Math.round(p.perMin / 60 * 10) / 10;
+        return `<div class="cal2-planblock" style="top:${topPx}px;height:${hPx}px"
+            onclick="event.stopPropagation();TasksModule.openDrawer(${p.id})"
+            title="Plan sugerido · ${esc(p.titulo)} — ${p.weekly}h/semana ÷ ${p.nDays} ${p.nDays === 1 ? 'día' : 'días'} = ${hrs}h/día">
+          <div class="cal2-planblock__t">${p.isSub ? '<span class="cal2-tblock__sub">SUB</span>' : ''}${esc(p.titulo)}</div>
+          <div class="cal2-planblock__meta">◇ ${_fmtT(ini)}–${_fmtT(fin)} · ${hrs}h</div>
+        </div>`;
+      }).join('');
+
+      const dayNoHora = showTasks ? _tasks.filter(t => !t.prog_inicio && t.estado !== 'completado' && _taskDay(t) === ds && _taskForMember(t) && _isSchedulable(t)) : [];
+      const noHoraPill = dayNoHora.length
+        ? `<button class="cal2-nohora" onclick="CalendarModule.openDayUnscheduled(event,'${ds}')" title="${dayNoHora.length} tarea(s) sin hora — clic para asignar">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 8 12 12 14.5 13.5"/></svg>
+            Sin hora · ${dayNoHora.length}
+          </button>`
+        : '';
 
       const dayMtgs = (_tab === 'all' || _tab === 'meetings')
-        ? _meetings.filter(m => String(m.fecha).split('T')[0] === ds && m.estado !== 'cancelada')
+        ? _meetings.filter(m => String(m.fecha).split('T')[0] === ds && m.estado !== 'cancelada' && _mtgForMember(m))
         : [];
 
       const noTimeMtgs = dayMtgs.filter(m => !m.hora_inicio).map(m =>
@@ -3567,7 +8713,7 @@ const CalendarModule = (() => {
         ? _timeOff.filter(o => {
             const s = String(o.fecha_inicio).split('T')[0];
             const e = String(o.fecha_fin).split('T')[0];
-            return ds >= s && ds <= e;
+            return ds >= s && ds <= e && _offForMember(o);
           })
         : [];
       const offChips = dayOff.map(o =>
@@ -3575,10 +8721,10 @@ const CalendarModule = (() => {
       ).join('');
 
       // Google Calendar events for this day
-      const dayGcal = _gcalEvents.filter(ev => {
+      const dayGcal = _personal ? _gcalEvents.filter(ev => {
         const evDate = (ev.start || '').split('T')[0];
         return evDate === ds;
-      });
+      }) : [];
       const gcalAllDay = dayGcal.filter(ev => ev.allDay).map(ev =>
         `<div class="cal2-tchip cal2-tchip--gcal" title="${esc(ev.title)}"${ev.link ? ` onclick="window.open('${esc(ev.link)}','_blank')"` : ''}>${esc(ev.title)}</div>`
       ).join('');
@@ -3612,10 +8758,10 @@ const CalendarModule = (() => {
         </div>`;
       }).join('');
 
-      const dayEntries = _timeEntries.filter(e => {
+      const dayEntries = _personal ? _timeEntries.filter(e => {
         const ed = new Date(e.started_at); ed.setHours(0,0,0,0);
         return ed.toDateString() === d.toDateString();
-      });
+      }) : [];
       const timerBlocks = dayEntries.map(e => {
         const st  = new Date(e.started_at);
         const en  = e.ended_at ? new Date(e.ended_at) : new Date();
@@ -3647,8 +8793,8 @@ const CalendarModule = (() => {
           <span class="cal2-col__dow" translate="no">${_WKS[i]}</span>
           <span class="cal2-col__num${isToday ? ' cal2-col__num--today' : ''}">${d.getDate()}</span>
         </div>
-        <div class="cal2-col__allday">${taskChips}${noTimeMtgs}${offChips}${gcalAllDay}</div>
-        <div class="cal2-col__body">${timedBlocks}${gcalTimed}${timerBlocks}${nowLine}</div>
+        <div class="cal2-col__allday">${noHoraPill}${noTimeMtgs}${offChips}${gcalAllDay}</div>
+        <div class="cal2-col__body">${planBlocks}${taskBlocks}${timedBlocks}${gcalTimed}${timerBlocks}${nowLine}</div>
       </div>`;
     }).join('');
 
@@ -3658,6 +8804,84 @@ const CalendarModule = (() => {
         <div class="cal2-cols">${cols}</div>
       </div>
     </div>`;
+  }
+
+  // ── Programar tarea: popover rápido (día · inicio · duración) ──────
+  let _popClose = null;
+  function _closePop() { if (_popClose) _popClose(); }
+
+  function openSchedulePopover(e, taskId) {
+    e.stopPropagation();
+    const anchor = e.currentTarget.getBoundingClientRect();   // captura antes de cerrar (puede venir del popover de día)
+    if (_popClose) { _popClose(); }
+    const t = _tasks.find(x => x.id === taskId); if (!t) return;
+    const weekDays = Array.from({length:7}, (_, i) => _iso(new Date(_weekOf.getTime() + i * 86400000)));
+    const curDay = _taskDay(t) || weekDays[0];
+    const curIni = t.prog_inicio ? String(t.prog_inicio).slice(0,5) : '09:00';
+    const curMin = t.prog_min || 60;
+    const dayOpts = weekDays.map(ds => {
+      const d = new Date(ds + 'T00:00:00');
+      return `<option value="${ds}"${ds === curDay ? ' selected' : ''}>${_WKS[(d.getDay()+6)%7]} ${d.getDate()} ${_MONS[d.getMonth()]}</option>`;
+    }).join('');
+    const durOpts = [[15,'15 min'],[30,'30 min'],[45,'45 min'],[60,'1 h'],[90,'1.5 h'],[120,'2 h']]
+      .map(([v,l]) => `<option value="${v}"${v === curMin ? ' selected' : ''}>${l}</option>`).join('');
+    const dlNote = t.deadline ? `<div class="cal2-pop__dl">Fecha límite: ${_dlShort(String(t.deadline).split('T')[0])} · la hora solo ordena cuándo trabajarla</div>` : '';
+    const pop = document.createElement('div');
+    pop.className = 'cal2-pop';
+    pop.innerHTML = `
+      <div class="cal2-pop__name">${esc(t.titulo)}</div>
+      <div class="cal2-pop__row"><label>Día</label><select id="cal-pop-day">${dayOpts}</select></div>
+      <div class="cal2-pop__row"><label>Inicio</label><input type="time" id="cal-pop-ini" step="900" value="${curIni}"></div>
+      <div class="cal2-pop__row"><label>Duración</label><select id="cal-pop-dur">${durOpts}</select></div>
+      ${dlNote}
+      <div class="cal2-pop__acts">
+        ${t.prog_inicio ? `<button class="cal2-pop__del" onclick="CalendarModule.unschedule(${taskId})">Quitar hora</button>` : '<span></span>'}
+        <button class="cal2-pop__save" onclick="CalendarModule.saveSchedule(${taskId})">Guardar</button>
+      </div>`;
+    document.body.appendChild(pop);
+    pop.style.cssText += `;position:fixed;z-index:10001;top:${Math.min(anchor.bottom + 6, window.innerHeight - 230)}px;left:${Math.min(Math.max(8, anchor.left), window.innerWidth - 248)}px`;
+    const onDoc = ev => { if (!pop.contains(ev.target)) _closePop(); };
+    _popClose = () => { pop.remove(); document.removeEventListener('mousedown', onDoc); _popClose = null; };
+    setTimeout(() => document.addEventListener('mousedown', onDoc), 0);
+  }
+
+  function saveSchedule(taskId) {
+    const ds  = $('cal-pop-day')?.value;
+    const ini = $('cal-pop-ini')?.value;
+    const min = +($('cal-pop-dur')?.value || 60);
+    if (!ini || !ds) return;
+    _closePop();
+    _assignSchedule(taskId, ds, ini, min);
+  }
+
+  async function _assignSchedule(id, ds, inicio, min) {
+    const t = _tasks.find(x => x.id === id); if (!t) return;
+    const dur  = min || t.prog_min || 60;
+    const prev = { prog_fecha: t.prog_fecha, prog_inicio: t.prog_inicio, prog_min: t.prog_min };
+    t.prog_fecha = ds; t.prog_inicio = inicio; t.prog_min = dur;   // optimistic
+    render();
+    try {
+      const r = await apiFetch(`${API}/mgmt/tasks/${id}/horario`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prog_fecha: ds, prog_inicio: inicio, prog_min: dur }),
+      });
+      if (!r.ok) throw new Error(await r.text());
+    } catch (err) { Object.assign(t, prev); render(); console.error('[cal] schedule:', err); }
+  }
+
+  async function unschedule(id) {
+    _closePop();
+    const t = _tasks.find(x => x.id === id); if (!t) return;
+    const prev = { prog_fecha: t.prog_fecha, prog_inicio: t.prog_inicio, prog_min: t.prog_min };
+    t.prog_fecha = null; t.prog_inicio = null; t.prog_min = null;
+    render();
+    try {
+      const r = await apiFetch(`${API}/mgmt/tasks/${id}/horario`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prog_fecha: null, prog_inicio: null, prog_min: null }),
+      });
+      if (!r.ok) throw new Error(await r.text());
+    } catch (err) { Object.assign(t, prev); render(); console.error('[cal] unschedule:', err); }
   }
 
   function setTab(t)  { _tab = t; render(); }
@@ -3685,7 +8909,12 @@ const CalendarModule = (() => {
     }
   }
 
-  return { load, setTab, prev, next, goToday, refresh, connectGcal, disconnectGcal, syncTaskToGcal, tickRunning };
+  // Re-render si el calendario está montado (p. ej. tras guardar un plan desde el drawer)
+  function refreshPlans() { if ($('cal-pane-container')) render(); }
+
+  return { load, setTab, prev, next, goToday, refresh, refreshPlans, switchMember, connectGcal, disconnectGcal, syncTaskToGcal, tickRunning,
+    openSchedulePopover, saveSchedule, unschedule, openDayUnscheduled, closeDayPop,
+    _dpSearch, _dpSchedule, _dpPickDur, _dpPickHour, _dpCustomDur, _dpSchedCancel, _dpConfirm, _dpToggleSubs };
 })();
 
 // =================================================================
@@ -3931,13 +9160,17 @@ const TimeOffModule = (() => {
 const ProjectsModule = (() => {
   let _projects     = [];
   let _editId       = null;
-  let _filterEstado = '';
-  let _filterMember = '';
+  let _filterEstado    = '';
+  let _filterMember    = '';
+  let _filterMemberSet = false;
   let _view         = 'timeline';
   let _taskCache    = {};   // pid → tasks[]
   let _activeTabs   = {};   // pid → tab name
   let _expandedTasks    = new Set();   // taskId → subtasks shown (Timeline + Lista)
   let _expandedProjects = new Set();   // pid → tasks shown (Lista only)
+  let _expandedSubrows  = new Set();   // subtask id → text expanded inline
+  let _addingLinkFor    = null;        // pid | null — inline add-link form open
+  let _editingLinkIdx   = null;        // { pid, idx } | null — link being edited
 
   function _estadoBadge(estado) {
     const map = {
@@ -4012,7 +9245,7 @@ const ProjectsModule = (() => {
       if (res.status === 401) { location.reload(); return; }
       if (!res.ok) throw new Error(await res.text());
       _projects = await res.json();
-      _populateMemberDropdown();
+      await Promise.all([_populateMemberDropdown(), _ensureAllTasksLoaded()]);
       render();
     } catch (e) {
       console.error('[projects] load error:', e);
@@ -4033,7 +9266,8 @@ const ProjectsModule = (() => {
   }
 
   function setMemberFilter(val) {
-    _filterMember = val;
+    _filterMember    = val;
+    _filterMemberSet = true;
     const sel = $('proj-member-filter');
     if (sel) {
       sel.classList.toggle('filter-select--active', !!val);
@@ -4057,7 +9291,17 @@ const ProjectsModule = (() => {
       <option value="__none__">Sin asignar</option>
       ${members.map(m => `<option value="${esc(m)}">${esc(m)}</option>`).join('')}
     `;
-    if (members.includes(current) || current === '__none__') sel.value = current;
+    if (current && (members.includes(current) || current === '__none__')) {
+      sel.value = current;
+    } else if (!_filterMemberSet) {
+      const myName = window._authUser?.memberNombre || window._authUser?.name || '';
+      if (myName && members.includes(myName)) {
+        _filterMember    = myName;
+        _filterMemberSet = true;
+        sel.value        = myName;
+        sel.classList.add('filter-select--active');
+      }
+    }
   }
 
   /* ── filtered list ─────────────────────────── */
@@ -4069,10 +9313,16 @@ const ProjectsModule = (() => {
       list = list.filter(p => !p.responsable && !p.responsable_id && (!p.responsables || !p.responsables.length));
     } else if (_filterMember) {
       const lm = _filterMember.toLowerCase();
-      list = list.filter(p =>
-        (p.responsables || []).some(r => r.toLowerCase() === lm) ||
-        (p.responsable || '').toLowerCase() === lm
-      );
+      list = list.filter(p => {
+        // project-level responsable (legacy/direct assignment)
+        if ((p.responsables || []).some(r => r.toLowerCase() === lm) ||
+            (p.responsable  || '').toLowerCase() === lm) return true;
+        // tasks and subtasks in this project
+        return (_taskCache[p.id] || []).some(t =>
+          (t.responsables || []).some(r => r.toLowerCase() === lm) ||
+          (t.responsable  || '').toLowerCase() === lm
+        );
+      });
     }
     if (q) list = list.filter(p =>
       (p.nombre + ' ' + (p.client_nombre || '') + ' ' + (p.client_empresa || '') + ' ' + (p.responsable || '') + ' ' + (p.responsables || []).join(' ')).toLowerCase().includes(q)
@@ -4092,9 +9342,18 @@ const ProjectsModule = (() => {
     if (!list.length) {
       cards.style.display     = 'none';
       tableWrap.style.display = 'none';
-      empty.style.display     = 'flex';
+      const msg = empty.querySelector('p');
+      const btn = empty.querySelector('button');
+      const isFiltered = !!(_filterMember || _filterEstado) && _projects.length > 0;
+      if (msg) msg.textContent = isFiltered
+        ? 'No hay proyectos con tareas asignadas a este miembro.'
+        : 'Aún no tienes proyectos creados.';
+      if (btn) btn.style.display = isFiltered ? 'none' : '';
+      empty.style.display = 'flex';
       return;
     }
+    const btn0 = empty.querySelector('button');
+    if (btn0) btn0.style.display = '';
     empty.style.display = 'none';
 
     if (_view === 'timeline') {
@@ -4234,9 +9493,9 @@ const ProjectsModule = (() => {
 
   const _chevronSvg = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>`;
 
-  function _chevronHtml(taskId, childCount) {
-    if (!childCount) return `<span class="pjt-chevron pjt-chevron--ghost">${_chevronSvg}</span>`;
-    const open = _expandedTasks.has(taskId);
+  function _chevronHtml(taskId, childCount, forceOpen) {
+    if (!childCount && !forceOpen) return `<span class="pjt-chevron pjt-chevron--ghost">${_chevronSvg}</span>`;
+    const open = forceOpen || _expandedTasks.has(taskId);
     return `<button type="button" class="pjt-chevron${open ? ' pjt-chevron--open' : ''}"
       onclick="event.stopPropagation();ProjectsModule.toggleTaskExpand(${taskId})"
       title="${open ? 'Ocultar' : 'Mostrar'} subtareas">${_chevronSvg}</button>`;
@@ -4248,16 +9507,19 @@ const ProjectsModule = (() => {
     const clr  = _TASK_ESTADO_CLR[t.estado] || '#6B7280';
     const lbl  = _TASK_ESTADO_LBL[t.estado] || t.estado || 'Pendiente';
     const done = kids.filter(k => k.estado === 'completado').length;
+    const forceOpen = _inlineSubtaskFor === t.id;
     return `<div class="pjt-row" data-task-id="${t.id}"
-        onclick="event.stopPropagation();TasksModule.openDrawer(${t.id})"
-        oncontextmenu="event.preventDefault();event.stopPropagation();ProjectsModule.openSubtaskMenu(event,${t.id},${t.project_id})">
-      ${_chevronHtml(t.id, kids.length)}
+        onclick="event.stopPropagation();ProjectsModule.openQuickEditPopover(event,${t.id})"
+        oncontextmenu="event.preventDefault();event.stopPropagation();ProjectsModule.openTaskMenu(event,${t.id})">
+      ${_chevronHtml(t.id, kids.length, forceOpen)}
       <span class="pjt-row__dot" style="background:${dot}"></span>
       <span class="pjt-row__name">${esc(t.titulo)}</span>
       ${kids.length ? `<span class="pjt-subcount">${done}/${kids.length} subtarea${kids.length !== 1 ? 's' : ''}</span>` : ''}
       <span class="pjt-row__tag" style="background:${bg};color:${clr}">${lbl}</span>
       <button type="button" class="pjt-add-sub" title="Agregar subtarea"
-        onclick="event.stopPropagation();TasksModule.openDrawer(null,${t.project_id},${t.id})">+ Subtarea</button>
+        onclick="event.stopPropagation();ProjectsModule.startInlineSubtask(${t.id})">+ Subtarea</button>
+      <button type="button" class="pjt-more-btn" title="Más opciones"
+        onclick="event.stopPropagation();ProjectsModule.openTaskMenu(event,${t.id})">⋯</button>
     </div>`;
   }
 
@@ -4266,11 +9528,251 @@ const ProjectsModule = (() => {
     const bg  = _TASK_ESTADO_BG[t.estado]  || '#F3F4F6';
     const clr = _TASK_ESTADO_CLR[t.estado] || '#6B7280';
     const lbl = _TASK_ESTADO_LBL[t.estado] || t.estado || 'Pendiente';
-    return `<div class="pjt-subrow" onclick="event.stopPropagation();TasksModule.openDrawer(${t.id})">
+    return `<div class="pjt-subrow" data-subtask-id="${t.id}"
+        onclick="event.stopPropagation();ProjectsModule.toggleSubrowExpand(${t.id})"
+        oncontextmenu="event.preventDefault();event.stopPropagation();ProjectsModule.openTaskMenu(event,${t.id})">
       <span class="pjt-row__dot pjt-row__dot--sm" style="background:${dot}"></span>
       <span class="pjt-row__name pjt-row__name--sub">${esc(t.titulo)}</span>
       <span class="pjt-row__tag pjt-row__tag--sm" style="background:${bg};color:${clr}">${lbl}</span>
+      <button type="button" class="pjt-more-btn pjt-more-btn--sm" title="Más opciones"
+        onclick="event.stopPropagation();ProjectsModule.openTaskMenu(event,${t.id})">⋯</button>
     </div>`;
+  }
+
+  /* ── subtareas: creación inline (sin drawer) ─────────── */
+  let _inlineSubtaskFor = null;   // parent taskId con la fila de creación abierta
+  let _editingTaskId    = null;   // taskId (tarea o subtarea) en modo edición inline
+  let _teamCache        = null;   // cache simple [{nombre,...}] para el <select> Responsable
+
+  function _findTaskById(taskId) {
+    for (const pid in _taskCache) {
+      const t = _taskCache[pid].find(x => x.id === taskId);
+      if (t) return t;
+    }
+    return null;
+  }
+
+  async function _ensureTeamLoaded() {
+    if (_teamCache) return _teamCache;
+    try {
+      const res = await apiFetch(`${API}/mgmt/team`);
+      _teamCache = res.ok ? await res.json() : [];
+    } catch { _teamCache = []; }
+    return _teamCache;
+  }
+
+  function _subtaskDeadlineRange(parentTask) {
+    const today = new Date().toISOString().split('T')[0];
+    const max   = parentTask?.deadline ? String(parentTask.deadline).split('T')[0] : '';
+    return { min: today, max };
+  }
+
+  function _inlineSubtaskRowHtml(parentTaskId, projectId) {
+    const teamOpts = (_teamCache || []).map(m => `<option value="${esc(m.nombre)}">${esc(m.nombre)}</option>`).join('');
+    const parentTask = _findTaskById(parentTaskId);
+    const { min: dtMin, max: dtMax } = _subtaskDeadlineRange(parentTask);
+    return `<div class="pjt-inline-row" onclick="event.stopPropagation()">
+      <input type="text" id="subtask-inline-titulo" class="pjt-inline-input" placeholder="Título de la subtarea…"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();ProjectsModule.saveInlineSubtask(${parentTaskId},${projectId});}else if(event.key==='Escape'){event.preventDefault();ProjectsModule.cancelInlineSubtask();}">
+      <select id="subtask-inline-estado" class="pjt-inline-select" title="Estado">
+        <option value="pendiente" selected>Pendiente</option>
+        <option value="en_progreso">En progreso</option>
+        <option value="bloqueado">Bloqueado</option>
+        <option value="completado">Completado</option>
+      </select>
+      <select id="subtask-inline-prioridad" class="pjt-inline-select" title="Prioridad">
+        <option value="baja">Baja</option>
+        <option value="media" selected>Media</option>
+        <option value="alta">Alta</option>
+      </select>
+      <select id="subtask-inline-resp" class="pjt-inline-select" title="Responsable">
+        <option value="">Sin asignar</option>
+        ${teamOpts}
+      </select>
+      <input type="date" id="subtask-inline-deadline" class="pjt-inline-date" title="Deadline" ${dtMin ? `min="${dtMin}"` : ''} ${dtMax ? `max="${dtMax}"` : ''}>
+      <button type="button" class="pjt-inline-save" id="subtask-inline-save"
+        onclick="ProjectsModule.saveInlineSubtask(${parentTaskId},${projectId})">Guardar</button>
+      <button type="button" class="pjt-inline-cancel" onclick="ProjectsModule.cancelInlineSubtask()" title="Cancelar">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>`;
+  }
+
+  async function startInlineSubtask(parentTaskId) {
+    if (_taskMenuClose) _taskMenuClose();
+    if (_quickEditClose) _quickEditClose();
+    await _ensureTeamLoaded();
+    _inlineSubtaskFor = parentTaskId;
+    _expandedTasks.add(parentTaskId);
+    _rerenderTaskHost(parentTaskId);
+    setTimeout(() => $('subtask-inline-titulo')?.focus(), 30);
+  }
+
+  function cancelInlineSubtask() {
+    const taskId = _inlineSubtaskFor;
+    _inlineSubtaskFor = null;
+    if (taskId != null) _rerenderTaskHost(taskId);
+  }
+
+  async function saveInlineSubtask(parentTaskId, projectId) {
+    const titleInput = $('subtask-inline-titulo');
+    const titulo = (titleInput?.value || '').trim();
+    if (!titulo) {
+      titleInput?.classList.add('subtask-input--error');
+      titleInput?.focus();
+      setTimeout(() => titleInput?.classList.remove('subtask-input--error'), 1200);
+      return;
+    }
+    const estado      = $('subtask-inline-estado')?.value || 'pendiente';
+    const prioridad   = $('subtask-inline-prioridad')?.value || 'media';
+    const responsable = $('subtask-inline-resp')?.value || '';
+    const deadline    = $('subtask-inline-deadline')?.value || null;
+    const parentTask  = _findTaskById(parentTaskId);
+    if (deadline && parentTask?.deadline) {
+      const parentMax = String(parentTask.deadline).split('T')[0];
+      if (deadline > parentMax) {
+        alert('La subtarea debe estar dentro del rango de la tarea padre.');
+        return;
+      }
+    }
+    const saveBtn = $('subtask-inline-save');
+    if (saveBtn) saveBtn.disabled = true;
+    try {
+      const res = await apiFetch(`${API}/mgmt/tasks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          titulo, project_id: projectId, estado, prioridad,
+          responsable, responsables: responsable ? [responsable] : [],
+          deadline, parent_task_id: parentTaskId,
+        }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || 'Error al crear subtarea');
+      _inlineSubtaskFor = null;
+      await refreshCard(projectId);
+    } catch (e) {
+      alert('Error: ' + e.message);
+      if (saveBtn) saveBtn.disabled = false;
+    }
+  }
+
+  /* ── tareas/subtareas: edición inline (sin drawer) ───── */
+  function _editTaskRowHtml(t) {
+    const teamOpts = (_teamCache || []).map(m =>
+      `<option value="${esc(m.nombre)}"${t.responsable === m.nombre ? ' selected' : ''}>${esc(m.nombre)}</option>`
+    ).join('');
+    const dl = t.deadline ? String(t.deadline).split('T')[0] : '';
+    const _editParent = t.parent_task_id ? _findTaskById(t.parent_task_id) : null;
+    const { min: teMin, max: teMax } = _editParent ? _subtaskDeadlineRange(_editParent) : { min: '', max: '' };
+    return `<div class="pjt-inline-row" onclick="event.stopPropagation()">
+      <input type="text" id="tedit-titulo" class="pjt-inline-input" value="${esc(t.titulo)}" placeholder="Título…"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();ProjectsModule.saveEditTask(${t.id});}else if(event.key==='Escape'){event.preventDefault();ProjectsModule.cancelEditTask();}">
+      <select id="tedit-estado" class="pjt-inline-select" title="Estado">
+        <option value="pendiente"${t.estado==='pendiente'?' selected':''}>Pendiente</option>
+        <option value="en_progreso"${t.estado==='en_progreso'?' selected':''}>En progreso</option>
+        <option value="bloqueado"${t.estado==='bloqueado'?' selected':''}>Bloqueado</option>
+        <option value="completado"${t.estado==='completado'?' selected':''}>Completado</option>
+      </select>
+      <select id="tedit-prioridad" class="pjt-inline-select" title="Prioridad">
+        <option value="baja"${t.prioridad==='baja'?' selected':''}>Baja</option>
+        <option value="media"${t.prioridad==='media'?' selected':''}>Media</option>
+        <option value="alta"${t.prioridad==='alta'?' selected':''}>Alta</option>
+      </select>
+      <select id="tedit-resp" class="pjt-inline-select" title="Responsable">
+        <option value="">Sin asignar</option>
+        ${teamOpts}
+      </select>
+      <input type="date" id="tedit-deadline" class="pjt-inline-date" title="Deadline" value="${dl}" ${teMin ? `min="${teMin}"` : ''} ${teMax ? `max="${teMax}"` : ''}>
+      <button type="button" class="pjt-inline-del" title="Eliminar" onclick="ProjectsModule.deleteTaskInline(${t.id})">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+      </button>
+      <button type="button" class="pjt-inline-save" id="tedit-save" onclick="ProjectsModule.saveEditTask(${t.id})">Guardar</button>
+      <button type="button" class="pjt-inline-cancel" onclick="ProjectsModule.cancelEditTask()" title="Cancelar">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>`;
+  }
+
+  async function startEditTask(taskId) {
+    if (_taskMenuClose) _taskMenuClose();
+    if (_quickEditClose) _quickEditClose();
+    await _ensureTeamLoaded();
+    _editingTaskId = taskId;
+    _inlineSubtaskFor = null;
+    const t = _findTaskById(taskId);
+    if (t?.parent_task_id) _expandedTasks.add(t.parent_task_id);
+    _rerenderTaskHost(taskId);
+    setTimeout(() => $('tedit-titulo')?.focus(), 30);
+  }
+
+  function cancelEditTask() {
+    const taskId = _editingTaskId;
+    _editingTaskId = null;
+    if (taskId != null) _rerenderTaskHost(taskId);
+  }
+
+  async function saveEditTask(taskId) {
+    const titleInput = $('tedit-titulo');
+    const titulo = (titleInput?.value || '').trim();
+    if (!titulo) {
+      titleInput?.classList.add('subtask-input--error');
+      titleInput?.focus();
+      setTimeout(() => titleInput?.classList.remove('subtask-input--error'), 1200);
+      return;
+    }
+    const t = _findTaskById(taskId);
+    if (!t) return;
+    const estado      = $('tedit-estado')?.value || 'pendiente';
+    const prioridad   = $('tedit-prioridad')?.value || 'media';
+    const responsable = $('tedit-resp')?.value || '';
+    const deadline    = $('tedit-deadline')?.value || null;
+    if (deadline && t.parent_task_id) {
+      const editParent = _findTaskById(t.parent_task_id);
+      if (editParent?.deadline) {
+        const parentMax = String(editParent.deadline).split('T')[0];
+        if (deadline > parentMax) {
+          alert('La subtarea debe estar dentro del rango de la tarea padre.');
+          return;
+        }
+      }
+    }
+    const saveBtn = $('tedit-save');
+    if (saveBtn) saveBtn.disabled = true;
+    try {
+      const res = await apiFetch(`${API}/mgmt/tasks/${taskId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          titulo, project_id: t.project_id, descripcion: t.descripcion || '',
+          estado, prioridad, responsable, responsables: responsable ? [responsable] : [],
+          deadline, notas: t.notas || '', monto: t.monto, cobrado: t.cobrado,
+          parent_task_id: t.parent_task_id || null,
+        }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || 'Error al guardar');
+      _editingTaskId = null;
+      await refreshCard(t.project_id);
+    } catch (e) {
+      alert('Error: ' + e.message);
+      if (saveBtn) saveBtn.disabled = false;
+    }
+  }
+
+  async function deleteTaskInline(taskId) {
+    const t = _findTaskById(taskId);
+    if (!t) return;
+    const pid = t.project_id;
+    const kids = (_taskCache[pid] || []).filter(x => x.parent_task_id === taskId);
+    const msg = kids.length
+      ? `Esta tarea tiene ${kids.length} subtarea${kids.length !== 1 ? 's' : ''}. ¿Deseas eliminar todo?`
+      : `¿Eliminar "${t.titulo}"? Esta acción no se puede deshacer.`;
+    if (!confirm(msg)) return;
+    try {
+      const res = await apiFetch(`${API}/mgmt/tasks/${taskId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Error al eliminar');
+      _editingTaskId = null;
+      await refreshCard(pid);
+    } catch (e) { alert('Error: ' + e.message); }
   }
 
   function _tabGeneral(p, tasks) {
@@ -4280,9 +9782,10 @@ const ProjectsModule = (() => {
     const childrenOf = pid => children.filter(c => c.parent_task_id === pid);
 
     if (!parents.length) {
-      return `${_newTaskBtn(p)}
-              <div class="pjcard__tl-label">HOY</div>
-              <div class="pjt-empty">Sin tareas asignadas a este proyecto.</div>`;
+      return `<div class="pjt-group">
+        <div class="pjt-group__hdr">HOY<button type="button" class="pjt-add-ghost pjt-add-ghost--visible" onclick="event.stopPropagation();TasksModule.openDrawer(null,${p.id})">+ Tarea</button></div>
+        <div class="pjt-empty">Sin tareas asignadas a este proyecto.</div>
+      </div>`;
     }
     // group by date
     const today = new Date(); today.setHours(0,0,0,0);
@@ -4305,17 +9808,23 @@ const ProjectsModule = (() => {
       const isT = ds === todayS;
       const taskRows = byDate[ds].map(t => {
         const kids = childrenOf(t.id);
-        const subHtml = (kids.length && _expandedTasks.has(t.id))
-          ? `<div class="pjt-subgroup">${kids.map(_subtaskRowHtml).join('')}</div>`
+        const isCreating = _inlineSubtaskFor === t.id;
+        const childBeingEdited = kids.some(k => k.id === _editingTaskId);
+        const showGroup = (kids.length && _expandedTasks.has(t.id)) || isCreating || childBeingEdited;
+        const subHtml = showGroup
+          ? `<div class="pjt-subgroup">${kids.map(k => _editingTaskId === k.id ? _editTaskRowHtml(k) : _subtaskRowHtml(k)).join('')}${isCreating ? _inlineSubtaskRowHtml(t.id, t.project_id) : ''}</div>`
           : '';
-        return _taskRowHtml(t, kids) + subHtml;
+        const rowHtml = _editingTaskId === t.id ? _editTaskRowHtml(t) : _taskRowHtml(t, kids);
+        return rowHtml + subHtml;
       }).join('');
       return `<div class="pjt-group">
-        <div class="pjt-group__hdr${isT?' pjt-group__hdr--today':''}">${isT?'<span class="pjt-today-dot"></span>':''}${fmtHdr(ds)}</div>
+        <div class="pjt-group__hdr${isT?' pjt-group__hdr--today':''}">
+          ${isT?'<span class="pjt-today-dot"></span>':''}${fmtHdr(ds)}<button type="button" class="pjt-add-ghost" onclick="event.stopPropagation();TasksModule.openDrawer(null,${p.id})">+ Tarea</button>
+        </div>
         ${taskRows}
       </div>`;
     }).join('');
-    return `${_newTaskBtn(p)}<div class="pjt-list">${rows}</div>`;
+    return `<div class="pjt-list">${rows}</div>`;
   }
 
   /* ── subtareas: estado compartido (Timeline + Lista) ─ */
@@ -4326,13 +9835,12 @@ const ProjectsModule = (() => {
     return null;
   }
 
-  function toggleTaskExpand(taskId) {
-    if (_expandedTasks.has(taskId)) _expandedTasks.delete(taskId);
-    else _expandedTasks.add(taskId);
+  function _rerenderTaskHost(taskId) {
+    const pid = _findProjectIdForTask(taskId);
+    if (pid == null) return;
     if (_view === 'timeline') {
-      const pid = _findProjectIdForTask(taskId);
-      const p   = pid != null ? _projects.find(x => x.id === pid) : null;
-      const cont = pid != null ? $(`pjcontent-${pid}`) : null;
+      const p = _projects.find(x => x.id === pid);
+      const cont = $(`pjcontent-${pid}`);
       if (p && cont && (_activeTabs[pid] || 'general') === 'general') {
         cont.innerHTML = _tabGeneral(p, _taskCache[pid] || []);
       }
@@ -4341,28 +9849,147 @@ const ProjectsModule = (() => {
     }
   }
 
-  let _subtaskMenuClose = null;
-  function openSubtaskMenu(e, taskId, projectId) {
-    if (_subtaskMenuClose) { _subtaskMenuClose(); return; }
-    const menu = document.createElement('div');
-    menu.className = 'd3-status-menu';
-    menu.innerHTML = `<button class="d3-status-opt" onclick="ProjectsModule._createSubtaskFromMenu(${projectId},${taskId})">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        Crear subtarea
-      </button>`;
-    menu.style.cssText = `position:fixed;z-index:9999;top:${e.clientY + 4}px;left:${e.clientX + 4}px`;
-    document.body.appendChild(menu);
-    _subtaskMenuClose = () => {
-      menu.remove();
-      document.removeEventListener('click', _subtaskMenuClose);
-      _subtaskMenuClose = null;
-    };
-    setTimeout(() => document.addEventListener('click', _subtaskMenuClose), 0);
+  function toggleTaskExpand(taskId) {
+    if (_quickEditClose) _quickEditClose();
+    if (_taskMenuClose) _taskMenuClose();
+    if (_expandedTasks.has(taskId)) _expandedTasks.delete(taskId);
+    else _expandedTasks.add(taskId);
+    _rerenderTaskHost(taskId);
   }
 
-  function _createSubtaskFromMenu(projectId, taskId) {
-    if (_subtaskMenuClose) _subtaskMenuClose();
-    TasksModule.openDrawer(null, projectId, taskId);
+  /* ── menú "⋯" — Editar / Crear subtarea / Eliminar ───── */
+  let _taskMenuClose = null;
+  function openTaskMenu(e, taskId) {
+    if (_taskMenuClose) { _taskMenuClose(); return; }
+    if (_quickEditClose) _quickEditClose();
+    const t = _findTaskById(taskId);
+    const isSubtask = !!(t && t.parent_task_id);
+    const menu = document.createElement('div');
+    menu.className = 'd3-status-menu';
+    let items = `<button class="d3-status-opt" onclick="ProjectsModule._onTaskMenuEdit(${taskId})">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        Editar
+      </button>`;
+    if (!isSubtask) {
+      items += `<button class="d3-status-opt" onclick="ProjectsModule._onTaskMenuAddSub(${taskId})">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Crear subtarea
+        </button>`;
+    }
+    items += `<button class="d3-status-opt d3-status-opt--danger" onclick="ProjectsModule._onTaskMenuDelete(${taskId})">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+        Eliminar
+      </button>`;
+    menu.innerHTML = items;
+    if (e.type === 'click' && e.currentTarget?.getBoundingClientRect) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const left = Math.min(rect.left, window.innerWidth - 180);
+      menu.style.cssText = `position:fixed;z-index:9999;top:${rect.bottom + 4}px;left:${left}px`;
+    } else {
+      menu.style.cssText = `position:fixed;z-index:9999;top:${e.clientY + 4}px;left:${e.clientX + 4}px`;
+    }
+    document.body.appendChild(menu);
+    const closeOnScrollOrResize = () => _taskMenuClose();
+    _taskMenuClose = () => {
+      menu.remove();
+      document.removeEventListener('click', _taskMenuClose);
+      window.removeEventListener('scroll', closeOnScrollOrResize, true);
+      window.removeEventListener('resize', closeOnScrollOrResize);
+      _taskMenuClose = null;
+    };
+    setTimeout(() => {
+      document.addEventListener('click', _taskMenuClose);
+      window.addEventListener('scroll', closeOnScrollOrResize, true);
+      window.addEventListener('resize', closeOnScrollOrResize);
+    }, 0);
+  }
+
+  function _onTaskMenuEdit(taskId) { if (_taskMenuClose) _taskMenuClose(); startEditTask(taskId); }
+  function _onTaskMenuAddSub(taskId) { if (_taskMenuClose) _taskMenuClose(); startInlineSubtask(taskId); }
+  function _onTaskMenuDelete(taskId) { if (_taskMenuClose) _taskMenuClose(); deleteTaskInline(taskId); }
+
+  /* ── quick edit popover — estado + deadline ──────────── */
+  let _quickEditClose = null;
+  function openQuickEditPopover(e, taskId) {
+    if (_quickEditClose) { _quickEditClose(); return; }
+    if (_taskMenuClose) _taskMenuClose();
+    const t = _findTaskById(taskId);
+    if (!t) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const pop = document.createElement('div');
+    pop.className = 'task-quick-popover';
+    pop.onclick = ev => ev.stopPropagation();
+    const dl = t.deadline ? String(t.deadline).split('T')[0] : '';
+    pop.innerHTML = `
+      <div class="tqp-field">
+        <label>Estado</label>
+        <select id="tqp-estado">
+          <option value="pendiente"${t.estado==='pendiente'?' selected':''}>Pendiente</option>
+          <option value="en_progreso"${t.estado==='en_progreso'?' selected':''}>En progreso</option>
+          <option value="bloqueado"${t.estado==='bloqueado'?' selected':''}>Bloqueado</option>
+          <option value="completado"${t.estado==='completado'?' selected':''}>Completado</option>
+        </select>
+      </div>
+      <div class="tqp-field">
+        <label>Deadline</label>
+        <input type="date" id="tqp-deadline" value="${dl}">
+      </div>
+      <div class="task-quick-popover-actions">
+        <button type="button" class="tqp-btn tqp-btn--cancel">Cancelar</button>
+        <button type="button" class="tqp-btn tqp-btn--save">Guardar</button>
+      </div>`;
+    document.body.appendChild(pop);
+
+    const popWidth = 280, estHeight = 168;
+    let left = rect.left;
+    if (left + popWidth > window.innerWidth - 12) left = window.innerWidth - popWidth - 12;
+    if (left < 12) left = 12;
+    let top = rect.bottom + 6;
+    if (top + estHeight > window.innerHeight - 12) top = rect.top - estHeight - 6;
+    pop.style.cssText = `position:fixed;z-index:9999;top:${top}px;left:${left}px;width:${popWidth}px`;
+
+    const escHandler = ev => { if (ev.key === 'Escape') _quickEditClose(); };
+    const closeOnScrollOrResize = () => _quickEditClose();
+    _quickEditClose = () => {
+      pop.remove();
+      document.removeEventListener('click', _quickEditClose);
+      document.removeEventListener('keydown', escHandler);
+      window.removeEventListener('scroll', closeOnScrollOrResize, true);
+      window.removeEventListener('resize', closeOnScrollOrResize);
+      _quickEditClose = null;
+    };
+    pop.querySelector('.tqp-btn--save').addEventListener('click', () => _saveQuickEdit(taskId));
+    pop.querySelector('.tqp-btn--cancel').addEventListener('click', () => _quickEditClose());
+    setTimeout(() => {
+      document.addEventListener('click', _quickEditClose);
+      document.addEventListener('keydown', escHandler);
+      window.addEventListener('scroll', closeOnScrollOrResize, true);
+      window.addEventListener('resize', closeOnScrollOrResize);
+    }, 0);
+    setTimeout(() => $('tqp-estado')?.focus(), 30);
+  }
+
+  async function _saveQuickEdit(taskId) {
+    const t = _findTaskById(taskId);
+    if (!t) return;
+    const estado   = $('tqp-estado')?.value || t.estado;
+    const deadline = $('tqp-deadline')?.value || null;
+    try {
+      const res = await apiFetch(`${API}/mgmt/tasks/${taskId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          titulo: t.titulo, project_id: t.project_id, descripcion: t.descripcion || '',
+          estado, prioridad: t.prioridad, responsable: t.responsable || '',
+          responsables: t.responsable ? [t.responsable] : [],
+          deadline, notas: t.notas || '', monto: t.monto, cobrado: t.cobrado,
+          parent_task_id: t.parent_task_id || null,
+        }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || 'Error al guardar');
+      if (_quickEditClose) _quickEditClose();
+      await refreshCard(t.project_id);
+    } catch (e) { alert('Error: ' + e.message); }
   }
 
   /* ── FINANCIALS tab ─────────────────────────── */
@@ -4374,12 +10001,15 @@ const ProjectsModule = (() => {
       try { return new Intl.NumberFormat('es-MX',{style:'currency',currency:m||'USD',maximumFractionDigits:0}).format(n); }
       catch { return `${m||'USD'} ${n}`; }
     };
-    const mon      = p.moneda || 'USD';
-    const total    = p.valor_total || 0;
-    const cobrado  = tasks.reduce((s, t) => s + (t.cobrado ? (+t.monto || 0) : 0), 0);
+    const mon       = p.moneda || 'USD';
+    const total     = p.valor_total || 0;
+    // Only main tasks — subtasks are execution steps, not financial units
+    const mainTasks = (tasks || []).filter(t => !t.parent_task_id);
+    const cobrado   = mainTasks.reduce((s, t) => s + (t.cobrado ? (+t.monto || 0) : 0), 0);
     const pendiente = Math.max(total - cobrado, 0);
+    const asignado  = mainTasks.reduce((s, t) => s + (+t.monto || 0), 0);
 
-    const taskRows = tasks.map(t => {
+    const taskRows = mainTasks.map(t => {
       const mv = t.monto != null ? t.monto : '';
       return `<div class="pjfin__task-row">
         <span class="pjfin__task-name" onclick="event.stopPropagation();TasksModule.openDrawer(${t.id})">${esc(t.titulo)}</span>
@@ -4396,6 +10026,10 @@ const ProjectsModule = (() => {
       </div>`;
     }).join('');
 
+    const distributeBtn = mainTasks.length > 0 && total > 0
+      ? `<button type="button" class="pjfin__distribute-btn" onclick="event.stopPropagation();ProjectsModule.distributeTaskMontos(${p.id})">↔ Distribuir automáticamente</button>`
+      : '';
+
     return `
     <div class="pjfin__stats">
       <div class="pjfin__stat">
@@ -4410,87 +10044,238 @@ const ProjectsModule = (() => {
         <span class="pjfin__stat-lbl">Pendiente</span>
         <span class="pjfin__stat-val">${money(pendiente || null, mon)}</span>
       </div>
+      ${asignado > 0 ? `<div class="pjfin__stat pjfin__stat--assigned">
+        <span class="pjfin__stat-lbl">Total asignado</span>
+        <span class="pjfin__stat-val">${money(asignado, mon)}</span>
+      </div>` : ''}
     </div>
-    ${tasks.length ? `<div class="pjfin__section-title" style="margin-top:16px;margin-bottom:6px">TAREAS</div>
-    <div class="pjfin__tasks">${taskRows}</div>` : '<div class="pjfin__empty-tasks">Sin tareas asignadas</div>'}`;
+    ${mainTasks.length
+      ? `<div class="pjfin__section-hdr">
+           <span class="pjfin__section-title">TAREAS PRINCIPALES</span>
+           ${distributeBtn}
+         </div>
+         <div class="pjfin__tasks">${taskRows}</div>`
+      : `<div class="pjfin__empty-tasks">Agrega tareas principales para distribuir el valor del proyecto.</div>`}`;
   }
 
   /* ── MORE INFO tab ──────────────────────────── */
+  function _fmtDescMeta(p) {
+    if (!p.descripcion_updated_by || !p.descripcion_updated_at) return '';
+    const ts = new Date(p.descripcion_updated_at);
+    const fmtDate = ts.toLocaleString('es-ES', {
+      day: 'numeric', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit'
+    });
+    return `<div class="pjinfo__meta">Última actualización: ${esc(p.descripcion_updated_by)} · ${fmtDate}</div>`;
+  }
+
+  // Read mode (default)
   function _tabInfo(p) {
-    return `<div class="pjinfo__edit">
-      <textarea class="form-input form-textarea pjinfo__textarea" rows="4"
-        placeholder="Objetivos, alcance, detalles del proyecto…"
-        onblur="ProjectsModule.updateDescripcion(${p.id},this.value)"
-        onkeydown="if(event.key==='Escape'){this.value=${JSON.stringify(p.descripcion || '')};this.blur();}"
-      >${esc(p.descripcion || '')}</textarea>
-      <span class="pjinfo__save-hint" id="pjinfo-saved-${p.id}"></span>
+    const hasContent = (p.descripcion || '').trim().length > 0;
+    if (!hasContent) {
+      return `<div class="pjinfo__note pjinfo__note--empty" id="pjinfo-container-${p.id}">
+        <div class="pjinfo__empty-title">Sin información adicional</div>
+        <div class="pjinfo__empty-desc">Agrega contexto, acuerdos, condiciones o notas importantes del proyecto.</div>
+        <button type="button" class="pjinfo__add-btn" onclick="event.stopPropagation();ProjectsModule.enterInfoEdit(${p.id})">+ Agregar información</button>
+      </div>`;
+    }
+    const lines = esc(p.descripcion).replace(/\n/g, '<br>');
+    return `<div class="pjinfo__note" id="pjinfo-container-${p.id}">
+      <div class="pjinfo__note-hdr">
+        <button type="button" class="pjinfo__edit-btn" onclick="event.stopPropagation();ProjectsModule.enterInfoEdit(${p.id})">Editar</button>
+      </div>
+      <div class="pjinfo__body pjinfo__body--collapsed" id="pjinfo-body-${p.id}">${lines}</div>
+      <button type="button" class="pjinfo__toggle" id="pjinfo-toggle-${p.id}"
+        onclick="event.stopPropagation();ProjectsModule.toggleInfoExpand(${p.id})">Ver más</button>
+      ${_fmtDescMeta(p)}
     </div>`;
   }
 
-  async function updateDescripcion(pid, value) {
+  function _initInfoExpand(pid) {
+    const body   = $(`pjinfo-body-${pid}`);
+    const toggle = $(`pjinfo-toggle-${pid}`);
+    if (!body || !toggle) return;
+    // If content fits inside the max-height, no need for toggle
+    if (body.scrollHeight <= body.offsetHeight + 4) {
+      body.classList.remove('pjinfo__body--collapsed');
+      toggle.style.display = 'none';
+    }
+  }
+
+  function toggleInfoExpand(pid) {
+    const body   = $(`pjinfo-body-${pid}`);
+    const toggle = $(`pjinfo-toggle-${pid}`);
+    if (!body || !toggle) return;
+    const collapsed = body.classList.toggle('pjinfo__body--collapsed');
+    toggle.textContent = collapsed ? 'Ver más' : 'Ver menos';
+  }
+
+  // Edit mode
+  function _tabInfoEdit(p) {
+    return `<div class="pjinfo__note pjinfo__note--editing" id="pjinfo-container-${p.id}">
+      <textarea class="pjinfo__textarea" id="pjinfo-ta-${p.id}" rows="5"
+        placeholder="Objetivos, alcance, detalles del proyecto…"
+        onkeydown="if(event.key==='Escape'){event.stopPropagation();ProjectsModule.cancelInfoEdit(${p.id});}"
+      >${esc(p.descripcion || '')}</textarea>
+      <div class="pjinfo__edit-actions">
+        <span class="pjinfo__save-hint" id="pjinfo-saved-${p.id}"></span>
+        <button type="button" class="btn btn--ghost btn--sm" onclick="event.stopPropagation();ProjectsModule.cancelInfoEdit(${p.id})">Cancelar</button>
+        <button type="button" class="btn btn--primary btn--sm" onclick="event.stopPropagation();ProjectsModule.saveInfoEdit(${p.id})">Guardar</button>
+      </div>
+    </div>`;
+  }
+
+  function enterInfoEdit(pid) {
+    const cont = $(`pjinfo-container-${pid}`);
+    if (!cont) return;
     const p = _projects.find(x => x.id === pid);
     if (!p) return;
+    cont.outerHTML = _tabInfoEdit(p);
+    // focus textarea
+    const ta = $(`pjinfo-ta-${pid}`);
+    if (ta) { ta.focus(); ta.selectionStart = ta.value.length; }
+  }
+
+  function cancelInfoEdit(pid) {
+    const cont = $(`pjinfo-container-${pid}`);
+    if (!cont) return;
+    const p = _projects.find(x => x.id === pid);
+    if (!p) return;
+    cont.outerHTML = _tabInfo(p);
+  }
+
+  async function saveInfoEdit(pid) {
+    const p = _projects.find(x => x.id === pid);
+    if (!p) return;
+    const ta = $(`pjinfo-ta-${pid}`);
+    const value = ta ? ta.value : '';
     const trimmed = value.trim();
-    if (trimmed === (p.descripcion || '')) return;
     const hint = $(`pjinfo-saved-${pid}`);
+    if (trimmed === (p.descripcion || '').trim()) { cancelInfoEdit(pid); return; }
     if (hint) hint.textContent = 'Guardando…';
-    const data = {
-      nombre:          p.nombre,
-      client_id:       p.client_id,
-      descripcion:     trimmed,
-      estado:          p.estado,
-      prioridad:       p.prioridad,
-      responsable:     p.responsable || '',
-      responsable_id:  p.responsable_id || null,
-      responsables:    p.responsables || [],
-      fecha_inicio:    p.fecha_inicio ? p.fecha_inicio.split('T')[0] : null,
-      fecha_fin:       p.fecha_fin    ? p.fecha_fin.split('T')[0]    : null,
-      tipo_proyecto:   p.tipo_proyecto || 'fijo',
-      moneda:          p.moneda || 'USD',
-      valor_total:     p.valor_total,
-      tarifa_hora:     p.tarifa_hora,
-      horas_estimadas: p.horas_estimadas,
-      horas_semanales: p.horas_semanales,
-      horario_semanal: p.horario_semanal || '',
-      comision:        p.comision,
-    };
     try {
-      const res = await apiFetch(`${API}/mgmt/projects/${pid}`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
+      const res = await apiFetch(`${API}/mgmt/projects/${pid}/descripcion`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ descripcion: trimmed })
       });
       if (!res.ok) throw new Error('Error al guardar');
-      p.descripcion = trimmed;
-      if (hint) {
-        hint.textContent = 'Guardado ✓';
-        setTimeout(() => { if (hint) hint.textContent = ''; }, 1500);
-      }
+      const updated = await res.json();
+      p.descripcion            = trimmed;
+      p.descripcion_updated_by = updated.descripcion_updated_by;
+      p.descripcion_updated_at = updated.descripcion_updated_at;
+      const cont = $(`pjinfo-container-${pid}`);
+      if (cont) cont.outerHTML = _tabInfo(p);
     } catch (e) {
       if (hint) hint.textContent = 'Error al guardar';
     }
   }
 
-  /* ── ARCHIVOS tab: enlaces (Drive, brief, etc.) ─ */
+  async function updateDescripcion(pid, value) {
+    // Legacy — kept for backward compat but main flow is saveInfoEdit
+    const p = _projects.find(x => x.id === pid);
+    if (!p) return;
+    const trimmed = value.trim();
+    if (trimmed === (p.descripcion || '')) return;
+    try {
+      const res = await apiFetch(`${API}/mgmt/projects/${pid}/descripcion`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ descripcion: trimmed })
+      });
+      if (!res.ok) throw new Error('Error al guardar');
+      const updated = await res.json();
+      p.descripcion            = trimmed;
+      p.descripcion_updated_by = updated.descripcion_updated_by;
+      p.descripcion_updated_at = updated.descripcion_updated_at;
+    } catch {}
+  }
+
+  /* ── ARCHIVOS tab: cards limpias + formulario inline ─ */
+  const _LINK_ICONS = {
+    drive:       `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`,
+    spreadsheet: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg>`,
+    documento:   `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`,
+    link:        `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>`,
+    otro:        `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>`,
+  };
+
+  function _guessTipo(url) {
+    if (!url) return 'link';
+    const u = url.toLowerCase();
+    if (u.includes('drive.google') || u.includes('dropbox.com') || u.includes('onedrive')) return 'drive';
+    if (u.includes('docs.google.com/spreadsheets') || u.includes('sheets.google')) return 'spreadsheet';
+    if (u.includes('docs.google') || u.includes('notion.so') || u.includes('.pdf')) return 'documento';
+    return 'link';
+  }
+
+  function _linkFormHtml(pid, idx, data) {
+    const tipos = ['link','documento','drive','spreadsheet','otro'];
+    const tipoOpts = tipos.map(t => `<option value="${t}"${((data?.tipo||'link')===t)?' selected':''}>${esc(t.charAt(0).toUpperCase()+t.slice(1))}</option>`).join('');
+    const isEdit  = idx != null;
+    const cancelFn = isEdit ? `ProjectsModule.cancelLinkEdit(${pid})` : `ProjectsModule.cancelLinkForm(${pid})`;
+    const saveFn   = isEdit ? `ProjectsModule.saveLinkEdit(${pid},${idx})` : `ProjectsModule.saveLinkForm(${pid})`;
+    return `<div class="pjlinks__form" onclick="event.stopPropagation()">
+      <div class="pjlinks__form-row">
+        <input class="pjlinks__form-input" id="pjlf-label-${pid}" type="text" placeholder="Nombre del recurso *" value="${esc(data?.label||'')}">
+        <input class="pjlinks__form-input" id="pjlf-url-${pid}" type="url" placeholder="URL / enlace *" value="${esc(data?.url||'')}">
+      </div>
+      <div class="pjlinks__form-row pjlinks__form-row--sm">
+        <select class="pjlinks__form-select" id="pjlf-tipo-${pid}">${tipoOpts}</select>
+        <input class="pjlinks__form-input" id="pjlf-nota-${pid}" type="text" placeholder="Nota opcional" value="${esc(data?.nota||'')}">
+      </div>
+      <div class="pjlinks__form-actions">
+        <button type="button" class="btn btn--ghost btn--sm" onclick="event.stopPropagation();${cancelFn}">Cancelar</button>
+        <button type="button" class="btn btn--primary btn--sm" onclick="event.stopPropagation();${saveFn}">Guardar</button>
+      </div>
+    </div>`;
+  }
+
   function _tabLinks(p) {
     const links = Array.isArray(p.links) ? p.links : [];
-    const rows = links.map((l, i) => `
-      <div class="pjlinks__row">
-        <input class="pjlinks__label" type="text" placeholder="Ej: Carpeta de archivos, Brief…"
-          value="${esc(l.label || '')}" onchange="ProjectsModule._setLinkField(${p.id},${i},'label',this.value)">
-        <input class="pjlinks__url" type="url" placeholder="https://…"
-          value="${esc(l.url || '')}" onchange="ProjectsModule._setLinkField(${p.id},${i},'url',this.value)">
-        ${l.url ? `<a class="pjlinks__open" href="${esc(l.url)}" target="_blank" rel="noopener noreferrer" title="Abrir">↗</a>` : '<span class="pjlinks__open pjlinks__open--disabled">↗</span>'}
-        <button type="button" class="pjlinks__del" title="Eliminar" onclick="ProjectsModule.removeLink(${p.id},${i})">×</button>
-      </div>`).join('');
+    const pid   = p.id;
+    const openIconSvg = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>`;
+    const editIconSvg = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
+    const delIconSvg  = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>`;
+
+    const items = links.map((l, i) => {
+      if (_editingLinkIdx && _editingLinkIdx.pid === pid && _editingLinkIdx.idx === i) {
+        return _linkFormHtml(pid, i, l);
+      }
+      const tipo   = l.tipo || _guessTipo(l.url);
+      const icon   = _LINK_ICONS[tipo] || _LINK_ICONS.link;
+      const shortUrl = l.url ? (l.url.length > 55 ? l.url.slice(0,55) + '…' : l.url) : '';
+      const metaParts = [];
+      if (l.added_by) metaParts.push(esc(l.added_by));
+      if (l.added_at) metaParts.push(new Date(l.added_at).toLocaleDateString('es-ES',{day:'numeric',month:'short',year:'numeric'}));
+      const meta = metaParts.join(' · ');
+      return `<div class="pjlinks__card">
+        <div class="pjlinks__card-icon">${icon}</div>
+        <div class="pjlinks__card-body">
+          <div class="pjlinks__card-name">${esc(l.label || 'Sin nombre')}</div>
+          ${shortUrl ? `<a class="pjlinks__card-url" href="${esc(l.url)}" target="_blank" rel="noopener noreferrer">${shortUrl}</a>` : ''}
+          ${l.nota ? `<div class="pjlinks__card-nota">${esc(l.nota)}</div>` : ''}
+          ${meta ? `<div class="pjlinks__card-meta">${meta}</div>` : ''}
+        </div>
+        <div class="pjlinks__card-actions">
+          ${l.url ? `<a class="pjlinks__act-btn" href="${esc(l.url)}" target="_blank" rel="noopener noreferrer" title="Abrir">${openIconSvg}</a>` : ''}
+          <button type="button" class="pjlinks__act-btn" title="Editar" onclick="event.stopPropagation();ProjectsModule.startLinkEdit(${pid},${i})">${editIconSvg}</button>
+          <button type="button" class="pjlinks__act-btn pjlinks__act-btn--del" title="Eliminar" onclick="event.stopPropagation();ProjectsModule.removeLink(${pid},${i})">${delIconSvg}</button>
+        </div>
+      </div>`;
+    }).join('');
+
+    const addForm = _addingLinkFor === pid ? _linkFormHtml(pid, null, null) : '';
+    const emptyContent = !links.length && _addingLinkFor !== pid
+      ? `<div class="pjlinks__empty">
+          <div class="pjlinks__empty-title">Sin archivos todavía</div>
+          <div class="pjlinks__empty-desc">Agrega enlaces de Drive, documentos, briefs o recursos del proyecto.</div>
+        </div>` : '';
 
     return `<div class="pjlinks">
-      ${links.length ? `<div class="pjlinks__list">${rows}</div>` : '<div class="pjt-empty">Sin archivos o enlaces todavía.</div>'}
-      <div class="pjlinks__footer">
-        <button type="button" class="btn btn--ghost btn--sm" onclick="ProjectsModule.addLink(${p.id})">+ Agregar enlace</button>
-        <span style="display:flex;align-items:center;gap:8px">
-          <span class="pjinfo__save-hint" id="pjlinks-saved-${p.id}"></span>
-          <button type="button" class="btn btn--primary btn--sm" onclick="ProjectsModule.saveLinks(${p.id})">Guardar</button>
-        </span>
-      </div>
+      ${links.length ? `<div class="pjlinks__list">${items}</div>` : emptyContent}
+      ${addForm}
+      ${_addingLinkFor !== pid ? `<div class="pjlinks__footer-new">
+        <button type="button" class="pjlinks__add-btn" onclick="event.stopPropagation();ProjectsModule.openLinkForm(${pid})">+ Agregar archivo/enlace</button>
+      </div>` : ''}
     </div>`;
   }
 
@@ -4501,18 +10286,15 @@ const ProjectsModule = (() => {
   }
 
   function addLink(pid) {
-    const p = _projects.find(x => x.id === pid);
-    if (!p) return;
-    if (!Array.isArray(p.links)) p.links = [];
-    p.links.push({ label: '', url: '' });
-    _rerenderLinksTab(pid);
+    openLinkForm(pid);
   }
 
   function removeLink(pid, idx) {
     const p = _projects.find(x => x.id === pid);
     if (!p || !Array.isArray(p.links)) return;
     p.links.splice(idx, 1);
-    _rerenderLinksTab(pid);
+    if (_editingLinkIdx && _editingLinkIdx.pid === pid && _editingLinkIdx.idx === idx) _editingLinkIdx = null;
+    _persistLinks(pid);
   }
 
   function _setLinkField(pid, idx, field, value) {
@@ -4521,27 +10303,73 @@ const ProjectsModule = (() => {
     p.links[idx][field] = value;
   }
 
-  async function saveLinks(pid) {
+  async function saveLinks(pid) { await _persistLinks(pid); }
+
+  async function _persistLinks(pid) {
     const p = _projects.find(x => x.id === pid);
     if (!p) return;
-    const hint = $(`pjlinks-saved-${pid}`);
-    if (hint) hint.textContent = 'Guardando…';
-    const links = (p.links || []).filter(l => (l.label && l.label.trim()) || (l.url && l.url.trim()));
+    const links = (p.links || []).filter(l => (l.label?.trim()) || (l.url?.trim()));
     try {
       const res = await apiFetch(`${API}/mgmt/projects/${pid}/links`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ links })
       });
-      if (!res.ok) throw new Error('Error al guardar');
+      if (!res.ok) throw new Error('fail');
       p.links = links;
-      _rerenderLinksTab(pid);
-      const hint2 = $(`pjlinks-saved-${pid}`);
-      if (hint2) {
-        hint2.textContent = 'Guardado ✓';
-        setTimeout(() => { if (hint2) hint2.textContent = ''; }, 1500);
-      }
-    } catch (e) {
-      if (hint) hint.textContent = 'Error al guardar';
-    }
+    } catch(e) {}
+    _rerenderLinksTab(pid);
+  }
+
+  function openLinkForm(pid) {
+    _addingLinkFor  = pid;
+    _editingLinkIdx = null;
+    _rerenderLinksTab(pid);
+    setTimeout(() => document.getElementById(`pjlf-label-${pid}`)?.focus(), 40);
+  }
+
+  function cancelLinkForm(pid) {
+    _addingLinkFor = null;
+    _rerenderLinksTab(pid);
+  }
+
+  async function saveLinkForm(pid) {
+    const label = document.getElementById(`pjlf-label-${pid}`)?.value.trim();
+    const url   = document.getElementById(`pjlf-url-${pid}`)?.value.trim();
+    if (!label || !url) return;
+    const tipo = document.getElementById(`pjlf-tipo-${pid}`)?.value || _guessTipo(url);
+    const nota = document.getElementById(`pjlf-nota-${pid}`)?.value.trim() || '';
+    const p = _projects.find(x => x.id === pid);
+    if (!p) return;
+    if (!Array.isArray(p.links)) p.links = [];
+    const authName = window._authUser?.memberNombre || window._authUser?.name || '';
+    p.links.push({ label, url, tipo, nota, added_by: authName, added_at: new Date().toISOString() });
+    _addingLinkFor = null;
+    await _persistLinks(pid);
+  }
+
+  function startLinkEdit(pid, idx) {
+    _editingLinkIdx = { pid, idx };
+    _addingLinkFor  = null;
+    _rerenderLinksTab(pid);
+    setTimeout(() => document.getElementById(`pjlf-label-${pid}`)?.focus(), 40);
+  }
+
+  function cancelLinkEdit(pid) {
+    _editingLinkIdx = null;
+    _rerenderLinksTab(pid);
+  }
+
+  async function saveLinkEdit(pid, idx) {
+    const label = document.getElementById(`pjlf-label-${pid}`)?.value.trim();
+    const url   = document.getElementById(`pjlf-url-${pid}`)?.value.trim();
+    if (!label || !url) return;
+    const tipo = document.getElementById(`pjlf-tipo-${pid}`)?.value || _guessTipo(url);
+    const nota = document.getElementById(`pjlf-nota-${pid}`)?.value.trim() || '';
+    const p = _projects.find(x => x.id === pid);
+    if (!p || !p.links?.[idx]) return;
+    const authName = window._authUser?.memberNombre || window._authUser?.name || '';
+    p.links[idx] = { ...p.links[idx], label, url, tipo, nota, added_by: authName };
+    _editingLinkIdx = null;
+    await _persistLinks(pid);
   }
 
   /* ── switch sub-tab ─────────────────────────── */
@@ -4556,7 +10384,10 @@ const ProjectsModule = (() => {
     const content = $(`pjcontent-${pid}`);
     if (content) {
       const p = _projects.find(x => x.id === pid);
-      if (p) content.innerHTML = _tabContent(p, tab, _taskCache[pid] || []);
+      if (p) {
+        content.innerHTML = _tabContent(p, tab, _taskCache[pid] || []);
+        if (tab === 'info') setTimeout(() => _initInfoExpand(pid), 0);
+      }
     }
   }
 
@@ -4634,6 +10465,8 @@ const ProjectsModule = (() => {
 
   /* ── table view (Lista) ─────────────────────── */
   async function toggleProjectExpand(pid) {
+    if (_quickEditClose) _quickEditClose();
+    if (_taskMenuClose) _taskMenuClose();
     if (_expandedProjects.has(pid)) {
       _expandedProjects.delete(pid);
       _renderTable(_filtered());
@@ -4660,39 +10493,61 @@ const ProjectsModule = (() => {
     } catch {}
   }
 
+  function _pjlistAddTaskBtn(pid) {
+    return `<div class="pjlist-footer">
+      <button type="button" class="pjlist-add-task-btn" onclick="event.stopPropagation();TasksModule.openDrawer(null,${pid})">+ Nueva tarea</button>
+    </div>`;
+  }
+
   function _taskTreeHtml(pid) {
     const tasks = _taskCache[pid];
     if (tasks === undefined) return `<div class="pjlist-tasks__loading">Cargando tareas…</div>`;
     const parents = tasks.filter(t => !t.parent_task_id);
     if (!parents.length) {
-      return `<div class="pjlist-tasks__empty">Sin tareas asignadas.</div>${_newTaskBtn({ id: pid })}`;
+      return `<div class="pjlist-empty-row">
+        <span>Sin tareas asignadas.</span>
+        <button type="button" class="pjlist-add-task-btn" onclick="event.stopPropagation();TasksModule.openDrawer(null,${pid})">+ Nueva tarea</button>
+      </div>`;
     }
     const childrenOf = parentId => tasks.filter(t => t.parent_task_id === parentId);
     const rows = parents.map(t => {
       const kids = childrenOf(t.id);
       const done = kids.filter(k => k.estado === 'completado').length;
-      const isOpen = _expandedTasks.has(t.id);
-      const subHtml = (kids.length && isOpen)
-        ? `<div class="pjlist-sub-group">${kids.map(k => `
-            <div class="pjlist-sub-row" onclick="event.stopPropagation();TasksModule.openDrawer(${k.id})">
-              <span class="pjt-row__dot pjt-row__dot--sm" style="background:${_TASK_PRIO_DOT[k.prioridad] || '#9CA3AF'}"></span>
-              <span class="pjlist-sub-name">${esc(k.titulo)}</span>
-              <span class="pjt-row__tag pjt-row__tag--sm" style="background:${_TASK_ESTADO_BG[k.estado]||'#F3F4F6'};color:${_TASK_ESTADO_CLR[k.estado]||'#6B7280'}">${_TASK_ESTADO_LBL[k.estado]||k.estado}</span>
-            </div>`).join('')}</div>`
+      const isCreating = _inlineSubtaskFor === t.id;
+      const childBeingEdited = kids.some(k => k.id === _editingTaskId);
+      const isOpen = _expandedTasks.has(t.id) || isCreating || childBeingEdited;
+      const subHtml = (kids.length || isCreating || childBeingEdited) && isOpen
+        ? `<div class="pjlist-sub-group">${kids.map(k => _editingTaskId === k.id ? _editTaskRowHtml(k) : `
+            <div class="pjlist-sub-row"
+                onclick="event.stopPropagation();ProjectsModule.openQuickEditPopover(event,${k.id})"
+                oncontextmenu="event.preventDefault();event.stopPropagation();ProjectsModule.openTaskMenu(event,${k.id})">
+              <span class="pl-sub-name-cell">
+                <span class="pjt-row__dot pjt-row__dot--sm" style="background:${_TASK_PRIO_DOT[k.prioridad] || '#9CA3AF'}"></span>
+                <span class="pjlist-sub-name">${esc(k.titulo)}</span>
+              </span>
+              <span class="pjt-row__tag" style="background:${_TASK_ESTADO_BG[k.estado]||'#F3F4F6'};color:${_TASK_ESTADO_CLR[k.estado]||'#6B7280'}">${_TASK_ESTADO_LBL[k.estado]||k.estado}</span>
+              <button type="button" class="pjt-more-btn pjt-more-btn--sm" title="Más opciones"
+                onclick="event.stopPropagation();ProjectsModule.openTaskMenu(event,${k.id})">⋯</button>
+            </div>`).join('')}${isCreating ? _inlineSubtaskRowHtml(t.id, pid) : ''}</div>`
         : '';
+      if (_editingTaskId === t.id) return _editTaskRowHtml(t) + subHtml;
       return `<div class="pjlist-task-row" data-task-id="${t.id}"
-          onclick="event.stopPropagation();TasksModule.openDrawer(${t.id})"
-          oncontextmenu="event.preventDefault();event.stopPropagation();ProjectsModule.openSubtaskMenu(event,${t.id},${pid})">
-        ${_chevronHtml(t.id, kids.length)}
-        <span class="pjt-row__dot" style="background:${_TASK_PRIO_DOT[t.prioridad] || '#9CA3AF'}"></span>
-        <span class="pjlist-task-name">${esc(t.titulo)}</span>
-        ${kids.length ? `<span class="pjt-subcount">${done}/${kids.length} subtarea${kids.length !== 1 ? 's' : ''}</span>` : ''}
+          onclick="event.stopPropagation();ProjectsModule.openQuickEditPopover(event,${t.id})"
+          oncontextmenu="event.preventDefault();event.stopPropagation();ProjectsModule.openTaskMenu(event,${t.id})">
+        <div class="pl-task-name-cell">
+          ${_chevronHtml(t.id, kids.length, isCreating)}
+          <span class="pjt-row__dot" style="background:${_TASK_PRIO_DOT[t.prioridad] || '#9CA3AF'}"></span>
+          <span class="pjlist-task-name">${esc(t.titulo)}</span>
+        </div>
+        <span class="pjt-subcount">${kids.length ? `${done}/${kids.length} subtareas` : '—'}</span>
         <span class="pjt-row__tag" style="background:${_TASK_ESTADO_BG[t.estado]||'#F3F4F6'};color:${_TASK_ESTADO_CLR[t.estado]||'#6B7280'}">${_TASK_ESTADO_LBL[t.estado]||t.estado}</span>
         <button type="button" class="pjt-add-sub" title="Agregar subtarea"
-          onclick="event.stopPropagation();TasksModule.openDrawer(null,${pid},${t.id})">+ Subtarea</button>
+          onclick="event.stopPropagation();ProjectsModule.startInlineSubtask(${t.id})">+ Subtarea</button>
+        <button type="button" class="pjt-more-btn" title="Más opciones"
+          onclick="event.stopPropagation();ProjectsModule.openTaskMenu(event,${t.id})">⋯</button>
       </div>${subHtml}`;
     }).join('');
-    return `<div class="pjlist-tasks">${rows}</div>${_newTaskBtn({ id: pid })}`;
+    return `<div class="pjlist-tasks">${rows}</div>${_pjlistAddTaskBtn(pid)}`;
   }
 
   function _renderTable(list) {
@@ -4711,34 +10566,39 @@ const ProjectsModule = (() => {
       else if (p.tipo_proyecto === 'horas') val = p.tarifa_hora ? money(p.tarifa_hora) + '/h' : '<span class="muted">—</span>';
       else val = money(p.valor_total);
       const isOpen = _expandedProjects.has(p.id);
-      const expandRow = isOpen
-        ? `<tr class="pjlist-expand-row"><td colspan="7">${_taskTreeHtml(p.id)}</td></tr>`
+      const expandHtml = isOpen
+        ? `<div class="project-expanded-content">${_taskTreeHtml(p.id)}</div>`
         : '';
-      return `<tr class="clients-table__row" onclick="ProjectsModule.toggleProjectExpand(${p.id})">
-        <td><div style="display:flex;align-items:center;gap:8px">
-          <button type="button" class="pjt-chevron${isOpen ? ' pjt-chevron--open' : ''}" onclick="event.stopPropagation();ProjectsModule.toggleProjectExpand(${p.id})">${_chevronSvg}</button>
-          <div style="width:8px;height:8px;border-radius:2px;background:${prioColors[p.prioridad]||'#FBBF24'};flex-shrink:0"></div>
-          <span class="client-nombre">${esc(p.nombre)}</span>
-        </div></td>
-        <td class="client-meta">${p.client_nombre ? esc(p.client_nombre) : '<span class="muted">—</span>'}</td>
-        <td>${_estadoBadge(p.estado)}</td>
-        <td>${_tipoBadge(p.tipo_proyecto || 'fijo')}</td>
-        <td class="client-meta">${_fmtDate(p.fecha_fin)}</td>
-        <td class="client-meta">${val}</td>
-        <td><div class="client-actions-cell">
-          <button class="client-action-btn" onclick="event.stopPropagation();ProjectsModule.openDrawer(${p.id})">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-          </button>
-          <button class="client-action-btn client-action-btn--danger" onclick="event.stopPropagation();ProjectsModule.confirmDelete(${p.id})">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
-          </button>
-        </div></td>
-      </tr>${expandRow}`;
+      return `<div class="project-row-wrapper">
+        <div class="projects-list-row projects-list-grid" onclick="ProjectsModule.toggleProjectExpand(${p.id})">
+          <div class="pl-proj-cell">
+            <button type="button" class="pjt-chevron${isOpen ? ' pjt-chevron--open' : ''}" onclick="event.stopPropagation();ProjectsModule.toggleProjectExpand(${p.id})">${_chevronSvg}</button>
+            <div style="width:8px;height:8px;border-radius:2px;background:${prioColors[p.prioridad]||'#FBBF24'};flex-shrink:0"></div>
+            <span class="client-nombre">${esc(p.nombre)}</span>
+          </div>
+          <div class="pl-cell">${p.client_nombre ? esc(p.client_nombre) : '<span class="muted">—</span>'}</div>
+          <div>${_estadoBadge(p.estado)}</div>
+          <div>${_tipoBadge(p.tipo_proyecto || 'fijo')}</div>
+          <div class="pl-cell">${_fmtDate(p.fecha_fin)}</div>
+          <div class="pl-cell">${val}</div>
+          <div class="client-actions-cell">
+            <button class="client-action-btn" onclick="event.stopPropagation();ProjectsModule.openDrawer(${p.id})">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            </button>
+            <button class="client-action-btn client-action-btn--danger" onclick="event.stopPropagation();ProjectsModule.confirmDelete(${p.id})">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+            </button>
+          </div>
+        </div>
+        ${expandHtml}
+      </div>`;
     }).join('');
   }
 
   /* ── setView ────────────────────────────────── */
   function setView(v) {
+    if (_quickEditClose) _quickEditClose();
+    if (_taskMenuClose) _taskMenuClose();
     _view = v;
     $('pv-tab-timeline')?.classList.toggle('pv-view--active', v === 'timeline');
     $('pv-tab-lista')?.classList.toggle('pv-view--active', v === 'lista');
@@ -4980,7 +10840,853 @@ const ProjectsModule = (() => {
     } catch (e) { alert('Error: ' + e.message); }
   }
 
-  return { load, filter, setFilter, setMemberFilter, render, onTipoChange, openDrawer, closeDrawer, save, confirmDelete, setView, switchTab, toggleTaskCobrado, updateTaskMonto, updateDescripcion, addLink, removeLink, _setLinkField, saveLinks, refreshCard, closeQuickClientModal, saveQuickClient, toggleTaskExpand, toggleProjectExpand, openSubtaskMenu, _createSubtaskFromMenu };
+  async function distributeTaskMontos(pid) {
+    const p = _projects.find(x => x.id === pid);
+    if (!p || !p.valor_total) return;
+    const mainTasks = (_taskCache[pid] || []).filter(t => !t.parent_task_id);
+    if (!mainTasks.length) return;
+    const share = Math.round((p.valor_total / mainTasks.length) * 100) / 100;
+    for (const t of mainTasks) {
+      await updateTaskMonto(t.id, share, pid);
+    }
+  }
+
+  function toggleSubrowExpand(id) {
+    const row = document.querySelector(`.pjt-subrow[data-subtask-id="${id}"]`);
+    if (!row) return;
+    if (_expandedSubrows.has(id)) {
+      _expandedSubrows.delete(id);
+      row.classList.remove('pjt-subrow--expanded');
+    } else {
+      _expandedSubrows.add(id);
+      row.classList.add('pjt-subrow--expanded');
+    }
+  }
+
+  return { load, filter, setFilter, setMemberFilter, render, onTipoChange, openDrawer, closeDrawer, save, confirmDelete, setView, switchTab, toggleTaskCobrado, updateTaskMonto, updateDescripcion, addLink, removeLink, _setLinkField, saveLinks, refreshCard, closeQuickClientModal, saveQuickClient, toggleTaskExpand, toggleProjectExpand, openTaskMenu, _onTaskMenuEdit, _onTaskMenuAddSub, _onTaskMenuDelete, openQuickEditPopover, startInlineSubtask, cancelInlineSubtask, saveInlineSubtask, startEditTask, cancelEditTask, saveEditTask, deleteTaskInline, toggleSubrowExpand, distributeTaskMontos, openLinkForm, cancelLinkForm, saveLinkForm, startLinkEdit, cancelLinkEdit, saveLinkEdit, enterInfoEdit, cancelInfoEdit, saveInfoEdit, toggleInfoExpand };
+})();
+
+// =================================================================
+// OPPORTUNITIES MODULE — procesos pre-proyecto (aplicaciones, invitaciones…)
+// =================================================================
+
+const OpportunitiesModule = (() => {
+  let _opps   = [];
+  let _filter = '';
+  let _editId = null;
+  let _menuClose = null;
+  let _detail = null;        // opportunity object open in detail view
+  let _detailTasks = [];     // internal tasks of _detail
+  let _detailTab = 'pipeline';
+  let _pipeStage = null;     // selected stage in Pipeline tab
+  let _teamCache = [];       // workspace members (para Responsable)
+  let _clientsCache = [];    // clientes existentes (para Cliente)
+
+  async function _ensureTeam() {
+    if (_teamCache.length) return;
+    try { const r = await apiFetch(`${API}/mgmt/team`); if (r.ok) _teamCache = await r.json(); } catch {}
+  }
+  async function _ensureClients() {
+    if (_clientsCache.length) return;
+    try { const r = await apiFetch(`${API}/mgmt/clients`); if (r.ok) _clientsCache = await r.json(); } catch {}
+  }
+  function _memberNames(selected) {
+    const me = window._authUser?.memberNombre || window._authUser?.name || '';
+    const names = [...new Set([me, ..._teamCache.map(m => m.nombre)].filter(Boolean))];
+    if (selected && !names.includes(selected)) names.unshift(selected);
+    return names;
+  }
+
+  const OPP_STAGES = [
+    ['aplicacion',   'Postulación'],
+    ['preseleccion', 'Preselección'],
+    ['entrevista',   'Entrevista'],
+    ['contrato',     'Decisión final'],
+  ];
+  // Estado general automático: activa (por defecto) · ganada · perdida · archivada
+  const OPP_ESTADOS = [
+    ['activa',    'Activa',    '#0EA5E9'],
+    ['ganada',    'Ganada',    '#22C55E'],
+    ['perdida',   'Perdida',   '#EF4444'],
+    ['archivada', 'Archivada', '#9CA3AF'],
+  ];
+  const OPP_CANALES = ['Upwork', 'Freelancer', 'Fiverr', 'LinkedIn', 'Email directo', 'Referido', 'Web', 'Otro'];
+  const OPP_PRIOS   = [['alta', 'Alta'], ['media', 'Media'], ['baja', 'Baja']];
+  const TERMINAL    = ['ganada', 'perdida', 'archivada'];
+
+  // Normaliza valores legacy: nueva/en_proceso/…→activa, rechazada→perdida; preselección/revisión→conversación
+  function _normEstado(v) {
+    if (v === 'ganada' || v === 'perdida' || v === 'archivada') return v;
+    if (v === 'rechazada') return 'perdida';
+    return 'activa';
+  }
+  function _normStage(k) {
+    if (k === 'conversacion' || k === 'revision') return 'preseleccion';
+    if (k === 'piloto') return 'entrevista';
+    if (k === 'propuesta') return 'contrato';
+    return k || 'aplicacion';
+  }
+  function _estadoMeta(v) { return OPP_ESTADOS.find(x => x[0] === _normEstado(v)) || OPP_ESTADOS[0]; }
+  function _stageIdx(key) { const i = OPP_STAGES.findIndex(s => s[0] === _normStage(key)); return i < 0 ? 0 : i; }
+
+  async function load() {
+    const loading = $('opp-loading');
+    if (!loading) return;
+    _showList();
+    loading.style.display = 'flex';
+    $('opp-empty').style.display = 'none';
+    $('opp-cards').innerHTML = '';
+    try {
+      const res = await apiFetch(`${API}/mgmt/opportunities`);
+      if (res.status === 401) { location.reload(); return; }
+      if (!res.ok) throw new Error(await res.text());
+      _opps = await res.json();
+      render();
+    } catch (e) {
+      console.error('[opportunities] load error:', e);
+      loading.innerHTML = '<span style="color:var(--err)">Error al cargar oportunidades.</span>';
+    } finally {
+      loading.style.display = 'none';
+    }
+  }
+
+  function _showList() {
+    const lv = $('opp-list-view'), dv = $('opp-detail-view');
+    if (lv) lv.style.display = '';
+    if (dv) dv.style.display = 'none';
+  }
+
+  // Filtros tipo tabs (etapa: usa etapa_actual · ganada/perdida/archivada usan estado)
+  const OPP_TABS = [
+    ['', 'Todas'],
+    ['etapa:aplicacion',   'Postulación'],
+    ['etapa:preseleccion', 'Preselección'],
+    ['etapa:entrevista',   'Entrevista'],
+    ['etapa:contrato',     'Decisión final'],
+    ['ganada',    'Ganadas'],
+    ['perdida',   'Perdidas'],
+    ['archivada', 'Archivadas'],
+  ];
+
+  function _matchTab(o, f) {
+    const est = _normEstado(o.estado);
+    if (f === '') return est !== 'archivada';
+    if (f === 'ganada' || f === 'perdida' || f === 'archivada') return est === f;
+    if (f.startsWith('etapa:')) return est === 'activa' && _normStage(o.etapa_actual) === f.slice(6);
+    return true;
+  }
+
+  function _renderTabs() {
+    const el = $('opp-tabs');
+    if (!el) return;
+    el.innerHTML = OPP_TABS.map(([f, label]) => {
+      const n = _opps.filter(o => _matchTab(o, f)).length;
+      return `<button class="opp-tab${_filter === f ? ' opp-tab--active' : ''}" onclick="OpportunitiesModule.setFilter('${f}')">${esc(label)}${n ? `<span class="opp-tab-n">${n}</span>` : ''}</button>`;
+    }).join('');
+  }
+
+  function setFilter(f) { _filter = f; render(); }
+  function filter() { render(); }
+
+  function _filtered() {
+    const q = ($('opp-search')?.value || '').toLowerCase();
+    let list = _opps.filter(o => _matchTab(o, _filter));
+    if (q) list = list.filter(o =>
+      (o.titulo + ' ' + (o.cliente || '') + ' ' + (o.client_nombre || '') + ' ' + (o.canal || '')).toLowerCase().includes(q));
+    return list;
+  }
+
+  function render() {
+    _renderTabs();
+    const cards = $('opp-cards'), empty = $('opp-empty');
+    if (!cards) return;
+    const list = _filtered();
+    if (!list.length) {
+      cards.innerHTML = '';
+      if (empty) {
+        empty.style.display = 'flex';
+        const p = empty.querySelector('p');
+        if (p) p.textContent = !_opps.length ? 'Aún no tienes oportunidades. Registra la primera aplicación o invitación.' : 'No hay oportunidades en esta etapa.';
+      }
+      return;
+    }
+    if (empty) empty.style.display = 'none';
+    cards.innerHTML = list.map(_cardHtml).join('');
+  }
+
+  function _checkSvg() { return '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'; }
+  function _xSvg() { return '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>'; }
+
+  function _stageStatus(o, key, i) {
+    const cur = _stageIdx(o.etapa_actual);
+    if (o.estado === 'ganada') return 'completada';
+    if ((o.estado === 'perdida' || o.estado === 'rechazada') && i === cur) return 'rechazada';
+    const ex = o.etapas && o.etapas[key] && o.etapas[key].estado;
+    if (ex) return ex;
+    if (i < cur) return 'completada';
+    if (i === cur) return 'activa';
+    return 'pendiente';
+  }
+  const _svg = (p, w = 11) => `<svg width="${w}" height="${w}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
+  const OPP_STAGE_ICONS = {
+    aplicacion:   _svg('<line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>'),
+    preseleccion: _svg('<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>'),
+    entrevista:   _svg('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>'),
+    contrato:     _svg('<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>'),
+  };
+  const _META_ICO = {
+    id:      _svg('<line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/>', 10),
+    canal:   _svg('<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>', 10),
+    cliente: _svg('<path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/>', 10),
+  };
+  const _ICO_PERSON = _svg('<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>', 10);
+  const _ICO_CARET  = _svg('<polyline points="6 9 12 15 18 9"/>', 9);
+
+  const _STAGE_MAP = {
+    completada: ['opp-pipe-step--completada', _checkSvg()],
+    activa:     ['opp-pipe-step--activa',     '<span class="opp-pipe-dot"></span>'],
+    rechazada:  ['opp-pipe-step--rechazada',  _xSvg()],
+    pendiente:  ['opp-pipe-step--pendiente',  '<span class="opp-pipe-dot"></span>'],
+  };
+  function _pipelineHtml(o) {
+    return `<div class="opp-pipe">${OPP_STAGES.map(([k, l], i) => {
+      const st = _stageStatus(o, k, i);
+      const inner = st === 'completada' ? _checkSvg() : st === 'rechazada' ? _xSvg() : (OPP_STAGE_ICONS[k] || '<span class="opp-pipe-dot"></span>');
+      const line = i < OPP_STAGES.length - 1 ? `<span class="opp-pipe-line${st === 'completada' ? ' opp-pipe-line--done' : ''}"></span>` : '';
+      return `<div class="opp-pipe-step opp-pipe-step--${st}"><span class="opp-pipe-ic">${inner}</span><span class="opp-pipe-lbl">${esc(l)}</span></div>${line}`;
+    }).join('')}</div>`;
+  }
+
+  function _cardHtml(o) {
+    const [, estLbl] = _estadoMeta(o.estado);
+    const est = _normEstado(o.estado);
+    const cur = _stageIdx(o.etapa_actual);
+    const isTerminal = TERMINAL.includes(est);
+    const nextStage = (!isTerminal && cur < OPP_STAGES.length - 1) ? OPP_STAGES[cur + 1] : null;
+    const fecha = o.fecha_aplicacion ? new Date(String(o.fecha_aplicacion).split('T')[0] + 'T00:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' }) : '';
+    const cliente = o.cliente || o.client_nombre || '';
+    const adv = nextStage
+      ? `<button class="btn btn--primary btn--sm opp-adv" onclick="event.stopPropagation();OpportunitiesModule.advanceStage(${o.id})">${esc(nextStage[1])}</button>`
+      : (!isTerminal ? `<button class="btn btn--primary btn--sm opp-adv" onclick="event.stopPropagation();OpportunitiesModule.setEstado(${o.id},'ganada')">Marcar ganada</button>` : '');
+    const xBtn = !isTerminal
+      ? `<button class="opp-x-btn" title="Marcar perdida" onclick="event.stopPropagation();OpportunitiesModule.setEstado(${o.id},'perdida')">${_xSvg()}</button>` : '';
+    return `
+      <div class="opp-card opp-card--${est}" onclick="OpportunitiesModule.openDetail(${o.id})">
+        <div class="opp-card__top">
+          <div class="opp-card__head">
+            <span class="opp-card__title">${esc(o.titulo)}</span>
+            <button class="opp-status opp-status--${est}" onclick="event.stopPropagation();OpportunitiesModule.openStatusMenu(event,${o.id})" title="Cambiar estado">
+              <span class="opp-status-dot"></span>${estLbl}${_ICO_CARET}
+            </button>
+            ${o.responsable ? `<span class="opp-assign">${_ICO_PERSON}${esc(o.responsable)}</span>` : ''}
+          </div>
+          <div class="opp-card__right">
+            ${fecha ? `<span class="opp-card__date">Aplicado el ${fecha}</span>` : ''}
+            <button class="opp-menu-btn" onclick="event.stopPropagation();OpportunitiesModule.openMenu(event,${o.id})" title="Opciones">⋯</button>
+          </div>
+        </div>
+        <div class="opp-card__meta">
+          <span class="opp-meta-item">${_META_ICO.id}ID: #${o.id}</span>
+          ${o.canal ? `<span class="opp-meta-item">${_META_ICO.canal}${esc(o.canal)}</span>` : ''}
+          ${cliente ? `<span class="opp-meta-item">${_META_ICO.cliente}${esc(cliente)}</span>` : ''}
+        </div>
+        <div class="opp-card__pipe-row">
+          ${_pipelineHtml(o)}
+          <div class="opp-card__actions">${xBtn}${adv}</div>
+        </div>
+      </div>`;
+  }
+
+  async function advanceStage(id) {
+    const o = _opps.find(x => x.id === id);
+    if (!o) return;
+    const cur = _stageIdx(o.etapa_actual);
+    if (cur >= OPP_STAGES.length - 1) return;
+    const next = OPP_STAGES[cur + 1][0];
+    const prevEtapa = o.etapa_actual, prevEstado = o.estado;
+    o.etapa_actual = next;
+    if (o.estado === 'nueva') o.estado = 'en_proceso';
+    render();
+    try {
+      const res = await apiFetch(`${API}/mgmt/opportunities/${id}/etapa`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ etapa_actual: next }) });
+      if (!res.ok) throw new Error(await res.text());
+    } catch (e) { o.etapa_actual = prevEtapa; o.estado = prevEstado; render(); console.error('[opportunities] advanceStage:', e); }
+  }
+
+  async function setEstado(id, estado) {
+    const o = _opps.find(x => x.id === id);
+    if (!o) return;
+    const prev = o.estado;
+    o.estado = estado;
+    render();
+    try {
+      const res = await apiFetch(`${API}/mgmt/opportunities/${id}/estado`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ estado }) });
+      if (!res.ok) throw new Error(await res.text());
+    } catch (e) { o.estado = prev; render(); console.error('[opportunities] setEstado:', e); }
+  }
+
+  function openMenu(e, id) {
+    closeMenu();
+    const o = _opps.find(x => x.id === id);
+    if (!o) return;
+    const menu = document.createElement('div');
+    menu.className = 'opp-menu';
+    const item = (label, onclick, cls = '') => `<button class="opp-menu-item ${cls}" onclick="${onclick};OpportunitiesModule.closeMenu()">${label}</button>`;
+    const est = _normEstado(o.estado);
+    menu.innerHTML =
+      item('Editar', `OpportunitiesModule.openModal(${id})`) +
+      (est !== 'ganada'  ? item('Marcar ganada',  `OpportunitiesModule.setEstado(${id},'ganada')`)  : '') +
+      (est !== 'perdida' ? item('Marcar perdida', `OpportunitiesModule.setEstado(${id},'perdida')`) : '') +
+      (est !== 'archivada' ? item('Archivar', `OpportunitiesModule.setEstado(${id},'archivada')`)
+                           : item('Reactivar', `OpportunitiesModule.setEstado(${id},'activa')`)) +
+      '<div class="opp-menu-sep"></div>' +
+      item('Eliminar', `OpportunitiesModule.confirmDelete(${id})`, 'opp-menu-item--danger');
+    document.body.appendChild(menu);
+    const r = e.currentTarget.getBoundingClientRect();
+    menu.style.top  = `${r.bottom + 4}px`;
+    menu.style.left = `${Math.min(r.left, window.innerWidth - 200)}px`;
+    menu.style.display = 'block';
+    _menuClose = () => menu.remove();
+    setTimeout(() => document.addEventListener('click', function onDoc(ev) {
+      if (!menu.contains(ev.target)) { closeMenu(); document.removeEventListener('click', onDoc); }
+    }), 0);
+  }
+  function closeMenu() { if (_menuClose) { _menuClose(); _menuClose = null; } document.querySelectorAll('.opp-menu').forEach(m => m.remove()); }
+
+  function openStatusMenu(e, id) {
+    closeMenu();
+    const o = _opps.find(x => x.id === id); if (!o) return;
+    const cur = _normEstado(o.estado);
+    const menu = document.createElement('div');
+    menu.className = 'opp-menu opp-status-menu';
+    menu.innerHTML = OPP_ESTADOS.map(([v, l, c]) =>
+      `<button class="opp-menu-item" onclick="OpportunitiesModule.setEstado(${id},'${v}');OpportunitiesModule.closeMenu()">
+        <span class="opp-status-dot" style="background:${c}"></span>${l}${cur === v ? '<span class="opp-status-check">✓</span>' : ''}
+      </button>`).join('');
+    document.body.appendChild(menu);
+    const r = e.currentTarget.getBoundingClientRect();
+    menu.style.top  = `${r.bottom + 5}px`;
+    menu.style.left = `${Math.min(r.left, window.innerWidth - 190)}px`;
+    menu.style.display = 'block';
+    _menuClose = () => menu.remove();
+    setTimeout(() => document.addEventListener('click', function onDoc(ev) {
+      if (!menu.contains(ev.target)) { closeMenu(); document.removeEventListener('click', onDoc); }
+    }), 0);
+  }
+
+  async function confirmDelete(id) {
+    const o = _opps.find(x => x.id === id);
+    if (!confirm(`¿Eliminar la oportunidad "${o?.titulo || ''}"? Los proyectos ya creados no se eliminan.`)) return;
+    try {
+      const res = await apiFetch(`${API}/mgmt/opportunities/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(await res.text());
+      _opps = _opps.filter(x => x.id !== id);
+      render();
+    } catch (e) { alert('Error al eliminar la oportunidad.'); console.error(e); }
+  }
+
+  async function openModal(id = null) {
+    closeMenu();
+    await Promise.all([_ensureClients(), _ensureTeam()]);
+    _editId = id;
+    const o = id ? (_opps.find(x => x.id === id) || (_detail && _detail.id === id ? _detail : null)) : null;
+    const d = o || {};
+    const canalOpts = '<option value="">— Selecciona canal —</option>' + OPP_CANALES.map(c => `<option value="${c}"${d.canal === c ? ' selected' : ''}>${c}</option>`).join('');
+    const etapaOpts = OPP_STAGES.map(([v, l]) => `<option value="${v}"${_normStage(d.etapa_actual || 'aplicacion') === v ? ' selected' : ''}>${l}</option>`).join('');
+    const prioOpts  = OPP_PRIOS.map(([v, l]) => `<option value="${v}"${(d.prioridad || 'media') === v ? ' selected' : ''}>${l}</option>`).join('');
+    const hasId  = d.client_id != null && _clientsCache.some(c => String(c.id) === String(d.client_id));
+    const useNew = !hasId && !!(d.cliente && d.cliente.trim());
+    const clientOpts = '<option value="">— Sin cliente —</option>'
+      + _clientsCache.map(c => `<option value="${c.id}"${hasId && String(c.id) === String(d.client_id) ? ' selected' : ''}>${esc(c.nombre)}${c.empresa ? ' — ' + esc(c.empresa) : ''}</option>`).join('')
+      + `<option value="__new__"${useNew ? ' selected' : ''}>+ Crear cliente nuevo…</option>`;
+    const respOpts = '<option value="">— Sin asignar —</option>' + _memberNames(d.responsable).map(n => `<option value="${esc(n)}"${(d.responsable || '') === n ? ' selected' : ''}>${esc(n)}</option>`).join('');
+
+    document.getElementById('opp-modal')?.remove();
+    const modal = document.createElement('div');
+    modal.id = 'opp-modal';
+    modal.className = 'opp-modal-backdrop';
+    modal.onclick = e => { if (e.target === modal) closeModal(); };
+    modal.innerHTML = `
+      <div class="opp-modal-box">
+        <div class="opp-modal-hd">
+          <h3>${id ? 'Editar oportunidad' : 'Nueva oportunidad'}</h3>
+          <button class="opp-modal-x" onclick="OpportunitiesModule.closeModal()" title="Cerrar">✕</button>
+        </div>
+        <div class="opp-modal-form">
+          <label class="fin-cfg-field opp-full"><span class="fin-cfg-lbl">Título de la oportunidad *</span>
+            <input class="form-input" id="op-titulo" value="${esc(d.titulo || '')}" placeholder="Ej: Math Teacher · Upwork"></label>
+          <label class="fin-cfg-field"><span class="fin-cfg-lbl">Canal / Plataforma *</span>
+            <select class="form-input" id="op-canal">${canalOpts}</select></label>
+          <label class="fin-cfg-field"><span class="fin-cfg-lbl">Etapa actual *</span>
+            <select class="form-input" id="op-etapa">${etapaOpts}</select></label>
+          <label class="fin-cfg-field opp-full"><span class="fin-cfg-lbl">Cliente / empresa</span>
+            <select class="form-input" id="op-client-sel" onchange="OpportunitiesModule._onClientSel()">${clientOpts}</select>
+            <input class="form-input" id="op-client-new" placeholder="Nombre del nuevo cliente" value="${useNew ? esc(d.cliente) : ''}" style="margin-top:8px;${useNew ? '' : 'display:none'}"></label>
+          <label class="fin-cfg-field"><span class="fin-cfg-lbl">Prioridad</span>
+            <select class="form-input" id="op-prio">${prioOpts}</select></label>
+          <label class="fin-cfg-field"><span class="fin-cfg-lbl">Responsable</span>
+            <select class="form-input" id="op-resp">${respOpts}</select></label>
+          <label class="fin-cfg-field"><span class="fin-cfg-lbl">Fecha de aplicación</span>
+            <input class="form-input" type="date" id="op-fecha" value="${d.fecha_aplicacion ? String(d.fecha_aplicacion).split('T')[0] : ''}"></label>
+          <label class="fin-cfg-field"><span class="fin-cfg-lbl">Valor estimado (opcional)</span>
+            <input class="form-input" type="number" id="op-valor" min="0" step="0.01" value="${d.valor_estimado ?? ''}"></label>
+          <label class="fin-cfg-field opp-full"><span class="fin-cfg-lbl">Próxima acción</span>
+            <input class="form-input" id="op-next" value="${esc(d.proxima_accion || '')}" placeholder="Ej: Enviar propuesta comercial"></label>
+          <label class="fin-cfg-field opp-full"><span class="fin-cfg-lbl">Descripción / notas</span>
+            <textarea class="form-input" id="op-notas" rows="3">${esc(d.notas || d.descripcion || '')}</textarea></label>
+        </div>
+        <div class="opp-modal-ft">
+          <span class="fin-cfg-hint" id="op-hint"></span>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn--ghost btn--sm" onclick="OpportunitiesModule.closeModal()">Cancelar</button>
+            <button class="btn btn--primary btn--sm" onclick="OpportunitiesModule.save()">${id ? 'Guardar' : 'Crear oportunidad'}</button>
+          </div>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    setTimeout(() => $('op-titulo')?.focus(), 100);
+  }
+  function closeModal() { document.getElementById('opp-modal')?.remove(); _editId = null; }
+  function _onClientSel() {
+    const sel = $('op-client-sel'), inp = $('op-client-new');
+    if (inp) inp.style.display = (sel && sel.value === '__new__') ? '' : 'none';
+  }
+
+  async function save() {
+    const titulo = $('op-titulo')?.value.trim() || '';
+    const canal  = $('op-canal')?.value || '';
+    const etapa  = $('op-etapa')?.value || 'aplicacion';
+    const hint = $('op-hint');
+    const fail = m => { if (hint) { hint.textContent = m; hint.className = 'fin-cfg-hint fin-cfg-hint--err'; } };
+    if (!titulo) return fail('El título es obligatorio.');
+    if (!canal)  return fail('Indica el canal / plataforma.');
+    const existing = _editId ? (_opps.find(x => x.id === _editId) || (_detail && _detail.id === _editId ? _detail : null)) : null;
+    if (hint) { hint.textContent = 'Guardando…'; hint.className = 'fin-cfg-hint'; }
+    // cliente: existente, nuevo (se crea) o ninguno
+    let client_id = null, clienteName = '';
+    const csel = $('op-client-sel')?.value || '';
+    if (csel === '__new__') {
+      const newName = ($('op-client-new')?.value || '').trim();
+      if (newName) {
+        const found = _clientsCache.find(c => (c.nombre || '').toLowerCase() === newName.toLowerCase());
+        if (found) { client_id = found.id; clienteName = found.nombre; }
+        else {
+          try {
+            const cr = await apiFetch(`${API}/mgmt/clients`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre: newName }) });
+            if (cr.ok) { const c = await cr.json(); _clientsCache.push(c); client_id = c.id; clienteName = c.nombre; }
+            else clienteName = newName;
+          } catch { clienteName = newName; }
+        }
+      }
+    } else if (csel) {
+      client_id = parseInt(csel);
+      const c = _clientsCache.find(x => String(x.id) === csel);
+      clienteName = c ? c.nombre : '';
+    }
+    const data = {
+      titulo, canal, etapa_actual: etapa,
+      estado:         existing ? (existing.estado || 'activa') : 'activa',   // auto al crear · preserva al editar
+      cliente:        clienteName,
+      client_id,
+      prioridad:      $('op-prio')?.value || 'media',
+      responsable:    $('op-resp')?.value || '',
+      proxima_accion: $('op-next')?.value.trim() || '',
+      notas:          $('op-notas')?.value.trim() || '',
+      valor_estimado: $('op-valor')?.value ? parseFloat($('op-valor').value) : null,
+      fecha_aplicacion: $('op-fecha')?.value || null,
+    };
+    try {
+      const url = `${API}/mgmt/opportunities${_editId ? '/' + _editId : ''}`;
+      const res = await apiFetch(url, { method: _editId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+      if (res.status === 401) return fail('Sesión expirada. Recarga la página (Ctrl+R) e inténtalo de nuevo.');
+      if (!res.ok) throw new Error(await res.text());
+      const saved = await res.json();
+      const wasEdit = _editId;
+      if (wasEdit) {
+        const i = _opps.findIndex(x => x.id === wasEdit); if (i >= 0) _opps[i] = { ..._opps[i], ...saved };
+        if (_detail && _detail.id === wasEdit) _detail = { ..._detail, ...saved };
+      } else { _opps.unshift(saved); }
+      closeModal();
+      if (_detail) _renderDetail(); else render();
+    } catch (e) {
+      console.error('[opportunities] save error:', e);
+      fail('No se pudo guardar. Revisa los campos e inténtalo de nuevo.');
+    }
+  }
+
+  // ── Detalle (página, no drawer) ────────────────────────────────────
+
+  function _moneyOpp(v, cur) {
+    try { return new Intl.NumberFormat('es-MX', { style: 'currency', currency: cur || 'USD', maximumFractionDigits: 0 }).format(parseFloat(v)); }
+    catch { return (cur || 'USD') + ' ' + v; }
+  }
+  function _stageLbl(k) { return k ? ((OPP_STAGES.find(s => s[0] === _normStage(k)) || [, ''])[1]) : ''; }
+
+  async function openDetail(id) {
+    closeMenu();
+    const lv = $('opp-list-view'), dv = $('opp-detail-view');
+    if (!dv) return;
+    dv.style.display = ''; if (lv) lv.style.display = 'none';
+    dv.innerHTML = '<div class="clients-loading" style="padding:40px"><div class="clients-spin"></div><span>Cargando…</span></div>';
+    try {
+      const [oRes, tRes] = await Promise.all([
+        apiFetch(`${API}/mgmt/opportunities/${id}`),
+        apiFetch(`${API}/mgmt/opportunities/${id}/tasks`),
+      ]);
+      if (!oRes.ok) throw new Error(await oRes.text());
+      _detail = await oRes.json();
+      if (!_detail.etapas || typeof _detail.etapas !== 'object' || Array.isArray(_detail.etapas)) _detail.etapas = {};
+      if (!Array.isArray(_detail.links)) _detail.links = [];
+      _detailTasks = tRes.ok ? await tRes.json() : [];
+      _detailTab = 'pipeline';
+      _pipeStage = _detail.etapa_actual;
+      _renderDetail();
+    } catch (e) {
+      console.error('[opportunities] detail error:', e);
+      dv.innerHTML = '<div class="fin-placeholder" style="padding:40px"><p class="fin-placeholder__s" style="color:var(--err)">Error al cargar la oportunidad.</p><button class="btn btn--ghost btn--sm" onclick="OpportunitiesModule.closeDetail()">← Volver</button></div>';
+    }
+  }
+
+  function closeDetail() {
+    _detail = null; _detailTasks = [];
+    const dv = $('opp-detail-view'); if (dv) { dv.style.display = 'none'; dv.innerHTML = ''; }
+    load();
+  }
+
+  function _renderDetail() {
+    const dv = $('opp-detail-view');
+    if (!dv || !_detail) return;
+    const o = _detail;
+    const [, estLbl, estColor] = _estadoMeta(o.estado);
+    const cliente = o.cliente || o.client_nombre || '';
+    const prio = { alta: 'Alta', media: 'Media', baja: 'Baja' }[o.prioridad] || '';
+    const tabs = [['pipeline', 'Pipeline'], ['resumen', 'Resumen'], ['tareas', 'Tareas'], ['docs', 'Documentos'], ['actividad', 'Actividad']];
+    dv.innerHTML = `
+      <div class="opp-det-header">
+        <button class="opp-back" onclick="OpportunitiesModule.closeDetail()">← Oportunidades</button>
+        <div class="opp-det-titlerow">
+          <div class="opp-det-titlewrap">
+            <h1 class="opp-det-title">${esc(o.titulo)}</h1>
+            <div class="opp-det-meta">
+              ${cliente ? esc(cliente) + ' · ' : ''}${o.canal ? esc(o.canal) + ' · ' : ''}
+              <span class="opp-badge" style="background:${estColor}1f;color:${estColor}">${estLbl}</span>
+              · Etapa: <b>${esc(_stageLbl(o.etapa_actual))}</b>${prio ? ' · ' + prio : ''}
+            </div>
+          </div>
+          <div class="opp-det-actions">
+            ${_normEstado(o.estado) !== 'ganada'  ? `<button class="btn btn--primary btn--sm" onclick="OpportunitiesModule.setDetailEstado('ganada')">Marcar ganada</button>` : ''}
+            ${_normEstado(o.estado) !== 'perdida' ? `<button class="btn btn--ghost btn--sm" onclick="OpportunitiesModule.setDetailEstado('perdida')">Marcar perdida</button>` : ''}
+            <button class="btn btn--ghost btn--sm" onclick="OpportunitiesModule.openModal(${o.id})">Editar</button>
+          </div>
+        </div>
+        <div class="opp-det-tabs">
+          ${tabs.map(([k, l]) => `<button class="opp-det-tab${_detailTab === k ? ' active' : ''}" data-dtab="${k}" onclick="OpportunitiesModule.setDetailTab('${k}')">${l}</button>`).join('')}
+        </div>
+      </div>
+      <div class="opp-det-body" id="opp-det-body"></div>`;
+    _renderDetailBody();
+  }
+
+  function setDetailTab(t) {
+    _detailTab = t;
+    document.querySelectorAll('.opp-det-tab').forEach(b => b.classList.toggle('active', b.dataset.dtab === t));
+    _renderDetailBody();
+  }
+
+  function _renderDetailBody() {
+    const b = $('opp-det-body');
+    if (!b || !_detail) return;
+    b.innerHTML = ({ pipeline: _detPipeline, resumen: _detResumen, tareas: _detTasks, propuesta: _detPropuesta, docs: _detDocs, actividad: _detActividad }[_detailTab] || _detPipeline)();
+  }
+
+  function _detResumen() {
+    const o = _detail;
+    const row = (lbl, val) => `<div class="opp-rs-field"><span class="opp-rs-lbl">${lbl}</span><span class="opp-rs-val">${val || '<span class="muted">—</span>'}</span></div>`;
+    const fecha = o.fecha_aplicacion ? new Date(String(o.fecha_aplicacion).split('T')[0] + 'T00:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' }) : '';
+    return `<div class="opp-rs-grid">
+      ${row('Cliente / empresa', esc(o.cliente || o.client_nombre || ''))}
+      ${row('Canal', esc(o.canal || ''))}
+      ${row('Estado', esc(_estadoMeta(o.estado)[1]))}
+      ${row('Etapa actual', esc(_stageLbl(o.etapa_actual)))}
+      ${row('Prioridad', { alta: 'Alta', media: 'Media', baja: 'Baja' }[o.prioridad] || '')}
+      ${row('Responsable', esc(o.responsable || ''))}
+      ${row('Fecha de aplicación', fecha)}
+      ${row('Valor estimado', o.valor_estimado != null ? _moneyOpp(o.valor_estimado, o.moneda) : '')}
+      ${row('Próxima acción', esc(o.proxima_accion || ''))}
+    </div>
+    ${o.notas ? `<div class="opp-rs-notes"><span class="opp-rs-lbl">Descripción / notas</span><p>${esc(o.notas)}</p></div>` : ''}
+    <div style="margin-top:14px"><button class="btn btn--ghost btn--sm" onclick="OpportunitiesModule.openModal(${o.id})">Editar campos</button></div>`;
+  }
+
+  function _detPipeline() {
+    const o = _detail;
+    const sel = _pipeStage || o.etapa_actual;
+    const selIdx = _stageIdx(sel);
+    const selStage = o.etapas[sel] || {};
+    const selStatus = _stageStatus(o, sel, selIdx);
+    const stageTasks = _detailTasks.filter(t => t.etapa && _normStage(t.etapa) === sel);
+    const bigPipe = `<div class="opp-pipe opp-pipe--big">${OPP_STAGES.map(([k, l], i) => {
+      const [cls, icon] = _STAGE_MAP[_stageStatus(o, k, i)] || _STAGE_MAP.pendiente;
+      return `<div class="opp-pipe-step ${cls}${k === sel ? ' opp-pipe-step--sel' : ''}" onclick="OpportunitiesModule.selectStage('${k}')"><span class="opp-pipe-ic">${icon}</span><span class="opp-pipe-lbl">${esc(l)}</span></div>`;
+    }).join('<span class="opp-pipe-sep"></span>')}</div>`;
+    const estadoOpts = [['pendiente', 'Pendiente'], ['activa', 'Activa'], ['completada', 'Completada'], ['rechazada', 'Rechazada']].map(([v, l]) => `<option value="${v}"${selStatus === v ? ' selected' : ''}>${l}</option>`).join('');
+    const tasksHtml = stageTasks.length ? stageTasks.map(t => _detTaskRow(t, true)).join('') : '<div class="opp-empty-sm">Sin tareas en esta etapa.</div>';
+    return `${bigPipe}
+      <div class="opp-stage-panel">
+        <div class="opp-stage-hd">
+          <h3>${esc(_stageLbl(sel))}</h3>
+          <div class="opp-stage-actions">
+            ${selIdx < OPP_STAGES.length - 1 ? `<button class="btn btn--ghost btn--sm" onclick="OpportunitiesModule.moverSiguiente('${sel}')">Mover a siguiente →</button>` : ''}
+            <button class="btn btn--primary btn--sm" onclick="OpportunitiesModule.completarEtapa('${sel}')">Completar etapa</button>
+          </div>
+        </div>
+        <div class="opp-stage-fields">
+          <label class="fin-cfg-field"><span class="fin-cfg-lbl">Estado de la etapa</span>
+            <select class="form-input" onchange="OpportunitiesModule.setStageEstado('${sel}',this.value)">${estadoOpts}</select></label>
+          <label class="fin-cfg-field"><span class="fin-cfg-lbl">Fecha</span>
+            <input class="form-input" type="date" value="${selStage.fecha || ''}" onchange="OpportunitiesModule.setStageFecha('${sel}',this.value)"></label>
+          <label class="fin-cfg-field opp-full"><span class="fin-cfg-lbl">Notas de la etapa</span>
+            <textarea class="form-input" rows="2" onblur="OpportunitiesModule.setStageNotas('${sel}',this.value)">${esc(selStage.notas || '')}</textarea></label>
+        </div>
+        <div class="opp-stage-tasks">
+          <div class="opp-stage-tasks-hd"><span>Checklist / tareas internas</span>
+            <button class="btn btn--ghost btn--xs" onclick="OpportunitiesModule.openTaskForm(null,'${sel}')">+ Tarea</button></div>
+          ${tasksHtml}
+        </div>
+      </div>`;
+  }
+
+  function _detTaskRow(t, compact) {
+    const est = oppTaskNorm(t.estado);
+    const done = est === 'completado';
+    const fecha = t.fecha_limite ? new Date(String(t.fecha_limite).split('T')[0] + 'T00:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }) : '';
+    const stageLbl = !compact ? _stageLbl(t.etapa) : '';
+    return `<div class="opp-task${done ? ' opp-task--done' : ''}">
+      <button class="d3-status-btn d3-status-btn--${oppTaskMeta(t.estado)[4]}" onclick="event.stopPropagation();openOppTaskStatusMenu(event,${t.id},'${est}','OpportunitiesModule.setDetailTaskStatus')" title="Cambiar estado">${oppTaskStatusSvg(t.estado)}</button>
+      <span class="opp-task-t">${esc(t.titulo)}</span>
+      ${stageLbl ? `<span class="opp-task-stage">${esc(stageLbl)}</span>` : ''}
+      ${t.prioridad === 'alta' ? '<span class="opp-prio opp-prio--alta">Alta</span>' : ''}
+      ${t.responsable ? `<span class="opp-task-meta">👤 ${esc(t.responsable)}</span>` : ''}
+      ${t.horas_estimadas ? `<span class="opp-task-meta">${parseFloat(t.horas_estimadas)}h</span>` : ''}
+      ${t.presupuesto ? `<span class="opp-task-meta">${_moneyOpp(t.presupuesto, 'USD')}</span>` : ''}
+      ${fecha ? `<span class="opp-task-meta">${fecha}</span>` : ''}
+      <span class="opp-task-acts">
+        <button class="opp-ic-btn" onclick="OpportunitiesModule.openTaskForm(${t.id})" title="Editar">✎</button>
+        <button class="opp-ic-btn opp-ic-btn--danger" onclick="OpportunitiesModule.deleteOppTask(${t.id})" title="Eliminar">✕</button>
+      </span>
+    </div>`;
+  }
+
+  function _detTasks() {
+    const groups = { general: [] };
+    OPP_STAGES.forEach(([k]) => { groups[k] = []; });
+    _detailTasks.forEach(t => {
+      const ns = t.etapa ? _normStage(t.etapa) : '';
+      (groups[ns] ? groups[ns] : groups.general).push(t);
+    });
+    const generalSection = groups.general.length ? `
+      <div class="opp-tasks-group">
+        <div class="opp-tasks-group-hd">General / Sin etapa <button class="btn btn--ghost btn--xs" onclick="OpportunitiesModule.openTaskForm(null,'')">+ Tarea</button></div>
+        ${groups.general.map(t => _detTaskRow(t, false)).join('')}
+      </div>` : '';
+    const stageSections = OPP_STAGES.filter(([k]) => groups[k].length).map(([k, l]) => `
+      <div class="opp-tasks-group">
+        <div class="opp-tasks-group-hd">${esc(l)} <button class="btn btn--ghost btn--xs" onclick="OpportunitiesModule.openTaskForm(null,'${k}')">+ Tarea</button></div>
+        ${groups[k].map(t => _detTaskRow(t, false)).join('')}
+      </div>`).join('');
+    return `<div class="opp-tasks-top">
+        <p class="opp-tasks-note">Tareas de la oportunidad: responsable, presupuesto y tiempo estimado. Aparecen en el Dashboard. No entran a Finanzas ni a Proyectos.</p>
+        <button class="btn btn--primary btn--sm" onclick="OpportunitiesModule.openTaskForm()">+ Nueva tarea</button>
+      </div>
+      ${_detailTasks.length ? (generalSection + stageSections) : '<div class="opp-empty-sm" style="padding:24px 0">Aún no hay tareas. Agrega la primera.</div>'}`;
+  }
+
+  function _detPropuesta() {
+    return `<div class="opp-prop">
+      <label class="fin-cfg-field"><span class="fin-cfg-lbl">Propuesta comercial / alcance</span>
+        <textarea class="form-input" id="opp-prop-txt" rows="10" placeholder="Alcance, precio, condiciones, seguimiento…">${esc(_detail.propuesta || '')}</textarea></label>
+      <div style="margin-top:10px;display:flex;align-items:center;gap:10px">
+        <button class="btn btn--primary btn--sm" onclick="OpportunitiesModule.savePropuesta()">Guardar propuesta</button>
+        <span class="fin-cfg-hint" id="opp-prop-hint"></span>
+      </div>
+    </div>`;
+  }
+
+  function _detDocs() {
+    const links = Array.isArray(_detail.links) ? _detail.links : [];
+    const rows = links.length
+      ? links.map((l, i) => `<div class="opp-link"><a href="${esc(l.url)}" target="_blank" rel="noopener noreferrer">🔗 ${esc(l.label || l.url)}</a><button class="opp-ic-btn opp-ic-btn--danger" onclick="OpportunitiesModule.removeLink(${i})" title="Quitar">✕</button></div>`).join('')
+      : '<div class="opp-empty-sm">Sin documentos / enlaces.</div>';
+    return `<div class="opp-docs">
+      ${rows}
+      <div class="opp-link-add">
+        <input class="form-input" id="opp-link-label" placeholder="Etiqueta (opcional)">
+        <input class="form-input" id="opp-link-url" placeholder="https://…">
+        <button class="btn btn--ghost btn--sm" onclick="OpportunitiesModule.addLink()">Agregar enlace</button>
+      </div>
+    </div>`;
+  }
+
+  function _detActividad() {
+    const o = _detail;
+    const fmt = d => d ? new Date(d).toLocaleString('es-ES') : '—';
+    return `<div class="opp-act">
+      <div class="opp-act-row">Creada: <b>${fmt(o.created_at)}</b></div>
+      <div class="opp-act-row">Última actualización: <b>${fmt(o.updated_at)}</b></div>
+      <div class="opp-act-row">Estado actual: <b>${esc(_estadoMeta(o.estado)[1])}</b></div>
+      <div class="opp-act-row">Etapa actual: <b>${esc(_stageLbl(o.etapa_actual))}</b></div>
+      ${o.project_id ? `<div class="opp-act-row">Convertida en proyecto #${o.project_id}</div>` : ''}
+    </div>`;
+  }
+
+  // ── detail actions ──
+  function selectStage(k) { _pipeStage = k; _renderDetailBody(); }
+  function _ensureStage(k) { if (!_detail.etapas[k]) _detail.etapas[k] = {}; return _detail.etapas[k]; }
+  function setStageEstado(k, v) { _ensureStage(k).estado = v; _saveDetail(); _renderDetail(); }
+  function setStageFecha(k, v) { _ensureStage(k).fecha = v || ''; _saveDetail(); }
+  function setStageNotas(k, v) { _ensureStage(k).notas = v || ''; _saveDetail(); }
+
+  function completarEtapa(k) {
+    _ensureStage(k).estado = 'completada';
+    const idx = _stageIdx(k);
+    if (k === _detail.etapa_actual && idx < OPP_STAGES.length - 1) { _detail.etapa_actual = OPP_STAGES[idx + 1][0]; _pipeStage = _detail.etapa_actual; }
+    if (_detail.estado === 'nueva') _detail.estado = 'en_proceso';
+    _saveDetail(); _renderDetail();
+  }
+  function moverSiguiente(k) {
+    const idx = _stageIdx(k);
+    if (idx >= OPP_STAGES.length - 1) return;
+    _detail.etapa_actual = OPP_STAGES[idx + 1][0]; _pipeStage = _detail.etapa_actual;
+    if (_detail.estado === 'nueva') _detail.estado = 'en_proceso';
+    _saveDetail(); _renderDetail();
+  }
+  function setDetailEstado(estado) { _detail.estado = estado; _saveDetail(); _renderDetail(); }
+
+  async function _saveDetail() {
+    const o = _detail; if (!o) return;
+    try {
+      const res = await apiFetch(`${API}/mgmt/opportunities/${o.id}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          titulo: o.titulo, cliente: o.cliente, client_id: o.client_id, canal: o.canal,
+          estado: o.estado, etapa_actual: o.etapa_actual, prioridad: o.prioridad,
+          responsable: o.responsable, proxima_accion: o.proxima_accion, descripcion: o.descripcion,
+          notas: o.notas, valor_estimado: o.valor_estimado, moneda: o.moneda,
+          fecha_aplicacion: o.fecha_aplicacion ? String(o.fecha_aplicacion).split('T')[0] : null,
+          etapas: o.etapas, propuesta: o.propuesta, links: o.links,
+        }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const saved = await res.json();
+      const i = _opps.findIndex(x => x.id === o.id);
+      if (i >= 0) _opps[i] = { ..._opps[i], ...saved };
+    } catch (e) { console.error('[opportunities] saveDetail:', e); }
+  }
+
+  // ── internal tasks ──
+  async function openTaskForm(id = null, etapa = null) {
+    await _ensureTeam();
+    const t = id ? _detailTasks.find(x => x.id === id) : null;
+    const d = t || { etapa: etapa || '' };
+    const curEtapa = (d.etapa == null || d.etapa === '') ? '' : _normStage(d.etapa);
+    const etapaOpts = '<option value="">— Sin etapa —</option>' + OPP_STAGES.map(([v, l]) => `<option value="${v}"${curEtapa === v ? ' selected' : ''}>${l}</option>`).join('');
+    const prioOpts = OPP_PRIOS.map(([v, l]) => `<option value="${v}"${(d.prioridad || 'media') === v ? ' selected' : ''}>${l}</option>`).join('');
+    const respOpts = '<option value="">— Sin asignar —</option>' + _memberNames(d.responsable).map(n => `<option value="${esc(n)}"${(d.responsable || '') === n ? ' selected' : ''}>${esc(n)}</option>`).join('');
+    document.getElementById('opp-task-modal')?.remove();
+    const m = document.createElement('div');
+    m.id = 'opp-task-modal'; m.className = 'opp-modal-backdrop';
+    m.onclick = e => { if (e.target === m) m.remove(); };
+    m.innerHTML = `<div class="opp-modal-box" style="max-width:520px">
+      <div class="opp-modal-hd"><h3>${id ? 'Editar tarea' : 'Nueva tarea'}</h3><button class="opp-modal-x" onclick="document.getElementById('opp-task-modal').remove()">✕</button></div>
+      <div class="opp-modal-form">
+        <label class="fin-cfg-field opp-full"><span class="fin-cfg-lbl">Tarea *</span><input class="form-input" id="ot-titulo" value="${esc(d.titulo || '')}" placeholder="Ej: Preparar reunión"></label>
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Responsable</span><select class="form-input" id="ot-resp">${respOpts}</select></label>
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Etapa (opcional)</span><select class="form-input" id="ot-etapa">${etapaOpts}</select></label>
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Presupuesto (opcional)</span><input class="form-input" type="number" id="ot-presu" min="0" step="0.01" value="${d.presupuesto ?? ''}" placeholder="0"></label>
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Tiempo estimado (horas)</span><input class="form-input" type="number" id="ot-horas" min="0" step="0.5" value="${d.horas_estimadas ?? ''}" placeholder="0"></label>
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Estado</span><select class="form-input" id="ot-estado">${OPP_TASK_STATES.map(([v, l]) => `<option value="${v}"${oppTaskNorm(d.estado || 'pendiente') === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Prioridad</span><select class="form-input" id="ot-prio">${prioOpts}</select></label>
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Fecha límite</span><input class="form-input" type="date" id="ot-fecha" value="${d.fecha_limite ? String(d.fecha_limite).split('T')[0] : ''}"></label>
+        <label class="fin-cfg-field opp-full"><span class="fin-cfg-lbl">Notas</span><textarea class="form-input" id="ot-notas" rows="2">${esc(d.notas || '')}</textarea></label>
+      </div>
+      <div class="opp-modal-ft"><span class="fin-cfg-hint" id="ot-hint"></span><div style="display:flex;gap:8px">
+        <button class="btn btn--ghost btn--sm" onclick="document.getElementById('opp-task-modal').remove()">Cancelar</button>
+        <button class="btn btn--primary btn--sm" onclick="OpportunitiesModule.saveOppTask(${id || 'null'})">${id ? 'Guardar' : 'Crear'}</button>
+      </div></div>
+    </div>`;
+    document.body.appendChild(m);
+    setTimeout(() => $('ot-titulo')?.focus(), 100);
+  }
+
+  async function saveOppTask(id) {
+    const titulo = $('ot-titulo')?.value.trim() || '';
+    const hint = $('ot-hint');
+    if (!titulo) { if (hint) { hint.textContent = 'El título es obligatorio.'; hint.className = 'fin-cfg-hint fin-cfg-hint--err'; } return; }
+    const data = {
+      titulo, etapa: $('ot-etapa')?.value || '', prioridad: $('ot-prio')?.value || 'media',
+      responsable: $('ot-resp')?.value.trim() || '', fecha_limite: $('ot-fecha')?.value || null,
+      notas: $('ot-notas')?.value.trim() || '',
+      presupuesto: $('ot-presu')?.value ? parseFloat($('ot-presu').value) : null,
+      horas_estimadas: $('ot-horas')?.value ? parseFloat($('ot-horas').value) : null,
+      estado: $('ot-estado')?.value || 'pendiente',
+    };
+    try {
+      const url = id ? `${API}/mgmt/opportunity-tasks/${id}` : `${API}/mgmt/opportunities/${_detail.id}/tasks`;
+      const res = await apiFetch(url, { method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+      if (!res.ok) throw new Error(await res.text());
+      const saved = await res.json();
+      if (id) { const i = _detailTasks.findIndex(x => x.id === id); if (i >= 0) _detailTasks[i] = saved; }
+      else _detailTasks.push(saved);
+      document.getElementById('opp-task-modal')?.remove();
+      _renderDetailBody();
+    } catch (e) { console.error('[opportunities] saveOppTask:', e); if (hint) { hint.textContent = 'No se pudo guardar.'; hint.className = 'fin-cfg-hint fin-cfg-hint--err'; } }
+  }
+
+  async function setDetailTaskStatus(id, estado) {
+    const t = _detailTasks.find(x => x.id === id); if (!t) return;
+    const prev = t.estado;
+    t.estado = estado; _renderDetailBody();
+    try {
+      const res = await apiFetch(`${API}/mgmt/opportunity-tasks/${id}/estado`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ estado }) });
+      if (!res.ok) throw new Error(await res.text());
+    } catch (e) { t.estado = prev; _renderDetailBody(); console.error('[opportunities] setDetailTaskStatus:', e); }
+  }
+
+  async function deleteOppTask(id) {
+    if (!confirm('¿Eliminar esta tarea interna?')) return;
+    try {
+      const res = await apiFetch(`${API}/mgmt/opportunity-tasks/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(await res.text());
+      _detailTasks = _detailTasks.filter(x => x.id !== id);
+      _renderDetailBody();
+    } catch (e) { alert('Error al eliminar la tarea.'); console.error(e); }
+  }
+
+  async function savePropuesta() {
+    _detail.propuesta = $('opp-prop-txt')?.value || '';
+    const hint = $('opp-prop-hint');
+    if (hint) { hint.textContent = 'Guardando…'; hint.className = 'fin-cfg-hint'; }
+    await _saveDetail();
+    if (hint) { hint.textContent = 'Guardado ✓'; hint.className = 'fin-cfg-hint fin-cfg-hint--ok'; setTimeout(() => { if (hint) hint.textContent = ''; }, 2000); }
+  }
+
+  function addLink() {
+    const urlRaw = $('opp-link-url')?.value.trim(); if (!urlRaw) return;
+    const label = $('opp-link-label')?.value.trim() || '';
+    const url = /^https?:\/\//i.test(urlRaw) ? urlRaw : 'https://' + urlRaw;
+    if (!Array.isArray(_detail.links)) _detail.links = [];
+    _detail.links.push({ url, label });
+    _saveDetail(); _renderDetailBody();
+  }
+  function removeLink(i) {
+    if (!Array.isArray(_detail.links)) return;
+    _detail.links.splice(i, 1); _saveDetail(); _renderDetailBody();
+  }
+
+  return { load, render, filter, setFilter, openModal, closeModal, _onClientSel, save, advanceStage, setEstado, openMenu, closeMenu, openStatusMenu, confirmDelete,
+    openDetail, closeDetail, setDetailTab, selectStage, setStageEstado, setStageFecha, setStageNotas,
+    completarEtapa, moverSiguiente, setDetailEstado, openTaskForm, saveOppTask, setDetailTaskStatus, deleteOppTask,
+    savePropuesta, addLink, removeLink };
 })();
 
 // =================================================================
@@ -5227,9 +11933,68 @@ const TeamModule = (() => {
 // LEAD MANAGER MODULE
 // =================================================================
 
+// ═══════════════════════════════════════════════════════════════════
+// NovaIcon — sistema de iconos unificado (trazo redondeado estilo Pinterest)
+// Uso: NI('zap') → SVG inline 15px. NI('mail', 18) → 18px.
+// ═══════════════════════════════════════════════════════════════════
+const _NI_LIB = {
+  zap: '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
+  sparkles: '<path d="M12 3l1.9 5.7a2 2 0 0 0 1.3 1.3L21 12l-5.8 1.9a2 2 0 0 0-1.3 1.3L12 21l-1.9-5.8a2 2 0 0 0-1.3-1.3L3 12l5.8-1.9a2 2 0 0 0 1.3-1.3L12 3z"/>',
+  mail: '<rect x="2" y="4" width="20" height="16" rx="3"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>',
+  whatsapp: '<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"/><path d="M8.7 9.2c0 3.4 2.7 6.1 6.1 6.1l1.5-1.5-2-1.3-1 .7a4.2 4.2 0 0 1-2.5-2.5l.7-1-1.3-2z"/>',
+  phone: '<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/>',
+  sliders: '<line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/>',
+  flask: '<path d="M10 2v7.5L4.5 19a2 2 0 0 0 1.8 3h11.4a2 2 0 0 0 1.8-3L14 9.5V2"/><line x1="8.5" y1="2" x2="15.5" y2="2"/><line x1="7" y1="15" x2="17" y2="15"/>',
+  eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>',
+  click: '<path d="M9 9l5 12 1.8-5.2L21 14z"/><path d="M7.2 2.2 8 5.1"/><path d="m5.1 8-2.9-.8"/><path d="M14 4.1 12 6"/><path d="m6 12-1.9 2"/>',
+  send: '<path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/>',
+  reply: '<polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/>',
+  trophy: '<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>',
+  copy: '<rect x="9" y="9" width="13" height="13" rx="2.5"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+  linkedin: '<path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-4 0v7h-4V8h4v1.8A5.9 5.9 0 0 1 16 8z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/>',
+  check: '<polyline points="20 6 9 17 4 12"/>',
+  checksq: '<path d="m9 11 3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
+  pen: '<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>',
+  search: '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
+  calendar: '<rect x="3" y="4" width="18" height="18" rx="3"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
+  gear: '<circle cx="12" cy="12" r="3"/><path d="M12 1v3M12 20v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M1 12h3M20 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>',
+  external: '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>',
+  inbox: '<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
+};
+function NI(name, size) {
+  const p = _NI_LIB[name]; if (!p) return '';
+  const s = size || 15;
+  return `<svg class="ni" width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${p}</svg>`;
+}
+
 const LeadManagerModule = (() => {
   let _data   = [];
   let _stage  = '';
+  let _view   = 'cards';   // 'cards' (principal) | 'list' (tabla secundaria)
+  let _clients = [];          // clientes outbound (unidad principal)
+  let _campaigns = [];        // campañas (Fase 2)
+  let _sequences = [];        // secuencias (Fase 3)
+  let _steps = [];            // pasos de secuencia (Fase 3)
+  let _activities = [];       // actividades / tareas comerciales (Fase 4)
+  let _lmTpls = [];           // biblioteca de plantillas / assets
+  let _tplFilter = 'all';     // filtro de canal en la vista Plantillas
+  let _repCharts = [];        // instancias Chart.js de Reportes (para destruir al re-render)
+  let _repChartData = null;   // datos calculados para los charts de Reportes
+  let _taskView = 'list';     // 'list' | 'calendar' en Tareas comerciales
+  let _calRef = null;         // mes mostrado en el calendario (Date al día 1)
+  let _section = 'dashboard'; // sección activa del workspace
+  let _activeClient = null;   // id del cliente outbound en detalle
+  let _activeSeq = null;      // id de la secuencia en editor
+  const _ORDER = ['nuevo', 'contactado', 'propuesta', 'negociacion', 'ganado', 'perdido'];
+  const _AV_PERSON = 'data:image/svg+xml,' + encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'><circle cx='20' cy='20' r='20' fill='#EAF5EE'/><circle cx='20' cy='16' r='6' fill='#00804C'/><path fill='#00804C' d='M9 33c0-5.5 4.9-9.5 11-9.5S31 27.5 31 33a20 20 0 0 1-22 0z'/></svg>");
+  const _av = _ => _AV_PERSON;  // icono de persona uniforme para todos los contactos/leads
+  function _money(n) {
+    n = Number(n) || 0;
+    if (!n) return '$0';
+    if (n >= 1000000) return '$' + (n / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+    if (n >= 1000)    return '$' + (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+    return '$' + Math.round(n).toLocaleString();
+  }
 
   const STAGE_LABELS = {
     nuevo: 'Nuevo', contactado: 'Contactado', propuesta: 'Propuesta',
@@ -5245,19 +12010,1451 @@ const LeadManagerModule = (() => {
   };
 
   async function load() {
-    $('lm-loading').style.display = '';
-    $('lm-empty').classList.add('hidden');
-    $('lm-table-wrap').classList.add('hidden');
+    if (!$('lm2-body')) _renderShell();
+    _renderBody();
     try {
-      const res = await apiFetch(`${API}/leads`);
-      _data = await res.json();
+      const [lr, cr, cmr, sr, str, ar, cor, ctr, tplr] = await Promise.all([
+        apiFetch(`${API}/leads`).catch(() => null),
+        apiFetch(`${API}/outbound-clients`).catch(() => null),
+        apiFetch(`${API}/campaigns`).catch(() => null),
+        apiFetch(`${API}/sequences`).catch(() => null),
+        apiFetch(`${API}/sequence-steps`).catch(() => null),
+        apiFetch(`${API}/activities`).catch(() => null),
+        apiFetch(`${API}/lm/companies`).catch(() => null),
+        apiFetch(`${API}/lm/contacts`).catch(() => null),
+        apiFetch(`${API}/lm/templates`).catch(() => null),
+      ]);
+      _data       = (lr && lr.ok)   ? await lr.json()  : [];
+      _clients    = (cr && cr.ok)   ? await cr.json()  : [];
+      _campaigns  = (cmr && cmr.ok) ? await cmr.json() : [];
+      _sequences  = (sr && sr.ok)   ? await sr.json()  : [];
+      _steps      = (str && str.ok) ? await str.json() : [];
+      _activities = (ar && ar.ok)   ? await ar.json()  : [];
+      _companies  = (cor && cor.ok) ? await cor.json() : [];
+      _contacts   = (ctr && ctr.ok) ? await ctr.json() : [];
+      _lmTpls     = (tplr && tplr.ok) ? await tplr.json() : [];
       if (!Array.isArray(_data)) _data = [];
-    } catch (e) {
-      console.warn('[lm] load error:', e.message);
-      _data = [];
+      if (!Array.isArray(_clients)) _clients = [];
+      if (!Array.isArray(_campaigns)) _campaigns = [];
+      if (!Array.isArray(_sequences)) _sequences = [];
+      if (!Array.isArray(_steps)) _steps = [];
+      if (!Array.isArray(_activities)) _activities = [];
+      if (!Array.isArray(_companies)) _companies = [];
+      if (!Array.isArray(_contacts)) _contacts = [];
+      if (!Array.isArray(_lmTpls)) _lmTpls = [];
+    } catch (e) { console.warn('[lm] load error:', e.message); _data = []; _clients = []; _campaigns = []; _sequences = []; _steps = []; _activities = []; }
+    _renderBody();
+    if (_section === 'dashboard') _loadToday(); // card Hoy del motor de envío
+  }
+
+  // ── Navegación interna del workspace ──
+  const _NAV = [
+    { k: 'dashboard',  l: 'Dashboard',          g: '' },
+    { k: 'clients',    l: 'Clientes outbound',  g: 'Workspace' },
+    { k: 'campaigns',  l: 'Campañas',           g: 'Workspace' },
+    { k: 'sequences',  l: 'Secuencias',         g: 'Workspace' },
+    { k: 'leads',      l: 'Leads',              g: 'Datos' },
+    { k: 'companies',  l: 'Empresas',           g: 'Datos' },
+    { k: 'contacts',   l: 'Contactos',          g: 'Datos' },
+    { k: 'activities', l: 'Actividades',        g: 'Comercial' },
+    { k: 'inbox',      l: 'Inbox / Respuestas', g: 'Comercial' },
+    { k: 'tasks',      l: 'Tareas comerciales', g: 'Comercial' },
+    { k: 'reports',    l: 'Reportes',           g: 'Análisis' },
+    { k: 'templates',  l: 'Plantillas',         g: 'Análisis' },
+    { k: 'settings',   l: 'Configuración',      g: 'Análisis' },
+  ];
+  const _NAV_ICON = {
+    dashboard:'<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
+    clients:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/>',
+    campaigns:'<path d="M3 11l18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/>',
+    sequences:'<line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>',
+    leads:'<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>',
+    companies:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M3 9h6"/>',
+    contacts:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>',
+    activities:'<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
+    inbox:'<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
+    tasks:'<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
+    reports:'<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>',
+    templates:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>',
+    settings:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+  };
+  function _navHtml() {
+    let html = '', lastG = null;
+    _NAV.forEach(n => {
+      if (n.g !== lastG) { if (n.g) html += `<div class="lm2-nav__grp">${n.g}</div>`; lastG = n.g; }
+      const active = (_section === n.k) || (_section === 'client' && n.k === 'clients') || (_section === 'sequence' && n.k === 'sequences');
+      const cnt = n.k === 'tasks' ? _pendingTaskCount() : 0;
+      html += `<button class="lm2-nav__item${active ? ' active' : ''}" onclick="LeadManagerModule.go('${n.k}')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${_NAV_ICON[n.k] || ''}</svg>
+        <span class="lm2-nav__lbl">${n.l}</span>${cnt ? `<span class="lm2-nav__cnt">${cnt}</span>` : ''}${n.soon ? '<span class="lm2-nav__soon">Pronto</span>' : ''}</button>`;
+    });
+    return html;
+  }
+  function _renderShell() {
+    const pane = $('pane-lead-manager'); if (!pane) return;
+    pane.innerHTML = `<div class="lm2">
+      <aside class="lm2-nav">
+        <div class="snav-panel__hd"><span class="snav-panel__title">Lead Manager</span><button class="sidebar__toggle" title="Ocultar panel" onclick="toggleNavPanel()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button></div>
+        <nav class="lm2-nav__list" id="lm2-nav-list">${_navHtml()}</nav>
+      </aside>
+      <main class="lm2-main"><div class="lm2-body" id="lm2-body"></div></main>
+    </div>`;
+  }
+  function go(section) {
+    _section = section; _activeClient = null; _refreshNav(); _renderBody();
+    // LM Fase A: cargas lazy por sección (motor de envío)
+    if (section === 'dashboard') _loadToday();
+    if (section === 'settings')  { _loadSendCfg(); _loadAiCfg(); }
+    if (section === 'inbox')     { _lmMsgs = null; _loadLmMsgs(); }
+  }
+  function openClient(id) { _activeClient = id; _section = 'client'; _refreshNav(); _renderBody(); }
+  function _refreshNav() { const n = $('lm2-nav-list'); if (n) n.innerHTML = _navHtml(); }
+  function _renderBody() {
+    const body = $('lm2-body'); if (!body) return;
+    if      (_section === 'dashboard') body.innerHTML = _vDashboard();
+    else if (_section === 'clients')   body.innerHTML = _vClients();
+    else if (_section === 'client')    body.innerHTML = _vClientDetail(_activeClient);
+    else if (_section === 'campaigns') body.innerHTML = _vCampaigns();
+    else if (_section === 'sequences') body.innerHTML = _vSequences();
+    else if (_section === 'sequence')  body.innerHTML = _vSequenceDetail(_activeSeq);
+    else if (_section === 'activities') body.innerHTML = _vActivities();
+    else if (_section === 'tasks')     body.innerHTML = _vTasks();
+    else if (_section === 'inbox')     body.innerHTML = _vInbox();
+    else if (_section === 'leads')     { body.innerHTML = _vLeadsShell(); filter(); }
+    else if (_section === 'companies') { body.innerHTML = _vCompanies(); _renderCompanies(); }
+    else if (_section === 'contacts')  { body.innerHTML = _vContacts();  _renderContacts(); }
+    else if (_section === 'contact-view') { body.innerHTML = _vContactPage(_contactView); _cpLoadMap(_contacts.find(x => x.id === _contactView)); }
+    else if (_section === 'templates') body.innerHTML = _vTemplates();
+    else if (_section === 'reports') { body.innerHTML = _vReports(); _repInitCharts(); }
+    else if (_section === 'settings') { body.innerHTML = _vSettings(); _countUp(); }
+    else body.innerHTML = _vPlaceholder(_section);
+  }
+
+  // ── Helpers de cliente outbound ──
+  const _OBC = { preparacion:['Preparación','#FEF3C7','#92400E'], activo:['Activo','#D1FAE5','#065F46'], pausado:['Pausado','#FFEDD5','#9A3412'], cerrado:['Cerrado','#F1EFEC','#57534E'] };
+  function _obcBadge(e) { const s = _OBC[e] || _OBC.preparacion; return `<span class="lm-obc-badge" style="background:${s[1]};color:${s[2]}">${s[0]}</span>`; }
+  function _clientName(id) { const c = _clients.find(x => x.id === id); return c ? c.nombre : null; }
+  function _clientLeads(id) { return _data.filter(l => l.outbound_client_id === id); }
+  function _sumv(arr) { return arr.reduce((a, l) => a + (Number(l.valor_estimado) || 0), 0); }
+
+  // ── Helpers de campaña (Fase 2) ──
+  const _CMP = { draft: ['Draft', '#F1EFEC', '#57534E'], activa: ['Activa', '#D1FAE5', '#065F46'], pausada: ['Pausada', '#FFEDD5', '#9A3412'], cerrada: ['Cerrada', '#E8EDF5', '#3B5573'] };
+  const _CMP_ORDER = { activa: 0, pausada: 1, draft: 2, cerrada: 3 };
+  function _cmpBadge(e) { const s = _CMP[e] || _CMP.draft; return `<span class="lm-obc-badge" style="background:${s[1]};color:${s[2]}">${s[0]}</span>`; }
+  function _campaignName(id) { const c = _campaigns.find(x => x.id === id); return c ? c.nombre : null; }
+  function _campaignsByClient(cid) { return _campaigns.filter(c => c.outbound_client_id === cid); }
+  function _campaignLeads(id) { return _data.filter(l => l.campaign_id === id); }
+  function _sortCmp(arr) { return [...arr].sort((a, b) => (_CMP_ORDER[a.estado] ?? 9) - (_CMP_ORDER[b.estado] ?? 9) || (b.id || 0) - (a.id || 0)); }
+  function _cmpMetrics(c) {
+    const ls = _campaignLeads(c.id);
+    const ids = new Set(ls.map(l => l.id));
+    const acts = _activities.filter(a => ids.has(a.lead_id));
+    return { leads: ls.length, contactados: ls.filter(l => l.stage !== 'nuevo').length, ganados: ls.filter(l => l.stage === 'ganado').length,
+             replies: acts.filter(a => a.tipo === 'respuesta').length, meetings: acts.filter(a => a.tipo === 'reunion').length };
+  }
+  function _campaignCard(c, withClient) {
+    const m = _cmpMetrics(c);
+    const cli = withClient ? _clientName(c.outbound_client_id) : null;
+    return `<button class="lm-cmp" onclick="LeadManagerModule.openCampaignDrawer(${c.id})">
+      <div class="lm-cmp__hd"><div class="lm-cmp__id"><span class="lm-cmp__nm">${esc(c.nombre)}</span>${cli ? `<span class="lm-cmp__cli">◆ ${esc(cli)}</span>` : ''}</div>${_cmpBadge(c.estado)}</div>
+      ${c.canal || c.mercado ? `<div class="lm-cmp__meta">${[c.canal, c.mercado].filter(Boolean).map(esc).join(' · ')}</div>` : ''}
+      <div class="lm-cmp__stats">
+        <div class="lm-cmp__stat"><b>${m.leads}</b><span>leads</span></div>
+        <div class="lm-cmp__stat"><b>${m.contactados}</b><span>contactados</span></div>
+        <div class="lm-cmp__stat"><b>${m.ganados}</b><span>ganados</span></div>
+        <div class="lm-cmp__stat"><b>${m.replies}</b><span>replies</span></div>
+        <div class="lm-cmp__stat"><b>${m.meetings}</b><span>meetings</span></div>
+      </div>
+    </button>`;
+  }
+  function _vCampaigns() {
+    const list = _sortCmp(_campaigns);
+    return `
+      <div class="lm-sec-head">
+        <div><h2 class="lm-sec-title">Campañas</h2><p class="lm-sec-sub">Campañas outbound por cliente — activas primero</p></div>
+        ${_clients.length ? `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openCampaignDrawer()">＋ Nueva campaña</button>` : ''}
+      </div>
+      ${list.length ? `<div class="lm-cmp-grid">${list.map(c => _campaignCard(c, true)).join('')}</div>`
+        : (_clients.length ? _empty('campaigns', 'Aún no hay campañas', 'Crea tu primera campaña y asígnale leads. Las secuencias se gestionan en su propia sección.', 'Nueva campaña', 'LeadManagerModule.openCampaignDrawer()')
+                           : _empty('campaigns', 'Primero crea un cliente outbound', 'Las campañas pertenecen a un cliente outbound. Crea uno para empezar.', 'Nuevo cliente outbound', 'LeadManagerModule.openClientDrawer()'))}`;
+  }
+
+  // ── Helpers de secuencia (Fase 3) ──
+  const _SEQ = { draft: ['Draft', '#F1EFEC', '#57534E'], activa: ['Activa', '#D1FAE5', '#065F46'], pausada: ['Pausada', '#FFEDD5', '#9A3412'], archivada: ['Archivada', '#E8EDF5', '#3B5573'] };
+  const _TOUCH = {
+    email:    ['Email',    '#E07B12', '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 5L2 7"/>'],
+    linkedin: ['LinkedIn', '#0A66C2', '<path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-4 0v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/>'],
+    call:     ['Llamada',  '#0E8A4C', '<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>'],
+    task:     ['Tarea',    '#7C3AED', '<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>'],
+    whatsapp: ['WhatsApp', '#1FA855', '<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>'],
+  };
+  const _CANALES = ['email', 'linkedin', 'call', 'task', 'whatsapp'];
+  function _seqBadge(e) { const s = _SEQ[e] || _SEQ.draft; return `<span class="lm-obc-badge" style="background:${s[1]};color:${s[2]}">${s[0]}</span>`; }
+  function _seqSteps(id) { return _steps.filter(s => s.sequence_id === id).sort((a, b) => (a.dia - b.dia) || (a.orden - b.orden) || (a.id - b.id)); }
+  function _sequencesByClient(cid) { return _sequences.filter(s => s.outbound_client_id === cid); }
+  function _sortSeq(arr) { const o = { activa: 0, pausada: 1, draft: 2, archivada: 3 }; return [...arr].sort((a, b) => (o[a.estado] ?? 9) - (o[b.estado] ?? 9) || (b.id || 0) - (a.id || 0)); }
+
+  function _sequenceCard(s, withClient) {
+    const steps = _seqSteps(s.id);
+    const cli = withClient ? _clientName(s.outbound_client_id) : null;
+    const cmp = _campaignName(s.campaign_id);
+    const dots = steps.slice(0, 8).map(st => { const t = _TOUCH[st.canal] || _TOUCH.email; return `<span class="lm-seq__dot" style="background:${t[1]}" title="Día ${st.dia} · ${t[0]}"></span>`; }).join('');
+    return `<button class="lm-cmp" onclick="LeadManagerModule.openSequence(${s.id})">
+      <div class="lm-cmp__hd"><div class="lm-cmp__id"><span class="lm-cmp__nm">${esc(s.nombre)}</span>${cli ? `<span class="lm-cmp__cli">◆ ${esc(cli)}</span>` : (cmp ? `<span class="lm-cmp__cli">📣 ${esc(cmp)}</span>` : '')}</div>${_seqBadge(s.estado)}</div>
+      <div class="lm-seq__dots">${dots || '<span class="lm-seq__none">Sin pasos aún</span>'}</div>
+      <div class="lm-cmp__meta">${steps.length} paso${steps.length !== 1 ? 's' : ''}${steps.length ? ` · ${steps[steps.length - 1].dia} días` : ''}</div>
+    </button>`;
+  }
+  function _vSequences() {
+    const list = _sortSeq(_sequences);
+    return `
+      <div class="lm-sec-head">
+        <div><h2 class="lm-sec-title">Secuencias</h2><p class="lm-sec-sub">Pasos de outbound (Email, LinkedIn, llamada…) — planificación y registro manual</p></div>
+        ${_clients.length ? `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openSequenceDrawer()">＋ Nueva secuencia</button>` : ''}
+      </div>
+      ${list.length ? `<div class="lm-cmp-grid">${list.map(s => _sequenceCard(s, true)).join('')}</div>`
+        : (_clients.length ? _empty('sequences', 'Aún no hay secuencias', 'Crea una secuencia y define sus pasos (Día 1 Email, Día 2 LinkedIn…). El envío automático llega en una fase futura.', 'Nueva secuencia', 'LeadManagerModule.openSequenceDrawer()')
+                           : _empty('sequences', 'Primero crea un cliente outbound', 'Las secuencias pertenecen a un cliente. Crea uno para empezar.', 'Nuevo cliente outbound', 'LeadManagerModule.openClientDrawer()'))}`;
+  }
+  function openSequence(id) { _activeSeq = id; _section = 'sequence'; _seqTab = 'pasos'; _seqContacts = null; _seqMetrics = null; _seqDo = null; _refreshNav(); _renderBody(); _seqLoadContacts(id); }
+  const _TZ = [
+    ['', 'Sin zona (sin sugerencia de hora)'],
+    ['Europe/Madrid', 'España — Madrid'], ['America/New_York', 'EE. UU. Este — New York'], ['America/Chicago', 'EE. UU. Centro — Chicago'],
+    ['America/Denver', 'EE. UU. Montaña — Denver'], ['America/Los_Angeles', 'EE. UU. Oeste — Los Angeles'], ['America/Mexico_City', 'México — CDMX'],
+    ['America/Bogota', 'Colombia — Bogotá'], ['America/Lima', 'Perú — Lima'], ['America/Argentina/Buenos_Aires', 'Argentina — Buenos Aires'],
+    ['America/Sao_Paulo', 'Brasil — São Paulo'], ['Europe/London', 'Reino Unido — Londres'], ['Europe/Berlin', 'Centro Europa — Berlín'],
+    ['Asia/Dubai', 'Golfo — Dubái'], ['Asia/Kolkata', 'India — Delhi'], ['Asia/Singapore', 'Sudeste Asia — Singapur'], ['Australia/Sydney', 'Australia — Sídney'],
+  ];
+  const _TZ_DB_RAW = {
+    'America/New_York': ['New York', 'Nueva York', 'Florida', 'Miami', 'Orlando', 'Tampa', 'Jacksonville', 'Georgia', 'Atlanta', 'Pennsylvania', 'Philadelphia', 'Filadelfia', 'Pittsburgh', 'Washington DC', 'Boston', 'Massachusetts', 'Michigan', 'Detroit', 'Ohio', 'Columbus', 'Cleveland', 'Cincinnati', 'North Carolina', 'Carolina del Norte', 'Charlotte', 'Raleigh', 'South Carolina', 'Virginia', 'New Jersey', 'Newark', 'Connecticut', 'Maine', 'Maryland', 'Baltimore', 'Indiana', 'Indianapolis', 'Kentucky', 'EE. UU. Este'],
+    'America/Chicago': ['Chicago', 'Illinois', 'Texas', 'Dallas', 'Fort Worth', 'Houston', 'Austin', 'San Antonio', 'El Paso', 'Missouri', 'St. Louis', 'Kansas City', 'Kansas', 'Minnesota', 'Minneapolis', 'Wisconsin', 'Milwaukee', 'Louisiana', 'New Orleans', 'Nueva Orleans', 'Oklahoma', 'Nebraska', 'Omaha', 'Iowa', 'Alabama', 'Birmingham', 'Tennessee', 'Nashville', 'Memphis', 'Arkansas', 'Mississippi', 'Dakota', 'EE. UU. Centro'],
+    'America/Denver': ['Denver', 'Colorado', 'Utah', 'Salt Lake City', 'New Mexico', 'Nuevo México', 'Albuquerque', 'Wyoming', 'Montana', 'Idaho', 'EE. UU. Montaña'],
+    'America/Phoenix': ['Phoenix', 'Arizona', 'Tucson', 'Scottsdale'],
+    'America/Los_Angeles': ['Los Angeles', 'Los Ángeles', 'California', 'San Diego', 'San Francisco', 'San Jose', 'San José CA', 'Sacramento', 'Oakland', 'Fresno', 'Nevada', 'Las Vegas', 'Reno', 'Oregon', 'Portland', 'Washington State', 'Seattle', 'EE. UU. Oeste', 'Pacífico'],
+    'America/Anchorage': ['Alaska', 'Anchorage'], 'Pacific/Honolulu': ['Hawaii', 'Hawái', 'Honolulu'],
+    'America/Mexico_City': ['México', 'Mexico', 'CDMX', 'Ciudad de México', 'Guadalajara', 'Monterrey', 'Puebla', 'Querétaro', 'León'],
+    'America/Tijuana': ['Tijuana', 'Baja California', 'Mexicali'],
+    'America/Bogota': ['Colombia', 'Bogotá', 'Bogota', 'Medellín', 'Medellin', 'Cali', 'Barranquilla', 'Cartagena'],
+    'America/Lima': ['Perú', 'Peru', 'Lima', 'Arequipa', 'Cusco', 'Trujillo'],
+    'America/Argentina/Buenos_Aires': ['Argentina', 'Buenos Aires', 'Córdoba', 'Cordoba', 'Rosario', 'Mendoza'],
+    'America/Santiago': ['Chile', 'Santiago', 'Valparaíso', 'Concepción'],
+    'America/Sao_Paulo': ['Brasil', 'Brazil', 'São Paulo', 'Sao Paulo', 'Río de Janeiro', 'Rio de Janeiro', 'Brasília', 'Brasilia', 'Belo Horizonte', 'Curitiba', 'Porto Alegre'],
+    'America/Guayaquil': ['Ecuador', 'Quito', 'Guayaquil'], 'America/Caracas': ['Venezuela', 'Caracas', 'Maracaibo'],
+    'America/Montevideo': ['Uruguay', 'Montevideo'], 'America/La_Paz': ['Bolivia', 'La Paz', 'Santa Cruz'],
+    'America/Asuncion': ['Paraguay', 'Asunción', 'Asuncion'], 'America/Panama': ['Panamá', 'Panama', 'Ciudad de Panamá'],
+    'America/Costa_Rica': ['Costa Rica', 'San José CR'], 'America/Guatemala': ['Guatemala', 'El Salvador', 'San Salvador', 'Honduras', 'Tegucigalpa', 'Nicaragua', 'Managua'],
+    'America/Santo_Domingo': ['República Dominicana', 'Santo Domingo', 'Puerto Rico', 'San Juan'],
+    'America/Toronto': ['Canadá Este', 'Toronto', 'Ottawa', 'Montreal', 'Quebec'], 'America/Vancouver': ['Canadá Oeste', 'Vancouver', 'Calgary'],
+    'Europe/Madrid': ['España', 'Spain', 'Madrid', 'Barcelona', 'Valencia', 'Sevilla', 'Bilbao', 'Málaga'],
+    'Europe/London': ['Reino Unido', 'UK', 'Londres', 'London', 'Inglaterra', 'Manchester', 'Irlanda', 'Dublín', 'Dublin'],
+    'Europe/Lisbon': ['Portugal', 'Lisboa', 'Oporto'], 'Europe/Paris': ['Francia', 'París', 'Paris', 'Lyon'],
+    'Europe/Berlin': ['Alemania', 'Berlín', 'Berlin', 'Múnich', 'Fráncfort', 'Países Bajos', 'Ámsterdam', 'Amsterdam', 'Bélgica', 'Bruselas', 'Suiza', 'Zúrich', 'Austria', 'Viena', 'Italia', 'Roma', 'Milán', 'Polonia', 'Varsovia', 'Suecia', 'Estocolmo', 'Noruega', 'Oslo', 'Dinamarca', 'Copenhague'],
+    'Europe/Athens': ['Grecia', 'Atenas', 'Rumanía', 'Bucarest', 'Finlandia', 'Helsinki', 'Ucrania', 'Kiev'],
+    'Europe/Moscow': ['Rusia', 'Moscú', 'Moscow'], 'Africa/Cairo': ['Egipto', 'El Cairo', 'Cairo'], 'Africa/Johannesburg': ['Sudáfrica', 'Johannesburgo', 'Ciudad del Cabo'],
+    'Asia/Dubai': ['Emiratos', 'Dubái', 'Dubai', 'Abu Dabi', 'Golfo'], 'Asia/Riyadh': ['Arabia Saudita', 'Riad', 'Riyadh'],
+    'Asia/Jerusalem': ['Israel', 'Tel Aviv', 'Jerusalén'], 'Asia/Karachi': ['Pakistán', 'Karachi', 'Islamabad'],
+    'Asia/Kolkata': ['India', 'Delhi', 'Nueva Delhi', 'Bombay', 'Mumbai', 'Bangalore', 'Hyderabad'], 'Asia/Dhaka': ['Bangladesh', 'Daca'],
+    'Asia/Bangkok': ['Tailandia', 'Bangkok', 'Vietnam', 'Hanói', 'Ho Chi Minh'], 'Asia/Singapore': ['Singapur', 'Singapore', 'Malasia', 'Kuala Lumpur', 'Filipinas', 'Manila'],
+    'Asia/Shanghai': ['China', 'Pekín', 'Beijing', 'Shanghái', 'Shanghai', 'Hong Kong', 'Shenzhen'], 'Asia/Tokyo': ['Japón', 'Tokio', 'Tokyo', 'Osaka', 'Corea', 'Seúl', 'Seoul'],
+    'Australia/Sydney': ['Australia', 'Sídney', 'Sydney', 'Melbourne', 'Canberra', 'Brisbane'], 'Pacific/Auckland': ['Nueva Zelanda', 'Auckland', 'Wellington'],
+  };
+  const _LOC_DB = Object.entries(_TZ_DB_RAW).flatMap(([tz, names]) => names.map(n => ({ name: n, tz: tz })));
+  function _tzLabelFor(tz) { if (!tz) return ''; const m = _LOC_DB.find(x => x.tz === tz); return (m ? m.name : _tzShort(tz)) + ' · ' + _tzShort(tz); }
+  function _herTz() { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Madrid'; } catch (e) { return 'Europe/Madrid'; } }
+  function _tzOffsetMin(tz, at) {
+    try {
+      const p = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(at).reduce((o, x) => { o[x.type] = x.value; return o; }, {});
+      const asUTC = Date.UTC(+p.year, +p.month - 1, +p.day, +(p.hour === '24' ? 0 : p.hour), +p.minute, +p.second);
+      return Math.round((asUTC - at.getTime()) / 60000);
+    } catch (e) { return 0; }
+  }
+  function _suggestWindow(seqTz) {
+    if (!seqTz) return null;
+    const at = new Date();
+    const diff = _tzOffsetMin(_herTz(), at) - _tzOffsetMin(seqTz, at);
+    const fmt = (h, m) => { const t = ((h * 60 + m + diff) % 1440 + 1440) % 1440; return String(Math.floor(t / 60)).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0'); };
+    return { prosp: '09:00–11:00', her: fmt(9, 0) + '–' + fmt(11, 0) };
+  }
+  function _tzShort(tz) { return (tz || '').split('/').pop().replace(/_/g, ' '); }
+  function _seqTzChip(s) {
+    if (!s || !s.timezone) return '';
+    const w = _suggestWindow(s.timezone);
+    return `<span class="seq-tz-chip" title="Zona del prospecto: ${esc(s.timezone)}. Ventana recomendada 9–11 h de su hora local.">🕐 ${esc(_tzShort(s.timezone))} · envía ≈ ${w.her} tu hora</span>`;
+  }
+  function tzSearch() {
+    const inp = document.getElementById('seq-tz-search'), list = document.getElementById('seq-tz-list'); if (!inp || !list) return;
+    const q = _lmNorm(inp.value);
+    let matches = q ? _LOC_DB.filter(x => _lmNorm(x.name).includes(q)) : _LOC_DB.slice();
+    matches = matches.slice(0, 50);
+    const clear = `<button type="button" class="tz-opt tz-opt--clear" onclick="LeadManagerModule.tzPick('','')">Sin zona (sin sugerencia de hora)</button>`;
+    list.innerHTML = clear + (matches.length ? matches.map(x => `<button type="button" class="tz-opt" onclick="LeadManagerModule.tzPick('${x.tz}','${esc(x.name).replace(/'/g, '')}')">${esc(x.name)}<span class="tz-opt__z">${esc(_tzShort(x.tz))}</span></button>`).join('') : `<div class="tz-empty">Sin coincidencias — prueba con la ciudad, estado o país</div>`);
+    const r = inp.getBoundingClientRect();
+    list.style.left = r.left + 'px'; list.style.top = (r.bottom + 4) + 'px'; list.style.width = r.width + 'px';
+    list.style.display = 'block';
+  }
+  function tzPick(tz, name) {
+    const inp = document.getElementById('seq-tz-search'), h = document.getElementById('seq-tz'), list = document.getElementById('seq-tz-list');
+    if (h) h.value = tz;
+    if (inp) inp.value = tz ? (name + ' · ' + _tzShort(tz)) : '';
+    if (list) list.style.display = 'none';
+  }
+  function tzBlur() { setTimeout(() => { const l = document.getElementById('seq-tz-list'); if (l) l.style.display = 'none'; }, 180); }
+  function _vSequenceDetail(id) {
+    const s = _sequences.find(x => x.id === id);
+    if (!s) return _vSequences();
+    const steps = _seqSteps(id);
+    const cli = _clientName(s.outbound_client_id), cmp = _campaignName(s.campaign_id);
+    const timeline = steps.length ? steps.map(_stepRow).join('') : `<div class="lm-act-empty"><div class="lm-act-empty__i">🪜</div><p>Esta secuencia no tiene pasos</p><span>Agrega el primero (Día 1 · Email).</span></div>`;
+    return `
+      <button class="lm-back" onclick="LeadManagerModule.go('sequences')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg> Secuencias</button>
+      <div class="lm-sec-head">
+        <div>
+          <h2 class="lm-sec-title">${esc(s.nombre)} ${_seqBadge(s.estado)}</h2>
+          <p class="lm-sec-sub">${[cli && '◆ ' + esc(cli), cmp && '📣 ' + esc(cmp), s.objetivo && esc(s.objetivo)].filter(Boolean).join(' · ') || 'Secuencia outbound'}</p>
+          ${_seqTzChip(s) ? `<div class="seq-tz-line">${_seqTzChip(s)}</div>` : ''}
+        </div>
+        <div class="lm-sec-actions">
+          <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openSequenceDrawer(${s.id})">Editar</button>
+          ${_seqTab === 'pasos'
+            ? `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openStepDrawer(${s.id})">＋ Añadir paso</button>`
+            : `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.seqEnrolOpen(${s.id})">＋ Enrolar contacto</button>`}
+        </div>
+      </div>
+      <div class="cp-tabs">
+        <button class="cp-tab${_seqTab === 'pasos' ? ' active' : ''}" onclick="LeadManagerModule.seqTab('pasos')">Pasos</button>
+        <button class="cp-tab${_seqTab === 'contactos' ? ' active' : ''}" onclick="LeadManagerModule.seqTab('contactos')">Contactos${Array.isArray(_seqContacts) ? ` (${_seqContacts.length})` : ''}</button>
+        <button class="cp-tab${_seqTab === 'tareas' ? ' active' : ''}" onclick="LeadManagerModule.seqTab('tareas')">Tareas</button>
+        <button class="cp-tab${_seqTab === 'metricas' ? ' active' : ''}" onclick="LeadManagerModule.seqTab('metricas')">Métricas</button>
+        <button class="cp-tab${_seqTab === 'envios' ? ' active' : ''}" onclick="LeadManagerModule.seqTab('envios')">Envíos</button>
+      </div>
+      <div id="seq-tabwrap">${_seqTabContent(id)}</div>`;
+  }
+  function _seqTabContent(id) {
+    const steps = _seqSteps(id);
+    if (_seqTab === 'contactos') {
+      const list = Array.isArray(_seqContacts) ? _seqContacts : null;
+      if (list === null) return `<div class="cp-empty2" style="padding:22px">Cargando…</div>`;
+      if (!list.length) return _empty('contacts', 'Nadie enrolado aún', 'Enrola contactos para arrancar la secuencia (o hazlo desde Contactos → seleccionar → ＋ Secuencia).', 'Enrolar contacto', `LeadManagerModule.seqEnrolOpen(${id})`);
+      return `<div class="clients-table-wrap"><table class="clients-table lm-dt"><thead><tr><th>Contacto</th><th>Progreso</th><th>Estado</th><th></th></tr></thead><tbody>${list.map(e => _seqCtRow(e, steps, id)).join('')}</tbody></table></div>`;
     }
-    $('lm-loading').style.display = 'none';
-    filter();
+    if (_seqTab === 'tareas') {
+      const list = Array.isArray(_seqContacts) ? _seqContacts : null;
+      if (list === null) return `<div class="cp-empty2" style="padding:22px">Cargando…</div>`;
+      const today = new Date(new Date().toDateString());
+      const tasks = _seqTasks(id);
+      if (!tasks.length) {
+        const steps = _seqSteps(id);
+        const activos = list.filter(e => e.estado === 'activo');
+        let msg = '', cta = '', ctaFn = '';
+        if (!steps.length) { msg = 'Esta secuencia todavía no tiene pasos. Ve a la pestaña “Pasos” y agrega al menos uno (p. ej. Día 1 · LinkedIn) — la tarea nace de un paso.'; }
+        else if (!list.length) { msg = 'Aún no hay nadie enrolado en esta secuencia. Enrola contactos para generar tareas.'; cta = 'Enrolar contacto'; ctaFn = `LeadManagerModule.seqEnrolOpen(${id})`; }
+        else if (!activos.length) { msg = 'Los contactos enrolados están pausados o terminados; no hay tareas activas. Reactívalos (►) en la pestaña “Contactos”.'; }
+        else { msg = 'Los contactos activos ya completaron todos los pasos definidos. Agrega más pasos o enrola contactos nuevos.'; cta = 'Enrolar contacto'; ctaFn = `LeadManagerModule.seqEnrolOpen(${id})`; }
+        return _empty('tasks', 'Sin tareas pendientes', msg, cta, ctaFn);
+      }
+      const todo = tasks.filter(t => t.due <= today);
+      const future = tasks.filter(t => t.due > today);
+      const nextLine = future.length ? `<div class="seq-next">Siguiente tarea: <b>${_relDay(future[0].due)}</b>${future.length > 1 ? ` · +${future.length - 1} más` : ''}</div>` : '';
+      const head = todo.length
+        ? `<div class="seq-tasks-hd">${todo.length} ${todo.length === 1 ? 'tarea' : 'tareas'} para hoy<button class="seq-tasks-start" onclick="LeadManagerModule.seqTaskOpen(${id},${todo[0].e.contact_id})">▶ Empezar</button></div>`
+        : `<div class="seq-tasks-hd seq-tasks-hd--none">Sin tareas para hoy</div>`;
+      return `${head}${todo.length ? `<div class="seq-tasks">${todo.map(t => _seqTaskRow(t, id, today)).join('')}</div>` : ''}${nextLine}`;
+    }
+    if (_seqTab === 'envios') {
+      if (_seqMsgs === null) return `<div class="cp-empty2" style="padding:22px">Cargando envíos…</div>`;
+      if (!_seqMsgs.length) return `<div class="cp-empty2" style="padding:22px">Aún no hay emails enviados por el motor en esta secuencia.<br><span style="color:var(--muted);font-size:12px">Actívala (estado “activa”), enrola contactos con email verificado y enciende el envío en Configuración.</span></div>`;
+      return `<div class="clients-table-wrap"><table class="clients-table lm-dt"><thead><tr><th>Para</th><th>Asunto</th><th>Enviado</th><th>Tracking</th><th>Estado</th></tr></thead><tbody>${_seqMsgs.map(_msgRow).join('')}</tbody></table></div>`;
+    }
+    if (_seqTab === 'metricas') {
+      const mt = _seqMetrics;
+      if (mt === null) return `<div class="cp-empty2" style="padding:22px">Cargando…</div>`;
+      const en = mt.enrolados || 0;
+      const pct = (a, b) => b ? Math.round((a || 0) / b * 100) : 0;
+      const mc = (n, l) => `<div class="seq-mc"><div class="seq-mc__v">${n != null ? n : 0}</div><div class="seq-mc__l">${l}</div></div>`;
+      const bar = (n, label, color) => `<div class="seq-fn-row"><div class="seq-fn-lbl">${label}</div><div class="seq-fn-track"><div class="seq-fn-fill" style="width:${en ? Math.max(3, Math.round((n || 0) / en * 100)) : 0}%;background:${color}"></div></div><div class="seq-fn-n">${n || 0}</div></div>`;
+      return `<div class="seq-mc-row">${mc(mt.enrolados, 'Enrolados')}${mc(mt.contactados, 'Contactados')}${mc(mt.respuestas, 'Respuestas')}${mc(mt.reuniones, 'Reuniones')}</div>
+        <div class="cp-card"><div class="cp-card__t">Embudo</div>${bar(mt.enrolados, 'Enrolados', 'var(--brand, #00804C)')}${bar(mt.contactados, 'Contactados', '#1E5FA8')}${bar(mt.respuestas, 'Respuestas', '#15803D')}${bar(mt.reuniones, 'Reuniones', '#5B4BC4')}</div>
+        <div class="seq-mc-row">${mc(pct(mt.respuestas, mt.contactados) + '%', 'Reply rate')}${mc(pct(mt.reuniones, en) + '%', 'Meeting rate')}${mc(mt.activos, 'Activos')}${mc(mt.terminados, 'Terminados')}</div>
+        <div id="seq-ab-wrap">${_seqAbHtml(id)}</div>`;
+    }
+    return `<div class="lm-seq-tl">${steps.length ? steps.map(_stepRow).join('') : `<div class="lm-act-empty"><div class="lm-act-empty__i">🪜</div><p>Esta secuencia no tiene pasos</p><span>Agrega el primero (Día 1 · Email).</span></div>`}</div>`;
+  }
+  function _seqCtRow(e, steps, seqId) {
+    const full = [e.nombre, e.apellido].filter(Boolean).join(' ') || (e.email || '—');
+    const N = steps.length;
+    const done = e.estado === 'terminado';
+    const paso = Math.min(Math.max(e.paso || 1, 1), Math.max(N, 1));
+    const st = steps[paso - 1];
+    const stTitle = st ? (st.titulo || (_TOUCH[st.canal] || _TOUCH.email)[0]) : '—';
+    const pct = done ? 100 : (N ? Math.round((paso - 1) / N * 100) : 0);
+    const EST = { activo: ['Activo', '#E9F1FA', '#1E5FA8'], pausado: ['Pausado', '#FEF3E2', '#92400E'], terminado: ['Terminado', '#E7F8EF', '#15803D'], respondio: ['Respondió', '#E7F8EF', '#15803D'] };
+    const em = EST[e.estado] || EST.activo;
+    return `<tr class="clients-table__row" onclick="LeadManagerModule.openContactPage(${e.contact_id})" style="cursor:pointer">
+      <td><div class="client-cell-name"><img class="client-avatar" src="${_av(full)}" style="object-fit:cover" alt=""/><div><div class="client-nombre">${esc(full)}</div>${(e.cargo || e.company_nombre) ? `<div class="client-empresa">${esc([e.cargo, e.company_nombre].filter(Boolean).join(' · '))}</div>` : ''}</div></div></td>
+      <td class="client-meta"><div class="seq-prog"><div class="seq-prog__bar"><span style="width:${pct}%"></span></div><span class="seq-prog__t">${done ? 'Completada' : `Paso ${paso}/${N || '—'} · ${esc(stTitle)}`}</span></div></td>
+      <td><span class="client-badge" style="background:${em[1]};color:${em[2]}">${em[0]}</span></td>
+      <td class="lm-dt-act" onclick="event.stopPropagation()">
+        <button class="lm-mini-b" title="Escribir con IA (✨ Fable investiga en línea)" onclick="LeadManagerModule.openAiDrafts(${e.contact_id},${seqId})">${NI('sparkles')}</button>
+        ${done ? '' : `<button class="lm-mini-b" title="Avanzar de paso" onclick="LeadManagerModule.seqCtAdvance(${seqId},${e.contact_id})">→</button>`}
+        <button class="lm-mini-b" title="${e.estado === 'pausado' ? 'Reanudar' : 'Pausar'}" onclick="LeadManagerModule.seqCtPause(${seqId},${e.contact_id})">${e.estado === 'pausado' ? '►' : 'II'}</button>
+        <button class="lm-mini-x" title="Quitar de la secuencia" onclick="LeadManagerModule.seqCtRemove(${seqId},${e.contact_id})">✕</button>
+      </td>
+    </tr>`;
+  }
+  async function _seqLoadContacts(id) {
+    try { const r = await apiFetch(`${API}/lm/sequences/${id}/contacts`); _seqContacts = (r && r.ok) ? await r.json() : []; } catch { _seqContacts = []; }
+    if (!Array.isArray(_seqContacts)) _seqContacts = [];
+    if (_section === 'sequence' && _activeSeq === id) _renderBody();
+  }
+  async function _reloadContacts() {
+    try { const r = await apiFetch(`${API}/lm/contacts`); if (r && r.ok) { const d = await r.json(); if (Array.isArray(d)) _contacts = d; } } catch (e) {}
+    _refreshNav();
+  }
+  // ── Disposición outbound (independiente del paso; pausa en todas sus secuencias) ──
+  const _DISPOS = [['respondio', 'Respondió', '#15803D', '#E7F8EF'], ['reunion', 'Reunión', '#5B4BC4', '#EDE9FE'], ['no_interesado', 'No interesado', '#B45309', '#FEF3C7'], ['no_contactar', 'No contactar', '#C4342B', '#FDECEA']];
+  function _dispoLabel(d) { const x = _DISPOS.find(y => y[0] === d); return x ? x[1] : ''; }
+  function _dispoBadge(d) { const x = _DISPOS.find(y => y[0] === d); return x ? `<span class="cp-dispo-badge" style="background:${x[3]};color:${x[2]}">${x[1]}</span>` : ''; }
+  async function _lmSetDispositionCore(cid, disp, seqId) {
+    const res = await apiFetch(`${API}/lm/contacts/${cid}/disposition`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ disposition: disp, sequence_id: seqId || null }) });
+    if (!res.ok) throw new Error((await res.json()).error || 'Error');
+    return await res.json();
+  }
+  async function lmSetDisposition(cid, disp) {
+    try {
+      const r = await _lmSetDispositionCore(cid, disp);
+      await _reloadContacts();
+      if (_activeSeq && Array.isArray(_seqContacts)) { _seqContacts = null; await _seqLoadContacts(_activeSeq); }
+      showBanner(disp ? `✓ ${_dispoLabel(disp)}${r.paused ? ` · pausado en ${r.paused} secuencia${r.paused === 1 ? '' : 's'}` : ''}` : '✓ Disposición quitada', 'success');
+      if (_section === 'contact-view') { _renderBody(); _cpReloadActs(cid); } else _renderBody();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  async function seqDoDisposition(disp) {
+    if (!_cpTaskCtx) return;
+    const seqId = _cpTaskCtx.seqId, cid = _contactView;
+    try {
+      const r = await _lmSetDispositionCore(cid, disp, seqId);
+      _seqContacts = null; await _seqLoadContacts(seqId); await _reloadContacts();
+      showBanner(`✓ ${_dispoLabel(disp)}${r.paused ? ' · pausado en secuencias' : ''}`, 'success');
+      const today = _dayOf(new Date());
+      const next = _seqTasks(seqId).filter(t => t.due <= today)[0];
+      if (next) openContactPage(next.e.contact_id, { seqId: seqId }); else seqDoExit();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  async function _seqLoadMetrics(id) {
+    try { const r = await apiFetch(`${API}/lm/sequences/${id}/metrics`); _seqMetrics = (r && r.ok) ? await r.json() : {}; } catch { _seqMetrics = {}; }
+    if (_section === 'sequence' && _activeSeq === id && _seqTab === 'metricas') { const el = document.getElementById('seq-tabwrap'); if (el) el.innerHTML = _seqTabContent(id); }
+  }
+  function seqTab(t) { _seqTab = t; _renderBody(); if ((t === 'contactos' || t === 'tareas') && !Array.isArray(_seqContacts)) _seqLoadContacts(_activeSeq); if (t === 'metricas') { if (_seqMetrics === null) _seqLoadMetrics(_activeSeq); _seqAb = null; _seqLoadAb(_activeSeq); } if (t === 'envios') { _seqMsgs = null; _seqLoadMsgs(_activeSeq); } }
+  async function _seqPatch(seqId, cid, body) {
+    try {
+      const res = await apiFetch(`${API}/lm/sequences/${seqId}/contacts/${cid}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (!res.ok) throw new Error((await res.json()).error || 'Error');
+      const row = await res.json();
+      const e = (_seqContacts || []).find(x => x.contact_id === cid); if (e) { e.paso = row.paso; e.estado = row.estado; }
+      const el = document.getElementById('seq-tabwrap'); if (el) el.innerHTML = _seqTabContent(seqId);
+    } catch (err) { alert('Error: ' + err.message); }
+  }
+  function seqCtAdvance(seqId, cid) {
+    const e = (_seqContacts || []).find(x => x.contact_id === cid); if (!e) return;
+    const N = _seqSteps(seqId).length;
+    if ((e.paso || 1) >= N) _seqPatch(seqId, cid, { estado: 'terminado' });
+    else _seqPatch(seqId, cid, { paso: (e.paso || 1) + 1 });
+  }
+  function seqCtPause(seqId, cid) {
+    const e = (_seqContacts || []).find(x => x.contact_id === cid); if (!e) return;
+    _seqPatch(seqId, cid, { estado: e.estado === 'pausado' ? 'activo' : 'pausado' });
+  }
+  async function seqCtRemove(seqId, cid) {
+    if (!confirm('¿Quitar este contacto de la secuencia?')) return;
+    try {
+      const res = await apiFetch(`${API}/lm/sequences/${seqId}/contacts/${cid}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Error');
+      _seqContacts = (_seqContacts || []).filter(x => x.contact_id !== cid);
+      _renderBody();
+    } catch (e) { alert('Error: ' + e.message); }
+  }
+  function seqEnrolOpen(seqId) {
+    document.getElementById('lm-enrol-modal')?.remove();
+    const enrolled = new Set((Array.isArray(_seqContacts) ? _seqContacts : []).map(e => e.contact_id));
+    const avail = _contacts.filter(c => !enrolled.has(c.id));
+    const m = document.createElement('div'); m.id = 'lm-enrol-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) m.remove(); };
+    const rows = avail.length
+      ? avail.map(c => { const full = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || '—'; return `<button class="lm-pick-item" data-nm="${esc((full + ' ' + (c.company_nombre || '')).toLowerCase())}" onclick="LeadManagerModule.seqEnrol(${seqId},${c.id})"><span>${esc(full)}</span>${c.company_nombre ? `<span class="lm-pick-est">${esc(c.company_nombre)}</span>` : ''}</button>`; }).join('')
+      : `<div class="lm-pick-empty">Todos tus contactos ya están enrolados (o no tienes contactos).</div>`;
+    m.innerHTML = `<div class="fin-pi-box lm-pick-box">
+      <div class="fin-pi-box__hd"><h3>Enrolar contacto</h3><button class="fin-pi-x" onclick="document.getElementById('lm-enrol-modal').remove()">✕</button></div>
+      <div style="padding:10px 16px 0"><input class="form-input" id="enrol-q" placeholder="Buscar contacto o empresa…" oninput="LeadManagerModule.seqEnrolFilter()"></div>
+      <div class="lm-pick-list" id="enrol-list">${rows}</div>
+    </div>`;
+    document.body.appendChild(m);
+    setTimeout(() => $('enrol-q')?.focus(), 60);
+  }
+  function seqEnrolFilter() {
+    const q = ($('enrol-q')?.value || '').toLowerCase().trim();
+    document.querySelectorAll('#enrol-list .lm-pick-item').forEach(b => { b.style.display = (!q || b.dataset.nm.includes(q)) ? '' : 'none'; });
+  }
+  async function seqEnrol(seqId, cid) {
+    document.getElementById('lm-enrol-modal')?.remove();
+    try {
+      const res = await apiFetch(`${API}/lm/contacts/add-to-sequence`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact_ids: [cid], sequence_id: seqId }) });
+      if (!res.ok) throw new Error((await res.json()).error || 'Error');
+      _seqContacts = null; await _seqLoadContacts(seqId);
+      showBanner('✓ Contacto enrolado', 'success');
+    } catch (e) { showBanner('No se pudo enrolar: ' + e.message, 'error'); }
+  }
+  function _seqTasks(id) {
+    const steps = _seqSteps(id);
+    const list = Array.isArray(_seqContacts) ? _seqContacts : [];
+    return list.filter(e => e.estado === 'activo' && steps[(e.paso || 1) - 1]).map(e => {
+      const st = steps[(e.paso || 1) - 1];
+      const due = new Date(e.enrolled_at); due.setHours(0, 0, 0, 0); due.setDate(due.getDate() + ((st.dia || 1) - 1));
+      return { e, st, due };
+    }).sort((a, b) => a.due - b.due);
+  }
+  function _seqTaskRow(t, seqId, today) {
+    const { e, st, due } = t;
+    const touch = _TOUCH[st.canal] || _TOUCH.email;
+    const full = [e.nombre, e.apellido].filter(Boolean).join(' ') || e.email || '—';
+    const overdue = due < today; const isToday = due.getTime() === today.getTime();
+    const dLabel = isToday ? 'Hoy' : overdue ? 'Vencida' : due.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
+    return `<div class="seq-task${overdue ? ' over' : ''}${isToday ? ' today' : ''}" onclick="LeadManagerModule.seqTaskOpen(${seqId},${e.contact_id})" title="Hacer tarea">
+      <button class="seq-task__ck" onclick="event.stopPropagation();LeadManagerModule.seqTaskDone(${seqId},${e.contact_id})" title="Marcar hecho sin abrir"></button>
+      <span class="seq-task__ico" style="background:${touch[1]}1a;color:${touch[1]}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${touch[2]}</svg></span>
+      <div class="seq-task__body"><div class="seq-task__t">${esc(st.titulo || touch[0])}<span class="seq-task__ch" style="color:${touch[1]}">${touch[0]}</span></div><div class="seq-task__who">${esc(full)}${e.company_nombre ? ` · ${esc(e.company_nombre)}` : ''}</div></div>
+      <span class="seq-task__go">Hacer ›</span>
+      <span class="seq-task__due">${dLabel}</span>
+    </div>`;
+  }
+  async function _seqCompleteStep(seqId, cid) {
+    const e = (_seqContacts || []).find(x => x.contact_id === cid); if (!e) return;
+    const steps = _seqSteps(seqId); const N = steps.length; const st = steps[(e.paso || 1) - 1];
+    const c = _contacts.find(x => x.id === cid);
+    const tipoMap = { email: 'email_enviado', linkedin: 'linkedin_msg', call: 'llamada', whatsapp: 'nota', task: 'nota' };
+    const _v = st ? _stepVariant(st, c) : null;
+    const _vn = (_v && st && _stepVariants(st).length > 1) ? ` · Variante ${_v.nombre || '?'}` : '';
+    if (st) await apiFetch(`${API}/activities`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact_id: cid, outbound_client_id: (c && c.outbound_client_id) || null, tipo: tipoMap[st.canal] || 'nota', nota: `Paso ${e.paso}${st.titulo ? ': ' + st.titulo : ''}${_vn}`, fecha: new Date().toISOString().slice(0, 10), estado: 'hecha', variant: (_v && _stepVariants(st).length > 1) ? String(_v.nombre || 'A') : '' }) });
+    const body = (e.paso || 1) >= N ? { estado: 'terminado' } : { paso: (e.paso || 1) + 1 };
+    await apiFetch(`${API}/lm/sequences/${seqId}/contacts/${cid}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  }
+  async function seqTaskDone(seqId, cid) {
+    try {
+      const has = Array.isArray(_seqContacts) && _activeSeq === seqId && _seqContacts.some(e => e.contact_id === cid);
+      if (!has) { _activeSeq = seqId; _seqContacts = null; await _seqLoadContacts(seqId); }
+      await _seqCompleteStep(seqId, cid);
+      _seqContacts = null; await _seqLoadContacts(seqId);
+      await _reloadContacts();
+      if (_section === 'tasks') _renderBody();
+      showBanner('✓ Paso completado', 'success');
+    } catch (err) { showBanner('Error: ' + err.message, 'error'); }
+  }
+  // ── Panel de ejecución de tarea (task flow estilo Outreach) ──
+  function _seqRenderTpl(tpl, s) {
+    s = s || {};
+    const full = [s.nombre, s.apellido].filter(Boolean).join(' ');
+    const empresa = s.company_nombre || s.empresa_nombre || '';
+    const MAP = {
+      first_name: s.nombre, firstname: s.nombre, name: s.nombre, nombre: s.nombre, first: s.nombre,
+      last_name: s.apellido, lastname: s.apellido, apellido: s.apellido, last: s.apellido, surname: s.apellido,
+      full_name: full, fullname: full, nombre_completo: full,
+      email: s.email, correo: s.email,
+      personal_email: s.email_personal, email_personal: s.email_personal, correo_personal: s.email_personal,
+      phone: s.telefono, telefono: s.telefono, tel: s.telefono,
+      mobile: s.movil, movil: s.movil, celular: s.movil, cell: s.movil,
+      title: s.cargo, job_title: s.cargo, jobtitle: s.cargo, cargo: s.cargo, puesto: s.cargo, position: s.cargo,
+      seniority: s.seniority,
+      department: s.departamento, departamento: s.departamento,
+      buyer_role: s.buyer_role, buyerrole: s.buyer_role, rol_compra: s.buyer_role,
+      contact_priority: s.contact_priority, priority: s.contact_priority, prioridad: s.contact_priority,
+      linkedin: s.linkedin,
+      city: s.ciudad, ciudad: s.ciudad,
+      region: s.region, state: s.region,
+      country: s.pais, pais: s.pais,
+      stage: s.estado, estado: s.estado,
+      source: s.fuente, fuente: s.fuente,
+      company: empresa, company_name: empresa, empresa: empresa, cuenta: empresa, account: empresa,
+      company_domain: s.company_dominio, company_dominio: s.company_dominio, domain: s.company_dominio, dominio: s.company_dominio,
+      company_website: s.company_website, company_industry: s.company_industria, company_industria: s.company_industria,
+      company_size: s.company_tamano, company_tamano: s.company_tamano, company_revenue: s.company_ingresos, company_ingresos: s.company_ingresos,
+      company_city: s.company_ciudad, company_country: s.company_pais, company_target_tier: s.company_target_tier,
+    };
+    return String(tpl || '').replace(/\{\{\s*([^}]+?)\s*\}\}/g, (m, tok) => {
+      const k = tok.trim().toLowerCase().replace(/[\s-]+/g, '_');
+      if (!(k in MAP)) return m;
+      const v = MAP[k];
+      return v == null ? '' : String(v);
+    });
+  }
+  async function seqTaskOpen(seqId, cid) {
+    if (!cid) return;
+    const has = Array.isArray(_seqContacts) && _activeSeq === seqId && _seqContacts.some(e => e.contact_id === cid);
+    if (!has) { _activeSeq = seqId; _seqContacts = null; await _seqLoadContacts(seqId); }
+    openContactPage(cid, { seqId: seqId });
+  }
+  function seqDoClose() { document.getElementById('seq-do-modal')?.remove(); _seqDo = null; }
+  function seqDoEditStep(stepId) { const seqId = _cpTaskCtx ? _cpTaskCtx.seqId : _activeSeq; openStepDrawer(seqId, stepId); }
+  function seqDoExit() { const seqId = _cpTaskCtx ? _cpTaskCtx.seqId : _activeSeq; _cpTaskCtx = null; _activeSeq = seqId; _section = 'sequence'; _seqTab = 'tareas'; _renderBody(); if (!Array.isArray(_seqContacts)) _seqLoadContacts(seqId); }
+  function seqOpenLinkedIn(cid) {
+    const c = _contacts.find(x => x.id === cid);
+    const url = c && c.linkedin; if (!url) return;
+    try {
+      const w = screen.availWidth || window.innerWidth || 1280, h = screen.availHeight || window.innerHeight || 800;
+      const pw = Math.max(560, Math.floor(w / 2));
+      const win = window.open(url, 'nova_linkedin', `width=${pw},height=${h},left=${w - pw},top=0`);
+      if (win) win.focus(); else window.open(url, '_blank');
+    } catch (e) { window.open(url, '_blank'); }
+  }
+  function _stepVariants(st) {
+    const v = (st && Array.isArray(st.variants)) ? st.variants.filter(x => x && ((x.cuerpo || '').trim() || (x.nombre || '').trim())) : [];
+    if (v.length) return v;
+    return (st && st.plantilla) ? [{ nombre: 'A', cuerpo: st.plantilla, targets: [] }] : [{ nombre: 'A', cuerpo: '', targets: [] }];
+  }
+  function _stepVariant(st, c) {
+    const vars = _stepVariants(st);
+    if (vars.length <= 1) return vars[0];
+    const mode = (st && st.variant_mode) || 'off';
+    if (mode === 'segment' && st.variant_field) {
+      const val = String((c && c[st.variant_field]) || '').toLowerCase().trim();
+      const hit = vars.find(v => (Array.isArray(v.targets) ? v.targets : []).some(t => String(t).toLowerCase().trim() === val));
+      return hit || vars[0];
+    }
+    if (mode === 'random') { const idx = Math.abs(((c ? c.id : 0) + (st.id || 0))) % vars.length; return vars[idx]; }
+    return vars[0];
+  }
+  // ── Ejecución con 1 click por canal (Gmail / LinkedIn / WhatsApp) ──
+  let _cpTaskDraft = null;   // { key, data } — borrador IA APROBADO del paso actual (lazy)
+  let _seqDoSubject = '';    // asunto calculado (para copiar)
+
+  // Asunto estilo Outreach: el 1er email de la secuencia define el asunto;
+  // los follow-ups usan "Re: <asunto del 1er email>" para simular el hilo
+  // aunque el buzón sea externo y no haya threading real.
+  function _emailSubjectFor(seqId, st, src, draft) {
+    const emails = _seqSteps(seqId).filter(s => s.canal === 'email')
+      .sort((a, b) => (a.dia || 0) - (b.dia || 0) || (a.orden || 0) - (b.orden || 0) || a.id - b.id);
+    const first = emails[0];
+    const isFirst = !first || first.id === st.id;
+    if (isFirst) {
+      return (draft && draft.asunto) ? draft.asunto
+           : (_seqRenderTpl(st.titulo || '', src).trim() || 'Seguimiento');
+    }
+    const base = _seqRenderTpl((first && first.titulo) || '', src).trim()
+              || _seqRenderTpl(st.titulo || '', src).trim() || 'Seguimiento';
+    return /^re\s*:/i.test(base) ? base : 'Re: ' + base;
+  }
+  function _waDigits(c) {
+    const raw = String(c.movil || c.telefono || '').replace(/\D/g, '');
+    return raw.length >= 7 ? raw : '';
+  }
+  function _gmailUrl(to, subject, body) {
+    return `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to || '')}&su=${encodeURIComponent(subject || '')}&body=${encodeURIComponent(body || '')}`;
+  }
+  async function _loadTaskDraft(cid, stepId, key) {
+    try {
+      const r = await apiFetch(`${API}/lm/ai/drafts?contact_id=${cid}`);
+      const list = (r && r.ok) ? await r.json() : [];
+      const d = list.find(x => x.status === 'approved' && x.step_id === stepId) || null;
+      if (_cpTaskDraft && _cpTaskDraft.key === key) {
+        _cpTaskDraft.data = d; _cpTaskDraft.loading = false;
+        if (_section === 'contact-view' && _cpTaskCtx && _contactView === cid) _renderBody();
+      }
+    } catch { if (_cpTaskDraft && _cpTaskDraft.key === key) _cpTaskDraft.loading = false; }
+  }
+  function _cpTaskBar(cid) {
+    if (!_cpTaskCtx) return '';
+    const seqId = _cpTaskCtx.seqId;
+    const e = (_seqContacts || []).find(x => x.contact_id === cid);
+    const steps = _seqSteps(seqId);
+    const st = e ? steps[(e.paso || 1) - 1] : null;
+    if (!e || !st) return '';
+    const c = _contacts.find(x => x.id === cid) || {};
+    const src = c;
+    const touch = _TOUCH[st.canal] || _TOUCH.email;
+    const seq = _sequences.find(s => s.id === seqId);
+    const today = new Date(new Date().toDateString());
+    const queue = _seqTasks(seqId).filter(t => t.due <= today);
+    const pos = queue.findIndex(t => t.e.contact_id === cid);
+
+    // Borrador IA aprobado del paso (lazy, 1 fetch por contacto+paso)
+    const dkey = `${cid}:${st.id}`;
+    if (!_cpTaskDraft || _cpTaskDraft.key !== dkey) {
+      _cpTaskDraft = { key: dkey, data: null, loading: true };
+      _loadTaskDraft(cid, st.id, dkey);
+    }
+    const draft = _cpTaskDraft.data;
+
+    const variant = _stepVariant(st, c);
+    const rendered = draft ? (draft.cuerpo || '') : _seqRenderTpl(variant.cuerpo || '', src);
+    _seqDoText = rendered;
+    const subject = st.canal === 'email' ? _emailSubjectFor(seqId, st, src, draft) : '';
+    _seqDoSubject = subject;
+    const hasMsg = !!rendered.trim();
+    const vtag = draft ? ` <span class="cp-var-tag" style="background:#EDE9FE;color:#5B21B6">${NI('sparkles')} Mensaje IA</span>`
+               : (_stepVariants(st).length > 1 ? ` <span class="cp-var-tag">Variante ${esc(variant.nombre || '?')}</span>` : '');
+    const disp = esc(rendered).replace(/(\{\{[^}]+\}\})/g, '<span class="seqdo-miss">$1</span>').replace(/\n/g, '<br>');
+
+    // Acciones de 1 click por canal — el canal del paso va primero (primario)
+    const wa = _waDigits(c);
+    const A = [];
+    if (st.canal === 'email' && c.email) A.push(`<a class="btn btn--primary btn--sm" href="${esc(_gmailUrl(c.email, subject, rendered))}" target="_blank" rel="noopener" title="Abre Gmail con destinatario, asunto y mensaje ya puestos">${NI('mail')} Abrir Gmail listo</a>`);
+    if (st.canal === 'whatsapp' && wa) A.push(`<a class="btn btn--primary btn--sm" href="https://wa.me/${wa}?text=${encodeURIComponent(rendered)}" target="_blank" rel="noopener" title="Abre WhatsApp con el mensaje ya puesto">${NI('whatsapp')} Abrir WhatsApp listo</a>`);
+    if ((st.canal === 'linkedin' || st.canal === 'task' || st.canal === 'call') && c.linkedin) A.push(`<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.seqOpenLinkedIn(${cid})" title="Abre LinkedIn en una ventana a la derecha — pega el mensaje copiado">${NI('linkedin')} Abrir LinkedIn</button>`);
+    // Secundarios (los otros canales disponibles, por si quieres cambiar de canal al vuelo)
+    if (st.canal !== 'email' && c.email) A.push(`<a class="btn btn--ghost btn--sm" href="${esc(_gmailUrl(c.email, subject || _emailSubjectFor(seqId, st, src, draft), rendered))}" target="_blank" rel="noopener">${NI('mail')} Gmail</a>`);
+    if (st.canal !== 'linkedin' && st.canal !== 'task' && st.canal !== 'call' && c.linkedin) A.push(`<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqOpenLinkedIn(${cid})">${NI('linkedin')} LinkedIn</button>`);
+    if (st.canal !== 'whatsapp' && wa) A.push(`<a class="btn btn--ghost btn--sm" href="https://wa.me/${wa}?text=${encodeURIComponent(rendered)}" target="_blank" rel="noopener">${NI('whatsapp')} WhatsApp</a>`);
+    if (st.canal === 'call' && (c.telefono || c.movil)) A.unshift(`<a class="btn btn--primary btn--sm" href="tel:${esc((c.telefono || c.movil).replace(/\s/g, ''))}">${NI('phone')} Llamar ${esc(c.telefono || c.movil)}</a>`);
+    if (!A.length) A.push(`<span class="seqdo-nolink">Sin datos de contacto para este canal — complétalos en la ficha</span>`);
+
+    return `<div class="cp-taskbar">
+      <div class="cp-taskbar__top">
+        <span class="cp-taskbar__ico" style="background:${touch[1]}1a;color:${touch[1]}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${touch[2]}</svg></span>
+        <div class="cp-taskbar__ttl"><div class="cp-taskbar__t">Tarea de hoy · ${esc(st.titulo || touch[0])} <b style="color:${touch[1]}">${touch[0]}</b></div><div class="cp-taskbar__s">${seq ? esc(seq.nombre) + ' · ' : ''}Día ${st.dia || 1}${pos >= 0 && queue.length ? ` · ${pos + 1} de ${queue.length} para hoy` : ''}${seq && seq.timezone ? ` · 🕐 envía ≈ ${_suggestWindow(seq.timezone).her} tu hora` : ''}</div></div>
+        <button class="cp-taskbar__exit" onclick="LeadManagerModule.seqDoExit()">‹ Volver a tareas</button>
+      </div>
+      ${st.canal === 'email' && subject ? `<div class="cp-taskbar__subj"><span class="cp-taskbar__subj-l">Asunto</span><span class="cp-taskbar__subj-v">${esc(subject)}</span><button class="seqdo-copy" onclick="LeadManagerModule.seqDoCopySubject()">${NI('copy')}</button>${/^re\s*:/i.test(subject) ? `<span class="lm-vb" style="background:#FEF3C7;color:#B45309" title="Follow-up: usa Re: del primer email para simular el hilo">hilo Re:</span>` : ''}</div>` : ''}
+      ${hasMsg
+        ? `<div class="cp-taskbar__tpl"><div class="seqdo-tpl-hd"><span>Mensaje${vtag}</span><span style="display:flex;gap:6px"><button class="seqdo-copy" onclick="LeadManagerModule.openAiDrafts(${cid},${seqId})">${NI('sparkles')} Escribir con IA</button><button class="seqdo-copy" onclick="LeadManagerModule.seqDoCopy()">${NI('copy')} Copiar</button></span></div><div class="seqdo-tpl">${disp}</div></div>`
+        : `<div class="cp-taskbar__notpl">Este paso no tiene mensaje. <a href="#" onclick="LeadManagerModule.seqDoEditStep(${st.id});return false;">Añádelo</a> con variables — o <a href="#" onclick="LeadManagerModule.openAiDrafts(${cid},${seqId});return false;">✨ escríbelo con IA</a>.</div>`}
+      <div class="cp-taskbar__dispo"><span class="cp-taskbar__dispo-l">Marcar:</span>${_DISPOS.map(d => `<button class="cp-dispo-b" onclick="LeadManagerModule.seqDoDisposition('${d[0]}')">${d[1]}</button>`).join('')}</div>
+      <div class="cp-taskbar__acts">
+        ${A.join('')}
+        <span class="cp-taskbar__sp"></span>
+        <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqDoSkip()">Saltar</button>
+        <button class="btn btn--primary btn--sm" id="seqdo-done" onclick="LeadManagerModule.seqDoDone()">✓ Hecha → siguiente</button>
+      </div>
+    </div>`;
+  }
+  function seqDoCopySubject() {
+    const s = _seqDoSubject || ''; if (!s) return;
+    const ok = () => showBanner('✓ Asunto copiado', 'success');
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(s).then(ok).catch(() => _seqDoCopyFallback(s, ok));
+    else _seqDoCopyFallback(s, ok);
+  }
+  function _seqDoRender() {
+    if (!_seqDo) return;
+    const seqId = _seqDo.seqId, cid = _seqDo.cid;
+    const today = new Date(new Date().toDateString());
+    const queue = _seqTasks(seqId).filter(t => t.due <= today);
+    const e = (_seqContacts || []).find(x => x.contact_id === cid);
+    const steps = _seqSteps(seqId);
+    const st = e ? steps[(e.paso || 1) - 1] : null;
+    if (!e || !st) { seqDoClose(); return; }
+    const c = _contacts.find(x => x.id === cid) || {};
+    const src = { nombre: c.nombre || e.nombre, apellido: c.apellido || e.apellido, email: c.email || e.email, cargo: c.cargo || e.cargo, company_nombre: c.company_nombre || c.empresa_nombre || e.company_nombre, ciudad: c.ciudad, region: c.region, pais: c.pais, seniority: c.seniority, departamento: c.departamento };
+    const full = [src.nombre, src.apellido].filter(Boolean).join(' ') || src.email || '—';
+    const touch = _TOUCH[st.canal] || _TOUCH.email;
+    const pos = queue.findIndex(t => t.e.contact_id === cid);
+    const rendered = _seqRenderTpl(st.plantilla, src);
+    _seqDoText = rendered;
+    const disp = esc(rendered).replace(/(\{\{[^}]+\}\})/g, '<span class="seqdo-miss">$1</span>').replace(/\n/g, '<br>');
+    const chip = (lbl, val) => val ? `<span class="seqdo-chip"><b>${lbl}:</b> ${esc(val)}</span>` : '';
+    document.getElementById('seq-do-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'seq-do-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = ev => { if (ev.target === m) seqDoClose(); };
+    m.innerHTML = `<div class="fin-pi-box seqdo-box">
+      <div class="seqdo-hd">
+        <span class="seqdo-ico" style="background:${touch[1]}1a;color:${touch[1]}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${touch[2]}</svg></span>
+        <div class="seqdo-hd__tt"><div class="seqdo-hd__t">${esc(st.titulo || touch[0])} <b style="color:${touch[1]}">${touch[0]}</b></div><div class="seqdo-hd__s">Día ${st.dia || 1}${pos >= 0 && queue.length ? ` · Tarea ${pos + 1} de ${queue.length} para hoy` : ''}</div></div>
+        <button class="fin-pi-x" onclick="LeadManagerModule.seqDoClose()">✕</button>
+      </div>
+      <div class="seqdo-body">
+        <div class="seqdo-contact">
+          <img class="seqdo-av" src="${_av(full)}" alt=""/>
+          <div class="seqdo-contact__i">
+            <div class="seqdo-name">${esc(full)}</div>
+            <div class="seqdo-role">${esc([src.cargo, src.company_nombre].filter(Boolean).join(' · ') || '—')}</div>
+            <div class="seqdo-chips">${chip('Email', src.email)}${chip('Ciudad', src.ciudad)}${chip('Seniority', src.seniority)}</div>
+          </div>
+        </div>
+        <div class="seqdo-do">
+          ${c.linkedin ? `<a class="btn btn--primary btn--sm seqdo-li" href="${esc(c.linkedin)}" target="_blank" rel="noopener">Abrir LinkedIn ↗</a>` : `<span class="seqdo-nolink">Sin LinkedIn en la ficha</span>`}
+          <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openContactPage(${cid})">Ver ficha completa ›</button>
+        </div>
+        <div class="seqdo-tplwrap">
+          <div class="seqdo-tpl-hd"><span>Mensaje del paso</span>${st.plantilla ? `<button class="seqdo-copy" onclick="LeadManagerModule.seqDoCopy()">${NI('copy')} Copiar</button>` : ''}</div>
+          ${st.plantilla
+            ? `<div class="seqdo-tpl">${disp}</div>`
+            : `<div class="seqdo-tpl seqdo-tpl--empty">Este paso aún no tiene plantilla. <a href="#" onclick="LeadManagerModule.seqDoEditStep(${st.id});return false;">Añádela en el paso</a> usando variables como <code>//nombre//</code>.</div>`}
+        </div>
+      </div>
+      <div class="seqdo-ft">
+        <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqDoSkip()">Saltar</button>
+        <button class="btn btn--primary" id="seqdo-done" onclick="LeadManagerModule.seqDoDone()">✓ Hecha → siguiente</button>
+      </div>
+    </div>`;
+    document.body.appendChild(m);
+  }
+  function seqDoCopy() {
+    const txt = _seqDoText || ''; if (!txt) return;
+    const ok = () => showBanner('✓ Mensaje copiado', 'success');
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(ok).catch(() => _seqDoCopyFallback(txt, ok));
+    else _seqDoCopyFallback(txt, ok);
+  }
+  function _seqDoCopyFallback(txt, cb) {
+    const ta = document.createElement('textarea'); ta.value = txt; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.focus(); ta.select();
+    try { document.execCommand('copy'); cb && cb(); } catch (e) { showBanner('No se pudo copiar', 'error'); }
+    document.body.removeChild(ta);
+  }
+  async function seqDoDone() {
+    if (!_cpTaskCtx) return;
+    const seqId = _cpTaskCtx.seqId, cid = _contactView;
+    const btn = document.getElementById('seqdo-done'); if (btn) btn.disabled = true;
+    try {
+      await _seqCompleteStep(seqId, cid);
+      _seqContacts = null; await _seqLoadContacts(seqId);
+      await _reloadContacts();
+      const today = new Date(new Date().toDateString());
+      const next = _seqTasks(seqId).filter(t => t.due <= today)[0];
+      if (next) { openContactPage(next.e.contact_id, { seqId: seqId }); showBanner('✓ Hecha · siguiente', 'success'); }
+      else { seqDoExit(); showBanner('🎉 ¡No quedan tareas para hoy!', 'success'); }
+    } catch (err) { if (btn) btn.disabled = false; showBanner('Error: ' + err.message, 'error'); }
+  }
+  function seqDoSkip() {
+    if (!_cpTaskCtx) return;
+    const seqId = _cpTaskCtx.seqId, cid = _contactView;
+    const today = new Date(new Date().toDateString());
+    const queue = _seqTasks(seqId).filter(t => t.due <= today);
+    const i = queue.findIndex(t => t.e.contact_id === cid);
+    const next = i >= 0 ? queue[i + 1] : queue[0];
+    if (next && next.e.contact_id !== cid) openContactPage(next.e.contact_id, { seqId: seqId });
+    else seqDoExit();
+  }
+  function _stepRow(st) {
+    const t = _TOUCH[st.canal] || _TOUCH.email;
+    return `<div class="lm-step">
+      <div class="lm-step__day"><span>Día</span><b>${st.dia}</b></div>
+      <div class="lm-step__rail"><span class="lm-step__ico" style="background:${t[1]}1a;color:${t[1]}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${t[2]}</svg></span></div>
+      <div class="lm-step__body">
+        <div class="lm-step__top"><span class="lm-step__t">${esc(st.titulo || t[0])}</span><span class="lm-step__canal" style="color:${t[1]}">${t[0]}</span></div>
+        ${st.plantilla ? `<div class="lm-step__tpl">${esc(st.plantilla)}</div>` : ''}
+      </div>
+      <div class="lm-step__acts">
+        <button class="lm-step__btn" onclick="LeadManagerModule.openStepDrawer(${st.sequence_id},${st.id})" title="Editar"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+        <button class="lm-step__btn lm-step__btn--del" onclick="LeadManagerModule.confirmDeleteStep(${st.id})" title="Eliminar"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>
+      </div>
+    </div>`;
+  }
+
+  // ── Helpers de actividad (Fase 4) ──
+  const _ACT = {
+    email_enviado:    ['Email enviado',      '#E07B12', _TOUCH.email[2]],
+    linkedin_visita:  ['LinkedIn visitado',  '#0A66C2', _TOUCH.linkedin[2]],
+    linkedin_connect: ['LinkedIn connect',   '#0A66C2', _TOUCH.linkedin[2]],
+    linkedin_msg:     ['LinkedIn mensaje',   '#0A66C2', _TOUCH.linkedin[2]],
+    llamada:          ['Llamada',            '#0E8A4C', _TOUCH.call[2]],
+    followup:         ['Follow-up',          '#C28A0B', '<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/>'],
+    respuesta:        ['Respuesta recibida', '#0D9488', '<polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/>'],
+    reunion:          ['Reunión agendada',   '#7C3AED', '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>'],
+    nota:             ['Nota interna',       '#8a837a', '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>'],
+    stage:            ['Stage actualizado',  '#57534E', '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>'],
+  };
+  const _ACT_OPTS = ['email_enviado', 'llamada', 'linkedin_msg', 'linkedin_connect', 'linkedin_visita', 'respuesta', 'reunion', 'followup', 'nota', 'stage'];
+  function _actMeta(t) { return _ACT[t] || _ACT.nota; }
+  function _leadName(id) { const l = _data.find(x => x.id === id); return l ? l.nombre : null; }
+  function _leadClientId(id) { const l = _data.find(x => x.id === id); return l ? l.outbound_client_id : null; }
+  function _actClient(a) { return a.outbound_client_id || _leadClientId(a.lead_id); }
+  function _leadActs(leadId) { return _activities.filter(a => a.lead_id === leadId).sort((x, y) => new Date(y.fecha) - new Date(x.fecha)); }
+  function _clientActs(cid) { const ids = new Set(_clientLeads(cid).map(l => l.id)); return _activities.filter(a => _actClient(a) === cid || ids.has(a.lead_id)).sort((x, y) => new Date(y.fecha) - new Date(x.fecha)); }
+  function _leadNextTask(leadId) { return _leadActs(leadId).filter(a => a.estado === 'pendiente').sort((x, y) => new Date(x.fecha) - new Date(y.fecha))[0] || null; }
+  function _fmtActDate(f) {
+    if (!f) return ''; const d = new Date(f), now = new Date();
+    const sameDay = d.toDateString() === now.toDateString();
+    return (sameDay ? 'Hoy ' : '') + d.toLocaleDateString('es-ES', sameDay ? { hour: '2-digit', minute: '2-digit' } : { day: '2-digit', month: 'short' });
+  }
+  function _actRow(a, showLead) {
+    const m = _actMeta(a.tipo), lead = _leadName(a.lead_id), cli = _clientName(_actClient(a));
+    const pend = a.estado === 'pendiente';
+    const overdue = pend && new Date(a.fecha) < new Date(new Date().toDateString());
+    const ctx = [showLead && lead, cli].filter(Boolean).map(esc).join(' · ');
+    return `<div class="lm-act${pend ? ' lm-act--pend' : ''}">
+      <span class="lm-act__ico" style="background:${m[1]}1a;color:${m[1]}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${m[2]}</svg></span>
+      <div class="lm-act__body">
+        <div class="lm-act__top"><span class="lm-act__t">${m[0]}${pend ? ' <span class="lm-act__pendtag">Pendiente</span>' : ''}</span><span class="lm-act__date${overdue ? ' lm-act__date--over' : ''}">${_fmtActDate(a.fecha)}</span></div>
+        ${a.nota ? `<div class="lm-act__note">${esc(a.nota)}</div>` : ''}
+        ${ctx ? `<div class="lm-act__ctx">${ctx}</div>` : ''}
+      </div>
+      <div class="lm-act__acts">
+        ${pend ? `<button class="lm-step__btn" title="Marcar hecha" onclick="LeadManagerModule.markActDone(${a.id})"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button>` : ''}
+        <button class="lm-step__btn lm-step__btn--del" title="Eliminar" onclick="LeadManagerModule.confirmDeleteActivity(${a.id})"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>
+      </div>
+    </div>`;
+  }
+  function _vActivities() {
+    const list = [..._activities].sort((x, y) => new Date(y.fecha) - new Date(x.fecha));
+    return `
+      <div class="lm-sec-head">
+        <div><h2 class="lm-sec-title">Actividades</h2><p class="lm-sec-sub">Feed de touches: emails, LinkedIn, llamadas, respuestas, reuniones…</p></div>
+        ${_data.length ? `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openActivityDrawer()">＋ Registrar actividad</button>` : ''}
+      </div>
+      ${list.length ? `<div class="lm-feed">${list.map(a => _actRow(a, true)).join('')}</div>`
+        : (_data.length ? _empty('activities', 'Aún no hay actividades', 'Registra tu primer touch (email enviado, LinkedIn, llamada, respuesta…) y aparecerá en el feed.', 'Registrar actividad', 'LeadManagerModule.openActivityDrawer()')
+                        : _empty('activities', 'Primero crea leads', 'Las actividades se registran sobre un lead. Crea uno para empezar.', '', ''))}`;
+  }
+  function _allSeqTasks() {
+    const out = [];
+    (_contacts || []).forEach(c => {
+      (Array.isArray(c.sequences) ? c.sequences : []).forEach(sq => {
+        if (sq.estado && sq.estado !== 'activo') return;
+        const steps = _seqSteps(sq.id);
+        const st = steps[((sq.paso || 1) - 1)];
+        if (!st) return;
+        const due = new Date(sq.enrolled_at || Date.now()); due.setHours(0, 0, 0, 0); due.setDate(due.getDate() + ((st.dia || 1) - 1));
+        out.push({ c: c, sq: sq, st: st, due: due });
+      });
+    });
+    return out.sort((a, b) => a.due - b.due);
+  }
+  function _dayOf(d) { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; }
+  function _relDay(due) {
+    const today = _dayOf(new Date());
+    const diff = Math.round((due - today) / 86400000);
+    const dm = due.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
+    if (diff <= 0) return 'hoy';
+    if (diff === 1) return 'mañana · ' + dm;
+    const wd = due.toLocaleDateString('es-ES', { weekday: 'long' });
+    if (diff <= 6) { const dow = (today.getDay() + 6) % 7; return (diff <= (6 - dow) ? 'este ' : 'el próximo ') + wd + ' · ' + dm; }
+    return 'el ' + wd + ' · ' + dm;
+  }
+  function _pendingTaskCount() {
+    try {
+      const today = _dayOf(new Date());
+      const seq = _allSeqTasks().filter(t => t.due <= today).length;
+      const acts = (_activities || []).filter(a => a.estado === 'pendiente' && _dayOf(a.fecha) <= today).length;
+      return seq + acts;
+    } catch (e) { return 0; }
+  }
+  function _allTaskRow(t, today) {
+    const c = t.c, sq = t.sq, st = t.st, due = t.due;
+    const touch = _TOUCH[st.canal] || _TOUCH.email;
+    const full = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || '—';
+    const overdue = due < today; const isToday = due.getTime() === today.getTime();
+    const dLabel = isToday ? 'Hoy' : overdue ? 'Vencida' : due.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
+    return `<div class="seq-task${overdue ? ' over' : ''}${isToday ? ' today' : ''}" onclick="LeadManagerModule.seqTaskOpen(${sq.id},${c.id})" title="Hacer tarea">
+      <button class="seq-task__ck" onclick="event.stopPropagation();LeadManagerModule.seqTaskDone(${sq.id},${c.id})" title="Marcar hecho sin abrir"></button>
+      <span class="seq-task__ico" style="background:${touch[1]}1a;color:${touch[1]}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${touch[2]}</svg></span>
+      <div class="seq-task__body"><div class="seq-task__t">${esc(st.titulo || touch[0])}<span class="seq-task__ch" style="color:${touch[1]}">${touch[0]}</span></div><div class="seq-task__who">${esc(full)}${c.company_nombre ? ` · ${esc(c.company_nombre)}` : ''} · <span class="seq-task__seq">${esc(sq.nombre)}</span></div></div>
+      <span class="seq-task__go">Hacer ›</span>
+      <span class="seq-task__due">${dLabel}</span>
+    </div>`;
+  }
+  function _vTasks() {
+    const all = _allSeqTasks();
+    const today = _dayOf(new Date());
+    const seqToday = all.filter(t => t.due <= today);
+    const seqFuture = all.filter(t => t.due > today);
+    const acts = _activities.filter(a => a.estado === 'pendiente').sort((x, y) => new Date(x.fecha) - new Date(y.fecha));
+    const actToday = acts.filter(a => _dayOf(a.fecha) <= today);
+    const totalToday = seqToday.length + actToday.length;
+    const nextLine = seqFuture.length ? `<div class="seq-next">Siguiente tarea de secuencia: <b>${_relDay(seqFuture[0].due)}</b>${seqFuture.length > 1 ? ` · +${seqFuture.length - 1} más próximas` : ''}</div>` : '';
+    const anything = all.length || acts.length;
+    const listHtml = `${seqToday.length ? `<div class="lm-tsec-h">De secuencias · hoy (${seqToday.length})</div><div class="seq-tasks">${seqToday.map(t => _allTaskRow(t, today)).join('')}</div>`
+        : (all.length ? `<div class="lm-tsec-h">De secuencias</div><div class="cp-empty2" style="padding:14px 6px">Sin tareas de secuencia para hoy.</div>` : '')}
+      ${nextLine}
+      ${acts.length ? `<div class="lm-tsec-h">Follow-ups y tareas sueltas · ${acts.length}</div><div class="lm-feed">${acts.map(a => _actRow(a, true)).join('')}</div>` : ''}
+      ${anything ? '' : _empty('tasks', 'Sin tareas pendientes', 'Enrola contactos en secuencias o crea follow-ups; aparecerán aquí ordenados por fecha.', _data.length ? 'Nueva tarea' : '', _data.length ? 'LeadManagerModule.openActivityDrawer(null,null,1)' : '')}`;
+    return `
+      <div class="lm-sec-head">
+        <div><h2 class="lm-sec-title">Tareas comerciales</h2><p class="lm-sec-sub">${totalToday} para hoy${seqFuture.length ? ` · ${seqFuture.length} próxima${seqFuture.length === 1 ? '' : 's'}` : ''} — secuencias y follow-ups</p></div>
+        <div class="lm-hd-actions"><div class="task-viewtoggle"><button class="tvt${_taskView === 'calendar' ? '' : ' on'}" onclick="LeadManagerModule.taskSetView('list')">Lista</button><button class="tvt${_taskView === 'calendar' ? ' on' : ''}" onclick="LeadManagerModule.taskSetView('calendar')">Calendario</button></div>${_data.length ? `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openActivityDrawer(null,null,1)">＋ Nueva tarea</button>` : ''}</div>
+      </div>
+      ${_taskView === 'calendar' ? _vTaskCalendar() : listHtml}`;
+  }
+  function _monthStart(d) { return new Date(d.getFullYear(), d.getMonth(), 1); }
+  function _dayKey(d) { const x = _dayOf(d); return x.getFullYear() + '-' + (x.getMonth() + 1) + '-' + x.getDate(); }
+  function taskSetView(v) { _taskView = v; _renderBody(); }
+  function calPrev() { const r = _calRef || _monthStart(new Date()); _calRef = new Date(r.getFullYear(), r.getMonth() - 1, 1); _renderBody(); }
+  function calNext() { const r = _calRef || _monthStart(new Date()); _calRef = new Date(r.getFullYear(), r.getMonth() + 1, 1); _renderBody(); }
+  function calToday() { _calRef = _monthStart(new Date()); _renderBody(); }
+  function _calChip(t) {
+    const c = t.c, sq = t.sq, st = t.st;
+    const touch = _TOUCH[st.canal] || _TOUCH.email;
+    const full = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || '—';
+    const seq = _sequences.find(s => s.id === sq.id);
+    const hr = (seq && seq.timezone) ? _suggestWindow(seq.timezone).her.split('–')[0] : '';
+    return `<button class="cal-chip" style="border-left-color:${touch[1]}" onclick="LeadManagerModule.seqTaskOpen(${sq.id},${c.id})" title="${esc(full)} · ${esc(sq.nombre)}${hr ? ' · sugerido ' + hr : ''}">${hr ? `<span class="cal-chip__hr">${hr}</span>` : ''}<span class="cal-chip__ico" style="color:${touch[1]}"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">${touch[2]}</svg></span><span class="cal-chip__nm">${esc(full)}</span></button>`;
+  }
+  function _vTaskCalendar() {
+    const ref = _calRef || _monthStart(new Date());
+    const y = ref.getFullYear(), mo = ref.getMonth();
+    const startDow = (new Date(y, mo, 1).getDay() + 6) % 7;
+    const dim = new Date(y, mo + 1, 0).getDate();
+    const today = _dayOf(new Date());
+    const byDay = {};
+    _allSeqTasks().forEach(t => { const k = _dayKey(t.due); (byDay[k] = byDay[k] || []).push(t); });
+    const wd = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+    const total = Math.ceil((startDow + dim) / 7) * 7;
+    let cells = '';
+    for (let i = 0; i < total; i++) {
+      const n = i - startDow + 1;
+      if (n < 1 || n > dim) { cells += `<div class="cal-cell cal-cell--out"></div>`; continue; }
+      const d = _dayOf(new Date(y, mo, n));
+      const list = (byDay[_dayKey(d)] || []).sort((a, b) => a.due - b.due);
+      const isToday = d.getTime() === today.getTime();
+      const isPast = d < today;
+      const chips = list.slice(0, 3).map(_calChip).join('');
+      const more = list.length > 3 ? `<div class="cal-more">+${list.length - 3} más</div>` : '';
+      cells += `<div class="cal-cell${isToday ? ' cal-cell--today' : ''}${isPast ? ' cal-cell--past' : ''}"><div class="cal-daynum">${n}</div>${chips}${more}</div>`;
+    }
+    const title = ref.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+    return `<div class="cal-hd"><div class="cal-nav-grp"><button class="cal-nav" onclick="LeadManagerModule.calPrev()" title="Mes anterior">‹</button><button class="cal-nav" onclick="LeadManagerModule.calNext()" title="Mes siguiente">›</button></div><span class="cal-title">${title}</span><button class="cal-today-b" onclick="LeadManagerModule.calToday()">Hoy</button></div>
+      <div class="cal-wdrow">${wd.map(w => `<div class="cal-wd">${w}</div>`).join('')}</div>
+      <div class="cal-grid">${cells}</div>`;
+  }
+  async function markActDone(id) {
+    const a = _activities.find(x => x.id === id); if (!a) return;
+    try {
+      const res = await apiFetch(`${API}/activities/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...a, estado: 'hecha', fecha: new Date().toISOString() }) });
+      if (!res.ok) throw new Error('Error');
+      await load();
+    } catch (e) { alert('Error: ' + e.message); }
+  }
+
+  // ── Inbox / Respuestas (Fase 5) ──
+  const _SENT = {
+    interesado:    ['Interesado',    '#D1FAE5', '#065F46'],
+    mas_info:      ['Pide info',     '#DBEAFE', '#1D4ED8'],
+    reunion:       ['Reunión',       '#EDE9FE', '#6D28D9'],
+    no_interesado: ['No interesado', '#F1EFEC', '#57534E'],
+    no_fit:        ['No fit',        '#FEE2E2', '#B91C1C'],
+    ooo:           ['Out of office', '#FEF3C7', '#92400E'],
+    bounced:       ['Bounced',       '#FEE2E2', '#DC2626'],
+  };
+  const _SENT_ORDER = ['interesado', 'mas_info', 'reunion', 'no_interesado', 'no_fit', 'ooo', 'bounced'];
+  function _replies() { return _activities.filter(a => a.tipo === 'respuesta').sort((x, y) => new Date(y.fecha) - new Date(x.fecha)); }
+  function _inboxCard(a) {
+    const lead = _data.find(l => l.id === a.lead_id);
+    const cli = _clientName(_actClient(a)), cmp = _campaignName(a.campaign_id || lead?.campaign_id);
+    const sub = [lead?.empresa, cli && '◆ ' + cli, cmp && '📣 ' + cmp].filter(Boolean).map(esc).join(' · ');
+    const pills = _SENT_ORDER.map(k => { const s = _SENT[k], on = a.sentimiento === k;
+      return `<button class="lm-sent${on ? ' on' : ''}"${on ? ` style="background:${s[1]};color:${s[2]}"` : ''} onclick="LeadManagerModule.setReplySentiment(${a.id},'${a.sentimiento === k ? '' : k}')">${s[0]}</button>`; }).join('');
+    const stageSel = lead ? `<select class="lm-inbox__stage" onchange="LeadManagerModule.setLeadStage(${lead.id},this.value)">${_ORDER.map(s => `<option value="${s}"${lead.stage === s ? ' selected' : ''}>${STAGE_LABELS[s]}</option>`).join('')}</select>` : '';
+    return `<div class="lm-inbox">
+      <div class="lm-inbox__hd">
+        <img class="lm-inbox__av" src="${_av(lead?.nombre || '?')}" alt="">
+        <div class="lm-inbox__id"><span class="lm-inbox__nm">${esc(lead?.nombre || 'Lead')}</span>${sub ? `<span class="lm-inbox__sub">${sub}</span>` : ''}</div>
+        <span class="lm-inbox__date">${_fmtActDate(a.fecha)}</span>
+      </div>
+      <div class="lm-inbox__msg${a.nota ? '' : ' lm-inbox__msg--empty'}">${a.nota ? esc(a.nota) : 'Respuesta registrada (sin texto).'}</div>
+      <div class="lm-inbox__sent">${pills}</div>
+      <div class="lm-inbox__foot">
+        ${stageSel ? `<span class="lm-inbox__foot-l">Stage</span>${stageSel}` : ''}
+        ${lead ? `<button class="lm-inbox__task" onclick="LeadManagerModule.openActivityDrawer(${lead.id},null,1)">＋ Crear tarea</button>` : ''}
+        <button class="lm-step__btn lm-step__btn--del" title="Eliminar" onclick="LeadManagerModule.confirmDeleteActivity(${a.id})"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>
+      </div>
+    </div>`;
+  }
+  function _vInbox() {
+    const reps = _replies();
+    return `
+      <div class="lm-sec-head">
+        <div><h2 class="lm-sec-title">Inbox / Respuestas</h2><p class="lm-sec-sub">Clasifica respuestas por sentimiento, mueve el stage y crea tareas</p></div>
+        ${_data.length ? `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openActivityDrawer(null,null,0,'respuesta')">＋ Registrar respuesta</button>` : ''}
+      </div>
+      <div id="lm-real-inbox">${_realInboxHtml()}</div>
+      ${reps.length ? `<div class="lm-dash-head" style="margin-top:14px"><h3 class="lm-dash-h3">Respuestas registradas</h3></div><div class="lm-inbox-grid">${reps.map(_inboxCard).join('')}</div>` : ''}`;
+  }
+  async function setReplySentiment(actId, sent) {
+    const a = _activities.find(x => x.id === actId); if (!a) return;
+    a.sentimiento = sent;
+    if ($('lm2-body')) _renderBody();
+    try {
+      const res = await apiFetch(`${API}/activities/${actId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...a, sentimiento: sent }) });
+      if (!res.ok) throw new Error('Error');
+    } catch (e) { console.warn('[lm] sentiment:', e.message); await load(); }
+  }
+  async function setLeadStage(leadId, stage) {
+    const l = _data.find(x => x.id === leadId); if (!l) return;
+    try {
+      const res = await apiFetch(`${API}/leads/${leadId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...l, stage }) });
+      if (!res.ok) throw new Error('Error');
+      await load();
+    } catch (e) { alert('Error: ' + e.message); }
+  }
+
+  function _empty(icon, title, sub, ctaLbl, ctaAction, badge) {
+    return `<div class="lm-empty2">
+      <div class="lm-empty2__ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${_NAV_ICON[icon] || _NAV_ICON.leads}</svg></div>
+      ${badge ? `<span class="lm-empty2__badge">${badge}</span>` : ''}
+      <p class="lm-empty2__t">${title}</p>
+      <p class="lm-empty2__s">${sub}</p>
+      ${ctaLbl ? `<button class="btn btn--primary btn--sm" onclick="${ctaAction}">${ctaLbl}</button>` : ''}
+    </div>`;
+  }
+
+  // ── Dashboard global ──
+  function _vDashboard() {
+    const activos = _clients.filter(c => c.estado === 'activo').length;
+    const pipeline = _data.filter(l => !['ganado', 'perdido'].includes(l.stage));
+    const ganados = _data.filter(l => l.stage === 'ganado').length;
+    const sinClient = _data.filter(l => !l.outbound_client_id).length;
+    const kpi = (l, v, s, t) => `<div class="lm-mc lm-mc--${t}"><span class="lm-mc__l">${l}</span><span class="lm-mc__v">${v}</span><span class="lm-mc__s">${s}</span></div>`;
+    return `
+      <div class="lm-sec-head">
+        <div><h2 class="lm-sec-title">Lead Manager</h2><p class="lm-sec-sub">Operación outbound por cliente, campaña y secuencia</p></div>
+        <div class="lm-sec-actions">
+          <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openDrawer()">＋ Nuevo lead</button>
+          <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openClientDrawer()">＋ Nuevo cliente outbound</button>
+        </div>
+      </div>
+      <div class="lm-metrics">
+        ${kpi('Clientes outbound', _clients.length, `${activos} activo${activos !== 1 ? 's' : ''}`, 'a')}
+        ${kpi('Leads en pipeline', pipeline.length, _money(_sumv(pipeline)) + ' estimado', 'b')}
+        ${kpi('Ganados', ganados, 'leads cerrados', 'c')}
+        ${kpi('Sin cliente', sinClient, 'por asignar', 'd')}
+        ${kpi('Campañas activas', _campaigns.filter(c => c.estado === 'activa').length, `${_campaigns.length} en total`, 'b')}
+        ${kpi('Tareas pendientes', _activities.filter(a => a.estado === 'pendiente').length, 'follow-ups por hacer', 'c')}
+      </div>
+      <div id="lm-today-card">${_todayData ? _todayCardHtml(_todayData) : '<div class="cp-card lm-today"><div class="cp-card__t">Hoy — outreach automático</div><div class="cp-empty2" style="padding:12px">Cargando…</div></div>'}</div>
+      <div class="lm-dash-head"><h3 class="lm-dash-h3">Clientes outbound</h3>${_clients.length ? `<button class="lm-link" onclick="LeadManagerModule.go('clients')">Ver todos →</button>` : ''}</div>
+      ${_clients.length ? `<div class="lm-obc-grid">${_clients.slice(0, 6).map(_obcCard).join('')}</div>`
+        : _empty('clients', 'Aún no tienes clientes outbound', 'Crea tu primer cliente para organizar campañas, secuencias y leads como un workspace propio.', 'Nuevo cliente outbound', 'LeadManagerModule.openClientDrawer()')}`;
+  }
+  function _obcCard(c) {
+    const leads = _clientLeads(c.id);
+    return `<button class="lm-obc" onclick="LeadManagerModule.openClient(${c.id})">
+      <div class="lm-obc__top"><div class="lm-obc__ava">${esc((c.nombre || '?').slice(0, 1).toUpperCase())}</div><div class="lm-obc__id"><span class="lm-obc__nm">${esc(c.nombre)}</span>${_obcBadge(c.estado)}</div></div>
+      <div class="lm-obc__stats"><span><b>${leads.length}</b> leads</span><span><b>${_money(_sumv(leads))}</b> pipeline</span><span><b>—</b> replies</span></div>
+      ${c.proxima_accion ? `<div class="lm-obc__next"><span class="lm-obc__next-l">Próxima acción</span> ${esc(c.proxima_accion)}</div>` : ''}
+      <div class="lm-obc__cta">Abrir workspace <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></div>
+    </button>`;
+  }
+  function _vClients() {
+    return `
+      <div class="lm-sec-head">
+        <div><h2 class="lm-sec-title">Clientes outbound</h2><p class="lm-sec-sub">Cada cliente es un workspace con sus campañas, secuencias y leads</p></div>
+        <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openClientDrawer()">＋ Nuevo cliente outbound</button>
+      </div>
+      ${_clients.length ? `<div class="lm-obc-grid">${_clients.map(_obcCard).join('')}</div>`
+        : _empty('clients', 'Aún no tienes clientes outbound', 'Crea tu primer cliente para organizar campañas, secuencias y leads como un workspace propio.', 'Nuevo cliente outbound', 'LeadManagerModule.openClientDrawer()')}`;
+  }
+
+  // ── Workspace por cliente (detalle tipo CRM) ──
+  function _vClientDetail(id) {
+    const c = _clients.find(x => x.id === id);
+    if (!c) return _vClients();
+    const leads = _clientLeads(id);
+    const byStage = {}; _ORDER.forEach(s => byStage[s] = leads.filter(l => l.stage === s).length);
+    const pipe = leads.filter(l => !['ganado', 'perdido'].includes(l.stage));
+    const tabs = ['Overview', 'Leads', 'Campañas', 'Secuencias', 'Actividades', 'Respuestas', 'Reportes', 'Notas'];
+    const tabBtns = tabs.map((t, i) => `<button class="lm-ws-tab${i === 0 ? ' active' : ''}" onclick="LeadManagerModule.clientTab(this,'${t}')">${t}</button>`).join('');
+    const pipeBar = _ORDER.map(s => `<div class="lm-pipe__seg lm-pipe__seg--${s}"><span class="lm-pipe__n">${byStage[s]}</span><span class="lm-pipe__l">${STAGE_LABELS[s]}</span></div>`).join('');
+    const field = (l, v) => `<div class="lm-ws-field"><span class="lm-ws-field__l">${l}</span><span class="lm-ws-field__v">${v || '—'}</span></div>`;
+    return `
+      <button class="lm-back" onclick="LeadManagerModule.go('clients')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg> Clientes outbound</button>
+      <div class="lm-ws">
+        <aside class="lm-ws-side">
+          <div class="lm-ws-side__top"><div class="lm-ws-side__ava">${esc((c.nombre || '?').slice(0, 1).toUpperCase())}</div><div><div class="lm-ws-side__nm">${esc(c.nombre)}</div>${_obcBadge(c.estado)}</div></div>
+          <div class="lm-ws-side__acts">
+            <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openDrawer(null,${c.id})">＋ Nuevo lead</button>
+            <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openClientDrawer(${c.id})">Editar cliente</button>
+          </div>
+          ${field('Responsable', esc(c.responsable))}
+          ${field('Canal principal', esc(c.canal))}
+          ${field('Mercado objetivo', esc(c.mercado))}
+          ${field('ICP', esc(c.icp))}
+          ${field('Website', c.website ? `<a href="${esc(c.website)}" target="_blank" rel="noopener" class="lm-link">${esc(c.website)}</a>` : '—')}
+          ${field('Leads cargados', String(leads.length))}
+          ${field('Valor estimado', _money(_sumv(leads)))}
+        </aside>
+        <section class="lm-ws-main">
+          <div class="lm-ws-pipe"><div class="lm-ws-pipe__hd">Pipeline · ${pipe.length} en juego</div><div class="lm-pipe">${pipeBar}</div></div>
+          <div class="lm-ws-tabs">${tabBtns}</div>
+          <div class="lm-ws-tabbody" id="lm-ws-tabbody">${_clientTabBody('Overview', c, leads)}</div>
+        </section>
+      </div>`;
+  }
+  function clientTab(btn, tab) {
+    document.querySelectorAll('.lm-ws-tab').forEach(b => b.classList.toggle('active', b === btn));
+    const c = _clients.find(x => x.id === _activeClient); const body = $('lm-ws-tabbody');
+    if (c && body) body.innerHTML = _clientTabBody(tab, c, _clientLeads(c.id));
+  }
+  function _clientTabBody(tab, c, leads) {
+    if (tab === 'Leads') {
+      return leads.length ? `<div class="lm-cards">${leads.map(_lmCard).join('')}</div>`
+        : _empty('leads', 'Sin leads para este cliente', 'Crea leads y quedarán asociados a este cliente outbound.', 'Nuevo lead', `LeadManagerModule.openDrawer(null,${c.id})`);
+    }
+    if (tab === 'Campañas') {
+      const cs = _sortCmp(_campaignsByClient(c.id));
+      return `<div class="lm-tab-head"><span class="lm-tab-head__c">${cs.length} campaña${cs.length !== 1 ? 's' : ''}</span><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openCampaignDrawer(null,${c.id})">＋ Nueva campaña</button></div>
+        ${cs.length ? `<div class="lm-cmp-grid">${cs.map(x => _campaignCard(x, false)).join('')}</div>`
+          : _empty('campaigns', 'Sin campañas para este cliente', 'Crea una campaña y asígnale leads de este cliente.', 'Nueva campaña', `LeadManagerModule.openCampaignDrawer(null,${c.id})`)}`;
+    }
+    if (tab === 'Secuencias') {
+      const ss = _sortSeq(_sequencesByClient(c.id));
+      return `<div class="lm-tab-head"><span class="lm-tab-head__c">${ss.length} secuencia${ss.length !== 1 ? 's' : ''}</span><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openSequenceDrawer(null,${c.id})">＋ Nueva secuencia</button></div>
+        ${ss.length ? `<div class="lm-cmp-grid">${ss.map(x => _sequenceCard(x, false)).join('')}</div>`
+          : _empty('sequences', 'Sin secuencias para este cliente', 'Crea una secuencia y define sus pasos (Día 1 Email…).', 'Nueva secuencia', `LeadManagerModule.openSequenceDrawer(null,${c.id})`)}`;
+    }
+    if (tab === 'Actividades') {
+      const acts = _clientActs(c.id);
+      return `<div class="lm-tab-head"><span class="lm-tab-head__c">${acts.length} actividad${acts.length !== 1 ? 'es' : ''}</span><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openActivityDrawer(null,${c.id})">＋ Registrar actividad</button></div>
+        ${acts.length ? `<div class="lm-feed">${acts.map(a => _actRow(a, true)).join('')}</div>`
+          : _empty('activities', 'Sin actividades para este cliente', 'Registra un touch o tarea sobre alguno de sus leads.', 'Registrar actividad', `LeadManagerModule.openActivityDrawer(null,${c.id})`)}`;
+    }
+    if (tab === 'Respuestas') {
+      const reps = _clientActs(c.id).filter(a => a.tipo === 'respuesta');
+      return `<div class="lm-tab-head"><span class="lm-tab-head__c">${reps.length} respuesta${reps.length !== 1 ? 's' : ''}</span><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openActivityDrawer(null,${c.id},0,'respuesta')">＋ Registrar respuesta</button></div>
+        ${reps.length ? `<div class="lm-inbox-grid">${reps.map(_inboxCard).join('')}</div>`
+          : _empty('inbox', 'Sin respuestas para este cliente', 'Registra respuestas (tipo "Respuesta recibida") sobre sus leads para clasificarlas.', 'Registrar respuesta', `LeadManagerModule.openActivityDrawer(null,${c.id},0,'respuesta')`)}`;
+    }
+    if (tab === 'Overview') {
+      const recent = _clientActs(c.id).slice(0, 6);
+      const act = recent.length
+        ? `<div class="lm-feed lm-feed--mini">${recent.map(a => _actRow(a, true)).join('')}</div>`
+        : `<div class="lm-act-empty"><div class="lm-act-empty__i">🕒</div><p>Sin actividad aún</p><span>Registra emails, llamadas, respuestas… desde la pestaña Actividades.</span></div>`;
+      return `<div class="lm-ov">
+        <div class="lm-ov__col">
+          <h4 class="lm-ov__h">Resumen</h4>
+          <div class="lm-ov__row"><span>Leads</span><b>${leads.length}</b></div>
+          <div class="lm-ov__row"><span>En pipeline</span><b>${leads.filter(l => !['ganado','perdido'].includes(l.stage)).length}</b></div>
+          <div class="lm-ov__row"><span>Ganados</span><b>${leads.filter(l => l.stage === 'ganado').length}</b></div>
+          <div class="lm-ov__row"><span>Valor estimado</span><b>${_money(_sumv(leads))}</b></div>
+          ${c.notas ? `<h4 class="lm-ov__h" style="margin-top:16px">Notas</h4><p class="lm-ov__notes">${esc(c.notas)}</p>` : ''}
+        </div>
+        <div class="lm-ov__col"><h4 class="lm-ov__h">Actividad reciente</h4>${act}</div>
+      </div>`;
+    }
+    const map = {
+      'Campañas':   ['campaigns', 'Campañas del cliente', 'Crea campañas y asígnales leads y secuencias.', 'Fase 2'],
+      'Secuencias': ['sequences', 'Secuencias del cliente', 'Define pasos (Email, LinkedIn, llamada) y registra su ejecución.', 'Fase 3'],
+      'Actividades':['activities','Actividades del cliente', 'Email enviado, LinkedIn touch, llamada, respuesta… asociadas a este cliente.', 'Fase 4'],
+      'Respuestas': ['inbox', 'Respuestas', 'Conecta email o registra respuestas manualmente para verlas aquí.', 'Fase 5'],
+      'Reportes':   ['reports', 'Reportes del cliente', 'Reply rate, meetings y rendimiento por campaña y secuencia.', 'Fase 6'],
+      'Notas':      ['templates', 'Notas y assets', 'Mensajes aprobados, ángulos, objeciones y plantillas del cliente.', 'Fase 1+'],
+    };
+    const m = map[tab] || ['leads', tab, 'Sección en preparación.', ''];
+    return _empty(m[0], m[1], m[2], '', '', m[3]);
+  }
+
+  // ── Reportes (datos reales + data-viz premium con Chart.js) ──
+  const _REP_ICON = {
+    contacts: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>',
+    enrolled: '<line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>',
+    reply: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+    meeting: '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
+    building: '<rect x="4" y="3" width="16" height="18" rx="1.5"/><path d="M9 21v-4h6v4"/><path d="M9 7h1M14 7h1M9 11h1M14 11h1"/>',
+  };
+  function _repKpi(iconKey, n, l, color) {
+    return `<div class="rep-kpi"><span class="rep-kpi__i" style="background:${color}1a;color:${color}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${_REP_ICON[iconKey] || ''}</svg></span><div class="rep-kpi__b"><div class="rep-kpi__v" data-count="${n}">0</div><div class="rep-kpi__l">${l}</div></div></div>`;
+  }
+  function _vReports() {
+    const acts = _activities || [];
+    const done = acts.filter(a => a.estado === 'hecha');
+    const today = _dayOf(new Date());
+    const chOf = t => (t === 'email_enviado' ? 'email' : /^linkedin/.test(t) ? 'linkedin' : t === 'llamada' ? 'call' : 'otro');
+    const outreach = new Set(['email_enviado', 'linkedin_msg', 'linkedin_connect', 'linkedin_visita', 'llamada']);
+    const uniq = arr => new Set(arr).size;
+    const enrolled = (_contacts || []).filter(c => (c.sequences || []).length).length;
+    const activeEnr = (_contacts || []).filter(c => (c.sequences || []).some(s => (s.estado || 'activo') === 'activo')).length;
+    const contacted = uniq(done.filter(a => a.contact_id && outreach.has(a.tipo)).map(a => a.contact_id));
+    const replied = uniq(acts.filter(a => a.tipo === 'respuesta' && a.contact_id).map(a => a.contact_id));
+    const meetings = uniq(acts.filter(a => a.tipo === 'reunion' && a.contact_id).map(a => a.contact_id));
+    const pct = (a, b) => b ? Math.round(a / b * 100) : 0;
+    const days = []; for (let i = 13; i >= 0; i--) { const d = new Date(today); d.setDate(d.getDate() - i); days.push(d); }
+    const dailyOut = days.map(d => done.filter(a => outreach.has(a.tipo) && _dayOf(a.fecha).getTime() === d.getTime()).length);
+    const dailyLabels = days.map(d => d.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }));
+    const chStat = ch => ({ hoy: done.filter(a => chOf(a.tipo) === ch && _dayOf(a.fecha).getTime() === today.getTime()).length, tot: done.filter(a => chOf(a.tipo) === ch).length });
+    const CH = [['LinkedIn', 'linkedin', '#0A66C2', (_TOUCH.linkedin || [])[2]], ['Email', 'email', '#006B3F', (_TOUCH.email || [])[2]], ['Llamada', 'call', '#B45309', (_TOUCH.call || [])[2]]];
+    const cliRows = (_clients || []).map(cl => {
+      const cids = new Set((_contacts || []).filter(c => c.outbound_client_id === cl.id).map(c => c.id));
+      const act = done.filter(x => cids.has(x.contact_id)).length;
+      const rep = uniq(acts.filter(x => x.tipo === 'respuesta' && cids.has(x.contact_id)).map(x => x.contact_id));
+      const mt = uniq(acts.filter(x => x.tipo === 'reunion' && cids.has(x.contact_id)).map(x => x.contact_id));
+      return { nombre: cl.nombre, contactos: cids.size, act, rep, mt };
+    }).filter(r => r.contactos || r.act).sort((x, y) => y.act - x.act);
+    const cliHtml = cliRows.length ? cliRows.map(r => `<tr><td>${esc(r.nombre)}</td><td>${r.contactos}</td><td>${r.act}</td><td>${r.rep}</td><td>${r.mt}</td></tr>`).join('') : `<tr><td colspan="5" class="rep-empty-td">Aún sin actividad registrada</td></tr>`;
+    const dispCounts = _DISPOS.map(d => ({ label: d[1], n: (_contacts || []).filter(c => c.disposition === d[0]).length, color: d[2] })).filter(x => x.n > 0);
+    _repChartData = { dailyLabels, dailyOut, dispCounts };
+    const stages = [['Enrolados', enrolled, 'var(--brand, #00804C)'], ['Contactados', contacted, '#1E5FA8'], ['Respuestas', replied, '#15803D'], ['Reuniones', meetings, '#5B4BC4']];
+    const funnelHtml = stages.map((s, i) => {
+      const base = stages[0][1] || 1;
+      const conv = i === 0 ? '<span class="rep-fn__conv rep-fn__conv--base">base</span>' : `<span class="rep-fn__conv">${pct(s[1], stages[i - 1][1])}% ↳</span>`;
+      return `<div class="rep-fn"><div class="rep-fn__top"><span class="rep-fn__lbl">${s[0]}</span>${conv}<span class="rep-fn__n">${s[1]}</span></div><div class="rep-fn__track"><div class="rep-fn__fill" style="width:${Math.max(4, Math.round(s[1] / base * 100))}%;background:${s[2]}"></div></div></div>`;
+    }).join('');
+    const chHtml = CH.map(([lbl, ch, color, icon]) => { const s = chStat(ch); return `<div class="rep-ch"><span class="rep-ch__i" style="background:${color}1a;color:${color}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${icon || ''}</svg></span><div class="rep-ch__b"><div class="rep-ch__n" data-count="${s.tot}">0</div><div class="rep-ch__l">${lbl}</div></div><span class="rep-ch__hoy">${s.hoy ? '+' + s.hoy + ' hoy' : '—'}</span></div>`; }).join('');
+    return `<div class="lm-sec-head"><div><h2 class="lm-sec-title">Reportes</h2><p class="lm-sec-sub">Rendimiento outbound — de tu actividad registrada</p></div></div>
+      <div class="rep-kpis">${_repKpi('contacts', _contacts.length, 'Contactos', '#00804C')}${_repKpi('enrolled', activeEnr, 'Enrolados activos', '#1E5FA8')}${_repKpi('reply', replied, 'Respuestas', '#15803D')}${_repKpi('meeting', meetings, 'Reuniones', '#5B4BC4')}</div>
+      <div class="rep-grid2">
+        <div class="cp-card"><div class="cp-card__t">Embudo de conversión</div><div class="rep-funnel">${funnelHtml}</div><div class="rep-rates"><span><b>${pct(replied, contacted)}%</b> reply rate</span><span><b>${pct(meetings, enrolled)}%</b> meeting rate</span></div></div>
+        <div class="cp-card"><div class="cp-card__t">Actividad · últimos 14 días</div><div class="rep-chart"><canvas id="rep-daily"></canvas></div></div>
+      </div>
+      <div class="cp-card"><div class="cp-card__t">Por canal</div><div class="rep-channels">${chHtml}</div></div>
+      <div class="rep-grid2">
+        <div class="cp-card"><div class="cp-card__t">Por cliente outbound</div><div class="clients-table-wrap"><table class="clients-table"><thead><tr><th>Cliente</th><th>Contactos</th><th>Activ.</th><th>Resp.</th><th>Reun.</th></tr></thead><tbody>${cliHtml}</tbody></table></div></div>
+        <div class="cp-card"><div class="cp-card__t">Disposiciones</div>${dispCounts.length ? `<div class="rep-chart rep-chart--sm"><canvas id="rep-dispo"></canvas></div>` : `<div class="rep-empty">Marca disposiciones (Respondió, No contactar…) y verás aquí su distribución.</div>`}</div>
+      </div>`;
+  }
+  function _vSettings() {
+    const views = _lmViewsGet();
+    return `<div class="lm-sec-head"><div><h2 class="lm-sec-title">Configuración</h2><p class="lm-sec-sub">Ajustes y datos del Lead Manager</p></div></div>
+      <div class="rep-kpis">${_repKpi('contacts', _clients.length, 'Clientes', '#00804C')}${_repKpi('enrolled', _sequences.length, 'Secuencias', '#1E5FA8')}${_repKpi('reply', _campaigns.length, 'Campañas', '#5B4BC4')}${_repKpi('building', _lmTpls.length, 'Plantillas', '#B45309')}</div>
+      <div class="cp-card"><div class="cp-card__t">Datos</div><div class="set-actions">
+        <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.exportCsv('contacts')">${_ico('down')} Exportar contactos</button>
+        <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.exportCsv('companies')">${_ico('down')} Exportar empresas</button>
+        <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.clearAllViews()">Limpiar vistas guardadas (${views.length})</button>
+      </div></div>
+      <div class="cp-card"><div class="cp-card__t">${NI('zap')} Envío automático (Gmail)</div><div id="lm-send-cfg">${_sendCfg ? _sendCfgHtml() : '<div class="cp-empty2" style="padding:14px">Cargando configuración…</div>'}</div></div>
+      <div class="cp-card"><div class="cp-card__t">${NI('sparkles')} Personalización con IA (Fable 5 · Haiku)</div><div id="lm-ai-cfg">${_aiCfg ? _aiCfgHtml() : '<div class="cp-empty2" style="padding:14px">Cargando…</div>'}</div></div>
+      <div class="cp-card"><div class="cp-card__t">Integraciones</div><div class="set-integr">
+        <div class="set-integr-row"><div class="set-integr-i"><b>LinkedIn</b><span>Aceptación/respuesta se marcan manualmente (sin API oficial).</span></div><span class="set-badge set-badge--manual">Manual</span></div>
+      </div></div>`;
+  }
+  function _repInitCharts() {
+    (_repCharts || []).forEach(c => { try { c.destroy(); } catch (e) {} }); _repCharts = [];
+    _countUp();
+    if (typeof Chart === 'undefined' || !_repChartData) return;
+    const d = _repChartData;
+    const dc = document.getElementById('rep-daily');
+    if (dc) {
+      const ctx = dc.getContext('2d');
+      const grad = ctx.createLinearGradient(0, 0, 0, 200); grad.addColorStop(0, 'rgba(0,128,76,.22)'); grad.addColorStop(1, 'rgba(0,128,76,0)');
+      _repCharts.push(new Chart(ctx, { type: 'line', data: { labels: d.dailyLabels, datasets: [{ data: d.dailyOut, borderColor: '#00804C', backgroundColor: grad, fill: true, tension: .35, borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, pointHoverBackgroundColor: '#00804C' }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { backgroundColor: '#001F3F', padding: 9, cornerRadius: 8, displayColors: false } }, scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 6, color: '#8C97A3', font: { size: 10 } } }, y: { beginAtZero: true, grid: { color: '#EEF0EA' }, ticks: { precision: 0, maxTicksLimit: 4, color: '#8C97A3', font: { size: 10 } } } } } }));
+    }
+    const pc = document.getElementById('rep-dispo');
+    if (pc && d.dispCounts.length) {
+      _repCharts.push(new Chart(pc.getContext('2d'), { type: 'doughnut', data: { labels: d.dispCounts.map(x => x.label), datasets: [{ data: d.dispCounts.map(x => x.n), backgroundColor: d.dispCounts.map(x => x.color), borderWidth: 0, hoverOffset: 6 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '62%', plugins: { legend: { position: 'right', labels: { boxWidth: 10, boxHeight: 10, usePointStyle: true, font: { size: 11 }, color: '#45586A' } }, tooltip: { backgroundColor: '#001F3F', padding: 9, cornerRadius: 8 } } } }));
+    }
+  }
+  function _countUp() {
+    document.querySelectorAll('#lm2-body [data-count]').forEach(el => {
+      const target = parseFloat(el.dataset.count) || 0;
+      if (!target) { el.textContent = '0'; return; }
+      const dur = 700, start = performance.now();
+      const step = now => { const p = Math.min(1, (now - start) / dur); el.textContent = Math.round(target * (1 - Math.pow(1 - p, 3))); if (p < 1) requestAnimationFrame(step); };
+      requestAnimationFrame(step);
+    });
+  }
+  function clearAllViews() { if (!confirm('¿Borrar todas las vistas guardadas de este navegador?')) return; _lmViewsSet([]); _renderBody(); showBanner('✓ Vistas borradas', 'success'); }
+
+  // ── Placeholders honestos (secciones de fases futuras) ──
+  function _vPlaceholder(k) {
+    const P = {
+      campaigns: ['Campañas', 'Campañas por cliente con mercado, ICP, canal y secuencia asociada. Métricas por campaña.', 'Fase 2'],
+      sequences: ['Secuencias', 'Pasos tipo Outreach: Día 1 Email, Día 2 LinkedIn, Día 5 follow-up… planifica y registra la ejecución manual.', 'Fase 3'],
+      companies: ['Empresas', 'Cuentas/empresas objetivo de tus campañas, con sus contactos.', 'Fase 2'],
+      contacts:  ['Contactos', 'Contactos por empresa y cliente, vinculados a leads y actividades.', 'Fase 2'],
+      activities:['Actividades', 'Feed de touches: email enviado, LinkedIn, llamada, respuesta, stage actualizado.', 'Fase 4'],
+      inbox:     ['Inbox / Respuestas', 'Conecta email o registra respuestas manualmente. Clasifica sentimiento y crea tareas.', 'Fase 5'],
+      tasks:     ['Tareas comerciales', 'Próximas acciones y follow-ups por lead, generados desde secuencias y respuestas.', 'Fase 4'],
+      reports:   ['Reportes', 'Reply rate, meetings, conversión y rendimiento por cliente, campaña y secuencia.', 'Fase 6'],
+      templates: ['Plantillas / Assets', 'Email & LinkedIn templates, snippets, ángulos, objeciones y mensajes aprobados.', 'Fase 1+'],
+      settings:  ['Configuración', 'Ajustes del workspace de Lead Manager, canales e integraciones.', 'Fase 7'],
+    };
+    const p = P[k] || ['Sección', 'En preparación.', ''];
+    return `<div class="lm-sec-head"><div><h2 class="lm-sec-title">${p[0]}</h2><p class="lm-sec-sub">${p[1]}</p></div></div>
+      ${_empty(k, p[0] + ' — llega pronto', p[1], '', '', p[2])}`;
+  }
+
+  // ── Plantillas / Assets (biblioteca reutilizable) ──
+  const _TPL_CANALES = [['linkedin', 'LinkedIn'], ['email', 'Email'], ['general', 'General']];
+  const _TPL_TIPOS = [['plantilla', 'Plantilla'], ['snippet', 'Snippet'], ['angulo', 'Ángulo'], ['objecion', 'Objeción']];
+  function _tplCanalLabel(c) { return (_TPL_CANALES.find(x => x[0] === c) || ['', 'General'])[1]; }
+  function _tplTipoLabel(t) { return (_TPL_TIPOS.find(x => x[0] === t) || ['', 'Plantilla'])[1]; }
+  function _vTemplates() {
+    const list = _tplFilter === 'all' ? _lmTpls : _lmTpls.filter(t => (t.canal || 'general') === _tplFilter);
+    const fils = [['all', 'Todas'], ..._TPL_CANALES].map(f => `<button class="lm-tpl-fil${_tplFilter === f[0] ? ' on' : ''}" onclick="LeadManagerModule.tplSetFilter('${f[0]}')">${f[1]}</button>`).join('');
+    const cards = list.length
+      ? list.map(_tplCard).join('')
+      : `<div class="cp-empty2" style="grid-column:1/-1;padding:26px;text-align:center">No hay plantillas${_tplFilter !== 'all' ? ' en este canal' : ''} todavía. Crea la primera con “＋ Nueva plantilla”.</div>`;
+    return `<div class="lm-sec-head">
+        <div><h2 class="lm-sec-title">Plantillas / Assets</h2><p class="lm-sec-sub">Plantillas de Email y LinkedIn con variables — reutilízalas en tus secuencias</p></div>
+        <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openTemplate()">＋ Nueva plantilla</button>
+      </div>
+      <div class="lm-toolbar"><div class="lm-tpl-fils">${fils}</div><span class="lm-count">${list.length} ${list.length === 1 ? 'plantilla' : 'plantillas'}</span></div>
+      <div class="lm-tpl-grid">${cards}</div>`;
+  }
+  function _tplCard(t) {
+    const canal = t.canal || 'general';
+    const body = (t.cuerpo || '').replace(/\s+/g, ' ').trim();
+    const prev = body.length > 170 ? body.slice(0, 170) + '…' : (body || '—');
+    return `<div class="lm-tpl-card" onclick="LeadManagerModule.openTemplate(${t.id})">
+      <div class="lm-tpl-card__hd"><span class="lm-tpl-chip lm-tpl-chip--${esc(canal)}">${esc(_tplCanalLabel(canal))}</span><span class="lm-tpl-tipo">${esc(_tplTipoLabel(t.tipo))}</span>
+        <button class="lm-tpl-del" title="Eliminar" onclick="event.stopPropagation();LeadManagerModule.deleteTemplate(${t.id})">✕</button></div>
+      <div class="lm-tpl-card__t">${esc(t.nombre || 'Sin título')}</div>
+      ${t.asunto ? `<div class="lm-tpl-card__subj">✉ ${esc(t.asunto)}</div>` : ''}
+      <div class="lm-tpl-card__body">${esc(prev)}</div>
+    </div>`;
+  }
+  function tplSetFilter(f) { _tplFilter = f; _renderBody(); }
+  function stepUseTpl(tplId) {
+    const t = _lmTpls.find(x => String(x.id) === String(tplId)); if (!t) return;
+    const ta = document.getElementById(_stepFocusTa || 'step-var-0');
+    if (ta) { ta.value = t.cuerpo || ''; ta.focus(); if (_stepDraft) { const i = +ta.dataset.i || 0; if (_stepDraft.variants[i]) _stepDraft.variants[i].cuerpo = t.cuerpo || ''; } }
+    const ti = document.getElementById('step-titulo'); if (ti && !ti.value.trim()) ti.value = t.nombre || '';
+  }
+  function tplInsertVar(tok) {
+    if (!tok) return;
+    const ta = document.getElementById('tpl-cuerpo'); if (!ta) return;
+    const ins = `{{${tok}}}`;
+    const s = ta.selectionStart == null ? ta.value.length : ta.selectionStart;
+    const e = ta.selectionEnd == null ? ta.value.length : ta.selectionEnd;
+    ta.value = ta.value.slice(0, s) + ins + ta.value.slice(e);
+    ta.focus(); const pos = s + ins.length; ta.setSelectionRange(pos, pos);
+  }
+  function openTemplate(id) {
+    const t = id ? _lmTpls.find(x => x.id === id) : null;
+    document.getElementById('lm-tpl-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'lm-tpl-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) closeTemplate(); };
+    const canalOpts = _TPL_CANALES.map(c => `<option value="${c[0]}"${(t?.canal || 'linkedin') === c[0] ? ' selected' : ''}>${c[1]}</option>`).join('');
+    const tipoOpts = _TPL_TIPOS.map(c => `<option value="${c[0]}"${(t?.tipo || 'plantilla') === c[0] ? ' selected' : ''}>${c[1]}</option>`).join('');
+    m.innerHTML = `<div class="fin-pi-box lm-drawer-box">
+      ${_impHd(t ? 'Editar plantilla' : 'Nueva plantilla').replace('closeImport', 'closeTemplate')}
+      <div class="fin-pi-form">
+        ${_lmFld('tpl-nombre', 'Nombre', t?.nombre, 'Ej. Conexión LinkedIn — intro', true)}
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Canal</span><select class="form-input" id="tpl-canal">${canalOpts}</select></label>
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Tipo</span><select class="form-input" id="tpl-tipo">${tipoOpts}</select></label>
+        ${_lmFld('tpl-asunto', 'Asunto (solo email)', t?.asunto, 'Asunto del email', true)}
+        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Mensaje / cuerpo</span><textarea class="form-input" id="tpl-cuerpo" rows="6" placeholder="Ej. Hola {{first_name}}, vi que eres {{title}} en {{company}}…">${t ? esc(t.cuerpo) : ''}</textarea>
+          ${_varSelectHtml('tplInsertVar')}
+          <span class="step-vars__hint">Las variables se reemplazan por los datos del contacto al hacer la tarea.</span></label>
+      </div>
+      <div class="fin-pi-box__ft"><span class="fin-cfg-hint" id="tpl-hint"></span><div class="fin-pi-ft-btns">
+        ${t ? `<button class="btn btn--ghost btn--danger btn--sm" onclick="LeadManagerModule.deleteTemplate(${t.id},1)">Eliminar</button>` : ''}
+        <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.closeTemplate()">Cancelar</button>
+        <button class="btn btn--primary btn--sm" id="tpl-save" onclick="LeadManagerModule.saveTemplate(${t ? t.id : 'null'})">${t ? 'Guardar' : 'Crear'}</button>
+      </div></div></div>`;
+    document.body.appendChild(m);
+    setTimeout(() => $('tpl-nombre')?.focus(), 60);
+  }
+  function closeTemplate() { document.getElementById('lm-tpl-modal')?.remove(); }
+  async function saveTemplate(id) {
+    const g = fid => ($(fid)?.value || '').trim();
+    const payload = { nombre: g('tpl-nombre'), canal: $('tpl-canal')?.value || 'linkedin', tipo: $('tpl-tipo')?.value || 'plantilla', asunto: g('tpl-asunto'), cuerpo: g('tpl-cuerpo') };
+    const hint = $('tpl-hint');
+    if (!payload.nombre) { if (hint) { hint.textContent = 'Ponle un nombre a la plantilla'; hint.style.color = '#C4342B'; } return; }
+    const btn = $('tpl-save'); if (btn) btn.disabled = true;
+    try {
+      const res = await apiFetch(`${API}/lm/templates${id ? '/' + id : ''}`, { method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      if (!res.ok) throw new Error((await res.json()).error || 'Error');
+      closeTemplate(); await load();
+    } catch (e) { if (hint) { hint.textContent = 'Error: ' + e.message; hint.style.color = '#C4342B'; } if (btn) btn.disabled = false; }
+  }
+  async function deleteTemplate(id, fromDrawer) {
+    if (!confirm('¿Eliminar esta plantilla?')) return;
+    try { const res = await apiFetch(`${API}/lm/templates/${id}`, { method: 'DELETE' }); if (!res.ok) throw new Error('Error'); if (fromDrawer) closeTemplate(); await load(); }
+    catch (e) { alert('Error: ' + e.message); }
+  }
+
+  // ── Leads (sección) ──
+  function _vLeadsShell() {
+    return `<div class="lm-sec-head">
+        <div><h2 class="lm-sec-title">Leads</h2><p class="lm-sec-sub">Todos tus prospectos — asócialos a un cliente outbound</p></div>
+        <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openDrawer()">＋ Nuevo lead</button>
+      </div>
+      <div class="lm-toolbar">
+        <div class="lm-stages" id="lm-filter-bar"></div>
+        <div class="lm-toolbar__r">
+          <div class="lm-search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" id="lm-search" placeholder="Buscar lead, empresa o email…" oninput="LeadManagerModule.filter()"></div>
+          <div class="lm-vtoggle">
+            <button class="lm-vt active" id="lm-vt-cards" onclick="LeadManagerModule.setView('cards')" title="Tarjetas"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></button>
+            <button class="lm-vt" id="lm-vt-list" onclick="LeadManagerModule.setView('list')" title="Lista"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></button>
+          </div>
+        </div>
+      </div>
+      <div class="clients-empty hidden" id="lm-empty"></div>
+      <div class="lm-cards" id="lm-cards"></div>
+      <div class="clients-table-wrap hidden" id="lm-table-wrap"><table class="clients-table"><thead><tr><th>Nombre</th><th>Empresa</th><th>Cliente outbound</th><th>Stage</th><th>Fuente</th><th>Valor</th></tr></thead><tbody id="lm-tbody"></tbody></table></div>`;
   }
 
   function filter() {
@@ -5265,49 +13462,96 @@ const LeadManagerModule = (() => {
     let items = _data;
     if (_stage) items = items.filter(l => l.stage === _stage);
     if (q) items = items.filter(l =>
-      (l.nombre + l.empresa + l.email + l.cargo).toLowerCase().includes(q)
+      ((l.nombre || '') + (l.empresa || '') + (l.email || '') + (l.cargo || '')).toLowerCase().includes(q)
     );
-    render(items);
+    _renderStages(_data);   // pills premium con conteos
+    _renderList(items);     // cards (principal) + tabla (secundaria), según filtro
   }
 
-  function setFilter(stage) {
-    _stage = stage;
-    document.querySelectorAll('#lm-filter-bar .filter-pill').forEach(p => {
-      p.classList.toggle('active', p.dataset.stage === stage);
-    });
-    filter();
+  function setFilter(stage) { _stage = stage; filter(); }
+  function setView(v) { _view = v; _applyView(); }
+
+  function _applyView() {
+    if (!$('lm-cards')?.innerHTML) return;     // sin resultados → no togglear
+    const isCards = _view !== 'list';
+    $('lm-cards').classList.toggle('hidden', !isCards);
+    $('lm-table-wrap').classList.toggle('hidden', isCards);
+    $('lm-vt-cards')?.classList.toggle('active', isCards);
+    $('lm-vt-list')?.classList.toggle('active', !isCards);
   }
 
-  function render(items) {
+  // ── Stages premium (pills con conteo) ──
+  function _renderStages(all) {
+    const bar = $('lm-filter-bar');
+    if (!bar) return;
+    const cnt = s => all.filter(l => l.stage === s).length;
+    const pill = (stage, lbl) => {
+      const n = stage ? cnt(stage) : all.length;
+      const active = (_stage || '') === stage;
+      return `<button class="lm-stage lm-stage--${stage || 'all'}${active ? ' active' : ''}" data-stage="${stage}" onclick="LeadManagerModule.setFilter('${stage}')">
+        <span class="lm-stage__lbl">${lbl}</span><span class="lm-stage__n">${n}</span></button>`;
+    };
+    bar.innerHTML = pill('', 'Todos') + _ORDER.map(s => pill(s, STAGE_LABELS[s])).join('');
+  }
+
+  // ── Listado: cards (principal) + filas de tabla (secundaria) ──
+  function _renderList(items) {
+    const cards = $('lm-cards'), tw = $('lm-table-wrap'), empty = $('lm-empty');
     if (!items.length) {
-      $('lm-empty').classList.remove('hidden');
-      $('lm-table-wrap').classList.add('hidden');
+      if (empty) { empty.classList.remove('hidden'); empty.textContent = _data.length ? 'No hay leads en este filtro.' : 'Sin leads aún. ¡Agrega el primero!'; }
+      if (cards) { cards.classList.add('hidden'); cards.innerHTML = ''; }
+      if (tw) tw.classList.add('hidden');
+      const tb = $('lm-tbody'); if (tb) tb.innerHTML = '';
       return;
     }
-    $('lm-empty').classList.add('hidden');
-    $('lm-table-wrap').classList.remove('hidden');
-    $('lm-tbody').innerHTML = items.map(l => {
-      const valor = l.valor_estimado ? `$${Number(l.valor_estimado).toLocaleString()}` : '—';
-      return `<tr class="clients-table__row" onclick="LeadManagerModule.openDrawer(${l.id})" style="cursor:pointer">
-        <td>
-          <div class="client-cell-name">
-            <img class="client-avatar" src="https://api.dicebear.com/9.x/lorelei/svg?seed=${encodeURIComponent(l.nombre)}" style="object-fit:cover" alt=""/>
-            <div>
-              <div class="client-nombre">${esc(l.nombre)}</div>
-              ${l.cargo ? `<div class="client-empresa">${esc(l.cargo)}</div>` : ''}
-            </div>
-          </div>
-        </td>
-        <td class="client-meta">${l.empresa ? esc(l.empresa) : '<span style="color:var(--muted)">—</span>'}</td>
-        <td class="client-meta">${l.email ? esc(l.email) : '<span style="color:var(--muted)">—</span>'}</td>
-        <td class="client-meta">${esc(l.fuente || 'manual')}</td>
-        <td><span class="client-badge" style="${STAGE_STYLES[l.stage] || ''}">${STAGE_LABELS[l.stage] || l.stage}</span></td>
-        <td class="client-meta">${valor}</td>
-      </tr>`;
-    }).join('');
+    if (empty) empty.classList.add('hidden');
+    if (cards) cards.innerHTML = items.map(_lmCard).join('');
+    const tb = $('lm-tbody'); if (tb) tb.innerHTML = items.map(_lmRow).join('');
+    _applyView();
   }
 
-  function openDrawer(id) {
+  function _lmCard(l) {
+    const stg = l.stage || 'nuevo';
+    const valor = l.valor_estimado ? _money(l.valor_estimado) : null;
+    const loc = l.pais || l.email || '';
+    const cli = _clientName(l.outbound_client_id);
+    const nextT = _leadNextTask(l.id);
+    return `<button class="lm-card" onclick="LeadManagerModule.openDrawer(${l.id})">
+      <div class="lm-card__cover lm-cover--${stg}">
+        <span class="lm-card__badge">${STAGE_LABELS[stg] || stg}</span>
+        <img class="lm-card__av" src="${_av(l.nombre)}" alt="">
+      </div>
+      <div class="lm-card__body">
+        <div class="lm-card__name">${esc(l.nombre)}</div>
+        <div class="lm-card__org">${l.empresa ? esc(l.empresa) : 'Sin empresa'}${l.cargo ? ` · ${esc(l.cargo)}` : ''}</div>
+        <div class="lm-card__chips">
+          ${cli ? `<span class="lm-chip lm-chip--cli">◆ ${esc(cli)}</span>` : ''}
+          <span class="lm-chip">${esc(l.fuente || 'manual')}</span>
+          ${valor ? `<span class="lm-chip lm-chip--val">${valor}</span>` : ''}
+        </div>
+        ${nextT ? `<div class="lm-card__next">⏱ ${esc(_actMeta(nextT.tipo)[0])} · ${_fmtActDate(nextT.fecha)}</div>` : ''}
+      </div>
+      <div class="lm-card__foot">
+        <span class="lm-card__loc">${loc ? esc(loc) : '—'}</span>
+        <span class="lm-card__cta">Ver <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
+      </div>
+    </button>`;
+  }
+
+  function _lmRow(l) {
+    const valor = l.valor_estimado ? `$${Number(l.valor_estimado).toLocaleString()}` : '—';
+    const cli = _clientName(l.outbound_client_id);
+    return `<tr class="clients-table__row" onclick="LeadManagerModule.openDrawer(${l.id})" style="cursor:pointer">
+      <td><div class="client-cell-name"><img class="client-avatar" src="${_av(l.nombre)}" style="object-fit:cover" alt=""/><div><div class="client-nombre">${esc(l.nombre)}</div>${l.cargo ? `<div class="client-empresa">${esc(l.cargo)}</div>` : ''}</div></div></td>
+      <td class="client-meta">${l.empresa ? esc(l.empresa) : '<span style="color:var(--muted)">—</span>'}</td>
+      <td class="client-meta">${cli ? esc(cli) : '<span style="color:var(--muted)">—</span>'}</td>
+      <td><span class="client-badge" style="${STAGE_STYLES[l.stage] || ''}">${STAGE_LABELS[l.stage] || l.stage}</span></td>
+      <td class="client-meta">${esc(l.fuente || 'manual')}</td>
+      <td class="client-meta">${valor}</td>
+    </tr>`;
+  }
+
+  function openDrawer(id, presetClient) {
     const lead = id ? _data.find(l => l.id === id) : null;
     $('lm-drawer-title').textContent = lead ? 'Editar lead' : 'Nuevo lead';
     $('lm-id').value       = lead?.id || '';
@@ -5321,6 +13565,8 @@ const LeadManagerModule = (() => {
     $('lm-valor').value    = lead?.valor_estimado || '';
     $('lm-fuente').value   = lead?.fuente || 'manual';
     $('lm-notas').value    = lead?.notas || '';
+    _fillClientSelect(lead?.outbound_client_id ?? presetClient ?? '');
+    _fillCampaignSelect(lead?.outbound_client_id ?? presetClient ?? '', lead?.campaign_id ?? '');
     $('lm-delete-btn').style.display  = lead ? '' : 'none';
     $('lm-convert-btn').style.display = (lead && lead.stage !== 'ganado') ? '' : 'none';
     $('lm-drawer-overlay').classList.remove('hidden');
@@ -5347,6 +13593,8 @@ const LeadManagerModule = (() => {
       valor_estimado: $('lm-valor').value ? Number($('lm-valor').value) : null,
       fuente:         $('lm-fuente').value,
       notas:          $('lm-notas').value.trim(),
+      outbound_client_id: $('lm-outbound-client')?.value ? Number($('lm-outbound-client').value) : null,
+      campaign_id: $('lm-campaign')?.value ? Number($('lm-campaign').value) : null,
     };
     const btn = $('lm-save-btn');
     btn.disabled = true;
@@ -5388,7 +13636,2183 @@ const LeadManagerModule = (() => {
     } catch (e) { alert('Error: ' + e.message); }
   }
 
-  return { load, filter, setFilter, openDrawer, closeDrawer, save, confirmDelete, convertToClient };
+  function _fillClientSelect(sel) {
+    const el = $('lm-outbound-client'); if (!el) return;
+    el.innerHTML = '<option value="">— Sin cliente outbound —</option>' +
+      _clients.map(c => `<option value="${c.id}"${String(c.id) === String(sel) ? ' selected' : ''}>${esc(c.nombre)}</option>`).join('');
+  }
+
+  // ── Cliente outbound: drawer crear/editar (modal dinámico) ──
+  const _OBC_OPTS = [['preparacion', 'Preparación'], ['activo', 'Activo'], ['pausado', 'Pausado'], ['cerrado', 'Cerrado']];
+  function openClientDrawer(id) {
+    const c = id ? _clients.find(x => x.id === id) : null;
+    document.getElementById('lm-obc-modal')?.remove();
+    const m = document.createElement('div');
+    m.id = 'lm-obc-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) closeClientDrawer(); };
+    const fld = (fid, lbl, val, ph, full) => `<label class="fin-cfg-field${full ? ' fin-pi-full' : ''}"><span class="fin-cfg-lbl">${lbl}</span><input class="form-input" id="${fid}" value="${val ? esc(val) : ''}" placeholder="${ph || ''}"></label>`;
+    m.innerHTML = `<div class="fin-pi-box">
+      <div class="fin-pi-box__hd"><h3>${c ? 'Editar cliente outbound' : 'Nuevo cliente outbound'}</h3><button class="fin-pi-x" onclick="LeadManagerModule.closeClientDrawer()">✕</button></div>
+      <div class="fin-pi-form">
+        ${fld('obc-nombre', 'Nombre del cliente *', c?.nombre, 'Ej. Tent Softlab', true)}
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Estado</span><select class="form-input" id="obc-estado">${_OBC_OPTS.map(([v, l]) => `<option value="${v}"${c?.estado === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+        ${fld('obc-responsable', 'Responsable', c?.responsable, '')}
+        ${fld('obc-canal', 'Canal principal', c?.canal, 'Email · LinkedIn')}
+        ${fld('obc-website', 'Website', c?.website, '')}
+        ${fld('obc-mercado', 'Mercado objetivo', c?.mercado, '')}
+        ${fld('obc-icp', 'ICP principal', c?.icp, '')}
+        ${fld('obc-proxima', 'Próxima acción', c?.proxima_accion, 'Ej. Revisar respuestas', true)}
+        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Notas</span><textarea class="form-input" id="obc-notas" rows="2">${c ? esc(c.notas) : ''}</textarea></label>
+      </div>
+      <div class="fin-pi-box__ft">
+        <span class="fin-cfg-hint" id="obc-hint"></span>
+        <div class="fin-pi-ft-btns">
+          ${c ? `<button class="btn btn--ghost btn--danger btn--sm" onclick="LeadManagerModule.confirmDeleteClient(${c.id})">Eliminar</button>` : ''}
+          <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.closeClientDrawer()">Cancelar</button>
+          <button class="btn btn--primary btn--sm" id="obc-save" onclick="LeadManagerModule.saveClient(${c ? c.id : 'null'})">${c ? 'Guardar' : 'Crear cliente'}</button>
+        </div>
+      </div></div>`;
+    document.body.appendChild(m);
+    setTimeout(() => $('obc-nombre')?.focus(), 60);
+  }
+  function closeClientDrawer() { document.getElementById('lm-obc-modal')?.remove(); }
+  async function saveClient(id) {
+    const nombre = $('obc-nombre')?.value.trim();
+    const hint = $('obc-hint');
+    if (!nombre) { if (hint) { hint.textContent = 'El nombre es requerido'; hint.className = 'fin-cfg-hint fin-cfg-hint--err'; } return; }
+    const body = {
+      nombre, estado: $('obc-estado')?.value || 'preparacion',
+      responsable: $('obc-responsable')?.value.trim() || '', canal: $('obc-canal')?.value.trim() || '',
+      website: $('obc-website')?.value.trim() || '', mercado: $('obc-mercado')?.value.trim() || '',
+      icp: $('obc-icp')?.value.trim() || '', proxima_accion: $('obc-proxima')?.value.trim() || '',
+      notas: $('obc-notas')?.value.trim() || '',
+    };
+    const btn = $('obc-save'); if (btn) btn.disabled = true;
+    try {
+      const res = await apiFetch(`${API}/outbound-clients${id ? '/' + id : ''}`, { method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (!res.ok) throw new Error((await res.json()).error || 'Error');
+      closeClientDrawer();
+      await load();
+    } catch (e) { if (hint) { hint.textContent = e.message; hint.className = 'fin-cfg-hint fin-cfg-hint--err'; } if (btn) btn.disabled = false; }
+  }
+  async function confirmDeleteClient(id) {
+    if (!confirm('¿Eliminar este cliente outbound?\nLos leads asociados quedarán sin cliente (no se borran).')) return;
+    try {
+      const res = await apiFetch(`${API}/outbound-clients/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error((await res.json()).error || 'Error');
+      closeClientDrawer();
+      if (_section === 'client') { _section = 'clients'; _activeClient = null; }
+      await load();
+    } catch (e) { alert('Error: ' + e.message); }
+  }
+
+  // ── Lead drawer: select de campaña (filtrado por cliente) ──
+  function _fillCampaignSelect(clientId, sel) {
+    const el = $('lm-campaign'); if (!el) return;
+    const cid = clientId ? Number(clientId) : null;
+    const opts = cid ? _campaignsByClient(cid) : _campaigns;
+    el.innerHTML = '<option value="">— Sin campaña —</option>' +
+      opts.map(c => `<option value="${c.id}"${String(c.id) === String(sel) ? ' selected' : ''}>${esc(c.nombre)}</option>`).join('');
+  }
+  function onLeadClientChange() { _fillCampaignSelect($('lm-outbound-client')?.value || '', ''); }
+
+  // ── Campaña: drawer crear/editar (modal dinámico) ──
+  const _CMP_OPTS = [['draft', 'Draft'], ['activa', 'Activa'], ['pausada', 'Pausada'], ['cerrada', 'Cerrada']];
+  function openCampaignDrawer(id, presetClient) {
+    const c = id ? _campaigns.find(x => x.id === id) : null;
+    const clientId = c?.outbound_client_id ?? presetClient ?? '';
+    document.getElementById('lm-cmp-modal')?.remove();
+    const m = document.createElement('div');
+    m.id = 'lm-cmp-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) closeCampaignDrawer(); };
+    const fld = (fid, lbl, val, ph, full) => `<label class="fin-cfg-field${full ? ' fin-pi-full' : ''}"><span class="fin-cfg-lbl">${lbl}</span><input class="form-input" id="${fid}" value="${val ? esc(val) : ''}" placeholder="${ph || ''}"></label>`;
+    const clientOpts = '<option value="">— Selecciona cliente —</option>' + _clients.map(x => `<option value="${x.id}"${String(x.id) === String(clientId) ? ' selected' : ''}>${esc(x.nombre)}</option>`).join('');
+    m.innerHTML = `<div class="fin-pi-box">
+      <div class="fin-pi-box__hd"><h3>${c ? 'Editar campaña' : 'Nueva campaña'}</h3><button class="fin-pi-x" onclick="LeadManagerModule.closeCampaignDrawer()">✕</button></div>
+      <div class="fin-pi-form">
+        ${fld('cmp-nombre', 'Nombre de campaña *', c?.nombre, 'Ej. US Landscaping Q3', true)}
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Cliente outbound *</span><select class="form-input" id="cmp-client">${clientOpts}</select></label>
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Estado</span><select class="form-input" id="cmp-estado">${_CMP_OPTS.map(([v, l]) => `<option value="${v}"${c?.estado === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+        ${fld('cmp-canal', 'Canal principal', c?.canal, 'Email · LinkedIn')}
+        ${fld('cmp-canal2', 'Canal secundario', c?.canal_secundario, '')}
+        ${fld('cmp-mercado', 'Mercado', c?.mercado, '')}
+        ${fld('cmp-icp', 'ICP', c?.icp, '')}
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Fecha de inicio</span><input class="form-input" type="date" id="cmp-fecha" value="${c?.fecha_inicio ? String(c.fecha_inicio).split('T')[0] : ''}"></label>
+        ${fld('cmp-objetivo', 'Objetivo', c?.objetivo, 'Ej. 5 reuniones / mes', true)}
+        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Notas</span><textarea class="form-input" id="cmp-notas" rows="2">${c ? esc(c.notas) : ''}</textarea></label>
+      </div>
+      <div class="fin-pi-box__ft">
+        <span class="fin-cfg-hint" id="cmp-hint"></span>
+        <div class="fin-pi-ft-btns">
+          ${c ? `<button class="btn btn--ghost btn--danger btn--sm" onclick="LeadManagerModule.confirmDeleteCampaign(${c.id})">Eliminar</button>` : ''}
+          <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.closeCampaignDrawer()">Cancelar</button>
+          <button class="btn btn--primary btn--sm" id="cmp-save" onclick="LeadManagerModule.saveCampaign(${c ? c.id : 'null'})">${c ? 'Guardar' : 'Crear campaña'}</button>
+        </div>
+      </div></div>`;
+    document.body.appendChild(m);
+    setTimeout(() => $('cmp-nombre')?.focus(), 60);
+  }
+  function closeCampaignDrawer() { document.getElementById('lm-cmp-modal')?.remove(); }
+  async function saveCampaign(id) {
+    const nombre = $('cmp-nombre')?.value.trim();
+    const clientId = $('cmp-client')?.value;
+    const hint = $('cmp-hint');
+    const fail = msg => { if (hint) { hint.textContent = msg; hint.className = 'fin-cfg-hint fin-cfg-hint--err'; } };
+    if (!nombre) return fail('El nombre es requerido');
+    if (!clientId) return fail('Selecciona el cliente outbound');
+    const body = {
+      nombre, outbound_client_id: Number(clientId), estado: $('cmp-estado')?.value || 'draft',
+      canal: $('cmp-canal')?.value.trim() || '', canal_secundario: $('cmp-canal2')?.value.trim() || '',
+      mercado: $('cmp-mercado')?.value.trim() || '', icp: $('cmp-icp')?.value.trim() || '',
+      fecha_inicio: $('cmp-fecha')?.value || null, objetivo: $('cmp-objetivo')?.value.trim() || '',
+      notas: $('cmp-notas')?.value.trim() || '',
+    };
+    const btn = $('cmp-save'); if (btn) btn.disabled = true;
+    try {
+      const res = await apiFetch(`${API}/campaigns${id ? '/' + id : ''}`, { method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (!res.ok) throw new Error((await res.json()).error || 'Error');
+      closeCampaignDrawer();
+      await load();
+    } catch (e) { fail(e.message); if (btn) btn.disabled = false; }
+  }
+  async function confirmDeleteCampaign(id) {
+    if (!confirm('¿Eliminar esta campaña?\nLos leads asociados quedarán sin campaña (no se borran).')) return;
+    try {
+      const res = await apiFetch(`${API}/campaigns/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error((await res.json()).error || 'Error');
+      closeCampaignDrawer();
+      await load();
+    } catch (e) { alert('Error: ' + e.message); }
+  }
+
+  // ── Secuencia: drawer crear/editar ──
+  const _SEQ_OPTS = [['draft', 'Draft'], ['activa', 'Activa'], ['pausada', 'Pausada'], ['archivada', 'Archivada']];
+  function openSequenceDrawer(id, presetClient) {
+    const s = id ? _sequences.find(x => x.id === id) : null;
+    const clientId = s?.outbound_client_id ?? presetClient ?? '';
+    document.getElementById('lm-seq-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'lm-seq-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) closeSequenceDrawer(); };
+    const clientOpts = '<option value="">— Selecciona cliente —</option>' + _clients.map(x => `<option value="${x.id}"${String(x.id) === String(clientId) ? ' selected' : ''}>${esc(x.nombre)}</option>`).join('');
+    const cmpOpts = '<option value="">— Sin campaña —</option>' + _campaigns.map(x => `<option value="${x.id}"${String(x.id) === String(s?.campaign_id ?? '') ? ' selected' : ''}>${esc(x.nombre)}</option>`).join('');
+    m.innerHTML = `<div class="fin-pi-box">
+      <div class="fin-pi-box__hd"><h3>${s ? 'Editar secuencia' : 'Nueva secuencia'}</h3><button class="fin-pi-x" onclick="LeadManagerModule.closeSequenceDrawer()">✕</button></div>
+      <div class="fin-pi-form">
+        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Nombre *</span><input class="form-input" id="seq-nombre" value="${s ? esc(s.nombre) : ''}" placeholder="Ej. QuickBooks field service sequence"></label>
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Cliente outbound *</span><select class="form-input" id="seq-client">${clientOpts}</select></label>
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Campaña (opcional)</span><select class="form-input" id="seq-campaign">${cmpOpts}</select></label>
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Estado</span><select class="form-input" id="seq-estado">${_SEQ_OPTS.map(([v, l]) => `<option value="${v}"${s?.estado === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Zona horaria del prospecto</span><div class="tz-combo"><input class="form-input" id="seq-tz-search" autocomplete="off" placeholder="Ciudad, estado o país (ej. Dallas, New York, Lima)…" value="${esc(_tzLabelFor(s?.timezone || ''))}" oninput="LeadManagerModule.tzSearch()" onfocus="LeadManagerModule.tzSearch()" onblur="LeadManagerModule.tzBlur()"><input type="hidden" id="seq-tz" value="${esc(s?.timezone || '')}"><div class="tz-list" id="seq-tz-list"></div></div></label>
+        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Objetivo</span><input class="form-input" id="seq-objetivo" value="${s ? esc(s.objetivo) : ''}" placeholder="Ej. Agendar demo"></label>
+      </div>
+      <div class="fin-pi-box__ft"><span class="fin-cfg-hint" id="seq-hint"></span><div class="fin-pi-ft-btns">
+        ${s ? `<button class="btn btn--ghost btn--danger btn--sm" onclick="LeadManagerModule.confirmDeleteSequence(${s.id})">Eliminar</button>` : ''}
+        <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.closeSequenceDrawer()">Cancelar</button>
+        <button class="btn btn--primary btn--sm" id="seq-save" onclick="LeadManagerModule.saveSequence(${s ? s.id : 'null'})">${s ? 'Guardar' : 'Crear secuencia'}</button>
+      </div></div></div>`;
+    document.body.appendChild(m);
+    setTimeout(() => $('seq-nombre')?.focus(), 60);
+  }
+  function closeSequenceDrawer() { document.getElementById('lm-seq-modal')?.remove(); }
+  async function saveSequence(id) {
+    const nombre = $('seq-nombre')?.value.trim(); const clientId = $('seq-client')?.value; const hint = $('seq-hint');
+    const fail = m => { if (hint) { hint.textContent = m; hint.className = 'fin-cfg-hint fin-cfg-hint--err'; } };
+    if (!nombre) return fail('El nombre es requerido');
+    if (!clientId) return fail('Selecciona el cliente outbound');
+    const body = { nombre, outbound_client_id: Number(clientId), campaign_id: $('seq-campaign')?.value ? Number($('seq-campaign').value) : null, estado: $('seq-estado')?.value || 'draft', objetivo: $('seq-objetivo')?.value.trim() || '', timezone: $('seq-tz')?.value || '' };
+    const btn = $('seq-save'); if (btn) btn.disabled = true;
+    try {
+      const res = await apiFetch(`${API}/sequences${id ? '/' + id : ''}`, { method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (!res.ok) throw new Error((await res.json()).error || 'Error');
+      const saved = await res.json().catch(() => null);
+      closeSequenceDrawer(); await load();
+      if (!id && saved && saved.id) openSequence(saved.id);
+    } catch (e) { fail(e.message); if (btn) btn.disabled = false; }
+  }
+  async function confirmDeleteSequence(id) {
+    if (!confirm('¿Eliminar esta secuencia y sus pasos?')) return;
+    try {
+      const res = await apiFetch(`${API}/sequences/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error((await res.json()).error || 'Error');
+      closeSequenceDrawer(); _section = 'sequences'; _activeSeq = null; await load();
+    } catch (e) { alert('Error: ' + e.message); }
+  }
+
+  // ── Paso de secuencia: drawer ──
+  function openStepDrawer(seqId, stepId) {
+    const st = stepId ? _steps.find(x => x.id === stepId) : null;
+    _stepFocusTa = 'step-var-0';
+    _stepDraft = {
+      mode: (st && st.variant_mode) || 'off',
+      field: (st && st.variant_field) || 'buyer_role',
+      variants: (st && Array.isArray(st.variants) && st.variants.length) ? st.variants.map(v => ({ nombre: v.nombre || '', cuerpo: v.cuerpo || '', targets: Array.isArray(v.targets) ? v.targets.slice() : [] })) : [{ nombre: 'A', cuerpo: (st && st.plantilla) || '', targets: [] }],
+    };
+    const existing = _seqSteps(seqId);
+    const nextDia = st ? st.dia : ((existing.slice(-1)[0]?.dia || 0) + (existing.length ? 2 : 1));
+    document.getElementById('lm-step-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'lm-step-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) closeStepDrawer(); };
+    const canalOpts = _CANALES.map(c => `<option value="${c}"${st?.canal === c ? ' selected' : ''}>${_TOUCH[c][0]}</option>`).join('');
+    m.innerHTML = `<div class="fin-pi-box">
+      <div class="fin-pi-box__hd"><h3>${st ? 'Editar paso' : 'Nuevo paso'}</h3><button class="fin-pi-x" onclick="LeadManagerModule.closeStepDrawer()">✕</button></div>
+      <div class="fin-pi-form">
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Día (relativo)</span><input class="form-input" type="number" id="step-dia" min="1" value="${st ? st.dia : nextDia}"></label>
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Canal / touch</span><select class="form-input" id="step-canal">${canalOpts}</select></label>
+        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Título del paso</span><input class="form-input" id="step-titulo" value="${st ? esc(st.titulo) : ''}" placeholder="Ej. Email 1 — intro"></label>
+        ${_lmTpls.length ? `<label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Usar plantilla guardada</span><select class="form-input" onchange="LeadManagerModule.stepUseTpl(this.value)"><option value="">— Elegir de la biblioteca —</option>${_lmTpls.map(tp => `<option value="${tp.id}">${esc(tp.nombre)} · ${esc((tp.canal || '').toUpperCase())}</option>`).join('')}</select></label>` : ''}
+        <div id="step-msg" class="fin-pi-full step-msg"></div>
+      </div>
+      <div class="fin-pi-box__ft"><span class="fin-cfg-hint" id="step-hint"></span><div class="fin-pi-ft-btns">
+        <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.closeStepDrawer()">Cancelar</button>
+        <button class="btn btn--primary btn--sm" id="step-save" onclick="LeadManagerModule.saveStep(${seqId},${st ? st.id : 'null'})">${st ? 'Guardar' : 'Añadir paso'}</button>
+      </div></div></div>`;
+    document.body.appendChild(m);
+    _stepRenderMsg();
+    setTimeout(() => $('step-titulo')?.focus(), 60);
+  }
+  function closeStepDrawer() { document.getElementById('lm-step-modal')?.remove(); }
+  function _stepRenderMsg() {
+    const el = document.getElementById('step-msg'); if (!el || !_stepDraft) return;
+    const d = _stepDraft;
+    const single = d.mode === 'off';
+    const modeSel = `<label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Mensaje del paso</span><select class="form-input" onchange="LeadManagerModule.stepSetMode(this.value)"><option value="off"${d.mode === 'off' ? ' selected' : ''}>Un solo mensaje</option><option value="random"${d.mode === 'random' ? ' selected' : ''}>A/B — repartir al azar</option><option value="segment"${d.mode === 'segment' ? ' selected' : ''}>Por segmento (según un campo)</option></select></label>`;
+    let fieldSel = '';
+    if (d.mode === 'segment') {
+      const opts = _CT_FILTER_FIELDS.map(f => `<option value="${f[0]}"${d.field === f[0] ? ' selected' : ''}>${f[1]}</option>`).join('');
+      fieldSel = `<label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Campo del segmento</span><select class="form-input" onchange="LeadManagerModule.stepSetField(this.value)">${opts}</select></label>`;
+    }
+    const vars = single ? d.variants.slice(0, 1) : d.variants;
+    const varsHtml = vars.map((v, i) => {
+      const head = single ? '' : `<div class="step-var-hd"><input class="step-var-nm" value="${esc(v.nombre || String.fromCharCode(65 + i))}" data-i="${i}" placeholder="Nombre"><span class="step-var-sp"></span>${d.variants.length > 1 ? `<button type="button" class="flt-del" onclick="LeadManagerModule.stepDelVariant(${i})" title="Quitar variante">✕</button>` : ''}</div>`;
+      const targets = (!single && d.mode === 'segment') ? _stepTargetsHtml(i) : '';
+      return `<div class="step-var-box">${head}<textarea class="form-input step-var-ta" id="step-var-${i}" data-i="${i}" rows="${single ? 4 : 3}" placeholder="Ej. Hola {{first_name}}…" onfocus="LeadManagerModule.stepFocusTa('step-var-${i}')">${esc(v.cuerpo || '')}</textarea>${targets}</div>`;
+    }).join('');
+    const addBtn = single ? '' : `<button type="button" class="flt-add" onclick="LeadManagerModule.stepAddVariant()">＋ Añadir variante</button>`;
+    el.innerHTML = `${modeSel}${fieldSel}${varsHtml}${_varSelectHtml('seqInsertVar')}${addBtn}<span class="step-vars__hint">Las variables ({{first_name}}…) se reemplazan al hacer la tarea.${single ? '' : ' El sistema le muestra a cada contacto la variante que le toca.'}</span>`;
+  }
+  function _stepSyncDraft() {
+    if (!_stepDraft) return;
+    document.querySelectorAll('#step-msg .step-var-ta').forEach(ta => { const i = +ta.dataset.i; if (_stepDraft.variants[i]) _stepDraft.variants[i].cuerpo = ta.value; });
+    document.querySelectorAll('#step-msg .step-var-nm').forEach(inp => { const i = +inp.dataset.i; if (_stepDraft.variants[i]) _stepDraft.variants[i].nombre = inp.value.trim(); });
+    // targets (segmento) se mantienen vivos en _stepDraft vía el tag-input (stepTagAdd/Remove), no se leen de un input.
+  }
+  // ── Tag-input con autocomplete para los valores del segmento (detecta lo ya cargado en la base) ──
+  let _stepTagOpts = [];
+  function _stepChipsHtml(i) {
+    const arr = (_stepDraft && _stepDraft.variants[i] && _stepDraft.variants[i].targets) || [];
+    return arr.map((t, ti) => `<span class="step-tag">${esc(t)}<button type="button" tabindex="-1" onmousedown="event.preventDefault()" onclick="LeadManagerModule.stepTagRemove(${i},${ti})" title="Quitar">✕</button></span>`).join('');
+  }
+  function _stepTargetsHtml(i) {
+    const lbl = _stepDraft ? _fltFieldLabel('contacts', _stepDraft.field) : '';
+    return `<div class="step-tags-wrap" data-i="${i}">
+      <div class="step-tags"><span class="step-chips" id="step-chips-${i}">${_stepChipsHtml(i)}</span><input class="step-tags-inp" id="step-tags-inp-${i}" data-i="${i}" autocomplete="off" placeholder="Escribe o elige un valor…" oninput="LeadManagerModule.stepTagInput(${i})" onfocus="LeadManagerModule.stepTagInput(${i})" onkeydown="LeadManagerModule.stepTagKey(${i},event)" onblur="LeadManagerModule.stepTagBlur(${i})"></div>
+      <div class="step-tags-pop" id="step-tags-pop-${i}"></div>
+      <div class="step-tags-lbl">Se aplica a los contactos cuyo “${esc(lbl)}” sea uno de estos valores.</div>
+    </div>`;
+  }
+  function _stepRefreshChips(i) { const c = document.getElementById(`step-chips-${i}`); if (c) c.innerHTML = _stepChipsHtml(i); }
+  function stepTagInput(i) {
+    const inp = document.getElementById(`step-tags-inp-${i}`), pop = document.getElementById(`step-tags-pop-${i}`);
+    if (!inp || !pop || !_stepDraft || !_stepDraft.variants[i]) return;
+    const chosen = new Set((_stepDraft.variants[i].targets || []).map(x => _lmNorm(x)));
+    const all = _fltDistinct('contacts', _stepDraft.field).filter(v => !chosen.has(_lmNorm(v)));
+    const q = _lmNorm(inp.value);
+    _stepTagOpts = (q ? all.filter(v => _lmNorm(v).includes(q)) : all).slice(0, 8);
+    let html = _stepTagOpts.map((v, oi) => `<button type="button" class="step-tags-opt" onmousedown="event.preventDefault();LeadManagerModule.stepTagPick(${i},${oi})">${esc(v)}</button>`).join('');
+    const typed = inp.value.trim();
+    if (typed && !all.some(v => _lmNorm(v) === _lmNorm(typed)) && !chosen.has(_lmNorm(typed)))
+      html += `<button type="button" class="step-tags-opt step-tags-opt--new" onmousedown="event.preventDefault();LeadManagerModule.stepTagAddTyped(${i})">＋ Añadir “${esc(typed)}”</button>`;
+    if (!html) html = `<div class="step-tags-empty">${all.length ? 'Sin coincidencias' : 'Aún no hay valores en tus contactos — escribe uno y pulsa Enter'}</div>`;
+    pop.innerHTML = html; pop.classList.add('open');
+  }
+  function stepTagKey(i, ev) {
+    if (ev.key === 'Enter') { ev.preventDefault(); stepTagAddTyped(i); }
+    else if (ev.key === 'Backspace') { const inp = document.getElementById(`step-tags-inp-${i}`); if (inp && !inp.value && _stepDraft.variants[i]) { const a = _stepDraft.variants[i].targets || []; if (a.length) { a.pop(); _stepRefreshChips(i); stepTagInput(i); } } }
+    else if (ev.key === 'Escape') { document.getElementById(`step-tags-pop-${i}`)?.classList.remove('open'); }
+  }
+  function stepTagPick(i, oi) { stepTagAdd(i, _stepTagOpts[oi]); }
+  function stepTagAddTyped(i) { const inp = document.getElementById(`step-tags-inp-${i}`); if (inp) stepTagAdd(i, inp.value); }
+  function stepTagAdd(i, val) {
+    val = (val || '').trim(); if (!val || !_stepDraft || !_stepDraft.variants[i]) return;
+    const arr = _stepDraft.variants[i].targets || (_stepDraft.variants[i].targets = []);
+    if (!arr.some(x => _lmNorm(x) === _lmNorm(val))) arr.push(val);
+    _stepRefreshChips(i);
+    const inp = document.getElementById(`step-tags-inp-${i}`); if (inp) { inp.value = ''; inp.focus(); }
+    stepTagInput(i);
+  }
+  function stepTagRemove(i, ti) { if (!_stepDraft || !_stepDraft.variants[i]) return; (_stepDraft.variants[i].targets || []).splice(ti, 1); _stepRefreshChips(i); stepTagInput(i); }
+  function stepTagBlur(i) { setTimeout(() => document.getElementById(`step-tags-pop-${i}`)?.classList.remove('open'), 130); }
+  function stepSetMode(mode) { _stepSyncDraft(); _stepDraft.mode = mode; if (mode !== 'off') { while (_stepDraft.variants.length < 2) _stepDraft.variants.push({ nombre: String.fromCharCode(65 + _stepDraft.variants.length), cuerpo: '', targets: [] }); } _stepRenderMsg(); }
+  function stepSetField(f) { _stepSyncDraft(); _stepDraft.field = f; _stepRenderMsg(); }
+  function stepAddVariant() { _stepSyncDraft(); _stepDraft.variants.push({ nombre: String.fromCharCode(65 + _stepDraft.variants.length), cuerpo: '', targets: [] }); _stepRenderMsg(); }
+  function stepDelVariant(i) { _stepSyncDraft(); _stepDraft.variants.splice(i, 1); if (!_stepDraft.variants.length) _stepDraft.variants.push({ nombre: 'A', cuerpo: '', targets: [] }); _stepRenderMsg(); }
+  function stepFocusTa(id) { _stepFocusTa = id; }
+  function seqInsertVar(tok) {
+    if (!tok) return;
+    const ta = document.getElementById(_stepFocusTa || 'step-var-0'); if (!ta) return;
+    const ins = `{{${tok}}}`;
+    const s = ta.selectionStart == null ? ta.value.length : ta.selectionStart;
+    const e = ta.selectionEnd == null ? ta.value.length : ta.selectionEnd;
+    ta.value = ta.value.slice(0, s) + ins + ta.value.slice(e);
+    ta.focus(); const pos = s + ins.length; ta.setSelectionRange(pos, pos);
+  }
+  async function saveStep(seqId, stepId) {
+    _stepSyncDraft();
+    const dia = parseInt($('step-dia')?.value) || 1;
+    const d = _stepDraft || { mode: 'off', field: '', variants: [{ cuerpo: '' }] };
+    const variants = d.mode === 'off' ? [] : d.variants.filter(v => (v.cuerpo || '').trim() || (v.nombre || '').trim());
+    const plantilla = ((d.variants[0] && d.variants[0].cuerpo) || '').trim();
+    const body = { sequence_id: seqId, dia, canal: $('step-canal')?.value || 'email', titulo: $('step-titulo')?.value.trim() || '', plantilla, variants, variant_mode: d.mode, variant_field: d.field, orden: dia };
+    const btn = $('step-save'); if (btn) btn.disabled = true;
+    try {
+      const res = await apiFetch(`${API}/sequence-steps${stepId ? '/' + stepId : ''}`, { method: stepId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (!res.ok) throw new Error((await res.json()).error || 'Error');
+      closeStepDrawer(); await load();
+    } catch (e) { const h = $('step-hint'); if (h) { h.textContent = e.message; h.className = 'fin-cfg-hint fin-cfg-hint--err'; } if (btn) btn.disabled = false; }
+  }
+  async function confirmDeleteStep(id) {
+    if (!confirm('¿Eliminar este paso?')) return;
+    try {
+      const res = await apiFetch(`${API}/sequence-steps/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error((await res.json()).error || 'Error');
+      await load();
+    } catch (e) { alert('Error: ' + e.message); }
+  }
+
+  // ── Actividad: drawer registrar (touch o tarea) ──
+  function openActivityDrawer(leadId, clientId, isTask, presetTipo) {
+    if (!_data.length) { alert('Crea al menos un lead primero.'); return; }
+    document.getElementById('lm-act-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'lm-act-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) closeActivityDrawer(); };
+    const leadPool = clientId ? _data.filter(l => l.outbound_client_id === clientId) : _data;
+    const leadOpts = '<option value="">— Selecciona lead —</option>' + leadPool.map(l => `<option value="${l.id}"${String(l.id) === String(leadId ?? '') ? ' selected' : ''}>${esc(l.nombre)}${l.empresa ? ' · ' + esc(l.empresa) : ''}</option>`).join('');
+    const tipoOpts = _ACT_OPTS.map(t => `<option value="${t}"${t === presetTipo ? ' selected' : ''}>${_ACT[t][0]}</option>`).join('');
+    const today = new Date().toISOString().split('T')[0];
+    m.innerHTML = `<div class="fin-pi-box">
+      <div class="fin-pi-box__hd"><h3>${isTask ? 'Nueva tarea comercial' : 'Registrar actividad'}</h3><button class="fin-pi-x" onclick="LeadManagerModule.closeActivityDrawer()">✕</button></div>
+      <div class="fin-pi-form">
+        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Lead *</span><select class="form-input" id="act-lead">${leadOpts}</select></label>
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Tipo</span><select class="form-input" id="act-tipo">${tipoOpts}</select></label>
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Registro</span><select class="form-input" id="act-estado"><option value="hecha"${isTask ? '' : ' selected'}>Hecha (touch)</option><option value="pendiente"${isTask ? ' selected' : ''}>Tarea pendiente</option></select></label>
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Fecha</span><input class="form-input" type="date" id="act-fecha" value="${today}"></label>
+        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Nota</span><textarea class="form-input" id="act-nota" rows="3" placeholder="Detalle del touch / contexto…"></textarea></label>
+      </div>
+      <div class="fin-pi-box__ft"><span class="fin-cfg-hint" id="act-hint"></span><div class="fin-pi-ft-btns">
+        <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.closeActivityDrawer()">Cancelar</button>
+        <button class="btn btn--primary btn--sm" id="act-save" onclick="LeadManagerModule.saveActivity()">Guardar</button>
+      </div></div></div>`;
+    document.body.appendChild(m);
+    setTimeout(() => $('act-lead')?.focus(), 60);
+  }
+  function closeActivityDrawer() { document.getElementById('lm-act-modal')?.remove(); }
+  async function saveActivity() {
+    const leadId = $('act-lead')?.value; const hint = $('act-hint');
+    const fail = m => { if (hint) { hint.textContent = m; hint.className = 'fin-cfg-hint fin-cfg-hint--err'; } };
+    if (!leadId) return fail('Selecciona el lead');
+    const lead = _data.find(l => l.id === Number(leadId));
+    const body = {
+      lead_id: Number(leadId), outbound_client_id: lead?.outbound_client_id || null, campaign_id: lead?.campaign_id || null,
+      tipo: $('act-tipo')?.value || 'nota', nota: $('act-nota')?.value.trim() || '',
+      fecha: $('act-fecha')?.value ? new Date($('act-fecha').value + 'T12:00:00').toISOString() : new Date().toISOString(),
+      estado: $('act-estado')?.value || 'hecha',
+    };
+    const btn = $('act-save'); if (btn) btn.disabled = true;
+    try {
+      const res = await apiFetch(`${API}/activities`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (!res.ok) throw new Error((await res.json()).error || 'Error');
+      closeActivityDrawer(); await load();
+    } catch (e) { fail(e.message); if (btn) btn.disabled = false; }
+  }
+  async function confirmDeleteActivity(id) {
+    if (!confirm('¿Eliminar esta actividad?')) return;
+    try { const res = await apiFetch(`${API}/activities/${id}`, { method: 'DELETE' }); if (!res.ok) throw new Error('Error'); await load(); }
+    catch (e) { alert('Error: ' + e.message); }
+  }
+
+  // =================================================================
+  // EMPRESAS + CONTACTOS + IMPORTADOR (directorio estilo Apollo/HubSpot)
+  // =================================================================
+  let _companies = [];
+  let _contacts  = [];
+  let _coQuery = '';
+  let _ctQuery = '';
+  let _ctFilters = [];        // filtros avanzados de contactos: [{field, op, val}]
+  let _coFilters = [];        // filtros avanzados de empresas
+  let _fltEntity = null;      // entidad del modal de filtros abierto
+  let _fltDraft = [];         // borrador editable dentro del modal
+  let _fmsRow = null;         // fila con el multi-select de valores abierto
+  let _fmsValues = [];        // valores distintos cacheados para el multi-select
+  let _ctSel = new Set();
+  let _ctFilteredIds = [];
+  let _coSel = new Set();
+  let _coFilteredIds = [];
+  let _ctSelMode = false;
+  let _coSelMode = false;
+  let _contactView = null;
+  let _cpTab = 'resumen';
+  let _addIds = [];
+  let _cpActs = null;
+  let _cpTaskCtx = null;      // { seqId } — ejecutando una tarea de secuencia sobre esta ficha
+  let _seqTab = 'pasos';
+  let _seqContacts = null;
+  let _seqMetrics = null;
+  let _seqDo = null;          // { seqId, cid } — tarea abierta en el panel de ejecución
+  let _seqDoText = '';        // plantilla ya renderizada (texto plano para copiar)
+  let _stepDraft = null;      // borrador de variantes / A-B dentro del editor de paso
+  let _stepFocusTa = 'step-var-0';
+  const _SEQ_VARS = [['first_name', 'Nombre'], ['last_name', 'Apellido'], ['full_name', 'Nombre completo'], ['email', 'Email'], ['personal_email', 'Email personal'], ['phone', 'Teléfono'], ['mobile', 'Móvil'], ['title', 'Cargo'], ['seniority', 'Seniority'], ['department', 'Departamento'], ['buyer_role', 'Buyer Role'], ['contact_priority', 'Contact Priority'], ['linkedin', 'LinkedIn'], ['city', 'Ciudad'], ['region', 'Región'], ['country', 'País'], ['stage', 'Estado'], ['source', 'Fuente'], ['company', 'Empresa'], ['company_domain', 'Dominio empresa']];
+  // Variables agrupadas para el desplegable (mismos campos que la importación)
+  const _VAR_GROUPS = [
+    ['Contacto', [['first_name', 'Nombre'], ['last_name', 'Apellido'], ['full_name', 'Nombre completo'], ['email', 'Email'], ['personal_email', 'Email personal'], ['phone', 'Teléfono'], ['mobile', 'Móvil'], ['title', 'Cargo'], ['seniority', 'Seniority'], ['department', 'Departamento'], ['buyer_role', 'Buyer Role'], ['contact_priority', 'Contact Priority'], ['linkedin', 'LinkedIn'], ['city', 'Ciudad'], ['region', 'Región'], ['country', 'País'], ['stage', 'Estado'], ['source', 'Fuente']]],
+    ['Empresa', [['company', 'Nombre empresa'], ['company_domain', 'Dominio'], ['company_website', 'Website'], ['company_industry', 'Industria'], ['company_size', 'Nº empleados'], ['company_revenue', 'Ingresos'], ['company_city', 'Ciudad'], ['company_country', 'País'], ['company_target_tier', 'Target Tier / Focus']]],
+  ];
+  function _varSelectHtml(fn) {
+    return `<div class="step-vars"><span class="step-vars__l">Insertar variable</span><select class="step-varsel" onchange="LeadManagerModule.${fn}(this.value); this.selectedIndex=0;"><option value="">＋ Elegir campo…</option>${_VAR_GROUPS.map(g => `<optgroup label="${g[0]}">${g[1].map(v => `<option value="${v[0]}">${v[1]}  ·  {{${v[0]}}}</option>`).join('')}</optgroup>`).join('')}</select></div>`;
+  }
+
+  function _ico(k) {
+    const I = { up: '<path d="M12 19V6"/><path d="M5 12l7-7 7 7"/>', down: '<path d="M12 5v13"/><path d="M19 12l-7 7-7-7"/>', check: '<path d="M20 6L9 17l-5-5"/>' };
+    return `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${I[k] || ''}</svg>`;
+  }
+
+  // ── Catálogo de campos para el mapeo (por destino) ──
+  const LM_FIELDS = {
+    contacts: [
+      { g: 'Contacto', opts: [
+        ['nombre', 'Nombre'], ['apellido', 'Apellido'], ['nombre_completo', 'Nombre completo'],
+        ['email', 'Email'], ['email_personal', 'Email personal'], ['telefono', 'Teléfono'], ['movil', 'Móvil'],
+        ['cargo', 'Cargo / Puesto'], ['seniority', 'Seniority'], ['departamento', 'Departamento / Función'],
+        ['buyer_role', 'Rol de compra (Buyer Role)'],
+        ['linkedin', 'LinkedIn'], ['ciudad', 'Ciudad'], ['region', 'Región / Estado'], ['pais', 'País'],
+        ['estado', 'Etapa / Estado'], ['contact_priority', 'Prioridad (Contact Priority)'], ['fuente', 'Fuente'], ['notas', 'Notas'],
+      ] },
+      { g: 'Empresa (se crea y enlaza)', opts: [
+        ['co_nombre', 'Empresa · Nombre'], ['co_dominio', 'Empresa · Dominio'], ['co_website', 'Empresa · Website'],
+        ['co_industria', 'Empresa · Industria'], ['co_tamano', 'Empresa · Nº empleados'], ['co_ingresos', 'Empresa · Ingresos'],
+        ['co_telefono', 'Empresa · Teléfono'], ['co_linkedin', 'Empresa · LinkedIn'],
+        ['co_ciudad', 'Empresa · Ciudad'], ['co_region', 'Empresa · Región/Estado'], ['co_pais', 'Empresa · País'],
+        ['co_direccion', 'Empresa · Dirección'], ['co_cp', 'Empresa · Código postal'], ['co_fundada', 'Empresa · Año fundación'],
+        ['co_descripcion', 'Empresa · Descripción'], ['co_tecnologias', 'Empresa · Tecnologías'], ['co_funding', 'Empresa · Funding'],
+        ['co_target_tier', 'Empresa · Target Tier / Focus'],
+      ] },
+    ],
+    companies: [
+      { g: 'Empresa', opts: [
+        ['nombre', 'Nombre'], ['dominio', 'Dominio'], ['website', 'Website (URL)'],
+        ['industria', 'Industria'], ['tamano', 'Nº empleados'], ['ingresos', 'Ingresos anuales'],
+        ['telefono', 'Teléfono'], ['linkedin', 'LinkedIn'],
+        ['ciudad', 'Ciudad'], ['region', 'Región / Estado'], ['pais', 'País'],
+        ['direccion', 'Dirección'], ['codigo_postal', 'Código postal'], ['fundada', 'Año fundación'],
+        ['descripcion', 'Descripción'], ['tecnologias', 'Tecnologías'], ['funding', 'Funding'],
+        ['target_tier', 'Target Tier / Focus'], ['notas', 'Notas'],
+      ] },
+    ],
+  };
+  // Sinónimos de campos de CONTACTO (persona)
+  const LM_CT_SYN = {
+    nombre: ['first name', 'firstname', 'first', 'nombre', 'nombres', 'given name', 'prenom'],
+    apellido: ['last name', 'lastname', 'last', 'apellido', 'apellidos', 'surname', 'family name'],
+    nombre_completo: ['full name', 'name', 'nombre completo', 'contact name'],
+    email: ['email', 'e mail', 'correo', 'mail', 'email address', 'work email', 'business email', 'correo electronico'],
+    email_personal: ['personal email', 'email personal', 'correo personal', 'other email'],
+    telefono: ['phone', 'telefono', 'tel', 'phone number', 'work phone', 'direct phone', 'direct', 'corporate phone'],
+    movil: ['mobile', 'mobile number', 'mobile phone', 'movil', 'celular', 'cell', 'cell phone', 'whatsapp'],
+    cargo: ['title', 'job title', 'cargo', 'puesto', 'position', 'role', 'headline'],
+    seniority: ['seniority', 'seniority level', 'nivel', 'nivel jerarquico'],
+    departamento: ['department', 'departamento', 'area', 'function', 'functional level', 'departments'],
+    linkedin: ['linkedin', 'linkedin url', 'linkedin profile', 'perfil linkedin', 'person linkedin url', 'personal linkedin'],
+    ciudad: ['city', 'ciudad', 'localidad'],
+    region: ['state', 'region', 'provincia', 'state region', 'estado region'],
+    pais: ['country', 'pais', 'country region'],
+    estado: ['stage', 'lead stage', 'status', 'estado', 'lifecycle', 'lifecycle stage', 'lead status', 'etapa'],
+    fuente: ['source', 'fuente', 'lead source', 'original source', 'origen'],
+    notas: ['notes', 'notas', 'comments', 'comentarios', 'observaciones'],
+    buyer_role: ['buyer role', 'buying role', 'buyer persona', 'rol de compra', 'rol comprador', 'rol de comprador', 'purchase role', 'buying center role'],
+    contact_priority: ['contact priority', 'priority', 'prioridad', 'prioridad de contacto', 'prioridad contacto', 'lead priority'],
+  };
+  // Sinónimos de atributos de EMPRESA (con y sin el prefijo "company")
+  const LM_CO_SYN = {
+    nombre: ['name', 'company', 'company name', 'account name', 'organization', 'organisation', 'razon social', 'empresa'],
+    dominio: ['domain', 'company domain'],
+    website: ['website', 'company website', 'web', 'url', 'sitio web', 'site'],
+    industria: ['industry', 'industria', 'sector', 'vertical'],
+    tamano: ['size', 'company size', 'employees', 'number of employees', 'num employees', 'no of employees', 'headcount'],
+    ingresos: ['annual revenue', 'revenue', 'company annual revenue', 'ingresos', 'ingresos anuales', 'facturacion'],
+    telefono: ['phone', 'company phone', 'telefono'],
+    linkedin: ['linkedin', 'company linkedin', 'linkedin url'],
+    ciudad: ['city', 'company city', 'ciudad'],
+    region: ['state', 'region', 'company state', 'provincia'],
+    pais: ['country', 'company country', 'pais'],
+    direccion: ['address', 'full address', 'street address', 'company address', 'direccion'],
+    codigo_postal: ['postal code', 'zip', 'zip code', 'post code', 'codigo postal'],
+    fundada: ['founded', 'founded year', 'year founded', 'ano fundacion', 'fundada'],
+    descripcion: ['description', 'company description', 'descripcion'],
+    tecnologias: ['technologies', 'tech stack', 'company technologies', 'tecnologias'],
+    funding: ['total funding', 'funding', 'company total funding'],
+    target_tier: ['target tier', 'target tier focus', 'target account tier', 'account tier', 'tier', 'target focus', 'account focus', 'focus'],
+  };
+  function _lmNorm(s) { return String(s || '').toLowerCase().trim().replace(/[_\-./]+/g, ' ').replace(/\s+/g, ' ').replace(/[áàä]/g, 'a').replace(/[éèë]/g, 'e').replace(/[íìï]/g, 'i').replace(/[óòö]/g, 'o').replace(/[úùü]/g, 'u').replace(/ñ/g, 'n'); }
+  function _lmWord(h, s) { return new RegExp('(^| )' + s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '( |$)').test(h); }
+  function _lmBest(h, synMap) {
+    let best = '', score = 0;
+    for (const [key, syns] of Object.entries(synMap)) {
+      for (const raw of syns) {
+        const s = _lmNorm(raw); if (!s) continue;
+        let sc = 0;
+        if (h === s) sc = 1000 + s.length;
+        else if (_lmWord(h, s)) sc = 100 + s.length;
+        if (sc > score) { score = sc; best = key; }
+      }
+    }
+    return best;
+  }
+  const _CO_PFX = /^(company|empresa|account|org|organization|organisation)\s+(.+)$/;
+  function _coKey(attr) { return 'co_' + (attr === 'codigo_postal' ? 'cp' : attr); }
+  // Auto-detección: distingue company_* (empresa) de campos de contacto
+  function _lmGuess(headerRaw, target) {
+    const h = _lmNorm(headerRaw);
+    if (!h) return '';
+    if (target === 'companies') return _lmBest(h, LM_CO_SYN);
+    const m = h.match(_CO_PFX);                       // "company X" → atributo de empresa
+    if (m) { const a = _lmBest(m[2], LM_CO_SYN); if (a) return _coKey(a); }
+    const c = _lmBest(h, LM_CT_SYN);                  // campo de contacto directo
+    if (c) return c;
+    const a = _lmBest(h, LM_CO_SYN);                  // atributo de empresa sin prefijo (industry, revenue…)
+    if (a) return _coKey(a);
+    return '';
+  }
+
+  // ── Vista: Contactos ──
+  // ── Filtrado avanzado de Contactos / Empresas (por campo importado) ──
+  const _FLT_ICON = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>';
+  const _FLT_OPS = [['in', 'es uno de'], ['nin', 'no es ninguno de'], ['contains', 'contiene'], ['starts', 'empieza por'], ['empty', 'está vacío'], ['nempty', 'tiene valor']];
+  const _CT_FILTER_FIELDS = [['nombre', 'Nombre'], ['apellido', 'Apellido'], ['email', 'Email'], ['email_personal', 'Email personal'], ['telefono', 'Teléfono'], ['movil', 'Móvil'], ['cargo', 'Cargo'], ['seniority', 'Seniority'], ['departamento', 'Departamento'], ['buyer_role', 'Buyer Role'], ['contact_priority', 'Contact Priority'], ['linkedin', 'LinkedIn'], ['company_nombre', 'Empresa'], ['ciudad', 'Ciudad'], ['region', 'Región'], ['pais', 'País'], ['estado', 'Estado'], ['fuente', 'Fuente']];
+  const _CO_FILTER_FIELDS = [['nombre', 'Nombre'], ['dominio', 'Dominio'], ['website', 'Website'], ['industria', 'Industria'], ['tamano', 'Nº empleados'], ['ingresos', 'Ingresos'], ['telefono', 'Teléfono'], ['linkedin', 'LinkedIn'], ['ciudad', 'Ciudad'], ['region', 'Región'], ['pais', 'País'], ['direccion', 'Dirección'], ['codigo_postal', 'Código postal'], ['fundada', 'Año fundación'], ['descripcion', 'Descripción'], ['tecnologias', 'Tecnologías'], ['funding', 'Funding'], ['target_tier', 'Target Tier / Focus']];
+  function _fltFields(entity) { return entity === 'contacts' ? _CT_FILTER_FIELDS : _CO_FILTER_FIELDS; }
+  function _fltFieldLabel(entity, key) { return (_fltFields(entity).find(x => x[0] === key) || ['', key])[1]; }
+  function _fltOpLabel(op) { return (_FLT_OPS.find(x => x[0] === op) || ['', op])[1]; }
+  function _fltDistinct(entity, field) {
+    const rows = entity === 'contacts' ? _contacts : _companies;
+    const map = new Map();
+    (rows || []).forEach(r => {
+      const raw = field === 'company_nombre' ? (r.company_nombre || r.empresa_nombre) : r[field];
+      if (raw == null) return; const s = String(raw).trim(); if (!s) return;
+      const k = s.toLowerCase(); if (!map.has(k)) map.set(k, s);
+    });
+    return [...map.values()].sort((a, b) => a.localeCompare(b, 'es', { numeric: true, sensitivity: 'base' }));
+  }
+  const _EMP_RANGES = [['1–10', 1, 10], ['11–20', 11, 20], ['21–50', 21, 50], ['51–100', 51, 100], ['101–200', 101, 200], ['201–500', 201, 500], ['501–1000', 501, 1000], ['1001–5000', 1001, 5000], ['5000+', 5001, null]];
+  const _FLT_RANGE_FIELDS = ['tamano'];
+  function _fltIsRange(field) { return _FLT_RANGE_FIELDS.indexOf(field) >= 0; }
+  function _fltRangeVals(field) { return field === 'tamano' ? _EMP_RANGES : []; }
+  function _numIn(raw, labels) {
+    const n = parseFloat(String(raw == null ? '' : raw).replace(/[^0-9.]/g, ''));
+    if (isNaN(n)) return false;
+    return labels.some(lbl => { const r = _EMP_RANGES.find(x => x[0] === lbl); return r ? (n >= r[1] && (r[2] == null || n <= r[2])) : false; });
+  }
+  function _fmsSummary(arr) { return (arr && arr.length) ? `${arr.length} seleccionado${arr.length === 1 ? '' : 's'}` : 'Elegir valor…'; }
+  function _lmMatch(row, filters) {
+    return filters.every(f => {
+      const raw = f.field === 'company_nombre' ? (row.company_nombre || row.empresa_nombre) : row[f.field];
+      const v = (raw == null ? '' : String(raw)).trim().toLowerCase();
+      if (f.op === 'empty') return !v;
+      if (f.op === 'nempty') return !!v;
+      if (f.op === 'in' || f.op === 'nin') {
+        const arr = Array.isArray(f.val) ? f.val : [];
+        const hit = _fltIsRange(f.field) ? _numIn(raw, arr) : arr.some(x => v === String(x).trim().toLowerCase());
+        return f.op === 'in' ? hit : !hit;
+      }
+      const q = (typeof f.val === 'string' ? f.val : '').toLowerCase().trim();
+      if (f.op === 'starts') return v.startsWith(q);
+      return v.includes(q);
+    });
+  }
+  function _fltValTxt(f) {
+    if (f.op === 'empty' || f.op === 'nempty') return '';
+    if (f.op === 'in' || f.op === 'nin') { const a = Array.isArray(f.val) ? f.val : []; return a.length <= 2 ? a.map(x => `“${esc(x)}”`).join(', ') : `${a.length} valores`; }
+    return `“${esc(typeof f.val === 'string' ? f.val : '')}”`;
+  }
+  function _fltChipsHtml(entity) {
+    const filters = entity === 'contacts' ? _ctFilters : _coFilters;
+    if (!filters.length) return '';
+    return `<div class="lm-filter-chips">${filters.map((f, i) => `<span class="lm-fchip"><b>${esc(_fltFieldLabel(entity, f.field))}</b> ${_fltOpLabel(f.op)}${_fltValTxt(f) ? ' ' + _fltValTxt(f) : ''}<button title="Quitar" onclick="LeadManagerModule.removeFilter('${entity}',${i})">✕</button></span>`).join('')}<button class="lm-fchip-clear" onclick="LeadManagerModule.clearFilters('${entity}')">Limpiar todo</button></div>`;
+  }
+  function _fltNewRow() { return { field: _fltFields(_fltEntity)[0][0], op: 'in', val: [] }; }
+  function openFilters(entity) {
+    _fltEntity = entity;
+    const cur = entity === 'contacts' ? _ctFilters : _coFilters;
+    _fltDraft = cur.length ? cur.map(f => ({ field: f.field, op: f.op, val: Array.isArray(f.val) ? [...f.val] : f.val })) : [_fltNewRow()];
+    document.getElementById('lm-flt-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'lm-flt-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) closeFilters(); };
+    m.innerHTML = `<div class="fin-pi-box lm-flt-box">
+      <div class="fin-pi-box__hd"><h3>Filtros avanzados · ${entity === 'contacts' ? 'Contactos' : 'Empresas'}</h3><button class="fin-pi-x" onclick="LeadManagerModule.closeFilters()">✕</button></div>
+      <div class="flt-body"><div id="flt-rows" class="flt-rows"></div>
+        <button class="flt-add" onclick="LeadManagerModule.fltAddRow()">＋ Añadir condición</button>
+        <p class="flt-hint">Cumplen <b>todas</b> las condiciones. En “es uno de” eliges de la lista de valores que existen en tus datos.</p></div>
+      <div class="fin-pi-box__ft"><button class="btn btn--ghost btn--danger btn--sm" onclick="LeadManagerModule.clearFilters('${entity}')">Limpiar todo</button><div class="fin-pi-ft-btns">
+        <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.closeFilters()">Cancelar</button>
+        <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.fltApply()">Aplicar</button>
+      </div></div></div>`;
+    document.body.appendChild(m);
+    _fltRenderRows();
+  }
+  function closeFilters() { fmsClose(); document.getElementById('lm-flt-modal')?.remove(); }
+  function _fltRenderRows() {
+    const el = document.getElementById('flt-rows'); if (!el) return;
+    const fields = _fltFields(_fltEntity);
+    el.innerHTML = _fltDraft.map((f, i) => {
+      const fieldOpts = fields.map(x => `<option value="${x[0]}"${f.field === x[0] ? ' selected' : ''}>${x[1]}</option>`).join('');
+      const opOpts = _FLT_OPS.map(o => `<option value="${o[0]}"${f.op === o[0] ? ' selected' : ''}>${o[1]}</option>`).join('');
+      let valCell;
+      if (f.op === 'empty' || f.op === 'nempty') valCell = '<span class="flt-noval">sin valor</span>';
+      else if (f.op === 'in' || f.op === 'nin') valCell = `<div class="fms" id="fms-box-${i}" onclick="LeadManagerModule.fmsToggle(${i})"><span class="fms-lbl" id="fms-lbl-${i}">${_fmsSummary(Array.isArray(f.val) ? f.val : [])}</span><svg class="fms-chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>`;
+      else valCell = `<input class="form-input" value="${esc(typeof f.val === 'string' ? f.val : '')}" placeholder="Valor…" oninput="LeadManagerModule.fltSet(${i},'val',this.value,1)">`;
+      return `<div class="flt-row">
+        <select class="form-input" onchange="LeadManagerModule.fltSet(${i},'field',this.value)">${fieldOpts}</select>
+        <select class="form-input" onchange="LeadManagerModule.fltSet(${i},'op',this.value)">${opOpts}</select>
+        ${valCell}
+        <button class="flt-del" title="Quitar condición" onclick="LeadManagerModule.fltDelRow(${i})">✕</button>
+      </div>`;
+    }).join('');
+  }
+  function _fltResetVal(i) {
+    const op = _fltDraft[i].op;
+    if (op === 'in' || op === 'nin') { if (!Array.isArray(_fltDraft[i].val)) _fltDraft[i].val = []; }
+    else if (Array.isArray(_fltDraft[i].val)) _fltDraft[i].val = '';
+  }
+  function fltSet(i, key, val, noRerender) {
+    if (!_fltDraft[i]) return;
+    _fltDraft[i][key] = val;
+    if (key === 'field' && (_fltDraft[i].op === 'in' || _fltDraft[i].op === 'nin')) _fltDraft[i].val = [];
+    if (key === 'op') _fltResetVal(i);
+    if (!noRerender) { fmsClose(); _fltRenderRows(); }
+  }
+  function fltAddRow() { fmsClose(); _fltDraft.push(_fltNewRow()); _fltRenderRows(); }
+  function fltDelRow(i) { fmsClose(); _fltDraft.splice(i, 1); if (!_fltDraft.length) _fltDraft.push(_fltNewRow()); _fltRenderRows(); }
+  function fltApply() {
+    const clean = _fltDraft.filter(f => {
+      if (f.op === 'empty' || f.op === 'nempty') return true;
+      if (f.op === 'in' || f.op === 'nin') return Array.isArray(f.val) && f.val.length;
+      return typeof f.val === 'string' && f.val.trim();
+    });
+    if (_fltEntity === 'contacts') _ctFilters = clean; else _coFilters = clean;
+    closeFilters(); _renderBody();
+  }
+  function clearFilters(entity) { if (entity === 'contacts') _ctFilters = []; else _coFilters = []; closeFilters(); _renderBody(); }
+  function removeFilter(entity, i) { const arr = entity === 'contacts' ? _ctFilters : _coFilters; arr.splice(i, 1); _renderBody(); }
+  // Multi-select flotante de valores existentes (buscable)
+  function fmsToggle(i) { if (_fmsRow === i) fmsClose(); else fmsOpen(i); }
+  function fmsOpen(i) {
+    fmsClose();
+    const box = document.getElementById('fms-box-' + i); if (!box || !_fltDraft[i]) return;
+    _fmsRow = i;
+    _fmsValues = _fltIsRange(_fltDraft[i].field) ? _fltRangeVals(_fltDraft[i].field).map(r => r[0]) : _fltDistinct(_fltEntity, _fltDraft[i].field);
+    const r = box.getBoundingClientRect();
+    const pop = document.createElement('div'); pop.id = 'fms-pop'; pop.className = 'fms-pop';
+    pop.style.left = r.left + 'px'; pop.style.top = (r.bottom + 4) + 'px'; pop.style.width = Math.max(r.width, 230) + 'px';
+    pop.innerHTML = `<input class="fms-search" id="fms-search" placeholder="Buscar valor…" oninput="LeadManagerModule.fmsFilter()"><div class="fms-list" id="fms-list"></div>`;
+    document.body.appendChild(pop);
+    _fmsRenderList('');
+    setTimeout(() => document.getElementById('fms-search')?.focus(), 30);
+    setTimeout(() => document.addEventListener('mousedown', _fmsOutside), 0);
+  }
+  function _fmsOutside(e) {
+    const pop = document.getElementById('fms-pop'); const box = _fmsRow != null ? document.getElementById('fms-box-' + _fmsRow) : null;
+    if (pop && !pop.contains(e.target) && (!box || !box.contains(e.target))) fmsClose();
+  }
+  function fmsClose() { document.getElementById('fms-pop')?.remove(); document.removeEventListener('mousedown', _fmsOutside); _fmsRow = null; }
+  function fmsFilter() { _fmsRenderList(document.getElementById('fms-search')?.value || ''); }
+  function _fmsRenderList(q) {
+    const el = document.getElementById('fms-list'); if (!el || _fmsRow == null || !_fltDraft[_fmsRow]) return;
+    if (!_fmsValues.length) { el.innerHTML = '<div class="fms-empty">Este campo no tiene valores en tus datos.</div>'; return; }
+    const selArr = Array.isArray(_fltDraft[_fmsRow].val) ? _fltDraft[_fmsRow].val : [];
+    const ql = (q || '').toLowerCase().trim();
+    el.innerHTML = _fmsValues.map((v, idx) => {
+      const show = !ql || v.toLowerCase().includes(ql);
+      const checked = selArr.some(x => String(x).toLowerCase() === v.toLowerCase());
+      return `<label class="fms-opt"${show ? '' : ' style="display:none"'}><input type="checkbox" ${checked ? 'checked' : ''} onchange="LeadManagerModule.fmsPick(${idx})"><span>${esc(v)}</span></label>`;
+    }).join('');
+  }
+  function fmsPick(idx) {
+    if (_fmsRow == null || !_fltDraft[_fmsRow]) return;
+    const v = _fmsValues[idx]; if (v == null) return;
+    const arr = Array.isArray(_fltDraft[_fmsRow].val) ? _fltDraft[_fmsRow].val : [];
+    const pos = arr.findIndex(x => String(x).toLowerCase() === v.toLowerCase());
+    if (pos >= 0) arr.splice(pos, 1); else arr.push(v);
+    _fltDraft[_fmsRow].val = arr;
+    const lbl = document.getElementById('fms-lbl-' + _fmsRow); if (lbl) lbl.textContent = _fmsSummary(arr);
+  }
+
+  // ── Vistas guardadas (conjuntos de filtros con nombre; localStorage por navegador) ──
+  const _VIEW_ICON = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>';
+  const _LM_VIEWS_KEY = 'kw_lm_views';
+  function _lmViewsGet() { try { const a = JSON.parse(localStorage.getItem(_LM_VIEWS_KEY)); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+  function _lmViewsSet(a) { try { localStorage.setItem(_LM_VIEWS_KEY, JSON.stringify(a)); } catch (e) {} }
+  function openViews(entity) {
+    document.getElementById('lm-views-modal')?.remove();
+    const all = _lmViewsGet().map((v, i) => ({ v, i })).filter(x => x.v.entity === entity);
+    const cur = entity === 'contacts' ? _ctFilters : _coFilters;
+    const m = document.createElement('div'); m.id = 'lm-views-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) m.remove(); };
+    const rows = all.length
+      ? all.map(x => `<div class="lm-view-row"><button class="lm-view-apply" onclick="LeadManagerModule.applyView('${entity}',${x.i})"><span class="lm-view-nm">${esc(x.v.name)}</span><span class="lm-view-meta">${(x.v.filters || []).length} filtro${(x.v.filters || []).length === 1 ? '' : 's'}</span></button><button class="lm-view-del" title="Eliminar vista" onclick="LeadManagerModule.deleteView(${x.i})">✕</button></div>`).join('')
+      : `<div class="lm-view-empty">Aún no tienes vistas guardadas para ${entity === 'contacts' ? 'Contactos' : 'Empresas'}. Aplica filtros y guárdalos aquí.</div>`;
+    m.innerHTML = `<div class="fin-pi-box lm-views-box">
+      <div class="fin-pi-box__hd"><h3>Vistas guardadas · ${entity === 'contacts' ? 'Contactos' : 'Empresas'}</h3><button class="fin-pi-x" onclick="document.getElementById('lm-views-modal').remove()">✕</button></div>
+      <div class="fin-pi-form"><div class="lm-view-list">${rows}</div></div>
+      <div class="fin-pi-box__ft"><span class="fin-cfg-hint">${cur.length ? `${cur.length} filtro(s) activo(s) ahora` : 'Aplica filtros para poder guardarlos'}</span><div class="fin-pi-ft-btns">
+        <button class="btn btn--ghost btn--sm" onclick="document.getElementById('lm-views-modal').remove()">Cerrar</button>
+        <button class="btn btn--primary btn--sm"${cur.length ? '' : ' disabled'} onclick="LeadManagerModule.saveView('${entity}')">＋ Guardar vista actual</button>
+      </div></div></div>`;
+    document.body.appendChild(m);
+  }
+  function applyView(entity, idx) {
+    const v = _lmViewsGet()[idx]; if (!v) return;
+    const flt = (v.filters || []).map(f => ({ ...f }));
+    if (entity === 'contacts') _ctFilters = flt; else _coFilters = flt;
+    document.getElementById('lm-views-modal')?.remove();
+    _renderBody();
+  }
+  function saveView(entity) {
+    const cur = entity === 'contacts' ? _ctFilters : _coFilters;
+    if (!cur.length) { alert('Aplica al menos un filtro antes de guardar la vista.'); return; }
+    const name = (prompt('Nombre de la vista:') || '').trim(); if (!name) return;
+    const all = _lmViewsGet();
+    all.push({ name: name, entity: entity, filters: cur.map(f => ({ ...f })) });
+    _lmViewsSet(all);
+    openViews(entity);
+  }
+  function deleteView(idx) {
+    const all = _lmViewsGet(); const v = all[idx]; if (!v) return;
+    if (!confirm(`¿Eliminar la vista “${v.name}”?`)) return;
+    const entity = v.entity;
+    all.splice(idx, 1); _lmViewsSet(all);
+    openViews(entity);
+  }
+
+  function _vContacts() {
+    return `<div class="lm-sec-head">
+        <div><h2 class="lm-sec-title">Contactos</h2><p class="lm-sec-sub">Personas ligadas a su empresa — importa desde Excel / CSV</p></div>
+        <div class="lm-hd-actions">
+          <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.exportCsv('contacts')">${_ico('down')} Exportar</button>
+          <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openContact()">＋ Contacto</button>
+          <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openImport('contacts')">${_ico('up')} Importar</button>
+        </div>
+      </div>
+      <div class="lm-toolbar">
+        <div class="lm-search lm-search--wide"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" id="lm-ct-search" placeholder="Buscar contacto, empresa, email…" value="${esc(_ctQuery)}" oninput="LeadManagerModule.filterContacts(this.value)"></div>
+        <span class="lm-count" id="lm-ct-count"></span>
+        <button class="lm-filter-btn${_ctFilters.length ? ' on' : ''}" onclick="LeadManagerModule.openFilters('contacts')">${_FLT_ICON} Filtros${_ctFilters.length ? ` · ${_ctFilters.length}` : ''}</button>
+        <button class="lm-filter-btn" onclick="LeadManagerModule.openViews('contacts')">${_VIEW_ICON} Vistas</button>
+        <button class="lm-filter-btn" title="Elegir columnas visibles" onclick="LeadManagerModule.openColsPicker(this)">${NI('sliders')} Columnas</button>
+        <button class="lm-sel-btn" onclick="LeadManagerModule.toggleCtSelMode()">Seleccionar</button>
+      </div>
+      ${_fltChipsHtml('contacts')}
+      <div class="lm-bulk-bar" id="lm-ct-bulk"></div>
+      <div id="lm-ct-results"></div>`;
+  }
+  // ── Tabla de Contactos nivel SaaS: columnas configurables, sin cortes, compacta ──
+  const _CT_COLDEFS = [
+    { k: 'contacto',     l: 'Contacto',      w: 230, fixed: true },
+    { k: 'cargo',        l: 'Cargo',         w: 160 },
+    { k: 'empresa',      l: 'Empresa',       w: 170 },
+    { k: 'email',        l: 'Email',         w: 220 },
+    { k: 'verificacion', l: 'Verificación',  w: 118 },
+    { k: 'telefono',     l: 'Teléfono',      w: 128 },
+    { k: 'linkedin',     l: 'LinkedIn',      w: 92 },
+    { k: 'ciudad',       l: 'Ciudad',        w: 120 },
+    { k: 'region',       l: 'Región',        w: 120 },
+    { k: 'pais',         l: 'País',          w: 110 },
+    { k: 'seniority',    l: 'Seniority',     w: 110 },
+    { k: 'departamento', l: 'Departamento',  w: 140 },
+    { k: 'buyer_role',   l: 'Rol de compra', w: 130 },
+    { k: 'contact_priority', l: 'Prioridad', w: 105 },
+    { k: 'estado',       l: 'Estado',        w: 108 },
+    { k: 'disposition',  l: 'Disposición',   w: 120 },
+    { k: 'fuente',       l: 'Fuente',        w: 96 },
+    { k: 'secuencias',   l: 'Secuencias',    w: 150 },
+    { k: 'creado',       l: 'Creado',        w: 100 },
+  ];
+  const _CT_COLS_DEFAULT = ['contacto', 'cargo', 'empresa', 'email', 'verificacion', 'telefono', 'estado'];
+  let _ctCols = null;
+  function _ctColsGet() {
+    if (_ctCols) return _ctCols;
+    try { const s = JSON.parse(localStorage.getItem('lm_ct_cols') || 'null'); if (Array.isArray(s) && s.length) _ctCols = s.filter(k => _CT_COLDEFS.some(d => d.k === k)); } catch {}
+    if (!_ctCols || !_ctCols.length) _ctCols = [..._CT_COLS_DEFAULT];
+    if (!_ctCols.includes('contacto')) _ctCols.unshift('contacto');
+    return _ctCols;
+  }
+  function _ctColsSave() { try { localStorage.setItem('lm_ct_cols', JSON.stringify(_ctCols)); } catch {} }
+  function toggleCtCol(k) {
+    const def = _CT_COLDEFS.find(d => d.k === k); if (!def || def.fixed) return;
+    _ctColsGet();
+    if (_ctCols.includes(k)) _ctCols = _ctCols.filter(x => x !== k);
+    else { // insertar respetando el orden del registro
+      const order = _CT_COLDEFS.map(d => d.k);
+      _ctCols = order.filter(x => _ctCols.includes(x) || x === k);
+    }
+    _ctColsSave(); _renderContacts();
+    const pop = document.getElementById('lm-cols-pop'); if (pop) pop.innerHTML = _colsPopHtml();
+  }
+  function resetCtCols() { _ctCols = [..._CT_COLS_DEFAULT]; _ctColsSave(); _renderContacts(); const pop = document.getElementById('lm-cols-pop'); if (pop) pop.innerHTML = _colsPopHtml(); }
+  function _colsPopHtml() {
+    const on = _ctColsGet();
+    return `<div class="lm-pop__hd">Columnas visibles <button class="lm-link" style="margin-left:auto;font-size:11px" onclick="LeadManagerModule.resetCtCols()">Restablecer</button></div>
+      ${_CT_COLDEFS.map(d => `
+      <label class="lm-pop__it${d.fixed ? ' fx' : ''}">
+        <span class="lm-sw${on.includes(d.k) ? ' on' : ''}"${d.fixed ? '' : ` onclick="LeadManagerModule.toggleCtCol('${d.k}')"`}><span class="lm-sw__dot"></span></span>
+        <span>${d.l}</span>${d.fixed ? '<span class="lm-pop__fx">fija</span>' : ''}
+      </label>`).join('')}`;
+  }
+  function openColsPicker(btn) {
+    document.getElementById('lm-cols-pop')?.remove();
+    const pop = document.createElement('div'); pop.id = 'lm-cols-pop'; pop.className = 'lm-pop';
+    pop.innerHTML = _colsPopHtml();
+    document.body.appendChild(pop);
+    const r = btn.getBoundingClientRect();
+    pop.style.top = (r.bottom + 6) + 'px';
+    pop.style.left = Math.max(10, Math.min(r.left, window.innerWidth - pop.offsetWidth - 10)) + 'px';
+    setTimeout(() => {
+      const close = ev => { if (!pop.contains(ev.target) && ev.target !== btn) { pop.remove(); document.removeEventListener('mousedown', close); } };
+      document.addEventListener('mousedown', close);
+    }, 0);
+  }
+  function _ctCell(c, k) {
+    const clip = (v, extra) => v ? `<span class="cell-clip" title="${esc(v)}">${extra || esc(v)}</span>` : '<span class="lm-dim">—</span>';
+    switch (k) {
+      case 'contacto': {
+        const full = [c.nombre, c.apellido].filter(Boolean).join(' ') || (c.email || '—');
+        return `<div class="client-cell-name"><img class="client-avatar" src="${_av(full)}" style="object-fit:cover" alt=""/><div class="lm-cellmain"><span class="client-nombre cell-clip" title="${esc(full)}">${esc(full)}</span>${_dispoBadge(c.disposition)}</div></div>`;
+      }
+      case 'cargo':    return clip(c.cargo);
+      case 'empresa': { const emp = c.company_nombre || c.empresa_nombre || ''; return emp ? `<span class="lm-emp-chip cell-clip" title="${esc(emp)}">${esc(emp)}</span>` : '<span class="lm-dim">—</span>'; }
+      case 'email':    return c.email ? `<a class="cell-clip" style="max-width:100%" href="mailto:${esc(c.email)}" title="${esc(c.email)}" onclick="event.stopPropagation()">${esc(c.email)}</a>` : '<span class="lm-dim">—</span>';
+      case 'verificacion': return c.email ? _emailBadge(c) : '<span class="lm-dim">—</span>';
+      case 'telefono': return clip(c.telefono || c.movil);
+      case 'linkedin': return c.linkedin ? `<a href="${esc(c.linkedin)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="lm-link">Perfil ↗</a>` : '<span class="lm-dim">—</span>';
+      case 'ciudad':   return clip(c.ciudad);
+      case 'region':   return clip(c.region);
+      case 'pais':     return clip(c.pais);
+      case 'seniority':    return clip(c.seniority);
+      case 'departamento': return clip(c.departamento);
+      case 'buyer_role':   return clip(c.buyer_role);
+      case 'contact_priority': return clip(c.contact_priority);
+      case 'estado': { const badge = STAGE_STYLES[c.estado] || 'background:#EEF2F6;color:#475569'; return `<span class="client-badge" style="${badge}">${esc(c.estado || 'nuevo')}</span>`; }
+      case 'disposition': return _dispoBadge(c.disposition) || '<span class="lm-dim">—</span>';
+      case 'fuente':   return clip(c.fuente);
+      case 'secuencias': return _memChips(c) || '<span class="lm-dim">—</span>';
+      case 'creado':   return c.created_at ? `<span class="lm-dim">${new Date(c.created_at).toLocaleDateString()}</span>` : '<span class="lm-dim">—</span>';
+      default: return '<span class="lm-dim">—</span>';
+    }
+  }
+  function _renderContacts() {
+    const el = $('lm-ct-results'); if (!el) return;
+    const q = _ctQuery;
+    let list = _contacts;
+    if (q) list = list.filter(c => (`${c.nombre || ''} ${c.apellido || ''} ${c.email || ''} ${c.company_nombre || c.empresa_nombre || ''} ${c.cargo || ''}`).toLowerCase().includes(q));
+    if (_ctFilters.length) list = list.filter(c => _lmMatch(c, _ctFilters));
+    const cnt = $('lm-ct-count'); if (cnt) cnt.textContent = (q || _ctFilters.length) ? `${list.length} de ${_contacts.length}` : `${_contacts.length} contacto${_contacts.length === 1 ? '' : 's'}`;
+    _ctFilteredIds = list.map(c => c.id);
+    _ctSel.forEach(id => { if (!_ctFilteredIds.includes(id)) _ctSel.delete(id); });
+    if (!list.length) {
+      _renderBulkBar();
+      el.innerHTML = _empty('contacts', _contacts.length ? 'Sin resultados' : 'Aún no hay contactos',
+        _contacts.length ? 'Prueba otra búsqueda.' : 'Importa tu lista de Excel / CSV o agrega uno manualmente. Cada contacto se enlaza a su empresa.',
+        _contacts.length ? '' : 'Importar contactos', "LeadManagerModule.openImport('contacts')");
+      return;
+    }
+    const allSel = list.length > 0 && list.every(c => _ctSel.has(c.id));
+    const cols = _ctColsGet().map(k => _CT_COLDEFS.find(d => d.k === k)).filter(Boolean);
+    const totalW = cols.reduce((s, d) => s + d.w, 0) + (_ctSelMode ? 36 : 0) + 72;
+    el.innerHTML = `<div class="clients-table-wrap lm-dt2-wrap"><table class="clients-table lm-dt lm-dt2${_ctSelMode ? ' sel-on' : ''}" style="min-width:${totalW}px">
+      <colgroup>${_ctSelMode ? '<col style="width:36px">' : '<col style="width:0">'}${cols.map(d => `<col style="width:${d.w}px">`).join('')}<col style="width:72px"></colgroup>
+      <thead><tr>
+        <th class="lm-ck-col"><input type="checkbox" class="lm-ck" ${allSel ? 'checked' : ''} onclick="LeadManagerModule.toggleCtAll(this.checked)"></th>
+        ${cols.map(d => `<th>${d.l}</th>`).join('')}<th></th>
+      </tr></thead>
+      <tbody>${list.map(c => `<tr class="clients-table__row${_ctSel.has(c.id) ? ' sel' : ''}" onclick="LeadManagerModule.openContactPage(${c.id})" style="cursor:pointer">
+        <td class="lm-ck-col" onclick="event.stopPropagation()"><input type="checkbox" class="lm-ck" ${_ctSel.has(c.id) ? 'checked' : ''} onclick="LeadManagerModule.toggleCt(event,${c.id})"></td>
+        ${cols.map(d => `<td class="client-meta">${_ctCell(c, d.k)}</td>`).join('')}
+        <td class="lm-dt-act"><button class="lm-mini-b" title="Borradores IA (✨)" onclick="event.stopPropagation();LeadManagerModule.openAiDrafts(${c.id})">${NI('sparkles')}</button><button class="lm-mini-x" title="Eliminar" onclick="event.stopPropagation();LeadManagerModule.deleteContact(${c.id})">✕</button></td>
+      </tr>`).join('')}</tbody></table></div>`;
+    _renderBulkBar();
+    _syncSelAll();
+  }
+  function filterContacts(v) { _ctQuery = (v || '').toLowerCase().trim(); _renderContacts(); }
+  function toggleCt(ev, id) { const on = ev.target.checked; if (on) _ctSel.add(id); else _ctSel.delete(id); ev.target.closest('tr')?.classList.toggle('sel', on); _renderBulkBar(); _syncSelAll(); }
+  function toggleCtAll(on) { if (on) _ctFilteredIds.forEach(id => _ctSel.add(id)); else _ctFilteredIds.forEach(id => _ctSel.delete(id)); _renderContacts(); }
+  function clearCtSel() { _ctSel.clear(); _renderContacts(); }
+  function toggleCtSelMode() { _ctSelMode = !_ctSelMode; if (!_ctSelMode) _ctSel.clear(); _renderContacts(); }
+  function _syncSelAll() { const box = document.querySelector('#lm-ct-results .lm-dt thead .lm-ck'); if (!box) return; const total = _ctFilteredIds.length, sel = _ctFilteredIds.filter(id => _ctSel.has(id)).length; box.checked = total > 0 && sel === total; box.indeterminate = sel > 0 && sel < total; }
+  function _renderBulkBar() {
+    const bar = $('lm-ct-bulk'); if (!bar) return;
+    if (!_ctSelMode) { bar.classList.remove('show'); bar.innerHTML = ''; return; }
+    bar.classList.add('show');
+    const n = _ctSel.size, total = _ctFilteredIds.length;
+    const selAll = n < total ? `<button class="lm-bulk-ghost" onclick="LeadManagerModule.toggleCtAll(true)">Seleccionar todos (${total})</button>` : '';
+    const acts = n > 0 ? `
+        <button class="lm-bulk-ghost" onclick="LeadManagerModule.clearCtSel()">Ninguno</button>
+        <button class="lm-bulk-act" onclick="LeadManagerModule.bulkAddOpen('sequence')">＋ Secuencia</button>
+        <button class="lm-bulk-act" onclick="LeadManagerModule.bulkAddOpen('campaign')">＋ Campaña</button>
+        <button class="lm-bulk-act lm-bulk-act--vf" title="Verifica emails con el pipeline propio (SMTP) — y busca el email si falta" onclick="LeadManagerModule.bulkVerifyEmails()">${NI('zap')} Verificar emails</button>
+        <button class="lm-bulk-act lm-bulk-act--ai" title="Genera un borrador de email personalizado por IA (Fable 5 para cuentas de alto valor, Haiku para el resto)" onclick="LeadManagerModule.bulkPersonalize()">${NI('sparkles')} Personalizar (IA)</button>
+        <button class="lm-bulk-del" onclick="LeadManagerModule.bulkDeleteContacts(false)">Eliminar</button>
+        <button class="lm-bulk-del" onclick="LeadManagerModule.bulkDeleteContacts(true)">Eliminar + empresas</button>` : '';
+    bar.innerHTML = `<span class="lm-bulk-n">${n ? `${n} seleccionado${n === 1 ? '' : 's'}` : 'Modo selección — elige contactos'}</span>
+      <div class="lm-bulk-actions">
+        ${selAll}${acts}
+        <button class="lm-bulk-ghost" onclick="LeadManagerModule.toggleCtSelMode()">Salir</button>
+      </div>`;
+  }
+  // DELETE con reintento ante 429 (rate-limit): espera y reintenta antes de rendirse.
+  async function _apiDelete(url) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const res = await apiFetch(url, { method: 'DELETE' });
+      if (res.status !== 429) return res;
+      await new Promise(r => setTimeout(r, 1200 * (attempt + 1)));
+    }
+    return apiFetch(url, { method: 'DELETE' });
+  }
+  async function bulkDeleteContacts(withCompanies) {
+    const ids = [..._ctSel]; if (!ids.length) return;
+    const sel = new Set(ids);
+    let emptyCo = [];
+    if (withCompanies) {
+      const assoc = new Set();
+      _contacts.forEach(c => { if (sel.has(c.id) && c.company_id) assoc.add(c.company_id); });
+      emptyCo = [...assoc].filter(coId => !_contacts.some(c => c.company_id === coId && !sel.has(c.id)));
+    }
+    const msg = withCompanies
+      ? `¿Eliminar ${ids.length} contacto(s)?\n\nAdemás se eliminarán ${emptyCo.length} empresa(s) que quedarían sin ningún contacto. Las empresas con otros contactos se conservan.`
+      : `¿Eliminar ${ids.length} contacto(s)?`;
+    if (!confirm(msg)) return;
+    const bar = $('lm-ct-bulk'); if (bar) bar.innerHTML = `<span class="lm-bulk-n">Eliminando…</span>`;
+    try {
+      const res = await apiFetch(`${API}/lm/contacts/bulk-delete`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids, company_ids: withCompanies ? emptyCo : [] }) });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `Error ${res.status}`);
+      const r = await res.json();
+      showBanner(`✓ ${r.deleted} contacto(s)${r.companiesDeleted ? ` y ${r.companiesDeleted} empresa(s)` : ''} eliminado(s)`, 'success');
+    } catch (e) { alert('Error al eliminar: ' + e.message); }
+    _ctSel.clear();
+    await load();
+  }
+  function _memChips(c) {
+    const seqs = Array.isArray(c.sequences) ? c.sequences : [];
+    const camps = Array.isArray(c.campaigns) ? c.campaigns : [];
+    if (!seqs.length && !camps.length) return '';
+    const all = [...camps.map(x => `<span class="lm-mem-chip lm-mem-chip--cmp" title="Campaña: ${esc(x.nombre)}">${esc(x.nombre)}</span>`),
+                 ...seqs.map(x => `<span class="lm-mem-chip lm-mem-chip--seq" title="Secuencia: ${esc(x.nombre)}">${esc(x.nombre)}</span>`)];
+    const more = all.length > 2 ? `<span class="lm-mem-chip lm-mem-chip--more">+${all.length - 2}</span>` : '';
+    return `<div class="lm-mem-chips">${all.slice(0, 2).join('')}${more}</div>`;
+  }
+  function bulkAddOpen(kind, ids) {
+    _addIds = (ids && ids.length) ? ids : [..._ctSel];
+    if (!_addIds.length) return;
+    const items = kind === 'sequence' ? _sequences : _campaigns;
+    const word = kind === 'sequence' ? 'secuencia' : 'campaña';
+    document.getElementById('lm-add-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'lm-add-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) m.remove(); };
+    const list = items.length
+      ? items.map(it => `<button class="lm-pick-item" onclick="LeadManagerModule.bulkAddDo('${kind}',${it.id})"><span>${esc(it.nombre)}</span>${it.estado ? `<span class="lm-pick-est">${esc(it.estado)}</span>` : ''}</button>`).join('')
+      : `<div class="lm-pick-empty">Aún no hay ${word}s. Crea una en su sección primero.</div>`;
+    m.innerHTML = `<div class="fin-pi-box lm-pick-box">
+      <div class="fin-pi-box__hd"><h3>Añadir ${_addIds.length} contacto(s) a una ${word}</h3><button class="fin-pi-x" onclick="document.getElementById('lm-add-modal').remove()">✕</button></div>
+      <div class="lm-pick-list">${list}</div>
+    </div>`;
+    document.body.appendChild(m);
+  }
+  async function bulkAddDo(kind, id) {
+    const ids = _addIds; if (!ids.length) return;
+    const ep = kind === 'sequence' ? 'add-to-sequence' : 'add-to-campaign';
+    const key = kind === 'sequence' ? 'sequence_id' : 'campaign_id';
+    document.getElementById('lm-add-modal')?.remove();
+    try {
+      const res = await apiFetch(`${API}/lm/contacts/${ep}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact_ids: ids, [key]: id }) });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || 'Error');
+      await load();
+      const dup = (d.requested || ids.length) - (d.added || 0);
+      showBanner(`✓ ${d.added || 0} contacto(s) añadido(s)${dup > 0 ? ` · ${dup} ya pertenecían` : ''}`, 'success');
+    } catch (e) { alert('Error: ' + e.message); }
+  }
+
+  // ── Página completa de contacto (estilo Outreach) — Fase 1 ──
+  function openContactPage(id, taskCtx) { _contactView = id; _cpTab = 'resumen'; _cpActs = null; _cpTaskCtx = taskCtx || null; _section = 'contact-view'; _renderBody(); const b = $('lm2-body'); if (b) b.scrollTop = 0; _cpReloadActs(id); }
+  function cpTab(t) { _cpTab = t; const el = document.getElementById('cp-tabwrap'); if (el) el.innerHTML = _cpTabContent(_contacts.find(x => x.id === _contactView)); document.querySelectorAll('.cp-tab').forEach(b => b.classList.toggle('active', b.dataset.t === t)); }
+  function _vContactPage(id) {
+    const c = _contacts.find(x => x.id === id);
+    if (!c) return `<div class="lm-sec-head"><div><button class="lm-back" onclick="LeadManagerModule.go('contacts')">‹ Contactos</button><h2 class="lm-sec-title">Contacto no encontrado</h2></div></div>`;
+    const full = [c.nombre, c.apellido].filter(Boolean).join(' ') || (c.email || 'Contacto');
+    const emp = c.company_nombre || c.empresa_nombre || '';
+    const eStyle = STAGE_STYLES[c.estado] || 'background:#EEF2F6;color:#475569';
+    const loc = [c.ciudad, c.pais].filter(Boolean).join(', ');
+    const F = (f, label, val) => `<label class="cp-f"><span class="cp-f__l">${label}</span><input class="cp-f__i" data-f="${f}" value="${esc(val || '')}" placeholder="＋ Añadir" onchange="LeadManagerModule.cpSave(${id})"></label>`;
+    const coOpts = `<option value="">— Sin empresa —</option>` + _companies.map(co => `<option value="${co.id}"${String(c.company_id) === String(co.id) ? ' selected' : ''}>${esc(co.nombre || co.dominio)}</option>`).join('');
+    const estOpts = _ORDER.map(s => `<option value="${s}"${(c.estado || 'nuevo') === s ? ' selected' : ''}>${STAGE_LABELS[s]}</option>`).join('');
+    const raw = (c.raw && typeof c.raw === 'object') ? c.raw : {};
+    const rawKeys = Object.keys(raw).filter(k => raw[k]);
+    return `<div class="cp" id="lm-cp">
+      <button class="lm-back" onclick="${_cpTaskCtx ? 'LeadManagerModule.seqDoExit()' : "LeadManagerModule.go('contacts')"}">‹ ${_cpTaskCtx ? 'Tareas' : 'Contactos'}</button>
+      ${_cpTaskBar(id)}
+      <div class="cp-head">
+        <img class="cp-ava" src="${_av(full)}" alt="">
+        <div class="cp-id">
+          <h2 class="cp-name">${esc(full)}</h2>
+          <div class="cp-sub">${c.cargo ? esc(c.cargo) : ''}${emp ? `${c.cargo ? ' · ' : ''}<span class="lm-emp-chip">${esc(emp)}</span>` : ''}</div>
+          <div class="cp-badges"><span class="client-badge" style="${eStyle}">${esc(c.estado || 'nuevo')}</span>${_dispoBadge(c.disposition)}${loc ? `<span class="cp-loc">${esc(loc)}</span>` : ''}</div>
+          ${_cpStrip(c)}
+        </div>
+        <div class="cp-actions">
+          <button class="cp-cta" onclick="LeadManagerModule.cpActOpen('')">＋ Registrar actividad</button>
+          ${c.linkedin ? `<a class="cp-act cp-act--in" href="${esc(c.linkedin)}" target="_blank" rel="noopener">LinkedIn ›</a>` : ''}
+          ${c.email ? `<a class="cp-act" href="mailto:${esc(c.email)}">Email</a>` : ''}
+          <button class="cp-act" onclick="LeadManagerModule.bulkAddOpen('sequence',[${id}])">＋ Secuencia</button>
+          <button class="cp-act" onclick="LeadManagerModule.bulkAddOpen('campaign',[${id}])">＋ Campaña</button>
+          <button class="cp-act cp-act--danger" onclick="LeadManagerModule.cpDelete(${id})">Eliminar</button>
+        </div>
+      </div>
+      ${_cpStepper(c, id)}
+      <div class="cp-grid">
+        <div class="cp-left">
+          <div class="cp-card"><div class="cp-card__t">Contacto</div><div class="cp-fields">
+            ${F('nombre', 'Nombre', c.nombre)}${F('apellido', 'Apellido', c.apellido)}
+            ${F('email', 'Email', c.email)}${F('email_personal', 'Email personal', c.email_personal)}
+            ${F('telefono', 'Teléfono', c.telefono)}
+            ${F('movil', 'Móvil', c.movil)}${F('cargo', 'Cargo', c.cargo)}
+            ${F('seniority', 'Seniority', c.seniority)}${F('departamento', 'Departamento', c.departamento)}
+            ${F('linkedin', 'LinkedIn', c.linkedin)}
+          </div></div>
+          <div class="cp-card"><div class="cp-card__t">Ubicación</div><div class="cp-fields">
+            ${F('ciudad', 'Ciudad', c.ciudad)}${F('region', 'Región', c.region)}${F('pais', 'País', c.pais)}
+          </div><div class="cp-map" id="cp-map"></div></div>
+          <div class="cp-card"><div class="cp-card__t">Empresa</div><div class="cp-fields">
+            <label class="cp-f cp-f--full"><span class="cp-f__l">Empresa</span><select class="cp-f__i" data-f="company_id" onchange="LeadManagerModule.cpSave(${id})">${coOpts}</select></label>
+            ${c.company_id ? `<div class="cp-f cp-f--full"><button class="cp-golink" onclick="LeadManagerModule.openCompany(${c.company_id})">Ver ficha de la empresa ›</button></div>` : ''}
+          </div></div>
+          <div class="cp-card"><div class="cp-card__t">CRM</div><div class="cp-fields">
+            <label class="cp-f"><span class="cp-f__l">Estado</span><select class="cp-f__i" data-f="estado" onchange="LeadManagerModule.cpSave(${id})">${estOpts}</select></label>
+            ${F('fuente', 'Fuente', c.fuente)}
+            <div class="cp-f cp-f--full"><span class="cp-f__l">Disposición outbound</span><div class="cp-dispo">${_DISPOS.map(d => `<button class="cp-dispo-b${c.disposition === d[0] ? ' on' : ''}" style="${c.disposition === d[0] ? `background:${d[3]};color:${d[2]};border-color:${d[2]}` : ''}" onclick="LeadManagerModule.lmSetDisposition(${id},'${c.disposition === d[0] ? '' : d[0]}')">${d[1]}</button>`).join('')}</div></div>
+          </div></div>
+          ${rawKeys.length ? `<div class="cp-card"><div class="cp-card__t">Datos importados (sin mapear)</div><div class="cp-fields">${rawKeys.map(k => `<div class="cp-f"><span class="cp-f__l">${esc(k)}</span><span class="cp-f__ro">${esc(raw[k])}</span></div>`).join('')}</div></div>` : ''}
+        </div>
+        <div class="cp-right">
+          <div class="cp-tabs">
+            <button class="cp-tab${_cpTab === 'resumen' ? ' active' : ''}" data-t="resumen" onclick="LeadManagerModule.cpTab('resumen')">Resumen</button>
+            <button class="cp-tab${_cpTab === 'actividad' ? ' active' : ''}" data-t="actividad" onclick="LeadManagerModule.cpTab('actividad')">Actividad</button>
+            <button class="cp-tab${_cpTab === 'reuniones' ? ' active' : ''}" data-t="reuniones" onclick="LeadManagerModule.cpTab('reuniones')">Reuniones</button>
+            <button class="cp-tab${_cpTab === 'tareas' ? ' active' : ''}" data-t="tareas" onclick="LeadManagerModule.cpTab('tareas')">Tareas</button>
+            <button class="cp-tab${_cpTab === 'notas' ? ' active' : ''}" data-t="notas" onclick="LeadManagerModule.cpTab('notas')">Notas</button>
+            <button class="cp-tab${_cpTab === 'facturas' ? ' active' : ''}" data-t="facturas" onclick="LeadManagerModule.cpTab('facturas')">Facturas</button>
+          </div>
+          <div id="cp-tabwrap">${_cpTabContent(c)}</div>
+        </div>
+      </div>
+    </div>`;
+  }
+  const _STRIP_ICO = {
+    mail: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 5L2 7"/></svg>',
+    phone: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>',
+    in: '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-4 0v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>',
+    src: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0l-7.17-7.17a2 2 0 0 1 0-2.83l7.17-7.17a2 2 0 0 1 2.83 0l7.17 7.17a2 2 0 0 1 0 2.83z"/><circle cx="7.5" cy="7.5" r="1.3" fill="currentColor"/></svg>',
+  };
+  function _cpStrip(c) {
+    const items = [];
+    if (c.email) items.push(['mail', c.email, `href="mailto:${esc(c.email)}"`]);
+    const tel = c.telefono || c.movil;
+    if (tel) items.push(['phone', tel, `href="tel:${esc(String(tel).replace(/[^0-9+]/g, ''))}"`]);
+    if (c.linkedin) items.push(['in', 'LinkedIn', `href="${esc(c.linkedin)}" target="_blank" rel="noopener"`]);
+    if (c.fuente) items.push(['src', c.fuente, '']);
+    if (!items.length) return '';
+    return `<div class="cp-strip">${items.map(([ic, val, attr]) => attr ? `<a class="cp-strip__i" ${attr} onclick="event.stopPropagation()">${_STRIP_ICO[ic]}<span>${esc(val)}</span></a>` : `<span class="cp-strip__i">${_STRIP_ICO[ic]}<span>${esc(val)}</span></span>`).join('')}</div>`;
+  }
+  function _cpStepper(c, id) {
+    const cur = c.estado || 'nuevo';
+    const idx = _ORDER.indexOf(cur);
+    return `<div class="cp-stepper">${_ORDER.map((s, i) => {
+      const active = s === cur;
+      const done = idx >= 0 && i < idx && s !== 'perdido';
+      const cls = active ? ' is-active' : done ? ' is-done' : '';
+      return `<button class="cp-step${cls}" ${active ? `style="${STAGE_STYLES[s] || ''}"` : ''} onclick="LeadManagerModule.cpSetStage(${id},'${s}')" title="Marcar “${STAGE_LABELS[s]}”">${STAGE_LABELS[s]}</button>`;
+    }).join('')}</div>`;
+  }
+  async function cpSetStage(id, estado) {
+    const c = _contacts.find(x => x.id === id); if (!c || c.estado === estado) return;
+    try {
+      const res = await apiFetch(`${API}/lm/contacts/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...c, estado }) });
+      if (!res.ok) throw new Error((await res.json()).error || 'Error');
+      c.estado = estado;
+      if (_section === 'contact-view') _renderBody();
+      showBanner('✓ Estado: ' + (STAGE_LABELS[estado] || estado), 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  function _cpTabContent(c) {
+    if (!c) return '';
+    if (_cpTab === 'resumen') {
+      const seqs = Array.isArray(c.sequences) ? c.sequences : [];
+      const camps = Array.isArray(c.campaigns) ? c.campaigns : [];
+      const rows = (arr, k, empty) => arr.length ? arr.map(x => `<div class="cp-mem"><span class="cp-mem__dot cp-mem__dot--${k}"></span>${esc(x.nombre)}</div>`).join('') : `<div class="cp-empty2">${empty}</div>`;
+      return `<div class="cp-card"><div class="cp-card__t">Secuencias <button class="cp-mini" onclick="LeadManagerModule.bulkAddOpen('sequence',[${c.id}])">＋</button></div>${rows(seqs, 'seq', 'Sin secuencias')}</div>
+        <div class="cp-card"><div class="cp-card__t">Campañas <button class="cp-mini" onclick="LeadManagerModule.bulkAddOpen('campaign',[${c.id}])">＋</button></div>${rows(camps, 'cmp', 'Sin campañas')}</div>`;
+    }
+    if (_cpTab === 'notas') {
+      return `<div class="cp-card"><div class="cp-card__t">Notas</div><textarea class="cp-notes" data-f="notas" placeholder="Escribe notas sobre este contacto…  Se guardan al salir del campo." onchange="LeadManagerModule.cpSave(${c.id})">${esc(c.notas || '')}</textarea></div>`;
+    }
+    if (_cpTab === 'facturas') {
+      return `<div class="cp-card"><div class="cp-fact"><div class="cp-fact__ico"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg></div><div class="cp-fact__t">Facturación · próximamente</div><div class="cp-fact__s">Aquí verás y crearás las facturas de ${esc([c.nombre, c.apellido].filter(Boolean).join(' ') || 'este contacto')} cuando activemos el módulo de facturación.</div><button class="btn btn--ghost btn--sm" disabled>＋ Crear factura</button></div></div>`;
+    }
+    const acts = Array.isArray(_cpActs) ? _cpActs : null;
+    if (acts === null) return `<div class="cp-card"><div class="cp-empty2">Cargando…</div></div>`;
+    if (_cpTab === 'reuniones') {
+      const list = acts.filter(a => a.tipo === 'reunion');
+      return `<div class="cp-card"><div class="cp-card__t">Reuniones <button class="cp-mini" onclick="LeadManagerModule.cpActOpen('reunion')">＋</button></div>${list.length ? list.map(a => _cpAct(a)).join('') : '<div class="cp-empty2">Sin reuniones — registra una con ＋</div>'}</div>`;
+    }
+    if (_cpTab === 'tareas') {
+      const list = acts.filter(a => a.estado === 'pendiente');
+      return `<div class="cp-card"><div class="cp-card__t">Tareas pendientes <button class="cp-mini" onclick="LeadManagerModule.cpActOpen('tarea')">＋</button></div>${list.length ? list.map(a => _cpAct(a, true)).join('') : '<div class="cp-empty2">Sin tareas pendientes</div>'}</div>`;
+    }
+    return `<div class="cp-card"><div class="cp-card__t">Actividad <button class="cp-mini" onclick="LeadManagerModule.cpActOpen('')">＋</button></div>${acts.length ? acts.map(a => _cpAct(a)).join('') : '<div class="cp-empty2">Sin actividad — registra la primera con ＋</div>'}</div>`;
+  }
+  function _cpAct(a, isTask) {
+    const m = _actMeta(a.tipo);
+    const pend = a.estado === 'pendiente';
+    const left = isTask
+      ? `<button class="cp-actv__ck${pend ? '' : ' done'}" onclick="LeadManagerModule.cpActToggle(${a.id})" title="${pend ? 'Marcar hecha' : 'Marcar pendiente'}">${pend ? '' : '✓'}</button>`
+      : `<span class="cp-actv__ico" style="background:${m[1]}1a;color:${m[1]}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${m[2]}</svg></span>`;
+    return `<div class="cp-actv${pend ? ' pend' : ''}">${left}
+      <div class="cp-actv__body"><div class="cp-actv__top"><span class="cp-actv__t">${esc(m[0])}</span><span class="cp-actv__d">${_fmtActDate(a.fecha)}</span></div>${a.nota ? `<div class="cp-actv__n">${esc(a.nota)}</div>` : ''}</div>
+      <button class="cp-actv__x" onclick="LeadManagerModule.cpActDel(${a.id})" title="Eliminar">✕</button></div>`;
+  }
+  async function _cpReloadActs(id) {
+    try { const r = await apiFetch(`${API}/lm/contacts/${id}/activities`); _cpActs = (r && r.ok) ? await r.json() : []; } catch { _cpActs = []; }
+    if (!Array.isArray(_cpActs)) _cpActs = [];
+    if (_section === 'contact-view' && _contactView === id) { const el = document.getElementById('cp-tabwrap'); if (el) el.innerHTML = _cpTabContent(_contacts.find(x => x.id === id)); }
+  }
+  function cpActOpen(preset) {
+    const id = _contactView; if (!id) return;
+    document.getElementById('lm-act-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'lm-act-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) m.remove(); };
+    const tipos = [['reunion', 'Reunión'], ['llamada', 'Llamada'], ['email_enviado', 'Email'], ['linkedin_msg', 'LinkedIn'], ['followup', 'Follow-up'], ['nota', 'Nota']];
+    const defTipo = preset === 'tarea' ? 'followup' : (preset || 'nota');
+    const today = new Date().toISOString().slice(0, 10);
+    m.innerHTML = `<div class="fin-pi-box" style="max-width:440px">
+      <div class="fin-pi-box__hd"><h3>${preset === 'reunion' ? 'Registrar reunión' : preset === 'tarea' ? 'Nueva tarea' : 'Registrar actividad'}</h3><button class="fin-pi-x" onclick="document.getElementById('lm-act-modal').remove()">✕</button></div>
+      <div class="fin-pi-form">
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Tipo</span><select class="form-input" id="act-tipo">${tipos.map(([v, l]) => `<option value="${v}"${v === defTipo ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Fecha</span><input type="date" class="form-input" id="act-fecha" value="${today}"></label>
+        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Nota</span><textarea class="form-input" id="act-nota" rows="3" placeholder="Detalle…"></textarea></label>
+        <label class="fin-cfg-field fin-pi-full" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="act-pend"${preset === 'tarea' ? ' checked' : ''}><span class="fin-cfg-lbl" style="margin:0">Es una tarea pendiente</span></label>
+      </div>
+      <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns"><button class="btn btn--ghost btn--sm" onclick="document.getElementById('lm-act-modal').remove()">Cancelar</button><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.cpActSave(${id})">Guardar</button></div></div>
+    </div>`;
+    document.body.appendChild(m);
+    setTimeout(() => $('act-nota')?.focus(), 60);
+  }
+  async function cpActSave(id) {
+    const c = _contacts.find(x => x.id === id); if (!c) return;
+    const tipo = $('act-tipo')?.value || 'nota';
+    const fecha = $('act-fecha')?.value || new Date().toISOString().slice(0, 10);
+    const nota = ($('act-nota')?.value || '').trim();
+    const estado = $('act-pend')?.checked ? 'pendiente' : 'hecha';
+    document.getElementById('lm-act-modal')?.remove();
+    try {
+      const res = await apiFetch(`${API}/activities`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact_id: id, outbound_client_id: c.outbound_client_id || null, tipo, nota, fecha, estado }) });
+      if (!res.ok) throw new Error((await res.json()).error || 'Error');
+      await _cpReloadActs(id);
+      showBanner('✓ Registrado', 'success');
+    } catch (e) { showBanner('No se pudo guardar: ' + e.message, 'error'); }
+  }
+  async function cpActToggle(actId) {
+    const a = (_cpActs || []).find(x => x.id === actId); if (!a) return;
+    const estado = a.estado === 'pendiente' ? 'hecha' : 'pendiente';
+    try {
+      const res = await apiFetch(`${API}/lm/activities/${actId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ estado }) });
+      if (!res.ok) throw new Error('Error');
+      a.estado = estado;
+      const el = document.getElementById('cp-tabwrap'); if (el) el.innerHTML = _cpTabContent(_contacts.find(x => x.id === _contactView));
+    } catch (e) { alert('Error: ' + e.message); }
+  }
+  async function cpActDel(actId) {
+    if (!confirm('¿Eliminar esta actividad?')) return;
+    try {
+      const res = await apiFetch(`${API}/activities/${actId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Error');
+      _cpActs = (_cpActs || []).filter(x => x.id !== actId);
+      const el = document.getElementById('cp-tabwrap'); if (el) el.innerHTML = _cpTabContent(_contacts.find(x => x.id === _contactView));
+    } catch (e) { alert('Error: ' + e.message); }
+  }
+  async function _cpLoadMap(c) {
+    const el = document.getElementById('cp-map'); if (!el || !c) return;
+    const q = [c.ciudad, c.region, c.pais].filter(Boolean).join(', ');
+    if (!q) { el.innerHTML = `<div class="cp-map-empty">Sin ubicación — añade una ciudad</div>`; return; }
+    el.innerHTML = `<div class="cp-map-empty">Cargando mapa…</div>`;
+    try {
+      const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`, { headers: { 'Accept': 'application/json' } });
+      const d = await r.json();
+      if (!d || !d.length) { el.innerHTML = `<div class="cp-map-empty">No se ubicó “${esc(q)}”</div>`; return; }
+      const it = d[0], bb = it.boundingbox;
+      const bbox = `${bb[2]},${bb[0]},${bb[3]},${bb[1]}`;
+      el.innerHTML = `<iframe class="cp-map-frame" title="Mapa de ${esc(q)}" loading="lazy" src="https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${it.lat},${it.lon}"></iframe><a class="cp-map-link" href="https://www.openstreetmap.org/?mlat=${it.lat}&mlon=${it.lon}#map=11/${it.lat}/${it.lon}" target="_blank" rel="noopener">${esc(q)} · ver mapa grande ›</a>`;
+    } catch (e) { el.innerHTML = `<div class="cp-map-empty">${esc(q)}</div>`; }
+  }
+  async function cpSave(id) {
+    const page = document.getElementById('lm-cp'); if (!page) return;
+    const c = _contacts.find(x => x.id === id); if (!c) return;
+    const payload = {};
+    page.querySelectorAll('[data-f]').forEach(el => { payload[el.dataset.f] = el.value; });
+    const coId = payload.company_id ? Number(payload.company_id) : null;
+    const co = coId ? _companies.find(x => x.id === coId) : null;
+    payload.company_id = coId;
+    payload.empresa_nombre = co ? (co.nombre || co.dominio || '') : '';
+    payload.estado = payload.estado || 'nuevo';
+    payload.fuente = payload.fuente || 'manual';
+    payload.outbound_client_id = c.outbound_client_id || null;
+    if (!payload.nombre && !payload.apellido && !payload.email) { showBanner('El contacto necesita nombre o email', 'error'); return; }
+    try {
+      const res = await apiFetch(`${API}/lm/contacts/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      if (!res.ok) throw new Error((await res.json()).error || 'Error');
+      Object.assign(c, payload, { company_nombre: payload.empresa_nombre });
+      showBanner('✓ Guardado', 'success');
+    } catch (e) { showBanner('No se pudo guardar: ' + e.message, 'error'); }
+  }
+  async function cpDelete(id) {
+    if (!confirm('¿Eliminar este contacto?')) return;
+    try { const res = await _apiDelete(`${API}/lm/contacts/${id}`); if (!res.ok) throw new Error(res.status === 429 ? 'Demasiadas peticiones, reintenta en un momento' : 'Error'); } catch (e) { alert('Error: ' + e.message); return; }
+    _section = 'contacts'; _contactView = null; await load();
+  }
+
+  // ── Vista: Empresas ──
+  function _vCompanies() {
+    return `<div class="lm-sec-head">
+        <div><h2 class="lm-sec-title">Empresas</h2><p class="lm-sec-sub">Cuentas objetivo con sus contactos — importa desde Excel / CSV</p></div>
+        <div class="lm-hd-actions">
+          <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.exportCsv('companies')">${_ico('down')} Exportar</button>
+          <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openCompany()">＋ Empresa</button>
+          <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openImport('companies')">${_ico('up')} Importar</button>
+        </div>
+      </div>
+      <div class="lm-toolbar">
+        <div class="lm-search lm-search--wide"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" id="lm-co-search" placeholder="Buscar empresa o dominio…" value="${esc(_coQuery)}" oninput="LeadManagerModule.filterCompanies(this.value)"></div>
+        <span class="lm-count" id="lm-co-count"></span>
+        <button class="lm-filter-btn${_coFilters.length ? ' on' : ''}" onclick="LeadManagerModule.openFilters('companies')">${_FLT_ICON} Filtros${_coFilters.length ? ` · ${_coFilters.length}` : ''}</button>
+        <button class="lm-filter-btn" onclick="LeadManagerModule.openViews('companies')">${_VIEW_ICON} Vistas</button>
+        <button class="lm-sel-btn" onclick="LeadManagerModule.toggleCoSelMode()">Seleccionar</button>
+      </div>
+      ${_fltChipsHtml('companies')}
+      <div class="lm-bulk-bar" id="lm-co-bulk"></div>
+      <div id="lm-co-results"></div>`;
+  }
+  function _renderCompanies() {
+    const el = $('lm-co-results'); if (!el) return;
+    const q = _coQuery;
+    let list = _companies;
+    if (q) list = list.filter(c => (`${c.nombre || ''} ${c.dominio || ''} ${c.industria || ''} ${c.pais || ''}`).toLowerCase().includes(q));
+    if (_coFilters.length) list = list.filter(c => _lmMatch(c, _coFilters));
+    const cnt = $('lm-co-count'); if (cnt) cnt.textContent = (q || _coFilters.length) ? `${list.length} de ${_companies.length}` : `${_companies.length} empresa${_companies.length === 1 ? '' : 's'}`;
+    _coFilteredIds = list.map(c => c.id);
+    _coSel.forEach(id => { if (!_coFilteredIds.includes(id)) _coSel.delete(id); });
+    if (!list.length) {
+      _renderCoBulkBar();
+      el.innerHTML = _empty('companies', _companies.length ? 'Sin resultados' : 'Aún no hay empresas',
+        _companies.length ? 'Prueba otra búsqueda.' : 'Impórtalas desde Excel / CSV, o se crean solas al importar contactos.',
+        _companies.length ? '' : 'Importar empresas', "LeadManagerModule.openImport('companies')");
+      return;
+    }
+    const allSel = list.length > 0 && list.every(c => _coSel.has(c.id));
+    el.innerHTML = `<div class="clients-table-wrap"><table class="clients-table lm-dt${_coSelMode ? ' sel-on' : ''}"><thead><tr>
+        <th class="lm-ck-col"><input type="checkbox" class="lm-ck" ${allSel ? 'checked' : ''} onclick="LeadManagerModule.toggleCoAll(this.checked)"></th>
+        <th>Empresa</th><th>Industria</th><th>Nº empleados</th><th>País</th><th>Contactos</th><th></th>
+      </tr></thead><tbody>${list.map(_coRow).join('')}</tbody></table></div>`;
+    _renderCoBulkBar();
+    _syncCoSelAll();
+  }
+  function _coRow(c) {
+    const dom = c.dominio || '';
+    const name = c.nombre || dom || '—';
+    return `<tr class="clients-table__row${_coSel.has(c.id) ? ' sel' : ''}" onclick="LeadManagerModule.openCompany(${c.id})" style="cursor:pointer">
+      <td class="lm-ck-col" onclick="event.stopPropagation()"><input type="checkbox" class="lm-ck" ${_coSel.has(c.id) ? 'checked' : ''} onclick="LeadManagerModule.toggleCo(event,${c.id})"></td>
+      <td><div class="client-cell-name"><div class="lm-co-logo"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4M10 10h4M10 14h4M10 18h4"/></svg></div><div><div class="client-nombre">${esc(name)}</div>${dom ? `<div class="client-empresa">${esc(dom)}</div>` : ''}</div></div></td>
+      <td class="client-meta">${c.industria ? esc(c.industria) : '—'}</td>
+      <td class="client-meta">${c.tamano ? esc(c.tamano) : '—'}</td>
+      <td class="client-meta">${c.pais ? esc(c.pais) : '—'}</td>
+      <td class="client-meta"><span class="lm-cnt-chip">${c.contact_count || 0}</span></td>
+      <td class="lm-dt-act"><button class="lm-mini-x" title="Eliminar" onclick="event.stopPropagation();LeadManagerModule.deleteCompany(${c.id})">✕</button></td>
+    </tr>`;
+  }
+  function filterCompanies(v) { _coQuery = (v || '').toLowerCase().trim(); _renderCompanies(); }
+  function toggleCo(ev, id) { const on = ev.target.checked; if (on) _coSel.add(id); else _coSel.delete(id); ev.target.closest('tr')?.classList.toggle('sel', on); _renderCoBulkBar(); _syncCoSelAll(); }
+  function toggleCoAll(on) { if (on) _coFilteredIds.forEach(id => _coSel.add(id)); else _coFilteredIds.forEach(id => _coSel.delete(id)); _renderCompanies(); }
+  function clearCoSel() { _coSel.clear(); _renderCompanies(); }
+  function toggleCoSelMode() { _coSelMode = !_coSelMode; if (!_coSelMode) _coSel.clear(); _renderCompanies(); }
+  function _syncCoSelAll() { const box = document.querySelector('#lm-co-results .lm-dt thead .lm-ck'); if (!box) return; const total = _coFilteredIds.length, sel = _coFilteredIds.filter(id => _coSel.has(id)).length; box.checked = total > 0 && sel === total; box.indeterminate = sel > 0 && sel < total; }
+  function _renderCoBulkBar() {
+    const bar = $('lm-co-bulk'); if (!bar) return;
+    if (!_coSelMode) { bar.classList.remove('show'); bar.innerHTML = ''; return; }
+    bar.classList.add('show');
+    const n = _coSel.size, total = _coFilteredIds.length;
+    const selAll = n < total ? `<button class="lm-bulk-ghost" onclick="LeadManagerModule.toggleCoAll(true)">Seleccionar todas (${total})</button>` : '';
+    const acts = n > 0 ? `
+        <button class="lm-bulk-ghost" onclick="LeadManagerModule.clearCoSel()">Ninguna</button>
+        <button class="lm-bulk-del" onclick="LeadManagerModule.bulkDeleteCompanies(false)">Eliminar empresas</button>
+        <button class="lm-bulk-del" onclick="LeadManagerModule.bulkDeleteCompanies(true)">Eliminar + sus contactos</button>` : '';
+    bar.innerHTML = `<span class="lm-bulk-n">${n ? `${n} seleccionada${n === 1 ? '' : 's'}` : 'Modo selección — elige empresas'}</span>
+      <div class="lm-bulk-actions">
+        ${selAll}${acts}
+        <button class="lm-bulk-ghost" onclick="LeadManagerModule.toggleCoSelMode()">Salir</button>
+      </div>`;
+  }
+  async function bulkDeleteCompanies(withContacts) {
+    const ids = [..._coSel]; if (!ids.length) return;
+    const sel = new Set(ids);
+    let contactIds = [];
+    if (withContacts) contactIds = _contacts.filter(c => c.company_id && sel.has(c.company_id)).map(c => c.id);
+    const msg = withContacts
+      ? `¿Eliminar ${ids.length} empresa(s) y sus ${contactIds.length} contacto(s)?`
+      : `¿Eliminar ${ids.length} empresa(s)?\n\nSus contactos se conservan (quedan sin empresa asignada).`;
+    if (!confirm(msg)) return;
+    const bar = $('lm-co-bulk'); if (bar) bar.innerHTML = `<span class="lm-bulk-n">Eliminando…</span>`;
+    try {
+      const res = await apiFetch(`${API}/lm/companies/bulk-delete`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids, with_contacts: !!withContacts }) });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `Error ${res.status}`);
+      const r = await res.json();
+      showBanner(`✓ ${r.deleted} empresa(s)${r.contactsDeleted ? ` y ${r.contactsDeleted} contacto(s)` : ''} eliminada(s)`, 'success');
+    } catch (e) { alert('Error al eliminar: ' + e.message); }
+    _coSel.clear();
+    await load();
+  }
+
+  // ── Export CSV (client-side) ──
+  function exportCsv(target) {
+    const isCo = target === 'companies';
+    const rows = isCo ? _companies : _contacts;
+    if (!rows.length) { alert('No hay nada para exportar.'); return; }
+    const cols = isCo
+      ? [['nombre', 'Nombre'], ['dominio', 'Dominio'], ['website', 'Website'], ['industria', 'Industria'], ['tamano', 'Nº empleados'], ['ingresos', 'Ingresos'], ['telefono', 'Teléfono'], ['linkedin', 'LinkedIn'], ['ciudad', 'Ciudad'], ['region', 'Región'], ['pais', 'País'], ['direccion', 'Dirección'], ['codigo_postal', 'Código postal'], ['fundada', 'Fundada'], ['descripcion', 'Descripción'], ['tecnologias', 'Tecnologías'], ['funding', 'Funding'], ['target_tier', 'Target Tier / Focus'], ['notas', 'Notas']]
+      : [['nombre', 'Nombre'], ['apellido', 'Apellido'], ['email', 'Email'], ['email_personal', 'Email personal'], ['telefono', 'Teléfono'], ['movil', 'Móvil'], ['cargo', 'Cargo'], ['seniority', 'Seniority'], ['departamento', 'Departamento'], ['buyer_role', 'Buyer Role'], ['linkedin', 'LinkedIn'], ['company_nombre', 'Empresa'], ['ciudad', 'Ciudad'], ['region', 'Región'], ['pais', 'País'], ['estado', 'Estado'], ['contact_priority', 'Contact Priority'], ['fuente', 'Fuente'], ['notas', 'Notas']];
+    const cell = v => { v = v == null ? '' : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+    const csv = '﻿' + cols.map(c => c[1]).join(',') + '\n' + rows.map(r => cols.map(c => cell(r[c[0]] != null ? r[c[0]] : r[c[0] === 'company_nombre' ? 'empresa_nombre' : c[0]])).join(',')).join('\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    a.download = `${isCo ? 'empresas' : 'contactos'}_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+
+  // ── Importador (wizard con mapeo de columnas) ──
+  let _imp = null;
+  function openImport(target) {
+    _imp = { target: target === 'companies' ? 'companies' : 'contacts', file: null, origHeader: [], samplesOrig: [], headers: [], samples: [], hasHeader: true, obc: '' };
+    document.getElementById('lm-imp-modal')?.remove();
+    const m = document.createElement('div');
+    m.id = 'lm-imp-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) closeImport(); };
+    m.innerHTML = `<div class="fin-pi-box lm-imp-box"><div id="lm-imp-inner"></div></div>`;
+    document.body.appendChild(m);
+    _impStepFile();
+  }
+  function closeImport() { document.getElementById('lm-imp-modal')?.remove(); _imp = null; }
+  function _impInner(html) { const el = $('lm-imp-inner'); if (el) el.innerHTML = html; }
+  function _impWord() { return _imp.target === 'companies' ? 'empresas' : 'contactos'; }
+  function _impHd(title) { return `<div class="fin-pi-box__hd"><h3>${title}</h3><button class="fin-pi-x" onclick="LeadManagerModule.closeImport()">✕</button></div>`; }
+  function _impSteps(n) { const s = ['1 · Archivo', '2 · Mapear', '3 · Listo']; return `<div class="lm-imp-steps">${s.map((t, i) => `<span class="${i + 1 < n ? 'done' : i + 1 === n ? 'on' : ''}">${t}</span>`).join('')}</div>`; }
+
+  function _impStepFile() {
+    _impInner(`${_impHd('Importar ' + _impWord())}
+      <div class="lm-imp-body">
+        ${_impSteps(1)}
+        <label class="lm-drop" id="lm-drop">
+          <input type="file" accept=".csv,.xlsx,.xls,.tsv" style="display:none" onchange="LeadManagerModule.impFile(this.files[0])">
+          <div class="lm-drop__ico">${_ico('up')}</div>
+          <div class="lm-drop__t">Arrastra tu Excel / CSV aquí o haz clic para elegir</div>
+          <div class="lm-drop__s">.xlsx · .xls · .csv — hasta 10 MB</div>
+        </label>
+        <div class="lm-imp-hint">Detectaremos las columnas automáticamente; podrás revisarlas antes de guardar.</div>
+      </div>`);
+    const drop = $('lm-drop');
+    if (drop) {
+      ['dragover', 'dragenter'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('drag'); }));
+      ['dragleave', 'dragend'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('drag'); }));
+      drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('drag'); const f = e.dataTransfer?.files?.[0]; if (f) impFile(f); });
+    }
+  }
+
+  function _lmReadCsv(file) {
+    return new Promise((resolve, reject) => {
+      const rd = new FileReader();
+      rd.onload = e => {
+        const lines = String(e.target.result || '').split(/\r?\n/).filter(l => l.trim().length);
+        if (!lines.length) { resolve({ headers: [], sampleRows: [] }); return; }
+        const d = lines[0].includes('\t') ? '\t' : lines[0].includes(';') ? ';' : ',';
+        const pr = l => l.split(d).map(x => x.replace(/^["']|["']$/g, '').trim());
+        resolve({ headers: pr(lines[0]), sampleRows: lines.slice(1, 6).map(pr) });
+      };
+      rd.onerror = () => reject(new Error('No se pudo leer el archivo.'));
+      rd.readAsText(file);
+    });
+  }
+
+  async function impFile(file) {
+    if (!file || !_imp) return;
+    _imp.file = file;
+    _impInner(`${_impHd('Importar ' + _impWord())}<div class="lm-imp-body">${_impSteps(1)}<div class="lm-imp-load">🗂 Leyendo <b>${esc(file.name)}</b>…</div></div>`);
+    try {
+      let headers = [], samples = [];
+      if (/\.(csv|tsv|txt)$/i.test(file.name)) {
+        const r = await _lmReadCsv(file); headers = r.headers; samples = r.sampleRows;
+      } else {
+        const fd = new FormData(); fd.append('file', file);
+        const res = await apiFetch(`${API}/enrich/parse-headers`, { method: 'POST', body: fd });
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `Error ${res.status}`);
+        const dd = await res.json(); headers = dd.headers || []; samples = dd.sampleRows || [];
+      }
+      if (!headers.length) throw new Error('No se encontraron columnas en el archivo.');
+      _imp.origHeader = headers.slice(); _imp.samplesOrig = samples.slice();
+      _imp.hasHeader = true; _imp.headers = headers; _imp.samples = samples;
+      _impStepMap();
+    } catch (e) {
+      _impInner(`${_impHd('Importar ' + _impWord())}<div class="lm-imp-body">${_impSteps(1)}<div class="lm-imp-err">⚠️ ${esc(e.message)}</div></div>
+        <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openImport('${_imp.target}')">Reintentar</button></div></div>`);
+    }
+  }
+
+  function impToggleHeader(chk) {
+    if (!_imp) return;
+    _imp.hasHeader = chk;
+    if (chk) { _imp.headers = _imp.origHeader.slice(); _imp.samples = _imp.samplesOrig.slice(); }
+    else { _imp.headers = _imp.origHeader.map((_, i) => `Columna ${i + 1}`); _imp.samples = [_imp.origHeader.slice(), ..._imp.samplesOrig]; }
+    _impStepMap();
+  }
+  function impSetObc(v) { if (!_imp) return; _imp.obc = v; const go = $('lm-imp-go'); if (go && _imp.target === 'contacts') go.disabled = !v; }
+  function impNewClient() { closeImport(); openClientDrawer(); }
+
+  function _lmFlatOpts(target) {
+    const out = [{ key: '', label: '— Extra (se conserva) —', grp: '' }, { key: '__ignore__', label: '✕ Ignorar', grp: '' }];
+    LM_FIELDS[target].forEach(g => g.opts.forEach(([k, l]) => out.push({ key: k, label: l, grp: g.g })));
+    return out;
+  }
+  function _impStepMap() {
+    _imp.opts = _lmFlatOpts(_imp.target);
+    const rowsHtml = _imp.headers.map((h, idx) => {
+      const samples = _imp.samples.map(r => r[idx] || '').filter(Boolean).slice(0, 2);
+      const gKey = _lmGuess(h, _imp.target);
+      const gOpt = _imp.opts.find(o => o.key === gKey) || _imp.opts[0];
+      const chips = samples.length ? samples.map(v => `<span class="lm-map-chip">${esc(v.length > 22 ? v.slice(0, 20) + '…' : v)}</span>`).join('') : '<span class="lm-map-empty">sin datos</span>';
+      return `<div class="lm-map-row${gKey ? ' mapped' : ''}" data-idx="${idx}">
+        <div class="lm-map-src" title="${esc(h)}">${esc(h || ('Columna ' + (idx + 1)))}</div>
+        <div class="lm-map-ex">${chips}</div>
+        <div class="lm-map-arrow">${_ico('down')}</div>
+        <div class="lm-cbx" data-idx="${idx}">
+          <input class="lm-cbx-input form-input" data-value="${esc(gKey)}" value="${esc(gOpt.label)}" placeholder="Buscar campo…" autocomplete="off" spellcheck="false"
+            onfocus="LeadManagerModule.cbxOpen(${idx})" oninput="LeadManagerModule.cbxFilter(${idx})" onblur="LeadManagerModule.cbxBlur(${idx})">
+          <div class="lm-cbx-menu" id="lm-cbx-menu-${idx}"></div>
+        </div>
+      </div>`;
+    }).join('');
+    const _clientOpts = _clients.map(c => `<option value="${c.id}"${String(_imp.obc) === String(c.id) ? ' selected' : ''}>${esc(c.nombre)}</option>`).join('');
+    const _obcBar = _imp.target === 'contacts'
+      ? (_clients.length
+          ? `<label class="lm-map-obc">Cliente outbound <b class="lm-req">*</b> <select class="form-input" onchange="LeadManagerModule.impSetObc(this.value)"><option value="">— Elegir cliente —</option>${_clientOpts}</select></label>`
+          : `<span class="lm-imp-warn">⚠️ Necesitas un cliente outbound para importar contactos <button type="button" class="btn btn--ghost btn--sm" onclick="LeadManagerModule.impNewClient()">＋ Crear cliente</button></span>`)
+      : `<label class="lm-map-obc">Asignar a cliente outbound <select class="form-input" onchange="LeadManagerModule.impSetObc(this.value)"><option value="">— Sin asignar —</option>${_clientOpts}</select></label>`;
+    _impInner(`${_impHd('Importar ' + _impWord() + ' — asigna las columnas')}
+      <div class="lm-imp-body">
+        ${_impSteps(2)}
+        <div class="lm-map-bar">
+          <label class="lm-chk"><input type="checkbox" ${_imp.hasHeader ? 'checked' : ''} onchange="LeadManagerModule.impToggleHeader(this.checked)"> Primera fila = encabezado</label>
+          ${_obcBar}
+        </div>
+        <div class="lm-map-headrow"><span>Columna del archivo</span><span>Ejemplo</span><span></span><span>Asignar a (escribe para buscar)</span></div>
+        <div class="lm-map-list">${rowsHtml}</div>
+      </div>
+      <div class="fin-pi-box__ft">
+        <span class="fin-cfg-hint" id="lm-imp-msg">${_imp.headers.length} columnas · las no asignadas se conservan como extra</span>
+        <div class="fin-pi-ft-btns">
+          <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.closeImport()">Cancelar</button>
+          <button class="btn btn--primary btn--sm" id="lm-imp-go" ${_imp.target === 'contacts' && !_imp.obc ? 'disabled' : ''} onclick="LeadManagerModule.impRun()">Importar ${_impWord()}</button>
+        </div>
+      </div>`);
+  }
+
+  // Combobox buscable para asignar columnas
+  function _cbxMenuHtml(idx, filter) {
+    const f = _lmNorm(filter || '');
+    let lastGrp = null, h = '';
+    _imp.opts.forEach(o => {
+      const special = (o.key === '' || o.key === '__ignore__');
+      if (f && !special && !_lmNorm(o.label).includes(f)) return;
+      if (o.grp !== lastGrp && o.grp) { h += `<div class="lm-cbx-grp">${esc(o.grp)}</div>`; lastGrp = o.grp; }
+      h += `<div class="lm-cbx-opt" onmousedown="event.preventDefault();LeadManagerModule.cbxPick(${idx},'${o.key}')">${esc(o.label)}</div>`;
+    });
+    return h || `<div class="lm-cbx-none">Sin coincidencias</div>`;
+  }
+  function cbxOpen(idx) {
+    const wrap = document.querySelector(`.lm-cbx[data-idx="${idx}"]`); if (!wrap) return;
+    const inp = wrap.querySelector('.lm-cbx-input'); const menu = document.getElementById('lm-cbx-menu-' + idx); if (!inp || !menu) return;
+    menu.innerHTML = _cbxMenuHtml(idx, '');
+    const r = inp.getBoundingClientRect();
+    menu.style.left = r.left + 'px'; menu.style.top = (r.bottom + 3) + 'px'; menu.style.width = r.width + 'px';
+    menu.classList.add('open');
+    setTimeout(() => inp.select(), 0);
+  }
+  function cbxFilter(idx) {
+    const inp = document.querySelector(`.lm-cbx[data-idx="${idx}"] .lm-cbx-input`); const menu = document.getElementById('lm-cbx-menu-' + idx); if (!inp || !menu) return;
+    menu.innerHTML = _cbxMenuHtml(idx, inp.value);
+    menu.classList.add('open');
+  }
+  function cbxPick(idx, key) {
+    const o = _imp.opts.find(x => x.key === key) || _imp.opts[0];
+    const inp = document.querySelector(`.lm-cbx[data-idx="${idx}"] .lm-cbx-input`);
+    if (inp) { inp.value = o.label; inp.dataset.value = o.key; }
+    document.getElementById('lm-cbx-menu-' + idx)?.classList.remove('open');
+    const row = document.querySelector(`.lm-map-row[data-idx="${idx}"]`);
+    if (row) row.classList.toggle('mapped', !!o.key && o.key !== '__ignore__');
+  }
+  function cbxBlur(idx) { setTimeout(() => document.getElementById('lm-cbx-menu-' + idx)?.classList.remove('open'), 160); }
+
+  async function impRun() {
+    if (!_imp || !_imp.file) return;
+    if (_imp.target === 'contacts' && !_imp.obc) { const m = $('lm-imp-msg'); if (m) { m.textContent = '⚠️ Elige un cliente outbound antes de importar.'; m.style.color = '#C4342B'; } return; }
+    const mapping = {};
+    document.querySelectorAll('#lm-imp-modal .lm-cbx-input').forEach(inp => { const v = inp.dataset.value; if (v) mapping[inp.closest('.lm-cbx').dataset.idx] = v; });
+    const go = $('lm-imp-go'); if (go) { go.disabled = true; go.textContent = 'Importando…'; }
+    try {
+      const fd = new FormData();
+      fd.append('file', _imp.file);
+      fd.append('target', _imp.target);
+      fd.append('mapping', JSON.stringify(mapping));
+      fd.append('hasHeader', _imp.hasHeader ? '1' : '0');
+      if (_imp.obc) fd.append('outbound_client_id', _imp.obc);
+      const res = await apiFetch(`${API}/lm/import`, { method: 'POST', body: fd });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || `Error ${res.status}`);
+      _impStepDone(d);
+      await load();
+    } catch (e) {
+      if (go) { go.disabled = false; go.textContent = 'Importar ' + _impWord(); }
+      const msg = $('lm-imp-msg'); if (msg) { msg.textContent = '⚠️ ' + e.message; msg.style.color = '#C4342B'; }
+    }
+  }
+
+  function _impStepDone(d) {
+    const isCo = _imp.target === 'companies';
+    const stat = (n, l) => `<div class="lm-stat"><b>${n || 0}</b><span>${l}</span></div>`;
+    _impInner(`${_impHd('Importación completa')}
+      <div class="lm-imp-body">
+        ${_impSteps(3)}
+        <div class="lm-imp-done">
+          <div class="lm-imp-done__ico">${_ico('check')}</div>
+          <div class="lm-imp-done__stats">
+            ${isCo ? '' : stat(d.contactsCreated, 'contactos creados')}
+            ${isCo ? '' : stat(d.contactsSkipped, 'duplicados omitidos')}
+            ${stat(d.companiesCreated, 'empresas nuevas')}
+            ${stat(d.companiesMatched, 'empresas enlazadas')}
+          </div>
+          ${d.errors && d.errors.length ? `<div class="lm-imp-err">${d.errors.length} fila(s) con error — ${esc(d.errors.slice(0, 3).join(' · '))}</div>` : ''}
+        </div>
+      </div>
+      <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.closeImport()">Cerrar</button></div></div>`);
+  }
+
+  // ── Drawer: Contacto (crear / editar) ──
+  function _lmFld(fid, lbl, val, ph, full) { return `<label class="fin-cfg-field${full ? ' fin-pi-full' : ''}"><span class="fin-cfg-lbl">${lbl}</span><input class="form-input" id="${fid}" value="${val ? esc(val) : ''}" placeholder="${ph || ''}"></label>`; }
+  function openContact(id) {
+    const c = id ? _contacts.find(x => x.id === id) : null;
+    document.getElementById('lm-ct-modal')?.remove();
+    const m = document.createElement('div');
+    m.id = 'lm-ct-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) closeContact(); };
+    const coOpts = `<option value="">— Sin empresa —</option>` + _companies.map(co => `<option value="${co.id}"${c && String(c.company_id) === String(co.id) ? ' selected' : ''}>${esc(co.nombre || co.dominio)}</option>`).join('');
+    m.innerHTML = `<div class="fin-pi-box lm-drawer-box">
+      ${_impHd(c ? 'Editar contacto' : 'Nuevo contacto').replace('closeImport', 'closeContact')}
+      <div class="fin-pi-form">
+        ${_lmFld('ct-nombre', 'Nombre', c?.nombre)}
+        ${_lmFld('ct-apellido', 'Apellido', c?.apellido)}
+        ${_lmFld('ct-email', 'Email', c?.email)}
+        ${_lmFld('ct-email_personal', 'Email personal', c?.email_personal)}
+        ${_lmFld('ct-cargo', 'Cargo', c?.cargo)}
+        ${_lmFld('ct-telefono', 'Teléfono', c?.telefono)}
+        ${_lmFld('ct-movil', 'Móvil', c?.movil)}
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Empresa</span><select class="form-input" id="ct-company">${coOpts}</select></label>
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Cliente outbound <b class="lm-req">*</b></span><select class="form-input" id="ct-obc"><option value="">— Elegir —</option>${_clients.map(cl => `<option value="${cl.id}"${c && String(c.outbound_client_id) === String(cl.id) ? ' selected' : ''}>${esc(cl.nombre)}</option>`).join('')}</select></label>
+        ${_lmFld('ct-seniority', 'Seniority', c?.seniority)}
+        ${_lmFld('ct-departamento', 'Departamento', c?.departamento)}
+        ${_lmFld('ct-buyer_role', 'Rol de compra', c?.buyer_role)}
+        ${_lmFld('ct-linkedin', 'LinkedIn', c?.linkedin, '', true)}
+        ${_lmFld('ct-ciudad', 'Ciudad', c?.ciudad)}
+        ${_lmFld('ct-region', 'Región', c?.region)}
+        ${_lmFld('ct-pais', 'País', c?.pais)}
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Estado</span><select class="form-input" id="ct-estado">${_ORDER.map(s => `<option value="${s}"${(c?.estado || 'nuevo') === s ? ' selected' : ''}>${STAGE_LABELS[s]}</option>`).join('')}</select></label>
+        ${_lmFld('ct-contact_priority', 'Prioridad de contacto', c?.contact_priority)}
+        ${_lmFld('ct-fuente', 'Fuente', c?.fuente)}
+        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Notas</span><textarea class="form-input" id="ct-notas" rows="2">${c ? esc(c.notas) : ''}</textarea></label>
+      </div>
+      <div class="fin-pi-box__ft"><span class="fin-cfg-hint" id="ct-hint"></span><div class="fin-pi-ft-btns">
+        ${c ? `<button class="btn btn--ghost btn--danger btn--sm" onclick="LeadManagerModule.deleteContact(${c.id},1)">Eliminar</button>` : ''}
+        <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.closeContact()">Cancelar</button>
+        <button class="btn btn--primary btn--sm" id="ct-save" onclick="LeadManagerModule.saveContact(${c ? c.id : 'null'})">${c ? 'Guardar' : 'Crear'}</button>
+      </div></div></div>`;
+    document.body.appendChild(m);
+    setTimeout(() => $('ct-nombre')?.focus(), 60);
+  }
+  function closeContact() { document.getElementById('lm-ct-modal')?.remove(); }
+  async function saveContact(id) {
+    const g = fid => ($(fid)?.value || '').trim();
+    const companyId = $('ct-company')?.value ? Number($('ct-company').value) : null;
+    const co = companyId ? _companies.find(x => x.id === companyId) : null;
+    const payload = {
+      nombre: g('ct-nombre'), apellido: g('ct-apellido'), email: g('ct-email'), email_personal: g('ct-email_personal'), cargo: g('ct-cargo'),
+      telefono: g('ct-telefono'), movil: g('ct-movil'), seniority: g('ct-seniority'), departamento: g('ct-departamento'),
+      buyer_role: g('ct-buyer_role'), contact_priority: g('ct-contact_priority'),
+      linkedin: g('ct-linkedin'), ciudad: g('ct-ciudad'), region: g('ct-region'), pais: g('ct-pais'),
+      estado: $('ct-estado')?.value || 'nuevo', fuente: g('ct-fuente') || 'manual', notas: g('ct-notas'),
+      company_id: companyId, empresa_nombre: co ? (co.nombre || co.dominio || '') : '',
+      outbound_client_id: $('ct-obc')?.value ? Number($('ct-obc').value) : null,
+    };
+    const hint = $('ct-hint');
+    if (!payload.nombre && !payload.apellido && !payload.email) { if (hint) { hint.textContent = 'Nombre o email requerido'; hint.style.color = '#C4342B'; } return; }
+    if (_clients.length && !payload.outbound_client_id) { if (hint) { hint.textContent = 'Elige un cliente outbound'; hint.style.color = '#C4342B'; } return; }
+    const btn = $('ct-save'); if (btn) btn.disabled = true;
+    try {
+      const res = await apiFetch(`${API}/lm/contacts${id ? `/${id}` : ''}`, { method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      if (!res.ok) throw new Error((await res.json()).error || 'Error');
+      closeContact(); await load();
+    } catch (e) { if (hint) { hint.textContent = 'Error: ' + e.message; hint.style.color = '#C4342B'; } if (btn) btn.disabled = false; }
+  }
+  async function deleteContact(id, fromDrawer) {
+    if (!confirm('¿Eliminar este contacto?')) return;
+    try { const res = await _apiDelete(`${API}/lm/contacts/${id}`); if (!res.ok) throw new Error(res.status === 429 ? 'Demasiadas peticiones, reintenta en un momento' : 'Error'); if (fromDrawer) closeContact(); await load(); }
+    catch (e) { alert('Error: ' + e.message); }
+  }
+
+  // ── Drawer: Empresa (crear / editar) ──
+  function openCompany(id) {
+    const c = id ? _companies.find(x => x.id === id) : null;
+    document.getElementById('lm-co-modal')?.remove();
+    const m = document.createElement('div');
+    m.id = 'lm-co-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) closeCompany(); };
+    m.innerHTML = `<div class="fin-pi-box lm-drawer-box">
+      ${_impHd(c ? 'Editar empresa' : 'Nueva empresa').replace('closeImport', 'closeCompany')}
+      <div class="fin-pi-form">
+        ${_lmFld('co-nombre', 'Nombre', c?.nombre, '', true)}
+        ${_lmFld('co-dominio', 'Dominio', c?.dominio, 'empresa.com')}
+        ${_lmFld('co-website', 'Website', c?.website, 'https://')}
+        ${_lmFld('co-industria', 'Industria', c?.industria)}
+        ${_lmFld('co-tamano', 'Nº empleados', c?.tamano)}
+        ${_lmFld('co-ingresos', 'Ingresos anuales', c?.ingresos)}
+        ${_lmFld('co-telefono', 'Teléfono', c?.telefono)}
+        ${_lmFld('co-linkedin', 'LinkedIn', c?.linkedin)}
+        ${_lmFld('co-ciudad', 'Ciudad', c?.ciudad)}
+        ${_lmFld('co-region', 'Región', c?.region)}
+        ${_lmFld('co-pais', 'País', c?.pais)}
+        ${_lmFld('co-fundada', 'Año fundación', c?.fundada)}
+        ${_lmFld('co-direccion', 'Dirección', c?.direccion)}
+        ${_lmFld('co-codigo_postal', 'Código postal', c?.codigo_postal)}
+        ${_lmFld('co-funding', 'Funding', c?.funding)}
+        ${_lmFld('co-target_tier', 'Target Tier / Focus', c?.target_tier)}
+        ${_lmFld('co-descripcion', 'Descripción', c?.descripcion, '', true)}
+        ${_lmFld('co-tecnologias', 'Tecnologías', c?.tecnologias, '', true)}
+        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Notas</span><textarea class="form-input" id="co-notas" rows="2">${c ? esc(c.notas) : ''}</textarea></label>
+      </div>
+      <div class="fin-pi-box__ft"><span class="fin-cfg-hint" id="co-hint"></span><div class="fin-pi-ft-btns">
+        ${c ? `<button class="btn btn--ghost btn--danger btn--sm" onclick="LeadManagerModule.deleteCompany(${c.id},1)">Eliminar</button>` : ''}
+        <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.closeCompany()">Cancelar</button>
+        <button class="btn btn--primary btn--sm" id="co-save" onclick="LeadManagerModule.saveCompany(${c ? c.id : 'null'})">${c ? 'Guardar' : 'Crear'}</button>
+      </div></div></div>`;
+    document.body.appendChild(m);
+    setTimeout(() => $('co-nombre')?.focus(), 60);
+  }
+  function closeCompany() { document.getElementById('lm-co-modal')?.remove(); }
+  async function saveCompany(id) {
+    const g = fid => ($(fid)?.value || '').trim();
+    const payload = {
+      nombre: g('co-nombre'), dominio: g('co-dominio'), website: g('co-website'), industria: g('co-industria'),
+      tamano: g('co-tamano'), ingresos: g('co-ingresos'), telefono: g('co-telefono'), linkedin: g('co-linkedin'),
+      ciudad: g('co-ciudad'), region: g('co-region'), pais: g('co-pais'), fundada: g('co-fundada'),
+      direccion: g('co-direccion'), codigo_postal: g('co-codigo_postal'), descripcion: g('co-descripcion'), tecnologias: g('co-tecnologias'), funding: g('co-funding'), target_tier: g('co-target_tier'), notas: g('co-notas'),
+    };
+    const hint = $('co-hint');
+    if (!payload.nombre && !payload.dominio) { if (hint) { hint.textContent = 'Nombre o dominio requerido'; hint.style.color = '#C4342B'; } return; }
+    const btn = $('co-save'); if (btn) btn.disabled = true;
+    try {
+      const res = await apiFetch(`${API}/lm/companies${id ? `/${id}` : ''}`, { method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      if (!res.ok) throw new Error((await res.json()).error || 'Error');
+      closeCompany(); await load();
+    } catch (e) { if (hint) { hint.textContent = 'Error: ' + e.message; hint.style.color = '#C4342B'; } if (btn) btn.disabled = false; }
+  }
+  async function deleteCompany(id, fromDrawer) {
+    if (!confirm('¿Eliminar esta empresa? Sus contactos quedarán sin empresa asignada.')) return;
+    try { const res = await _apiDelete(`${API}/lm/companies/${id}`); if (!res.ok) throw new Error(res.status === 429 ? 'Demasiadas peticiones, reintenta en un momento' : 'Error'); if (fromDrawer) closeCompany(); await load(); }
+    catch (e) { alert('Error: ' + e.message); }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // LM FASE A — motor de envío: card Hoy, settings, verificación, envíos
+  // ═══════════════════════════════════════════════════════════════
+  let _sendCfg = null;      // configuración de envío (lazy)
+  let _todayData = null;    // datos de la card Hoy (lazy)
+  let _lmMsgs = null;       // mensajes enviados (inbox real, lazy)
+  let _seqMsgs = null;      // mensajes de la secuencia activa (tab Envíos, lazy)
+
+  // Badge de verificación de email (pipeline propio — el diferenciador)
+  const _VB = {
+    'valid':     ['Verificado', '#E7F8EF', '#15803D', '✓'],
+    'catch-all': ['Catch-all',  '#FEF3C7', '#B45309', '~'],
+    'risky':     ['Riesgoso',   '#FEF3C7', '#B45309', '~'],
+    'invalid':   ['Inválido',   '#FDECEA', '#C4342B', '✕'],
+    'blocked':   ['Bloqueado',  '#F3F4F6', '#6B7280', '·'],
+    'unknown':   ['Sin señal',  '#F3F4F6', '#6B7280', '?'],
+  };
+  function _emailBadge(c) {
+    if (!c.email) return '';
+    const v = _VB[c.email_status];
+    if (!v) return `<span class="lm-vb lm-vb--none" title="Email sin verificar — usa “Verificar emails” en selección">— sin verificar</span>`;
+    return `<span class="lm-vb" style="background:${v[1]};color:${v[2]}" title="Verificación del pipeline propio${c.email_score != null ? ` · score ${c.email_score}` : ''}${c.email_verified_at ? ` · ${new Date(c.email_verified_at).toLocaleDateString()}` : ''}">${v[3]} ${v[0]}</span>`;
+  }
+  async function bulkVerifyEmails() {
+    const ids = [..._ctSel]; if (!ids.length) return;
+    try {
+      const res = await apiFetch(`${API}/lm/contacts/verify-email`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids }) });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Error');
+      const r = await res.json();
+      showBanner(`⚡ ${r.queued} contacto(s) en cola de verificación — los badges se actualizan al terminar`, 'success');
+      // refresco suave mientras la cola avanza
+      let n = 0;
+      const iv = setInterval(async () => {
+        n++; await _reloadContacts();
+        if (_section === 'contacts') _renderContacts();
+        if (n >= 6) clearInterval(iv);
+      }, 10000);
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+
+  // ── Card "Hoy" (dashboard) ──
+  async function _loadToday() {
+    try { const r = await apiFetch(`${API}/lm/today`); _todayData = (r && r.ok) ? await r.json() : null; } catch { _todayData = null; }
+    const el = document.getElementById('lm-today-card');
+    if (el && _todayData) el.innerHTML = _todayCardHtml(_todayData);
+  }
+  function _todayCardHtml(d) {
+    const on = d.settings?.enabled;
+    const chip = (t, bg, fg) => `<span class="lm-vb" style="background:${bg};color:${fg}">${t}</span>`;
+    const stat = (v, l, warn) => `<div class="lm-today-stat${warn ? ' warn' : ''}"><div class="lm-today-stat__v">${v}</div><div class="lm-today-stat__l">${l}</div></div>`;
+    const reps = (d.replies || []).slice(0, 4).map(r => `
+      <button class="lm-today-rep" onclick="LeadManagerModule.openContactPage(${r.contact_id})">
+        <span class="lm-today-rep__who">${esc([r.nombre, r.apellido].filter(Boolean).join(' '))}</span>
+        <span class="lm-today-rep__co">${esc(r.company_nombre || r.empresa_nombre || '')}</span>
+        ${r.snippet ? `<span class="lm-today-rep__sn">"${esc(String(r.snippet).slice(0, 80))}"</span>` : ''}
+      </button>`).join('');
+    const tasks = (d.manual_tasks || []).slice(0, 5).map(t => `
+      <button class="lm-today-task" onclick="LeadManagerModule.openContactPage(${t.contact_id})">
+        <span class="lm-today-task__ch">${esc(t.canal || 'tarea')}</span>
+        <span>${esc([t.nombre, t.apellido].filter(Boolean).join(' '))}</span>
+        <span class="lm-today-task__n">${esc(String(t.nota || '').slice(0, 60))}</span>
+      </button>`).join('');
+    return `
+      <div class="cp-card lm-today">
+        <div class="cp-card__t" style="display:flex;align-items:center;gap:8px">${NI('zap')} Hoy — outreach automático
+          <span style="margin-left:auto;display:flex;gap:6px">
+            ${d.gmail?.connected ? chip('Gmail ✓ ' + esc(d.gmail.email || ''), '#E7F8EF', '#15803D') : chip('Gmail sin conectar', '#FDECEA', '#C4342B')}
+            ${on ? chip('Envío ON', '#E7F8EF', '#15803D') : chip('Envío OFF', '#F3F4F6', '#6B7280')}
+            <button class="cp-mini" title="Configurar" onclick="LeadManagerModule.go('settings')">${NI('gear', 13)}</button>
+          </span>
+        </div>
+        <div class="lm-today-stats">
+          ${stat(`${d.sent_today}<span class="lm-today-stat__max">/${d.daily_limit}</span>`, 'Enviados hoy')}
+          ${stat(d.due_24h, 'Programados 24 h')}
+          ${stat((d.replies || []).length, 'Respuestas 48 h')}
+          ${stat(d.failed_48h, 'Fallos', d.failed_48h > 0)}
+        </div>
+        ${reps ? `<div class="lm-today-sec">${NI('reply')} Respondieron</div><div class="lm-today-reps">${reps}</div>` : ''}
+        ${tasks ? `<div class="lm-today-sec">${NI('checksq')} Tareas manuales (LinkedIn / llamadas)</div><div class="lm-today-tasks">${tasks}</div>` : ''}
+        ${!on && !reps && !tasks ? `<p class="lm-today-off">Activa el envío automático en Configuración para que las secuencias envíen solas.</p>` : ''}
+      </div>`;
+  }
+
+  // ── Configuración de envío + conexión Gmail ──
+  async function _loadSendCfg() {
+    try {
+      const [r, g] = await Promise.all([
+        apiFetch(`${API}/lm/send-settings`),
+        apiFetch(`${API}/lm/gmail/status`),
+      ]);
+      _sendCfg = (r && r.ok) ? await r.json() : null;
+      if (_sendCfg && g && g.ok) _sendCfg._gmail = await g.json();
+    } catch { _sendCfg = null; }
+    const el = document.getElementById('lm-send-cfg');
+    if (el) el.innerHTML = _sendCfgHtml();
+  }
+  function _sendCfgHtml() {
+    const c = _sendCfg;
+    if (!c) return `<div class="cp-empty2" style="padding:16px">No se pudo cargar la configuración.</div>`;
+    const gm = c._gmail || { connected: false };
+    const F = (l, inp, hint) => `<label class="lm-cfg-f"><span class="lm-cfg-f__l">${l}</span>${inp}${hint ? `<span class="lm-cfg-f__h">${hint}</span>` : ''}</label>`;
+    return `
+      <div class="lm-cfg-gmail">
+        ${gm.connected
+          ? `<span class="lm-vb" style="background:#E7F8EF;color:#15803D">✓ Gmail conectado — ${esc(gm.email || '')}</span>
+             <span class="lm-cfg-f__h">Los emails de secuencia salen desde esta cuenta; las respuestas se detectan solas.</span>`
+          : `<span class="lm-vb" style="background:#FDECEA;color:#C4342B">Gmail sin conectar</span>
+             <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.connectGmail()">Conectar Gmail</button>
+             <span class="lm-cfg-f__h">Requerido para el envío automático (scope gmail.send + lectura de respuestas).</span>`}
+      </div>
+      <div class="lm-cfg-toggle${c.enabled ? ' on' : ''}" onclick="LeadManagerModule.sendCfgToggle()">
+        <span class="lm-cfg-toggle__sw"><span class="lm-cfg-toggle__dot"></span></span>
+        <div><b>Envío automático ${c.enabled ? 'ACTIVADO' : 'desactivado'}</b>
+        <span class="lm-cfg-f__h">${c.enabled ? 'Las secuencias activas envían solas dentro de la ventana.' : 'Nada se envía hasta que lo actives.'}</span></div>
+      </div>
+      <div class="lm-cfg-grid">
+        ${F('Nombre remitente', `<input class="lm-cfg-in" id="scfg-from" value="${esc(c.from_name || '')}" placeholder="Jenny de Novacentrax">`)}
+        ${F('Límite diario', `<input class="lm-cfg-in" id="scfg-limit" type="number" min="1" max="200" value="${c.daily_limit}">`, 'Conservador protege tu dominio (30 rec.)')}
+        ${F('Segundos entre envíos', `<input class="lm-cfg-in" id="scfg-throttle" type="number" min="30" max="3600" value="${c.throttle_seconds}">`)}
+        ${F('Ventana horaria', `<div style="display:flex;gap:6px;align-items:center"><input class="lm-cfg-in" id="scfg-ws" type="number" min="0" max="23" value="${c.window_start}" style="width:64px"> a <input class="lm-cfg-in" id="scfg-we" type="number" min="1" max="24" value="${c.window_end}" style="width:64px"> h</div>`, 'Hora local del timezone')}
+        ${F('Timezone', `<input class="lm-cfg-in" id="scfg-tz" value="${esc(c.timezone || 'America/Lima')}">`)}
+        ${F('Fines de semana', `<select class="lm-cfg-in" id="scfg-wk"><option value="0"${!c.send_weekends ? ' selected' : ''}>No enviar</option><option value="1"${c.send_weekends ? ' selected' : ''}>Enviar</option></select>`)}
+      </div>
+      ${F('Firma (texto o HTML)', `<textarea class="lm-cfg-in" id="scfg-firma" rows="3" placeholder="Jenny · Novacentrax&#10;novacentrax.com">${esc(c.firma || '')}</textarea>`)}
+      <div class="lm-cfg-checks">
+        <label><input type="checkbox" id="scfg-opens" ${c.track_opens ? 'checked' : ''}> Trackear aperturas</label>
+        <label><input type="checkbox" id="scfg-clicks" ${c.track_clicks ? 'checked' : ''}> Trackear clics</label>
+      </div>
+      <div style="display:flex;justify-content:flex-end;margin-top:10px">
+        <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.saveSendCfg()">Guardar configuración</button>
+      </div>`;
+  }
+  function connectGmail() { window.location.href = `${API}/lm/gmail/connect`; }
+  function sendCfgToggle() { if (!_sendCfg) return; _sendCfg.enabled = !_sendCfg.enabled; const el = document.getElementById('lm-send-cfg'); if (el) el.innerHTML = _sendCfgHtml(); }
+  async function saveSendCfg() {
+    if (!_sendCfg) return;
+    const v = id => document.getElementById(id);
+    const body = {
+      enabled: _sendCfg.enabled,
+      from_name: v('scfg-from')?.value || '', daily_limit: v('scfg-limit')?.value,
+      throttle_seconds: v('scfg-throttle')?.value, window_start: v('scfg-ws')?.value,
+      window_end: v('scfg-we')?.value, timezone: v('scfg-tz')?.value,
+      send_weekends: v('scfg-wk')?.value === '1', firma: v('scfg-firma')?.value || '',
+      track_opens: !!v('scfg-opens')?.checked, track_clicks: !!v('scfg-clicks')?.checked,
+    };
+    try {
+      const res = await apiFetch(`${API}/lm/send-settings`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Error');
+      const saved = await res.json(); saved._gmail = _sendCfg._gmail; _sendCfg = saved;
+      showBanner(`✓ Configuración guardada — envío ${saved.enabled ? 'ACTIVADO ⚡' : 'desactivado'}`, 'success');
+      const el = document.getElementById('lm-send-cfg'); if (el) el.innerHTML = _sendCfgHtml();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+
+  // ── Inbox real: mensajes enviados con opens/clicks/replied ──
+  async function _loadLmMsgs(target) {
+    try { const r = await apiFetch(`${API}/lm/messages?limit=120`); _lmMsgs = (r && r.ok) ? await r.json() : []; } catch { _lmMsgs = []; }
+    const el = document.getElementById(target || 'lm-real-inbox');
+    if (el) el.innerHTML = _realInboxHtml();
+  }
+  function _msgRow(m) {
+    const ST = { sent: ['Enviado', '#E9F1FA', '#1E5FA8'], replied: ['Respondió', '#E7F8EF', '#15803D'], failed: ['Falló', '#FDECEA', '#C4342B'], queued: ['En cola', '#F3F4F6', '#6B7280'], bounced: ['Rebotó', '#FDECEA', '#C4342B'] };
+    const s = ST[m.estado] || ST.queued;
+    const when = m.sent_at ? new Date(m.sent_at).toLocaleString('es-PE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
+    return `<tr class="clients-table__row" onclick="LeadManagerModule.openContactPage(${m.contact_id})" style="cursor:pointer">
+      <td><div class="client-nombre">${esc([m.nombre, m.apellido].filter(Boolean).join(' ') || m.to_email)}</div><div class="client-empresa">${esc(m.to_email)}</div></td>
+      <td class="client-meta">${esc(m.asunto)}${m.seq_nombre ? `<div class="client-empresa">${esc(m.seq_nombre)}</div>` : ''}</td>
+      <td class="client-meta">${when}</td>
+      <td class="client-meta lm-msg-tr">${m.opens > 0 ? `<span title="aperturas">${NI('eye', 13)} ${m.opens}</span>` : ''}${m.clicks > 0 ? `<span title="clics">${NI('click', 13)} ${m.clicks}</span>` : ''}</td>
+      <td><span class="client-badge" style="background:${s[1]};color:${s[2]}">${s[0]}</span>${m.error ? `<div class="client-empresa" title="${esc(m.error)}">${esc(String(m.error).slice(0, 40))}</div>` : ''}</td>
+    </tr>`;
+  }
+  function _realInboxHtml() {
+    if (_lmMsgs === null) return `<div class="cp-empty2" style="padding:18px">Cargando envíos…</div>`;
+    if (!_lmMsgs.length) return `<div class="cp-card"><div class="cp-card__t">${NI('send')} Envíos automáticos</div><div class="cp-empty2" style="padding:14px">Aún no hay emails enviados por el motor. Activa el envío en Configuración y enrola contactos en una secuencia activa.</div></div>`;
+    const replied = _lmMsgs.filter(m => m.estado === 'replied').length;
+    const opens = _lmMsgs.filter(m => m.opens > 0).length;
+    return `<div class="cp-card"><div class="cp-card__t">${NI('send')} Envíos automáticos <span class="lm-cfg-f__h" style="font-weight:400">· ${_lmMsgs.length} mensajes · ${opens} abiertos · ${replied} con respuesta</span></div>
+      <div class="clients-table-wrap" style="max-height:420px;overflow:auto"><table class="clients-table lm-dt"><thead><tr><th>Para</th><th>Asunto / Secuencia</th><th>Enviado</th><th>Tracking</th><th>Estado</th></tr></thead>
+      <tbody>${_lmMsgs.map(_msgRow).join('')}</tbody></table></div></div>`;
+  }
+
+  // ── A/B (Fase B3): métricas por variante en el tab Métricas ──
+  let _seqAb = null;   // datos de /ab-metrics de la secuencia activa (lazy)
+  async function _seqLoadAb(id) {
+    try { const r = await apiFetch(`${API}/lm/sequences/${id}/ab-metrics`); _seqAb = (r && r.ok) ? await r.json() : { steps: [], auto: [], manual: [], manual_replies: [] }; }
+    catch { _seqAb = { steps: [], auto: [], manual: [], manual_replies: [] }; }
+    if (_section === 'sequence' && _activeSeq === id && _seqTab === 'metricas') {
+      const el = document.getElementById('seq-ab-wrap'); if (el) el.innerHTML = _seqAbHtml(id);
+    }
+  }
+  const MIN_AB_N = 10; // muestra mínima por variante antes de declarar ganadora
+  function _seqAbHtml(seqId) {
+    const d = _seqAb;
+    if (d === null) return `<div class="cp-card"><div class="cp-card__t">${NI('flask')} A/B por variante</div><div class="cp-empty2" style="padding:14px">Cargando…</div></div>`;
+    // Pasos de email con más de 1 variante definida
+    const abSteps = (d.steps || []).filter(s => s.canal === 'email' && Array.isArray(s.variants) && s.variants.filter(v => v && ((v.cuerpo || '').trim() || (v.nombre || '').trim())).length > 1);
+    // Totales manuales por variante (a nivel secuencia, sin paso)
+    const man = {}; (d.manual || []).forEach(m => { man[m.variant] = m; });
+    const manR = {}; (d.manual_replies || []).forEach(m => { manR[m.variant] = m.respuestas; });
+    if (!abSteps.length && !(d.manual || []).length) {
+      return `<div class="cp-card"><div class="cp-card__t">${NI('flask')} A/B por variante</div>
+        <div class="cp-empty2" style="padding:14px">Aún no hay pasos con variantes A/B. Edita un paso de email y agrega una <b>Variante B</b> (reparto al azar o por segmento) — desde entonces cada envío/touch queda etiquetado y aquí verás cuál convierte.</div></div>`;
+    }
+    let html = `<div class="cp-card"><div class="cp-card__t">${NI('flask')} A/B por variante <span class="lm-cfg-f__h" style="font-weight:400">· automático (tracking real) + manual (tareas marcadas)</span></div>`;
+    // Por paso: funnel automático de lm_messages
+    abSteps.forEach(s => {
+      const rows = (d.auto || []).filter(a => a.step_id === s.id);
+      const names = [...new Set([...s.variants.map(v => String(v.nombre || 'A')), ...rows.map(r => r.variant)])].filter(n => n && n !== 'IA');
+      if (!names.length) return;
+      const stats = names.map(n => {
+        const a = rows.find(r => r.variant === n) || { enviados: 0, aperturas: 0, clics: 0, respuestas: 0 };
+        const rate = a.enviados ? a.respuestas / a.enviados : 0;
+        return { n, ...a, rate };
+      });
+      const best = stats.filter(x => x.enviados >= MIN_AB_N).sort((x, y) => y.rate - x.rate)[0];
+      const winner = (best && best.rate > 0 && stats.filter(x => x.enviados >= MIN_AB_N).length > 1) ? best.n : null;
+      const maxRate = Math.max(...stats.map(x => x.rate), 0.0001);
+      html += `<div class="ab-step"><div class="ab-step__t">Día ${s.dia || 1} · ${esc(s.titulo || 'Email')}</div>
+        ${stats.map(x => `
+        <div class="ab-row${winner === x.n ? ' win' : ''}">
+          <span class="ab-row__v">${esc(x.n)}${winner === x.n ? ` <span class="ab-win">${NI('trophy')} ganando</span>` : ''}</span>
+          <div class="ab-row__bar"><span style="width:${Math.max(3, Math.round(x.rate / maxRate * 100))}%"></span></div>
+          <span class="ab-row__nums" title="enviados · aperturas · clics · respuestas">${x.enviados} env · ${x.aperturas} ${NI('eye', 12)} · ${x.clics} ${NI('click', 12)} · <b>${x.respuestas} resp (${Math.round(x.rate * 100)}%)</b></span>
+        </div>`).join('')}
+        ${stats.every(x => x.enviados < MIN_AB_N) ? `<div class="lm-cfg-f__h">Muestra chica (mín. ${MIN_AB_N} envíos por variante para declarar ganadora).</div>` : ''}
+      </div>`;
+    });
+    // Manual (secuencia completa): enviados + respuestas atribuidas
+    const manNames = Object.keys(man);
+    if (manNames.length) {
+      const stats = manNames.map(n => {
+        const m = man[n]; const resp = manR[n] || 0;
+        return { n, enviados: m.enviados, contactos: m.contactos, resp, rate: m.contactos ? resp / m.contactos : 0 };
+      });
+      const best = stats.filter(x => x.contactos >= MIN_AB_N).sort((x, y) => y.rate - x.rate)[0];
+      const winner = (best && best.rate > 0 && stats.filter(x => x.contactos >= MIN_AB_N).length > 1) ? best.n : null;
+      const maxRate = Math.max(...stats.map(x => x.rate), 0.0001);
+      html += `<div class="ab-step"><div class="ab-step__t">Touches manuales (toda la secuencia)</div>
+        ${stats.map(x => `
+        <div class="ab-row${winner === x.n ? ' win' : ''}">
+          <span class="ab-row__v">${esc(x.n)}${winner === x.n ? ` <span class="ab-win">${NI('trophy')} ganando</span>` : ''}</span>
+          <div class="ab-row__bar"><span style="width:${Math.max(3, Math.round(x.rate / maxRate * 100))}%"></span></div>
+          <span class="ab-row__nums">${x.enviados} touches · ${x.contactos} contactos · <b>${x.resp} resp (${Math.round(x.rate * 100)}%)</b></span>
+        </div>`).join('')}
+        <div class="lm-cfg-f__h">Respuestas atribuidas a la última variante tocada antes de responder.</div>
+      </div>`;
+    }
+    return html + `</div>`;
+  }
+
+  // ── Tab Envíos en detalle de secuencia ──
+  async function _seqLoadMsgs(id) {
+    try { const r = await apiFetch(`${API}/lm/messages?sequence_id=${id}&limit=200`); _seqMsgs = (r && r.ok) ? await r.json() : []; } catch { _seqMsgs = []; }
+    if (_section === 'sequence' && _activeSeq === id && _seqTab === 'envios') {
+      const el = document.getElementById('seq-tabwrap'); if (el) el.innerHTML = _seqTabContent(id);
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // LM · Personalización con IA (Fable 5 alto valor · Haiku volumen)
+  // ═══════════════════════════════════════════════════════════════
+  let _aiCfg = null;        // configuración IA (lazy)
+  let _aiDrafts = null;     // borradores del modal (por contacto o secuencia)
+  let _aiDraftCtx = null;   // { contactId } o { sequenceId } del modal abierto
+
+  async function _aiPersonalizeReq(body, label) {
+    try {
+      const res = await apiFetch(`${API}/lm/ai/personalize`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Error');
+      const r = await res.json();
+      showBanner(`✨ ${r.queued} ${label} en cola — el borrador aparece al terminar`, 'success');
+      return true;
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); return false; }
+  }
+  function personalizeOne(contactId) { _aiPersonalizeReq({ contact_id: contactId }, 'contacto'); }
+  async function aiGenerate(contactId) {
+    const sel = document.getElementById('ai-step-sel')?.value || '';
+    const [stepId, seqId] = sel ? sel.split(':') : [null, null];
+    const ok = await _aiPersonalizeReq({ contact_id: contactId, step_id: stepId || null, sequence_id: seqId || null }, 'contacto');
+    if (!ok) return;
+    // refresco suave mientras el modelo redacta (Fable puede tardar)
+    let n = 0;
+    const iv = setInterval(async () => {
+      n++;
+      try { const r = await apiFetch(`${API}/lm/ai/drafts?contact_id=${contactId}`); if (r && r.ok) { _aiDrafts = await r.json(); if (_aiDraftCtx && _aiDraftCtx.contactId === contactId) _renderAiModal(); } } catch {}
+      if (n >= 8) clearInterval(iv);
+    }, 5000);
+  }
+  function bulkPersonalize() {
+    const ids = [..._ctSel]; if (!ids.length) return;
+    _aiPersonalizeReq({ contact_ids: ids }, `contacto${ids.length === 1 ? '' : 's'}`);
+  }
+
+  // ── Modal de borradores IA de un contacto ──
+  async function openAiDrafts(contactId, seqId) {
+    _aiDraftCtx = { contactId, seqId: seqId || null }; _aiDrafts = null;
+    _renderAiModal();
+    try { const r = await apiFetch(`${API}/lm/ai/drafts?contact_id=${contactId}`); _aiDrafts = (r && r.ok) ? await r.json() : []; }
+    catch { _aiDrafts = []; }
+    _renderAiModal();
+  }
+  // Pasos de email de las secuencias en las que está el contacto (para ligar el borrador).
+  function _aiStepOptions(contactId, preSeq) {
+    const c = _contacts.find(x => x.id === contactId);
+    const seqs = (c && Array.isArray(c.sequences)) ? c.sequences : [];
+    const opts = [];
+    seqs.forEach(sq => {
+      const steps = _steps.filter(s => s.sequence_id === sq.id && s.canal === 'email')
+                          .sort((a, b) => (a.dia || 0) - (b.dia || 0) || (a.orden || 0) - (b.orden || 0));
+      steps.forEach((s, i) => opts.push({ stepId: s.id, seqId: sq.id, label: `${esc(sq.nombre)} · Día ${s.dia || i + 1}: ${esc(s.titulo || 'Email')}` }));
+    });
+    return opts;
+  }
+  function closeAiDrafts() { _aiDraftCtx = null; _aiDrafts = null; const m = $('lm-ai-modal'); if (m) m.remove(); }
+  function _renderAiModal() {
+    let m = $('lm-ai-modal');
+    if (!_aiDraftCtx) { if (m) m.remove(); return; }
+    if (!m) { m = document.createElement('div'); m.id = 'lm-ai-modal'; m.className = 'lm-modal-back'; m.onclick = e => { if (e.target === m) closeAiDrafts(); }; document.body.appendChild(m); }
+    const list = _aiDrafts;
+    let body;
+    if (list === null) body = `<div class="cp-empty2" style="padding:26px">Cargando borradores…</div>`;
+    else if (!list.length) body = `<div class="cp-empty2" style="padding:26px">Aún no hay borradores IA para este contacto.<br><span style="color:var(--muted);font-size:12px">Genera uno con el botón ✨ en la tabla.</span></div>`;
+    else body = list.map(_aiDraftCard).join('');
+    const cid = _aiDraftCtx.contactId;
+    const opts = _aiStepOptions(cid);
+    const stepSel = `<select class="lm-cfg-in" id="ai-step-sel" style="max-width:280px">
+        <option value="">Suelto (sin paso — no se envía solo)</option>
+        ${opts.map(o => `<option value="${o.stepId}:${o.seqId}"${_aiDraftCtx.seqId && o.seqId === _aiDraftCtx.seqId ? ' selected' : ''}>${o.label}</option>`).join('')}
+      </select>`;
+    m.innerHTML = `<div class="lm-modal lm-ai-modal2"><div class="lm-modal-hd"><span>${NI('sparkles')} Escribir con IA</span>
+      <button class="lm-modal-x" style="margin-left:auto" onclick="LeadManagerModule.closeAiDrafts()">✕</button></div>
+      <div class="lm-ai-gen">
+        <div class="lm-cfg-f__l">Paso a personalizar (para que el motor lo use al aprobar)</div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:4px">
+          ${stepSel}
+          <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.aiGenerate(${cid})">${NI('pen')} Escribir con IA</button>
+        </div>
+        <div class="lm-cfg-f__h" style="margin-top:6px">Alto valor → Fable 5 investiga en internet a la empresa/persona. Consume tokens solo al pulsar.</div>
+      </div>
+      <div class="lm-modal-bd">${body}</div></div>`;
+  }
+  const _AI_ST = { draft: ['Borrador', '#EEF2F6', '#475569'], approved: ['✓ Aprobado', '#E7F8EF', '#15803D'], discarded: ['Descartado', '#FDECEA', '#C4342B'] };
+  function _aiDraftCard(d) {
+    const st = _AI_ST[d.status] || _AI_ST.draft;
+    const tierBadge = d.tier === 'alto'
+      ? `<span class="lm-vb" style="background:#EDE9FE;color:#5B21B6" title="${esc(d.model)}">Fable · alto valor</span>`
+      : `<span class="lm-vb" style="background:#E9F1FA;color:#1E5FA8" title="${esc(d.model)}">Haiku · volumen</span>`;
+    if (d.error) return `<div class="lm-ai-card"><div class="lm-ai-card__hd">${tierBadge}<span class="lm-vb" style="background:${st[1]};color:${st[2]}">${st[0]}</span></div><div style="color:#C4342B;font-size:12.5px">${esc(d.error)}</div></div>`;
+    return `<div class="lm-ai-card" data-did="${d.id}">
+      <div class="lm-ai-card__hd">${tierBadge}<span class="lm-vb" style="background:${st[1]};color:${st[2]}">${st[0]}</span>
+        <span class="lm-ai-cost" title="Costo estimado de esta generación">$${Number(d.cost_usd).toFixed(4)}</span></div>
+      <label class="lm-cfg-f__l">Asunto</label>
+      <input class="lm-cfg-in lm-ai-subj" value="${esc(d.asunto)}">
+      <label class="lm-cfg-f__l" style="margin-top:8px">Cuerpo</label>
+      <textarea class="lm-cfg-in lm-ai-body" rows="7">${esc(d.cuerpo)}</textarea>
+      ${d.research_notes ? `<div class="lm-ai-notes">💡 ${esc(d.research_notes)}</div>` : ''}
+      <div class="lm-ai-card__ft">
+        <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.aiDraftSave(${d.id})">Guardar cambios</button>
+        ${d.status !== 'approved' ? `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.aiDraftStatus(${d.id},'approved')">✓ Aprobar (se enviará este)</button>` : `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.aiDraftStatus(${d.id},'draft')">Quitar aprobación</button>`}
+        <button class="lm-mini-x" title="Eliminar borrador" onclick="LeadManagerModule.aiDraftDelete(${d.id})">✕</button>
+      </div>
+    </div>`;
+  }
+  function _aiDraftFields(id) {
+    const card = document.querySelector(`.lm-ai-card[data-did="${id}"]`); if (!card) return {};
+    return { asunto: card.querySelector('.lm-ai-subj')?.value || '', cuerpo: card.querySelector('.lm-ai-body')?.value || '' };
+  }
+  async function _aiDraftPut(id, body, okMsg) {
+    try {
+      const res = await apiFetch(`${API}/lm/ai/drafts/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Error');
+      const upd = await res.json();
+      if (Array.isArray(_aiDrafts)) { const i = _aiDrafts.findIndex(x => x.id === id); if (i >= 0) _aiDrafts[i] = { ..._aiDrafts[i], ...upd }; }
+      showBanner(okMsg, 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  async function aiDraftSave(id) { await _aiDraftPut(id, _aiDraftFields(id), '✓ Cambios guardados'); }
+  async function aiDraftStatus(id, status) {
+    const extra = status === 'approved' ? _aiDraftFields(id) : {};
+    await _aiDraftPut(id, { ...extra, status }, status === 'approved' ? '✓ Aprobado — el motor enviará este borrador' : '✓ Aprobación quitada');
+    _renderAiModal();
+  }
+  async function aiDraftDelete(id) {
+    if (!confirm('¿Eliminar este borrador?')) return;
+    try {
+      const res = await apiFetch(`${API}/lm/ai/drafts/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Error');
+      if (Array.isArray(_aiDrafts)) _aiDrafts = _aiDrafts.filter(x => x.id !== id);
+      _renderAiModal();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+
+  // ── Config IA (card en Configuración) ──
+  async function _loadAiCfg() {
+    try { const r = await apiFetch(`${API}/lm/ai/settings`); _aiCfg = (r && r.ok) ? await r.json() : null; } catch { _aiCfg = null; }
+    const el = document.getElementById('lm-ai-cfg'); if (el) el.innerHTML = _aiCfgHtml();
+  }
+  function _aiCfgHtml() {
+    const c = _aiCfg;
+    if (!c) return `<div class="cp-empty2" style="padding:14px">Cargando…</div>`;
+    const spent = Number(c.spent_month || 0), budget = Number(c.monthly_budget_usd || 0);
+    const pct = budget ? Math.min(100, Math.round(spent / budget * 100)) : 0;
+    const F = (l, inp, hint) => `<label class="lm-cfg-f"><span class="lm-cfg-f__l">${l}</span>${inp}${hint ? `<span class="lm-cfg-f__h">${hint}</span>` : ''}</label>`;
+    return `
+      <div class="lm-cfg-toggle${c.enabled ? ' on' : ''}" onclick="LeadManagerModule.aiCfgToggle()">
+        <span class="lm-cfg-toggle__sw"><span class="lm-cfg-toggle__dot"></span></span>
+        <div><b>Personalización con IA ${c.enabled ? 'ACTIVADA' : 'desactivada'}</b>
+        <span class="lm-cfg-f__h">Fable 5 investiga y redacta para cuentas de alto valor; Haiku para el volumen.</span></div>
+      </div>
+      <div class="lm-ai-budget">
+        <div class="lm-ai-budget__row"><span>Gasto del mes</span><b>$${spent.toFixed(2)} / $${budget.toFixed(2)}</b></div>
+        <div class="seq-prog__bar"><span style="width:${pct}%;background:${pct >= 100 ? '#C4342B' : '#00804C'}"></span></div>
+        ${pct >= 100 ? `<div class="lm-cfg-f__h" style="color:#C4342B">Presupuesto agotado — no se generan más borradores hasta el próximo mes o subir el tope.</div>` : ''}
+      </div>
+      <div class="lm-cfg-grid">
+        ${F('Presupuesto mensual (USD)', `<input class="lm-cfg-in" id="aicfg-budget" type="number" min="0" step="1" value="${budget}">`, 'Tope de gasto en IA por mes')}
+        ${F('Modelo alto valor', `<select class="lm-cfg-in" id="aicfg-high"><option value="claude-fable-5"${c.model_high === 'claude-fable-5' ? ' selected' : ''}>Fable 5 (máx. calidad)</option><option value="claude-opus-4-8"${c.model_high === 'claude-opus-4-8' ? ' selected' : ''}>Opus 4.8</option></select>`)}
+        ${F('Modelo volumen', `<select class="lm-cfg-in" id="aicfg-vol"><option value="claude-haiku-4-5"${c.model_volume === 'claude-haiku-4-5' ? ' selected' : ''}>Haiku 4.5 (barato)</option><option value="claude-sonnet-5"${c.model_volume === 'claude-sonnet-5' ? ' selected' : ''}>Sonnet 5</option></select>`)}
+        ${F('Idioma', `<select class="lm-cfg-in" id="aicfg-lang"><option value="auto"${c.idioma === 'auto' ? ' selected' : ''}>Auto (según país)</option><option value="español"${c.idioma === 'español' ? ' selected' : ''}>Español</option><option value="inglés"${c.idioma === 'inglés' ? ' selected' : ''}>Inglés</option></select>`)}
+      </div>
+      <div style="display:flex;justify-content:flex-end;margin-top:8px"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.saveAiCfg()">Guardar</button></div>`;
+  }
+  function aiCfgToggle() { if (!_aiCfg) return; _aiCfg.enabled = !_aiCfg.enabled; const el = document.getElementById('lm-ai-cfg'); if (el) el.innerHTML = _aiCfgHtml(); }
+  async function saveAiCfg() {
+    if (!_aiCfg) return;
+    const v = id => document.getElementById(id);
+    const body = { enabled: _aiCfg.enabled, monthly_budget_usd: v('aicfg-budget')?.value, model_high: v('aicfg-high')?.value, model_volume: v('aicfg-vol')?.value, idioma: v('aicfg-lang')?.value };
+    try {
+      const res = await apiFetch(`${API}/lm/ai/settings`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Error');
+      const saved = await res.json(); saved.spent_month = _aiCfg.spent_month; _aiCfg = saved;
+      showBanner('✓ Configuración de IA guardada', 'success');
+      const el = document.getElementById('lm-ai-cfg'); if (el) el.innerHTML = _aiCfgHtml();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+
+  return { load, filter, setFilter, setView, go, openClient, clientTab,
+    openImport, closeImport, impFile, impToggleHeader, impSetObc, impNewClient, impRun, exportCsv,
+    cbxOpen, cbxFilter, cbxPick, cbxBlur,
+    openContact, closeContact, saveContact, deleteContact, filterContacts, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, bulkDeleteContacts, bulkAddOpen, bulkAddDo, openContactPage, cpTab, cpSave, cpDelete, cpActOpen, cpActSave, cpActToggle, cpActDel,
+    openCompany, closeCompany, saveCompany, deleteCompany, filterCompanies, toggleCo, toggleCoAll, clearCoSel, toggleCoSelMode, bulkDeleteCompanies,
+    openDrawer, closeDrawer, save, confirmDelete, convertToClient,
+    openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
+    openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
+    openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, confirmDeleteSequence, seqTab, seqCtAdvance, seqCtPause, seqCtRemove, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
+    seqTaskOpen, seqDoClose, seqDoCopy, seqDoDone, seqDoSkip, seqDoEditStep, seqDoExit, seqOpenLinkedIn,
+    openStepDrawer, closeStepDrawer, saveStep, confirmDeleteStep, seqInsertVar, stepUseTpl, tzSearch, tzPick, tzBlur,
+    stepSetMode, stepSetField, stepAddVariant, stepDelVariant, stepFocusTa,
+    stepTagInput, stepTagKey, stepTagPick, stepTagAddTyped, stepTagRemove, stepTagBlur,
+    openTemplate, closeTemplate, saveTemplate, deleteTemplate, tplInsertVar, tplSetFilter,
+    openFilters, closeFilters, fltSet, fltAddRow, fltDelRow, fltApply, clearFilters, removeFilter,
+    fmsToggle, fmsFilter, fmsPick,
+    openViews, applyView, saveView, deleteView, clearAllViews,
+    taskSetView, calPrev, calNext, calToday,
+    lmSetDisposition, seqDoDisposition, cpSetStage,
+    openActivityDrawer, closeActivityDrawer, saveActivity, confirmDeleteActivity, markActDone,
+    setReplySentiment, setLeadStage,
+    bulkVerifyEmails, connectGmail, sendCfgToggle, saveSendCfg,
+    personalizeOne, bulkPersonalize, openAiDrafts, closeAiDrafts, aiGenerate,
+    aiDraftSave, aiDraftStatus, aiDraftDelete, aiCfgToggle, saveAiCfg,
+    seqDoCopySubject,
+    openColsPicker, toggleCtCol, resetCtCols };
 })();
 
 // =================================================================
@@ -6545,7 +16969,8 @@ const RChatPanel = (() => {
 
   function close() {
     _open = false;
-    $('rchat')?.classList.add('rchat--collapsed');
+    const p = $('rchat');
+    if (p) { p.classList.add('rchat--collapsed'); p.classList.remove('rchat--notifs'); }
   }
 
   function toggle() { _open ? close() : open('chat'); }
@@ -6569,7 +16994,7 @@ const RChatPanel = (() => {
     notesView?.classList.toggle('hidden', !isNotes);
     if (ctxBtn) ctxBtn.style.display = isChat ? '' : 'none';
     panel?.classList.toggle('rchat--notifs', isNotifs);
-    if (title) title.textContent = isChat ? 'Equipo' : isNotes ? 'Notas' : 'Alertas';
+    if (title) title.textContent = isChat ? 'Equipo' : isNotes ? 'Notas' : 'Notificaciones';
     vswChat?.classList.toggle('active', isChat);
     vswNotif?.classList.toggle('active', isNotifs);
     vswNotes?.classList.toggle('active', isNotes);
@@ -6748,79 +17173,75 @@ const RNotifPanel = (() => {
     }
   }
 
+  // Footer del panel (cuenta + actualizar). No hay "leídas/eliminar" porque las alertas
+  // de integridad son en vivo: se limpian al resolver el dato (fijar fecha, asignar, etc.).
+  function _setFooter(total) {
+    const f = $('rnotif-footer');
+    if (!f) return;
+    if (!total) { f.classList.add('hidden'); f.innerHTML = ''; return; }
+    f.classList.remove('hidden');
+    f.innerHTML = `<span class="rnf-footer__cnt">${total} pendiente${total !== 1 ? 's' : ''}</span>
+      <button class="rnf-footer__btn" onclick="RNotifPanel.load()">Actualizar</button>`;
+  }
+
   function _render(data) {
     const el = $('rnotif-content');
     if (!el) return;
 
     const total = data.total || 0;
+    _setFooter(total);
     if (!total) {
       el.innerHTML = `<div class="rnotif__ok">
         <div class="rnotif__ok-icon">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
         </div>
-        <p class="rnotif__ok-title">Todo en orden</p>
-        <span class="rnotif__ok-sub">Sin alertas de integridad</span>
+        <p class="rnotif__ok-title">No tienes notificaciones pendientes</p>
+        <span class="rnotif__ok-sub">Todo está al día</span>
       </div>`;
       return;
     }
 
+    // Icono por tipo + flecha de acción (chevron)
+    const ICO = {
+      member:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',
+      calendar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
+      folder:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>',
+      building: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16"/><line x1="9" y1="7" x2="9.01" y2="7"/><line x1="15" y1="7" x2="15.01" y2="7"/><line x1="9" y1="11" x2="9.01" y2="11"/><line x1="15" y1="11" x2="15.01" y2="11"/></svg>',
+    };
+    const ARROW = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>';
+
+    // Reutiliza los datos de /mgmt/integrity y las acciones existentes (pickDeadline / pickMember).
     const cats = [
-      { key: 'clientes_sin_proyecto',  dot: '#FDBA74', lbl: 'Clientes sin proyecto',   nameKey: 'nombre', subKey: 'empresa' },
-      { key: 'proyectos_sin_tareas',   dot: '#C4B5FD', lbl: 'Proyectos sin tareas',    nameKey: 'nombre', subKey: 'client_nombre' },
-      { key: 'tareas_sin_deadline',    dot: '#FDE68A', lbl: 'Tareas sin fecha límite', nameKey: 'titulo', subKey: null, mode: 'deadline' },
-      { key: 'tareas_sin_responsable', dot: '#FBBFB0', lbl: 'Tareas sin responsable',  nameKey: 'titulo', subKey: null, mode: 'member' },
+      { key: 'tareas_sin_responsable', tone: 'orange', badge: 'Sin responsable', ico: 'member',   nameKey: 'titulo', task: true,  action: t => `RNotifPanel.pickMember(event,${t.id})`,                    link: 'Asignar responsable', sub: t => [t.client_nombre, t.project_nombre].filter(Boolean).map(esc).join(' · ') },
+      { key: 'tareas_sin_deadline',    tone: 'amber',  badge: 'Sin fecha',       ico: 'calendar', nameKey: 'titulo', task: true,  action: t => `RNotifPanel.pickDeadline(event,${t.id})`,                  link: 'Fijar fecha',         sub: t => [t.client_nombre, t.project_nombre].filter(Boolean).map(esc).join(' · ') },
+      { key: 'proyectos_sin_tareas',   tone: 'violet', badge: 'Sin tareas',      ico: 'folder',   nameKey: 'nombre', task: false, action: () => `document.querySelector('[data-tab=mgmt-projects]').click()`, link: 'Ver proyecto',        sub: t => esc(t.client_nombre || '') },
+      { key: 'clientes_sin_proyecto',  tone: 'blue',   badge: 'Sin proyecto',    ico: 'building', nameKey: 'nombre', task: false, action: () => `document.querySelector('[data-tab=mgmt-clients]').click()`,  link: 'Ver cliente',         sub: t => esc(t.empresa || '') },
     ];
 
     let html = '';
+    let hidden = 0;
     for (const cat of cats) {
       const items = data[cat.key] || [];
-      if (!items.length) continue;
-      html += `<div class="rnotif__cat">
-        <div class="rnotif__cat-hdr">
-          <span class="rnotif__cat-dot" style="background:${cat.dot}"></span>
-          <span class="rnotif__cat-lbl">${cat.lbl}</span>
-          <span class="rnotif__cat-cnt">${items.length}</span>
-        </div>`;
-
-      for (const item of items.slice(0, 6)) {
-        const name = esc(item[cat.nameKey] || '');
-        const sub  = cat.subKey ? esc(item[cat.subKey] || '') : '';
-
-        if (cat.mode === 'deadline') {
-          const ctx = [item.client_nombre, item.project_nombre].filter(Boolean).map(esc).join(' · ');
-          html += `<div class="rnotif__item rnotif__item--clickable" data-task-id="${item.id}"
-            onclick="RNotifPanel.pickDeadline(event,${item.id})">
-            <div class="rnotif__item-body">
-              <span class="rnotif__item-name">${name}</span>
-              ${ctx ? `<span class="rnotif__item-sub">${ctx}</span>` : ''}
+      const shown = items.slice(0, 6);
+      hidden += items.length - shown.length;
+      for (const t of shown) {
+        const name = esc(t[cat.nameKey] || '');
+        const sub  = cat.sub(t);
+        html += `<button class="rnf-card" ${cat.task ? `data-task-id="${t.id}"` : ''} onclick="${cat.action(t)}">
+          <span class="rnf-ico rnf-ico--${cat.tone}">${ICO[cat.ico]}</span>
+          <div class="rnf-main">
+            <div class="rnf-row1">
+              <span class="rnf-title" title="${name}">${name}</span>
+              <span class="rnf-dot rnf-dot--${cat.tone}"></span>
             </div>
-            <span class="rnotif__item-hint rnotif__item-hint--date" title="Fijar fecha">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-            </span>
-          </div>`;
-        } else if (cat.mode === 'member') {
-          html += `<div class="rnotif__item rnotif__item--clickable" data-task-id="${item.id}"
-            onclick="RNotifPanel.pickMember(event,${item.id})">
-            <div class="rnotif__item-body">
-              <span class="rnotif__item-name">${name}</span>
-            </div>
-            <span class="rnotif__item-hint rnotif__item-hint--member" title="Asignar responsable">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-            </span>
-          </div>`;
-        } else {
-          html += `<div class="rnotif__item">
-            <span class="rnotif__item-name">${name}</span>
-            ${sub ? `<span class="rnotif__item-sub">${sub}</span>` : ''}
-          </div>`;
-        }
+            <span class="rnf-badge rnf-badge--${cat.tone}">${cat.badge}</span>
+            ${sub ? `<p class="rnf-sub">${sub}</p>` : ''}
+            <span class="rnf-link rnf-link--${cat.tone}">${cat.link}${ARROW}</span>
+          </div>
+        </button>`;
       }
-
-      if (items.length > 6) {
-        html += `<div class="rnotif__item-more">+${items.length - 6} más…</div>`;
-      }
-      html += `</div>`;
     }
+    if (hidden > 0) html += `<div class="rnf-more">+${hidden} alertas más</div>`;
     el.innerHTML = html;
 
     // Inject floating date popover (once)
@@ -7035,6 +17456,7 @@ const RNotifPanel = (() => {
 const TimerModule = (() => {
   const IDLE_MS  = 5 * 60 * 1000;
   const PULSE_MS = 30 * 1000;
+  const STALE_MS = 10 * 3600 * 1000;     // al abrir Nova, un timer corriendo > 10h se cierra solo (quedó prendido)
   const LS_KEY   = 'nova_timer_session';
 
   let _entryId      = null;
@@ -7119,26 +17541,28 @@ const TimerModule = (() => {
   }
 
   function _updateWidget() {
+    // La tarjeta del sidebar (#tt-widget) fue removida: se actualiza solo si existe.
+    // Los botones ▶ por-tarea SIEMPRE se refrescan (no dependen de la tarjeta).
     const widget = $('tt-widget');
-    if (!widget) return;
-    if (!_entryId) {
-      widget.classList.add('tt-widget--hidden');
-      _updatePlayButtons();
-      return;
+    if (widget) {
+      if (!_entryId) {
+        widget.classList.add('tt-widget--hidden');
+      } else {
+        widget.classList.remove('tt-widget--hidden');
+        const elapsed = _elapsed();
+        const display = widget.querySelector('.tt-widget__time');
+        const statusEl = widget.querySelector('.tt-widget__status');
+        const taskEl  = widget.querySelector('.tt-widget__task');
+        const bar     = widget.querySelector('.tt-widget__bar-fill');
+        const pctEl   = widget.querySelector('.tt-widget__pct');
+        if (display)  display.textContent  = _fmtElapsed(elapsed);
+        if (statusEl) { statusEl.className = `tt-widget__status ${_isIdle ? 'tt-widget__status--idle' : 'tt-widget__status--active'}`; statusEl.textContent = _isIdle ? '● Inactivo' : '● Activo'; }
+        if (taskEl)   taskEl.textContent   = _taskTitle || 'Sin tarea';
+        const pct = elapsed > 0 ? Math.round((_currentActive() / elapsed) * 100) : 100;
+        if (bar)  bar.style.width   = pct + '%';
+        if (pctEl) pctEl.textContent = pct + '% activo';
+      }
     }
-    widget.classList.remove('tt-widget--hidden');
-    const elapsed = _elapsed();
-    const display = widget.querySelector('.tt-widget__time');
-    const statusEl = widget.querySelector('.tt-widget__status');
-    const taskEl  = widget.querySelector('.tt-widget__task');
-    const bar     = widget.querySelector('.tt-widget__bar-fill');
-    const pctEl   = widget.querySelector('.tt-widget__pct');
-    if (display)  display.textContent  = _fmtElapsed(elapsed);
-    if (statusEl) { statusEl.className = `tt-widget__status ${_isIdle ? 'tt-widget__status--idle' : 'tt-widget__status--active'}`; statusEl.textContent = _isIdle ? '● Inactivo' : '● Activo'; }
-    if (taskEl)   taskEl.textContent   = _taskTitle || 'Sin tarea';
-    const pct = elapsed > 0 ? Math.round((_currentActive() / elapsed) * 100) : 100;
-    if (bar)  bar.style.width   = pct + '%';
-    if (pctEl) pctEl.textContent = pct + '% activo';
     _updatePlayButtons();
   }
 
@@ -7171,19 +17595,26 @@ const TimerModule = (() => {
     clearTimeout(_idleTimer);
   }
 
-  async function start(taskId) {
+  async function start(taskId, ctx = null) {
     if (_entryId) await stop();
     try {
       const res = await apiFetch(`${API}/timer/start`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ task_id: taskId || null }),
+        body: JSON.stringify({ task_id: taskId || null, task_titulo: ctx?.titulo || '', project_nombre: ctx?.ctxLabel || '',
+          source: 'manual_timer', activity_type: 'active_work', metadata: ctx ? { kind: ctx.kind || 'proyecto', cliente: ctx.cliente || '' } : {} }),
       });
-      if (!res.ok) return;
+      if (!res.ok) {
+        let msg = 'No se pudo iniciar el seguimiento para esta tarea.';
+        try { const err = await res.json(); if (err && err.error) msg += ' (' + err.error + ')'; } catch {}
+        console.error('[timer] start failed:', res.status, msg);
+        showBanner(msg, 'error');
+        return;
+      }
       const data = await res.json();
       _entryId   = data.entryId;
       _startedAt = new Date(data.startedAt);
       _activeS   = 0; _idleS = 0; _taskId = taskId;
-      _taskTitle = data.taskTitulo || '';
+      _taskTitle = data.taskTitulo || ctx?.titulo || '';
       _isIdle    = false; _lastActivity = Date.now();
       _saveSession();
       _startListeners();
@@ -7192,23 +17623,39 @@ const TimerModule = (() => {
       clearInterval(_pulseTimer);
       _pulseTimer = setInterval(_pulse, PULSE_MS);
       _updateWidget();
+      try { DashboardModule._setHrsCtx(ctx ? Object.assign({}, ctx, { taskId }) : null); } catch {}
       showBanner(`Timer iniciado${_taskTitle ? ': ' + _taskTitle : ''}`, 'success');
     } catch (e) { console.error('[timer] start:', e); }
   }
 
-  async function stop() {
-    if (!_entryId) return;
+  // opts: { endedAt?: Date (fin retro-datado), activeS?, idleS? } — para cierres retro-datados (guardia de timer viejo >10h).
+  async function stop(opts = {}) {
+    let eid = _entryId, activeS = opts.activeS, idleS = opts.idleS;
+    const endedAt = opts.endedAt || null;
+    if (eid) {
+      if (activeS == null) {
+        const idleNow = _isIdle ? Math.round((Date.now() - _lastActivity) / 1000) : 0;
+        activeS = _currentActive(); idleS = _idleS + idleNow;
+      }
+    } else {
+      // No lo trackeamos localmente → adopta el timer que corre en el servidor para poder detenerlo.
+      try {
+        const r = await apiFetch(`${API}/timer/running`);
+        if (r.ok) { const d = await r.json(); if (d.running) { eid = d.entryId; if (activeS == null) { activeS = Math.max(0, Math.round((Date.now() - new Date(d.startedAt)) / 1000)); idleS = d.idleS || 0; } } }
+      } catch (_) {}
+    }
+    if (!eid) return;
     clearInterval(_pulseTimer); clearInterval(_displayTimer); clearTimeout(_idleTimer);
-    const idleNow = _isIdle ? Math.round((Date.now() - _lastActivity) / 1000) : 0;
     try {
-      await apiFetch(`${API}/timer/${_entryId}/stop`, {
+      await apiFetch(`${API}/timer/${eid}/stop`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ active_s: _currentActive(), idle_s: _idleS + idleNow }),
+        body: JSON.stringify({ active_s: activeS || 0, idle_s: idleS || 0, ...(endedAt ? { ended_at: endedAt.toISOString() } : {}) }),
       });
     } catch (_) {}
     _entryId = null; _startedAt = null; _activeS = 0; _idleS = 0; _taskId = null; _taskTitle = '';
     _isIdle  = false;
     _saveSession(); _stopListeners(); _updateWidget();
+    try { DashboardModule._renderHours(); } catch {}
     showBanner('Timer detenido', 'info');
     setTimeout(loadReport, 300);
   }
@@ -7242,157 +17689,670 @@ const TimerModule = (() => {
     const user = window._authUser;
     _isAdmin = !!(user?.isOwner || ['admin', 'manager'].includes(user?.memberRol));
 
-    if (_loadSession()) {
-      try {
-        const res = await apiFetch(`${API}/timer/running`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.running && data.entryId === _entryId) {
-            _startedAt = new Date(data.startedAt);
+    _loadSession();   // restaura _entryId/_taskId si hay sesión local
+    try {
+      const res = await apiFetch(`${API}/timer/running`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.running) {
+          const startedAt = new Date(data.startedAt);
+          if (Date.now() - startedAt.getTime() > STALE_MS) {
+            // Timer que quedó corriendo demasiado (p. ej. toda la noche): ciérralo retro-datado
+            // al último punto conocido (inicio + activo + idle) para no registrar horas fantasma.
+            const lastKnownS = (data.activeS || 0) + (data.idleS || 0);
+            const endedAt = new Date(startedAt.getTime() + Math.max(60, lastKnownS) * 1000);
+            try {
+              await apiFetch(`${API}/timer/${data.entryId}/stop`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ active_s: data.activeS || 0, idle_s: data.idleS || 0, ended_at: endedAt.toISOString() }),
+              });
+            } catch (_) {}
+            _entryId = null; localStorage.removeItem(LS_KEY); _updateWidget();
+            try { showBanner('Se cerró un timer que quedó corriendo demasiado tiempo. Revísalo en Time Tracking.', 'info'); } catch {}
+          } else {
+            // ADOPTA el timer que corre en el servidor (coincida o no con la sesión local —
+            // p. ej. tras un redeploy que borró la sesión, u otra pestaña). Así Pausar/Detener funcionan.
+            if (data.entryId !== _entryId) { _taskId = data.taskId || null; _taskTitle = data.taskTitle || ''; }
+            _entryId   = data.entryId;
+            _startedAt = startedAt;
             _activeS   = data.activeS || 0;
             _idleS     = data.idleS   || 0;
+            _saveSession();
             _startListeners();
-            clearInterval(_displayTimer);
-            _displayTimer = setInterval(_updateWidget, 1000);
-            clearInterval(_pulseTimer);
-            _pulseTimer   = setInterval(_pulse, PULSE_MS);
+            clearInterval(_displayTimer); _displayTimer = setInterval(_updateWidget, 1000);
+            clearInterval(_pulseTimer);   _pulseTimer   = setInterval(_pulse, PULSE_MS);
             _updateWidget();
-          } else {
-            _entryId = null; localStorage.removeItem(LS_KEY); _updateWidget();
           }
+        } else {
+          _entryId = null; localStorage.removeItem(LS_KEY); _updateWidget();
         }
-      } catch (_) { _updateWidget(); }
-    } else {
-      _updateWidget();
-    }
+      } else { _updateWidget(); }
+    } catch (_) { _updateWidget(); }
     loadReport();
+  }
+
+  // ── Estado del período de la vista (Día / Semana / Mes / Personalizado) ──
+  let _ttPeriod = 'day';                  // 'day' | 'week' | 'month' | 'custom'
+  let _ttAnchor = new Date();             // fecha de referencia dentro del período
+  let _ttCustom = null;                   // { start: Date, end: Date } para 'custom'
+  let _ttMember = 'me';                   // 'me' | nombre de miembro | 'all' — admin puede ver el detalle de otro
+  let _ttClient = 'all';                  // filtro combinable por cliente
+  let _ttProject = 'all';                 // filtro combinable por proyecto
+  const _ttMyName = () => (window._authUser?.memberNombre || window._authUser?.name || '').toLowerCase();
+  let _billChart = null, _billChartData = null;   // reporte de facturación por horas (Chart.js)
+  let _ttSummary = null;                          // datos del resumen (para el PDF imprimible a medida)
+  const _MONTHS   = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  const _MONTHS_L = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  function _startOfDay(d){ const x = new Date(d); x.setHours(0,0,0,0); return x; }
+  function _endOfDay(d){ const x = new Date(d); x.setHours(23,59,59,999); return x; }
+  function _mondayOf(d){ const x = _startOfDay(d); const dow = x.getDay(); x.setDate(x.getDate() + (dow === 0 ? -6 : 1 - dow)); return x; }
+  function _weekdaysIn(s, e){ let n = 0; const t = _startOfDay(s); while (t <= e) { const d = t.getDay(); if (d !== 0 && d !== 6) n++; t.setDate(t.getDate() + 1); } return n; }
+
+  // Rango activo: {start, end, label, bucket}. bucket: 'hour' (día) | 'day' | 'week'.
+  function _ttRange() {
+    const a = _ttAnchor;
+    if (_ttPeriod === 'day') {
+      const start = _startOfDay(a), end = _endOfDay(a);
+      const isToday = _startOfDay(new Date()).getTime() === start.getTime();
+      const label = isToday ? 'Hoy' : `${a.getDate()} ${_MONTHS[a.getMonth()]} ${a.getFullYear()}`;
+      return { start, end, label, bucket: 'hour' };
+    }
+    if (_ttPeriod === 'yesterday') {
+      const y = new Date(); y.setDate(y.getDate() - 1);
+      return { start: _startOfDay(y), end: _endOfDay(y), label: 'Ayer', bucket: 'hour' };
+    }
+    if (_ttPeriod === 'week') {
+      const start = _mondayOf(a), end = _endOfDay(new Date(start.getTime() + 6 * 86400000));
+      const sM = _MONTHS[start.getMonth()], eM = _MONTHS[end.getMonth()];
+      const label = sM === eM ? `${start.getDate()}–${end.getDate()} ${eM} ${end.getFullYear()}`
+                              : `${start.getDate()} ${sM} – ${end.getDate()} ${eM} ${end.getFullYear()}`;
+      return { start, end, label, bucket: 'day' };
+    }
+    if (_ttPeriod === 'month') {
+      const start = _startOfDay(new Date(a.getFullYear(), a.getMonth(), 1));
+      const end   = _endOfDay(new Date(a.getFullYear(), a.getMonth() + 1, 0));
+      return { start, end, label: `${_MONTHS_L[a.getMonth()]} ${a.getFullYear()}`, bucket: 'day' };
+    }
+    const cs = _ttCustom && _ttCustom.start ? _ttCustom.start : _startOfDay(a);
+    const ce = _ttCustom && _ttCustom.end   ? _ttCustom.end   : _endOfDay(a);
+    const start = _startOfDay(cs), end = _endOfDay(ce);
+    const days = Math.round((end - start) / 86400000) + 1;
+    const label = `${start.getDate()} ${_MONTHS[start.getMonth()]} – ${end.getDate()} ${_MONTHS[end.getMonth()]} ${end.getFullYear()}`;
+    return { start, end, label, bucket: days > 31 ? 'week' : 'day' };
+  }
+
+  function setPeriod(p) {
+    _ttPeriod = p;
+    if (p === 'custom') { if (!_ttCustom) { const e = new Date(); _ttCustom = { start: _mondayOf(e), end: _endOfDay(e) }; } }
+    else _ttAnchor = new Date();
+    loadReport();
+  }
+
+  function setTtMember(v) { _ttMember = v || 'me'; loadReport(); }
+  function setTtClient(v) { _ttClient = v || 'all'; _ttProject = 'all'; loadReport(); }   // cambiar cliente resetea el proyecto
+  function setTtProject(v) { _ttProject = v || 'all'; loadReport(); }
+  function clearTtFilters() { _ttClient = 'all'; _ttProject = 'all'; loadReport(); }
+
+  // Impresión / PDF: arma un documento limpio (encabezado + resumen de horas + facturación con el
+  // gráfico como imagen), respetando los filtros actuales. Solo `#tt-print` se muestra al imprimir.
+  // Idiomas del imprimible (salida del PDF). El selector en pantalla queda en español;
+  // solo se traduce el DOCUMENTO generado. Idiomas: Español · Inglés · Alemán.
+  const PRINT_I18N = {
+    es: {
+      locale: 'es', logoAlt: 'Logo de la empresa',
+      title: 'Reporte de Time Tracking', subtitle: 'Resumen de horas y facturación',
+      period: 'Período', member: 'Miembro', client: 'Cliente', project: 'Proyecto', generated: 'Generado',
+      memberMe: 'Yo', memberAll: 'Todo el equipo', today: 'Hoy', yesterday: 'Ayer',
+      summary: 'Resumen', detail: 'Detalle por proyecto y tarea',
+      chartBilling: 'Facturación por día', chartHours: 'Horas por día',
+      totalHours: 'Horas totales', billableHours: 'Horas facturables', balance: 'Saldo final',
+      avgRate: 'Tarifa media', projects: 'Proyectos', tasks: 'Tareas',
+      thProjectTask: 'Proyecto / tarea', thHours: 'Horas', thAmount: 'Monto', total: 'Total',
+      legendBill: 'Proyecto por horas (facturable)', legendFlat: 'Sin tarifa / precio fijo (—)',
+      empty: 'Sin registros para los filtros seleccionados.',
+    },
+    en: {
+      locale: 'en-GB', logoAlt: 'Company logo',
+      title: 'Time Tracking Report', subtitle: 'Hours and billing summary',
+      period: 'Period', member: 'Member', client: 'Client', project: 'Project', generated: 'Generated',
+      memberMe: 'Me', memberAll: 'Whole team', today: 'Today', yesterday: 'Yesterday',
+      summary: 'Summary', detail: 'Detail by project and task',
+      chartBilling: 'Billing per day', chartHours: 'Hours per day',
+      totalHours: 'Total hours', billableHours: 'Billable hours', balance: 'Final balance',
+      avgRate: 'Average rate', projects: 'Projects', tasks: 'Tasks',
+      thProjectTask: 'Project / task', thHours: 'Hours', thAmount: 'Amount', total: 'Total',
+      legendBill: 'Hourly project (billable)', legendFlat: 'No rate / fixed price (—)',
+      empty: 'No records for the selected filters.',
+    },
+    de: {
+      locale: 'de-DE', logoAlt: 'Firmenlogo',
+      title: 'Zeiterfassungsbericht', subtitle: 'Stunden- und Abrechnungsübersicht',
+      period: 'Zeitraum', member: 'Mitglied', client: 'Kunde', project: 'Projekt', generated: 'Erstellt',
+      memberMe: 'Ich', memberAll: 'Gesamtes Team', today: 'Heute', yesterday: 'Gestern',
+      summary: 'Zusammenfassung', detail: 'Details nach Projekt und Aufgabe',
+      chartBilling: 'Abrechnung pro Tag', chartHours: 'Stunden pro Tag',
+      totalHours: 'Gesamtstunden', billableHours: 'Abrechenbare Stunden', balance: 'Endsaldo',
+      avgRate: 'Durchschnittssatz', projects: 'Projekte', tasks: 'Aufgaben',
+      thProjectTask: 'Projekt / Aufgabe', thHours: 'Stunden', thAmount: 'Betrag', total: 'Gesamt',
+      legendBill: 'Stundenprojekt (abrechenbar)', legendFlat: 'Kein Satz / Festpreis (—)',
+      empty: 'Keine Einträge für die gewählten Filter.',
+    },
+  };
+
+  // Etiqueta del período traducida (Intl según el idioma elegido). "Hoy"/"Ayer" localizados.
+  function _localizedPeriodLabel(range, locale, t) {
+    const fmt = (d, o) => { try { return new Intl.DateTimeFormat(locale, o).format(d); } catch (_) { return d.toLocaleDateString(); } };
+    if (_ttPeriod === 'yesterday') return t.yesterday;
+    if (_ttPeriod === 'day') {
+      const isToday = _startOfDay(new Date()).getTime() === range.start.getTime();
+      return isToday ? t.today : fmt(range.start, { day: 'numeric', month: 'long', year: 'numeric' });
+    }
+    if (_ttPeriod === 'month') return fmt(range.start, { month: 'long', year: 'numeric' });
+    const sameYM = range.start.getMonth() === range.end.getMonth() && range.start.getFullYear() === range.end.getFullYear();
+    if (sameYM) return `${range.start.getDate()}–${fmt(range.end, { day: 'numeric', month: 'long', year: 'numeric' })}`;
+    return `${fmt(range.start, { day: 'numeric', month: 'short' })} – ${fmt(range.end, { day: 'numeric', month: 'short', year: 'numeric' })}`;
+  }
+
+  // Paso previo a imprimir: pregunta el idioma (Español / Inglés / Alemán) y luego arma el PDF.
+  function printReport() {
+    const existing = document.getElementById('tt-print-lang');
+    if (existing) existing.remove();
+    let last = 'es';
+    try { last = localStorage.getItem('kw_printLang') || 'es'; } catch (_) {}
+    const opt = (lang, flag, name, native) =>
+      `<button class="ttpl-opt${lang === last ? ' ttpl-opt--last' : ''}" data-lang="${lang}" type="button">
+        <span class="ttpl-flag">${flag}</span>
+        <span class="ttpl-ltext"><span class="ttpl-lname">${name}</span><span class="ttpl-lnative">${native}</span></span>
+        ${lang === last ? '<span class="ttpl-lastbadge">último</span>' : '<span class="ttpl-go">↵</span>'}
+      </button>`;
+    const ov = document.createElement('div');
+    ov.id = 'tt-print-lang';
+    ov.className = 'ttpl-overlay';
+    ov.innerHTML = `
+      <div class="ttpl-modal" role="dialog" aria-modal="true" aria-label="Idioma del reporte">
+        <div class="ttpl-head">
+          <div class="ttpl-ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></div>
+          <div><div class="ttpl-title">Idioma del reporte</div><div class="ttpl-sub">¿En qué idioma quieres el PDF / la impresión?</div></div>
+        </div>
+        <div class="ttpl-opts">
+          ${opt('es', 'ES', 'Español', 'Español')}
+          ${opt('en', 'EN', 'Inglés', 'English')}
+          ${opt('de', 'DE', 'Alemán', 'Deutsch')}
+        </div>
+        <button class="ttpl-cancel" type="button">Cancelar</button>
+      </div>`;
+    document.body.appendChild(ov);
+    const onKey = (e) => { if (e.key === 'Escape') close(); };
+    function close() { ov.remove(); document.removeEventListener('keydown', onKey); }
+    ov.addEventListener('mousedown', (e) => { if (e.target === ov) close(); });
+    ov.querySelector('.ttpl-cancel').addEventListener('click', close);
+    ov.querySelectorAll('.ttpl-opt').forEach(b => b.addEventListener('click', () => {
+      const lang = b.getAttribute('data-lang') || 'es';
+      try { localStorage.setItem('kw_printLang', lang); } catch (_) {}
+      close();
+      _doPrintReport(lang);
+    }));
+    document.addEventListener('keydown', onKey);
+    const focusTarget = ov.querySelector(`.ttpl-opt[data-lang="${last}"]`) || ov.querySelector('.ttpl-opt');
+    if (focusTarget) focusTarget.focus();
+  }
+
+  function _doPrintReport(lang) {
+    const t = PRINT_I18N[lang] || PRINT_I18N.es;
+    const locale = t.locale;
+    let pr = document.getElementById('tt-print');
+    if (!pr) { pr = document.createElement('div'); pr.id = 'tt-print'; document.body.appendChild(pr); }
+    const range = _ttRange();
+    const myName = window._authUser?.memberNombre || window._authUser?.name || '';
+    const memberLabel = _ttMember === 'me' ? (myName || t.memberMe) : (_ttMember === 'all' ? t.memberAll : _ttMember);
+    const now = new Date();
+    let fechaGen;
+    try { fechaGen = new Intl.DateTimeFormat(locale, { day: '2-digit', month: 'long', year: 'numeric' }).format(now) + ' · ' + new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit' }).format(now); }
+    catch (_) { fechaGen = now.toLocaleString(); }
+    const periodLabel = _localizedPeriodLabel(range, locale, t);
+    const metaFields = [
+      [t.period, periodLabel], [t.member, memberLabel],
+      _ttClient !== 'all'  ? [t.client, _ttClient]   : null,
+      _ttProject !== 'all' ? [t.project, _ttProject] : null,
+      [t.generated, fechaGen],
+    ].filter(Boolean).map(([l, v]) => `<div class="ttp-meta"><div class="ttp-meta__l">${esc(l)}</div><div class="ttp-meta__v">${esc(v)}</div></div>`).join('');
+
+    const s = _ttSummary;
+    let kpisHtml = '', tableHtml = '', chartHtml = '', legendHtml = '';
+    if (s) {
+      const kpis = s.hasBilling
+        ? [[t.totalHours, s.totalStr, ''], [t.billableHours, s.billStr, ''], [t.balance, s.saldoStr, ' ttp-kpi--accent'], [t.avgRate, s.avgTarifaStr, '']]
+        : [[t.totalHours, s.totalStr, ''], [t.projects, String(s.projCount), ''], [t.tasks, String(s.totalTasks), ''], [t.balance, '—', '']];
+      kpisHtml = kpis.map(([l, v, acc]) => `<div class="ttp-kpi${acc}"><div class="ttp-kpi__l">${esc(l)}</div><div class="ttp-kpi__v">${esc(v)}</div></div>`).join('');
+      const rows = s.projects.map(pg => {
+        const tRows = pg.tasks.map(tk => `<tr class="ttp-trow"><td class="c1">${esc(tk.titulo)}</td><td class="r">${esc(tk.secStr)}</td><td class="r">${esc(tk.montoStr)}</td></tr>`).join('');
+        return `<tbody class="ttp-grp"><tr class="ttp-prow"><td>${esc(pg.nombre)}${pg.rateStr ? `<span class="ttp-rate">${esc(pg.rateStr)}</span>` : ''}</td><td class="r">${esc(pg.secStr)}</td><td class="r">${esc(pg.montoStr)}</td></tr>${tRows}</tbody>`;
+      }).join('');
+      tableHtml = `<table class="ttp-table"><thead><tr><th>${esc(t.thProjectTask)}</th><th class="r">${esc(t.thHours)}</th><th class="r">${esc(t.thAmount)}</th></tr></thead>${rows}<tfoot><tr class="ttp-total"><td>${esc(t.total)}</td><td class="r">${esc(s.totalStr)}</td><td class="r">${esc(s.saldoStr)}</td></tr></tfoot></table>`;
+      if (_billChart) { try { const src = _billChart.toBase64Image(); const ttl = (_billChartData && _billChartData.mode === 'money') ? t.chartBilling : t.chartHours; chartHtml = `<div class="ttp-sect">${esc(ttl)}</div><div class="ttp-chartbox"><img src="${src}"></div>`; } catch (_) {} }
+      legendHtml = `<div class="ttp-legend"><span><i class="ttp-dot ttp-dot--bill"></i>${esc(t.legendBill)}</span><span><i class="ttp-dot ttp-dot--flat"></i>${esc(t.legendFlat)}</span></div>`;
+    }
+
+    const clogo = window._authUser?.companyLogo || '';
+    const companyName = window._authUser?.companyName || '';
+    pr.innerHTML = `
+      <div class="ttp-accent"></div>
+      <div class="ttp-body">
+        <div class="ttp-header">
+          <div class="ttp-head-l"><div class="ttp-h1">${esc(t.title)}</div><div class="ttp-subtitle">${esc(t.subtitle)}</div></div>
+          ${clogo ? `<img class="ttp-clogo" src="${esc(clogo)}" alt="${esc(t.logoAlt)}">` : ''}
+        </div>
+        <div class="ttp-rule"></div>
+        <div class="ttp-metarow">${metaFields}</div>
+        ${s ? `
+          <div class="ttp-sect">${esc(t.summary)}</div>
+          <div class="ttp-kpis">${kpisHtml}</div>
+          ${chartHtml}
+          <div class="ttp-sect">${esc(t.detail)}</div>
+          ${tableHtml}
+          ${legendHtml}` : `<div class="ttp-empty">${esc(t.empty)}</div>`}
+        <div class="ttp-footer"><span>${companyName ? `<strong>${esc(companyName)}</strong> · ` : ''}${esc(t.title)}</span><span>${esc(t.generated)} ${esc(fechaGen)}</span></div>
+      </div>`;
+    setTimeout(() => window.print(), 80);
+  }
+  function navPeriod(dir) {
+    if (_ttPeriod === 'custom') return;
+    const a = new Date(_ttAnchor);
+    if (_ttPeriod === 'day')   a.setDate(a.getDate() + dir);
+    if (_ttPeriod === 'week')  a.setDate(a.getDate() + dir * 7);
+    if (_ttPeriod === 'month') a.setMonth(a.getMonth() + dir);
+    _ttAnchor = a; loadReport();
+  }
+  function setCustom(which, val) {
+    if (!val) return;
+    const d = new Date(val + 'T00:00:00');
+    if (isNaN(d)) return;
+    if (!_ttCustom) _ttCustom = { start: _startOfDay(new Date()), end: _endOfDay(new Date()) };
+    if (which === 'start') _ttCustom.start = _startOfDay(d); else _ttCustom.end = _endOfDay(d);
+    if (_ttCustom.end < _ttCustom.start) { if (which === 'start') _ttCustom.end = _endOfDay(d); else _ttCustom.start = _startOfDay(d); }
+    _ttPeriod = 'custom'; loadReport();
   }
 
   async function loadReport() {
     const pane = $('tt-report-root');
     if (!pane) return;
-
-    const today = new Date();
-    const dow   = today.getDay();
-    const monday = new Date(today);
-    monday.setDate(today.getDate() + (dow === 0 ? -6 : 1 - dow));
-    monday.setHours(0,0,0,0);
-    const sunday = new Date(monday.getTime() + 6 * 86400000);
-    sunday.setHours(23,59,59,999);
-
+    const range = _ttRange();
     try {
-      const [todayRes, weekRes] = await Promise.all([
-        apiFetch(`${API}/timer/today`),
-        apiFetch(`${API}/timer/report?start=${monday.toISOString()}&end=${sunday.toISOString()}`),
+      const memberQ = (_ttMember && _ttMember !== 'me') ? `&member=${encodeURIComponent(_ttMember)}` : '';
+      const qs = `start=${range.start.toISOString()}&end=${range.end.toISOString()}`;
+      const [entRes, teamRes] = await Promise.all([
+        apiFetch(`${API}/timer/entries?${qs}${memberQ}`),
+        _isAdmin ? apiFetch(`${API}/timer/team?${qs}`) : Promise.resolve(null),
       ]);
-      const todayData = todayRes.ok ? await todayRes.json() : [];
-      const weekData  = weekRes.ok  ? await weekRes.json()  : { totalS: 0, byDay: [], byTask: [] };
-
-      let teamData = null;
-      if (_isAdmin) {
-        const teamRes = await apiFetch(`${API}/timer/team?start=${monday.toISOString()}&end=${sunday.toISOString()}`);
-        if (teamRes.ok) teamData = await teamRes.json();
-      }
-
-      _renderReport(pane, todayData, weekData, teamData);
+      const entries  = entRes && entRes.ok ? await entRes.json() : [];
+      const teamData = teamRes && teamRes.ok ? await teamRes.json() : null;
+      _renderReport(pane, entries, range, teamData);
     } catch (e) { console.error('[timer] loadReport:', e); }
   }
 
-  function _renderReport(pane, todayEntries, weekData, teamData) {
+  // ════════════════════════════════════════════════════════════════
+  // TIME TRACKING — arquitectura multi-fuente (honesta, por fases)
+  //   Fase 1 (AHORA · web):   timer manual asociado a tarea/proyecto/oportunidad,
+  //                           timeline del día, dashboard. Modelo listo para fuentes externas.
+  //   Fase 2 (Browser Ext):   pestaña/dominio activo → POST /api/timer/ingest (website_usage).
+  //   Fase 3 (Desktop Agent): app/ventana activa + idle real → POST /api/timer/ingest (app_usage).
+  //   La web app NO detecta apps ni websites: si no hay extensión/agente, se muestra empty state.
+  // ════════════════════════════════════════════════════════════════
+  const TTD_GOAL = 8 * 3600;   // objetivo diario (8h) — futuro: configurable por miembro
+  function _ttdDur(e, now) { return e.ended_at ? (e.duration_s || 0) : Math.max(e.duration_s || 0, Math.round((now - new Date(e.started_at)) / 1000)); }
+
+  function _renderReport(pane, todayEntries, range, teamData) {
     const days = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
-    const todayTotal  = todayEntries.reduce((a, e) => a + (e.duration_s || 0), 0);
-    const todayActive = todayEntries.reduce((a, e) => a + (e.active_s || 0), 0);
-    const activePct   = todayTotal > 0 ? Math.round((todayActive / todayTotal) * 100) : 0;
-    const maxDay = Math.max(...(weekData.byDay || []).map(d => d.duration_s || 0), 1);
+    const now = new Date();
+    const _viewingOther = (_ttMember !== 'me');   // admin viendo a otro → solo lectura (sin borrar)
 
-    const barsHtml = (weekData.byDay || []).map((d, i) => {
-      const pct = Math.round(((d.duration_s || 0) / maxDay) * 100);
-      return `<div class="tt-bar-col">
-        <div class="tt-bar-track"><div class="tt-bar-fill${d.isToday ? ' tt-bar-fill--today' : ''}" style="height:${pct}%"></div></div>
-        <div class="tt-bar-label${d.isToday ? ' tt-bar-label--today' : ''}">${days[i] || ''}</div>
-        <div class="tt-bar-val">${_fmtDur(d.duration_s)}</div>
+    // ── Filtros combinables (cliente + proyecto) sobre las entradas del período/miembro ──
+    const _allEntries = todayEntries;
+    const _distinct = arr => [...new Set(arr.filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    const _clientList = _distinct(_allEntries.map(e => e.client_nombre));
+    if (_ttClient !== 'all' && !_clientList.includes(_ttClient)) _ttClient = 'all';
+    const _projList = _distinct(_allEntries.filter(e => _ttClient === 'all' || (e.client_nombre || '') === _ttClient).map(e => e.proj_nombre || e.project_nombre));
+    if (_ttProject !== 'all' && !_projList.includes(_ttProject)) _ttProject = 'all';
+    todayEntries = _allEntries.filter(e =>
+      (_ttClient === 'all'  || (e.client_nombre || '') === _ttClient) &&
+      (_ttProject === 'all' || (e.proj_nombre || e.project_nombre || '') === _ttProject));
+    const total   = todayEntries.reduce((a, e) => a + _ttdDur(e, now), 0);
+    const active  = todayEntries.reduce((a, e) => a + (e.active_s || 0), 0);
+    const manual  = todayEntries.filter(e => (e.source || 'manual_timer') === 'manual_timer').reduce((a, e) => a + _ttdDur(e, now), 0);
+    const pending = todayEntries.filter(e => !e.task_id || (e.activity_type || 'active_work') === 'unknown').reduce((a, e) => a + _ttdDur(e, now), 0);
+    const running = todayEntries.some(e => !e.ended_at);
+    const isDay   = _ttPeriod === 'day';
+    const goalSec = isDay ? TTD_GOAL : Math.max(1, _weekdaysIn(range.start, range.end)) * TTD_GOAL;
+    const goalPct = goalSec > 0 ? Math.round(total / goalSec * 100) : 0;
+
+    // ── Working Hours ──
+    const stat = (l, v, cls) => `<div class="ttd-stat"><div class="ttd-stat__v ${cls || ''}">${v}</div><div class="ttd-stat__l">${l}</div></div>`;
+    const workingHours = `<div class="ttd-card ttd-wh">
+      <div class="ttd-wh__hero">
+        <div><div class="ttd-wh__lbl">${isDay && range.label === 'Hoy' ? 'Trabajado hoy' : 'Trabajado en el período'}</div><div class="ttd-wh__big">${_fmtDur(total) || '0m'}</div></div>
+        <div class="ttd-wh__goal">
+          <div class="ttd-goalbar"><span style="width:${Math.min(100, goalPct)}%"></span></div>
+          <div class="ttd-wh__goaltxt">${goalPct}% del objetivo de ${_fmtDur(goalSec)}${isDay ? '' : ' · 8h/día hábil'}</div>
+        </div>
+      </div>
+      <div class="ttd-wh__stats">
+        ${stat('Manual registrado', _fmtDur(manual) || '0m')}
+        ${stat('Activo confirmado', _fmtDur(active) || '0m')}
+        ${stat('Sin clasificar', _fmtDur(pending) || '0m', pending > 0 ? 'ttd-warn' : '')}
+        ${stat(isDay ? 'Objetivo diario' : 'Objetivo período', _fmtDur(goalSec))}
+      </div>
+    </div>`;
+
+    // ── Distribución del período: timeline por hora (Día) o barras por día/semana ──
+    let timeline;
+    if (range.bucket === 'hour') {
+      let minH = 8, maxH = 18;
+      todayEntries.forEach(e => { const s = new Date(e.started_at); const en = e.ended_at ? new Date(e.ended_at) : now; minH = Math.min(minH, s.getHours()); maxH = Math.max(maxH, en.getHours() + 1); });
+      minH = Math.max(0, minH); maxH = Math.min(24, Math.max(maxH, minH + 1));
+      const span = maxH - minH;
+      const tlBlocks = todayEntries.map(e => {
+        const s = new Date(e.started_at); const en = e.ended_at ? new Date(e.ended_at) : now;
+        const startH = s.getHours() + s.getMinutes() / 60, endH = en.getHours() + en.getMinutes() / 60;
+        const left = (startH - minH) / span * 100, width = Math.max(0.6, (endH - startH) / span * 100);
+        const kind = !e.task_id ? 'pending' : ((e.source || 'manual_timer') === 'manual_timer' ? 'manual' : 'ext');
+        const ttl = `${esc(e.task_titulo || 'Sin tarea')} · ${_fmtDur(_ttdDur(e, now))}`;
+        return `<div class="ttd-tlblk ttd-tlblk--${kind}${!e.ended_at ? ' ttd-tlblk--live' : ''}" style="left:${left}%;width:${width}%" title="${ttl}"></div>`;
+      }).join('');
+      const hourLabels = Array.from({ length: span + 1 }, (_, i) => { const h = minH + i; return `<span class="ttd-tlhr" style="left:${i / span * 100}%">${h % 12 || 12}${h < 12 ? 'a' : 'p'}</span>`; }).join('');
+      timeline = `<div class="ttd-card">
+        <div class="ttd-card__hd"><span class="ttd-card__t">Timeline del día</span>
+          <div class="ttd-legend"><span><i class="ttd-dot ttd-dot--manual"></i>Manual</span><span><i class="ttd-dot ttd-dot--pending"></i>Sin tarea</span><span><i class="ttd-dot ttd-dot--ext"></i>Externo</span></div>
+        </div>
+        ${todayEntries.length ? `<div class="ttd-tl"><div class="ttd-tl__track">${tlBlocks}</div><div class="ttd-tl__hours">${hourLabels}</div></div>`
+          : '<div class="ttd-empty">Sin registros este día. Inicia el timer en una tarea para empezar a construir tu jornada.</div>'}
       </div>`;
-    }).join('');
-
-    const entriesHtml = todayEntries.length === 0
-      ? `<div class="tt-empty">Sin sesiones hoy. Usa el botón ▶ en una tarea o el widget de la barra lateral.</div>`
-      : todayEntries.map(e => `
-        <div class="tt-entry">
-          <div class="tt-entry__left">
-            <div class="tt-entry__task">${esc(e.task_titulo || 'Sin tarea')}</div>
-            ${e.project_nombre ? `<div class="tt-entry__project">${esc(e.project_nombre)}</div>` : ''}
-          </div>
-          <div class="tt-entry__right">
-            <span class="tt-entry__dur">${_fmtDur(e.duration_s)}</span>
-            <span class="tt-entry__activepct">${e.duration_s > 0 ? Math.round((e.active_s / e.duration_s) * 100) : 0}% activo</span>
-            <button class="tt-entry__del" onclick="TimerModule.deleteEntry(${e.id})" title="Eliminar">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
-            </button>
-          </div>
-        </div>`).join('');
-
-    const byTaskHtml = (weekData.byTask || []).map(t => {
-      const pct = weekData.totalS > 0 ? Math.round((t.total_s / weekData.totalS) * 100) : 0;
-      return `<div class="tt-task-row">
-        <div class="tt-task-row__name">${esc(t.task_titulo || 'Sin tarea')}</div>
-        <div class="tt-task-row__bar-wrap"><div class="tt-task-row__bar" style="width:${pct}%"></div></div>
-        <div class="tt-task-row__dur">${_fmtDur(t.total_s)}</div>
+    } else {
+      const step = range.bucket === 'week' ? 7 : 1;
+      const buckets = [];
+      const cur = range.bucket === 'week' ? _mondayOf(range.start) : _startOfDay(range.start);
+      const todayKey = _startOfDay(new Date()).getTime();
+      while (cur <= range.end) {
+        const bs = _startOfDay(cur);
+        const be = range.bucket === 'week' ? _endOfDay(new Date(bs.getTime() + 6 * 86400000)) : _endOfDay(cur);
+        let sum = 0;
+        todayEntries.forEach(e => { const t = new Date(e.started_at); if (t >= bs && t <= be) sum += _ttdDur(e, now); });
+        const lbl = range.bucket === 'week' ? `${bs.getDate()}/${bs.getMonth() + 1}`
+                  : (_ttPeriod === 'week' ? days[(bs.getDay() + 6) % 7] : String(bs.getDate()));
+        buckets.push({ sum, lbl, isToday: bs.getTime() === todayKey });
+        cur.setDate(cur.getDate() + step);
+      }
+      const maxB = Math.max(...buckets.map(b => b.sum), 1);
+      const bars = buckets.map(b => `<div class="tt-bar-col"><div class="tt-bar-track"><div class="tt-bar-fill${b.isToday ? ' tt-bar-fill--today' : ''}" style="height:${Math.round(b.sum / maxB * 100)}%"></div></div><div class="tt-bar-label${b.isToday ? ' tt-bar-label--today' : ''}">${b.lbl}</div><div class="tt-bar-val">${b.sum ? _fmtDur(b.sum) : ''}</div></div>`).join('');
+      timeline = `<div class="ttd-card">
+        <div class="ttd-card__hd"><span class="ttd-card__t">${range.bucket === 'week' ? 'Distribución por semana' : 'Distribución por día'}</span><span class="ttd-card__n2">${_fmtDur(total)}</span></div>
+        ${todayEntries.length ? `<div class="tt-bars tt-bars--wide">${bars}</div>` : '<div class="ttd-empty">Sin registros en este período.</div>'}
       </div>`;
-    }).join('');
+    }
 
-    const teamHtml = teamData ? `
-      <div class="tt-card tt-card--print">
-        <div class="tt-card__title">Equipo — esta semana</div>
-        <table class="tt-team-table">
-          <thead><tr><th>Miembro</th><th>Tiempo total</th><th>% Activo</th><th>Sesiones</th></tr></thead>
-          <tbody>${teamData.map(m => `
-            <tr>
-              <td>${esc(m.nombre || '—')}</td>
-              <td>${_fmtDur(m.totalS)}</td>
-              <td>${m.totalS > 0 ? Math.round((m.activeS / m.totalS) * 100) : 0}%</td>
-              <td>${m.sessions}</td>
-            </tr>`).join('')}
-          </tbody>
-        </table>
-      </div>` : '';
+    // ── Resumen de horas y facturación: TODAS las sesiones manuales agrupadas por proyecto → tarea.
+    //    SIEMPRE muestra horas + total; agrega $ (monto/saldo) para proyectos por horas con tarifa. ──
+    const _bnum = v => { const n = typeof v === 'string' ? parseFloat(v) : v; return (n && !isNaN(n)) ? n : 0; };
+    const _bmoney = (v, cur) => { try { return new Intl.NumberFormat('es', { style: 'currency', currency: cur || 'USD', maximumFractionDigits: 2 }).format(v); } catch (_) { return (cur || 'USD') + ' ' + (Math.round(v * 100) / 100); } };
+    const _isoDay = dt => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+    const sumEntries = todayEntries.filter(e => (e.source || 'manual_timer') === 'manual_timer');
+    let billingCard = '';
+    _billChartData = null; _ttSummary = null;
+    if (sumEntries.length) {
+      const projs = new Map();          // pid → {nombre, moneda, tarifa, hourly, sec, tasks:Map}
+      const totByCur = {}, perDayMonto = {}, perDayHours = {}, curSec = {};
+      let totalSec = 0, billSec = 0, totalTasks = 0;
+      for (const e of sumEntries) {
+        const dur = _ttdDur(e, now); totalSec += dur;
+        const hourly = e.tipo_proyecto === 'horas' && _bnum(e.tarifa_hora) > 0;
+        const cur = e.moneda || 'USD', tarifa = _bnum(e.tarifa_hora);
+        const pid = e.project_id != null ? 'p' + e.project_id : ('n:' + (e.proj_nombre || e.project_nombre || 'Sin proyecto'));
+        if (!projs.has(pid)) projs.set(pid, { nombre: e.proj_nombre || e.project_nombre || 'Sin proyecto', moneda: cur, tarifa, hourly, sec: 0, tasks: new Map() });
+        const pg = projs.get(pid); pg.sec += dur;
+        const tk = e.task_titulo || 'Sin tarea'; pg.tasks.set(tk, (pg.tasks.get(tk) || 0) + dur);
+        const day = _isoDay(new Date(e.started_at));
+        perDayHours[day] = (perDayHours[day] || 0) + dur / 3600;
+        if (hourly) {
+          billSec += dur;
+          const monto = dur / 3600 * tarifa;
+          totByCur[cur] = (totByCur[cur] || 0) + monto;
+          perDayMonto[cur] = perDayMonto[cur] || {}; perDayMonto[cur][day] = (perDayMonto[cur][day] || 0) + monto;
+          curSec[cur] = (curSec[cur] || 0) + dur;
+        }
+      }
+      projs.forEach(pg => { totalTasks += pg.tasks.size; });
+      const curList = Object.keys(totByCur).sort((a, b) => (curSec[b] || 0) - (curSec[a] || 0));
+      const hasBilling = curList.length > 0;
+      const domCur = curList[0] || 'USD';
+      const saldoStr = hasBilling ? curList.map(c => _bmoney(totByCur[c], c)).join('  ·  ') : '—';
+      const avgTarifa = billSec > 0 ? (curList.reduce((a, c) => a + totByCur[c], 0) / (billSec / 3600)) : 0;
+      const dayKeys = []; { const c = _startOfDay(range.start); let i = 0; while (c <= range.end && i < 400) { dayKeys.push(_isoDay(c)); c.setDate(c.getDate() + 1); i++; } }
+      const _lbl = d => { const dd = new Date(d + 'T00:00:00'); return `${dd.getDate()}/${dd.getMonth() + 1}`; };
+      _billChartData = hasBilling
+        ? { mode: 'money', cur: domCur, labels: dayKeys.map(_lbl), values: dayKeys.map(d => Math.round(((perDayMonto[domCur] || {})[d] || 0) * 100) / 100) }
+        : { mode: 'hours', labels: dayKeys.map(_lbl), values: dayKeys.map(d => Math.round((perDayHours[d] || 0) * 100) / 100) };
+      const grpRows = [...projs.values()].sort((a, b) => b.sec - a.sec).map(pg => {
+        const tRows = [...pg.tasks.entries()].sort((a, b) => b[1] - a[1]).map(([tk, sec]) =>
+          `<tr class="ttb-trow"><td class="ttb-c1">${esc(tk)}</td><td class="ttb-c2">${_fmtDur(sec) || '0m'}</td><td class="ttb-c3">${pg.hourly ? _bmoney(sec / 3600 * pg.tarifa, pg.moneda) : '—'}</td></tr>`).join('');
+        return `<tbody class="ttb-grp">
+          <tr class="ttb-prow"><td class="ttb-c1"><span class="ttb-pname">${esc(pg.nombre)}</span>${pg.hourly ? `<span class="ttb-rate">${_bmoney(pg.tarifa, pg.moneda)}/h</span>` : ''}</td><td class="ttb-c2">${_fmtDur(pg.sec) || '0m'}</td><td class="ttb-c3">${pg.hourly ? _bmoney(pg.sec / 3600 * pg.tarifa, pg.moneda) : '—'}</td></tr>
+          ${tRows}
+        </tbody>`;
+      }).join('');
+      _ttSummary = {
+        hasBilling,
+        totalStr: _fmtDur(totalSec) || '0m',
+        billStr:  _fmtDur(billSec) || '0m',
+        saldoStr,
+        avgTarifaStr: _bmoney(avgTarifa, domCur) + '/h',
+        projCount: projs.size, totalTasks,
+        projects: [...projs.values()].sort((a, b) => b.sec - a.sec).map(pg => ({
+          nombre: pg.nombre, hourly: pg.hourly,
+          rateStr: pg.hourly ? _bmoney(pg.tarifa, pg.moneda) + '/h' : '',
+          secStr:  _fmtDur(pg.sec) || '0m',
+          montoStr: pg.hourly ? _bmoney(pg.sec / 3600 * pg.tarifa, pg.moneda) : '—',
+          tasks: [...pg.tasks.entries()].sort((a, b) => b[1] - a[1]).map(([tk, sec]) => ({
+            titulo: tk, secStr: _fmtDur(sec) || '0m',
+            montoStr: pg.hourly ? _bmoney(sec / 3600 * pg.tarifa, pg.moneda) : '—',
+          })),
+        })),
+      };
+      const kpisHtml = hasBilling
+        ? stat('Horas totales', _fmtDur(totalSec) || '0m') + stat('Horas facturables', _fmtDur(billSec) || '0m') + stat('Saldo final', saldoStr) + stat('Tarifa media', _bmoney(avgTarifa, domCur) + '/h')
+        : stat('Horas totales', _fmtDur(totalSec) || '0m') + stat('Proyectos', String(projs.size)) + stat('Tareas', String(totalTasks)) + stat('Saldo final', '—');
+      billingCard = `<div class="ttd-card ttb-card">
+        <div class="ttd-card__hd"><span class="ttd-card__t">Resumen de horas${hasBilling ? ' y facturación' : ''}</span><span class="ttb-badge">${hasBilling ? saldoStr : (_fmtDur(totalSec) || '0m')}</span></div>
+        <div class="ttb-kpis">${kpisHtml}</div>
+        <div class="ttb-chartwrap"><canvas id="ttd-bill-chart"></canvas></div>
+        <div class="ttb-tablewrap"><table class="ttb-table">
+          <thead><tr><th class="ttb-c1">Proyecto / tarea</th><th class="ttb-c2">Horas</th><th class="ttb-c3">Monto</th></tr></thead>
+          ${grpRows}
+          <tfoot><tr class="ttb-total"><td class="ttb-c1">Total</td><td class="ttb-c2">${_fmtDur(totalSec) || '0m'}</td><td class="ttb-c3">${saldoStr}</td></tr></tfoot>
+        </table></div>
+      </div>`;
+    }
+
+    // ── Activity Sources (honesto · estado según datos reales) ──
+    const hasExt   = todayEntries.some(e => e.source === 'browser_extension');
+    const hasAgent = todayEntries.some(e => e.source === 'desktop_agent');
+    const srcRow = (name, desc, st, right) => `<div class="ttd-src">
+      <div class="ttd-src__l"><span class="ttd-src__dot ttd-src__dot--${st}"></span><div><div class="ttd-src__nm">${name}</div><div class="ttd-src__desc">${desc}</div></div></div>
+      ${right}
+    </div>`;
+    const srcBadge = (st, txt) => `<span class="ttd-src__badge ttd-src__badge--${st}">${txt}</span>`;
+    const sources = `<div class="ttd-card">
+      <div class="ttd-card__hd"><span class="ttd-card__t">Fuentes de actividad</span></div>
+      ${srcRow('Manual Timer', 'Registro manual desde Nova', 'on', srcBadge('on', running ? 'En curso' : 'Activo'))}
+      ${srcRow('Browser Extension', 'Webs y pestañas del navegador', hasExt ? 'on' : 'soon', hasExt ? srcBadge('on', 'Activo') : '<button class="ttd-connect" onclick="TimerModule.connectExtension()">Conectar</button>')}
+      ${srcRow('Desktop Agent', 'Apps de escritorio y todos los perfiles de Chrome', hasAgent ? 'on' : 'soon', hasAgent ? srcBadge('on', 'Activo') : '<button class="ttd-connect" onclick="TimerModule.connectExtension()">Conectar</button>')}
+    </div>`;
+
+    // ── Apps / Websites — datos REALES de fuentes externas (browser_extension / desktop_agent).
+    //    Agrega por dominio (web) o app, suma tiempo; empty state honesto solo si no hay nada.
+    const _extAgg = {};
+    todayEntries.forEach(e => {
+      if (e.source !== 'browser_extension' && e.source !== 'desktop_agent') return;
+      let meta = e.metadata;
+      if (typeof meta === 'string') { try { meta = JSON.parse(meta); } catch { meta = {}; } }
+      meta = meta || {};
+      const isWeb = e.source === 'browser_extension';
+      const name  = (isWeb ? meta.websiteDomain : meta.appName) || '';
+      if (!name) return;
+      const k = (isWeb ? 'w·' : 'a·') + name;
+      (_extAgg[k] || (_extAgg[k] = { name, isWeb, dur: 0 })).dur += _ttdDur(e, now);
+    });
+    const _appsList = Object.values(_extAgg).sort((a, b) => b.dur - a.dur);
+    const _appsMax  = _appsList.reduce((m, x) => Math.max(m, x.dur), 0);
+    const _webIco = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>';
+    const _appIco = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>';
+    const appsBody = _appsList.length
+      ? `<div class="ttd-applist">${_appsList.map(x => {
+          const pct = _appsMax > 0 ? Math.round(x.dur / _appsMax * 100) : 0;
+          return `<div class="ttd-app">
+            <span class="ttd-app__ico ttd-app__ico--${x.isWeb ? 'web' : 'app'}">${x.isWeb ? _webIco : _appIco}</span>
+            <div class="ttd-app__body"><div class="ttd-app__nm">${esc(x.name)}</div><div class="ttd-app__bar"><span style="width:${pct}%"></span></div></div>
+            <span class="ttd-app__dur">${_fmtDur(x.dur) || '0m'}</span>
+          </div>`;
+        }).join('')}</div>`
+      : `<div class="ttd-empty ttd-empty--apps">
+          <div class="ttd-empty__ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div>
+          <p class="ttd-empty__t">Conecta Nova Extension o Desktop Agent</p>
+          <p class="ttd-empty__s">Aquí verás las apps y websites en los que realmente trabajaste, fuera de Nova.</p>
+        </div>`;
+    const appsCard = `<div class="ttd-card">
+      <div class="ttd-card__hd"><span class="ttd-card__t">Apps y websites usados</span>${_appsList.length ? `<span class="ttd-card__n">${_appsList.length}</span>` : ''}</div>
+      ${appsBody}
+    </div>`;
+
+    // ── Time Review ──
+    const review = [];
+    todayEntries.forEach(e => {
+      if ((e.source || 'manual_timer') !== 'manual_timer') return;   // uso web/app externo → se resume en "Apps y websites", no se revisa aquí
+      const r = [];
+      if (!e.task_id) r.push('Sin tarea');
+      if ((e.activity_type || 'active_work') === 'unknown') r.push('Sin clasificar');
+      if (_ttdDur(e, now) > 6 * 3600) r.push('Bloque largo');   // >6h seguidas → probable timer olvidado (2h daba falsos positivos: sesiones de enfoque normales)
+      if (r.length) review.push({ e, r });
+    });
+    const reviewBody = review.length
+      ? review.map(({ e, r }) => `<div class="ttd-rv">
+          <div class="ttd-rv__l"><div class="ttd-rv__t">${esc(e.task_titulo || 'Sin tarea')}</div><div class="ttd-rv__m">${e.project_nombre ? esc(e.project_nombre) + ' · ' : ''}${_fmtDur(_ttdDur(e, now))}</div></div>
+          <div class="ttd-rv__r">${r.map(x => `<span class="ttd-rvtag">${x}</span>`).join('')}</div>
+        </div>`).join('')
+      : '<div class="ttd-empty">Todo tu tiempo está clasificado y asociado a una tarea. Nada pendiente de revisar. 👌</div>';
+    const reviewCard = `<div class="ttd-card">
+      <div class="ttd-card__hd"><span class="ttd-card__t">Por revisar</span>${review.length ? `<span class="ttd-card__n">${review.length}</span>` : ''}</div>
+      <div class="ttd-rvlist">${reviewBody}</div>
+    </div>`;
+
+    // ── Sesiones del período (fecha cuando no es "Hoy"). Solo sesiones del timer MANUAL;
+    //    el uso web/app externo se resume en "Apps y websites usados", no como sesiones sueltas.
+    const _multiDay = !(isDay && range.label === 'Hoy');
+    const _MAXLIST = 80;
+    const sesEntries = todayEntries.filter(e => (e.source || 'manual_timer') === 'manual_timer');
+    const entriesHtml = sesEntries.length === 0
+      ? '<div class="ttd-empty">Sin sesiones en este período. Usa el botón ▶ en una tarea o el widget de la barra lateral.</div>'
+      : sesEntries.slice(0, _MAXLIST).map(e => {
+          const dur = _ttdDur(e, now);
+          const ap = dur > 0 ? Math.round((e.active_s || 0) / dur * 100) : 0;
+          const s = new Date(e.started_at);
+          const hhmm = `${String(s.getHours()).padStart(2,'0')}:${String(s.getMinutes()).padStart(2,'0')}`;
+          return `<div class="ttd-entry">
+            <div class="ttd-entry__time">${_multiDay ? `<span class="ttd-entry__date">${s.getDate()}/${s.getMonth() + 1}</span>` : ''}${hhmm}</div>
+            <span class="ttd-entry__dot ttd-dot--${!e.task_id ? 'pending' : 'manual'}"></span>
+            <div class="ttd-entry__body"><div class="ttd-entry__task">${esc(e.task_titulo || 'Sin tarea')}</div>${e.project_nombre ? `<div class="ttd-entry__proj">${esc(e.project_nombre)}</div>` : ''}</div>
+            <span class="ttd-entry__ap">${ap}% activo</span>
+            <span class="ttd-entry__dur">${_fmtDur(dur) || '0m'}</span>
+            ${_viewingOther ? '' : `<button class="ttd-entry__del" onclick="TimerModule.deleteEntry(${e.id})" title="Eliminar"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>`}
+          </div>`;
+        }).join('') + (sesEntries.length > _MAXLIST ? `<div class="ttd-empty" style="padding:10px 0">… y ${sesEntries.length - _MAXLIST} sesiones más en este período.</div>` : '');
+
+    // ── Equipo (admin) — agregados del período ──
+    const teamHtml = teamData ? `<div class="ttd-card"><div class="ttd-card__hd"><span class="ttd-card__t">Equipo — ${range.label}</span></div>
+      <table class="tt-team-table"><thead><tr><th>Miembro</th><th>Total</th><th>% Activo</th><th>Sesiones</th></tr></thead>
+      <tbody>${teamData.map(m => `<tr><td>${esc(m.nombre || '—')}</td><td>${_fmtDur(m.totalS)}</td><td>${m.totalS > 0 ? Math.round((m.activeS / m.totalS) * 100) : 0}%</td><td>${m.sessions}</td></tr>`).join('')}</tbody></table></div>` : '';
+
+    // ── Selector de período (Día / Semana / Mes / Personalizado) ──
+    const _seg = (p, lbl) => `<button class="ttd-seg__b${_ttPeriod === p ? ' is-on' : ''}" onclick="TimerModule.setPeriod('${p}')">${lbl}</button>`;
+    const _isoD = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const periodBar = `<div class="ttd-period">
+      <div class="ttd-seg">${_seg('day','Día')}${_seg('yesterday','Ayer')}${_seg('week','Semana')}${_seg('month','Mes')}${_seg('custom','Personalizado')}</div>
+      ${_ttPeriod === 'custom'
+        ? `<div class="ttd-cust"><input type="date" class="ttd-date" value="${_isoD(range.start)}" onchange="TimerModule.setCustom('start',this.value)"><span class="ttd-cust__sep">→</span><input type="date" class="ttd-date" value="${_isoD(range.end)}" onchange="TimerModule.setCustom('end',this.value)"></div>`
+        : _ttPeriod === 'yesterday'
+          ? `<div class="ttd-pnav"><span class="ttd-pnav__lbl">Ayer</span></div>`
+          : `<div class="ttd-pnav"><button class="ttd-pnav__b" onclick="TimerModule.navPeriod(-1)" aria-label="Anterior">‹</button><span class="ttd-pnav__lbl">${range.label}</span><button class="ttd-pnav__b" onclick="TimerModule.navPeriod(1)" aria-label="Siguiente">›</button></div>`}
+    </div>`;
+
+    // ── Filtros combinables: Miembro (admin) · Cliente · Proyecto — se aplican todos a la vez ──
+    const _filterSel = (cur, opts, fn, label) => `<label class="ttd-filter"><span class="ttd-filter__l">${label}</span><select class="ttd-filter__sel" onchange="TimerModule.${fn}(this.value)">${opts.map(o => `<option value="${esc(o.v)}"${cur === o.v ? ' selected' : ''}>${esc(o.t)}</option>`).join('')}</select></label>`;
+    const memberOpts  = [{ v: 'me', t: 'Mi tiempo (yo)' }, { v: 'all', t: 'Todo el equipo' }, ...((teamData || []).filter(m => (m.nombre || '').toLowerCase() !== _ttMyName()).map(m => ({ v: m.nombre, t: m.nombre })))];
+    const clientOpts  = [{ v: 'all', t: 'Todos los clientes' }, ..._clientList.map(c => ({ v: c, t: c }))];
+    const projectOpts = [{ v: 'all', t: 'Todos los proyectos' }, ..._projList.map(p => ({ v: p, t: p }))];
+    const filterBits = [
+      (_isAdmin && (teamData || []).length) ? _filterSel(_ttMember, memberOpts, 'setTtMember', 'Miembro') : '',
+      _clientList.length ? _filterSel(_ttClient, clientOpts, 'setTtClient', 'Cliente') : '',
+      _projList.length   ? _filterSel(_ttProject, projectOpts, 'setTtProject', 'Proyecto') : '',
+    ].filter(Boolean).join('');
+    const _hasFilters = (_ttClient !== 'all' || _ttProject !== 'all');
+    const filterBar = filterBits ? `<div class="ttd-filters">${filterBits}${_hasFilters ? `<button class="ttd-filters__clear" onclick="TimerModule.clearTtFilters()">Limpiar filtros</button>` : ''}</div>` : '';
 
     pane.innerHTML = `
-      <div class="tt-page-header">
-        <div>
-          <h2 class="tt-page-title">Time Tracking</h2>
-          <div class="tt-page-sub">Semana actual</div>
-        </div>
-        <button class="tt-print-btn" onclick="window.print()">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-          Imprimir reporte
-        </button>
+      <div class="ttd-head">
+        <div><h2 class="ttd-head__t">Time Tracking</h2><p class="ttd-head__s">${(_ttMember && _ttMember !== 'me') ? `Viendo el tiempo de <b>${_ttMember === 'all' ? 'todo el equipo' : esc(_ttMember)}</b> · por día, semana, mes o rango.` : 'Todas tus entradas de tiempo · por día, semana, mes o rango personalizado.'}</p></div>
+        <button class="ttd-print" onclick="TimerModule.printReport()" title="Imprimir / exportar a PDF"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>Imprimir</button>
       </div>
-
-      <div class="tt-stats-row">
-        <div class="tt-stat"><div class="tt-stat__val">${_fmtDur(todayTotal)}</div><div class="tt-stat__label">Hoy</div></div>
-        <div class="tt-stat"><div class="tt-stat__val">${activePct}%</div><div class="tt-stat__label">Activo hoy</div></div>
-        <div class="tt-stat"><div class="tt-stat__val">${todayEntries.length}</div><div class="tt-stat__label">Sesiones hoy</div></div>
-        <div class="tt-stat"><div class="tt-stat__val">${_fmtDur(weekData.totalS)}</div><div class="tt-stat__label">Esta semana</div></div>
-      </div>
-
-      <div class="tt-card tt-card--print">
-        <div class="tt-card__title">Semana — ${_fmtDur(weekData.totalS || 0)} total</div>
-        <div class="tt-bars">${barsHtml}</div>
-      </div>
-
-      <div class="tt-card tt-card--print">
-        <div class="tt-card__title">Entradas de hoy</div>
-        <div class="tt-entries">${entriesHtml}</div>
-      </div>
-
-      ${(weekData.byTask || []).length ? `
-      <div class="tt-card tt-card--print">
-        <div class="tt-card__title">Por tarea — esta semana</div>
-        ${byTaskHtml}
-      </div>` : ''}
-
+      ${periodBar}
+      ${filterBar}
+      ${workingHours}
+      ${timeline}
+      ${billingCard}
+      <div class="ttd-2col">${sources}${appsCard}</div>
+      ${reviewCard}
+      <div class="ttd-card"><div class="ttd-card__hd"><span class="ttd-card__t">${isDay && range.label === 'Hoy' ? 'Sesiones de hoy' : 'Sesiones'}</span>${sesEntries.length ? `<span class="ttd-card__n">${sesEntries.length}</span>` : ''}</div><div class="ttd-entries">${entriesHtml}</div></div>
       ${teamHtml}
     `;
+    if (_billChartData) requestAnimationFrame(_drawBillingChart);
+  }
+
+  function _drawBillingChart() {
+    const d = _billChartData, cv = document.getElementById('ttd-bill-chart');
+    if (!d || !cv || typeof Chart === 'undefined') return;
+    if (_billChart) { try { _billChart.destroy(); } catch (_) {} _billChart = null; }
+    const money = d.mode === 'money';
+    const fmtMoney = v => { try { return new Intl.NumberFormat('es', { style: 'currency', currency: d.cur || 'USD' }).format(v); } catch (_) { return (d.cur || 'USD') + ' ' + v; } };
+    const fmtHours = v => { const s = Math.round(v * 3600), h = Math.floor(s / 3600), m = Math.round((s % 3600) / 60); return h > 0 ? `${h}h ${m}m` : `${m}m`; };
+    // Etiquetas de valor encima de cada barra (solo si hay pocas, para no saturar en vista mensual).
+    const showLabels = d.labels.length <= 14 && d.values.filter(v => v > 0).length <= 14;
+    const valueLabels = {
+      id: 'ttpValueLabels',
+      afterDatasetsDraw(chart) {
+        if (!showLabels) return;
+        const { ctx } = chart, meta = chart.getDatasetMeta(0);
+        ctx.save();
+        ctx.font = '600 10px Inter, system-ui, sans-serif';
+        ctx.fillStyle = money ? '#006B3F' : '#6B655E';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+        meta.data.forEach((bar, i) => { const v = d.values[i]; if (v) ctx.fillText(money ? fmtMoney(v) : fmtHours(v), bar.x, bar.y - 5); });
+        ctx.restore();
+      },
+    };
+    _billChart = new Chart(cv, {
+      type: 'bar',
+      data: { labels: d.labels, datasets: [{ data: d.values, backgroundColor: '#00804C', hoverBackgroundColor: '#006B3F', borderRadius: 5, maxBarThickness: 42, categoryPercentage: 0.66, barPercentage: 0.9 }] },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        layout: { padding: { top: showLabels ? 20 : 6, right: 4, left: 2 } },
+        plugins: {
+          legend: { display: false },
+          tooltip: { displayColors: false, backgroundColor: '#1C1A17', padding: 8, cornerRadius: 6, titleFont: { size: 10 }, bodyFont: { size: 11, weight: '600' }, callbacks: { label: c => money ? fmtMoney(c.parsed.y) : fmtHours(c.parsed.y) } },
+        },
+        scales: {
+          x: { grid: { display: false }, border: { color: '#E7E3DC' }, ticks: { color: '#8A8175', font: { size: 10 }, maxRotation: 0, autoSkip: true, autoSkipPadding: 12 } },
+          y: { beginAtZero: true, grid: { color: '#F0EDE7', drawTicks: false }, border: { display: false }, ticks: { color: '#A8A29E', font: { size: 10 }, padding: 8, maxTicksLimit: 5, callback: v => money ? ((d.cur === 'USD' ? '$' : '') + v) : (v + 'h') } },
+        },
+      },
+      plugins: [valueLabels],
+    });
   }
 
   async function deleteEntry(id) {
@@ -7401,7 +18361,33 @@ const TimerModule = (() => {
     loadReport();
   }
 
-  return { init, start, stop, startFromTask, toggleTask, loadReport, deleteEntry, syncButtons: _updatePlayButtons };
+  // Genera un token de Nova y lo muestra una sola vez. Sirve para el Desktop Agent y la extensión.
+  async function connectExtension() {
+    try {
+      const r = await apiFetch(`${API}/timer/ext-token`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ label: 'Nova Activity' }) });
+      if (r.status === 401) { alert('Sesión expirada. Recarga la página (Ctrl+R) e inténtalo de nuevo.'); return; }
+      if (!r.ok) throw new Error(await r.text());
+      const { token } = await r.json();
+      _showExtToken(token);
+    } catch (e) { console.error('[timer] ext-token:', e); alert('No se pudo generar el token. Inténtalo de nuevo.'); }
+  }
+  function _showExtToken(token) {
+    const back = document.createElement('div');
+    back.className = 'ttx-back';
+    back.innerHTML = `<div class="ttx-box" onclick="event.stopPropagation()">
+      <div class="ttx-hd"><div><h3 class="ttx-t">Token de Nova</h3><p class="ttx-s">Un mismo token conecta el <b>Desktop Agent</b> y la extensión del navegador. Cópialo:</p></div><button class="ttx-x" onclick="this.closest('.ttx-back').remove()" aria-label="Cerrar">✕</button></div>
+      <div class="ttx-token"><code>${esc(token)}</code><button class="ttx-copy" onclick="navigator.clipboard.writeText('${token}').then(()=>{this.textContent='Copiado ✓'})">Copiar</button></div>
+      <ol class="ttx-steps">
+        <li><b>Desktop Agent (recomendado):</b> pégalo en el instalador <b>Nova Activity</b>, en el campo "Token".</li>
+        <li><b>Extensión del navegador:</b> abre su popup → pégalo en <b>Token de Nova</b> y activa el switch.</li>
+      </ol>
+      <p class="ttx-note">Guárdalo ahora: por seguridad no se vuelve a mostrar. Puedes generar otro cuando quieras.</p>
+    </div>`;
+    back.onclick = () => back.remove();
+    document.body.appendChild(back);
+  }
+
+  return { init, start, stop, startFromTask, toggleTask, loadReport, deleteEntry, connectExtension, setPeriod, navPeriod, setCustom, setTtMember, setTtClient, setTtProject, clearTtFilters, printReport, syncButtons: _updatePlayButtons };
 })();
 
 // =================================================================
@@ -7415,10 +18401,12 @@ function initApp() {
 
   // Wire both old .tab buttons and new .snav-item sidebar buttons
   function _switchTab(tabName) {
+    try { localStorage.setItem('kw_activeTab', tabName); } catch (_) {}   // recuerda la sección para restaurarla al recargar
     document.querySelectorAll('.tab,.snav-item').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.pane').forEach(p => p.classList.remove('active'));
     document.querySelectorAll(`[data-tab="${tabName}"]`).forEach(t => t.classList.add('active'));
     $(`pane-${tabName}`)?.classList.add('active');
+    { const _m = _moduleOf(tabName); _setActiveModule(_m); try { localStorage.setItem('kw_lastTab_' + _m, tabName); } catch (_) {} }
     if (tabName === 'batch') { _checkPersistedJob(); _loadBatchHistory(); }
     if (tabName === 'verifications' && !_verifLoaded) {
       _verifLoaded = true;
@@ -7429,6 +18417,7 @@ function initApp() {
     if (tabName === 'mgmt-finance')   FinanceModule.load();
     if (tabName === 'mgmt-clients')   ClientsModule.load();
     if (tabName === 'mgmt-projects')  ProjectsModule.load();
+    if (tabName === 'mgmt-opportunities') OpportunitiesModule.load();
     if (tabName === 'mgmt-tasks')     TasksModule.load();
     if (tabName === 'mgmt-calendar')  CalendarModule.load();
     if (tabName === 'mgmt-blocks')    BlocksModule.load();
@@ -7441,6 +18430,7 @@ function initApp() {
   document.querySelectorAll('.tab, .snav-item').forEach(btn => {
     btn.addEventListener('click', () => _switchTab(btn.dataset.tab));
   });
+  window._novaSwitchTab = _switchTab;   // expuesto para restaurar la última sección al recargar (desde initAuth)
 
   // ═══════════════════════════════════════════════════════════════
   // SINGLE LEAD

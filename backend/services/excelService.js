@@ -34,18 +34,62 @@ function mapHeader(raw) {
   return null;
 }
 
+// ── Lectura robusta de CSV/Excel (encoding + separador) ─────────────
+// Problemas reales que arregla:
+//  1. Excel en español guarda "CSV" en CP1252 → decodificar como UTF-8 rompe
+//     tildes/ñ (aparece U+FFFD). Detectamos eso y reintentamos como latin1.
+//  2. Excel en español usa ';' como separador (y a veces '\t'). Detectamos el
+//     separador dominante en las primeras líneas y se lo pasamos a SheetJS (FS).
+function _decodeText(buffer) {
+  let str = buffer.toString('utf8');
+  if (str.includes('�')) str = buffer.toString('latin1'); // no era UTF-8
+  if (str.charCodeAt(0) === 0xFEFF) str = str.slice(1);        // quitar BOM
+  return str;
+}
+function _guessSep(str) {
+  // Cuenta separadores FUERA de comillas en las primeras 5 líneas.
+  const lines = str.split(/\r?\n/).slice(0, 5).filter(l => l.trim());
+  const counts = { ',': 0, ';': 0, '\t': 0 };
+  for (const line of lines) {
+    let inQ = false;
+    for (const ch of line) {
+      if (ch === '"') inQ = !inQ;
+      else if (!inQ && counts[ch] !== undefined) counts[ch]++;
+    }
+  }
+  if (counts[';'] > counts[','] && counts[';'] >= counts['\t']) return ';';
+  if (counts['\t'] > counts[','] && counts['\t'] > counts[';']) return '\t';
+  return ',';
+}
+/**
+ * Lee un buffer CSV/TSV/Excel y devuelve las filas como arrays (header:1).
+ * @param {Buffer} buffer  @param {string} filename
+ * @returns {Array<Array<string>>}
+ */
+function readTabular(buffer, filename) {
+  const isText = /\.(csv|tsv|txt)$/i.test(filename || '');
+  let wb;
+  if (isText) {
+    const str = _decodeText(buffer);
+    const FS = /\.tsv$/i.test(filename || '') ? '\t' : _guessSep(str);
+    wb = XLSX.read(str, { type: 'string', cellText: true, cellDates: true, FS });
+  } else {
+    wb = XLSX.read(buffer, { type: 'buffer', cellText: true, cellDates: true });
+  }
+  const sheet = wb.Sheets[wb.SheetNames[0]];
+  if (!sheet) throw new Error('El archivo no tiene hojas.');
+  return XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: false });
+}
+
 /**
  * Read only the header row of a file and return column names + auto-suggestions.
  *
  * @param {Buffer} buffer
  * @returns {{ headers: string[], suggestions: Object.<number,string> }}
  */
-function parseHeaders(buffer) {
-  const workbook = XLSX.read(buffer, { type: 'buffer', cellText: true });
-  const sheetName = workbook.SheetNames[0];
-  if (!sheetName) throw new Error('File has no sheets.');
-  const sheet = workbook.Sheets[sheetName];
-  const rows  = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+function parseHeaders(buffer, filename) {
+  // Lectura robusta: corrige tildes rotas (CP1252) y separador ';' de Excel español.
+  const rows = readTabular(buffer, filename);
   if (!rows.length) throw new Error('File is empty.');
 
   const headers = rows[0].map(h => String(h).trim());
@@ -458,4 +502,4 @@ function buildTemplateExcel() {
   return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 }
 
-module.exports = { parseLeadsFile, parseHeaders, buildResultsExcel, buildCleanExcel, buildTemplateExcel, FIELD_ALIASES };
+module.exports = { parseLeadsFile, parseHeaders, readTabular, buildResultsExcel, buildCleanExcel, buildTemplateExcel, FIELD_ALIASES };

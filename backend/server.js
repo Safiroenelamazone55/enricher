@@ -295,6 +295,25 @@ function requireAuth(req, res, next) {
   res.status(401).json({ error: 'Authentication required. Please log in.' });
 }
 
+// Acepta sesión web O un token de extensión (Bearer) — usado por endpoints del timer
+// que la Browser Extension / Desktop Agent consumen sin cookies (Fase 2.1).
+async function requireAuthOrToken(req, res, next) {
+  if (req.isAuthenticated && req.isAuthenticated()) {
+    req.workspaceOwnerId = req.user.workspace_id || req.user.id;
+    return next();
+  }
+  const m = (req.headers.authorization || '').match(/^Bearer\s+(.+)$/i);
+  if (m) {
+    try {
+      const hash = require('crypto').createHash('sha256').update(m[1].trim()).digest('hex');
+      const { rows } = await pool.query(
+        `UPDATE ext_tokens SET last_used_at=NOW() WHERE token_hash=$1 AND revoked=false RETURNING user_id`, [hash]);
+      if (rows[0]) { req.user = { id: rows[0].user_id }; req.workspaceOwnerId = rows[0].user_id; return next(); }
+    } catch (_) { /* cae a 401 */ }
+  }
+  res.status(401).json({ error: 'Authentication required.' });
+}
+
 // =================================================================
 // ROUTES
 // =================================================================
@@ -682,7 +701,7 @@ app.post('/api/enrich/verify-batch', requireAuth, async (req, res) => {
 app.post('/api/enrich/parse-headers', requireAuth, upload.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
   try {
-    const result = parseHeaders(req.file.buffer);
+    const result = parseHeaders(req.file.buffer, req.file.originalname || '');
     res.json(result);
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -1438,15 +1457,20 @@ app.get('/api/mgmt/clients', requireAuth, async (req, res) => {
 
 // ── POST /api/mgmt/clients ────────────────────────────────────────
 app.post('/api/mgmt/clients', requireAuth, async (req, res) => {
-  const { nombre, empresa, email, telefono, pais, estado, notas, comision_default } = req.body;
+  const { nombre, empresa, email, telefono, pais, estado, notas, comision_default,
+          cargo, sitio_web, linkedin, industria, pais_empresa, ciudad, notas_empresa } = req.body;
   if (!nombre?.trim()) return res.status(400).json({ error: 'El nombre es requerido' });
   try {
     const { rows } = await pool.query(
-      `INSERT INTO clients (user_id, nombre, empresa, email, telefono, pais, estado, notas, comision_default)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      `INSERT INTO clients
+         (user_id, nombre, empresa, email, telefono, pais, estado, notas, comision_default,
+          cargo, sitio_web, linkedin, industria, pais_empresa, ciudad, notas_empresa)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
        RETURNING *`,
-      [req.workspaceOwnerId, nombre.trim(), empresa || '', email || '', telefono || '', pais || '',
-       estado || 'activo', notas || '', comision_default || null]
+      [req.workspaceOwnerId, nombre.trim(), empresa || '', email || '', telefono || '',
+       pais || '', estado || 'activo', notas || '', comision_default || null,
+       cargo || '', sitio_web || '', linkedin || '', industria || '',
+       pais_empresa || '', ciudad || '', notas_empresa || '']
     );
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -1472,17 +1496,22 @@ app.get('/api/mgmt/clients/:id', requireAuth, async (req, res) => {
 
 // ── PUT /api/mgmt/clients/:id ─────────────────────────────────────
 app.put('/api/mgmt/clients/:id', requireAuth, async (req, res) => {
-  const { nombre, empresa, email, telefono, pais, estado, notas, comision_default } = req.body;
+  const { nombre, empresa, email, telefono, pais, estado, notas, comision_default,
+          cargo, sitio_web, linkedin, industria, pais_empresa, ciudad, notas_empresa } = req.body;
   if (!nombre?.trim()) return res.status(400).json({ error: 'El nombre es requerido' });
   try {
     const { rows } = await pool.query(
       `UPDATE clients
           SET nombre=$3, empresa=$4, email=$5, telefono=$6, pais=$7,
-              estado=$8, notas=$9, comision_default=$10, updated_at=NOW()
+              estado=$8, notas=$9, comision_default=$10, updated_at=NOW(),
+              cargo=$11, sitio_web=$12, linkedin=$13, industria=$14,
+              pais_empresa=$15, ciudad=$16, notas_empresa=$17
         WHERE id=$1 AND user_id=$2
         RETURNING *`,
       [req.params.id, req.workspaceOwnerId, nombre.trim(), empresa || '', email || '',
-       telefono || '', pais || '', estado || 'activo', notas || '', comision_default || null]
+       telefono || '', pais || '', estado || 'activo', notas || '', comision_default || null,
+       cargo || '', sitio_web || '', linkedin || '', industria || '',
+       pais_empresa || '', ciudad || '', notas_empresa || '']
     );
     if (!rows[0]) return res.status(404).json({ error: 'Cliente no encontrado' });
     res.json(rows[0]);
@@ -1697,6 +1726,54 @@ app.put('/api/mgmt/projects/:id', requireAuth, async (req, res) => {
   }
 });
 
+// ── PATCH /api/mgmt/projects/:id/valor — valor total (Conciliación) ──
+app.patch('/api/mgmt/projects/:id/valor', requireAuth, async (req, res) => {
+  const { valor_total } = req.body;
+  const v = (valor_total === null || valor_total === '' || valor_total === undefined)
+    ? null : Math.max(0, +valor_total || 0);
+  try {
+    const { rows } = await pool.query(
+      `UPDATE projects SET valor_total=$1, updated_at=NOW()
+       WHERE id=$2 AND user_id=$3 RETURNING id, valor_total`,
+      [v, req.params.id, req.workspaceOwnerId]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Proyecto no encontrado' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[mgmt/projects] PATCH valor error:', err.message);
+    res.status(500).json({ error: 'Error al actualizar el valor' });
+  }
+});
+
+// ── PATCH /api/mgmt/projects/:id/descripcion — nota pública ───────
+app.patch('/api/mgmt/projects/:id/descripcion', requireAuth, async (req, res) => {
+  const { descripcion } = req.body;
+  const uid = req.workspaceOwnerId;
+  // Resolve display name: team member nombre first, fallback to user.name
+  let displayName = req.user.name || '';
+  try {
+    const { rows: tm } = await pool.query(
+      `SELECT nombre FROM team_members WHERE user_id=$1 AND LOWER(email)=LOWER($2) LIMIT 1`,
+      [uid, req.user.email]
+    );
+    if (tm.length && tm[0].nombre) displayName = tm[0].nombre;
+  } catch (_) {}
+  try {
+    const { rows } = await pool.query(
+      `UPDATE projects
+          SET descripcion=$3, descripcion_updated_by=$4, descripcion_updated_at=NOW(), updated_at=NOW()
+        WHERE id=$1 AND user_id=$2
+        RETURNING *`,
+      [req.params.id, uid, descripcion || '', displayName]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Proyecto no encontrado' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[mgmt/projects] PATCH descripcion error:', err.message);
+    res.status(500).json({ error: 'Error al guardar' });
+  }
+});
+
 // ── PATCH /api/mgmt/projects/:id/links — archivos / enlaces ───────
 app.patch('/api/mgmt/projects/:id/links', requireAuth, async (req, res) => {
   const { links } = req.body;
@@ -1739,7 +1816,12 @@ app.get('/api/mgmt/tasks', requireAuth, async (req, res) => {
     const { rows } = await pool.query(
       `SELECT t.*,
               p.nombre AS project_nombre,
-              c.nombre AS client_nombre
+              c.nombre AS client_nombre,
+              COALESCE((
+                SELECT json_agg(json_build_object('id', dt.id, 'titulo', dt.titulo, 'estado', dt.estado) ORDER BY dt.titulo)
+                  FROM task_dependencies td JOIN tasks dt ON dt.id = td.depends_on_id
+                 WHERE td.task_id = t.id
+              ), '[]'::json) AS waiting_on
          FROM tasks t
          LEFT JOIN projects p ON t.project_id = p.id
          LEFT JOIN clients  c ON p.client_id  = c.id
@@ -1766,7 +1848,8 @@ app.get('/api/mgmt/tasks', requireAuth, async (req, res) => {
 // ── POST /api/mgmt/tasks ──────────────────────────────────────────
 app.post('/api/mgmt/tasks', requireAuth, async (req, res) => {
   const { titulo, project_id, descripcion, estado, prioridad,
-          responsable, responsables, deadline, notas, monto, cobrado, parent_task_id } = req.body;
+          responsable, responsables, deadline, fecha_inicio, notas, monto, cobrado, parent_task_id,
+          plan_dias, plan_horas, plan_hora } = req.body;
   if (!titulo?.trim())  return res.status(400).json({ error: 'El título es requerido' });
   if (!project_id)      return res.status(400).json({ error: 'El proyecto es requerido' });
   const respArr = Array.isArray(responsables) ? responsables : (responsable ? [responsable] : []);
@@ -1774,14 +1857,15 @@ app.post('/api/mgmt/tasks', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(
       `INSERT INTO tasks
-         (user_id, project_id, titulo, descripcion, estado, prioridad, responsable, responsables, deadline, notas, monto, cobrado, parent_task_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+         (user_id, project_id, titulo, descripcion, estado, prioridad, responsable, responsables, deadline, fecha_inicio, notas, monto, cobrado, parent_task_id, plan_dias, plan_horas, plan_hora)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
        RETURNING *`,
       [req.workspaceOwnerId, project_id, titulo.trim(), descripcion || '',
        estado || 'pendiente', prioridad || 'media',
-       respFirst, respArr, deadline || null, notas || '',
+       respFirst, respArr, deadline || null, fecha_inicio || null, notas || '',
        monto != null ? +monto : null, cobrado ? true : false,
-       parent_task_id || null]
+       parent_task_id || null,
+       plan_dias || '', plan_horas != null && plan_horas !== '' ? +plan_horas : null, plan_hora != null && plan_hora !== '' ? +plan_hora : null]
     );
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -1812,7 +1896,7 @@ app.get('/api/mgmt/tasks/:id', requireAuth, async (req, res) => {
 // ── PUT /api/mgmt/tasks/:id ───────────────────────────────────────
 app.put('/api/mgmt/tasks/:id', requireAuth, async (req, res) => {
   const { titulo, project_id, descripcion, estado, prioridad,
-          responsable, responsables, deadline, notas, monto, cobrado, parent_task_id } = req.body;
+          responsable, responsables, deadline, fecha_inicio, notas, monto, cobrado, parent_task_id } = req.body;
   if (!titulo?.trim())  return res.status(400).json({ error: 'El título es requerido' });
   if (!project_id)      return res.status(400).json({ error: 'El proyecto es requerido' });
   if (parent_task_id && String(parent_task_id) === String(req.params.id))
@@ -1824,14 +1908,14 @@ app.put('/api/mgmt/tasks/:id', requireAuth, async (req, res) => {
       `UPDATE tasks
           SET project_id=$3, titulo=$4, descripcion=$5, estado=$6,
               prioridad=$7, responsable=$8, responsables=$9, deadline=$10, notas=$11,
-              monto=$12, cobrado=$13, parent_task_id=$14, updated_at=NOW()
+              monto=$12, cobrado=$13, parent_task_id=$14, fecha_inicio=$15, updated_at=NOW()
         WHERE id=$1 AND user_id=$2
         RETURNING *`,
       [req.params.id, req.workspaceOwnerId, project_id, titulo.trim(),
        descripcion || '', estado || 'pendiente', prioridad || 'media',
        respFirst, respArr, deadline || null, notas || '',
        monto != null ? +monto : null, cobrado ? true : false,
-       parent_task_id || null]
+       parent_task_id || null, fecha_inicio || null]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Tarea no encontrada' });
     res.json(rows[0]);
@@ -1859,6 +1943,64 @@ app.patch('/api/mgmt/tasks/:id/status', requireAuth, async (req, res) => {
   }
 });
 
+// ── Dependencias entre tareas (ClickUp): :id ESPERA A depends_on_id ──
+async function _taskWaitingOn(taskId) {
+  const { rows } = await pool.query(
+    `SELECT dt.id, dt.titulo, dt.estado
+       FROM task_dependencies td JOIN tasks dt ON dt.id = td.depends_on_id
+      WHERE td.task_id = $1 ORDER BY dt.titulo`, [taskId]);
+  return rows;
+}
+// POST /api/mgmt/tasks/:id/deps  body { depends_on_id }
+app.post('/api/mgmt/tasks/:id/deps', requireAuth, async (req, res) => {
+  const taskId = +req.params.id, depId = +(req.body?.depends_on_id);
+  if (!taskId || !depId || taskId === depId) return res.status(400).json({ error: 'Dependencia inválida' });
+  try {
+    const chk = await pool.query(`SELECT COUNT(*)::int AS n FROM tasks WHERE id IN ($1,$2) AND user_id=$3`,
+      [taskId, depId, req.workspaceOwnerId]);
+    if (chk.rows[0].n !== 2) return res.status(404).json({ error: 'Tarea no encontrada' });
+    const cyc = await pool.query(`SELECT 1 FROM task_dependencies WHERE task_id=$1 AND depends_on_id=$2`, [depId, taskId]);
+    if (cyc.rows.length) return res.status(400).json({ error: 'Eso crearía una dependencia circular' });
+    await pool.query(`INSERT INTO task_dependencies (task_id, depends_on_id) VALUES ($1,$2)
+                      ON CONFLICT (task_id, depends_on_id) DO NOTHING`, [taskId, depId]);
+    res.status(201).json({ waiting_on: await _taskWaitingOn(taskId) });
+  } catch (err) {
+    console.error('[tasks/deps] POST error:', err.message);
+    res.status(500).json({ error: 'Error al crear dependencia' });
+  }
+});
+// DELETE /api/mgmt/tasks/:id/deps/:depId
+app.delete('/api/mgmt/tasks/:id/deps/:depId', requireAuth, async (req, res) => {
+  try {
+    const own = await pool.query(`SELECT 1 FROM tasks WHERE id=$1 AND user_id=$2`, [+req.params.id, req.workspaceOwnerId]);
+    if (!own.rows.length) return res.status(404).json({ error: 'Tarea no encontrada' });
+    await pool.query(`DELETE FROM task_dependencies WHERE task_id=$1 AND depends_on_id=$2`, [+req.params.id, +req.params.depId]);
+    res.json({ waiting_on: await _taskWaitingOn(+req.params.id) });
+  } catch (err) {
+    console.error('[tasks/deps] DELETE error:', err.message);
+    res.status(500).json({ error: 'Error al quitar dependencia' });
+  }
+});
+
+// ── PATCH /api/mgmt/tasks/:id/estado-financiero ──────────────────
+app.patch('/api/mgmt/tasks/:id/estado-financiero', requireAuth, async (req, res) => {
+  const { estado_financiero } = req.body;
+  const VALID = ['sin_revisar', 'por_conciliar', 'conciliado', 'facturable', 'facturado', 'cobro_pendiente', 'cobrado', 'observado'];
+  if (!VALID.includes(estado_financiero)) return res.status(400).json({ error: 'Estado financiero inválido' });
+  try {
+    const { rows } = await pool.query(
+      `UPDATE tasks SET estado_financiero=$3, updated_at=NOW()
+       WHERE id=$1 AND user_id=$2 RETURNING id, estado_financiero`,
+      [req.params.id, req.workspaceOwnerId, estado_financiero]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Tarea no encontrada' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[tasks/estado-financiero] PATCH error:', err.message);
+    res.status(500).json({ error: 'Error al actualizar estado financiero' });
+  }
+});
+
 // ── PATCH /api/mgmt/tasks/:id/deadline ───────────────────────────
 app.patch('/api/mgmt/tasks/:id/deadline', requireAuth, async (req, res) => {
   const { deadline } = req.body;
@@ -1873,6 +2015,65 @@ app.patch('/api/mgmt/tasks/:id/deadline', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('[tasks/deadline] PATCH error:', err.message);
     res.status(500).json({ error: 'Error al actualizar deadline' });
+  }
+});
+
+// ── PATCH /api/mgmt/tasks/:id/fecha-inicio (inicio del rango, tareas padre) ──
+app.patch('/api/mgmt/tasks/:id/fecha-inicio', requireAuth, async (req, res) => {
+  const { fecha_inicio } = req.body;
+  try {
+    const { rows } = await pool.query(
+      `UPDATE tasks SET fecha_inicio=$1, updated_at=NOW()
+       WHERE id=$2 AND user_id=$3 RETURNING id, titulo, fecha_inicio, deadline`,
+      [fecha_inicio || null, req.params.id, req.workspaceOwnerId]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Tarea no encontrada' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[tasks/fecha-inicio] PATCH error:', err.message);
+    res.status(500).json({ error: 'Error al actualizar fecha de inicio' });
+  }
+});
+
+// ── PATCH /api/mgmt/tasks/:id/plan (plan de trabajo recurrente: días + meta horas + hora) ──
+app.patch('/api/mgmt/tasks/:id/plan', requireAuth, async (req, res) => {
+  const { plan_dias, plan_horas, plan_hora } = req.body;
+  try {
+    const { rows } = await pool.query(
+      `UPDATE tasks SET plan_dias=$1, plan_horas=$2, plan_hora=$3, updated_at=NOW()
+       WHERE id=$4 AND user_id=$5 RETURNING id, titulo, plan_dias, plan_horas, plan_hora`,
+      [plan_dias || '',
+       (plan_horas != null && plan_horas !== '') ? +plan_horas : null,
+       (plan_hora != null && plan_hora !== '') ? +plan_hora : null,
+       req.params.id, req.workspaceOwnerId]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Tarea no encontrada' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[tasks/plan] PATCH error:', err.message);
+    res.status(500).json({ error: 'Error al actualizar el plan' });
+  }
+});
+
+// ── PATCH /api/mgmt/tasks/:id/horario (programación en Calendario) ──
+// prog_inicio = hora a la que planeo trabajarla · prog_min = duración · prog_fecha = día.
+// NO toca deadline. Sin hora → limpia duración (vuelve al panel "Sin hora asignada").
+app.patch('/api/mgmt/tasks/:id/horario', requireAuth, async (req, res) => {
+  let { prog_fecha, prog_inicio, prog_min } = req.body;
+  prog_fecha  = prog_fecha || null;
+  prog_inicio = (prog_inicio && /^\d{1,2}:\d{2}/.test(prog_inicio)) ? String(prog_inicio).slice(0, 5) : null;
+  prog_min    = (prog_inicio && prog_min != null && +prog_min > 0) ? Math.min(Math.round(+prog_min), 1440) : null;
+  try {
+    const { rows } = await pool.query(
+      `UPDATE tasks SET prog_fecha=$1, prog_inicio=$2, prog_min=$3, updated_at=NOW()
+       WHERE id=$4 AND user_id=$5 RETURNING id, titulo, prog_fecha, prog_inicio, prog_min`,
+      [prog_fecha, prog_inicio, prog_min, req.params.id, req.workspaceOwnerId]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Tarea no encontrada' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[tasks/horario] PATCH error:', err.message);
+    res.status(500).json({ error: 'Error al programar tarea' });
   }
 });
 
@@ -2147,14 +2348,14 @@ app.get('/api/leads', requireAuth, async (req, res) => {
 });
 
 app.post('/api/leads', requireAuth, async (req, res) => {
-  const { nombre, empresa, email, telefono, pais, cargo, stage, fuente, valor_estimado, notas } = req.body;
+  const { nombre, empresa, email, telefono, pais, cargo, stage, fuente, valor_estimado, notas, outbound_client_id, campaign_id } = req.body;
   if (!nombre?.trim()) return res.status(400).json({ error: 'El nombre es requerido' });
   try {
     const { rows } = await pool.query(`
-      INSERT INTO leads (user_id,nombre,empresa,email,telefono,pais,cargo,stage,fuente,valor_estimado,notas)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *
+      INSERT INTO leads (user_id,nombre,empresa,email,telefono,pais,cargo,stage,fuente,valor_estimado,notas,outbound_client_id,campaign_id)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *
     `, [req.workspaceOwnerId, nombre.trim(), empresa||'', email||'', telefono||'', pais||'', cargo||'',
-        stage||'nuevo', fuente||'manual', valor_estimado||null, notas||'']);
+        stage||'nuevo', fuente||'manual', valor_estimado||null, notas||'', outbound_client_id||null, campaign_id||null]);
     res.status(201).json(rows[0]);
   } catch (err) {
     console.error('[leads] POST error:', err.message);
@@ -2163,15 +2364,15 @@ app.post('/api/leads', requireAuth, async (req, res) => {
 });
 
 app.put('/api/leads/:id', requireAuth, async (req, res) => {
-  const { nombre, empresa, email, telefono, pais, cargo, stage, fuente, valor_estimado, notas } = req.body;
+  const { nombre, empresa, email, telefono, pais, cargo, stage, fuente, valor_estimado, notas, outbound_client_id, campaign_id } = req.body;
   if (!nombre?.trim()) return res.status(400).json({ error: 'El nombre es requerido' });
   try {
     const { rows } = await pool.query(`
       UPDATE leads SET nombre=$1,empresa=$2,email=$3,telefono=$4,pais=$5,cargo=$6,
-        stage=$7,fuente=$8,valor_estimado=$9,notas=$10,updated_at=NOW()
-      WHERE id=$11 AND user_id=$12 RETURNING *
+        stage=$7,fuente=$8,valor_estimado=$9,notas=$10,outbound_client_id=$11,campaign_id=$12,updated_at=NOW()
+      WHERE id=$13 AND user_id=$14 RETURNING *
     `, [nombre.trim(), empresa||'', email||'', telefono||'', pais||'', cargo||'',
-        stage||'nuevo', fuente||'manual', valor_estimado||null, notas||'',
+        stage||'nuevo', fuente||'manual', valor_estimado||null, notas||'', outbound_client_id||null, campaign_id||null,
         req.params.id, req.workspaceOwnerId]);
     if (!rows.length) return res.status(404).json({ error: 'Lead no encontrado' });
     res.json(rows[0]);
@@ -2214,6 +2415,959 @@ app.post('/api/leads/:id/convert', requireAuth, async (req, res) => {
 });
 
 // =================================================================
+// LEAD MANAGER — OUTBOUND CLIENTS (unidad principal del módulo)
+// =================================================================
+const OBC_ESTADOS = ['preparacion', 'activo', 'pausado', 'cerrado'];
+
+app.get('/api/outbound-clients', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT * FROM outbound_clients WHERE user_id=$1 ORDER BY created_at DESC`, [req.workspaceOwnerId]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('[obc] GET error:', err.message);
+    res.status(500).json({ error: 'Error al cargar clientes outbound' });
+  }
+});
+
+app.post('/api/outbound-clients', requireAuth, async (req, res) => {
+  const b = req.body || {};
+  if (!b.nombre?.trim()) return res.status(400).json({ error: 'El nombre es requerido' });
+  const estado = OBC_ESTADOS.includes(b.estado) ? b.estado : 'preparacion';
+  try {
+    const { rows } = await pool.query(`
+      INSERT INTO outbound_clients (user_id,nombre,estado,responsable,canal,website,mercado,icp,proxima_accion,notas)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *
+    `, [req.workspaceOwnerId, b.nombre.trim(), estado, b.responsable||'', b.canal||'', b.website||'',
+        b.mercado||'', b.icp||'', b.proxima_accion||'', b.notas||'']);
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    console.error('[obc] POST error:', err.message);
+    res.status(500).json({ error: 'Error al crear cliente outbound' });
+  }
+});
+
+app.put('/api/outbound-clients/:id', requireAuth, async (req, res) => {
+  const b = req.body || {};
+  if (!b.nombre?.trim()) return res.status(400).json({ error: 'El nombre es requerido' });
+  const estado = OBC_ESTADOS.includes(b.estado) ? b.estado : 'preparacion';
+  try {
+    const { rows } = await pool.query(`
+      UPDATE outbound_clients SET nombre=$1,estado=$2,responsable=$3,canal=$4,website=$5,
+        mercado=$6,icp=$7,proxima_accion=$8,notas=$9,updated_at=NOW()
+      WHERE id=$10 AND user_id=$11 RETURNING *
+    `, [b.nombre.trim(), estado, b.responsable||'', b.canal||'', b.website||'',
+        b.mercado||'', b.icp||'', b.proxima_accion||'', b.notas||'', req.params.id, req.workspaceOwnerId]);
+    if (!rows.length) return res.status(404).json({ error: 'Cliente outbound no encontrado' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[obc] PUT error:', err.message);
+    res.status(500).json({ error: 'Error al actualizar cliente outbound' });
+  }
+});
+
+app.delete('/api/outbound-clients/:id', requireAuth, async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(
+      `DELETE FROM outbound_clients WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId]
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Cliente outbound no encontrado' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[obc] DELETE error:', err.message);
+    res.status(500).json({ error: 'Error al eliminar cliente outbound' });
+  }
+});
+
+// =================================================================
+// LEAD MANAGER — EMPRESAS + CONTACTOS (directorio importable estilo Apollo/HubSpot)
+// =================================================================
+function _lmS(v) { return (v == null ? '' : String(v)).trim(); }
+function _lmNormDomain(raw) {
+  let s = _lmS(raw).toLowerCase();
+  if (!s) return '';
+  if (s.includes('@')) s = s.split('@').pop();               // email → dominio
+  s = s.replace(/^https?:\/\//, '').replace(/^www\./, '');
+  s = s.split(/[\/?#]/)[0].trim();
+  return s;
+}
+
+// ── Empresas (lm_companies) ────────────────────────────────────────
+const LM_CO_COLS = ['nombre','dominio','website','industria','tamano','ingresos','telefono','linkedin','ciudad','region','pais','fundada','direccion','codigo_postal','descripcion','tecnologias','funding','target_tier','notas'];
+app.get('/api/lm/companies', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT c.*, (SELECT COUNT(*) FROM lm_contacts k WHERE k.company_id = c.id)::int AS contact_count
+      FROM lm_companies c WHERE c.user_id=$1 ORDER BY c.nombre ASC, c.id DESC
+    `, [req.workspaceOwnerId]);
+    res.json(rows);
+  } catch (err) { console.error('[lm-co] GET', err.message); res.status(500).json({ error: 'Error al cargar empresas' }); }
+});
+app.post('/api/lm/companies', requireAuth, async (req, res) => {
+  const b = req.body || {};
+  if (!_lmS(b.nombre) && !_lmS(b.dominio)) return res.status(400).json({ error: 'Nombre o dominio requerido' });
+  try {
+    const vals = LM_CO_COLS.map(k => k === 'dominio' ? _lmNormDomain(b.dominio) : _lmS(b[k]));
+    const { rows } = await pool.query(`
+      INSERT INTO lm_companies (user_id,${LM_CO_COLS.join(',')},outbound_client_id)
+      VALUES ($1,${LM_CO_COLS.map((_, i) => '$' + (i + 2)).join(',')},$${LM_CO_COLS.length + 2}) RETURNING *
+    `, [req.workspaceOwnerId, ...vals, b.outbound_client_id || null]);
+    res.status(201).json(rows[0]);
+  } catch (err) { console.error('[lm-co] POST', err.message); res.status(500).json({ error: 'Error al crear empresa' }); }
+});
+app.put('/api/lm/companies/:id', requireAuth, async (req, res) => {
+  const b = req.body || {};
+  try {
+    const vals = LM_CO_COLS.map(k => k === 'dominio' ? _lmNormDomain(b.dominio) : _lmS(b[k]));
+    const set = LM_CO_COLS.map((k, i) => `${k}=$${i + 1}`).join(',');
+    const { rows } = await pool.query(`
+      UPDATE lm_companies SET ${set}, outbound_client_id=$${LM_CO_COLS.length + 1}, updated_at=NOW()
+      WHERE id=$${LM_CO_COLS.length + 2} AND user_id=$${LM_CO_COLS.length + 3} RETURNING *
+    `, [...vals, b.outbound_client_id || null, req.params.id, req.workspaceOwnerId]);
+    if (!rows.length) return res.status(404).json({ error: 'Empresa no encontrada' });
+    res.json(rows[0]);
+  } catch (err) { console.error('[lm-co] PUT', err.message); res.status(500).json({ error: 'Error al actualizar empresa' }); }
+});
+app.delete('/api/lm/companies/:id', requireAuth, async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(`DELETE FROM lm_companies WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId]);
+    if (!rowCount) return res.status(404).json({ error: 'Empresa no encontrada' });
+    res.json({ ok: true });
+  } catch (err) { console.error('[lm-co] DELETE', err.message); res.status(500).json({ error: 'Error al eliminar empresa' }); }
+});
+// Borrado en lote de empresas (1 request → evita el rate-limit). with_contacts=true también borra sus contactos.
+app.post('/api/lm/companies/bulk-delete', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId;
+  const ids = Array.isArray((req.body || {}).ids) ? req.body.ids.map(Number).filter(Boolean) : [];
+  const withContacts = (req.body || {}).with_contacts === true || (req.body || {}).with_contacts === 'true';
+  if (!ids.length) return res.status(400).json({ error: 'Sin empresas seleccionadas' });
+  const cl = await pool.connect();
+  try {
+    await cl.query('BEGIN');
+    let contactsDeleted = 0;
+    if (withContacts) {
+      const r = await cl.query(`DELETE FROM lm_contacts WHERE user_id=$1 AND company_id = ANY($2::int[])`, [uid, ids]);
+      contactsDeleted = r.rowCount;
+    } else {
+      // desligar contactos para que no bloquee la FK
+      await cl.query(`UPDATE lm_contacts SET company_id=NULL WHERE user_id=$1 AND company_id = ANY($2::int[])`, [uid, ids]);
+    }
+    const d = await cl.query(`DELETE FROM lm_companies WHERE user_id=$1 AND id = ANY($2::int[])`, [uid, ids]);
+    await cl.query('COMMIT');
+    res.json({ deleted: d.rowCount, contactsDeleted, requested: ids.length });
+  } catch (err) { await cl.query('ROLLBACK').catch(() => {}); console.error('[lm-co] BULK', err.message); res.status(500).json({ error: 'Error al eliminar empresas' }); }
+  finally { cl.release(); }
+});
+
+// ── Contactos (lm_contacts) ────────────────────────────────────────
+const LM_CT_COLS = ['nombre','apellido','email','email_personal','telefono','movil','cargo','seniority','departamento','linkedin','empresa_nombre','ciudad','region','pais','estado','fuente','contact_priority','buyer_role','notas'];
+app.get('/api/lm/contacts', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT k.*, co.nombre AS company_nombre, co.dominio AS company_dominio,
+        co.website AS company_website, co.industria AS company_industria, co.tamano AS company_tamano,
+        co.ingresos AS company_ingresos, co.ciudad AS company_ciudad, co.pais AS company_pais, co.target_tier AS company_target_tier,
+        COALESCE((SELECT json_agg(json_build_object('id', s.id, 'nombre', s.nombre, 'paso', cs.paso, 'estado', cs.estado, 'enrolled_at', cs.created_at) ORDER BY s.nombre)
+                  FROM lm_contact_sequences cs JOIN sequences s ON s.id = cs.sequence_id
+                  WHERE cs.contact_id = k.id), '[]') AS sequences,
+        COALESCE((SELECT json_agg(json_build_object('id', cp.id, 'nombre', cp.nombre) ORDER BY cp.nombre)
+                  FROM lm_contact_campaigns cc JOIN campaigns cp ON cp.id = cc.campaign_id
+                  WHERE cc.contact_id = k.id), '[]') AS campaigns
+      FROM lm_contacts k LEFT JOIN lm_companies co ON co.id = k.company_id
+      WHERE k.user_id=$1 ORDER BY k.created_at DESC, k.id DESC
+    `, [req.workspaceOwnerId]);
+    res.json(rows);
+  } catch (err) { console.error('[lm-ct] GET', err.message); res.status(500).json({ error: 'Error al cargar contactos' }); }
+});
+app.post('/api/lm/contacts', requireAuth, async (req, res) => {
+  const b = req.body || {};
+  if (!_lmS(b.nombre) && !_lmS(b.apellido) && !_lmS(b.email)) return res.status(400).json({ error: 'Nombre o email requerido' });
+  try {
+    const vals = LM_CT_COLS.map(k => k === 'estado' ? (_lmS(b.estado) || 'nuevo') : k === 'fuente' ? (_lmS(b.fuente) || 'manual') : _lmS(b[k]));
+    const { rows } = await pool.query(`
+      INSERT INTO lm_contacts (user_id,${LM_CT_COLS.join(',')},company_id,outbound_client_id)
+      VALUES ($1,${LM_CT_COLS.map((_, i) => '$' + (i + 2)).join(',')},$${LM_CT_COLS.length + 2},$${LM_CT_COLS.length + 3}) RETURNING *
+    `, [req.workspaceOwnerId, ...vals, b.company_id || null, b.outbound_client_id || null]);
+    // Auto-enriquecimiento: verificar (o buscar) el email en background, sin bloquear la respuesta.
+    if (b.auto_verify !== false) {
+      try {
+        const { queueVerify } = require('./services/lmVerifyService');
+        queueVerify(pool, req.workspaceOwnerId, [rows[0].id]);
+      } catch (e) { console.warn('[lm-ct] auto-verify:', e.message); }
+    }
+    res.status(201).json(rows[0]);
+  } catch (err) { console.error('[lm-ct] POST', err.message); res.status(500).json({ error: 'Error al crear contacto' }); }
+});
+app.put('/api/lm/contacts/:id', requireAuth, async (req, res) => {
+  const b = req.body || {};
+  try {
+    const vals = LM_CT_COLS.map(k => _lmS(b[k]));
+    const set = LM_CT_COLS.map((k, i) => `${k}=$${i + 1}`).join(',');
+    const { rows } = await pool.query(`
+      UPDATE lm_contacts SET ${set}, company_id=$${LM_CT_COLS.length + 1}, outbound_client_id=$${LM_CT_COLS.length + 2}, updated_at=NOW()
+      WHERE id=$${LM_CT_COLS.length + 3} AND user_id=$${LM_CT_COLS.length + 4} RETURNING *
+    `, [...vals, b.company_id || null, b.outbound_client_id || null, req.params.id, req.workspaceOwnerId]);
+    if (!rows.length) return res.status(404).json({ error: 'Contacto no encontrado' });
+    res.json(rows[0]);
+  } catch (err) { console.error('[lm-ct] PUT', err.message); res.status(500).json({ error: 'Error al actualizar contacto' }); }
+});
+app.delete('/api/lm/contacts/:id', requireAuth, async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(`DELETE FROM lm_contacts WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId]);
+    if (!rowCount) return res.status(404).json({ error: 'Contacto no encontrado' });
+    res.json({ ok: true });
+  } catch (err) { console.error('[lm-ct] DELETE', err.message); res.status(500).json({ error: 'Error al eliminar contacto' }); }
+});
+// Borrado en lote de contactos (1 request → evita el rate-limit). company_ids: empresas que quedan vacías y también se borran.
+app.post('/api/lm/contacts/bulk-delete', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId;
+  const ids     = Array.isArray((req.body || {}).ids) ? req.body.ids.map(Number).filter(Boolean) : [];
+  const coIds   = Array.isArray((req.body || {}).company_ids) ? req.body.company_ids.map(Number).filter(Boolean) : [];
+  if (!ids.length) return res.status(400).json({ error: 'Sin contactos seleccionados' });
+  const cl = await pool.connect();
+  try {
+    await cl.query('BEGIN');
+    const d = await cl.query(`DELETE FROM lm_contacts WHERE user_id=$1 AND id = ANY($2::int[])`, [uid, ids]);
+    let companiesDeleted = 0;
+    if (coIds.length) {
+      // solo borra las empresas que realmente quedaron sin ningún contacto
+      const dc = await cl.query(
+        `DELETE FROM lm_companies WHERE user_id=$1 AND id = ANY($2::int[])
+           AND NOT EXISTS (SELECT 1 FROM lm_contacts k WHERE k.company_id = lm_companies.id)`,
+        [uid, coIds]);
+      companiesDeleted = dc.rowCount;
+    }
+    await cl.query('COMMIT');
+    res.json({ deleted: d.rowCount, companiesDeleted, requested: ids.length });
+  } catch (err) { await cl.query('ROLLBACK').catch(() => {}); console.error('[lm-ct] BULK', err.message); res.status(500).json({ error: 'Error al eliminar contactos' }); }
+  finally { cl.release(); }
+});
+
+// ── Pertenencias en lote: añadir contactos a secuencia / campaña ──
+async function _lmAddMembership(req, res, kind) {
+  const uid = req.workspaceOwnerId;
+  const b = req.body || {};
+  const ids = Array.isArray(b.contact_ids) ? b.contact_ids.map(Number).filter(Boolean) : [];
+  const targetId = parseInt(kind === 'sequence' ? b.sequence_id : b.campaign_id);
+  if (!ids.length) return res.status(400).json({ error: 'Sin contactos seleccionados' });
+  if (!targetId) return res.status(400).json({ error: 'Falta la ' + (kind === 'sequence' ? 'secuencia' : 'campaña') });
+  const table  = kind === 'sequence' ? 'lm_contact_sequences' : 'lm_contact_campaigns';
+  const col    = kind === 'sequence' ? 'sequence_id' : 'campaign_id';
+  const parent = kind === 'sequence' ? 'sequences' : 'campaigns';
+  try {
+    const ok = (await pool.query(`SELECT 1 FROM ${parent} WHERE id=$1 AND user_id=$2`, [targetId, uid])).rowCount;
+    if (!ok) return res.status(404).json({ error: (kind === 'sequence' ? 'Secuencia' : 'Campaña') + ' no encontrada' });
+    // Al enrolar en secuencia: next_action_at=NOW() para que el motor de envío lo tome.
+    const extraCols = kind === 'sequence' ? ', next_action_at' : '';
+    const extraVals = kind === 'sequence' ? ', NOW()' : '';
+    const r = await pool.query(`
+      INSERT INTO ${table} (user_id, contact_id, ${col}${extraCols})
+      SELECT $1, c.id, $2${extraVals} FROM lm_contacts c WHERE c.user_id=$1 AND c.id = ANY($3::int[])
+      ON CONFLICT (contact_id, ${col}) DO NOTHING
+    `, [uid, targetId, ids]);
+    res.json({ added: r.rowCount, requested: ids.length });
+  } catch (err) { console.error('[lm-mem]', err.message); res.status(500).json({ error: 'Error al añadir' }); }
+}
+app.post('/api/lm/contacts/add-to-sequence', requireAuth, (req, res) => _lmAddMembership(req, res, 'sequence'));
+app.post('/api/lm/contacts/add-to-campaign', requireAuth, (req, res) => _lmAddMembership(req, res, 'campaign'));
+// Disposición outbound: marca el contacto, registra actividad y (si aplica) lo pausa en TODAS sus secuencias activas.
+app.post('/api/lm/contacts/:id/disposition', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId, cid = req.params.id;
+  const disp = _lmS((req.body || {}).disposition);
+  const nota = _lmS((req.body || {}).nota);
+  const seqId = (req.body || {}).sequence_id ? (parseInt((req.body).sequence_id) || null) : null;
+  const EXIT = ['respondio', 'reunion', 'no_interesado', 'no_contactar'];
+  try {
+    const upd = await pool.query(`UPDATE lm_contacts SET disposition=$1, updated_at=NOW() WHERE id=$2 AND user_id=$3 RETURNING id, outbound_client_id`, [disp, cid, uid]);
+    if (!upd.rowCount) return res.status(404).json({ error: 'Contacto no encontrado' });
+    let paused = 0;
+    if (disp && EXIT.includes(disp) && seqId) {
+      const r = await pool.query(`UPDATE lm_contact_sequences SET estado='pausado' WHERE user_id=$1 AND contact_id=$2 AND sequence_id=$3 AND estado='activo'`, [uid, cid, seqId]);
+      paused = r.rowCount;
+    }
+    if (disp) {
+      const LBL = { respondio: 'Respondió', reunion: 'Reunión agendada', no_interesado: 'No interesado', no_contactar: 'No contactar (opt-out)' };
+      const tipoMap = { respondio: 'respuesta', reunion: 'reunion', no_interesado: 'nota', no_contactar: 'nota' };
+      await pool.query(`INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, nota, fecha, estado) VALUES ($1,$2,$3,$4,$5,NOW(),'hecha')`,
+        [uid, cid, upd.rows[0].outbound_client_id || null, tipoMap[disp] || 'nota', `Disposición: ${LBL[disp] || disp}${nota ? ' — ' + nota : ''}`]);
+    }
+    res.json({ ok: true, disposition: disp, paused: paused });
+  } catch (err) { console.error('[lm-disp]', err.message); res.status(500).json({ error: 'Error al actualizar disposición' }); }
+});
+
+// ── Contactos enrolados en una secuencia (progreso) ──
+app.get('/api/lm/sequences/:id/contacts', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT cs.contact_id, cs.paso, cs.estado, cs.created_at AS enrolled_at,
+        k.nombre, k.apellido, k.email, k.cargo, k.company_id, co.nombre AS company_nombre
+      FROM lm_contact_sequences cs
+      JOIN lm_contacts k ON k.id = cs.contact_id
+      LEFT JOIN lm_companies co ON co.id = k.company_id
+      WHERE cs.user_id=$1 AND cs.sequence_id=$2
+      ORDER BY cs.created_at DESC
+    `, [req.workspaceOwnerId, req.params.id]);
+    res.json(rows);
+  } catch (err) { console.error('[lm-seq-ct] GET', err.message); res.status(500).json({ error: 'Error al cargar contactos' }); }
+});
+app.patch('/api/lm/sequences/:id/contacts/:cid', requireAuth, async (req, res) => {
+  const b = req.body || {};
+  const sets = []; const vals = [];
+  if (b.estado != null) { vals.push(String(b.estado).slice(0, 20)); sets.push(`estado=$${vals.length}`); }
+  if (b.paso != null) { vals.push(parseInt(b.paso) || 1); sets.push(`paso=$${vals.length}`); }
+  if (!sets.length) return res.status(400).json({ error: 'Nada que actualizar' });
+  vals.push(req.workspaceOwnerId, req.params.id, req.params.cid);
+  try {
+    const { rows } = await pool.query(`UPDATE lm_contact_sequences SET ${sets.join(',')} WHERE user_id=$${vals.length - 2} AND sequence_id=$${vals.length - 1} AND contact_id=$${vals.length} RETURNING *`, vals);
+    if (!rows.length) return res.status(404).json({ error: 'Enrolamiento no encontrado' });
+    res.json(rows[0]);
+  } catch (err) { console.error('[lm-seq-ct] PATCH', err.message); res.status(500).json({ error: 'Error al actualizar' }); }
+});
+app.delete('/api/lm/sequences/:id/contacts/:cid', requireAuth, async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(`DELETE FROM lm_contact_sequences WHERE user_id=$1 AND sequence_id=$2 AND contact_id=$3`, [req.workspaceOwnerId, req.params.id, req.params.cid]);
+    if (!rowCount) return res.status(404).json({ error: 'Enrolamiento no encontrado' });
+    res.json({ ok: true });
+  } catch (err) { console.error('[lm-seq-ct] DEL', err.message); res.status(500).json({ error: 'Error al quitar' }); }
+});
+app.get('/api/lm/sequences/:id/metrics', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId, sid = req.params.id;
+  try {
+    const { rows } = await pool.query(`
+      WITH enr AS (SELECT contact_id, estado FROM lm_contact_sequences WHERE user_id=$1 AND sequence_id=$2)
+      SELECT
+        (SELECT COUNT(*) FROM enr)::int AS enrolados,
+        (SELECT COUNT(*) FROM enr WHERE estado='terminado')::int AS terminados,
+        (SELECT COUNT(*) FROM enr WHERE estado='activo')::int AS activos,
+        (SELECT COUNT(*) FROM enr WHERE estado='pausado')::int AS pausados,
+        (SELECT COUNT(DISTINCT a.contact_id) FROM activities a WHERE a.user_id=$1 AND a.estado='hecha' AND a.contact_id IN (SELECT contact_id FROM enr))::int AS contactados,
+        (SELECT COUNT(DISTINCT a.contact_id) FROM activities a WHERE a.user_id=$1 AND a.tipo='respuesta' AND a.contact_id IN (SELECT contact_id FROM enr))::int AS respuestas,
+        (SELECT COUNT(DISTINCT a.contact_id) FROM activities a WHERE a.user_id=$1 AND a.tipo='reunion' AND a.contact_id IN (SELECT contact_id FROM enr))::int AS reuniones
+    `, [uid, sid]);
+    res.json(rows[0] || {});
+  } catch (err) { console.error('[lm-seq-met] GET', err.message); res.status(500).json({ error: 'Error al cargar métricas' }); }
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// LM FASE A — motor de envío: settings, tracking, mensajes, verificación
+// ═══════════════════════════════════════════════════════════════════
+
+// ── Tracking público (sin auth: lo llaman los clientes de correo) ──
+const _TRACK_PX = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+  'base64'
+);
+app.get('/t/o/:token.png', async (req, res) => {
+  res.set({ 'Content-Type': 'image/png', 'Cache-Control': 'no-store, max-age=0' });
+  res.end(_TRACK_PX);
+  try {
+    const { rows: [m] } = await pool.query(`SELECT id FROM lm_messages WHERE track_token=$1`, [req.params.token]);
+    if (m) await pool.query(
+      `INSERT INTO lm_message_events (message_id, tipo, ip, user_agent) VALUES ($1,'open',$2,$3)`,
+      [m.id, (req.headers['x-forwarded-for'] || req.ip || '').slice(0, 100), (req.headers['user-agent'] || '').slice(0, 300)]
+    );
+  } catch (e) { /* tracking nunca rompe nada */ }
+});
+app.get('/t/c/:token', async (req, res) => {
+  const url = String(req.query.url || '');
+  // solo redirigir a http(s) — nunca javascript: u otros esquemas
+  const safe = /^https?:\/\//i.test(url) ? url : 'https://kiwoc.com';
+  res.redirect(302, safe);
+  try {
+    const { rows: [m] } = await pool.query(`SELECT id FROM lm_messages WHERE track_token=$1`, [req.params.token]);
+    if (m) await pool.query(
+      `INSERT INTO lm_message_events (message_id, tipo, url, ip, user_agent) VALUES ($1,'click',$2,$3,$4)`,
+      [m.id, safe.slice(0, 800), (req.headers['x-forwarded-for'] || req.ip || '').slice(0, 100), (req.headers['user-agent'] || '').slice(0, 300)]
+    );
+  } catch (e) { /* tracking nunca rompe nada */ }
+});
+
+// ── Configuración de envío (singleton por workspace, patrón fin_config) ──
+app.get('/api/lm/send-settings', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`SELECT * FROM lm_send_settings WHERE user_id=$1`, [req.workspaceOwnerId]);
+    res.json(rows[0] || {
+      user_id: req.workspaceOwnerId, enabled: false, from_name: '', daily_limit: 30,
+      throttle_seconds: 90, window_start: 9, window_end: 18, send_weekends: false,
+      timezone: 'America/Lima', firma: '', track_opens: true, track_clicks: true,
+    });
+  } catch (err) { console.error('[lm-send-cfg] GET', err.message); res.status(500).json({ error: 'Error al cargar configuración' }); }
+});
+app.put('/api/lm/send-settings', requireAuth, async (req, res) => {
+  const b = req.body || {};
+  try {
+    const { rows } = await pool.query(`
+      INSERT INTO lm_send_settings (user_id, enabled, from_name, daily_limit, throttle_seconds,
+                                    window_start, window_end, send_weekends, timezone, firma,
+                                    track_opens, track_clicks, updated_at)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW())
+      ON CONFLICT (user_id) DO UPDATE SET
+        enabled=$2, from_name=$3, daily_limit=$4, throttle_seconds=$5, window_start=$6,
+        window_end=$7, send_weekends=$8, timezone=$9, firma=$10, track_opens=$11,
+        track_clicks=$12, updated_at=NOW()
+      RETURNING *
+    `, [req.workspaceOwnerId, !!b.enabled, String(b.from_name || '').slice(0, 120),
+        Math.min(Math.max(parseInt(b.daily_limit) || 30, 1), 200),
+        Math.min(Math.max(parseInt(b.throttle_seconds) || 90, 30), 3600),
+        Math.min(Math.max(parseInt(b.window_start) ?? 9, 0), 23),
+        Math.min(Math.max(parseInt(b.window_end) ?? 18, 1), 24),
+        !!b.send_weekends, String(b.timezone || 'America/Lima').slice(0, 60),
+        String(b.firma || '').slice(0, 4000), b.track_opens !== false, b.track_clicks !== false]);
+    res.json(rows[0]);
+  } catch (err) { console.error('[lm-send-cfg] PUT', err.message); res.status(500).json({ error: 'Error al guardar configuración' }); }
+});
+
+// ── Mensajes enviados (con conteo de opens/clicks por mensaje) ──
+app.get('/api/lm/messages', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId;
+  const cid = parseInt(req.query.contact_id) || null;
+  const sid = parseInt(req.query.sequence_id) || null;
+  const lim = Math.min(parseInt(req.query.limit) || 100, 500);
+  try {
+    const { rows } = await pool.query(`
+      SELECT m.id, m.contact_id, m.sequence_id, m.step_id, m.asunto, m.to_email, m.estado,
+             m.error, m.sent_at, m.replied_at, m.created_at,
+             k.nombre, k.apellido, s.nombre AS seq_nombre,
+             (SELECT COUNT(*)::int FROM lm_message_events e WHERE e.message_id=m.id AND e.tipo='open')  AS opens,
+             (SELECT COUNT(*)::int FROM lm_message_events e WHERE e.message_id=m.id AND e.tipo='click') AS clicks
+        FROM lm_messages m
+        JOIN lm_contacts k ON k.id = m.contact_id
+        LEFT JOIN sequences s ON s.id = m.sequence_id
+       WHERE m.user_id=$1
+         AND ($2::int IS NULL OR m.contact_id=$2)
+         AND ($3::int IS NULL OR m.sequence_id=$3)
+       ORDER BY m.created_at DESC LIMIT $4
+    `, [uid, cid, sid, lim]);
+    res.json(rows);
+  } catch (err) { console.error('[lm-msgs] GET', err.message); res.status(500).json({ error: 'Error al cargar mensajes' }); }
+});
+
+// ── Verificación/enriquecimiento de contactos (cola con el pipeline propio) ──
+app.post('/api/lm/contacts/verify-email', requireAuth, (req, res) => {
+  const ids = Array.isArray((req.body || {}).ids) ? req.body.ids.map(Number).filter(Boolean) : [];
+  if (!ids.length) return res.status(400).json({ error: 'Sin contactos seleccionados' });
+  if (ids.length > 500) return res.status(400).json({ error: 'Máximo 500 contactos por lote' });
+  const { queueVerify } = require('./services/lmVerifyService');
+  res.json(queueVerify(pool, req.workspaceOwnerId, ids));
+});
+
+// ── Card "Hoy": qué pasa hoy en el outreach ──
+app.get('/api/lm/today', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId;
+  try {
+    const [cfg, dueQ, sentQ, repliesQ, tasksQ, failedQ] = await Promise.all([
+      pool.query(`SELECT * FROM lm_send_settings WHERE user_id=$1`, [uid]),
+      pool.query(`
+        SELECT COUNT(*)::int AS n FROM lm_contact_sequences cs
+          JOIN sequences s ON s.id=cs.sequence_id AND s.estado='activa'
+         WHERE cs.user_id=$1 AND cs.estado='activo'
+           AND (cs.next_action_at IS NULL OR cs.next_action_at <= NOW() + interval '24 hours')`, [uid]),
+      pool.query(`
+        SELECT COUNT(*)::int AS n FROM lm_messages
+         WHERE user_id=$1 AND estado IN ('sent','replied') AND sent_at::date = CURRENT_DATE`, [uid]),
+      pool.query(`
+        SELECT m.id, m.asunto, m.replied_at, k.id AS contact_id, k.nombre, k.apellido,
+               k.empresa_nombre, co.nombre AS company_nombre,
+               (SELECT e.url FROM lm_message_events e WHERE e.message_id=m.id AND e.tipo='reply' ORDER BY e.created_at DESC LIMIT 1) AS snippet
+          FROM lm_messages m JOIN lm_contacts k ON k.id=m.contact_id
+          LEFT JOIN lm_companies co ON co.id=k.company_id
+         WHERE m.user_id=$1 AND m.estado='replied' AND m.replied_at > NOW() - interval '48 hours'
+         ORDER BY m.replied_at DESC LIMIT 10`, [uid]),
+      pool.query(`
+        SELECT a.id, a.canal, a.nota, a.fecha, k.id AS contact_id, k.nombre, k.apellido
+          FROM activities a JOIN lm_contacts k ON k.id=a.contact_id
+         WHERE a.user_id=$1 AND a.estado='pendiente'
+         ORDER BY a.fecha ASC LIMIT 20`, [uid]),
+      pool.query(`
+        SELECT COUNT(*)::int AS n FROM lm_messages
+         WHERE user_id=$1 AND estado='failed' AND created_at > NOW() - interval '48 hours'`, [uid]),
+    ]);
+    const { gmailStatus } = require('./services/gmailService');
+    const gmail = await gmailStatus(pool, uid);
+    res.json({
+      settings:     cfg.rows[0] || { enabled: false },
+      gmail,
+      due_24h:      dueQ.rows[0].n,
+      sent_today:   sentQ.rows[0].n,
+      daily_limit:  cfg.rows[0]?.daily_limit ?? 30,
+      replies:      repliesQ.rows,
+      manual_tasks: tasksQ.rows,
+      failed_48h:   failedQ.rows[0].n,
+    });
+  } catch (err) { console.error('[lm-today] GET', err.message); res.status(500).json({ error: 'Error al cargar resumen' }); }
+});
+
+// ── LM · A/B (Fase B3): métricas por variante de cada paso email ──
+// Combina: envíos AUTOMÁTICOS (lm_messages: funnel completo con opens/clics/replies)
+// + touches MANUALES (activities.variant: enviados, y respuestas atribuidas a la
+// última variante tocada del contacto antes de responder).
+app.get('/api/lm/sequences/:id/ab-metrics', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId, sid = parseInt(req.params.id);
+  try {
+    const { rows: steps } = await pool.query(
+      `SELECT id, dia, titulo, canal, variants, variant_mode FROM sequence_steps
+        WHERE sequence_id=$1 ORDER BY dia ASC, orden ASC, id ASC`, [sid]);
+
+    // Automático: funnel por paso+variante desde lm_messages
+    const { rows: auto } = await pool.query(`
+      SELECT m.step_id, m.variant,
+             COUNT(*) FILTER (WHERE m.estado IN ('sent','replied','bounced'))::int AS enviados,
+             COUNT(DISTINCT m.id) FILTER (WHERE EXISTS (SELECT 1 FROM lm_message_events e WHERE e.message_id=m.id AND e.tipo='open'))::int AS aperturas,
+             COUNT(DISTINCT m.id) FILTER (WHERE EXISTS (SELECT 1 FROM lm_message_events e WHERE e.message_id=m.id AND e.tipo='click'))::int AS clics,
+             COUNT(*) FILTER (WHERE m.estado='replied')::int AS respuestas
+        FROM lm_messages m
+       WHERE m.user_id=$1 AND m.sequence_id=$2 AND m.variant <> ''
+       GROUP BY m.step_id, m.variant`, [uid, sid]);
+
+    // Manual: enviados por variante (activities de contactos enrolados en esta secuencia)
+    const { rows: manual } = await pool.query(`
+      WITH enrolled AS (SELECT contact_id FROM lm_contact_sequences WHERE user_id=$1 AND sequence_id=$2)
+      SELECT a.variant, COUNT(*)::int AS enviados, COUNT(DISTINCT a.contact_id)::int AS contactos
+        FROM activities a
+       WHERE a.user_id=$1 AND a.variant <> '' AND a.estado='hecha'
+         AND a.contact_id IN (SELECT contact_id FROM enrolled)
+       GROUP BY a.variant`, [uid, sid]);
+
+    // Manual: respuestas atribuidas a la ÚLTIMA variante tocada antes de la respuesta
+    const { rows: manualReplies } = await pool.query(`
+      WITH enrolled AS (SELECT contact_id FROM lm_contact_sequences WHERE user_id=$1 AND sequence_id=$2),
+      first_reply AS (
+        SELECT a.contact_id, MIN(a.created_at) AS at FROM activities a
+         WHERE a.user_id=$1 AND a.tipo='respuesta'
+           AND a.contact_id IN (SELECT contact_id FROM enrolled)
+         GROUP BY a.contact_id)
+      SELECT lastv.variant, COUNT(DISTINCT r.contact_id)::int AS respuestas
+        FROM first_reply r
+        JOIN LATERAL (
+          SELECT t.variant FROM activities t
+           WHERE t.user_id=$1 AND t.contact_id=r.contact_id AND t.variant <> '' AND t.created_at <= r.at
+           ORDER BY t.created_at DESC LIMIT 1) lastv ON TRUE
+       GROUP BY lastv.variant`, [uid, sid]);
+
+    res.json({ steps, auto, manual, manual_replies: manualReplies });
+  } catch (err) { console.error('[lm-ab] GET', err.message); res.status(500).json({ error: 'Error al cargar métricas A/B' }); }
+});
+
+// ── LM · Personalización con IA (Fable 5 alto valor · Haiku volumen) ──
+app.get('/api/lm/ai/settings', requireAuth, async (req, res) => {
+  try {
+    const { getSettings } = require('./services/aiPersonalizeService');
+    res.json(await getSettings(pool, req.workspaceOwnerId));
+  } catch (err) { console.error('[lm-ai-cfg] GET', err.message); res.status(500).json({ error: 'Error al cargar configuración de IA' }); }
+});
+app.put('/api/lm/ai/settings', requireAuth, async (req, res) => {
+  const b = req.body || {};
+  try {
+    const { rows } = await pool.query(`
+      INSERT INTO lm_ai_settings (user_id, enabled, monthly_budget_usd, model_high, model_volume, idioma, updated_at)
+      VALUES ($1,$2,$3,$4,$5,$6,NOW())
+      ON CONFLICT (user_id) DO UPDATE SET
+        enabled=$2, monthly_budget_usd=$3, model_high=$4, model_volume=$5, idioma=$6, updated_at=NOW()
+      RETURNING *
+    `, [req.workspaceOwnerId, b.enabled !== false,
+        Math.min(Math.max(parseFloat(b.monthly_budget_usd) || 20, 0), 100000),
+        String(b.model_high || 'claude-fable-5').slice(0, 60),
+        String(b.model_volume || 'claude-haiku-4-5').slice(0, 60),
+        String(b.idioma || 'auto').slice(0, 30)]);
+    res.json(rows[0]);
+  } catch (err) { console.error('[lm-ai-cfg] PUT', err.message); res.status(500).json({ error: 'Error al guardar configuración de IA' }); }
+});
+// Encolar personalización (1 o varios contactos). tier opcional ('alto'|'volumen'); si falta, se auto-decide.
+app.post('/api/lm/ai/personalize', requireAuth, (req, res) => {
+  const b = req.body || {};
+  const ids = Array.isArray(b.contact_ids) ? b.contact_ids.map(Number).filter(Boolean)
+            : (b.contact_id ? [Number(b.contact_id)] : []);
+  if (!ids.length) return res.status(400).json({ error: 'Sin contactos' });
+  if (ids.length > 200) return res.status(400).json({ error: 'Máximo 200 por lote' });
+  const stepId = b.step_id ? (parseInt(b.step_id) || null) : null;
+  const seqId  = b.sequence_id ? (parseInt(b.sequence_id) || null) : null;
+  const tier   = (b.tier === 'alto' || b.tier === 'volumen') ? b.tier : null;
+  const { queuePersonalize } = require('./services/aiPersonalizeService');
+  const items = ids.map(contactId => ({ contactId, stepId, sequenceId: seqId, tier }));
+  res.json(queuePersonalize(pool, req.workspaceOwnerId, items));
+});
+app.get('/api/lm/ai/drafts', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId;
+  const cid = parseInt(req.query.contact_id) || null;
+  const sid = parseInt(req.query.sequence_id) || null;
+  try {
+    const { rows } = await pool.query(`
+      SELECT d.*, k.nombre, k.apellido, k.empresa_nombre, co.nombre AS company_nombre
+        FROM lm_ai_drafts d
+        JOIN lm_contacts k ON k.id = d.contact_id
+        LEFT JOIN lm_companies co ON co.id = k.company_id
+       WHERE d.user_id=$1
+         AND ($2::int IS NULL OR d.contact_id=$2)
+         AND ($3::int IS NULL OR d.sequence_id=$3)
+       ORDER BY d.created_at DESC LIMIT 300
+    `, [uid, cid, sid]);
+    res.json(rows);
+  } catch (err) { console.error('[lm-ai-drafts] GET', err.message); res.status(500).json({ error: 'Error al cargar borradores' }); }
+});
+app.put('/api/lm/ai/drafts/:id', requireAuth, async (req, res) => {
+  const b = req.body || {};
+  const sets = [], vals = [];
+  if (b.asunto != null) { vals.push(String(b.asunto).slice(0, 300)); sets.push(`asunto=$${vals.length}`); }
+  if (b.cuerpo != null) { vals.push(String(b.cuerpo).slice(0, 4000)); sets.push(`cuerpo=$${vals.length}`); }
+  if (b.status != null && ['draft', 'approved', 'discarded'].includes(b.status)) { vals.push(b.status); sets.push(`status=$${vals.length}`); }
+  if (!sets.length) return res.status(400).json({ error: 'Nada que actualizar' });
+  vals.push(req.workspaceOwnerId, req.params.id);
+  try {
+    const { rows } = await pool.query(
+      `UPDATE lm_ai_drafts SET ${sets.join(',')}, updated_at=NOW()
+        WHERE user_id=$${vals.length - 1} AND id=$${vals.length} RETURNING *`, vals);
+    if (!rows.length) return res.status(404).json({ error: 'Borrador no encontrado' });
+    res.json(rows[0]);
+  } catch (err) { console.error('[lm-ai-drafts] PUT', err.message); res.status(500).json({ error: 'Error al actualizar borrador' }); }
+});
+app.delete('/api/lm/ai/drafts/:id', requireAuth, async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(`DELETE FROM lm_ai_drafts WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId]);
+    if (!rowCount) return res.status(404).json({ error: 'Borrador no encontrado' });
+    res.json({ ok: true });
+  } catch (err) { console.error('[lm-ai-drafts] DEL', err.message); res.status(500).json({ error: 'Error al eliminar borrador' }); }
+});
+
+// ── Importación con mapeo (Excel/CSV → empresas + contactos) ───────
+const LM_IMPORT_MAX = 5000;
+app.post('/api/lm/import', requireAuth, upload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No se subió ningún archivo.' });
+  const uid       = req.workspaceOwnerId;
+  const target    = req.body?.target === 'companies' ? 'companies' : 'contacts';
+  const obcId     = req.body?.outbound_client_id ? (parseInt(req.body.outbound_client_id) || null) : null;
+  const hasHeader = req.body?.hasHeader !== '0' && req.body?.hasHeader !== 'false';
+  let mapping = {};
+  try { mapping = JSON.parse(req.body?.mapping || '{}') || {}; } catch (_) {}
+
+  let rows;
+  try {
+    // Lectura robusta compartida con parse-headers: corrige encoding CP1252
+    // (tildes rotas) y detecta separador ';'/'\t' de Excel en español.
+    const { readTabular } = require('./services/excelService');
+    rows = readTabular(req.file.buffer, req.file.originalname || '');
+  } catch (e) {
+    return res.status(400).json({ error: 'No se pudo leer el archivo: ' + e.message });
+  }
+  if (!rows.length) return res.status(400).json({ error: 'El archivo está vacío.' });
+
+  const headerRow = (rows[0] || []).map(h => _lmS(h));
+  const dataRows  = hasHeader ? rows.slice(1) : rows;
+  if (dataRows.length > LM_IMPORT_MAX)
+    return res.status(400).json({ error: `El archivo tiene ${dataRows.length} filas; el máximo por importación es ${LM_IMPORT_MAX}.` });
+
+  const colMap = {}; const ignored = new Set();
+  for (const [idxStr, field] of Object.entries(mapping)) {
+    const idx = parseInt(idxStr); if (isNaN(idx)) continue;
+    if (field === '__ignore__') { ignored.add(idx); continue; }
+    if (field) colMap[idx] = field;
+  }
+
+  const summary = { rows: 0, contactsCreated: 0, contactsSkipped: 0, companiesCreated: 0, companiesMatched: 0, errors: [] };
+  const coCache = new Map();
+  async function _co(f) {
+    const dominio = _lmNormDomain(f.dominio || f.website || '');
+    const nombre  = _lmS(f.nombre);
+    if (!dominio && !nombre) return null;
+    const key = dominio ? 'd:' + dominio : 'n:' + nombre.toLowerCase();
+    if (coCache.has(key)) return coCache.get(key);
+    let found;
+    if (dominio) found = (await pool.query(`SELECT id FROM lm_companies WHERE user_id=$1 AND dominio=$2 LIMIT 1`, [uid, dominio])).rows[0];
+    else         found = (await pool.query(`SELECT id FROM lm_companies WHERE user_id=$1 AND dominio='' AND LOWER(nombre)=$2 LIMIT 1`, [uid, nombre.toLowerCase()])).rows[0];
+    if (found) { coCache.set(key, found.id); summary.companiesMatched++; return found.id; }
+    const ins = await pool.query(`
+      INSERT INTO lm_companies (user_id,nombre,dominio,website,industria,tamano,ingresos,telefono,linkedin,ciudad,region,pais,fundada,direccion,codigo_postal,descripcion,tecnologias,funding,target_tier,outbound_client_id,notas)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21) RETURNING id
+    `, [uid, nombre || dominio, dominio, _lmS(f.website), _lmS(f.industria), _lmS(f.tamano), _lmS(f.ingresos),
+        _lmS(f.telefono), _lmS(f.linkedin), _lmS(f.ciudad), _lmS(f.region), _lmS(f.pais), _lmS(f.fundada),
+        _lmS(f.direccion), _lmS(f.codigo_postal), _lmS(f.descripcion), _lmS(f.tecnologias), _lmS(f.funding), _lmS(f.target_tier), obcId, _lmS(f.notas)]);
+    coCache.set(key, ins.rows[0].id); summary.companiesCreated++; return ins.rows[0].id;
+  }
+
+  for (const row of dataRows) {
+    if (!Array.isArray(row) || row.every(c => !_lmS(c))) continue;
+    summary.rows++;
+    const f = {}; const raw = {};
+    const maxLen = Math.max(row.length, headerRow.length);
+    for (let idx = 0; idx < maxLen; idx++) {
+      const val = _lmS(row[idx]);
+      if (colMap[idx]) { const k = colMap[idx]; f[k] = f[k] ? `${f[k]} ${val}` : val; }
+      else if (!ignored.has(idx) && val) { raw[headerRow[idx] || `Columna ${idx + 1}`] = val; }
+    }
+    try {
+      if (target === 'companies') {
+        const id = await _co(f);
+        if (id && Object.keys(raw).length) await pool.query(`UPDATE lm_companies SET raw = raw || $1::jsonb WHERE id=$2`, [JSON.stringify(raw), id]);
+      } else {
+        let nombre = _lmS(f.nombre), apellido = _lmS(f.apellido);
+        if (!nombre && !apellido && _lmS(f.nombre_completo)) {
+          const parts = _lmS(f.nombre_completo).split(/\s+/);
+          nombre = parts.shift() || ''; apellido = parts.join(' ');
+        }
+        const email = _lmS(f.email).toLowerCase();
+        if (email) {
+          const dup = (await pool.query(`SELECT id FROM lm_contacts WHERE user_id=$1 AND LOWER(email)=$2 LIMIT 1`, [uid, email])).rows[0];
+          if (dup) { summary.contactsSkipped++; continue; }
+        }
+        const companyId = await _co({
+          nombre: f.co_nombre, dominio: f.co_dominio, website: f.co_website, industria: f.co_industria,
+          tamano: f.co_tamano, ingresos: f.co_ingresos, telefono: f.co_telefono, linkedin: f.co_linkedin,
+          ciudad: f.co_ciudad, region: f.co_region, pais: f.co_pais, direccion: f.co_direccion,
+          codigo_postal: f.co_cp, fundada: f.co_fundada, descripcion: f.co_descripcion,
+          tecnologias: f.co_tecnologias, funding: f.co_funding, target_tier: f.co_target_tier,
+        });
+        await pool.query(`
+          INSERT INTO lm_contacts (user_id,company_id,nombre,apellido,email,email_personal,telefono,movil,cargo,seniority,departamento,linkedin,empresa_nombre,ciudad,region,pais,estado,fuente,contact_priority,buyer_role,outbound_client_id,notas,raw)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
+        `, [uid, companyId, nombre, apellido, email, _lmS(f.email_personal), _lmS(f.telefono), _lmS(f.movil), _lmS(f.cargo), _lmS(f.seniority), _lmS(f.departamento),
+            _lmS(f.linkedin), _lmS(f.co_nombre), _lmS(f.ciudad), _lmS(f.region), _lmS(f.pais), _lmS(f.estado) || 'nuevo', _lmS(f.fuente) || 'import', _lmS(f.contact_priority), _lmS(f.buyer_role), obcId, _lmS(f.notas), JSON.stringify(raw)]);
+        summary.contactsCreated++;
+      }
+    } catch (e) {
+      if (summary.errors.length < 10) summary.errors.push(`Fila ${summary.rows}: ${e.message}`);
+    }
+  }
+  res.json(summary);
+});
+
+// ── Plantillas / Assets (lm_templates) ─────────────────────────────
+const LM_TPL_COLS = ['nombre', 'canal', 'tipo', 'asunto', 'cuerpo'];
+app.get('/api/lm/templates', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`SELECT * FROM lm_templates WHERE user_id=$1 ORDER BY updated_at DESC, id DESC`, [req.workspaceOwnerId]);
+    res.json(rows);
+  } catch (err) { console.error('[lm-tpl] GET', err.message); res.status(500).json({ error: 'Error al cargar plantillas' }); }
+});
+app.post('/api/lm/templates', requireAuth, async (req, res) => {
+  const b = req.body || {};
+  if (!_lmS(b.nombre)) return res.status(400).json({ error: 'El nombre es requerido' });
+  try {
+    const vals = LM_TPL_COLS.map(k => _lmS(b[k]));
+    const { rows } = await pool.query(
+      `INSERT INTO lm_templates (user_id,${LM_TPL_COLS.join(',')}) VALUES ($1,${LM_TPL_COLS.map((_, i) => '$' + (i + 2)).join(',')}) RETURNING *`,
+      [req.workspaceOwnerId, ...vals]);
+    res.status(201).json(rows[0]);
+  } catch (err) { console.error('[lm-tpl] POST', err.message); res.status(500).json({ error: 'Error al crear plantilla' }); }
+});
+app.put('/api/lm/templates/:id', requireAuth, async (req, res) => {
+  const b = req.body || {};
+  try {
+    const vals = LM_TPL_COLS.map(k => _lmS(b[k]));
+    const set = LM_TPL_COLS.map((k, i) => `${k}=$${i + 1}`).join(',');
+    const { rows } = await pool.query(
+      `UPDATE lm_templates SET ${set}, updated_at=NOW() WHERE id=$${LM_TPL_COLS.length + 1} AND user_id=$${LM_TPL_COLS.length + 2} RETURNING *`,
+      [...vals, req.params.id, req.workspaceOwnerId]);
+    if (!rows[0]) return res.status(404).json({ error: 'Plantilla no encontrada' });
+    res.json(rows[0]);
+  } catch (err) { console.error('[lm-tpl] PUT', err.message); res.status(500).json({ error: 'Error al guardar plantilla' }); }
+});
+app.delete('/api/lm/templates/:id', requireAuth, async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(`DELETE FROM lm_templates WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId]);
+    if (!rowCount) return res.status(404).json({ error: 'Plantilla no encontrada' });
+    res.json({ ok: true });
+  } catch (err) { console.error('[lm-tpl] DELETE', err.message); res.status(500).json({ error: 'Error al eliminar plantilla' }); }
+});
+
+// ── Campañas (Fase 2) ──────────────────────────────────────────────
+const CMP_ESTADOS = ['draft', 'activa', 'pausada', 'cerrada'];
+app.get('/api/campaigns', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT * FROM campaigns WHERE user_id=$1 ORDER BY created_at DESC`, [req.workspaceOwnerId]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('[cmp] GET error:', err.message);
+    res.status(500).json({ error: 'Error al cargar campañas' });
+  }
+});
+app.post('/api/campaigns', requireAuth, async (req, res) => {
+  const b = req.body || {};
+  if (!b.nombre?.trim()) return res.status(400).json({ error: 'El nombre es requerido' });
+  const estado = CMP_ESTADOS.includes(b.estado) ? b.estado : 'draft';
+  try {
+    const { rows } = await pool.query(`
+      INSERT INTO campaigns (user_id,outbound_client_id,nombre,estado,mercado,icp,canal,canal_secundario,objetivo,fecha_inicio,notas)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *
+    `, [req.workspaceOwnerId, b.outbound_client_id || null, b.nombre.trim(), estado, b.mercado||'', b.icp||'',
+        b.canal||'', b.canal_secundario||'', b.objetivo||'', b.fecha_inicio||null, b.notas||'']);
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    console.error('[cmp] POST error:', err.message);
+    res.status(500).json({ error: 'Error al crear campaña' });
+  }
+});
+app.put('/api/campaigns/:id', requireAuth, async (req, res) => {
+  const b = req.body || {};
+  if (!b.nombre?.trim()) return res.status(400).json({ error: 'El nombre es requerido' });
+  const estado = CMP_ESTADOS.includes(b.estado) ? b.estado : 'draft';
+  try {
+    const { rows } = await pool.query(`
+      UPDATE campaigns SET outbound_client_id=$1,nombre=$2,estado=$3,mercado=$4,icp=$5,canal=$6,
+        canal_secundario=$7,objetivo=$8,fecha_inicio=$9,notas=$10,updated_at=NOW()
+      WHERE id=$11 AND user_id=$12 RETURNING *
+    `, [b.outbound_client_id || null, b.nombre.trim(), estado, b.mercado||'', b.icp||'', b.canal||'',
+        b.canal_secundario||'', b.objetivo||'', b.fecha_inicio||null, b.notas||'', req.params.id, req.workspaceOwnerId]);
+    if (!rows.length) return res.status(404).json({ error: 'Campaña no encontrada' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[cmp] PUT error:', err.message);
+    res.status(500).json({ error: 'Error al actualizar campaña' });
+  }
+});
+app.delete('/api/campaigns/:id', requireAuth, async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(
+      `DELETE FROM campaigns WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId]
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Campaña no encontrada' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[cmp] DELETE error:', err.message);
+    res.status(500).json({ error: 'Error al eliminar campaña' });
+  }
+});
+
+// ── Secuencias + pasos (Fase 3) ────────────────────────────────────
+const SEQ_ESTADOS  = ['draft', 'activa', 'pausada', 'archivada'];
+const STEP_CANALES = ['email', 'linkedin', 'call', 'task', 'whatsapp'];
+
+app.get('/api/sequences', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`SELECT * FROM sequences WHERE user_id=$1 ORDER BY created_at DESC`, [req.workspaceOwnerId]);
+    res.json(rows);
+  } catch (err) { console.error('[seq] GET error:', err.message); res.status(500).json({ error: 'Error al cargar secuencias' }); }
+});
+app.post('/api/sequences', requireAuth, async (req, res) => {
+  const b = req.body || {};
+  if (!b.nombre?.trim()) return res.status(400).json({ error: 'El nombre es requerido' });
+  const estado = SEQ_ESTADOS.includes(b.estado) ? b.estado : 'draft';
+  try {
+    const { rows } = await pool.query(`
+      INSERT INTO sequences (user_id,outbound_client_id,campaign_id,nombre,objetivo,estado,timezone)
+      VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *
+    `, [req.workspaceOwnerId, b.outbound_client_id || null, b.campaign_id || null, b.nombre.trim(), b.objetivo || '', estado, b.timezone || '']);
+    res.status(201).json(rows[0]);
+  } catch (err) { console.error('[seq] POST error:', err.message); res.status(500).json({ error: 'Error al crear secuencia' }); }
+});
+app.put('/api/sequences/:id', requireAuth, async (req, res) => {
+  const b = req.body || {};
+  if (!b.nombre?.trim()) return res.status(400).json({ error: 'El nombre es requerido' });
+  const estado = SEQ_ESTADOS.includes(b.estado) ? b.estado : 'draft';
+  try {
+    const { rows } = await pool.query(`
+      UPDATE sequences SET outbound_client_id=$1,campaign_id=$2,nombre=$3,objetivo=$4,estado=$5,timezone=$6,updated_at=NOW()
+      WHERE id=$7 AND user_id=$8 RETURNING *
+    `, [b.outbound_client_id || null, b.campaign_id || null, b.nombre.trim(), b.objetivo || '', estado, b.timezone || '', req.params.id, req.workspaceOwnerId]);
+    if (!rows.length) return res.status(404).json({ error: 'Secuencia no encontrada' });
+    res.json(rows[0]);
+  } catch (err) { console.error('[seq] PUT error:', err.message); res.status(500).json({ error: 'Error al actualizar secuencia' }); }
+});
+app.delete('/api/sequences/:id', requireAuth, async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(`DELETE FROM sequences WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId]);
+    if (!rowCount) return res.status(404).json({ error: 'Secuencia no encontrada' });
+    res.json({ ok: true });
+  } catch (err) { console.error('[seq] DELETE error:', err.message); res.status(500).json({ error: 'Error al eliminar secuencia' }); }
+});
+
+app.get('/api/sequence-steps', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`SELECT * FROM sequence_steps WHERE user_id=$1 ORDER BY dia ASC, orden ASC, id ASC`, [req.workspaceOwnerId]);
+    res.json(rows);
+  } catch (err) { console.error('[step] GET error:', err.message); res.status(500).json({ error: 'Error al cargar pasos' }); }
+});
+app.post('/api/sequence-steps', requireAuth, async (req, res) => {
+  const b = req.body || {};
+  if (!b.sequence_id) return res.status(400).json({ error: 'sequence_id requerido' });
+  const canal = STEP_CANALES.includes(b.canal) ? b.canal : 'email';
+  try {
+    const { rows } = await pool.query(`
+      INSERT INTO sequence_steps (user_id,sequence_id,dia,canal,titulo,plantilla,variants,variant_mode,variant_field,orden)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *
+    `, [req.workspaceOwnerId, b.sequence_id, parseInt(b.dia) || 1, canal, b.titulo || '', b.plantilla || '', JSON.stringify(Array.isArray(b.variants) ? b.variants : []), b.variant_mode || 'off', b.variant_field || '', parseInt(b.orden) || 0]);
+    res.status(201).json(rows[0]);
+  } catch (err) { console.error('[step] POST error:', err.message); res.status(500).json({ error: 'Error al crear paso' }); }
+});
+app.put('/api/sequence-steps/:id', requireAuth, async (req, res) => {
+  const b = req.body || {};
+  const canal = STEP_CANALES.includes(b.canal) ? b.canal : 'email';
+  try {
+    const { rows } = await pool.query(`
+      UPDATE sequence_steps SET dia=$1,canal=$2,titulo=$3,plantilla=$4,variants=$5,variant_mode=$6,variant_field=$7,orden=$8 WHERE id=$9 AND user_id=$10 RETURNING *
+    `, [parseInt(b.dia) || 1, canal, b.titulo || '', b.plantilla || '', JSON.stringify(Array.isArray(b.variants) ? b.variants : []), b.variant_mode || 'off', b.variant_field || '', parseInt(b.orden) || 0, req.params.id, req.workspaceOwnerId]);
+    if (!rows.length) return res.status(404).json({ error: 'Paso no encontrado' });
+    res.json(rows[0]);
+  } catch (err) { console.error('[step] PUT error:', err.message); res.status(500).json({ error: 'Error al actualizar paso' }); }
+});
+app.delete('/api/sequence-steps/:id', requireAuth, async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(`DELETE FROM sequence_steps WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId]);
+    if (!rowCount) return res.status(404).json({ error: 'Paso no encontrado' });
+    res.json({ ok: true });
+  } catch (err) { console.error('[step] DELETE error:', err.message); res.status(500).json({ error: 'Error al eliminar paso' }); }
+});
+
+// ── Actividades / tareas comerciales (Fase 4) ──────────────────────
+app.get('/api/activities', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`SELECT * FROM activities WHERE user_id=$1 ORDER BY fecha DESC, id DESC`, [req.workspaceOwnerId]);
+    res.json(rows);
+  } catch (err) { console.error('[act] GET error:', err.message); res.status(500).json({ error: 'Error al cargar actividades' }); }
+});
+app.post('/api/activities', requireAuth, async (req, res) => {
+  const b = req.body || {};
+  if (!b.tipo) return res.status(400).json({ error: 'tipo requerido' });
+  const estado = b.estado === 'pendiente' ? 'pendiente' : 'hecha';
+  try {
+    const { rows } = await pool.query(`
+      INSERT INTO activities (user_id,lead_id,contact_id,outbound_client_id,campaign_id,tipo,canal,nota,fecha,estado,sentimiento,variant)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *
+    `, [req.workspaceOwnerId, b.lead_id || null, b.contact_id || null, b.outbound_client_id || null, b.campaign_id || null,
+        String(b.tipo).slice(0, 40), b.canal || '', b.nota || '', b.fecha || new Date().toISOString(), estado, b.sentimiento || '',
+        String(b.variant || '').slice(0, 60)]);
+    res.status(201).json(rows[0]);
+  } catch (err) { console.error('[act] POST error:', err.message); res.status(500).json({ error: 'Error al crear actividad' }); }
+});
+app.put('/api/activities/:id', requireAuth, async (req, res) => {
+  const b = req.body || {};
+  const estado = b.estado === 'pendiente' ? 'pendiente' : 'hecha';
+  try {
+    const { rows } = await pool.query(`
+      UPDATE activities SET lead_id=$1,outbound_client_id=$2,campaign_id=$3,tipo=$4,canal=$5,nota=$6,fecha=$7,estado=$8,sentimiento=$9
+      WHERE id=$10 AND user_id=$11 RETURNING *
+    `, [b.lead_id || null, b.outbound_client_id || null, b.campaign_id || null, String(b.tipo || 'nota').slice(0, 40),
+        b.canal || '', b.nota || '', b.fecha || new Date().toISOString(), estado, b.sentimiento || '', req.params.id, req.workspaceOwnerId]);
+    if (!rows.length) return res.status(404).json({ error: 'Actividad no encontrada' });
+    res.json(rows[0]);
+  } catch (err) { console.error('[act] PUT error:', err.message); res.status(500).json({ error: 'Error al actualizar actividad' }); }
+});
+app.delete('/api/activities/:id', requireAuth, async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(`DELETE FROM activities WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId]);
+    if (!rowCount) return res.status(404).json({ error: 'Actividad no encontrada' });
+    res.json({ ok: true });
+  } catch (err) { console.error('[act] DELETE error:', err.message); res.status(500).json({ error: 'Error al eliminar actividad' }); }
+});
+
+// ── Actividades por contacto (Lead Manager) ──
+app.get('/api/lm/contacts/:id/activities', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`SELECT * FROM activities WHERE user_id=$1 AND contact_id=$2 ORDER BY fecha DESC, id DESC`, [req.workspaceOwnerId, req.params.id]);
+    res.json(rows);
+  } catch (err) { console.error('[lm-act] GET', err.message); res.status(500).json({ error: 'Error al cargar actividades' }); }
+});
+app.patch('/api/lm/activities/:id', requireAuth, async (req, res) => {
+  const estado = req.body?.estado === 'pendiente' ? 'pendiente' : 'hecha';
+  try {
+    const { rows } = await pool.query(`UPDATE activities SET estado=$1 WHERE id=$2 AND user_id=$3 RETURNING *`, [estado, req.params.id, req.workspaceOwnerId]);
+    if (!rows.length) return res.status(404).json({ error: 'Actividad no encontrada' });
+    res.json(rows[0]);
+  } catch (err) { console.error('[lm-act] PATCH', err.message); res.status(500).json({ error: 'Error al actualizar' }); }
+});
+
+// =================================================================
 // MANAGEMENT — PAYMENTS (FINANZAS)
 // =================================================================
 
@@ -2235,6 +3389,11 @@ app.get('/api/mgmt/payments', requireAuth, async (req, res) => {
           pm.monto_bruto      AS monto_bruto,
           pm.porcentaje       AS porcentaje,
           pm.monto_neto       AS monto_neto,
+          pm.canal            AS canal,
+          pm.comision_monto   AS comision_monto,
+          pm.moneda           AS moneda,
+          pm.tipo_cambio      AS tipo_cambio,
+          pm.costo_extra      AS costo_extra,
           pm.notas            AS notas,
           pm.created_at       AS created_at,
           c.nombre            AS client_nombre,
@@ -2262,6 +3421,11 @@ app.get('/api/mgmt/payments', requireAuth, async (req, res) => {
           t.monto              AS monto_bruto,
           NULL::numeric        AS porcentaje,
           t.monto              AS monto_neto,
+          ''                   AS canal,
+          NULL::numeric        AS comision_monto,
+          ''                   AS moneda,
+          NULL::numeric        AS tipo_cambio,
+          NULL::numeric        AS costo_extra,
           t.notas              AS notas,
           t.created_at         AS created_at,
           c2.nombre            AS client_nombre,
@@ -2294,18 +3458,24 @@ app.get('/api/mgmt/payments', requireAuth, async (req, res) => {
 // ── POST /api/mgmt/payments ───────────────────────────────────────
 app.post('/api/mgmt/payments', requireAuth, async (req, res) => {
   const { concepto, client_id, project_id, monto_bruto, porcentaje,
-          monto_neto, fecha_esperada, fecha_pagada, estado, notas } = req.body;
+          monto_neto, fecha_esperada, fecha_pagada, estado, notas, canal, comision_monto,
+          moneda, tipo_cambio, costo_extra, disponibilidad } = req.body;
+  const disp = ['disponible', 'liberacion'].includes(disponibilidad) ? disponibilidad : 'disponible';
   try {
     const { rows } = await pool.query(`
       INSERT INTO payments
         (user_id, client_id, project_id, concepto, monto_bruto, porcentaje,
-         monto_neto, fecha_esperada, fecha_pagada, estado, notas)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+         monto_neto, fecha_esperada, fecha_pagada, estado, notas, canal, comision_monto,
+         moneda, tipo_cambio, costo_extra, disponibilidad)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
       RETURNING *
     `, [req.workspaceOwnerId, client_id || null, project_id || null,
         concepto || '', monto_bruto || 0, porcentaje || null,
         monto_neto || null, fecha_esperada || null, fecha_pagada || null,
-        estado || 'pendiente', notas || '']);
+        estado || 'pendiente', notas || '', canal || '',
+        (comision_monto != null && comision_monto !== '') ? comision_monto : null,
+        moneda || '', (tipo_cambio != null && tipo_cambio !== '') ? tipo_cambio : null,
+        (costo_extra != null && costo_extra !== '') ? costo_extra : null, disp]);
     res.status(201).json(rows[0]);
   } catch (err) {
     console.error('[mgmt/payments] POST error:', err.message);
@@ -2316,24 +3486,46 @@ app.post('/api/mgmt/payments', requireAuth, async (req, res) => {
 // ── PUT /api/mgmt/payments/:id ────────────────────────────────────
 app.put('/api/mgmt/payments/:id', requireAuth, async (req, res) => {
   const { concepto, client_id, project_id, monto_bruto, porcentaje,
-          monto_neto, fecha_esperada, fecha_pagada, estado, notas } = req.body;
+          monto_neto, fecha_esperada, fecha_pagada, estado, notas, canal, comision_monto,
+          moneda, tipo_cambio, costo_extra, disponibilidad } = req.body;
+  const disp = ['disponible', 'liberacion'].includes(disponibilidad) ? disponibilidad : 'disponible';
   try {
     const { rows } = await pool.query(`
       UPDATE payments
       SET concepto=$1, client_id=$2, project_id=$3, monto_bruto=$4,
           porcentaje=$5, monto_neto=$6, fecha_esperada=$7, fecha_pagada=$8,
-          estado=$9, notas=$10, updated_at=NOW()
-      WHERE id=$11 AND user_id=$12
+          estado=$9, notas=$10, canal=$11, comision_monto=$12,
+          moneda=$13, tipo_cambio=$14, costo_extra=$15, disponibilidad=$16, updated_at=NOW()
+      WHERE id=$17 AND user_id=$18
       RETURNING *
     `, [concepto || '', client_id || null, project_id || null, monto_bruto || 0,
         porcentaje || null, monto_neto || null, fecha_esperada || null,
         fecha_pagada || null, estado || 'pendiente', notas || '',
+        canal || '', (comision_monto != null && comision_monto !== '') ? comision_monto : null,
+        moneda || '', (tipo_cambio != null && tipo_cambio !== '') ? tipo_cambio : null,
+        (costo_extra != null && costo_extra !== '') ? costo_extra : null, disp,
         req.params.id, req.workspaceOwnerId]);
     if (!rows.length) return res.status(404).json({ error: 'Pago no encontrado' });
     res.json(rows[0]);
   } catch (err) {
     console.error('[mgmt/payments] PUT error:', err.message);
     res.status(500).json({ error: 'Error al actualizar pago' });
+  }
+});
+
+// ── PATCH /api/mgmt/payments/:id/disponibilidad (toggle liberación ↔ disponible) ──
+app.patch('/api/mgmt/payments/:id/disponibilidad', requireAuth, async (req, res) => {
+  const disp = ['disponible', 'liberacion'].includes(req.body.disponibilidad) ? req.body.disponibilidad : 'disponible';
+  try {
+    const { rows } = await pool.query(
+      `UPDATE payments SET disponibilidad=$1, updated_at=NOW() WHERE id=$2 AND user_id=$3 RETURNING *`,
+      [disp, req.params.id, req.workspaceOwnerId]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Pago no encontrado' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[mgmt/payments/disponibilidad] PATCH error:', err.message);
+    res.status(500).json({ error: 'Error al actualizar disponibilidad' });
   }
 });
 
@@ -2349,6 +3541,582 @@ app.delete('/api/mgmt/payments/:id', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('[mgmt/payments] DELETE error:', err.message);
     res.status(500).json({ error: 'Error al eliminar pago' });
+  }
+});
+
+// =================================================================
+// MANAGEMENT — FINANCE CONFIG (impuestos, reserva, socios, equipo)
+// =================================================================
+
+// ── GET /api/mgmt/fin-config ──────────────────────────────────────
+app.get('/api/mgmt/fin-config', requireAuth, async (req, res) => {
+  try {
+    const cfgQ = await pool.query(
+      `SELECT impuesto_pct, reserva_pct, comision_pct, costos_operativos,
+              moneda_principal, periodo_default
+         FROM fin_config WHERE user_id = $1`,
+      [req.workspaceOwnerId]
+    );
+    const config = cfgQ.rows[0] || {
+      impuesto_pct: 0, reserva_pct: 0, comision_pct: 0, costos_operativos: 0,
+      moneda_principal: 'USD', periodo_default: 'mes',
+    };
+    const memQ = await pool.query(
+      `SELECT tm.id     AS member_id,
+              tm.nombre  AS nombre,
+              tm.cargo   AS cargo,
+              tm.estado  AS estado,
+              COALESCE(fc.es_socio,    FALSE)     AS es_socio,
+              COALESCE(fc.socio_pct,   0)         AS socio_pct,
+              COALESCE(fc.socio_regla, 'despues') AS socio_regla,
+              COALESCE(fc.tipo_pago,   'manual')  AS tipo_pago,
+              COALESCE(fc.monto_pago,  0)         AS monto_pago,
+              COALESCE(fc.moneda_pago, 'USD')     AS moneda_pago
+         FROM team_members tm
+         LEFT JOIN fin_member_config fc
+                ON fc.member_id = tm.id AND fc.user_id = $1
+        WHERE tm.user_id = $1
+        ORDER BY tm.nombre ASC`,
+      [req.workspaceOwnerId]
+    );
+    res.json({ config, members: memQ.rows });
+  } catch (err) {
+    console.error('[mgmt/fin-config] GET error:', err.message);
+    res.status(500).json({ error: 'Error al cargar configuración financiera' });
+  }
+});
+
+// ── PUT /api/mgmt/fin-config ──────────────────────────────────────
+app.put('/api/mgmt/fin-config', requireAuth, async (req, res) => {
+  const { impuesto_pct, reserva_pct, comision_pct, costos_operativos,
+          moneda_principal, periodo_default } = req.body;
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO fin_config
+         (user_id, impuesto_pct, reserva_pct, comision_pct, costos_operativos,
+          moneda_principal, periodo_default, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,NOW())
+       ON CONFLICT (user_id) DO UPDATE SET
+         impuesto_pct      = EXCLUDED.impuesto_pct,
+         reserva_pct       = EXCLUDED.reserva_pct,
+         comision_pct      = EXCLUDED.comision_pct,
+         costos_operativos = EXCLUDED.costos_operativos,
+         moneda_principal  = EXCLUDED.moneda_principal,
+         periodo_default   = EXCLUDED.periodo_default,
+         updated_at        = NOW()
+       RETURNING *`,
+      [req.workspaceOwnerId,
+       impuesto_pct || 0, reserva_pct || 0, comision_pct || 0, costos_operativos || 0,
+       moneda_principal || 'USD',
+       periodo_default === 'semana' ? 'semana' : 'mes']
+    );
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[mgmt/fin-config] PUT error:', err.message);
+    res.status(500).json({ error: 'Error al guardar configuración financiera' });
+  }
+});
+
+// ── PUT /api/mgmt/fin-config/member/:memberId ─────────────────────
+app.put('/api/mgmt/fin-config/member/:memberId', requireAuth, async (req, res) => {
+  const memberId = parseInt(req.params.memberId, 10);
+  const { es_socio, socio_pct, socio_regla, tipo_pago, monto_pago, moneda_pago } = req.body;
+  const VALID_TIPO = ['sueldo_mensual', 'sueldo_semanal', 'por_proyecto', 'comision', 'manual'];
+  try {
+    const own = await pool.query(
+      `SELECT 1 FROM team_members WHERE id = $1 AND user_id = $2`,
+      [memberId, req.workspaceOwnerId]
+    );
+    if (!own.rows.length) return res.status(404).json({ error: 'Miembro no encontrado' });
+
+    const { rows } = await pool.query(
+      `INSERT INTO fin_member_config
+         (user_id, member_id, es_socio, socio_pct, socio_regla,
+          tipo_pago, monto_pago, moneda_pago, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW())
+       ON CONFLICT (user_id, member_id) DO UPDATE SET
+         es_socio    = EXCLUDED.es_socio,
+         socio_pct   = EXCLUDED.socio_pct,
+         socio_regla = EXCLUDED.socio_regla,
+         tipo_pago   = EXCLUDED.tipo_pago,
+         monto_pago  = EXCLUDED.monto_pago,
+         moneda_pago = EXCLUDED.moneda_pago,
+         updated_at  = NOW()
+       RETURNING *`,
+      [req.workspaceOwnerId, memberId,
+       !!es_socio, socio_pct || 0,
+       socio_regla === 'antes' ? 'antes' : 'despues',
+       VALID_TIPO.includes(tipo_pago) ? tipo_pago : 'manual',
+       monto_pago || 0, moneda_pago || 'USD']
+    );
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[mgmt/fin-config] PUT member error:', err.message);
+    res.status(500).json({ error: 'Error al guardar configuración del miembro' });
+  }
+});
+
+// =================================================================
+// MANAGEMENT — PAGOS INTERNOS (abonos a socios / equipo / colaboradores)
+// =================================================================
+
+const PI_TIPOS   = ['socio', 'equipo', 'colaborador', 'comision', 'bono', 'reembolso'];
+const PI_ESTADOS = ['pendiente', 'programado', 'pagado', 'observado'];
+const PI_PERIODOS = ['semana', 'mes', 'proyecto'];
+
+// ── GET /api/mgmt/pagos-internos ──────────────────────────────────
+app.get('/api/mgmt/pagos-internos', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT pi.*, tm.nombre AS member_nombre
+         FROM pagos_internos pi
+         LEFT JOIN team_members tm ON pi.member_id = tm.id
+        WHERE pi.user_id = $1
+        ORDER BY
+          CASE pi.estado WHEN 'pendiente' THEN 1 WHEN 'programado' THEN 2
+                         WHEN 'observado' THEN 3 WHEN 'pagado' THEN 4 ELSE 5 END,
+          pi.fecha_pago DESC NULLS LAST,
+          pi.created_at DESC`,
+      [req.workspaceOwnerId]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('[mgmt/pagos-internos] GET error:', err.message);
+    res.status(500).json({ error: 'Error al cargar pagos internos' });
+  }
+});
+
+// ── POST /api/mgmt/pagos-internos ─────────────────────────────────
+app.post('/api/mgmt/pagos-internos', requireAuth, async (req, res) => {
+  const { member_id, persona, tipo, periodo_tipo, periodo_ref, monto, moneda,
+          fecha_pago, metodo, referencia, nota, estado } = req.body;
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO pagos_internos
+         (user_id, member_id, persona, tipo, periodo_tipo, periodo_ref, monto, moneda,
+          fecha_pago, metodo, referencia, nota, estado)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+       RETURNING *`,
+      [req.workspaceOwnerId, member_id || null, (persona || '').trim(),
+       PI_TIPOS.includes(tipo) ? tipo : 'equipo',
+       PI_PERIODOS.includes(periodo_tipo) ? periodo_tipo : 'mes', periodo_ref || '',
+       monto || 0, moneda || 'USD', fecha_pago || null, metodo || '', referencia || '',
+       nota || '', PI_ESTADOS.includes(estado) ? estado : 'pendiente']
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    console.error('[mgmt/pagos-internos] POST error:', err.message);
+    res.status(500).json({ error: 'Error al crear pago interno' });
+  }
+});
+
+// ── PUT /api/mgmt/pagos-internos/:id ──────────────────────────────
+app.put('/api/mgmt/pagos-internos/:id', requireAuth, async (req, res) => {
+  const { member_id, persona, tipo, periodo_tipo, periodo_ref, monto, moneda,
+          fecha_pago, metodo, referencia, nota, estado } = req.body;
+  try {
+    const { rows } = await pool.query(
+      `UPDATE pagos_internos SET
+         member_id=$1, persona=$2, tipo=$3, periodo_tipo=$4, periodo_ref=$5,
+         monto=$6, moneda=$7, fecha_pago=$8, metodo=$9, referencia=$10, nota=$11,
+         estado=$12, updated_at=NOW()
+       WHERE id=$13 AND user_id=$14 RETURNING *`,
+      [member_id || null, (persona || '').trim(),
+       PI_TIPOS.includes(tipo) ? tipo : 'equipo',
+       PI_PERIODOS.includes(periodo_tipo) ? periodo_tipo : 'mes', periodo_ref || '',
+       monto || 0, moneda || 'USD', fecha_pago || null, metodo || '', referencia || '',
+       nota || '', PI_ESTADOS.includes(estado) ? estado : 'pendiente',
+       req.params.id, req.workspaceOwnerId]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Pago interno no encontrado' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[mgmt/pagos-internos] PUT error:', err.message);
+    res.status(500).json({ error: 'Error al actualizar pago interno' });
+  }
+});
+
+// ── DELETE /api/mgmt/pagos-internos/:id ───────────────────────────
+app.delete('/api/mgmt/pagos-internos/:id', requireAuth, async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(
+      `DELETE FROM pagos_internos WHERE id=$1 AND user_id=$2`,
+      [req.params.id, req.workspaceOwnerId]
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Pago interno no encontrado' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[mgmt/pagos-internos] DELETE error:', err.message);
+    res.status(500).json({ error: 'Error al eliminar pago interno' });
+  }
+});
+
+// =================================================================
+// MANAGEMENT — GASTOS / CAJA (fin_movimientos: gastos operativos + aportes a caja)
+// =================================================================
+const MOV_TIPOS        = ['gasto', 'aporte'];
+const MOV_ESTADOS      = ['pendiente', 'pagado', 'reembolsable', 'reembolsado', 'cancelado'];
+const MOV_PAGADO_DESDE = ['caja', 'cobro', 'socio_a', 'socio_b', 'personal', 'otro'];
+const MOV_ORIGEN       = ['cobro', 'aporte_socio', 'ajuste', 'otro'];
+
+app.get('/api/mgmt/fin-movimientos', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT m.*, p.nombre AS project_nombre, c.nombre AS client_nombre
+         FROM fin_movimientos m
+         LEFT JOIN projects p ON m.project_id = p.id
+         LEFT JOIN clients  c ON m.client_id  = c.id
+        WHERE m.user_id = $1
+        ORDER BY m.fecha DESC NULLS LAST, m.created_at DESC`,
+      [req.workspaceOwnerId]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('[mgmt/fin-movimientos] GET error:', err.message);
+    res.status(500).json({ error: 'Error al cargar movimientos' });
+  }
+});
+
+app.post('/api/mgmt/fin-movimientos', requireAuth, async (req, res) => {
+  const b = req.body || {};
+  const tipo  = MOV_TIPOS.includes(b.tipo) ? b.tipo : 'gasto';
+  const monto = Math.max(0, parseFloat(b.monto) || 0);   // sin negativos
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO fin_movimientos
+         (user_id, tipo, concepto, categoria, proveedor, monto, moneda, tipo_cambio,
+          fecha, estado, pagado_desde, origen, project_id, client_id, responsable, nota)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,
+      [req.workspaceOwnerId, tipo, (b.concepto || '').trim(), b.categoria || '', b.proveedor || '',
+       monto, b.moneda || 'USD', b.tipo_cambio ? +b.tipo_cambio : null, b.fecha || null,
+       tipo === 'gasto'  ? (MOV_ESTADOS.includes(b.estado) ? b.estado : 'pagado') : 'registrado',
+       tipo === 'gasto'  ? (MOV_PAGADO_DESDE.includes(b.pagado_desde) ? b.pagado_desde : 'caja') : '',
+       tipo === 'aporte' ? (MOV_ORIGEN.includes(b.origen) ? b.origen : 'ajuste') : '',
+       b.project_id || null, b.client_id || null, b.responsable || '', b.nota || '']
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    console.error('[mgmt/fin-movimientos] POST error:', err.message);
+    res.status(500).json({ error: 'Error al crear movimiento' });
+  }
+});
+
+app.put('/api/mgmt/fin-movimientos/:id', requireAuth, async (req, res) => {
+  const b = req.body || {};
+  const tipo  = MOV_TIPOS.includes(b.tipo) ? b.tipo : 'gasto';
+  const monto = Math.max(0, parseFloat(b.monto) || 0);
+  try {
+    const { rows } = await pool.query(
+      `UPDATE fin_movimientos SET
+         tipo=$1, concepto=$2, categoria=$3, proveedor=$4, monto=$5, moneda=$6, tipo_cambio=$7,
+         fecha=$8, estado=$9, pagado_desde=$10, origen=$11, project_id=$12, client_id=$13,
+         responsable=$14, nota=$15, updated_at=NOW()
+       WHERE id=$16 AND user_id=$17 RETURNING *`,
+      [tipo, (b.concepto || '').trim(), b.categoria || '', b.proveedor || '', monto, b.moneda || 'USD',
+       b.tipo_cambio ? +b.tipo_cambio : null, b.fecha || null,
+       tipo === 'gasto'  ? (MOV_ESTADOS.includes(b.estado) ? b.estado : 'pagado') : 'registrado',
+       tipo === 'gasto'  ? (MOV_PAGADO_DESDE.includes(b.pagado_desde) ? b.pagado_desde : 'caja') : '',
+       tipo === 'aporte' ? (MOV_ORIGEN.includes(b.origen) ? b.origen : 'ajuste') : '',
+       b.project_id || null, b.client_id || null, b.responsable || '', b.nota || '',
+       req.params.id, req.workspaceOwnerId]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Movimiento no encontrado' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[mgmt/fin-movimientos] PUT error:', err.message);
+    res.status(500).json({ error: 'Error al actualizar movimiento' });
+  }
+});
+
+app.patch('/api/mgmt/fin-movimientos/:id/estado', requireAuth, async (req, res) => {
+  const estado = MOV_ESTADOS.includes(req.body.estado) ? req.body.estado : 'pagado';
+  try {
+    const { rows } = await pool.query(
+      `UPDATE fin_movimientos SET estado=$1, updated_at=NOW() WHERE id=$2 AND user_id=$3 RETURNING *`,
+      [estado, req.params.id, req.workspaceOwnerId]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Movimiento no encontrado' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[mgmt/fin-movimientos/estado] PATCH error:', err.message);
+    res.status(500).json({ error: 'Error al actualizar estado' });
+  }
+});
+
+app.delete('/api/mgmt/fin-movimientos/:id', requireAuth, async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(
+      `DELETE FROM fin_movimientos WHERE id=$1 AND user_id=$2`,
+      [req.params.id, req.workspaceOwnerId]
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Movimiento no encontrado' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[mgmt/fin-movimientos] DELETE error:', err.message);
+    res.status(500).json({ error: 'Error al eliminar movimiento' });
+  }
+});
+
+// =================================================================
+// MANAGEMENT — OPORTUNIDADES (procesos pre-proyecto)
+// =================================================================
+
+const OPP_ESTADOS = ['activa', 'nueva', 'en_proceso', 'esperando', 'entrevista', 'propuesta', 'piloto', 'ganada', 'perdida', 'rechazada', 'archivada'];
+const OPP_ETAPAS  = ['aplicacion', 'conversacion', 'preseleccion', 'revision', 'entrevista', 'piloto', 'propuesta', 'contrato'];
+// Estados de tareas internas: idénticos a tareas normales (pendiente/en_progreso/completado/bloqueado)
+const OPP_TASK_ESTADOS = ['pendiente', 'en_progreso', 'completado', 'bloqueado'];
+const normOppTaskEstado = e => {
+  if (e === 'completada') e = 'completado';   // legacy
+  return OPP_TASK_ESTADOS.includes(e) ? e : 'pendiente';
+};
+
+// ── GET /api/mgmt/opportunities ───────────────────────────────────
+app.get('/api/mgmt/opportunities', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT o.*, c.nombre AS client_nombre, c.empresa AS client_empresa
+         FROM opportunities o
+         LEFT JOIN clients c ON o.client_id = c.id
+        WHERE o.user_id = $1
+        ORDER BY
+          CASE o.estado WHEN 'archivada' THEN 5
+                        WHEN 'perdida' THEN 4 WHEN 'rechazada' THEN 4
+                        WHEN 'ganada' THEN 3 ELSE 1 END,
+          o.updated_at DESC`,
+      [req.workspaceOwnerId]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('[mgmt/opportunities] GET error:', err.message);
+    res.status(500).json({ error: 'Error al cargar oportunidades' });
+  }
+});
+
+// ── POST /api/mgmt/opportunities ──────────────────────────────────
+app.post('/api/mgmt/opportunities', requireAuth, async (req, res) => {
+  const { titulo, cliente, client_id, canal, estado, etapa_actual, prioridad,
+          responsable, proxima_accion, descripcion, notas, valor_estimado, moneda,
+          fecha_aplicacion, etapas } = req.body;
+  if (!titulo?.trim()) return res.status(400).json({ error: 'El título es requerido' });
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO opportunities
+         (user_id, titulo, cliente, client_id, canal, estado, etapa_actual, prioridad,
+          responsable, proxima_accion, descripcion, notas, valor_estimado, moneda, fecha_aplicacion, etapas)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+       RETURNING *`,
+      [req.workspaceOwnerId, titulo.trim(), cliente || '', client_id || null, canal || '',
+       OPP_ESTADOS.includes(estado) ? estado : 'activa',
+       OPP_ETAPAS.includes(etapa_actual) ? etapa_actual : 'aplicacion',
+       prioridad || 'media', responsable || '', proxima_accion || '', descripcion || '',
+       notas || '', (valor_estimado != null && valor_estimado !== '') ? valor_estimado : null,
+       moneda || 'USD', fecha_aplicacion || null, etapas ? JSON.stringify(etapas) : '{}']
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    console.error('[mgmt/opportunities] POST error:', err.message);
+    res.status(500).json({ error: 'Error al crear oportunidad' });
+  }
+});
+
+// ── GET /api/mgmt/opportunities/:id ───────────────────────────────
+app.get('/api/mgmt/opportunities/:id', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT o.*, c.nombre AS client_nombre, c.empresa AS client_empresa
+         FROM opportunities o LEFT JOIN clients c ON o.client_id = c.id
+        WHERE o.id = $1 AND o.user_id = $2`,
+      [req.params.id, req.workspaceOwnerId]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Oportunidad no encontrada' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[mgmt/opportunities] GET/:id error:', err.message);
+    res.status(500).json({ error: 'Error al cargar oportunidad' });
+  }
+});
+
+// ── PUT /api/mgmt/opportunities/:id ───────────────────────────────
+app.put('/api/mgmt/opportunities/:id', requireAuth, async (req, res) => {
+  const { titulo, cliente, client_id, canal, estado, etapa_actual, prioridad,
+          responsable, proxima_accion, descripcion, notas, valor_estimado, moneda,
+          fecha_aplicacion, etapas, propuesta, links } = req.body;
+  if (!titulo?.trim()) return res.status(400).json({ error: 'El título es requerido' });
+  try {
+    const { rows } = await pool.query(
+      `UPDATE opportunities SET
+         titulo=$1, cliente=$2, client_id=$3, canal=$4, estado=$5, etapa_actual=$6,
+         prioridad=$7, responsable=$8, proxima_accion=$9, descripcion=$10, notas=$11,
+         valor_estimado=$12, moneda=$13, fecha_aplicacion=$14, etapas=$15,
+         propuesta=$16, links=$17, updated_at=NOW()
+       WHERE id=$18 AND user_id=$19 RETURNING *`,
+      [titulo.trim(), cliente || '', client_id || null, canal || '',
+       OPP_ESTADOS.includes(estado) ? estado : 'activa',
+       OPP_ETAPAS.includes(etapa_actual) ? etapa_actual : 'aplicacion',
+       prioridad || 'media', responsable || '', proxima_accion || '', descripcion || '',
+       notas || '', (valor_estimado != null && valor_estimado !== '') ? valor_estimado : null,
+       moneda || 'USD', fecha_aplicacion || null, etapas ? JSON.stringify(etapas) : '{}',
+       propuesta || '', JSON.stringify(Array.isArray(links) ? links : []),
+       req.params.id, req.workspaceOwnerId]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Oportunidad no encontrada' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[mgmt/opportunities] PUT error:', err.message);
+    res.status(500).json({ error: 'Error al actualizar oportunidad' });
+  }
+});
+
+// ── PATCH /api/mgmt/opportunities/:id/etapa ───────────────────────
+app.patch('/api/mgmt/opportunities/:id/etapa', requireAuth, async (req, res) => {
+  const { etapa_actual } = req.body;
+  if (!OPP_ETAPAS.includes(etapa_actual)) return res.status(400).json({ error: 'Etapa inválida' });
+  try {
+    const { rows } = await pool.query(
+      `UPDATE opportunities SET etapa_actual=$1, updated_at=NOW() WHERE id=$2 AND user_id=$3 RETURNING *`,
+      [etapa_actual, req.params.id, req.workspaceOwnerId]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Oportunidad no encontrada' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[mgmt/opportunities] PATCH etapa error:', err.message);
+    res.status(500).json({ error: 'Error al cambiar etapa' });
+  }
+});
+
+// ── PATCH /api/mgmt/opportunities/:id/estado ──────────────────────
+app.patch('/api/mgmt/opportunities/:id/estado', requireAuth, async (req, res) => {
+  const { estado } = req.body;
+  if (!OPP_ESTADOS.includes(estado)) return res.status(400).json({ error: 'Estado inválido' });
+  try {
+    const { rows } = await pool.query(
+      `UPDATE opportunities SET estado=$1, updated_at=NOW() WHERE id=$2 AND user_id=$3 RETURNING *`,
+      [estado, req.params.id, req.workspaceOwnerId]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Oportunidad no encontrada' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[mgmt/opportunities] PATCH estado error:', err.message);
+    res.status(500).json({ error: 'Error al cambiar estado' });
+  }
+});
+
+// ── DELETE /api/mgmt/opportunities/:id (no borra proyectos creados) ─
+app.delete('/api/mgmt/opportunities/:id', requireAuth, async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(
+      `DELETE FROM opportunities WHERE id=$1 AND user_id=$2`,
+      [req.params.id, req.workspaceOwnerId]
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Oportunidad no encontrada' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[mgmt/opportunities] DELETE error:', err.message);
+    res.status(500).json({ error: 'Error al eliminar oportunidad' });
+  }
+});
+
+// ── Tareas internas de oportunidad (pre-proyecto, NO tareas de proyecto) ──
+app.get('/api/mgmt/opportunities/:oid/tasks', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT * FROM opportunity_tasks WHERE opportunity_id=$1 AND user_id=$2 ORDER BY created_at ASC`,
+      [req.params.oid, req.workspaceOwnerId]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('[opportunity-tasks] GET error:', err.message);
+    res.status(500).json({ error: 'Error al cargar tareas internas' });
+  }
+});
+
+app.post('/api/mgmt/opportunities/:oid/tasks', requireAuth, async (req, res) => {
+  const { titulo, etapa, estado, prioridad, responsable, fecha_limite, notas, presupuesto, horas_estimadas } = req.body;
+  if (!titulo?.trim()) return res.status(400).json({ error: 'El título es requerido' });
+  try {
+    const own = await pool.query(`SELECT 1 FROM opportunities WHERE id=$1 AND user_id=$2`, [req.params.oid, req.workspaceOwnerId]);
+    if (!own.rows.length) return res.status(404).json({ error: 'Oportunidad no encontrada' });
+    const { rows } = await pool.query(
+      `INSERT INTO opportunity_tasks
+         (user_id, opportunity_id, titulo, etapa, estado, prioridad, responsable, fecha_limite, notas, presupuesto, horas_estimadas)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+      [req.workspaceOwnerId, req.params.oid, titulo.trim(),
+       OPP_ETAPAS.includes(etapa) ? etapa : '',
+       normOppTaskEstado(estado),
+       prioridad || 'media', responsable || '', fecha_limite || null, notas || '',
+       (presupuesto != null && presupuesto !== '') ? presupuesto : null,
+       (horas_estimadas != null && horas_estimadas !== '') ? horas_estimadas : null]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    console.error('[opportunity-tasks] POST error:', err.message);
+    res.status(500).json({ error: 'Error al crear tarea interna' });
+  }
+});
+
+app.put('/api/mgmt/opportunity-tasks/:id', requireAuth, async (req, res) => {
+  const { titulo, etapa, estado, prioridad, responsable, fecha_limite, notas, presupuesto, horas_estimadas } = req.body;
+  try {
+    const { rows } = await pool.query(
+      `UPDATE opportunity_tasks SET titulo=$1, etapa=$2, estado=$3, prioridad=$4,
+         responsable=$5, fecha_limite=$6, notas=$7, presupuesto=$8, horas_estimadas=$9, updated_at=NOW()
+       WHERE id=$10 AND user_id=$11 RETURNING *`,
+      [titulo || '', OPP_ETAPAS.includes(etapa) ? etapa : '',
+       normOppTaskEstado(estado),
+       prioridad || 'media', responsable || '', fecha_limite || null, notas || '',
+       (presupuesto != null && presupuesto !== '') ? presupuesto : null,
+       (horas_estimadas != null && horas_estimadas !== '') ? horas_estimadas : null,
+       req.params.id, req.workspaceOwnerId]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Tarea no encontrada' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[opportunity-tasks] PUT error:', err.message);
+    res.status(500).json({ error: 'Error al actualizar tarea interna' });
+  }
+});
+
+app.patch('/api/mgmt/opportunity-tasks/:id/estado', requireAuth, async (req, res) => {
+  const estado = normOppTaskEstado(req.body.estado);
+  try {
+    const { rows } = await pool.query(
+      `UPDATE opportunity_tasks SET estado=$1, updated_at=NOW() WHERE id=$2 AND user_id=$3 RETURNING id, estado`,
+      [estado, req.params.id, req.workspaceOwnerId]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Tarea no encontrada' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[opportunity-tasks] PATCH error:', err.message);
+    res.status(500).json({ error: 'Error al actualizar estado' });
+  }
+});
+
+app.delete('/api/mgmt/opportunity-tasks/:id', requireAuth, async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(`DELETE FROM opportunity_tasks WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId]);
+    if (!rowCount) return res.status(404).json({ error: 'Tarea no encontrada' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[opportunity-tasks] DELETE error:', err.message);
+    res.status(500).json({ error: 'Error al eliminar tarea interna' });
+  }
+});
+
+// ── GET /api/mgmt/opportunity-tasks — todas (para el Dashboard) ────
+app.get('/api/mgmt/opportunity-tasks', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT ot.*, o.titulo AS opp_titulo, o.estado AS opp_estado, o.cliente AS opp_cliente
+         FROM opportunity_tasks ot
+         JOIN opportunities o ON ot.opportunity_id = o.id
+        WHERE ot.user_id = $1
+        ORDER BY (ot.estado = 'completada'), ot.fecha_limite ASC NULLS LAST, ot.created_at DESC`,
+      [req.workspaceOwnerId]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('[opportunity-tasks] GET all error:', err.message);
+    res.status(500).json({ error: 'Error al cargar tareas de oportunidades' });
   }
 });
 
@@ -2384,23 +4152,33 @@ app.get('/api/mgmt/dashboard', requireAuth, async (req, res) => {
     );
     console.log('[dashboard] responsable values in DB:', respSample.map(r => r.responsable));
 
+    // Helper: member-match condition for a tasks query (checks both responsable string
+    // and responsables[] array, dual-name: memberNombre + userDispName).
+    // $N_NAME1 = memberNombre, $N_NAME2 = userDispName (same indices across all queries)
+    const _memberMatch = (alias = 't') => `(
+      ($2::text IS NOT NULL AND LOWER(${alias}.responsable) = LOWER($2))
+      OR ($3::text IS NOT NULL AND LOWER(${alias}.responsable) = LOWER($3))
+      OR ($2::text IS NOT NULL AND EXISTS (
+            SELECT 1 FROM unnest(${alias}.responsables) _r WHERE LOWER(_r) = LOWER($2)))
+      OR ($3::text IS NOT NULL AND EXISTS (
+            SELECT 1 FROM unnest(${alias}.responsables) _r WHERE LOWER(_r) = LOWER($3)))
+    )`;
+
     const [cntRes, todayRes, urgentRes, projCntRes] = await Promise.all([
 
-      // Count ALL pending tasks for this member (case-insensitive, dual-name)
+      // Count ALL pending tasks (main + subtasks) assigned to this member
       pool.query(`
         SELECT COUNT(*) AS total
-        FROM tasks
-        WHERE user_id = $1
-          AND estado != 'completado'
-          AND (
-            ($2::text IS NOT NULL AND LOWER(responsable) = LOWER($2))
-            OR ($3::text IS NOT NULL AND LOWER(responsable) = LOWER($3))
-          )
+        FROM tasks t
+        WHERE t.user_id = $1
+          AND t.estado != 'completado'
+          AND ${_memberMatch('t')}
       `, [uid, memberNombre, userDispName]),
 
       // Tasks due TODAY for this member
       pool.query(`
         SELECT t.id, t.titulo, t.estado, t.prioridad, t.deadline, t.responsable,
+               t.responsables, t.parent_task_id,
                p.nombre AS project_nombre, c.nombre AS client_nombre
         FROM   tasks t
         LEFT JOIN projects p ON t.project_id = p.id
@@ -2408,10 +4186,7 @@ app.get('/api/mgmt/dashboard', requireAuth, async (req, res) => {
         WHERE  t.user_id = $1
           AND  t.estado != 'completado'
           AND  t.deadline = CURRENT_DATE
-          AND  (
-            ($2::text IS NOT NULL AND LOWER(t.responsable) = LOWER($2))
-            OR ($3::text IS NOT NULL AND LOWER(t.responsable) = LOWER($3))
-          )
+          AND  ${_memberMatch('t')}
         ORDER BY t.created_at DESC
         LIMIT 20
       `, [uid, memberNombre, userDispName]),
@@ -2419,6 +4194,7 @@ app.get('/api/mgmt/dashboard', requireAuth, async (req, res) => {
       // Overdue / blocked tasks for this member
       pool.query(`
         SELECT t.id, t.titulo, t.estado, t.prioridad, t.deadline, t.responsable,
+               t.responsables, t.parent_task_id,
                p.nombre AS project_nombre, c.nombre AS client_nombre
         FROM   tasks t
         LEFT JOIN projects p ON t.project_id = p.id
@@ -2426,17 +4202,14 @@ app.get('/api/mgmt/dashboard', requireAuth, async (req, res) => {
         WHERE  t.user_id = $1
           AND  t.estado != 'completado'
           AND  ((t.deadline IS NOT NULL AND t.deadline < CURRENT_DATE) OR t.estado = 'bloqueado')
-          AND  (
-            ($2::text IS NOT NULL AND LOWER(t.responsable) = LOWER($2))
-            OR ($3::text IS NOT NULL AND LOWER(t.responsable) = LOWER($3))
-          )
+          AND  ${_memberMatch('t')}
         ORDER BY
           CASE t.estado WHEN 'bloqueado' THEN 1 ELSE 2 END,
           t.deadline ASC NULLS LAST
         LIMIT 12
       `, [uid, memberNombre, userDispName]),
 
-      // Count active projects for this member (by ID or name, case-insensitive, dual-name)
+      // Count active projects for this member (by ID or name, dual-name)
       pool.query(`
         SELECT COUNT(*) AS total
         FROM projects
@@ -2761,6 +4534,7 @@ app.get('/api/gcal/connect', requireAuth, (req, res) => {
     access_type: 'offline',
     scope: GCAL_SCOPES,
     prompt: 'consent',
+    include_granted_scopes: true, // conserva scopes ya concedidos (ej. gmail.send)
     state: String(req.user.id),
   });
   res.redirect(url);
@@ -2773,9 +4547,11 @@ app.get('/api/gcal/callback', async (req, res) => {
     const auth = _gcalOAuth2();
     const { tokens } = await auth.getToken(code);
     await pool.query(
-      `UPDATE users SET google_access_token=$1, google_refresh_token=$2, google_token_expiry=$3 WHERE id=$4`,
+      `UPDATE users SET google_access_token=$1, google_refresh_token=$2, google_token_expiry=$3,
+              google_scopes=$4 WHERE id=$5`,
       [tokens.access_token, tokens.refresh_token,
-       tokens.expiry_date ? new Date(tokens.expiry_date) : null, userId]
+       tokens.expiry_date ? new Date(tokens.expiry_date) : null,
+       tokens.scope || '', userId]
     );
     res.redirect(`${FRONTEND_URL}?gcal=ok`);
   } catch (e) {
@@ -2873,12 +4649,77 @@ app.delete('/api/gcal/sync-task/:taskId', requireAuth, async (req, res) => {
   } catch (e) { res.json({ ok: true }); }
 });
 
+// ═══════════════════════════════════════════════════════════════════
+// LM GMAIL — conexión de la cuenta de envío (outreach)
+// Mismo token store que Calendar (users.google_*); include_granted_scopes
+// hace que un solo refresh token cubra Calendar + Gmail.
+// ═══════════════════════════════════════════════════════════════════
+
+const GMAIL_CALLBACK = (process.env.API_BASE_URL || 'https://api.kiwoc.com') + '/api/lm/gmail/callback';
+
+app.get('/api/lm/gmail/status', requireAuth, async (req, res) => {
+  const { gmailStatus } = require('./services/gmailService');
+  res.json(await gmailStatus(pool, req.user.id));
+});
+
+app.get('/api/lm/gmail/connect', requireAuth, (req, res) => {
+  const { GMAIL_SCOPES } = require('./services/gmailService');
+  const { google } = require('googleapis');
+  const auth = new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET, GMAIL_CALLBACK
+  );
+  const url = auth.generateAuthUrl({
+    access_type: 'offline',
+    scope: GMAIL_SCOPES,
+    prompt: 'consent',
+    include_granted_scopes: true, // conserva calendar.events si ya estaba
+    state: String(req.user.id),
+  });
+  res.redirect(url);
+});
+
+app.get('/api/lm/gmail/callback', async (req, res) => {
+  const { code, state: userId } = req.query;
+  if (!code || !userId) return res.redirect(`${FRONTEND_URL}?gmail=error`);
+  try {
+    const { google } = require('googleapis');
+    const auth = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET, GMAIL_CALLBACK
+    );
+    const { tokens } = await auth.getToken(code);
+    await pool.query(
+      `UPDATE users SET google_access_token=$1, google_refresh_token=$2, google_token_expiry=$3,
+              google_scopes=$4 WHERE id=$5`,
+      [tokens.access_token, tokens.refresh_token,
+       tokens.expiry_date ? new Date(tokens.expiry_date) : null,
+       tokens.scope || '', userId]
+    );
+    res.redirect(`${FRONTEND_URL}?gmail=ok`);
+  } catch (e) {
+    console.error('[lm-gmail] callback error:', e.message);
+    res.redirect(`${FRONTEND_URL}?gmail=error`);
+  }
+});
+
 // ══════════════════════════════════════════════════════════════════
 // TIME TRACKING
 // ══════════════════════════════════════════════════════════════════
 
 // GET /api/timer/running — restore active timer on page load
-app.get('/api/timer/running', requireAuth, async (req, res) => {
+// POST /api/timer/ext-token — genera un token para la Browser Extension / Desktop Agent.
+// Requiere sesión web (lo pide Nova desde el dashboard). El token en claro se devuelve UNA vez.
+app.post('/api/timer/ext-token', requireAuth, async (req, res) => {
+  try {
+    const crypto = require('crypto');
+    const token  = 'nova_ext_' + crypto.randomBytes(24).toString('hex');
+    const hash   = crypto.createHash('sha256').update(token).digest('hex');
+    const label  = (req.body && req.body.label ? String(req.body.label) : 'Browser Extension').slice(0, 60);
+    await pool.query(`INSERT INTO ext_tokens (user_id, token_hash, label) VALUES ($1,$2,$3)`, [req.user.id, hash, label]);
+    res.status(201).json({ token });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/timer/running', requireAuthOrToken, async (req, res) => {
   try {
     const uid = req.user.id;
     const r = await pool.query(
@@ -2894,6 +4735,10 @@ app.get('/api/timer/running', requireAuth, async (req, res) => {
 });
 
 // POST /api/timer/start
+// Time Tracking — enums de fuente/actividad (ver db.js). Web app solo emite manual_timer.
+const TT_SOURCES = ['manual_timer', 'nova_web', 'browser_extension', 'desktop_agent', 'calendar_block', 'imported'];
+const TT_TYPES   = ['active_work', 'idle', 'break', 'meeting', 'app_usage', 'website_usage', 'unknown'];
+
 app.post('/api/timer/start', requireAuth, async (req, res) => {
   try {
     const uid = req.user.id;
@@ -2903,19 +4748,34 @@ app.post('/api/timer/start', requireAuth, async (req, res) => {
          duration_s=EXTRACT(EPOCH FROM (NOW()-started_at))::INTEGER
        WHERE user_id=$1 AND ended_at IS NULL`, [uid]);
 
-    const { task_id } = req.body;
-    let taskTitulo = '', projectNombre = '';
-    if (task_id) {
+    const { task_id, task_titulo, project_nombre, metadata } = req.body;
+    // El timer manual de la web siempre es manual_timer / active_work (sin simular fuentes externas).
+    const source = TT_SOURCES.includes(req.body.source) ? req.body.source : 'manual_timer';
+    const activityType = TT_TYPES.includes(req.body.activity_type) ? req.body.activity_type : 'active_work';
+    const meta = metadata && typeof metadata === 'object' ? metadata : {};
+    // Contexto explícito (p.ej. tareas de oportunidad, que no viven en la tabla tasks).
+    let taskTitulo = (task_titulo || '').trim();
+    let projectNombre = (project_nombre || '').trim();
+    // La FK time_entries.task_id → tasks(id) es estricta. Verificamos que el task_id exista;
+    // si no (tarea borrada, subtarea inconsistente, id de otra tabla, etc.) lo dejamos en null y
+    // registramos por título, así el timer SIEMPRE arranca en vez de fallar con 500 en silencio.
+    let validTaskId = task_id || null;
+    if (validTaskId) {
       const tr = await pool.query(
         `SELECT t.titulo, p.nombre FROM tasks t
          LEFT JOIN projects p ON p.id=t.project_id
-         WHERE t.id=$1`, [task_id]);
-      if (tr.rows.length) { taskTitulo = tr.rows[0].titulo || ''; projectNombre = tr.rows[0].nombre || ''; }
+         WHERE t.id=$1`, [validTaskId]);
+      if (tr.rows.length) {
+        if (!taskTitulo)    taskTitulo    = tr.rows[0].titulo || '';
+        if (!projectNombre) projectNombre = tr.rows[0].nombre || '';
+      } else {
+        validTaskId = null;   // el id no existe en tasks → registra por título
+      }
     }
     const ins = await pool.query(
-      `INSERT INTO time_entries (user_id,task_id,task_titulo,project_nombre,started_at,active_s,idle_s)
-       VALUES ($1,$2,$3,$4,NOW(),0,0) RETURNING id, started_at`,
-      [uid, task_id || null, taskTitulo, projectNombre]);
+      `INSERT INTO time_entries (user_id,task_id,task_titulo,project_nombre,started_at,active_s,idle_s,source,activity_type,metadata)
+       VALUES ($1,$2,$3,$4,NOW(),0,0,$5,$6,$7) RETURNING id, started_at`,
+      [uid, validTaskId, taskTitulo, projectNombre, source, activityType, JSON.stringify(meta)]);
     const e = ins.rows[0];
     res.json({ entryId: e.id, startedAt: e.started_at, taskTitulo, projectNombre });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -2939,27 +4799,120 @@ app.patch('/api/timer/:id/pulse', requireAuth, async (req, res) => {
 app.post('/api/timer/:id/stop', requireAuth, async (req, res) => {
   try {
     const uid = req.user.id;
-    const { active_s, idle_s } = req.body;
+    const { active_s, idle_s, ended_at } = req.body;
+    // ended_at opcional (auto-stop por inactividad / cierre de timer viejo): retro-data el fin.
+    // Validado: parseable y no en el futuro (>1min). GREATEST evita duración negativa.
+    let end = null;
+    if (ended_at) { const d = new Date(ended_at); if (!isNaN(d.getTime()) && d.getTime() <= Date.now() + 60000) end = d.toISOString(); }
     await pool.query(
-      `UPDATE time_entries SET ended_at=NOW(), active_s=$3, idle_s=$4,
-         duration_s=EXTRACT(EPOCH FROM (NOW()-started_at))::INTEGER
+      `UPDATE time_entries
+         SET ended_at   = GREATEST(started_at, COALESCE($5::timestamptz, NOW())),
+             active_s   = $3, idle_s = $4,
+             duration_s = EXTRACT(EPOCH FROM (GREATEST(started_at, COALESCE($5::timestamptz, NOW())) - started_at))::INTEGER
        WHERE id=$1 AND user_id=$2 AND ended_at IS NULL`,
-      [req.params.id, uid, active_s || 0, idle_s || 0]);
+      [req.params.id, uid, active_s || 0, idle_s || 0, end]);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // GET /api/timer/today
-app.get('/api/timer/today', requireAuth, async (req, res) => {
+app.get('/api/timer/today', requireAuthOrToken, async (req, res) => {
   try {
     const uid = req.user.id;
     const r = await pool.query(
       `SELECT id, task_id, task_titulo, project_nombre,
-              started_at, ended_at, duration_s, active_s, idle_s, notes
+              started_at, ended_at, duration_s, active_s, idle_s, notes,
+              source, activity_type, metadata
        FROM time_entries
        WHERE user_id=$1 AND started_at::date = CURRENT_DATE
        ORDER BY started_at DESC`, [uid]);
     res.json(r.rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/timer/entries?start=&end=  — entries COMPLETOS (con metadata) en un rango
+// arbitrario; alimenta la vista de Time Tracking por Día/Semana/Mes/Personalizado.
+app.get('/api/timer/entries', requireAuth, async (req, res) => {
+  try {
+    const uid = req.user.id;
+    const wid = req.workspaceOwnerId;
+    const { start, end } = req.query;
+    if (!start || !end) return res.status(400).json({ error: 'start and end required' });
+    const member = (req.query.member || '').trim();
+    // Enriquecemos cada entrada con la tarifa/moneda/tipo del proyecto (vía tarea → proyecto)
+    // para poder calcular horas → dinero en el reporte de facturación por horas.
+    const sel = `SELECT te.id, te.task_id, te.task_titulo, te.project_nombre,
+              te.started_at, te.ended_at, te.duration_s, te.active_s, te.idle_s, te.notes,
+              te.source, te.activity_type, te.metadata,
+              t.project_id, p.nombre AS proj_nombre, p.tarifa_hora, p.moneda, p.tipo_proyecto,
+              c.nombre AS client_nombre
+       FROM time_entries te
+       LEFT JOIN tasks t     ON t.id = te.task_id
+       LEFT JOIN projects p  ON p.id = t.project_id
+       LEFT JOIN clients c   ON c.id = p.client_id`;
+
+    // Ver el detalle de OTRO miembro (o de todo el equipo): solo admin (owner o admin/manager).
+    if (member && member !== 'me') {
+      let isAdmin = (uid === wid);
+      if (!isAdmin) {
+        const rr = await pool.query(
+          `SELECT rol FROM team_members WHERE user_id=$1 AND email=(SELECT email FROM users WHERE id=$2)`,
+          [wid, uid]);
+        isAdmin = ['admin', 'manager'].includes(rr.rows[0]?.rol || '');
+      }
+      if (!isAdmin) return res.status(403).json({ error: 'Admin only' });
+
+      if (member === 'all') {
+        const r = await pool.query(
+          `${sel} WHERE te.user_id IN (SELECT id FROM users WHERE workspace_id=$1 OR id=$1)
+             AND te.started_at >= $2 AND te.started_at <= $3 ORDER BY te.started_at DESC`, [wid, start, end]);
+        return res.json(r.rows);
+      }
+      // resolver nombre del miembro → user_id dentro del workspace
+      const mr = await pool.query(
+        `SELECT u.id FROM users u
+         LEFT JOIN team_members tm ON tm.email=u.email AND tm.user_id=$1
+         WHERE (u.workspace_id=$1 OR u.id=$1)
+           AND lower(COALESCE(tm.nombre, u.name, u.email)) = lower($2) LIMIT 1`, [wid, member]);
+      if (!mr.rows.length) return res.json([]);
+      const r = await pool.query(
+        `${sel} WHERE te.user_id=$1 AND te.started_at >= $2 AND te.started_at <= $3 ORDER BY te.started_at DESC`,
+        [mr.rows[0].id, start, end]);
+      return res.json(r.rows);
+    }
+
+    const r = await pool.query(
+      `${sel} WHERE te.user_id=$1 AND te.started_at >= $2 AND te.started_at <= $3 ORDER BY te.started_at DESC`,
+      [uid, start, end]);
+    res.json(r.rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/timer/ingest — receptor de actividad de FUENTES EXTERNAS (Fase 2/3).
+// Lo consumirán la Browser Extension (website_usage) y el Desktop Agent (app_usage / idle real).
+// La web app NO llama aquí; solo deja el contrato listo. No hay detección desde el navegador.
+app.post('/api/timer/ingest', requireAuthOrToken, async (req, res) => {
+  try {
+    const uid = req.user.id;
+    const b = req.body || {};
+    const source = TT_SOURCES.includes(b.source) ? b.source : null;
+    if (!source || source === 'manual_timer') {
+      return res.status(400).json({ error: 'source externo requerido (browser_extension | desktop_agent | calendar_block | imported)' });
+    }
+    const activityType = TT_TYPES.includes(b.activity_type) ? b.activity_type : 'unknown';
+    if (!b.started_at) return res.status(400).json({ error: 'started_at requerido' });
+    // appName / websiteDomain / windowTitle / confidence viajan dentro de metadata por ahora.
+    const meta = Object.assign({}, b.metadata && typeof b.metadata === 'object' ? b.metadata : {},
+      b.app_name ? { appName: b.app_name } : {}, b.website_domain ? { websiteDomain: b.website_domain } : {},
+      b.window_title ? { windowTitle: b.window_title } : {}, b.confidence != null ? { confidence: b.confidence } : {});
+    const { rows } = await pool.query(
+      `INSERT INTO time_entries
+         (user_id, task_id, task_titulo, project_nombre, started_at, ended_at, duration_s, active_s, idle_s, source, activity_type, metadata)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`,
+      [uid, b.task_id || null, b.task_titulo || '', b.project_nombre || '',
+       b.started_at, b.ended_at || null, +b.duration_s || 0, +b.active_s || 0, +b.idle_s || 0,
+       source, activityType, JSON.stringify(meta)]);
+    res.status(201).json({ id: rows[0].id, ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -3008,6 +4961,24 @@ app.get('/api/timer/report', requireAuth, async (req, res) => {
       byDay,
       byTask: byTaskR.rows.map(r => ({ ...r, total_s: Number(r.total_s), active_s: Number(r.active_s) })),
     });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/timer/daily?start=&end=  — total trabajado POR DÍA en un rango (heatmap del dashboard).
+// Un cuadrito por día. Solo entradas cerradas; devuelve solo los días con registro.
+app.get('/api/timer/daily', requireAuth, async (req, res) => {
+  try {
+    const uid = req.user.id;
+    const { start, end, active_only } = req.query;
+    if (!start || !end) return res.status(400).json({ error: 'start and end required' });
+    // active_only: excluye la navegación web de la extensión (website_usage) → solo trabajo activo.
+    const activeClause = active_only ? " AND activity_type <> 'website_usage'" : '';
+    const r = await pool.query(
+      `SELECT DATE(started_at) AS day, COALESCE(SUM(duration_s),0) AS duration_s
+       FROM time_entries
+       WHERE user_id=$1 AND started_at>=$2 AND started_at<=$3 AND ended_at IS NOT NULL${activeClause}
+       GROUP BY day ORDER BY day`, [uid, start, end]);
+    res.json(r.rows.map(row => ({ day: row.day.toISOString().split('T')[0], duration_s: Number(row.duration_s) })));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -3097,7 +5068,7 @@ app.get('/api/analytics/summary', requireAuth, async (req, res) => {
     ] = await Promise.all([
       // Revenue — tasks marked cobrado in current period, grouped by day+currency
       pool.query(
-        `SELECT DATE(t.cobrado_at AT TIME ZONE 'UTC')::text AS day,
+        `SELECT DATE(t.cobrado_at AT TIME ZONE 'America/Bogota')::text AS day,
                 COALESCE(p.moneda, 'USD') AS moneda,
                 COALESCE(SUM(t.monto), 0) AS total
          FROM tasks t
@@ -3122,7 +5093,7 @@ app.get('/api/analytics/summary', requireAuth, async (req, res) => {
         : Promise.resolve({ rows: [] }),
       // Tasks completed — daily series (current)
       pool.query(
-        `SELECT DATE(updated_at AT TIME ZONE 'UTC')::text AS day,
+        `SELECT DATE(updated_at AT TIME ZONE 'America/Bogota')::text AS day,
                 COUNT(*) AS count
          FROM tasks
          WHERE user_id=$1 AND estado='completado'
@@ -3142,7 +5113,7 @@ app.get('/api/analytics/summary', requireAuth, async (req, res) => {
         : Promise.resolve({ rows: [{ count: 0 }] }),
       // Tasks created — daily series (current)
       pool.query(
-        `SELECT DATE(created_at AT TIME ZONE 'UTC')::text AS day,
+        `SELECT DATE(created_at AT TIME ZONE 'America/Bogota')::text AS day,
                 COUNT(*) AS count
          FROM tasks
          WHERE user_id=$1
@@ -3186,7 +5157,7 @@ app.get('/api/analytics/summary', requireAuth, async (req, res) => {
       ),
       // Time — daily series (workspace total)
       pool.query(
-        `SELECT DATE(te.started_at AT TIME ZONE 'UTC')::text AS day,
+        `SELECT DATE(te.started_at AT TIME ZONE 'America/Bogota')::text AS day,
                 COALESCE(SUM(te.active_s), 0) AS active_s
          FROM time_entries te
          JOIN users u ON u.id = te.user_id
@@ -3436,6 +5407,14 @@ async function start() {
 
     console.log(`[socket] connected uid=${socket.userId} ws=${wid}`);
   });
+
+  // ── LM Fase A: workers de outreach (persisten estado en DB, PM2-safe) ──
+  try {
+    const apiBase = process.env.API_BASE_URL || 'https://api.kiwoc.com';
+    require('./services/sendEngine').startSendEngine(pool, { apiBase, gmailCallback: GMAIL_CALLBACK });
+    require('./services/replyWatcher').startReplyWatcher(pool, { gmailCallback: GMAIL_CALLBACK });
+    require('./services/dailyReport').startDailyReport(pool);
+  } catch (e) { console.warn('[lm-workers] no iniciados:', e.message); }
 
   // ── HTTP server listen ───────────────────────────────────────
   httpServer.listen(PORT, '0.0.0.0', () => {
