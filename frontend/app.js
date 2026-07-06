@@ -14270,6 +14270,8 @@ table{width:100%;border-collapse:collapse;font-size:13px}
     m.id = 'lm-cmp-modal'; m.className = 'fin-pi-backdrop';
     m.onclick = e => { if (e.target === m) closeCampaignDrawer(); };
     const fld = (fid, lbl, val, ph, full) => `<label class="fin-cfg-field${full ? ' fin-pi-full' : ''}"><span class="fin-cfg-lbl">${lbl}</span><input class="form-input" id="${fid}" value="${val ? esc(val) : ''}" placeholder="${ph || ''}"></label>`;
+    // Textarea (conserva saltos de línea al pegar contenido multilínea del sistema ICP).
+    const fldTa = (fid, lbl, val, ph, full, rows) => `<label class="fin-cfg-field${full ? ' fin-pi-full' : ''}"><span class="fin-cfg-lbl">${lbl}</span><textarea class="form-input lm-ta-grow" id="${fid}" rows="${rows || 2}" placeholder="${ph || ''}">${val ? esc(val) : ''}</textarea></label>`;
     const clientOpts = '<option value="">— Selecciona cliente —</option>' + _clients.map(x => `<option value="${x.id}"${String(x.id) === String(clientId) ? ' selected' : ''}>${esc(x.nombre)}</option>`).join('');
     m.innerHTML = `<div class="fin-pi-box">
       <div class="fin-pi-box__hd"><h3>${c ? 'Editar campaña' : 'Nueva campaña'}</h3><button class="fin-pi-x" onclick="LeadManagerModule.closeCampaignDrawer()">✕</button></div>
@@ -14279,11 +14281,11 @@ table{width:100%;border-collapse:collapse;font-size:13px}
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Estado</span><select class="form-input" id="cmp-estado">${_CMP_OPTS.map(([v, l]) => `<option value="${v}"${c?.estado === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
         ${fld('cmp-canal', 'Canal principal', c?.canal, 'Email · LinkedIn')}
         ${fld('cmp-canal2', 'Canal secundario', c?.canal_secundario, '')}
-        ${fld('cmp-mercado', 'Mercado', c?.mercado, '')}
-        ${fld('cmp-icp', 'ICP', c?.icp, '')}
+        ${fldTa('cmp-mercado', 'Mercado', c?.mercado, 'Ej. EE. UU. · Landscaping')}
+        ${fldTa('cmp-icp', 'ICP', c?.icp, 'Ej. Owners 5–50 empleados')}
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Fecha de inicio</span><input class="form-input" type="date" id="cmp-fecha" value="${c?.fecha_inicio ? String(c.fecha_inicio).split('T')[0] : ''}"></label>
-        ${fld('cmp-objetivo', 'Objetivo', c?.objetivo, 'Ej. 5 reuniones / mes', true)}
-        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Notas</span><textarea class="form-input" id="cmp-notas" rows="2">${c ? esc(c.notas) : ''}</textarea></label>
+        ${fldTa('cmp-objetivo', 'Objetivo', c?.objetivo, 'Ej. 5 reuniones / mes', true)}
+        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Notas</span><textarea class="form-input lm-ta-grow" id="cmp-notas" rows="3">${c ? esc(c.notas) : ''}</textarea></label>
       </div>
       <div class="fin-pi-box__ft">
         <span class="fin-cfg-hint" id="cmp-hint"></span>
@@ -14352,10 +14354,10 @@ table{width:100%;border-collapse:collapse;font-size:13px}
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Días de cadencia</span><input type="hidden" id="seq-senddays" value="${_sanSendDays(s?.send_days)}"><div class="seq-days" id="seq-days">${['L', 'M', 'X', 'J', 'V', 'S', 'D'].map((lbl, i) => `<button type="button" class="seq-day${_sanSendDays(s?.send_days)[i] === '1' ? ' on' : ''}" data-d="${i}" onclick="LeadManagerModule.seqDayToggle(${i})">${lbl}</button>`).join('')}<span class="seq-days-sp"></span><button type="button" class="seq-days-preset" onclick="LeadManagerModule.seqDaysPreset('week')">L–V</button><button type="button" class="seq-days-preset" onclick="LeadManagerModule.seqDaysPreset('all')">Todos</button></div><span class="seq-drip-hint">Los pasos y tareas caen solo en los días marcados. Si un “día N” cae en un día no marcado, se mueve al siguiente permitido (ej. sáb/dom → lunes).</span></label>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Arranque escalonado · contactos por día</span><input class="form-input" type="number" id="seq-drip" min="0" step="1" value="${s?.drip_per_day ? s.drip_per_day : ''}" placeholder="0 = todos arrancan el mismo día"><span class="seq-drip-hint">Al enrolar muchos contactos a la vez, reparte su “día 1” en tandas (ej. 20/día) para no saturarte de tareas ni de envíos. Se distribuyen automáticamente en los días de cadencia permitidos.${s ? ` <button type="button" class="seq-days-preset" onclick="LeadManagerModule.seqRedistribute(${s.id})" title="Recalcula las fechas de los contactos que aún no empiezan, según el valor de arriba (guárdalo primero)">↻ Repartir ahora los ya enrolados</button>` : ''}</span></label>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Límite diario de envíos (esta secuencia)</span><input class="form-input" type="number" id="seq-dlim" min="0" step="1" value="${s?.daily_limit ? s.daily_limit : ''}" placeholder="0 = usa el límite global del workspace"><span class="seq-drip-hint">Tope de emails automáticos por día para el buzón de este cliente. Al llegar al tope, el motor sigue con las demás secuencias y esta continúa mañana.</span></label>
-        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Objetivo</span><input class="form-input" id="seq-objetivo" value="${s ? esc(s.objetivo) : ''}" placeholder="Ej. Agendar demo"></label>
-        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Mercado (de esta secuencia)</span><input class="form-input" id="seq-mercado" value="${s ? esc(s.mercado || '') : ''}" placeholder="Ej. EE. UU. · Field services"></label>
-        <label class="fin-cfg-field"><span class="fin-cfg-lbl">ICP (de esta secuencia)</span><input class="form-input" id="seq-icp" value="${s ? esc(s.icp || '') : ''}" placeholder="Ej. Owners 5–50 empleados"></label>
-        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Notas del segmento</span><textarea class="form-input" id="seq-notas" rows="2" placeholder="Ángulo, contexto del segmento, aprendizajes…">${s ? esc(s.notas || '') : ''}</textarea><span class="seq-drip-hint">Cada secuencia puede atacar un mercado/ICP distinto de su campaña (ej. Tier 1 · EE. UU.). Mercado, ICP y notas salen en el informe PDF; si los dejas vacíos, el informe usa los de la campaña.</span></label>
+        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Objetivo</span><textarea class="form-input lm-ta-grow" id="seq-objetivo" rows="2" placeholder="Ej. Agendar demo">${s ? esc(s.objetivo) : ''}</textarea></label>
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Mercado (de esta secuencia)</span><textarea class="form-input lm-ta-grow" id="seq-mercado" rows="2" placeholder="Ej. EE. UU. · Field services">${s ? esc(s.mercado || '') : ''}</textarea></label>
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">ICP (de esta secuencia)</span><textarea class="form-input lm-ta-grow" id="seq-icp" rows="2" placeholder="Ej. Owners 5–50 empleados">${s ? esc(s.icp || '') : ''}</textarea></label>
+        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Notas del segmento</span><textarea class="form-input lm-ta-grow" id="seq-notas" rows="3" placeholder="Ángulo, contexto del segmento, aprendizajes…">${s ? esc(s.notas || '') : ''}</textarea><span class="seq-drip-hint">Cada secuencia puede atacar un mercado/ICP distinto de su campaña (ej. Tier 1 · EE. UU.). Mercado, ICP y notas salen en el informe PDF; si los dejas vacíos, el informe usa los de la campaña. Los saltos de línea que pegues se conservan.</span></label>
       </div>
       <div class="fin-pi-box__ft"><span class="fin-cfg-hint" id="seq-hint"></span><div class="fin-pi-ft-btns">
         ${s ? `<button class="btn btn--ghost btn--danger btn--sm" onclick="LeadManagerModule.confirmDeleteSequence(${s.id})">Eliminar</button>` : ''}

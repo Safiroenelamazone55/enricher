@@ -3211,6 +3211,18 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 .form-input::placeholder { color: var(--muted); }
 .form-input--narrow { max-width: 130px; }
 .form-textarea { resize: vertical; min-height: 72px; }
+/* Textareas de datos (Mercado/ICP/Objetivo/Notas en LM): conservan saltos de
+   línea al pegar, compactos por defecto, se pueden ampliar en vertical y hacen
+   scroll interno (sin alto excesivo del modal). */
+.lm-ta-grow {
+  resize: vertical;
+  min-height: 0;
+  max-height: 220px;
+  line-height: 1.45;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
 .form-select {
   appearance: none;
   cursor: pointer;
