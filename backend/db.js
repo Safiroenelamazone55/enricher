@@ -631,6 +631,12 @@ async function initDb() {
     await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS starts_on DATE;`);
     // Límite diario de envíos POR SECUENCIA (cada cliente da su buzón). 0 = usa el límite global del workspace.
     await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS daily_limit INTEGER NOT NULL DEFAULT 0;`);
+    // Contexto del segmento POR SECUENCIA: cada secuencia puede atacar un mercado/ICP distinto dentro
+    // de la campaña (ej. Tier 1 · EE.UU. vs Tier 2 · LATAM). Salen en el informe PDF; si están vacíos,
+    // el informe cae a los de la campaña.
+    await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS mercado TEXT NOT NULL DEFAULT '';`);
+    await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS icp     TEXT NOT NULL DEFAULT '';`);
+    await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS notas   TEXT NOT NULL DEFAULT '';`);
 
     // ── activities (Lead Manager Fase 4: touches registrados + tareas comerciales) ──
     await pool.query(`
