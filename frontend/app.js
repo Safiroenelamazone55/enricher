@@ -12791,14 +12791,30 @@ table{width:100%;border-collapse:collapse;font-size:13px}
       if (win) win.focus(); else window.open(url, '_blank');
     } catch (e) { window.open(url, '_blank'); }
   }
-  // Vínculo con plantilla: si la variante tiene tplId, su texto/asunto se toma EN VIVO de la plantilla actual
-  // (así, editar la plantilla se refleja en el paso). Si no, usa el texto propio (personalizado). Cae al snapshot si la plantilla ya no existe.
+  // Vínculo con plantilla — automático:
+  //  · Si la variante tiene tplId → texto/asunto EN VIVO de esa plantilla.
+  //  · Si tplId==='' → personalizada (el usuario editó y desvinculó): respeta su texto.
+  //  · Si nunca se tocó (tplId undefined) y el paso es "por segmento" → se vincula sola a la plantilla
+  //    cuyo nombre coincide con el valor de segmento (así editar la plantilla se refleja sin clicks).
   function _tplById(id) { return (_lmTpls || []).find(x => String(x.id) === String(id)); }
-  function _varCuerpo(v) { if (v && v.tplId) { const t = _tplById(v.tplId); if (t) return t.cuerpo || ''; } return (v && v.cuerpo) || ''; }
-  function _varAsunto(v) { if (v && v.tplId) { const t = _tplById(v.tplId); if (t) return t.asunto || ''; } return (v && v.asunto) || ''; }
+  function _matchTplBySegment(v) {
+    const words = [...((v && v.targets) || [])].flatMap(t => _lmNorm(t).split(' ')).filter(w => w.length > 3);
+    if (!words.length) return '';
+    let best = '', bs = 0;
+    (_lmTpls || []).forEach(t => { const name = _lmNorm(t.nombre || ''); let sc = 0; words.forEach(w => { if (name.includes(w)) sc++; }); if (sc > bs) { bs = sc; best = String(t.id); } });
+    return bs > 0 ? best : '';
+  }
+  function _effTplId(v, st) {
+    if (v && v.tplId) return v.tplId;
+    if (v && v.tplId === '') return '';
+    return (st && st.variant_mode === 'segment') ? _matchTplBySegment(v) : '';
+  }
+  function _varResolve(v, st) { const tid = _effTplId(v, st); const t = tid ? _tplById(tid) : null; return { tplId: tid, cuerpo: t ? (t.cuerpo || '') : ((v && v.cuerpo) || ''), asunto: t ? (t.asunto || '') : ((v && v.asunto) || '') }; }
+  function _varCuerpo(v, st) { return _varResolve(v, st).cuerpo; }
+  function _varAsunto(v, st) { return _varResolve(v, st).asunto; }
   function _stepVariants(st) {
     const raw = (st && Array.isArray(st.variants)) ? st.variants : [];
-    const resolved = raw.map(v => ({ ...v, cuerpo: _varCuerpo(v), asunto: _varAsunto(v) })).filter(x => (x.cuerpo || '').trim() || (x.nombre || '').trim());
+    const resolved = raw.map(v => { const r = _varResolve(v, st); return { ...v, ...r }; }).filter(x => (x.cuerpo || '').trim() || (x.nombre || '').trim());
     if (resolved.length) return resolved;
     return (st && st.plantilla) ? [{ nombre: 'A', cuerpo: st.plantilla, targets: [] }] : [{ nombre: 'A', cuerpo: '', targets: [] }];
   }
@@ -14165,7 +14181,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}
     _stepDraft = {
       mode: (st && st.variant_mode) || 'off',
       field: (st && st.variant_field) || 'buyer_role',
-      variants: (st && Array.isArray(st.variants) && st.variants.length) ? st.variants.map(v => ({ nombre: v.nombre || '', asunto: _varAsunto(v), cuerpo: _varCuerpo(v), targets: Array.isArray(v.targets) ? v.targets.slice() : [], tplId: v.tplId || '' })) : [{ nombre: 'A', asunto: '', cuerpo: (st && st.plantilla) || '', targets: [], tplId: '' }],
+      variants: (st && Array.isArray(st.variants) && st.variants.length) ? st.variants.map(v => { const r = _varResolve(v, st); return { nombre: v.nombre || '', asunto: r.asunto, cuerpo: r.cuerpo, targets: Array.isArray(v.targets) ? v.targets.slice() : [], tplId: r.tplId }; }) : [{ nombre: 'A', asunto: '', cuerpo: (st && st.plantilla) || '', targets: [], tplId: '' }],
     };
     const existing = _seqSteps(seqId);
     const nextDia = st ? st.dia : ((existing.slice(-1)[0]?.dia || 0) + (existing.length ? 2 : 1));
@@ -14220,8 +14236,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}
       return `<div class="step-var-box">${head}${link}${asunto}<textarea class="form-input step-var-ta" id="step-var-${i}" data-i="${i}" rows="${single ? 4 : 3}" placeholder="Ej. Hola {{first_name}}…" onfocus="LeadManagerModule.stepFocusTa('step-var-${i}')" oninput="LeadManagerModule.stepVarEdit(${i})">${esc(v.cuerpo || '')}</textarea>${targets}</div>`;
     }).join('');
     const addBtn = single ? '' : `<button type="button" class="flt-add" onclick="LeadManagerModule.stepAddVariant()">＋ Añadir variante</button>`;
-    const linkBtn = (!single && d.mode === 'segment' && _lmTpls.length) ? `<button type="button" class="flt-add" onclick="LeadManagerModule.stepAutoLink()">🔗 Vincular variantes a su plantilla por segmento</button>` : '';
-    el.innerHTML = `${modeSel}${fieldSel}${varsHtml}${_varSelectHtml('seqInsertVar')}${addBtn}${linkBtn}<span class="step-vars__hint">Las variables ({{first_name}}…) se reemplazan al hacer la tarea.${single ? '' : ' Cada variante tiene su propia plantilla, asunto y valores de segmento. El sistema le muestra a cada contacto la variante que le toca.'}</span>`;
+    el.innerHTML = `${modeSel}${fieldSel}${varsHtml}${_varSelectHtml('seqInsertVar')}${addBtn}<span class="step-vars__hint">Las variables ({{first_name}}…) se reemplazan al hacer la tarea.${single ? '' : ' Cada variante toma su plantilla por segmento y se actualiza sola al editarla. Si escribes texto propio, se desvincula.'}</span>`;
     // El selector de plantilla de arriba solo aplica a "un solo mensaje"; en A/B o segmento cada variante usa el suyo.
     const topTpl = document.getElementById('step-tpl-top'); if (topTpl) topTpl.style.display = single ? '' : 'none';
   }
