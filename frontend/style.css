@@ -11038,7 +11038,7 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .seqdo-do { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .seqdo-nolink { font-size: .78rem; color: var(--muted, #8C97A3); font-style: italic; }
 .seqdo-tplwrap { border: 1px solid var(--border, #E4E7DD); border-radius: 12px; overflow: hidden; }
-.seqdo-tpl-hd { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: var(--bg, #F6F7ED); border-bottom: 1px solid var(--border, #E4E7DD); font-size: .74rem; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--muted, #8C97A3); }
+.seqdo-tpl-hd { display: flex; align-items: center; justify-content: space-between; padding: 5px 10px; background: var(--bg, #F6F7ED); border-bottom: 1px solid var(--border, #E4E7DD); font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--muted, #8C97A3); }
 .seqdo-copy { border: 1px solid var(--brand-l, #BFE0CC); background: var(--brand-ll, #EAF5EE); color: var(--brand-d, #006B3F); font-weight: 700; font-size: .74rem; padding: 4px 12px; border-radius: 8px; cursor: pointer; text-transform: none; letter-spacing: 0; }
 .seqdo-copy:hover { background: var(--brand, #00804C); color: #fff; border-color: var(--brand, #00804C); }
 .seqdo-tpl { padding: 13px 14px; font-size: .88rem; line-height: 1.55; color: var(--text, #0A2540); white-space: pre-wrap; word-break: break-word; }
@@ -11091,19 +11091,25 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .seq-days-preset { border: 1px solid var(--border, #E4E7DD); border-radius: 8px; background: #fff; font-family: inherit; font-size: .74rem; font-weight: 600; color: var(--text2, #45586A); padding: 6px 10px; cursor: pointer; }
 .seq-days-preset:hover { background: var(--bg, #F6F7ED); border-color: var(--brand-l, #BFE0CC); }
 /* Barra de tarea del día dentro de la ficha del contacto */
-.cp-taskbar { background: var(--brand-ll, #EAF5EE); border: 1px solid var(--brand-l, #BFE0CC); border-radius: 14px; padding: 14px 16px; margin-bottom: 16px; }
-.cp-taskbar__top { display: flex; align-items: center; gap: 11px; }
-.cp-taskbar__ico { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; flex-shrink: 0; }
-.cp-taskbar__ttl { flex: 1; min-width: 0; }
-.cp-taskbar__t { font-size: .92rem; font-weight: 700; color: var(--text, #0A2540); }
-.cp-taskbar__t b { font-size: .62rem; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; margin-left: 6px; }
+.cp-taskbar { background: var(--brand-ll, #EAF5EE); border: 1px solid var(--brand-l, #BFE0CC); border-radius: 12px; padding: 9px 12px; margin-bottom: 10px; }
+.cp-taskbar__top { display: flex; align-items: center; gap: 8px; }
+.cp-taskbar__ico { width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; flex-shrink: 0; }
+.cp-taskbar__ttl { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 7px; overflow: hidden; white-space: nowrap; }
+.cp-taskbar__t { font-size: .86rem; font-weight: 750; color: var(--text, #0A2540); flex-shrink: 0; }
+.cp-taskbar__ch { font-size: .6rem; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; flex-shrink: 0; }
+.cp-taskbar__meta { font-size: .72rem; color: var(--text2, #45586A); overflow: hidden; text-overflow: ellipsis; }
 .cp-taskbar__s { font-size: .75rem; color: var(--text2, #45586A); margin-top: 1px; }
 .cp-taskbar__exit { border: none; background: none; color: var(--text2, #45586A); font-size: .78rem; font-weight: 600; cursor: pointer; padding: 4px 9px; border-radius: 7px; white-space: nowrap; flex-shrink: 0; }
 .cp-taskbar__exit:hover { background: rgba(255,255,255,.65); color: var(--text, #0A2540); }
-.cp-taskbar__tpl { margin-top: 11px; border: 1px solid var(--border, #E4E7DD); border-radius: 10px; overflow: hidden; background: #fff; }
-.cp-taskbar__notpl { margin-top: 10px; font-size: .82rem; color: var(--text2, #45586A); }
+.cp-taskbar__tpl { margin-top: 7px; border: 1px solid var(--border, #E4E7DD); border-radius: 9px; overflow: hidden; background: #fff; }
+.cp-taskbar__notpl { margin-top: 8px; font-size: .8rem; color: var(--text2, #45586A); }
 .cp-taskbar__acts { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+.cp-taskbar__foot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; }
+.cp-taskbar__div { width: 1px; height: 20px; background: var(--brand-l, #BFE0CC); margin: 0 3px; }
 .cp-taskbar__sp { flex: 1; }
+.cp-dispo-b--xs { font-size: .72rem; padding: 4px 9px; }
+.seqdo-copy--xs { font-size: .7rem; padding: 3px 9px; }
+.seqdo-tpl--slim { font-size: .82rem; line-height: 1.45; padding: 10px 12px; max-height: 34vh; overflow-y: auto; }
 .cp-dispo { display: flex; flex-wrap: wrap; gap: 6px; }
 .cp-dispo-b { border: 1px solid var(--border, #E4E7DD); background: #fff; color: var(--text2, #45586A); font-size: .78rem; font-weight: 600; padding: 5px 11px; border-radius: 8px; cursor: pointer; }
 .cp-dispo-b:hover { border-color: var(--brand-l, #BFE0CC); }
@@ -11656,9 +11662,9 @@ a.cp-strip__i:hover svg { color: var(--brand, #00804C); }
 .lm-ai-gen { padding: 12px 20px; border-bottom: 1px solid #EEF0EA; background: #FAFBF9; }
 
 /* ── LM · Tarea: fila de asunto (email con Re: fake-thread) ── */
-.cp-taskbar__subj { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #F6F8F4; border-radius: 10px; margin: 8px 0; }
-.cp-taskbar__subj-l { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; color: #6B7280; }
-.cp-taskbar__subj-v { font-size: 13px; font-weight: 600; color: #0B1E3A; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cp-taskbar__subj { display: flex; align-items: center; gap: 8px; padding: 5px 10px; background: #fff; border: 1px solid var(--border, #E4E7DD); border-radius: 8px; margin-top: 7px; }
+.cp-taskbar__subj-l { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; color: #6B7280; flex-shrink: 0; }
+.cp-taskbar__subj-v { font-size: 12.5px; font-weight: 600; color: #0B1E3A; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
 .cp-taskbar__acts .btn { text-decoration: none; }
 
 /* ── LM · A/B por variante (tab Métricas) ── */

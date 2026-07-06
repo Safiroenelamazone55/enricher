@@ -12916,19 +12916,20 @@ table{width:100%;border-collapse:collapse;font-size:13px}
     if (st.canal === 'call' && (c.telefono || c.movil)) A.unshift(`<a class="btn btn--primary btn--sm" href="tel:${esc((c.telefono || c.movil).replace(/\s/g, ''))}">${NI('phone')} Llamar ${esc(c.telefono || c.movil)}</a>`);
     if (!A.length) A.push(`<span class="seqdo-nolink">Sin datos de contacto para este canal — complétalos en la ficha</span>`);
 
-    return `<div class="cp-taskbar">
+    return `<div class="cp-taskbar cp-taskbar--slim">
       <div class="cp-taskbar__top">
-        <span class="cp-taskbar__ico" style="background:${touch[1]}1a;color:${touch[1]}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${touch[2]}</svg></span>
-        <div class="cp-taskbar__ttl"><div class="cp-taskbar__t">Tarea de hoy · ${esc(st.titulo || touch[0])} <b style="color:${touch[1]}">${touch[0]}</b></div><div class="cp-taskbar__s">${seq ? esc(seq.nombre) + ' · ' : ''}Día ${st.dia || 1}${pos >= 0 && queue.length ? ` · ${pos + 1} de ${queue.length} para hoy` : ''}${seq && seq.timezone ? ` · 🕐 envía ≈ ${_suggestWindow(seq.timezone).her} tu hora` : ''}</div></div>
-        <button class="cp-taskbar__exit" onclick="LeadManagerModule.seqDoExit()">‹ Volver a tareas</button>
+        <span class="cp-taskbar__ico" style="background:${touch[1]}1a;color:${touch[1]}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${touch[2]}</svg></span>
+        <div class="cp-taskbar__ttl"><span class="cp-taskbar__t">${esc(st.titulo || touch[0])}</span><b class="cp-taskbar__ch" style="color:${touch[1]}">${touch[0]}</b><span class="cp-taskbar__meta">${pos >= 0 && queue.length ? `${pos + 1}/${queue.length} hoy` : `Día ${st.dia || 1}`}${seq && seq.timezone ? ` · 🕐 ≈ ${_suggestWindow(seq.timezone).her}` : ''}${seq ? ` · ${esc(seq.nombre)}` : ''}</span></div>
+        <button class="cp-taskbar__exit" onclick="LeadManagerModule.seqDoExit()">‹ Tareas</button>
       </div>
-      ${st.canal === 'email' && subject ? `<div class="cp-taskbar__subj"><span class="cp-taskbar__subj-l">Asunto</span><span class="cp-taskbar__subj-v">${esc(subject)}</span><button class="seqdo-copy" onclick="LeadManagerModule.seqDoCopySubject()">${NI('copy')}</button>${/^re\s*:/i.test(subject) ? `<span class="lm-vb" style="background:#FEF3C7;color:#B45309" title="Follow-up: usa Re: del primer email para simular el hilo">hilo Re:</span>` : ''}</div>` : ''}
+      ${st.canal === 'email' && subject ? `<div class="cp-taskbar__subj"><span class="cp-taskbar__subj-l">Asunto</span><span class="cp-taskbar__subj-v">${esc(subject)}</span>${/^re\s*:/i.test(subject) ? `<span class="lm-vb" style="background:#FEF3C7;color:#B45309" title="Follow-up: usa Re: del primer email para simular el hilo">Re:</span>` : ''}<button class="seqdo-copy seqdo-copy--xs" onclick="LeadManagerModule.seqDoCopySubject()">${NI('copy')}</button></div>` : ''}
       ${hasMsg
-        ? `<div class="cp-taskbar__tpl"><div class="seqdo-tpl-hd"><span>Mensaje${vtag}</span><span style="display:flex;gap:6px"><button class="seqdo-copy" onclick="LeadManagerModule.openAiDrafts(${cid},${seqId})">${NI('sparkles')} Escribir con IA</button><button class="seqdo-copy" onclick="LeadManagerModule.seqDoCopy()">${NI('copy')} Copiar</button></span></div><div class="seqdo-tpl">${disp}</div></div>`
+        ? `<div class="cp-taskbar__tpl"><div class="seqdo-tpl-hd"><span>Mensaje${vtag}</span><span style="display:flex;gap:6px"><button class="seqdo-copy seqdo-copy--xs" onclick="LeadManagerModule.openAiDrafts(${cid},${seqId})">${NI('sparkles')} IA</button><button class="seqdo-copy seqdo-copy--xs" onclick="LeadManagerModule.seqDoCopy()">${NI('copy')} Copiar</button></span></div><div class="seqdo-tpl seqdo-tpl--slim">${disp}</div></div>`
         : `<div class="cp-taskbar__notpl">Este paso no tiene mensaje. <a href="#" onclick="LeadManagerModule.seqDoEditStep(${st.id});return false;">Añádelo</a> con variables — o <a href="#" onclick="LeadManagerModule.openAiDrafts(${cid},${seqId});return false;">✨ escríbelo con IA</a>.</div>`}
-      <div class="cp-taskbar__dispo"><span class="cp-taskbar__dispo-l">Marcar:</span>${_DISPOS.map(d => `<button class="cp-dispo-b" onclick="LeadManagerModule.seqDoDisposition('${d[0]}')">${d[1]}</button>`).join('')}</div>
-      <div class="cp-taskbar__acts">
+      <div class="cp-taskbar__foot">
         ${A.join('')}
+        <span class="cp-taskbar__div"></span>
+        ${_DISPOS.map(d => `<button class="cp-dispo-b cp-dispo-b--xs" title="Marcar disposición: ${d[1]}" onclick="LeadManagerModule.seqDoDisposition('${d[0]}')">${d[1]}</button>`).join('')}
         <span class="cp-taskbar__sp"></span>
         <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqDoSkip()">Saltar</button>
         <button class="btn btn--primary btn--sm" id="seqdo-done" onclick="LeadManagerModule.seqDoDone()">✓ Hecha → siguiente</button>
