@@ -11062,6 +11062,7 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .step-var-asunto { font-size: .84rem; font-weight: 600; margin-bottom: 2px; }
 .step-var-tplsel { font-family: inherit; font-size: .74rem; padding: 4px 8px; border: 1px solid var(--border, #E4E7DD); border-radius: 7px; background: #fff; color: var(--brand-d, #006B3F); cursor: pointer; max-width: 200px; }
 .step-var-tplsel:hover { border-color: var(--brand-l, #BFE0CC); }
+.step-var-link { display: inline-block; font-size: .68rem; font-weight: 700; color: #1E3A8A; background: #E4ECF5; border: 1px solid #C7D2F0; border-radius: 999px; padding: 2px 9px; align-self: flex-start; }
 /* Tag-input con autocomplete para valores del segmento */
 .step-tags-wrap { position: relative; }
 .step-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; border: 1px solid var(--border, #E4E7DD); border-radius: 8px; padding: 5px 7px; background: #fff; min-height: 34px; }

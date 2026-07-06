@@ -12791,9 +12791,15 @@ table{width:100%;border-collapse:collapse;font-size:13px}
       if (win) win.focus(); else window.open(url, '_blank');
     } catch (e) { window.open(url, '_blank'); }
   }
+  // Vínculo con plantilla: si la variante tiene tplId, su texto/asunto se toma EN VIVO de la plantilla actual
+  // (así, editar la plantilla se refleja en el paso). Si no, usa el texto propio (personalizado). Cae al snapshot si la plantilla ya no existe.
+  function _tplById(id) { return (_lmTpls || []).find(x => String(x.id) === String(id)); }
+  function _varCuerpo(v) { if (v && v.tplId) { const t = _tplById(v.tplId); if (t) return t.cuerpo || ''; } return (v && v.cuerpo) || ''; }
+  function _varAsunto(v) { if (v && v.tplId) { const t = _tplById(v.tplId); if (t) return t.asunto || ''; } return (v && v.asunto) || ''; }
   function _stepVariants(st) {
-    const v = (st && Array.isArray(st.variants)) ? st.variants.filter(x => x && ((x.cuerpo || '').trim() || (x.nombre || '').trim())) : [];
-    if (v.length) return v;
+    const raw = (st && Array.isArray(st.variants)) ? st.variants : [];
+    const resolved = raw.map(v => ({ ...v, cuerpo: _varCuerpo(v), asunto: _varAsunto(v) })).filter(x => (x.cuerpo || '').trim() || (x.nombre || '').trim());
+    if (resolved.length) return resolved;
     return (st && st.plantilla) ? [{ nombre: 'A', cuerpo: st.plantilla, targets: [] }] : [{ nombre: 'A', cuerpo: '', targets: [] }];
   }
   function _stepVariant(st, c) {
@@ -13607,8 +13613,10 @@ table{width:100%;border-collapse:collapse;font-size:13px}
   function stepUseTpl(tplId) {
     const t = _lmTpls.find(x => String(x.id) === String(tplId)); if (!t) return;
     const ta = document.getElementById(_stepFocusTa || 'step-var-0');
-    if (ta) { ta.value = t.cuerpo || ''; ta.focus(); if (_stepDraft) { const i = +ta.dataset.i || 0; if (_stepDraft.variants[i]) _stepDraft.variants[i].cuerpo = t.cuerpo || ''; } }
+    const i = ta ? (+ta.dataset.i || 0) : 0;
+    if (_stepDraft && _stepDraft.variants[i]) { _stepDraft.variants[i].tplId = String(tplId); _stepDraft.variants[i].cuerpo = t.cuerpo || ''; }
     const ti = document.getElementById('step-titulo'); if (ti && !ti.value.trim()) ti.value = t.nombre || '';
+    _stepRenderMsg();
   }
   function tplInsertVar(tok) {
     if (!tok) return;
@@ -14157,7 +14165,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}
     _stepDraft = {
       mode: (st && st.variant_mode) || 'off',
       field: (st && st.variant_field) || 'buyer_role',
-      variants: (st && Array.isArray(st.variants) && st.variants.length) ? st.variants.map(v => ({ nombre: v.nombre || '', asunto: v.asunto || '', cuerpo: v.cuerpo || '', targets: Array.isArray(v.targets) ? v.targets.slice() : [] })) : [{ nombre: 'A', asunto: '', cuerpo: (st && st.plantilla) || '', targets: [] }],
+      variants: (st && Array.isArray(st.variants) && st.variants.length) ? st.variants.map(v => ({ nombre: v.nombre || '', asunto: _varAsunto(v), cuerpo: _varCuerpo(v), targets: Array.isArray(v.targets) ? v.targets.slice() : [], tplId: v.tplId || '' })) : [{ nombre: 'A', asunto: '', cuerpo: (st && st.plantilla) || '', targets: [], tplId: '' }],
     };
     const existing = _seqSteps(seqId);
     const nextDia = st ? st.dia : ((existing.slice(-1)[0]?.dia || 0) + (existing.length ? 2 : 1));
@@ -14206,9 +14214,10 @@ table{width:100%;border-collapse:collapse;font-size:13px}
     const vars = single ? d.variants.slice(0, 1) : d.variants;
     const varsHtml = vars.map((v, i) => {
       const head = single ? '' : `<div class="step-var-hd"><input class="step-var-nm" value="${esc(v.nombre || String.fromCharCode(65 + i))}" data-i="${i}" placeholder="Nombre"><span class="step-var-sp"></span>${tplOpts ? tplOpts.replace('IDX', i) : ''}${d.variants.length > 1 ? `<button type="button" class="flt-del" onclick="LeadManagerModule.stepDelVariant(${i})" title="Quitar variante">✕</button>` : ''}</div>`;
-      const asunto = (!single && usesSubject) ? `<input class="form-input step-var-asunto" data-i="${i}" placeholder="Asunto del email" value="${esc(v.asunto || '')}">` : '';
+      const asunto = (!single && usesSubject) ? `<input class="form-input step-var-asunto" data-i="${i}" placeholder="Asunto del email" value="${esc(v.asunto || '')}" oninput="LeadManagerModule.stepVarEdit(${i})">` : '';
       const targets = (!single && d.mode === 'segment') ? _stepTargetsHtml(i) : '';
-      return `<div class="step-var-box">${head}${asunto}<textarea class="form-input step-var-ta" id="step-var-${i}" data-i="${i}" rows="${single ? 4 : 3}" placeholder="Ej. Hola {{first_name}}…" onfocus="LeadManagerModule.stepFocusTa('step-var-${i}')">${esc(v.cuerpo || '')}</textarea>${targets}</div>`;
+      const link = v.tplId ? `<span class="step-var-link" id="step-var-link-${i}" title="Vinculada a la plantilla — se actualiza sola. Editar el texto la desvincula.">🔗 ${esc(_tplName(v.tplId))} · en vivo</span>` : '';
+      return `<div class="step-var-box">${head}${link}${asunto}<textarea class="form-input step-var-ta" id="step-var-${i}" data-i="${i}" rows="${single ? 4 : 3}" placeholder="Ej. Hola {{first_name}}…" onfocus="LeadManagerModule.stepFocusTa('step-var-${i}')" oninput="LeadManagerModule.stepVarEdit(${i})">${esc(v.cuerpo || '')}</textarea>${targets}</div>`;
     }).join('');
     const addBtn = single ? '' : `<button type="button" class="flt-add" onclick="LeadManagerModule.stepAddVariant()">＋ Añadir variante</button>`;
     el.innerHTML = `${modeSel}${fieldSel}${varsHtml}${_varSelectHtml('seqInsertVar')}${addBtn}<span class="step-vars__hint">Las variables ({{first_name}}…) se reemplazan al hacer la tarea.${single ? '' : ' Cada variante tiene su propia plantilla, asunto y valores de segmento. El sistema le muestra a cada contacto la variante que le toca.'}</span>`;
@@ -14268,20 +14277,24 @@ table{width:100%;border-collapse:collapse;font-size:13px}
   }
   function stepTagRemove(i, ti) { if (!_stepDraft || !_stepDraft.variants[i]) return; (_stepDraft.variants[i].targets || []).splice(ti, 1); _stepRefreshChips(i); stepTagInput(i); }
   function stepTagBlur(i) { setTimeout(() => document.getElementById(`step-tags-pop-${i}`)?.classList.remove('open'), 130); }
-  function stepSetMode(mode) { _stepSyncDraft(); _stepDraft.mode = mode; if (mode !== 'off') { while (_stepDraft.variants.length < 2) _stepDraft.variants.push({ nombre: String.fromCharCode(65 + _stepDraft.variants.length), asunto: '', cuerpo: '', targets: [] }); } _stepRenderMsg(); }
+  function stepSetMode(mode) { _stepSyncDraft(); _stepDraft.mode = mode; if (mode !== 'off') { while (_stepDraft.variants.length < 2) _stepDraft.variants.push({ nombre: String.fromCharCode(65 + _stepDraft.variants.length), asunto: '', cuerpo: '', targets: [], tplId: '' }); } _stepRenderMsg(); }
   function stepSetField(f) { _stepSyncDraft(); _stepDraft.field = f; _stepRenderMsg(); }
-  function stepAddVariant() { _stepSyncDraft(); _stepDraft.variants.push({ nombre: String.fromCharCode(65 + _stepDraft.variants.length), asunto: '', cuerpo: '', targets: [] }); _stepRenderMsg(); }
-  function stepDelVariant(i) { _stepSyncDraft(); _stepDraft.variants.splice(i, 1); if (!_stepDraft.variants.length) _stepDraft.variants.push({ nombre: 'A', asunto: '', cuerpo: '', targets: [] }); _stepRenderMsg(); }
+  function stepAddVariant() { _stepSyncDraft(); _stepDraft.variants.push({ nombre: String.fromCharCode(65 + _stepDraft.variants.length), asunto: '', cuerpo: '', targets: [], tplId: '' }); _stepRenderMsg(); }
+  function stepDelVariant(i) { _stepSyncDraft(); _stepDraft.variants.splice(i, 1); if (!_stepDraft.variants.length) _stepDraft.variants.push({ nombre: 'A', asunto: '', cuerpo: '', targets: [], tplId: '' }); _stepRenderMsg(); }
   function stepCanalChange() { _stepSyncDraft(); _stepRenderMsg(); }
   function stepVarUseTpl(i, tplId) {
     if (!tplId || !_stepDraft || !_stepDraft.variants[i]) return;
     const t = _lmTpls.find(x => String(x.id) === String(tplId)); if (!t) return;
     _stepSyncDraft();
+    _stepDraft.variants[i].tplId = String(tplId);
     _stepDraft.variants[i].cuerpo = t.cuerpo || '';
     if (($('step-canal')?.value || 'email') === 'email' && t.asunto) _stepDraft.variants[i].asunto = t.asunto;
     if (!$('step-titulo')?.value.trim() && t.nombre) { const ti = $('step-titulo'); if (ti) ti.value = t.nombre; }
     _stepRenderMsg();
   }
+  // Al editar el texto/asunto de una variante vinculada, se desvincula (queda personalizado).
+  function stepVarEdit(i) { if (_stepDraft && _stepDraft.variants[i] && _stepDraft.variants[i].tplId) { _stepDraft.variants[i].tplId = ''; const b = document.getElementById(`step-var-link-${i}`); if (b) b.remove(); } }
+  function _tplName(id) { const t = _tplById(id); return t ? (t.nombre || 'plantilla') : 'plantilla'; }
   function stepFocusTa(id) { _stepFocusTa = id; }
   function seqInsertVar(tok) {
     if (!tok) return;
@@ -16165,7 +16178,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}
     openStepDrawer, closeStepDrawer, saveStep, confirmDeleteStep, seqInsertVar, stepUseTpl, tzSearch, tzPick, tzBlur,
     stepSetMode, stepSetField, stepAddVariant, stepDelVariant, stepFocusTa,
     stepTagInput, stepTagKey, stepTagPick, stepTagAddTyped, stepTagRemove, stepTagBlur,
-    stepCanalChange, stepVarUseTpl,
+    stepCanalChange, stepVarUseTpl, stepVarEdit,
     seqDayToggle, seqDaysPreset, stepUseSuggestedHour, seqReportOpen, seqReportGen,
     openTemplate, closeTemplate, saveTemplate, deleteTemplate, tplInsertVar, tplSetFilter, tplSetTag, tplSetSeq, tplCanalChange,
     tplTagInput, tplTagKey, tplTagPick, tplTagAddTyped, tplTagRemove, tplTagBlur,
