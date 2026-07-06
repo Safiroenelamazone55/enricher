@@ -14220,7 +14220,8 @@ table{width:100%;border-collapse:collapse;font-size:13px}
       return `<div class="step-var-box">${head}${link}${asunto}<textarea class="form-input step-var-ta" id="step-var-${i}" data-i="${i}" rows="${single ? 4 : 3}" placeholder="Ej. Hola {{first_name}}…" onfocus="LeadManagerModule.stepFocusTa('step-var-${i}')" oninput="LeadManagerModule.stepVarEdit(${i})">${esc(v.cuerpo || '')}</textarea>${targets}</div>`;
     }).join('');
     const addBtn = single ? '' : `<button type="button" class="flt-add" onclick="LeadManagerModule.stepAddVariant()">＋ Añadir variante</button>`;
-    el.innerHTML = `${modeSel}${fieldSel}${varsHtml}${_varSelectHtml('seqInsertVar')}${addBtn}<span class="step-vars__hint">Las variables ({{first_name}}…) se reemplazan al hacer la tarea.${single ? '' : ' Cada variante tiene su propia plantilla, asunto y valores de segmento. El sistema le muestra a cada contacto la variante que le toca.'}</span>`;
+    const linkBtn = (!single && d.mode === 'segment' && _lmTpls.length) ? `<button type="button" class="flt-add" onclick="LeadManagerModule.stepAutoLink()">🔗 Vincular variantes a su plantilla por segmento</button>` : '';
+    el.innerHTML = `${modeSel}${fieldSel}${varsHtml}${_varSelectHtml('seqInsertVar')}${addBtn}${linkBtn}<span class="step-vars__hint">Las variables ({{first_name}}…) se reemplazan al hacer la tarea.${single ? '' : ' Cada variante tiene su propia plantilla, asunto y valores de segmento. El sistema le muestra a cada contacto la variante que le toca.'}</span>`;
     // El selector de plantilla de arriba solo aplica a "un solo mensaje"; en A/B o segmento cada variante usa el suyo.
     const topTpl = document.getElementById('step-tpl-top'); if (topTpl) topTpl.style.display = single ? '' : 'none';
   }
@@ -14294,6 +14295,25 @@ table{width:100%;border-collapse:collapse;font-size:13px}
   }
   // Al editar el texto/asunto de una variante vinculada, se desvincula (queda personalizado).
   function stepVarEdit(i) { if (_stepDraft && _stepDraft.variants[i] && _stepDraft.variants[i].tplId) { _stepDraft.variants[i].tplId = ''; const b = document.getElementById(`step-var-link-${i}`); if (b) b.remove(); } }
+  // Vincula cada variante a la plantilla cuyo nombre coincide con el/los valores de segmento de esa variante.
+  function stepAutoLink() {
+    if (!_stepDraft) return; _stepSyncDraft();
+    const canal = $('step-canal')?.value || 'email';
+    let linked = 0;
+    _stepDraft.variants.forEach(v => {
+      const words = [...(v.targets || [])].flatMap(t => _lmNorm(t).split(' ')).filter(w => w.length > 3);
+      if (!words.length) return;
+      let best = null, bestScore = 0;
+      (_lmTpls || []).forEach(t => {
+        const name = _lmNorm(t.nombre || '');
+        let score = 0; words.forEach(w => { if (name.includes(w)) score++; });
+        if (score > bestScore) { bestScore = score; best = t; }
+      });
+      if (best && bestScore > 0) { v.tplId = String(best.id); v.cuerpo = best.cuerpo || ''; if (canal === 'email' && best.asunto) v.asunto = best.asunto; linked++; }
+    });
+    _stepRenderMsg();
+    showBanner(linked ? `✓ ${linked} variante(s) vinculada(s) a su plantilla por segmento` : 'No encontré plantillas cuyo nombre coincida con los valores de segmento', linked ? 'success' : 'error');
+  }
   function _tplName(id) { const t = _tplById(id); return t ? (t.nombre || 'plantilla') : 'plantilla'; }
   function stepFocusTa(id) { _stepFocusTa = id; }
   function seqInsertVar(tok) {
@@ -16178,7 +16198,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}
     openStepDrawer, closeStepDrawer, saveStep, confirmDeleteStep, seqInsertVar, stepUseTpl, tzSearch, tzPick, tzBlur,
     stepSetMode, stepSetField, stepAddVariant, stepDelVariant, stepFocusTa,
     stepTagInput, stepTagKey, stepTagPick, stepTagAddTyped, stepTagRemove, stepTagBlur,
-    stepCanalChange, stepVarUseTpl, stepVarEdit,
+    stepCanalChange, stepVarUseTpl, stepVarEdit, stepAutoLink,
     seqDayToggle, seqDaysPreset, stepUseSuggestedHour, seqReportOpen, seqReportGen,
     openTemplate, closeTemplate, saveTemplate, deleteTemplate, tplInsertVar, tplSetFilter, tplSetTag, tplSetSeq, tplCanalChange,
     tplTagInput, tplTagKey, tplTagPick, tplTagAddTyped, tplTagRemove, tplTagBlur,
