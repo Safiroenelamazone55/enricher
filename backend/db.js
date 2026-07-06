@@ -629,6 +629,8 @@ async function initDb() {
     await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS send_days TEXT NOT NULL DEFAULT '1111100';`);
     // Fecha de inicio (calendario): el "día 1" de los contactos que enroles no arranca antes de esta fecha. NULL = arranca al enrolar.
     await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS starts_on DATE;`);
+    // Límite diario de envíos POR SECUENCIA (cada cliente da su buzón). 0 = usa el límite global del workspace.
+    await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS daily_limit INTEGER NOT NULL DEFAULT 0;`);
 
     // ── activities (Lead Manager Fase 4: touches registrados + tareas comerciales) ──
     await pool.query(`

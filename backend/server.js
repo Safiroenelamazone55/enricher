@@ -3294,10 +3294,11 @@ app.post('/api/sequences', requireAuth, async (req, res) => {
   try {
     const drip = Math.max(0, parseInt(b.drip_per_day) || 0);
     const sendDays = _sanSendDays(b.send_days);
+    const dLim = Math.max(0, parseInt(b.daily_limit) || 0);
     const { rows } = await pool.query(`
-      INSERT INTO sequences (user_id,outbound_client_id,campaign_id,nombre,objetivo,estado,timezone,drip_per_day,send_days,starts_on)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *
-    `, [req.workspaceOwnerId, b.outbound_client_id || null, b.campaign_id || null, b.nombre.trim(), b.objetivo || '', estado, b.timezone || '', drip, sendDays, _sanDate(b.starts_on)]);
+      INSERT INTO sequences (user_id,outbound_client_id,campaign_id,nombre,objetivo,estado,timezone,drip_per_day,send_days,starts_on,daily_limit)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *
+    `, [req.workspaceOwnerId, b.outbound_client_id || null, b.campaign_id || null, b.nombre.trim(), b.objetivo || '', estado, b.timezone || '', drip, sendDays, _sanDate(b.starts_on), dLim]);
     res.status(201).json(rows[0]);
   } catch (err) { console.error('[seq] POST error:', err.message); res.status(500).json({ error: 'Error al crear secuencia' }); }
 });
@@ -3308,10 +3309,11 @@ app.put('/api/sequences/:id', requireAuth, async (req, res) => {
   try {
     const drip = Math.max(0, parseInt(b.drip_per_day) || 0);
     const sendDays = _sanSendDays(b.send_days);
+    const dLim = Math.max(0, parseInt(b.daily_limit) || 0);
     const { rows } = await pool.query(`
-      UPDATE sequences SET outbound_client_id=$1,campaign_id=$2,nombre=$3,objetivo=$4,estado=$5,timezone=$6,drip_per_day=$7,send_days=$8,starts_on=$9,updated_at=NOW()
-      WHERE id=$10 AND user_id=$11 RETURNING *
-    `, [b.outbound_client_id || null, b.campaign_id || null, b.nombre.trim(), b.objetivo || '', estado, b.timezone || '', drip, sendDays, _sanDate(b.starts_on), req.params.id, req.workspaceOwnerId]);
+      UPDATE sequences SET outbound_client_id=$1,campaign_id=$2,nombre=$3,objetivo=$4,estado=$5,timezone=$6,drip_per_day=$7,send_days=$8,starts_on=$9,daily_limit=$10,updated_at=NOW()
+      WHERE id=$11 AND user_id=$12 RETURNING *
+    `, [b.outbound_client_id || null, b.campaign_id || null, b.nombre.trim(), b.objetivo || '', estado, b.timezone || '', drip, sendDays, _sanDate(b.starts_on), dLim, req.params.id, req.workspaceOwnerId]);
     if (!rows.length) return res.status(404).json({ error: 'Secuencia no encontrada' });
     res.json(rows[0]);
   } catch (err) { console.error('[seq] PUT error:', err.message); res.status(500).json({ error: 'Error al actualizar secuencia' }); }

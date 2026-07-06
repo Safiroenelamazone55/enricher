@@ -176,9 +176,16 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback) {
       LEFT JOIN lm_companies co ON co.id = k.company_id
      WHERE cs.user_id = $1 AND cs.estado = 'activo'
        AND (cs.next_action_at IS NULL OR cs.next_action_at <= NOW())
+       -- Límite diario POR SECUENCIA (buzón del cliente): si esta secuencia ya llegó a su tope hoy,
+       -- se salta y el motor sigue con las demás. 0 = sin límite propio (aplica solo el global).
+       AND (COALESCE(s.daily_limit, 0) <= 0 OR (
+            SELECT COUNT(*) FROM lm_messages m
+             WHERE m.sequence_id = s.id AND m.estado IN ('sent','replied','bounced')
+               AND (m.sent_at AT TIME ZONE $2)::date = (NOW() AT TIME ZONE $2)::date
+           ) < s.daily_limit)
      ORDER BY cs.next_action_at ASC NULLS FIRST
      LIMIT 1
-  `, [uid]);
+  `, [uid, cfg.timezone || 'America/Lima']);
   if (!enr) return false;
 
   // Días de cadencia de la secuencia: si hoy no es día permitido, reprograma al próximo día permitido.
