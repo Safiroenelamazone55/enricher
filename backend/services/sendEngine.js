@@ -136,7 +136,7 @@ async function _advance(pool, enr, steps, curIdx) {
   const base = _todayUTC(); base.setUTCDate(base.getUTCDate() + days);
   const target = _rollFwd(base, mask);
   await pool.query(
-    `UPDATE lm_contact_sequences SET paso=$1, next_action_at=$2 WHERE id=$3`,
+    `UPDATE lm_contact_sequences SET paso=$1, next_action_at=$2, paso_date=CURRENT_DATE WHERE id=$3`,
     [curIdx + 2, target.toISOString(), enr.enr_id]
   );
 }

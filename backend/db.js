@@ -1002,6 +1002,9 @@ async function initDb() {
     await pool.query(`ALTER TABLE lm_contact_sequences ADD COLUMN IF NOT EXISTS paused_reason  TEXT NOT NULL DEFAULT '';`);
     // Día efectivo de arranque (día 1) de ESTE contacto en la secuencia. NULL → se usa created_at (compat).
     await pool.query(`ALTER TABLE lm_contact_sequences ADD COLUMN IF NOT EXISTS start_date DATE;`);
+    // Fecha en que el paso ACTUAL quedó activo (= día en que se completó el anterior). El siguiente paso
+    // se agenda desde aquí (retraso corre la cadencia, como Outreach). NULL → ancla en start_date/created_at.
+    await pool.query(`ALTER TABLE lm_contact_sequences ADD COLUMN IF NOT EXISTS paso_date DATE;`);
     await pool.query(`CREATE INDEX IF NOT EXISTS lm_cseq_next_idx ON lm_contact_sequences (estado, next_action_at);`);
     // Espera relativa entre pasos (días desde el paso anterior; complementa 'dia' absoluto).
     await pool.query(`ALTER TABLE sequence_steps ADD COLUMN IF NOT EXISTS espera_dias INTEGER NOT NULL DEFAULT 0;`);

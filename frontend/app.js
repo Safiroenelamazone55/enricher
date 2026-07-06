@@ -12685,8 +12685,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}
     const mask = _seqSendDays(id);
     return list.filter(e => e.estado === 'activo' && steps[(e.paso || 1) - 1]).map(e => {
       const st = steps[(e.paso || 1) - 1];
-      let due = new Date(e.enrolled_at); due.setHours(0, 0, 0, 0); due.setDate(due.getDate() + ((st.dia || 1) - 1));
-      due = _rollFwdLocal(due, mask);
+      const due = _dueForStep(steps, e.paso, e.enrolled_at, e.paso_date, mask);
       return { e, st, due };
     }).sort((a, b) => a.due - b.due || (a.st.hora || '99:99').localeCompare(b.st.hora || '99:99'));
   }
@@ -13125,8 +13124,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}
         const steps = _seqSteps(sq.id);
         const st = steps[((sq.paso || 1) - 1)];
         if (!st) return;
-        let due = new Date(sq.enrolled_at || Date.now()); due.setHours(0, 0, 0, 0); due.setDate(due.getDate() + ((st.dia || 1) - 1));
-        due = _rollFwdLocal(due, _seqSendDays(sq.id));
+        const due = _dueForStep(steps, sq.paso, sq.enrolled_at, sq.paso_date, _seqSendDays(sq.id));
         out.push({ c: c, sq: sq, st: st, due: due });
       });
     });
@@ -13136,6 +13134,21 @@ table{width:100%;border-collapse:collapse;font-size:13px}
   function _sanSendDays(v) { const s = String(v || ''); return (/^[01]{7}$/.test(s) && s.includes('1')) ? s : '1111100'; }
   function _seqSendDays(seqId) { const s = (_sequences || []).find(x => x.id === seqId); return _sanSendDays(s && s.send_days); }
   function _rollFwdLocal(date, mask) { const x = new Date(date); for (let i = 0; i < 7; i++) { if (mask[(x.getDay() + 6) % 7] === '1') return x; x.setDate(x.getDate() + 1); } return x; }
+  // Fecha de la tarea del paso actual. Si ya completaste un paso (paso_date), el siguiente cuenta
+  // DESDE ese día (+ separación entre pasos): un retraso corre la cadencia, no la comprime.
+  // Sin paso_date (paso 1 o enrolamientos antiguos) ancla en la inscripción, como antes.
+  function _dueForStep(steps, paso, enrolledAt, pasoDate, mask) {
+    const idx = (paso || 1) - 1; const st = steps[idx]; if (!st) return null;
+    let due;
+    const pd = pasoDate ? new Date(String(pasoDate).slice(0, 10) + 'T00:00:00') : null;
+    if (idx > 0 && pd && !isNaN(pd)) {
+      const gap = Math.max(0, (st.dia || 1) - (steps[idx - 1].dia || 1));
+      due = pd; due.setHours(0, 0, 0, 0); due.setDate(due.getDate() + gap);
+    } else {
+      due = new Date(enrolledAt || Date.now()); due.setHours(0, 0, 0, 0); due.setDate(due.getDate() + ((st.dia || 1) - 1));
+    }
+    return _rollFwdLocal(due, mask);
+  }
   function _dayOf(d) { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; }
   function _relDay(due) {
     const today = _dayOf(new Date());

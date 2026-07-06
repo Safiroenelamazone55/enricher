@@ -2568,7 +2568,7 @@ app.get('/api/lm/contacts', requireAuth, async (req, res) => {
       SELECT k.*, co.nombre AS company_nombre, co.dominio AS company_dominio,
         co.website AS company_website, co.industria AS company_industria, co.tamano AS company_tamano,
         co.ingresos AS company_ingresos, co.ciudad AS company_ciudad, co.pais AS company_pais, co.target_tier AS company_target_tier, co.segmento AS company_segmento,
-        COALESCE((SELECT json_agg(json_build_object('id', s.id, 'nombre', s.nombre, 'paso', cs.paso, 'estado', cs.estado, 'enrolled_at', COALESCE((cs.start_date + TIME '12:00')::timestamptz, cs.created_at)) ORDER BY s.nombre)
+        COALESCE((SELECT json_agg(json_build_object('id', s.id, 'nombre', s.nombre, 'paso', cs.paso, 'estado', cs.estado, 'enrolled_at', COALESCE((cs.start_date + TIME '12:00')::timestamptz, cs.created_at), 'paso_date', cs.paso_date::text) ORDER BY s.nombre)
                   FROM lm_contact_sequences cs JOIN sequences s ON s.id = cs.sequence_id
                   WHERE cs.contact_id = k.id), '[]') AS sequences,
         COALESCE((SELECT json_agg(json_build_object('id', cp.id, 'nombre', cp.nombre) ORDER BY cp.nombre)
@@ -2748,7 +2748,7 @@ app.post('/api/lm/contacts/:id/disposition', requireAuth, async (req, res) => {
 app.get('/api/lm/sequences/:id/contacts', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(`
-      SELECT cs.contact_id, cs.paso, cs.estado, COALESCE((cs.start_date + TIME '12:00')::timestamptz, cs.created_at) AS enrolled_at,
+      SELECT cs.contact_id, cs.paso, cs.estado, COALESCE((cs.start_date + TIME '12:00')::timestamptz, cs.created_at) AS enrolled_at, cs.paso_date::text AS paso_date,
         k.nombre, k.apellido, k.email, k.cargo, k.company_id, co.nombre AS company_nombre
       FROM lm_contact_sequences cs
       JOIN lm_contacts k ON k.id = cs.contact_id
@@ -2763,7 +2763,9 @@ app.patch('/api/lm/sequences/:id/contacts/:cid', requireAuth, async (req, res) =
   const b = req.body || {};
   const sets = []; const vals = [];
   if (b.estado != null) { vals.push(String(b.estado).slice(0, 20)); sets.push(`estado=$${vals.length}`); }
-  if (b.paso != null) { vals.push(parseInt(b.paso) || 1); sets.push(`paso=$${vals.length}`); }
+  // Al avanzar de paso se sella paso_date=HOY: el siguiente paso se agenda desde el día en que
+  // realmente completaste este (un retraso corre toda la cadencia, no la comprime).
+  if (b.paso != null) { vals.push(parseInt(b.paso) || 1); sets.push(`paso=$${vals.length}`); sets.push(`paso_date=CURRENT_DATE`); }
   if (!sets.length) return res.status(400).json({ error: 'Nada que actualizar' });
   vals.push(req.workspaceOwnerId, req.params.id, req.params.cid);
   try {
