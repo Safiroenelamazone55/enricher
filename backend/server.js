@@ -2741,6 +2741,27 @@ app.post('/api/lm/sequences/:id/redistribute', requireAuth, async (req, res) => 
     res.json({ updated: ids.length, spread_days: new Set(dates).size, per_day: drip });
   } catch (err) { console.error('[lm-seq-redist]', err.message); res.status(500).json({ error: 'Error al repartir' }); }
 });
+// Deshacer el último "Hecha": retrocede un paso (o reactiva si estaba terminado), re-ancla la fecha
+// y borra la actividad de completado falsa. Para cuando marcas por error sin haber hecho la tarea.
+app.post('/api/lm/sequences/:id/contacts/:cid/rollback', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId, sid = parseInt(req.params.id), cid = parseInt(req.params.cid);
+  try {
+    const enr = (await pool.query(`SELECT id, paso, estado FROM lm_contact_sequences WHERE user_id=$1 AND sequence_id=$2 AND contact_id=$3`, [uid, sid, cid])).rows[0];
+    if (!enr) return res.status(404).json({ error: 'Enrolamiento no encontrado' });
+    let newPaso = enr.paso || 1;
+    if (enr.estado === 'terminado') { /* reactivar en el último paso hecho */ }
+    else if ((enr.paso || 1) > 1) { newPaso = (enr.paso || 1) - 1; }
+    else return res.status(400).json({ error: 'Ya está en el primer paso; no hay nada que deshacer.' });
+    await pool.query(`UPDATE lm_contact_sequences SET paso=$1, estado='activo', paso_date=NULL, next_action_at=NOW() WHERE id=$2`, [newPaso, enr.id]);
+    // Borra la última actividad de completado de paso de este contacto (la que se creó por error).
+    const del = await pool.query(
+      `DELETE FROM activities WHERE id = (
+         SELECT id FROM activities WHERE user_id=$1 AND contact_id=$2 AND estado='hecha' AND nota LIKE 'Paso %'
+         ORDER BY fecha DESC, id DESC LIMIT 1) RETURNING id`,
+      [uid, cid]);
+    res.json({ paso: newPaso, estado: 'activo', activity_deleted: del.rowCount });
+  } catch (err) { console.error('[lm-seq-rollback]', err.message); res.status(500).json({ error: 'Error al deshacer' }); }
+});
 app.post('/api/lm/contacts/add-to-sequence', requireAuth, (req, res) => _lmAddMembership(req, res, 'sequence'));
 app.post('/api/lm/contacts/add-to-campaign', requireAuth, (req, res) => _lmAddMembership(req, res, 'campaign'));
 // Disposición outbound: marca el contacto, registra actividad y (si aplica) lo pausa en TODAS sus secuencias activas.

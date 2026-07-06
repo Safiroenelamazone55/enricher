@@ -11991,6 +11991,7 @@ const LeadManagerModule = (() => {
   let _section = 'dashboard'; // sección activa del workspace
   let _activeClient = null;   // id del cliente outbound en detalle
   let _activeSeq = null;      // id de la secuencia en editor
+  let _lastDone = null;       // { seqId, cid } último paso marcado hecho → para "Deshacer"
   const _ORDER = ['nuevo', 'contactado', 'propuesta', 'negociacion', 'ganado', 'perdido'];
   const _AV_PERSON = 'data:image/svg+xml,' + encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'><circle cx='20' cy='20' r='20' fill='#EAF5EE'/><circle cx='20' cy='16' r='6' fill='#00804C'/><path fill='#00804C' d='M9 33c0-5.5 4.9-9.5 11-9.5S31 27.5 31 33a20 20 0 0 1-22 0z'/></svg>");
   const _av = _ => _AV_PERSON;  // icono de persona uniforme para todos los contactos/leads
@@ -12571,6 +12572,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}
       <td><span class="client-badge" style="background:${em[1]};color:${em[2]}">${em[0]}</span></td>
       <td class="lm-dt-act" onclick="event.stopPropagation()">
         <button class="lm-mini-b" title="Escribir con IA (✨ Fable investiga en línea)" onclick="LeadManagerModule.openAiDrafts(${e.contact_id},${seqId})">${NI('sparkles')}</button>
+        ${(paso > 1 || done) ? `<button class="lm-mini-b" title="Deshacer último paso — lo marqué hecho por error" onclick="LeadManagerModule.seqCtRollback(${seqId},${e.contact_id})">↩</button>` : ''}
         ${done ? '' : `<button class="lm-mini-b" title="Avanzar de paso" onclick="LeadManagerModule.seqCtAdvance(${seqId},${e.contact_id})">→</button>`}
         <button class="lm-mini-b" title="${e.estado === 'pausado' ? 'Reanudar' : 'Pausar'}" onclick="LeadManagerModule.seqCtPause(${seqId},${e.contact_id})">${e.estado === 'pausado' ? '►' : 'II'}</button>
         <button class="lm-mini-x" title="Quitar de la secuencia" onclick="LeadManagerModule.seqCtRemove(${seqId},${e.contact_id})">✕</button>
@@ -12649,6 +12651,33 @@ table{width:100%;border-collapse:collapse;font-size:13px}
       _renderBody();
     } catch (e) { alert('Error: ' + e.message); }
   }
+  // ── Deshacer un "Hecha" marcado por error ──
+  async function _seqRollbackCore(seqId, cid) {
+    const res = await apiFetch(`${API}/lm/sequences/${seqId}/contacts/${cid}/rollback`, { method: 'POST' });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(d.error || 'Error');
+    return d;
+  }
+  async function seqCtRollback(seqId, cid) {
+    if (!confirm('¿Deshacer el último paso de este contacto?\n\nVuelve al paso anterior, la tarea reaparece y se borra el registro de “hecho”.')) return;
+    try {
+      await _seqRollbackCore(seqId, cid);
+      _seqContacts = null; if (_activeSeq === seqId) await _seqLoadContacts(seqId);
+      await _reloadContacts(); _renderBody();
+      showBanner('↩ Paso deshecho — el contacto volvió al paso anterior', 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  async function seqUndoLast() {
+    if (!_lastDone) return;
+    const { seqId, cid } = _lastDone; _lastDone = null;
+    try {
+      await _seqRollbackCore(seqId, cid);
+      _seqContacts = null; if (_activeSeq === seqId) await _seqLoadContacts(seqId);
+      await _reloadContacts();
+      openContactPage(cid, { seqId });
+      showBanner('↩ Deshecho — vuelves a la tarea', 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
   function seqEnrolOpen(seqId) {
     document.getElementById('lm-enrol-modal')?.remove();
     const enrolled = new Set((Array.isArray(_seqContacts) ? _seqContacts : []).map(e => e.contact_id));
@@ -12726,11 +12755,11 @@ table{width:100%;border-collapse:collapse;font-size:13px}
     try {
       const has = Array.isArray(_seqContacts) && _activeSeq === seqId && _seqContacts.some(e => e.contact_id === cid);
       if (!has) { _activeSeq = seqId; _seqContacts = null; await _seqLoadContacts(seqId); }
-      await _seqCompleteStep(seqId, cid);
+      await _seqCompleteStep(seqId, cid); _lastDone = { seqId, cid };
       _seqContacts = null; await _seqLoadContacts(seqId);
       await _reloadContacts();
       if (_section === 'tasks') _renderBody();
-      showBanner('✓ Paso completado', 'success');
+      showBanner('✓ Paso completado &nbsp; <a href="#" onclick="LeadManagerModule.seqUndoLast();return false;" style="color:#fff;text-decoration:underline">↩ Deshacer</a>', 'success');
     } catch (err) { showBanner('Error: ' + err.message, 'error'); }
   }
   // ── Panel de ejecución de tarea (task flow estilo Outreach) ──
@@ -13026,13 +13055,14 @@ table{width:100%;border-collapse:collapse;font-size:13px}
     const seqId = _cpTaskCtx.seqId, cid = _contactView;
     const btn = document.getElementById('seqdo-done'); if (btn) btn.disabled = true;
     try {
-      await _seqCompleteStep(seqId, cid);
+      await _seqCompleteStep(seqId, cid); _lastDone = { seqId, cid };
       _seqContacts = null; await _seqLoadContacts(seqId);
       await _reloadContacts();
       const today = new Date(new Date().toDateString());
       const next = _seqTasks(seqId).filter(t => t.due <= today)[0];
-      if (next) { openContactPage(next.e.contact_id, { seqId: seqId }); showBanner('✓ Hecha · siguiente', 'success'); }
-      else { seqDoExit(); showBanner('🎉 ¡No quedan tareas para hoy!', 'success'); }
+      const undoLink = ' &nbsp; <a href="#" onclick="LeadManagerModule.seqUndoLast();return false;" style="color:#fff;text-decoration:underline">↩ Deshacer</a>';
+      if (next) { openContactPage(next.e.contact_id, { seqId: seqId }); showBanner('✓ Hecha · siguiente' + undoLink, 'success'); }
+      else { seqDoExit(); showBanner('🎉 ¡No quedan tareas para hoy!' + undoLink, 'success'); }
     } catch (err) { if (btn) btn.disabled = false; showBanner('Error: ' + err.message, 'error'); }
   }
   function seqDoSkip() {
@@ -16251,7 +16281,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}
     openDrawer, closeDrawer, save, confirmDelete, convertToClient,
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
     openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
-    openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, confirmDeleteSequence, seqTab, seqCtAdvance, seqCtPause, seqCtRemove, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
+    openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, confirmDeleteSequence, seqTab, seqCtAdvance, seqCtPause, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
     seqTaskOpen, seqDoClose, seqDoCopy, seqDoDone, seqDoSkip, seqDoEditStep, seqDoExit, seqOpenLinkedIn,
     openStepDrawer, closeStepDrawer, saveStep, confirmDeleteStep, seqInsertVar, stepUseTpl, tzSearch, tzPick, tzBlur,
     stepSetMode, stepSetField, stepAddVariant, stepDelVariant, stepFocusTa,
