@@ -2437,10 +2437,10 @@ app.post('/api/outbound-clients', requireAuth, async (req, res) => {
   const estado = OBC_ESTADOS.includes(b.estado) ? b.estado : 'preparacion';
   try {
     const { rows } = await pool.query(`
-      INSERT INTO outbound_clients (user_id,nombre,estado,responsable,canal,website,mercado,icp,proxima_accion,notas)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *
+      INSERT INTO outbound_clients (user_id,nombre,estado,responsable,canal,website,mercado,icp,proxima_accion,notas,from_email,cc_email)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *
     `, [req.workspaceOwnerId, b.nombre.trim(), estado, b.responsable||'', b.canal||'', b.website||'',
-        b.mercado||'', b.icp||'', b.proxima_accion||'', b.notas||'']);
+        b.mercado||'', b.icp||'', b.proxima_accion||'', b.notas||'', _lmS(b.from_email), _lmS(b.cc_email)]);
     res.status(201).json(rows[0]);
   } catch (err) {
     console.error('[obc] POST error:', err.message);
@@ -2455,10 +2455,10 @@ app.put('/api/outbound-clients/:id', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(`
       UPDATE outbound_clients SET nombre=$1,estado=$2,responsable=$3,canal=$4,website=$5,
-        mercado=$6,icp=$7,proxima_accion=$8,notas=$9,updated_at=NOW()
-      WHERE id=$10 AND user_id=$11 RETURNING *
+        mercado=$6,icp=$7,proxima_accion=$8,notas=$9,from_email=$10,cc_email=$11,updated_at=NOW()
+      WHERE id=$12 AND user_id=$13 RETURNING *
     `, [b.nombre.trim(), estado, b.responsable||'', b.canal||'', b.website||'',
-        b.mercado||'', b.icp||'', b.proxima_accion||'', b.notas||'', req.params.id, req.workspaceOwnerId]);
+        b.mercado||'', b.icp||'', b.proxima_accion||'', b.notas||'', _lmS(b.from_email), _lmS(b.cc_email), req.params.id, req.workspaceOwnerId]);
     if (!rows.length) return res.status(404).json({ error: 'Cliente outbound no encontrado' });
     res.json(rows[0]);
   } catch (err) {

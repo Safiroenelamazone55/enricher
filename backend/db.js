@@ -555,6 +555,9 @@ async function initDb() {
       );
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS outbound_clients_user_idx ON outbound_clients (user_id);`);
+    // Buzón de envío del cliente (ej. Zoho que él proporciona) y CC solicitado — informativos, se muestran en la tarea.
+    await pool.query(`ALTER TABLE outbound_clients ADD COLUMN IF NOT EXISTS from_email TEXT NOT NULL DEFAULT '';`);
+    await pool.query(`ALTER TABLE outbound_clients ADD COLUMN IF NOT EXISTS cc_email   TEXT NOT NULL DEFAULT '';`);
     // leads ahora pueden pertenecer a un cliente outbound (nullable → no rompe leads existentes)
     await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS outbound_client_id INTEGER REFERENCES outbound_clients(id) ON DELETE SET NULL;`);
 

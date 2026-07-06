@@ -12856,8 +12856,15 @@ table{width:100%;border-collapse:collapse;font-size:13px}
     const raw = String(c.movil || c.telefono || '').replace(/\D/g, '');
     return raw.length >= 7 ? raw : '';
   }
-  function _gmailUrl(to, subject, body) {
-    return `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to || '')}&su=${encodeURIComponent(subject || '')}&body=${encodeURIComponent(body || '')}`;
+  function _gmailUrl(to, subject, body, cc) {
+    return `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to || '')}${cc ? `&cc=${encodeURIComponent(cc)}` : ''}&su=${encodeURIComponent(subject || '')}&body=${encodeURIComponent(body || '')}`;
+  }
+  function _copyBtn(val, lbl) { return `<button class="seqdo-copy seqdo-copy--xs" title="Copiar ${esc(lbl)}" onclick="LeadManagerModule.lmCopy('${esc(String(val).replace(/'/g, '&#39;'))}','${esc(lbl)}')">${NI('copy')}</button>`; }
+  function lmCopy(val, lbl) {
+    const v = String(val || '').replace(/&#39;/g, "'"); if (!v) return;
+    const ok = () => showBanner(`✓ ${lbl || 'Copiado'}`, 'success');
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(v).then(ok).catch(() => _seqDoCopyFallback(v, ok));
+    else _seqDoCopyFallback(v, ok);
   }
   async function _loadTaskDraft(cid, stepId, key) {
     try {
@@ -12903,10 +12910,13 @@ table{width:100%;border-collapse:collapse;font-size:13px}
                : (_stepVariants(st).length > 1 ? ` <span class="cp-var-tag">Variante ${esc(variant.nombre || '?')}</span>` : '');
     const disp = esc(rendered).replace(/(\{\{[^}]+\}\})/g, '<span class="seqdo-miss">$1</span>').replace(/\n/g, '<br>');
 
+    // Buzón/CC del cliente outbound (informativos, para el envío manual desde Zoho/etc.)
+    const obc = _clients.find(x => x.id === (seq && seq.outbound_client_id)) || {};
+    const ccMail = (obc.cc_email || '').trim(), fromMail = (obc.from_email || '').trim();
     // Acciones de 1 click por canal — el canal del paso va primero (primario)
     const wa = _waDigits(c);
     const A = [];
-    if (st.canal === 'email' && c.email) A.push(`<a class="btn btn--primary btn--sm" href="${esc(_gmailUrl(c.email, subject, rendered))}" target="_blank" rel="noopener" title="Abre Gmail con destinatario, asunto y mensaje ya puestos">${NI('mail')} Abrir Gmail listo</a>`);
+    if (st.canal === 'email' && c.email) A.push(`<a class="btn btn--primary btn--sm" href="${esc(_gmailUrl(c.email, subject, rendered, ccMail))}" target="_blank" rel="noopener" title="Abre Gmail con destinatario${ccMail ? ', CC' : ''}, asunto y mensaje ya puestos">${NI('mail')} Abrir Gmail listo</a>`);
     if (st.canal === 'whatsapp' && wa) A.push(`<a class="btn btn--primary btn--sm" href="https://wa.me/${wa}?text=${encodeURIComponent(rendered)}" target="_blank" rel="noopener" title="Abre WhatsApp con el mensaje ya puesto">${NI('whatsapp')} Abrir WhatsApp listo</a>`);
     if ((st.canal === 'linkedin' || st.canal === 'task' || st.canal === 'call') && c.linkedin) A.push(`<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.seqOpenLinkedIn(${cid})" title="Abre LinkedIn en una ventana a la derecha — pega el mensaje copiado">${NI('linkedin')} Abrir LinkedIn</button>`);
     // Secundarios (los otros canales disponibles, por si quieres cambiar de canal al vuelo)
@@ -12922,6 +12932,11 @@ table{width:100%;border-collapse:collapse;font-size:13px}
         <div class="cp-taskbar__ttl"><span class="cp-taskbar__t">${esc(st.titulo || touch[0])}</span><b class="cp-taskbar__ch" style="color:${touch[1]}">${touch[0]}</b><span class="cp-taskbar__meta">${pos >= 0 && queue.length ? `${pos + 1}/${queue.length} hoy` : `Día ${st.dia || 1}`}${seq && seq.timezone ? ` · 🕐 ≈ ${_suggestWindow(seq.timezone).her}` : ''}${seq ? ` · ${esc(seq.nombre)}` : ''}</span></div>
         <button class="cp-taskbar__exit" onclick="LeadManagerModule.seqDoExit()">‹ Tareas</button>
       </div>
+      ${st.canal === 'email' && c.email ? `<div class="cp-taskbar__mailto">
+        <span class="cp-taskbar__mt"><span class="cp-taskbar__subj-l">Para</span><span class="cp-taskbar__mt-v">${esc(c.email)}</span>${_copyBtn(c.email, 'Para copiado')}</span>
+        ${ccMail ? `<span class="cp-taskbar__mt cp-taskbar__mt--cc" title="El cliente pidió ir en copia"><span class="cp-taskbar__subj-l">CC</span><span class="cp-taskbar__mt-v">${esc(ccMail)}</span>${_copyBtn(ccMail, 'CC copiado')}</span>` : ''}
+        ${fromMail ? `<span class="cp-taskbar__mt cp-taskbar__mt--from" title="Envía desde este buzón del cliente"><span class="cp-taskbar__subj-l">De</span><span class="cp-taskbar__mt-v">${esc(fromMail)}</span>${_copyBtn(fromMail, 'Buzón copiado')}</span>` : ''}
+      </div>` : ''}
       ${st.canal === 'email' && subject ? `<div class="cp-taskbar__subj"><span class="cp-taskbar__subj-l">Asunto</span><span class="cp-taskbar__subj-v">${esc(subject)}</span>${/^re\s*:/i.test(subject) ? `<span class="lm-vb" style="background:#FEF3C7;color:#B45309" title="Follow-up: usa Re: del primer email para simular el hilo">Re:</span>` : ''}<button class="seqdo-copy seqdo-copy--xs" onclick="LeadManagerModule.seqDoCopySubject()">${NI('copy')}</button></div>` : ''}
       ${hasMsg
         ? `<div class="cp-taskbar__tpl"><div class="seqdo-tpl-hd"><span>Mensaje${vtag}</span><span style="display:flex;gap:6px"><button class="seqdo-copy seqdo-copy--xs" onclick="LeadManagerModule.openAiDrafts(${cid},${seqId})">${NI('sparkles')} IA</button><button class="seqdo-copy seqdo-copy--xs" onclick="LeadManagerModule.seqDoCopy()">${NI('copy')} Copiar</button></span></div><div class="seqdo-tpl seqdo-tpl--slim">${disp}</div></div>`
@@ -13975,6 +13990,8 @@ table{width:100%;border-collapse:collapse;font-size:13px}
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Responsable</span><select class="form-input" id="obc-responsable"><option value="">— Sin asignar —</option>${c?.responsable ? `<option value="${esc(c.responsable)}" selected>${esc(c.responsable)}</option>` : ''}</select></label>
         ${fld('obc-canal', 'Canal principal', c?.canal, 'Email · LinkedIn')}
         ${fld('obc-website', 'Website', c?.website, '')}
+        ${fld('obc-from', 'Buzón de envío (De)', c?.from_email, 'ej. ventas@clientezoho.com')}
+        ${fld('obc-cc', 'CC en emails', c?.cc_email, 'ej. gerente@cliente.com')}
         ${fld('obc-mercado', 'Mercado objetivo', c?.mercado, '')}
         ${fld('obc-icp', 'ICP principal', c?.icp, '')}
         ${fld('obc-proxima', 'Próxima acción', c?.proxima_accion, 'Ej. Revisar respuestas', true)}
@@ -14015,6 +14032,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}
       nombre, estado: $('obc-estado')?.value || 'preparacion',
       responsable: $('obc-responsable')?.value.trim() || '', canal: $('obc-canal')?.value.trim() || '',
       website: $('obc-website')?.value.trim() || '', mercado: $('obc-mercado')?.value.trim() || '',
+      from_email: $('obc-from')?.value.trim() || '', cc_email: $('obc-cc')?.value.trim() || '',
       icp: $('obc-icp')?.value.trim() || '', proxima_accion: $('obc-proxima')?.value.trim() || '',
       notas: $('obc-notas')?.value.trim() || '',
     };
@@ -16229,7 +16247,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}
     bulkVerifyEmails, connectGmail, sendCfgToggle, saveSendCfg,
     personalizeOne, bulkPersonalize, openAiDrafts, closeAiDrafts, aiGenerate,
     aiDraftSave, aiDraftStatus, aiDraftDelete, aiCfgToggle, saveAiCfg,
-    seqDoCopySubject,
+    seqDoCopySubject, lmCopy,
     openColsPicker, toggleCtCol, resetCtCols };
 })();
 
