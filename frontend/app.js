@@ -14167,7 +14167,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Zona horaria del prospecto</span><div class="tz-combo"><input class="form-input" id="seq-tz-search" autocomplete="off" placeholder="Ciudad, estado o país (ej. Dallas, New York, Lima)…" value="${esc(_tzLabelFor(s?.timezone || ''))}" oninput="LeadManagerModule.tzSearch()" onfocus="LeadManagerModule.tzSearch()" onblur="LeadManagerModule.tzBlur()"><input type="hidden" id="seq-tz" value="${esc(s?.timezone || '')}"><div class="tz-list" id="seq-tz-list"></div></div></label>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Fecha de inicio (opcional)</span><input class="form-input" type="date" id="seq-starts" value="${esc((s?.starts_on || '').slice(0, 10))}"><span class="seq-drip-hint">La secuencia arranca (día 1 de los contactos que enroles) en esta fecha. Vacío = arranca al momento de enrolar. Si cae en un día no permitido, se mueve al siguiente de cadencia.</span></label>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Días de cadencia</span><input type="hidden" id="seq-senddays" value="${_sanSendDays(s?.send_days)}"><div class="seq-days" id="seq-days">${['L', 'M', 'X', 'J', 'V', 'S', 'D'].map((lbl, i) => `<button type="button" class="seq-day${_sanSendDays(s?.send_days)[i] === '1' ? ' on' : ''}" data-d="${i}" onclick="LeadManagerModule.seqDayToggle(${i})">${lbl}</button>`).join('')}<span class="seq-days-sp"></span><button type="button" class="seq-days-preset" onclick="LeadManagerModule.seqDaysPreset('week')">L–V</button><button type="button" class="seq-days-preset" onclick="LeadManagerModule.seqDaysPreset('all')">Todos</button></div><span class="seq-drip-hint">Los pasos y tareas caen solo en los días marcados. Si un “día N” cae en un día no marcado, se mueve al siguiente permitido (ej. sáb/dom → lunes).</span></label>
-        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Arranque escalonado · contactos por día</span><input class="form-input" type="number" id="seq-drip" min="0" step="1" value="${s?.drip_per_day ? s.drip_per_day : ''}" placeholder="0 = todos arrancan el mismo día"><span class="seq-drip-hint">Al enrolar muchos contactos a la vez, reparte su “día 1” en tandas (ej. 20/día) para no saturarte de tareas ni de envíos. Se distribuyen automáticamente en los días de cadencia permitidos.</span></label>
+        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Arranque escalonado · contactos por día</span><input class="form-input" type="number" id="seq-drip" min="0" step="1" value="${s?.drip_per_day ? s.drip_per_day : ''}" placeholder="0 = todos arrancan el mismo día"><span class="seq-drip-hint">Al enrolar muchos contactos a la vez, reparte su “día 1” en tandas (ej. 20/día) para no saturarte de tareas ni de envíos. Se distribuyen automáticamente en los días de cadencia permitidos.${s ? ` <button type="button" class="seq-days-preset" onclick="LeadManagerModule.seqRedistribute(${s.id})" title="Recalcula las fechas de los contactos que aún no empiezan, según el valor de arriba (guárdalo primero)">↻ Repartir ahora los ya enrolados</button>` : ''}</span></label>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Límite diario de envíos (esta secuencia)</span><input class="form-input" type="number" id="seq-dlim" min="0" step="1" value="${s?.daily_limit ? s.daily_limit : ''}" placeholder="0 = usa el límite global del workspace"><span class="seq-drip-hint">Tope de emails automáticos por día para el buzón de este cliente. Al llegar al tope, el motor sigue con las demás secuencias y esta continúa mañana.</span></label>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Objetivo</span><input class="form-input" id="seq-objetivo" value="${s ? esc(s.objetivo) : ''}" placeholder="Ej. Agendar demo"></label>
       </div>
@@ -14178,6 +14178,16 @@ table{width:100%;border-collapse:collapse;font-size:13px}
       </div></div></div>`;
     document.body.appendChild(m);
     setTimeout(() => $('seq-nombre')?.focus(), 60);
+  }
+  async function seqRedistribute(id) {
+    if (!confirm('¿Repartir de nuevo los contactos que AÚN NO empiezan (paso 1) según “contactos por día”?\n\nLos que ya avanzaron de paso no se tocan. Guarda la secuencia antes si acabas de cambiar el número.')) return;
+    try {
+      const res = await apiFetch(`${API}/lm/sequences/${id}/redistribute`, { method: 'POST' });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || 'Error');
+      showBanner(`✓ ${d.updated} contacto(s) repartidos en ${d.spread_days} día(s) (${d.per_day}/día)`, 'success');
+      closeSequenceDrawer(); await load();
+    } catch (e) { alert('Error: ' + e.message); }
   }
   function _seqDaysRender() { const inp = $('seq-senddays'); const m = _sanSendDays(inp?.value); document.querySelectorAll('#seq-days .seq-day').forEach(b => { const i = +b.dataset.d; b.classList.toggle('on', m[i] === '1'); }); }
   function seqDayToggle(i) { const inp = $('seq-senddays'); if (!inp) return; const m = _sanSendDays(inp.value).split(''); m[i] = m[i] === '1' ? '0' : '1'; if (!m.includes('1')) m[i] = '1'; inp.value = m.join(''); _seqDaysRender(); }
@@ -16247,7 +16257,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}
     stepSetMode, stepSetField, stepAddVariant, stepDelVariant, stepFocusTa,
     stepTagInput, stepTagKey, stepTagPick, stepTagAddTyped, stepTagRemove, stepTagBlur,
     stepCanalChange, stepVarUseTpl, stepVarEdit, stepAutoLink,
-    seqDayToggle, seqDaysPreset, stepUseSuggestedHour, seqReportOpen, seqReportGen,
+    seqDayToggle, seqDaysPreset, stepUseSuggestedHour, seqReportOpen, seqReportGen, seqRedistribute,
     openTemplate, closeTemplate, saveTemplate, deleteTemplate, tplInsertVar, tplSetFilter, tplSetTag, tplSetSeq, tplCanalChange,
     tplTagInput, tplTagKey, tplTagPick, tplTagAddTyped, tplTagRemove, tplTagBlur,
     tplSeqInput, tplSeqKey, tplSeqPick, tplSeqRemove, tplSeqBlur,

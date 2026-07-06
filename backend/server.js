@@ -2717,6 +2717,30 @@ async function _lmAddMembership(req, res, kind) {
     res.json({ added: r.rowCount, requested: ids.length, spread_days: spreadDays, per_day: drip });
   } catch (err) { console.error('[lm-mem]', err.message); res.status(500).json({ error: 'Error al añadir' }); }
 }
+// Reparte de nuevo los contactos AÚN SIN EMPEZAR (paso=1, activos) según drip_per_day y send_days.
+// Útil cuando cambias el arranque escalonado DESPUÉS de haber enrolado (las fechas ya asignadas no se recalculan solas).
+app.post('/api/lm/sequences/:id/redistribute', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId, sid = parseInt(req.params.id);
+  try {
+    const sq = (await pool.query(`SELECT drip_per_day, send_days, starts_on::text AS starts_on FROM sequences WHERE id=$1 AND user_id=$2`, [sid, uid])).rows[0];
+    if (!sq) return res.status(404).json({ error: 'Secuencia no encontrada' });
+    const drip = Math.max(0, parseInt(sq.drip_per_day) || 0);
+    if (!drip) return res.status(400).json({ error: 'Define primero “Arranque escalonado · contactos por día” en la secuencia' });
+    const mask = _sanSendDays(sq.send_days);
+    const { rows: enrs } = await pool.query(`SELECT id FROM lm_contact_sequences WHERE user_id=$1 AND sequence_id=$2 AND estado='activo' AND paso=1 ORDER BY start_date ASC NULLS FIRST, created_at ASC, id ASC`, [uid, sid]);
+    if (!enrs.length) return res.json({ updated: 0, spread_days: 0, per_day: drip });
+    let base = _todayUTC();
+    if (sq.starts_on && /^\d{4}-\d{2}-\d{2}$/.test(sq.starts_on)) { const [y, mo, d] = sq.starts_on.split('-').map(Number); const so = new Date(Date.UTC(y, mo - 1, d)); if (so > base) base = so; }
+    const ids = [], dates = [];
+    let slot = 0, cur = _nthAllowed(base, 0, mask), curStr = _ymd(cur), inDay = 0;
+    for (const e of enrs) {
+      while (inDay >= drip) { slot++; cur = _nthAllowed(base, slot, mask); curStr = _ymd(cur); inDay = 0; }
+      ids.push(e.id); dates.push(curStr); inDay++;
+    }
+    await pool.query(`UPDATE lm_contact_sequences cs SET start_date=t.sd::date, next_action_at=t.sd::timestamptz FROM unnest($1::int[],$2::text[]) AS t(id,sd) WHERE cs.id=t.id`, [ids, dates]);
+    res.json({ updated: ids.length, spread_days: new Set(dates).size, per_day: drip });
+  } catch (err) { console.error('[lm-seq-redist]', err.message); res.status(500).json({ error: 'Error al repartir' }); }
+});
 app.post('/api/lm/contacts/add-to-sequence', requireAuth, (req, res) => _lmAddMembership(req, res, 'sequence'));
 app.post('/api/lm/contacts/add-to-campaign', requireAuth, (req, res) => _lmAddMembership(req, res, 'campaign'));
 // Disposición outbound: marca el contacto, registra actividad y (si aplica) lo pausa en TODAS sus secuencias activas.
