@@ -14373,6 +14373,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}
   let _contacts  = [];
   let _coQuery = '';
   let _ctQuery = '';
+  let _ctClientFilter = '';   // filtro por cliente outbound asignado
   let _ctFilters = [];        // filtros avanzados de contactos: [{field, op, val}]
   let _coFilters = [];        // filtros avanzados de empresas
   let _fltEntity = null;      // entidad del modal de filtros abierto
@@ -14741,6 +14742,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}
       <div class="lm-toolbar">
         <div class="lm-search lm-search--wide"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" id="lm-ct-search" placeholder="Buscar contacto, empresa, email…" value="${esc(_ctQuery)}" oninput="LeadManagerModule.filterContacts(this.value)"></div>
         <span class="lm-count" id="lm-ct-count"></span>
+        ${_clients.length ? `<select class="lm-tpl-tagsel" title="Filtrar por cliente outbound" onchange="LeadManagerModule.ctSetClient(this.value)"><option value="">◆ Todos los clientes</option>${_clients.map(cl => `<option value="${cl.id}"${String(_ctClientFilter) === String(cl.id) ? ' selected' : ''}>${esc(cl.nombre)}</option>`).join('')}</select>` : ''}
         <button class="lm-filter-btn${_ctFilters.length ? ' on' : ''}" onclick="LeadManagerModule.openFilters('contacts')">${_FLT_ICON} Filtros${_ctFilters.length ? ` · ${_ctFilters.length}` : ''}</button>
         <button class="lm-filter-btn" onclick="LeadManagerModule.openViews('contacts')">${_VIEW_ICON} Vistas</button>
         <button class="lm-filter-btn" title="Elegir columnas visibles" onclick="LeadManagerModule.openColsPicker(this)">${NI('sliders')} Columnas</button>
@@ -14849,8 +14851,10 @@ table{width:100%;border-collapse:collapse;font-size:13px}
     const q = _ctQuery;
     let list = _contacts;
     if (q) list = list.filter(c => (`${c.nombre || ''} ${c.apellido || ''} ${c.email || ''} ${c.company_nombre || c.empresa_nombre || ''} ${c.cargo || ''}`).toLowerCase().includes(q));
+    if (_ctClientFilter) list = list.filter(c => String(c.outbound_client_id) === String(_ctClientFilter));
     if (_ctFilters.length) list = list.filter(c => _lmMatch(c, _ctFilters));
-    const cnt = $('lm-ct-count'); if (cnt) cnt.textContent = (q || _ctFilters.length) ? `${list.length} de ${_contacts.length}` : `${_contacts.length} contacto${_contacts.length === 1 ? '' : 's'}`;
+    const activeFlt = q || _ctFilters.length || _ctClientFilter;
+    const cnt = $('lm-ct-count'); if (cnt) cnt.textContent = activeFlt ? `${list.length} de ${_contacts.length}` : `${_contacts.length} contacto${_contacts.length === 1 ? '' : 's'}`;
     _ctFilteredIds = list.map(c => c.id);
     _ctSel.forEach(id => { if (!_ctFilteredIds.includes(id)) _ctSel.delete(id); });
     if (!list.length) {
@@ -14878,6 +14882,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}
     _syncSelAll();
   }
   function filterContacts(v) { _ctQuery = (v || '').toLowerCase().trim(); _renderContacts(); }
+  function ctSetClient(v) { _ctClientFilter = v || ''; _renderBody(); }
   function toggleCt(ev, id) { const on = ev.target.checked; if (on) _ctSel.add(id); else _ctSel.delete(id); ev.target.closest('tr')?.classList.toggle('sel', on); _renderBulkBar(); _syncSelAll(); }
   function toggleCtAll(on) { if (on) _ctFilteredIds.forEach(id => _ctSel.add(id)); else _ctFilteredIds.forEach(id => _ctSel.delete(id)); _renderContacts(); }
   function clearCtSel() { _ctSel.clear(); _renderContacts(); }
@@ -15378,15 +15383,36 @@ table{width:100%;border-collapse:collapse;font-size:13px}
     }
   }
 
+  // Parser CSV real: respeta campos entre comillas (con comas, saltos de línea y "" escapadas dentro).
+  function _csvParse(text, delim) {
+    const rows = []; let row = [], field = '', q = false, i = 0; const n = text.length;
+    while (i < n) {
+      const c = text[i];
+      if (q) {
+        if (c === '"') { if (text[i + 1] === '"') { field += '"'; i += 2; continue; } q = false; i++; continue; }
+        field += c; i++; continue;
+      }
+      if (c === '"') { q = true; i++; continue; }
+      if (c === delim) { row.push(field); field = ''; i++; continue; }
+      if (c === '\n') { row.push(field); rows.push(row); row = []; field = ''; i++; continue; }
+      if (c === '\r') { i++; continue; }
+      field += c; i++;
+    }
+    if (field.length || row.length) { row.push(field); rows.push(row); }
+    return rows;
+  }
   function _lmReadCsv(file) {
     return new Promise((resolve, reject) => {
       const rd = new FileReader();
       rd.onload = e => {
-        const lines = String(e.target.result || '').split(/\r?\n/).filter(l => l.trim().length);
-        if (!lines.length) { resolve({ headers: [], sampleRows: [] }); return; }
-        const d = lines[0].includes('\t') ? '\t' : lines[0].includes(';') ? ';' : ',';
-        const pr = l => l.split(d).map(x => x.replace(/^["']|["']$/g, '').trim());
-        resolve({ headers: pr(lines[0]), sampleRows: lines.slice(1, 6).map(pr) });
+        let text = String(e.target.result || '');
+        if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1); // quitar BOM
+        const firstLine = text.split(/\r?\n/)[0] || '';
+        const d = firstLine.includes('\t') ? '\t' : (firstLine.split(';').length > firstLine.split(',').length ? ';' : ',');
+        const rows = _csvParse(text, d).filter(r => r.some(c => String(c).trim().length));
+        if (!rows.length) { resolve({ headers: [], sampleRows: [] }); return; }
+        const trim = r => r.map(x => String(x).trim());
+        resolve({ headers: trim(rows[0]), sampleRows: rows.slice(1, 6).map(trim) });
       };
       rd.onerror = () => reject(new Error('No se pudo leer el archivo.'));
       rd.readAsText(file);
@@ -16129,7 +16155,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}
   return { load, filter, setFilter, setView, go, openClient, clientTab,
     openImport, closeImport, impFile, impToggleHeader, impSetObc, impNewClient, impRun, exportCsv,
     cbxOpen, cbxFilter, cbxPick, cbxBlur,
-    openContact, closeContact, saveContact, deleteContact, filterContacts, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, bulkDeleteContacts, bulkAddOpen, bulkAddDo, openContactPage, cpTab, cpSave, cpDelete, cpActOpen, cpActSave, cpActToggle, cpActDel,
+    openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, bulkDeleteContacts, bulkAddOpen, bulkAddDo, openContactPage, cpTab, cpSave, cpDelete, cpActOpen, cpActSave, cpActToggle, cpActDel,
     openCompany, closeCompany, saveCompany, deleteCompany, filterCompanies, toggleCo, toggleCoAll, clearCoSel, toggleCoSelMode, bulkDeleteCompanies,
     openDrawer, closeDrawer, save, confirmDelete, convertToClient,
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
