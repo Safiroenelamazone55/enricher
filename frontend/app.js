@@ -12400,19 +12400,45 @@ const LeadManagerModule = (() => {
       reuniones:   met && met.reuniones   != null ? +met.reuniones   : (d.byDisp.reunion || 0),
     };
   }
-  // Contexto (Mercado / ICP / Objetivo / Notas) con fallback a la campaña cuando el propio está vacío.
+  // Texto pegado (multilínea) → HTML compacto: colapsa líneas en blanco, marca
+  // sub-encabezados (líneas que terminan en ':') y agrupa listas (líneas cortas
+  // seguidas) en <ul> — a 2 columnas cuando son largas. Evita el doblado de
+  // altura de white-space:pre-wrap sin perder la estructura que el usuario pegó.
+  function _rtText(str) {
+    const raw = String(str || '').replace(/\r/g, '').replace(/\n{3,}/g, '\n\n').trim();
+    if (!raw) return '';
+    const lines = raw.split('\n');
+    const isItem = l => l.length <= 52 && !/[.:!?;]$/.test(l);
+    let html = '', list = [];
+    const flush = () => { if (!list.length) return; const many = list.length >= 6; html += `<ul class="rt-ul${many ? ' rt-ul--2' : ''}">${list.map(x => `<li>${esc(x)}</li>`).join('')}</ul>`; list = []; };
+    for (let i = 0; i < lines.length; i++) {
+      const l = lines[i].trim();
+      if (!l) { flush(); continue; }
+      if (/:$/.test(l) && l.length <= 60) { flush(); html += `<p class="rt-h">${esc(l)}</p>`; continue; }
+      const nxt = (lines[i + 1] || '').trim();
+      if (isItem(l) && (list.length || (nxt && isItem(nxt)))) { list.push(l); continue; }
+      flush();
+      html += `<p class="rt-p">${esc(l)}</p>`;
+    }
+    flush();
+    return html;
+  }
+  // Primera línea (o corte) para resúmenes de una sola línea.
+  function _firstLine(str, n) { const s = String(str || '').replace(/\r/g, '').split('\n').map(x => x.trim()).filter(Boolean)[0] || ''; return s.length > (n || 90) ? s.slice(0, n || 90).replace(/\s+\S*$/, '') + '…' : s; }
+  // Contexto (Mercado / ICP / Objetivo / Notas) full-width apilado (sin columnas
+  // que dejan hueco). Fallback a la campaña cuando el propio está vacío.
   function _rptContext(L, own, fb, fbLbl) {
-    const src = k => (!own[k] && fb && fb[k]) ? `<span class="src">· ${esc(fbLbl)}</span>` : '';
     const val = k => own[k] || (fb && fb[k]) || '';
-    const cards = [];
-    if (val('mercado')) cards.push(`<div class="card"><h4>${esc(L.market)}${src('mercado')}</h4><p>${esc(val('mercado'))}</p></div>`);
-    if (val('icp'))     cards.push(`<div class="card"><h4>${esc(L.icp)}${src('icp')}</h4><p>${esc(val('icp'))}</p></div>`);
-    if (own.objetivo)   cards.push(`<div class="card full"><h4>${esc(L.obj)}</h4><p>${esc(own.objetivo)}</p></div>`);
-    let notes = '';
-    if (own.notas) notes += `<div class="note" style="margin-top:12px"><b class="note__t">${esc(L.notes)}</b>${esc(own.notas)}</div>`;
-    if (fb && fb.notas && fb.notas !== own.notas) notes += `<div class="note note--navy" style="margin-top:12px"><b class="note__t note__t--navy">${esc(L.notes)} · ${esc(fbLbl)}</b>${esc(fb.notas)}</div>`;
-    if (!cards.length && !notes) return '';
-    return `<div class="sec"><h2>${esc(L.context)}</h2>${cards.length ? `<div class="cards">${cards.join('')}</div>` : ''}${notes}</div>`;
+    const src = k => (!own[k] && fb && fb[k]) ? ` <span class="src">· ${esc(fbLbl)}</span>` : '';
+    const blk = (label, key, cls, srcKey) => { const v = val(key); return v ? `<div class="ctx ${cls || ''}"><div class="ctx-h">${esc(label)}${srcKey ? src(srcKey) : ''}</div><div class="ctx-b">${_rtText(v)}</div></div>` : ''; };
+    let out = '';
+    out += blk(L.market, 'mercado', 'ctx--split', 'mercado');
+    out += blk(L.icp, 'icp', 'ctx--split', 'icp');
+    if (own.objetivo) out += `<div class="ctx"><div class="ctx-h">${esc(L.obj)}</div><div class="ctx-b">${_rtText(own.objetivo)}</div></div>`;
+    if (own.notas) out += `<div class="ctx ctx--note"><div class="ctx-h">${esc(L.notes)}</div><div class="ctx-b">${_rtText(own.notas)}</div></div>`;
+    if (fb && fb.notas && fb.notas !== own.notas) out += `<div class="ctx ctx--note ctx--note2"><div class="ctx-h">${esc(L.notes)} · ${esc(fbLbl)}</div><div class="ctx-b">${_rtText(fb.notas)}</div></div>`;
+    if (!out) return '';
+    return `<div class="sec sec--ctx"><h2>${esc(L.context)}</h2>${out}</div>`;
   }
   function _rptCss() {
     return `*{box-sizing:border-box;margin:0;padding:0}
@@ -12434,20 +12460,26 @@ body{font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;colo
 .kpi b{display:block;font-family:Georgia,serif;font-size:28px;color:#0f2b3d;font-weight:700}
 .kpi.hero b{color:#00804C}
 .kpi span{font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:#7b8794;font-weight:700;margin-top:3px;display:block}
-.sec{padding:26px 52px;break-inside:avoid}
+.sec{padding:20px 52px}
 .sec+.sec{border-top:1px solid #eef1f4}
-.sec h2{font-family:Georgia,serif;font-size:17px;color:#0f2b3d;margin-bottom:14px;display:flex;align-items:center;gap:10px}
+.sec h2{font-family:Georgia,serif;font-size:16px;color:#0f2b3d;margin-bottom:12px;display:flex;align-items:center;gap:10px;break-after:avoid}
 .sec h2:before{content:"";width:20px;height:5px;border-radius:3px;background:linear-gradient(90deg,#00804C,#B5E951);flex:none}
-.cards{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.card{border:1px solid #e5e9ec;border-radius:10px;padding:13px 15px;background:#fbfcfc;break-inside:avoid}
-.card.full{grid-column:1/-1}
-.card h4{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#00804C;font-weight:800;margin-bottom:5px}
-.card h4 .src,.note__t .src{color:#9aa5b1;font-weight:600;text-transform:none;letter-spacing:0;margin-left:5px}
-.card p{font-size:13px;color:#1b2733;white-space:pre-wrap}
-.note{border-left:3px solid #00804C;background:#f0f8f4;padding:11px 14px;border-radius:0 8px 8px 0;font-size:12.5px;white-space:pre-wrap}
-.note--navy{border-left-color:#0f2b3d;background:#f2f6f9}
-.note__t{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#00804C;display:block;margin-bottom:4px}
-.note__t--navy{color:#0f2b3d}
+/* ── Contexto (texto pegado, compacto y estructurado) ── */
+.ctx{margin:0 0 12px}
+.ctx:last-child{margin-bottom:0}
+.ctx-h{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#00804C;font-weight:800;margin-bottom:5px;break-after:avoid}
+.ctx-h .src{color:#9aa5b1;font-weight:600;text-transform:none;letter-spacing:0}
+.ctx--split .ctx-b{columns:2;column-gap:30px}
+.ctx--note{border-left:3px solid #00804C;background:#f0f8f4;padding:10px 14px;border-radius:0 8px 8px 0}
+.ctx--note2{border-left-color:#0f2b3d;background:#f2f6f9}
+.ctx--note .ctx-h{color:#0f2b3d}
+.rt-p{font-size:12px;color:#28323c;margin:0 0 5px;break-inside:avoid;line-height:1.42}
+.rt-p:last-child{margin-bottom:0}
+.rt-h{font-size:12px;font-weight:700;color:#0f2b3d;margin:7px 0 3px;break-after:avoid;break-inside:avoid}
+.rt-ul{margin:2px 0 6px;padding-left:15px;font-size:12px;color:#28323c}
+.rt-ul li{margin:1px 0;break-inside:avoid;line-height:1.35}
+.rt-ul--2{columns:2;column-gap:22px}
+.ctx-b>*:first-child{margin-top:0}
 table{width:100%;border-collapse:collapse;font-size:13px}
 .kvt th{text-align:left;color:#7b8794;font-weight:600;width:44%;padding:7px 0;vertical-align:top;font-size:12.5px}
 .kvt td{padding:7px 0;color:#1b2733;font-weight:500}
@@ -12470,9 +12502,9 @@ table{width:100%;border-collapse:collapse;font-size:13px}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:24px}
 .h3{font-size:11px;color:#7b8794;margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;font-weight:800}
 .muted{color:#9aa5b1;font-style:italic}
-.seqblk{border:1px solid #e5e9ec;border-radius:12px;margin:0 0 14px;overflow:hidden;break-inside:avoid}
+.seqblk{border:1px solid #e5e9ec;border-radius:12px;margin:0 0 14px;overflow:hidden}
 .seqblk:last-child{margin-bottom:0}
-.seqblk__hd{background:#f7f9fa;padding:12px 18px;display:flex;justify-content:space-between;align-items:center;gap:10px;border-bottom:1px solid #e5e9ec}
+.seqblk__hd{background:#f7f9fa;padding:12px 18px;display:flex;justify-content:space-between;align-items:center;gap:10px;border-bottom:1px solid #e5e9ec;break-inside:avoid;break-after:avoid}
 .seqblk__nm{font-family:Georgia,serif;font-size:15.5px;color:#0f2b3d;font-weight:700}
 .seqblk__bd{padding:14px 18px}
 .cfgline{font-size:12px;color:#61707d;margin-bottom:4px}
@@ -12546,7 +12578,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}
   <div class="cover">
     <div class="kicker">${esc(L.title)}</div>
     <h1>${esc(s.nombre || '')} &nbsp;${_rptPill(estKey, lang)}</h1>
-    <div class="facts">${fact(L.client, cli)}${fact(L.campaign, cmp ? cmp.nombre : '')}${fact(L.market, s.mercado || (cmp && cmp.mercado) || '')}${fact(L.gen, nowStr)}</div>
+    <div class="facts">${fact(L.client, cli)}${fact(L.campaign, cmp ? cmp.nombre : '')}${fact(L.launch, launch)}${fact(L.gen, nowStr)}</div>
   </div>
   <div class="kpis">${kpi(d.touches, L.touches)}${kpi(M.enrolados, L.leads)}${kpi(M.contactados, L.contacted, true)}${kpi(M.respuestas, L.replies, true)}${kpi(M.reuniones, L.meetings, true)}${kpi(d.segCount, L.segments)}</div>
   ${_rptContext(L, { mercado: s.mercado || '', icp: s.icp || '', objetivo: s.objetivo || '', notas: s.notas || '' }, cmp ? { mercado: cmp.mercado || '', icp: cmp.icp || '', notas: cmp.notas || '' } : null, L.campaign)}
@@ -12580,7 +12612,9 @@ table{width:100%;border-collapse:collapse;font-size:13px}
       const mask = _sanSendDays(s.send_days);
       const drip = (parseInt(s.drip_per_day) || 0) > 0 ? s.drip_per_day + L.perDay : '';
       const dlim = (parseInt(s.daily_limit) || 0) > 0 ? s.daily_limit + L.perDay : '';
-      const seg = [s.mercado && `${esc(L.market)}: <b>${esc(s.mercado)}</b>`, s.icp && `${esc(L.icp)}: <b>${esc(s.icp)}</b>`].filter(Boolean).join(' &nbsp;·&nbsp; ');
+      // Resumen de una línea para Mercado/ICP de la secuencia (el detalle completo
+      // vive en el informe individual de la secuencia).
+      const seg = [s.mercado && `${esc(L.market)}: <b>${esc(_firstLine(s.mercado, 70))}</b>`, s.icp && `${esc(L.icp)}: <b>${esc(_firstLine(s.icp, 70))}</b>`].filter(Boolean).join('<br>');
       const cfg = [`${esc(L.touches)}: <b>${d.touches}</b>`, drip && `${esc(L.drip)}: <b>${esc(drip)}</b>`, dlim && `${esc(L.dailyLim)}: <b>${esc(dlim)}</b>`, s.starts_on && `${esc(L.launch)}: <b>${esc(_rptDateFmt(s.starts_on, lang))}</b>`].filter(Boolean).join(' &nbsp;·&nbsp; ');
       const stepsLine = d.steps.length
         ? d.steps.map(st => `<span class="sday">${esc(L.day.slice(0, 1))}${st.dia || 1}</span>${esc(_rptChan(st.canal, lang))}${st.titulo ? ` <span class="muted">· ${esc(st.titulo)}</span>` : ''}`).join('<span class="sarrow">→</span>')
@@ -12588,11 +12622,11 @@ table{width:100%;border-collapse:collapse;font-size:13px}
       return `<div class="seqblk">
         <div class="seqblk__hd"><span class="seqblk__nm">${esc(s.nombre)}</span>${_rptPill(s.estado || 'draft', lang)}</div>
         <div class="seqblk__bd">
-          ${seg ? `<div class="cfgline">${seg}</div>` : ''}
           <div class="cfgline">${cfg} &nbsp;·&nbsp; ${_rptDays(mask, L)}</div>
+          ${seg ? `<div class="cfgline">${seg}</div>` : ''}
           <div class="minik">${mk(M.enrolados, L.leads)}${mk(M.contactados, L.contacted, true)}${mk(M.respuestas, L.replies, true)}${mk(M.reuniones, L.meetings, true)}</div>
           <div class="steps-line">${stepsLine}</div>
-          ${s.notas ? `<div class="note" style="margin-top:10px"><b class="note__t">${esc(L.notes)}</b>${esc(s.notas)}</div>` : ''}
+          ${s.notas ? `<div class="ctx ctx--note" style="margin-top:10px"><div class="ctx-h">${esc(L.notes)}</div><div class="ctx-b">${_rtText(s.notas)}</div></div>` : ''}
         </div>
       </div>`;
     }).join('') : `<p class="muted">${esc(L.noSeqs)}</p>`;
