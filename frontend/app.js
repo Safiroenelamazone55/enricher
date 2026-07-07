@@ -12795,11 +12795,15 @@ ${foot}
       }
       const todo = tasks.filter(t => t.due <= today);
       const future = tasks.filter(t => t.due > today);
+      const over = todo.filter(t => t.due < today).sort((a, b) => a.due - b.due || (a.st.hora || '99:99').localeCompare(b.st.hora || '99:99'));
+      const hoy = todo.filter(t => t.due.getTime() === today.getTime()).sort((a, b) => (a.st.hora || '99:99').localeCompare(b.st.hora || '99:99'));
       const nextLine = future.length ? `<div class="seq-next">Siguiente tarea: <b>${_relDay(future[0].due)}</b>${future.length > 1 ? ` · +${future.length - 1} más` : ''}</div>` : '';
       const head = todo.length
-        ? `<div class="seq-tasks-hd">${todo.length} ${todo.length === 1 ? 'tarea' : 'tareas'} para hoy<button class="seq-tasks-start" onclick="LeadManagerModule.seqTaskOpen(${id},${todo[0].e.contact_id})">▶ Empezar</button></div>`
+        ? `<div class="seq-tasks-hd">${todo.length} ${todo.length === 1 ? 'tarea' : 'tareas'} por hacer<button class="seq-tasks-start" onclick="LeadManagerModule.seqTaskOpen(${id},${todo[0].e.contact_id})">▶ Empezar</button></div>`
         : `<div class="seq-tasks-hd seq-tasks-hd--none">Sin tareas para hoy</div>`;
-      return `${head}${todo.length ? `<div class="seq-tasks">${todo.map(t => _seqTaskRow(t, id, today)).join('')}</div>` : ''}${nextLine}`;
+      const grp = (over.length ? `<div class="lm-tsec-h" style="color:#C4342B">⚠ Vencidas · ${over.length}</div><div class="seq-tasks">${over.map(t => _seqTaskRow(t, id, today)).join('')}</div>` : '')
+                + (hoy.length ? `<div class="lm-tsec-h">Hoy · ${hoy.length}</div><div class="seq-tasks">${hoy.map(t => _seqTaskRow(t, id, today)).join('')}</div>` : '');
+      return `${head}${grp}${nextLine}`;
     }
     if (_seqTab === 'envios') {
       if (_seqMsgs === null) return `<div class="cp-empty2" style="padding:22px">Cargando envíos…</div>`;
@@ -13055,13 +13059,11 @@ ${foot}
     const touch = _TOUCH[st.canal] || _TOUCH.email;
     const full = [e.nombre, e.apellido].filter(Boolean).join(' ') || e.email || '—';
     const overdue = due < today; const isToday = due.getTime() === today.getTime();
-    const dLabel = isToday ? 'Hoy' : overdue ? 'Vencida' : due.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
     return `<div class="seq-task${overdue ? ' over' : ''}${isToday ? ' today' : ''}" onclick="LeadManagerModule.seqTaskOpen(${seqId},${e.contact_id})" title="Hacer tarea">
       <span class="seq-task__ico" style="background:${touch[1]}1a;color:${touch[1]}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${touch[2]}</svg></span>
       <div class="seq-task__body"><div class="seq-task__t">${esc(st.titulo || touch[0])}<span class="seq-task__ch" style="color:${touch[1]}">${touch[0]}</span></div><div class="seq-task__who">${esc(full)}${e.company_nombre ? ` · ${esc(e.company_nombre)}` : ''}</div></div>
       ${_taskTimeHtml(st, seqId)}
-      <span class="seq-task__go">Hacer ›</span>
-      <span class="seq-task__due">${dLabel}</span>
+      <span class="seq-task__go" style="opacity:1;color:var(--brand-d,#006B3F)">Hacer tarea ›</span>
     </div>`;
   }
   async function _seqCompleteStep(seqId, cid) {
