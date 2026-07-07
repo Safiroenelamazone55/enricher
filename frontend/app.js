@@ -12826,7 +12826,7 @@ ${foot}
       const r = await _lmSetDispositionCore(cid, disp);
       await _reloadContacts();
       if (_activeSeq && Array.isArray(_seqContacts)) { _seqContacts = null; await _seqLoadContacts(_activeSeq); }
-      showBanner(disp ? `✓ ${_dispoLabel(disp)}${r.paused ? ` · pausado en ${r.paused} secuencia${r.paused === 1 ? '' : 's'}` : ''}` : '✓ Disposición quitada', 'success');
+      showBanner(disp ? `✓ ${_dispoLabel(disp)}${r.rerouted ? ` · → Ruta A (LinkedIn) en ${r.rerouted} secuencia${r.rerouted === 1 ? '' : 's'}` : ''}${r.paused ? ` · pausado en ${r.paused} secuencia${r.paused === 1 ? '' : 's'}` : ''}` : '✓ Disposición quitada', 'success');
       if (_section === 'contact-view') { _renderBody(); _cpReloadActs(cid); } else _renderBody();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
@@ -12836,7 +12836,7 @@ ${foot}
     try {
       const r = await _lmSetDispositionCore(cid, disp, seqId);
       _seqContacts = null; await _seqLoadContacts(seqId); await _reloadContacts();
-      showBanner(`✓ ${_dispoLabel(disp)}${r.paused ? ' · pausado en secuencias' : ''}`, 'success');
+      showBanner(`✓ ${_dispoLabel(disp)}${r.rerouted ? ' · → Ruta A (LinkedIn)' : ''}${r.paused ? ' · pausado en secuencias' : ''}`, 'success');
       const today = _dayOf(new Date());
       const next = _seqTasks(seqId).filter(t => t.due <= today)[0];
       if (next) openContactPage(next.e.contact_id, { seqId: seqId }); else seqDoExit();

@@ -2774,10 +2774,32 @@ app.post('/api/lm/contacts/:id/disposition', requireAuth, async (req, res) => {
   const seqId = (req.body || {}).sequence_id ? (parseInt((req.body).sequence_id) || null) : null;
   const EXIT = ['respondio', 'reunion', 'no_interesado', 'no_contactar'];
   try {
-    const upd = await pool.query(`UPDATE lm_contacts SET disposition=$1, updated_at=NOW() WHERE id=$2 AND user_id=$3 RETURNING id, outbound_client_id`, [disp, cid, uid]);
-    if (!upd.rowCount) return res.status(404).json({ error: 'Contacto no encontrado' });
-    let paused = 0;
-    if (disp && EXIT.includes(disp) && seqId) {
+    const before = await pool.query(`SELECT disposition, outbound_client_id FROM lm_contacts WHERE id=$1 AND user_id=$2`, [cid, uid]);
+    if (!before.rowCount) return res.status(404).json({ error: 'Contacto no encontrado' });
+    const oldDisp = before.rows[0].disposition || '';
+    const obcId = before.rows[0].outbound_client_id || null;
+    await pool.query(`UPDATE lm_contacts SET disposition=$1, updated_at=NOW() WHERE id=$2 AND user_id=$3`, [disp, cid, uid]);
+
+    let paused = 0, rerouted = 0;
+    if (disp === 'respondio' && oldDisp !== 'respondio') {
+      // Fase 2 — aceptó/respondió por PRIMERA vez: si la secuencia ramifica (tiene algún paso
+      // cond='replied'), RE-ENRUTA a la Ruta A (primer paso 'replied') fechando desde hoy — aunque
+      // ya estuviera en la Ruta B (rescata pausados). Si no ramifica, pausa como siempre.
+      const seqs = seqId
+        ? [seqId]
+        : (await pool.query(`SELECT sequence_id FROM lm_contact_sequences WHERE user_id=$1 AND contact_id=$2 AND estado IN ('activo','pausado')`, [uid, cid])).rows.map(r => r.sequence_id);
+      for (const sq of seqs) {
+        const steps = (await pool.query(`SELECT cond FROM sequence_steps WHERE sequence_id=$1 AND user_id=$2 ORDER BY dia ASC, orden ASC, id ASC`, [sq, uid])).rows;
+        const fr = steps.findIndex(s => (s.cond || '') === 'replied');
+        if (fr >= 0) {
+          const r = await pool.query(`UPDATE lm_contact_sequences SET paso=$1, paso_date=CURRENT_DATE, estado='activo', paused_reason='' WHERE user_id=$2 AND contact_id=$3 AND sequence_id=$4 AND estado IN ('activo','pausado')`, [fr + 1, uid, cid, sq]);
+          rerouted += r.rowCount;
+        } else {
+          const r = await pool.query(`UPDATE lm_contact_sequences SET estado='pausado' WHERE user_id=$1 AND contact_id=$2 AND sequence_id=$3 AND estado='activo'`, [uid, cid, sq]);
+          paused += r.rowCount;
+        }
+      }
+    } else if (['reunion', 'no_interesado', 'no_contactar'].includes(disp) && seqId) {
       const r = await pool.query(`UPDATE lm_contact_sequences SET estado='pausado' WHERE user_id=$1 AND contact_id=$2 AND sequence_id=$3 AND estado='activo'`, [uid, cid, seqId]);
       paused = r.rowCount;
     }
@@ -2785,9 +2807,9 @@ app.post('/api/lm/contacts/:id/disposition', requireAuth, async (req, res) => {
       const LBL = { respondio: 'Respondió', reunion: 'Reunión agendada', no_interesado: 'No interesado', no_contactar: 'No contactar (opt-out)' };
       const tipoMap = { respondio: 'respuesta', reunion: 'reunion', no_interesado: 'nota', no_contactar: 'nota' };
       await pool.query(`INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, nota, fecha, estado) VALUES ($1,$2,$3,$4,$5,NOW(),'hecha')`,
-        [uid, cid, upd.rows[0].outbound_client_id || null, tipoMap[disp] || 'nota', `Disposición: ${LBL[disp] || disp}${nota ? ' — ' + nota : ''}`]);
+        [uid, cid, obcId, tipoMap[disp] || 'nota', `Disposición: ${LBL[disp] || disp}${nota ? ' — ' + nota : ''}`]);
     }
-    res.json({ ok: true, disposition: disp, paused: paused });
+    res.json({ ok: true, disposition: disp, paused, rerouted });
   } catch (err) { console.error('[lm-disp]', err.message); res.status(500).json({ error: 'Error al actualizar disposición' }); }
 });
 
