@@ -12279,12 +12279,48 @@ const LeadManagerModule = (() => {
       return Math.round((asUTC - at.getTime()) / 60000);
     } catch (e) { return 0; }
   }
+  // ── Ventanas recomendadas de envío por país (hora LOCAL del prospecto), 2 rangos/día ──
+  // Investigación outreach B2B: mañana ~9–11 (pico de respuestas; LinkedIn 8–11) + tarde ~13–15,
+  // martes–jueves; evitar 12–13 (almuerzo) y después de 16h. Ajustes culturales:
+  // España (siesta, tarde 16–18), LatAm (almuerzo tardío → tarde 15–17), germánicos/nórdicos (más temprano 8–10).
+  const _SEND_DEFAULT = [[9, 11], [13, 15]];
+  const _SEND_WINDOWS = {
+    US: [[9, 11], [13, 15]], CA: [[9, 11], [13, 15]],
+    GB: [[9, 11], [14, 16]], IE: [[9, 11], [14, 16]],
+    ES: [[10, 12], [16, 18]],
+    FR: [[9, 11], [14, 16]], IT: [[9, 11], [14, 16]], PT: [[9, 11], [14, 16]], BE: [[9, 11], [14, 16]],
+    DE: [[8, 10], [13, 15]], AT: [[8, 10], [13, 15]], CH: [[8, 10], [13, 15]], NL: [[8, 10], [13, 15]],
+    SE: [[8, 10], [13, 15]], NO: [[8, 10], [13, 15]], DK: [[8, 10], [13, 15]], FI: [[8, 10], [13, 15]], PL: [[8, 10], [13, 15]],
+    MX: [[9, 11], [15, 17]], PE: [[9, 11], [15, 17]], CO: [[9, 11], [15, 17]], CL: [[9, 11], [15, 17]], AR: [[9, 11], [15, 17]], EC: [[9, 11], [15, 17]], BR: [[9, 11], [15, 17]],
+    IN: [[10, 12], [15, 17]], JP: [[10, 12], [13, 15]], SG: [[9, 11], [14, 16]],
+    AE: [[9, 11], [13, 15]], SA: [[9, 11], [13, 15]],
+    AU: [[9, 11], [13, 15]], NZ: [[9, 11], [13, 15]],
+  };
+  const _SEND_TZ_COUNTRY = {
+    'America/New_York': 'US', 'America/Chicago': 'US', 'America/Denver': 'US', 'America/Phoenix': 'US', 'America/Los_Angeles': 'US', 'America/Anchorage': 'US', 'America/Detroit': 'US', 'America/Indiana/Indianapolis': 'US',
+    'America/Toronto': 'CA', 'America/Vancouver': 'CA', 'America/Edmonton': 'CA', 'America/Winnipeg': 'CA', 'America/Halifax': 'CA',
+    'America/Mexico_City': 'MX', 'America/Monterrey': 'MX', 'America/Tijuana': 'MX', 'America/Cancun': 'MX',
+    'America/Lima': 'PE', 'America/Bogota': 'CO', 'America/Santiago': 'CL', 'America/Guayaquil': 'EC',
+    'America/Argentina/Buenos_Aires': 'AR', 'America/Sao_Paulo': 'BR',
+    'Europe/Madrid': 'ES', 'Europe/London': 'GB', 'Europe/Dublin': 'IE', 'Europe/Paris': 'FR', 'Europe/Berlin': 'DE',
+    'Europe/Amsterdam': 'NL', 'Europe/Rome': 'IT', 'Europe/Lisbon': 'PT', 'Europe/Zurich': 'CH', 'Europe/Vienna': 'AT',
+    'Europe/Brussels': 'BE', 'Europe/Stockholm': 'SE', 'Europe/Oslo': 'NO', 'Europe/Copenhagen': 'DK', 'Europe/Helsinki': 'FI', 'Europe/Warsaw': 'PL',
+    'Asia/Dubai': 'AE', 'Asia/Riyadh': 'SA', 'Asia/Kolkata': 'IN', 'Asia/Tokyo': 'JP', 'Asia/Singapore': 'SG',
+    'Australia/Sydney': 'AU', 'Australia/Melbourne': 'AU', 'Australia/Brisbane': 'AU', 'Australia/Perth': 'AU', 'Pacific/Auckland': 'NZ',
+  };
+  function _windowsForTz(tz) { const cc = _SEND_TZ_COUNTRY[tz]; return (cc && _SEND_WINDOWS[cc]) || _SEND_DEFAULT; }
+  const _hh = h => String(h).padStart(2, '0') + ':00';
   function _suggestWindow(seqTz) {
     if (!seqTz) return null;
-    const at = new Date();
-    const diff = _tzOffsetMin(_herTz(), at) - _tzOffsetMin(seqTz, at);
-    const fmt = (h, m) => { const t = ((h * 60 + m + diff) % 1440 + 1440) % 1440; return String(Math.floor(t / 60)).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0'); };
-    return { prosp: '09:00–11:00', her: fmt(9, 0) + '–' + fmt(11, 0) };
+    const w = _windowsForTz(seqTz)[0];
+    return { prosp: _hh(w[0]) + '–' + _hh(w[1]), her: _prospToHer(seqTz, _hh(w[0])) + '–' + _prospToHer(seqTz, _hh(w[1])) };
+  }
+  // Las DOS ventanas recomendadas, convertidas a la hora de la usuaria, para la barra de tarea.
+  function _recWindowsInner(seqTz) {
+    const wins = _windowsForTz(seqTz);
+    const her = wins.map(w => `<b style="color:#0f2b3d">${_prospToHer(seqTz, _hh(w[0]))}–${_prospToHer(seqTz, _hh(w[1]))}</b>`).join('  ·  ');
+    const loc = wins.map(w => `${_hh(w[0])}–${_hh(w[1])}`).join(' y ');
+    return `🎯 Mejor enviar (tu hora): ${her} <span style="color:#8C97A3" title="Dos buenas franjas del día. Equivale a ${loc} hora local del prospecto (${esc(_tzShort(seqTz))}).">ⓘ</span>`;
   }
   // Convierte una hora local del PROSPECTO (HH:MM) a la hora local de la usuaria.
   function _prospToHer(seqTz, hhmm) {
@@ -13270,10 +13306,11 @@ ${foot}
     return `<div class="cp-taskbar cp-taskbar--slim">
       <div class="cp-taskbar__top">
         <span class="cp-taskbar__ico" style="background:${touch[1]}1a;color:${touch[1]}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${touch[2]}</svg></span>
-        <div class="cp-taskbar__ttl"><span class="cp-taskbar__t">${esc(st.titulo || touch[0])}</span><b class="cp-taskbar__ch" style="color:${touch[1]}">${touch[0]}</b><span class="cp-taskbar__meta">${pos >= 0 && queue.length ? `${pos + 1}/${queue.length} hoy` : `Día ${st.dia || 1}`}${seq && seq.timezone ? ` · 🕐 ≈ ${_suggestWindow(seq.timezone).her}` : ''}${seq ? ` · ${esc(seq.nombre)}` : ''}</span></div>
+        <div class="cp-taskbar__ttl"><span class="cp-taskbar__t">${esc(st.titulo || touch[0])}</span><b class="cp-taskbar__ch" style="color:${touch[1]}">${touch[0]}</b><span class="cp-taskbar__meta">${pos >= 0 && queue.length ? `${pos + 1}/${queue.length} hoy` : `Día ${st.dia || 1}`}${seq ? ` · ${esc(seq.nombre)}` : ''}</span></div>
         <button class="cp-taskbar__exit" onclick="LeadManagerModule.seqDoExit()">‹ Tareas</button>
       </div>
-      ${seq && seq.timezone ? `<div class="cp-taskbar__clock" id="cp-clock-row" data-tz="${esc(seq.timezone)}" style="margin:2px 0 0;padding:7px 2px 3px;font-size:.8rem;color:#3e4c59;display:flex;align-items:center;gap:6px;flex-wrap:wrap;border-top:1px dashed #E4E7DD">${_prospectClockInner(seq.timezone)}</div>` : ''}
+      ${seq && seq.timezone ? `<div class="cp-taskbar__clock" id="cp-clock-row" data-tz="${esc(seq.timezone)}" style="margin:2px 0 0;padding:7px 2px 2px;font-size:.8rem;color:#3e4c59;display:flex;align-items:center;gap:6px;flex-wrap:wrap;border-top:1px dashed #E4E7DD">${_prospectClockInner(seq.timezone)}</div>
+      <div class="cp-taskbar__win" style="padding:1px 2px 3px;font-size:.8rem;color:#3e4c59;display:flex;align-items:center;gap:6px;flex-wrap:wrap">${_recWindowsInner(seq.timezone)}</div>` : ''}
       ${st.canal === 'email' && c.email ? `<div class="cp-taskbar__mailto">
         <span class="cp-taskbar__mt"><span class="cp-taskbar__subj-l">Para</span><span class="cp-taskbar__mt-v">${esc(c.email)}</span>${_copyBtn(c.email, 'Para copiado')}</span>
         ${ccMail ? `<span class="cp-taskbar__mt cp-taskbar__mt--cc" title="El cliente pidió ir en copia"><span class="cp-taskbar__subj-l">CC</span><span class="cp-taskbar__mt-v">${esc(ccMail)}</span>${_copyBtn(ccMail, 'CC copiado')}</span>` : ''}
