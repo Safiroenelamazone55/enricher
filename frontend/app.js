@@ -13540,15 +13540,20 @@ ${foot}
         : (_data.length ? _empty('activities', 'Aún no hay actividades', 'Registra tu primer touch (email enviado, LinkedIn, llamada, respuesta…) y aparecerá en el feed.', 'Registrar actividad', 'LeadManagerModule.openActivityDrawer()')
                         : _empty('activities', 'Primero crea leads', 'Las actividades se registran sobre un lead. Crea uno para empezar.', '', ''))}`;
   }
+  // Tareas globales CONSCIENTES DE RAMAS: usa el paso EFECTIVO (salta ramas que no aplican al
+  // contacto) y _dueForEff (ancla la cadencia en el paso efectivo anterior), igual que _seqTasks.
+  // Antes usaba steps[paso-1] + _dueForStep (lineal), lo que en secuencias con rama calculaba mal
+  // la fecha (p. ej. el email de Ruta B caía "hoy" en vez de en su día).
   function _allSeqTasks() {
     const out = [];
     (_contacts || []).forEach(c => {
       (Array.isArray(c.sequences) ? c.sequences : []).forEach(sq => {
         if (sq.estado && sq.estado !== 'activo') return;
         const steps = _seqSteps(sq.id);
-        const st = steps[((sq.paso || 1) - 1)];
-        if (!st) return;
-        const due = _dueForStep(steps, sq.paso, sq.enrolled_at, sq.paso_date, _seqSendDays(sq.id));
+        const eff = _effIdx(steps, c.id, (sq.paso || 1) - 1);
+        if (eff < 0) return;
+        const st = steps[eff];
+        const due = _dueForEff(steps, c.id, eff, sq.enrolled_at, sq.paso_date, _seqSendDays(sq.id));
         out.push({ c: c, sq: sq, st: st, due: due });
       });
     });
