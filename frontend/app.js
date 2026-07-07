@@ -12214,10 +12214,14 @@ const LeadManagerModule = (() => {
   }
   function _vSequences() {
     const list = _sortSeq(_sequences);
+    const paN = _pendingAccept().length;
     return `
       <div class="lm-sec-head">
         <div><h2 class="lm-sec-title">Secuencias</h2><p class="lm-sec-sub">Pasos de outbound (Email, LinkedIn, llamada…) — planificación y registro manual</p></div>
-        ${_clients.length ? `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openSequenceDrawer()">＋ Nueva secuencia</button>` : ''}
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.pendingAcceptOpen()" title="Marca en lote quién aceptó tu conexión de LinkedIn → saltan a la Ruta A (mensaje)">🔗 Pendientes de aceptación${paN ? ` <b style="color:var(--brand,#00804C)">(${paN})</b>` : ''}</button>
+          ${_clients.length ? `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openSequenceDrawer()">＋ Nueva secuencia</button>` : ''}
+        </div>
       </div>
       ${list.length ? `<div class="lm-cmp-grid">${list.map(s => _sequenceCard(s, true)).join('')}</div>`
         : (_clients.length ? _empty('sequences', 'Aún no hay secuencias', 'Crea una secuencia y define sus pasos (Día 1 Email, Día 2 LinkedIn…). El envío automático llega en una fase futura.', 'Nueva secuencia', 'LeadManagerModule.openSequenceDrawer()')
@@ -12841,6 +12845,58 @@ ${foot}
       const next = _seqTasks(seqId).filter(t => t.due <= today)[0];
       if (next) openContactPage(next.e.contact_id, { seqId: seqId }); else seqDoExit();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  // ── Fase 3: bandeja "Pendientes de aceptación" (cross-secuencia / cross-cliente) ──
+  // Contactos en secuencias con rama ('replied') que aún NO marcas como aceptados
+  // y ya tienen la nota enviada (paso > 1). Marcarlos los re-enruta a la Ruta A.
+  function _pendingAccept() {
+    const branch = {};
+    (_sequences || []).forEach(s => { branch[s.id] = _seqSteps(s.id).some(st => (st.cond || '') === 'replied'); });
+    const out = [];
+    (_contacts || []).forEach(c => {
+      if (c.disposition === 'respondio') return;
+      const seqs = (c.sequences || []).filter(sq => branch[sq.id] && (sq.estado === 'activo' || sq.estado === 'pausado') && (sq.paso || 1) > 1);
+      if (seqs.length) out.push({ c, seqs });
+    });
+    return out;
+  }
+  function pendingAcceptOpen() {
+    const list = _pendingAccept();
+    document.getElementById('lm-pa-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'lm-pa-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) m.remove(); };
+    const rowS = 'display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid #eef1f4;border-radius:8px;cursor:pointer';
+    const rows = list.length ? list.map(({ c, seqs }) => {
+      const full = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || '—';
+      const li = c.linkedin ? `<a href="${esc(c.linkedin)}" target="_blank" rel="noopener" class="lm-link" style="font-size:.74rem;white-space:nowrap" onclick="event.stopPropagation()">LinkedIn ↗</a>` : '';
+      return `<label style="${rowS}"><input type="checkbox" class="pa-ck" value="${c.id}"><span style="flex:1;min-width:0;font-size:.85rem"><b>${esc(full)}</b>${c.company_nombre ? ` · <span style="color:var(--muted)">${esc(c.company_nombre)}</span>` : ''}<span style="display:block;font-size:.72rem;color:var(--muted)">${seqs.map(s => esc(s.nombre)).join(' · ')}</span></span>${li}</label>`;
+    }).join('') : `<div class="lm-act-empty" style="padding:22px"><div class="lm-act-empty__i">✅</div><p>No hay pendientes de aceptación</p><span>Aparecerán aquí los contactos de secuencias con rama que aún no marcas como aceptados.</span></div>`;
+    m.innerHTML = `<div class="fin-pi-box" style="max-width:560px">
+      <div class="fin-pi-box__hd"><h3>Pendientes de aceptación${list.length ? ` (${list.length})` : ''}</h3><button class="fin-pi-x" onclick="document.getElementById('lm-pa-modal').remove()">✕</button></div>
+      <div class="fin-pi-form" style="grid-template-columns:1fr;gap:8px">
+        <span class="seq-drip-hint">Contactos de <b>todas</b> tus secuencias con rama que aún no marcas como aceptados. Abre tus <b>Conexiones</b> en LinkedIn, marca aquí quién ya aparece conectado y <b>saltarán al mensaje de LinkedIn (Ruta A)</b>.</span>
+        ${list.length ? `<label style="${rowS};background:#fafbfc"><input type="checkbox" id="pa-all" onchange="LeadManagerModule.pendingAcceptToggleAll(this.checked)"><span style="flex:1;font-size:.85rem"><b>Seleccionar todos</b></span></label>` : ''}
+        <div style="max-height:min(50vh,400px);overflow:auto;display:flex;flex-direction:column;gap:3px">${rows}</div>
+      </div>
+      <div class="fin-pi-box__ft"><span class="fin-cfg-hint" id="pa-hint"></span><div class="fin-pi-ft-btns">
+        <button class="btn btn--ghost btn--sm" onclick="document.getElementById('lm-pa-modal').remove()">Cerrar</button>
+        ${list.length ? `<button class="btn btn--primary btn--sm" id="pa-mark" onclick="LeadManagerModule.pendingAcceptMark()">✓ Marcar como aceptados</button>` : ''}
+      </div></div></div>`;
+    document.body.appendChild(m);
+  }
+  function pendingAcceptToggleAll(on) { document.querySelectorAll('#lm-pa-modal .pa-ck').forEach(ck => { ck.checked = on; }); }
+  async function pendingAcceptMark() {
+    const cks = [...document.querySelectorAll('#lm-pa-modal .pa-ck:checked')].map(ck => +ck.value);
+    const hint = document.getElementById('pa-hint');
+    if (!cks.length) { if (hint) { hint.textContent = 'Marca al menos un contacto.'; hint.className = 'fin-cfg-hint fin-cfg-hint--err'; } return; }
+    const btn = document.getElementById('pa-mark'); if (btn) btn.disabled = true;
+    let ok = 0, rr = 0;
+    for (const cid of cks) { try { const r = await _lmSetDispositionCore(cid, 'respondio', null); ok++; rr += (r.rerouted || 0); } catch (_) {} }
+    await _reloadContacts();
+    if (_activeSeq && Array.isArray(_seqContacts)) { _seqContacts = null; await _seqLoadContacts(_activeSeq); }
+    document.getElementById('lm-pa-modal')?.remove();
+    showBanner(`✓ ${ok} marcado(s) como aceptado(s)${rr ? ` · ${rr} → Ruta A (LinkedIn)` : ''}`, 'success');
+    _renderBody();
   }
   async function _seqLoadMetrics(id) {
     try { const r = await apiFetch(`${API}/lm/sequences/${id}/metrics`); _seqMetrics = (r && r.ok) ? await r.json() : {}; } catch { _seqMetrics = {}; }
@@ -16566,6 +16622,7 @@ ${foot}
     openViews, applyView, saveView, deleteView, clearAllViews,
     taskSetView, calPrev, calNext, calToday,
     lmSetDisposition, seqDoDisposition, cpSetStage,
+    pendingAcceptOpen, pendingAcceptToggleAll, pendingAcceptMark,
     openActivityDrawer, closeActivityDrawer, saveActivity, confirmDeleteActivity, markActDone,
     setReplySentiment, setLeadStage,
     bulkVerifyEmails, connectGmail, sendCfgToggle, saveSendCfg,
