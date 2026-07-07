@@ -12932,15 +12932,24 @@ ${foot}
       showBanner('✓ Contacto enrolado', 'success');
     } catch (e) { showBanner('No se pudo enrolar: ' + e.message, 'error'); }
   }
+  // ── Ramas por condición: el motor salta los pasos que no aplican al contacto ──
+  // Señal v1 = disposición 'respondio' (respondió/aceptó). Seguro por defecto:
+  // con cond='' en todos los pasos, _effIdx devuelve el mismo paso que hoy.
+  function _respondedC(cid) { const c = (_contacts || []).find(x => x.id === cid); return !!(c && c.disposition === 'respondio'); }
+  function _stepCondMatch(st, cid) { const cd = (st && st.cond) || ''; if (!cd) return true; const r = _respondedC(cid); return cd === 'replied' ? r : cd === 'no_reply' ? !r : true; }
+  // Índice del paso EFECTIVO: el primero desde fromIdx cuya condición aplica al contacto, o -1 si ninguno.
+  function _effIdx(steps, cid, fromIdx) { for (let i = Math.max(0, fromIdx || 0); i < steps.length; i++) { if (_stepCondMatch(steps[i], cid)) return i; } return -1; }
   function _seqTasks(id) {
     const steps = _seqSteps(id);
     const list = Array.isArray(_seqContacts) ? _seqContacts : [];
     const mask = _seqSendDays(id);
-    return list.filter(e => e.estado === 'activo' && steps[(e.paso || 1) - 1]).map(e => {
-      const st = steps[(e.paso || 1) - 1];
-      const due = _dueForStep(steps, e.paso, e.enrolled_at, e.paso_date, mask);
+    return list.filter(e => e.estado === 'activo').map(e => {
+      const eff = _effIdx(steps, e.contact_id, (e.paso || 1) - 1);
+      if (eff < 0) return null;
+      const st = steps[eff];
+      const due = _dueForEff(steps, e.contact_id, eff, e.enrolled_at, e.paso_date, mask);
       return { e, st, due };
-    }).sort((a, b) => a.due - b.due || (a.st.hora || '99:99').localeCompare(b.st.hora || '99:99'));
+    }).filter(Boolean).sort((a, b) => a.due - b.due || (a.st.hora || '99:99').localeCompare(b.st.hora || '99:99'));
   }
   // Etiqueta de hora: la hora fija del paso, o si no hay, la sugerida por la zona del prospecto.
   function _taskTimeHtml(st, seqId) {
@@ -12965,13 +12974,16 @@ ${foot}
   }
   async function _seqCompleteStep(seqId, cid) {
     const e = (_seqContacts || []).find(x => x.contact_id === cid); if (!e) return;
-    const steps = _seqSteps(seqId); const N = steps.length; const st = steps[(e.paso || 1) - 1];
+    const steps = _seqSteps(seqId);
+    const eff = _effIdx(steps, cid, (e.paso || 1) - 1);   // paso realmente mostrado/hecho (saltando ramas)
+    const st = eff >= 0 ? steps[eff] : null;
     const c = _contacts.find(x => x.id === cid);
     const tipoMap = { email: 'email_enviado', linkedin: 'linkedin_msg', call: 'llamada', whatsapp: 'nota', task: 'nota' };
     const _v = st ? _stepVariant(st, c) : null;
     const _vn = (_v && st && _stepVariants(st).length > 1) ? ` · Variante ${_v.nombre || '?'}` : '';
     if (st) await apiFetch(`${API}/activities`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact_id: cid, outbound_client_id: (c && c.outbound_client_id) || null, tipo: tipoMap[st.canal] || 'nota', nota: `Paso ${e.paso}${st.titulo ? ': ' + st.titulo : ''}${_vn}`, fecha: new Date().toISOString().slice(0, 10), estado: 'hecha', variant: (_v && _stepVariants(st).length > 1) ? String(_v.nombre || 'A') : '' }) });
-    const body = (e.paso || 1) >= N ? { estado: 'terminado' } : { paso: (e.paso || 1) + 1 };
+    const nextEff = eff >= 0 ? _effIdx(steps, cid, eff + 1) : -1;   // siguiente paso que aplica al contacto
+    const body = nextEff < 0 ? { estado: 'terminado' } : { paso: nextEff + 1 };
     await apiFetch(`${API}/lm/sequences/${seqId}/contacts/${cid}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   }
   async function seqTaskDone(seqId, cid) {
@@ -13134,7 +13146,8 @@ ${foot}
     const seqId = _cpTaskCtx.seqId;
     const e = (_seqContacts || []).find(x => x.contact_id === cid);
     const steps = _seqSteps(seqId);
-    const st = e ? steps[(e.paso || 1) - 1] : null;
+    const eff = e ? _effIdx(steps, cid, (e.paso || 1) - 1) : -1;
+    const st = eff >= 0 ? steps[eff] : null;
     if (!e || !st) return '';
     const c = _contacts.find(x => x.id === cid) || {};
     const src = c;
@@ -13307,11 +13320,13 @@ ${foot}
   }
   function _stepRow(st) {
     const t = _TOUCH[st.canal] || _TOUCH.email;
+    const cb = st.cond === 'replied' ? '<span class="lm-vb" style="background:#E7F8EF;color:#15803D" title="Solo para contactos que respondieron/aceptaron">↳ si respondió</span>'
+             : st.cond === 'no_reply' ? '<span class="lm-vb" style="background:#FEF3C7;color:#B45309" title="Solo para contactos que NO respondieron">↳ si no respondió</span>' : '';
     return `<div class="lm-step">
       <div class="lm-step__day"><span>Día</span><b>${st.dia}</b></div>
       <div class="lm-step__rail"><span class="lm-step__ico" style="background:${t[1]}1a;color:${t[1]}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${t[2]}</svg></span></div>
       <div class="lm-step__body">
-        <div class="lm-step__top"><span class="lm-step__t">${esc(st.titulo || t[0])}</span><span class="lm-step__canal" style="color:${t[1]}">${t[0]}</span></div>
+        <div class="lm-step__top"><span class="lm-step__t">${esc(st.titulo || t[0])}</span><span class="lm-step__canal" style="color:${t[1]}">${t[0]}</span>${cb}</div>
         ${st.plantilla ? `<div class="lm-step__tpl">${esc(st.plantilla)}</div>` : ''}
       </div>
       <div class="lm-step__acts">
@@ -13403,6 +13418,22 @@ ${foot}
     const pd = pasoDate ? new Date(String(pasoDate).slice(0, 10) + 'T00:00:00') : null;
     if (idx > 0 && pd && !isNaN(pd)) {
       const gap = Math.max(0, (st.dia || 1) - (steps[idx - 1].dia || 1));
+      due = pd; due.setHours(0, 0, 0, 0); due.setDate(due.getDate() + gap);
+    } else {
+      due = new Date(enrolledAt || Date.now()); due.setHours(0, 0, 0, 0); due.setDate(due.getDate() + ((st.dia || 1) - 1));
+    }
+    return _rollFwdLocal(due, mask);
+  }
+  // Vencimiento del paso EFECTIVO: la cadencia (paso_date) se ancla en el paso
+  // anterior que SÍ aplicó al contacto (no en steps[idx-1]), para que al saltar
+  // ramas el timing sea correcto (ej. el email de Ruta B cae en su día, no hoy).
+  function _dueForEff(steps, cid, eff, enrolledAt, pasoDate, mask) {
+    const st = steps[eff]; if (!st) return null;
+    let prev = -1; for (let i = eff - 1; i >= 0; i--) { if (_stepCondMatch(steps[i], cid)) { prev = i; break; } }
+    const pd = pasoDate ? new Date(String(pasoDate).slice(0, 10) + 'T00:00:00') : null;
+    let due;
+    if (prev >= 0 && pd && !isNaN(pd)) {
+      const gap = Math.max(0, (st.dia || 1) - (steps[prev].dia || 1));
       due = pd; due.setHours(0, 0, 0, 0); due.setDate(due.getDate() + gap);
     } else {
       due = new Date(enrolledAt || Date.now()); due.setHours(0, 0, 0, 0); due.setDate(due.getDate() + ((st.dia || 1) - 1));
@@ -14506,6 +14537,7 @@ ${foot}
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Canal / touch</span><select class="form-input" id="step-canal" onchange="LeadManagerModule.stepCanalChange()">${canalOpts}</select></label>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Hora (opcional)</span><input class="form-input" type="time" id="step-hora" value="${st && st.hora ? esc(st.hora) : ''}"><span class="seq-drip-hint" id="step-hora-hint">${_stepHoraHint(seqId)}</span></label>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Título del paso</span><input class="form-input" id="step-titulo" value="${st ? esc(st.titulo) : ''}" placeholder="Ej. Email 1 — intro"></label>
+        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">¿Para quién? (rama por respuesta)</span><select class="form-input" id="step-cond"><option value=""${!(st && st.cond) ? ' selected' : ''}>Todos</option><option value="replied"${st && st.cond === 'replied' ? ' selected' : ''}>Solo si respondió / aceptó</option><option value="no_reply"${st && st.cond === 'no_reply' ? ' selected' : ''}>Solo si NO respondió</option></select><span class="seq-drip-hint">Ramifica la secuencia: el sistema <b>salta</b> este paso para quien no cumpla la condición. Ej.: nota de conexión = <b>Todos</b>; mensaje de LinkedIn = <b>Solo si aceptó</b>; email de seguimiento = <b>Solo si no respondió</b>.</span></label>
         ${_lmTpls.length ? `<label class="fin-cfg-field fin-pi-full" id="step-tpl-top"><span class="fin-cfg-lbl">Usar plantilla guardada</span><select class="form-input" onchange="LeadManagerModule.stepUseTpl(this.value)"><option value="">— Elegir de la biblioteca —</option>${_lmTpls.map(tp => `<option value="${tp.id}">${esc(tp.nombre)} · ${esc(_tplCanalLabel(tp.canal))}</option>`).join('')}</select></label>` : ''}
         <div id="step-msg" class="fin-pi-full step-msg"></div>
       </div>
@@ -14656,7 +14688,7 @@ ${foot}
     const d = _stepDraft || { mode: 'off', field: '', variants: [{ cuerpo: '' }] };
     const variants = d.mode === 'off' ? [] : d.variants.filter(v => (v.cuerpo || '').trim() || (v.nombre || '').trim());
     const plantilla = ((d.variants[0] && d.variants[0].cuerpo) || '').trim();
-    const body = { sequence_id: seqId, dia, canal: $('step-canal')?.value || 'email', titulo: $('step-titulo')?.value.trim() || '', plantilla, variants, variant_mode: d.mode, variant_field: d.field, orden: dia, hora: $('step-hora')?.value || '' };
+    const body = { sequence_id: seqId, dia, canal: $('step-canal')?.value || 'email', titulo: $('step-titulo')?.value.trim() || '', plantilla, variants, variant_mode: d.mode, variant_field: d.field, orden: dia, hora: $('step-hora')?.value || '', cond: $('step-cond')?.value || '' };
     const btn = $('step-save'); if (btn) btn.disabled = true;
     try {
       const res = await apiFetch(`${API}/sequence-steps${stepId ? '/' + stepId : ''}`, { method: stepId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
