@@ -112,7 +112,7 @@ function _reportHtml(data, fecha) {
     html += `<div style="background:#fef2f2;border-radius:8px;padding:10px 14px;margin-top:14px;font-size:12px;color:#991b1b">
       ⚠ ${data.alertas.fallos ? `${data.alertas.fallos} envíos fallidos. ` : ''}${data.alertas.pausados_email ? `${data.alertas.pausados_email} contactos pausados por email inválido/sin verificar.` : ''}</div>`;
   }
-  html += `<p style="margin:18px 0 0;font-size:11px;color:#9ca3af">Nova · Kiwoc — reporte automático del Lead Manager.</p></div></div>`;
+  html += `<p style="margin:18px 0 0;font-size:11px;color:#9ca3af">Nova — reporte automático del Lead Manager.</p></div></div>`;
   return html;
 }
 

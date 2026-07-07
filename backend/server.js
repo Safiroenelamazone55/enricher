@@ -935,7 +935,7 @@ async function _sendChatNotifEmail(pool, wid, channel, msgs, senderIds) {
       </td></tr>`;
   }).join('');
 
-  const subject = `💬 ${sendersLabel} en ${channelLabel} — Kiwoc`;
+  const subject = `💬 ${sendersLabel} en ${channelLabel} — Nova`;
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
   <body style="margin:0;padding:0;background:#F9F5F2;font-family:-apple-system,BlinkMacSystemFont,'Inter',sans-serif">
     <div style="max-width:520px;margin:32px auto;border-radius:14px;overflow:hidden;
@@ -945,7 +945,7 @@ async function _sendChatNotifEmail(pool, wid, channel, msgs, senderIds) {
           <div style="width:44px;height:44px;background:rgba(255,255,255,.25);border-radius:11px;
                       text-align:center;line-height:44px;font-size:22px">💬</div>
           <div>
-            <div style="color:#fff;font-weight:700;font-size:1.05rem">Nuevo mensaje en Kiwoc</div>
+            <div style="color:#fff;font-weight:700;font-size:1.05rem">Nuevo mensaje en Nova</div>
             <div style="color:rgba(255,255,255,.85);font-size:.78rem;margin-top:2px">${channelLabel}</div>
           </div>
         </div>
@@ -967,7 +967,7 @@ async function _sendChatNotifEmail(pool, wid, channel, msgs, senderIds) {
       </div>
       <div style="background:#F9F5F2;border-top:1px solid #EDEAE4;padding:14px 28px;text-align:center">
         <p style="margin:0;font-size:.72rem;color:#A8A29E">
-          Kiwoc · Notificación automática de ${channelLabel}<br>No respondas a este correo.
+          Nova · Notificación automática de ${channelLabel}<br>No respondas a este correo.
         </p>
       </div>
     </div>

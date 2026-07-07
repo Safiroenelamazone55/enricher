@@ -12,7 +12,7 @@
 AppId={{A7F3C2E1-9B4D-4E8A-B6C1-2F9D7E0A1B23}
 AppName={#AppName}
 AppVersion={#AppVer}
-AppPublisher=Kiwoc
+AppPublisher=Nova
 DefaultDirName={localappdata}\Programs\Nova Activity
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
