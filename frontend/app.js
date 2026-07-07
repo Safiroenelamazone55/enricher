@@ -13162,7 +13162,9 @@ ${foot}
   }
   function _effTplId(v, st) {
     if (v && v.tplId) return v.tplId;
-    if (v && v.tplId === '') return '';
+    // Si la variante ya tiene tplId='' o un cuerpo propio, usa ese cuerpo — NO auto-adivines
+    // una plantilla por su nombre (evita mostrar el mensaje de otro paso).
+    if (v && (v.tplId === '' || (v.cuerpo || '').trim())) return '';
     return (st && st.variant_mode === 'segment') ? _matchTplBySegment(v) : '';
   }
   function _varResolve(v, st) { const tid = _effTplId(v, st); const t = tid ? _tplById(tid) : null; return { tplId: tid, cuerpo: t ? (t.cuerpo || '') : ((v && v.cuerpo) || ''), asunto: t ? (t.asunto || '') : ((v && v.asunto) || '') }; }
