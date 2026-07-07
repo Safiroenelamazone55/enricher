@@ -12442,7 +12442,11 @@ const LeadManagerModule = (() => {
   }
   function _rptCss() {
     return `*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:#1b2733;background:#eef0f2;line-height:1.55;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+/* Tipografía de informe (editorial): serif de documento (Constantia) para
+   títulos y cuerpo; sans limpia solo en micro-etiquetas en mayúsculas. Todas
+   estas fuentes están en Windows/Office → se incrustan en el PDF. */
+body{font-family:Constantia,"Palatino Linotype",Georgia,"Times New Roman",serif;color:#1b2733;background:#eef0f2;line-height:1.5;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.kicker,.fact .k,.fact .v,.kpi span,.ctx-h,.tbl thead th,.h3,.mk span,.pill,.chip,.dchip,.dchips,.foot{font-family:"Segoe UI",Calibri,-apple-system,system-ui,sans-serif}
 .bar{position:sticky;top:0;z-index:5;background:#0f2b3d;color:#fff;padding:12px 20px;display:flex;justify-content:space-between;align-items:center;font-size:14px}
 .bar button{background:#00804C;color:#fff;border:0;border-radius:8px;padding:9px 18px;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit}
 .doc{max-width:860px;margin:26px auto;background:#fff;box-shadow:0 10px 44px rgba(15,43,61,.16)}
@@ -12450,19 +12454,19 @@ body{font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;colo
 .cover:before{content:"";position:absolute;right:-90px;top:-90px;width:300px;height:300px;border-radius:50%;background:radial-gradient(circle,rgba(181,233,81,.18),transparent 68%)}
 .cover:after{content:"";position:absolute;left:0;top:0;right:0;height:5px;background:linear-gradient(90deg,#00804C 0%,#B5E951 100%)}
 .kicker{font-size:11.5px;letter-spacing:.22em;text-transform:uppercase;color:#b5e951;font-weight:700}
-.cover h1{font-family:Georgia,"Times New Roman",serif;font-size:32px;font-weight:700;margin:8px 0 10px;line-height:1.18;position:relative}
+.cover h1{font-family:Constantia,"Palatino Linotype",Georgia,"Times New Roman",serif;font-size:32px;font-weight:700;margin:8px 0 10px;line-height:1.18;position:relative}
 .pill{display:inline-block;border-radius:999px;font-size:11px;font-weight:800;padding:3px 12px;vertical-align:4px;letter-spacing:.02em}
 .facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px 24px;margin-top:22px;border-top:1px solid rgba(255,255,255,.18);padding-top:16px;position:relative}
 .fact .k{font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#8fb0be;font-weight:800}
 .fact .v{font-size:13px;font-weight:600;color:#fff;margin-top:2px}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:1px;background:#e5e9ec;border-bottom:1px solid #e5e9ec}
 .kpi{background:#fff;padding:18px 12px;text-align:center}
-.kpi b{display:block;font-family:Georgia,serif;font-size:28px;color:#0f2b3d;font-weight:700}
+.kpi b{display:block;font-family:Constantia,"Palatino Linotype",Georgia,serif;font-size:28px;color:#0f2b3d;font-weight:700}
 .kpi.hero b{color:#00804C}
 .kpi span{font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:#7b8794;font-weight:700;margin-top:3px;display:block}
 .sec{padding:20px 52px}
 .sec+.sec{border-top:1px solid #eef1f4}
-.sec h2{font-family:Georgia,serif;font-size:16px;color:#0f2b3d;margin-bottom:12px;display:flex;align-items:center;gap:10px;break-after:avoid}
+.sec h2{font-family:Constantia,"Palatino Linotype",Georgia,serif;font-size:16px;color:#0f2b3d;margin-bottom:12px;display:flex;align-items:center;gap:10px;break-after:avoid}
 .sec h2:before{content:"";width:20px;height:5px;border-radius:3px;background:linear-gradient(90deg,#00804C,#B5E951);flex:none}
 /* ── Contexto (texto pegado, compacto y estructurado) ── */
 .ctx{margin:0 0 12px}
@@ -12496,7 +12500,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}
 .fbar{height:15px;border-radius:4px;background:#edf1f4;overflow:hidden}
 .fbar i{display:block;height:100%;border-radius:4px;background:linear-gradient(90deg,#00804C,#1aa66e)}
 .frow.alt .fbar i{background:#0f2b3d}
-.fnum{font-family:Georgia,serif;font-weight:700;color:#0f2b3d;text-align:right;font-size:15px}
+.fnum{font-family:Constantia,"Palatino Linotype",Georgia,serif;font-weight:700;color:#0f2b3d;text-align:right;font-size:15px}
 .segline{margin:2px 0 8px}.segline:last-child{margin-bottom:0}
 .segmsg{font-size:11.5px;color:#61707d;font-style:italic;margin-top:2px}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:24px}
@@ -12505,13 +12509,13 @@ table{width:100%;border-collapse:collapse;font-size:13px}
 .seqblk{border:1px solid #e5e9ec;border-radius:12px;margin:0 0 14px;overflow:hidden}
 .seqblk:last-child{margin-bottom:0}
 .seqblk__hd{background:#f7f9fa;padding:12px 18px;display:flex;justify-content:space-between;align-items:center;gap:10px;border-bottom:1px solid #e5e9ec;break-inside:avoid;break-after:avoid}
-.seqblk__nm{font-family:Georgia,serif;font-size:15.5px;color:#0f2b3d;font-weight:700}
+.seqblk__nm{font-family:Constantia,"Palatino Linotype",Georgia,serif;font-size:15.5px;color:#0f2b3d;font-weight:700}
 .seqblk__bd{padding:14px 18px}
 .cfgline{font-size:12px;color:#61707d;margin-bottom:4px}
 .cfgline b{color:#1b2733}
 .minik{display:grid;grid-template-columns:repeat(auto-fit,minmax(92px,1fr));gap:8px;margin:10px 0 4px}
 .mk{background:#fbfcfc;border:1px solid #eef1f4;border-radius:8px;text-align:center;padding:8px 6px}
-.mk b{font-family:Georgia,serif;font-size:18px;color:#0f2b3d;display:block}
+.mk b{font-family:Constantia,"Palatino Linotype",Georgia,serif;font-size:18px;color:#0f2b3d;display:block}
 .mk.hero b{color:#00804C}
 .mk span{font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:#7b8794;font-weight:800}
 .steps-line{font-size:12px;color:#3e4c59;margin-top:8px;line-height:2}
