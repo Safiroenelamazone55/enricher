@@ -12740,6 +12740,18 @@ ${foot}
     _rptModal('Informe PDF de la campaña', `LeadManagerModule.cmpReportGen(${id})`,
       'Portada con mercado, ICP, objetivo y notas de la campaña + un bloque por cada secuencia con su segmento, configuración, cadencia y progreso (contactados, respuestas, reuniones).');
   }
+  // Desde el detalle del cliente: informe de la campaña / secuencia MÁS RECIENTE del cliente
+  // (reutiliza el mismo flujo idioma+generar). Con varias, toma la última actualizada.
+  function clientCmpReport(cid) {
+    const cs = _campaignsByClient(cid).slice().sort((a, b) => String(b.updated_at || '').localeCompare(String(a.updated_at || '')) || (b.id - a.id));
+    if (!cs.length) { showBanner('Este cliente todavía no tiene campañas.', 'info'); return; }
+    cmpReportOpen(cs[0].id);
+  }
+  function clientSeqReport(cid) {
+    const ss = _sequencesByClient(cid).slice().sort((a, b) => String(b.updated_at || '').localeCompare(String(a.updated_at || '')) || (b.id - a.id));
+    if (!ss.length) { showBanner('Este cliente todavía no tiene secuencias.', 'info'); return; }
+    seqReportOpen(ss[0].id);
+  }
   // Abre la pestaña YA (dentro del gesto del usuario, para que no la bloquee el navegador)
   // y escribe el informe cuando llegan las métricas del servidor.
   function _rptWin() {
@@ -13869,6 +13881,8 @@ ${foot}
           <div class="lm-ws-side__acts">
             <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openDrawer(null,${c.id})">＋ Nuevo lead</button>
             <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openClientDrawer(${c.id})">Editar cliente</button>
+            <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.clientCmpReport(${c.id})">${_ico('down')} Informe de campaña</button>
+            <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.clientSeqReport(${c.id})">${_ico('down')} Informe de secuencia</button>
           </div>
           ${field('Responsable', esc(c.responsable))}
           ${field('Website', c.website ? `<a href="${esc(c.website)}" target="_blank" rel="noopener" class="lm-link">${esc(c.website)}</a>` : '—')}
@@ -16742,7 +16756,7 @@ ${foot}
     stepSetMode, stepSetField, stepAddVariant, stepDelVariant, stepFocusTa,
     stepTagInput, stepTagKey, stepTagPick, stepTagAddTyped, stepTagRemove, stepTagBlur,
     stepCanalChange, stepVarUseTpl, stepVarEdit, stepAutoLink,
-    seqDayToggle, seqDaysPreset, stepUseSuggestedHour, seqReportOpen, seqReportGen, cmpReportOpen, cmpReportGen, seqRedistribute,
+    seqDayToggle, seqDaysPreset, stepUseSuggestedHour, seqReportOpen, seqReportGen, cmpReportOpen, cmpReportGen, clientCmpReport, clientSeqReport, seqRedistribute,
     openTemplate, closeTemplate, saveTemplate, deleteTemplate, tplInsertVar, tplSetFilter, tplSetTag, tplSetSeq, tplCanalChange,
     tplTagInput, tplTagKey, tplTagPick, tplTagAddTyped, tplTagRemove, tplTagBlur,
     tplSeqInput, tplSeqKey, tplSeqPick, tplSeqRemove, tplSeqBlur,
