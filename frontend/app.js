@@ -12530,7 +12530,8 @@ table{width:100%;border-collapse:collapse;font-size:13px}
    RESERVA su alto por página (vía layout de tabla), así el contenido nunca queda
    debajo del pie — sin depender del margen del diálogo de impresión. */
 .sheet{width:100%;border-collapse:collapse}
-.sheet>tbody>tr>td,.sheet>tfoot>tr>td{padding:0}
+.sheet>thead>tr>td,.sheet>tbody>tr>td,.sheet>tfoot>tr>td{padding:0}
+.head-sp{height:0}
 .foot-sp{height:0}
 @media print{
   body{background:#fff}
@@ -12538,9 +12539,11 @@ table{width:100%;border-collapse:collapse;font-size:13px}
   .doc{box-shadow:none;margin:0;max-width:none}
   .sec{padding:16px 30px}
   .cover{padding:28px 30px 22px}
-  /* Margen 10mm arriba (aire en páginas de continuación), 0 en lados/abajo:
-     la portada/pie llegan al borde y no queda hueco. */
-  @page{margin:10mm 0 0 0}
+  /* Sin márgenes de página: así Chrome NO imprime su propio encabezado (fecha/
+     hora) ni pie. El aire superior de cada página lo da el espaciador del thead
+     y el inferior el del tfoot (layout de tabla, se repiten por página). */
+  @page{margin:0}
+  .head-sp{height:11mm}
   /* El espaciador del tfoot reserva 15mm al fondo de CADA página; el pie va fijo
      al borde inferior (queda clavado también en la última página, sin flotar). */
   .foot-sp{height:15mm}
@@ -12553,7 +12556,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}
     return `<!DOCTYPE html><html lang="${lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(docTitle)}</title>
 <style>${_rptCss()}</style></head><body>
 <div class="bar"><span>${esc(docTitle)}</span><button onclick="window.print()">${esc(L.print)}</button></div>
-<table class="sheet"><tfoot><tr><td><div class="foot-sp"></div></td></tr></tfoot><tbody><tr><td>
+<table class="sheet"><thead><tr><td><div class="head-sp"></div></td></tr></thead><tfoot><tr><td><div class="foot-sp"></div></td></tr></tfoot><tbody><tr><td>
 <div class="doc">${body}</div>
 </td></tr></tbody></table>
 ${foot}
