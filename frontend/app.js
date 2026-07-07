@@ -12933,19 +12933,34 @@ ${foot}
     const rowS = 'display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid #eef1f4;border-radius:8px;cursor:pointer';
     const invOf = seqs => { const ds = (seqs || []).map(s => s.enrolled_at).filter(Boolean).sort(); return ds.length ? ds[ds.length - 1] : ''; };
     const sorted = [...list].sort((a, b) => String(invOf(b.seqs)).localeCompare(String(invOf(a.seqs)))); // invitados más recientes primero
+    // Mapas para los filtros (solo secuencias/campañas presentes en la bandeja) + secuencia→campaña
+    const seqMap = new Map(), campMap = new Map(), seqCamp = {};
+    list.forEach(({ seqs }) => seqs.forEach(s => {
+      seqMap.set(s.id, s.nombre);
+      const gs = (_sequences || []).find(x => x.id === s.id); const cid = gs && gs.campaign_id;
+      seqCamp[s.id] = cid || '';
+      if (cid) campMap.set(cid, _campaignName(cid) || ('Campaña ' + cid));
+    }));
     const rows = sorted.length ? sorted.map(({ c, seqs }) => {
       const full = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || '—';
       const inv = invOf(seqs); const invTxt = inv ? ` · invitado ${_relAgo(inv)}` : '';
       const sData = esc((full + ' ' + (c.company_nombre || '')).toLowerCase());
+      const seqIds = seqs.map(s => s.id).join(' ');
+      const campIds = [...new Set(seqs.map(s => seqCamp[s.id]).filter(Boolean))].join(' ');
       const li = c.linkedin ? `<a href="${esc(c.linkedin)}" target="_blank" rel="noopener" class="lm-link" style="font-size:.74rem;white-space:nowrap" onclick="event.stopPropagation()">LinkedIn ↗</a>` : '';
-      return `<label class="pa-row" data-s="${sData}" style="${rowS}"><input type="checkbox" class="pa-ck" value="${c.id}"><span style="flex:1;min-width:0;font-size:.85rem"><b>${esc(full)}</b>${c.company_nombre ? ` · <span style="color:var(--muted)">${esc(c.company_nombre)}</span>` : ''}<span style="display:block;font-size:.72rem;color:var(--muted)">${seqs.map(s => esc(s.nombre)).join(' · ')}${invTxt}</span></span>${li}</label>`;
+      return `<label class="pa-row" data-s="${sData}" data-seq="${seqIds}" data-camp="${campIds}" style="${rowS}"><input type="checkbox" class="pa-ck" value="${c.id}"><span style="flex:1;min-width:0;font-size:.85rem"><b>${esc(full)}</b>${c.company_nombre ? ` · <span style="color:var(--muted)">${esc(c.company_nombre)}</span>` : ''}<span style="display:block;font-size:.72rem;color:var(--muted)">${seqs.map(s => esc(s.nombre)).join(' · ')}${invTxt}</span></span>${li}</label>`;
     }).join('') : `<div class="lm-act-empty" style="padding:22px"><div class="lm-act-empty__i">✅</div><p>No hay pendientes de aceptación</p><span>Aparecerán aquí los contactos de secuencias con rama que aún no marcas como aceptados.</span></div>`;
+    const selCss = 'flex:1;min-width:0;box-sizing:border-box;padding:8px 10px;border:1px solid #e3e7eb;border-radius:8px;font-size:.85rem;background:#fff';
+    const optSort = m => [...m.entries()].sort((a, b) => String(a[1]).localeCompare(String(b[1])));
+    const campSel = campMap.size ? `<select id="pa-fcamp" onchange="LeadManagerModule.pendingAcceptApplyFilters()" style="${selCss}"><option value="">Todas las campañas</option>${optSort(campMap).map(([id, nm]) => `<option value="${id}">${esc(nm)}</option>`).join('')}</select>` : '';
+    const seqSel = seqMap.size ? `<select id="pa-fseq" onchange="LeadManagerModule.pendingAcceptApplyFilters()" style="${selCss}"><option value="">Todas las secuencias</option>${optSort(seqMap).map(([id, nm]) => `<option value="${id}">${esc(nm)}</option>`).join('')}</select>` : '';
     m.innerHTML = `<div class="fin-pi-box" style="max-width:560px">
       <div class="fin-pi-box__hd"><h3>Pendientes de aceptación${list.length ? ` (${list.length})` : ''}</h3><button class="fin-pi-x" onclick="document.getElementById('lm-pa-modal').remove()">✕</button></div>
       <div class="fin-pi-form" style="grid-template-columns:1fr;gap:8px">
         <span class="seq-drip-hint">Contactos de <b>todas</b> tus secuencias con rama que aún no marcas como aceptados. Abre tus <b>Conexiones</b> en LinkedIn, marca aquí quién ya aparece conectado y <b>saltarán al mensaje de LinkedIn (Ruta A)</b>.</span>
-        ${list.length > 6 ? `<input type="text" placeholder="🔍 Buscar por nombre o empresa…" oninput="LeadManagerModule.pendingAcceptFilter(this.value)" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #e3e7eb;border-radius:8px;font-size:.85rem">` : ''}
-        ${list.length ? `<label style="${rowS};background:#fafbfc"><input type="checkbox" id="pa-all" onchange="LeadManagerModule.pendingAcceptToggleAll(this.checked)"><span style="flex:1;font-size:.85rem"><b>Seleccionar todos</b> <span style="color:var(--muted);font-weight:400">(los visibles)</span></span></label>` : ''}
+        ${list.length > 6 ? `<div style="display:flex;gap:8px">${campSel}${seqSel}</div>` : ''}
+        ${list.length > 6 ? `<input id="pa-search" type="text" placeholder="🔍 Buscar por nombre o empresa…" oninput="LeadManagerModule.pendingAcceptApplyFilters()" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #e3e7eb;border-radius:8px;font-size:.85rem">` : ''}
+        ${list.length ? `<label style="${rowS};background:#fafbfc"><input type="checkbox" id="pa-all" onchange="LeadManagerModule.pendingAcceptToggleAll(this.checked)"><span style="flex:1;font-size:.85rem"><b>Seleccionar todos</b> <span style="color:var(--muted);font-weight:400">(<span id="pa-count">${sorted.length}</span> visibles)</span></span></label>` : ''}
         <div style="max-height:min(50vh,400px);overflow:auto;display:flex;flex-direction:column;gap:3px">${rows}</div>
       </div>
       <div class="fin-pi-box__ft"><span class="fin-cfg-hint" id="pa-hint"></span><div class="fin-pi-ft-btns">
@@ -12955,7 +12970,22 @@ ${foot}
     document.body.appendChild(m);
   }
   function pendingAcceptToggleAll(on) { document.querySelectorAll('#lm-pa-modal .pa-row').forEach(r => { if (r.style.display !== 'none') { const ck = r.querySelector('.pa-ck'); if (ck) ck.checked = on; } }); }
-  function pendingAcceptFilter(q) { const n = String(q || '').toLowerCase().trim(); document.querySelectorAll('#lm-pa-modal .pa-row').forEach(r => { r.style.display = (!n || (r.getAttribute('data-s') || '').includes(n)) ? '' : 'none'; }); }
+  function pendingAcceptApplyFilters() {
+    const modal = document.getElementById('lm-pa-modal'); if (!modal) return;
+    const q = (modal.querySelector('#pa-search')?.value || '').toLowerCase().trim();
+    const fseq = modal.querySelector('#pa-fseq')?.value || '';
+    const fcamp = modal.querySelector('#pa-fcamp')?.value || '';
+    let vis = 0;
+    modal.querySelectorAll('.pa-row').forEach(r => {
+      const okQ = !q || (r.getAttribute('data-s') || '').includes(q);
+      const okSeq = !fseq || (' ' + (r.getAttribute('data-seq') || '') + ' ').includes(' ' + fseq + ' ');
+      const okCamp = !fcamp || (' ' + (r.getAttribute('data-camp') || '') + ' ').includes(' ' + fcamp + ' ');
+      const show = okQ && okSeq && okCamp;
+      r.style.display = show ? '' : 'none'; if (show) vis++;
+    });
+    const n = modal.querySelector('#pa-count'); if (n) n.textContent = vis;
+    const all = modal.querySelector('#pa-all'); if (all) all.checked = false; // el "todos" se reevalúa sobre lo visible
+  }
   async function pendingAcceptMark() {
     const cks = [...document.querySelectorAll('#lm-pa-modal .pa-ck:checked')].map(ck => +ck.value);
     const hint = document.getElementById('pa-hint');
@@ -16721,7 +16751,7 @@ ${foot}
     openViews, applyView, saveView, deleteView, clearAllViews,
     taskSetView, calPrev, calNext, calToday,
     lmSetDisposition, seqDoDisposition, cpSetStage,
-    pendingAcceptOpen, pendingAcceptToggleAll, pendingAcceptFilter, pendingAcceptMark,
+    pendingAcceptOpen, pendingAcceptToggleAll, pendingAcceptApplyFilters, pendingAcceptMark,
     openActivityDrawer, closeActivityDrawer, saveActivity, confirmDeleteActivity, markActDone,
     setReplySentiment, setLeadStage,
     bulkVerifyEmails, connectGmail, sendCfgToggle, saveSendCfg,
