@@ -12803,7 +12803,7 @@ ${foot}
         : `<div class="seq-tasks-hd seq-tasks-hd--none">Sin tareas para hoy</div>`;
       const grp = (over.length ? `<div class="lm-tsec-h" style="color:#C4342B">⚠ Vencidas · ${over.length}</div><div class="seq-tasks">${over.map(t => _seqTaskRow(t, id, today)).join('')}</div>` : '')
                 + (hoy.length ? `<div class="lm-tsec-h">Hoy · ${hoy.length}</div><div class="seq-tasks">${hoy.map(t => _seqTaskRow(t, id, today)).join('')}</div>` : '');
-      return `${head}${grp}${nextLine}`;
+      return `${_acceptCtaHtml()}${head}${grp}${nextLine}`;
     }
     if (_seqTab === 'envios') {
       if (_seqMsgs === null) return `<div class="cp-empty2" style="padding:22px">Cargando envíos…</div>`;
@@ -12889,6 +12889,30 @@ ${foot}
   // ── Fase 3: bandeja "Pendientes de aceptación" (cross-secuencia / cross-cliente) ──
   // Contactos en secuencias con rama ('replied') que aún NO marcas como aceptados
   // y ya tienen la nota enviada (paso > 1). Marcarlos los re-enruta a la Ruta A.
+  function _lastAcceptReview() { try { return localStorage.getItem('lm_last_accept_review') || ''; } catch (_) { return ''; } }
+  function _setAcceptReviewed() { try { localStorage.setItem('lm_last_accept_review', new Date().toISOString()); } catch (_) {} }
+  function _relAgo(iso) {
+    if (!iso) return '';
+    const t = new Date(iso).getTime(); if (isNaN(t)) return '';
+    const mins = Math.floor((Date.now() - t) / 60000);
+    if (mins < 2) return 'hace un momento';
+    if (mins < 60) return `hace ${mins} min`;
+    const h = Math.floor(mins / 60); if (h < 24) return `hace ${h} h`;
+    const d = Math.floor(h / 24); return d === 1 ? 'hace 1 día' : `hace ${d} días`;
+  }
+  // Tarjeta "Revisar aceptaciones de LinkedIn" (con sello de última revisión). Se reutiliza en Tareas comerciales y en la pestaña Tareas de la secuencia.
+  function _acceptCtaHtml() {
+    const n = _pendingAccept().length;
+    if (!n) return '';
+    const last = _lastAcceptReview();
+    const t = last ? new Date(last).getTime() : 0;
+    const stale = !t || (Date.now() - t) / 3600000 > 20; // pasó ~1 día → conviene revisar
+    const revTxt = last ? `Última revisión: ${_relAgo(last)}` : 'Aún no la revisas';
+    return `<div onclick="LeadManagerModule.pendingAcceptOpen()" title="Marca quién aceptó tu conexión de LinkedIn → saltan a la Ruta A (mensaje)" style="cursor:pointer;background:#EAF5EE;border:1px solid ${stale ? '#E7C79A' : '#BFE0CC'};border-radius:12px;padding:12px 14px;margin:2px 2px 16px;color:#0A2540">
+      <div style="display:flex;align-items:center;gap:10px"><span style="font-size:1.15rem">🔗</span><span style="flex:1;font-size:.88rem"><b>Revisar aceptaciones de LinkedIn</b> — <b style="color:#006B3F">${n}</b> contacto${n === 1 ? '' : 's'} esperando que marques quién aceptó.</span><span style="color:#006B3F;font-weight:800;white-space:nowrap;font-size:.88rem">Abrir ›</span></div>
+      <div style="margin:7px 0 0 30px;font-size:.76rem;color:${stale ? '#B45309' : '#5b7a68'};font-weight:${stale ? 700 : 500}">${stale ? '⏰ ' : ''}${revTxt} · recomendado cada 1–2 días</div>
+    </div>`;
+  }
   function _pendingAccept() {
     const branch = {};
     (_sequences || []).forEach(s => { branch[s.id] = _seqSteps(s.id).some(st => (st.cond || '') === 'replied'); });
@@ -12902,6 +12926,7 @@ ${foot}
   }
   function pendingAcceptOpen() {
     const list = _pendingAccept();
+    _setAcceptReviewed();
     document.getElementById('lm-pa-modal')?.remove();
     const m = document.createElement('div'); m.id = 'lm-pa-modal'; m.className = 'fin-pi-backdrop';
     m.onclick = e => { if (e.target === m) m.remove(); };
@@ -13601,8 +13626,7 @@ ${foot}
     const totalToday = seqToday.length + actToday.length;
     const nextLine = seqFuture.length ? `<div class="seq-next">Siguiente tarea de secuencia: <b>${_relDay(seqFuture[0].due)}</b>${seqFuture.length > 1 ? ` · +${seqFuture.length - 1} más próximas` : ''}</div>` : '';
     const anything = all.length || acts.length;
-    const paN = _pendingAccept().length;
-    const paCta = paN ? `<div onclick="LeadManagerModule.pendingAcceptOpen()" title="Marca quién aceptó tu conexión de LinkedIn → saltan a la Ruta A (mensaje)" style="cursor:pointer;display:flex;align-items:center;gap:10px;background:#EAF5EE;border:1px solid #BFE0CC;border-radius:12px;padding:12px 14px;margin:2px 2px 16px;font-size:.88rem;color:#0A2540"><span style="font-size:1.15rem">🔗</span><span style="flex:1"><b>Revisar aceptaciones de LinkedIn</b> — <b style="color:#006B3F">${paN}</b> contacto${paN === 1 ? '' : 's'} esperando que marques quién aceptó (para que salten al mensaje).</span><span style="color:#006B3F;font-weight:800;white-space:nowrap">Abrir ›</span></div>` : '';
+    const paCta = _acceptCtaHtml();
     const listHtml = `${paCta}${seqOver.length ? `<div class="lm-tsec-h" style="color:#C4342B">⚠ Vencidas · ${seqOver.length}</div><div class="seq-tasks">${seqOver.map(t => _allTaskRow(t, today)).join('')}</div>` : ''}
       ${seqHoy.length ? `<div class="lm-tsec-h">Hoy · ${seqHoy.length}</div><div class="seq-tasks">${seqHoy.map(t => _allTaskRow(t, today)).join('')}</div>` : ''}
       ${(!seqToday.length && all.length) ? `<div class="lm-tsec-h">De secuencias</div><div class="cp-empty2" style="padding:14px 6px">Sin tareas de secuencia para hoy.</div>` : ''}
