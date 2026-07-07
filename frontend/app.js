@@ -12517,8 +12517,24 @@ table{width:100%;border-collapse:collapse;font-size:13px}
 .steps-line{font-size:12px;color:#3e4c59;margin-top:8px;line-height:2}
 .steps-line .sday{display:inline-block;background:#0f2b3d;color:#fff;border-radius:6px;font-size:10.5px;font-weight:800;padding:1px 7px;margin-right:4px}
 .steps-line .sarrow{color:#c3cbd3;margin:0 7px}
-.foot{padding:16px 52px;background:#0f2b3d;color:#8fa6b2;font-size:11px;display:flex;justify-content:space-between}
-@media print{body{background:#fff}.bar{display:none}.doc{box-shadow:none;margin:0;max-width:none}.sec{padding:20px 34px}.cover{padding:32px 34px 26px}.foot{padding:14px 34px}}`;
+.foot{padding:14px 52px;background:#0f2b3d;color:#8fa6b2;font-size:11px;display:flex;justify-content:space-between;align-items:center}
+.foot span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.foot span+span{margin-left:16px;max-width:55%}
+@media print{
+  body{background:#fff}
+  .bar{display:none}
+  .doc{box-shadow:none;margin:0;max-width:none}
+  .sec{padding:18px 34px}
+  .cover{padding:30px 34px 24px}
+  /* Márgenes de página: sin margen arriba/lados (la portada llega al borde) y
+     12mm abajo reservados para el pie corrido. margin:0 arriba también evita que
+     Chrome imprima su propio encabezado. */
+  @page{margin:0 0 15mm 0}
+  /* Pie corrido: fijo al borde inferior de CADA página (Chrome posiciona los
+     position:fixed respecto al borde del papel). El margen de 15mm reserva el
+     espacio para que el contenido no lo pise (pie de 12mm + ~3mm de aire). */
+  .foot{position:fixed;left:0;right:0;bottom:0;height:12mm;padding:0 34px}
+}`;
   }
   function _rptShell(lang, L, docTitle, subject, body) {
     return `<!DOCTYPE html><html lang="${lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(docTitle)}</title>
