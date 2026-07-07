@@ -13601,7 +13601,9 @@ ${foot}
     const totalToday = seqToday.length + actToday.length;
     const nextLine = seqFuture.length ? `<div class="seq-next">Siguiente tarea de secuencia: <b>${_relDay(seqFuture[0].due)}</b>${seqFuture.length > 1 ? ` · +${seqFuture.length - 1} más próximas` : ''}</div>` : '';
     const anything = all.length || acts.length;
-    const listHtml = `${seqOver.length ? `<div class="lm-tsec-h" style="color:#C4342B">⚠ Vencidas · ${seqOver.length}</div><div class="seq-tasks">${seqOver.map(t => _allTaskRow(t, today)).join('')}</div>` : ''}
+    const paN = _pendingAccept().length;
+    const paCta = paN ? `<div onclick="LeadManagerModule.pendingAcceptOpen()" title="Marca quién aceptó tu conexión de LinkedIn → saltan a la Ruta A (mensaje)" style="cursor:pointer;display:flex;align-items:center;gap:10px;background:#EAF5EE;border:1px solid #BFE0CC;border-radius:12px;padding:12px 14px;margin:2px 2px 16px;font-size:.88rem;color:#0A2540"><span style="font-size:1.15rem">🔗</span><span style="flex:1"><b>Revisar aceptaciones de LinkedIn</b> — <b style="color:#006B3F">${paN}</b> contacto${paN === 1 ? '' : 's'} esperando que marques quién aceptó (para que salten al mensaje).</span><span style="color:#006B3F;font-weight:800;white-space:nowrap">Abrir ›</span></div>` : '';
+    const listHtml = `${paCta}${seqOver.length ? `<div class="lm-tsec-h" style="color:#C4342B">⚠ Vencidas · ${seqOver.length}</div><div class="seq-tasks">${seqOver.map(t => _allTaskRow(t, today)).join('')}</div>` : ''}
       ${seqHoy.length ? `<div class="lm-tsec-h">Hoy · ${seqHoy.length}</div><div class="seq-tasks">${seqHoy.map(t => _allTaskRow(t, today)).join('')}</div>` : ''}
       ${(!seqToday.length && all.length) ? `<div class="lm-tsec-h">De secuencias</div><div class="cp-empty2" style="padding:14px 6px">Sin tareas de secuencia para hoy.</div>` : ''}
       ${nextLine}
