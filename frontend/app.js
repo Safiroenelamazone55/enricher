@@ -14341,6 +14341,10 @@ ${foot}
     const fld = (fid, lbl, val, ph, full) => `<label class="fin-cfg-field${full ? ' fin-pi-full' : ''}"><span class="fin-cfg-lbl">${lbl}</span><input class="form-input" id="${fid}" value="${val ? esc(val) : ''}" placeholder="${ph || ''}"></label>`;
     // Textarea (conserva saltos de línea al pegar contenido multilínea del sistema ICP).
     const fldTa = (fid, lbl, val, ph, full, rows) => `<label class="fin-cfg-field${full ? ' fin-pi-full' : ''}"><span class="fin-cfg-lbl">${lbl}</span><textarea class="form-input lm-ta-grow" id="${fid}" rows="${rows || 2}" placeholder="${ph || ''}">${val ? esc(val) : ''}</textarea></label>`;
+    // Canal: select con variedad. Si la campaña ya tiene un valor libre antiguo
+    // (p. ej. "email · llamadas"), se conserva como opción seleccionada.
+    const _CANAL_OPTS = ['Email', 'LinkedIn', 'Llamada', 'WhatsApp', 'SMS', 'Instagram', 'Video', 'Otro'];
+    const chanSel = (fid, lbl, val, emptyLbl) => `<label class="fin-cfg-field"><span class="fin-cfg-lbl">${lbl}</span><select class="form-input" id="${fid}"><option value="">${emptyLbl}</option>${_CANAL_OPTS.map(o => `<option value="${o}"${val === o ? ' selected' : ''}>${o}</option>`).join('')}${val && !_CANAL_OPTS.includes(val) ? `<option value="${esc(val)}" selected>${esc(val)}</option>` : ''}</select></label>`;
     const clientOpts = '<option value="">— Selecciona cliente —</option>' + _clients.map(x => `<option value="${x.id}"${String(x.id) === String(clientId) ? ' selected' : ''}>${esc(x.nombre)}</option>`).join('');
     m.innerHTML = `<div class="fin-pi-box">
       <div class="fin-pi-box__hd"><h3>${c ? 'Editar campaña' : 'Nueva campaña'}</h3><button class="fin-pi-x" onclick="LeadManagerModule.closeCampaignDrawer()">✕</button></div>
@@ -14348,8 +14352,8 @@ ${foot}
         ${fld('cmp-nombre', 'Nombre de campaña *', c?.nombre, 'Ej. US Landscaping Q3', true)}
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Cliente outbound *</span><select class="form-input" id="cmp-client">${clientOpts}</select></label>
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Estado</span><select class="form-input" id="cmp-estado">${_CMP_OPTS.map(([v, l]) => `<option value="${v}"${c?.estado === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
-        ${fld('cmp-canal', 'Canal principal', c?.canal, 'Email · LinkedIn')}
-        ${fld('cmp-canal2', 'Canal secundario', c?.canal_secundario, '')}
+        ${chanSel('cmp-canal', 'Canal principal', c?.canal, '— Selecciona canal —')}
+        ${chanSel('cmp-canal2', 'Canal secundario', c?.canal_secundario, '— Ninguno —')}
         ${fldTa('cmp-mercado', 'Mercado', c?.mercado, 'Ej. EE. UU. · Landscaping')}
         ${fldTa('cmp-icp', 'ICP', c?.icp, 'Ej. Owners 5–50 empleados')}
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Fecha de inicio</span><input class="form-input" type="date" id="cmp-fecha" value="${c?.fecha_inicio ? String(c.fecha_inicio).split('T')[0] : ''}"></label>
