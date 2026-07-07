@@ -12956,7 +12956,6 @@ ${foot}
     const overdue = due < today; const isToday = due.getTime() === today.getTime();
     const dLabel = isToday ? 'Hoy' : overdue ? 'Vencida' : due.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
     return `<div class="seq-task${overdue ? ' over' : ''}${isToday ? ' today' : ''}" onclick="LeadManagerModule.seqTaskOpen(${seqId},${e.contact_id})" title="Hacer tarea">
-      <button class="seq-task__ck" onclick="event.stopPropagation();LeadManagerModule.seqTaskDone(${seqId},${e.contact_id})" title="Marcar hecho sin abrir"></button>
       <span class="seq-task__ico" style="background:${touch[1]}1a;color:${touch[1]}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${touch[2]}</svg></span>
       <div class="seq-task__body"><div class="seq-task__t">${esc(st.titulo || touch[0])}<span class="seq-task__ch" style="color:${touch[1]}">${touch[0]}</span></div><div class="seq-task__who">${esc(full)}${e.company_nombre ? ` · ${esc(e.company_nombre)}` : ''}</div></div>
       ${_taskTimeHtml(st, seqId)}
@@ -13026,13 +13025,14 @@ ${foot}
   }
   async function seqTaskOpen(seqId, cid) {
     if (!cid) return;
+    _cpTaskHist = [];   // corrida nueva
     const has = Array.isArray(_seqContacts) && _activeSeq === seqId && _seqContacts.some(e => e.contact_id === cid);
     if (!has) { _activeSeq = seqId; _seqContacts = null; await _seqLoadContacts(seqId); }
     openContactPage(cid, { seqId: seqId });
   }
   function seqDoClose() { document.getElementById('seq-do-modal')?.remove(); _seqDo = null; }
   function seqDoEditStep(stepId) { const seqId = _cpTaskCtx ? _cpTaskCtx.seqId : _activeSeq; openStepDrawer(seqId, stepId); }
-  function seqDoExit() { const seqId = _cpTaskCtx ? _cpTaskCtx.seqId : _activeSeq; _cpTaskCtx = null; _activeSeq = seqId; _section = 'sequence'; _seqTab = 'tareas'; _renderBody(); if (!Array.isArray(_seqContacts)) _seqLoadContacts(seqId); }
+  function seqDoExit() { const seqId = _cpTaskCtx ? _cpTaskCtx.seqId : _activeSeq; _cpTaskCtx = null; _cpTaskHist = []; _activeSeq = seqId; _section = 'sequence'; _seqTab = 'tareas'; _renderBody(); if (!Array.isArray(_seqContacts)) _seqLoadContacts(seqId); }
   function seqOpenLinkedIn(cid) {
     const c = _contacts.find(x => x.id === cid);
     const url = c && c.linkedin; if (!url) return;
@@ -13198,7 +13198,8 @@ ${foot}
         <span class="cp-taskbar__div"></span>
         ${_DISPOS.map(d => `<button class="cp-dispo-b cp-dispo-b--xs" title="Marcar disposición: ${d[1]}" onclick="LeadManagerModule.seqDoDisposition('${d[0]}')">${d[1]}</button>`).join('')}
         <span class="cp-taskbar__sp"></span>
-        <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqDoSkip()">Saltar</button>
+        <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqDoPrev()"${_cpTaskHist.length ? '' : ' disabled'} title="Volver al contacto anterior (para revisar o deshacer)">‹ Anterior</button>
+        <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqDoSkip()">Saltar ›</button>
         <button class="btn btn--primary btn--sm" id="seqdo-done" onclick="LeadManagerModule.seqDoDone()">✓ Hecha → siguiente</button>
       </div>
     </div>`;
@@ -13279,7 +13280,7 @@ ${foot}
     const seqId = _cpTaskCtx.seqId, cid = _contactView;
     const btn = document.getElementById('seqdo-done'); if (btn) btn.disabled = true;
     try {
-      await _seqCompleteStep(seqId, cid); _lastDone = { seqId, cid };
+      await _seqCompleteStep(seqId, cid); _lastDone = { seqId, cid }; _cpTaskHist.push(cid);
       _seqContacts = null; await _seqLoadContacts(seqId);
       await _reloadContacts();
       const today = new Date(new Date().toDateString());
@@ -13296,8 +13297,13 @@ ${foot}
     const queue = _seqTasks(seqId).filter(t => t.due <= today);
     const i = queue.findIndex(t => t.e.contact_id === cid);
     const next = i >= 0 ? queue[i + 1] : queue[0];
-    if (next && next.e.contact_id !== cid) openContactPage(next.e.contact_id, { seqId: seqId });
+    if (next && next.e.contact_id !== cid) { _cpTaskHist.push(cid); openContactPage(next.e.contact_id, { seqId: seqId }); }
     else seqDoExit();
+  }
+  function seqDoPrev() {
+    if (!_cpTaskCtx || !_cpTaskHist.length) return;
+    const prev = _cpTaskHist.pop();
+    if (prev) openContactPage(prev, { seqId: _cpTaskCtx.seqId });
   }
   function _stepRow(st) {
     const t = _TOUCH[st.canal] || _TOUCH.email;
@@ -14743,6 +14749,7 @@ ${foot}
   let _addIds = [];
   let _cpActs = null;
   let _cpTaskCtx = null;      // { seqId } — ejecutando una tarea de secuencia sobre esta ficha
+  let _cpTaskHist = [];       // historial de contactos ya recorridos en la corrida (para "‹ Anterior")
   let _seqTab = 'pasos';
   let _seqContacts = null;
   let _seqMetrics = null;
@@ -16513,7 +16520,7 @@ ${foot}
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
     openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
     openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, confirmDeleteSequence, seqTab, seqCtAdvance, seqCtPause, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
-    seqTaskOpen, seqDoClose, seqDoCopy, seqDoDone, seqDoSkip, seqDoEditStep, seqDoExit, seqOpenLinkedIn,
+    seqTaskOpen, seqDoClose, seqDoCopy, seqDoDone, seqDoSkip, seqDoPrev, seqDoEditStep, seqDoExit, seqOpenLinkedIn,
     openStepDrawer, closeStepDrawer, saveStep, confirmDeleteStep, seqInsertVar, stepUseTpl, tzSearch, tzPick, tzBlur,
     stepSetMode, stepSetField, stepAddVariant, stepDelVariant, stepFocusTa,
     stepTagInput, stepTagKey, stepTagPick, stepTagAddTyped, stepTagRemove, stepTagBlur,
