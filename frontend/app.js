@@ -13197,6 +13197,25 @@ ${foot}
       }
     } catch { if (_cpTaskDraft && _cpTaskDraft.key === key) _cpTaskDraft.loading = false; }
   }
+  // ── Hora local ACTUAL del prospecto (según la zona de la secuencia), en vivo ──
+  let _cpClockTimer = null;
+  function _prospectClockLabel(tz) {
+    try { return new Intl.DateTimeFormat('es-ES', { timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date()); } catch { return '—'; }
+  }
+  function _prospectHour(tz) {
+    try { return parseInt(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', hour12: false }).format(new Date()), 10); } catch { return null; }
+  }
+  function _prospectClockInner(tz) {
+    const h = _prospectHour(tz);
+    const tag = h == null ? '' : (h >= 8 && h < 18)
+      ? '<span style="color:#15803D;font-weight:600">🟢 buen horario</span>'
+      : '<span style="color:#B45309;font-weight:600">🌙 fuera de horario</span>';
+    return `🕐 Hora del prospecto ahora: <b style="color:#0f2b3d">${_prospectClockLabel(tz)}</b> <span style="color:#8C97A3">${esc(_tzShort(tz))}</span>${tag ? ' · ' + tag : ''}`;
+  }
+  function _ensureProspectClock() {
+    if (_cpClockTimer) return;
+    _cpClockTimer = setInterval(() => { const el = document.getElementById('cp-clock-row'); if (el && el.dataset.tz) el.innerHTML = _prospectClockInner(el.dataset.tz); }, 20000);
+  }
   function _cpTaskBar(cid) {
     if (!_cpTaskCtx) return '';
     const seqId = _cpTaskCtx.seqId;
@@ -13247,12 +13266,14 @@ ${foot}
     if (st.canal === 'call' && (c.telefono || c.movil)) A.unshift(`<a class="btn btn--primary btn--sm" href="tel:${esc((c.telefono || c.movil).replace(/\s/g, ''))}">${NI('phone')} Llamar ${esc(c.telefono || c.movil)}</a>`);
     if (!A.length) A.push(`<span class="seqdo-nolink">Sin datos de contacto para este canal — complétalos en la ficha</span>`);
 
+    _ensureProspectClock();
     return `<div class="cp-taskbar cp-taskbar--slim">
       <div class="cp-taskbar__top">
         <span class="cp-taskbar__ico" style="background:${touch[1]}1a;color:${touch[1]}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${touch[2]}</svg></span>
         <div class="cp-taskbar__ttl"><span class="cp-taskbar__t">${esc(st.titulo || touch[0])}</span><b class="cp-taskbar__ch" style="color:${touch[1]}">${touch[0]}</b><span class="cp-taskbar__meta">${pos >= 0 && queue.length ? `${pos + 1}/${queue.length} hoy` : `Día ${st.dia || 1}`}${seq && seq.timezone ? ` · 🕐 ≈ ${_suggestWindow(seq.timezone).her}` : ''}${seq ? ` · ${esc(seq.nombre)}` : ''}</span></div>
         <button class="cp-taskbar__exit" onclick="LeadManagerModule.seqDoExit()">‹ Tareas</button>
       </div>
+      ${seq && seq.timezone ? `<div class="cp-taskbar__clock" id="cp-clock-row" data-tz="${esc(seq.timezone)}" style="margin:2px 0 0;padding:7px 2px 3px;font-size:.8rem;color:#3e4c59;display:flex;align-items:center;gap:6px;flex-wrap:wrap;border-top:1px dashed #E4E7DD">${_prospectClockInner(seq.timezone)}</div>` : ''}
       ${st.canal === 'email' && c.email ? `<div class="cp-taskbar__mailto">
         <span class="cp-taskbar__mt"><span class="cp-taskbar__subj-l">Para</span><span class="cp-taskbar__mt-v">${esc(c.email)}</span>${_copyBtn(c.email, 'Para copiado')}</span>
         ${ccMail ? `<span class="cp-taskbar__mt cp-taskbar__mt--cc" title="El cliente pidió ir en copia"><span class="cp-taskbar__subj-l">CC</span><span class="cp-taskbar__mt-v">${esc(ccMail)}</span>${_copyBtn(ccMail, 'CC copiado')}</span>` : ''}
