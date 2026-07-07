@@ -13580,14 +13580,11 @@ ${foot}
     const touch = _TOUCH[st.canal] || _TOUCH.email;
     const full = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || '—';
     const overdue = due < today; const isToday = due.getTime() === today.getTime();
-    const dLabel = isToday ? 'Hoy' : overdue ? 'Vencida' : due.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
     return `<div class="seq-task${overdue ? ' over' : ''}${isToday ? ' today' : ''}" onclick="LeadManagerModule.seqTaskOpen(${sq.id},${c.id})" title="Hacer tarea">
-      <button class="seq-task__ck" onclick="event.stopPropagation();LeadManagerModule.seqTaskDone(${sq.id},${c.id})" title="Marcar hecho sin abrir"></button>
       <span class="seq-task__ico" style="background:${touch[1]}1a;color:${touch[1]}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${touch[2]}</svg></span>
       <div class="seq-task__body"><div class="seq-task__t">${esc(st.titulo || touch[0])}<span class="seq-task__ch" style="color:${touch[1]}">${touch[0]}</span></div><div class="seq-task__who">${esc(full)}${c.company_nombre ? ` · ${esc(c.company_nombre)}` : ''} · <span class="seq-task__seq">${esc(sq.nombre)}</span></div></div>
       ${_taskTimeHtml(st, sq.id)}
-      <span class="seq-task__go">Hacer ›</span>
-      <span class="seq-task__due">${dLabel}</span>
+      <span class="seq-task__go" style="opacity:1;color:var(--brand-d,#006B3F)">Hacer tarea ›</span>
     </div>`;
   }
   function _vTasks() {
@@ -13595,13 +13592,16 @@ ${foot}
     const today = _dayOf(new Date());
     const seqToday = all.filter(t => t.due <= today);
     const seqFuture = all.filter(t => t.due > today);
+    const seqOver = seqToday.filter(t => t.due < today).sort((a, b) => a.due - b.due || (a.st.hora || '99:99').localeCompare(b.st.hora || '99:99'));
+    const seqHoy = seqToday.filter(t => t.due.getTime() === today.getTime()).sort((a, b) => (a.st.hora || '99:99').localeCompare(b.st.hora || '99:99'));
     const acts = _activities.filter(a => a.estado === 'pendiente').sort((x, y) => new Date(x.fecha) - new Date(y.fecha));
     const actToday = acts.filter(a => _dayOf(a.fecha) <= today);
     const totalToday = seqToday.length + actToday.length;
     const nextLine = seqFuture.length ? `<div class="seq-next">Siguiente tarea de secuencia: <b>${_relDay(seqFuture[0].due)}</b>${seqFuture.length > 1 ? ` · +${seqFuture.length - 1} más próximas` : ''}</div>` : '';
     const anything = all.length || acts.length;
-    const listHtml = `${seqToday.length ? `<div class="lm-tsec-h">De secuencias · hoy (${seqToday.length})</div><div class="seq-tasks">${seqToday.map(t => _allTaskRow(t, today)).join('')}</div>`
-        : (all.length ? `<div class="lm-tsec-h">De secuencias</div><div class="cp-empty2" style="padding:14px 6px">Sin tareas de secuencia para hoy.</div>` : '')}
+    const listHtml = `${seqOver.length ? `<div class="lm-tsec-h" style="color:#C4342B">⚠ Vencidas · ${seqOver.length}</div><div class="seq-tasks">${seqOver.map(t => _allTaskRow(t, today)).join('')}</div>` : ''}
+      ${seqHoy.length ? `<div class="lm-tsec-h">Hoy · ${seqHoy.length}</div><div class="seq-tasks">${seqHoy.map(t => _allTaskRow(t, today)).join('')}</div>` : ''}
+      ${(!seqToday.length && all.length) ? `<div class="lm-tsec-h">De secuencias</div><div class="cp-empty2" style="padding:14px 6px">Sin tareas de secuencia para hoy.</div>` : ''}
       ${nextLine}
       ${acts.length ? `<div class="lm-tsec-h">Follow-ups y tareas sueltas · ${acts.length}</div><div class="lm-feed">${acts.map(a => _actRow(a, true)).join('')}</div>` : ''}
       ${anything ? '' : _empty('tasks', 'Sin tareas pendientes', 'Enrola contactos en secuencias o crea follow-ups; aparecerán aquí ordenados por fecha.', _data.length ? 'Nueva tarea' : '', _data.length ? 'LeadManagerModule.openActivityDrawer(null,null,1)' : '')}`;
