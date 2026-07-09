@@ -11987,6 +11987,7 @@ const LeadManagerModule = (() => {
   let _repCharts = [];        // instancias Chart.js de Reportes (para destruir al re-render)
   let _repChartData = null;   // datos calculados para los charts de Reportes
   let _taskView = 'list';     // 'list' | 'calendar' en Tareas comerciales
+  let _taskFCamp = '', _taskFSeq = ''; // filtros de Tareas comerciales (campaña / secuencia)
   let _calRef = null;         // mes mostrado en el calendario (Date al día 1)
   let _section = 'dashboard'; // sección activa del workspace
   let _activeClient = null;   // id del cliente outbound en detalle
@@ -13667,22 +13668,55 @@ ${foot}
       <span class="seq-task__go" style="opacity:1;color:var(--brand-d,#006B3F)">Hacer tarea ›</span>
     </div>`;
   }
+  // ── Filtro por campaña/secuencia en Tareas comerciales (lista y calendario) ──
+  function _taskFilterPass(t) {
+    if (_taskFSeq && String(t.sq.id) !== String(_taskFSeq)) return false;
+    if (_taskFCamp) { const s = (_sequences || []).find(x => x.id === t.sq.id); if (String((s && s.campaign_id) || '') !== String(_taskFCamp)) return false; }
+    return true;
+  }
+  function taskSetFilter(kind, val) {
+    if (kind === 'clear') { _taskFCamp = ''; _taskFSeq = ''; _renderBody(); return; }
+    if (kind === 'camp') {
+      _taskFCamp = val;
+      // si la secuencia elegida no pertenece a la campaña nueva, se limpia
+      if (val && _taskFSeq) { const s = (_sequences || []).find(x => String(x.id) === String(_taskFSeq)); if (!s || String(s.campaign_id || '') !== String(val)) _taskFSeq = ''; }
+    } else _taskFSeq = val;
+    _renderBody();
+  }
   function _vTasks() {
-    const all = _allSeqTasks();
+    const allRaw = _allSeqTasks();
+    const hasFilter = !!(_taskFCamp || _taskFSeq);
+    const all = hasFilter ? allRaw.filter(_taskFilterPass) : allRaw;
     const today = _dayOf(new Date());
     const seqToday = all.filter(t => t.due <= today);
     const seqFuture = all.filter(t => t.due > today);
+    // Opciones de filtro: solo campañas/secuencias con tareas presentes (de allRaw, para no perder opciones al filtrar)
+    const seqMap = new Map(), campMap = new Map();
+    allRaw.forEach(t => {
+      if (!seqMap.has(t.sq.id)) seqMap.set(t.sq.id, t.sq.nombre);
+      const s = (_sequences || []).find(x => x.id === t.sq.id); const cid = s && s.campaign_id;
+      if (cid && !campMap.has(cid)) campMap.set(cid, _campaignName(cid) || ('Campaña ' + cid));
+    });
+    const optSort = m => [...m.entries()].sort((a, b) => String(a[1]).localeCompare(String(b[1])));
+    const seqOpts = optSort(seqMap).filter(([id]) => { if (!_taskFCamp) return true; const s = (_sequences || []).find(x => x.id === id); return String((s && s.campaign_id) || '') === String(_taskFCamp); });
+    const selCss = 'flex:1;min-width:0;max-width:290px;box-sizing:border-box;padding:7px 10px;border:1px solid #e3e7eb;border-radius:8px;font-size:.83rem;background:#fff;color:inherit';
+    const filterRow = (seqMap.size > 1 || campMap.size > 1 || hasFilter) ? `<div style="display:flex;gap:8px;margin:0 2px 14px;flex-wrap:wrap">
+      ${campMap.size ? `<select onchange="LeadManagerModule.taskSetFilter('camp',this.value)" style="${selCss}"><option value="">Todas las campañas</option>${optSort(campMap).map(([id, nm]) => `<option value="${id}"${String(id) === String(_taskFCamp) ? ' selected' : ''}>${esc(nm)}</option>`).join('')}</select>` : ''}
+      <select onchange="LeadManagerModule.taskSetFilter('seq',this.value)" style="${selCss}"><option value="">Todas las secuencias</option>${seqOpts.map(([id, nm]) => `<option value="${id}"${String(id) === String(_taskFSeq) ? ' selected' : ''}>${esc(nm)}</option>`).join('')}</select>
+      ${hasFilter ? `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.taskSetFilter('clear','')" title="Quitar filtros">✕ Limpiar</button>` : ''}
+    </div>` : '';
     const seqOver = seqToday.filter(t => t.due < today).sort((a, b) => a.due - b.due || (a.st.hora || '99:99').localeCompare(b.st.hora || '99:99'));
     const seqHoy = seqToday.filter(t => t.due.getTime() === today.getTime()).sort((a, b) => (a.st.hora || '99:99').localeCompare(b.st.hora || '99:99'));
     const acts = _activities.filter(a => a.estado === 'pendiente').sort((x, y) => new Date(x.fecha) - new Date(y.fecha));
     const actToday = acts.filter(a => _dayOf(a.fecha) <= today);
     const totalToday = seqToday.length + actToday.length;
     const nextLine = seqFuture.length ? `<div class="seq-next">Siguiente tarea de secuencia: <b>${_relDay(seqFuture[0].due)}</b>${seqFuture.length > 1 ? ` · +${seqFuture.length - 1} más próximas` : ''}</div>` : '';
-    const anything = all.length || acts.length;
+    const anything = allRaw.length || acts.length;
     const paCta = _acceptCtaHtml();
-    const listHtml = `${paCta}${seqOver.length ? `<div class="lm-tsec-h" style="color:#C4342B">⚠ Vencidas · ${seqOver.length}</div><div class="seq-tasks">${seqOver.map(t => _allTaskRow(t, today)).join('')}</div>` : ''}
+    const listHtml = `${seqOver.length ? `<div class="lm-tsec-h" style="color:#C4342B">⚠ Vencidas · ${seqOver.length}</div><div class="seq-tasks">${seqOver.map(t => _allTaskRow(t, today)).join('')}</div>` : ''}
       ${seqHoy.length ? `<div class="lm-tsec-h">Hoy · ${seqHoy.length}</div><div class="seq-tasks">${seqHoy.map(t => _allTaskRow(t, today)).join('')}</div>` : ''}
       ${(!seqToday.length && all.length) ? `<div class="lm-tsec-h">De secuencias</div><div class="cp-empty2" style="padding:14px 6px">Sin tareas de secuencia para hoy.</div>` : ''}
+      ${(hasFilter && !all.length) ? `<div class="cp-empty2" style="padding:14px 6px">Sin tareas de secuencia para este filtro.</div>` : ''}
       ${nextLine}
       ${acts.length ? `<div class="lm-tsec-h">Follow-ups y tareas sueltas · ${acts.length}</div><div class="lm-feed">${acts.map(a => _actRow(a, true)).join('')}</div>` : ''}
       ${anything ? '' : _empty('tasks', 'Sin tareas pendientes', 'Enrola contactos en secuencias o crea follow-ups; aparecerán aquí ordenados por fecha.', _data.length ? 'Nueva tarea' : '', _data.length ? 'LeadManagerModule.openActivityDrawer(null,null,1)' : '')}`;
@@ -13691,11 +13725,12 @@ ${foot}
         <div><h2 class="lm-sec-title">Tareas comerciales</h2><p class="lm-sec-sub">${totalToday} para hoy${seqFuture.length ? ` · ${seqFuture.length} próxima${seqFuture.length === 1 ? '' : 's'}` : ''} — secuencias y follow-ups</p></div>
         <div class="lm-hd-actions"><div class="task-viewtoggle"><button class="tvt${_taskView === 'calendar' ? '' : ' on'}" onclick="LeadManagerModule.taskSetView('list')">Lista</button><button class="tvt${_taskView === 'calendar' ? ' on' : ''}" onclick="LeadManagerModule.taskSetView('calendar')">Calendario</button></div>${_data.length ? `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openActivityDrawer(null,null,1)">＋ Nueva tarea</button>` : ''}</div>
       </div>
-      ${_taskView === 'calendar' ? _vTaskCalendar() : listHtml}`;
+      ${paCta}${filterRow}${_taskView === 'calendar' ? _vTaskCalendar() : listHtml}`;
   }
   function _monthStart(d) { return new Date(d.getFullYear(), d.getMonth(), 1); }
   function _dayKey(d) { const x = _dayOf(d); return x.getFullYear() + '-' + (x.getMonth() + 1) + '-' + x.getDate(); }
   function taskSetView(v) { _taskView = v; _renderBody(); }
+  // taskSetFilter definido junto a _vTasks
   function calPrev() { const r = _calRef || _monthStart(new Date()); _calRef = new Date(r.getFullYear(), r.getMonth() - 1, 1); _renderBody(); }
   function calNext() { const r = _calRef || _monthStart(new Date()); _calRef = new Date(r.getFullYear(), r.getMonth() + 1, 1); _renderBody(); }
   function calToday() { _calRef = _monthStart(new Date()); _renderBody(); }
@@ -13714,7 +13749,7 @@ ${foot}
     const dim = new Date(y, mo + 1, 0).getDate();
     const today = _dayOf(new Date());
     const byDay = {};
-    _allSeqTasks().forEach(t => { const k = _dayKey(t.due); (byDay[k] = byDay[k] || []).push(t); });
+    _allSeqTasks().filter(_taskFilterPass).forEach(t => { const k = _dayKey(t.due); (byDay[k] = byDay[k] || []).push(t); });
     const wd = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
     const total = Math.ceil((startDow + dim) / 7) * 7;
     let cells = '';
@@ -16763,7 +16798,7 @@ ${foot}
     openFilters, closeFilters, fltSet, fltAddRow, fltDelRow, fltApply, clearFilters, removeFilter,
     fmsToggle, fmsFilter, fmsPick,
     openViews, applyView, saveView, deleteView, clearAllViews,
-    taskSetView, calPrev, calNext, calToday,
+    taskSetView, taskSetFilter, calPrev, calNext, calToday,
     lmSetDisposition, seqDoDisposition, cpSetStage,
     pendingAcceptOpen, pendingAcceptToggleAll, pendingAcceptApplyFilters, pendingAcceptMark,
     openActivityDrawer, closeActivityDrawer, saveActivity, confirmDeleteActivity, markActDone,
