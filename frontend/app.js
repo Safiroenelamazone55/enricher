@@ -13258,8 +13258,8 @@ ${foot}
     const touch = _TOUCH[st.canal] || _TOUCH.email;
     const full = [e.nombre, e.apellido].filter(Boolean).join(' ') || e.email || '—';
     const overdue = due < today; const isToday = due.getTime() === today.getTime();
-    return `<div class="seq-task${overdue ? ' over' : ''}${isToday ? ' today' : ''}" onclick="LeadManagerModule.seqTaskOpen(${seqId},${e.contact_id})" title="Hacer tarea">
-      <span class="seq-task__ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${touch[2]}</svg></span>
+    return `<div class="seq-task${overdue ? ' over' : ''}${isToday ? ' today' : ''}" onclick="LeadManagerModule.seqTaskOpen(${seqId},${e.contact_id})">
+      <span class="seq-task__ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${touch[2]}</svg></span>
       <div class="seq-task__body"><div class="seq-task__t">${esc(st.titulo || touch[0])}<span class="seq-task__ch">${touch[0]}</span></div><div class="seq-task__who">${esc(full)}${e.company_nombre ? ` · ${esc(e.company_nombre)}` : ''}</div></div>
       ${_taskTimeHtml(st, seqId, e)}
       <span class="seq-task__go">Hacer tarea ›</span>
@@ -13788,8 +13788,8 @@ ${foot}
     const touch = _TOUCH[st.canal] || _TOUCH.email;
     const full = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || '—';
     const overdue = due < today; const isToday = due.getTime() === today.getTime();
-    return `<div class="seq-task${overdue ? ' over' : ''}${isToday ? ' today' : ''}" onclick="LeadManagerModule.seqTaskOpen(${sq.id},${c.id})" title="Hacer tarea">
-      <span class="seq-task__ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${touch[2]}</svg></span>
+    return `<div class="seq-task${overdue ? ' over' : ''}${isToday ? ' today' : ''}" onclick="LeadManagerModule.seqTaskOpen(${sq.id},${c.id})">
+      <span class="seq-task__ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${touch[2]}</svg></span>
       <div class="seq-task__body"><div class="seq-task__t">${esc(st.titulo || touch[0])}<span class="seq-task__ch">${touch[0]}</span></div><div class="seq-task__who">${esc(full)}${c.company_nombre ? ` · ${esc(c.company_nombre)}` : ''} · <span class="seq-task__seq">${esc(sq.nombre)}</span></div></div>
       ${_taskTimeHtml(st, sq.id, c)}
       <span class="seq-task__go">Hacer tarea ›</span>
