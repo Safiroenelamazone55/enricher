@@ -12228,7 +12228,7 @@ const LeadManagerModule = (() => {
         : (_clients.length ? _empty('sequences', 'Aún no hay secuencias', 'Crea una secuencia y define sus pasos (Día 1 Email, Día 2 LinkedIn…). El envío automático llega en una fase futura.', 'Nueva secuencia', 'LeadManagerModule.openSequenceDrawer()')
                            : _empty('sequences', 'Primero crea un cliente outbound', 'Las secuencias pertenecen a un cliente. Crea uno para empezar.', 'Nuevo cliente outbound', 'LeadManagerModule.openClientDrawer()'))}`;
   }
-  function openSequence(id) { _activeSeq = id; _section = 'sequence'; _seqTab = 'pasos'; _seqContacts = null; _seqMetrics = null; _seqDo = null; _refreshNav(); _renderBody(); _seqLoadContacts(id); }
+  function openSequence(id) { _activeSeq = id; _section = 'sequence'; _seqTab = 'pasos'; _seqContacts = null; _seqMetrics = null; _seqDo = null; _seqCtEstado = ''; _refreshNav(); _renderBody(); _seqLoadContacts(id); }
   const _TZ = [
     ['', 'Sin zona (sin sugerencia de hora)'],
     ['Europe/Madrid', 'España — Madrid'], ['America/New_York', 'EE. UU. Este — New York'], ['America/Chicago', 'EE. UU. Centro — Chicago'],
@@ -12815,7 +12815,17 @@ ${foot}
       const list = Array.isArray(_seqContacts) ? _seqContacts : null;
       if (list === null) return `<div class="cp-empty2" style="padding:22px">Cargando…</div>`;
       if (!list.length) return _empty('contacts', 'Nadie enrolado aún', 'Enrola contactos para arrancar la secuencia (o hazlo desde Contactos → seleccionar → ＋ Secuencia).', 'Enrolar contacto', `LeadManagerModule.seqEnrolOpen(${id})`);
-      return `<div class="clients-table-wrap"><table class="clients-table lm-dt"><thead><tr><th>Contacto</th><th>Progreso</th><th>Estado</th><th></th></tr></thead><tbody>${list.map(e => _seqCtRow(e, steps, id)).join('')}</tbody></table></div>`;
+      // Filtro por estado del enrolamiento (chips con conteo)
+      const counts = {}; list.forEach(e => { const s = e.estado || 'activo'; counts[s] = (counts[s] || 0) + 1; });
+      const LBL = { activo: 'Activos', pausado: 'Pausados', respondido: 'Respondieron', terminado: 'Terminados', bounce: 'Rebotados' };
+      const order = ['activo', 'pausado', 'respondido', 'terminado', 'bounce', ...Object.keys(counts).filter(k => !LBL[k])];
+      const chips = [`<button class="lm-filter-btn${!_seqCtEstado ? ' on' : ''}" onclick="LeadManagerModule.seqCtSetEstado('')">Todos · ${list.length}</button>`]
+        .concat(order.filter(k => counts[k]).map(k => `<button class="lm-filter-btn${_seqCtEstado === k ? ' on' : ''}" onclick="LeadManagerModule.seqCtSetEstado('${k}')">${LBL[k] || k} · ${counts[k]}</button>`)).join('');
+      const fl = _seqCtEstado ? list.filter(e => (e.estado || 'activo') === _seqCtEstado) : list;
+      return `<div style="display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px">${chips}</div>` +
+        (fl.length
+          ? `<div class="clients-table-wrap"><table class="clients-table lm-dt"><thead><tr><th>Contacto</th><th>Progreso</th><th>Estado</th><th></th></tr></thead><tbody>${fl.map(e => _seqCtRow(e, steps, id)).join('')}</tbody></table></div>`
+          : `<div class="cp-empty2" style="padding:16px">Nadie con este estado.</div>`);
     }
     if (_seqTab === 'tareas') {
       const list = Array.isArray(_seqContacts) ? _seqContacts : null;
@@ -13114,6 +13124,7 @@ ${foot}
     if (_section === 'sequence' && _activeSeq === id && _seqTab === 'metricas') { const el = document.getElementById('seq-tabwrap'); if (el) el.innerHTML = _seqTabContent(id); }
   }
   function seqTab(t) { _seqTab = t; _renderBody(); if ((t === 'contactos' || t === 'tareas') && !Array.isArray(_seqContacts)) _seqLoadContacts(_activeSeq); if (t === 'metricas') { if (_seqMetrics === null) _seqLoadMetrics(_activeSeq); _seqAb = null; _seqLoadAb(_activeSeq); } if (t === 'envios') { _seqMsgs = null; _seqLoadMsgs(_activeSeq); } }
+  function seqCtSetEstado(v) { _seqCtEstado = v || ''; const el = document.getElementById('seq-tabwrap'); if (el && _activeSeq) el.innerHTML = _seqTabContent(_activeSeq); else _renderBody(); }
   async function _seqPatch(seqId, cid, body) {
     try {
       const res = await apiFetch(`${API}/lm/sequences/${seqId}/contacts/${cid}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -15114,6 +15125,25 @@ ${foot}
   let _coQuery = '';
   let _ctQuery = '';
   let _ctBounced = false; // filtro rápido: solo emails rebotados (para corregirlos)
+  // ── Paginación de tablas (Contactos / Empresas): sin scroll interno, 50/100 por página ──
+  let _ctPage = 0, _coPage = 0;
+  function _pageSize() { try { return parseInt(localStorage.getItem('lm_page_size')) || 50; } catch (_) { return 50; } }
+  function lmSetPageSize(n) { try { localStorage.setItem('lm_page_size', String(parseInt(n) || 50)); } catch (_) {} _ctPage = 0; _coPage = 0; _renderBody(); }
+  function ctGoPage(d) { _ctPage = Math.max(0, _ctPage + d); _renderContacts(); const b = $('lm2-body'); if (b) b.scrollTop = 0; }
+  function coGoPage(d) { _coPage = Math.max(0, _coPage + d); _renderCompanies(); const b = $('lm2-body'); if (b) b.scrollTop = 0; }
+  function _pagerHtml(total, page, fn) {
+    const ps = _pageSize();
+    const pages = Math.max(1, Math.ceil(total / ps));
+    const from = total ? page * ps + 1 : 0, to = Math.min(total, (page + 1) * ps);
+    const nav = (dir, dis, label) => `<button class="btn btn--ghost btn--sm" style="min-width:34px" ${dis ? 'disabled style="min-width:34px;opacity:.4;cursor:default"' : ''} onclick="LeadManagerModule.${fn}(${dir})" title="${dir < 0 ? 'Página anterior' : 'Página siguiente'}">${label}</button>`;
+    return `<div class="lm-pager" style="display:flex;align-items:center;gap:10px;justify-content:flex-end;flex-wrap:wrap;padding:12px 4px 4px;font-size:.83rem;color:#5b6b7b">
+      <span>Mostrando <b style="color:#0f2b3d">${from}–${to}</b> de <b style="color:#0f2b3d">${total}</b></span>
+      <select onchange="LeadManagerModule.lmSetPageSize(this.value)" title="Filas por página" style="padding:5px 9px;border:1px solid #e3e7eb;border-radius:8px;background:#fff;font-size:.82rem;color:inherit;cursor:pointer">${[50, 100].map(n => `<option value="${n}"${ps === n ? ' selected' : ''}>${n} / página</option>`).join('')}</select>
+      ${nav(-1, page <= 0, '‹')}
+      <span>${page + 1} / ${pages}</span>
+      ${nav(1, page >= pages - 1, '›')}
+    </div>`;
+  }
   let _ctClientFilter = '';   // filtro por cliente outbound asignado
   let _ctFilters = [];        // filtros avanzados de contactos: [{field, op, val}]
   let _coFilters = [];        // filtros avanzados de empresas
@@ -15134,6 +15164,7 @@ ${foot}
   let _cpTaskCtx = null;      // { seqId } — ejecutando una tarea de secuencia sobre esta ficha
   let _cpTaskHist = [];       // historial de contactos ya recorridos en la corrida (para "‹ Anterior")
   let _seqTab = 'pasos';
+  let _seqCtEstado = ''; // filtro de estado en la pestaña Contactos de la secuencia
   let _seqContacts = null;
   let _seqMetrics = null;
   let _seqDo = null;          // { seqId, cid } — tarea abierta en el panel de ejecución
@@ -15611,23 +15642,27 @@ ${foot}
     const allSel = list.length > 0 && list.every(c => _ctSel.has(c.id));
     const cols = _ctColsGet().map(k => _CT_COLDEFS.find(d => d.k === k)).filter(Boolean);
     const totalW = cols.reduce((s, d) => s + d.w, 0) + (_ctSelMode ? 36 : 0) + 72;
-    el.innerHTML = `<div class="clients-table-wrap lm-dt2-wrap"><table class="clients-table lm-dt lm-dt2${_ctSelMode ? ' sel-on' : ''}" style="min-width:${totalW}px">
+    // Paginación: sin scroll vertical interno — se navega con ‹ › (50/100 por página)
+    const ps = _pageSize();
+    if (_ctPage * ps >= list.length) _ctPage = 0;
+    const pageList = list.slice(_ctPage * ps, (_ctPage + 1) * ps);
+    el.innerHTML = `<div class="clients-table-wrap lm-dt2-wrap" style="max-height:none"><table class="clients-table lm-dt lm-dt2${_ctSelMode ? ' sel-on' : ''}" style="min-width:${totalW}px">
       <colgroup>${_ctSelMode ? '<col style="width:36px">' : '<col style="width:0">'}${cols.map(d => `<col style="width:${d.w}px">`).join('')}<col style="width:72px"></colgroup>
       <thead><tr>
         <th class="lm-ck-col"><input type="checkbox" class="lm-ck" ${allSel ? 'checked' : ''} onclick="LeadManagerModule.toggleCtAll(this.checked)"></th>
         ${cols.map(d => `<th>${d.l}</th>`).join('')}<th></th>
       </tr></thead>
-      <tbody>${list.map(c => `<tr class="clients-table__row${_ctSel.has(c.id) ? ' sel' : ''}" onclick="LeadManagerModule.openContactPage(${c.id})" style="cursor:pointer">
+      <tbody>${pageList.map(c => `<tr class="clients-table__row${_ctSel.has(c.id) ? ' sel' : ''}" onclick="LeadManagerModule.openContactPage(${c.id})" style="cursor:pointer">
         <td class="lm-ck-col" onclick="event.stopPropagation()"><input type="checkbox" class="lm-ck" ${_ctSel.has(c.id) ? 'checked' : ''} onclick="LeadManagerModule.toggleCt(event,${c.id})"></td>
         ${cols.map(d => `<td class="client-meta">${_ctCell(c, d.k)}</td>`).join('')}
         <td class="lm-dt-act"><button class="lm-mini-b" title="Borradores IA (✨)" onclick="event.stopPropagation();LeadManagerModule.openAiDrafts(${c.id})">${NI('sparkles')}</button><button class="lm-mini-x" title="Eliminar" onclick="event.stopPropagation();LeadManagerModule.deleteContact(${c.id})">✕</button></td>
-      </tr>`).join('')}</tbody></table></div>`;
+      </tr>`).join('')}</tbody></table></div>${_pagerHtml(list.length, _ctPage, 'ctGoPage')}`;
     _renderBulkBar();
     _syncSelAll();
   }
-  function filterContacts(v) { _ctQuery = (v || '').toLowerCase().trim(); _renderContacts(); }
-  function ctSetClient(v) { _ctClientFilter = v || ''; _renderBody(); }
-  function ctToggleBounced() { _ctBounced = !_ctBounced; _renderBody(); }
+  function filterContacts(v) { _ctQuery = (v || '').toLowerCase().trim(); _ctPage = 0; _renderContacts(); }
+  function ctSetClient(v) { _ctClientFilter = v || ''; _ctPage = 0; _renderBody(); }
+  function ctToggleBounced() { _ctBounced = !_ctBounced; _ctPage = 0; _renderBody(); }
   function toggleCt(ev, id) { const on = ev.target.checked; if (on) _ctSel.add(id); else _ctSel.delete(id); ev.target.closest('tr')?.classList.toggle('sel', on); _renderBulkBar(); _syncSelAll(); }
   function toggleCtAll(on) { if (on) _ctFilteredIds.forEach(id => _ctSel.add(id)); else _ctFilteredIds.forEach(id => _ctSel.delete(id)); _renderContacts(); }
   function clearCtSel() { _ctSel.clear(); _renderContacts(); }
@@ -16025,10 +16060,13 @@ ${foot}
       return;
     }
     const allSel = list.length > 0 && list.every(c => _coSel.has(c.id));
-    el.innerHTML = `<div class="clients-table-wrap"><table class="clients-table lm-dt${_coSelMode ? ' sel-on' : ''}"><thead><tr>
+    const ps = _pageSize();
+    if (_coPage * ps >= list.length) _coPage = 0;
+    const pageList = list.slice(_coPage * ps, (_coPage + 1) * ps);
+    el.innerHTML = `<div class="clients-table-wrap" style="max-height:none"><table class="clients-table lm-dt${_coSelMode ? ' sel-on' : ''}"><thead><tr>
         <th class="lm-ck-col"><input type="checkbox" class="lm-ck" ${allSel ? 'checked' : ''} onclick="LeadManagerModule.toggleCoAll(this.checked)"></th>
         <th>Empresa</th><th>Industria</th><th>Nº empleados</th><th>País</th><th>Contactos</th><th></th>
-      </tr></thead><tbody>${list.map(_coRow).join('')}</tbody></table></div>`;
+      </tr></thead><tbody>${pageList.map(_coRow).join('')}</tbody></table></div>${_pagerHtml(list.length, _coPage, 'coGoPage')}`;
     _renderCoBulkBar();
     _syncCoSelAll();
   }
@@ -16045,7 +16083,7 @@ ${foot}
       <td class="lm-dt-act"><button class="lm-mini-x" title="Eliminar" onclick="event.stopPropagation();LeadManagerModule.deleteCompany(${c.id})">✕</button></td>
     </tr>`;
   }
-  function filterCompanies(v) { _coQuery = (v || '').toLowerCase().trim(); _renderCompanies(); }
+  function filterCompanies(v) { _coQuery = (v || '').toLowerCase().trim(); _coPage = 0; _renderCompanies(); }
   function toggleCo(ev, id) { const on = ev.target.checked; if (on) _coSel.add(id); else _coSel.delete(id); ev.target.closest('tr')?.classList.toggle('sel', on); _renderCoBulkBar(); _syncCoSelAll(); }
   function toggleCoAll(on) { if (on) _coFilteredIds.forEach(id => _coSel.add(id)); else _coFilteredIds.forEach(id => _coSel.delete(id)); _renderCompanies(); }
   function clearCoSel() { _coSel.clear(); _renderCompanies(); }
@@ -16937,6 +16975,7 @@ ${foot}
     taskSetView, taskSetFilter, calPrev, calNext, calToday,
     lmSetDisposition, seqDoDisposition, cpSetStage,
     seqDoNoLinkedIn, seqDoBounced, lmToggleNoLinkedIn, lmToggleBounced, lmToggleManualEmail, ctToggleBounced,
+    lmSetPageSize, ctGoPage, coGoPage, seqCtSetEstado,
     pendingAcceptOpen, pendingAcceptToggleAll, pendingAcceptApplyFilters, pendingAcceptMark,
     openActivityDrawer, closeActivityDrawer, saveActivity, confirmDeleteActivity, markActDone,
     setReplySentiment, setLeadStage,
