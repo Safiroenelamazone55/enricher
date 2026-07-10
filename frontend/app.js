@@ -13028,9 +13028,8 @@ ${foot}
     const t = last ? new Date(last).getTime() : 0;
     const stale = !t || (Date.now() - t) / 3600000 > 20; // pasó ~1 día → conviene revisar
     const revTxt = last ? `Última revisión: ${_relAgo(last)}` : 'Aún no la revisas';
-    return `<div onclick="LeadManagerModule.pendingAcceptOpen()" title="Marca quién aceptó tu conexión de LinkedIn → saltan a la Ruta A (mensaje)" class="lm-accept-cta${stale ? ' lm-accept-cta--stale' : ''}">
-      <div class="lm-accept-cta__row"><span class="lm-accept-cta__ico">${NI('linkedin', 14)}</span><span class="lm-accept-cta__tx"><b>Revisar aceptaciones de LinkedIn</b> — <b style="color:#006B3F">${n}</b> contacto${n === 1 ? '' : 's'} esperando que marques quién aceptó.</span><span class="lm-accept-cta__go">Abrir ›</span></div>
-      <div class="lm-accept-cta__meta">${revTxt} · recomendado cada 1–2 días</div>
+    return `<div onclick="LeadManagerModule.pendingAcceptOpen()" title="Marca quién aceptó tu conexión de LinkedIn → saltan a la Ruta A (mensaje). Recomendado cada 1–2 días." class="lm-accept-cta${stale ? ' lm-accept-cta--stale' : ''}">
+      <div class="lm-accept-cta__row"><span class="lm-accept-cta__ico">${NI('linkedin', 13)}</span><span class="lm-accept-cta__tx"><b>Revisar aceptaciones de LinkedIn</b> — <b style="color:#006B3F">${n}</b> por marcar</span><span class="lm-accept-cta__meta2">${revTxt}</span><span class="lm-accept-cta__go">Abrir ›</span></div>
     </div>`;
   }
   function _pendingAccept() {
@@ -13260,8 +13259,8 @@ ${foot}
     const full = [e.nombre, e.apellido].filter(Boolean).join(' ') || e.email || '—';
     const overdue = due < today; const isToday = due.getTime() === today.getTime();
     return `<div class="seq-task${overdue ? ' over' : ''}${isToday ? ' today' : ''}" onclick="LeadManagerModule.seqTaskOpen(${seqId},${e.contact_id})" title="Hacer tarea">
-      <span class="seq-task__ico" style="background:${touch[1]}1a;color:${touch[1]}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${touch[2]}</svg></span>
-      <div class="seq-task__body"><div class="seq-task__t">${esc(st.titulo || touch[0])}<span class="seq-task__ch" style="color:${touch[1]}">${touch[0]}</span></div><div class="seq-task__who">${esc(full)}${e.company_nombre ? ` · ${esc(e.company_nombre)}` : ''}</div></div>
+      <span class="seq-task__ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${touch[2]}</svg></span>
+      <div class="seq-task__body"><div class="seq-task__t">${esc(st.titulo || touch[0])}<span class="seq-task__ch">${touch[0]}</span></div><div class="seq-task__who">${esc(full)}${e.company_nombre ? ` · ${esc(e.company_nombre)}` : ''}</div></div>
       ${_taskTimeHtml(st, seqId, e)}
       <span class="seq-task__go">Hacer tarea ›</span>
     </div>`;
@@ -13790,8 +13789,8 @@ ${foot}
     const full = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || '—';
     const overdue = due < today; const isToday = due.getTime() === today.getTime();
     return `<div class="seq-task${overdue ? ' over' : ''}${isToday ? ' today' : ''}" onclick="LeadManagerModule.seqTaskOpen(${sq.id},${c.id})" title="Hacer tarea">
-      <span class="seq-task__ico" style="background:${touch[1]}1a;color:${touch[1]}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${touch[2]}</svg></span>
-      <div class="seq-task__body"><div class="seq-task__t">${esc(st.titulo || touch[0])}<span class="seq-task__ch" style="color:${touch[1]}">${touch[0]}</span></div><div class="seq-task__who">${esc(full)}${c.company_nombre ? ` · ${esc(c.company_nombre)}` : ''} · <span class="seq-task__seq">${esc(sq.nombre)}</span></div></div>
+      <span class="seq-task__ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${touch[2]}</svg></span>
+      <div class="seq-task__body"><div class="seq-task__t">${esc(st.titulo || touch[0])}<span class="seq-task__ch">${touch[0]}</span></div><div class="seq-task__who">${esc(full)}${c.company_nombre ? ` · ${esc(c.company_nombre)}` : ''} · <span class="seq-task__seq">${esc(sq.nombre)}</span></div></div>
       ${_taskTimeHtml(st, sq.id, c)}
       <span class="seq-task__go">Hacer tarea ›</span>
     </div>`;

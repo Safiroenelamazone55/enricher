@@ -11888,3 +11888,38 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
 .lm-accept-cta--stale .lm-accept-cta__ico { color: #B45309; }
 .lm-task-empty__i .ni { display: block; }
 .cal-chip { border-radius: 6px; }
+
+/* ═══ TAREAS COMERCIALES — v4 pase de calma (un acento por fila, sin losas) ═══ */
+/* Stat strip: compacta y alineada a la izquierda, número protagonista */
+.lm-stat-strip { display: inline-flex; }
+.lm-stat { flex: 0 0 auto; min-width: 0; padding: 9px 22px 10px 16px; text-align: left; }
+.lm-stat__l { font-size: .63rem; }
+.lm-stat__n { font-size: 1.35rem; }
+
+/* Fila: UN solo acento (el botón "Hacer tarea") — icono, canal y contexto neutros */
+.seq-task__ico { background: #F3F5F7; color: #5B6B7B; }
+.seq-task__ch { color: #8A94A6; }
+.seq-task__seq { color: #7C8A98; font-weight: 500; }
+.seq-task__who { color: #7C8A98; }
+.seq-task__hora { background: #F3F5F7; color: #45586A; }
+/* El grupo ya dice "Vencidas/Hoy": fuera el riel de color continuo por fila */
+.seq-task.over, .seq-task.over:hover, .seq-task.today, .seq-task.today:hover { box-shadow: none; }
+.seq-task.over:hover { background: #F7FAF8; }
+
+/* Encabezado de grupo: conteo como número plano, sin chip de fondo */
+.lm-tsec-h { margin: 16px 2px 8px; }
+.lm-tsec-h__n { background: transparent; padding: 0; min-width: 0; height: auto; font-size: .72rem; color: #8A94A6; }
+.lm-tsec-h--over .lm-tsec-h__n { background: transparent; color: #C4342B; }
+.lm-tsec-h--today .lm-tsec-h__n { background: transparent; color: #006B3F; }
+
+/* CTA en una sola línea, más baja */
+.lm-accept-cta { padding: 8px 12px; margin: 0 2px 12px; }
+.lm-accept-cta__ico { width: 24px; height: 24px; border-radius: 7px; }
+.lm-accept-cta__tx { font-size: .84rem; flex: 0 1 auto; }
+.lm-accept-cta__meta2 { flex: 1; min-width: 0; text-align: right; font-size: .73rem; color: #8A94A6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 4px; }
+.lm-accept-cta--stale .lm-accept-cta__meta2 { color: #B45309; font-weight: 600; }
+
+/* Filtros: controles compactos, no losa de ancho completo */
+.lm-task-filters { margin: 0 2px 12px; }
+.lm-task-filters select { flex: 0 0 auto; width: auto; max-width: 240px; padding: 7px 11px; }
+.lm-stat-strip { margin-bottom: 12px; }
