@@ -12850,8 +12850,8 @@ ${foot}
       const head = todo.length
         ? `<div class="seq-tasks-hd">${todo.length} ${todo.length === 1 ? 'tarea' : 'tareas'} por hacer<button class="seq-tasks-start" onclick="LeadManagerModule.seqTaskOpen(${id},${todo[0].e.contact_id})">▶ Empezar</button></div>`
         : `<div class="seq-tasks-hd seq-tasks-hd--none">Sin tareas para hoy</div>`;
-      const grp = (over.length ? `<div class="lm-tsec-h" style="color:#C4342B">⚠ Vencidas · ${over.length}</div><div class="seq-tasks">${over.map(t => _seqTaskRow(t, id, today)).join('')}</div>` : '')
-                + (hoy.length ? `<div class="lm-tsec-h">Hoy · ${hoy.length}</div><div class="seq-tasks">${hoy.map(t => _seqTaskRow(t, id, today)).join('')}</div>` : '');
+      const grp = (over.length ? `<div class="lm-tsec-h lm-tsec-h--over"><span class="lm-tsec-h__dot"></span>Vencidas<span class="lm-tsec-h__n">${over.length}</span></div><div class="seq-tasks">${over.map(t => _seqTaskRow(t, id, today)).join('')}</div>` : '')
+                + (hoy.length ? `<div class="lm-tsec-h lm-tsec-h--today"><span class="lm-tsec-h__dot"></span>Hoy<span class="lm-tsec-h__n">${hoy.length}</span></div><div class="seq-tasks">${hoy.map(t => _seqTaskRow(t, id, today)).join('')}</div>` : '');
       return `${_acceptCtaHtml()}${head}${grp}${nextLine}`;
     }
     if (_seqTab === 'envios') {
@@ -13027,9 +13027,9 @@ ${foot}
     const t = last ? new Date(last).getTime() : 0;
     const stale = !t || (Date.now() - t) / 3600000 > 20; // pasó ~1 día → conviene revisar
     const revTxt = last ? `Última revisión: ${_relAgo(last)}` : 'Aún no la revisas';
-    return `<div onclick="LeadManagerModule.pendingAcceptOpen()" title="Marca quién aceptó tu conexión de LinkedIn → saltan a la Ruta A (mensaje)" style="cursor:pointer;background:#EAF5EE;border:1px solid ${stale ? '#E7C79A' : '#BFE0CC'};border-radius:12px;padding:12px 14px;margin:2px 2px 16px;color:#0A2540">
-      <div style="display:flex;align-items:center;gap:10px"><span style="font-size:1.15rem">🔗</span><span style="flex:1;font-size:.88rem"><b>Revisar aceptaciones de LinkedIn</b> — <b style="color:#006B3F">${n}</b> contacto${n === 1 ? '' : 's'} esperando que marques quién aceptó.</span><span style="color:#006B3F;font-weight:800;white-space:nowrap;font-size:.88rem">Abrir ›</span></div>
-      <div style="margin:7px 0 0 30px;font-size:.76rem;color:${stale ? '#B45309' : '#5b7a68'};font-weight:${stale ? 700 : 500}">${stale ? '⏰ ' : ''}${revTxt} · recomendado cada 1–2 días</div>
+    return `<div onclick="LeadManagerModule.pendingAcceptOpen()" title="Marca quién aceptó tu conexión de LinkedIn → saltan a la Ruta A (mensaje)" class="lm-accept-cta${stale ? ' lm-accept-cta--stale' : ''}">
+      <div class="lm-accept-cta__row"><span class="lm-accept-cta__ico">🔗</span><span class="lm-accept-cta__tx"><b>Revisar aceptaciones de LinkedIn</b> — <b style="color:#006B3F">${n}</b> contacto${n === 1 ? '' : 's'} esperando que marques quién aceptó.</span><span class="lm-accept-cta__go">Abrir ›</span></div>
+      <div class="lm-accept-cta__meta">${stale ? '⏰ ' : ''}${revTxt} · recomendado cada 1–2 días</div>
     </div>`;
   }
   function _pendingAccept() {
@@ -13262,7 +13262,7 @@ ${foot}
       <span class="seq-task__ico" style="background:${touch[1]}1a;color:${touch[1]}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${touch[2]}</svg></span>
       <div class="seq-task__body"><div class="seq-task__t">${esc(st.titulo || touch[0])}<span class="seq-task__ch" style="color:${touch[1]}">${touch[0]}</span></div><div class="seq-task__who">${esc(full)}${e.company_nombre ? ` · ${esc(e.company_nombre)}` : ''}</div></div>
       ${_taskTimeHtml(st, seqId, e)}
-      <span class="seq-task__go" style="opacity:1;color:var(--brand-d,#006B3F)">Hacer tarea ›</span>
+      <span class="seq-task__go">Hacer tarea ›</span>
     </div>`;
   }
   async function _seqCompleteStep(seqId, cid) {
@@ -13792,7 +13792,7 @@ ${foot}
       <span class="seq-task__ico" style="background:${touch[1]}1a;color:${touch[1]}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${touch[2]}</svg></span>
       <div class="seq-task__body"><div class="seq-task__t">${esc(st.titulo || touch[0])}<span class="seq-task__ch" style="color:${touch[1]}">${touch[0]}</span></div><div class="seq-task__who">${esc(full)}${c.company_nombre ? ` · ${esc(c.company_nombre)}` : ''} · <span class="seq-task__seq">${esc(sq.nombre)}</span></div></div>
       ${_taskTimeHtml(st, sq.id, c)}
-      <span class="seq-task__go" style="opacity:1;color:var(--brand-d,#006B3F)">Hacer tarea ›</span>
+      <span class="seq-task__go">Hacer tarea ›</span>
     </div>`;
   }
   // ── Filtro por campaña/secuencia en Tareas comerciales (lista y calendario) ──
@@ -13826,10 +13826,9 @@ ${foot}
     });
     const optSort = m => [...m.entries()].sort((a, b) => String(a[1]).localeCompare(String(b[1])));
     const seqOpts = optSort(seqMap).filter(([id]) => { if (!_taskFCamp) return true; const s = (_sequences || []).find(x => x.id === id); return String((s && s.campaign_id) || '') === String(_taskFCamp); });
-    const selCss = 'flex:1;min-width:0;max-width:290px;box-sizing:border-box;padding:7px 10px;border:1px solid #e3e7eb;border-radius:8px;font-size:.83rem;background:#fff;color:inherit';
-    const filterRow = (seqMap.size > 1 || campMap.size > 1 || hasFilter) ? `<div style="display:flex;gap:8px;margin:0 2px 14px;flex-wrap:wrap">
-      ${campMap.size ? `<select onchange="LeadManagerModule.taskSetFilter('camp',this.value)" style="${selCss}"><option value="">Todas las campañas</option>${optSort(campMap).map(([id, nm]) => `<option value="${id}"${String(id) === String(_taskFCamp) ? ' selected' : ''}>${esc(nm)}</option>`).join('')}</select>` : ''}
-      <select onchange="LeadManagerModule.taskSetFilter('seq',this.value)" style="${selCss}"><option value="">Todas las secuencias</option>${seqOpts.map(([id, nm]) => `<option value="${id}"${String(id) === String(_taskFSeq) ? ' selected' : ''}>${esc(nm)}</option>`).join('')}</select>
+    const filterRow = (seqMap.size > 1 || campMap.size > 1 || hasFilter) ? `<div class="lm-task-filters">
+      ${campMap.size ? `<select onchange="LeadManagerModule.taskSetFilter('camp',this.value)"><option value="">Todas las campañas</option>${optSort(campMap).map(([id, nm]) => `<option value="${id}"${String(id) === String(_taskFCamp) ? ' selected' : ''}>${esc(nm)}</option>`).join('')}</select>` : ''}
+      <select onchange="LeadManagerModule.taskSetFilter('seq',this.value)"><option value="">Todas las secuencias</option>${seqOpts.map(([id, nm]) => `<option value="${id}"${String(id) === String(_taskFSeq) ? ' selected' : ''}>${esc(nm)}</option>`).join('')}</select>
       ${hasFilter ? `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.taskSetFilter('clear','')" title="Quitar filtros">✕ Limpiar</button>` : ''}
     </div>` : '';
     const seqOver = seqToday.filter(t => t.due < today).sort((a, b) => a.due - b.due || (a.st.hora || '99:99').localeCompare(b.st.hora || '99:99'));
@@ -13840,12 +13839,12 @@ ${foot}
     const nextLine = seqFuture.length ? `<div class="seq-next">Siguiente tarea de secuencia: <b>${_relDay(seqFuture[0].due)}</b>${seqFuture.length > 1 ? ` · +${seqFuture.length - 1} más próximas` : ''}</div>` : '';
     const anything = allRaw.length || acts.length;
     const paCta = _acceptCtaHtml();
-    const listHtml = `${seqOver.length ? `<div class="lm-tsec-h" style="color:#C4342B">⚠ Vencidas · ${seqOver.length}</div><div class="seq-tasks">${seqOver.map(t => _allTaskRow(t, today)).join('')}</div>` : ''}
-      ${seqHoy.length ? `<div class="lm-tsec-h">Hoy · ${seqHoy.length}</div><div class="seq-tasks">${seqHoy.map(t => _allTaskRow(t, today)).join('')}</div>` : ''}
-      ${(!seqToday.length && all.length) ? `<div class="lm-tsec-h">De secuencias</div><div class="cp-empty2" style="padding:14px 6px">Sin tareas de secuencia para hoy.</div>` : ''}
-      ${(hasFilter && !all.length) ? `<div class="cp-empty2" style="padding:14px 6px">Sin tareas de secuencia para este filtro.</div>` : ''}
+    const listHtml = `${seqOver.length ? `<div class="lm-tsec-h lm-tsec-h--over"><span class="lm-tsec-h__dot"></span>Vencidas<span class="lm-tsec-h__n">${seqOver.length}</span></div><div class="seq-tasks">${seqOver.map(t => _allTaskRow(t, today)).join('')}</div>` : ''}
+      ${seqHoy.length ? `<div class="lm-tsec-h lm-tsec-h--today"><span class="lm-tsec-h__dot"></span>Hoy<span class="lm-tsec-h__n">${seqHoy.length}</span></div><div class="seq-tasks">${seqHoy.map(t => _allTaskRow(t, today)).join('')}</div>` : ''}
+      ${(!seqToday.length && all.length) ? `<div class="lm-task-empty"><span class="lm-task-empty__i">✓</span>Al día — sin tareas de secuencia para hoy. La siguiente aparece abajo.</div>` : ''}
+      ${(hasFilter && !all.length) ? `<div class="lm-task-empty"><span class="lm-task-empty__i">✓</span>Sin tareas de secuencia para este filtro.</div>` : ''}
       ${nextLine}
-      ${acts.length ? `<div class="lm-tsec-h">Follow-ups y tareas sueltas · ${acts.length}</div><div class="lm-feed">${acts.map(a => _actRow(a, true)).join('')}</div>` : ''}
+      ${acts.length ? `<div class="lm-tsec-h"><span class="lm-tsec-h__dot"></span>Follow-ups y tareas sueltas<span class="lm-tsec-h__n">${acts.length}</span></div><div class="lm-feed">${acts.map(a => _actRow(a, true)).join('')}</div>` : ''}
       ${anything ? '' : _empty('tasks', 'Sin tareas pendientes', 'Enrola contactos en secuencias o crea follow-ups; aparecerán aquí ordenados por fecha.', _data.length ? 'Nueva tarea' : '', _data.length ? 'LeadManagerModule.openActivityDrawer(null,null,1)' : '')}`;
     return `
       <div class="lm-sec-head">

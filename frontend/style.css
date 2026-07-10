@@ -10968,8 +10968,6 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .seq-task { display: flex; align-items: center; gap: 11px; background: #fff; border: 1px solid var(--border, #E4E7DD); border-radius: 12px; padding: 10px 14px; }
 .seq-task.over { border-color: #F6C9C4; }
 .seq-task.today { border-color: var(--brand-l, #BFE0CC); }
-.seq-task__ck { width: 22px; height: 22px; border-radius: 50%; border: 2px solid #C0BAB4; background: #fff; cursor: pointer; flex-shrink: 0; transition: border-color .12s, background .12s; }
-.seq-task__ck:hover { border-color: var(--brand, #00804C); background: var(--brand-ll, #EAF5EE); }
 .seq-task__ico { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; flex-shrink: 0; }
 .seq-task__body { flex: 1; min-width: 0; }
 .seq-task__t { font-size: .88rem; font-weight: 600; color: var(--text, #0A2540); }
@@ -11782,3 +11780,81 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
 
 /* Tabs → transición suave */
 .cp-tab { transition: color .13s, border-color .13s; }
+
+/* ══════════════════════════════════════════════════════════════════
+   TAREAS COMERCIALES — elevación SaaS (auditoría 2026-07-09)
+   Scope: cabecera LM, grupos Vencidas/Hoy, filas .seq-task, CTA de
+   aceptaciones, filtros, siguiente-tarea, vacíos y calendario.
+   ══════════════════════════════════════════════════════════════════ */
+
+/* Cabecera de sección LM: negros/grises cálidos → paleta navy fría */
+.lm-sec-title { color: #0A2540; }
+.lm-sec-sub { color: #7C8A98; }
+
+/* Encabezados de grupo: punto de estado + conteo en chip + línea que respira */
+.lm-tsec-h { display: flex; align-items: center; gap: 8px; font-weight: 800; letter-spacing: .06em; color: #7C8A98; margin: 18px 2px 10px; }
+.lm-tsec-h::after { content: ''; flex: 1; height: 1px; background: rgba(11,30,58,.07); }
+.lm-tsec-h__dot { width: 7px; height: 7px; border-radius: 50%; background: #A6B0BA; flex-shrink: 0; }
+.lm-tsec-h__n { display: inline-grid; place-items: center; min-width: 20px; height: 18px; padding: 0 6px; border-radius: 999px; background: rgba(11,30,58,.06); color: #45586A; font-size: .68rem; font-weight: 800; letter-spacing: 0; }
+.lm-tsec-h--over { color: #C4342B; }
+.lm-tsec-h--over .lm-tsec-h__dot { background: #C4342B; box-shadow: 0 0 0 3px rgba(196,52,43,.12); }
+.lm-tsec-h--over .lm-tsec-h__n { background: #FDECEA; color: #C4342B; }
+.lm-tsec-h--today { color: #006B3F; }
+.lm-tsec-h--today .lm-tsec-h__dot { background: #00804C; box-shadow: 0 0 0 3px rgba(0,128,76,.14); }
+.lm-tsec-h--today .lm-tsec-h__n { background: #E7F8EF; color: #006B3F; }
+
+/* Filas de tarea: acento lateral por estado, hover con tinte, CTA tipo botón */
+.seq-tasks { gap: 8px; }
+.seq-task { border-color: rgba(11,30,58,.08); padding: 11px 14px; transition: border-color .15s ease, box-shadow .15s ease, background .15s ease, transform .05s; }
+.seq-task:hover { background: #FBFDFC; border-color: var(--brand-l, #BFE0CC); box-shadow: 0 2px 12px rgba(11,30,58,.07); }
+.seq-task:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(0,128,76,.25); }
+.seq-task.over { box-shadow: inset 3px 0 0 #E25C50; border-color: rgba(196,52,43,.18); }
+.seq-task.over:hover { border-color: rgba(196,52,43,.35); box-shadow: inset 3px 0 0 #E25C50, 0 2px 12px rgba(196,52,43,.08); background: #FFFDFC; }
+.seq-task.today { box-shadow: inset 3px 0 0 var(--brand, #00804C); border-color: rgba(0,128,76,.16); }
+.seq-task.today:hover { box-shadow: inset 3px 0 0 var(--brand, #00804C), 0 2px 12px rgba(0,128,76,.10); }
+.seq-task__ico { width: 32px; height: 32px; border-radius: 9px; }
+.seq-task__t { font-weight: 650; }
+.seq-task__who { color: #5b6b7b; }
+.seq-task__go { opacity: 1; border: 1px solid rgba(0,128,76,.25); background: #fff; color: var(--brand-d, #006B3F); padding: 5px 11px; border-radius: 999px; font-size: .74rem; font-weight: 800; transition: background .15s ease, border-color .15s ease, transform .15s ease; }
+.seq-task:hover .seq-task__go { background: var(--brand-ll, #EAF5EE); border-color: var(--brand, #00804C); transform: translateX(2px); }
+
+/* "Siguiente tarea": de caja punteada tipo borrador → strip informativo sereno */
+.seq-next { background: #fff; border: 1px solid rgba(11,30,58,.07); border-left: 3px solid var(--brand-l, #BFE0CC); border-radius: 10px; color: #5b6b7b; }
+
+/* Filtros por campaña/secuencia (selects con estados de verdad) */
+.lm-task-filters { display: flex; gap: 8px; margin: 0 2px 14px; flex-wrap: wrap; align-items: center; }
+.lm-task-filters select { flex: 1; min-width: 0; max-width: 290px; box-sizing: border-box; padding: 8px 11px; border: 1px solid rgba(11,30,58,.10); border-radius: 9px; font-size: .83rem; background: #fff; color: #33475b; font-weight: 600; cursor: pointer; font-family: inherit; transition: border-color .15s ease, box-shadow .15s ease; }
+.lm-task-filters select:hover { border-color: var(--brand-l, #BFE0CC); }
+.lm-task-filters select:focus { outline: none; border-color: var(--brand, #00804C); box-shadow: 0 0 0 3px rgba(0,128,76,.12); }
+
+/* Tarjeta "Revisar aceptaciones de LinkedIn" */
+.lm-accept-cta { cursor: pointer; background: #EAF5EE; border: 1px solid #BFE0CC; border-radius: 14px; padding: 12px 14px; margin: 2px 2px 16px; color: #0A2540; transition: box-shadow .15s ease, transform .15s ease, border-color .15s ease; }
+.lm-accept-cta:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,128,76,.12); border-color: #9CCFB4; }
+.lm-accept-cta--stale { border-color: #E7C79A; }
+.lm-accept-cta--stale:hover { border-color: #D9A96A; box-shadow: 0 4px 14px rgba(180,83,9,.10); }
+.lm-accept-cta__row { display: flex; align-items: center; gap: 10px; }
+.lm-accept-cta__ico { width: 32px; height: 32px; border-radius: 9px; background: #fff; display: grid; place-items: center; font-size: 1rem; box-shadow: 0 1px 2px rgba(11,30,58,.08); flex-shrink: 0; }
+.lm-accept-cta__tx { flex: 1; font-size: .88rem; min-width: 0; }
+.lm-accept-cta__go { color: #006B3F; font-weight: 800; white-space: nowrap; font-size: .85rem; transition: transform .15s ease; }
+.lm-accept-cta:hover .lm-accept-cta__go { transform: translateX(2px); }
+.lm-accept-cta__meta { margin: 7px 0 0 42px; font-size: .76rem; color: #5b7a68; font-weight: 500; }
+.lm-accept-cta--stale .lm-accept-cta__meta { color: #B45309; font-weight: 700; }
+
+/* Toggle Lista/Calendario: segmented pill con transición */
+.task-viewtoggle { border-radius: 999px; padding: 3px; }
+.tvt { border-radius: 999px; padding: 6px 16px; transition: color .15s ease, background .15s ease, box-shadow .15s ease; }
+.tvt:hover:not(.on) { color: #0A2540; }
+.tvt.on { font-weight: 700; }
+
+/* Vacío compacto "Al día" */
+.lm-task-empty { display: flex; align-items: center; gap: 10px; background: #fff; border: 1px dashed rgba(11,30,58,.14); border-radius: 12px; padding: 14px 16px; color: #5b6b7b; font-size: .84rem; margin: 2px; }
+.lm-task-empty__i { width: 30px; height: 30px; border-radius: 50%; background: #E7F8EF; color: #15803D; display: grid; place-items: center; font-weight: 800; flex-shrink: 0; }
+
+/* Feed de follow-ups: borde/sombra a la paleta fría */
+.lm-feed { border-color: rgba(11,30,58,.08); box-shadow: 0 1px 2px rgba(11,30,58,.04); }
+
+/* Calendario: micro-interacciones y "hoy" con número en burbuja */
+.cal-nav, .cal-today-b, .cal-chip { transition: background .15s ease, border-color .15s ease, color .15s ease; }
+.cal-cell { transition: border-color .15s ease; }
+.cal-grid .cal-cell:not(.cal-cell--out):hover { border-color: var(--brand-l, #BFE0CC); }
+.cal-cell--today .cal-daynum { display: inline-grid; place-items: center; min-width: 20px; height: 20px; border-radius: 999px; background: var(--brand, #00804C); color: #fff; padding: 0; margin: 1px 0 0 1px; }
