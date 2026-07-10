@@ -11866,3 +11866,25 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
 .cal-cell { transition: border-color .15s ease; }
 .cal-grid .cal-cell:not(.cal-cell--out):hover { border-color: var(--brand-l, #BFE0CC); }
 .cal-cell--today .cal-daynum { display: inline-grid; place-items: center; min-width: 20px; height: 20px; border-radius: 999px; background: var(--brand, #00804C); color: #fff; padding: 0; margin: 1px 0 0 1px; }
+
+/* ═══ TAREAS COMERCIALES — v2 nivel referencia (stat strip, sin emojis, chips quietos) ═══ */
+.lm-stat-strip { display: flex; flex-wrap: wrap; background: #fff; border: 1px solid rgba(11,30,58,.08); border-radius: 14px; box-shadow: 0 1px 2px rgba(11,30,58,.04); margin: 0 2px 14px; overflow: hidden; }
+.lm-stat { flex: 1; min-width: 104px; padding: 10px 16px 11px; }
+.lm-stat + .lm-stat { border-left: 1px solid rgba(11,30,58,.06); }
+.lm-stat__l { display: block; font-size: .66rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #8A94A6; white-space: nowrap; }
+.lm-stat__n { display: block; margin-top: 2px; font-size: 1.3rem; font-weight: 800; color: #0A2540; font-variant-numeric: tabular-nums; line-height: 1.15; }
+.lm-stat__n--warn { color: #C4342B; }
+
+/* Chip de hora: tinte suave con icono (ya sin emoji) */
+.seq-task__hora { display: inline-flex; align-items: center; gap: 4px; background: #EDF7F1; color: #1F7A4D; font-weight: 700; }
+.seq-task__hora .ni { opacity: .75; }
+
+/* "Siguiente tarea" con icono muted */
+.seq-next { display: flex; align-items: center; gap: 8px; padding: 8px 12px; font-size: .8rem; }
+.seq-next .ni { color: #8A94A6; flex-shrink: 0; }
+
+/* CTA aceptaciones: icono NI tintado según estado */
+.lm-accept-cta__ico { color: #006B3F; }
+.lm-accept-cta--stale .lm-accept-cta__ico { color: #B45309; }
+.lm-task-empty__i .ni { display: block; }
+.cal-chip { border-radius: 6px; }

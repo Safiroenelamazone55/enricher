@@ -11957,6 +11957,7 @@ const _NI_LIB = {
   pen: '<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>',
   search: '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
   calendar: '<rect x="3" y="4" width="18" height="18" rx="3"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/>',
   gear: '<circle cx="12" cy="12" r="3"/><path d="M12 1v3M12 20v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M1 12h3M20 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>',
   external: '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>',
   inbox: '<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
@@ -12846,7 +12847,7 @@ ${foot}
       const future = tasks.filter(t => t.due > today);
       const over = todo.filter(t => t.due < today).sort((a, b) => a.due - b.due || (a.st.hora || '99:99').localeCompare(b.st.hora || '99:99'));
       const hoy = todo.filter(t => t.due.getTime() === today.getTime()).sort((a, b) => (a.st.hora || '99:99').localeCompare(b.st.hora || '99:99'));
-      const nextLine = future.length ? `<div class="seq-next">Siguiente tarea: <b>${_relDay(future[0].due)}</b>${future.length > 1 ? ` · +${future.length - 1} más` : ''}</div>` : '';
+      const nextLine = future.length ? `<div class="seq-next">${NI('calendar', 12)} Siguiente tarea: <b>${_relDay(future[0].due)}</b>${future.length > 1 ? ` · +${future.length - 1} más` : ''}</div>` : '';
       const head = todo.length
         ? `<div class="seq-tasks-hd">${todo.length} ${todo.length === 1 ? 'tarea' : 'tareas'} por hacer<button class="seq-tasks-start" onclick="LeadManagerModule.seqTaskOpen(${id},${todo[0].e.contact_id})">▶ Empezar</button></div>`
         : `<div class="seq-tasks-hd seq-tasks-hd--none">Sin tareas para hoy</div>`;
@@ -13028,8 +13029,8 @@ ${foot}
     const stale = !t || (Date.now() - t) / 3600000 > 20; // pasó ~1 día → conviene revisar
     const revTxt = last ? `Última revisión: ${_relAgo(last)}` : 'Aún no la revisas';
     return `<div onclick="LeadManagerModule.pendingAcceptOpen()" title="Marca quién aceptó tu conexión de LinkedIn → saltan a la Ruta A (mensaje)" class="lm-accept-cta${stale ? ' lm-accept-cta--stale' : ''}">
-      <div class="lm-accept-cta__row"><span class="lm-accept-cta__ico">🔗</span><span class="lm-accept-cta__tx"><b>Revisar aceptaciones de LinkedIn</b> — <b style="color:#006B3F">${n}</b> contacto${n === 1 ? '' : 's'} esperando que marques quién aceptó.</span><span class="lm-accept-cta__go">Abrir ›</span></div>
-      <div class="lm-accept-cta__meta">${stale ? '⏰ ' : ''}${revTxt} · recomendado cada 1–2 días</div>
+      <div class="lm-accept-cta__row"><span class="lm-accept-cta__ico">${NI('linkedin', 14)}</span><span class="lm-accept-cta__tx"><b>Revisar aceptaciones de LinkedIn</b> — <b style="color:#006B3F">${n}</b> contacto${n === 1 ? '' : 's'} esperando que marques quién aceptó.</span><span class="lm-accept-cta__go">Abrir ›</span></div>
+      <div class="lm-accept-cta__meta">${revTxt} · recomendado cada 1–2 días</div>
     </div>`;
   }
   function _pendingAccept() {
@@ -13249,7 +13250,7 @@ ${foot}
   // (derivada de su estado si se puede — campañas US multi-estado — o la de la secuencia).
   function _taskTimeHtml(st, seqId, c) {
     const s = (_sequences || []).find(x => x.id === seqId); const tz = _contactTz(c) || (s && s.timezone);
-    if (st && st.hora) return `<span class="seq-task__hora" title="Hora asignada para esta tarea">🕐 ${esc(st.hora)}</span>`;
+    if (st && st.hora) return `<span class="seq-task__hora" title="Hora asignada para esta tarea">${NI('clock', 11)} ${esc(st.hora)}</span>`;
     if (tz) { const sug = _suggestHour(tz); return `<span class="seq-task__sug" title="Hora sugerida en tu horario para caer en la mañana del prospecto (${esc(_tzShort(tz))}${c && _contactTz(c) ? ' · por su estado: ' + esc(c.region || '') : ''})">sug. ${sug}</span>`; }
     return '';
   }
@@ -13835,23 +13836,31 @@ ${foot}
     const seqHoy = seqToday.filter(t => t.due.getTime() === today.getTime()).sort((a, b) => (a.st.hora || '99:99').localeCompare(b.st.hora || '99:99'));
     const acts = _activities.filter(a => a.estado === 'pendiente').sort((x, y) => new Date(x.fecha) - new Date(y.fecha));
     const actToday = acts.filter(a => _dayOf(a.fecha) <= today);
-    const totalToday = seqToday.length + actToday.length;
-    const nextLine = seqFuture.length ? `<div class="seq-next">Siguiente tarea de secuencia: <b>${_relDay(seqFuture[0].due)}</b>${seqFuture.length > 1 ? ` · +${seqFuture.length - 1} más próximas` : ''}</div>` : '';
+    const nextLine = seqFuture.length ? `<div class="seq-next">${NI('calendar', 12)} Siguiente tarea de secuencia: <b>${_relDay(seqFuture[0].due)}</b>${seqFuture.length > 1 ? ` · +${seqFuture.length - 1} más próximas` : ''}</div>` : '';
     const anything = allRaw.length || acts.length;
     const paCta = _acceptCtaHtml();
+    // Stat strip (patrón referencia: número grande + label uppercase muted)
+    const stat = (l, n, warn) => `<div class="lm-stat"><span class="lm-stat__l">${l}</span><span class="lm-stat__n${warn ? ' lm-stat__n--warn' : ''}">${n}</span></div>`;
+    const statStrip = anything ? `<div class="lm-stat-strip">
+      ${stat('Vencidas', seqOver.length, seqOver.length > 0)}
+      ${stat('Para hoy', seqHoy.length + actToday.length, false)}
+      ${stat('Próximas', seqFuture.length, false)}
+      ${stat('Follow-ups', acts.length, false)}
+      ${stat('Por aceptar', _pendingAccept().length, false)}
+    </div>` : '';
     const listHtml = `${seqOver.length ? `<div class="lm-tsec-h lm-tsec-h--over"><span class="lm-tsec-h__dot"></span>Vencidas<span class="lm-tsec-h__n">${seqOver.length}</span></div><div class="seq-tasks">${seqOver.map(t => _allTaskRow(t, today)).join('')}</div>` : ''}
       ${seqHoy.length ? `<div class="lm-tsec-h lm-tsec-h--today"><span class="lm-tsec-h__dot"></span>Hoy<span class="lm-tsec-h__n">${seqHoy.length}</span></div><div class="seq-tasks">${seqHoy.map(t => _allTaskRow(t, today)).join('')}</div>` : ''}
-      ${(!seqToday.length && all.length) ? `<div class="lm-task-empty"><span class="lm-task-empty__i">✓</span>Al día — sin tareas de secuencia para hoy. La siguiente aparece abajo.</div>` : ''}
-      ${(hasFilter && !all.length) ? `<div class="lm-task-empty"><span class="lm-task-empty__i">✓</span>Sin tareas de secuencia para este filtro.</div>` : ''}
+      ${(!seqToday.length && all.length) ? `<div class="lm-task-empty"><span class="lm-task-empty__i">${NI('check', 13)}</span>Al día — sin tareas de secuencia para hoy. La siguiente aparece abajo.</div>` : ''}
+      ${(hasFilter && !all.length) ? `<div class="lm-task-empty"><span class="lm-task-empty__i">${NI('check', 13)}</span>Sin tareas de secuencia para este filtro.</div>` : ''}
       ${nextLine}
       ${acts.length ? `<div class="lm-tsec-h"><span class="lm-tsec-h__dot"></span>Follow-ups y tareas sueltas<span class="lm-tsec-h__n">${acts.length}</span></div><div class="lm-feed">${acts.map(a => _actRow(a, true)).join('')}</div>` : ''}
       ${anything ? '' : _empty('tasks', 'Sin tareas pendientes', 'Enrola contactos en secuencias o crea follow-ups; aparecerán aquí ordenados por fecha.', _data.length ? 'Nueva tarea' : '', _data.length ? 'LeadManagerModule.openActivityDrawer(null,null,1)' : '')}`;
     return `
       <div class="lm-sec-head">
-        <div><h2 class="lm-sec-title">Tareas comerciales</h2><p class="lm-sec-sub">${totalToday} para hoy${seqFuture.length ? ` · ${seqFuture.length} próxima${seqFuture.length === 1 ? '' : 's'}` : ''} — secuencias y follow-ups</p></div>
+        <div><h2 class="lm-sec-title">Tareas comerciales</h2><p class="lm-sec-sub">Secuencias y follow-ups, ordenados por fecha</p></div>
         <div class="lm-hd-actions"><div class="task-viewtoggle"><button class="tvt${_taskView === 'calendar' ? '' : ' on'}" onclick="LeadManagerModule.taskSetView('list')">Lista</button><button class="tvt${_taskView === 'calendar' ? ' on' : ''}" onclick="LeadManagerModule.taskSetView('calendar')">Calendario</button></div>${_data.length ? `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openActivityDrawer(null,null,1)">＋ Nueva tarea</button>` : ''}</div>
       </div>
-      ${paCta}${filterRow}${_taskView === 'calendar' ? _vTaskCalendar() : listHtml}`;
+      ${statStrip}${paCta}${filterRow}${_taskView === 'calendar' ? _vTaskCalendar() : listHtml}`;
   }
   function _monthStart(d) { return new Date(d.getFullYear(), d.getMonth(), 1); }
   function _dayKey(d) { const x = _dayOf(d); return x.getFullYear() + '-' + (x.getMonth() + 1) + '-' + x.getDate(); }
