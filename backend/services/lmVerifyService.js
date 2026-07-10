@@ -45,9 +45,12 @@ async function _drain(pool) {
   } finally { _working = false; }
 }
 
+// Ventana de reuso de intentos SMTP: dentro de estos días NO se re-sondea el mismo email.
+const ATTEMPT_TTL_DAYS = 7;
+
 async function _verifyOne(pool, userId, contactId) {
   const { rows: [c] } = await pool.query(`
-    SELECT k.id, k.user_id, k.nombre, k.apellido, k.email, k.empresa_nombre, k.linkedin,
+    SELECT k.id, k.user_id, k.nombre, k.apellido, k.email, k.email_status, k.empresa_nombre, k.linkedin,
            co.dominio, co.website, co.nombre AS company_nombre
       FROM lm_contacts k
       LEFT JOIN lm_companies co ON co.id = k.company_id
@@ -55,13 +58,35 @@ async function _verifyOne(pool, userId, contactId) {
   `, [contactId, userId]);
   if (!c) return;
 
+  // Email confirmado a mano: no lo pisamos con una sonda automática.
+  if (c.email_status === 'manual') { console.log(`[lm-verify] ${c.email} → manual (respetado, no se re-sondea)`); return; }
+
   if (c.email) {
-    const r = await _verifyExisting(c.email);
+    const emailNorm = String(c.email).trim().toLowerCase();
+    // 1) Memoria de intentos: si ya sondeamos este email hace poco, reutiliza el resultado.
+    const { rows: [prev] } = await pool.query(
+      `SELECT status, score, tried_at FROM lm_smtp_attempts
+        WHERE user_id=$1 AND email=$2 AND tried_at > NOW() - ($3 || ' days')::interval`,
+      [userId, emailNorm, ATTEMPT_TTL_DAYS]);
+    let r;
+    if (prev) {
+      r = { status: prev.status, score: prev.score };
+      console.log(`[lm-verify] ${c.email} → ${r.status} (memoria de intento, sin re-sondear)`);
+    } else {
+      r = await _verifyExisting(c.email);
+      await pool.query(
+        `INSERT INTO lm_smtp_attempts (user_id, email, status, score, tried_at) VALUES ($1,$2,$3,$4,NOW())
+         ON CONFLICT (user_id, email) DO UPDATE SET status=EXCLUDED.status, score=EXCLUDED.score, tried_at=NOW()`,
+        [userId, emailNorm, r.status, r.score]);
+      // 2) Patrón confirmado por dominio: un 'valid' real alimenta la memoria de patrones
+      //    para que futuros contactos del mismo dominio prueben ese formato PRIMERO.
+      if (r.status === 'valid') _learnFromValid(c, emailNorm);
+      console.log(`[lm-verify] ${c.email} → ${r.status} (${r.score})`);
+    }
     await pool.query(
       `UPDATE lm_contacts SET email_status=$1, email_score=$2, email_verified_at=NOW(), updated_at=NOW() WHERE id=$3`,
       [r.status, r.score, contactId]
     );
-    console.log(`[lm-verify] ${c.email} → ${r.status} (${r.score})`);
     return;
   }
 
@@ -118,6 +143,21 @@ async function _verifyExisting(email) {
   // unknown: conexión bloqueada / greylisting / sin respuesta definitiva
   if (isCatchAll) return { status: 'catch-all', score: 55 };
   return { status: 'unknown', score: 40 };
+}
+
+// Deducción del patrón: genera los candidatos estándar para nombre+apellido en ese dominio
+// y, si el email verificado como 'valid' coincide con uno, registra su patrón en la memoria
+// por dominio (domainPatternService) — los siguientes contactos de ese dominio lo prueban primero.
+function _learnFromValid(c, emailNorm) {
+  try {
+    if (!c.nombre || !c.apellido) return;
+    const domain = emailNorm.split('@')[1]; if (!domain) return;
+    const { generateEmails } = require('./emailGenerator');
+    const hit = generateEmails(c.nombre, c.apellido, domain).find(x => x.email === emailNorm);
+    if (!hit) return;
+    const { learnPattern } = require('./domainPatternService');
+    learnPattern(domain, hit.pattern, 250);
+  } catch (e) { console.warn('[lm-verify] learn:', e.message); }
 }
 
 module.exports = { queueVerify, queueSize };

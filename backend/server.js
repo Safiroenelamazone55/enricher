@@ -2602,6 +2602,7 @@ app.post('/api/lm/contacts', requireAuth, async (req, res) => {
 app.put('/api/lm/contacts/:id', requireAuth, async (req, res) => {
   const b = req.body || {};
   try {
+    const prev = (await pool.query(`SELECT email FROM lm_contacts WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId])).rows[0];
     const vals = LM_CT_COLS.map(k => _lmS(b[k]));
     const set = LM_CT_COLS.map((k, i) => `${k}=$${i + 1}`).join(',');
     const { rows } = await pool.query(`
@@ -2609,6 +2610,17 @@ app.put('/api/lm/contacts/:id', requireAuth, async (req, res) => {
       WHERE id=$${LM_CT_COLS.length + 3} AND user_id=$${LM_CT_COLS.length + 4} RETURNING *
     `, [...vals, b.company_id || null, b.outbound_client_id || null, req.params.id, req.workspaceOwnerId]);
     if (!rows.length) return res.status(404).json({ error: 'Contacto no encontrado' });
+    // Si el email CAMBIÓ (p. ej. corrigiendo uno que rebotó), el estado anterior deja de valer:
+    // se resetea a "sin verificar" y se re-verifica en background.
+    const oldE = String((prev && prev.email) || '').trim().toLowerCase();
+    const newE = String(rows[0].email || '').trim().toLowerCase();
+    if (oldE !== newE) {
+      await pool.query(`UPDATE lm_contacts SET email_status='', email_score=NULL, email_verified_at=NULL WHERE id=$1`, [rows[0].id]);
+      rows[0].email_status = ''; rows[0].email_score = null; rows[0].email_verified_at = null;
+      if (newE && b.auto_verify !== false) {
+        try { const { queueVerify } = require('./services/lmVerifyService'); queueVerify(pool, req.workspaceOwnerId, [rows[0].id]); } catch (e) { console.warn('[lm-ct] re-verify:', e.message); }
+      }
+    }
     res.json(rows[0]);
   } catch (err) { console.error('[lm-ct] PUT', err.message); res.status(500).json({ error: 'Error al actualizar contacto' }); }
 });
@@ -2687,8 +2699,37 @@ async function _lmAddMembership(req, res, kind) {
     // Solo contactos que existen y que NO estén ya enrolados (para no gastar cupos ni reiniciar su reloj).
     const already = new Set((await pool.query(`SELECT contact_id FROM lm_contact_sequences WHERE user_id=$1 AND sequence_id=$2 AND contact_id = ANY($3::int[])`, [uid, targetId, ids])).rows.map(r => r.contact_id));
     const exist = new Set((await pool.query(`SELECT id FROM lm_contacts WHERE user_id=$1 AND id = ANY($2::int[])`, [uid, ids])).rows.map(r => r.id));
-    const toAdd = ids.filter(id => exist.has(id) && !already.has(id));
+    let toAdd = ids.filter(id => exist.has(id) && !already.has(id));
     if (!toAdd.length) return res.json({ added: 0, requested: ids.length, spread_days: 0 });
+
+    // ── Regla outbound: 1 persona por empresa A LA VEZ ──
+    // Omite contactos cuya empresa ya tiene OTRA persona activa en cualquier secuencia
+    // (y duplicados de empresa dentro del mismo lote). body.force=true ignora la regla.
+    const skipped = [];
+    if (!b.force) {
+      const info = (await pool.query(`SELECT id, company_id, nombre, apellido, empresa_nombre FROM lm_contacts WHERE user_id=$1 AND id = ANY($2::int[])`, [uid, toAdd])).rows;
+      const byId = new Map(info.map(c => [c.id, c]));
+      const compIds = [...new Set(info.map(c => c.company_id).filter(Boolean))];
+      const busy = new Map(); // company_id → nombre de la persona ya activa
+      if (compIds.length) {
+        (await pool.query(`
+          SELECT DISTINCT ON (k.company_id) k.company_id, k.nombre, k.apellido
+            FROM lm_contact_sequences cs JOIN lm_contacts k ON k.id = cs.contact_id
+           WHERE cs.user_id=$1 AND cs.estado='activo' AND k.company_id = ANY($2::int[]) AND NOT (k.id = ANY($3::int[]))
+        `, [uid, compIds, toAdd])).rows.forEach(r => busy.set(r.company_id, [r.nombre, r.apellido].filter(Boolean).join(' ') || '(sin nombre)'));
+      }
+      const seenComp = new Set();
+      const pass = [];
+      for (const id of toAdd) {
+        const c = byId.get(id); const co = c && c.company_id;
+        const nm = c ? ([c.nombre, c.apellido].filter(Boolean).join(' ') || '(sin nombre)') : String(id);
+        if (co && busy.has(co)) { skipped.push({ id, nombre: nm, empresa: c.empresa_nombre || '', con: busy.get(co) }); continue; }
+        if (co) { if (seenComp.has(co)) { skipped.push({ id, nombre: nm, empresa: c.empresa_nombre || '', con: 'otro contacto del mismo lote' }); continue; } seenComp.add(co); }
+        pass.push(id);
+      }
+      toAdd = pass;
+      if (!toAdd.length) return res.json({ added: 0, requested: ids.length, spread_days: 0, skipped_company: skipped });
+    }
 
     // Cupos ya usados por fecha (para encadenar tandas sin pasar el límite/día permitido).
     const usedByDate = {};
@@ -2716,7 +2757,7 @@ async function _lmAddMembership(req, res, kind) {
       ON CONFLICT (contact_id, ${col}) DO NOTHING
     `, [uid, targetId, toAdd, dates]);
     const spreadDays = new Set(dates).size;
-    res.json({ added: r.rowCount, requested: ids.length, spread_days: spreadDays, per_day: drip });
+    res.json({ added: r.rowCount, requested: ids.length, spread_days: spreadDays, per_day: drip, skipped_company: skipped });
   } catch (err) { console.error('[lm-mem]', err.message); res.status(500).json({ error: 'Error al añadir' }); }
 }
 // Reparte de nuevo los contactos AÚN SIN EMPEZAR (paso=1, activos) según drip_per_day y send_days.
@@ -2812,13 +2853,51 @@ app.post('/api/lm/contacts/:id/disposition', requireAuth, async (req, res) => {
     res.json({ ok: true, disposition: disp, paused, rerouted });
   } catch (err) { console.error('[lm-disp]', err.message); res.status(500).json({ error: 'Error al actualizar disposición' }); }
 });
+// Canal LinkedIn no válido (perfil falso/inactivo): NO saca al contacto de la secuencia —
+// el motor de tareas salta sus pasos de LinkedIn y sigue por la ruta de email. value=false revierte.
+app.post('/api/lm/contacts/:id/no-linkedin', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId, cid = req.params.id;
+  const value = !!(req.body || {}).value;
+  try {
+    const r = await pool.query(`UPDATE lm_contacts SET no_linkedin=$1, updated_at=NOW() WHERE id=$2 AND user_id=$3 RETURNING outbound_client_id`, [value, cid, uid]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Contacto no encontrado' });
+    await pool.query(`INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, nota, fecha, estado) VALUES ($1,$2,$3,'nota',$4,NOW(),'hecha')`,
+      [uid, cid, r.rows[0].outbound_client_id || null, value ? 'LinkedIn marcado como no válido (perfil falso/inactivo) → sigue solo por email' : 'LinkedIn habilitado de nuevo para este contacto']);
+    res.json({ ok: true, no_linkedin: value });
+  } catch (err) { console.error('[lm-noli]', err.message); res.status(500).json({ error: 'Error al actualizar' }); }
+});
+// Estado manual del email: 'bounced' (rebotó — pausa sus secuencias para corregirlo),
+// 'manual' (ingresado/confirmado a mano → enviable) o '' (volver a "sin verificar").
+app.post('/api/lm/contacts/:id/email-status', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId, cid = req.params.id;
+  const status = String((req.body || {}).status || '');
+  if (!['bounced', 'manual', ''].includes(status)) return res.status(400).json({ error: 'Estado no válido' });
+  try {
+    const r = await pool.query(
+      `UPDATE lm_contacts SET email_status=$1, email_score=$2, email_verified_at=${status ? 'NOW()' : 'NULL'}, updated_at=NOW()
+       WHERE id=$3 AND user_id=$4 RETURNING email, outbound_client_id`,
+      [status, status === 'manual' ? 75 : status === 'bounced' ? 0 : null, cid, uid]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Contacto no encontrado' });
+    let paused = 0;
+    if (status === 'bounced') {
+      const p = await pool.query(`UPDATE lm_contact_sequences SET estado='pausado', paused_reason='email_rebotado' WHERE user_id=$1 AND contact_id=$2 AND estado='activo'`, [uid, cid]);
+      paused = p.rowCount;
+    }
+    const nota = status === 'bounced' ? `Email rebotó: ${r.rows[0].email || '—'} — corregir y reanudar`
+               : status === 'manual' ? `Email confirmado manualmente: ${r.rows[0].email || '—'}`
+               : 'Estado de email restablecido a "sin verificar"';
+    await pool.query(`INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, nota, fecha, estado) VALUES ($1,$2,$3,'nota',$4,NOW(),'hecha')`,
+      [uid, cid, r.rows[0].outbound_client_id || null, nota]);
+    res.json({ ok: true, email_status: status, paused });
+  } catch (err) { console.error('[lm-estat]', err.message); res.status(500).json({ error: 'Error al actualizar' }); }
+});
 
 // ── Contactos enrolados en una secuencia (progreso) ──
 app.get('/api/lm/sequences/:id/contacts', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(`
       SELECT cs.contact_id, cs.paso, cs.estado, COALESCE((cs.start_date + TIME '12:00')::timestamptz, cs.created_at) AS enrolled_at, cs.paso_date::text AS paso_date,
-        k.nombre, k.apellido, k.email, k.cargo, k.company_id, co.nombre AS company_nombre
+        k.nombre, k.apellido, k.email, k.cargo, k.company_id, k.region, k.pais, co.nombre AS company_nombre
       FROM lm_contact_sequences cs
       JOIN lm_contacts k ON k.id = cs.contact_id
       LEFT JOIN lm_companies co ON co.id = k.company_id

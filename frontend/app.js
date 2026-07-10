@@ -12310,6 +12310,32 @@ const LeadManagerModule = (() => {
     'Australia/Sydney': 'AU', 'Australia/Melbourne': 'AU', 'Australia/Brisbane': 'AU', 'Australia/Perth': 'AU', 'Pacific/Auckland': 'NZ',
   };
   function _windowsForTz(tz) { const cc = _SEND_TZ_COUNTRY[tz]; return (cc && _SEND_WINDOWS[cc]) || _SEND_DEFAULT; }
+  // ── Zona horaria POR CONTACTO (campañas US multi-estado): se deriva del estado (Región). ──
+  // Zona dominante por estado; si no se puede derivar, se usa la de la secuencia.
+  const _US_TZ = {
+    CT: 'America/New_York', DE: 'America/New_York', FL: 'America/New_York', GA: 'America/New_York', IN: 'America/New_York', KY: 'America/New_York', ME: 'America/New_York', MD: 'America/New_York', MA: 'America/New_York', MI: 'America/New_York', NH: 'America/New_York', NJ: 'America/New_York', NY: 'America/New_York', NC: 'America/New_York', OH: 'America/New_York', PA: 'America/New_York', RI: 'America/New_York', SC: 'America/New_York', VT: 'America/New_York', VA: 'America/New_York', WV: 'America/New_York', DC: 'America/New_York',
+    AL: 'America/Chicago', AR: 'America/Chicago', IL: 'America/Chicago', IA: 'America/Chicago', KS: 'America/Chicago', LA: 'America/Chicago', MN: 'America/Chicago', MS: 'America/Chicago', MO: 'America/Chicago', NE: 'America/Chicago', ND: 'America/Chicago', OK: 'America/Chicago', SD: 'America/Chicago', TN: 'America/Chicago', TX: 'America/Chicago', WI: 'America/Chicago',
+    CO: 'America/Denver', ID: 'America/Denver', MT: 'America/Denver', NM: 'America/Denver', UT: 'America/Denver', WY: 'America/Denver', AZ: 'America/Phoenix',
+    CA: 'America/Los_Angeles', NV: 'America/Los_Angeles', OR: 'America/Los_Angeles', WA: 'America/Los_Angeles',
+    AK: 'America/Anchorage', HI: 'Pacific/Honolulu',
+  };
+  const _US_NAMES = {
+    'connecticut': 'CT', 'delaware': 'DE', 'florida': 'FL', 'georgia': 'GA', 'indiana': 'IN', 'kentucky': 'KY', 'maine': 'ME', 'maryland': 'MD', 'massachusetts': 'MA', 'michigan': 'MI', 'new hampshire': 'NH', 'new jersey': 'NJ', 'new york': 'NY', 'north carolina': 'NC', 'ohio': 'OH', 'pennsylvania': 'PA', 'rhode island': 'RI', 'south carolina': 'SC', 'vermont': 'VT', 'virginia': 'VA', 'west virginia': 'WV', 'washington dc': 'DC', 'district of columbia': 'DC',
+    'alabama': 'AL', 'arkansas': 'AR', 'illinois': 'IL', 'iowa': 'IA', 'kansas': 'KS', 'louisiana': 'LA', 'minnesota': 'MN', 'mississippi': 'MS', 'missouri': 'MO', 'nebraska': 'NE', 'north dakota': 'ND', 'oklahoma': 'OK', 'south dakota': 'SD', 'tennessee': 'TN', 'texas': 'TX', 'wisconsin': 'WI',
+    'colorado': 'CO', 'idaho': 'ID', 'montana': 'MT', 'new mexico': 'NM', 'utah': 'UT', 'wyoming': 'WY', 'arizona': 'AZ',
+    'california': 'CA', 'nevada': 'NV', 'oregon': 'OR', 'washington': 'WA',
+    'alaska': 'AK', 'hawaii': 'HI',
+  };
+  function _contactTz(c) {
+    if (!c) return '';
+    const pais = String(c.pais || '').trim().toLowerCase();
+    const okUS = !pais || ['us', 'usa', 'u.s.', 'u.s.a.', 'united states', 'united states of america', 'estados unidos', 'ee.uu.', 'eeuu'].includes(pais);
+    if (!okUS) return '';
+    let r = String(c.region || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[.,;].*$/, '').trim();
+    if (!r) return '';
+    const ab = r.length === 2 ? r.toUpperCase() : (_US_NAMES[r] || '');
+    return (ab && _US_TZ[ab]) || '';
+  }
   const _hh = h => String(h).padStart(2, '0') + ':00';
   function _suggestWindow(seqTz) {
     if (!seqTz) return null;
@@ -12899,6 +12925,76 @@ ${foot}
       if (next) openContactPage(next.e.contact_id, { seqId: seqId }); else seqDoExit();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
+  // ── Canal LinkedIn no válido / email rebotado / email manual ──
+  async function _noLinkedInCore(cid, value) {
+    const res = await apiFetch(`${API}/lm/contacts/${cid}/no-linkedin`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ value }) });
+    if (!res.ok) throw new Error((await res.json()).error || 'Error');
+    return await res.json();
+  }
+  async function _emailStatusCore(cid, status) {
+    const res = await apiFetch(`${API}/lm/contacts/${cid}/email-status`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) });
+    if (!res.ok) throw new Error((await res.json()).error || 'Error');
+    return await res.json();
+  }
+  // Desde la barra de tarea (paso LinkedIn): perfil falso/inactivo → sigue por email, no se saca.
+  async function seqDoNoLinkedIn() {
+    if (!_cpTaskCtx) return;
+    const seqId = _cpTaskCtx.seqId, cid = _contactView;
+    if (!confirm('¿Marcar LinkedIn como NO válido para este contacto (perfil falso/inactivo)?\n\nNo lo saca de la secuencia: salta los pasos de LinkedIn y sigue por la ruta de email en su día.')) return;
+    try {
+      await _noLinkedInCore(cid, true);
+      const c = (_contacts || []).find(x => x.id === cid); if (c) c.no_linkedin = true;
+      showBanner('🚫 LinkedIn no válido — este contacto sigue por email (Ruta B)', 'success');
+      const today = _dayOf(new Date());
+      const next = _seqTasks(seqId).filter(t => t.due <= today && t.e.contact_id !== cid)[0];
+      if (next) openContactPage(next.e.contact_id, { seqId: seqId }); else seqDoExit();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  // Desde la barra de tarea (paso email): el email rebotó → pausa y va a la lista Rebotados.
+  async function seqDoBounced() {
+    if (!_cpTaskCtx) return;
+    const seqId = _cpTaskCtx.seqId, cid = _contactView;
+    const c0 = (_contacts || []).find(x => x.id === cid);
+    if (!confirm(`¿Marcar que el email ${c0 && c0.email ? c0.email + ' ' : ''}REBOTÓ?\n\nSe pausa en sus secuencias y queda en "Rebotados" (Contactos) para que lo corrijas; al editarlo se re-verifica solo.`)) return;
+    try {
+      await _emailStatusCore(cid, 'bounced');
+      if (c0) c0.email_status = 'bounced';
+      _seqContacts = null; await _seqLoadContacts(seqId); await _reloadContacts();
+      showBanner('↩ Email rebotado — pausado; corrígelo en Contactos → Rebotados', 'success');
+      const today = _dayOf(new Date());
+      const next = _seqTasks(seqId).filter(t => t.due <= today)[0];
+      if (next) openContactPage(next.e.contact_id, { seqId: seqId }); else seqDoExit();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  async function lmToggleNoLinkedIn(cid) {
+    const c = (_contacts || []).find(x => x.id === cid); const to = !(c && c.no_linkedin);
+    if (to && !confirm('¿Marcar LinkedIn como NO válido para este contacto?\n\nSalta sus pasos de LinkedIn, sigue por email y sale de "Pendientes de aceptación".')) return;
+    try {
+      await _noLinkedInCore(cid, to);
+      if (c) c.no_linkedin = to;
+      showBanner(to ? '🚫 LinkedIn no válido — seguirá por email' : '✓ LinkedIn habilitado de nuevo', 'success');
+      _renderBody();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  async function lmToggleBounced(cid) {
+    const c = (_contacts || []).find(x => x.id === cid); const to = (c && c.email_status) === 'bounced' ? '' : 'bounced';
+    try {
+      const r = await _emailStatusCore(cid, to);
+      await _reloadContacts();
+      showBanner(to ? `↩ Email marcado como rebotado${r.paused ? ` · pausado en ${r.paused} secuencia(s)` : ''}` : '✓ Estado de email restablecido', 'success');
+      _renderBody();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  async function lmToggleManualEmail(cid) {
+    const c = (_contacts || []).find(x => x.id === cid); const to = (c && c.email_status) === 'manual' ? '' : 'manual';
+    if (to && !(c && c.email)) { showBanner('Primero escribe el email en la ficha (Editar).', 'error'); return; }
+    try {
+      await _emailStatusCore(cid, to);
+      if (c) c.email_status = to;
+      showBanner(to ? '✍ Email confirmado manualmente — se trata como enviable' : '✓ Vuelve a "sin verificar"', 'success');
+      _renderBody();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
   // ── Fase 3: bandeja "Pendientes de aceptación" (cross-secuencia / cross-cliente) ──
   // Contactos en secuencias con rama ('replied') que aún NO marcas como aceptados
   // y ya tienen la nota enviada (paso > 1). Marcarlos los re-enruta a la Ruta A.
@@ -12932,6 +13028,7 @@ ${foot}
     const out = [];
     (_contacts || []).forEach(c => {
       if (c.disposition === 'respondio') return;
+      if (c.no_linkedin) return; // LinkedIn no válido → ya no espera aceptación; va por email
       const seqs = (c.sequences || []).filter(sq => branch[sq.id] && (sq.estado === 'activo' || sq.estado === 'pausado') && (sq.paso || 1) > 1);
       if (seqs.length) out.push({ c, seqs });
     });
@@ -13093,11 +13190,22 @@ ${foot}
     const q = ($('enrol-q')?.value || '').toLowerCase().trim();
     document.querySelectorAll('#enrol-list .lm-pick-item').forEach(b => { b.style.display = (!q || b.dataset.nm.includes(q)) ? '' : 'none'; });
   }
+  // Mensaje de la regla "1 persona por empresa a la vez" (con detalle de con quién choca).
+  function _companyRuleMsg(sk) {
+    const few = sk.slice(0, 5).map(s => `• ${s.nombre}${s.empresa ? ` (${s.empresa})` : ''} — ya hay activo: ${s.con}`).join('\n');
+    return `⚠ Regla: 1 persona por empresa a la vez.\n\n${sk.length} contacto(s) omitido(s):\n${few}${sk.length > 5 ? `\n…y ${sk.length - 5} más` : ''}\n\n¿Enrolarlos DE TODAS FORMAS?`;
+  }
   async function seqEnrol(seqId, cid) {
     document.getElementById('lm-enrol-modal')?.remove();
     try {
-      const res = await apiFetch(`${API}/lm/contacts/add-to-sequence`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact_ids: [cid], sequence_id: seqId }) });
+      let res = await apiFetch(`${API}/lm/contacts/add-to-sequence`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact_ids: [cid], sequence_id: seqId }) });
       if (!res.ok) throw new Error((await res.json()).error || 'Error');
+      let d = await res.json();
+      if (d.skipped_company && d.skipped_company.length) {
+        if (!confirm(_companyRuleMsg(d.skipped_company))) { showBanner('No se enroló — su empresa ya tiene una persona activa en secuencia', 'info'); return; }
+        res = await apiFetch(`${API}/lm/contacts/add-to-sequence`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact_ids: [cid], sequence_id: seqId, force: true }) });
+        if (!res.ok) throw new Error((await res.json()).error || 'Error');
+      }
       _seqContacts = null; await _seqLoadContacts(seqId);
       showBanner('✓ Contacto enrolado', 'success');
     } catch (e) { showBanner('No se pudo enrolar: ' + e.message, 'error'); }
@@ -13106,7 +13214,12 @@ ${foot}
   // Señal v1 = disposición 'respondio' (respondió/aceptó). Seguro por defecto:
   // con cond='' en todos los pasos, _effIdx devuelve el mismo paso que hoy.
   function _respondedC(cid) { const c = (_contacts || []).find(x => x.id === cid); return !!(c && c.disposition === 'respondio'); }
-  function _stepCondMatch(st, cid) { const cd = (st && st.cond) || ''; if (!cd) return true; const r = _respondedC(cid); return cd === 'replied' ? r : cd === 'no_reply' ? !r : true; }
+  function _noLinkedInC(cid) { const c = (_contacts || []).find(x => x.id === cid); return !!(c && c.no_linkedin); }
+  function _stepCondMatch(st, cid) {
+    // Canal LinkedIn no válido para este contacto (perfil falso/inactivo) → sus pasos de LinkedIn se saltan.
+    if (st && st.canal === 'linkedin' && _noLinkedInC(cid)) return false;
+    const cd = (st && st.cond) || ''; if (!cd) return true; const r = _respondedC(cid); return cd === 'replied' ? r : cd === 'no_reply' ? !r : true;
+  }
   // Índice del paso EFECTIVO: el primero desde fromIdx cuya condición aplica al contacto, o -1 si ninguno.
   function _effIdx(steps, cid, fromIdx) { for (let i = Math.max(0, fromIdx || 0); i < steps.length; i++) { if (_stepCondMatch(steps[i], cid)) return i; } return -1; }
   function _seqTasks(id) {
@@ -13121,11 +13234,12 @@ ${foot}
       return { e, st, due };
     }).filter(Boolean).sort((a, b) => a.due - b.due || (a.st.hora || '99:99').localeCompare(b.st.hora || '99:99'));
   }
-  // Etiqueta de hora: la hora fija del paso, o si no hay, la sugerida por la zona del prospecto.
-  function _taskTimeHtml(st, seqId) {
-    const s = (_sequences || []).find(x => x.id === seqId); const tz = s && s.timezone;
+  // Etiqueta de hora: la hora fija del paso, o si no hay, la sugerida por la zona del PROSPECTO
+  // (derivada de su estado si se puede — campañas US multi-estado — o la de la secuencia).
+  function _taskTimeHtml(st, seqId, c) {
+    const s = (_sequences || []).find(x => x.id === seqId); const tz = _contactTz(c) || (s && s.timezone);
     if (st && st.hora) return `<span class="seq-task__hora" title="Hora asignada para esta tarea">🕐 ${esc(st.hora)}</span>`;
-    if (tz) { const sug = _suggestHour(tz); return `<span class="seq-task__sug" title="Hora sugerida en tu horario para caer en la mañana del prospecto (${esc(_tzShort(tz))})">sug. ${sug}</span>`; }
+    if (tz) { const sug = _suggestHour(tz); return `<span class="seq-task__sug" title="Hora sugerida en tu horario para caer en la mañana del prospecto (${esc(_tzShort(tz))}${c && _contactTz(c) ? ' · por su estado: ' + esc(c.region || '') : ''})">sug. ${sug}</span>`; }
     return '';
   }
   function _seqTaskRow(t, seqId, today) {
@@ -13136,7 +13250,7 @@ ${foot}
     return `<div class="seq-task${overdue ? ' over' : ''}${isToday ? ' today' : ''}" onclick="LeadManagerModule.seqTaskOpen(${seqId},${e.contact_id})" title="Hacer tarea">
       <span class="seq-task__ico" style="background:${touch[1]}1a;color:${touch[1]}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${touch[2]}</svg></span>
       <div class="seq-task__body"><div class="seq-task__t">${esc(st.titulo || touch[0])}<span class="seq-task__ch" style="color:${touch[1]}">${touch[0]}</span></div><div class="seq-task__who">${esc(full)}${e.company_nombre ? ` · ${esc(e.company_nombre)}` : ''}</div></div>
-      ${_taskTimeHtml(st, seqId)}
+      ${_taskTimeHtml(st, seqId, e)}
       <span class="seq-task__go" style="opacity:1;color:var(--brand-d,#006B3F)">Hacer tarea ›</span>
     </div>`;
   }
@@ -13387,8 +13501,8 @@ ${foot}
         <div class="cp-taskbar__ttl"><span class="cp-taskbar__t">${esc(st.titulo || touch[0])}</span><b class="cp-taskbar__ch" style="color:${touch[1]}">${touch[0]}</b><span class="cp-taskbar__meta">${pos >= 0 && queue.length ? `${pos + 1}/${queue.length} hoy` : `Día ${st.dia || 1}`}${seq ? ` · ${esc(seq.nombre)}` : ''}</span></div>
         <button class="cp-taskbar__exit" onclick="LeadManagerModule.seqDoExit()">‹ Tareas</button>
       </div>
-      ${seq && seq.timezone ? `<div class="cp-taskbar__clock" id="cp-clock-row" data-tz="${esc(seq.timezone)}" style="margin:2px 0 0;padding:7px 2px 2px;font-size:.8rem;color:#3e4c59;display:flex;align-items:center;gap:6px;flex-wrap:wrap;border-top:1px dashed #E4E7DD">${_prospectClockInner(seq.timezone)}</div>
-      <div class="cp-taskbar__win" style="padding:1px 2px 3px;font-size:.8rem;color:#3e4c59;display:flex;align-items:center;gap:6px;flex-wrap:wrap">${_recWindowsInner(seq.timezone)}</div>` : ''}
+      ${(() => { const ptz = _contactTz(c) || (seq && seq.timezone) || ''; if (!ptz) return ''; const own = !!_contactTz(c); return `<div class="cp-taskbar__clock" id="cp-clock-row" data-tz="${esc(ptz)}" style="margin:2px 0 0;padding:7px 2px 2px;font-size:.8rem;color:#3e4c59;display:flex;align-items:center;gap:6px;flex-wrap:wrap;border-top:1px dashed #E4E7DD">${_prospectClockInner(ptz)}${own ? `<span style="color:#8C97A3" title="Zona horaria derivada del estado del prospecto (no de la secuencia)">📍 ${esc(c.region || '')}</span>` : ''}</div>
+      <div class="cp-taskbar__win" style="padding:1px 2px 3px;font-size:.8rem;color:#3e4c59;display:flex;align-items:center;gap:6px;flex-wrap:wrap">${_recWindowsInner(ptz)}</div>`; })()}
       ${st.canal === 'email' && c.email ? `<div class="cp-taskbar__mailto">
         <span class="cp-taskbar__mt"><span class="cp-taskbar__subj-l">Para</span><span class="cp-taskbar__mt-v">${esc(c.email)}</span>${_copyBtn(c.email, 'Para copiado')}</span>
         ${ccMail ? `<span class="cp-taskbar__mt cp-taskbar__mt--cc" title="El cliente pidió ir en copia"><span class="cp-taskbar__subj-l">CC</span><span class="cp-taskbar__mt-v">${esc(ccMail)}</span>${_copyBtn(ccMail, 'CC copiado')}</span>` : ''}
@@ -13402,6 +13516,8 @@ ${foot}
         ${A.join('')}
         <span class="cp-taskbar__div"></span>
         ${_DISPOS.map(d => `<button class="cp-dispo-b cp-dispo-b--xs" title="Marcar disposición: ${d[1]}" onclick="LeadManagerModule.seqDoDisposition('${d[0]}')">${d[1]}</button>`).join('')}
+        ${st.canal === 'linkedin' ? `<button class="cp-dispo-b cp-dispo-b--xs" style="color:#B45309;border-color:#E7C79A" title="Perfil falso/inactivo: salta los pasos de LinkedIn y sigue por email — NO lo saca de la secuencia" onclick="LeadManagerModule.seqDoNoLinkedIn()">🚫 LinkedIn no válido</button>` : ''}
+        ${st.canal === 'email' ? `<button class="cp-dispo-b cp-dispo-b--xs" style="color:#C4342B;border-color:#F3C1BD" title="El email rebotó: pausa sus secuencias y lo deja en Rebotados para corregirlo" onclick="LeadManagerModule.seqDoBounced()">↩ Rebotó</button>` : ''}
         <span class="cp-taskbar__sp"></span>
         <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqDoPrev()"${_cpTaskHist.length ? '' : ' disabled'} title="Volver al contacto anterior (para revisar o deshacer)">‹ Anterior</button>
         <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqDoSkip()">Saltar ›</button>
@@ -13664,7 +13780,7 @@ ${foot}
     return `<div class="seq-task${overdue ? ' over' : ''}${isToday ? ' today' : ''}" onclick="LeadManagerModule.seqTaskOpen(${sq.id},${c.id})" title="Hacer tarea">
       <span class="seq-task__ico" style="background:${touch[1]}1a;color:${touch[1]}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${touch[2]}</svg></span>
       <div class="seq-task__body"><div class="seq-task__t">${esc(st.titulo || touch[0])}<span class="seq-task__ch" style="color:${touch[1]}">${touch[0]}</span></div><div class="seq-task__who">${esc(full)}${c.company_nombre ? ` · ${esc(c.company_nombre)}` : ''} · <span class="seq-task__seq">${esc(sq.nombre)}</span></div></div>
-      ${_taskTimeHtml(st, sq.id)}
+      ${_taskTimeHtml(st, sq.id, c)}
       <span class="seq-task__go" style="opacity:1;color:var(--brand-d,#006B3F)">Hacer tarea ›</span>
     </div>`;
   }
@@ -14997,6 +15113,7 @@ ${foot}
   let _contacts  = [];
   let _coQuery = '';
   let _ctQuery = '';
+  let _ctBounced = false; // filtro rápido: solo emails rebotados (para corregirlos)
   let _ctClientFilter = '';   // filtro por cliente outbound asignado
   let _ctFilters = [];        // filtros avanzados de contactos: [{field, op, val}]
   let _coFilters = [];        // filtros avanzados de empresas
@@ -15368,6 +15485,7 @@ ${foot}
         <div class="lm-search lm-search--wide"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" id="lm-ct-search" placeholder="Buscar contacto, empresa, email…" value="${esc(_ctQuery)}" oninput="LeadManagerModule.filterContacts(this.value)"></div>
         <span class="lm-count" id="lm-ct-count"></span>
         ${_clients.length ? `<select class="lm-tpl-tagsel" title="Filtrar por cliente outbound" onchange="LeadManagerModule.ctSetClient(this.value)"><option value="">◆ Todos los clientes</option>${_clients.map(cl => `<option value="${cl.id}"${String(_ctClientFilter) === String(cl.id) ? ' selected' : ''}>${esc(cl.nombre)}</option>`).join('')}</select>` : ''}
+        ${(() => { const n = (_contacts || []).filter(c => c.email_status === 'bounced').length; return (n || _ctBounced) ? `<button class="lm-filter-btn${_ctBounced ? ' on' : ''}" style="${_ctBounced ? '' : 'color:#C4342B'}" title="Emails que rebotaron — corrígelos y reanuda sus secuencias" onclick="LeadManagerModule.ctToggleBounced()">↩ Rebotados · ${n}</button>` : ''; })()}
         <button class="lm-filter-btn${_ctFilters.length ? ' on' : ''}" onclick="LeadManagerModule.openFilters('contacts')">${_FLT_ICON} Filtros${_ctFilters.length ? ` · ${_ctFilters.length}` : ''}</button>
         <button class="lm-filter-btn" onclick="LeadManagerModule.openViews('contacts')">${_VIEW_ICON} Vistas</button>
         <button class="lm-filter-btn" title="Elegir columnas visibles" onclick="LeadManagerModule.openColsPicker(this)">${NI('sliders')} Columnas</button>
@@ -15477,8 +15595,9 @@ ${foot}
     let list = _contacts;
     if (q) list = list.filter(c => (`${c.nombre || ''} ${c.apellido || ''} ${c.email || ''} ${c.company_nombre || c.empresa_nombre || ''} ${c.cargo || ''}`).toLowerCase().includes(q));
     if (_ctClientFilter) list = list.filter(c => String(c.outbound_client_id) === String(_ctClientFilter));
+    if (_ctBounced) list = list.filter(c => c.email_status === 'bounced');
     if (_ctFilters.length) list = list.filter(c => _lmMatch(c, _ctFilters));
-    const activeFlt = q || _ctFilters.length || _ctClientFilter;
+    const activeFlt = q || _ctFilters.length || _ctClientFilter || _ctBounced;
     const cnt = $('lm-ct-count'); if (cnt) cnt.textContent = activeFlt ? `${list.length} de ${_contacts.length}` : `${_contacts.length} contacto${_contacts.length === 1 ? '' : 's'}`;
     _ctFilteredIds = list.map(c => c.id);
     _ctSel.forEach(id => { if (!_ctFilteredIds.includes(id)) _ctSel.delete(id); });
@@ -15508,6 +15627,7 @@ ${foot}
   }
   function filterContacts(v) { _ctQuery = (v || '').toLowerCase().trim(); _renderContacts(); }
   function ctSetClient(v) { _ctClientFilter = v || ''; _renderBody(); }
+  function ctToggleBounced() { _ctBounced = !_ctBounced; _renderBody(); }
   function toggleCt(ev, id) { const on = ev.target.checked; if (on) _ctSel.add(id); else _ctSel.delete(id); ev.target.closest('tr')?.classList.toggle('sel', on); _renderBulkBar(); _syncSelAll(); }
   function toggleCtAll(on) { if (on) _ctFilteredIds.forEach(id => _ctSel.add(id)); else _ctFilteredIds.forEach(id => _ctSel.delete(id)); _renderContacts(); }
   function clearCtSel() { _ctSel.clear(); _renderContacts(); }
@@ -15600,10 +15720,19 @@ ${foot}
       const res = await apiFetch(`${API}/lm/contacts/${ep}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact_ids: ids, [key]: id }) });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(d.error || 'Error');
+      // Regla "1 persona por empresa a la vez": ofrecer forzar los omitidos con su detalle.
+      let forced = 0;
+      if (kind === 'sequence' && d.skipped_company && d.skipped_company.length && confirm(_companyRuleMsg(d.skipped_company))) {
+        const res2 = await apiFetch(`${API}/lm/contacts/${ep}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact_ids: d.skipped_company.map(s => s.id), [key]: id, force: true }) });
+        const d2 = await res2.json().catch(() => ({}));
+        if (res2.ok) forced = d2.added || 0;
+      }
       await load();
-      const dup = (d.requested || ids.length) - (d.added || 0);
+      const added = (d.added || 0) + forced;
+      const skipped = (d.skipped_company && d.skipped_company.length || 0) - forced;
+      const dup = (d.requested || ids.length) - (d.added || 0) - (d.skipped_company ? d.skipped_company.length : 0);
       const spread = (kind === 'sequence' && d.spread_days > 1) ? ` · repartidos en ${d.spread_days} días (${d.per_day}/día)` : '';
-      showBanner(`✓ ${d.added || 0} contacto(s) añadido(s)${dup > 0 ? ` · ${dup} ya pertenecían` : ''}${spread}`, 'success');
+      showBanner(`✓ ${added} contacto(s) añadido(s)${dup > 0 ? ` · ${dup} ya pertenecían` : ''}${skipped > 0 ? ` · ${skipped} omitido(s) por regla 1-por-empresa` : ''}${spread}`, added ? 'success' : 'info');
     } catch (e) { alert('Error: ' + e.message); }
   }
 
@@ -15630,7 +15759,7 @@ ${foot}
         <div class="cp-id">
           <h2 class="cp-name">${esc(full)}</h2>
           <div class="cp-sub">${c.cargo ? esc(c.cargo) : ''}${emp ? `${c.cargo ? ' · ' : ''}<span class="lm-emp-chip">${esc(emp)}</span>` : ''}</div>
-          <div class="cp-badges"><span class="client-badge" style="${eStyle}">${esc(c.estado || 'nuevo')}</span>${_dispoBadge(c.disposition)}${loc ? `<span class="cp-loc">${esc(loc)}</span>` : ''}</div>
+          <div class="cp-badges"><span class="client-badge" style="${eStyle}">${esc(c.estado || 'nuevo')}</span>${_dispoBadge(c.disposition)}${c.no_linkedin ? '<span class="client-badge" style="background:#FEF3C7;color:#B45309" title="Perfil falso/inactivo: sigue solo por email">🚫 Sin LinkedIn</span>' : ''}${_emailBadge(c)}${loc ? `<span class="cp-loc">${esc(loc)}</span>` : ''}</div>
           ${_cpStrip(c)}
         </div>
         <div class="cp-actions">
@@ -15664,6 +15793,11 @@ ${foot}
             <label class="cp-f"><span class="cp-f__l">Estado</span><select class="cp-f__i" data-f="estado" onchange="LeadManagerModule.cpSave(${id})">${estOpts}</select></label>
             ${F('fuente', 'Fuente', c.fuente)}
             <div class="cp-f cp-f--full"><span class="cp-f__l">Disposición outbound</span><div class="cp-dispo">${_DISPOS.map(d => `<button class="cp-dispo-b${c.disposition === d[0] ? ' on' : ''}" style="${c.disposition === d[0] ? `background:${d[3]};color:${d[2]};border-color:${d[2]}` : ''}" onclick="LeadManagerModule.lmSetDisposition(${id},'${c.disposition === d[0] ? '' : d[0]}')">${d[1]}</button>`).join('')}</div></div>
+            <div class="cp-f cp-f--full"><span class="cp-f__l">Canales / email</span><div class="cp-dispo">
+              <button class="cp-dispo-b${c.no_linkedin ? ' on' : ''}" style="${c.no_linkedin ? 'background:#FEF3C7;color:#B45309;border-color:#B45309' : ''}" title="Perfil falso/inactivo: salta los pasos de LinkedIn y sigue por email — no lo saca de la secuencia" onclick="LeadManagerModule.lmToggleNoLinkedIn(${id})">🚫 LinkedIn no válido</button>
+              <button class="cp-dispo-b${c.email_status === 'bounced' ? ' on' : ''}" style="${c.email_status === 'bounced' ? 'background:#FDECEA;color:#C4342B;border-color:#C4342B' : ''}" title="El email rebotó: pausa sus secuencias; corrige el email (se re-verifica solo) y reanuda" onclick="LeadManagerModule.lmToggleBounced(${id})">↩ Email rebotó</button>
+              <button class="cp-dispo-b${c.email_status === 'manual' ? ' on' : ''}" style="${c.email_status === 'manual' ? 'background:#E0F2FE;color:#0369A1;border-color:#0369A1' : ''}" title="Email conseguido/confirmado a mano (Google/MS contacts, respuesta directa…): se trata como enviable sin sonda" onclick="LeadManagerModule.lmToggleManualEmail(${id})">✍ Email manual OK</button>
+            </div></div>
           </div></div>
           ${rawKeys.length ? `<div class="cp-card"><div class="cp-card__t">Datos importados (sin mapear)</div><div class="cp-fields">${rawKeys.map(k => `<div class="cp-f"><span class="cp-f__l">${esc(k)}</span><span class="cp-f__ro">${esc(raw[k])}</span></div>`).join('')}</div></div>` : ''}
         </div>
@@ -16356,6 +16490,8 @@ ${foot}
     'invalid':   ['Inválido',   '#FDECEA', '#C4342B', '✕'],
     'blocked':   ['Bloqueado',  '#F3F4F6', '#6B7280', '·'],
     'unknown':   ['Sin señal',  '#F3F4F6', '#6B7280', '?'],
+    'bounced':   ['Rebotó',     '#FDECEA', '#C4342B', '↩'],
+    'manual':    ['Manual ✓',   '#E0F2FE', '#0369A1', '✍'],
   };
   function _emailBadge(c) {
     if (!c.email) return '';
@@ -16800,6 +16936,7 @@ ${foot}
     openViews, applyView, saveView, deleteView, clearAllViews,
     taskSetView, taskSetFilter, calPrev, calNext, calToday,
     lmSetDisposition, seqDoDisposition, cpSetStage,
+    seqDoNoLinkedIn, seqDoBounced, lmToggleNoLinkedIn, lmToggleBounced, lmToggleManualEmail, ctToggleBounced,
     pendingAcceptOpen, pendingAcceptToggleAll, pendingAcceptApplyFilters, pendingAcceptMark,
     openActivityDrawer, closeActivityDrawer, saveActivity, confirmDeleteActivity, markActDone,
     setReplySentiment, setLeadStage,

@@ -19,7 +19,8 @@ let _timer = null;
 let _running = false;
 
 // Estados de verificación con los que SÍ se permite enviar.
-const SENDABLE_STATUS = ['valid', 'catch-all', 'risky'];
+// 'manual' = email ingresado/confirmado a mano por la usuaria (se confía sin sonda SMTP).
+const SENDABLE_STATUS = ['valid', 'catch-all', 'risky', 'manual'];
 
 // ── A/B: selección de variante — MISMA regla determinista que el frontend ──
 // (random: (contact_id + step_id) % n · segment: match de variant_field en targets)

@@ -1002,9 +1002,26 @@ async function initDb() {
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS google_scopes TEXT NOT NULL DEFAULT '';`);
     // Verificación de email del contacto (resultado del pipeline /api/enrich interno).
     // email_status: '' (sin verificar) | valid | invalid | catch-all | risky | blocked | unknown
+    //             | bounced (rebotó al enviar — marcado a mano) | manual (ingresado/confirmado a mano, enviable)
     await pool.query(`ALTER TABLE lm_contacts ADD COLUMN IF NOT EXISTS email_status      TEXT NOT NULL DEFAULT '';`);
     await pool.query(`ALTER TABLE lm_contacts ADD COLUMN IF NOT EXISTS email_score       INTEGER;`);
     await pool.query(`ALTER TABLE lm_contacts ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMPTZ;`);
+    // Canal LinkedIn no válido para este contacto (perfil falso/inactivo): el motor de tareas
+    // salta sus pasos de LinkedIn y sigue por la ruta de email — NO se saca de la secuencia.
+    await pool.query(`ALTER TABLE lm_contacts ADD COLUMN IF NOT EXISTS no_linkedin BOOLEAN NOT NULL DEFAULT FALSE;`);
+    // Memoria de intentos SMTP por email (persiste entre reinicios): dentro de la ventana de
+    // reintento, verificar de nuevo reutiliza el último resultado en vez de re-sondear el servidor.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS lm_smtp_attempts (
+        id        SERIAL      PRIMARY KEY,
+        user_id   INTEGER     REFERENCES users(id) ON DELETE CASCADE,
+        email     TEXT        NOT NULL,
+        status    TEXT        NOT NULL DEFAULT '',
+        score     INTEGER,
+        tried_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE (user_id, email)
+      );
+    `);
     // Estado de avance automático del enrolamiento: cuándo toca el próximo paso y por qué se pausó.
     // estado (ya existe): activo | pausado | respondido | completado | bounce
     await pool.query(`ALTER TABLE lm_contact_sequences ADD COLUMN IF NOT EXISTS next_action_at TIMESTAMPTZ;`);
