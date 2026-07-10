@@ -11803,19 +11803,26 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
 .lm-tsec-h--today .lm-tsec-h__dot { background: #00804C; box-shadow: 0 0 0 3px rgba(0,128,76,.14); }
 .lm-tsec-h--today .lm-tsec-h__n { background: #E7F8EF; color: #006B3F; }
 
-/* Filas de tarea: acento lateral por estado, hover con tinte, CTA tipo botón */
-.seq-tasks { gap: 8px; }
-.seq-task { border-color: rgba(11,30,58,.08); padding: 11px 14px; transition: border-color .15s ease, box-shadow .15s ease, background .15s ease, transform .05s; }
-.seq-task:hover { background: #FBFDFC; border-color: var(--brand-l, #BFE0CC); box-shadow: 0 2px 12px rgba(11,30,58,.07); }
-.seq-task:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(0,128,76,.25); }
-.seq-task.over { box-shadow: inset 3px 0 0 #E25C50; border-color: rgba(196,52,43,.18); }
-.seq-task.over:hover { border-color: rgba(196,52,43,.35); box-shadow: inset 3px 0 0 #E25C50, 0 2px 12px rgba(196,52,43,.08); background: #FFFDFC; }
-.seq-task.today { box-shadow: inset 3px 0 0 var(--brand, #00804C); border-color: rgba(0,128,76,.16); }
-.seq-task.today:hover { box-shadow: inset 3px 0 0 var(--brand, #00804C), 0 2px 12px rgba(0,128,76,.10); }
-.seq-task__ico { width: 32px; height: 32px; border-radius: 9px; }
-.seq-task__t { font-weight: 650; }
-.seq-task__who { color: #5b6b7b; }
-.seq-task__go { opacity: 1; border: 1px solid rgba(0,128,76,.25); background: #fff; color: var(--brand-d, #006B3F); padding: 5px 11px; border-radius: 999px; font-size: .74rem; font-weight: 800; transition: background .15s ease, border-color .15s ease, transform .15s ease; }
+/* Lista de tareas PLANA (estilo Linear/Attio): UN contenedor por grupo con filas
+   compactas separadas por hairlines — nada de cajas sueltas con bordes de color. */
+.seq-tasks { gap: 0; background: #fff; border: 1px solid rgba(11,30,58,.08); border-radius: 14px; overflow: hidden; box-shadow: 0 1px 2px rgba(11,30,58,.04); }
+.seq-task { border: none; border-radius: 0; padding: 7px 14px; min-height: 50px; box-sizing: border-box; transition: background .15s ease; }
+.seq-task + .seq-task { border-top: 1px solid rgba(11,30,58,.055); }
+.seq-task:hover { background: #F7FAF8; box-shadow: none; transform: none; border-color: rgba(11,30,58,.055); }
+.seq-task:active { transform: none; background: #F1F6F3; }
+.seq-task:focus-visible { outline: none; box-shadow: inset 0 0 0 2px rgba(0,128,76,.35); }
+/* Estado = barra fina de 2px, sin teñir la caja entera */
+.seq-task.over { box-shadow: inset 2px 0 0 #DD5145; border-color: rgba(11,30,58,.055); }
+.seq-task.over:hover { box-shadow: inset 2px 0 0 #DD5145; background: #FAF7F6; border-color: rgba(11,30,58,.055); }
+.seq-task.today { box-shadow: inset 2px 0 0 var(--brand, #00804C); border-color: rgba(11,30,58,.055); }
+.seq-task.today:hover { box-shadow: inset 2px 0 0 var(--brand, #00804C); background: #F7FAF8; }
+.seq-task__ico { width: 26px; height: 26px; border-radius: 7px; }
+.seq-task__t { font-size: .84rem; font-weight: 650; line-height: 1.3; }
+.seq-task__ch { font-size: .62rem; }
+.seq-task__who { font-size: .74rem; line-height: 1.3; margin-top: 0; color: #5b6b7b; }
+.seq-task__hora { font-size: .7rem; padding: 1px 7px; }
+.seq-task__sug { font-size: .66rem; padding: 1px 6px; }
+.seq-task__go { opacity: 1; border: 1px solid rgba(0,128,76,.22); background: #fff; color: var(--brand-d, #006B3F); padding: 4px 10px; border-radius: 999px; font-size: .72rem; font-weight: 800; transition: background .15s ease, border-color .15s ease, transform .15s ease; }
 .seq-task:hover .seq-task__go { background: var(--brand-ll, #EAF5EE); border-color: var(--brand, #00804C); transform: translateX(2px); }
 
 /* "Siguiente tarea": de caja punteada tipo borrador → strip informativo sereno */
@@ -11827,18 +11834,19 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
 .lm-task-filters select:hover { border-color: var(--brand-l, #BFE0CC); }
 .lm-task-filters select:focus { outline: none; border-color: var(--brand, #00804C); box-shadow: 0 0 0 3px rgba(0,128,76,.12); }
 
-/* Tarjeta "Revisar aceptaciones de LinkedIn" */
-.lm-accept-cta { cursor: pointer; background: #EAF5EE; border: 1px solid #BFE0CC; border-radius: 14px; padding: 12px 14px; margin: 2px 2px 16px; color: #0A2540; transition: box-shadow .15s ease, transform .15s ease, border-color .15s ease; }
-.lm-accept-cta:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,128,76,.12); border-color: #9CCFB4; }
-.lm-accept-cta--stale { border-color: #E7C79A; }
-.lm-accept-cta--stale:hover { border-color: #D9A96A; box-shadow: 0 4px 14px rgba(180,83,9,.10); }
+/* Tarjeta "Revisar aceptaciones": blanca, acento lateral fino, compacta */
+.lm-accept-cta { cursor: pointer; background: #fff; border: 1px solid rgba(11,30,58,.08); border-left: 3px solid var(--brand, #00804C); border-radius: 12px; padding: 9px 14px; margin: 2px 2px 14px; color: #0A2540; box-shadow: 0 1px 2px rgba(11,30,58,.04); transition: box-shadow .15s ease, border-color .15s ease, background .15s ease; }
+.lm-accept-cta:hover { background: #FBFDFC; border-color: var(--brand-l, #BFE0CC); border-left-color: var(--brand, #00804C); box-shadow: 0 2px 10px rgba(11,30,58,.07); }
+.lm-accept-cta--stale { border-left-color: #E0A155; }
+.lm-accept-cta--stale:hover { border-left-color: #D08A2D; }
 .lm-accept-cta__row { display: flex; align-items: center; gap: 10px; }
-.lm-accept-cta__ico { width: 32px; height: 32px; border-radius: 9px; background: #fff; display: grid; place-items: center; font-size: 1rem; box-shadow: 0 1px 2px rgba(11,30,58,.08); flex-shrink: 0; }
-.lm-accept-cta__tx { flex: 1; font-size: .88rem; min-width: 0; }
-.lm-accept-cta__go { color: #006B3F; font-weight: 800; white-space: nowrap; font-size: .85rem; transition: transform .15s ease; }
+.lm-accept-cta__ico { width: 28px; height: 28px; border-radius: 8px; background: var(--brand-ll, #EAF5EE); display: grid; place-items: center; font-size: .85rem; flex-shrink: 0; }
+.lm-accept-cta--stale .lm-accept-cta__ico { background: #FEF3C7; }
+.lm-accept-cta__tx { flex: 1; font-size: .84rem; min-width: 0; line-height: 1.35; }
+.lm-accept-cta__go { color: #006B3F; font-weight: 800; white-space: nowrap; font-size: .8rem; transition: transform .15s ease; }
 .lm-accept-cta:hover .lm-accept-cta__go { transform: translateX(2px); }
-.lm-accept-cta__meta { margin: 7px 0 0 42px; font-size: .76rem; color: #5b7a68; font-weight: 500; }
-.lm-accept-cta--stale .lm-accept-cta__meta { color: #B45309; font-weight: 700; }
+.lm-accept-cta__meta { margin: 3px 0 0 38px; font-size: .73rem; color: #7C8A98; font-weight: 500; }
+.lm-accept-cta--stale .lm-accept-cta__meta { color: #B45309; font-weight: 600; }
 
 /* Toggle Lista/Calendario: segmented pill con transición */
 .task-viewtoggle { border-radius: 999px; padding: 3px; }
