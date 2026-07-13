@@ -9507,6 +9507,19 @@ const ProjectsModule = (() => {
       title="${open ? 'Ocultar' : 'Mostrar'} subtareas">${_chevronSvg}</button>`;
   }
 
+  // Chip de fecha: muestra "12 jul → 22 jul" (rango) o "22 jul" (única, solo subtareas —
+  // las tareas padre ya agrupan por fecha). Clic → mini calendario del quick-edit.
+  function _whenChip(t, sub) {
+    const dl = t.deadline ? String(t.deadline).split('T')[0] : '';
+    const fi = t.fecha_inicio ? String(t.fecha_inicio).split('T')[0] : '';
+    let txt = '';
+    if (fi && dl) txt = `${_tqpFmt(fi)} → ${_tqpFmt(dl)}`;
+    else if (sub && dl) txt = _tqpFmt(dl);
+    else if (!sub) return '';
+    return `<button type="button" class="pjt-when${txt ? '' : ' pjt-when--ghost'}" title="Fecha única o rango — clic para cambiar"
+      onclick="event.stopPropagation();ProjectsModule.openQuickEditPopover(event,${t.id})">${NI('calendar', 10)}${txt ? ` ${txt}` : ' Fecha'}</button>`;
+  }
+
   function _taskRowHtml(t, kids) {
     const dot  = _TASK_PRIO_DOT[t.prioridad] || '#9CA3AF';
     const bg   = _TASK_ESTADO_BG[t.estado]  || '#F3F4F6';
@@ -9521,6 +9534,7 @@ const ProjectsModule = (() => {
       <span class="pjt-row__dot" style="background:${dot}"></span>
       <span class="pjt-row__name">${esc(t.titulo)}</span>
       ${kids.length ? `<span class="pjt-subcount">${done}/${kids.length} subtarea${kids.length !== 1 ? 's' : ''}</span>` : ''}
+      ${_whenChip(t, false)}
       <span class="pjt-row__tag" style="background:${bg};color:${clr}">${lbl}</span>
       <button type="button" class="pjt-add-sub" title="Agregar subtarea"
         onclick="event.stopPropagation();ProjectsModule.startInlineSubtask(${t.id})">+ Subtarea</button>
@@ -9539,6 +9553,7 @@ const ProjectsModule = (() => {
         oncontextmenu="event.preventDefault();event.stopPropagation();ProjectsModule.openTaskMenu(event,${t.id})">
       <span class="pjt-row__dot pjt-row__dot--sm" style="background:${dot}"></span>
       <span class="pjt-row__name pjt-row__name--sub">${esc(t.titulo)}</span>
+      ${_whenChip(t, true)}
       <span class="pjt-row__tag pjt-row__tag--sm" style="background:${bg};color:${clr}">${lbl}</span>
       <button type="button" class="pjt-more-btn pjt-more-btn--sm" title="Más opciones"
         onclick="event.stopPropagation();ProjectsModule.openTaskMenu(event,${t.id})">⋯</button>
@@ -9744,6 +9759,10 @@ const ProjectsModule = (() => {
     }
     const saveBtn = $('tedit-save');
     if (saveBtn) saveBtn.disabled = true;
+    // Preserva el rango existente (fecha_inicio) — solo se gestiona desde el mini calendario;
+    // si el nuevo fin quedó antes del inicio, el rango deja de tener sentido y se limpia.
+    const fiRaw = t.fecha_inicio ? String(t.fecha_inicio).split('T')[0] : null;
+    const fecha_inicio = (fiRaw && deadline && fiRaw <= deadline) ? fiRaw : null;
     try {
       const res = await apiFetch(`${API}/mgmt/tasks/${taskId}`, {
         method: 'PUT',
@@ -9751,7 +9770,7 @@ const ProjectsModule = (() => {
         body: JSON.stringify({
           titulo, project_id: t.project_id, descripcion: t.descripcion || '',
           estado, prioridad, responsable, responsables: responsable ? [responsable] : [],
-          deadline, notas: t.notas || '', monto: t.monto, cobrado: t.cobrado,
+          deadline, fecha_inicio, notas: t.notas || '', monto: t.monto, cobrado: t.cobrado,
           parent_task_id: t.parent_task_id || null,
         }),
       });
@@ -9916,6 +9935,68 @@ const ProjectsModule = (() => {
 
   /* ── quick edit popover — estado + deadline ──────────── */
   let _quickEditClose = null;
+  /* ── Quick-edit: mini calendario con FECHA ÚNICA o RANGO (tareas y subtareas) ──
+     Clic en un día = fecha única (deadline). "Seleccionar rango" (abajo del
+     calendario) → eliges inicio y fin → guarda fecha_inicio + deadline. */
+  let _tqp = null;   // { mode:'single'|'range', start, end, view:Date }
+  const _TQP_MES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+  const _MES_S = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+  const _tqpIso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const _tqpFmt = iso => { const d = new Date(iso + 'T00:00:00'); return `${d.getDate()} ${_MES_S[d.getMonth()]}`; };
+  function _tqpCalHtml() {
+    const s = _tqp; if (!s) return '';
+    const y = s.view.getFullYear(), m = s.view.getMonth();
+    const off = (new Date(y, m, 1).getDay() + 6) % 7;   // Lun=0
+    const dim = new Date(y, m + 1, 0).getDate();
+    const todayIso = _tqpIso(new Date());
+    let cells = '';
+    for (let i = 0; i < off; i++) cells += '<span class="tqp-cal__blank"></span>';
+    for (let d = 1; d <= dim; d++) {
+      const iso = _tqpIso(new Date(y, m, d));
+      const sel = (s.mode === 'single' && s.end === iso) || s.start === iso || s.end === iso;
+      const inR = s.mode === 'range' && s.start && s.end && iso > s.start && iso < s.end;
+      const cls = ['tqp-cal__d'];
+      if (iso === todayIso) cls.push('is-today');
+      if (sel) cls.push('is-sel');
+      if (s.mode === 'range' && s.start === iso && s.end) cls.push('is-rs');
+      if (s.mode === 'range' && s.end === iso && s.start) cls.push('is-re');
+      if (inR) cls.push('is-in');
+      cells += `<button type="button" class="${cls.join(' ')}" onclick="event.stopPropagation();ProjectsModule.tqpPick('${iso}')">${d}</button>`;
+    }
+    const sum = s.mode === 'range'
+      ? (s.start && s.end ? `<b>${_tqpFmt(s.start)}</b> → <b>${_tqpFmt(s.end)}</b>` : s.start ? `Inicio: <b>${_tqpFmt(s.start)}</b> — ahora elige la fecha de fin` : 'Elige la fecha de inicio')
+      : (s.end ? `<b>${_tqpFmt(s.end)}</b>` : 'Sin fecha');
+    return `
+      <div class="tqp-cal__nav">
+        <button type="button" class="tqp-cal__nb" onclick="event.stopPropagation();ProjectsModule.tqpNav(-1)">‹</button>
+        <span class="tqp-cal__mes">${_TQP_MES[m]} ${y}</span>
+        <button type="button" class="tqp-cal__nb" onclick="event.stopPropagation();ProjectsModule.tqpNav(1)">›</button>
+      </div>
+      <div class="tqp-cal__dow"><span>L</span><span>M</span><span>X</span><span>J</span><span>V</span><span>S</span><span>D</span></div>
+      <div class="tqp-cal__grid">${cells}</div>
+      <div class="tqp-cal__foot">
+        <button type="button" class="tqp-cal__link${s.mode === 'range' ? ' on' : ''}" onclick="event.stopPropagation();ProjectsModule.tqpToggleRange()">${s.mode === 'range' ? 'Rango activado · volver a fecha única' : 'Seleccionar rango'}</button>
+        ${(s.start || s.end) ? `<button type="button" class="tqp-cal__link tqp-cal__link--muted" onclick="event.stopPropagation();ProjectsModule.tqpClear()">Quitar</button>` : ''}
+      </div>
+      <div class="tqp-cal__sum">${sum}</div>`;
+  }
+  function _tqpPaint() { const el = $('tqp-calwrap'); if (el) el.innerHTML = _tqpCalHtml(); }
+  function tqpNav(d) { if (!_tqp) return; _tqp.view = new Date(_tqp.view.getFullYear(), _tqp.view.getMonth() + d, 1); _tqpPaint(); }
+  function tqpPick(iso) {
+    const s = _tqp; if (!s) return;
+    if (s.mode === 'single') { s.end = iso; s.start = null; }
+    else if (s.start && !s.end) { if (iso < s.start) { s.end = s.start; s.start = iso; } else s.end = iso; }
+    else { s.start = iso; if (s.end && s.end < iso) s.end = null; }
+    _tqpPaint();
+  }
+  function tqpToggleRange() {
+    const s = _tqp; if (!s) return;
+    if (s.mode === 'range') { s.mode = 'single'; s.end = s.end || s.start; s.start = null; }
+    else { s.mode = 'range'; s.start = null; }
+    _tqpPaint();
+  }
+  function tqpClear() { const s = _tqp; if (!s) return; s.start = null; s.end = null; _tqpPaint(); }
+
   function openQuickEditPopover(e, taskId) {
     if (_quickEditClose) { _quickEditClose(); return; }
     if (_taskMenuClose) _taskMenuClose();
@@ -9926,6 +10007,9 @@ const ProjectsModule = (() => {
     pop.className = 'task-quick-popover';
     pop.onclick = ev => ev.stopPropagation();
     const dl = t.deadline ? String(t.deadline).split('T')[0] : '';
+    const fi = t.fecha_inicio ? String(t.fecha_inicio).split('T')[0] : '';
+    _tqp = { mode: (fi && dl) ? 'range' : 'single', start: (fi && dl) ? fi : null, end: dl || null, view: new Date((dl || _tqpIso(new Date())) + 'T00:00:00') };
+    _tqp.view = new Date(_tqp.view.getFullYear(), _tqp.view.getMonth(), 1);
     pop.innerHTML = `
       <div class="tqp-field">
         <label>Estado</label>
@@ -9937,8 +10021,8 @@ const ProjectsModule = (() => {
         </select>
       </div>
       <div class="tqp-field">
-        <label>Deadline</label>
-        <input type="date" id="tqp-deadline" value="${dl}">
+        <label>Fecha</label>
+        <div id="tqp-calwrap" class="tqp-cal">${_tqpCalHtml()}</div>
       </div>
       <div class="task-quick-popover-actions">
         <button type="button" class="tqp-btn tqp-btn--cancel">Cancelar</button>
@@ -9946,7 +10030,7 @@ const ProjectsModule = (() => {
       </div>`;
     document.body.appendChild(pop);
 
-    const popWidth = 280, estHeight = 168;
+    const popWidth = 280, estHeight = 430;
     let left = rect.left;
     if (left + popWidth > window.innerWidth - 12) left = window.innerWidth - popWidth - 12;
     if (left < 12) left = 12;
@@ -9958,6 +10042,7 @@ const ProjectsModule = (() => {
     const closeOnScrollOrResize = () => _quickEditClose();
     _quickEditClose = () => {
       pop.remove();
+      _tqp = null;
       document.removeEventListener('click', _quickEditClose);
       document.removeEventListener('keydown', escHandler);
       window.removeEventListener('scroll', closeOnScrollOrResize, true);
@@ -9978,8 +10063,11 @@ const ProjectsModule = (() => {
   async function _saveQuickEdit(taskId) {
     const t = _findTaskById(taskId);
     if (!t) return;
-    const estado   = $('tqp-estado')?.value || t.estado;
-    const deadline = $('tqp-deadline')?.value || null;
+    const estado = $('tqp-estado')?.value || t.estado;
+    // Del calendario: fecha única → solo deadline; rango completo → fecha_inicio + deadline.
+    const s = _tqp || {};
+    const deadline = s.end || s.start || null;
+    const fecha_inicio = (s.mode === 'range' && s.start && s.end) ? s.start : null;
     try {
       const res = await apiFetch(`${API}/mgmt/tasks/${taskId}`, {
         method: 'PUT',
@@ -9988,7 +10076,7 @@ const ProjectsModule = (() => {
           titulo: t.titulo, project_id: t.project_id, descripcion: t.descripcion || '',
           estado, prioridad: t.prioridad, responsable: t.responsable || '',
           responsables: t.responsable ? [t.responsable] : [],
-          deadline, notas: t.notas || '', monto: t.monto, cobrado: t.cobrado,
+          deadline, fecha_inicio, notas: t.notas || '', monto: t.monto, cobrado: t.cobrado,
           parent_task_id: t.parent_task_id || null,
         }),
       });
@@ -10869,7 +10957,7 @@ const ProjectsModule = (() => {
     }
   }
 
-  return { load, filter, setFilter, setMemberFilter, render, onTipoChange, openDrawer, closeDrawer, save, confirmDelete, setView, switchTab, toggleTaskCobrado, updateTaskMonto, updateDescripcion, addLink, removeLink, _setLinkField, saveLinks, refreshCard, closeQuickClientModal, saveQuickClient, toggleTaskExpand, toggleProjectExpand, openTaskMenu, _onTaskMenuEdit, _onTaskMenuAddSub, _onTaskMenuDelete, openQuickEditPopover, startInlineSubtask, cancelInlineSubtask, saveInlineSubtask, startEditTask, cancelEditTask, saveEditTask, deleteTaskInline, toggleSubrowExpand, distributeTaskMontos, openLinkForm, cancelLinkForm, saveLinkForm, startLinkEdit, cancelLinkEdit, saveLinkEdit, enterInfoEdit, cancelInfoEdit, saveInfoEdit, toggleInfoExpand };
+  return { load, filter, setFilter, setMemberFilter, render, onTipoChange, openDrawer, closeDrawer, save, confirmDelete, setView, switchTab, toggleTaskCobrado, updateTaskMonto, updateDescripcion, addLink, removeLink, _setLinkField, saveLinks, refreshCard, closeQuickClientModal, saveQuickClient, toggleTaskExpand, toggleProjectExpand, openTaskMenu, _onTaskMenuEdit, _onTaskMenuAddSub, _onTaskMenuDelete, openQuickEditPopover, tqpNav, tqpPick, tqpToggleRange, tqpClear, startInlineSubtask, cancelInlineSubtask, saveInlineSubtask, startEditTask, cancelEditTask, saveEditTask, deleteTaskInline, toggleSubrowExpand, distributeTaskMontos, openLinkForm, cancelLinkForm, saveLinkForm, startLinkEdit, cancelLinkEdit, saveLinkEdit, enterInfoEdit, cancelInfoEdit, saveInfoEdit, toggleInfoExpand };
 })();
 
 // =================================================================

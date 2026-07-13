@@ -11992,3 +11992,47 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
 .cp-dispo-b--xs { font-size: 11.5px; padding: 5px 11px; border: none; background: #F3F5F7; color: #5B6B7B; border-radius: 999px; transition: background .15s ease, color .15s ease; }
 .cp-dispo-b--xs:hover { background: #E9EDF1; color: #0A2540; }
 .cp-taskbar__div { background: rgba(11,30,58,.08); }
+
+/* ═══ DETALLE DE PROYECTO — lista compacta + chip de fecha/rango + mini calendario ═══ */
+/* Compactación (pedido Jenny: ~la mitad de alto) */
+.pjcard__content { padding: 10px 14px 12px; }
+.pjt-group { margin-bottom: 4px; }
+.pjt-group__hdr { margin-bottom: 1px; }
+.pjt-row { padding: 2px 0; }
+.pjt-row:hover { border-radius: 6px; }
+.pjt-subgroup { margin: 0 0 2px 28px; padding-left: 8px; gap: 0; }
+.pjt-subrow { padding: 2px 6px; }
+.pjt-empty { padding: 4px 0; }
+
+/* Chip de fecha única / rango en la fila (clic → calendario) */
+.pjt-when { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; border: none; background: #F3F5F7; color: #45586A; font-size: 10.5px; font-weight: 600; padding: 2px 8px; border-radius: 999px; cursor: pointer; white-space: nowrap; transition: background .15s ease, color .15s ease; }
+.pjt-when:hover { background: #E9EDF1; color: #0A2540; }
+.pjt-when--ghost { background: transparent; color: var(--brand, #00804C); opacity: 0; }
+.pjt-row:hover .pjt-when--ghost, .pjt-subrow:hover .pjt-when--ghost { opacity: 1; }
+.pjt-when .ni { flex-shrink: 0; }
+
+/* Mini calendario del quick-edit (fecha única ↔ rango) */
+.tqp-cal { border: 1px solid rgba(11,30,58,.10); border-radius: 10px; padding: 8px; background: #fff; }
+.tqp-cal__nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.tqp-cal__mes { font-size: 12px; font-weight: 700; color: #0A2540; }
+.tqp-cal__nb { width: 22px; height: 22px; border: none; background: transparent; border-radius: 6px; color: #5B6B7B; cursor: pointer; font-size: 13px; line-height: 1; transition: background .15s ease; }
+.tqp-cal__nb:hover { background: #F3F5F7; color: #0A2540; }
+.tqp-cal__dow { display: grid; grid-template-columns: repeat(7, 1fr); font-size: 9px; font-weight: 700; color: #98A2AE; text-align: center; letter-spacing: .04em; margin-bottom: 2px; }
+.tqp-cal__grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px 0; }
+.tqp-cal__blank { height: 26px; }
+.tqp-cal__d { height: 26px; border: none; background: transparent; border-radius: 7px; font-size: 11.5px; font-weight: 600; color: #33475B; cursor: pointer; font-variant-numeric: tabular-nums; transition: background .12s ease; }
+.tqp-cal__d:hover { background: #F3F5F7; }
+.tqp-cal__d.is-today { box-shadow: inset 0 0 0 1px rgba(0,128,76,.45); }
+.tqp-cal__d.is-sel { background: var(--brand, #00804C); color: #fff; }
+.tqp-cal__d.is-in { background: rgba(0,128,76,.10); border-radius: 0; }
+.tqp-cal__d.is-rs { border-radius: 7px 0 0 7px; }
+.tqp-cal__d.is-re { border-radius: 0 7px 7px 0; }
+.tqp-cal__foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 7px; }
+.tqp-cal__link { border: none; background: transparent; color: var(--brand-d, #006B3F); font-size: 11px; font-weight: 700; cursor: pointer; padding: 3px 7px; border-radius: 6px; transition: background .15s ease; }
+.tqp-cal__link:hover { background: var(--brand-ll, #EAF5EE); }
+.tqp-cal__link.on { color: #B45309; }
+.tqp-cal__link.on:hover { background: #FEF3C7; }
+.tqp-cal__link--muted { color: #8A94A6; }
+.tqp-cal__link--muted:hover { background: #F3F5F7; color: #45586A; }
+.tqp-cal__sum { margin-top: 5px; font-size: 11px; color: #5B6B7B; text-align: center; min-height: 14px; }
+.tqp-cal__sum b { color: #0A2540; }
