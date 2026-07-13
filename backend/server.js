@@ -5177,10 +5177,13 @@ app.get('/api/timer/daily', requireAuth, async (req, res) => {
     if (!start || !end) return res.status(400).json({ error: 'start and end required' });
     // active_only: excluye la navegación web de la extensión (website_usage) → solo trabajo activo.
     const activeClause = active_only ? " AND activity_type <> 'website_usage'" : '';
+    // Las fuentes de EVIDENCIA (extensión/agente) confirman actividad DENTRO de las sesiones
+    // manuales; sumarlas duplicaría el mismo minuto (bug 2026-07-13: 4h34m reales → 7h39m).
     const r = await pool.query(
       `SELECT DATE(started_at) AS day, COALESCE(SUM(duration_s),0) AS duration_s
        FROM time_entries
        WHERE user_id=$1 AND started_at>=$2 AND started_at<=$3 AND ended_at IS NOT NULL${activeClause}
+         AND COALESCE(source,'manual_timer') NOT IN ('browser_extension','desktop_agent')
        GROUP BY day ORDER BY day`, [uid, start, end]);
     res.json(r.rows.map(row => ({ day: row.day.toISOString().split('T')[0], duration_s: Number(row.duration_s) })));
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -5221,12 +5224,14 @@ app.get('/api/timer/team', requireAuth, async (req, res) => {
     const { start, end } = req.query;
     if (!start || !end) return res.status(400).json({ error: 'start and end required' });
 
+    // total_s/sessions = solo sesiones propias (manual/bloques/importado); la evidencia
+    // (extensión/agente) aporta active_s pero no suma horas ni cuenta como sesión.
     const r = await pool.query(
       `SELECT u.id AS user_id,
               COALESCE(tm.nombre, u.name, u.email) AS nombre,
-              COALESCE(SUM(te.duration_s),0) AS total_s,
+              COALESCE(SUM(te.duration_s) FILTER (WHERE COALESCE(te.source,'manual_timer') NOT IN ('browser_extension','desktop_agent')),0) AS total_s,
               COALESCE(SUM(te.active_s),0) AS active_s,
-              COUNT(te.id) AS sessions
+              COUNT(te.id) FILTER (WHERE COALESCE(te.source,'manual_timer') NOT IN ('browser_extension','desktop_agent')) AS sessions
        FROM users u
        LEFT JOIN time_entries te ON te.user_id=u.id
          AND te.started_at>=$2 AND te.started_at<=$3 AND te.ended_at IS NOT NULL

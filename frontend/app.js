@@ -4348,9 +4348,12 @@ const DashboardModule = (() => {
     _hrsBaseSec = 0; _hrsRunStart = null; _hrsRunEntry = null;
 
     for (const e of entries) {
-      // "Horas de trabajo" = trabajo ACTIVO (timer manual / apps del agente). La navegación web
-      // de la extensión NO cuenta como horas trabajadas (se ve en "Apps y websites usados").
+      // "Horas de trabajo" = SOLO tus sesiones (timer manual / bloques / importado). La extensión y
+      // el agente son EVIDENCIA: confirman actividad dentro de tus sesiones pero no suman horas
+      // (si no, el mismo minuto se cuenta dos veces — bug del 2026-07-13).
       if ((e.activity_type || 'active_work') === 'website_usage') continue;
+      const src = e.source || 'manual_timer';
+      if (src === 'browser_extension' || src === 'desktop_agent') continue;
       const s  = new Date(e.started_at);
       const running = !e.ended_at;
       const en = running ? now : new Date(e.ended_at);
@@ -4369,7 +4372,10 @@ const DashboardModule = (() => {
     let focusAct = 0, focusTot = 0;
     for (const e of entries) {
       if ((e.activity_type || 'active_work') === 'website_usage') continue;   // navegación no es hora trabajada
+      const src = e.source || 'manual_timer';
       const dur = _dur(e);
+      // Evidencia (agente/extensión): aporta el "activo confirmado" al foco, sin sumar horas ni dinero.
+      if (src === 'browser_extension' || src === 'desktop_agent') { focusAct += (+e.active_s || 0); continue; }
       focusTot += dur; focusAct += e.ended_at ? (+e.active_s || 0) : dur;      // el que corre se cuenta activo
       if (e.tipo_proyecto === 'horas' && _num(e.tarifa_hora) > 0) {
         const cur = e.moneda || 'USD';
@@ -4379,7 +4385,7 @@ const DashboardModule = (() => {
     const _curs = Object.keys(billByCur).sort((a, b) => billByCur[b] - billByCur[a]);
     const _money = (v, cur) => { try { return new Intl.NumberFormat('es', { style: 'currency', currency: cur, maximumFractionDigits: 0 }).format(v); } catch { return (cur || 'USD') + ' ' + Math.round(v); } };
     const billStr  = _curs.length ? _money(billByCur[_curs[0]], _curs[0]) + (_curs.length > 1 ? ' +' : '') : '—';
-    const focusPct = focusTot > 0 ? Math.round(focusAct / focusTot * 100) : 0;
+    const focusPct = focusTot > 0 ? Math.min(100, Math.round(focusAct / focusTot * 100)) : 0;
     const _wk = new Date(now); _wk.setDate(_wk.getDate() - ((_wk.getDay() + 6) % 7)); _wk.setHours(0, 0, 0, 0);
     const _wkKey = _isoD(_wk), _todayKey = _isoD(now);
     const weekSec = (daily || []).filter(d => d.day >= _wkKey && d.day < _todayKey).reduce((a, d) => a + (+d.duration_s || 0), 0) + totalSec;
@@ -19198,11 +19204,15 @@ const TimerModule = (() => {
     todayEntries = _allEntries.filter(e =>
       (_ttClient === 'all'  || (e.client_nombre || '') === _ttClient) &&
       (_ttProject === 'all' || (e.proj_nombre || e.project_nombre || '') === _ttProject));
-    const total   = todayEntries.reduce((a, e) => a + _ttdDur(e, now), 0);
+    // Fuentes de EVIDENCIA (extensión/agente): confirman actividad dentro de tus sesiones,
+    // pero NO suman horas trabajadas — si no, el mismo minuto se cuenta dos veces.
+    const _evid = e => { const s = e.source || 'manual_timer'; return s === 'browser_extension' || s === 'desktop_agent'; };
+    const countable = todayEntries.filter(e => !_evid(e));
+    const total   = countable.reduce((a, e) => a + _ttdDur(e, now), 0);
     const active  = todayEntries.reduce((a, e) => a + (e.active_s || 0), 0);
     const manual  = todayEntries.filter(e => (e.source || 'manual_timer') === 'manual_timer').reduce((a, e) => a + _ttdDur(e, now), 0);
     const pending = todayEntries.filter(e => !e.task_id || (e.activity_type || 'active_work') === 'unknown').reduce((a, e) => a + _ttdDur(e, now), 0);
-    const running = todayEntries.some(e => !e.ended_at);
+    const running = countable.some(e => !e.ended_at);
     const isDay   = _ttPeriod === 'day';
     const goalSec = isDay ? TTD_GOAL : Math.max(1, _weekdaysIn(range.start, range.end)) * TTD_GOAL;
     const goalPct = goalSec > 0 ? Math.round(total / goalSec * 100) : 0;
@@ -19257,7 +19267,7 @@ const TimerModule = (() => {
         const bs = _startOfDay(cur);
         const be = range.bucket === 'week' ? _endOfDay(new Date(bs.getTime() + 6 * 86400000)) : _endOfDay(cur);
         let sum = 0;
-        todayEntries.forEach(e => { const t = new Date(e.started_at); if (t >= bs && t <= be) sum += _ttdDur(e, now); });
+        countable.forEach(e => { const t = new Date(e.started_at); if (t >= bs && t <= be) sum += _ttdDur(e, now); });
         const lbl = range.bucket === 'week' ? `${bs.getDate()}/${bs.getMonth() + 1}`
                   : (_ttPeriod === 'week' ? days[(bs.getDay() + 6) % 7] : String(bs.getDate()));
         buckets.push({ sum, lbl, isToday: bs.getTime() === todayKey });
