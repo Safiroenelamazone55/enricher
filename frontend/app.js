@@ -11958,6 +11958,9 @@ const _NI_LIB = {
   search: '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
   calendar: '<rect x="3" y="4" width="18" height="18" rx="3"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
   clock: '<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/>',
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/>',
+  target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1"/>',
+  pin: '<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>',
   gear: '<circle cx="12" cy="12" r="3"/><path d="M12 1v3M12 20v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M1 12h3M20 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>',
   external: '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>',
   inbox: '<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
@@ -12348,7 +12351,7 @@ const LeadManagerModule = (() => {
     const wins = _windowsForTz(seqTz);
     const her = wins.map(w => `<b style="color:#0f2b3d">${_prospToHer(seqTz, _hh(w[0]))}–${_prospToHer(seqTz, _hh(w[1]))}</b>`).join('  ·  ');
     const loc = wins.map(w => `${_hh(w[0])}–${_hh(w[1])}`).join(' y ');
-    return `🎯 Mejor enviar (tu hora): ${her} <span style="color:#8C97A3" title="Dos buenas franjas del día. Equivale a ${loc} hora local del prospecto (${esc(_tzShort(seqTz))}).">ⓘ</span>`;
+    return `${NI('target', 12)} Mejor enviar (tu hora): ${her} <span style="color:#8C97A3;display:inline-flex;vertical-align:middle" title="Dos buenas franjas del día. Equivale a ${loc} hora local del prospecto (${esc(_tzShort(seqTz))}).">${NI('info', 12)}</span>`;
   }
   // Convierte una hora local del PROSPECTO (HH:MM) a la hora local de la usuaria.
   function _prospToHer(seqTz, hhmm) {
@@ -13446,10 +13449,11 @@ ${foot}
   }
   function _prospectClockInner(tz) {
     const h = _prospectHour(tz);
+    const dot = c => `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${c};margin:0 4px 1px 0;vertical-align:middle"></span>`;
     const tag = h == null ? '' : (h >= 8 && h < 18)
-      ? '<span style="color:#15803D;font-weight:600">🟢 buen horario</span>'
-      : '<span style="color:#B45309;font-weight:600">🌙 fuera de horario</span>';
-    return `🕐 Hora del prospecto ahora: <b style="color:#0f2b3d">${_prospectClockLabel(tz)}</b> <span style="color:#8C97A3">${esc(_tzShort(tz))}</span>${tag ? ' · ' + tag : ''}`;
+      ? `<span style="color:#15803D;font-weight:600">${dot('#15803D')}buen horario</span>`
+      : `<span style="color:#B45309;font-weight:600">${dot('#D08A2D')}fuera de horario</span>`;
+    return `${NI('clock', 12)} Hora del prospecto: <b style="color:#0f2b3d">${_prospectClockLabel(tz)}</b> <span style="color:#8C97A3">${esc(_tzShort(tz))}</span>${tag ? ' · ' + tag : ''}`;
   }
   function _ensureProspectClock() {
     if (_cpClockTimer) return;
@@ -13508,12 +13512,12 @@ ${foot}
     _ensureProspectClock();
     return `<div class="cp-taskbar cp-taskbar--slim">
       <div class="cp-taskbar__top">
-        <span class="cp-taskbar__ico" style="background:${touch[1]}1a;color:${touch[1]}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${touch[2]}</svg></span>
-        <div class="cp-taskbar__ttl"><span class="cp-taskbar__t">${esc(st.titulo || touch[0])}</span><b class="cp-taskbar__ch" style="color:${touch[1]}">${touch[0]}</b><span class="cp-taskbar__meta">${pos >= 0 && queue.length ? `${pos + 1}/${queue.length} hoy` : `Día ${st.dia || 1}`}${seq ? ` · ${esc(seq.nombre)}` : ''}</span></div>
+        <span class="cp-taskbar__ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${touch[2]}</svg></span>
+        <div class="cp-taskbar__ttl"><span class="cp-taskbar__t">${esc(st.titulo || touch[0])}</span><b class="cp-taskbar__ch">${touch[0]}</b><span class="cp-taskbar__meta">${pos >= 0 && queue.length ? `${pos + 1} de ${queue.length} hoy` : `Día ${st.dia || 1}`}${seq ? ` · ${esc(seq.nombre)}` : ''}</span></div>
         <button class="cp-taskbar__exit" onclick="LeadManagerModule.seqDoExit()">‹ Tareas</button>
       </div>
-      ${(() => { const ptz = _contactTz(c) || (seq && seq.timezone) || ''; if (!ptz) return ''; const own = !!_contactTz(c); return `<div class="cp-taskbar__clock" id="cp-clock-row" data-tz="${esc(ptz)}" style="margin:2px 0 0;padding:7px 2px 2px;font-size:.8rem;color:#3e4c59;display:flex;align-items:center;gap:6px;flex-wrap:wrap;border-top:1px dashed #E4E7DD">${_prospectClockInner(ptz)}${own ? `<span style="color:#8C97A3" title="Zona horaria derivada del estado del prospecto (no de la secuencia)">📍 ${esc(c.region || '')}</span>` : ''}</div>
-      <div class="cp-taskbar__win" style="padding:1px 2px 3px;font-size:.8rem;color:#3e4c59;display:flex;align-items:center;gap:6px;flex-wrap:wrap">${_recWindowsInner(ptz)}</div>`; })()}
+      ${(() => { const ptz = _contactTz(c) || (seq && seq.timezone) || ''; if (!ptz) return ''; const own = !!_contactTz(c); return `<div class="cp-taskbar__clock" id="cp-clock-row" data-tz="${esc(ptz)}">${_prospectClockInner(ptz)}${own ? `<span style="color:#98A2AE;display:inline-flex;align-items:center;gap:3px" title="Zona horaria derivada del estado del prospecto (no de la secuencia)">${NI('pin', 11)} ${esc(c.region || '')}</span>` : ''}</div>
+      <div class="cp-taskbar__win">${_recWindowsInner(ptz)}</div>`; })()}
       ${st.canal === 'email' && c.email ? `<div class="cp-taskbar__mailto">
         <span class="cp-taskbar__mt"><span class="cp-taskbar__subj-l">Para</span><span class="cp-taskbar__mt-v">${esc(c.email)}</span>${_copyBtn(c.email, 'Para copiado')}</span>
         ${ccMail ? `<span class="cp-taskbar__mt cp-taskbar__mt--cc" title="El cliente pidió ir en copia"><span class="cp-taskbar__subj-l">CC</span><span class="cp-taskbar__mt-v">${esc(ccMail)}</span>${_copyBtn(ccMail, 'CC copiado')}</span>` : ''}

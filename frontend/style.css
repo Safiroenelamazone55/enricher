@@ -11958,3 +11958,37 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
 .seq-next { font-size: 12px; padding: 7px 11px; }
 .lm-task-empty { font-size: 12.5px; padding: 11px 14px; }
 .lm-sec-sub { font-size: 12.5px; }
+
+/* ═══ FICHA CON TAREA — barra de ejecución a nivel referencia ═══ */
+/* Barra blanca (fuera el lavado verde), un solo acento, tipografía en px */
+.cp-taskbar { background: #fff; border: 1px solid rgba(11,30,58,.08); border-radius: 14px; padding: 11px 14px; box-shadow: 0 1px 2px rgba(11,30,58,.04); }
+.cp-taskbar__ico { width: 20px; height: 20px; border-radius: 0; background: transparent; color: #98A2AE; }
+.cp-taskbar__t { font-size: 13.5px; font-weight: 700; color: #0A2540; }
+.cp-taskbar__ch { font-size: 9.5px; color: #8A94A6; letter-spacing: .05em; }
+.cp-taskbar__meta { font-size: 11.5px; color: #8A94A6; }
+.cp-taskbar__exit { font-size: 12px; color: #5B6B7B; border: 1px solid rgba(11,30,58,.10); border-radius: 999px; padding: 4px 12px; background: #fff; transition: border-color .15s ease, color .15s ease; }
+.cp-taskbar__exit:hover { background: #fff; border-color: var(--brand-l, #BFE0CC); color: #0A2540; }
+
+/* Contexto (reloj del prospecto + mejor ventana): zona quieta con hairline */
+.cp-taskbar__clock { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 9px; padding: 8px 2px 1px; font-size: 12px; color: #5B6B7B; border-top: 1px solid rgba(11,30,58,.06); }
+.cp-taskbar__win { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 3px 2px 1px; font-size: 12px; color: #5B6B7B; }
+.cp-taskbar__clock .ni, .cp-taskbar__win .ni { color: #98A2AE; flex-shrink: 0; }
+
+/* Mensaje: header 9.5px, variante sin lima, cuerpo 13px */
+.cp-taskbar__tpl { margin-top: 9px; border: 1px solid rgba(11,30,58,.08); border-radius: 10px; }
+.seqdo-tpl-hd { background: #FAFBFC; border-bottom: 1px solid rgba(11,30,58,.06); font-size: 9.5px; letter-spacing: .06em; color: #98A2AE; padding: 6px 11px; }
+.cp-var-tag { background: #F3F5F7; color: #45586A; font-size: 9.5px; }
+.seqdo-tpl--slim { font-size: 13px; line-height: 1.6; color: #33475B; padding: 11px 13px; }
+.seqdo-copy { background: #fff; border: 1px solid rgba(11,30,58,.12); color: #45586A; border-radius: 999px; }
+.seqdo-copy:hover { background: #F3F5F7; color: #0A2540; border-color: rgba(11,30,58,.2); }
+.seqdo-copy--xs { font-size: 11px; padding: 3px 10px; }
+.cp-taskbar__mt, .cp-taskbar__subj { border-color: rgba(11,30,58,.10); }
+.cp-taskbar__subj-l { color: #98A2AE; }
+.cp-taskbar__notpl { font-size: 12.5px; }
+
+/* Pie de acciones: primario verde, lo demás quieto y compacto */
+.cp-taskbar__foot { gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(11,30,58,.06); }
+.cp-taskbar__foot .btn--sm { font-size: 12px; padding: 6px 13px; }
+.cp-dispo-b--xs { font-size: 11.5px; padding: 5px 11px; border: none; background: #F3F5F7; color: #5B6B7B; border-radius: 999px; transition: background .15s ease, color .15s ease; }
+.cp-dispo-b--xs:hover { background: #E9EDF1; color: #0A2540; }
+.cp-taskbar__div { background: rgba(11,30,58,.08); }
