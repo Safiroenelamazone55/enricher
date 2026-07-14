@@ -8876,7 +8876,7 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
   letter-spacing: 0.1em;
   color: #A6998A;
 }
-.d3-section-label--warn  { color: #D97706; }
+.d3-section-label--warn  { color: #C4342B; }
 .d3-section-label--muted { color: #B5A99A; cursor: pointer; user-select: none; }
 .d3-section-details { border: none; padding: 0; }
 .d3-section-details > summary { list-style: none; }
@@ -8943,8 +8943,9 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 }
 .d3-task-row:first-of-type { border-top: none; }
 .d3-task-row:hover { background: #FAFAF8; }
-.d3-task-row--overdue { background: #FFFCF7; }
-.d3-task-row--overdue:hover { background: #FFF6EC; }
+/* Vencidas: fondo rojizo apagado + acento lateral rojo (Jenny) */
+.d3-task-row--overdue { background: #FBF1EF; box-shadow: inset 2px 0 0 #DD5145; border-top-color: #F4E4E1; }
+.d3-task-row--overdue:hover { background: #F7E9E6; }
 .d3-task-row--expanded { background: #F5F4F1; align-items: flex-start; }
 .d3-task-row--expanded:hover { background: #F5F4F1; }
 /* Al expandir, el título/meta de la fila se muestra COMPLETO (se destrunca) */
@@ -9111,7 +9112,7 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
   letter-spacing: -0.01em;
   line-height: 1.35;
 }
-.d3-task-name--overdue { color: #C45A0A; font-weight: 500; }
+.d3-task-name--overdue { color: #A83A31; font-weight: 550; }
 
 .d3-task-meta {
   font-size: 10.5px;
@@ -9133,7 +9134,7 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
   flex-shrink: 0;
   letter-spacing: 0;
 }
-.d3-task-date--overdue { color: var(--brand-d); font-weight: 500; letter-spacing: 0; }
+.d3-task-date--overdue { color: #C4342B; font-weight: 600; letter-spacing: 0; }
 
 .d3-play-btn {
   width: 24px; height: 24px;

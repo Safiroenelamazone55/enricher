@@ -4800,12 +4800,14 @@ const DashboardModule = (() => {
         ${_renderSectionFlat(sectionTomorrow, false, allTasksById)}
       </details>`;
 
-    el.innerHTML = header + `
+    // Orden pedido por Jenny: VENCIDAS primero (fondo rojizo apagado), luego HOY (tono normal),
+    // y después lo que siga por fecha (Mañana / próximas).
+    el.innerHTML = header + `${overdueHtml}
       <div class="d3-section-label">
         <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
         Hoy
       </div>
-      ${todayHtml}${overdueHtml}${tomorrowHtml}`;
+      ${todayHtml}${tomorrowHtml}`;
   }
 
   const _STATUS_CFG = {
