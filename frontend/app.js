@@ -4310,7 +4310,7 @@ const DashboardModule = (() => {
 
       loadEl.classList.add('hidden');
       bodyEl.classList.remove('hidden');
-      if (window.AnalyticsModule && typeof AnalyticsModule.mountRevCard === 'function') AnalyticsModule.mountRevCard();
+      try { if (typeof AnalyticsModule !== 'undefined' && AnalyticsModule.mountRevCard) AnalyticsModule.mountRevCard(); } catch (_) {}
     } catch (e) {
       console.error('[dashboard] load error:', e);
       if (loadEl) loadEl.innerHTML = '<span style="color:var(--err)">Error al cargar el dashboard.</span>';
