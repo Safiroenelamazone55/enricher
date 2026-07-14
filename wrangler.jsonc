@@ -1,7 +1,12 @@
 {
   "name": "enricher",
   "compatibility_date": "2026-05-28",
+  "workers_dev": true,
   "assets": {
     "directory": "./frontend"
-  }
+  },
+  "routes": [
+    { "pattern": "enricher.kiwoc.com", "custom_domain": true },
+    { "pattern": "app.novacentrax.com", "custom_domain": true }
+  ]
 }
