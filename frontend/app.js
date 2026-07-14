@@ -277,19 +277,7 @@ async function initAuth() {
         <div class="ws-user__meta">
           <div class="ws-user__name">${esc(data.name || 'Usuario')}</div>
           <div class="ws-user__mail">${esc(data.email || '')}</div>
-        </div>
-        <a href="${API}/auth/logout" class="rail-user__out" id="btnLogout" title="Cerrar sesión" aria-label="Cerrar sesión" onclick="event.stopPropagation()">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-        </a>`;
-
-      const logoutBtn = $('btnLogout');
-      if (logoutBtn) {
-        logoutBtn.addEventListener('click', async e => {
-          e.preventDefault();
-          await apiFetch(`${API}/auth/logout`);
-          location.reload();
-        });
-      }
+        </div>`;
 
       authWall.classList.add('hidden');
       appShell.classList.remove('hidden');
@@ -512,6 +500,13 @@ function closeWorkspaceMenu() {
   if (menu) menu.classList.add('hidden');
   _wsMenuOpen = false;
   document.removeEventListener('mousedown', _wsMenuOutside);
+}
+// Cerrar sesión desde el pie fijo de la barra (Salir de la cuenta)
+function novaLogout(e) {
+  if (e) { e.preventDefault(); e.stopPropagation(); }
+  try {
+    apiFetch(`${API}/auth/logout`).then(() => location.reload()).catch(() => location.reload());
+  } catch (_) { location.href = `${API}/auth/logout`; }
 }
 
 // Simple top toast
@@ -12317,6 +12312,16 @@ const LeadManagerModule = (() => {
       <aside class="lm2-nav">
         <div class="snav-panel__hd"><button class="snav-ws" title="Cambiar módulo" aria-label="Cambiar módulo" onclick="toggleWorkspaceMenu(this)"><span class="snav-ws__ico"><svg width="19" height="19" viewBox="0 0 100 100" fill="none"><path d="M50 3 L63 38 L97 50 L63 62 L50 97 L37 62 L3 50 L37 38 Z" fill="currentColor"/></svg></span><span class="snav-panel__title">Lead Manager</span><svg class="snav-ws__chev" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button></div>
         <nav class="lm2-nav__list" id="lm2-nav-list">${_navHtml()}</nav>
+        <div class="snav-foot">
+          <button class="snav-foot__btn" onclick="WorkspaceModule.openNameModal()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            <span>Configuración</span>
+          </button>
+          <a class="snav-foot__btn snav-foot__btn--out" href="#" onclick="novaLogout(event)">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            <span>Salir de la cuenta</span>
+          </a>
+        </div>
       </aside>
       <main class="lm2-main"><div class="lm2-body" id="lm2-body"></div></main>
     </div>`;

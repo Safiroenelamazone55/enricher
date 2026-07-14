@@ -12132,3 +12132,33 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
 .ws-user__mail { font-size: 11px; color: var(--muted, #A8A29E); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ws-menu__user .rail-user__out { flex-shrink: 0; color: var(--muted, #A8A29E); width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; transition: background .12s, color .12s; }
 .ws-menu__user .rail-user__out:hover { background: var(--bg2, #F3EFE9); color: var(--err, #DC2626); }
+
+/* ══════════════════════════════════════════════════════════════
+   PIE FIJO DE LA BARRA: Configuración + Salir siempre abajo
+   La lista de secciones ocupa el centro y hace scroll cuando no
+   cabe; el encabezado (workspace) queda fijo arriba y el pie abajo.
+   ══════════════════════════════════════════════════════════════ */
+#sidebar { overflow: hidden; }
+#sidebar .sidebar__nav { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.lm2-nav { height: 100vh; max-height: 100vh; overflow: hidden; }
+.lm2-nav__list { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+
+.snav-foot {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border, #EDEBE6);
+  padding: 8px;
+  display: flex; flex-direction: column; gap: 2px;
+  background: #fff;
+}
+.snav-foot__btn {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  border: 0; background: transparent; cursor: pointer; font-family: inherit;
+  padding: 8px 9px; border-radius: 9px;
+  font-size: 12.5px; font-weight: 550; color: var(--text2, #57534E);
+  text-align: left; text-decoration: none;
+  transition: background .12s, color .12s;
+}
+.snav-foot__btn:hover { background: var(--bg, #F7F5F1); color: var(--text, #1c1a17); }
+.snav-foot__btn svg { width: 16px; height: 16px; color: var(--muted, #A8A29E); flex-shrink: 0; transition: color .12s; }
+.snav-foot__btn--out:hover { color: var(--err, #DC2626); }
+.snav-foot__btn--out:hover svg { color: var(--err, #DC2626); }
