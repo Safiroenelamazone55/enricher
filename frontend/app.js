@@ -6,7 +6,7 @@ console.log('[Enricher] app.js v2026-05-28-B loaded');
  * Vanilla JS · no framework
  */
 
-const API = 'https://api.kiwoc.com/api';
+const API = 'https://api.novacentrax.com/api';
 
 // ── Helpers ──────────────────────────────────────────────────────
 const $   = id => document.getElementById(id);
@@ -17563,7 +17563,7 @@ const ChatModule = (() => {
 
   function _connect() {
     if (_socket) return;
-    _socket = io('https://api.kiwoc.com', {
+    _socket = io('https://api.novacentrax.com', {
       withCredentials: true,
       transports: ['polling', 'websocket'],
     });
