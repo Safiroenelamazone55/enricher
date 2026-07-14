@@ -420,7 +420,9 @@ app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 // Captures ?join=TOKEN into session so the strategy can process it.
 app.get('/api/auth/google', (req, res, next) => {
   if (req.query.join) req.session.pendingJoinToken = req.query.join;
-  passport.authenticate('google', { scope: ['profile', 'email'] })(req, res, next);
+  // prompt=select_account: Google SIEMPRE muestra el selector de cuenta (no auto-entra en
+  // silencio). Da control al usuario con varias cuentas y evita el "abre solo al hacer clic".
+  passport.authenticate('google', { scope: ['profile', 'email'], prompt: 'select_account' })(req, res, next);
 });
 
 // ── GET /api/auth/google/callback ─────────────────────────────────
