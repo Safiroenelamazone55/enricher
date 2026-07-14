@@ -12210,7 +12210,9 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
    HEATMAP DE ACTIVIDAD (día de la semana × hora) — al lado de Ingresos
    Intensidad del verde = actividad (tiempo trabajado) en esa hora.
    ══════════════════════════════════════════════════════════════ */
-.d3-hero { align-items: stretch; justify-content: flex-start; gap: 16px; flex-wrap: nowrap; }
+/* Sin recuadro blanco de fondo: las 2 tarjetas van directo sobre el fondo del
+   dashboard, alineadas con el contenido de abajo (izq 0, der 52, como .d3-body). */
+.d3-hero { align-items: stretch; justify-content: flex-start; gap: 16px; flex-wrap: nowrap; background: transparent; border-bottom: none; padding: 24px 52px 0 0; }
 .d3-revcard { flex: 0 0 320px; max-width: 320px; }
 .d3-actcard {
   flex: 1 1 auto; min-width: 0;
