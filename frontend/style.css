@@ -12036,3 +12036,14 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
 .tqp-cal__link--muted:hover { background: #F3F5F7; color: #45586A; }
 .tqp-cal__sum { margin-top: 5px; font-size: 11px; color: #5B6B7B; text-align: center; min-height: 14px; }
 .tqp-cal__sum b { color: #0A2540; }
+
+/* ═══ Fila inline (crear/editar tarea): botón de fecha única/rango ═══ */
+.pjt-inline-datebtn { display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0; height: 28px; padding: 0 10px; border: 1px solid rgba(11,30,58,.14); background: #fff; color: #8A94A6; font-size: 11.5px; font-weight: 600; border-radius: 8px; cursor: pointer; white-space: nowrap; max-width: 150px; overflow: hidden; transition: border-color .15s ease, color .15s ease, background .15s ease; }
+.pjt-inline-datebtn:hover { border-color: var(--brand-l, #BFE0CC); color: #45586A; }
+.pjt-inline-datebtn.has-date { color: #0A2540; border-color: rgba(0,128,76,.30); background: #F7FBF8; }
+.pjt-inline-datebtn .ni { color: #98A2AE; flex-shrink: 0; }
+.pjt-inline-datebtn.has-date .ni { color: var(--brand, #00804C); }
+.pjt-inline-datebtn span { overflow: hidden; text-overflow: ellipsis; }
+
+/* Popover flotante del calendario (reusa .tqp-cal) */
+.range-pick-pop { box-shadow: 0 8px 28px rgba(11,30,58,.16); border-radius: 12px; }

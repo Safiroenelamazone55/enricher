@@ -7692,10 +7692,12 @@ const TasksModule = (() => {
       if (delBtn) delBtn.style.display = 'none';
       _plReset();
       await _applyParentBadge(presetParentTaskId);
-      await Promise.all([
-        _fetchAndPopulateProjects(presetProjectId),
-        _fetchAndPopulateTeam(''),
-      ]);
+      await _fetchAndPopulateProjects(presetProjectId);
+      // Hereda el responsable: de la tarea padre (si es subtarea) o del proyecto — editable.
+      let inheritResp = '';
+      if (presetParentTaskId) { const _pt = (_tasks || []).find(t => t.id === presetParentTaskId); inheritResp = (_pt && _pt.responsable) || ''; }
+      if (!inheritResp && presetProjectId) { const _pp = (_projectsForDateLimit || []).find(p => String(p.id) === String(presetProjectId)); if (_pp) inheritResp = _pp.responsable || (Array.isArray(_pp.responsables) && _pp.responsables[0]) || ''; }
+      await _fetchAndPopulateTeam(inheritResp);
       _applyProjectDateLimits();
       if (projSel) projSel.disabled = !!presetParentTaskId;
     }
@@ -9589,9 +9591,13 @@ const ProjectsModule = (() => {
   }
 
   function _inlineSubtaskRowHtml(parentTaskId, projectId) {
-    const teamOpts = (_teamCache || []).map(m => `<option value="${esc(m.nombre)}">${esc(m.nombre)}</option>`).join('');
     const parentTask = _findTaskById(parentTaskId);
-    const { min: dtMin, max: dtMax } = _subtaskDeadlineRange(parentTask);
+    // Hereda el responsable: de la tarea padre si tiene, si no del proyecto (editable).
+    const proj = (typeof _projects !== 'undefined' ? _projects : []).find(x => x.id === projectId);
+    const inheritResp = (parentTask && parentTask.responsable) || (proj && (proj.responsable || (Array.isArray(proj.responsables) && proj.responsables[0]))) || '';
+    const teamNames = (_teamCache || []).map(m => m.nombre);
+    const respNames = (inheritResp && !teamNames.includes(inheritResp)) ? [inheritResp, ...teamNames] : teamNames;
+    const teamOpts = respNames.map(nm => `<option value="${esc(nm)}"${nm === inheritResp ? ' selected' : ''}>${esc(nm)}</option>`).join('');
     return `<div class="pjt-inline-row" onclick="event.stopPropagation()">
       <input type="text" id="subtask-inline-titulo" class="pjt-inline-input" placeholder="Título de la subtarea…"
         onkeydown="if(event.key==='Enter'){event.preventDefault();ProjectsModule.saveInlineSubtask(${parentTaskId},${projectId});}else if(event.key==='Escape'){event.preventDefault();ProjectsModule.cancelInlineSubtask();}">
@@ -9606,11 +9612,12 @@ const ProjectsModule = (() => {
         <option value="media" selected>Media</option>
         <option value="alta">Alta</option>
       </select>
-      <select id="subtask-inline-resp" class="pjt-inline-select" title="Responsable">
-        <option value="">Sin asignar</option>
+      <select id="subtask-inline-resp" class="pjt-inline-select" title="Responsable (heredado del proyecto — cámbialo si quieres)">
+        <option value=""${inheritResp ? '' : ' selected'}>Sin asignar</option>
         ${teamOpts}
       </select>
-      <input type="date" id="subtask-inline-deadline" class="pjt-inline-date" title="Deadline" ${dtMin ? `min="${dtMin}"` : ''} ${dtMax ? `max="${dtMax}"` : ''}>
+      <button type="button" id="subtask-inline-datebtn" class="pjt-inline-datebtn" title="Fecha única o rango"
+        onclick="event.stopPropagation();ProjectsModule.openInlineDate('create')">${NI('calendar', 12)}<span id="subtask-inline-datelbl">${_rangeLabel(_inlineCreateDate)}</span></button>
       <button type="button" class="pjt-inline-save" id="subtask-inline-save"
         onclick="ProjectsModule.saveInlineSubtask(${parentTaskId},${projectId})">Guardar</button>
       <button type="button" class="pjt-inline-cancel" onclick="ProjectsModule.cancelInlineSubtask()" title="Cancelar">
@@ -9622,6 +9629,7 @@ const ProjectsModule = (() => {
   async function startInlineSubtask(parentTaskId) {
     if (_taskMenuClose) _taskMenuClose();
     if (_quickEditClose) _quickEditClose();
+    _inlineCreateDate = { mode: 'single', start: null, end: null };
     await _ensureTeamLoaded();
     _inlineSubtaskFor = parentTaskId;
     _expandedTasks.add(parentTaskId);
@@ -9647,7 +9655,9 @@ const ProjectsModule = (() => {
     const estado      = $('subtask-inline-estado')?.value || 'pendiente';
     const prioridad   = $('subtask-inline-prioridad')?.value || 'media';
     const responsable = $('subtask-inline-resp')?.value || '';
-    const deadline    = $('subtask-inline-deadline')?.value || null;
+    const _d = _inlineCreateDate || {};
+    const deadline = _d.end || _d.start || null;
+    const fecha_inicio = (_d.mode === 'range' && _d.start && _d.end) ? _d.start : null;
     const parentTask  = _findTaskById(parentTaskId);
     if (deadline && parentTask?.deadline) {
       const parentMax = String(parentTask.deadline).split('T')[0];
@@ -9665,7 +9675,7 @@ const ProjectsModule = (() => {
         body: JSON.stringify({
           titulo, project_id: projectId, estado, prioridad,
           responsable, responsables: responsable ? [responsable] : [],
-          deadline, parent_task_id: parentTaskId,
+          deadline, fecha_inicio, parent_task_id: parentTaskId,
         }),
       });
       if (!res.ok) throw new Error((await res.json()).error || 'Error al crear subtarea');
@@ -9703,7 +9713,8 @@ const ProjectsModule = (() => {
         <option value="">Sin asignar</option>
         ${teamOpts}
       </select>
-      <input type="date" id="tedit-deadline" class="pjt-inline-date" title="Deadline" value="${dl}" ${teMin ? `min="${teMin}"` : ''} ${teMax ? `max="${teMax}"` : ''}>
+      <button type="button" id="tedit-datebtn" class="pjt-inline-datebtn${(_inlineEditDate.start || _inlineEditDate.end) ? ' has-date' : ''}" title="Fecha única o rango"
+        onclick="event.stopPropagation();ProjectsModule.openInlineDate('edit')">${NI('calendar', 12)}<span id="tedit-datelbl">${_rangeLabel(_inlineEditDate)}</span></button>
       <button type="button" class="pjt-inline-del" title="Eliminar" onclick="ProjectsModule.deleteTaskInline(${t.id})">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
       </button>
@@ -9721,6 +9732,10 @@ const ProjectsModule = (() => {
     _editingTaskId = taskId;
     _inlineSubtaskFor = null;
     const t = _findTaskById(taskId);
+    // Inicializa el botón de fecha con la fecha/rango actual de la tarea.
+    const _efi = t && t.fecha_inicio ? String(t.fecha_inicio).split('T')[0] : null;
+    const _edl = t && t.deadline ? String(t.deadline).split('T')[0] : null;
+    _inlineEditDate = { mode: (_efi && _edl) ? 'range' : 'single', start: (_efi && _edl) ? _efi : null, end: _edl };
     if (t?.parent_task_id) _expandedTasks.add(t.parent_task_id);
     _rerenderTaskHost(taskId);
     setTimeout(() => $('tedit-titulo')?.focus(), 30);
@@ -9746,7 +9761,10 @@ const ProjectsModule = (() => {
     const estado      = $('tedit-estado')?.value || 'pendiente';
     const prioridad   = $('tedit-prioridad')?.value || 'media';
     const responsable = $('tedit-resp')?.value || '';
-    const deadline    = $('tedit-deadline')?.value || null;
+    // Fecha del botón-calendario: fecha única → solo deadline; rango → fecha_inicio + deadline.
+    const _d = _inlineEditDate || {};
+    const deadline = _d.end || _d.start || null;
+    const fecha_inicio = (_d.mode === 'range' && _d.start && _d.end) ? _d.start : null;
     if (deadline && t.parent_task_id) {
       const editParent = _findTaskById(t.parent_task_id);
       if (editParent?.deadline) {
@@ -9759,10 +9777,6 @@ const ProjectsModule = (() => {
     }
     const saveBtn = $('tedit-save');
     if (saveBtn) saveBtn.disabled = true;
-    // Preserva el rango existente (fecha_inicio) — solo se gestiona desde el mini calendario;
-    // si el nuevo fin quedó antes del inicio, el rango deja de tener sentido y se limpia.
-    const fiRaw = t.fecha_inicio ? String(t.fecha_inicio).split('T')[0] : null;
-    const fecha_inicio = (fiRaw && deadline && fiRaw <= deadline) ? fiRaw : null;
     try {
       const res = await apiFetch(`${API}/mgmt/tasks/${taskId}`, {
         method: 'PUT',
@@ -9980,7 +9994,7 @@ const ProjectsModule = (() => {
       </div>
       <div class="tqp-cal__sum">${sum}</div>`;
   }
-  function _tqpPaint() { const el = $('tqp-calwrap'); if (el) el.innerHTML = _tqpCalHtml(); }
+  function _tqpPaint() { const el = $('tqp-calwrap'); if (el) el.innerHTML = _tqpCalHtml(); if (_tqp && _tqp.onChange) _tqp.onChange({ mode: _tqp.mode, start: _tqp.start, end: _tqp.end }); }
   function tqpNav(d) { if (!_tqp) return; _tqp.view = new Date(_tqp.view.getFullYear(), _tqp.view.getMonth() + d, 1); _tqpPaint(); }
   function tqpPick(iso) {
     const s = _tqp; if (!s) return;
@@ -9997,7 +10011,56 @@ const ProjectsModule = (() => {
   }
   function tqpClear() { const s = _tqp; if (!s) return; s.start = null; s.end = null; _tqpPaint(); }
 
+  // ── Botón de fecha reutilizable para las filas inline (crear/editar): abre el
+  //    MISMO mini calendario (fecha única o rango) en un popover flotante. ──
+  let _rangePickClose = null;
+  let _inlineCreateDate = { mode: 'single', start: null, end: null };
+  let _inlineEditDate   = { mode: 'single', start: null, end: null };
+  function _rangeLabel(v) {
+    if (!v) return 'Fecha';
+    if (v.mode === 'range' && v.start && v.end) return `${_tqpFmt(v.start)} → ${_tqpFmt(v.end)}`;
+    if (v.end) return _tqpFmt(v.end);
+    if (v.start) return _tqpFmt(v.start);
+    return 'Fecha';
+  }
+  function _openRangePicker(anchorEl, cur, onChange) {
+    if (_rangePickClose) _rangePickClose();
+    if (_quickEditClose) _quickEditClose();
+    _tqp = {
+      mode: (cur && cur.mode) || ((cur && cur.start && cur.end) ? 'range' : 'single'),
+      start: (cur && cur.start) || null, end: (cur && cur.end) || null,
+      view: new Date(((cur && (cur.end || cur.start)) || _tqpIso(new Date())) + 'T00:00:00'),
+      onChange,
+    };
+    _tqp.view = new Date(_tqp.view.getFullYear(), _tqp.view.getMonth(), 1);
+    const pop = document.createElement('div');
+    pop.className = 'range-pick-pop';
+    pop.onclick = ev => ev.stopPropagation();
+    pop.innerHTML = `<div id="tqp-calwrap" class="tqp-cal">${_tqpCalHtml()}</div>`;
+    document.body.appendChild(pop);
+    const rect = anchorEl.getBoundingClientRect();
+    const w = 250, h = 322;
+    let left = rect.left; if (left + w > window.innerWidth - 10) left = window.innerWidth - w - 10; if (left < 10) left = 10;
+    let top = rect.bottom + 6; if (top + h > window.innerHeight - 10) top = Math.max(10, rect.top - h - 6);
+    pop.style.cssText = `position:fixed;z-index:10001;top:${top}px;left:${left}px;width:${w}px`;
+    const close = () => { pop.remove(); _tqp = null; document.removeEventListener('click', close); _rangePickClose = null; };
+    _rangePickClose = close;
+    setTimeout(() => document.addEventListener('click', close), 0);
+  }
+  function openInlineDate(kind) {
+    const btnId = kind === 'edit' ? 'tedit-datebtn' : 'subtask-inline-datebtn';
+    const lblId = kind === 'edit' ? 'tedit-datelbl' : 'subtask-inline-datelbl';
+    const btn = $(btnId); if (!btn) return;
+    const state = kind === 'edit' ? _inlineEditDate : _inlineCreateDate;
+    _openRangePicker(btn, state, v => {
+      if (kind === 'edit') _inlineEditDate = v; else _inlineCreateDate = v;
+      const lbl = $(lblId); if (lbl) lbl.textContent = _rangeLabel(v);
+      btn.classList.toggle('has-date', !!(v.start || v.end));
+    });
+  }
+
   function openQuickEditPopover(e, taskId) {
+    if (_rangePickClose) _rangePickClose();
     if (_quickEditClose) { _quickEditClose(); return; }
     if (_taskMenuClose) _taskMenuClose();
     const t = _findTaskById(taskId);
@@ -10957,7 +11020,7 @@ const ProjectsModule = (() => {
     }
   }
 
-  return { load, filter, setFilter, setMemberFilter, render, onTipoChange, openDrawer, closeDrawer, save, confirmDelete, setView, switchTab, toggleTaskCobrado, updateTaskMonto, updateDescripcion, addLink, removeLink, _setLinkField, saveLinks, refreshCard, closeQuickClientModal, saveQuickClient, toggleTaskExpand, toggleProjectExpand, openTaskMenu, _onTaskMenuEdit, _onTaskMenuAddSub, _onTaskMenuDelete, openQuickEditPopover, tqpNav, tqpPick, tqpToggleRange, tqpClear, startInlineSubtask, cancelInlineSubtask, saveInlineSubtask, startEditTask, cancelEditTask, saveEditTask, deleteTaskInline, toggleSubrowExpand, distributeTaskMontos, openLinkForm, cancelLinkForm, saveLinkForm, startLinkEdit, cancelLinkEdit, saveLinkEdit, enterInfoEdit, cancelInfoEdit, saveInfoEdit, toggleInfoExpand };
+  return { load, filter, setFilter, setMemberFilter, render, onTipoChange, openDrawer, closeDrawer, save, confirmDelete, setView, switchTab, toggleTaskCobrado, updateTaskMonto, updateDescripcion, addLink, removeLink, _setLinkField, saveLinks, refreshCard, closeQuickClientModal, saveQuickClient, toggleTaskExpand, toggleProjectExpand, openTaskMenu, _onTaskMenuEdit, _onTaskMenuAddSub, _onTaskMenuDelete, openQuickEditPopover, tqpNav, tqpPick, tqpToggleRange, tqpClear, openInlineDate, startInlineSubtask, cancelInlineSubtask, saveInlineSubtask, startEditTask, cancelEditTask, saveEditTask, deleteTaskInline, toggleSubrowExpand, distributeTaskMontos, openLinkForm, cancelLinkForm, saveLinkForm, startLinkEdit, cancelLinkEdit, saveLinkEdit, enterInfoEdit, cancelInfoEdit, saveInfoEdit, toggleInfoExpand };
 })();
 
 // =================================================================
