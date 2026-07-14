@@ -4284,18 +4284,23 @@ const DashboardModule = (() => {
     }
   }
 
-  function _subtaskRow(t, isOverdue) {
+  function _subtaskRow(t, isOverdue, allTasksById) {
     const dl = t.deadline
       ? new Date(String(t.deadline).split('T')[0] + 'T00:00:00')
           .toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })
       : null;
+    // Fila auto-contenida: su contexto (tarea padre · proyecto) va inline, sin cabecera
+    // de padre repetida por sección (antes el mismo padre aparecía en Hoy y en Vencidas).
+    const parent = allTasksById ? allTasksById.get(t.parent_task_id) : null;
+    const ctx = [parent && parent.titulo, t.project_nombre].filter(Boolean).join(' · ');
     const estado = t.estado || 'pendiente';
-    return `<div class="d3-task-row d3-task-row--sub${isOverdue ? ' d3-task-row--overdue' : ''}" data-task-id="${t.id}" onclick="DashboardModule.toggleExpand(${t.id})">
+    return `<div class="d3-task-row${isOverdue ? ' d3-task-row--overdue' : ''}" data-task-id="${t.id}" onclick="DashboardModule.toggleExpand(${t.id})">
       <button class="d3-status-btn d3-status-btn--${(_STATUS_CFG[estado]||_STATUS_CFG.pendiente).dot}"
               onclick="event.stopPropagation();DashboardModule.openStatusMenu(event,${t.id})"
               title="Cambiar estado">${_statusSvg(estado)}</button>
       <div class="d3-task-body">
-        <span class="d3-task-name d3-task-name--sub${isOverdue ? ' d3-task-name--overdue' : ''}">${esc(t.titulo)}</span>
+        <span class="d3-task-name${isOverdue ? ' d3-task-name--overdue' : ''}">${esc(t.titulo)}</span>
+        ${ctx ? `<span class="d3-task-meta">${esc(ctx)}</span>` : ''}
       </div>
       ${dl ? `<span class="d3-task-date${isOverdue ? ' d3-task-date--overdue' : ''}">${dl}</span>` : ''}
       <button class="d3-play-btn" data-timer-task="${t.id}" title="Iniciar timer"
@@ -4707,6 +4712,18 @@ const DashboardModule = (() => {
     }).join('');
   }
 
+  // Render PLANO de una sección: cada item (tarea-hoja o subtarea) en una fila propia,
+  // ordenado por fecha de fin. Sin cabecera de padre repetida entre secciones — el padre
+  // va como contexto inline en la subtarea. Evita que "semana IV" aparezca en Hoy y Vencidas.
+  function _renderSectionFlat(items, isOverdue, allTasksById) {
+    const _k = t => (t.deadline ? String(t.deadline).split('T')[0]
+                    : (!t.parent_task_id && t.fecha_inicio ? String(t.fecha_inicio).split('T')[0] : '9999-12-31'));
+    return [...items]
+      .sort((a, b) => _k(a).localeCompare(_k(b)) || String(a.titulo || '').localeCompare(String(b.titulo || '')))
+      .map(t => t.parent_task_id ? _subtaskRow(t, isOverdue, allTasksById) : _taskRow(t, isOverdue))
+      .join('');
+  }
+
   function _renderTasks(_apiCount, _todayApi, _overdueApi, allTasks) {
     const el = $('dash2-tasks');
     if (!el) return;
@@ -4762,20 +4779,16 @@ const DashboardModule = (() => {
     const sectionToday    = active.filter(t => { const w = _win(t); return w.start && w.start <= todayStr && (!w.end || w.end >= todayStr) && _isActionable(t); });
     const sectionTomorrow = active.filter(t => { const w = _win(t); return w.start === tomorrowStr && (!w.end || w.end >= todayStr) && _isActionable(t); });
 
-    const todayGroups    = _buildSectionGroups(sectionToday,    allTasksById);
-    const overdueGroups  = _buildSectionGroups(sectionOverdue,  allTasksById);
-    const tomorrowGroups = _buildSectionGroups(sectionTomorrow, allTasksById);
-
     const todayHtml = sectionToday.length === 0
       ? `<div class="d3-empty"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Sin tareas para hoy</div>`
-      : _renderSectionGroups(todayGroups, false);
+      : _renderSectionFlat(sectionToday, false, allTasksById);
 
     const overdueHtml = sectionOverdue.length === 0 ? '' : `
       <div class="d3-section-label d3-section-label--warn">
         <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 100 20A10 10 0 0012 2zm1 14h-2v-2h2v2zm0-4h-2V7h2v5z"/></svg>
         Vencidas · ${sectionOverdue.length}
       </div>
-      ${_renderSectionGroups(overdueGroups, true)}`;
+      ${_renderSectionFlat(sectionOverdue, true, allTasksById)}`;
 
     const tomorrowHtml = sectionTomorrow.length === 0 ? '' : `
       <details class="d3-section-details">
@@ -4784,7 +4797,7 @@ const DashboardModule = (() => {
           Mañana · ${sectionTomorrow.length}
           <svg class="d3-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
         </summary>
-        ${_renderSectionGroups(tomorrowGroups, false)}
+        ${_renderSectionFlat(sectionTomorrow, false, allTasksById)}
       </details>`;
 
     el.innerHTML = header + `
