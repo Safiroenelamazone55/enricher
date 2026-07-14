@@ -12210,14 +12210,19 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
    HEATMAP DE ACTIVIDAD (día de la semana × hora) — al lado de Ingresos
    Intensidad del verde = actividad (tiempo trabajado) en esa hora.
    ══════════════════════════════════════════════════════════════ */
-.d3-hero { align-items: stretch; flex-wrap: wrap; gap: 18px; }
-.d3-revcard { flex: 0 1 400px; max-width: 400px; }
-.d3-refresh-btn { align-self: flex-start; }
+.d3-hero { align-items: stretch; justify-content: flex-start; gap: 16px; flex-wrap: nowrap; }
+.d3-revcard { flex: 0 0 320px; max-width: 320px; }
 .d3-actcard {
-  flex: 1 1 360px; min-width: 300px;
+  flex: 1 1 auto; min-width: 0;
   background: #fff; border: 1px solid var(--border, #EDEBE6);
   border-radius: 16px; padding: 14px 16px 12px;
   box-shadow: 0 1px 2px rgba(16,24,40,.05);
+}
+/* Solo en pantallas realmente angostas se apilan */
+@media (max-width: 940px) {
+  .d3-hero { flex-wrap: wrap; }
+  .d3-revcard { flex-basis: 100%; max-width: none; }
+  .d3-actcard { flex-basis: 100%; }
 }
 .ac-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
 .ac-title { font-size: 13px; font-weight: 600; color: var(--text2, #57534E); }
