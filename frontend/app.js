@@ -15235,7 +15235,11 @@ ${foot}
       <div class="fin-pi-box__hd"><h3>${st ? 'Editar paso' : 'Nuevo paso'}</h3><button class="fin-pi-x" onclick="LeadManagerModule.closeStepDrawer()">✕</button></div>
       <div class="fin-pi-form">
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Día (relativo)</span><input class="form-input" type="number" id="step-dia" min="1" value="${st ? st.dia : nextDia}"></label>
-        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Canal / touch</span><select class="form-input" id="step-canal" onchange="LeadManagerModule.stepCanalChange()">${canalOpts}</select></label>
+        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Canal del paso — define qué verás al hacer la tarea</span>
+          <div class="step-canal-pick">${_CANALES.map(cn => `<button type="button" class="step-canal-b${(st?.canal || 'email') === cn ? ' on' : ''}" data-canal="${cn}" onclick="LeadManagerModule.stepPickCanal('${cn}')" title="${esc(_canalHintPlain(cn))}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${_TOUCH[cn][2]}</svg>${_TOUCH[cn][0]}</button>`).join('')}</div>
+          <input type="hidden" id="step-canal" value="${st?.canal || 'email'}">
+          <span class="seq-drip-hint" id="step-canal-hint">${_canalHint(st?.canal || 'email')}</span>
+        </label>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Hora (opcional)</span><input class="form-input" type="time" id="step-hora" value="${st && st.hora ? esc(st.hora) : ''}"><span class="seq-drip-hint" id="step-hora-hint">${_stepHoraHint(seqId)}</span></label>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Título del paso</span><input class="form-input" id="step-titulo" value="${st ? esc(st.titulo) : ''}" placeholder="Ej. Email 1 — intro"></label>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">¿Para quién? (rama por respuesta)</span><select class="form-input" id="step-cond"><option value=""${!(st && st.cond) ? ' selected' : ''}>Todos</option><option value="replied"${st && st.cond === 'replied' ? ' selected' : ''}>Solo si respondió / aceptó</option><option value="no_reply"${st && st.cond === 'no_reply' ? ' selected' : ''}>Solo si NO respondió</option></select><span class="seq-drip-hint">Ramifica la secuencia: el sistema <b>salta</b> este paso para quien no cumpla la condición. Ej.: nota de conexión = <b>Todos</b>; mensaje de LinkedIn = <b>Solo si aceptó</b>; email de seguimiento = <b>Solo si no respondió</b>.</span></label>
@@ -15341,6 +15345,20 @@ ${foot}
   function stepAddVariant() { _stepSyncDraft(); _stepDraft.variants.push({ nombre: String.fromCharCode(65 + _stepDraft.variants.length), asunto: '', cuerpo: '', targets: [], tplId: '' }); _stepRenderMsg(); }
   function stepDelVariant(i) { _stepSyncDraft(); _stepDraft.variants.splice(i, 1); if (!_stepDraft.variants.length) _stepDraft.variants.push({ nombre: 'A', asunto: '', cuerpo: '', targets: [], tplId: '' }); _stepRenderMsg(); }
   function stepCanalChange() { _stepSyncDraft(); _stepRenderMsg(); }
+  function _canalHintPlain(c) {
+    return c === 'email'    ? 'Verás Para / CC / Asunto y "Abrir Gmail listo".'
+         : c === 'linkedin' ? 'Verás el URL del perfil de LinkedIn (sin datos de correo).'
+         : c === 'whatsapp' ? 'Verás el WhatsApp del prospecto.'
+         : c === 'call'     ? 'Verás el teléfono para llamar.'
+         : 'Tarea manual, sin canal de envío.';
+  }
+  function _canalHint(c) { return `Al hacer la tarea: ${_canalHintPlain(c)}`; }
+  function stepPickCanal(c) {
+    const inp = $('step-canal'); if (inp) inp.value = c;
+    document.querySelectorAll('#lm-step-modal .step-canal-b').forEach(b => b.classList.toggle('on', b.dataset.canal === c));
+    const h = $('step-canal-hint'); if (h) h.innerHTML = _canalHint(c);
+    stepCanalChange();
+  }
   function stepVarUseTpl(i, tplId) {
     if (!tplId || !_stepDraft || !_stepDraft.variants[i]) return;
     const t = _lmTpls.find(x => String(x.id) === String(tplId)); if (!t) return;
@@ -17304,7 +17322,7 @@ ${foot}
     openStepDrawer, closeStepDrawer, saveStep, confirmDeleteStep, seqInsertVar, stepUseTpl, tzSearch, tzPick, tzBlur,
     stepSetMode, stepSetField, stepAddVariant, stepDelVariant, stepFocusTa,
     stepTagInput, stepTagKey, stepTagPick, stepTagAddTyped, stepTagRemove, stepTagBlur,
-    stepCanalChange, stepVarUseTpl, stepVarEdit, stepAutoLink,
+    stepCanalChange, stepPickCanal, stepVarUseTpl, stepVarEdit, stepAutoLink,
     seqDayToggle, seqDaysPreset, stepUseSuggestedHour, seqReportOpen, seqReportGen, cmpReportOpen, cmpReportGen, clientCmpReport, clientSeqReport, seqRedistribute,
     openTemplate, closeTemplate, saveTemplate, deleteTemplate, tplInsertVar, tplSetFilter, tplSetTag, tplSetSeq, tplCanalChange,
     tplTagInput, tplTagKey, tplTagPick, tplTagAddTyped, tplTagRemove, tplTagBlur,
