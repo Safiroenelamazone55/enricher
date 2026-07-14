@@ -209,6 +209,8 @@ function _isAllowedOrigin(origin) {
   return (
     o === 'https://kiwoc.com'        ||
     o.endsWith('.kiwoc.com')         ||
+    o === 'https://novacentrax.com'  ||
+    o.endsWith('.novacentrax.com')   ||
     o.endsWith('.pages.dev')         ||
     o.endsWith('.onrender.com')      ||
     _extraOrigins.includes('*')      ||
@@ -438,7 +440,7 @@ app.get('/api/auth/google/callback', (req, res, next) => {
   // Fast path: code already redeemed and session is live
   if (req.isAuthenticated && req.isAuthenticated()) {
     console.log('[auth] callback hit with live session — skipping OAuth exchange');
-    return res.redirect('https://enricher.kiwoc.com?auth=ok');
+    return res.redirect(FRONTEND_URL + '?auth=ok');
   }
 
   passport.authenticate('google', { session: true }, (err, user) => {
@@ -447,20 +449,20 @@ app.get('/api/auth/google/callback', (req, res, next) => {
       // by an earlier attempt (race condition / double-callback)
       console.warn('[auth] OAuth error:', err.message);
       if (req.isAuthenticated && req.isAuthenticated()) {
-        return res.redirect('https://enricher.kiwoc.com?auth=ok');
+        return res.redirect(FRONTEND_URL + '?auth=ok');
       }
-      return res.redirect('https://enricher.kiwoc.com?error=auth_failed');
+      return res.redirect(FRONTEND_URL + '?error=auth_failed');
     }
 
     if (!user) {
       // done(null, false) — whitelist rejection
-      return res.redirect('https://enricher.kiwoc.com?error=unauthorized');
+      return res.redirect(FRONTEND_URL + '?error=unauthorized');
     }
 
     req.login(user, loginErr => {
       if (loginErr) return next(loginErr);
       console.log(`[auth] login ok — user ${user.email}`);
-      res.redirect('https://enricher.kiwoc.com?auth=ok');
+      res.redirect(FRONTEND_URL + '?auth=ok');
     });
   })(req, res, next);
 });
@@ -910,7 +912,7 @@ async function _sendChatNotifEmail(pool, wid, channel, msgs, senderIds) {
     ? uniqueSenders[0]
     : `${uniqueSenders.slice(0, -1).join(', ')} y ${uniqueSenders.at(-1)}`;
 
-  const appUrl    = process.env.APP_URL || 'https://enricher.kiwoc.com';
+  const appUrl    = process.env.APP_URL || FRONTEND_URL;
   const fromEmail = process.env.SES_FROM_EMAIL;
   const esc       = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
@@ -4586,7 +4588,7 @@ app.post('/api/workspace/invite', requireAuth, async (req, res) => {
       [req.user.id, email.trim().toLowerCase(), token, expires,
        nombre.trim(), (cargo || '').trim(), nivel || 'miembro']
     );
-    const inviteUrl = `https://enricher.kiwoc.com?join=${token}`;
+    const inviteUrl = `${FRONTEND_URL}?join=${token}`;
     res.json({ ok: true, invite_url: inviteUrl, expires_at: expires });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -4689,7 +4691,9 @@ app.get('/api/chat/pinned/:channel', requireAuth, async (req, res) => {
 
 const GCAL_SCOPES   = ['https://www.googleapis.com/auth/calendar.events'];
 const GCAL_CALLBACK = (process.env.API_BASE_URL || 'https://api.kiwoc.com') + '/api/gcal/callback';
-const FRONTEND_URL  = 'https://enricher.kiwoc.com';
+// URL pública del frontend. Se toma de la env FRONTEND_URL; default = kiwoc (sin cambio hasta el
+// cutover a app.novacentrax.com — ahí solo se define la env, no se toca el código).
+const FRONTEND_URL  = (process.env.FRONTEND_URL || 'https://enricher.kiwoc.com').replace(/\/+$/, '');
 
 function _gcalOAuth2() {
   const { google } = require('googleapis');
