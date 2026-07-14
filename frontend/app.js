@@ -13847,6 +13847,11 @@ ${foot}
         ${ccMail ? `<span class="cp-taskbar__mt cp-taskbar__mt--cc" title="El cliente pidió ir en copia"><span class="cp-taskbar__subj-l">CC</span><span class="cp-taskbar__mt-v">${esc(ccMail)}</span>${_copyBtn(ccMail, 'CC copiado')}</span>` : ''}
         ${fromMail ? `<span class="cp-taskbar__mt cp-taskbar__mt--from" title="Envía desde este buzón del cliente"><span class="cp-taskbar__subj-l">De</span><span class="cp-taskbar__mt-v">${esc(fromMail)}</span>${_copyBtn(fromMail, 'Buzón copiado')}</span>` : ''}
       </div>` : ''}
+      ${st.canal === 'linkedin' ? `<div class="cp-taskbar__mailto">
+        ${c.linkedin
+          ? `<span class="cp-taskbar__mt"><span class="cp-taskbar__subj-l">LinkedIn</span><a class="cp-taskbar__mt-v cp-taskbar__mt-v--li" href="${esc(c.linkedin)}" target="_blank" rel="noopener" title="Abrir el perfil de LinkedIn del prospecto">${esc(c.linkedin)}</a>${_copyBtn(c.linkedin, 'URL de LinkedIn copiado')}</span>`
+          : `<span class="cp-taskbar__mt cp-taskbar__mt--nolink" title="Este contacto no tiene URL de LinkedIn en su ficha"><span class="cp-taskbar__subj-l">LinkedIn</span><span class="cp-taskbar__mt-v" style="color:#B45309">Sin URL en la ficha del contacto</span></span>`}
+      </div>` : ''}
       ${st.canal === 'email' && subject ? `<div class="cp-taskbar__subj"><span class="cp-taskbar__subj-l">Asunto</span><span class="cp-taskbar__subj-v">${esc(subject)}</span>${/^re\s*:/i.test(subject) ? `<span class="lm-vb" style="background:#FEF3C7;color:#B45309" title="Follow-up: usa Re: del primer email para simular el hilo">Re:</span>` : ''}<button class="seqdo-copy seqdo-copy--xs" onclick="LeadManagerModule.seqDoCopySubject()">${NI('copy')}</button></div>` : ''}
       ${hasMsg
         ? `<div class="cp-taskbar__tpl"><div class="seqdo-tpl-hd"><span>Mensaje${vtag}</span><span style="display:flex;gap:6px"><button class="seqdo-copy seqdo-copy--xs" onclick="LeadManagerModule.openAiDrafts(${cid},${seqId})">${NI('sparkles')} IA</button><button class="seqdo-copy seqdo-copy--xs" onclick="LeadManagerModule.seqDoCopy()">${NI('copy')} Copiar</button></span></div><div class="seqdo-tpl seqdo-tpl--slim">${disp}</div></div>`

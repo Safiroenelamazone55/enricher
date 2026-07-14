@@ -11679,6 +11679,9 @@ a.cp-strip__i:hover svg { color: var(--brand, #00804C); }
 .cp-taskbar__mt--cc { border-color: #C7D2F0; background: #F4F7FD; }
 .cp-taskbar__mt--cc .cp-taskbar__subj-l { color: #1E3A8A; }
 .cp-taskbar__mt--from { border-style: dashed; }
+.cp-taskbar__mt-v--li { color: #0A66C2; text-decoration: none; }
+.cp-taskbar__mt-v--li:hover { text-decoration: underline; }
+.cp-taskbar__mt--nolink { border-style: dashed; border-color: #E7C79A; background: #FFFDF7; }
 .cp-taskbar__subj { display: flex; align-items: center; gap: 8px; padding: 5px 10px; background: #fff; border: 1px solid var(--border, #E4E7DD); border-radius: 8px; margin-top: 7px; }
 .cp-taskbar__subj-l { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; color: #6B7280; flex-shrink: 0; }
 .cp-taskbar__subj-v { font-size: 12.5px; font-weight: 600; color: #0B1E3A; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
