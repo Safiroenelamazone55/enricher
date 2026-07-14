@@ -274,7 +274,11 @@ async function initAuth() {
 
       authBar.innerHTML = `
         <img src="${data.avatar || `https://api.dicebear.com/9.x/lorelei/svg?seed=${encodeURIComponent(data.name || data.email || 'user')}`}" alt="" class="rail-user__av" title="${esc(data.name || data.email)}${data.isOwner ? ' · Configuración' : ''}" ${data.isOwner ? 'style="cursor:pointer" onclick="WorkspaceModule.openNameModal()"' : ''}/>
-        <a href="${API}/auth/logout" class="rail-user__out" id="btnLogout" title="Salir" aria-label="Salir" onclick="event.stopPropagation()">
+        <div class="ws-user__meta">
+          <div class="ws-user__name">${esc(data.name || 'Usuario')}</div>
+          <div class="ws-user__mail">${esc(data.email || '')}</div>
+        </div>
+        <a href="${API}/auth/logout" class="rail-user__out" id="btnLogout" title="Cerrar sesión" aria-label="Cerrar sesión" onclick="event.stopPropagation()">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
         </a>`;
 
@@ -467,7 +471,6 @@ function _setNavCollapsed(on) {
 }
 function toggleNavPanel() { _setNavCollapsed(!_navCollapsed()); }
 function selectModule(mod) {
-  if (_activeModule === mod && !_navCollapsed()) { _setNavCollapsed(true); return; }
   if (_navCollapsed()) _setNavCollapsed(false);
   _setActiveModule(mod);
   let target = null;
@@ -475,6 +478,40 @@ function selectModule(mod) {
   const group = document.getElementById('snav-body-' + mod);
   if (!target || !group?.querySelector(`.snav-item[data-tab="${target}"]`)) target = group?.querySelector('.snav-item')?.dataset.tab;
   if (target && typeof window._novaSwitchTab === 'function') window._novaSwitchTab(target);
+}
+
+// ── Menú de workspace (cambiar de módulo) ──────────────────
+let _wsMenuOpen = false;
+function toggleWorkspaceMenu(btn) {
+  const menu = document.getElementById('ws-menu');
+  if (!menu) return;
+  if (_wsMenuOpen) { closeWorkspaceMenu(); return; }
+  // Reubica avatar/logout (authBar) dentro del menú la 1ª vez que se abre
+  const ab = document.getElementById('authBar');
+  const slot = document.getElementById('ws-user-slot');
+  if (ab && slot && ab.parentElement !== slot) slot.appendChild(ab);
+  // Marca el módulo activo dentro del menú
+  menu.querySelectorAll('.ws-mod').forEach(b => b.classList.toggle('active', b.dataset.module === _activeModule));
+  // Posiciona bajo el botón, sin salirse de la pantalla
+  const r = btn.getBoundingClientRect();
+  menu.classList.remove('hidden');
+  const mw = menu.offsetWidth || 248;
+  let left = r.left;
+  if (left + mw > window.innerWidth - 8) left = window.innerWidth - mw - 8;
+  menu.style.top = (r.bottom + 6) + 'px';
+  menu.style.left = Math.max(8, left) + 'px';
+  _wsMenuOpen = true;
+  setTimeout(() => document.addEventListener('mousedown', _wsMenuOutside), 0);
+}
+function _wsMenuOutside(e) {
+  const menu = document.getElementById('ws-menu');
+  if (menu && !menu.contains(e.target) && !e.target.closest('.snav-ws')) closeWorkspaceMenu();
+}
+function closeWorkspaceMenu() {
+  const menu = document.getElementById('ws-menu');
+  if (menu) menu.classList.add('hidden');
+  _wsMenuOpen = false;
+  document.removeEventListener('mousedown', _wsMenuOutside);
 }
 
 // Simple top toast
@@ -12278,7 +12315,7 @@ const LeadManagerModule = (() => {
     const pane = $('pane-lead-manager'); if (!pane) return;
     pane.innerHTML = `<div class="lm2">
       <aside class="lm2-nav">
-        <div class="snav-panel__hd"><span class="snav-panel__title">Lead Manager</span><button class="sidebar__toggle" title="Ocultar panel" onclick="toggleNavPanel()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button></div>
+        <div class="snav-panel__hd"><button class="snav-ws" title="Cambiar módulo" aria-label="Cambiar módulo" onclick="toggleWorkspaceMenu(this)"><span class="snav-ws__ico"><svg width="19" height="19" viewBox="0 0 100 100" fill="none"><path d="M50 3 L63 38 L97 50 L63 62 L50 97 L37 62 L3 50 L37 38 Z" fill="currentColor"/></svg></span><span class="snav-panel__title">Lead Manager</span><svg class="snav-ws__chev" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button></div>
         <nav class="lm2-nav__list" id="lm2-nav-list">${_navHtml()}</nav>
       </aside>
       <main class="lm2-main"><div class="lm2-body" id="lm2-body"></div></main>

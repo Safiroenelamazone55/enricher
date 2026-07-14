@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260713d"/>
+  <link rel="stylesheet" href="style.css?v=20260713h"/>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -223,13 +223,12 @@
   <!-- ── SECONDARY PANEL: subsecciones del módulo activo ── -->
   <aside class="sidebar" id="sidebar">
 
-    <!-- Panel header: nombre del módulo + colapsar -->
+    <!-- Panel header: botón de workspace (cambiar módulo) -->
     <div class="snav-panel__hd">
-      <span class="snav-panel__title" id="snav-panel-title">Management</span>
-      <button class="sidebar__toggle" id="sidebarToggle" title="Ocultar panel" onclick="toggleNavPanel()">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="15 18 9 12 15 6"/>
-        </svg>
+      <button class="snav-ws" id="ws-switch" title="Cambiar módulo" aria-label="Cambiar módulo" onclick="toggleWorkspaceMenu(this)">
+        <span class="snav-ws__ico"><svg width="19" height="19" viewBox="0 0 100 100" fill="none"><path d="M50 3 L63 38 L97 50 L63 62 L50 97 L37 62 L3 50 L37 38 Z" fill="currentColor"/></svg></span>
+        <span class="snav-panel__title" id="snav-panel-title">Management</span>
+        <svg class="snav-ws__chev" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
     </div>
 
@@ -1593,6 +1592,30 @@
   </aside>
 
 </div><!-- /app-layout -->
+
+  <!-- ── MENÚ DE WORKSPACE: cambiar módulo + configuración + usuario ── -->
+  <div id="ws-menu" class="ws-menu hidden" role="menu" aria-label="Cambiar de módulo">
+    <div class="ws-menu__lbl">Módulos</div>
+    <button class="snav-mod ws-mod" data-module="management" onclick="selectModule('management');closeWorkspaceMenu()" role="menuitem">
+      <span class="ws-mod__ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg></span>
+      <span class="ws-mod__lbl">Management</span><span class="ws-mod__chk"></span>
+    </button>
+    <button class="snav-mod ws-mod" data-module="enricher" onclick="selectModule('enricher');closeWorkspaceMenu()" role="menuitem">
+      <span class="ws-mod__ico"><span class="snav-mod__badge">E</span></span>
+      <span class="ws-mod__lbl">Enricher</span><span class="ws-mod__chk"></span>
+    </button>
+    <button class="snav-mod ws-mod" data-module="leadmanagement" onclick="selectModule('leadmanagement');closeWorkspaceMenu()" role="menuitem">
+      <span class="ws-mod__ico"><span class="snav-mod__badge snav-mod__badge--lead">L</span></span>
+      <span class="ws-mod__lbl">Lead Management</span><span class="ws-mod__chk"></span>
+    </button>
+    <div class="ws-menu__sep"></div>
+    <button class="ws-menu__row" onclick="WorkspaceModule.openNameModal();closeWorkspaceMenu()" role="menuitem">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      <span>Configuración</span>
+    </button>
+    <div id="ws-user-slot" class="ws-menu__user"></div>
+  </div>
+
 </div><!-- /appShell -->
 
 <!-- ── CLIENTS DRAWER ─────────────────────────────────── -->
@@ -2443,11 +2466,11 @@
 <!-- Restaura el panel colapsado antes de app.js (evita flash) -->
 <script>
 (function() {
-  try { if (localStorage.getItem('sb-collapsed') === '1') { var a = document.getElementById('appShell'); if (a) a.classList.add('nav-collapsed'); } } catch (_) {}
+  try { localStorage.removeItem('sb-collapsed'); } catch (_) {}
 })();
 </script>
 
-<script src="app.js?v=20260713g"></script>
+<script src="app.js?v=20260713h"></script>
 <div id="task-quick-edit" style="display:none;position:fixed;z-index:9999"></div>
 </body>
 </html>

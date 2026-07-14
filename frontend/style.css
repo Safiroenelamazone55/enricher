@@ -12048,3 +12048,87 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
 
 /* Popover flotante del calendario (reusa .tqp-cal) */
 .range-pick-pop { box-shadow: 0 8px 28px rgba(11,30,58,.16); border-radius: 12px; }
+
+/* ══════════════════════════════════════════════════════════════
+   BARRA ÚNICA + WORKSPACE SWITCHER
+   Se retira el rail de 3 módulos; el cambio de módulo vive en un
+   menú (popover) que abre el botón de workspace de la cabecera.
+   ══════════════════════════════════════════════════════════════ */
+.snav-rail { display: none !important; }
+/* La barra queda pegada a la izquierda; sin estados de colapso */
+#appShell.nav-collapsed #sidebar,
+#appShell.nav-collapsed .lm2-nav { display: flex; }
+#appShell.lm-active #sidebar { display: none; }
+
+/* Botón de workspace (cabecera): ícono + título del módulo + chevron */
+.snav-ws {
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  border: none; background: transparent; cursor: pointer;
+  padding: 6px 8px; border-radius: 10px; font-family: inherit;
+  text-align: left; transition: background .13s;
+}
+.snav-ws:hover { background: var(--bg2, #F3EFE9); }
+.snav-ws__ico {
+  width: 30px; height: 30px; border-radius: 8px; flex-shrink: 0;
+  display: grid; place-items: center;
+  background: var(--brand-ll, #E6F3EC); color: var(--brand, #00804C);
+}
+.snav-ws .snav-panel__title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.snav-ws__chev { color: var(--muted, #A8A29E); flex-shrink: 0; transition: transform .13s; }
+.snav-panel__hd { padding-left: 10px !important; padding-right: 10px !important; }
+
+/* Popover del menú de workspace */
+.ws-menu {
+  position: fixed; z-index: 320; width: 250px;
+  background: #fff; border: 1px solid var(--border, #EDEBE6);
+  border-radius: 14px; padding: 7px;
+  box-shadow: 0 14px 38px rgba(16,24,40,.16), 0 3px 10px rgba(16,24,40,.08);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  animation: wsMenuIn .13s ease;
+}
+.ws-menu.hidden { display: none; }
+@keyframes wsMenuIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: none; } }
+.ws-menu__lbl { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #B0A89C; padding: 6px 9px 4px; }
+
+/* Ítems de módulo dentro del menú (reset del .snav-mod del rail) */
+.ws-mod {
+  position: static; width: 100%; height: auto;
+  display: flex; align-items: center; gap: 10px;
+  border: none; background: transparent; cursor: pointer;
+  padding: 8px 9px; border-radius: 10px; font-family: inherit;
+  text-align: left; transition: background .12s;
+}
+.ws-mod::before { display: none !important; content: none !important; }
+.ws-mod:hover { background: var(--bg, #F7F5F1); }
+.ws-mod.active { background: var(--brand-ll, #E6F3EC); }
+.ws-mod__ico { width: 28px; height: 28px; flex-shrink: 0; display: grid; place-items: center; color: var(--text2, #57534E); }
+.ws-mod.active .ws-mod__ico { color: var(--brand-d, #006B3F); }
+.ws-mod .snav-mod__badge { width: 28px; height: 28px; box-shadow: none !important; font-size: 13px; }
+.ws-mod__lbl { flex: 1; font-size: 13.5px; font-weight: 550; color: var(--text, #1c1a17); white-space: nowrap; }
+.ws-mod.active .ws-mod__lbl { font-weight: 700; color: var(--brand-d, #006B3F); }
+.ws-mod__chk { width: 16px; height: 16px; flex-shrink: 0; position: relative; }
+.ws-mod.active .ws-mod__chk::after {
+  content: ''; position: absolute; right: 3px; top: 50%; margin-top: -6px;
+  width: 5px; height: 9px; border: solid var(--brand, #00804C);
+  border-width: 0 2px 2px 0; transform: rotate(45deg);
+}
+
+.ws-menu__sep { height: 1px; background: var(--border, #EDEBE6); margin: 6px 4px; }
+.ws-menu__row {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  border: none; background: transparent; cursor: pointer;
+  padding: 8px 9px; border-radius: 10px; font-family: inherit;
+  font-size: 13px; font-weight: 550; color: var(--text2, #57534E);
+  text-align: left; transition: background .12s;
+}
+.ws-menu__row:hover { background: var(--bg, #F7F5F1); color: var(--text, #1c1a17); }
+.ws-menu__row svg { color: var(--muted, #A8A29E); flex-shrink: 0; }
+
+/* Usuario (avatar + nombre/email + salir) reubicado desde el rail */
+.ws-menu__user { display: flex; align-items: center; gap: 9px; padding: 8px 8px 5px; }
+.ws-menu__user .rail-user__av { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 1.5px solid var(--border, #EDEBE6); flex-shrink: 0; }
+.ws-user__meta { flex: 1; min-width: 0; }
+.ws-user__name { font-size: 13px; font-weight: 650; color: var(--text, #1c1a17); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ws-user__mail { font-size: 11px; color: var(--muted, #A8A29E); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ws-menu__user .rail-user__out { flex-shrink: 0; color: var(--muted, #A8A29E); width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; transition: background .12s, color .12s; }
+.ws-menu__user .rail-user__out:hover { background: var(--bg2, #F3EFE9); color: var(--err, #DC2626); }
