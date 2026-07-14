@@ -4367,7 +4367,7 @@ const DashboardModule = (() => {
   function _setHrsCtx(ctx) { _hrsCtx = ctx; _hrsPaused = false; _renderHours(); }
 
   async function _renderHours() {
-    const el = $('dash2-hours');
+    const el = $('dash2-act-timer');
     if (!el) return;
     let entries = [], daily = [];
     try {
@@ -4441,29 +4441,6 @@ const DashboardModule = (() => {
       <div class="d3-hrs-metric"><div class="d3-hrs-metric__v">${streak}</div><div class="d3-hrs-metric__l">Días seguidos</div></div>
     </div>`;
 
-    // Heatmap por DÍA: cada cuadro = un día (últimos 35), coloreado por horas trabajadas ese día.
-    const HRS_DAYS = 35;
-    const _MESH = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
-    const dayMap = {};
-    for (const d of (daily || [])) dayMap[d.day] = +d.duration_s || 0;
-    const todayKey = new Date().toISOString().split('T')[0];
-    const cells = Array.from({ length: HRS_DAYS }, (_, i) => {
-      const d   = new Date(Date.now() - (HRS_DAYS - 1 - i) * 86400000);
-      const key = d.toISOString().split('T')[0];
-      const sec = dayMap[key] || 0;
-      const h   = sec / 3600;
-      let lvl = 0;
-      if (h > 0)    lvl = 1;
-      if (h >= 2)   lvl = 2;
-      if (h >= 4)   lvl = 3;
-      if (h >= 6.5) lvl = 4;
-      const isToday = key === todayKey;
-      const label = `${d.getUTCDate()} ${_MESH[d.getUTCMonth()]}: ${sec ? _fmtHrs(sec) : 'sin registro'}`;
-      return `<span class="d3-hrs-cell d3-hrs-cell--l${lvl}${isToday ? ' d3-hrs-cell--now' : ''}" title="${label}"></span>`;
-    }).join('');
-
-    const clock = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/></svg>';
-
     // Bloque de contexto activo (tarea en curso): de _hrsCtx (sesión) o del entry corriendo (tras recargar)
     let ctxBlock = '';
     if (running || paused) {
@@ -4500,19 +4477,13 @@ const DashboardModule = (() => {
     }
 
     el.innerHTML = `
-      <div class="d3-card-header"><span class="d3-card-ico">${clock}</span><span class="d3-card-title">Horas de trabajo</span>${running ? '<span class="d3-hrs-live">● en curso</span>' : (paused ? '<span class="d3-hrs-live d3-hrs-live--paused">⏸ en pausa</span>' : '')}</div>
       ${ctxBlock}
-      <div class="d3-hrs-body">
-        <div class="d3-hrs-gridwrap">
-          <div class="d3-hrs-grid">${cells}</div>
-          <div class="d3-hrs-cap">Últimos 35 días · cada cuadro = 1 día</div>
-        </div>
-        <div class="d3-hrs-stats">
-          <div class="d3-hrs-total" id="dash2-hrs-total">${_fmtHrs(totalSec)}</div>
-          <div class="d3-hrs-sub">Tiempo trabajado hoy</div>
-          <div class="d3-hrs-pct" id="dash2-hrs-pct">${Math.round(totalSec / HRS_WORKDAY * 100)}%<span> de 8 h</span></div>
-          <div class="d3-hrs-sub">Horario: 8 AM – 5 PM</div>
-        </div>
+      <div class="d3-act-today">
+        <span class="d3-hrs-total" id="dash2-hrs-total">${_fmtHrs(totalSec)}</span>
+        <span class="d3-act-today__meta">
+          <span class="d3-act-today__lbl">Tiempo trabajado hoy</span>
+          <span class="d3-hrs-pct" id="dash2-hrs-pct">${Math.round(totalSec / HRS_WORKDAY * 100)}%<span> de 8 h</span></span>
+        </span>
       </div>
       ${metricsStrip}
       ${actions}`;
@@ -5791,7 +5762,7 @@ const AnalyticsModule = (() => {
     return `<div class="ac-head"><span class="ac-title">Tu ritmo de trabajo</span>${extra || ''}</div>`;
   }
   async function mountActivityCard() {
-    const el = $('dash2-actcard');
+    const el = $('dash2-act-heatmap');
     if (!el) return;
     el.innerHTML = _acHead() + '<div class="ac-skel"></div>';
     try {
@@ -5803,12 +5774,12 @@ const AnalyticsModule = (() => {
       _renderActivity(Array.isArray(entries) ? entries : []);
     } catch (e) {
       console.error('[actcard] load error:', e);
-      const el2 = $('dash2-actcard');
+      const el2 = $('dash2-act-heatmap');
       if (el2) el2.innerHTML = _acHead() + '<div class="ac-empty">No se pudo cargar la actividad.</div>';
     }
   }
   function _renderActivity(entries) {
-    const el = $('dash2-actcard'); if (!el) return;
+    const el = $('dash2-act-heatmap'); if (!el) return;
     // Solo trabajo real (mismas exclusiones que "Horas de trabajo"): sin website_usage,
     // sin extensión ni agente (son evidencia, no suman) — evita el doble conteo.
     const cells = Array.from({ length: 7 }, () => new Array(24).fill(0));
