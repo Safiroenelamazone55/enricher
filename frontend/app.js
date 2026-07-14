@@ -4311,6 +4311,7 @@ const DashboardModule = (() => {
       loadEl.classList.add('hidden');
       bodyEl.classList.remove('hidden');
       try { if (typeof AnalyticsModule !== 'undefined' && AnalyticsModule.mountRevCard) AnalyticsModule.mountRevCard(); } catch (_) {}
+      try { if (typeof AnalyticsModule !== 'undefined' && AnalyticsModule.mountActivityCard) AnalyticsModule.mountActivityCard(); } catch (_) {}
     } catch (e) {
       console.error('[dashboard] load error:', e);
       if (loadEl) loadEl.innerHTML = '<span style="color:var(--err)">Error al cargar el dashboard.</span>';
@@ -5783,6 +5784,69 @@ const AnalyticsModule = (() => {
     el.innerHTML = _revShell(body);
   }
 
+  // ── Heatmap de ACTIVIDAD (día de la semana × hora del día) ──────
+  const _AC_WD = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+  const _AC_HLBL = { 0:'0', 4:'4', 8:'8', 12:'12', 16:'16', 20:'20' };
+  function _acHead(extra) {
+    return `<div class="ac-head"><span class="ac-title">Tu ritmo de trabajo</span>${extra || ''}</div>`;
+  }
+  async function mountActivityCard() {
+    const el = $('dash2-actcard');
+    if (!el) return;
+    el.innerHTML = _acHead() + '<div class="ac-skel"></div>';
+    try {
+      const end = new Date();
+      const start = new Date(Date.now() - 42 * 86400000);   // últimas 6 semanas
+      const res = await apiFetch(`${API}/timer/entries?start=${start.toISOString()}&end=${end.toISOString()}`);
+      if (!res.ok) throw new Error(await res.text());
+      const entries = await res.json();
+      _renderActivity(Array.isArray(entries) ? entries : []);
+    } catch (e) {
+      console.error('[actcard] load error:', e);
+      const el2 = $('dash2-actcard');
+      if (el2) el2.innerHTML = _acHead() + '<div class="ac-empty">No se pudo cargar la actividad.</div>';
+    }
+  }
+  function _renderActivity(entries) {
+    const el = $('dash2-actcard'); if (!el) return;
+    // Solo trabajo real (mismas exclusiones que "Horas de trabajo"): sin website_usage,
+    // sin extensión ni agente (son evidencia, no suman) — evita el doble conteo.
+    const cells = Array.from({ length: 7 }, () => new Array(24).fill(0));
+    let any = false;
+    for (const e of entries) {
+      if ((e.activity_type || 'active_work') === 'website_usage') continue;
+      const src = e.source || 'manual_timer';
+      if (src === 'browser_extension' || src === 'desktop_agent') continue;
+      const dur = e.ended_at ? (+e.duration_s || 0) : 0;
+      if (dur <= 0 || !e.started_at) continue;
+      const s = new Date(e.started_at);
+      const wd = (s.getDay() + 6) % 7;   // 0=Lun … 6=Dom
+      cells[wd][s.getHours()] += dur;
+      any = true;
+    }
+    if (!any) {
+      el.innerHTML = _acHead() + '<div class="ac-empty">Aún no hay actividad registrada.<br>Usa el cronómetro y aquí verás tus mejores horas.</div>';
+      return;
+    }
+    let max = 0, peak = { wd: 0, hr: 0, v: 0 };
+    for (let d = 0; d < 7; d++) for (let h = 0; h < 24; h++) {
+      const v = cells[d][h]; if (v > max) max = v; if (v > peak.v) peak = { wd: d, hr: h, v };
+    }
+    const lvl = v => { if (v <= 0) return 0; const r = v / max; return r <= 0.25 ? 1 : r <= 0.5 ? 2 : r <= 0.75 ? 3 : 4; };
+    let grid = '<div class="ac-corner"></div>';
+    for (let h = 0; h < 24; h++) grid += `<div class="ac-hlbl">${_AC_HLBL[h] || ''}</div>`;
+    for (let d = 0; d < 7; d++) {
+      grid += `<div class="ac-rowlbl">${_AC_WD[d]}</div>`;
+      for (let h = 0; h < 24; h++) {
+        const v = cells[d][h], mins = Math.round(v / 60);
+        grid += `<div class="ac-cell ac-cell--l${lvl(v)}"${mins > 0 ? ` title="${_AC_WD[d]} ${String(h).padStart(2, '0')}:00 · ${mins} min"` : ''}></div>`;
+      }
+    }
+    const legend = '<span class="ac-legend"><span>menos</span><i class="ac-cell ac-cell--l0"></i><i class="ac-cell ac-cell--l1"></i><i class="ac-cell ac-cell--l2"></i><i class="ac-cell ac-cell--l3"></i><i class="ac-cell ac-cell--l4"></i><span>más</span></span>';
+    const peakTxt = peak.v > 0 ? `Tu franja más activa: <b>${_AC_WD[peak.wd]} ${String(peak.hr).padStart(2, '0')}:00</b>` : '';
+    el.innerHTML = _acHead(legend) + `<div class="ac-grid">${grid}</div>` + (peakTxt ? `<div class="ac-peak">${peakTxt}</div>` : '');
+  }
+
   function switchMember(m) {
     _state.member = m;
     _drawCharts();
@@ -6114,7 +6178,7 @@ const AnalyticsModule = (() => {
     });
   }
 
-  return { load, open, close, switchTab, switchPeriod, switchMember, mountRevCard, setRevPeriod };
+  return { load, open, close, switchTab, switchPeriod, switchMember, mountRevCard, setRevPeriod, mountActivityCard };
 })();
 
 // =================================================================

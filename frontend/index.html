@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260713j"/>
+  <link rel="stylesheet" href="style.css?v=20260713l"/>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -454,6 +454,10 @@
             <button class="rc-tab" data-rev="month" onclick="AnalyticsModule.setRevPeriod('month')">Mes</button>
           </div>
           <div class="rc-chart rc-chart--skel"></div>
+        </div>
+        <div class="d3-actcard" id="dash2-actcard">
+          <div class="ac-head"><span class="ac-title">Tu ritmo de trabajo</span></div>
+          <div class="ac-skel"></div>
         </div>
         <button class="d3-refresh-btn" onclick="DashboardModule.load()">
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
@@ -2471,7 +2475,7 @@
 })();
 </script>
 
-<script src="app.js?v=20260713k"></script>
+<script src="app.js?v=20260713l"></script>
 <div id="task-quick-edit" style="display:none;position:fixed;z-index:9999"></div>
 </body>
 </html>
