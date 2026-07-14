@@ -4310,6 +4310,7 @@ const DashboardModule = (() => {
 
       loadEl.classList.add('hidden');
       bodyEl.classList.remove('hidden');
+      if (window.AnalyticsModule && typeof AnalyticsModule.mountRevCard === 'function') AnalyticsModule.mountRevCard();
     } catch (e) {
       console.error('[dashboard] load error:', e);
       if (loadEl) loadEl.innerHTML = '<span style="color:var(--err)">Error al cargar el dashboard.</span>';
@@ -5722,6 +5723,66 @@ const AnalyticsModule = (() => {
       .catch(() => {});
   }
 
+  // ── Tarjeta de INGRESOS del Dashboard (reemplaza el saludo + avatar) ──
+  let _revPeriod = 'week';
+  function _revTabs() {
+    return `<div class="rc-tabs">
+      <button class="rc-tab${_revPeriod==='week'?' rc-tab--on':''}" data-rev="week" onclick="AnalyticsModule.setRevPeriod('week')">Semana</button>
+      <button class="rc-tab${_revPeriod==='month'?' rc-tab--on':''}" data-rev="month" onclick="AnalyticsModule.setRevPeriod('month')">Mes</button>
+    </div>`;
+  }
+  function _revShell(body) {
+    return `<div class="rc-head"><span class="rc-label">Ingresos</span></div>${body}`;
+  }
+  async function mountRevCard(showSkel) {
+    const el = $('dash2-revcard');
+    if (!el) return;
+    if (showSkel !== false) {
+      el.innerHTML = _revShell(`<div class="rc-val rc-val--skel">—</div>${_revTabs()}<div class="rc-chart rc-chart--skel"></div>`);
+    }
+    try {
+      const cur  = _revPeriod === 'week' ? _weekRange(0)  : _monthRange(0);
+      const prev = _revPeriod === 'week' ? _weekRange(-1) : _monthRange(-1);
+      const url = `${API}/analytics/summary`
+        + `?start=${encodeURIComponent(cur.start)}&end=${encodeURIComponent(cur.end)}`
+        + `&prev_start=${encodeURIComponent(prev.start)}&prev_end=${encodeURIComponent(prev.end)}`;
+      const res = await apiFetch(url);
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      _renderRevCard(data.revenue || {});
+    } catch (e) {
+      console.error('[revcard] load error:', e);
+      const el2 = $('dash2-revcard');
+      if (el2) el2.innerHTML = _revShell(`<div class="rc-val rc-val--skel">—</div>${_revTabs()}<div class="rc-empty">No se pudieron cargar los ingresos.</div>`);
+    }
+  }
+  function setRevPeriod(p) {
+    _revPeriod = (p === 'month') ? 'month' : 'week';
+    document.querySelectorAll('#dash2-revcard .rc-tab').forEach(b =>
+      b.classList.toggle('rc-tab--on', b.dataset.rev === _revPeriod));
+    mountRevCard(false);
+  }
+  function _renderRevCard(revenue) {
+    const el = $('dash2-revcard'); if (!el) return;
+    const total   = +(revenue.total || 0);
+    const pct     = _pct(total, revenue.prev_total || 0);
+    const totalStr = _fmtByCur(revenue.by_currency) || _fmtMoney(total, 'USD');
+    const vals    = (revenue.series || []).map(s => +(s.total || s.value || 0));
+    const hasChart = vals.filter(v => v > 0).length >= 2;
+    const cob     = +(revenue.cobrado_count || 0);
+    const periodTxt = _revPeriod === 'week' ? 'esta semana' : 'este mes';
+    const pctBadge = (pct == null) ? '' :
+      `<span class="rc-pct rc-pct--${pct >= 0 ? 'up' : 'down'}">${pct >= 0 ? '+' : ''}${pct}%</span>`;
+    const body = `
+      <div class="rc-val">${totalStr}${pctBadge}</div>
+      ${_revTabs()}
+      ${hasChart
+        ? `<div class="rc-chart"><svg class="rc-svg" viewBox="0 0 100 34" preserveAspectRatio="none">${_svgLine(vals, '#00804C')}</svg></div>`
+        : `<div class="rc-empty">${total > 0 ? 'Ingresos de ' + periodTxt + '.' : 'Sin ingresos registrados en ' + periodTxt + '.'}</div>`}
+      <div class="rc-foot">${cob > 0 ? cob + ' cobro' + (cob !== 1 ? 's' : '') + ' · ' + periodTxt : 'Cobrado · ' + periodTxt}</div>`;
+    el.innerHTML = _revShell(body);
+  }
+
   function switchMember(m) {
     _state.member = m;
     _drawCharts();
@@ -6053,7 +6114,7 @@ const AnalyticsModule = (() => {
     });
   }
 
-  return { load, open, close, switchTab, switchPeriod, switchMember };
+  return { load, open, close, switchTab, switchPeriod, switchMember, mountRevCard, setRevPeriod };
 })();
 
 // =================================================================
