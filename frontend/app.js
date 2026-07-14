@@ -13166,7 +13166,7 @@ ${foot}
         : `<div class="seq-tasks-hd seq-tasks-hd--none">Sin tareas para hoy</div>`;
       const grp = (over.length ? `<div class="lm-tsec-h lm-tsec-h--over"><span class="lm-tsec-h__dot"></span>Vencidas<span class="lm-tsec-h__n">${over.length}</span></div><div class="seq-tasks">${over.map(t => _seqTaskRow(t, id, today)).join('')}</div>` : '')
                 + (hoy.length ? `<div class="lm-tsec-h lm-tsec-h--today"><span class="lm-tsec-h__dot"></span>Hoy<span class="lm-tsec-h__n">${hoy.length}</span></div><div class="seq-tasks">${hoy.map(t => _seqTaskRow(t, id, today)).join('')}</div>` : '');
-      return `${_acceptCtaHtml()}${head}${grp}${nextLine}`;
+      return `${_acceptCtaHtml(id)}${head}${grp}${nextLine}`;
     }
     if (_seqTab === 'envios') {
       if (_seqMsgs === null) return `<div class="cp-empty2" style="padding:22px">Cargando envíos…</div>`;
@@ -13334,14 +13334,18 @@ ${foot}
     const d = Math.floor(h / 24); return d === 1 ? 'hace 1 día' : `hace ${d} días`;
   }
   // Tarjeta "Revisar aceptaciones de LinkedIn" (con sello de última revisión). Se reutiliza en Tareas comerciales y en la pestaña Tareas de la secuencia.
-  function _acceptCtaHtml() {
-    const n = _pendingAccept().length;
+  function _acceptCtaHtml(seqId) {
+    // seqId opcional: dentro de la pestaña Tareas de UNA secuencia solo cuenta las
+    // aceptaciones pendientes DE ESA secuencia (no las de otras). Sin arg = global.
+    let list = _pendingAccept();
+    if (seqId != null) list = list.filter(p => (p.seqs || []).some(s => s.id === seqId));
+    const n = list.length;
     if (!n) return '';
     const last = _lastAcceptReview();
     const t = last ? new Date(last).getTime() : 0;
     const stale = !t || (Date.now() - t) / 3600000 > 20; // pasó ~1 día → conviene revisar
     const revTxt = last ? `Última revisión: ${_relAgo(last)}` : 'Aún no la revisas';
-    return `<div onclick="LeadManagerModule.pendingAcceptOpen()" title="Marca quién aceptó tu conexión de LinkedIn → saltan a la Ruta A (mensaje). Recomendado cada 1–2 días." class="lm-accept-cta${stale ? ' lm-accept-cta--stale' : ''}">
+    return `<div onclick="LeadManagerModule.pendingAcceptOpen(${seqId != null ? seqId : ''})" title="Marca quién aceptó tu conexión de LinkedIn → saltan a la Ruta A (mensaje). Recomendado cada 1–2 días." class="lm-accept-cta${stale ? ' lm-accept-cta--stale' : ''}">
       <div class="lm-accept-cta__row"><span class="lm-accept-cta__ico">${NI('linkedin', 13)}</span><span class="lm-accept-cta__tx"><b>Revisar aceptaciones de LinkedIn</b> — <b style="color:#006B3F">${n}</b> por marcar</span><span class="lm-accept-cta__meta2">${revTxt}</span><span class="lm-accept-cta__go">Abrir ›</span></div>
     </div>`;
   }
@@ -13357,7 +13361,7 @@ ${foot}
     });
     return out;
   }
-  function pendingAcceptOpen() {
+  function pendingAcceptOpen(seqId) {
     const list = _pendingAccept();
     _setAcceptReviewed();
     document.getElementById('lm-pa-modal')?.remove();
@@ -13401,6 +13405,16 @@ ${foot}
         ${list.length ? `<button class="btn btn--primary btn--sm" id="pa-mark" onclick="LeadManagerModule.pendingAcceptMark()">✓ Marcar como aceptados</button>` : ''}
       </div></div></div>`;
     document.body.appendChild(m);
+    // Si se abrió desde una secuencia concreta, prefiltra la bandeja a esa secuencia
+    if (seqId != null && seqId !== '') {
+      const sel = m.querySelector('#pa-fseq'); if (sel) sel.value = String(seqId);
+      let vis = 0;
+      m.querySelectorAll('.pa-row').forEach(r => {
+        const show = (' ' + (r.getAttribute('data-seq') || '') + ' ').includes(' ' + seqId + ' ');
+        r.style.display = show ? '' : 'none'; if (show) vis++;
+      });
+      const cnt = m.querySelector('#pa-count'); if (cnt) cnt.textContent = vis;
+    }
   }
   function pendingAcceptToggleAll(on) { document.querySelectorAll('#lm-pa-modal .pa-row').forEach(r => { if (r.style.display !== 'none') { const ck = r.querySelector('.pa-ck'); if (ck) ck.checked = on; } }); }
   function pendingAcceptApplyFilters() {
