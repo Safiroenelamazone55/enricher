@@ -4125,7 +4125,7 @@ const RangePicker = (() => {
     const rect = anchorEl.getBoundingClientRect();
     const w = 250, h = 372;
     let left = rect.left; if (left + w > window.innerWidth - 10) left = window.innerWidth - w - 10; if (left < 10) left = 10;
-    let top = rect.bottom + 6; if (top + h > window.innerHeight - 10) top = Math.max(10, rect.top - h - 6);
+    let top = rect.bottom + 6; if (top + h > window.innerHeight - 10) top = Math.max(64, rect.top - h - 6);
     pop.style.cssText = `position:fixed;z-index:10001;top:${top}px;left:${left}px;width:${w}px`;
     const _close = () => { pop.remove(); _s = null; document.removeEventListener('click', _close); };
     _s.close = _close;
@@ -4537,6 +4537,7 @@ const DashboardModule = (() => {
 
       _renderHero(tareasCount, proyectosCount, 0, 0);
       _renderTasks(tareasCount, todayTasks, overdue, allTasks);
+      _renderOverview(allTasks);
       _renderOppTasks();
       _renderHours();
 
@@ -5025,6 +5026,41 @@ const DashboardModule = (() => {
     </div>`;
   }
 
+  // Tarjeta "Resumen de tareas": total + desglose por estado (barra segmentada),
+  // repartidas en N proyectos. Cuenta unidades de trabajo (subtareas + tareas-hoja,
+  // sin los padres-contenedor). Rellena el hueco de la columna derecha del dashboard.
+  function _renderOverview(allTasks) {
+    const el = document.getElementById('dash2-overview');
+    if (!el) return;
+    const tasks = allTasks || [];
+    const parentIds = new Set(tasks.filter(t => t.parent_task_id).map(t => t.parent_task_id));
+    const units = tasks.filter(t => t.parent_task_id || !parentIds.has(t.id));
+    const total = units.length;
+    if (total === 0) { el.style.display = 'none'; return; }
+    el.style.display = '';
+    const projects = new Set(units.map(t => t.project_id).filter(Boolean)).size;
+    const cnt = {};
+    units.forEach(t => { const e = t.estado || 'pendiente'; cnt[e] = (cnt[e] || 0) + 1; });
+    const SEG = [
+      { k: 'en_progreso', label: 'En progreso', color: '#6366F1' },
+      { k: 'pendiente',   label: 'Pendiente',   color: '#C0B9AE' },
+      { k: 'bloqueado',   label: 'Bloqueado',   color: '#EF4444' },
+      { k: 'completado',  label: 'Completado',  color: '#22C55E' },
+    ].filter(s => (cnt[s.k] || 0) > 0);
+    const bar = SEG.map(s => `<span class="d3-ov-seg" style="flex:${cnt[s.k]};background:${s.color}"></span>`).join('');
+    const legend = SEG.map(s => `<div class="d3-ov-leg"><span class="d3-ov-dot" style="background:${s.color}"></span><span class="d3-ov-leg-lbl">${s.label}</span><span class="d3-ov-leg-n">${cnt[s.k]}</span></div>`).join('');
+    el.innerHTML = `
+      <div class="d3-card-header">
+        <span class="d3-card-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="3" width="8" height="4" rx="1.5"/><path d="M9 5H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3"/></svg></span>
+        <span class="d3-card-title">Resumen de tareas</span>
+        <span class="d3-card-link" onclick="document.querySelector('[data-tab=mgmt-tasks]').click()">Ver todo →</span>
+      </div>
+      <div class="d3-ov-sub">Repartidas en ${projects} proyecto${projects === 1 ? '' : 's'}</div>
+      <div class="d3-ov-total"><span class="d3-ov-total-lbl">Tareas</span><span class="d3-ov-total-n">${total}</span></div>
+      <div class="d3-ov-bar">${bar}</div>
+      <div class="d3-ov-legend">${legend}</div>`;
+  }
+
   function _renderTasks(_apiCount, _todayApi, _overdueApi, allTasks) {
     const el = $('dash2-tasks');
     if (!el) return;
@@ -5347,7 +5383,6 @@ const DashboardModule = (() => {
     const _icoUsr = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>';
     panel.innerHTML = `
       <div class="d3xp">
-        ${parent ? `<div class="d3xp__crumb"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>${esc(parent.titulo)}</div>` : ''}
         <div class="d3xp__chips">
           <button class="d3xp-chip" title="Cambiar estado" onclick="event.stopPropagation();DashboardModule.expEditStatus(${id},this)"><span class="d3xp__dot d3xp__dot--${estado}"></span><span class="d3xp-chip__tx">${esc(estadoCfg.label)}</span></button>
           ${isParent
@@ -5358,7 +5393,7 @@ const DashboardModule = (() => {
           ${t.prioridad === 'alta' ? '<span class="d3xp-chip d3xp-chip--prio">Alta</span>' : ''}
         </div>
         <div class="d3xp__meta">
-          ${ctx ? `<span class="d3xp__ctx"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg><span class="d3xp__ctx-t">${esc(ctx)}</span></span>` : '<span></span>'}
+          <span></span>
           <button class="d3xp__open" onclick="event.stopPropagation();TasksModule.openDrawer(${id})">Abrir tarea<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>
         </div>
       </div>`;
@@ -5420,6 +5455,7 @@ const DashboardModule = (() => {
   function _expRefresh(id) {
     _expandedTaskId = null;
     _renderTasks(0, [], [], _allTasksCache);
+    _renderOverview(_allTasksCache);
     toggleExpand(id);
   }
 
@@ -10444,7 +10480,7 @@ const ProjectsModule = (() => {
     const rect = anchorEl.getBoundingClientRect();
     const w = 250, h = 322;
     let left = rect.left; if (left + w > window.innerWidth - 10) left = window.innerWidth - w - 10; if (left < 10) left = 10;
-    let top = rect.bottom + 6; if (top + h > window.innerHeight - 10) top = Math.max(10, rect.top - h - 6);
+    let top = rect.bottom + 6; if (top + h > window.innerHeight - 10) top = Math.max(64, rect.top - h - 6);
     pop.style.cssText = `position:fixed;z-index:10001;top:${top}px;left:${left}px;width:${w}px`;
     const close = () => { pop.remove(); _tqp = null; document.removeEventListener('click', close); _rangePickClose = null; };
     _rangePickClose = close;

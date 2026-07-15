@@ -8966,6 +8966,20 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 .d3-task-group__ctx svg { flex-shrink: 0; opacity: .8; }
 .d3-task-group__ctx span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* Tarjeta "Resumen de tareas" (columna derecha del dashboard) */
+.d3-card--overview { padding-bottom: 16px; }
+.d3-ov-sub { font-size: 12px; color: var(--muted, #8A94A6); padding: 0 18px 12px; margin-top: -2px; }
+.d3-ov-total { display: flex; align-items: baseline; justify-content: space-between; padding: 0 18px 8px; }
+.d3-ov-total-lbl { font-size: 13px; font-weight: 700; color: #0A2540; }
+.d3-ov-total-n { font-size: 23px; font-weight: 800; color: #0A2540; letter-spacing: -.5px; font-variant-numeric: tabular-nums; }
+.d3-ov-bar { display: flex; gap: 3px; height: 10px; margin: 2px 18px 14px; }
+.d3-ov-seg { border-radius: 99px; min-width: 6px; transition: flex .3s ease; }
+.d3-ov-legend { display: flex; flex-direction: column; gap: 9px; padding: 0 18px; }
+.d3-ov-leg { display: flex; align-items: center; gap: 9px; font-size: 12.5px; }
+.d3-ov-dot { width: 11px; height: 11px; border-radius: 3.5px; flex-shrink: 0; }
+.d3-ov-leg-lbl { color: #45586A; flex: 1; }
+.d3-ov-leg-n { color: #0A2540; font-weight: 700; font-variant-numeric: tabular-nums; }
+
 /* Subtask rows — indented with vertical guide */
 .d3-task-row--sub {
   position: relative;

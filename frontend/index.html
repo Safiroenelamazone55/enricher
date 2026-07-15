@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260715f"/>
+  <link rel="stylesheet" href="style.css?v=20260715g"/>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -485,9 +485,10 @@
         <div class="d3-grid" id="d3-grid">
           <!-- Col 1: Mis tareas -->
           <div class="d3-card" id="dash2-tasks"></div>
-          <!-- Col 2: Tareas de oportunidades (arriba) + Horas de trabajo -->
+          <!-- Col 2: Tareas de oportunidades (arriba) + Resumen de tareas -->
           <div class="d3-sidebar-col">
             <div class="d3-card d3-card--opp" id="dash2-opp-tasks" style="display:none"></div>
+            <div class="d3-card d3-card--overview" id="dash2-overview" style="display:none"></div>
           </div>
         </div>
         <div class="an-pane-wrap hidden" id="dash2-analytics-pane"></div>
@@ -2485,7 +2486,7 @@
 })();
 </script>
 
-<script src="app.js?v=20260715f"></script>
+<script src="app.js?v=20260715g"></script>
 <div id="task-quick-edit" style="display:none;position:fixed;z-index:9999"></div>
 </body>
 </html>
