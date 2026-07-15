@@ -10519,6 +10519,40 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 #pane-mgmt-tasks .clients-search-wrap input { font-size: 13px; }
 #pane-mgmt-tasks .filter-select { height: 34px; font-size: 12.5px; }
 
+/* ── Filtros premium + multi-seleccion (Tareas) ── */
+.tf-btn {
+  display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 13px;
+  border: 1px solid var(--border, #E4E7DD); border-radius: var(--r-pill, 999px); background: var(--white, #fff);
+  font: inherit; font-size: 12.5px; font-weight: 600; color: var(--text2, #57534E);
+  cursor: pointer; white-space: nowrap; transition: border-color .14s, color .14s, background .14s;
+}
+.tf-btn:hover { border-color: var(--brand-l, #BFE0CC); color: var(--text, #1c1a17); }
+.tf-btn__chev { color: var(--muted, #A8A29E); transition: transform .15s; flex-shrink: 0; }
+.tf-btn--open .tf-btn__chev { transform: rotate(180deg); }
+.tf-btn--active { border-color: var(--brand, #00804C); color: var(--brand-d, #006B3F); background: var(--brand-ll, #EAF5EE); font-weight: 700; }
+.tf-btn--active .tf-btn__chev { color: var(--brand, #00804C); }
+/* Menu multi-seleccion con checks */
+.tf-menu { background: #fff; border: 1px solid var(--border, #E4E7DD); border-radius: 12px; box-shadow: 0 12px 32px rgba(11,30,58,.16); padding: 6px; }
+.tf-opt { display: flex; align-items: center; gap: 9px; padding: 8px 9px; border-radius: 9px; cursor: pointer; font-size: 13px; color: #33475B; user-select: none; position: relative; }
+.tf-opt:hover { background: #F5F4F1; }
+.tf-opt:has(input:checked) { background: var(--brand-ll, #EAF5EE); color: var(--brand-d, #006B3F); font-weight: 600; }
+.tf-opt input { position: absolute; opacity: 0; pointer-events: none; width: 0; height: 0; }
+.tf-opt__dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.tf-opt__lbl { flex: 1; }
+.tf-opt__chk { color: var(--brand, #00804C); opacity: 0; flex-shrink: 0; }
+.tf-opt:has(input:checked) .tf-opt__chk { opacity: 1; }
+.tf-opt__dot--pendiente { background: #C0B9AE; }
+.tf-opt__dot--en_progreso { background: #6366F1; }
+.tf-opt__dot--bloqueado { background: #EF4444; }
+.tf-opt__dot--completado { background: #22C55E; }
+.tf-opt__dot--alta { background: #EF4444; }
+.tf-opt__dot--media { background: #F5C24B; }
+.tf-opt__dot--baja { background: #22C55E; }
+.tf-menu__clear { width: 100%; margin-top: 4px; border: 0; border-top: 1px solid var(--border, #EDEBE6); background: transparent; color: var(--muted, #8A94A6); font-weight: 600; font-size: 12px; padding: 8px 6px 5px; cursor: pointer; text-align: center; }
+.tf-menu__clear:hover { color: var(--err, #DC2626); }
+/* Selects restantes (Fecha/Miembro): activo en verde, no naranja */
+#pane-mgmt-tasks .filter-select--active { border-color: var(--brand, #00804C); color: var(--brand-d, #006B3F); background-color: var(--brand-ll, #EAF5EE); }
+
 /* ── Body — remove double padding ── */
 #pane-mgmt-tasks .clients-body { padding: 0 0 16px; }
 

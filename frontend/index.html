@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260715l"/>
+  <link rel="stylesheet" href="style.css?v=20260715m"/>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -605,19 +605,14 @@
             <input type="text" id="tasks-search" placeholder="Buscar tarea, proyecto o miembro…" oninput="TasksModule.filter()">
           </div>
           <!-- Filtros compactos: Estado · Prioridad · Fecha · Miembro -->
-          <select id="tasks-estado-select" class="filter-select" onchange="TasksModule.setFilter(this.value)">
-            <option value="">Estado</option>
-            <option value="pendiente">⚬ Pendiente</option>
-            <option value="en_progreso">◑ En progreso</option>
-            <option value="bloqueado">⊗ Bloqueado</option>
-            <option value="completado">✓ Completado</option>
-          </select>
-          <select id="tasks-prio-select" class="filter-select" onchange="TasksModule.setFilterPrio(this.value)">
-            <option value="">Prioridad</option>
-            <option value="alta">↑ Alta</option>
-            <option value="media">→ Media</option>
-            <option value="baja">↓ Baja</option>
-          </select>
+          <button type="button" class="tf-btn" id="tasks-estado-btn" onclick="TasksModule.openFilterMenu(event,'estado')">
+            <span class="tf-btn__txt">Estado</span>
+            <svg class="tf-btn__chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <button type="button" class="tf-btn" id="tasks-prioridad-btn" onclick="TasksModule.openFilterMenu(event,'prioridad')">
+            <span class="tf-btn__txt">Prioridad</span>
+            <svg class="tf-btn__chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
           <select id="tasks-fecha-select" class="filter-select" onchange="TasksModule.setFilterFecha(this.value)">
             <option value="">Fecha</option>
             <option value="hoy">Hoy</option>
@@ -2492,7 +2487,7 @@
 })();
 </script>
 
-<script src="app.js?v=20260715l"></script>
+<script src="app.js?v=20260715m"></script>
 <div id="task-quick-edit" style="display:none;position:fixed;z-index:9999"></div>
 </body>
 </html>

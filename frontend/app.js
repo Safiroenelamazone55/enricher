@@ -6509,8 +6509,8 @@ const AnalyticsModule = (() => {
 const TasksModule = (() => {
   let _tasks        = [];
   let _editId       = null;
-  let _filterEstado = '';
-  let _filterPrio   = '';
+  let _filterEstadoSet = new Set();   // multi-selección de estados (En progreso + Pendiente, etc.)
+  let _filterPrioSet   = new Set();   // multi-selección de prioridades
   let _filterMember    = '';
   let _filterMemberSet = false; // true once default or user interaction applied
   let _filterFecha  = '';
@@ -6579,10 +6579,10 @@ const TasksModule = (() => {
   function _applyView() {
     _hideAllViews();
     const toolbar   = $('tasks-list-toolbar');
-    const estadoSel = $('tasks-estado-select');
+    const estadoBtn = $('tasks-estado-btn');
     const showBar   = _currentView === 'list' || _currentView === 'kanban';
     if (toolbar)   toolbar.style.display   = showBar ? '' : 'none';
-    if (estadoSel) estadoSel.style.display = _currentView === 'list' ? '' : 'none';
+    if (estadoBtn) estadoBtn.style.display = _currentView === 'list' ? '' : 'none';
     const viewEl = $('tasks-view-' + _currentView);
     if (viewEl) viewEl.style.display = '';
     if (_currentView === 'list')     render();
@@ -6664,7 +6664,7 @@ const TasksModule = (() => {
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const endOfWeek = new Date(today); endOfWeek.setDate(today.getDate() + (6 - today.getDay()));
     let list = _tasks;
-    if (_filterPrio) list = list.filter(t => t.prioridad === _filterPrio);
+    if (_filterPrioSet.size) list = list.filter(t => _filterPrioSet.has(t.prioridad));
     if (_filterMember === '__none__') {
       list = list.filter(t => !t.responsable && (!t.responsables || !t.responsables.length));
     } else if (_filterMember) {
@@ -6692,18 +6692,70 @@ const TasksModule = (() => {
 
   function filter() { _rerender(); }
 
-  function setFilter(estado) {
-    _filterEstado = estado;
-    const sel = $('tasks-estado-select');
-    if (sel) { sel.value = estado; sel.classList.toggle('filter-select--active', !!estado); }
-    render();
-  }
+  // ── Filtros multi-selección (Estado / Prioridad): dropdown propio con checks ──
+  const _FILTER_OPTS = {
+    estado: [
+      { v: 'pendiente',   l: 'Pendiente' },
+      { v: 'en_progreso', l: 'En progreso' },
+      { v: 'bloqueado',   l: 'Bloqueado' },
+      { v: 'completado',  l: 'Completado' },
+    ],
+    prioridad: [
+      { v: 'alta',  l: 'Alta' },
+      { v: 'media', l: 'Media' },
+      { v: 'baja',  l: 'Baja' },
+    ],
+  };
+  function _filterSet(kind) { return kind === 'estado' ? _filterEstadoSet : _filterPrioSet; }
+  let _filterMenuClose = null;
 
-  function setFilterPrio(prio) {
-    _filterPrio = prio;
-    const sel = $('tasks-prio-select');
-    if (sel) { sel.value = prio; sel.classList.toggle('filter-select--active', !!prio); }
+  function openFilterMenu(e, kind) {
+    e.stopPropagation();
+    if (_filterMenuClose) { _filterMenuClose(); return; }
+    const btn = e.currentTarget;
+    const set = _filterSet(kind);
+    const menu = document.createElement('div');
+    menu.className = 'tf-menu';
+    menu.onclick = ev => ev.stopPropagation();
+    menu.innerHTML = _FILTER_OPTS[kind].map(o => `
+      <label class="tf-opt${set.has(o.v) ? ' is-on' : ''}">
+        <input type="checkbox" ${set.has(o.v) ? 'checked' : ''} onchange="TasksModule.toggleFilterOpt('${kind}','${o.v}')">
+        <span class="tf-opt__dot tf-opt__dot--${o.v}"></span>
+        <span class="tf-opt__lbl">${o.l}</span>
+        <svg class="tf-opt__chk" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      </label>`).join('') +
+      (set.size ? `<button type="button" class="tf-menu__clear" onclick="TasksModule.clearFilter('${kind}')">Limpiar selección</button>` : '');
+    document.body.appendChild(menu);
+    const r = btn.getBoundingClientRect();
+    const w = Math.max(r.width, 190);
+    let left = r.left; if (left + w > window.innerWidth - 10) left = window.innerWidth - w - 10;
+    menu.style.cssText = `position:fixed;z-index:10001;top:${r.bottom + 6}px;left:${Math.max(10, left)}px;width:${w}px`;
+    btn.classList.add('tf-btn--open');
+    _filterMenuClose = () => { menu.remove(); btn.classList.remove('tf-btn--open'); document.removeEventListener('click', _filterMenuClose); _filterMenuClose = null; };
+    setTimeout(() => document.addEventListener('click', _filterMenuClose), 0);
+  }
+  function toggleFilterOpt(kind, val) {
+    const set = _filterSet(kind);
+    if (set.has(val)) set.delete(val); else set.add(val);
+    _updateFilterBtn(kind);
     _rerender();
+  }
+  function clearFilter(kind) {
+    _filterSet(kind).clear();
+    _updateFilterBtn(kind);
+    if (_filterMenuClose) _filterMenuClose();
+    _rerender();
+  }
+  function _updateFilterBtn(kind) {
+    const btn = $(`tasks-${kind}-btn`);
+    if (!btn) return;
+    const set = _filterSet(kind);
+    const base = kind === 'estado' ? 'Estado' : 'Prioridad';
+    const txt = !set.size ? base
+      : set.size === 1 ? (_FILTER_OPTS[kind].find(o => set.has(o.v))?.l || base)
+      : `${base} · ${set.size}`;
+    const el = btn.querySelector('.tf-btn__txt'); if (el) el.textContent = txt;
+    btn.classList.toggle('tf-btn--active', set.size > 0);
   }
 
   function setFilterMember(member) {
@@ -6919,8 +6971,8 @@ const TasksModule = (() => {
     const endOfWeek = new Date(today); endOfWeek.setDate(today.getDate() + (6 - today.getDay()));
 
     let list = _tasks;
-    if (_filterEstado) list = list.filter(t => t.estado === _filterEstado);
-    if (_filterPrio)   list = list.filter(t => t.prioridad === _filterPrio);
+    if (_filterEstadoSet.size) list = list.filter(t => _filterEstadoSet.has(t.estado));
+    if (_filterPrioSet.size)   list = list.filter(t => _filterPrioSet.has(t.prioridad));
     if (_filterMember === '__none__') {
       list = list.filter(t => !t.responsable && (!t.responsables || !t.responsables.length));
     } else if (_filterMember) {
@@ -8462,7 +8514,8 @@ const TasksModule = (() => {
   }
 
   return {
-    load, filter, setFilter, setFilterPrio, setFilterMember, setFilterFecha, render,
+    load, filter, setFilterMember, setFilterFecha, render,
+    openFilterMenu, toggleFilterOpt, clearFilter,
     setView, calPrev, calNext, setCalView, loadForCalPane,
     openDrawer, closeDrawer, save, confirmDelete, onProjectDateChange,
     openQuickEdit, closeQuickEdit, qeChip, saveQuickEdit,
