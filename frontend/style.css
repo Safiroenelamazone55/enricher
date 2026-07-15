@@ -10131,7 +10131,7 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
   #tt-print .ttp-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
   #tt-print .ttp-h1 { font-size: 27px; font-weight: 800; letter-spacing: .005em; line-height: 1.03; margin: 0 0 5px; text-transform: uppercase; color: #1C1A17; }
   #tt-print .ttp-subtitle { font-size: 13px; font-weight: 400; color: #6B655E; }
-  #tt-print .ttp-clogo { max-height: 44px; max-width: 170px; width: auto; height: auto; object-fit: contain; display: block; flex-shrink: 0; }
+  #tt-print .ttp-clogo { max-height: 66px; max-width: 240px; width: auto; height: auto; object-fit: contain; display: block; flex-shrink: 0; }
   #tt-print .ttp-rule { height: 2px; background: #1C1A17; margin-top: 14px; }
   /* Metadatos: columnas separadas por hairlines (editorial, sin caja) */
   #tt-print .ttp-metarow { display: flex; flex-wrap: wrap; margin: 0 0 4px; border-bottom: 1px solid #E7E3DC; }
@@ -12232,19 +12232,19 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
 .d3-hero { align-items: flex-start; justify-content: flex-start; gap: 16px; flex-wrap: nowrap; background: transparent; border-bottom: none; padding: 24px 52px 0 0; }
 .d3-revcard { flex: 0 0 280px; max-width: 280px; }
 .d3-actcard {
-  flex: 1 1 auto; min-width: 0; max-width: 900px;
+  flex: 1 1 auto; min-width: 0;
   background: #fff; border: 1px solid var(--border, #EDEBE6);
   border-radius: 16px; padding: 14px 16px 12px;
   box-shadow: 0 1px 2px rgba(16,24,40,.05);
   display: flex; gap: 20px; align-items: stretch;
 }
-#dash2-act-heatmap { flex: 1 1 auto; min-width: 0; }
+#dash2-act-heatmap { flex: 2 1 auto; min-width: 0; }
 /* Solo en pantallas realmente angostas se apilan */
 @media (max-width: 940px) {
   .d3-hero { flex-wrap: wrap; }
   .d3-revcard { flex-basis: 100%; max-width: none; }
   .d3-actcard { flex-basis: 100%; flex-direction: column; }
-  .d3-act-timer { flex-basis: auto; border-left: none; border-top: 1px solid var(--border, #EDEBE6); padding: 12px 0 0; }
+  .d3-act-timer { flex-basis: auto; min-width: 0; max-width: none; border-left: none; border-top: 1px solid var(--border, #EDEBE6); padding: 12px 0 0; }
   .d3-act-statsrow { flex-direction: row; flex-wrap: wrap; align-items: center; }
   .d3-act-timer .d3-hrs-metrics { grid-template-columns: repeat(4, 1fr); }
   .d3-act-timer .d3-hrs-btn { margin-top: 0; }
@@ -12253,7 +12253,7 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
 /* ══ Cronómetro consolidado dentro de "Tu ritmo de trabajo" ══
    (panel de hoy + métricas + botón, movido desde HORAS DE TRABAJO). */
 /* Cronómetro como COLUMNA a la derecha del heatmap (baja el alto de la tarjeta) */
-.d3-act-timer { flex: 0 0 280px; margin: 0; padding: 2px 0 2px 20px; border-top: none; border-left: 1px solid var(--border, #EDEBE6); display: flex; flex-direction: column; }
+.d3-act-timer { flex: 1 1 280px; min-width: 260px; max-width: 440px; margin: 0; padding: 2px 0 2px 20px; border-top: none; border-left: 1px solid var(--border, #EDEBE6); display: flex; flex-direction: column; }
 .d3-act-timer:empty { display: none; }
 .d3-act-statsrow { display: flex; flex-direction: column; align-items: stretch; gap: 12px; margin-bottom: 12px; }
 .d3-act-today { display: flex; align-items: center; gap: 11px; }
@@ -12264,9 +12264,15 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
 /* Reusa el estilo del widget viejo, sin sus márgenes de 18px (ya vive dentro de la tarjeta) */
 .d3-act-timer .d3-hrs-now { margin: 0 0 12px; }
 .d3-act-timer .d3-hrs-metrics { padding: 0; border-top: none; grid-template-columns: repeat(2, 1fr); row-gap: 12px; }
-.d3-act-timer .d3-hrs-btn { margin-top: auto; }
-.d3-act-timer .d3-hrs-btn { width: 100%; margin: 0; height: 38px; font-size: .86rem; }
-.d3-act-timer .d3-hrs-actions { padding: 0; }
+.d3-act-timer .d3-hrs-btn { width: 100%; margin: auto 0 0; height: 38px; font-size: .86rem; }
+.d3-act-timer .d3-hrs-actions { padding: 0; margin-top: auto; }
+/* Móvil: al apilarse, el cronómetro va a ancho completo (el max-width/columna del desktop no aplican) */
+@media (max-width: 940px) {
+  .d3-act-timer { max-width: none; min-width: 0; }
+  .d3-act-statsrow { flex-direction: row; align-items: center; }
+  .d3-act-timer .d3-hrs-metrics { grid-template-columns: repeat(4, 1fr); }
+  .d3-act-timer .d3-hrs-btn { margin: 0; }
+}
 .ac-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
 .ac-title { font-size: 13px; font-weight: 600; color: var(--text2, #57534E); }
 .ac-legend { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; color: var(--muted, #A8A29E); }
