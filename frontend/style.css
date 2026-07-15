@@ -12229,7 +12229,9 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
    ══════════════════════════════════════════════════════════════ */
 /* Sin recuadro blanco de fondo: las 2 tarjetas van directo sobre el fondo del
    dashboard, alineadas con el contenido de abajo (izq 0, der 52, como .d3-body). */
-.d3-hero { align-items: flex-start; justify-content: flex-start; gap: 16px; flex-wrap: nowrap; background: transparent; border-bottom: none; padding: 24px 52px 0 0; }
+.d3-hero { align-items: flex-start; justify-content: flex-start; gap: 16px; flex-wrap: nowrap; background: transparent; border-bottom: none; padding: 6px 52px 0 0; }
+/* El Dashboard arranca pegado arriba (menos padding que otras secciones) */
+.app-main:has(#pane-mgmt-dashboard.active) { padding-top: 10px; }
 .d3-revcard { flex: 0 0 280px; max-width: 280px; }
 .d3-actcard {
   flex: 1 1 auto; min-width: 0;
