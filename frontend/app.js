@@ -12423,7 +12423,7 @@ const LeadManagerModule = (() => {
     </div>`;
   }
   function go(section) {
-    _section = section; _activeClient = null; _refreshNav(); _renderBody();
+    _section = section; _activeClient = null; _seqTaskCanal = ''; _refreshNav(); _renderBody();
     // LM Fase A: cargas lazy por sección (motor de envío)
     if (section === 'dashboard') _loadToday();
     if (section === 'settings')  { _loadSendCfg(); _loadAiCfg(); }
@@ -12542,7 +12542,7 @@ const LeadManagerModule = (() => {
         : (_clients.length ? _empty('sequences', 'Aún no hay secuencias', 'Crea una secuencia y define sus pasos (Día 1 Email, Día 2 LinkedIn…). El envío automático llega en una fase futura.', 'Nueva secuencia', 'LeadManagerModule.openSequenceDrawer()')
                            : _empty('sequences', 'Primero crea un cliente outbound', 'Las secuencias pertenecen a un cliente. Crea uno para empezar.', 'Nuevo cliente outbound', 'LeadManagerModule.openClientDrawer()'))}`;
   }
-  function openSequence(id) { _activeSeq = id; _section = 'sequence'; _seqTab = 'pasos'; _seqContacts = null; _seqMetrics = null; _seqDo = null; _seqCtEstado = ''; _refreshNav(); _renderBody(); _seqLoadContacts(id); }
+  function openSequence(id) { _activeSeq = id; _section = 'sequence'; _seqTab = 'pasos'; _seqContacts = null; _seqMetrics = null; _seqDo = null; _seqCtEstado = ''; _seqTaskCanal = ''; _refreshNav(); _renderBody(); _seqLoadContacts(id); }
   const _TZ = [
     ['', 'Sin zona (sin sugerencia de hora)'],
     ['Europe/Madrid', 'España — Madrid'], ['America/New_York', 'EE. UU. Este — New York'], ['America/Chicago', 'EE. UU. Centro — Chicago'],
@@ -13156,17 +13156,28 @@ ${foot}
         else { msg = 'Los contactos activos ya completaron todos los pasos definidos. Agrega más pasos o enrola contactos nuevos.'; cta = 'Enrolar contacto'; ctaFn = `LeadManagerModule.seqEnrolOpen(${id})`; }
         return _empty('tasks', 'Sin tareas pendientes', msg, cta, ctaFn);
       }
-      const todo = tasks.filter(t => t.due <= today);
+      const todoAll = tasks.filter(t => t.due <= today);
+      // Filtro por canal (chips arriba): p. ej. hacer primero los de email, luego los de llamada.
+      const cCounts = {}; todoAll.forEach(t => { const cn = t.st.canal || 'email'; cCounts[cn] = (cCounts[cn] || 0) + 1; });
+      const cOrder = _CANALES.filter(cn => cCounts[cn]);
+      const canalChips = cOrder.length > 1
+        ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px">
+            <button class="lm-filter-btn${!_seqTaskCanal ? ' on' : ''}" onclick="LeadManagerModule.seqTaskSetCanal('')">Todos · ${todoAll.length}</button>
+            ${cOrder.map(cn => `<button class="lm-filter-btn${_seqTaskCanal === cn ? ' on' : ''}" onclick="LeadManagerModule.seqTaskSetCanal('${cn}')">${_TOUCH[cn][0]} · ${cCounts[cn]}</button>`).join('')}
+          </div>`
+        : '';
+      const todo = _seqTaskCanal ? todoAll.filter(t => (t.st.canal || 'email') === _seqTaskCanal) : todoAll;
       const future = tasks.filter(t => t.due > today);
       const over = todo.filter(t => t.due < today).sort((a, b) => a.due - b.due || (a.st.hora || '99:99').localeCompare(b.st.hora || '99:99'));
       const hoy = todo.filter(t => t.due.getTime() === today.getTime()).sort((a, b) => (a.st.hora || '99:99').localeCompare(b.st.hora || '99:99'));
       const nextLine = future.length ? `<div class="seq-next">${NI('calendar', 12)} Siguiente tarea: <b>${_relDay(future[0].due)}</b>${future.length > 1 ? ` · +${future.length - 1} más` : ''}</div>` : '';
+      const canalLbl = _seqTaskCanal ? ` de ${_TOUCH[_seqTaskCanal][0]}` : '';
       const head = todo.length
-        ? `<div class="seq-tasks-hd">${todo.length} ${todo.length === 1 ? 'tarea' : 'tareas'} por hacer<button class="seq-tasks-start" onclick="LeadManagerModule.seqTaskOpen(${id},${todo[0].e.contact_id})">▶ Empezar</button></div>`
-        : `<div class="seq-tasks-hd seq-tasks-hd--none">Sin tareas para hoy</div>`;
+        ? `<div class="seq-tasks-hd">${todo.length} ${todo.length === 1 ? 'tarea' : 'tareas'}${canalLbl} por hacer<button class="seq-tasks-start" onclick="LeadManagerModule.seqTaskOpen(${id},${todo[0].e.contact_id})">▶ Empezar</button></div>`
+        : `<div class="seq-tasks-hd seq-tasks-hd--none">Sin tareas${canalLbl} para hoy</div>`;
       const grp = (over.length ? `<div class="lm-tsec-h lm-tsec-h--over"><span class="lm-tsec-h__dot"></span>Vencidas<span class="lm-tsec-h__n">${over.length}</span></div><div class="seq-tasks">${over.map(t => _seqTaskRow(t, id, today)).join('')}</div>` : '')
                 + (hoy.length ? `<div class="lm-tsec-h lm-tsec-h--today"><span class="lm-tsec-h__dot"></span>Hoy<span class="lm-tsec-h__n">${hoy.length}</span></div><div class="seq-tasks">${hoy.map(t => _seqTaskRow(t, id, today)).join('')}</div>` : '');
-      return `${_acceptCtaHtml(id)}${head}${grp}${nextLine}`;
+      return `${_acceptCtaHtml(id)}${canalChips}${head}${grp}${nextLine}`;
     }
     if (_seqTab === 'envios') {
       if (_seqMsgs === null) return `<div class="cp-empty2" style="padding:22px">Cargando envíos…</div>`;
@@ -13245,7 +13256,7 @@ ${foot}
       _seqContacts = null; await _seqLoadContacts(seqId); await _reloadContacts();
       showBanner(`✓ ${_dispoLabel(disp)}${r.rerouted ? ' · → Ruta A (LinkedIn)' : ''}${r.paused ? ' · pausado en secuencias' : ''}`, 'success');
       const today = _dayOf(new Date());
-      const next = _seqTasks(seqId).filter(t => t.due <= today)[0];
+      const next = _seqTasks(seqId).filter(t => t.due <= today && (!_seqTaskCanal || (t.st.canal || 'email') === _seqTaskCanal))[0];
       if (next) openContactPage(next.e.contact_id, { seqId: seqId }); else seqDoExit();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
@@ -13286,7 +13297,7 @@ ${foot}
       _seqContacts = null; await _seqLoadContacts(seqId); await _reloadContacts();
       showBanner('↩ Email rebotado — pausado; corrígelo en Contactos → Rebotados', 'success');
       const today = _dayOf(new Date());
-      const next = _seqTasks(seqId).filter(t => t.due <= today)[0];
+      const next = _seqTasks(seqId).filter(t => t.due <= today && (!_seqTaskCanal || (t.st.canal || 'email') === _seqTaskCanal))[0];
       if (next) openContactPage(next.e.contact_id, { seqId: seqId }); else seqDoExit();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
@@ -13452,6 +13463,7 @@ ${foot}
   }
   function seqTab(t) { _seqTab = t; _renderBody(); if ((t === 'contactos' || t === 'tareas') && !Array.isArray(_seqContacts)) _seqLoadContacts(_activeSeq); if (t === 'metricas') { if (_seqMetrics === null) _seqLoadMetrics(_activeSeq); _seqAb = null; _seqLoadAb(_activeSeq); } if (t === 'envios') { _seqMsgs = null; _seqLoadMsgs(_activeSeq); } }
   function seqCtSetEstado(v) { _seqCtEstado = v || ''; const el = document.getElementById('seq-tabwrap'); if (el && _activeSeq) el.innerHTML = _seqTabContent(_activeSeq); else _renderBody(); }
+  function seqTaskSetCanal(v) { _seqTaskCanal = v || ''; const el = document.getElementById('seq-tabwrap'); if (el && _activeSeq) el.innerHTML = _seqTabContent(_activeSeq); else _renderBody(); }
   async function _seqPatch(seqId, cid, body) {
     try {
       const res = await apiFetch(`${API}/lm/sequences/${seqId}/contacts/${cid}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -13796,7 +13808,7 @@ ${foot}
     const touch = _TOUCH[st.canal] || _TOUCH.email;
     const seq = _sequences.find(s => s.id === seqId);
     const today = new Date(new Date().toDateString());
-    const queue = _seqTasks(seqId).filter(t => t.due <= today);
+    const queue = _seqTasks(seqId).filter(t => t.due <= today && (!_seqTaskCanal || (t.st.canal || 'email') === _seqTaskCanal));
     const pos = queue.findIndex(t => t.e.contact_id === cid);
 
     // Borrador IA aprobado del paso (lazy, 1 fetch por contacto+paso)
@@ -13879,7 +13891,7 @@ ${foot}
     if (!_seqDo) return;
     const seqId = _seqDo.seqId, cid = _seqDo.cid;
     const today = new Date(new Date().toDateString());
-    const queue = _seqTasks(seqId).filter(t => t.due <= today);
+    const queue = _seqTasks(seqId).filter(t => t.due <= today && (!_seqTaskCanal || (t.st.canal || 'email') === _seqTaskCanal));
     const e = (_seqContacts || []).find(x => x.contact_id === cid);
     const steps = _seqSteps(seqId);
     const st = e ? steps[(e.paso || 1) - 1] : null;
@@ -13949,7 +13961,7 @@ ${foot}
       _seqContacts = null; await _seqLoadContacts(seqId);
       await _reloadContacts();
       const today = new Date(new Date().toDateString());
-      const next = _seqTasks(seqId).filter(t => t.due <= today)[0];
+      const next = _seqTasks(seqId).filter(t => t.due <= today && (!_seqTaskCanal || (t.st.canal || 'email') === _seqTaskCanal))[0];
       const undoLink = ' &nbsp; <a href="#" onclick="LeadManagerModule.seqUndoLast();return false;" style="color:#fff;text-decoration:underline">↩ Deshacer</a>';
       if (next) { openContactPage(next.e.contact_id, { seqId: seqId }); showBanner('✓ Hecha · siguiente' + undoLink, 'success'); }
       else { seqDoExit(); showBanner('🎉 ¡No quedan tareas para hoy!' + undoLink, 'success'); }
@@ -13959,7 +13971,7 @@ ${foot}
     if (!_cpTaskCtx) return;
     const seqId = _cpTaskCtx.seqId, cid = _contactView;
     const today = new Date(new Date().toDateString());
-    const queue = _seqTasks(seqId).filter(t => t.due <= today);
+    const queue = _seqTasks(seqId).filter(t => t.due <= today && (!_seqTaskCanal || (t.st.canal || 'email') === _seqTaskCanal));
     const i = queue.findIndex(t => t.e.contact_id === cid);
     const next = i >= 0 ? queue[i + 1] : queue[0];
     if (next && next.e.contact_id !== cid) { _cpTaskHist.push(cid); openContactPage(next.e.contact_id, { seqId: seqId }); }
@@ -15523,6 +15535,7 @@ ${foot}
   let _cpTaskHist = [];       // historial de contactos ya recorridos en la corrida (para "‹ Anterior")
   let _seqTab = 'pasos';
   let _seqCtEstado = ''; // filtro de estado en la pestaña Contactos de la secuencia
+  let _seqTaskCanal = ''; // filtro por canal en la pestaña Tareas de la secuencia
   let _seqContacts = null;
   let _seqMetrics = null;
   let _seqDo = null;          // { seqId, cid } — tarea abierta en el panel de ejecución
@@ -17333,7 +17346,7 @@ ${foot}
     taskSetView, taskSetFilter, calPrev, calNext, calToday,
     lmSetDisposition, seqDoDisposition, cpSetStage,
     seqDoNoLinkedIn, seqDoBounced, lmToggleNoLinkedIn, lmToggleBounced, lmToggleManualEmail, ctToggleBounced,
-    lmSetPageSize, ctGoPage, coGoPage, seqCtSetEstado,
+    lmSetPageSize, ctGoPage, coGoPage, seqCtSetEstado, seqTaskSetCanal,
     pendingAcceptOpen, pendingAcceptToggleAll, pendingAcceptApplyFilters, pendingAcceptMark,
     openActivityDrawer, closeActivityDrawer, saveActivity, confirmDeleteActivity, markActDone,
     setReplySentiment, setLeadStage,
