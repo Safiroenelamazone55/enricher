@@ -5116,7 +5116,8 @@ const DashboardModule = (() => {
     // (incluye tareas con fecha de inicio pero SIN deadline → "empieza hoy"). Mañana: arranca mañana.
     const sectionOverdue  = active.filter(t => { const w = _win(t); return w.end && w.end < todayStr && _isActionable(t); });
     const sectionToday    = active.filter(t => { const w = _win(t); return w.start && w.start <= todayStr && (!w.end || w.end >= todayStr) && _isActionable(t); });
-    const sectionTomorrow = active.filter(t => { const w = _win(t); return w.start === tomorrowStr && (!w.end || w.end >= todayStr) && _isActionable(t); });
+    // Próximos días: todo lo que ARRANCA después de hoy (mañana y en adelante), ordenado por fecha.
+    const sectionUpcoming = active.filter(t => { const w = _win(t); return w.start && w.start > todayStr && _isActionable(t); });
 
     const todayHtml = sectionToday.length === 0
       ? `<div class="d3-empty"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>Sin tareas para hoy</div>`
@@ -5129,14 +5130,14 @@ const DashboardModule = (() => {
       </div>
       ${_renderSectionFlat(sectionOverdue, true, allTasksById)}`;
 
-    const tomorrowHtml = sectionTomorrow.length === 0 ? '' : `
-      <details class="d3-section-details">
+    const tomorrowHtml = sectionUpcoming.length === 0 ? '' : `
+      <details class="d3-section-details" open>
         <summary class="d3-section-label d3-section-label--muted">
           <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 16 12"/></svg>
-          Mañana · ${sectionTomorrow.length}
+          Próximos días · ${sectionUpcoming.length}
           <svg class="d3-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
         </summary>
-        ${_renderSectionFlat(sectionTomorrow, false, allTasksById)}
+        ${_renderSectionFlat(sectionUpcoming, false, allTasksById)}
       </details>`;
 
     // Orden pedido por Jenny: VENCIDAS primero (fondo rojizo apagado), luego HOY (tono normal),
@@ -18989,23 +18990,32 @@ const RNotifPanel = (() => {
   // Tarea "lista": tarea padre con subtareas, todas las subtareas completadas, pero
   // la tarea aún no marcada completa. Proyecto "listo": con tareas, todas completas,
   // y el proyecto aún activo. Se muestran para preguntar "¿Acabaste?".
-  function _tareasListas(tasks) {
+  // El aviso de cierre solo le sale a QUIEN está a cargo: responsable de la tarea
+  // (para tareas) o responsable del proyecto (para proyectos). Si no hay usuario
+  // identificado, no se filtra.
+  function _esMio(x, me) {
+    if (!me) return true;
+    const arr = (x.responsables && x.responsables.length) ? x.responsables : (x.responsable ? [x.responsable] : []);
+    return arr.some(r => (r || '').toLowerCase() === me);
+  }
+  function _tareasListas(tasks, me) {
     const kids = {};
     tasks.forEach(t => { if (t.parent_task_id) (kids[t.parent_task_id] = kids[t.parent_task_id] || []).push(t); });
     return tasks.filter(t =>
       !t.parent_task_id &&
       t.estado !== 'completado' &&
       kids[t.id] && kids[t.id].length > 0 &&
-      kids[t.id].every(c => c.estado === 'completado'));
+      kids[t.id].every(c => c.estado === 'completado') &&
+      _esMio(t, me));
   }
-  function _proyectosListos(projects, tasks) {
+  function _proyectosListos(projects, tasks, me) {
     const byProj = {};
     tasks.forEach(t => { if (t.project_id) (byProj[t.project_id] = byProj[t.project_id] || []).push(t); });
     return (projects || []).filter(p => {
       const st = p.estado || 'activo';
       if (st === 'completado' || st === 'cancelado') return false;
       const ts = byProj[p.id];
-      return ts && ts.length > 0 && ts.every(t => t.estado === 'completado');
+      return ts && ts.length > 0 && ts.every(t => t.estado === 'completado') && _esMio(p, me);
     });
   }
 
@@ -19021,8 +19031,9 @@ const RNotifPanel = (() => {
         const [tr, pr] = await Promise.all([apiFetch(`${API}/mgmt/tasks`), apiFetch(`${API}/mgmt/projects`)]);
         const tasks    = tr.ok ? await tr.json() : [];
         const projects = pr.ok ? await pr.json() : [];
-        const tListas  = _tareasListas(tasks);
-        const pListos  = _proyectosListos(projects, tasks);
+        const me       = (window._authUser?.memberNombre || window._authUser?.name || '').toLowerCase();
+        const tListas  = _tareasListas(tasks, me);
+        const pListos  = _proyectosListos(projects, tasks, me);
         if (tListas.length) { data.tareas_completas   = tListas; data.total = (data.total || 0) + tListas.length; }
         if (pListos.length) { data.proyectos_completos = pListos; data.total = (data.total || 0) + pListos.length; }
       } catch (_) { /* si falla, se muestran solo las alertas de integridad */ }
