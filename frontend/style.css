@@ -285,6 +285,25 @@ body {
 }
 .sidebar--collapsed .snav-item__icon { width:40px; height:40px; border-radius:10px; }
 
+/* Encabezado de sección de la barra lateral (estilo Clay: agrupa la nav) */
+.snav-cat {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--muted, #A8A29E);
+  padding: 15px 14px 5px;
+  white-space: nowrap;
+  overflow: hidden;
+  user-select: none;
+}
+.snav-group > .snav-cat:first-child { padding-top: 4px; }
+/* Colapsada: el encabezado se vuelve un divisor sutil (sin texto) */
+.sidebar--collapsed .snav-cat {
+  font-size: 0; letter-spacing: 0; padding: 0; height: 0;
+  margin: 7px 12px; border-top: 1px solid var(--border, #EDEBE6);
+}
+
 /* Tooltip on collapsed hover */
 .sidebar--collapsed .snav-item::after {
   content: attr(data-tooltip);
