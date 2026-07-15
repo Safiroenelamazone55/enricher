@@ -12065,6 +12065,9 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
 
 /* Popover flotante del calendario (reusa .tqp-cal) */
 .range-pick-pop { box-shadow: 0 8px 28px rgba(11,30,58,.16); border-radius: 12px; }
+/* Barra Guardar/Cancelar del RangePicker compartido (Tareas + Dashboard) */
+.rp-actions { display: flex; gap: 8px; margin-top: 6px; padding: 8px; background: #fff; border: 1px solid rgba(11,30,58,.10); border-radius: 10px; }
+.rp-actions .tqp-btn { flex: 1; margin: 0; }
 
 /* ══════════════════════════════════════════════════════════════
    BARRA ÚNICA + WORKSPACE SWITCHER

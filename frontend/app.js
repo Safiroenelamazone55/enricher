@@ -4023,6 +4023,119 @@ const FxRatesModule = (() => {
 })();
 
 // =================================================================
+// RANGE PICKER  (mini-calendario reutilizable: fecha única o RANGO)
+// =================================================================
+// Mismo look que el selector de Proyectos (reusa las clases .tqp-cal*). Se usa
+// en las vistas Tareas y Dashboard para poder fijar [inicio → fin], no solo el
+// fin. Proyectos conserva su propia copia interna (no depende de este módulo).
+//   Uso: RangePicker.open(anchorEl, { start, end }, ({ fecha_inicio, deadline }) => { ... })
+//   - fecha_inicio solo viene con un rango completo; en fecha única va null.
+const RangePicker = (() => {
+  const MES   = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+  const MES_S = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+  const _iso  = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const _fmt  = s => { const d = new Date(s + 'T00:00:00'); return `${d.getDate()} ${MES_S[d.getMonth()]}`; };
+  let _s = null;   // { mode:'single'|'range', start, end, view:Date, onSave, close }
+
+  function _calHtml() {
+    const s = _s; if (!s) return '';
+    const y = s.view.getFullYear(), m = s.view.getMonth();
+    const off = (new Date(y, m, 1).getDay() + 6) % 7;   // Lun=0
+    const dim = new Date(y, m + 1, 0).getDate();
+    const todayIso = _iso(new Date());
+    let cells = '';
+    for (let i = 0; i < off; i++) cells += '<span class="tqp-cal__blank"></span>';
+    for (let d = 1; d <= dim; d++) {
+      const iso = _iso(new Date(y, m, d));
+      const sel = (s.mode === 'single' && s.end === iso) || s.start === iso || s.end === iso;
+      const inR = s.mode === 'range' && s.start && s.end && iso > s.start && iso < s.end;
+      const cls = ['tqp-cal__d'];
+      if (iso === todayIso) cls.push('is-today');
+      if (sel) cls.push('is-sel');
+      if (s.mode === 'range' && s.start === iso && s.end) cls.push('is-rs');
+      if (s.mode === 'range' && s.end === iso && s.start) cls.push('is-re');
+      if (inR) cls.push('is-in');
+      cells += `<button type="button" class="${cls.join(' ')}" onclick="event.stopPropagation();RangePicker.pick('${iso}')">${d}</button>`;
+    }
+    const sum = s.mode === 'range'
+      ? (s.start && s.end ? `<b>${_fmt(s.start)}</b> → <b>${_fmt(s.end)}</b>` : s.start ? `Inicio: <b>${_fmt(s.start)}</b> — ahora elige la fecha de fin` : 'Elige la fecha de inicio')
+      : (s.end ? `<b>${_fmt(s.end)}</b>` : 'Sin fecha');
+    return `
+      <div class="tqp-cal__nav">
+        <button type="button" class="tqp-cal__nb" onclick="event.stopPropagation();RangePicker.nav(-1)">‹</button>
+        <span class="tqp-cal__mes">${MES[m]} ${y}</span>
+        <button type="button" class="tqp-cal__nb" onclick="event.stopPropagation();RangePicker.nav(1)">›</button>
+      </div>
+      <div class="tqp-cal__dow"><span>L</span><span>M</span><span>X</span><span>J</span><span>V</span><span>S</span><span>D</span></div>
+      <div class="tqp-cal__grid">${cells}</div>
+      <div class="tqp-cal__foot">
+        <button type="button" class="tqp-cal__link${s.mode === 'range' ? ' on' : ''}" onclick="event.stopPropagation();RangePicker.toggleRange()">${s.mode === 'range' ? 'Rango activado · volver a fecha única' : 'Seleccionar rango'}</button>
+        ${(s.start || s.end) ? `<button type="button" class="tqp-cal__link tqp-cal__link--muted" onclick="event.stopPropagation();RangePicker.clear()">Quitar</button>` : ''}
+      </div>
+      <div class="tqp-cal__sum">${sum}</div>`;
+  }
+  function _paint() { const el = document.getElementById('rp-calwrap'); if (el) el.innerHTML = _calHtml(); }
+  function nav(d) { if (!_s) return; _s.view = new Date(_s.view.getFullYear(), _s.view.getMonth() + d, 1); _paint(); }
+  function pick(iso) {
+    const s = _s; if (!s) return;
+    if (s.mode === 'single') { s.end = iso; s.start = null; }
+    else if (s.start && !s.end) { if (iso < s.start) { s.end = s.start; s.start = iso; } else s.end = iso; }
+    else { s.start = iso; if (s.end && s.end < iso) s.end = null; }
+    _paint();
+  }
+  function toggleRange() {
+    const s = _s; if (!s) return;
+    if (s.mode === 'range') { s.mode = 'single'; s.end = s.end || s.start; s.start = null; }
+    else { s.mode = 'range'; s.start = null; }
+    _paint();
+  }
+  function clear() { const s = _s; if (!s) return; s.start = null; s.end = null; _paint(); }
+
+  function open(anchorEl, cur, onSave) {
+    close();
+    const dl = (cur && cur.end) || null, fi = (cur && cur.start) || null;
+    _s = {
+      mode:  (fi && dl) ? 'range' : 'single',
+      start: (fi && dl) ? fi : null,
+      end:   dl || null,
+      view:  new Date(((dl || fi) || _iso(new Date())) + 'T00:00:00'),
+      onSave,
+    };
+    _s.view = new Date(_s.view.getFullYear(), _s.view.getMonth(), 1);
+    const pop = document.createElement('div');
+    pop.className = 'range-pick-pop';
+    pop.onclick = ev => ev.stopPropagation();
+    pop.innerHTML = `<div id="rp-calwrap" class="tqp-cal">${_calHtml()}</div>
+      <div class="rp-actions">
+        <button type="button" class="tqp-btn tqp-btn--cancel" onclick="event.stopPropagation();RangePicker.cancel()">Cancelar</button>
+        <button type="button" class="tqp-btn tqp-btn--save" onclick="event.stopPropagation();RangePicker.save()">Guardar</button>
+      </div>`;
+    document.body.appendChild(pop);
+    const rect = anchorEl.getBoundingClientRect();
+    const w = 250, h = 372;
+    let left = rect.left; if (left + w > window.innerWidth - 10) left = window.innerWidth - w - 10; if (left < 10) left = 10;
+    let top = rect.bottom + 6; if (top + h > window.innerHeight - 10) top = Math.max(10, rect.top - h - 6);
+    pop.style.cssText = `position:fixed;z-index:10001;top:${top}px;left:${left}px;width:${w}px`;
+    const _close = () => { pop.remove(); _s = null; document.removeEventListener('click', _close); };
+    _s.close = _close;
+    setTimeout(() => document.addEventListener('click', _close), 0);
+  }
+  function save() {
+    const s = _s; if (!s) return;
+    const out = (s.mode === 'range' && s.start && s.end)
+      ? { fecha_inicio: s.start, deadline: s.end }
+      : { fecha_inicio: null, deadline: s.end || s.start || null };
+    const cb = s.onSave;
+    close();
+    if (cb) cb(out);
+  }
+  function cancel() { close(); }
+  function close() { if (_s && _s.close) _s.close(); }
+
+  return { open, nav, pick, toggleRange, clear, save, cancel, close, fmt: _fmt };
+})();
+
+// =================================================================
 // DASHBOARD MODULE
 // =================================================================
 
@@ -5162,8 +5275,26 @@ const DashboardModule = (() => {
     _expCalY = base.getFullYear(); _expCalM = base.getMonth();
     _expOpenPop(anchor, _expCalHtml(), 'd3xp-pop--cal');
   }
-  function expEditDate(id, anchor)  { _expOpenCal(id, anchor, 'deadline'); }
-  function expEditStart(id, anchor) { _expOpenCal(id, anchor, 'fecha_inicio'); }
+  // Ambos chips (Inicio / Fin) abren el MISMO selector de rango compartido, para
+  // fijar [inicio → fin] de una sola vez (igual que en Proyectos y Tareas).
+  function expEditDate(id, anchor)  { _expOpenRange(id, anchor); }
+  function expEditStart(id, anchor) { _expOpenRange(id, anchor); }
+  function _expOpenRange(id, anchor) {
+    const t = _allTasksCache.find(x => x.id === id); if (!t) return;
+    RangePicker.open(anchor, {
+      start: t.fecha_inicio ? String(t.fecha_inicio).split('T')[0] : null,
+      end:   t.deadline     ? String(t.deadline).split('T')[0]     : null,
+    }, out => _expSaveRange(id, out));
+  }
+  async function _expSaveRange(id, { fecha_inicio, deadline }) {
+    try {
+      await apiFetch(`${API}/mgmt/tasks/${id}/fecha-inicio`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fecha_inicio: fecha_inicio || null }) });
+      await apiFetch(`${API}/mgmt/tasks/${id}/deadline`,     { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ deadline: deadline || null }) });
+      const t = _allTasksCache.find(x => x.id === id); if (t) { t.fecha_inicio = fecha_inicio || null; t.deadline = deadline || null; }
+      _expToast('Fecha actualizada');
+      _expRefresh(id);
+    } catch (e) { console.error('[dashboard] range save:', e); _expToast('No se pudo guardar. Reintenta.', true); }
+  }
   function _expCalHtml() {
     const MES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
     const y = _expCalY, m = _expCalM;
@@ -7098,100 +7229,65 @@ const TasksModule = (() => {
     const prev = t.prioridad;
     t.prioridad = prioridad;
     _rerender();
-    try {
-      await apiFetch(`${API}/mgmt/tasks/${tid}`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          titulo: t.titulo, project_id: t.project_id, descripcion: t.descripcion || '',
-          estado: t.estado, prioridad, responsable: t.responsable || '',
-          responsables: t.responsables || [], deadline: t.deadline || null,
-          notas: t.notas || '', parent_task_id: t.parent_task_id || null,
-        }),
-      });
-    } catch { t.prioridad = prev; _rerender(); }
+    try { await _putTask(t); }
+    catch { t.prioridad = prev; _rerender(); }
   }
 
-  // ── Date popover ──────────────────────────────────────────────────
+  // ── Date popover — selector de rango compartido (fecha única o [inicio → fin]) ──
+
+  // Body COMPLETO del PUT a partir de la tarea + cambios puntuales. El UPDATE del
+  // backend reescribe TODA la fila, así que omitir un campo lo borra; mandar el
+  // registro completo evita perder fecha_inicio, monto, cobrado, parent, etc.
+  function _putTask(t, over) {
+    const body = {
+      titulo: t.titulo, project_id: t.project_id, descripcion: t.descripcion || '',
+      estado: t.estado, prioridad: t.prioridad,
+      responsable: t.responsable || '',
+      responsables: t.responsables || (t.responsable ? [t.responsable] : []),
+      deadline: t.deadline || null, fecha_inicio: t.fecha_inicio || null,
+      notas: t.notas || '', monto: (t.monto != null ? t.monto : null), cobrado: !!t.cobrado,
+      parent_task_id: t.parent_task_id || null,
+      ...(over || {}),
+    };
+    return apiFetch(`${API}/mgmt/tasks/${t.id}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+  }
 
   function openKcDatePopover(e, tid) {
     e.stopPropagation();
-    const anchor = e.currentTarget || (e.target && e.target.closest('.kc-ctx-item')) || e.target;
+    const anchor = e.currentTarget || (e.target && (e.target.closest('td') || e.target.closest('.kc-ctx-item'))) || e.target;
     const t      = _tasks.find(x => x.id === tid);
-    const cur    = t?.deadline ? String(t.deadline).split('T')[0] : '';
-
-    let minDate = '', maxDate = '';
-    if (t?.parent_task_id) {
-      const par = _tasks.find(x => x.id === t.parent_task_id);
-      maxDate = par?.deadline ? String(par.deadline).split('T')[0] : '';
-    } else {
-      const proj = _projectsForDateLimit.find(x => x.id === t?.project_id);
-      minDate = proj?.fecha_inicio ? String(proj.fecha_inicio).split('T')[0] : '';
-      maxDate = proj?.fecha_fin    ? String(proj.fecha_fin).split('T')[0]    : '';
-    }
-    const rangeHint = (minDate || maxDate) ? `Rango: ${minDate||'sin inicio'} → ${maxDate||'sin fin'}` : '';
-    const curLabel  = cur ? `Actual: ${cur}` : 'Sin fecha asignada';
-
-    const html = `<div class="kcp-date-wrap">
-      <div class="kcp-date-cur">${curLabel}</div>
-      <input type="date" id="kcp-date-inp" class="kcp-date-inp" value="${cur}"
-        ${minDate?`min="${minDate}"`:''}${maxDate?` max="${maxDate}"`:''}
-        onkeydown="if(event.key==='Enter'){event.preventDefault();TasksModule.saveKcDate(${tid})}"
-        onchange="TasksModule.saveKcDate(${tid})">
-      <div class="kcp-hint" id="kcp-date-hint">${rangeHint}</div>
-      <div class="kcp-date-btns">
-        <button class="kcp-btn kcp-btn--ghost" onclick="TasksModule.closeKcPopover()">Cancelar</button>
-        <button class="kcp-btn kcp-btn--brand" onclick="TasksModule.saveKcDate(${tid})">Guardar</button>
-      </div>
-    </div>`;
-    _kcOpenPopover(anchor, html, 'kcp-date');
-    setTimeout(() => {
-      const inp = document.getElementById('kcp-date-inp');
-      if (!inp) return;
-      inp.focus();
-      try { inp.showPicker?.(); } catch {}
-    }, 60);
+    if (!t) return;
+    if (_kcClosePopover) _kcClosePopover();
+    RangePicker.open(anchor, {
+      start: t.fecha_inicio ? String(t.fecha_inicio).split('T')[0] : null,
+      end:   t.deadline     ? String(t.deadline).split('T')[0]     : null,
+    }, out => _applyTaskDates(t, out.fecha_inicio, out.deadline));
   }
 
-  async function saveKcDate(tid) {
-    const inp    = document.getElementById('kcp-date-inp');
-    const hint   = document.getElementById('kcp-date-hint');
-    if (!inp) return;
-    const deadline = inp.value || null;
-    const t = _tasks.find(x => x.id === tid);
-    if (!t) return;
-
-    const _showErr = msg => {
-      if (hint) { hint.textContent = '⚠ ' + msg; hint.classList.add('kcp-hint--err'); }
-    };
-
-    if (deadline) {
+  // Valida contra los límites (tarea padre / proyecto), guarda optimista y
+  // persiste conservando el resto de la tarea.
+  async function _applyTaskDates(t, fecha_inicio, deadline) {
+    const lo = fecha_inicio || deadline;   // inicio efectivo
+    const hi = deadline || fecha_inicio;   // fin efectivo
+    if (hi) {
       if (t.parent_task_id) {
         const par   = _tasks.find(x => x.id === t.parent_task_id);
         const parDl = par?.deadline ? String(par.deadline).split('T')[0] : '';
-        if (parDl && deadline > parDl) { _showErr('Fecha posterior a la tarea padre'); return; }
+        if (parDl && hi > parDl) { alert('La subtarea debe estar dentro del rango de la tarea padre.'); return; }
       } else {
         const proj = _projectsForDateLimit.find(x => x.id === t.project_id);
         const ps   = proj?.fecha_inicio ? String(proj.fecha_inicio).split('T')[0] : '';
         const pe   = proj?.fecha_fin    ? String(proj.fecha_fin).split('T')[0]    : '';
-        if ((ps && deadline < ps) || (pe && deadline > pe)) { _showErr('Fuera del rango del proyecto'); return; }
+        if ((ps && lo && lo < ps) || (pe && hi > pe)) { alert('La tarea debe estar dentro del rango de fechas del proyecto.'); return; }
       }
     }
-
-    _kcClosePopover();
-    const prev = t.deadline;
-    t.deadline = deadline;
+    const prev = { d: t.deadline, f: t.fecha_inicio };
+    t.deadline = deadline; t.fecha_inicio = fecha_inicio;
     _rerender();
-    try {
-      await apiFetch(`${API}/mgmt/tasks/${tid}`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          titulo: t.titulo, project_id: t.project_id, descripcion: t.descripcion || '',
-          estado: t.estado, prioridad: t.prioridad, responsable: t.responsable || '',
-          responsables: t.responsables || [], deadline,
-          notas: t.notas || '', parent_task_id: t.parent_task_id || null,
-        }),
-      });
-    } catch { t.deadline = prev; _rerender(); }
+    try { await _putTask(t); }
+    catch { t.deadline = prev.d; t.fecha_inicio = prev.f; _rerender(); }
   }
 
   // ── Responsable popover ───────────────────────────────────────────
@@ -7250,18 +7346,8 @@ const TasksModule = (() => {
     t.responsable  = responsable;
     t.responsables = responsable ? [responsable] : [];
     _rerender();
-    try {
-      await apiFetch(`${API}/mgmt/tasks/${tid}`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          titulo: t.titulo, project_id: t.project_id, descripcion: t.descripcion || '',
-          estado: t.estado, prioridad: t.prioridad, responsable,
-          responsables: responsable ? [responsable] : [],
-          deadline: t.deadline || null,
-          notas: t.notas || '', parent_task_id: t.parent_task_id || null,
-        }),
-      });
-    } catch {
+    try { await _putTask(t); }
+    catch {
       t.responsable = prev.r; t.responsables = prev.rs;
       _rerender();
     }
@@ -8155,18 +8241,7 @@ const TasksModule = (() => {
     t.deadline = deadline; t.responsable = responsable;
     t.responsables = responsable ? [responsable] : [];
     render();
-    try {
-      await apiFetch(`${API}/mgmt/tasks/${t.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          titulo: t.titulo, project_id: t.project_id,
-          descripcion: t.descripcion || '', estado, prioridad,
-          responsable, responsables: responsable ? [responsable] : [],
-          deadline: deadline || null, notas: t.notas || '',
-        }),
-      });
-    } catch { /* optimistic */ }
+    try { await _putTask(t); } catch { /* optimistic */ }
   }
 
   return {
@@ -8179,7 +8254,7 @@ const TasksModule = (() => {
     kanbanDragStart, kanbanDragEnd, moveTaskToStatus,
     openKanbanMenu, closeKanbanMenu, toggleCardSubs, _kcToggleSubItem, toggleSubtaskStatus, duplicateTask, archiveTask, openDrawerWithStatus,
     openKcPrioPopover, saveKcPrio,
-    openKcDatePopover, saveKcDate,
+    openKcDatePopover,
     openKcRespPopover, saveKcResp, _kcFilterResp,
     closeKcPopover,
     tlOpenEstadoPop, tlSaveEstado, _tlToggleSubStatus,
