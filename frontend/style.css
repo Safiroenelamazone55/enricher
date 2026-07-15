@@ -10648,6 +10648,33 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 #pane-mgmt-tasks .clients-table thead th:not(:last-child) { box-shadow: inset -1px 0 0 rgba(15,23,42,.07); }
 #pane-mgmt-tasks .clients-table .tl-row--main > td:not(:last-child) { box-shadow: inset -1px 0 0 rgba(15,23,42,.045); }
 #pane-mgmt-tasks .clients-table .tl-row--main:hover > td:not(:last-child) { box-shadow: inset -1px 0 0 rgba(15,23,42,.06); }
+
+/* ── Columnas redimensibles + mostrar/ocultar (tabla de Tareas) ── */
+#tasks-table-wrap table.clients-table { table-layout: fixed; width: 100%; }
+#tasks-table-wrap thead th { position: relative; }
+/* Truncar solo el texto largo (nombre/proyecto) sin recortar guías ni badges */
+#tasks-table-wrap .ct-name,
+#tasks-table-wrap .tl-sub-name,
+#tasks-table-wrap .tl-proj-txt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+#tasks-table-wrap .tl-name-wrap,
+#tasks-table-wrap .tl-sub-row-wrap { min-width: 0; }
+/* Tirador de redimensión en el borde derecho del encabezado */
+.tl-col-rz { position: absolute; top: 0; right: -3px; width: 8px; height: 100%; cursor: col-resize; z-index: 3; }
+.tl-col-rz::after { content: ""; position: absolute; top: 20%; bottom: 20%; left: 50%; width: 2px; transform: translateX(-50%); background: transparent; border-radius: 2px; transition: background .12s; }
+.tl-col-rz:hover::after, .tl-col-rz:active::after { background: var(--brand, #00804C); }
+/* Botón "Columnas" en la barra de filtros */
+.tl-colbtn { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 11px; border: 1px solid var(--border, #E4E7DD); border-radius: 8px; background: #fff; color: var(--text2, #57534E); font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: border-color .12s, color .12s; }
+.tl-colbtn:hover { border-color: var(--brand-l, #BFE0CC); color: var(--text, #1c1a17); }
+.tl-colbtn svg { color: var(--muted, #A8A29E); flex-shrink: 0; }
+/* Menú desplegable de columnas */
+.tl-colmenu { background: #fff; border: 1px solid var(--border, #E4E7DD); border-radius: 11px; box-shadow: 0 10px 30px rgba(11,30,58,.16); padding: 6px; }
+.tl-colmenu__hd { font-size: 10.5px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: #97A0AE; padding: 5px 9px 6px; }
+.tl-colmenu__it { display: flex; align-items: center; gap: 9px; padding: 6px 9px; border-radius: 8px; cursor: pointer; font-size: 12.5px; color: #33475B; }
+.tl-colmenu__it:hover { background: #F3F5F7; }
+.tl-colmenu__it.is-fixed { opacity: .5; cursor: default; }
+.tl-colmenu__it input { accent-color: var(--brand, #00804C); width: 15px; height: 15px; flex-shrink: 0; }
+.tl-colmenu__reset { width: 100%; margin-top: 5px; border: 0; border-top: 1px solid var(--border, #EDEBE6); background: transparent; color: var(--brand-d, #006B3F); font-weight: 700; font-size: 12px; padding: 8px 6px 5px; cursor: pointer; text-align: center; }
+.tl-colmenu__reset:hover { color: var(--brand, #00804C); }
 #pane-mgmt-tasks .ct-name { color:#0A2540; }
 #pane-mgmt-tasks .client-meta { color:#6B7480; }
 .tl-client-txt { color:#97A0AE; }

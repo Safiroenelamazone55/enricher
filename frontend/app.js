@@ -4150,6 +4150,114 @@ const RangePicker = (() => {
 })();
 
 // =================================================================
+// TASKS COLUMNS — columnas redimensibles + mostrar/ocultar (tabla Tareas)
+// =================================================================
+// Robusto ante filas colspan (grupo/ctx/expand): solo se afectan celdas con
+// [data-col]; las filas colspan=9 se re-ajustan solas. Persistencia por
+// navegador (localStorage) → cada miembro configura la suya.
+const TasksColumns = (() => {
+  const LS_HIDE = 'kw_tasksColHidden', LS_W = 'kw_tasksColW';
+  const ALWAYS = new Set(['tarea']);   // el nombre de la tarea no se puede ocultar
+  let _cols = [];                       // [{ key, label }]
+  let _hidden = new Set(), _w = {};
+  let _styleEl = null, _menuClose = null, _rz = null;
+
+  function _load() {
+    try { _hidden = new Set(JSON.parse(localStorage.getItem(LS_HIDE) || '[]')); } catch { _hidden = new Set(); }
+    try { _w = JSON.parse(localStorage.getItem(LS_W) || '{}') || {}; } catch { _w = {}; }
+  }
+  function _save() {
+    try { localStorage.setItem(LS_HIDE, JSON.stringify([..._hidden])); } catch (_) {}
+    try { localStorage.setItem(LS_W, JSON.stringify(_w)); } catch (_) {}
+  }
+  function _readCols() {
+    const ths = document.querySelectorAll('#tasks-table-wrap thead th[data-col]');
+    _cols = [...ths].map(th => ({
+      key: th.dataset.col,
+      label: (th.dataset.label || th.textContent || th.dataset.col).trim() || th.dataset.col,
+    }));
+  }
+  function _apply() {
+    if (!_styleEl) { _styleEl = document.createElement('style'); _styleEl.id = 'tasks-col-style'; document.head.appendChild(_styleEl); }
+    let css = '';
+    for (const c of _cols) {
+      if (_hidden.has(c.key) && !ALWAYS.has(c.key)) css += `#tasks-table-wrap [data-col="${c.key}"]{display:none!important}`;
+      const w = _w[c.key];
+      if (w) css += `#tasks-table-wrap thead th[data-col="${c.key}"]{width:${w}px}`;
+    }
+    _styleEl.textContent = css;
+  }
+  function _attachResizers() {
+    document.querySelectorAll('#tasks-table-wrap thead th[data-col]').forEach(th => {
+      if (th.querySelector('.tl-col-rz')) return;
+      const h = document.createElement('span');
+      h.className = 'tl-col-rz';
+      h.addEventListener('mousedown', ev => _startResize(ev, th));
+      h.addEventListener('click', ev => ev.stopPropagation());
+      th.appendChild(h);
+    });
+  }
+  function _startResize(ev, th) {
+    ev.preventDefault(); ev.stopPropagation();
+    _rz = { key: th.dataset.col, startX: ev.clientX, startW: th.offsetWidth };
+    document.addEventListener('mousemove', _onResize);
+    document.addEventListener('mouseup', _endResize);
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'col-resize';
+  }
+  function _onResize(ev) {
+    if (!_rz) return;
+    _w[_rz.key] = Math.max(48, _rz.startW + (ev.clientX - _rz.startX));
+    _apply();
+  }
+  function _endResize() {
+    if (_rz) { _save(); _rz = null; }
+    document.removeEventListener('mousemove', _onResize);
+    document.removeEventListener('mouseup', _endResize);
+    document.body.style.userSelect = '';
+    document.body.style.cursor = '';
+  }
+
+  function init() {
+    if (!document.querySelector('#tasks-table-wrap thead th[data-col]')) return;
+    _load(); _readCols(); _apply(); _attachResizers();
+  }
+  function toggleMenu(btn) {
+    if (_menuClose) { _menuClose(); return; }
+    _readCols();
+    const menu = document.createElement('div');
+    menu.className = 'tl-colmenu';
+    menu.onclick = e => e.stopPropagation();
+    menu.innerHTML = `<div class="tl-colmenu__hd">Mostrar columnas</div>` +
+      _cols.map(c => {
+        const on = !_hidden.has(c.key), fixed = ALWAYS.has(c.key);
+        return `<label class="tl-colmenu__it${fixed ? ' is-fixed' : ''}">
+          <input type="checkbox" ${on ? 'checked' : ''} ${fixed ? 'disabled' : ''}
+                 onchange="TasksColumns.setVisible('${c.key}',this.checked)">
+          <span>${esc(c.label)}</span></label>`;
+      }).join('') +
+      `<button type="button" class="tl-colmenu__reset" onclick="TasksColumns.reset()">Restablecer todo</button>`;
+    document.body.appendChild(menu);
+    const r = btn.getBoundingClientRect();
+    const w = 220;
+    let left = r.right - w; if (left < 10) left = 10;
+    menu.style.cssText = `position:fixed;z-index:10001;top:${r.bottom + 6}px;left:${left}px;width:${w}px`;
+    _menuClose = () => { menu.remove(); document.removeEventListener('click', _menuClose); _menuClose = null; };
+    setTimeout(() => document.addEventListener('click', _menuClose), 0);
+  }
+  function setVisible(key, vis) {
+    if (ALWAYS.has(key)) return;
+    if (vis) _hidden.delete(key); else _hidden.add(key);
+    _save(); _apply();
+  }
+  function reset() {
+    _hidden = new Set(); _w = {}; _save(); _apply();
+    if (_menuClose) _menuClose();
+  }
+  return { init, toggleMenu, setVisible, reset };
+})();
+
+// =================================================================
 // DASHBOARD MODULE
 // =================================================================
 
@@ -6651,7 +6759,7 @@ const TasksModule = (() => {
     </button>`;
   }
   function _timerCell(taskId) {
-    return `<td class="tl-timer-cell" onclick="event.stopPropagation()">
+    return `<td class="tl-timer-cell" data-col="timer" onclick="event.stopPropagation()">
       <span class="tl-timer-wrap"><span class="task-elapsed" data-timer-display="${taskId}" hidden></span>${_timerBtn(taskId)}</span>
     </td>`;
   }
@@ -6663,23 +6771,23 @@ const TasksModule = (() => {
     const respArr  = t.responsables?.length ? t.responsables : (t.responsable ? [t.responsable] : []);
     const respHtml = _tlResp(respArr);
     return `<tr class="clients-table__row tl-row tl-row--main${done ? ' tl-row--done-main' : ''}" data-task-id="${t.id}" onclick="TasksModule.toggleTaskExpand(${t.id})">
-      <td class="ct-name-cell tl-name-cell">
+      <td class="ct-name-cell tl-name-cell" data-col="tarea">
         <div class="tl-name-wrap">
           ${_tlChevron(t.id, allKidsCount > 0, isOpen)}
           <span class="ct-name">${esc(t.titulo)}</span>
           ${_tlDepChip(t)}
         </div>
       </td>
-      <td class="client-meta ct-proj-cell tl-proj-cell">
+      <td class="client-meta ct-proj-cell tl-proj-cell" data-col="proyecto">
         ${t.project_nombre ? `<span class="tl-proj-txt">${esc(t.project_nombre)}${t.client_nombre ? `<span class="tl-client-txt"> · ${esc(t.client_nombre)}</span>` : ''}</span>` : '<span class="muted">—</span>'}
       </td>
-      <td class="tl-tip-cell" onclick="event.stopPropagation();TasksModule.tlOpenEstadoPop(event,${t.id})">${_estadoBadge(t.estado)}</td>
-      <td class="tl-tip-cell" onclick="event.stopPropagation();TasksModule.openKcPrioPopover(event,${t.id})">${_prioridadBadge(t.prioridad)}</td>
-      <td class="tl-tip-cell" onclick="event.stopPropagation();TasksModule.openKcDatePopover(event,${t.id})">${_deadlineCell(t.deadline, t.estado)}</td>
-      <td class="tl-tip-cell tl-resp-cell" onclick="event.stopPropagation();TasksModule.openKcRespPopover(event,${t.id})">${respHtml}</td>
-      <td class="tl-prog-cell">${prog || '<span class="muted">—</span>'}</td>
+      <td class="tl-tip-cell" data-col="estado" onclick="event.stopPropagation();TasksModule.tlOpenEstadoPop(event,${t.id})">${_estadoBadge(t.estado)}</td>
+      <td class="tl-tip-cell" data-col="prioridad" onclick="event.stopPropagation();TasksModule.openKcPrioPopover(event,${t.id})">${_prioridadBadge(t.prioridad)}</td>
+      <td class="tl-tip-cell" data-col="deadline" onclick="event.stopPropagation();TasksModule.openKcDatePopover(event,${t.id})">${_deadlineCell(t.deadline, t.estado)}</td>
+      <td class="tl-tip-cell tl-resp-cell" data-col="responsable" onclick="event.stopPropagation();TasksModule.openKcRespPopover(event,${t.id})">${respHtml}</td>
+      <td class="tl-prog-cell" data-col="progreso">${prog || '<span class="muted">—</span>'}</td>
       ${_timerCell(t.id)}
-      <td onclick="event.stopPropagation()" class="tl-actions-cell">
+      <td onclick="event.stopPropagation()" class="tl-actions-cell" data-col="acciones">
         <div class="client-actions-cell">
           <button class="client-action-btn" title="Dependencias (esperando a)" onclick="event.stopPropagation();TasksModule.tlOpenDepPop(event,${t.id})">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 0 1 0 10h-2"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
@@ -6710,7 +6818,7 @@ const TasksModule = (() => {
     const respArr  = t.responsables?.length ? t.responsables : (t.responsable ? [t.responsable] : []);
     const respHtml = _tlResp(respArr);
     return `<tr class="clients-table__row tl-row tl-row--sub${isLast ? ' tl-row--sub-last' : ''}${done ? ' tl-row--done' : ''}" data-task-id="${t.id}">
-      <td class="ct-name-cell tl-name-cell--sub">
+      <td class="ct-name-cell tl-name-cell--sub" data-col="tarea">
         <div class="tl-sub-row-wrap">
           <span class="tl-sub-chk${done ? ' tl-sub-chk--done' : ''}"
             onclick="event.stopPropagation();TasksModule._tlToggleSubStatus(${t.id})">${chkIcon}</span>
@@ -6719,14 +6827,14 @@ const TasksModule = (() => {
           ${_tlDepChip(t)}
         </div>
       </td>
-      <td class="client-meta tl-proj-cell tl-sub-proj"></td>
-      <td class="tl-tip-cell" onclick="event.stopPropagation();TasksModule.tlOpenEstadoPop(event,${t.id})">${_estadoBadge(t.estado)}</td>
-      <td class="tl-tip-cell" onclick="event.stopPropagation();TasksModule.openKcPrioPopover(event,${t.id})">${_prioridadBadge(t.prioridad)}</td>
-      <td class="tl-tip-cell" onclick="event.stopPropagation();TasksModule.openKcDatePopover(event,${t.id})">${_deadlineCell(t.deadline, t.estado)}</td>
-      <td class="tl-tip-cell tl-resp-cell" onclick="event.stopPropagation();TasksModule.openKcRespPopover(event,${t.id})">${respHtml}</td>
-      <td class="tl-prog-cell"></td>
+      <td class="client-meta tl-proj-cell tl-sub-proj" data-col="proyecto"></td>
+      <td class="tl-tip-cell" data-col="estado" onclick="event.stopPropagation();TasksModule.tlOpenEstadoPop(event,${t.id})">${_estadoBadge(t.estado)}</td>
+      <td class="tl-tip-cell" data-col="prioridad" onclick="event.stopPropagation();TasksModule.openKcPrioPopover(event,${t.id})">${_prioridadBadge(t.prioridad)}</td>
+      <td class="tl-tip-cell" data-col="deadline" onclick="event.stopPropagation();TasksModule.openKcDatePopover(event,${t.id})">${_deadlineCell(t.deadline, t.estado)}</td>
+      <td class="tl-tip-cell tl-resp-cell" data-col="responsable" onclick="event.stopPropagation();TasksModule.openKcRespPopover(event,${t.id})">${respHtml}</td>
+      <td class="tl-prog-cell" data-col="progreso"></td>
       ${_timerCell(t.id)}
-      <td onclick="event.stopPropagation()" class="tl-actions-cell">
+      <td onclick="event.stopPropagation()" class="tl-actions-cell" data-col="acciones">
         <div class="client-actions-cell">
           <button class="client-action-btn" title="Dependencias (esperando a)" onclick="event.stopPropagation();TasksModule.tlOpenDepPop(event,${t.id})">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 0 1 0 10h-2"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
@@ -20096,6 +20204,9 @@ const TimerModule = (() => {
 // =================================================================
 
 function initApp() {
+
+  // Columnas de la tabla de Tareas: aplica anchos/ocultas guardadas + resizers.
+  try { TasksColumns.init(); } catch (_) {}
 
   // ── Tab switching ───────────────────────────────────────────────
   let _verifLoaded = false;
