@@ -152,11 +152,11 @@ function applyBranding({ companyLogo, workspaceName } = {}) {
 /* ── Workspace launcher: Google-Workspace-style app picker, opened
    by clicking the sidebar logo/brand. ────────────────────────── */
 const WS_LAUNCHER_ITEMS = [
-  { tab: 'mgmt-dashboard', area: 'management', name: 'Management', desc: 'Proyectos, tareas, clientes y finanzas',
+  { tab: 'mgmt-dashboard', area: 'management', name: 'Operaciones', desc: 'Proyectos, tareas, clientes y finanzas',
     icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="11" height="9" rx="2"/><rect x="16" y="3" width="5" height="9" rx="2"/><rect x="3" y="14" width="5" height="7" rx="2"/><rect x="10" y="14" width="11" height="7" rx="2"/></svg>' },
-  { tab: 'single', area: 'enricher', name: 'Enricher', desc: 'Preparación, verificación y scoring de leads',
+  { tab: 'single', area: 'enricher', name: 'Enriquecimiento', desc: 'Preparación, verificación y scoring de leads',
     icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21"/><path d="M6.2 6.2l1.8 1.8M16 16l1.8 1.8M6.2 17.8l1.8-1.8M16 8l1.8-1.8"/></svg>' },
-  { tab: 'lead-manager', area: 'leadmanagement', name: 'Lead Management', desc: 'CRM, campañas, actividades y seguimiento',
+  { tab: 'lead-manager', area: 'leadmanagement', name: 'Outreach', desc: 'CRM, campañas, actividades y seguimiento',
     icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 3H2l8 9.5v7.5l4 2v-9.5L22 3z"/></svg>' },
 ];
 
@@ -271,6 +271,20 @@ async function initAuth() {
 
       // ── Store auth info globally for modules to read ────────
       window._authUser = data;
+
+      // ── Pie de la barra: nombre + rol del usuario (visible para todos) ──
+      const _footUser = document.getElementById('snav-foot-user');
+      if (_footUser) {
+        const _rol = data.isOwner ? 'Propietaria · Admin'
+          : (data.memberRol === 'admin' ? 'Administrador'
+          : (data.memberRol === 'manager' ? 'Manager' : 'Miembro'));
+        const _nm = data.memberNombre || data.name || 'Usuario';
+        const _av = data.avatar || `https://api.dicebear.com/9.x/lorelei/svg?seed=${encodeURIComponent(_nm || data.email || 'user')}`;
+        const _avEl = document.getElementById('snav-foot-av');   if (_avEl) _avEl.src = _av;
+        const _nmEl = document.getElementById('snav-foot-name'); if (_nmEl) { _nmEl.textContent = _nm; _nmEl.title = _nm; }
+        const _roEl = document.getElementById('snav-foot-role'); if (_roEl) _roEl.textContent = _rol;
+        _footUser.hidden = false;
+      }
 
       authBar.innerHTML = `
         <img src="${data.avatar || `https://api.dicebear.com/9.x/lorelei/svg?seed=${encodeURIComponent(data.name || data.email || 'user')}`}" alt="" class="rail-user__av" title="${esc(data.name || data.email)}${data.isOwner ? ' · Configuración' : ''}" ${data.isOwner ? 'style="cursor:pointer" onclick="WorkspaceModule.openNameModal()"' : ''}/>
@@ -440,7 +454,7 @@ function selectWorkspaceArea(area) {
 
 // ── Doble sidebar: rail de módulos + panel de secciones ──
 let _activeModule = 'management';
-const _MOD_TITLES = { management: 'Management', enricher: 'Enricher', leadmanagement: 'Lead Management' };
+const _MOD_TITLES = { management: 'Operaciones', enricher: 'Enriquecimiento', leadmanagement: 'Outreach' };
 function _moduleOf(tab) {
   return document.querySelector(`.snav-item[data-tab="${tab}"]`)?.closest('.snav-group')?.dataset.module || 'management';
 }

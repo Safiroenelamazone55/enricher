@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260715b"/>
+  <link rel="stylesheet" href="style.css?v=20260715c"/>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -207,11 +207,15 @@
     </div>
     <div class="snav-rail__sep"></div>
     <div class="snav-rail__mods">
-      <button class="snav-mod active" data-module="management" onclick="selectModule('management')" data-tip="Management" aria-label="Management">
+      <button class="snav-mod active" data-module="management" onclick="selectModule('management')" data-tip="Operaciones" aria-label="Operaciones">
         <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg>
       </button>
-      <button class="snav-mod" data-module="enricher" onclick="selectModule('enricher')" data-tip="Enricher" aria-label="Enricher"><span class="snav-mod__badge">E</span></button>
-      <button class="snav-mod" data-module="leadmanagement" onclick="selectModule('leadmanagement')" data-tip="Lead Management" aria-label="Lead Management"><span class="snav-mod__badge snav-mod__badge--lead">L</span></button>
+      <button class="snav-mod" data-module="enricher" onclick="selectModule('enricher')" data-tip="Enriquecimiento" aria-label="Enriquecimiento">
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 4.9 4.9 1.8-4.9 1.8L12 16.4l-1.8-4.9L5.3 9.5l4.9-1.8z"/><path d="M18.6 14.6l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/></svg>
+      </button>
+      <button class="snav-mod" data-module="leadmanagement" onclick="selectModule('leadmanagement')" data-tip="Outreach" aria-label="Outreach">
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>
+      </button>
     </div>
     <div class="snav-rail__spacer"></div>
     <button class="snav-rail__btn" onclick="WorkspaceModule.openNameModal()" data-tip="Configuración" aria-label="Configuración general">
@@ -226,8 +230,7 @@
     <!-- Panel header: botón de workspace (cambiar módulo) -->
     <div class="snav-panel__hd">
       <button class="snav-ws" id="ws-switch" title="Cambiar módulo" aria-label="Cambiar módulo" onclick="toggleWorkspaceMenu(this)">
-        <span class="snav-ws__ico"><svg width="19" height="19" viewBox="0 0 100 100" fill="none"><path d="M50 3 L63 38 L97 50 L63 62 L50 97 L37 62 L3 50 L37 38 Z" fill="currentColor"/></svg></span>
-        <span class="snav-panel__title" id="snav-panel-title">Management</span>
+        <span class="snav-panel__title" id="snav-panel-title">Operaciones</span>
         <svg class="snav-ws__chev" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
     </div>
@@ -419,8 +422,15 @@
 
     </nav>
 
-    <!-- Pie fijo: Configuración + Salir (siempre abajo) -->
+    <!-- Pie fijo: usuario (nombre + rol) + Configuración + Salir (siempre abajo) -->
     <div class="snav-foot">
+      <div class="snav-foot__user" id="snav-foot-user" hidden>
+        <img class="snav-foot__av" id="snav-foot-av" alt=""/>
+        <div class="snav-foot__uinfo">
+          <span class="snav-foot__uname" id="snav-foot-name">—</span>
+          <span class="snav-foot__urole" id="snav-foot-role">—</span>
+        </div>
+      </div>
       <button class="snav-foot__btn" onclick="WorkspaceModule.openNameModal()">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
         <span>Configuración</span>
@@ -1605,15 +1615,15 @@
     <div class="ws-menu__lbl">Módulos</div>
     <button class="snav-mod ws-mod" data-module="management" onclick="selectModule('management');closeWorkspaceMenu()" role="menuitem">
       <span class="ws-mod__ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg></span>
-      <span class="ws-mod__lbl">Management</span><span class="ws-mod__chk"></span>
+      <span class="ws-mod__lbl">Operaciones</span><span class="ws-mod__chk"></span>
     </button>
     <button class="snav-mod ws-mod" data-module="enricher" onclick="selectModule('enricher');closeWorkspaceMenu()" role="menuitem">
-      <span class="ws-mod__ico"><span class="snav-mod__badge">E</span></span>
-      <span class="ws-mod__lbl">Enricher</span><span class="ws-mod__chk"></span>
+      <span class="ws-mod__ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 4.9 4.9 1.8-4.9 1.8L12 16.4l-1.8-4.9L5.3 9.5l4.9-1.8z"/><path d="M18.6 14.6l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/></svg></span>
+      <span class="ws-mod__lbl">Enriquecimiento</span><span class="ws-mod__chk"></span>
     </button>
     <button class="snav-mod ws-mod" data-module="leadmanagement" onclick="selectModule('leadmanagement');closeWorkspaceMenu()" role="menuitem">
-      <span class="ws-mod__ico"><span class="snav-mod__badge snav-mod__badge--lead">L</span></span>
-      <span class="ws-mod__lbl">Lead Management</span><span class="ws-mod__chk"></span>
+      <span class="ws-mod__ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg></span>
+      <span class="ws-mod__lbl">Outreach</span><span class="ws-mod__chk"></span>
     </button>
     <div class="ws-menu__sep"></div>
     <div id="ws-user-slot" class="ws-menu__user"></div>
@@ -2440,7 +2450,7 @@
       <label class="form-label">Fuente</label>
       <select id="lm-fuente" class="form-input">
         <option value="manual">Manual</option>
-        <option value="enricher">Enricher</option>
+        <option value="enricher">Enriquecimiento</option>
         <option value="referido">Referido</option>
         <option value="web">Web</option>
         <option value="redes">Redes sociales</option>
@@ -2473,7 +2483,7 @@
 })();
 </script>
 
-<script src="app.js?v=20260715b"></script>
+<script src="app.js?v=20260715c"></script>
 <div id="task-quick-edit" style="display:none;position:fixed;z-index:9999"></div>
 </body>
 </html>
