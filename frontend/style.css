@@ -12232,7 +12232,7 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
 .d3-hero { align-items: flex-start; justify-content: flex-start; gap: 16px; flex-wrap: nowrap; background: transparent; border-bottom: none; padding: 24px 52px 0 0; }
 .d3-revcard { flex: 0 0 280px; max-width: 280px; }
 .d3-actcard {
-  flex: 1 1 auto; min-width: 0;
+  flex: 1 1 auto; min-width: 0; max-width: 900px;
   background: #fff; border: 1px solid var(--border, #EDEBE6);
   border-radius: 16px; padding: 14px 16px 12px;
   box-shadow: 0 1px 2px rgba(16,24,40,.05);
@@ -12253,7 +12253,7 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
 /* ══ Cronómetro consolidado dentro de "Tu ritmo de trabajo" ══
    (panel de hoy + métricas + botón, movido desde HORAS DE TRABAJO). */
 /* Cronómetro como COLUMNA a la derecha del heatmap (baja el alto de la tarjeta) */
-.d3-act-timer { flex: 0 0 228px; margin: 0; padding: 2px 0 2px 20px; border-top: none; border-left: 1px solid var(--border, #EDEBE6); display: flex; flex-direction: column; }
+.d3-act-timer { flex: 0 0 280px; margin: 0; padding: 2px 0 2px 20px; border-top: none; border-left: 1px solid var(--border, #EDEBE6); display: flex; flex-direction: column; }
 .d3-act-timer:empty { display: none; }
 .d3-act-statsrow { display: flex; flex-direction: column; align-items: stretch; gap: 12px; margin-bottom: 12px; }
 .d3-act-today { display: flex; align-items: center; gap: 11px; }
