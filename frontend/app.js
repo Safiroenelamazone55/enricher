@@ -19345,7 +19345,7 @@ const TimerModule = (() => {
     es: {
       locale: 'es', logoAlt: 'Logo de la empresa',
       title: 'Reporte de Time Tracking', subtitle: 'Resumen de horas y facturación',
-      period: 'Período', member: 'Miembro', client: 'Cliente', project: 'Proyecto', generated: 'Generado',
+      period: 'Período', member: 'Miembro', client: 'Cliente', project: 'Proyecto', generated: 'Generado', allProjects: 'Todos los proyectos',
       memberMe: 'Yo', memberAll: 'Todo el equipo', today: 'Hoy', yesterday: 'Ayer',
       summary: 'Resumen', detail: 'Detalle por proyecto y tarea',
       chartBilling: 'Facturación por día', chartHours: 'Horas por día',
@@ -19358,7 +19358,7 @@ const TimerModule = (() => {
     en: {
       locale: 'en-GB', logoAlt: 'Company logo',
       title: 'Time Tracking Report', subtitle: 'Hours and billing summary',
-      period: 'Period', member: 'Member', client: 'Client', project: 'Project', generated: 'Generated',
+      period: 'Period', member: 'Member', client: 'Client', project: 'Project', generated: 'Generated', allProjects: 'All projects',
       memberMe: 'Me', memberAll: 'Whole team', today: 'Today', yesterday: 'Yesterday',
       summary: 'Summary', detail: 'Detail by project and task',
       chartBilling: 'Billing per day', chartHours: 'Hours per day',
@@ -19371,7 +19371,7 @@ const TimerModule = (() => {
     de: {
       locale: 'de-DE', logoAlt: 'Firmenlogo',
       title: 'Zeiterfassungsbericht', subtitle: 'Stunden- und Abrechnungsübersicht',
-      period: 'Zeitraum', member: 'Mitglied', client: 'Kunde', project: 'Projekt', generated: 'Erstellt',
+      period: 'Zeitraum', member: 'Mitglied', client: 'Kunde', project: 'Projekt', generated: 'Erstellt', allProjects: 'Alle Projekte',
       memberMe: 'Ich', memberAll: 'Gesamtes Team', today: 'Heute', yesterday: 'Gestern',
       summary: 'Zusammenfassung', detail: 'Details nach Projekt und Aufgabe',
       chartBilling: 'Abrechnung pro Tag', chartHours: 'Stunden pro Tag',
@@ -19457,7 +19457,7 @@ const TimerModule = (() => {
     const metaFields = [
       [t.period, periodLabel], [t.member, memberLabel],
       _ttClient !== 'all'  ? [t.client, _ttClient]   : null,
-      _ttProject !== 'all' ? [t.project, _ttProject] : null,
+      [t.project, _ttProject !== 'all' ? _ttProject : t.allProjects],
       [t.generated, fechaGen],
     ].filter(Boolean).map(([l, v]) => `<div class="ttp-meta"><div class="ttp-meta__l">${esc(l)}</div><div class="ttp-meta__v">${esc(v)}</div></div>`).join('');
 
@@ -19483,7 +19483,7 @@ const TimerModule = (() => {
       <div class="ttp-accent"></div>
       <div class="ttp-body">
         <div class="ttp-header">
-          <div class="ttp-head-l"><div class="ttp-h1">${esc(t.title)}</div><div class="ttp-subtitle">${esc(t.subtitle)}</div></div>
+          <div class="ttp-head-l"><div class="ttp-h1">${esc(t.title)}</div><div class="ttp-subtitle">${esc(t.subtitle)}${_ttProject !== 'all' ? ' — ' + esc(_ttProject) : ''}</div></div>
           ${clogo ? `<img class="ttp-clogo" src="${esc(clogo)}" alt="${esc(t.logoAlt)}">` : ''}
         </div>
         <div class="ttp-rule"></div>
