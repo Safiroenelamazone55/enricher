@@ -12230,48 +12230,57 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
 /* Sin recuadro blanco de fondo: las 2 tarjetas van directo sobre el fondo del
    dashboard, alineadas con el contenido de abajo (izq 0, der 52, como .d3-body). */
 .d3-hero { align-items: flex-start; justify-content: flex-start; gap: 16px; flex-wrap: nowrap; background: transparent; border-bottom: none; padding: 24px 52px 0 0; }
-.d3-revcard { flex: 0 0 320px; max-width: 320px; }
+.d3-revcard { flex: 0 0 280px; max-width: 280px; }
 .d3-actcard {
   flex: 1 1 auto; min-width: 0;
   background: #fff; border: 1px solid var(--border, #EDEBE6);
   border-radius: 16px; padding: 14px 16px 12px;
   box-shadow: 0 1px 2px rgba(16,24,40,.05);
+  display: flex; gap: 20px; align-items: stretch;
 }
+#dash2-act-heatmap { flex: 1 1 auto; min-width: 0; }
 /* Solo en pantallas realmente angostas se apilan */
 @media (max-width: 940px) {
   .d3-hero { flex-wrap: wrap; }
   .d3-revcard { flex-basis: 100%; max-width: none; }
-  .d3-actcard { flex-basis: 100%; }
+  .d3-actcard { flex-basis: 100%; flex-direction: column; }
+  .d3-act-timer { flex-basis: auto; border-left: none; border-top: 1px solid var(--border, #EDEBE6); padding: 12px 0 0; }
+  .d3-act-statsrow { flex-direction: row; flex-wrap: wrap; align-items: center; }
+  .d3-act-timer .d3-hrs-metrics { grid-template-columns: repeat(4, 1fr); }
+  .d3-act-timer .d3-hrs-btn { margin-top: 0; }
 }
 
 /* ══ Cronómetro consolidado dentro de "Tu ritmo de trabajo" ══
    (panel de hoy + métricas + botón, movido desde HORAS DE TRABAJO). */
-.d3-act-timer { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border, #EDEBE6); }
+/* Cronómetro como COLUMNA a la derecha del heatmap (baja el alto de la tarjeta) */
+.d3-act-timer { flex: 0 0 228px; margin: 0; padding: 2px 0 2px 20px; border-top: none; border-left: 1px solid var(--border, #EDEBE6); display: flex; flex-direction: column; }
 .d3-act-timer:empty { display: none; }
-.d3-act-today { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
-.d3-act-today .d3-hrs-total { font-size: 1.5rem; font-weight: 800; }
+.d3-act-statsrow { display: flex; flex-direction: column; align-items: stretch; gap: 12px; margin-bottom: 12px; }
+.d3-act-today { display: flex; align-items: center; gap: 11px; }
+.d3-act-today .d3-hrs-total { font-size: 1.45rem; font-weight: 800; }
 .d3-act-today__meta { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .d3-act-today__lbl { font-size: 11.5px; color: var(--muted, #A8A29E); }
 .d3-act-today .d3-hrs-pct { font-size: 13px; font-weight: 700; }
 /* Reusa el estilo del widget viejo, sin sus márgenes de 18px (ya vive dentro de la tarjeta) */
 .d3-act-timer .d3-hrs-now { margin: 0 0 12px; }
-.d3-act-timer .d3-hrs-metrics { padding: 0 0 12px; border-top: none; }
-.d3-act-timer .d3-hrs-btn { width: 100%; margin: 0; height: 40px; font-size: .86rem; }
+.d3-act-timer .d3-hrs-metrics { padding: 0; border-top: none; grid-template-columns: repeat(2, 1fr); row-gap: 12px; }
+.d3-act-timer .d3-hrs-btn { margin-top: auto; }
+.d3-act-timer .d3-hrs-btn { width: 100%; margin: 0; height: 38px; font-size: .86rem; }
 .d3-act-timer .d3-hrs-actions { padding: 0; }
-.ac-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+.ac-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
 .ac-title { font-size: 13px; font-weight: 600; color: var(--text2, #57534E); }
 .ac-legend { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; color: var(--muted, #A8A29E); }
 .ac-legend i { width: 11px; height: 11px; border-radius: 2px; display: inline-block; }
-.ac-grid { display: grid; grid-template-columns: 30px repeat(24, minmax(0, 1fr)); gap: 3px; align-items: center; }
+.ac-grid { display: grid; grid-template-columns: 28px repeat(24, minmax(0, 1fr)); gap: 2px; align-items: center; }
 .ac-hlbl { font-size: 9px; color: var(--muted, #A8A29E); text-align: center; line-height: 1; }
-.ac-rowlbl { font-size: 10px; font-weight: 600; color: var(--text2, #57534E); display: flex; align-items: center; height: 15px; }
-.ac-cell { height: 15px; border-radius: 3px; background: #EEF3EE; }
+.ac-rowlbl { font-size: 10px; font-weight: 600; color: var(--text2, #57534E); display: flex; align-items: center; height: 13px; }
+.ac-cell { height: 13px; border-radius: 3px; background: #EEF3EE; }
 .ac-cell--l0 { background: #EEF3EE; }
 .ac-cell--l1 { background: #D8EEDF; }
 .ac-cell--l2 { background: #A3D9B6; }
 .ac-cell--l3 { background: #5FB985; }
 .ac-cell--l4 { background: #00804C; }
-.ac-peak { margin-top: 11px; font-size: 11.5px; color: var(--muted, #A8A29E); }
+.ac-peak { margin-top: 7px; font-size: 11.5px; color: var(--muted, #A8A29E); }
 .ac-peak b { color: var(--brand-d, #006B3F); font-weight: 700; }
 .ac-skel { height: 132px; border-radius: 8px; background: linear-gradient(90deg, var(--bg,#F7F5F1), var(--bg2,#F3EFE9), var(--bg,#F7F5F1)); }
 .ac-empty { padding: 22px 0; font-size: 12.5px; color: var(--muted, #A8A29E); text-align: center; line-height: 1.6; }

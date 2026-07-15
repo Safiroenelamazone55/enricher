@@ -4478,14 +4478,16 @@ const DashboardModule = (() => {
 
     el.innerHTML = `
       ${ctxBlock}
-      <div class="d3-act-today">
-        <span class="d3-hrs-total" id="dash2-hrs-total">${_fmtHrs(totalSec)}</span>
-        <span class="d3-act-today__meta">
-          <span class="d3-act-today__lbl">Tiempo trabajado hoy</span>
-          <span class="d3-hrs-pct" id="dash2-hrs-pct">${Math.round(totalSec / HRS_WORKDAY * 100)}%<span> de 8 h</span></span>
-        </span>
+      <div class="d3-act-statsrow">
+        <div class="d3-act-today">
+          <span class="d3-hrs-total" id="dash2-hrs-total">${_fmtHrs(totalSec)}</span>
+          <span class="d3-act-today__meta">
+            <span class="d3-act-today__lbl">Tiempo trabajado hoy</span>
+            <span class="d3-hrs-pct" id="dash2-hrs-pct">${Math.round(totalSec / HRS_WORKDAY * 100)}%<span> de 8 h</span></span>
+          </span>
+        </div>
+        ${metricsStrip}
       </div>
-      ${metricsStrip}
       ${actions}`;
 
     clearInterval(_hrsTimer);
