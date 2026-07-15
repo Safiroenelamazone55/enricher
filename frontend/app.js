@@ -4432,14 +4432,17 @@ const DashboardModule = (() => {
   }
 
   function _subtaskRow(t, isOverdue, allTasksById) {
-    const dl = t.deadline
-      ? new Date(String(t.deadline).split('T')[0] + 'T00:00:00')
-          .toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })
+    // Muestra el rango [inicio – fin] si la subtarea lo tiene; si no, la fecha única.
+    const _fmtD = d => new Date(d + 'T00:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
+    const _end = t.deadline ? String(t.deadline).split('T')[0] : null;
+    const _start = t.fecha_inicio ? String(t.fecha_inicio).split('T')[0] : null;
+    const dl = _end
+      ? (_start && _start !== _end ? `${_fmtD(_start)} – ${_fmtD(_end)}` : _fmtD(_end))
       : null;
-    // Fila auto-contenida: su contexto (tarea padre · proyecto) va inline, sin cabecera
+    // Fila auto-contenida: su contexto (tarea padre · cliente) va inline, sin cabecera
     // de padre repetida por sección (antes el mismo padre aparecía en Hoy y en Vencidas).
     const parent = allTasksById ? allTasksById.get(t.parent_task_id) : null;
-    const ctx = [parent && parent.titulo, t.project_nombre].filter(Boolean).join(' · ');
+    const ctx = [parent && parent.titulo, t.client_nombre || t.project_nombre].filter(Boolean).join(' · ');
     const estado = t.estado || 'pendiente';
     return `<div class="d3-task-row${isOverdue ? ' d3-task-row--overdue' : ''}" data-task-id="${t.id}" onclick="DashboardModule.toggleExpand(${t.id})">
       <button class="d3-status-btn d3-status-btn--${(_STATUS_CFG[estado]||_STATUS_CFG.pendiente).dot}"
@@ -4837,11 +4840,70 @@ const DashboardModule = (() => {
   // va como contexto inline en la subtarea. Evita que "semana IV" aparezca en Hoy y Vencidas.
   function _renderSectionFlat(items, isOverdue, allTasksById) {
     const _k = t => (t.deadline ? String(t.deadline).split('T')[0]
-                    : (!t.parent_task_id && t.fecha_inicio ? String(t.fecha_inicio).split('T')[0] : '9999-12-31'));
-    return [...items]
-      .sort((a, b) => _k(a).localeCompare(_k(b)) || String(a.titulo || '').localeCompare(String(b.titulo || '')))
-      .map(t => t.parent_task_id ? _subtaskRow(t, isOverdue, allTasksById) : _taskRow(t, isOverdue))
+                    : (t.fecha_inicio ? String(t.fecha_inicio).split('T')[0] : '9999-12-31'));
+    // Tareas-hoja van sueltas; las subtareas se AGRUPAN por su tarea padre para no
+    // repetir "tarea · cliente" en varias tarjetas (pedido de Jenny: optimizar espacio).
+    const leaves = items.filter(t => !t.parent_task_id);
+    const subs   = items.filter(t => t.parent_task_id);
+    const groups = new Map();
+    for (const s of subs) {
+      if (!groups.has(s.parent_task_id)) groups.set(s.parent_task_id, []);
+      groups.get(s.parent_task_id).push(s);
+    }
+    // Cada bloque (tarea suelta o grupo de subtareas) se ordena por su fecha más próxima.
+    const blocks = [];
+    for (const t of leaves) blocks.push({ k: _k(t), t: String(t.titulo || ''), html: _taskRow(t, isOverdue) });
+    for (const [, arr] of groups) {
+      arr.sort((a, b) => _k(a).localeCompare(_k(b)) || String(a.titulo || '').localeCompare(String(b.titulo || '')));
+      const parent = allTasksById ? allTasksById.get(arr[0].parent_task_id) : null;
+      blocks.push({
+        k: _k(arr[0]),
+        t: String((parent && parent.titulo) || arr[0].titulo || ''),
+        html: arr.length === 1 ? _subtaskRow(arr[0], isOverdue, allTasksById) : _subtaskGroup(arr, isOverdue, allTasksById),
+      });
+    }
+    return blocks
+      .sort((a, b) => a.k.localeCompare(b.k) || a.t.localeCompare(b.t))
+      .map(b => b.html)
       .join('');
+  }
+
+  // Grupo de subtareas de la MISMA tarea padre: las subtareas arriba (lo accionable)
+  // y el contexto compartido "tarea · cliente" una sola vez abajo.
+  function _subtaskGroup(arr, isOverdue, allTasksById) {
+    const parent = allTasksById ? allTasksById.get(arr[0].parent_task_id) : null;
+    const client = arr[0].client_nombre || arr[0].project_nombre || '';
+    const ctx = [parent && parent.titulo, client].filter(Boolean).join(' · ');
+    const items = arr.map(t => _subtaskGroupItem(t, isOverdue)).join('');
+    return `<div class="d3-task-group${isOverdue ? ' d3-task-group--overdue' : ''}">
+      <div class="d3-task-group__items">${items}</div>
+      ${ctx ? `<div class="d3-task-group__ctx"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg><span>${esc(ctx)}</span></div>` : ''}
+    </div>`;
+  }
+
+  // Fila compacta de subtarea dentro de un grupo (sin repetir el contexto).
+  function _subtaskGroupItem(t, isOverdue) {
+    const _fmtD = d => new Date(d + 'T00:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
+    const _end = t.deadline ? String(t.deadline).split('T')[0] : null;
+    const _start = t.fecha_inicio ? String(t.fecha_inicio).split('T')[0] : null;
+    const dl = _end
+      ? (_start && _start !== _end ? `${_fmtD(_start)} – ${_fmtD(_end)}` : _fmtD(_end))
+      : null;
+    const estado = t.estado || 'pendiente';
+    return `<div class="d3-task-row d3-task-row--grouped${isOverdue ? ' d3-task-row--overdue' : ''}" data-task-id="${t.id}" onclick="DashboardModule.toggleExpand(${t.id})">
+      <button class="d3-status-btn d3-status-btn--${(_STATUS_CFG[estado]||_STATUS_CFG.pendiente).dot}"
+              onclick="event.stopPropagation();DashboardModule.openStatusMenu(event,${t.id})"
+              title="Cambiar estado">${_statusSvg(estado)}</button>
+      <div class="d3-task-body">
+        <span class="d3-task-name${isOverdue ? ' d3-task-name--overdue' : ''}">${esc(t.titulo)}</span>
+      </div>
+      ${dl ? `<span class="d3-task-date${isOverdue ? ' d3-task-date--overdue' : ''}">${dl}</span>` : ''}
+      <button class="d3-play-btn" data-timer-task="${t.id}" title="Iniciar timer"
+              onclick="event.stopPropagation();TimerModule.toggleTask(${t.id})">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      </button>
+      <span class="task-elapsed" data-timer-display="${t.id}" hidden></span>
+    </div>`;
   }
 
   function _renderTasks(_apiCount, _todayApi, _overdueApi, allTasks) {
@@ -4886,11 +4948,13 @@ const DashboardModule = (() => {
       return;
     }
 
-    // Ventana de la tarea: PADRE usa [fecha_inicio, deadline] (rango); subtarea/legacy usa deadline (fecha fija).
-    // Vencida solo cuando el FIN (deadline) ya pasó; activa (Hoy) mientras hoy esté dentro del rango.
+    // Ventana [inicio, fin] de la tarea O subtarea. Tanto padres como subtareas
+    // pueden tener rango (fecha_inicio + deadline) o fecha única (solo deadline).
+    // Vencida solo cuando el FIN (deadline) ya pasó; activa (Hoy) mientras hoy esté
+    // dentro del rango — no antes de empezar ni después de vencer.
     const _win = t => {
       const end = t.deadline ? String(t.deadline).split('T')[0] : null;
-      const start = (!t.parent_task_id && t.fecha_inicio) ? String(t.fecha_inicio).split('T')[0] : end;
+      const start = t.fecha_inicio ? String(t.fecha_inicio).split('T')[0] : end;
       return { start, end };
     };
     // Vencida: solo si el FIN (deadline) ya pasó. Hoy: activa desde su fecha de inicio y aún no vencida

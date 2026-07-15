@@ -8953,6 +8953,19 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 .d3-task-row--expanded .d3-task-name--sub,
 .d3-task-row--expanded .d3-task-meta { white-space: normal; overflow: visible; text-overflow: clip; }
 
+/* Grupo de subtareas de la misma tarea padre — contexto "tarea · cliente" una sola vez abajo */
+.d3-task-group { margin: 3px 10px; border: 1px solid #EDEBE5; border-radius: 10px; overflow: hidden; background: #FCFBF9; }
+.d3-task-group--overdue { border-color: #F1DAD5; background: #FCF3F1; box-shadow: inset 2px 0 0 #DD5145; }
+.d3-task-group__items { display: flex; flex-direction: column; }
+.d3-task-group .d3-task-row--grouped { padding-top: 6px; padding-bottom: 6px; background: transparent; }
+.d3-task-group .d3-task-row--grouped:hover { background: rgba(0,0,0,.025); }
+.d3-task-group--overdue .d3-task-row--grouped { box-shadow: none; background: transparent; }
+.d3-task-group--overdue .d3-task-row--grouped:hover { background: rgba(221,81,69,.06); }
+.d3-task-group__ctx { display: flex; align-items: center; gap: 5px; padding: 5px 18px 7px; font-size: 11px; color: #8A94A6; border-top: 1px solid #EFEDE7; }
+.d3-task-group--overdue .d3-task-group__ctx { border-top-color: #F1DAD5; color: #B0857E; }
+.d3-task-group__ctx svg { flex-shrink: 0; opacity: .8; }
+.d3-task-group__ctx span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 /* Subtask rows — indented with vertical guide */
 .d3-task-row--sub {
   position: relative;
