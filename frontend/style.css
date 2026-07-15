@@ -4388,6 +4388,7 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 .rnf-ico--amber  { background: #FEF6E0; color: #C28A0B; } .rnf-dot--amber  { background: #F5C24B; } .rnf-badge--amber  { background: #FEF6E0; color: #A9790A; } .rnf-link--amber  { color: #C28A0B; }
 .rnf-ico--violet { background: #F1ECFF; color: #7C5BD6; } .rnf-dot--violet { background: #A78BFA; } .rnf-badge--violet { background: #F1ECFF; color: #6A4CC4; } .rnf-link--violet { color: #7C5BD6; }
 .rnf-ico--blue   { background: #E8F1FE; color: #3B7DD8; } .rnf-dot--blue   { background: #7FB0EE; } .rnf-badge--blue   { background: #E8F1FE; color: #2F6FCB; } .rnf-link--blue   { color: #3B7DD8; }
+.rnf-ico--green  { background: #E3F5EA; color: #12925A; } .rnf-dot--green  { background: #22C55E; } .rnf-badge--green  { background: #E3F5EA; color: #0F7A4A; } .rnf-link--green  { color: #12925A; }
 .rnf-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 14px; border-top: 1px solid #EFEBE5; background: #FDFCFB; flex-shrink: 0; }
 .rnf-footer.hidden { display: none; }
 .rnf-footer__cnt { font-size: .72rem; color: #8a837a; font-weight: 600; }

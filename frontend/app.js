@@ -18988,6 +18988,30 @@ const RNotifPanel = (() => {
   let _pendingMembers = [];   // multi-select
   let _teamCache      = null;
 
+  // ── Avisos de CIERRE (calculados en el frontend, sin tocar el backend) ──
+  // Tarea "lista": tarea padre con subtareas, todas las subtareas completadas, pero
+  // la tarea aún no marcada completa. Proyecto "listo": con tareas, todas completas,
+  // y el proyecto aún activo. Se muestran para preguntar "¿Acabaste?".
+  function _tareasListas(tasks) {
+    const kids = {};
+    tasks.forEach(t => { if (t.parent_task_id) (kids[t.parent_task_id] = kids[t.parent_task_id] || []).push(t); });
+    return tasks.filter(t =>
+      !t.parent_task_id &&
+      t.estado !== 'completado' &&
+      kids[t.id] && kids[t.id].length > 0 &&
+      kids[t.id].every(c => c.estado === 'completado'));
+  }
+  function _proyectosListos(projects, tasks) {
+    const byProj = {};
+    tasks.forEach(t => { if (t.project_id) (byProj[t.project_id] = byProj[t.project_id] || []).push(t); });
+    return (projects || []).filter(p => {
+      const st = p.estado || 'activo';
+      if (st === 'completado' || st === 'cancelado') return false;
+      const ts = byProj[p.id];
+      return ts && ts.length > 0 && ts.every(t => t.estado === 'completado');
+    });
+  }
+
   async function load() {
     const el = $('rnotif-content');
     if (!el) return;
@@ -18995,11 +19019,38 @@ const RNotifPanel = (() => {
     try {
       const res  = await apiFetch(`${API}/mgmt/integrity`);
       const data = await res.json();
+      // Enriquecer con avisos de cierre (GET de solo lectura, sin cambios en backend).
+      try {
+        const [tr, pr] = await Promise.all([apiFetch(`${API}/mgmt/tasks`), apiFetch(`${API}/mgmt/projects`)]);
+        const tasks    = tr.ok ? await tr.json() : [];
+        const projects = pr.ok ? await pr.json() : [];
+        const tListas  = _tareasListas(tasks);
+        const pListos  = _proyectosListos(projects, tasks);
+        if (tListas.length) { data.tareas_completas   = tListas; data.total = (data.total || 0) + tListas.length; }
+        if (pListos.length) { data.proyectos_completos = pListos; data.total = (data.total || 0) + pListos.length; }
+      } catch (_) { /* si falla, se muestran solo las alertas de integridad */ }
       _render(data);
       _updateBadge(data.total || 0);
     } catch (e) {
       el.innerHTML = `<div style="text-align:center;color:var(--muted);font-size:.82rem;padding:44px 0">Error al cargar.</div>`;
     }
+  }
+
+  // Marca una tarea como completada desde la notificación (endpoint seguro /status).
+  async function completeTask(id) {
+    if (!confirm('¿Marcar esta tarea como completada?')) return;
+    try {
+      await apiFetch(`${API}/mgmt/tasks/${id}/status`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ estado: 'completado' }),
+      });
+      load();
+      try { DashboardModule.load(); } catch (_) {}
+    } catch (e) { alert('No se pudo completar. Reintenta.'); }
+  }
+  // Lleva a Proyectos para marcarlo completado allí (su vista manda el PUT correcto).
+  function goToProject() {
+    document.querySelector('[data-tab=mgmt-projects]')?.click();
   }
 
   function _updateBadge(total) {
@@ -19045,11 +19096,14 @@ const RNotifPanel = (() => {
       calendar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
       folder:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>',
       building: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16"/><line x1="9" y1="7" x2="9.01" y2="7"/><line x1="15" y1="7" x2="15.01" y2="7"/><line x1="9" y1="11" x2="9.01" y2="11"/><line x1="15" y1="11" x2="15.01" y2="11"/></svg>',
+      check:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>',
     };
     const ARROW = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>';
 
     // Reutiliza los datos de /mgmt/integrity y las acciones existentes (pickDeadline / pickMember).
     const cats = [
+      { key: 'tareas_completas',       tone: 'green',  badge: 'Todo listo',      ico: 'check',    nameKey: 'titulo', task: true,  action: t => `RNotifPanel.completeTask(${t.id})`,                        link: '¿Acabaste? Marcar completada', sub: t => [t.client_nombre, t.project_nombre].filter(Boolean).map(esc).join(' · ') },
+      { key: 'proyectos_completos',    tone: 'green',  badge: 'Todo listo',      ico: 'check',    nameKey: 'nombre', task: false, action: () => `RNotifPanel.goToProject()`,                               link: '¿Acabaste? Ver proyecto',      sub: t => esc(t.client_nombre || '') },
       { key: 'tareas_sin_responsable', tone: 'orange', badge: 'Sin responsable', ico: 'member',   nameKey: 'titulo', task: true,  action: t => `RNotifPanel.pickMember(event,${t.id})`,                    link: 'Asignar responsable', sub: t => [t.client_nombre, t.project_nombre].filter(Boolean).map(esc).join(' · ') },
       { key: 'tareas_sin_deadline',    tone: 'amber',  badge: 'Sin fecha',       ico: 'calendar', nameKey: 'titulo', task: true,  action: t => `RNotifPanel.pickDeadline(event,${t.id})`,                  link: 'Fijar fecha',         sub: t => [t.client_nombre, t.project_nombre].filter(Boolean).map(esc).join(' · ') },
       { key: 'proyectos_sin_tareas',   tone: 'violet', badge: 'Sin tareas',      ico: 'folder',   nameKey: 'nombre', task: false, action: () => `document.querySelector('[data-tab=mgmt-projects]').click()`, link: 'Ver proyecto',        sub: t => esc(t.client_nombre || '') },
@@ -19285,6 +19339,7 @@ const RNotifPanel = (() => {
     load, updateBadge: _updateBadge,
     pickDeadline, closeDatePop, confirmDeadline,
     pickMember, _selectMember, closeMemberPop, confirmMember,
+    completeTask, goToProject,
   };
 })();
 
