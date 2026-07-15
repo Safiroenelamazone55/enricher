@@ -10644,6 +10644,10 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 #pane-mgmt-tasks .clients-table thead th { color:#97A0AE; letter-spacing:.06em; font-weight:700; }
 #pane-mgmt-tasks .tl-row--main > td { border-top:1px solid #EEF0EA; }
 #pane-mgmt-tasks .tl-row--main:hover > td { background:#FBFCF8; }
+/* Separadores verticales sutiles entre columnas — pedido de Jenny (sutil pero visible) */
+#pane-mgmt-tasks .clients-table thead th:not(:last-child) { box-shadow: inset -1px 0 0 rgba(15,23,42,.07); }
+#pane-mgmt-tasks .clients-table .tl-row--main > td:not(:last-child) { box-shadow: inset -1px 0 0 rgba(15,23,42,.045); }
+#pane-mgmt-tasks .clients-table .tl-row--main:hover > td:not(:last-child) { box-shadow: inset -1px 0 0 rgba(15,23,42,.06); }
 #pane-mgmt-tasks .ct-name { color:#0A2540; }
 #pane-mgmt-tasks .client-meta { color:#6B7480; }
 .tl-client-txt { color:#97A0AE; }
