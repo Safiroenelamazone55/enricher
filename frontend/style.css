@@ -9063,8 +9063,8 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 .d3xp__ctx { display: flex; align-items: center; gap: 5px; min-width: 0; font-size: 10.5px; color: #A29A8E; }
 .d3xp__ctx svg { color: #C4BDB2; flex-shrink: 0; }
 .d3xp__ctx-t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.d3xp__open { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; font-family: inherit; font-size: 10.5px; font-weight: 600; color: var(--brand,#00804C); background: none; border: none; padding: 2px 5px; border-radius: 7px; cursor: pointer; transition: background .12s; }
-.d3xp__open:hover { background: #FFF3E4; }
+.d3xp__open { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; margin-left: auto; font-family: inherit; font-size: 10.5px; font-weight: 700; color: var(--brand,#00804C); background: var(--brand-ll,#EAF5EE); border: none; padding: 3px 9px; border-radius: 7px; cursor: pointer; transition: background .12s; }
+.d3xp__open:hover { background: #DCEEE3; }
 .d3xp__open svg { transition: transform .14s; }
 .d3xp__open:hover svg { transform: translateX(2px); }
 

@@ -5391,9 +5391,6 @@ const DashboardModule = (() => {
             : `<button class="d3xp-chip${dlShort ? (isOverdue ? ' d3xp-chip--over' : '') : ' d3xp-chip--empty'}" title="Cambiar fecha" onclick="event.stopPropagation();DashboardModule.expEditDate(${id},this)">${_icoCal}<span class="d3xp-chip__tx">${dlShort ? esc(dlShort) : 'Fecha'}</span></button>`}
           <button class="d3xp-chip${asgShort ? '' : ' d3xp-chip--empty'}" title="Cambiar responsable" onclick="event.stopPropagation();DashboardModule.expEditAssignee(${id},this)">${asgShort ? _expAvatar(asgName) : _icoUsr}<span class="d3xp-chip__tx">${asgShort ? esc(asgShort) : 'Asignar'}</span></button>
           ${t.prioridad === 'alta' ? '<span class="d3xp-chip d3xp-chip--prio">Alta</span>' : ''}
-        </div>
-        <div class="d3xp__meta">
-          <span></span>
           <button class="d3xp__open" onclick="event.stopPropagation();TasksModule.openDrawer(${id})">Abrir tarea<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>
         </div>
       </div>`;
