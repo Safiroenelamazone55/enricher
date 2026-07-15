@@ -9607,7 +9607,7 @@ const TimeOffModule = (() => {
 const ProjectsModule = (() => {
   let _projects     = [];
   let _editId       = null;
-  let _filterEstado    = '';
+  let _filterEstado    = 'activo';   // por defecto muestra solo Activos (pedido de Jenny)
   let _filterMember    = '';
   let _filterMemberSet = false;
   let _view         = 'timeline';
