@@ -488,10 +488,7 @@ function toggleWorkspaceMenu(btn) {
   const menu = document.getElementById('ws-menu');
   if (!menu) return;
   if (_wsMenuOpen) { closeWorkspaceMenu(); return; }
-  // Reubica avatar/logout (authBar) dentro del menú la 1ª vez que se abre
-  const ab = document.getElementById('authBar');
-  const slot = document.getElementById('ws-user-slot');
-  if (ab && slot && ab.parentElement !== slot) slot.appendChild(ab);
+  // (El usuario ya se muestra en el pie de la barra — no se duplica en este menú.)
   // Marca el módulo activo dentro del menú
   menu.querySelectorAll('.ws-mod').forEach(b => b.classList.toggle('active', b.dataset.module === _activeModule));
   // Posiciona bajo el botón, sin salirse de la pantalla
