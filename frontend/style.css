@@ -12351,7 +12351,7 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
    ══════════════════════════════════════════════════════════════ */
 /* Sin recuadro blanco de fondo: las 2 tarjetas van directo sobre el fondo del
    dashboard, alineadas con el contenido de abajo (izq 0, der 52, como .d3-body). */
-.d3-hero { align-items: stretch; justify-content: flex-start; gap: 16px; flex-wrap: nowrap; background: transparent; border-bottom: none; padding: 6px 52px 0 0; }
+.d3-hero { align-items: flex-start; justify-content: flex-start; gap: 16px; flex-wrap: nowrap; background: transparent; border-bottom: none; padding: 6px 52px 0 0; }
 /* El Dashboard arranca pegado arriba (menos padding que otras secciones) */
 .app-main:has(#pane-mgmt-dashboard.active) { padding-top: 10px; }
 .d3-revcard { flex: 0 0 280px; max-width: 280px; }
@@ -12389,15 +12389,17 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
 .d3-act-timer .d3-hrs-now { margin: 0 0 12px; }
 .d3-act-timer .d3-hrs-metrics { padding: 0; border-top: none; grid-template-columns: repeat(2, 1fr); row-gap: 12px; }
 .d3-act-timer .d3-hrs-btn { width: 100%; margin: auto 0 0; height: 38px; font-size: .86rem; }
-.d3-act-timer .d3-hrs-actions { padding: 0; margin-top: auto; gap: 6px; }
-/* Timer ACTIVO compacto: que la tarjeta no crezca ni desacomode la fila */
-.d3-act-timer .d3-hrs-now { margin: 0 0 8px; padding: 8px 12px; }
-.d3-act-timer .d3-hrs-now__task { margin-top: 2px; }
-.d3-act-timer .d3-hrs-now__time { font-size: 1.05rem; margin-top: 3px; }
-.d3-act-timer .d3-act-statsrow { gap: 9px; margin-bottom: 8px; }
-.d3-act-timer .d3-hrs-metrics { row-gap: 8px; }
-.d3-act-timer .d3-hrs-act { height: 34px; padding: 0 11px; font-size: .78rem; }
-.d3-act-timer .d3-hrs-changetask { padding: 0 4px; white-space: nowrap; }
+/* Timer ACTIVO compacto: tarjeta a la altura del heatmap, sin huecos ni desproporción */
+.d3-act-timer .d3-hrs-actions { padding: 0; margin-top: 4px; gap: 6px; }
+.d3-act-timer .d3-hrs-now { margin: 0 0 7px; padding: 7px 11px; }
+.d3-act-timer .d3-hrs-now__task { margin-top: 1px; }
+.d3-act-timer .d3-hrs-now__time { font-size: 1rem; margin-top: 2px; }
+.d3-act-timer .d3-act-statsrow { gap: 7px; margin-bottom: 7px; }
+.d3-act-timer .d3-act-today .d3-hrs-total { font-size: 1.15rem; white-space: nowrap; }
+.d3-act-timer .d3-hrs-metrics { row-gap: 6px; column-gap: 8px; }
+.d3-act-timer .d3-hrs-metric__v { font-size: .92rem; }
+.d3-act-timer .d3-hrs-act { height: 32px; padding: 0 10px; font-size: .76rem; }
+.d3-act-timer .d3-hrs-changetask { padding: 0 3px; white-space: nowrap; font-size: .76rem; }
 /* Móvil: al apilarse, el cronómetro va a ancho completo (el max-width/columna del desktop no aplican) */
 @media (max-width: 940px) {
   .d3-act-timer { max-width: none; min-width: 0; }
