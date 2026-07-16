@@ -14005,6 +14005,8 @@ ${foot}
     const { seqId, cid } = _lastDone; _lastDone = null;
     try {
       await _seqRollbackCore(seqId, cid);
+      _cpDone = Math.max(0, _cpDone - 1);
+      if (_cpTaskHist[_cpTaskHist.length - 1] === cid) _cpTaskHist.pop();
       _seqContacts = null; if (_activeSeq === seqId) await _seqLoadContacts(seqId);
       await _reloadContacts();
       openContactPage(cid, { seqId });
@@ -14161,14 +14163,14 @@ ${foot}
   }
   async function seqTaskOpen(seqId, cid) {
     if (!cid) return;
-    _cpTaskHist = []; _cpSkipped = [];   // corrida nueva
+    _cpTaskHist = []; _cpSkipped = []; _cpDone = 0;   // corrida nueva
     const has = Array.isArray(_seqContacts) && _activeSeq === seqId && _seqContacts.some(e => e.contact_id === cid);
     if (!has) { _activeSeq = seqId; _seqContacts = null; await _seqLoadContacts(seqId); }
     openContactPage(cid, { seqId: seqId });
   }
   function seqDoClose() { document.getElementById('seq-do-modal')?.remove(); _seqDo = null; }
   function seqDoEditStep(stepId) { const seqId = _cpTaskCtx ? _cpTaskCtx.seqId : _activeSeq; openStepDrawer(seqId, stepId); }
-  function seqDoExit() { const seqId = _cpTaskCtx ? _cpTaskCtx.seqId : _activeSeq; _cpTaskCtx = null; _cpTaskHist = []; _cpSkipped = []; _activeSeq = seqId; _section = 'sequence'; _seqTab = 'tareas'; _renderBody(); if (!Array.isArray(_seqContacts)) _seqLoadContacts(seqId); }
+  function seqDoExit() { const seqId = _cpTaskCtx ? _cpTaskCtx.seqId : _activeSeq; _cpTaskCtx = null; _cpTaskHist = []; _cpSkipped = []; _cpDone = 0; _activeSeq = seqId; _section = 'sequence'; _seqTab = 'tareas'; _renderBody(); if (!Array.isArray(_seqContacts)) _seqLoadContacts(seqId); }
   function seqOpenLinkedIn(cid) {
     const c = _contacts.find(x => x.id === cid);
     const url = c && c.linkedin; if (!url) return;
@@ -14341,7 +14343,7 @@ ${foot}
     return `<div class="cp-taskbar cp-taskbar--slim">
       <div class="cp-taskbar__top">
         <span class="cp-taskbar__ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${touch[2]}</svg></span>
-        <div class="cp-taskbar__ttl"><span class="cp-taskbar__t">${esc(st.titulo || touch[0])}</span><b class="cp-taskbar__ch">${touch[0]}</b><span class="cp-taskbar__meta">${pos >= 0 && queue.length ? `${pos + 1} de ${queue.length} hoy` : `Día ${st.dia || 1}`}${seq ? ` · ${esc(seq.nombre)}` : ''}</span></div>
+        <div class="cp-taskbar__ttl"><span class="cp-taskbar__t">${esc(st.titulo || touch[0])}</span><b class="cp-taskbar__ch">${touch[0]}</b><span class="cp-taskbar__meta">${queue.length ? `${_cpDone + 1} de ${_cpDone + queue.length} hoy` : `Día ${st.dia || 1}`}${seq ? ` · ${esc(seq.nombre)}` : ''}</span></div>
         <button class="cp-taskbar__exit" onclick="LeadManagerModule.seqDoExit()">‹ Tareas</button>
       </div>
       ${(() => { const ptz = _contactTz(c) || (seq && seq.timezone) || ''; if (!ptz) return ''; const own = !!_contactTz(c); return `<div class="cp-taskbar__clock" id="cp-clock-row" data-tz="${esc(ptz)}">${_prospectClockInner(ptz)}${own ? `<span style="color:#98A2AE;display:inline-flex;align-items:center;gap:3px" title="Zona horaria derivada del estado del prospecto (no de la secuencia)">${NI('pin', 11)} ${esc(c.region || '')}</span>` : ''}</div>
@@ -14403,7 +14405,7 @@ ${foot}
     m.innerHTML = `<div class="fin-pi-box seqdo-box">
       <div class="seqdo-hd">
         <span class="seqdo-ico" style="background:${touch[1]}1a;color:${touch[1]}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${touch[2]}</svg></span>
-        <div class="seqdo-hd__tt"><div class="seqdo-hd__t">${esc(st.titulo || touch[0])} <b style="color:${touch[1]}">${touch[0]}</b></div><div class="seqdo-hd__s">Día ${st.dia || 1}${pos >= 0 && queue.length ? ` · Tarea ${pos + 1} de ${queue.length} para hoy` : ''}</div></div>
+        <div class="seqdo-hd__tt"><div class="seqdo-hd__t">${esc(st.titulo || touch[0])} <b style="color:${touch[1]}">${touch[0]}</b></div><div class="seqdo-hd__s">Día ${st.dia || 1}${queue.length ? ` · Tarea ${_cpDone + 1} de ${_cpDone + queue.length} para hoy` : ''}</div></div>
         <button class="fin-pi-x" onclick="LeadManagerModule.seqDoClose()">✕</button>
       </div>
       <div class="seqdo-body">
@@ -14462,7 +14464,7 @@ ${foot}
     const seqId = _cpTaskCtx.seqId, cid = _contactView;
     const btn = document.getElementById('seqdo-done'); if (btn) btn.disabled = true;
     try {
-      await _seqCompleteStep(seqId, cid); _lastDone = { seqId, cid }; _cpTaskHist.push(cid);
+      await _seqCompleteStep(seqId, cid); _lastDone = { seqId, cid }; _cpTaskHist.push(cid); _cpDone++;
       _seqContacts = null; await _seqLoadContacts(seqId);
       await _reloadContacts();
       const next = _cpNextTask(seqId, cid);
@@ -16038,6 +16040,7 @@ ${foot}
   let _cpTaskCtx = null;      // { seqId } — ejecutando una tarea de secuencia sobre esta ficha
   let _cpTaskHist = [];       // historial de contactos ya recorridos en la corrida (para "‹ Anterior")
   let _cpSkipped = [];        // contactos SALTADOS en la corrida → van al FINAL de la cola (no reaparecen enseguida)
+  let _cpDone = 0;            // tareas COMPLETADAS en la corrida → para el progreso "X de Y" (Y = hechas + restantes)
   let _seqTab = 'pasos';
   let _seqCtEstado = ''; // filtro de estado en la pestaña Contactos de la secuencia
   let _seqTaskCanal = ''; // filtro por canal en la pestaña Tareas de la secuencia
