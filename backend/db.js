@@ -813,6 +813,11 @@ async function initDb() {
     await pool.query(`ALTER TABLE time_entries ADD COLUMN IF NOT EXISTS source        TEXT  NOT NULL DEFAULT 'manual_timer';`);
     await pool.query(`ALTER TABLE time_entries ADD COLUMN IF NOT EXISTS activity_type TEXT  NOT NULL DEFAULT 'active_work';`);
     await pool.query(`ALTER TABLE time_entries ADD COLUMN IF NOT EXISTS metadata      JSONB NOT NULL DEFAULT '{}';`);
+    // Aprobación de nómina: el admin revisa/edita y aprueba las sesiones. Una sesión aprobada
+    // queda bloqueada para el miembro (solo el admin la reabre). approved_by = users.id del admin.
+    await pool.query(`ALTER TABLE time_entries ADD COLUMN IF NOT EXISTS approved    BOOLEAN NOT NULL DEFAULT FALSE;`);
+    await pool.query(`ALTER TABLE time_entries ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ;`);
+    await pool.query(`ALTER TABLE time_entries ADD COLUMN IF NOT EXISTS approved_by INTEGER;`);
     // Tokens de extensión/agente (Fase 2.1): auth por Bearer, independiente de cookies de sesión.
     // Se guarda solo el hash sha256; el token en claro se muestra UNA vez al generarlo.
     await pool.query(`

@@ -10256,6 +10256,69 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 .ttd-entry__dur { font-size: .82rem; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; white-space: nowrap; flex-shrink: 0; }
 .ttd-entry__del { width: 26px; height: 26px; border: none; background: none; color: #C0BAB4; border-radius: 7px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .ttd-entry__del:hover { background: #FEECEC; color: #DC2626; }
+
+/* ── Time Tracking · timesheet (editar + aprobar, estilo nómina) ── */
+.ttd-tscard .ttd-card__hd { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ttd-ts__hdsp { flex: 1; }
+.ttd-ts { display: flex; flex-direction: column; }
+.ttd-ts__head, .ttd-ts__row { display: grid; grid-template-columns: 92px minmax(0,1fr) 74px 82px 96px 92px; align-items: center; gap: 10px; }
+.ttd-ts__head { padding: 8px 8px 6px; font-size: .63rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: #A8A29E; border-bottom: 1px solid var(--border,#EDEBE6); }
+.ttd-ts__head span:nth-child(3), .ttd-ts__head span:nth-child(4) { text-align: right; }
+.ttd-ts__row { padding: 9px 8px; border-bottom: 1px solid var(--border,#F1EEE9); border-radius: 8px; transition: background .12s; }
+.ttd-ts__row:hover { background: #FAFAF8; }
+.ttd-ts__row.is-appr { background: #F1FAF4; box-shadow: inset 2px 0 0 #22C55E; }
+.ttd-ts__row.is-appr:hover { background: #E9F6EE; }
+.ttd-ts__dayhd { display: flex; align-items: baseline; justify-content: space-between; padding: 13px 8px 5px; margin-top: 2px; border-bottom: 1px solid var(--border,#EDEBE6); }
+.ttd-ts__dayhd > span:first-child { font-size: .74rem; font-weight: 700; color: var(--text); text-transform: capitalize; }
+.ttd-ts__daytot { font-size: .72rem; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ttd-ts__time { font-size: .76rem; font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; display: flex; flex-direction: column; }
+.ttd-ts__end { font-size: .63rem; font-weight: 500; color: #B0AAA4; }
+.ttd-ts__task { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.ttd-ts__t { font-size: .82rem; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ttd-ts__notask { font-size: .58rem; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: #B45309; background: #FEF3C7; border-radius: 5px; padding: 1px 5px; width: max-content; }
+.ttd-ts__p { font-size: .69rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ttd-ts__note { font-size: .69rem; color: #8E877F; font-style: italic; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ttd-ts__dur { font-size: .84rem; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; text-align: right; }
+.ttd-ts__ap { display: flex; align-items: center; gap: 6px; justify-content: flex-end; }
+.ttd-ts__apbar { width: 32px; height: 5px; border-radius: 3px; background: #ECEAE4; overflow: hidden; flex-shrink: 0; }
+.ttd-ts__apbar i { display: block; height: 100%; background: var(--brand,#00804C); border-radius: 3px; }
+.ttd-ts__appct { font-size: .66rem; color: #A8A29E; font-variant-numeric: tabular-nums; width: 30px; text-align: right; }
+.ttd-ts__acts { display: flex; gap: 3px; justify-content: flex-end; }
+.ttd-act { width: 27px; height: 27px; border: 1px solid transparent; background: none; color: #A8A29E; border-radius: 7px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: background .12s, color .12s, border-color .12s; }
+.ttd-act:hover { background: #F1EFEA; color: var(--text); }
+.ttd-act--del:hover { background: #FEECEC; color: #DC2626; }
+.ttd-act--appr:hover { background: #E7F8EF; color: #15803D; border-color: #BBE7CC; }
+.ttd-act--appr.is-on { background: #22C55E; color: #fff; }
+.ttd-act--appr.is-on:hover { background: #16A34A; color: #fff; border-color: transparent; }
+.ttd-tsbadge { font-size: .64rem; font-weight: 700; border-radius: 999px; padding: 2px 9px; white-space: nowrap; }
+.ttd-tsbadge--appr { background: #E7F8EF; color: #15803D; }
+.ttd-tsbadge--pend { background: #F3F1EC; color: #8E877F; }
+.ttd-approveall { display: inline-flex; align-items: center; gap: 6px; border: none; background: #22C55E; color: #fff; font-size: .76rem; font-weight: 700; padding: 7px 13px; border-radius: 9px; cursor: pointer; transition: background .12s; }
+.ttd-approveall:hover { background: #16A34A; }
+.ttd-approveall--undo { background: #fff; color: #8E877F; border: 1px solid var(--border,#EDEBE6); }
+.ttd-approveall--undo:hover { background: #F3F1EC; color: var(--text); }
+@media (max-width: 780px) {
+  .ttd-ts__head { display: none; }
+  .ttd-ts__row { grid-template-columns: 1fr auto auto; grid-template-areas: "task dur acts" "time ap st"; row-gap: 4px; column-gap: 8px; }
+  .ttd-ts__time { grid-area: time; flex-direction: row; gap: 6px; align-items: baseline; }
+  .ttd-ts__task { grid-area: task; } .ttd-ts__dur { grid-area: dur; } .ttd-ts__ap { grid-area: ap; justify-content: flex-start; } .ttd-ts__st { grid-area: st; } .ttd-ts__acts { grid-area: acts; }
+}
+
+/* Editar sesión — modal */
+.tt-edit-box { max-width: 460px; width: 100%; }
+.tt-edit-hd { display: flex; align-items: center; justify-content: space-between; padding: 15px 18px; border-bottom: 1px solid var(--border,#EDEBE6); }
+.tt-edit-hd h3 { margin: 0; font-size: 1rem; font-weight: 700; color: var(--text); }
+.tt-edit-body { padding: 16px 18px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px 14px; }
+.tt-edit-f { display: flex; flex-direction: column; gap: 5px; }
+.tt-edit-f--full { grid-column: 1 / -1; }
+.tt-edit-f > span { font-size: .72rem; font-weight: 600; color: var(--muted); }
+.tt-edit-dur { display: flex; align-items: center; gap: 6px; }
+.tt-edit-dur input { width: 64px; }
+.tt-edit-dur b { font-size: .74rem; font-weight: 600; color: var(--muted); }
+.tt-edit-ft { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 18px; border-top: 1px solid var(--border,#EDEBE6); background: #FAFAF8; }
+.tt-edit-hint { font-size: .7rem; color: var(--muted); }
+.tt-edit-btns { display: flex; gap: 8px; flex-shrink: 0; }
+@media (max-width: 520px) { .tt-edit-body { grid-template-columns: 1fr; } }
 @media (max-width: 760px) { .ttd-2col { grid-template-columns: 1fr; } .ttd-wh__stats { grid-template-columns: repeat(2,1fr); } }
 
 /* Week bars */

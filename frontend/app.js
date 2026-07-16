@@ -20117,6 +20117,10 @@ const TimerModule = (() => {
   // ════════════════════════════════════════════════════════════════
   const TTD_GOAL = 8 * 3600;   // objetivo diario (8h) — futuro: configurable por miembro
   function _ttdDur(e, now) { return e.ended_at ? (e.duration_s || 0) : Math.max(e.duration_s || 0, Math.round((now - new Date(e.started_at)) / 1000)); }
+  let _ttLastEntries = [];     // cache de las entradas del período (para editar/aprobar por id)
+  let _ttTasks = null;         // cache de tareas para el selector del editor
+  const _TT_ACT = [['active_work', 'Trabajo'], ['meeting', 'Reunión'], ['break', 'Descanso'], ['idle', 'Inactivo']];
+  const _pad2 = n => String(n).padStart(2, '0');
 
   function _renderReport(pane, todayEntries, range, teamData) {
     const days = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
@@ -20133,6 +20137,7 @@ const TimerModule = (() => {
     todayEntries = _allEntries.filter(e =>
       (_ttClient === 'all'  || (e.client_nombre || '') === _ttClient) &&
       (_ttProject === 'all' || (e.proj_nombre || e.project_nombre || '') === _ttProject));
+    _ttLastEntries = todayEntries;   // cache filtrado → editar/aprobar por id coincide con lo visible
     // Fuentes de EVIDENCIA (extensión/agente): confirman actividad dentro de tus sesiones,
     // pero NO suman horas trabajadas — si no, el mismo minuto se cuenta dos veces.
     const _evid = e => { const s = e.source || 'manual_timer'; return s === 'browser_extension' || s === 'desktop_agent'; };
@@ -20368,24 +20373,55 @@ const TimerModule = (() => {
     // ── Sesiones del período (fecha cuando no es "Hoy"). Solo sesiones del timer MANUAL;
     //    el uso web/app externo se resume en "Apps y websites usados", no como sesiones sueltas.
     const _multiDay = !(isDay && range.label === 'Hoy');
-    const _MAXLIST = 80;
+    const _MAXLIST = 200;
     const sesEntries = todayEntries.filter(e => (e.source || 'manual_timer') === 'manual_timer');
-    const entriesHtml = sesEntries.length === 0
-      ? '<div class="ttd-empty">Sin sesiones en este período. Usa el botón ▶ en una tarea o el widget de la barra lateral.</div>'
-      : sesEntries.slice(0, _MAXLIST).map(e => {
-          const dur = _ttdDur(e, now);
-          const ap = dur > 0 ? Math.round((e.active_s || 0) / dur * 100) : 0;
-          const s = new Date(e.started_at);
-          const hhmm = `${String(s.getHours()).padStart(2,'0')}:${String(s.getMinutes()).padStart(2,'0')}`;
-          return `<div class="ttd-entry">
-            <div class="ttd-entry__time">${_multiDay ? `<span class="ttd-entry__date">${s.getDate()}/${s.getMonth() + 1}</span>` : ''}${hhmm}</div>
-            <span class="ttd-entry__dot ttd-dot--${!e.task_id ? 'pending' : 'manual'}"></span>
-            <div class="ttd-entry__body"><div class="ttd-entry__task">${esc(e.task_titulo || 'Sin tarea')}</div>${e.project_nombre ? `<div class="ttd-entry__proj">${esc(e.project_nombre)}</div>` : ''}</div>
-            <span class="ttd-entry__ap">${ap}% activo</span>
-            <span class="ttd-entry__dur">${_fmtDur(dur) || '0m'}</span>
-            ${_viewingOther ? '' : `<button class="ttd-entry__del" onclick="TimerModule.deleteEntry(${e.id})" title="Eliminar"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>`}
-          </div>`;
-        }).join('') + (sesEntries.length > _MAXLIST ? `<div class="ttd-empty" style="padding:10px 0">… y ${sesEntries.length - _MAXLIST} sesiones más en este período.</div>` : '');
+    const _icEdit = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
+    const _icCheck = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+    const _icDel = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>';
+    const _sesRow = e => {
+      const dur = _ttdDur(e, now);
+      const ap = dur > 0 ? Math.round((e.active_s || 0) / dur * 100) : 0;
+      const s = new Date(e.started_at), endD = e.ended_at ? new Date(e.ended_at) : null;
+      const appr = !!e.approved;
+      const canEdit = _isAdmin || (!_viewingOther && !appr);
+      const canDel  = _isAdmin || (!_viewingOther && !appr);
+      const bEdit = canEdit ? `<button class="ttd-act" title="Editar sesión" onclick="TimerModule.openEntryEdit(${e.id})">${_icEdit}</button>` : '';
+      const bAppr = _isAdmin ? `<button class="ttd-act ttd-act--appr${appr ? ' is-on' : ''}" title="${appr ? 'Aprobada — clic para reabrir' : 'Aprobar para nómina'}" onclick="TimerModule.approveEntry(${e.id},${appr ? 'false' : 'true'})">${_icCheck}</button>` : '';
+      const bDel  = canDel ? `<button class="ttd-act ttd-act--del" title="Eliminar" onclick="TimerModule.deleteEntry(${e.id})">${_icDel}</button>` : '';
+      return `<div class="ttd-ts__row${appr ? ' is-appr' : ''}">
+        <div class="ttd-ts__time">${_pad2(s.getHours())}:${_pad2(s.getMinutes())}<span class="ttd-ts__end">${endD ? '– ' + _pad2(endD.getHours()) + ':' + _pad2(endD.getMinutes()) : '· en curso'}</span></div>
+        <div class="ttd-ts__task"><span class="ttd-ts__t">${esc(e.task_titulo || 'Sin tarea')}</span>${!e.task_id ? '<span class="ttd-ts__notask">sin tarea</span>' : ''}${e.project_nombre ? `<span class="ttd-ts__p">${esc(e.project_nombre)}</span>` : ''}${e.notes ? `<span class="ttd-ts__note">“${esc(e.notes)}”</span>` : ''}</div>
+        <div class="ttd-ts__dur">${_fmtDur(dur) || '0m'}</div>
+        <div class="ttd-ts__ap"><span class="ttd-ts__apbar"><i style="width:${ap}%"></i></span><span class="ttd-ts__appct">${ap}%</span></div>
+        <div class="ttd-ts__st">${appr ? '<span class="ttd-tsbadge ttd-tsbadge--appr">✓ Aprobada</span>' : '<span class="ttd-tsbadge ttd-tsbadge--pend">Pendiente</span>'}</div>
+        <div class="ttd-ts__acts">${bEdit}${bAppr}${bDel}</div>
+      </div>`;
+    };
+    let _tsRows;
+    const _dkey = d => `${d.getFullYear()}-${_pad2(d.getMonth() + 1)}-${_pad2(d.getDate())}`;
+    if (_multiDay) {
+      const byDay = {};
+      sesEntries.slice(0, _MAXLIST).forEach(e => { const k = _dkey(new Date(e.started_at)); (byDay[k] || (byDay[k] = [])).push(e); });
+      _tsRows = Object.keys(byDay).sort((a, b) => b.localeCompare(a)).map(k => {
+        const items = byDay[k], daySec = items.reduce((a, e) => a + _ttdDur(e, now), 0);
+        const dLbl = new Date(k + 'T00:00:00').toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' });
+        return `<div class="ttd-ts__dayhd"><span>${dLbl}</span><span class="ttd-ts__daytot">${_fmtDur(daySec)}</span></div>${items.map(_sesRow).join('')}`;
+      }).join('');
+    } else {
+      _tsRows = sesEntries.slice(0, _MAXLIST).map(_sesRow).join('');
+    }
+    const _apprN = sesEntries.filter(e => e.approved).length, _pendN = sesEntries.length - _apprN;
+    const _bulk = (_isAdmin && sesEntries.length)
+      ? (_pendN ? `<button class="ttd-approveall" onclick="TimerModule.approveAll()">${_icCheck} Aprobar todo (${_pendN})</button>`
+                : `<button class="ttd-approveall ttd-approveall--undo" onclick="TimerModule.unapproveAll()">Reabrir todo</button>`)
+      : '';
+    const _sum = sesEntries.length ? `<span class="ttd-tsbadge ttd-tsbadge--appr">${_apprN} aprob.</span><span class="ttd-tsbadge ttd-tsbadge--pend">${_pendN} pend.</span>` : '';
+    const sessionsCard = `<div class="ttd-card ttd-tscard">
+      <div class="ttd-card__hd"><span class="ttd-card__t">${isDay && range.label === 'Hoy' ? 'Sesiones de hoy' : 'Sesiones'}</span>${sesEntries.length ? `<span class="ttd-card__n">${sesEntries.length}</span>` : ''}<span class="ttd-ts__hdsp"></span>${_sum}${_bulk}</div>
+      ${sesEntries.length === 0
+        ? '<div class="ttd-empty">Sin sesiones en este período. Usa el botón ▶ en una tarea o el widget de la barra lateral.</div>'
+        : `<div class="ttd-ts"><div class="ttd-ts__head"><span>Hora</span><span>Tarea / Proyecto</span><span>Duración</span><span>Activo</span><span>Estado</span><span></span></div>${_tsRows}</div>${sesEntries.length > _MAXLIST ? `<div class="ttd-empty" style="padding:10px 0">… y ${sesEntries.length - _MAXLIST} sesiones más en este período.</div>` : ''}`}
+    </div>`;
 
     // ── Equipo (admin) — agregados del período ──
     const teamHtml = teamData ? `<div class="ttd-card"><div class="ttd-card__hd"><span class="ttd-card__t">Equipo — ${range.label}</span></div>
@@ -20429,7 +20465,7 @@ const TimerModule = (() => {
       ${billingCard}
       <div class="ttd-2col">${sources}${appsCard}</div>
       ${reviewCard}
-      <div class="ttd-card"><div class="ttd-card__hd"><span class="ttd-card__t">${isDay && range.label === 'Hoy' ? 'Sesiones de hoy' : 'Sesiones'}</span>${sesEntries.length ? `<span class="ttd-card__n">${sesEntries.length}</span>` : ''}</div><div class="ttd-entries">${entriesHtml}</div></div>
+      ${sessionsCard}
       ${teamHtml}
     `;
     if (_billChartData) requestAnimationFrame(_drawBillingChart);
@@ -20478,8 +20514,92 @@ const TimerModule = (() => {
 
   async function deleteEntry(id) {
     if (!confirm('¿Eliminar esta entrada de tiempo?')) return;
-    await apiFetch(`${API}/timer/${id}`, { method: 'DELETE' });
+    const r = await apiFetch(`${API}/timer/${id}`, { method: 'DELETE' });
+    if (!r.ok) { showBanner((await r.json().catch(() => ({}))).error || 'No se pudo eliminar', 'error'); return; }
     loadReport();
+  }
+
+  // ── Editar sesión (payroll) ──
+  async function _ttEnsureTasks() {
+    if (_ttTasks) return _ttTasks;
+    try { const r = await apiFetch(`${API}/mgmt/tasks`); _ttTasks = r.ok ? await r.json() : []; }
+    catch (_) { _ttTasks = []; }
+    return _ttTasks;
+  }
+  function _ttTaskLabel(t) { const p = t.project_nombre || t.proyecto_nombre || ''; return (t.titulo || '(sin título)') + (p ? ' · ' + p : ''); }
+  async function openEntryEdit(id) {
+    const e = (_ttLastEntries || []).find(x => x.id === id);
+    if (!e) return;
+    await _ttEnsureTasks();
+    const dur = _ttdDur(e, new Date()), s = new Date(e.started_at);
+    const dtVal = `${s.getFullYear()}-${_pad2(s.getMonth() + 1)}-${_pad2(s.getDate())}T${_pad2(s.getHours())}:${_pad2(s.getMinutes())}`;
+    const h = Math.floor(dur / 3600), m = Math.round((dur % 3600) / 60);
+    const taskOpts = `<option value="">— Sin tarea —</option>` + (_ttTasks || []).map(t => `<option value="${t.id}"${e.task_id === t.id ? ' selected' : ''}>${esc(_ttTaskLabel(t))}</option>`).join('');
+    const actOpts = _TT_ACT.map(([v, l]) => `<option value="${v}"${(e.activity_type || 'active_work') === v ? ' selected' : ''}>${l}</option>`).join('');
+    document.getElementById('tt-edit-modal')?.remove();
+    const bd = document.createElement('div');
+    bd.id = 'tt-edit-modal'; bd.className = 'fin-pi-backdrop';
+    bd.onclick = ev => { if (ev.target === bd) closeEntryEdit(); };
+    bd.innerHTML = `<div class="fin-pi-box tt-edit-box">
+      <div class="tt-edit-hd"><h3>Editar sesión</h3><button class="fin-pi-x" onclick="TimerModule.closeEntryEdit()">✕</button></div>
+      <div class="tt-edit-body">
+        <label class="tt-edit-f tt-edit-f--full"><span>Tarea / Proyecto</span><select class="form-input" id="tt-e-task">${taskOpts}</select></label>
+        <label class="tt-edit-f"><span>Inicio</span><input class="form-input" type="datetime-local" id="tt-e-start" value="${dtVal}"></label>
+        <label class="tt-edit-f"><span>Duración</span><span class="tt-edit-dur"><input class="form-input" type="number" min="0" id="tt-e-h" value="${h}"><b>h</b><input class="form-input" type="number" min="0" max="59" id="tt-e-m" value="${m}"><b>min</b></span></label>
+        <label class="tt-edit-f"><span>Tipo</span><select class="form-input" id="tt-e-act">${actOpts}</select></label>
+        <label class="tt-edit-f tt-edit-f--full"><span>Notas</span><textarea class="form-input" id="tt-e-notes" rows="2" placeholder="Qué se hizo, ajuste, etc.">${esc(e.notes || '')}</textarea></label>
+      </div>
+      <div class="tt-edit-ft"><span class="tt-edit-hint">${e.approved ? '⚠ Sesión aprobada — al guardar sigue aprobada.' : 'La duración se recalcula desde inicio + tiempo indicado.'}</span><div class="tt-edit-btns"><button class="btn btn--ghost btn--sm" onclick="TimerModule.closeEntryEdit()">Cancelar</button><button class="btn btn--primary btn--sm" id="tt-e-save" onclick="TimerModule.saveEntryEdit(${id})">Guardar</button></div></div>
+    </div>`;
+    document.body.appendChild(bd);
+  }
+  function closeEntryEdit() { document.getElementById('tt-edit-modal')?.remove(); }
+  async function saveEntryEdit(id) {
+    const g = x => document.getElementById(x);
+    const taskSel = g('tt-e-task'), taskId = taskSel.value || null;
+    const taskTit = taskId ? (taskSel.options[taskSel.selectedIndex]?.text || '').split(' · ')[0] : '';
+    const startV = g('tt-e-start').value;
+    const h = parseInt(g('tt-e-h').value || '0', 10) || 0, m = parseInt(g('tt-e-m').value || '0', 10) || 0;
+    const started = startV ? new Date(startV) : null;
+    if (started && isNaN(started.getTime())) { showBanner('Fecha de inicio no válida', 'error'); return; }
+    const body = { task_id: taskId, task_titulo: taskTit, duration_s: h * 3600 + m * 60, activity_type: g('tt-e-act').value, notes: g('tt-e-notes').value };
+    if (started) body.started_at = started.toISOString();
+    const btn = g('tt-e-save'); if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+    try {
+      const r = await apiFetch(`${API}/timer/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Error');
+      closeEntryEdit(); showBanner('✓ Sesión actualizada', 'success'); loadReport();
+    } catch (e) { if (btn) { btn.disabled = false; btn.textContent = 'Guardar'; } showBanner('Error: ' + e.message, 'error'); }
+  }
+  // ── Aprobar (nómina) ──
+  async function approveEntry(id, approved) {
+    try {
+      const r = await apiFetch(`${API}/timer/${id}/approve`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ approved }) });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Error');
+      loadReport();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  async function _ttApproveBulk(ids, approved) {
+    if (!ids.length) return;
+    try {
+      const r = await apiFetch(`${API}/timer/approve-bulk`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids, approved }) });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Error');
+      const d = await r.json();
+      showBanner(approved ? `✓ ${d.count} sesión(es) aprobada(s)` : `${d.count} sesión(es) reabierta(s)`, 'success');
+      loadReport();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  function approveAll() {
+    const ids = (_ttLastEntries || []).filter(e => (e.source || 'manual_timer') === 'manual_timer' && !e.approved).map(e => e.id);
+    if (!ids.length) return;
+    if (!confirm(`¿Aprobar ${ids.length} sesión(es) para nómina? Quedarán bloqueadas para el miembro.`)) return;
+    _ttApproveBulk(ids, true);
+  }
+  function unapproveAll() {
+    const ids = (_ttLastEntries || []).filter(e => (e.source || 'manual_timer') === 'manual_timer' && e.approved).map(e => e.id);
+    if (!ids.length) return;
+    if (!confirm(`¿Reabrir ${ids.length} sesión(es)? Podrán editarse de nuevo.`)) return;
+    _ttApproveBulk(ids, false);
   }
 
   // Genera un token de Nova y lo muestra una sola vez. Sirve para el Desktop Agent y la extensión.
@@ -20508,7 +20628,8 @@ const TimerModule = (() => {
     document.body.appendChild(back);
   }
 
-  return { init, start, stop, startFromTask, toggleTask, loadReport, deleteEntry, connectExtension, setPeriod, navPeriod, setCustom, setTtMember, setTtClient, setTtProject, clearTtFilters, printReport, syncButtons: _updatePlayButtons };
+  return { init, start, stop, startFromTask, toggleTask, loadReport, deleteEntry, connectExtension, setPeriod, navPeriod, setCustom, setTtMember, setTtClient, setTtProject, clearTtFilters, printReport, syncButtons: _updatePlayButtons,
+    openEntryEdit, closeEntryEdit, saveEntryEdit, approveEntry, approveAll, unapproveAll };
 })();
 
 // =================================================================

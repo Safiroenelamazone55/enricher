@@ -5084,9 +5084,9 @@ app.get('/api/timer/entries', requireAuth, async (req, res) => {
     const member = (req.query.member || '').trim();
     // Enriquecemos cada entrada con la tarifa/moneda/tipo del proyecto (vía tarea → proyecto)
     // para poder calcular horas → dinero en el reporte de facturación por horas.
-    const sel = `SELECT te.id, te.task_id, te.task_titulo, te.project_nombre,
+    const sel = `SELECT te.id, te.user_id, te.task_id, te.task_titulo, te.project_nombre,
               te.started_at, te.ended_at, te.duration_s, te.active_s, te.idle_s, te.notes,
-              te.source, te.activity_type, te.metadata,
+              te.source, te.activity_type, te.metadata, te.approved, te.approved_at, te.approved_by,
               t.project_id, p.nombre AS proj_nombre, p.tarifa_hora, p.moneda, p.tipo_proyecto,
               c.nombre AS client_nombre
        FROM time_entries te
@@ -5286,12 +5286,94 @@ app.get('/api/timer/team', requireAuth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// DELETE /api/timer/:id — delete an entry
+// Helper: ¿uid es admin del workspace wid? (owner o rol admin/manager en team_members)
+async function _isWsAdmin(uid, wid) {
+  if (uid === wid) return true;
+  const rr = await pool.query(`SELECT rol FROM team_members WHERE user_id=$1 AND email=(SELECT email FROM users WHERE id=$2)`, [wid, uid]);
+  return ['admin', 'manager'].includes(rr.rows[0]?.rol || '');
+}
+
+// DELETE /api/timer/:id — borrar sesión (propia y NO aprobada; el admin puede borrar cualquiera del workspace)
 app.delete('/api/timer/:id', requireAuth, async (req, res) => {
   try {
-    await pool.query(`DELETE FROM time_entries WHERE id=$1 AND user_id=$2`,
-      [req.params.id, req.user.id]);
+    const uid = req.user.id, wid = req.workspaceOwnerId;
+    const admin = await _isWsAdmin(uid, wid);
+    const r = admin
+      ? await pool.query(`DELETE FROM time_entries WHERE id=$1 AND user_id IN (SELECT id FROM users WHERE workspace_id=$2 OR id=$2)`, [req.params.id, wid])
+      : await pool.query(`DELETE FROM time_entries WHERE id=$1 AND user_id=$2 AND approved=FALSE`, [req.params.id, uid]);
+    if (!r.rowCount) return res.status(403).json({ error: 'No se puede eliminar (aprobada o sin permiso)' });
     res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// PUT /api/timer/:id — editar una sesión (tarea/proyecto, inicio, duración, tipo, notas).
+// Miembro: solo las suyas y NO aprobadas. Admin: cualquiera del workspace.
+app.put('/api/timer/:id', requireAuth, async (req, res) => {
+  try {
+    const uid = req.user.id, wid = req.workspaceOwnerId, id = req.params.id;
+    const b = req.body || {};
+    const cur = (await pool.query(`SELECT * FROM time_entries WHERE id=$1`, [id])).rows[0];
+    if (!cur) return res.status(404).json({ error: 'Sesión no encontrada' });
+    const admin = await _isWsAdmin(uid, wid);
+    const own = cur.user_id === uid;
+    const inWs = admin && (await pool.query(`SELECT 1 FROM users WHERE id=$1 AND (workspace_id=$2 OR id=$2)`, [cur.user_id, wid])).rowCount > 0;
+    if (!(own || inWs)) return res.status(403).json({ error: 'Sin permiso' });
+    if (own && !admin && cur.approved) return res.status(403).json({ error: 'Sesión aprobada: pide a un admin que la reabra' });
+
+    let taskId = b.task_id != null && b.task_id !== '' ? parseInt(b.task_id, 10) : null;
+    let taskTit = String(b.task_titulo != null ? b.task_titulo : cur.task_titulo || '');
+    let projNom = String(b.project_nombre != null ? b.project_nombre : cur.project_nombre || '');
+    if (taskId) {
+      const t = (await pool.query(`SELECT t.titulo, p.nombre AS proj FROM tasks t LEFT JOIN projects p ON p.id=t.project_id WHERE t.id=$1`, [taskId])).rows[0];
+      if (!t) { taskId = null; } else { taskTit = t.titulo || taskTit; if (t.proj) projNom = t.proj; }
+    }
+    const started = b.started_at ? new Date(b.started_at) : new Date(cur.started_at);
+    if (isNaN(started.getTime())) return res.status(400).json({ error: 'Fecha de inicio no válida' });
+    let dur = b.duration_s != null ? Math.round(Number(b.duration_s)) : cur.duration_s;
+    if (!isFinite(dur) || dur < 0) dur = cur.duration_s;
+    const ended = new Date(started.getTime() + dur * 1000);
+    const act = ['active_work', 'idle', 'break', 'meeting'].includes(b.activity_type) ? b.activity_type : cur.activity_type;
+    const notes = b.notes != null ? String(b.notes).slice(0, 1000) : cur.notes;
+
+    const r = await pool.query(
+      `UPDATE time_entries SET task_id=$1, task_titulo=$2, project_nombre=$3, started_at=$4, ended_at=$5,
+         duration_s=$6, active_s=$6, idle_s=0, activity_type=$7, notes=$8
+       WHERE id=$9 RETURNING *`,
+      [taskId, taskTit, projNom, started.toISOString(), ended.toISOString(), dur, act, notes, id]);
+    res.json(r.rows[0]);
+  } catch (e) { console.error('[timer-edit]', e.message); res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/timer/:id/approve  { approved } — aprobar/desaprobar una sesión (solo admin)
+app.post('/api/timer/:id/approve', requireAuth, async (req, res) => {
+  try {
+    const uid = req.user.id, wid = req.workspaceOwnerId;
+    if (!(await _isWsAdmin(uid, wid))) return res.status(403).json({ error: 'Solo admin' });
+    const approved = !!(req.body || {}).approved;
+    const r = await pool.query(
+      `UPDATE time_entries SET approved=$1, approved_at=$2, approved_by=$3
+       WHERE id=$4 AND user_id IN (SELECT id FROM users WHERE workspace_id=$5 OR id=$5)
+       RETURNING id, approved, approved_at, approved_by`,
+      [approved, approved ? new Date().toISOString() : null, approved ? uid : null, req.params.id, wid]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Sesión no encontrada' });
+    res.json(r.rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/timer/approve-bulk  { ids:[], approved } — aprobar/desaprobar varias (solo admin)
+app.post('/api/timer/approve-bulk', requireAuth, async (req, res) => {
+  try {
+    const uid = req.user.id, wid = req.workspaceOwnerId;
+    if (!(await _isWsAdmin(uid, wid))) return res.status(403).json({ error: 'Solo admin' });
+    const b = req.body || {};
+    const ids = Array.isArray(b.ids) ? b.ids.map(x => parseInt(x, 10)).filter(Boolean) : [];
+    const approved = !!b.approved;
+    if (!ids.length) return res.json({ ok: true, count: 0 });
+    const r = await pool.query(
+      `UPDATE time_entries SET approved=$1, approved_at=$2, approved_by=$3
+       WHERE id = ANY($4::int[]) AND user_id IN (SELECT id FROM users WHERE workspace_id=$5 OR id=$5)`,
+      [approved, approved ? new Date().toISOString() : null, approved ? uid : null, ids, wid]);
+    res.json({ ok: true, count: r.rowCount });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
