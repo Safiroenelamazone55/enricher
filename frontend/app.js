@@ -5034,18 +5034,34 @@ const DashboardModule = (() => {
     </div>`;
   }
 
-  // Tarjeta "Resumen de tareas": total + desglose por estado (barra segmentada),
-  // repartidas en N proyectos. Cuenta unidades de trabajo (subtareas + tareas-hoja,
-  // sin los padres-contenedor). Rellena el hueco de la columna derecha del dashboard.
+  // Tarjeta "Resumen de tareas": total + desglose por estado (barra segmentada) de las
+  // tareas con fecha límite en el período elegido (Semana/Mes). Cuenta unidades de
+  // trabajo (subtareas + tareas-hoja, sin los padres-contenedor).
+  let _ovPeriod   = 'mes';   // 'semana' | 'mes'
+  let _ovAllTasks = [];
+  function setOvPeriod(p) { _ovPeriod = p; _renderOverview(); }
   function _renderOverview(allTasks) {
     const el = document.getElementById('dash2-overview');
     if (!el) return;
-    const tasks = allTasks || [];
-    const parentIds = new Set(tasks.filter(t => t.parent_task_id).map(t => t.parent_task_id));
-    const units = tasks.filter(t => t.parent_task_id || !parentIds.has(t.id));
-    const total = units.length;
-    if (total === 0) { el.style.display = 'none'; return; }
+    if (allTasks) _ovAllTasks = allTasks;
+    const tasks = _ovAllTasks || [];
+    if (!tasks.length) { el.style.display = 'none'; return; }
     el.style.display = '';
+    const parentIds = new Set(tasks.filter(t => t.parent_task_id).map(t => t.parent_task_id));
+    let units = tasks.filter(t => t.parent_task_id || !parentIds.has(t.id));
+    // Período: tareas con deadline dentro de la semana / mes actual.
+    const now = new Date(); now.setHours(0, 0, 0, 0);
+    const dow = (now.getDay() + 6) % 7;               // Lun=0
+    const wkS = new Date(now); wkS.setDate(now.getDate() - dow);
+    const wkE = new Date(wkS); wkE.setDate(wkS.getDate() + 6);
+    units = units.filter(t => {
+      if (!t.deadline) return false;
+      const d = new Date(String(t.deadline).split('T')[0] + 'T00:00:00');
+      return _ovPeriod === 'semana'
+        ? (d >= wkS && d <= wkE)
+        : (d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth());
+    });
+    const total = units.length;
     const projects = new Set(units.map(t => t.project_id).filter(Boolean)).size;
     const cnt = {};
     units.forEach(t => { const e = t.estado || 'pendiente'; cnt[e] = (cnt[e] || 0) + 1; });
@@ -5057,16 +5073,24 @@ const DashboardModule = (() => {
     ].filter(s => (cnt[s.k] || 0) > 0);
     const bar = SEG.map(s => `<span class="d3-ov-seg" style="flex:${cnt[s.k]};background:${s.color}"></span>`).join('');
     const legend = SEG.map(s => `<div class="d3-ov-leg"><span class="d3-ov-dot" style="background:${s.color}"></span><span class="d3-ov-leg-lbl">${s.label}</span><span class="d3-ov-leg-n">${cnt[s.k]}</span></div>`).join('');
+    const tabs = `<div class="d3-ov-tabs">
+      <button class="d3-ov-tab${_ovPeriod === 'semana' ? ' on' : ''}" onclick="DashboardModule.setOvPeriod('semana')">Semana</button>
+      <button class="d3-ov-tab${_ovPeriod === 'mes' ? ' on' : ''}" onclick="DashboardModule.setOvPeriod('mes')">Mes</button>
+    </div>`;
+    const body = total === 0
+      ? `<div class="d3-ov-empty">Sin tareas con fecha ${_ovPeriod === 'semana' ? 'esta semana' : 'este mes'}.</div>`
+      : `<div class="d3-ov-total"><span class="d3-ov-total-lbl">Tareas</span><span class="d3-ov-total-n">${total}</span></div>
+         <div class="d3-ov-bar">${bar}</div>
+         <div class="d3-ov-legend">${legend}</div>`;
     el.innerHTML = `
       <div class="d3-card-header">
         <span class="d3-card-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="3" width="8" height="4" rx="1.5"/><path d="M9 5H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3"/></svg></span>
         <span class="d3-card-title">Resumen de tareas</span>
         <span class="d3-card-link" onclick="document.querySelector('[data-tab=mgmt-tasks]').click()">Ver todo →</span>
       </div>
-      <div class="d3-ov-sub">Repartidas en ${projects} proyecto${projects === 1 ? '' : 's'}</div>
-      <div class="d3-ov-total"><span class="d3-ov-total-lbl">Tareas</span><span class="d3-ov-total-n">${total}</span></div>
-      <div class="d3-ov-bar">${bar}</div>
-      <div class="d3-ov-legend">${legend}</div>`;
+      ${tabs}
+      ${total ? `<div class="d3-ov-sub">Repartidas en ${projects} proyecto${projects === 1 ? '' : 's'}</div>` : ''}
+      ${body}`;
   }
 
   function _renderTasks(_apiCount, _todayApi, _overdueApi, allTasks) {
@@ -5745,7 +5769,7 @@ const DashboardModule = (() => {
   }
   function goTasks() { document.querySelector('[data-tab=mgmt-tasks]')?.click(); }
 
-  return { load, openStatusMenu, setTaskStatus, toggleExpand, setOppTaskStatus, _renderHours, _setHrsCtx,
+  return { load, openStatusMenu, setTaskStatus, toggleExpand, setOppTaskStatus, _renderHours, _setHrsCtx, setOvPeriod,
     openTrackPicker, closeTrackPicker, _tpFilter, _tpSelect, trackPickerStart, hrsPause, hrsResume, hrsStop, hrsChangeTask,
     goFinance, goTasks,
     _onAvatarClick, openAvatarPicker, closeAvatarPicker, selectAvatar, resetAvatar, _avSwitchTab,
