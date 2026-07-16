@@ -4698,13 +4698,13 @@ const DashboardModule = (() => {
       actions = `<div class="d3-hrs-actions">
         <button class="d3-hrs-act d3-hrs-act--pause" onclick="DashboardModule.hrsPause()"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>Pausar</button>
         <button class="d3-hrs-act d3-hrs-act--stop" onclick="DashboardModule.hrsStop()"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>Detener</button>
-        <button class="d3-hrs-changetask" onclick="DashboardModule.hrsChangeTask()">Cambiar tarea</button>
+        <button class="d3-hrs-changetask" onclick="DashboardModule.hrsChangeTask()">Cambiar</button>
       </div>`;
     } else if (paused) {
       actions = `<div class="d3-hrs-actions">
         <button class="d3-hrs-act d3-hrs-act--resume" onclick="DashboardModule.hrsResume()"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg>Reanudar</button>
         <button class="d3-hrs-act d3-hrs-act--stop" onclick="DashboardModule.hrsStop()"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>Detener</button>
-        <button class="d3-hrs-changetask" onclick="DashboardModule.hrsChangeTask()">Cambiar tarea</button>
+        <button class="d3-hrs-changetask" onclick="DashboardModule.hrsChangeTask()">Cambiar</button>
       </div>`;
     } else {
       actions = `<button class="d3-hrs-btn" onclick="DashboardModule.openTrackPicker()">
