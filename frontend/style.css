@@ -12355,7 +12355,7 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
    ══════════════════════════════════════════════════════════════ */
 /* Sin recuadro blanco de fondo: las 2 tarjetas van directo sobre el fondo del
    dashboard, alineadas con el contenido de abajo (izq 0, der 52, como .d3-body). */
-.d3-hero { align-items: flex-start; justify-content: flex-start; gap: 16px; flex-wrap: nowrap; background: transparent; border-bottom: none; padding: 6px 52px 0 0; }
+.d3-hero { align-items: stretch; justify-content: flex-start; gap: 16px; flex-wrap: nowrap; background: transparent; border-bottom: none; padding: 6px 0 0 0; }
 /* El Dashboard arranca pegado arriba (menos padding que otras secciones) */
 .app-main:has(#pane-mgmt-dashboard.active) { padding-top: 10px; }
 .d3-revcard { flex: 0 0 280px; max-width: 280px; }
@@ -12395,11 +12395,12 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
 .d3-act-timer .d3-hrs-btn { width: 100%; margin: auto 0 0; height: 38px; font-size: .86rem; }
 /* Timer ACTIVO compacto: tarjeta a la altura del heatmap, sin huecos ni desproporción */
 .d3-act-timer .d3-hrs-actions { padding: 0; margin-top: 4px; gap: 6px; }
-.d3-act-timer .d3-hrs-now { margin: 0 0 6px; padding: 6px 10px; }
-.d3-act-timer .d3-hrs-now__lbl { font-size: .58rem; }
-.d3-act-timer .d3-hrs-now__task { margin-top: 1px; font-size: .86rem; }
-.d3-act-timer .d3-hrs-now__ctx { margin-top: 0; }
-.d3-act-timer .d3-hrs-now__time { font-size: .92rem; margin-top: 1px; }
+.d3-act-timer .d3-hrs-now { margin: 0 0 5px; padding: 5px 10px; }
+.d3-act-timer .d3-hrs-now__lbl { font-size: .56rem; }
+.d3-act-timer .d3-hrs-now__task { margin-top: 0; font-size: .84rem; line-height: 1.2; }
+.d3-act-timer .d3-hrs-now__ctx { margin-top: 0; font-size: .66rem; }
+.d3-act-timer .d3-hrs-now__time { font-size: .82rem; margin-top: 0; }
+.d3-act-timer .d3-hrs-act { height: 30px; }
 .d3-act-timer .d3-act-statsrow { gap: 7px; margin-bottom: 7px; }
 .d3-act-timer .d3-act-today .d3-hrs-total { font-size: 1.15rem; white-space: nowrap; }
 .d3-act-timer .d3-hrs-metrics { row-gap: 6px; column-gap: 8px; }
