@@ -13706,8 +13706,7 @@ ${foot}
       const r = await _lmSetDispositionCore(cid, disp, seqId);
       _seqContacts = null; await _seqLoadContacts(seqId); await _reloadContacts();
       showBanner(`✓ ${_dispoLabel(disp)}${r.rerouted ? ' · → Ruta A (LinkedIn)' : ''}${r.paused ? ' · pausado en secuencias' : ''}`, 'success');
-      const today = _dayOf(new Date());
-      const next = _seqTasks(seqId).filter(t => t.due <= today && (!_seqTaskCanal || (t.st.canal || 'email') === _seqTaskCanal))[0];
+      const next = _cpNextTask(seqId, cid);
       if (next) openContactPage(next.e.contact_id, { seqId: seqId }); else seqDoExit();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
@@ -13759,8 +13758,7 @@ ${foot}
       const c0 = (_contacts || []).find(x => x.id === cid); if (c0) c0.data_issue = issue;
       _seqContacts = null; await _seqLoadContacts(seqId); await _reloadContacts();
       showBanner(`⚠ ${lbl} — pausado; queda en Contactos → Por corregir`, 'success');
-      const today = _dayOf(new Date());
-      const next = _seqTasks(seqId).filter(t => t.due <= today && (!_seqTaskCanal || (t.st.canal || 'email') === _seqTaskCanal))[0];
+      const next = _cpNextTask(seqId, cid);
       if (next) openContactPage(next.e.contact_id, { seqId: seqId }); else seqDoExit();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
@@ -13773,8 +13771,7 @@ ${foot}
       await _noLinkedInCore(cid, true);
       const c = (_contacts || []).find(x => x.id === cid); if (c) c.no_linkedin = true;
       showBanner('🚫 LinkedIn no válido — este contacto sigue por email (Ruta B)', 'success');
-      const today = _dayOf(new Date());
-      const next = _seqTasks(seqId).filter(t => t.due <= today && t.e.contact_id !== cid)[0];
+      const next = _cpNextTask(seqId, cid);
       if (next) openContactPage(next.e.contact_id, { seqId: seqId }); else seqDoExit();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
@@ -13789,8 +13786,7 @@ ${foot}
       if (c0) c0.email_status = 'bounced';
       _seqContacts = null; await _seqLoadContacts(seqId); await _reloadContacts();
       showBanner('↩ Email rebotado — pausado; corrígelo en Contactos → Rebotados', 'success');
-      const today = _dayOf(new Date());
-      const next = _seqTasks(seqId).filter(t => t.due <= today && (!_seqTaskCanal || (t.st.canal || 'email') === _seqTaskCanal))[0];
+      const next = _cpNextTask(seqId, cid);
       if (next) openContactPage(next.e.contact_id, { seqId: seqId }); else seqDoExit();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
@@ -14162,14 +14158,14 @@ ${foot}
   }
   async function seqTaskOpen(seqId, cid) {
     if (!cid) return;
-    _cpTaskHist = [];   // corrida nueva
+    _cpTaskHist = []; _cpSkipped = [];   // corrida nueva
     const has = Array.isArray(_seqContacts) && _activeSeq === seqId && _seqContacts.some(e => e.contact_id === cid);
     if (!has) { _activeSeq = seqId; _seqContacts = null; await _seqLoadContacts(seqId); }
     openContactPage(cid, { seqId: seqId });
   }
   function seqDoClose() { document.getElementById('seq-do-modal')?.remove(); _seqDo = null; }
   function seqDoEditStep(stepId) { const seqId = _cpTaskCtx ? _cpTaskCtx.seqId : _activeSeq; openStepDrawer(seqId, stepId); }
-  function seqDoExit() { const seqId = _cpTaskCtx ? _cpTaskCtx.seqId : _activeSeq; _cpTaskCtx = null; _cpTaskHist = []; _activeSeq = seqId; _section = 'sequence'; _seqTab = 'tareas'; _renderBody(); if (!Array.isArray(_seqContacts)) _seqLoadContacts(seqId); }
+  function seqDoExit() { const seqId = _cpTaskCtx ? _cpTaskCtx.seqId : _activeSeq; _cpTaskCtx = null; _cpTaskHist = []; _cpSkipped = []; _activeSeq = seqId; _section = 'sequence'; _seqTab = 'tareas'; _renderBody(); if (!Array.isArray(_seqContacts)) _seqLoadContacts(seqId); }
   function seqOpenLinkedIn(cid) {
     const c = _contacts.find(x => x.id === cid);
     const url = c && c.linkedin; if (!url) return;
@@ -14446,6 +14442,19 @@ ${foot}
     try { document.execCommand('copy'); cb && cb(); } catch (e) { showBanner('No se pudo copiar', 'error'); }
     document.body.removeChild(ta);
   }
+  // Cola de la corrida con los SALTADOS al final (para que "siguiente" no reabra el saltado enseguida).
+  function _cpOrderedQueue(seqId) {
+    const today = new Date(new Date().toDateString());
+    const q = _seqTasks(seqId).filter(t => t.due <= today && (!_seqTaskCanal || (t.st.canal || 'email') === _seqTaskCanal));
+    if (!_cpSkipped.length) return q;
+    const sk = new Set(_cpSkipped);
+    const rest = q.filter(t => !sk.has(t.e.contact_id));
+    const tail = _cpSkipped.map(id => q.find(t => t.e.contact_id === id)).filter(Boolean);
+    return [...rest, ...tail];
+  }
+  function _cpNextTask(seqId, excludeCid) {
+    return _cpOrderedQueue(seqId).find(t => t.e.contact_id !== excludeCid) || null;
+  }
   async function seqDoDone() {
     if (!_cpTaskCtx) return;
     const seqId = _cpTaskCtx.seqId, cid = _contactView;
@@ -14454,8 +14463,7 @@ ${foot}
       await _seqCompleteStep(seqId, cid); _lastDone = { seqId, cid }; _cpTaskHist.push(cid);
       _seqContacts = null; await _seqLoadContacts(seqId);
       await _reloadContacts();
-      const today = new Date(new Date().toDateString());
-      const next = _seqTasks(seqId).filter(t => t.due <= today && (!_seqTaskCanal || (t.st.canal || 'email') === _seqTaskCanal))[0];
+      const next = _cpNextTask(seqId, cid);
       const undoLink = ' &nbsp; <a href="#" onclick="LeadManagerModule.seqUndoLast();return false;" style="color:#fff;text-decoration:underline">↩ Deshacer</a>';
       if (next) { openContactPage(next.e.contact_id, { seqId: seqId }); showBanner('✓ Hecha · siguiente' + undoLink, 'success'); }
       else { seqDoExit(); showBanner('🎉 ¡No quedan tareas para hoy!' + undoLink, 'success'); }
@@ -14464,11 +14472,10 @@ ${foot}
   function seqDoSkip() {
     if (!_cpTaskCtx) return;
     const seqId = _cpTaskCtx.seqId, cid = _contactView;
-    const today = new Date(new Date().toDateString());
-    const queue = _seqTasks(seqId).filter(t => t.due <= today && (!_seqTaskCanal || (t.st.canal || 'email') === _seqTaskCanal));
-    const i = queue.findIndex(t => t.e.contact_id === cid);
-    const next = i >= 0 ? queue[i + 1] : queue[0];
-    if (next && next.e.contact_id !== cid) { _cpTaskHist.push(cid); openContactPage(next.e.contact_id, { seqId: seqId }); }
+    // Saltar = mandarlo al FINAL de la cola de la corrida (para retomarlo al final, no enseguida).
+    _cpSkipped = _cpSkipped.filter(x => x !== cid); _cpSkipped.push(cid);
+    const next = _cpNextTask(seqId, cid);
+    if (next) { _cpTaskHist.push(cid); openContactPage(next.e.contact_id, { seqId: seqId }); }
     else seqDoExit();
   }
   function seqDoPrev() {
@@ -16028,6 +16035,7 @@ ${foot}
   let _cpActs = null;
   let _cpTaskCtx = null;      // { seqId } — ejecutando una tarea de secuencia sobre esta ficha
   let _cpTaskHist = [];       // historial de contactos ya recorridos en la corrida (para "‹ Anterior")
+  let _cpSkipped = [];        // contactos SALTADOS en la corrida → van al FINAL de la cola (no reaparecen enseguida)
   let _seqTab = 'pasos';
   let _seqCtEstado = ''; // filtro de estado en la pestaña Contactos de la secuencia
   let _seqTaskCanal = ''; // filtro por canal en la pestaña Tareas de la secuencia
