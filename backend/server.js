@@ -2606,7 +2606,7 @@ app.post('/api/lm/contacts', requireAuth, async (req, res) => {
 app.put('/api/lm/contacts/:id', requireAuth, async (req, res) => {
   const b = req.body || {};
   try {
-    const prev = (await pool.query(`SELECT email FROM lm_contacts WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId])).rows[0];
+    const prev = (await pool.query(`SELECT email, data_issue FROM lm_contacts WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId])).rows[0];
     const vals = LM_CT_COLS.map(k => _lmS(b[k]));
     const set = LM_CT_COLS.map((k, i) => `${k}=$${i + 1}`).join(',');
     const { rows } = await pool.query(`
@@ -2624,6 +2624,13 @@ app.put('/api/lm/contacts/:id', requireAuth, async (req, res) => {
       if (newE && b.auto_verify !== false) {
         try { const { queueVerify } = require('./services/lmVerifyService'); queueVerify(pool, req.workspaceOwnerId, [rows[0].id]); } catch (e) { console.warn('[lm-ct] re-verify:', e.message); }
       }
+    }
+    // Auto-reanudar "Por corregir": si el dato que faltaba ya está, se limpia y reanuda su(s) secuencia(s).
+    const di = prev && prev.data_issue;
+    if (di === 'falta_email' && newE || di === 'falta_linkedin' && String(rows[0].linkedin || '').trim()) {
+      await pool.query(`UPDATE lm_contacts SET data_issue='' WHERE id=$1`, [rows[0].id]);
+      await pool.query(`UPDATE lm_contact_sequences SET estado='activo', paused_reason='' WHERE user_id=$1 AND contact_id=$2 AND estado='pausado' AND paused_reason LIKE 'dato_%'`, [req.workspaceOwnerId, rows[0].id]);
+      rows[0].data_issue = '';
     }
     res.json(rows[0]);
   } catch (err) { console.error('[lm-ct] PUT', err.message); res.status(500).json({ error: 'Error al actualizar contacto' }); }
@@ -2894,6 +2901,32 @@ app.post('/api/lm/contacts/:id/email-status', requireAuth, async (req, res) => {
       [uid, cid, r.rows[0].outbound_client_id || null, nota]);
     res.json({ ok: true, email_status: status, paused });
   } catch (err) { console.error('[lm-estat]', err.message); res.status(500).json({ error: 'Error al actualizar' }); }
+});
+
+// "Por corregir": falta/está mal un dato para poder contactar (falta_email | falta_linkedin |
+// dato_incorrecto). Pausa sus secuencias y lo deja en Contactos → "Por corregir". issue='' reanuda.
+app.post('/api/lm/contacts/:id/data-issue', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId, cid = req.params.id;
+  const issue = String((req.body || {}).issue || '');
+  const note = String((req.body || {}).note || '').slice(0, 500);
+  if (!['falta_email', 'falta_linkedin', 'dato_incorrecto', ''].includes(issue)) return res.status(400).json({ error: 'Motivo no válido' });
+  try {
+    const r = await pool.query(`UPDATE lm_contacts SET data_issue=$1, updated_at=NOW() WHERE id=$2 AND user_id=$3 RETURNING outbound_client_id`, [issue, cid, uid]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Contacto no encontrado' });
+    let paused = 0, resumed = 0;
+    if (issue) {
+      const p = await pool.query(`UPDATE lm_contact_sequences SET estado='pausado', paused_reason=$1 WHERE user_id=$2 AND contact_id=$3 AND estado='activo'`, ['dato_' + issue, uid, cid]);
+      paused = p.rowCount;
+    } else {
+      const p = await pool.query(`UPDATE lm_contact_sequences SET estado='activo', paused_reason='' WHERE user_id=$1 AND contact_id=$2 AND estado='pausado' AND paused_reason LIKE 'dato_%'`, [uid, cid]);
+      resumed = p.rowCount;
+    }
+    const L = { falta_email: 'Falta email', falta_linkedin: 'Falta LinkedIn', dato_incorrecto: 'Dato incorrecto' };
+    const nota = issue ? `Marcado "Por corregir": ${L[issue]}${note ? ' — ' + note : ''} (pausado; corregir y reanudar)` : 'Dato corregido — secuencia(s) reanudada(s)';
+    await pool.query(`INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, nota, fecha, estado) VALUES ($1,$2,$3,'nota',$4,NOW(),'hecha')`,
+      [uid, cid, r.rows[0].outbound_client_id || null, nota]);
+    res.json({ ok: true, data_issue: issue, paused, resumed });
+  } catch (err) { console.error('[lm-datai]', err.message); res.status(500).json({ error: 'Error al actualizar' }); }
 });
 
 // ── Contactos enrolados en una secuencia (progreso) ──

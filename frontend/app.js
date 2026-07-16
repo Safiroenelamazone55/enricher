@@ -13720,6 +13720,48 @@ ${foot}
     if (!res.ok) throw new Error((await res.json()).error || 'Error');
     return await res.json();
   }
+  // "Por corregir": marca falta/error de dato (falta_email|falta_linkedin|dato_incorrecto), pausa
+  // sus secuencias; issue='' reanuda. Al corregir el dato en la ficha se reanuda solo (backend).
+  const _DATA_ISSUE_LBL = { falta_email: 'Falta email', falta_linkedin: 'Falta LinkedIn', dato_incorrecto: 'Dato incorrecto' };
+  async function _dataIssueCore(cid, issue, note) {
+    const res = await apiFetch(`${API}/lm/contacts/${cid}/data-issue`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ issue, note: note || '' }) });
+    if (!res.ok) throw new Error((await res.json()).error || 'Error');
+    return await res.json();
+  }
+  // Barra de tarea: menú "⚠ Falta dato" con los 3 motivos.
+  function seqDoDataIssue(ev) {
+    if (ev && ev.stopPropagation) ev.stopPropagation();
+    document.querySelectorAll('.lm-di-menu').forEach(m => m.remove());
+    const opts = [['falta_email', '✉ Falta email'], ['falta_linkedin', '🔗 Falta LinkedIn'], ['dato_incorrecto', '⚠ Dato incorrecto']];
+    const menu = document.createElement('div');
+    menu.className = 'lm-di-menu';
+    menu.innerHTML = `<div class="lm-di-menu__h">¿Qué falta para poder contactar?</div>` + opts.map(([v, l]) => `<button class="lm-di-menu__b" onclick="LeadManagerModule.seqDoDataIssuePick('${v}')">${l}</button>`).join('');
+    document.body.appendChild(menu);
+    const t = (ev && (ev.currentTarget || ev.target)) || document.body;
+    const r = t.getBoundingClientRect();
+    menu.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 240))}px`;
+    menu.style.top = `${r.top - 6}px`;
+    menu.style.transform = 'translateY(-100%)';
+    setTimeout(() => document.addEventListener('click', function onDoc(e) { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', onDoc); } }), 0);
+  }
+  async function seqDoDataIssuePick(issue) {
+    document.querySelectorAll('.lm-di-menu').forEach(m => m.remove());
+    if (!_cpTaskCtx) return;
+    const seqId = _cpTaskCtx.seqId, cid = _contactView;
+    const lbl = _DATA_ISSUE_LBL[issue] || issue;
+    let note = '';
+    if (issue === 'dato_incorrecto') { note = (prompt('¿Qué dato hay que corregir? (opcional)') || '').trim(); }
+    if (!confirm(`¿Marcar "${lbl}" para este contacto?\n\nSe pausa en sus secuencias y queda en Contactos → "Por corregir". Al arreglar el dato se reanuda solo.`)) return;
+    try {
+      await _dataIssueCore(cid, issue, note);
+      const c0 = (_contacts || []).find(x => x.id === cid); if (c0) c0.data_issue = issue;
+      _seqContacts = null; await _seqLoadContacts(seqId); await _reloadContacts();
+      showBanner(`⚠ ${lbl} — pausado; queda en Contactos → Por corregir`, 'success');
+      const today = _dayOf(new Date());
+      const next = _seqTasks(seqId).filter(t => t.due <= today && (!_seqTaskCanal || (t.st.canal || 'email') === _seqTaskCanal))[0];
+      if (next) openContactPage(next.e.contact_id, { seqId: seqId }); else seqDoExit();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
   // Desde la barra de tarea (paso LinkedIn): perfil falso/inactivo → sigue por email, no se saca.
   async function seqDoNoLinkedIn() {
     if (!_cpTaskCtx) return;
@@ -14323,6 +14365,7 @@ ${foot}
         ${_DISPOS.map(d => `<button class="cp-dispo-b cp-dispo-b--xs" title="Marcar disposición: ${d[1]}" onclick="LeadManagerModule.seqDoDisposition('${d[0]}')">${d[1]}</button>`).join('')}
         ${st.canal === 'linkedin' ? `<button class="cp-dispo-b cp-dispo-b--xs" style="color:#B45309;border-color:#E7C79A" title="Perfil falso/inactivo: salta los pasos de LinkedIn y sigue por email — NO lo saca de la secuencia" onclick="LeadManagerModule.seqDoNoLinkedIn()">🚫 LinkedIn no válido</button>` : ''}
         ${st.canal === 'email' ? `<button class="cp-dispo-b cp-dispo-b--xs" style="color:#C4342B;border-color:#F3C1BD" title="El email rebotó: pausa sus secuencias y lo deja en Rebotados para corregirlo" onclick="LeadManagerModule.seqDoBounced()">↩ Rebotó</button>` : ''}
+        <button class="cp-dispo-b cp-dispo-b--xs" style="color:#B45309;border-color:#E7C79A" title="No puedes contactar por falta o error de un dato: pausa sus secuencias y lo deja en Contactos → Por corregir. Al arreglar el dato se reanuda." onclick="LeadManagerModule.seqDoDataIssue(event)">⚠ Falta dato</button>
         <span class="cp-taskbar__sp"></span>
         <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqDoPrev()"${_cpTaskHist.length ? '' : ' disabled'} title="Volver al contacto anterior (para revisar o deshacer)">‹ Anterior</button>
         <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqDoSkip()">Saltar ›</button>
@@ -15944,6 +15987,7 @@ ${foot}
   let _coQuery = '';
   let _ctQuery = '';
   let _ctBounced = false; // filtro rápido: solo emails rebotados (para corregirlos)
+  let _ctDataIssue = false; // filtro rápido: "Por corregir" (falta email/LinkedIn o dato incorrecto)
   // ── Paginación de tablas (Contactos / Empresas): sin scroll interno, 50/100 por página ──
   let _ctPage = 0, _coPage = 0;
   function _pageSize() { try { return parseInt(localStorage.getItem('lm_page_size')) || 50; } catch (_) { return 50; } }
@@ -16337,6 +16381,7 @@ ${foot}
         <span class="lm-count" id="lm-ct-count"></span>
         ${_clients.length ? `<select class="lm-tpl-tagsel" title="Filtrar por cliente outbound" onchange="LeadManagerModule.ctSetClient(this.value)"><option value="">◆ Todos los clientes</option>${_clients.map(cl => `<option value="${cl.id}"${String(_ctClientFilter) === String(cl.id) ? ' selected' : ''}>${esc(cl.nombre)}</option>`).join('')}</select>` : ''}
         ${(() => { const n = (_contacts || []).filter(c => c.email_status === 'bounced').length; return (n || _ctBounced) ? `<button class="lm-filter-btn${_ctBounced ? ' on' : ''}" style="${_ctBounced ? '' : 'color:#C4342B'}" title="Emails que rebotaron — corrígelos y reanuda sus secuencias" onclick="LeadManagerModule.ctToggleBounced()">↩ Rebotados · ${n}</button>` : ''; })()}
+        ${(() => { const n = (_contacts || []).filter(c => c.data_issue).length; return (n || _ctDataIssue) ? `<button class="lm-filter-btn${_ctDataIssue ? ' on' : ''}" style="${_ctDataIssue ? '' : 'color:#B45309'}" title="Contactos pausados por falta o error de dato (falta email/LinkedIn o dato incorrecto). Arregla el dato en la ficha y su secuencia se reanuda." onclick="LeadManagerModule.ctToggleDataIssue()">⚠ Por corregir · ${n}</button>` : ''; })()}
         <button class="lm-filter-btn${_ctFilters.length ? ' on' : ''}" onclick="LeadManagerModule.openFilters('contacts')">${_FLT_ICON} Filtros${_ctFilters.length ? ` · ${_ctFilters.length}` : ''}</button>
         <button class="lm-filter-btn" onclick="LeadManagerModule.openViews('contacts')">${_VIEW_ICON} Vistas</button>
         <button class="lm-filter-btn" title="Elegir columnas visibles" onclick="LeadManagerModule.openColsPicker(this)">${NI('sliders')} Columnas</button>
@@ -16447,8 +16492,9 @@ ${foot}
     if (q) list = list.filter(c => (`${c.nombre || ''} ${c.apellido || ''} ${c.email || ''} ${c.company_nombre || c.empresa_nombre || ''} ${c.cargo || ''}`).toLowerCase().includes(q));
     if (_ctClientFilter) list = list.filter(c => String(c.outbound_client_id) === String(_ctClientFilter));
     if (_ctBounced) list = list.filter(c => c.email_status === 'bounced');
+    if (_ctDataIssue) list = list.filter(c => c.data_issue);
     if (_ctFilters.length) list = list.filter(c => _lmMatch(c, _ctFilters));
-    const activeFlt = q || _ctFilters.length || _ctClientFilter || _ctBounced;
+    const activeFlt = q || _ctFilters.length || _ctClientFilter || _ctBounced || _ctDataIssue;
     const cnt = $('lm-ct-count'); if (cnt) cnt.textContent = activeFlt ? `${list.length} de ${_contacts.length}` : `${_contacts.length} contacto${_contacts.length === 1 ? '' : 's'}`;
     _ctFilteredIds = list.map(c => c.id);
     _ctSel.forEach(id => { if (!_ctFilteredIds.includes(id)) _ctSel.delete(id); });
@@ -16483,6 +16529,19 @@ ${foot}
   function filterContacts(v) { _ctQuery = (v || '').toLowerCase().trim(); _ctPage = 0; _renderContacts(); }
   function ctSetClient(v) { _ctClientFilter = v || ''; _ctPage = 0; _renderBody(); }
   function ctToggleBounced() { _ctBounced = !_ctBounced; _ctPage = 0; _renderBody(); }
+  function ctToggleDataIssue() { _ctDataIssue = !_ctDataIssue; _ctPage = 0; _renderBody(); }
+  // Reanudar un contacto "Por corregir" (marca dato corregido y reactiva sus secuencias).
+  async function lmResumeDataIssue(cid) {
+    const c = (_contacts || []).find(x => x.id === cid);
+    if (!confirm('¿Marcar como corregido y reanudar sus secuencias?')) return;
+    try {
+      const r = await _dataIssueCore(cid, '');
+      if (c) c.data_issue = '';
+      await _reloadContacts();
+      showBanner(`✓ Corregido${r.resumed ? ` · reanudado en ${r.resumed} secuencia(s)` : ''}`, 'success');
+      _renderBody();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
   function toggleCt(ev, id) { const on = ev.target.checked; if (on) _ctSel.add(id); else _ctSel.delete(id); ev.target.closest('tr')?.classList.toggle('sel', on); _renderBulkBar(); _syncSelAll(); }
   function toggleCtAll(on) { if (on) _ctFilteredIds.forEach(id => _ctSel.add(id)); else _ctFilteredIds.forEach(id => _ctSel.delete(id)); _renderContacts(); }
   function clearCtSel() { _ctSel.clear(); _renderContacts(); }
@@ -16614,7 +16673,7 @@ ${foot}
         <div class="cp-id">
           <h2 class="cp-name">${esc(full)}</h2>
           <div class="cp-sub">${c.cargo ? esc(c.cargo) : ''}${emp ? `${c.cargo ? ' · ' : ''}<span class="lm-emp-chip">${esc(emp)}</span>` : ''}</div>
-          <div class="cp-badges"><span class="client-badge" style="${eStyle}">${esc(c.estado || 'nuevo')}</span>${_dispoBadge(c.disposition)}${c.no_linkedin ? '<span class="client-badge" style="background:#FEF3C7;color:#B45309" title="Perfil falso/inactivo: sigue solo por email">🚫 Sin LinkedIn</span>' : ''}${_emailBadge(c)}${loc ? `<span class="cp-loc">${esc(loc)}</span>` : ''}</div>
+          <div class="cp-badges"><span class="client-badge" style="${eStyle}">${esc(c.estado || 'nuevo')}</span>${_dispoBadge(c.disposition)}${c.no_linkedin ? '<span class="client-badge" style="background:#FEF3C7;color:#B45309" title="Perfil falso/inactivo: sigue solo por email">🚫 Sin LinkedIn</span>' : ''}${c.data_issue ? `<span class="client-badge" style="background:#FEF3C7;color:#B45309" title="Pausado por falta o error de dato — corrige el dato y sus secuencias se reanudan">⚠ ${_DATA_ISSUE_LBL[c.data_issue] || 'Por corregir'}</span>` : ''}${_emailBadge(c)}${loc ? `<span class="cp-loc">${esc(loc)}</span>` : ''}</div>
           ${_cpStrip(c)}
         </div>
         <div class="cp-actions">
@@ -16653,6 +16712,7 @@ ${foot}
               <button class="cp-dispo-b${c.email_status === 'bounced' ? ' on' : ''}" style="${c.email_status === 'bounced' ? 'background:#FDECEA;color:#C4342B;border-color:#C4342B' : ''}" title="El email rebotó: pausa sus secuencias; corrige el email (se re-verifica solo) y reanuda" onclick="LeadManagerModule.lmToggleBounced(${id})">↩ Email rebotó</button>
               <button class="cp-dispo-b${c.email_status === 'manual' ? ' on' : ''}" style="${c.email_status === 'manual' ? 'background:#E0F2FE;color:#0369A1;border-color:#0369A1' : ''}" title="Email conseguido/confirmado a mano (Google/MS contacts, respuesta directa…): se trata como enviable sin sonda" onclick="LeadManagerModule.lmToggleManualEmail(${id})">✍ Email manual OK</button>
             </div></div>
+            ${c.data_issue ? `<div class="cp-f cp-f--full"><span class="cp-f__l">Por corregir</span><div class="cp-dispo" style="align-items:center;gap:8px"><span class="client-badge" style="background:#FEF3C7;color:#B45309">⚠ ${_DATA_ISSUE_LBL[c.data_issue] || c.data_issue}</span><button class="cp-dispo-b" title="Marca el dato como corregido y reanuda sus secuencias pausadas" onclick="LeadManagerModule.lmResumeDataIssue(${id})">✓ Corregido — reanudar</button></div></div>` : ''}
           </div></div>
           ${rawKeys.length ? `<div class="cp-card"><div class="cp-card__t">Datos importados (sin mapear)</div><div class="cp-fields">${rawKeys.map(k => `<div class="cp-f"><span class="cp-f__l">${esc(k)}</span><span class="cp-f__ro">${esc(raw[k])}</span></div>`).join('')}</div></div>` : ''}
         </div>
@@ -17795,6 +17855,7 @@ ${foot}
     taskSetView, taskSetFilter, calPrev, calNext, calToday,
     lmSetDisposition, seqDoDisposition, cpSetStage,
     seqDoNoLinkedIn, seqDoBounced, lmToggleNoLinkedIn, lmToggleBounced, lmToggleManualEmail, ctToggleBounced,
+    seqDoDataIssue, seqDoDataIssuePick, ctToggleDataIssue, lmResumeDataIssue,
     lmSetPageSize, ctGoPage, coGoPage, seqCtSetEstado, seqTaskSetCanal,
     pendingAcceptOpen, pendingAcceptToggleAll, pendingAcceptApplyFilters, pendingAcceptMark,
     openActivityDrawer, closeActivityDrawer, saveActivity, confirmDeleteActivity, markActDone,

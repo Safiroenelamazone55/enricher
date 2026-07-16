@@ -1009,6 +1009,9 @@ async function initDb() {
     // Canal LinkedIn no válido para este contacto (perfil falso/inactivo): el motor de tareas
     // salta sus pasos de LinkedIn y sigue por la ruta de email — NO se saca de la secuencia.
     await pool.query(`ALTER TABLE lm_contacts ADD COLUMN IF NOT EXISTS no_linkedin BOOLEAN NOT NULL DEFAULT FALSE;`);
+    // "Por corregir": falta/está mal un dato para contactar → pausa sus secuencias hasta arreglarlo.
+    // '' (ok) | falta_email | falta_linkedin | dato_incorrecto
+    await pool.query(`ALTER TABLE lm_contacts ADD COLUMN IF NOT EXISTS data_issue TEXT NOT NULL DEFAULT '';`);
     // Memoria de intentos SMTP por email (persiste entre reinicios): dentro de la ventana de
     // reintento, verificar de nuevo reutiliza el último resultado en vez de re-sondear el servidor.
     await pool.query(`
