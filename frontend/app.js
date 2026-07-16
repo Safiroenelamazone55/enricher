@@ -13160,6 +13160,8 @@ const LeadManagerModule = (() => {
     const steps = _seqSteps(id);
     const cli = _clientName(s.outbound_client_id), cmp = _campaignName(s.campaign_id);
     const timeline = steps.length ? steps.map(_stepRow).join('') : `<div class="lm-act-empty"><div class="lm-act-empty__i">🪜</div><p>Esta secuencia no tiene pasos</p><span>Agrega el primero (Día 1 · Email).</span></div>`;
+    // Conteo "por hacer" (vencidas + hoy) para mostrarlo en la pestaña Tareas, como Contactos (N).
+    const _seqTaskN = Array.isArray(_seqContacts) ? _seqTasks(id).filter(t => t.due <= new Date(new Date().toDateString())).length : null;
     return `
       <button class="lm-back" onclick="LeadManagerModule.go('sequences')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg> Secuencias</button>
       <div class="lm-sec-head">
@@ -13179,7 +13181,7 @@ const LeadManagerModule = (() => {
       <div class="cp-tabs">
         <button class="cp-tab${_seqTab === 'pasos' ? ' active' : ''}" onclick="LeadManagerModule.seqTab('pasos')">Pasos</button>
         <button class="cp-tab${_seqTab === 'contactos' ? ' active' : ''}" onclick="LeadManagerModule.seqTab('contactos')">Contactos${Array.isArray(_seqContacts) ? ` (${_seqContacts.length})` : ''}</button>
-        <button class="cp-tab${_seqTab === 'tareas' ? ' active' : ''}" onclick="LeadManagerModule.seqTab('tareas')">Tareas</button>
+        <button class="cp-tab${_seqTab === 'tareas' ? ' active' : ''}" onclick="LeadManagerModule.seqTab('tareas')">Tareas${_seqTaskN ? ` (${_seqTaskN})` : ''}</button>
         <button class="cp-tab${_seqTab === 'metricas' ? ' active' : ''}" onclick="LeadManagerModule.seqTab('metricas')">Métricas</button>
         <button class="cp-tab${_seqTab === 'envios' ? ' active' : ''}" onclick="LeadManagerModule.seqTab('envios')">Envíos</button>
       </div>
