@@ -11925,6 +11925,11 @@ a.cp-strip__i:hover svg { color: var(--brand, #00804C); }
 .cp-taskbar__mt-v--li { color: #0A66C2; text-decoration: none; }
 .cp-taskbar__mt-v--li:hover { text-decoration: underline; }
 .cp-taskbar__mt--nolink { border-style: dashed; border-color: #E7C79A; background: #FFFDF7; }
+/* Fila de LinkedIn clickable: abre el perfil al costado (reemplaza el botón "Abrir LinkedIn" de abajo) */
+.cp-taskbar__mt--liopen { cursor: pointer; font: inherit; text-align: left; transition: border-color .12s, background .12s, box-shadow .12s; }
+.cp-taskbar__mt--liopen:hover { border-color: #0A66C2; background: #F3F8FE; box-shadow: 0 1px 3px rgba(10,102,194,.14); }
+.cp-taskbar__open { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; font-weight: 700; color: #0A66C2; background: #EAF3FD; border-radius: 6px; padding: 3px 8px; margin-left: 2px; flex-shrink: 0; }
+.cp-taskbar__mt--liopen:hover .cp-taskbar__open { background: #0A66C2; color: #fff; }
 
 /* Selector de canal del paso (botones visibles, antes un <select> que se quedaba en Email) */
 .step-canal-pick { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }

@@ -14353,7 +14353,7 @@ ${foot}
       </div>` : ''}
       ${st.canal === 'linkedin' ? `<div class="cp-taskbar__mailto">
         ${c.linkedin
-          ? `<span class="cp-taskbar__mt"><span class="cp-taskbar__subj-l">LinkedIn</span><a class="cp-taskbar__mt-v cp-taskbar__mt-v--li" href="${esc(c.linkedin)}" target="_blank" rel="noopener" title="Abrir el perfil de LinkedIn del prospecto">${esc(c.linkedin)}</a>${_copyBtn(c.linkedin, 'URL de LinkedIn copiado')}</span>`
+          ? `<button class="cp-taskbar__mt cp-taskbar__mt--liopen" onclick="LeadManagerModule.seqOpenLinkedIn(${cid})" title="Abrir el perfil de LinkedIn al costado para enviar la conexión o la nota"><span class="cp-taskbar__subj-l">LinkedIn</span><span class="cp-taskbar__mt-v cp-taskbar__mt-v--li">${esc(c.linkedin)}</span><span class="cp-taskbar__open"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>Abrir</span></button>`
           : `<span class="cp-taskbar__mt cp-taskbar__mt--nolink" title="Este contacto no tiene URL de LinkedIn en su ficha"><span class="cp-taskbar__subj-l">LinkedIn</span><span class="cp-taskbar__mt-v" style="color:#B45309">Sin URL en la ficha del contacto</span></span>`}
       </div>` : ''}
       ${st.canal === 'email' && subject ? `<div class="cp-taskbar__subj"><span class="cp-taskbar__subj-l">Asunto</span><span class="cp-taskbar__subj-v">${esc(subject)}</span>${/^re\s*:/i.test(subject) ? `<span class="lm-vb" style="background:#FEF3C7;color:#B45309" title="Follow-up: usa Re: del primer email para simular el hilo">Re:</span>` : ''}<button class="seqdo-copy seqdo-copy--xs" onclick="LeadManagerModule.seqDoCopySubject()">${NI('copy')}</button></div>` : ''}
@@ -14361,8 +14361,7 @@ ${foot}
         ? `<div class="cp-taskbar__tpl"><div class="seqdo-tpl-hd"><span>Mensaje${vtag}</span><span style="display:flex;gap:6px"><button class="seqdo-copy seqdo-copy--xs" onclick="LeadManagerModule.openAiDrafts(${cid},${seqId})">${NI('sparkles')} IA</button><button class="seqdo-copy seqdo-copy--xs" onclick="LeadManagerModule.seqDoCopy()">${NI('copy')} Copiar</button></span></div><div class="seqdo-tpl seqdo-tpl--slim">${disp}</div></div>`
         : `<div class="cp-taskbar__notpl">Este paso no tiene mensaje. <a href="#" onclick="LeadManagerModule.seqDoEditStep(${st.id});return false;">Añádelo</a> con variables — o <a href="#" onclick="LeadManagerModule.openAiDrafts(${cid},${seqId});return false;">✨ escríbelo con IA</a>.</div>`}
       <div class="cp-taskbar__foot">
-        ${A.join('')}
-        <span class="cp-taskbar__div"></span>
+        ${st.canal === 'linkedin' ? '' : `${A.join('')}<span class="cp-taskbar__div"></span>`}
         ${_DISPOS.map(d => `<button class="cp-dispo-b cp-dispo-b--xs" title="Marcar disposición: ${d[1]}" onclick="LeadManagerModule.seqDoDisposition('${d[0]}')">${d[1]}</button>`).join('')}
         ${st.canal === 'linkedin' ? `<button class="cp-dispo-b cp-dispo-b--xs" style="color:#B45309;border-color:#E7C79A" title="Perfil falso/inactivo: salta los pasos de LinkedIn y sigue por email — NO lo saca de la secuencia" onclick="LeadManagerModule.seqDoNoLinkedIn()">🚫 LinkedIn no válido</button>` : ''}
         ${st.canal === 'email' ? `<button class="cp-dispo-b cp-dispo-b--xs" style="color:#C4342B;border-color:#F3C1BD" title="El email rebotó: pausa sus secuencias y lo deja en Rebotados para corregirlo" onclick="LeadManagerModule.seqDoBounced()">↩ Rebotó</button>` : ''}
