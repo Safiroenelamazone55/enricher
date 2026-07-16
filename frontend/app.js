@@ -13609,12 +13609,15 @@ ${foot}
       }
       const todoAll = tasks.filter(t => t.due <= today);
       // Filtro por canal (chips arriba): p. ej. hacer primero los de email, luego los de llamada.
+      // Se ofrece en TODA secuencia multicanal (según sus PASOS), no solo cuando hoy toca >1 canal
+      // — así aparece consistente en todas; el conteo es de lo vencido/hoy por canal (0 si aún no toca).
       const cCounts = {}; todoAll.forEach(t => { const cn = t.st.canal || 'email'; cCounts[cn] = (cCounts[cn] || 0) + 1; });
-      const cOrder = _CANALES.filter(cn => cCounts[cn]);
+      const _stepCanals = new Set(_seqSteps(id).map(st => st.canal || 'email'));
+      const cOrder = _CANALES.filter(cn => _stepCanals.has(cn) || cCounts[cn]);
       const canalChips = cOrder.length > 1
         ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px">
             <button class="lm-filter-btn${!_seqTaskCanal ? ' on' : ''}" onclick="LeadManagerModule.seqTaskSetCanal('')">Todos · ${todoAll.length}</button>
-            ${cOrder.map(cn => `<button class="lm-filter-btn${_seqTaskCanal === cn ? ' on' : ''}" onclick="LeadManagerModule.seqTaskSetCanal('${cn}')">${_TOUCH[cn][0]} · ${cCounts[cn]}</button>`).join('')}
+            ${cOrder.map(cn => `<button class="lm-filter-btn${_seqTaskCanal === cn ? ' on' : ''}" onclick="LeadManagerModule.seqTaskSetCanal('${cn}')">${_TOUCH[cn][0]} · ${cCounts[cn] || 0}</button>`).join('')}
           </div>`
         : '';
       const todo = _seqTaskCanal ? todoAll.filter(t => (t.st.canal || 'email') === _seqTaskCanal) : todoAll;
