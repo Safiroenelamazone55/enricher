@@ -4712,19 +4712,27 @@ const DashboardModule = (() => {
       </button>`;
     }
 
-    el.innerHTML = `
-      ${ctxBlock}
-      <div class="d3-act-statsrow">
-        <div class="d3-act-today">
-          <span class="d3-hrs-total" id="dash2-hrs-total">${_fmtHrs(totalSec)}</span>
-          <span class="d3-act-today__meta">
-            <span class="d3-act-today__lbl">Tiempo trabajado hoy</span>
-            <span class="d3-hrs-pct" id="dash2-hrs-pct">${Math.round(totalSec / HRS_WORKDAY * 100)}%<span> de 8 h</span></span>
-          </span>
-        </div>
-        ${metricsStrip}
-      </div>
-      ${actions}`;
+    const todayPct = Math.round(totalSec / HRS_WORKDAY * 100);
+    // Corriendo/pausado: stats COMPACTAS en rejilla 2×2 (entran a la altura del heatmap,
+    // sin crecer ni desproporcionar). Inactivo: la vista amplia de siempre + botón.
+    const statsHtml = (running || paused)
+      ? `<div class="d3-hrs-cstats">
+          <div class="d3-hrs-cstat"><div class="d3-hrs-cstat__v" id="dash2-hrs-total">${_fmtHrs(totalSec)}</div><div class="d3-hrs-cstat__l">Hoy · <b id="dash2-hrs-pct">${todayPct}%</b></div></div>
+          <div class="d3-hrs-cstat"><div class="d3-hrs-cstat__v">${billStr}</div><div class="d3-hrs-cstat__l">Facturable hoy</div></div>
+          <div class="d3-hrs-cstat"><div class="d3-hrs-cstat__v">${_fmtHrs(weekSec)} <span class="d3-hrs-metric__x">${weekPct}%</span></div><div class="d3-hrs-cstat__l">Esta semana</div></div>
+          <div class="d3-hrs-cstat"><div class="d3-hrs-cstat__v">${focusPct}% · ${streak}</div><div class="d3-hrs-cstat__l">Foco · días</div></div>
+        </div>`
+      : `<div class="d3-act-statsrow">
+          <div class="d3-act-today">
+            <span class="d3-hrs-total" id="dash2-hrs-total">${_fmtHrs(totalSec)}</span>
+            <span class="d3-act-today__meta">
+              <span class="d3-act-today__lbl">Tiempo trabajado hoy</span>
+              <span class="d3-hrs-pct" id="dash2-hrs-pct">${todayPct}%<span> de 8 h</span></span>
+            </span>
+          </div>
+          ${metricsStrip}
+        </div>`;
+    el.innerHTML = `${ctxBlock}${statsHtml}${actions}`;
 
     clearInterval(_hrsTimer);
     if (running) _hrsTimer = setInterval(_hoursTick, 1000);
@@ -4738,7 +4746,7 @@ const DashboardModule = (() => {
     const totalSec = _hrsBaseSec + elapsed;
     t.textContent = _fmtHrs(totalSec);
     const p = $('dash2-hrs-pct');
-    if (p) p.innerHTML = `${Math.round(totalSec / HRS_WORKDAY * 100)}%<span> de 8 h</span>`;
+    if (p) p.textContent = `${Math.round(totalSec / HRS_WORKDAY * 100)}%`;
     const el = $('dash2-hrs-elapsed');
     if (el) el.textContent = _fmtClock(elapsed);
   }

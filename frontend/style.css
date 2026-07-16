@@ -12400,6 +12400,13 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
 .d3-act-timer .d3-hrs-metric__v { font-size: .92rem; }
 .d3-act-timer .d3-hrs-act { height: 32px; padding: 0 10px; font-size: .76rem; }
 .d3-act-timer .d3-hrs-changetask { padding: 0 3px; white-space: nowrap; font-size: .76rem; }
+/* Stats compactas 2x2 del timer corriendo */
+.d3-act-timer .d3-hrs-cstats { display: grid; grid-template-columns: 1fr 1fr; gap: 7px 10px; margin-bottom: 8px; }
+.d3-act-timer .d3-hrs-cstat { min-width: 0; }
+.d3-act-timer .d3-hrs-cstat__v { font-size: .95rem; font-weight: 800; color: var(--text, #0A2540); font-variant-numeric: tabular-nums; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.d3-act-timer .d3-hrs-cstat__v .d3-hrs-metric__x { font-size: .62rem; font-weight: 600; color: var(--brand-d, #006B3F); }
+.d3-act-timer .d3-hrs-cstat__l { font-size: .58rem; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: #8C97A3; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.d3-act-timer .d3-hrs-cstat__l b { color: var(--brand-d, #006B3F); }
 /* Móvil: al apilarse, el cronómetro va a ancho completo (el max-width/columna del desktop no aplican) */
 @media (max-width: 940px) {
   .d3-act-timer { max-width: none; min-width: 0; }
