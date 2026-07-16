@@ -11690,7 +11690,77 @@ const OpportunitiesModule = (() => {
       return;
     }
     if (empty) empty.style.display = 'none';
-    cards.innerHTML = list.map(_cardHtml).join('');
+    cards.innerHTML = _tableHtml(list);
+  }
+
+  function _tableHtml(list) {
+    return `
+      <div class="opp-table-wrap">
+        <table class="opp-table">
+          <colgroup>
+            <col style="width:21%"><col style="width:12%"><col style="width:10%"><col style="width:22%"><col style="width:13%"><col style="width:11%"><col style="width:11%">
+          </colgroup>
+          <thead>
+            <tr>
+              <th>Oportunidad</th>
+              <th>Cliente</th>
+              <th>Canal</th>
+              <th>Etapa</th>
+              <th>Responsable</th>
+              <th>Estado</th>
+              <th>Aplicada</th>
+            </tr>
+          </thead>
+          <tbody>${list.map(_rowHtml).join('')}</tbody>
+        </table>
+      </div>`;
+  }
+
+  function _stageMini(o) {
+    const est = _normEstado(o.estado);
+    const segs = OPP_STAGES.map(([k, l], i) => {
+      const st = _stageStatus(o, k, i);
+      return `<span class="opp-seg opp-seg--${st}" title="${esc(l)}"></span>`;
+    }).join('');
+    let lbl = _stageLbl(o.etapa_actual) || '—', cls = '';
+    if (est === 'ganada') { lbl = 'Ganada'; cls = ' opp-stg--won'; }
+    else if (est === 'perdida' || est === 'rechazada') { cls = ' opp-stg--lost'; }
+    else if (est === 'archivada') { cls = ' opp-stg--arch'; }
+    return `<span class="opp-stage-mini"><span class="opp-segs">${segs}</span><span class="opp-stg-lbl${cls}">${esc(lbl)}</span></span>`;
+  }
+
+  function _rowHtml(o) {
+    const [, estLbl] = _estadoMeta(o.estado);
+    const est = _normEstado(o.estado);
+    const cur = _stageIdx(o.etapa_actual);
+    const isTerminal = TERMINAL.includes(est);
+    const nextStage = (!isTerminal && cur < OPP_STAGES.length - 1) ? OPP_STAGES[cur + 1] : null;
+    const cliente = o.cliente || o.client_nombre || '';
+    const fecha = o.fecha_aplicacion
+      ? new Date(String(o.fecha_aplicacion).split('T')[0] + 'T00:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })
+      : '';
+    const adv = nextStage
+      ? `<button class="btn btn--primary btn--sm opp-adv" onclick="event.stopPropagation();OpportunitiesModule.advanceStage(${o.id})">${esc(nextStage[1])}</button>`
+      : (!isTerminal ? `<button class="btn btn--primary btn--sm opp-adv" onclick="event.stopPropagation();OpportunitiesModule.setEstado(${o.id},'ganada')">Marcar ganada</button>` : '');
+    return `
+      <tr class="opp-row opp-row--${est}" tabindex="0" onclick="OpportunitiesModule.openDetail(${o.id})" onkeydown="if(event.key==='Enter'){OpportunitiesModule.openDetail(${o.id})}">
+        <td class="opp-td-title">
+          <div class="opp-titlewrap">
+            <span class="opp-row-title" title="${esc(o.titulo)}">${esc(o.titulo)}</span>
+            <span class="opp-row-id">#${o.id}</span>
+          </div>
+        </td>
+        <td class="opp-td-cli"${cliente ? ` title="${esc(cliente)}"` : ''}>${cliente ? esc(cliente) : '<span class="opp-dash">—</span>'}</td>
+        <td class="opp-td-can"${o.canal ? ` title="${esc(o.canal)}"` : ''}>${o.canal ? esc(o.canal) : '<span class="opp-dash">—</span>'}</td>
+        <td class="opp-td-stage">${_stageMini(o)}</td>
+        <td class="opp-td-resp">${o.responsable ? `<span class="opp-resp" title="${esc(o.responsable)}">${_ICO_PERSON}<span class="opp-resp-nm">${esc(o.responsable)}</span></span>` : '<span class="opp-dash">Sin asignar</span>'}</td>
+        <td class="opp-td-est">
+          <button class="opp-status opp-status--${est}" onclick="event.stopPropagation();OpportunitiesModule.openStatusMenu(event,${o.id})" title="Cambiar estado">
+            <span class="opp-status-dot"></span>${estLbl}${_ICO_CARET}
+          </button>
+        </td>
+        <td class="opp-td-date">${fecha ? esc(fecha) : '<span class="opp-dash">—</span>'}<span class="opp-row-act">${adv}<button class="opp-menu-btn" onclick="event.stopPropagation();OpportunitiesModule.openMenu(event,${o.id})" title="Opciones">⋯</button></span></td>
+      </tr>`;
   }
 
   function _checkSvg() { return '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'; }
