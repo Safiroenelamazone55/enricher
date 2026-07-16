@@ -12395,9 +12395,11 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
 .d3-act-timer .d3-hrs-btn { width: 100%; margin: auto 0 0; height: 38px; font-size: .86rem; }
 /* Timer ACTIVO compacto: tarjeta a la altura del heatmap, sin huecos ni desproporción */
 .d3-act-timer .d3-hrs-actions { padding: 0; margin-top: 4px; gap: 6px; }
-.d3-act-timer .d3-hrs-now { margin: 0 0 7px; padding: 7px 11px; }
-.d3-act-timer .d3-hrs-now__task { margin-top: 1px; }
-.d3-act-timer .d3-hrs-now__time { font-size: 1rem; margin-top: 2px; }
+.d3-act-timer .d3-hrs-now { margin: 0 0 6px; padding: 6px 10px; }
+.d3-act-timer .d3-hrs-now__lbl { font-size: .58rem; }
+.d3-act-timer .d3-hrs-now__task { margin-top: 1px; font-size: .86rem; }
+.d3-act-timer .d3-hrs-now__ctx { margin-top: 0; }
+.d3-act-timer .d3-hrs-now__time { font-size: .92rem; margin-top: 1px; }
 .d3-act-timer .d3-act-statsrow { gap: 7px; margin-bottom: 7px; }
 .d3-act-timer .d3-act-today .d3-hrs-total { font-size: 1.15rem; white-space: nowrap; }
 .d3-act-timer .d3-hrs-metrics { row-gap: 6px; column-gap: 8px; }
@@ -12405,9 +12407,9 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
 .d3-act-timer .d3-hrs-act { height: 32px; padding: 0 10px; font-size: .76rem; }
 .d3-act-timer .d3-hrs-changetask { padding: 0 3px; white-space: nowrap; font-size: .76rem; }
 /* Stats compactas 2x2 del timer corriendo */
-.d3-act-timer .d3-hrs-cstats { display: grid; grid-template-columns: 1fr 1fr; gap: 7px 10px; margin-bottom: 8px; }
+.d3-act-timer .d3-hrs-cstats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 8px; margin-bottom: 6px; }
 .d3-act-timer .d3-hrs-cstat { min-width: 0; }
-.d3-act-timer .d3-hrs-cstat__v { font-size: .95rem; font-weight: 800; color: var(--text, #0A2540); font-variant-numeric: tabular-nums; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.d3-act-timer .d3-hrs-cstat__v { font-size: .84rem; font-weight: 800; color: var(--text, #0A2540); font-variant-numeric: tabular-nums; letter-spacing: -.015em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .d3-act-timer .d3-hrs-cstat__v .d3-hrs-metric__x { font-size: .62rem; font-weight: 600; color: var(--brand-d, #006B3F); }
 .d3-act-timer .d3-hrs-cstat__l { font-size: .58rem; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: #8C97A3; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .d3-act-timer .d3-hrs-cstat__l b { color: var(--brand-d, #006B3F); }
