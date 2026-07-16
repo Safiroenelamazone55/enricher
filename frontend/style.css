@@ -292,7 +292,7 @@ body {
   letter-spacing: .07em;
   text-transform: uppercase;
   color: var(--muted, #A8A29E);
-  padding: 11px 14px 4px;
+  padding: 8px 14px 3px;
   white-space: nowrap;
   overflow: hidden;
   user-select: none;
@@ -11465,11 +11465,13 @@ a.cp-strip__i:hover svg { color: var(--brand, #00804C); }
 #sidebar .snav-panel__hd .sidebar__toggle { color: var(--muted); background: transparent; }
 #sidebar .snav-panel__hd .sidebar__toggle:hover { background: var(--bg2); color: var(--text); }
 /* Ítems: alto uniforme y reducido (sin salto en el activo), texto oscuro, activo verde */
-#sidebar .snav-item { color: var(--text2); height: 32px; min-height: 32px; }
-#sidebar .snav-item__label { font-size: 13.5px; }
+#sidebar .snav-item { color: var(--text2); height: 26px; min-height: 26px; gap: 9px; }
+#sidebar .snav-item__label { font-size: 12.8px; }
+#sidebar .snav-item__icon { width: 22px; height: 22px; }
+#sidebar .snav-item__icon svg { width: 16px; height: 16px; }
 #sidebar .snav-item__icon { color: var(--muted); }
 #sidebar .snav-item:hover:not(.active) { background: var(--bg); color: var(--text); }
-#sidebar .snav-item.active { height: 32px; min-height: 32px; background: var(--brand-ll); color: var(--brand-d); box-shadow: none; }
+#sidebar .snav-item.active { height: 26px; min-height: 26px; background: var(--brand-ll); color: var(--brand-d); box-shadow: none; }
 #sidebar .snav-item.active .snav-item__icon,
 #sidebar .snav-item.active .snav-item__label { color: var(--brand-d); }
 
