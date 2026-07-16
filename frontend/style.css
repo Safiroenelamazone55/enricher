@@ -8688,7 +8688,7 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 
 /* ── Body ────────────────────────────────────────────────── */
 .d3-body {
-  padding: 24px 52px 40px 0;
+  padding: 24px 0 40px 0;
 }
 .d3-body.hidden { display: none; }
 
