@@ -8705,7 +8705,7 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
    para que no empuje el dashboard. Las 3 columnas se alinean arriba (align-items:start),
    así "Acciones pendientes" (col 3) queda visible sin scroll. */
 #dash2-tasks {
-  max-height: min(260px, calc(100vh - 150px));
+  max-height: min(316px, calc(100vh - 150px));
   overflow: hidden auto;
 }
 #dash2-tasks .d3-card-header {
