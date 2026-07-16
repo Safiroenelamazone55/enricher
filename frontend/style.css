@@ -11773,13 +11773,13 @@ a.cp-strip__i:hover svg { color: var(--brand, #00804C); }
 
 /* ── Dashboard · tareas de oportunidades (sidebar · simples) ─────── */
 .d3-opp-list { padding: 5px 10px 8px; }
-.d3-opp-row { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 10px; cursor: pointer; transition: background .12s; }
+.d3-opp-row { display: flex; align-items: center; gap: 10px; padding: 4px 8px; border-radius: 10px; cursor: pointer; transition: background .12s; }
 .d3-opp-row:hover { background: #F7F6F3; }
 .d3-opp-chk { width: 18px; height: 18px; border-radius: 50%; border: 1.6px solid #D6D3CE; background: #fff; cursor: pointer; flex-shrink: 0; padding: 0; transition: border-color .12s, background .12s; }
 .d3-opp-chk:hover { border-color: var(--brand, #00804C); background: #FFF6EC; }
 .d3-opp-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.d3-opp-name { font-size: 12.5px; font-weight: 500; color: #2A2623; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: -0.01em; }
-.d3-opp-sub { font-size: 10.5px; color: #8A8175; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.d3-opp-name { font-size: 12.5px; font-weight: 500; color: #2A2623; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: -0.01em; line-height: 1.3; }
+.d3-opp-sub { font-size: 10.5px; color: #8A8175; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.3; }
 
 /* ── LM Fase A · motor de envío (badges, card Hoy, settings, envíos) ── */
 .lm-vb { display: inline-flex; align-items: center; gap: 3px; font-size: 10.5px; font-weight: 600; padding: 2px 7px; border-radius: 20px; white-space: nowrap; vertical-align: middle; }
