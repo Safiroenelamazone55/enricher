@@ -292,12 +292,12 @@ body {
   letter-spacing: .07em;
   text-transform: uppercase;
   color: var(--muted, #A8A29E);
-  padding: 15px 14px 5px;
+  padding: 11px 14px 4px;
   white-space: nowrap;
   overflow: hidden;
   user-select: none;
 }
-.snav-group > .snav-cat:first-child { padding-top: 4px; }
+.snav-group > .snav-cat:first-child { padding-top: 3px; }
 /* Colapsada: el encabezado se vuelve un divisor sutil (sin texto) */
 .sidebar--collapsed .snav-cat {
   font-size: 0; letter-spacing: 0; padding: 0; height: 0;
@@ -11465,7 +11465,7 @@ a.cp-strip__i:hover svg { color: var(--brand, #00804C); }
 #sidebar .snav-item__label { font-size: 13.5px; }
 #sidebar .snav-item__icon { color: var(--muted); }
 #sidebar .snav-item:hover:not(.active) { background: var(--bg); color: var(--text); }
-#sidebar .snav-item.active { height: 32px; min-height: 32px; background: var(--brand-ll); color: var(--brand-d); box-shadow: inset 2px 0 0 var(--brand); }
+#sidebar .snav-item.active { height: 32px; min-height: 32px; background: var(--brand-ll); color: var(--brand-d); box-shadow: none; }
 #sidebar .snav-item.active .snav-item__icon,
 #sidebar .snav-item.active .snav-item__label { color: var(--brand-d); }
 
