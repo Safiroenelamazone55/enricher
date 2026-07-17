@@ -16587,6 +16587,7 @@ ${foot}
   const LM_FIELDS = {
     contacts: [
       { g: 'Contacto', opts: [
+        ['id', 'ID (actualizar contacto existente)'],
         ['nombre', 'Nombre'], ['apellido', 'Apellido'], ['nombre_completo', 'Nombre completo'],
         ['email', 'Email'], ['email_personal', 'Email personal'], ['telefono', 'Teléfono'], ['movil', 'Móvil'],
         ['cargo', 'Cargo / Puesto'], ['seniority', 'Seniority'], ['departamento', 'Departamento / Función'],
@@ -16682,6 +16683,9 @@ ${foot}
     const h = _lmNorm(headerRaw);
     if (!h) return '';
     if (target === 'companies') return _lmBest(h, LM_CO_SYN);
+    // 'ID' EXACTO = id de nuestro export (actualizar existente). "Record ID"/"Contact ID" de
+    // otras herramientas NO se mapean solos (evita actualizar contactos equivocados).
+    if (h === 'id') return 'id';
     const m = h.match(_CO_PFX);                       // "company X" → atributo de empresa
     if (m) { const a = _lmBest(m[2], LM_CO_SYN); if (a) return _coKey(a); }
     const c = _lmBest(h, LM_CT_SYN);                  // campo de contacto directo
@@ -17018,8 +17022,9 @@ ${foot}
       default: return '<span class="lm-dim">—</span>';
     }
   }
-  function _renderContacts() {
-    const el = $('lm-ct-results'); if (!el) return;
+  // Lista de contactos VISIBLE (búsqueda + todos los filtros). La usan la tabla y el Export
+  // — exportar respeta exactamente lo que ves.
+  function _ctVisible() {
     const q = _ctQuery;
     let list = _contacts;
     if (q) list = list.filter(c => (`${c.nombre || ''} ${c.apellido || ''} ${c.email || ''} ${c.company_nombre || c.empresa_nombre || ''} ${c.cargo || ''}`).toLowerCase().includes(q));
@@ -17027,7 +17032,14 @@ ${foot}
     if (_ctBounced) list = list.filter(c => c.email_status === 'bounced');
     if (_ctDataIssue) list = list.filter(c => c.data_issue);
     if (_ctFilters.length) list = list.filter(c => _lmMatch(c, _ctFilters));
-    const activeFlt = q || _ctFilters.length || _ctClientFilter || _ctBounced || _ctDataIssue;
+    return list;
+  }
+  function _ctHasFilters() { return !!(_ctQuery || _ctFilters.length || _ctClientFilter || _ctBounced || _ctDataIssue); }
+  function _renderContacts() {
+    const el = $('lm-ct-results'); if (!el) return;
+    const q = _ctQuery;
+    let list = _ctVisible();
+    const activeFlt = _ctHasFilters();
     const cnt = $('lm-ct-count'); if (cnt) cnt.textContent = activeFlt ? `${list.length} de ${_contacts.length}` : `${_contacts.length} contacto${_contacts.length === 1 ? '' : 's'}`;
     _ctFilteredIds = list.map(c => c.id);
     _ctSel.forEach(id => { if (!_ctFilteredIds.includes(id)) _ctSel.delete(id); });
@@ -17456,12 +17468,18 @@ ${foot}
       <div class="lm-bulk-bar" id="lm-co-bulk"></div>
       <div id="lm-co-results"></div>`;
   }
-  function _renderCompanies() {
-    const el = $('lm-co-results'); if (!el) return;
+  // Lista de empresas VISIBLE (búsqueda + filtros) — la usan la tabla y el Export.
+  function _coVisible() {
     const q = _coQuery;
     let list = _companies;
     if (q) list = list.filter(c => (`${c.nombre || ''} ${c.dominio || ''} ${c.industria || ''} ${c.pais || ''}`).toLowerCase().includes(q));
     if (_coFilters.length) list = list.filter(c => _lmMatch(c, _coFilters));
+    return list;
+  }
+  function _renderCompanies() {
+    const el = $('lm-co-results'); if (!el) return;
+    const q = _coQuery;
+    let list = _coVisible();
     const cnt = $('lm-co-count'); if (cnt) cnt.textContent = (q || _coFilters.length) ? `${list.length} de ${_companies.length}` : `${_companies.length} empresa${_companies.length === 1 ? '' : 's'}`;
     _coFilteredIds = list.map(c => c.id);
     _coSel.forEach(id => { if (!_coFilteredIds.includes(id)) _coSel.delete(id); });
@@ -17541,18 +17559,22 @@ ${foot}
   // ── Export CSV (client-side) ──
   function exportCsv(target) {
     const isCo = target === 'companies';
-    const rows = isCo ? _companies : _contacts;
-    if (!rows.length) { alert('No hay nada para exportar.'); return; }
+    // Exporta LO QUE VES: la misma lista filtrada de la tabla (secuencia, cliente, estado, búsqueda…)
+    const rows = isCo ? _coVisible() : _ctVisible();
+    const filtered = isCo ? !!(_coQuery || _coFilters.length) : _ctHasFilters();
+    if (!rows.length) { alert(filtered ? 'El filtro actual no tiene resultados para exportar.' : 'No hay nada para exportar.'); return; }
+    // La columna ID permite re-importar ACTUALIZANDO el contacto exacto (sin duplicar).
     const cols = isCo
-      ? [['nombre', 'Nombre'], ['dominio', 'Dominio'], ['website', 'Website'], ['industria', 'Industria'], ['tamano', 'Nº empleados'], ['ingresos', 'Ingresos'], ['telefono', 'Teléfono'], ['linkedin', 'LinkedIn'], ['ciudad', 'Ciudad'], ['region', 'Región'], ['pais', 'País'], ['direccion', 'Dirección'], ['codigo_postal', 'Código postal'], ['fundada', 'Fundada'], ['descripcion', 'Descripción'], ['tecnologias', 'Tecnologías'], ['funding', 'Funding'], ['target_tier', 'Target Tier / Focus'], ['segmento', 'Segmento / ICP'], ['notas', 'Notas']]
-      : [['nombre', 'Nombre'], ['apellido', 'Apellido'], ['email', 'Email'], ['email_personal', 'Email personal'], ['telefono', 'Teléfono'], ['movil', 'Móvil'], ['cargo', 'Cargo'], ['seniority', 'Seniority'], ['departamento', 'Departamento'], ['buyer_role', 'Buyer Role'], ['linkedin', 'LinkedIn'], ['company_nombre', 'Empresa'], ['ciudad', 'Ciudad'], ['region', 'Región'], ['pais', 'País'], ['estado', 'Estado'], ['contact_priority', 'Contact Priority'], ['fuente', 'Fuente'], ['notas', 'Notas']];
+      ? [['id', 'ID'], ['nombre', 'Nombre'], ['dominio', 'Dominio'], ['website', 'Website'], ['industria', 'Industria'], ['tamano', 'Nº empleados'], ['ingresos', 'Ingresos'], ['telefono', 'Teléfono'], ['linkedin', 'LinkedIn'], ['ciudad', 'Ciudad'], ['region', 'Región'], ['pais', 'País'], ['direccion', 'Dirección'], ['codigo_postal', 'Código postal'], ['fundada', 'Fundada'], ['descripcion', 'Descripción'], ['tecnologias', 'Tecnologías'], ['funding', 'Funding'], ['target_tier', 'Target Tier / Focus'], ['segmento', 'Segmento / ICP'], ['notas', 'Notas']]
+      : [['id', 'ID'], ['nombre', 'Nombre'], ['apellido', 'Apellido'], ['email', 'Email'], ['email_personal', 'Email personal'], ['telefono', 'Teléfono'], ['movil', 'Móvil'], ['cargo', 'Cargo'], ['seniority', 'Seniority'], ['departamento', 'Departamento'], ['buyer_role', 'Buyer Role'], ['linkedin', 'LinkedIn'], ['company_nombre', 'Empresa'], ['ciudad', 'Ciudad'], ['region', 'Región'], ['pais', 'País'], ['estado', 'Estado'], ['contact_priority', 'Contact Priority'], ['fuente', 'Fuente'], ['notas', 'Notas']];
     const cell = v => { v = v == null ? '' : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
     const csv = '﻿' + cols.map(c => c[1]).join(',') + '\n' + rows.map(r => cols.map(c => cell(r[c[0]] != null ? r[c[0]] : r[c[0] === 'company_nombre' ? 'empresa_nombre' : c[0]])).join(',')).join('\n');
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-    a.download = `${isCo ? 'empresas' : 'contactos'}_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `${isCo ? 'empresas' : 'contactos'}${filtered ? '_filtrados' : ''}_${new Date().toISOString().slice(0, 10)}.csv`;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    showBanner(`✓ Exportados ${rows.length} ${isCo ? 'empresas' : 'contactos'}${filtered ? ' (con los filtros aplicados)' : ''}`, 'success');
   }
 
   // ── Importador (wizard con mapeo de columnas) ──
@@ -17583,7 +17605,8 @@ ${foot}
           <div class="lm-drop__t">Arrastra tu Excel / CSV aquí o haz clic para elegir</div>
           <div class="lm-drop__s">.xlsx · .xls · .csv — hasta 10 MB</div>
         </label>
-        <div class="lm-imp-hint">Detectaremos las columnas automáticamente; podrás revisarlas antes de guardar.</div>
+        <div class="lm-imp-hint">Detectaremos las columnas automáticamente; podrás revisarlas antes de guardar.<br>
+        Si el archivo trae la columna <b>ID</b> (de un export) o el <b>email</b> ya existe, el contacto se <b>actualiza</b> — no se duplica; las celdas vacías no borran datos. Los que no existan se crean.</div>
       </div>`);
     const drop = $('lm-drop');
     if (drop) {
@@ -17781,7 +17804,8 @@ ${foot}
           <div class="lm-imp-done__ico">${_ico('check')}</div>
           <div class="lm-imp-done__stats">
             ${isCo ? '' : stat(d.contactsCreated, 'contactos creados')}
-            ${isCo ? '' : stat(d.contactsSkipped, 'duplicados omitidos')}
+            ${isCo ? '' : stat(d.contactsUpdated, 'contactos actualizados')}
+            ${isCo ? '' : stat(d.contactsSkipped, 'sin cambios')}
             ${stat(d.companiesCreated, 'empresas nuevas')}
             ${stat(d.companiesMatched, 'empresas enlazadas')}
           </div>

@@ -3445,7 +3445,7 @@ app.post('/api/lm/import', requireAuth, upload.single('file'), async (req, res) 
     if (field) colMap[idx] = field;
   }
 
-  const summary = { rows: 0, contactsCreated: 0, contactsSkipped: 0, companiesCreated: 0, companiesMatched: 0, errors: [] };
+  const summary = { rows: 0, contactsCreated: 0, contactsUpdated: 0, contactsSkipped: 0, companiesCreated: 0, companiesMatched: 0, errors: [] };
   const coCache = new Map();
   async function _co(f) {
     const dominio = _lmNormDomain(f.dominio || f.website || '');
@@ -3487,9 +3487,52 @@ app.post('/api/lm/import', requireAuth, upload.single('file'), async (req, res) 
           nombre = parts.shift() || ''; apellido = parts.join(' ');
         }
         const email = _lmS(f.email).toLowerCase();
-        if (email) {
-          const dup = (await pool.query(`SELECT id FROM lm_contacts WHERE user_id=$1 AND LOWER(email)=$2 LIMIT 1`, [uid, email])).rows[0];
-          if (dup) { summary.contactsSkipped++; continue; }
+        // ── UPSERT: si ya existe (por ID del export, o por email) se ACTUALIZA — no se duplica.
+        // Solo se pisan los campos que VIENEN con valor: una celda vacía nunca borra datos.
+        let existing = null;
+        const idStr = _lmS(f.id);
+        if (/^\d+$/.test(idStr)) {
+          existing = (await pool.query(`SELECT id, email FROM lm_contacts WHERE user_id=$1 AND id=$2 LIMIT 1`, [uid, parseInt(idStr, 10)])).rows[0] || null;
+        }
+        if (!existing && email) {
+          existing = (await pool.query(`SELECT id, email FROM lm_contacts WHERE user_id=$1 AND LOWER(email)=$2 LIMIT 1`, [uid, email])).rows[0] || null;
+        }
+        if (existing) {
+          const sets = []; const vals = [existing.id, uid];
+          const upd = {
+            nombre, apellido,
+            email_personal: _lmS(f.email_personal), telefono: _lmS(f.telefono), movil: _lmS(f.movil),
+            cargo: _lmS(f.cargo), seniority: _lmS(f.seniority), departamento: _lmS(f.departamento),
+            linkedin: _lmS(f.linkedin), ciudad: _lmS(f.ciudad), region: _lmS(f.region), pais: _lmS(f.pais),
+            estado: _lmS(f.estado), fuente: _lmS(f.fuente),
+            contact_priority: _lmS(f.contact_priority), buyer_role: _lmS(f.buyer_role), notas: _lmS(f.notas),
+          };
+          for (const [k, v] of Object.entries(upd)) if (v) sets.push(`${k}=$${vals.push(v)}`);
+          // Email nuevo/corregido → se actualiza y su verificación vuelve a "sin verificar"
+          if (email && email !== String(existing.email || '').trim().toLowerCase()) {
+            sets.push(`email=$${vals.push(email)}`);
+            sets.push(`email_status=''`, 'email_score=NULL', 'email_verified_at=NULL');
+          }
+          // Empresa: si el archivo trae datos de empresa, se resuelve/crea y se re-enlaza
+          if (_lmS(f.co_nombre) || _lmS(f.co_dominio) || _lmS(f.co_website)) {
+            const cid2 = await _co({
+              nombre: f.co_nombre, dominio: f.co_dominio, website: f.co_website, industria: f.co_industria,
+              tamano: f.co_tamano, ingresos: f.co_ingresos, telefono: f.co_telefono, linkedin: f.co_linkedin,
+              ciudad: f.co_ciudad, region: f.co_region, pais: f.co_pais, direccion: f.co_direccion,
+              codigo_postal: f.co_cp, fundada: f.co_fundada, descripcion: f.co_descripcion,
+              tecnologias: f.co_tecnologias, funding: f.co_funding, target_tier: f.co_target_tier, segmento: f.co_segmento,
+            });
+            if (cid2) { sets.push(`company_id=$${vals.push(cid2)}`); if (_lmS(f.co_nombre)) sets.push(`empresa_nombre=$${vals.push(_lmS(f.co_nombre))}`); }
+          }
+          if (Object.keys(raw).length) sets.push(`raw = COALESCE(raw,'{}'::jsonb) || $${vals.push(JSON.stringify(raw))}::jsonb`);
+          if (sets.length) {
+            sets.push('updated_at=NOW()');
+            await pool.query(`UPDATE lm_contacts SET ${sets.join(',')} WHERE id=$1 AND user_id=$2`, vals);
+            summary.contactsUpdated++;
+          } else {
+            summary.contactsSkipped++;   // fila sin nada nuevo
+          }
+          continue;
         }
         const companyId = await _co({
           nombre: f.co_nombre, dominio: f.co_dominio, website: f.co_website, industria: f.co_industria,
