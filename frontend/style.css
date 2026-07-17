@@ -12627,7 +12627,9 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
    así que las media queries no lo ven y el hero quedaba aplastado/encimado.
    Container query sobre el pane del dashboard → se apila según el ancho DISPONIBLE. */
 #pane-mgmt-dashboard { container-type: inline-size; }
-@container (max-width: 980px) {
+/* Umbral por debajo del ancho NORMAL del pane (~900px con panel cerrado): en una fila
+   siempre, y solo se apila cuando el panel de notificaciones/chat roba espacio de verdad. */
+@container (max-width: 780px) {
   .d3-hero { flex-wrap: wrap; }
   .d3-revcard { flex-basis: 100%; max-width: none; }
   .d3-actcard { flex-basis: 100%; flex-direction: column; }
