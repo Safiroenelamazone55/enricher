@@ -4537,7 +4537,10 @@ const DashboardModule = (() => {
 
       _renderHero(tareasCount, proyectosCount, 0, 0);
       _renderTasks(tareasCount, todayTasks, overdue, allTasks);
-      _renderOverview(allTasks);
+      // Resumen de tareas: solo las tareas del miembro logueado (no todo el workspace).
+      const _ovMe = (window._authUser?.memberNombre || window._authUser?.name || '').toLowerCase();
+      const _ovTasks = _ovMe ? (allTasks || []).filter(t => (t.responsables || []).some(r => String(r).toLowerCase() === _ovMe) || String(t.responsable || '').toLowerCase() === _ovMe) : allTasks;
+      _renderOverview(_ovTasks);
       _renderOppTasks();
       _renderHours();
 
@@ -6099,7 +6102,8 @@ const AnalyticsModule = (() => {
       const prev = _revPeriod === 'week' ? _weekRange(-1) : _monthRange(-1);
       const url = `${API}/analytics/summary`
         + `?start=${encodeURIComponent(cur.start)}&end=${encodeURIComponent(cur.end)}`
-        + `&prev_start=${encodeURIComponent(prev.start)}&prev_end=${encodeURIComponent(prev.end)}`;
+        + `&prev_start=${encodeURIComponent(prev.start)}&prev_end=${encodeURIComponent(prev.end)}`
+        + `&member=me`;   // Ingresos del dashboard: solo cobros de MIS proyectos (donde soy responsable)
       const res = await apiFetch(url);
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();

@@ -5387,6 +5387,24 @@ app.get('/api/analytics/summary', requireAuth, async (req, res) => {
 
     const hasPrev = !!(prev_start && prev_end);
 
+    // Facturación del dashboard por miembro: solo cobros de los proyectos donde el miembro es responsable.
+    const memberQ = String(req.query.member || '').trim();
+    let memberName = '';
+    if (memberQ === 'me') {
+      const mr = await pool.query(
+        `SELECT COALESCE(tm.nombre, u.name, u.email) AS nombre
+         FROM users u LEFT JOIN team_members tm ON tm.email=u.email AND tm.user_id=$1
+         WHERE u.id=$2`, [wid, uid]);
+      memberName = (mr.rows[0]?.nombre || '').trim();
+    } else if (memberQ && memberQ !== 'all') {
+      memberName = memberQ;
+    }
+    const revWhere = memberName
+      ? ` AND (LOWER(p.responsable) = LOWER($4) OR EXISTS (SELECT 1 FROM unnest(p.responsables) r WHERE LOWER(r) = LOWER($4)))`
+      : '';
+    const revCurParams  = memberName ? [wid, start, end, memberName] : [wid, start, end];
+    const revPrevParams = memberName ? [wid, prev_start, prev_end, memberName] : [wid, prev_start, prev_end];
+
     const [
       revCur, revPrev,
       tasksDoneSeries, tasksDonePrevTotal,
@@ -5404,9 +5422,9 @@ app.get('/api/analytics/summary', requireAuth, async (req, res) => {
          FROM tasks t
          LEFT JOIN projects p ON t.project_id = p.id
          WHERE t.user_id=$1 AND t.cobrado=true
-           AND t.cobrado_at >= $2 AND t.cobrado_at < $3
+           AND t.cobrado_at >= $2 AND t.cobrado_at < $3${revWhere}
          GROUP BY 1, 2 ORDER BY 1, 2`,
-        [wid, start, end]
+        revCurParams
       ),
       // Revenue — previous period total per currency (for badge)
       hasPrev
@@ -5416,9 +5434,9 @@ app.get('/api/analytics/summary', requireAuth, async (req, res) => {
              FROM tasks t
              LEFT JOIN projects p ON t.project_id = p.id
              WHERE t.user_id=$1 AND t.cobrado=true
-               AND t.cobrado_at >= $2 AND t.cobrado_at < $3
+               AND t.cobrado_at >= $2 AND t.cobrado_at < $3${revWhere}
              GROUP BY 1`,
-            [wid, prev_start, prev_end]
+            revPrevParams
           )
         : Promise.resolve({ rows: [] }),
       // Tasks completed — daily series (current)
