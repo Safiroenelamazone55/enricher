@@ -2145,39 +2145,65 @@ app.patch('/api/mgmt/tasks/:id/billing', requireAuth, async (req, res) => {
   }
 });
 
-// ── POST /api/mgmt/billing/ensure-weekly ──────────────────────────
-// Crea (idempotente, por billing_week) la tarea de cobro de la semana para cada
-// proyecto ACTIVO con cobro_semanal. La llama la vista de Facturación al cargar.
+// ── Facturación semanal: creación de la tarea de cobro de la semana ─
+// Idempotente por (project_id, billing_week=lunes). Título: "Cobro semanal · 20–24 jul".
+async function _ensureWeeklyCore(wid, ws) {
+  const projs = (await pool.query(
+    `SELECT id, nombre, responsable, responsables, precio_semanal FROM projects
+     WHERE user_id=$1 AND cobro_semanal=TRUE AND estado='activo'`, [wid])).rows;
+  const mon = new Date(ws + 'T12:00:00Z');
+  const fri = new Date(mon); fri.setUTCDate(mon.getUTCDate() + 4);
+  const MES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+  const titulo = `Cobro semanal · ${mon.getUTCDate()}–${fri.getUTCDate()} ${MES[fri.getUTCMonth()]}`;
+  const friStr = fri.toISOString().slice(0, 10);
+  const created = [];
+  for (const p of projs) {
+    const ex = await pool.query(`SELECT id FROM tasks WHERE user_id=$1 AND project_id=$2 AND billing_week=$3 LIMIT 1`, [wid, p.id, ws]);
+    if (ex.rows.length) continue;
+    const respArr = (p.responsables && p.responsables.length) ? p.responsables : (p.responsable ? [p.responsable] : []);
+    const ins = await pool.query(
+      `INSERT INTO tasks (user_id, project_id, titulo, estado, prioridad, responsable, responsables, fecha_inicio, deadline, monto, billing_week)
+       VALUES ($1,$2,$3,'pendiente','media',$4,$5,$6,$7,$8,$9) RETURNING id, titulo, project_id`,
+      [wid, p.id, titulo, respArr[0] || '', respArr, ws, friStr, p.precio_semanal || null, ws]);
+    created.push(ins.rows[0]);
+  }
+  return { created, checked: projs.length };
+}
+
+// POST /api/mgmt/billing/ensure-weekly — la vista de Facturación lo dispara al cargar (respaldo del cron)
 app.post('/api/mgmt/billing/ensure-weekly', requireAuth, async (req, res) => {
-  const wid = req.workspaceOwnerId;
   const ws = String((req.body || {}).week_start || '');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(ws)) return res.status(400).json({ error: 'week_start (YYYY-MM-DD, lunes) requerido' });
   try {
-    const projs = (await pool.query(
-      `SELECT id, nombre, responsable, responsables, precio_semanal FROM projects
-       WHERE user_id=$1 AND cobro_semanal=TRUE AND estado='activo'`, [wid])).rows;
-    const mon = new Date(ws + 'T12:00:00Z');
-    const fri = new Date(mon); fri.setUTCDate(mon.getUTCDate() + 4);
-    const MES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
-    const titulo = `Semana ${mon.getUTCDate()}–${fri.getUTCDate()} ${MES[fri.getUTCMonth()]}`;
-    const friStr = fri.toISOString().slice(0, 10);
-    const created = [];
-    for (const p of projs) {
-      const ex = await pool.query(`SELECT id FROM tasks WHERE user_id=$1 AND project_id=$2 AND billing_week=$3 LIMIT 1`, [wid, p.id, ws]);
-      if (ex.rows.length) continue;
-      const respArr = (p.responsables && p.responsables.length) ? p.responsables : (p.responsable ? [p.responsable] : []);
-      const ins = await pool.query(
-        `INSERT INTO tasks (user_id, project_id, titulo, estado, prioridad, responsable, responsables, fecha_inicio, deadline, monto, billing_week)
-         VALUES ($1,$2,$3,'pendiente','media',$4,$5,$6,$7,$8,$9) RETURNING id, titulo, project_id`,
-        [wid, p.id, titulo, respArr[0] || '', respArr, ws, friStr, p.precio_semanal || null, ws]);
-      created.push(ins.rows[0]);
-    }
-    res.json({ ok: true, created, checked: projs.length });
+    const r = await _ensureWeeklyCore(req.workspaceOwnerId, ws);
+    res.json({ ok: true, ...r });
   } catch (err) {
     console.error('[billing/ensure-weekly]', err.message);
     res.status(500).json({ error: 'Error al crear las tareas semanales' });
   }
 });
+
+// Cron: cada hora revisa (hora de Lima). El domingo ya crea la tarea de la SEMANA ENTRANTE
+// ("todos los domingos pasada la medianoche"), y de lunes a sábado asegura la semana en curso.
+async function _weeklyBillingTick() {
+  try {
+    const ymd = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' }); // YYYY-MM-DD en Lima
+    const d = new Date(ymd + 'T12:00:00Z');
+    const dow = d.getUTCDay(); // 0=Dom
+    const mon = new Date(d);
+    if (dow === 0) mon.setUTCDate(d.getUTCDate() + 1);           // domingo → lunes de mañana
+    else mon.setUTCDate(d.getUTCDate() - ((dow + 6) % 7));       // resto → lunes de esta semana
+    const ws = mon.toISOString().slice(0, 10);
+    const owners = (await pool.query(
+      `SELECT DISTINCT user_id FROM projects WHERE cobro_semanal=TRUE AND estado='activo'`)).rows;
+    for (const o of owners) {
+      const r = await _ensureWeeklyCore(o.user_id, ws);
+      if (r.created.length) console.log(`[billing-weekly] user ${o.user_id}: ${r.created.length} tarea(s) de cobro creadas para ${ws}`);
+    }
+  } catch (e) { console.error('[billing-weekly]', e.message); }
+}
+setInterval(_weeklyBillingTick, 60 * 60 * 1000);
+setTimeout(_weeklyBillingTick, 20 * 1000); // al arrancar (con margen para la migración)
 
 // ── PATCH /api/mgmt/projects/:id/billing-cfg ──────────────────────
 // Config de cobro del proyecto (endpoint dedicado: el PUT full-row NO toca estos campos).

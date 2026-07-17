@@ -10036,16 +10036,37 @@ const ProjectsModule = (() => {
 
   function _getMoneda() {
     const tipo = $('proj-tipo')?.value || 'fijo';
-    if (tipo === 'fijo')    return $('proj-moneda')?.value       || 'USD';
-    if (tipo === 'horas')   return $('proj-moneda-horas')?.value || 'USD';
-    if (tipo === 'semanal') return $('proj-moneda-semanal')?.value || 'USD';
-    return 'USD';
+    if (tipo === 'fijo') return $('proj-moneda')?.value || 'USD';
+    return $('proj-moneda-horas')?.value || 'USD';
   }
 
   function onTipoChange(tipo) {
-    $('proj-bloque-fijo').style.display    = tipo === 'fijo'    ? '' : 'none';
-    $('proj-bloque-horas').style.display   = tipo === 'horas'   ? '' : 'none';
-    $('proj-bloque-semanal').style.display = tipo === 'semanal' ? '' : 'none';
+    // 'semanal' (legacy) se muestra como "Por horas" + check "Horas fijas por semana"
+    const horas = tipo === 'horas' || tipo === 'semanal';
+    $('proj-bloque-fijo').style.display  = tipo === 'fijo' ? '' : 'none';
+    $('proj-bloque-horas').style.display = horas ? '' : 'none';
+  }
+  function onHorasFijasToggle() {
+    $('proj-hsem-wrap').style.display = $('proj-horas-fijas').checked ? '' : 'none';
+  }
+  // Fechas del proyecto: un solo selector de rango (RangePicker compartido)
+  function _projFechasLbl() {
+    const fi = $('proj-fecha-inicio')?.value || '', ff = $('proj-fecha-fin')?.value || '';
+    const fmt = s => s ? new Date(s + 'T00:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
+    const btn = $('proj-fechas-btn'); if (!btn) return;
+    btn.textContent = fi || ff ? `${fmt(fi) || '…'} → ${fmt(ff) || '…'}` : 'Seleccionar rango…';
+    btn.classList.toggle('on', !!(fi || ff));
+  }
+  function openProjFechas(e) {
+    if (e && e.stopPropagation) e.stopPropagation();
+    RangePicker.open(e.currentTarget || $('proj-fechas-btn'), {
+      start: $('proj-fecha-inicio')?.value || null,
+      end:   $('proj-fecha-fin')?.value || null,
+    }, ({ fecha_inicio, deadline }) => {
+      $('proj-fecha-inicio').value = fecha_inicio || '';
+      $('proj-fecha-fin').value    = deadline || '';
+      _projFechasLbl();
+    });
   }
 
   async function load() {
@@ -10219,12 +10240,10 @@ const ProjectsModule = (() => {
     if (tipo === 'fijo' && p.valor_total) {
       totalVal  = money(p.valor_total, p.moneda);
       totalMeta = '1 contrato';
-    } else if (tipo === 'horas' && p.tarifa_hora) {
-      totalVal  = money(p.tarifa_hora, p.moneda) + '/h';
-      totalMeta = p.horas_estimadas ? `~${p.horas_estimadas}h estimadas` : 'Por horas';
-    } else if (tipo === 'semanal') {
-      totalVal  = p.horas_semanales ? `${p.horas_semanales}h/sem` : '—';
-      totalMeta = p.tarifa_hora ? money(p.tarifa_hora, p.moneda) + '/h' : '';
+    } else if ((tipo === 'horas' || tipo === 'semanal') && (p.tarifa_hora || p.horas_semanales)) {
+      totalVal  = p.tarifa_hora ? money(p.tarifa_hora, p.moneda) + '/h' : `${p.horas_semanales}h/sem`;
+      totalMeta = p.horas_semanales ? `${p.horas_semanales}h fijas/semana`
+                : (p.horas_estimadas ? `~${p.horas_estimadas}h estimadas` : 'Por horas');
     }
 
     return `
@@ -11597,7 +11616,7 @@ const ProjectsModule = (() => {
       };
       let val = '';
       if (p.tipo_proyecto === 'fijo') val = money(p.valor_total);
-      else if (p.tipo_proyecto === 'horas') val = p.tarifa_hora ? money(p.tarifa_hora) + '/h' : '<span class="muted">—</span>';
+      else if (p.tipo_proyecto === 'horas' || p.tipo_proyecto === 'semanal') val = p.tarifa_hora ? money(p.tarifa_hora) + '/h' : '<span class="muted">—</span>';
       else val = money(p.valor_total);
       const isOpen = _expandedProjects.has(p.id);
       const expandHtml = isOpen
@@ -11748,26 +11767,29 @@ const ProjectsModule = (() => {
       $('proj-estado').value    = p.estado || 'activo';
       $('proj-prioridad').value = p.prioridad || 'media';
       $('proj-descripcion').value = p.descripcion || '';
-      if (p.fecha_inicio) $('proj-fecha-inicio').value = p.fecha_inicio.split('T')[0];
-      if (p.fecha_fin)    $('proj-fecha-fin').value    = p.fecha_fin.split('T')[0];
+      $('proj-fecha-inicio').value = p.fecha_inicio ? p.fecha_inicio.split('T')[0] : '';
+      $('proj-fecha-fin').value    = p.fecha_fin ? p.fecha_fin.split('T')[0] : '';
+      _projFechasLbl();
 
+      // 'semanal' (legacy) se abre como "Por horas" con "Horas fijas por semana" activado
       const tipo = p.tipo_proyecto || 'fijo';
-      $('proj-tipo').value = tipo;
-      onTipoChange(tipo);
+      const tipoSel = tipo === 'semanal' ? 'horas' : tipo;
+      $('proj-tipo').value = tipoSel;
+      onTipoChange(tipoSel);
 
       const mon = p.moneda || 'USD';
-      if (tipo === 'fijo') {
+      if (tipoSel === 'fijo') {
         $('proj-valor-total').value = p.valor_total ?? '';
         $('proj-moneda').value      = mon;
-      } else if (tipo === 'horas') {
-        $('proj-tarifa-hora').value = p.tarifa_hora ?? '';
-        $('proj-horas-est').value   = p.horas_estimadas ?? '';
+      } else {
+        $('proj-tarifa-hora').value  = p.tarifa_hora ?? '';
+        $('proj-horas-est').value    = p.horas_estimadas ?? '';
         $('proj-moneda-horas').value = mon;
-      } else if (tipo === 'semanal') {
-        $('proj-tarifa-hora-s').value  = p.tarifa_hora ?? '';
-        $('proj-horas-sem').value      = p.horas_semanales ?? '';
-        $('proj-horario').value        = p.horario_semanal || '';
-        $('proj-moneda-semanal').value = mon;
+        const hFijas = tipo === 'semanal' || (p.horas_semanales != null && p.horas_semanales > 0);
+        $('proj-horas-fijas').checked = hFijas;
+        $('proj-horas-sem').value = p.horas_semanales ?? '';
+        $('proj-horario').value   = p.horario_semanal || '';
+        onHorasFijasToggle();
       }
 
       if ($('proj-comision')) $('proj-comision').value = p.comision ?? '';
@@ -11784,10 +11806,14 @@ const ProjectsModule = (() => {
       $('proj-descripcion').value = '';
       $('proj-fecha-inicio').value = '';
       $('proj-fecha-fin').value    = '';
+      _projFechasLbl();
       $('proj-tipo').value = 'fijo';
       onTipoChange('fijo');
       $('proj-valor-total').value = '';
       $('proj-moneda').value      = 'USD';
+      $('proj-horas-fijas').checked = false;
+      $('proj-horas-sem').value = ''; $('proj-horario').value = '';
+      onHorasFijasToggle();
       if ($('proj-comision')) $('proj-comision').value = '';
       await _renderRespCobro(null);
       await _fetchAndPopulateClients(null);
@@ -11881,11 +11907,11 @@ const ProjectsModule = (() => {
       tarifa_hora      = $('proj-tarifa-hora').value ? parseFloat($('proj-tarifa-hora').value) : null;
       horas_estimadas  = $('proj-horas-est').value  ? parseFloat($('proj-horas-est').value)   : null;
       moneda           = $('proj-moneda-horas').value || 'USD';
-    } else if (tipo === 'semanal') {
-      tarifa_hora     = $('proj-tarifa-hora-s').value ? parseFloat($('proj-tarifa-hora-s').value) : null;
-      horas_semanales = $('proj-horas-sem').value     ? parseFloat($('proj-horas-sem').value)     : null;
-      horario_semanal = $('proj-horario').value?.trim() || '';
-      moneda          = $('proj-moneda-semanal').value || 'USD';
+      // Variante "horas fijas por semana" (antes tipo 'semanal' — se guarda como 'horas')
+      if ($('proj-horas-fijas')?.checked) {
+        horas_semanales = $('proj-horas-sem').value ? parseFloat($('proj-horas-sem').value) : null;
+        horario_semanal = $('proj-horario').value?.trim() || '';
+      }
     }
 
     const respSel = _drawerRespSel();
@@ -11980,6 +12006,7 @@ const ProjectsModule = (() => {
 
   return { load, filter, setFilter, setMemberFilter, render, onTipoChange, openDrawer, closeDrawer, save, confirmDelete, setView, switchTab, toggleTaskCobrado, updateTaskMonto, updateDescripcion, addLink, removeLink, _setLinkField, saveLinks, refreshCard, closeQuickClientModal, saveQuickClient, toggleTaskExpand, toggleProjectExpand, openTaskMenu, _onTaskMenuEdit, _onTaskMenuAddSub, _onTaskMenuDelete, openQuickEditPopover, tqpNav, tqpPick, tqpToggleRange, tqpClear, openInlineDate, startInlineSubtask, cancelInlineSubtask, saveInlineSubtask, startEditTask, cancelEditTask, saveEditTask, deleteTaskInline, toggleSubrowExpand, distributeTaskMontos, openLinkForm, cancelLinkForm, saveLinkForm, startLinkEdit, cancelLinkEdit, saveLinkEdit, enterInfoEdit, cancelInfoEdit, saveInfoEdit, toggleInfoExpand,
     onRespChange, onRepartoToggle, repartoIgual, repartoHint: _repartoHint, onCobroSemanalToggle,
+    onHorasFijasToggle, openProjFechas,
     openConvertToSub, convertToSub, convertToMain };
 })();
 
