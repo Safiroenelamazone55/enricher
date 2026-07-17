@@ -276,6 +276,10 @@ async function initDb() {
     await pool.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS pais_empresa TEXT NOT NULL DEFAULT '';`);
     await pool.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS ciudad       TEXT NOT NULL DEFAULT '';`);
     await pool.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS notas_empresa TEXT NOT NULL DEFAULT '';`);
+    // Dos niveles: 'cliente' (tiene proyectos) y 'contacto' (registrado desde Oportunidades u otro
+    // origen, aún sin proyecto). Los contactos NO generan la alerta "cliente sin proyecto"; al
+    // crearles su primer proyecto se promueven a 'cliente' automáticamente.
+    await pool.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS tipo TEXT NOT NULL DEFAULT 'cliente';`);
 
     // ── client_contacts table ─────────────────────────────────────
     await pool.query(`

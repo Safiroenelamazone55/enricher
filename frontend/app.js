@@ -912,7 +912,9 @@ const ClientsModule = (() => {
 
     const q = ($('clients-search')?.value || '').toLowerCase();
     let list = _clients;
-    if (_filterEstado) list = list.filter(c => c.estado === _filterEstado);
+    // '__contactos' = registrados sin ser clientes (p. ej. desde Oportunidades, tipo='contacto')
+    if (_filterEstado === '__contactos') list = list.filter(c => (c.tipo || 'cliente') === 'contacto');
+    else if (_filterEstado) list = list.filter(c => c.estado === _filterEstado);
     if (q) list = list.filter(c =>
       (c.nombre + ' ' + c.empresa + ' ' + c.email).toLowerCase().includes(q)
     );
@@ -980,7 +982,9 @@ const ClientsModule = (() => {
           ` : '<span class="muted">—</span>'}
         </div>
         <div class="client-col--country client-meta">${c.pais ? esc(c.pais) : '<span class="muted">—</span>'}</div>
-        <div class="client-col--status">${_estadoBadge(c.estado)}</div>
+        <div class="client-col--status">${(c.tipo || 'cliente') === 'contacto'
+          ? '<span class="client-badge" style="background:#E0E7FF;color:#3730A3" title="Registrado sin proyecto (p. ej. desde Oportunidades) — pasa a cliente con su primer proyecto">Contacto</span>'
+          : _estadoBadge(c.estado)}</div>
         <div class="client-col--actions">
           <div class="client-actions-cell">
             <button class="client-action-btn" title="Editar" onclick="event.stopPropagation();ClientsModule.openDrawer(${c.id})">
@@ -11897,6 +11901,13 @@ const ProjectsModule = (() => {
     const saveBtn = $('projects-save-btn');
     const tipo = $('proj-tipo').value;
 
+    // La fecha de inicio es requerida (la fecha fin / rango es opcional)
+    if (!$('proj-fecha-inicio').value) {
+      alert('Selecciona la fecha de inicio del proyecto (la fecha fin es opcional).');
+      $('proj-fechas-btn')?.focus();
+      return;
+    }
+
     let tarifa_hora = null, horas_estimadas = null, horas_semanales = null,
         horario_semanal = '', valor_total = null, moneda = 'USD';
 
@@ -12435,7 +12446,16 @@ const OpportunitiesModule = (() => {
             <select class="form-input" id="op-etapa">${etapaOpts}</select></label>
           <label class="fin-cfg-field opp-full"><span class="fin-cfg-lbl">Cliente / empresa</span>
             <select class="form-input" id="op-client-sel" onchange="OpportunitiesModule._onClientSel()">${clientOpts}</select>
-            <input class="form-input" id="op-client-new" placeholder="Nombre del nuevo cliente" value="${useNew ? esc(d.cliente) : ''}" style="margin-top:8px;${useNew ? '' : 'display:none'}"></label>
+            <div id="op-client-new-wrap" style="margin-top:8px;${useNew ? '' : 'display:none'}">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                <input class="form-input" id="op-client-new" placeholder="Nombre del contacto *" value="${useNew ? esc(d.cliente) : ''}" style="grid-column:1/-1">
+                <input class="form-input" id="op-cn-email" type="email" placeholder="Email">
+                <input class="form-input" id="op-cn-telefono" placeholder="Teléfono">
+                <input class="form-input" id="op-cn-web" placeholder="Sitio web">
+                <input class="form-input" id="op-cn-pais" placeholder="País / ciudad">
+              </div>
+              <span class="fin-cfg-hint" style="display:block;margin-top:5px">Se guarda como <b>contacto</b> — pasa a cliente cuando le crees su primer proyecto.</span>
+            </div></label>
           <label class="fin-cfg-field"><span class="fin-cfg-lbl">Prioridad</span>
             <select class="form-input" id="op-prio">${prioOpts}</select></label>
           <label class="fin-cfg-field"><span class="fin-cfg-lbl">Responsable</span>
@@ -12462,8 +12482,8 @@ const OpportunitiesModule = (() => {
   }
   function closeModal() { document.getElementById('opp-modal')?.remove(); _editId = null; }
   function _onClientSel() {
-    const sel = $('op-client-sel'), inp = $('op-client-new');
-    if (inp) inp.style.display = (sel && sel.value === '__new__') ? '' : 'none';
+    const sel = $('op-client-sel'), wrap = $('op-client-new-wrap');
+    if (wrap) wrap.style.display = (sel && sel.value === '__new__') ? '' : 'none';
   }
 
   async function save() {
@@ -12486,7 +12506,17 @@ const OpportunitiesModule = (() => {
         if (found) { client_id = found.id; clienteName = found.nombre; }
         else {
           try {
-            const cr = await apiFetch(`${API}/mgmt/clients`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre: newName }) });
+            // Se registra como CONTACTO (no cliente): con sus datos completos; no dispara
+            // la alerta "cliente sin proyecto" y se promueve a cliente con su primer proyecto.
+            const body = {
+              nombre: newName,
+              email:    ($('op-cn-email')?.value || '').trim(),
+              telefono: ($('op-cn-telefono')?.value || '').trim(),
+              sitio_web: ($('op-cn-web')?.value || '').trim(),
+              pais:     ($('op-cn-pais')?.value || '').trim(),
+              tipo: 'contacto',
+            };
+            const cr = await apiFetch(`${API}/mgmt/clients`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
             if (cr.ok) { const c = await cr.json(); _clientsCache.push(c); client_id = c.id; clienteName = c.nombre; }
             else clienteName = newName;
           } catch { clienteName = newName; }
@@ -19725,7 +19755,8 @@ const RNotifPanel = (() => {
       t.estado !== 'completado' &&
       kids[t.id] && kids[t.id].length > 0 &&
       kids[t.id].every(c => c.estado === 'completado') &&
-      _esMio(t, me));
+      _esMio(t, me))
+      .map(t => ({ ...t, _n: kids[t.id].length }));   // "N de N subtareas completadas"
   }
   function _proyectosListos(projects, tasks, me) {
     const byProj = {};
@@ -19735,7 +19766,7 @@ const RNotifPanel = (() => {
       if (st === 'completado' || st === 'cancelado') return false;
       const ts = byProj[p.id];
       return ts && ts.length > 0 && ts.every(t => t.estado === 'completado') && _esMio(p, me);
-    });
+    }).map(p => ({ ...p, _n: (byProj[p.id] || []).filter(t => !t.parent_task_id).length }));   // "N de N tareas completadas"
   }
 
   async function load() {
@@ -19778,6 +19809,23 @@ const RNotifPanel = (() => {
   // Lleva a Proyectos para marcarlo completado allí (su vista manda el PUT correcto).
   function goToProject() {
     document.querySelector('[data-tab=mgmt-projects]')?.click();
+  }
+  // Marca el proyecto como completado desde la notificación (PATCH /estado, seguro).
+  // Si el cliente queda sin proyectos activos, el backend lo pasa a inactivo y avisamos.
+  async function completeProject(id) {
+    if (!confirm('¿Marcar este proyecto como COMPLETADO?')) return;
+    try {
+      const res = await apiFetch(`${API}/mgmt/projects/${id}/estado`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ estado: 'completado' }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Error');
+      const d = await res.json();
+      showBanner(`✓ Proyecto completado${d.client_inactivated ? ` · ${esc(d.client_nombre)} pasó a cliente inactivo (sin proyectos activos)` : ''}`, 'success');
+      load();
+      try { DashboardModule.load(); } catch (_) {}
+      try { ProjectsModule.load(); } catch (_) {}
+    } catch (e) { alert('No se pudo completar el proyecto: ' + e.message); }
   }
 
   function _updateBadge(total) {
@@ -19829,8 +19877,18 @@ const RNotifPanel = (() => {
 
     // Reutiliza los datos de /mgmt/integrity y las acciones existentes (pickDeadline / pickMember).
     const cats = [
-      { key: 'tareas_completas',       tone: 'green',  badge: 'Todo listo',      ico: 'check',    nameKey: 'titulo', task: true,  action: t => `RNotifPanel.completeTask(${t.id})`,                        link: '¿Acabaste? Marcar completada', sub: t => [t.client_nombre, t.project_nombre].filter(Boolean).map(esc).join(' · ') },
-      { key: 'proyectos_completos',    tone: 'green',  badge: 'Todo listo',      ico: 'check',    nameKey: 'nombre', task: false, action: () => `RNotifPanel.goToProject()`,                               link: '¿Acabaste? Ver proyecto',      sub: t => esc(t.client_nombre || '') },
+      { key: 'tareas_completas', tone: 'green', badge: 'Lista para cerrar', ico: 'check', nameKey: 'titulo', task: true,
+        sub: t => `${t._n || '?'} de ${t._n || '?'} subtareas completadas${[t.client_nombre, t.project_nombre].filter(Boolean).length ? ' · ' + [t.client_nombre, t.project_nombre].filter(Boolean).map(esc).join(' · ') : ''}`,
+        actions: t => [
+          { lbl: '✓ Completar tarea', on: `RNotifPanel.completeTask(${t.id})`, pri: true },
+          { lbl: '＋ Añadir subtarea', on: `TasksModule.openDrawer(null,${t.project_id},${t.id})` },
+        ] },
+      { key: 'proyectos_completos', tone: 'green', badge: 'Listo para cerrar', ico: 'check', nameKey: 'nombre', task: false,
+        sub: p => `${p._n || '?'} de ${p._n || '?'} tareas completadas${p.client_nombre ? ' · ' + esc(p.client_nombre) : ''}`,
+        actions: p => [
+          { lbl: '✓ Completar proyecto', on: `RNotifPanel.completeProject(${p.id})`, pri: true },
+          { lbl: '＋ Añadir tarea', on: `TasksModule.openDrawer(null,${p.id})` },
+        ] },
       { key: 'tareas_sin_responsable', tone: 'orange', badge: 'Sin responsable', ico: 'member',   nameKey: 'titulo', task: true,  action: t => `RNotifPanel.pickMember(event,${t.id})`,                    link: 'Asignar responsable', sub: t => [t.client_nombre, t.project_nombre].filter(Boolean).map(esc).join(' · ') },
       { key: 'tareas_sin_deadline',    tone: 'amber',  badge: 'Sin fecha',       ico: 'calendar', nameKey: 'titulo', task: true,  action: t => `RNotifPanel.pickDeadline(event,${t.id})`,                  link: 'Fijar fecha',         sub: t => [t.client_nombre, t.project_nombre].filter(Boolean).map(esc).join(' · ') },
       { key: 'proyectos_sin_tareas',   tone: 'violet', badge: 'Sin tareas',      ico: 'folder',   nameKey: 'nombre', task: false, action: () => `document.querySelector('[data-tab=mgmt-projects]').click()`, link: 'Ver proyecto',        sub: t => esc(t.client_nombre || '') },
@@ -19846,6 +19904,23 @@ const RNotifPanel = (() => {
       for (const t of shown) {
         const name = esc(t[cat.nameKey] || '');
         const sub  = cat.sub(t);
+        if (cat.actions) {
+          // Tarjeta con DOS acciones (cierres): completar o seguir añadiendo trabajo.
+          const acts = cat.actions(t);
+          html += `<div class="rnf-card rnf-card--static" ${cat.task ? `data-task-id="${t.id}"` : ''}>
+            <span class="rnf-ico rnf-ico--${cat.tone}">${ICO[cat.ico]}</span>
+            <div class="rnf-main">
+              <div class="rnf-row1">
+                <span class="rnf-title" title="${name}">${name}</span>
+                <span class="rnf-dot rnf-dot--${cat.tone}"></span>
+              </div>
+              <span class="rnf-badge rnf-badge--${cat.tone}">${cat.badge}</span>
+              ${sub ? `<p class="rnf-sub">${sub}</p>` : ''}
+              <div class="rnf-acts">${acts.map(a => `<button class="rnf-act${a.pri ? ' rnf-act--pri' : ''}" onclick="${a.on}">${a.lbl}</button>`).join('')}</div>
+            </div>
+          </div>`;
+          continue;
+        }
         html += `<button class="rnf-card" ${cat.task ? `data-task-id="${t.id}"` : ''} onclick="${cat.action(t)}">
           <span class="rnf-ico rnf-ico--${cat.tone}">${ICO[cat.ico]}</span>
           <div class="rnf-main">
@@ -20066,7 +20141,7 @@ const RNotifPanel = (() => {
     load, updateBadge: _updateBadge,
     pickDeadline, closeDatePop, confirmDeadline,
     pickMember, _selectMember, closeMemberPop, confirmMember,
-    completeTask, goToProject,
+    completeTask, goToProject, completeProject,
   };
 })();
 

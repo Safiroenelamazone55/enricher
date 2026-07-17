@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260717b"/>
+  <link rel="stylesheet" href="style.css?v=20260717c"/>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -1479,6 +1479,7 @@
             <button class="filter-pill" data-estado="potencial" onclick="ClientsModule.setFilter('potencial')">Potenciales</button>
             <button class="filter-pill" data-estado="pausado" onclick="ClientsModule.setFilter('pausado')">Pausados</button>
             <button class="filter-pill" data-estado="inactivo" onclick="ClientsModule.setFilter('inactivo')">Inactivos</button>
+            <button class="filter-pill" data-estado="__contactos" onclick="ClientsModule.setFilter('__contactos')" title="Registrados desde Oportunidades u otro origen — aún sin proyecto, no son clientes">Contactos</button>
           </div>
         </div>
       </div>
@@ -1994,10 +1995,10 @@
       </div>
     </div>
 
-    <!-- Fechas (rango en un solo selector) -->
+    <!-- Fechas (rango en un solo selector; inicio requerido, fin opcional) -->
     <div class="form-row">
-      <label class="form-label">Fechas del proyecto</label>
-      <button type="button" class="form-input proj-fechas-btn" id="proj-fechas-btn" onclick="ProjectsModule.openProjFechas(event)">Seleccionar rango…</button>
+      <label class="form-label">Fechas del proyecto <span style="color:#DC2626">*</span> <span style="font-weight:400;color:var(--muted,#8C97A3)">(la fecha fin es opcional)</span></label>
+      <button type="button" class="form-input proj-fechas-btn" id="proj-fechas-btn" onclick="ProjectsModule.openProjFechas(event)">Seleccionar fecha de inicio…</button>
       <input type="hidden" id="proj-fecha-inicio">
       <input type="hidden" id="proj-fecha-fin">
     </div>
@@ -2493,7 +2494,7 @@
 })();
 </script>
 
-<script src="app.js?v=20260717b"></script>
+<script src="app.js?v=20260717c"></script>
 <div id="task-quick-edit" style="display:none;position:fixed;z-index:9999"></div>
 </body>
 </html>

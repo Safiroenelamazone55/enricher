@@ -1462,19 +1462,20 @@ app.get('/api/mgmt/clients', requireAuth, async (req, res) => {
 // ── POST /api/mgmt/clients ────────────────────────────────────────
 app.post('/api/mgmt/clients', requireAuth, async (req, res) => {
   const { nombre, empresa, email, telefono, pais, estado, notas, comision_default,
-          cargo, sitio_web, linkedin, industria, pais_empresa, ciudad, notas_empresa } = req.body;
+          cargo, sitio_web, linkedin, industria, pais_empresa, ciudad, notas_empresa, tipo } = req.body;
   if (!nombre?.trim()) return res.status(400).json({ error: 'El nombre es requerido' });
   try {
     const { rows } = await pool.query(
       `INSERT INTO clients
          (user_id, nombre, empresa, email, telefono, pais, estado, notas, comision_default,
-          cargo, sitio_web, linkedin, industria, pais_empresa, ciudad, notas_empresa)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+          cargo, sitio_web, linkedin, industria, pais_empresa, ciudad, notas_empresa, tipo)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
        RETURNING *`,
       [req.workspaceOwnerId, nombre.trim(), empresa || '', email || '', telefono || '',
        pais || '', estado || 'activo', notas || '', comision_default || null,
        cargo || '', sitio_web || '', linkedin || '', industria || '',
-       pais_empresa || '', ciudad || '', notas_empresa || '']
+       pais_empresa || '', ciudad || '', notas_empresa || '',
+       tipo === 'contacto' ? 'contacto' : 'cliente']
     );
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -1669,6 +1670,13 @@ app.post('/api/mgmt/projects', requireAuth, async (req, res) => {
        tarifa_hora || null, horas_estimadas || null, horas_semanales || null, horario_semanal || '',
        comision || null]
     );
+    // Contacto que consigue su primer proyecto → se promueve a cliente (y vuelve a activo).
+    try {
+      await pool.query(
+        `UPDATE clients SET tipo='cliente', estado=CASE WHEN COALESCE(estado,'activo')='inactivo' THEN 'activo' ELSE estado END
+         WHERE id=$1 AND user_id=$2 AND COALESCE(tipo,'cliente')='contacto'`,
+        [client_id, req.workspaceOwnerId]);
+    } catch (e) { console.warn('[mgmt/projects] promote contacto→cliente:', e.message); }
     res.status(201).json(rows[0]);
   } catch (err) {
     console.error('[mgmt/projects] POST error:', err.message);
@@ -1731,6 +1739,37 @@ app.put('/api/mgmt/projects/:id', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('[mgmt/projects] PUT error:', err.message);
     res.status(500).json({ error: 'Error al actualizar proyecto' });
+  }
+});
+
+// ── PATCH /api/mgmt/projects/:id/estado — cambio de estado seguro (no full-row) ──
+// Al COMPLETAR: si el cliente queda sin ningún proyecto activo, pasa a 'inactivo'
+// automáticamente (regla de Jenny: cerró su único proyecto → cliente inactivo).
+app.patch('/api/mgmt/projects/:id/estado', requireAuth, async (req, res) => {
+  const wid = req.workspaceOwnerId;
+  const estado = String((req.body || {}).estado || '');
+  if (!['activo', 'completado', 'pausado', 'cancelado'].includes(estado)) return res.status(400).json({ error: 'Estado no válido' });
+  try {
+    const { rows } = await pool.query(
+      `UPDATE projects SET estado=$1, updated_at=NOW() WHERE id=$2 AND user_id=$3 RETURNING id, nombre, estado, client_id`,
+      [estado, req.params.id, wid]);
+    if (!rows[0]) return res.status(404).json({ error: 'Proyecto no encontrado' });
+    let client_inactivated = false, client_nombre = '';
+    if (estado === 'completado' && rows[0].client_id) {
+      const act = await pool.query(
+        `SELECT COUNT(*)::int AS n FROM projects WHERE user_id=$1 AND client_id=$2 AND estado='activo'`,
+        [wid, rows[0].client_id]);
+      if ((act.rows[0]?.n || 0) === 0) {
+        const cu = await pool.query(
+          `UPDATE clients SET estado='inactivo' WHERE id=$1 AND user_id=$2 AND COALESCE(estado,'activo') <> 'inactivo' RETURNING nombre`,
+          [rows[0].client_id, wid]);
+        if (cu.rows[0]) { client_inactivated = true; client_nombre = cu.rows[0].nombre; }
+      }
+    }
+    res.json({ ok: true, ...rows[0], client_inactivated, client_nombre });
+  } catch (err) {
+    console.error('[projects/estado]', err.message);
+    res.status(500).json({ error: 'Error al cambiar el estado del proyecto' });
   }
 });
 
@@ -4593,6 +4632,8 @@ app.get('/api/mgmt/integrity', requireAuth, async (req, res) => {
         `SELECT c.id, c.nombre, c.empresa
          FROM clients c
          WHERE c.user_id = $1
+         AND COALESCE(c.tipo, 'cliente') <> 'contacto'   -- contactos (sin ser clientes) no generan esta alerta
+         AND COALESCE(c.estado, 'activo') <> 'inactivo'
          AND NOT EXISTS (
            SELECT 1 FROM projects p
            WHERE p.client_id = c.id AND p.user_id = $1

@@ -4460,6 +4460,13 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 .rnf-sub { font-size: .72rem; color: #8a837a; line-height: 1.35; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rnf-link { display: inline-flex; align-items: center; gap: 2px; font-size: .71rem; font-weight: 600; margin-top: 1px; }
 .rnf-link svg { width: 11px; height: 11px; }
+/* Tarjeta de cierre con DOS acciones (completar o añadir trabajo) */
+.rnf-card--static { cursor: default; }
+.rnf-acts { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.rnf-act { border: 1px solid var(--border, #E4E7DD); background: #fff; color: var(--text2, #45586A); font-size: .71rem; font-weight: 700; padding: 5px 10px; border-radius: 8px; cursor: pointer; font-family: inherit; transition: all .12s; white-space: nowrap; }
+.rnf-act:hover { border-color: var(--brand-l, #BFE0CC); color: var(--brand-d, #006B3F); }
+.rnf-act--pri { background: var(--brand, #00804C); border-color: var(--brand, #00804C); color: #fff; }
+.rnf-act--pri:hover { background: var(--brand-d, #006B3F); color: #fff; }
 .rnf-more { text-align: center; font-size: .72rem; color: #A8A29E; padding: 4px 0 2px; }
 .rnf-ico--orange { background: #FFF1E2; color: #E07B12; } .rnf-dot--orange { background: #00804C; } .rnf-badge--orange { background: #FFF1E2; color: #C2740B; } .rnf-link--orange { color: #E07B12; }
 .rnf-ico--amber  { background: #FEF6E0; color: #C28A0B; } .rnf-dot--amber  { background: #F5C24B; } .rnf-badge--amber  { background: #FEF6E0; color: #A9790A; } .rnf-link--amber  { color: #C28A0B; }
