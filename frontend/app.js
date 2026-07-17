@@ -19756,8 +19756,10 @@ const NotesModule = (() => {
 
 const RNotifPanel = (() => {
   let _pendingTaskId  = null;
+  let _pendingProjId  = null;   // ampliar plazo de PROYECTO (comparte el popover de fecha)
   let _pendingMembers = [];   // multi-select
   let _teamCache      = null;
+  let _lastTasks      = [];   // tareas del último load (para el picker "+ Subtarea" por proyecto)
 
   // ── Avisos de CIERRE (calculados en el frontend, sin tocar el backend) ──
   // Tarea "lista": tarea padre con subtareas, todas las subtareas completadas, pero
@@ -19800,16 +19802,29 @@ const RNotifPanel = (() => {
     try {
       const res  = await apiFetch(`${API}/mgmt/integrity`);
       const data = await res.json();
-      // Enriquecer con avisos de cierre (GET de solo lectura, sin cambios en backend).
+      // "Cliente sin proyecto" ya NO se notifica aquí (decisión de Jenny: contactos/prospectos
+      // sin proyecto son normales; esa info vive en la sección Clientes).
+      if (data.clientes_sin_proyecto) { data.total = Math.max(0, (data.total || 0) - data.clientes_sin_proyecto.length); delete data.clientes_sin_proyecto; }
+      // Enriquecer con avisos de cierre y VENCIDOS (GET de solo lectura).
       try {
         const [tr, pr] = await Promise.all([apiFetch(`${API}/mgmt/tasks`), apiFetch(`${API}/mgmt/projects`)]);
         const tasks    = tr.ok ? await tr.json() : [];
         const projects = pr.ok ? await pr.json() : [];
+        _lastTasks     = tasks;
         const me       = (window._authUser?.memberNombre || window._authUser?.name || '').toLowerCase();
         const tListas  = _tareasListas(tasks, me);
         const pListos  = _proyectosListos(projects, tasks, me);
+        // Vencidas: con fecha pasada y sin completar — para ampliar el plazo o cerrarlas.
+        const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+        const _past = ds => { if (!ds) return false; const d = new Date(String(ds).split('T')[0] + 'T00:00:00'); return d < hoy; };
+        const listaIds  = new Set(tListas.map(t => t.id));
+        const pListoIds = new Set(pListos.map(p => p.id));
+        const tVenc = tasks.filter(t => t.estado !== 'completado' && _past(t.deadline) && !listaIds.has(t.id) && _esMio(t, me));
+        const pVenc = projects.filter(p => { const st = p.estado || 'activo'; return st !== 'completado' && st !== 'cancelado' && _past(p.fecha_fin) && !pListoIds.has(p.id) && _esMio(p, me); });
         if (tListas.length) { data.tareas_completas   = tListas; data.total = (data.total || 0) + tListas.length; }
         if (pListos.length) { data.proyectos_completos = pListos; data.total = (data.total || 0) + pListos.length; }
+        if (tVenc.length)   { data.tareas_vencidas    = tVenc;   data.total = (data.total || 0) + tVenc.length; }
+        if (pVenc.length)   { data.proyectos_vencidos = pVenc;   data.total = (data.total || 0) + pVenc.length; }
       } catch (_) { /* si falla, se muestran solo las alertas de integridad */ }
       _render(data);
       _updateBadge(data.total || 0);
@@ -19900,23 +19915,37 @@ const RNotifPanel = (() => {
     const ARROW = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>';
 
     // Reutiliza los datos de /mgmt/integrity y las acciones existentes (pickDeadline / pickMember).
+    const _fv = ds => ds ? new Date(String(ds).split('T')[0] + 'T00:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }) : '';
     const cats = [
       { key: 'tareas_completas', tone: 'green', badge: 'Lista para cerrar', ico: 'check', nameKey: 'titulo', task: true,
         sub: t => `${t._n || '?'} de ${t._n || '?'} subtareas completadas${[t.client_nombre, t.project_nombre].filter(Boolean).length ? ' · ' + [t.client_nombre, t.project_nombre].filter(Boolean).map(esc).join(' · ') : ''}`,
         actions: t => [
           { lbl: '✓ Completar tarea', on: `RNotifPanel.completeTask(${t.id})`, pri: true },
-          { lbl: '＋ Añadir subtarea', on: `TasksModule.openDrawer(null,${t.project_id},${t.id})` },
+          { lbl: '＋ Subtarea', on: `TasksModule.openDrawer(null,${t.project_id},${t.id})` },
         ] },
       { key: 'proyectos_completos', tone: 'green', badge: 'Listo para cerrar', ico: 'check', nameKey: 'nombre', task: false,
         sub: p => `${p._n || '?'} de ${p._n || '?'} tareas completadas${p.client_nombre ? ' · ' + esc(p.client_nombre) : ''}`,
         actions: p => [
           { lbl: '✓ Completar proyecto', on: `RNotifPanel.completeProject(${p.id})`, pri: true },
-          { lbl: '＋ Añadir tarea', on: `TasksModule.openDrawer(null,${p.id})` },
+          { lbl: '＋ Tarea', on: `TasksModule.openDrawer(null,${p.id})` },
+          { lbl: '＋ Subtarea', on: `RNotifPanel.addSubToProject(event,${p.id})` },
+        ] },
+      { key: 'tareas_vencidas', tone: 'red', badge: 'Vencida', ico: 'calendar', nameKey: 'titulo', task: true,
+        sub: t => `Venció el ${_fv(t.deadline)}${[t.client_nombre, t.project_nombre].filter(Boolean).length ? ' · ' + [t.client_nombre, t.project_nombre].filter(Boolean).map(esc).join(' · ') : ''}`,
+        actions: t => [
+          { lbl: '📅 Ampliar plazo', on: `RNotifPanel.pickDeadline(event,${t.id})`, pri: true },
+          { lbl: '✓ Completar', on: `RNotifPanel.completeTask(${t.id})` },
+        ] },
+      { key: 'proyectos_vencidos', tone: 'red', badge: 'Vencido', ico: 'calendar', nameKey: 'nombre', task: false,
+        sub: p => `Venció el ${_fv(p.fecha_fin)}${p.client_nombre ? ' · ' + esc(p.client_nombre) : ''}`,
+        actions: p => [
+          { lbl: '📅 Ampliar plazo', on: `RNotifPanel.pickProjFecha(event,${p.id})`, pri: true },
+          { lbl: '✓ Completar proyecto', on: `RNotifPanel.completeProject(${p.id})` },
         ] },
       { key: 'tareas_sin_responsable', tone: 'orange', badge: 'Sin responsable', ico: 'member',   nameKey: 'titulo', task: true,  action: t => `RNotifPanel.pickMember(event,${t.id})`,                    link: 'Asignar responsable', sub: t => [t.client_nombre, t.project_nombre].filter(Boolean).map(esc).join(' · ') },
       { key: 'tareas_sin_deadline',    tone: 'amber',  badge: 'Sin fecha',       ico: 'calendar', nameKey: 'titulo', task: true,  action: t => `RNotifPanel.pickDeadline(event,${t.id})`,                  link: 'Fijar fecha',         sub: t => [t.client_nombre, t.project_nombre].filter(Boolean).map(esc).join(' · ') },
       { key: 'proyectos_sin_tareas',   tone: 'violet', badge: 'Sin tareas',      ico: 'folder',   nameKey: 'nombre', task: false, action: () => `document.querySelector('[data-tab=mgmt-projects]').click()`, link: 'Ver proyecto',        sub: t => esc(t.client_nombre || '') },
-      { key: 'clientes_sin_proyecto',  tone: 'blue',   badge: 'Sin proyecto',    ico: 'building', nameKey: 'nombre', task: false, action: () => `document.querySelector('[data-tab=mgmt-clients]').click()`,  link: 'Ver cliente',         sub: t => esc(t.empresa || '') },
+      // 'clientes_sin_proyecto' se quitó del panel a pedido de Jenny (los contactos/prospectos sin proyecto son normales).
     ];
 
     let html = '';
@@ -19996,14 +20025,13 @@ const RNotifPanel = (() => {
     }
   }
 
-  function pickDeadline(e, taskId) {
-    _pendingTaskId = taskId;
+  function _openDatePop(e, label) {
     const pop = $('rnotif-date-pop');
     if (!pop) return;
-    // Default to today
+    const lbl = pop.querySelector('.rnotif-date-pop__label');
+    if (lbl) lbl.textContent = label || 'Fecha límite';
     const inp = $('rnotif-date-inp');
     if (inp) inp.value = new Date().toISOString().split('T')[0];
-    // Position near the button
     const rect = e.currentTarget.getBoundingClientRect();
     pop.style.display = 'block';
     const popW = 220, popH = 120;
@@ -20016,6 +20044,32 @@ const RNotifPanel = (() => {
     setTimeout(() => inp?.focus(), 50);
     setTimeout(() => document.addEventListener('click', _popOutside), 0);
   }
+  function pickDeadline(e, taskId) {
+    _pendingTaskId = taskId; _pendingProjId = null;
+    _openDatePop(e, 'Nueva fecha límite');
+  }
+  // Ampliar el plazo de un PROYECTO vencido (nueva fecha fin)
+  function pickProjFecha(e, projId) {
+    _pendingProjId = projId; _pendingTaskId = null;
+    _openDatePop(e, 'Nueva fecha fin del proyecto');
+  }
+  // "+ Subtarea" desde la notificación de proyecto: eliges a qué tarea del proyecto va (asociación rápida)
+  function addSubToProject(e, projectId) {
+    if (e && e.stopPropagation) e.stopPropagation();
+    document.querySelectorAll('.rnf-subpick').forEach(m => m.remove());
+    const mains = (_lastTasks || []).filter(t => t.project_id === projectId && !t.parent_task_id);
+    if (!mains.length) { TasksModule.openDrawer(null, projectId); return; }
+    const menu = document.createElement('div');
+    menu.className = 'd3-status-menu rnf-subpick';
+    menu.innerHTML = `<div style="padding:7px 12px 4px;font-size:.66rem;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:#98A2AE">Subtarea dentro de…</div>`
+      + mains.slice(0, 14).map(t => `<button class="d3-status-opt" onclick="TasksModule.openDrawer(null,${projectId},${t.id});document.querySelectorAll('.rnf-subpick').forEach(m=>m.remove())">${esc(t.titulo)}</button>`).join('');
+    const r = (e && e.currentTarget && e.currentTarget.getBoundingClientRect) ? e.currentTarget.getBoundingClientRect() : { left: 220, bottom: 220 };
+    menu.style.cssText = `position:fixed;z-index:10060;top:${Math.min(r.bottom + 4, window.innerHeight - 280)}px;left:${Math.max(8, r.left - 140)}px;max-height:260px;overflow:auto;min-width:220px`;
+    document.body.appendChild(menu);
+    setTimeout(() => document.addEventListener('click', function onDoc(ev) {
+      if (!menu.contains(ev.target)) { menu.remove(); document.removeEventListener('click', onDoc); }
+    }), 0);
+  }
 
   function _popOutside(e) {
     const pop = $('rnotif-date-pop');
@@ -20027,22 +20081,24 @@ const RNotifPanel = (() => {
     if (pop) pop.style.display = 'none';
     document.removeEventListener('click', _popOutside);
     _pendingTaskId = null;
+    _pendingProjId = null;
   }
 
   async function confirmDeadline() {
     const date = $('rnotif-date-inp')?.value;
-    if (!date || !_pendingTaskId) return;
-    const taskId = _pendingTaskId;
+    if (!date || (!_pendingTaskId && !_pendingProjId)) return;
+    const taskId = _pendingTaskId, projId = _pendingProjId;
     const saveBtn = document.querySelector('.rnotif-date-pop__save');
     if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = '…'; }
     try {
-      const res = await apiFetch(`${API}/mgmt/tasks/${taskId}/deadline`, {
+      const res = await apiFetch(projId ? `${API}/mgmt/projects/${projId}/fechas` : `${API}/mgmt/tasks/${taskId}/deadline`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ deadline: date }),
+        body: JSON.stringify(projId ? { fecha_fin: date } : { deadline: date }),
       });
       if (!res.ok) throw new Error('Error al guardar');
       closeDatePop();
+      if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Guardar'; }
       // Animate item out then reload
       const row = document.querySelector(`[data-task-id="${taskId}"]`);
       if (row) {
@@ -20165,7 +20221,7 @@ const RNotifPanel = (() => {
     load, updateBadge: _updateBadge,
     pickDeadline, closeDatePop, confirmDeadline,
     pickMember, _selectMember, closeMemberPop, confirmMember,
-    completeTask, goToProject, completeProject,
+    completeTask, goToProject, completeProject, pickProjFecha, addSubToProject,
   };
 })();
 

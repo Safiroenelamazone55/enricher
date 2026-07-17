@@ -1773,6 +1773,27 @@ app.patch('/api/mgmt/projects/:id/estado', requireAuth, async (req, res) => {
   }
 });
 
+// ── PATCH /api/mgmt/projects/:id/fechas — ampliar plazo (solo fechas, seguro) ──
+app.patch('/api/mgmt/projects/:id/fechas', requireAuth, async (req, res) => {
+  const b = req.body || {};
+  const okd = v => v === null || v === '' || /^\d{4}-\d{2}-\d{2}/.test(String(v));
+  if (b.fecha_fin !== undefined && !okd(b.fecha_fin)) return res.status(400).json({ error: 'fecha_fin no válida' });
+  if (b.fecha_inicio !== undefined && !okd(b.fecha_inicio)) return res.status(400).json({ error: 'fecha_inicio no válida' });
+  try {
+    const sets = [], vals = [req.params.id, req.workspaceOwnerId];
+    if (b.fecha_fin !== undefined) sets.push(`fecha_fin=$${vals.push(b.fecha_fin || null)}`);
+    if (b.fecha_inicio !== undefined) sets.push(`fecha_inicio=$${vals.push(b.fecha_inicio || null)}`);
+    if (!sets.length) return res.json({ ok: true });
+    sets.push('updated_at=NOW()');
+    const { rows } = await pool.query(`UPDATE projects SET ${sets.join(',')} WHERE id=$1 AND user_id=$2 RETURNING id, fecha_inicio, fecha_fin`, vals);
+    if (!rows[0]) return res.status(404).json({ error: 'Proyecto no encontrado' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[projects/fechas]', err.message);
+    res.status(500).json({ error: 'Error al actualizar las fechas' });
+  }
+});
+
 // ── PATCH /api/mgmt/projects/:id/valor — valor total (Conciliación) ──
 app.patch('/api/mgmt/projects/:id/valor', requireAuth, async (req, res) => {
   const { valor_total } = req.body;

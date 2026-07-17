@@ -4446,24 +4446,29 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 .rnotif__ok-title { font-size: .88rem; font-weight: 700; color: var(--text); }
 .rnotif__ok-sub   { font-size: .76rem; color: var(--muted); }
 
-/* ── Notificaciones — cards estilo referencia (icono, badge, acción) ── */
-#rnotif-content { gap: 8px; }
-.rnf-card { display: flex; gap: 10px; width: 100%; text-align: left; background: #FBFAF8; border: 1px solid #EFEBE5; border-radius: 14px; padding: 11px 12px; cursor: pointer; font-family: inherit; transition: border-color .14s, box-shadow .14s, background .14s; }
+/* ── Notificaciones — cards estilo referencia (icono, badge, acción) — COMPACTAS ── */
+#rnotif-content { gap: 6px; }
+.rnf-card { display: flex; gap: 8px; width: 100%; text-align: left; background: #FBFAF8; border: 1px solid #EFEBE5; border-radius: 12px; padding: 8px 10px; cursor: pointer; font-family: inherit; transition: border-color .14s, box-shadow .14s, background .14s; }
 .rnf-card:hover { background: #fff; border-color: #E2D8C9; box-shadow: 0 4px 14px rgba(28,25,23,.06); }
-.rnf-ico { flex-shrink: 0; width: 34px; height: 34px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; }
-.rnf-ico svg { width: 17px; height: 17px; }
-.rnf-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.rnf-ico { flex-shrink: 0; width: 26px; height: 26px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; }
+.rnf-ico svg { width: 14px; height: 14px; }
+.rnf-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .rnf-row1 { display: flex; align-items: center; gap: 6px; }
-.rnf-title { flex: 1; min-width: 0; font-size: .82rem; font-weight: 600; color: #1c1a17; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.rnf-dot { flex-shrink: 0; width: 7px; height: 7px; border-radius: 50%; }
-.rnf-badge { align-self: flex-start; display: inline-flex; align-items: center; font-size: .65rem; font-weight: 700; letter-spacing: .01em; padding: 2px 8px; border-radius: 999px; }
-.rnf-sub { font-size: .72rem; color: #8a837a; line-height: 1.35; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rnf-title { flex: 1; min-width: 0; font-size: .8rem; font-weight: 600; color: #1c1a17; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rnf-dot { flex-shrink: 0; width: 6px; height: 6px; border-radius: 50%; }
+.rnf-badge { align-self: flex-start; display: inline-flex; align-items: center; font-size: .62rem; font-weight: 700; letter-spacing: .01em; padding: 1px 7px; border-radius: 999px; }
+.rnf-sub { font-size: .71rem; color: #8a837a; line-height: 1.3; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* tono rojo (vencidos) */
+.rnf-ico--red { background: #FDECEC; color: #DC2626; }
+.rnf-badge--red { background: #FDECEC; color: #B91C1C; }
+.rnf-dot--red { background: #EF4444; }
+.rnf-link--red { color: #DC2626; }
 .rnf-link { display: inline-flex; align-items: center; gap: 2px; font-size: .71rem; font-weight: 600; margin-top: 1px; }
 .rnf-link svg { width: 11px; height: 11px; }
 /* Tarjeta de cierre con DOS acciones (completar o añadir trabajo) */
 .rnf-card--static { cursor: default; }
-.rnf-acts { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
-.rnf-act { border: 1px solid var(--border, #E4E7DD); background: #fff; color: var(--text2, #45586A); font-size: .71rem; font-weight: 700; padding: 5px 10px; border-radius: 8px; cursor: pointer; font-family: inherit; transition: all .12s; white-space: nowrap; }
+.rnf-acts { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 4px; }
+.rnf-act { border: 1px solid var(--border, #E4E7DD); background: #fff; color: var(--text2, #45586A); font-size: .67rem; font-weight: 700; padding: 3px 9px; border-radius: 7px; cursor: pointer; font-family: inherit; transition: all .12s; white-space: nowrap; }
 .rnf-act:hover { border-color: var(--brand-l, #BFE0CC); color: var(--brand-d, #006B3F); }
 .rnf-act--pri { background: var(--brand, #00804C); border-color: var(--brand, #00804C); color: #fff; }
 .rnf-act--pri:hover { background: var(--brand-d, #006B3F); color: #fff; }
