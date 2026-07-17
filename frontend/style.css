@@ -12623,6 +12623,24 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
   .d3-act-timer .d3-hrs-btn { margin-top: 0; }
 }
 
+/* El panel derecho (notificaciones/chat) angosta el CONTENIDO sin cambiar la ventana,
+   así que las media queries no lo ven y el hero quedaba aplastado/encimado.
+   Container query sobre el pane del dashboard → se apila según el ancho DISPONIBLE. */
+#pane-mgmt-dashboard { container-type: inline-size; }
+@container (max-width: 980px) {
+  .d3-hero { flex-wrap: wrap; }
+  .d3-revcard { flex-basis: 100%; max-width: none; }
+  .d3-actcard { flex-basis: 100%; flex-direction: column; }
+  .d3-act-timer { flex-basis: auto; min-width: 0; max-width: none; border-left: none; border-top: 1px solid var(--border, #EDEBE6); padding: 12px 0 0; }
+  .d3-act-statsrow { flex-direction: row; flex-wrap: wrap; align-items: center; }
+  .d3-act-timer .d3-hrs-metrics { grid-template-columns: repeat(4, 1fr); }
+  .d3-act-timer .d3-hrs-btn { margin-top: 0; }
+}
+/* Con MUY poco ancho (panel abierto en ventana chica), la grilla de abajo también se apila */
+@container (max-width: 700px) {
+  .d3-grid { grid-template-columns: 1fr; }
+}
+
 /* ══ Cronómetro consolidado dentro de "Tu ritmo de trabajo" ══
    (panel de hoy + métricas + botón, movido desde HORAS DE TRABAJO). */
 /* Cronómetro como COLUMNA a la derecha del heatmap (baja el alto de la tarjeta) */
