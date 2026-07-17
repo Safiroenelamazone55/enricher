@@ -20858,22 +20858,87 @@ const TimerModule = (() => {
     const goalSec = isDay ? TTD_GOAL : Math.max(1, _weekdaysIn(range.start, range.end)) * TTD_GOAL;
     const goalPct = goalSec > 0 ? Math.round(total / goalSec * 100) : 0;
 
-    // ── Working Hours ──
-    const stat = (l, v, cls) => `<div class="ttd-stat"><div class="ttd-stat__v ${cls || ''}">${v}</div><div class="ttd-stat__l">${l}</div></div>`;
-    const workingHours = `<div class="ttd-card ttd-wh">
-      <div class="ttd-wh__hero">
-        <div><div class="ttd-wh__lbl">${isDay && range.label === 'Hoy' ? 'Trabajado hoy' : 'Trabajado en el período'}</div><div class="ttd-wh__big">${_fmtDur(total) || '0m'}</div></div>
-        <div class="ttd-wh__goal">
-          <div class="ttd-goalbar"><span style="width:${Math.min(100, goalPct)}%"></span></div>
-          <div class="ttd-wh__goaltxt">${goalPct}% del objetivo de ${_fmtDur(goalSec)}${isDay ? '' : ' · 8h/día hábil'}</div>
+    // ── Grilla estilo Tracklog: Horas de trabajo · Desglose · Apps · Proyectos ──
+    const stat = (l, v, cls) => `<div class="ttd-stat"><div class="ttd-stat__v ${cls || ''}">${v}</div><div class="ttd-stat__l">${l}</div></div>`;   // (lo usa el Resumen de horas)
+    const _tt2Ico = n => ({
+      clock:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
+      pie:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>',
+      apps:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>',
+      folder: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>',
+    })[n] || '';
+
+    // Heatmap: por hora (vista Día) o por día (Semana/Mes/Rango)
+    const _hm = [];
+    if (isDay) {
+      const byH = Array(24).fill(0);
+      countable.forEach(e => {
+        const s = new Date(e.started_at), en = e.ended_at ? new Date(e.ended_at) : now;
+        for (let h = s.getHours(); h <= Math.min(23, en.getHours()); h++) {
+          const hs = Math.max(s.getTime(), new Date(s).setHours(h, 0, 0, 0));
+          const he = Math.min(en.getTime(), new Date(s).setHours(h, 59, 59, 999));
+          if (he > hs) byH[h] += (he - hs) / 1000;
+        }
+      });
+      const mxH = Math.max(...byH, 1);
+      for (let h = 0; h < 24; h++) { const v = byH[h]; _hm.push({ lv: v <= 0 ? 0 : Math.max(1, Math.ceil(v / mxH * 4)), t: `${h}:00 · ${_fmtDur(v) || '0m'}` }); }
+    } else {
+      const dayMap = {};
+      countable.forEach(e => { const k = _startOfDay(new Date(e.started_at)).getTime(); dayMap[k] = (dayMap[k] || 0) + _ttdDur(e, now); });
+      const cur2 = _startOfDay(range.start);
+      while (cur2 <= range.end && _hm.length < 62) {
+        const v = dayMap[_startOfDay(cur2).getTime()] || 0;
+        const lv = v <= 0 ? 0 : v < TTD_GOAL * .25 ? 1 : v < TTD_GOAL * .5 ? 2 : v < TTD_GOAL * .8 ? 3 : 4;
+        _hm.push({ lv, t: `${cur2.getDate()}/${cur2.getMonth() + 1} · ${_fmtDur(v) || '0m'}` });
+        cur2.setDate(cur2.getDate() + 1);
+      }
+    }
+    const heatHtml = `<div class="tt2-heat">${_hm.map(c => `<span class="tt2-hc tt2-hc--${c.lv}" title="${c.t}"></span>`).join('')}</div>`;
+    const startBtn = running
+      ? `<button class="tt2-start tt2-start--stop" onclick="TimerModule.stop().then(()=>TimerModule.loadReport())">■ Detener seguimiento</button>`
+      : `<button class="tt2-start" onclick="try{DashboardModule.openTrackPicker()}catch(_){}">▶ Iniciar seguimiento</button>`;
+    const workingHours = `<div class="ttd-card tt2-card">
+      <div class="tt2-card__hd">${_tt2Ico('clock')}<span>Horas de trabajo</span></div>
+      <div class="tt2-wh">
+        <div class="tt2-wh__l">${heatHtml}</div>
+        <div class="tt2-wh__r">
+          <div class="tt2-big">${_fmtDur(total) || '0m'}</div>
+          <div class="tt2-sub">${isDay && range.label === 'Hoy' ? 'Total trabajado hoy' : 'Total del período'}</div>
+          <div class="tt2-pct${goalPct >= 100 ? ' ok' : ''}">${goalPct}%<span> de ${_fmtDur(goalSec)}${isDay ? '' : ' (8h/día hábil)'}</span></div>
+          ${startBtn}
         </div>
       </div>
-      <div class="ttd-wh__stats">
-        ${stat('Manual registrado', _fmtDur(manual) || '0m')}
-        ${stat('Activo confirmado', _fmtDur(active) || '0m')}
-        ${stat('Sin clasificar', _fmtDur(pending) || '0m', pending > 0 ? 'ttd-warn' : '')}
-        ${stat(isDay ? 'Objetivo diario' : 'Objetivo período', _fmtDur(goalSec))}
+    </div>`;
+
+    // Desglose del tiempo (anillos)
+    const _ringPct = v => total > 0 ? Math.min(100, Math.round(v / total * 100)) : 0;
+    const ring = (pct, color, val, lbl) => `<div class="tt2-ring-row">
+      <span class="tt2-ring" style="background:conic-gradient(${color} ${pct}%, #EEF0EC 0)"><i></i></span>
+      <div class="tt2-ring-tx"><b>${val}</b><span>${lbl}</span></div>
+    </div>`;
+    const breakdownCard = `<div class="ttd-card tt2-card">
+      <div class="tt2-card__hd">${_tt2Ico('pie')}<span>Desglose del tiempo</span></div>
+      <div class="tt2-rings">
+        ${ring(_ringPct(active), '#00804C', _fmtDur(active) || '0m', `Activo confirmado · ${_ringPct(active)}%`)}
+        ${ring(_ringPct(manual), '#0EA5E9', _fmtDur(manual) || '0m', 'Timer manual')}
+        ${ring(_ringPct(pending), '#F59E0B', _fmtDur(pending) || '0m', 'Sin clasificar')}
       </div>
+    </div>`;
+
+    // Proyectos (horas por proyecto, con barra y %)
+    const projAgg = {};
+    countable.forEach(e => { const k = e.proj_nombre || e.project_nombre || 'Sin proyecto'; projAgg[k] = (projAgg[k] || 0) + _ttdDur(e, now); });
+    const projRows = Object.entries(projAgg).filter(([, s2]) => s2 > 0).sort((a, b) => b[1] - a[1]).slice(0, 6);
+    const pMax = projRows.length ? projRows[0][1] : 1;
+    const projectsCard = `<div class="ttd-card tt2-card">
+      <div class="tt2-card__hd">${_tt2Ico('folder')}<span>Proyectos</span></div>
+      <div class="tt2-total"><b>${_fmtDur(total) || '0m'}</b><span>Tiempo total del período</span></div>
+      ${projRows.length
+        ? projRows.map(([n, s2]) => `<div class="tt2-bar-row" title="${esc(n)} · ${_fmtDur(s2)}">
+            <span class="tt2-bar-nm">${esc(n)}</span>
+            <span class="tt2-bar"><i style="width:${Math.max(6, Math.round(s2 / pMax * 100))}%"></i><b>${Math.round(s2 / Math.max(total, 1) * 100)}%</b></span>
+            <span class="tt2-bar-t">${_fmtDur(s2) || '0m'}</span>
+          </div>`).join('')
+        : '<div class="ttd-empty" style="padding:14px 0">Sin tiempo por proyecto en el período.</div>'}
     </div>`;
 
     // ── Distribución del período: timeline por hora (Día) o barras por día/semana ──
@@ -21051,8 +21116,10 @@ const TimerModule = (() => {
           <p class="ttd-empty__t">Conecta Nova Extension o Desktop Agent</p>
           <p class="ttd-empty__s">Aquí verás las apps y websites en los que realmente trabajaste, fuera de Nova.</p>
         </div>`;
-    const appsCard = `<div class="ttd-card">
-      <div class="ttd-card__hd"><span class="ttd-card__t">Apps y websites usados</span>${_appsList.length ? `<span class="ttd-card__n">${_appsList.length}</span>` : ''}</div>
+    const _appsTotal = _appsList.reduce((a, x) => a + (x.dur || 0), 0);
+    const appsCard = `<div class="ttd-card tt2-card">
+      <div class="tt2-card__hd">${_tt2Ico('apps')}<span>Apps y websites usados</span>${_appsList.length ? `<span class="ttd-card__n">${_appsList.length}</span>` : ''}</div>
+      ${_appsTotal > 0 ? `<div class="tt2-total"><b>${_fmtDur(_appsTotal)}</b><span>Total rastreado (extensión / agente)</span></div>` : ''}
       ${appsBody}
     </div>`;
 
@@ -21138,6 +21205,11 @@ const TimerModule = (() => {
     // ── Selector de período (Día / Semana / Mes / Personalizado) ──
     const _seg = (p, lbl) => `<button class="ttd-seg__b${_ttPeriod === p ? ' is-on' : ''}" onclick="TimerModule.setPeriod('${p}')">${lbl}</button>`;
     const _isoD = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    // Chip "Hoy: Xh Ym" (solo si el rango incluye hoy)
+    const _t0k = _startOfDay(new Date()).getTime();
+    const _rangeHasToday = range.start <= now && range.end >= _startOfDay(new Date());
+    const todaySec = _rangeHasToday ? countable.reduce((a, e) => (_startOfDay(new Date(e.started_at)).getTime() === _t0k ? a + _ttdDur(e, now) : a), 0) : 0;
+    const todayChip = _rangeHasToday ? `<span class="tt2-today">Hoy: <b>${_fmtDur(todaySec) || '0m'}</b></span>` : '';
     const periodBar = `<div class="ttd-period">
       <div class="ttd-seg">${_seg('day','Día')}${_seg('yesterday','Ayer')}${_seg('week','Semana')}${_seg('month','Mes')}${_seg('custom','Personalizado')}</div>
       ${_ttPeriod === 'custom'
@@ -21145,6 +21217,7 @@ const TimerModule = (() => {
         : _ttPeriod === 'yesterday'
           ? `<div class="ttd-pnav"><span class="ttd-pnav__lbl">Ayer</span></div>`
           : `<div class="ttd-pnav"><button class="ttd-pnav__b" onclick="TimerModule.navPeriod(-1)" aria-label="Anterior">‹</button><span class="ttd-pnav__lbl">${range.label}</span><button class="ttd-pnav__b" onclick="TimerModule.navPeriod(1)" aria-label="Siguiente">›</button></div>`}
+      ${todayChip}
     </div>`;
 
     // ── Filtros combinables: Miembro (admin) · Cliente · Proyecto — se aplican todos a la vez ──
@@ -21167,11 +21240,10 @@ const TimerModule = (() => {
       </div>
       ${periodBar}
       ${filterBar}
-      ${workingHours}
       ${timeline}
+      <div class="tt2-row3">${workingHours}${breakdownCard}${appsCard}</div>
+      <div class="tt2-row3">${projectsCard}${reviewCard}${sources}</div>
       ${billingCard}
-      <div class="ttd-2col">${sources}${appsCard}</div>
-      ${reviewCard}
       ${sessionsCard}
       ${teamHtml}
     `;
