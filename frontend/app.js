@@ -1432,6 +1432,16 @@ const FinanceModule = (() => {
   let _dsRangeFrom = null;
   let _dsRangeTo   = null;
 
+  // ── Facturación tab (cobros por tarea, por miembro) ──────────────
+  let _fbLoaded   = false;
+  let _fbTasks    = [];      // tareas (mains) del workspace
+  let _fbProjects = [];
+  let _fbTeam     = [];
+  let _fbMember   = 'me';    // 'me' | 'all' | nombre
+  let _fbPeriod   = 'semana';// 'semana' | 'mes' | 'todo' (aplica a los KPIs de período)
+  let _fbProject  = '';      // filtro por proyecto (link desde Proyectos)
+  let _fbMore     = new Set();// proyectos con "ver más" abierto
+
   // ── Pagos internos tab ───────────────────────────────────────────
   let _piLoaded  = false;
   let _piList    = [];
@@ -2293,6 +2303,7 @@ const FinanceModule = (() => {
     document.querySelectorAll('.fin-panels .fin-panel').forEach(p =>
       p.classList.toggle('active', p.id === 'fin-panel-' + tab));
     if (tab === 'config' && !_finConfigLoaded) _loadConfig();
+    if (tab === 'facturacion') { _fbLoaded ? _renderFacturacion() : _loadFacturacion(); }
     if (tab === 'resumen') { _rsLoaded ? _renderResumenCards() : _loadResumen(); }
     if (tab === 'conciliacion') { _cnLoaded ? _renderConciliacion() : _loadConciliacion(); }
     if (tab === 'distribucion') { _dsLoaded ? _renderDistribucion() : _loadDistribucion(); }
@@ -2879,6 +2890,275 @@ const FinanceModule = (() => {
     else if (kind === 'project') _rsProject = val;
     else if (kind === 'member') _rsMember = val;
     _renderResumenCards();
+  }
+
+  // ── Facturación (cobros por tarea, por miembro) ────────────────────
+  // La facturación vive en las TAREAS (monto/cobrado/en_cuenta) — nunca toca el tiempo registrado.
+
+  const _fbPad2 = n => String(n).padStart(2, '0');
+  function _fbMyName() { return (window._authUser?.memberNombre || window._authUser?.name || ''); }
+  function _fbMonday() {
+    const t0 = new Date(); t0.setHours(0, 0, 0, 0);
+    const mon = new Date(t0); mon.setDate(t0.getDate() - ((t0.getDay() + 6) % 7));
+    return `${mon.getFullYear()}-${_fbPad2(mon.getMonth() + 1)}-${_fbPad2(mon.getDate())}`;
+  }
+  // Peso del miembro en un proyecto: reparto ([{nombre,pct}]) manda; si no hay, 100% del responsable.
+  function _fbWeight(p, nameLc) {
+    if (!nameLc) return 1;
+    const rep = Array.isArray(p.reparto) ? p.reparto : [];
+    if (rep.length) { const r = rep.find(x => String(x.nombre || '').toLowerCase() === nameLc); return r ? Math.max(0, Math.min(100, +r.pct || 0)) / 100 : 0; }
+    const resp = (p.responsables && p.responsables.length) ? p.responsables : (p.responsable ? [p.responsable] : []);
+    return resp.some(x => String(x).toLowerCase() === nameLc) ? 1 : 0;
+  }
+  function _fbDstr(ts) { return ts ? String(ts).split('T')[0] : ''; }
+  function _fbFmtD(s) { return s ? new Date(String(s).split('T')[0] + 'T00:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }) : ''; }
+
+  async function _loadFacturacion() {
+    const body = $('fin-fact-body');
+    if (!body) return;
+    body.innerHTML = '<div class="clients-loading"><div class="clients-spin"></div><span>Cargando facturación…</span></div>';
+    try {
+      // 1) Asegura las tareas de cobro de ESTA semana (proyectos con cobro semanal) — idempotente.
+      try { await apiFetch(`${API}/mgmt/billing/ensure-weekly`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ week_start: _fbMonday() }) }); } catch (_) {}
+      const [pRes, tRes, mRes] = await Promise.all([
+        apiFetch(`${API}/mgmt/projects`),
+        apiFetch(`${API}/mgmt/tasks`),
+        apiFetch(`${API}/mgmt/team`),
+      ]);
+      _fbProjects = pRes.ok ? await pRes.json() : [];
+      _fbTasks    = tRes.ok ? await tRes.json() : [];
+      _fbTeam     = mRes.ok ? await mRes.json() : [];
+      _fbLoaded = true;
+      _renderFacturacion();
+    } catch (e) {
+      console.error('[finance] facturacion load error:', e);
+      body.innerHTML = '<div class="fin-placeholder"><p class="fin-placeholder__s" style="color:var(--err)">Error al cargar la facturación.</p></div>';
+    }
+  }
+
+  function _renderFacturacion() {
+    const body = $('fin-fact-body');
+    if (!body) return;
+    const m0 = v => _money(v, 'USD', 0);
+    const meName = _fbMyName();
+    const nameLc = _fbMember === 'all' ? '' : (_fbMember === 'me' ? meName : _fbMember).toLowerCase();
+    const bounds = _fbPeriod === 'todo' ? null : _periodBounds(_fbPeriod, null, null);
+    const inP = ts => { if (!bounds) return true; if (!ts) return false; const d = new Date(String(ts).split('T')[0] + 'T00:00:00'); return d >= bounds.start && d < bounds.end; };
+
+    const projMap = {}; _fbProjects.forEach(p => { projMap[p.id] = p; });
+    let projs = _fbProjects.filter(p => (nameLc ? _fbWeight(p, nameLc) > 0 : true));
+    if (_fbProject) projs = projs.filter(p => String(p.id) === String(_fbProject));
+
+    const visIds = new Set(projs.map(p => p.id));
+    const mains = _fbTasks.filter(t => !t.parent_task_id && visIds.has(t.project_id));
+    const byProj = {}; mains.forEach(t => { (byProj[t.project_id] = byProj[t.project_id] || []).push(t); });
+
+    // ── KPIs (ponderados por tu % en cada proyecto) ──
+    let porCobrar = 0, cobradoPer = 0, porTransferir = 0, enCuentaPer = 0;
+    for (const t of mains) {
+      const p = projMap[t.project_id] || {};
+      const w = nameLc ? _fbWeight(p, nameLc) : 1;
+      const usd = (_toUsdEquiv(parseFloat(t.monto || 0), p.moneda || 'USD') || 0) * w;
+      if (!usd) continue;
+      if (!t.cobrado) { porCobrar += usd; continue; }
+      if (inP(t.cobrado_at)) cobradoPer += usd;
+      if (!t.en_cuenta) porTransferir += usd;
+      else if (inP(t.en_cuenta_at)) enCuentaPer += usd;
+    }
+    const perLbl = _fbPeriod === 'todo' ? 'histórico' : _periodLabel(_fbPeriod, null, null);
+    const kpis = `<div class="fin-rs-grid" style="margin-top:14px">
+      ${_dsCard('Por cobrar', m0(porCobrar), 'amber', 'Montos asignados aún no cobrados')}
+      ${_dsCard('Cobrado', m0(cobradoPer), 'green', `Clientes pagaron · ${perLbl}`)}
+      ${_dsCard('Por transferir', m0(porTransferir), 'blue', 'Cobrado, aún no en tu cuenta')}
+      ${_dsCard('En mi cuenta', m0(enCuentaPer), 'green', `Transferido · ${perLbl}`)}
+    </div>`;
+
+    // ── Controles ──
+    const memberOpts = `<option value="me"${_fbMember === 'me' ? ' selected' : ''}>Mi facturación (${esc(meName)})</option>`
+      + `<option value="all"${_fbMember === 'all' ? ' selected' : ''}>Todo el workspace</option>`
+      + _fbTeam.filter(m => (m.nombre || '').toLowerCase() !== meName.toLowerCase())
+          .map(m => `<option value="${esc(m.nombre)}"${_fbMember === m.nombre ? ' selected' : ''}>${esc(m.nombre)}</option>`).join('');
+    const projOpts = '<option value="">Todos mis proyectos</option>'
+      + _fbProjects.filter(p => (nameLc ? _fbWeight(p, nameLc) > 0 : true)).slice().sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''))
+          .map(p => `<option value="${p.id}"${String(_fbProject) === String(p.id) ? ' selected' : ''}>${esc(p.nombre || ('#' + p.id))}</option>`).join('');
+    const seg = (v, l) => `<button class="an-period${_fbPeriod === v ? ' an-period--on' : ''}" onclick="FinanceModule.fbSetPeriod('${v}')">${l}</button>`;
+    const controls = `<div class="fin-rs-filters" style="margin-top:4px">
+      <div class="fin-rs-period">
+        <select class="filter-select" onchange="FinanceModule.fbSetMember(this.value)">${memberOpts}</select>
+        <select class="filter-select" onchange="FinanceModule.fbSetProject(this.value)">${projOpts}</select>
+        <span class="fin-period-lbl" style="margin-left:6px">Período:</span>
+        ${seg('semana', 'Semana')}${seg('mes', 'Mes')}${seg('todo', 'Todo')}
+      </div>
+    </div>`;
+
+    // ── Grupos por proyecto ──
+    const sortKey = t => _fbDstr(t.billing_week || t.fecha_inicio || t.deadline || t.cobrado_at || '') || '0000';
+    const groups = projs.map(p => {
+      const rows = (byProj[p.id] || []).slice().sort((a, b) => sortKey(b).localeCompare(sortKey(a)));
+      if (!rows.length && !p.cobro_semanal) return '';
+      const cur = p.moneda || 'USD';
+      const w = nameLc ? _fbWeight(p, nameLc) : 1;
+      const rep = Array.isArray(p.reparto) ? p.reparto : [];
+      const chips = [];
+      if (p.cobro_semanal) chips.push(`<span class="fb-chip fb-chip--week">Semanal${p.precio_semanal ? ' · ' + _money(p.precio_semanal, cur, 0) : ''}</span>`);
+      else if (p.tipo_proyecto === 'horas') chips.push(`<span class="fb-chip">Por horas${p.tarifa_hora ? ' · ' + _money(p.tarifa_hora, cur, 0) + '/h' : ''}</span>`);
+      else if (p.valor_total > 0) chips.push(`<span class="fb-chip">Fijo · ${_money(p.valor_total, cur, 0)}</span>`);
+      if (rep.length) chips.push(`<span class="fb-chip fb-chip--rep" title="Proyecto compartido">${rep.map(r => `${esc(r.nombre.split(' ')[0])} ${+r.pct}%`).join(' · ')}</span>`);
+      if (nameLc && w < 1 && w > 0) chips.push(`<span class="fb-chip fb-chip--w">Tu parte: ${Math.round(w * 100)}%</span>`);
+
+      // proyectos de precio fijo: asignado vs valor
+      let fixedLine = '';
+      if (p.tipo_proyecto !== 'horas' && !p.cobro_semanal && p.valor_total > 0) {
+        const asignado = rows.reduce((s, t) => s + (parseFloat(t.monto || 0)), 0);
+        const rest = Math.max(0, p.valor_total - asignado);
+        fixedLine = `<div class="fb-fixed">Asignado ${_money(asignado, cur, 0)} de ${_money(p.valor_total, cur, 0)}${rest > 0 ? ` · <b>sin asignar ${_money(rest, cur, 0)}</b>` : ' · completo ✓'}</div>`;
+      }
+
+      const MAXR = 8;
+      const more = rows.length > MAXR && !_fbMore.has(p.id);
+      const shown = more ? rows.slice(0, MAXR) : rows;
+      const rowsHtml = shown.map(t => _fbRowHtml(t, cur)).join('')
+        + (more ? `<button class="fb-more" onclick="FinanceModule.fbToggleMore(${p.id})">Ver ${rows.length - MAXR} más…</button>` : '');
+
+      return `<div class="fb-proj">
+        <div class="fb-proj__hd">
+          <div class="fb-proj__t">${esc(p.nombre || '')}${p.client_nombre ? `<span class="fb-proj__c">· ${esc(p.client_nombre)}</span>` : ''}</div>
+          <div class="fb-proj__chips">${chips.join('')}<button class="btn btn--ghost btn--xs" onclick="FinanceModule.fbOpenCobro(${p.id})">＋ Cobro</button></div>
+        </div>
+        ${fixedLine}
+        ${rows.length ? `<div class="fb-head"><span>Tarea</span><span>Fechas</span><span>Monto</span><span>Cobrado</span><span>En mi cuenta</span></div>${rowsHtml}`
+                      : '<div class="fb-empty">Sin cobros aún — se creará la tarea de la semana automáticamente.</div>'}
+      </div>`;
+    }).filter(Boolean).join('');
+
+    body.innerHTML = controls + kpis
+      + `<p class="fin-d-context" style="margin:10px 2px 2px">La facturación vive en las tareas y es independiente del tiempo registrado — editar aquí no toca Time Tracking. “Cobrado” = el cliente pagó · “En mi cuenta” = ya lo transferiste a tu cuenta personal.</p>`
+      + (groups || '<div class="fin-placeholder" style="padding:40px 12px"><p class="fin-placeholder__s">No hay proyectos con cobros para este filtro. Asigna montos a tareas o activa “Cobro semanal” en el proyecto.</p></div>');
+  }
+
+  function _fbRowHtml(t, cur) {
+    const fechas = t.billing_week
+      ? `${_fbFmtD(t.fecha_inicio || t.billing_week)} – ${_fbFmtD(t.deadline)}`
+      : (t.fecha_inicio && t.deadline ? `${_fbFmtD(t.fecha_inicio)} – ${_fbFmtD(t.deadline)}` : (_fbFmtD(t.deadline) || '—'));
+    const mv = t.monto != null ? t.monto : '';
+    return `<div class="fb-row${t.cobrado ? ' fb-row--cob' : ''}">
+      <div class="fb-row__t" onclick="TasksModule.openDrawer(${t.id})" title="Abrir tarea">${esc(t.titulo)}${t.billing_week ? '<span class="fb-wk" title="Tarea de cobro semanal (auto)">↻</span>' : ''}</div>
+      <div class="fb-row__d">${fechas}</div>
+      <div class="fb-row__m"><span class="fb-cur">${cur}</span><input type="number" min="0" step="0.01" value="${mv}" placeholder="—"
+        onblur="FinanceModule.fbMonto(${t.id},this.value)"
+        onkeydown="if(event.key==='Enter')this.blur();"></div>
+      <div class="fb-row__c">
+        <button class="fb-tog${t.cobrado ? ' on' : ''}" onclick="FinanceModule.fbCobrado(${t.id},${t.cobrado ? 'false' : 'true'})">${t.cobrado ? '✓ Cobrado' : 'Marcar'}</button>
+        ${t.cobrado ? `<input type="date" class="fb-date" value="${_fbDstr(t.cobrado_at)}" title="Fecha de cobro (editable — puedes retro-datarla)" onchange="FinanceModule.fbCobradoFecha(${t.id},this.value)">` : ''}
+      </div>
+      <div class="fb-row__e">
+        ${t.cobrado
+          ? `<button class="fb-tog fb-tog--acc${t.en_cuenta ? ' on' : ''}" onclick="FinanceModule.fbEnCuenta(${t.id},${t.en_cuenta ? 'false' : 'true'})">${t.en_cuenta ? '✓ En cuenta' : 'Por transferir'}</button>
+             ${t.en_cuenta ? `<input type="date" class="fb-date" value="${_fbDstr(t.en_cuenta_at)}" title="Fecha en que llegó a tu cuenta" onchange="FinanceModule.fbEnCuentaFecha(${t.id},this.value)">` : ''}`
+          : '<span class="fb-muted">—</span>'}
+      </div>
+    </div>`;
+  }
+
+  function _fbInvalidate() { _rsLoaded = false; _cnLoaded = false; _dsLoaded = false; }
+  async function _fbPatch(id, payload) {
+    const res = await apiFetch(`${API}/mgmt/tasks/${id}/billing`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Error');
+    const row = await res.json();
+    const i = _fbTasks.findIndex(x => x.id === row.id);
+    if (i >= 0) _fbTasks[i] = { ..._fbTasks[i], ...row };
+    _fbInvalidate();
+    return row;
+  }
+  function fbSetMember(v)  { _fbMember = v || 'me'; _fbProject = ''; _renderFacturacion(); }
+  function fbSetPeriod(v)  { _fbPeriod = v; _renderFacturacion(); }
+  function fbSetProject(v) { _fbProject = v || ''; _renderFacturacion(); }
+  function fbToggleMore(pid) { _fbMore.has(pid) ? _fbMore.delete(pid) : _fbMore.add(pid); _renderFacturacion(); }
+  async function fbMonto(id, val) {
+    const t = _fbTasks.find(x => x.id === id);
+    const nv = val === '' ? null : +val;
+    if (t && ((t.monto == null && nv == null) || (t.monto != null && nv != null && +t.monto === nv))) return;
+    try { await _fbPatch(id, { monto: val === '' ? null : +val }); _renderFacturacion(); showBanner('✓ Monto actualizado', 'success'); }
+    catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  async function fbCobrado(id, on) {
+    const hoy = `${new Date().getFullYear()}-${_fbPad2(new Date().getMonth() + 1)}-${_fbPad2(new Date().getDate())}`;
+    try {
+      await _fbPatch(id, on ? { cobrado: true, cobrado_fecha: hoy } : { cobrado: false });
+      _renderFacturacion();
+      showBanner(on ? '✓ Cobrado — puedes editar la fecha si fue otro día' : 'Cobro desmarcado', 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  async function fbCobradoFecha(id, val) {
+    if (!val) return;
+    try { await _fbPatch(id, { cobrado_fecha: val }); _renderFacturacion(); showBanner('✓ Fecha de cobro actualizada', 'success'); }
+    catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  async function fbEnCuenta(id, on) {
+    const hoy = `${new Date().getFullYear()}-${_fbPad2(new Date().getMonth() + 1)}-${_fbPad2(new Date().getDate())}`;
+    try {
+      await _fbPatch(id, { en_cuenta: !!on, en_cuenta_fecha: hoy });
+      _renderFacturacion();
+      showBanner(on ? '✓ Marcado en tu cuenta' : 'Vuelve a "por transferir"', 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  async function fbEnCuentaFecha(id, val) {
+    if (!val) return;
+    try { await _fbPatch(id, { en_cuenta_fecha: val }); _renderFacturacion(); showBanner('✓ Fecha actualizada', 'success'); }
+    catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  // "+ Cobro": registra un cobro puntual como tarea de cobro (adelantos, hitos de precio fijo, extras)
+  function fbOpenCobro(pid) {
+    const p = _fbProjects.find(x => x.id === pid); if (!p) return;
+    document.getElementById('fb-cobro-modal')?.remove();
+    const hoy = `${new Date().getFullYear()}-${_fbPad2(new Date().getMonth() + 1)}-${_fbPad2(new Date().getDate())}`;
+    const bd = document.createElement('div');
+    bd.id = 'fb-cobro-modal'; bd.className = 'fin-pi-backdrop';
+    bd.onclick = ev => { if (ev.target === bd) bd.remove(); };
+    bd.innerHTML = `<div class="fin-pi-box" style="max-width:420px">
+      <div class="fin-pi-box__hd"><h3>Nuevo cobro · ${esc(p.nombre || '')}</h3><button class="fin-pi-x" onclick="document.getElementById('fb-cobro-modal').remove()">✕</button></div>
+      <div style="padding:16px 18px;display:flex;flex-direction:column;gap:12px">
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Concepto</span><input class="form-input" id="fbc-concepto" placeholder="Ej. Adelanto 50% / Entrega final"></label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <label class="fin-cfg-field"><span class="fin-cfg-lbl">Monto (${esc(p.moneda || 'USD')})</span><input class="form-input" type="number" min="0" step="0.01" id="fbc-monto"></label>
+          <label class="fin-cfg-field"><span class="fin-cfg-lbl">Fecha de cobro</span><input class="form-input" type="date" id="fbc-fecha" value="${hoy}"></label>
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:.84rem;color:var(--text)"><input type="checkbox" id="fbc-cobrado" checked> Ya lo cobré (el cliente ya pagó)</label>
+      </div>
+      <div class="fin-pi-box__ft" style="display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:1px solid var(--border)">
+        <button class="btn btn--ghost btn--sm" onclick="document.getElementById('fb-cobro-modal').remove()">Cancelar</button>
+        <button class="btn btn--primary btn--sm" onclick="FinanceModule.fbSaveCobro(${pid})">Registrar</button>
+      </div>
+    </div>`;
+    document.body.appendChild(bd);
+  }
+  async function fbSaveCobro(pid) {
+    const g = x => document.getElementById(x);
+    const concepto = (g('fbc-concepto')?.value || '').trim();
+    const monto = parseFloat(g('fbc-monto')?.value || '');
+    const fecha = g('fbc-fecha')?.value || '';
+    const yaCobrado = !!g('fbc-cobrado')?.checked;
+    if (!concepto) { showBanner('Escribe el concepto del cobro.', 'error'); return; }
+    if (!(monto > 0)) { showBanner('Escribe el monto.', 'error'); return; }
+    try {
+      const res = await apiFetch(`${API}/mgmt/tasks`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ titulo: concepto, project_id: pid, monto, estado: yaCobrado ? 'completado' : 'pendiente', deadline: fecha || null, responsable: _fbMyName() }) });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Error');
+      const t = await res.json();
+      _fbTasks.push(t);
+      if (yaCobrado) await _fbPatch(t.id, { cobrado: true, cobrado_fecha: fecha || undefined });
+      _fbInvalidate();
+      document.getElementById('fb-cobro-modal')?.remove();
+      _renderFacturacion();
+      showBanner('✓ Cobro registrado', 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  // Entrada desde Proyectos → "Ver en Facturación"
+  function openFacturacion(pid) {
+    try { document.querySelector('[data-tab=mgmt-finance]')?.click(); } catch (_) {}
+    _fbProject = pid ? String(pid) : '';
+    _fbLoaded = false;
+    setTab('facturacion');
   }
 
   // ── Conciliación ───────────────────────────────────────────────────
@@ -3952,7 +4232,9 @@ const FinanceModule = (() => {
     cnOpenCobroModal, cnCobroOnCanal, cnCobroOnMoneda, cnCobroRecalc, closeCobroModal, cnSaveCobro,
     setDsPeriod, applyDsRange, registrarPagoSocio,
     setPiFilter, openPagoModal, _piOnMember, closePagoModal, savePago, deletePago,
-    setGxPeriod, applyGxRange, openMovModal, closeMovModal, saveMov, gxSetEstado, gxDelete, gxMovUsd, gxMovWarn };
+    setGxPeriod, applyGxRange, openMovModal, closeMovModal, saveMov, gxSetEstado, gxDelete, gxMovUsd, gxMovWarn,
+    fbSetMember, fbSetPeriod, fbSetProject, fbToggleMore, fbMonto, fbCobrado, fbCobradoFecha, fbEnCuenta, fbEnCuentaFecha,
+    fbOpenCobro, fbSaveCobro, openFacturacion };
 })();
 
 // =================================================================
@@ -10439,6 +10721,15 @@ const ProjectsModule = (() => {
       items += `<button class="d3-status-opt" onclick="ProjectsModule._onTaskMenuAddSub(${taskId})">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           Crear subtarea
+        </button>
+        <button class="d3-status-opt" onclick="ProjectsModule.openConvertToSub(event,${taskId})">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 10 4 15 9 20"/><path d="M20 4v7a4 4 0 0 1-4 4H4"/></svg>
+          Convertir en subtarea de…
+        </button>`;
+    } else {
+      items += `<button class="d3-status-opt" onclick="ProjectsModule.convertToMain(${taskId})">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 14 20 9 15 4"/><path d="M4 20v-7a4 4 0 0 1 4-4h12"/></svg>
+          Convertir en tarea principal
         </button>`;
     }
     items += `<button class="d3-status-opt d3-status-opt--danger" onclick="ProjectsModule._onTaskMenuDelete(${taskId})">
@@ -10467,6 +10758,62 @@ const ProjectsModule = (() => {
       window.addEventListener('scroll', closeOnScrollOrResize, true);
       window.addEventListener('resize', closeOnScrollOrResize);
     }, 0);
+  }
+
+  // ── Convertir tarea ↔ subtarea (mover tareas sueltas dentro de la semanal, etc.) ──
+  // PUT con el cuerpo COMPLETO de la tarea (el PUT full-row borra los campos omitidos).
+  async function _putTaskSafe(t, over) {
+    const body = {
+      titulo: t.titulo, project_id: t.project_id, descripcion: t.descripcion || '',
+      estado: t.estado || 'pendiente', prioridad: t.prioridad || 'media',
+      responsable: t.responsable || '',
+      responsables: (t.responsables && t.responsables.length) ? t.responsables : (t.responsable ? [t.responsable] : []),
+      deadline: t.deadline ? String(t.deadline).split('T')[0] : null,
+      fecha_inicio: t.fecha_inicio ? String(t.fecha_inicio).split('T')[0] : null,
+      notas: t.notas || '', monto: t.monto != null ? t.monto : null, cobrado: !!t.cobrado,
+      parent_task_id: t.parent_task_id || null, ...over,
+    };
+    const res = await apiFetch(`${API}/mgmt/tasks/${t.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Error');
+    return await res.json();
+  }
+  function openConvertToSub(e, taskId) {
+    if (e && e.stopPropagation) e.stopPropagation();
+    const t = _findTaskById(taskId); if (!t) return;
+    const all = _taskCache[t.project_id] || [];
+    if (all.some(k => k.parent_task_id === taskId)) { showBanner('Esta tarea tiene subtareas — muévelas o complétalas primero.', 'error'); return; }
+    const mains = all.filter(x => !x.parent_task_id && x.id !== taskId);
+    if (!mains.length) { showBanner('No hay otra tarea principal en este proyecto.', 'error'); return; }
+    const menu = document.createElement('div');
+    menu.className = 'd3-status-menu';
+    menu.innerHTML = `<div style="padding:7px 12px 4px;font-size:.68rem;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:#98A2AE">Convertir en subtarea de…</div>`
+      + mains.map(m => `<button class="d3-status-opt" onclick="ProjectsModule.convertToSub(${taskId},${m.id})">${esc(m.titulo)}</button>`).join('');
+    const x = Math.max(8, Math.min((e && e.clientX) || 200, window.innerWidth - 280));
+    const y = ((e && e.clientY) || 200) + 4;
+    menu.style.cssText = `position:fixed;z-index:9999;top:${y}px;left:${x}px;max-height:300px;overflow:auto;min-width:220px`;
+    document.body.appendChild(menu);
+    setTimeout(() => document.addEventListener('click', function onDoc(ev) {
+      if (!menu.contains(ev.target)) { menu.remove(); document.removeEventListener('click', onDoc); }
+    }), 0);
+  }
+  async function convertToSub(taskId, parentId) {
+    document.querySelectorAll('.d3-status-menu').forEach(m => m.remove());
+    const t = _findTaskById(taskId); if (!t) return;
+    try {
+      await _putTaskSafe(t, { parent_task_id: parentId });
+      t.parent_task_id = parentId;
+      showBanner('✓ Convertida en subtarea', 'success');
+      refreshCard(t.project_id);
+    } catch (e2) { showBanner('Error: ' + e2.message, 'error'); }
+  }
+  async function convertToMain(taskId) {
+    const t = _findTaskById(taskId); if (!t) return;
+    try {
+      await _putTaskSafe(t, { parent_task_id: null });
+      t.parent_task_id = null;
+      showBanner('✓ Ahora es tarea principal', 'success');
+      refreshCard(t.project_id);
+    } catch (e2) { showBanner('Error: ' + e2.message, 'error'); }
   }
 
   function _onTaskMenuEdit(taskId) { if (_taskMenuClose) _taskMenuClose(); startEditTask(taskId); }
@@ -10692,6 +11039,7 @@ const ProjectsModule = (() => {
     const pendiente = Math.max(total - cobrado, 0);
     const asignado  = mainTasks.reduce((s, t) => s + (+t.monto || 0), 0);
 
+    const _finD = ts => ts ? new Date(String(ts).split('T')[0] + 'T00:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }) : '';
     const taskRows = mainTasks.map(t => {
       const mv = t.monto != null ? t.monto : '';
       return `<div class="pjfin__task-row">
@@ -10702,6 +11050,8 @@ const ProjectsModule = (() => {
             onblur="ProjectsModule.updateTaskMonto(${t.id},this.value,${p.id})"
             onkeydown="if(event.key==='Enter')this.blur();if(event.key==='Escape'){this.value='${mv}';this.blur();}"/>
         </div>
+        ${t.cobrado && t.cobrado_at ? `<span class="pjfin__fecha" title="Fecha de cobro — edítala en Finanzas → Facturación">${_finD(t.cobrado_at)}</span>` : ''}
+        ${t.en_cuenta ? `<span class="pjfin__acc" title="Ya transferido a la cuenta personal${t.en_cuenta_at ? ' · ' + _finD(t.en_cuenta_at) : ''}">✓ en cuenta</span>` : ''}
         <button class="pjfin__cobrado-btn${t.cobrado?' pjfin__cobrado-btn--on':''}"
           onclick="ProjectsModule.toggleTaskCobrado(${t.id},${!t.cobrado},${p.id})">
           ${t.cobrado ? 'Cobrado' : 'Pendiente'}
@@ -10735,10 +11085,11 @@ const ProjectsModule = (() => {
     ${mainTasks.length
       ? `<div class="pjfin__section-hdr">
            <span class="pjfin__section-title">TAREAS PRINCIPALES</span>
-           ${distributeBtn}
+           <span style="display:inline-flex;gap:8px;align-items:center">${distributeBtn}
+           <button type="button" class="pjfin__gofact" onclick="event.stopPropagation();FinanceModule.openFacturacion(${p.id})" title="Fechas de cobro, en-mi-cuenta y cobros semanales se editan allá">Ver en Facturación →</button></span>
          </div>
          <div class="pjfin__tasks">${taskRows}</div>`
-      : `<div class="pjfin__empty-tasks">Agrega tareas principales para distribuir el valor del proyecto.</div>`}`;
+      : `<div class="pjfin__empty-tasks">Agrega tareas principales para distribuir el valor del proyecto. <button type="button" class="pjfin__gofact" onclick="event.stopPropagation();FinanceModule.openFacturacion(${p.id})">Ver en Facturación →</button></div>`}`;
   }
 
   /* ── MORE INFO tab ──────────────────────────── */
@@ -11420,6 +11771,7 @@ const ProjectsModule = (() => {
       }
 
       if ($('proj-comision')) $('proj-comision').value = p.comision ?? '';
+      await _renderRespCobro(p);
       await _fetchAndPopulateClients(p.client_id);
     } else {
       title.textContent   = 'Nuevo proyecto';
@@ -11437,12 +11789,75 @@ const ProjectsModule = (() => {
       $('proj-valor-total').value = '';
       $('proj-moneda').value      = 'USD';
       if ($('proj-comision')) $('proj-comision').value = '';
+      await _renderRespCobro(null);
       await _fetchAndPopulateClients(null);
     }
 
     $('projects-drawer').classList.add('open');
     $('projects-drawer-overlay').classList.add('open');
     setTimeout(() => $('proj-nombre')?.focus(), 150);
+  }
+
+  // ── Responsables + reparto + cobro semanal (drawer) ──────────────
+  async function _renderRespCobro(p) {
+    const list = $('proj-resp-list'); if (!list) return;
+    await _ensureTeamLoaded();
+    const sel = new Set(((p && ((p.responsables && p.responsables.length) ? p.responsables : (p.responsable ? [p.responsable] : []))) || []).map(String));
+    const names = (_teamCache || []).map(m => m.nombre).filter(Boolean);
+    sel.forEach(n => { if (!names.includes(n)) names.push(n); });   // por si un responsable ya no está en el equipo
+    list.innerHTML = names.map(n => `<label class="proj-resp-chip${sel.has(n) ? ' on' : ''}">
+      <input type="checkbox" value="${esc(n)}"${sel.has(n) ? ' checked' : ''} onchange="ProjectsModule.onRespChange(this)">${esc(n)}</label>`).join('')
+      || '<span class="muted" style="font-size:.8rem">Agrega miembros en Equipo para poder asignarlos.</span>';
+    const rep = (p && Array.isArray(p.reparto)) ? p.reparto : [];
+    $('proj-reparto-on').checked = rep.length > 0;
+    _renderRepartoRows(rep);
+    $('proj-reparto-list').style.display = rep.length ? '' : 'none';
+    $('proj-cobro-semanal').checked = !!(p && p.cobro_semanal);
+    $('proj-precio-semanal-wrap').style.display = (p && p.cobro_semanal) ? '' : 'none';
+    $('proj-precio-semanal').value = (p && p.precio_semanal != null) ? p.precio_semanal : '';
+  }
+  function _drawerRespSel() {
+    return [...document.querySelectorAll('#proj-resp-list input:checked')].map(i => i.value);
+  }
+  function _renderRepartoRows(rep) {
+    const wrap = $('proj-reparto-list'); if (!wrap) return;
+    const sel = _drawerRespSel();
+    if (!sel.length) { wrap.innerHTML = '<span class="muted" style="font-size:.78rem">Marca primero a los responsables del proyecto.</span>'; return; }
+    const pctOf = n => { const r = (rep || []).find(x => String(x.nombre) === n); return r ? +r.pct : ''; };
+    wrap.innerHTML = sel.map(n => `<div class="proj-reparto-row"><span>${esc(n)}</span>
+        <input type="number" class="form-input" data-rep-nombre="${esc(n)}" min="0" max="100" step="1" value="${pctOf(n)}" placeholder="%" oninput="ProjectsModule.repartoHint()"><b>%</b></div>`).join('')
+      + `<button type="button" class="btn btn--ghost btn--xs" onclick="ProjectsModule.repartoIgual()">Partes iguales</button>
+         <span class="muted" id="proj-reparto-hint" style="font-size:.75rem"></span>`;
+    _repartoHint();
+  }
+  function _drawerReparto() {
+    return [...document.querySelectorAll('#proj-reparto-list input[data-rep-nombre]')]
+      .map(i => ({ nombre: i.dataset.repNombre, pct: +i.value || 0 })).filter(r => r.pct > 0);
+  }
+  function _repartoHint() {
+    const h = $('proj-reparto-hint'); if (!h) return;
+    const tot = [...document.querySelectorAll('#proj-reparto-list input[data-rep-nombre]')].reduce((s, i) => s + (+i.value || 0), 0);
+    h.textContent = tot ? `Suma: ${tot}%${Math.round(tot) !== 100 ? ' ⚠ debería sumar 100%' : ' ✓'}` : '';
+    h.style.color = tot && Math.round(tot) !== 100 ? '#B45309' : '';
+  }
+  function onRespChange(el) {
+    if (el && el.closest('.proj-resp-chip')) el.closest('.proj-resp-chip').classList.toggle('on', el.checked);
+    if ($('proj-reparto-on').checked) _renderRepartoRows(_drawerReparto());
+  }
+  function onRepartoToggle() {
+    const on = $('proj-reparto-on').checked;
+    $('proj-reparto-list').style.display = on ? '' : 'none';
+    if (on) _renderRepartoRows([]);
+  }
+  function repartoIgual() {
+    const inputs = [...document.querySelectorAll('#proj-reparto-list input[data-rep-nombre]')];
+    if (!inputs.length) return;
+    const eq = Math.floor(100 / inputs.length);
+    inputs.forEach((i, ix) => { i.value = ix === 0 ? 100 - eq * (inputs.length - 1) : eq; });
+    _repartoHint();
+  }
+  function onCobroSemanalToggle() {
+    $('proj-precio-semanal-wrap').style.display = $('proj-cobro-semanal').checked ? '' : 'none';
   }
 
   function closeDrawer() {
@@ -11473,6 +11888,7 @@ const ProjectsModule = (() => {
       moneda          = $('proj-moneda-semanal').value || 'USD';
     }
 
+    const respSel = _drawerRespSel();
     const data = {
       nombre:          $('proj-nombre').value.trim(),
       client_id:       parseInt($('projects-client-select').value) || null,
@@ -11480,6 +11896,8 @@ const ProjectsModule = (() => {
       estado:          $('proj-estado').value,
       prioridad:       $('proj-prioridad').value,
       responsable_id:  null,
+      responsables:    respSel,
+      responsable:     respSel[0] || '',
       fecha_inicio:    $('proj-fecha-inicio').value || null,
       fecha_fin:       $('proj-fecha-fin').value    || null,
       tipo_proyecto:   tipo,
@@ -11501,6 +11919,20 @@ const ProjectsModule = (() => {
         { method: _editId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }
       );
       if (!res.ok) { const err = await res.json(); throw new Error(err.error || `HTTP ${res.status}`); }
+      const saved = await res.json().catch(() => null);
+      // Config de cobro (endpoint dedicado — no viaja en el PUT full-row)
+      const pid = _editId || (saved && saved.id);
+      if (pid) {
+        const cobroSem = $('proj-cobro-semanal')?.checked || false;
+        const precioSem = $('proj-precio-semanal')?.value;
+        const reparto = ($('proj-reparto-on')?.checked ? _drawerReparto() : []);
+        try {
+          await apiFetch(`${API}/mgmt/projects/${pid}/billing-cfg`, {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cobro_semanal: cobroSem, precio_semanal: precioSem === '' ? null : parseFloat(precioSem), reparto }),
+          });
+        } catch (e) { console.error('[projects] billing-cfg:', e); }
+      }
       closeDrawer();
       await load();
     } catch (err) {
@@ -11546,7 +11978,9 @@ const ProjectsModule = (() => {
     }
   }
 
-  return { load, filter, setFilter, setMemberFilter, render, onTipoChange, openDrawer, closeDrawer, save, confirmDelete, setView, switchTab, toggleTaskCobrado, updateTaskMonto, updateDescripcion, addLink, removeLink, _setLinkField, saveLinks, refreshCard, closeQuickClientModal, saveQuickClient, toggleTaskExpand, toggleProjectExpand, openTaskMenu, _onTaskMenuEdit, _onTaskMenuAddSub, _onTaskMenuDelete, openQuickEditPopover, tqpNav, tqpPick, tqpToggleRange, tqpClear, openInlineDate, startInlineSubtask, cancelInlineSubtask, saveInlineSubtask, startEditTask, cancelEditTask, saveEditTask, deleteTaskInline, toggleSubrowExpand, distributeTaskMontos, openLinkForm, cancelLinkForm, saveLinkForm, startLinkEdit, cancelLinkEdit, saveLinkEdit, enterInfoEdit, cancelInfoEdit, saveInfoEdit, toggleInfoExpand };
+  return { load, filter, setFilter, setMemberFilter, render, onTipoChange, openDrawer, closeDrawer, save, confirmDelete, setView, switchTab, toggleTaskCobrado, updateTaskMonto, updateDescripcion, addLink, removeLink, _setLinkField, saveLinks, refreshCard, closeQuickClientModal, saveQuickClient, toggleTaskExpand, toggleProjectExpand, openTaskMenu, _onTaskMenuEdit, _onTaskMenuAddSub, _onTaskMenuDelete, openQuickEditPopover, tqpNav, tqpPick, tqpToggleRange, tqpClear, openInlineDate, startInlineSubtask, cancelInlineSubtask, saveInlineSubtask, startEditTask, cancelEditTask, saveEditTask, deleteTaskInline, toggleSubrowExpand, distributeTaskMontos, openLinkForm, cancelLinkForm, saveLinkForm, startLinkEdit, cancelLinkEdit, saveLinkEdit, enterInfoEdit, cancelInfoEdit, saveInfoEdit, toggleInfoExpand,
+    onRespChange, onRepartoToggle, repartoIgual, repartoHint: _repartoHint, onCobroSemanalToggle,
+    openConvertToSub, convertToSub, convertToMain };
 })();
 
 // =================================================================

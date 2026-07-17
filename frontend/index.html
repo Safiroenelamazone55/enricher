@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260716t"/>
+  <link rel="stylesheet" href="style.css?v=20260717a"/>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -752,6 +752,7 @@
         </div>
         <div class="fin-tabs" id="fin-tabs">
           <button class="fin-tab active" data-fintab="resumen"        onclick="FinanceModule.setTab('resumen')">Resumen</button>
+          <button class="fin-tab"        data-fintab="facturacion"    onclick="FinanceModule.setTab('facturacion')">Facturación</button>
           <button class="fin-tab"        data-fintab="conciliacion"   onclick="FinanceModule.setTab('conciliacion')">Conciliación</button>
           <button class="fin-tab"        data-fintab="cobros"         onclick="FinanceModule.setTab('cobros')">Cobros</button>
           <button class="fin-tab"        data-fintab="pagos-internos" onclick="FinanceModule.setTab('pagos-internos')">Pagos internos</button>
@@ -838,6 +839,13 @@
         <div class="fin-panel active" id="fin-panel-resumen">
           <div id="fin-resumen-body">
             <div class="clients-loading"><div class="clients-spin"></div><span>Cargando resumen…</span></div>
+          </div>
+        </div>
+
+        <!-- ── FACTURACIÓN (cobros por tarea, por miembro: monto · cobrado · en mi cuenta) ── -->
+        <div class="fin-panel" id="fin-panel-facturacion">
+          <div id="fin-fact-body">
+            <div class="clients-loading"><div class="clients-spin"></div><span>Cargando facturación…</span></div>
           </div>
         </div>
 
@@ -1984,6 +1992,23 @@
       <input class="form-input form-input--narrow" type="number" id="proj-comision" min="0" max="100" step="0.5" placeholder="Ej: 15">
     </div>
 
+    <!-- Responsables + reparto (quién cobra este proyecto) -->
+    <div class="form-row">
+      <label class="form-label">Responsables — quién cobra este proyecto</label>
+      <div id="proj-resp-list" class="proj-resp-list"></div>
+      <label class="proj-share-toggle"><input type="checkbox" id="proj-reparto-on" onchange="ProjectsModule.onRepartoToggle()"> Proyecto compartido — reparto exacto (ej. 30–70)</label>
+      <div id="proj-reparto-list" class="proj-reparto-list" style="display:none"></div>
+    </div>
+
+    <!-- Cobro semanal -->
+    <div class="form-row">
+      <label class="proj-share-toggle"><input type="checkbox" id="proj-cobro-semanal" onchange="ProjectsModule.onCobroSemanalToggle()"> Cobro semanal — crear la tarea de cobro automáticamente cada semana</label>
+      <div id="proj-precio-semanal-wrap" style="display:none;margin-top:8px;max-width:50%">
+        <label class="form-label">Precio por semana (moneda del proyecto)</label>
+        <input class="form-input form-input--narrow" type="number" id="proj-precio-semanal" min="0" step="0.01" placeholder="Ej: 200">
+      </div>
+    </div>
+
     <!-- Fechas -->
     <div class="form-row form-row--2col">
       <div>
@@ -2487,7 +2512,7 @@
 })();
 </script>
 
-<script src="app.js?v=20260716t"></script>
+<script src="app.js?v=20260717a"></script>
 <div id="task-quick-edit" style="display:none;position:fixed;z-index:9999"></div>
 </body>
 </html>

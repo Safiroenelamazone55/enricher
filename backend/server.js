@@ -1702,13 +1702,17 @@ app.put('/api/mgmt/projects/:id', requireAuth, async (req, res) => {
           comision } = req.body;
   if (!nombre?.trim()) return res.status(400).json({ error: 'El nombre es requerido' });
   if (!client_id)      return res.status(400).json({ error: 'El cliente es requerido' });
+  // Si el caller NO envía responsable(s), se conservan los actuales (no se borran por omisión).
+  const touchResp = responsables !== undefined || responsable !== undefined;
   const respArr = Array.isArray(responsables) ? responsables : (responsable ? [responsable] : []);
   const respFirst = respArr[0] || '';
   try {
     const { rows } = await pool.query(
       `UPDATE projects
           SET client_id=$3, nombre=$4, descripcion=$5, estado=$6,
-              responsable=$7, responsable_id=$8, responsables=$9,
+              responsable=CASE WHEN $21 THEN $7 ELSE responsable END,
+              responsable_id=$8,
+              responsables=CASE WHEN $21 THEN $9::text[] ELSE responsables END,
               fecha_inicio=$10, fecha_fin=$11,
               valor_total=$12, prioridad=$13, tipo_proyecto=$14, moneda=$15,
               tarifa_hora=$16, horas_estimadas=$17, horas_semanales=$18, horario_semanal=$19,
@@ -1720,7 +1724,7 @@ app.put('/api/mgmt/projects/:id', requireAuth, async (req, res) => {
        fecha_inicio || null, fecha_fin || null, valor_total || null, prioridad || 'media',
        tipo_proyecto || 'fijo', moneda || 'USD',
        tarifa_hora || null, horas_estimadas || null, horas_semanales || null, horario_semanal || '',
-       comision || null]
+       comision || null, touchResp]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Proyecto no encontrado' });
     res.json(rows[0]);
@@ -2100,15 +2104,32 @@ app.patch('/api/mgmt/tasks/:id/responsable', requireAuth, async (req, res) => {
 });
 
 // ── PATCH /api/mgmt/tasks/:id/billing ────────────────────────────
+// Facturación por tarea. Independiente del tiempo registrado (Time Tracking) — editar aquí NUNCA toca time_entries.
+// cobrado_fecha / en_cuenta_fecha (YYYY-MM-DD) permiten retro-datar cobros ("esto lo cobré la semana pasada").
 app.patch('/api/mgmt/tasks/:id/billing', requireAuth, async (req, res) => {
-  const { monto, cobrado } = req.body;
+  const { monto, cobrado, cobrado_fecha, en_cuenta, en_cuenta_fecha } = req.body;
+  // Fecha "YYYY-MM-DD" → timestamp al mediodía UTC (evita corrimientos de día al agrupar en America/Bogota)
+  const _midday = (d) => (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)) ? d + 'T12:00:00Z' : null;
   try {
     const sets = [];
     const vals = [req.params.id, req.workspaceOwnerId];
     if (monto !== undefined) sets.push(`monto=$${vals.push(monto === null || monto === '' ? null : +monto)}`);
     if (cobrado !== undefined) {
       sets.push(`cobrado=$${vals.push(!!cobrado)}`);
-      sets.push(cobrado ? `cobrado_at=NOW()` : `cobrado_at=NULL`);
+      if (cobrado) sets.push(`cobrado_at=$${vals.push(_midday(cobrado_fecha) || new Date().toISOString())}`);
+      else { sets.push('cobrado_at=NULL'); sets.push('en_cuenta=FALSE'); sets.push('en_cuenta_at=NULL'); }
+    } else if (cobrado_fecha !== undefined) {
+      // corregir solo la fecha de un cobro ya marcado
+      const md = _midday(cobrado_fecha);
+      if (md) sets.push(`cobrado_at=$${vals.push(md)}`);
+    }
+    if (en_cuenta !== undefined) {
+      sets.push(`en_cuenta=$${vals.push(!!en_cuenta)}`);
+      if (en_cuenta) sets.push(`en_cuenta_at=$${vals.push(_midday(en_cuenta_fecha) || new Date().toISOString())}`);
+      else sets.push('en_cuenta_at=NULL');
+    } else if (en_cuenta_fecha !== undefined) {
+      const md = _midday(en_cuenta_fecha);
+      if (md) sets.push(`en_cuenta_at=$${vals.push(md)}`);
     }
     if (!sets.length) return res.json({ ok: true });
     sets.push('updated_at=NOW()');
@@ -2121,6 +2142,67 @@ app.patch('/api/mgmt/tasks/:id/billing', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('[tasks/billing] PATCH error:', err.message);
     res.status(500).json({ error: 'Error al actualizar facturación' });
+  }
+});
+
+// ── POST /api/mgmt/billing/ensure-weekly ──────────────────────────
+// Crea (idempotente, por billing_week) la tarea de cobro de la semana para cada
+// proyecto ACTIVO con cobro_semanal. La llama la vista de Facturación al cargar.
+app.post('/api/mgmt/billing/ensure-weekly', requireAuth, async (req, res) => {
+  const wid = req.workspaceOwnerId;
+  const ws = String((req.body || {}).week_start || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(ws)) return res.status(400).json({ error: 'week_start (YYYY-MM-DD, lunes) requerido' });
+  try {
+    const projs = (await pool.query(
+      `SELECT id, nombre, responsable, responsables, precio_semanal FROM projects
+       WHERE user_id=$1 AND cobro_semanal=TRUE AND estado='activo'`, [wid])).rows;
+    const mon = new Date(ws + 'T12:00:00Z');
+    const fri = new Date(mon); fri.setUTCDate(mon.getUTCDate() + 4);
+    const MES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    const titulo = `Semana ${mon.getUTCDate()}–${fri.getUTCDate()} ${MES[fri.getUTCMonth()]}`;
+    const friStr = fri.toISOString().slice(0, 10);
+    const created = [];
+    for (const p of projs) {
+      const ex = await pool.query(`SELECT id FROM tasks WHERE user_id=$1 AND project_id=$2 AND billing_week=$3 LIMIT 1`, [wid, p.id, ws]);
+      if (ex.rows.length) continue;
+      const respArr = (p.responsables && p.responsables.length) ? p.responsables : (p.responsable ? [p.responsable] : []);
+      const ins = await pool.query(
+        `INSERT INTO tasks (user_id, project_id, titulo, estado, prioridad, responsable, responsables, fecha_inicio, deadline, monto, billing_week)
+         VALUES ($1,$2,$3,'pendiente','media',$4,$5,$6,$7,$8,$9) RETURNING id, titulo, project_id`,
+        [wid, p.id, titulo, respArr[0] || '', respArr, ws, friStr, p.precio_semanal || null, ws]);
+      created.push(ins.rows[0]);
+    }
+    res.json({ ok: true, created, checked: projs.length });
+  } catch (err) {
+    console.error('[billing/ensure-weekly]', err.message);
+    res.status(500).json({ error: 'Error al crear las tareas semanales' });
+  }
+});
+
+// ── PATCH /api/mgmt/projects/:id/billing-cfg ──────────────────────
+// Config de cobro del proyecto (endpoint dedicado: el PUT full-row NO toca estos campos).
+// reparto: [{nombre, pct}] — proyecto compartido con % exacto (ej. 30-70); [] o null = 100% del responsable.
+app.patch('/api/mgmt/projects/:id/billing-cfg', requireAuth, async (req, res) => {
+  const b = req.body || {};
+  try {
+    const sets = [], vals = [req.params.id, req.workspaceOwnerId];
+    if (b.cobro_semanal !== undefined) sets.push(`cobro_semanal=$${vals.push(!!b.cobro_semanal)}`);
+    if (b.precio_semanal !== undefined) sets.push(`precio_semanal=$${vals.push(b.precio_semanal === null || b.precio_semanal === '' ? null : +b.precio_semanal)}`);
+    if (b.reparto !== undefined) {
+      const rep = Array.isArray(b.reparto)
+        ? b.reparto.map(r => ({ nombre: String(r.nombre || '').trim(), pct: Math.max(0, Math.min(100, +r.pct || 0)) })).filter(r => r.nombre)
+        : [];
+      sets.push(`reparto=$${vals.push(rep.length ? JSON.stringify(rep) : null)}`);
+    }
+    if (!sets.length) return res.json({ ok: true });
+    sets.push('updated_at=NOW()');
+    const { rows } = await pool.query(
+      `UPDATE projects SET ${sets.join(',')} WHERE id=$1 AND user_id=$2 RETURNING id, cobro_semanal, precio_semanal, reparto`, vals);
+    if (!rows[0]) return res.status(404).json({ error: 'Proyecto no encontrado' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[projects/billing-cfg]', err.message);
+    res.status(500).json({ error: 'Error al guardar la configuración de cobro' });
   }
 });
 
@@ -5399,9 +5481,16 @@ app.get('/api/analytics/summary', requireAuth, async (req, res) => {
     } else if (memberQ && memberQ !== 'all') {
       memberName = memberQ;
     }
-    const revWhere = memberName
-      ? ` AND (LOWER(p.responsable) = LOWER($4) OR EXISTS (SELECT 1 FROM unnest(p.responsables) r WHERE LOWER(r) = LOWER($4)))`
-      : '';
+    // Peso del miembro en el proyecto: si hay reparto ([{nombre,pct}]) manda el %, si no,
+    // 100% para el/los responsables. Proyecto compartido 30-70 → cada quien ve SU parte.
+    const pctExpr = `(CASE
+        WHEN jsonb_array_length(COALESCE(p.reparto, '[]'::jsonb)) > 0 THEN
+          COALESCE((SELECT (r->>'pct')::numeric FROM jsonb_array_elements(p.reparto) r WHERE LOWER(r->>'nombre') = LOWER($4) LIMIT 1), 0)
+        WHEN LOWER(COALESCE(p.responsable, '')) = LOWER($4)
+          OR EXISTS (SELECT 1 FROM unnest(COALESCE(p.responsables, '{}')) rr WHERE LOWER(rr) = LOWER($4)) THEN 100
+        ELSE 0 END) / 100.0`;
+    const revWhere = memberName ? ` AND ${pctExpr} > 0` : '';
+    const revSum   = memberName ? `SUM(t.monto * ${pctExpr})` : `SUM(t.monto)`;
     const revCurParams  = memberName ? [wid, start, end, memberName] : [wid, start, end];
     const revPrevParams = memberName ? [wid, prev_start, prev_end, memberName] : [wid, prev_start, prev_end];
 
@@ -5418,7 +5507,7 @@ app.get('/api/analytics/summary', requireAuth, async (req, res) => {
       pool.query(
         `SELECT DATE(t.cobrado_at AT TIME ZONE 'America/Bogota')::text AS day,
                 COALESCE(p.moneda, 'USD') AS moneda,
-                COALESCE(SUM(t.monto), 0) AS total
+                COALESCE(${revSum}, 0) AS total
          FROM tasks t
          LEFT JOIN projects p ON t.project_id = p.id
          WHERE t.user_id=$1 AND t.cobrado=true
@@ -5430,7 +5519,7 @@ app.get('/api/analytics/summary', requireAuth, async (req, res) => {
       hasPrev
         ? pool.query(
             `SELECT COALESCE(p.moneda, 'USD') AS moneda,
-                    COALESCE(SUM(t.monto), 0) AS total
+                    COALESCE(${revSum}, 0) AS total
              FROM tasks t
              LEFT JOIN projects p ON t.project_id = p.id
              WHERE t.user_id=$1 AND t.cobrado=true

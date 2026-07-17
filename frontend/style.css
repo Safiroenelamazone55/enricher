@@ -3605,6 +3605,61 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 .fin-rs-selects { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .fin-rs-selects .filter-select { min-width: 150px; }
 
+/* ── Drawer de proyecto: responsables + reparto + cobro semanal ── */
+.proj-resp-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
+.proj-resp-chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border, #E4E7DD); border-radius: 999px; padding: 5px 12px; font-size: .8rem; font-weight: 600; color: var(--text2, #45586A); cursor: pointer; background: #fff; transition: all .12s; }
+.proj-resp-chip input { accent-color: var(--brand, #00804C); margin: 0; }
+.proj-resp-chip.on { background: var(--brand-ll, #EAF5EE); border-color: var(--brand-l, #BFE0CC); color: var(--brand-d, #006B3F); }
+.proj-share-toggle { display: flex; align-items: center; gap: 8px; font-size: .82rem; color: var(--text, #0A2540); font-weight: 600; cursor: pointer; margin-top: 4px; }
+.proj-share-toggle input { accent-color: var(--brand, #00804C); }
+.proj-reparto-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; padding: 10px 12px; background: var(--bg, #F8F7F3); border: 1px solid var(--border, #EFECE6); border-radius: 10px; }
+.proj-reparto-row { display: flex; align-items: center; gap: 8px; font-size: .82rem; }
+.proj-reparto-row span { flex: 1; }
+.proj-reparto-row input { width: 76px; text-align: right; }
+.proj-reparto-row b { color: var(--muted); font-weight: 600; }
+.pjfin__gofact { background: none; border: none; color: var(--brand, #00804C); font: inherit; font-size: .76rem; font-weight: 700; cursor: pointer; padding: 2px 4px; }
+.pjfin__gofact:hover { text-decoration: underline; }
+.pjfin__fecha { font-size: .7rem; color: var(--muted); white-space: nowrap; }
+.pjfin__acc { font-size: .66rem; font-weight: 700; color: #0369A1; background: #E0F2FE; border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
+
+/* ── Finanzas · Facturación (cobros por tarea, por miembro) ─────── */
+.fb-proj { background: #fff; border: 1px solid var(--border, #EAE6DE); border-radius: 14px; padding: 14px 16px; margin-top: 14px; }
+.fb-proj__hd { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.fb-proj__t { font-size: .95rem; font-weight: 700; color: var(--text, #0A2540); }
+.fb-proj__c { font-weight: 500; color: var(--muted); margin-left: 6px; font-size: .82rem; }
+.fb-proj__chips { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.fb-chip { font-size: .68rem; font-weight: 700; border-radius: 999px; padding: 3px 9px; background: #F3F1EC; color: #57534E; white-space: nowrap; }
+.fb-chip--week { background: #EAF5EE; color: #006B3F; }
+.fb-chip--rep { background: #EEF0FE; color: #4F46E5; }
+.fb-chip--w { background: #FEF3C7; color: #92400E; }
+.fb-fixed { font-size: .76rem; color: var(--muted); margin-top: 6px; }
+.fb-fixed b { color: #B45309; font-weight: 700; }
+.fb-head, .fb-row { display: grid; grid-template-columns: minmax(0, 1.6fr) 108px 148px 198px 198px; gap: 10px; align-items: center; }
+.fb-head { margin-top: 10px; padding: 6px 8px; font-size: .62rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: #A8A29E; border-bottom: 1px solid var(--border, #EFECE6); }
+.fb-row { padding: 7px 8px; border-bottom: 1px solid #F4F2ED; border-radius: 8px; }
+.fb-row:hover { background: #FAFAF8; }
+.fb-row--cob { background: #F7FBF8; }
+.fb-row__t { font-size: .84rem; font-weight: 600; color: var(--text); cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fb-row__t:hover { color: var(--brand, #00804C); }
+.fb-wk { margin-left: 6px; color: #00804C; font-weight: 700; }
+.fb-row__d { font-size: .74rem; color: var(--muted); white-space: nowrap; }
+.fb-row__m { display: flex; align-items: center; gap: 6px; }
+.fb-cur { font-size: .68rem; font-weight: 700; color: #A8A29E; }
+.fb-row__m input { width: 92px; border: 1px solid transparent; background: transparent; border-radius: 7px; padding: 5px 7px; font: inherit; font-size: .84rem; font-weight: 700; color: var(--text); text-align: right; }
+.fb-row__m input:hover { border-color: var(--border, #E4E7DD); background: #fff; }
+.fb-row__m input:focus { border-color: var(--brand-l, #BFE0CC); background: #fff; outline: none; }
+.fb-row__c, .fb-row__e { display: flex; align-items: center; gap: 7px; }
+.fb-tog { border: 1px solid var(--border, #E4E7DD); background: #fff; color: #6B7280; font-size: .72rem; font-weight: 700; border-radius: 999px; padding: 4px 11px; cursor: pointer; white-space: nowrap; font-family: inherit; transition: all .12s; }
+.fb-tog:hover { border-color: var(--brand-l, #BFE0CC); color: var(--text, #0A2540); }
+.fb-tog.on { background: #E7F8EF; color: #15803D; border-color: #BBE7CC; }
+.fb-tog--acc.on { background: #E0F2FE; color: #0369A1; border-color: #BAE2F8; }
+.fb-date { border: 1px solid transparent; background: transparent; font: inherit; font-size: .72rem; color: var(--muted); border-radius: 7px; padding: 3px 5px; cursor: pointer; }
+.fb-date:hover, .fb-date:focus { border-color: var(--border, #E4E7DD); background: #fff; color: var(--text); outline: none; }
+.fb-muted { color: #C6C2D0; font-size: .8rem; }
+.fb-empty { padding: 14px 8px; font-size: .8rem; color: var(--muted); }
+.fb-more { display: block; width: 100%; text-align: center; background: none; border: none; color: var(--brand, #00804C); font: inherit; font-size: .78rem; font-weight: 700; padding: 9px; cursor: pointer; }
+@media (max-width: 860px) { .fb-head { display: none; } .fb-row { grid-template-columns: 1fr; gap: 6px; } }
+
 .fin-rs-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

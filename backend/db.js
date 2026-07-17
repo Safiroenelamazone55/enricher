@@ -354,6 +354,16 @@ async function initDb() {
     await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS cobrado BOOLEAN NOT NULL DEFAULT FALSE;`);
     await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS cobrado_at TIMESTAMPTZ;`);
     await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS estado_financiero TEXT NOT NULL DEFAULT 'sin_revisar';`);
+    // Facturación por miembro: cobrado (cliente pagó) ≠ en_cuenta (ya transferido a la cuenta personal).
+    await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS en_cuenta BOOLEAN NOT NULL DEFAULT FALSE;`);
+    await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS en_cuenta_at TIMESTAMPTZ;`);
+    // Tarea de cobro semanal auto-creada: lunes de su semana (idempotencia de ensure-weekly).
+    await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS billing_week DATE;`);
+    // Proyectos con cobro semanal (tarea de cobro auto por semana) + reparto por proyecto
+    // reparto JSONB: [{"nombre":"Jenny","pct":30},{"nombre":"José","pct":70}] · null/[] = 100% del responsable.
+    await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS cobro_semanal BOOLEAN NOT NULL DEFAULT FALSE;`);
+    await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS precio_semanal NUMERIC(12,2);`);
+    await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS reparto JSONB;`);
     // Rango de fechas: las tareas PADRE usan [fecha_inicio, deadline]; las subtareas usan deadline (fecha fija).
     // deadline = fin del rango; fecha_inicio = inicio (solo tareas padre). Null = comportamiento de fecha única (legacy).
     await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS fecha_inicio DATE;`);
