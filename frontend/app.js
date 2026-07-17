@@ -13733,6 +13733,31 @@ ${foot}
     return await res.json();
   }
   // Barra de tarea: menú "⚠ Falta dato" con los 3 motivos.
+  // Menú "Marcar resultado" — agrupa disposiciones + problema para una barra más limpia.
+  function seqOpenMark(ev, canal) {
+    if (ev && ev.stopPropagation) ev.stopPropagation();
+    document.querySelectorAll('.cp-mark-menu, .lm-di-menu').forEach(m => m.remove());
+    const close = "document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove())";
+    const item = (label, onclick, dot) => `<button class="cp-mark-menu__b" onclick="${close};${onclick}">${dot ? `<span class="cp-mark-dot" style="background:${dot}"></span>` : ''}${label}</button>`;
+    let html = `<div class="cp-mark-menu__h">Resultado del contacto</div>`;
+    html += _DISPOS.map(d => item(esc(d[1]), `LeadManagerModule.seqDoDisposition('${d[0]}')`, d[2])).join('');
+    html += `<div class="cp-mark-menu__sep"></div>`;
+    if (canal === 'linkedin') html += item('🚫 LinkedIn no válido', 'LeadManagerModule.seqDoNoLinkedIn()');
+    if (canal === 'email') html += item('↩ Email rebotó', 'LeadManagerModule.seqDoBounced()');
+    html += item('✉ Falta email', "LeadManagerModule.seqDoDataIssuePick('falta_email')");
+    html += item('🔗 Falta LinkedIn', "LeadManagerModule.seqDoDataIssuePick('falta_linkedin')");
+    html += item('⚠ Dato incorrecto', "LeadManagerModule.seqDoDataIssuePick('dato_incorrecto')");
+    const menu = document.createElement('div');
+    menu.className = 'cp-mark-menu';
+    menu.innerHTML = html;
+    document.body.appendChild(menu);
+    const t = (ev && (ev.currentTarget || ev.target)) || document.body;
+    const r = t.getBoundingClientRect();
+    menu.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 250))}px`;
+    menu.style.top = `${r.top - 6}px`;
+    menu.style.transform = 'translateY(-100%)';
+    setTimeout(() => document.addEventListener('click', function onDoc(e) { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', onDoc); } }), 0);
+  }
   function seqDoDataIssue(ev) {
     if (ev && ev.stopPropagation) ev.stopPropagation();
     document.querySelectorAll('.lm-di-menu').forEach(m => m.remove());
@@ -14245,7 +14270,7 @@ ${foot}
     return /^re\s*:/i.test(base) ? base : 'Re: ' + base;
   }
   function _waDigits(c) {
-    const raw = String(c.movil || c.telefono || '').replace(/\D/g, '');
+    const raw = String(c.whatsapp || c.movil || c.celular || c.telefono || c.phone || '').replace(/\D/g, '');
     return raw.length >= 7 ? raw : '';
   }
   function _gmailUrl(to, subject, body, cc) {
@@ -14326,18 +14351,19 @@ ${foot}
     // Buzón/CC del cliente outbound (informativos, para el envío manual desde Zoho/etc.)
     const obc = _clients.find(x => x.id === (seq && seq.outbound_client_id)) || {};
     const ccMail = (obc.cc_email || '').trim(), fromMail = (obc.from_email || '').trim();
-    // Acciones de 1 click por canal — el canal del paso va primero (primario)
+    // Canales para contactar — acción principal (canal del paso) + otros como íconos sutiles.
     const wa = _waDigits(c);
-    const A = [];
-    if (st.canal === 'email' && c.email) A.push(`<a class="btn btn--primary btn--sm" href="${esc(_gmailUrl(c.email, subject, rendered, ccMail))}" target="_blank" rel="noopener" title="Abre Gmail con destinatario${ccMail ? ', CC' : ''}, asunto y mensaje ya puestos">${NI('mail')} Abrir Gmail listo</a>`);
-    if (st.canal === 'whatsapp' && wa) A.push(`<a class="btn btn--primary btn--sm" href="https://wa.me/${wa}?text=${encodeURIComponent(rendered)}" target="_blank" rel="noopener" title="Abre WhatsApp con el mensaje ya puesto">${NI('whatsapp')} Abrir WhatsApp listo</a>`);
-    if ((st.canal === 'linkedin' || st.canal === 'task' || st.canal === 'call') && c.linkedin) A.push(`<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.seqOpenLinkedIn(${cid})" title="Abre LinkedIn en una ventana a la derecha — pega el mensaje copiado">${NI('linkedin')} Abrir LinkedIn</button>`);
-    // Secundarios (los otros canales disponibles, por si quieres cambiar de canal al vuelo)
-    if (st.canal !== 'email' && c.email) A.push(`<a class="btn btn--ghost btn--sm" href="${esc(_gmailUrl(c.email, subject || _emailSubjectFor(seqId, st, src, draft), rendered))}" target="_blank" rel="noopener">${NI('mail')} Gmail</a>`);
-    if (st.canal !== 'linkedin' && st.canal !== 'task' && st.canal !== 'call' && c.linkedin) A.push(`<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqOpenLinkedIn(${cid})">${NI('linkedin')} LinkedIn</button>`);
-    if (st.canal !== 'whatsapp' && wa) A.push(`<a class="btn btn--ghost btn--sm" href="https://wa.me/${wa}?text=${encodeURIComponent(rendered)}" target="_blank" rel="noopener">${NI('whatsapp')} WhatsApp</a>`);
-    if (st.canal === 'call' && (c.telefono || c.movil)) A.unshift(`<a class="btn btn--primary btn--sm" href="tel:${esc((c.telefono || c.movil).replace(/\s/g, ''))}">${NI('phone')} Llamar ${esc(c.telefono || c.movil)}</a>`);
-    if (!A.length) A.push(`<span class="seqdo-nolink">Sin datos de contacto para este canal — complétalos en la ficha</span>`);
+    const _tel = String(c.movil || c.celular || c.telefono || c.phone || '').trim();
+    let chanPrimary = '';
+    if (st.canal === 'email' && c.email) chanPrimary = `<a class="cp-ch cp-ch--primary" href="${esc(_gmailUrl(c.email, subject, rendered, ccMail))}" target="_blank" rel="noopener" title="Abre Gmail con destinatario${ccMail ? ', CC' : ''}, asunto y mensaje ya puestos">${NI('mail')}<span>Abrir Gmail</span></a>`;
+    else if (st.canal === 'whatsapp' && wa) chanPrimary = `<a class="cp-ch cp-ch--primary" href="https://wa.me/${wa}?text=${encodeURIComponent(rendered)}" target="_blank" rel="noopener" title="Abre WhatsApp con el mensaje ya puesto">${NI('whatsapp')}<span>WhatsApp</span></a>`;
+    else if (st.canal === 'call' && _tel) chanPrimary = `<a class="cp-ch cp-ch--primary" href="tel:${esc(_tel.replace(/\s/g, ''))}" title="Llamar ${esc(_tel)}">${NI('phone')}<span>Llamar</span></a>`;
+    const chanIcons = [];
+    if (wa && st.canal !== 'whatsapp') chanIcons.push(`<a class="cp-ch cp-ch--ic" href="https://wa.me/${wa}?text=${encodeURIComponent(rendered)}" target="_blank" rel="noopener" title="WhatsApp — ${esc(_tel)}">${NI('whatsapp')}</a>`);
+    if (_tel && st.canal !== 'call') chanIcons.push(`<a class="cp-ch cp-ch--ic" href="tel:${esc(_tel.replace(/\s/g, ''))}" title="Llamar — ${esc(_tel)}">${NI('phone')}</a>`);
+    if (c.linkedin && st.canal !== 'linkedin') chanIcons.push(`<button class="cp-ch cp-ch--ic" onclick="LeadManagerModule.seqOpenLinkedIn(${cid})" title="Abrir el perfil de LinkedIn al costado">${NI('linkedin')}</button>`);
+    if (c.email && st.canal !== 'email' && st.canal !== 'linkedin') chanIcons.push(`<a class="cp-ch cp-ch--ic" href="${esc(_gmailUrl(c.email, subject || _emailSubjectFor(seqId, st, src, draft), rendered))}" target="_blank" rel="noopener" title="Gmail — ${esc(c.email)}">${NI('mail')}</a>`);
+    const chanHtml = chanPrimary + (chanIcons.length ? `<span class="cp-ch-grp">${chanIcons.join('')}</span>` : '');
 
     _ensureProspectClock();
     return `<div class="cp-taskbar cp-taskbar--slim">
@@ -14363,12 +14389,9 @@ ${foot}
         ? `<div class="cp-taskbar__tpl"><div class="seqdo-tpl-hd"><span>Mensaje${vtag}</span><span style="display:flex;gap:6px"><button class="seqdo-copy seqdo-copy--xs" onclick="LeadManagerModule.openAiDrafts(${cid},${seqId})">${NI('sparkles')} IA</button><button class="seqdo-copy seqdo-copy--xs" onclick="LeadManagerModule.seqDoCopy()">${NI('copy')} Copiar</button></span></div><div class="seqdo-tpl seqdo-tpl--slim">${disp}</div></div>`
         : `<div class="cp-taskbar__notpl">Este paso no tiene mensaje. <a href="#" onclick="LeadManagerModule.seqDoEditStep(${st.id});return false;">Añádelo</a> con variables — o <a href="#" onclick="LeadManagerModule.openAiDrafts(${cid},${seqId});return false;">✨ escríbelo con IA</a>.</div>`}
       <div class="cp-taskbar__foot">
-        ${st.canal === 'linkedin' ? '' : `${A.join('')}<span class="cp-taskbar__div"></span>`}
-        ${_DISPOS.map(d => `<button class="cp-dispo-b cp-dispo-b--xs" title="Marcar disposición: ${d[1]}" onclick="LeadManagerModule.seqDoDisposition('${d[0]}')">${d[1]}</button>`).join('')}
-        ${st.canal === 'linkedin' ? `<button class="cp-dispo-b cp-dispo-b--xs" style="color:#B45309;border-color:#E7C79A" title="Perfil falso/inactivo: salta los pasos de LinkedIn y sigue por email — NO lo saca de la secuencia" onclick="LeadManagerModule.seqDoNoLinkedIn()">🚫 LinkedIn no válido</button>` : ''}
-        ${st.canal === 'email' ? `<button class="cp-dispo-b cp-dispo-b--xs" style="color:#C4342B;border-color:#F3C1BD" title="El email rebotó: pausa sus secuencias y lo deja en Rebotados para corregirlo" onclick="LeadManagerModule.seqDoBounced()">↩ Rebotó</button>` : ''}
-        <button class="cp-dispo-b cp-dispo-b--xs" style="color:#B45309;border-color:#E7C79A" title="No puedes contactar por falta o error de un dato: pausa sus secuencias y lo deja en Contactos → Por corregir. Al arreglar el dato se reanuda." onclick="LeadManagerModule.seqDoDataIssue(event)">⚠ Falta dato</button>
+        ${chanHtml}
         <span class="cp-taskbar__sp"></span>
+        <button class="cp-mark-btn" onclick="LeadManagerModule.seqOpenMark(event,'${st.canal}')" title="Marcar el resultado de esta tarea (respondió, no contactar, falta dato…)">Marcar resultado <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
         <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqDoPrev()"${_cpTaskHist.length ? '' : ' disabled'} title="Volver al contacto anterior (para revisar o deshacer)">‹ Anterior</button>
         <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqDoSkip()">Saltar ›</button>
         <button class="btn btn--primary btn--sm" id="seqdo-done" onclick="LeadManagerModule.seqDoDone()">✓ Hecha → siguiente</button>
@@ -17870,7 +17893,7 @@ ${foot}
     taskSetView, taskSetFilter, calPrev, calNext, calToday,
     lmSetDisposition, seqDoDisposition, cpSetStage,
     seqDoNoLinkedIn, seqDoBounced, lmToggleNoLinkedIn, lmToggleBounced, lmToggleManualEmail, ctToggleBounced,
-    seqDoDataIssue, seqDoDataIssuePick, ctToggleDataIssue, lmResumeDataIssue,
+    seqDoDataIssue, seqDoDataIssuePick, ctToggleDataIssue, lmResumeDataIssue, seqOpenMark,
     lmSetPageSize, ctGoPage, coGoPage, seqCtSetEstado, seqTaskSetCanal,
     pendingAcceptOpen, pendingAcceptToggleAll, pendingAcceptApplyFilters, pendingAcceptMark,
     openActivityDrawer, closeActivityDrawer, saveActivity, confirmDeleteActivity, markActDone,
