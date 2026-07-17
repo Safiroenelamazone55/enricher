@@ -578,6 +578,39 @@ function novaConfirm(opts = {}) {
   });
 }
 
+// Modal de nota rápida (estilo Nova) — resuelve con el texto ('' si se omite/cierra).
+// Ctrl+Enter guarda, Esc omite. Uso: const nota = await novaNote({title, message});
+function novaNote(opts = {}) {
+  return new Promise(resolve => {
+    document.getElementById('nova-note')?.remove();
+    const o = { title: 'Añadir nota', message: '', placeholder: 'Escribe la nota…', ok: 'Guardar nota', skip: 'Sin nota', ...opts };
+    const bd = document.createElement('div');
+    bd.id = 'nova-note'; bd.className = 'nvc-back';
+    const done = v => { bd.remove(); document.removeEventListener('keydown', onKey, true); resolve(v); };
+    const val = () => (bd.querySelector('.nvc-ta')?.value || '').trim();
+    const onKey = e => {
+      if (e.key === 'Escape') { e.stopPropagation(); done(''); }
+      else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.stopPropagation(); done(val()); }
+    };
+    bd.innerHTML = `<div class="nvc-box nvc-box--note">
+      <div class="nvc-ico nvc-ico--brand"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></div>
+      <div class="nvc-t">${o.title}</div>
+      ${o.message ? `<p class="nvc-m">${o.message}</p>` : ''}
+      <textarea class="nvc-ta" placeholder="${o.placeholder}"></textarea>
+      <div class="nvc-btns">
+        <button type="button" class="nvc-b nvc-b--ghost">${o.skip}</button>
+        <button type="button" class="nvc-b nvc-b--pri nvc-b--brand">${o.ok}</button>
+      </div>
+    </div>`;
+    bd.onclick = e => { if (e.target === bd) done(''); };
+    bd.querySelector('.nvc-b--ghost').onclick = () => done('');
+    bd.querySelector('.nvc-b--pri').onclick = () => done(val());
+    document.body.appendChild(bd);
+    setTimeout(() => bd.querySelector('.nvc-ta')?.focus(), 40);
+    document.addEventListener('keydown', onKey, true);
+  });
+}
+
 // Run auth check immediately
 initAuth();
 
@@ -13343,9 +13376,9 @@ const LeadManagerModule = (() => {
     { k: 'clients',    l: 'Clientes outbound',  g: 'Workspace' },
     { k: 'campaigns',  l: 'Campañas',           g: 'Workspace' },
     { k: 'sequences',  l: 'Secuencias',         g: 'Workspace' },
-    { k: 'leads',      l: 'Leads',              g: 'Datos' },
     { k: 'companies',  l: 'Empresas',           g: 'Datos' },
     { k: 'contacts',   l: 'Contactos',          g: 'Datos' },
+    { k: 'leads',      l: 'Leads',              g: 'Comercial' },
     { k: 'activities', l: 'Actividades',        g: 'Comercial' },
     { k: 'inbox',      l: 'Inbox / Respuestas', g: 'Comercial' },
     { k: 'tasks',      l: 'Tareas comerciales', g: 'Comercial' },
@@ -13373,7 +13406,7 @@ const LeadManagerModule = (() => {
     _NAV.forEach(n => {
       if (n.g !== lastG) { if (n.g) html += `<div class="lm2-nav__grp">${n.g}</div>`; lastG = n.g; }
       const active = (_section === n.k) || (_section === 'client' && n.k === 'clients') || (_section === 'sequence' && n.k === 'sequences');
-      const cnt = n.k === 'tasks' ? _pendingTaskCount() : 0;
+      const cnt = n.k === 'tasks' ? _pendingTaskCount() : n.k === 'leads' ? _contacts.filter(c => c.disposition === 'respondio' || c.disposition === 'reunion').length : 0;
       html += `<button class="lm2-nav__item${active ? ' active' : ''}" onclick="LeadManagerModule.go('${n.k}')">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${_NAV_ICON[n.k] || ''}</svg>
         <span class="lm2-nav__lbl">${n.l}</span>${cnt ? `<span class="lm2-nav__cnt">${cnt}</span>` : ''}${n.soon ? '<span class="lm2-nav__soon">Pronto</span>' : ''}</button>`;
@@ -13406,6 +13439,7 @@ const LeadManagerModule = (() => {
     if (section === 'dashboard') _loadToday();
     if (section === 'settings')  { _loadSendCfg(); _loadAiCfg(); }
     if (section === 'inbox')     { _lmMsgs = null; _loadLmMsgs(); }
+    if (section === 'leads')     _reloadActivities();
   }
   function openClient(id) { _activeClient = id; _section = 'client'; _refreshNav(); _renderBody(); }
   function _refreshNav() { const n = $('lm2-nav-list'); if (n) n.innerHTML = _navHtml(); }
@@ -13420,7 +13454,7 @@ const LeadManagerModule = (() => {
     else if (_section === 'activities') body.innerHTML = _vActivities();
     else if (_section === 'tasks')     body.innerHTML = _vTasks();
     else if (_section === 'inbox')     body.innerHTML = _vInbox();
-    else if (_section === 'leads')     { body.innerHTML = _vLeadsShell(); filter(); }
+    else if (_section === 'leads')     { body.innerHTML = _vLeadsHub(); _ldPaint(); }
     else if (_section === 'companies') { body.innerHTML = _vCompanies(); _renderCompanies(); }
     else if (_section === 'contacts')  { body.innerHTML = _vContacts();  _renderContacts(); }
     else if (_section === 'contact-view') { body.innerHTML = _vContactPage(_contactView); _cpLoadMap(_contacts.find(x => x.id === _contactView)); }
@@ -14217,14 +14251,19 @@ ${foot}
   const _DISPOS = [['respondio', 'Respondió', '#15803D', '#E7F8EF'], ['reunion', 'Reunión', '#5B4BC4', '#EDE9FE'], ['no_interesado', 'No interesado', '#B45309', '#FEF3C7'], ['no_contactar', 'No contactar', '#C4342B', '#FDECEA']];
   function _dispoLabel(d) { const x = _DISPOS.find(y => y[0] === d); return x ? x[1] : ''; }
   function _dispoBadge(d) { const x = _DISPOS.find(y => y[0] === d); return x ? `<span class="cp-dispo-badge" style="background:${x[3]};color:${x[2]}">${x[1]}</span>` : ''; }
-  async function _lmSetDispositionCore(cid, disp, seqId) {
-    const res = await apiFetch(`${API}/lm/contacts/${cid}/disposition`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ disposition: disp, sequence_id: seqId || null }) });
+  async function _lmSetDispositionCore(cid, disp, seqId, nota) {
+    const res = await apiFetch(`${API}/lm/contacts/${cid}/disposition`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ disposition: disp, sequence_id: seqId || null, nota: nota || '' }) });
     if (!res.ok) throw new Error((await res.json()).error || 'Error');
+    _reloadActivities();
     return await res.json();
+  }
+  async function _reloadActivities() {
+    try { const r = await apiFetch(`${API}/activities`); if (r && r.ok) { const a = await r.json(); if (Array.isArray(a)) { _activities = a; if (_section === 'leads') _ldPaint(); } } } catch {}
   }
   async function lmSetDisposition(cid, disp) {
     try {
-      const r = await _lmSetDispositionCore(cid, disp);
+      const nota = disp ? await novaNote({ title: _dispoLabel(disp), message: '¿Quieres dejar una nota? Quedará en la actividad del contacto y en Leads.' }) : '';
+      const r = await _lmSetDispositionCore(cid, disp, null, nota);
       await _reloadContacts();
       if (_activeSeq && Array.isArray(_seqContacts)) { _seqContacts = null; await _seqLoadContacts(_activeSeq); }
       showBanner(disp ? `✓ ${_dispoLabel(disp)}${r.rerouted ? ` · → Ruta A (LinkedIn) en ${r.rerouted} secuencia${r.rerouted === 1 ? '' : 's'}` : ''}${r.paused ? ` · pausado en ${r.paused} secuencia${r.paused === 1 ? '' : 's'}` : ''}` : '✓ Disposición quitada', 'success');
@@ -14235,7 +14274,8 @@ ${foot}
     if (!_cpTaskCtx) return;
     const seqId = _cpTaskCtx.seqId, cid = _contactView;
     try {
-      const r = await _lmSetDispositionCore(cid, disp, seqId);
+      const nota = disp ? await novaNote({ title: _dispoLabel(disp), message: '¿Alguna nota de la respuesta? Quedará en la ficha y en Leads. (Esc para omitir)' }) : '';
+      const r = await _lmSetDispositionCore(cid, disp, seqId, nota);
       _seqContacts = null; await _seqLoadContacts(seqId); await _reloadContacts();
       showBanner(`✓ ${_dispoLabel(disp)}${r.rerouted ? ' · → Ruta A (LinkedIn)' : ''}${r.paused ? ' · pausado en secuencias' : ''}`, 'success');
       const next = _cpNextTask(seqId, cid);
@@ -15839,6 +15879,122 @@ ${foot}
   }
 
   // ── Leads (sección) ──
+  // ── Leads hub: contactos con resultado marcado (respondió/reunión/…) + siguiente paso ──
+  let _ldPill = 'pos', _ldCli = '', _ldSeq = '', _ldCamp = '', _ldQ = '';
+  const _LD_PILLS = [['pos', 'Positivos'], ['respondio', 'Respondió'], ['reunion', 'Reunión'], ['desc', 'Descartados']];
+  function _ldMatchPill(c, pill) {
+    const d = c.disposition || '';
+    if (pill === 'pos') return d === 'respondio' || d === 'reunion';
+    if (pill === 'desc') return d === 'no_interesado' || d === 'no_contactar';
+    return d === pill;
+  }
+  function _ldBase() {
+    let list = _contacts.filter(c => c.disposition);
+    if (_ldCli)  list = list.filter(c => String(c.outbound_client_id || '') === _ldCli);
+    if (_ldSeq)  list = list.filter(c => (c.sequences || []).some(s => String(s.id) === _ldSeq));
+    if (_ldCamp) list = list.filter(c => (c.campaigns || []).some(x => String(x.id) === _ldCamp));
+    if (_ldQ) { const q = _ldQ.toLowerCase(); list = list.filter(c => ((c.nombre || '') + ' ' + (c.apellido || '') + ' ' + (c.email || '') + ' ' + (c.company_nombre || '')).toLowerCase().includes(q)); }
+    return list;
+  }
+  // Por contacto: fecha de la disposición más reciente + última nota legible (sin logs "Paso N").
+  function _ldActInfo() {
+    const map = {};
+    for (const a of _activities) {
+      const cid = a.contact_id; if (!cid) continue;
+      const m = map[cid] || (map[cid] = { fecha: null, nota: '' });
+      const txt = String(a.nota || '');
+      if (!m.fecha && txt.startsWith('Disposición:')) m.fecha = a.fecha;
+      if (!m.nota && txt && !txt.startsWith('Paso ')) {
+        const clean = txt.startsWith('Disposición:') ? (txt.includes(' — ') ? txt.slice(txt.indexOf(' — ') + 3) : '') : txt;
+        if (clean) m.nota = clean;
+      }
+    }
+    return map;
+  }
+  function _ldFmtDate(d) {
+    const x = new Date(d); if (isNaN(x)) return '—';
+    const now = new Date();
+    return x.toLocaleDateString('es', x.getFullYear() === now.getFullYear() ? { day: 'numeric', month: 'short' } : { day: 'numeric', month: 'short', year: '2-digit' });
+  }
+  function _vLeadsHub() {
+    return `<div class="lm-sec-head">
+        <div><h2 class="lm-sec-title">Leads</h2><p class="lm-sec-sub">Quiénes respondieron y su siguiente paso — se llena al marcar el resultado en las tareas</p></div>
+      </div>
+      <div class="ldh-toolbar">
+        <div class="ldh-pills" id="ldh-pills"></div>
+        <span class="ldh-toolbar__sp"></span>
+        <select class="ldh-sel" id="ldh-cli" onchange="LeadManagerModule.ldSetCli(this.value)"></select>
+        <select class="ldh-sel" id="ldh-seq" onchange="LeadManagerModule.ldSetSeq(this.value)"></select>
+        <select class="ldh-sel" id="ldh-camp" onchange="LeadManagerModule.ldSetCamp(this.value)"></select>
+        <div class="lm-search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" id="ldh-q" placeholder="Buscar lead…" oninput="LeadManagerModule.ldSetQ(this.value)"></div>
+      </div>
+      <div id="ldh-wrap"></div>`;
+  }
+  function _ldPaint() {
+    const pillsEl = $('ldh-pills'), wrap = $('ldh-wrap');
+    if (!pillsEl || !wrap) return;
+    const base = _ldBase();
+    const cnt = p => base.filter(c => _ldMatchPill(c, p)).length;
+    pillsEl.innerHTML = _LD_PILLS.map(([k, l]) => `<button class="ldh-pill${_ldPill === k ? ' on' : ''}" onclick="LeadManagerModule.ldPill('${k}')">${l}<span>${cnt(k)}</span></button>`).join('');
+    const fill = (id, arr, lbl, val) => { const el = $(id); if (el) el.innerHTML = `<option value="">${lbl}</option>` + arr.map(x => `<option value="${x.id}"${String(val) === String(x.id) ? ' selected' : ''}>${esc(x.nombre || x.dominio || ('#' + x.id))}</option>`).join(''); };
+    fill('ldh-cli', _clients, 'Cliente: todos', _ldCli);
+    fill('ldh-seq', _sequences, 'Secuencia: todas', _ldSeq);
+    fill('ldh-camp', _campaigns, 'Campaña: todas', _ldCamp);
+    const info = _ldActInfo();
+    const list = base.filter(c => _ldMatchPill(c, _ldPill))
+      .map(c => ({ c, i: info[c.id] || {} }))
+      .sort((a, b) => String(b.i.fecha || b.c.updated_at || '').localeCompare(String(a.i.fecha || a.c.updated_at || '')));
+    if (!_contacts.some(c => c.disposition)) {
+      wrap.innerHTML = `<div class="ldh-empty">
+        <div class="ldh-empty__ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
+        <div class="ldh-empty__t">Aún no hay leads con respuesta</div>
+        <div class="ldh-empty__s">Cuando marques el resultado de una tarea (Respondió, Reunión, No interesado…) el contacto aparecerá aquí con su nota, su secuencia y su cliente — listo para el siguiente paso.</div>
+        <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.go('sequences')">Ir a Secuencias</button>
+      </div>`;
+      return;
+    }
+    if (!list.length) { wrap.innerHTML = `<div class="ldh-empty"><div class="ldh-empty__t">Sin resultados</div><div class="ldh-empty__s">No hay leads que cumplan estos filtros. Prueba con otro filtro o pestaña.</div></div>`; return; }
+    const rows = list.map(({ c, i }) => {
+      const d = _DISPOS.find(x => x[0] === c.disposition);
+      const full = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || '—';
+      const cli = _clients.find(x => x.id === c.outbound_client_id);
+      const seqs = c.sequences || [];
+      const fecha = _ldFmtDate(i.fecha || c.updated_at);
+      return `<tr class="ldh-row" onclick="LeadManagerModule.openContactPage(${c.id})">
+        <td><div class="ldh-name">${esc(full)}</div><div class="ldh-sub">${esc([c.cargo, c.company_nombre].filter(Boolean).join(' · ')) || '&nbsp;'}</div></td>
+        <td class="ldh-dim">${cli ? esc(cli.nombre) : '—'}</td>
+        <td class="ldh-dim">${seqs.length ? esc(seqs[0].nombre) + (seqs.length > 1 ? ` <span class="ldh-more">+${seqs.length - 1}</span>` : '') : '—'}</td>
+        <td>${d ? `<span class="ldh-chip" style="background:${d[3]};color:${d[2]}">${d[1]}</span>` : '—'}</td>
+        <td class="ldh-date">${fecha}</td>
+        <td class="ldh-note" title="${esc(i.nota || '')}">${i.nota ? esc(i.nota) : '<span class="ldh-none">—</span>'}</td>
+        <td class="ldh-acts" onclick="event.stopPropagation()">
+          <button class="ldh-act" title="Añadir nota" onclick="LeadManagerModule.ldAddNote(${c.id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+          <button class="ldh-act" title="Registrar reunión" onclick="LeadManagerModule.ldMeet(${c.id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></button>
+        </td></tr>`;
+    }).join('');
+    wrap.innerHTML = `<div class="ldh-table-wrap"><table class="ldh-table">
+      <colgroup><col style="width:22%"><col style="width:12%"><col style="width:17%"><col style="width:11%"><col style="width:8%"><col><col style="width:84px"></colgroup>
+      <thead><tr><th>Lead</th><th>Cliente</th><th>Secuencia</th><th>Resultado</th><th>Fecha</th><th>Última nota</th><th></th></tr></thead>
+      <tbody>${rows}</tbody></table></div>`;
+  }
+  function ldPill(k) { _ldPill = k; _ldPaint(); }
+  function ldSetCli(v) { _ldCli = v; _ldPaint(); }
+  function ldSetSeq(v) { _ldSeq = v; _ldPaint(); }
+  function ldSetCamp(v) { _ldCamp = v; _ldPaint(); }
+  function ldSetQ(v) { _ldQ = v; _ldPaint(); }
+  async function ldAddNote(cid) {
+    const c = _contacts.find(x => x.id === cid); if (!c) return;
+    const nota = await novaNote({ title: 'Nota del lead', message: `Sobre <b>${esc([c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || 'el contacto')}</b> — quedará en su actividad.`, ok: 'Guardar nota', skip: 'Cancelar' });
+    if (!nota) return;
+    try {
+      const res = await apiFetch(`${API}/activities`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact_id: cid, outbound_client_id: c.outbound_client_id || null, tipo: 'nota', nota, fecha: new Date().toISOString().slice(0, 10), estado: 'hecha' }) });
+      if (!res.ok) throw new Error((await res.json()).error || 'Error');
+      showBanner('✓ Nota guardada', 'success');
+      await _reloadActivities();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  function ldMeet(cid) { openContactPage(cid); setTimeout(() => cpActOpen('reunion'), 250); }
+
   function _vLeadsShell() {
     return `<div class="lm-sec-head">
         <div><h2 class="lm-sec-title">Leads</h2><p class="lm-sec-sub">Todos tus prospectos — asócialos a un cliente outbound</p></div>
@@ -18448,6 +18604,7 @@ ${foot}
     seqDoNoLinkedIn, seqDoBounced, lmToggleNoLinkedIn, lmToggleBounced, lmToggleManualEmail, ctToggleBounced,
     seqDoDataIssue, seqDoDataIssuePick, ctToggleDataIssue, lmResumeDataIssue, seqOpenMark,
     lmSetPageSize, ctGoPage, coGoPage, seqCtSetEstado, seqTaskSetCanal,
+    ldPill, ldSetCli, ldSetSeq, ldSetCamp, ldSetQ, ldAddNote, ldMeet,
     pendingAcceptOpen, pendingAcceptToggleAll, pendingAcceptApplyFilters, pendingAcceptMark,
     openActivityDrawer, closeActivityDrawer, saveActivity, confirmDeleteActivity, markActDone,
     setReplySentiment, setLeadStage,
