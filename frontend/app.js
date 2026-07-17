@@ -544,6 +544,40 @@ function showBanner(msg, type) {
   setTimeout(() => el.remove(), 5000);
 }
 
+// Confirmación estilizada (reemplaza el confirm() nativo del navegador).
+// Uso: if (!(await novaConfirm({ title, message, ok, tone: 'brand'|'danger' }))) return;
+function novaConfirm(opts = {}) {
+  return new Promise(resolve => {
+    document.getElementById('nova-confirm')?.remove();
+    const o = { title: '¿Confirmar?', message: '', ok: 'Confirmar', cancel: 'Cancelar', tone: 'brand', ...opts };
+    const ICO = o.tone === 'danger'
+      ? '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>'
+      : '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>';
+    const bd = document.createElement('div');
+    bd.id = 'nova-confirm'; bd.className = 'nvc-back';
+    const done = v => { bd.remove(); document.removeEventListener('keydown', onKey, true); resolve(v); };
+    const onKey = e => {
+      if (e.key === 'Escape') { e.stopPropagation(); done(false); }
+      else if (e.key === 'Enter') { e.stopPropagation(); done(true); }
+    };
+    bd.innerHTML = `<div class="nvc-box">
+      <div class="nvc-ico nvc-ico--${o.tone}">${ICO}</div>
+      <div class="nvc-t">${o.title}</div>
+      ${o.message ? `<p class="nvc-m">${o.message}</p>` : ''}
+      <div class="nvc-btns">
+        <button type="button" class="nvc-b nvc-b--ghost">${o.cancel}</button>
+        <button type="button" class="nvc-b nvc-b--pri nvc-b--${o.tone}">${o.ok}</button>
+      </div>
+    </div>`;
+    bd.onclick = e => { if (e.target === bd) done(false); };
+    bd.querySelector('.nvc-b--ghost').onclick = () => done(false);
+    bd.querySelector('.nvc-b--pri').onclick = () => done(true);
+    document.body.appendChild(bd);
+    setTimeout(() => bd.querySelector('.nvc-b--pri')?.focus(), 40);
+    document.addEventListener('keydown', onKey, true);
+  });
+}
+
 // Run auth check immediately
 initAuth();
 
@@ -19760,6 +19794,7 @@ const RNotifPanel = (() => {
   let _pendingMembers = [];   // multi-select
   let _teamCache      = null;
   let _lastTasks      = [];   // tareas del último load (para el picker "+ Subtarea" por proyecto)
+  let _lastProjects   = [];   // proyectos del último load (para los textos de confirmación)
 
   // ── Avisos de CIERRE (calculados en el frontend, sin tocar el backend) ──
   // Tarea "lista": tarea padre con subtareas, todas las subtareas completadas, pero
@@ -19811,6 +19846,7 @@ const RNotifPanel = (() => {
         const tasks    = tr.ok ? await tr.json() : [];
         const projects = pr.ok ? await pr.json() : [];
         _lastTasks     = tasks;
+        _lastProjects  = projects;
         const me       = (window._authUser?.memberNombre || window._authUser?.name || '').toLowerCase();
         const tListas  = _tareasListas(tasks, me);
         const pListos  = _proyectosListos(projects, tasks, me);
@@ -19835,15 +19871,22 @@ const RNotifPanel = (() => {
 
   // Marca una tarea como completada desde la notificación (endpoint seguro /status).
   async function completeTask(id) {
-    if (!confirm('¿Marcar esta tarea como completada?')) return;
+    const t = (_lastTasks || []).find(x => x.id === id);
+    const ok = await novaConfirm({
+      title: '¿Completar esta tarea?',
+      message: t ? `<b>${esc(t.titulo)}</b>${[t.client_nombre, t.project_nombre].filter(Boolean).length ? '<br>' + [t.client_nombre, t.project_nombre].filter(Boolean).map(esc).join(' · ') : ''} se marcará como completada.` : 'La tarea se marcará como completada.',
+      ok: '✓ Completar tarea',
+    });
+    if (!ok) return;
     try {
       await apiFetch(`${API}/mgmt/tasks/${id}/status`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ estado: 'completado' }),
       });
+      showBanner('✓ Tarea completada', 'success');
       load();
       try { DashboardModule.load(); } catch (_) {}
-    } catch (e) { alert('No se pudo completar. Reintenta.'); }
+    } catch (e) { showBanner('No se pudo completar. Reintenta.', 'error'); }
   }
   // Lleva a Proyectos para marcarlo completado allí (su vista manda el PUT correcto).
   function goToProject() {
@@ -19852,7 +19895,13 @@ const RNotifPanel = (() => {
   // Marca el proyecto como completado desde la notificación (PATCH /estado, seguro).
   // Si el cliente queda sin proyectos activos, el backend lo pasa a inactivo y avisamos.
   async function completeProject(id) {
-    if (!confirm('¿Marcar este proyecto como COMPLETADO?')) return;
+    const p = (_lastProjects || []).find(x => x.id === id);
+    const ok = await novaConfirm({
+      title: '¿Completar este proyecto?',
+      message: p ? `<b>${esc(p.nombre)}</b>${p.client_nombre ? '<br>' + esc(p.client_nombre) : ''} pasará a completado.<br><span style="color:#8a837a">Si el cliente queda sin proyectos activos, pasará a inactivo automáticamente.</span>` : 'El proyecto pasará a completado.',
+      ok: '✓ Completar proyecto',
+    });
+    if (!ok) return;
     try {
       const res = await apiFetch(`${API}/mgmt/projects/${id}/estado`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
