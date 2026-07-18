@@ -13444,7 +13444,7 @@ const LeadManagerModule = (() => {
     if (section === 'inbox')     { _lmMsgs = null; _loadLmMsgs(); }
     if (section === 'leads')     _reloadActivities();
   }
-  function openClient(id) { _activeClient = id; _section = 'client'; _refreshNav(); _renderBody(); }
+  function openClient(id) { _activeClient = id; _section = 'client'; _refreshNav(); _renderBody(); if (_mailboxes === null) _mbReload(); }
   function _refreshNav() { const n = $('lm2-nav-list'); if (n) n.innerHTML = _navHtml(); }
   function _renderBody() {
     const body = $('lm2-body'); if (!body) return;
@@ -15614,6 +15614,121 @@ ${foot}
   }
 
   // ── Workspace por cliente (detalle tipo CRM) ──
+  // ── Buzón real por cliente (SMTP/IMAP multi-proveedor) ──
+  let _mailboxes = null;   // null = aún no cargado
+  const _MB_PROV = [['google', 'Google / Gmail'], ['microsoft', 'Microsoft / Outlook'], ['zoho', 'Zoho Mail'], ['otro', 'Otro proveedor']];
+  const _MB_HINT = {
+    google: 'Gmail/Workspace: activa la Verificación en 2 pasos → busca “Contraseñas de aplicación” → crea una para Correo y pégala aquí (16 letras, sin espacios).',
+    microsoft: 'Outlook/Microsoft 365: con 2FA activa, genera una “Contraseña de aplicación” en Seguridad. Si es 365 de empresa, activa también “SMTP autenticado” para el buzón en el centro de administración.',
+    zoho: 'Zoho Mail: Mi cuenta → Seguridad → App Passwords → genera una para Nova. Si el buzón no usa 2FA, prueba primero la contraseña normal.',
+    otro: 'Ingresa los servidores SMTP e IMAP que te dé el proveedor (suelen estar en su ayuda como “configurar cliente de correo”).',
+  };
+  async function _mbReload() {
+    try { const r = await apiFetch(`${API}/lm/mailboxes`); _mailboxes = (r && r.ok) ? await r.json() : []; } catch { _mailboxes = []; }
+    if (_section === 'client') _renderBody();
+  }
+  function _mbFor(clientId) { return Array.isArray(_mailboxes) ? _mailboxes.find(m => m.outbound_client_id === clientId) : null; }
+  function _mbSideHtml(c) {
+    const mb = _mbFor(c.id);
+    const provLbl = mb ? (_MB_PROV.find(p => p[0] === mb.provider) || ['', mb.provider])[1] : '';
+    const inner = _mailboxes === null
+      ? `<div class="mbx-sub">Cargando…</div>`
+      : mb
+        ? `<div class="mbx-row"><span class="mbx-chip${mb.estado === 'conectado' ? ' mbx-chip--ok' : ' mbx-chip--err'}">${mb.estado === 'conectado' ? '✓ Conectado' : '⚠ Error'}</span></div>
+           <div class="mbx-mail" title="${esc(mb.email)}">${esc(mb.email)}</div>
+           <div class="mbx-sub">${esc(provLbl)}${mb.last_error ? ` · ${esc(mb.last_error)}` : ''}</div>
+           <div class="mbx-acts">
+             <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.mbTest(${mb.id})">Probar envío</button>
+             <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.mbOpen(${c.id})">Cambiar</button>
+             <button class="btn btn--ghost btn--sm" style="color:var(--danger)" onclick="LeadManagerModule.mbDelete(${mb.id})">Quitar</button>
+           </div>`
+        : `<div class="mbx-sub">Conecta el buzón real de este cliente (jenny@sudominio…) para enviar, leer respuestas y rebotes desde Nova.</div>
+           <button class="btn btn--primary btn--sm" style="margin-top:8px" onclick="LeadManagerModule.mbOpen(${c.id})">Conectar buzón</button>`;
+    return `<div class="mbx"><div class="mbx-t">Buzón de envío</div>${inner}</div>`;
+  }
+  function mbClose() { document.getElementById('mbx-modal')?.remove(); }
+  function mbProv(p) {
+    const hint = $('mbx-hint'); if (hint) hint.textContent = _MB_HINT[p] || '';
+    const hosts = $('mbx-hosts'); if (hosts) hosts.style.display = p === 'otro' ? '' : 'none';
+  }
+  function mbOpen(clientId) {
+    mbClose();
+    const c = _clients.find(x => x.id === clientId); if (!c) return;
+    const mb = _mbFor(clientId);
+    const m = document.createElement('div'); m.id = 'mbx-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = ev => { if (ev.target === m) mbClose(); };
+    const prov = (mb && mb.provider) || 'google';
+    m.innerHTML = `<div class="fin-pi-box dle-box">
+      <div class="dle-hd"><div style="flex:1;min-width:0"><div class="dle-hd__t">Buzón de ${esc(c.nombre)}</div><div class="dle-hd__s">Se conecta por SMTP (enviar) e IMAP (leer). La contraseña se guarda cifrada.</div></div><button class="fin-pi-x" onclick="LeadManagerModule.mbClose()">✕</button></div>
+      <div class="dle-grid">
+        <label class="dle-f"><span class="dle-l">Proveedor</span><select class="dle-i" id="mbx-prov" onchange="LeadManagerModule.mbProv(this.value)">${_MB_PROV.map(p => `<option value="${p[0]}"${prov === p[0] ? ' selected' : ''}>${p[1]}</option>`).join('')}</select></label>
+        <label class="dle-f"><span class="dle-l">Correo del buzón</span><input class="dle-i" id="mbx-email" type="email" placeholder="jenny@dominio.com" value="${mb ? esc(mb.email) : ''}"></label>
+        <label class="dle-f dle-f--full"><span class="dle-l">Contraseña de aplicación</span><input class="dle-i" id="mbx-pass" type="password" placeholder="••••••••••••••••" autocomplete="new-password"></label>
+        <div class="dle-f dle-f--full" id="mbx-hosts" style="display:${prov === 'otro' ? '' : 'none'}">
+          <div class="dle-grid" style="margin-top:2px">
+            <label class="dle-f"><span class="dle-l">Servidor SMTP</span><input class="dle-i" id="mbx-smtp" placeholder="smtp.dominio.com" value="${mb && mb.provider === 'otro' ? esc(mb.smtp_host || '') : ''}"></label>
+            <label class="dle-f"><span class="dle-l">Puerto SMTP</span><input class="dle-i" id="mbx-smtpp" type="number" value="${mb && mb.provider === 'otro' ? (mb.smtp_port || 465) : 465}"></label>
+            <label class="dle-f"><span class="dle-l">Servidor IMAP</span><input class="dle-i" id="mbx-imap" placeholder="imap.dominio.com" value="${mb && mb.provider === 'otro' ? esc(mb.imap_host || '') : ''}"></label>
+            <label class="dle-f"><span class="dle-l">Puerto IMAP</span><input class="dle-i" id="mbx-imapp" type="number" value="${mb && mb.provider === 'otro' ? (mb.imap_port || 993) : 993}"></label>
+          </div>
+        </div>
+        <div class="dle-f dle-f--full"><span class="seq-drip-hint" id="mbx-hint">${_MB_HINT[prov]}</span></div>
+        <div class="dle-f dle-f--full" id="mbx-err" style="display:none;color:var(--danger);font-size:.8rem"></div>
+      </div>
+      <div class="dle-foot"><span class="sp"></span>
+        <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.mbClose()">Cancelar</button>
+        <button class="btn btn--primary btn--sm" id="mbx-save" onclick="LeadManagerModule.mbSave(${clientId})">Probar y conectar</button>
+      </div>
+    </div>`;
+    document.body.appendChild(m);
+    setTimeout(() => $(mb ? 'mbx-pass' : 'mbx-email')?.focus(), 60);
+  }
+  async function mbSave(clientId) {
+    const g = id => $(id);
+    const body = {
+      outbound_client_id: clientId, provider: g('mbx-prov').value,
+      email: g('mbx-email').value.trim(), password: g('mbx-pass').value,
+      smtp_host: g('mbx-smtp')?.value.trim() || '', smtp_port: g('mbx-smtpp')?.value || '',
+      imap_host: g('mbx-imap')?.value.trim() || '', imap_port: g('mbx-imapp')?.value || '',
+    };
+    const err = $('mbx-err'); if (err) err.style.display = 'none';
+    if (!body.email || !body.password) { if (err) { err.textContent = 'Correo y contraseña son obligatorios.'; err.style.display = ''; } return; }
+    const btn = $('mbx-save'); if (btn) { btn.disabled = true; btn.textContent = 'Probando conexión…'; }
+    try {
+      const res = await apiFetch(`${API}/lm/mailboxes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'No se pudo conectar');
+      mbClose();
+      showBanner(`✓ Buzón ${d.email} conectado — SMTP e IMAP verificados`, 'success');
+      await _mbReload();
+    } catch (e) {
+      if (err) { err.textContent = e.message; err.style.display = ''; }
+      if (btn) { btn.disabled = false; btn.textContent = 'Probar y conectar'; }
+    }
+  }
+  async function mbTest(id) {
+    showBanner('Probando buzón y enviando correo de prueba…', 'info');
+    try {
+      const res = await apiFetch(`${API}/lm/mailboxes/${id}/test`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ send_test: true }) });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Error');
+      if (d.smtpOk && d.imapOk) showBanner(`✓ Todo OK — te enviamos un correo de prueba a tu propio buzón (revisa también la carpeta Enviados)`, 'success');
+      else throw new Error(d.error || 'La conexión falló');
+      await _mbReload();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); _mbReload(); }
+  }
+  async function mbDelete(id) {
+    const mb = Array.isArray(_mailboxes) ? _mailboxes.find(m => m.id === id) : null;
+    const ok = await novaConfirm({ title: '¿Quitar este buzón?', message: mb ? `Se desconecta <b>${esc(mb.email)}</b>. No borra ningún correo del proveedor — solo la conexión con Nova.` : '', ok: 'Quitar', cancel: 'Cancelar', tone: 'danger' });
+    if (!ok) return;
+    try {
+      const res = await apiFetch(`${API}/lm/mailboxes/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error((await res.json()).error || 'Error');
+      showBanner('✓ Buzón desconectado', 'success');
+      await _mbReload();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+
   function _vClientDetail(id) {
     const c = _clients.find(x => x.id === id);
     if (!c) return _vClients();
@@ -15639,6 +15754,7 @@ ${foot}
           ${field('Website', c.website ? `<a href="${esc(c.website)}" target="_blank" rel="noopener" class="lm-link">${esc(c.website)}</a>` : '—')}
           ${field('Leads cargados', String(leads.length))}
           ${field('Valor estimado', _money(_sumv(leads)))}
+          ${_mbSideHtml(c)}
         </aside>
         <section class="lm-ws-main">
           <div class="lm-ws-pipe"><div class="lm-ws-pipe__hd">Pipeline · ${pipe.length} en juego</div><div class="lm-pipe">${pipeBar}</div></div>
@@ -18886,6 +19002,7 @@ ${foot}
     dlSetCli, dlOpen, dlClose, dlSave,
     sqSetCli, sqSetEst, sqSetQ, cmSetCli, cmSetEst, cmSetQ,
     seqRunSetCanal, seqTaskSetDue,
+    mbOpen, mbClose, mbSave, mbTest, mbDelete, mbProv,
     pendingAcceptOpen, pendingAcceptToggleAll, pendingAcceptApplyFilters, pendingAcceptMark,
     openActivityDrawer, closeActivityDrawer, saveActivity, confirmDeleteActivity, markActDone,
     setReplySentiment, setLeadStage,

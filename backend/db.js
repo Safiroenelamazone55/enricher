@@ -1074,6 +1074,29 @@ async function initDb() {
     await pool.query(`CREATE INDEX IF NOT EXISTS lm_cseq_next_idx ON lm_contact_sequences (estado, next_action_at);`);
     // Espera relativa entre pasos (días desde el paso anterior; complementa 'dia' absoluto).
     await pool.query(`ALTER TABLE sequence_steps ADD COLUMN IF NOT EXISTS espera_dias INTEGER NOT NULL DEFAULT 0;`);
+    // lm_mailboxes: buzones reales por cliente outbound (SMTP+IMAP, cualquier proveedor).
+    // pass_enc = contraseña de aplicación cifrada AES-256-GCM (nunca en claro).
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS lm_mailboxes (
+        id                 SERIAL      PRIMARY KEY,
+        user_id            INTEGER     REFERENCES users(id) ON DELETE CASCADE,
+        outbound_client_id INTEGER     REFERENCES outbound_clients(id) ON DELETE CASCADE,
+        email              TEXT        NOT NULL,
+        provider           TEXT        NOT NULL DEFAULT 'otro',
+        smtp_host          TEXT        NOT NULL DEFAULT '',
+        smtp_port          INTEGER     NOT NULL DEFAULT 465,
+        smtp_secure        BOOLEAN     NOT NULL DEFAULT true,
+        imap_host          TEXT        NOT NULL DEFAULT '',
+        imap_port          INTEGER     NOT NULL DEFAULT 993,
+        pass_enc           TEXT        NOT NULL DEFAULT '',
+        estado             TEXT        NOT NULL DEFAULT 'nuevo',
+        last_error         TEXT        NOT NULL DEFAULT '',
+        verified_at        TIMESTAMPTZ,
+        created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS lm_mailboxes_client_uq ON lm_mailboxes (user_id, outbound_client_id);`);
+
     // lm_messages: cada email real enviado por el motor (asunto/cuerpo ya renderizados).
     // estado: queued | sent | bounced | replied | failed
     await pool.query(`

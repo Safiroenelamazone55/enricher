@@ -12852,3 +12852,15 @@ td.ldh-acts { padding-left: 6px; padding-right: 10px; }
 .cp-tb-flt.on { background: var(--primary-soft); border-color: var(--primary-border); color: var(--primary-hover); font-weight: 600; }
 .lm-flt-sep { width: 1px; height: 18px; background: var(--border); margin: 0 4px; }
 .cp-taskbar__ch--act { text-transform: none; letter-spacing: 0; font-size: .66rem; background: var(--primary-soft); color: var(--primary-hover); }
+
+/* Buzón de envío por cliente (sidebar de la ficha) */
+.mbx { margin-top: 14px; padding: 12px 13px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
+.mbx-t { font-size: .8rem; font-weight: 600; color: var(--text-primary); margin-bottom: 7px; }
+.mbx-row { margin-bottom: 6px; }
+.mbx-chip { display: inline-block; font-size: .7rem; font-weight: 600; padding: 2px 9px; border-radius: 999px; }
+.mbx-chip--ok { background: var(--success-soft); color: var(--success); }
+.mbx-chip--err { background: var(--danger-soft); color: var(--danger); }
+.mbx-mail { font-size: .8rem; font-weight: 500; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mbx-sub { font-size: .72rem; color: var(--text-muted); margin-top: 2px; line-height: 1.45; }
+.mbx-acts { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 9px; }
+.mbx-acts .btn { padding: 4px 9px; font-size: .72rem; }
