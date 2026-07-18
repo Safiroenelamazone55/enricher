@@ -2841,6 +2841,8 @@ function _sanSendDays(v) { const s = String(v || ''); return (/^[01]{7}$/.test(s
 function _sanHora(v) { const s = String(v || '').trim(); const m = s.match(/^(\d{1,2}):(\d{2})$/); if (!m) return ''; const h = +m[1], mi = +m[2]; return (h >= 0 && h < 24 && mi >= 0 && mi < 60) ? String(h).padStart(2, '0') + ':' + m[2] : ''; }
 // Condición de rama de un paso: '' (todos) | 'replied' (respondió/aceptó) | 'no_reply' (no respondió).
 function _sanCond(v) { return ['replied', 'no_reply'].includes(v) ? v : ''; }
+// Acción del paso dentro del canal (invitación con/sin nota, mensaje, follow, comentario…)
+function _sanAccion(v) { return ['invite_nota', 'invite', 'mensaje', 'follow', 'comentario', 'visita', 'llamada', 'voicemail'].includes(v) ? v : ''; }
 function _sanDate(v) { const s = String(v || '').trim(); return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null; }
 // today (fecha local del server como UTC-midnight, para aritmética de días sin tz-shift)
 function _todayUTC() { const t = new Date(); return new Date(Date.UTC(t.getFullYear(), t.getMonth(), t.getDate())); }
@@ -3755,9 +3757,9 @@ app.post('/api/sequence-steps', requireAuth, async (req, res) => {
   const canal = STEP_CANALES.includes(b.canal) ? b.canal : 'email';
   try {
     const { rows } = await pool.query(`
-      INSERT INTO sequence_steps (user_id,sequence_id,dia,canal,titulo,plantilla,variants,variant_mode,variant_field,orden,hora,cond)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *
-    `, [req.workspaceOwnerId, b.sequence_id, parseInt(b.dia) || 1, canal, b.titulo || '', b.plantilla || '', JSON.stringify(Array.isArray(b.variants) ? b.variants : []), b.variant_mode || 'off', b.variant_field || '', parseInt(b.orden) || 0, _sanHora(b.hora), _sanCond(b.cond)]);
+      INSERT INTO sequence_steps (user_id,sequence_id,dia,canal,titulo,plantilla,variants,variant_mode,variant_field,orden,hora,cond,accion)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *
+    `, [req.workspaceOwnerId, b.sequence_id, parseInt(b.dia) || 1, canal, b.titulo || '', b.plantilla || '', JSON.stringify(Array.isArray(b.variants) ? b.variants : []), b.variant_mode || 'off', b.variant_field || '', parseInt(b.orden) || 0, _sanHora(b.hora), _sanCond(b.cond), _sanAccion(b.accion)]);
     res.status(201).json(rows[0]);
   } catch (err) { console.error('[step] POST error:', err.message); res.status(500).json({ error: 'Error al crear paso' }); }
 });
@@ -3766,8 +3768,8 @@ app.put('/api/sequence-steps/:id', requireAuth, async (req, res) => {
   const canal = STEP_CANALES.includes(b.canal) ? b.canal : 'email';
   try {
     const { rows } = await pool.query(`
-      UPDATE sequence_steps SET dia=$1,canal=$2,titulo=$3,plantilla=$4,variants=$5,variant_mode=$6,variant_field=$7,orden=$8,hora=$9,cond=$10 WHERE id=$11 AND user_id=$12 RETURNING *
-    `, [parseInt(b.dia) || 1, canal, b.titulo || '', b.plantilla || '', JSON.stringify(Array.isArray(b.variants) ? b.variants : []), b.variant_mode || 'off', b.variant_field || '', parseInt(b.orden) || 0, _sanHora(b.hora), _sanCond(b.cond), req.params.id, req.workspaceOwnerId]);
+      UPDATE sequence_steps SET dia=$1,canal=$2,titulo=$3,plantilla=$4,variants=$5,variant_mode=$6,variant_field=$7,orden=$8,hora=$9,cond=$10,accion=$11 WHERE id=$12 AND user_id=$13 RETURNING *
+    `, [parseInt(b.dia) || 1, canal, b.titulo || '', b.plantilla || '', JSON.stringify(Array.isArray(b.variants) ? b.variants : []), b.variant_mode || 'off', b.variant_field || '', parseInt(b.orden) || 0, _sanHora(b.hora), _sanCond(b.cond), _sanAccion(b.accion), req.params.id, req.workspaceOwnerId]);
     if (!rows.length) return res.status(404).json({ error: 'Paso no encontrado' });
     res.json(rows[0]);
   } catch (err) { console.error('[step] PUT error:', err.message); res.status(500).json({ error: 'Error al actualizar paso' }); }

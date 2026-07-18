@@ -12844,3 +12844,11 @@ td.ldh-acts { padding-left: 6px; padding-right: 10px; }
 .ldh-num { text-align: right; font-variant-numeric: tabular-nums; font-size: .82rem; color: var(--text-primary); }
 .ldh-table th.ldh-num { text-align: right; color: var(--text-muted); }
 .sq-dots { display: inline-flex; gap: 4px; align-items: center; vertical-align: middle; }
+
+/* Filtro de canal dentro del runner + separador de grupos de chips */
+.cp-tb-flt-grp { display: inline-flex; gap: 4px; align-items: center; flex-shrink: 0; margin: 0 4px; }
+.cp-tb-flt { border: 1px solid var(--border); background: var(--surface); color: var(--text-muted); font-family: inherit; font-size: .68rem; font-weight: 500; padding: 3px 9px; border-radius: 999px; cursor: pointer; white-space: nowrap; transition: color .12s, border-color .12s, background .12s; }
+.cp-tb-flt:hover { border-color: var(--border-strong); color: var(--text-primary); }
+.cp-tb-flt.on { background: var(--primary-soft); border-color: var(--primary-border); color: var(--primary-hover); font-weight: 600; }
+.lm-flt-sep { width: 1px; height: 18px; background: var(--border); margin: 0 4px; }
+.cp-taskbar__ch--act { text-transform: none; letter-spacing: 0; font-size: .66rem; background: var(--primary-soft); color: var(--primary-hover); }

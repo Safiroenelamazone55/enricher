@@ -13582,6 +13582,14 @@ const LeadManagerModule = (() => {
     whatsapp: ['WhatsApp', '#1FA855', '<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>'],
   };
   const _CANALES = ['email', 'linkedin', 'call', 'task', 'whatsapp'];
+  // Acción dentro del canal: canal = POR DÓNDE contactas; acción = QUÉ haces exactamente.
+  // Define el título por defecto de la tarea y deja claro el trabajo (ej. invitación con nota vs mensaje).
+  const _ACCIONES = {
+    linkedin: [['invite_nota', 'Invitación con nota'], ['invite', 'Invitación sin nota'], ['mensaje', 'Mensaje directo'], ['follow', 'Seguir el perfil'], ['comentario', 'Comentar una publicación'], ['visita', 'Visitar el perfil']],
+    whatsapp: [['mensaje', 'Mensaje'], ['llamada', 'Llamada por WhatsApp']],
+    call:     [['llamada', 'Llamada'], ['voicemail', 'Llamada + voicemail']],
+  };
+  function _accionLabel(canal, a) { const x = (_ACCIONES[canal] || []).find(y => y[0] === a); return x ? x[1] : ''; }
   function _seqBadge(e) { const s = _SEQ[e] || _SEQ.draft; return `<span class="lm-obc-badge" style="background:${s[1]};color:${s[2]}">${s[0]}</span>`; }
   function _seqSteps(id) { return _steps.filter(s => s.sequence_id === id).sort((a, b) => (a.dia - b.dia) || (a.orden - b.orden) || (a.id - b.id)); }
   function _sequencesByClient(cid) { return _sequences.filter(s => s.outbound_client_id === cid); }
@@ -13653,7 +13661,7 @@ const LeadManagerModule = (() => {
   function sqSetCli(v) { _sqCli = v; _sqPaint(); }
   function sqSetEst(v) { _sqEst = v; _sqPaint(); }
   function sqSetQ(v) { _sqQ = v; _sqPaint(); }
-  function openSequence(id) { _activeSeq = id; _section = 'sequence'; _seqTab = 'pasos'; _seqContacts = null; _seqMetrics = null; _seqDo = null; _seqCtEstado = ''; _seqTaskCanal = ''; _refreshNav(); _renderBody(); _seqLoadContacts(id); }
+  function openSequence(id) { _activeSeq = id; _section = 'sequence'; _seqTab = 'pasos'; _seqContacts = null; _seqMetrics = null; _seqDo = null; _seqCtEstado = ''; _seqTaskCanal = ''; _seqTaskDue = ''; _refreshNav(); _renderBody(); _seqLoadContacts(id); }
   const _TZ = [
     ['', 'Sin zona (sin sugerencia de hora)'],
     ['Europe/Madrid', 'España — Madrid'], ['America/New_York', 'EE. UU. Este — New York'], ['America/Chicago', 'EE. UU. Centro — Chicago'],
@@ -14277,23 +14285,33 @@ ${foot}
       const _stepCanals = new Set(_seqSteps(id).map(st => st.canal || 'email'));
       const cOrder = _CANALES.filter(cn => _stepCanals.has(cn) || cCounts[cn]);
       const canalChips = cOrder.length > 1
-        ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px">
-            <button class="lm-filter-btn${!_seqTaskCanal ? ' on' : ''}" onclick="LeadManagerModule.seqTaskSetCanal('')">Todos · ${todoAll.length}</button>
-            ${cOrder.map(cn => `<button class="lm-filter-btn${_seqTaskCanal === cn ? ' on' : ''}" onclick="LeadManagerModule.seqTaskSetCanal('${cn}')">${_TOUCH[cn][0]} · ${cCounts[cn] || 0}</button>`).join('')}
-          </div>`
+        ? `<button class="lm-filter-btn${!_seqTaskCanal ? ' on' : ''}" onclick="LeadManagerModule.seqTaskSetCanal('')">Todos · ${todoAll.length}</button>
+            ${cOrder.map(cn => `<button class="lm-filter-btn${_seqTaskCanal === cn ? ' on' : ''}" onclick="LeadManagerModule.seqTaskSetCanal('${cn}')">${_TOUCH[cn][0]} · ${cCounts[cn] || 0}</button>`).join('')}`
         : '';
       const todo = _seqTaskCanal ? todoAll.filter(t => (t.st.canal || 'email') === _seqTaskCanal) : todoAll;
       const future = tasks.filter(t => t.due > today);
       const over = todo.filter(t => t.due < today).sort((a, b) => a.due - b.due || (a.st.hora || '99:99').localeCompare(b.st.hora || '99:99'));
       const hoy = todo.filter(t => t.due.getTime() === today.getTime()).sort((a, b) => (a.st.hora || '99:99').localeCompare(b.st.hora || '99:99'));
+      // Filtro por estatus de la tarea (Vencidas / Hoy) — junto al de canal.
+      const dueChips = (over.length && hoy.length)
+        ? `<span class="lm-flt-sep"></span>
+           <button class="lm-filter-btn${!_seqTaskDue ? ' on' : ''}" onclick="LeadManagerModule.seqTaskSetDue('')">Todas · ${todo.length}</button>
+           <button class="lm-filter-btn${_seqTaskDue === 'over' ? ' on' : ''}" onclick="LeadManagerModule.seqTaskSetDue('over')">Vencidas · ${over.length}</button>
+           <button class="lm-filter-btn${_seqTaskDue === 'today' ? ' on' : ''}" onclick="LeadManagerModule.seqTaskSetDue('today')">Hoy · ${hoy.length}</button>`
+        : '';
+      const fltRow = (canalChips || dueChips) ? `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:0 0 12px">${canalChips}${dueChips}</div>` : '';
+      const showOver = !_seqTaskDue || _seqTaskDue === 'over';
+      const showToday = !_seqTaskDue || _seqTaskDue === 'today';
+      const visibles = (showOver ? over : []).concat(showToday ? hoy : []);
       const nextLine = future.length ? `<div class="seq-next">${NI('calendar', 12)} Siguiente tarea: <b>${_relDay(future[0].due)}</b>${future.length > 1 ? ` · +${future.length - 1} más` : ''}</div>` : '';
       const canalLbl = _seqTaskCanal ? ` de ${_TOUCH[_seqTaskCanal][0]}` : '';
-      const head = todo.length
-        ? `<div class="seq-tasks-hd">${todo.length} ${todo.length === 1 ? 'tarea' : 'tareas'}${canalLbl} por hacer<button class="seq-tasks-start" onclick="LeadManagerModule.seqTaskOpen(${id},${todo[0].e.contact_id})">▶ Empezar</button></div>`
-        : `<div class="seq-tasks-hd seq-tasks-hd--none">Sin tareas${canalLbl} para hoy</div>`;
-      const grp = (over.length ? `<div class="lm-tsec-h lm-tsec-h--over"><span class="lm-tsec-h__dot"></span>Vencidas<span class="lm-tsec-h__n">${over.length}</span></div><div class="seq-tasks">${over.map(t => _seqTaskRow(t, id, today)).join('')}</div>` : '')
-                + (hoy.length ? `<div class="lm-tsec-h lm-tsec-h--today"><span class="lm-tsec-h__dot"></span>Hoy<span class="lm-tsec-h__n">${hoy.length}</span></div><div class="seq-tasks">${hoy.map(t => _seqTaskRow(t, id, today)).join('')}</div>` : '');
-      return `${_acceptCtaHtml(id)}${canalChips}${head}${grp}${nextLine}`;
+      const dueLbl = _seqTaskDue === 'over' ? ' vencidas' : _seqTaskDue === 'today' ? ' de hoy' : '';
+      const head = visibles.length
+        ? `<div class="seq-tasks-hd">${visibles.length} ${visibles.length === 1 ? 'tarea' : 'tareas'}${canalLbl}${dueLbl} por hacer<button class="seq-tasks-start" onclick="LeadManagerModule.seqTaskOpen(${id},${visibles[0].e.contact_id})">▶ Empezar</button></div>`
+        : `<div class="seq-tasks-hd seq-tasks-hd--none">Sin tareas${canalLbl}${dueLbl} para hoy</div>`;
+      const grp = (showOver && over.length ? `<div class="lm-tsec-h lm-tsec-h--over"><span class="lm-tsec-h__dot"></span>Vencidas<span class="lm-tsec-h__n">${over.length}</span></div><div class="seq-tasks">${over.map(t => _seqTaskRow(t, id, today)).join('')}</div>` : '')
+                + (showToday && hoy.length ? `<div class="lm-tsec-h lm-tsec-h--today"><span class="lm-tsec-h__dot"></span>Hoy<span class="lm-tsec-h__n">${hoy.length}</span></div><div class="seq-tasks">${hoy.map(t => _seqTaskRow(t, id, today)).join('')}</div>` : '');
+      return `${_acceptCtaHtml(id)}${fltRow}${head}${grp}${nextLine}`;
     }
     if (_seqTab === 'envios') {
       if (_seqMsgs === null) return `<div class="cp-empty2" style="padding:22px">Cargando envíos…</div>`;
@@ -14649,6 +14667,7 @@ ${foot}
   function seqTab(t) { _seqTab = t; _renderBody(); if ((t === 'contactos' || t === 'tareas') && !Array.isArray(_seqContacts)) _seqLoadContacts(_activeSeq); if (t === 'metricas') { if (_seqMetrics === null) _seqLoadMetrics(_activeSeq); _seqAb = null; _seqLoadAb(_activeSeq); } if (t === 'envios') { _seqMsgs = null; _seqLoadMsgs(_activeSeq); } }
   function seqCtSetEstado(v) { _seqCtEstado = v || ''; const el = document.getElementById('seq-tabwrap'); if (el && _activeSeq) el.innerHTML = _seqTabContent(_activeSeq); else _renderBody(); }
   function seqTaskSetCanal(v) { _seqTaskCanal = v || ''; const el = document.getElementById('seq-tabwrap'); if (el && _activeSeq) el.innerHTML = _seqTabContent(_activeSeq); else _renderBody(); }
+  function seqTaskSetDue(v) { _seqTaskDue = v || ''; const el = document.getElementById('seq-tabwrap'); if (el && _activeSeq) el.innerHTML = _seqTabContent(_activeSeq); else _renderBody(); }
   async function _seqPatch(seqId, cid, body) {
     try {
       const res = await apiFetch(`${API}/lm/sequences/${seqId}/contacts/${cid}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -14786,7 +14805,7 @@ ${foot}
     const overdue = due < today; const isToday = due.getTime() === today.getTime();
     return `<div class="seq-task${overdue ? ' over' : ''}${isToday ? ' today' : ''}" onclick="LeadManagerModule.seqTaskOpen(${seqId},${e.contact_id})">
       <span class="seq-task__ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${touch[2]}</svg></span>
-      <div class="seq-task__body"><div class="seq-task__t">${esc(st.titulo || touch[0])}<span class="seq-task__ch">${touch[0]}</span></div><div class="seq-task__who">${esc(full)}${e.company_nombre ? ` · ${esc(e.company_nombre)}` : ''}</div></div>
+      <div class="seq-task__body"><div class="seq-task__t">${esc(st.titulo || _accionLabel(st.canal, st.accion) || touch[0])}<span class="seq-task__ch">${touch[0]}</span></div><div class="seq-task__who">${esc(full)}${e.company_nombre ? ` · ${esc(e.company_nombre)}` : ''}</div></div>
       ${_taskTimeHtml(st, seqId, e)}
       <span class="seq-task__go">Hacer tarea ›</span>
     </div>`;
@@ -14863,6 +14882,26 @@ ${foot}
   }
   function seqDoClose() { document.getElementById('seq-do-modal')?.remove(); _seqDo = null; }
   function seqDoEditStep(stepId) { const seqId = _cpTaskCtx ? _cpTaskCtx.seqId : _activeSeq; openStepDrawer(seqId, stepId); }
+  // Filtro de canal DENTRO del runner: cambia la cola sin salir de la tarea.
+  function _runnerFltHtml(seqId) {
+    const canals = [...new Set(_seqSteps(seqId).map(s => s.canal || 'email'))];
+    if (canals.length < 2) return '';
+    const today = new Date(new Date().toDateString());
+    const all = _seqTasks(seqId).filter(t => t.due <= today);
+    const cCounts = {}; all.forEach(t => { const cn = t.st.canal || 'email'; cCounts[cn] = (cCounts[cn] || 0) + 1; });
+    const chips = [['', `Todos · ${all.length}`]].concat(_CANALES.filter(cn => canals.includes(cn)).map(cn => [cn, `${_TOUCH[cn][0]} · ${cCounts[cn] || 0}`]));
+    return `<span class="cp-tb-flt-grp" title="Filtra la cola de tareas por canal sin salir">${chips.map(([cn, lbl]) => `<button class="cp-tb-flt${_seqTaskCanal === cn ? ' on' : ''}" onclick="LeadManagerModule.seqRunSetCanal('${cn}')">${lbl}</button>`).join('')}</span>`;
+  }
+  function seqRunSetCanal(cn) {
+    _seqTaskCanal = cn || '';
+    const seqId = _cpTaskCtx && _cpTaskCtx.seqId;
+    if (!seqId) { _renderBody(); return; }
+    const today = new Date(new Date().toDateString());
+    const queue = _seqTasks(seqId).filter(t => t.due <= today && (!_seqTaskCanal || (t.st.canal || 'email') === _seqTaskCanal));
+    if (!queue.length) { showBanner(`Sin tareas${cn ? ' de ' + _TOUCH[cn][0] : ''} por hacer hoy`, 'info'); _renderBody(); return; }
+    if (!queue.some(t => t.e.contact_id === _contactView)) openContactPage(queue[0].e.contact_id, { seqId });
+    else _renderBody();
+  }
   function seqDoExit() { const seqId = _cpTaskCtx ? _cpTaskCtx.seqId : _activeSeq; _cpTaskCtx = null; _cpTaskHist = []; _cpSkipped = []; _cpDone = 0; _activeSeq = seqId; _section = 'sequence'; _seqTab = 'tareas'; _renderBody(); if (!Array.isArray(_seqContacts)) _seqLoadContacts(seqId); }
   function seqOpenLinkedIn(cid) {
     const c = _contacts.find(x => x.id === cid);
@@ -15037,7 +15076,8 @@ ${foot}
     return `<div class="cp-taskbar cp-taskbar--slim">
       <div class="cp-taskbar__top">
         <span class="cp-taskbar__ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${touch[2]}</svg></span>
-        <div class="cp-taskbar__ttl"><span class="cp-taskbar__t">${esc(st.titulo || touch[0])}</span><b class="cp-taskbar__ch">${touch[0]}</b><span class="cp-taskbar__meta">${queue.length ? `${_cpDone + 1} de ${_cpDone + queue.length} hoy` : `Día ${st.dia || 1}`}${seq ? ` · ${esc(seq.nombre)}` : ''}</span></div>
+        <div class="cp-taskbar__ttl"><span class="cp-taskbar__t">${esc(st.titulo || _accionLabel(st.canal, st.accion) || touch[0])}</span><b class="cp-taskbar__ch">${touch[0]}</b>${st.accion && st.titulo ? `<b class="cp-taskbar__ch cp-taskbar__ch--act">${_accionLabel(st.canal, st.accion)}</b>` : ''}<span class="cp-taskbar__meta">${queue.length ? `${_cpDone + 1} de ${_cpDone + queue.length} hoy` : `Día ${st.dia || 1}`}${seq ? ` · ${esc(seq.nombre)}` : ''}</span></div>
+        ${_runnerFltHtml(seqId)}
         <button class="cp-taskbar__exit" onclick="LeadManagerModule.seqDoExit()">‹ Tareas</button>
       </div>
       ${(() => { const ptz = _contactTz(c) || (seq && seq.timezone) || ''; if (!ptz) return ''; const own = !!_contactTz(c); return `<div class="cp-taskbar__clock" id="cp-clock-row" data-tz="${esc(ptz)}">${_prospectClockInner(ptz)}${own ? `<span style="color:#98A2AE;display:inline-flex;align-items:center;gap:3px" title="Zona horaria derivada del estado del prospecto (no de la secuencia)">${NI('pin', 11)} ${esc(c.region || '')}</span>` : ''}</div>
@@ -15186,7 +15226,7 @@ ${foot}
       <div class="lm-step__day"><span>Día</span><b>${st.dia}</b></div>
       <div class="lm-step__rail"><span class="lm-step__ico" style="background:${t[1]}1a;color:${t[1]}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${t[2]}</svg></span></div>
       <div class="lm-step__body">
-        <div class="lm-step__top"><span class="lm-step__t">${esc(st.titulo || t[0])}</span><span class="lm-step__canal" style="color:${t[1]}">${t[0]}</span>${cb}</div>
+        <div class="lm-step__top"><span class="lm-step__t">${esc(st.titulo || _accionLabel(st.canal, st.accion) || t[0])}</span><span class="lm-step__canal" style="color:${t[1]}">${t[0]}</span>${st.accion ? `<span class="lm-vb" style="background:var(--surface-secondary,#F2F4F1);color:var(--text2,#5F6B64)">${_accionLabel(st.canal, st.accion)}</span>` : ''}${cb}</div>
         ${st.plantilla ? `<div class="lm-step__tpl">${esc(st.plantilla)}</div>` : ''}
       </div>
       <div class="lm-step__acts">
@@ -16690,6 +16730,7 @@ ${foot}
           <input type="hidden" id="step-canal" value="${st?.canal || 'email'}">
           <span class="seq-drip-hint" id="step-canal-hint">${_canalHint(st?.canal || 'email')}</span>
         </label>
+        <div class="fin-pi-full" id="step-accion-slot">${_stepAccionHtml(st?.canal || 'email', st?.accion || '')}</div>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Hora (opcional)</span><input class="form-input" type="time" id="step-hora" value="${st && st.hora ? esc(st.hora) : ''}"><span class="seq-drip-hint" id="step-hora-hint">${_stepHoraHint(seqId)}</span></label>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Título del paso</span><input class="form-input" id="step-titulo" value="${st ? esc(st.titulo) : ''}" placeholder="Ej. Email 1 — intro"></label>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">¿Para quién? (rama por respuesta)</span><select class="form-input" id="step-cond"><option value=""${!(st && st.cond) ? ' selected' : ''}>Todos</option><option value="replied"${st && st.cond === 'replied' ? ' selected' : ''}>Solo si respondió / aceptó</option><option value="no_reply"${st && st.cond === 'no_reply' ? ' selected' : ''}>Solo si NO respondió</option></select><span class="seq-drip-hint">Ramifica la secuencia: el sistema <b>salta</b> este paso para quien no cumpla la condición. Ej.: nota de conexión = <b>Todos</b>; mensaje de LinkedIn = <b>Solo si aceptó</b>; email de seguimiento = <b>Solo si no respondió</b>.</span></label>
@@ -16803,10 +16844,18 @@ ${foot}
          : 'Tarea manual, sin canal de envío.';
   }
   function _canalHint(c) { return `Al hacer la tarea: ${_canalHintPlain(c)}`; }
+  function _stepAccionHtml(canal, cur) {
+    const opts = _ACCIONES[canal];
+    if (!opts) return '';
+    return `<label class="fin-cfg-field"><span class="fin-cfg-lbl">Acción del paso</span>
+      <select class="form-input" id="step-accion">${opts.map(o => `<option value="${o[0]}"${cur === o[0] ? ' selected' : ''}>${o[1]}</option>`).join('')}</select>
+      <span class="seq-drip-hint">Qué harás exactamente en este canal. Da el título por defecto de la tarea (ej. “Invitación con nota” vs “Mensaje directo”).</span></label>`;
+  }
   function stepPickCanal(c) {
     const inp = $('step-canal'); if (inp) inp.value = c;
     document.querySelectorAll('#lm-step-modal .step-canal-b').forEach(b => b.classList.toggle('on', b.dataset.canal === c));
     const h = $('step-canal-hint'); if (h) h.innerHTML = _canalHint(c);
+    const slot = $('step-accion-slot'); if (slot) slot.innerHTML = _stepAccionHtml(c, '');
     stepCanalChange();
   }
   function stepVarUseTpl(i, tplId) {
@@ -16857,7 +16906,7 @@ ${foot}
     const d = _stepDraft || { mode: 'off', field: '', variants: [{ cuerpo: '' }] };
     const variants = d.mode === 'off' ? [] : d.variants.filter(v => (v.cuerpo || '').trim() || (v.nombre || '').trim());
     const plantilla = ((d.variants[0] && d.variants[0].cuerpo) || '').trim();
-    const body = { sequence_id: seqId, dia, canal: $('step-canal')?.value || 'email', titulo: $('step-titulo')?.value.trim() || '', plantilla, variants, variant_mode: d.mode, variant_field: d.field, orden: dia, hora: $('step-hora')?.value || '', cond: $('step-cond')?.value || '' };
+    const body = { sequence_id: seqId, dia, canal: $('step-canal')?.value || 'email', titulo: $('step-titulo')?.value.trim() || '', plantilla, variants, variant_mode: d.mode, variant_field: d.field, orden: dia, hora: $('step-hora')?.value || '', cond: $('step-cond')?.value || '', accion: $('step-accion')?.value || '' };
     const btn = $('step-save'); if (btn) btn.disabled = true;
     try {
       const res = await apiFetch(`${API}/sequence-steps${stepId ? '/' + stepId : ''}`, { method: stepId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -16866,7 +16915,9 @@ ${foot}
     } catch (e) { const h = $('step-hint'); if (h) { h.textContent = e.message; h.className = 'fin-cfg-hint fin-cfg-hint--err'; } if (btn) btn.disabled = false; }
   }
   async function confirmDeleteStep(id) {
-    if (!confirm('¿Eliminar este paso?')) return;
+    const st = _steps.find(x => x.id === id);
+    const ok = await novaConfirm({ title: '¿Eliminar este paso?', message: st ? `Día ${st.dia} · <b>${esc(st.titulo || _accionLabel(st.canal, st.accion) || (_TOUCH[st.canal] || _TOUCH.email)[0])}</b>. Los contactos que iban por este paso saltan al siguiente.` : '', ok: 'Eliminar', cancel: 'Cancelar', tone: 'danger' });
+    if (!ok) return;
     try {
       const res = await apiFetch(`${API}/sequence-steps/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error((await res.json()).error || 'Error');
@@ -16977,6 +17028,7 @@ ${foot}
   let _seqTab = 'pasos';
   let _seqCtEstado = ''; // filtro de estado en la pestaña Contactos de la secuencia
   let _seqTaskCanal = ''; // filtro por canal en la pestaña Tareas de la secuencia
+  let _seqTaskDue = '';   // filtro por estatus de tarea: '' todas | 'over' vencidas | 'today' hoy
   let _seqContacts = null;
   let _seqMetrics = null;
   let _seqDo = null;          // { seqId, cid } — tarea abierta en el panel de ejecución
@@ -18832,6 +18884,7 @@ ${foot}
     ldPill, ldSetCli, ldSetSeq, ldSetCamp, ldSetQ, ldAddNote, ldMeet, ldToDeal,
     dlSetCli, dlOpen, dlClose, dlSave,
     sqSetCli, sqSetEst, sqSetQ, cmSetCli, cmSetEst, cmSetQ,
+    seqRunSetCanal, seqTaskSetDue,
     pendingAcceptOpen, pendingAcceptToggleAll, pendingAcceptApplyFilters, pendingAcceptMark,
     openActivityDrawer, closeActivityDrawer, saveActivity, confirmDeleteActivity, markActDone,
     setReplySentiment, setLeadStage,

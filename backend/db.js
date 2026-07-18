@@ -638,6 +638,9 @@ async function initDb() {
     // Condición de rama del paso: '' = para todos; 'replied' = solo si el contacto respondió/aceptó;
     // 'no_reply' = solo si NO respondió. El motor salta los pasos cuya condición no aplica al contacto.
     await pool.query(`ALTER TABLE sequence_steps ADD COLUMN IF NOT EXISTS cond TEXT NOT NULL DEFAULT '';`);
+    // Acción del paso dentro del canal (LinkedIn: invitación con/sin nota, mensaje, follow…;
+    // WhatsApp: mensaje/llamada; Llamada: llamada/voicemail). '' = acción por defecto del canal.
+    await pool.query(`ALTER TABLE sequence_steps ADD COLUMN IF NOT EXISTS accion TEXT NOT NULL DEFAULT '';`);
     // Zona horaria del prospecto por secuencia (IANA, p. ej. America/New_York) → ventana de envío sugerida.
     await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS timezone TEXT NOT NULL DEFAULT '';`);
     // Arranque escalonado (drip): nº de contactos nuevos a arrancar por día al enrolar. 0 = todos el mismo día.
