@@ -2843,6 +2843,21 @@ function _sanHora(v) { const s = String(v || '').trim(); const m = s.match(/^(\d
 function _sanCond(v) { return ['replied', 'no_reply'].includes(v) ? v : ''; }
 // Acción del paso dentro del canal (invitación con/sin nota, mensaje, follow, comentario…)
 function _sanAccion(v) { return ['invite_nota', 'invite', 'mensaje', 'follow', 'comentario', 'visita', 'llamada', 'voicemail'].includes(v) ? v : ''; }
+// ── Pipeline automático del contacto (estilo Apollo) ──
+// El estado avanza SOLO hacia adelante según la actividad: 1er paso completado → contactado;
+// disposición respondió/reunión → respondio; no interesado/no contactar → perdido.
+// Nunca retrocede ni saca a nadie de 'ganado' — lo manual (propuesta/negociación/ganado) manda.
+const LM_STAGE_ORDER = ['nuevo', 'contactado', 'respondio', 'propuesta', 'negociacion', 'ganado', 'perdido'];
+async function _lmAdvanceStage(uid, cid, target) {
+  try {
+    const cur = (await pool.query(`SELECT estado FROM lm_contacts WHERE id=$1 AND user_id=$2`, [cid, uid])).rows[0];
+    if (!cur || cur.estado === 'ganado') return null;
+    const a = LM_STAGE_ORDER.indexOf(cur.estado || 'nuevo'), b = LM_STAGE_ORDER.indexOf(target);
+    if (b < 0 || a >= b) return null;
+    await pool.query(`UPDATE lm_contacts SET estado=$1, updated_at=NOW() WHERE id=$2 AND user_id=$3`, [target, cid, uid]);
+    return target;
+  } catch (e) { console.error('[lm-stage]', e.message); return null; }
+}
 function _sanDate(v) { const s = String(v || '').trim(); return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null; }
 // today (fecha local del server como UTC-midnight, para aritmética de días sin tz-shift)
 function _todayUTC() { const t = new Date(); return new Date(Date.UTC(t.getFullYear(), t.getMonth(), t.getDate())); }
@@ -3031,7 +3046,10 @@ app.post('/api/lm/contacts/:id/disposition', requireAuth, async (req, res) => {
       await pool.query(`INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, nota, fecha, estado) VALUES ($1,$2,$3,$4,$5,NOW(),'hecha')`,
         [uid, cid, obcId, tipoMap[disp] || 'nota', `Disposición: ${LBL[disp] || disp}${nota ? ' — ' + nota : ''}`]);
     }
-    res.json({ ok: true, disposition: disp, paused, rerouted });
+    // La disposición alimenta el pipeline (solo hacia adelante): respondió/reunión → respondio; descartes → perdido.
+    const STAGE_BY_DISP = { respondio: 'respondio', reunion: 'respondio', no_interesado: 'perdido', no_contactar: 'perdido' };
+    const stage = disp ? await _lmAdvanceStage(uid, cid, STAGE_BY_DISP[disp]) : null;
+    res.json({ ok: true, disposition: disp, paused, rerouted, stage });
   } catch (err) { console.error('[lm-disp]', err.message); res.status(500).json({ error: 'Error al actualizar disposición' }); }
 });
 // Deal (capa financiera del pipeline): valor estimado, moneda, probabilidad y fecha de cierre.
@@ -3145,7 +3163,10 @@ app.patch('/api/lm/sequences/:id/contacts/:cid', requireAuth, async (req, res) =
   try {
     const { rows } = await pool.query(`UPDATE lm_contact_sequences SET ${sets.join(',')} WHERE user_id=$${vals.length - 2} AND sequence_id=$${vals.length - 1} AND contact_id=$${vals.length} RETURNING *`, vals);
     if (!rows.length) return res.status(404).json({ error: 'Enrolamiento no encontrado' });
-    res.json(rows[0]);
+    // Completó al menos el paso 1 (avanza de paso o termina) → el contacto ya fue contactado.
+    const stage = ((b.paso != null && (parseInt(b.paso) || 1) > 1) || b.estado === 'terminado')
+      ? await _lmAdvanceStage(req.workspaceOwnerId, req.params.cid, 'contactado') : null;
+    res.json({ ...rows[0], stage });
   } catch (err) { console.error('[lm-seq-ct] PATCH', err.message); res.status(500).json({ error: 'Error al actualizar' }); }
 });
 app.delete('/api/lm/sequences/:id/contacts/:cid', requireAuth, async (req, res) => {

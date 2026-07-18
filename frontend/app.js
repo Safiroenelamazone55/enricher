@@ -13308,7 +13308,7 @@ const LeadManagerModule = (() => {
   let _activeClient = null;   // id del cliente outbound en detalle
   let _activeSeq = null;      // id de la secuencia en editor
   let _lastDone = null;       // { seqId, cid } último paso marcado hecho → para "Deshacer"
-  const _ORDER = ['nuevo', 'contactado', 'propuesta', 'negociacion', 'ganado', 'perdido'];
+  const _ORDER = ['nuevo', 'contactado', 'respondio', 'propuesta', 'negociacion', 'ganado', 'perdido'];
   const _AV_PERSON = 'data:image/svg+xml,' + encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'><circle cx='20' cy='20' r='20' fill='#EAF5EE'/><circle cx='20' cy='16' r='6' fill='#00804C'/><path fill='#00804C' d='M9 33c0-5.5 4.9-9.5 11-9.5S31 27.5 31 33a20 20 0 0 1-22 0z'/></svg>");
   const _av = _ => _AV_PERSON;  // icono de persona uniforme para todos los contactos/leads
   function _money(n) {
@@ -13320,12 +13320,13 @@ const LeadManagerModule = (() => {
   }
 
   const STAGE_LABELS = {
-    nuevo: 'Nuevo', contactado: 'Contactado', propuesta: 'Propuesta',
+    nuevo: 'Nuevo', contactado: 'Contactado', respondio: 'Respondió', propuesta: 'Propuesta',
     negociacion: 'Negociación', ganado: 'Ganado', perdido: 'Perdido',
   };
   const STAGE_STYLES = {
     nuevo:       'background:#BFDBFE;color:#1E40AF',
     contactado:  'background:#FDE68A;color:#92400E',
+    respondio:   'background:#D1FAE5;color:#065F46',
     propuesta:   'background:#FDBA74;color:#9A3412',
     negociacion: 'background:#DDD6FE;color:#5B21B6',
     ganado:      'background:#A7F3D0;color:#065F46',
@@ -14383,7 +14384,7 @@ ${foot}
       const r = await _lmSetDispositionCore(cid, disp, null, nota);
       await _reloadContacts();
       if (_activeSeq && Array.isArray(_seqContacts)) { _seqContacts = null; await _seqLoadContacts(_activeSeq); }
-      showBanner(disp ? `✓ ${_dispoLabel(disp)}${r.rerouted ? ` · → Ruta A (LinkedIn) en ${r.rerouted} secuencia${r.rerouted === 1 ? '' : 's'}` : ''}${r.paused ? ` · pausado en ${r.paused} secuencia${r.paused === 1 ? '' : 's'}` : ''}` : '✓ Disposición quitada', 'success');
+      showBanner(disp ? `✓ ${_dispoLabel(disp)}${r.stage ? ` · Estado → ${STAGE_LABELS[r.stage] || r.stage}` : ''}${r.rerouted ? ` · → Ruta A (LinkedIn) en ${r.rerouted} secuencia${r.rerouted === 1 ? '' : 's'}` : ''}${r.paused ? ` · pausado en ${r.paused} secuencia${r.paused === 1 ? '' : 's'}` : ''}` : '✓ Disposición quitada', 'success');
       if (_section === 'contact-view') { _renderBody(); _cpReloadActs(cid); } else _renderBody();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
@@ -14394,7 +14395,7 @@ ${foot}
       const nota = disp ? await novaNote({ title: _dispoLabel(disp), message: '¿Alguna nota de la respuesta? Quedará en la ficha y en Leads. (Esc para omitir)' }) : '';
       const r = await _lmSetDispositionCore(cid, disp, seqId, nota);
       _seqContacts = null; await _seqLoadContacts(seqId); await _reloadContacts();
-      showBanner(`✓ ${_dispoLabel(disp)}${r.rerouted ? ' · → Ruta A (LinkedIn)' : ''}${r.paused ? ' · pausado en secuencias' : ''}`, 'success');
+      showBanner(`✓ ${_dispoLabel(disp)}${r.stage ? ` · Estado → ${STAGE_LABELS[r.stage] || r.stage}` : ''}${r.rerouted ? ' · → Ruta A (LinkedIn)' : ''}${r.paused ? ' · pausado en secuencias' : ''}`, 'success');
       const next = _cpNextTask(seqId, cid);
       if (next) openContactPage(next.e.contact_id, { seqId: seqId }); else seqDoExit();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
