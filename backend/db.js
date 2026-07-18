@@ -748,6 +748,11 @@ async function initDb() {
     await pool.query(`ALTER TABLE lm_contacts  ADD COLUMN IF NOT EXISTS buyer_role       TEXT NOT NULL DEFAULT '';`);
     // Disposición outbound (independiente del paso): respondio/reunion/no_interesado/no_contactar. Vacío = sin marcar.
     await pool.query(`ALTER TABLE lm_contacts  ADD COLUMN IF NOT EXISTS disposition      TEXT NOT NULL DEFAULT '';`);
+    // Deals: capa financiera del pipeline por contacto (valor estimado · probabilidad · cierre)
+    await pool.query(`ALTER TABLE lm_contacts  ADD COLUMN IF NOT EXISTS deal_valor       NUMERIC(12,2);`);
+    await pool.query(`ALTER TABLE lm_contacts  ADD COLUMN IF NOT EXISTS deal_moneda      TEXT NOT NULL DEFAULT 'USD';`);
+    await pool.query(`ALTER TABLE lm_contacts  ADD COLUMN IF NOT EXISTS deal_prob        INTEGER;`);
+    await pool.query(`ALTER TABLE lm_contacts  ADD COLUMN IF NOT EXISTS deal_cierre      DATE;`);
     // lm_templates: biblioteca de plantillas/assets (Email & LinkedIn) con variables, reutilizables en secuencias.
     await pool.query(`
       CREATE TABLE IF NOT EXISTS lm_templates (

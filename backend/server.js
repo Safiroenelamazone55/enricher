@@ -3032,6 +3032,25 @@ app.post('/api/lm/contacts/:id/disposition', requireAuth, async (req, res) => {
     res.json({ ok: true, disposition: disp, paused, rerouted });
   } catch (err) { console.error('[lm-disp]', err.message); res.status(500).json({ error: 'Error al actualizar disposición' }); }
 });
+// Deal (capa financiera del pipeline): valor estimado, moneda, probabilidad y fecha de cierre.
+// El PUT completo del contacto usa LM_CT_COLS y NO toca estas columnas.
+app.patch('/api/lm/contacts/:id/deal', requireAuth, async (req, res) => {
+  const b = req.body || {};
+  const valor = (b.valor === '' || b.valor == null) ? null : Number(b.valor);
+  const probN = (b.prob === '' || b.prob == null) ? null : parseInt(b.prob, 10);
+  const prob = Number.isFinite(probN) ? Math.max(0, Math.min(100, probN)) : null;
+  const moneda = ['USD', 'PEN', 'EUR'].includes(b.moneda) ? b.moneda : 'USD';
+  const cierre = b.cierre ? String(b.cierre).slice(0, 10) : null;
+  if (valor != null && (!isFinite(valor) || valor < 0)) return res.status(400).json({ error: 'Valor inválido' });
+  try {
+    const { rows } = await pool.query(
+      `UPDATE lm_contacts SET deal_valor=$1, deal_moneda=$2, deal_prob=$3, deal_cierre=$4, updated_at=NOW()
+       WHERE id=$5 AND user_id=$6 RETURNING id, deal_valor, deal_moneda, deal_prob, deal_cierre`,
+      [valor, moneda, prob, cierre, req.params.id, req.workspaceOwnerId]);
+    if (!rows.length) return res.status(404).json({ error: 'Contacto no encontrado' });
+    res.json(rows[0]);
+  } catch (err) { console.error('[lm-deal]', err.message); res.status(500).json({ error: 'Error al guardar el deal' }); }
+});
 // Canal LinkedIn no válido (perfil falso/inactivo): NO saca al contacto de la secuencia —
 // el motor de tareas salta sus pasos de LinkedIn y sigue por la ruta de email. value=false revierte.
 app.post('/api/lm/contacts/:id/no-linkedin', requireAuth, async (req, res) => {

@@ -13379,6 +13379,7 @@ const LeadManagerModule = (() => {
     { k: 'companies',  l: 'Empresas',           g: 'Datos' },
     { k: 'contacts',   l: 'Contactos',          g: 'Datos' },
     { k: 'leads',      l: 'Leads',              g: 'Comercial' },
+    { k: 'deals',      l: 'Deals',              g: 'Comercial' },
     { k: 'activities', l: 'Actividades',        g: 'Comercial' },
     { k: 'inbox',      l: 'Inbox / Respuestas', g: 'Comercial' },
     { k: 'tasks',      l: 'Tareas comerciales', g: 'Comercial' },
@@ -13392,6 +13393,7 @@ const LeadManagerModule = (() => {
     campaigns:'<path d="M3 11l18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/>',
     sequences:'<line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>',
     leads:'<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>',
+    deals:'<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
     companies:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M3 9h6"/>',
     contacts:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>',
     activities:'<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
@@ -13455,6 +13457,7 @@ const LeadManagerModule = (() => {
     else if (_section === 'tasks')     body.innerHTML = _vTasks();
     else if (_section === 'inbox')     body.innerHTML = _vInbox();
     else if (_section === 'leads')     { body.innerHTML = _vLeadsHub(); _ldPaint(); }
+    else if (_section === 'deals')     { body.innerHTML = _vDeals(); _dlPaint(); }
     else if (_section === 'companies') { body.innerHTML = _vCompanies(); _renderCompanies(); }
     else if (_section === 'contacts')  { body.innerHTML = _vContacts();  _renderContacts(); }
     else if (_section === 'contact-view') { body.innerHTML = _vContactPage(_contactView); _cpLoadMap(_contacts.find(x => x.id === _contactView)); }
@@ -15970,10 +15973,11 @@ ${foot}
         <td class="ldh-acts" onclick="event.stopPropagation()">
           <button class="ldh-act" title="Añadir nota" onclick="LeadManagerModule.ldAddNote(${c.id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
           <button class="ldh-act" title="Registrar reunión" onclick="LeadManagerModule.ldMeet(${c.id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></button>
+          <button class="ldh-act" title="Convertir en deal (valor · probabilidad · cierre)" onclick="LeadManagerModule.ldToDeal(${c.id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></button>
         </td></tr>`;
     }).join('');
     wrap.innerHTML = `<div class="ldh-table-wrap"><table class="ldh-table">
-      <colgroup><col style="width:22%"><col style="width:12%"><col style="width:17%"><col style="width:11%"><col style="width:8%"><col><col style="width:84px"></colgroup>
+      <colgroup><col style="width:22%"><col style="width:12%"><col style="width:16%"><col style="width:11%"><col style="width:8%"><col><col style="width:118px"></colgroup>
       <thead><tr><th>Lead</th><th>Cliente</th><th>Secuencia</th><th>Resultado</th><th>Fecha</th><th>Última nota</th><th></th></tr></thead>
       <tbody>${rows}</tbody></table></div>`;
   }
@@ -15994,6 +15998,131 @@ ${foot}
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
   function ldMeet(cid) { openContactPage(cid); setTimeout(() => cpActOpen('reunion'), 250); }
+  function ldToDeal(cid) { dlOpen(cid); }
+
+  // ── Deals: capa financiera del pipeline (valor · probabilidad · fecha de cierre) ──
+  let _dlCli = '';
+  const _DL_STAGES = ['propuesta', 'negociacion', 'ganado', 'perdido'];
+  function _dlList() {
+    let list = _contacts.filter(c => _DL_STAGES.includes(c.estado) || c.deal_valor != null);
+    if (_dlCli) list = list.filter(c => String(c.outbound_client_id || '') === _dlCli);
+    return list;
+  }
+  function _dlMoney(n, mon) { return `${mon || 'USD'} ${Number(n || 0).toLocaleString('es-PE', { maximumFractionDigits: 0 })}`; }
+  function _dlSums(list, weighted) {
+    const by = {};
+    list.forEach(c => {
+      if (c.deal_valor == null) return;
+      const m = c.deal_moneda || 'USD';
+      const v = Number(c.deal_valor) * (weighted ? ((c.deal_prob != null ? c.deal_prob : 50) / 100) : 1);
+      by[m] = (by[m] || 0) + v;
+    });
+    const parts = Object.entries(by).map(([m, v]) => _dlMoney(v, m));
+    return parts.length ? parts.join(' · ') : '—';
+  }
+  function _stColor(s) { const m = (STAGE_STYLES[s] || '').match(/color:([^;]+)/); return m ? m[1] : '#888'; }
+  function _vDeals() {
+    return `<div class="lm-sec-head">
+        <div><h2 class="lm-sec-title">Deals</h2><p class="lm-sec-sub">Pipeline comercial — valor, probabilidad y fecha de cierre por lead</p></div>
+      </div>
+      <div id="dl-kpis"></div>
+      <div class="dl-toolbar"><select class="ldh-sel" id="dl-cli" onchange="LeadManagerModule.dlSetCli(this.value)"></select></div>
+      <div id="dl-board"></div>`;
+  }
+  function _dlPaint() {
+    const kEl = $('dl-kpis'), bEl = $('dl-board');
+    if (!kEl || !bEl) return;
+    const cliEl = $('dl-cli');
+    if (cliEl) cliEl.innerHTML = `<option value="">Cliente: todos</option>` + _clients.map(x => `<option value="${x.id}"${String(_dlCli) === String(x.id) ? ' selected' : ''}>${esc(x.nombre)}</option>`).join('');
+    const list = _dlList();
+    const open = list.filter(c => c.estado === 'propuesta' || c.estado === 'negociacion');
+    const won = list.filter(c => c.estado === 'ganado');
+    const lost = list.filter(c => c.estado === 'perdido');
+    const rate = (won.length + lost.length) ? Math.round(won.length * 100 / (won.length + lost.length)) : null;
+    kEl.innerHTML = `<div class="dl-kpis">
+      <div class="dl-kpi"><div class="dl-kpi__l">Pipeline abierto</div><div class="dl-kpi__v">${_dlSums(open)}</div></div>
+      <div class="dl-kpi"><div class="dl-kpi__l">Ponderado por probabilidad</div><div class="dl-kpi__v">${_dlSums(open, true)}</div></div>
+      <div class="dl-kpi"><div class="dl-kpi__l">Ganado</div><div class="dl-kpi__v">${_dlSums(won)}</div></div>
+      <div class="dl-kpi"><div class="dl-kpi__l">Tasa de cierre</div><div class="dl-kpi__v">${rate == null ? '—' : rate + ' %'}</div></div>
+    </div>`;
+    if (!list.length) {
+      bEl.innerHTML = `<div class="ldh-empty">
+        <div class="ldh-empty__ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+        <div class="ldh-empty__t">Aún no hay deals</div>
+        <div class="ldh-empty__s">Convierte un lead positivo en deal desde la sección Leads (botón $ en la fila) o mueve un contacto a la etapa Propuesta en su ficha. Aquí verás su valor, probabilidad y fecha de cierre.</div>
+        <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.go('leads')">Ir a Leads</button>
+      </div>`;
+      return;
+    }
+    const today = new Date().toISOString().slice(0, 10);
+    const col = st => {
+      const items = list.filter(c => c.estado === st);
+      const cards = items.map(c => {
+        const full = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || '—';
+        const cli = _clients.find(x => x.id === c.outbound_client_id);
+        const cierre = c.deal_cierre ? String(c.deal_cierre).slice(0, 10) : '';
+        const late = cierre && cierre < today && (st === 'propuesta' || st === 'negociacion');
+        return `<div class="dl-card" onclick="LeadManagerModule.dlOpen(${c.id})">
+          <div class="dl-card__n">${esc(full)}</div>
+          <div class="dl-card__s">${esc([c.company_nombre, cli && cli.nombre].filter(Boolean).join(' · ')) || '&nbsp;'}</div>
+          <div class="dl-card__row">
+            <span class="dl-card__val${c.deal_valor == null ? ' dl-card__val--none' : ''}">${c.deal_valor == null ? 'Sin valor' : _dlMoney(c.deal_valor, c.deal_moneda)}</span>
+            ${c.deal_prob != null ? `<span class="dl-card__prob">${c.deal_prob}%</span>` : ''}
+            ${cierre ? `<span class="dl-card__date${late ? ' dl-card__date--late' : ''}">${_ldFmtDate(cierre + 'T12:00:00')}</span>` : ''}
+          </div></div>`;
+      }).join('');
+      return `<div class="dl-col dl-col--${st}">
+        <div class="dl-col__hd"><span class="cp-mark-dot" style="background:${_stColor(st)}"></span><span class="dl-col__t">${STAGE_LABELS[st]}</span><span class="dl-col__n">${items.length}</span><span class="dl-col__sum">${_dlSums(items)}</span></div>
+        ${cards || '<div class="dl-empty-col">— vacío —</div>'}</div>`;
+    };
+    bEl.innerHTML = `<div class="dl-board">${_DL_STAGES.map(col).join('')}</div>`;
+  }
+  function dlSetCli(v) { _dlCli = v; _dlPaint(); }
+  function dlClose() { document.getElementById('dl-modal')?.remove(); }
+  function dlOpen(cid) {
+    const c = _contacts.find(x => x.id === cid); if (!c) return;
+    dlClose();
+    const full = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || '—';
+    const est = _DL_STAGES.includes(c.estado) ? c.estado : 'propuesta';
+    const probOpts = ['', 10, 20, 30, 40, 50, 60, 70, 80, 90].map(p => `<option value="${p}"${String(c.deal_prob == null ? '' : c.deal_prob) === String(p) ? ' selected' : ''}>${p === '' ? 'Sin definir' : p + ' %'}</option>`).join('');
+    const estOpts = _ORDER.map(s => `<option value="${s}"${est === s ? ' selected' : ''}>${STAGE_LABELS[s]}</option>`).join('');
+    const monOpts = ['USD', 'PEN', 'EUR'].map(x => `<option value="${x}"${(c.deal_moneda || 'USD') === x ? ' selected' : ''}>${x}</option>`).join('');
+    const m = document.createElement('div'); m.id = 'dl-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = ev => { if (ev.target === m) dlClose(); };
+    m.innerHTML = `<div class="fin-pi-box dle-box">
+      <div class="dle-hd"><div style="flex:1;min-width:0"><div class="dle-hd__t">${esc(full)}</div><div class="dle-hd__s">${esc([c.cargo, c.company_nombre].filter(Boolean).join(' · ')) || 'Deal'}</div></div><button class="fin-pi-x" onclick="LeadManagerModule.dlClose()">✕</button></div>
+      <div class="dle-grid">
+        <label class="dle-f dle-f--full"><span class="dle-l">Etapa del pipeline</span><select class="dle-i" id="dle-estado">${estOpts}</select></label>
+        <label class="dle-f"><span class="dle-l">Valor estimado</span><input class="dle-i" id="dle-valor" type="number" min="0" step="0.01" placeholder="0" value="${c.deal_valor == null ? '' : c.deal_valor}"></label>
+        <label class="dle-f"><span class="dle-l">Moneda</span><select class="dle-i" id="dle-moneda">${monOpts}</select></label>
+        <label class="dle-f"><span class="dle-l">Probabilidad de cierre</span><select class="dle-i" id="dle-prob">${probOpts}</select></label>
+        <label class="dle-f"><span class="dle-l">Fecha estimada de cierre</span><input class="dle-i" id="dle-cierre" type="date" value="${c.deal_cierre ? String(c.deal_cierre).slice(0, 10) : ''}"></label>
+      </div>
+      <div class="dle-foot">
+        <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.dlClose();LeadManagerModule.openContactPage(${c.id})">Ver ficha ›</button>
+        <span class="sp"></span>
+        <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.dlClose()">Cancelar</button>
+        <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.dlSave(${c.id})">Guardar deal</button>
+      </div>
+    </div>`;
+    document.body.appendChild(m);
+    setTimeout(() => document.getElementById('dle-valor')?.focus(), 40);
+  }
+  async function dlSave(cid) {
+    const c = _contacts.find(x => x.id === cid); if (!c) return;
+    const g = id => document.getElementById(id);
+    const valor = g('dle-valor').value.trim(), moneda = g('dle-moneda').value, prob = g('dle-prob').value, cierre = g('dle-cierre').value, estado = g('dle-estado').value;
+    try {
+      const res = await apiFetch(`${API}/lm/contacts/${cid}/deal`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ valor, moneda, prob, cierre }) });
+      if (!res.ok) throw new Error((await res.json()).error || 'Error');
+      const d = await res.json();
+      c.deal_valor = d.deal_valor; c.deal_moneda = d.deal_moneda; c.deal_prob = d.deal_prob; c.deal_cierre = d.deal_cierre;
+      if (estado && estado !== c.estado) await cpSetStage(cid, estado);
+      dlClose();
+      if (_section === 'deals') _dlPaint(); else if (_section === 'leads') _ldPaint();
+      showBanner('✓ Deal guardado', 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
 
   function _vLeadsShell() {
     return `<div class="lm-sec-head">
@@ -18604,7 +18733,8 @@ ${foot}
     seqDoNoLinkedIn, seqDoBounced, lmToggleNoLinkedIn, lmToggleBounced, lmToggleManualEmail, ctToggleBounced,
     seqDoDataIssue, seqDoDataIssuePick, ctToggleDataIssue, lmResumeDataIssue, seqOpenMark,
     lmSetPageSize, ctGoPage, coGoPage, seqCtSetEstado, seqTaskSetCanal,
-    ldPill, ldSetCli, ldSetSeq, ldSetCamp, ldSetQ, ldAddNote, ldMeet,
+    ldPill, ldSetCli, ldSetSeq, ldSetCamp, ldSetQ, ldAddNote, ldMeet, ldToDeal,
+    dlSetCli, dlOpen, dlClose, dlSave,
     pendingAcceptOpen, pendingAcceptToggleAll, pendingAcceptApplyFilters, pendingAcceptMark,
     openActivityDrawer, closeActivityDrawer, saveActivity, confirmDeleteActivity, markActDone,
     setReplySentiment, setLeadStage,
