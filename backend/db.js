@@ -756,6 +756,16 @@ async function initDb() {
     await pool.query(`ALTER TABLE lm_contacts  ADD COLUMN IF NOT EXISTS deal_moneda      TEXT NOT NULL DEFAULT 'USD';`);
     await pool.query(`ALTER TABLE lm_contacts  ADD COLUMN IF NOT EXISTS deal_prob        INTEGER;`);
     await pool.query(`ALTER TABLE lm_contacts  ADD COLUMN IF NOT EXISTS deal_cierre      DATE;`);
+    // Backfill del pipeline automático (idempotente; red de seguridad en cada boot):
+    // 1er paso completado → contactado; disposición positiva → respondio; descartes → perdido.
+    // Solo desde etapas anteriores — nunca toca propuesta/negociación/ganado (manual).
+    await pool.query(`UPDATE lm_contacts k SET estado='contactado', updated_at=NOW()
+      WHERE k.estado='nuevo' AND EXISTS (SELECT 1 FROM lm_contact_sequences cs
+        WHERE cs.contact_id=k.id AND cs.user_id=k.user_id AND (cs.paso > 1 OR cs.estado='terminado'))`);
+    await pool.query(`UPDATE lm_contacts SET estado='respondio', updated_at=NOW()
+      WHERE disposition IN ('respondio','reunion') AND estado IN ('nuevo','contactado')`);
+    await pool.query(`UPDATE lm_contacts SET estado='perdido', updated_at=NOW()
+      WHERE disposition IN ('no_interesado','no_contactar') AND estado IN ('nuevo','contactado','respondio')`);
     // lm_templates: biblioteca de plantillas/assets (Email & LinkedIn) con variables, reutilizables en secuencias.
     await pool.query(`
       CREATE TABLE IF NOT EXISTS lm_templates (
