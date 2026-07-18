@@ -12839,3 +12839,8 @@ td.ldh-acts { padding-left: 6px; padding-right: 10px; }
 .dle-foot { display: flex; align-items: center; gap: 8px; margin-top: 16px; }
 .dle-foot .sp { flex: 1; }
 @media (max-width: 980px) { .dl-board { grid-template-columns: 1fr 1fr; } .dl-kpis { grid-template-columns: 1fr 1fr; } .dl-kpi { border-left: none; border-top: 1px solid var(--border); } .dl-kpi:nth-child(-n+2) { border-top: none; } .dl-kpi:nth-child(even) { border-left: 1px solid var(--border); } }
+
+/* Tablas de Secuencias y Campañas (reusan .ldh-*) */
+.ldh-num { text-align: right; font-variant-numeric: tabular-nums; font-size: .82rem; color: var(--text-primary); }
+.ldh-table th.ldh-num { text-align: right; color: var(--text-muted); }
+.sq-dots { display: inline-flex; gap: 4px; align-items: center; vertical-align: middle; }

@@ -13450,8 +13450,8 @@ const LeadManagerModule = (() => {
     if      (_section === 'dashboard') body.innerHTML = _vDashboard();
     else if (_section === 'clients')   body.innerHTML = _vClients();
     else if (_section === 'client')    body.innerHTML = _vClientDetail(_activeClient);
-    else if (_section === 'campaigns') body.innerHTML = _vCampaigns();
-    else if (_section === 'sequences') body.innerHTML = _vSequences();
+    else if (_section === 'campaigns') { body.innerHTML = _vCampaigns(); _cmPaint(); }
+    else if (_section === 'sequences') { body.innerHTML = _vSequences(); _sqPaint(); }
     else if (_section === 'sequence')  body.innerHTML = _vSequenceDetail(_activeSeq);
     else if (_section === 'activities') body.innerHTML = _vActivities();
     else if (_section === 'tasks')     body.innerHTML = _vTasks();
@@ -13504,17 +13504,73 @@ const LeadManagerModule = (() => {
       </div>
     </button>`;
   }
+  let _cmCli = '', _cmEst = '', _cmQ = '';
   function _vCampaigns() {
-    const list = _sortCmp(_campaigns);
     return `
       <div class="lm-sec-head">
         <div><h2 class="lm-sec-title">Campañas</h2><p class="lm-sec-sub">Campañas outbound por cliente — activas primero</p></div>
         ${_clients.length ? `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openCampaignDrawer()">＋ Nueva campaña</button>` : ''}
       </div>
-      ${list.length ? `<div class="lm-cmp-grid">${list.map(c => _campaignCard(c, true)).join('')}</div>`
-        : (_clients.length ? _empty('campaigns', 'Aún no hay campañas', 'Crea tu primera campaña y asígnale leads. Las secuencias se gestionan en su propia sección.', 'Nueva campaña', 'LeadManagerModule.openCampaignDrawer()')
-                           : _empty('campaigns', 'Primero crea un cliente outbound', 'Las campañas pertenecen a un cliente outbound. Crea uno para empezar.', 'Nuevo cliente outbound', 'LeadManagerModule.openClientDrawer()'))}`;
+      <div class="ldh-toolbar">
+        <select class="ldh-sel" id="cm-cli" onchange="LeadManagerModule.cmSetCli(this.value)"></select>
+        <select class="ldh-sel" id="cm-est" onchange="LeadManagerModule.cmSetEst(this.value)"></select>
+        <span class="ldh-toolbar__sp"></span>
+        <div class="lm-search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" id="cm-q" placeholder="Buscar campaña…" oninput="LeadManagerModule.cmSetQ(this.value)"></div>
+      </div>
+      <div id="cm-wrap"></div>`;
   }
+  function _cmPaint() {
+    const wrap = $('cm-wrap'); if (!wrap) return;
+    const selC = $('cm-cli'), selE = $('cm-est');
+    if (selC) selC.innerHTML = `<option value="">Cliente: todos</option>` + _clients.map(x => `<option value="${x.id}"${String(_cmCli) === String(x.id) ? ' selected' : ''}>${esc(x.nombre)}</option>`).join('');
+    if (selE) selE.innerHTML = `<option value="">Estado: todos</option>` + Object.entries(_CMP).map(([k, v]) => `<option value="${k}"${_cmEst === k ? ' selected' : ''}>${v[0]}</option>`).join('');
+    if (!_campaigns.length) {
+      wrap.innerHTML = _clients.length ? _empty('campaigns', 'Aún no hay campañas', 'Crea tu primera campaña y asígnale leads. Las secuencias se gestionan en su propia sección.', 'Nueva campaña', 'LeadManagerModule.openCampaignDrawer()')
+                                       : _empty('campaigns', 'Primero crea un cliente outbound', 'Las campañas pertenecen a un cliente outbound. Crea uno para empezar.', 'Nuevo cliente outbound', 'LeadManagerModule.openClientDrawer()');
+      return;
+    }
+    let list = _sortCmp(_campaigns);
+    if (_cmCli) list = list.filter(c => String(c.outbound_client_id || '') === _cmCli);
+    if (_cmEst) list = list.filter(c => (c.estado || 'draft') === _cmEst);
+    if (_cmQ) { const q = _cmQ.toLowerCase(); list = list.filter(c => ((c.nombre || '') + ' ' + (_clientName(c.outbound_client_id) || '') + ' ' + (c.canal || '') + ' ' + (c.mercado || '')).toLowerCase().includes(q)); }
+    if (!list.length) { wrap.innerHTML = `<div class="ldh-empty"><div class="ldh-empty__t">Sin resultados</div><div class="ldh-empty__s">Ninguna campaña cumple estos filtros.</div></div>`; return; }
+    // Métricas desde los contactos reales (enrolados en secuencias de la campaña o vinculados
+    // directo) + leads legacy como fallback histórico.
+    const stats = c => {
+      const m = _cmpMetrics(c);
+      const seqIds = _sequences.filter(s => s.campaign_id === c.id).map(s => s.id);
+      const cts = _contacts.filter(ct => (ct.campaigns || []).some(k => k.id === c.id) || (ct.sequences || []).some(sq => seqIds.includes(sq.id)));
+      return {
+        seqs: seqIds.length,
+        leads: m.leads + cts.length,
+        contactados: m.contactados + cts.filter(x => (x.estado || 'nuevo') !== 'nuevo').length,
+        replies: m.replies + cts.filter(x => x.disposition === 'respondio' || x.disposition === 'reunion').length,
+        ganados: m.ganados + cts.filter(x => x.estado === 'ganado').length,
+      };
+    };
+    const rows = list.map(c => {
+      const m = stats(c);
+      const cli = _clientName(c.outbound_client_id);
+      const meta = [c.canal, c.mercado].filter(Boolean).join(' · ');
+      return `<tr class="ldh-row" onclick="LeadManagerModule.openCampaignDrawer(${c.id})">
+        <td><div class="ldh-name">${esc(c.nombre)}</div><div class="ldh-sub">${esc(meta) || '&nbsp;'}</div></td>
+        <td class="ldh-dim">${cli ? esc(cli) : '—'}</td>
+        <td>${_cmpBadge(c.estado)}</td>
+        <td class="ldh-num">${m.seqs}</td>
+        <td class="ldh-num">${m.leads}</td>
+        <td class="ldh-num">${m.contactados}</td>
+        <td class="ldh-num">${m.replies}</td>
+        <td class="ldh-num">${m.ganados}</td>
+      </tr>`;
+    }).join('');
+    wrap.innerHTML = `<div class="ldh-table-wrap"><table class="ldh-table" style="min-width:820px">
+      <colgroup><col style="width:26%"><col style="width:14%"><col style="width:11%"><col style="width:11%"><col style="width:9%"><col style="width:12%"><col style="width:10%"><col style="width:9%"></colgroup>
+      <thead><tr><th>Campaña</th><th>Cliente</th><th>Estado</th><th class="ldh-num">Secuencias</th><th class="ldh-num">Leads</th><th class="ldh-num">Contactados</th><th class="ldh-num">Respuestas</th><th class="ldh-num">Ganados</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>`;
+  }
+  function cmSetCli(v) { _cmCli = v; _cmPaint(); }
+  function cmSetEst(v) { _cmEst = v; _cmPaint(); }
+  function cmSetQ(v) { _cmQ = v; _cmPaint(); }
 
   // ── Helpers de secuencia (Fase 3) ──
   const _SEQ = { draft: ['Draft', '#F1EFEC', '#57534E'], activa: ['Activa', '#D1FAE5', '#065F46'], pausada: ['Pausada', '#FFEDD5', '#9A3412'], archivada: ['Archivada', '#E8EDF5', '#3B5573'] };
@@ -13542,8 +13598,8 @@ const LeadManagerModule = (() => {
       <div class="lm-cmp__meta">${steps.length} paso${steps.length !== 1 ? 's' : ''}${steps.length ? ` · ${steps[steps.length - 1].dia} días` : ''}</div>
     </button>`;
   }
+  let _sqCli = '', _sqEst = '', _sqQ = '';
   function _vSequences() {
-    const list = _sortSeq(_sequences);
     const paN = _pendingAccept().length;
     return `
       <div class="lm-sec-head">
@@ -13553,10 +13609,50 @@ const LeadManagerModule = (() => {
           ${_clients.length ? `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openSequenceDrawer()">＋ Nueva secuencia</button>` : ''}
         </div>
       </div>
-      ${list.length ? `<div class="lm-cmp-grid">${list.map(s => _sequenceCard(s, true)).join('')}</div>`
-        : (_clients.length ? _empty('sequences', 'Aún no hay secuencias', 'Crea una secuencia y define sus pasos (Día 1 Email, Día 2 LinkedIn…). El envío automático llega en una fase futura.', 'Nueva secuencia', 'LeadManagerModule.openSequenceDrawer()')
-                           : _empty('sequences', 'Primero crea un cliente outbound', 'Las secuencias pertenecen a un cliente. Crea uno para empezar.', 'Nuevo cliente outbound', 'LeadManagerModule.openClientDrawer()'))}`;
+      <div class="ldh-toolbar">
+        <select class="ldh-sel" id="sq-cli" onchange="LeadManagerModule.sqSetCli(this.value)"></select>
+        <select class="ldh-sel" id="sq-est" onchange="LeadManagerModule.sqSetEst(this.value)"></select>
+        <span class="ldh-toolbar__sp"></span>
+        <div class="lm-search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" id="sq-q" placeholder="Buscar secuencia…" oninput="LeadManagerModule.sqSetQ(this.value)"></div>
+      </div>
+      <div id="sq-wrap"></div>`;
   }
+  function _sqPaint() {
+    const wrap = $('sq-wrap'); if (!wrap) return;
+    const selC = $('sq-cli'), selE = $('sq-est');
+    if (selC) selC.innerHTML = `<option value="">Cliente: todos</option>` + _clients.map(x => `<option value="${x.id}"${String(_sqCli) === String(x.id) ? ' selected' : ''}>${esc(x.nombre)}</option>`).join('');
+    if (selE) selE.innerHTML = `<option value="">Estado: todos</option>` + Object.entries(_SEQ).map(([k, v]) => `<option value="${k}"${_sqEst === k ? ' selected' : ''}>${v[0]}</option>`).join('');
+    if (!_sequences.length) {
+      wrap.innerHTML = _clients.length ? _empty('sequences', 'Aún no hay secuencias', 'Crea una secuencia y define sus pasos (Día 1 Email, Día 2 LinkedIn…). El envío automático llega en una fase futura.', 'Nueva secuencia', 'LeadManagerModule.openSequenceDrawer()')
+                                       : _empty('sequences', 'Primero crea un cliente outbound', 'Las secuencias pertenecen a un cliente. Crea uno para empezar.', 'Nuevo cliente outbound', 'LeadManagerModule.openClientDrawer()');
+      return;
+    }
+    let list = _sortSeq(_sequences);
+    if (_sqCli) list = list.filter(s => String(s.outbound_client_id || '') === _sqCli);
+    if (_sqEst) list = list.filter(s => (s.estado || 'draft') === _sqEst);
+    if (_sqQ) { const q = _sqQ.toLowerCase(); list = list.filter(s => ((s.nombre || '') + ' ' + (_clientName(s.outbound_client_id) || '') + ' ' + (_campaignName(s.campaign_id) || '')).toLowerCase().includes(q)); }
+    if (!list.length) { wrap.innerHTML = `<div class="ldh-empty"><div class="ldh-empty__t">Sin resultados</div><div class="ldh-empty__s">Ninguna secuencia cumple estos filtros.</div></div>`; return; }
+    const rows = list.map(s => {
+      const steps = _seqSteps(s.id);
+      const cli = _clientName(s.outbound_client_id);
+      const cmp = _campaignName(s.campaign_id);
+      const dots = steps.slice(0, 8).map(st => { const t = _TOUCH[st.canal] || _TOUCH.email; return `<span class="lm-seq__dot" style="background:${t[1]}" title="Día ${st.dia} · ${t[0]}"></span>`; }).join('');
+      return `<tr class="ldh-row" onclick="LeadManagerModule.openSequence(${s.id})">
+        <td><div class="ldh-name">${esc(s.nombre)}</div><div class="ldh-sub">${cmp ? '📣 ' + esc(cmp) : '&nbsp;'}</div></td>
+        <td class="ldh-dim">${cli ? esc(cli) : '—'}</td>
+        <td>${_seqBadge(s.estado)}</td>
+        <td><span class="sq-dots">${dots || '<span class="ldh-none">Sin pasos</span>'}</span></td>
+        <td class="ldh-dim">${steps.length ? `${steps.length} paso${steps.length !== 1 ? 's' : ''} · ${steps[steps.length - 1].dia} días` : '—'}</td>
+      </tr>`;
+    }).join('');
+    wrap.innerHTML = `<div class="ldh-table-wrap"><table class="ldh-table">
+      <colgroup><col style="width:34%"><col style="width:17%"><col style="width:12%"><col style="width:19%"><col style="width:18%"></colgroup>
+      <thead><tr><th>Secuencia</th><th>Cliente</th><th>Estado</th><th>Canales</th><th>Pasos</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>`;
+  }
+  function sqSetCli(v) { _sqCli = v; _sqPaint(); }
+  function sqSetEst(v) { _sqEst = v; _sqPaint(); }
+  function sqSetQ(v) { _sqQ = v; _sqPaint(); }
   function openSequence(id) { _activeSeq = id; _section = 'sequence'; _seqTab = 'pasos'; _seqContacts = null; _seqMetrics = null; _seqDo = null; _seqCtEstado = ''; _seqTaskCanal = ''; _refreshNav(); _renderBody(); _seqLoadContacts(id); }
   const _TZ = [
     ['', 'Sin zona (sin sugerencia de hora)'],
@@ -18735,6 +18831,7 @@ ${foot}
     lmSetPageSize, ctGoPage, coGoPage, seqCtSetEstado, seqTaskSetCanal,
     ldPill, ldSetCli, ldSetSeq, ldSetCamp, ldSetQ, ldAddNote, ldMeet, ldToDeal,
     dlSetCli, dlOpen, dlClose, dlSave,
+    sqSetCli, sqSetEst, sqSetQ, cmSetCli, cmSetEst, cmSetQ,
     pendingAcceptOpen, pendingAcceptToggleAll, pendingAcceptApplyFilters, pendingAcceptMark,
     openActivityDrawer, closeActivityDrawer, saveActivity, confirmDeleteActivity, markActDone,
     setReplySentiment, setLeadStage,
