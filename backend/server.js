@@ -3215,16 +3215,20 @@ app.post('/api/lm/mailboxes', requireAuth, async (req, res) => {
   const mb = { email, provider, ...hosts };
   try {
     const t = await mailboxSvc.testMailbox(mb, pass);
-    if (!t.smtpOk || !t.imapOk) return res.status(400).json({ error: t.error || 'No se pudo conectar el buzón' });
+    // SMTP es obligatorio; IMAP puede faltar (Microsoft 365 ya no acepta IMAP con contraseña)
+    // → se guarda como 'solo_envio' y la lectura llega con la pieza OAuth (F2).
+    if (!t.smtpOk) return res.status(400).json({ error: t.error || 'No se pudo conectar el buzón' });
+    const estado = t.imapOk ? 'conectado' : 'solo_envio';
+    const lastErr = t.imapOk ? '' : (t.error || 'IMAP no disponible');
     const { rows } = await pool.query(`
       INSERT INTO lm_mailboxes (user_id, outbound_client_id, email, provider, smtp_host, smtp_port, smtp_secure, imap_host, imap_port, pass_enc, estado, last_error, verified_at)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'conectado','',NOW())
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW())
       ON CONFLICT (user_id, outbound_client_id) DO UPDATE SET
         email=EXCLUDED.email, provider=EXCLUDED.provider, smtp_host=EXCLUDED.smtp_host, smtp_port=EXCLUDED.smtp_port,
         smtp_secure=EXCLUDED.smtp_secure, imap_host=EXCLUDED.imap_host, imap_port=EXCLUDED.imap_port,
-        pass_enc=EXCLUDED.pass_enc, estado='conectado', last_error='', verified_at=NOW()
-      RETURNING id, outbound_client_id, email, provider, estado, verified_at
-    `, [req.workspaceOwnerId, cid, email, provider, hosts.smtp_host, hosts.smtp_port, hosts.smtp_secure, hosts.imap_host, hosts.imap_port, mailboxSvc.encPass(pass)]);
+        pass_enc=EXCLUDED.pass_enc, estado=EXCLUDED.estado, last_error=EXCLUDED.last_error, verified_at=NOW()
+      RETURNING id, outbound_client_id, email, provider, estado, last_error, verified_at
+    `, [req.workspaceOwnerId, cid, email, provider, hosts.smtp_host, hosts.smtp_port, hosts.smtp_secure, hosts.imap_host, hosts.imap_port, mailboxSvc.encPass(pass), estado, lastErr]);
     res.status(201).json(rows[0]);
   } catch (err) { console.error('[mailbox] POST', err.message); res.status(500).json({ error: 'Error al guardar el buzón' }); }
 });
@@ -3236,16 +3240,17 @@ app.post('/api/lm/mailboxes/:id/test', requireAuth, async (req, res) => {
     const pass = mailboxSvc.decPass(mb.pass_enc);
     const t = await mailboxSvc.testMailbox(mb, pass);
     let sent = false;
-    if (t.smtpOk && t.imapOk && (req.body || {}).send_test) {
+    if (t.smtpOk && (req.body || {}).send_test) {
       await mailboxSvc.sendFromMailbox(mb, pass, {
         to: mb.email, subject: '✓ Prueba de Nova — buzón conectado',
-        text: `Este buzón (${mb.email}) quedó conectado a Nova.\nEnvío por SMTP y lectura por IMAP funcionando. Esta copia debe aparecer también en tu carpeta Enviados.`,
+        text: `Este buzón (${mb.email}) quedó conectado a Nova.\nEnvío por SMTP funcionando${t.imapOk ? ' y lectura por IMAP también. Esta copia debe aparecer en tu carpeta Enviados.' : '. La lectura automática (IMAP) queda pendiente para la fase OAuth.'}`,
       });
       sent = true;
     }
+    const estado = t.smtpOk ? (t.imapOk ? 'conectado' : 'solo_envio') : 'error';
     await pool.query(`UPDATE lm_mailboxes SET estado=$1, last_error=$2, verified_at=CASE WHEN $3 THEN NOW() ELSE verified_at END WHERE id=$4`,
-      [t.smtpOk && t.imapOk ? 'conectado' : 'error', t.error || '', t.smtpOk && t.imapOk, mb.id]);
-    res.json({ ...t, sent });
+      [estado, t.smtpOk && t.imapOk ? '' : (t.error || ''), t.smtpOk, mb.id]);
+    res.json({ ...t, estado, sent });
   } catch (err) { console.error('[mailbox] TEST', err.message); res.status(500).json({ error: 'Error al probar el buzón' }); }
 });
 app.delete('/api/lm/mailboxes/:id', requireAuth, async (req, res) => {

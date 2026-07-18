@@ -15619,7 +15619,7 @@ ${foot}
   const _MB_PROV = [['google', 'Google / Gmail'], ['microsoft', 'Microsoft / Outlook'], ['zoho', 'Zoho Mail'], ['otro', 'Otro proveedor']];
   const _MB_HINT = {
     google: 'Gmail/Workspace: activa la Verificación en 2 pasos → busca “Contraseñas de aplicación” → crea una para Correo y pégala aquí (16 letras, sin espacios).',
-    microsoft: 'Outlook/Microsoft 365: con 2FA activa, genera una “Contraseña de aplicación” en Seguridad. Si es 365 de empresa, activa también “SMTP autenticado” para el buzón en el centro de administración.',
+    microsoft: 'Microsoft 365 empresa: (1) en admin.microsoft.com → Usuarios → este buzón → Correo → “Administrar aplicaciones de correo electrónico” → marca “SMTP autenticado”. (2) Usa aquí la contraseña normal del buzón. Enviar funciona; la lectura automática de respuestas llega con la fase OAuth. Si el proveedor la rechaza, el tenant bloquea autenticación básica (Security Defaults) — avísame.',
     zoho: 'Zoho Mail: Mi cuenta → Seguridad → App Passwords → genera una para Nova. Si el buzón no usa 2FA, prueba primero la contraseña normal.',
     otro: 'Ingresa los servidores SMTP e IMAP que te dé el proveedor (suelen estar en su ayuda como “configurar cliente de correo”).',
   };
@@ -15634,7 +15634,7 @@ ${foot}
     const inner = _mailboxes === null
       ? `<div class="mbx-sub">Cargando…</div>`
       : mb
-        ? `<div class="mbx-row"><span class="mbx-chip${mb.estado === 'conectado' ? ' mbx-chip--ok' : ' mbx-chip--err'}">${mb.estado === 'conectado' ? '✓ Conectado' : '⚠ Error'}</span></div>
+        ? `<div class="mbx-row"><span class="mbx-chip${mb.estado === 'conectado' ? ' mbx-chip--ok' : mb.estado === 'solo_envio' ? ' mbx-chip--warn' : ' mbx-chip--err'}">${mb.estado === 'conectado' ? '✓ Conectado' : mb.estado === 'solo_envio' ? '✓ Envío OK · lectura pendiente' : '⚠ Error'}</span></div>
            <div class="mbx-mail" title="${esc(mb.email)}">${esc(mb.email)}</div>
            <div class="mbx-sub">${esc(provLbl)}${mb.last_error ? ` · ${esc(mb.last_error)}` : ''}</div>
            <div class="mbx-acts">
@@ -15699,7 +15699,9 @@ ${foot}
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || 'No se pudo conectar');
       mbClose();
-      showBanner(`✓ Buzón ${d.email} conectado — SMTP e IMAP verificados`, 'success');
+      showBanner(d.estado === 'solo_envio'
+        ? `✓ Buzón ${d.email} conectado para ENVIAR — la lectura automática de respuestas llega con la fase OAuth`
+        : `✓ Buzón ${d.email} conectado — envío y lectura verificados`, 'success');
       await _mbReload();
     } catch (e) {
       if (err) { err.textContent = e.message; err.style.display = ''; }
@@ -15713,6 +15715,7 @@ ${foot}
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || 'Error');
       if (d.smtpOk && d.imapOk) showBanner(`✓ Todo OK — te enviamos un correo de prueba a tu propio buzón (revisa también la carpeta Enviados)`, 'success');
+      else if (d.smtpOk) showBanner(`✓ Envío OK — correo de prueba enviado. La lectura (IMAP) no está disponible en este buzón: llega con la fase OAuth`, 'info');
       else throw new Error(d.error || 'La conexión falló');
       await _mbReload();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); _mbReload(); }

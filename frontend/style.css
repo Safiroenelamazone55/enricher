@@ -12864,3 +12864,4 @@ td.ldh-acts { padding-left: 6px; padding-right: 10px; }
 .mbx-sub { font-size: .72rem; color: var(--text-muted); margin-top: 2px; line-height: 1.45; }
 .mbx-acts { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 9px; }
 .mbx-acts .btn { padding: 4px 9px; font-size: .72rem; }
+.mbx-chip--warn { background: var(--warning-soft); color: #A96D0C; }
