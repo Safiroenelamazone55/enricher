@@ -13336,6 +13336,9 @@ const LeadManagerModule = (() => {
   async function load() {
     if (!$('lm2-body')) _renderShell();
     _renderBody();
+    // Contador de Inbox en la barra: carga al entrar al módulo y refresca cada 3 min.
+    _ibReload();
+    if (!_ibPoll) { _ibPoll = setInterval(_ibReload, 3 * 60 * 1000); }
     try {
       const [lr, cr, cmr, sr, str, ar, cor, ctr, tplr] = await Promise.all([
         apiFetch(`${API}/leads`).catch(() => null),
@@ -13409,7 +13412,7 @@ const LeadManagerModule = (() => {
     _NAV.forEach(n => {
       if (n.g !== lastG) { if (n.g) html += `<div class="lm2-nav__grp">${n.g}</div>`; lastG = n.g; }
       const active = (_section === n.k) || (_section === 'client' && n.k === 'clients') || (_section === 'sequence' && n.k === 'sequences');
-      const cnt = n.k === 'tasks' ? _pendingTaskCount() : n.k === 'leads' ? _contacts.filter(c => c.disposition === 'respondio' || c.disposition === 'reunion').length : 0;
+      const cnt = n.k === 'tasks' ? _pendingTaskCount() : n.k === 'leads' ? _contacts.filter(c => c.disposition === 'respondio' || c.disposition === 'reunion').length : n.k === 'inbox' ? _ibUnreadTotal() : 0;
       html += `<button class="lm2-nav__item${active ? ' active' : ''}" onclick="LeadManagerModule.go('${n.k}')">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${_NAV_ICON[n.k] || ''}</svg>
         <span class="lm2-nav__lbl">${n.l}</span>${cnt ? `<span class="lm2-nav__cnt">${cnt}</span>` : ''}${n.soon ? '<span class="lm2-nav__soon">Pronto</span>' : ''}</button>`;
@@ -15597,6 +15600,7 @@ ${foot}
   }
   // ── Inbox unificado (Mailboxes F3): hilos reales entrantes/salientes ──
   let _ibThreads = null;   // null = cargando
+  let _ibPoll    = null;   // refresco periódico del contador sin-leer
   let _ibTab     = 'sin';  // sin | resp | env | reb
   let _ibCli     = 0;      // filtro por cliente outbound (0 = todos)
   let _ibActive  = null;   // contact_id del hilo abierto
@@ -15607,6 +15611,10 @@ ${foot}
     try { const r = await apiFetch(`${API}/lm/inbox/threads`); _ibThreads = (r && r.ok) ? await r.json() : []; }
     catch { _ibThreads = []; }
     if (_section === 'inbox') _ibPaint();
+    _refreshNav(); // contador "sin leer" junto a Inbox en la barra lateral
+  }
+  function _ibUnreadTotal() {
+    return Array.isArray(_ibThreads) ? _ibThreads.reduce((s, t) => s + (t.unread || 0), 0) : 0;
   }
   // Categoría del hilo → pestaña. 'sin' = lo último es una entrada del prospecto
   // (nos toca responder); 'resp' = ya le respondimos; 'env' = solo salientes.
@@ -15739,7 +15747,7 @@ ${foot}
   async function ibOpen(cid) {
     _ibActive = cid; _ibThread = null;
     const t = (_ibThreads || []).find(x => x.contact_id === cid); if (t) t.unread = 0;
-    _ibPaint();
+    _ibPaint(); _refreshNav();
     try {
       const r = await apiFetch(`${API}/lm/inbox/thread/${cid}`);
       _ibThread = (r && r.ok) ? await r.json() : { contact: null, messages: [] };

@@ -3514,11 +3514,22 @@ app.get('/t/o/:token.png', async (req, res) => {
   res.set({ 'Content-Type': 'image/png', 'Cache-Control': 'no-store, max-age=0' });
   res.end(_TRACK_PX);
   try {
-    const { rows: [m] } = await pool.query(`SELECT id FROM lm_messages WHERE track_token=$1`, [req.params.token]);
-    if (m) await pool.query(
-      `INSERT INTO lm_message_events (message_id, tipo, ip, user_agent) VALUES ($1,'open',$2,$3)`,
-      [m.id, (req.headers['x-forwarded-for'] || req.ip || '').slice(0, 100), (req.headers['user-agent'] || '').slice(0, 300)]
-    );
+    const { rows: [m] } = await pool.query(`SELECT id, sent_at FROM lm_messages WHERE track_token=$1`, [req.params.token]);
+    if (m) {
+      // Anti-inflado de aperturas: los proxies de imágenes (Gmail/Apple) y los escáneres
+      // antispam disparan el píxel al ENTREGAR el correo y en cada re-render de la vista.
+      // 1) Se ignoran "aperturas" en los primeros 90s tras el envío (prefetch, no humano).
+      // 2) Se deduplica: máx. 1 apertura registrada por mensaje cada 15 minutos.
+      if (m.sent_at && Date.now() - new Date(m.sent_at).getTime() < 90 * 1000) return;
+      await pool.query(
+        `INSERT INTO lm_message_events (message_id, tipo, ip, user_agent)
+         SELECT $1, 'open', $2, $3
+          WHERE NOT EXISTS (
+            SELECT 1 FROM lm_message_events
+             WHERE message_id=$1 AND tipo='open' AND created_at > NOW() - interval '15 minutes')`,
+        [m.id, (req.headers['x-forwarded-for'] || req.ip || '').slice(0, 100), (req.headers['user-agent'] || '').slice(0, 300)]
+      );
+    }
   } catch (e) { /* tracking nunca rompe nada */ }
 });
 app.get('/t/c/:token', async (req, res) => {
