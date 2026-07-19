@@ -12928,3 +12928,15 @@ td.ldh-acts { padding-left: 6px; padding-right: 10px; }
 .ibx-m--sched .ibx-m__meta { color: var(--primary); font-weight: 600; }
 .ibx-m__cancel { border: none; background: none; cursor: pointer; font-family: inherit; font-size: .66rem; font-weight: 600; color: var(--danger); margin-left: 6px; padding: 0 3px; }
 .ibx-m__cancel:hover { text-decoration: underline; }
+
+/* ── Modo pre-aprobado: tab Aprobar ── */
+.seq-app-n { display: inline-block; font-size: .64rem; font-weight: 700; background: #FEF3E2; color: #A96D0C; border-radius: 8px; padding: 1px 7px; vertical-align: 1px; }
+.seq-app-list { display: flex; flex-direction: column; gap: 10px; }
+.seq-app { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; }
+.seq-app--ok { border-color: var(--primary-border, var(--border)); background: var(--primary-soft); }
+.seq-app__hd { display: flex; align-items: center; gap: 8px; justify-content: space-between; margin-bottom: 8px; flex-wrap: wrap; }
+.seq-app__who { font-size: .8rem; color: var(--text-primary); min-width: 0; }
+.seq-app__who span { color: var(--text-muted); font-size: .74rem; }
+.seq-app__subj { font-weight: 600; margin-bottom: 6px; }
+.seq-app__body { resize: vertical; min-height: 90px; font-size: .8rem; line-height: 1.5; }
+.seq-app__ft { display: flex; gap: 6px; align-items: center; margin-top: 8px; }

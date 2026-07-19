@@ -3416,6 +3416,49 @@ app.post('/api/lm/inbox/reply', requireAuth, async (req, res) => {
   }
 });
 
+// ── Aprobaciones (modo pre-aprobado): borradores que el motor dejó esperando ──
+app.get('/api/lm/sequences/:id/approvals', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT m.id, m.contact_id, m.step_id, m.asunto, m.cuerpo, m.to_email, m.estado, m.created_at,
+             k.nombre, k.apellido, k.cargo, COALESCE(NULLIF(k.empresa_nombre,''), co.nombre, '') AS empresa,
+             st.dia AS paso_dia, st.titulo AS paso_titulo
+        FROM lm_messages m
+        JOIN lm_contacts k ON k.id = m.contact_id
+        LEFT JOIN lm_companies co ON co.id = k.company_id
+        LEFT JOIN sequence_steps st ON st.id = m.step_id
+       WHERE m.user_id=$1 AND m.sequence_id=$2 AND m.estado IN ('awaiting','approved')
+       ORDER BY m.created_at ASC
+    `, [req.workspaceOwnerId, req.params.id]);
+    res.json(rows);
+  } catch (err) { console.error('[approvals] GET', err.message); res.status(500).json({ error: 'Error al cargar aprobaciones' }); }
+});
+// action: 'save' (editar sin aprobar) | 'approve' (sale en el próximo tick, espaciado
+// por el intervalo de la secuencia) | 'discard' (no se envía y el contacto avanza de paso).
+app.put('/api/lm/approvals/:id', requireAuth, async (req, res) => {
+  const b = req.body || {};
+  const action = ['save', 'approve', 'discard'].includes(b.action) ? b.action : 'save';
+  try {
+    const { rows: [m] } = await pool.query(
+      `SELECT * FROM lm_messages WHERE id=$1 AND user_id=$2 AND estado IN ('awaiting','approved')`,
+      [req.params.id, req.workspaceOwnerId]);
+    if (!m) return res.status(404).json({ error: 'Ese borrador ya salió o no existe' });
+    if (action === 'discard') {
+      await pool.query(`DELETE FROM lm_messages WHERE id=$1`, [m.id]);
+      const { advancePastStep } = require('./services/sendEngine');
+      await advancePastStep(pool, req.workspaceOwnerId, m.contact_id, m.sequence_id, m.step_id);
+      return res.json({ ok: true, discarded: true });
+    }
+    const asunto = String(b.asunto ?? m.asunto).trim() || m.asunto;
+    const cuerpo = String(b.cuerpo ?? m.cuerpo);
+    const estado = action === 'approve' ? 'approved' : 'awaiting';
+    const { rows: [upd] } = await pool.query(
+      `UPDATE lm_messages SET asunto=$1, cuerpo=$2, estado=$3 WHERE id=$4 RETURNING id, asunto, cuerpo, estado`,
+      [asunto, cuerpo, estado, m.id]);
+    res.json({ ok: true, message: upd });
+  } catch (err) { console.error('[approvals] PUT', err.message); res.status(500).json({ error: 'Error al actualizar el borrador' }); }
+});
+
 // Cancelar un envío programado (solo mientras siga 'scheduled').
 app.delete('/api/lm/inbox/scheduled/:id', requireAuth, async (req, res) => {
   try {
@@ -3953,9 +3996,17 @@ app.delete('/api/campaigns/:id', requireAuth, async (req, res) => {
 const SEQ_ESTADOS  = ['draft', 'activa', 'pausada', 'archivada'];
 const STEP_CANALES = ['email', 'linkedin', 'call', 'task', 'whatsapp'];
 
+// Saneo del modo de envío por secuencia (manual = externo, default).
+const SEQ_SEND_MODES = ['manual', 'auto', 'preaprobado'];
+function _sanSendMode(v) { return SEQ_SEND_MODES.includes(v) ? v : 'manual'; }
+function _sanInterval(v) { const n = parseInt(v); return (n >= 1 && n <= 1440) ? n : 5; }
+
 app.get('/api/sequences', requireAuth, async (req, res) => {
   try {
-    const { rows } = await pool.query(`SELECT *, starts_on::text AS starts_on FROM sequences WHERE user_id=$1 ORDER BY created_at DESC`, [req.workspaceOwnerId]);
+    const { rows } = await pool.query(`
+      SELECT s.*, s.starts_on::text AS starts_on,
+             (SELECT COUNT(*)::int FROM lm_messages m WHERE m.sequence_id = s.id AND m.estado='awaiting') AS awaiting
+        FROM sequences s WHERE s.user_id=$1 ORDER BY s.created_at DESC`, [req.workspaceOwnerId]);
     res.json(rows);
   } catch (err) { console.error('[seq] GET error:', err.message); res.status(500).json({ error: 'Error al cargar secuencias' }); }
 });
@@ -3968,9 +4019,9 @@ app.post('/api/sequences', requireAuth, async (req, res) => {
     const sendDays = _sanSendDays(b.send_days);
     const dLim = Math.max(0, parseInt(b.daily_limit) || 0);
     const { rows } = await pool.query(`
-      INSERT INTO sequences (user_id,outbound_client_id,campaign_id,nombre,objetivo,estado,timezone,drip_per_day,send_days,starts_on,daily_limit,mercado,icp,notas)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *
-    `, [req.workspaceOwnerId, b.outbound_client_id || null, b.campaign_id || null, b.nombre.trim(), b.objetivo || '', estado, b.timezone || '', drip, sendDays, _sanDate(b.starts_on), dLim, b.mercado || '', b.icp || '', b.notas || '']);
+      INSERT INTO sequences (user_id,outbound_client_id,campaign_id,nombre,objetivo,estado,timezone,drip_per_day,send_days,starts_on,daily_limit,mercado,icp,notas,send_mode,send_interval_min,auto_activar)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING *
+    `, [req.workspaceOwnerId, b.outbound_client_id || null, b.campaign_id || null, b.nombre.trim(), b.objetivo || '', estado, b.timezone || '', drip, sendDays, _sanDate(b.starts_on), dLim, b.mercado || '', b.icp || '', b.notas || '', _sanSendMode(b.send_mode), _sanInterval(b.send_interval_min), !!b.auto_activar]);
     res.status(201).json(rows[0]);
   } catch (err) { console.error('[seq] POST error:', err.message); res.status(500).json({ error: 'Error al crear secuencia' }); }
 });
@@ -3983,9 +4034,9 @@ app.put('/api/sequences/:id', requireAuth, async (req, res) => {
     const sendDays = _sanSendDays(b.send_days);
     const dLim = Math.max(0, parseInt(b.daily_limit) || 0);
     const { rows } = await pool.query(`
-      UPDATE sequences SET outbound_client_id=$1,campaign_id=$2,nombre=$3,objetivo=$4,estado=$5,timezone=$6,drip_per_day=$7,send_days=$8,starts_on=$9,daily_limit=$10,mercado=$11,icp=$12,notas=$13,updated_at=NOW()
-      WHERE id=$14 AND user_id=$15 RETURNING *
-    `, [b.outbound_client_id || null, b.campaign_id || null, b.nombre.trim(), b.objetivo || '', estado, b.timezone || '', drip, sendDays, _sanDate(b.starts_on), dLim, b.mercado || '', b.icp || '', b.notas || '', req.params.id, req.workspaceOwnerId]);
+      UPDATE sequences SET outbound_client_id=$1,campaign_id=$2,nombre=$3,objetivo=$4,estado=$5,timezone=$6,drip_per_day=$7,send_days=$8,starts_on=$9,daily_limit=$10,mercado=$11,icp=$12,notas=$13,send_mode=$14,send_interval_min=$15,auto_activar=$16,updated_at=NOW()
+      WHERE id=$17 AND user_id=$18 RETURNING *
+    `, [b.outbound_client_id || null, b.campaign_id || null, b.nombre.trim(), b.objetivo || '', estado, b.timezone || '', drip, sendDays, _sanDate(b.starts_on), dLim, b.mercado || '', b.icp || '', b.notas || '', _sanSendMode(b.send_mode), _sanInterval(b.send_interval_min), !!b.auto_activar, req.params.id, req.workspaceOwnerId]);
     if (!rows.length) return res.status(404).json({ error: 'Secuencia no encontrada' });
     res.json(rows[0]);
   } catch (err) { console.error('[seq] PUT error:', err.message); res.status(500).json({ error: 'Error al actualizar secuencia' }); }

@@ -13649,7 +13649,7 @@ const LeadManagerModule = (() => {
       return `<tr class="ldh-row" onclick="LeadManagerModule.openSequence(${s.id})">
         <td><div class="ldh-name">${esc(s.nombre)}</div><div class="ldh-sub">${cmp ? '📣 ' + esc(cmp) : '&nbsp;'}</div></td>
         <td class="ldh-dim">${cli ? esc(cli) : '—'}</td>
-        <td>${_seqBadge(s.estado)}</td>
+        <td>${_seqBadge(s.estado)}${(s.awaiting || 0) > 0 ? ` <span class="seq-app-n" title="Emails esperando tu aprobación">${s.awaiting} por aprobar</span>` : ''}${s.send_mode === 'auto' ? ' <span class="ldh-dim" title="Envío automático">⚡</span>' : s.send_mode === 'preaprobado' ? ' <span class="ldh-dim" title="Pre-aprobado">✋</span>' : ''}</td>
         <td><span class="sq-dots">${dots || '<span class="ldh-none">Sin pasos</span>'}</span></td>
         <td class="ldh-dim">${steps.length ? `${steps.length} paso${steps.length !== 1 ? 's' : ''} · ${steps[steps.length - 1].dia} días` : '—'}</td>
       </tr>`;
@@ -13837,7 +13837,7 @@ const LeadManagerModule = (() => {
       <button class="lm-back" onclick="LeadManagerModule.go('sequences')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg> Secuencias</button>
       <div class="lm-sec-head">
         <div>
-          <h2 class="lm-sec-title">${esc(s.nombre)} ${_seqBadge(s.estado)}</h2>
+          <h2 class="lm-sec-title">${esc(s.nombre)} ${_seqBadge(s.estado)} ${_seqModeChip(s)}</h2>
           <p class="lm-sec-sub">${[cli && '◆ ' + esc(cli), cmp && '📣 ' + esc(cmp), s.objetivo && esc(s.objetivo)].filter(Boolean).join(' · ') || 'Secuencia outbound'}</p>
           ${_seqTzChip(s) ? `<div class="seq-tz-line">${_seqTzChip(s)}</div>` : ''}
         </div>
@@ -13855,6 +13855,7 @@ const LeadManagerModule = (() => {
         <button class="cp-tab${_seqTab === 'tareas' ? ' active' : ''}" onclick="LeadManagerModule.seqTab('tareas')">Tareas${_seqTaskN ? ` (${_seqTaskN})` : ''}</button>
         <button class="cp-tab${_seqTab === 'metricas' ? ' active' : ''}" onclick="LeadManagerModule.seqTab('metricas')">Métricas</button>
         <button class="cp-tab${_seqTab === 'envios' ? ' active' : ''}" onclick="LeadManagerModule.seqTab('envios')">Envíos</button>
+        ${(s.send_mode === 'preaprobado' || (s.awaiting || 0) > 0) ? `<button class="cp-tab${_seqTab === 'aprobar' ? ' active' : ''}" onclick="LeadManagerModule.seqTab('aprobar')">Aprobar${(s.awaiting || 0) > 0 ? ` <span class="seq-app-n">${s.awaiting}</span>` : ''}</button>` : ''}
       </div>
       <div id="seq-tabwrap">${_seqTabContent(id)}</div>`;
   }
@@ -14319,6 +14320,13 @@ ${foot}
       if (!_seqMsgs.length) return `<div class="cp-empty2" style="padding:22px">Aún no hay emails enviados por el motor en esta secuencia.<br><span style="color:var(--muted);font-size:12px">Actívala (estado “activa”), enrola contactos con email verificado y enciende el envío en Configuración.</span></div>`;
       return `<div class="clients-table-wrap"><table class="clients-table lm-dt"><thead><tr><th>Para</th><th>Asunto</th><th>Enviado</th><th>Tracking</th><th>Estado</th></tr></thead><tbody>${_seqMsgs.map(_msgRow).join('')}</tbody></table></div>`;
     }
+    if (_seqTab === 'aprobar') {
+      if (_seqApprovals === null) return `<div class="cp-empty2" style="padding:22px">Cargando borradores…</div>`;
+      if (!_seqApprovals.length) return `<div class="cp-empty2" style="padding:22px">No hay emails esperando aprobación.<br><span style="color:var(--muted);font-size:12px">En modo pre-aprobado, el motor redacta cada email cuando toca su paso y lo deja aquí para tu OK. Revísalo, edítalo si quieres y apruébalo — sale solo respetando el intervalo.</span></div>`;
+      const wait = _seqApprovals.filter(a => a.estado === 'awaiting').length;
+      return `<div class="seq-tasks-hd">${wait} email${wait !== 1 ? 's' : ''} por aprobar${_seqApprovals.length - wait ? ` · ${_seqApprovals.length - wait} aprobado(s) en cola` : ''}</div>
+        <div class="seq-app-list">${_seqApprovals.map(_seqAppCard).join('')}</div>`;
+    }
     if (_seqTab === 'metricas') {
       const mt = _seqMetrics;
       if (mt === null) return `<div class="cp-empty2" style="padding:22px">Cargando…</div>`;
@@ -14665,7 +14673,61 @@ ${foot}
     try { const r = await apiFetch(`${API}/lm/sequences/${id}/metrics`); _seqMetrics = (r && r.ok) ? await r.json() : {}; } catch { _seqMetrics = {}; }
     if (_section === 'sequence' && _activeSeq === id && _seqTab === 'metricas') { const el = document.getElementById('seq-tabwrap'); if (el) el.innerHTML = _seqTabContent(id); }
   }
-  function seqTab(t) { _seqTab = t; _renderBody(); if ((t === 'contactos' || t === 'tareas') && !Array.isArray(_seqContacts)) _seqLoadContacts(_activeSeq); if (t === 'metricas') { if (_seqMetrics === null) _seqLoadMetrics(_activeSeq); _seqAb = null; _seqLoadAb(_activeSeq); } if (t === 'envios') { _seqMsgs = null; _seqLoadMsgs(_activeSeq); } }
+  function seqTab(t) { _seqTab = t; _renderBody(); if ((t === 'contactos' || t === 'tareas') && !Array.isArray(_seqContacts)) _seqLoadContacts(_activeSeq); if (t === 'metricas') { if (_seqMetrics === null) _seqLoadMetrics(_activeSeq); _seqAb = null; _seqLoadAb(_activeSeq); } if (t === 'envios') { _seqMsgs = null; _seqLoadMsgs(_activeSeq); } if (t === 'aprobar') { _seqApprovals = null; _seqLoadApprovals(_activeSeq); } }
+
+  // ── Aprobaciones (modo pre-aprobado): borradores del motor esperando OK ──
+  let _seqApprovals = null;
+  async function _seqLoadApprovals(id) {
+    try { const r = await apiFetch(`${API}/lm/sequences/${id}/approvals`); _seqApprovals = (r && r.ok) ? await r.json() : []; }
+    catch { _seqApprovals = []; }
+    if (_section === 'sequence' && _activeSeq === id && _seqTab === 'aprobar') {
+      const el = document.getElementById('seq-tabwrap'); if (el) el.innerHTML = _seqTabContent(id);
+    }
+  }
+  async function seqAppAction(mid, action) {
+    const asunto = document.getElementById(`app-subj-${mid}`)?.value;
+    const cuerpo = document.getElementById(`app-body-${mid}`)?.value;
+    if (action === 'discard' && !(await novaConfirm({ title: '¿Descartar este email?', message: 'No se enviará y el contacto avanzará al siguiente paso de la secuencia.', ok: 'Descartar', cancel: 'Cancelar', tone: 'danger' }))) return;
+    try {
+      const res = await apiFetch(`${API}/lm/approvals/${mid}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, asunto, cuerpo }) });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Error');
+      const s = _sequences.find(x => x.id === _activeSeq);
+      if (Array.isArray(_seqApprovals)) {
+        const it = _seqApprovals.find(x => x.id === mid);
+        if (action === 'discard') { _seqApprovals = _seqApprovals.filter(x => x.id !== mid); if (s && s.awaiting > 0) s.awaiting--; }
+        else if (it) { it.estado = d.message?.estado || it.estado; it.asunto = d.message?.asunto ?? it.asunto; it.cuerpo = d.message?.cuerpo ?? it.cuerpo; if (action === 'approve' && s && s.awaiting > 0) s.awaiting--; }
+      }
+      const el = document.getElementById('seq-tabwrap'); if (el) el.innerHTML = _seqTabContent(_activeSeq);
+      showBanner(action === 'approve' ? '✓ Aprobado — saldrá solo respetando el intervalo de la secuencia'
+               : action === 'discard' ? '✓ Descartado — el contacto avanza al siguiente paso'
+               : '✓ Borrador guardado', 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  function _seqAppCard(a) {
+    const nm = [a.nombre, a.apellido].filter(Boolean).join(' ') || a.to_email;
+    const approved = a.estado === 'approved';
+    return `<div class="seq-app${approved ? ' seq-app--ok' : ''}">
+      <div class="seq-app__hd">
+        <div class="seq-app__who"><b>${esc(nm)}</b>${a.cargo || a.empresa ? ` <span>· ${esc([a.cargo, a.empresa].filter(Boolean).join(', '))}</span>` : ''} <span>→ ${esc(a.to_email)}</span></div>
+        ${approved ? `<span class="ibx-b" style="background:var(--primary-soft);color:var(--primary)">Aprobado · en cola</span>` : `<span class="ibx-b ibx-b--ooo">Paso día ${a.paso_dia || '?'}</span>`}
+      </div>
+      <input class="form-input seq-app__subj" id="app-subj-${a.id}" value="${esc(a.asunto)}" ${approved ? 'disabled' : ''} placeholder="Asunto">
+      <textarea class="form-input seq-app__body" id="app-body-${a.id}" rows="5" ${approved ? 'disabled' : ''}>${esc(a.cuerpo)}</textarea>
+      <div class="seq-app__ft">
+        ${approved ? '' : `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqAppAction(${a.id},'save')">Guardar cambios</button>`}
+        <span class="sp"></span>
+        <button class="btn btn--ghost btn--danger btn--sm" onclick="LeadManagerModule.seqAppAction(${a.id},'discard')">Descartar</button>
+        ${approved ? '' : `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.seqAppAction(${a.id},'approve')">✓ Aprobar y enviar</button>`}
+      </div>
+    </div>`;
+  }
+  // Chip del modo de envío en el título de la secuencia.
+  function _seqModeChip(s) {
+    const M = { auto: ['⚡ Envío automático', 'var(--primary-soft)', 'var(--primary)'], preaprobado: ['✋ Pre-aprobado', '#FEF3E2', '#A96D0C'] };
+    const m = M[s?.send_mode]; if (!m) return '';
+    return `<span class="client-badge" style="background:${m[1]};color:${m[2]};font-size:.62rem;vertical-align:3px">${m[0]}</span>`;
+  }
   function seqCtSetEstado(v) { _seqCtEstado = v || ''; const el = document.getElementById('seq-tabwrap'); if (el && _activeSeq) el.innerHTML = _seqTabContent(_activeSeq); else _renderBody(); }
   function seqTaskSetCanal(v) { _seqTaskCanal = v || ''; const el = document.getElementById('seq-tabwrap'); if (el && _activeSeq) el.innerHTML = _seqTabContent(_activeSeq); else _renderBody(); }
   function seqTaskSetDue(v) { _seqTaskDue = v || ''; const el = document.getElementById('seq-tabwrap'); if (el && _activeSeq) el.innerHTML = _seqTabContent(_activeSeq); else _renderBody(); }
@@ -17013,6 +17075,15 @@ ${foot}
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Estado</span><select class="form-input" id="seq-estado">${_SEQ_OPTS.map(([v, l]) => `<option value="${v}"${s?.estado === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Zona horaria del prospecto</span><div class="tz-combo"><input class="form-input" id="seq-tz-search" autocomplete="off" placeholder="Ciudad, estado o país (ej. Dallas, New York, Lima)…" value="${esc(_tzLabelFor(s?.timezone || ''))}" oninput="LeadManagerModule.tzSearch()" onfocus="LeadManagerModule.tzSearch()" onblur="LeadManagerModule.tzBlur()"><input type="hidden" id="seq-tz" value="${esc(s?.timezone || '')}"><div class="tz-list" id="seq-tz-list"></div></div></label>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Fecha de inicio (opcional)</span><input class="form-input" type="date" id="seq-starts" value="${esc((s?.starts_on || '').slice(0, 10))}"><span class="seq-drip-hint">La secuencia arranca (día 1 de los contactos que enroles) en esta fecha. Vacío = arranca al momento de enrolar. Si cae en un día no permitido, se mueve al siguiente de cadencia.</span></label>
+        <label class="fin-cfg-field fin-pi-full" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="seq-autoact" ${s?.auto_activar ? 'checked' : ''} style="width:auto"><span class="fin-cfg-lbl" style="margin:0">Activar sola en la fecha de inicio</span><span class="seq-drip-hint" style="margin:0">Al llegar la fecha de arriba, la secuencia pasa a “activa” automáticamente (aunque esté en borrador o pausada).</span></label>
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Modo de envío de los emails</span><select class="form-input" id="seq-mode" onchange="LeadManagerModule.seqModeHint()">
+          <option value="manual"${(s?.send_mode || 'manual') === 'manual' ? ' selected' : ''}>Manual — se maneja fuera de Nova</option>
+          <option value="auto"${s?.send_mode === 'auto' ? ' selected' : ''}>Automático — el motor envía solo</option>
+          <option value="preaprobado"${s?.send_mode === 'preaprobado' ? ' selected' : ''}>Automático con aprobación previa</option>
+        </select><span class="seq-drip-hint" id="seq-mode-hint"></span></label>
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Intervalo entre envíos automáticos</span><select class="form-input" id="seq-interval">
+          ${[[2, 'Cada 2 min'], [5, 'Cada 5 min (recomendado)'], [10, 'Cada 10 min'], [15, 'Cada 15 min'], [30, 'Cada 30 min'], [60, 'Cada 1 hora']].map(([v, l]) => `<option value="${v}"${(s?.send_interval_min || 5) === v ? ' selected' : ''}>${l}</option>`).join('')}
+        </select><span class="seq-drip-hint">Espacio mínimo entre emails automáticos de ESTA secuencia — nunca salen 100 a la vez. Aplica a los modos automáticos y a los aprobados en cola.</span></label>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Días de cadencia</span><input type="hidden" id="seq-senddays" value="${_sanSendDays(s?.send_days)}"><div class="seq-days" id="seq-days">${['L', 'M', 'X', 'J', 'V', 'S', 'D'].map((lbl, i) => `<button type="button" class="seq-day${_sanSendDays(s?.send_days)[i] === '1' ? ' on' : ''}" data-d="${i}" onclick="LeadManagerModule.seqDayToggle(${i})">${lbl}</button>`).join('')}<span class="seq-days-sp"></span><button type="button" class="seq-days-preset" onclick="LeadManagerModule.seqDaysPreset('week')">L–V</button><button type="button" class="seq-days-preset" onclick="LeadManagerModule.seqDaysPreset('all')">Todos</button></div><span class="seq-drip-hint">Los pasos y tareas caen solo en los días marcados. Si un “día N” cae en un día no marcado, se mueve al siguiente permitido (ej. sáb/dom → lunes).</span></label>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Arranque escalonado · contactos por día</span><input class="form-input" type="number" id="seq-drip" min="0" step="1" value="${s?.drip_per_day ? s.drip_per_day : ''}" placeholder="0 = todos arrancan el mismo día"><span class="seq-drip-hint">Al enrolar muchos contactos a la vez, reparte su “día 1” en tandas (ej. 20/día) para no saturarte de tareas ni de envíos. Se distribuyen automáticamente en los días de cadencia permitidos.${s ? ` <button type="button" class="seq-days-preset" onclick="LeadManagerModule.seqRedistribute(${s.id})" title="Recalcula las fechas de los contactos que aún no empiezan, según el valor de arriba (guárdalo primero)">↻ Repartir ahora los ya enrolados</button>` : ''}</span></label>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Límite diario de envíos (esta secuencia)</span><input class="form-input" type="number" id="seq-dlim" min="0" step="1" value="${s?.daily_limit ? s.daily_limit : ''}" placeholder="0 = usa el límite global del workspace"><span class="seq-drip-hint">Tope de emails automáticos por día para el buzón de este cliente. Al llegar al tope, el motor sigue con las demás secuencias y esta continúa mañana.</span></label>
@@ -17028,6 +17099,25 @@ ${foot}
       </div></div></div>`;
     document.body.appendChild(m);
     setTimeout(() => $('seq-nombre')?.focus(), 60);
+    if (_mailboxes === null) _mbReload().then(() => seqModeHint()); else seqModeHint();
+    const cl = $('seq-client'); if (cl) cl.addEventListener('change', seqModeHint);
+  }
+  // Hint del modo de envío según el buzón del cliente elegido.
+  function seqModeHint() {
+    const hint = $('seq-mode-hint'); if (!hint) return;
+    const mode = $('seq-mode')?.value || 'manual';
+    const cid = parseInt($('seq-client')?.value) || 0;
+    const mb = cid ? _mbFor(cid) : null;
+    if (mode === 'manual') { hint.textContent = 'Los pasos de email aparecen como tareas y tú los envías desde tu correo (como hasta ahora).'; hint.style.color = ''; return; }
+    if (!cid) { hint.textContent = 'Elige primero el cliente outbound.'; hint.style.color = ''; return; }
+    if (!mb || !['conectado', 'solo_envio'].includes(mb.estado)) {
+      hint.textContent = '⚠ Este cliente NO tiene buzón conectado — conéctalo en su ficha o los envíos automáticos no saldrán.';
+      hint.style.color = 'var(--danger)'; return;
+    }
+    hint.style.color = '';
+    hint.textContent = mode === 'auto'
+      ? `Los emails salen solos desde ${mb.email} respetando ventana, límites e intervalo.`
+      : `El motor redacta cada email y lo deja en la pestaña “Aprobar” — tras tu OK, sale solo desde ${mb.email}.`;
   }
   async function seqRedistribute(id) {
     if (!confirm('¿Repartir de nuevo los contactos que AÚN NO empiezan (paso 1) según “contactos por día”?\n\nLos que ya avanzaron de paso no se tocan. Guarda la secuencia antes si acabas de cambiar el número.')) return;
@@ -17048,7 +17138,7 @@ ${foot}
     const fail = m => { if (hint) { hint.textContent = m; hint.className = 'fin-cfg-hint fin-cfg-hint--err'; } };
     if (!nombre) return fail('El nombre es requerido');
     if (!clientId) return fail('Selecciona el cliente outbound');
-    const body = { nombre, outbound_client_id: Number(clientId), campaign_id: $('seq-campaign')?.value ? Number($('seq-campaign').value) : null, estado: $('seq-estado')?.value || 'draft', objetivo: $('seq-objetivo')?.value.trim() || '', timezone: $('seq-tz')?.value || '', drip_per_day: Math.max(0, parseInt($('seq-drip')?.value) || 0), send_days: _sanSendDays($('seq-senddays')?.value), starts_on: $('seq-starts')?.value || null, daily_limit: Math.max(0, parseInt($('seq-dlim')?.value) || 0), mercado: $('seq-mercado')?.value.trim() || '', icp: $('seq-icp')?.value.trim() || '', notas: $('seq-notas')?.value.trim() || '' };
+    const body = { nombre, outbound_client_id: Number(clientId), campaign_id: $('seq-campaign')?.value ? Number($('seq-campaign').value) : null, estado: $('seq-estado')?.value || 'draft', objetivo: $('seq-objetivo')?.value.trim() || '', timezone: $('seq-tz')?.value || '', drip_per_day: Math.max(0, parseInt($('seq-drip')?.value) || 0), send_days: _sanSendDays($('seq-senddays')?.value), starts_on: $('seq-starts')?.value || null, daily_limit: Math.max(0, parseInt($('seq-dlim')?.value) || 0), mercado: $('seq-mercado')?.value.trim() || '', icp: $('seq-icp')?.value.trim() || '', notas: $('seq-notas')?.value.trim() || '', send_mode: $('seq-mode')?.value || 'manual', send_interval_min: parseInt($('seq-interval')?.value) || 5, auto_activar: !!$('seq-autoact')?.checked };
     const btn = $('seq-save'); if (btn) btn.disabled = true;
     try {
       const res = await apiFetch(`${API}/sequences${id ? '/' + id : ''}`, { method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -19225,6 +19315,7 @@ ${foot}
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
     openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
     openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, confirmDeleteSequence, seqTab, seqCtAdvance, seqCtPause, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
+    seqAppAction, seqModeHint,
     seqTaskOpen, seqDoClose, seqDoCopy, seqDoDone, seqDoSkip, seqDoPrev, seqDoEditStep, seqDoExit, seqOpenLinkedIn,
     openStepDrawer, closeStepDrawer, saveStep, confirmDeleteStep, seqInsertVar, stepUseTpl, tzSearch, tzPick, tzBlur,
     stepSetMode, stepSetField, stepAddVariant, stepDelVariant, stepFocusTa,

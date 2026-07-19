@@ -657,6 +657,15 @@ async function initDb() {
     await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS mercado TEXT NOT NULL DEFAULT '';`);
     await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS icp     TEXT NOT NULL DEFAULT '';`);
     await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS notas   TEXT NOT NULL DEFAULT '';`);
+    // Modo de envío por secuencia (estilo Outreach.io):
+    //   manual      → se maneja externamente (tareas); el motor NO envía nada. Default.
+    //   auto        → el motor envía solo por el buzón del cliente.
+    //   preaprobado → el motor redacta el email y espera aprobación; al aprobar, sale solo.
+    await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS send_mode         TEXT    NOT NULL DEFAULT 'manual';`);
+    // Minutos mínimos entre envíos automáticos de ESTA secuencia (anti-ráfaga).
+    await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS send_interval_min INTEGER NOT NULL DEFAULT 5;`);
+    // Auto-activación: al llegar starts_on, el motor pasa la secuencia a 'activa' solo.
+    await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS auto_activar      BOOLEAN NOT NULL DEFAULT FALSE;`);
 
     // ── activities (Lead Manager Fase 4: touches registrados + tareas comerciales) ──
     await pool.query(`

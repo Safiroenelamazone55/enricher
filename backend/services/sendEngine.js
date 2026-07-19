@@ -170,13 +170,22 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback) {
     SELECT cs.id AS enr_id, cs.user_id, cs.contact_id, cs.sequence_id, cs.paso,
            k.nombre, k.apellido, k.email, k.cargo, k.empresa_nombre, k.ciudad, k.pais,
            k.seniority, k.departamento, k.buyer_role, k.region, k.contact_priority,
-           k.email_status, k.disposition, co.nombre AS company_nombre, s.nombre AS seq_nombre, s.send_days
+           k.email_status, k.disposition, co.nombre AS company_nombre, s.nombre AS seq_nombre, s.send_days,
+           s.send_mode, s.send_interval_min
       FROM lm_contact_sequences cs
       JOIN sequences   s  ON s.id = cs.sequence_id AND s.estado = 'activa'
       JOIN lm_contacts k  ON k.id = cs.contact_id
       LEFT JOIN lm_companies co ON co.id = k.company_id
      WHERE cs.user_id = $1 AND cs.estado = 'activo'
        AND (cs.next_action_at IS NULL OR cs.next_action_at <= NOW())
+       -- Modo de envío: 'manual' = la secuencia se maneja externamente, el motor NO la toca.
+       AND s.send_mode IN ('auto','preaprobado')
+       -- Intervalo anti-ráfaga POR SECUENCIA: espera N min desde el último envío de esta secuencia.
+       AND NOT EXISTS (
+            SELECT 1 FROM lm_messages mi
+             WHERE mi.sequence_id = s.id AND mi.sent_at IS NOT NULL
+               AND mi.sent_at > NOW() - make_interval(mins => GREATEST(COALESCE(s.send_interval_min,5),1))
+           )
        -- Límite diario POR SECUENCIA (buzón del cliente): si esta secuencia ya llegó a su tope hoy,
        -- se salta y el motor sigue con las demás. 0 = sin límite propio (aplica solo el global).
        AND (COALESCE(s.daily_limit, 0) <= 0 OR (
@@ -268,6 +277,31 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback) {
     variantName = multi ? String(variant.nombre || 'A') : '';
   }
   const token = crypto.randomBytes(12).toString('hex');
+
+  // ── Modo PRE-APROBADO: el motor deja el email redactado como borrador y espera.
+  // Al aprobarlo (o editarlo y aprobarlo) en la UI, _flushApproved lo envía y avanza.
+  if (enr.send_mode === 'preaprobado') {
+    const { rows: [waiting] } = await pool.query(
+      `SELECT id FROM lm_messages WHERE user_id=$1 AND contact_id=$2 AND step_id=$3 AND estado IN ('awaiting','approved') LIMIT 1`,
+      [uid, enr.contact_id, step.id]
+    );
+    if (!waiting) {
+      const { rows: [mbq] } = await pool.query(
+        `SELECT mb.id FROM lm_mailboxes mb JOIN sequences s ON s.outbound_client_id = mb.outbound_client_id AND s.user_id = mb.user_id
+          WHERE s.id=$1 AND mb.user_id=$2 AND mb.estado IN ('conectado','solo_envio') LIMIT 1`, [enr.sequence_id, uid]);
+      await pool.query(
+        `INSERT INTO lm_messages (user_id, contact_id, sequence_id, step_id, asunto, cuerpo, to_email, estado, track_token, variant, mailbox_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,'awaiting',$8,$9,$10)`,
+        [uid, enr.contact_id, enr.sequence_id, step.id, asunto, cuerpoTxt, enr.email, token, variantName, mbq ? mbq.id : null]
+      );
+      console.log(`[send-engine] borrador por aprobar → ${enr.email} (${enr.seq_nombre} paso ${enr.paso})`);
+    }
+    // Patear el enrolamiento para no bloquear el pick del workspace; reintenta luego
+    // por si el borrador se descarta sin avanzar. El envío real ocurre al aprobar.
+    await pool.query(`UPDATE lm_contact_sequences SET next_action_at = NOW() + interval '12 hours' WHERE id=$1`, [enr.enr_id]);
+    return false;
+  }
+
   const html = buildHtml({
     text: cuerpoTxt, firma: cfg.firma, trackToken: token, apiBase,
     trackOpens: cfg.track_opens, trackClicks: cfg.track_clicks,
@@ -388,11 +422,91 @@ async function _flushScheduled(pool) {
   }
 }
 
+// ── Avanza un enrolamiento saltando el paso indicado (aprobación enviada o descartada) ──
+async function advancePastStep(pool, userId, contactId, sequenceId, stepId) {
+  const { rows: [enr] } = await pool.query(
+    `SELECT cs.id AS enr_id, cs.user_id, cs.contact_id, s.send_days
+       FROM lm_contact_sequences cs JOIN sequences s ON s.id = cs.sequence_id
+      WHERE cs.user_id=$1 AND cs.contact_id=$2 AND cs.sequence_id=$3 AND cs.estado='activo'`,
+    [userId, contactId, sequenceId]);
+  if (!enr) return false;
+  const { rows: steps } = await pool.query(
+    `SELECT id, dia, canal, espera_dias FROM sequence_steps WHERE sequence_id=$1 ORDER BY dia ASC, orden ASC, id ASC`,
+    [sequenceId]);
+  const curIdx = steps.findIndex(x => x.id === stepId);
+  if (curIdx < 0) return false;
+  await _advance(pool, enr, steps, curIdx);
+  return true;
+}
+
+// ── Envíos pre-aprobados: despacha los 'approved' respetando el intervalo por secuencia ──
+async function _flushApproved(pool, apiBase) {
+  const { rows: due } = await pool.query(`
+    SELECT DISTINCT ON (m.sequence_id)
+           m.id, m.user_id, m.contact_id, m.sequence_id, m.step_id, m.asunto, m.cuerpo, m.to_email, m.track_token,
+           mb.id AS mb_ok, mb.email AS mb_email, mb.pass_enc, mb.smtp_host, mb.smtp_port, mb.smtp_secure,
+           mb.imap_host, mb.imap_port, mb.provider, mb.sent_folder, mb.estado AS mb_estado,
+           cfg.from_name, cfg.firma, cfg.track_opens, cfg.track_clicks
+      FROM lm_messages m
+      JOIN sequences s ON s.id = m.sequence_id
+      LEFT JOIN lm_mailboxes mb ON mb.id = m.mailbox_id
+      LEFT JOIN lm_send_settings cfg ON cfg.user_id = m.user_id
+     WHERE m.estado='approved'
+       AND NOT EXISTS (
+            SELECT 1 FROM lm_messages mi
+             WHERE mi.sequence_id = m.sequence_id AND mi.sent_at IS NOT NULL
+               AND mi.sent_at > NOW() - make_interval(mins => GREATEST(COALESCE(s.send_interval_min,5),1))
+           )
+     ORDER BY m.sequence_id, m.created_at ASC
+  `);
+  for (const m of due) {
+    try {
+      if (!m.mb_ok || !['conectado', 'solo_envio'].includes(m.mb_estado)) throw new Error('El buzón ya no está conectado');
+      const { decPass, sendFromMailbox } = require('./mailboxService');
+      const html = buildHtml({
+        text: m.cuerpo, firma: m.firma, trackToken: m.track_token, apiBase,
+        trackOpens: !!apiBase && m.track_opens, trackClicks: !!apiBase && m.track_clicks,
+      });
+      const mb = { id: m.mb_ok, email: m.mb_email, pass_enc: m.pass_enc, smtp_host: m.smtp_host, smtp_port: m.smtp_port,
+                   smtp_secure: m.smtp_secure, imap_host: m.imap_host, imap_port: m.imap_port, provider: m.provider, sent_folder: m.sent_folder };
+      const sent = await sendFromMailbox(mb, decPass(m.pass_enc), {
+        to: m.to_email, subject: m.asunto, html,
+        text: m.cuerpo + (m.firma ? `\n\n${String(m.firma).replace(/<[^>]+>/g, '')}` : ''),
+        fromName: m.from_name || undefined,
+      });
+      await pool.query(`UPDATE lm_messages SET estado='sent', sent_at=NOW(), smtp_message_id=$1 WHERE id=$2`,
+        [sent.messageId || '', m.id]);
+      await pool.query(
+        `INSERT INTO activities (user_id, contact_id, tipo, canal, nota, fecha, estado)
+         VALUES ($1,$2,'email','email',$3,NOW(),'hecha')`,
+        [m.user_id, m.contact_id, `[Aprobado] Email enviado: ${m.asunto}`]);
+      await advancePastStep(pool, m.user_id, m.contact_id, m.sequence_id, m.step_id);
+      console.log(`[send-engine] approved → ${m.to_email} ("${m.asunto}")`);
+    } catch (err) {
+      await pool.query(`UPDATE lm_messages SET estado='failed', error=$1 WHERE id=$2`,
+        [err.message.slice(0, 500), m.id]).catch(() => {});
+      console.warn(`[send-engine] approved fail → ${m.to_email}: ${err.message}`);
+    }
+  }
+}
+
+// ── Auto-activación por fecha: 'inicia el 5 de agosto' → ese día pasa a activa sola ──
+async function _autoActivate(pool) {
+  const { rows } = await pool.query(`
+    UPDATE sequences SET estado='activa', updated_at=NOW()
+     WHERE auto_activar AND estado IN ('draft','pausada')
+       AND starts_on IS NOT NULL AND starts_on <= CURRENT_DATE
+     RETURNING id, nombre`);
+  for (const s of rows) console.log(`[send-engine] auto-activada: "${s.nombre}" (llegó su fecha de inicio)`);
+}
+
 async function tick(pool, apiBase, gmailCallback) {
   if (_running) return; // no solapar ticks
   _running = true;
   try {
+    await _autoActivate(pool).catch(e => console.warn('[send-engine] auto-activar:', e.message));
     await _flushScheduled(pool).catch(e => console.warn('[send-engine] scheduled:', e.message));
+    await _flushApproved(pool, apiBase).catch(e => console.warn('[send-engine] approved:', e.message));
     const { rows: configs } = await pool.query(`SELECT * FROM lm_send_settings WHERE enabled = TRUE`);
     for (const cfg of configs) {
       try { await _tickWorkspace(pool, cfg, apiBase, gmailCallback); }
@@ -410,4 +524,4 @@ function startSendEngine(pool, { apiBase, gmailCallback }) {
   console.log('[send-engine] started (tick 60s)');
 }
 
-module.exports = { startSendEngine, tick, renderTemplate, buildHtml, SENDABLE_STATUS, pickVariant, stepVariants };
+module.exports = { startSendEngine, tick, renderTemplate, buildHtml, SENDABLE_STATUS, pickVariant, stepVariants, advancePastStep };
