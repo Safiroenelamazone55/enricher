@@ -234,9 +234,13 @@ async function _checkMailbox(pool, mb) {
 
 // ── Tick global ──────────────────────────────────────────────────────
 
+let _runningSince = 0;
 async function tick(pool) {
-  if (_running) return;
-  _running = true;
+  // Watchdog anti-cuelgue (ver sendEngine): un IMAP que nunca responde no debe
+  // matar el vigilante para siempre. A los 10 min se libera.
+  if (_running && Date.now() - _runningSince < 10 * 60 * 1000) return;
+  if (_running) console.warn('[imap-watcher] tick anterior colgado >10min — watchdog lo libera');
+  _running = true; _runningSince = Date.now();
   try {
     const { rows: boxes } = await pool.query(
       `SELECT * FROM lm_mailboxes WHERE estado='conectado' AND imap_host <> '' ORDER BY id`

@@ -14,9 +14,12 @@
 let _timer = null;
 let _running = false;
 
+let _runningSince = 0;
 async function tick(pool, gmailCallback) {
-  if (_running) return;
-  _running = true;
+  // Watchdog anti-cuelgue (ver sendEngine).
+  if (_running && Date.now() - _runningSince < 10 * 60 * 1000) return;
+  if (_running) console.warn('[reply-watcher] tick anterior colgado >10min — watchdog lo libera');
+  _running = true; _runningSince = Date.now();
   try {
     // Mensajes enviados con thread, sin respuesta detectada, últimos 30 días.
     const { rows: msgs } = await pool.query(`

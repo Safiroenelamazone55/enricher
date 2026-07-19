@@ -500,9 +500,14 @@ async function _autoActivate(pool) {
   for (const s of rows) console.log(`[send-engine] auto-activada: "${s.nombre}" (llegó su fecha de inicio)`);
 }
 
+let _runningSince = 0;
 async function tick(pool, apiBase, gmailCallback) {
-  if (_running) return; // no solapar ticks
-  _running = true;
+  // Watchdog anti-cuelgue: si un tick anterior quedó colgado (query al pooler que
+  // nunca resuelve), _running quedaba en true PARA SIEMPRE y el motor moría en
+  // silencio. A los 5 min se considera muerto y se retoma.
+  if (_running && Date.now() - _runningSince < 5 * 60 * 1000) return;
+  if (_running) console.warn('[send-engine] tick anterior colgado >5min — watchdog lo libera');
+  _running = true; _runningSince = Date.now();
   try {
     await _autoActivate(pool).catch(e => console.warn('[send-engine] auto-activar:', e.message));
     await _flushScheduled(pool).catch(e => console.warn('[send-engine] scheduled:', e.message));
