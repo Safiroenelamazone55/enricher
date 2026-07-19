@@ -451,6 +451,7 @@ async function _flushApproved(pool, apiBase) {
            mb.id AS mb_ok, mb.email AS mb_email, mb.pass_enc, mb.smtp_host, mb.smtp_port, mb.smtp_secure,
            mb.imap_host, mb.imap_port, mb.provider, mb.sent_folder, mb.estado AS mb_estado,
            cfg.from_name, cfg.firma, cfg.track_opens, cfg.track_clicks,
+           cfg.window_start, cfg.window_end, cfg.send_weekends, cfg.timezone,
            COALESCE(oc.cc_email,'') AS cc_email, COALESCE(st.cc_off, FALSE) AS cc_off,
            k.disposition AS k_disposition
       FROM lm_messages m
@@ -472,6 +473,11 @@ async function _flushApproved(pool, apiBase) {
   `);
   for (const m of due) {
     try {
+      // Ventana horaria y fin de semana del workspace: aprobar en lote un domingo por la
+      // noche NO dispara los envíos — esperan a la próxima ventana hábil.
+      const { hour, weekend } = _localNow(m.timezone);
+      if (hour < (m.window_start ?? 9) || hour >= (m.window_end ?? 18)) continue;
+      if (weekend && !m.send_weekends) continue;
       // Guarda de opt-out: si el contacto quedó "no interesado"/"no contactar" DESPUÉS de
       // aprobar el borrador (o de crearlo), el email aprobado NO sale jamás.
       if (['no_interesado', 'no_contactar'].includes(m.k_disposition)) {
