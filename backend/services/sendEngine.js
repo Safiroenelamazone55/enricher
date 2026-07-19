@@ -250,18 +250,20 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback) {
     return false;
   }
 
-  // ── Paso email: guardas de verificación (el diferenciador) ──
+  // ── Paso email: guardas ──
+  // Solo se bloquea lo que de verdad NO se puede enviar: sin email, o un email que YA
+  // rebotó (email_status='invalid', marcado por el vigilante IMAP tras un rebote real).
+  // "Sin verificar" NO bloquea: se confía en el dato importado/ingresado por la usuaria.
+  // La sonda SMTP previa da demasiados falsos positivos/negativos como para exigirla;
+  // la protección real es la detección de rebotes reales (que sí marca invalid y pausa).
   if (!enr.email) {
     await _pauseEnrollment(pool, enr, 'sin_email',
-      `[${enr.seq_nombre}] Contacto sin email — verificar/enriquecer para reanudar`);
+      `[${enr.seq_nombre}] Contacto sin email — agregar email para reanudar`);
     return false;
   }
-  if (!SENDABLE_STATUS.includes(enr.email_status)) {
-    const reason = enr.email_status === 'invalid' ? 'email_invalido'
-                 : enr.email_status === ''        ? 'email_no_verificado'
-                 : 'email_' + enr.email_status;
-    await _pauseEnrollment(pool, enr, reason,
-      `[${enr.seq_nombre}] Email de ${enr.nombre || enr.email} ${enr.email_status === 'invalid' ? 'inválido' : 'sin verificar'} — revisar para reanudar`);
+  if (enr.email_status === 'invalid') {
+    await _pauseEnrollment(pool, enr, 'email_invalido',
+      `[${enr.seq_nombre}] Email de ${enr.nombre || enr.email} rebotó antes — corregir para reanudar`);
     return false;
   }
 
@@ -548,8 +550,9 @@ async function _draftPreapproved(pool) {
   `);
   for (const enr of enrs) {
     try {
-      // Guardas suaves: sin email o sin verificar → lo resuelve el flujo principal cuando toque.
-      if (!enr.email || !SENDABLE_STATUS.includes(enr.email_status)) continue;
+      // Solo se salta sin email o con email que ya rebotó (invalid). "Sin verificar" SÍ
+      // genera borrador (se confía en el dato; el rebote real lo detecta el vigilante).
+      if (!enr.email || enr.email_status === 'invalid') continue;
       // Opt-out: a un contacto descartado no se le redacta ni el borrador.
       if (['no_interesado', 'no_contactar'].includes(enr.disposition)) continue;
       const { rows: steps } = await pool.query(
