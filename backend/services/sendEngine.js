@@ -304,6 +304,9 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback) {
       const { rows: [mbq] } = await pool.query(
         `SELECT mb.id FROM lm_mailboxes mb JOIN sequences s ON s.outbound_client_id = mb.outbound_client_id AND s.user_id = mb.user_id
           WHERE s.id=$1 AND mb.user_id=$2 AND mb.estado IN ('conectado','solo_envio') LIMIT 1`, [enr.sequence_id, uid]);
+      // Sin buzón conectado no se redacta el borrador (evita huérfanos que fallan al
+      // aprobar). Se reintenta en el próximo tick cuando la usuaria conecte el buzón.
+      if (!mbq) { await pool.query(`UPDATE lm_contact_sequences SET next_action_at = NOW() + interval '1 hour' WHERE id=$1`, [enr.enr_id]); return false; }
       // scheduled_at = la fecha en que TOCA enviarlo: aprobar antes no lo adelanta.
       await pool.query(
         `INSERT INTO lm_messages (user_id, contact_id, sequence_id, step_id, asunto, cuerpo, to_email, estado, track_token, variant, mailbox_id, scheduled_at)
@@ -582,6 +585,7 @@ async function _draftPreapproved(pool) {
       const { rows: [mbq] } = await pool.query(
         `SELECT mb.id FROM lm_mailboxes mb JOIN sequences s ON s.outbound_client_id = mb.outbound_client_id AND s.user_id = mb.user_id
           WHERE s.id=$1 AND mb.user_id=$2 AND mb.estado IN ('conectado','solo_envio') LIMIT 1`, [enr.sequence_id, enr.user_id]);
+      if (!mbq) continue; // sin buzón conectado: no se redacta borrador (evita huérfanos)
       const token = crypto.randomBytes(12).toString('hex');
       await pool.query(
         `INSERT INTO lm_messages (user_id, contact_id, sequence_id, step_id, asunto, cuerpo, to_email, estado, track_token, variant, mailbox_id, scheduled_at)
