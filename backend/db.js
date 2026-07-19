@@ -1096,6 +1096,39 @@ async function initDb() {
       );
     `);
     await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS lm_mailboxes_client_uq ON lm_mailboxes (user_id, outbound_client_id);`);
+    // F2 (vigilante IMAP): cursor de lectura por buzón. uidvalidity cambia si el servidor
+    // resetea la carpeta (hay que re-anclar el cursor); last_uid = último UID ya procesado.
+    await pool.query(`ALTER TABLE lm_mailboxes ADD COLUMN IF NOT EXISTS imap_uidvalidity BIGINT NOT NULL DEFAULT 0;`);
+    await pool.query(`ALTER TABLE lm_mailboxes ADD COLUMN IF NOT EXISTS imap_last_uid    BIGINT NOT NULL DEFAULT 0;`);
+    await pool.query(`ALTER TABLE lm_mailboxes ADD COLUMN IF NOT EXISTS last_checked_at  TIMESTAMPTZ;`);
+    await pool.query(`ALTER TABLE lm_mailboxes ADD COLUMN IF NOT EXISTS sent_folder      TEXT NOT NULL DEFAULT '';`);
+
+    // lm_inbox_messages: correos ENTRANTES detectados por el vigilante IMAP (F2).
+    // Solo se guardan los relevantes: remitente que es contacto del CRM, o rebotes.
+    // tipo: reply (respuesta real) | ooo (out-of-office) | bounce (rebote) | otro
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS lm_inbox_messages (
+        id                 SERIAL      PRIMARY KEY,
+        user_id            INTEGER     REFERENCES users(id)            ON DELETE CASCADE,
+        mailbox_id         INTEGER     REFERENCES lm_mailboxes(id)     ON DELETE CASCADE,
+        outbound_client_id INTEGER     REFERENCES outbound_clients(id) ON DELETE SET NULL,
+        contact_id         INTEGER     REFERENCES lm_contacts(id)      ON DELETE SET NULL,
+        imap_uid           BIGINT      NOT NULL DEFAULT 0,
+        message_id         TEXT        NOT NULL DEFAULT '',
+        in_reply_to        TEXT        NOT NULL DEFAULT '',
+        from_email         TEXT        NOT NULL DEFAULT '',
+        from_name          TEXT        NOT NULL DEFAULT '',
+        asunto             TEXT        NOT NULL DEFAULT '',
+        cuerpo             TEXT        NOT NULL DEFAULT '',
+        tipo               TEXT        NOT NULL DEFAULT 'reply',
+        leido              BOOLEAN     NOT NULL DEFAULT FALSE,
+        received_at        TIMESTAMPTZ,
+        created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE (mailbox_id, imap_uid)
+      );
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS lm_inbox_user_idx    ON lm_inbox_messages (user_id, received_at DESC);`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS lm_inbox_contact_idx ON lm_inbox_messages (contact_id);`);
 
     // lm_messages: cada email real enviado por el motor (asunto/cuerpo ya renderizados).
     // estado: queued | sent | bounced | replied | failed
@@ -1166,6 +1199,11 @@ async function initDb() {
         UNIQUE (user_id, fecha)
       );
     `);
+
+    // F2: envíos por buzón del cliente (SMTP). mailbox_id = por qué buzón salió;
+    // smtp_message_id = header Message-ID (threading real en respuestas).
+    await pool.query(`ALTER TABLE lm_messages ADD COLUMN IF NOT EXISTS mailbox_id      INTEGER REFERENCES lm_mailboxes(id) ON DELETE SET NULL;`);
+    await pool.query(`ALTER TABLE lm_messages ADD COLUMN IF NOT EXISTS smtp_message_id TEXT NOT NULL DEFAULT '';`);
 
     // ── LM · A/B (Fase B3): variante usada en cada envío/touch, para medir cuál convierte ──
     await pool.query(`ALTER TABLE lm_messages ADD COLUMN IF NOT EXISTS variant TEXT NOT NULL DEFAULT '';`);

@@ -273,22 +273,45 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback) {
     trackOpens: cfg.track_opens, trackClicks: cfg.track_clicks,
   });
 
+  // ── Buzón del cliente (F2): si la secuencia pertenece a un cliente con buzón
+  // conectado, el envío sale por SU buzón (SMTP). Sin buzón → Gmail del workspace.
+  const { rows: [mbx] } = await pool.query(
+    `SELECT mb.* FROM lm_mailboxes mb
+      JOIN sequences s ON s.outbound_client_id = mb.outbound_client_id AND s.user_id = mb.user_id
+     WHERE s.id = $1 AND mb.user_id = $2 AND mb.estado IN ('conectado','solo_envio')
+     LIMIT 1`,
+    [enr.sequence_id, uid]
+  );
+
   const { rows: [msg] } = await pool.query(
-    `INSERT INTO lm_messages (user_id, contact_id, sequence_id, step_id, asunto, cuerpo, to_email, estado, track_token, variant)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,'queued',$8,$9) RETURNING id`,
-    [uid, enr.contact_id, enr.sequence_id, step.id, asunto, cuerpoTxt, enr.email, token, variantName]
+    `INSERT INTO lm_messages (user_id, contact_id, sequence_id, step_id, asunto, cuerpo, to_email, estado, track_token, variant, mailbox_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,'queued',$8,$9,$10) RETURNING id`,
+    [uid, enr.contact_id, enr.sequence_id, step.id, asunto, cuerpoTxt, enr.email, token, variantName, mbx ? mbx.id : null]
   );
 
   try {
-    const { sendEmail } = require('./gmailService');
-    const sent = await sendEmail(pool, uid, gmailCallback, {
-      to: enr.email, subject: asunto, html, text: cuerpoTxt + (cfg.firma ? `\n\n${cfg.firma.replace(/<[^>]+>/g, '')}` : ''),
-      fromName: cfg.from_name,
-    });
-    await pool.query(
-      `UPDATE lm_messages SET estado='sent', sent_at=NOW(), gmail_message_id=$1, gmail_thread_id=$2 WHERE id=$3`,
-      [sent.id || '', sent.threadId || '', msg.id]
-    );
+    if (mbx) {
+      const { decPass, sendFromMailbox } = require('./mailboxService');
+      const sent = await sendFromMailbox(mbx, decPass(mbx.pass_enc), {
+        to: enr.email, subject: asunto, html,
+        text: cuerpoTxt + (cfg.firma ? `\n\n${cfg.firma.replace(/<[^>]+>/g, '')}` : ''),
+        fromName: cfg.from_name,
+      });
+      await pool.query(
+        `UPDATE lm_messages SET estado='sent', sent_at=NOW(), smtp_message_id=$1 WHERE id=$2`,
+        [sent.messageId || '', msg.id]
+      );
+    } else {
+      const { sendEmail } = require('./gmailService');
+      const sent = await sendEmail(pool, uid, gmailCallback, {
+        to: enr.email, subject: asunto, html, text: cuerpoTxt + (cfg.firma ? `\n\n${cfg.firma.replace(/<[^>]+>/g, '')}` : ''),
+        fromName: cfg.from_name,
+      });
+      await pool.query(
+        `UPDATE lm_messages SET estado='sent', sent_at=NOW(), gmail_message_id=$1, gmail_thread_id=$2 WHERE id=$3`,
+        [sent.id || '', sent.threadId || '', msg.id]
+      );
+    }
     await pool.query( // actividad 'hecha' → alimenta métricas existentes (contactados)
       `INSERT INTO activities (user_id, contact_id, tipo, canal, nota, fecha, estado)
        VALUES ($1,$2,'email','email',$3,NOW(),'hecha')`,
@@ -300,6 +323,13 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback) {
   } catch (err) {
     const fatal = err.message === 'gmail_not_connected';
     await pool.query(`UPDATE lm_messages SET estado='failed', error=$1 WHERE id=$2`, [err.message.slice(0, 500), msg.id]);
+    if (mbx && /535|auth|credentials|login/i.test(err.message)) {
+      // El buzón del cliente dejó de autenticar (contraseña revocada, etc.):
+      // marcarlo en el buzón para que se vea en la UI. El enrolamiento reintenta
+      // en 15 min (si Jenny reconecta el buzón, retoma solo).
+      await pool.query(`UPDATE lm_mailboxes SET last_error=$1 WHERE id=$2`,
+        [('SMTP: ' + err.message).slice(0, 300), mbx.id]).catch(() => {});
+    }
     if (fatal) {
       await _pauseEnrollment(pool, enr, 'gmail_desconectado', null);
     } else {

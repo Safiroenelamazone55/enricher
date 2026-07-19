@@ -3221,14 +3221,18 @@ app.post('/api/lm/mailboxes', requireAuth, async (req, res) => {
     const estado = t.imapOk ? 'conectado' : 'solo_envio';
     const lastErr = t.imapOk ? '' : (t.error || 'IMAP no disponible');
     const { rows } = await pool.query(`
-      INSERT INTO lm_mailboxes (user_id, outbound_client_id, email, provider, smtp_host, smtp_port, smtp_secure, imap_host, imap_port, pass_enc, estado, last_error, verified_at)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW())
+      INSERT INTO lm_mailboxes (user_id, outbound_client_id, email, provider, smtp_host, smtp_port, smtp_secure, imap_host, imap_port, pass_enc, estado, last_error, sent_folder, verified_at)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NOW())
       ON CONFLICT (user_id, outbound_client_id) DO UPDATE SET
         email=EXCLUDED.email, provider=EXCLUDED.provider, smtp_host=EXCLUDED.smtp_host, smtp_port=EXCLUDED.smtp_port,
         smtp_secure=EXCLUDED.smtp_secure, imap_host=EXCLUDED.imap_host, imap_port=EXCLUDED.imap_port,
-        pass_enc=EXCLUDED.pass_enc, estado=EXCLUDED.estado, last_error=EXCLUDED.last_error, verified_at=NOW()
+        pass_enc=EXCLUDED.pass_enc, estado=EXCLUDED.estado, last_error=EXCLUDED.last_error, sent_folder=EXCLUDED.sent_folder,
+        -- Al reconectar (o cambiar de cuenta) el cursor IMAP se re-ancla en el próximo tick
+        imap_uidvalidity=CASE WHEN lm_mailboxes.email <> EXCLUDED.email THEN 0 ELSE lm_mailboxes.imap_uidvalidity END,
+        imap_last_uid   =CASE WHEN lm_mailboxes.email <> EXCLUDED.email THEN 0 ELSE lm_mailboxes.imap_last_uid    END,
+        verified_at=NOW()
       RETURNING id, outbound_client_id, email, provider, estado, last_error, verified_at
-    `, [req.workspaceOwnerId, cid, email, provider, hosts.smtp_host, hosts.smtp_port, hosts.smtp_secure, hosts.imap_host, hosts.imap_port, mailboxSvc.encPass(pass), estado, lastErr]);
+    `, [req.workspaceOwnerId, cid, email, provider, hosts.smtp_host, hosts.smtp_port, hosts.smtp_secure, hosts.imap_host, hosts.imap_port, mailboxSvc.encPass(pass), estado, lastErr, t.sentFolder || '']);
     res.status(201).json(rows[0]);
   } catch (err) { console.error('[mailbox] POST', err.message); res.status(500).json({ error: 'Error al guardar el buzón' }); }
 });
@@ -6089,6 +6093,7 @@ async function start() {
     const apiBase = process.env.API_BASE_URL || 'https://api.kiwoc.com';
     require('./services/sendEngine').startSendEngine(pool, { apiBase, gmailCallback: GMAIL_CALLBACK });
     require('./services/replyWatcher').startReplyWatcher(pool, { gmailCallback: GMAIL_CALLBACK });
+    require('./services/imapWatcher').startImapWatcher(pool);
     require('./services/dailyReport').startDailyReport(pool);
   } catch (e) { console.warn('[lm-workers] no iniciados:', e.message); }
 
