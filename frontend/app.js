@@ -15617,10 +15617,25 @@ ${foot}
   // ── Buzón real por cliente (SMTP/IMAP multi-proveedor) ──
   let _mailboxes = null;   // null = aún no cargado
   const _MB_PROV = [['google', 'Google / Gmail'], ['microsoft', 'Microsoft / Outlook'], ['zoho', 'Zoho Mail'], ['otro', 'Otro proveedor']];
+  // Zoho aloja cada cuenta en una región (data center) con su propio servidor.
+  // Si eliges la región equivocada, el login se rechaza aunque la contraseña sea correcta.
+  const _MB_ZOHO_REGIONS = [
+    ['com', 'Global / EE.UU. (.com)'], ['eu', 'Europa (.eu)'], ['in', 'India (.in)'],
+    ['com.au', 'Australia (.com.au)'], ['jp', 'Japón (.jp)'], ['com.cn', 'China (.com.cn)'],
+    ['sa', 'Arabia Saudí (.sa)'], ['ca', 'Canadá (.ca)'],
+  ];
+  const _ZOHO_DOM = { com: 'zoho.com', eu: 'zoho.eu', in: 'zoho.in', 'com.au': 'zoho.com.au', jp: 'zoho.jp', 'com.cn': 'zoho.com.cn', sa: 'zoho.sa', ca: 'zohocloud.ca' };
+  // Deriva la región desde un host guardado (al reabrir un buzón Zoho ya conectado).
+  function _zohoRegionFromHost(host) {
+    const h = String(host || '').toLowerCase();
+    const claves = Object.keys(_ZOHO_DOM).sort((a, b) => _ZOHO_DOM[b].length - _ZOHO_DOM[a].length);
+    for (const k of claves) if (h.endsWith(_ZOHO_DOM[k])) return k;
+    return 'com';
+  }
   const _MB_HINT = {
     google: 'Gmail/Workspace: activa la Verificación en 2 pasos → busca “Contraseñas de aplicación” → crea una para Correo y pégala aquí (16 letras, sin espacios).',
     microsoft: 'Microsoft 365 empresa: (1) en admin.microsoft.com → Usuarios → este buzón → Correo → “Administrar aplicaciones de correo electrónico” → marca “SMTP autenticado”. (2) Usa aquí la contraseña normal del buzón. Enviar funciona; la lectura automática de respuestas llega con la fase OAuth. Si el proveedor la rechaza, el tenant bloquea autenticación básica (Security Defaults) — avísame.',
-    zoho: 'Zoho Mail: Mi cuenta → Seguridad → App Passwords → genera una para Nova. Si el buzón no usa 2FA, prueba primero la contraseña normal.',
+    zoho: 'Zoho Mail: Mi cuenta → Seguridad → App Passwords → genera una para Nova. IMPORTANTE: elige la región correcta (la de tu cuenta Zoho) — es el error de login más común. Si el buzón no usa 2FA, prueba primero la contraseña normal.',
     otro: 'Ingresa los servidores SMTP e IMAP que te dé el proveedor (suelen estar en su ayuda como “configurar cliente de correo”).',
   };
   async function _mbReload() {
@@ -15650,6 +15665,7 @@ ${foot}
   function mbProv(p) {
     const hint = $('mbx-hint'); if (hint) hint.textContent = _MB_HINT[p] || '';
     const hosts = $('mbx-hosts'); if (hosts) hosts.style.display = p === 'otro' ? '' : 'none';
+    const zr = $('mbx-zregion-f'); if (zr) zr.style.display = p === 'zoho' ? '' : 'none';
   }
   function mbOpen(clientId) {
     mbClose();
@@ -15658,10 +15674,12 @@ ${foot}
     const m = document.createElement('div'); m.id = 'mbx-modal'; m.className = 'fin-pi-backdrop';
     m.onclick = ev => { if (ev.target === m) mbClose(); };
     const prov = (mb && mb.provider) || 'google';
+    const zregion = (mb && mb.provider === 'zoho') ? _zohoRegionFromHost(mb.smtp_host) : 'com';
     m.innerHTML = `<div class="fin-pi-box dle-box">
       <div class="dle-hd"><div style="flex:1;min-width:0"><div class="dle-hd__t">Buzón de ${esc(c.nombre)}</div><div class="dle-hd__s">Se conecta por SMTP (enviar) e IMAP (leer). La contraseña se guarda cifrada.</div></div><button class="fin-pi-x" onclick="LeadManagerModule.mbClose()">✕</button></div>
       <div class="dle-grid">
         <label class="dle-f"><span class="dle-l">Proveedor</span><select class="dle-i" id="mbx-prov" onchange="LeadManagerModule.mbProv(this.value)">${_MB_PROV.map(p => `<option value="${p[0]}"${prov === p[0] ? ' selected' : ''}>${p[1]}</option>`).join('')}</select></label>
+        <label class="dle-f" id="mbx-zregion-f" style="display:${prov === 'zoho' ? '' : 'none'}"><span class="dle-l">Región de Zoho</span><select class="dle-i" id="mbx-zregion">${_MB_ZOHO_REGIONS.map(r => `<option value="${r[0]}"${zregion === r[0] ? ' selected' : ''}>${r[1]}</option>`).join('')}</select></label>
         <label class="dle-f"><span class="dle-l">Correo del buzón</span><input class="dle-i" id="mbx-email" type="email" placeholder="jenny@dominio.com" value="${mb ? esc(mb.email) : ''}"></label>
         <label class="dle-f dle-f--full"><span class="dle-l">Contraseña de aplicación</span><input class="dle-i" id="mbx-pass" type="password" placeholder="••••••••••••••••" autocomplete="new-password"></label>
         <div class="dle-f dle-f--full" id="mbx-hosts" style="display:${prov === 'otro' ? '' : 'none'}">
@@ -15687,6 +15705,7 @@ ${foot}
     const g = id => $(id);
     const body = {
       outbound_client_id: clientId, provider: g('mbx-prov').value,
+      zoho_region: g('mbx-zregion')?.value || 'com',
       email: g('mbx-email').value.trim(), password: g('mbx-pass').value,
       smtp_host: g('mbx-smtp')?.value.trim() || '', smtp_port: g('mbx-smtpp')?.value || '',
       imap_host: g('mbx-imap')?.value.trim() || '', imap_port: g('mbx-imapp')?.value || '',

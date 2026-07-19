@@ -3207,7 +3207,7 @@ app.post('/api/lm/mailboxes', requireAuth, async (req, res) => {
   const b = req.body || {};
   const cid = parseInt(b.outbound_client_id) || null;
   const email = String(b.email || '').trim().toLowerCase();
-  const pass = String(b.password || '');
+  const pass = String(b.password || '').trim();
   const provider = ['google', 'microsoft', 'zoho', 'otro'].includes(b.provider) ? b.provider : 'otro';
   if (!cid || !email || !pass) return res.status(400).json({ error: 'Cliente, correo y contraseña son obligatorios' });
   const hosts = mailboxSvc.resolveHosts(provider, b);

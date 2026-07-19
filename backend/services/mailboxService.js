@@ -33,7 +33,36 @@ const PROVIDERS = {
   otro:      null,
 };
 
+// Zoho aloja los datos por región (data center) y CADA región tiene su propio
+// servidor SMTP/IMAP. Usar el de la región equivocada hace que el login sea
+// rechazado aunque la contraseña de aplicación sea correcta.
+const ZOHO_REGIONS = {
+  com:      { dominio: 'zoho.com',    etiqueta: 'Global / EE.UU. (.com)' },
+  eu:       { dominio: 'zoho.eu',     etiqueta: 'Europa (.eu)' },
+  in:       { dominio: 'zoho.in',     etiqueta: 'India (.in)' },
+  'com.au': { dominio: 'zoho.com.au', etiqueta: 'Australia (.com.au)' },
+  jp:       { dominio: 'zoho.jp',     etiqueta: 'Japón (.jp)' },
+  'com.cn': { dominio: 'zoho.com.cn', etiqueta: 'China (.com.cn)' },
+  sa:       { dominio: 'zoho.sa',     etiqueta: 'Arabia Saudí (.sa)' },
+  ca:       { dominio: 'zohocloud.ca', etiqueta: 'Canadá (.ca)' },
+};
+
+// Deriva la región de Zoho a partir de un host ya guardado (para reabrir el form).
+function zohoRegionFromHost(host) {
+  const h = String(host || '').toLowerCase();
+  // Orden por especificidad: primero los sufijos largos (com.au, com.cn) para que
+  // no gane 'com' por accidente.
+  const claves = Object.keys(ZOHO_REGIONS).sort((a, b) => ZOHO_REGIONS[b].dominio.length - ZOHO_REGIONS[a].dominio.length);
+  for (const k of claves) if (h.endsWith(ZOHO_REGIONS[k].dominio)) return k;
+  return 'com';
+}
+
 function resolveHosts(provider, b) {
+  if (provider === 'zoho') {
+    const region = ZOHO_REGIONS[b.zoho_region] ? b.zoho_region : 'com';
+    const d = ZOHO_REGIONS[region].dominio;
+    return { smtp_host: `smtp.${d}`, smtp_port: 465, smtp_secure: true, imap_host: `imap.${d}`, imap_port: 993 };
+  }
   const p = PROVIDERS[provider];
   if (p) return { smtp_host: p.smtp[0], smtp_port: p.smtp[1], smtp_secure: p.smtp[2], imap_host: p.imap[0], imap_port: p.imap[1] };
   return {
@@ -120,4 +149,4 @@ async function sendFromMailbox(mb, pass, msg) {
   return { messageId: info.messageId || '' };
 }
 
-module.exports = { PROVIDERS, resolveHosts, encPass, decPass, testMailbox, sendFromMailbox, _friendlyErr };
+module.exports = { PROVIDERS, ZOHO_REGIONS, zohoRegionFromHost, resolveHosts, encPass, decPass, testMailbox, sendFromMailbox, _friendlyErr };
