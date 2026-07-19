@@ -13339,6 +13339,8 @@ const LeadManagerModule = (() => {
     // Contador de Inbox en la barra: carga al entrar al módulo y refresca cada 3 min.
     _ibReload();
     if (!_ibPoll) { _ibPoll = setInterval(_ibReload, 3 * 60 * 1000); }
+    // Config de envío (ventana/fines de semana) para calcular la fecha real de envío en Aprobar.
+    if (_sendCfg === null) apiFetch(`${API}/lm/send-settings`).then(r => r && r.ok && r.json().then(j => { _sendCfg = j; })).catch(() => {});
     try {
       const [lr, cr, cmr, sr, str, ar, cor, ctr, tplr] = await Promise.all([
         apiFetch(`${API}/leads`).catch(() => null),
@@ -14567,11 +14569,35 @@ ${foot}
     catch { _apList = []; }
     if (_section === 'tasks') _renderBody();
   }
-  function _apFmtDate(d) {
-    if (!d) return 'hoy';
-    const dd = new Date(d), today = _dayOf(new Date());
-    if (_dayOf(dd) <= today) return 'hoy';
-    return dd.toLocaleDateString('es-PE', { weekday: 'short', day: '2-digit', month: 'short' });
+  // Próximo día REAL de envío: parte de la fecha programada (o ahora) y avanza hasta el
+  // primer día permitido por la cadencia de la secuencia (L–V…), saltando fin de semana
+  // y, si hoy ya pasó la ventana horaria, al día siguiente. Así "aprobar el sábado" no
+  // dice "hoy" sino "lun 21 jul" — que es cuando el motor realmente lo suelta.
+  function _nextSendDay(scheduledAt, seqId) {
+    const mask = _seqSendDays(seqId);
+    const cfg = _sendCfg || {};
+    const wEnd = cfg.window_end != null ? +cfg.window_end : 18;
+    const weekends = !!cfg.send_weekends;
+    const now = new Date();
+    let d = scheduledAt ? new Date(scheduledAt) : new Date(now);
+    if (isNaN(d) || d.getTime() < now.getTime()) d = new Date(now);
+    if (_dayOf(d).getTime() === _dayOf(now).getTime() && now.getHours() >= wEnd) {
+      d = new Date(_dayOf(now).getTime() + 86400000); // hoy ya cerró la ventana → mañana
+    }
+    for (let i = 0; i < 14; i++) {
+      const wd = (d.getDay() + 6) % 7;            // 0 = lunes
+      const isWk = d.getDay() === 0 || d.getDay() === 6;
+      if (mask[wd] === '1' && (weekends || !isWk)) return _dayOf(d);
+      d = new Date(_dayOf(d).getTime() + 86400000);
+    }
+    return _dayOf(d);
+  }
+  function _apFmtDate(scheduledAt, seqId) {
+    const d = _nextSendDay(scheduledAt, seqId), t = _dayOf(new Date());
+    const diff = Math.round((d - t) / 86400000);
+    if (diff <= 0) return 'hoy';
+    if (diff === 1) return 'mañana';
+    return d.toLocaleDateString('es-PE', { weekday: 'short', day: '2-digit', month: 'short' });
   }
   function _apRowHtml(a) {
     const nm = [a.nombre, a.apellido].filter(Boolean).join(' ') || a.to_email;
@@ -14579,7 +14605,7 @@ ${foot}
       <span class="ap-row__ico">✋</span>
       <div class="ap-row__main">
         <div class="ap-row__t"><b>${esc(nm)}</b>${a.empresa ? ` · ${esc(a.empresa)}` : ''} — ${esc(a.asunto || '(sin asunto)')}</div>
-        <div class="ap-row__s">${esc(a.seq_nombre)} · envío <b>${_apFmtDate(a.scheduled_at)}</b> · ${esc(a.to_email)}</div>
+        <div class="ap-row__s">${esc(a.seq_nombre)} · envío <b>${_apFmtDate(a.scheduled_at, a.sequence_id)}</b> · ${esc(a.to_email)}</div>
       </div>
       <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqGoApprove(${a.sequence_id})">Revisar / editar</button>
       <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.taskApprove(${a.id})">✓ Aprobar</button>
@@ -14599,7 +14625,7 @@ ${foot}
       _apList = (_apList || []).filter(x => x.id !== mid);
       if (it) { const s = _sequences.find(x => x.id === it.sequence_id); if (s && s.awaiting > 0) s.awaiting--; }
       _renderBody();
-      showBanner(`✓ Aprobado — saldrá ${it ? _apFmtDate(it.scheduled_at) : 'en su fecha'} desde el buzón del cliente`, 'success');
+      showBanner(`✓ Aprobado — saldrá ${it ? _apFmtDate(it.scheduled_at, it.sequence_id) : 'en su fecha'} desde el buzón del cliente`, 'success');
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
   // Tarjeta "Emails por aprobar" (modo pre-aprobado). Se usa en la pestaña Tareas de la
@@ -14777,7 +14803,7 @@ ${foot}
     return `<div class="seq-app${approved ? ' seq-app--ok' : ''}">
       <div class="seq-app__hd">
         <div class="seq-app__who"><b>${esc(nm)}</b>${a.cargo || a.empresa ? ` <span>· ${esc([a.cargo, a.empresa].filter(Boolean).join(', '))}</span>` : ''} <span>→ ${esc(a.to_email)}</span></div>
-        ${approved ? `<span class="ibx-b" style="background:var(--primary-soft);color:var(--primary)">Aprobado · sale ${a.scheduled_at ? esc(new Date(a.scheduled_at) <= new Date() ? 'en breve' : new Date(a.scheduled_at).toLocaleDateString('es-PE', { weekday: 'short', day: '2-digit', month: 'short' })) : 'en breve'}</span>` : `<span class="ibx-b ibx-b--ooo">Paso día ${a.paso_dia || '?'}${a.scheduled_at ? ` · envío ${esc(new Date(a.scheduled_at).toLocaleDateString('es-PE', { weekday: 'short', day: '2-digit', month: 'short' }))}` : ''}</span>`}
+        ${approved ? `<span class="ibx-b" style="background:var(--primary-soft);color:var(--primary)">Aprobado · sale ${esc(_apFmtDate(a.scheduled_at, _activeSeq))}</span>` : `<span class="ibx-b ibx-b--ooo">Paso día ${a.paso_dia || '?'} · envío ${esc(_apFmtDate(a.scheduled_at, _activeSeq))}</span>`}
       </div>
       <div class="seq-app__route">De <b>${mb ? esc(mb.email) : '⚠ sin buzón'}</b>${a.cc_off ? ' · CC desactivado en este paso' : cli?.cc_email ? ` · CC <b>${esc(cli.cc_email)}</b>` : ' · sin CC'}</div>
       <input class="form-input seq-app__subj" id="app-subj-${a.id}" value="${esc(a.asunto)}" ${approved ? 'disabled' : ''} placeholder="Asunto">
