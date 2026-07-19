@@ -16406,7 +16406,13 @@ ${foot}
     const t = _lmTpls.find(x => String(x.id) === String(tplId)); if (!t) return;
     const ta = document.getElementById(_stepFocusTa || 'step-var-0');
     const i = ta ? (+ta.dataset.i || 0) : 0;
-    if (_stepDraft && _stepDraft.variants[i]) { _stepDraft.variants[i].tplId = String(tplId); _stepDraft.variants[i].cuerpo = t.cuerpo || ''; }
+    if (_stepDraft && _stepDraft.variants[i]) {
+      _stepDraft.variants[i].tplId = String(tplId);
+      _stepDraft.variants[i].cuerpo = t.cuerpo || '';
+      // Copiar TAMBIÉN el asunto de la plantilla (en email) — antes solo copiaba el cuerpo
+      // y el asunto quedaba vacío → el motor caía al nombre interno.
+      if (($('step-canal')?.value || 'email') === 'email' && t.asunto) _stepDraft.variants[i].asunto = t.asunto;
+    }
     const ti = document.getElementById('step-titulo'); if (ti && !ti.value.trim()) ti.value = t.nombre || '';
     _stepRenderMsg();
   }
