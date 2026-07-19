@@ -2956,6 +2956,38 @@ async function _lmAddMembership(req, res, kind) {
     res.json({ added: r.rowCount, requested: ids.length, spread_days: spreadDays, per_day: drip, skipped_company: skipped });
   } catch (err) { console.error('[lm-mem]', err.message); res.status(500).json({ error: 'Error al añadir' }); }
 }
+// Re-ancla start_date/next_action_at de los enrolamientos que AÚN NO empiezan (paso 1,
+// activos) con la cadencia/fecha/drip ACTUALES de la secuencia. Se llama solo al guardar
+// la secuencia con cambios: sin esto, activar fines de semana DESPUÉS de enrolar dejaba
+// las fechas viejas congeladas (ej. programado para el lunes aunque S/D ya estén permitidos).
+async function _reanchorPendingEnrollments(uid, sid) {
+  const sq = (await pool.query(`SELECT drip_per_day, send_days, starts_on::text AS starts_on FROM sequences WHERE id=$1 AND user_id=$2`, [sid, uid])).rows[0];
+  if (!sq) return 0;
+  const drip = Math.max(0, parseInt(sq.drip_per_day) || 0);
+  const perDay = drip > 0 ? drip : Infinity;
+  const mask = _sanSendDays(sq.send_days);
+  const { rows: enrs } = await pool.query(
+    `SELECT id FROM lm_contact_sequences WHERE user_id=$1 AND sequence_id=$2 AND estado='activo' AND paso=1
+      ORDER BY start_date ASC NULLS FIRST, created_at ASC, id ASC`, [uid, sid]);
+  if (!enrs.length) return 0;
+  let base = _todayUTC();
+  if (sq.starts_on && /^\d{4}-\d{2}-\d{2}$/.test(sq.starts_on)) {
+    const [y, mo, d] = sq.starts_on.split('-').map(Number);
+    const so = new Date(Date.UTC(y, mo - 1, d));
+    if (so > base) base = so;
+  }
+  const ids = [], dates = [];
+  let slot = 0, cur = _nthAllowed(base, 0, mask), curStr = _ymd(cur), inDay = 0;
+  for (const e of enrs) {
+    while (inDay >= perDay) { slot++; cur = _nthAllowed(base, slot, mask); curStr = _ymd(cur); inDay = 0; }
+    ids.push(e.id); dates.push(curStr); inDay++;
+  }
+  await pool.query(
+    `UPDATE lm_contact_sequences cs SET start_date=t.sd::date, next_action_at=t.sd::timestamptz
+      FROM unnest($1::int[],$2::text[]) AS t(id,sd) WHERE cs.id=t.id`, [ids, dates]);
+  return ids.length;
+}
+
 // Reparte de nuevo los contactos AÚN SIN EMPEZAR (paso=1, activos) según drip_per_day y send_days.
 // Útil cuando cambias el arranque escalonado DESPUÉS de haber enrolado (las fechas ya asignadas no se recalculan solas).
 app.post('/api/lm/sequences/:id/redistribute', requireAuth, async (req, res) => {
@@ -4033,12 +4065,25 @@ app.put('/api/sequences/:id', requireAuth, async (req, res) => {
     const drip = Math.max(0, parseInt(b.drip_per_day) || 0);
     const sendDays = _sanSendDays(b.send_days);
     const dLim = Math.max(0, parseInt(b.daily_limit) || 0);
+    // Estado previo para detectar cambios de cadencia/fecha/drip (→ re-anclar fechas).
+    const { rows: [old] } = await pool.query(
+      `SELECT send_days, starts_on::text AS starts_on, drip_per_day FROM sequences WHERE id=$1 AND user_id=$2`,
+      [req.params.id, req.workspaceOwnerId]);
     const { rows } = await pool.query(`
       UPDATE sequences SET outbound_client_id=$1,campaign_id=$2,nombre=$3,objetivo=$4,estado=$5,timezone=$6,drip_per_day=$7,send_days=$8,starts_on=$9,daily_limit=$10,mercado=$11,icp=$12,notas=$13,send_mode=$14,send_interval_min=$15,auto_activar=$16,updated_at=NOW()
       WHERE id=$17 AND user_id=$18 RETURNING *
     `, [b.outbound_client_id || null, b.campaign_id || null, b.nombre.trim(), b.objetivo || '', estado, b.timezone || '', drip, sendDays, _sanDate(b.starts_on), dLim, b.mercado || '', b.icp || '', b.notas || '', _sanSendMode(b.send_mode), _sanInterval(b.send_interval_min), !!b.auto_activar, req.params.id, req.workspaceOwnerId]);
     if (!rows.length) return res.status(404).json({ error: 'Secuencia no encontrada' });
-    res.json(rows[0]);
+    // Cambió la cadencia, la fecha de inicio o el drip → recalcular las fechas de los
+    // que aún no empiezan (paso 1). Sin esto, activar S/D después de enrolar no movía nada.
+    let reanchored = 0;
+    if (old && (_sanSendDays(old.send_days) !== sendDays
+             || String(old.starts_on || '') !== String(_sanDate(b.starts_on) || '')
+             || (parseInt(old.drip_per_day) || 0) !== drip)) {
+      reanchored = await _reanchorPendingEnrollments(req.workspaceOwnerId, rows[0].id).catch(e => { console.warn('[seq] reanchor:', e.message); return 0; });
+      if (reanchored) console.log(`[seq] "${rows[0].nombre}": ${reanchored} enrolamiento(s) re-anclados por cambio de cadencia/fecha`);
+    }
+    res.json({ ...rows[0], reanchored });
   } catch (err) { console.error('[seq] PUT error:', err.message); res.status(500).json({ error: 'Error al actualizar secuencia' }); }
 });
 app.delete('/api/sequences/:id', requireAuth, async (req, res) => {
