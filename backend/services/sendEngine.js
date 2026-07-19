@@ -214,7 +214,7 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback) {
   }
 
   const { rows: steps } = await pool.query(
-    `SELECT id, dia, canal, titulo, plantilla, espera_dias, variants, variant_mode, variant_field, asunto
+    `SELECT id, dia, canal, titulo, plantilla, espera_dias, variants, variant_mode, variant_field, asunto, cc_off
        FROM sequence_steps WHERE sequence_id=$1 ORDER BY dia ASC, orden ASC, id ASC`,
     [enr.sequence_id]
   );
@@ -332,7 +332,7 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback) {
         to: enr.email, subject: asunto, html,
         text: cuerpoTxt + (cfg.firma ? `\n\n${cfg.firma.replace(/<[^>]+>/g, '')}` : ''),
         fromName: cfg.from_name,
-        cc: mbx.cc_email || undefined,  // CC del cliente (definido en su ficha) en cada envío
+        cc: (!step.cc_off && mbx.cc_email) || undefined,  // CC del cliente, salvo que el paso lo desactive
       });
       await pool.query(
         `UPDATE lm_messages SET estado='sent', sent_at=NOW(), smtp_message_id=$1 WHERE id=$2`,
@@ -450,12 +450,13 @@ async function _flushApproved(pool, apiBase) {
            mb.id AS mb_ok, mb.email AS mb_email, mb.pass_enc, mb.smtp_host, mb.smtp_port, mb.smtp_secure,
            mb.imap_host, mb.imap_port, mb.provider, mb.sent_folder, mb.estado AS mb_estado,
            cfg.from_name, cfg.firma, cfg.track_opens, cfg.track_clicks,
-           COALESCE(oc.cc_email,'') AS cc_email
+           COALESCE(oc.cc_email,'') AS cc_email, COALESCE(st.cc_off, FALSE) AS cc_off
       FROM lm_messages m
       JOIN sequences s ON s.id = m.sequence_id
       LEFT JOIN lm_mailboxes mb ON mb.id = m.mailbox_id
       LEFT JOIN lm_send_settings cfg ON cfg.user_id = m.user_id
       LEFT JOIN outbound_clients oc ON oc.id = s.outbound_client_id
+      LEFT JOIN sequence_steps st ON st.id = m.step_id
      WHERE m.estado='approved'
        AND NOT EXISTS (
             SELECT 1 FROM lm_messages mi
@@ -478,7 +479,7 @@ async function _flushApproved(pool, apiBase) {
         to: m.to_email, subject: m.asunto, html,
         text: m.cuerpo + (m.firma ? `\n\n${String(m.firma).replace(/<[^>]+>/g, '')}` : ''),
         fromName: m.from_name || undefined,
-        cc: m.cc_email || undefined,  // CC del cliente también en los pre-aprobados
+        cc: (!m.cc_off && m.cc_email) || undefined,  // CC del cliente, salvo que el paso lo desactive
       });
       await pool.query(`UPDATE lm_messages SET estado='sent', sent_at=NOW(), smtp_message_id=$1 WHERE id=$2`,
         [sent.messageId || '', m.id]);

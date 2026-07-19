@@ -638,6 +638,8 @@ async function initDb() {
     // Asunto del email SEPARADO del título del paso (el título es el nombre interno).
     // Antes el motor usaba titulo como asunto — confuso y sin campo propio en la UI.
     await pool.query(`ALTER TABLE sequence_steps ADD COLUMN IF NOT EXISTS asunto TEXT NOT NULL DEFAULT '';`);
+    // CC por paso: por defecto va el CC del cliente en cada envío; cc_off=TRUE lo quita en ESTE paso.
+    await pool.query(`ALTER TABLE sequence_steps ADD COLUMN IF NOT EXISTS cc_off BOOLEAN NOT NULL DEFAULT FALSE;`);
     // Condición de rama del paso: '' = para todos; 'replied' = solo si el contacto respondió/aceptó;
     // 'no_reply' = solo si NO respondió. El motor salta los pasos cuya condición no aplica al contacto.
     await pool.query(`ALTER TABLE sequence_steps ADD COLUMN IF NOT EXISTS cond TEXT NOT NULL DEFAULT '';`);

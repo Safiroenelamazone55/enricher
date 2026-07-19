@@ -12957,3 +12957,6 @@ td.ldh-acts { padding-left: 6px; padding-right: 10px; }
 .step-prev-warn { color: #A96D0C; font-size: .74rem; }
 .seq-app__route { font-size: .7rem; color: var(--text-muted); margin-bottom: 7px; }
 .seq-app__route b { color: var(--text-secondary); font-weight: 600; }
+
+/* Fecha calendario bajo el "Día N" del paso */
+.lm-step__cal { display: block; font-size: .6rem; color: var(--primary); font-weight: 600; margin-top: 2px; white-space: nowrap; }

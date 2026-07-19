@@ -15289,12 +15289,24 @@ ${foot}
     const prev = _cpTaskHist.pop();
     if (prev) openContactPage(prev, { seqId: _cpTaskCtx.seqId });
   }
+  // Fecha calendario del paso: fecha de inicio de la secuencia + (día-1), rodada a la
+  // cadencia permitida. Solo si la secuencia tiene fecha de inicio (si no, el día 1 es
+  // el del enrolamiento de cada contacto y no hay una fecha única).
+  function _stepCalDate(st) {
+    const s = (_sequences || []).find(x => x.id === st.sequence_id);
+    if (!s || !s.starts_on) return '';
+    const base = new Date(String(s.starts_on).slice(0, 10) + 'T00:00:00');
+    if (isNaN(base)) return '';
+    const d = new Date(base); d.setDate(d.getDate() + ((st.dia || 1) - 1));
+    return _rollFwdLocal(d, _sanSendDays(s.send_days)).toLocaleDateString('es-PE', { weekday: 'short', day: '2-digit', month: 'short' });
+  }
   function _stepRow(st) {
     const t = _TOUCH[st.canal] || _TOUCH.email;
+    const cal = _stepCalDate(st);
     const cb = st.cond === 'replied' ? '<span class="lm-vb" style="background:#E7F8EF;color:#15803D" title="Solo para contactos que respondieron/aceptaron">↳ si respondió</span>'
              : st.cond === 'no_reply' ? '<span class="lm-vb" style="background:#FEF3C7;color:#B45309" title="Solo para contactos que NO respondieron">↳ si no respondió</span>' : '';
     return `<div class="lm-step">
-      <div class="lm-step__day"><span>Día</span><b>${st.dia}</b></div>
+      <div class="lm-step__day"><span>Día</span><b>${st.dia}</b>${cal ? `<span class="lm-step__cal" title="Fecha real según la fecha de inicio y los días de cadencia">${cal}</span>` : ''}</div>
       <div class="lm-step__rail"><span class="lm-step__ico" style="background:${t[1]}1a;color:${t[1]}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${t[2]}</svg></span></div>
       <div class="lm-step__body">
         <div class="lm-step__top"><span class="lm-step__t">${esc(st.titulo || _accionLabel(st.canal, st.accion) || t[0])}</span><span class="lm-step__canal" style="color:${t[1]}">${t[0]}</span>${st.accion ? `<span class="lm-vb" style="background:var(--surface-secondary,#F2F4F1);color:var(--text2,#5F6B64)">${_accionLabel(st.canal, st.accion)}</span>` : ''}${cb}</div>
@@ -17201,6 +17213,7 @@ ${foot}
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">¿Para quién? (rama por respuesta)</span><select class="form-input" id="step-cond"><option value=""${!(st && st.cond) ? ' selected' : ''}>Todos</option><option value="replied"${st && st.cond === 'replied' ? ' selected' : ''}>Solo si respondió / aceptó</option><option value="no_reply"${st && st.cond === 'no_reply' ? ' selected' : ''}>Solo si NO respondió</option></select><span class="seq-drip-hint">Ramifica la secuencia: el sistema <b>salta</b> este paso para quien no cumpla la condición. Ej.: nota de conexión = <b>Todos</b>; mensaje de LinkedIn = <b>Solo si aceptó</b>; email de seguimiento = <b>Solo si no respondió</b>.</span></label>
         <div class="fin-pi-full step-sec-h"><span class="step-sec-n">2</span> El mensaje — qué se envía <span class="sp"></span><button type="button" class="seq-days-preset" id="step-prev-btn" onclick="LeadManagerModule.stepPreview(${seqId})">👁 Vista previa</button></div>
         <div id="step-preview" class="fin-pi-full" style="display:none"></div>
+        ${(() => { const sq = (_sequences || []).find(x => x.id === seqId); const cli = (_clients || []).find(c => c.id === sq?.outbound_client_id); const cc = cli?.cc_email || ''; return cc ? `<label class="fin-cfg-field fin-pi-full" id="step-cc-wrap" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="step-cc" ${st?.cc_off ? '' : 'checked'} style="width:auto"><span class="fin-cfg-lbl" style="margin:0">Incluir CC del cliente (${esc(cc)})</span><span class="seq-drip-hint" style="margin:0">Desmárcalo para que ESTE paso salga sin copia.</span></label>` : ''; })()}
         ${_lmTpls.length ? `<label class="fin-cfg-field fin-pi-full" id="step-tpl-top"><span class="fin-cfg-lbl">Usar plantilla guardada</span><select class="form-input" onchange="LeadManagerModule.stepUseTpl(this.value)"><option value="">— Elegir de la biblioteca —</option>${_lmTpls.map(tp => `<option value="${tp.id}">${esc(tp.nombre)} · ${esc(_tplCanalLabel(tp.canal))}</option>`).join('')}</select></label>` : ''}
         <div id="step-msg" class="fin-pi-full step-msg"></div>
       </div>
@@ -17375,7 +17388,8 @@ ${foot}
     const plantilla = ((d.variants[0] && d.variants[0].cuerpo) || '').trim();
     // Asunto propio del paso (separado del nombre interno). En A/B cada variante lleva el suyo.
     const asunto = ((d.variants[0] && d.variants[0].asunto) || '').trim();
-    const body = { sequence_id: seqId, dia, canal: $('step-canal')?.value || 'email', titulo: $('step-titulo')?.value.trim() || '', asunto, plantilla, variants, variant_mode: d.mode, variant_field: d.field, orden: dia, hora: $('step-hora')?.value || '', cond: $('step-cond')?.value || '', accion: $('step-accion')?.value || '' };
+    const ccBox = $('step-cc');
+    const body = { sequence_id: seqId, dia, canal: $('step-canal')?.value || 'email', titulo: $('step-titulo')?.value.trim() || '', asunto, plantilla, variants, variant_mode: d.mode, variant_field: d.field, orden: dia, hora: $('step-hora')?.value || '', cond: $('step-cond')?.value || '', accion: $('step-accion')?.value || '', cc_off: ccBox ? !ccBox.checked : false };
     const btn = $('step-save'); if (btn) btn.disabled = true;
     try {
       const res = await apiFetch(`${API}/sequence-steps${stepId ? '/' + stepId : ''}`, { method: stepId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -17405,7 +17419,8 @@ ${foot}
       : { nombre: 'María', apellido: 'García', email: 'maria.garcia@empresa.com', cargo: 'CEO', empresa: 'Empresa Ejemplo', ciudad: 'Austin', pais: 'EE.UU.' };
     const v = (_stepDraft && _stepDraft.variants[0]) || { asunto: '', cuerpo: '' };
     const de = mb ? mb.email : (cli?.from_email || '');
-    const cc = cli?.cc_email || '';
+    const ccBox = $('step-cc');
+    const cc = (ccBox && !ccBox.checked) ? '' : (cli?.cc_email || '');
     const multi = _stepDraft && _stepDraft.mode !== 'off' && _stepDraft.variants.length > 1;
     panel.style.display = '';
     panel.innerHTML = `<div class="step-prev">
@@ -17413,7 +17428,7 @@ ${foot}
       <div class="step-prev-meta">
         <div><span>De</span>${de ? esc(de) : '<i class="step-prev-warn">sin buzón conectado — conéctalo en la ficha del cliente</i>'}</div>
         <div><span>Para</span>${esc(ctx.email)}</div>
-        <div><span>CC</span>${cc ? esc(cc) : '<i>— nadie (defínelo en la ficha del cliente como "CC")</i>'}</div>
+        <div><span>CC</span>${cc ? esc(cc) : (ccBox && !ccBox.checked) ? '<i>— desactivado en este paso</i>' : '<i>— nadie (defínelo en la ficha del cliente como "CC")</i>'}</div>
         <div><span>Asunto</span>${v.asunto ? _rvPrev(esc(v.asunto), ctx) : '<i class="step-prev-warn">⚠ sin asunto — escríbelo abajo</i>'}</div>
       </div>
       <div class="step-prev-body">${v.cuerpo ? _rvPrev(esc(v.cuerpo), ctx).replace(/\n/g, '<br>') : '<i class="step-prev-warn">⚠ sin cuerpo — escríbelo abajo</i>'}</div>
