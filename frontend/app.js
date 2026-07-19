@@ -13445,6 +13445,7 @@ const LeadManagerModule = (() => {
     if (section === 'dashboard') _loadToday();
     if (section === 'settings')  { _loadSendCfg(); _loadAiCfg(); }
     if (section === 'inbox')     { _lmMsgs = null; _ibThreads = null; _ibActive = null; _ibThread = null; _ibReload(); _loadLmMsgs(); }
+    if (section === 'tasks')     { _apList = null; _apReload(); }
     if (section === 'leads')     _reloadActivities();
   }
   function openClient(id) { _activeClient = id; _section = 'client'; _refreshNav(); _renderBody(); if (_mailboxes === null) _mbReload(); }
@@ -14559,8 +14560,50 @@ ${foot}
     const h = Math.floor(mins / 60); if (h < 24) return `hace ${h} h`;
     const d = Math.floor(h / 24); return d === 1 ? 'hace 1 día' : `hace ${d} días`;
   }
-  // Tarjeta "Emails por aprobar" (modo pre-aprobado). Se muestra en Tareas comerciales
-  // y en la pestaña Tareas de la secuencia — aprobar ES una tarea del día.
+  // ── Aprobaciones DENTRO de la lista de Tareas comerciales (filas, no banner) ──
+  let _apList = null;   // borradores por aprobar de TODAS las secuencias (lazy)
+  async function _apReload() {
+    try { const r = await apiFetch(`${API}/lm/approvals`); _apList = (r && r.ok) ? await r.json() : []; }
+    catch { _apList = []; }
+    if (_section === 'tasks') _renderBody();
+  }
+  function _apFmtDate(d) {
+    if (!d) return 'hoy';
+    const dd = new Date(d), today = _dayOf(new Date());
+    if (_dayOf(dd) <= today) return 'hoy';
+    return dd.toLocaleDateString('es-PE', { weekday: 'short', day: '2-digit', month: 'short' });
+  }
+  function _apRowHtml(a) {
+    const nm = [a.nombre, a.apellido].filter(Boolean).join(' ') || a.to_email;
+    return `<div class="ap-row">
+      <span class="ap-row__ico">✋</span>
+      <div class="ap-row__main">
+        <div class="ap-row__t"><b>${esc(nm)}</b>${a.empresa ? ` · ${esc(a.empresa)}` : ''} — ${esc(a.asunto || '(sin asunto)')}</div>
+        <div class="ap-row__s">${esc(a.seq_nombre)} · envío <b>${_apFmtDate(a.scheduled_at)}</b> · ${esc(a.to_email)}</div>
+      </div>
+      <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqGoApprove(${a.sequence_id})">Revisar / editar</button>
+      <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.taskApprove(${a.id})">✓ Aprobar</button>
+    </div>`;
+  }
+  function _apSectionHtml() {
+    if (!Array.isArray(_apList) || !_apList.length) return '';
+    return `<div class="lm-tsec-h" style="color:#A96D0C"><span class="lm-tsec-h__dot" style="background:#A96D0C"></span>Emails por aprobar<span class="lm-tsec-h__n">${_apList.length}</span></div>
+      <div class="seq-tasks">${_apList.map(_apRowHtml).join('')}</div>`;
+  }
+  async function taskApprove(mid) {
+    try {
+      const res = await apiFetch(`${API}/lm/approvals/${mid}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'approve' }) });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Error');
+      const it = (_apList || []).find(x => x.id === mid);
+      _apList = (_apList || []).filter(x => x.id !== mid);
+      if (it) { const s = _sequences.find(x => x.id === it.sequence_id); if (s && s.awaiting > 0) s.awaiting--; }
+      _renderBody();
+      showBanner(`✓ Aprobado — saldrá ${it ? _apFmtDate(it.scheduled_at) : 'en su fecha'} desde el buzón del cliente`, 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  // Tarjeta "Emails por aprobar" (modo pre-aprobado). Se usa en la pestaña Tareas de la
+  // secuencia; en Tareas comerciales las aprobaciones salen como FILAS de la lista.
   function _approveCtaHtml(seqId) {
     let list = (_sequences || []).filter(s => (s.awaiting || 0) > 0);
     if (seqId != null) list = list.filter(s => s.id === seqId);
@@ -14736,7 +14779,7 @@ ${foot}
         <div class="seq-app__who"><b>${esc(nm)}</b>${a.cargo || a.empresa ? ` <span>· ${esc([a.cargo, a.empresa].filter(Boolean).join(', '))}</span>` : ''} <span>→ ${esc(a.to_email)}</span></div>
         ${approved ? `<span class="ibx-b" style="background:var(--primary-soft);color:var(--primary)">Aprobado · sale ${a.scheduled_at ? esc(new Date(a.scheduled_at) <= new Date() ? 'en breve' : new Date(a.scheduled_at).toLocaleDateString('es-PE', { weekday: 'short', day: '2-digit', month: 'short' })) : 'en breve'}</span>` : `<span class="ibx-b ibx-b--ooo">Paso día ${a.paso_dia || '?'}${a.scheduled_at ? ` · envío ${esc(new Date(a.scheduled_at).toLocaleDateString('es-PE', { weekday: 'short', day: '2-digit', month: 'short' }))}` : ''}</span>`}
       </div>
-      <div class="seq-app__route">De <b>${mb ? esc(mb.email) : '⚠ sin buzón'}</b>${cli?.cc_email ? ` · CC <b>${esc(cli.cc_email)}</b>` : ' · sin CC'}</div>
+      <div class="seq-app__route">De <b>${mb ? esc(mb.email) : '⚠ sin buzón'}</b>${a.cc_off ? ' · CC desactivado en este paso' : cli?.cc_email ? ` · CC <b>${esc(cli.cc_email)}</b>` : ' · sin CC'}</div>
       <input class="form-input seq-app__subj" id="app-subj-${a.id}" value="${esc(a.asunto)}" ${approved ? 'disabled' : ''} placeholder="Asunto">
       <textarea class="form-input seq-app__body" id="app-body-${a.id}" rows="5" ${approved ? 'disabled' : ''}>${esc(a.cuerpo)}</textarea>
       <div class="seq-app__ft">
@@ -15517,9 +15560,8 @@ ${foot}
     const acts = _activities.filter(a => a.estado === 'pendiente').sort((x, y) => new Date(x.fecha) - new Date(y.fecha));
     const actToday = acts.filter(a => _dayOf(a.fecha) <= today);
     const nextLine = seqFuture.length ? `<div class="seq-next">${NI('calendar', 12)} Siguiente tarea de secuencia: <b>${_relDay(seqFuture[0].due)}</b>${seqFuture.length > 1 ? ` · +${seqFuture.length - 1} más próximas` : ''}</div>` : '';
-    const anything = allRaw.length || acts.length;
+    const anything = allRaw.length || acts.length || (Array.isArray(_apList) && _apList.length);
     const paCta = _acceptCtaHtml();
-    const apCta = _approveCtaHtml();
     const totalAwaiting = (_sequences || []).reduce((t, s) => t + (s.awaiting || 0), 0);
     // Stat strip (patrón referencia: número grande + label uppercase muted)
     const stat = (l, n, warn) => `<div class="lm-stat"><span class="lm-stat__l">${l}</span><span class="lm-stat__n${warn ? ' lm-stat__n--warn' : ''}">${n}</span></div>`;
@@ -15531,7 +15573,7 @@ ${foot}
       ${stat('Por aceptar', _pendingAccept().length, false)}
       ${totalAwaiting ? stat('Por aprobar', totalAwaiting, true) : ''}
     </div>` : '';
-    const listHtml = `${seqOver.length ? `<div class="lm-tsec-h lm-tsec-h--over"><span class="lm-tsec-h__dot"></span>Vencidas<span class="lm-tsec-h__n">${seqOver.length}</span></div><div class="seq-tasks">${seqOver.map(t => _allTaskRow(t, today)).join('')}</div>` : ''}
+    const listHtml = `${_apSectionHtml()}${seqOver.length ? `<div class="lm-tsec-h lm-tsec-h--over"><span class="lm-tsec-h__dot"></span>Vencidas<span class="lm-tsec-h__n">${seqOver.length}</span></div><div class="seq-tasks">${seqOver.map(t => _allTaskRow(t, today)).join('')}</div>` : ''}
       ${seqHoy.length ? `<div class="lm-tsec-h lm-tsec-h--today"><span class="lm-tsec-h__dot"></span>Hoy<span class="lm-tsec-h__n">${seqHoy.length}</span></div><div class="seq-tasks">${seqHoy.map(t => _allTaskRow(t, today)).join('')}</div>` : ''}
       ${(!seqToday.length && all.length) ? `<div class="lm-task-empty"><span class="lm-task-empty__i">${NI('check', 13)}</span>Al día — sin tareas de secuencia para hoy. La siguiente aparece abajo.</div>` : ''}
       ${(hasFilter && !all.length) ? `<div class="lm-task-empty"><span class="lm-task-empty__i">${NI('check', 13)}</span>Sin tareas de secuencia para este filtro.</div>` : ''}
@@ -15543,7 +15585,7 @@ ${foot}
         <div><h2 class="lm-sec-title">Tareas comerciales</h2><p class="lm-sec-sub">Secuencias y follow-ups, ordenados por fecha</p></div>
         <div class="lm-hd-actions"><div class="task-viewtoggle"><button class="tvt${_taskView === 'calendar' ? '' : ' on'}" onclick="LeadManagerModule.taskSetView('list')">Lista</button><button class="tvt${_taskView === 'calendar' ? ' on' : ''}" onclick="LeadManagerModule.taskSetView('calendar')">Calendario</button></div>${_data.length ? `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openActivityDrawer(null,null,1)">＋ Nueva tarea</button>` : ''}</div>
       </div>
-      ${statStrip}${apCta}${paCta}${filterRow}${_taskView === 'calendar' ? _vTaskCalendar() : listHtml}`;
+      ${statStrip}${paCta}${filterRow}${_taskView === 'calendar' ? _vTaskCalendar() : listHtml}`;
   }
   function _monthStart(d) { return new Date(d.getFullYear(), d.getMonth(), 1); }
   function _dayKey(d) { const x = _dayOf(d); return x.getFullYear() + '-' + (x.getMonth() + 1) + '-' + x.getDate(); }
@@ -19418,7 +19460,7 @@ ${foot}
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
     openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
     openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, confirmDeleteSequence, seqTab, seqCtAdvance, seqCtPause, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
-    seqAppAction, seqModeHint, stepPreview, stepDiaCal, seqGoApprove,
+    seqAppAction, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, taskApprove,
     seqTaskOpen, seqDoClose, seqDoCopy, seqDoDone, seqDoSkip, seqDoPrev, seqDoEditStep, seqDoExit, seqOpenLinkedIn,
     openStepDrawer, closeStepDrawer, saveStep, confirmDeleteStep, seqInsertVar, stepUseTpl, tzSearch, tzPick, tzBlur,
     stepSetMode, stepSetField, stepAddVariant, stepDelVariant, stepFocusTa,

@@ -12960,3 +12960,11 @@ td.ldh-acts { padding-left: 6px; padding-right: 10px; }
 
 /* Fecha calendario bajo el "Día N" del paso */
 .lm-step__cal { display: block; font-size: .6rem; color: var(--primary); font-weight: 600; margin-top: 2px; white-space: nowrap; }
+
+/* Filas "Emails por aprobar" en Tareas comerciales */
+.ap-row { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--border); border-left: 3px solid #E8A33D; border-radius: 0 10px 10px 0; padding: 9px 12px; margin-bottom: 6px; }
+.ap-row__ico { font-size: 15px; flex: 0 0 auto; }
+.ap-row__main { flex: 1; min-width: 0; }
+.ap-row__t { font-size: .8rem; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ap-row__s { font-size: .7rem; color: var(--text-muted); margin-top: 1px; }
+.ap-row .btn { flex: 0 0 auto; }

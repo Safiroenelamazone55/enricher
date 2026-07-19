@@ -3454,7 +3454,7 @@ app.get('/api/lm/sequences/:id/approvals', requireAuth, async (req, res) => {
     const { rows } = await pool.query(`
       SELECT m.id, m.contact_id, m.step_id, m.asunto, m.cuerpo, m.to_email, m.estado, m.created_at, m.scheduled_at,
              k.nombre, k.apellido, k.cargo, COALESCE(NULLIF(k.empresa_nombre,''), co.nombre, '') AS empresa,
-             st.dia AS paso_dia, st.titulo AS paso_titulo
+             st.dia AS paso_dia, st.titulo AS paso_titulo, COALESCE(st.cc_off, FALSE) AS cc_off
         FROM lm_messages m
         JOIN lm_contacts k ON k.id = m.contact_id
         LEFT JOIN lm_companies co ON co.id = k.company_id
@@ -3464,6 +3464,24 @@ app.get('/api/lm/sequences/:id/approvals', requireAuth, async (req, res) => {
     `, [req.workspaceOwnerId, req.params.id]);
     res.json(rows);
   } catch (err) { console.error('[approvals] GET', err.message); res.status(500).json({ error: 'Error al cargar aprobaciones' }); }
+});
+// Lista GLOBAL de borradores por aprobar (para la lista de Tareas comerciales).
+app.get('/api/lm/approvals', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT m.id, m.sequence_id, m.contact_id, m.asunto, m.to_email, m.scheduled_at,
+             s.nombre AS seq_nombre,
+             k.nombre, k.apellido, COALESCE(NULLIF(k.empresa_nombre,''), co.nombre, '') AS empresa
+        FROM lm_messages m
+        JOIN sequences s ON s.id = m.sequence_id
+        JOIN lm_contacts k ON k.id = m.contact_id
+        LEFT JOIN lm_companies co ON co.id = k.company_id
+       WHERE m.user_id=$1 AND m.estado='awaiting'
+       ORDER BY m.scheduled_at ASC NULLS FIRST, m.created_at ASC
+       LIMIT 100
+    `, [req.workspaceOwnerId]);
+    res.json(rows);
+  } catch (err) { console.error('[approvals] GET all', err.message); res.status(500).json({ error: 'Error al cargar aprobaciones' }); }
 });
 // action: 'save' (editar sin aprobar) | 'approve' (sale en el próximo tick, espaciado
 // por el intervalo de la secuencia) | 'discard' (no se envía y el contacto avanza de paso).
