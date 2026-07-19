@@ -14280,7 +14280,7 @@ ${foot}
         else if (!list.length) { msg = 'Aún no hay nadie enrolado en esta secuencia. Enrola contactos para generar tareas.'; cta = 'Enrolar contacto'; ctaFn = `LeadManagerModule.seqEnrolOpen(${id})`; }
         else if (!activos.length) { msg = 'Los contactos enrolados están pausados o terminados; no hay tareas activas. Reactívalos (►) en la pestaña “Contactos”.'; }
         else { msg = 'Los contactos activos ya completaron todos los pasos definidos. Agrega más pasos o enrola contactos nuevos.'; cta = 'Enrolar contacto'; ctaFn = `LeadManagerModule.seqEnrolOpen(${id})`; }
-        return _empty('tasks', 'Sin tareas pendientes', msg, cta, ctaFn);
+        return _approveCtaHtml(id) + _empty('tasks', 'Sin tareas pendientes', msg, cta, ctaFn);
       }
       const todoAll = tasks.filter(t => t.due <= today);
       // Filtro por canal (chips arriba): p. ej. hacer primero los de email, luego los de llamada.
@@ -14316,7 +14316,7 @@ ${foot}
         : `<div class="seq-tasks-hd seq-tasks-hd--none">Sin tareas${canalLbl}${dueLbl} para hoy</div>`;
       const grp = (showOver && over.length ? `<div class="lm-tsec-h lm-tsec-h--over"><span class="lm-tsec-h__dot"></span>Vencidas<span class="lm-tsec-h__n">${over.length}</span></div><div class="seq-tasks">${over.map(t => _seqTaskRow(t, id, today)).join('')}</div>` : '')
                 + (showToday && hoy.length ? `<div class="lm-tsec-h lm-tsec-h--today"><span class="lm-tsec-h__dot"></span>Hoy<span class="lm-tsec-h__n">${hoy.length}</span></div><div class="seq-tasks">${hoy.map(t => _seqTaskRow(t, id, today)).join('')}</div>` : '');
-      return `${_acceptCtaHtml(id)}${fltRow}${head}${grp}${nextLine}`;
+      return `${_approveCtaHtml(id)}${_acceptCtaHtml(id)}${fltRow}${head}${grp}${nextLine}`;
     }
     if (_seqTab === 'envios') {
       if (_seqMsgs === null) return `<div class="cp-empty2" style="padding:22px">Cargando envíos…</div>`;
@@ -14558,6 +14558,23 @@ ${foot}
     if (mins < 60) return `hace ${mins} min`;
     const h = Math.floor(mins / 60); if (h < 24) return `hace ${h} h`;
     const d = Math.floor(h / 24); return d === 1 ? 'hace 1 día' : `hace ${d} días`;
+  }
+  // Tarjeta "Emails por aprobar" (modo pre-aprobado). Se muestra en Tareas comerciales
+  // y en la pestaña Tareas de la secuencia — aprobar ES una tarea del día.
+  function _approveCtaHtml(seqId) {
+    let list = (_sequences || []).filter(s => (s.awaiting || 0) > 0);
+    if (seqId != null) list = list.filter(s => s.id === seqId);
+    const n = list.reduce((t, s) => t + (s.awaiting || 0), 0);
+    if (!n) return '';
+    const names = list.slice(0, 2).map(s => `“${esc(s.nombre)}”`).join(', ') + (list.length > 2 ? ` y ${list.length - 2} más` : '');
+    return `<div class="lm-accept-cta lm-accept-cta--stale" onclick="LeadManagerModule.seqGoApprove(${list[0].id})" title="Emails redactados por el motor esperando tu OK — al aprobarlos salen solos en su fecha, espaciados por el intervalo">
+      <div class="lm-accept-cta__row"><span class="lm-accept-cta__ico">✋</span><span class="lm-accept-cta__tx"><b>Emails por aprobar</b> — <b style="color:#A96D0C">${n}</b> en ${names}</span><span class="lm-accept-cta__go">Aprobar ›</span></div>
+    </div>`;
+  }
+  function seqGoApprove(id) {
+    openSequence(id);
+    _seqTab = 'aprobar'; _seqApprovals = null;
+    _renderBody(); _seqLoadApprovals(id);
   }
   // Tarjeta "Revisar aceptaciones de LinkedIn" (con sello de última revisión). Se reutiliza en Tareas comerciales y en la pestaña Tareas de la secuencia.
   function _acceptCtaHtml(seqId) {
@@ -15502,6 +15519,8 @@ ${foot}
     const nextLine = seqFuture.length ? `<div class="seq-next">${NI('calendar', 12)} Siguiente tarea de secuencia: <b>${_relDay(seqFuture[0].due)}</b>${seqFuture.length > 1 ? ` · +${seqFuture.length - 1} más próximas` : ''}</div>` : '';
     const anything = allRaw.length || acts.length;
     const paCta = _acceptCtaHtml();
+    const apCta = _approveCtaHtml();
+    const totalAwaiting = (_sequences || []).reduce((t, s) => t + (s.awaiting || 0), 0);
     // Stat strip (patrón referencia: número grande + label uppercase muted)
     const stat = (l, n, warn) => `<div class="lm-stat"><span class="lm-stat__l">${l}</span><span class="lm-stat__n${warn ? ' lm-stat__n--warn' : ''}">${n}</span></div>`;
     const statStrip = anything ? `<div class="lm-stat-strip">
@@ -15510,6 +15529,7 @@ ${foot}
       ${stat('Próximas', seqFuture.length, false)}
       ${stat('Follow-ups', acts.length, false)}
       ${stat('Por aceptar', _pendingAccept().length, false)}
+      ${totalAwaiting ? stat('Por aprobar', totalAwaiting, true) : ''}
     </div>` : '';
     const listHtml = `${seqOver.length ? `<div class="lm-tsec-h lm-tsec-h--over"><span class="lm-tsec-h__dot"></span>Vencidas<span class="lm-tsec-h__n">${seqOver.length}</span></div><div class="seq-tasks">${seqOver.map(t => _allTaskRow(t, today)).join('')}</div>` : ''}
       ${seqHoy.length ? `<div class="lm-tsec-h lm-tsec-h--today"><span class="lm-tsec-h__dot"></span>Hoy<span class="lm-tsec-h__n">${seqHoy.length}</span></div><div class="seq-tasks">${seqHoy.map(t => _allTaskRow(t, today)).join('')}</div>` : ''}
@@ -15523,7 +15543,7 @@ ${foot}
         <div><h2 class="lm-sec-title">Tareas comerciales</h2><p class="lm-sec-sub">Secuencias y follow-ups, ordenados por fecha</p></div>
         <div class="lm-hd-actions"><div class="task-viewtoggle"><button class="tvt${_taskView === 'calendar' ? '' : ' on'}" onclick="LeadManagerModule.taskSetView('list')">Lista</button><button class="tvt${_taskView === 'calendar' ? ' on' : ''}" onclick="LeadManagerModule.taskSetView('calendar')">Calendario</button></div>${_data.length ? `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openActivityDrawer(null,null,1)">＋ Nueva tarea</button>` : ''}</div>
       </div>
-      ${statStrip}${paCta}${filterRow}${_taskView === 'calendar' ? _vTaskCalendar() : listHtml}`;
+      ${statStrip}${apCta}${paCta}${filterRow}${_taskView === 'calendar' ? _vTaskCalendar() : listHtml}`;
   }
   function _monthStart(d) { return new Date(d.getFullYear(), d.getMonth(), 1); }
   function _dayKey(d) { const x = _dayOf(d); return x.getFullYear() + '-' + (x.getMonth() + 1) + '-' + x.getDate(); }
@@ -19398,7 +19418,7 @@ ${foot}
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
     openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
     openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, confirmDeleteSequence, seqTab, seqCtAdvance, seqCtPause, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
-    seqAppAction, seqModeHint, stepPreview, stepDiaCal,
+    seqAppAction, seqModeHint, stepPreview, stepDiaCal, seqGoApprove,
     seqTaskOpen, seqDoClose, seqDoCopy, seqDoDone, seqDoSkip, seqDoPrev, seqDoEditStep, seqDoExit, seqOpenLinkedIn,
     openStepDrawer, closeStepDrawer, saveStep, confirmDeleteStep, seqInsertVar, stepUseTpl, tzSearch, tzPick, tzBlur,
     stepSetMode, stepSetField, stepAddVariant, stepDelVariant, stepFocusTa,
