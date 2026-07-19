@@ -635,6 +635,9 @@ async function initDb() {
     await pool.query(`ALTER TABLE sequence_steps ADD COLUMN IF NOT EXISTS variant_field TEXT  NOT NULL DEFAULT '';`);
     // Hora opcional para hacer la tarea de este paso (HH:MM en hora local de quien la ejecuta). '' = todo el día.
     await pool.query(`ALTER TABLE sequence_steps ADD COLUMN IF NOT EXISTS hora TEXT NOT NULL DEFAULT '';`);
+    // Asunto del email SEPARADO del título del paso (el título es el nombre interno).
+    // Antes el motor usaba titulo como asunto — confuso y sin campo propio en la UI.
+    await pool.query(`ALTER TABLE sequence_steps ADD COLUMN IF NOT EXISTS asunto TEXT NOT NULL DEFAULT '';`);
     // Condición de rama del paso: '' = para todos; 'replied' = solo si el contacto respondió/aceptó;
     // 'no_reply' = solo si NO respondió. El motor salta los pasos cuya condición no aplica al contacto.
     await pool.query(`ALTER TABLE sequence_steps ADD COLUMN IF NOT EXISTS cond TEXT NOT NULL DEFAULT '';`);

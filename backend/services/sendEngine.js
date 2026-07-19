@@ -214,7 +214,7 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback) {
   }
 
   const { rows: steps } = await pool.query(
-    `SELECT id, dia, canal, titulo, plantilla, espera_dias, variants, variant_mode, variant_field
+    `SELECT id, dia, canal, titulo, plantilla, espera_dias, variants, variant_mode, variant_field, asunto
        FROM sequence_steps WHERE sequence_id=$1 ORDER BY dia ASC, orden ASC, id ASC`,
     [enr.sequence_id]
   );
@@ -272,7 +272,8 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback) {
     // A/B: elegir variante (misma regla que el frontend) y registrarla para medir conversión.
     const variant = pickVariant(step, enr);
     const multi = stepVariants(step).length > 1;
-    asunto    = renderTemplate(step.titulo, enr) || `(${enr.seq_nombre} — paso ${enr.paso})`;
+    // Asunto: el de la variante > el asunto propio del paso > el título (compat con pasos viejos).
+    asunto    = renderTemplate((variant && variant.asunto) || step.asunto || step.titulo, enr) || `(${enr.seq_nombre} — paso ${enr.paso})`;
     cuerpoTxt = renderTemplate((variant && variant.cuerpo) || step.plantilla, enr);
     variantName = multi ? String(variant.nombre || 'A') : '';
   }
@@ -310,8 +311,9 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback) {
   // ── Buzón del cliente (F2): si la secuencia pertenece a un cliente con buzón
   // conectado, el envío sale por SU buzón (SMTP). Sin buzón → Gmail del workspace.
   const { rows: [mbx] } = await pool.query(
-    `SELECT mb.* FROM lm_mailboxes mb
+    `SELECT mb.*, COALESCE(oc.cc_email,'') AS cc_email FROM lm_mailboxes mb
       JOIN sequences s ON s.outbound_client_id = mb.outbound_client_id AND s.user_id = mb.user_id
+      LEFT JOIN outbound_clients oc ON oc.id = mb.outbound_client_id
      WHERE s.id = $1 AND mb.user_id = $2 AND mb.estado IN ('conectado','solo_envio')
      LIMIT 1`,
     [enr.sequence_id, uid]
@@ -330,6 +332,7 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback) {
         to: enr.email, subject: asunto, html,
         text: cuerpoTxt + (cfg.firma ? `\n\n${cfg.firma.replace(/<[^>]+>/g, '')}` : ''),
         fromName: cfg.from_name,
+        cc: mbx.cc_email || undefined,  // CC del cliente (definido en su ficha) en cada envío
       });
       await pool.query(
         `UPDATE lm_messages SET estado='sent', sent_at=NOW(), smtp_message_id=$1 WHERE id=$2`,
@@ -446,11 +449,13 @@ async function _flushApproved(pool, apiBase) {
            m.id, m.user_id, m.contact_id, m.sequence_id, m.step_id, m.asunto, m.cuerpo, m.to_email, m.track_token,
            mb.id AS mb_ok, mb.email AS mb_email, mb.pass_enc, mb.smtp_host, mb.smtp_port, mb.smtp_secure,
            mb.imap_host, mb.imap_port, mb.provider, mb.sent_folder, mb.estado AS mb_estado,
-           cfg.from_name, cfg.firma, cfg.track_opens, cfg.track_clicks
+           cfg.from_name, cfg.firma, cfg.track_opens, cfg.track_clicks,
+           COALESCE(oc.cc_email,'') AS cc_email
       FROM lm_messages m
       JOIN sequences s ON s.id = m.sequence_id
       LEFT JOIN lm_mailboxes mb ON mb.id = m.mailbox_id
       LEFT JOIN lm_send_settings cfg ON cfg.user_id = m.user_id
+      LEFT JOIN outbound_clients oc ON oc.id = s.outbound_client_id
      WHERE m.estado='approved'
        AND NOT EXISTS (
             SELECT 1 FROM lm_messages mi
@@ -473,6 +478,7 @@ async function _flushApproved(pool, apiBase) {
         to: m.to_email, subject: m.asunto, html,
         text: m.cuerpo + (m.firma ? `\n\n${String(m.firma).replace(/<[^>]+>/g, '')}` : ''),
         fromName: m.from_name || undefined,
+        cc: m.cc_email || undefined,  // CC del cliente también en los pre-aprobados
       });
       await pool.query(`UPDATE lm_messages SET estado='sent', sent_at=NOW(), smtp_message_id=$1 WHERE id=$2`,
         [sent.messageId || '', m.id]);

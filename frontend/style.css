@@ -12940,3 +12940,20 @@ td.ldh-acts { padding-left: 6px; padding-right: 10px; }
 .seq-app__subj { font-weight: 600; margin-bottom: 6px; }
 .seq-app__body { resize: vertical; min-height: 90px; font-size: .8rem; line-height: 1.5; }
 .seq-app__ft { display: flex; gap: 6px; align-items: center; margin-top: 8px; }
+
+/* ── Drawer de paso: secciones + vista previa ── */
+.step-sec-h { display: flex; align-items: center; gap: 8px; font-size: .78rem; font-weight: 700; color: var(--text-primary); border-top: 1px solid var(--border); padding-top: 12px; margin-top: 4px; }
+.step-sec-h:first-child { border-top: none; padding-top: 0; margin-top: 0; }
+.step-sec-n { width: 18px; height: 18px; border-radius: 50%; background: var(--primary); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: .64rem; font-weight: 700; flex: 0 0 auto; }
+.step-var-subjwrap { display: block; margin-bottom: 6px; }
+.step-var-subjlbl { display: block; font-size: .68rem; font-weight: 600; color: var(--text-muted); margin-bottom: 3px; }
+.step-prev { border: 1px solid var(--primary-border, var(--border)); background: var(--primary-soft); border-radius: 10px; padding: 10px 12px; }
+.step-prev-hd { font-size: .7rem; font-weight: 700; color: var(--primary); margin-bottom: 7px; }
+.step-prev-meta { display: flex; flex-direction: column; gap: 3px; font-size: .76rem; color: var(--text-primary); border-bottom: 1px solid var(--primary-border, var(--border)); padding-bottom: 8px; margin-bottom: 8px; }
+.step-prev-meta > div > span { display: inline-block; width: 52px; color: var(--text-muted); font-size: .68rem; font-weight: 600; }
+.step-prev-body { font-size: .8rem; line-height: 1.55; color: var(--text-primary); background: var(--surface); border-radius: 8px; padding: 9px 11px; max-height: 220px; overflow-y: auto; }
+.step-prev-var { color: var(--primary); font-weight: 600; }
+.step-prev-miss { background: #FEF3E2; color: #A96D0C; border-radius: 4px; padding: 0 3px; font-size: .74rem; }
+.step-prev-warn { color: #A96D0C; font-size: .74rem; }
+.seq-app__route { font-size: .7rem; color: var(--text-muted); margin-bottom: 7px; }
+.seq-app__route b { color: var(--text-secondary); font-weight: 600; }

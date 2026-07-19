@@ -14707,11 +14707,16 @@ ${foot}
   function _seqAppCard(a) {
     const nm = [a.nombre, a.apellido].filter(Boolean).join(' ') || a.to_email;
     const approved = a.estado === 'approved';
+    // De/CC reales del envío: buzón + CC del cliente de esta secuencia.
+    const s = (_sequences || []).find(x => x.id === _activeSeq);
+    const cli = (_clients || []).find(c => c.id === s?.outbound_client_id);
+    const mb = cli ? _mbFor(cli.id) : null;
     return `<div class="seq-app${approved ? ' seq-app--ok' : ''}">
       <div class="seq-app__hd">
         <div class="seq-app__who"><b>${esc(nm)}</b>${a.cargo || a.empresa ? ` <span>· ${esc([a.cargo, a.empresa].filter(Boolean).join(', '))}</span>` : ''} <span>→ ${esc(a.to_email)}</span></div>
         ${approved ? `<span class="ibx-b" style="background:var(--primary-soft);color:var(--primary)">Aprobado · en cola</span>` : `<span class="ibx-b ibx-b--ooo">Paso día ${a.paso_dia || '?'}</span>`}
       </div>
+      <div class="seq-app__route">De <b>${mb ? esc(mb.email) : '⚠ sin buzón'}</b>${cli?.cc_email ? ` · CC <b>${esc(cli.cc_email)}</b>` : ' · sin CC'}</div>
       <input class="form-input seq-app__subj" id="app-subj-${a.id}" value="${esc(a.asunto)}" ${approved ? 'disabled' : ''} placeholder="Asunto">
       <textarea class="form-input seq-app__body" id="app-body-${a.id}" rows="5" ${approved ? 'disabled' : ''}>${esc(a.cuerpo)}</textarea>
       <div class="seq-app__ft">
@@ -17164,7 +17169,7 @@ ${foot}
     _stepDraft = {
       mode: (st && st.variant_mode) || 'off',
       field: (st && st.variant_field) || 'buyer_role',
-      variants: (st && Array.isArray(st.variants) && st.variants.length) ? st.variants.map(v => { const r = _varResolve(v, st); return { nombre: v.nombre || '', asunto: r.asunto, cuerpo: r.cuerpo, targets: Array.isArray(v.targets) ? v.targets.slice() : [], tplId: r.tplId }; }) : [{ nombre: 'A', asunto: '', cuerpo: (st && st.plantilla) || '', targets: [], tplId: '' }],
+      variants: (st && Array.isArray(st.variants) && st.variants.length) ? st.variants.map(v => { const r = _varResolve(v, st); return { nombre: v.nombre || '', asunto: r.asunto, cuerpo: r.cuerpo, targets: Array.isArray(v.targets) ? v.targets.slice() : [], tplId: r.tplId }; }) : [{ nombre: 'A', asunto: (st && st.asunto) || '', cuerpo: (st && st.plantilla) || '', targets: [], tplId: '' }],
     };
     const existing = _seqSteps(seqId);
     const nextDia = st ? st.dia : ((existing.slice(-1)[0]?.dia || 0) + (existing.length ? 2 : 1));
@@ -17175,7 +17180,9 @@ ${foot}
     m.innerHTML = `<div class="fin-pi-box">
       <div class="fin-pi-box__hd"><h3>${st ? 'Editar paso' : 'Nuevo paso'}</h3><button class="fin-pi-x" onclick="LeadManagerModule.closeStepDrawer()">✕</button></div>
       <div class="fin-pi-form">
+        <div class="fin-pi-full step-sec-h"><span class="step-sec-n">1</span> El paso — cuándo y por dónde</div>
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Día (relativo)</span><input class="form-input" type="number" id="step-dia" min="1" value="${st ? st.dia : nextDia}"></label>
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Nombre interno (opcional)</span><input class="form-input" id="step-titulo" value="${st ? esc(st.titulo) : ''}" placeholder="Ej. Email 1 — intro"><span class="seq-drip-hint">Solo para identificar el paso en la lista. <b>No se envía</b> — el asunto del email va abajo.</span></label>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Canal del paso — define qué verás al hacer la tarea</span>
           <div class="step-canal-pick">${_CANALES.map(cn => `<button type="button" class="step-canal-b${(st?.canal || 'email') === cn ? ' on' : ''}" data-canal="${cn}" onclick="LeadManagerModule.stepPickCanal('${cn}')" title="${esc(_canalHintPlain(cn))}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${_TOUCH[cn][2]}</svg>${_TOUCH[cn][0]}</button>`).join('')}</div>
           <input type="hidden" id="step-canal" value="${st?.canal || 'email'}">
@@ -17183,8 +17190,9 @@ ${foot}
         </label>
         <div class="fin-pi-full" id="step-accion-slot">${_stepAccionHtml(st?.canal || 'email', st?.accion || '')}</div>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Hora (opcional)</span><input class="form-input" type="time" id="step-hora" value="${st && st.hora ? esc(st.hora) : ''}"><span class="seq-drip-hint" id="step-hora-hint">${_stepHoraHint(seqId)}</span></label>
-        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Título del paso</span><input class="form-input" id="step-titulo" value="${st ? esc(st.titulo) : ''}" placeholder="Ej. Email 1 — intro"></label>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">¿Para quién? (rama por respuesta)</span><select class="form-input" id="step-cond"><option value=""${!(st && st.cond) ? ' selected' : ''}>Todos</option><option value="replied"${st && st.cond === 'replied' ? ' selected' : ''}>Solo si respondió / aceptó</option><option value="no_reply"${st && st.cond === 'no_reply' ? ' selected' : ''}>Solo si NO respondió</option></select><span class="seq-drip-hint">Ramifica la secuencia: el sistema <b>salta</b> este paso para quien no cumpla la condición. Ej.: nota de conexión = <b>Todos</b>; mensaje de LinkedIn = <b>Solo si aceptó</b>; email de seguimiento = <b>Solo si no respondió</b>.</span></label>
+        <div class="fin-pi-full step-sec-h"><span class="step-sec-n">2</span> El mensaje — qué se envía <span class="sp"></span><button type="button" class="seq-days-preset" id="step-prev-btn" onclick="LeadManagerModule.stepPreview(${seqId})">👁 Vista previa</button></div>
+        <div id="step-preview" class="fin-pi-full" style="display:none"></div>
         ${_lmTpls.length ? `<label class="fin-cfg-field fin-pi-full" id="step-tpl-top"><span class="fin-cfg-lbl">Usar plantilla guardada</span><select class="form-input" onchange="LeadManagerModule.stepUseTpl(this.value)"><option value="">— Elegir de la biblioteca —</option>${_lmTpls.map(tp => `<option value="${tp.id}">${esc(tp.nombre)} · ${esc(_tplCanalLabel(tp.canal))}</option>`).join('')}</select></label>` : ''}
         <div id="step-msg" class="fin-pi-full step-msg"></div>
       </div>
@@ -17219,7 +17227,7 @@ ${foot}
     const vars = single ? d.variants.slice(0, 1) : d.variants;
     const varsHtml = vars.map((v, i) => {
       const head = single ? '' : `<div class="step-var-hd"><input class="step-var-nm" value="${esc(v.nombre || String.fromCharCode(65 + i))}" data-i="${i}" placeholder="Nombre"><span class="step-var-sp"></span>${tplOpts ? tplOpts.replace('IDX', i) : ''}${d.variants.length > 1 ? `<button type="button" class="flt-del" onclick="LeadManagerModule.stepDelVariant(${i})" title="Quitar variante">✕</button>` : ''}</div>`;
-      const asunto = (!single && usesSubject) ? `<input class="form-input step-var-asunto" data-i="${i}" placeholder="Asunto del email" value="${esc(v.asunto || '')}" oninput="LeadManagerModule.stepVarEdit(${i})">` : '';
+      const asunto = usesSubject ? `<label class="step-var-subjwrap"><span class="step-var-subjlbl">Asunto</span><input class="form-input step-var-asunto" data-i="${i}" placeholder="Ej. Quick question about {{company}}" value="${esc(v.asunto || '')}" oninput="LeadManagerModule.stepVarEdit(${i})"></label>` : '';
       const targets = (!single && d.mode === 'segment') ? _stepTargetsHtml(i) : '';
       const link = v.tplId ? `<span class="step-var-link" id="step-var-link-${i}" title="Vinculada a la plantilla — se actualiza sola. Editar el texto la desvincula.">🔗 ${esc(_tplName(v.tplId))} · en vivo</span>` : '';
       return `<div class="step-var-box">${head}${link}${asunto}<textarea class="form-input step-var-ta" id="step-var-${i}" data-i="${i}" rows="${single ? 4 : 3}" placeholder="Ej. Hola {{first_name}}…" onfocus="LeadManagerModule.stepFocusTa('step-var-${i}')" oninput="LeadManagerModule.stepVarEdit(${i})">${esc(v.cuerpo || '')}</textarea>${targets}</div>`;
@@ -17357,13 +17365,51 @@ ${foot}
     const d = _stepDraft || { mode: 'off', field: '', variants: [{ cuerpo: '' }] };
     const variants = d.mode === 'off' ? [] : d.variants.filter(v => (v.cuerpo || '').trim() || (v.nombre || '').trim());
     const plantilla = ((d.variants[0] && d.variants[0].cuerpo) || '').trim();
-    const body = { sequence_id: seqId, dia, canal: $('step-canal')?.value || 'email', titulo: $('step-titulo')?.value.trim() || '', plantilla, variants, variant_mode: d.mode, variant_field: d.field, orden: dia, hora: $('step-hora')?.value || '', cond: $('step-cond')?.value || '', accion: $('step-accion')?.value || '' };
+    // Asunto propio del paso (separado del nombre interno). En A/B cada variante lleva el suyo.
+    const asunto = ((d.variants[0] && d.variants[0].asunto) || '').trim();
+    const body = { sequence_id: seqId, dia, canal: $('step-canal')?.value || 'email', titulo: $('step-titulo')?.value.trim() || '', asunto, plantilla, variants, variant_mode: d.mode, variant_field: d.field, orden: dia, hora: $('step-hora')?.value || '', cond: $('step-cond')?.value || '', accion: $('step-accion')?.value || '' };
     const btn = $('step-save'); if (btn) btn.disabled = true;
     try {
       const res = await apiFetch(`${API}/sequence-steps${stepId ? '/' + stepId : ''}`, { method: stepId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       if (!res.ok) throw new Error((await res.json()).error || 'Error');
       closeStepDrawer(); await load();
     } catch (e) { const h = $('step-hint'); if (h) { h.textContent = e.message; h.className = 'fin-cfg-hint fin-cfg-hint--err'; } if (btn) btn.disabled = false; }
+  }
+  // ── Vista previa del email del paso: De/CC/Para reales + variables resueltas ──
+  function _rvPrev(str, ctx) {
+    const map = { first_name: ctx.nombre, last_name: ctx.apellido, full_name: [ctx.nombre, ctx.apellido].filter(Boolean).join(' '), email: ctx.email, title: ctx.cargo, company: ctx.empresa, city: ctx.ciudad, country: ctx.pais, nombre: ctx.nombre, apellido: ctx.apellido, cargo: ctx.cargo, empresa: ctx.empresa, ciudad: ctx.ciudad, pais: ctx.pais };
+    return String(str || '').replace(/\{\{\s*(\w+)\s*\}\}/g, (m, k) => { const v = map[k.toLowerCase()]; return (v == null || v === '') ? `<span class="step-prev-miss">${m}</span>` : `<b class="step-prev-var">${esc(String(v))}</b>`; });
+  }
+  function stepPreview(seqId) {
+    const panel = $('step-preview'); if (!panel) return;
+    if (panel.style.display !== 'none') { panel.style.display = 'none'; return; }
+    _stepSyncDraft();
+    const canal = $('step-canal')?.value || 'email';
+    if (canal !== 'email') { panel.style.display = ''; panel.innerHTML = `<div class="step-prev"><div class="ibx-empty" style="padding:12px">La vista previa aplica a pasos de email. Este paso es de ${esc((_TOUCH[canal] || ['otro'])[0])} — lo que escribas se muestra al hacer la tarea.</div></div>`; return; }
+    const s = (_sequences || []).find(x => x.id === seqId);
+    const cid = s?.outbound_client_id;
+    const cli = (_clients || []).find(x => x.id === cid);
+    const mb = cid ? _mbFor(cid) : null;
+    // Contacto de ejemplo: el primero del cliente con email; si no hay, uno ficticio.
+    const kReal = (_contacts || []).find(k => k.outbound_client_id === cid && k.email);
+    const ctx = kReal
+      ? { nombre: kReal.nombre, apellido: kReal.apellido, email: kReal.email, cargo: kReal.cargo, empresa: kReal.empresa_nombre || '', ciudad: kReal.ciudad, pais: kReal.pais }
+      : { nombre: 'María', apellido: 'García', email: 'maria.garcia@empresa.com', cargo: 'CEO', empresa: 'Empresa Ejemplo', ciudad: 'Austin', pais: 'EE.UU.' };
+    const v = (_stepDraft && _stepDraft.variants[0]) || { asunto: '', cuerpo: '' };
+    const de = mb ? mb.email : (cli?.from_email || '');
+    const cc = cli?.cc_email || '';
+    const multi = _stepDraft && _stepDraft.mode !== 'off' && _stepDraft.variants.length > 1;
+    panel.style.display = '';
+    panel.innerHTML = `<div class="step-prev">
+      <div class="step-prev-hd">Así se verá${kReal ? ` (con ${esc([kReal.nombre, kReal.apellido].filter(Boolean).join(' ') || kReal.email)})` : ' (contacto de ejemplo)'}${multi ? ' · variante A' : ''}</div>
+      <div class="step-prev-meta">
+        <div><span>De</span>${de ? esc(de) : '<i class="step-prev-warn">sin buzón conectado — conéctalo en la ficha del cliente</i>'}</div>
+        <div><span>Para</span>${esc(ctx.email)}</div>
+        <div><span>CC</span>${cc ? esc(cc) : '<i>— nadie (defínelo en la ficha del cliente como "CC")</i>'}</div>
+        <div><span>Asunto</span>${v.asunto ? _rvPrev(esc(v.asunto), ctx) : '<i class="step-prev-warn">⚠ sin asunto — escríbelo abajo</i>'}</div>
+      </div>
+      <div class="step-prev-body">${v.cuerpo ? _rvPrev(esc(v.cuerpo), ctx).replace(/\n/g, '<br>') : '<i class="step-prev-warn">⚠ sin cuerpo — escríbelo abajo</i>'}</div>
+    </div>`;
   }
   async function confirmDeleteStep(id) {
     const st = _steps.find(x => x.id === id);
@@ -19315,7 +19361,7 @@ ${foot}
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
     openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
     openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, confirmDeleteSequence, seqTab, seqCtAdvance, seqCtPause, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
-    seqAppAction, seqModeHint,
+    seqAppAction, seqModeHint, stepPreview,
     seqTaskOpen, seqDoClose, seqDoCopy, seqDoDone, seqDoSkip, seqDoPrev, seqDoEditStep, seqDoExit, seqOpenLinkedIn,
     openStepDrawer, closeStepDrawer, saveStep, confirmDeleteStep, seqInsertVar, stepUseTpl, tzSearch, tzPick, tzBlur,
     stepSetMode, stepSetField, stepAddVariant, stepDelVariant, stepFocusTa,
