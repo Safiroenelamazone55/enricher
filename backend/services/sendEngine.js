@@ -167,7 +167,7 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback) {
   // Enrolamiento más atrasado que ya toca (NULL = recién enrolado, también toca).
   // Solo secuencias ACTIVAS: pausar la secuencia detiene todos sus envíos.
   const { rows: [enr] } = await pool.query(`
-    SELECT cs.id AS enr_id, cs.user_id, cs.contact_id, cs.sequence_id, cs.paso,
+    SELECT cs.id AS enr_id, cs.user_id, cs.contact_id, cs.sequence_id, cs.paso, cs.next_action_at,
            k.nombre, k.apellido, k.email, k.cargo, k.empresa_nombre, k.ciudad, k.pais,
            k.seniority, k.departamento, k.buyer_role, k.region, k.contact_priority,
            k.email_status, k.disposition, co.nombre AS company_nombre, s.nombre AS seq_nombre, s.send_days,
@@ -290,10 +290,11 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback) {
       const { rows: [mbq] } = await pool.query(
         `SELECT mb.id FROM lm_mailboxes mb JOIN sequences s ON s.outbound_client_id = mb.outbound_client_id AND s.user_id = mb.user_id
           WHERE s.id=$1 AND mb.user_id=$2 AND mb.estado IN ('conectado','solo_envio') LIMIT 1`, [enr.sequence_id, uid]);
+      // scheduled_at = la fecha en que TOCA enviarlo: aprobar antes no lo adelanta.
       await pool.query(
-        `INSERT INTO lm_messages (user_id, contact_id, sequence_id, step_id, asunto, cuerpo, to_email, estado, track_token, variant, mailbox_id)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,'awaiting',$8,$9,$10)`,
-        [uid, enr.contact_id, enr.sequence_id, step.id, asunto, cuerpoTxt, enr.email, token, variantName, mbq ? mbq.id : null]
+        `INSERT INTO lm_messages (user_id, contact_id, sequence_id, step_id, asunto, cuerpo, to_email, estado, track_token, variant, mailbox_id, scheduled_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,'awaiting',$8,$9,$10,$11)`,
+        [uid, enr.contact_id, enr.sequence_id, step.id, asunto, cuerpoTxt, enr.email, token, variantName, mbq ? mbq.id : null, enr.next_action_at || new Date().toISOString()]
       );
       console.log(`[send-engine] borrador por aprobar → ${enr.email} (${enr.seq_nombre} paso ${enr.paso})`);
     }
@@ -458,6 +459,8 @@ async function _flushApproved(pool, apiBase) {
       LEFT JOIN outbound_clients oc ON oc.id = s.outbound_client_id
       LEFT JOIN sequence_steps st ON st.id = m.step_id
      WHERE m.estado='approved'
+       -- Respetar la fecha del paso: aprobar con anticipación NO adelanta el envío.
+       AND (m.scheduled_at IS NULL OR m.scheduled_at <= NOW())
        AND NOT EXISTS (
             SELECT 1 FROM lm_messages mi
              WHERE mi.sequence_id = m.sequence_id AND mi.sent_at IS NOT NULL
@@ -497,6 +500,65 @@ async function _flushApproved(pool, apiBase) {
   }
 }
 
+// ── Borradores ANTICIPADOS (modo pre-aprobado): el email aparece en "Aprobar"
+// hasta 3 días antes de su fecha de envío (cubre el fin de semana: el viernes ya
+// ves lo del lunes). Aprobarlo antes no lo adelanta — scheduled_at manda. ──
+async function _draftPreapproved(pool) {
+  const { rows: enrs } = await pool.query(`
+    SELECT cs.id AS enr_id, cs.user_id, cs.contact_id, cs.sequence_id, cs.paso, cs.next_action_at,
+           k.nombre, k.apellido, k.email, k.cargo, k.empresa_nombre, k.ciudad, k.pais,
+           k.seniority, k.departamento, k.buyer_role, k.region, k.contact_priority, k.email_status,
+           co.nombre AS company_nombre, s.nombre AS seq_nombre
+      FROM lm_contact_sequences cs
+      JOIN sequences s ON s.id = cs.sequence_id AND s.estado='activa' AND s.send_mode='preaprobado'
+      JOIN lm_contacts k ON k.id = cs.contact_id
+      LEFT JOIN lm_companies co ON co.id = k.company_id
+     WHERE cs.estado='activo'
+       AND (cs.next_action_at IS NULL OR cs.next_action_at <= NOW() + interval '3 days')
+     ORDER BY cs.next_action_at ASC NULLS FIRST
+     LIMIT 25
+  `);
+  for (const enr of enrs) {
+    try {
+      // Guardas suaves: sin email o sin verificar → lo resuelve el flujo principal cuando toque.
+      if (!enr.email || !SENDABLE_STATUS.includes(enr.email_status)) continue;
+      const { rows: steps } = await pool.query(
+        `SELECT id, dia, canal, titulo, plantilla, espera_dias, variants, variant_mode, variant_field, asunto, cc_off
+           FROM sequence_steps WHERE sequence_id=$1 ORDER BY dia ASC, orden ASC, id ASC`, [enr.sequence_id]);
+      const step = steps[(enr.paso || 1) - 1];
+      if (!step || step.canal !== 'email') continue;
+      const { rows: [waiting] } = await pool.query(
+        `SELECT id FROM lm_messages WHERE user_id=$1 AND contact_id=$2 AND step_id=$3 AND estado IN ('awaiting','approved') LIMIT 1`,
+        [enr.user_id, enr.contact_id, step.id]);
+      if (waiting) continue;
+      // Mismo render que el flujo principal (borrador IA aprobado > variante A/B > plantilla).
+      let asunto, cuerpoTxt, variantName = '';
+      const { rows: [aiDraft] } = await pool.query(
+        `SELECT asunto, cuerpo FROM lm_ai_drafts WHERE user_id=$1 AND contact_id=$2 AND step_id=$3 AND status='approved'
+          ORDER BY updated_at DESC LIMIT 1`, [enr.user_id, enr.contact_id, step.id]);
+      if (aiDraft && (aiDraft.asunto || aiDraft.cuerpo)) {
+        asunto = renderTemplate(aiDraft.asunto, enr) || `(${enr.seq_nombre} — paso ${enr.paso})`;
+        cuerpoTxt = renderTemplate(aiDraft.cuerpo, enr); variantName = 'IA';
+      } else {
+        const variant = pickVariant(step, enr);
+        const multi = stepVariants(step).length > 1;
+        asunto = renderTemplate((variant && variant.asunto) || step.asunto || step.titulo, enr) || `(${enr.seq_nombre} — paso ${enr.paso})`;
+        cuerpoTxt = renderTemplate((variant && variant.cuerpo) || step.plantilla, enr);
+        variantName = multi ? String(variant.nombre || 'A') : '';
+      }
+      const { rows: [mbq] } = await pool.query(
+        `SELECT mb.id FROM lm_mailboxes mb JOIN sequences s ON s.outbound_client_id = mb.outbound_client_id AND s.user_id = mb.user_id
+          WHERE s.id=$1 AND mb.user_id=$2 AND mb.estado IN ('conectado','solo_envio') LIMIT 1`, [enr.sequence_id, enr.user_id]);
+      const token = crypto.randomBytes(12).toString('hex');
+      await pool.query(
+        `INSERT INTO lm_messages (user_id, contact_id, sequence_id, step_id, asunto, cuerpo, to_email, estado, track_token, variant, mailbox_id, scheduled_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,'awaiting',$8,$9,$10,$11)`,
+        [enr.user_id, enr.contact_id, enr.sequence_id, step.id, asunto, cuerpoTxt, enr.email, token, variantName, mbq ? mbq.id : null, enr.next_action_at || new Date().toISOString()]);
+      console.log(`[send-engine] borrador anticipado → ${enr.email} (${enr.seq_nombre} paso ${enr.paso}, envío ${enr.next_action_at ? new Date(enr.next_action_at).toISOString().slice(0, 10) : 'hoy'})`);
+    } catch (e) { console.warn('[send-engine] draft-preaprobado:', e.message); }
+  }
+}
+
 // ── Auto-activación por fecha: 'inicia el 5 de agosto' → ese día pasa a activa sola ──
 async function _autoActivate(pool) {
   const { rows } = await pool.query(`
@@ -517,6 +579,7 @@ async function tick(pool, apiBase, gmailCallback) {
   _running = true; _runningSince = Date.now();
   try {
     await _autoActivate(pool).catch(e => console.warn('[send-engine] auto-activar:', e.message));
+    await _draftPreapproved(pool).catch(e => console.warn('[send-engine] draft-preaprobado:', e.message));
     await _flushScheduled(pool).catch(e => console.warn('[send-engine] scheduled:', e.message));
     await _flushApproved(pool, apiBase).catch(e => console.warn('[send-engine] approved:', e.message));
     const { rows: configs } = await pool.query(`SELECT * FROM lm_send_settings WHERE enabled = TRUE`);

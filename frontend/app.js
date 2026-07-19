@@ -14717,7 +14717,7 @@ ${foot}
     return `<div class="seq-app${approved ? ' seq-app--ok' : ''}">
       <div class="seq-app__hd">
         <div class="seq-app__who"><b>${esc(nm)}</b>${a.cargo || a.empresa ? ` <span>· ${esc([a.cargo, a.empresa].filter(Boolean).join(', '))}</span>` : ''} <span>→ ${esc(a.to_email)}</span></div>
-        ${approved ? `<span class="ibx-b" style="background:var(--primary-soft);color:var(--primary)">Aprobado · en cola</span>` : `<span class="ibx-b ibx-b--ooo">Paso día ${a.paso_dia || '?'}</span>`}
+        ${approved ? `<span class="ibx-b" style="background:var(--primary-soft);color:var(--primary)">Aprobado · sale ${a.scheduled_at ? esc(new Date(a.scheduled_at) <= new Date() ? 'en breve' : new Date(a.scheduled_at).toLocaleDateString('es-PE', { weekday: 'short', day: '2-digit', month: 'short' })) : 'en breve'}</span>` : `<span class="ibx-b ibx-b--ooo">Paso día ${a.paso_dia || '?'}${a.scheduled_at ? ` · envío ${esc(new Date(a.scheduled_at).toLocaleDateString('es-PE', { weekday: 'short', day: '2-digit', month: 'short' }))}` : ''}</span>`}
       </div>
       <div class="seq-app__route">De <b>${mb ? esc(mb.email) : '⚠ sin buzón'}</b>${cli?.cc_email ? ` · CC <b>${esc(cli.cc_email)}</b>` : ' · sin CC'}</div>
       <input class="form-input seq-app__subj" id="app-subj-${a.id}" value="${esc(a.asunto)}" ${approved ? 'disabled' : ''} placeholder="Asunto">
@@ -17201,7 +17201,7 @@ ${foot}
       <div class="fin-pi-box__hd"><h3>${st ? 'Editar paso' : 'Nuevo paso'}</h3><button class="fin-pi-x" onclick="LeadManagerModule.closeStepDrawer()">✕</button></div>
       <div class="fin-pi-form">
         <div class="fin-pi-full step-sec-h"><span class="step-sec-n">1</span> El paso — cuándo y por dónde</div>
-        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Día (relativo)</span><input class="form-input" type="number" id="step-dia" min="1" value="${st ? st.dia : nextDia}"></label>
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Día (relativo)</span><input class="form-input" type="number" id="step-dia" min="1" value="${st ? st.dia : nextDia}" oninput="LeadManagerModule.stepDiaCal(${seqId})"><span class="seq-drip-hint" id="step-dia-cal"></span></label>
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Nombre interno (opcional)</span><input class="form-input" id="step-titulo" value="${st ? esc(st.titulo) : ''}" placeholder="Ej. Email 1 — intro"><span class="seq-drip-hint">Solo para identificar el paso en la lista. <b>No se envía</b> — el asunto del email va abajo.</span></label>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Canal del paso — define qué verás al hacer la tarea</span>
           <div class="step-canal-pick">${_CANALES.map(cn => `<button type="button" class="step-canal-b${(st?.canal || 'email') === cn ? ' on' : ''}" data-canal="${cn}" onclick="LeadManagerModule.stepPickCanal('${cn}')" title="${esc(_canalHintPlain(cn))}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${_TOUCH[cn][2]}</svg>${_TOUCH[cn][0]}</button>`).join('')}</div>
@@ -17223,7 +17223,21 @@ ${foot}
       </div></div></div>`;
     document.body.appendChild(m);
     _stepRenderMsg();
+    stepDiaCal(seqId);
     setTimeout(() => $('step-titulo')?.focus(), 60);
+  }
+  // Fecha calendario en vivo junto al "Día (relativo)" del editor de paso.
+  function stepDiaCal(seqId) {
+    const el = $('step-dia-cal'); if (!el) return;
+    const s = (_sequences || []).find(x => x.id === seqId);
+    const dia = parseInt($('step-dia')?.value) || 1;
+    if (!s || !s.starts_on) { el.innerHTML = 'La secuencia no tiene fecha de inicio — el día 1 es el del enrolamiento de cada contacto.'; return; }
+    const base = new Date(String(s.starts_on).slice(0, 10) + 'T00:00:00');
+    if (isNaN(base)) { el.textContent = ''; return; }
+    const d = new Date(base); d.setDate(d.getDate() + (dia - 1));
+    const r = _rollFwdLocal(d, _sanSendDays(s.send_days));
+    const moved = r.getTime() !== d.getTime();
+    el.innerHTML = `Cae el <b style="color:var(--primary)">${r.toLocaleDateString('es-PE', { weekday: 'long', day: '2-digit', month: 'long' })}</b>${moved ? ' (movido al siguiente día de cadencia permitido)' : ''}.`;
   }
   function closeStepDrawer() { document.getElementById('lm-step-modal')?.remove(); }
   function _stepHoraHint(seqId) {
@@ -19384,7 +19398,7 @@ ${foot}
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
     openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
     openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, confirmDeleteSequence, seqTab, seqCtAdvance, seqCtPause, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
-    seqAppAction, seqModeHint, stepPreview,
+    seqAppAction, seqModeHint, stepPreview, stepDiaCal,
     seqTaskOpen, seqDoClose, seqDoCopy, seqDoDone, seqDoSkip, seqDoPrev, seqDoEditStep, seqDoExit, seqOpenLinkedIn,
     openStepDrawer, closeStepDrawer, saveStep, confirmDeleteStep, seqInsertVar, stepUseTpl, tzSearch, tzPick, tzBlur,
     stepSetMode, stepSetField, stepAddVariant, stepDelVariant, stepFocusTa,

@@ -3452,7 +3452,7 @@ app.post('/api/lm/inbox/reply', requireAuth, async (req, res) => {
 app.get('/api/lm/sequences/:id/approvals', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(`
-      SELECT m.id, m.contact_id, m.step_id, m.asunto, m.cuerpo, m.to_email, m.estado, m.created_at,
+      SELECT m.id, m.contact_id, m.step_id, m.asunto, m.cuerpo, m.to_email, m.estado, m.created_at, m.scheduled_at,
              k.nombre, k.apellido, k.cargo, COALESCE(NULLIF(k.empresa_nombre,''), co.nombre, '') AS empresa,
              st.dia AS paso_dia, st.titulo AS paso_titulo
         FROM lm_messages m
