@@ -176,10 +176,22 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback) {
       JOIN sequences   s  ON s.id = cs.sequence_id AND s.estado = 'activa'
       JOIN lm_contacts k  ON k.id = cs.contact_id
       LEFT JOIN lm_companies co ON co.id = k.company_id
+      -- Canal del paso ACTUAL del contacto (el paso-ésimo en el orden de la secuencia).
+      LEFT JOIN LATERAL (
+        SELECT ss.canal FROM sequence_steps ss
+         WHERE ss.sequence_id = cs.sequence_id
+         ORDER BY ss.dia ASC, ss.orden ASC, ss.id ASC
+         OFFSET GREATEST(cs.paso - 1, 0) LIMIT 1
+      ) cur ON TRUE
      WHERE cs.user_id = $1 AND cs.estado = 'activo'
        AND (cs.next_action_at IS NULL OR cs.next_action_at <= NOW())
        -- Modo de envío: 'manual' = la secuencia se maneja externamente, el motor NO la toca.
        AND s.send_mode IN ('auto','preaprobado')
+       -- El motor SOLO maneja pasos de EMAIL. Los pasos manuales (WhatsApp/llamada/
+       -- LinkedIn/tarea) los completa la usuaria en el task-runner; al marcarlos "Hecha"
+       -- el enrolamiento avanza (PATCH). Así el paso 3 (email) NO avanza hasta que el
+       -- paso 2 (WhatsApp) se haga a mano. Sin esto el motor los auto-saltaba.
+       AND cur.canal = 'email'
        -- Intervalo anti-ráfaga POR SECUENCIA: espera N min desde el último envío de esta secuencia.
        AND NOT EXISTS (
             SELECT 1 FROM lm_messages mi
