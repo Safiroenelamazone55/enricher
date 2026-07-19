@@ -3265,6 +3265,147 @@ app.delete('/api/lm/mailboxes/:id', requireAuth, async (req, res) => {
   } catch (err) { console.error('[mailbox] DELETE', err.message); res.status(500).json({ error: 'Error al quitar el buzón' }); }
 });
 
+// ── Inbox unificado (Mailboxes F3): hilos por contacto entre lo enviado
+// (lm_messages) y lo recibido por el vigilante IMAP (lm_inbox_messages). ──
+
+// Lista de hilos: 1 fila por contacto con actividad de correo. El frontend
+// arma las pestañas con estos campos (last_in_at vs last_out_at, bounces…).
+app.get('/api/lm/inbox/threads', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      WITH inx AS (
+        SELECT contact_id,
+               MAX(received_at) FILTER (WHERE tipo IN ('reply','ooo'))          AS last_in_at,
+               COUNT(*)         FILTER (WHERE NOT leido AND tipo='reply')::int  AS unread,
+               COUNT(*)         FILTER (WHERE tipo='bounce')::int               AS bounces
+          FROM lm_inbox_messages
+         WHERE user_id=$1 AND contact_id IS NOT NULL
+         GROUP BY contact_id
+      ),
+      outx AS (
+        SELECT contact_id, MAX(sent_at) AS last_out_at, COUNT(*)::int AS sent_count
+          FROM lm_messages
+         WHERE user_id=$1 AND estado IN ('sent','replied','bounced')
+         GROUP BY contact_id
+      )
+      SELECT k.id AS contact_id, k.nombre, k.apellido, k.email, k.cargo,
+             COALESCE(NULLIF(k.empresa_nombre,''), co.nombre, '') AS empresa,
+             k.estado AS pipeline, k.disposition, k.outbound_client_id,
+             oc.nombre AS cliente, mb.email AS buzon,
+             i.last_in_at, COALESCE(i.unread,0) AS unread, COALESCE(i.bounces,0) AS bounces,
+             o.last_out_at, COALESCE(o.sent_count,0) AS sent_count,
+             li.asunto AS last_asunto, li.cuerpo AS last_snippet, li.tipo AS last_in_tipo
+        FROM lm_contacts k
+        LEFT JOIN inx  i ON i.contact_id = k.id
+        LEFT JOIN outx o ON o.contact_id = k.id
+        LEFT JOIN lm_companies co ON co.id = k.company_id
+        LEFT JOIN outbound_clients oc ON oc.id = k.outbound_client_id
+        LEFT JOIN lm_mailboxes mb ON mb.outbound_client_id = k.outbound_client_id AND mb.user_id = k.user_id
+        LEFT JOIN LATERAL (
+          SELECT asunto, LEFT(cuerpo, 160) AS cuerpo, tipo
+            FROM lm_inbox_messages
+           WHERE contact_id = k.id AND tipo IN ('reply','ooo')
+           ORDER BY received_at DESC LIMIT 1
+        ) li ON TRUE
+       WHERE k.user_id=$1 AND (i.contact_id IS NOT NULL OR o.contact_id IS NOT NULL)
+       ORDER BY GREATEST(COALESCE(i.last_in_at,'epoch'), COALESCE(o.last_out_at,'epoch')) DESC
+       LIMIT 400
+    `, [req.workspaceOwnerId]);
+    res.json(rows);
+  } catch (err) { console.error('[inbox] THREADS', err.message); res.status(500).json({ error: 'Error al cargar el inbox' }); }
+});
+
+// Hilo completo de un contacto: entrantes + salientes en orden cronológico.
+// Abrirlo marca como leídos los mensajes entrantes de ese contacto.
+app.get('/api/lm/inbox/thread/:contactId', requireAuth, async (req, res) => {
+  const cid = parseInt(req.params.contactId);
+  if (!cid) return res.status(400).json({ error: 'Contacto inválido' });
+  try {
+    const { rows: msgs } = await pool.query(`
+      SELECT * FROM (
+        SELECT 'out' AS dir, m.id, m.asunto, m.cuerpo, m.sent_at AS at, m.estado, '' AS tipo,
+               COALESCE(s.nombre,'') AS seq_nombre, m.step_id, mb.email AS buzon
+          FROM lm_messages m
+          LEFT JOIN sequences s ON s.id = m.sequence_id
+          LEFT JOIN lm_mailboxes mb ON mb.id = m.mailbox_id
+         WHERE m.user_id=$1 AND m.contact_id=$2 AND m.estado IN ('sent','replied','bounced','failed')
+        UNION ALL
+        SELECT 'in', im.id, im.asunto, im.cuerpo, im.received_at, '', im.tipo, '', NULL, im.from_email
+          FROM lm_inbox_messages im
+         WHERE im.user_id=$1 AND im.contact_id=$2
+      ) t ORDER BY at ASC NULLS FIRST
+    `, [req.workspaceOwnerId, cid]);
+    await pool.query(`UPDATE lm_inbox_messages SET leido=TRUE WHERE user_id=$1 AND contact_id=$2 AND NOT leido`,
+      [req.workspaceOwnerId, cid]);
+    const { rows: [contact] } = await pool.query(`
+      SELECT k.id, k.nombre, k.apellido, k.email, k.cargo,
+             COALESCE(NULLIF(k.empresa_nombre,''), co.nombre, '') AS empresa,
+             k.estado AS pipeline, k.disposition, k.outbound_client_id,
+             oc.nombre AS cliente, mb.id AS mailbox_id, mb.email AS buzon, mb.estado AS buzon_estado,
+             (SELECT s.nombre FROM lm_contact_sequences cs JOIN sequences s ON s.id=cs.sequence_id
+               WHERE cs.contact_id=k.id AND cs.user_id=$1 ORDER BY cs.created_at DESC LIMIT 1) AS seq_nombre,
+             (SELECT cs.estado FROM lm_contact_sequences cs
+               WHERE cs.contact_id=k.id AND cs.user_id=$1 ORDER BY cs.created_at DESC LIMIT 1) AS seq_estado
+        FROM lm_contacts k
+        LEFT JOIN lm_companies co ON co.id = k.company_id
+        LEFT JOIN outbound_clients oc ON oc.id = k.outbound_client_id
+        LEFT JOIN lm_mailboxes mb ON mb.outbound_client_id = k.outbound_client_id AND mb.user_id = k.user_id
+       WHERE k.id=$2 AND k.user_id=$1
+    `, [req.workspaceOwnerId, cid]);
+    res.json({ contact: contact || null, messages: msgs });
+  } catch (err) { console.error('[inbox] THREAD', err.message); res.status(500).json({ error: 'Error al cargar el hilo' }); }
+});
+
+// Responder desde el buzón del cliente (threading real con In-Reply-To).
+app.post('/api/lm/inbox/reply', requireAuth, async (req, res) => {
+  const b = req.body || {};
+  const cid = parseInt(b.contact_id);
+  const cuerpo = String(b.cuerpo || '').trim();
+  if (!cid || !cuerpo) return res.status(400).json({ error: 'Falta el contacto o el mensaje' });
+  try {
+    const { rows: [k] } = await pool.query(
+      `SELECT k.*, mb.id AS mb_id FROM lm_contacts k
+        LEFT JOIN lm_mailboxes mb ON mb.outbound_client_id = k.outbound_client_id
+             AND mb.user_id = k.user_id AND mb.estado IN ('conectado','solo_envio')
+       WHERE k.id=$1 AND k.user_id=$2`, [cid, req.workspaceOwnerId]);
+    if (!k) return res.status(404).json({ error: 'Contacto no encontrado' });
+    if (!k.email) return res.status(400).json({ error: 'El contacto no tiene email' });
+    if (!k.mb_id) return res.status(400).json({ error: 'El cliente de este contacto no tiene buzón conectado' });
+    const { rows: [mb] } = await pool.query(`SELECT * FROM lm_mailboxes WHERE id=$1`, [k.mb_id]);
+
+    // Threading: responder al último entrante (Message-ID + asunto con Re:).
+    const { rows: [lastIn] } = await pool.query(
+      `SELECT message_id, asunto FROM lm_inbox_messages
+        WHERE user_id=$1 AND contact_id=$2 AND tipo IN ('reply','ooo')
+        ORDER BY received_at DESC LIMIT 1`, [req.workspaceOwnerId, cid]);
+    let asunto = String(b.asunto || '').trim();
+    if (!asunto) asunto = lastIn?.asunto ? (/^re:/i.test(lastIn.asunto) ? lastIn.asunto : `Re: ${lastIn.asunto}`) : '(sin asunto)';
+
+    const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const html = `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.55;color:#1a1a2e">${esc(cuerpo).replace(/\n/g, '<br>')}</div>`;
+
+    const pass = mailboxSvc.decPass(mb.pass_enc);
+    const sent = await mailboxSvc.sendFromMailbox(mb, pass, {
+      to: k.email, subject: asunto, text: cuerpo, html,
+      fromName: String(b.from_name || '').trim() || undefined,
+      inReplyTo: lastIn?.message_id || undefined,
+      references: lastIn?.message_id || undefined,
+    });
+    const { rows: [msg] } = await pool.query(
+      `INSERT INTO lm_messages (user_id, contact_id, asunto, cuerpo, to_email, estado, sent_at, mailbox_id, smtp_message_id)
+       VALUES ($1,$2,$3,$4,$5,'sent',NOW(),$6,$7) RETURNING id, asunto, cuerpo, sent_at`,
+      [req.workspaceOwnerId, cid, asunto, cuerpo, k.email, mb.id, sent.messageId || '']);
+    await pool.query(
+      `INSERT INTO activities (user_id, contact_id, tipo, canal, nota, fecha, estado)
+       VALUES ($1,$2,'email','email',$3,NOW(),'hecha')`,
+      [req.workspaceOwnerId, cid, `[Inbox] Respuesta enviada: ${asunto}`]);
+    res.status(201).json({ ok: true, message: msg });
+  } catch (err) {
+    console.error('[inbox] REPLY', err.message);
+    res.status(500).json({ error: mailboxSvc._friendlyErr(err) });
+  }
+});
+
 // LM FASE A — motor de envío: settings, tracking, mensajes, verificación
 // ═══════════════════════════════════════════════════════════════════
 

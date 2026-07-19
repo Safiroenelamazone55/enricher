@@ -13441,7 +13441,7 @@ const LeadManagerModule = (() => {
     // LM Fase A: cargas lazy por sección (motor de envío)
     if (section === 'dashboard') _loadToday();
     if (section === 'settings')  { _loadSendCfg(); _loadAiCfg(); }
-    if (section === 'inbox')     { _lmMsgs = null; _loadLmMsgs(); }
+    if (section === 'inbox')     { _lmMsgs = null; _ibThreads = null; _ibActive = null; _ibThread = null; _ibReload(); _loadLmMsgs(); }
     if (section === 'leads')     _reloadActivities();
   }
   function openClient(id) { _activeClient = id; _section = 'client'; _refreshNav(); _renderBody(); if (_mailboxes === null) _mbReload(); }
@@ -15528,15 +15528,168 @@ ${foot}
       </div>
     </div>`;
   }
+  // ── Inbox unificado (Mailboxes F3): hilos reales entrantes/salientes ──
+  let _ibThreads = null;   // null = cargando
+  let _ibTab     = 'sin';  // sin | resp | env | reb
+  let _ibCli     = 0;      // filtro por cliente outbound (0 = todos)
+  let _ibActive  = null;   // contact_id del hilo abierto
+  let _ibThread  = null;   // { contact, messages } del hilo abierto
+  let _ibSending = false;
+
+  async function _ibReload() {
+    try { const r = await apiFetch(`${API}/lm/inbox/threads`); _ibThreads = (r && r.ok) ? await r.json() : []; }
+    catch { _ibThreads = []; }
+    if (_section === 'inbox') _ibPaint();
+  }
+  // Categoría del hilo → pestaña. 'sin' = lo último es una entrada del prospecto
+  // (nos toca responder); 'resp' = ya le respondimos; 'env' = solo salientes.
+  function _ibCat(t) {
+    const inAt  = t.last_in_at  ? new Date(t.last_in_at).getTime()  : 0;
+    const outAt = t.last_out_at ? new Date(t.last_out_at).getTime() : 0;
+    if (t.bounces > 0 && !inAt) return 'reb';
+    if (inAt && inAt >= outAt) return 'sin';
+    if (inAt) return 'resp';
+    return 'env';
+  }
+  function _ibFiltered() {
+    const all = Array.isArray(_ibThreads) ? _ibThreads : [];
+    return _ibCli ? all.filter(t => t.outbound_client_id === _ibCli) : all;
+  }
+  function _ibFmtAgo(d) {
+    if (!d) return '';
+    const ms = Date.now() - new Date(d).getTime();
+    const m = Math.floor(ms / 60000);
+    if (m < 1) return 'ahora'; if (m < 60) return `${m}m`;
+    const h = Math.floor(m / 60); if (h < 24) return `${h}h`;
+    const dd = Math.floor(h / 24); if (dd < 7) return `${dd}d`;
+    return new Date(d).toLocaleDateString('es-PE', { day: '2-digit', month: 'short' });
+  }
+  function _ibRow(t) {
+    const cat = _ibCat(t);
+    const nm = [t.nombre, t.apellido].filter(Boolean).join(' ') || t.email;
+    const when = _ibFmtAgo(t.last_in_at && (!t.last_out_at || new Date(t.last_in_at) > new Date(t.last_out_at)) ? t.last_in_at : t.last_out_at);
+    const snippet = t.last_snippet || t.last_asunto || (t.sent_count ? `${t.sent_count} enviados, sin respuesta` : '');
+    const badge = cat === 'reb' ? `<span class="ibx-b ibx-b--reb">Rebote</span>`
+                : t.last_in_tipo === 'ooo' ? `<span class="ibx-b ibx-b--ooo">OOO</span>` : '';
+    return `<div class="ibx-row${_ibActive === t.contact_id ? ' active' : ''}${t.unread > 0 ? ' unread' : ''}" onclick="LeadManagerModule.ibOpen(${t.contact_id})">
+      <div class="ibx-row__l1"><span class="ibx-row__nm">${t.unread > 0 ? '<span class="ibx-dot"></span>' : ''}${esc(nm)}</span><span class="ibx-row__t">${when}</span></div>
+      <div class="ibx-row__sn">${esc(String(snippet).slice(0, 90))}</div>
+      <div class="ibx-row__meta">${esc(t.buzon || '')}${t.cliente ? ` · ${esc(t.cliente)}` : ''} ${badge}</div>
+    </div>`;
+  }
+  function _ibMsg(m) {
+    const inMsg = m.dir === 'in';
+    const when = m.at ? new Date(m.at).toLocaleString('es-PE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+    const tag = inMsg
+      ? (m.tipo === 'ooo' ? ' · respuesta automática' : m.tipo === 'bounce' ? ' · rebote' : '')
+      : (m.seq_nombre ? ` · ${esc(m.seq_nombre)}` : '') + (m.estado === 'failed' ? ' · FALLÓ' : '');
+    return `<div class="ibx-m ${inMsg ? (m.tipo === 'bounce' ? 'ibx-m--reb' : 'ibx-m--in') : 'ibx-m--out'}">
+      <div class="ibx-m__meta">${esc(inMsg ? (m.buzon || '') : ('Tú · ' + (m.buzon || '')))}${tag} · ${when}</div>
+      ${m.asunto ? `<div class="ibx-m__subj">${esc(m.asunto)}</div>` : ''}
+      <div class="ibx-m__body">${esc(m.cuerpo || '').replace(/\n/g, '<br>')}</div>
+    </div>`;
+  }
+  function _ibConvHtml() {
+    if (!_ibActive) return `<div class="ibx-empty">Elige una conversación de la lista para leerla y responder desde el buzón del cliente.</div>`;
+    if (!_ibThread) return `<div class="ibx-empty">Cargando conversación…</div>`;
+    const c = _ibThread.contact || {};
+    const nm = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || '';
+    const ini = (nm || '?').split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
+    const seqInfo = c.seq_nombre ? `${esc(c.seq_nombre)}${c.seq_estado === 'respondido' ? ' · <span style="color:var(--brand)">pausada por respuesta</span>' : c.seq_estado ? ` · ${esc(c.seq_estado)}` : ''}` : 'Sin secuencia';
+    const canSend = !!c.mailbox_id;
+    return `
+      <div class="ibx-conv__hd">
+        <div class="ibx-av">${esc(ini)}</div>
+        <div class="ibx-conv__who"><div class="ibx-conv__nm">${esc(nm)}${c.cargo || c.empresa ? ` <span class="ibx-conv__sub">· ${esc([c.cargo, c.empresa].filter(Boolean).join(', '))}</span>` : ''}</div>
+        <div class="ibx-conv__seq">${seqInfo}</div></div>
+        <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openContactPage(${c.id})">Ver ficha</button>
+      </div>
+      <div class="ibx-msgs" id="ibx-msgs">${(_ibThread.messages || []).map(_ibMsg).join('') || '<div class="ibx-empty">Sin mensajes aún.</div>'}</div>
+      <div class="ibx-replybox">
+        ${canSend
+          ? `<textarea class="ibx-ta" id="ibx-ta" rows="2" placeholder="Responder como ${esc(c.buzon)}…"></textarea>
+             <button class="btn btn--primary btn--sm" id="ibx-send" onclick="LeadManagerModule.ibSend()">Enviar</button>`
+          : `<div class="ibx-nosend">El cliente <b>${esc(c.cliente || '')}</b> no tiene buzón conectado — conéctalo en su ficha para responder desde aquí.</div>`}
+      </div>`;
+  }
+  function _ibListHtml() {
+    if (_ibThreads === null) return `<div class="ibx-empty">Cargando hilos…</div>`;
+    const rows = _ibFiltered().filter(t => _ibCat(t) === _ibTab);
+    if (!rows.length) {
+      const M = { sin: 'Nada pendiente de responder 🎉', resp: 'Aún no hay conversaciones respondidas.', reb: 'Sin rebotes — buena señal.', env: '' };
+      return `<div class="ibx-empty">${M[_ibTab] || 'Sin conversaciones.'}</div>`;
+    }
+    return rows.map(_ibRow).join('');
+  }
+  function _ibCounts() {
+    const f = _ibFiltered(); const n = { sin: 0, resp: 0, env: 0, reb: 0 };
+    f.forEach(t => n[_ibCat(t)]++);
+    return n;
+  }
+  function _ibPaint() { const el = document.getElementById('ibx-wrap'); if (el) el.outerHTML = _ibWrapHtml(); }
+  function _ibWrapHtml() {
+    const n = _ibCounts();
+    const unread = _ibFiltered().reduce((s, t) => s + (t.unread || 0), 0);
+    const TABS = [['sin', 'Sin responder', n.sin], ['resp', 'Respondidos', n.resp], ['env', 'Enviados', n.env], ['reb', 'Rebotes', n.reb]];
+    return `<div id="ibx-wrap">
+      <div class="ibx-top">
+        <div class="ibx-tabs">${TABS.map(([k, l, c]) => `<button class="ibx-tab${_ibTab === k ? ' active' : ''}${k === 'reb' && c ? ' ibx-tab--warn' : ''}" onclick="LeadManagerModule.ibTab('${k}')">${l}${c ? ` <span class="ibx-tab__n">${c}</span>` : ''}</button>`).join('')}</div>
+        <span class="sp"></span>
+        ${unread ? `<span class="ibx-unread">${unread} sin leer</span>` : ''}
+        <select class="dle-i ibx-fcli" onchange="LeadManagerModule.ibCli(this.value)"><option value="0">Todos los clientes</option>${_clients.map(c => `<option value="${c.id}"${_ibCli === c.id ? ' selected' : ''}>${esc(c.nombre)}</option>`).join('')}</select>
+      </div>
+      ${_ibTab === 'env'
+        ? `<div id="lm-real-inbox">${_realInboxHtml()}</div>`
+        : `<div class="ibx-grid">
+             <div class="ibx-list">${_ibListHtml()}</div>
+             <div class="ibx-conv">${_ibConvHtml()}</div>
+           </div>`}
+    </div>`;
+  }
+  async function ibOpen(cid) {
+    _ibActive = cid; _ibThread = null;
+    const t = (_ibThreads || []).find(x => x.contact_id === cid); if (t) t.unread = 0;
+    _ibPaint();
+    try {
+      const r = await apiFetch(`${API}/lm/inbox/thread/${cid}`);
+      _ibThread = (r && r.ok) ? await r.json() : { contact: null, messages: [] };
+    } catch { _ibThread = { contact: null, messages: [] }; }
+    if (_section === 'inbox' && _ibActive === cid) {
+      _ibPaint();
+      const box = document.getElementById('ibx-msgs'); if (box) box.scrollTop = box.scrollHeight;
+    }
+  }
+  function ibTab(k) { _ibTab = k; _ibPaint(); if (k === 'env' && _lmMsgs === null) _loadLmMsgs(); }
+  function ibCli(v) { _ibCli = parseInt(v) || 0; _ibPaint(); }
+  async function ibSend() {
+    if (_ibSending || !_ibActive) return;
+    const ta = document.getElementById('ibx-ta'); const cuerpo = (ta?.value || '').trim();
+    if (!cuerpo) return;
+    _ibSending = true;
+    const btn = document.getElementById('ibx-send'); if (btn) { btn.disabled = true; btn.textContent = 'Enviando…'; }
+    try {
+      const res = await apiFetch(`${API}/lm/inbox/reply`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact_id: _ibActive, cuerpo }) });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'No se pudo enviar');
+      if (_ibThread) _ibThread.messages.push({ dir: 'out', asunto: d.message?.asunto || '', cuerpo, at: new Date().toISOString(), estado: 'sent', buzon: _ibThread.contact?.buzon || '' });
+      const t = (_ibThreads || []).find(x => x.contact_id === _ibActive);
+      if (t) { t.last_out_at = new Date().toISOString(); }
+      _ibPaint();
+      const box = document.getElementById('ibx-msgs'); if (box) box.scrollTop = box.scrollHeight;
+      showBanner('✓ Respuesta enviada desde el buzón del cliente', 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+    finally { _ibSending = false; const b = document.getElementById('ibx-send'); if (b) { b.disabled = false; b.textContent = 'Enviar'; } }
+  }
+
   function _vInbox() {
     const reps = _replies();
     return `
       <div class="lm-sec-head">
-        <div><h2 class="lm-sec-title">Inbox / Respuestas</h2><p class="lm-sec-sub">Clasifica respuestas por sentimiento, mueve el stage y crea tareas</p></div>
-        ${_data.length ? `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openActivityDrawer(null,null,0,'respuesta')">＋ Registrar respuesta</button>` : ''}
+        <div><h2 class="lm-sec-title">Inbox</h2><p class="lm-sec-sub">Conversaciones reales por buzón: respuestas, rebotes y todo lo enviado</p></div>
+        ${_data.length ? `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openActivityDrawer(null,null,0,'respuesta')">＋ Registrar respuesta manual</button>` : ''}
       </div>
-      <div id="lm-real-inbox">${_realInboxHtml()}</div>
-      ${reps.length ? `<div class="lm-dash-head" style="margin-top:14px"><h3 class="lm-dash-h3">Respuestas registradas</h3></div><div class="lm-inbox-grid">${reps.map(_inboxCard).join('')}</div>` : ''}`;
+      ${_ibWrapHtml()}
+      ${reps.length ? `<div class="lm-dash-head" style="margin-top:14px"><h3 class="lm-dash-h3">Respuestas registradas a mano</h3></div><div class="lm-inbox-grid">${reps.map(_inboxCard).join('')}</div>` : ''}`;
   }
   async function setReplySentiment(actId, sent) {
     const a = _activities.find(x => x.id === actId); if (!a) return;
@@ -19025,6 +19178,7 @@ ${foot}
     sqSetCli, sqSetEst, sqSetQ, cmSetCli, cmSetEst, cmSetQ,
     seqRunSetCanal, seqTaskSetDue,
     mbOpen, mbClose, mbSave, mbTest, mbDelete, mbProv,
+    ibOpen, ibTab, ibCli, ibSend,
     pendingAcceptOpen, pendingAcceptToggleAll, pendingAcceptApplyFilters, pendingAcceptMark,
     openActivityDrawer, closeActivityDrawer, saveActivity, confirmDeleteActivity, markActDone,
     setReplySentiment, setLeadStage,
