@@ -451,9 +451,11 @@ async function _flushApproved(pool, apiBase) {
            mb.id AS mb_ok, mb.email AS mb_email, mb.pass_enc, mb.smtp_host, mb.smtp_port, mb.smtp_secure,
            mb.imap_host, mb.imap_port, mb.provider, mb.sent_folder, mb.estado AS mb_estado,
            cfg.from_name, cfg.firma, cfg.track_opens, cfg.track_clicks,
-           COALESCE(oc.cc_email,'') AS cc_email, COALESCE(st.cc_off, FALSE) AS cc_off
+           COALESCE(oc.cc_email,'') AS cc_email, COALESCE(st.cc_off, FALSE) AS cc_off,
+           k.disposition AS k_disposition
       FROM lm_messages m
       JOIN sequences s ON s.id = m.sequence_id
+      JOIN lm_contacts k ON k.id = m.contact_id
       LEFT JOIN lm_mailboxes mb ON mb.id = m.mailbox_id
       LEFT JOIN lm_send_settings cfg ON cfg.user_id = m.user_id
       LEFT JOIN outbound_clients oc ON oc.id = s.outbound_client_id
@@ -470,6 +472,14 @@ async function _flushApproved(pool, apiBase) {
   `);
   for (const m of due) {
     try {
+      // Guarda de opt-out: si el contacto quedó "no interesado"/"no contactar" DESPUÉS de
+      // aprobar el borrador (o de crearlo), el email aprobado NO sale jamás.
+      if (['no_interesado', 'no_contactar'].includes(m.k_disposition)) {
+        await pool.query(`UPDATE lm_messages SET estado='failed', error=$1 WHERE id=$2`,
+          ['No enviado: el contacto está marcado como ' + m.k_disposition.replace('_', ' '), m.id]);
+        console.log(`[send-engine] approved SKIP → ${m.to_email} (disposición ${m.k_disposition})`);
+        continue;
+      }
       if (!m.mb_ok || !['conectado', 'solo_envio'].includes(m.mb_estado)) throw new Error('El buzón ya no está conectado');
       const { decPass, sendFromMailbox } = require('./mailboxService');
       const html = buildHtml({
@@ -508,7 +518,7 @@ async function _draftPreapproved(pool) {
     SELECT cs.id AS enr_id, cs.user_id, cs.contact_id, cs.sequence_id, cs.paso, cs.next_action_at,
            k.nombre, k.apellido, k.email, k.cargo, k.empresa_nombre, k.ciudad, k.pais,
            k.seniority, k.departamento, k.buyer_role, k.region, k.contact_priority, k.email_status,
-           co.nombre AS company_nombre, s.nombre AS seq_nombre
+           k.disposition, co.nombre AS company_nombre, s.nombre AS seq_nombre
       FROM lm_contact_sequences cs
       JOIN sequences s ON s.id = cs.sequence_id AND s.estado='activa' AND s.send_mode='preaprobado'
       JOIN lm_contacts k ON k.id = cs.contact_id
@@ -522,6 +532,8 @@ async function _draftPreapproved(pool) {
     try {
       // Guardas suaves: sin email o sin verificar → lo resuelve el flujo principal cuando toque.
       if (!enr.email || !SENDABLE_STATUS.includes(enr.email_status)) continue;
+      // Opt-out: a un contacto descartado no se le redacta ni el borrador.
+      if (['no_interesado', 'no_contactar'].includes(enr.disposition)) continue;
       const { rows: steps } = await pool.query(
         `SELECT id, dia, canal, titulo, plantilla, espera_dias, variants, variant_mode, variant_field, asunto, cc_off
            FROM sequence_steps WHERE sequence_id=$1 ORDER BY dia ASC, orden ASC, id ASC`, [enr.sequence_id]);
