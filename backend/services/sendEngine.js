@@ -341,10 +341,58 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback) {
   }
 }
 
+// ── Envíos programados (Inbox): despacha los 'scheduled' vencidos ──
+// Corren FUERA de la ventana/límites del workspace: la usuaria eligió esa hora
+// a propósito (p. ej. la ventana recomendada del país del prospecto).
+async function _flushScheduled(pool) {
+  const { rows: due } = await pool.query(`
+    SELECT m.id, m.user_id, m.contact_id, m.asunto, m.cuerpo, m.to_email, m.in_reply_to, m.mailbox_id,
+           mb.id AS mb_ok, mb.email AS mb_email, mb.pass_enc, mb.smtp_host, mb.smtp_port, mb.smtp_secure,
+           mb.imap_host, mb.imap_port, mb.provider, mb.sent_folder, mb.estado AS mb_estado,
+           cfg.from_name
+      FROM lm_messages m
+      LEFT JOIN lm_mailboxes mb ON mb.id = m.mailbox_id
+      LEFT JOIN lm_send_settings cfg ON cfg.user_id = m.user_id
+     WHERE m.estado='scheduled' AND m.scheduled_at <= NOW()
+     ORDER BY m.scheduled_at ASC
+     LIMIT 10
+  `);
+  for (const m of due) {
+    try {
+      if (!m.mb_ok || !['conectado', 'solo_envio'].includes(m.mb_estado)) {
+        throw new Error('El buzón ya no está conectado');
+      }
+      const { decPass, sendFromMailbox } = require('./mailboxService');
+      const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const html = `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.55;color:#1a1a2e">${esc(m.cuerpo).replace(/\n/g, '<br>')}</div>`;
+      const mb = { id: m.mb_ok, email: m.mb_email, pass_enc: m.pass_enc, smtp_host: m.smtp_host, smtp_port: m.smtp_port,
+                   smtp_secure: m.smtp_secure, imap_host: m.imap_host, imap_port: m.imap_port, provider: m.provider, sent_folder: m.sent_folder };
+      const sent = await sendFromMailbox(mb, decPass(m.pass_enc), {
+        to: m.to_email, subject: m.asunto, text: m.cuerpo, html,
+        fromName: m.from_name || undefined,
+        inReplyTo: m.in_reply_to || undefined,
+        references: m.in_reply_to || undefined,
+      });
+      await pool.query(`UPDATE lm_messages SET estado='sent', sent_at=NOW(), smtp_message_id=$1 WHERE id=$2`,
+        [sent.messageId || '', m.id]);
+      await pool.query(
+        `INSERT INTO activities (user_id, contact_id, tipo, canal, nota, fecha, estado)
+         VALUES ($1,$2,'email','email',$3,NOW(),'hecha')`,
+        [m.user_id, m.contact_id, `[Inbox] Respuesta programada enviada: ${m.asunto}`]);
+      console.log(`[send-engine] scheduled → ${m.to_email} ("${m.asunto}")`);
+    } catch (err) {
+      await pool.query(`UPDATE lm_messages SET estado='failed', error=$1 WHERE id=$2`,
+        [err.message.slice(0, 500), m.id]).catch(() => {});
+      console.warn(`[send-engine] scheduled fail → ${m.to_email}: ${err.message}`);
+    }
+  }
+}
+
 async function tick(pool, apiBase, gmailCallback) {
   if (_running) return; // no solapar ticks
   _running = true;
   try {
+    await _flushScheduled(pool).catch(e => console.warn('[send-engine] scheduled:', e.message));
     const { rows: configs } = await pool.query(`SELECT * FROM lm_send_settings WHERE enabled = TRUE`);
     for (const cfg of configs) {
       try { await _tickWorkspace(pool, cfg, apiBase, gmailCallback); }

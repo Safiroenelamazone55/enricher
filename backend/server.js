@@ -3323,12 +3323,12 @@ app.get('/api/lm/inbox/thread/:contactId', requireAuth, async (req, res) => {
   try {
     const { rows: msgs } = await pool.query(`
       SELECT * FROM (
-        SELECT 'out' AS dir, m.id, m.asunto, m.cuerpo, m.sent_at AS at, m.estado, '' AS tipo,
+        SELECT 'out' AS dir, m.id, m.asunto, m.cuerpo, COALESCE(m.sent_at, m.scheduled_at) AS at, m.estado, '' AS tipo,
                COALESCE(s.nombre,'') AS seq_nombre, m.step_id, mb.email AS buzon
           FROM lm_messages m
           LEFT JOIN sequences s ON s.id = m.sequence_id
           LEFT JOIN lm_mailboxes mb ON mb.id = m.mailbox_id
-         WHERE m.user_id=$1 AND m.contact_id=$2 AND m.estado IN ('sent','replied','bounced','failed')
+         WHERE m.user_id=$1 AND m.contact_id=$2 AND m.estado IN ('sent','replied','bounced','failed','scheduled')
         UNION ALL
         SELECT 'in', im.id, im.asunto, im.cuerpo, im.received_at, '', im.tipo, '', NULL, im.from_email
           FROM lm_inbox_messages im
@@ -3384,6 +3384,16 @@ app.post('/api/lm/inbox/reply', requireAuth, async (req, res) => {
     const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const html = `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.55;color:#1a1a2e">${esc(cuerpo).replace(/\n/g, '<br>')}</div>`;
 
+    // ── Envío programado: se guarda 'scheduled' y el motor lo despacha al vencer ──
+    const schedAt = b.scheduled_at ? new Date(b.scheduled_at) : null;
+    if (schedAt && !isNaN(schedAt) && schedAt.getTime() > Date.now() + 30 * 1000) {
+      const { rows: [msg] } = await pool.query(
+        `INSERT INTO lm_messages (user_id, contact_id, asunto, cuerpo, to_email, estado, scheduled_at, mailbox_id, in_reply_to)
+         VALUES ($1,$2,$3,$4,$5,'scheduled',$6,$7,$8) RETURNING id, asunto, cuerpo, scheduled_at`,
+        [req.workspaceOwnerId, cid, asunto, cuerpo, k.email, schedAt.toISOString(), mb.id, lastIn?.message_id || '']);
+      return res.status(201).json({ ok: true, scheduled: true, message: msg });
+    }
+
     const pass = mailboxSvc.decPass(mb.pass_enc);
     const sent = await mailboxSvc.sendFromMailbox(mb, pass, {
       to: k.email, subject: asunto, text: cuerpo, html,
@@ -3404,6 +3414,17 @@ app.post('/api/lm/inbox/reply', requireAuth, async (req, res) => {
     console.error('[inbox] REPLY', err.message);
     res.status(500).json({ error: mailboxSvc._friendlyErr(err) });
   }
+});
+
+// Cancelar un envío programado (solo mientras siga 'scheduled').
+app.delete('/api/lm/inbox/scheduled/:id', requireAuth, async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(
+      `DELETE FROM lm_messages WHERE id=$1 AND user_id=$2 AND estado='scheduled'`,
+      [req.params.id, req.workspaceOwnerId]);
+    if (!rowCount) return res.status(404).json({ error: 'Ese envío ya salió o no existe' });
+    res.json({ ok: true });
+  } catch (err) { console.error('[inbox] SCHED DEL', err.message); res.status(500).json({ error: 'Error al cancelar' }); }
 });
 
 // LM FASE A — motor de envío: settings, tracking, mensajes, verificación

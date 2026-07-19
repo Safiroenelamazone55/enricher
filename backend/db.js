@@ -1204,6 +1204,11 @@ async function initDb() {
     // smtp_message_id = header Message-ID (threading real en respuestas).
     await pool.query(`ALTER TABLE lm_messages ADD COLUMN IF NOT EXISTS mailbox_id      INTEGER REFERENCES lm_mailboxes(id) ON DELETE SET NULL;`);
     await pool.query(`ALTER TABLE lm_messages ADD COLUMN IF NOT EXISTS smtp_message_id TEXT NOT NULL DEFAULT '';`);
+    // Envío programado (estado='scheduled'): el motor lo despacha cuando scheduled_at vence.
+    // in_reply_to se congela al programar para conservar el threading aunque lleguen más correos.
+    await pool.query(`ALTER TABLE lm_messages ADD COLUMN IF NOT EXISTS scheduled_at TIMESTAMPTZ;`);
+    await pool.query(`ALTER TABLE lm_messages ADD COLUMN IF NOT EXISTS in_reply_to  TEXT NOT NULL DEFAULT '';`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS lm_messages_sched_idx ON lm_messages (estado, scheduled_at) WHERE estado='scheduled';`);
 
     // ── LM · A/B (Fase B3): variante usada en cada envío/touch, para medir cuál convierte ──
     await pool.query(`ALTER TABLE lm_messages ADD COLUMN IF NOT EXISTS variant TEXT NOT NULL DEFAULT '';`);

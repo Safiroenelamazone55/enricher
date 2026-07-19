@@ -15580,6 +15580,15 @@ ${foot}
   function _ibMsg(m) {
     const inMsg = m.dir === 'in';
     const when = m.at ? new Date(m.at).toLocaleString('es-PE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+    // Envío programado pendiente: burbuja punteada con hora y botón para cancelar.
+    if (!inMsg && m.estado === 'scheduled') {
+      return `<div class="ibx-m ibx-m--out ibx-m--sched">
+        <div class="ibx-m__meta"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:-1px"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg> Programado · saldrá el ${when}
+          <button class="ibx-m__cancel" onclick="LeadManagerModule.ibCancelSched(${m.id})">Cancelar</button></div>
+        ${m.asunto ? `<div class="ibx-m__subj">${esc(m.asunto)}</div>` : ''}
+        <div class="ibx-m__body">${esc(m.cuerpo || '').replace(/\n/g, '<br>')}</div>
+      </div>`;
+    }
     const tag = inMsg
       ? (m.tipo === 'ooo' ? ' · respuesta automática' : m.tipo === 'bounce' ? ' · rebote' : '')
       : (m.seq_nombre ? ` · ${esc(m.seq_nombre)}` : '') + (m.estado === 'failed' ? ' · FALLÓ' : '');
@@ -15608,7 +15617,21 @@ ${foot}
       <div class="ibx-replybox">
         ${canSend
           ? `<textarea class="ibx-ta" id="ibx-ta" rows="2" placeholder="Responder como ${esc(c.buzon)}…"></textarea>
-             <button class="btn btn--primary btn--sm" id="ibx-send" onclick="LeadManagerModule.ibSend()">Enviar</button>`
+             <div class="ibx-sendgrp">
+               <button class="btn btn--primary btn--sm" id="ibx-send" onclick="LeadManagerModule.ibSend()">Enviar</button>
+               <button class="ibx-clock" title="Programar envío" onclick="LeadManagerModule.ibSchedToggle(event)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg></button>
+               <div class="ibx-sched" id="ibx-sched" style="display:none" onclick="event.stopPropagation()">
+                 <div class="ibx-sched__t">Programar envío</div>
+                 <button class="ibx-sched__opt" onclick="LeadManagerModule.ibSchedPick('h1')">En 1 hora</button>
+                 <button class="ibx-sched__opt" onclick="LeadManagerModule.ibSchedPick('h3')">En 3 horas</button>
+                 <button class="ibx-sched__opt" onclick="LeadManagerModule.ibSchedPick('man9')">Mañana 9:00</button>
+                 <button class="ibx-sched__opt" onclick="LeadManagerModule.ibSchedPick('lun9')">Lunes 9:00</button>
+                 <div class="ibx-sched__custom">
+                   <input type="datetime-local" class="dle-i" id="ibx-sched-dt" style="font-size:.74rem;padding:5px 7px">
+                   <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.ibSchedPick('custom')">OK</button>
+                 </div>
+               </div>
+             </div>`
           : `<div class="ibx-nosend">El cliente <b>${esc(c.cliente || '')}</b> no tiene buzón conectado — conéctalo en su ficha para responder desde aquí.</div>`}
       </div>`;
   }
@@ -15661,24 +15684,70 @@ ${foot}
   }
   function ibTab(k) { _ibTab = k; _ibPaint(); if (k === 'env' && _lmMsgs === null) _loadLmMsgs(); }
   function ibCli(v) { _ibCli = parseInt(v) || 0; _ibPaint(); }
-  async function ibSend() {
+  async function ibSend(schedIso) {
     if (_ibSending || !_ibActive) return;
     const ta = document.getElementById('ibx-ta'); const cuerpo = (ta?.value || '').trim();
-    if (!cuerpo) return;
+    if (!cuerpo) { if (schedIso) showBanner('Escribe el mensaje antes de programarlo', 'info'); return; }
     _ibSending = true;
-    const btn = document.getElementById('ibx-send'); if (btn) { btn.disabled = true; btn.textContent = 'Enviando…'; }
+    const btn = document.getElementById('ibx-send'); if (btn) { btn.disabled = true; btn.textContent = schedIso ? 'Programando…' : 'Enviando…'; }
     try {
-      const res = await apiFetch(`${API}/lm/inbox/reply`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact_id: _ibActive, cuerpo }) });
+      const body = { contact_id: _ibActive, cuerpo };
+      if (schedIso) body.scheduled_at = schedIso;
+      const res = await apiFetch(`${API}/lm/inbox/reply`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || 'No se pudo enviar');
-      if (_ibThread) _ibThread.messages.push({ dir: 'out', asunto: d.message?.asunto || '', cuerpo, at: new Date().toISOString(), estado: 'sent', buzon: _ibThread.contact?.buzon || '' });
+      if (_ibThread) _ibThread.messages.push(d.scheduled
+        ? { dir: 'out', id: d.message?.id, asunto: d.message?.asunto || '', cuerpo, at: d.message?.scheduled_at || schedIso, estado: 'scheduled', buzon: _ibThread.contact?.buzon || '' }
+        : { dir: 'out', asunto: d.message?.asunto || '', cuerpo, at: new Date().toISOString(), estado: 'sent', buzon: _ibThread.contact?.buzon || '' });
       const t = (_ibThreads || []).find(x => x.contact_id === _ibActive);
-      if (t) { t.last_out_at = new Date().toISOString(); }
+      if (t && !d.scheduled) { t.last_out_at = new Date().toISOString(); }
       _ibPaint();
       const box = document.getElementById('ibx-msgs'); if (box) box.scrollTop = box.scrollHeight;
-      showBanner('✓ Respuesta enviada desde el buzón del cliente', 'success');
+      showBanner(d.scheduled
+        ? `🕑 Programado — saldrá el ${new Date(d.message?.scheduled_at || schedIso).toLocaleString('es-PE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}`
+        : '✓ Respuesta enviada desde el buzón del cliente', 'success');
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
     finally { _ibSending = false; const b = document.getElementById('ibx-send'); if (b) { b.disabled = false; b.textContent = 'Enviar'; } }
+  }
+  function ibSchedToggle(ev) {
+    if (ev) ev.stopPropagation();
+    const p = document.getElementById('ibx-sched'); if (!p) return;
+    const show = p.style.display === 'none';
+    p.style.display = show ? '' : 'none';
+    if (show) {
+      // Prellenar el picker con mañana 9:00 (hora local) como punto de partida.
+      const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0);
+      const pad = n => String(n).padStart(2, '0');
+      const inp = document.getElementById('ibx-sched-dt');
+      if (inp && !inp.value) inp.value = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      const close = e => { if (!p.contains(e.target)) { p.style.display = 'none'; document.removeEventListener('click', close); } };
+      setTimeout(() => document.addEventListener('click', close), 0);
+    }
+  }
+  function ibSchedPick(kind) {
+    let d = new Date();
+    if (kind === 'h1') d = new Date(Date.now() + 60 * 60 * 1000);
+    else if (kind === 'h3') d = new Date(Date.now() + 3 * 60 * 60 * 1000);
+    else if (kind === 'man9') { d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0); }
+    else if (kind === 'lun9') { const add = ((8 - d.getDay()) % 7) || 7; d.setDate(d.getDate() + add); d.setHours(9, 0, 0, 0); }
+    else if (kind === 'custom') {
+      const v = document.getElementById('ibx-sched-dt')?.value;
+      if (!v) return;
+      d = new Date(v);
+      if (isNaN(d) || d.getTime() < Date.now() + 60 * 1000) { showBanner('Elige una fecha futura', 'info'); return; }
+    }
+    const p = document.getElementById('ibx-sched'); if (p) p.style.display = 'none';
+    ibSend(d.toISOString());
+  }
+  async function ibCancelSched(id) {
+    try {
+      const res = await apiFetch(`${API}/lm/inbox/scheduled/${id}`, { method: 'DELETE' });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || 'No se pudo cancelar');
+      if (_ibThread) _ibThread.messages = _ibThread.messages.filter(m => !(m.estado === 'scheduled' && m.id === id));
+      _ibPaint();
+      showBanner('✓ Envío programado cancelado', 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
   function _vInbox() {
@@ -19178,7 +19247,7 @@ ${foot}
     sqSetCli, sqSetEst, sqSetQ, cmSetCli, cmSetEst, cmSetQ,
     seqRunSetCanal, seqTaskSetDue,
     mbOpen, mbClose, mbSave, mbTest, mbDelete, mbProv,
-    ibOpen, ibTab, ibCli, ibSend,
+    ibOpen, ibTab, ibCli, ibSend, ibSchedToggle, ibSchedPick, ibCancelSched,
     pendingAcceptOpen, pendingAcceptToggleAll, pendingAcceptApplyFilters, pendingAcceptMark,
     openActivityDrawer, closeActivityDrawer, saveActivity, confirmDeleteActivity, markActDone,
     setReplySentiment, setLeadStage,
