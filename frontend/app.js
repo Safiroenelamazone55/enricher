@@ -596,7 +596,7 @@ function novaNote(opts = {}) {
       <div class="nvc-ico nvc-ico--brand"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></div>
       <div class="nvc-t">${o.title}</div>
       ${o.message ? `<p class="nvc-m">${o.message}</p>` : ''}
-      <textarea class="nvc-ta" placeholder="${o.placeholder}"></textarea>
+      <textarea class="nvc-ta" placeholder="${o.placeholder}">${o.value ? String(o.value).replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m])) : ''}</textarea>
       <div class="nvc-btns">
         <button type="button" class="nvc-b nvc-b--ghost">${o.skip}</button>
         <button type="button" class="nvc-b nvc-b--pri nvc-b--brand">${o.ok}</button>
@@ -606,7 +606,7 @@ function novaNote(opts = {}) {
     bd.querySelector('.nvc-b--ghost').onclick = () => done('');
     bd.querySelector('.nvc-b--pri').onclick = () => done(val());
     document.body.appendChild(bd);
-    setTimeout(() => bd.querySelector('.nvc-ta')?.focus(), 40);
+    setTimeout(() => { const ta = bd.querySelector('.nvc-ta'); if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } }, 40);
     document.addEventListener('keydown', onKey, true);
   });
 }
@@ -16586,13 +16586,24 @@ ${foot}
 
   // ── Leads (sección) ──
   // ── Leads hub: contactos con resultado marcado (respondió/reunión/…) + siguiente paso ──
-  let _ldPill = 'pos', _ldCli = '', _ldSeq = '', _ldCamp = '', _ldQ = '';
+  // Filtro de resultado MULTI-selección: [] = todos; si no, se muestra lo que cumpla
+  // CUALQUIERA de los elegidos (ej. Respondió + Reunión a la vez).
+  let _ldPills = ['pos'], _ldCli = '', _ldSeq = '', _ldCamp = '', _ldQ = '';
   const _LD_PILLS = [['pos', 'Positivos'], ['respondio', 'Respondió'], ['reunion', 'Reunión'], ['desc', 'Descartados']];
   function _ldMatchPill(c, pill) {
     const d = c.disposition || '';
     if (pill === 'pos') return d === 'respondio' || d === 'reunion';
     if (pill === 'desc') return d === 'no_interesado' || d === 'no_contactar';
     return d === pill;
+  }
+  function _ldMatchSel(c) { return !_ldPills.length || _ldPills.some(p => _ldMatchPill(c, p)); }
+  // Paso en el que está el contacto dentro de su secuencia (donde respondió).
+  function _ldPaso(c) {
+    const sq = (c.sequences || [])[0]; if (!sq) return '';
+    const steps = _seqSteps(sq.id);
+    const n = sq.paso || 1;
+    const st = steps[n - 1];
+    return st ? `Paso ${n}${st.titulo ? ' · ' + st.titulo : ''}` : `Paso ${n}`;
   }
   function _ldBase() {
     let list = _contacts.filter(c => c.disposition);
@@ -16607,12 +16618,12 @@ ${foot}
     const map = {};
     for (const a of _activities) {
       const cid = a.contact_id; if (!cid) continue;
-      const m = map[cid] || (map[cid] = { fecha: null, nota: '' });
+      const m = map[cid] || (map[cid] = { fecha: null, nota: '', notaId: null });
       const txt = String(a.nota || '');
       if (!m.fecha && txt.startsWith('Disposición:')) m.fecha = a.fecha;
       if (!m.nota && txt && !txt.startsWith('Paso ')) {
         const clean = txt.startsWith('Disposición:') ? (txt.includes(' — ') ? txt.slice(txt.indexOf(' — ') + 3) : '') : txt;
-        if (clean) m.nota = clean;
+        if (clean) { m.nota = clean; m.notaId = a.id; }   // id para poder EDITAR esa nota
       }
     }
     return map;
@@ -16633,6 +16644,7 @@ ${foot}
         <select class="ldh-sel" id="ldh-seq" onchange="LeadManagerModule.ldSetSeq(this.value)"></select>
         <select class="ldh-sel" id="ldh-camp" onchange="LeadManagerModule.ldSetCamp(this.value)"></select>
         <div class="lm-search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" id="ldh-q" placeholder="Buscar lead…" oninput="LeadManagerModule.ldSetQ(this.value)"></div>
+        <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.ldExport()" title="Exporta lo que ves (con los filtros aplicados) a Excel">${_ico('down')} Exportar</button>
       </div>
       <div id="ldh-wrap"></div>`;
   }
@@ -16641,13 +16653,15 @@ ${foot}
     if (!pillsEl || !wrap) return;
     const base = _ldBase();
     const cnt = p => base.filter(c => _ldMatchPill(c, p)).length;
-    pillsEl.innerHTML = _LD_PILLS.map(([k, l]) => `<button class="ldh-pill${_ldPill === k ? ' on' : ''}" onclick="LeadManagerModule.ldPill('${k}')">${l}<span>${cnt(k)}</span></button>`).join('');
+    // "Todos" + chips multi-selección (se pueden combinar varios resultados a la vez).
+    pillsEl.innerHTML = `<button class="ldh-pill${!_ldPills.length ? ' on' : ''}" onclick="LeadManagerModule.ldPill('')" title="Quitar el filtro de resultado">Todos<span>${base.length}</span></button>`
+      + _LD_PILLS.map(([k, l]) => `<button class="ldh-pill${_ldPills.includes(k) ? ' on' : ''}" onclick="LeadManagerModule.ldPill('${k}')" title="Se combinan: puedes marcar varios">${l}<span>${cnt(k)}</span></button>`).join('');
     const fill = (id, arr, lbl, val) => { const el = $(id); if (el) el.innerHTML = `<option value="">${lbl}</option>` + arr.map(x => `<option value="${x.id}"${String(val) === String(x.id) ? ' selected' : ''}>${esc(x.nombre || x.dominio || ('#' + x.id))}</option>`).join(''); };
     fill('ldh-cli', _clients, 'Cliente: todos', _ldCli);
     fill('ldh-seq', _sequences, 'Secuencia: todas', _ldSeq);
     fill('ldh-camp', _campaigns, 'Campaña: todas', _ldCamp);
     const info = _ldActInfo();
-    const list = base.filter(c => _ldMatchPill(c, _ldPill))
+    const list = base.filter(_ldMatchSel)
       .map(c => ({ c, i: info[c.id] || {} }))
       .sort((a, b) => String(b.i.fecha || b.c.updated_at || '').localeCompare(String(a.i.fecha || a.c.updated_at || '')));
     if (!_contacts.some(c => c.disposition)) {
@@ -16666,13 +16680,25 @@ ${foot}
       const cli = _clients.find(x => x.id === c.outbound_client_id);
       const seqs = c.sequences || [];
       const fecha = _ldFmtDate(i.fecha || c.updated_at);
+      const tel = c.telefono || c.movil || '';
+      const mail = c.email || c.email_personal || '';
+      const li = c.linkedin || '';
+      const contacto = `<div class="ldh-cto" onclick="event.stopPropagation()">
+        ${mail ? `<a class="ldh-cto__b" href="mailto:${esc(mail)}" title="${esc(mail)}">${NI('mail', 13)}</a>` : ''}
+        ${tel ? `<a class="ldh-cto__b" href="tel:${esc(tel.replace(/\s/g, ''))}" title="${esc(tel)}">${NI('phone', 13)}</a>` : ''}
+        ${li ? `<a class="ldh-cto__b" href="${esc(/^https?:/i.test(li) ? li : 'https://' + li)}" target="_blank" rel="noopener" title="LinkedIn">${NI('linkedin', 13)}</a>` : ''}
+        ${(mail || tel || li) ? '' : '<span class="ldh-none">—</span>'}
+        <div class="ldh-cto__txt">${mail ? esc(mail) : tel ? esc(tel) : '&nbsp;'}</div>
+      </div>`;
+      const paso = _ldPaso(c);
       return `<tr class="ldh-row" onclick="LeadManagerModule.openContactPage(${c.id})">
         <td><div class="ldh-name">${esc(full)}</div><div class="ldh-sub">${esc([c.cargo, c.company_nombre].filter(Boolean).join(' · ')) || '&nbsp;'}</div></td>
+        <td>${contacto}</td>
         <td class="ldh-dim">${cli ? esc(cli.nombre) : '—'}</td>
-        <td class="ldh-dim">${seqs.length ? esc(seqs[0].nombre) + (seqs.length > 1 ? ` <span class="ldh-more">+${seqs.length - 1}</span>` : '') : '—'}</td>
+        <td class="ldh-dim">${seqs.length ? esc(seqs[0].nombre) + (seqs.length > 1 ? ` <span class="ldh-more">+${seqs.length - 1}</span>` : '') : '—'}${paso ? `<div class="ldh-sub">${esc(paso)}</div>` : ''}</td>
         <td>${d ? `<span class="ldh-chip" style="background:${d[3]};color:${d[2]}">${d[1]}</span>` : '—'}</td>
         <td class="ldh-date">${fecha}</td>
-        <td class="ldh-note" title="${esc(i.nota || '')}">${i.nota ? esc(i.nota) : '<span class="ldh-none">—</span>'}</td>
+        <td class="ldh-note ldh-note--full" onclick="event.stopPropagation();LeadManagerModule.ldEditNote(${c.id},${i.notaId || 'null'})" title="Clic para editar la nota"><div class="ldh-note__in">${i.nota ? esc(i.nota) : '<span class="ldh-none">＋ Añadir nota</span>'}</div></td>
         <td class="ldh-acts" onclick="event.stopPropagation()">
           <button class="ldh-act" title="Añadir nota" onclick="LeadManagerModule.ldAddNote(${c.id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
           <button class="ldh-act" title="Registrar reunión" onclick="LeadManagerModule.ldMeet(${c.id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></button>
@@ -16680,11 +16706,72 @@ ${foot}
         </td></tr>`;
     }).join('');
     wrap.innerHTML = `<div class="ldh-table-wrap"><table class="ldh-table">
-      <colgroup><col style="width:22%"><col style="width:12%"><col style="width:16%"><col style="width:11%"><col style="width:8%"><col><col style="width:118px"></colgroup>
-      <thead><tr><th>Lead</th><th>Cliente</th><th>Secuencia</th><th>Resultado</th><th>Fecha</th><th>Última nota</th><th></th></tr></thead>
+      <colgroup><col style="width:16%"><col style="width:10%"><col style="width:8%"><col style="width:14%"><col style="width:8%"><col style="width:6%"><col><col style="width:106px"></colgroup>
+      <thead><tr><th>Lead</th><th>Contacto</th><th>Cliente</th><th>Secuencia · paso</th><th>Resultado</th><th>Fecha</th><th>Nota (clic para editar)</th><th></th></tr></thead>
       <tbody>${rows}</tbody></table></div>`;
   }
-  function ldPill(k) { _ldPill = k; _ldPaint(); }
+  // Multi-selección: '' = Todos; si no, alterna el chip (se pueden combinar varios).
+  function ldPill(k) {
+    if (!k) _ldPills = [];
+    else if (_ldPills.includes(k)) _ldPills = _ldPills.filter(x => x !== k);
+    else _ldPills = _ldPills.concat(k);
+    _ldPaint();
+  }
+  // Editar la última nota del lead (o crear una si no hay), con el texto precargado.
+  async function ldEditNote(cid, actId) {
+    const c = _contacts.find(x => x.id === cid); if (!c) return;
+    const act = actId ? (_activities || []).find(a => a.id === actId) : null;
+    const prev = act ? String(act.nota || '').replace(/^Disposición:[^—]*—\s*/, '') : '';
+    const nombre = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || 'el contacto';
+    const nota = await novaNote({
+      title: act ? 'Editar nota' : 'Nueva nota',
+      message: `Sobre <b>${esc(nombre)}</b>`,
+      value: prev, ok: 'Guardar', skip: 'Cancelar',
+    });
+    if (nota === '' || nota == null) return;
+    try {
+      if (act) {
+        const res = await apiFetch(`${API}/activities/${act.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...act, nota }) });
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Error');
+      } else {
+        const res = await apiFetch(`${API}/activities`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact_id: cid, outbound_client_id: c.outbound_client_id || null, tipo: 'nota', nota, fecha: new Date().toISOString().slice(0, 10), estado: 'hecha' }) });
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Error');
+      }
+      await _reloadActivities(); _ldPaint();
+      showBanner('✓ Nota guardada', 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  // Exporta LO QUE VES (con los filtros aplicados) para abrir en Excel.
+  function ldExport() {
+    const info = _ldActInfo();
+    const list = _ldBase().filter(_ldMatchSel)
+      .map(c => ({ c, i: info[c.id] || {} }))
+      .sort((a, b) => String(b.i.fecha || b.c.updated_at || '').localeCompare(String(a.i.fecha || a.c.updated_at || '')));
+    if (!list.length) { showBanner('No hay leads que exportar con estos filtros.', 'info'); return; }
+    const cols = [
+      ['Nombre', r => r.c.nombre], ['Apellido', r => r.c.apellido],
+      ['Email', r => r.c.email], ['Email personal', r => r.c.email_personal],
+      ['Teléfono', r => r.c.telefono], ['Móvil', r => r.c.movil],
+      ['LinkedIn', r => r.c.linkedin], ['Cargo', r => r.c.cargo],
+      ['Empresa', r => r.c.company_nombre || r.c.empresa_nombre],
+      ['Ciudad', r => r.c.ciudad], ['País', r => r.c.pais],
+      ['Cliente', r => (_clients.find(x => x.id === r.c.outbound_client_id) || {}).nombre],
+      ['Secuencia', r => ((r.c.sequences || [])[0] || {}).nombre],
+      ['Paso en que respondió', r => _ldPaso(r.c)],
+      ['Resultado', r => ((_DISPOS.find(x => x[0] === r.c.disposition) || [])[1] || r.c.disposition)],
+      ['Fecha', r => { const f = r.i.fecha || r.c.updated_at; const x = new Date(f); return isNaN(x) ? '' : x.toISOString().slice(0, 10); }],
+      ['Nota', r => r.i.nota],
+    ];
+    const cell = v => { v = v == null ? '' : String(v); return /[",\n;]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+    const csv = '﻿' + cols.map(c => c[0]).join(',') + '\n'
+      + list.map(r => cols.map(c => cell(c[1](r))).join(',')).join('\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    a.download = `leads_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    showBanner(`✓ ${list.length} lead(s) exportados — ábrelo con Excel`, 'success');
+  }
   function ldSetCli(v) { _ldCli = v; _ldPaint(); }
   function ldSetSeq(v) { _ldSeq = v; _ldPaint(); }
   function ldSetCamp(v) { _ldCamp = v; _ldPaint(); }
@@ -19535,7 +19622,7 @@ ${foot}
     seqDoNoLinkedIn, seqDoBounced, lmToggleNoLinkedIn, lmToggleBounced, lmToggleManualEmail, ctToggleBounced,
     seqDoDataIssue, seqDoDataIssuePick, ctToggleDataIssue, lmResumeDataIssue, seqOpenMark,
     lmSetPageSize, ctGoPage, coGoPage, seqCtSetEstado, seqTaskSetCanal,
-    ldPill, ldSetCli, ldSetSeq, ldSetCamp, ldSetQ, ldAddNote, ldMeet, ldToDeal,
+    ldPill, ldSetCli, ldSetSeq, ldSetCamp, ldSetQ, ldAddNote, ldMeet, ldToDeal, ldEditNote, ldExport,
     dlSetCli, dlOpen, dlClose, dlSave,
     sqSetCli, sqSetEst, sqSetQ, cmSetCli, cmSetEst, cmSetQ,
     seqRunSetCanal, seqTaskSetDue,

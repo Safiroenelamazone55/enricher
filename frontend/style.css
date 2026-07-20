@@ -12998,3 +12998,15 @@ td.ldh-acts { padding-left: 6px; padding-right: 10px; }
 .rtt__time.on { display: block; }
 /* En modo inactivo (idle) el verde se atenúa a ámbar: sigue contando pero sin actividad */
 .rchat__strip-btn.rtt.idle .rtt__pulse { animation: none; }
+
+/* ── Leads: columna de contacto + nota completa editable ────────── */
+/* Iconos de contacto en FILA + el dato principal debajo, compacto */
+.ldh-cto { display: flex; flex-flow: row wrap; align-items: center; gap: 4px; }
+.ldh-cto__b { display: inline-flex; align-items: center; justify-content: center; width: 23px; height: 23px; border-radius: 6px; color: var(--text-secondary); background: var(--surface-secondary); text-decoration: none; flex: 0 0 auto; transition: background .12s, color .12s; }
+.ldh-cto__b:hover { background: var(--primary-soft); color: var(--primary); }
+.ldh-cto__txt { flex: 0 0 100%; font-size: .66rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Nota completa pero SIN alto excesivo: scroll interno dentro de la fila */
+.ldh-note--full { cursor: text; padding: 0; }
+.ldh-note__in { white-space: pre-wrap; word-break: break-word; line-height: 1.4; max-height: 58px; overflow-y: auto; border-radius: 6px; padding: 4px 6px; font-size: .76rem; transition: background .12s; }
+.ldh-note--full:hover .ldh-note__in { background: var(--primary-soft); }
+.ldh-table td.ldh-note--full { vertical-align: middle; }
