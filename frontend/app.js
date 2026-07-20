@@ -13838,7 +13838,10 @@ const LeadManagerModule = (() => {
     const cli = _clientName(s.outbound_client_id), cmp = _campaignName(s.campaign_id);
     const timeline = steps.length ? steps.map(_stepRow).join('') : `<div class="lm-act-empty"><div class="lm-act-empty__i">🪜</div><p>Esta secuencia no tiene pasos</p><span>Agrega el primero (Día 1 · Email).</span></div>`;
     // Conteo "por hacer" (vencidas + hoy) para mostrarlo en la pestaña Tareas, como Contactos (N).
-    const _seqTaskN = Array.isArray(_seqContacts) ? _seqTasks(id).filter(t => t.due <= new Date(new Date().toDateString())).length : null;
+    // El contador incluye los emails por aprobar: también son trabajo del día.
+    const _seqTaskN = Array.isArray(_seqContacts)
+      ? _seqTasks(id).filter(t => t.due <= new Date(new Date().toDateString())).length + (s.awaiting || 0)
+      : null;
     return `
       <button class="lm-back" onclick="LeadManagerModule.go('sequences')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg> Secuencias</button>
       <div class="lm-sec-head">
@@ -14283,7 +14286,8 @@ ${foot}
         else if (!list.length) { msg = 'Aún no hay nadie enrolado en esta secuencia. Enrola contactos para generar tareas.'; cta = 'Enrolar contacto'; ctaFn = `LeadManagerModule.seqEnrolOpen(${id})`; }
         else if (!activos.length) { msg = 'Los contactos enrolados están pausados o terminados; no hay tareas activas. Reactívalos (►) en la pestaña “Contactos”.'; }
         else { msg = 'Los contactos activos ya completaron todos los pasos definidos. Agrega más pasos o enrola contactos nuevos.'; cta = 'Enrolar contacto'; ctaFn = `LeadManagerModule.seqEnrolOpen(${id})`; }
-        return _approveCtaHtml(id) + _empty('tasks', 'Sin tareas pendientes', msg, cta, ctaFn);
+        const ap = _seqApRowsHtml(id);
+        return ap ? ap : _empty('tasks', 'Sin tareas pendientes', msg, cta, ctaFn);
       }
       const todoAll = tasks.filter(t => t.due <= today);
       // Filtro por canal (chips arriba): p. ej. hacer primero los de email, luego los de llamada.
@@ -14319,7 +14323,7 @@ ${foot}
         : `<div class="seq-tasks-hd seq-tasks-hd--none">Sin tareas${canalLbl}${dueLbl} para hoy</div>`;
       const grp = (showOver && over.length ? `<div class="lm-tsec-h lm-tsec-h--over"><span class="lm-tsec-h__dot"></span>Vencidas<span class="lm-tsec-h__n">${over.length}</span></div><div class="seq-tasks">${over.map(t => _seqTaskRow(t, id, today)).join('')}</div>` : '')
                 + (showToday && hoy.length ? `<div class="lm-tsec-h lm-tsec-h--today"><span class="lm-tsec-h__dot"></span>Hoy<span class="lm-tsec-h__n">${hoy.length}</span></div><div class="seq-tasks">${hoy.map(t => _seqTaskRow(t, id, today)).join('')}</div>` : '');
-      return `${_approveCtaHtml(id)}${_acceptCtaHtml(id)}${fltRow}${head}${grp}${nextLine}`;
+      return `${_seqApRowsHtml(id)}${_acceptCtaHtml(id)}${fltRow}${head}${grp}${nextLine}`;
     }
     if (_seqTab === 'envios') {
       if (_seqMsgs === null) return `<div class="cp-empty2" style="padding:22px">Cargando envíos…</div>`;
@@ -14628,18 +14632,6 @@ ${foot}
       showBanner(`✓ Aprobado — saldrá ${it ? _apFmtDate(it.scheduled_at, it.sequence_id) : 'en su fecha'} desde el buzón del cliente`, 'success');
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
-  // Tarjeta "Emails por aprobar" (modo pre-aprobado). Se usa en la pestaña Tareas de la
-  // secuencia; en Tareas comerciales las aprobaciones salen como FILAS de la lista.
-  function _approveCtaHtml(seqId) {
-    let list = (_sequences || []).filter(s => (s.awaiting || 0) > 0);
-    if (seqId != null) list = list.filter(s => s.id === seqId);
-    const n = list.reduce((t, s) => t + (s.awaiting || 0), 0);
-    if (!n) return '';
-    const names = list.slice(0, 2).map(s => `“${esc(s.nombre)}”`).join(', ') + (list.length > 2 ? ` y ${list.length - 2} más` : '');
-    return `<div class="lm-accept-cta lm-accept-cta--stale" onclick="LeadManagerModule.seqGoApprove(${list[0].id})" title="Emails redactados por el motor esperando tu OK — al aprobarlos salen solos en su fecha, espaciados por el intervalo">
-      <div class="lm-accept-cta__row"><span class="lm-accept-cta__ico">✋</span><span class="lm-accept-cta__tx"><b>Emails por aprobar</b> — <b style="color:#A96D0C">${n}</b> en ${names}</span><span class="lm-accept-cta__go">Aprobar ›</span></div>
-    </div>`;
-  }
   function seqGoApprove(id) {
     openSequence(id);
     _seqTab = 'aprobar'; _seqApprovals = null;
@@ -14762,7 +14754,27 @@ ${foot}
     try { const r = await apiFetch(`${API}/lm/sequences/${id}/metrics`); _seqMetrics = (r && r.ok) ? await r.json() : {}; } catch { _seqMetrics = {}; }
     if (_section === 'sequence' && _activeSeq === id && _seqTab === 'metricas') { const el = document.getElementById('seq-tabwrap'); if (el) el.innerHTML = _seqTabContent(id); }
   }
-  function seqTab(t) { _seqTab = t; _renderBody(); if ((t === 'contactos' || t === 'tareas') && !Array.isArray(_seqContacts)) _seqLoadContacts(_activeSeq); if (t === 'metricas') { if (_seqMetrics === null) _seqLoadMetrics(_activeSeq); _seqAb = null; _seqLoadAb(_activeSeq); } if (t === 'envios') { _seqMsgs = null; _seqLoadMsgs(_activeSeq); } if (t === 'aprobar') { _seqApprovals = null; _seqLoadApprovals(_activeSeq); } }
+  function seqTab(t) { _seqTab = t; _renderBody(); if ((t === 'contactos' || t === 'tareas') && !Array.isArray(_seqContacts)) _seqLoadContacts(_activeSeq); if (t === 'metricas') { if (_seqMetrics === null) _seqLoadMetrics(_activeSeq); _seqAb = null; _seqLoadAb(_activeSeq); } if (t === 'envios') { _seqMsgs = null; _seqLoadMsgs(_activeSeq); } if (t === 'aprobar' || t === 'tareas') { _seqApprovals = null; _seqLoadApprovals(_activeSeq); } }
+  // Filas de aprobación DENTRO de la pestaña Tareas: el email automático se revisa,
+  // edita y aprueba aquí mismo — no es una tarea de "marcar hecho".
+  function _seqApRowsHtml(seqId) {
+    const list = (Array.isArray(_seqApprovals) ? _seqApprovals : []).filter(a => a.estado === 'awaiting');
+    if (!list.length) return '';
+    const rows = list.map(a => {
+      const nm = [a.nombre, a.apellido].filter(Boolean).join(' ') || a.to_email;
+      return `<div class="ap-row">
+        <span class="ap-row__ico">✋</span>
+        <div class="ap-row__main">
+          <div class="ap-row__t"><b>${esc(nm)}</b>${a.empresa ? ` · ${esc(a.empresa)}` : ''} — ${esc(a.asunto || '(sin asunto)')}</div>
+          <div class="ap-row__s">Paso día ${a.paso_dia || '?'} · sale <b>${esc(_apFmtDate(a.scheduled_at, seqId))}</b> · ${esc(a.to_email)}</div>
+        </div>
+        <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqTab('aprobar')">Revisar / editar</button>
+        <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.seqAppAction(${a.id},'approve')">✓ Aprobar</button>
+      </div>`;
+    }).join('');
+    return `<div class="lm-tsec-h" style="color:#A96D0C"><span class="lm-tsec-h__dot" style="background:#A96D0C"></span>Emails por aprobar<span class="lm-tsec-h__n">${list.length}</span></div>
+      <div class="seq-tasks">${rows}</div>`;
+  }
 
   // ── Aprobaciones (modo pre-aprobado): borradores del motor esperando OK ──
   let _seqApprovals = null;
@@ -14935,6 +14947,16 @@ ${foot}
   }
   // Índice del paso EFECTIVO: el primero desde fromIdx cuya condición aplica al contacto, o -1 si ninguno.
   function _effIdx(steps, cid, fromIdx) { for (let i = Math.max(0, fromIdx || 0); i < steps.length; i++) { if (_stepCondMatch(steps[i], cid)) return i; } return -1; }
+  // En secuencias automáticas (auto / pre-aprobado) los pasos de EMAIL los envía el motor:
+  // NO son tarea manual. Si aparecieran como tarea normal, marcarlas "Hecha" avanzaría al
+  // contacto sin que el email llegara a salir. Se gestionan en la cola de aprobación.
+  function _seqEmailEsAutomatico(seqId) {
+    const s = (_sequences || []).find(x => x.id === seqId);
+    return !!s && (s.send_mode === 'auto' || s.send_mode === 'preaprobado');
+  }
+  function _pasoEsTareaManual(st, seqId) {
+    return !((st.canal || 'email') === 'email' && _seqEmailEsAutomatico(seqId));
+  }
   function _seqTasks(id) {
     const steps = _seqSteps(id);
     const list = Array.isArray(_seqContacts) ? _seqContacts : [];
@@ -14943,6 +14965,7 @@ ${foot}
       const eff = _effIdx(steps, e.contact_id, (e.paso || 1) - 1);
       if (eff < 0) return null;
       const st = steps[eff];
+      if (!_pasoEsTareaManual(st, id)) return null;   // email automático → no es tarea manual
       const due = _dueForEff(steps, e.contact_id, eff, e.enrolled_at, e.paso_date, mask);
       return { e, st, due };
     }).filter(Boolean).sort((a, b) => a.due - b.due || (a.st.hora || '99:99').localeCompare(b.st.hora || '99:99'));
@@ -15473,6 +15496,7 @@ ${foot}
         const eff = _effIdx(steps, c.id, (sq.paso || 1) - 1);
         if (eff < 0) return;
         const st = steps[eff];
+        if (!_pasoEsTareaManual(st, sq.id)) return;   // email automático → lo envía el motor
         const due = _dueForEff(steps, c.id, eff, sq.enrolled_at, sq.paso_date, _seqSendDays(sq.id));
         out.push({ c: c, sq: sq, st: st, due: due });
       });
@@ -15530,7 +15554,8 @@ ${foot}
       const today = _dayOf(new Date());
       const seq = _allSeqTasks().filter(t => t.due <= today).length;
       const acts = (_activities || []).filter(a => a.estado === 'pendiente' && _dayOf(a.fecha) <= today).length;
-      return seq + acts;
+      const aprob = (_sequences || []).reduce((n, s) => n + (s.awaiting || 0), 0);
+      return seq + acts + aprob;
     } catch (e) { return 0; }
   }
   function _allTaskRow(t, today) {
