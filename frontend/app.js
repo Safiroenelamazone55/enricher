@@ -21456,6 +21456,47 @@ const TimerModule = (() => {
       }
     }
     _updatePlayButtons();
+    _updateRailBtn();
+  }
+
+  // Botón del rail derecho: rojo = detenido · verde con pulso = corriendo (ámbar si idle).
+  // Visible en TODOS los módulos, así se prende/apaga sin ir a Time Tracking.
+  function _updateRailBtn() {
+    const b = document.getElementById('rtt-btn');
+    const t = document.getElementById('rtt-time');
+    if (!b) return;
+    const on = !!_entryId;
+    b.classList.toggle('on', on);
+    b.classList.toggle('idle', on && _isIdle);
+    // El color se pinta en el span .rtt__pulse (fondo) y en el fill de los SVG, NO en el
+    // <button>: hay navegadores/extensiones que fuerzan el background de los botones e
+    // ignoran incluso inline + !important (verificado en producción).
+    const paleta = !on ? ['#FDECEA', '#C4342B']          // detenido → rojo
+                 : _isIdle ? ['#FEF3E2', '#A96D0C']      // corriendo pero inactivo → ámbar
+                 : ['#00804C', '#FFFFFF'];               // corriendo → verde
+    const pulse = b.querySelector('.rtt__pulse');
+    if (pulse) pulse.style.setProperty('background', paleta[0], 'important');
+    b.querySelectorAll('.rtt__ico').forEach(s => s.style.setProperty('fill', paleta[1], 'important'));
+    b.title = on
+      ? `Detener seguimiento — ${_taskTitle || 'sin tarea'}${_isIdle ? ' (inactivo)' : ''}`
+      : 'Iniciar seguimiento de tiempo';
+    b.setAttribute('aria-label', b.title);
+    if (t) {
+      t.classList.toggle('on', on);
+      if (on) {
+        const s = _elapsed();
+        const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+        t.textContent = h > 0 ? `${h}:${String(m).padStart(2, '0')}` : `${m}m`;
+      }
+    }
+  }
+  // Prender/apagar desde el rail: sin tarea concreta = seguimiento general.
+  async function railToggle() {
+    try {
+      if (_entryId) { await stop(); showBanner('■ Seguimiento detenido', 'info'); }
+      else { await start(_taskId || null); showBanner('▶ Seguimiento iniciado', 'success'); }
+    } catch (e) { try { showBanner('Error: ' + e.message, 'error'); } catch {} }
+    _updateRailBtn();
   }
 
   async function _pulse() {
@@ -22475,7 +22516,7 @@ const TimerModule = (() => {
     document.body.appendChild(back);
   }
 
-  return { init, start, stop, startFromTask, toggleTask, loadReport, deleteEntry, connectExtension, setPeriod, navPeriod, setCustom, setTtMember, setTtClient, setTtProject, clearTtFilters, printReport, syncButtons: _updatePlayButtons,
+  return { init, start, stop, startFromTask, toggleTask, loadReport, deleteEntry, connectExtension, setPeriod, navPeriod, setCustom, setTtMember, setTtClient, setTtProject, clearTtFilters, printReport, syncButtons: _updatePlayButtons, railToggle,
     openEntryEdit, closeEntryEdit, saveEntryEdit, approveEntry, approveAll, unapproveAll };
 })();
 

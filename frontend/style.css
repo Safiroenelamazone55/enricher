@@ -12970,3 +12970,31 @@ td.ldh-acts { padding-left: 6px; padding-right: 10px; }
 .ap-row__t { font-size: .8rem; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ap-row__s { font-size: .7rem; color: var(--text-muted); margin-top: 1px; }
 .ap-row .btn { flex: 0 0 auto; }
+
+/* ── Botón de seguimiento de tiempo en el rail derecho ──────────── */
+/* Rojo = detenido · Verde con pulso = corriendo. Visible en cualquier módulo. */
+.rchat__strip-sep { width: 22px; height: 1px; background: var(--border); margin: 6px 0 4px; }
+/* Especificidad alta a propósito: .rchat__strip-btn define background/color y tiene
+   variantes :hover/.active que empatan con una sola clase extra. */
+/* El color de estado NO va en el <button>: algunos navegadores/extensiones fuerzan su
+   background e ignoran incluso inline+important. Va en el span .rtt__pulse (que cubre
+   todo el botón) y en el fill de los SVG — ambos sí lo respetan. Lo pinta _updateRailBtn. */
+.rchat__strip-btn.rtt { background: none !important; }
+.rchat__strip-btn.rtt:hover .rtt__pulse { filter: brightness(.94); }
+.rchat__strip-btn.rtt .rtt__ico--stop { display: none; }
+.rchat__strip-btn.rtt.on .rtt__ico--play { display: none; }
+.rchat__strip-btn.rtt.on .rtt__ico--stop { display: block; }
+/* Pastilla de color + halo que late mientras el seguimiento está activo */
+.rtt__pulse { position: absolute; inset: 0; border-radius: 12px; pointer-events: none; z-index: 0; background: #FDECEA; transition: background .15s; }
+.rtt__ico { position: relative; z-index: 1; }
+.rtt.on .rtt__pulse { box-shadow: 0 0 0 0 rgba(0,128,76,.55); animation: rtt-pulse 2s ease-out infinite; }
+@keyframes rtt-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(0,128,76,.5); }
+  70%  { box-shadow: 0 0 0 9px rgba(0,128,76,0); }
+  100% { box-shadow: 0 0 0 0 rgba(0,128,76,0); }
+}
+/* Tiempo transcurrido bajo el botón (solo mientras corre) */
+.rtt__time { display: none; font-size: .62rem; font-weight: 700; color: #00804C; letter-spacing: .2px; margin-top: 1px; font-variant-numeric: tabular-nums; }
+.rtt__time.on { display: block; }
+/* En modo inactivo (idle) el verde se atenúa a ámbar: sigue contando pero sin actividad */
+.rchat__strip-btn.rtt.idle .rtt__pulse { animation: none; }
