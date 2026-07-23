@@ -13130,3 +13130,7 @@ body:has(#pane-mgmt-tasks.active) .content-wrap { max-width: 1400px; }
 
 /* Proyectos (lista de 7 columnas) también aprovecha el ancho, como Tareas */
 body:has(#pane-mgmt-projects.active) .content-wrap { max-width: 1400px; }
+
+/* Progreso en % (la fracción queda como detalle secundario) */
+.tl-prog-txt { font-weight: 700; font-variant-numeric: tabular-nums; }
+.tl-prog-frac { font-size: .62rem; color: var(--text-muted, #A6998A); margin-left: 4px; font-variant-numeric: tabular-nums; }

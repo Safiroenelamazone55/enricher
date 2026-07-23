@@ -6956,15 +6956,27 @@ const TasksModule = (() => {
     return `<span class="tl-prio tl-prio--${key}">${flag}${L[key]}</span>`;
   }
 
-  function _deadlineCell(d, estado) {
+  // Fecha de la tarea. Si tiene inicio y fin muestra el RANGO ("13 – 19 jul"), que es
+  // lo que necesitan las tareas de semana; si no, la fecha única de siempre.
+  function _deadlineCell(d, estado, inicio) {
     if (!d) return '<span class="tl-due tl-due--none">—</span>';
     const date  = new Date(String(d).split('T')[0] + 'T00:00:00');
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const diff  = Math.round((date - today) / 86400000);
-    const label = date.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
-    if (estado !== 'completado' && diff < 0)   return `<span class="tl-due tl-due--over"><span class="tl-due-dot"></span>${label}</span>`;
-    if (estado !== 'completado' && diff === 0) return `<span class="tl-due tl-due--today">Hoy</span>`;
-    if (estado !== 'completado' && diff === 1) return `<span class="tl-due tl-due--soon">Mañana</span>`;
+    const fmt = (dt, conMes) => dt.toLocaleDateString('es-ES', conMes ? { day: '2-digit', month: 'short' } : { day: '2-digit' });
+    let label = fmt(date, true);
+    if (inicio) {
+      const ini = new Date(String(inicio).split('T')[0] + 'T00:00:00');
+      if (!isNaN(ini) && ini < date) {
+        // Mismo mes → "13 – 19 jul"; distinto mes → "29 jun – 5 jul"
+        label = ini.getMonth() === date.getMonth()
+          ? `${fmt(ini, false)} – ${fmt(date, true)}`
+          : `${fmt(ini, true)} – ${fmt(date, true)}`;
+      }
+    }
+    if (estado !== 'completado' && diff < 0)   return `<span class="tl-due tl-due--over">${label}</span>`;
+    if (estado !== 'completado' && diff === 0) return `<span class="tl-due tl-due--today">${inicio ? label : 'Hoy'}</span>`;
+    if (estado !== 'completado' && diff === 1) return `<span class="tl-due tl-due--soon">${inicio ? label : 'Mañana'}</span>`;
     return `<span class="tl-due">${label}</span>`;
   }
 
@@ -7181,18 +7193,22 @@ const TasksModule = (() => {
   }
 
   // anillo de progreso de subtareas (0/4 → 4/4 con check verde al completar)
+  // Avance en PORCENTAJE: normaliza proyectos por horas y de precio fijo bajo la misma
+  // medida. Cuenta las subtareas completadas (o la propia tarea si no tiene subtareas).
   function _tlProgress(done, total) {
     if (!total) return '';
+    const pct = Math.round(done / total * 100);
     const complete = done >= total;
     const c = 37.7;                              // 2·π·r con r=6
     const off = (c * (1 - done / total)).toFixed(1);
-    return `<span class="tl-prog${complete ? ' tl-prog--done' : ''}" title="${done}/${total} subtareas completadas">
+    return `<span class="tl-prog${complete ? ' tl-prog--done' : ''}" title="${done} de ${total} completadas (${pct}%)">
       <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
         <circle cx="8" cy="8" r="6" stroke="#E7E3DD" stroke-width="2"/>
         ${done > 0 ? `<circle cx="8" cy="8" r="6" stroke="${complete ? '#22C55E' : 'var(--brand,#00804C)'}" stroke-width="2" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${off}" transform="rotate(-90 8 8)"/>` : ''}
         ${complete ? '<path d="M5.4 8 L7 9.6 L10.6 5.8" stroke="#22C55E" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>' : ''}
       </svg>
-      <span class="tl-prog-txt">${done}/${total}</span>
+      <span class="tl-prog-txt">${pct}%</span>
+      <span class="tl-prog-frac">${done}/${total}</span>
     </span>`;
   }
 
@@ -7250,7 +7266,11 @@ const TasksModule = (() => {
   function _tlMainRow(t, allKidsCount, isOpen) {
     const completedKids = _tasks.filter(x => x.parent_task_id === t.id && x.estado === 'completado').length;
     const done     = t.estado === 'completado';
-    const prog     = _tlProgress(completedKids, allKidsCount);
+    // Sin subtareas también se normaliza a %: la tarea cuenta como 1 unidad (0 % o 100 %),
+    // así todo el tablero se lee con la misma medida (proyectos por horas y de precio fijo).
+    const prog     = allKidsCount > 0
+      ? _tlProgress(completedKids, allKidsCount)
+      : _tlProgress(done ? 1 : 0, 1);
     const respArr  = t.responsables?.length ? t.responsables : (t.responsable ? [t.responsable] : []);
     const respHtml = _tlResp(respArr);
     return `<tr class="clients-table__row tl-row tl-row--main${done ? ' tl-row--done-main' : ''}" data-task-id="${t.id}" onclick="TasksModule.toggleTaskExpand(${t.id})">
@@ -7266,7 +7286,7 @@ const TasksModule = (() => {
       </td>
       <td class="tl-tip-cell" data-col="estado" onclick="event.stopPropagation();TasksModule.tlOpenEstadoPop(event,${t.id})">${_estadoBadge(t.estado)}</td>
       <td class="tl-tip-cell" data-col="prioridad" onclick="event.stopPropagation();TasksModule.openKcPrioPopover(event,${t.id})">${_prioridadBadge(t.prioridad)}</td>
-      <td class="tl-tip-cell" data-col="deadline" onclick="event.stopPropagation();TasksModule.openKcDatePopover(event,${t.id})">${_deadlineCell(t.deadline, t.estado)}</td>
+      <td class="tl-tip-cell" data-col="deadline" onclick="event.stopPropagation();TasksModule.openKcDatePopover(event,${t.id})">${_deadlineCell(t.deadline, t.estado, t.fecha_inicio)}</td>
       <td class="tl-tip-cell tl-resp-cell" data-col="responsable" onclick="event.stopPropagation();TasksModule.openKcRespPopover(event,${t.id})">${respHtml}</td>
       <td class="tl-prog-cell" data-col="progreso">${prog || '<span class="muted">—</span>'}</td>
       ${_timerCell(t.id)}
@@ -7317,7 +7337,7 @@ const TasksModule = (() => {
       <td class="client-meta tl-proj-cell tl-sub-proj" data-col="proyecto"></td>
       <td class="tl-tip-cell" data-col="estado" onclick="event.stopPropagation();TasksModule.tlOpenEstadoPop(event,${t.id})">${_estadoBadge(t.estado)}</td>
       <td class="tl-tip-cell" data-col="prioridad" onclick="event.stopPropagation();TasksModule.openKcPrioPopover(event,${t.id})">${_prioridadBadge(t.prioridad)}</td>
-      <td class="tl-tip-cell" data-col="deadline" onclick="event.stopPropagation();TasksModule.openKcDatePopover(event,${t.id})">${_deadlineCell(t.deadline, t.estado)}</td>
+      <td class="tl-tip-cell" data-col="deadline" onclick="event.stopPropagation();TasksModule.openKcDatePopover(event,${t.id})">${_deadlineCell(t.deadline, t.estado, t.fecha_inicio)}</td>
       <td class="tl-tip-cell tl-resp-cell" data-col="responsable" onclick="event.stopPropagation();TasksModule.openKcRespPopover(event,${t.id})">${respHtml}</td>
       <td class="tl-prog-cell" data-col="progreso"></td>
       ${_timerCell(t.id)}
