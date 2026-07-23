@@ -366,6 +366,14 @@ async function initDb() {
     // Proyectos con cobro semanal (tarea de cobro auto por semana) + reparto por proyecto
     // reparto JSONB: [{"nombre":"Jenny","pct":30},{"nombre":"José","pct":70}] · null/[] = 100% del responsable.
     await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS cobro_semanal BOOLEAN NOT NULL DEFAULT FALSE;`);
+    // Semana de TRABAJO automática: cada domingo se crea la tarea contenedora de la semana
+    // entrante ("ABREV · 27 jul – 2 ago"), heredando el plan (horas/días/hora) de la anterior.
+    // Es independiente del cobro semanal (esa es la tarea de facturación).
+    await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS semana_auto BOOLEAN NOT NULL DEFAULT FALSE;`);
+    // Abreviatura del contrato para los títulos ('' = se deriva del nombre del proyecto).
+    await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS abrev TEXT NOT NULL DEFAULT '';`);
+    // Lunes de la semana que representa la tarea (idempotencia de la creación automática).
+    await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS semana_week DATE;`);
     await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS precio_semanal NUMERIC(12,2);`);
     await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS reparto JSONB;`);
     // Rango de fechas: las tareas PADRE usan [fecha_inicio, deadline]; las subtareas usan deadline (fecha fija).

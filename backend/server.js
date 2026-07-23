@@ -2205,6 +2205,112 @@ app.patch('/api/mgmt/tasks/:id/billing', requireAuth, async (req, res) => {
   }
 });
 
+// ── Nomenclatura de las semanas de trabajo ──────────────────────────
+// Título: "ABREV · 20–26 jul" (o "ABREV · 29 jun – 5 jul" si cruza de mes).
+const _MES_AB = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+const _STOPW = /^(de|del|la|el|los|las|y|para|con|por|the|of|for|and|to|a|an|in)$/i;
+// Abreviatura automática: palabras cortas tal cual (B2B), largas a 3 letras (Adquisicion→ADQ).
+function _abrevProyecto(nombre) {
+  return String(nombre || '').replace(/[^\wáéíóúñÁÉÍÓÚÑ\s-]/gi, ' ')
+    .split(/[\s-]+/).filter(w => w && !_STOPW.test(w)).slice(0, 3)
+    .map(w => (w.length <= 4 ? w : w.slice(0, 3)).toUpperCase()).join(' ') || 'PROY';
+}
+// Lunes (0) y domingo (6) de la semana que contiene la fecha dada.
+function _semanaDe(fechaStr) {
+  const d = new Date(String(fechaStr).slice(0, 10) + 'T12:00:00Z');
+  if (isNaN(d)) return null;
+  const dow = (d.getUTCDay() + 6) % 7;
+  const lun = new Date(d); lun.setUTCDate(d.getUTCDate() - dow);
+  const dom = new Date(lun); dom.setUTCDate(lun.getUTCDate() + 6);
+  return { lun, dom };
+}
+function _tituloSemana(proyecto, fechaAncla) {
+  const s = _semanaDe(fechaAncla); if (!s) return null;
+  const ab = (proyecto.abrev || '').trim() || _abrevProyecto(proyecto.nombre);
+  const rango = s.lun.getUTCMonth() === s.dom.getUTCMonth()
+    ? `${s.lun.getUTCDate()}–${s.dom.getUTCDate()} ${_MES_AB[s.dom.getUTCMonth()]}`
+    : `${s.lun.getUTCDate()} ${_MES_AB[s.lun.getUTCMonth()]} – ${s.dom.getUTCDate()} ${_MES_AB[s.dom.getUTCMonth()]}`;
+  return `${ab} · ${rango}`;
+}
+
+// ── Semana de TRABAJO automática ────────────────────────────────────
+// Crea la tarea contenedora de la semana heredando el plan (días/horas/hora) de la
+// semana anterior del mismo proyecto. Idempotente por (project_id, semana_week).
+async function _ensureWeeklyTaskCore(wid, ws) {
+  const projs = (await pool.query(
+    `SELECT id, nombre, abrev, responsable, responsables FROM projects
+      WHERE user_id=$1 AND semana_auto=TRUE AND estado='activo'`, [wid])).rows;
+  const s = _semanaDe(ws); if (!s) return { created: [], checked: 0 };
+  const lunStr = s.lun.toISOString().slice(0, 10), domStr = s.dom.toISOString().slice(0, 10);
+  const created = [];
+  for (const p of projs) {
+    const ex = await pool.query(`SELECT id FROM tasks WHERE user_id=$1 AND project_id=$2 AND semana_week=$3 LIMIT 1`, [wid, p.id, lunStr]);
+    if (ex.rows.length) continue;
+    // Plan heredado de la última semana del proyecto (la que tenga plan configurado).
+    const prev = (await pool.query(
+      `SELECT plan_dias, plan_horas, plan_hora FROM tasks
+        WHERE user_id=$1 AND project_id=$2 AND parent_task_id IS NULL AND plan_dias <> ''
+        ORDER BY COALESCE(fecha_inicio, deadline) DESC NULLS LAST LIMIT 1`, [wid, p.id])).rows[0] || {};
+    const respArr = (p.responsables && p.responsables.length) ? p.responsables : (p.responsable ? [p.responsable] : []);
+    const ins = await pool.query(
+      `INSERT INTO tasks (user_id, project_id, titulo, estado, prioridad, responsable, responsables,
+                          fecha_inicio, deadline, semana_week, plan_dias, plan_horas, plan_hora)
+       VALUES ($1,$2,$3,'pendiente','media',$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id, titulo, project_id`,
+      [wid, p.id, _tituloSemana(p, lunStr), respArr[0] || '', respArr, lunStr, domStr, lunStr,
+       prev.plan_dias || '', prev.plan_horas ?? null, prev.plan_hora ?? null]);
+    created.push(ins.rows[0]);
+  }
+  return { created, checked: projs.length };
+}
+
+// POST /api/mgmt/tasks/ensure-weekly — respaldo del cron; lo dispara la vista de Tareas.
+app.post('/api/mgmt/tasks/ensure-weekly', requireAuth, async (req, res) => {
+  const ws = String((req.body || {}).week_start || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(ws)) return res.status(400).json({ error: 'week_start (YYYY-MM-DD) requerido' });
+  try {
+    const r = await _ensureWeeklyTaskCore(req.workspaceOwnerId, ws);
+    res.json({ ok: true, ...r });
+  } catch (err) {
+    console.error('[tasks/ensure-weekly]', err.message);
+    res.status(500).json({ error: 'Error al crear la tarea semanal' });
+  }
+});
+
+// POST /api/mgmt/tasks/rename-weeks — normaliza los títulos de las semanas ya existentes
+// al formato "ABREV · fechas". dry=true devuelve el preview sin tocar nada.
+app.post('/api/mgmt/tasks/rename-weeks', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId;
+  const dry = !!(req.body || {}).dry;
+  const soloProyecto = parseInt((req.body || {}).project_id) || null;
+  try {
+    const projs = (await pool.query(
+      `SELECT id, nombre, abrev FROM projects WHERE user_id=$1 ${soloProyecto ? 'AND id=$2' : ''}`,
+      soloProyecto ? [uid, soloProyecto] : [uid])).rows;
+    const cambios = [];
+    for (const p of projs) {
+      const tks = (await pool.query(
+        `SELECT id, titulo, fecha_inicio::text AS fi, deadline::text AS dl FROM tasks
+          WHERE user_id=$1 AND project_id=$2 AND parent_task_id IS NULL AND titulo ~* '^\\s*semana\\s'
+          ORDER BY COALESCE(fecha_inicio, deadline)`, [uid, p.id])).rows;
+      for (const t of tks) {
+        const ancla = t.fi || t.dl; if (!ancla) continue;
+        const nuevo = _tituloSemana(p, ancla);
+        if (!nuevo || nuevo === t.titulo) continue;
+        cambios.push({ id: t.id, proyecto: p.nombre, antes: t.titulo, despues: nuevo });
+        if (!dry) {
+          const s = _semanaDe(ancla);
+          await pool.query(`UPDATE tasks SET titulo=$1, semana_week=$2, updated_at=NOW() WHERE id=$3 AND user_id=$4`,
+            [nuevo, s.lun.toISOString().slice(0, 10), t.id, uid]);
+        }
+      }
+    }
+    res.json({ ok: true, dry, total: cambios.length, cambios });
+  } catch (err) {
+    console.error('[tasks/rename-weeks]', err.message);
+    res.status(500).json({ error: 'Error al renombrar las semanas' });
+  }
+});
+
 // ── Facturación semanal: creación de la tarea de cobro de la semana ─
 // Idempotente por (project_id, billing_week=lunes). Título: "Cobro semanal · 20–24 jul".
 async function _ensureWeeklyCore(wid, ws) {
@@ -2260,6 +2366,13 @@ async function _weeklyBillingTick() {
       const r = await _ensureWeeklyCore(o.user_id, ws);
       if (r.created.length) console.log(`[billing-weekly] user ${o.user_id}: ${r.created.length} tarea(s) de cobro creadas para ${ws}`);
     }
+    // Semana de TRABAJO (independiente del cobro): misma cadencia, el domingo ya crea la entrante.
+    const wOwners = (await pool.query(
+      `SELECT DISTINCT user_id FROM projects WHERE semana_auto=TRUE AND estado='activo'`)).rows;
+    for (const o of wOwners) {
+      const r = await _ensureWeeklyTaskCore(o.user_id, ws);
+      if (r.created.length) console.log(`[semana-auto] user ${o.user_id}: ${r.created.length} semana(s) creada(s) para ${ws} — ${r.created.map(x => x.titulo).join(', ')}`);
+    }
   } catch (e) { console.error('[billing-weekly]', e.message); }
 }
 setInterval(_weeklyBillingTick, 60 * 60 * 1000);
@@ -2273,6 +2386,8 @@ app.patch('/api/mgmt/projects/:id/billing-cfg', requireAuth, async (req, res) =>
   try {
     const sets = [], vals = [req.params.id, req.workspaceOwnerId];
     if (b.cobro_semanal !== undefined) sets.push(`cobro_semanal=$${vals.push(!!b.cobro_semanal)}`);
+    if (b.semana_auto !== undefined) sets.push(`semana_auto=$${vals.push(!!b.semana_auto)}`);
+    if (b.abrev !== undefined) sets.push(`abrev=$${vals.push(String(b.abrev || '').trim().slice(0, 24))}`);
     if (b.precio_semanal !== undefined) sets.push(`precio_semanal=$${vals.push(b.precio_semanal === null || b.precio_semanal === '' ? null : +b.precio_semanal)}`);
     if (b.reparto !== undefined) {
       const rep = Array.isArray(b.reparto)
@@ -2283,7 +2398,7 @@ app.patch('/api/mgmt/projects/:id/billing-cfg', requireAuth, async (req, res) =>
     if (!sets.length) return res.json({ ok: true });
     sets.push('updated_at=NOW()');
     const { rows } = await pool.query(
-      `UPDATE projects SET ${sets.join(',')} WHERE id=$1 AND user_id=$2 RETURNING id, cobro_semanal, precio_semanal, reparto`, vals);
+      `UPDATE projects SET ${sets.join(',')} WHERE id=$1 AND user_id=$2 RETURNING id, cobro_semanal, precio_semanal, reparto, semana_auto, abrev`, vals);
     if (!rows[0]) return res.status(404).json({ error: 'Proyecto no encontrado' });
     res.json(rows[0]);
   } catch (err) {

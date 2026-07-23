@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260719w"/>
+  <link rel="stylesheet" href="style.css?v=20260719x"/>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -2003,6 +2003,13 @@
         <label class="form-label">Precio por semana (moneda del proyecto)</label>
         <input class="form-input form-input--narrow" type="number" id="proj-precio-semanal" min="0" step="0.01" placeholder="Ej: 200">
       </div>
+
+      <label class="proj-share-toggle" style="margin-top:10px"><input type="checkbox" id="proj-semana-auto" onchange="ProjectsModule.onSemanaAutoToggle()"> Semana de trabajo automática — cada domingo se crea la tarea de la semana entrante, con el mismo plan de horas y días</label>
+      <div id="proj-abrev-wrap" style="display:none;margin-top:8px;max-width:50%">
+        <label class="form-label">Abreviatura para el título de la semana</label>
+        <input class="form-input form-input--narrow" id="proj-abrev" maxlength="24" placeholder="Se genera sola del nombre">
+        <div class="form-hint" id="proj-abrev-hint" style="margin-top:4px"></div>
+      </div>
     </div>
 
     <!-- Fechas (rango en un solo selector; inicio requerido, fin opcional) -->
@@ -2504,7 +2511,7 @@
 })();
 </script>
 
-<script src="app.js?v=20260719w"></script>
+<script src="app.js?v=20260719x"></script>
 <div id="task-quick-edit" style="display:none;position:fixed;z-index:9999"></div>
 </body>
 </html>

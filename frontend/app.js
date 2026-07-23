@@ -7268,6 +7268,10 @@ const TasksModule = (() => {
             onclick="event.stopPropagation();TasksModule.openDrawer(null,${t.project_id},${t.id})">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           </button>
+          ${_esSemana(t) ? `<button class="client-action-btn" title="Copiar aquí las subtareas de la semana anterior"
+            onclick="event.stopPropagation();TasksModule.copiarSemanaAnterior(${t.id})">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          </button>` : ''}
           <button class="client-action-btn" title="Editar tarea completa"
             onclick="event.stopPropagation();TasksModule.openDrawer(${t.id})">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
@@ -8902,7 +8906,51 @@ const TasksModule = (() => {
     try { await _putTask(t); } catch { /* optimistic */ }
   }
 
+  // ── Semana de trabajo ────────────────────────────────────────────
+  // Es "semana" si es contenedora (sin padre) y su título tiene el formato
+  // "ABREV · 20–26 jul" (o el viejo "Semana N").
+  function _esSemana(t) {
+    if (t.parent_task_id) return false;
+    return !!t.semana_week || /·\s*\d{1,2}\s*[–-]/.test(t.titulo || '') || /^\s*semana\s/i.test(t.titulo || '');
+  }
+  // Copia las subtareas de la semana ANTERIOR del mismo proyecto a esta.
+  async function copiarSemanaAnterior(destId) {
+    const dest = _tasks.find(t => t.id === destId); if (!dest) return;
+    const anclaDest = String(dest.fecha_inicio || dest.deadline || '').slice(0, 10);
+    const prev = _tasks
+      .filter(t => t.project_id === dest.project_id && t.id !== destId && _esSemana(t))
+      .filter(t => String(t.fecha_inicio || t.deadline || '').slice(0, 10) < anclaDest)
+      .sort((a, b) => String(b.fecha_inicio || b.deadline || '').localeCompare(String(a.fecha_inicio || a.deadline || '')))[0];
+    if (!prev) { showBanner('No encontré una semana anterior en este proyecto.', 'info'); return; }
+    const subs = _tasks.filter(t => t.parent_task_id === prev.id);
+    if (!subs.length) { showBanner(`"${prev.titulo}" no tiene subtareas que copiar.`, 'info'); return; }
+    const ok = await novaConfirm({
+      title: 'Copiar subtareas de la semana anterior',
+      message: `Se crearán <b>${subs.length}</b> subtarea(s) en <b>${esc(dest.titulo)}</b>, copiadas de <b>${esc(prev.titulo)}</b>.<br><br>Entran como pendientes, con las fechas de esta semana.`,
+      ok: 'Copiar', cancel: 'Cancelar',
+    });
+    if (!ok) return;
+    let n = 0;
+    for (const s of subs) {
+      try {
+        const res = await apiFetch(`${API}/mgmt/tasks`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            project_id: dest.project_id, parent_task_id: dest.id, titulo: s.titulo,
+            descripcion: s.descripcion || '', estado: 'pendiente', prioridad: s.prioridad || 'media',
+            responsable: s.responsable || '', responsables: s.responsables || [],
+            fecha_inicio: dest.fecha_inicio || null, deadline: dest.deadline || null,
+          }),
+        });
+        if (res.ok) n++;
+      } catch (_) {}
+    }
+    await load();
+    showBanner(`✓ ${n} subtarea(s) copiadas de ${esc(prev.titulo)}`, 'success');
+  }
+
   return {
+    copiarSemanaAnterior,
     load, filter, setFilterMember, setFilterFecha, render,
     openFilterMenu, toggleFilterOpt, clearFilter,
     setView, calPrev, calNext, setCalView, loadForCalPane,
@@ -9504,8 +9552,11 @@ const CalendarModule = (() => {
       const weekly = (t.plan_horas != null && t.plan_horas !== '') ? +t.plan_horas : 0;
       const hour   = (t.plan_hora  != null && t.plan_hora  !== '') ? +t.plan_hora  : null;
       if (!days.length || !(weekly > 0) || hour == null) continue;
-      // regla jerárquica: si la tarea tiene subtareas, el plan vive en ellas (no en la padre)
-      if (_tasks.some(x => x.parent_task_id === t.id)) continue;
+      // Regla jerárquica: el plan de la PADRE solo se ignora si alguna de sus subtareas
+      // define su propio plan (ahí manda el detalle). Si ninguna lo hace —el caso normal:
+      // la semana lleva el plan y las subtareas son el trabajo suelto— vale el de la padre.
+      const subs = _tasks.filter(x => x.parent_task_id === t.id);
+      if (subs.some(s => String(s.plan_dias || '') !== '' && s.plan_horas != null && s.plan_hora != null)) continue;
       // ancla de inicio: fecha_inicio propia → la del padre (subtarea) → hoy (plan abierto)
       let start = t.fecha_inicio ? String(t.fecha_inicio).split('T')[0] : null;
       if (!start && t.parent_task_id) {
@@ -11912,6 +11963,35 @@ const ProjectsModule = (() => {
     $('proj-cobro-semanal').checked = !!(p && p.cobro_semanal);
     $('proj-precio-semanal-wrap').style.display = (p && p.cobro_semanal) ? '' : 'none';
     $('proj-precio-semanal').value = (p && p.precio_semanal != null) ? p.precio_semanal : '';
+    $('proj-semana-auto').checked = !!(p && p.semana_auto);
+    $('proj-abrev-wrap').style.display = (p && p.semana_auto) ? '' : 'none';
+    $('proj-abrev').value = (p && p.abrev) ? p.abrev : '';
+    _abrevHint();
+  }
+  // Abreviatura del proyecto para el título de la semana (misma regla que el backend).
+  const _ABREV_STOP = /^(de|del|la|el|los|las|y|para|con|por|the|of|for|and|to|a|an|in)$/i;
+  function _abrevAuto(nombre) {
+    return String(nombre || '').replace(/[^\wáéíóúñÁÉÍÓÚÑ\s-]/gi, ' ')
+      .split(/[\s-]+/).filter(w => w && !_ABREV_STOP.test(w)).slice(0, 3)
+      .map(w => (w.length <= 4 ? w : w.slice(0, 3)).toUpperCase()).join(' ') || 'PROY';
+  }
+  // Vista previa del título que tendrá la semana, con la abreviatura actual.
+  function _abrevHint() {
+    const h = $('proj-abrev-hint'); if (!h) return;
+    const ab = ($('proj-abrev')?.value || '').trim() || _abrevAuto($('proj-nombre')?.value || '');
+    const MES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+    const d = new Date(), dow = (d.getDay() + 6) % 7;
+    const lun = new Date(d); lun.setDate(d.getDate() - dow);
+    const dom = new Date(lun); dom.setDate(lun.getDate() + 6);
+    const rango = lun.getMonth() === dom.getMonth()
+      ? `${lun.getDate()}–${dom.getDate()} ${MES[dom.getMonth()]}`
+      : `${lun.getDate()} ${MES[lun.getMonth()]} – ${dom.getDate()} ${MES[dom.getMonth()]}`;
+    h.innerHTML = `La tarea se llamará: <b>${esc(ab)} · ${rango}</b>`;
+  }
+  function onSemanaAutoToggle() {
+    const on = $('proj-semana-auto')?.checked;
+    const w = $('proj-abrev-wrap'); if (w) w.style.display = on ? '' : 'none';
+    if (on) _abrevHint();
   }
   function _drawerRespSel() {
     return [...document.querySelectorAll('#proj-resp-list input:checked')].map(i => i.value);
@@ -12033,7 +12113,8 @@ const ProjectsModule = (() => {
         try {
           await apiFetch(`${API}/mgmt/projects/${pid}/billing-cfg`, {
             method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ cobro_semanal: cobroSem, precio_semanal: precioSem === '' ? null : parseFloat(precioSem), reparto }),
+            body: JSON.stringify({ cobro_semanal: cobroSem, precio_semanal: precioSem === '' ? null : parseFloat(precioSem), reparto,
+              semana_auto: $('proj-semana-auto')?.checked || false, abrev: ($('proj-abrev')?.value || '').trim() }),
           });
         } catch (e) { console.error('[projects] billing-cfg:', e); }
       }
@@ -12083,7 +12164,7 @@ const ProjectsModule = (() => {
   }
 
   return { load, filter, setFilter, setMemberFilter, render, onTipoChange, openDrawer, closeDrawer, save, confirmDelete, setView, switchTab, toggleTaskCobrado, updateTaskMonto, updateDescripcion, addLink, removeLink, _setLinkField, saveLinks, refreshCard, closeQuickClientModal, saveQuickClient, toggleTaskExpand, toggleProjectExpand, openTaskMenu, _onTaskMenuEdit, _onTaskMenuAddSub, _onTaskMenuDelete, openQuickEditPopover, tqpNav, tqpPick, tqpToggleRange, tqpClear, openInlineDate, startInlineSubtask, cancelInlineSubtask, saveInlineSubtask, startEditTask, cancelEditTask, saveEditTask, deleteTaskInline, toggleSubrowExpand, distributeTaskMontos, openLinkForm, cancelLinkForm, saveLinkForm, startLinkEdit, cancelLinkEdit, saveLinkEdit, enterInfoEdit, cancelInfoEdit, saveInfoEdit, toggleInfoExpand,
-    onRespChange, onRepartoToggle, repartoIgual, repartoHint: _repartoHint, onCobroSemanalToggle,
+    onRespChange, onRepartoToggle, repartoIgual, repartoHint: _repartoHint, onCobroSemanalToggle, onSemanaAutoToggle,
     onHorasFijasToggle, openProjFechas,
     openConvertToSub, convertToSub, convertToMain };
 })();
