@@ -8,6 +8,10 @@
   --brand:#00804C; --brand-d:#006B3F; --brand-l:#BFE0CC; --brand-ll:#EAF5EE;
   --brand-accent:#74C365;
   --brand-rgb:0,128,76;
+  /* --accent se usaba en 10 sitios sin estar definida: el navegador la resolvía a
+     "nada", así que el botón Guardar de las notificaciones salía blanco sobre blanco
+     (invisible) y varios chips perdían su estado seleccionado. */
+  --accent:#00804C;
   /* Paleta extendida (acentos con rol) */
   --navy:#001F3F; --lime:#DBE64C; --mantis:#74C365; --info:#3B6FE8;
   /* Semantic */
@@ -13253,3 +13257,5 @@ body:has(#pane-mgmt-projects.active) .content-wrap { max-width: 1400px; }
 .cal2-pp__foot { display: flex; flex-wrap: wrap; gap: 10px; padding: 9px 13px 11px; }
 .cal2-pp__link { font: inherit; font-size: .66rem; color: var(--muted); background: none; border: none; padding: 0; cursor: pointer; }
 .cal2-pp__link:hover { color: var(--primary, #00804C); text-decoration: underline; }
+.cal2-pp__sub--done { opacity: .5; }
+.cal2-pp__sub--done .cal2-pp__sub-t { text-decoration: line-through; }

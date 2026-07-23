@@ -9217,6 +9217,7 @@ const CalendarModule = (() => {
     </div>`;
 
     requestAnimationFrame(() => {
+      _syncBands();
       const wrap = document.getElementById('cal-grid-scroll');
       if (!wrap) return;
       const now = new Date();
@@ -9224,6 +9225,22 @@ const CalendarModule = (() => {
       if (h >= GRID_S && h < GRID_E) {
         wrap.scrollTop = Math.max(0, ((h - GRID_S) * 60 + m) / 60 * HOUR_H - 100);
       }
+    });
+  }
+
+  // La columna de horas y las 7 columnas del día son hermanas, no una tabla: si un día
+  // acumula dos chips, su banda crece sola y las horas dejan de cuadrar con la rejilla.
+  // Igualamos cada banda a la más alta de su fila.
+  function _syncBands() {
+    [['.cal2-col__allday', '.cal2-tlabels__allday', 40],
+     ['.cal2-col__todo',   '.cal2-tlabels__todo',   34]].forEach(([colSel, lblSel, min]) => {
+      const bands = [...document.querySelectorAll(colSel)];
+      if (!bands.length) return;
+      bands.forEach(b => b.style.height = 'auto');
+      const h = Math.max(min, ...bands.map(b => b.offsetHeight));
+      bands.forEach(b => b.style.height = h + 'px');
+      const lbl = document.querySelector(lblSel);
+      if (lbl) lbl.style.height = h + 'px';
     });
   }
 
@@ -9821,18 +9838,22 @@ const CalendarModule = (() => {
     const d = new Date(ds + 'T00:00:00');
 
     // Subtareas: son el trabajo real de la semana. Aquí se elige en cuál trabajar.
-    const subs = _tasks.filter(x => x.parent_task_id === taskId && x.estado !== 'completado');
-    const subsHtml = subs.length
-      ? `<div class="cal2-pp__seclbl">¿En qué vas a trabajar?</div>
-         <div class="cal2-pp__subs">${subs.map(s => {
-           const fija = s.prog_inicio ? `<span class="cal2-pp__sub-h">${_fmtT(s.prog_inicio)}</span>` : '';
-           return `<div class="cal2-pp__sub">
-             <button class="cal2-pp__sub-go" onclick="CalendarModule.startFromPlan(${s.id})" title="Iniciar cronómetro en «${esc(s.titulo)}»">
-               <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20"/></svg>
-             </button>
-             <span class="cal2-pp__sub-t" onclick="CalendarModule.closeDayPop();TasksModule.openDrawer(${s.id})">${esc(s.titulo)}</span>${fija}
-           </div>`;
-         }).join('')}</div>`
+    // Las completadas se listan al final, apagadas: sirven de contexto, no de destino.
+    const kids = _tasks.filter(x => x.parent_task_id === taskId);
+    const pend = kids.filter(x => x.estado !== 'completado');
+    const done = kids.filter(x => x.estado === 'completado');
+    const fila = (s, ok) => {
+      const fija = s.prog_inicio ? `<span class="cal2-pp__sub-h">${_fmtT(s.prog_inicio)}</span>` : '';
+      return `<div class="cal2-pp__sub${ok ? ' cal2-pp__sub--done' : ''}">
+        <button class="cal2-pp__sub-go" onclick="CalendarModule.startFromPlan(${s.id})" title="Iniciar cronómetro en «${esc(s.titulo)}»">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20"/></svg>
+        </button>
+        <span class="cal2-pp__sub-t" onclick="CalendarModule.closeDayPop();TasksModule.openDrawer(${s.id})">${esc(s.titulo)}</span>${fija}
+      </div>`;
+    };
+    const subsHtml = kids.length
+      ? `<div class="cal2-pp__seclbl">${pend.length ? '¿En qué vas a trabajar?' : `Las ${done.length} subtareas están completadas`}</div>
+         <div class="cal2-pp__subs">${pend.map(s => fila(s, false)).join('')}${done.map(s => fila(s, true)).join('')}</div>`
       : `<div class="cal2-pp__seclbl">Sin subtareas</div>
          <div class="cal2-pp__subs"><div class="cal2-pp__sub">
            <button class="cal2-pp__sub-go" onclick="CalendarModule.startFromPlan(${taskId})" title="Iniciar cronómetro">
@@ -9841,8 +9862,11 @@ const CalendarModule = (() => {
            <span class="cal2-pp__sub-t">Trabajar en la tarea</span>
          </div></div>`;
 
-    const durOpts = [[30,'30 min'],[60,'1 h'],[90,'1.5 h'],[120,'2 h'],[180,'3 h'],[240,'4 h']]
-      .map(([v,l]) => `<option value="${v}"${v === perMin ? ' selected' : ''}>${l}</option>`).join('');
+    // La duración que toca (20h ÷ 6 días = 3h20) casi nunca es un valor redondo: si no
+    // está en la lista el navegador elige el primero y el popover miente sobre el bloque.
+    const _durLbl = m => m % 60 === 0 ? `${m / 60} h` : m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`;
+    const durVals = [...new Set([30, 60, 90, 120, 180, 240, 300, perMin])].sort((a, b) => a - b);
+    const durOpts = durVals.map(v => `<option value="${v}"${v === perMin ? ' selected' : ''}>${_durLbl(v)}</option>`).join('');
     const horaOpts = Array.from({length: GRID_E - GRID_S}, (_, i) => GRID_S + i)
       .map(h => `<option value="${h}"${h === hora ? ' selected' : ''}>${_fmtT(_pad(h) + ':00')}</option>`).join('');
 
@@ -11058,7 +11082,11 @@ const ProjectsModule = (() => {
           Convertir en subtarea de…
         </button>`;
     } else {
-      items += `<button class="d3-status-opt" onclick="ProjectsModule.convertToMain(${taskId})">
+      items += `<button class="d3-status-opt" onclick="ProjectsModule.openConvertToSub(event,${taskId})">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></svg>
+          Mover a otra tarea
+        </button>
+        <button class="d3-status-opt" onclick="ProjectsModule.convertToMain(${taskId})">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 14 20 9 15 4"/><path d="M4 20v-7a4 4 0 0 1 4-4h12"/></svg>
           Convertir en tarea principal
         </button>`;
@@ -11112,17 +11140,24 @@ const ProjectsModule = (() => {
     if (e && e.stopPropagation) e.stopPropagation();
     const t = _findTaskById(taskId); if (!t) return;
     const all = _taskCache[t.project_id] || [];
-    if (all.some(k => k.parent_task_id === taskId)) { showBanner('Esta tarea tiene subtareas — muévelas o complétalas primero.', 'error'); return; }
-    const mains = all.filter(x => !x.parent_task_id && x.id !== taskId);
-    if (!mains.length) { showBanner('No hay otra tarea principal en este proyecto.', 'error'); return; }
+    // Una subtarea ya cuelga de alguien: aquí se MUEVE a otra tarea del proyecto.
+    // Una tarea principal se convierte en subtarea, y solo puede si no arrastra hijas.
+    const esSub = !!t.parent_task_id;
+    if (!esSub && all.some(k => k.parent_task_id === taskId)) { showBanner('Esta tarea tiene subtareas — muévelas o complétalas primero.', 'error'); return; }
+    const mains = all.filter(x => !x.parent_task_id && x.id !== taskId && x.id !== t.parent_task_id);
+    if (!mains.length) { showBanner(esSub ? 'No hay otra tarea a la que moverla en este proyecto.' : 'No hay otra tarea principal en este proyecto.', 'error'); return; }
     const menu = document.createElement('div');
     menu.className = 'd3-status-menu';
-    menu.innerHTML = `<div style="padding:7px 12px 4px;font-size:.68rem;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:#98A2AE">Convertir en subtarea de…</div>`
+    menu.innerHTML = `<div style="padding:7px 12px 4px;font-size:.68rem;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:#98A2AE">${esSub ? 'Mover a…' : 'Convertir en subtarea de…'}</div>`
       + mains.map(m => `<button class="d3-status-opt" onclick="ProjectsModule.convertToSub(${taskId},${m.id})">${esc(m.titulo)}</button>`).join('');
     const x = Math.max(8, Math.min((e && e.clientX) || 200, window.innerWidth - 280));
-    const y = ((e && e.clientY) || 200) + 4;
-    menu.style.cssText = `position:fixed;z-index:9999;top:${y}px;left:${x}px;max-height:300px;overflow:auto;min-width:220px`;
+    menu.style.cssText = `position:fixed;z-index:9999;visibility:hidden;top:0;left:${x}px;max-height:300px;overflow:auto;min-width:220px`;
     document.body.appendChild(menu);
+    // Con varias semanas la lista es alta: si se abre cerca del borde inferior hay que
+    // subirla, o los últimos destinos quedan fuera de la pantalla y no se pueden elegir.
+    const y = Math.max(8, Math.min(((e && e.clientY) || 200) + 4, window.innerHeight - menu.offsetHeight - 8));
+    menu.style.top = y + 'px';
+    menu.style.visibility = 'visible';
     setTimeout(() => document.addEventListener('click', function onDoc(ev) {
       if (!menu.contains(ev.target)) { menu.remove(); document.removeEventListener('click', onDoc); }
     }), 0);
@@ -11130,10 +11165,11 @@ const ProjectsModule = (() => {
   async function convertToSub(taskId, parentId) {
     document.querySelectorAll('.d3-status-menu').forEach(m => m.remove());
     const t = _findTaskById(taskId); if (!t) return;
+    const movida = !!t.parent_task_id;
     try {
       await _putTaskSafe(t, { parent_task_id: parentId });
       t.parent_task_id = parentId;
-      showBanner('✓ Convertida en subtarea', 'success');
+      showBanner(movida ? '✓ Movida' : '✓ Convertida en subtarea', 'success');
       refreshCard(t.project_id);
     } catch (e2) { showBanner('Error: ' + e2.message, 'error'); }
   }
@@ -21722,13 +21758,17 @@ const RNotifPanel = (() => {
     if (inp) inp.value = new Date().toISOString().split('T')[0];
     const rect = e.currentTarget.getBoundingClientRect();
     pop.style.display = 'block';
-    const popW = 220, popH = 120;
+    // Medir DESPUÉS de mostrarlo: con títulos largos ("Nueva fecha fin del proyecto")
+    // la etiqueta se parte en dos líneas y el alto real supera cualquier valor supuesto,
+    // así que el botón Guardar terminaba fuera de la pantalla.
+    const popW = pop.offsetWidth  || 220;
+    const popH = pop.offsetHeight || 140;
     let left = rect.left - popW - 8;
-    let top  = rect.top;
-    if (left < 8) left = rect.right + 8;
-    if (top + popH > window.innerHeight - 8) top = window.innerHeight - popH - 8;
+    if (left < 8) left = Math.min(rect.right + 8, window.innerWidth - popW - 8);
+    left = Math.max(8, left);
+    let top = Math.min(rect.top, window.innerHeight - popH - 8);
     pop.style.left = left + 'px';
-    pop.style.top  = top + 'px';
+    pop.style.top  = Math.max(8, top) + 'px';
     setTimeout(() => inp?.focus(), 50);
     setTimeout(() => document.addEventListener('click', _popOutside), 0);
   }

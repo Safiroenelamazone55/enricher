@@ -1980,6 +1980,11 @@ app.put('/api/mgmt/tasks/:id', requireAuth, async (req, res) => {
   const respArr = Array.isArray(responsables) ? responsables : (responsable ? [responsable] : []);
   const respFirst = respArr[0] || '';
   try {
+    // Al mover una subtarea de una tarea a otra cambian DOS padres: el que la pierde
+    // (puede quedar completo) y el que la recibe. Guardamos el viejo antes del UPDATE.
+    const { rows: [antes] } = await pool.query(
+      `SELECT parent_task_id FROM tasks WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId]);
+    const padreViejo = antes ? antes.parent_task_id : null;
     const { rows } = await pool.query(
       `UPDATE tasks
           SET project_id=$3, titulo=$4, descripcion=$5, estado=$6,
@@ -1995,6 +2000,7 @@ app.put('/api/mgmt/tasks/:id', requireAuth, async (req, res) => {
     );
     if (!rows[0]) return res.status(404).json({ error: 'Tarea no encontrada' });
     const parentEstado = await _syncParentEstado(req.workspaceOwnerId, rows[0].parent_task_id);
+    if (padreViejo && padreViejo !== rows[0].parent_task_id) await _syncParentEstado(req.workspaceOwnerId, padreViejo);
     res.json({ ...rows[0], parent_estado: parentEstado, parent_id: rows[0].parent_task_id || null });
   } catch (err) {
     console.error('[mgmt/tasks] PUT error:', err.message);
