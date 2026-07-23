@@ -9196,7 +9196,8 @@ const CalendarModule = (() => {
   // Título grande: "julio 2026" — el mes en negrita y el año en fino, como en macOS.
   function _viewTitle() {
     const a = new Date(_anchor);
-    if (_view === 'day') return `<b>${a.getDate()} ${_MON[a.getMonth()]}</b> ${a.getFullYear()}`;
+    if (_view === 'day') return `<b>${a.getDate()} ${_MON[a.getMonth()]},</b> ${a.getFullYear()}`
+      + `<span class="cal2m__dow">${_DOMF[a.getDay()]}</span>`;
     if (_view === 'month') return `<b>${_MON[a.getMonth()]}</b> ${a.getFullYear()}`;
     const s = new Date(_weekOf), e = new Date(_weekOf.getTime() + 6 * 86400000);
     return s.getMonth() === e.getMonth()
@@ -9223,7 +9224,9 @@ const CalendarModule = (() => {
     cont.innerHTML = `<div class="cal2 cal2--mac">
       ${_macBar()}
       ${_tabs(wMtgs.length, wTasks.length, wTOff.length)}
-      ${_view === 'month' ? _month(days, todayDs) : _grid(days, todayDs)}
+      ${_view === 'month' ? _month(days, todayDs)
+        : _view === 'day'  ? `<div class="cal2d"><div class="cal2d__main">${_grid(days, todayDs)}</div>${_dayAside(days[0])}</div>`
+        : _grid(days, todayDs)}
     </div>`;
 
     requestAnimationFrame(() => {
@@ -9545,11 +9548,20 @@ const CalendarModule = (() => {
       ? Math.round(((_now.getHours() - GRID_S) * 60 + _now.getMinutes()) / 60 * HOUR_H)
       : -1;
 
+    const _nowLbl = `${_now.getHours() === 0 ? 12 : _now.getHours() > 12 ? _now.getHours() - 12 : _now.getHours()}:${_pad(_now.getMinutes())}`;
+    const _nowPill = `<div class="cal2-nowpill" style="top:${(_now.getHours() * 60 + _now.getMinutes()) / 60 * HOUR_H}px">${_nowLbl}</div>`;
     const timeCol = `<div class="cal2-tlabels">
       <div class="cal2-tlabels__top"></div>
       <div class="cal2-tlabels__allday">Todo el día</div>
       <div class="cal2-tlabels__todo">Por programar</div>
-      ${hours.map(h => `<div class="cal2-tlabel">${h === 0 ? '12 AM' : h === 12 ? 'Mediodía' : h > 12 ? (h - 12) + ' PM' : h + ' AM'}</div>`).join('')}
+      <div class="cal2-tlabels__hours">
+        ${_nowPill}
+        ${hours.map(h => {
+          if (h === 12) return `<div class="cal2-tlabel"><b>Mediodía</b></div>`;
+          const n = h === 0 ? 12 : h > 12 ? h - 12 : h;
+          return `<div class="cal2-tlabel"><b>${n}</b><i>${h < 12 ? 'AM' : 'PM'}</i></div>`;
+        }).join('')}
+      </div>
     </div>`;
 
     const _plans = (_tab === 'all' || _tab === 'tasks') ? _recurPlans() : [];
@@ -9575,7 +9587,7 @@ const CalendarModule = (() => {
         const dlHint = (dl && dl !== ds) ? ` <span class="cal2-tblock__dl" title="Fecha límite de entrega">⚑ ${_dlShort(dl)}</span>` : '';
         const endT   = _addMin(t.prog_inicio, dur);
         return `<div class="cal2-tblock${done ? ' cal2-tblock--done' : ''}" style="top:${topPx}px;height:${hPx}px;--c:${accent}"
-            onclick="event.stopPropagation();CalendarModule.openSchedulePopover(event,${t.id})" title="${esc(t.titulo)} — clic para reprogramar">
+            onclick="event.stopPropagation();${_view === 'day' ? `CalendarModule.selectItem('task',${t.id},'${ds}')` : `CalendarModule.openSchedulePopover(event,${t.id})`}" title="${esc(t.titulo)} — clic para ${_view === 'day' ? 'ver el detalle' : 'reprogramar'}">
           <div class="cal2-tblock__t">${t.parent_task_id ? '<span class="cal2-tblock__sub">SUB</span>' : ''}${esc(t.titulo)}</div>
           <div class="cal2-tblock__meta">${_fmtT(t.prog_inicio)}–${_fmtT(endT)}${proj ? ` · ${proj}` : ''}${dlHint}</div>
         </div>`;
@@ -9610,7 +9622,7 @@ const CalendarModule = (() => {
         const fin   = _addMin(ini, p.perMin);
         const hrs   = Math.round(p.perMin / 60 * 10) / 10;
         return `<div class="cal2-planblock${p.moved ? ' cal2-planblock--moved' : ''}" style="top:${topPx}px;height:${hPx}px;--c:${_projColor(p.projectId)}"
-            onclick="event.stopPropagation();CalendarModule.openPlanPop(event,${p.id},'${ds}')"
+            onclick="event.stopPropagation();${_view === 'day' ? `CalendarModule.selectItem('plan',${p.id},'${ds}')` : `CalendarModule.openPlanPop(event,${p.id},'${ds}')`}"
             title="Plan · ${esc(p.titulo)} — ${p.weekly}h/semana ÷ ${p.nDays} ${p.nDays === 1 ? 'día' : 'días'} = ${hrs}h/día${p.moved ? ' · movido solo este día' : ''}">
           <div class="cal2-planblock__t">${p.isSub ? '<span class="cal2-tblock__sub">SUB</span>' : ''}${esc(p.titulo)}</div>
           <div class="cal2-planblock__meta">${p.moved ? '↷ ' : '◇ '}${_fmtT(ini)}–${_fmtT(fin)} · ${hrs}h</div>
@@ -9728,6 +9740,84 @@ const CalendarModule = (() => {
       <div class="cal2-grid">
         ${timeCol}
         <div class="cal2-cols">${cols}</div>
+      </div>
+    </div>`;
+  }
+
+  // ── Vista de día: rejilla + panel lateral (mini mes y detalle) ─────
+  let _sel = null;   // {kind:'task'|'plan'|'mtg', id, ds} — lo seleccionado en la vista de día
+  function selectItem(kind, id, ds) { _sel = { kind, id, ds }; render(); }
+
+  // Mini calendario del mes, para saltar de día sin perder el contexto.
+  function _miniMonth(cur, todayDs) {
+    const y = cur.getFullYear(), m = cur.getMonth();
+    const ini = _monday(new Date(y, m, 1));
+    let celdas = Array.from({ length: 42 }, (_, i) => new Date(ini.getTime() + i * 86400000));
+    while (celdas.length > 28 && celdas.slice(-7).every(d => d.getMonth() !== m)) celdas = celdas.slice(0, -7);
+    const curDs = _iso(cur);
+    return `<div class="cal2mini">
+      <div class="cal2mini__hd">
+        <button class="cal2mini__nav" onclick="CalendarModule.miniShift(-1)" aria-label="Mes anterior">‹</button>
+        <span class="cal2mini__t">${_MON[m]} ${y}</span>
+        <button class="cal2mini__nav" onclick="CalendarModule.miniShift(1)" aria-label="Mes siguiente">›</button>
+      </div>
+      <div class="cal2mini__grid">
+        ${_WKS.map(w => `<span class="cal2mini__dow">${w[0]}</span>`).join('')}
+        ${celdas.map(d => {
+          const ds = _iso(d);
+          const cls = [d.getMonth() !== m ? 'out' : '', ds === curDs ? 'sel' : '', ds === todayDs ? 'today' : ''].filter(Boolean).join(' ');
+          return `<button class="cal2mini__d ${cls}" onclick="CalendarModule.openDay('${ds}')">${d.getDate()}</button>`;
+        }).join('')}
+      </div>
+    </div>`;
+  }
+
+  function _dayAside(day) {
+    const { ds } = day;
+    const todayDs = _iso(new Date());
+    let det = '';
+    if (_sel && _sel.ds === ds) {
+      if (_sel.kind === 'mtg') {
+        const m = _meetings.find(x => x.id === _sel.id);
+        if (m) det = _detCard(m.titulo, '#5856D6', [
+          ['Cuándo', m.hora_inicio ? `${_fmtT(m.hora_inicio)}${m.hora_fin ? '–' + _fmtT(m.hora_fin) : ''}` : 'Sin hora'],
+          ['Estado', m.estado || '—'],
+        ], `MeetingsModule.openDrawer(${m.id})`, null);
+      } else {
+        const t = _tasks.find(x => x.id === _sel.id);
+        if (t) {
+          const ov = _planOv[`${t.id}|${ds}`];
+          const hr = _sel.kind === 'plan'
+            ? (ov && ov.hora != null ? +ov.hora : (t.plan_hora != null ? +t.plan_hora : null))
+            : null;
+          det = _detCard(t.titulo, _projColor(t.project_id), [
+            ['Proyecto', [t.project_nombre, t.client_nombre].filter(Boolean).join(' · ') || '—'],
+            ['Cuándo', _sel.kind === 'plan'
+              ? (hr == null ? 'Sin hora fija' : `${_fmtT(_pad(hr) + ':00')}${ov && ov.hora != null ? ' · movido este día' : ''}`)
+              : (t.prog_inicio ? `${_fmtT(t.prog_inicio)}–${_fmtT(_addMin(t.prog_inicio, t.prog_min || 60))}` : 'Sin hora')],
+            ['Estado', (t.estado || '').replace('_', ' ') || '—'],
+            ['Entrega', t.deadline ? _dlShort(String(t.deadline).split('T')[0]) : '—'],
+          ], `TasksModule.openDrawer(${t.id})`, t.id);
+        }
+      }
+    }
+    if (!det) {
+      const n = _tasks.filter(t => _taskDay(t) === ds && t.estado !== 'completado' && _taskForMember(t)).length;
+      det = `<div class="cal2det cal2det--empty">
+        <div class="cal2det__hint">Elige un bloque del día para ver su detalle aquí.</div>
+        <div class="cal2det__sub">${n === 0 ? 'Nada pendiente para este día.' : `${n} ${n === 1 ? 'tarea pendiente' : 'tareas pendientes'} hoy.`}</div>
+      </div>`;
+    }
+    return `<aside class="cal2d__side">${_miniMonth(new Date(_anchor), todayDs)}${det}</aside>`;
+  }
+
+  function _detCard(titulo, color, filas, onOpen, taskId) {
+    return `<div class="cal2det">
+      <div class="cal2det__ttl"><span class="cal2det__dot" style="background:${color}"></span>${esc(titulo)}</div>
+      ${filas.map(([k, v]) => `<div class="cal2det__row"><span class="cal2det__k">${k}</span><span class="cal2det__v">${esc(String(v))}</span></div>`).join('')}
+      <div class="cal2det__acts">
+        ${taskId ? `<button class="cal2det__go" onclick="CalendarModule.startFromPlan(${taskId})">▶ Empezar</button>` : ''}
+        <button class="cal2det__open" onclick="${onOpen}">Abrir ficha</button>
       </div>
     </div>`;
   }
@@ -9983,6 +10073,7 @@ const CalendarModule = (() => {
   function next()     { _shift(1);  load(); }
   function goToday()  { _anchor = new Date(); _weekOf = _monday(new Date()); load(); }
   function setView(v) { _view = v; if (!_anchor) _anchor = new Date(); _weekOf = _monday(_anchor); render(); }
+  function miniShift(dir) { const a = new Date(_anchor); a.setMonth(a.getMonth() + dir, 1); _anchor = a; _weekOf = _monday(a); load(); }
   function openDay(ds) { _anchor = new Date(ds + 'T00:00:00'); _weekOf = _monday(_anchor); _view = 'day'; load(); }
   async function refresh() { _meetings = []; _tasks = []; _timeOff = []; _timeEntries = []; await load(); }
 
@@ -10010,7 +10101,7 @@ const CalendarModule = (() => {
 
   return { load, setTab, prev, next, goToday, refresh, refreshPlans, switchMember, connectGcal, disconnectGcal, syncTaskToGcal, tickRunning,
     openSchedulePopover, saveSchedule, unschedule, openDayUnscheduled, closeDayPop,
-    openPlanPop, movePlan, startFromPlan, setView, openDay,
+    openPlanPop, movePlan, startFromPlan, setView, openDay, selectItem, miniShift,
     _dpSearch, _dpSchedule, _dpPickDur, _dpPickHour, _dpCustomDur, _dpSchedCancel, _dpConfirm, _dpToggleSubs };
 })();
 

@@ -13460,3 +13460,88 @@ body:has(#pane-mgmt-projects.active) .content-wrap { max-width: 1400px; }
 .cal2--mac .cal2-cols .cal2-col__hdr { background: #fff !important; z-index: 6 !important; }
 .cal2--mac .cal2-cols .cal2-col__allday,
 .cal2--mac .cal2-cols .cal2-col__todo { background: #fff !important; z-index: 5 !important; }
+
+/* ── Vista de día: rejilla + panel lateral (mini mes y detalle), como en macOS ── */
+.cal2m__dow {
+  display: block; font-size: 15px; font-weight: 400; color: #86868B;
+  margin-top: 1px; text-transform: capitalize; letter-spacing: 0;
+}
+.cal2d { flex: 1; min-height: 0; display: flex; }
+.cal2d__main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.cal2d__side {
+  width: 268px; flex-shrink: 0; border-left: 1px solid #E4E4E6;
+  display: flex; flex-direction: column; overflow-y: auto; background: #fff;
+}
+
+/* Mini calendario del mes */
+.cal2mini { padding: 12px 14px 14px; border-bottom: 1px solid #E4E4E6; }
+.cal2mini__hd { display: flex; align-items: center; justify-content: space-between; margin-bottom: 7px; }
+.cal2mini__t { font-size: 12.5px; font-weight: 600; color: #1D1D1F; text-transform: capitalize; }
+.cal2mini__nav {
+  width: 20px; height: 20px; display: flex; align-items: center; justify-content: center;
+  font: inherit; font-size: 15px; line-height: 1; color: #86868B;
+  background: none; border: none; border-radius: 5px; cursor: pointer;
+}
+.cal2mini__nav:hover { background: #F1F1F3; color: #1D1D1F; }
+.cal2mini__grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; }
+.cal2mini__dow { font-size: 9.5px; color: #A1A1A6; text-align: center; padding-bottom: 3px; }
+.cal2mini__d {
+  font: inherit; font-size: 11px; color: #1D1D1F; background: none; border: none;
+  aspect-ratio: 1; border-radius: 50%; cursor: pointer; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+.cal2mini__d:hover { background: #F1F1F3; }
+.cal2mini__d.out { color: #C7C7CC; }
+.cal2mini__d.today { color: #FF3B30; font-weight: 700; }
+.cal2mini__d.sel { background: #FF3B30; color: #fff; font-weight: 600; }
+.cal2mini__d.sel.today { color: #fff; }
+
+/* Panel de detalle del bloque seleccionado */
+.cal2det { padding: 14px 16px 16px; }
+.cal2det__ttl {
+  display: flex; align-items: flex-start; gap: 7px;
+  font-size: 16px; font-weight: 600; color: #1D1D1F; line-height: 1.3; margin-bottom: 12px;
+}
+.cal2det__dot { flex-shrink: 0; width: 9px; height: 9px; border-radius: 50%; margin-top: 5px; }
+.cal2det__row { display: flex; gap: 10px; padding: 6px 0; border-top: 1px solid #F0F0F2; font-size: 12px; }
+.cal2det__k { width: 68px; flex-shrink: 0; color: #86868B; }
+.cal2det__v { flex: 1; min-width: 0; color: #1D1D1F; text-transform: capitalize; }
+.cal2det__acts { display: flex; gap: 7px; margin-top: 14px; }
+.cal2det__go, .cal2det__open {
+  font: inherit; font-size: 12px; font-weight: 500; padding: 6px 11px;
+  border-radius: 7px; cursor: pointer;
+}
+.cal2det__go { border: none; background: var(--primary, #00804C); color: #fff; }
+.cal2det__go:hover { filter: brightness(1.08); }
+.cal2det__open { border: 1px solid #E4E4E6; background: #fff; color: #1D1D1F; }
+.cal2det__open:hover { background: #F7F7F8; }
+.cal2det--empty { color: #86868B; }
+.cal2det__hint { font-size: 12.5px; color: #1D1D1F; }
+.cal2det__sub { font-size: 12px; margin-top: 4px; }
+
+/* Etiquetas de hora: número grande y AM/PM pequeño, alineados a la derecha */
+.cal2--mac .cal2-tlabels__hours { position: relative; }
+.cal2--mac .cal2-tlabel { gap: 2px; }
+.cal2--mac .cal2-tlabel b { font-size: 11px; font-weight: 400; color: #86868B; }
+.cal2--mac .cal2-tlabel i { font-size: 8.5px; font-style: normal; color: #A1A1A6; }
+
+/* Píldora roja con la hora actual, sobre la columna de horas */
+.cal2-nowpill {
+  position: absolute; right: 4px; z-index: 8;
+  transform: translateY(-50%);
+  background: #FF3B30; color: #fff;
+  font-size: 9.5px; font-weight: 700; letter-spacing: -.01em;
+  padding: 2px 5px; border-radius: 4px; white-space: nowrap; pointer-events: none;
+}
+
+/* La rejilla pide 660px pensando en 7 columnas; con una sola sobra y saldria scroll. */
+.cal2--mac .cal2-grid-wrap--day .cal2-grid { min-width: 0; }
+
+/* El mini-mes es contexto, no protagonista: compacto para que el detalle quepa. */
+.cal2d__side { overflow: hidden; }
+.cal2mini { padding: 9px 12px 10px; flex-shrink: 0; }
+.cal2mini__d { aspect-ratio: auto; height: 21px; font-size: 10.5px; border-radius: 5px; }
+.cal2mini__dow { font-size: 9px; padding-bottom: 2px; }
+.cal2mini__t { font-size: 11.5px; }
+.cal2det { flex: 1; min-height: 0; overflow-y: auto; padding: 12px 14px 14px; }
+.cal2det__ttl { font-size: 14.5px; margin-bottom: 9px; }
