@@ -13063,3 +13063,11 @@ body:has(#pane-mgmt-tasks.active) .content-wrap { max-width: 1400px; }
 #pane-mgmt-tasks .clients-table th[data-col="progreso"],
 #pane-mgmt-tasks .clients-table td[data-col="progreso"] { min-width: 92px; }
 #pane-mgmt-tasks .clients-table th:nth-last-child(3) { white-space: nowrap; }
+
+/* "Progreso" (77px de texto) no cabía en su columna de 64px y se desbordaba
+   pegándose a "Timer". Se les da el ancho que realmente necesitan. */
+#pane-mgmt-tasks .clients-table th[data-col="progreso"],
+#pane-mgmt-tasks .clients-table td[data-col="progreso"] { width: 104px; }
+#pane-mgmt-tasks .clients-table th[data-col="timer"],
+#pane-mgmt-tasks .clients-table td[data-col="timer"] { width: 78px; }
+#pane-mgmt-tasks .clients-table thead th { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
