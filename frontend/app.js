@@ -11793,6 +11793,17 @@ const ProjectsModule = (() => {
       if (p.tipo_proyecto === 'fijo') val = money(p.valor_total);
       else if (p.tipo_proyecto === 'horas' || p.tipo_proyecto === 'semanal') val = p.tarifa_hora ? money(p.tarifa_hora) + '/h' : '<span class="muted">—</span>';
       else val = money(p.valor_total);
+      // Responsables: iniciales en círculo (varios caben sin romper la columna).
+      const resps = (Array.isArray(p.responsables) && p.responsables.length) ? p.responsables : (p.responsable ? [p.responsable] : []);
+      const inic = n => String(n || '').trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
+      const respHtml = resps.length
+        ? `<div class="pl-resp">${resps.slice(0, 3).map(n => `<span class="pl-resp__av" title="${esc(n)}">${esc(inic(n))}</span>`).join('')}${resps.length > 3 ? `<span class="pl-resp__more">+${resps.length - 3}</span>` : ''}</div>`
+        : '<span class="muted">—</span>';
+      // Ritmo semanal: lo que se cobra/trabaja por semana, si el proyecto lo tiene.
+      const sem = [];
+      if (p.plan_horas > 0) sem.push(`${String(p.plan_horas).replace(/\.00$/, '')} h/sem`);
+      if (p.cobro_semanal && p.precio_semanal > 0) sem.push(money(p.precio_semanal) + '/sem');
+      const semHtml = sem.length ? `<span class="pl-sem">${sem.join(' · ')}</span>` : '<span class="muted">—</span>';
       const isOpen = _expandedProjects.has(p.id);
       const expandHtml = isOpen
         ? `<div class="project-expanded-content">${_taskTreeHtml(p.id)}</div>`
@@ -11801,14 +11812,17 @@ const ProjectsModule = (() => {
         <div class="projects-list-row projects-list-grid" onclick="ProjectsModule.toggleProjectExpand(${p.id})">
           <div class="pl-proj-cell">
             <button type="button" class="pjt-chevron${isOpen ? ' pjt-chevron--open' : ''}" onclick="event.stopPropagation();ProjectsModule.toggleProjectExpand(${p.id})">${_chevronSvg}</button>
-            <div style="width:8px;height:8px;border-radius:2px;background:${prioColors[p.prioridad]||'#FBBF24'};flex-shrink:0"></div>
-            <span class="client-nombre">${esc(p.nombre)}</span>
+            <div class="pl-prio" style="background:${prioColors[p.prioridad]||'#FBBF24'}"></div>
+            <div class="pl-proj-txt">
+              <span class="client-nombre">${esc(p.nombre)}</span>
+              <span class="pl-proj-sub">${p.client_nombre ? esc(p.client_nombre) : 'Sin cliente'}</span>
+            </div>
           </div>
-          <div class="pl-cell">${p.client_nombre ? esc(p.client_nombre) : '<span class="muted">—</span>'}</div>
+          <div>${respHtml}</div>
           <div>${_estadoBadge(p.estado)}</div>
-          <div>${_tipoBadge(p.tipo_proyecto || 'fijo')}</div>
+          <div class="pl-cell pl-cell--val"><span class="pl-tipo">${p.tipo_proyecto === 'horas' ? 'Por horas' : p.tipo_proyecto === 'semanal' ? 'Semanal' : 'Precio fijo'}</span>${val}</div>
+          <div class="pl-cell">${semHtml}</div>
           <div class="pl-cell">${_fmtDate(p.fecha_fin)}</div>
-          <div class="pl-cell">${val}</div>
           <div class="client-actions-cell">
             <button class="client-action-btn" onclick="event.stopPropagation();ProjectsModule.openDrawer(${p.id})">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
