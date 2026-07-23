@@ -13086,3 +13086,10 @@ body:has(#pane-mgmt-tasks.active) .content-wrap { max-width: 1400px; }
 .proj-wk__cobro { display: inline-flex; align-items: center; gap: 5px; font-size: .78rem; color: var(--text-secondary, #6B7280); margin-left: 10px; cursor: pointer; }
 .proj-wk__hint { font-size: .74rem; color: var(--text-muted, #8C97A3); padding-top: 2px; border-top: 1px solid var(--border, #E4E7DD); margin-top: 2px; padding-top: 8px; }
 .proj-wk__hint b { color: var(--primary, #00804C); }
+
+/* Plan sin hora fija: chip en "Todo el día" (clic para fijarle hora exacta) */
+.cal2-planflex { display: block; width: 100%; text-align: left; font: inherit; font-size: 10.5px; font-weight: 600;
+  color: var(--primary, #00804C); background: var(--primary-soft, #EAF5EE); border: 1px dashed var(--primary-border, #CDE9DA);
+  border-radius: 6px; padding: 3px 6px; margin-bottom: 3px; cursor: pointer; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; transition: background .12s; }
+.cal2-planflex:hover { background: #DCEFE4; }

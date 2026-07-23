@@ -9554,8 +9554,10 @@ const CalendarModule = (() => {
       const days = String(t.plan_dias || '').split(',').map(s => s.trim())
         .filter(s => s !== '').map(Number).filter(n => n >= 0 && n <= 6);
       const weekly = (t.plan_horas != null && t.plan_horas !== '') ? +t.plan_horas : 0;
+      // hour null = plan SIN hora fija: igual se muestra (como bloque flexible del día)
+      // para poder programarlo a la hora exacta cuando toque.
       const hour   = (t.plan_hora  != null && t.plan_hora  !== '') ? +t.plan_hora  : null;
-      if (!days.length || !(weekly > 0) || hour == null) continue;
+      if (!days.length || !(weekly > 0)) continue;
       // Regla jerárquica: el plan de la PADRE solo se ignora si alguna de sus subtareas
       // define su propio plan (ahí manda el detalle). Si ninguna lo hace —el caso normal:
       // la semana lleva el plan y las subtareas son el trabajo suelto— vale el de la padre.
@@ -9618,7 +9620,19 @@ const CalendarModule = (() => {
         </div>`;
       }).join('');
 
+      // Planes SIN hora fija: chip en la franja "Todo el día" con las horas que tocan
+      // ese día; al hacer clic se abre la tarea para fijarles hora exacta.
+      const planFlex = _plans.filter(p =>
+        p.hour == null && ds >= p.start && (!p.end || ds <= p.end) && p.daysSet.has((d.getDay() + 6) % 7));
+      const planFlexHtml = planFlex.map(p => {
+        const hrs = Math.round(p.perMin / 60 * 10) / 10;
+        return `<button class="cal2-planflex" onclick="event.stopPropagation();TasksModule.openDrawer(${p.id})"
+            title="${esc(p.titulo)} — ${p.weekly}h/semana ÷ ${p.nDays} ${p.nDays === 1 ? 'día' : 'días'} = ${hrs}h hoy · sin hora fija, clic para programarla">
+          ◇ ${esc(p.titulo)} · ${hrs}h</button>`;
+      }).join('');
+
       const planBlocks = _plans.map(p => {
+        if (p.hour == null) return '';
         if (ds < p.start || (p.end && ds > p.end) || !p.daysSet.has((d.getDay() + 6) % 7)) return '';
         if (p.hour < GRID_S || p.hour >= GRID_E) return '';
         const topPx = (p.hour - GRID_S) * HOUR_H;
@@ -9735,7 +9749,7 @@ const CalendarModule = (() => {
           <span class="cal2-col__dow" translate="no">${_WKS[i]}</span>
           <span class="cal2-col__num${isToday ? ' cal2-col__num--today' : ''}">${d.getDate()}</span>
         </div>
-        <div class="cal2-col__allday">${noHoraPill}${noTimeMtgs}${offChips}${gcalAllDay}</div>
+        <div class="cal2-col__allday">${planFlexHtml}${noHoraPill}${noTimeMtgs}${offChips}${gcalAllDay}</div>
         <div class="cal2-col__body">${planBlocks}${taskBlocks}${timedBlocks}${gcalTimed}${timerBlocks}${nowLine}</div>
       </div>`;
     }).join('');
