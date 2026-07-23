@@ -7199,16 +7199,9 @@ const TasksModule = (() => {
     if (!total) return '';
     const pct = Math.round(done / total * 100);
     const complete = done >= total;
-    const c = 37.7;                              // 2·π·r con r=6
-    const off = (c * (1 - done / total)).toFixed(1);
     return `<span class="tl-prog${complete ? ' tl-prog--done' : ''}" title="${done} de ${total} completadas (${pct}%)">
-      <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
-        <circle cx="8" cy="8" r="6" stroke="#E7E3DD" stroke-width="2"/>
-        ${done > 0 ? `<circle cx="8" cy="8" r="6" stroke="${complete ? '#22C55E' : 'var(--brand,#00804C)'}" stroke-width="2" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${off}" transform="rotate(-90 8 8)"/>` : ''}
-        ${complete ? '<path d="M5.4 8 L7 9.6 L10.6 5.8" stroke="#22C55E" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>' : ''}
-      </svg>
-      <span class="tl-prog-txt">${pct}%</span>
-      <span class="tl-prog-frac">${done}/${total}</span>
+      <span class="tl-bar"><span class="tl-bar__fill" style="width:${pct}%"></span></span>
+      <span class="tl-prog-txt">${complete ? '✓' : pct + '%'}</span>
     </span>`;
   }
 

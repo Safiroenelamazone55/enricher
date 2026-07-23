@@ -13134,3 +13134,42 @@ body:has(#pane-mgmt-projects.active) .content-wrap { max-width: 1400px; }
 /* Progreso en % (la fracción queda como detalle secundario) */
 .tl-prog-txt { font-weight: 700; font-variant-numeric: tabular-nums; }
 .tl-prog-frac { font-size: .62rem; color: var(--text-muted, #A6998A); margin-left: 4px; font-variant-numeric: tabular-nums; }
+
+/* ── Avance: barra fina en vez del anillo (más legible de un vistazo) ────────── */
+#pane-mgmt-tasks .tl-prog { display: inline-flex; align-items: center; gap: 8px; }
+#pane-mgmt-tasks .tl-bar { flex: 1; min-width: 42px; max-width: 62px; height: 5px; border-radius: 99px;
+  background: #EBE8E2; overflow: hidden; }
+#pane-mgmt-tasks .tl-bar__fill { display: block; height: 100%; border-radius: 99px;
+  background: linear-gradient(90deg, #4FA37B, #00804C); transition: width .35s cubic-bezier(.16,1,.3,1); }
+#pane-mgmt-tasks .tl-prog--done .tl-bar__fill { background: #22C55E; }
+#pane-mgmt-tasks .tl-prog-txt { font-size: .72rem; font-weight: 700; color: var(--text-secondary, #6B7280);
+  font-variant-numeric: tabular-nums; min-width: 30px; }
+#pane-mgmt-tasks .tl-prog--done .tl-prog-txt { color: #22C55E; }
+#pane-mgmt-tasks .tl-prog-frac { display: none; }
+
+/* ── Jerarquía tarea → subtarea: línea de árbol "└─" ─────────────────────────
+   Había DOS definiciones en conflicto (una con bordes, otra con fondo sólido) y el
+   resultado era un cuadrado gris. Aquí queda una sola, explícita:
+   ::before = el codo (baja y gira a la derecha) · ::after = la guía que continúa
+   hacia la siguiente subtarea (se oculta en la última). */
+#pane-mgmt-tasks .tl-name-cell--sub::before {
+  content: '' !important; position: absolute !important;
+  /* Arranca arriba de la fila y baja hasta el centro, girando hacia el texto. */
+  left: 26px !important; top: -2px !important;
+  width: 22px !important; height: calc(50% + 2px) !important;
+  background: transparent !important;                    /* clave: sin relleno */
+  border-left: 1.5px solid #C4CFC0 !important;
+  border-bottom: 1.5px solid #C4CFC0 !important;
+  border-top: none !important; border-right: none !important;
+  border-bottom-left-radius: 10px !important;
+  border-top-left-radius: 0 !important; border-bottom-right-radius: 0 !important;
+}
+#pane-mgmt-tasks .tl-name-cell--sub::after {
+  content: '' !important; position: absolute !important;
+  left: 26px !important; top: 50% !important;
+  width: 1.5px !important; height: calc(50% + 2px) !important;  /* vertical, no horizontal */
+  background: #C4CFC0 !important; border: none !important; border-radius: 0 !important;
+}
+#pane-mgmt-tasks .tl-row--sub-last .tl-name-cell--sub::after { display: none !important; }
+#pane-mgmt-tasks .clients-table td.tl-name-cell--sub { padding-left: 58px !important; }
+#pane-mgmt-tasks .tl-row--sub .ct-name { color: var(--text-secondary, #5F6B64); }
