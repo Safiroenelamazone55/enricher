@@ -13259,3 +13259,204 @@ body:has(#pane-mgmt-projects.active) .content-wrap { max-width: 1400px; }
 .cal2-pp__link:hover { color: var(--primary, #00804C); text-decoration: underline; }
 .cal2-pp__sub--done { opacity: .5; }
 .cal2-pp__sub--done .cal2-pp__sub-t { text-decoration: line-through; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   CALENDARIO — presentación estilo macOS Calendar
+   Cromo casi invisible (líneas de 1px, gris muy claro), tipografía del sistema,
+   densidad alta, y el color puesto SOLO en los eventos: cada proyecto el suyo.
+   ══════════════════════════════════════════════════════════════════════════ */
+.cal2--mac {
+  --mac-line:   #E4E4E6;      /* hairline de la rejilla */
+  --mac-line-s: #EFEFF1;      /* división de media hora */
+  --mac-txt:    #1D1D1F;
+  --mac-mut:    #86868B;
+  --mac-red:    #FF3B30;      /* hoy y línea de "ahora" */
+  --mac-bg:     #FFFFFF;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Inter, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  background: var(--mac-bg);
+  display: flex; flex-direction: column;
+  height: 100%; min-height: 0;
+}
+
+/* ── Barra superior: título · segmentado · ‹ Hoy › ── */
+.cal2m__bar {
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px 18px 12px; border-bottom: 1px solid var(--mac-line);
+}
+.cal2m__title { font-size: 26px; letter-spacing: -.02em; color: var(--mac-txt); font-weight: 300; white-space: nowrap; }
+.cal2m__title b { font-weight: 700; text-transform: capitalize; }
+.cal2m__seg { display: flex; background: #F1F1F3; border-radius: 8px; padding: 2px; margin: 0 auto; }
+.cal2m__segb {
+  font: inherit; font-size: 12.5px; font-weight: 500; color: var(--mac-txt);
+  background: none; border: none; border-radius: 6px; padding: 4px 15px; cursor: pointer;
+  transition: background .12s, box-shadow .12s;
+}
+.cal2m__segb.on { background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.14), 0 0 0 .5px rgba(0,0,0,.04); font-weight: 600; }
+.cal2m__right { display: flex; align-items: center; gap: 8px; }
+.cal2m__nav { display: flex; align-items: center; background: #F1F1F3; border-radius: 8px; padding: 2px; }
+.cal2m__navb {
+  width: 26px; height: 24px; display: flex; align-items: center; justify-content: center;
+  background: none; border: none; border-radius: 6px; color: var(--mac-txt); cursor: pointer;
+}
+.cal2m__navb:hover, .cal2m__today:hover { background: #fff; }
+.cal2m__today {
+  font: inherit; font-size: 12.5px; font-weight: 500; color: var(--mac-txt);
+  background: none; border: none; border-radius: 6px; padding: 4px 12px; cursor: pointer;
+}
+.cal2m__sel {
+  font: inherit; font-size: 12.5px; color: var(--mac-txt); background: #F1F1F3;
+  border: none; border-radius: 8px; padding: 5px 9px; cursor: pointer; max-width: 165px;
+}
+.cal2m__gc {
+  font: inherit; font-size: 12px; color: var(--mac-mut); background: none;
+  border: 1px solid var(--mac-line); border-radius: 8px; padding: 5px 10px; cursor: pointer; white-space: nowrap;
+}
+.cal2m__gc:hover { color: var(--mac-txt); border-color: #C9C9CC; }
+.cal2m__gc--on { color: #1E8E3E; border-color: #BFE3C9; background: #F1FAF3; }
+.cal2m__new {
+  width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
+  background: var(--primary, #00804C); color: #fff; border: none; border-radius: 8px; cursor: pointer;
+}
+.cal2m__new:hover { filter: brightness(1.08); }
+
+/* ── Fila de filtros: discreta, casi una nota al pie ── */
+.cal2--mac .cal2__tabs { padding: 6px 18px; border-bottom: 1px solid var(--mac-line); gap: 4px; background: #FCFCFD; }
+.cal2--mac .cal2__tab {
+  font-size: 12px; font-weight: 500; color: var(--mac-mut); border: none; background: none;
+  border-radius: 6px; padding: 3px 9px;
+}
+.cal2--mac .cal2__tab.active { color: var(--mac-txt); background: #ECECEE; }
+.cal2--mac .cal2__tab::after { display: none; }
+.cal2--mac .cal2__tab-n { font-size: 10.5px; color: var(--mac-mut); }
+.cal2--mac .cal2__tab-action { font-size: 12px; color: var(--mac-mut); border: none; background: none; }
+
+/* ── Rejilla ── */
+.cal2--mac .cal2-grid-wrap { flex: 1; min-height: 0; overflow: auto; background: var(--mac-bg); }
+.cal2--mac .cal2-grid { border: none; }
+.cal2--mac .cal2-tlabels { width: 72px; border-right: none; flex-shrink: 0; }
+.cal2--mac .cal2-tlabels__top { height: 46px; border-bottom: 1px solid var(--mac-line); }
+.cal2--mac .cal2-tlabels__allday,
+.cal2--mac .cal2-tlabels__todo {
+  font-size: 9.5px; line-height: 1.15; text-align: right; color: var(--mac-mut); border-bottom: 1px solid var(--mac-line);
+  justify-content: flex-end; padding-right: 7px;
+}
+.cal2--mac .cal2-tlabel {
+  height: 48px; border-bottom: none; font-size: 10.5px; color: var(--mac-mut);
+  padding: 0 7px 0 0; align-items: flex-start; justify-content: flex-end;
+  transform: translateY(-6px);            /* la etiqueta se apoya en su línea, como en macOS */
+}
+.cal2--mac .cal2-col { border-left: 1px solid var(--mac-line); min-width: 0; }
+.cal2--mac .cal2-col__hdr {
+  height: 46px; flex-direction: row; align-items: baseline; justify-content: center; gap: 6px;
+  border-bottom: 1px solid var(--mac-line); background: var(--mac-bg);
+}
+.cal2--mac .cal2-col__dow { font-size: 11px; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--mac-mut); }
+.cal2--mac .cal2-col__num { font-size: 17px; font-weight: 400; color: var(--mac-txt); width: 26px; height: 26px; }
+.cal2--mac .cal2-col__num--today { background: var(--mac-red); color: #fff; font-weight: 600; }
+.cal2--mac .cal2-col--today .cal2-col__allday,
+.cal2--mac .cal2-col--today .cal2-col__todo { background: transparent; }
+.cal2--mac .cal2-col--today .cal2-col__body { background: none; }
+.cal2--mac .cal2-col__allday, .cal2--mac .cal2-col__todo { border-bottom: 1px solid var(--mac-line); }
+.cal2--mac .cal2-col__todo { background: none; }
+/* Rejilla horaria: línea llena a la hora, tenue a la media */
+.cal2--mac .cal2-col__body {
+  height: 1152px;                          /* 24 h × 48 px */
+  background:
+    repeating-linear-gradient(to bottom, transparent 0 47px, var(--mac-line) 47px 48px),
+    repeating-linear-gradient(to bottom, transparent 0 23px, var(--mac-line-s) 23px 24px);
+}
+
+/* Línea de "ahora": roja, con un punto en el borde */
+.cal2--mac .cal2-now-line { background: var(--mac-red); height: 1.5px; z-index: 5; }
+.cal2--mac .cal2-now-line::before {
+  content: ""; position: absolute; left: -3px; top: -3px;
+  width: 7px; height: 7px; border-radius: 50%; background: var(--mac-red);
+}
+
+/* ── Eventos: fondo teñido + barra de color a la izquierda (color del proyecto) ── */
+.cal2--mac .cal2-tblock,
+.cal2--mac .cal2-planblock {
+  --c: #8E8E93;
+  left: 1px; right: 1px; padding: 2px 5px 2px 7px;
+  border: none; border-left: 3px solid var(--c);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--c) 15%, #fff);
+  box-shadow: none; overflow: hidden;
+}
+.cal2--mac .cal2-tblock:hover, .cal2--mac .cal2-planblock:hover { background: color-mix(in srgb, var(--c) 24%, #fff); }
+.cal2--mac .cal2-tblock__t, .cal2--mac .cal2-planblock__t {
+  font-size: 11px; font-weight: 600; line-height: 1.3;
+  color: color-mix(in srgb, var(--c) 78%, #000);
+}
+.cal2--mac .cal2-tblock__meta, .cal2--mac .cal2-planblock__meta {
+  font-size: 10px; margin-top: 0;
+  color: color-mix(in srgb, var(--c) 62%, #333);
+}
+.cal2--mac .cal2-planblock { border-left-style: dashed; }
+.cal2--mac .cal2-planblock--moved { border-left-style: solid; }
+.cal2--mac .cal2-tblock__sub { font-size: 8.5px; font-weight: 700; letter-spacing: .04em; opacity: .75; margin-right: 3px; }
+
+/* Chip "por programar": el color del proyecto, sin relleno (aún no ocupa hueco) */
+.cal2--mac .cal2-planflex {
+  --c: #8E8E93;
+  border: 1px dashed color-mix(in srgb, var(--c) 45%, #fff);
+  background: color-mix(in srgb, var(--c) 8%, #fff);
+  color: color-mix(in srgb, var(--c) 75%, #000);
+  border-radius: 5px; padding: 3px 6px; font-size: 10.5px;
+}
+.cal2--mac .cal2-planflex:hover { border-style: solid; border-color: var(--c); box-shadow: none; }
+.cal2--mac .cal2-planflex__h { background: color-mix(in srgb, var(--c) 14%, #fff); color: inherit; }
+.cal2--mac .cal2-nohora {
+  font-size: 10.5px; font-weight: 500; color: var(--mac-mut);
+  background: #F1F1F3; border: none; border-radius: 5px; padding: 3px 8px;
+}
+.cal2--mac .cal2-nohora:hover { background: #E7E7EA; box-shadow: none; }
+.cal2--mac .cal2-tchip { font-size: 10.5px; border-radius: 5px; padding: 2px 6px; }
+
+/* ── Vista de mes ── */
+.cal2mo { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.cal2mo__dows { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border-bottom: 1px solid #E4E4E6; }
+.cal2mo__dow { font-size: 11px; color: #86868B; text-align: right; padding: 6px 8px; }
+.cal2mo__grid { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; }
+.cal2mo__row { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); flex: 1; min-height: 104px; }
+.cal2mo__cell {
+  border-left: 1px solid #E4E4E6; border-bottom: 1px solid #E4E4E6;
+  padding: 3px 3px 4px; display: flex; flex-direction: column; gap: 1px; min-width: 0; overflow: hidden;
+}
+.cal2mo__cell:first-child { border-left: none; }
+.cal2mo__cell--out { background: #FAFAFB; }
+.cal2mo__cell--out .cal2mo__num { color: #C7C7CC; }
+.cal2mo__num {
+  align-self: flex-end; font-size: 12px; color: #1D1D1F; padding: 1px 5px;
+  border-radius: 999px; cursor: pointer; white-space: nowrap;
+}
+.cal2mo__num:hover { background: #ECECEE; }
+.cal2mo__num--today { background: #FF3B30; color: #fff; font-weight: 600; }
+.cal2mo__ev {
+  display: flex; align-items: center; gap: 4px; width: 100%; text-align: left;
+  font: inherit; font-size: 10.5px; background: none; border: none; border-radius: 4px;
+  padding: 1px 4px; cursor: pointer; min-width: 0; color: #1D1D1F;
+}
+.cal2mo__ev:hover { background: #F1F1F3; }
+.cal2mo__dot { flex-shrink: 0; width: 7px; height: 7px; border-radius: 50%; }
+.cal2mo__ev--plan .cal2mo__dot { background: none !important; border: 1.5px solid currentColor; opacity: .55; }
+.cal2mo__h { flex-shrink: 0; color: #86868B; font-size: 10px; }
+.cal2mo__t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cal2mo__more { font: inherit; font-size: 10px; color: #86868B; background: none; border: none; padding: 1px 4px; text-align: left; cursor: pointer; }
+.cal2mo__more:hover { color: #1D1D1F; }
+
+/* Cabecera y bandas fijas al scrollear (el "top" lo pone el JS: las bandas crecen) */
+.cal2--mac .cal2-col__hdr,
+.cal2--mac .cal2-tlabels__top { position: sticky; top: 0; z-index: 6; background: #fff; }
+.cal2--mac .cal2-col__allday,
+.cal2--mac .cal2-col__todo,
+.cal2--mac .cal2-tlabels__allday,
+.cal2--mac .cal2-tlabels__todo { position: sticky; z-index: 5; background: #fff; }
+.cal2--mac .cal2-tlabels { position: relative; z-index: 7; background: #fff; }
+
+/* La cabecera del dia y las bandas SIEMPRE opacas: si no, los bloques se ven por
+   debajo al scrollear (en la vista de dia la unica columna es hoy). */
+.cal2--mac .cal2-cols .cal2-col__hdr { background: #fff !important; z-index: 6 !important; }
+.cal2--mac .cal2-cols .cal2-col__allday,
+.cal2--mac .cal2-cols .cal2-col__todo { background: #fff !important; z-index: 5 !important; }

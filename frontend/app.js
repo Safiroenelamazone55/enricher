@@ -9011,9 +9011,25 @@ const CalendarModule = (() => {
   let _calMember  = 'me';   // filtro de calendario: 'me' | 'all' | nombre del miembro
   let _calTeam    = [];     // /mgmt/team para el selector (solo admin)
 
-  const HOUR_H = 56;
-  let GRID_S = 8;   // límites del grid — dinámicos: se expanden si hay bloques/sesiones fuera de 8–20
-  let GRID_E = 20;
+  let _view       = 'week';  // 'day' | 'week' | 'month'
+  let _anchor     = null;    // día de referencia de la vista (para día y mes)
+
+  // Día completo, de 0 a 24: la jornada no termina a las 7 de la tarde. La rejilla
+  // scrollea (como la de macOS) y arranca a la altura de la hora actual.
+  const HOUR_H = 48;
+  const GRID_S = 0;
+  const GRID_E = 24;
+
+  // Un color por proyecto, estable: el mismo proyecto siempre sale del mismo color.
+  // Paleta de macOS Calendar.
+  const _PROJ_COLORS = ['#FF3B30','#FF9500','#FFCC00','#34C759','#007AFF','#AF52DE',
+                        '#FF2D55','#5AC8FA','#A2845E','#5856D6','#30B0C7','#FF6482'];
+  function _projColor(pid) {
+    if (pid == null) return '#8E8E93';
+    let n = 0; const s = String(pid);
+    for (let i = 0; i < s.length; i++) n = (n * 31 + s.charCodeAt(i)) >>> 0;
+    return _PROJ_COLORS[n % _PROJ_COLORS.length];
+  }
 
   const _WKS  = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
   const _DOMF = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
@@ -9097,8 +9113,18 @@ const CalendarModule = (() => {
     spin.style.display = 'flex';
     cont.style.display = 'none';
     try {
-      const weekStart = _weekOf || _monday(new Date());
-      const weekEnd   = new Date(weekStart.getTime() + 7 * 86400000);
+      // La ventana que se pide depende de la vista: el mes necesita 6 semanas, no una.
+      if (!_anchor) _anchor = new Date();
+      let weekStart = _weekOf || _monday(new Date());
+      let weekEnd   = new Date(weekStart.getTime() + 7 * 86400000);
+      if (_view === 'month') {
+        const a = new Date(_anchor); a.setDate(1);
+        weekStart = _monday(a);
+        weekEnd   = new Date(weekStart.getTime() + 42 * 86400000);
+      } else if (_view === 'day') {
+        weekStart = new Date(_anchor); weekStart.setHours(0, 0, 0, 0);
+        weekEnd   = new Date(weekStart.getTime() + 86400000);
+      }
       const [mr, tr, tor, gcr, ter, por] = await Promise.all([
         apiFetch(`${API}/mgmt/meetings`),
         apiFetch(`${API}/mgmt/tasks`),
@@ -9148,54 +9174,44 @@ const CalendarModule = (() => {
     } catch (e) { console.warn('[gcal] sync failed:', e.message); }
   }
 
-  // Límites horarios del grid: por defecto 8–20, pero se EXPANDEN para incluir cualquier
-  // sesión/bloque/reunión fuera de ese rango (p. ej. tiempo registrado a las 6 AM o 10 PM).
-  // Solo cuenta lo que realmente se renderiza (respeta el filtro por miembro).
-  function _computeGridBounds() {
-    let minH = 8, maxH = 20;
-    const ws = _weekOf || _monday(new Date());
-    const weekDs = new Set(Array.from({ length: 7 }, (_, i) => _iso(new Date(ws.getTime() + i * 86400000))));
-    const personal = (_calMember === 'me');
-    const lo = h => { if (h != null && !isNaN(h) && h < minH) minH = Math.floor(h); };
-    const hi = h => { if (h != null && !isNaN(h) && h > maxH) maxH = Math.ceil(h); };
-    if (personal) for (const e of _timeEntries) {
-      const s = new Date(e.started_at); if (!weekDs.has(_iso(s))) continue;
-      const en = e.ended_at ? new Date(e.ended_at) : new Date();
-      lo(s.getHours() + s.getMinutes() / 60); hi(en.getHours() + en.getMinutes() / 60);
-    }
-    for (const t of _tasks) {
-      if (!t.prog_inicio || !weekDs.has(_taskDay(t)) || !_taskForMember(t)) continue;
-      const p = _parseT(t.prog_inicio); if (!p) continue;
-      const sh = p.h + p.m / 60; lo(sh); hi(sh + (t.prog_min || 60) / 60);
-    }
-    for (const m of _meetings) {
-      if (!m.hora_inicio || !weekDs.has(String(m.fecha).split('T')[0]) || !_mtgForMember(m)) continue;
-      const s = _parseT(m.hora_inicio); if (!s) continue; const e = _parseT(m.hora_fin);
-      lo(s.h + s.m / 60); hi(e ? e.h + e.m / 60 : s.h + s.m / 60 + 1);
-    }
-    if (personal) for (const ev of _gcalEvents) {
-      if (ev.allDay || !ev.start) continue; const s = new Date(ev.start); if (!weekDs.has(_iso(s))) continue;
-      const e = new Date(ev.end || ev.start); lo(s.getHours() + s.getMinutes() / 60); hi(e.getHours() + e.getMinutes() / 60);
-    }
-    for (const p of _recurPlans()) { lo(p.hour); hi(p.hour + p.perMin / 60); }
-    GRID_S = Math.max(0, Math.min(8, minH));
-    GRID_E = Math.min(24, Math.max(20, maxH));
-  }
+  // El grid ya cubre el día entero (0–24 h), así que no hay que ensancharlo: se
+  // conserva la llamada para no tocar todos los puntos de uso.
+  function _computeGridBounds() {}
 
   // ── Render ─────────────────────────────────────────────────────────
+  // Los días que pinta la vista actual: 1 (día), 7 (semana) o la retícula del mes.
+  function _viewDays(todayDs) {
+    const mk = d => ({ d, ds: _iso(d), isToday: _iso(d) === todayDs });
+    if (_view === 'day')  return [mk(new Date(_anchor))];
+    if (_view === 'month') {
+      const a = new Date(_anchor); a.setDate(1);
+      const ini = _monday(a);
+      const fin = new Date(a.getFullYear(), a.getMonth() + 1, 0);
+      const n = Math.ceil((fin - ini) / 86400000 / 7) * 7;
+      return Array.from({ length: Math.max(35, n) }, (_, i) => mk(new Date(ini.getTime() + i * 86400000)));
+    }
+    return Array.from({ length: 7 }, (_, i) => mk(new Date(_weekOf.getTime() + i * 86400000)));
+  }
+
+  // Título grande: "julio 2026" — el mes en negrita y el año en fino, como en macOS.
+  function _viewTitle() {
+    const a = new Date(_anchor);
+    if (_view === 'day') return `<b>${a.getDate()} ${_MON[a.getMonth()]}</b> ${a.getFullYear()}`;
+    if (_view === 'month') return `<b>${_MON[a.getMonth()]}</b> ${a.getFullYear()}`;
+    const s = new Date(_weekOf), e = new Date(_weekOf.getTime() + 6 * 86400000);
+    return s.getMonth() === e.getMonth()
+      ? `<b>${_MON[s.getMonth()]}</b> ${s.getFullYear()}`
+      : `<b>${_MONS[s.getMonth()]} – ${_MONS[e.getMonth()]}</b> ${e.getFullYear()}`;
+  }
+
   function render() {
     const cont = $('cal-pane-container');
     if (!cont) return;
-    _computeGridBounds();
+    if (!_anchor) _anchor = new Date();
     const today   = new Date(); today.setHours(0,0,0,0);
     const todayDs = _iso(today);
-    const weekDays = Array.from({length:7}, (_,i) => {
-      const d = new Date(_weekOf.getTime() + i * 86400000);
-      return { d, ds: _iso(d), isToday: _iso(d) === todayDs };
-    });
-    const wDs = new Set(weekDays.map(x => x.ds));
-    const tMtgs  = _meetings.filter(m => String(m.fecha).split('T')[0] === todayDs && _mtgForMember(m));
-    const tTasks = _tasks.filter(t => t.deadline && String(t.deadline).split('T')[0] === todayDs && _taskForMember(t));
+    const days    = _viewDays(todayDs);
+    const wDs = new Set(days.map(x => x.ds));
     const wMtgs  = _meetings.filter(m => wDs.has(String(m.fecha).split('T')[0]) && _mtgForMember(m));
     const wTasks = _tasks.filter(t => t.deadline && wDs.has(String(t.deadline).split('T')[0]) && _taskForMember(t));
     const wTOff  = _timeOff.filter(o => {
@@ -9203,36 +9219,29 @@ const CalendarModule = (() => {
       const e = String(o.fecha_fin).split('T')[0];
       return _offForMember(o) && [...wDs].some(ds => ds >= s && ds <= e);
     });
-    const s = weekDays[0].d, e = weekDays[6].d;
-    const rangeLabel = s.getMonth() === e.getMonth()
-      ? `${s.getDate()} – ${e.getDate()} ${_MONS[s.getMonth()]} ${s.getFullYear()}`
-      : `${s.getDate()} ${_MONS[s.getMonth()]} – ${e.getDate()} ${_MONS[e.getMonth()]} ${e.getFullYear()}`;
 
-    cont.innerHTML = `<div class="cal2">
-      ${_hdr(today, tMtgs.length, tTasks.length)}
-      ${_fbar(rangeLabel)}
+    cont.innerHTML = `<div class="cal2 cal2--mac">
+      ${_macBar()}
       ${_tabs(wMtgs.length, wTasks.length, wTOff.length)}
-      ${_cards(weekDays, todayDs)}
-      ${_grid(weekDays, todayDs)}
+      ${_view === 'month' ? _month(days, todayDs) : _grid(days, todayDs)}
     </div>`;
 
     requestAnimationFrame(() => {
+      _fitHeight();
       _syncBands();
       const wrap = document.getElementById('cal-grid-scroll');
       if (!wrap) return;
+      // Arranca a la altura de la hora actual, con algo de contexto por encima.
       const now = new Date();
-      const h = now.getHours(), m = now.getMinutes();
-      if (h >= GRID_S && h < GRID_E) {
-        wrap.scrollTop = Math.max(0, ((h - GRID_S) * 60 + m) / 60 * HOUR_H - 100);
-      }
+      wrap.scrollTop = Math.max(0, (now.getHours() * 60 + now.getMinutes()) / 60 * HOUR_H - HOUR_H * 1.5);
     });
   }
 
-  // La columna de horas y las 7 columnas del día son hermanas, no una tabla: si un día
+  // La columna de horas y las columnas del día son hermanas, no una tabla: si un día
   // acumula dos chips, su banda crece sola y las horas dejan de cuadrar con la rejilla.
   // Igualamos cada banda a la más alta de su fila.
   function _syncBands() {
-    [['.cal2-col__allday', '.cal2-tlabels__allday', 40],
+    [['.cal2-col__allday', '.cal2-tlabels__allday', 34],
      ['.cal2-col__todo',   '.cal2-tlabels__todo',   34]].forEach(([colSel, lblSel, min]) => {
       const bands = [...document.querySelectorAll(colSel)];
       if (!bands.length) return;
@@ -9242,72 +9251,62 @@ const CalendarModule = (() => {
       const lbl = document.querySelector(lblSel);
       if (lbl) lbl.style.height = h + 'px';
     });
+    // Cabecera y bandas pegadas arriba al scrollear: la altura de las bandas es
+    // variable, así que el "top" de cada franja se calcula, no se fija en el CSS.
+    const HDR = 46;
+    const ad = document.querySelector('.cal2-col__allday');
+    const adH = ad ? ad.offsetHeight : 0;
+    document.querySelectorAll('.cal2-col__allday, .cal2-tlabels__allday')
+      .forEach(el => el.style.top = HDR + 'px');
+    document.querySelectorAll('.cal2-col__todo, .cal2-tlabels__todo')
+      .forEach(el => el.style.top = (HDR + adH) + 'px');
   }
 
-  function _hdr(today, mc, tc) {
-    const full = `${_DOMF[today.getDay()]}, ${today.getDate()} de ${_MON[today.getMonth()]} ${today.getFullYear()}`;
-    const sub  = mc + tc === 0
-      ? 'Sin reuniones ni tareas para hoy'
-      : [mc ? `${mc} reunión${mc !== 1 ? 'es' : ''}` : null,
-         tc ? `${tc} tarea${tc !== 1 ? 's' : ''}` : null]
-          .filter(Boolean).join(' y ') + ' para hoy';
-    return `<div class="cal2__hdr">
-      <div class="cal2__hdr-left">
-        <div class="cal2__hdr-icon">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-        </div>
-        <div>
-          <div class="cal2__hdr-title">${esc(full)}</div>
-          <div class="cal2__hdr-sub">${esc(sub)}</div>
-        </div>
-      </div>
-      <div class="cal2__hdr-actions">
-        ${_gcalConn
-          ? `<button class="cal2__gcal-btn cal2__gcal-btn--conn" onclick="CalendarModule.disconnectGcal()" title="Google Calendar conectado — clic para desconectar">
-               <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z" fill="#34A853"/></svg>
-               Google Calendar
-             </button>`
-          : `<button class="cal2__gcal-btn" onclick="CalendarModule.connectGcal()" title="Conectar Google Calendar">
-               <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" fill="#FBBC05"/><path d="M17.545 13.023H12V10.5h8.1c.1.5.155 1.02.155 1.5 0 4.42-2.965 7.5-8.255 7.5-4.97 0-9-4.03-9-9s4.03-9 9-9c2.43 0 4.465.885 6.03 2.34L16.15 5.71C15.045 4.67 13.6 4 12 4 7.58 4 4 7.58 4 12s3.58 8 8 8c4.7 0 7.5-3.3 7.5-8 0-.33-.03-.66-.09-.977h-7.865v2.5h5.91z" fill="#4285F4"/></svg>
-               Conectar Google Cal
-             </button>`
-        }
-        <button class="btn btn--primary btn--sm" onclick="MeetingsModule.openDrawer()">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Nueva reunión
-        </button>
-      </div>
-    </div>`;
+  // El calendario ocupa lo que queda de pantalla y scrollea por dentro (como el de
+  // macOS). Sin esto la rejilla de 24 h estira la pagina entera y se pierde la cabecera.
+  let _fitBound = false;
+  function _fitHeight() {
+    const el = document.querySelector('.cal2--mac');
+    if (!el) return;
+    el.style.height = Math.max(420, window.innerHeight - el.getBoundingClientRect().top - 10) + 'px';
+    if (!_fitBound) {
+      _fitBound = true;
+      window.addEventListener('resize', () => { _fitHeight(); _syncBands(); });
+    }
   }
 
-  function _fbar(rangeLabel) {
-    const today    = new Date(); today.setHours(0,0,0,0);
-    const thisWeek = _monday(today).getTime() === _weekOf.getTime();
+  // Barra superior estilo macOS Calendar: título · segmentado Día/Semana/Mes · ‹ Hoy ›
+  function _macBar() {
+    const segs = [['day','Día'],['week','Semana'],['month','Mes']];
     const memberSel = _calIsAdmin() ? `
-      <div style="flex:1"></div>
-      <div class="cal2__member" title="Ver el calendario de un miembro del equipo">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-        <select class="cal2__member-sel" onchange="CalendarModule.switchMember(this.value)">
-          <option value="me"${_calMember === 'me' ? ' selected' : ''}>Mi calendario (yo)</option>
-          <option value="all"${_calMember === 'all' ? ' selected' : ''}>Todo el equipo</option>
-          ${_calTeam.filter(m => String(m.nombre || '').trim().toLowerCase() !== _calMyName()).map(m => `<option value="${esc(m.nombre)}"${_calMember === m.nombre ? ' selected' : ''}>${esc(m.nombre)}</option>`).join('')}
-        </select>
-      </div>` : '';
-    return `<div class="cal2__fbar">
-      <button class="cal2__fbtn${thisWeek ? ' cal2__fbtn--on' : ''}" onclick="CalendarModule.goToday()">Hoy</button>
-      <div class="cal2__fnav">
-        <button class="cal2__fnavbtn" onclick="CalendarModule.prev()">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-        </button>
-        <button class="cal2__fnavbtn" onclick="CalendarModule.next()">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      <select class="cal2m__sel" onchange="CalendarModule.switchMember(this.value)" title="Ver el calendario de un miembro">
+        <option value="me"${_calMember === 'me' ? ' selected' : ''}>Mi calendario</option>
+        <option value="all"${_calMember === 'all' ? ' selected' : ''}>Todo el equipo</option>
+        ${_calTeam.filter(m => String(m.nombre || '').trim().toLowerCase() !== _calMyName()).map(m => `<option value="${esc(m.nombre)}"${_calMember === m.nombre ? ' selected' : ''}>${esc(m.nombre)}</option>`).join('')}
+      </select>` : '';
+    return `<div class="cal2m__bar">
+      <div class="cal2m__title">${_viewTitle()}</div>
+      <div class="cal2m__seg">
+        ${segs.map(([id, lbl]) => `<button class="cal2m__segb${_view === id ? ' on' : ''}" onclick="CalendarModule.setView('${id}')">${lbl}</button>`).join('')}
+      </div>
+      <div class="cal2m__right">
+        ${memberSel}
+        <div class="cal2m__nav">
+          <button class="cal2m__navb" onclick="CalendarModule.prev()" aria-label="Anterior">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
+          <button class="cal2m__today" onclick="CalendarModule.goToday()">Hoy</button>
+          <button class="cal2m__navb" onclick="CalendarModule.next()" aria-label="Siguiente">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+        </div>
+        ${_gcalConn
+          ? `<button class="cal2m__gc cal2m__gc--on" onclick="CalendarModule.disconnectGcal()" title="Google Calendar conectado — clic para desconectar">Google Cal</button>`
+          : `<button class="cal2m__gc" onclick="CalendarModule.connectGcal()" title="Conectar Google Calendar">Conectar Google Cal</button>`}
+        <button class="cal2m__new" onclick="MeetingsModule.openDrawer()">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         </button>
       </div>
-      <div class="cal2__range">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-        ${esc(rangeLabel)}
-      </div>
-      ${memberSel}
     </div>`;
   }
 
@@ -9328,88 +9327,6 @@ const CalendarModule = (() => {
         Registrar ausencia
       </button>
     </div>`;
-  }
-
-  function _cards(weekDays, todayDs) {
-    if (_tab === 'tasks') return '';
-    const wDs = new Set(weekDays.map(x => x.ds));
-
-    // ── Time Off cards ────────────────────────────────────────────────
-    if (_tab === 'timeoff') {
-      const list = _timeOff.filter(o => {
-        const s = String(o.fecha_inicio).split('T')[0];
-        const e = String(o.fecha_fin).split('T')[0];
-        return _offForMember(o) && [...wDs].some(ds => ds >= s && ds <= e);
-      });
-      if (!list.length) return `<div class="cal2__empty-cards">Sin ausencias registradas esta semana</div>`;
-      const motivos = { 'Vacaciones':'🏖','Enfermedad':'🤒','Personal':'🏠','Feriado':'📅','Otro':'📌' };
-      const html = list.map(o => {
-        const si  = String(o.fecha_inicio).split('T')[0];
-        const ei  = String(o.fecha_fin).split('T')[0];
-        const di  = new Date(si + 'T00:00:00'), de = new Date(ei + 'T00:00:00');
-        const days = Math.round((de - di) / 86400000) + 1;
-        const fmt  = d => `${d.getDate()} ${_MONS[d.getMonth()]}`;
-        return `<div class="cal2-card cal2-card--off" onclick="TimeOffModule.openDrawer(${o.id})">
-          <div class="cal2-card__body">
-            <div class="cal2-card__top">
-              <div class="cal2-card__title">${esc(o.member_nombre || '—')}</div>
-              <button class="cal2-card__chevron" onclick="event.stopPropagation();TimeOffModule.openDrawer(${o.id})">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-              </button>
-            </div>
-            <div class="cal2-card__time">${fmt(di)} – ${fmt(de)}</div>
-          </div>
-          <div class="cal2-card__foot cal2-card__foot--off">
-            <span class="cal2-card__status-text">${motivos[o.motivo] || '📌'} ${esc(o.motivo)}</span>
-            <span class="cal2-card__days">${days} día${days !== 1 ? 's' : ''}</span>
-          </div>
-        </div>`;
-      }).join('');
-      return `<div class="cal2__cards-wrap"><div class="cal2__cards">${html}</div></div>`;
-    }
-
-    // ── Meeting cards ─────────────────────────────────────────────────
-    const list = _meetings
-      .filter(m => wDs.has(String(m.fecha).split('T')[0]) && m.estado !== 'cancelada' && _mtgForMember(m))
-      .sort((a, b) => {
-        const da = String(a.fecha).split('T')[0], db = String(b.fecha).split('T')[0];
-        return da !== db ? da < db ? -1 : 1 : (a.hora_inicio || '') < (b.hora_inicio || '') ? -1 : 1;
-      });
-    if (!list.length) return '';
-
-    const html = list.map((m) => {
-      const ds      = String(m.fecha).split('T')[0];
-      const isToday = ds === todayDs;
-      const isPast  = ds < todayDs;
-      const date    = new Date(ds + 'T00:00:00');
-      const dLabel  = isToday ? 'Hoy' : `${_WKS[(date.getDay() + 6) % 7]} ${date.getDate()}`;
-      const timeStr = m.hora_inicio
-        ? `${_fmtT(m.hora_inicio)}${m.hora_fin ? ' – ' + _fmtT(m.hora_fin) : ''}`
-        : 'Sin hora definida';
-      const footClass = isToday ? 'cal2-card__foot--today'
-                      : isPast  ? 'cal2-card__foot--past'
-                      :           'cal2-card__foot--upcoming';
-      let atts = []; try { atts = JSON.parse(m.attendees || '[]'); } catch {}
-      return `<div class="cal2-card">
-        <div class="cal2-card__body">
-          <div class="cal2-card__top">
-            <div class="cal2-card__title">${esc(m.titulo)}</div>
-            <button class="cal2-card__chevron" onclick="MeetingsModule.openDrawer(${m.id})">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-            </button>
-          </div>
-          <div class="cal2-card__time">${esc(timeStr)}</div>
-          ${atts.length ? `<div class="cal2-card__atts">${esc(atts.slice(0,3).join(', '))}${atts.length>3?` +${atts.length-3}`:''}</div>` : ''}
-        </div>
-        <div class="cal2-card__foot ${footClass}">
-          <span class="cal2-card__status-text">● ${esc(dLabel)}</span>
-          ${m.link
-            ? `<a class="cal2-card__link" href="${esc(m.link)}" target="_blank" rel="noopener">Unirse a reunión</a>`
-            : `<button class="cal2-card__link" onclick="MeetingsModule.openDrawer(${m.id})">Ver detalle</button>`}
-        </div>
-      </div>`;
-    }).join('');
-    return `<div class="cal2__cards-wrap"><div class="cal2__cards">${html}</div></div>`;
   }
 
   // Panel "Sin hora asignada": tareas/subtareas con día (prog o deadline) en la semana, sin hora
@@ -9615,7 +9532,7 @@ const CalendarModule = (() => {
       if (!start) start = todayStr;
       const end = t.deadline ? String(t.deadline).split('T')[0] : null;   // opcional
       const perMin = Math.max(15, Math.round(weekly / days.length * 60)); // meta ÷ días de semana completa
-      out.push({ id: t.id, titulo: t.titulo, isSub: !!t.parent_task_id,
+      out.push({ id: t.id, titulo: t.titulo, isSub: !!t.parent_task_id, projectId: t.project_id,
                  daysSet: new Set(days), hour, start, end, perMin, weekly, nDays: days.length });
     }
     return out;
@@ -9632,7 +9549,7 @@ const CalendarModule = (() => {
       <div class="cal2-tlabels__top"></div>
       <div class="cal2-tlabels__allday">Todo el día</div>
       <div class="cal2-tlabels__todo">Por programar</div>
-      ${hours.map(h => `<div class="cal2-tlabel">${h > 12 ? (h - 12) + ' PM' : h === 12 ? '12 PM' : h + ' AM'}</div>`).join('')}
+      ${hours.map(h => `<div class="cal2-tlabel">${h === 0 ? '12 AM' : h === 12 ? 'Mediodía' : h > 12 ? (h - 12) + ' PM' : h + ' AM'}</div>`).join('')}
     </div>`;
 
     const _plans = (_tab === 'all' || _tab === 'tasks') ? _recurPlans() : [];
@@ -9651,13 +9568,13 @@ const CalendarModule = (() => {
         const dur    = t.prog_min || 60;
         const topPx  = stMin / 60 * HOUR_H;
         const hPx    = Math.max(24, dur / 60 * HOUR_H - 2);
-        const accent = _ESTADO_COL[t.estado] || '#C8BCAC';
+        const accent = _projColor(t.project_id);
         const done   = t.estado === 'completado';
         const proj   = t.project_nombre ? esc(t.project_nombre) : '';
         const dl     = t.deadline ? String(t.deadline).split('T')[0] : null;
         const dlHint = (dl && dl !== ds) ? ` <span class="cal2-tblock__dl" title="Fecha límite de entrega">⚑ ${_dlShort(dl)}</span>` : '';
         const endT   = _addMin(t.prog_inicio, dur);
-        return `<div class="cal2-tblock${done ? ' cal2-tblock--done' : ''}" style="top:${topPx}px;height:${hPx}px;border-left-color:${accent}"
+        return `<div class="cal2-tblock${done ? ' cal2-tblock--done' : ''}" style="top:${topPx}px;height:${hPx}px;--c:${accent}"
             onclick="event.stopPropagation();CalendarModule.openSchedulePopover(event,${t.id})" title="${esc(t.titulo)} — clic para reprogramar">
           <div class="cal2-tblock__t">${t.parent_task_id ? '<span class="cal2-tblock__sub">SUB</span>' : ''}${esc(t.titulo)}</div>
           <div class="cal2-tblock__meta">${_fmtT(t.prog_inicio)}–${_fmtT(endT)}${proj ? ` · ${proj}` : ''}${dlHint}</div>
@@ -9679,7 +9596,8 @@ const CalendarModule = (() => {
       // que aún espera un hueco). Clic → elegir en qué subtarea trabajar y a qué hora.
       const planFlexHtml = dayPlans.filter(p => p.hour == null).map(p => {
         const hrs = Math.round(p.perMin / 60 * 10) / 10;
-        return `<button class="cal2-planflex" onclick="CalendarModule.openPlanPop(event,${p.id},'${ds}')"
+        const col = _projColor(p.projectId);
+        return `<button class="cal2-planflex" style="--c:${col}" onclick="CalendarModule.openPlanPop(event,${p.id},'${ds}')"
             title="${esc(p.titulo)} — ${p.weekly}h/semana ÷ ${p.nDays} ${p.nDays === 1 ? 'día' : 'días'} = ${hrs}h hoy · clic para darle hora o empezar">
           <span class="cal2-planflex__t">${esc(p.titulo)}</span><span class="cal2-planflex__h">${hrs}h</span></button>`;
       }).join('');
@@ -9691,7 +9609,7 @@ const CalendarModule = (() => {
         const ini   = `${_pad(p.hour)}:00`;
         const fin   = _addMin(ini, p.perMin);
         const hrs   = Math.round(p.perMin / 60 * 10) / 10;
-        return `<div class="cal2-planblock${p.moved ? ' cal2-planblock--moved' : ''}" style="top:${topPx}px;height:${hPx}px"
+        return `<div class="cal2-planblock${p.moved ? ' cal2-planblock--moved' : ''}" style="top:${topPx}px;height:${hPx}px;--c:${_projColor(p.projectId)}"
             onclick="event.stopPropagation();CalendarModule.openPlanPop(event,${p.id},'${ds}')"
             title="Plan · ${esc(p.titulo)} — ${p.weekly}h/semana ÷ ${p.nDays} ${p.nDays === 1 ? 'día' : 'días'} = ${hrs}h/día${p.moved ? ' · movido solo este día' : ''}">
           <div class="cal2-planblock__t">${p.isSub ? '<span class="cal2-tblock__sub">SUB</span>' : ''}${esc(p.titulo)}</div>
@@ -9797,7 +9715,7 @@ const CalendarModule = (() => {
 
       return `<div class="cal2-col${isToday ? ' cal2-col--today' : ''}">
         <div class="cal2-col__hdr">
-          <span class="cal2-col__dow" translate="no">${_WKS[i]}</span>
+          <span class="cal2-col__dow" translate="no">${_WKS[(d.getDay() + 6) % 7]}</span>
           <span class="cal2-col__num${isToday ? ' cal2-col__num--today' : ''}">${d.getDate()}</span>
         </div>
         <div class="cal2-col__allday">${noTimeMtgs}${offChips}${gcalAllDay}</div>
@@ -9806,11 +9724,56 @@ const CalendarModule = (() => {
       </div>`;
     }).join('');
 
-    return `<div class="cal2-grid-wrap" id="cal-grid-scroll">
+    return `<div class="cal2-grid-wrap${_view === 'day' ? ' cal2-grid-wrap--day' : ''}" id="cal-grid-scroll">
       <div class="cal2-grid">
         ${timeCol}
         <div class="cal2-cols">${cols}</div>
       </div>
+    </div>`;
+  }
+
+  // ── Vista de mes ───────────────────────────────────────────────────
+  // Retícula de semanas con una línea por evento (color del proyecto). Sin horas:
+  // el mes sirve para ver la carga, no para colocar bloques.
+  function _month(days, todayDs) {
+    const mes = new Date(_anchor).getMonth();
+    const showT = (_tab === 'all' || _tab === 'tasks');
+    const showM = (_tab === 'all' || _tab === 'meetings');
+    const plans = showT ? _recurPlans() : [];
+    const semanas = [];
+    for (let i = 0; i < days.length; i += 7) semanas.push(days.slice(i, i + 7));
+
+    const celda = ({ d, ds, isToday }) => {
+      const fuera = d.getMonth() !== mes;
+      const items = [];
+      if (showM) _meetings.filter(m => String(m.fecha).split('T')[0] === ds && m.estado !== 'cancelada' && _mtgForMember(m))
+        .forEach(m => items.push({ h: m.hora_inicio || '', txt: m.titulo, col: '#5856D6', on: `MeetingsModule.openDrawer(${m.id})` }));
+      if (showT) _tasks.filter(t => _taskDay(t) === ds && t.estado !== 'completado' && _taskForMember(t))
+        .forEach(t => items.push({ h: t.prog_inicio || '', txt: t.titulo, col: _projColor(t.project_id), on: `TasksModule.openDrawer(${t.id})` }));
+      plans.filter(p => ds >= p.start && (!p.end || ds <= p.end) && p.daysSet.has((d.getDay() + 6) % 7))
+        .forEach(p => {
+          const ov = _planOv[`${p.id}|${ds}`]; if (ov && ov.skip) return;
+          const hr = ov && ov.hora != null ? +ov.hora : p.hour;
+          items.push({ h: hr == null ? '' : `${_pad(hr)}:00`, txt: p.titulo, plan: true,
+                       col: _projColor(p.projectId), on: `CalendarModule.openPlanPop(event,${p.id},'${ds}')` });
+        });
+      items.sort((a, b) => (a.h || '99').localeCompare(b.h || '99'));
+      const vis = items.slice(0, 4), resto = items.length - vis.length;
+      return `<div class="cal2mo__cell${fuera ? ' cal2mo__cell--out' : ''}${isToday ? ' cal2mo__cell--today' : ''}">
+        <div class="cal2mo__num${isToday ? ' cal2mo__num--today' : ''}"
+             onclick="CalendarModule.openDay('${ds}')" title="Ver este día">${d.getDate()}${d.getDate() === 1 ? ' ' + _MONS[d.getMonth()] : ''}</div>
+        ${vis.map(it => `<button class="cal2mo__ev${it.plan ? ' cal2mo__ev--plan' : ''}" onclick="event.stopPropagation();${it.on}" title="${esc(it.txt)}">
+          <span class="cal2mo__dot" style="background:${it.col}"></span>
+          ${it.h ? `<span class="cal2mo__h">${esc(_fmtT(it.h))}</span>` : ''}
+          <span class="cal2mo__t">${esc(it.txt)}</span>
+        </button>`).join('')}
+        ${resto > 0 ? `<button class="cal2mo__more" onclick="CalendarModule.openDay('${ds}')">${resto} más…</button>` : ''}
+      </div>`;
+    };
+
+    return `<div class="cal2mo">
+      <div class="cal2mo__dows">${_WKS.map(w => `<div class="cal2mo__dow" translate="no">${w}</div>`).join('')}</div>
+      <div class="cal2mo__grid">${semanas.map(sem => `<div class="cal2mo__row">${sem.map(celda).join('')}</div>`).join('')}</div>
     </div>`;
   }
 
@@ -10008,9 +9971,19 @@ const CalendarModule = (() => {
   }
 
   function setTab(t)  { _tab = t; render(); }
-  function prev()     { _weekOf = new Date(_weekOf.getTime() - 7 * 86400000); render(); }
-  function next()     { _weekOf = new Date(_weekOf.getTime() + 7 * 86400000); render(); }
-  function goToday()  { _weekOf = _monday(new Date()); render(); }
+  // Cada vista avanza en su propia unidad: un día, una semana, un mes.
+  function _shift(dir) {
+    const a = new Date(_anchor);
+    if (_view === 'day')        a.setDate(a.getDate() + dir);
+    else if (_view === 'month') a.setMonth(a.getMonth() + dir, 1);
+    else                        a.setDate(a.getDate() + 7 * dir);
+    _anchor = a; _weekOf = _monday(a);
+  }
+  function prev()     { _shift(-1); load(); }
+  function next()     { _shift(1);  load(); }
+  function goToday()  { _anchor = new Date(); _weekOf = _monday(new Date()); load(); }
+  function setView(v) { _view = v; if (!_anchor) _anchor = new Date(); _weekOf = _monday(_anchor); render(); }
+  function openDay(ds) { _anchor = new Date(ds + 'T00:00:00'); _weekOf = _monday(_anchor); _view = 'day'; load(); }
   async function refresh() { _meetings = []; _tasks = []; _timeOff = []; _timeEntries = []; await load(); }
 
   function tickRunning() {
@@ -10037,7 +10010,7 @@ const CalendarModule = (() => {
 
   return { load, setTab, prev, next, goToday, refresh, refreshPlans, switchMember, connectGcal, disconnectGcal, syncTaskToGcal, tickRunning,
     openSchedulePopover, saveSchedule, unschedule, openDayUnscheduled, closeDayPop,
-    openPlanPop, movePlan, startFromPlan,
+    openPlanPop, movePlan, startFromPlan, setView, openDay,
     _dpSearch, _dpSchedule, _dpPickDur, _dpPickHour, _dpCustomDur, _dpSchedCancel, _dpConfirm, _dpToggleSubs };
 })();
 
