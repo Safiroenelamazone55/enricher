@@ -372,6 +372,12 @@ async function initDb() {
     await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS semana_auto BOOLEAN NOT NULL DEFAULT FALSE;`);
     // Abreviatura del contrato para los títulos ('' = se deriva del nombre del proyecto).
     await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS abrev TEXT NOT NULL DEFAULT '';`);
+    // Plan de trabajo POR PROYECTO: días de la semana, meta de horas y hora de inicio.
+    // La tarea semanal que se crea cada domingo lo hereda (antes solo se copiaba de la
+    // semana anterior, así que no había dónde definirlo la primera vez).
+    await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS plan_dias  TEXT NOT NULL DEFAULT '';`);
+    await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS plan_horas NUMERIC(6,2);`);
+    await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS plan_hora  INTEGER;`);
     // Lunes de la semana que representa la tarea (idempotencia de la creación automática).
     await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS semana_week DATE;`);
     await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS precio_semanal NUMERIC(12,2);`);

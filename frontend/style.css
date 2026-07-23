@@ -13071,3 +13071,18 @@ body:has(#pane-mgmt-tasks.active) .content-wrap { max-width: 1400px; }
 #pane-mgmt-tasks .clients-table th[data-col="timer"],
 #pane-mgmt-tasks .clients-table td[data-col="timer"] { width: 78px; }
 #pane-mgmt-tasks .clients-table thead th { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── Proyecto · bloque "Trabajo semanal" (compacto, todo en 3 líneas) ────────── */
+.proj-wk { margin-top: 8px; padding: 10px 12px; background: var(--surface-secondary, #F5F6F3); border-radius: 10px; display: flex; flex-direction: column; gap: 8px; }
+.proj-wk__row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.proj-wk__lbl { font-size: .74rem; font-weight: 600; color: var(--text-secondary, #6B7280); min-width: 84px; }
+.proj-wk__row .proj-wk__lbl:not(:first-child) { min-width: 0; }
+.proj-wk__days { display: flex; gap: 4px; }
+.proj-wk__day { width: 28px; height: 28px; border-radius: 7px; border: 1px solid var(--border, #E4E7DD); background: #fff; font: inherit; font-size: .72rem; font-weight: 600; color: var(--text-secondary, #6B7280); cursor: pointer; transition: all .12s; }
+.proj-wk__day:hover { border-color: var(--primary, #00804C); color: var(--primary, #00804C); }
+.proj-wk__day.on { background: var(--primary, #00804C); border-color: var(--primary, #00804C); color: #fff; }
+.proj-wk__num { width: 78px !important; padding: 5px 8px !important; font-size: .8rem !important; }
+.proj-wk__abrev { width: 130px !important; padding: 5px 8px !important; font-size: .8rem !important; }
+.proj-wk__cobro { display: inline-flex; align-items: center; gap: 5px; font-size: .78rem; color: var(--text-secondary, #6B7280); margin-left: 10px; cursor: pointer; }
+.proj-wk__hint { font-size: .74rem; color: var(--text-muted, #8C97A3); padding-top: 2px; border-top: 1px solid var(--border, #E4E7DD); margin-top: 2px; padding-top: 8px; }
+.proj-wk__hint b { color: var(--primary, #00804C); }

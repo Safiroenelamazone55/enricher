@@ -2241,7 +2241,8 @@ async function _ensureWeeklyTaskCore(wid, ws) {
   // semana (así lo usa Jenny desde siempre). Se crea si el proyecto tiene la semana
   // automática o el cobro semanal; si hay precio_semanal, la tarea lleva el monto.
   const projs = (await pool.query(
-    `SELECT id, nombre, abrev, responsable, responsables, precio_semanal, cobro_semanal FROM projects
+    `SELECT id, nombre, abrev, responsable, responsables, precio_semanal, cobro_semanal,
+            plan_dias, plan_horas, plan_hora, tipo_proyecto, tarifa_hora FROM projects
       WHERE user_id=$1 AND (semana_auto=TRUE OR cobro_semanal=TRUE) AND estado='activo'`, [wid])).rows;
   const s = _semanaDe(ws); if (!s) return { created: [], checked: 0 };
   const lunStr = s.lun.toISOString().slice(0, 10), domStr = s.dom.toISOString().slice(0, 10);
@@ -2252,21 +2253,31 @@ async function _ensureWeeklyTaskCore(wid, ws) {
       `SELECT id FROM tasks WHERE user_id=$1 AND project_id=$2 AND (semana_week=$3 OR billing_week=$3) LIMIT 1`,
       [wid, p.id, lunStr]);
     if (ex.rows.length) continue;
-    // Plan heredado de la última semana del proyecto (la que tenga plan configurado).
-    const prev = (await pool.query(
-      `SELECT plan_dias, plan_horas, plan_hora FROM tasks
-        WHERE user_id=$1 AND project_id=$2 AND parent_task_id IS NULL AND plan_dias <> ''
-        ORDER BY COALESCE(fecha_inicio, deadline) DESC NULLS LAST LIMIT 1`, [wid, p.id])).rows[0] || {};
+    // Plan: manda el del PROYECTO (se define una vez); si no tiene, se hereda de la
+    // última semana que sí lo tenga.
+    const prev = (p.plan_dias || '') !== ''
+      ? { plan_dias: p.plan_dias, plan_horas: p.plan_horas, plan_hora: p.plan_hora }
+      : ((await pool.query(
+          `SELECT plan_dias, plan_horas, plan_hora FROM tasks
+            WHERE user_id=$1 AND project_id=$2 AND parent_task_id IS NULL AND plan_dias <> ''
+            ORDER BY COALESCE(fecha_inicio, deadline) DESC NULLS LAST LIMIT 1`, [wid, p.id])).rows[0] || {});
     const respArr = (p.responsables && p.responsables.length) ? p.responsables : (p.responsable ? [p.responsable] : []);
     // billing_week se llena también cuando el proyecto cobra por semana: así esta misma
     // tarea es la del cobro y no se crea otra aparte.
     const bw = p.cobro_semanal ? lunStr : null;
+    // Monto de la semana. En contratos POR HORAS el importe es tarifa × meta de horas
+    // (lo pactado), no un precio suelto: así el cobro refleja el contrato aunque las
+    // horas trabajadas queden por debajo. Se puede ajustar a mano en Finanzas.
+    const montoSemana = !p.cobro_semanal ? null
+      : (p.tipo_proyecto === 'horas' && p.tarifa_hora > 0 && (prev.plan_horas || p.plan_horas) > 0)
+        ? +(p.tarifa_hora * (prev.plan_horas || p.plan_horas)).toFixed(2)
+        : (p.precio_semanal || null);
     const ins = await pool.query(
       `INSERT INTO tasks (user_id, project_id, titulo, estado, prioridad, responsable, responsables,
                           fecha_inicio, deadline, semana_week, billing_week, monto, plan_dias, plan_horas, plan_hora)
        VALUES ($1,$2,$3,'pendiente','media',$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id, titulo, project_id`,
       [wid, p.id, _tituloSemana(p, lunStr), respArr[0] || '', respArr, lunStr, domStr, lunStr,
-       bw, p.cobro_semanal ? (p.precio_semanal || null) : null,
+       bw, montoSemana,
        prev.plan_dias || '', prev.plan_horas ?? null, prev.plan_hora ?? null]);
     created.push(ins.rows[0]);
   }
@@ -2377,6 +2388,10 @@ app.patch('/api/mgmt/projects/:id/billing-cfg', requireAuth, async (req, res) =>
     if (b.cobro_semanal !== undefined) sets.push(`cobro_semanal=$${vals.push(!!b.cobro_semanal)}`);
     if (b.semana_auto !== undefined) sets.push(`semana_auto=$${vals.push(!!b.semana_auto)}`);
     if (b.abrev !== undefined) sets.push(`abrev=$${vals.push(String(b.abrev || '').trim().slice(0, 24))}`);
+    // Plan de trabajo del proyecto (lo hereda cada semana que se crea)
+    if (b.plan_dias !== undefined) sets.push(`plan_dias=$${vals.push(String(b.plan_dias || '').split(',').map(s => s.trim()).filter(s => /^[0-6]$/.test(s)).join(','))}`);
+    if (b.plan_horas !== undefined) sets.push(`plan_horas=$${vals.push(b.plan_horas === null || b.plan_horas === '' ? null : +b.plan_horas)}`);
+    if (b.plan_hora !== undefined) sets.push(`plan_hora=$${vals.push(b.plan_hora === null || b.plan_hora === '' ? null : Math.max(0, Math.min(23, parseInt(b.plan_hora))))}`);
     if (b.precio_semanal !== undefined) sets.push(`precio_semanal=$${vals.push(b.precio_semanal === null || b.precio_semanal === '' ? null : +b.precio_semanal)}`);
     if (b.reparto !== undefined) {
       const rep = Array.isArray(b.reparto)
@@ -2387,7 +2402,7 @@ app.patch('/api/mgmt/projects/:id/billing-cfg', requireAuth, async (req, res) =>
     if (!sets.length) return res.json({ ok: true });
     sets.push('updated_at=NOW()');
     const { rows } = await pool.query(
-      `UPDATE projects SET ${sets.join(',')} WHERE id=$1 AND user_id=$2 RETURNING id, cobro_semanal, precio_semanal, reparto, semana_auto, abrev`, vals);
+      `UPDATE projects SET ${sets.join(',')} WHERE id=$1 AND user_id=$2 RETURNING id, cobro_semanal, precio_semanal, reparto, semana_auto, abrev, plan_dias, plan_horas, plan_hora`, vals);
     if (!rows[0]) return res.status(404).json({ error: 'Proyecto no encontrado' });
     res.json(rows[0]);
   } catch (err) {

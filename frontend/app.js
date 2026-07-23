@@ -11964,23 +11964,34 @@ const ProjectsModule = (() => {
     $('proj-reparto-on').checked = rep.length > 0;
     _renderRepartoRows(rep);
     $('proj-reparto-list').style.display = rep.length ? '' : 'none';
+    // Bloque "Trabajo semanal": días + horas/semana + hora + nombre + cobro, todo junto.
     $('proj-cobro-semanal').checked = !!(p && p.cobro_semanal);
-    $('proj-precio-semanal-wrap').style.display = (p && p.cobro_semanal) ? '' : 'none';
+    $('proj-precio-semanal').style.display = (p && p.cobro_semanal) ? '' : 'none';
     $('proj-precio-semanal').value = (p && p.precio_semanal != null) ? p.precio_semanal : '';
-    $('proj-semana-auto').checked = !!(p && p.semana_auto);
-    $('proj-abrev-wrap').style.display = (p && p.semana_auto) ? '' : 'none';
+    // La semana se crea si tiene semana_auto o cobro_semanal (una sola tarea para ambos).
+    const wkOn = !!(p && (p.semana_auto || p.cobro_semanal));
+    $('proj-semana-auto').checked = wkOn;
+    $('proj-semana-cfg').style.display = wkOn ? '' : 'none';
     $('proj-abrev').value = (p && p.abrev) ? p.abrev : '';
-    _abrevHint();
+    _planDias = new Set(String((p && p.plan_dias) || '').split(',').map(s => s.trim()).filter(s => /^[0-6]$/.test(s)).map(Number));
+    _planDiasRender();
+    $('proj-plan-horas').value = (p && p.plan_horas != null) ? p.plan_horas : '';
+    $('proj-plan-hora').value = (p && p.plan_hora != null) ? String(p.plan_hora).padStart(2, '0') + ':00' : '';
+    planHint();
   }
-  // Abreviatura del proyecto para el título de la semana (misma regla que el backend).
-  const _ABREV_STOP = /^(de|del|la|el|los|las|y|para|con|por|the|of|for|and|to|a|an|in)$/i;
-  function _abrevAuto(nombre) {
-    return String(nombre || '').replace(/[^\wáéíóúñÁÉÍÓÚÑ\s-]/gi, ' ')
-      .split(/[\s-]+/).filter(w => w && !_ABREV_STOP.test(w)).slice(0, 3)
-      .map(w => (w.length <= 4 ? w : w.slice(0, 3)).toUpperCase()).join(' ') || 'PROY';
+  // Días del plan (0 = lunes … 6 = domingo)
+  let _planDias = new Set();
+  function _planDiasRender() {
+    document.querySelectorAll('#proj-plan-dias .proj-wk__day').forEach(b => {
+      b.classList.toggle('on', _planDias.has(+b.dataset.d));
+    });
   }
-  // Vista previa del título que tendrá la semana, con la abreviatura actual.
-  function _abrevHint() {
+  function togglePlanDia(d) {
+    if (_planDias.has(d)) _planDias.delete(d); else _planDias.add(d);
+    _planDiasRender(); planHint();
+  }
+  // Resumen en una línea: cómo se llamará la tarea y cómo queda repartido el tiempo.
+  function planHint() {
     const h = $('proj-abrev-hint'); if (!h) return;
     const ab = ($('proj-abrev')?.value || '').trim() || _abrevAuto($('proj-nombre')?.value || '');
     const MES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
@@ -11990,12 +12001,39 @@ const ProjectsModule = (() => {
     const rango = lun.getMonth() === dom.getMonth()
       ? `${lun.getDate()}–${dom.getDate()} ${MES[dom.getMonth()]}`
       : `${lun.getDate()} ${MES[lun.getMonth()]} – ${dom.getDate()} ${MES[dom.getMonth()]}`;
-    h.innerHTML = `La tarea se llamará: <b>${esc(ab)} · ${rango}</b>`;
+    const horas = parseFloat($('proj-plan-horas')?.value) || 0;
+    const nd = _planDias.size;
+    const reparto = (horas > 0 && nd > 0)
+      ? ` · ${(horas / nd).toFixed(1).replace('.0', '')} h/día en ${nd} día${nd > 1 ? 's' : ''}`
+      : '';
+    // En contratos por horas el cobro se deriva de tarifa × meta (lo pactado), y se
+    // muestra el cálculo para que quede claro de dónde sale el importe.
+    let cobro = '';
+    if ($('proj-cobro-semanal')?.checked) {
+      const porHoras = ($('proj-tipo')?.value === 'horas');
+      const tarifa = parseFloat($('proj-tarifa-hora')?.value) || 0;
+      const cur = $('proj-moneda')?.value || 'USD';
+      if (porHoras && tarifa > 0 && horas > 0) {
+        cobro = ` · cobro <b>${cur} ${(tarifa * horas).toFixed(2).replace(/\.00$/, '')}</b> (${tarifa}/h × ${horas} h)`;
+        const inp = $('proj-precio-semanal'); if (inp) inp.value = (tarifa * horas).toFixed(2).replace(/\.00$/, '');
+      } else {
+        const precio = parseFloat($('proj-precio-semanal')?.value) || 0;
+        if (precio > 0) cobro = ` · cobro <b>${cur} ${precio}</b>`;
+      }
+    }
+    h.innerHTML = `<b>${esc(ab)} · ${rango}</b>${reparto}${cobro}`;
+  }
+  // Abreviatura del proyecto para el título de la semana (misma regla que el backend).
+  const _ABREV_STOP = /^(de|del|la|el|los|las|y|para|con|por|the|of|for|and|to|a|an|in)$/i;
+  function _abrevAuto(nombre) {
+    return String(nombre || '').replace(/[^\wáéíóúñÁÉÍÓÚÑ\s-]/gi, ' ')
+      .split(/[\s-]+/).filter(w => w && !_ABREV_STOP.test(w)).slice(0, 3)
+      .map(w => (w.length <= 4 ? w : w.slice(0, 3)).toUpperCase()).join(' ') || 'PROY';
   }
   function onSemanaAutoToggle() {
     const on = $('proj-semana-auto')?.checked;
-    const w = $('proj-abrev-wrap'); if (w) w.style.display = on ? '' : 'none';
-    if (on) _abrevHint();
+    const w = $('proj-semana-cfg'); if (w) w.style.display = on ? '' : 'none';
+    if (on) planHint();
   }
   function _drawerRespSel() {
     return [...document.querySelectorAll('#proj-resp-list input:checked')].map(i => i.value);
@@ -12038,7 +12076,17 @@ const ProjectsModule = (() => {
     _repartoHint();
   }
   function onCobroSemanalToggle() {
-    $('proj-precio-semanal-wrap').style.display = $('proj-cobro-semanal').checked ? '' : 'none';
+    const on = $('proj-cobro-semanal').checked;
+    const inp = $('proj-precio-semanal');
+    if (inp) {
+      inp.style.display = on ? '' : 'none';
+      // En contratos por horas el importe lo calcula tarifa × meta: el campo queda de
+      // solo lectura para que el número siempre cuadre con lo pactado.
+      const porHoras = ($('proj-tipo')?.value === 'horas');
+      inp.readOnly = porHoras;
+      inp.title = porHoras ? 'Se calcula: tarifa por hora × meta de horas de la semana' : 'Importe fijo por semana';
+    }
+    planHint();
   }
 
   function closeDrawer() {
@@ -12118,7 +12166,10 @@ const ProjectsModule = (() => {
           await apiFetch(`${API}/mgmt/projects/${pid}/billing-cfg`, {
             method: 'PATCH', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ cobro_semanal: cobroSem, precio_semanal: precioSem === '' ? null : parseFloat(precioSem), reparto,
-              semana_auto: $('proj-semana-auto')?.checked || false, abrev: ($('proj-abrev')?.value || '').trim() }),
+              semana_auto: $('proj-semana-auto')?.checked || false, abrev: ($('proj-abrev')?.value || '').trim(),
+              plan_dias: [..._planDias].sort((a, b) => a - b).join(','),
+              plan_horas: $('proj-plan-horas')?.value || null,
+              plan_hora: ($('proj-plan-hora')?.value || '').slice(0, 2) }),
           });
         } catch (e) { console.error('[projects] billing-cfg:', e); }
       }
@@ -12169,6 +12220,7 @@ const ProjectsModule = (() => {
 
   return { load, filter, setFilter, setMemberFilter, render, onTipoChange, openDrawer, closeDrawer, save, confirmDelete, setView, switchTab, toggleTaskCobrado, updateTaskMonto, updateDescripcion, addLink, removeLink, _setLinkField, saveLinks, refreshCard, closeQuickClientModal, saveQuickClient, toggleTaskExpand, toggleProjectExpand, openTaskMenu, _onTaskMenuEdit, _onTaskMenuAddSub, _onTaskMenuDelete, openQuickEditPopover, tqpNav, tqpPick, tqpToggleRange, tqpClear, openInlineDate, startInlineSubtask, cancelInlineSubtask, saveInlineSubtask, startEditTask, cancelEditTask, saveEditTask, deleteTaskInline, toggleSubrowExpand, distributeTaskMontos, openLinkForm, cancelLinkForm, saveLinkForm, startLinkEdit, cancelLinkEdit, saveLinkEdit, enterInfoEdit, cancelInfoEdit, saveInfoEdit, toggleInfoExpand,
     onRespChange, onRepartoToggle, repartoIgual, repartoHint: _repartoHint, onCobroSemanalToggle, onSemanaAutoToggle,
+    togglePlanDia, planHint,
     onHorasFijasToggle, openProjFechas,
     openConvertToSub, convertToSub, convertToMain };
 })();
