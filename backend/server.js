@@ -3036,12 +3036,30 @@ app.post('/api/lm/sequences/:id/contacts/:cid/rollback', requireAuth, async (req
 app.post('/api/lm/contacts/add-to-sequence', requireAuth, (req, res) => _lmAddMembership(req, res, 'sequence'));
 app.post('/api/lm/contacts/add-to-campaign', requireAuth, (req, res) => _lmAddMembership(req, res, 'campaign'));
 // Disposición outbound: marca el contacto, registra actividad y (si aplica) lo pausa en TODAS sus secuencias activas.
+// ── Disposiciones outbound, en 3 grupos que SUMAN al total (sin solaparse) ──
+//   Positivos : respondio · reunion · mas_adelante   → hay señal comercial
+//   Derivados : derivado · no_es_persona             → la persona no sirve, la CUENTA sí
+//   Descartados: no_interesado · no_califica · no_contactar
+const LM_DISP_LBL = {
+  respondio: 'Interesado', reunion: 'Reunión agendada', mas_adelante: 'Contactar más adelante',
+  derivado: 'Derivó a otro contacto', no_es_persona: 'No es la persona — se agregó a otro',
+  no_interesado: 'No interesado', no_califica: 'No califica (fuera de ICP)', no_contactar: 'No contactar (opt-out)',
+};
+const LM_DISP_TIPO = { respondio: 'respuesta', reunion: 'reunion', mas_adelante: 'respuesta', derivado: 'respuesta', no_es_persona: 'nota' };
+// Etapa del pipeline por disposición. null = no mover (derivados: la cuenta sigue viva).
+const LM_STAGE_BY_DISP = {
+  respondio: 'respondio', reunion: 'respondio', mas_adelante: 'respondio',
+  derivado: null, no_es_persona: null,
+  no_interesado: 'perdido', no_califica: 'perdido', no_contactar: 'perdido',
+};
+// Disposiciones que sacan al contacto de la cola activa (pausan su secuencia).
+const LM_DISP_EXIT = ['reunion', 'mas_adelante', 'derivado', 'no_es_persona', 'no_interesado', 'no_califica', 'no_contactar'];
+
 app.post('/api/lm/contacts/:id/disposition', requireAuth, async (req, res) => {
   const uid = req.workspaceOwnerId, cid = req.params.id;
   const disp = _lmS((req.body || {}).disposition);
   const nota = _lmS((req.body || {}).nota);
   const seqId = (req.body || {}).sequence_id ? (parseInt((req.body).sequence_id) || null) : null;
-  const EXIT = ['respondio', 'reunion', 'no_interesado', 'no_contactar'];
   try {
     const before = await pool.query(`SELECT disposition, outbound_client_id FROM lm_contacts WHERE id=$1 AND user_id=$2`, [cid, uid]);
     if (!before.rowCount) return res.status(404).json({ error: 'Contacto no encontrado' });
@@ -3068,22 +3086,95 @@ app.post('/api/lm/contacts/:id/disposition', requireAuth, async (req, res) => {
           paused += r.rowCount;
         }
       }
-    } else if (['reunion', 'no_interesado', 'no_contactar'].includes(disp) && seqId) {
-      const r = await pool.query(`UPDATE lm_contact_sequences SET estado='pausado' WHERE user_id=$1 AND contact_id=$2 AND sequence_id=$3 AND estado='activo'`, [uid, cid, seqId]);
+    } else if (LM_DISP_EXIT.includes(disp)) {
+      // Todo lo que saca al contacto de la cola activa pausa su(s) secuencia(s): si viene
+      // sequence_id solo esa, si no, todas (marcar desde Leads no lleva secuencia).
+      const r = seqId
+        ? await pool.query(`UPDATE lm_contact_sequences SET estado='pausado', paused_reason=$4 WHERE user_id=$1 AND contact_id=$2 AND sequence_id=$3 AND estado='activo'`, [uid, cid, seqId, 'disposition_' + disp])
+        : await pool.query(`UPDATE lm_contact_sequences SET estado='pausado', paused_reason=$3 WHERE user_id=$1 AND contact_id=$2 AND estado='activo'`, [uid, cid, 'disposition_' + disp]);
       paused = r.rowCount;
     }
-    if (disp) {
-      const LBL = { respondio: 'Respondió', reunion: 'Reunión agendada', no_interesado: 'No interesado', no_contactar: 'No contactar (opt-out)' };
-      const tipoMap = { respondio: 'respuesta', reunion: 'reunion', no_interesado: 'nota', no_contactar: 'nota' };
-      await pool.query(`INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, nota, fecha, estado) VALUES ($1,$2,$3,$4,$5,NOW(),'hecha')`,
-        [uid, cid, obcId, tipoMap[disp] || 'nota', `Disposición: ${LBL[disp] || disp}${nota ? ' — ' + nota : ''}`]);
+    // "Más adelante": guarda cuándo hay que retomarlo (nurturing). Vacío = sin fecha.
+    if (disp === 'mas_adelante') {
+      await pool.query(`UPDATE lm_contacts SET nurture_at=$1 WHERE id=$2 AND user_id=$3`,
+        [_sanDate((req.body || {}).nurture_at), cid, uid]);
     }
-    // La disposición alimenta el pipeline (solo hacia adelante): respondió/reunión → respondio; descartes → perdido.
-    const STAGE_BY_DISP = { respondio: 'respondio', reunion: 'respondio', no_interesado: 'perdido', no_contactar: 'perdido' };
-    const stage = disp ? await _lmAdvanceStage(uid, cid, STAGE_BY_DISP[disp]) : null;
+    if (disp) {
+      await pool.query(`INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, nota, fecha, estado) VALUES ($1,$2,$3,$4,$5,NOW(),'hecha')`,
+        [uid, cid, obcId, LM_DISP_TIPO[disp] || 'nota', `Disposición: ${LM_DISP_LBL[disp] || disp}${nota ? ' — ' + nota : ''}`]);
+    }
+    // La disposición alimenta el pipeline (solo hacia adelante). Los derivados NO son
+    // pérdida: la cuenta sigue viva con otra persona, así que no se tocan de etapa.
+    const stage = disp ? await _lmAdvanceStage(uid, cid, LM_STAGE_BY_DISP[disp]) : null;
     res.json({ ok: true, disposition: disp, paused, rerouted, stage });
   } catch (err) { console.error('[lm-disp]', err.message); res.status(500).json({ error: 'Error al actualizar disposición' }); }
 });
+// ── Derivación: el lead no es la persona correcta → se registra al contacto NUEVO de la
+// MISMA empresa (te lo dio él, o lo conseguiste tú) y se enrola en la misma secuencia
+// desde el paso 1. El original NO se marca como perdido: la cuenta sigue viva.
+app.post('/api/lm/contacts/:id/refer', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId, cid = parseInt(req.params.id);
+  const b = req.body || {};
+  const nombre = _lmS(b.nombre), apellido = _lmS(b.apellido), email = _lmS(b.email).toLowerCase();
+  const disp = b.disposition === 'no_es_persona' ? 'no_es_persona' : 'derivado';
+  if (!nombre && !email) return res.status(400).json({ error: 'Indica al menos el nombre o el email del nuevo contacto' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows: [orig] } = await client.query(
+      `SELECT id, nombre, apellido, company_id, empresa_nombre, outbound_client_id FROM lm_contacts WHERE id=$1 AND user_id=$2`, [cid, uid]);
+    if (!orig) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Contacto no encontrado' }); }
+    const nomOrig = [orig.nombre, orig.apellido].filter(Boolean).join(' ') || 'el contacto anterior';
+
+    // Si ya existe un contacto con ese email en el workspace, se reutiliza (no se duplica).
+    let nuevo = null;
+    if (email) {
+      const { rows } = await client.query(`SELECT * FROM lm_contacts WHERE user_id=$1 AND LOWER(email)=$2 LIMIT 1`, [uid, email]);
+      nuevo = rows[0] || null;
+    }
+    if (!nuevo) {
+      const { rows: [ins] } = await client.query(`
+        INSERT INTO lm_contacts (user_id, company_id, nombre, apellido, email, telefono, movil, cargo, linkedin,
+                                 empresa_nombre, outbound_client_id, estado, fuente, referred_by, notas)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'nuevo','derivado',$12,$13) RETURNING *`,
+        [uid, orig.company_id, nombre, apellido, email, _lmS(b.telefono), _lmS(b.movil), _lmS(b.cargo), _lmS(b.linkedin),
+         orig.empresa_nombre, orig.outbound_client_id, cid, `Referido por ${nomOrig}`]);
+      nuevo = ins;
+    } else {
+      await client.query(`UPDATE lm_contacts SET referred_by=COALESCE(referred_by,$1), company_id=COALESCE(company_id,$2), updated_at=NOW() WHERE id=$3`,
+        [cid, orig.company_id, nuevo.id]);
+    }
+
+    // Enrolar al nuevo en las mismas secuencias del original, desde el paso 1 (no vio los envíos previos).
+    const { rows: seqs } = await client.query(
+      `SELECT DISTINCT sequence_id FROM lm_contact_sequences WHERE user_id=$1 AND contact_id=$2`, [uid, cid]);
+    let enrolado = 0;
+    for (const s of seqs) {
+      const r = await client.query(
+        `INSERT INTO lm_contact_sequences (user_id, contact_id, sequence_id, paso, estado, start_date, next_action_at)
+         VALUES ($1,$2,$3,1,'activo',CURRENT_DATE,NOW()) ON CONFLICT (contact_id, sequence_id) DO NOTHING`,
+        [uid, nuevo.id, s.sequence_id]);
+      enrolado += r.rowCount;
+    }
+
+    // El original sale de la cola (sin marcarse como perdido) y queda la traza en ambos.
+    const nomNuevo = [nombre, apellido].filter(Boolean).join(' ') || email;
+    await client.query(`UPDATE lm_contacts SET disposition=$1, updated_at=NOW() WHERE id=$2 AND user_id=$3`, [disp, cid, uid]);
+    await client.query(`UPDATE lm_contact_sequences SET estado='pausado', paused_reason=$3 WHERE user_id=$1 AND contact_id=$2 AND estado='activo'`,
+      [uid, cid, 'disposition_' + disp]);
+    await client.query(`INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, nota, fecha, estado) VALUES ($1,$2,$3,'respuesta',$4,NOW(),'hecha')`,
+      [uid, cid, orig.outbound_client_id, `Disposición: ${LM_DISP_LBL[disp]} → ${nomNuevo}${_lmS(b.nota) ? ' — ' + _lmS(b.nota) : ''}`]);
+    await client.query(`INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, nota, fecha, estado) VALUES ($1,$2,$3,'nota',$4,NOW(),'hecha')`,
+      [uid, nuevo.id, orig.outbound_client_id, `Referido por ${nomOrig} (misma empresa)`]);
+    await client.query('COMMIT');
+    res.status(201).json({ ok: true, contacto: nuevo, enrolado, disposition: disp });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[lm-refer]', err.message);
+    res.status(500).json({ error: 'Error al registrar el contacto derivado' });
+  } finally { client.release(); }
+});
+
 // Deal (capa financiera del pipeline): valor estimado, moneda, probabilidad y fecha de cierre.
 // El PUT completo del contacto usa LM_CT_COLS y NO toca estas columnas.
 app.patch('/api/lm/contacts/:id/deal', requireAuth, async (req, res) => {

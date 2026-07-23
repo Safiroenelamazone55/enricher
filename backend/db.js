@@ -765,6 +765,11 @@ async function initDb() {
     await pool.query(`ALTER TABLE lm_contacts  ADD COLUMN IF NOT EXISTS buyer_role       TEXT NOT NULL DEFAULT '';`);
     // Disposición outbound (independiente del paso): respondio/reunion/no_interesado/no_contactar. Vacío = sin marcar.
     await pool.query(`ALTER TABLE lm_contacts  ADD COLUMN IF NOT EXISTS disposition      TEXT NOT NULL DEFAULT '';`);
+    // Derivación: quién refirió a este contacto (el lead que dijo "habla con X" o al que
+    // reemplaza). Da trazabilidad en ambos sentidos dentro de la misma empresa.
+    await pool.query(`ALTER TABLE lm_contacts  ADD COLUMN IF NOT EXISTS referred_by      INTEGER REFERENCES lm_contacts(id) ON DELETE SET NULL;`);
+    // Nurturing: fecha en la que hay que retomar a un contacto marcado "Más adelante".
+    await pool.query(`ALTER TABLE lm_contacts  ADD COLUMN IF NOT EXISTS nurture_at       DATE;`);
     // Deals: capa financiera del pipeline por contacto (valor estimado · probabilidad · cierre)
     await pool.query(`ALTER TABLE lm_contacts  ADD COLUMN IF NOT EXISTS deal_valor       NUMERIC(12,2);`);
     await pool.query(`ALTER TABLE lm_contacts  ADD COLUMN IF NOT EXISTS deal_moneda      TEXT NOT NULL DEFAULT 'USD';`);

@@ -14384,7 +14384,21 @@ ${foot}
     _refreshNav();
   }
   // ── Disposición outbound (independiente del paso; pausa en todas sus secuencias) ──
-  const _DISPOS = [['respondio', 'Respondió', '#15803D', '#E7F8EF'], ['reunion', 'Reunión', '#5B4BC4', '#EDE9FE'], ['no_interesado', 'No interesado', '#B45309', '#FEF3C7'], ['no_contactar', 'No contactar', '#C4342B', '#FDECEA']];
+  // Disposiciones en 3 grupos que SUMAN al total (sin solaparse):
+  //   pos  = hay señal comercial · der = la persona no sirve pero la CUENTA sí · desc = cerrado
+  // [valor, etiqueta, color texto, color fondo, grupo]
+  const _DISPOS = [
+    ['respondio',     'Interesado',      '#15803D', '#E7F8EF', 'pos'],
+    ['reunion',       'Reunión',         '#5B4BC4', '#EDE9FE', 'pos'],
+    ['mas_adelante',  'Más adelante',    '#0E7490', '#E0F2FE', 'pos'],
+    ['derivado',      'Derivó a otro',   '#7C3AED', '#F3E8FF', 'der'],
+    ['no_es_persona', 'No es la persona','#7C3AED', '#F3E8FF', 'der'],
+    ['no_interesado', 'No interesado',   '#B45309', '#FEF3C7', 'desc'],
+    ['no_califica',   'No califica',     '#8A6D3B', '#FBF0DA', 'desc'],
+    ['no_contactar',  'No contactar',    '#C4342B', '#FDECEA', 'desc'],
+  ];
+  const _DISP_GRUPOS = [['pos', 'Positivos'], ['der', 'Derivados'], ['desc', 'Descartados']];
+  function _dispGrupo(d) { const x = _DISPOS.find(y => y[0] === d); return x ? x[4] : ''; }
   function _dispoLabel(d) { const x = _DISPOS.find(y => y[0] === d); return x ? x[1] : ''; }
   function _dispoBadge(d) { const x = _DISPOS.find(y => y[0] === d); return x ? `<span class="cp-dispo-badge" style="background:${x[3]};color:${x[2]}">${x[1]}</span>` : ''; }
   async function _lmSetDispositionCore(cid, disp, seqId, nota) {
@@ -16588,12 +16602,13 @@ ${foot}
   // ── Leads hub: contactos con resultado marcado (respondió/reunión/…) + siguiente paso ──
   // Filtro de resultado MULTI-selección: [] = todos; si no, se muestra lo que cumpla
   // CUALQUIERA de los elegidos (ej. Respondió + Reunión a la vez).
-  let _ldPills = ['pos'], _ldCli = '', _ldSeq = '', _ldCamp = '', _ldQ = '';
-  const _LD_PILLS = [['pos', 'Positivos'], ['respondio', 'Respondió'], ['reunion', 'Reunión'], ['desc', 'Descartados']];
+  // Filtros de Leads: los GRUPOS (pos/der/desc) suman exactamente el total; debajo, los
+  // estados individuales. Cada lead cae en un solo grupo y en un solo estado → los
+  // números siempre cuadran, aunque se combinen varios chips.
+  let _ldPills = [], _ldCli = '', _ldSeq = '', _ldCamp = '', _ldQ = '';
   function _ldMatchPill(c, pill) {
     const d = c.disposition || '';
-    if (pill === 'pos') return d === 'respondio' || d === 'reunion';
-    if (pill === 'desc') return d === 'no_interesado' || d === 'no_contactar';
+    if (['pos', 'der', 'desc'].includes(pill)) return _dispGrupo(d) === pill;
     return d === pill;
   }
   function _ldMatchSel(c) { return !_ldPills.length || _ldPills.some(p => _ldMatchPill(c, p)); }
@@ -16653,9 +16668,15 @@ ${foot}
     if (!pillsEl || !wrap) return;
     const base = _ldBase();
     const cnt = p => base.filter(c => _ldMatchPill(c, p)).length;
-    // "Todos" + chips multi-selección (se pueden combinar varios resultados a la vez).
-    pillsEl.innerHTML = `<button class="ldh-pill${!_ldPills.length ? ' on' : ''}" onclick="LeadManagerModule.ldPill('')" title="Quitar el filtro de resultado">Todos<span>${base.length}</span></button>`
-      + _LD_PILLS.map(([k, l]) => `<button class="ldh-pill${_ldPills.includes(k) ? ' on' : ''}" onclick="LeadManagerModule.ldPill('${k}')" title="Se combinan: puedes marcar varios">${l}<span>${cnt(k)}</span></button>`).join('');
+    // Fila 1: Todos + los 3 grupos (suman el total). Fila 2: estados individuales.
+    // Solo se listan los estados que existen en los datos (no llenar de chips en cero).
+    const grupos = _DISP_GRUPOS.map(([k, l]) => `<button class="ldh-pill${_ldPills.includes(k) ? ' on' : ''}" onclick="LeadManagerModule.ldPill('${k}')" title="Grupo — se puede combinar con otros">${l}<span>${cnt(k)}</span></button>`).join('');
+    const estados = _DISPOS.filter(d => cnt(d[0]) > 0 || _ldPills.includes(d[0]))
+      .map(d => `<button class="ldh-pill ldh-pill--sm${_ldPills.includes(d[0]) ? ' on' : ''}" onclick="LeadManagerModule.ldPill('${d[0]}')">${d[1]}<span>${cnt(d[0])}</span></button>`).join('');
+    pillsEl.innerHTML = `<div class="ldh-pillrow">
+        <button class="ldh-pill${!_ldPills.length ? ' on' : ''}" onclick="LeadManagerModule.ldPill('')" title="Quitar el filtro de resultado">Todos<span>${base.length}</span></button>
+        <span class="ldh-pillsep"></span>${grupos}
+      </div>${estados ? `<div class="ldh-pillrow ldh-pillrow--sub">${estados}</div>` : ''}`;
     const fill = (id, arr, lbl, val) => { const el = $(id); if (el) el.innerHTML = `<option value="">${lbl}</option>` + arr.map(x => `<option value="${x.id}"${String(val) === String(x.id) ? ' selected' : ''}>${esc(x.nombre || x.dominio || ('#' + x.id))}</option>`).join(''); };
     fill('ldh-cli', _clients, 'Cliente: todos', _ldCli);
     fill('ldh-seq', _sequences, 'Secuencia: todas', _ldSeq);
@@ -16702,6 +16723,8 @@ ${foot}
         <td class="ldh-acts" onclick="event.stopPropagation()">
           <button class="ldh-act" title="Añadir nota" onclick="LeadManagerModule.ldAddNote(${c.id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
           <button class="ldh-act" title="Registrar reunión" onclick="LeadManagerModule.ldMeet(${c.id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></button>
+          <button class="ldh-act" title="No es la persona → registrar al contacto correcto de la misma empresa" onclick="LeadManagerModule.ldRefer(${c.id},'derivado')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg></button>
+          <button class="ldh-act" title="Contactar más adelante (nurturing)" onclick="LeadManagerModule.ldNurture(${c.id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg></button>
           <button class="ldh-act" title="Convertir en deal (valor · probabilidad · cierre)" onclick="LeadManagerModule.ldToDeal(${c.id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></button>
         </td></tr>`;
     }).join('');
@@ -16741,6 +16764,101 @@ ${foot}
       showBanner('✓ Nota guardada', 'success');
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
+  // ── Derivación: registrar al contacto correcto de la MISMA empresa ──
+  // disp='derivado' (te lo dio el lead) | 'no_es_persona' (no dio datos, lo agregas tú).
+  function ldRefer(cid, disp) {
+    const c = _contacts.find(x => x.id === cid); if (!c) return;
+    const emp = c.company_nombre || c.empresa_nombre || 'la misma empresa';
+    const nomOrig = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || 'este contacto';
+    const esDer = disp !== 'no_es_persona';
+    document.getElementById('lm-ref-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'lm-ref-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) m.remove(); };
+    m.innerHTML = `<div class="fin-pi-box">
+      <div class="fin-pi-box__hd"><h3>${esDer ? 'Derivó a otro contacto' : 'No es la persona — agregar a otro'}</h3><button class="fin-pi-x" onclick="document.getElementById('lm-ref-modal').remove()">✕</button></div>
+      <div class="fin-pi-form">
+        <div class="fin-pi-full seq-drip-hint" style="margin:0 0 4px">${esc(nomOrig)} sale de la cola, pero <b>${esc(emp)}</b> sigue activa: el contacto nuevo se crea en esa misma empresa y entra a la secuencia desde el paso 1.</div>
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Nombre *</span><input class="form-input" id="ref-nombre" placeholder="Ej. Ana"></label>
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Apellido</span><input class="form-input" id="ref-apellido" placeholder="Ej. Pérez"></label>
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Cargo</span><input class="form-input" id="ref-cargo" placeholder="Ej. Gerente de Compras"></label>
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Email</span><input class="form-input" id="ref-email" type="email" placeholder="ana@empresa.com"></label>
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Teléfono</span><input class="form-input" id="ref-tel" placeholder="+51 …"></label>
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">LinkedIn</span><input class="form-input" id="ref-li" placeholder="linkedin.com/in/…"></label>
+        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Nota (opcional)</span><input class="form-input" id="ref-nota" placeholder="${esDer ? 'Ej. me pasó su correo directo' : 'Ej. lo ubiqué por LinkedIn'}"></label>
+      </div>
+      <div class="fin-pi-box__ft"><span class="fin-cfg-hint" id="ref-hint"></span><div class="fin-pi-ft-btns">
+        <button class="btn btn--ghost btn--sm" onclick="document.getElementById('lm-ref-modal').remove()">Cancelar</button>
+        <button class="btn btn--primary btn--sm" id="ref-save" onclick="LeadManagerModule.ldReferSave(${cid},'${disp}')">Guardar y enrolar</button>
+      </div></div></div>`;
+    document.body.appendChild(m);
+    setTimeout(() => $('ref-nombre')?.focus(), 60);
+  }
+  async function ldReferSave(cid, disp) {
+    const g = id => ($(id)?.value || '').trim();
+    const hint = $('ref-hint');
+    if (!g('ref-nombre') && !g('ref-email')) { if (hint) { hint.textContent = 'Indica al menos el nombre o el email.'; hint.className = 'fin-cfg-hint fin-cfg-hint--err'; } return; }
+    const btn = $('ref-save'); if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+    try {
+      const res = await apiFetch(`${API}/lm/contacts/${cid}/refer`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ disposition: disp, nombre: g('ref-nombre'), apellido: g('ref-apellido'), cargo: g('ref-cargo'),
+          email: g('ref-email'), telefono: g('ref-tel'), linkedin: g('ref-li'), nota: g('ref-nota') }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Error');
+      document.getElementById('lm-ref-modal')?.remove();
+      await load();
+      const nom = [d.contacto?.nombre, d.contacto?.apellido].filter(Boolean).join(' ') || d.contacto?.email || 'el contacto';
+      showBanner(`✓ ${esc(nom)} agregado a la misma empresa${d.enrolado ? ` y enrolado en ${d.enrolado} secuencia(s) desde el paso 1` : ''}`, 'success');
+    } catch (e) {
+      if (hint) { hint.textContent = e.message; hint.className = 'fin-cfg-hint fin-cfg-hint--err'; }
+      if (btn) { btn.disabled = false; btn.textContent = 'Guardar y enrolar'; }
+    }
+  }
+  // "Más adelante" (nurturing): pide CUÁNDO retomarlo, con atajos de 1/3/6 meses.
+  function ldNurture(cid) {
+    const c = _contacts.find(x => x.id === cid); if (!c) return;
+    const nom = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || 'este contacto';
+    const enMeses = n => { const d = new Date(); d.setMonth(d.getMonth() + n); return d.toISOString().slice(0, 10); };
+    document.getElementById('lm-nur-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'lm-nur-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) m.remove(); };
+    m.innerHTML = `<div class="fin-pi-box" style="max-width:440px">
+      <div class="fin-pi-box__hd"><h3>Contactar más adelante</h3><button class="fin-pi-x" onclick="document.getElementById('lm-nur-modal').remove()">✕</button></div>
+      <div class="fin-pi-form">
+        <div class="fin-pi-full seq-drip-hint" style="margin:0 0 6px"><b>${esc(nom)}</b> sale de la cola pero <b>no se pierde</b>: queda en la lista de nurturing y lo verás cuando toque retomarlo.</div>
+        <div class="fin-pi-full" style="display:flex;gap:6px;flex-wrap:wrap">
+          <button type="button" class="seq-days-preset" onclick="document.getElementById('nur-fecha').value='${enMeses(1)}'">En 1 mes</button>
+          <button type="button" class="seq-days-preset" onclick="document.getElementById('nur-fecha').value='${enMeses(3)}'">En 3 meses</button>
+          <button type="button" class="seq-days-preset" onclick="document.getElementById('nur-fecha').value='${enMeses(6)}'">En 6 meses</button>
+        </div>
+        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Retomar el</span><input class="form-input" type="date" id="nur-fecha" value="${enMeses(3)}"></label>
+        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Nota (opcional)</span><input class="form-input" id="nur-nota" placeholder="Ej. cierran presupuesto en Q4"></label>
+      </div>
+      <div class="fin-pi-box__ft"><span class="fin-cfg-hint" id="nur-hint"></span><div class="fin-pi-ft-btns">
+        <button class="btn btn--ghost btn--sm" onclick="document.getElementById('lm-nur-modal').remove()">Cancelar</button>
+        <button class="btn btn--primary btn--sm" id="nur-save" onclick="LeadManagerModule.ldNurtureSave(${cid})">Guardar</button>
+      </div></div></div>`;
+    document.body.appendChild(m);
+  }
+  async function ldNurtureSave(cid) {
+    const fecha = $('nur-fecha')?.value || '';
+    const nota = ($('nur-nota')?.value || '').trim();
+    const btn = $('nur-save'); if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+    try {
+      const res = await apiFetch(`${API}/lm/contacts/${cid}/disposition`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ disposition: 'mas_adelante', nurture_at: fecha, nota: nota || (fecha ? `Retomar el ${fecha}` : '') }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Error');
+      document.getElementById('lm-nur-modal')?.remove();
+      await load();
+      showBanner(`✓ Marcado para retomar${fecha ? ' el ' + fecha : ''}`, 'success');
+    } catch (e) {
+      const h = $('nur-hint'); if (h) { h.textContent = e.message; h.className = 'fin-cfg-hint fin-cfg-hint--err'; }
+      if (btn) { btn.disabled = false; btn.textContent = 'Guardar'; }
+    }
+  }
   // Exporta LO QUE VES (con los filtros aplicados) para abrir en Excel.
   function ldExport() {
     const info = _ldActInfo();
@@ -16759,6 +16877,9 @@ ${foot}
       ['Secuencia', r => ((r.c.sequences || [])[0] || {}).nombre],
       ['Paso en que respondió', r => _ldPaso(r.c)],
       ['Resultado', r => ((_DISPOS.find(x => x[0] === r.c.disposition) || [])[1] || r.c.disposition)],
+      ['Grupo', r => ((_DISP_GRUPOS.find(g => g[0] === _dispGrupo(r.c.disposition)) || [])[1] || '')],
+      ['Retomar el', r => (r.c.nurture_at ? String(r.c.nurture_at).slice(0, 10) : '')],
+      ['Referido por', r => { const o = _contacts.find(x => x.id === r.c.referred_by); return o ? ([o.nombre, o.apellido].filter(Boolean).join(' ') || o.email) : ''; }],
       ['Fecha', r => { const f = r.i.fecha || r.c.updated_at; const x = new Date(f); return isNaN(x) ? '' : x.toISOString().slice(0, 10); }],
       ['Nota', r => r.i.nota],
     ];
@@ -19623,6 +19744,7 @@ ${foot}
     seqDoDataIssue, seqDoDataIssuePick, ctToggleDataIssue, lmResumeDataIssue, seqOpenMark,
     lmSetPageSize, ctGoPage, coGoPage, seqCtSetEstado, seqTaskSetCanal,
     ldPill, ldSetCli, ldSetSeq, ldSetCamp, ldSetQ, ldAddNote, ldMeet, ldToDeal, ldEditNote, ldExport,
+    ldRefer, ldReferSave, ldNurture, ldNurtureSave,
     dlSetCli, dlOpen, dlClose, dlSave,
     sqSetCli, sqSetEst, sqSetQ, cmSetCli, cmSetEst, cmSetQ,
     seqRunSetCanal, seqTaskSetDue,

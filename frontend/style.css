@@ -13010,3 +13010,10 @@ td.ldh-acts { padding-left: 6px; padding-right: 10px; }
 .ldh-note__in { white-space: pre-wrap; word-break: break-word; line-height: 1.4; max-height: 58px; overflow-y: auto; border-radius: 6px; padding: 4px 6px; font-size: .76rem; transition: background .12s; }
 .ldh-note--full:hover .ldh-note__in { background: var(--primary-soft); }
 .ldh-table td.ldh-note--full { vertical-align: middle; }
+
+/* Chips de Leads en 2 niveles: grupos (suman el total) + estados individuales */
+.ldh-pillrow { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.ldh-pillrow--sub { margin-top: 6px; padding-left: 2px; }
+.ldh-pillsep { width: 1px; height: 18px; background: var(--border); margin: 0 2px; }
+.ldh-pill--sm { font-size: .72rem; padding: 4px 9px; opacity: .92; }
+.ldh-pill--sm span { font-size: .66rem; }
