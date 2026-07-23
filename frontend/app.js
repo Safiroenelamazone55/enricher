@@ -3021,7 +3021,11 @@ const FinanceModule = (() => {
     if (_fbProject) projs = projs.filter(p => String(p.id) === String(_fbProject));
 
     const visIds = new Set(projs.map(p => p.id));
-    const mains = _fbTasks.filter(t => !t.parent_task_id && visIds.has(t.project_id));
+    // Finanzas lista solo lo COBRABLE. Las tareas contenedoras de la semana de trabajo
+    // (semana_week, sin monto) son organización interna, no un cobro: se excluyen para
+    // no duplicar la fila junto a "Cobro semanal · …".
+    const mains = _fbTasks.filter(t => !t.parent_task_id && visIds.has(t.project_id)
+      && !(t.semana_week && !(parseFloat(t.monto) > 0)));
     const byProj = {}; mains.forEach(t => { (byProj[t.project_id] = byProj[t.project_id] || []).push(t); });
 
     // ── KPIs (ponderados por tu % en cada proyecto) ──

@@ -13020,3 +13020,46 @@ td.ldh-acts { padding-left: 6px; padding-right: 10px; }
 .ldh-pillsep { width: 1px; height: 18px; background: var(--border); margin: 0 2px; }
 .ldh-pill--sm { font-size: .72rem; padding: 4px 9px; opacity: .92; }
 .ldh-pill--sm span { font-size: .66rem; }
+
+/* ── Tareas · lista: limpieza visual (mismo lenguaje que el dashboard) ──────────
+   Cabeceras de grupo sin barra de fondo (solo tipografía + separador), dots y
+   contadores discretos, y fechas con tonos apagados en vez de rojo saturado. */
+#pane-mgmt-tasks .tl-group-cell {
+  background: transparent;
+  border-top: 1px solid var(--border, #E4E7DD);
+  border-bottom: none;
+  padding: 16px 14px 7px;
+  gap: 7px;
+}
+#pane-mgmt-tasks .tl-group-name {
+  font-size: 10.5px; font-weight: 700; letter-spacing: .1em;
+  text-transform: uppercase; color: #A6998A;
+}
+#pane-mgmt-tasks .tl-group-dot { width: 6px; height: 6px; opacity: .75; }
+#pane-mgmt-tasks .tl-group-count {
+  background: none; border: none; padding: 0 0 0 1px;
+  font-size: 10.5px; font-weight: 700; color: #B8ADA0; letter-spacing: .04em;
+}
+#pane-mgmt-tasks .tl-group-chev { color: #C0B7AC; }
+
+/* Fechas: la señal la da el tono, no un rojo saturado con punto */
+#pane-mgmt-tasks .tl-due--over  { color: #B07064; font-weight: 600; }
+#pane-mgmt-tasks .tl-due--soon  { color: #A6853F; font-weight: 500; }
+#pane-mgmt-tasks .tl-due--today { color: #3F7A5C; font-weight: 600; }
+#pane-mgmt-tasks .tl-due--over .tl-due-dot { display: none; }
+
+/* Aire entre columnas (PROGRESO y TIMER se tocaban) */
+#pane-mgmt-tasks .clients-table th,
+#pane-mgmt-tasks .clients-table td { padding-left: 12px; padding-right: 12px; }
+#pane-mgmt-tasks .clients-table th { font-size: 10.5px; letter-spacing: .07em; color: #A6998A; font-weight: 700; }
+
+/* La tabla de tareas tiene muchas columnas: en Tareas el contenido usa más ancho
+   (el resto de secciones mantiene su ancho de lectura de 1060px). */
+body:has(#pane-mgmt-tasks.active) .content-wrap { max-width: 1400px; }
+
+/* Aire real entre columnas — "Progreso" y "Timer" se tocaban en la cabecera */
+#pane-mgmt-tasks .clients-table th,
+#pane-mgmt-tasks .clients-table td { padding-left: 14px !important; padding-right: 14px !important; }
+#pane-mgmt-tasks .clients-table th[data-col="progreso"],
+#pane-mgmt-tasks .clients-table td[data-col="progreso"] { min-width: 92px; }
+#pane-mgmt-tasks .clients-table th:nth-last-child(3) { white-space: nowrap; }
