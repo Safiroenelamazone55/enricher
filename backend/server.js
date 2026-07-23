@@ -241,7 +241,19 @@ app.use(express.text({ type: 'text/plain', limit: '512kb' }));
 // sameSite:'none' + secure:true are required for cross-site cookies
 // (Cloudflare Pages frontend ↔ Render backend).
 const SESSION_SECRET = process.env.SESSION_SECRET || 'enricher-dev-secret-change-in-prod';
+// Las sesiones vivian en memoria: cada despliegue del backend echaba a todo el
+// mundo. Ahora se guardan en Postgres, asi que reiniciar no cierra la sesion.
+let _sessionStore;
+try {
+  const PgSession = require('connect-pg-simple')(session);
+  _sessionStore = new PgSession({ pool, tableName: 'user_sessions', createTableIfMissing: true });
+  _sessionStore.on('error', err => console.error('[session] store:', err.message));
+  console.log('[session] almacenadas en Postgres (user_sessions)');
+} catch (e) {
+  console.warn('[session] connect-pg-simple no disponible, se usa memoria:', e.message);
+}
 const sessionMiddleware = session({
+  store:             _sessionStore,
   secret:            SESSION_SECRET,
   resave:            false,
   saveUninitialized: false,
@@ -3673,6 +3685,29 @@ app.delete('/api/lm/mailboxes/:id', requireAuth, async (req, res) => {
 
 // Lista de hilos: 1 fila por contacto con actividad de correo. El frontend
 // arma las pestañas con estos campos (last_in_at vs last_out_at, bounces…).
+// Contadores de la barra lateral. Existian en el frontend, pero se calculaban a
+// partir de listas que solo se cargan al ENTRAR en cada seccion: al abrir el modulo
+// no habia datos y las insignias salian vacias. Esto los da de una, y barato.
+app.get('/api/lm/nav-counts', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId;
+  try {
+    const [inbox, acts, aprob, leads] = await Promise.all([
+      pool.query(`SELECT COUNT(*)::int n FROM lm_inbox_messages
+                   WHERE user_id=$1 AND NOT leido AND tipo='reply'`, [uid]),
+      pool.query(`SELECT COUNT(*)::int n FROM activities
+                   WHERE user_id=$1 AND estado='pendiente' AND fecha::date <= CURRENT_DATE`, [uid]),
+      pool.query(`SELECT COUNT(*)::int n FROM lm_messages
+                   WHERE user_id=$1 AND estado='awaiting'`, [uid]),
+      pool.query(`SELECT COUNT(*)::int n FROM lm_contacts
+                   WHERE user_id=$1 AND disposition IN ('respondio','reunion')`, [uid]),
+    ]);
+    res.json({ inbox: inbox.rows[0].n, tasks: acts.rows[0].n + aprob.rows[0].n, leads: leads.rows[0].n });
+  } catch (err) {
+    console.error('[lm/nav-counts] error:', err.message);
+    res.json({ inbox: 0, tasks: 0, leads: 0 });   // una insignia no debe tumbar el modulo
+  }
+});
+
 app.get('/api/lm/inbox/threads', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(`

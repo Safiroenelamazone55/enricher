@@ -13623,3 +13623,16 @@ body:has(#pane-mgmt-projects.active) .content-wrap { max-width: 1400px; }
 
 /* El panel de detalle del día ya no lleva mini-mes: vive en la barra lateral */
 .cal2d__side { width: 246px; }
+
+/* Insignia de la barra lateral con la forma de iOS/macOS: pildora roja, numero
+   blanco y ligero apretado tipografico. El verde de marca se confundia con el
+   estado 'activo' de la propia fila. */
+.lm2-nav__cnt {
+  background: #FF3B30 !important; color: #fff !important;
+  font-size: 11px !important; font-weight: 600 !important; letter-spacing: -.01em;
+  min-width: 19px !important; height: 19px !important; padding: 0 6px !important;
+  border-radius: 999px !important; line-height: 1;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 1px 2px rgba(255,59,48,.35);
+}
+.lm2-nav__item.active .lm2-nav__cnt { background: #FF3B30 !important; }

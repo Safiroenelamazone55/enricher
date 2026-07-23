@@ -13894,7 +13894,19 @@ const LeadManagerModule = (() => {
       if (!Array.isArray(_lmTpls)) _lmTpls = [];
     } catch (e) { console.warn('[lm] load error:', e.message); _data = []; _clients = []; _campaigns = []; _sequences = []; _steps = []; _activities = []; }
     _renderBody();
+    _loadNavCounts();                          // insignias visibles desde el primer momento
     if (_section === 'dashboard') _loadToday(); // card Hoy del motor de envío
+  }
+
+  // Las insignias se calculaban con listas que solo existen tras entrar en cada
+  // seccion, asi que al abrir el modulo salian vacias. Este contador viene del
+  // servidor y no depende de por donde hayas pasado.
+  let _navCounts = null;
+  async function _loadNavCounts() {
+    try {
+      const r = await apiFetch(`${API}/lm/nav-counts`);
+      if (r.ok) { _navCounts = await r.json(); _refreshNav(); }
+    } catch (e) { /* una insignia no merece un error visible */ }
   }
 
   // ── Navegación interna del workspace ──
@@ -13935,7 +13947,13 @@ const LeadManagerModule = (() => {
     _NAV.forEach(n => {
       if (n.g !== lastG) { if (n.g) html += `<div class="lm2-nav__grp">${n.g}</div>`; lastG = n.g; }
       const active = (_section === n.k) || (_section === 'client' && n.k === 'clients') || (_section === 'sequence' && n.k === 'sequences');
-      const cnt = n.k === 'tasks' ? _pendingTaskCount() : n.k === 'leads' ? _contacts.filter(c => c.disposition === 'respondio' || c.disposition === 'reunion').length : n.k === 'inbox' ? _ibUnreadTotal() : 0;
+      // Manda lo que ya esta cargado en pantalla (mas fresco); si aun no hay nada,
+      // el contador del servidor.
+      const nc = _navCounts || {};
+      const cnt = n.k === 'tasks'  ? (_pendingTaskCount() || nc.tasks || 0)
+                : n.k === 'leads'  ? ((_contacts.length ? _contacts.filter(c => c.disposition === 'respondio' || c.disposition === 'reunion').length : 0) || nc.leads || 0)
+                : n.k === 'inbox'  ? (Array.isArray(_ibThreads) ? _ibUnreadTotal() : (nc.inbox || 0))
+                : 0;
       html += `<button class="lm2-nav__item${active ? ' active' : ''}" onclick="LeadManagerModule.go('${n.k}')">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${_NAV_ICON[n.k] || ''}</svg>
         <span class="lm2-nav__lbl">${n.l}</span>${cnt ? `<span class="lm2-nav__cnt">${cnt}</span>` : ''}${n.soon ? '<span class="lm2-nav__soon">Pronto</span>' : ''}</button>`;
