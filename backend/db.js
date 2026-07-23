@@ -392,6 +392,8 @@ async function initDb() {
     await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS plan_dias TEXT NOT NULL DEFAULT '';`);
     await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS plan_horas NUMERIC(6,2);`);
     await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS plan_hora INTEGER;`);
+    // Color del proyecto en el calendario (hex). NULL = se asigna uno estable por id.
+    await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS color TEXT;`);
     // Excepciones al plan recurrente: mover UN día concreto sin tocar el resto de la semana.
     // hora NULL + skip=true → ese día no se trabaja. Si no hay fila, manda el plan de la tarea.
     await pool.query(`

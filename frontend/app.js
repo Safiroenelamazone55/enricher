@@ -9022,14 +9022,21 @@ const CalendarModule = (() => {
 
   // Un color por proyecto, estable: el mismo proyecto siempre sale del mismo color.
   // Paleta de macOS Calendar.
-  const _PROJ_COLORS = ['#FF3B30','#FF9500','#FFCC00','#34C759','#007AFF','#AF52DE',
-                        '#FF2D55','#5AC8FA','#A2845E','#5856D6','#30B0C7','#FF6482'];
+  // Paleta de macOS Calendar. El orden importa: los primeros proyectos se llevan
+  // los tonos amables (azul, verde, morado) y no el rosa fuerte.
+  const _PROJ_COLORS = ['#007AFF','#34C759','#AF52DE','#FF9500','#5AC8FA','#FF3B30',
+                        '#5856D6','#FFCC00','#30B0C7','#A2845E','#FF2D55','#8E8E93'];
+  let _projects = [];                       // para la barra lateral y sus colores
+  let _projHidden = new Set(JSON.parse(localStorage.getItem('cal_proj_off') || '[]').map(Number));
   function _projColor(pid) {
     if (pid == null) return '#8E8E93';
+    const p = _projects.find(x => x.id === pid);
+    if (p && p.color) return p.color;        // color elegido por la usuaria
     let n = 0; const s = String(pid);
     for (let i = 0; i < s.length; i++) n = (n * 31 + s.charCodeAt(i)) >>> 0;
     return _PROJ_COLORS[n % _PROJ_COLORS.length];
   }
+  const _projOn = pid => !_projHidden.has(Number(pid));
 
   const _WKS  = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
   const _DOMF = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
@@ -9080,7 +9087,9 @@ const CalendarModule = (() => {
     return !!(u && (u.isOwner || ['admin', 'manager'].includes(u.memberRol)));
   }
   function _calMyName() { return (window._authUser?.memberNombre || window._authUser?.name || '').toLowerCase(); }
-  function _taskForMember(t) {
+  // Filtro unico de tareas: quien la lleva y si su proyecto esta visible. Las casillas
+  // de la barra lateral pasan por aqui, que es la puerta por la que entran todas.
+  function _taskDeMiembro(t) {
     if (_calMember === 'all') return true;
     const who  = (_calMember === 'me' ? _calMyName() : _calMember).toLowerCase();
     if (!who) return true;                         // sin identidad → no ocultar nada
@@ -9088,6 +9097,7 @@ const CalendarModule = (() => {
                  : (t.responsable ? [t.responsable] : [])).map(r => String(r).toLowerCase());
     return resp.includes(who);
   }
+  function _taskForMember(t) { return _projOn(t.project_id) && _taskDeMiembro(t); }
   function _memberWho() { return (_calMember === 'me' ? _calMyName() : _calMember).toLowerCase(); }
   // Ausencias: por member_nombre. 'all' → todas; 'me' → las mías; otro → las suyas.
   function _offForMember(o) {
@@ -9125,17 +9135,19 @@ const CalendarModule = (() => {
         weekStart = new Date(_anchor); weekStart.setHours(0, 0, 0, 0);
         weekEnd   = new Date(weekStart.getTime() + 86400000);
       }
-      const [mr, tr, tor, gcr, ter, por] = await Promise.all([
+      const [mr, tr, tor, gcr, ter, por, prr] = await Promise.all([
         apiFetch(`${API}/mgmt/meetings`),
         apiFetch(`${API}/mgmt/tasks`),
         apiFetch(`${API}/mgmt/time-off`),
         apiFetch(`${API}/gcal/events?start=${weekStart.toISOString()}&end=${weekEnd.toISOString()}`),
         apiFetch(`${API}/timer/entries?start=${weekStart.toISOString()}&end=${weekEnd.toISOString()}`),
         apiFetch(`${API}/mgmt/plan-overrides?desde=${_iso(weekStart)}&hasta=${_iso(new Date(weekEnd.getTime() - 86400000))}`),
+        apiFetch(`${API}/mgmt/projects`),
       ]);
       if (mr.ok)  _meetings    = await mr.json();
       if (tr.ok)  _tasks       = await tr.json();
       if (tor.ok) _timeOff     = await tor.json();
+      if (prr.ok) _projects = await prr.json();
       if (por.ok) {
         _planOv = {};                                   // clave "taskId|YYYY-MM-DD" → excepción
         (await por.json()).forEach(o => { _planOv[`${o.task_id}|${o.fecha}`] = o; });
@@ -9222,11 +9234,14 @@ const CalendarModule = (() => {
     });
 
     cont.innerHTML = `<div class="cal2 cal2--mac">
-      ${_macBar()}
-      ${_tabs(wMtgs.length, wTasks.length, wTOff.length)}
-      ${_view === 'month' ? _month(days, todayDs)
-        : _view === 'day'  ? `<div class="cal2d"><div class="cal2d__main">${_grid(days, todayDs)}</div>${_dayAside(days[0])}</div>`
-        : _grid(days, todayDs)}
+      ${_sideBar(todayDs)}
+      <div class="cal2__main">
+        ${_macBar()}
+        ${_tabs(wMtgs.length, wTasks.length, wTOff.length)}
+        ${_view === 'month' ? _month(days, todayDs)
+          : _view === 'day'  ? `<div class="cal2d"><div class="cal2d__main">${_grid(days, todayDs)}</div>${_dayAside(days[0])}</div>`
+          : _grid(days, todayDs)}
+      </div>
     </div>`;
 
     requestAnimationFrame(() => {
@@ -9276,6 +9291,74 @@ const CalendarModule = (() => {
       _fitBound = true;
       window.addEventListener('resize', () => { _fitHeight(); _syncBands(); });
     }
+  }
+
+  // Barra lateral: la lista de "calendarios". Aqui cada proyecto es un calendario,
+  // con su color (editable) y su casilla para mostrarlo u ocultarlo.
+  function _sideBar(todayDs) {
+    const conTareas = new Set(_tasks.filter(_taskDeMiembro).map(t => t.project_id).filter(x => x != null));
+    const lista = _projects.filter(p => conTareas.has(p.id));
+    lista.sort((a, b) => String(a.nombre || '').localeCompare(String(b.nombre || '')));
+    const fila = p => {
+      const on = _projOn(p.id), c = _projColor(p.id);
+      return `<div class="cal2sb__row">
+        <button class="cal2sb__chk${on ? ' on' : ''}" style="--c:${c}" onclick="CalendarModule.toggleProj(${p.id})"
+                title="${on ? 'Ocultar' : 'Mostrar'} ${esc(p.nombre)}"></button>
+        <span class="cal2sb__name" title="${esc(p.nombre)}${p.client_nombre ? ' · ' + esc(p.client_nombre) : ''}"
+              onclick="CalendarModule.toggleProj(${p.id})">${esc(p.nombre)}</span>
+        <button class="cal2sb__pick" onclick="CalendarModule.openColorPick(event,${p.id})" title="Cambiar color">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg>
+        </button>
+      </div>`;
+    };
+    return `<aside class="cal2sb">
+      <div class="cal2sb__grp">Proyectos</div>
+      <div class="cal2sb__list">${lista.length ? lista.map(fila).join('') : '<div class="cal2sb__vacio">Sin proyectos con tareas.</div>'}</div>
+      <div class="cal2sb__grp">Otros</div>
+      <div class="cal2sb__list">
+        <div class="cal2sb__row"><span class="cal2sb__chk on" style="--c:#5856D6"></span><span class="cal2sb__name">Reuniones</span></div>
+        <div class="cal2sb__row"><span class="cal2sb__chk on" style="--c:#FF9500"></span><span class="cal2sb__name">Tiempo libre</span></div>
+        ${_gcalConn ? `<div class="cal2sb__row"><span class="cal2sb__chk on" style="--c:#34C759"></span><span class="cal2sb__name">Google Calendar</span></div>` : ''}
+      </div>
+      <div class="cal2sb__foot">${_miniMonth(new Date(_anchor), todayDs)}</div>
+    </aside>`;
+  }
+
+  function toggleProj(pid) {
+    pid = Number(pid);
+    if (_projHidden.has(pid)) _projHidden.delete(pid); else _projHidden.add(pid);
+    localStorage.setItem('cal_proj_off', JSON.stringify([..._projHidden]));
+    render();
+  }
+
+  function openColorPick(e, pid) {
+    e.stopPropagation();
+    if (_popClose) _popClose();
+    const anchor = e.currentTarget.getBoundingClientRect();
+    const pop = document.createElement('div');
+    pop.className = 'cal2cp';
+    pop.innerHTML = _PROJ_COLORS.map(c =>
+      `<button class="cal2cp__c${_projColor(pid) === c ? ' on' : ''}" style="background:${c}" onclick="CalendarModule.setProjColor(${pid},'${c}')" title="${c}"></button>`).join('')
+      + `<button class="cal2cp__auto" onclick="CalendarModule.setProjColor(${pid},'')">Automático</button>`;
+    document.body.appendChild(pop);
+    const W = 168;
+    pop.style.cssText += `;position:fixed;z-index:10001;width:${W}px;top:${Math.min(anchor.bottom + 5, window.innerHeight - 130)}px;left:${Math.min(anchor.left, window.innerWidth - W - 8)}px`;
+    const onDoc = ev => { if (!pop.contains(ev.target)) _closePop(); };
+    _popClose = () => { pop.remove(); document.removeEventListener('mousedown', onDoc); _popClose = null; };
+    setTimeout(() => document.addEventListener('mousedown', onDoc), 0);
+  }
+
+  async function setProjColor(pid, color) {
+    _closePop();
+    const p = _projects.find(x => x.id === pid);
+    const prev = p ? p.color : null;
+    if (p) p.color = color || null;                       // optimista
+    render();
+    try {
+      const r = await apiFetch(`${API}/mgmt/projects/${pid}/color`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ color }) });
+      if (!r.ok) throw new Error(await r.text());
+    } catch (err) { if (p) p.color = prev; render(); console.error('[cal] color:', err); }
   }
 
   // Barra superior estilo macOS Calendar: título · segmentado Día/Semana/Mes · ‹ Hoy ›
@@ -9808,7 +9891,7 @@ const CalendarModule = (() => {
         <div class="cal2det__sub">${n === 0 ? 'Nada pendiente para este día.' : `${n} ${n === 1 ? 'tarea pendiente' : 'tareas pendientes'} hoy.`}</div>
       </div>`;
     }
-    return `<aside class="cal2d__side">${_miniMonth(new Date(_anchor), todayDs)}${det}</aside>`;
+    return `<aside class="cal2d__side">${det}</aside>`;
   }
 
   function _detCard(titulo, color, filas, onOpen, taskId) {
@@ -10102,6 +10185,7 @@ const CalendarModule = (() => {
   return { load, setTab, prev, next, goToday, refresh, refreshPlans, switchMember, connectGcal, disconnectGcal, syncTaskToGcal, tickRunning,
     openSchedulePopover, saveSchedule, unschedule, openDayUnscheduled, closeDayPop,
     openPlanPop, movePlan, startFromPlan, setView, openDay, selectItem, miniShift,
+    toggleProj, openColorPick, setProjColor,
     _dpSearch, _dpSchedule, _dpPickDur, _dpPickHour, _dpCustomDur, _dpSchedCancel, _dpConfirm, _dpToggleSubs };
 })();
 

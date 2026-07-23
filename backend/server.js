@@ -2144,6 +2144,22 @@ app.patch('/api/mgmt/tasks/:id/fecha-inicio', requireAuth, async (req, res) => {
   }
 });
 
+// Color del proyecto en el calendario. Lo elige la usuaria; si no hay, se calcula uno.
+app.patch('/api/mgmt/projects/:id/color', requireAuth, async (req, res) => {
+  const c = String(req.body?.color || '').trim();
+  if (c && !/^#[0-9A-Fa-f]{6}$/.test(c)) return res.status(400).json({ error: 'Color inválido' });
+  try {
+    const { rows } = await pool.query(
+      `UPDATE projects SET color=$1, updated_at=NOW() WHERE id=$2 AND user_id=$3 RETURNING id, color`,
+      [c || null, req.params.id, req.workspaceOwnerId]);
+    if (!rows[0]) return res.status(404).json({ error: 'Proyecto no encontrado' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[projects/color] PATCH error:', err.message);
+    res.status(500).json({ error: 'Error al guardar el color' });
+  }
+});
+
 // ── Excepciones del plan recurrente ──────────────────────────────────────────
 // Mover el bloque de UN día ("solo este evento") sin tocar la semana entera.
 // GET  ?desde=&hasta=  → las excepciones de esa ventana, para pintarlas en el calendario.
