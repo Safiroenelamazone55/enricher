@@ -3790,7 +3790,28 @@ app.get('/api/lm/inbox/thread/:contactId', requireAuth, async (req, res) => {
         LEFT JOIN lm_mailboxes mb ON mb.outbound_client_id = k.outbound_client_id AND mb.user_id = k.user_id
        WHERE k.id=$2 AND k.user_id=$1
     `, [req.workspaceOwnerId, cid]);
-    res.json({ contact: contact || null, messages: msgs });
+    // A quien iria la respuesta: se calcula aqui para que la usuaria lo VEA antes
+    // de escribir, en vez de descubrirlo cuando ya se envio.
+    let destinatarios = { to: contact?.email ? [contact.email] : [], cc: [] };
+    if (contact) {
+      const { rows: [li] } = await pool.query(
+        `SELECT from_email, to_emails, cc_emails FROM lm_inbox_messages
+          WHERE user_id=$1 AND contact_id=$2 AND tipo IN ('reply','ooo')
+          ORDER BY received_at DESC LIMIT 1`, [req.workspaceOwnerId, cid]);
+      const { rows: [mbx] } = await pool.query(
+        `SELECT mb.email, COALESCE(oc.cc_email,'') AS cc_email
+           FROM lm_mailboxes mb LEFT JOIN outbound_clients oc ON oc.id = mb.outbound_client_id
+          WHERE mb.outbound_client_id=$1 AND mb.user_id=$2 LIMIT 1`,
+        [contact.outbound_client_id, req.workspaceOwnerId]);
+      const lista = t => String(t || '').split(/[,;]/).map(x => x.trim().toLowerCase()).filter(x => x.includes('@'));
+      const mios = new Set([String(mbx?.email || '').toLowerCase(), String(mbx?.cc_email || '').toLowerCase()].filter(Boolean));
+      const to = [String(contact.email || '').toLowerCase()].filter(Boolean);
+      if (li?.from_email && !mios.has(li.from_email.toLowerCase()) && !to.includes(li.from_email.toLowerCase())) to.push(li.from_email.toLowerCase());
+      let cc = li ? [...lista(li.to_emails), ...lista(li.cc_emails)].filter(a => !mios.has(a) && !to.includes(a)) : [];
+      if (mbx?.cc_email) cc.push(String(mbx.cc_email).toLowerCase());
+      destinatarios = { to, cc: [...new Set(cc)].filter(a => !to.includes(a)) };
+    }
+    res.json({ contact: contact || null, messages: msgs, destinatarios });
   } catch (err) { console.error('[inbox] THREAD', err.message); res.status(500).json({ error: 'Error al cargar el hilo' }); }
 });
 
@@ -3813,9 +3834,29 @@ app.post('/api/lm/inbox/reply', requireAuth, async (req, res) => {
 
     // Threading: responder al último entrante (Message-ID + asunto con Re:).
     const { rows: [lastIn] } = await pool.query(
-      `SELECT message_id, asunto FROM lm_inbox_messages
+      `SELECT message_id, asunto, from_email, to_emails, cc_emails FROM lm_inbox_messages
         WHERE user_id=$1 AND contact_id=$2 AND tipo IN ('reply','ooo')
         ORDER BY received_at DESC LIMIT 1`, [req.workspaceOwnerId, cid]);
+
+    // Responder a TODOS: quien escribio + los que iban en Para y en CC. Si solo se
+    // contestara al contacto, la gente en copia se cae del hilo sin enterarse.
+    const _lista = t => String(t || '').split(/[,;]/).map(x => x.trim().toLowerCase()).filter(x => x.includes('@'));
+    const _mios = new Set([String(mb.email || '').toLowerCase(), String(mb.cc_email || '').toLowerCase()].filter(Boolean));
+    const replyAll = b.reply_all !== false;
+    const to = [String(k.email).toLowerCase()];
+    if (lastIn?.from_email && !_mios.has(String(lastIn.from_email).toLowerCase())) {
+      const f = String(lastIn.from_email).toLowerCase();
+      if (!to.includes(f)) to.push(f);
+    }
+    let cc = [];
+    if (replyAll && lastIn) {
+      cc = [..._lista(lastIn.to_emails), ..._lista(lastIn.cc_emails)]
+        .filter(a => !_mios.has(a) && !to.includes(a));
+    }
+    if (Array.isArray(b.cc)) cc = b.cc.map(x => String(x).trim().toLowerCase()).filter(x => x.includes('@'));
+    // El CC fijo del cliente (lo que ya hacia el motor) se respeta siempre.
+    if (mb.cc_email && !cc.includes(String(mb.cc_email).toLowerCase())) cc.push(String(mb.cc_email).toLowerCase());
+    cc = [...new Set(cc)].filter(a => !to.includes(a));
     let asunto = String(b.asunto || '').trim();
     if (!asunto) asunto = lastIn?.asunto ? (/^re:/i.test(lastIn.asunto) ? lastIn.asunto : `Re: ${lastIn.asunto}`) : '(sin asunto)';
 
@@ -3826,15 +3867,16 @@ app.post('/api/lm/inbox/reply', requireAuth, async (req, res) => {
     const schedAt = b.scheduled_at ? new Date(b.scheduled_at) : null;
     if (schedAt && !isNaN(schedAt) && schedAt.getTime() > Date.now() + 30 * 1000) {
       const { rows: [msg] } = await pool.query(
-        `INSERT INTO lm_messages (user_id, contact_id, asunto, cuerpo, to_email, estado, scheduled_at, mailbox_id, in_reply_to)
-         VALUES ($1,$2,$3,$4,$5,'scheduled',$6,$7,$8) RETURNING id, asunto, cuerpo, scheduled_at`,
-        [req.workspaceOwnerId, cid, asunto, cuerpo, k.email, schedAt.toISOString(), mb.id, lastIn?.message_id || '']);
+        `INSERT INTO lm_messages (user_id, contact_id, asunto, cuerpo, to_email, estado, scheduled_at, mailbox_id, in_reply_to, cc_emails)
+         VALUES ($1,$2,$3,$4,$5,'scheduled',$6,$7,$8,$9) RETURNING id, asunto, cuerpo, scheduled_at`,
+        [req.workspaceOwnerId, cid, asunto, cuerpo, to.join(', '), schedAt.toISOString(), mb.id, lastIn?.message_id || '', cc.join(', ')]);
       return res.status(201).json({ ok: true, scheduled: true, message: msg });
     }
 
     const pass = mailboxSvc.decPass(mb.pass_enc);
     const sent = await mailboxSvc.sendFromMailbox(mb, pass, {
-      to: k.email, subject: asunto, text: cuerpo, html,
+      to: to.join(', '), cc: cc.length ? cc.join(', ') : undefined,
+      subject: asunto, text: cuerpo, html,
       fromName: String(b.from_name || '').trim() || undefined,
       inReplyTo: lastIn?.message_id || undefined,
       references: lastIn?.message_id || undefined,
@@ -3842,15 +3884,33 @@ app.post('/api/lm/inbox/reply', requireAuth, async (req, res) => {
     const { rows: [msg] } = await pool.query(
       `INSERT INTO lm_messages (user_id, contact_id, asunto, cuerpo, to_email, estado, sent_at, mailbox_id, smtp_message_id)
        VALUES ($1,$2,$3,$4,$5,'sent',NOW(),$6,$7) RETURNING id, asunto, cuerpo, sent_at`,
-      [req.workspaceOwnerId, cid, asunto, cuerpo, k.email, mb.id, sent.messageId || '']);
+      [req.workspaceOwnerId, cid, asunto, cuerpo, to.join(', '), mb.id, sent.messageId || '']);
     await pool.query(
       `INSERT INTO activities (user_id, contact_id, tipo, canal, nota, fecha, estado)
        VALUES ($1,$2,'email','email',$3,NOW(),'hecha')`,
       [req.workspaceOwnerId, cid, `[Inbox] Respuesta enviada: ${asunto}`]);
-    res.status(201).json({ ok: true, message: msg });
+    res.status(201).json({ ok: true, message: msg, to, cc });
   } catch (err) {
     console.error('[inbox] REPLY', err.message);
     res.status(500).json({ error: mailboxSvc._friendlyErr(err) });
+  }
+});
+
+// Marcar el hilo como no leido: abrirlo lo marca leido automaticamente, y a veces
+// solo se echa un vistazo y se quiere dejar pendiente.
+app.patch('/api/lm/inbox/thread/:contactId/unread', requireAuth, async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(
+      `UPDATE lm_inbox_messages SET leido=FALSE
+        WHERE user_id=$1 AND contact_id=$2 AND tipo='reply'
+          AND id = (SELECT id FROM lm_inbox_messages
+                     WHERE user_id=$1 AND contact_id=$2 AND tipo='reply'
+                     ORDER BY received_at DESC LIMIT 1)`,
+      [req.workspaceOwnerId, req.params.contactId]);
+    res.json({ ok: true, unread: rowCount });
+  } catch (err) {
+    console.error('[inbox] unread', err.message);
+    res.status(500).json({ error: 'No se pudo marcar como no leído' });
   }
 });
 

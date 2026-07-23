@@ -402,6 +402,7 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback) {
 async function _flushScheduled(pool) {
   const { rows: due } = await pool.query(`
     SELECT m.id, m.user_id, m.contact_id, m.asunto, m.cuerpo, m.to_email, m.in_reply_to, m.mailbox_id,
+           COALESCE(m.cc_emails,'') AS cc_emails,
            mb.id AS mb_ok, mb.email AS mb_email, mb.pass_enc, mb.smtp_host, mb.smtp_port, mb.smtp_secure,
            mb.imap_host, mb.imap_port, mb.provider, mb.sent_folder, mb.estado AS mb_estado,
            cfg.from_name
@@ -423,7 +424,8 @@ async function _flushScheduled(pool) {
       const mb = { id: m.mb_ok, email: m.mb_email, pass_enc: m.pass_enc, smtp_host: m.smtp_host, smtp_port: m.smtp_port,
                    smtp_secure: m.smtp_secure, imap_host: m.imap_host, imap_port: m.imap_port, provider: m.provider, sent_folder: m.sent_folder };
       const sent = await sendFromMailbox(mb, decPass(m.pass_enc), {
-        to: m.to_email, subject: m.asunto, text: m.cuerpo, html,
+        to: m.to_email, cc: m.cc_emails || undefined,   // conserva a los de copia
+        subject: m.asunto, text: m.cuerpo, html,
         fromName: m.from_name || undefined,
         inReplyTo: m.in_reply_to || undefined,
         references: m.in_reply_to || undefined,

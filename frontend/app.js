@@ -16324,7 +16324,7 @@ ${foot}
     const snippet = t.last_snippet || t.last_asunto || (t.sent_count ? `${t.sent_count} enviados, sin respuesta` : '');
     const badge = cat === 'reb' ? `<span class="ibx-b ibx-b--reb">Rebote</span>`
                 : t.last_in_tipo === 'ooo' ? `<span class="ibx-b ibx-b--ooo">OOO</span>` : '';
-    return `<div class="ibx-row${_ibActive === t.contact_id ? ' active' : ''}${t.unread > 0 ? ' unread' : ''}" onclick="LeadManagerModule.ibOpen(${t.contact_id})">
+    return `<div class="ibx-row${_ibActive === t.contact_id ? ' active' : ''}${t.unread > 0 ? ' unread' : ''}" onclick="LeadManagerModule.ibOpen(${t.contact_id})" oncontextmenu="LeadManagerModule.ibRowMenu(event,${t.contact_id})">
       <div class="ibx-row__l1"><span class="ibx-row__nm">${t.unread > 0 ? '<span class="ibx-dot"></span>' : ''}${esc(nm)}</span><span class="ibx-row__t">${when}</span></div>
       <div class="ibx-row__sn">${esc(String(snippet).slice(0, 90))}</div>
       <div class="ibx-row__meta">${esc(t.buzon || '')}${t.cliente ? ` · ${esc(t.cliente)}` : ''} ${badge}</div>
@@ -16369,7 +16369,8 @@ ${foot}
       <div class="ibx-msgs" id="ibx-msgs">${(_ibThread.messages || []).map(_ibMsg).join('') || '<div class="ibx-empty">Sin mensajes aún.</div>'}</div>
       <div class="ibx-replybox">
         ${canSend
-          ? `<textarea class="ibx-ta" id="ibx-ta" rows="2" placeholder="Responder como ${esc(c.buzon)}…"></textarea>
+          ? `${_ibDestHtml(c)}
+             <textarea class="ibx-ta" id="ibx-ta" rows="3" placeholder="Responder como ${esc(c.buzon)}…"></textarea>
              <div class="ibx-sendgrp">
                <button class="btn btn--primary btn--sm" id="ibx-send" onclick="LeadManagerModule.ibSend()">Enviar</button>
                <button class="ibx-clock" title="Programar envío" onclick="LeadManagerModule.ibSchedToggle(event)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg></button>
@@ -16388,6 +16389,63 @@ ${foot}
           : `<div class="ibx-nosend">El cliente <b>${esc(c.cliente || '')}</b> no tiene buzón conectado — conéctalo en su ficha para responder desde aquí.</div>`}
       </div>`;
   }
+  // Destinatarios de la respuesta, a la vista y editables: hasta ahora se enviaba
+  // solo al contacto y no habia forma de saber a quien iba a llegar.
+  function _ibDestHtml(c) {
+    const d = (_ibThread && _ibThread.destinatarios) || {};
+    const to = (d.to || [c.email]).filter(Boolean);
+    const cc = (d.cc || []).filter(Boolean);
+    return `<div class="ibx-dest">
+      <div class="ibx-dest__l"><span class="ibx-dest__k">Para</span><span class="ibx-dest__v">${esc(to.join(', '))}</span></div>
+      <div class="ibx-dest__l">
+        <span class="ibx-dest__k">CC</span>
+        <input class="ibx-dest__i" id="ibx-cc" value="${esc(cc.join(', '))}" placeholder="nadie en copia"
+               title="Separa varios con comas. Se rellena con quienes venian en el hilo.">
+      </div>
+    </div>`;
+  }
+
+  let _ibMenuClose = null;
+  function ibRowMenu(e, cid) {
+    e.preventDefault(); e.stopPropagation();
+    if (_ibMenuClose) _ibMenuClose();
+    const t = (_ibThreads || []).find(x => x.contact_id === cid);
+    const m = document.createElement('div');
+    m.className = 'd3-status-menu';
+    m.innerHTML =
+      `<button class="d3-status-opt" onclick="LeadManagerModule.ibMarkUnread(${cid})">Marcar como no leído</button>`
+      + `<button class="d3-status-opt" onclick="LeadManagerModule.ibOpen(${cid});LeadManagerModule.ibCloseMenu()">Abrir conversación</button>`
+      + (t ? `<button class="d3-status-opt" onclick="LeadManagerModule.ibCloseMenu();LeadManagerModule.openContactPage(${cid})">Ver ficha del contacto</button>` : '');
+    document.body.appendChild(m);
+    m.style.cssText = `position:fixed;z-index:10050;top:${Math.min(e.clientY + 4, window.innerHeight - 130)}px;left:${Math.min(e.clientX + 4, window.innerWidth - 210)}px;min-width:196px`;
+    const onDoc = ev => { if (!m.contains(ev.target)) _ibMenuClose(); };
+    _ibMenuClose = () => { m.remove(); document.removeEventListener('mousedown', onDoc); _ibMenuClose = null; };
+    setTimeout(() => document.addEventListener('mousedown', onDoc), 0);
+  }
+  function ibCloseMenu() { if (_ibMenuClose) _ibMenuClose(); }
+
+  async function ibMarkUnread(cid) {
+    ibCloseMenu();
+    try {
+      const r = await apiFetch(`${API}/lm/inbox/thread/${cid}/unread`, { method: 'PATCH' });
+      if (!r.ok) throw new Error('No se pudo marcar');
+      const t = (_ibThreads || []).find(x => x.contact_id === cid);
+      if (t) t.unread = Math.max(1, t.unread || 0);
+      if (_ibActive === cid) { _ibActive = null; _ibThread = null; }   // si sigue abierto se volveria a marcar leido
+      _ibPaint(); _refreshNav();
+      showBanner('Marcada como no leída', 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+
+  // El alto fijo (100vh - 340px) dejaba la caja de respuesta fuera de pantalla en
+  // ventanas bajas. Se mide lo que queda de verdad.
+  let _ibFitBound = false;
+  function _ibFit() {
+    const g = document.querySelector('.ibx-grid'); if (!g) return;
+    g.style.height = Math.max(300, window.innerHeight - g.getBoundingClientRect().top - 16) + 'px';
+    if (!_ibFitBound) { _ibFitBound = true; window.addEventListener('resize', () => _ibFit()); }
+  }
+
   function _ibListHtml() {
     if (_ibThreads === null) return `<div class="ibx-empty">Cargando hilos…</div>`;
     const rows = _ibFiltered().filter(t => _ibCat(t) === _ibTab);
@@ -16402,7 +16460,11 @@ ${foot}
     f.forEach(t => n[_ibCat(t)]++);
     return n;
   }
-  function _ibPaint() { const el = document.getElementById('ibx-wrap'); if (el) el.outerHTML = _ibWrapHtml(); }
+  function _ibPaint() {
+    const el = document.getElementById('ibx-wrap');
+    if (el) el.outerHTML = _ibWrapHtml();
+    requestAnimationFrame(_ibFit);
+  }
   function _ibWrapHtml() {
     const n = _ibCounts();
     const unread = _ibFiltered().reduce((s, t) => s + (t.unread || 0), 0);
@@ -16446,6 +16508,8 @@ ${foot}
     try {
       const body = { contact_id: _ibActive, cuerpo };
       if (schedIso) body.scheduled_at = schedIso;
+      const ccRaw = document.getElementById('ibx-cc')?.value || '';
+      body.cc = ccRaw.split(/[,;]/).map(x => x.trim()).filter(x => x.includes('@'));
       const res = await apiFetch(`${API}/lm/inbox/reply`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || 'No se pudo enviar');
@@ -20289,6 +20353,7 @@ ${foot}
     seqRunSetCanal, seqTaskSetDue,
     mbOpen, mbClose, mbSave, mbTest, mbDelete, mbProv,
     ibOpen, ibTab, ibCli, ibSend, ibSchedToggle, ibSchedPick, ibCancelSched,
+    ibRowMenu, ibCloseMenu, ibMarkUnread,
     pendingAcceptOpen, pendingAcceptToggleAll, pendingAcceptApplyFilters, pendingAcceptMark,
     openActivityDrawer, closeActivityDrawer, saveActivity, confirmDeleteActivity, markActDone,
     setReplySentiment, setLeadStage,

@@ -40,6 +40,18 @@ const BOUNCE_FROM = /mailer-daemon|postmaster|mail delivery|maildelivery/i;
 const BOUNCE_SUBJ = /undeliver|delivery (status|failure|has failed)|returned mail|mail delivery failed|failure notice|no se pudo entregar|entrega fallida/i;
 const OOO_SUBJ    = /out of office|automatic reply|auto[- ]?reply|autoreply|away from|vacation|fuera de (la )?oficina|respuesta automática|ausen(te|cia)/i;
 
+// "Nombre <a@b.com>, otro@c.com" -> "a@b.com, otro@c.com". Guardamos solo direcciones
+// para poder responder a todos sin volver a parsear cabeceras.
+function _dirs(campo) {
+  if (!campo) return '';
+  const arr = Array.isArray(campo) ? campo : [campo];
+  const out = [];
+  for (const c of arr) {
+    for (const v of (c && c.value) || []) if (v && v.address) out.push(String(v.address).toLowerCase());
+  }
+  return [...new Set(out)].join(', ').slice(0, 2000);
+}
+
 function classify(parsed) {
   const fromAddr = (parsed.from?.value?.[0]?.address || '').toLowerCase();
   const subject  = parsed.subject || '';
@@ -206,13 +218,14 @@ async function _checkMailbox(pool, mb) {
         await pool.query(
           `INSERT INTO lm_inbox_messages
              (user_id, mailbox_id, outbound_client_id, contact_id, imap_uid, message_id,
-              in_reply_to, from_email, from_name, asunto, cuerpo, tipo, received_at)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+              in_reply_to, from_email, from_name, asunto, cuerpo, tipo, received_at,
+              to_emails, cc_emails)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
            ON CONFLICT (mailbox_id, imap_uid) DO NOTHING`,
           [mb.user_id, mb.id, mb.outbound_client_id, contact ? contact.id : null, msg.uid,
            parsed.messageId || '', parsed.inReplyTo || '', fromAddr, fromName,
            (parsed.subject || '').slice(0, 500), snippet, tipo,
-           parsed.date || new Date()]
+           parsed.date || new Date(), _dirs(parsed.to), _dirs(parsed.cc)]
         );
 
         if (tipo === 'reply' && contact) await _onReply(pool, mb, contact, parsed, snippet);

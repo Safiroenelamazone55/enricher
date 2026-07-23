@@ -392,6 +392,13 @@ async function initDb() {
     await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS plan_dias TEXT NOT NULL DEFAULT '';`);
     await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS plan_horas NUMERIC(6,2);`);
     await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS plan_hora INTEGER;`);
+    // CC de la respuesta: si no se guarda, el envio programado la manda solo al
+    // contacto y pierde a todos los que iban en copia.
+    await pool.query(`ALTER TABLE lm_messages ADD COLUMN IF NOT EXISTS cc_emails TEXT NOT NULL DEFAULT '';`);
+    // Destinatarios del correo entrante: sin ellos, responder solo iba al remitente
+    // y se caian del hilo todos los que estaban en CC.
+    await pool.query(`ALTER TABLE lm_inbox_messages ADD COLUMN IF NOT EXISTS to_emails TEXT NOT NULL DEFAULT '';`);
+    await pool.query(`ALTER TABLE lm_inbox_messages ADD COLUMN IF NOT EXISTS cc_emails TEXT NOT NULL DEFAULT '';`);
     // Color del proyecto en el calendario (hex). NULL = se asigna uno estable por id.
     await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS color TEXT;`);
     // Excepciones al plan recurrente: mover UN día concreto sin tocar el resto de la semana.

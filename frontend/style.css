@@ -13636,3 +13636,42 @@ body:has(#pane-mgmt-projects.active) .content-wrap { max-width: 1400px; }
   box-shadow: 0 1px 2px rgba(255,59,48,.35);
 }
 .lm2-nav__item.active .lm2-nav__cnt { background: #FF3B30 !important; }
+
+/* A sangre de verdad: el recuadro interior venia del padding propio de .cal2 (24/28px)
+   MAS el del armazon (.content-wrap 0 28px y .app-main 28px arriba). Se anulan solo
+   mientras el calendario es el panel activo; el resto de secciones conserva su aire. */
+.cal2--mac { padding: 0 !important; }
+body:has(#pane-mgmt-calendar.active) .content-wrap { padding: 0 !important; }
+body:has(#pane-mgmt-calendar.active) .app-main { padding: 0 !important; }
+
+/* Con la barra lateral de calendarios, los 660px minimos de la rejilla ya no caben
+   y salia scroll horizontal. Las columnas se aprietan solas hasta 56px. */
+.cal2--mac .cal2-grid { min-width: 0; }
+.cal2--mac .cal2-col { min-width: 56px; }
+
+/* Inbox: destinatarios a la vista sobre la caja de respuesta */
+.ibx-dest { display: flex; flex-direction: column; gap: 2px; padding: 6px 2px 7px; border-bottom: 1px solid var(--border); margin-bottom: 7px; }
+.ibx-dest__l { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ibx-dest__k { width: 30px; flex-shrink: 0; font-size: .68rem; color: var(--text-muted); }
+.ibx-dest__v { flex: 1; min-width: 0; font-size: .74rem; color: var(--text-secondary, #5F6B64); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ibx-dest__i {
+  flex: 1; min-width: 0; font: inherit; font-size: .74rem; color: var(--text-secondary, #5F6B64);
+  background: none; border: none; border-radius: 5px; padding: 2px 5px;
+}
+.ibx-dest__i:hover { background: #F4F6F5; }
+.ibx-dest__i:focus { outline: none; background: #fff; box-shadow: inset 0 0 0 1px var(--primary, #00804C); }
+.ibx-ta { min-height: 62px; }
+
+/* La columna de conversacion crecia con el contenido (min-height:auto de los items
+   de grid), asi que .ibx-msgs no scrolleaba por dentro y la caja de respuesta
+   terminaba fuera de la pantalla. */
+.ibx-grid { grid-template-rows: minmax(0, 1fr); }
+.ibx-conv, .ibx-list { min-height: 0; }
+.ibx-msgs { min-height: 0; }
+
+/* Los destinatarios van ARRIBA, a lo ancho; el texto y el boton debajo. En fila
+   quedaban a un lado, apretando la caja de escritura a la mitad. */
+.ibx-replybox { flex-direction: column; align-items: stretch; gap: 0; }
+.ibx-replybox .ibx-dest { width: 100%; }
+.ibx-replybox .ibx-ta { width: 100%; }
+.ibx-sendgrp { display: flex; align-items: center; gap: 8px; justify-content: flex-end; margin-top: 7px; position: relative; }
