@@ -94,8 +94,21 @@ async function _imapConnect(mb, pass) {
 // Traducción de errores técnicos a mensajes accionables en español.
 function _friendlyErr(e) {
   const m = String((e && e.message) || e || '');
+  // Microsoft 365 devuelve en el propio 535 la causa exacta. Distinguirlas evita
+  // horas perdidas: no es lo mismo "contraseña mal" que "SMTP AUTH apagado por el admin".
+  if (/SmtpClientAuthentication is disabled|SMTP ?AUTH.*disabled|SmtpClientAuthentication/i.test(m))
+    return 'El envío SMTP está DESHABILITADO para este buzón en el panel del proveedor. '
+         + 'No es la contraseña: el administrador debe activar "SMTP autenticado" para esta cuenta. '
+         + 'Detalle del servidor: ' + m.slice(0, 200);
+  if (/basic authentication is disabled|BasicAuthBlockedErr|blocked.*basic auth/i.test(m))
+    return 'El tenant bloquea la autenticación básica (Security Defaults / acceso condicional). '
+         + 'El administrador debe permitirla para este buzón, o habrá que usar OAuth. '
+         + 'Detalle del servidor: ' + m.slice(0, 200);
+  if (/credentials were incorrect|user name or password is incorrect|LogonDenied/i.test(m))
+    return 'Usuario o contraseña incorrectos según el proveedor. Si la cuenta tiene verificación en 2 pasos, '
+         + 'necesitas una contraseña de aplicación. Detalle: ' + m.slice(0, 200);
   if (/invalid credentials|authentication failed|auth|535|LOGIN failed/i.test(m))
-    return 'El proveedor rechazó el usuario o la contraseña. Usa una contraseña de aplicación (no la normal).';
+    return 'El proveedor rechazó el usuario o la contraseña. Detalle del servidor: ' + m.slice(0, 220);
   if (/ENOTFOUND|EAI_AGAIN/i.test(m)) return 'No se encontró el servidor — revisa el host.';
   if (/timeout|ETIMEDOUT|ECONNREFUSED/i.test(m)) return 'El servidor no respondió (puerto bloqueado o host incorrecto).';
   if (/self signed|certificate/i.test(m)) return 'Problema de certificado TLS del servidor.';
