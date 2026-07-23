@@ -2138,6 +2138,110 @@ app.patch('/api/mgmt/tasks/:id/fecha-inicio', requireAuth, async (req, res) => {
   }
 });
 
+// ── Excepciones del plan recurrente ──────────────────────────────────────────
+// Mover el bloque de UN día ("solo este evento") sin tocar la semana entera.
+// GET  ?desde=&hasta=  → las excepciones de esa ventana, para pintarlas en el calendario.
+app.get('/api/mgmt/plan-overrides', requireAuth, async (req, res) => {
+  const { desde, hasta } = req.query;
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, task_id, TO_CHAR(fecha,'YYYY-MM-DD') AS fecha, hora, minutos, skip
+         FROM task_plan_overrides
+        WHERE user_id=$1 ${desde ? 'AND fecha >= $2' : ''} ${hasta ? `AND fecha <= $${desde ? 3 : 2}` : ''}
+        ORDER BY fecha`,
+      [req.workspaceOwnerId, ...(desde ? [desde] : []), ...(hasta ? [hasta] : [])]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('[plan-overrides] GET error:', err.message);
+    res.status(500).json({ error: 'Error al leer las excepciones del plan' });
+  }
+});
+
+// PUT → mueve (o salta) ese día concreto. Upsert por (tarea, fecha).
+app.put('/api/mgmt/plan-overrides', requireAuth, async (req, res) => {
+  const { task_id, fecha, hora, minutos, skip } = req.body;
+  if (!task_id || !/^\d{4}-\d{2}-\d{2}$/.test(String(fecha || ''))) {
+    return res.status(400).json({ error: 'Falta la tarea o la fecha' });
+  }
+  try {
+    const { rows: [t] } = await pool.query(`SELECT id FROM tasks WHERE id=$1 AND user_id=$2`, [task_id, req.workspaceOwnerId]);
+    if (!t) return res.status(404).json({ error: 'Tarea no encontrada' });
+    const h = (hora != null && hora !== '') ? Math.max(0, Math.min(23, Math.round(+hora))) : null;
+    const m = (minutos != null && minutos !== '') ? Math.max(15, Math.min(1440, Math.round(+minutos))) : null;
+    const { rows } = await pool.query(
+      `INSERT INTO task_plan_overrides (user_id, task_id, fecha, hora, minutos, skip)
+            VALUES ($1,$2,$3,$4,$5,$6)
+       ON CONFLICT (task_id, fecha)
+       DO UPDATE SET hora=EXCLUDED.hora, minutos=EXCLUDED.minutos, skip=EXCLUDED.skip
+       RETURNING id, task_id, TO_CHAR(fecha,'YYYY-MM-DD') AS fecha, hora, minutos, skip`,
+      [req.workspaceOwnerId, task_id, fecha, h, m, !!skip]
+    );
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[plan-overrides] PUT error:', err.message);
+    res.status(500).json({ error: 'Error al mover el bloque' });
+  }
+});
+
+// DELETE → vuelve al plan de la tarea para ese día.
+app.delete('/api/mgmt/plan-overrides', requireAuth, async (req, res) => {
+  const { task_id, fecha } = req.body || {};
+  try {
+    await pool.query(`DELETE FROM task_plan_overrides WHERE user_id=$1 AND task_id=$2 AND fecha=$3`,
+      [req.workspaceOwnerId, task_id, fecha]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[plan-overrides] DELETE error:', err.message);
+    res.status(500).json({ error: 'Error al restaurar el plan' });
+  }
+});
+
+// "Este y los siguientes": cambia la hora del plan a partir de una fecha. Para que el pasado
+// no se mueva con él, antes de tocar el plan se clavan como excepciones los días ya ocurridos
+// con la hora vieja (acotado a 60 días atrás: más lejos ya es historia que nadie mira).
+app.put('/api/mgmt/tasks/:id/plan-hora-desde', requireAuth, async (req, res) => {
+  const { fecha, hora, minutos } = req.body;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(fecha || ''))) return res.status(400).json({ error: 'Falta la fecha' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows: [t] } = await client.query(
+      `SELECT id, plan_dias, plan_horas, plan_hora, TO_CHAR(fecha_inicio,'YYYY-MM-DD') AS ini
+         FROM tasks WHERE id=$1 AND user_id=$2 FOR UPDATE`, [req.params.id, req.workspaceOwnerId]);
+    if (!t) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Tarea no encontrada' }); }
+
+    const dias = String(t.plan_dias || '').split(',').map(s => +s.trim()).filter(n => n >= 0 && n <= 6);
+    if (t.plan_hora != null && dias.length) {
+      const desde = new Date(fecha + 'T00:00:00');
+      const tope  = new Date(desde); tope.setDate(tope.getDate() - 60);
+      let cur = t.ini ? new Date(t.ini + 'T00:00:00') : new Date(tope);
+      if (cur < tope) cur = tope;
+      for (; cur < desde; cur.setDate(cur.getDate() + 1)) {
+        if (!dias.includes((cur.getDay() + 6) % 7)) continue;
+        const ds = cur.toISOString().slice(0, 10);
+        await client.query(
+          `INSERT INTO task_plan_overrides (user_id, task_id, fecha, hora, minutos)
+                VALUES ($1,$2,$3,$4,NULL) ON CONFLICT (task_id, fecha) DO NOTHING`,
+          [req.workspaceOwnerId, t.id, ds, t.plan_hora]);
+      }
+    }
+    // A partir de esta fecha manda el plan nuevo: las excepciones futuras sobran.
+    await client.query(`DELETE FROM task_plan_overrides WHERE user_id=$1 AND task_id=$2 AND fecha >= $3`,
+      [req.workspaceOwnerId, t.id, fecha]);
+    const h = (hora != null && hora !== '') ? Math.max(0, Math.min(23, Math.round(+hora))) : null;
+    const { rows } = await client.query(
+      `UPDATE tasks SET plan_hora=$1, updated_at=NOW() WHERE id=$2 AND user_id=$3
+       RETURNING id, titulo, plan_dias, plan_horas, plan_hora`, [h, t.id, req.workspaceOwnerId]);
+    await client.query('COMMIT');
+    res.json(rows[0]);
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[plan-hora-desde] PUT error:', err.message);
+    res.status(500).json({ error: 'Error al mover el plan' });
+  } finally { client.release(); }
+});
+
 // ── PATCH /api/mgmt/tasks/:id/plan (plan de trabajo recurrente: días + meta horas + hora) ──
 app.patch('/api/mgmt/tasks/:id/plan', requireAuth, async (req, res) => {
   const { plan_dias, plan_horas, plan_hora } = req.body;

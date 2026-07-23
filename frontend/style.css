@@ -13173,3 +13173,83 @@ body:has(#pane-mgmt-projects.active) .content-wrap { max-width: 1400px; }
 #pane-mgmt-tasks .tl-row--sub-last .tl-name-cell--sub::after { display: none !important; }
 #pane-mgmt-tasks .clients-table td.tl-name-cell--sub { padding-left: 58px !important; }
 #pane-mgmt-tasks .tl-row--sub .ct-name { color: var(--text-secondary, #5F6B64); }
+
+/* ══ Calendario · banda "Por programar" y bloques del plan ══════════════════
+   El trabajo planificado sin hora NO es un evento de todo el día: es trabajo
+   que espera un hueco. Por eso vive en su propia banda, debajo. */
+.cal2-tlabels__todo {
+  height: 34px; border-bottom: 1px solid var(--border);
+  font-size: .62rem; color: var(--muted); display: flex; align-items: center;
+  justify-content: flex-end; padding-right: 8px; white-space: nowrap;
+}
+.cal2-col__todo {
+  min-height: 34px; border-bottom: 1px solid var(--border);
+  padding: 4px; display: flex; flex-direction: column; gap: 3px;
+  background: repeating-linear-gradient(135deg, transparent, transparent 6px, rgba(0,128,76,.035) 6px, rgba(0,128,76,.035) 12px);
+}
+.cal2-col--today .cal2-col__todo { background: #F8F7FF; }
+
+.cal2-planflex {
+  display: flex; align-items: center; gap: 6px; width: 100%; text-align: left;
+  font: inherit; font-size: 10.5px; font-weight: 600;
+  color: #2E6B4F; background: #fff; border: 1px dashed #BFDCCB;
+  border-radius: 7px; padding: 4px 7px; margin: 0; cursor: pointer;
+  transition: border-color .14s, box-shadow .14s, transform .1s;
+}
+.cal2-planflex:hover { border-color: var(--primary, #00804C); border-style: solid; box-shadow: 0 2px 8px rgba(0,128,76,.14); }
+.cal2-planflex:active { transform: scale(.985); }
+.cal2-planflex__t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cal2-planflex__h { flex-shrink: 0; font-size: 9.5px; font-weight: 700; color: #6B7C73; background: #F1F4F2; border-radius: 4px; padding: 1px 4px; }
+
+/* Bloque del plan en la rejilla: sobrio, para que no compita con lo ya agendado */
+.cal2-planblock {
+  background: #F4F8F5;
+  border: 1px dashed #C3DCCD;
+  border-left: 2px solid #9FC6B0;
+  border-radius: 7px;
+}
+.cal2-planblock:hover { background: #EAF3ED; border-color: var(--primary, #00804C); box-shadow: 0 2px 10px rgba(0,128,76,.14); }
+.cal2-planblock__t    { color: #2E4C3C; }
+.cal2-planblock__meta { color: #7C8C83; }
+.cal2-planblock--moved { border-style: solid; border-left-color: #E0A458; background: #FBF6EE; }
+.cal2-planblock--moved .cal2-planblock__meta { color: #A9763A; }
+
+/* ── Popover del bloque de plan: en qué trabajar + mover ── */
+.cal2-pp { padding: 0; overflow: hidden; }
+.cal2-pp__hd { padding: 11px 13px 9px; border-bottom: 1px solid var(--border); background: #FAFBFA; }
+.cal2-pp__day { font-size: .66rem; color: var(--muted); margin-top: 2px; }
+.cal2-pp__seclbl {
+  font-size: .58rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase;
+  color: var(--muted); padding: 10px 13px 5px;
+}
+.cal2-pp__subs { padding: 0 8px; max-height: 148px; overflow-y: auto; }
+.cal2-pp__sub {
+  display: flex; align-items: center; gap: 8px; padding: 5px 5px; border-radius: 7px;
+  transition: background .12s;
+}
+.cal2-pp__sub:hover { background: #F4F6F5; }
+.cal2-pp__sub-go {
+  flex-shrink: 0; width: 21px; height: 21px; display: flex; align-items: center; justify-content: center;
+  border: 1px solid #CFE0D6; background: #fff; color: var(--primary, #00804C);
+  border-radius: 50%; cursor: pointer; transition: background .12s, color .12s, transform .1s;
+}
+.cal2-pp__sub-go:hover  { background: var(--primary, #00804C); color: #fff; border-color: var(--primary, #00804C); }
+.cal2-pp__sub-go:active { transform: scale(.9); }
+.cal2-pp__sub-t { flex: 1; min-width: 0; font-size: .74rem; color: var(--text2, #3A473F); cursor: pointer;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cal2-pp__sub-t:hover { color: var(--primary, #00804C); }
+.cal2-pp__sub-h { flex-shrink: 0; font-size: .6rem; font-weight: 700; color: #6B7C73; background: #F1F4F2; border-radius: 4px; padding: 1px 5px; }
+.cal2-pp .cal2-pop__row { padding: 0 13px; }
+.cal2-pp__acts { display: flex; gap: 6px; padding: 11px 13px 0; }
+.cal2-pp__b {
+  flex: 1; font: inherit; font-size: .68rem; font-weight: 600; padding: 7px 6px;
+  border-radius: 7px; cursor: pointer; transition: background .12s, transform .1s; line-height: 1.15;
+}
+.cal2-pp__b:active { transform: scale(.98); }
+.cal2-pp__b--one { border: 1px solid var(--border); background: #fff; color: var(--text2, #3A473F); }
+.cal2-pp__b--one:hover { background: #F4F6F5; }
+.cal2-pp__b--all { border: 1px solid var(--primary, #00804C); background: var(--primary, #00804C); color: #fff; }
+.cal2-pp__b--all:hover { background: #006B40; }
+.cal2-pp__foot { display: flex; flex-wrap: wrap; gap: 10px; padding: 9px 13px 11px; }
+.cal2-pp__link { font: inherit; font-size: .66rem; color: var(--muted); background: none; border: none; padding: 0; cursor: pointer; }
+.cal2-pp__link:hover { color: var(--primary, #00804C); text-decoration: underline; }

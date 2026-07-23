@@ -9005,6 +9005,7 @@ const CalendarModule = (() => {
   let _gcalEvents   = [];
   let _gcalConn     = false;
   let _timeEntries  = [];
+  let _planOv       = {};   // excepciones del plan: "taskId|YYYY-MM-DD" → {hora, minutos, skip}
   let _tab          = 'all';
   let _weekOf     = null;
   let _calMember  = 'me';   // filtro de calendario: 'me' | 'all' | nombre del miembro
@@ -9098,16 +9099,21 @@ const CalendarModule = (() => {
     try {
       const weekStart = _weekOf || _monday(new Date());
       const weekEnd   = new Date(weekStart.getTime() + 7 * 86400000);
-      const [mr, tr, tor, gcr, ter] = await Promise.all([
+      const [mr, tr, tor, gcr, ter, por] = await Promise.all([
         apiFetch(`${API}/mgmt/meetings`),
         apiFetch(`${API}/mgmt/tasks`),
         apiFetch(`${API}/mgmt/time-off`),
         apiFetch(`${API}/gcal/events?start=${weekStart.toISOString()}&end=${weekEnd.toISOString()}`),
         apiFetch(`${API}/timer/entries?start=${weekStart.toISOString()}&end=${weekEnd.toISOString()}`),
+        apiFetch(`${API}/mgmt/plan-overrides?desde=${_iso(weekStart)}&hasta=${_iso(new Date(weekEnd.getTime() - 86400000))}`),
       ]);
       if (mr.ok)  _meetings    = await mr.json();
       if (tr.ok)  _tasks       = await tr.json();
       if (tor.ok) _timeOff     = await tor.json();
+      if (por.ok) {
+        _planOv = {};                                   // clave "taskId|YYYY-MM-DD" → excepción
+        (await por.json()).forEach(o => { _planOv[`${o.task_id}|${o.fecha}`] = o; });
+      }
       if (gcr.ok) { const gd = await gcr.json(); _gcalConn = gd.connected; _gcalEvents = gd.events || []; }
       // Solo sesiones del timer MANUAL en el calendario. El uso web/app de la extensión/agente
       // (cientos de micro-bloques "Sin tarea") se resume en Time Tracking → "Apps y websites usados", no aquí.
@@ -9608,6 +9614,7 @@ const CalendarModule = (() => {
     const timeCol = `<div class="cal2-tlabels">
       <div class="cal2-tlabels__top"></div>
       <div class="cal2-tlabels__allday">Todo el día</div>
+      <div class="cal2-tlabels__todo">Por programar</div>
       ${hours.map(h => `<div class="cal2-tlabel">${h > 12 ? (h - 12) + ' PM' : h === 12 ? '12 PM' : h + ' AM'}</div>`).join('')}
     </div>`;
 
@@ -9640,31 +9647,38 @@ const CalendarModule = (() => {
         </div>`;
       }).join('');
 
-      // Planes SIN hora fija: chip en la franja "Todo el día" con las horas que tocan
-      // ese día; al hacer clic se abre la tarea para fijarles hora exacta.
-      const planFlex = _plans.filter(p =>
-        p.hour == null && ds >= p.start && (!p.end || ds <= p.end) && p.daysSet.has((d.getDay() + 6) % 7));
-      const planFlexHtml = planFlex.map(p => {
+      // Planes de ESTE día, ya con la excepción aplicada (mover/saltar un día suelto).
+      const dayPlans = _plans.filter(p => ds >= p.start && (!p.end || ds <= p.end) && p.daysSet.has((d.getDay() + 6) % 7))
+        .map(p => {
+          const ov = _planOv[`${p.id}|${ds}`];
+          if (ov && ov.skip) return null;
+          return { ...p,
+                   hour:   ov && ov.hora    != null ? +ov.hora    : p.hour,
+                   perMin: ov && ov.minutos != null ? +ov.minutos : p.perMin,
+                   moved:  !!(ov && ov.hora != null) };
+        }).filter(Boolean);
+
+      // Sin hora todavía → banda "Por programar" (no es un evento de todo el día: es trabajo
+      // que aún espera un hueco). Clic → elegir en qué subtarea trabajar y a qué hora.
+      const planFlexHtml = dayPlans.filter(p => p.hour == null).map(p => {
         const hrs = Math.round(p.perMin / 60 * 10) / 10;
-        return `<button class="cal2-planflex" onclick="event.stopPropagation();TasksModule.openDrawer(${p.id})"
-            title="${esc(p.titulo)} — ${p.weekly}h/semana ÷ ${p.nDays} ${p.nDays === 1 ? 'día' : 'días'} = ${hrs}h hoy · sin hora fija, clic para programarla">
-          ◇ ${esc(p.titulo)} · ${hrs}h</button>`;
+        return `<button class="cal2-planflex" onclick="CalendarModule.openPlanPop(event,${p.id},'${ds}')"
+            title="${esc(p.titulo)} — ${p.weekly}h/semana ÷ ${p.nDays} ${p.nDays === 1 ? 'día' : 'días'} = ${hrs}h hoy · clic para darle hora o empezar">
+          <span class="cal2-planflex__t">${esc(p.titulo)}</span><span class="cal2-planflex__h">${hrs}h</span></button>`;
       }).join('');
 
-      const planBlocks = _plans.map(p => {
-        if (p.hour == null) return '';
-        if (ds < p.start || (p.end && ds > p.end) || !p.daysSet.has((d.getDay() + 6) % 7)) return '';
-        if (p.hour < GRID_S || p.hour >= GRID_E) return '';
+      const planBlocks = dayPlans.map(p => {
+        if (p.hour == null || p.hour < GRID_S || p.hour >= GRID_E) return '';
         const topPx = (p.hour - GRID_S) * HOUR_H;
         const hPx   = Math.max(22, p.perMin / 60 * HOUR_H - 2);
         const ini   = `${_pad(p.hour)}:00`;
         const fin   = _addMin(ini, p.perMin);
         const hrs   = Math.round(p.perMin / 60 * 10) / 10;
-        return `<div class="cal2-planblock" style="top:${topPx}px;height:${hPx}px"
-            onclick="event.stopPropagation();TasksModule.openDrawer(${p.id})"
-            title="Plan sugerido · ${esc(p.titulo)} — ${p.weekly}h/semana ÷ ${p.nDays} ${p.nDays === 1 ? 'día' : 'días'} = ${hrs}h/día">
+        return `<div class="cal2-planblock${p.moved ? ' cal2-planblock--moved' : ''}" style="top:${topPx}px;height:${hPx}px"
+            onclick="event.stopPropagation();CalendarModule.openPlanPop(event,${p.id},'${ds}')"
+            title="Plan · ${esc(p.titulo)} — ${p.weekly}h/semana ÷ ${p.nDays} ${p.nDays === 1 ? 'día' : 'días'} = ${hrs}h/día${p.moved ? ' · movido solo este día' : ''}">
           <div class="cal2-planblock__t">${p.isSub ? '<span class="cal2-tblock__sub">SUB</span>' : ''}${esc(p.titulo)}</div>
-          <div class="cal2-planblock__meta">◇ ${_fmtT(ini)}–${_fmtT(fin)} · ${hrs}h</div>
+          <div class="cal2-planblock__meta">${p.moved ? '↷ ' : '◇ '}${_fmtT(ini)}–${_fmtT(fin)} · ${hrs}h</div>
         </div>`;
       }).join('');
 
@@ -9769,7 +9783,8 @@ const CalendarModule = (() => {
           <span class="cal2-col__dow" translate="no">${_WKS[i]}</span>
           <span class="cal2-col__num${isToday ? ' cal2-col__num--today' : ''}">${d.getDate()}</span>
         </div>
-        <div class="cal2-col__allday">${planFlexHtml}${noHoraPill}${noTimeMtgs}${offChips}${gcalAllDay}</div>
+        <div class="cal2-col__allday">${noTimeMtgs}${offChips}${gcalAllDay}</div>
+        <div class="cal2-col__todo">${planFlexHtml}${noHoraPill}</div>
         <div class="cal2-col__body">${planBlocks}${taskBlocks}${timedBlocks}${gcalTimed}${timerBlocks}${nowLine}</div>
       </div>`;
     }).join('');
@@ -9785,6 +9800,114 @@ const CalendarModule = (() => {
   // ── Programar tarea: popover rápido (día · inicio · duración) ──────
   let _popClose = null;
   function _closePop() { if (_popClose) _popClose(); }
+
+  // ── Bloque del plan recurrente: mover ese día o toda la serie, y arrancar el cronómetro ──
+  // El bloque no es una fila en la base: sale de "N horas ÷ días de la semana". Por eso mover
+  // uno suelto guarda una EXCEPCIÓN de ese día, y mover la serie cambia el plan de la tarea.
+  let _ppTask = null, _ppDs = null;
+
+  function openPlanPop(e, taskId, ds) {
+    e.stopPropagation();
+    const anchor = e.currentTarget.getBoundingClientRect();
+    if (_popClose) _popClose();
+    const t = _tasks.find(x => x.id === taskId); if (!t) return;
+    _ppTask = taskId; _ppDs = ds;
+    const ov   = _planOv[`${taskId}|${ds}`];
+    const base = (t.plan_hora != null && t.plan_hora !== '') ? +t.plan_hora : null;
+    const hora = ov && ov.hora != null ? +ov.hora : base;
+    const dias = String(t.plan_dias || '').split(',').filter(s => s !== '').length || 1;
+    const perMin = ov && ov.minutos != null ? +ov.minutos
+                 : Math.max(15, Math.round((+t.plan_horas || 0) / dias * 60));
+    const d = new Date(ds + 'T00:00:00');
+
+    // Subtareas: son el trabajo real de la semana. Aquí se elige en cuál trabajar.
+    const subs = _tasks.filter(x => x.parent_task_id === taskId && x.estado !== 'completado');
+    const subsHtml = subs.length
+      ? `<div class="cal2-pp__seclbl">¿En qué vas a trabajar?</div>
+         <div class="cal2-pp__subs">${subs.map(s => {
+           const fija = s.prog_inicio ? `<span class="cal2-pp__sub-h">${_fmtT(s.prog_inicio)}</span>` : '';
+           return `<div class="cal2-pp__sub">
+             <button class="cal2-pp__sub-go" onclick="CalendarModule.startFromPlan(${s.id})" title="Iniciar cronómetro en «${esc(s.titulo)}»">
+               <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20"/></svg>
+             </button>
+             <span class="cal2-pp__sub-t" onclick="CalendarModule.closeDayPop();TasksModule.openDrawer(${s.id})">${esc(s.titulo)}</span>${fija}
+           </div>`;
+         }).join('')}</div>`
+      : `<div class="cal2-pp__seclbl">Sin subtareas</div>
+         <div class="cal2-pp__subs"><div class="cal2-pp__sub">
+           <button class="cal2-pp__sub-go" onclick="CalendarModule.startFromPlan(${taskId})" title="Iniciar cronómetro">
+             <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20"/></svg>
+           </button>
+           <span class="cal2-pp__sub-t">Trabajar en la tarea</span>
+         </div></div>`;
+
+    const durOpts = [[30,'30 min'],[60,'1 h'],[90,'1.5 h'],[120,'2 h'],[180,'3 h'],[240,'4 h']]
+      .map(([v,l]) => `<option value="${v}"${v === perMin ? ' selected' : ''}>${l}</option>`).join('');
+    const horaOpts = Array.from({length: GRID_E - GRID_S}, (_, i) => GRID_S + i)
+      .map(h => `<option value="${h}"${h === hora ? ' selected' : ''}>${_fmtT(_pad(h) + ':00')}</option>`).join('');
+
+    const pop = document.createElement('div');
+    pop.className = 'cal2-pop cal2-pp';
+    pop.innerHTML = `
+      <div class="cal2-pp__hd">
+        <div class="cal2-pop__name">${esc(t.titulo)}</div>
+        <div class="cal2-pp__day">${_WKS[(d.getDay()+6)%7]} ${d.getDate()} ${_MONS[d.getMonth()]}${ov && ov.hora != null ? ' · movido este día' : ''}</div>
+      </div>
+      ${subsHtml}
+      <div class="cal2-pp__seclbl">Bloque de este día</div>
+      <div class="cal2-pop__row"><label>Hora</label><select id="cal-pp-h">${hora == null ? '<option value="" selected>Sin fijar</option>' : ''}${horaOpts}</select></div>
+      <div class="cal2-pop__row"><label>Duración</label><select id="cal-pp-d">${durOpts}</select></div>
+      <div class="cal2-pp__acts">
+        <button class="cal2-pp__b cal2-pp__b--one"  onclick="CalendarModule.movePlan('one')">Solo este día</button>
+        <button class="cal2-pp__b cal2-pp__b--all"  onclick="CalendarModule.movePlan('all')">Este y los siguientes</button>
+      </div>
+      <div class="cal2-pp__foot">
+        <button class="cal2-pp__link" onclick="CalendarModule.movePlan('skip')">Saltar este día</button>
+        ${ov ? `<button class="cal2-pp__link" onclick="CalendarModule.movePlan('reset')">Volver al plan</button>` : ''}
+        <button class="cal2-pp__link" onclick="CalendarModule.closeDayPop();TasksModule.openDrawer(${taskId})">Ver tarea</button>
+      </div>`;
+    document.body.appendChild(pop);
+    const W = 300, H = pop.offsetHeight || 340;
+    pop.style.cssText += `;position:fixed;z-index:10001;width:${W}px;top:${Math.max(12, Math.min(anchor.bottom + 6, window.innerHeight - H - 12))}px;left:${Math.min(Math.max(8, anchor.left), window.innerWidth - W - 8)}px`;
+    const onDoc = ev => { if (!pop.contains(ev.target)) _closePop(); };
+    _popClose = () => { pop.remove(); document.removeEventListener('mousedown', onDoc); _popClose = null; _ppTask = null; };
+    setTimeout(() => document.addEventListener('mousedown', onDoc), 0);
+  }
+
+  function startFromPlan(taskId) {
+    const t = _tasks.find(x => x.id === taskId);
+    _closePop();
+    TimerModule.start(taskId, t ? { titulo: t.titulo, ctxLabel: t.project_nombre || '', cliente: t.client_nombre || '' } : null);
+  }
+
+  async function movePlan(modo) {
+    const id = _ppTask, ds = _ppDs;
+    if (!id || !ds) return;
+    const hv = $('cal-pp-h')?.value;
+    const hora = hv === '' || hv == null ? null : +hv;
+    const min  = +($('cal-pp-d')?.value || 60);
+    _closePop();
+    try {
+      if (modo === 'reset') {
+        await apiFetch(`${API}/mgmt/plan-overrides`, { method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task_id: id, fecha: ds }) });
+        delete _planOv[`${id}|${ds}`];
+      } else if (modo === 'skip') {
+        const r = await apiFetch(`${API}/mgmt/plan-overrides`, { method: 'PUT',
+          headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task_id: id, fecha: ds, skip: true }) });
+        if (r.ok) _planOv[`${id}|${ds}`] = await r.json();
+      } else if (modo === 'one') {
+        const r = await apiFetch(`${API}/mgmt/plan-overrides`, { method: 'PUT',
+          headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task_id: id, fecha: ds, hora, minutos: min }) });
+        if (r.ok) _planOv[`${id}|${ds}`] = await r.json();
+      } else {                                    // 'all' → cambia el plan a partir de este día
+        const r = await apiFetch(`${API}/mgmt/tasks/${id}/plan-hora-desde`, { method: 'PUT',
+          headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fecha: ds, hora }) });
+        if (r.ok) { await load(); return; }        // recarga: cambia el plan y sus excepciones
+      }
+      render();
+    } catch (err) { console.error('[cal] movePlan:', err); showBanner('No se pudo mover el bloque.', 'error'); }
+  }
 
   function openSchedulePopover(e, taskId) {
     e.stopPropagation();
@@ -9890,6 +10013,7 @@ const CalendarModule = (() => {
 
   return { load, setTab, prev, next, goToday, refresh, refreshPlans, switchMember, connectGcal, disconnectGcal, syncTaskToGcal, tickRunning,
     openSchedulePopover, saveSchedule, unschedule, openDayUnscheduled, closeDayPop,
+    openPlanPop, movePlan, startFromPlan,
     _dpSearch, _dpSchedule, _dpPickDur, _dpPickHour, _dpCustomDur, _dpSchedCancel, _dpConfirm, _dpToggleSubs };
 })();
 

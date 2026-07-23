@@ -392,6 +392,21 @@ async function initDb() {
     await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS plan_dias TEXT NOT NULL DEFAULT '';`);
     await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS plan_horas NUMERIC(6,2);`);
     await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS plan_hora INTEGER;`);
+    // Excepciones al plan recurrente: mover UN día concreto sin tocar el resto de la semana.
+    // hora NULL + skip=true → ese día no se trabaja. Si no hay fila, manda el plan de la tarea.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS task_plan_overrides (
+        id       SERIAL PRIMARY KEY,
+        user_id  INTEGER NOT NULL,
+        task_id  INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+        fecha    DATE NOT NULL,
+        hora     INTEGER,
+        minutos  INTEGER,
+        skip     BOOLEAN NOT NULL DEFAULT false,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        UNIQUE (task_id, fecha)
+      );`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_tpo_user_fecha ON task_plan_overrides(user_id, fecha);`);
     // Programación en Calendario (cuándo planeo trabajar la tarea — independiente del deadline)
     await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS prog_fecha DATE;`);
     await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS prog_inicio TEXT;`);
