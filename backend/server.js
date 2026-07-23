@@ -1889,7 +1889,15 @@ app.get('/api/mgmt/tasks', requireAuth, async (req, res) => {
                 SELECT json_agg(json_build_object('id', dt.id, 'titulo', dt.titulo, 'estado', dt.estado) ORDER BY dt.titulo)
                   FROM task_dependencies td JOIN tasks dt ON dt.id = td.depends_on_id
                  WHERE td.task_id = t.id
-              ), '[]'::json) AS waiting_on
+              ), '[]'::json) AS waiting_on,
+              -- Horas realmente trackeadas en la tarea Y sus subtareas (para comparar
+              -- lo trabajado contra la meta de horas de la semana en Finanzas).
+              COALESCE((
+                SELECT ROUND(SUM(te.duration_s)::numeric / 3600, 2)
+                  FROM time_entries te
+                 WHERE te.user_id = t.user_id
+                   AND (te.task_id = t.id OR te.task_id IN (SELECT s.id FROM tasks s WHERE s.parent_task_id = t.id))
+              ), 0) AS horas_track
          FROM tasks t
          LEFT JOIN projects p ON t.project_id = p.id
          LEFT JOIN clients  c ON p.client_id  = c.id

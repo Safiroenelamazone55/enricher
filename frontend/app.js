@@ -3116,8 +3116,15 @@ const FinanceModule = (() => {
       ? `${_fbFmtD(t.fecha_inicio || t.billing_week)} – ${_fbFmtD(t.deadline)}`
       : (t.fecha_inicio && t.deadline ? `${_fbFmtD(t.fecha_inicio)} – ${_fbFmtD(t.deadline)}` : (_fbFmtD(t.deadline) || '—'));
     const mv = t.monto != null ? t.monto : '';
+    // Trabajado vs meta: en contratos por horas importa ver la brecha (se cobra lo
+    // pactado aunque las horas queden por debajo, pero conviene tenerlo a la vista).
+    const meta = (t.plan_horas != null && t.plan_horas !== '') ? +t.plan_horas : 0;
+    const hecho = (t.horas_track != null) ? +t.horas_track : 0;
+    const nHoras = (meta > 0 || hecho > 0)
+      ? `<span class="fb-hrs${meta > 0 && hecho < meta ? ' fb-hrs--bajo' : ''}" title="Horas trackeadas${meta > 0 ? ` de la meta de ${meta} h` : ''}">${String(hecho).replace(/\.00$/, '')} h${meta > 0 ? ` / ${String(meta).replace(/\.00$/, '')} h` : ''}</span>`
+      : '';
     return `<div class="fb-row${t.cobrado ? ' fb-row--cob' : ''}">
-      <div class="fb-row__t" onclick="TasksModule.openDrawer(${t.id})" title="Abrir tarea">${esc(t.titulo)}${t.billing_week ? '<span class="fb-wk" title="Tarea de cobro semanal (auto)">↻</span>' : ''}</div>
+      <div class="fb-row__t" onclick="TasksModule.openDrawer(${t.id})" title="Abrir tarea">${esc(t.titulo)}${t.billing_week ? '<span class="fb-wk" title="Semana con cobro (auto)">↻</span>' : ''}${nHoras}</div>
       <div class="fb-row__d">${fechas}</div>
       <div class="fb-row__m"><span class="fb-cur">${cur}</span><input type="number" min="0" step="0.01" value="${mv}" placeholder="—"
         onblur="FinanceModule.fbMonto(${t.id},this.value)"
@@ -10809,8 +10816,24 @@ const ProjectsModule = (() => {
       const d = new Date(ds + 'T00:00:00');
       return `${DAYS_ES[d.getDay()].toUpperCase()} ${d.getDate()} ${MONS_ES[d.getMonth()].toUpperCase()}`;
     };
-    const sorted = Object.keys(byDate).sort();
-    const rows = sorted.map(ds => {
+    // Orden: lo MÁS RECIENTE primero (la semana en curso arriba, luego hacia atrás).
+    const sorted = Object.keys(byDate).sort().reverse();
+    // Qué se ve de entrada (el resto queda tras "Mostrar más"):
+    //  · proyectos por semana → solo la última semana
+    //  · tareas sueltas → las que tienen trabajo pendiente (subtareas sin completar,
+    //    o la tarea sin completar si no tiene subtareas)
+    const esSemanal = parents.some(t => t.semana_week || /·\s*\d{1,2}\s*[–-]/.test(t.titulo || ''));
+    const verTodo = _pjtVerTodo.has(p.id);
+    const tienePendiente = ds => byDate[ds].some(t => {
+      const kids = childrenOf(t.id);
+      return kids.length ? kids.some(k => k.estado !== 'completado') : t.estado !== 'completado';
+    });
+    let visibles;
+    if (verTodo) visibles = sorted;
+    else if (esSemanal) visibles = sorted.slice(0, 1);
+    else { visibles = sorted.filter(tienePendiente); if (!visibles.length) visibles = sorted.slice(0, 1); }
+    const nOcultos = sorted.length - visibles.length;
+    const rows = visibles.map(ds => {
       const isT = ds === todayS;
       const taskRows = byDate[ds].map(t => {
         const kids = childrenOf(t.id);
@@ -10830,7 +10853,19 @@ const ProjectsModule = (() => {
         ${taskRows}
       </div>`;
     }).join('');
-    return `<div class="pjt-list">${rows}</div>`;
+    // Pie: desplegar/plegar lo que quedó oculto (semanas anteriores o ya completadas).
+    const masBtn = (nOcultos > 0 || verTodo)
+      ? `<button type="button" class="pjt-mas" onclick="event.stopPropagation();ProjectsModule.toggleVerTodo(${p.id})">
+          ${verTodo ? '▲ Mostrar menos' : `▼ Mostrar ${nOcultos} ${esSemanal ? (nOcultos === 1 ? 'semana anterior' : 'semanas anteriores') : (nOcultos === 1 ? 'grupo más' : 'grupos más')}`}
+        </button>`
+      : '';
+    return `<div class="pjt-list">${rows}${masBtn}</div>`;
+  }
+  // Proyectos con el historial desplegado (ids)
+  const _pjtVerTodo = new Set();
+  function toggleVerTodo(pid) {
+    if (_pjtVerTodo.has(pid)) _pjtVerTodo.delete(pid); else _pjtVerTodo.add(pid);
+    render();
   }
 
   /* ── subtareas: estado compartido (Timeline + Lista) ─ */
@@ -12232,7 +12267,7 @@ const ProjectsModule = (() => {
     }
   }
 
-  return { load, filter, setFilter, setMemberFilter, render, onTipoChange, openDrawer, closeDrawer, save, confirmDelete, setView, switchTab, toggleTaskCobrado, updateTaskMonto, updateDescripcion, addLink, removeLink, _setLinkField, saveLinks, refreshCard, closeQuickClientModal, saveQuickClient, toggleTaskExpand, toggleProjectExpand, openTaskMenu, _onTaskMenuEdit, _onTaskMenuAddSub, _onTaskMenuDelete, openQuickEditPopover, tqpNav, tqpPick, tqpToggleRange, tqpClear, openInlineDate, startInlineSubtask, cancelInlineSubtask, saveInlineSubtask, startEditTask, cancelEditTask, saveEditTask, deleteTaskInline, toggleSubrowExpand, distributeTaskMontos, openLinkForm, cancelLinkForm, saveLinkForm, startLinkEdit, cancelLinkEdit, saveLinkEdit, enterInfoEdit, cancelInfoEdit, saveInfoEdit, toggleInfoExpand,
+  return { load, filter, setFilter, setMemberFilter, render, onTipoChange, openDrawer, closeDrawer, save, confirmDelete, setView, switchTab, toggleVerTodo, toggleTaskCobrado, updateTaskMonto, updateDescripcion, addLink, removeLink, _setLinkField, saveLinks, refreshCard, closeQuickClientModal, saveQuickClient, toggleTaskExpand, toggleProjectExpand, openTaskMenu, _onTaskMenuEdit, _onTaskMenuAddSub, _onTaskMenuDelete, openQuickEditPopover, tqpNav, tqpPick, tqpToggleRange, tqpClear, openInlineDate, startInlineSubtask, cancelInlineSubtask, saveInlineSubtask, startEditTask, cancelEditTask, saveEditTask, deleteTaskInline, toggleSubrowExpand, distributeTaskMontos, openLinkForm, cancelLinkForm, saveLinkForm, startLinkEdit, cancelLinkEdit, saveLinkEdit, enterInfoEdit, cancelInfoEdit, saveInfoEdit, toggleInfoExpand,
     onRespChange, onRepartoToggle, repartoIgual, repartoHint: _repartoHint, onCobroSemanalToggle, onSemanaAutoToggle,
     togglePlanDia, planHint,
     onHorasFijasToggle, openProjFechas,

@@ -13093,3 +13093,14 @@ body:has(#pane-mgmt-tasks.active) .content-wrap { max-width: 1400px; }
   border-radius: 6px; padding: 3px 6px; margin-bottom: 3px; cursor: pointer; white-space: nowrap; overflow: hidden;
   text-overflow: ellipsis; transition: background .12s; }
 .cal2-planflex:hover { background: #DCEFE4; }
+
+/* Timeline de proyecto: "Mostrar N semanas anteriores" */
+.pjt-mas { display: block; width: 100%; margin-top: 4px; padding: 7px 10px; border: none; background: none;
+  font: inherit; font-size: .74rem; font-weight: 600; color: var(--text-muted, #8C97A3); cursor: pointer;
+  border-radius: 8px; text-align: center; transition: background .12s, color .12s; }
+.pjt-mas:hover { background: var(--surface-secondary, #F5F6F3); color: var(--primary, #00804C); }
+
+/* Finanzas: horas trackeadas vs meta de la semana */
+.fb-hrs { display: inline-block; margin-left: 8px; font-size: .68rem; font-weight: 600; color: var(--text-muted, #8C97A3);
+  background: var(--surface-secondary, #F5F6F3); border-radius: 6px; padding: 1px 6px; vertical-align: 1px; }
+.fb-hrs--bajo { color: #A6853F; background: #FCF6E8; }
