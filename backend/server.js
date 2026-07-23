@@ -1994,12 +1994,37 @@ app.put('/api/mgmt/tasks/:id', requireAuth, async (req, res) => {
        parent_task_id || null, fecha_inicio || null]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Tarea no encontrada' });
-    res.json(rows[0]);
+    const parentEstado = await _syncParentEstado(req.workspaceOwnerId, rows[0].parent_task_id);
+    res.json({ ...rows[0], parent_estado: parentEstado, parent_id: rows[0].parent_task_id || null });
   } catch (err) {
     console.error('[mgmt/tasks] PUT error:', err.message);
     res.status(500).json({ error: 'Error al actualizar tarea' });
   }
 });
+
+// ── Coherencia padre ↔ subtareas ─────────────────────────────────
+// Si TODAS las subtareas quedan completadas, la tarea padre se completa sola (si no,
+// aparecía al 100 % pero seguía en "Pendiente"). Si se reabre una subtarea, el padre
+// vuelve a abrirse. Devuelve el nuevo estado del padre, o null si no cambió.
+async function _syncParentEstado(uid, parentId) {
+  if (!parentId) return null;
+  const { rows: [p] } = await pool.query(`SELECT id, estado FROM tasks WHERE id=$1 AND user_id=$2`, [parentId, uid]);
+  if (!p) return null;
+  const { rows: [c] } = await pool.query(
+    `SELECT COUNT(*)::int AS n, COUNT(*) FILTER (WHERE estado='completado')::int AS ok
+       FROM tasks WHERE parent_task_id=$1 AND user_id=$2`, [parentId, uid]);
+  if (!c.n) return null;
+  const todas = c.ok === c.n;
+  if (todas && p.estado !== 'completado') {
+    await pool.query(`UPDATE tasks SET estado='completado', updated_at=NOW() WHERE id=$1`, [parentId]);
+    return 'completado';
+  }
+  if (!todas && p.estado === 'completado') {
+    await pool.query(`UPDATE tasks SET estado='en_progreso', updated_at=NOW() WHERE id=$1`, [parentId]);
+    return 'en_progreso';
+  }
+  return null;
+}
 
 // ── PATCH /api/mgmt/tasks/:id/status ─────────────────────────────
 app.patch('/api/mgmt/tasks/:id/status', requireAuth, async (req, res) => {
@@ -2012,7 +2037,9 @@ app.patch('/api/mgmt/tasks/:id/status', requireAuth, async (req, res) => {
       [req.params.id, req.workspaceOwnerId, estado]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Tarea no encontrada' });
-    res.json(rows[0]);
+    // Al mover una subtarea, el padre se pone al día (y viceversa si se reabre).
+    const parentEstado = await _syncParentEstado(req.workspaceOwnerId, rows[0].parent_task_id);
+    res.json({ ...rows[0], parent_estado: parentEstado, parent_id: rows[0].parent_task_id || null });
   } catch (err) {
     console.error('[tasks/status] PATCH error:', err.message);
     res.status(500).json({ error: 'Error al actualizar estado' });
