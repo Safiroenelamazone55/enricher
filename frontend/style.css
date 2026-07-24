@@ -14146,8 +14146,12 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 #chat-channels .chat-ch__av { width: 20px; height: 20px; border-radius: 5px; flex-shrink: 0; background: #F1EFEB; }
 #chat-channels .chat-ch-slabel--sub { padding-top: 12px; }
 /* Emojis: en Windows caen en Segoe UI Emoji; en Mac y iPhone, en los de Apple. */
-#chat-messages .chat-msg__txt, .slk-reac {
-  font-family: inherit, 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji';
+/* Fuente de emoji: en Mac/iPhone caen en los de Apple; en Windows, en Segoe UI Emoji
+   (Windows no trae la fuente de Apple). 'inherit' dentro de la lista invalidaba la
+   regla entera, por eso salian con la fuente de la interfaz. */
+.slk-emoji, .slk-reac, .slk-mm-reac, .slk-emoji-pop button,
+#chat-messages .chat-msg__txt {
+  font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif;
 }
 
 /* ── Menu contextual del mensaje (clic derecho) ── */
