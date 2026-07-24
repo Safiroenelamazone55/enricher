@@ -21217,10 +21217,15 @@ const SlackChat = (() => {
            <button class="slk-volver" onclick="SlackChat.abrir('${_canal.id}')">‹ Volver a #${esc(_canal.name)}</button>
            <span class="slk-hilo-tit">Hilo${orden.length > 1 ? ` · ${orden.length - 1} respuesta${orden.length - 1 > 1 ? 's' : ''}` : ''}</span>
          </div>` : '';
-    for (const m of orden) {
+    orden.forEach((m, i) => {
       const f = new Date(+m.ts * 1000);
       const d2 = f.toLocaleDateString('es-PE', { day: 'numeric', month: 'long' });
       if (d2 !== dia) { html += `<div class="chat-daysep"><span>${d2}</span></div>`; dia = d2; }
+      // En un hilo: el primero es el mensaje ORIGINAL (destacado); del segundo en
+      // adelante son respuestas, indentadas bajo un separador, como en WhatsApp.
+      const esRaiz  = enHilo && i === 0;
+      const esResp  = enHilo && i > 0;
+      if (esResp && i === 1) html += `<div class="slk-resp-sep"><span>${orden.length - 1} respuesta${orden.length - 1 > 1 ? 's' : ''}</span></div>`;
       const quien = _users[m.user] || m.username || 'Slack';
       const hora = f.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
       const reacs = (m.reactions || []).map(r =>
@@ -21228,7 +21233,7 @@ const SlackChat = (() => {
       const hilo = (!enHilo && m.reply_count)
         ? `<button class="slk-thread" onclick="SlackChat.verHilo('${m.ts}')">${m.reply_count} respuesta${m.reply_count > 1 ? 's' : ''}</button>` : '';
       const files = (m.files || []).map(f2 => `<div class="slk-file">📎 ${esc(f2.name || 'archivo')}</div>`).join('');
-      html += `<div class="chat-msg" data-ts="${m.ts}"
+      html += `<div class="chat-msg${esRaiz ? ' slk-root' : ''}${esResp ? ' slk-reply' : ''}" data-ts="${m.ts}"
                     oncontextmenu="SlackChat.menuMsg(event,'${m.ts}',${m.reply_count || 0})">
         <img class="chat-msg__av" src="https://api.dicebear.com/9.x/lorelei/svg?seed=${encodeURIComponent(quien)}" alt="">
         <div class="chat-msg__body">
@@ -21237,7 +21242,7 @@ const SlackChat = (() => {
           ${files}${reacs ? `<div class="slk-reacs">${reacs}</div>` : ''}${hilo}
         </div>
       </div>`;
-    }
+    });
     const prev = box.scrollTop;
     box.style.scrollBehavior = 'auto';   // sin barrido animado
     box.innerHTML = html;

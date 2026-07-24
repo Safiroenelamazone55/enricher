@@ -14203,3 +14203,17 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 /* El chat NO debe scrollear animado: al abrir o enviar, saltar directo al final sin
    el barrido desde arriba. (scroll-behavior:smooth es global y se heredaba). */
 #chat-messages, #chat-channels { scroll-behavior: auto !important; }
+
+/* Hilo con jerarquia tipo WhatsApp: el mensaje ORIGINAL destacado, las respuestas
+   indentadas con una guia a la izquierda. */
+#chat-messages .chat-msg.slk-root {
+  background:#F1EFEB; border-radius:10px; margin:0 12px 4px; padding:10px 12px;
+  border-left:3px solid #007AFF;
+}
+.slk-resp-sep { display:flex; align-items:center; gap:10px; margin:6px 16px 8px 40px; }
+.slk-resp-sep::before, .slk-resp-sep::after { content:''; flex:1; height:1px; background:#E7E3DD; }
+.slk-resp-sep span { font-size:11px; font-weight:600; color:#918C85; }
+#chat-messages .chat-msg.slk-reply {
+  margin-left:34px; padding-left:12px; border-left:2px solid #E7E3DD;
+}
+#chat-messages .chat-msg.slk-reply .chat-msg__av { width:28px !important; height:28px !important; flex-basis:28px !important; }
