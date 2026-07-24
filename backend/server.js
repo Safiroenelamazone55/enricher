@@ -6037,6 +6037,59 @@ app.post('/api/gcal/sync-task', requireAuth, async (req, res) => {
   }
 });
 
+// ── POST /api/gcal/meet ───────────────────────────────────────────
+// Crea la junta como evento de Google Calendar CON enlace de Meet. Se hace aqui y
+// no en Slack porque en el plan gratuito de Slack las llamadas son solo de dos
+// personas. El enlace se guarda en meetings.link, que el calendario ya usa para
+// pintar "Unirse a reunion".
+app.post('/api/gcal/meet', requireAuth, async (req, res) => {
+  const { meetingId } = req.body || {};
+  if (!meetingId) return res.status(400).json({ error: 'Falta la reunión' });
+  try {
+    const cal = await _gcalClient(req.user.id);
+    if (!cal) return res.status(409).json({ error: 'Conecta Google Calendar primero', connected: false });
+    const { rows: [m] } = await pool.query(
+      `SELECT * FROM meetings WHERE id=$1 AND user_id=$2`, [meetingId, req.workspaceOwnerId]);
+    if (!m) return res.status(404).json({ error: 'Reunión no encontrada' });
+
+    const dia = String(m.fecha).split('T')[0];
+    const ini = m.hora_inicio ? String(m.hora_inicio).slice(0, 5) : '09:00';
+    const fin = m.hora_fin    ? String(m.hora_fin).slice(0, 5)
+                              : `${String(Math.min(23, +ini.slice(0, 2) + 1)).padStart(2, '0')}:${ini.slice(3)}`;
+    let invitados = [];
+    try { invitados = JSON.parse(m.attendees || '[]'); } catch (_) {}
+    const correos = (Array.isArray(invitados) ? invitados : [])
+      .map(x => (typeof x === 'string' ? x : x && x.email) || '')
+      .filter(e => e.includes('@')).map(email => ({ email }));
+
+    const { data } = await cal.events.insert({
+      calendarId: 'primary',
+      conferenceDataVersion: 1,                 // sin esto Google ignora la peticion de Meet
+      requestBody: {
+        summary: m.titulo || 'Reunión',
+        description: m.descripcion || '',
+        start: { dateTime: `${dia}T${ini}:00`, timeZone: process.env.TZ_DEFAULT || 'America/Lima' },
+        end:   { dateTime: `${dia}T${fin}:00`, timeZone: process.env.TZ_DEFAULT || 'America/Lima' },
+        attendees: correos.length ? correos : undefined,
+        conferenceData: {
+          createRequest: { requestId: `nova-${meetingId}-${Date.now()}`,
+                           conferenceSolutionKey: { type: 'hangoutsMeet' } },
+        },
+      },
+    });
+    const link = data.hangoutLink
+      || (data.conferenceData?.entryPoints || []).find(e => e.entryPointType === 'video')?.uri || '';
+    if (!link) return res.status(502).json({ error: 'Google no devolvió enlace de Meet' });
+    await pool.query(`UPDATE meetings SET link=$1 WHERE id=$2`, [link, meetingId]);
+    res.json({ ok: true, link, eventId: data.id });
+  } catch (e) {
+    console.error('[gcal] meet error:', e.message);
+    res.status(500).json({ error: /invalid_grant/i.test(e.message)
+      ? 'Google Calendar perdió la autorización — reconéctalo'
+      : e.message });
+  }
+});
+
 app.delete('/api/gcal/sync-task/:taskId', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(`SELECT gcal_event_id FROM tasks WHERE id=$1 AND user_id=$2`, [req.params.taskId, req.workspaceOwnerId]);

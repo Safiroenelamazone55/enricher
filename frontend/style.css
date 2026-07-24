@@ -13988,3 +13988,9 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 /* El campo del titulo es el importante: ocupa el ancho y se lee mas grande. */
 .opp-modal-form .opp-full { grid-column: 1 / -1; }
 .opp-modal-form .opp-full #ot-titulo { font-size: 15px; padding: 9px 11px; }
+
+/* Fila del enlace de reunion: el campo y el boton de generar Meet, juntos */
+.mtg-link-row { display: flex; gap: 8px; align-items: center; }
+.mtg-link-row .form-input { flex: 1; min-width: 0; }
+.mtg-meet-btn { flex-shrink: 0; white-space: nowrap; }
+.form-hint { display: block; margin-top: 5px; font-size: 11.5px; color: #918C85; }

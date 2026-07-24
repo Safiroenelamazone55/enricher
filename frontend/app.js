@@ -10392,7 +10392,35 @@ const MeetingsModule = (() => {
     } catch (e) { alert('Error: ' + e.message); }
   }
 
-  return { openDrawer, closeDrawer, save, confirmDelete };
+  // Genera el enlace de Meet creando el evento en Google Calendar. Slack no sirve
+  // para esto: en su plan gratuito las llamadas son solo de dos personas.
+  async function crearMeet() {
+    const btn  = $('mtg-meet-btn');
+    const hint = $('mtg-meet-hint');
+    if (!_editId) {
+      if (hint) hint.textContent = 'Guarda la reunión primero y vuelve a abrirla para generar el enlace.';
+      return;
+    }
+    const orig = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = 'Creando…'; }
+    try {
+      const r = await apiFetch(`${API}/gcal/meet`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ meetingId: _editId }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || 'No se pudo crear el enlace');
+      const inp = document.querySelector('#meetings-form [name="link"]');
+      if (inp) inp.value = d.link;
+      if (hint) hint.textContent = 'Enlace creado e invitaciones enviadas por Google Calendar.';
+      showBanner('✓ Meet creado — el evento ya está en tu Google Calendar', 'success');
+    } catch (e) {
+      showBanner('Error: ' + e.message, 'error');
+      if (hint) hint.textContent = e.message;
+    } finally { if (btn) { btn.disabled = false; btn.textContent = orig; } }
+  }
+
+  return { openDrawer, closeDrawer, save, confirmDelete, crearMeet };
 })();
 
 // =================================================================
