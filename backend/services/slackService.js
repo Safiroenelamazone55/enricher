@@ -70,10 +70,12 @@ async function verificar(token) {
 
 const token = ws => decPass(ws.token_enc);
 
-// Canales visibles para la app (públicos y privados donde esté invitada).
-async function canales(ws, { limit = 200, cursor } = {}) {
+// Todo lo que se puede abrir: canales públicos y privados, mensajes directos (im) y
+// grupos de directos (mpim). Sin 'im' no aparecían las conversaciones con el equipo,
+// que es justo donde se habla del día a día.
+async function canales(ws, { limit = 300, cursor } = {}) {
   const d = await _call(token(ws), 'conversations.list', {
-    types: 'public_channel,private_channel', exclude_archived: true, limit, cursor,
+    types: 'public_channel,private_channel,im,mpim', exclude_archived: true, limit, cursor,
   });
   return { canales: d.channels || [], cursor: d.response_metadata?.next_cursor || '' };
 }
@@ -81,6 +83,11 @@ async function canales(ws, { limit = 200, cursor } = {}) {
 // Miembros del workspace — es lo que permite ver "mi equipo" y resolver las menciones.
 async function miembros(ws, { limit = 200, cursor } = {}) {
   const d = await _call(token(ws), 'users.list', { limit, cursor });
+  // El indice incluye a TODOS —bots y desactivados— porque un mensaje directo puede
+  // ser con alguien que ya dejo el workspace, y sin su nombre la conversacion
+  // aparecia como "Directo".
+  const indice = {};
+  (d.members || []).forEach(u => { indice[u.id] = u.profile?.real_name || u.real_name || u.name || ''; });
   return {
     miembros: (d.members || [])
       .filter(u => !u.deleted && !u.is_bot && u.id !== 'USLACKBOT')
@@ -89,8 +96,34 @@ async function miembros(ws, { limit = 200, cursor } = {}) {
         usuario: u.name, email: u.profile?.email || '',
         avatar: u.profile?.image_72 || '', tz: u.tz || '', admin: !!u.is_admin,
       })),
+    indice,
     cursor: d.response_metadata?.next_cursor || '',
   };
+}
+
+// No leídos. Slack no ofrece un total por workspace: unread_count_display llega en
+// conversations.info, uno por canal. Para no gastar el presupuesto de peticiones se
+// consultan solo los canales donde se está dentro, de 6 en 6, y el resultado se
+// guarda un minuto.
+const _cacheNL = new Map();   // wsId -> { at, datos }
+async function noLeidos(ws, canales) {
+  const guardado = _cacheNL.get(ws.id);
+  if (guardado && Date.now() - guardado.at < 60_000) return guardado.datos;
+
+  const propios = canales.filter(c => c.is_member || c.is_im || c.is_mpim).slice(0, 60);
+  const porCanal = {};
+  let total = 0;
+  for (let i = 0; i < propios.length; i += 6) {
+    const lote = propios.slice(i, i + 6);
+    const res = await Promise.all(lote.map(c =>
+      _call(token(ws), 'conversations.info', { channel: c.id })
+        .then(d => ({ id: c.id, n: d.channel?.unread_count_display || 0 }))
+        .catch(() => ({ id: c.id, n: 0 }))));   // un canal que falle no tumba el resto
+    for (const r of res) { if (r.n) { porCanal[r.id] = r.n; total += r.n; } }
+  }
+  const datos = { total, porCanal };
+  _cacheNL.set(ws.id, { at: Date.now(), datos });
+  return datos;
 }
 
 async function historial(ws, canal, { limit = 50, cursor } = {}) {
@@ -143,6 +176,6 @@ async function archivarCanal(ws, canalId) {
 }
 
 module.exports = {
-  encPass, verificar, canales, miembros, historial, hilo,
+  encPass, verificar, canales, miembros, noLeidos, historial, hilo,
   enviar, directo, crearCanal, archivarCanal, normalizarNombre, _errorClaro,
 };

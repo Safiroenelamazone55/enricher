@@ -6119,6 +6119,19 @@ app.get('/api/slack/workspaces/:id/canales', requireAuth, async (req, res) => {
   } catch (err) { res.status(400).json({ error: err.message }); }
 });
 
+// No leidos del workspace: el numero que va sobre la letra en el riel.
+app.get('/api/slack/workspaces/:id/no-leidos', requireAuth, async (req, res) => {
+  try {
+    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
+    const { canales } = await slackSvc.canales(w);
+    res.json(await slackSvc.noLeidos(w, canales));
+  } catch (err) {
+    console.error('[slack] no-leidos:', err.message);
+    res.json({ total: 0, porCanal: {} });   // una insignia no debe romper el chat
+  }
+});
+
 // Mensajes de un canal. No se guardan: se leen de Slack en el momento, que es
 // justo lo que Jenny pidio (que la memoria la ponga Slack, no su base).
 app.get('/api/slack/workspaces/:id/canales/:canal/mensajes', requireAuth, async (req, res) => {

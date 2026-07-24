@@ -20912,6 +20912,8 @@ const SlackChat = (() => {
   let _canal   = null;    // { id, name, topic }
   let _users   = {};      // id -> nombre, para resolver las menciones
   let _hilo    = null;    // ts del hilo abierto, si hay uno
+  let _noLeidos = {};     // canal -> nº sin leer (del workspace que se mira)
+  let _nlPorWs  = {};     // workspace -> total, para la insignia del riel
 
   const $$ = id => document.getElementById(id);
 
@@ -20921,10 +20923,24 @@ const SlackChat = (() => {
       _ws = r.ok ? await r.json() : [];
     } catch (_) { _ws = []; }
     _riel();
+    _refrescarNoLeidos();
     const guardado = localStorage.getItem('slk_ws');
     const inicial = _ws.find(w => String(w.id) === guardado) || _ws[0];
     if (inicial) await irA(inicial.id);
     else _vacio();
+  }
+
+  // Se piden en segundo plano: la insignia no debe retrasar la apertura del chat.
+  async function _refrescarNoLeidos() {
+    await Promise.all(_ws.map(async w => {
+      try {
+        const r = await apiFetch(`${API}/slack/workspaces/${w.id}/no-leidos`);
+        const d = await r.json();
+        _nlPorWs[w.id] = d.total || 0;
+        if (String(w.id) === String(_wsAct)) { _noLeidos = d.porCanal || {}; _pintaCanales(); }
+      } catch (_) { _nlPorWs[w.id] = 0; }
+    }));
+    _riel();
   }
 
   function _vacio() {
@@ -20946,8 +20962,10 @@ const SlackChat = (() => {
     const ini = t => (String(t || '?').trim()[0] || '?').toUpperCase();
     r.innerHTML = _ws.map(w => `
       <button class="chat-rail__b${String(_wsAct) === String(w.id) ? ' on' : ''}"
-              title="${esc(w.etiqueta || w.team_name)}" onclick="SlackChat.irA(${w.id})">
+              title="${esc(w.etiqueta || w.team_name)}${_nlPorWs[w.id] ? ` — ${_nlPorWs[w.id]} sin leer` : ''}"
+              onclick="SlackChat.irA(${w.id})">
         <span class="chat-rail__ico">${esc(ini(w.etiqueta || w.team_name))}</span>
+        ${_nlPorWs[w.id] ? `<span class="chat-rail__n">${_nlPorWs[w.id] > 99 ? '99+' : _nlPorWs[w.id]}</span>` : ''}
       </button>`).join('')
       + `<button class="chat-rail__add" title="Conectar otro Slack"
                 onclick="WorkspaceModule.openNameModal();setTimeout(()=>WorkspaceModule.setSection('integraciones'),60)">+</button>`;
@@ -20966,10 +20984,16 @@ const SlackChat = (() => {
       ]);
       const dc = await rc.json(), dm = await rm.json();
       if (dc.error) throw new Error(dc.error);
-      _users = {};
+      // El indice trae a todos (incluidos los que ya no estan); la lista de miembros
+      // solo a los activos. Para resolver nombres hace falta el indice completo.
+      _users = { ...(dm.indice || {}) };
       (dm.miembros || []).forEach(u => { _users[u.id] = u.nombre || u.usuario; });
-      _canales = (dc.canales || []).sort((a, b) => a.name.localeCompare(b.name));
+      _canales = dc.canales || [];
       _pintaCanales();
+      apiFetch(`${API}/slack/workspaces/${wsId}/no-leidos`)
+        .then(r => r.json())
+        .then(d => { _noLeidos = d.porCanal || {}; _nlPorWs[wsId] = d.total || 0; _pintaCanales(); _riel(); })
+        .catch(() => {});
       if (_canales.length) abrir(_canales[0].id);
       else if ($$('chat-messages')) $$('chat-messages').innerHTML = `<div class="chat-ch-empty">Este Slack no tiene canales visibles.</div>`;
     } catch (e) {
@@ -20977,21 +21001,41 @@ const SlackChat = (() => {
     }
   }
 
+  // Un directo no trae nombre: trae el id de la otra persona, hay que resolverlo.
+  function _nombreDe(c) {
+    if (c.is_im)   return _users[c.user] || 'Directo';
+    if (c.is_mpim) return (c.name || '').replace(/^mpdm-|-1$/g, '').replace(/--/g, ', ');
+    return c.name || '';
+  }
+
   function _pintaCanales(filtro = '') {
     const cont = $$('chat-channels');
     if (!cont) return;
     const q = filtro.trim().toLowerCase();
-    const lista = q ? _canales.filter(c => c.name.toLowerCase().includes(q)) : _canales;
+    const conNombre = _canales.map(c => ({ ...c, _nm: _nombreDe(c) }));
+    const lista = q ? conNombre.filter(c => c._nm.toLowerCase().includes(q)) : conNombre;
     const w = _ws.find(x => String(x.id) === String(_wsAct));
+
+    const fila = c => {
+      const n = _noLeidos[c.id] || 0;
+      const ico = c.is_im ? '' : (c.is_private || c.is_mpim) ? '🔒' : '#';
+      return `<button class="chat-ch${_canal && _canal.id === c.id ? ' active' : ''}${n ? ' unread' : ''}"
+                      onclick="SlackChat.abrir('${c.id}')">
+        ${c.is_im ? `<img class="chat-ch__av" src="https://api.dicebear.com/9.x/lorelei/svg?seed=${encodeURIComponent(c._nm)}" alt="">`
+                  : `<span class="chat-ch__hash">${ico}</span>`}
+        <span class="chat-ch__name">${c.is_im ? escNom(c._nm) : esc(c._nm)}</span>
+        ${n ? `<span class="chat-ch__n">${n > 99 ? '99+' : n}</span>` : ''}
+      </button>`;
+    };
+
+    const canales  = lista.filter(c => !c.is_im && !c.is_mpim).sort((a, b) => a._nm.localeCompare(b._nm));
+    const directos = lista.filter(c =>  c.is_im ||  c.is_mpim).sort((a, b) => a._nm.localeCompare(b._nm));
+
     cont.innerHTML =
       `<div class="chat-ch-slabel">${esc(w ? (w.etiqueta || w.team_name) : 'Slack')}</div>`
-      + (lista.length
-        ? lista.map(c => `
-          <button class="chat-ch${_canal && _canal.id === c.id ? ' active' : ''}" onclick="SlackChat.abrir('${c.id}')">
-            <span class="chat-ch__hash">${c.is_private ? '🔒' : '#'}</span>
-            <span class="chat-ch__name">${esc(c.name)}</span>
-          </button>`).join('')
-        : `<div class="chat-ch-empty">Sin canales para "${esc(filtro)}".</div>`);
+      + (canales.length  ? `<div class="chat-ch-slabel chat-ch-slabel--sub">Canales</div>` + canales.map(fila).join('') : '')
+      + (directos.length ? `<div class="chat-ch-slabel chat-ch-slabel--sub">Mensajes directos</div>` + directos.map(fila).join('') : '')
+      + (!lista.length ? `<div class="chat-ch-empty">Sin resultados para "${esc(filtro)}".</div>` : '');
   }
 
   function buscar(v) { _pintaCanales(v || ''); }
@@ -21005,10 +21049,14 @@ const SlackChat = (() => {
   async function abrir(canalId) {
     const c = _canales.find(x => x.id === canalId);
     if (!c) return;
-    _canal = { id: c.id, name: c.name, topic: (c.topic && c.topic.value) || '' };
+    _canal = { id: c.id, name: _nombreDe(c), topic: (c.topic && c.topic.value) || '' };
     _hilo = null;
+    if (_noLeidos[c.id]) {                     // al abrirlo deja de estar pendiente
+      _nlPorWs[_wsAct] = Math.max(0, (_nlPorWs[_wsAct] || 0) - _noLeidos[c.id]);
+      delete _noLeidos[c.id]; _riel();
+    }
     _pintaCanales();
-    _cab(c.name, _canal.topic);
+    _cab(_canal.name, _canal.topic);
     const box = $$('chat-messages');
     if (box) box.innerHTML = `<div class="chat-ch-empty">Cargando mensajes…</div>`;
     try {
@@ -21021,10 +21069,56 @@ const SlackChat = (() => {
     }
   }
 
+  // Slack no manda el emoji: manda su nombre (:tada:). Sin traducirlo se leen los
+  // dos puntos en crudo. Estos son los que de verdad se usan a diario.
+  const EMOJI = {
+    smile:'😄', smiley:'😃', grinning:'😀', laughing:'😆', sweat_smile:'😅', joy:'😂', rofl:'🤣',
+    slightly_smiling_face:'🙂', upside_down_face:'🙃', wink:'😉', blush:'😊', innocent:'😇',
+    heart_eyes:'😍', kissing_heart:'😘', yum:'😋', sunglasses:'😎', nerd_face:'🤓',
+    thinking_face:'🤔', zipper_mouth_face:'🤐', neutral_face:'😐', expressionless:'😑',
+    grimacing:'😬', relieved:'😌', pensive:'😔', sleepy:'😪', sleeping:'😴', mask:'😷',
+    dizzy_face:'😵', cold_sweat:'😰', cry:'😢', sob:'😭', scream:'😱', angry:'😠', rage:'😡',
+    tired_face:'😫', weary:'😩', sweat:'😓', disappointed:'😞', confused:'😕', worried:'😟',
+    open_mouth:'😮', hushed:'😯', astonished:'😲', flushed:'😳', pray:'🙏', clap:'👏',
+    '+1':'👍', thumbsup:'👍', '-1':'👎', thumbsdown:'👎', ok_hand:'👌', punch:'👊', fist:'✊',
+    wave:'👋', raised_hands:'🙌', muscle:'💪', point_up:'☝️', point_right:'👉', point_left:'👈',
+    eyes:'👀', heart:'❤️', broken_heart:'💔', two_hearts:'💕', sparkling_heart:'💖',
+    heartpulse:'💗', blue_heart:'💙', green_heart:'💚', yellow_heart:'💛', purple_heart:'💜',
+    fire:'🔥', star:'⭐', star2:'🌟', sparkles:'✨', boom:'💥', zap:'⚡', dizzy:'💫',
+    tada:'🎉', confetti_ball:'🎊', gift:'🎁', balloon:'🎈', trophy:'🏆', medal:'🏅',
+    rocket:'🚀', airplane:'✈️', car:'🚗', house:'🏠', office:'🏢', hospital:'🏥',
+    white_check_mark:'✅', heavy_check_mark:'✔️', ballot_box_with_check:'☑️', x:'❌',
+    negative_squared_cross_mark:'❎', warning:'⚠️', exclamation:'❗', question:'❓',
+    bangbang:'‼️', no_entry:'⛔', no_entry_sign:'🚫', heavy_plus_sign:'➕', heavy_minus_sign:'➖',
+    arrow_right:'➡️', arrow_left:'⬅️', arrow_up:'⬆️', arrow_down:'⬇️',
+    hourglass:'⌛', hourglass_flowing_sand:'⏳', alarm_clock:'⏰', clock1:'🕐', watch:'⌚',
+    calendar:'📅', date:'📆', memo:'📝', pencil2:'✏️', page_facing_up:'📄', clipboard:'📋',
+    file_folder:'📁', open_file_folder:'📂', paperclip:'📎', pushpin:'📌', round_pushpin:'📍',
+    email:'📧', envelope:'✉️', inbox_tray:'📥', outbox_tray:'📤', mailbox:'📫',
+    telephone:'☎️', iphone:'📱', computer:'💻', desktop_computer:'🖥️', keyboard:'⌨️',
+    bulb:'💡', mag:'🔍', mag_right:'🔎', lock:'🔒', unlock:'🔓', key:'🔑',
+    bell:'🔔', no_bell:'🔕', loudspeaker:'📢', mega:'📣', speech_balloon:'💬', thought_balloon:'💭',
+    chart_with_upwards_trend:'📈', chart_with_downwards_trend:'📉', bar_chart:'📊',
+    moneybag:'💰', dollar:'💵', credit_card:'💳', receipt:'🧾', gem:'💎',
+    coffee:'☕', tea:'🍵', beer:'🍺', clinking_glasses:'🥂', pizza:'🍕', cake:'🎂',
+    sunny:'☀️', cloud:'☁️', rain_cloud:'🌧️', snowflake:'❄️', rainbow:'🌈', moon:'🌙',
+    earth_americas:'🌎', seedling:'🌱', deciduous_tree:'🌳', four_leaf_clover:'🍀',
+    dog:'🐶', cat:'🐱', bug:'🐛', beetle:'🪲', snail:'🐌', whale:'🐳', unicorn_face:'🦄',
+    ok:'🆗', new:'🆕', top:'🔝', soon:'🔜', back:'🔙', free:'🆓', cool:'🆒', sos:'🆘',
+    100:'💯', poop:'💩', ghost:'👻', alien:'👽', robot_face:'🤖', skull:'💀',
+    man:'👨', woman:'👩', bust_in_silhouette:'👤', busts_in_silhouette:'👥', handshake:'🤝',
+    construction:'🚧', hammer:'🔨', wrench:'🔧', gear:'⚙️', link:'🔗', bookmark:'🔖',
+    books:'📚', book:'📖', newspaper:'📰', tv:'📺', camera:'📷', video_camera:'📹',
+    art:'🎨', musical_note:'🎵', headphones:'🎧', microphone:'🎤', game_die:'🎲',
+    dart:'🎯', crystal_ball:'🔮', hourglass_done:'⌛', wastebasket:'🗑️', recycle:'♻️',
+  };
+  const _emoji = t => String(t || '').replace(/:([a-z0-9_+-]+):/gi,
+    (m, n) => EMOJI[n.toLowerCase()] || m);
+
   // Slack manda las menciones como <@U123> y los enlaces como <url|texto>. Sin
   // traducirlo, el mensaje se lee como un volcado de codigo.
   function _fmt(t) {
-    return esc(String(t || ''))
+    return esc(_emoji(t))
       .replace(/&lt;@([A-Z0-9]+)&gt;/g, (_, id) => `<span class="slk-men">@${esc(_users[id] || id)}</span>`)
       .replace(/&lt;#([A-Z0-9]+)\|([^&]*)&gt;/g, (_, id, nm) => `<span class="slk-men">#${esc(nm || id)}</span>`)
       .replace(/&lt;!(here|channel|everyone)&gt;/g, (_, k) => `<span class="slk-men">@${k}</span>`)
@@ -21050,7 +21144,8 @@ const SlackChat = (() => {
       if (d2 !== dia) { html += `<div class="chat-daysep"><span>${d2}</span></div>`; dia = d2; }
       const quien = _users[m.user] || m.username || 'Slack';
       const hora = f.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
-      const reacs = (m.reactions || []).map(r => `<span class="slk-reac">:${esc(r.name)}: ${r.count}</span>`).join('');
+      const reacs = (m.reactions || []).map(r =>
+        `<span class="slk-reac">${esc(_emoji(':' + r.name + ':'))} ${r.count}</span>`).join('');
       const hilo = (!enHilo && m.reply_count)
         ? `<button class="slk-thread" onclick="SlackChat.verHilo('${m.ts}')">${m.reply_count} respuesta${m.reply_count > 1 ? 's' : ''}</button>` : '';
       const files = (m.files || []).map(f2 => `<div class="slk-file">📎 ${esc(f2.name || 'archivo')}</div>`).join('');

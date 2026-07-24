@@ -14125,3 +14125,27 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 #chat-messages .chat-daysep { display: flex; align-items: center; gap: 10px; margin: 14px 16px 8px; }
 #chat-messages .chat-daysep::before, #chat-messages .chat-daysep::after { content: ''; flex: 1; height: 1px; background: #E7E3DD; }
 #chat-messages .chat-daysep span { font-size: 11.5px; font-weight: 600; color: #918C85; }
+
+/* Insignia de no leidos sobre la letra del workspace, como en Slack */
+.chat-rail__b { position: relative; }
+.chat-rail__n {
+  position: absolute; top: -4px; right: -5px; min-width: 18px; height: 18px;
+  display: flex; align-items: center; justify-content: center; padding: 0 5px;
+  background: #FF3B30; color: #fff; border: 2px solid #F1EFEB;
+  border-radius: 999px; font-size: 10.5px; font-weight: 700; line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+/* Canal con mensajes sin leer: nombre en negrita y su propio contador */
+#chat-channels .chat-ch.unread .chat-ch__name { font-weight: 700; color: #1F1D1B; }
+#chat-channels .chat-ch__n {
+  flex-shrink: 0; min-width: 18px; height: 18px; padding: 0 5px;
+  display: flex; align-items: center; justify-content: center;
+  background: #FF3B30; color: #fff; border-radius: 999px;
+  font-size: 10.5px; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+#chat-channels .chat-ch__av { width: 20px; height: 20px; border-radius: 5px; flex-shrink: 0; background: #F1EFEB; }
+#chat-channels .chat-ch-slabel--sub { padding-top: 12px; }
+/* Emojis: en Windows caen en Segoe UI Emoji; en Mac y iPhone, en los de Apple. */
+#chat-messages .chat-msg__txt, .slk-reac {
+  font-family: inherit, 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji';
+}
