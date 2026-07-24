@@ -21290,45 +21290,82 @@ const SlackChat = (() => {
   }
 
   // Selector de personas para etiquetar. Slack no tagea con un @ suelto: necesita
-  // <@ID>. Aqui se elige a la persona y se inserta un token legible (@Nombre) que
-  // se traduce a <@ID> justo al enviar.
+  // <@ID>. Se elige a la persona y se inserta un token legible (@Nombre) que se
+  // traduce a <@ID> al enviar. Se abre con el boton @ o al teclear @ en el campo.
+  let _arrobaPos = -1;   // posicion del @ que disparo el picker (para reemplazar ahi)
+
+  // Al teclear: si justo antes del cursor hay "@algo" (sin espacio), abrir el picker
+  // filtrando por "algo". Es lo que hace Slack.
+  function detectarArroba(inp) {
+    const cur = inp.selectionStart;
+    const antes = inp.value.slice(0, cur);
+    const m = antes.match(/@([\p{L}0-9._-]*)$/u);
+    if (m && (m.index === 0 || /\s/.test(antes[m.index - 1]))) {
+      _arrobaPos = m.index;
+      _abrirPicker(m[1], inp);
+    } else {
+      _arrobaPos = -1;
+      document.querySelectorAll('.slk-men-pop').forEach(x => x.remove());
+    }
+  }
+
+  // Boton @: abre el picker vacio e inserta el @ si no estaba.
   function menciones(ev) {
     if (ev) ev.stopPropagation();
-    document.querySelectorAll('.slk-men-pop').forEach(x => x.remove());
     const inp = $$('chat-input'); if (!inp) return;
+    inp.focus();
+    _arrobaPos = -1;
+    _abrirPicker('', inp);
+  }
+
+  function _abrirPicker(filtro, inp) {
+    document.querySelectorAll('.slk-men-pop').forEach(x => x.remove());
+    const q = (filtro || '').toLowerCase();
+    const lista = _miembros
+      .filter(m => (m.nombre || m.usuario || '').toLowerCase().includes(q))
+      .slice(0, 8);
+    if (!lista.length && filtro) return;   // nada que ofrecer para ese texto
     const pop = document.createElement('div');
     pop.className = 'slk-men-pop';
-    const pinta = (filtro = '') => {
-      const q = filtro.toLowerCase();
-      const lista = _miembros.filter(m => (m.nombre || m.usuario || '').toLowerCase().includes(q)).slice(0, 8);
-      pop.innerHTML = `<input class="slk-men-q" placeholder="Buscar persona…" value="${esc(filtro)}">`
-        + (lista.length ? lista.map(m =>
-            `<button class="slk-men-it" onclick="SlackChat._mencionar('${m.id}','${esc((m.nombre||m.usuario).replace(/'/g,''))}')">
-               <img src="https://api.dicebear.com/9.x/lorelei/svg?seed=${encodeURIComponent(m.nombre||m.usuario)}"><span>${escNom(m.nombre||m.usuario)}</span>
-             </button>`).join('')
-          : `<div class="slk-men-empty">Sin resultados</div>`);
-      const qi = pop.querySelector('.slk-men-q');
-      qi.oninput = () => pinta(qi.value);
-      setTimeout(() => qi.focus(), 0);
-    };
+    pop.innerHTML = lista.length
+      ? lista.map(m =>
+          `<button class="slk-men-it" data-id="${m.id}" data-nm="${esc((m.nombre||m.usuario).replace(/"/g,''))}">
+             <img src="https://api.dicebear.com/9.x/lorelei/svg?seed=${encodeURIComponent(m.nombre||m.usuario)}"><span>${escNom(m.nombre||m.usuario)}</span>
+           </button>`).join('')
+      : `<div class="slk-men-empty">Sin resultados</div>`;
+    pop.querySelectorAll('.slk-men-it').forEach(b =>
+      b.onclick = () => _mencionar(b.dataset.id, b.dataset.nm));
     pop.style.cssText = 'position:fixed;z-index:10050;width:250px;visibility:hidden';
     document.body.appendChild(pop);
-    pinta('');
-    // Anclar al boton @ (siempre visible), encima de el. Medir el alto real y no
-    // salirse por arriba de la pantalla.
-    const btn = (ev && ev.currentTarget) || document.querySelector('.chat-tool-btn[title="Mencionar a alguien"]');
-    const r = (btn || $$('chat-input')).getBoundingClientRect();
+    const btn = document.querySelector('.chat-tool-btn[title="Mencionar a alguien"]');
+    const r = (btn || inp).getBoundingClientRect();
     const alto = pop.offsetHeight || 240;
     pop.style.top  = Math.max(8, r.top - alto - 6) + 'px';
     pop.style.left = Math.min(r.left, window.innerWidth - 260) + 'px';
     pop.style.visibility = 'visible';
-    setTimeout(() => document.addEventListener('click', function o(e2) { if (!pop.contains(e2.target)) { pop.remove(); document.removeEventListener('click', o); } }), 0);
+    setTimeout(() => document.addEventListener('click', function o(e2) {
+      if (!pop.contains(e2.target) && e2.target !== inp) { pop.remove(); document.removeEventListener('click', o); }
+    }), 0);
   }
+
   function _mencionar(id, nombre) {
     document.querySelectorAll('.slk-men-pop').forEach(x => x.remove());
+    const inp = $$('chat-input'); if (!inp) return;
     const token = '@' + nombre;
     _menciones.push({ token, id });
-    insertar(token + ' ');
+    if (_arrobaPos >= 0) {
+      // Reemplazar el "@loquescribias" en su sitio por el token completo.
+      const cur = inp.selectionStart;
+      const antes = inp.value.slice(0, _arrobaPos);
+      const despues = inp.value.slice(cur);
+      inp.value = antes + token + ' ' + despues;
+      const pos = (antes + token + ' ').length;
+      inp.focus(); inp.setSelectionRange(pos, pos);
+      _arrobaPos = -1;
+      ChatModule.onInputChange(inp);
+    } else {
+      insertar(token + ' ');
+    }
   }
 
   function insertar(txt) {
@@ -21510,7 +21547,7 @@ const SlackChat = (() => {
            fmt, insertar, adjuntar, grabarAudio, emojiPicker, _emojiIns,
            menuMsg, reaccionar, anclar, copiar,
            menuCanal, verProyecto, verTareas, copiarNombre, archivarCanal,
-           menciones, _mencionar };
+           menciones, _mencionar, detectarArroba };
 })();
 
 const ChatModule = (() => {
