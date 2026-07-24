@@ -807,7 +807,7 @@ const ClientsModule = (() => {
   function _estadoBadge(estado) {
     const map = {
       activo:    { bg: '#A7F3D0', color: '#065F46', label: 'Activo' },
-      inactivo:  { bg: '#EAE7E2', color: '#6C6862', label: 'Inactivo' },
+      inactivo:  { bg: '#EAE7E2', color: '#6C6862', label: 'Archivado' },
       potencial: { bg: '#C4B5FD', color: '#4C1D95', label: 'Potencial' },
       pausado:   { bg: '#FDE68A', color: '#78350F', label: 'Pausado' },
     };
@@ -20902,7 +20902,7 @@ const ChatModule = (() => {
           id: `project:${p.id}`, name: p.nombre, type: 'project',
           clientNombre: p.client_nombre || p.client_empresa || null,
           clientId: p.client_id || null,
-          archived: p.estado && p.estado !== 'activo',
+          archived: ['completado','cancelado','archivado','inactivo'].includes(p.estado || ''),
         })) : []),
       ];
       const dms = (Array.isArray(members) ? members : [])
