@@ -13913,3 +13913,19 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
   border-color: #DAD5CE !important; background-color: #F1EFEB !important;
   color: #1F1D1B !important; font-weight: 500;
 }
+
+/* Barra lateral: en Finder o Mail el elemento seleccionado es un relleno gris
+   neutro, no un azul. El azul en una barra que esta SIEMPRE a la vista satura
+   la pantalla entera. El icono acompana al texto, tampoco se colorea. */
+.snav-item--active,
+.snav-item.active,
+.lm2-nav__item.active {
+  background: #EAE7E2 !important;
+  color: #1F1D1B !important;
+  font-weight: 600;
+}
+.snav-item--active svg,
+.snav-item.active svg,
+.lm2-nav__item.active svg { color: #6C6862 !important; }
+.snav-item:hover, .lm2-nav__item:hover { background: rgba(0,0,0,.035) !important; color: #1F1D1B; }
+.snav-item--active:hover, .lm2-nav__item.active:hover { background: #E4E0DA !important; }
