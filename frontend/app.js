@@ -21203,7 +21203,10 @@ const SlackChat = (() => {
     if (!orden.length) { box.innerHTML = `<div class="chat-ch-empty">Sin mensajes en este canal.</div>`; return; }
     let dia = '';
     let html = enHilo
-      ? `<button class="slk-volver" onclick="SlackChat.abrir('${_canal.id}')">‹ Volver a #${esc(_canal.name)}</button>` : '';
+      ? `<div class="slk-hilo-bar">
+           <button class="slk-volver" onclick="SlackChat.abrir('${_canal.id}')">‹ Volver a #${esc(_canal.name)}</button>
+           <span class="slk-hilo-tit">Hilo${orden.length > 1 ? ` · ${orden.length - 1} respuesta${orden.length - 1 > 1 ? 's' : ''}` : ''}</span>
+         </div>` : '';
     for (const m of orden) {
       const f = new Date(+m.ts * 1000);
       const d2 = f.toLocaleDateString('es-PE', { day: 'numeric', month: 'long' });
@@ -21236,8 +21239,15 @@ const SlackChat = (() => {
       const r = await apiFetch(`${API}/slack/workspaces/${_wsAct}/canales/${_canal.id}/hilo/${ts}`);
       const d = await r.json();
       if (d.error) throw new Error(d.error);
-      _hilo = ts;
-      _pinta([...(d.mensajes || [])].reverse(), true);
+      const msgs = d.mensajes || [];
+      // El thread_ts para responder es el del mensaje RAIZ (el primero que devuelve
+      // Slack), no el que se clico: si se clica una respuesta, usar su ts da
+      // cannot_reply_to_message. thread_ts propio -> ese; si no, su ts.
+      const raiz = msgs[0] || {};
+      _hilo = raiz.thread_ts || raiz.ts || ts;
+      const inp = $$('chat-input');
+      if (inp) inp.placeholder = 'Responder en el hilo…';
+      _pinta([...msgs].reverse(), true);
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 

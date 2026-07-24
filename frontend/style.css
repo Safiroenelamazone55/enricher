@@ -14194,3 +14194,8 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .slk-men-it:hover { background:#F1EFEB; }
 .slk-men-it img { width:24px; height:24px; border-radius:6px; background:#F1EFEB; }
 .slk-men-empty { font-size:12.5px; color:#918C85; padding:8px 7px; }
+
+/* Barra de hilo: deja claro que estas dentro de un hilo, no en el canal */
+.slk-hilo-bar { position:sticky; top:0; z-index:3; display:flex; align-items:center; gap:12px; padding:8px 16px; margin:-6px -16px 8px; background:#F1EFEB; border-bottom:1px solid #E7E3DD; }
+.slk-hilo-bar .slk-volver { margin:0; }
+.slk-hilo-tit { font-size:12.5px; font-weight:600; color:#6C6862; }
