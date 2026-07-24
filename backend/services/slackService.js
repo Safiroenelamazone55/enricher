@@ -213,6 +213,11 @@ async function subirArchivo(ws, canal, buffer, nombre, comentario, thread_ts) {
   return done.files?.[0] || { id: up.file_id };
 }
 
+async function renombrarCanal(ws, canalId, nombre) {
+  const d = await _call(token(ws), 'conversations.rename', { channel: canalId, name: nombre }, 'POST');
+  return d.channel;
+}
+
 async function archivarCanal(ws, canalId) {
   await _call(token(ws), 'conversations.archive', { channel: canalId }, 'POST');
   return true;
@@ -221,5 +226,5 @@ async function archivarCanal(ws, canalId) {
 module.exports = {
   encPass, verificar, canales, miembros, noLeidos, historial, hilo,
   enviar, directo, crearCanal, archivarCanal, normalizarNombre, _errorClaro,
-  reaccionar, quitarReaccion, anclar, desanclar, anclados, subirArchivo,
+  reaccionar, quitarReaccion, anclar, desanclar, anclados, subirArchivo, renombrarCanal,
 };

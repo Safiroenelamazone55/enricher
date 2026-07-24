@@ -1718,7 +1718,27 @@ app.post('/api/mgmt/projects', requireAuth, async (req, res) => {
          WHERE id=$1 AND user_id=$2 AND COALESCE(tipo,'cliente')='contacto'`,
         [client_id, req.workspaceOwnerId]);
     } catch (e) { console.warn('[mgmt/projects] promote contacto→cliente:', e.message); }
-    res.status(201).json(rows[0]);
+
+    // Canal de Slack para el proyecto nuevo, en el workspace marcado por defecto
+    // (Novacentrax). Best-effort: si Slack falla, el proyecto se crea igual y el
+    // canal se puede ligar despues a mano.
+    let slack_channel = null;
+    try {
+      const { rows: [ws] } = await pool.query(
+        `SELECT * FROM slack_workspaces WHERE user_id=$1 AND es_default_proyectos=true LIMIT 1`,
+        [req.workspaceOwnerId]);
+      if (ws) {
+        const { rows: [cli] } = await pool.query(`SELECT nombre, empresa FROM clients WHERE id=$1`, [client_id]);
+        const base = [cli ? (cli.nombre || cli.empresa) : '', nombre].filter(Boolean).join(' ');
+        const chName = slackSvc.normalizarNombre(base, 'pj');
+        const ch = await slackSvc.crearCanal(ws, chName);
+        await pool.query(`UPDATE projects SET slack_channel_id=$1, slack_ws_id=$2 WHERE id=$3`,
+          [ch.id, ws.id, rows[0].id]);
+        slack_channel = ch.name;
+      }
+    } catch (e) { console.warn('[mgmt/projects] no se pudo crear el canal de Slack:', e.message); }
+
+    res.status(201).json({ ...rows[0], slack_channel });
   } catch (err) {
     console.error('[mgmt/projects] POST error:', err.message);
     res.status(500).json({ error: 'Error al crear proyecto' });
@@ -1795,6 +1815,23 @@ app.patch('/api/mgmt/projects/:id/estado', requireAuth, async (req, res) => {
       `UPDATE projects SET estado=$1, updated_at=NOW() WHERE id=$2 AND user_id=$3 RETURNING id, nombre, estado, client_id`,
       [estado, req.params.id, wid]);
     if (!rows[0]) return res.status(404).json({ error: 'Proyecto no encontrado' });
+
+    // Cerrar el proyecto archiva su canal de Slack, si tiene uno ligado. Best-effort:
+    // un fallo de Slack no debe impedir el cambio de estado. Solo aplica a proyectos
+    // con canal enlazado (los de Novacentrax que normalizamos), asi que queda acotado
+    // a ese workspace sin logica extra.
+    if (['completado', 'cancelado'].includes(estado)) {
+      try {
+        const { rows: [pj] } = await pool.query(
+          `SELECT slack_channel_id, slack_ws_id FROM projects WHERE id=$1 AND user_id=$2`,
+          [req.params.id, wid]);
+        if (pj && pj.slack_channel_id && pj.slack_ws_id) {
+          const w = await _slackWs(wid, pj.slack_ws_id);
+          if (w) await slackSvc.archivarCanal(w, pj.slack_channel_id);
+        }
+      } catch (e) { console.warn('[projects/estado] no se pudo archivar el canal:', e.message); }
+    }
+
     let client_inactivated = false, client_nombre = '';
     if (estado === 'completado' && rows[0].client_id) {
       const act = await pool.query(
@@ -6172,6 +6209,32 @@ app.post('/api/slack/workspaces/:id/canales/:canal/archivo', requireAuth, upload
     console.error('[slack] archivo:', err.message);
     res.status(400).json({ error: err.message });
   }
+});
+
+// Renombrar un canal y (opcional) ligarlo a un proyecto. Es lo que usa la
+// normalizacion de una vez, y tambien la automatizacion al crear un proyecto.
+app.post('/api/slack/workspaces/:id/canales/:canal/renombrar', requireAuth, async (req, res) => {
+  const { nombre, projectId } = req.body || {};
+  try {
+    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
+    const ch = await slackSvc.renombrarCanal(w, req.params.canal, nombre);
+    if (projectId) {
+      await pool.query(`UPDATE projects SET slack_channel_id=$1, slack_ws_id=$2 WHERE id=$3 AND user_id=$4`,
+        [req.params.canal, w.id, projectId, req.workspaceOwnerId]);
+    }
+    res.json({ ok: true, canal: ch.name });
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
+// Archivar un canal (los proyectos viejos que ya no van).
+app.post('/api/slack/workspaces/:id/canales/:canal/archivar-canal', requireAuth, async (req, res) => {
+  try {
+    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
+    await slackSvc.archivarCanal(w, req.params.canal);
+    res.json({ ok: true });
+  } catch (err) { res.status(400).json({ error: err.message }); }
 });
 
 // No leidos del workspace: el numero que va sobre la letra en el riel.

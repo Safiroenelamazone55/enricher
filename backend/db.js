@@ -418,6 +418,11 @@ async function initDb() {
         created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         UNIQUE (user_id, team_id)
       );`);
+    // Canal de Slack ligado a un proyecto: el id del canal (y de que workspace).
+    // Con esto la automatizacion sabe que canal renombrar o archivar cuando el
+    // proyecto cambia de estado, sin adivinar por el nombre.
+    await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS slack_channel_id TEXT;`);
+    await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS slack_ws_id INTEGER;`);
     // Color del proyecto en el calendario (hex). NULL = se asigna uno estable por id.
     await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS color TEXT;`);
     // Excepciones al plan recurrente: mover UN día concreto sin tocar el resto de la semana.
@@ -435,6 +440,7 @@ async function initDb() {
         UNIQUE (task_id, fecha)
       );`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_tpo_user_fecha ON task_plan_overrides(user_id, fecha);`);
+    await pool.query(`ALTER TABLE slack_workspaces ADD COLUMN IF NOT EXISTS es_default_proyectos BOOLEAN NOT NULL DEFAULT false;`);
     // Programación en Calendario (cuándo planeo trabajar la tarea — independiente del deadline)
     await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS prog_fecha DATE;`);
     await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS prog_inicio TEXT;`);
