@@ -1460,8 +1460,30 @@ app.get('/api/domain-info', async (req, res) => {
 // ── GET /api/mgmt/clients ─────────────────────────────────────────
 app.get('/api/mgmt/clients', requireAuth, async (req, res) => {
   try {
+    // POTENCIAL vs CLIENTE. Toda oportunidad da de alta una fila en clients, asi que
+    // la cartera se llenaba de gente con la que aun no se trabaja. No hace falta una
+    // columna nueva: se deduce, y asi el ascenso a cliente es automatico el dia que
+    // la oportunidad se gana o que se le abre un proyecto.
+    //   potencial = viene de una oportunidad + ninguna ganada + sin proyectos
     const { rows } = await pool.query(
-      `SELECT * FROM clients WHERE user_id = $1 ORDER BY created_at DESC`,
+      `SELECT c.*,
+              COALESCE(o.n, 0)      AS oportunidades,
+              COALESCE(o.abiertas, 0) AS oportunidades_abiertas,
+              o.etapa               AS etapa_oportunidad,
+              COALESCE(p.n, 0)      AS proyectos,
+              (COALESCE(o.n,0) > 0 AND COALESCE(o.ganadas,0) = 0 AND COALESCE(p.n,0) = 0) AS potencial
+         FROM clients c
+         LEFT JOIN LATERAL (
+           SELECT COUNT(*)::int AS n,
+                  COUNT(*) FILTER (WHERE estado = 'ganada')::int AS ganadas,
+                  COUNT(*) FILTER (WHERE estado NOT IN ('ganada','perdida','archivada'))::int AS abiertas,
+                  (ARRAY_AGG(etapa_actual ORDER BY created_at DESC))[1] AS etapa
+             FROM opportunities WHERE client_id = c.id AND user_id = c.user_id) o ON TRUE
+         LEFT JOIN LATERAL (
+           SELECT COUNT(*)::int AS n FROM projects
+            WHERE client_id = c.id AND user_id = c.user_id) p ON TRUE
+        WHERE c.user_id = $1
+        ORDER BY c.created_at DESC`,
       [req.workspaceOwnerId]
     );
     res.json(rows);

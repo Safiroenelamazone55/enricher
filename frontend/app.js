@@ -908,6 +908,59 @@ const ClientsModule = (() => {
     }).join('');
   }
 
+  // ── Panel de detalle: media pantalla a la derecha ────────────────────────
+  // Antes solo se podia editar en un formulario; para MIRAR una ficha habia que
+  // entrar a editarla, con el riesgo de tocar algo sin querer.
+  let _panelClose = null;
+  function openPanel(id) {
+    const c = _clients.find(x => x.id === id); if (!c) return;
+    closePanel();
+    const fila = (k, v, extra = '') => v
+      ? `<div class="clp__row"><span class="clp__k">${k}</span><span class="clp__v">${v}</span>${extra}</div>` : '';
+    const wa = (c.telefono || '').replace(/\D/g, '');
+    const el = document.createElement('div');
+    el.className = 'clp';
+    el.innerHTML = `
+      <div class="clp__hd">
+        <img class="clp__av" src="https://api.dicebear.com/9.x/lorelei/svg?seed=${encodeURIComponent(c.nombre)}" alt=""/>
+        <div class="clp__id">
+          <div class="clp__nm">${esc(c.nombre)}</div>
+          <div class="clp__emp">${c.empresa ? esc(c.empresa) : '<span class="muted">Sin empresa</span>'}</div>
+        </div>
+        <button class="clp__x" onclick="ClientsModule.closePanel()" aria-label="Cerrar">✕</button>
+      </div>
+      <div class="clp__badges">
+        ${c.potencial
+          ? `<span class="client-badge client-badge--pot">Potencial</span>`
+          : _estadoBadge(c.estado)}
+        ${+c.proyectos ? `<span class="clp__chip">${c.proyectos} ${+c.proyectos === 1 ? 'proyecto' : 'proyectos'}</span>` : ''}
+        ${+c.oportunidades ? `<span class="clp__chip">${c.oportunidades} ${+c.oportunidades === 1 ? 'oportunidad' : 'oportunidades'}${+c.oportunidades_abiertas ? ` · ${c.oportunidades_abiertas} abierta${+c.oportunidades_abiertas === 1 ? '' : 's'}` : ''}</span>` : ''}
+      </div>
+      ${c.potencial ? `<div class="clp__nota">Viene de una oportunidad${c.etapa_oportunidad ? ` (${esc(c.etapa_oportunidad)})` : ''} y todavia no tiene proyecto. Pasa a cliente en cuanto se le abra el primero.</div>` : ''}
+      <div class="clp__body">
+        ${fila('Email', c.email ? esc(c.email) : '', c.email ? `<a class="clp__go" href="mailto:${esc(c.email)}">Escribir</a>` : '')}
+        ${fila('Teléfono', c.telefono ? esc(c.telefono) : '', wa ? `<a class="clp__go" href="https://wa.me/${wa}" target="_blank" rel="noopener">WhatsApp</a>` : '')}
+        ${fila('País', c.pais ? esc(c.pais) : '')}
+        ${fila('Comisión', c.comision_default != null ? c.comision_default + ' %' : '')}
+        ${fila('Alta', c.created_at ? new Date(c.created_at).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' }) : '')}
+        ${c.notas ? `<div class="clp__notas"><span class="clp__k">Notas</span><p>${esc(c.notas)}</p></div>` : ''}
+      </div>
+      <div class="clp__acts">
+        <button class="btn btn--ghost btn--sm" onclick="ClientsModule.closePanel()">Cerrar</button>
+        <button class="btn btn--primary btn--sm" onclick="ClientsModule.closePanel();ClientsModule.openDrawer(${c.id})">Editar</button>
+      </div>`;
+    document.body.appendChild(el);
+    const velo = document.createElement('div');
+    velo.className = 'clp__velo';
+    velo.onclick = closePanel;
+    document.body.appendChild(velo);
+    requestAnimationFrame(() => el.classList.add('clp--on'));
+    const esc2 = ev => { if (ev.key === 'Escape') closePanel(); };
+    document.addEventListener('keydown', esc2);
+    _panelClose = () => { el.remove(); velo.remove(); document.removeEventListener('keydown', esc2); _panelClose = null; };
+  }
+  function closePanel() { if (_panelClose) _panelClose(); }
+
   async function load() {
     const loading  = $('clients-loading');
     const empty    = $('clients-empty');
@@ -979,9 +1032,10 @@ const ClientsModule = (() => {
 
     const q = ($('clients-search')?.value || '').toLowerCase();
     let list = _clients;
-    // '__contactos' = registrados sin ser clientes (p. ej. desde Oportunidades, tipo='contacto')
-    if (_filterEstado === '__contactos') list = list.filter(c => (c.tipo || 'cliente') === 'contacto');
-    else if (_filterEstado) list = list.filter(c => c.estado === _filterEstado);
+    // Potencial no es un estado que se elija a mano: se deduce (viene de una
+    // oportunidad, ninguna ganada y sin proyectos). Asi asciende solo a cliente.
+    if (_filterEstado === '__potenciales') list = list.filter(c => c.potencial);
+    else if (_filterEstado) list = list.filter(c => c.estado === _filterEstado && !c.potencial);
     if (q) list = list.filter(c =>
       (c.nombre + ' ' + c.empresa + ' ' + c.email).toLowerCase().includes(q)
     );
@@ -1021,7 +1075,7 @@ const ClientsModule = (() => {
     tbody.innerHTML = list.map(c => {
       const waPhone = (c.telefono || '').replace(/\D/g, '');
       return `
-      <div class="cl-grid cl-row">
+      <div class="cl-grid cl-row" onclick="ClientsModule.openPanel(${c.id})" title="Ver detalle">
         <div class="client-col--name">
           <div class="client-cell-name">
             <img class="client-avatar" src="https://api.dicebear.com/9.x/lorelei/svg?seed=${encodeURIComponent(c.nombre)}" alt=""/>
@@ -1049,8 +1103,8 @@ const ClientsModule = (() => {
           ` : '<span class="muted">—</span>'}
         </div>
         <div class="client-col--country client-meta">${c.pais ? esc(c.pais) : '<span class="muted">—</span>'}</div>
-        <div class="client-col--status">${(c.tipo || 'cliente') === 'contacto'
-          ? '<span class="client-badge" style="background:#E0E7FF;color:#3730A3" title="Registrado sin proyecto (p. ej. desde Oportunidades) — pasa a cliente con su primer proyecto">Contacto</span>'
+        <div class="client-col--status">${c.potencial
+          ? `<span class="client-badge client-badge--pot" title="Viene de una oportunidad${c.etapa_oportunidad ? ' (' + esc(c.etapa_oportunidad) + ')' : ''} y aun no tiene proyecto — pasa a cliente con el primero">Potencial</span>`
           : _estadoBadge(c.estado)}</div>
         <div class="client-col--actions">
           <div class="client-actions-cell">
@@ -1420,6 +1474,7 @@ const ClientsModule = (() => {
     addMcn, removeMcn,
     openAddContact, openEditContact, closeContactForm, saveContact, deleteContact,
     copyClient: _copyClient,
+    openPanel, closePanel,
   };
 })();
 
