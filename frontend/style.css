@@ -13962,3 +13962,29 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .clp__acts { display: flex; justify-content: flex-end; gap: 8px; padding: 13px 20px; border-top: 1px solid #E7E3DD; }
 .client-badge--pot { background: #FFF1DC; color: #9A6100; }
 @media (max-width: 760px) { .clp { width: 100vw; } }
+
+/* ── Modal de tarea de oportunidad ──────────────────────────────────────────
+   Se veia desordenado: mucho aire vertical por campo, asi que no cabia y salia
+   un scroll interno que partia el formulario y escondia el pie. Se compacta y
+   se agrupan los campos por sentido. */
+.opp-modal-box { max-height: 88vh; border-radius: 14px; box-shadow: 0 24px 64px rgba(0,0,0,.18); }
+.opp-modal-hd { padding: 15px 20px 13px; }
+.opp-modal-hd h3 { font-size: 17px; font-weight: 600; letter-spacing: -.015em; }
+.opp-modal-form { padding: 16px 20px; gap: 12px 14px; }
+.opp-modal-form .fin-cfg-field { gap: 4px; }
+.opp-modal-form .fin-cfg-lbl {
+  font-size: 12px; font-weight: 500; color: #6C6862; letter-spacing: 0; text-transform: none;
+}
+.opp-modal-form .form-input {
+  font-size: 14px; padding: 8px 10px; border-radius: 9px;
+  border: 1px solid #DAD5CE; background: #FFFFFF; color: #1F1D1B;
+}
+.opp-modal-form .form-input:focus {
+  outline: none; border-color: #007AFF; box-shadow: 0 0 0 3px rgba(0,122,255,.12);
+}
+.opp-modal-form textarea.form-input { min-height: 58px; resize: vertical; }
+.opp-modal-form select.form-input { height: 36px; }
+.opp-modal-ft { padding: 13px 20px; border-top: 1px solid #E7E3DD; background: #FAF8F5; }
+/* El campo del titulo es el importante: ocupa el ancho y se lee mas grande. */
+.opp-modal-form .opp-full { grid-column: 1 / -1; }
+.opp-modal-form .opp-full #ot-titulo { font-size: 15px; padding: 9px 11px; }

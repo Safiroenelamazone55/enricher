@@ -13030,6 +13030,11 @@ const OpportunitiesModule = (() => {
     const est = _normEstado(o.estado);
     menu.innerHTML =
       item('Editar', `OpportunitiesModule.openModal(${id})`) +
+      item('Nueva tarea', `OpportunitiesModule.nuevaTareaDesdeLista(${id})`) +
+      '<div class="opp-menu-sep"></div>' +
+      (o.project_id
+        ? item('Ver proyecto', `document.querySelector('[data-tab=\'mgmt-projects\']')?.click()`)
+        : item('Abrir proyecto…', `OpportunitiesModule.abrirProyecto(${id})`)) +
       (est !== 'ganada'  ? item('Marcar ganada',  `OpportunitiesModule.setEstado(${id},'ganada')`)  : '') +
       (est !== 'perdida' ? item('Marcar perdida', `OpportunitiesModule.setEstado(${id},'perdida')`) : '') +
       (est !== 'archivada' ? item('Archivar', `OpportunitiesModule.setEstado(${id},'archivada')`)
@@ -13047,6 +13052,31 @@ const OpportunitiesModule = (() => {
     }), 0);
   }
   function closeMenu() { if (_menuClose) { _menuClose(); _menuClose = null; } document.querySelectorAll('.opp-menu').forEach(m => m.remove()); }
+
+  // El formulario de tarea vive dentro de la ficha (trabaja sobre sus tareas), asi
+  // que desde la lista se abre la oportunidad y despues el formulario.
+  async function nuevaTareaDesdeLista(id) {
+    await openDetail(id);
+    setTimeout(() => openTaskForm(), 60);
+  }
+
+  // Abrir el proyecto: es el paso que convierte la oportunidad en trabajo real y,
+  // de paso, al potencial en cliente (la regla de Clientes mira si tiene proyectos).
+  async function abrirProyecto(id) {
+    const o = _opps.find(x => x.id === id); if (!o) return;
+    const nombre = prompt('Nombre del proyecto:', o.titulo || '');
+    if (nombre === null) return;
+    try {
+      const r = await apiFetch(`${API}/mgmt/opportunities/${id}/proyecto`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nombre: nombre.trim() || o.titulo }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || 'No se pudo abrir el proyecto');
+      showBanner(`✓ Proyecto abierto — ${esc(o.cliente || '')} ya es cliente`, 'success');
+      await load();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
 
   function openStatusMenu(e, id) {
     closeMenu();
@@ -13600,6 +13630,7 @@ const OpportunitiesModule = (() => {
   return { load, render, filter, setFilter, openModal, closeModal, _onClientSel, save, advanceStage, setEstado, openMenu, closeMenu, openStatusMenu, confirmDelete,
     openDetail, closeDetail, setDetailTab, selectStage, setStageEstado, setStageFecha, setStageNotas,
     completarEtapa, moverSiguiente, setDetailEstado, openTaskForm, saveOppTask, setDetailTaskStatus, deleteOppTask,
+    abrirProyecto, nuevaTareaDesdeLista,
     savePropuesta, addLink, removeLink };
 })();
 

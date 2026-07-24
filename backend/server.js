@@ -5306,6 +5306,64 @@ app.put('/api/mgmt/opportunities/:id', requireAuth, async (req, res) => {
   }
 });
 
+// ── POST /api/mgmt/opportunities/:id/proyecto ─────────────────────
+// Abrir el proyecto es lo que convierte la oportunidad en trabajo real. Aqui es
+// donde el POTENCIAL se vuelve cliente: no hace falta marcarlo a mano porque la
+// regla de Clientes ya mira si tiene proyectos. Si el cliente no existia todavia
+// se da de alta ahora, con el nombre que se escribio en la oportunidad.
+app.post('/api/mgmt/opportunities/:id/proyecto', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows: [o] } = await client.query(
+      `SELECT * FROM opportunities WHERE id=$1 AND user_id=$2 FOR UPDATE`, [req.params.id, uid]);
+    if (!o) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Oportunidad no encontrada' }); }
+    if (o.project_id) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'Esta oportunidad ya tiene un proyecto abierto', project_id: o.project_id });
+    }
+
+    // Cliente: el que ya estuviera enlazado; si no, se busca por nombre antes de
+    // crear uno nuevo — asi no se duplica a quien ya esta en la cartera.
+    let clientId = o.client_id;
+    const nombreCli = String(o.cliente || '').trim();
+    if (!clientId && nombreCli) {
+      const { rows: [ya] } = await client.query(
+        `SELECT id FROM clients WHERE user_id=$1
+           AND (LOWER(TRIM(nombre))=LOWER($2) OR LOWER(TRIM(empresa))=LOWER($2)) LIMIT 1`, [uid, nombreCli]);
+      if (ya) clientId = ya.id;
+      else {
+        const { rows: [nuevo] } = await client.query(
+          `INSERT INTO clients (user_id, nombre, estado, notas)
+           VALUES ($1,$2,'activo',$3) RETURNING id`,
+          [uid, nombreCli, `Alta desde la oportunidad "${o.titulo}"`]);
+        clientId = nuevo.id;
+      }
+    }
+
+    const nombreProy = String(req.body?.nombre || o.titulo || 'Proyecto').trim();
+    const { rows: [proy] } = await client.query(
+      `INSERT INTO projects (user_id, client_id, nombre, descripcion, estado, responsable,
+                             valor_total, moneda, fecha_inicio)
+       VALUES ($1,$2,$3,$4,'activo',$5,$6,$7,CURRENT_DATE)
+       RETURNING id, nombre, client_id`,
+      [uid, clientId, nombreProy, o.descripcion || '', o.responsable || '',
+       o.valor_estimado != null ? o.valor_estimado : null, o.moneda || 'USD']);
+
+    await client.query(
+      `UPDATE opportunities SET project_id=$1, client_id=COALESCE(client_id,$2),
+              estado='ganada', updated_at=NOW() WHERE id=$3`,
+      [proy.id, clientId, o.id]);
+    await client.query('COMMIT');
+    res.status(201).json({ ok: true, project: proy, client_id: clientId });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[opp/proyecto] error:', err.message);
+    res.status(500).json({ error: 'No se pudo abrir el proyecto' });
+  } finally { client.release(); }
+});
+
 // ── PATCH /api/mgmt/opportunities/:id/etapa ───────────────────────
 app.patch('/api/mgmt/opportunities/:id/etapa', requireAuth, async (req, res) => {
   const { etapa_actual } = req.body;
