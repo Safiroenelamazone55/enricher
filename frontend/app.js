@@ -20944,6 +20944,7 @@ const SlackChat = (() => {
   }
 
   function _vacio() {
+    _pararSondeo();
     const c = $$('chat-channels');
     if (c) c.innerHTML = `<div class="chat-ch-empty">Todavía no hay ningún Slack conectado.</div>`;
     const m = $$('chat-messages');
@@ -20972,6 +20973,7 @@ const SlackChat = (() => {
   }
 
   async function irA(wsId) {
+    _pararSondeo();
     _wsAct = wsId; _hilo = null;
     localStorage.setItem('slk_ws', String(wsId));
     _riel();
@@ -21046,6 +21048,46 @@ const SlackChat = (() => {
     if (tp) tp.textContent = topic || '';
   }
 
+  let _tCanal = null, _tNL = null, _ultimoTs = null;
+
+  function _pararSondeo() {
+    if (_tCanal) { clearInterval(_tCanal); _tCanal = null; }
+    if (_tNL)    { clearInterval(_tNL);    _tNL = null; }
+  }
+
+  // Sondeo: Slack en plan gratuito no empuja eventos, asi que se pregunta cada pocos
+  // segundos. El canal abierto cada 8s; los no leidos cada 30s. Se detiene solo al
+  // salir del chat o cambiar de pestana del navegador, para no gastar peticiones.
+  function _arrancarSondeo() {
+    _pararSondeo();
+    _tCanal = setInterval(() => {
+      if (document.hidden || !_canal || _hilo) return;
+      if (!document.getElementById('chat-messages')) { _pararSondeo(); return; }
+      _refrescarCanal();
+    }, 8000);
+    _tNL = setInterval(() => {
+      if (document.hidden) return;
+      if (!document.getElementById('chat-messages')) { _pararSondeo(); return; }
+      _refrescarNoLeidos();
+    }, 30000);
+  }
+
+  // Recarga el canal sin parpadeo: solo repinta si hay algo nuevo, y respeta el
+  // scroll —si estas leyendo mas arriba, no te arrastra al final de golpe—.
+  async function _refrescarCanal() {
+    try {
+      const r = await apiFetch(`${API}/slack/workspaces/${_wsAct}/canales/${_canal.id}/mensajes?limit=50`);
+      const d = await r.json();
+      if (d.error || !Array.isArray(d.mensajes)) return;
+      const ultimo = d.mensajes[0]?.ts || null;      // Slack los da del mas nuevo al mas viejo
+      if (ultimo === _ultimoTs) return;               // nada cambio
+      _ultimoTs = ultimo;
+      const box = document.getElementById('chat-messages');
+      const alFinal = box ? (box.scrollHeight - box.scrollTop - box.clientHeight < 60) : true;
+      _pinta(d.mensajes, false, !alFinal);
+    } catch (_) {}
+  }
+
   async function abrir(canalId) {
     const c = _canales.find(x => x.id === canalId);
     if (!c) return;
@@ -21057,13 +21099,18 @@ const SlackChat = (() => {
     }
     _pintaCanales();
     _cab(_canal.name, _canal.topic);
+    const inp = $$('chat-input');
+    const c2 = _canales.find(x => x.id === canalId);
+    if (inp) inp.placeholder = c2 && c2.is_im ? `Mensaje a ${_canal.name}` : `Mensaje en #${_canal.name}`;
     const box = $$('chat-messages');
     if (box) box.innerHTML = `<div class="chat-ch-empty">Cargando mensajes…</div>`;
     try {
       const r = await apiFetch(`${API}/slack/workspaces/${_wsAct}/canales/${canalId}/mensajes?limit=50`);
       const d = await r.json();
       if (d.error) throw new Error(d.error);
+      _ultimoTs = (d.mensajes || [])[0]?.ts || null;
       _pinta(d.mensajes || []);
+      _arrancarSondeo();
     } catch (e) {
       if (box) box.innerHTML = `<div class="chat-ch-empty">${esc(e.message)}</div>`;
     }
@@ -21130,7 +21177,7 @@ const SlackChat = (() => {
       .replace(/\n/g, '<br>');
   }
 
-  function _pinta(msgs, enHilo = false) {
+  function _pinta(msgs, enHilo = false, conservarScroll = false) {
     const box = $$('chat-messages');
     if (!box) return;
     const orden = [...msgs].reverse();     // Slack devuelve del mas nuevo al mas viejo
@@ -21158,8 +21205,10 @@ const SlackChat = (() => {
         </div>
       </div>`;
     }
+    const prev = box.scrollTop;
     box.innerHTML = html;
-    box.scrollTop = box.scrollHeight;
+    // Si la usuaria estaba leyendo mas arriba, no la arrastramos al final.
+    box.scrollTop = conservarScroll ? prev : box.scrollHeight;
   }
 
   async function verHilo(ts) {
@@ -21192,7 +21241,7 @@ const SlackChat = (() => {
     }
   }
 
-  return { load, irA, abrir, buscar, verHilo, enviar };
+  return { load, irA, abrir, buscar, verHilo, enviar, detener: _pararSondeo };
 })();
 
 const ChatModule = (() => {
@@ -23917,6 +23966,7 @@ function initApp() {
     if (tabName === 'mgmt-blocks')    BlocksModule.load();
     if (tabName === 'mgmt-team')      TeamModule.load();
     if (tabName === 'mgmt-chat')          SlackChat.load();
+    else                                  SlackChat.detener();
     if (tabName === 'lead-manager')       LeadManagerModule.load();
     if (tabName === 'mgmt-timetracking')  TimerModule.loadReport();
   }
