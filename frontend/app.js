@@ -14,6 +14,33 @@ const esc = s => String(s ?? '')
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   .replace(/"/g, '&quot;');
 
+// ── Presentacion de nombres y titulos ──────────────────────────────────────
+// Orden visual sin tocar los datos: se corrige al PINTAR, no al guardar, asi que
+// nunca se altera lo que la usuaria escribio.
+//
+// Dos reglas distintas, porque no es lo mismo un nombre propio que un titulo:
+//  · Nombres (personas, empresas): capitaliza cada palabra, PERO solo si el nombre
+//    venia todo en minuscula. Si ya empieza bien, quien lo escribio sabia lo que
+//    hacia: "PHM Danmark ApS" y "Mi mochila y yo" quedan intactos, igual que las
+//    siglas ("MWHADS" no puede volverse "Mwhads").
+//  · Titulos (tareas, subtareas, proyectos): solo la primera letra. Es la convencion
+//    editorial y respeta lo de dentro — "LinkedIn", "B2B", "Odoo" siguen igual.
+const _PARTICULAS = new Set(['de','del','la','las','el','los','y','e','da','do','di',
+                             'van','von','der','of','and','the','en','a']);
+const nomProp = s => {
+  s = String(s ?? '').trim();
+  if (!s || /^[A-ZÁÉÍÓÚÑ0-9]/.test(s)) return s;
+  return s.split(/(\s+|-)/).map((w, i) => {
+    if (/^\s+$/.test(w) || w === '-' || /[A-ZÁÉÍÓÚÑ]/.test(w)) return w;
+    if (i > 0 && _PARTICULAS.has(w)) return w;
+    return w.charAt(0).toLocaleUpperCase('es') + w.slice(1);
+  }).join('');
+};
+const cap = s => { s = String(s ?? '').trim(); return s ? s.charAt(0).toLocaleUpperCase('es') + s.slice(1) : s; };
+// Versiones que ademas escapan, para usarlas directo en las plantillas
+const escNom = s => esc(nomProp(s));
+const escCap = s => esc(cap(s));
+
 // ── Estados de tareas de oportunidad (idénticos a las tareas normales) ──
 const OPP_TASK_STATES = [
   ['pendiente',   'Pendiente',   '#CFCAC3', false, 'pendiente'],
@@ -887,7 +914,7 @@ const ClientsModule = (() => {
       <div class="cl-grid cl-grid--empresa cl-row" data-emp="${esc(e.nombre)}">
         <div class="client-cell-name">
           <div class="cl-emp-avatar" style="background:${_avatarColor(e.nombre)}">${_initials(e.nombre)}</div>
-          <span class="client-nombre">${esc(e.nombre)}</span>
+          <span class="client-nombre">${escNom(e.nombre)}</span>
         </div>
         <div class="client-meta">${e.contactos.length}</div>
         <div class="client-meta">${e._country ? esc(e._country) : '<span class="muted">—</span>'}</div>
@@ -924,8 +951,8 @@ const ClientsModule = (() => {
       <div class="clp__hd">
         <img class="clp__av" src="https://api.dicebear.com/9.x/lorelei/svg?seed=${encodeURIComponent(c.nombre)}" alt=""/>
         <div class="clp__id">
-          <div class="clp__nm">${esc(c.nombre)}</div>
-          <div class="clp__emp">${c.empresa ? esc(c.empresa) : '<span class="muted">Sin empresa</span>'}</div>
+          <div class="clp__nm">${escNom(c.nombre)}</div>
+          <div class="clp__emp">${c.empresa ? escNom(c.empresa) : '<span class="muted">Sin empresa</span>'}</div>
         </div>
         <button class="clp__x" onclick="ClientsModule.closePanel()" aria-label="Cerrar">✕</button>
       </div>
@@ -1080,7 +1107,7 @@ const ClientsModule = (() => {
           <div class="client-cell-name">
             <img class="client-avatar" src="https://api.dicebear.com/9.x/lorelei/svg?seed=${encodeURIComponent(c.nombre)}" alt=""/>
             <div class="client-name-line">
-              <span class="client-nombre">${esc(c.nombre)}</span>${c.empresa ? `<span class="client-empresa-inline"> · ${esc(c.empresa)}</span>` : ''}
+              <span class="client-nombre">${escNom(c.nombre)}</span>${c.empresa ? `<span class="client-empresa-inline"> · ${escNom(c.empresa)}</span>` : ''}
             </div>
           </div>
         </div>
@@ -7325,7 +7352,7 @@ const TasksModule = (() => {
       <td class="ct-name-cell tl-name-cell" data-col="tarea">
         <div class="tl-name-wrap">
           ${_tlChevron(t.id, allKidsCount > 0, isOpen)}
-          <span class="ct-name">${esc(t.titulo)}</span>
+          <span class="ct-name">${escCap(t.titulo)}</span>
           ${_tlDepChip(t)}
         </div>
       </td>
@@ -7378,7 +7405,7 @@ const TasksModule = (() => {
           <span class="tl-sub-chk${done ? ' tl-sub-chk--done' : ''}"
             onclick="event.stopPropagation();TasksModule._tlToggleSubStatus(${t.id})">${chkIcon}</span>
           <span class="tl-sub-name${expanded ? ' tl-sub-name--exp' : ''}"
-            onclick="event.stopPropagation();TasksModule.toggleSubExpand(${t.id})">${esc(t.titulo)}</span>
+            onclick="event.stopPropagation();TasksModule.toggleSubExpand(${t.id})">${escCap(t.titulo)}</span>
           ${_tlDepChip(t)}
         </div>
       </td>
@@ -9726,7 +9753,7 @@ const CalendarModule = (() => {
         const endT   = _addMin(t.prog_inicio, dur);
         return `<div class="cal2-tblock${done ? ' cal2-tblock--done' : ''}" style="top:${topPx}px;height:${hPx}px;--c:${accent}"
             onclick="event.stopPropagation();${_view === 'day' ? `CalendarModule.selectItem('task',${t.id},'${ds}')` : `CalendarModule.openSchedulePopover(event,${t.id})`}" title="${esc(t.titulo)} — clic para ${_view === 'day' ? 'ver el detalle' : 'reprogramar'}">
-          <div class="cal2-tblock__t">${t.parent_task_id ? '<span class="cal2-tblock__sub">SUB</span>' : ''}${esc(t.titulo)}</div>
+          <div class="cal2-tblock__t">${t.parent_task_id ? '<span class="cal2-tblock__sub">SUB</span>' : ''}${escCap(t.titulo)}</div>
           <div class="cal2-tblock__meta">${_fmtT(t.prog_inicio)}–${_fmtT(endT)}${proj ? ` · ${proj}` : ''}${dlHint}</div>
         </div>`;
       }).join('');
@@ -9762,7 +9789,7 @@ const CalendarModule = (() => {
         return `<div class="cal2-planblock${p.moved ? ' cal2-planblock--moved' : ''}" style="top:${topPx}px;height:${hPx}px;--c:${_projColor(p.projectId)}"
             onclick="event.stopPropagation();${_view === 'day' ? `CalendarModule.selectItem('plan',${p.id},'${ds}')` : `CalendarModule.openPlanPop(event,${p.id},'${ds}')`}"
             title="Plan · ${esc(p.titulo)} — ${p.weekly}h/semana ÷ ${p.nDays} ${p.nDays === 1 ? 'día' : 'días'} = ${hrs}h/día${p.moved ? ' · movido solo este día' : ''}">
-          <div class="cal2-planblock__t">${p.isSub ? '<span class="cal2-tblock__sub">SUB</span>' : ''}${esc(p.titulo)}</div>
+          <div class="cal2-planblock__t">${p.isSub ? '<span class="cal2-tblock__sub">SUB</span>' : ''}${escCap(p.titulo)}</div>
           <div class="cal2-planblock__meta">${p.moved ? '↷ ' : '◇ '}${_fmtT(ini)}–${_fmtT(fin)} · ${hrs}h</div>
         </div>`;
       }).join('');
@@ -10872,7 +10899,7 @@ const ProjectsModule = (() => {
         oncontextmenu="event.preventDefault();event.stopPropagation();ProjectsModule.openTaskMenu(event,${t.id})">
       ${_chevronHtml(t.id, kids.length, forceOpen)}
       <span class="pjt-row__dot" style="background:${dot}"></span>
-      <span class="pjt-row__name">${esc(t.titulo)}</span>
+      <span class="pjt-row__name">${escCap(t.titulo)}</span>
       ${kids.length ? `<span class="pjt-subcount">${done}/${kids.length} subtarea${kids.length !== 1 ? 's' : ''}</span>` : ''}
       ${_whenChip(t, false)}
       <span class="pjt-row__tag" style="background:${bg};color:${clr}">${lbl}</span>
@@ -10892,7 +10919,7 @@ const ProjectsModule = (() => {
         onclick="event.stopPropagation();ProjectsModule.toggleSubrowExpand(${t.id})"
         oncontextmenu="event.preventDefault();event.stopPropagation();ProjectsModule.openTaskMenu(event,${t.id})">
       <span class="pjt-row__dot pjt-row__dot--sm" style="background:${dot}"></span>
-      <span class="pjt-row__name pjt-row__name--sub">${esc(t.titulo)}</span>
+      <span class="pjt-row__name pjt-row__name--sub">${escCap(t.titulo)}</span>
       ${_whenChip(t, true)}
       <span class="pjt-row__tag pjt-row__tag--sm" style="background:${bg};color:${clr}">${lbl}</span>
       <button type="button" class="pjt-more-btn pjt-more-btn--sm" title="Más opciones"
@@ -12190,7 +12217,7 @@ const ProjectsModule = (() => {
             <button type="button" class="pjt-chevron${isOpen ? ' pjt-chevron--open' : ''}" onclick="event.stopPropagation();ProjectsModule.toggleProjectExpand(${p.id})">${_chevronSvg}</button>
             <div class="pl-prio" style="background:${prioColors[p.prioridad]||'#FBBF24'}"></div>
             <div class="pl-proj-txt">
-              <span class="client-nombre">${esc(p.nombre)}</span>
+              <span class="client-nombre">${escNom(p.nombre)}</span>
               <span class="pl-proj-sub">${p.client_nombre ? esc(p.client_nombre) : 'Sin cliente'}</span>
             </div>
           </div>
