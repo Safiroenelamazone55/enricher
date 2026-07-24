@@ -16,7 +16,7 @@ const esc = s => String(s ?? '')
 
 // ── Estados de tareas de oportunidad (idénticos a las tareas normales) ──
 const OPP_TASK_STATES = [
-  ['pendiente',   'Pendiente',   '#C8BCAC', false, 'pendiente'],
+  ['pendiente',   'Pendiente',   '#C7C7CC', false, 'pendiente'],
   ['en_progreso', 'En progreso', '#6366F1', true,  'inprogress'],
   ['completado',  'Completado',  '#22C55E', true,  'done'],
   ['bloqueado',   'Bloqueado',   '#EF4444', true,  'blocked'],
@@ -28,7 +28,7 @@ function oppTaskNorm(v) {
 function oppTaskMeta(v) { const n = oppTaskNorm(v); return OPP_TASK_STATES.find(s => s[0] === n) || OPP_TASK_STATES[0]; }
 function oppTaskStatusSvg(v) {
   const ic = {
-    pendiente:   '<circle cx="8" cy="8" r="5.5" stroke="#C8BCAC" stroke-width="1.5" fill="none"/>',
+    pendiente:   '<circle cx="8" cy="8" r="5.5" stroke="#C7C7CC" stroke-width="1.5" fill="none"/>',
     en_progreso: '<circle cx="8" cy="8" r="6.5" fill="#6366F1"/><path d="M5.5 8a2.5 2.5 0 0 1 4.5-1.5" stroke="#fff" stroke-width="1.5" stroke-linecap="round" fill="none"/>',
     completado:  '<circle cx="8" cy="8" r="6.5" fill="#22C55E"/><path d="M5 8 L7.2 10.5 L11 6" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>',
     bloqueado:   '<circle cx="8" cy="8" r="6.5" fill="#EF4444"/><line x1="5.5" y1="8" x2="10.5" y2="8" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/>',
@@ -44,7 +44,7 @@ function openOppTaskStatusMenu(e, id, current, fnName) {
   menu.className = 'd3-status-menu';
   menu.innerHTML = OPP_TASK_STATES.map(([v, l, dot, fill]) => `
     <button class="d3-status-opt" onclick="${fnName}(${id},'${v}')">
-      <span class="d3-status-opt__dot" style="background:${fill ? dot : 'transparent'};border:1.5px solid ${dot}"></span>${l}${cur === v ? '<span style="margin-left:auto;color:#A8A29E">✓</span>' : ''}
+      <span class="d3-status-opt__dot" style="background:${fill ? dot : 'transparent'};border:1.5px solid ${dot}"></span>${l}${cur === v ? '<span style="margin-left:auto;color:#AEAEB2">✓</span>' : ''}
     </button>`).join('');
   menu.style.cssText = `position:fixed;z-index:10000;top:${rect.bottom + 6}px;left:${Math.min(rect.left - 4, window.innerWidth - 180)}px`;
   document.body.appendChild(menu);
@@ -68,7 +68,7 @@ function setBtn(btn, loading) {
 }
 
 function scoreColor(s) {
-  return s >= 75 ? '#16a34a' : s >= 55 ? '#d97706' : s >= 35 ? '#dc2626' : '#9ca3af';
+  return s >= 75 ? '#16a34a' : s >= 55 ? '#d97706' : s >= 35 ? '#dc2626' : '#AEAEB2';
 }
 
 function renderScoreBar(score) {
@@ -780,7 +780,7 @@ const ClientsModule = (() => {
   function _estadoBadge(estado) {
     const map = {
       activo:    { bg: '#A7F3D0', color: '#065F46', label: 'Activo' },
-      inactivo:  { bg: '#E7E5E0', color: '#57534E', label: 'Inactivo' },
+      inactivo:  { bg: '#E5E5EA', color: '#6E6E73', label: 'Inactivo' },
       potencial: { bg: '#C4B5FD', color: '#4C1D95', label: 'Potencial' },
       pausado:   { bg: '#FDE68A', color: '#78350F', label: 'Pausado' },
     };
@@ -1454,7 +1454,7 @@ const FinanceModule = (() => {
   let _gxRangeTo   = null;
   const GX_CATEGORIAS = ['Herramientas / Software','IA / Automatización','Dominios / Hosting','Comisiones bancarias','Suscripciones','Servicios externos','Equipo / Freelancers','Marketing','Operación','Otro'];
   const GX_PROVEEDORES = ['Claude','ChatGPT','Google Workspace','Apify','LinkedIn','Make','Zapier','Dominio','Hosting','Otro'];
-  const GX_ESTADOS = [['pendiente','Pendiente','#F59E0B'],['pagado','Pagado','#22C55E'],['reembolsable','Reembolsable','#6366F1'],['reembolsado','Reembolsado','#0EA5E9'],['cancelado','Cancelado','#9CA3AF']];
+  const GX_ESTADOS = [['pendiente','Pendiente','#F59E0B'],['pagado','Pagado','#22C55E'],['reembolsable','Reembolsable','#6366F1'],['reembolsado','Reembolsado','#0EA5E9'],['cancelado','Cancelado','#AEAEB2']];
   const GX_PAGADO_DESDE = [['caja','Caja'],['cobro','Cobro del periodo'],['socio_a','Socio A'],['socio_b','Socio B'],['personal','Cuenta personal'],['otro','Otro']];
   const GX_ORIGEN = [['cobro','Cobro del periodo'],['aporte_socio','Aporte de socio'],['ajuste','Ajuste manual'],['otro','Otro']];
 
@@ -1481,7 +1481,7 @@ const FinanceModule = (() => {
   let _cnComCtx   = null;   // contexto del popover de comisión inline { tid, bruto, cur }
   // estado financiero: [valor, etiqueta, color]
   const FIN_EF_STATES = [
-    ['sin_revisar',   'Sin revisar',  '#A8A29E'],
+    ['sin_revisar',   'Sin revisar',  '#AEAEB2'],
     ['por_conciliar', 'Por conciliar', '#F59E0B'],
     ['conciliado',    'Conciliado',   '#0EA5E9'],
     ['facturable',     'Facturable',     '#6366F1'],
@@ -3266,7 +3266,7 @@ const FinanceModule = (() => {
     }
   }
 
-  function _efColor(v) { const s = FIN_EF_STATES.find(x => x[0] === v); return s ? s[2] : '#A8A29E'; }
+  function _efColor(v) { const s = FIN_EF_STATES.find(x => x[0] === v); return s ? s[2] : '#AEAEB2'; }
 
   function _cnTaskPaid(t) { return t.cobrado || (t.estado_financiero || 'sin_revisar') === 'cobrado'; }
   function _cnTaskPrio(t) { return (t.estado === 'completado' && !_cnTaskPaid(t)) ? 0 : (_cnTaskPaid(t) ? 2 : 1); }
@@ -3731,7 +3731,7 @@ const FinanceModule = (() => {
             <label class="fin-cfg-field"><span class="fin-cfg-lbl">Tipo de cambio referencial</span>
               <input class="form-input" type="number" id="co-fx" min="0" step="0.0001" oninput="FinanceModule.cnCobroRecalc('fx')"></label>
             <label class="fin-cfg-field"><span class="fin-cfg-lbl">USD equivalente referencial</span>
-              <input class="form-input" type="text" id="co-usd" disabled style="background:#FAFAF8;color:var(--muted)"></label>
+              <input class="form-input" type="text" id="co-usd" disabled style="background:#F9F9FB;color:var(--muted)"></label>
           </div>
           <label class="fin-cfg-field"><span class="fin-cfg-lbl">Fecha de cobro</span>
             <input class="form-input" type="date" id="co-fecha" value="${today}"></label>
@@ -4672,23 +4672,23 @@ const DashboardModule = (() => {
   const _AVATARS = {
     combat: [
       { id:'ghost',    src:'/ghosts.png',                                                                   label:'Ghost',    bg:'',        pos:'center bottom', type:'character' },
-      { id:'warrior',  src:'https://api.dicebear.com/9.x/pixel-art/svg?seed=warrior',                       label:'Warrior',  bg:'#1a1a2e', pos:'center center'},
+      { id:'warrior',  src:'https://api.dicebear.com/9.x/pixel-art/svg?seed=warrior',                       label:'Warrior',  bg:'#1D1D1F', pos:'center center'},
       { id:'mage',     src:'https://api.dicebear.com/9.x/pixel-art/svg?seed=archmage',                      label:'Mage',     bg:'#2d1b69', pos:'center center'},
-      { id:'assassin', src:'https://api.dicebear.com/9.x/pixel-art/svg?seed=assassin',                      label:'Assassin', bg:'#1c0a00', pos:'center center'},
+      { id:'assassin', src:'https://api.dicebear.com/9.x/pixel-art/svg?seed=assassin',                      label:'Assassin', bg:'#1D1D1F', pos:'center center'},
       { id:'paladin',  src:'https://api.dicebear.com/9.x/pixel-art/svg?seed=paladin',                       label:'Paladin',  bg:'#0d2137', pos:'center center'},
-      { id:'archer',   src:'https://api.dicebear.com/9.x/pixel-art/svg?seed=ranger',                        label:'Archer',   bg:'#0f2318', pos:'center center'},
-      { id:'necro',    src:'https://api.dicebear.com/9.x/pixel-art/svg?seed=necromancer',                   label:'Necro',    bg:'#100010', pos:'center center'},
-      { id:'knight',   src:'https://api.dicebear.com/9.x/pixel-art/svg?seed=darknight',                     label:'Knight',   bg:'#1a0a0a', pos:'center center'},
+      { id:'archer',   src:'https://api.dicebear.com/9.x/pixel-art/svg?seed=ranger',                        label:'Archer',   bg:'#1D1D1F', pos:'center center'},
+      { id:'necro',    src:'https://api.dicebear.com/9.x/pixel-art/svg?seed=necromancer',                   label:'Necro',    bg:'#000000', pos:'center center'},
+      { id:'knight',   src:'https://api.dicebear.com/9.x/pixel-art/svg?seed=darknight',                     label:'Knight',   bg:'#1D1D1F', pos:'center center'},
     ],
     robo: [
       { id:'bot-alpha', src:'https://api.dicebear.com/9.x/bottts/svg?seed=alpha',   label:'Alpha',  bg:'#0d1b2a' },
       { id:'bot-omega', src:'https://api.dicebear.com/9.x/bottts/svg?seed=omega',   label:'Omega',  bg:'#1a0d2e' },
       { id:'bot-cyber', src:'https://api.dicebear.com/9.x/bottts/svg?seed=cyber',   label:'Cyber',  bg:'#002b1a' },
-      { id:'bot-nova',  src:'https://api.dicebear.com/9.x/bottts/svg?seed=nova',    label:'Nova',   bg:'#1a1a00' },
-      { id:'bot-titan', src:'https://api.dicebear.com/9.x/bottts/svg?seed=titan',   label:'Titan',  bg:'#1a0000' },
-      { id:'bot-rex',   src:'https://api.dicebear.com/9.x/bottts/svg?seed=rex',     label:'Rex',    bg:'#001a1a' },
-      { id:'bot-zero',  src:'https://api.dicebear.com/9.x/bottts/svg?seed=zero',    label:'Zero',   bg:'#0a0a1a' },
-      { id:'bot-glitch',src:'https://api.dicebear.com/9.x/bottts/svg?seed=glitch',  label:'Glitch', bg:'#0f000f' },
+      { id:'bot-nova',  src:'https://api.dicebear.com/9.x/bottts/svg?seed=nova',    label:'Nova',   bg:'#1D1D1F' },
+      { id:'bot-titan', src:'https://api.dicebear.com/9.x/bottts/svg?seed=titan',   label:'Titan',  bg:'#000000' },
+      { id:'bot-rex',   src:'https://api.dicebear.com/9.x/bottts/svg?seed=rex',     label:'Rex',    bg:'#1D1D1F' },
+      { id:'bot-zero',  src:'https://api.dicebear.com/9.x/bottts/svg?seed=zero',    label:'Zero',   bg:'#000000' },
+      { id:'bot-glitch',src:'https://api.dicebear.com/9.x/bottts/svg?seed=glitch',  label:'Glitch', bg:'#000000' },
     ],
   };
 
@@ -4788,7 +4788,7 @@ const DashboardModule = (() => {
   function _avGridHtml(tab, selected) {
     return (_AVATARS[tab] || []).map(av => `
       <div class="av-option${av.id === selected ? ' av-option--on' : ''}"
-           style="background:${av.bg || '#1a1a1a'}"
+           style="background:${av.bg || '#1D1D1F'}"
            onclick="DashboardModule.selectAvatar('${av.id}')"
            title="${av.label}">
         <img src="${av.src}" alt="${av.label}" style="object-position:${av.pos||'center center'}">
@@ -5434,7 +5434,7 @@ const DashboardModule = (() => {
     units.forEach(t => { const e = t.estado || 'pendiente'; cnt[e] = (cnt[e] || 0) + 1; });
     const SEG = [
       { k: 'en_progreso', label: 'En progreso', color: '#6366F1' },
-      { k: 'pendiente',   label: 'Pendiente',   color: '#C0B9AE' },
+      { k: 'pendiente',   label: 'Pendiente',   color: '#C7C7CC' },
       { k: 'bloqueado',   label: 'Bloqueado',   color: '#EF4444' },
       { k: 'completado',  label: 'Completado',  color: '#22C55E' },
     ].filter(s => (cnt[s.k] || 0) > 0);
@@ -5550,7 +5550,7 @@ const DashboardModule = (() => {
   }
 
   const _STATUS_CFG = {
-    pendiente:   { dot: 'pendiente',   label: 'Pendiente',   icon: `<circle cx="8" cy="8" r="5.5" stroke="#C8BCAC" stroke-width="1.5" fill="none"/>` },
+    pendiente:   { dot: 'pendiente',   label: 'Pendiente',   icon: `<circle cx="8" cy="8" r="5.5" stroke="#C7C7CC" stroke-width="1.5" fill="none"/>` },
     en_progreso: { dot: 'inprogress',  label: 'En progreso', icon: `<circle cx="8" cy="8" r="6.5" fill="#6366F1"/><path d="M5 8 L7.5 10.5 L11 6" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity=".4"/><path d="M5.5 8a2.5 2.5 0 0 1 4.5-1.5" stroke="#fff" stroke-width="1.5" stroke-linecap="round" fill="none"/>` },
     completado:  { dot: 'done',        label: 'Completado',  icon: `<circle cx="8" cy="8" r="6.5" fill="#22C55E"/><path d="M5 8 L7.2 10.5 L11 6" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>` },
     bloqueado:   { dot: 'blocked',     label: 'Bloqueado',   icon: `<circle cx="8" cy="8" r="6.5" fill="#EF4444"/><line x1="5.5" y1="8" x2="10.5" y2="8" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/>` },
@@ -5595,7 +5595,7 @@ const DashboardModule = (() => {
     const menu = document.createElement('div');
     menu.className = 'd3-status-menu';
     const opts = [
-      { value: 'pendiente',   label: 'Pendiente',   dot: '#C8BCAC', fill: false },
+      { value: 'pendiente',   label: 'Pendiente',   dot: '#C7C7CC', fill: false },
       { value: 'en_progreso', label: 'En progreso', dot: '#6366F1', fill: true },
       { value: 'completado',  label: 'Completado',  dot: '#22C55E', fill: true },
       { value: 'bloqueado',   label: 'Bloqueado',   dot: '#EF4444', fill: true },
@@ -6158,9 +6158,9 @@ const AnalyticsModule = (() => {
     Chart.defaults.animation.duration = 750;
     Chart.defaults.animation.easing = 'easeOutCubic';
     Object.assign(Chart.defaults.plugins.tooltip, {
-      backgroundColor: '#1C1917',
-      titleColor: '#A8A29E',
-      bodyColor: '#FAFAF9',
+      backgroundColor: '#1D1D1F',
+      titleColor: '#AEAEB2',
+      bodyColor: '#F9F9FB',
       padding: 11,
       cornerRadius: 9,
       displayColors: false,
@@ -6357,7 +6357,7 @@ const AnalyticsModule = (() => {
     const rPct = _pct(revenue.total, revenue.prev_total);
     const tPct = _pct(tasks.total_completed, tasks.prev_completed);
 
-    const revSpark  = _svgLine(_fillDays(revenue.series || [], 'total'), '#00804C');
+    const revSpark  = _svgLine(_fillDays(revenue.series || [], 'total'), '#007AFF');
     const taskSpark = _svgBars(_fillDays(tasks.completed_series || [], 'count'), '#1D9E75');
 
     const pip = pipeline || { total: 0, count: 0, pending: 0 };
@@ -6499,7 +6499,7 @@ const AnalyticsModule = (() => {
       <div class="rc-val">${totalStr}${pctBadge}</div>
       ${_revTabs()}
       ${hasChart
-        ? `<div class="rc-chart"><svg class="rc-svg" viewBox="0 0 100 34" preserveAspectRatio="none">${_svgLine(vals, '#00804C')}</svg></div>`
+        ? `<div class="rc-chart"><svg class="rc-svg" viewBox="0 0 100 34" preserveAspectRatio="none">${_svgLine(vals, '#007AFF')}</svg></div>`
         : `<div class="rc-empty">${total > 0 ? 'Ingresos de ' + periodTxt + '.' : 'Sin ingresos registrados en ' + periodTxt + '.'}</div>`}
       <div class="rc-foot">${cob > 0 ? cob + ' cobro' + (cob !== 1 ? 's' : '') + ' · ' + periodTxt : 'Cobrado · ' + periodTxt}</div>`;
     el.innerHTML = _revShell(body);
@@ -6628,12 +6628,12 @@ const AnalyticsModule = (() => {
   const _xS = {
     grid:   { display: false },
     border: { display: false },
-    ticks:  { font: { size: 11 }, color: '#A8A29E' },
+    ticks:  { font: { size: 11 }, color: '#AEAEB2' },
   };
   const _yG = {
     grid:   { color: 'rgba(120,113,108,.07)', lineWidth: 1 },
     border: { display: false, dash: [3, 4] },
-    ticks:  { font: { size: 11 }, color: '#A8A29E' },
+    ticks:  { font: { size: 11 }, color: '#AEAEB2' },
   };
 
   // Returns a Chart.js backgroundColor callback that creates a vertical gradient
@@ -6727,19 +6727,19 @@ const AnalyticsModule = (() => {
       { l:'Por cobrar',      v: pendingStr,  s: pip2.pending > 0 ? 'tareas con monto sin cobrar' : 'Todo cobrado ✓' },
       { l:'Promedio / hora', v: avgPerHStr,  s: avgPerHSub },
     ]);
-    _leg('an-legend1', [{ c:'#00804C', l:'Facturación' }]);
-    _leg('an-legend2', [{ c:'#00804C', l:'Cobrado diario' }, { c:'rgba(180,178,169,.5)', l:'Sin cobro' }], 'desglose por día');
+    _leg('an-legend1', [{ c:'#007AFF', l:'Facturación' }]);
+    _leg('an-legend2', [{ c:'#007AFF', l:'Cobrado diario' }, { c:'rgba(180,178,169,.5)', l:'Sin cobro' }], 'desglose por día');
 
     $('an-c1-wrap').style.height = '210px';
     _mkChart('an-c1', {
       type: 'line',
       data: { labels, datasets: [{
-        data: cur, borderColor: '#00804C',
+        data: cur, borderColor: '#007AFF',
         backgroundColor: _gradFn(0, 128, 76, 0.30),
         fill: true, tension: .4, borderWidth: 2.5,
         pointRadius: 4, pointHoverRadius: 6,
-        pointBackgroundColor: '#00804C', pointHoverBackgroundColor: '#fff',
-        pointHoverBorderColor: '#00804C', pointHoverBorderWidth: 2.5,
+        pointBackgroundColor: '#007AFF', pointHoverBackgroundColor: '#fff',
+        pointHoverBorderColor: '#007AFF', pointHoverBorderWidth: 2.5,
       }]},
       options: {
         responsive: true, maintainAspectRatio: false,
@@ -6795,7 +6795,7 @@ const AnalyticsModule = (() => {
       type: 'bar',
       data: { labels, datasets: [
         { data:done, backgroundColor:'#1D9E75', borderRadius:4, borderSkipped:false },
-        { data:made, backgroundColor:'rgba(180,178,169,.4)', borderColor:'#C4C2BA', borderWidth:1, borderRadius:4, borderSkipped:false },
+        { data:made, backgroundColor:'rgba(180,178,169,.4)', borderColor:'#C7C7CC', borderWidth:1, borderRadius:4, borderSkipped:false },
       ]},
       options: {
         responsive:true, maintainAspectRatio:false,
@@ -6939,7 +6939,7 @@ const TasksModule = (() => {
 
   function _estadoBadge(estado) {
     const icons = {
-      pendiente:   `<svg width="12" height="12" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5.5" stroke="#9CA3AF" stroke-width="1.5" stroke-dasharray="2.8 1.8"/></svg>`,
+      pendiente:   `<svg width="12" height="12" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5.5" stroke="#AEAEB2" stroke-width="1.5" stroke-dasharray="2.8 1.8"/></svg>`,
       en_progreso: `<svg width="12" height="12" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5.5" stroke="#2E7BD6" stroke-width="1.5"/><path d="M7 1.5 A5.5 5.5 0 0 0 7 12.5 Z" fill="#2E7BD6"/></svg>`,
       bloqueado:   `<svg width="12" height="12" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5.5" stroke="#EF4444" stroke-width="1.5"/><line x1="4.5" y1="4.5" x2="9.5" y2="9.5" stroke="#EF4444" stroke-width="1.5" stroke-linecap="round"/><line x1="9.5" y1="4.5" x2="4.5" y2="9.5" stroke="#EF4444" stroke-width="1.5" stroke-linecap="round"/></svg>`,
       completado:  `<svg width="12" height="12" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5.5" fill="#22C55E"/><polyline points="4.5,7.5 6.5,9.5 9.5,5" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
@@ -7314,7 +7314,7 @@ const TasksModule = (() => {
     const done     = t.estado === 'completado';
     const chkIcon  = done
       ? `<svg width="13" height="13" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6" fill="#22C55E"/><polyline points="4.5,7.5 6.5,9.5 9.5,5" stroke="#fff" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`
-      : `<svg width="13" height="13" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5.5" stroke="#C0BAB4" stroke-width="1.4"/></svg>`;
+      : `<svg width="13" height="13" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5.5" stroke="#C7C7CC" stroke-width="1.4"/></svg>`;
     const respArr  = t.responsables?.length ? t.responsables : (t.responsable ? [t.responsable] : []);
     const respHtml = _tlResp(respArr);
     return `<tr class="clients-table__row tl-row tl-row--sub${isLast ? ' tl-row--sub-last' : ''}${done ? ' tl-row--done' : ''}" data-task-id="${t.id}">
@@ -7548,7 +7548,7 @@ const TasksModule = (() => {
         const subExp  = _kcSubItemOpen.has(s.id);
         const icon = done
           ? `<svg width="11" height="11" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="5.5" fill="#22C55E"/><polyline points="3.5,6.5 5.5,8.5 8.5,4" stroke="#fff" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`
-          : `<svg width="11" height="11" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="5.5" stroke="#C0BAB4" stroke-width="1.3"/></svg>`;
+          : `<svg width="11" height="11" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="5.5" stroke="#C7C7CC" stroke-width="1.3"/></svg>`;
         return `<div class="kc-sub-item${done ? ' kc-sub-item--done' : ''}${subExp ? ' kc-sub-item--exp' : ''}" data-sub-id="${s.id}">
           <span class="kc-sub-chk" onclick="event.stopPropagation();TasksModule.toggleSubtaskStatus(${s.id},${t.id})">${icon}</span>
           <span class="kc-sub-txt${subExp ? ' kc-sub-txt--exp' : ''}"
@@ -7892,7 +7892,7 @@ const TasksModule = (() => {
     const cur    = t?.prioridad || 'media';
     const chk    = `<svg class="kcp-check" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
     const items  = [
-      ['baja',    'Baja',    '#A8A29E'],
+      ['baja',    'Baja',    '#AEAEB2'],
       ['media',   'Media',   '#D97706'],
       ['alta',    'Alta',    '#EF4444'],
       ['urgente', 'Urgente', '#7C3AED'],
@@ -8048,7 +8048,7 @@ const TasksModule = (() => {
     const cur    = t?.estado || 'pendiente';
     const chk    = `<svg class="kcp-check" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
     const items  = [
-      ['pendiente',   'Pendiente',   '#9CA3AF'],
+      ['pendiente',   'Pendiente',   '#AEAEB2'],
       ['en_progreso', 'En progreso', '#F97316'],
       ['bloqueado',   'Bloqueado',   '#EF4444'],
       ['completado',  'Completado',  '#22C55E'],
@@ -8225,10 +8225,10 @@ const TasksModule = (() => {
   const _MONTHS_SHORT = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
   const _DAYS_SHORT   = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
   const _DAYNAMES     = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
-  const _PRIO_BG      = { alta: '#FBBFB0', media: '#FDE68A', baja: '#E7E5E0' };
-  const _PRIO_COL     = { alta: '#9F1239', media: '#78350F', baja: '#57534E' };
-  const _EST_BG       = { pendiente:'#E7E5E0', en_curso:'#A7F3D0', bloqueado:'#FBBFB0', completado:'#BAE6FD' };
-  const _EST_COL      = { pendiente:'#57534E', en_curso:'#065F46', bloqueado:'#9F1239', completado:'#0369A1' };
+  const _PRIO_BG      = { alta: '#FBBFB0', media: '#FDE68A', baja: '#E5E5EA' };
+  const _PRIO_COL     = { alta: '#9F1239', media: '#78350F', baja: '#6E6E73' };
+  const _EST_BG       = { pendiente:'#E5E5EA', en_curso:'#A7F3D0', bloqueado:'#FBBFB0', completado:'#BAE6FD' };
+  const _EST_COL      = { pendiente:'#6E6E73', en_curso:'#065F46', bloqueado:'#9F1239', completado:'#0369A1' };
   const _EST_LBL      = { pendiente:'Pendiente', en_curso:'En curso', bloqueado:'Bloqueado', completado:'Completado' };
   const _arrowL       = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>`;
   const _arrowR       = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>`;
@@ -8276,7 +8276,7 @@ const TasksModule = (() => {
       const overflow = dayTasks.length - visible.length;
       const chips    = visible.map(t => {
         const od  = isPast && t.estado !== 'completado';
-        const bg  = od ? '#FEE2E2' : (_PRIO_BG[t.prioridad] || _PRIO_BG.media);
+        const bg  = od ? '#E5E5EA' : (_PRIO_BG[t.prioridad] || _PRIO_BG.media);
         const col = od ? '#9F1239' : (_PRIO_COL[t.prioridad] || _PRIO_COL.media);
         return `<div class="cal-chip" style="background:${bg};color:${col}${od?';border-color:#FCA5A5':''}" onclick="event.stopPropagation();TasksModule.openDrawer(${t.id})" title="${esc(t.titulo)}">${esc(t.titulo)}</div>`;
       }).join('');
@@ -8320,7 +8320,7 @@ const TasksModule = (() => {
       const isPast  = day < today;
       const chips   = _tasks.filter(t => t.deadline && t.deadline.split('T')[0] === ds).map(t => {
         const od = isPast && t.estado !== 'completado';
-        const bg = od ? '#FEE2E2' : (_PRIO_BG[t.prioridad] || _PRIO_BG.media);
+        const bg = od ? '#E5E5EA' : (_PRIO_BG[t.prioridad] || _PRIO_BG.media);
         const co = od ? '#9F1239' : (_PRIO_COL[t.prioridad] || _PRIO_COL.media);
         return `<div class="cal-chip" style="background:${bg};color:${co}${od?';border-color:#FCA5A5':''}" onclick="TasksModule.openDrawer(${t.id})" title="${esc(t.titulo)}">${esc(t.titulo)}</div>`;
       }).join('');
@@ -8355,13 +8355,13 @@ const TasksModule = (() => {
     const items = _tasks.filter(t => t.deadline && t.deadline.split('T')[0] === ds).map(t => {
       const od = isPast && t.estado !== 'completado';
       return `<div class="cal-day-item${od?' cal-day-item--overdue':''}" onclick="TasksModule.openDrawer(${t.id})">
-        <div class="cal-day-item__bar" style="background:${_EST_BG[t.estado]||'#E7E5E0'}"></div>
+        <div class="cal-day-item__bar" style="background:${_EST_BG[t.estado]||'#E5E5EA'}"></div>
         <div class="cal-day-item__body">
           <div class="cal-day-item__title">${esc(t.titulo)}</div>
           <div class="cal-day-item__meta">
             ${(t.responsables?.length ? t.responsables : t.responsable ? [t.responsable] : []).map(r=>`<span class="cal-day-meta-tag">${esc(r)}</span>`).join('')}
-            <span class="client-badge" style="background:${_EST_BG[t.estado]||'#E7E5E0'};color:${_EST_COL[t.estado]||'#57534E'}">${_EST_LBL[t.estado]||t.estado}</span>
-            ${od?`<span class="client-badge" style="background:#FEE2E2;color:#9F1239">Vencida</span>`:''}
+            <span class="client-badge" style="background:${_EST_BG[t.estado]||'#E5E5EA'};color:${_EST_COL[t.estado]||'#6E6E73'}">${_EST_LBL[t.estado]||t.estado}</span>
+            ${od?`<span class="client-badge" style="background:#E5E5EA;color:#9F1239">Vencida</span>`:''}
           </div>
         </div>
       </div>`;
@@ -8790,7 +8790,7 @@ const TasksModule = (() => {
 
   /* ── quick-edit mini modal ───────────────────── */
   const _QE_ESTADO = [
-    { val: 'pendiente',   label: 'Pendiente',   bg: '#F3F4F6', clr: '#6B7280' },
+    { val: 'pendiente',   label: 'Pendiente',   bg: '#F2F2F7', clr: '#6E6E73' },
     { val: 'en_progreso', label: 'En progreso', bg: '#FFE4CC', clr: '#92400E' },
     { val: 'bloqueado',   label: 'Bloqueado',   bg: '#FFD0D0', clr: '#991B1B' },
     { val: 'completado',  label: 'Completado',  bg: '#BBF7D0', clr: '#14532D' },
@@ -9079,7 +9079,7 @@ const CalendarModule = (() => {
     const d = new Date(ds + 'T00:00:00');
     return `${d.getDate()} ${_MONS[d.getMonth()]}`;
   }
-  const _ESTADO_COL = { pendiente: '#C8BCAC', en_progreso: '#6366F1', completado: '#22C55E', bloqueado: '#EF4444' };
+  const _ESTADO_COL = { pendiente: '#C7C7CC', en_progreso: '#6366F1', completado: '#22C55E', bloqueado: '#EF4444' };
 
   // ── Filtro por miembro (admin puede ver el calendario de otro) ──────
   function _calIsAdmin() {
@@ -9498,7 +9498,7 @@ const CalendarModule = (() => {
   }
 
   function _dpRow(t, isSub, nSubs, parentName) {
-    const accent = _ESTADO_COL[t.estado] || '#C8BCAC';
+    const accent = _ESTADO_COL[t.estado] || '#C7C7CC';
     const dl   = t.deadline ? _dlShort(String(t.deadline).split('T')[0]) : '';
     const prio = (t.prioridad === 'alta' || t.prioridad === 'urgente') ? `<span class="cal2-dprio">${t.prioridad === 'urgente' ? 'Urgente' : 'Alta'}</span>` : '';
     const resp = (t.responsables?.length ? t.responsables[0] : t.responsable) || '';
@@ -10459,7 +10459,7 @@ const ProjectsModule = (() => {
     const map = {
       alta:  { bg: '#FBBFB0', color: '#9F1239', label: '↑ Alta' },
       media: { bg: '#FDE68A', color: '#78350F', label: '→ Media' },
-      baja:  { bg: '#E7E5E0', color: '#57534E', label: '↓ Baja' },
+      baja:  { bg: '#E5E5EA', color: '#6E6E73', label: '↓ Baja' },
     };
     const m = map[prioridad] || map.media;
     return `<span class="client-badge" style="background:${m.bg};color:${m.color}">${m.label}</span>`;
@@ -10777,8 +10777,8 @@ const ProjectsModule = (() => {
     </div>`;
   }
 
-  const _TASK_ESTADO_BG  = { pendiente:'#F3F4F6', en_progreso:'#FFE4CC', bloqueado:'#FFD0D0', completado:'#BBF7D0' };
-  const _TASK_ESTADO_CLR = { pendiente:'#6B7280', en_progreso:'#92400E', bloqueado:'#991B1B', completado:'#14532D' };
+  const _TASK_ESTADO_BG  = { pendiente:'#F2F2F7', en_progreso:'#FFE4CC', bloqueado:'#FFD0D0', completado:'#BBF7D0' };
+  const _TASK_ESTADO_CLR = { pendiente:'#6E6E73', en_progreso:'#92400E', bloqueado:'#991B1B', completado:'#14532D' };
   const _TASK_ESTADO_LBL = { pendiente:'Pendiente', en_progreso:'En progreso', bloqueado:'Bloqueado', completado:'Completado' };
   const _TASK_PRIO_DOT   = { alta:'#EF4444', media:'#F59E0B', baja:'#10B981' };
 
@@ -10806,9 +10806,9 @@ const ProjectsModule = (() => {
   }
 
   function _taskRowHtml(t, kids) {
-    const dot  = _TASK_PRIO_DOT[t.prioridad] || '#9CA3AF';
-    const bg   = _TASK_ESTADO_BG[t.estado]  || '#F3F4F6';
-    const clr  = _TASK_ESTADO_CLR[t.estado] || '#6B7280';
+    const dot  = _TASK_PRIO_DOT[t.prioridad] || '#AEAEB2';
+    const bg   = _TASK_ESTADO_BG[t.estado]  || '#F2F2F7';
+    const clr  = _TASK_ESTADO_CLR[t.estado] || '#6E6E73';
     const lbl  = _TASK_ESTADO_LBL[t.estado] || t.estado || 'Pendiente';
     const done = kids.filter(k => k.estado === 'completado').length;
     const forceOpen = _inlineSubtaskFor === t.id;
@@ -10829,9 +10829,9 @@ const ProjectsModule = (() => {
   }
 
   function _subtaskRowHtml(t) {
-    const dot = _TASK_PRIO_DOT[t.prioridad] || '#9CA3AF';
-    const bg  = _TASK_ESTADO_BG[t.estado]  || '#F3F4F6';
-    const clr = _TASK_ESTADO_CLR[t.estado] || '#6B7280';
+    const dot = _TASK_PRIO_DOT[t.prioridad] || '#AEAEB2';
+    const bg  = _TASK_ESTADO_BG[t.estado]  || '#F2F2F7';
+    const clr = _TASK_ESTADO_CLR[t.estado] || '#6E6E73';
     const lbl = _TASK_ESTADO_LBL[t.estado] || t.estado || 'Pendiente';
     return `<div class="pjt-subrow" data-subtask-id="${t.id}"
         onclick="event.stopPropagation();ProjectsModule.toggleSubrowExpand(${t.id})"
@@ -11296,7 +11296,7 @@ const ProjectsModule = (() => {
     if (!mains.length) { showBanner(esSub ? 'No hay otra tarea a la que moverla en este proyecto.' : 'No hay otra tarea principal en este proyecto.', 'error'); return; }
     const menu = document.createElement('div');
     menu.className = 'd3-status-menu';
-    menu.innerHTML = `<div style="padding:7px 12px 4px;font-size:.68rem;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:#98A2AE">${esSub ? 'Mover a…' : 'Convertir en subtarea de…'}</div>`
+    menu.innerHTML = `<div style="padding:7px 12px 4px;font-size:.68rem;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:#AEAEB2">${esSub ? 'Mover a…' : 'Convertir en subtarea de…'}</div>`
       + mains.map(m => `<button class="d3-status-opt" onclick="ProjectsModule.convertToSub(${taskId},${m.id})">${esc(m.titulo)}</button>`).join('');
     const x = Math.max(8, Math.min((e && e.clientX) || 200, window.innerWidth - 280));
     menu.style.cssText = `position:fixed;z-index:9999;visibility:hidden;top:0;left:${x}px;max-height:300px;overflow:auto;min-width:220px`;
@@ -12071,10 +12071,10 @@ const ProjectsModule = (() => {
                 onclick="event.stopPropagation();ProjectsModule.openQuickEditPopover(event,${k.id})"
                 oncontextmenu="event.preventDefault();event.stopPropagation();ProjectsModule.openTaskMenu(event,${k.id})">
               <span class="pl-sub-name-cell">
-                <span class="pjt-row__dot pjt-row__dot--sm" style="background:${_TASK_PRIO_DOT[k.prioridad] || '#9CA3AF'}"></span>
+                <span class="pjt-row__dot pjt-row__dot--sm" style="background:${_TASK_PRIO_DOT[k.prioridad] || '#AEAEB2'}"></span>
                 <span class="pjlist-sub-name">${esc(k.titulo)}</span>
               </span>
-              <span class="pjt-row__tag" style="background:${_TASK_ESTADO_BG[k.estado]||'#F3F4F6'};color:${_TASK_ESTADO_CLR[k.estado]||'#6B7280'}">${_TASK_ESTADO_LBL[k.estado]||k.estado}</span>
+              <span class="pjt-row__tag" style="background:${_TASK_ESTADO_BG[k.estado]||'#F2F2F7'};color:${_TASK_ESTADO_CLR[k.estado]||'#6E6E73'}">${_TASK_ESTADO_LBL[k.estado]||k.estado}</span>
               <button type="button" class="pjt-more-btn pjt-more-btn--sm" title="Más opciones"
                 onclick="event.stopPropagation();ProjectsModule.openTaskMenu(event,${k.id})">⋯</button>
             </div>`).join('')}${isCreating ? _inlineSubtaskRowHtml(t.id, pid) : ''}</div>`
@@ -12085,11 +12085,11 @@ const ProjectsModule = (() => {
           oncontextmenu="event.preventDefault();event.stopPropagation();ProjectsModule.openTaskMenu(event,${t.id})">
         <div class="pl-task-name-cell">
           ${_chevronHtml(t.id, kids.length, isCreating)}
-          <span class="pjt-row__dot" style="background:${_TASK_PRIO_DOT[t.prioridad] || '#9CA3AF'}"></span>
+          <span class="pjt-row__dot" style="background:${_TASK_PRIO_DOT[t.prioridad] || '#AEAEB2'}"></span>
           <span class="pjlist-task-name">${esc(t.titulo)}</span>
         </div>
         <span class="pjt-subcount">${kids.length ? `${done}/${kids.length} subtareas` : '—'}</span>
-        <span class="pjt-row__tag" style="background:${_TASK_ESTADO_BG[t.estado]||'#F3F4F6'};color:${_TASK_ESTADO_CLR[t.estado]||'#6B7280'}">${_TASK_ESTADO_LBL[t.estado]||t.estado}</span>
+        <span class="pjt-row__tag" style="background:${_TASK_ESTADO_BG[t.estado]||'#F2F2F7'};color:${_TASK_ESTADO_CLR[t.estado]||'#6E6E73'}">${_TASK_ESTADO_LBL[t.estado]||t.estado}</span>
         <button type="button" class="pjt-add-sub" title="Agregar subtarea"
           onclick="event.stopPropagation();ProjectsModule.startInlineSubtask(${t.id})">+ Subtarea</button>
         <button type="button" class="pjt-more-btn" title="Más opciones"
@@ -12651,7 +12651,7 @@ const OpportunitiesModule = (() => {
     ['activa',    'Activa',    '#0EA5E9'],
     ['ganada',    'Ganada',    '#22C55E'],
     ['perdida',   'Perdida',   '#EF4444'],
-    ['archivada', 'Archivada', '#9CA3AF'],
+    ['archivada', 'Archivada', '#AEAEB2'],
   ];
   const OPP_CANALES = ['Upwork', 'Freelancer', 'Fiverr', 'LinkedIn', 'Email directo', 'Referido', 'Web', 'Otro'];
   const OPP_PRIOS   = [['alta', 'Alta'], ['media', 'Media'], ['baja', 'Baja']];
@@ -13539,7 +13539,7 @@ const BlocksModule = (() => {
       media: { label: 'Media', bg: '#FDE68A', color: '#78350F' },
       baja:  { label: 'Baja',  bg: '#A7F3D0', color: '#065F46' },
     };
-    const m = map[p] || { label: p, bg: '#F5F5F4', color: '#57534E' };
+    const m = map[p] || { label: p, bg: '#F2F2F7', color: '#6E6E73' };
     return `<span class="client-badge" style="background:${m.bg};color:${m.color}">${m.label}</span>`;
   }
 
@@ -13620,9 +13620,9 @@ const TeamModule = (() => {
 
   const ROLE_LABELS = { admin: 'Admin', manager: 'Manager', miembro: 'Miembro', freelance: 'Freelance' };
   const ROLE_COLORS = {
-    admin:     'background:#EDE9FE;color:#5B21B6',
+    admin:     'background:#E5E5EA;color:#5B21B6',
     manager:   'background:#DBEAFE;color:#1E40AF',
-    miembro:   'background:#F5F5F4;color:#57534E',
+    miembro:   'background:#F2F2F7;color:#6E6E73',
     freelance: 'background:#FEF3C7;color:#92400E',
   };
 
@@ -13692,7 +13692,7 @@ const TeamModule = (() => {
         </td>
         <td>${m.email ? esc(m.email) : '<span style="color:var(--muted)">—</span>'}</td>
         <td><span class="client-badge" style="${rolStyle}">${ROLE_LABELS[m.rol] || m.rol}</span></td>
-        <td><span class="client-badge" style="${m.estado==='activo'?'background:#A7F3D0;color:#065F46':'background:#F5F5F4;color:#57534E'}">${m.estado==='activo'?'Activo':'Inactivo'}</span></td>
+        <td><span class="client-badge" style="${m.estado==='activo'?'background:#A7F3D0;color:#065F46':'background:#F2F2F7;color:#6E6E73'}">${m.estado==='activo'?'Activo':'Inactivo'}</span></td>
         <td><span class="workload-badge ${wClass}">${n} tarea${n!==1?'s':''}</span></td>
         <td><span class="blk-motivo">${m.notas ? esc(m.notas) : '<span style="color:var(--muted)">—</span>'}</span></td>
         <td class="client-actions-cell">
@@ -13830,7 +13830,7 @@ const LeadManagerModule = (() => {
   let _activeSeq = null;      // id de la secuencia en editor
   let _lastDone = null;       // { seqId, cid } último paso marcado hecho → para "Deshacer"
   const _ORDER = ['nuevo', 'contactado', 'respondio', 'propuesta', 'negociacion', 'ganado', 'perdido'];
-  const _AV_PERSON = 'data:image/svg+xml,' + encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'><circle cx='20' cy='20' r='20' fill='#EAF5EE'/><circle cx='20' cy='16' r='6' fill='#00804C'/><path fill='#00804C' d='M9 33c0-5.5 4.9-9.5 11-9.5S31 27.5 31 33a20 20 0 0 1-22 0z'/></svg>");
+  const _AV_PERSON = 'data:image/svg+xml,' + encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'><circle cx='20' cy='20' r='20' fill='#F2F2F7'/><circle cx='20' cy='16' r='6' fill='#007AFF'/><path fill='#007AFF' d='M9 33c0-5.5 4.9-9.5 11-9.5S31 27.5 31 33a20 20 0 0 1-22 0z'/></svg>");
   const _av = _ => _AV_PERSON;  // icono de persona uniforme para todos los contactos/leads
   function _money(n) {
     n = Number(n) || 0;
@@ -13851,7 +13851,7 @@ const LeadManagerModule = (() => {
     propuesta:   'background:#FDBA74;color:#9A3412',
     negociacion: 'background:#DDD6FE;color:#5B21B6',
     ganado:      'background:#A7F3D0;color:#065F46',
-    perdido:     'background:#F5F5F4;color:#57534E',
+    perdido:     'background:#F2F2F7;color:#6E6E73',
   };
 
   async function load() {
@@ -14014,14 +14014,14 @@ const LeadManagerModule = (() => {
   }
 
   // ── Helpers de cliente outbound ──
-  const _OBC = { preparacion:['Preparación','#FEF3C7','#92400E'], activo:['Activo','#D1FAE5','#065F46'], pausado:['Pausado','#FFEDD5','#9A3412'], cerrado:['Cerrado','#F1EFEC','#57534E'] };
+  const _OBC = { preparacion:['Preparación','#FEF3C7','#92400E'], activo:['Activo','#D1FAE5','#065F46'], pausado:['Pausado','#FFEDD5','#9A3412'], cerrado:['Cerrado','#F2F2F7','#6E6E73'] };
   function _obcBadge(e) { const s = _OBC[e] || _OBC.preparacion; return `<span class="lm-obc-badge" style="background:${s[1]};color:${s[2]}">${s[0]}</span>`; }
   function _clientName(id) { const c = _clients.find(x => x.id === id); return c ? c.nombre : null; }
   function _clientLeads(id) { return _data.filter(l => l.outbound_client_id === id); }
   function _sumv(arr) { return arr.reduce((a, l) => a + (Number(l.valor_estimado) || 0), 0); }
 
   // ── Helpers de campaña (Fase 2) ──
-  const _CMP = { draft: ['Draft', '#F1EFEC', '#57534E'], activa: ['Activa', '#D1FAE5', '#065F46'], pausada: ['Pausada', '#FFEDD5', '#9A3412'], cerrada: ['Cerrada', '#E8EDF5', '#3B5573'] };
+  const _CMP = { draft: ['Draft', '#F2F2F7', '#6E6E73'], activa: ['Activa', '#D1FAE5', '#065F46'], pausada: ['Pausada', '#FFEDD5', '#9A3412'], cerrada: ['Cerrada', '#F2F2F7', '#3B5573'] };
   const _CMP_ORDER = { activa: 0, pausada: 1, draft: 2, cerrada: 3 };
   function _cmpBadge(e) { const s = _CMP[e] || _CMP.draft; return `<span class="lm-obc-badge" style="background:${s[1]};color:${s[2]}">${s[0]}</span>`; }
   function _campaignName(id) { const c = _campaigns.find(x => x.id === id); return c ? c.nombre : null; }
@@ -14119,7 +14119,7 @@ const LeadManagerModule = (() => {
   function cmSetQ(v) { _cmQ = v; _cmPaint(); }
 
   // ── Helpers de secuencia (Fase 3) ──
-  const _SEQ = { draft: ['Draft', '#F1EFEC', '#57534E'], activa: ['Activa', '#D1FAE5', '#065F46'], pausada: ['Pausada', '#FFEDD5', '#9A3412'], archivada: ['Archivada', '#E8EDF5', '#3B5573'] };
+  const _SEQ = { draft: ['Draft', '#F2F2F7', '#6E6E73'], activa: ['Activa', '#D1FAE5', '#065F46'], pausada: ['Pausada', '#FFEDD5', '#9A3412'], archivada: ['Archivada', '#F2F2F7', '#3B5573'] };
   const _TOUCH = {
     email:    ['Email',    '#E07B12', '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 5L2 7"/>'],
     linkedin: ['LinkedIn', '#0A66C2', '<path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-4 0v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/>'],
@@ -14159,7 +14159,7 @@ const LeadManagerModule = (() => {
       <div class="lm-sec-head">
         <div><h2 class="lm-sec-title">Secuencias</h2><p class="lm-sec-sub">Pasos de outbound (Email, LinkedIn, llamada…) — planificación y registro manual</p></div>
         <div style="display:flex;gap:8px;align-items:center">
-          <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.pendingAcceptOpen()" title="Marca en lote quién aceptó tu conexión de LinkedIn → saltan a la Ruta A (mensaje)">🔗 Pendientes de aceptación${paN ? ` <b style="color:var(--brand,#00804C)">(${paN})</b>` : ''}</button>
+          <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.pendingAcceptOpen()" title="Marca en lote quién aceptó tu conexión de LinkedIn → saltan a la Ruta A (mensaje)">🔗 Pendientes de aceptación${paN ? ` <b style="color:var(--brand,#007AFF)">(${paN})</b>` : ''}</button>
           ${_clients.length ? `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openSequenceDrawer()">＋ Nueva secuencia</button>` : ''}
         </div>
       </div>
@@ -14326,7 +14326,7 @@ const LeadManagerModule = (() => {
     const wins = _windowsForTz(seqTz);
     const her = wins.map(w => `<b style="color:#0f2b3d">${_prospToHer(seqTz, _hh(w[0]))}–${_prospToHer(seqTz, _hh(w[1]))}</b>`).join('  ·  ');
     const loc = wins.map(w => `${_hh(w[0])}–${_hh(w[1])}`).join(' y ');
-    return `${NI('target', 12)} Mejor enviar (tu hora): ${her} <span style="color:#8C97A3;display:inline-flex;vertical-align:middle" title="Dos buenas franjas del día. Equivale a ${loc} hora local del prospecto (${esc(_tzShort(seqTz))}).">${NI('info', 12)}</span>`;
+    return `${NI('target', 12)} Mejor enviar (tu hora): ${her} <span style="color:#AEAEB2;display:inline-flex;vertical-align:middle" title="Dos buenas franjas del día. Equivale a ${loc} hora local del prospecto (${esc(_tzShort(seqTz))}).">${NI('info', 12)}</span>`;
   }
   // Convierte una hora local del PROSPECTO (HH:MM) a la hora local de la usuaria.
   function _prospToHer(seqTz, hhmm) {
@@ -14435,7 +14435,7 @@ const LeadManagerModule = (() => {
     return { s, steps, enrolled, segField, segLabel, bySeg, byState, byDisp, touches: steps.length, anglesMax, segCount };
   }
   // ── Piezas compartidas de informes (secuencia + campaña) ──
-  const _RPT_PILL = { activa: ['#D1FAE5', '#065F46'], activo: ['#D1FAE5', '#065F46'], pausada: ['#FFEDD5', '#9A3412'], pausado: ['#FFEDD5', '#9A3412'], draft: ['#ECEFF3', '#57534E'], cerrada: ['#E8EDF5', '#3B5573'], archivada: ['#E8EDF5', '#3B5573'], terminado: ['#D1FAE5', '#065F46'] };
+  const _RPT_PILL = { activa: ['#D1FAE5', '#065F46'], activo: ['#D1FAE5', '#065F46'], pausada: ['#FFEDD5', '#9A3412'], pausado: ['#FFEDD5', '#9A3412'], draft: ['#F2F2F7', '#6E6E73'], cerrada: ['#F2F2F7', '#3B5573'], archivada: ['#F2F2F7', '#3B5573'], terminado: ['#D1FAE5', '#065F46'] };
   function _rptPill(key, lang) { const c = _RPT_PILL[key] || _RPT_PILL.draft; const lbl = (_RPT_EST[key] && _RPT_EST[key][lang]) || key; return `<span class="pill" style="background:${c[0]};color:${c[1]}">${esc(lbl)}</span>`; }
   function _rptDays(mask, L) { return `<span class="dchips">${L.dayShort.map((d, i) => `<span class="dchip${mask[i] === '1' ? ' on' : ''}">${d}</span>`).join('')}</span>`; }
   function _rptFunnel(M, L) {
@@ -14497,14 +14497,14 @@ const LeadManagerModule = (() => {
 /* Tipografía de informe (editorial): serif de documento (Constantia) para
    títulos y cuerpo; sans limpia solo en micro-etiquetas en mayúsculas. Todas
    estas fuentes están en Windows/Office → se incrustan en el PDF. */
-body{font-family:Constantia,"Palatino Linotype",Georgia,"Times New Roman",serif;color:#1b2733;background:#eef0f2;line-height:1.5;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+body{font-family:Constantia,"Palatino Linotype",Georgia,"Times New Roman",serif;color:#1D1D1F;background:#F2F2F7;line-height:1.5;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 .kicker,.fact .k,.fact .v,.kpi span,.ctx-h,.tbl thead th,.h3,.mk span,.pill,.chip,.dchip,.dchips,.foot{font-family:"Segoe UI",Calibri,-apple-system,system-ui,sans-serif}
 .bar{position:sticky;top:0;z-index:5;background:#0f2b3d;color:#fff;padding:12px 20px;display:flex;justify-content:space-between;align-items:center;font-size:14px}
-.bar button{background:#00804C;color:#fff;border:0;border-radius:8px;padding:9px 18px;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit}
+.bar button{background:#007AFF;color:#fff;border:0;border-radius:8px;padding:9px 18px;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit}
 .doc{max-width:860px;margin:26px auto;background:#fff;box-shadow:0 10px 44px rgba(15,43,61,.16)}
 .cover{position:relative;background:linear-gradient(132deg,#0f2b3d 0%,#123a52 55%,#0d4141 100%);color:#fff;padding:42px 52px 34px;overflow:hidden}
 .cover:before{content:"";position:absolute;right:-90px;top:-90px;width:300px;height:300px;border-radius:50%;background:radial-gradient(circle,rgba(181,233,81,.18),transparent 68%)}
-.cover:after{content:"";position:absolute;left:0;top:0;right:0;height:5px;background:linear-gradient(90deg,#00804C 0%,#B5E951 100%)}
+.cover:after{content:"";position:absolute;left:0;top:0;right:0;height:5px;background:linear-gradient(90deg,#007AFF 0%,#B5E951 100%)}
 .rpt-logo{height:30px;width:auto;display:block;margin-bottom:16px;position:relative;z-index:1}
 .kicker{font-size:11.5px;letter-spacing:.22em;text-transform:uppercase;color:#b5e951;font-weight:700}
 .cover h1{font-family:Constantia,"Palatino Linotype",Georgia,"Times New Roman",serif;font-size:32px;font-weight:700;margin:8px 0 10px;line-height:1.18;position:relative}
@@ -14512,68 +14512,68 @@ body{font-family:Constantia,"Palatino Linotype",Georgia,"Times New Roman",serif;
 .facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px 24px;margin-top:22px;border-top:1px solid rgba(255,255,255,.18);padding-top:16px;position:relative}
 .fact .k{font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#8fb0be;font-weight:800}
 .fact .v{font-size:13px;font-weight:600;color:#fff;margin-top:2px}
-.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:1px;background:#e5e9ec;border-bottom:1px solid #e5e9ec}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:1px;background:#E5E5EA;border-bottom:1px solid #E5E5EA}
 .kpi{background:#fff;padding:18px 12px;text-align:center}
 .kpi b{display:block;font-family:Constantia,"Palatino Linotype",Georgia,serif;font-size:28px;color:#0f2b3d;font-weight:700}
-.kpi.hero b{color:#00804C}
-.kpi span{font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:#7b8794;font-weight:700;margin-top:3px;display:block}
+.kpi.hero b{color:#007AFF}
+.kpi span{font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:#8E8E93;font-weight:700;margin-top:3px;display:block}
 .sec{padding:20px 52px}
-.sec+.sec{border-top:1px solid #eef1f4}
+.sec+.sec{border-top:1px solid #F2F2F7}
 .sec h2{font-family:Constantia,"Palatino Linotype",Georgia,serif;font-size:16px;color:#0f2b3d;margin-bottom:12px;display:flex;align-items:center;gap:10px;break-after:avoid}
-.sec h2:before{content:"";width:20px;height:5px;border-radius:3px;background:linear-gradient(90deg,#00804C,#B5E951);flex:none}
+.sec h2:before{content:"";width:20px;height:5px;border-radius:3px;background:linear-gradient(90deg,#007AFF,#B5E951);flex:none}
 /* ── Contexto (texto pegado, compacto y estructurado) ── */
 .ctx{margin:0 0 12px}
 .ctx:last-child{margin-bottom:0}
-.ctx-h{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#00804C;font-weight:800;margin-bottom:5px;break-after:avoid}
-.ctx-h .src{color:#9aa5b1;font-weight:600;text-transform:none;letter-spacing:0}
+.ctx-h{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#007AFF;font-weight:800;margin-bottom:5px;break-after:avoid}
+.ctx-h .src{color:#AEAEB2;font-weight:600;text-transform:none;letter-spacing:0}
 .ctx--split .ctx-b{columns:2;column-gap:30px}
-.ctx--note{border-left:3px solid #00804C;background:#f0f8f4;padding:10px 14px;border-radius:0 8px 8px 0}
-.ctx--note2{border-left-color:#0f2b3d;background:#f2f6f9}
+.ctx--note{border-left:3px solid #007AFF;background:#F2F2F7;padding:10px 14px;border-radius:0 8px 8px 0}
+.ctx--note2{border-left-color:#0f2b3d;background:#F2F2F7}
 .ctx--note .ctx-h{color:#0f2b3d}
-.rt-p{font-size:12px;color:#28323c;margin:0 0 5px;break-inside:avoid;line-height:1.42}
+.rt-p{font-size:12px;color:#1D1D1F;margin:0 0 5px;break-inside:avoid;line-height:1.42}
 .rt-p:last-child{margin-bottom:0}
 .rt-h{font-size:12px;font-weight:700;color:#0f2b3d;margin:7px 0 3px;break-after:avoid;break-inside:avoid}
-.rt-ul{margin:2px 0 6px;padding-left:15px;font-size:12px;color:#28323c}
+.rt-ul{margin:2px 0 6px;padding-left:15px;font-size:12px;color:#1D1D1F}
 .rt-ul li{margin:1px 0;break-inside:avoid;line-height:1.35}
 .rt-ul--2{columns:2;column-gap:22px}
 .ctx-b>*:first-child{margin-top:0}
 table{width:100%;border-collapse:collapse;font-size:13px}
-.kvt th{text-align:left;color:#7b8794;font-weight:600;width:44%;padding:7px 0;vertical-align:top;font-size:12.5px}
-.kvt td{padding:7px 0;color:#1b2733;font-weight:500}
-.kvt tr+tr th,.kvt tr+tr td{border-top:1px solid #f0f2f5}
-.tbl thead th{background:#f5f7f9;text-align:left;padding:9px 10px;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:#7b8794;border-bottom:2px solid #e4e7eb}
-.tbl td{padding:9px 10px;border-bottom:1px solid #f0f2f5;vertical-align:top}
+.kvt th{text-align:left;color:#8E8E93;font-weight:600;width:44%;padding:7px 0;vertical-align:top;font-size:12.5px}
+.kvt td{padding:7px 0;color:#1D1D1F;font-weight:500}
+.kvt tr+tr th,.kvt tr+tr td{border-top:1px solid #F2F2F7}
+.tbl thead th{background:#F9F9FB;text-align:left;padding:9px 10px;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:#8E8E93;border-bottom:2px solid #E5E5EA}
+.tbl td{padding:9px 10px;border-bottom:1px solid #F2F2F7;vertical-align:top}
 .tbl td.c{text-align:center;white-space:nowrap}
-.chip{display:inline-block;background:#e6f4ef;color:#00804C;font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px}
+.chip{display:inline-block;background:#F2F2F7;color:#007AFF;font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px}
 .dchips{white-space:nowrap}
-.dchip{display:inline-block;min-width:22px;height:22px;line-height:22px;text-align:center;border-radius:6px;background:#eef1f4;color:#9aa5b1;font-size:10.5px;font-weight:800;margin-right:3px}
+.dchip{display:inline-block;min-width:22px;height:22px;line-height:22px;text-align:center;border-radius:6px;background:#F2F2F7;color:#AEAEB2;font-size:10.5px;font-weight:800;margin-right:3px}
 .dchip.on{background:#0f2b3d;color:#fff}
 .funnel{margin-top:4px}
-.frow{display:grid;grid-template-columns:150px 1fr 54px;gap:12px;align-items:center;margin:8px 0;font-size:12.5px;color:#3e4c59;font-weight:600}
-.fbar{height:15px;border-radius:4px;background:#edf1f4;overflow:hidden}
-.fbar i{display:block;height:100%;border-radius:4px;background:linear-gradient(90deg,#00804C,#1aa66e)}
+.frow{display:grid;grid-template-columns:150px 1fr 54px;gap:12px;align-items:center;margin:8px 0;font-size:12.5px;color:#3C3C43;font-weight:600}
+.fbar{height:15px;border-radius:4px;background:#F2F2F7;overflow:hidden}
+.fbar i{display:block;height:100%;border-radius:4px;background:linear-gradient(90deg,#007AFF,#1aa66e)}
 .frow.alt .fbar i{background:#0f2b3d}
 .fnum{font-family:Constantia,"Palatino Linotype",Georgia,serif;font-weight:700;color:#0f2b3d;text-align:right;font-size:15px}
 .segline{margin:2px 0 8px}.segline:last-child{margin-bottom:0}
-.segmsg{font-size:11.5px;color:#61707d;font-style:italic;margin-top:2px}
+.segmsg{font-size:11.5px;color:#6E6E73;font-style:italic;margin-top:2px}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:24px}
-.h3{font-size:11px;color:#7b8794;margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;font-weight:800}
-.muted{color:#9aa5b1;font-style:italic}
-.seqblk{border:1px solid #e5e9ec;border-radius:12px;margin:0 0 14px;overflow:hidden}
+.h3{font-size:11px;color:#8E8E93;margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;font-weight:800}
+.muted{color:#AEAEB2;font-style:italic}
+.seqblk{border:1px solid #E5E5EA;border-radius:12px;margin:0 0 14px;overflow:hidden}
 .seqblk:last-child{margin-bottom:0}
-.seqblk__hd{background:#f7f9fa;padding:12px 18px;display:flex;justify-content:space-between;align-items:center;gap:10px;border-bottom:1px solid #e5e9ec;break-inside:avoid;break-after:avoid}
+.seqblk__hd{background:#F9F9FB;padding:12px 18px;display:flex;justify-content:space-between;align-items:center;gap:10px;border-bottom:1px solid #E5E5EA;break-inside:avoid;break-after:avoid}
 .seqblk__nm{font-family:Constantia,"Palatino Linotype",Georgia,serif;font-size:15.5px;color:#0f2b3d;font-weight:700}
 .seqblk__bd{padding:14px 18px}
-.cfgline{font-size:12px;color:#61707d;margin-bottom:4px}
-.cfgline b{color:#1b2733}
+.cfgline{font-size:12px;color:#6E6E73;margin-bottom:4px}
+.cfgline b{color:#1D1D1F}
 .minik{display:grid;grid-template-columns:repeat(auto-fit,minmax(92px,1fr));gap:8px;margin:10px 0 4px}
-.mk{background:#fbfcfc;border:1px solid #eef1f4;border-radius:8px;text-align:center;padding:8px 6px}
+.mk{background:#F9F9FB;border:1px solid #F2F2F7;border-radius:8px;text-align:center;padding:8px 6px}
 .mk b{font-family:Constantia,"Palatino Linotype",Georgia,serif;font-size:18px;color:#0f2b3d;display:block}
-.mk.hero b{color:#00804C}
-.mk span{font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:#7b8794;font-weight:800}
-.steps-line{font-size:12px;color:#3e4c59;margin-top:8px;line-height:2}
+.mk.hero b{color:#007AFF}
+.mk span{font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:#8E8E93;font-weight:800}
+.steps-line{font-size:12px;color:#3C3C43;margin-top:8px;line-height:2}
 .steps-line .sday{display:inline-block;background:#0f2b3d;color:#fff;border-radius:6px;font-size:10.5px;font-weight:800;padding:1px 7px;margin-right:4px}
-.steps-line .sarrow{color:#c3cbd3;margin:0 7px}
+.steps-line .sarrow{color:#C7C7CC;margin:0 7px}
 .foot{padding:14px 52px;background:#0f2b3d;color:#8fa6b2;font-size:11px;display:flex;justify-content:space-between;align-items:center}
 .foot-l{display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
 .foot-logo{height:14px;width:auto;opacity:.92}
@@ -14884,7 +14884,7 @@ ${foot}
       const mc = (n, l) => `<div class="seq-mc"><div class="seq-mc__v">${n != null ? n : 0}</div><div class="seq-mc__l">${l}</div></div>`;
       const bar = (n, label, color) => `<div class="seq-fn-row"><div class="seq-fn-lbl">${label}</div><div class="seq-fn-track"><div class="seq-fn-fill" style="width:${en ? Math.max(3, Math.round((n || 0) / en * 100)) : 0}%;background:${color}"></div></div><div class="seq-fn-n">${n || 0}</div></div>`;
       return `<div class="seq-mc-row">${mc(mt.enrolados, 'Enrolados')}${mc(mt.contactados, 'Contactados')}${mc(mt.respuestas, 'Respuestas')}${mc(mt.reuniones, 'Reuniones')}</div>
-        <div class="cp-card"><div class="cp-card__t">Embudo</div>${bar(mt.enrolados, 'Enrolados', 'var(--brand, #00804C)')}${bar(mt.contactados, 'Contactados', '#1E5FA8')}${bar(mt.respuestas, 'Respuestas', '#15803D')}${bar(mt.reuniones, 'Reuniones', '#5B4BC4')}</div>
+        <div class="cp-card"><div class="cp-card__t">Embudo</div>${bar(mt.enrolados, 'Enrolados', 'var(--brand, #007AFF)')}${bar(mt.contactados, 'Contactados', '#1E5FA8')}${bar(mt.respuestas, 'Respuestas', '#15803D')}${bar(mt.reuniones, 'Reuniones', '#5B4BC4')}</div>
         <div class="seq-mc-row">${mc(pct(mt.respuestas, mt.contactados) + '%', 'Reply rate')}${mc(pct(mt.reuniones, en) + '%', 'Meeting rate')}${mc(mt.activos, 'Activos')}${mc(mt.terminados, 'Terminados')}</div>
         <div id="seq-ab-wrap">${_seqAbHtml(id)}</div>`;
     }
@@ -14898,7 +14898,7 @@ ${foot}
     const st = steps[paso - 1];
     const stTitle = st ? (st.titulo || (_TOUCH[st.canal] || _TOUCH.email)[0]) : '—';
     const pct = done ? 100 : (N ? Math.round((paso - 1) / N * 100) : 0);
-    const EST = { activo: ['Activo', '#E9F1FA', '#1E5FA8'], pausado: ['Pausado', '#FEF3E2', '#92400E'], terminado: ['Terminado', '#E7F8EF', '#15803D'], respondio: ['Respondió', '#E7F8EF', '#15803D'] };
+    const EST = { activo: ['Activo', '#F2F2F7', '#1E5FA8'], pausado: ['Pausado', '#F2F2F7', '#92400E'], terminado: ['Terminado', '#F2F2F7', '#15803D'], respondio: ['Respondió', '#F2F2F7', '#15803D'] };
     const em = EST[e.estado] || EST.activo;
     return `<tr class="clients-table__row" onclick="LeadManagerModule.openContactPage(${e.contact_id})" style="cursor:pointer">
       <td><div class="client-cell-name"><img class="client-avatar" src="${_av(full)}" style="object-fit:cover" alt=""/><div><div class="client-nombre">${esc(full)}</div>${(e.cargo || e.company_nombre) ? `<div class="client-empresa">${esc([e.cargo, e.company_nombre].filter(Boolean).join(' · '))}</div>` : ''}</div></div></td>
@@ -14927,14 +14927,14 @@ ${foot}
   //   pos  = hay señal comercial · der = la persona no sirve pero la CUENTA sí · desc = cerrado
   // [valor, etiqueta, color texto, color fondo, grupo]
   const _DISPOS = [
-    ['respondio',     'Interesado',      '#15803D', '#E7F8EF', 'pos'],
-    ['reunion',       'Reunión',         '#5B4BC4', '#EDE9FE', 'pos'],
+    ['respondio',     'Interesado',      '#15803D', '#F2F2F7', 'pos'],
+    ['reunion',       'Reunión',         '#5B4BC4', '#E5E5EA', 'pos'],
     ['mas_adelante',  'Más adelante',    '#0E7490', '#E0F2FE', 'pos'],
-    ['derivado',      'Derivó a otro',   '#7C3AED', '#F3E8FF', 'der'],
-    ['no_es_persona', 'No es la persona','#7C3AED', '#F3E8FF', 'der'],
+    ['derivado',      'Derivó a otro',   '#7C3AED', '#F2F2F7', 'der'],
+    ['no_es_persona', 'No es la persona','#7C3AED', '#F2F2F7', 'der'],
     ['no_interesado', 'No interesado',   '#B45309', '#FEF3C7', 'desc'],
     ['no_califica',   'No califica',     '#8A6D3B', '#FBF0DA', 'desc'],
-    ['no_contactar',  'No contactar',    '#C4342B', '#FDECEA', 'desc'],
+    ['no_contactar',  'No contactar',    '#C4342B', '#F2F2F7', 'desc'],
   ];
   const _DISP_GRUPOS = [['pos', 'Positivos'], ['der', 'Derivados'], ['desc', 'Descartados']];
   function _dispGrupo(d) { const x = _DISPOS.find(y => y[0] === d); return x ? x[4] : ''; }
@@ -15203,7 +15203,7 @@ ${foot}
     const stale = !t || (Date.now() - t) / 3600000 > 20; // pasó ~1 día → conviene revisar
     const revTxt = last ? `Última revisión: ${_relAgo(last)}` : 'Aún no la revisas';
     return `<div onclick="LeadManagerModule.pendingAcceptOpen(${seqId != null ? seqId : ''})" title="Marca quién aceptó tu conexión de LinkedIn → saltan a la Ruta A (mensaje). Recomendado cada 1–2 días." class="lm-accept-cta${stale ? ' lm-accept-cta--stale' : ''}">
-      <div class="lm-accept-cta__row"><span class="lm-accept-cta__ico">${NI('linkedin', 13)}</span><span class="lm-accept-cta__tx"><b>Revisar aceptaciones de LinkedIn</b> — <b style="color:#006B3F">${n}</b> por marcar</span><span class="lm-accept-cta__meta2">${revTxt}</span><span class="lm-accept-cta__go">Abrir ›</span></div>
+      <div class="lm-accept-cta__row"><span class="lm-accept-cta__ico">${NI('linkedin', 13)}</span><span class="lm-accept-cta__tx"><b>Revisar aceptaciones de LinkedIn</b> — <b style="color:#0062CC">${n}</b> por marcar</span><span class="lm-accept-cta__meta2">${revTxt}</span><span class="lm-accept-cta__go">Abrir ›</span></div>
     </div>`;
   }
   function _pendingAccept() {
@@ -15224,7 +15224,7 @@ ${foot}
     document.getElementById('lm-pa-modal')?.remove();
     const m = document.createElement('div'); m.id = 'lm-pa-modal'; m.className = 'fin-pi-backdrop';
     m.onclick = e => { if (e.target === m) m.remove(); };
-    const rowS = 'display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid #eef1f4;border-radius:8px;cursor:pointer';
+    const rowS = 'display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid #F2F2F7;border-radius:8px;cursor:pointer';
     const invOf = seqs => { const ds = (seqs || []).map(s => s.enrolled_at).filter(Boolean).sort(); return ds.length ? ds[ds.length - 1] : ''; };
     const sorted = [...list].sort((a, b) => String(invOf(b.seqs)).localeCompare(String(invOf(a.seqs)))); // invitados más recientes primero
     // Mapas para los filtros (solo secuencias/campañas presentes en la bandeja) + secuencia→campaña
@@ -15244,7 +15244,7 @@ ${foot}
       const li = c.linkedin ? `<a href="${esc(c.linkedin)}" target="_blank" rel="noopener" class="lm-link" style="font-size:.74rem;white-space:nowrap" onclick="event.stopPropagation()">LinkedIn ↗</a>` : '';
       return `<label class="pa-row" data-s="${sData}" data-seq="${seqIds}" data-camp="${campIds}" style="${rowS}"><input type="checkbox" class="pa-ck" value="${c.id}"><span style="flex:1;min-width:0;font-size:.85rem"><b>${esc(full)}</b>${c.company_nombre ? ` · <span style="color:var(--muted)">${esc(c.company_nombre)}</span>` : ''}<span style="display:block;font-size:.72rem;color:var(--muted)">${seqs.map(s => esc(s.nombre)).join(' · ')}${invTxt}</span></span>${li}</label>`;
     }).join('') : `<div class="lm-act-empty" style="padding:22px"><div class="lm-act-empty__i">✅</div><p>No hay pendientes de aceptación</p><span>Aparecerán aquí los contactos de secuencias con rama que aún no marcas como aceptados.</span></div>`;
-    const selCss = 'flex:1;min-width:0;box-sizing:border-box;padding:8px 10px;border:1px solid #e3e7eb;border-radius:8px;font-size:.85rem;background:#fff';
+    const selCss = 'flex:1;min-width:0;box-sizing:border-box;padding:8px 10px;border:1px solid #E5E5EA;border-radius:8px;font-size:.85rem;background:#fff';
     const optSort = m => [...m.entries()].sort((a, b) => String(a[1]).localeCompare(String(b[1])));
     const campSel = campMap.size ? `<select id="pa-fcamp" onchange="LeadManagerModule.pendingAcceptApplyFilters()" style="${selCss}"><option value="">Todas las campañas</option>${optSort(campMap).map(([id, nm]) => `<option value="${id}">${esc(nm)}</option>`).join('')}</select>` : '';
     const seqSel = seqMap.size ? `<select id="pa-fseq" onchange="LeadManagerModule.pendingAcceptApplyFilters()" style="${selCss}"><option value="">Todas las secuencias</option>${optSort(seqMap).map(([id, nm]) => `<option value="${id}">${esc(nm)}</option>`).join('')}</select>` : '';
@@ -15253,8 +15253,8 @@ ${foot}
       <div class="fin-pi-form" style="grid-template-columns:1fr;gap:8px">
         <span class="seq-drip-hint">Contactos de <b>todas</b> tus secuencias con rama que aún no marcas como aceptados. Abre tus <b>Conexiones</b> en LinkedIn, marca aquí quién ya aparece conectado y <b>saltarán al mensaje de LinkedIn (Ruta A)</b>.</span>
         ${list.length > 6 ? `<div style="display:flex;gap:8px">${campSel}${seqSel}</div>` : ''}
-        ${list.length > 6 ? `<input id="pa-search" type="text" placeholder="🔍 Buscar por nombre o empresa…" oninput="LeadManagerModule.pendingAcceptApplyFilters()" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #e3e7eb;border-radius:8px;font-size:.85rem">` : ''}
-        ${list.length ? `<label style="${rowS};background:#fafbfc"><input type="checkbox" id="pa-all" onchange="LeadManagerModule.pendingAcceptToggleAll(this.checked)"><span style="flex:1;font-size:.85rem"><b>Seleccionar todos</b> <span style="color:var(--muted);font-weight:400">(<span id="pa-count">${sorted.length}</span> visibles)</span></span></label>` : ''}
+        ${list.length > 6 ? `<input id="pa-search" type="text" placeholder="🔍 Buscar por nombre o empresa…" oninput="LeadManagerModule.pendingAcceptApplyFilters()" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #E5E5EA;border-radius:8px;font-size:.85rem">` : ''}
+        ${list.length ? `<label style="${rowS};background:#F9F9FB"><input type="checkbox" id="pa-all" onchange="LeadManagerModule.pendingAcceptToggleAll(this.checked)"><span style="flex:1;font-size:.85rem"><b>Seleccionar todos</b> <span style="color:var(--muted);font-weight:400">(<span id="pa-count">${sorted.length}</span> visibles)</span></span></label>` : ''}
         <div style="max-height:min(50vh,400px);overflow:auto;display:flex;flex-direction:column;gap:3px">${rows}</div>
       </div>
       <div class="fin-pi-box__ft"><span class="fin-cfg-hint" id="pa-hint"></span><div class="fin-pi-ft-btns">
@@ -15383,7 +15383,7 @@ ${foot}
   }
   // Chip del modo de envío en el título de la secuencia.
   function _seqModeChip(s) {
-    const M = { auto: ['⚡ Envío automático', 'var(--primary-soft)', 'var(--primary)'], preaprobado: ['✋ Pre-aprobado', '#FEF3E2', '#A96D0C'] };
+    const M = { auto: ['⚡ Envío automático', 'var(--primary-soft)', 'var(--primary)'], preaprobado: ['✋ Pre-aprobado', '#F2F2F7', '#A96D0C'] };
     const m = M[s?.send_mode]; if (!m) return '';
     return `<span class="client-badge" style="background:${m[1]};color:${m[2]};font-size:.62rem;vertical-align:3px">${m[0]}</span>`;
   }
@@ -15748,7 +15748,7 @@ ${foot}
     const tag = h == null ? '' : (h >= 8 && h < 18)
       ? `<span style="color:#15803D;font-weight:600">${dot('#15803D')}buen horario</span>`
       : `<span style="color:#B45309;font-weight:600">${dot('#D08A2D')}fuera de horario</span>`;
-    return `${NI('clock', 12)} Hora del prospecto: <b style="color:#0f2b3d">${_prospectClockLabel(tz)}</b> <span style="color:#8C97A3">${esc(_tzShort(tz))}</span>${tag ? ' · ' + tag : ''}`;
+    return `${NI('clock', 12)} Hora del prospecto: <b style="color:#0f2b3d">${_prospectClockLabel(tz)}</b> <span style="color:#AEAEB2">${esc(_tzShort(tz))}</span>${tag ? ' · ' + tag : ''}`;
   }
   function _ensureProspectClock() {
     if (_cpClockTimer) return;
@@ -15784,7 +15784,7 @@ ${foot}
     const subject = st.canal === 'email' ? _emailSubjectFor(seqId, st, src, draft) : '';
     _seqDoSubject = subject;
     const hasMsg = !!rendered.trim();
-    const vtag = draft ? ` <span class="cp-var-tag" style="background:#EDE9FE;color:#5B21B6">${NI('sparkles')} Mensaje IA</span>`
+    const vtag = draft ? ` <span class="cp-var-tag" style="background:#E5E5EA;color:#5B21B6">${NI('sparkles')} Mensaje IA</span>`
                : (_stepVariants(st).length > 1 ? ` <span class="cp-var-tag">Variante ${esc(variant.nombre || '?')}</span>` : '');
     const disp = esc(rendered).replace(/(\{\{[^}]+\}\})/g, '<span class="seqdo-miss">$1</span>').replace(/\n/g, '<br>');
 
@@ -15813,7 +15813,7 @@ ${foot}
         ${_runnerFltHtml(seqId)}
         <button class="cp-taskbar__exit" onclick="LeadManagerModule.seqDoExit()">‹ Tareas</button>
       </div>
-      ${(() => { const ptz = _contactTz(c) || (seq && seq.timezone) || ''; if (!ptz) return ''; const own = !!_contactTz(c); return `<div class="cp-taskbar__clock" id="cp-clock-row" data-tz="${esc(ptz)}">${_prospectClockInner(ptz)}${own ? `<span style="color:#98A2AE;display:inline-flex;align-items:center;gap:3px" title="Zona horaria derivada del estado del prospecto (no de la secuencia)">${NI('pin', 11)} ${esc(c.region || '')}</span>` : ''}</div>
+      ${(() => { const ptz = _contactTz(c) || (seq && seq.timezone) || ''; if (!ptz) return ''; const own = !!_contactTz(c); return `<div class="cp-taskbar__clock" id="cp-clock-row" data-tz="${esc(ptz)}">${_prospectClockInner(ptz)}${own ? `<span style="color:#AEAEB2;display:inline-flex;align-items:center;gap:3px" title="Zona horaria derivada del estado del prospecto (no de la secuencia)">${NI('pin', 11)} ${esc(c.region || '')}</span>` : ''}</div>
       <div class="cp-taskbar__win">${_recWindowsInner(ptz)}</div>`; })()}
       ${st.canal === 'email' && c.email ? `<div class="cp-taskbar__mailto">
         <span class="cp-taskbar__mt"><span class="cp-taskbar__subj-l">Para</span><span class="cp-taskbar__mt-v">${esc(c.email)}</span>${_copyBtn(c.email, 'Para copiado')}</span>
@@ -15965,13 +15965,13 @@ ${foot}
   function _stepRow(st) {
     const t = _TOUCH[st.canal] || _TOUCH.email;
     const cal = _stepCalDate(st);
-    const cb = st.cond === 'replied' ? '<span class="lm-vb" style="background:#E7F8EF;color:#15803D" title="Solo para contactos que respondieron/aceptaron">↳ si respondió</span>'
+    const cb = st.cond === 'replied' ? '<span class="lm-vb" style="background:#F2F2F7;color:#15803D" title="Solo para contactos que respondieron/aceptaron">↳ si respondió</span>'
              : st.cond === 'no_reply' ? '<span class="lm-vb" style="background:#FEF3C7;color:#B45309" title="Solo para contactos que NO respondieron">↳ si no respondió</span>' : '';
     return `<div class="lm-step">
       <div class="lm-step__day"><span>Día</span><b>${st.dia}</b>${cal ? `<span class="lm-step__cal" title="Fecha real según la fecha de inicio y los días de cadencia">${cal}</span>` : ''}</div>
       <div class="lm-step__rail"><span class="lm-step__ico" style="background:${t[1]}1a;color:${t[1]}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${t[2]}</svg></span></div>
       <div class="lm-step__body">
-        <div class="lm-step__top"><span class="lm-step__t">${esc(st.titulo || _accionLabel(st.canal, st.accion) || t[0])}</span><span class="lm-step__canal" style="color:${t[1]}">${t[0]}</span>${st.accion ? `<span class="lm-vb" style="background:var(--surface-secondary,#F2F4F1);color:var(--text2,#5F6B64)">${_accionLabel(st.canal, st.accion)}</span>` : ''}${cb}</div>
+        <div class="lm-step__top"><span class="lm-step__t">${esc(st.titulo || _accionLabel(st.canal, st.accion) || t[0])}</span><span class="lm-step__canal" style="color:${t[1]}">${t[0]}</span>${st.accion ? `<span class="lm-vb" style="background:var(--surface-secondary,#F2F2F7);color:var(--text2,#6E6E73)">${_accionLabel(st.canal, st.accion)}</span>` : ''}${cb}</div>
         ${st.plantilla ? `<div class="lm-step__tpl">${esc(st.plantilla)}</div>` : ''}
       </div>
       <div class="lm-step__acts">
@@ -15991,8 +15991,8 @@ ${foot}
     followup:         ['Follow-up',          '#C28A0B', '<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/>'],
     respuesta:        ['Respuesta recibida', '#0D9488', '<polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/>'],
     reunion:          ['Reunión agendada',   '#7C3AED', '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>'],
-    nota:             ['Nota interna',       '#8a837a', '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>'],
-    stage:            ['Stage actualizado',  '#57534E', '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>'],
+    nota:             ['Nota interna',       '#8E8E93', '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>'],
+    stage:            ['Stage actualizado',  '#6E6E73', '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>'],
   };
   const _ACT_OPTS = ['email_enviado', 'llamada', 'linkedin_msg', 'linkedin_connect', 'linkedin_visita', 'respuesta', 'reunion', 'followup', 'nota', 'stage'];
   function _actMeta(t) { return _ACT[t] || _ACT.nota; }
@@ -16246,11 +16246,11 @@ ${foot}
   const _SENT = {
     interesado:    ['Interesado',    '#D1FAE5', '#065F46'],
     mas_info:      ['Pide info',     '#DBEAFE', '#1D4ED8'],
-    reunion:       ['Reunión',       '#EDE9FE', '#6D28D9'],
-    no_interesado: ['No interesado', '#F1EFEC', '#57534E'],
-    no_fit:        ['No fit',        '#FEE2E2', '#B91C1C'],
+    reunion:       ['Reunión',       '#E5E5EA', '#6D28D9'],
+    no_interesado: ['No interesado', '#F2F2F7', '#6E6E73'],
+    no_fit:        ['No fit',        '#E5E5EA', '#B91C1C'],
     ooo:           ['Out of office', '#FEF3C7', '#92400E'],
-    bounced:       ['Bounced',       '#FEE2E2', '#DC2626'],
+    bounced:       ['Bounced',       '#E5E5EA', '#DC2626'],
   };
   const _SENT_ORDER = ['interesado', 'mas_info', 'reunion', 'no_interesado', 'no_fit', 'ooo', 'bounced'];
   function _replies() { return _activities.filter(a => a.tipo === 'respuesta').sort((x, y) => new Date(y.fecha) - new Date(x.fecha)); }
@@ -16626,7 +16626,7 @@ ${foot}
         ${kpi('Ganados', ganados, 'leads cerrados', 'c')}
         ${kpi('Sin cliente', sinClient, 'por asignar', 'd')}
         ${kpi('Campañas activas', _campaigns.filter(c => c.estado === 'activa').length, `${_campaigns.length} en total`, 'b')}
-        ${kpi('Tareas pendientes', _activities.filter(a => a.estado === 'pendiente').length, 'follow-ups por hacer', 'c')}
+        ${kpi('Tareas pendientes', _pendingTaskCount(), 'toques manuales, follow-ups y aprobaciones', 'c')}
       </div>
       <div id="lm-today-card">${_todayData ? _todayCardHtml(_todayData) : '<div class="cp-card lm-today"><div class="cp-card__t">Hoy — outreach automático</div><div class="cp-empty2" style="padding:12px">Cargando…</div></div>'}</div>
       <div class="lm-dash-head"><h3 class="lm-dash-h3">Clientes outbound</h3>${_clients.length ? `<button class="lm-link" onclick="LeadManagerModule.go('clients')">Ver todos →</button>` : ''}</div>
@@ -16915,7 +16915,7 @@ ${foot}
     const dailyOut = days.map(d => done.filter(a => outreach.has(a.tipo) && _dayOf(a.fecha).getTime() === d.getTime()).length);
     const dailyLabels = days.map(d => d.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }));
     const chStat = ch => ({ hoy: done.filter(a => chOf(a.tipo) === ch && _dayOf(a.fecha).getTime() === today.getTime()).length, tot: done.filter(a => chOf(a.tipo) === ch).length });
-    const CH = [['LinkedIn', 'linkedin', '#0A66C2', (_TOUCH.linkedin || [])[2]], ['Email', 'email', '#006B3F', (_TOUCH.email || [])[2]], ['Llamada', 'call', '#B45309', (_TOUCH.call || [])[2]]];
+    const CH = [['LinkedIn', 'linkedin', '#0A66C2', (_TOUCH.linkedin || [])[2]], ['Email', 'email', '#0062CC', (_TOUCH.email || [])[2]], ['Llamada', 'call', '#B45309', (_TOUCH.call || [])[2]]];
     const cliRows = (_clients || []).map(cl => {
       const cids = new Set((_contacts || []).filter(c => c.outbound_client_id === cl.id).map(c => c.id));
       const act = done.filter(x => cids.has(x.contact_id)).length;
@@ -16926,7 +16926,7 @@ ${foot}
     const cliHtml = cliRows.length ? cliRows.map(r => `<tr><td>${esc(r.nombre)}</td><td>${r.contactos}</td><td>${r.act}</td><td>${r.rep}</td><td>${r.mt}</td></tr>`).join('') : `<tr><td colspan="5" class="rep-empty-td">Aún sin actividad registrada</td></tr>`;
     const dispCounts = _DISPOS.map(d => ({ label: d[1], n: (_contacts || []).filter(c => c.disposition === d[0]).length, color: d[2] })).filter(x => x.n > 0);
     _repChartData = { dailyLabels, dailyOut, dispCounts };
-    const stages = [['Enrolados', enrolled, 'var(--brand, #00804C)'], ['Contactados', contacted, '#1E5FA8'], ['Respuestas', replied, '#15803D'], ['Reuniones', meetings, '#5B4BC4']];
+    const stages = [['Enrolados', enrolled, 'var(--brand, #007AFF)'], ['Contactados', contacted, '#1E5FA8'], ['Respuestas', replied, '#15803D'], ['Reuniones', meetings, '#5B4BC4']];
     const funnelHtml = stages.map((s, i) => {
       const base = stages[0][1] || 1;
       const conv = i === 0 ? '<span class="rep-fn__conv rep-fn__conv--base">base</span>' : `<span class="rep-fn__conv">${pct(s[1], stages[i - 1][1])}% ↳</span>`;
@@ -16934,7 +16934,7 @@ ${foot}
     }).join('');
     const chHtml = CH.map(([lbl, ch, color, icon]) => { const s = chStat(ch); return `<div class="rep-ch"><span class="rep-ch__i" style="background:${color}1a;color:${color}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${icon || ''}</svg></span><div class="rep-ch__b"><div class="rep-ch__n" data-count="${s.tot}">0</div><div class="rep-ch__l">${lbl}</div></div><span class="rep-ch__hoy">${s.hoy ? '+' + s.hoy + ' hoy' : '—'}</span></div>`; }).join('');
     return `<div class="lm-sec-head"><div><h2 class="lm-sec-title">Reportes</h2><p class="lm-sec-sub">Rendimiento outbound — de tu actividad registrada</p></div></div>
-      <div class="rep-kpis">${_repKpi('contacts', _contacts.length, 'Contactos', '#00804C')}${_repKpi('enrolled', activeEnr, 'Enrolados activos', '#1E5FA8')}${_repKpi('reply', replied, 'Respuestas', '#15803D')}${_repKpi('meeting', meetings, 'Reuniones', '#5B4BC4')}</div>
+      <div class="rep-kpis">${_repKpi('contacts', _contacts.length, 'Contactos', '#007AFF')}${_repKpi('enrolled', activeEnr, 'Enrolados activos', '#1E5FA8')}${_repKpi('reply', replied, 'Respuestas', '#15803D')}${_repKpi('meeting', meetings, 'Reuniones', '#5B4BC4')}</div>
       <div class="rep-grid2">
         <div class="cp-card"><div class="cp-card__t">Embudo de conversión</div><div class="rep-funnel">${funnelHtml}</div><div class="rep-rates"><span><b>${pct(replied, contacted)}%</b> reply rate</span><span><b>${pct(meetings, enrolled)}%</b> meeting rate</span></div></div>
         <div class="cp-card"><div class="cp-card__t">Actividad · últimos 14 días</div><div class="rep-chart"><canvas id="rep-daily"></canvas></div></div>
@@ -16948,7 +16948,7 @@ ${foot}
   function _vSettings() {
     const views = _lmViewsGet();
     return `<div class="lm-sec-head"><div><h2 class="lm-sec-title">Configuración</h2><p class="lm-sec-sub">Ajustes y datos del Lead Manager</p></div></div>
-      <div class="rep-kpis">${_repKpi('contacts', _clients.length, 'Clientes', '#00804C')}${_repKpi('enrolled', _sequences.length, 'Secuencias', '#1E5FA8')}${_repKpi('reply', _campaigns.length, 'Campañas', '#5B4BC4')}${_repKpi('building', _lmTpls.length, 'Plantillas', '#B45309')}</div>
+      <div class="rep-kpis">${_repKpi('contacts', _clients.length, 'Clientes', '#007AFF')}${_repKpi('enrolled', _sequences.length, 'Secuencias', '#1E5FA8')}${_repKpi('reply', _campaigns.length, 'Campañas', '#5B4BC4')}${_repKpi('building', _lmTpls.length, 'Plantillas', '#B45309')}</div>
       <div class="cp-card"><div class="cp-card__t">Datos</div><div class="set-actions">
         <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.exportCsv('contacts')">${_ico('down')} Exportar contactos</button>
         <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.exportCsv('companies')">${_ico('down')} Exportar empresas</button>
@@ -16968,8 +16968,8 @@ ${foot}
     const dc = document.getElementById('rep-daily');
     if (dc) {
       const ctx = dc.getContext('2d');
-      const grad = ctx.createLinearGradient(0, 0, 0, 200); grad.addColorStop(0, 'rgba(0,128,76,.22)'); grad.addColorStop(1, 'rgba(0,128,76,0)');
-      _repCharts.push(new Chart(ctx, { type: 'line', data: { labels: d.dailyLabels, datasets: [{ data: d.dailyOut, borderColor: '#00804C', backgroundColor: grad, fill: true, tension: .35, borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, pointHoverBackgroundColor: '#00804C' }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { backgroundColor: '#001F3F', padding: 9, cornerRadius: 8, displayColors: false } }, scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 6, color: '#8C97A3', font: { size: 10 } } }, y: { beginAtZero: true, grid: { color: '#EEF0EA' }, ticks: { precision: 0, maxTicksLimit: 4, color: '#8C97A3', font: { size: 10 } } } } } }));
+      const grad = ctx.createLinearGradient(0, 0, 0, 200); grad.addColorStop(0, 'rgba(0,122,255,.22)'); grad.addColorStop(1, 'rgba(0,122,255,0)');
+      _repCharts.push(new Chart(ctx, { type: 'line', data: { labels: d.dailyLabels, datasets: [{ data: d.dailyOut, borderColor: '#007AFF', backgroundColor: grad, fill: true, tension: .35, borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, pointHoverBackgroundColor: '#007AFF' }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { backgroundColor: '#001F3F', padding: 9, cornerRadius: 8, displayColors: false } }, scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 6, color: '#AEAEB2', font: { size: 10 } } }, y: { beginAtZero: true, grid: { color: '#F2F2F7' }, ticks: { precision: 0, maxTicksLimit: 4, color: '#AEAEB2', font: { size: 10 } } } } } }));
     }
     const pc = document.getElementById('rep-dispo');
     if (pc && d.dispCounts.length) {
@@ -18462,7 +18462,7 @@ ${foot}
     const nav = (dir, dis, label) => `<button class="btn btn--ghost btn--sm" style="min-width:34px" ${dis ? 'disabled style="min-width:34px;opacity:.4;cursor:default"' : ''} onclick="LeadManagerModule.${fn}(${dir})" title="${dir < 0 ? 'Página anterior' : 'Página siguiente'}">${label}</button>`;
     return `<div class="lm-pager" style="display:flex;align-items:center;gap:10px;justify-content:flex-end;flex-wrap:wrap;padding:12px 4px 4px;font-size:.83rem;color:#5b6b7b">
       <span>Mostrando <b style="color:#0f2b3d">${from}–${to}</b> de <b style="color:#0f2b3d">${total}</b></span>
-      <select onchange="LeadManagerModule.lmSetPageSize(this.value)" title="Filas por página" style="padding:5px 9px;border:1px solid #e3e7eb;border-radius:8px;background:#fff;font-size:.82rem;color:inherit;cursor:pointer">${[50, 100].map(n => `<option value="${n}"${ps === n ? ' selected' : ''}>${n} / página</option>`).join('')}</select>
+      <select onchange="LeadManagerModule.lmSetPageSize(this.value)" title="Filas por página" style="padding:5px 9px;border:1px solid #E5E5EA;border-radius:8px;background:#fff;font-size:.82rem;color:inherit;cursor:pointer">${[50, 100].map(n => `<option value="${n}"${ps === n ? ' selected' : ''}>${n} / página</option>`).join('')}</select>
       ${nav(-1, page <= 0, '‹')}
       <span>${page + 1} / ${pages}</span>
       ${nav(1, page >= pages - 1, '›')}
@@ -18945,7 +18945,7 @@ ${foot}
       case 'departamento': return clip(c.departamento);
       case 'buyer_role':   return clip(c.buyer_role);
       case 'contact_priority': return clip(c.contact_priority);
-      case 'estado': { const badge = STAGE_STYLES[c.estado] || 'background:#EEF2F6;color:#475569'; return `<span class="client-badge" style="${badge}">${esc(c.estado || 'nuevo')}</span>`; }
+      case 'estado': { const badge = STAGE_STYLES[c.estado] || 'background:#F2F2F7;color:#475569'; return `<span class="client-badge" style="${badge}">${esc(c.estado || 'nuevo')}</span>`; }
       case 'disposition': return _dispoBadge(c.disposition) || '<span class="lm-dim">—</span>';
       case 'fuente':   return clip(c.fuente);
       case 'secuencias': return _memChips(c) || '<span class="lm-dim">—</span>';
@@ -19134,7 +19134,7 @@ ${foot}
     if (!c) return `<div class="lm-sec-head"><div><button class="lm-back" onclick="LeadManagerModule.go('contacts')">‹ Contactos</button><h2 class="lm-sec-title">Contacto no encontrado</h2></div></div>`;
     const full = [c.nombre, c.apellido].filter(Boolean).join(' ') || (c.email || 'Contacto');
     const emp = c.company_nombre || c.empresa_nombre || '';
-    const eStyle = STAGE_STYLES[c.estado] || 'background:#EEF2F6;color:#475569';
+    const eStyle = STAGE_STYLES[c.estado] || 'background:#F2F2F7;color:#475569';
     const loc = [c.ciudad, c.pais].filter(Boolean).join(', ');
     const F = (f, label, val) => `<label class="cp-f"><span class="cp-f__l">${label}</span><input class="cp-f__i" data-f="${f}" value="${esc(val || '')}" placeholder="＋ Añadir" onchange="LeadManagerModule.cpSave(${id})"></label>`;
     const coOpts = `<option value="">— Sin empresa —</option>` + _companies.map(co => `<option value="${co.id}"${String(c.company_id) === String(co.id) ? ' selected' : ''}>${esc(co.nombre || co.dominio)}</option>`).join('');
@@ -19185,7 +19185,7 @@ ${foot}
             <div class="cp-f cp-f--full"><span class="cp-f__l">Disposición outbound</span><div class="cp-dispo">${_DISPOS.map(d => `<button class="cp-dispo-b${c.disposition === d[0] ? ' on' : ''}" style="${c.disposition === d[0] ? `background:${d[3]};color:${d[2]};border-color:${d[2]}` : ''}" onclick="LeadManagerModule.lmSetDisposition(${id},'${c.disposition === d[0] ? '' : d[0]}')">${d[1]}</button>`).join('')}</div></div>
             <div class="cp-f cp-f--full"><span class="cp-f__l">Canales / email</span><div class="cp-dispo">
               <button class="cp-dispo-b${c.no_linkedin ? ' on' : ''}" style="${c.no_linkedin ? 'background:#FEF3C7;color:#B45309;border-color:#B45309' : ''}" title="Perfil falso/inactivo: salta los pasos de LinkedIn y sigue por email — no lo saca de la secuencia" onclick="LeadManagerModule.lmToggleNoLinkedIn(${id})">🚫 LinkedIn no válido</button>
-              <button class="cp-dispo-b${c.email_status === 'bounced' ? ' on' : ''}" style="${c.email_status === 'bounced' ? 'background:#FDECEA;color:#C4342B;border-color:#C4342B' : ''}" title="El email rebotó: pausa sus secuencias; corrige el email (se re-verifica solo) y reanuda" onclick="LeadManagerModule.lmToggleBounced(${id})">↩ Email rebotó</button>
+              <button class="cp-dispo-b${c.email_status === 'bounced' ? ' on' : ''}" style="${c.email_status === 'bounced' ? 'background:#F2F2F7;color:#C4342B;border-color:#C4342B' : ''}" title="El email rebotó: pausa sus secuencias; corrige el email (se re-verifica solo) y reanuda" onclick="LeadManagerModule.lmToggleBounced(${id})">↩ Email rebotó</button>
               <button class="cp-dispo-b${c.email_status === 'manual' ? ' on' : ''}" style="${c.email_status === 'manual' ? 'background:#E0F2FE;color:#0369A1;border-color:#0369A1' : ''}" title="Email conseguido/confirmado a mano (Google/MS contacts, respuesta directa…): se trata como enviable sin sonda" onclick="LeadManagerModule.lmToggleManualEmail(${id})">✍ Email manual OK</button>
             </div></div>
             ${c.data_issue ? `<div class="cp-f cp-f--full"><span class="cp-f__l">Por corregir</span><div class="cp-dispo" style="align-items:center;gap:8px"><span class="client-badge" style="background:#FEF3C7;color:#B45309">⚠ ${_DATA_ISSUE_LBL[c.data_issue] || c.data_issue}</span><button class="cp-dispo-b" title="Marca el dato como corregido y reanuda sus secuencias pausadas" onclick="LeadManagerModule.lmResumeDataIssue(${id})">✓ Corregido — reanudar</button></div></div>` : ''}
@@ -19890,13 +19890,13 @@ ${foot}
 
   // Badge de verificación de email (pipeline propio — el diferenciador)
   const _VB = {
-    'valid':     ['Verificado', '#E7F8EF', '#15803D', '✓'],
+    'valid':     ['Verificado', '#F2F2F7', '#15803D', '✓'],
     'catch-all': ['Catch-all',  '#FEF3C7', '#B45309', '~'],
     'risky':     ['Riesgoso',   '#FEF3C7', '#B45309', '~'],
-    'invalid':   ['Inválido',   '#FDECEA', '#C4342B', '✕'],
-    'blocked':   ['Bloqueado',  '#F3F4F6', '#6B7280', '·'],
-    'unknown':   ['Sin señal',  '#F3F4F6', '#6B7280', '?'],
-    'bounced':   ['Rebotó',     '#FDECEA', '#C4342B', '↩'],
+    'invalid':   ['Inválido',   '#F2F2F7', '#C4342B', '✕'],
+    'blocked':   ['Bloqueado',  '#F2F2F7', '#6E6E73', '·'],
+    'unknown':   ['Sin señal',  '#F2F2F7', '#6E6E73', '?'],
+    'bounced':   ['Rebotó',     '#F2F2F7', '#C4342B', '↩'],
     'manual':    ['Manual ✓',   '#E0F2FE', '#0369A1', '✍'],
   };
   function _emailBadge(c) {
@@ -19948,8 +19948,8 @@ ${foot}
       <div class="cp-card lm-today">
         <div class="cp-card__t" style="display:flex;align-items:center;gap:8px">${NI('zap')} Hoy — outreach automático
           <span style="margin-left:auto;display:flex;gap:6px">
-            ${d.gmail?.connected ? chip('Gmail ✓ ' + esc(d.gmail.email || ''), '#E7F8EF', '#15803D') : chip('Gmail sin conectar', '#FDECEA', '#C4342B')}
-            ${on ? chip('Envío ON', '#E7F8EF', '#15803D') : chip('Envío OFF', '#F3F4F6', '#6B7280')}
+            ${d.gmail?.connected ? chip('Gmail ✓ ' + esc(d.gmail.email || ''), '#F2F2F7', '#15803D') : chip('Gmail sin conectar', '#F2F2F7', '#C4342B')}
+            ${on ? chip('Envío ON', '#F2F2F7', '#15803D') : chip('Envío OFF', '#F2F2F7', '#6E6E73')}
             <button class="cp-mini" title="Configurar" onclick="LeadManagerModule.go('settings')">${NI('gear', 13)}</button>
           </span>
         </div>
@@ -19986,9 +19986,9 @@ ${foot}
     return `
       <div class="lm-cfg-gmail">
         ${gm.connected
-          ? `<span class="lm-vb" style="background:#E7F8EF;color:#15803D">✓ Gmail conectado — ${esc(gm.email || '')}</span>
+          ? `<span class="lm-vb" style="background:#F2F2F7;color:#15803D">✓ Gmail conectado — ${esc(gm.email || '')}</span>
              <span class="lm-cfg-f__h">Los emails de secuencia salen desde esta cuenta; las respuestas se detectan solas.</span>`
-          : `<span class="lm-vb" style="background:#FDECEA;color:#C4342B">Gmail sin conectar</span>
+          : `<span class="lm-vb" style="background:#F2F2F7;color:#C4342B">Gmail sin conectar</span>
              <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.connectGmail()">Conectar Gmail</button>
              <span class="lm-cfg-f__h">Requerido para el envío automático (scope gmail.send + lectura de respuestas).</span>`}
       </div>
@@ -20043,7 +20043,7 @@ ${foot}
     if (el) el.innerHTML = _realInboxHtml();
   }
   function _msgRow(m) {
-    const ST = { sent: ['Enviado', '#E9F1FA', '#1E5FA8'], replied: ['Respondió', '#E7F8EF', '#15803D'], failed: ['Falló', '#FDECEA', '#C4342B'], queued: ['En cola', '#F3F4F6', '#6B7280'], bounced: ['Rebotó', '#FDECEA', '#C4342B'] };
+    const ST = { sent: ['Enviado', '#F2F2F7', '#1E5FA8'], replied: ['Respondió', '#F2F2F7', '#15803D'], failed: ['Falló', '#F2F2F7', '#C4342B'], queued: ['En cola', '#F2F2F7', '#6E6E73'], bounced: ['Rebotó', '#F2F2F7', '#C4342B'] };
     const s = ST[m.estado] || ST.queued;
     const when = m.sent_at ? new Date(m.sent_at).toLocaleString('es-PE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
     return `<tr class="clients-table__row" onclick="LeadManagerModule.openContactPage(${m.contact_id})" style="cursor:pointer">
@@ -20224,12 +20224,12 @@ ${foot}
       </div>
       <div class="lm-modal-bd">${body}</div></div>`;
   }
-  const _AI_ST = { draft: ['Borrador', '#EEF2F6', '#475569'], approved: ['✓ Aprobado', '#E7F8EF', '#15803D'], discarded: ['Descartado', '#FDECEA', '#C4342B'] };
+  const _AI_ST = { draft: ['Borrador', '#F2F2F7', '#475569'], approved: ['✓ Aprobado', '#F2F2F7', '#15803D'], discarded: ['Descartado', '#F2F2F7', '#C4342B'] };
   function _aiDraftCard(d) {
     const st = _AI_ST[d.status] || _AI_ST.draft;
     const tierBadge = d.tier === 'alto'
-      ? `<span class="lm-vb" style="background:#EDE9FE;color:#5B21B6" title="${esc(d.model)}">Fable · alto valor</span>`
-      : `<span class="lm-vb" style="background:#E9F1FA;color:#1E5FA8" title="${esc(d.model)}">Haiku · volumen</span>`;
+      ? `<span class="lm-vb" style="background:#E5E5EA;color:#5B21B6" title="${esc(d.model)}">Fable · alto valor</span>`
+      : `<span class="lm-vb" style="background:#F2F2F7;color:#1E5FA8" title="${esc(d.model)}">Haiku · volumen</span>`;
     if (d.error) return `<div class="lm-ai-card"><div class="lm-ai-card__hd">${tierBadge}<span class="lm-vb" style="background:${st[1]};color:${st[2]}">${st[0]}</span></div><div style="color:#C4342B;font-size:12.5px">${esc(d.error)}</div></div>`;
     return `<div class="lm-ai-card" data-did="${d.id}">
       <div class="lm-ai-card__hd">${tierBadge}<span class="lm-vb" style="background:${st[1]};color:${st[2]}">${st[0]}</span>
@@ -20294,7 +20294,7 @@ ${foot}
       </div>
       <div class="lm-ai-budget">
         <div class="lm-ai-budget__row"><span>Gasto del mes</span><b>$${spent.toFixed(2)} / $${budget.toFixed(2)}</b></div>
-        <div class="seq-prog__bar"><span style="width:${pct}%;background:${pct >= 100 ? '#C4342B' : '#00804C'}"></span></div>
+        <div class="seq-prog__bar"><span style="width:${pct}%;background:${pct >= 100 ? '#C4342B' : '#007AFF'}"></span></div>
         ${pct >= 100 ? `<div class="lm-cfg-f__h" style="color:#C4342B">Presupuesto agotado — no se generan más borradores hasta el próximo mes o subir el tope.</div>` : ''}
       </div>
       <div class="lm-cfg-grid">
@@ -20606,7 +20606,7 @@ const WorkloadModule = (() => {
     }
 
     const ESTADOS  = ['pendiente','en_curso','bloqueado','completado'];
-    const EST_BG   = { pendiente:'#E7E5E0', en_curso:'#A7F3D0', bloqueado:'#FBBFB0', completado:'#BAE6FD' };
+    const EST_BG   = { pendiente:'#E5E5EA', en_curso:'#A7F3D0', bloqueado:'#FBBFB0', completado:'#BAE6FD' };
     const EST_LBL  = { pendiente:'Pendiente', en_curso:'En curso', bloqueado:'Bloqueado', completado:'Completado' };
     const today    = new Date(); today.setHours(0,0,0,0);
 
@@ -20630,7 +20630,7 @@ const WorkloadModule = (() => {
       const preview = myTasks.filter(t => t.estado !== 'completado').slice(0,3).map(t => {
         const od = t.deadline && new Date(t.deadline) < today;
         return `<div class="wl-task-item${od?' wl-task-item--overdue':''}">
-          <span class="wl-task-dot" style="background:${EST_BG[t.estado]||'#E7E5E0'}"></span>
+          <span class="wl-task-dot" style="background:${EST_BG[t.estado]||'#E5E5EA'}"></span>
           <span class="wl-task-title">${esc(t.titulo)}</span>
           ${t.deadline?`<span class="wl-task-date">${new Date(t.deadline).toLocaleDateString('es-ES',{day:'2-digit',month:'short'})}</span>`:''}
         </div>`;
@@ -20827,7 +20827,7 @@ const ChatModule = (() => {
     if (hash) hash.textContent = prefix;
     if (lbl) {
       if (active.type === 'project' && active.clientNombre) {
-        lbl.innerHTML = `${esc(active.clientNombre)} <span style="color:#C4BAB3;font-weight:400">/ ${esc(active.name)}</span>`;
+        lbl.innerHTML = `${esc(active.clientNombre)} <span style="color:#C7C7CC;font-weight:400">/ ${esc(active.name)}</span>`;
       } else {
         lbl.textContent = active.name;
       }
@@ -21393,7 +21393,7 @@ const ChatModule = (() => {
   async function _loadPinnedMsgs() {
     const list = $('chat-pinned-list');
     if (!list) return;
-    list.innerHTML = `<div class="chat-pinned-empty" style="color:#C4BAB3">Cargando…</div>`;
+    list.innerHTML = `<div class="chat-pinned-empty" style="color:#C7C7CC">Cargando…</div>`;
     try {
       const res  = await apiFetch(`${API}/chat/pinned/${encodeURIComponent(_channel)}`);
       const msgs = await res.json();
@@ -21804,7 +21804,7 @@ const RNotifPanel = (() => {
     const p = (_lastProjects || []).find(x => x.id === id);
     const ok = await novaConfirm({
       title: '¿Completar este proyecto?',
-      message: p ? `<b>${esc(p.nombre)}</b>${p.client_nombre ? '<br>' + esc(p.client_nombre) : ''} pasará a completado.<br><span style="color:#8a837a">Si el cliente queda sin proyectos activos, pasará a inactivo automáticamente.</span>` : 'El proyecto pasará a completado.',
+      message: p ? `<b>${esc(p.nombre)}</b>${p.client_nombre ? '<br>' + esc(p.client_nombre) : ''} pasará a completado.<br><span style="color:#8E8E93">Si el cliente queda sin proyectos activos, pasará a inactivo automáticamente.</span>` : 'El proyecto pasará a completado.',
       ok: '✓ Completar proyecto',
     });
     if (!ok) return;
@@ -22020,7 +22020,7 @@ const RNotifPanel = (() => {
     if (!mains.length) { TasksModule.openDrawer(null, projectId); return; }
     const menu = document.createElement('div');
     menu.className = 'd3-status-menu rnf-subpick';
-    menu.innerHTML = `<div style="padding:7px 12px 4px;font-size:.66rem;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:#98A2AE">Subtarea dentro de…</div>`
+    menu.innerHTML = `<div style="padding:7px 12px 4px;font-size:.66rem;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:#AEAEB2">Subtarea dentro de…</div>`
       + mains.slice(0, 14).map(t => `<button class="d3-status-opt" onclick="TasksModule.openDrawer(null,${projectId},${t.id});document.querySelectorAll('.rnf-subpick').forEach(m=>m.remove())">${esc(t.titulo)}</button>`).join('');
     const r = (e && e.currentTarget && e.currentTarget.getBoundingClientRect) ? e.currentTarget.getBoundingClientRect() : { left: 220, bottom: 220 };
     menu.style.cssText = `position:fixed;z-index:10060;top:${Math.min(r.bottom + 4, window.innerHeight - 280)}px;left:${Math.max(8, r.left - 140)}px;max-height:260px;overflow:auto;min-width:220px`;
@@ -22313,9 +22313,9 @@ const TimerModule = (() => {
     // El color se pinta en el span .rtt__pulse (fondo) y en el fill de los SVG, NO en el
     // <button>: hay navegadores/extensiones que fuerzan el background de los botones e
     // ignoran incluso inline + !important (verificado en producción).
-    const paleta = !on ? ['#FDECEA', '#C4342B']          // detenido → rojo
-                 : _isIdle ? ['#FEF3E2', '#A96D0C']      // corriendo pero inactivo → ámbar
-                 : ['#00804C', '#FFFFFF'];               // corriendo → verde
+    const paleta = !on ? ['#F2F2F7', '#C4342B']          // detenido → rojo
+                 : _isIdle ? ['#F2F2F7', '#A96D0C']      // corriendo pero inactivo → ámbar
+                 : ['#007AFF', '#FFFFFF'];               // corriendo → verde
     const pulse = b.querySelector('.rtt__pulse');
     if (pulse) pulse.style.setProperty('background', paleta[0], 'important');
     b.querySelectorAll('.rtt__ico').forEach(s => s.style.setProperty('fill', paleta[1], 'important'));
@@ -22863,13 +22863,13 @@ const TimerModule = (() => {
     // Desglose del tiempo (anillos)
     const _ringPct = v => total > 0 ? Math.min(100, Math.round(v / total * 100)) : 0;
     const ring = (pct, color, val, lbl) => `<div class="tt2-ring-row">
-      <span class="tt2-ring" style="background:conic-gradient(${color} ${pct}%, #EEF0EC 0)"><i></i></span>
+      <span class="tt2-ring" style="background:conic-gradient(${color} ${pct}%, #F2F2F7 0)"><i></i></span>
       <div class="tt2-ring-tx"><b>${val}</b><span>${lbl}</span></div>
     </div>`;
     const breakdownCard = `<div class="ttd-card tt2-card">
       <div class="tt2-card__hd">${_tt2Ico('pie')}<span>Desglose del tiempo</span></div>
       <div class="tt2-rings">
-        ${ring(_ringPct(active), '#00804C', _fmtDur(active) || '0m', `Activo confirmado · ${_ringPct(active)}%`)}
+        ${ring(_ringPct(active), '#007AFF', _fmtDur(active) || '0m', `Activo confirmado · ${_ringPct(active)}%`)}
         ${ring(_ringPct(manual), '#0EA5E9', _fmtDur(manual) || '0m', 'Timer manual')}
         ${ring(_ringPct(pending), '#F59E0B', _fmtDur(pending) || '0m', 'Sin clasificar')}
       </div>
@@ -23217,7 +23217,7 @@ const TimerModule = (() => {
         const { ctx } = chart, meta = chart.getDatasetMeta(0);
         ctx.save();
         ctx.font = '600 10px Inter, system-ui, sans-serif';
-        ctx.fillStyle = money ? '#006B3F' : '#6B655E';
+        ctx.fillStyle = money ? '#0062CC' : '#6E6E73';
         ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
         meta.data.forEach((bar, i) => { const v = d.values[i]; if (v) ctx.fillText(money ? fmtMoney(v) : fmtHours(v), bar.x, bar.y - 5); });
         ctx.restore();
@@ -23225,17 +23225,17 @@ const TimerModule = (() => {
     };
     _billChart = new Chart(cv, {
       type: 'bar',
-      data: { labels: d.labels, datasets: [{ data: d.values, backgroundColor: '#00804C', hoverBackgroundColor: '#006B3F', borderRadius: 5, maxBarThickness: 42, categoryPercentage: 0.66, barPercentage: 0.9 }] },
+      data: { labels: d.labels, datasets: [{ data: d.values, backgroundColor: '#007AFF', hoverBackgroundColor: '#0062CC', borderRadius: 5, maxBarThickness: 42, categoryPercentage: 0.66, barPercentage: 0.9 }] },
       options: {
         responsive: true, maintainAspectRatio: false,
         layout: { padding: { top: showLabels ? 20 : 6, right: 4, left: 2 } },
         plugins: {
           legend: { display: false },
-          tooltip: { displayColors: false, backgroundColor: '#1C1A17', padding: 8, cornerRadius: 6, titleFont: { size: 10 }, bodyFont: { size: 11, weight: '600' }, callbacks: { label: c => money ? fmtMoney(c.parsed.y) : fmtHours(c.parsed.y) } },
+          tooltip: { displayColors: false, backgroundColor: '#1D1D1F', padding: 8, cornerRadius: 6, titleFont: { size: 10 }, bodyFont: { size: 11, weight: '600' }, callbacks: { label: c => money ? fmtMoney(c.parsed.y) : fmtHours(c.parsed.y) } },
         },
         scales: {
-          x: { grid: { display: false }, border: { color: '#E7E3DC' }, ticks: { color: '#8A8175', font: { size: 10 }, maxRotation: 0, autoSkip: true, autoSkipPadding: 12 } },
-          y: { beginAtZero: true, grid: { color: '#F0EDE7', drawTicks: false }, border: { display: false }, ticks: { color: '#A8A29E', font: { size: 10 }, padding: 8, maxTicksLimit: 5, callback: v => money ? ((d.cur === 'USD' ? '$' : '') + v) : (v + 'h') } },
+          x: { grid: { display: false }, border: { color: '#E5E5EA' }, ticks: { color: '#8E8E93', font: { size: 10 }, maxRotation: 0, autoSkip: true, autoSkipPadding: 12 } },
+          y: { beginAtZero: true, grid: { color: '#F2F2F7', drawTicks: false }, border: { display: false }, ticks: { color: '#AEAEB2', font: { size: 10 }, padding: 8, maxTicksLimit: 5, callback: v => money ? ((d.cur === 'USD' ? '$' : '') + v) : (v + 'h') } },
         },
       },
       plugins: [valueLabels],
@@ -24614,7 +24614,7 @@ function initApp() {
           // Highlight corresponding body cells (col offset: 3 frozen cols + colIdx + 1)
           const nthChild = colIdx + 4;
           body.querySelectorAll(`.vt-table tbody tr td:nth-child(${nthChild})`).forEach(td => {
-            td.style.background = (match && q) ? '#fefce8' : '';
+            td.style.background = (match && q) ? '#F9F9FB' : '';
           });
         });
         if (q) {
