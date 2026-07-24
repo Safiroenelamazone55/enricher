@@ -111,17 +111,18 @@ async function noLeidos(ws, canales) {
   if (guardado && Date.now() - guardado.at < 60_000) return guardado.datos;
 
   const propios = canales.filter(c => c.is_member || c.is_im || c.is_mpim).slice(0, 60);
-  const porCanal = {};
+  const porCanal = {};      // id -> nº sin leer
+  const actividad = {};     // id -> ts del ultimo mensaje (para ordenar por reciente)
   let total = 0;
   for (let i = 0; i < propios.length; i += 6) {
     const lote = propios.slice(i, i + 6);
     const res = await Promise.all(lote.map(c =>
       _call(token(ws), 'conversations.info', { channel: c.id })
-        .then(d => ({ id: c.id, n: d.channel?.unread_count_display || 0 }))
-        .catch(() => ({ id: c.id, n: 0 }))));   // un canal que falle no tumba el resto
-    for (const r of res) { if (r.n) { porCanal[r.id] = r.n; total += r.n; } }
+        .then(d => ({ id: c.id, n: d.channel?.unread_count_display || 0, ts: d.channel?.latest?.ts || null }))
+        .catch(() => ({ id: c.id, n: 0, ts: null }))));   // un canal que falle no tumba el resto
+    for (const r of res) { if (r.n) { porCanal[r.id] = r.n; total += r.n; } if (r.ts) actividad[r.id] = r.ts; }
   }
-  const datos = { total, porCanal };
+  const datos = { total, porCanal, actividad };
   _cacheNL.set(ws.id, { at: Date.now(), datos });
   return datos;
 }
@@ -213,6 +214,17 @@ async function subirArchivo(ws, canal, buffer, nombre, comentario, thread_ts) {
   return done.files?.[0] || { id: up.file_id };
 }
 
+// Marcar un canal como NO leido: se mueve el marcador de lectura al mensaje
+// ANTERIOR al ultimo, para que Slack lo cuente como pendiente otra vez.
+async function marcarNoLeido(ws, canalId) {
+  const h = await _call(token(ws), 'conversations.history', { channel: canalId, limit: 2 });
+  const msgs = h.messages || [];
+  const ts = (msgs[1] || msgs[0] || {}).ts;   // el penultimo, o el ultimo si solo hay uno
+  if (!ts) return false;
+  await _call(token(ws), 'conversations.mark', { channel: canalId, ts }, 'POST');
+  return true;
+}
+
 async function renombrarCanal(ws, canalId, nombre) {
   const d = await _call(token(ws), 'conversations.rename', { channel: canalId, name: nombre }, 'POST');
   return d.channel;
@@ -226,5 +238,5 @@ async function archivarCanal(ws, canalId) {
 module.exports = {
   encPass, verificar, canales, miembros, noLeidos, historial, hilo,
   enviar, directo, crearCanal, archivarCanal, normalizarNombre, _errorClaro,
-  reaccionar, quitarReaccion, anclar, desanclar, anclados, subirArchivo, renombrarCanal,
+  reaccionar, quitarReaccion, anclar, desanclar, anclados, subirArchivo, renombrarCanal, marcarNoLeido,
 };

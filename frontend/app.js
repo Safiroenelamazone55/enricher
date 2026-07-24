@@ -20913,6 +20913,7 @@ const SlackChat = (() => {
   let _users   = {};      // id -> nombre, para resolver las menciones
   let _hilo    = null;    // ts del hilo abierto, si hay uno
   let _noLeidos = {};     // canal -> nº sin leer (del workspace que se mira)
+  let _actividad = {};    // canal -> ts del ultimo mensaje (orden por reciente)
   let _nlPorWs  = {};     // workspace -> total, para la insignia del riel
   let _vinculos = {};     // canal de Slack -> proyecto ligado
   let _miembros = [];     // equipo del workspace (para etiquetar)
@@ -20951,7 +20952,7 @@ const SlackChat = (() => {
         const r = await apiFetch(`${API}/slack/workspaces/${w.id}/no-leidos`);
         const d = await r.json();
         _nlPorWs[w.id] = d.total || 0;
-        if (String(w.id) === String(_wsAct)) { _noLeidos = d.porCanal || {}; _pintaCanales(); }
+        if (String(w.id) === String(_wsAct)) { _noLeidos = d.porCanal || {}; _actividad = d.actividad || {}; _pintaCanales(); }
       } catch (_) { _nlPorWs[w.id] = 0; }
     }));
     _riel();
@@ -21011,7 +21012,7 @@ const SlackChat = (() => {
       _pintaCanales();
       apiFetch(`${API}/slack/workspaces/${wsId}/no-leidos`)
         .then(r => r.json())
-        .then(d => { _noLeidos = d.porCanal || {}; _nlPorWs[wsId] = d.total || 0; _pintaCanales(); _riel(); })
+        .then(d => { _noLeidos = d.porCanal || {}; _actividad = d.actividad || {}; _nlPorWs[wsId] = d.total || 0; _pintaCanales(); _riel(); })
         .catch(() => {});
       if (_canales.length) abrir(_canales[0].id);
       else if ($$('chat-messages')) $$('chat-messages').innerHTML = `<div class="chat-ch-empty">Este Slack no tiene canales visibles.</div>`;
@@ -21049,8 +21050,17 @@ const SlackChat = (() => {
       </button>`;
     };
 
-    const canales  = lista.filter(c => !c.is_im && !c.is_mpim).sort((a, b) => a._nm.localeCompare(b._nm));
-    const directos = lista.filter(c =>  c.is_im ||  c.is_mpim).sort((a, b) => a._nm.localeCompare(b._nm));
+    // Orden: lo que tiene mensajes sin leer primero; luego por actividad mas reciente;
+    // y si empatan (sin datos de actividad), alfabetico. Asi lo ultimo sube arriba.
+    const orden = (a, b) => {
+      const ua = _noLeidos[a.id] ? 1 : 0, ub = _noLeidos[b.id] ? 1 : 0;
+      if (ua !== ub) return ub - ua;
+      const ta = +(_actividad[a.id] || 0), tb = +(_actividad[b.id] || 0);
+      if (ta !== tb) return tb - ta;
+      return a._nm.localeCompare(b._nm);
+    };
+    const canales  = lista.filter(c => !c.is_im && !c.is_mpim).sort(orden);
+    const directos = lista.filter(c =>  c.is_im ||  c.is_mpim).sort(orden);
 
     cont.innerHTML =
       `<div class="chat-ch-slabel">${esc(w ? (w.etiqueta || w.team_name) : 'Slack')}</div>`
@@ -21509,7 +21519,8 @@ const SlackChat = (() => {
          + `<button class="slk-mm-op" onclick="SlackChat.verTareas(${pj.projectId})">Ver tareas del proyecto</button>`
          + `<div class="slk-cm-sep"></div>`;
     }
-    h += `<button class="slk-mm-op" onclick="SlackChat.abrir('${canalId}')">Abrir aquí</button>`;
+    h += `<button class="slk-mm-op" onclick="SlackChat.marcarNoLeido('${canalId}','${esc(nombre)}')">Marcar como no leído</button>`
+       + `<button class="slk-mm-op" onclick="SlackChat.abrir('${canalId}')">Abrir aquí</button>`;
     if (w && w.team_id) h += `<button class="slk-mm-op" onclick="window.open('https://app.slack.com/client/${w.team_id}/${canalId}','_blank')">Abrir en Slack</button>`;
     h += `<button class="slk-mm-op" onclick="SlackChat.copiarNombre('${esc(nombre)}')">Copiar nombre</button>`
        + `<div class="slk-cm-sep"></div>`
@@ -21529,6 +21540,18 @@ const SlackChat = (() => {
     document.querySelectorAll('.slk-msgmenu').forEach(x => x.remove());
     const b = document.querySelector('[data-tab="mgmt-tasks"]'); if (b) b.click();
   }
+  async function marcarNoLeido(canalId, nombre) {
+    document.querySelectorAll('.slk-msgmenu').forEach(x => x.remove());
+    try {
+      const r = await apiFetch(`${API}/slack/workspaces/${_wsAct}/canales/${canalId}/no-leido`, { method: 'POST' });
+      if (!r.ok) throw new Error((await r.json()).error || 'No se pudo marcar');
+      _noLeidos[canalId] = (_noLeidos[canalId] || 0) + 1;   // reflejo inmediato
+      _nlPorWs[_wsAct] = (_nlPorWs[_wsAct] || 0) + 1;
+      _pintaCanales(); _riel();
+      showBanner(`#${nombre} marcado como no leído`, 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+
   function copiarNombre(nombre) {
     document.querySelectorAll('.slk-msgmenu').forEach(x => x.remove());
     navigator.clipboard.writeText('#' + nombre).then(() => showBanner('Copiado', 'success'));
@@ -21549,7 +21572,7 @@ const SlackChat = (() => {
   return { load, irA, abrir, buscar, verHilo, enviar, detener: _pararSondeo,
            fmt, insertar, adjuntar, grabarAudio, emojiPicker, _emojiIns,
            menuMsg, reaccionar, anclar, copiar,
-           menuCanal, verProyecto, verTareas, copiarNombre, archivarCanal,
+           menuCanal, verProyecto, verTareas, copiarNombre, archivarCanal, marcarNoLeido,
            menciones, _mencionar, detectarArroba };
 })();
 

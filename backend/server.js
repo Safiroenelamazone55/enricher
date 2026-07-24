@@ -6211,6 +6211,16 @@ app.post('/api/slack/workspaces/:id/canales/:canal/archivo', requireAuth, upload
   }
 });
 
+// Marcar un canal como no leido.
+app.post('/api/slack/workspaces/:id/canales/:canal/no-leido', requireAuth, async (req, res) => {
+  try {
+    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
+    await slackSvc.marcarNoLeido(w, req.params.canal);
+    res.json({ ok: true });
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
 // Mapa canal_de_slack -> proyecto, para el menu contextual del canal (ver proyecto,
 // ver tareas...). Solo los proyectos que tienen canal ligado.
 app.get('/api/slack/workspaces/:id/vinculos', requireAuth, async (req, res) => {
