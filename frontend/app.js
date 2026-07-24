@@ -21229,9 +21229,12 @@ const SlackChat = (() => {
       </div>`;
     }
     const prev = box.scrollTop;
+    box.style.scrollBehavior = 'auto';   // sin barrido animado
     box.innerHTML = html;
     // Si la usuaria estaba leyendo mas arriba, no la arrastramos al final.
     box.scrollTop = conservarScroll ? prev : box.scrollHeight;
+    // Y de nuevo tras el layout, por si algo cambia el alto (evita quedar a medias).
+    if (!conservarScroll) requestAnimationFrame(() => { box.scrollTop = box.scrollHeight; });
   }
 
   async function verHilo(ts) {

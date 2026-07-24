@@ -14199,3 +14199,7 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .slk-hilo-bar { position:sticky; top:0; z-index:3; display:flex; align-items:center; gap:12px; padding:8px 16px; margin:-6px -16px 8px; background:#F1EFEB; border-bottom:1px solid #E7E3DD; }
 .slk-hilo-bar .slk-volver { margin:0; }
 .slk-hilo-tit { font-size:12.5px; font-weight:600; color:#6C6862; }
+
+/* El chat NO debe scrollear animado: al abrir o enviar, saltar directo al final sin
+   el barrido desde arriba. (scroll-behavior:smooth es global y se heredaba). */
+#chat-messages, #chat-channels { scroll-behavior: auto !important; }
