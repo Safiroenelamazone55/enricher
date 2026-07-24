@@ -193,9 +193,16 @@ async function anclados(ws, canal) {
 // files.upload quedó obsoleto en 2025.
 async function subirArchivo(ws, canal, buffer, nombre, comentario, thread_ts) {
   const tk = token(ws);
-  const up = await _call(tk, 'files.getUploadURLExternal',
-    { filename: nombre, length: buffer.length }, 'POST');
-  const put = await fetch(up.upload_url, { method: 'POST', body: buffer });
+  // getUploadURLExternal quiere los datos como form-urlencoded, no JSON.
+  const q = new URLSearchParams({ filename: nombre, length: String(buffer.length) });
+  const upR = await fetch(`${API}/files.getUploadURLExternal?${q}`, {
+    headers: { Authorization: `Bearer ${tk}` } });
+  const up = await upR.json();
+  if (!up.ok) throw new Error(_errorClaro(up.error || 'no upload url'));
+  // El binario se sube al upload_url como multipart, con el campo 'file'.
+  const fd = new FormData();
+  fd.append('file', new Blob([buffer]), nombre);
+  const put = await fetch(up.upload_url, { method: 'POST', body: fd });
   if (!put.ok) throw new Error('No se pudo subir el archivo a Slack');
   const done = await _call(tk, 'files.completeUploadExternal', {
     files: [{ id: up.file_id, title: nombre }],

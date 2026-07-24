@@ -299,6 +299,13 @@ const upload = multer({
   },
 });
 
+// Subidas a Slack: cualquier tipo de archivo (documentos, imagenes, audio), sin el
+// filtro de solo-Excel que usa el importador. El limite lo pone el plan de Slack.
+const uploadSlack = multer({
+  storage: multer.memoryStorage(),
+  limits:  { fileSize: 50 * 1024 * 1024 },
+});
+
 // ── Auth middleware ───────────────────────────────────────────────
 function requireAuth(req, res, next) {
   if (req.isAuthenticated && req.isAuthenticated()) {
@@ -6153,7 +6160,7 @@ app.get('/api/slack/workspaces/:id/canales/:canal/anclados', requireAuth, async 
 });
 
 // Subir documento o audio. El binario no se guarda en Nova: va directo a Slack.
-app.post('/api/slack/workspaces/:id/canales/:canal/archivo', requireAuth, upload.single('file'), async (req, res) => {
+app.post('/api/slack/workspaces/:id/canales/:canal/archivo', requireAuth, uploadSlack.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No llegó ningún archivo' });
     const w = await _slackWs(req.workspaceOwnerId, req.params.id);
