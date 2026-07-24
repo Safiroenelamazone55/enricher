@@ -20914,6 +20914,7 @@ const SlackChat = (() => {
   let _hilo    = null;    // ts del hilo abierto, si hay uno
   let _noLeidos = {};     // canal -> nº sin leer (del workspace que se mira)
   let _nlPorWs  = {};     // workspace -> total, para la insignia del riel
+  let _vinculos = {};     // canal de Slack -> proyecto ligado
 
   const $$ = id => document.getElementById(id);
 
@@ -21002,6 +21003,8 @@ const SlackChat = (() => {
       _users = { ...(dm.indice || {}) };
       (dm.miembros || []).forEach(u => { _users[u.id] = u.nombre || u.usuario; });
       _canales = dc.canales || [];
+      apiFetch(`${API}/slack/workspaces/${wsId}/vinculos`).then(r => r.json())
+        .then(v => { _vinculos = v || {}; _pintaCanales(); }).catch(() => {});
       _pintaCanales();
       apiFetch(`${API}/slack/workspaces/${wsId}/no-leidos`)
         .then(r => r.json())
@@ -21032,8 +21035,10 @@ const SlackChat = (() => {
     const fila = c => {
       const n = _noLeidos[c.id] || 0;
       const ico = c.is_im ? '' : (c.is_private || c.is_mpim) ? '🔒' : '#';
-      return `<button class="chat-ch${_canal && _canal.id === c.id ? ' active' : ''}${n ? ' unread' : ''}"
-                      onclick="SlackChat.abrir('${c.id}')">
+      const vinc = _vinculos[c.id] ? ' chat-ch--pj' : '';
+      return `<button class="chat-ch${_canal && _canal.id === c.id ? ' active' : ''}${n ? ' unread' : ''}${vinc}"
+                      onclick="SlackChat.abrir('${c.id}')"
+                      oncontextmenu="SlackChat.menuCanal(event,'${c.id}')">
         ${c.is_im ? `<img class="chat-ch__av" src="https://api.dicebear.com/9.x/lorelei/svg?seed=${encodeURIComponent(c._nm)}" alt="">`
                   : `<span class="chat-ch__hash">${ico}</span>`}
         <span class="chat-ch__name">${c.is_im ? escNom(c._nm) : esc(c._nm)}</span>
@@ -21388,9 +21393,65 @@ const SlackChat = (() => {
     if (el) navigator.clipboard.writeText(el.textContent).then(() => showBanner('Copiado', 'success'));
   }
 
+  // Menu contextual del canal. Si esta ligado a un proyecto, ofrece saltar a el y a
+  // sus tareas; siempre, abrir en Slack, copiar el nombre y archivar.
+  function menuCanal(ev, canalId) {
+    ev.preventDefault(); ev.stopPropagation();
+    document.querySelectorAll('.slk-msgmenu').forEach(x => x.remove());
+    const c = _canales.find(x => x.id === canalId);
+    const nombre = c ? _nombreDe(c) : '';
+    const pj = _vinculos[canalId];
+    const w = _ws.find(x => String(x.id) === String(_wsAct));
+    const m = document.createElement('div');
+    m.className = 'slk-msgmenu';
+    let h = `<div class="slk-cm-hd">#${esc(nombre)}</div>`;
+    if (pj) {
+      h += `<div class="slk-cm-pj">Proyecto: ${escCap(pj.nombre)}${pj.estado ? ` · ${esc(pj.estado)}` : ''}</div>`
+         + `<button class="slk-mm-op" onclick="SlackChat.verProyecto(${pj.projectId})">Ver proyecto</button>`
+         + `<button class="slk-mm-op" onclick="SlackChat.verTareas(${pj.projectId})">Ver tareas del proyecto</button>`
+         + `<div class="slk-cm-sep"></div>`;
+    }
+    h += `<button class="slk-mm-op" onclick="SlackChat.abrir('${canalId}')">Abrir aquí</button>`;
+    if (w && w.team_id) h += `<button class="slk-mm-op" onclick="window.open('https://app.slack.com/client/${w.team_id}/${canalId}','_blank')">Abrir en Slack</button>`;
+    h += `<button class="slk-mm-op" onclick="SlackChat.copiarNombre('${esc(nombre)}')">Copiar nombre</button>`
+       + `<div class="slk-cm-sep"></div>`
+       + `<button class="slk-mm-op slk-mm-op--danger" onclick="SlackChat.archivarCanal('${canalId}','${esc(nombre)}')">Archivar canal</button>`;
+    m.innerHTML = h;
+    document.body.appendChild(m);
+    m.style.cssText += `;position:fixed;z-index:10050;top:${Math.min(ev.clientY, window.innerHeight - m.offsetHeight - 10)}px;left:${Math.min(ev.clientX, window.innerWidth - 240)}px`;
+    setTimeout(() => document.addEventListener('click', function o(e2) { if (!m.contains(e2.target)) { m.remove(); document.removeEventListener('click', o); } }), 0);
+  }
+
+  function verProyecto(pid) {
+    document.querySelectorAll('.slk-msgmenu').forEach(x => x.remove());
+    const b = document.querySelector('[data-tab="mgmt-projects"]'); if (b) b.click();
+    setTimeout(() => { try { ProjectsModule.openDrawer(pid); } catch (_) {} }, 250);
+  }
+  function verTareas(pid) {
+    document.querySelectorAll('.slk-msgmenu').forEach(x => x.remove());
+    const b = document.querySelector('[data-tab="mgmt-tasks"]'); if (b) b.click();
+  }
+  function copiarNombre(nombre) {
+    document.querySelectorAll('.slk-msgmenu').forEach(x => x.remove());
+    navigator.clipboard.writeText('#' + nombre).then(() => showBanner('Copiado', 'success'));
+  }
+  async function archivarCanal(canalId, nombre) {
+    document.querySelectorAll('.slk-msgmenu').forEach(x => x.remove());
+    if (!confirm(`¿Archivar #${nombre}? Desaparece de la lista del equipo; en Slack se puede desarchivar después.`)) return;
+    try {
+      const r = await apiFetch(`${API}/slack/workspaces/${_wsAct}/canales/${canalId}/archivar-canal`, { method: 'POST' });
+      if (!r.ok) throw new Error((await r.json()).error || 'No se pudo archivar');
+      _canales = _canales.filter(x => x.id !== canalId);
+      _pintaCanales();
+      if (_canal && _canal.id === canalId && _canales[0]) abrir(_canales[0].id);
+      showBanner(`#${nombre} archivado`, 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+
   return { load, irA, abrir, buscar, verHilo, enviar, detener: _pararSondeo,
            fmt, insertar, adjuntar, grabarAudio, emojiPicker, _emojiIns,
-           menuMsg, reaccionar, anclar, copiar };
+           menuMsg, reaccionar, anclar, copiar,
+           menuCanal, verProyecto, verTareas, copiarNombre, archivarCanal };
 })();
 
 const ChatModule = (() => {

@@ -6211,6 +6211,21 @@ app.post('/api/slack/workspaces/:id/canales/:canal/archivo', requireAuth, upload
   }
 });
 
+// Mapa canal_de_slack -> proyecto, para el menu contextual del canal (ver proyecto,
+// ver tareas...). Solo los proyectos que tienen canal ligado.
+app.get('/api/slack/workspaces/:id/vinculos', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT slack_channel_id, id AS project_id, nombre, estado
+         FROM projects
+        WHERE user_id=$1 AND slack_ws_id=$2 AND slack_channel_id IS NOT NULL`,
+      [req.workspaceOwnerId, req.params.id]);
+    const mapa = {};
+    rows.forEach(r => { mapa[r.slack_channel_id] = { projectId: r.project_id, nombre: r.nombre, estado: r.estado }; });
+    res.json(mapa);
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
 // Renombrar un canal y (opcional) ligarlo a un proyecto. Es lo que usa la
 // normalizacion de una vez, y tambien la automatizacion al crear un proyecto.
 app.post('/api/slack/workspaces/:id/canales/:canal/renombrar', requireAuth, async (req, res) => {

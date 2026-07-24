@@ -14175,3 +14175,13 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .chat-shell .chat-main { display: flex; flex-direction: column; min-height: 0; flex: 1; }
 #chat-messages { flex: 1; min-height: 0; overflow-y: auto; }
 .chat-main__header, .chat-composer { flex: 0 0 auto; }
+
+/* Cabecera y bloque de proyecto en el menu contextual del canal */
+.slk-cm-hd { font-size:13px; font-weight:600; color:#1F1D1B; padding:6px 10px 3px; }
+.slk-cm-pj { font-size:11.5px; color:#918C85; padding:0 10px 6px; text-transform:capitalize; }
+.slk-cm-sep { height:1px; background:#F1EFEB; margin:4px 0; }
+.slk-mm-op--danger { color:#FF3B30; }
+.slk-mm-op--danger:hover { background:#FFF1F0; }
+/* Canal ligado a un proyecto: un puntito para distinguirlo de los sueltos */
+#chat-channels .chat-ch--pj .chat-ch__hash::after { content:''; }
+#chat-channels .chat-ch--pj .chat-ch__name::before { content:'●'; color:#34C759; font-size:7px; vertical-align:middle; margin-right:5px; }
