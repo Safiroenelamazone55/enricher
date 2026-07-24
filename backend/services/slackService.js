@@ -214,12 +214,34 @@ async function subirArchivo(ws, canal, buffer, nombre, comentario, thread_ts) {
   return done.files?.[0] || { id: up.file_id };
 }
 
-// Marcar un canal como NO leido: se mueve el marcador de lectura al mensaje
-// ANTERIOR al ultimo, para que Slack lo cuente como pendiente otra vez.
+// Un microsegundo antes de un ts de Slack (formato "segundos.microsegundos"). Deja
+// el marcador de lectura JUSTO antes del ultimo mensaje, de modo que ese mensaje
+// quede sin leer aunque sea el unico de la conversacion.
+function _tsAntes(ts) {
+  const [s, u = '0'] = String(ts).split('.');
+  const n = parseInt(u, 10) - 1;
+  return n < 0 ? `${parseInt(s, 10) - 1}.999999` : `${s}.${String(n).padStart(6, '0')}`;
+}
+
+// Marcar como NO leido: mueve el marcador a justo antes del ultimo mensaje, para que
+// Slack lo cuente como pendiente otra vez. Funciona igual en canales y en directos
+// (conversations.mark responde ok en ambos), y tambien cuando la conversacion tiene
+// un solo mensaje —el fallo del metodo anterior, que marcaba el PENULTIMO y por eso
+// no dejaba nada sin leer en los directos de un unico mensaje—.
 async function marcarNoLeido(ws, canalId) {
-  const h = await _call(token(ws), 'conversations.history', { channel: canalId, limit: 2 });
-  const msgs = h.messages || [];
-  const ts = (msgs[1] || msgs[0] || {}).ts;   // el penultimo, o el ultimo si solo hay uno
+  const h = await _call(token(ws), 'conversations.history', { channel: canalId, limit: 1 });
+  const ult = (h.messages || [])[0];
+  if (!ult) return false;
+  await _call(token(ws), 'conversations.mark', { channel: canalId, ts: _tsAntes(ult.ts) }, 'POST');
+  return true;
+}
+
+// Marcar como leido: mueve el marcador al ultimo mensaje. Se usa al ABRIR una
+// conversacion, para que quede leida tambien en Slack/el telefono, no solo aqui
+// (y para que el sondeo no vuelva a pintar la insignia de algo que ya se abrio).
+async function marcarLeido(ws, canalId) {
+  const h = await _call(token(ws), 'conversations.history', { channel: canalId, limit: 1 });
+  const ts = (h.messages || [])[0]?.ts;
   if (!ts) return false;
   await _call(token(ws), 'conversations.mark', { channel: canalId, ts }, 'POST');
   return true;
@@ -230,13 +252,22 @@ async function renombrarCanal(ws, canalId, nombre) {
   return d.channel;
 }
 
-async function archivarCanal(ws, canalId) {
+// Archivar un canal — o CERRAR un directo. Slack NO permite archivar un DM (im) ni
+// un grupo de directos (mpim): responde method_not_supported_for_channel_type. Lo
+// equivalente para esos es conversations.close, que quita la conversacion de la barra
+// sin borrar el historial (se reabre sola al escribir de nuevo). El frontend manda
+// dm:true cuando la fila es un directo.
+async function archivarCanal(ws, canalId, { dm = false } = {}) {
+  if (dm) {
+    await _call(token(ws), 'conversations.close', { channel: canalId }, 'POST');
+    return { cerrado: true };
+  }
   await _call(token(ws), 'conversations.archive', { channel: canalId }, 'POST');
-  return true;
+  return { archivado: true };
 }
 
 module.exports = {
   encPass, verificar, canales, miembros, noLeidos, historial, hilo,
   enviar, directo, crearCanal, archivarCanal, normalizarNombre, _errorClaro,
-  reaccionar, quitarReaccion, anclar, desanclar, anclados, subirArchivo, renombrarCanal, marcarNoLeido,
+  reaccionar, quitarReaccion, anclar, desanclar, anclados, subirArchivo, renombrarCanal, marcarNoLeido, marcarLeido,
 };

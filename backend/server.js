@@ -6252,12 +6252,23 @@ app.post('/api/slack/workspaces/:id/canales/:canal/renombrar', requireAuth, asyn
   } catch (err) { res.status(400).json({ error: err.message }); }
 });
 
-// Archivar un canal (los proyectos viejos que ya no van).
+// Archivar un canal (proyectos viejos) o cerrar un directo. dm:true => se cierra en
+// vez de archivar, porque Slack no archiva directos.
 app.post('/api/slack/workspaces/:id/canales/:canal/archivar-canal', requireAuth, async (req, res) => {
   try {
     const w = await _slackWs(req.workspaceOwnerId, req.params.id);
     if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
-    await slackSvc.archivarCanal(w, req.params.canal);
+    const r = await slackSvc.archivarCanal(w, req.params.canal, { dm: !!(req.body && req.body.dm) });
+    res.json({ ok: true, cerrado: !!r.cerrado });
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
+// Marcar una conversacion como leida en Slack (al abrirla desde aqui).
+app.post('/api/slack/workspaces/:id/canales/:canal/leido', requireAuth, async (req, res) => {
+  try {
+    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
+    await slackSvc.marcarLeido(w, req.params.canal);
     res.json({ ok: true });
   } catch (err) { res.status(400).json({ error: err.message }); }
 });

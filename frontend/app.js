@@ -20918,8 +20918,19 @@ const SlackChat = (() => {
   let _vinculos = {};     // canal de Slack -> proyecto ligado
   let _miembros = [];     // equipo del workspace (para etiquetar)
   let _menciones = [];    // tokens insertados: {token, id} -> se traducen al enviar
+  let _marcadoNL = {};    // canales que marqué "no leído" a mano. Se mantienen hasta
+                          // abrirlos: Slack no reporta unread_count_display igual para
+                          // todos los tipos (los directos sí, los canales públicos no),
+                          // así que el sondeo por sí solo borraría la insignia recién
+                          // puesta. Aquí la fijamos nosotros hasta que se abra el chat.
 
   const $$ = id => document.getElementById(id);
+
+  // Total sin leer del workspace que se mira (insignia del riel), contando también lo
+  // que marqué a mano.
+  function _totalNoLeidos() { return Object.values(_noLeidos).reduce((a, b) => a + (+b || 0), 0); }
+  // Reaplica los "no leído" manuales sobre lo que devuelve el sondeo de Slack.
+  function _fusionaSticky() { Object.keys(_marcadoNL).forEach(id => { _noLeidos[id] = Math.max(1, _noLeidos[id] || 0); }); }
 
   // El shell crecia con el contenido (4000+ px) y obligaba a scrollear toda la
   // pagina. Se acota a lo que queda de pantalla y cada columna scrollea por dentro.
@@ -20952,7 +20963,11 @@ const SlackChat = (() => {
         const r = await apiFetch(`${API}/slack/workspaces/${w.id}/no-leidos`);
         const d = await r.json();
         _nlPorWs[w.id] = d.total || 0;
-        if (String(w.id) === String(_wsAct)) { _noLeidos = d.porCanal || {}; _actividad = d.actividad || {}; _pintaCanales(); }
+        if (String(w.id) === String(_wsAct)) {
+          _noLeidos = d.porCanal || {}; _actividad = d.actividad || {};
+          _fusionaSticky(); _nlPorWs[w.id] = _totalNoLeidos();
+          _pintaCanales();
+        }
       } catch (_) { _nlPorWs[w.id] = 0; }
     }));
     _riel();
@@ -20989,7 +21004,7 @@ const SlackChat = (() => {
 
   async function irA(wsId) {
     _pararSondeo();
-    _wsAct = wsId; _hilo = null;
+    _wsAct = wsId; _hilo = null; _marcadoNL = {};
     localStorage.setItem('slk_ws', String(wsId));
     _riel();
     const cont = $$('chat-channels');
@@ -21012,7 +21027,7 @@ const SlackChat = (() => {
       _pintaCanales();
       apiFetch(`${API}/slack/workspaces/${wsId}/no-leidos`)
         .then(r => r.json())
-        .then(d => { _noLeidos = d.porCanal || {}; _actividad = d.actividad || {}; _nlPorWs[wsId] = d.total || 0; _pintaCanales(); _riel(); })
+        .then(d => { _noLeidos = d.porCanal || {}; _actividad = d.actividad || {}; _fusionaSticky(); _nlPorWs[wsId] = _totalNoLeidos(); _pintaCanales(); _riel(); })
         .catch(() => {});
       if (_canales.length) abrir(_canales[0].id);
       else if ($$('chat-messages')) $$('chat-messages').innerHTML = `<div class="chat-ch-empty">Este Slack no tiene canales visibles.</div>`;
@@ -21122,9 +21137,11 @@ const SlackChat = (() => {
     if (!c) return;
     _canal = { id: c.id, name: _nombreDe(c), topic: (c.topic && c.topic.value) || '' };
     _hilo = null;
-    if (_noLeidos[c.id]) {                     // al abrirlo deja de estar pendiente
-      _nlPorWs[_wsAct] = Math.max(0, (_nlPorWs[_wsAct] || 0) - _noLeidos[c.id]);
-      delete _noLeidos[c.id]; _riel();
+    if (_noLeidos[c.id] || _marcadoNL[c.id]) {   // al abrirlo deja de estar pendiente
+      delete _noLeidos[c.id]; delete _marcadoNL[c.id];
+      _nlPorWs[_wsAct] = _totalNoLeidos(); _riel();
+      // Que quede leído también en Slack/el teléfono, y que el sondeo no lo re-pinte.
+      apiFetch(`${API}/slack/workspaces/${_wsAct}/canales/${c.id}/leido`, { method: 'POST' }).catch(() => {});
     }
     _pintaCanales();
     _cab(_canal.name, _canal.topic);
@@ -21522,11 +21539,12 @@ const SlackChat = (() => {
     document.querySelectorAll('.slk-msgmenu').forEach(x => x.remove());
     const c = _canales.find(x => x.id === canalId);
     const nombre = c ? _nombreDe(c) : '';
+    const esDm = !!(c && (c.is_im || c.is_mpim));
     const pj = _vinculos[canalId];
     const w = _ws.find(x => String(x.id) === String(_wsAct));
     const m = document.createElement('div');
     m.className = 'slk-msgmenu';
-    let h = `<div class="slk-cm-hd">#${esc(nombre)}</div>`;
+    let h = `<div class="slk-cm-hd">${esDm ? '' : '#'}${esc(nombre)}</div>`;
     if (pj) {
       h += `<div class="slk-cm-pj">Proyecto: ${escCap(pj.nombre)}${pj.estado ? ` · ${esc(pj.estado)}` : ''}</div>`
          + `<button class="slk-mm-op" onclick="SlackChat.verProyecto(${pj.projectId})">Ver proyecto</button>`
@@ -21536,9 +21554,9 @@ const SlackChat = (() => {
     h += `<button class="slk-mm-op" onclick="SlackChat.marcarNoLeido('${canalId}','${esc(nombre)}')">Marcar como no leído</button>`
        + `<button class="slk-mm-op" onclick="SlackChat.abrir('${canalId}')">Abrir aquí</button>`;
     if (w && w.team_id) h += `<button class="slk-mm-op" onclick="window.open('https://app.slack.com/client/${w.team_id}/${canalId}','_blank')">Abrir en Slack</button>`;
-    h += `<button class="slk-mm-op" onclick="SlackChat.copiarNombre('${esc(nombre)}')">Copiar nombre</button>`
+    h += `<button class="slk-mm-op" onclick="SlackChat.copiarNombre('${esc(nombre)}',${esDm})">Copiar nombre</button>`
        + `<div class="slk-cm-sep"></div>`
-       + `<button class="slk-mm-op slk-mm-op--danger" onclick="SlackChat.archivarCanal('${canalId}','${esc(nombre)}')">Archivar canal</button>`;
+       + `<button class="slk-mm-op slk-mm-op--danger" onclick="SlackChat.archivarCanal('${canalId}','${esc(nombre)}',${esDm})">${esDm ? 'Cerrar conversación' : 'Archivar canal'}</button>`;
     m.innerHTML = h;
     document.body.appendChild(m);
     m.style.cssText += `;position:fixed;z-index:10050;top:${Math.min(ev.clientY, window.innerHeight - m.offsetHeight - 10)}px;left:${Math.min(ev.clientX, window.innerWidth - 240)}px`;
@@ -21556,30 +21574,43 @@ const SlackChat = (() => {
   }
   async function marcarNoLeido(canalId, nombre) {
     document.querySelectorAll('.slk-msgmenu').forEach(x => x.remove());
+    // Se marca localmente primero: la insignia debe aparecer y MANTENERSE aunque el
+    // sondeo de Slack no reporte el "sin leer" igual para todos los tipos de canal.
+    _marcadoNL[canalId] = true;
+    _noLeidos[canalId] = Math.max(1, _noLeidos[canalId] || 0);
+    _nlPorWs[_wsAct] = _totalNoLeidos();
+    _pintaCanales(); _riel();
     try {
       const r = await apiFetch(`${API}/slack/workspaces/${_wsAct}/canales/${canalId}/no-leido`, { method: 'POST' });
-      if (!r.ok) throw new Error((await r.json()).error || 'No se pudo marcar');
-      _noLeidos[canalId] = (_noLeidos[canalId] || 0) + 1;   // reflejo inmediato
-      _nlPorWs[_wsAct] = (_nlPorWs[_wsAct] || 0) + 1;
-      _pintaCanales(); _riel();
-      showBanner(`#${nombre} marcado como no leído`, 'success');
-    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+      if (!r.ok) throw new Error((await r.json()).error || 'No se pudo marcar en Slack');
+      showBanner(`${nombre} marcado como no leído`, 'success');
+    } catch (e) {
+      // Se queda marcado aquí igualmente; solo avisamos que Slack no lo sincronizó.
+      showBanner('Marcado aquí; Slack no lo aceptó: ' + e.message, 'info');
+    }
   }
 
-  function copiarNombre(nombre) {
+  function copiarNombre(nombre, esDm) {
     document.querySelectorAll('.slk-msgmenu').forEach(x => x.remove());
-    navigator.clipboard.writeText('#' + nombre).then(() => showBanner('Copiado', 'success'));
+    navigator.clipboard.writeText((esDm ? '' : '#') + nombre).then(() => showBanner('Copiado', 'success'));
   }
-  async function archivarCanal(canalId, nombre) {
+  // Archiva un canal o CIERRA un directo. Slack no archiva directos, así que para esos
+  // se cierra la conversación (se quita de la barra; se reabre al escribir de nuevo).
+  async function archivarCanal(canalId, nombre, esDm) {
     document.querySelectorAll('.slk-msgmenu').forEach(x => x.remove());
-    if (!confirm(`¿Archivar #${nombre}? Desaparece de la lista del equipo; en Slack se puede desarchivar después.`)) return;
+    const aviso = esDm
+      ? `¿Cerrar la conversación con ${nombre}? Se quita de la lista; se reabre al escribirle otra vez y no se pierde el historial.`
+      : `¿Archivar #${nombre}? Desaparece de la lista del equipo; en Slack se puede desarchivar después.`;
+    if (!confirm(aviso)) return;
     try {
-      const r = await apiFetch(`${API}/slack/workspaces/${_wsAct}/canales/${canalId}/archivar-canal`, { method: 'POST' });
-      if (!r.ok) throw new Error((await r.json()).error || 'No se pudo archivar');
+      const r = await apiFetch(`${API}/slack/workspaces/${_wsAct}/canales/${canalId}/archivar-canal`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dm: !!esDm }) });
+      if (!r.ok) throw new Error((await r.json()).error || 'No se pudo');
       _canales = _canales.filter(x => x.id !== canalId);
+      delete _marcadoNL[canalId];
       _pintaCanales();
       if (_canal && _canal.id === canalId && _canales[0]) abrir(_canales[0].id);
-      showBanner(`#${nombre} archivado`, 'success');
+      showBanner(esDm ? `Conversación con ${nombre} cerrada` : `#${nombre} archivado`, 'success');
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
