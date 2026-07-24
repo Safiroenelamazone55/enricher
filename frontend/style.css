@@ -14221,3 +14221,8 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
   margin-left:34px; padding-left:12px; border-left:2px solid #E7E3DD;
 }
 #chat-messages .chat-msg.slk-reply .chat-msg__av { width:28px !important; height:28px !important; flex-basis:28px !important; }
+
+/* Emoji estilo Apple como imagen (para Windows) */
+.e-img { width:1.15em; height:1.15em; vertical-align:-0.18em; object-fit:contain; }
+.e-inline { margin:0 .5px; }
+.slk-emoji-pop button .e-img, .slk-mm-reac .e-img { width:20px; height:20px; vertical-align:middle; }

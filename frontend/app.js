@@ -21191,8 +21191,17 @@ const SlackChat = (() => {
   const _emoji = t => String(t || '').replace(/:([a-z0-9_+-]+):/gi,
     (m, n) => EMOJI[n.toLowerCase()] || m);
 
+  // Emoji estilo Apple como imagen: en Windows el sistema pinta los suyos (planos);
+  // esto sirve el de Apple desde jsdelivr (estable, sin redirects). El nombre del
+  // archivo es el codepoint en hex. Si no existe, cae al emoji de texto.
+  const _codepoint = e => [...e].map(c => c.codePointAt(0).toString(16)).join('-');
+  const _emojiImg = (e, cls = 'e-img') =>
+    `<img class="${cls}" src="https://cdn.jsdelivr.net/npm/emoji-datasource-apple@15.1.2/img/apple/64/${_codepoint(e)}.png" alt="${e}" loading="lazy" onerror="this.replaceWith(document.createTextNode('${e}'))">`;
+
   // Slack manda las menciones como <@U123> y los enlaces como <url|texto>. Sin
   // traducirlo, el mensaje se lee como un volcado de codigo.
+  // Detecta emojis unicode en el texto ya formateado y los cambia por imagen Apple.
+  const _RE_EMOJI = /(\p{Extended_Pictographic}(‍\p{Extended_Pictographic})*[️⃣]?)/gu;
   function _fmt(t) {
     return esc(_emoji(t))
       .replace(/&lt;@([A-Z0-9]+)&gt;/g, (_, id) => `<span class="slk-men">@${esc(_users[id] || id)}</span>`)
@@ -21229,7 +21238,7 @@ const SlackChat = (() => {
       const quien = _users[m.user] || m.username || 'Slack';
       const hora = f.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
       const reacs = (m.reactions || []).map(r =>
-        `<span class="slk-reac">${esc(_emoji(':' + r.name + ':'))} ${r.count}</span>`).join('');
+        `<span class="slk-reac">${_emojiImg(_emoji(':' + r.name + ':'), 'e-img')} ${r.count}</span>`).join('');
       const hilo = (!enHilo && m.reply_count)
         ? `<button class="slk-thread" onclick="SlackChat.verHilo('${m.ts}')">${m.reply_count} respuesta${m.reply_count > 1 ? 's' : ''}</button>` : '';
       const files = (m.files || []).map(f2 => `<div class="slk-file">📎 ${esc(f2.name || 'archivo')}</div>`).join('');
@@ -21452,7 +21461,7 @@ const SlackChat = (() => {
     document.querySelectorAll('.slk-emoji-pop').forEach(x => x.remove());
     const pop = document.createElement('div');
     pop.className = 'slk-emoji-pop';
-    pop.innerHTML = EMOJIS_RAPIDOS.map(e => '<button onclick="SlackChat._emojiIns(\'' + e + '\')">' + e + '</button>').join('');
+    pop.innerHTML = EMOJIS_RAPIDOS.map(e => '<button onclick="SlackChat._emojiIns(\'' + e + '\')">' + _emojiImg(e) + '</button>').join('');
     const r = ev.currentTarget.getBoundingClientRect();
     document.body.appendChild(pop);
     pop.style.cssText += ';position:fixed;z-index:10050;bottom:' + (window.innerHeight - r.top + 6) + 'px;left:' + Math.min(r.left, window.innerWidth - 240) + 'px';
@@ -21465,7 +21474,7 @@ const SlackChat = (() => {
     ev.preventDefault(); ev.stopPropagation();
     document.querySelectorAll('.slk-msgmenu').forEach(x => x.remove());
     const reac = ['👍','❤️','😂','🎉','✅','🙏'].map(e =>
-      '<button class="slk-mm-reac" onclick="SlackChat.reaccionar(\'' + ts + '\',\'' + e + '\')">' + e + '</button>').join('');
+      '<button class="slk-mm-reac" onclick="SlackChat.reaccionar(\'' + ts + '\',\'' + e + '\')">' + _emojiImg(e) + '</button>').join('');
     const m = document.createElement('div');
     m.className = 'slk-msgmenu';
     m.innerHTML =
