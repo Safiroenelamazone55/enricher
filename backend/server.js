@@ -6119,6 +6119,39 @@ app.get('/api/slack/workspaces/:id/canales', requireAuth, async (req, res) => {
   } catch (err) { res.status(400).json({ error: err.message }); }
 });
 
+// Mensajes de un canal. No se guardan: se leen de Slack en el momento, que es
+// justo lo que Jenny pidio (que la memoria la ponga Slack, no su base).
+app.get('/api/slack/workspaces/:id/canales/:canal/mensajes', requireAuth, async (req, res) => {
+  try {
+    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
+    const d = await slackSvc.historial(w, req.params.canal,
+      { limit: Math.min(+req.query.limit || 50, 200), cursor: req.query.cursor });
+    res.json(d);
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
+// Un hilo completo (el primer mensaje es el que lo abrio).
+app.get('/api/slack/workspaces/:id/canales/:canal/hilo/:ts', requireAuth, async (req, res) => {
+  try {
+    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
+    res.json(await slackSvc.hilo(w, req.params.canal, req.params.ts));
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
+// Enviar. Con thread_ts la respuesta entra DENTRO del hilo, no suelta en el canal.
+app.post('/api/slack/workspaces/:id/canales/:canal/mensajes', requireAuth, async (req, res) => {
+  const texto = String(req.body?.texto || '').trim();
+  if (!texto) return res.status(400).json({ error: 'El mensaje está vacío' });
+  try {
+    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
+    res.status(201).json(await slackSvc.enviar(w, req.params.canal, texto,
+      { thread_ts: req.body?.thread_ts }));
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
 // ── POST /api/gcal/meet ───────────────────────────────────────────
 // Crea la junta como evento de Google Calendar CON enlace de Meet. Se hace aqui y
 // no en Slack porque en el plan gratuito de Slack las llamadas son solo de dos

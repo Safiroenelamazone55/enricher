@@ -14050,3 +14050,78 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
   #wsname-modal .modal__body.cfg { flex-direction: column; }
   .cfg__nav { width: auto; flex-direction: row; border-right: none; border-bottom: 1px solid #E7E3DD; }
 }
+
+/* ── Mensajeria: riel de espacios de Slack ─────────────────────────────────── */
+.chat-shell { display: flex; }
+.chat-rail {
+  width: 62px; flex-shrink: 0; display: flex; flex-direction: column; align-items: center;
+  gap: 7px; padding: 12px 0; background: #F1EFEB; border-right: 1px solid #E7E3DD;
+}
+.chat-rail__b { position: relative; width: 38px; height: 38px; padding: 0; border: none; background: none; cursor: pointer; border-radius: 11px; }
+.chat-rail__ico {
+  display: flex; align-items: center; justify-content: center; width: 38px; height: 38px;
+  border-radius: 11px; background: #FFFFFF; border: 1px solid #E7E3DD;
+  font-size: 15px; font-weight: 600; color: #6C6862; transition: border-radius .14s, background .14s, color .14s;
+}
+.chat-rail__b:hover .chat-rail__ico { border-radius: 9px; color: #1F1D1B; }
+.chat-rail__b.on .chat-rail__ico { background: #007AFF; border-color: #007AFF; color: #fff; border-radius: 9px; }
+/* La marca del espacio activo, como en Slack */
+.chat-rail__b.on::before {
+  content: ''; position: absolute; left: -12px; top: 7px; width: 3px; height: 24px;
+  border-radius: 0 3px 3px 0; background: #1F1D1B;
+}
+.chat-rail__add {
+  width: 38px; height: 38px; border: 1px dashed #DAD5CE; background: none; color: #918C85;
+  border-radius: 11px; font-size: 19px; line-height: 1; cursor: pointer;
+}
+.chat-rail__add:hover { border-color: #007AFF; color: #007AFF; }
+
+/* ── Mensajes de Slack ──────────────────────────────────────────────────────── */
+.slk-men { color: #007AFF; background: #EBF4FF; border-radius: 4px; padding: 0 3px; font-weight: 500; }
+.slk-reacs { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+.slk-reac { font-size: 11.5px; color: #6C6862; background: #F1EFEB; border: 1px solid #E7E3DD; border-radius: 999px; padding: 1px 7px; }
+.slk-thread { display: inline-block; margin-top: 5px; font: inherit; font-size: 12px; font-weight: 500; color: #007AFF; background: none; border: none; padding: 0; cursor: pointer; }
+.slk-thread:hover { text-decoration: underline; }
+.slk-file { font-size: 12px; color: #6C6862; margin-top: 4px; }
+.slk-volver { display: block; margin: 0 0 10px; font: inherit; font-size: 12.5px; color: #007AFF; background: none; border: none; padding: 0; cursor: pointer; }
+.slk-blank { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; height: 100%; text-align: center; padding: 40px 20px; }
+.slk-blank__t { margin: 0; font-size: 16px; font-weight: 600; color: #1F1D1B; }
+.slk-blank__s { margin: 0 0 6px; font-size: 13px; color: #918C85; max-width: 44ch; line-height: 1.5; }
+
+/* Filas de canal: planas. Heredaban el borde y el fondo de los chips del chat
+   viejo y se leian como botones sueltos en vez de como una lista. */
+#chat-channels .chat-ch {
+  display: flex; align-items: center; gap: 7px; width: 100%; text-align: left;
+  border: none !important; background: none !important; box-shadow: none !important;
+  border-radius: 7px; padding: 5px 9px; font-size: 13.5px; color: #6C6862; cursor: pointer;
+}
+#chat-channels .chat-ch:hover { background: rgba(0,0,0,.035) !important; color: #1F1D1B; }
+#chat-channels .chat-ch.active { background: #EAE7E2 !important; color: #1F1D1B; font-weight: 600; }
+#chat-channels .chat-ch__hash { color: #B4AFA8; flex-shrink: 0; font-size: 13px; }
+#chat-channels .chat-ch__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#chat-channels .chat-ch-slabel {
+  font-size: 10.5px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase;
+  color: #B4AFA8; padding: 10px 9px 5px; cursor: default;
+}
+
+/* Mensajes de Slack: el avatar es un SVG sin tamano propio, asi que sin acotarlo
+   se estira a 509px y empuja el texto fuera de la pantalla. */
+#chat-messages .chat-msg { display: flex; gap: 10px; align-items: flex-start; padding: 6px 16px; }
+#chat-messages .chat-msg:hover { background: rgba(0,0,0,.018); }
+#chat-messages .chat-msg__av {
+  width: 34px !important; height: 34px !important; flex: 0 0 34px !important;
+  border-radius: 8px; background: #F1EFEB; object-fit: cover;
+}
+#chat-messages .chat-msg__body { flex: 1; min-width: 0; }
+#chat-messages .chat-msg__hd { display: flex; align-items: baseline; gap: 8px; }
+#chat-messages .chat-msg__who { font-size: 13.5px; font-weight: 600; color: #1F1D1B; }
+#chat-messages .chat-msg__t { font-size: 11px; color: #B4AFA8; }
+#chat-messages .chat-msg__txt {
+  font-size: 13.5px; line-height: 1.5; color: #3D3A36; margin-top: 1px;
+  overflow-wrap: anywhere;
+}
+#chat-messages .chat-msg__txt img { max-width: 100%; height: auto; }
+#chat-messages .chat-msg__txt code { background: #F1EFEB; border-radius: 4px; padding: 1px 4px; font-size: 12.5px; }
+#chat-messages .chat-daysep { display: flex; align-items: center; gap: 10px; margin: 14px 16px 8px; }
+#chat-messages .chat-daysep::before, #chat-messages .chat-daysep::after { content: ''; flex: 1; height: 1px; background: #E7E3DD; }
+#chat-messages .chat-daysep span { font-size: 11.5px; font-weight: 600; color: #918C85; }

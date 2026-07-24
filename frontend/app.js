@@ -20899,6 +20899,207 @@ const WorkloadModule = (() => {
 // CHAT MODULE — real-time Socket.io
 // =================================================================
 
+// =================================================================
+// CHAT — Slack. La seccion de mensajeria deja de tener chat propio: ahora es un
+// cliente de los Slack conectados. Era lo que Jenny queria de verdad —dejar de
+// saltar de un espacio de cliente a otro— y ademas resuelve lo del almacenamiento:
+// los mensajes NO se guardan aqui, se piden a Slack en el momento.
+// =================================================================
+const SlackChat = (() => {
+  let _ws      = [];      // workspaces conectados
+  let _wsAct   = null;    // el que se esta mirando
+  let _canales = [];
+  let _canal   = null;    // { id, name, topic }
+  let _users   = {};      // id -> nombre, para resolver las menciones
+  let _hilo    = null;    // ts del hilo abierto, si hay uno
+
+  const $$ = id => document.getElementById(id);
+
+  async function load() {
+    try {
+      const r = await apiFetch(`${API}/slack/workspaces`);
+      _ws = r.ok ? await r.json() : [];
+    } catch (_) { _ws = []; }
+    _riel();
+    const guardado = localStorage.getItem('slk_ws');
+    const inicial = _ws.find(w => String(w.id) === guardado) || _ws[0];
+    if (inicial) await irA(inicial.id);
+    else _vacio();
+  }
+
+  function _vacio() {
+    const c = $$('chat-channels');
+    if (c) c.innerHTML = `<div class="chat-ch-empty">Todavía no hay ningún Slack conectado.</div>`;
+    const m = $$('chat-messages');
+    if (m) m.innerHTML = `<div class="slk-blank">
+      <p class="slk-blank__t">Conecta tu primer Slack</p>
+      <p class="slk-blank__s">Configuración → Integraciones. Tus conversaciones se quedan en Slack; aquí solo se leen.</p>
+      <button class="btn btn--primary btn--sm" onclick="WorkspaceModule.openNameModal();setTimeout(()=>WorkspaceModule.setSection('integraciones'),60)">Conectar Slack</button>
+    </div>`;
+    _cab('', '');
+  }
+
+  // Riel de espacios: uno por Slack. Es la pieza que evita saltar de ventana.
+  function _riel() {
+    const r = $$('chat-rail');
+    if (!r) return;
+    const ini = t => (String(t || '?').trim()[0] || '?').toUpperCase();
+    r.innerHTML = _ws.map(w => `
+      <button class="chat-rail__b${String(_wsAct) === String(w.id) ? ' on' : ''}"
+              title="${esc(w.etiqueta || w.team_name)}" onclick="SlackChat.irA(${w.id})">
+        <span class="chat-rail__ico">${esc(ini(w.etiqueta || w.team_name))}</span>
+      </button>`).join('')
+      + `<button class="chat-rail__add" title="Conectar otro Slack"
+                onclick="WorkspaceModule.openNameModal();setTimeout(()=>WorkspaceModule.setSection('integraciones'),60)">+</button>`;
+  }
+
+  async function irA(wsId) {
+    _wsAct = wsId; _hilo = null;
+    localStorage.setItem('slk_ws', String(wsId));
+    _riel();
+    const cont = $$('chat-channels');
+    if (cont) cont.innerHTML = `<div class="chat-ch-empty">Cargando canales…</div>`;
+    try {
+      const [rc, rm] = await Promise.all([
+        apiFetch(`${API}/slack/workspaces/${wsId}/canales`),
+        apiFetch(`${API}/slack/workspaces/${wsId}/miembros`),
+      ]);
+      const dc = await rc.json(), dm = await rm.json();
+      if (dc.error) throw new Error(dc.error);
+      _users = {};
+      (dm.miembros || []).forEach(u => { _users[u.id] = u.nombre || u.usuario; });
+      _canales = (dc.canales || []).sort((a, b) => a.name.localeCompare(b.name));
+      _pintaCanales();
+      if (_canales.length) abrir(_canales[0].id);
+      else if ($$('chat-messages')) $$('chat-messages').innerHTML = `<div class="chat-ch-empty">Este Slack no tiene canales visibles.</div>`;
+    } catch (e) {
+      if (cont) cont.innerHTML = `<div class="chat-ch-empty">${esc(e.message)}</div>`;
+    }
+  }
+
+  function _pintaCanales(filtro = '') {
+    const cont = $$('chat-channels');
+    if (!cont) return;
+    const q = filtro.trim().toLowerCase();
+    const lista = q ? _canales.filter(c => c.name.toLowerCase().includes(q)) : _canales;
+    const w = _ws.find(x => String(x.id) === String(_wsAct));
+    cont.innerHTML =
+      `<div class="chat-ch-slabel">${esc(w ? (w.etiqueta || w.team_name) : 'Slack')}</div>`
+      + (lista.length
+        ? lista.map(c => `
+          <button class="chat-ch${_canal && _canal.id === c.id ? ' active' : ''}" onclick="SlackChat.abrir('${c.id}')">
+            <span class="chat-ch__hash">${c.is_private ? '🔒' : '#'}</span>
+            <span class="chat-ch__name">${esc(c.name)}</span>
+          </button>`).join('')
+        : `<div class="chat-ch-empty">Sin canales para "${esc(filtro)}".</div>`);
+  }
+
+  function buscar(v) { _pintaCanales(v || ''); }
+
+  function _cab(nombre, topic) {
+    const nm = $$('chat-main-name'), tp = $$('chat-main-topic');
+    if (nm) nm.textContent = nombre || 'Slack';
+    if (tp) tp.textContent = topic || '';
+  }
+
+  async function abrir(canalId) {
+    const c = _canales.find(x => x.id === canalId);
+    if (!c) return;
+    _canal = { id: c.id, name: c.name, topic: (c.topic && c.topic.value) || '' };
+    _hilo = null;
+    _pintaCanales();
+    _cab(c.name, _canal.topic);
+    const box = $$('chat-messages');
+    if (box) box.innerHTML = `<div class="chat-ch-empty">Cargando mensajes…</div>`;
+    try {
+      const r = await apiFetch(`${API}/slack/workspaces/${_wsAct}/canales/${canalId}/mensajes?limit=50`);
+      const d = await r.json();
+      if (d.error) throw new Error(d.error);
+      _pinta(d.mensajes || []);
+    } catch (e) {
+      if (box) box.innerHTML = `<div class="chat-ch-empty">${esc(e.message)}</div>`;
+    }
+  }
+
+  // Slack manda las menciones como <@U123> y los enlaces como <url|texto>. Sin
+  // traducirlo, el mensaje se lee como un volcado de codigo.
+  function _fmt(t) {
+    return esc(String(t || ''))
+      .replace(/&lt;@([A-Z0-9]+)&gt;/g, (_, id) => `<span class="slk-men">@${esc(_users[id] || id)}</span>`)
+      .replace(/&lt;#([A-Z0-9]+)\|([^&]*)&gt;/g, (_, id, nm) => `<span class="slk-men">#${esc(nm || id)}</span>`)
+      .replace(/&lt;!(here|channel|everyone)&gt;/g, (_, k) => `<span class="slk-men">@${k}</span>`)
+      .replace(/&lt;(https?:[^|&]+)\|([^&]*)&gt;/g, (_, u, x) => `<a href="${u}" target="_blank" rel="noopener">${esc(x)}</a>`)
+      .replace(/&lt;(https?:[^&]+)&gt;/g, (_, u) => `<a href="${u}" target="_blank" rel="noopener">${esc(u)}</a>`)
+      .replace(/\*([^*\n]+)\*/g, '<strong>$1</strong>')
+      .replace(/_([^_\n]+)_/g, '<em>$1</em>')
+      .replace(/`([^`\n]+)`/g, '<code>$1</code>')
+      .replace(/\n/g, '<br>');
+  }
+
+  function _pinta(msgs, enHilo = false) {
+    const box = $$('chat-messages');
+    if (!box) return;
+    const orden = [...msgs].reverse();     // Slack devuelve del mas nuevo al mas viejo
+    if (!orden.length) { box.innerHTML = `<div class="chat-ch-empty">Sin mensajes en este canal.</div>`; return; }
+    let dia = '';
+    let html = enHilo
+      ? `<button class="slk-volver" onclick="SlackChat.abrir('${_canal.id}')">‹ Volver a #${esc(_canal.name)}</button>` : '';
+    for (const m of orden) {
+      const f = new Date(+m.ts * 1000);
+      const d2 = f.toLocaleDateString('es-PE', { day: 'numeric', month: 'long' });
+      if (d2 !== dia) { html += `<div class="chat-daysep"><span>${d2}</span></div>`; dia = d2; }
+      const quien = _users[m.user] || m.username || 'Slack';
+      const hora = f.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
+      const reacs = (m.reactions || []).map(r => `<span class="slk-reac">:${esc(r.name)}: ${r.count}</span>`).join('');
+      const hilo = (!enHilo && m.reply_count)
+        ? `<button class="slk-thread" onclick="SlackChat.verHilo('${m.ts}')">${m.reply_count} respuesta${m.reply_count > 1 ? 's' : ''}</button>` : '';
+      const files = (m.files || []).map(f2 => `<div class="slk-file">📎 ${esc(f2.name || 'archivo')}</div>`).join('');
+      html += `<div class="chat-msg">
+        <img class="chat-msg__av" src="https://api.dicebear.com/9.x/lorelei/svg?seed=${encodeURIComponent(quien)}" alt="">
+        <div class="chat-msg__body">
+          <div class="chat-msg__hd"><span class="chat-msg__who">${escNom(quien)}</span><span class="chat-msg__t">${hora}</span></div>
+          <div class="chat-msg__txt">${_fmt(m.text)}</div>
+          ${files}${reacs ? `<div class="slk-reacs">${reacs}</div>` : ''}${hilo}
+        </div>
+      </div>`;
+    }
+    box.innerHTML = html;
+    box.scrollTop = box.scrollHeight;
+  }
+
+  async function verHilo(ts) {
+    try {
+      const r = await apiFetch(`${API}/slack/workspaces/${_wsAct}/canales/${_canal.id}/hilo/${ts}`);
+      const d = await r.json();
+      if (d.error) throw new Error(d.error);
+      _hilo = ts;
+      _pinta([...(d.mensajes || [])].reverse(), true);
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+
+  // Si hay un hilo abierto se responde DENTRO del hilo, no suelto en el canal.
+  async function enviar() {
+    const inp = $$('chat-input');
+    const texto = (inp?.value || '').trim();
+    if (!texto || !_canal) return;
+    inp.value = ''; inp.style.height = 'auto';
+    try {
+      const r = await apiFetch(`${API}/slack/workspaces/${_wsAct}/canales/${_canal.id}/mensajes`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ texto, thread_ts: _hilo || undefined }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'No se pudo enviar');
+      if (_hilo) await verHilo(_hilo); else await abrir(_canal.id);
+    } catch (e) {
+      if (inp) inp.value = texto;                 // no se pierde lo escrito
+      showBanner('Error: ' + e.message, 'error');
+    }
+  }
+
+  return { load, irA, abrir, buscar, verHilo, enviar };
+})();
+
 const ChatModule = (() => {
   let _socket    = null;
   let _channel   = 'general';
@@ -23620,7 +23821,7 @@ function initApp() {
     if (tabName === 'mgmt-calendar')  CalendarModule.load();
     if (tabName === 'mgmt-blocks')    BlocksModule.load();
     if (tabName === 'mgmt-team')      TeamModule.load();
-    if (tabName === 'mgmt-chat')          ChatModule.load();
+    if (tabName === 'mgmt-chat')          SlackChat.load();
     if (tabName === 'lead-manager')       LeadManagerModule.load();
     if (tabName === 'mgmt-timetracking')  TimerModule.loadReport();
   }
