@@ -10275,6 +10275,77 @@ const CalendarModule = (() => {
 // MEETINGS MODULE — drawer CRUD for meetings
 // =================================================================
 
+// =================================================================
+// SLACK — workspaces conectados (uno por cliente)
+// =================================================================
+const SlackModule = (() => {
+  let _ws = [];
+
+  async function cargar() {
+    const cont = document.getElementById('slk-list');
+    if (!cont) return;
+    try {
+      const r = await apiFetch(`${API}/slack/workspaces`);
+      _ws = r.ok ? await r.json() : [];
+    } catch (_) { _ws = []; }
+    pintar();
+  }
+
+  function pintar() {
+    const cont = document.getElementById('slk-list');
+    if (!cont) return;
+    if (!_ws.length) {
+      cont.innerHTML = `<div class="slk-empty">Todavía no hay ningún Slack conectado.</div>`;
+      return;
+    }
+    cont.innerHTML = _ws.map(w => `
+      <div class="slk-row">
+        <span class="slk-dot${w.estado === 'conectado' ? ' slk-dot--on' : ''}"></span>
+        <div class="slk-row__id">
+          <div class="slk-row__nm">${escNom(w.etiqueta || w.team_name)}</div>
+          <div class="slk-row__meta">${esc(w.team_name)}${w.token_tipo === 'user' ? ' · a tu nombre' : ' · como app'}</div>
+        </div>
+        ${w.ultimo_error ? `<span class="slk-err" title="${esc(w.ultimo_error)}">Con error</span>` : ''}
+        <button class="slk-x" onclick="SlackModule.desconectar(${w.id})" title="Desconectar">✕</button>
+      </div>`).join('');
+  }
+
+  async function conectar() {
+    const inp = document.getElementById('slk-token');
+    const lbl = document.getElementById('slk-etiqueta');
+    const btn = document.getElementById('slk-add-btn');
+    const token = (inp?.value || '').trim();
+    if (!token) { showBanner('Pega el token de Slack primero', 'info'); return; }
+    const orig = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = 'Comprobando…'; }
+    try {
+      const r = await apiFetch(`${API}/slack/workspaces`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, etiqueta: (lbl?.value || '').trim() }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || 'No se pudo conectar');
+      if (inp) inp.value = ''; if (lbl) lbl.value = '';   // el token no se queda en pantalla
+      showBanner(`✓ ${d.info?.team_name || 'Slack'} conectado`, 'success');
+      await cargar();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+    finally { if (btn) { btn.disabled = false; btn.textContent = orig; } }
+  }
+
+  async function desconectar(id) {
+    const w = _ws.find(x => x.id === id);
+    if (!confirm(`¿Desconectar ${w ? (w.etiqueta || w.team_name) : 'este Slack'}? Las conversaciones siguen en Slack; solo se borra el acceso.`)) return;
+    try {
+      const r = await apiFetch(`${API}/slack/workspaces/${id}`, { method: 'DELETE' });
+      if (!r.ok) throw new Error('No se pudo desconectar');
+      await cargar();
+      showBanner('Desconectado', 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+
+  return { cargar, conectar, desconectar };
+})();
+
 const MeetingsModule = (() => {
   let _editId = null;
 
@@ -20601,11 +20672,22 @@ const WorkspaceModule = (() => {
     _updateLivePreview();
     $('wsname-overlay').classList.remove('hidden');
     $('wsname-modal').classList.remove('hidden');
+    setSection('apariencia');
     setTimeout(() => $('brand-company-input').focus(), 80);
 
     // Live preview updates on typing
     $('brand-company-input').oninput = _updateLivePreview;
     $('wsname-input').oninput        = _updateLivePreview;
+  }
+
+  // Cambia de seccion en Configuracion. Se cargan los datos de integraciones solo
+  // al entrar, no al abrir el modal: no hace falta pedirlos si vas a tocar el logo.
+  function setSection(sec) {
+    document.querySelectorAll('#wsname-modal .cfg__navb')
+      .forEach(b => b.classList.toggle('on', b.dataset.sec === sec));
+    document.querySelectorAll('#wsname-modal .cfg__sec')
+      .forEach(s2 => { s2.hidden = s2.dataset.sec !== sec; });
+    if (sec === 'integraciones') SlackModule.cargar();
   }
 
   function closeNameModal() {
@@ -20693,7 +20775,7 @@ const WorkspaceModule = (() => {
     }
   }
 
-  return { openInvite, closeInvite, resetInvite, generateInvite, copyInvite, openNameModal, closeNameModal, saveName, onLogoFile, onLogoUrl, clearLogo };
+  return { openInvite, closeInvite, resetInvite, generateInvite, copyInvite, openNameModal, closeNameModal, setSection, saveName, onLogoFile, onLogoUrl, clearLogo };
 })();
 
 // =================================================================

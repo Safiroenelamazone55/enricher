@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260724q"/>
+  <link rel="stylesheet" href="style.css?v=20260724s"/>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -2195,14 +2195,29 @@
 
 <!-- ── BRANDING MODAL ─────────────────────────────────── -->
 <div class="modal-overlay hidden" id="wsname-overlay" onclick="WorkspaceModule.closeNameModal()"></div>
-<div class="modal hidden" id="wsname-modal" style="max-width:460px">
+<div class="modal hidden" id="wsname-modal" style="max-width:720px">
   <div class="modal__header">
-    <h2 class="modal__title">Branding de la empresa</h2>
+    <h2 class="modal__title">Configuración</h2>
     <button class="drawer__close" onclick="WorkspaceModule.closeNameModal()">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
     </button>
   </div>
-  <div class="modal__body">
+  <div class="modal__body cfg">
+    <!-- Barra de secciones, como en Ajustes del sistema: apariencia e integraciones
+         son cosas distintas y no deben compartir pantalla. -->
+    <aside class="cfg__nav">
+      <button class="cfg__navb on" data-sec="apariencia" onclick="WorkspaceModule.setSection('apariencia')">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r="2.5"/><circle cx="19" cy="13" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="10" cy="20" r="2.5"/><path d="M12 2a10 10 0 1 0 0 20c1 0 1.5-.5 1.5-1.2 0-1.3-1.5-1.3-1.5-2.8a2 2 0 0 1 2-2H16a4 4 0 0 0 4-4 8 8 0 0 0-8-8Z"/></svg>
+        Apariencia
+      </button>
+      <button class="cfg__navb" data-sec="integraciones" onclick="WorkspaceModule.setSection('integraciones')">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>
+        Integraciones
+      </button>
+    </aside>
+
+    <div class="cfg__panel">
+      <section class="cfg__sec" data-sec="apariencia">
 
     <!-- Logo upload -->
     <div class="form-row">
@@ -2251,10 +2266,32 @@
       <button class="btn btn--ghost" onclick="WorkspaceModule.closeNameModal()">Cancelar</button>
       <button class="btn btn--primary" onclick="WorkspaceModule.saveName()">Guardar branding</button>
     </div>
+
+      </section>
+
+      <section class="cfg__sec" data-sec="integraciones" hidden>    <!-- Slack: un workspace por cliente. El token se guarda cifrado, nunca en claro. -->
+    <div class="slk-block">
+      <div class="slk-block__hd">
+        <h3 class="slk-block__t">Slack conectado</h3>
+        <span class="slk-block__sub">Un espacio por cliente, todos en el mismo sitio</span>
+      </div>
+      <div id="slk-list" class="slk-list"><div class="slk-empty">Cargando…</div></div>
+      <div class="slk-add">
+        <input class="form-input slk-add__tok" id="slk-token" type="password" autocomplete="off"
+               placeholder="xoxp-… (User OAuth Token)">
+        <input class="form-input slk-add__lbl" id="slk-etiqueta" placeholder="Nombre del cliente (opcional)">
+        <button class="btn btn--primary btn--sm" id="slk-add-btn" onclick="SlackModule.conectar()">Conectar</button>
+      </div>
+      <p class="slk-hint">
+        En <b>api.slack.com/apps</b> → tu app → <b>OAuth &amp; Permissions</b> → copia el
+        <b>User OAuth Token</b>. Se guarda cifrado y se comprueba contra Slack antes de aceptarlo.
+      </p>
+    </div>
+      </section>
+    </div>
   </div>
 </div>
 
-<!-- ── EXCHANGE RATES MODAL ───────────────────────────── -->
 <div class="modal-overlay hidden" id="fx-overlay" onclick="FxRatesModule.close()"></div>
 <div class="modal hidden" id="fx-modal" style="max-width:400px">
   <div class="modal__header">
@@ -2531,7 +2568,7 @@
 })();
 </script>
 
-<script src="app.js?v=20260724q"></script>
+<script src="app.js?v=20260724s"></script>
 <div id="task-quick-edit" style="display:none;position:fixed;z-index:9999"></div>
 </body>
 </html>

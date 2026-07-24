@@ -13994,3 +13994,47 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .mtg-link-row .form-input { flex: 1; min-width: 0; }
 .mtg-meet-btn { flex-shrink: 0; white-space: nowrap; }
 .form-hint { display: block; margin-top: 5px; font-size: 11.5px; color: #918C85; }
+
+/* ── Slack conectado (Configuracion) ────────────────────────────────────────── */
+.slk-block { margin-top: 20px; padding-top: 16px; border-top: 1px solid #E7E3DD; }
+.slk-block__hd { margin-bottom: 10px; }
+.slk-block__t { margin: 0; font-size: 14px; font-weight: 600; color: #1F1D1B; letter-spacing: -.012em; }
+.slk-block__sub { font-size: 12px; color: #918C85; }
+.slk-list { display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px; }
+.slk-empty { font-size: 12.5px; color: #918C85; padding: 8px 0; }
+.slk-row { display: flex; align-items: center; gap: 9px; padding: 7px 9px; border: 1px solid #E7E3DD; border-radius: 9px; background: #FFFFFF; }
+.slk-dot { flex-shrink: 0; width: 7px; height: 7px; border-radius: 50%; background: #C7C7CC; }
+.slk-dot--on { background: #34C759; }
+.slk-row__id { flex: 1; min-width: 0; }
+.slk-row__nm { font-size: 13px; font-weight: 500; color: #1F1D1B; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.slk-row__meta { font-size: 11.5px; color: #918C85; }
+.slk-err { font-size: 11px; color: #FF3B30; }
+.slk-x { width: 24px; height: 24px; border: none; background: none; color: #918C85; border-radius: 6px; cursor: pointer; }
+.slk-x:hover { background: #F1EFEB; color: #FF3B30; }
+.slk-add { display: flex; gap: 6px; flex-wrap: wrap; }
+.slk-add__tok { flex: 2 1 210px; min-width: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.slk-add__lbl { flex: 1 1 140px; min-width: 0; font-size: 13px; }
+.slk-hint { margin: 8px 0 0; font-size: 11.5px; color: #918C85; line-height: 1.5; }
+.slk-hint b { color: #6C6862; font-weight: 600; }
+
+/* ── Configuracion por secciones (Apariencia · Integraciones) ────────────────
+   Antes era un solo formulario largo con Slack colgado detras del pie de
+   branding. Son cosas distintas y no deben compartir pantalla. */
+#wsname-modal .modal__body.cfg { display: flex; gap: 0; padding: 0; min-height: 380px; }
+.cfg__nav {
+  width: 168px; flex-shrink: 0; border-right: 1px solid #E7E3DD; background: #FAF8F5;
+  padding: 12px 8px; display: flex; flex-direction: column; gap: 2px;
+}
+.cfg__navb {
+  display: flex; align-items: center; gap: 9px; width: 100%; text-align: left;
+  font: inherit; font-size: 13px; font-weight: 500; color: #6C6862;
+  background: none; border: none; border-radius: 8px; padding: 8px 10px; cursor: pointer;
+  transition: background .12s, color .12s;
+}
+.cfg__navb svg { flex-shrink: 0; opacity: .75; }
+.cfg__navb:hover { background: rgba(0,0,0,.035); color: #1F1D1B; }
+.cfg__navb.on { background: #EAE7E2; color: #1F1D1B; font-weight: 600; }
+.cfg__navb.on svg { opacity: 1; }
+.cfg__panel { flex: 1; min-width: 0; padding: 18px 20px 20px; max-height: 72vh; overflow-y: auto; }
+.cfg__sec[hidden] { display: none; }
+.cfg__panel .slk-block { margin-top: 0; padding-top: 0; border-top: none; }
