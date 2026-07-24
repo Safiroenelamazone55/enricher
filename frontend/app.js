@@ -20915,6 +20915,8 @@ const SlackChat = (() => {
   let _noLeidos = {};     // canal -> nº sin leer (del workspace que se mira)
   let _nlPorWs  = {};     // workspace -> total, para la insignia del riel
   let _vinculos = {};     // canal de Slack -> proyecto ligado
+  let _miembros = [];     // equipo del workspace (para etiquetar)
+  let _menciones = [];    // tokens insertados: {token, id} -> se traducen al enviar
 
   const $$ = id => document.getElementById(id);
 
@@ -21001,7 +21003,8 @@ const SlackChat = (() => {
       // El indice trae a todos (incluidos los que ya no estan); la lista de miembros
       // solo a los activos. Para resolver nombres hace falta el indice completo.
       _users = { ...(dm.indice || {}) };
-      (dm.miembros || []).forEach(u => { _users[u.id] = u.nombre || u.usuario; });
+      _miembros = dm.miembros || [];
+      _miembros.forEach(u => { _users[u.id] = u.nombre || u.usuario; });
       _canales = dc.canales || [];
       apiFetch(`${API}/slack/workspaces/${wsId}/vinculos`).then(r => r.json())
         .then(v => { _vinculos = v || {}; _pintaCanales(); }).catch(() => {});
@@ -21241,8 +21244,11 @@ const SlackChat = (() => {
   // Si hay un hilo abierto se responde DENTRO del hilo, no suelto en el canal.
   async function enviar() {
     const inp = $$('chat-input');
-    const texto = (inp?.value || '').trim();
+    let texto = (inp?.value || '').trim();
     if (!texto || !_canal) return;
+    // Traducir los tokens de mencion a la sintaxis de Slack antes de mandar.
+    for (const m of _menciones) texto = texto.split(m.token).join(`<@${m.id}>`);
+    _menciones = [];
     inp.value = ''; inp.style.height = 'auto';
     try {
       const r = await apiFetch(`${API}/slack/workspaces/${_wsAct}/canales/${_canal.id}/mensajes`, {
@@ -21271,6 +21277,48 @@ const SlackChat = (() => {
     inp.focus();
     inp.setSelectionRange(ini + env[0].length, ini + env[0].length + sel.length);
     ChatModule.onInputChange(inp);
+  }
+
+  // Selector de personas para etiquetar. Slack no tagea con un @ suelto: necesita
+  // <@ID>. Aqui se elige a la persona y se inserta un token legible (@Nombre) que
+  // se traduce a <@ID> justo al enviar.
+  function menciones(ev) {
+    if (ev) ev.stopPropagation();
+    document.querySelectorAll('.slk-men-pop').forEach(x => x.remove());
+    const inp = $$('chat-input'); if (!inp) return;
+    const pop = document.createElement('div');
+    pop.className = 'slk-men-pop';
+    const pinta = (filtro = '') => {
+      const q = filtro.toLowerCase();
+      const lista = _miembros.filter(m => (m.nombre || m.usuario || '').toLowerCase().includes(q)).slice(0, 8);
+      pop.innerHTML = `<input class="slk-men-q" placeholder="Buscar persona…" value="${esc(filtro)}">`
+        + (lista.length ? lista.map(m =>
+            `<button class="slk-men-it" onclick="SlackChat._mencionar('${m.id}','${esc((m.nombre||m.usuario).replace(/'/g,''))}')">
+               <img src="https://api.dicebear.com/9.x/lorelei/svg?seed=${encodeURIComponent(m.nombre||m.usuario)}"><span>${escNom(m.nombre||m.usuario)}</span>
+             </button>`).join('')
+          : `<div class="slk-men-empty">Sin resultados</div>`);
+      const qi = pop.querySelector('.slk-men-q');
+      qi.oninput = () => pinta(qi.value);
+      setTimeout(() => qi.focus(), 0);
+    };
+    pop.style.cssText = 'position:fixed;z-index:10050;width:250px;visibility:hidden';
+    document.body.appendChild(pop);
+    pinta('');
+    // Anclar al boton @ (siempre visible), encima de el. Medir el alto real y no
+    // salirse por arriba de la pantalla.
+    const btn = (ev && ev.currentTarget) || document.querySelector('.chat-tool-btn[title="Mencionar a alguien"]');
+    const r = (btn || $$('chat-input')).getBoundingClientRect();
+    const alto = pop.offsetHeight || 240;
+    pop.style.top  = Math.max(8, r.top - alto - 6) + 'px';
+    pop.style.left = Math.min(r.left, window.innerWidth - 260) + 'px';
+    pop.style.visibility = 'visible';
+    setTimeout(() => document.addEventListener('click', function o(e2) { if (!pop.contains(e2.target)) { pop.remove(); document.removeEventListener('click', o); } }), 0);
+  }
+  function _mencionar(id, nombre) {
+    document.querySelectorAll('.slk-men-pop').forEach(x => x.remove());
+    const token = '@' + nombre;
+    _menciones.push({ token, id });
+    insertar(token + ' ');
   }
 
   function insertar(txt) {
@@ -21451,7 +21499,8 @@ const SlackChat = (() => {
   return { load, irA, abrir, buscar, verHilo, enviar, detener: _pararSondeo,
            fmt, insertar, adjuntar, grabarAudio, emojiPicker, _emojiIns,
            menuMsg, reaccionar, anclar, copiar,
-           menuCanal, verProyecto, verTareas, copiarNombre, archivarCanal };
+           menuCanal, verProyecto, verTareas, copiarNombre, archivarCanal,
+           menciones, _mencionar };
 })();
 
 const ChatModule = (() => {

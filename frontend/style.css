@@ -14185,3 +14185,12 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 /* Canal ligado a un proyecto: un puntito para distinguirlo de los sueltos */
 #chat-channels .chat-ch--pj .chat-ch__hash::after { content:''; }
 #chat-channels .chat-ch--pj .chat-ch__name::before { content:'●'; color:#34C759; font-size:7px; vertical-align:middle; margin-right:5px; }
+
+/* Selector de personas para etiquetar (@) */
+.slk-men-pop { background:#fff; border:1px solid #E7E3DD; border-radius:12px; box-shadow:0 10px 34px rgba(0,0,0,.16); padding:6px; }
+.slk-men-q { width:100%; box-sizing:border-box; font:inherit; font-size:13px; border:1px solid #E7E3DD; border-radius:8px; padding:6px 9px; margin-bottom:5px; outline:none; }
+.slk-men-q:focus { border-color:#007AFF; }
+.slk-men-it { display:flex; align-items:center; gap:8px; width:100%; text-align:left; font:inherit; font-size:13px; color:#1F1D1B; background:none; border:none; border-radius:8px; padding:5px 7px; cursor:pointer; }
+.slk-men-it:hover { background:#F1EFEB; }
+.slk-men-it img { width:24px; height:24px; border-radius:6px; background:#F1EFEB; }
+.slk-men-empty { font-size:12.5px; color:#918C85; padding:8px 7px; }
