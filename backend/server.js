@@ -6263,6 +6263,15 @@ app.post('/api/slack/workspaces/:id/canales/:canal/archivar-canal', requireAuth,
   } catch (err) { res.status(400).json({ error: err.message }); }
 });
 
+// Guardados del workspace (stars.list). Sección "Guardados" del riel.
+app.get('/api/slack/workspaces/:id/guardados', requireAuth, async (req, res) => {
+  try {
+    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
+    res.json({ items: await slackSvc.guardados(w) });
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
 // Marcar una conversacion como leida en Slack (al abrirla desde aqui).
 app.post('/api/slack/workspaces/:id/canales/:canal/leido', requireAuth, async (req, res) => {
   try {

@@ -247,6 +247,17 @@ async function marcarLeido(ws, canalId) {
   return true;
 }
 
+// "Guardados" = lo que la persona marcó para después en Slack (stars.list). Devuelve
+// solo los mensajes, con lo justo para pintarlos y saltar a su canal. Necesita el
+// scope stars:read; si falta, _call lanza un error de permisos que el front traduce a
+// "reconecta este Slack".
+async function guardados(ws) {
+  const d = await _call(token(ws), 'stars.list', { limit: 100 });
+  return (d.items || [])
+    .filter(i => i.type === 'message' && i.message)
+    .map(i => ({ channel: i.channel, user: i.message.user, text: i.message.text || '', ts: i.message.ts }));
+}
+
 async function renombrarCanal(ws, canalId, nombre) {
   const d = await _call(token(ws), 'conversations.rename', { channel: canalId, name: nombre }, 'POST');
   return d.channel;
@@ -269,5 +280,5 @@ async function archivarCanal(ws, canalId, { dm = false } = {}) {
 module.exports = {
   encPass, verificar, canales, miembros, noLeidos, historial, hilo,
   enviar, directo, crearCanal, archivarCanal, normalizarNombre, _errorClaro,
-  reaccionar, quitarReaccion, anclar, desanclar, anclados, subirArchivo, renombrarCanal, marcarNoLeido, marcarLeido,
+  reaccionar, quitarReaccion, anclar, desanclar, anclados, subirArchivo, renombrarCanal, marcarNoLeido, marcarLeido, guardados,
 };

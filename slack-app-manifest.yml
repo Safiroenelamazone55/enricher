@@ -43,6 +43,7 @@ oauth_config:
       - reactions:write      # reaccionar a un mensaje
       - pins:read            # ver mensajes anclados
       - pins:write           # anclar / desanclar
+      - stars:read           # ver los mensajes guardados ("Guardados")
 
     # Token de bot (xoxb-) — minimo, por si mas adelante hace falta que Nova
     # publique avisos automaticos por su cuenta.

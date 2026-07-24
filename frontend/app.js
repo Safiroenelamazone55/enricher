@@ -20923,6 +20923,8 @@ const SlackChat = (() => {
                           // todos los tipos (los directos sí, los canales públicos no),
                           // así que el sondeo por sí solo borraría la insignia recién
                           // puesta. Aquí la fijamos nosotros hasta que se abra el chat.
+  let _seccion   = localStorage.getItem('slk_sec') || 'canales';  // sección del riel
+  let _guardados = null;   // cache de la sección Guardados (null = aún sin cargar)
 
   const $$ = id => document.getElementById(id);
 
@@ -20931,6 +20933,14 @@ const SlackChat = (() => {
   function _totalNoLeidos() { return Object.values(_noLeidos).reduce((a, b) => a + (+b || 0), 0); }
   // Reaplica los "no leído" manuales sobre lo que devuelve el sondeo de Slack.
   function _fusionaSticky() { Object.keys(_marcadoNL).forEach(id => { _noLeidos[id] = Math.max(1, _noLeidos[id] || 0); }); }
+
+  // Iconos del riel de secciones (línea fina, estilo iOS).
+  const _ICONO_SEC = {
+    canales:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/></svg>',
+    directos:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.5 8.5 0 0 1-3.6-.8L3 21l1.9-5.7A8.38 8.38 0 0 1 4 11.5 8.5 8.5 0 0 1 12.5 3 8.38 8.38 0 0 1 21 11.5z"/></svg>',
+    notif:     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>',
+    guardados: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>',
+  };
 
   // El shell crecia con el contenido (4000+ px) y obligaba a scrollear toda la
   // pagina. Se acota a lo que queda de pantalla y cada columna scrollea por dentro.
@@ -20991,7 +21001,8 @@ const SlackChat = (() => {
     const r = $$('chat-rail');
     if (!r) return;
     const ini = t => (String(t || '?').trim()[0] || '?').toUpperCase();
-    r.innerHTML = _ws.map(w => `
+    // Arriba: los espacios de Slack (cuál Slack). Es el switch de workspace.
+    const wsHtml = _ws.map(w => `
       <button class="chat-rail__b${String(_wsAct) === String(w.id) ? ' on' : ''}"
               title="${esc(w.etiqueta || w.team_name)}${_nlPorWs[w.id] ? ` — ${_nlPorWs[w.id]} sin leer` : ''}"
               onclick="SlackChat.irA(${w.id})">
@@ -21000,6 +21011,24 @@ const SlackChat = (() => {
       </button>`).join('')
       + `<button class="chat-rail__add" title="Conectar otro Slack"
                 onclick="WorkspaceModule.openNameModal();setTimeout(()=>WorkspaceModule.setSection('integraciones'),60)">+</button>`;
+
+    // Abajo: las secciones DENTRO del workspace elegido (canales / directos /
+    // notificaciones / guardados), como el riel fino de Slack. Un puntito rojo marca
+    // lo que tiene algo sin leer.
+    const hayC = _canales.some(c => !c.is_im && !c.is_mpim && _noLeidos[c.id]);
+    const hayD = _canales.some(c => (c.is_im || c.is_mpim) && _noLeidos[c.id]);
+    const secs = [
+      ['canales',   'Canales',           hayC],
+      ['directos',  'Mensajes directos', hayD],
+      ['notif',     'Notificaciones',    _totalNoLeidos() > 0],
+      ['guardados', 'Guardados',         false],
+    ];
+    const secHtml = `<div class="chat-rail__sep"></div>` + secs.map(([id, t, dot]) => `
+      <button class="chat-rail__sec${_seccion === id ? ' on' : ''}" title="${t}" onclick="SlackChat.seccion('${id}')">
+        ${_ICONO_SEC[id]}${dot ? '<span class="chat-rail__dot"></span>' : ''}
+      </button>`).join('');
+
+    r.innerHTML = wsHtml + secHtml;
   }
 
   async function irA(wsId) {
@@ -21043,45 +21072,107 @@ const SlackChat = (() => {
     return c.name || '';
   }
 
+  // Una fila de la lista (canal o directo). Se reutiliza en todas las secciones.
+  function _filaCanal(c) {
+    const nm = c._nm || _nombreDe(c);
+    const n = _noLeidos[c.id] || 0;
+    const ico = c.is_im ? '' : (c.is_private || c.is_mpim) ? '🔒' : '#';
+    const vinc = _vinculos[c.id] ? ' chat-ch--pj' : '';
+    return `<button class="chat-ch${_canal && _canal.id === c.id ? ' active' : ''}${n ? ' unread' : ''}${vinc}"
+                    onclick="SlackChat.abrir('${c.id}')"
+                    oncontextmenu="SlackChat.menuCanal(event,'${c.id}')">
+      ${c.is_im ? `<img class="chat-ch__av" src="https://api.dicebear.com/9.x/lorelei/svg?seed=${encodeURIComponent(nm)}" alt="">`
+                : `<span class="chat-ch__hash">${ico}</span>`}
+      <span class="chat-ch__name">${c.is_im ? escNom(nm) : esc(nm)}</span>
+      ${n ? `<span class="chat-ch__n">${n > 99 ? '99+' : n}</span>` : ''}
+    </button>`;
+  }
+
+  // Orden: sin leer primero; luego por actividad reciente; si empatan, alfabético.
+  function _ordenCanal(a, b) {
+    const ua = _noLeidos[a.id] ? 1 : 0, ub = _noLeidos[b.id] ? 1 : 0;
+    if (ua !== ub) return ub - ua;
+    const ta = +(_actividad[a.id] || 0), tb = +(_actividad[b.id] || 0);
+    if (ta !== tb) return tb - ta;
+    return (a._nm || '').localeCompare(b._nm || '');
+  }
+
+  // La lista lateral cambia según la sección elegida en el riel.
   function _pintaCanales(filtro = '') {
     const cont = $$('chat-channels');
     if (!cont) return;
+    if (_seccion === 'notif')     return _pintaNotif();
+    if (_seccion === 'guardados') return _pintaGuardados();
     const q = filtro.trim().toLowerCase();
     const conNombre = _canales.map(c => ({ ...c, _nm: _nombreDe(c) }));
-    const lista = q ? conNombre.filter(c => c._nm.toLowerCase().includes(q)) : conNombre;
-    const w = _ws.find(x => String(x.id) === String(_wsAct));
-
-    const fila = c => {
-      const n = _noLeidos[c.id] || 0;
-      const ico = c.is_im ? '' : (c.is_private || c.is_mpim) ? '🔒' : '#';
-      const vinc = _vinculos[c.id] ? ' chat-ch--pj' : '';
-      return `<button class="chat-ch${_canal && _canal.id === c.id ? ' active' : ''}${n ? ' unread' : ''}${vinc}"
-                      onclick="SlackChat.abrir('${c.id}')"
-                      oncontextmenu="SlackChat.menuCanal(event,'${c.id}')">
-        ${c.is_im ? `<img class="chat-ch__av" src="https://api.dicebear.com/9.x/lorelei/svg?seed=${encodeURIComponent(c._nm)}" alt="">`
-                  : `<span class="chat-ch__hash">${ico}</span>`}
-        <span class="chat-ch__name">${c.is_im ? escNom(c._nm) : esc(c._nm)}</span>
-        ${n ? `<span class="chat-ch__n">${n > 99 ? '99+' : n}</span>` : ''}
-      </button>`;
-    };
-
-    // Orden: lo que tiene mensajes sin leer primero; luego por actividad mas reciente;
-    // y si empatan (sin datos de actividad), alfabetico. Asi lo ultimo sube arriba.
-    const orden = (a, b) => {
-      const ua = _noLeidos[a.id] ? 1 : 0, ub = _noLeidos[b.id] ? 1 : 0;
-      if (ua !== ub) return ub - ua;
-      const ta = +(_actividad[a.id] || 0), tb = +(_actividad[b.id] || 0);
-      if (ta !== tb) return tb - ta;
-      return a._nm.localeCompare(b._nm);
-    };
-    const canales  = lista.filter(c => !c.is_im && !c.is_mpim).sort(orden);
-    const directos = lista.filter(c =>  c.is_im ||  c.is_mpim).sort(orden);
-
+    const dm = _seccion === 'directos';
+    const base = conNombre.filter(c => dm ? (c.is_im || c.is_mpim) : (!c.is_im && !c.is_mpim));
+    const lista = (q ? base.filter(c => c._nm.toLowerCase().includes(q)) : base).sort(_ordenCanal);
     cont.innerHTML =
-      `<div class="chat-ch-slabel">${esc(w ? (w.etiqueta || w.team_name) : 'Slack')}</div>`
-      + (canales.length  ? `<div class="chat-ch-slabel chat-ch-slabel--sub">Canales</div>` + canales.map(fila).join('') : '')
-      + (directos.length ? `<div class="chat-ch-slabel chat-ch-slabel--sub">Mensajes directos</div>` + directos.map(fila).join('') : '')
-      + (!lista.length ? `<div class="chat-ch-empty">Sin resultados para "${esc(filtro)}".</div>` : '');
+      `<div class="chat-sec-title">${dm ? 'Mensajes directos' : 'Canales'}</div>`
+      + (lista.length ? lista.map(_filaCanal).join('')
+         : `<div class="chat-ch-empty">${q ? `Sin resultados para "${esc(filtro)}".` : (dm ? 'Sin conversaciones directas.' : 'Sin canales.')}</div>`);
+  }
+
+  // Notificaciones: todo lo que tiene mensajes sin leer, junto y de lo más reciente a
+  // lo más antiguo. Es la vista "qué me falta ver" sin saltar entre secciones.
+  function _pintaNotif() {
+    const cont = $$('chat-channels');
+    if (!cont) return;
+    const lista = _canales.map(c => ({ ...c, _nm: _nombreDe(c) }))
+      .filter(c => _noLeidos[c.id]).sort(_ordenCanal);
+    cont.innerHTML = `<div class="chat-sec-title">Notificaciones</div>`
+      + (lista.length ? lista.map(_filaCanal).join('')
+         : `<div class="chat-ch-empty">Todo al día — no hay mensajes sin leer.</div>`);
+  }
+
+  // Guardados: los mensajes que marcaste "guardar" en Slack. Requiere el permiso de
+  // lectura de guardados; si falta, avisamos para reconectar el Slack.
+  function _pintaGuardados() {
+    const cont = $$('chat-channels');
+    if (!cont) return;
+    if (_guardados === null) { cont.innerHTML = `<div class="chat-sec-title">Guardados</div><div class="chat-ch-empty">Cargando…</div>`; return; }
+    if (_guardados.error) {
+      const falta = /scope|permiso|guardad/i.test(_guardados.error);
+      cont.innerHTML = `<div class="chat-sec-title">Guardados</div>`
+        + `<div class="chat-ch-empty">${falta
+            ? 'Para ver tus guardados hay que reconectar este Slack (le añadimos el permiso). Configuración → Integraciones.'
+            : esc(_guardados.error)}</div>`;
+      return;
+    }
+    const items = _guardados.items || [];
+    cont.innerHTML = `<div class="chat-sec-title">Guardados</div>`
+      + (items.length ? items.map(_filaGuardado).join('')
+         : `<div class="chat-ch-empty">No tienes mensajes guardados.</div>`);
+  }
+
+  function _filaGuardado(it) {
+    const quien = _users[it.user] || 'Alguien';
+    const txt = (it.text || '').replace(/\s+/g, ' ').slice(0, 90);
+    return `<button class="chat-ch chat-saved" onclick="SlackChat.abrir('${it.channel}')" title="Ir a la conversación">
+      <span class="chat-ch__hash">🔖</span>
+      <span class="chat-ch__name"><b>${escNom(quien)}</b> ${esc(txt) || '(archivo)'}</span>
+    </button>`;
+  }
+
+  async function _cargarGuardados() {
+    _guardados = null; _pintaGuardados();
+    try {
+      const r = await apiFetch(`${API}/slack/workspaces/${_wsAct}/guardados`);
+      const d = await r.json();
+      _guardados = r.ok ? { items: d.items || [] } : { error: d.error || 'No se pudo' };
+    } catch (e) { _guardados = { error: e.message }; }
+    if (_seccion === 'guardados') _pintaGuardados();
+  }
+
+  // Cambiar de sección desde el riel.
+  function seccion(s) {
+    _seccion = s; localStorage.setItem('slk_sec', s);
+    _riel();
+    const buscador = document.querySelector('.chat-sidebar__search');
+    if (buscador) buscador.value = '';
+    if (s === 'guardados') _cargarGuardados();
+    else _pintaCanales('');
   }
 
   function buscar(v) { _pintaCanales(v || ''); }
@@ -21618,7 +21709,7 @@ const SlackChat = (() => {
            fmt, insertar, adjuntar, grabarAudio, emojiPicker, _emojiIns,
            menuMsg, reaccionar, anclar, copiar,
            menuCanal, verProyecto, verTareas, copiarNombre, archivarCanal, marcarNoLeido,
-           menciones, _mencionar, detectarArroba };
+           seccion, menciones, _mencionar, detectarArroba };
 })();
 
 const ChatModule = (() => {
