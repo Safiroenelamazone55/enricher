@@ -1,0 +1,51 @@
+# ── Manifiesto de la app de Slack para Nova ──────────────────────────────────
+# Se pega tal cual en api.slack.com/apps -> Create New App -> From a manifest.
+# Hay que repetirlo en CADA workspace de cliente: una app por workspace mantiene
+# los limites de la API buenos (las apps distribuidas fuera del Marketplace estan
+# limitadas a 1 peticion por minuto desde mayo de 2025).
+#
+# Se piden permisos de USUARIO (no solo de bot) por una razon practica: un bot solo
+# ve los canales a los que se le invita, asi que habria que invitarlo uno por uno a
+# todos los canales que ya existen. Con permisos de usuario se ve exactamente lo
+# mismo que ve Jenny, sin invitar nada, y los mensajes salen a su nombre.
+display_information:
+  name: Nova
+  description: Conecta este Slack con Nova para ver y responder desde un solo sitio
+  background_color: "#1F1D1B"
+
+features:
+  bot_user:
+    display_name: Nova
+    always_online: false
+
+oauth_config:
+  scopes:
+    # Token de usuario (xoxp-) — el que de verdad usa Nova
+    user:
+      - channels:read        # listar canales publicos
+      - channels:history     # leer sus mensajes
+      - channels:write       # crear y archivar canales (uno por proyecto)
+      - groups:read          # canales privados
+      - groups:history
+      - groups:write
+      - im:read              # mensajes directos
+      - im:history
+      - im:write
+      - mpim:read            # grupos de mensajes directos
+      - mpim:history
+      - users:read           # ver el equipo y resolver las menciones
+      - users:read.email
+      - chat:write           # escribir COMO Jenny, no como una app
+      - search:read          # buscar dentro de Slack desde Nova
+
+    # Token de bot (xoxb-) — minimo, por si mas adelante hace falta que Nova
+    # publique avisos automaticos por su cuenta.
+    bot:
+      - channels:read
+      - chat:write
+      - users:read
+
+settings:
+  org_deploy_enabled: false
+  socket_mode_enabled: false
+  token_rotation_enabled: false

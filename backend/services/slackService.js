@@ -8,6 +8,11 @@
 // los límites normales, así que crear una app POR workspace deja cada instalación
 // del lado bueno de esa frontera.
 //
+// Se prefiere el token de USUARIO (xoxp-) sobre el de bot: un bot solo ve los canales
+// a los que se le invita —habría que invitarlo a cada canal ya existente— y sus
+// mensajes salen a nombre de la app. Con el de usuario se ve lo mismo que ve ella y
+// los mensajes salen a su nombre, que es lo que importa hablando con clientes.
+//
 // El token nunca se guarda en claro: se cifra con el mismo AES-256-GCM que usan las
 // contraseñas de los buzones.
 const { encPass, decPass } = require('./mailboxService');
