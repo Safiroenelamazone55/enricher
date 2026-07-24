@@ -14149,3 +14149,20 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 #chat-messages .chat-msg__txt, .slk-reac {
   font-family: inherit, 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji';
 }
+
+/* ── Menu contextual del mensaje (clic derecho) ── */
+.slk-msgmenu { background:#fff; border:1px solid #E7E3DD; border-radius:11px; box-shadow:0 10px 34px rgba(0,0,0,.16); padding:5px; min-width:210px; }
+.slk-mm-reacs { display:flex; gap:2px; padding:3px 3px 6px; border-bottom:1px solid #F1EFEB; margin-bottom:4px; }
+.slk-mm-reac { flex:1; font-size:17px; background:none; border:none; border-radius:7px; padding:5px 0; cursor:pointer; }
+.slk-mm-reac:hover { background:#F1EFEB; transform:scale(1.15); }
+.slk-mm-op { display:block; width:100%; text-align:left; font:inherit; font-size:13px; color:#1F1D1B; background:none; border:none; border-radius:7px; padding:7px 10px; cursor:pointer; }
+.slk-mm-op:hover { background:#F1EFEB; }
+/* ── Picker de emoji del composer ── */
+.slk-emoji-pop { background:#fff; border:1px solid #E7E3DD; border-radius:12px; box-shadow:0 10px 34px rgba(0,0,0,.16); padding:8px; display:grid; grid-template-columns:repeat(5,1fr); gap:2px; width:224px; }
+.slk-emoji-pop button { font-size:20px; background:none; border:none; border-radius:8px; padding:6px 0; cursor:pointer; }
+.slk-emoji-pop button:hover { background:#F1EFEB; transform:scale(1.18); }
+/* ── Boton de grabar audio: rojo mientras graba ── */
+#slk-rec-btn.grabando { color:#fff !important; background:#FF3B30 !important; border-radius:8px; animation:slkpulse 1.1s ease-in-out infinite; }
+@keyframes slkpulse { 0%,100%{opacity:1} 50%{opacity:.55} }
+/* El mensaje resalta al pasar, para que se note que tiene clic derecho */
+#chat-messages .chat-msg { cursor:default; }

@@ -6119,6 +6119,54 @@ app.get('/api/slack/workspaces/:id/canales', requireAuth, async (req, res) => {
   } catch (err) { res.status(400).json({ error: err.message }); }
 });
 
+// Reaccionar a un mensaje.
+app.post('/api/slack/workspaces/:id/canales/:canal/reaccion', requireAuth, async (req, res) => {
+  const { ts, emoji, quitar } = req.body || {};
+  try {
+    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
+    if (quitar) await slackSvc.quitarReaccion(w, req.params.canal, ts, emoji);
+    else        await slackSvc.reaccionar(w, req.params.canal, ts, emoji);
+    res.json({ ok: true });
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
+// Anclar / desanclar.
+app.post('/api/slack/workspaces/:id/canales/:canal/anclar', requireAuth, async (req, res) => {
+  const { ts, quitar } = req.body || {};
+  try {
+    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
+    if (quitar) await slackSvc.desanclar(w, req.params.canal, ts);
+    else        await slackSvc.anclar(w, req.params.canal, ts);
+    res.json({ ok: true });
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
+// Mensajes anclados del canal.
+app.get('/api/slack/workspaces/:id/canales/:canal/anclados', requireAuth, async (req, res) => {
+  try {
+    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
+    res.json({ anclados: await slackSvc.anclados(w, req.params.canal) });
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
+// Subir documento o audio. El binario no se guarda en Nova: va directo a Slack.
+app.post('/api/slack/workspaces/:id/canales/:canal/archivo', requireAuth, upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No llegó ningún archivo' });
+    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
+    const f = await slackSvc.subirArchivo(w, req.params.canal, req.file.buffer,
+      req.file.originalname || 'archivo', req.body?.comentario || '', req.body?.thread_ts || '');
+    res.status(201).json({ ok: true, file: { id: f.id, name: f.name } });
+  } catch (err) {
+    console.error('[slack] archivo:', err.message);
+    res.status(400).json({ error: err.message });
+  }
+});
+
 // No leidos del workspace: el numero que va sobre la letra en el riel.
 app.get('/api/slack/workspaces/:id/no-leidos', requireAuth, async (req, res) => {
   try {

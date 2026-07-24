@@ -21196,7 +21196,8 @@ const SlackChat = (() => {
       const hilo = (!enHilo && m.reply_count)
         ? `<button class="slk-thread" onclick="SlackChat.verHilo('${m.ts}')">${m.reply_count} respuesta${m.reply_count > 1 ? 's' : ''}</button>` : '';
       const files = (m.files || []).map(f2 => `<div class="slk-file">📎 ${esc(f2.name || 'archivo')}</div>`).join('');
-      html += `<div class="chat-msg">
+      html += `<div class="chat-msg" data-ts="${m.ts}"
+                    oncontextmenu="SlackChat.menuMsg(event,'${m.ts}',${m.reply_count || 0})">
         <img class="chat-msg__av" src="https://api.dicebear.com/9.x/lorelei/svg?seed=${encodeURIComponent(quien)}" alt="">
         <div class="chat-msg__body">
           <div class="chat-msg__hd"><span class="chat-msg__who">${escNom(quien)}</span><span class="chat-msg__t">${hora}</span></div>
@@ -21241,7 +21242,144 @@ const SlackChat = (() => {
     }
   }
 
-  return { load, irA, abrir, buscar, verHilo, enviar, detener: _pararSondeo };
+  // Formato: Slack usa UN asterisco para negrita, no dos. El toolbar del chat viejo
+  // metia ** y en Slack salia literal.
+  function fmt(tipo) {
+    const inp = $$('chat-input'); if (!inp) return;
+    const ini = inp.selectionStart, fin = inp.selectionEnd;
+    const sel = inp.value.slice(ini, fin) || 'texto';
+    const env = { bold: ['*', '*'], italic: ['_', '_'], code: ['`', '`'],
+                  strike: ['~', '~'], quote: ['> ', ''], list: ['- ', ''] }[tipo];
+    if (!env) return;
+    inp.value = inp.value.slice(0, ini) + env[0] + sel + env[1] + inp.value.slice(fin);
+    inp.focus();
+    inp.setSelectionRange(ini + env[0].length, ini + env[0].length + sel.length);
+    ChatModule.onInputChange(inp);
+  }
+
+  function insertar(txt) {
+    const inp = $$('chat-input'); if (!inp) return;
+    const ini = inp.selectionStart;
+    inp.value = inp.value.slice(0, ini) + txt + inp.value.slice(inp.selectionEnd);
+    inp.focus(); inp.setSelectionRange(ini + txt.length, ini + txt.length);
+    ChatModule.onInputChange(inp);
+  }
+
+  // Adjuntar: abre el selector, sube a Slack (no se guarda en Nova) y refresca.
+  function adjuntar() {
+    if (!_canal) { showBanner('Abre un canal primero', 'info'); return; }
+    let inp = document.getElementById('slk-file');
+    if (!inp) {
+      inp = document.createElement('input');
+      inp.type = 'file'; inp.id = 'slk-file'; inp.style.display = 'none';
+      inp.onchange = () => { if (inp.files[0]) _subir(inp.files[0]); inp.value = ''; };
+      document.body.appendChild(inp);
+    }
+    inp.click();
+  }
+
+  async function _subir(file) {
+    const comentario = ($$('chat-input') && $$('chat-input').value || '').trim();
+    const fd = new FormData();
+    fd.append('file', file);
+    if (comentario) fd.append('comentario', comentario);
+    if (_hilo) fd.append('thread_ts', _hilo);
+    showBanner('Subiendo ' + file.name + '...', 'info');
+    try {
+      const r = await apiFetch(API + '/slack/workspaces/' + _wsAct + '/canales/' + _canal.id + '/archivo',
+        { method: 'POST', body: fd });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'No se pudo subir');
+      const box = $$('chat-input'); if (box) { box.value = ''; ChatModule.onInputChange(box); }
+      showBanner('Archivo enviado', 'success');
+      if (_hilo) verHilo(_hilo); else abrir(_canal.id);
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+
+  // Grabar audio con el microfono y enviarlo como nota de voz.
+  let _rec = null, _trozos = [];
+  async function grabarAudio() {
+    if (_rec && _rec.state === 'recording') { _rec.stop(); return; }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      _rec = new MediaRecorder(stream); _trozos = [];
+      _rec.ondataavailable = e => _trozos.push(e.data);
+      _rec.onstop = () => {
+        stream.getTracks().forEach(t => t.stop());
+        const blob = new Blob(_trozos, { type: 'audio/webm' });
+        const marca = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
+        _subir(new File([blob], 'nota-de-voz-' + marca + '.webm', { type: 'audio/webm' }));
+        const b = document.getElementById('slk-rec-btn'); if (b) b.classList.remove('grabando');
+      };
+      _rec.start();
+      const b = document.getElementById('slk-rec-btn'); if (b) b.classList.add('grabando');
+      showBanner('Grabando... pulsa de nuevo para enviar', 'info');
+    } catch (_) { showBanner('No se pudo acceder al microfono', 'error'); }
+  }
+
+  const EMOJIS_RAPIDOS = ['👍','🙏','🔥','✅','❤️','😂','🎉','👀','💯','🚀','😍','😅','🤝','💪','👏','⭐','😎','🤔','😢','😡'];
+  function emojiPicker(ev) {
+    ev.stopPropagation();
+    document.querySelectorAll('.slk-emoji-pop').forEach(x => x.remove());
+    const pop = document.createElement('div');
+    pop.className = 'slk-emoji-pop';
+    pop.innerHTML = EMOJIS_RAPIDOS.map(e => '<button onclick="SlackChat._emojiIns(\'' + e + '\')">' + e + '</button>').join('');
+    const r = ev.currentTarget.getBoundingClientRect();
+    document.body.appendChild(pop);
+    pop.style.cssText += ';position:fixed;z-index:10050;bottom:' + (window.innerHeight - r.top + 6) + 'px;left:' + Math.min(r.left, window.innerWidth - 240) + 'px';
+    setTimeout(() => document.addEventListener('click', function o(e2) { if (!pop.contains(e2.target)) { pop.remove(); document.removeEventListener('click', o); } }), 0);
+  }
+  function _emojiIns(e) { insertar(e); document.querySelectorAll('.slk-emoji-pop').forEach(x => x.remove()); }
+
+  // Menu contextual del mensaje: reaccionar, anclar, abrir hilo, copiar.
+  function menuMsg(ev, ts, replies) {
+    ev.preventDefault(); ev.stopPropagation();
+    document.querySelectorAll('.slk-msgmenu').forEach(x => x.remove());
+    const reac = ['👍','❤️','😂','🎉','✅','🙏'].map(e =>
+      '<button class="slk-mm-reac" onclick="SlackChat.reaccionar(\'' + ts + '\',\'' + e + '\')">' + e + '</button>').join('');
+    const m = document.createElement('div');
+    m.className = 'slk-msgmenu';
+    m.innerHTML =
+      '<div class="slk-mm-reacs">' + reac + '</div>'
+      + (replies ? '<button class="slk-mm-op" onclick="SlackChat.verHilo(\'' + ts + '\')">Ver hilo (' + replies + ')</button>'
+                 : '<button class="slk-mm-op" onclick="SlackChat.verHilo(\'' + ts + '\')">Responder en hilo</button>')
+      + '<button class="slk-mm-op" onclick="SlackChat.anclar(\'' + ts + '\')">Anclar al canal</button>'
+      + '<button class="slk-mm-op" onclick="SlackChat.copiar(\'' + ts + '\')">Copiar texto</button>';
+    document.body.appendChild(m);
+    m.style.cssText += ';position:fixed;z-index:10050;top:' + Math.min(ev.clientY, window.innerHeight - 220) + 'px;left:' + Math.min(ev.clientX, window.innerWidth - 230) + 'px';
+    setTimeout(() => document.addEventListener('click', function o(e2) { if (!m.contains(e2.target)) { m.remove(); document.removeEventListener('click', o); } }), 0);
+  }
+
+  async function reaccionar(ts, emoji) {
+    document.querySelectorAll('.slk-msgmenu').forEach(x => x.remove());
+    const nombre = { '👍':'thumbsup','❤️':'heart','😂':'joy','🎉':'tada','✅':'white_check_mark','🙏':'pray' }[emoji] || 'thumbsup';
+    try {
+      const r = await apiFetch(API + '/slack/workspaces/' + _wsAct + '/canales/' + _canal.id + '/reaccion',
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ts, emoji: nombre }) });
+      if (!r.ok) throw new Error((await r.json()).error || 'No se pudo reaccionar');
+      _refrescarCanal();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+
+  async function anclar(ts) {
+    document.querySelectorAll('.slk-msgmenu').forEach(x => x.remove());
+    try {
+      const r = await apiFetch(API + '/slack/workspaces/' + _wsAct + '/canales/' + _canal.id + '/anclar',
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ts }) });
+      if (!r.ok) throw new Error((await r.json()).error || 'No se pudo anclar');
+      showBanner('Mensaje anclado', 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+
+  function copiar(ts) {
+    document.querySelectorAll('.slk-msgmenu').forEach(x => x.remove());
+    const el = document.querySelector('.chat-msg[data-ts="' + ts + '"] .chat-msg__txt');
+    if (el) navigator.clipboard.writeText(el.textContent).then(() => showBanner('Copiado', 'success'));
+  }
+
+  return { load, irA, abrir, buscar, verHilo, enviar, detener: _pararSondeo,
+           fmt, insertar, adjuntar, grabarAudio, emojiPicker, _emojiIns,
+           menuMsg, reaccionar, anclar, copiar };
 })();
 
 const ChatModule = (() => {

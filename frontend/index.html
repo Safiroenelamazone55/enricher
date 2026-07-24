@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260724z"/>
+  <link rel="stylesheet" href="style.css?v=20260725b"/>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -1119,27 +1119,30 @@
                 oninput="ChatModule.autoResize(this); ChatModule.onInputChange(this)"></textarea>
               <div class="chat-composer__toolbar">
                 <!-- Formatting: Bold / Italic / Code -->
-                <button class="chat-tool-btn" title="Negrita" onclick="ChatModule.fmt('bold')">
+                <button class="chat-tool-btn" title="Negrita" onclick="SlackChat.fmt('bold')">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/><path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/></svg>
                 </button>
-                <button class="chat-tool-btn" title="Cursiva" onclick="ChatModule.fmt('italic')">
+                <button class="chat-tool-btn" title="Cursiva" onclick="SlackChat.fmt('italic')">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="4" x2="10" y2="4"/><line x1="14" y1="20" x2="5" y2="20"/><line x1="15" y1="4" x2="9" y2="20"/></svg>
                 </button>
-                <button class="chat-tool-btn" title="Código" onclick="ChatModule.fmt('code')">
+                <button class="chat-tool-btn" title="Código" onclick="SlackChat.fmt('code')">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
                 </button>
                 <div class="chat-composer__divider"></div>
                 <!-- Mention -->
-                <button class="chat-tool-btn" title="Mencionar a alguien" onclick="ChatModule.insertMention()">
+                <button class="chat-tool-btn" title="Mencionar a alguien" onclick="SlackChat.insertar('@')">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.92 7.94"/></svg>
                 </button>
                 <!-- Emoji -->
-                <button class="chat-tool-btn" title="Emoji">
+                <button class="chat-tool-btn" title="Emoji" onclick="SlackChat.emojiPicker(event)">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 13s1.5 2.5 4 2.5 4-2.5 4-2.5"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
                 </button>
                 <!-- Attach -->
-                <button class="chat-tool-btn" title="Adjuntar archivo">
+                <button class="chat-tool-btn" title="Adjuntar documento" onclick="SlackChat.adjuntar()">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                </button>
+                <button class="chat-tool-btn" id="slk-rec-btn" title="Grabar nota de voz" onclick="SlackChat.grabarAudio()">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
                 </button>
                 <!-- Send -->
                 <button class="chat-composer__send" id="chat-send-btn" onclick="SlackChat.enviar()" title="Enviar (Enter)" disabled>
@@ -2572,7 +2575,7 @@
 })();
 </script>
 
-<script src="app.js?v=20260724z"></script>
+<script src="app.js?v=20260725b"></script>
 <div id="task-quick-edit" style="display:none;position:fixed;z-index:9999"></div>
 </body>
 </html>

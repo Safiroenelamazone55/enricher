@@ -170,6 +170,42 @@ async function crearCanal(ws, nombre, { privado = false } = {}) {
   return d.channel;
 }
 
+// Reaccionar a un mensaje (emoji por su nombre de Slack, ej. 'thumbsup').
+async function reaccionar(ws, canal, ts, emoji) {
+  await _call(token(ws), 'reactions.add', { channel: canal, timestamp: ts, name: emoji }, 'POST');
+  return true;
+}
+async function quitarReaccion(ws, canal, ts, emoji) {
+  await _call(token(ws), 'reactions.remove', { channel: canal, timestamp: ts, name: emoji }, 'POST');
+  return true;
+}
+
+// Anclar / desanclar un mensaje del canal.
+async function anclar(ws, canal, ts)   { await _call(token(ws), 'pins.add',    { channel: canal, timestamp: ts }, 'POST'); return true; }
+async function desanclar(ws, canal, ts){ await _call(token(ws), 'pins.remove', { channel: canal, timestamp: ts }, 'POST'); return true; }
+async function anclados(ws, canal) {
+  const d = await _call(token(ws), 'pins.list', { channel: canal });
+  return (d.items || []).filter(i => i.message).map(i => i.message);
+}
+
+// Subir un archivo (documento o audio) a un canal. Usa files.uploadV2 en dos pasos:
+// se pide una URL de subida, se sube el binario y se confirma. El método antiguo
+// files.upload quedó obsoleto en 2025.
+async function subirArchivo(ws, canal, buffer, nombre, comentario, thread_ts) {
+  const tk = token(ws);
+  const up = await _call(tk, 'files.getUploadURLExternal',
+    { filename: nombre, length: buffer.length }, 'POST');
+  const put = await fetch(up.upload_url, { method: 'POST', body: buffer });
+  if (!put.ok) throw new Error('No se pudo subir el archivo a Slack');
+  const done = await _call(tk, 'files.completeUploadExternal', {
+    files: [{ id: up.file_id, title: nombre }],
+    channel_id: canal,
+    initial_comment: comentario || undefined,
+    thread_ts: thread_ts || undefined,
+  }, 'POST');
+  return done.files?.[0] || { id: up.file_id };
+}
+
 async function archivarCanal(ws, canalId) {
   await _call(token(ws), 'conversations.archive', { channel: canalId }, 'POST');
   return true;
@@ -178,4 +214,5 @@ async function archivarCanal(ws, canalId) {
 module.exports = {
   encPass, verificar, canales, miembros, noLeidos, historial, hilo,
   enviar, directo, crearCanal, archivarCanal, normalizarNombre, _errorClaro,
+  reaccionar, quitarReaccion, anclar, desanclar, anclados, subirArchivo,
 };

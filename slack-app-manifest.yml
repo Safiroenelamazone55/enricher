@@ -37,6 +37,12 @@ oauth_config:
       - users:read.email
       - chat:write           # escribir COMO Jenny, no como una app
       - search:read          # buscar dentro de Slack desde Nova
+      - files:read           # ver archivos compartidos
+      - files:write          # subir documentos y audios
+      - reactions:read       # ver reacciones
+      - reactions:write      # reaccionar a un mensaje
+      - pins:read            # ver mensajes anclados
+      - pins:write           # anclar / desanclar
 
     # Token de bot (xoxb-) — minimo, por si mas adelante hace falta que Nova
     # publique avisos automaticos por su cuenta.
