@@ -14038,3 +14038,15 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .cfg__panel { flex: 1; min-width: 0; padding: 18px 20px 20px; max-height: 72vh; overflow-y: auto; }
 .cfg__sec[hidden] { display: none; }
 .cfg__panel .slk-block { margin-top: 0; padding-top: 0; border-top: none; }
+
+/* Configuracion mas ancha: el panel iba tan estrecho que hasta el subtitulo se
+   partia en dos lineas, y el token es una cadena larga que hay que poder leer. */
+#wsname-modal .cfg__panel { padding: 20px 26px 24px; }
+#wsname-modal .slk-add__tok { flex: 3 1 380px; }
+#wsname-modal .slk-hint { max-width: 62ch; }
+#wsname-modal .cfg__sec .form-row { max-width: 640px; }
+@media (max-width: 900px) {
+  #wsname-modal { max-width: calc(100vw - 24px) !important; }
+  #wsname-modal .modal__body.cfg { flex-direction: column; }
+  .cfg__nav { width: auto; flex-direction: row; border-right: none; border-bottom: 1px solid #E7E3DD; }
+}
