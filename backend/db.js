@@ -399,6 +399,25 @@ async function initDb() {
     // y se caian del hilo todos los que estaban en CC.
     await pool.query(`ALTER TABLE lm_inbox_messages ADD COLUMN IF NOT EXISTS to_emails TEXT NOT NULL DEFAULT '';`);
     await pool.query(`ALTER TABLE lm_inbox_messages ADD COLUMN IF NOT EXISTS cc_emails TEXT NOT NULL DEFAULT '';`);
+    // Workspaces de Slack conectados. Uno por cliente: la idea es dejar de saltar de
+    // uno a otro. El token va CIFRADO (mismo AES-256-GCM que las contrasenas de los
+    // buzones); en claro no se guarda nunca.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS slack_workspaces (
+        id          SERIAL PRIMARY KEY,
+        user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        team_id     TEXT    NOT NULL,
+        team_name   TEXT    NOT NULL DEFAULT '',
+        etiqueta    TEXT    NOT NULL DEFAULT '',
+        token_enc   TEXT    NOT NULL,
+        token_tipo  TEXT    NOT NULL DEFAULT 'bot',
+        scopes      TEXT    NOT NULL DEFAULT '',
+        bot_user_id TEXT    NOT NULL DEFAULT '',
+        estado      TEXT    NOT NULL DEFAULT 'conectado',
+        ultimo_error TEXT   NOT NULL DEFAULT '',
+        created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE (user_id, team_id)
+      );`);
     // Color del proyecto en el calendario (hex). NULL = se asigna uno estable por id.
     await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS color TEXT;`);
     // Excepciones al plan recurrente: mover UN día concreto sin tocar el resto de la semana.

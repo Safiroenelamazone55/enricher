@@ -6037,6 +6037,88 @@ app.post('/api/gcal/sync-task', requireAuth, async (req, res) => {
   }
 });
 
+// =================================================================
+// SLACK — varios workspaces conectados a la vez
+// =================================================================
+const slackSvc = require('./services/slackService');
+
+// Lista de workspaces. NUNCA devuelve el token, solo si esta conectado.
+app.get('/api/slack/workspaces', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, team_id, team_name, etiqueta, token_tipo, bot_user_id, estado,
+              ultimo_error, created_at
+         FROM slack_workspaces WHERE user_id=$1 ORDER BY created_at`,
+      [req.workspaceOwnerId]);
+    res.json(rows);
+  } catch (err) {
+    console.error('[slack] list:', err.message);
+    res.status(500).json({ error: 'Error al leer los workspaces' });
+  }
+});
+
+// Conectar uno. El token se COMPRUEBA contra Slack antes de guardarlo: si no sirve,
+// no se almacena nada. Se guarda cifrado, igual que las contrasenas de los buzones.
+app.post('/api/slack/workspaces', requireAuth, async (req, res) => {
+  const token = String(req.body?.token || '').trim();
+  const etiqueta = String(req.body?.etiqueta || '').trim();
+  if (!/^xox[bpe]-/.test(token)) {
+    return res.status(400).json({ error: 'Eso no parece un token de Slack (empieza por xoxb- o xoxp-)' });
+  }
+  try {
+    const info = await slackSvc.verificar(token);
+    const { rows } = await pool.query(
+      `INSERT INTO slack_workspaces (user_id, team_id, team_name, etiqueta, token_enc, token_tipo, bot_user_id, estado)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,'conectado')
+       ON CONFLICT (user_id, team_id)
+       DO UPDATE SET token_enc=EXCLUDED.token_enc, token_tipo=EXCLUDED.token_tipo,
+                     team_name=EXCLUDED.team_name, etiqueta=EXCLUDED.etiqueta,
+                     bot_user_id=EXCLUDED.bot_user_id, estado='conectado', ultimo_error=''
+       RETURNING id, team_id, team_name, etiqueta, token_tipo, estado`,
+      [req.workspaceOwnerId, info.team_id, info.team_name, etiqueta || info.team_name,
+       slackSvc.encPass(token), info.tipo, info.bot_id || '']);
+    res.status(201).json({ ok: true, workspace: rows[0], info });
+  } catch (err) {
+    console.error('[slack] connect:', err.message);
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.delete('/api/slack/workspaces/:id', requireAuth, async (req, res) => {
+  try {
+    await pool.query(`DELETE FROM slack_workspaces WHERE id=$1 AND user_id=$2`,
+      [req.params.id, req.workspaceOwnerId]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[slack] delete:', err.message);
+    res.status(500).json({ error: 'No se pudo desconectar' });
+  }
+});
+
+// Helper: trae el workspace con su token descifrado, o null.
+async function _slackWs(uid, id) {
+  const { rows: [w] } = await pool.query(
+    `SELECT * FROM slack_workspaces WHERE id=$1 AND user_id=$2`, [id, uid]);
+  return w || null;
+}
+
+// Equipo del workspace: es lo que permite ver a la gente y resolver las menciones.
+app.get('/api/slack/workspaces/:id/miembros', requireAuth, async (req, res) => {
+  try {
+    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
+    res.json(await slackSvc.miembros(w));
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
+app.get('/api/slack/workspaces/:id/canales', requireAuth, async (req, res) => {
+  try {
+    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
+    res.json(await slackSvc.canales(w, { cursor: req.query.cursor }));
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
 // ── POST /api/gcal/meet ───────────────────────────────────────────
 // Crea la junta como evento de Google Calendar CON enlace de Meet. Se hace aqui y
 // no en Slack porque en el plan gratuito de Slack las llamadas son solo de dos
