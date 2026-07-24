@@ -13641,12 +13641,28 @@ body:has(#pane-mgmt-projects.active) .content-wrap { max-width: 1400px; }
 }
 .lm2-nav__item.active .lm2-nav__cnt { background: #FF3B30 !important; }
 
-/* A sangre de verdad: el recuadro interior venia del padding propio de .cal2 (24/28px)
-   MAS el del armazon (.content-wrap 0 28px y .app-main 28px arriba). Se anulan solo
-   mientras el calendario es el panel activo; el resto de secciones conserva su aire. */
-.cal2--mac { padding: 0 !important; }
-body:has(#pane-mgmt-calendar.active) .content-wrap { padding: 0 !important; }
-body:has(#pane-mgmt-calendar.active) .app-main { padding: 0 !important; }
+/* El calendario vuelve a su tarjeta, como el resto de secciones. Solo se recorta el
+   padding lateral, que con la barra de calendarios dentro sobraba. */
+.cal2--mac { padding: 14px 16px 12px !important; }
+
+/* La barra superior no cabia en la vista de dia (titulo mas largo + segmentado +
+   navegacion + botones): se salia de la tarjeta. Ahora los grupos ceden y, si aun
+   asi no entra, pasa a dos lineas en vez de desbordar. */
+.cal2m__bar { flex-wrap: wrap; row-gap: 8px; }
+.cal2m__title { flex-shrink: 0; }
+.cal2m__seg   { flex-shrink: 0; margin: 0 auto 0 8px; }
+.cal2m__right { flex-shrink: 1; min-width: 0; flex-wrap: wrap; justify-content: flex-end; }
+.cal2m__sel   { max-width: 140px; }
+.cal2m__gc    { max-width: 132px; overflow: hidden; text-overflow: ellipsis; }
+
+/* Las pestanas de la ficha del proyecto: la regla base las dejaba en versalita y a
+   peso 700, gritando mas que el propio nombre del proyecto. */
+.pjcard__tabs .pjcard__tab {
+  text-transform: none !important; font-size: 13px !important; font-weight: 500 !important;
+  letter-spacing: -.006em !important; color: #6E6E73;
+}
+.pjcard__tabs .pjcard__tab:hover { color: #1D1D1F; }
+.pjcard__tabs .pjcard__tab--active { color: #007AFF; font-weight: 600 !important; }
 
 /* Con la barra lateral de calendarios, los 660px minimos de la rejilla ya no caben
    y salia scroll horizontal. Las columnas se aprietan solas hasta 56px. */
@@ -13738,3 +13754,82 @@ h3, h4                                   { letter-spacing: -.012em; }
 }
 
 body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   BLOQUE 1 — Tareas · Proyectos · Finanzas
+   Tres secciones que hacen lo mismo (pestañas + filtros + tabla) y lo mostraban
+   de tres formas distintas. Se unifican sobre el patrón que ya era correcto:
+   el de Finanzas.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── 1. Pestañas: una sola forma en toda la app ──────────────────────────────
+   En iOS las pestañas van en caja normal, no en versalita. "TIMELINE VIEW"
+   gritaba al lado de "Lista" en Tareas, que ya iba bien.                     */
+.pv-view {
+  font-size: 13.5px; font-weight: 500; letter-spacing: -.006em;
+  text-transform: none; padding: 9px 14px; color: #6E6E73;
+}
+.pv-view--active { color: #007AFF; border-bottom-color: #007AFF; font-weight: 600; }
+.pv-view:hover { color: #1D1D1F; }
+
+/* ── 2. Filtros excluyentes: control segmentado, no botones sueltos ──────────
+   Cinco cajas con borde, y la activa en azul sólido, pesan más que el contenido
+   que filtran. El segmentado de iOS agrupa y calla.                          */
+.clients-filters {
+  display: inline-flex; gap: 2px; background: #F2F2F7;
+  border-radius: 9px; padding: 2px; flex-wrap: nowrap;
+}
+.clients-filters .filter-pill {
+  border: none !important; background: none !important;
+  font-size: 12.5px; font-weight: 500; color: #1D1D1F;
+  padding: 5px 13px; border-radius: 7px; white-space: nowrap;
+  transition: background .12s, box-shadow .12s;
+}
+.clients-filters .filter-pill:hover { background: rgba(0,0,0,.04) !important; }
+.clients-filters .filter-pill.active {
+  background: #FFFFFF !important; color: #1D1D1F !important; font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0,0,0,.14), 0 0 0 .5px rgba(0,0,0,.04);
+}
+
+/* ── 3. Selectores: mismo alto, mismo borde, mismo radio ─────────────────────
+   Estaban cada uno de un ancho, dejando el borde izquierdo dentado.          */
+.filter-select, .fin-sel, #proj-member-filter, .cal2__member-sel {
+  font-size: 12.5px; height: 32px; padding: 0 28px 0 10px;
+  border: 1px solid #E5E5EA; border-radius: 9px; background-color: #FFFFFF;
+  color: #1D1D1F; min-width: 168px;
+}
+.filter-select:focus, #proj-member-filter:focus { outline: none; border-color: #007AFF; }
+
+/* ── 4. El color, con criterio ───────────────────────────────────────────────
+   Azul = progreso y cantidad. Verde = terminado. Antes la misma barra cambiaba
+   de tono según el estado, y el verde aparecía en sitios que no son "éxito"
+   (dinero disponible, reparto de caja).                                      */
+#pane-mgmt-tasks .tl-bar__fill { background: #007AFF; }
+#pane-mgmt-tasks .tl-prog--done .tl-bar__fill { background: #34C759; }
+.pjt-prog__fill, .pv-prog__fill { background: #007AFF; }
+.fin-bar__seg--base { background: #007AFF; }
+
+/* ── 5. Cabeceras de tabla y agrupadores: nivel 4, nunca compiten ────────── */
+#pane-mgmt-tasks .clients-table th,
+.pv-table th, .fin-gx-table thead th, .fin-d-table thead th {
+  font-size: 11px; font-weight: 600; letter-spacing: .04em;
+  text-transform: uppercase; color: #8E8E93;
+}
+
+/* ── 6. La columna "Tiempo" se cortaba en "TIE…" ─────────────────────────── */
+#pane-mgmt-tasks .clients-table th[data-col="timer"] { width: 72px; }
+
+/* ── 7. Tarjetas: el radio y la sombra de macOS (suave, casi solo un borde) ─ */
+.pv-card, .fin-card, .lm-card, .proj-card {
+  border-radius: 12px; border: 1px solid #E5E5EA;
+  box-shadow: 0 1px 2px rgba(0,0,0,.03);
+}
+
+/* Pestanas dentro de la ficha del proyecto: mismo patron que las de arriba.
+   Iban en versalita y a peso 700, gritando mas que el nombre del proyecto. */
+.pjcard__tab {
+  text-transform: none; font-size: 13px; font-weight: 500;
+  letter-spacing: -.006em; color: #6E6E73;
+}
+.pjcard__tab:hover { color: #1D1D1F; }
+.pjcard__tab.active, .pjcard__tab--active { color: #007AFF; font-weight: 600; }
