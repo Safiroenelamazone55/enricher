@@ -20917,7 +20917,18 @@ const SlackChat = (() => {
 
   const $$ = id => document.getElementById(id);
 
+  // El shell crecia con el contenido (4000+ px) y obligaba a scrollear toda la
+  // pagina. Se acota a lo que queda de pantalla y cada columna scrollea por dentro.
+  let _fitBound = false;
+  function _fit() {
+    const sh = document.getElementById('chat-shell');
+    if (!sh) return;
+    sh.style.height = Math.max(420, window.innerHeight - sh.getBoundingClientRect().top - 12) + 'px';
+    if (!_fitBound) { _fitBound = true; window.addEventListener('resize', _fit); }
+  }
+
   async function load() {
+    requestAnimationFrame(_fit);
     try {
       const r = await apiFetch(`${API}/slack/workspaces`);
       _ws = r.ok ? await r.json() : [];

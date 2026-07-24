@@ -14166,3 +14166,12 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 @keyframes slkpulse { 0%,100%{opacity:1} 50%{opacity:.55} }
 /* El mensaje resalta al pasar, para que se note que tiene clic derecho */
 #chat-messages .chat-msg { cursor:default; }
+
+/* El chat ocupa lo que queda de pantalla (altura por JS) y cada columna scrollea
+   por dentro, en vez de estirar la pagina entera. */
+.chat-shell { min-height: 0; overflow: hidden; }
+.chat-shell .chat-sidebar { display: flex; flex-direction: column; min-height: 0; }
+#chat-channels { flex: 1; min-height: 0; overflow-y: auto; }
+.chat-shell .chat-main { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+#chat-messages { flex: 1; min-height: 0; overflow-y: auto; }
+.chat-main__header, .chat-composer { flex: 0 0 auto; }
