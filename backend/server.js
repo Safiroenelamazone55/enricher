@@ -3844,6 +3844,32 @@ const ADMIN_CONSENT_TEMPLATES = {
   },
 };
 
+// Marca manualmente un buzón como needs_admin_consent — para el caso en que la
+// usuaria cierre el popup de Microsoft antes de que Microsoft haga el redirect
+// al callback (típico cuando aparece el mensaje "Se necesita la aprobación del
+// administrador" y cierra la ventana). Crea el registro placeholder si no existe.
+app.post('/api/lm/mailboxes/mark-admin-consent-required', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId;
+  const clientId = parseInt((req.body || {}).outbound_client_id, 10);
+  if (!clientId) return res.status(400).json({ error: 'Falta outbound_client_id' });
+  try {
+    const hosts = mailboxSvc.resolveHosts('microsoft', {});
+    await pool.query(
+      `INSERT INTO lm_mailboxes (user_id, outbound_client_id, email, provider, auth_method, oauth_provider,
+                                 smtp_host, smtp_port, smtp_secure, imap_host, imap_port,
+                                 estado, needs_admin_consent, last_error)
+            VALUES ($1,$2,'','microsoft','oauth','microsoft',$3,$4,$5,$6,$7,'error',TRUE,$8)
+       ON CONFLICT (user_id, outbound_client_id)
+       DO UPDATE SET provider='microsoft', auth_method='oauth', oauth_provider='microsoft',
+                     needs_admin_consent=TRUE, estado='error', last_error=EXCLUDED.last_error`,
+      [uid, clientId, hosts.smtp_host, hosts.smtp_port, hosts.smtp_secure, hosts.imap_host, hosts.imap_port,
+       'Falta aprobación del admin del tenant Microsoft. Envíale la solicitud desde la tarjeta del buzón.']);
+    const { rows } = await pool.query(
+      `SELECT id FROM lm_mailboxes WHERE user_id=$1 AND outbound_client_id=$2`, [uid, clientId]);
+    res.json({ ok: true, mailbox_id: rows[0]?.id });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // GET plantillas + URL de admin consent listo (para renderizar el preview) +
 // opciones de "Enviar desde" (Gmail + buzones SMTP en estado enviable).
 app.get('/api/lm/mailboxes/:id/admin-consent-templates', requireAuth, async (req, res) => {

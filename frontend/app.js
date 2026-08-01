@@ -16850,9 +16850,27 @@ ${foot}
   }
   function _obcCard(c) {
     const leads = _clientLeads(c.id);
+    const mb = _mbFor(c.id);
+    // Alerta visible del estado del buzón: si necesita admin consent (o hay error
+    // Microsoft y la usuaria lo cerró sin llegar al callback), permitir actuar
+    // directamente desde la card sin entrar al workspace.
+    let mbAlert = '';
+    if (mb && mb.needs_admin_consent) {
+      mbAlert = `<div class="lm-obc__mb-alert" onclick="event.stopPropagation();LeadManagerModule.mbAdminConsentOpen(${mb.id})">
+        <span class="lm-obc__mb-chip">⏳ Falta aprobación del admin del cliente</span>
+        <span class="lm-obc__mb-cta">${mb.admin_consent_requested_at ? '↻ Reenviar solicitud' : '📧 Solicitar aprobación'}</span>
+      </div>`;
+    } else if (mb && mb.provider === 'microsoft' && mb.auth_method !== 'oauth' && mb.estado !== 'conectado') {
+      // Buzón MS con básica que no llegó a conectar del todo — atajo para reconectar OAuth
+      mbAlert = `<div class="lm-obc__mb-alert" onclick="event.stopPropagation();LeadManagerModule.mbOAuthStart(${c.id})">
+        <span class="lm-obc__mb-chip lm-obc__mb-chip--warn">⚠ Buzón Microsoft necesita OAuth</span>
+        <span class="lm-obc__mb-cta">Conectar</span>
+      </div>`;
+    }
     return `<button class="lm-obc" onclick="LeadManagerModule.openClient(${c.id})">
       <div class="lm-obc__top"><div class="lm-obc__ava">${esc((c.nombre || '?').slice(0, 1).toUpperCase())}</div><div class="lm-obc__id"><span class="lm-obc__nm">${esc(c.nombre)}</span>${_obcBadge(c.estado)}</div></div>
       <div class="lm-obc__stats"><span><b>${leads.length}</b> leads</span><span><b>${_money(_sumv(leads))}</b> pipeline</span><span><b>—</b> replies</span></div>
+      ${mbAlert}
       ${c.proxima_accion ? `<div class="lm-obc__next"><span class="lm-obc__next-l">Próxima acción</span> ${esc(c.proxima_accion)}</div>` : ''}
       <div class="lm-obc__cta">Abrir workspace <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></div>
     </button>`;
@@ -16922,6 +16940,7 @@ ${foot}
            <div class="mbx-acts">
              ${!needsConsent ? `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.mbTest(${mb.id})">Probar envío</button>` : ''}
              <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.mbOpen(${c.id})">Cambiar</button>
+             ${mb.provider === 'microsoft' && !needsConsent ? `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.mbAdminConsentQuick(${c.id})" title="Si Microsoft pidió aprobación del admin del tenant">📧 Pedir consent al admin</button>` : ''}
              <button class="btn btn--ghost btn--sm" style="color:var(--danger)" onclick="LeadManagerModule.mbDelete(${mb.id})">Quitar</button>
            </div>`
         : `<div class="mbx-sub">Conecta el buzón real de este cliente (jenny@sudominio…) para enviar, leer respuestas y rebotes desde Nova.</div>
@@ -17009,18 +17028,19 @@ ${foot}
     const url = `${API}/lm/mailboxes/oauth/microsoft/start?client=${clientId}`;
     const pop = window.open(url, 'nova-oauth-ms', `width=${w},height=${h},left=${x},top=${y}`);
     if (!pop) { showBanner('El navegador bloqueó el popup — permite popups para app.novacentrax.com y vuelve a intentar.', 'error'); return; }
+    let gotResult = false;
+    let closeWatch = null;
     // Recibe el resultado del callback del backend
     const onMsg = async (ev) => {
       const d = ev.data || {};
       if (d.source !== 'nova-oauth-ms') return;
+      gotResult = true;
       window.removeEventListener('message', onMsg);
+      if (closeWatch) clearInterval(closeWatch);
       if (d.ok) { mbClose(); showBanner('✓ ' + (d.msg || 'Buzón conectado'), 'success'); _mbReload(); }
       else if (d.needsAdminConsent) {
-        // El tenant del cliente exige admin consent — el backend ya creó el registro
-        // marcado. Cerramos el modal de conexión y abrimos el de solicitud al admin.
         mbClose();
         await _mbReload();
-        // Buscar el buzón recién marcado y abrir su modal
         const mb = (_mailboxes || []).find(m => m.outbound_client_id === clientId && m.needs_admin_consent);
         if (mb) mbAdminConsentOpen(mb.id);
         else showBanner(d.msg || 'Falta aprobación del admin del cliente', 'info');
@@ -17028,6 +17048,52 @@ ${foot}
       else { const err = $('mbx-err'); if (err) { err.textContent = d.msg || 'No se pudo conectar'; err.style.display = ''; } }
     };
     window.addEventListener('message', onMsg);
+    // Si el usuario cierra el popup a mano (X) sin que Microsoft haya redirigido al
+    // callback, no hay postMessage. Detectamos el cierre y le ofrecemos abrir el
+    // flujo de solicitud al admin (que es el caso típico cuando aparece el mensaje
+    // "Se necesita la aprobación del administrador" y cierra la ventana).
+    closeWatch = setInterval(async () => {
+      if (!pop || pop.closed) {
+        clearInterval(closeWatch);
+        window.removeEventListener('message', onMsg);
+        if (gotResult) return;
+        // Esperar 400 ms por si postMessage llega tarde
+        await new Promise(r => setTimeout(r, 400));
+        if (gotResult) return;
+        // Ofrecer el flujo de admin consent — si el usuario acepta, marcamos el buzón
+        // sin necesidad de que Microsoft haya llamado al callback.
+        if (confirm('El popup se cerró sin completar el login.\n\n¿Microsoft te pidió aprobación del administrador del tenant?\n\nSi es así, podemos abrir ahora el asistente para enviarle un correo al admin con el link de aprobación.')) {
+          try {
+            const r = await apiFetch(`${API}/lm/mailboxes/mark-admin-consent-required`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ outbound_client_id: clientId })
+            });
+            const d = await r.json();
+            if (!r.ok) throw new Error(d.error || 'Error');
+            mbClose();
+            await _mbReload();
+            if (d.mailbox_id) mbAdminConsentOpen(d.mailbox_id);
+          } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+        }
+      }
+    }, 800);
+  }
+
+  // Atajo desde la tarjeta del buzón: marca el buzón como needs_admin_consent y
+  // abre el modal de solicitud. Útil cuando Microsoft mostró el aviso de admin
+  // consent y el usuario cerró el popup sin llegar al callback (por lo que no
+  // se marcó automáticamente).
+  async function mbAdminConsentQuick(clientId) {
+    try {
+      const r = await apiFetch(`${API}/lm/mailboxes/mark-admin-consent-required`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ outbound_client_id: clientId })
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Error');
+      await _mbReload();
+      if (d.mailbox_id) mbAdminConsentOpen(d.mailbox_id);
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
   // Modal para pedir al admin del cliente que apruebe la app Nova en su tenant
@@ -20725,7 +20791,7 @@ ${foot}
     sqSetCli, sqSetEst, sqSetQ, cmSetCli, cmSetEst, cmSetQ,
     seqRunSetCanal, seqTaskSetDue,
     mbOpen, mbClose, mbSave, mbTest, mbDelete, mbProv, mbOAuthStart,
-    mbAdminConsentOpen, mbAdminConsentLang, mbAdminConsentSend,
+    mbAdminConsentOpen, mbAdminConsentLang, mbAdminConsentSend, mbAdminConsentQuick,
     ibOpen, ibTab, ibCli, ibSend, ibSchedToggle, ibSchedPick, ibCancelSched,
     ibRowMenu, ibCloseMenu, ibMarkUnread,
     pendingAcceptOpen, pendingAcceptToggleAll, pendingAcceptApplyFilters, pendingAcceptMark,

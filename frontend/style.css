@@ -4684,6 +4684,12 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 .lm-obc__stats b { color: #1F1D1B; font-weight: 700; }
 .lm-obc__next { font-size: .73rem; color: #6C6862; background: #FAF8F5; border-radius: 9px; padding: 7px 10px; }
 .lm-obc__next-l { font-size: .59rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #B4AFA8; display: block; }
+/* Alerta contextual del buzón dentro de la card del cliente outbound */
+.lm-obc__mb-alert { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: .72rem; padding: 8px 10px; border-radius: 9px; background: #EAF2FF; border: 1px solid #C7DBFF; cursor: pointer; transition: background .12s ease; }
+.lm-obc__mb-alert:hover { background: #DBE8FF; }
+.lm-obc__mb-chip { color: #1E4A8C; font-weight: 600; }
+.lm-obc__mb-chip--warn { color: #92400E; }
+.lm-obc__mb-cta { color: #0062CC; font-weight: 700; font-size: .7rem; white-space: nowrap; }
 .lm-obc__cta { display: inline-flex; align-items: center; gap: 3px; font-size: .76rem; font-weight: 700; color: var(--brand, #007AFF); margin-top: auto; }
 
 .lm-empty2 { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; background: #fff; border: 1px solid var(--border, #EAE7E2); border-radius: 18px; padding: 44px 24px; }
