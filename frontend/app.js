@@ -16888,7 +16888,7 @@ ${foot}
   }
   const _MB_HINT = {
     google: 'Gmail/Workspace: activa la Verificación en 2 pasos → busca “Contraseñas de aplicación” → crea una para Correo y pégala aquí (16 letras, sin espacios).',
-    microsoft: 'Microsoft 365 empresa: (1) en admin.microsoft.com → Usuarios → este buzón → Correo → “Administrar aplicaciones de correo electrónico” → marca “SMTP autenticado”. (2) Usa aquí la contraseña normal del buzón. Enviar funciona; la lectura automática de respuestas llega con la fase OAuth. Si el proveedor la rechaza, el tenant bloquea autenticación básica (Security Defaults) — avísame.',
+    microsoft: 'Microsoft 365: usa el botón azul de arriba para conectar por OAuth (recomendado — no necesita permisos del admin del tenant). SMTP e IMAP quedan autenticados con XOAUTH2 y el token se refresca solo.',
     zoho: 'Zoho Mail: Mi cuenta → Seguridad → App Passwords → genera una para Nova. IMPORTANTE: elige la región correcta (la de tu cuenta Zoho) — es el error de login más común. Si el buzón no usa 2FA, prueba primero la contraseña normal.',
     otro: 'Ingresa los servidores SMTP e IMAP que te dé el proveedor (suelen estar en su ayuda como “configurar cliente de correo”).',
   };
@@ -16920,6 +16920,11 @@ ${foot}
     const hint = $('mbx-hint'); if (hint) hint.textContent = _MB_HINT[p] || '';
     const hosts = $('mbx-hosts'); if (hosts) hosts.style.display = p === 'otro' ? '' : 'none';
     const zr = $('mbx-zregion-f'); if (zr) zr.style.display = p === 'zoho' ? '' : 'none';
+    // Microsoft usa OAuth (auth básica bloqueada por default desde 2022): oculta el
+    // form de contraseña y muestra el botón "Conectar con Microsoft".
+    const oa = $('mbx-oauth-panel'); if (oa) oa.style.display = p === 'microsoft' ? '' : 'none';
+    const bs = $('mbx-basic-panel'); if (bs) bs.style.display = p === 'microsoft' ? 'none' : '';
+    const sv = $('mbx-save'); if (sv) sv.style.display = p === 'microsoft' ? 'none' : '';
   }
   function mbOpen(clientId) {
     mbClose();
@@ -16934,14 +16939,31 @@ ${foot}
       <div class="dle-grid">
         <label class="dle-f"><span class="dle-l">Proveedor</span><select class="dle-i" id="mbx-prov" onchange="LeadManagerModule.mbProv(this.value)">${_MB_PROV.map(p => `<option value="${p[0]}"${prov === p[0] ? ' selected' : ''}>${p[1]}</option>`).join('')}</select></label>
         <label class="dle-f" id="mbx-zregion-f" style="display:${prov === 'zoho' ? '' : 'none'}"><span class="dle-l">Región de Zoho</span><select class="dle-i" id="mbx-zregion">${_MB_ZOHO_REGIONS.map(r => `<option value="${r[0]}"${zregion === r[0] ? ' selected' : ''}>${r[1]}</option>`).join('')}</select></label>
-        <label class="dle-f"><span class="dle-l">Correo del buzón</span><input class="dle-i" id="mbx-email" type="email" placeholder="jenny@dominio.com" value="${mb ? esc(mb.email) : ''}"></label>
-        <label class="dle-f dle-f--full"><span class="dle-l">Contraseña de aplicación</span><input class="dle-i" id="mbx-pass" type="password" placeholder="••••••••••••••••" autocomplete="new-password"></label>
-        <div class="dle-f dle-f--full" id="mbx-hosts" style="display:${prov === 'otro' ? '' : 'none'}">
-          <div class="dle-grid" style="margin-top:2px">
-            <label class="dle-f"><span class="dle-l">Servidor SMTP</span><input class="dle-i" id="mbx-smtp" placeholder="smtp.dominio.com" value="${mb && mb.provider === 'otro' ? esc(mb.smtp_host || '') : ''}"></label>
-            <label class="dle-f"><span class="dle-l">Puerto SMTP</span><input class="dle-i" id="mbx-smtpp" type="number" value="${mb && mb.provider === 'otro' ? (mb.smtp_port || 465) : 465}"></label>
-            <label class="dle-f"><span class="dle-l">Servidor IMAP</span><input class="dle-i" id="mbx-imap" placeholder="imap.dominio.com" value="${mb && mb.provider === 'otro' ? esc(mb.imap_host || '') : ''}"></label>
-            <label class="dle-f"><span class="dle-l">Puerto IMAP</span><input class="dle-i" id="mbx-imapp" type="number" value="${mb && mb.provider === 'otro' ? (mb.imap_port || 993) : 993}"></label>
+        <div id="mbx-basic-panel" style="display:${prov === 'microsoft' ? 'none' : 'contents'}">
+          <label class="dle-f"><span class="dle-l">Correo del buzón</span><input class="dle-i" id="mbx-email" type="email" placeholder="jenny@dominio.com" value="${mb ? esc(mb.email) : ''}"></label>
+          <label class="dle-f dle-f--full"><span class="dle-l">Contraseña de aplicación</span><input class="dle-i" id="mbx-pass" type="password" placeholder="••••••••••••••••" autocomplete="new-password"></label>
+          <div class="dle-f dle-f--full" id="mbx-hosts" style="display:${prov === 'otro' ? '' : 'none'}">
+            <div class="dle-grid" style="margin-top:2px">
+              <label class="dle-f"><span class="dle-l">Servidor SMTP</span><input class="dle-i" id="mbx-smtp" placeholder="smtp.dominio.com" value="${mb && mb.provider === 'otro' ? esc(mb.smtp_host || '') : ''}"></label>
+              <label class="dle-f"><span class="dle-l">Puerto SMTP</span><input class="dle-i" id="mbx-smtpp" type="number" value="${mb && mb.provider === 'otro' ? (mb.smtp_port || 465) : 465}"></label>
+              <label class="dle-f"><span class="dle-l">Servidor IMAP</span><input class="dle-i" id="mbx-imap" placeholder="imap.dominio.com" value="${mb && mb.provider === 'otro' ? esc(mb.imap_host || '') : ''}"></label>
+              <label class="dle-f"><span class="dle-l">Puerto IMAP</span><input class="dle-i" id="mbx-imapp" type="number" value="${mb && mb.provider === 'otro' ? (mb.imap_port || 993) : 993}"></label>
+            </div>
+          </div>
+        </div>
+        <div class="dle-f dle-f--full" id="mbx-oauth-panel" style="display:${prov === 'microsoft' ? '' : 'none'}">
+          <div style="background:#EAF2FF;border:1px solid #C7DBFF;border-radius:8px;padding:14px 16px">
+            <div style="font-weight:600;color:#1F1D1B;margin-bottom:6px">Conexión segura con Microsoft (OAuth)</div>
+            <div style="font-size:.82rem;color:#6C6862;line-height:1.5;margin-bottom:12px">
+              Se abrirá una ventana de Microsoft para que inicies sesión y aprobes el acceso a IMAP y SMTP.
+              No hace falta contraseña ni permiso del admin del tenant (evita el bloqueo de auth básica desde 2022).
+            </div>
+            <button class="btn btn--primary btn--sm" id="mbx-oauth-btn" onclick="LeadManagerModule.mbOAuthStart(${clientId})">
+              <span style="display:inline-flex;align-items:center;gap:8px">
+                <svg width="16" height="16" viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="1" width="9" height="9" fill="#F25022"/><rect x="11" y="1" width="9" height="9" fill="#7FBA00"/><rect x="1" y="11" width="9" height="9" fill="#00A4EF"/><rect x="11" y="11" width="9" height="9" fill="#FFB900"/></svg>
+                Conectar con Microsoft
+              </span>
+            </button>
           </div>
         </div>
         <div class="dle-f dle-f--full"><span class="seq-drip-hint" id="mbx-hint">${_MB_HINT[prov]}</span></div>
@@ -16949,11 +16971,31 @@ ${foot}
       </div>
       <div class="dle-foot"><span class="sp"></span>
         <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.mbClose()">Cancelar</button>
-        <button class="btn btn--primary btn--sm" id="mbx-save" onclick="LeadManagerModule.mbSave(${clientId})">Probar y conectar</button>
+        <button class="btn btn--primary btn--sm" id="mbx-save" onclick="LeadManagerModule.mbSave(${clientId})" style="display:${prov === 'microsoft' ? 'none' : ''}">Probar y conectar</button>
       </div>
     </div>`;
     document.body.appendChild(m);
     setTimeout(() => $(mb ? 'mbx-pass' : 'mbx-email')?.focus(), 60);
+  }
+
+  // Arranca el flujo OAuth de Microsoft en un popup. El backend redirige a Microsoft,
+  // que devuelve al /callback; ese callback envía un postMessage aquí para cerrarlo.
+  function mbOAuthStart(clientId) {
+    const w = 520, h = 640;
+    const y = window.top.outerHeight / 2 + window.top.screenY - (h / 2);
+    const x = window.top.outerWidth  / 2 + window.top.screenX - (w / 2);
+    const url = `${API}/lm/mailboxes/oauth/microsoft/start?client=${clientId}`;
+    const pop = window.open(url, 'nova-oauth-ms', `width=${w},height=${h},left=${x},top=${y}`);
+    if (!pop) { showBanner('El navegador bloqueó el popup — permite popups para app.novacentrax.com y vuelve a intentar.', 'error'); return; }
+    // Recibe el resultado del callback del backend
+    const onMsg = (ev) => {
+      const d = ev.data || {};
+      if (d.source !== 'nova-oauth-ms') return;
+      window.removeEventListener('message', onMsg);
+      if (d.ok) { mbClose(); showBanner('✓ ' + (d.msg || 'Buzón conectado'), 'success'); _mbReload(); }
+      else { const err = $('mbx-err'); if (err) { err.textContent = d.msg || 'No se pudo conectar'; err.style.display = ''; } }
+    };
+    window.addEventListener('message', onMsg);
   }
   async function mbSave(clientId) {
     const g = id => $(id);
@@ -20566,7 +20608,7 @@ ${foot}
     dlSetCli, dlOpen, dlClose, dlSave,
     sqSetCli, sqSetEst, sqSetQ, cmSetCli, cmSetEst, cmSetQ,
     seqRunSetCanal, seqTaskSetDue,
-    mbOpen, mbClose, mbSave, mbTest, mbDelete, mbProv,
+    mbOpen, mbClose, mbSave, mbTest, mbDelete, mbProv, mbOAuthStart,
     ibOpen, ibTab, ibCli, ibSend, ibSchedToggle, ibSchedPick, ibCancelSched,
     ibRowMenu, ibCloseMenu, ibMarkUnread,
     pendingAcceptOpen, pendingAcceptToggleAll, pendingAcceptApplyFilters, pendingAcceptMark,

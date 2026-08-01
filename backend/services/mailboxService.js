@@ -72,23 +72,83 @@ function resolveHosts(provider, b) {
   };
 }
 
-function _transport(mb, pass) {
+// Bloque `auth` unificado para SMTP e IMAP. Acepta password (basic) o accessToken
+// (OAuth2/XOAUTH2). Puede recibirse ya construido o crearse a partir de un string
+// (retrocompat con llamadores viejos que pasaban solo el pass).
+function _authBlock(mb, credOrObj) {
+  const a = (typeof credOrObj === 'string' || credOrObj == null)
+    ? { user: mb.email, pass: credOrObj || '' }
+    : credOrObj;
+  return a;
+}
+
+function _transport(mb, credOrObj) {
+  const a = _authBlock(mb, credOrObj);
+  const auth = a.accessToken
+    ? { type: 'OAuth2', user: a.user || mb.email, accessToken: a.accessToken }
+    : { user: a.user || mb.email, pass: a.pass };
   return nodemailer.createTransport({
     host: mb.smtp_host, port: mb.smtp_port, secure: !!mb.smtp_secure,
     requireTLS: !mb.smtp_secure,
-    auth: { user: mb.email, pass },
+    auth,
     connectionTimeout: 15000, greetingTimeout: 15000, socketTimeout: 30000,
   });
 }
 
-async function _imapConnect(mb, pass) {
+async function _imapConnect(mb, credOrObj) {
+  const a = _authBlock(mb, credOrObj);
+  const auth = a.accessToken
+    ? { user: a.user || mb.email, accessToken: a.accessToken }
+    : { user: a.user || mb.email, pass: a.pass };
   const client = new ImapFlow({
     host: mb.imap_host, port: mb.imap_port, secure: true,
-    auth: { user: mb.email, pass },
-    logger: false, emitLogs: false,
+    auth, logger: false, emitLogs: false,
   });
   await client.connect();
   return client;
+}
+
+// Access token válido para un buzón OAuth. Si el actual expiró (o le quedan <2min),
+// refresca automáticamente y persiste los tokens nuevos (Microsoft rota el refresh
+// token de vez en cuando, hay que guardar el nuevo si viene). Sirve para cualquier
+// proveedor OAuth soportado — hoy solo 'microsoft'.
+async function _getValidAccessToken(pool, mb) {
+  const now = Date.now();
+  const exp = mb.oauth_expires_at ? new Date(mb.oauth_expires_at).getTime() : 0;
+  if (exp && exp - now > 120_000 && mb.oauth_access_enc) {
+    try { return decPass(mb.oauth_access_enc); } catch (_) { /* cae al refresh */ }
+  }
+  if (!mb.oauth_refresh_enc) throw new Error('No hay refresh_token — reconecta el buzón por OAuth.');
+  const refresh = decPass(mb.oauth_refresh_enc);
+  const provider = mb.oauth_provider || 'microsoft';
+  let r;
+  if (provider === 'microsoft') {
+    const ms = require('./microsoftOAuth');
+    r = await ms.refreshAccessToken(refresh);
+  } else {
+    throw new Error(`Proveedor OAuth no soportado: ${provider}`);
+  }
+  const newExpires = new Date(Date.now() + (r.expires_in * 1000));
+  await pool.query(
+    `UPDATE lm_mailboxes SET oauth_access_enc=$1, oauth_refresh_enc=$2, oauth_expires_at=$3, oauth_scopes=$4
+      WHERE id=$5`,
+    [encPass(r.access_token), encPass(r.refresh_token), newExpires, r.scope || '', mb.id]
+  );
+  // Reflejar en el objeto en memoria por si el llamador lo reutiliza en la misma tick.
+  mb.oauth_access_enc  = encPass(r.access_token);
+  mb.oauth_refresh_enc = encPass(r.refresh_token);
+  mb.oauth_expires_at  = newExpires;
+  return r.access_token;
+}
+
+// Helper único para los llamadores (sendEngine, imapWatcher, server): devuelve el
+// bloque auth listo para usar en _transport/_imapConnect. Es el punto donde OAuth y
+// basic auth quedan indistinguibles hacia arriba.
+async function getMailboxAuth(pool, mb) {
+  if (mb.auth_method === 'oauth') {
+    return { user: mb.email, accessToken: await _getValidAccessToken(pool, mb) };
+  }
+  return { user: mb.email, pass: decPass(mb.pass_enc) };
 }
 
 // Traducción de errores técnicos a mensajes accionables en español.
@@ -198,4 +258,4 @@ async function sendFromMailbox(mb, pass, msg) {
   return { messageId: info.messageId || '' };
 }
 
-module.exports = { PROVIDERS, ZOHO_REGIONS, zohoRegionFromHost, resolveHosts, encPass, decPass, testMailbox, sendFromMailbox, _friendlyErr };
+module.exports = { PROVIDERS, ZOHO_REGIONS, zohoRegionFromHost, resolveHosts, encPass, decPass, testMailbox, sendFromMailbox, getMailboxAuth, _friendlyErr };

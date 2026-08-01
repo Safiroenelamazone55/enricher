@@ -25,7 +25,7 @@
 
 const { ImapFlow } = require('imapflow');
 const { simpleParser } = require('mailparser');
-const { decPass, _friendlyErr } = require('./mailboxService');
+const { decPass, _friendlyErr, getMailboxAuth } = require('./mailboxService');
 
 let _timer = null;
 let _running = false;
@@ -159,11 +159,14 @@ async function _onBounce(pool, mb, parsed) {
 // ── Un buzón ─────────────────────────────────────────────────────────
 
 async function _checkMailbox(pool, mb) {
-  const pass = decPass(mb.pass_enc);
+  // auth: password (basic) o accessToken (OAuth); el helper elige y refresca si toca.
+  const authBlock = await getMailboxAuth(pool, mb);
+  const auth = authBlock.accessToken
+    ? { user: authBlock.user, accessToken: authBlock.accessToken }
+    : { user: authBlock.user, pass: authBlock.pass };
   const client = new ImapFlow({
     host: mb.imap_host, port: mb.imap_port, secure: true,
-    auth: { user: mb.email, pass },
-    logger: false, emitLogs: false,
+    auth, logger: false, emitLogs: false,
   });
   await client.connect();
   try {

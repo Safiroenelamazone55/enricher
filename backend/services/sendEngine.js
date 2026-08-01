@@ -345,8 +345,9 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback) {
 
   try {
     if (mbx) {
-      const { decPass, sendFromMailbox } = require('./mailboxService');
-      const sent = await sendFromMailbox(mbx, decPass(mbx.pass_enc), {
+      const { sendFromMailbox, getMailboxAuth } = require('./mailboxService');
+      const auth = await getMailboxAuth(pool, mbx);
+      const sent = await sendFromMailbox(mbx, auth, {
         to: enr.email, subject: asunto, html,
         text: cuerpoTxt + (cfg.firma ? `\n\n${cfg.firma.replace(/<[^>]+>/g, '')}` : ''),
         fromName: cfg.from_name,
@@ -405,6 +406,7 @@ async function _flushScheduled(pool) {
            COALESCE(m.cc_emails,'') AS cc_emails,
            mb.id AS mb_ok, mb.email AS mb_email, mb.pass_enc, mb.smtp_host, mb.smtp_port, mb.smtp_secure,
            mb.imap_host, mb.imap_port, mb.provider, mb.sent_folder, mb.estado AS mb_estado,
+           mb.auth_method, mb.oauth_provider, mb.oauth_access_enc, mb.oauth_refresh_enc, mb.oauth_expires_at,
            cfg.from_name
       FROM lm_messages m
       LEFT JOIN lm_mailboxes mb ON mb.id = m.mailbox_id
@@ -418,12 +420,15 @@ async function _flushScheduled(pool) {
       if (!m.mb_ok || !['conectado', 'solo_envio'].includes(m.mb_estado)) {
         throw new Error('El buzón ya no está conectado');
       }
-      const { decPass, sendFromMailbox } = require('./mailboxService');
+      const { sendFromMailbox, getMailboxAuth } = require('./mailboxService');
       const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
       const html = `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.55;color:#1a1a2e">${esc(m.cuerpo).replace(/\n/g, '<br>')}</div>`;
       const mb = { id: m.mb_ok, email: m.mb_email, pass_enc: m.pass_enc, smtp_host: m.smtp_host, smtp_port: m.smtp_port,
-                   smtp_secure: m.smtp_secure, imap_host: m.imap_host, imap_port: m.imap_port, provider: m.provider, sent_folder: m.sent_folder };
-      const sent = await sendFromMailbox(mb, decPass(m.pass_enc), {
+                   smtp_secure: m.smtp_secure, imap_host: m.imap_host, imap_port: m.imap_port, provider: m.provider, sent_folder: m.sent_folder,
+                   auth_method: m.auth_method, oauth_provider: m.oauth_provider, oauth_access_enc: m.oauth_access_enc,
+                   oauth_refresh_enc: m.oauth_refresh_enc, oauth_expires_at: m.oauth_expires_at };
+      const auth = await getMailboxAuth(pool, mb);
+      const sent = await sendFromMailbox(mb, auth, {
         to: m.to_email, cc: m.cc_emails || undefined,   // conserva a los de copia
         subject: m.asunto, text: m.cuerpo, html,
         fromName: m.from_name || undefined,
@@ -469,6 +474,7 @@ async function _flushApproved(pool, apiBase) {
            m.id, m.user_id, m.contact_id, m.sequence_id, m.step_id, m.asunto, m.cuerpo, m.to_email, m.track_token,
            mb.id AS mb_ok, mb.email AS mb_email, mb.pass_enc, mb.smtp_host, mb.smtp_port, mb.smtp_secure,
            mb.imap_host, mb.imap_port, mb.provider, mb.sent_folder, mb.estado AS mb_estado,
+           mb.auth_method, mb.oauth_provider, mb.oauth_access_enc, mb.oauth_refresh_enc, mb.oauth_expires_at,
            cfg.from_name, cfg.firma, cfg.track_opens, cfg.track_clicks,
            cfg.window_start, cfg.window_end, cfg.send_weekends, cfg.timezone,
            s.send_days,
@@ -509,14 +515,17 @@ async function _flushApproved(pool, apiBase) {
         continue;
       }
       if (!m.mb_ok || !['conectado', 'solo_envio'].includes(m.mb_estado)) throw new Error('El buzón ya no está conectado');
-      const { decPass, sendFromMailbox } = require('./mailboxService');
+      const { sendFromMailbox, getMailboxAuth } = require('./mailboxService');
       const html = buildHtml({
         text: m.cuerpo, firma: m.firma, trackToken: m.track_token, apiBase,
         trackOpens: !!apiBase && m.track_opens, trackClicks: !!apiBase && m.track_clicks,
       });
       const mb = { id: m.mb_ok, email: m.mb_email, pass_enc: m.pass_enc, smtp_host: m.smtp_host, smtp_port: m.smtp_port,
-                   smtp_secure: m.smtp_secure, imap_host: m.imap_host, imap_port: m.imap_port, provider: m.provider, sent_folder: m.sent_folder };
-      const sent = await sendFromMailbox(mb, decPass(m.pass_enc), {
+                   smtp_secure: m.smtp_secure, imap_host: m.imap_host, imap_port: m.imap_port, provider: m.provider, sent_folder: m.sent_folder,
+                   auth_method: m.auth_method, oauth_provider: m.oauth_provider, oauth_access_enc: m.oauth_access_enc,
+                   oauth_refresh_enc: m.oauth_refresh_enc, oauth_expires_at: m.oauth_expires_at };
+      const auth = await getMailboxAuth(pool, mb);
+      const sent = await sendFromMailbox(mb, auth, {
         to: m.to_email, subject: m.asunto, html,
         text: m.cuerpo + (m.firma ? `\n\n${String(m.firma).replace(/<[^>]+>/g, '')}` : ''),
         fromName: m.from_name || undefined,

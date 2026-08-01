@@ -3733,13 +3733,14 @@ app.post('/api/lm/mailboxes/:id/test', requireAuth, async (req, res) => {
     const { rows } = await pool.query(`SELECT * FROM lm_mailboxes WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId]);
     if (!rows.length) return res.status(404).json({ error: 'Buzón no encontrado' });
     const mb = rows[0];
-    const pass = mailboxSvc.decPass(mb.pass_enc);
-    const t = await mailboxSvc.testMailbox(mb, pass);
+    // Auth: pass (basic) o accessToken (OAuth). getMailboxAuth refresca token si toca.
+    const auth = await mailboxSvc.getMailboxAuth(pool, mb);
+    const t = await mailboxSvc.testMailbox(mb, auth);
     let sent = false;
     if (t.smtpOk && (req.body || {}).send_test) {
-      await mailboxSvc.sendFromMailbox(mb, pass, {
+      await mailboxSvc.sendFromMailbox(mb, auth, {
         to: mb.email, subject: '✓ Prueba de Nova — buzón conectado',
-        text: `Este buzón (${mb.email}) quedó conectado a Nova.\nEnvío por SMTP funcionando${t.imapOk ? ' y lectura por IMAP también. Esta copia debe aparecer en tu carpeta Enviados.' : '. La lectura automática (IMAP) queda pendiente para la fase OAuth.'}`,
+        text: `Este buzón (${mb.email}) quedó conectado a Nova.\nEnvío por SMTP funcionando${t.imapOk ? ' y lectura por IMAP también. Esta copia debe aparecer en tu carpeta Enviados.' : '. La lectura automática (IMAP) queda pendiente — actívala reconectando por OAuth.'}`,
       });
       sent = true;
     }
@@ -3755,6 +3756,105 @@ app.delete('/api/lm/mailboxes/:id', requireAuth, async (req, res) => {
     if (!rowCount) return res.status(404).json({ error: 'Buzón no encontrado' });
     res.json({ ok: true });
   } catch (err) { console.error('[mailbox] DELETE', err.message); res.status(500).json({ error: 'Error al quitar el buzón' }); }
+});
+
+// ── OAuth Microsoft para buzones (F4) ─────────────────────────────
+// Flujo: el frontend abre en popup /api/lm/mailboxes/oauth/microsoft/start?client=N.
+// Redirigimos a Microsoft; después de que la usuaria consiente, Microsoft vuelve a
+// /callback. Ahí intercambiamos el código por tokens, upsert-eamos el buzón (una
+// fila por outbound_client + email), verificamos IMAP/SMTP y cerramos el popup con
+// un postMessage para que el padre recargue la lista.
+app.get('/api/lm/mailboxes/oauth/microsoft/status', requireAuth, (_req, res) => {
+  const ms = require('./services/microsoftOAuth');
+  res.json({ configured: ms.isConfigured() });
+});
+
+app.get('/api/lm/mailboxes/oauth/microsoft/start', requireAuth, (req, res) => {
+  try {
+    const ms = require('./services/microsoftOAuth');
+    if (!ms.isConfigured()) {
+      return res.status(500).send('Microsoft OAuth no está configurado. Falta MS_CLIENT_ID / MS_CLIENT_SECRET / MS_REDIRECT_URI en el .env del backend.');
+    }
+    const clientId = parseInt(req.query.client, 10);
+    if (!clientId) return res.status(400).send('Falta el parámetro ?client=');
+    // Firmamos el state para que en el callback sepamos a qué cliente outbound
+    // asignar el buzón, sin que el navegador pueda cambiarlo.
+    const state = _signState({ uid: req.workspaceOwnerId, clientId, ts: Date.now() });
+    res.redirect(ms.buildAuthUrl(state));
+  } catch (e) { res.status(500).send('Error: ' + e.message); }
+});
+
+function _signState(obj) {
+  const crypto = require('crypto');
+  const payload = Buffer.from(JSON.stringify(obj)).toString('base64url');
+  const sig = crypto.createHmac('sha256', process.env.SESSION_SECRET || 'nova-fallback').update(payload).digest('base64url');
+  return payload + '.' + sig;
+}
+function _verifyState(state) {
+  const crypto = require('crypto');
+  const [payload, sig] = String(state || '').split('.');
+  if (!payload || !sig) return null;
+  const expect = crypto.createHmac('sha256', process.env.SESSION_SECRET || 'nova-fallback').update(payload).digest('base64url');
+  if (expect !== sig) return null;
+  try { return JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')); } catch (_) { return null; }
+}
+
+// Callback público (Microsoft redirige aquí sin cookies de sesión); la seguridad la
+// da el state firmado con SESSION_SECRET.
+app.get('/api/lm/mailboxes/oauth/microsoft/callback', async (req, res) => {
+  const { code, state, error, error_description } = req.query;
+  const _closePopup = (kind, msg) => `<!doctype html><meta charset="utf-8">
+<title>${kind === 'ok' ? 'Buzón conectado' : 'Error conectando buzón'}</title>
+<style>body{font-family:-apple-system,Segoe UI,sans-serif;padding:40px;text-align:center;color:#1f1d1b}</style>
+<h2>${kind === 'ok' ? '✓ Buzón conectado' : '⚠ No se pudo conectar'}</h2>
+<p>${String(msg || '').replace(/</g, '&lt;').slice(0, 400)}</p>
+<p style="color:#918c85;font-size:13px">Esta ventana se cerrará sola…</p>
+<script>
+try { window.opener && window.opener.postMessage({ source:'nova-oauth-ms', ok:${kind === 'ok'}, msg:${JSON.stringify(String(msg || ''))} }, '*'); } catch(e){}
+setTimeout(()=>window.close(), ${kind === 'ok' ? 1200 : 3500});
+</script>`;
+  try {
+    if (error) throw new Error(error_description || error);
+    if (!code || !state) throw new Error('Falta code o state');
+    const st = _verifyState(state);
+    if (!st) throw new Error('state inválido o firma no coincide');
+    const ms = require('./services/microsoftOAuth');
+    const tok = await ms.exchangeCode(code);
+    if (!tok.email) throw new Error('No se pudo leer el email del usuario (falta scope User.Read).');
+
+    const emailLc = tok.email.toLowerCase();
+    const expiresAt = new Date(Date.now() + (tok.expires_in * 1000));
+    const hosts = mailboxSvc.resolveHosts('microsoft', {});
+    await pool.query(
+      `INSERT INTO lm_mailboxes (user_id, outbound_client_id, email, provider, auth_method, oauth_provider,
+                                 smtp_host, smtp_port, smtp_secure, imap_host, imap_port,
+                                 oauth_access_enc, oauth_refresh_enc, oauth_expires_at, oauth_scopes,
+                                 estado, verified_at)
+            VALUES ($1,$2,$3,'microsoft','oauth','microsoft',$4,$5,$6,$7,$8,$9,$10,$11,$12,'nuevo',NOW())
+       ON CONFLICT (user_id, outbound_client_id)
+       DO UPDATE SET email=EXCLUDED.email, provider='microsoft', auth_method='oauth', oauth_provider='microsoft',
+                     smtp_host=EXCLUDED.smtp_host, smtp_port=EXCLUDED.smtp_port, smtp_secure=EXCLUDED.smtp_secure,
+                     imap_host=EXCLUDED.imap_host, imap_port=EXCLUDED.imap_port,
+                     oauth_access_enc=EXCLUDED.oauth_access_enc, oauth_refresh_enc=EXCLUDED.oauth_refresh_enc,
+                     oauth_expires_at=EXCLUDED.oauth_expires_at, oauth_scopes=EXCLUDED.oauth_scopes,
+                     last_error='', verified_at=NOW()`,
+      [st.uid, st.clientId, emailLc,
+       hosts.smtp_host, hosts.smtp_port, hosts.smtp_secure, hosts.imap_host, hosts.imap_port,
+       mailboxSvc.encPass(tok.access_token), mailboxSvc.encPass(tok.refresh_token), expiresAt, tok.scope]
+    );
+    // Verificar SMTP+IMAP en el momento para dejar el estado limpio.
+    const { rows } = await pool.query(`SELECT * FROM lm_mailboxes WHERE user_id=$1 AND outbound_client_id=$2`, [st.uid, st.clientId]);
+    const mb = rows[0];
+    const auth = await mailboxSvc.getMailboxAuth(pool, mb);
+    const t = await mailboxSvc.testMailbox(mb, auth);
+    const estado = t.smtpOk ? (t.imapOk ? 'conectado' : 'solo_envio') : 'error';
+    await pool.query(`UPDATE lm_mailboxes SET estado=$1, last_error=$2, sent_folder=$3 WHERE id=$4`,
+      [estado, t.error || '', t.sentFolder || '', mb.id]);
+    res.send(_closePopup('ok', `${emailLc} — ${estado === 'conectado' ? 'SMTP e IMAP OK' : (t.error || 'solo envío')}`));
+  } catch (e) {
+    console.error('[oauth-ms] callback error:', e.message);
+    res.send(_closePopup('err', e.message));
+  }
 });
 
 // ── Inbox unificado (Mailboxes F3): hilos por contacto entre lo enviado
@@ -3950,8 +4050,8 @@ app.post('/api/lm/inbox/reply', requireAuth, async (req, res) => {
       return res.status(201).json({ ok: true, scheduled: true, message: msg });
     }
 
-    const pass = mailboxSvc.decPass(mb.pass_enc);
-    const sent = await mailboxSvc.sendFromMailbox(mb, pass, {
+    const auth = await mailboxSvc.getMailboxAuth(pool, mb);
+    const sent = await mailboxSvc.sendFromMailbox(mb, auth, {
       to: to.join(', '), cc: cc.length ? cc.join(', ') : undefined,
       subject: asunto, text: cuerpo, html,
       fromName: String(b.from_name || '').trim() || undefined,

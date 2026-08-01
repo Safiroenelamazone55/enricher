@@ -1184,6 +1184,16 @@ async function initDb() {
     await pool.query(`ALTER TABLE lm_mailboxes ADD COLUMN IF NOT EXISTS imap_last_uid    BIGINT NOT NULL DEFAULT 0;`);
     await pool.query(`ALTER TABLE lm_mailboxes ADD COLUMN IF NOT EXISTS last_checked_at  TIMESTAMPTZ;`);
     await pool.query(`ALTER TABLE lm_mailboxes ADD COLUMN IF NOT EXISTS sent_folder      TEXT NOT NULL DEFAULT '';`);
+    // OAuth (F4): para Microsoft 365 donde el tenant bloquea autenticación básica IMAP.
+    // auth_method='basic' (default, usa pass_enc) o 'oauth' (usa oauth_* y hace XOAUTH2).
+    // Los tokens se cifran con el mismo AES-256-GCM que pass_enc (encPass/decPass).
+    await pool.query(`ALTER TABLE lm_mailboxes ADD COLUMN IF NOT EXISTS auth_method      TEXT NOT NULL DEFAULT 'basic';`);
+    await pool.query(`ALTER TABLE lm_mailboxes ADD COLUMN IF NOT EXISTS oauth_provider   TEXT NOT NULL DEFAULT '';`);
+    await pool.query(`ALTER TABLE lm_mailboxes ADD COLUMN IF NOT EXISTS oauth_access_enc TEXT NOT NULL DEFAULT '';`);
+    await pool.query(`ALTER TABLE lm_mailboxes ADD COLUMN IF NOT EXISTS oauth_refresh_enc TEXT NOT NULL DEFAULT '';`);
+    await pool.query(`ALTER TABLE lm_mailboxes ADD COLUMN IF NOT EXISTS oauth_expires_at TIMESTAMPTZ;`);
+    await pool.query(`ALTER TABLE lm_mailboxes ADD COLUMN IF NOT EXISTS oauth_scopes     TEXT NOT NULL DEFAULT '';`);
+    await pool.query(`ALTER TABLE lm_mailboxes ADD COLUMN IF NOT EXISTS oauth_tenant_id  TEXT NOT NULL DEFAULT '';`);
 
     // lm_inbox_messages: correos ENTRANTES detectados por el vigilante IMAP (F2).
     // Solo se guardan los relevantes: remitente que es contacto del CRM, o rebotes.
