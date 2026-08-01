@@ -1194,6 +1194,12 @@ async function initDb() {
     await pool.query(`ALTER TABLE lm_mailboxes ADD COLUMN IF NOT EXISTS oauth_expires_at TIMESTAMPTZ;`);
     await pool.query(`ALTER TABLE lm_mailboxes ADD COLUMN IF NOT EXISTS oauth_scopes     TEXT NOT NULL DEFAULT '';`);
     await pool.query(`ALTER TABLE lm_mailboxes ADD COLUMN IF NOT EXISTS oauth_tenant_id  TEXT NOT NULL DEFAULT '';`);
+    // Solicitud de admin consent: si el tenant del cliente exige aprobación del admin
+    // (AADSTS65001 en el OAuth), el buzón queda marcado y la UI ofrece enviarle un
+    // correo al admin con el link de admin-consent listo. El timestamp evita spam.
+    await pool.query(`ALTER TABLE lm_mailboxes ADD COLUMN IF NOT EXISTS needs_admin_consent BOOLEAN NOT NULL DEFAULT FALSE;`);
+    await pool.query(`ALTER TABLE lm_mailboxes ADD COLUMN IF NOT EXISTS admin_consent_requested_at TIMESTAMPTZ;`);
+    await pool.query(`ALTER TABLE lm_mailboxes ADD COLUMN IF NOT EXISTS admin_consent_sent_to TEXT NOT NULL DEFAULT '';`);
 
     // lm_inbox_messages: correos ENTRANTES detectados por el vigilante IMAP (F2).
     // Solo se guardan los relevantes: remitente que es contacto del CRM, o rebotes.

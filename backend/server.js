@@ -3799,24 +3799,207 @@ function _verifyState(state) {
   try { return JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')); } catch (_) { return null; }
 }
 
+// ── Plantillas de solicitud de admin consent (ES/EN) ─────────────────
+// Placeholders soportados: {{admin_consent_url}}, {{cliente_nombre}},
+// {{buzon_email}}, {{yo_nombre}}, {{yo_email}}. El frontend las muestra en el
+// modal como opción de partida; la usuaria puede editarlas antes de enviar.
+const ADMIN_CONSENT_TEMPLATES = {
+  es: {
+    label: 'Español',
+    subject: 'Aprobación necesaria: integrar {{buzon_email}} con nuestro sistema de outreach',
+    body_html: `<p>Hola,</p>
+<p>Soy <b>{{yo_nombre}}</b>. Estamos integrando el buzón <b>{{buzon_email}}</b> con nuestro sistema de outreach comercial (Nova) para gestionar el envío y las respuestas de forma centralizada.</p>
+<p>Para que funcione hace falta que apruebes la app <b>"Nova outreach"</b> en tu tenant de Microsoft — es un solo clic y no instalas nada. Cada usuario que conecte su buzón después seguirá dando su propio consentimiento; esto solo autoriza que la app pueda pedirlo.</p>
+<p style="margin:24px 0;text-align:center">
+  <a href="{{admin_consent_url}}" style="background:#0062CC;color:#fff;padding:12px 22px;border-radius:6px;text-decoration:none;font-weight:600">Aprobar acceso →</a>
+</p>
+<p><b>Permisos que pide:</b></p>
+<ul>
+  <li><code>IMAP.AccessAsUser.All</code> — leer el buzón por IMAP (para detectar respuestas)</li>
+  <li><code>SMTP.Send</code> — enviar correos desde el buzón</li>
+  <li><code>User.Read</code> — leer el email del usuario que se conecta</li>
+  <li><code>offline_access</code> — mantener la sesión sin re-loguear</li>
+</ul>
+<p>Cualquier duda me escribes a {{yo_email}}. ¡Gracias!</p>
+<p style="color:#6C6862;font-size:12px">— {{yo_nombre}}</p>`,
+  },
+  en: {
+    label: 'English',
+    subject: 'Approval needed: connect {{buzon_email}} to our outreach system',
+    body_html: `<p>Hi,</p>
+<p>I'm <b>{{yo_nombre}}</b>. We're connecting the mailbox <b>{{buzon_email}}</b> to our outreach system (Nova) so we can send campaigns and track replies in one place.</p>
+<p>For this to work, we need you to approve the app <b>"Nova outreach"</b> in your Microsoft tenant — one click, nothing to install. Each user who connects their mailbox afterward still gives their own consent; this only authorizes the app so it can ask them.</p>
+<p style="margin:24px 0;text-align:center">
+  <a href="{{admin_consent_url}}" style="background:#0062CC;color:#fff;padding:12px 22px;border-radius:6px;text-decoration:none;font-weight:600">Approve access →</a>
+</p>
+<p><b>Permissions requested:</b></p>
+<ul>
+  <li><code>IMAP.AccessAsUser.All</code> — read the mailbox over IMAP (to detect replies)</li>
+  <li><code>SMTP.Send</code> — send email from the mailbox</li>
+  <li><code>User.Read</code> — read the connecting user's email address</li>
+  <li><code>offline_access</code> — keep the session without re-login</li>
+</ul>
+<p>Any questions, reply to me at {{yo_email}}. Thanks!</p>
+<p style="color:#6C6862;font-size:12px">— {{yo_nombre}}</p>`,
+  },
+};
+
+// GET plantillas + URL de admin consent listo (para renderizar el preview).
+app.get('/api/lm/mailboxes/:id/admin-consent-templates', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT m.email, m.needs_admin_consent, m.admin_consent_requested_at, m.admin_consent_sent_to,
+              oc.nombre AS cliente_nombre,
+              u.name AS yo_nombre, u.email AS yo_email
+         FROM lm_mailboxes m
+         LEFT JOIN outbound_clients oc ON oc.id = m.outbound_client_id
+         LEFT JOIN users u ON u.id = m.user_id
+        WHERE m.id=$1 AND m.user_id=$2`, [req.params.id, req.workspaceOwnerId]);
+    if (!rows.length) return res.status(404).json({ error: 'Buzón no encontrado' });
+    const mb = rows[0];
+    const clientId = process.env.MS_CLIENT_ID || '';
+    const redirectUri = process.env.MS_REDIRECT_URI || '';
+    const admin_consent_url = clientId
+      ? `https://login.microsoftonline.com/common/adminconsent?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}`
+      : '';
+    res.json({
+      buzon_email: mb.email || '(pendiente)',
+      cliente_nombre: mb.cliente_nombre || '',
+      yo_nombre: mb.yo_nombre || '',
+      yo_email: mb.yo_email || '',
+      admin_consent_url,
+      already_sent_to: mb.admin_consent_sent_to || '',
+      already_sent_at: mb.admin_consent_requested_at,
+      templates: ADMIN_CONSENT_TEMPLATES,
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST envía el correo al admin del cliente pidiéndole el consent.
+// Prioriza Gmail conectado > primer buzón lm_mailboxes 'conectado' del user.
+app.post('/api/lm/mailboxes/:id/request-admin-consent', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId;
+  const { admin_email, subject, body_html } = req.body || {};
+  if (!admin_email || !subject || !body_html) return res.status(400).json({ error: 'Faltan admin_email, subject o body_html' });
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(admin_email).trim())) return res.status(400).json({ error: 'admin_email no es un correo válido' });
+  try {
+    const { rows } = await pool.query(
+      `SELECT m.*, u.name AS yo_nombre, u.email AS yo_email
+         FROM lm_mailboxes m LEFT JOIN users u ON u.id=m.user_id
+        WHERE m.id=$1 AND m.user_id=$2`, [req.params.id, uid]);
+    if (!rows.length) return res.status(404).json({ error: 'Buzón no encontrado' });
+    const mb = rows[0];
+
+    let sent_from = '';
+    let sendErr = null;
+
+    // Vía 1: Gmail del user (más natural: llega con nombre y foto de Jenny).
+    try {
+      const { gmailStatus, sendEmail } = require('./services/gmailService');
+      const gs = await gmailStatus(pool, uid);
+      if (gs.connected && gs.email) {
+        await sendEmail(pool, uid, GMAIL_CALLBACK, {
+          to: admin_email, subject, html: body_html, text: body_html.replace(/<[^>]+>/g, ' '),
+          fromName: mb.yo_nombre || '',
+        });
+        sent_from = gs.email;
+      }
+    } catch (e) { sendErr = e; }
+
+    // Vía 2: primer buzón conectado por SMTP (no el que estamos configurando).
+    if (!sent_from) {
+      const { rows: mbs } = await pool.query(
+        `SELECT * FROM lm_mailboxes WHERE user_id=$1 AND estado IN ('conectado','solo_envio') AND id<>$2 ORDER BY id LIMIT 1`,
+        [uid, mb.id]);
+      if (mbs.length) {
+        const sender = mbs[0];
+        const auth = await mailboxSvc.getMailboxAuth(pool, sender);
+        await mailboxSvc.sendFromMailbox(sender, auth, {
+          to: admin_email, subject, html: body_html, text: body_html.replace(/<[^>]+>/g, ' '),
+          fromName: mb.yo_nombre || '',
+        });
+        sent_from = sender.email;
+      }
+    }
+
+    if (!sent_from) {
+      return res.status(400).json({
+        error: 'No hay ningún buzón conectado para enviar el correo. Conecta primero Gmail o un buzón por SMTP en otro cliente para poder mandar la solicitud al admin.' + (sendErr ? ' Detalle: ' + sendErr.message : '')
+      });
+    }
+
+    await pool.query(
+      `UPDATE lm_mailboxes SET admin_consent_requested_at=NOW(), admin_consent_sent_to=$1 WHERE id=$2`,
+      [admin_email, mb.id]);
+    // Registra actividad en el cliente outbound para que quede rastro visible.
+    await pool.query(
+      `INSERT INTO activities (user_id, outbound_client_id, tipo, canal, nota, fecha, estado)
+       VALUES ($1,$2,'email','email',$3,NOW(),'hecha')`,
+      [uid, mb.outbound_client_id,
+       `Solicitud de admin consent enviada a ${admin_email} para conectar ${mb.email || 'el buzón Microsoft'} (desde ${sent_from})`]);
+    res.status(201).json({ ok: true, sent_from, sent_to: admin_email, sent_at: new Date().toISOString() });
+  } catch (e) {
+    console.error('[admin-consent] request error:', e.message);
+    res.status(500).json({ error: 'No se pudo enviar la solicitud: ' + e.message });
+  }
+});
+
 // Callback público (Microsoft redirige aquí sin cookies de sesión); la seguridad la
 // da el state firmado con SESSION_SECRET.
 app.get('/api/lm/mailboxes/oauth/microsoft/callback', async (req, res) => {
   const { code, state, error, error_description } = req.query;
-  const _closePopup = (kind, msg) => `<!doctype html><meta charset="utf-8">
-<title>${kind === 'ok' ? 'Buzón conectado' : 'Error conectando buzón'}</title>
+  // kind: 'ok' | 'err' | 'consent_required'. En consent_required, el popup manda un
+  // postMessage con needsAdminConsent:true para que el frontend abra el flujo de
+  // solicitud al admin en vez de mostrar solo un error.
+  const _closePopup = (kind, msg, extra = {}) => `<!doctype html><meta charset="utf-8">
+<title>${kind === 'ok' ? 'Buzón conectado' : (kind === 'consent_required' ? 'Se requiere aprobación del admin' : 'Error conectando buzón')}</title>
 <style>body{font-family:-apple-system,Segoe UI,sans-serif;padding:40px;text-align:center;color:#1f1d1b}</style>
-<h2>${kind === 'ok' ? '✓ Buzón conectado' : '⚠ No se pudo conectar'}</h2>
-<p>${String(msg || '').replace(/</g, '&lt;').slice(0, 400)}</p>
+<h2>${kind === 'ok' ? '✓ Buzón conectado' : (kind === 'consent_required' ? '⏳ Falta aprobación del admin del cliente' : '⚠ No se pudo conectar')}</h2>
+<p>${String(msg || '').replace(/</g, '&lt;').slice(0, 500)}</p>
 <p style="color:#918c85;font-size:13px">Esta ventana se cerrará sola…</p>
 <script>
-try { window.opener && window.opener.postMessage({ source:'nova-oauth-ms', ok:${kind === 'ok'}, msg:${JSON.stringify(String(msg || ''))} }, '*'); } catch(e){}
+try { window.opener && window.opener.postMessage({ source:'nova-oauth-ms', ok:${kind === 'ok'}, needsAdminConsent:${kind === 'consent_required'}, msg:${JSON.stringify(String(msg || ''))}, extra:${JSON.stringify(extra)} }, '*'); } catch(e){}
 setTimeout(()=>window.close(), ${kind === 'ok' ? 1200 : 3500});
 </script>`;
+  // Detecta el "AADSTS65001 / consent_required" que Microsoft devuelve cuando el
+  // tenant del cliente no permite user consent para apps sin verificar. Marca el
+  // buzón (crea el registro si no existía) y devuelve un popup especial que
+  // dispara el flujo de "solicitar aprobación al admin".
+  const _handleConsentRequired = async (st, detail) => {
+    if (!st) return _closePopup('err', detail || 'Se necesita aprobación del admin, pero no pude identificar el cliente.');
+    try {
+      const hosts = mailboxSvc.resolveHosts('microsoft', {});
+      // Crea/actualiza el buzón placeholder para poder mostrar el botón "Solicitar
+      // aprobación al admin" en la tarjeta. Sin email conocido todavía — se llenará
+      // cuando el admin apruebe y la usuaria repita el OAuth.
+      await pool.query(
+        `INSERT INTO lm_mailboxes (user_id, outbound_client_id, email, provider, auth_method, oauth_provider,
+                                   smtp_host, smtp_port, smtp_secure, imap_host, imap_port,
+                                   estado, needs_admin_consent, last_error)
+              VALUES ($1,$2,'','microsoft','oauth','microsoft',$3,$4,$5,$6,$7,'error',TRUE,$8)
+         ON CONFLICT (user_id, outbound_client_id)
+         DO UPDATE SET provider='microsoft', auth_method='oauth', oauth_provider='microsoft',
+                       needs_admin_consent=TRUE, estado='error', last_error=EXCLUDED.last_error`,
+        [st.uid, st.clientId, hosts.smtp_host, hosts.smtp_port, hosts.smtp_secure, hosts.imap_host, hosts.imap_port,
+         'Falta aprobación del admin del tenant Microsoft. Envíale la solicitud desde la tarjeta del buzón.']);
+      return _closePopup('consent_required',
+        'El tenant Microsoft del cliente exige que un administrador apruebe la app "Nova outreach" antes de que puedas conectar el buzón. Nova ya te va a ofrecer enviar un correo con el link de aprobación al admin.',
+        { clientId: st.clientId });
+    } catch (dbErr) {
+      console.error('[oauth-ms] consent flag save error:', dbErr.message);
+      return _closePopup('err', 'Se necesita aprobación del admin, y además falló guardar el estado: ' + dbErr.message);
+    }
+  };
   try {
-    if (error) throw new Error(error_description || error);
+    const st = state ? _verifyState(state) : null;
+    if (error) {
+      const combined = ((error_description || '') + ' ' + (error || '')).toLowerCase();
+      if (combined.includes('aadsts65001') || error === 'consent_required' || combined.includes('admin')) {
+        return res.send(await _handleConsentRequired(st, error_description || error));
+      }
+      throw new Error(error_description || error);
+    }
     if (!code || !state) throw new Error('Falta code o state');
-    const st = _verifyState(state);
     if (!st) throw new Error('state inválido o firma no coincide');
     const ms = require('./services/microsoftOAuth');
     const tok = await ms.exchangeCode(code);
@@ -3853,6 +4036,13 @@ setTimeout(()=>window.close(), ${kind === 'ok' ? 1200 : 3500});
     res.send(_closePopup('ok', `${emailLc} — ${estado === 'conectado' ? 'SMTP e IMAP OK' : (t.error || 'solo envío')}`));
   } catch (e) {
     console.error('[oauth-ms] callback error:', e.message);
+    const m = String(e.message || '').toLowerCase();
+    if (m.includes('aadsts65001') || m.includes('consent_required') || m.includes('admin')) {
+      try {
+        const st = state ? _verifyState(state) : null;
+        return res.send(await _handleConsentRequired(st, e.message));
+      } catch (_) {}
+    }
     res.send(_closePopup('err', e.message));
   }
 });

@@ -16900,20 +16900,42 @@ ${foot}
   function _mbSideHtml(c) {
     const mb = _mbFor(c.id);
     const provLbl = mb ? (_MB_PROV.find(p => p[0] === mb.provider) || ['', mb.provider])[1] : '';
+    // Estado "necesita aprobación del admin" pisa el chip normal: es un caso especial
+    // que requiere una acción distinta (mandar correo al admin, no re-conectar).
+    const needsConsent = mb && mb.needs_admin_consent;
+    const chipCls = needsConsent ? 'mbx-chip mbx-chip--warn' : ('mbx-chip' + (mb && mb.estado === 'conectado' ? ' mbx-chip--ok' : mb && mb.estado === 'solo_envio' ? ' mbx-chip--warn' : ' mbx-chip--err'));
+    const chipTxt = needsConsent ? '⏳ Falta aprobación del admin' : (mb && (mb.estado === 'conectado' ? '✓ Conectado' : mb.estado === 'solo_envio' ? '✓ Envío OK · lectura pendiente' : '⚠ Error'));
+    const consentInfo = needsConsent && mb.admin_consent_requested_at
+      ? `<div class="mbx-sub" style="color:#0062CC">Solicitud enviada a ${esc(mb.admin_consent_sent_to || '')} · ${_ago(mb.admin_consent_requested_at)}</div>`
+      : '';
+    const consentBtn = needsConsent
+      ? `<button class="btn btn--primary btn--sm" style="margin-top:8px" onclick="LeadManagerModule.mbAdminConsentOpen(${mb.id})">${mb.admin_consent_requested_at ? '↻ Reenviar solicitud al admin' : '📧 Solicitar aprobación al admin'}</button>`
+      : '';
     const inner = _mailboxes === null
       ? `<div class="mbx-sub">Cargando…</div>`
       : mb
-        ? `<div class="mbx-row"><span class="mbx-chip${mb.estado === 'conectado' ? ' mbx-chip--ok' : mb.estado === 'solo_envio' ? ' mbx-chip--warn' : ' mbx-chip--err'}">${mb.estado === 'conectado' ? '✓ Conectado' : mb.estado === 'solo_envio' ? '✓ Envío OK · lectura pendiente' : '⚠ Error'}</span></div>
-           <div class="mbx-mail" title="${esc(mb.email)}">${esc(mb.email)}</div>
-           <div class="mbx-sub">${esc(provLbl)}${mb.last_error ? ` · ${esc(mb.last_error)}` : ''}</div>
+        ? `<div class="mbx-row"><span class="${chipCls}">${chipTxt}</span></div>
+           <div class="mbx-mail" title="${esc(mb.email)}">${esc(mb.email || '(pendiente de aprobación)')}</div>
+           <div class="mbx-sub">${esc(provLbl)}${mb.last_error && !needsConsent ? ` · ${esc(mb.last_error)}` : ''}</div>
+           ${consentInfo}
+           ${consentBtn}
            <div class="mbx-acts">
-             <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.mbTest(${mb.id})">Probar envío</button>
+             ${!needsConsent ? `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.mbTest(${mb.id})">Probar envío</button>` : ''}
              <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.mbOpen(${c.id})">Cambiar</button>
              <button class="btn btn--ghost btn--sm" style="color:var(--danger)" onclick="LeadManagerModule.mbDelete(${mb.id})">Quitar</button>
            </div>`
         : `<div class="mbx-sub">Conecta el buzón real de este cliente (jenny@sudominio…) para enviar, leer respuestas y rebotes desde Nova.</div>
            <button class="btn btn--primary btn--sm" style="margin-top:8px" onclick="LeadManagerModule.mbOpen(${c.id})">Conectar buzón</button>`;
     return `<div class="mbx"><div class="mbx-t">Buzón de envío</div>${inner}</div>`;
+  }
+  // "hace 3 h" / "hace 2 d" para el timestamp del último envío al admin.
+  function _ago(ts) {
+    if (!ts) return '';
+    const d = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
+    if (d < 60) return 'ahora mismo';
+    if (d < 3600) return `hace ${Math.floor(d/60)} min`;
+    if (d < 86400) return `hace ${Math.floor(d/3600)} h`;
+    return `hace ${Math.floor(d/86400)} d`;
   }
   function mbClose() { document.getElementById('mbx-modal')?.remove(); }
   function mbProv(p) {
@@ -16988,14 +17010,102 @@ ${foot}
     const pop = window.open(url, 'nova-oauth-ms', `width=${w},height=${h},left=${x},top=${y}`);
     if (!pop) { showBanner('El navegador bloqueó el popup — permite popups para app.novacentrax.com y vuelve a intentar.', 'error'); return; }
     // Recibe el resultado del callback del backend
-    const onMsg = (ev) => {
+    const onMsg = async (ev) => {
       const d = ev.data || {};
       if (d.source !== 'nova-oauth-ms') return;
       window.removeEventListener('message', onMsg);
       if (d.ok) { mbClose(); showBanner('✓ ' + (d.msg || 'Buzón conectado'), 'success'); _mbReload(); }
+      else if (d.needsAdminConsent) {
+        // El tenant del cliente exige admin consent — el backend ya creó el registro
+        // marcado. Cerramos el modal de conexión y abrimos el de solicitud al admin.
+        mbClose();
+        await _mbReload();
+        // Buscar el buzón recién marcado y abrir su modal
+        const mb = (_mailboxes || []).find(m => m.outbound_client_id === clientId && m.needs_admin_consent);
+        if (mb) mbAdminConsentOpen(mb.id);
+        else showBanner(d.msg || 'Falta aprobación del admin del cliente', 'info');
+      }
       else { const err = $('mbx-err'); if (err) { err.textContent = d.msg || 'No se pudo conectar'; err.style.display = ''; } }
     };
     window.addEventListener('message', onMsg);
+  }
+
+  // Modal para pedir al admin del cliente que apruebe la app Nova en su tenant
+  // Microsoft. Idioma ES/EN con plantilla editable + preview + envío por el buzón
+  // que la usuaria ya tenga conectado (Gmail o SMTP).
+  let _acData = null; // datos que trae el backend (plantillas + placeholders)
+  async function mbAdminConsentOpen(mbId) {
+    document.getElementById('ac-modal')?.remove();
+    try {
+      const r = await apiFetch(`${API}/lm/mailboxes/${mbId}/admin-consent-templates`);
+      if (!r.ok) throw new Error((await r.json()).error || 'Error');
+      _acData = await r.json();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); return; }
+    const lang = 'es';
+    const m = document.createElement('div'); m.id = 'ac-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = ev => { if (ev.target === m) m.remove(); };
+    m.innerHTML = `<div class="fin-pi-box dle-box" style="max-width:720px">
+      <div class="dle-hd"><div style="flex:1;min-width:0">
+        <div class="dle-hd__t">📧 Solicitar aprobación al admin del cliente</div>
+        <div class="dle-hd__s">El tenant Microsoft de ${esc(_acData.cliente_nombre || 'este cliente')} exige que su admin apruebe la app "Nova outreach" una sola vez. Envíale este correo con el link de aprobación.</div>
+      </div><button class="fin-pi-x" onclick="document.getElementById('ac-modal').remove()">✕</button></div>
+      <div class="dle-grid">
+        <label class="dle-f"><span class="dle-l">Correo del admin del cliente</span><input class="dle-i" id="ac-to" type="email" placeholder="admin@dominiodelcliente.com" value="${esc(_acData.already_sent_to || '')}"></label>
+        <label class="dle-f"><span class="dle-l">Idioma de la plantilla</span><select class="dle-i" id="ac-lang" onchange="LeadManagerModule.mbAdminConsentLang(this.value)">${Object.entries(_acData.templates).map(([k,v]) => `<option value="${k}"${k===lang?' selected':''}>${esc(v.label)}</option>`).join('')}</select></label>
+        <label class="dle-f dle-f--full"><span class="dle-l">Asunto</span><input class="dle-i" id="ac-subj"></label>
+        <label class="dle-f dle-f--full"><span class="dle-l">Cuerpo del correo (HTML — puedes editarlo)</span><textarea class="dle-i" id="ac-body" rows="12" style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.78rem"></textarea></label>
+        <div class="dle-f dle-f--full">
+          <div style="background:#F7F8F6;border:1px solid #E5E4E1;border-radius:8px;padding:10px 14px;font-size:.78rem;color:#6C6862">
+            <b>Se enviará por:</b> el primer buzón conectado en tu cuenta (Gmail si está conectado, si no un SMTP).<br>
+            <b>Link de aprobación:</b> <code style="font-size:.72rem;color:#0062CC;word-break:break-all">${esc(_acData.admin_consent_url || '(falta MS_CLIENT_ID en el server)')}</code>
+          </div>
+        </div>
+        ${_acData.already_sent_at ? `<div class="dle-f dle-f--full"><div style="color:#B45309;font-size:.82rem">⚠ Ya se envió una solicitud a <b>${esc(_acData.already_sent_to)}</b> ${_ago(_acData.already_sent_at)}. Si reenvías, se sobrescribirá el registro.</div></div>` : ''}
+        <div class="dle-f dle-f--full" id="ac-err" style="display:none;color:var(--danger);font-size:.82rem"></div>
+      </div>
+      <div class="dle-foot"><span class="sp"></span>
+        <button class="btn btn--ghost btn--sm" onclick="document.getElementById('ac-modal').remove()">Cancelar</button>
+        <button class="btn btn--primary btn--sm" id="ac-send" onclick="LeadManagerModule.mbAdminConsentSend(${mbId})">Enviar solicitud</button>
+      </div>
+    </div>`;
+    document.body.appendChild(m);
+    mbAdminConsentLang(lang);
+    setTimeout(() => $('ac-to').focus(), 60);
+  }
+  // Sustituye placeholders y refresca subject + body al cambiar idioma o al abrir.
+  function mbAdminConsentLang(lang) {
+    if (!_acData) return;
+    const t = _acData.templates[lang]; if (!t) return;
+    const repl = (s) => String(s)
+      .replace(/\{\{admin_consent_url\}\}/g, _acData.admin_consent_url || '')
+      .replace(/\{\{cliente_nombre\}\}/g, _acData.cliente_nombre || '')
+      .replace(/\{\{buzon_email\}\}/g, _acData.buzon_email || '')
+      .replace(/\{\{yo_nombre\}\}/g, _acData.yo_nombre || '')
+      .replace(/\{\{yo_email\}\}/g, _acData.yo_email || '');
+    $('ac-subj').value = repl(t.subject);
+    $('ac-body').value = repl(t.body_html);
+  }
+  async function mbAdminConsentSend(mbId) {
+    const to = $('ac-to').value.trim();
+    const subject = $('ac-subj').value.trim();
+    const body_html = $('ac-body').value.trim();
+    const err = $('ac-err');
+    if (!to || !subject || !body_html) { err.textContent = 'Faltan campos (email, asunto o cuerpo).'; err.style.display = ''; return; }
+    const btn = $('ac-send'); btn.disabled = true; btn.textContent = 'Enviando…';
+    try {
+      const r = await apiFetch(`${API}/lm/mailboxes/${mbId}/request-admin-consent`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ admin_email: to, subject, body_html })
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Error');
+      document.getElementById('ac-modal').remove();
+      showBanner(`✓ Solicitud enviada a ${to} desde ${d.sent_from}. Avísale al admin y espera su aprobación.`, 'success');
+      await _mbReload();
+    } catch (e) {
+      err.textContent = e.message; err.style.display = '';
+      btn.disabled = false; btn.textContent = 'Enviar solicitud';
+    }
   }
   async function mbSave(clientId) {
     const g = id => $(id);
@@ -20609,6 +20719,7 @@ ${foot}
     sqSetCli, sqSetEst, sqSetQ, cmSetCli, cmSetEst, cmSetQ,
     seqRunSetCanal, seqTaskSetDue,
     mbOpen, mbClose, mbSave, mbTest, mbDelete, mbProv, mbOAuthStart,
+    mbAdminConsentOpen, mbAdminConsentLang, mbAdminConsentSend,
     ibOpen, ibTab, ibCli, ibSend, ibSchedToggle, ibSchedPick, ibCancelSched,
     ibRowMenu, ibCloseMenu, ibMarkUnread,
     pendingAcceptOpen, pendingAcceptToggleAll, pendingAcceptApplyFilters, pendingAcceptMark,
