@@ -3844,9 +3844,11 @@ const ADMIN_CONSENT_TEMPLATES = {
   },
 };
 
-// GET plantillas + URL de admin consent listo (para renderizar el preview).
+// GET plantillas + URL de admin consent listo (para renderizar el preview) +
+// opciones de "Enviar desde" (Gmail + buzones SMTP en estado enviable).
 app.get('/api/lm/mailboxes/:id/admin-consent-templates', requireAuth, async (req, res) => {
   try {
+    const uid = req.workspaceOwnerId;
     const { rows } = await pool.query(
       `SELECT m.email, m.needs_admin_consent, m.admin_consent_requested_at, m.admin_consent_sent_to,
               oc.nombre AS cliente_nombre,
@@ -3854,7 +3856,7 @@ app.get('/api/lm/mailboxes/:id/admin-consent-templates', requireAuth, async (req
          FROM lm_mailboxes m
          LEFT JOIN outbound_clients oc ON oc.id = m.outbound_client_id
          LEFT JOIN users u ON u.id = m.user_id
-        WHERE m.id=$1 AND m.user_id=$2`, [req.params.id, req.workspaceOwnerId]);
+        WHERE m.id=$1 AND m.user_id=$2`, [req.params.id, uid]);
     if (!rows.length) return res.status(404).json({ error: 'Buzón no encontrado' });
     const mb = rows[0];
     const clientId = process.env.MS_CLIENT_ID || '';
@@ -3862,6 +3864,30 @@ app.get('/api/lm/mailboxes/:id/admin-consent-templates', requireAuth, async (req
     const admin_consent_url = clientId
       ? `https://login.microsoftonline.com/common/adminconsent?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}`
       : '';
+
+    // Opciones "Enviar desde": Gmail conectado + cualquier buzón con SMTP OK.
+    // Incluye el propio buzón (aunque tenga IMAP roto): SMTP suele funcionar cuando
+    // el estado es 'solo_envio' o 'conectado', y para mandar un correo con eso basta.
+    const from_options = [];
+    try {
+      const { gmailStatus } = require('./services/gmailService');
+      const gs = await gmailStatus(pool, uid);
+      if (gs.connected && gs.email) {
+        from_options.push({ id: 'gmail', email: gs.email, provider: 'gmail', label: `Gmail — ${gs.email}` });
+      }
+    } catch (_) {}
+    const { rows: mbs } = await pool.query(
+      `SELECT m.id, m.email, m.provider, m.estado, oc.nombre AS cliente_nombre
+         FROM lm_mailboxes m LEFT JOIN outbound_clients oc ON oc.id=m.outbound_client_id
+        WHERE m.user_id=$1 AND m.estado IN ('conectado','solo_envio') AND m.email <> ''
+        ORDER BY m.id`, [uid]);
+    for (const x of mbs) {
+      from_options.push({
+        id: x.id, email: x.email, provider: x.provider, estado: x.estado,
+        label: `${x.email} (${x.cliente_nombre || x.provider})${x.estado === 'solo_envio' ? ' — solo envío' : ''}`,
+      });
+    }
+
     res.json({
       buzon_email: mb.email || '(pendiente)',
       cliente_nombre: mb.cliente_nombre || '',
@@ -3871,15 +3897,19 @@ app.get('/api/lm/mailboxes/:id/admin-consent-templates', requireAuth, async (req
       already_sent_to: mb.admin_consent_sent_to || '',
       already_sent_at: mb.admin_consent_requested_at,
       templates: ADMIN_CONSENT_TEMPLATES,
+      from_options,
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // POST envía el correo al admin del cliente pidiéndole el consent.
-// Prioriza Gmail conectado > primer buzón lm_mailboxes 'conectado' del user.
+// from_mailbox_id (opcional):
+//   'gmail'  → Gmail conectado del user
+//   <número> → id de un lm_mailbox del user (validado)
+//   omitido  → auto (Gmail si hay, si no primer buzón enviable distinto al target)
 app.post('/api/lm/mailboxes/:id/request-admin-consent', requireAuth, async (req, res) => {
   const uid = req.workspaceOwnerId;
-  const { admin_email, subject, body_html } = req.body || {};
+  const { admin_email, subject, body_html, from_mailbox_id } = req.body || {};
   if (!admin_email || !subject || !body_html) return res.status(400).json({ error: 'Faltan admin_email, subject o body_html' });
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(admin_email).trim())) return res.status(400).json({ error: 'admin_email no es un correo válido' });
   try {
@@ -3893,38 +3923,64 @@ app.post('/api/lm/mailboxes/:id/request-admin-consent', requireAuth, async (req,
     let sent_from = '';
     let sendErr = null;
 
-    // Vía 1: Gmail del user (más natural: llega con nombre y foto de Jenny).
-    try {
-      const { gmailStatus, sendEmail } = require('./services/gmailService');
-      const gs = await gmailStatus(pool, uid);
-      if (gs.connected && gs.email) {
+    // Selección explícita del buzón de envío (elegido por la usuaria en el desplegable).
+    if (from_mailbox_id === 'gmail') {
+      try {
+        const { gmailStatus, sendEmail } = require('./services/gmailService');
+        const gs = await gmailStatus(pool, uid);
+        if (!gs.connected || !gs.email) throw new Error('Gmail no está conectado en tu cuenta');
         await sendEmail(pool, uid, GMAIL_CALLBACK, {
           to: admin_email, subject, html: body_html, text: body_html.replace(/<[^>]+>/g, ' '),
           fromName: mb.yo_nombre || '',
         });
         sent_from = gs.email;
-      }
-    } catch (e) { sendErr = e; }
-
-    // Vía 2: primer buzón conectado por SMTP (no el que estamos configurando).
-    if (!sent_from) {
-      const { rows: mbs } = await pool.query(
-        `SELECT * FROM lm_mailboxes WHERE user_id=$1 AND estado IN ('conectado','solo_envio') AND id<>$2 ORDER BY id LIMIT 1`,
-        [uid, mb.id]);
-      if (mbs.length) {
-        const sender = mbs[0];
+      } catch (e) { sendErr = e; }
+    } else if (from_mailbox_id) {
+      const { rows: sr } = await pool.query(
+        `SELECT * FROM lm_mailboxes WHERE id=$1 AND user_id=$2 AND estado IN ('conectado','solo_envio')`,
+        [parseInt(from_mailbox_id, 10), uid]);
+      if (!sr.length) return res.status(400).json({ error: 'El buzón elegido no existe o no puede enviar correos.' });
+      const sender = sr[0];
+      try {
         const auth = await mailboxSvc.getMailboxAuth(pool, sender);
         await mailboxSvc.sendFromMailbox(sender, auth, {
           to: admin_email, subject, html: body_html, text: body_html.replace(/<[^>]+>/g, ' '),
           fromName: mb.yo_nombre || '',
         });
         sent_from = sender.email;
+      } catch (e) { sendErr = e; }
+    } else {
+      // Modo auto (retrocompat): Gmail primero, si no primer buzón enviable distinto al target.
+      try {
+        const { gmailStatus, sendEmail } = require('./services/gmailService');
+        const gs = await gmailStatus(pool, uid);
+        if (gs.connected && gs.email) {
+          await sendEmail(pool, uid, GMAIL_CALLBACK, {
+            to: admin_email, subject, html: body_html, text: body_html.replace(/<[^>]+>/g, ' '),
+            fromName: mb.yo_nombre || '',
+          });
+          sent_from = gs.email;
+        }
+      } catch (e) { sendErr = e; }
+      if (!sent_from) {
+        const { rows: mbs } = await pool.query(
+          `SELECT * FROM lm_mailboxes WHERE user_id=$1 AND estado IN ('conectado','solo_envio') AND id<>$2 ORDER BY id LIMIT 1`,
+          [uid, mb.id]);
+        if (mbs.length) {
+          const sender = mbs[0];
+          const auth = await mailboxSvc.getMailboxAuth(pool, sender);
+          await mailboxSvc.sendFromMailbox(sender, auth, {
+            to: admin_email, subject, html: body_html, text: body_html.replace(/<[^>]+>/g, ' '),
+            fromName: mb.yo_nombre || '',
+          });
+          sent_from = sender.email;
+        }
       }
     }
 
     if (!sent_from) {
       return res.status(400).json({
-        error: 'No hay ningún buzón conectado para enviar el correo. Conecta primero Gmail o un buzón por SMTP en otro cliente para poder mandar la solicitud al admin.' + (sendErr ? ' Detalle: ' + sendErr.message : '')
+        error: 'No se pudo enviar el correo.' + (sendErr ? ' Detalle: ' + sendErr.message : ' No hay ningún buzón conectado disponible.')
       });
     }
 

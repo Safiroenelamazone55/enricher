@@ -17044,19 +17044,23 @@ ${foot}
     const lang = 'es';
     const m = document.createElement('div'); m.id = 'ac-modal'; m.className = 'fin-pi-backdrop';
     m.onclick = ev => { if (ev.target === m) m.remove(); };
+    const fromOpts = Array.isArray(_acData.from_options) ? _acData.from_options : [];
+    const fromSelectHtml = fromOpts.length
+      ? fromOpts.map(o => `<option value="${esc(String(o.id))}">${esc(o.label)}</option>`).join('')
+      : `<option value="">(no hay buzones conectados)</option>`;
     m.innerHTML = `<div class="fin-pi-box dle-box" style="max-width:720px">
       <div class="dle-hd"><div style="flex:1;min-width:0">
         <div class="dle-hd__t">📧 Solicitar aprobación al admin del cliente</div>
         <div class="dle-hd__s">El tenant Microsoft de ${esc(_acData.cliente_nombre || 'este cliente')} exige que su admin apruebe la app "Nova outreach" una sola vez. Envíale este correo con el link de aprobación.</div>
       </div><button class="fin-pi-x" onclick="document.getElementById('ac-modal').remove()">✕</button></div>
       <div class="dle-grid">
+        <label class="dle-f dle-f--full"><span class="dle-l">Enviar desde</span><select class="dle-i" id="ac-from"${fromOpts.length ? '' : ' disabled'}>${fromSelectHtml}</select></label>
         <label class="dle-f"><span class="dle-l">Correo del admin del cliente</span><input class="dle-i" id="ac-to" type="email" placeholder="admin@dominiodelcliente.com" value="${esc(_acData.already_sent_to || '')}"></label>
         <label class="dle-f"><span class="dle-l">Idioma de la plantilla</span><select class="dle-i" id="ac-lang" onchange="LeadManagerModule.mbAdminConsentLang(this.value)">${Object.entries(_acData.templates).map(([k,v]) => `<option value="${k}"${k===lang?' selected':''}>${esc(v.label)}</option>`).join('')}</select></label>
         <label class="dle-f dle-f--full"><span class="dle-l">Asunto</span><input class="dle-i" id="ac-subj"></label>
         <label class="dle-f dle-f--full"><span class="dle-l">Cuerpo del correo (HTML — puedes editarlo)</span><textarea class="dle-i" id="ac-body" rows="12" style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.78rem"></textarea></label>
         <div class="dle-f dle-f--full">
           <div style="background:#F7F8F6;border:1px solid #E5E4E1;border-radius:8px;padding:10px 14px;font-size:.78rem;color:#6C6862">
-            <b>Se enviará por:</b> el primer buzón conectado en tu cuenta (Gmail si está conectado, si no un SMTP).<br>
             <b>Link de aprobación:</b> <code style="font-size:.72rem;color:#0062CC;word-break:break-all">${esc(_acData.admin_consent_url || '(falta MS_CLIENT_ID en el server)')}</code>
           </div>
         </div>
@@ -17089,13 +17093,15 @@ ${foot}
     const to = $('ac-to').value.trim();
     const subject = $('ac-subj').value.trim();
     const body_html = $('ac-body').value.trim();
+    const from_mailbox_id = $('ac-from')?.value || '';
     const err = $('ac-err');
     if (!to || !subject || !body_html) { err.textContent = 'Faltan campos (email, asunto o cuerpo).'; err.style.display = ''; return; }
+    if (!from_mailbox_id) { err.textContent = 'Elige desde qué buzón enviar el correo.'; err.style.display = ''; return; }
     const btn = $('ac-send'); btn.disabled = true; btn.textContent = 'Enviando…';
     try {
       const r = await apiFetch(`${API}/lm/mailboxes/${mbId}/request-admin-consent`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ admin_email: to, subject, body_html })
+        body: JSON.stringify({ admin_email: to, subject, body_html, from_mailbox_id })
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'Error');
