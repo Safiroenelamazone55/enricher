@@ -25,7 +25,7 @@
 
 const { ImapFlow } = require('imapflow');
 const { simpleParser } = require('mailparser');
-const { decPass } = require('./mailboxService');
+const { decPass, _friendlyErr } = require('./mailboxService');
 
 let _timer = null;
 let _running = false;
@@ -265,10 +265,15 @@ async function tick(pool) {
       } catch (e) {
         // login caído / servidor no responde: registrar sin marcar el buzón como roto
         // (un blip de red no debe apagar el envío; solo se refleja en last_error).
-        console.warn(`[imap-watcher] ${mb.email}:`, e.message);
+        // Antes se guardaba e.message crudo, que en imapflow suele ser "Command failed"
+        // sin más; el detalle real está en propiedades laterales (responseText). El
+        // helper _friendlyErr las lee y traduce a algo accionable ("activa IMAP en Zoho",
+        // "el tenant Microsoft bloquea auth básica", etc.).
+        const msg = _friendlyErr(e, { host: mb.imap_host, provider: mb.provider });
+        console.warn(`[imap-watcher] ${mb.email}:`, msg);
         await pool.query(
           `UPDATE lm_mailboxes SET last_checked_at=NOW(), last_error=$1 WHERE id=$2`,
-          [('IMAP: ' + e.message).slice(0, 300), mb.id]
+          [('IMAP: ' + msg).slice(0, 500), mb.id]
         ).catch(() => {});
       }
     }

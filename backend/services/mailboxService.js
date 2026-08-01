@@ -92,10 +92,25 @@ async function _imapConnect(mb, pass) {
 }
 
 // Traducción de errores técnicos a mensajes accionables en español.
-function _friendlyErr(e) {
-  const m = String((e && e.message) || e || '');
-  // Microsoft 365 devuelve en el propio 535 la causa exacta. Distinguirlas evita
-  // horas perdidas: no es lo mismo "contraseña mal" que "SMTP AUTH apagado por el admin".
+// Contexto opcional { host, provider } para desambiguar mensajes vagos ("AUTHENTICATE
+// failed" significa cosas distintas en Microsoft, Zoho o Gmail).
+function _friendlyErr(e, ctx = {}) {
+  // imapflow pone el detalle real del servidor en propiedades laterales cuando el
+  // .message es genérico ("Command failed"). Preferir esas: son la mina de oro.
+  const rawMsg = String((e && e.message) || e || '');
+  const detail = e && (e.responseText || e.response) || '';
+  const m = String(detail || rawMsg);
+  const host = String(ctx.host || '').toLowerCase();
+  const prov = String(ctx.provider || '').toLowerCase();
+
+  // ── Zoho ────────────────────────────────────────────────────────────────
+  // Zoho manda un mensaje precioso, muy claro, que nos ahorra el trabajo.
+  if (/yet to enable IMAP|enable IMAP for your account/i.test(m))
+    return 'IMAP está DESHABILITADO en el panel de Zoho para este buzón. '
+         + 'Entra a mail.zoho.com → Ajustes (rueda) → Correo → Cuentas de correo → IMAP → activa "IMAP Access". '
+         + 'Detalle del servidor: ' + m.slice(0, 200);
+
+  // ── Microsoft 365 ───────────────────────────────────────────────────────
   if (/SmtpClientAuthentication is disabled|SMTP ?AUTH.*disabled|SmtpClientAuthentication/i.test(m))
     return 'El envío SMTP está DESHABILITADO para este buzón en el panel del proveedor. '
          + 'No es la contraseña: el administrador debe activar "SMTP autenticado" para esta cuenta. '
@@ -104,22 +119,43 @@ function _friendlyErr(e) {
     return 'El tenant bloquea la autenticación básica (Security Defaults / acceso condicional). '
          + 'El administrador debe permitirla para este buzón, o habrá que usar OAuth. '
          + 'Detalle del servidor: ' + m.slice(0, 200);
+  // Microsoft es intencionalmente vago con IMAP: "AUTHENTICATE failed." sin más.
+  // Desde 2022 Microsoft deshabilita autenticación básica en tenants nuevos por default,
+  // así que el 90% de las veces es eso, no una contraseña mala.
+  if (/AUTHENTICATE failed/i.test(m) && (/office365|outlook\.com|microsoft/i.test(host) || prov === 'microsoft'))
+    return 'Microsoft rechazó la autenticación IMAP. Si la contraseña es correcta, casi seguro tu tenant tiene bloqueada '
+         + 'la autenticación básica (política por defecto desde 2022). El admin del tenant tiene que activar '
+         + '"IMAP con autenticación básica" solo para este buzón, o hay que migrar a OAuth. '
+         + 'Detalle: ' + m.slice(0, 180);
+
+  // ── Gmail ───────────────────────────────────────────────────────────────
+  if (/application-specific password required|app password/i.test(m))
+    return 'Gmail exige una contraseña de aplicación (la normal no sirve con IMAP). '
+         + 'Crea una en myaccount.google.com/apppasswords y úsala aquí. Detalle: ' + m.slice(0, 180);
+
+  // ── Genéricos de credenciales ───────────────────────────────────────────
   if (/credentials were incorrect|user name or password is incorrect|LogonDenied/i.test(m))
     return 'Usuario o contraseña incorrectos según el proveedor. Si la cuenta tiene verificación en 2 pasos, '
          + 'necesitas una contraseña de aplicación. Detalle: ' + m.slice(0, 200);
-  if (/invalid credentials|authentication failed|auth|535|LOGIN failed/i.test(m))
+  if (/invalid credentials|authentication failed|LOGIN failed|535/i.test(m))
     return 'El proveedor rechazó el usuario o la contraseña. Detalle del servidor: ' + m.slice(0, 220);
-  if (/ENOTFOUND|EAI_AGAIN/i.test(m)) return 'No se encontró el servidor — revisa el host.';
-  if (/timeout|ETIMEDOUT|ECONNREFUSED/i.test(m)) return 'El servidor no respondió (puerto bloqueado o host incorrecto).';
+
+  // ── Red / DNS / TLS ─────────────────────────────────────────────────────
+  if (/ENOTFOUND|EAI_AGAIN/i.test(m + ' ' + rawMsg)) return 'No se encontró el servidor — revisa el host.';
+  if (/timeout|ETIMEDOUT|ECONNREFUSED/i.test(m + ' ' + rawMsg)) return 'El servidor no respondió (puerto bloqueado o host incorrecto).';
   if (/self signed|certificate/i.test(m)) return 'Problema de certificado TLS del servidor.';
-  return m.slice(0, 180);
+
+  // Fallback: al menos preferimos el detalle del servidor sobre "Command failed".
+  return (detail ? detail : rawMsg).slice(0, 220);
 }
 
 // Prueba SMTP (login real) + IMAP (login + localizar carpeta Enviados).
 async function testMailbox(mb, pass) {
   const out = { smtpOk: false, imapOk: false, sentFolder: '', error: '' };
+  const ctx = { host: mb.smtp_host || mb.imap_host, provider: mb.provider };
   try { await _transport(mb, pass).verify(); out.smtpOk = true; }
-  catch (e) { out.error = 'SMTP: ' + _friendlyErr(e); return out; }
+  catch (e) { out.error = 'SMTP: ' + _friendlyErr(e, ctx); return out; }
+  const ictx = { host: mb.imap_host, provider: mb.provider };
   try {
     const client = await _imapConnect(mb, pass);
     try {
@@ -128,7 +164,7 @@ async function testMailbox(mb, pass) {
       out.sentFolder = sent ? sent.path : '';
       out.imapOk = true;
     } finally { await client.logout().catch(() => {}); }
-  } catch (e) { out.error = 'IMAP: ' + _friendlyErr(e); }
+  } catch (e) { out.error = 'IMAP: ' + _friendlyErr(e, ictx); }
   return out;
 }
 
