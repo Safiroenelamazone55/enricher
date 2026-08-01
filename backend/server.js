@@ -3398,15 +3398,21 @@ app.post('/api/lm/contacts/add-to-campaign', requireAuth, (req, res) => _lmAddMe
 //   Positivos : respondio · reunion · mas_adelante   → hay señal comercial
 //   Derivados : derivado · no_es_persona             → la persona no sirve, la CUENTA sí
 //   Descartados: no_interesado · no_califica · no_contactar
+// 'aceptado' = aceptó la invitación de LinkedIn — NO es una respuesta. Antes se
+// marcaba con 'respondio' (mismo valor que "Interesado"), así que aceptar una conexión
+// inflaba las respuestas/leads sin que la persona hubiera contestado nada todavía.
 const LM_DISP_LBL = {
-  respondio: 'Interesado', reunion: 'Reunión agendada', mas_adelante: 'Contactar más adelante',
+  aceptado: 'Aceptó en LinkedIn', respondio: 'Interesado', reunion: 'Reunión agendada', mas_adelante: 'Contactar más adelante',
   derivado: 'Derivó a otro contacto', no_es_persona: 'No es la persona — se agregó a otro',
   no_interesado: 'No interesado', no_califica: 'No califica (fuera de ICP)', no_contactar: 'No contactar (opt-out)',
 };
-const LM_DISP_TIPO = { respondio: 'respuesta', reunion: 'reunion', mas_adelante: 'respuesta', derivado: 'respuesta', no_es_persona: 'nota' };
-// Etapa del pipeline por disposición. null = no mover (derivados: la cuenta sigue viva).
+// tipo 'aceptacion' es DISTINTO de 'respuesta' a propósito: así no se cuenta como
+// respuesta en /sequences/:id/metrics ni en la pestaña "Respuestas" del cliente.
+const LM_DISP_TIPO = { aceptado: 'aceptacion', respondio: 'respuesta', reunion: 'reunion', mas_adelante: 'respuesta', derivado: 'respuesta', no_es_persona: 'nota' };
+// Etapa del pipeline por disposición. null = no mover (derivados y aceptado: aceptar
+// una conexión no es todavía una señal comercial, así que no adelanta la etapa).
 const LM_STAGE_BY_DISP = {
-  respondio: 'respondio', reunion: 'respondio', mas_adelante: 'respondio',
+  aceptado: null, respondio: 'respondio', reunion: 'respondio', mas_adelante: 'respondio',
   derivado: null, no_es_persona: null,
   no_interesado: 'perdido', no_califica: 'perdido', no_contactar: 'perdido',
 };
@@ -3426,7 +3432,11 @@ app.post('/api/lm/contacts/:id/disposition', requireAuth, async (req, res) => {
     await pool.query(`UPDATE lm_contacts SET disposition=$1, updated_at=NOW() WHERE id=$2 AND user_id=$3`, [disp, cid, uid]);
 
     let paused = 0, rerouted = 0;
-    if (disp === 'respondio' && oldDisp !== 'respondio') {
+    // El re-enrutado a Ruta A es el mismo evento tanto si aceptó la conexión de LinkedIn
+    // como si respondió: ambos son "hubo señal, sáltate a la rama de seguimiento". Se
+    // dispara la PRIMERA vez que pasa cualquiera de las dos (no de nuevo si ya había aceptado).
+    const yaDisparo = ['respondio', 'aceptado'].includes(oldDisp);
+    if (['respondio', 'aceptado'].includes(disp) && !yaDisparo) {
       // Fase 2 — aceptó/respondió por PRIMERA vez: si la secuencia ramifica (tiene algún paso
       // cond='replied'), RE-ENRUTA a la Ruta A (primer paso 'replied') fechando desde hoy — aunque
       // ya estuviera en la Ruta B (rescata pausados). Si no ramifica, pausa como siempre.
@@ -3669,6 +3679,7 @@ app.get('/api/lm/sequences/:id/metrics', requireAuth, async (req, res) => {
         (SELECT COUNT(*) FROM enr WHERE estado='pausado')::int AS pausados,
         (SELECT COUNT(DISTINCT a.contact_id) FROM activities a WHERE a.user_id=$1 AND a.estado='hecha' AND a.contact_id IN (SELECT contact_id FROM enr))::int AS contactados,
         (SELECT COUNT(DISTINCT a.contact_id) FROM activities a WHERE a.user_id=$1 AND a.tipo='respuesta' AND a.contact_id IN (SELECT contact_id FROM enr))::int AS respuestas,
+        (SELECT COUNT(DISTINCT a.contact_id) FROM activities a WHERE a.user_id=$1 AND a.tipo='aceptacion' AND a.contact_id IN (SELECT contact_id FROM enr))::int AS aceptaciones,
         (SELECT COUNT(DISTINCT a.contact_id) FROM activities a WHERE a.user_id=$1 AND a.tipo='reunion' AND a.contact_id IN (SELECT contact_id FROM enr))::int AS reuniones
     `, [uid, sid]);
     res.json(rows[0] || {});

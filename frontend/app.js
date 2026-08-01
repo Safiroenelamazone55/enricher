@@ -14627,7 +14627,7 @@ const LeadManagerModule = (() => {
   };
   const _RPT_CH = { email: { es: 'Email', en: 'Email', pt: 'Email' }, linkedin: { es: 'LinkedIn', en: 'LinkedIn', pt: 'LinkedIn' }, call: { es: 'Llamada', en: 'Call', pt: 'Ligação' }, task: { es: 'Tarea', en: 'Task', pt: 'Tarefa' }, whatsapp: { es: 'WhatsApp', en: 'WhatsApp', pt: 'WhatsApp' } };
   const _RPT_EST = { activo: { es: 'Activo', en: 'Active', pt: 'Ativo' }, pausado: { es: 'Pausado', en: 'Paused', pt: 'Pausado' }, terminado: { es: 'Terminado', en: 'Finished', pt: 'Concluído' }, respondido: { es: 'Respondió', en: 'Replied', pt: 'Respondeu' }, bounce: { es: 'Rebote', en: 'Bounce', pt: 'Bounce' }, draft: { es: 'Borrador', en: 'Draft', pt: 'Rascunho' }, activa: { es: 'Activa', en: 'Active', pt: 'Ativa' }, pausada: { es: 'Pausada', en: 'Paused', pt: 'Pausada' }, cerrada: { es: 'Cerrada', en: 'Closed', pt: 'Encerrada' }, archivada: { es: 'Archivada', en: 'Archived', pt: 'Arquivada' } };
-  const _RPT_DISP = { respondio: { es: 'Respondió', en: 'Replied', pt: 'Respondeu' }, reunion: { es: 'Reunión', en: 'Meeting', pt: 'Reunião' }, no_interesado: { es: 'No interesado', en: 'Not interested', pt: 'Não interessado' }, no_contactar: { es: 'No contactar', en: 'Do not contact', pt: 'Não contatar' } };
+  const _RPT_DISP = { aceptado: { es: 'Aceptó en LinkedIn', en: 'Accepted on LinkedIn', pt: 'Aceitou no LinkedIn' }, respondio: { es: 'Respondió', en: 'Replied', pt: 'Respondeu' }, reunion: { es: 'Reunión', en: 'Meeting', pt: 'Reunião' }, no_interesado: { es: 'No interesado', en: 'Not interested', pt: 'Não interessado' }, no_contactar: { es: 'No contactar', en: 'Do not contact', pt: 'Não contatar' } };
   function _rptChan(c, l) { return (_RPT_CH[c] && _RPT_CH[c][l]) || c; }
   function _rptModeLabel(st, L) { const m = st.variant_mode || 'off'; return m === 'segment' ? L.segmentMode : m === 'random' ? L.random : L.single; }
   function _rptDateFmt(str, lang) { if (!str) return ''; const d = new Date(String(str).slice(0, 10) + 'T00:00:00'); if (isNaN(d)) return String(str); const loc = lang === 'en' ? 'en-US' : lang === 'pt' ? 'pt-BR' : 'es-ES'; return d.toLocaleDateString(loc, { day: '2-digit', month: 'long', year: 'numeric' }); }
@@ -15095,9 +15095,9 @@ ${foot}
       const pct = (a, b) => b ? Math.round((a || 0) / b * 100) : 0;
       const mc = (n, l) => `<div class="seq-mc"><div class="seq-mc__v">${n != null ? n : 0}</div><div class="seq-mc__l">${l}</div></div>`;
       const bar = (n, label, color) => `<div class="seq-fn-row"><div class="seq-fn-lbl">${label}</div><div class="seq-fn-track"><div class="seq-fn-fill" style="width:${en ? Math.max(3, Math.round((n || 0) / en * 100)) : 0}%;background:${color}"></div></div><div class="seq-fn-n">${n || 0}</div></div>`;
-      return `<div class="seq-mc-row">${mc(mt.enrolados, 'Enrolados')}${mc(mt.contactados, 'Contactados')}${mc(mt.respuestas, 'Respuestas')}${mc(mt.reuniones, 'Reuniones')}</div>
-        <div class="cp-card"><div class="cp-card__t">Embudo</div>${bar(mt.enrolados, 'Enrolados', 'var(--brand, #007AFF)')}${bar(mt.contactados, 'Contactados', '#1E5FA8')}${bar(mt.respuestas, 'Respuestas', '#15803D')}${bar(mt.reuniones, 'Reuniones', '#5B4BC4')}</div>
-        <div class="seq-mc-row">${mc(pct(mt.respuestas, mt.contactados) + '%', 'Reply rate')}${mc(pct(mt.reuniones, en) + '%', 'Meeting rate')}${mc(mt.activos, 'Activos')}${mc(mt.terminados, 'Terminados')}</div>
+      return `<div class="seq-mc-row">${mc(mt.enrolados, 'Enrolados')}${mc(mt.contactados, 'Contactados')}${mc(mt.aceptaciones, 'Aceptaron LinkedIn')}${mc(mt.respuestas, 'Respuestas')}${mc(mt.reuniones, 'Reuniones')}</div>
+        <div class="cp-card"><div class="cp-card__t">Embudo</div>${bar(mt.enrolados, 'Enrolados', 'var(--brand, #007AFF)')}${bar(mt.contactados, 'Contactados', '#1E5FA8')}${bar(mt.aceptaciones, 'Aceptaron LinkedIn', '#0062CC')}${bar(mt.respuestas, 'Respuestas', '#15803D')}${bar(mt.reuniones, 'Reuniones', '#5B4BC4')}</div>
+        <div class="seq-mc-row">${mc(pct(mt.aceptaciones, mt.contactados) + '%', 'Acceptance rate')}${mc(pct(mt.respuestas, mt.contactados) + '%', 'Reply rate')}${mc(pct(mt.reuniones, en) + '%', 'Meeting rate')}${mc(mt.activos, 'Activos')}${mc(mt.terminados, 'Terminados')}</div>
         <div id="seq-ab-wrap">${_seqAbHtml(id)}</div>`;
     }
     return `<div class="lm-seq-tl">${steps.length ? steps.map(_stepRow).join('') : `<div class="lm-act-empty"><div class="lm-act-empty__i">🪜</div><p>Esta secuencia no tiene pasos</p><span>Agrega el primero (Día 1 · Email).</span></div>`}</div>`;
@@ -15139,6 +15139,7 @@ ${foot}
   //   pos  = hay señal comercial · der = la persona no sirve pero la CUENTA sí · desc = cerrado
   // [valor, etiqueta, color texto, color fondo, grupo]
   const _DISPOS = [
+    ['aceptado',      'Aceptó en LinkedIn', '#0062CC', '#EAF2FF', 'pos'],
     ['respondio',     'Interesado',      '#15803D', '#F1EFEB', 'pos'],
     ['reunion',       'Reunión',         '#5B4BC4', '#EAE7E2', 'pos'],
     ['mas_adelante',  'Más adelante',    '#0E7490', '#E0F2FE', 'pos'],
@@ -15423,7 +15424,7 @@ ${foot}
     (_sequences || []).forEach(s => { branch[s.id] = _seqSteps(s.id).some(st => (st.cond || '') === 'replied'); });
     const out = [];
     (_contacts || []).forEach(c => {
-      if (c.disposition === 'respondio') return;
+      if (c.disposition === 'respondio' || c.disposition === 'aceptado') return;
       if (c.no_linkedin) return; // LinkedIn no válido → ya no espera aceptación; va por email
       const seqs = (c.sequences || []).filter(sq => branch[sq.id] && (sq.estado === 'activo' || sq.estado === 'pausado') && (sq.paso || 1) > 1);
       if (seqs.length) out.push({ c, seqs });
@@ -15508,7 +15509,7 @@ ${foot}
     if (!cks.length) { if (hint) { hint.textContent = 'Marca al menos un contacto.'; hint.className = 'fin-cfg-hint fin-cfg-hint--err'; } return; }
     const btn = document.getElementById('pa-mark'); if (btn) btn.disabled = true;
     let ok = 0, rr = 0;
-    for (const cid of cks) { try { const r = await _lmSetDispositionCore(cid, 'respondio', null); ok++; rr += (r.rerouted || 0); } catch (_) {} }
+    for (const cid of cks) { try { const r = await _lmSetDispositionCore(cid, 'aceptado', null); ok++; rr += (r.rerouted || 0); } catch (_) {} }
     await _reloadContacts();
     if (_activeSeq && Array.isArray(_seqContacts)) { _seqContacts = null; await _seqLoadContacts(_activeSeq); }
     document.getElementById('lm-pa-modal')?.remove();
@@ -15703,7 +15704,9 @@ ${foot}
   // ── Ramas por condición: el motor salta los pasos que no aplican al contacto ──
   // Señal v1 = disposición 'respondio' (respondió/aceptó). Seguro por defecto:
   // con cond='' en todos los pasos, _effIdx devuelve el mismo paso que hoy.
-  function _respondedC(cid) { const c = (_contacts || []).find(x => x.id === cid); return !!(c && c.disposition === 'respondio'); }
+  // Aceptar la conexión de LinkedIn cuenta igual que responder para efectos de la rama
+  // de la secuencia: ambas son "hubo señal, sigue por la ruta de seguimiento".
+  function _respondedC(cid) { const c = (_contacts || []).find(x => x.id === cid); return !!(c && (c.disposition === 'respondio' || c.disposition === 'aceptado')); }
   function _noLinkedInC(cid) { const c = (_contacts || []).find(x => x.id === cid); return !!(c && c.no_linkedin); }
   function _stepCondMatch(st, cid) {
     // Canal LinkedIn no válido para este contacto (perfil falso/inactivo) → sus pasos de LinkedIn se saltan.
@@ -16177,7 +16180,7 @@ ${foot}
   function _stepRow(st) {
     const t = _TOUCH[st.canal] || _TOUCH.email;
     const cal = _stepCalDate(st);
-    const cb = st.cond === 'replied' ? '<span class="lm-vb" style="background:#F1EFEB;color:#15803D" title="Solo para contactos que respondieron/aceptaron">↳ si respondió</span>'
+    const cb = st.cond === 'replied' ? '<span class="lm-vb" style="background:#F1EFEB;color:#15803D" title="Solo para contactos que respondieron o aceptaron la conexión de LinkedIn">↳ si respondió/aceptó</span>'
              : st.cond === 'no_reply' ? '<span class="lm-vb" style="background:#FEF3C7;color:#B45309" title="Solo para contactos que NO respondieron">↳ si no respondió</span>' : '';
     return `<div class="lm-step">
       <div class="lm-step__day"><span>Día</span><b>${st.dia}</b>${cal ? `<span class="lm-step__cal" title="Fecha real según la fecha de inicio y los días de cadencia">${cal}</span>` : ''}</div>
