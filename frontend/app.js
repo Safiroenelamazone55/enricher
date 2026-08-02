@@ -17180,7 +17180,7 @@ ${foot}
               <b>Link de aprobación:</b> <code style="font-size:.72rem;color:#0062CC;word-break:break-all">${esc(_acData.admin_consent_url || '(falta MS_CLIENT_ID en el server)')}</code>
             </div>
           </div>
-          ${_acData.already_sent_at ? `<div class="dle-f dle-f--full"><div style="color:#B45309;font-size:.82rem">⚠ Ya se envió una solicitud a <b>${esc(_acData.already_sent_to)}</b> ${_ago(_acData.already_sent_at)}. Si reenvías, se sobrescribirá el registro.</div></div>` : ''}
+          ${_acData.already_sent_at ? `<div class="dle-f dle-f--full"><div style="background:#EAF2FF;border:1px solid #C7DBFF;border-radius:8px;padding:8px 12px;color:#1E4A8C;font-size:.8rem;display:flex;align-items:center;justify-content:space-between;gap:8px"><span>ℹ Última solicitud enviada a <b>${esc(_acData.already_sent_to)}</b> · ${_ago(_acData.already_sent_at)}. Puedes reenviar cuantas veces necesites.</span><button type="button" class="btn btn--ghost btn--sm" style="font-size:.72rem;padding:2px 8px" onclick="LeadManagerModule.mbAdminConsentClearRecipients()">↺ Empezar de cero</button></div></div>` : ''}
           <div class="dle-f dle-f--full" id="ac-err" style="display:none;color:var(--danger);font-size:.82rem"></div>
         </div>
       </div>
@@ -17224,6 +17224,12 @@ ${foot}
   function mbAdminConsentRmChip(which, idx) {
     const arr = which === 'to' ? _acTo : _acCc;
     arr.splice(idx, 1); mbAdminConsentRenderChips(which);
+  }
+  // Vaciar TO + CC de golpe (útil cuando la primera solicitud fue de prueba).
+  function mbAdminConsentClearRecipients() {
+    _acTo = []; _acCc = [];
+    mbAdminConsentRenderChips('to'); mbAdminConsentRenderChips('cc');
+    $('ac-to-input')?.focus();
   }
   function mbAdminConsentInputKey(ev, which) {
     if (ev.key === 'Enter' || ev.key === ',' || ev.key === ';' || ev.key === 'Tab') {
@@ -20909,7 +20915,7 @@ ${foot}
     mbOpen, mbClose, mbSave, mbTest, mbDelete, mbProv, mbOAuthStart,
     mbAdminConsentOpen, mbAdminConsentLang, mbAdminConsentSend, mbAdminConsentQuick,
     mbAdminConsentSync, mbAdminConsentToggleHtml,
-    mbAdminConsentSetSigner, mbAdminConsentAddChip, mbAdminConsentRmChip, mbAdminConsentInputKey,
+    mbAdminConsentSetSigner, mbAdminConsentAddChip, mbAdminConsentRmChip, mbAdminConsentInputKey, mbAdminConsentClearRecipients,
     ibOpen, ibTab, ibCli, ibSend, ibSchedToggle, ibSchedPick, ibCancelSched,
     ibRowMenu, ibCloseMenu, ibMarkUnread,
     pendingAcceptOpen, pendingAcceptToggleAll, pendingAcceptApplyFilters, pendingAcceptMark,
