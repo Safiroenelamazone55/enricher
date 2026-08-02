@@ -3806,59 +3806,55 @@ function _verifyState(state) {
 const ADMIN_CONSENT_TEMPLATES = {
   es: {
     label: 'Español',
-    subject: 'Aprobación rápida en Microsoft 365 para {{buzon_email}}',
+    subject: 'Aprobación en Microsoft 365 para {{buzon_email}}',
     body_html: `<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#1F1D1B;line-height:1.65;font-size:14px;max-width:640px">
 
 <p>Hola,</p>
 
-<p>Soy <b>{{yo_nombre}}</b> y trabajo con el equipo de <b>{{cliente_nombre}}</b> en su operación de outreach comercial. Uso una plataforma propia llamada <b>Nova</b> para gestionar el envío de correos, detectar respuestas y hacer seguimiento de los leads en un solo sitio.</p>
-
-<p>Para conectar el buzón <b>{{buzon_email}}</b> a Nova necesito que apruebes la app en tu tenant Microsoft 365. Es un solo clic desde el botón de abajo y toma un par de minutos.</p>
+<p>Estamos configurando el buzón <b>{{buzon_email}}</b> en la plataforma con la que gestionamos el outreach comercial de <b>{{cliente_nombre}}</b>. Para que pueda leer y enviar correo desde ese buzón necesitamos tu revisión y aprobación como administrador del tenant Microsoft 365.</p>
 
 <p style="margin:28px 0;text-align:center">
   <a href="{{admin_consent_url}}" style="background:#0062CC;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;display:inline-block">Aprobar acceso →</a>
 </p>
 
-<p>Tu aprobación no conecta ningún buzón por sí sola: solo autoriza a la app a existir en tu tenant. Después, cada persona que quiera conectar su correo sigue dando su propio permiso individual desde su cuenta.</p>
+<p>Es un solo clic. Tu aprobación autoriza a la app en el tenant, pero cada persona que quiera conectar su buzón sigue dando su propio consentimiento individual — no conecta buzones por sí sola.</p>
 
-<p>La app pide cuatro permisos estándar de Microsoft: leer y enviar correo del usuario que se conecte, más los tokens de sesión habituales. Son permisos delegados, así que solo aplican a los buzones cuyos dueños den consent individual — no dan acceso a otros correos del tenant ni a nada administrativo.</p>
+<p>La app pide cuatro permisos estándar delegados de Microsoft: leer y enviar correo del usuario que se conecte, más los tokens de sesión habituales. Solo aplican a los buzones cuyos dueños den consent individual.</p>
 
-<p>Para aprobarlo necesitas ser <b>Global Administrator</b>, <b>Cloud Application Administrator</b> o <b>Application Administrator</b> del tenant. Si sueles gestionar Microsoft 365 de la empresa, ya tienes el rol.</p>
+<p>Para aprobarlo debes ser <b>Global Administrator</b>, <b>Cloud Application Administrator</b> o <b>Application Administrator</b> del tenant.</p>
 
-<p style="color:#6C6862;font-size:13px">Un detalle: la app aparecerá como "Publisher not verified". Es normal — es una herramienta propia que aún no pasó la verificación opcional de publisher de Microsoft.</p>
+<p style="color:#6C6862;font-size:13px">La app aparecerá como "Publisher not verified" — es normal, es una herramienta propia que aún no pasó la verificación opcional de publisher de Microsoft.</p>
 
-<p style="margin-top:24px">Si tienes cualquier duda antes de darle clic, contéstame este correo y lo vemos. Gracias por el apoyo.</p>
+<p style="margin-top:24px">Cualquier duda, respóndeme y lo vemos. Gracias.</p>
 
-<p style="margin-top:20px;color:#6C6862;font-size:13px">— {{yo_nombre}}<br>{{yo_email}}</p>
+<p style="margin-top:20px;color:#6C6862;font-size:13px">— {{yo_nombre}}</p>
 
 </div>`,
   },
   en: {
     label: 'English',
-    subject: 'Quick Microsoft 365 approval for {{buzon_email}}',
+    subject: 'Microsoft 365 approval for {{buzon_email}}',
     body_html: `<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#1F1D1B;line-height:1.65;font-size:14px;max-width:640px">
 
 <p>Hi,</p>
 
-<p>I'm <b>{{yo_nombre}}</b> and I work with the <b>{{cliente_nombre}}</b> team on their outbound operation. I use a proprietary platform called <b>Nova</b> to handle email sending, detect replies and track leads in one place.</p>
-
-<p>To connect the mailbox <b>{{buzon_email}}</b> to Nova I need you to approve the app in your Microsoft 365 tenant. One click from the button below, takes a couple of minutes.</p>
+<p>We're setting up the mailbox <b>{{buzon_email}}</b> in the platform we use to manage <b>{{cliente_nombre}}</b>'s outbound operation. For it to send and read email from that mailbox we need your review and approval as admin of the Microsoft 365 tenant.</p>
 
 <p style="margin:28px 0;text-align:center">
   <a href="{{admin_consent_url}}" style="background:#0062CC;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;display:inline-block">Approve access →</a>
 </p>
 
-<p>Your approval doesn't connect any mailbox on its own — it just authorizes the app to exist in your tenant. After that, each person who wants to connect their mailbox still grants their own individual permission from their account.</p>
+<p>One click. Your approval authorizes the app in the tenant, but each person who wants to connect their mailbox still grants their own individual consent — it doesn't connect mailboxes on its own.</p>
 
-<p>The app requests four standard Microsoft permissions: read and send email for the connecting user, plus the usual session tokens. They're delegated permissions, so they only apply to mailboxes whose owners give individual consent — they don't grant access to other mailboxes in the tenant or to anything administrative.</p>
+<p>The app requests four standard delegated Microsoft permissions: read and send email for the connecting user, plus the usual session tokens. They only apply to mailboxes whose owners give individual consent.</p>
 
-<p>To approve you need to be <b>Global Administrator</b>, <b>Cloud Application Administrator</b> or <b>Application Administrator</b> of the tenant. If you usually manage the company's Microsoft 365, you already have the role.</p>
+<p>To approve you need to be <b>Global Administrator</b>, <b>Cloud Application Administrator</b> or <b>Application Administrator</b> of the tenant.</p>
 
-<p style="color:#6C6862;font-size:13px">One heads-up: the app will appear as "Publisher not verified". That's normal — it's a proprietary tool that hasn't gone through Microsoft's optional publisher verification yet.</p>
+<p style="color:#6C6862;font-size:13px">The app will appear as "Publisher not verified" — that's normal, it's a proprietary tool that hasn't gone through Microsoft's optional publisher verification yet.</p>
 
-<p style="margin-top:24px">If you have any questions before clicking, just reply to this email. Thanks for the help.</p>
+<p style="margin-top:24px">Any questions, reply and we'll go over it. Thanks.</p>
 
-<p style="margin-top:20px;color:#6C6862;font-size:13px">— {{yo_nombre}}<br>{{yo_email}}</p>
+<p style="margin-top:20px;color:#6C6862;font-size:13px">— {{yo_nombre}}</p>
 
 </div>`,
   },
@@ -3900,8 +3896,8 @@ app.get('/api/lm/mailboxes/:id/admin-consent-templates', requireAuth, async (req
   try {
     const uid = req.workspaceOwnerId;
     const { rows } = await pool.query(
-      `SELECT m.email, m.needs_admin_consent, m.admin_consent_requested_at, m.admin_consent_sent_to,
-              oc.nombre AS cliente_nombre,
+      `SELECT m.email, m.outbound_client_id, m.needs_admin_consent, m.admin_consent_requested_at, m.admin_consent_sent_to,
+              oc.nombre AS cliente_nombre, oc.from_email AS oc_from_email, oc.cc_email AS oc_cc_email,
               u.name AS yo_nombre, u.email AS yo_email
          FROM lm_mailboxes m
          LEFT JOIN outbound_clients oc ON oc.id = m.outbound_client_id
@@ -3938,10 +3934,37 @@ app.get('/api/lm/mailboxes/:id/admin-consent-templates', requireAuth, async (req
       });
     }
 
-    // Nombre corto: solo el primer nombre. Firmar el correo como "Jenny Obregon
-    // Barzola" queda formal; "Jenny" queda amigable y coincide con cómo la usuaria
-    // se presenta a sus clientes.
+    // Nombre corto: solo el primer nombre. "Jenny" firma mejor que "Jenny Obregon
+    // Barzola" y coincide con cómo la usuaria se presenta a sus clientes.
     const yoNombreCorto = String(mb.yo_nombre || '').trim().split(/\s+/)[0] || '';
+
+    // Firmantes disponibles: el usuario logueado + todos los team_members activos
+    // del workspace. La usuaria elige quién firma el correo (uno de los tres
+    // responsables del proyecto, por ejemplo). Solo se usa el primer nombre.
+    const signers = [];
+    if (yoNombreCorto) {
+      signers.push({ id: 'me', nombre: yoNombreCorto, nombre_full: mb.yo_nombre, email: mb.yo_email || '', cargo: '', source: 'yo' });
+    }
+    try {
+      const { rows: tms } = await pool.query(
+        `SELECT id, nombre, email, cargo FROM team_members
+          WHERE user_id=$1 AND estado='activo' AND nombre <> '' ORDER BY nombre`, [uid]);
+      for (const t of tms) {
+        const first = String(t.nombre).trim().split(/\s+/)[0];
+        // Evitar duplicar al usuario logueado si también está en team_members
+        if (signers.some(s => (s.email || '').toLowerCase() === (t.email || '').toLowerCase() && t.email)) continue;
+        signers.push({ id: 't' + t.id, nombre: first, nombre_full: t.nombre, email: t.email || '', cargo: t.cargo || '', source: 'team' });
+      }
+    } catch (_) {}
+
+    // Destinatarios sugeridos: correos que ya están asociados al cliente outbound.
+    // La usuaria puede elegir uno con clic y también añadir emails libres.
+    const to_options = [];
+    if (mb.oc_from_email) to_options.push({ email: mb.oc_from_email, label: 'Buzón del cliente', source: 'from_email' });
+    if (mb.oc_cc_email && mb.oc_cc_email !== mb.oc_from_email) {
+      to_options.push({ email: mb.oc_cc_email, label: 'CC del cliente', source: 'cc_email' });
+    }
+
     res.json({
       buzon_email: mb.email || '(pendiente)',
       cliente_nombre: mb.cliente_nombre || '',
@@ -3952,6 +3975,8 @@ app.get('/api/lm/mailboxes/:id/admin-consent-templates', requireAuth, async (req
       already_sent_at: mb.admin_consent_requested_at,
       templates: ADMIN_CONSENT_TEMPLATES,
       from_options,
+      signers,
+      to_options,
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -3963,9 +3988,24 @@ app.get('/api/lm/mailboxes/:id/admin-consent-templates', requireAuth, async (req
 //   omitido  → auto (Gmail si hay, si no primer buzón enviable distinto al target)
 app.post('/api/lm/mailboxes/:id/request-admin-consent', requireAuth, async (req, res) => {
   const uid = req.workspaceOwnerId;
-  const { admin_email, subject, body_html, from_mailbox_id } = req.body || {};
-  if (!admin_email || !subject || !body_html) return res.status(400).json({ error: 'Faltan admin_email, subject o body_html' });
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(admin_email).trim())) return res.status(400).json({ error: 'admin_email no es un correo válido' });
+  const b = req.body || {};
+  const { subject, body_html, from_mailbox_id } = b;
+  // Retrocompat: admin_email (string) sigue funcionando; to_emails (array) es lo nuevo.
+  const toArr = Array.isArray(b.to_emails) && b.to_emails.length
+    ? b.to_emails
+    : (b.admin_email ? [b.admin_email] : []);
+  const ccArr = Array.isArray(b.cc_emails) ? b.cc_emails : [];
+  const validEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(e).trim());
+  const toClean = toArr.map(x => String(x).trim()).filter(Boolean);
+  const ccClean = ccArr.map(x => String(x).trim()).filter(Boolean);
+  if (!toClean.length || !subject || !body_html) return res.status(400).json({ error: 'Faltan destinatarios (Para), asunto o cuerpo.' });
+  const badTo = toClean.find(e => !validEmail(e));
+  if (badTo) return res.status(400).json({ error: `Destinatario inválido: ${badTo}` });
+  const badCc = ccClean.find(e => !validEmail(e));
+  if (badCc) return res.status(400).json({ error: `CC inválido: ${badCc}` });
+  const admin_email = toClean[0]; // para el registro admin_consent_sent_to (compat)
+  const toStr = toClean.join(', ');
+  const ccStr = ccClean.length ? ccClean.join(', ') : undefined;
   try {
     const { rows } = await pool.query(
       `SELECT m.*, u.name AS yo_nombre, u.email AS yo_email
@@ -3984,7 +4024,7 @@ app.post('/api/lm/mailboxes/:id/request-admin-consent', requireAuth, async (req,
         const gs = await gmailStatus(pool, uid);
         if (!gs.connected || !gs.email) throw new Error('Gmail no está conectado en tu cuenta');
         await sendEmail(pool, uid, GMAIL_CALLBACK, {
-          to: admin_email, subject, html: body_html, text: body_html.replace(/<[^>]+>/g, ' '),
+          to: toStr, cc: ccStr, subject, html: body_html, text: body_html.replace(/<[^>]+>/g, ' '),
           fromName: mb.yo_nombre || '',
         });
         sent_from = gs.email;
@@ -3998,7 +4038,7 @@ app.post('/api/lm/mailboxes/:id/request-admin-consent', requireAuth, async (req,
       try {
         const auth = await mailboxSvc.getMailboxAuth(pool, sender);
         await mailboxSvc.sendFromMailbox(sender, auth, {
-          to: admin_email, subject, html: body_html, text: body_html.replace(/<[^>]+>/g, ' '),
+          to: toStr, cc: ccStr, subject, html: body_html, text: body_html.replace(/<[^>]+>/g, ' '),
           fromName: mb.yo_nombre || '',
         });
         sent_from = sender.email;
@@ -4010,7 +4050,7 @@ app.post('/api/lm/mailboxes/:id/request-admin-consent', requireAuth, async (req,
         const gs = await gmailStatus(pool, uid);
         if (gs.connected && gs.email) {
           await sendEmail(pool, uid, GMAIL_CALLBACK, {
-            to: admin_email, subject, html: body_html, text: body_html.replace(/<[^>]+>/g, ' '),
+            to: toStr, cc: ccStr, subject, html: body_html, text: body_html.replace(/<[^>]+>/g, ' '),
             fromName: mb.yo_nombre || '',
           });
           sent_from = gs.email;
@@ -4024,7 +4064,7 @@ app.post('/api/lm/mailboxes/:id/request-admin-consent', requireAuth, async (req,
           const sender = mbs[0];
           const auth = await mailboxSvc.getMailboxAuth(pool, sender);
           await mailboxSvc.sendFromMailbox(sender, auth, {
-            to: admin_email, subject, html: body_html, text: body_html.replace(/<[^>]+>/g, ' '),
+            to: toStr, cc: ccStr, subject, html: body_html, text: body_html.replace(/<[^>]+>/g, ' '),
             fromName: mb.yo_nombre || '',
           });
           sent_from = sender.email;
@@ -4038,16 +4078,18 @@ app.post('/api/lm/mailboxes/:id/request-admin-consent', requireAuth, async (req,
       });
     }
 
+    // Guardamos la lista completa de destinatarios en admin_consent_sent_to (TO + CC
+     // separados por " · " para verlo compacto en la tarjeta).
+    const sentToLabel = toStr + (ccStr ? '  ·  CC: ' + ccStr : '');
     await pool.query(
       `UPDATE lm_mailboxes SET admin_consent_requested_at=NOW(), admin_consent_sent_to=$1 WHERE id=$2`,
-      [admin_email, mb.id]);
-    // Registra actividad en el cliente outbound para que quede rastro visible.
+      [sentToLabel, mb.id]);
     await pool.query(
       `INSERT INTO activities (user_id, outbound_client_id, tipo, canal, nota, fecha, estado)
        VALUES ($1,$2,'email','email',$3,NOW(),'hecha')`,
       [uid, mb.outbound_client_id,
-       `Solicitud de admin consent enviada a ${admin_email} para conectar ${mb.email || 'el buzón Microsoft'} (desde ${sent_from})`]);
-    res.status(201).json({ ok: true, sent_from, sent_to: admin_email, sent_at: new Date().toISOString() });
+       `Solicitud de admin consent enviada a ${sentToLabel} para conectar ${mb.email || 'el buzón Microsoft'} (desde ${sent_from})`]);
+    res.status(201).json({ ok: true, sent_from, sent_to: toClean, sent_cc: ccClean, sent_at: new Date().toISOString() });
   } catch (e) {
     console.error('[admin-consent] request error:', e.message);
     res.status(500).json({ error: 'No se pudo enviar la solicitud: ' + e.message });

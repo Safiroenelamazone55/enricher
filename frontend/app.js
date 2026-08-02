@@ -17120,9 +17120,27 @@ ${foot}
     const fromSelectHtml = fromOpts.length
       ? fromOpts.map(o => `<option value="${esc(String(o.id))}">${esc(o.label)}</option>`).join('')
       : `<option value="">(no hay buzones conectados)</option>`;
-    // Modal ancho (940px), altura acotada al viewport con header y footer fijos
-    // y contenido scrolleable — para que los botones Enviar/Cancelar siempre se
-    // vean sin depender del zoom del navegador.
+    // Selector de firmante (responsable del proyecto) — la usuaria elige entre
+    // ella misma y el equipo. El primer nombre es el que aparece en la firma.
+    const signers = Array.isArray(_acData.signers) ? _acData.signers : [];
+    _acSignerId = signers[0]?.id || 'me';
+    const signerSelectHtml = signers.length
+      ? signers.map(s => `<option value="${esc(s.id)}">${esc(s.nombre_full || s.nombre)}${s.cargo ? ' — ' + esc(s.cargo) : ''}</option>`).join('')
+      : `<option value="me">Yo</option>`;
+    // Chips iniciales para "Para": si ya se envió antes, reusar los destinatarios.
+    _acTo = _acData.already_sent_to
+      ? _acData.already_sent_to.split(/\s*·\s*CC:\s*/i)[0].split(/\s*,\s*/).filter(Boolean)
+      : [];
+    _acCc = _acData.already_sent_to && /·\s*CC:/i.test(_acData.already_sent_to)
+      ? _acData.already_sent_to.split(/\s*·\s*CC:\s*/i)[1].split(/\s*,\s*/).filter(Boolean)
+      : [];
+    const toOpts = Array.isArray(_acData.to_options) ? _acData.to_options : [];
+    const sugerenciasHtml = toOpts.length
+      ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">
+           <span style="font-size:.72rem;color:#918c85">Sugerencias del cliente:</span>
+           ${toOpts.map((o, i) => `<button type="button" class="btn btn--ghost btn--sm" style="font-size:.72rem;padding:2px 8px" onclick="LeadManagerModule.mbAdminConsentAddChip('to', ${esc(JSON.stringify(o.email))})">+ ${esc(o.email)} <span style="color:#918c85">(${esc(o.label)})</span></button>`).join('')}
+         </div>`
+      : '';
     m.innerHTML = `<div class="fin-pi-box dle-box" style="max-width:940px;width:96vw;max-height:90vh;display:flex;flex-direction:column;padding:0">
       <div class="dle-hd" style="flex:0 0 auto;padding:18px 22px;border-bottom:1px solid #E5E4E1"><div style="flex:1;min-width:0">
         <div class="dle-hd__t">📧 Solicitar aprobación al admin del cliente</div>
@@ -17130,10 +17148,25 @@ ${foot}
       </div><button class="fin-pi-x" onclick="document.getElementById('ac-modal').remove()">✕</button></div>
       <div style="flex:1 1 auto;overflow-y:auto;padding:18px 22px">
         <div class="dle-grid">
-          <label class="dle-f dle-f--full"><span class="dle-l">Enviar desde</span><select class="dle-i" id="ac-from"${fromOpts.length ? '' : ' disabled'}>${fromSelectHtml}</select></label>
-          <label class="dle-f"><span class="dle-l">Correo del admin del cliente</span><input class="dle-i" id="ac-to" type="email" placeholder="admin@dominiodelcliente.com" value="${esc(_acData.already_sent_to || '')}"></label>
+          <label class="dle-f"><span class="dle-l">Enviar desde</span><select class="dle-i" id="ac-from"${fromOpts.length ? '' : ' disabled'}>${fromSelectHtml}</select></label>
+          <label class="dle-f"><span class="dle-l">Firmar como</span><select class="dle-i" id="ac-signer" onchange="LeadManagerModule.mbAdminConsentSetSigner(this.value)">${signerSelectHtml}</select></label>
+
+          <div class="dle-f dle-f--full">
+            <span class="dle-l">Para</span>
+            <div id="ac-to-chips" class="ac-chips"></div>
+            <input class="dle-i" id="ac-to-input" type="email" placeholder="Escribe un correo y Enter (o coma) para agregar" style="margin-top:6px" onkeydown="LeadManagerModule.mbAdminConsentInputKey(event, 'to')">
+            ${sugerenciasHtml}
+          </div>
+
+          <div class="dle-f dle-f--full">
+            <span class="dle-l">CC (opcional)</span>
+            <div id="ac-cc-chips" class="ac-chips"></div>
+            <input class="dle-i" id="ac-cc-input" type="email" placeholder="Otro correo para poner en copia (Enter para agregar)" style="margin-top:6px" onkeydown="LeadManagerModule.mbAdminConsentInputKey(event, 'cc')">
+          </div>
+
           <label class="dle-f"><span class="dle-l">Idioma de la plantilla</span><select class="dle-i" id="ac-lang" onchange="LeadManagerModule.mbAdminConsentLang(this.value)">${Object.entries(_acData.templates).map(([k,v]) => `<option value="${k}"${k===lang?' selected':''}>${esc(v.label)}</option>`).join('')}</select></label>
-          <label class="dle-f dle-f--full"><span class="dle-l">Asunto</span><input class="dle-i" id="ac-subj"></label>
+          <label class="dle-f"><span class="dle-l">Asunto</span><input class="dle-i" id="ac-subj"></label>
+
           <div class="dle-f dle-f--full">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
               <span class="dle-l" style="margin:0">Vista previa del correo</span>
@@ -17157,20 +17190,66 @@ ${foot}
       </div>
     </div>`;
     document.body.appendChild(m);
+    mbAdminConsentRenderChips('to');
+    mbAdminConsentRenderChips('cc');
     mbAdminConsentLang(lang);
-    setTimeout(() => $('ac-to').focus(), 60);
+    setTimeout(() => $('ac-to-input').focus(), 60);
+  }
+  // Estado del modal — chips y firmante activo, expuestos a las callbacks inline.
+  let _acTo = [], _acCc = [], _acSignerId = 'me';
+  // Nombre corto del firmante seleccionado (para {{yo_nombre}} en la plantilla).
+  function _acSignerNombre() {
+    if (!_acData) return '';
+    const s = (_acData.signers || []).find(x => x.id === _acSignerId);
+    return s ? s.nombre : (_acData.yo_nombre || '');
+  }
+  function mbAdminConsentSetSigner(id) { _acSignerId = id; mbAdminConsentLang($('ac-lang').value); }
+  function mbAdminConsentRenderChips(which) {
+    const arr = which === 'to' ? _acTo : _acCc;
+    const el = $(which === 'to' ? 'ac-to-chips' : 'ac-cc-chips'); if (!el) return;
+    el.innerHTML = arr.length
+      ? arr.map((e, i) => `<span class="ac-chip">${esc(e)}<button type="button" onclick="LeadManagerModule.mbAdminConsentRmChip('${which}', ${i})" aria-label="Quitar">×</button></span>`).join('')
+      : `<span style="color:#918c85;font-size:.75rem">Sin ${which === 'to' ? 'destinatarios' : 'CC'}</span>`;
+  }
+  function mbAdminConsentAddChip(which, email) {
+    email = String(email || '').trim().replace(/[,;]$/, '');
+    if (!email) return;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { const err = $('ac-err'); err.textContent = 'Correo inválido: ' + email; err.style.display = ''; return; }
+    const arr = which === 'to' ? _acTo : _acCc;
+    if (!arr.includes(email)) arr.push(email);
+    mbAdminConsentRenderChips(which);
+    $('ac-err').style.display = 'none';
+    const inp = $(which === 'to' ? 'ac-to-input' : 'ac-cc-input'); if (inp) inp.value = '';
+  }
+  function mbAdminConsentRmChip(which, idx) {
+    const arr = which === 'to' ? _acTo : _acCc;
+    arr.splice(idx, 1); mbAdminConsentRenderChips(which);
+  }
+  function mbAdminConsentInputKey(ev, which) {
+    if (ev.key === 'Enter' || ev.key === ',' || ev.key === ';' || ev.key === 'Tab') {
+      const v = ev.target.value.trim();
+      if (v) { ev.preventDefault(); mbAdminConsentAddChip(which, v); }
+    } else if (ev.key === 'Backspace' && !ev.target.value) {
+      const arr = which === 'to' ? _acTo : _acCc;
+      if (arr.length) { arr.pop(); mbAdminConsentRenderChips(which); }
+    }
   }
   // Sustituye placeholders, refresca subject + body al cambiar idioma o al abrir,
   // y actualiza la vista previa renderizada.
   function mbAdminConsentLang(lang) {
     if (!_acData) return;
+    // Si se llama sin argumento (ej. al cambiar firmante), reusar el actual del select.
+    if (!lang || typeof lang !== 'string') lang = $('ac-lang')?.value || 'es';
     const t = _acData.templates[lang]; if (!t) return;
+    const signerName = _acSignerNombre();
+    const signer = (_acData.signers || []).find(x => x.id === _acSignerId);
+    const signerEmail = signer?.email || _acData.yo_email || '';
     const repl = (s) => String(s)
       .replace(/\{\{admin_consent_url\}\}/g, _acData.admin_consent_url || '')
       .replace(/\{\{cliente_nombre\}\}/g, _acData.cliente_nombre || '')
       .replace(/\{\{buzon_email\}\}/g, _acData.buzon_email || '')
-      .replace(/\{\{yo_nombre\}\}/g, _acData.yo_nombre || '')
-      .replace(/\{\{yo_email\}\}/g, _acData.yo_email || '');
+      .replace(/\{\{yo_nombre\}\}/g, signerName)
+      .replace(/\{\{yo_email\}\}/g, signerEmail);
     $('ac-subj').value = repl(t.subject);
     $('ac-body').value = repl(t.body_html);
     mbAdminConsentSync();
@@ -17191,23 +17270,25 @@ ${foot}
     btn.textContent = showing ? '✎ Editar HTML' : '↑ Ocultar HTML';
   }
   async function mbAdminConsentSend(mbId) {
-    const to = $('ac-to').value.trim();
+    // Si dejó un email escrito en el input sin dar Enter, lo capturamos.
+    const toInp = $('ac-to-input')?.value.trim(); if (toInp) mbAdminConsentAddChip('to', toInp);
+    const ccInp = $('ac-cc-input')?.value.trim(); if (ccInp) mbAdminConsentAddChip('cc', ccInp);
     const subject = $('ac-subj').value.trim();
     const body_html = $('ac-body').value.trim();
     const from_mailbox_id = $('ac-from')?.value || '';
     const err = $('ac-err');
-    if (!to || !subject || !body_html) { err.textContent = 'Faltan campos (email, asunto o cuerpo).'; err.style.display = ''; return; }
+    if (!_acTo.length || !subject || !body_html) { err.textContent = 'Falta al menos un destinatario, el asunto o el cuerpo.'; err.style.display = ''; return; }
     if (!from_mailbox_id) { err.textContent = 'Elige desde qué buzón enviar el correo.'; err.style.display = ''; return; }
     const btn = $('ac-send'); btn.disabled = true; btn.textContent = 'Enviando…';
     try {
       const r = await apiFetch(`${API}/lm/mailboxes/${mbId}/request-admin-consent`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ admin_email: to, subject, body_html, from_mailbox_id })
+        body: JSON.stringify({ to_emails: _acTo, cc_emails: _acCc, subject, body_html, from_mailbox_id })
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'Error');
       document.getElementById('ac-modal').remove();
-      showBanner(`✓ Solicitud enviada a ${to} desde ${d.sent_from}. Avísale al admin y espera su aprobación.`, 'success');
+      showBanner(`✓ Solicitud enviada a ${_acTo.join(', ')}${_acCc.length ? ' (cc: ' + _acCc.join(', ') + ')' : ''} desde ${d.sent_from}.`, 'success');
       await _mbReload();
     } catch (e) {
       err.textContent = e.message; err.style.display = '';
@@ -20828,6 +20909,7 @@ ${foot}
     mbOpen, mbClose, mbSave, mbTest, mbDelete, mbProv, mbOAuthStart,
     mbAdminConsentOpen, mbAdminConsentLang, mbAdminConsentSend, mbAdminConsentQuick,
     mbAdminConsentSync, mbAdminConsentToggleHtml,
+    mbAdminConsentSetSigner, mbAdminConsentAddChip, mbAdminConsentRmChip, mbAdminConsentInputKey,
     ibOpen, ibTab, ibCli, ibSend, ibSchedToggle, ibSchedPick, ibCancelSched,
     ibRowMenu, ibCloseMenu, ibMarkUnread,
     pendingAcceptOpen, pendingAcceptToggleAll, pendingAcceptApplyFilters, pendingAcceptMark,
