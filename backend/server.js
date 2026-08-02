@@ -3926,14 +3926,18 @@ app.post('/api/lm/mailboxes/mark-admin-consent-required', requireAuth, async (re
   if (!clientId) return res.status(400).json({ error: 'Falta outbound_client_id' });
   try {
     const hosts = mailboxSvc.resolveHosts('microsoft', {});
+    // Si ya existe un buzón para este cliente, SOLO marcamos el flag y no
+    // tocamos su config (auth_method, estado, hosts, credenciales, etc.). Es
+    // clave para no romper buzones que ya tenían auth básica funcionando en
+    // 'solo_envio' — el consent es adicional, no reemplaza lo que ya hay.
+    // Si no existe, sí creamos un placeholder con estado 'error'.
     await pool.query(
       `INSERT INTO lm_mailboxes (user_id, outbound_client_id, email, provider, auth_method, oauth_provider,
                                  smtp_host, smtp_port, smtp_secure, imap_host, imap_port,
                                  estado, needs_admin_consent, last_error)
             VALUES ($1,$2,'','microsoft','oauth','microsoft',$3,$4,$5,$6,$7,'error',TRUE,$8)
        ON CONFLICT (user_id, outbound_client_id)
-       DO UPDATE SET provider='microsoft', auth_method='oauth', oauth_provider='microsoft',
-                     needs_admin_consent=TRUE, estado='error', last_error=EXCLUDED.last_error`,
+       DO UPDATE SET needs_admin_consent=TRUE`,
       [uid, clientId, hosts.smtp_host, hosts.smtp_port, hosts.smtp_secure, hosts.imap_host, hosts.imap_port,
        'Falta aprobación del admin del tenant Microsoft. Envíale la solicitud desde la tarjeta del buzón.']);
     const { rows } = await pool.query(
@@ -4123,17 +4127,17 @@ setTimeout(()=>window.close(), ${kind === 'ok' ? 1200 : 3500});
     if (!st) return _closePopup('err', detail || 'Se necesita aprobación del admin, pero no pude identificar el cliente.');
     try {
       const hosts = mailboxSvc.resolveHosts('microsoft', {});
-      // Crea/actualiza el buzón placeholder para poder mostrar el botón "Solicitar
-      // aprobación al admin" en la tarjeta. Sin email conocido todavía — se llenará
-      // cuando el admin apruebe y la usuaria repita el OAuth.
+      // Si ya hay buzón para este cliente, SOLO agregar el flag de admin consent.
+      // No tocar auth_method/estado/credenciales — un buzón con basic funcionando en
+      // 'solo_envio' debe seguir enviando por SMTP mientras se espera el consent.
+      // Solo si no existe, crear placeholder con estado='error'.
       await pool.query(
         `INSERT INTO lm_mailboxes (user_id, outbound_client_id, email, provider, auth_method, oauth_provider,
                                    smtp_host, smtp_port, smtp_secure, imap_host, imap_port,
                                    estado, needs_admin_consent, last_error)
               VALUES ($1,$2,'','microsoft','oauth','microsoft',$3,$4,$5,$6,$7,'error',TRUE,$8)
          ON CONFLICT (user_id, outbound_client_id)
-         DO UPDATE SET provider='microsoft', auth_method='oauth', oauth_provider='microsoft',
-                       needs_admin_consent=TRUE, estado='error', last_error=EXCLUDED.last_error`,
+         DO UPDATE SET needs_admin_consent=TRUE`,
         [st.uid, st.clientId, hosts.smtp_host, hosts.smtp_port, hosts.smtp_secure, hosts.imap_host, hosts.imap_port,
          'Falta aprobación del admin del tenant Microsoft. Envíale la solicitud desde la tarjeta del buzón.']);
       return _closePopup('consent_required',

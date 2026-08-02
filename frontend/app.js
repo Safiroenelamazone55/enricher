@@ -16921,10 +16921,16 @@ ${foot}
     // Estado "necesita aprobación del admin" pisa el chip normal: es un caso especial
     // que requiere una acción distinta (mandar correo al admin, no re-conectar).
     const needsConsent = mb && mb.needs_admin_consent;
-    const chipCls = needsConsent ? 'mbx-chip mbx-chip--warn' : ('mbx-chip' + (mb && mb.estado === 'conectado' ? ' mbx-chip--ok' : mb && mb.estado === 'solo_envio' ? ' mbx-chip--warn' : ' mbx-chip--err'));
-    const chipTxt = needsConsent ? '⏳ Falta aprobación del admin' : (mb && (mb.estado === 'conectado' ? '✓ Conectado' : mb.estado === 'solo_envio' ? '✓ Envío OK · lectura pendiente' : '⚠ Error'));
-    const consentInfo = needsConsent && mb.admin_consent_requested_at
-      ? `<div class="mbx-sub" style="color:#0062CC">Solicitud enviada a ${esc(mb.admin_consent_sent_to || '')} · ${_ago(mb.admin_consent_requested_at)}</div>`
+    // El chip refleja el estado REAL del buzón (envío/lectura). El aviso de admin
+    // consent va aparte, como banner debajo, para no ocultar que el envío funciona
+    // aunque falte OAuth.
+    const chipCls = 'mbx-chip' + (mb && mb.estado === 'conectado' ? ' mbx-chip--ok' : mb && mb.estado === 'solo_envio' ? ' mbx-chip--warn' : ' mbx-chip--err');
+    const chipTxt = mb && (mb.estado === 'conectado' ? '✓ Conectado' : mb.estado === 'solo_envio' ? '✓ Envío OK · lectura pendiente' : '⚠ Error');
+    const consentInfo = needsConsent
+      ? `<div class="mbx-consent" style="margin-top:8px;padding:8px 10px;background:#EAF2FF;border:1px solid #C7DBFF;border-radius:8px">
+          <div style="font-size:.76rem;color:#1E4A8C;font-weight:600;margin-bottom:2px">⏳ Falta consent del admin para leer respuestas (IMAP)</div>
+          ${mb.admin_consent_requested_at ? `<div style="font-size:.72rem;color:#0062CC">Solicitud enviada a ${esc(mb.admin_consent_sent_to || '')} · ${_ago(mb.admin_consent_requested_at)}</div>` : ''}
+        </div>`
       : '';
     const consentBtn = needsConsent
       ? `<button class="btn btn--primary btn--sm" style="margin-top:8px" onclick="LeadManagerModule.mbAdminConsentOpen(${mb.id})">${mb.admin_consent_requested_at ? '↻ Reenviar solicitud al admin' : '📧 Solicitar aprobación al admin'}</button>`
