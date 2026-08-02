@@ -3817,7 +3817,15 @@ const ADMIN_CONSENT_TEMPLATES = {
   <a href="{{admin_consent_url}}" style="background:#0062CC;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;display:inline-block">Aprobar acceso →</a>
 </p>
 
-<p>Es un solo clic. Tu aprobación autoriza a la app en el tenant, pero cada persona que quiera conectar su buzón sigue dando su propio consentimiento individual — no conecta buzones por sí sola.</p>
+<p>Al darle clic al botón:</p>
+<ol style="margin:4px 0 16px 22px;padding:0">
+  <li>Se abre <b>login.microsoftonline.com</b>. Inicia sesión con tu cuenta admin del tenant.</li>
+  <li>Verás una pantalla que dice <b>"Permisos solicitados"</b> con el nombre de la app (Nova outreach).</li>
+  <li>Revisa los permisos y clic en <b>Aceptar</b>.</li>
+  <li>La ventana se cierra sola — listo.</li>
+</ol>
+
+<p>Es un solo trámite y no se repite. Tu aprobación autoriza a la app en el tenant, pero cada persona que quiera conectar su buzón sigue dando su propio consentimiento individual — no conecta buzones por sí sola.</p>
 
 <p>La app pide cuatro permisos estándar delegados de Microsoft: leer y enviar correo del usuario que se conecte, más los tokens de sesión habituales. Solo aplican a los buzones cuyos dueños den consent individual.</p>
 
@@ -3844,7 +3852,15 @@ const ADMIN_CONSENT_TEMPLATES = {
   <a href="{{admin_consent_url}}" style="background:#0062CC;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;display:inline-block">Approve access →</a>
 </p>
 
-<p>One click. Your approval authorizes the app in the tenant, but each person who wants to connect their mailbox still grants their own individual consent — it doesn't connect mailboxes on its own.</p>
+<p>When you click the button:</p>
+<ol style="margin:4px 0 16px 22px;padding:0">
+  <li><b>login.microsoftonline.com</b> opens. Sign in with your admin account for the tenant.</li>
+  <li>You'll see a <b>"Permissions requested"</b> screen with the app name (Nova outreach).</li>
+  <li>Review the permissions and click <b>Accept</b>.</li>
+  <li>The window closes on its own — done.</li>
+</ol>
+
+<p>It's a one-time step. Your approval authorizes the app in the tenant, but each person who wants to connect their mailbox still grants their own individual consent — it doesn't connect mailboxes on its own.</p>
 
 <p>The app requests four standard delegated Microsoft permissions: read and send email for the connecting user, plus the usual session tokens. They only apply to mailboxes whose owners give individual consent.</p>
 
