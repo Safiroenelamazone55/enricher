@@ -17120,26 +17120,38 @@ ${foot}
     const fromSelectHtml = fromOpts.length
       ? fromOpts.map(o => `<option value="${esc(String(o.id))}">${esc(o.label)}</option>`).join('')
       : `<option value="">(no hay buzones conectados)</option>`;
-    m.innerHTML = `<div class="fin-pi-box dle-box" style="max-width:720px">
-      <div class="dle-hd"><div style="flex:1;min-width:0">
+    // Modal ancho (940px), altura acotada al viewport con header y footer fijos
+    // y contenido scrolleable — para que los botones Enviar/Cancelar siempre se
+    // vean sin depender del zoom del navegador.
+    m.innerHTML = `<div class="fin-pi-box dle-box" style="max-width:940px;width:96vw;max-height:90vh;display:flex;flex-direction:column;padding:0">
+      <div class="dle-hd" style="flex:0 0 auto;padding:18px 22px;border-bottom:1px solid #E5E4E1"><div style="flex:1;min-width:0">
         <div class="dle-hd__t">📧 Solicitar aprobación al admin del cliente</div>
         <div class="dle-hd__s">El tenant Microsoft de ${esc(_acData.cliente_nombre || 'este cliente')} exige que su admin apruebe la app "Nova outreach" una sola vez. Envíale este correo con el link de aprobación.</div>
       </div><button class="fin-pi-x" onclick="document.getElementById('ac-modal').remove()">✕</button></div>
-      <div class="dle-grid">
-        <label class="dle-f dle-f--full"><span class="dle-l">Enviar desde</span><select class="dle-i" id="ac-from"${fromOpts.length ? '' : ' disabled'}>${fromSelectHtml}</select></label>
-        <label class="dle-f"><span class="dle-l">Correo del admin del cliente</span><input class="dle-i" id="ac-to" type="email" placeholder="admin@dominiodelcliente.com" value="${esc(_acData.already_sent_to || '')}"></label>
-        <label class="dle-f"><span class="dle-l">Idioma de la plantilla</span><select class="dle-i" id="ac-lang" onchange="LeadManagerModule.mbAdminConsentLang(this.value)">${Object.entries(_acData.templates).map(([k,v]) => `<option value="${k}"${k===lang?' selected':''}>${esc(v.label)}</option>`).join('')}</select></label>
-        <label class="dle-f dle-f--full"><span class="dle-l">Asunto</span><input class="dle-i" id="ac-subj"></label>
-        <label class="dle-f dle-f--full"><span class="dle-l">Cuerpo del correo (HTML — puedes editarlo)</span><textarea class="dle-i" id="ac-body" rows="12" style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.78rem"></textarea></label>
-        <div class="dle-f dle-f--full">
-          <div style="background:#F7F8F6;border:1px solid #E5E4E1;border-radius:8px;padding:10px 14px;font-size:.78rem;color:#6C6862">
-            <b>Link de aprobación:</b> <code style="font-size:.72rem;color:#0062CC;word-break:break-all">${esc(_acData.admin_consent_url || '(falta MS_CLIENT_ID en el server)')}</code>
+      <div style="flex:1 1 auto;overflow-y:auto;padding:18px 22px">
+        <div class="dle-grid">
+          <label class="dle-f dle-f--full"><span class="dle-l">Enviar desde</span><select class="dle-i" id="ac-from"${fromOpts.length ? '' : ' disabled'}>${fromSelectHtml}</select></label>
+          <label class="dle-f"><span class="dle-l">Correo del admin del cliente</span><input class="dle-i" id="ac-to" type="email" placeholder="admin@dominiodelcliente.com" value="${esc(_acData.already_sent_to || '')}"></label>
+          <label class="dle-f"><span class="dle-l">Idioma de la plantilla</span><select class="dle-i" id="ac-lang" onchange="LeadManagerModule.mbAdminConsentLang(this.value)">${Object.entries(_acData.templates).map(([k,v]) => `<option value="${k}"${k===lang?' selected':''}>${esc(v.label)}</option>`).join('')}</select></label>
+          <label class="dle-f dle-f--full"><span class="dle-l">Asunto</span><input class="dle-i" id="ac-subj"></label>
+          <div class="dle-f dle-f--full">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+              <span class="dle-l" style="margin:0">Vista previa del correo</span>
+              <button type="button" id="ac-toggle-html" class="btn btn--ghost btn--sm" onclick="LeadManagerModule.mbAdminConsentToggleHtml()" style="font-size:.72rem">✎ Editar HTML</button>
+            </div>
+            <div id="ac-preview" style="background:#fff;border:1px solid #E5E4E1;border-radius:8px;padding:20px 22px;max-height:340px;overflow-y:auto;font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#1F1D1B"></div>
+            <textarea id="ac-body" rows="10" style="display:none;width:100%;margin-top:8px;padding:10px 12px;border:1px solid #E5E4E1;border-radius:8px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.76rem;box-sizing:border-box" oninput="LeadManagerModule.mbAdminConsentSync()"></textarea>
           </div>
+          <div class="dle-f dle-f--full">
+            <div style="background:#F7F8F6;border:1px solid #E5E4E1;border-radius:8px;padding:10px 14px;font-size:.76rem;color:#6C6862">
+              <b>Link de aprobación:</b> <code style="font-size:.72rem;color:#0062CC;word-break:break-all">${esc(_acData.admin_consent_url || '(falta MS_CLIENT_ID en el server)')}</code>
+            </div>
+          </div>
+          ${_acData.already_sent_at ? `<div class="dle-f dle-f--full"><div style="color:#B45309;font-size:.82rem">⚠ Ya se envió una solicitud a <b>${esc(_acData.already_sent_to)}</b> ${_ago(_acData.already_sent_at)}. Si reenvías, se sobrescribirá el registro.</div></div>` : ''}
+          <div class="dle-f dle-f--full" id="ac-err" style="display:none;color:var(--danger);font-size:.82rem"></div>
         </div>
-        ${_acData.already_sent_at ? `<div class="dle-f dle-f--full"><div style="color:#B45309;font-size:.82rem">⚠ Ya se envió una solicitud a <b>${esc(_acData.already_sent_to)}</b> ${_ago(_acData.already_sent_at)}. Si reenvías, se sobrescribirá el registro.</div></div>` : ''}
-        <div class="dle-f dle-f--full" id="ac-err" style="display:none;color:var(--danger);font-size:.82rem"></div>
       </div>
-      <div class="dle-foot"><span class="sp"></span>
+      <div class="dle-foot" style="flex:0 0 auto;padding:14px 22px;border-top:1px solid #E5E4E1;background:#FAF8F5;border-radius:0 0 12px 12px"><span class="sp"></span>
         <button class="btn btn--ghost btn--sm" onclick="document.getElementById('ac-modal').remove()">Cancelar</button>
         <button class="btn btn--primary btn--sm" id="ac-send" onclick="LeadManagerModule.mbAdminConsentSend(${mbId})">Enviar solicitud</button>
       </div>
@@ -17148,7 +17160,8 @@ ${foot}
     mbAdminConsentLang(lang);
     setTimeout(() => $('ac-to').focus(), 60);
   }
-  // Sustituye placeholders y refresca subject + body al cambiar idioma o al abrir.
+  // Sustituye placeholders, refresca subject + body al cambiar idioma o al abrir,
+  // y actualiza la vista previa renderizada.
   function mbAdminConsentLang(lang) {
     if (!_acData) return;
     const t = _acData.templates[lang]; if (!t) return;
@@ -17160,6 +17173,22 @@ ${foot}
       .replace(/\{\{yo_email\}\}/g, _acData.yo_email || '');
     $('ac-subj').value = repl(t.subject);
     $('ac-body').value = repl(t.body_html);
+    mbAdminConsentSync();
+  }
+  // Espeja el textarea (HTML source) al div de preview (renderizado) — el envío
+  // usa siempre el value del textarea, que es la fuente de la verdad.
+  function mbAdminConsentSync() {
+    const preview = $('ac-preview'), body = $('ac-body');
+    if (preview && body) preview.innerHTML = body.value;
+  }
+  // Toggle entre vista previa y editor HTML. La vista previa siempre queda visible
+  // arriba; el HTML es un extra opcional para quien quiera personalizar.
+  function mbAdminConsentToggleHtml() {
+    const body = $('ac-body'), btn = $('ac-toggle-html');
+    if (!body || !btn) return;
+    const showing = body.style.display !== 'none';
+    body.style.display = showing ? 'none' : 'block';
+    btn.textContent = showing ? '✎ Editar HTML' : '↑ Ocultar HTML';
   }
   async function mbAdminConsentSend(mbId) {
     const to = $('ac-to').value.trim();
@@ -20798,6 +20827,7 @@ ${foot}
     seqRunSetCanal, seqTaskSetDue,
     mbOpen, mbClose, mbSave, mbTest, mbDelete, mbProv, mbOAuthStart,
     mbAdminConsentOpen, mbAdminConsentLang, mbAdminConsentSend, mbAdminConsentQuick,
+    mbAdminConsentSync, mbAdminConsentToggleHtml,
     ibOpen, ibTab, ibCli, ibSend, ibSchedToggle, ibSchedPick, ibCancelSched,
     ibRowMenu, ibCloseMenu, ibMarkUnread,
     pendingAcceptOpen, pendingAcceptToggleAll, pendingAcceptApplyFilters, pendingAcceptMark,
