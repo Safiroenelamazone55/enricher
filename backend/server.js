@@ -3811,7 +3811,12 @@ const ADMIN_CONSENT_TEMPLATES = {
 
 <p>Hola,</p>
 
-<p>Estamos configurando el buzón <b>{{buzon_email}}</b> en la plataforma con la que gestionamos el outreach comercial de <b>{{cliente_nombre}}</b>. Para que pueda leer y enviar correo desde ese buzón necesitamos tu revisión y aprobación como administrador del tenant Microsoft 365.</p>
+<p>Estamos configurando el buzón <b>{{buzon_email}}</b> en <b>Nova</b>, la plataforma con la que gestionamos el outreach comercial de <b>{{cliente_nombre}}</b>.</p>
+
+<p><b>¿Para qué necesitamos el acceso?</b><br>
+Nova va a <b>enviar los correos de la campaña</b> desde ese buzón y <b>leer las respuestas</b> que lleguen — así ningún prospecto interesado se pierde en la bandeja y el equipo puede darle seguimiento a tiempo desde un solo lugar.</p>
+
+<p>Como Microsoft 365 bloquea por defecto a las apps externas del tenant, necesitamos tu <b>revisión y aprobación como administrador</b> para autorizar la app "Nova outreach". Es un trámite único.</p>
 
 <p style="margin:28px 0;text-align:center">
   <a href="{{admin_consent_url}}" style="background:#0062CC;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;display:inline-block">Aprobar acceso →</a>
@@ -3846,7 +3851,12 @@ const ADMIN_CONSENT_TEMPLATES = {
 
 <p>Hi,</p>
 
-<p>We're setting up the mailbox <b>{{buzon_email}}</b> in the platform we use to manage <b>{{cliente_nombre}}</b>'s outbound operation. For it to send and read email from that mailbox we need your review and approval as admin of the Microsoft 365 tenant.</p>
+<p>We're setting up the mailbox <b>{{buzon_email}}</b> in <b>Nova</b>, the platform we use to manage <b>{{cliente_nombre}}</b>'s outbound operation.</p>
+
+<p><b>Why do we need access?</b><br>
+Nova will <b>send the campaign emails</b> from that mailbox and <b>read the replies</b> that come in — so no interested prospect gets lost in the inbox and the team can follow up on time from a single place.</p>
+
+<p>Since Microsoft 365 blocks external apps in the tenant by default, we need your <b>review and approval as admin</b> to authorize the "Nova outreach" app. It's a one-time step.</p>
 
 <p style="margin:28px 0;text-align:center">
   <a href="{{admin_consent_url}}" style="background:#0062CC;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;display:inline-block">Approve access →</a>
