@@ -3806,54 +3806,28 @@ function _verifyState(state) {
 const ADMIN_CONSENT_TEMPLATES = {
   es: {
     label: 'Español',
-    subject: 'Aprobación de app en Microsoft 365: {{buzon_email}} · {{cliente_nombre}}',
-    body_html: `<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#1F1D1B;line-height:1.6;font-size:14px;max-width:640px">
+    subject: 'Aprobación rápida en Microsoft 365 para {{buzon_email}}',
+    body_html: `<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#1F1D1B;line-height:1.65;font-size:14px;max-width:640px">
 
 <p>Hola,</p>
 
-<p>Soy <b>{{yo_nombre}}</b>. Estoy configurando la operación de outreach comercial de <b>{{cliente_nombre}}</b> con nuestra plataforma <b>Nova</b>, y para poder conectar el buzón <b>{{buzon_email}}</b> necesito tu aprobación como administrador del tenant Microsoft 365. Toma 1–2 minutos, es un solo clic.</p>
+<p>Soy <b>{{yo_nombre}}</b> y trabajo con el equipo de <b>{{cliente_nombre}}</b> en su operación de outreach comercial. Uso una plataforma propia llamada <b>Nova</b> para gestionar el envío de correos, detectar respuestas y hacer seguimiento de los leads en un solo sitio.</p>
 
-<h3 style="margin:26px 0 6px;font-size:15px">¿Qué es Nova?</h3>
-<p>Nova es la herramienta interna con la que gestionamos el outreach comercial: envío programado de correos desde el buzón del cliente, detección automática de respuestas y rebotes, seguimiento de secuencias multi-canal (email + LinkedIn) y CRM ligero. Es una app propia — no un servicio de terceros que revenda datos.</p>
-
-<h3 style="margin:26px 0 6px;font-size:15px">¿Qué necesito de ti?</h3>
-<p>Un "consent" único a la app <b>Nova outreach</b> para el tenant. Esto <b>no</b> conecta ningún buzón ni da acceso a nada por sí solo — solo autoriza a la app a existir en tu tenant, para que después cada usuario (empezando por mí) pueda darle su propio permiso individual desde su cuenta.</p>
+<p>Para conectar el buzón <b>{{buzon_email}}</b> a Nova necesito que apruebes la app en tu tenant Microsoft 365. Es un solo clic desde el botón de abajo y toma un par de minutos.</p>
 
 <p style="margin:28px 0;text-align:center">
   <a href="{{admin_consent_url}}" style="background:#0062CC;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;display:inline-block">Aprobar acceso →</a>
 </p>
 
-<h3 style="margin:26px 0 6px;font-size:15px">Requisitos (los tienes si eres admin del tenant)</h3>
-<p>Debes tener uno de estos roles en Microsoft Entra ID (Azure AD):</p>
-<ul style="margin:6px 0 6px 20px;padding:0">
-  <li><b>Global Administrator</b> — el rol clásico de admin de dominio</li>
-  <li><b>Cloud Application Administrator</b>, o</li>
-  <li><b>Application Administrator</b></li>
-</ul>
-<p style="color:#6C6862;font-size:13px">Cualquier admin de IT o el dueño del dominio de correo suele tener alguno de estos.</p>
+<p>Tu aprobación no conecta ningún buzón por sí sola: solo autoriza a la app a existir en tu tenant. Después, cada persona que quiera conectar su correo sigue dando su propio permiso individual desde su cuenta.</p>
 
-<h3 style="margin:26px 0 6px;font-size:15px">Cómo hacerlo (paso a paso)</h3>
-<ol style="margin:6px 0 6px 20px;padding:0">
-  <li><b>Clic en el botón azul de arriba</b> ("Aprobar acceso"). Se abre login.microsoftonline.com.</li>
-  <li>Inicia sesión con tu <b>cuenta admin</b> del tenant (no una cuenta personal).</li>
-  <li>Verás una pantalla que dice <b>"Permisos solicitados"</b> con el nombre de la app (Nova outreach) y la lista de permisos.</li>
-  <li>Revísalos si quieres (te los pongo abajo). Luego clic en <b>"Aceptar"</b>.</li>
-  <li>La pantalla se cierra sola — listo. Ya nadie más del tenant necesitará aprobación tuya para esto.</li>
-</ol>
+<p>La app pide cuatro permisos estándar de Microsoft: leer y enviar correo del usuario que se conecte, más los tokens de sesión habituales. Son permisos delegados, así que solo aplican a los buzones cuyos dueños den consent individual — no dan acceso a otros correos del tenant ni a nada administrativo.</p>
 
-<h3 style="margin:26px 0 6px;font-size:15px">Permisos que se piden</h3>
-<ul style="margin:6px 0 6px 20px;padding:0">
-  <li><code>IMAP.AccessAsUser.All</code> — leer el buzón del usuario que se conecte (para detectar respuestas y rebotes).</li>
-  <li><code>SMTP.Send</code> — enviar correos autenticados desde ese buzón.</li>
-  <li><code>User.Read</code> — leer el email/nombre del usuario que se conecta, para identificarlo.</li>
-  <li><code>offline_access</code> — mantener la sesión sin re-loguear (refresh token estándar OAuth).</li>
-</ul>
-<p style="color:#6C6862;font-size:13px">Todos son permisos delegados: solo aplican a los buzones cuyos <i>dueños</i> le den consent individual después. No dan acceso a otros buzones del tenant, ni a directorio, ni a nada administrativo.</p>
+<p>Para aprobarlo necesitas ser <b>Global Administrator</b>, <b>Cloud Application Administrator</b> o <b>Application Administrator</b> del tenant. Si sueles gestionar Microsoft 365 de la empresa, ya tienes el rol.</p>
 
-<h3 style="margin:26px 0 6px;font-size:15px">Nota</h3>
-<p>La app aparecerá marcada como <b>"Publisher not verified"</b> (sin comprobar). Es normal — es una app propia que aún no pasó la verificación de publisher de Microsoft (proceso opcional que estamos considerando).</p>
+<p style="color:#6C6862;font-size:13px">Un detalle: la app aparecerá como "Publisher not verified". Es normal — es una herramienta propia que aún no pasó la verificación opcional de publisher de Microsoft.</p>
 
-<p style="margin-top:28px">Si tienes dudas o quieres validar algo antes, escríbeme a <a href="mailto:{{yo_email}}">{{yo_email}}</a>. Gracias por el apoyo.</p>
+<p style="margin-top:24px">Si tienes cualquier duda antes de darle clic, contéstame este correo y lo vemos. Gracias por el apoyo.</p>
 
 <p style="margin-top:20px;color:#6C6862;font-size:13px">— {{yo_nombre}}<br>{{yo_email}}</p>
 
@@ -3861,54 +3835,28 @@ const ADMIN_CONSENT_TEMPLATES = {
   },
   en: {
     label: 'English',
-    subject: 'Microsoft 365 app approval: {{buzon_email}} · {{cliente_nombre}}',
-    body_html: `<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#1F1D1B;line-height:1.6;font-size:14px;max-width:640px">
+    subject: 'Quick Microsoft 365 approval for {{buzon_email}}',
+    body_html: `<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#1F1D1B;line-height:1.65;font-size:14px;max-width:640px">
 
 <p>Hi,</p>
 
-<p>I'm <b>{{yo_nombre}}</b>. I'm setting up the outbound operation for <b>{{cliente_nombre}}</b> using our platform <b>Nova</b>, and to connect the mailbox <b>{{buzon_email}}</b> I need your approval as admin of the Microsoft 365 tenant. Takes 1–2 minutes, one click.</p>
+<p>I'm <b>{{yo_nombre}}</b> and I work with the <b>{{cliente_nombre}}</b> team on their outbound operation. I use a proprietary platform called <b>Nova</b> to handle email sending, detect replies and track leads in one place.</p>
 
-<h3 style="margin:26px 0 6px;font-size:15px">What is Nova?</h3>
-<p>Nova is our internal tool for outbound sales operations: scheduled email sending from the client mailbox, automatic reply and bounce detection, multi-channel sequences (email + LinkedIn), and lightweight CRM. It's a proprietary app — not a third-party service that resells data.</p>
-
-<h3 style="margin:26px 0 6px;font-size:15px">What I need from you</h3>
-<p>A one-time consent for the app <b>Nova outreach</b> in your tenant. This does <b>not</b> connect any mailbox or grant access to anything on its own — it just authorizes the app to exist in your tenant, so that afterward each user (starting with me) can grant their own individual permission from their account.</p>
+<p>To connect the mailbox <b>{{buzon_email}}</b> to Nova I need you to approve the app in your Microsoft 365 tenant. One click from the button below, takes a couple of minutes.</p>
 
 <p style="margin:28px 0;text-align:center">
   <a href="{{admin_consent_url}}" style="background:#0062CC;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;display:inline-block">Approve access →</a>
 </p>
 
-<h3 style="margin:26px 0 6px;font-size:15px">Requirements (you have this if you're tenant admin)</h3>
-<p>You need one of these roles in Microsoft Entra ID (Azure AD):</p>
-<ul style="margin:6px 0 6px 20px;padding:0">
-  <li><b>Global Administrator</b> — the classic tenant admin role</li>
-  <li><b>Cloud Application Administrator</b>, or</li>
-  <li><b>Application Administrator</b></li>
-</ul>
-<p style="color:#6C6862;font-size:13px">Any IT admin or the domain owner typically has one of these.</p>
+<p>Your approval doesn't connect any mailbox on its own — it just authorizes the app to exist in your tenant. After that, each person who wants to connect their mailbox still grants their own individual permission from their account.</p>
 
-<h3 style="margin:26px 0 6px;font-size:15px">How to do it (step by step)</h3>
-<ol style="margin:6px 0 6px 20px;padding:0">
-  <li><b>Click the blue button above</b> ("Approve access"). It opens login.microsoftonline.com.</li>
-  <li>Sign in with your <b>admin account</b> for the tenant (not a personal account).</li>
-  <li>You'll see a <b>"Permissions requested"</b> screen with the app name (Nova outreach) and the permission list.</li>
-  <li>Review them if you'd like (they're listed below). Then click <b>"Accept"</b>.</li>
-  <li>The screen closes on its own — done. No one else in the tenant will need your approval for this again.</li>
-</ol>
+<p>The app requests four standard Microsoft permissions: read and send email for the connecting user, plus the usual session tokens. They're delegated permissions, so they only apply to mailboxes whose owners give individual consent — they don't grant access to other mailboxes in the tenant or to anything administrative.</p>
 
-<h3 style="margin:26px 0 6px;font-size:15px">Permissions requested</h3>
-<ul style="margin:6px 0 6px 20px;padding:0">
-  <li><code>IMAP.AccessAsUser.All</code> — read the connecting user's mailbox (to detect replies and bounces).</li>
-  <li><code>SMTP.Send</code> — send authenticated email from that mailbox.</li>
-  <li><code>User.Read</code> — read the connecting user's email/name to identify them.</li>
-  <li><code>offline_access</code> — keep the session without re-login (standard OAuth refresh token).</li>
-</ul>
-<p style="color:#6C6862;font-size:13px">All are delegated permissions: they only apply to mailboxes whose <i>owners</i> give individual consent afterward. They don't grant access to other mailboxes in the tenant, or to directory, or to anything administrative.</p>
+<p>To approve you need to be <b>Global Administrator</b>, <b>Cloud Application Administrator</b> or <b>Application Administrator</b> of the tenant. If you usually manage the company's Microsoft 365, you already have the role.</p>
 
-<h3 style="margin:26px 0 6px;font-size:15px">Note</h3>
-<p>The app will appear marked as <b>"Publisher not verified"</b>. That's normal — it's a proprietary app that hasn't gone through Microsoft's optional publisher verification yet (we're considering it).</p>
+<p style="color:#6C6862;font-size:13px">One heads-up: the app will appear as "Publisher not verified". That's normal — it's a proprietary tool that hasn't gone through Microsoft's optional publisher verification yet.</p>
 
-<p style="margin-top:28px">If you have any questions or want to validate anything first, reach me at <a href="mailto:{{yo_email}}">{{yo_email}}</a>. Thanks for the support.</p>
+<p style="margin-top:24px">If you have any questions before clicking, just reply to this email. Thanks for the help.</p>
 
 <p style="margin-top:20px;color:#6C6862;font-size:13px">— {{yo_nombre}}<br>{{yo_email}}</p>
 
@@ -3990,10 +3938,14 @@ app.get('/api/lm/mailboxes/:id/admin-consent-templates', requireAuth, async (req
       });
     }
 
+    // Nombre corto: solo el primer nombre. Firmar el correo como "Jenny Obregon
+    // Barzola" queda formal; "Jenny" queda amigable y coincide con cómo la usuaria
+    // se presenta a sus clientes.
+    const yoNombreCorto = String(mb.yo_nombre || '').trim().split(/\s+/)[0] || '';
     res.json({
       buzon_email: mb.email || '(pendiente)',
       cliente_nombre: mb.cliente_nombre || '',
-      yo_nombre: mb.yo_nombre || '',
+      yo_nombre: yoNombreCorto,
       yo_email: mb.yo_email || '',
       admin_consent_url,
       already_sent_to: mb.admin_consent_sent_to || '',
