@@ -3933,8 +3933,12 @@ app.get('/api/lm/mailboxes/:id/admin-consent-templates', requireAuth, async (req
     const mb = rows[0];
     const clientId = process.env.MS_CLIENT_ID || '';
     const redirectUri = process.env.MS_REDIRECT_URI || '';
+    // El state firmado nos deja identificar el user + outbound_client en el callback
+    // (el flow /adminconsent lo devuelve tal cual). Sin esto no sabemos qué buzón
+    // limpiar cuando el admin aprueba.
+    const acState = clientId ? _signState({ uid, clientId: mb.outbound_client_id, ts: Date.now(), kind: 'admin' }) : '';
     const admin_consent_url = clientId
-      ? `https://login.microsoftonline.com/common/adminconsent?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}`
+      ? `https://login.microsoftonline.com/common/adminconsent?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(acState)}`
       : '';
 
     // Opciones "Enviar desde": Gmail conectado + cualquier buzón con SMTP OK.
@@ -4176,6 +4180,33 @@ setTimeout(()=>window.close(), ${kind === 'ok' ? 1200 : 3500});
         return res.send(await _handleConsentRequired(st, error_description || error));
       }
       throw new Error(error_description || error);
+    }
+    // Flow /adminconsent: Microsoft NO devuelve code/state normal, sino
+    // ?admin_consent=True&tenant=<guid>&state=<lo-que-mandamos>. Detectarlo antes
+    // de validar code/state; quien abre este URL suele ser el ADMIN del cliente,
+    // no la usuaria de Nova — mostramos un mensaje limpio y marcamos el buzón
+    // como aprobado para que al reintentar el OAuth normal, ya pase.
+    const adminConsentGranted = String(req.query.admin_consent || '').toLowerCase() === 'true';
+    if (adminConsentGranted) {
+      const tenantId = String(req.query.tenant || '');
+      if (st && st.uid && st.clientId) {
+        // Limpiar el flag needs_admin_consent para ESE buzón concreto.
+        await pool.query(
+          `UPDATE lm_mailboxes SET needs_admin_consent=FALSE, oauth_tenant_id=$1,
+                  last_error='Aprobación del admin recibida. Puedes reintentar la conexión OAuth.'
+            WHERE user_id=$2 AND outbound_client_id=$3`,
+          [tenantId, st.uid, st.clientId]);
+      } else if (tenantId) {
+        // Sin state (URL manipulada, admin sin state, etc.): limpiar flag de todos
+        // los buzones cuyo oauth_tenant_id coincida (best effort).
+        await pool.query(
+          `UPDATE lm_mailboxes SET needs_admin_consent=FALSE,
+                  last_error='Aprobación del admin recibida. Puedes reintentar la conexión OAuth.'
+            WHERE oauth_tenant_id=$1`, [tenantId]);
+      }
+      return res.send(_closePopup('ok',
+        '¡Gracias! La aprobación quedó registrada para el tenant ' + (tenantId || '(sin id)') +
+        '. Ya puedes cerrar esta ventana — quien te envió la solicitud podrá terminar de conectar el buzón sin más aprobaciones.'));
     }
     if (!code || !state) throw new Error('Falta code o state');
     if (!st) throw new Error('state inválido o firma no coincide');
