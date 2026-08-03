@@ -3444,11 +3444,32 @@ app.post('/api/lm/contacts/:id/disposition', requireAuth, async (req, res) => {
         ? [seqId]
         : (await pool.query(`SELECT sequence_id FROM lm_contact_sequences WHERE user_id=$1 AND contact_id=$2 AND estado IN ('activo','pausado')`, [uid, cid])).rows.map(r => r.sequence_id);
       for (const sq of seqs) {
-        const steps = (await pool.query(`SELECT cond FROM sequence_steps WHERE sequence_id=$1 AND user_id=$2 ORDER BY dia ASC, orden ASC, id ASC`, [sq, uid])).rows;
-        const fr = steps.findIndex(s => (s.cond || '') === 'replied');
+        // Traer también preferred_channel de la secuencia y el canal de cada paso.
+        const { rows: sqRow } = await pool.query(`SELECT preferred_channel, nombre FROM sequences WHERE id=$1 AND user_id=$2`, [sq, uid]);
+        const pref = (sqRow[0]?.preferred_channel) || '';
+        const seqName = sqRow[0]?.nombre || `#${sq}`;
+        const steps = (await pool.query(`SELECT id, cond, canal, titulo FROM sequence_steps WHERE sequence_id=$1 AND user_id=$2 ORDER BY dia ASC, orden ASC, id ASC`, [sq, uid])).rows;
+        // Buscar paso replied: si hay canal preferido, priorizarlo; fallback al
+        // primer replied sin importar canal (comportamiento previo).
+        let fr = -1;
+        if (pref) fr = steps.findIndex(s => (s.cond || '') === 'replied' && s.canal === pref);
+        if (fr < 0) fr = steps.findIndex(s => (s.cond || '') === 'replied');
+        // Paso anterior para el trazo (dónde estaba el contacto antes del salto).
+        const { rows: prevRow } = await pool.query(`SELECT paso FROM lm_contact_sequences WHERE user_id=$1 AND contact_id=$2 AND sequence_id=$3`, [uid, cid, sq]);
+        const pasoPrev = prevRow[0]?.paso || null;
         if (fr >= 0) {
           const r = await pool.query(`UPDATE lm_contact_sequences SET paso=$1, paso_date=CURRENT_DATE, estado='activo', paused_reason='' WHERE user_id=$2 AND contact_id=$3 AND sequence_id=$4 AND estado IN ('activo','pausado')`, [fr + 1, uid, cid, sq]);
           rerouted += r.rowCount;
+          if (r.rowCount) {
+            const stTarget = steps[fr];
+            const causa = disp === 'aceptado' ? 'aceptó la conexión de LinkedIn' : 'respondió';
+            const canalStr = stTarget.canal.charAt(0).toUpperCase() + stTarget.canal.slice(1);
+            const nota = `🔀 Re-enrutado en la secuencia "${seqName}"${pasoPrev ? ` del paso ${pasoPrev}` : ''} al paso ${fr + 1} (${canalStr}${stTarget.titulo ? ' — ' + String(stTarget.titulo).slice(0, 60) : ''}) porque el contacto ${causa}${pref ? ` · canal preferido: ${pref}` : ''}.`;
+            await pool.query(
+              `INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, nota, fecha, estado)
+               VALUES ($1,$2,$3,'reruta',$4,NOW(),'hecha')`,
+              [uid, cid, obcId, nota]).catch(() => {});
+          }
         } else {
           const r = await pool.query(`UPDATE lm_contact_sequences SET estado='pausado' WHERE user_id=$1 AND contact_id=$2 AND sequence_id=$3 AND estado='activo'`, [uid, cid, sq]);
           paused += r.rowCount;
@@ -5103,6 +5124,8 @@ const STEP_CANALES = ['email', 'linkedin', 'call', 'task', 'whatsapp'];
 const SEQ_SEND_MODES = ['manual', 'auto', 'preaprobado'];
 function _sanSendMode(v) { return SEQ_SEND_MODES.includes(v) ? v : 'manual'; }
 function _sanInterval(v) { const n = parseInt(v); return (n >= 1 && n <= 1440) ? n : 5; }
+// Canal preferido de la secuencia para re-enrutar al aceptar/responder.
+function _sanPreferredChannel(v) { return ['linkedin', 'email'].includes(v) ? v : ''; }
 
 app.get('/api/sequences', requireAuth, async (req, res) => {
   try {
@@ -5122,9 +5145,9 @@ app.post('/api/sequences', requireAuth, async (req, res) => {
     const sendDays = _sanSendDays(b.send_days);
     const dLim = Math.max(0, parseInt(b.daily_limit) || 0);
     const { rows } = await pool.query(`
-      INSERT INTO sequences (user_id,outbound_client_id,campaign_id,nombre,objetivo,estado,timezone,drip_per_day,send_days,starts_on,daily_limit,mercado,icp,notas,send_mode,send_interval_min,auto_activar)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING *
-    `, [req.workspaceOwnerId, b.outbound_client_id || null, b.campaign_id || null, b.nombre.trim(), b.objetivo || '', estado, b.timezone || '', drip, sendDays, _sanDate(b.starts_on), dLim, b.mercado || '', b.icp || '', b.notas || '', _sanSendMode(b.send_mode), _sanInterval(b.send_interval_min), !!b.auto_activar]);
+      INSERT INTO sequences (user_id,outbound_client_id,campaign_id,nombre,objetivo,estado,timezone,drip_per_day,send_days,starts_on,daily_limit,mercado,icp,notas,send_mode,send_interval_min,auto_activar,preferred_channel)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING *
+    `, [req.workspaceOwnerId, b.outbound_client_id || null, b.campaign_id || null, b.nombre.trim(), b.objetivo || '', estado, b.timezone || '', drip, sendDays, _sanDate(b.starts_on), dLim, b.mercado || '', b.icp || '', b.notas || '', _sanSendMode(b.send_mode), _sanInterval(b.send_interval_min), !!b.auto_activar, _sanPreferredChannel(b.preferred_channel)]);
     res.status(201).json(rows[0]);
   } catch (err) { console.error('[seq] POST error:', err.message); res.status(500).json({ error: 'Error al crear secuencia' }); }
 });
@@ -5141,9 +5164,9 @@ app.put('/api/sequences/:id', requireAuth, async (req, res) => {
       `SELECT send_days, starts_on::text AS starts_on, drip_per_day FROM sequences WHERE id=$1 AND user_id=$2`,
       [req.params.id, req.workspaceOwnerId]);
     const { rows } = await pool.query(`
-      UPDATE sequences SET outbound_client_id=$1,campaign_id=$2,nombre=$3,objetivo=$4,estado=$5,timezone=$6,drip_per_day=$7,send_days=$8,starts_on=$9,daily_limit=$10,mercado=$11,icp=$12,notas=$13,send_mode=$14,send_interval_min=$15,auto_activar=$16,updated_at=NOW()
-      WHERE id=$17 AND user_id=$18 RETURNING *
-    `, [b.outbound_client_id || null, b.campaign_id || null, b.nombre.trim(), b.objetivo || '', estado, b.timezone || '', drip, sendDays, _sanDate(b.starts_on), dLim, b.mercado || '', b.icp || '', b.notas || '', _sanSendMode(b.send_mode), _sanInterval(b.send_interval_min), !!b.auto_activar, req.params.id, req.workspaceOwnerId]);
+      UPDATE sequences SET outbound_client_id=$1,campaign_id=$2,nombre=$3,objetivo=$4,estado=$5,timezone=$6,drip_per_day=$7,send_days=$8,starts_on=$9,daily_limit=$10,mercado=$11,icp=$12,notas=$13,send_mode=$14,send_interval_min=$15,auto_activar=$16,preferred_channel=$17,updated_at=NOW()
+      WHERE id=$18 AND user_id=$19 RETURNING *
+    `, [b.outbound_client_id || null, b.campaign_id || null, b.nombre.trim(), b.objetivo || '', estado, b.timezone || '', drip, sendDays, _sanDate(b.starts_on), dLim, b.mercado || '', b.icp || '', b.notas || '', _sanSendMode(b.send_mode), _sanInterval(b.send_interval_min), !!b.auto_activar, _sanPreferredChannel(b.preferred_channel), req.params.id, req.workspaceOwnerId]);
     if (!rows.length) return res.status(404).json({ error: 'Secuencia no encontrada' });
     // Cambió la cadencia, la fecha de inicio o el drip → recalcular las fechas de los
     // que aún no empiezan (paso 1). Sin esto, activar S/D después de enrolar no movía nada.

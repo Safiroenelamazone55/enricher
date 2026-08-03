@@ -734,6 +734,10 @@ async function initDb() {
     await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS send_interval_min INTEGER NOT NULL DEFAULT 5;`);
     // Auto-activación: al llegar starts_on, el motor pasa la secuencia a 'activa' solo.
     await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS auto_activar      BOOLEAN NOT NULL DEFAULT FALSE;`);
+    // Canal principal de la secuencia: cuando el contacto acepta/responde, el
+    // re-enrutado a la rama 'replied' PRIORIZA pasos de este canal (linkedin/email).
+    // '' = auto (comportamiento clásico: primer paso replied sin importar canal).
+    await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS preferred_channel TEXT NOT NULL DEFAULT '';`);
 
     // ── activities (Lead Manager Fase 4: touches registrados + tareas comerciales) ──
     await pool.query(`
