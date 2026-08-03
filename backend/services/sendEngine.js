@@ -652,13 +652,24 @@ async function _draftPreapproved(pool) {
 }
 
 // ── Auto-activación por fecha: 'inicia el 5 de agosto' → ese día pasa a activa sola ──
+// Y propaga a la campaña padre: si la secuencia recién activada estaba dentro de una
+// campaña 'draft', la campaña también pasa a 'activa' — no tiene sentido que la
+// secuencia esté enviando pero la campaña siga en borrador.
 async function _autoActivate(pool) {
   const { rows } = await pool.query(`
     UPDATE sequences SET estado='activa', updated_at=NOW()
      WHERE auto_activar AND estado IN ('draft','pausada')
        AND starts_on IS NOT NULL AND starts_on <= CURRENT_DATE
-     RETURNING id, nombre`);
+     RETURNING id, nombre, campaign_id`);
   for (const s of rows) console.log(`[send-engine] auto-activada: "${s.nombre}" (llegó su fecha de inicio)`);
+  const campIds = [...new Set(rows.map(r => r.campaign_id).filter(Boolean))];
+  if (campIds.length) {
+    const { rows: cs } = await pool.query(
+      `UPDATE campaigns SET estado='activa', updated_at=NOW()
+        WHERE id = ANY($1::int[]) AND estado='draft'
+      RETURNING id, nombre`, [campIds]);
+    for (const c of cs) console.log(`[send-engine] campaña "${c.nombre}" pasó a activa (una de sus secuencias arrancó)`);
+  }
 }
 
 let _runningSince = 0;
