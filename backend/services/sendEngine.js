@@ -226,7 +226,7 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback) {
   }
 
   const { rows: steps } = await pool.query(
-    `SELECT id, dia, canal, titulo, plantilla, espera_dias, variants, variant_mode, variant_field, asunto, cc_off
+    `SELECT id, dia, canal, titulo, plantilla, espera_dias, variants, variant_mode, variant_field, asunto, cc_off, reply_to_prev
        FROM sequence_steps WHERE sequence_id=$1 ORDER BY dia ASC, orden ASC, id ASC`,
     [enr.sequence_id]
   );
@@ -337,10 +337,30 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback) {
     [enr.sequence_id, uid]
   );
 
+  // Reply threading: si el paso pide encadenar (reply_to_prev), buscar el último
+  // smtp_message_id del contacto en esta secuencia y prefijar "Re: " al asunto si
+  // falta. El motor lo aplica en el momento del envío para que refleje la config
+  // ACTUAL del paso (permite editar la secuencia en vivo sin colapsar borradores).
+  let inReplyTo = null;
+  if (step.reply_to_prev) {
+    const { rows: [prev] } = await pool.query(
+      `SELECT smtp_message_id FROM lm_messages
+        WHERE user_id=$1 AND contact_id=$2 AND sequence_id=$3
+          AND smtp_message_id <> '' AND estado IN ('sent','replied','bounced')
+        ORDER BY sent_at DESC NULLS LAST, id DESC LIMIT 1`,
+      [uid, enr.contact_id, enr.sequence_id]);
+    if (prev && prev.smtp_message_id) {
+      inReplyTo = prev.smtp_message_id;
+      if (!/^re:\s/i.test(asunto)) asunto = 'Re: ' + asunto;
+    }
+    // Si no hay email previo (es el primer paso o los anteriores fueron manuales),
+    // se envía como conversación nueva sin fallar — reply_to_prev queda inerte.
+  }
+
   const { rows: [msg] } = await pool.query(
-    `INSERT INTO lm_messages (user_id, contact_id, sequence_id, step_id, asunto, cuerpo, to_email, estado, track_token, variant, mailbox_id)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,'queued',$8,$9,$10) RETURNING id`,
-    [uid, enr.contact_id, enr.sequence_id, step.id, asunto, cuerpoTxt, enr.email, token, variantName, mbx ? mbx.id : null]
+    `INSERT INTO lm_messages (user_id, contact_id, sequence_id, step_id, asunto, cuerpo, to_email, estado, track_token, variant, mailbox_id, in_reply_to)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,'queued',$8,$9,$10,$11) RETURNING id`,
+    [uid, enr.contact_id, enr.sequence_id, step.id, asunto, cuerpoTxt, enr.email, token, variantName, mbx ? mbx.id : null, inReplyTo || '']
   );
 
   try {
@@ -352,6 +372,8 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback) {
         text: cuerpoTxt + (cfg.firma ? `\n\n${cfg.firma.replace(/<[^>]+>/g, '')}` : ''),
         fromName: cfg.from_name,
         cc: (!step.cc_off && mbx.cc_email) || undefined,  // CC del cliente, salvo que el paso lo desactive
+        inReplyTo: inReplyTo || undefined,
+        references: inReplyTo || undefined,
       });
       await pool.query(
         `UPDATE lm_messages SET estado='sent', sent_at=NOW(), smtp_message_id=$1 WHERE id=$2`,
@@ -479,6 +501,7 @@ async function _flushApproved(pool, apiBase) {
            cfg.window_start, cfg.window_end, cfg.send_weekends, cfg.timezone,
            s.send_days,
            COALESCE(oc.cc_email,'') AS cc_email, COALESCE(st.cc_off, FALSE) AS cc_off,
+           COALESCE(st.reply_to_prev, FALSE) AS reply_to_prev,
            k.disposition AS k_disposition
       FROM lm_messages m
       JOIN sequences s ON s.id = m.sequence_id
@@ -525,14 +548,32 @@ async function _flushApproved(pool, apiBase) {
                    auth_method: m.auth_method, oauth_provider: m.oauth_provider, oauth_access_enc: m.oauth_access_enc,
                    oauth_refresh_enc: m.oauth_refresh_enc, oauth_expires_at: m.oauth_expires_at };
       const auth = await getMailboxAuth(pool, mb);
+      // Reply threading para pre-aprobados: si el step lo pide, buscar el último
+      // smtp_message_id en la secuencia y prefijar "Re: " al asunto.
+      let subject = m.asunto, inReplyTo = null;
+      if (m.reply_to_prev) {
+        const { rows: [prev] } = await pool.query(
+          `SELECT smtp_message_id FROM lm_messages
+            WHERE user_id=$1 AND contact_id=$2 AND sequence_id=$3
+              AND smtp_message_id <> '' AND estado IN ('sent','replied','bounced')
+              AND id <> $4
+            ORDER BY sent_at DESC NULLS LAST, id DESC LIMIT 1`,
+          [m.user_id, m.contact_id, m.sequence_id, m.id]);
+        if (prev && prev.smtp_message_id) {
+          inReplyTo = prev.smtp_message_id;
+          if (!/^re:\s/i.test(subject)) subject = 'Re: ' + subject;
+        }
+      }
       const sent = await sendFromMailbox(mb, auth, {
-        to: m.to_email, subject: m.asunto, html,
+        to: m.to_email, subject, html,
         text: m.cuerpo + (m.firma ? `\n\n${String(m.firma).replace(/<[^>]+>/g, '')}` : ''),
         fromName: m.from_name || undefined,
         cc: (!m.cc_off && m.cc_email) || undefined,  // CC del cliente, salvo que el paso lo desactive
+        inReplyTo: inReplyTo || undefined,
+        references: inReplyTo || undefined,
       });
-      await pool.query(`UPDATE lm_messages SET estado='sent', sent_at=NOW(), smtp_message_id=$1 WHERE id=$2`,
-        [sent.messageId || '', m.id]);
+      await pool.query(`UPDATE lm_messages SET estado='sent', sent_at=NOW(), smtp_message_id=$1, asunto=$2, in_reply_to=$3 WHERE id=$4`,
+        [sent.messageId || '', subject, inReplyTo || '', m.id]);
       await pool.query(
         `INSERT INTO activities (user_id, contact_id, tipo, canal, nota, fecha, estado)
          VALUES ($1,$2,'email','email',$3,NOW(),'hecha')`,

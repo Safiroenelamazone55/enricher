@@ -18705,6 +18705,7 @@ ${foot}
         <div class="fin-pi-full step-sec-h"><span class="step-sec-n">2</span> El mensaje — qué se envía <span class="sp"></span><button type="button" class="seq-days-preset" id="step-prev-btn" onclick="LeadManagerModule.stepPreview(${seqId})">👁 Vista previa</button></div>
         <div id="step-preview" class="fin-pi-full" style="display:none"></div>
         ${(() => { const sq = (_sequences || []).find(x => x.id === seqId); const cli = (_clients || []).find(c => c.id === sq?.outbound_client_id); const cc = cli?.cc_email || ''; return cc ? `<label class="fin-cfg-field fin-pi-full" id="step-cc-wrap" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="step-cc" ${st?.cc_off ? '' : 'checked'} style="width:auto"><span class="fin-cfg-lbl" style="margin:0">Incluir CC del cliente (${esc(cc)})</span><span class="seq-drip-hint" style="margin:0">Desmárcalo para que ESTE paso salga sin copia.</span></label>` : ''; })()}
+        <label class="fin-cfg-field fin-pi-full" id="step-reply-wrap" style="flex-direction:row;align-items:center;gap:8px;display:${(st?.canal || 'email') === 'email' ? 'flex' : 'none'}"><input type="checkbox" id="step-reply" ${st?.reply_to_prev ? 'checked' : ''} style="width:auto"><span class="fin-cfg-lbl" style="margin:0">↩ Enviar en el mismo hilo del email anterior (Re:)</span><span class="seq-drip-hint" style="margin:0">Encadena este correo como respuesta al último email enviado al contacto en esta secuencia. Antepone "Re: " al asunto si falta y añade los headers In-Reply-To/References. Si aún no hay email previo, sale como conversación nueva.</span></label>
         ${_lmTpls.length ? `<label class="fin-cfg-field fin-pi-full" id="step-tpl-top"><span class="fin-cfg-lbl">Usar plantilla guardada</span><select class="form-input" onchange="LeadManagerModule.stepUseTpl(this.value)"><option value="">— Elegir de la biblioteca —</option>${_lmTpls.map(tp => `<option value="${tp.id}">${esc(tp.nombre)} · ${esc(_tplCanalLabel(tp.canal))}</option>`).join('')}</select></label>` : ''}
         <div id="step-msg" class="fin-pi-full step-msg"></div>
       </div>
@@ -18820,7 +18821,12 @@ ${foot}
   function stepSetField(f) { _stepSyncDraft(); _stepDraft.field = f; _stepRenderMsg(); }
   function stepAddVariant() { _stepSyncDraft(); _stepDraft.variants.push({ nombre: String.fromCharCode(65 + _stepDraft.variants.length), asunto: '', cuerpo: '', targets: [], tplId: '' }); _stepRenderMsg(); }
   function stepDelVariant(i) { _stepSyncDraft(); _stepDraft.variants.splice(i, 1); if (!_stepDraft.variants.length) _stepDraft.variants.push({ nombre: 'A', asunto: '', cuerpo: '', targets: [], tplId: '' }); _stepRenderMsg(); }
-  function stepCanalChange() { _stepSyncDraft(); _stepRenderMsg(); }
+  function stepCanalChange() {
+    _stepSyncDraft(); _stepRenderMsg();
+    // El toggle "responder en el mismo hilo" solo aplica a pasos email.
+    const c = $('step-canal')?.value || 'email';
+    const rw = $('step-reply-wrap'); if (rw) rw.style.display = c === 'email' ? 'flex' : 'none';
+  }
   function _canalHintPlain(c) {
     return c === 'email'    ? 'Verás Para / CC / Asunto y "Abrir Gmail listo".'
          : c === 'linkedin' ? 'Verás el URL del perfil de LinkedIn (sin datos de correo).'
@@ -18894,7 +18900,8 @@ ${foot}
     // Asunto propio del paso (separado del nombre interno). En A/B cada variante lleva el suyo.
     const asunto = ((d.variants[0] && d.variants[0].asunto) || '').trim();
     const ccBox = $('step-cc');
-    const body = { sequence_id: seqId, dia, canal: $('step-canal')?.value || 'email', titulo: $('step-titulo')?.value.trim() || '', asunto, plantilla, variants, variant_mode: d.mode, variant_field: d.field, orden: dia, hora: $('step-hora')?.value || '', cond: $('step-cond')?.value || '', accion: $('step-accion')?.value || '', cc_off: ccBox ? !ccBox.checked : false };
+    const replyBox = $('step-reply');
+    const body = { sequence_id: seqId, dia, canal: $('step-canal')?.value || 'email', titulo: $('step-titulo')?.value.trim() || '', asunto, plantilla, variants, variant_mode: d.mode, variant_field: d.field, orden: dia, hora: $('step-hora')?.value || '', cond: $('step-cond')?.value || '', accion: $('step-accion')?.value || '', cc_off: ccBox ? !ccBox.checked : false, reply_to_prev: !!(replyBox && replyBox.checked) };
     const btn = $('step-save'); if (btn) btn.disabled = true;
     try {
       const res = await apiFetch(`${API}/sequence-steps${stepId ? '/' + stepId : ''}`, { method: stepId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });

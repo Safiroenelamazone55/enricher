@@ -1156,6 +1156,11 @@ async function initDb() {
     await pool.query(`CREATE INDEX IF NOT EXISTS lm_cseq_next_idx ON lm_contact_sequences (estado, next_action_at);`);
     // Espera relativa entre pasos (días desde el paso anterior; complementa 'dia' absoluto).
     await pool.query(`ALTER TABLE sequence_steps ADD COLUMN IF NOT EXISTS espera_dias INTEGER NOT NULL DEFAULT 0;`);
+    // Reply threading: si TRUE, el paso email se envía como respuesta al último
+    // email enviado a ese contacto en la misma secuencia (In-Reply-To + References
+    // del smtp_message_id anterior + prefijo "Re: " al asunto si falta). Permite
+    // encadenar el segundo/tercer email en el mismo hilo, como hace Apollo/Instantly.
+    await pool.query(`ALTER TABLE sequence_steps ADD COLUMN IF NOT EXISTS reply_to_prev BOOLEAN NOT NULL DEFAULT FALSE;`);
     // lm_mailboxes: buzones reales por cliente outbound (SMTP+IMAP, cualquier proveedor).
     // pass_enc = contraseña de aplicación cifrada AES-256-GCM (nunca en claro).
     await pool.query(`
