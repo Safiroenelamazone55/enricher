@@ -326,14 +326,15 @@ async function initAuth() {
       // Restaurar la última sección visitada (en vez de volver siempre al Dashboard al recargar).
       // Activamos el pane/nav SÍNCRONAMENTE aquí (antes del await) para que la 1ª pintura ya sea
       // la sección correcta → sin "flash" del Dashboard. Los datos se cargan después de FxRates.
-      const _initTab = (() => {
-        try { const s = localStorage.getItem('kw_activeTab'); if (s && document.getElementById('pane-' + s) && document.querySelector(`[data-tab="${s}"]`)) return s; } catch (_) {}
-        return 'mgmt-dashboard';
-      })();
+      // Al hacer login, siempre entrar al HOME (grid de módulos estilo Creatio).
+      // La usuaria decide desde ahí a qué módulo entrar — más claro que "recordar"
+      // el último tab, sobre todo en workspaces con varios miembros.
+      const _initTab = 'home';
       document.querySelectorAll('.tab,.snav-item').forEach(t => t.classList.toggle('active', t.dataset.tab === _initTab));
       document.querySelectorAll('.pane').forEach(p => p.classList.toggle('active', p.id === 'pane-' + _initTab));
+      renderHome();
+      _applyHomeMode(true);
       await FxRatesModule.load();
-      if (typeof window._novaSwitchTab === 'function') window._novaSwitchTab(_initTab); else DashboardModule.load();
       ChatModule.init();
       TimerModule.init();
 
@@ -501,12 +502,67 @@ function _setNavCollapsed(on) {
 function toggleNavPanel() { _setNavCollapsed(!_navCollapsed()); }
 function selectModule(mod) {
   if (_navCollapsed()) _setNavCollapsed(false);
+  _applyHomeMode(false);
   _setActiveModule(mod);
   let target = null;
   try { target = localStorage.getItem('kw_lastTab_' + mod); } catch (_) {}
   const group = document.getElementById('snav-body-' + mod);
   if (!target || !group?.querySelector(`.snav-item[data-tab="${target}"]`)) target = group?.querySelector('.snav-item')?.dataset.tab;
   if (target && typeof window._novaSwitchTab === 'function') window._novaSwitchTab(target);
+}
+
+// ── HOME: grid de módulos (default al hacer login) ─────────────────
+// Estilo Creatio: cards blancas con icono pastel a la derecha, título +
+// descripción + chip Activo. Tamaño moderado, mismo layout para todos
+// los miembros del workspace (sin diferencias por rol/persona).
+const HOME_MODULES = [
+  { id: 'management',    tab: 'mgmt-dashboard', name: 'Operaciones',    desc: 'Proyectos, tareas, clientes y finanzas',      color: 'orange',
+    icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg>' },
+  { id: 'enricher',      tab: 'single',         name: 'Enriquecimiento', desc: 'Preparación, verificación y scoring de leads', color: 'green',
+    icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 4.9 4.9 1.8-4.9 1.8L12 16.4l-1.8-4.9L5.3 9.5l4.9-1.8z"/><path d="M18.6 14.6l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/></svg>' },
+  { id: 'leadmanagement', tab: 'lead-manager',   name: 'Outreach',       desc: 'CRM, campañas, secuencias y leads',            color: 'red',
+    icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>' },
+];
+
+function renderHome() {
+  const grid = document.getElementById('home-grid');
+  if (!grid) return;
+  // Saludo con nombre si lo tenemos en el DOM
+  const nameEl = document.querySelector('.rail-user__av');
+  const first = (nameEl?.title || '').split(/\s+/)[0] || '';
+  const h = new Date().getHours();
+  const saludo = h < 12 ? 'Buenos días' : h < 19 ? 'Buenas tardes' : 'Buenas noches';
+  const greet = document.getElementById('home-greeting');
+  if (greet) greet.textContent = first ? `${saludo}, ${first}` : saludo;
+
+  grid.innerHTML = HOME_MODULES.map(m => `
+    <button class="home-card" onclick="selectModule('${m.id}')" aria-label="${m.name}">
+      <div class="home-card__body">
+        <div class="home-card__title">${m.name}</div>
+        <div class="home-card__desc">${m.desc}</div>
+        <span class="home-card__chip"><span class="home-card__chip-dot"></span>Activo</span>
+      </div>
+      <div class="home-card__icon home-card__icon--${m.color}">${m.icon}</div>
+    </button>
+  `).join('');
+}
+
+// Alterna el "modo home": oculta la sidebar secundaria (que muestra items
+// del módulo) y le da al content-wrap el fondo crema propio del home.
+function _applyHomeMode(on) {
+  const shell = document.getElementById('appShell');
+  if (shell) shell.classList.toggle('home-mode', !!on);
+  document.querySelectorAll('.snav-mod').forEach(b => b.classList.remove('active'));
+}
+
+// Vuelve al home desde cualquier módulo (llamado por el botón "← Módulos"
+// que sustituyó al viejo dropdown de cambio de módulo).
+function goHome() {
+  _applyHomeMode(true);
+  document.querySelectorAll('.tab,.snav-item').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.pane').forEach(p => p.classList.toggle('active', p.id === 'pane-home'));
+  try { localStorage.setItem('kw_activeTab', 'home'); } catch (_) {}
+  renderHome();
 }
 
 // ── Menú de workspace (cambiar de módulo) ──────────────────
