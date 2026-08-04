@@ -14232,7 +14232,7 @@ const LeadManagerModule = (() => {
     const pane = $('pane-lead-manager'); if (!pane) return;
     pane.innerHTML = `<div class="lm2">
       <aside class="lm2-nav">
-        <div class="snav-panel__hd"><button class="snav-ws" title="Cambiar módulo" aria-label="Cambiar módulo" onclick="toggleWorkspaceMenu(this)"><span class="snav-ws__ico"><svg width="19" height="19" viewBox="0 0 100 100" fill="none"><path d="M50 3 L63 38 L97 50 L63 62 L50 97 L37 62 L3 50 L37 38 Z" fill="currentColor"/></svg></span><span class="snav-panel__title">Lead Manager</span><svg class="snav-ws__chev" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button></div>
+        <div class="snav-panel__hd"><button class="snav-back" title="Volver al inicio" aria-label="Volver al inicio" onclick="goHome()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg><span>Módulos</span></button></div>
         <nav class="lm2-nav__list" id="lm2-nav-list">${_navHtml()}</nav>
         <div class="snav-foot">
           <button class="snav-foot__btn" onclick="WorkspaceModule.openNameModal()">

@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260803a"/>
+  <link rel="stylesheet" href="style.css?v=20260803b"/>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -227,13 +227,14 @@
   <!-- ── SECONDARY PANEL: subsecciones del módulo activo ── -->
   <aside class="sidebar" id="sidebar">
 
-    <!-- Panel header: botón "← Módulos" (vuelve al home) + título del módulo activo -->
+    <!-- Panel header: solo botón "← Módulos" para volver al home. El nombre
+         del módulo activo NO se muestra aquí (Jenny prefiere que quede limpio;
+         el módulo ya se identifica por el contenido). -->
     <div class="snav-panel__hd">
       <button class="snav-back" id="snav-back" title="Volver al inicio" aria-label="Volver al inicio" onclick="goHome()">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
         <span>Módulos</span>
       </button>
-      <div class="snav-panel__title" id="snav-panel-title">Operaciones</div>
     </div>
 
     <!-- Navigation: un grupo por módulo, solo el activo visible -->
@@ -2587,7 +2588,7 @@
 })();
 </script>
 
-<script src="app.js?v=20260803a"></script>
+<script src="app.js?v=20260803b"></script>
 <div id="task-quick-edit" style="display:none;position:fixed;z-index:9999"></div>
 </body>
 </html>
