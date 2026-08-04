@@ -17702,14 +17702,24 @@ ${foot}
     const ti = document.getElementById('step-titulo'); if (ti && !ti.value.trim()) ti.value = t.nombre || '';
     _stepRenderMsg();
   }
-  function tplInsertVar(tok) {
+  function tplInsertVar(tok, targetId) {
     if (!tok) return;
-    const ta = document.getElementById('tpl-cuerpo'); if (!ta) return;
+    const ta = document.getElementById(targetId || 'tpl-cuerpo'); if (!ta) return;
     const ins = `{{${tok}}}`;
     const s = ta.selectionStart == null ? ta.value.length : ta.selectionStart;
     const e = ta.selectionEnd == null ? ta.value.length : ta.selectionEnd;
     ta.value = ta.value.slice(0, s) + ins + ta.value.slice(e);
     ta.focus(); const pos = s + ins.length; ta.setSelectionRange(pos, pos);
+  }
+  // Wrappers para insertar variable en el input de asunto (template modal y step drawer).
+  function tplInsertVarAsunto(tok) { tplInsertVar(tok, 'tpl-asunto'); }
+  function stepInsertVarAsunto(tok) {
+    // El step drawer usa un textarea por variante (step-var-asu-{i}) o el input
+    // de asunto del paso (step-asu-only). Insertamos en el que esté enfocado.
+    const focused = document.activeElement;
+    const cands = ['step-var-asu-0', 'step-asu-only'];
+    const targetId = (focused && focused.id && (focused.id.startsWith('step-var-asu-') || focused.id === 'step-asu-only')) ? focused.id : cands.find(id => document.getElementById(id));
+    if (!targetId) return; tplInsertVar(tok, targetId);
   }
   function openTemplate(id) {
     const t = id ? _lmTpls.find(x => x.id === id) : null;
@@ -17728,7 +17738,9 @@ ${foot}
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Tipo</span><select class="form-input" id="tpl-tipo">${tipoOpts}</select></label>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Secuencias relacionadas</span><div class="step-tags-wrap"><div class="step-tags"><span class="step-chips" id="tpl-seq-chips">${_tplSeqChipsHtml()}</span><input class="step-tags-inp" id="tpl-seq-inp" autocomplete="off" placeholder="Busca y elige una secuencia…" oninput="LeadManagerModule.tplSeqInput()" onfocus="LeadManagerModule.tplSeqInput()" onkeydown="LeadManagerModule.tplSeqKey(event)" onblur="LeadManagerModule.tplSeqBlur()"></div><div class="step-tags-pop" id="tpl-seq-pop"></div></div><span class="step-vars__hint">Vincula la plantilla a una o varias secuencias para ubicarla al instante con el filtro de arriba. No limita dónde puedes usarla.</span></label>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Etiquetas</span><div class="step-tags-wrap"><div class="step-tags"><span class="step-chips" id="tpl-chips">${_tplChipsHtml()}</span><input class="step-tags-inp" id="tpl-tags-inp" autocomplete="off" placeholder="Escribe una etiqueta y Enter (ej. ángulo, segmento)…" oninput="LeadManagerModule.tplTagInput()" onfocus="LeadManagerModule.tplTagInput()" onkeydown="LeadManagerModule.tplTagKey(event)" onblur="LeadManagerModule.tplTagBlur()"></div><div class="step-tags-pop" id="tpl-tags-pop"></div></div><span class="step-vars__hint">Etiqueta libre para organizar y filtrar tu biblioteca. No limita en qué secuencia puedes usarla.</span></label>
-        <label class="fin-cfg-field fin-pi-full" id="tpl-asunto-wrap"><span class="fin-cfg-lbl" id="tpl-asunto-lbl">Asunto</span><input class="form-input" id="tpl-asunto" value="${t?.asunto ? esc(t.asunto) : ''}" placeholder="Asunto del email"></label>
+        <label class="fin-cfg-field fin-pi-full" id="tpl-asunto-wrap"><span class="fin-cfg-lbl" id="tpl-asunto-lbl">Asunto</span><input class="form-input" id="tpl-asunto" value="${t?.asunto ? esc(t.asunto) : ''}" placeholder="Asunto del email — puedes usar variables, ej. Consulta sobre {{company}}">
+          ${_varSelectHtml('tplInsertVarAsunto')}
+          <span class="step-vars__hint">Puedes personalizar el asunto con variables ({{first_name}}, {{company}}…) — se reemplazan al enviar.</span></label>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl" id="tpl-cuerpo-lbl">Mensaje / cuerpo</span><textarea class="form-input" id="tpl-cuerpo" rows="6" placeholder="Ej. Hola {{first_name}}, vi que eres {{title}} en {{company}}…">${t ? esc(t.cuerpo) : ''}</textarea>
           ${_varSelectHtml('tplInsertVar')}
           <span class="step-vars__hint">Las variables se reemplazan por los datos del contacto al hacer la tarea.</span></label>
@@ -18816,7 +18828,7 @@ ${foot}
     const vars = single ? d.variants.slice(0, 1) : d.variants;
     const varsHtml = vars.map((v, i) => {
       const head = single ? '' : `<div class="step-var-hd"><input class="step-var-nm" value="${esc(v.nombre || String.fromCharCode(65 + i))}" data-i="${i}" placeholder="Nombre"><span class="step-var-sp"></span>${tplOpts ? tplOpts.replace('IDX', i) : ''}${d.variants.length > 1 ? `<button type="button" class="flt-del" onclick="LeadManagerModule.stepDelVariant(${i})" title="Quitar variante">✕</button>` : ''}</div>`;
-      const asunto = usesSubject ? `<label class="step-var-subjwrap"><span class="step-var-subjlbl">Asunto</span><input class="form-input step-var-asunto" data-i="${i}" placeholder="Ej. Quick question about {{company}}" value="${esc(v.asunto || '')}" oninput="LeadManagerModule.stepVarEdit(${i})"></label>` : '';
+      const asunto = usesSubject ? `<label class="step-var-subjwrap"><span class="step-var-subjlbl">Asunto <span style="color:#918C85;font-weight:400;font-size:.72rem">— acepta variables</span></span><input class="form-input step-var-asunto" id="step-var-asu-${i}" data-i="${i}" placeholder="Ej. Consulta sobre {{company}}" value="${esc(v.asunto || '')}" oninput="LeadManagerModule.stepVarEdit(${i})" onfocus="LeadManagerModule.stepFocusTa('step-var-asu-${i}')"></label>` : '';
       const targets = (!single && d.mode === 'segment') ? _stepTargetsHtml(i) : '';
       const link = v.tplId ? `<span class="step-var-link" id="step-var-link-${i}" title="Vinculada a la plantilla — se actualiza sola. Editar el texto la desvincula.">🔗 ${esc(_tplName(v.tplId))} · en vivo</span>` : '';
       return `<div class="step-var-box">${head}${link}${asunto}<textarea class="form-input step-var-ta" id="step-var-${i}" data-i="${i}" rows="${single ? 4 : 3}" placeholder="Ej. Hola {{first_name}}…" onfocus="LeadManagerModule.stepFocusTa('step-var-${i}')" oninput="LeadManagerModule.stepVarEdit(${i})">${esc(v.cuerpo || '')}</textarea>${targets}</div>`;

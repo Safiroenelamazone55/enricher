@@ -286,8 +286,10 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback) {
     // A/B: elegir variante (misma regla que el frontend) y registrarla para medir conversión.
     const variant = pickVariant(step, enr);
     const multi = stepVariants(step).length > 1;
-    // Asunto: el de la variante > el asunto propio del paso > el título (compat con pasos viejos).
-    asunto    = renderTemplate((variant && variant.asunto) || step.asunto || step.titulo, enr) || `(${enr.seq_nombre} — paso ${enr.paso})`;
+    // Asunto: el de la variante > el asunto propio del paso > default con variable.
+    // NUNCA usar step.titulo (nombre INTERNO del paso, a menudo el nombre de la
+    // plantilla — se ve horrible como subject y era el bug reportado por Jenny).
+    asunto    = renderTemplate((variant && variant.asunto) || step.asunto || 'Seguimiento — {{company}}', enr) || `Seguimiento — ${enr.company_nombre || enr.empresa_nombre || enr.nombre || enr.email}`;
     cuerpoTxt = renderTemplate((variant && variant.cuerpo) || step.plantilla, enr);
     variantName = multi ? String(variant.nombre || 'A') : '';
   }
@@ -633,7 +635,11 @@ async function _draftPreapproved(pool) {
       } else {
         const variant = pickVariant(step, enr);
         const multi = stepVariants(step).length > 1;
-        asunto = renderTemplate((variant && variant.asunto) || step.asunto || step.titulo, enr) || `(${enr.seq_nombre} — paso ${enr.paso})`;
+        // Fallback del asunto: nunca usar step.titulo (que es el nombre INTERNO
+        // del paso — a menudo el nombre de una plantilla, se ve horrible como
+        // subject). Preferir variant.asunto → step.asunto → default neutral con
+        // variable de empresa/contacto para que al menos personalice.
+        asunto = renderTemplate((variant && variant.asunto) || step.asunto || 'Seguimiento — {{company}}', enr) || `Seguimiento — ${enr.company_nombre || enr.empresa_nombre || enr.nombre || enr.email}`;
         cuerpoTxt = renderTemplate((variant && variant.cuerpo) || step.plantilla, enr);
         variantName = multi ? String(variant.nombre || 'A') : '';
       }
