@@ -5230,7 +5230,38 @@ app.put('/api/sequence-steps/:id', requireAuth, async (req, res) => {
       UPDATE sequence_steps SET dia=$1,canal=$2,titulo=$3,plantilla=$4,variants=$5,variant_mode=$6,variant_field=$7,orden=$8,hora=$9,cond=$10,accion=$11,asunto=$12,cc_off=$13,reply_to_prev=$14 WHERE id=$15 AND user_id=$16 RETURNING *
     `, [parseInt(b.dia) || 1, canal, b.titulo || '', b.plantilla || '', JSON.stringify(Array.isArray(b.variants) ? b.variants : []), b.variant_mode || 'off', b.variant_field || '', parseInt(b.orden) || 0, _sanHora(b.hora), _sanCond(b.cond), _sanAccion(b.accion), String(b.asunto || '').slice(0, 500), !!b.cc_off, !!b.reply_to_prev, req.params.id, req.workspaceOwnerId]);
     if (!rows.length) return res.status(404).json({ error: 'Paso no encontrado' });
-    res.json(rows[0]);
+
+    // Re-generar los borradores 'awaiting' de este step con la nueva plantilla/asunto.
+    // Los borradores son snapshots del momento en que se crearon: al editar el paso,
+    // los que aún no se han enviado deben tomar el texto nuevo (y sus variables se
+    // re-resuelven por contacto). Los 'approved' NO se tocan (ya fueron revisados).
+    let refreshed = 0;
+    if (canal === 'email') {
+      try {
+        const st = rows[0];
+        const { renderTemplate, pickVariant } = require('./services/sendEngine');
+        const { rows: drafts } = await pool.query(`
+          SELECT m.id, m.contact_id,
+                 k.nombre, k.apellido, k.email, k.cargo, k.empresa_nombre, k.ciudad, k.pais,
+                 k.seniority, k.departamento, k.buyer_role, k.region, k.contact_priority,
+                 co.nombre AS company_nombre
+            FROM lm_messages m
+            JOIN lm_contacts k ON k.id=m.contact_id
+            LEFT JOIN lm_companies co ON co.id=k.company_id
+           WHERE m.step_id=$1 AND m.user_id=$2 AND m.estado='awaiting'`,
+          [st.id, req.workspaceOwnerId]);
+        for (const d of drafts) {
+          const ctx = d; // renderTemplate lee k.* / company_nombre desde ctx
+          const variant = pickVariant(st, ctx);
+          const asu = renderTemplate((variant && variant.asunto) || st.asunto || 'Seguimiento — {{company}}', ctx)
+                    || `Seguimiento — ${ctx.company_nombre || ctx.empresa_nombre || ctx.nombre}`;
+          const cue = renderTemplate((variant && variant.cuerpo) || st.plantilla, ctx);
+          await pool.query(`UPDATE lm_messages SET asunto=$1, cuerpo=$2 WHERE id=$3`, [asu, cue, d.id]);
+          refreshed++;
+        }
+      } catch (e) { console.warn('[step] refresh drafts warn:', e.message); }
+    }
+    res.json({ ...rows[0], drafts_refreshed: refreshed });
   } catch (err) { console.error('[step] PUT error:', err.message); res.status(500).json({ error: 'Error al actualizar paso' }); }
 });
 app.delete('/api/sequence-steps/:id', requireAuth, async (req, res) => {
