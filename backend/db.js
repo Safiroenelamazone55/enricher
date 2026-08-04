@@ -1203,6 +1203,11 @@ async function initDb() {
     await pool.query(`ALTER TABLE lm_mailboxes ADD COLUMN IF NOT EXISTS oauth_expires_at TIMESTAMPTZ;`);
     await pool.query(`ALTER TABLE lm_mailboxes ADD COLUMN IF NOT EXISTS oauth_scopes     TEXT NOT NULL DEFAULT '';`);
     await pool.query(`ALTER TABLE lm_mailboxes ADD COLUMN IF NOT EXISTS oauth_tenant_id  TEXT NOT NULL DEFAULT '';`);
+    // Firma HTML por buzón (independiente por cliente). Acepta el HTML tal cual
+    // (con <img base64>, <a>, estilos inline, etc.). Si está vacío, el motor cae
+    // a lm_send_settings.firma del user (comportamiento previo). Se edita desde
+    // la tarjeta del buzón en el detalle del cliente outbound.
+    await pool.query(`ALTER TABLE lm_mailboxes ADD COLUMN IF NOT EXISTS signature_html TEXT NOT NULL DEFAULT '';`);
     // Solicitud de admin consent: si el tenant del cliente exige aprobación del admin
     // (AADSTS65001 en el OAuth), el buzón queda marcado y la UI ofrece enviarle un
     // correo al admin con el link de admin-consent listo. El timestamp evita spam.

@@ -323,11 +323,6 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback) {
     return false;
   }
 
-  const html = buildHtml({
-    text: cuerpoTxt, firma: cfg.firma, trackToken: token, apiBase,
-    trackOpens: cfg.track_opens, trackClicks: cfg.track_clicks,
-  });
-
   // ── Buzón del cliente (F2): si la secuencia pertenece a un cliente con buzón
   // conectado, el envío sale por SU buzón (SMTP). Sin buzón → Gmail del workspace.
   const { rows: [mbx] } = await pool.query(
@@ -338,6 +333,15 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback) {
      LIMIT 1`,
     [enr.sequence_id, uid]
   );
+
+  // Firma: la del buzón (si el cliente puso una) pisa a la global del user.
+  // Así cada cliente tiene su propia firma personalizada.
+  const firmaEfectiva = (mbx && mbx.signature_html) ? mbx.signature_html : cfg.firma;
+
+  const html = buildHtml({
+    text: cuerpoTxt, firma: firmaEfectiva, trackToken: token, apiBase,
+    trackOpens: cfg.track_opens, trackClicks: cfg.track_clicks,
+  });
 
   // Reply threading: si el paso pide encadenar (reply_to_prev), buscar el último
   // smtp_message_id del contacto en esta secuencia y prefijar "Re: " al asunto si
@@ -371,7 +375,7 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback) {
       const auth = await getMailboxAuth(pool, mbx);
       const sent = await sendFromMailbox(mbx, auth, {
         to: enr.email, subject: asunto, html,
-        text: cuerpoTxt + (cfg.firma ? `\n\n${cfg.firma.replace(/<[^>]+>/g, '')}` : ''),
+        text: cuerpoTxt + (firmaEfectiva ? `\n\n${String(firmaEfectiva).replace(/<[^>]+>/g, '')}` : ''),
         fromName: cfg.from_name,
         cc: (!step.cc_off && mbx.cc_email) || undefined,  // CC del cliente, salvo que el paso lo desactive
         inReplyTo: inReplyTo || undefined,
@@ -499,6 +503,7 @@ async function _flushApproved(pool, apiBase) {
            mb.id AS mb_ok, mb.email AS mb_email, mb.pass_enc, mb.smtp_host, mb.smtp_port, mb.smtp_secure,
            mb.imap_host, mb.imap_port, mb.provider, mb.sent_folder, mb.estado AS mb_estado,
            mb.auth_method, mb.oauth_provider, mb.oauth_access_enc, mb.oauth_refresh_enc, mb.oauth_expires_at,
+           mb.signature_html AS mb_signature,
            cfg.from_name, cfg.firma, cfg.track_opens, cfg.track_clicks,
            cfg.window_start, cfg.window_end, cfg.send_weekends, cfg.timezone,
            s.send_days,
@@ -541,8 +546,10 @@ async function _flushApproved(pool, apiBase) {
       }
       if (!m.mb_ok || !['conectado', 'solo_envio'].includes(m.mb_estado)) throw new Error('El buzón ya no está conectado');
       const { sendFromMailbox, getMailboxAuth } = require('./mailboxService');
+      // Firma: la del buzón pisa a la del user (misma regla que el auto-sender).
+      const firmaEfectiva = m.mb_signature || m.firma;
       const html = buildHtml({
-        text: m.cuerpo, firma: m.firma, trackToken: m.track_token, apiBase,
+        text: m.cuerpo, firma: firmaEfectiva, trackToken: m.track_token, apiBase,
         trackOpens: !!apiBase && m.track_opens, trackClicks: !!apiBase && m.track_clicks,
       });
       const mb = { id: m.mb_ok, email: m.mb_email, pass_enc: m.pass_enc, smtp_host: m.smtp_host, smtp_port: m.smtp_port,
@@ -568,7 +575,7 @@ async function _flushApproved(pool, apiBase) {
       }
       const sent = await sendFromMailbox(mb, auth, {
         to: m.to_email, subject, html,
-        text: m.cuerpo + (m.firma ? `\n\n${String(m.firma).replace(/<[^>]+>/g, '')}` : ''),
+        text: m.cuerpo + (firmaEfectiva ? `\n\n${String(firmaEfectiva).replace(/<[^>]+>/g, '')}` : ''),
         fromName: m.from_name || undefined,
         cc: (!m.cc_off && m.cc_email) || undefined,  // CC del cliente, salvo que el paso lo desactive
         inReplyTo: inReplyTo || undefined,

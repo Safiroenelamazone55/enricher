@@ -3771,6 +3771,22 @@ app.post('/api/lm/mailboxes/:id/test', requireAuth, async (req, res) => {
     res.json({ ...t, estado, sent });
   } catch (err) { console.error('[mailbox] TEST', err.message); res.status(500).json({ error: 'Error al probar el buzón' }); }
 });
+// Firma HTML por buzón (independiente por cliente outbound). Reemplaza la
+// firma global del user cuando este buzón envía. Guarda tal cual el HTML —
+// puede llevar <img base64>, links, estilos inline. Límite generoso (512KB)
+// para acomodar imágenes base64 típicas de firma.
+app.put('/api/lm/mailboxes/:id/signature', requireAuth, async (req, res) => {
+  try {
+    const html = String((req.body || {}).signature_html || '');
+    if (html.length > 524288) return res.status(400).json({ error: 'La firma pesa más de 512KB — reduce el tamaño de la imagen (usa una URL en vez de base64, o comprímela).' });
+    const { rowCount } = await pool.query(
+      `UPDATE lm_mailboxes SET signature_html=$1 WHERE id=$2 AND user_id=$3`,
+      [html, req.params.id, req.workspaceOwnerId]);
+    if (!rowCount) return res.status(404).json({ error: 'Buzón no encontrado' });
+    res.json({ ok: true, length: html.length });
+  } catch (err) { console.error('[mailbox] signature PUT', err.message); res.status(500).json({ error: 'Error al guardar la firma' }); }
+});
+
 app.delete('/api/lm/mailboxes/:id', requireAuth, async (req, res) => {
   try {
     const { rowCount } = await pool.query(`DELETE FROM lm_mailboxes WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId]);

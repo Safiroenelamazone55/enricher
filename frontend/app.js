@@ -17003,6 +17003,7 @@ ${foot}
            <div class="mbx-acts">
              ${!needsConsent ? `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.mbTest(${mb.id})">Probar envío</button>` : ''}
              <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.mbOpen(${c.id})">Cambiar</button>
+             <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.mbSignatureOpen(${mb.id})" title="Editar la firma HTML de este buzón">✎ Firma${mb.signature_html ? ' <span style=\"color:#15803D\">●</span>' : ''}</button>
              ${mb.provider === 'microsoft' && !needsConsent ? `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.mbAdminConsentQuick(${c.id})" title="Si Microsoft pidió aprobación del admin del tenant">📧 Pedir consent al admin</button>` : ''}
              <button class="btn btn--ghost btn--sm" style="color:var(--danger)" onclick="LeadManagerModule.mbDelete(${mb.id})">Quitar</button>
            </div>`
@@ -17140,6 +17141,112 @@ ${foot}
         }
       }
     }, 800);
+  }
+
+  // ── Firma HTML por buzón — editor con vista previa en vivo + insertar imagen ──
+  async function mbSignatureOpen(mbId) {
+    const mb = (_mailboxes || []).find(x => x.id === mbId);
+    if (!mb) return;
+    document.getElementById('mbx-sig-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'mbx-sig-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = ev => { if (ev.target === m) m.remove(); };
+    m.innerHTML = `<div class="fin-pi-box dle-box" style="max-width:940px;width:96vw;max-height:90vh;display:flex;flex-direction:column;padding:0">
+      <div class="dle-hd" style="flex:0 0 auto;padding:18px 22px;border-bottom:1px solid #E5E4E1">
+        <div style="flex:1;min-width:0">
+          <div class="dle-hd__t">✎ Firma del buzón · ${esc(mb.email)}</div>
+          <div class="dle-hd__s">Esta firma se añade automáticamente al final de cada correo que salga por este buzón. Pisa a la firma global. Acepta HTML completo (imagen base64, links, estilos inline).</div>
+        </div>
+        <button class="fin-pi-x" onclick="document.getElementById('mbx-sig-modal').remove()">✕</button>
+      </div>
+      <div style="flex:1 1 auto;overflow-y:auto;padding:18px 22px">
+        <div class="dle-grid">
+          <div class="dle-f dle-f--full">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+              <span class="dle-l" style="margin:0">HTML de la firma</span>
+              <div style="display:flex;gap:6px">
+                <label class="btn btn--ghost btn--sm" style="font-size:.72rem;cursor:pointer;margin:0">
+                  🖼 Subir imagen
+                  <input type="file" id="mbx-sig-img" accept="image/*" style="display:none" onchange="LeadManagerModule.mbSignatureImg(event)">
+                </label>
+                <button type="button" class="btn btn--ghost btn--sm" style="font-size:.72rem" onclick="LeadManagerModule.mbSignatureInsertLink()">🔗 Insertar link</button>
+                <button type="button" class="btn btn--ghost btn--sm" style="font-size:.72rem" onclick="LeadManagerModule.mbSignatureClear()">Vaciar</button>
+              </div>
+            </div>
+            <textarea id="mbx-sig-html" rows="10" style="width:100%;padding:10px 12px;border:1px solid #E5E4E1;border-radius:8px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.78rem;box-sizing:border-box" oninput="LeadManagerModule.mbSignaturePreview()" placeholder="Pega aquí tu HTML de firma. Ej.:&#10;&#10;&lt;p style=&quot;font-family:Arial;font-size:13px;color:#333&quot;&gt;&#10;  Saludos,&lt;br&gt;&#10;  &lt;b&gt;Jenny Obregón&lt;/b&gt; · CEO&lt;br&gt;&#10;  &lt;a href=&quot;https://novacentrax.com&quot;&gt;novacentrax.com&lt;/a&gt;&#10;&lt;/p&gt;">${esc(mb.signature_html || '')}</textarea>
+            <div style="margin-top:4px;color:#918C85;font-size:.72rem" id="mbx-sig-size">${mb.signature_html ? (mb.signature_html.length / 1024).toFixed(1) + ' KB' : 'Vacía'}</div>
+          </div>
+          <div class="dle-f dle-f--full">
+            <span class="dle-l">Vista previa (así lo verá el destinatario, después del cuerpo del correo)</span>
+            <div id="mbx-sig-prev" style="background:#fff;border:1px solid #E5E4E1;border-radius:8px;padding:16px 18px;min-height:100px;max-height:280px;overflow-y:auto;font-family:Arial,Helvetica,sans-serif">${mb.signature_html || '<div style="color:#B4AFA8;font-style:italic">— sin firma —</div>'}</div>
+          </div>
+          <div class="dle-f dle-f--full" id="mbx-sig-err" style="display:none;color:var(--danger);font-size:.82rem"></div>
+        </div>
+      </div>
+      <div class="dle-foot" style="flex:0 0 auto;padding:14px 22px;border-top:1px solid #E5E4E1;background:#FAF8F5;border-radius:0 0 12px 12px">
+        <span class="sp"></span>
+        <button class="btn btn--ghost btn--sm" onclick="document.getElementById('mbx-sig-modal').remove()">Cancelar</button>
+        <button class="btn btn--primary btn--sm" id="mbx-sig-save" onclick="LeadManagerModule.mbSignatureSave(${mbId})">Guardar firma</button>
+      </div>
+    </div>`;
+    document.body.appendChild(m);
+    setTimeout(() => $('mbx-sig-html')?.focus(), 60);
+  }
+  function mbSignaturePreview() {
+    const ta = $('mbx-sig-html'), prev = $('mbx-sig-prev'), size = $('mbx-sig-size');
+    if (prev) prev.innerHTML = ta.value || '<div style="color:#B4AFA8;font-style:italic">— sin firma —</div>';
+    if (size) size.textContent = ta.value ? (ta.value.length / 1024).toFixed(1) + ' KB' : 'Vacía';
+  }
+  function mbSignatureClear() {
+    const ta = $('mbx-sig-html'); if (ta) { ta.value = ''; mbSignaturePreview(); ta.focus(); }
+  }
+  function mbSignatureInsertLink() {
+    const url = prompt('URL del link:'); if (!url) return;
+    const text = prompt('Texto del link:', url) || url;
+    const ta = $('mbx-sig-html'); if (!ta) return;
+    const ins = `<a href="${url.replace(/"/g, '&quot;')}" style="color:#0062CC;text-decoration:none">${text.replace(/</g, '&lt;')}</a>`;
+    const s = ta.selectionStart || 0, e = ta.selectionEnd || 0;
+    ta.value = ta.value.slice(0, s) + ins + ta.value.slice(e);
+    ta.focus(); const pos = s + ins.length; ta.setSelectionRange(pos, pos);
+    mbSignaturePreview();
+  }
+  // Sube la imagen como base64 → <img src="data:..."> se inserta en el textarea.
+  // Aviso si pesa >300KB porque cada correo llevará esa imagen embebida.
+  function mbSignatureImg(ev) {
+    const f = ev.target.files && ev.target.files[0]; if (!f) return;
+    if (f.size > 300 * 1024) {
+      if (!confirm(`La imagen pesa ${(f.size/1024).toFixed(0)} KB. Cada correo llevará esa imagen embebida. ¿Continuar?`)) { ev.target.value = ''; return; }
+    }
+    const r = new FileReader();
+    r.onload = () => {
+      const dataUrl = String(r.result);
+      const ta = $('mbx-sig-html'); if (!ta) return;
+      const ins = `<img src="${dataUrl}" alt="firma" style="max-width:180px;height:auto;display:block">`;
+      const s = ta.selectionStart || 0, e = ta.selectionEnd || 0;
+      ta.value = ta.value.slice(0, s) + ins + ta.value.slice(e);
+      ta.focus(); const pos = s + ins.length; ta.setSelectionRange(pos, pos);
+      mbSignaturePreview();
+      ev.target.value = ''; // reset para poder subir otra vez el mismo archivo
+    };
+    r.readAsDataURL(f);
+  }
+  async function mbSignatureSave(mbId) {
+    const html = ($('mbx-sig-html')?.value || '');
+    const err = $('mbx-sig-err');
+    const btn = $('mbx-sig-save'); if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+    try {
+      const r = await apiFetch(`${API}/lm/mailboxes/${mbId}/signature`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ signature_html: html })
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Error');
+      document.getElementById('mbx-sig-modal').remove();
+      await _mbReload();
+      showBanner(`✓ Firma guardada${html ? ` (${(html.length/1024).toFixed(1)} KB)` : ' — vacía, se usará la firma global si la hay'}`, 'success');
+    } catch (e) {
+      if (err) { err.textContent = e.message; err.style.display = ''; }
+      if (btn) { btn.disabled = false; btn.textContent = 'Guardar firma'; }
+    }
   }
 
   // Atajo desde la tarjeta del buzón: marca el buzón como needs_admin_consent y
@@ -20995,6 +21102,7 @@ ${foot}
     seqRunSetCanal, seqTaskSetDue,
     mbOpen, mbClose, mbSave, mbTest, mbDelete, mbProv, mbOAuthStart,
     mbAdminConsentOpen, mbAdminConsentLang, mbAdminConsentSend, mbAdminConsentQuick,
+    mbSignatureOpen, mbSignaturePreview, mbSignatureClear, mbSignatureInsertLink, mbSignatureImg, mbSignatureSave,
     mbAdminConsentSync, mbAdminConsentToggleHtml,
     mbAdminConsentSetSigner, mbAdminConsentAddChip, mbAdminConsentRmChip, mbAdminConsentInputKey, mbAdminConsentClearRecipients,
     ibOpen, ibTab, ibCli, ibSend, ibSchedToggle, ibSchedPick, ibCancelSched,
