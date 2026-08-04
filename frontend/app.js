@@ -15212,8 +15212,13 @@ ${foot}
   async function _lmSetDispositionCore(cid, disp, seqId, nota) {
     const res = await apiFetch(`${API}/lm/contacts/${cid}/disposition`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ disposition: disp, sequence_id: seqId || null, nota: nota || '' }) });
     if (!res.ok) throw new Error((await res.json()).error || 'Error');
-    _reloadActivities();
-    return await res.json();
+    const out = await res.json();
+    // Bloque A: centralizar aquí el refresh de _contacts + _activities SIEMPRE tras
+    // un cambio exitoso, no importa desde qué flujo se haya llamado (task-runner,
+    // ficha, Pendientes de aceptación, botones inline). Await para que los renders
+    // posteriores usen datos ya frescos y no muestren estado optimista viejo.
+    await Promise.all([_reloadContacts(), _reloadActivities()]);
+    return out;
   }
   async function _reloadActivities() {
     try { const r = await apiFetch(`${API}/activities`); if (r && r.ok) { const a = await r.json(); if (Array.isArray(a)) { _activities = a; if (_section === 'leads') _ldPaint(); } } } catch {}

@@ -3419,6 +3419,18 @@ const LM_STAGE_BY_DISP = {
 // Disposiciones que sacan al contacto de la cola activa (pausan su secuencia).
 const LM_DISP_EXIT = ['reunion', 'mas_adelante', 'derivado', 'no_es_persona', 'no_interesado', 'no_califica', 'no_contactar'];
 
+// ── Estabilización del núcleo de secuencias (v2, Bloque A+B) ──────────────────
+// Separación estricta:
+//   respondio  → SIEMPRE pausa el enrolamiento activo (paused_reason='reply_received').
+//                Crea UNA sola tarea "revisar_respuesta" pendiente (idempotente).
+//                NO re-enruta automáticamente por cond='replied' — decisión humana.
+//   aceptado   → NO pausa. Registra la aceptación. Re-enruta al primer paso replied
+//                del canal principal (cuando existe) para continuar por LinkedIn.
+//                No crea tarea de "revisar respuesta" (no es una respuesta real).
+//   exit disp  → pausa por 'disposition_<X>' (no_interesado, no_contactar, …).
+//
+// Idempotencia: cada acción secundaria verifica su equivalente antes de crear.
+// yaDisparo se aplica solo al re-enrutado de aceptado (evita saltar dos veces).
 app.post('/api/lm/contacts/:id/disposition', requireAuth, async (req, res) => {
   const uid = req.workspaceOwnerId, cid = req.params.id;
   const disp = _lmS((req.body || {}).disposition);
@@ -3429,75 +3441,247 @@ app.post('/api/lm/contacts/:id/disposition', requireAuth, async (req, res) => {
     if (!before.rowCount) return res.status(404).json({ error: 'Contacto no encontrado' });
     const oldDisp = before.rows[0].disposition || '';
     const obcId = before.rows[0].outbound_client_id || null;
+
+    // Idempotencia clave: si el estado no cambió y no viene una nota nueva,
+    // no ejecutamos efectos secundarios — solo tocamos updated_at.
+    const noChange = disp === oldDisp;
+    if (noChange && !nota) {
+      await pool.query(`UPDATE lm_contacts SET updated_at=NOW() WHERE id=$1 AND user_id=$2`, [cid, uid]);
+      return res.json({ ok: true, disposition: disp, paused: 0, rerouted: 0, stage: null, no_change: true });
+    }
+
     await pool.query(`UPDATE lm_contacts SET disposition=$1, updated_at=NOW() WHERE id=$2 AND user_id=$3`, [disp, cid, uid]);
 
-    let paused = 0, rerouted = 0;
-    // El re-enrutado a Ruta A es el mismo evento tanto si aceptó la conexión de LinkedIn
-    // como si respondió: ambos son "hubo señal, sáltate a la rama de seguimiento". Se
-    // dispara la PRIMERA vez que pasa cualquiera de las dos (no de nuevo si ya había aceptado).
-    const yaDisparo = ['respondio', 'aceptado'].includes(oldDisp);
-    if (['respondio', 'aceptado'].includes(disp) && !yaDisparo) {
-      // Fase 2 — aceptó/respondió por PRIMERA vez: si la secuencia ramifica (tiene algún paso
-      // cond='replied'), RE-ENRUTA a la Ruta A (primer paso 'replied') fechando desde hoy — aunque
-      // ya estuviera en la Ruta B (rescata pausados). Si no ramifica, pausa como siempre.
-      const seqs = seqId
-        ? [seqId]
-        : (await pool.query(`SELECT sequence_id FROM lm_contact_sequences WHERE user_id=$1 AND contact_id=$2 AND estado IN ('activo','pausado')`, [uid, cid])).rows.map(r => r.sequence_id);
-      for (const sq of seqs) {
-        // Traer también preferred_channel de la secuencia y el canal de cada paso.
-        const { rows: sqRow } = await pool.query(`SELECT preferred_channel, nombre FROM sequences WHERE id=$1 AND user_id=$2`, [sq, uid]);
-        const pref = (sqRow[0]?.preferred_channel) || '';
-        const seqName = sqRow[0]?.nombre || `#${sq}`;
-        const steps = (await pool.query(`SELECT id, cond, canal, titulo FROM sequence_steps WHERE sequence_id=$1 AND user_id=$2 ORDER BY dia ASC, orden ASC, id ASC`, [sq, uid])).rows;
-        // Buscar paso replied: si hay canal preferido, priorizarlo; fallback al
-        // primer replied sin importar canal (comportamiento previo).
-        let fr = -1;
-        if (pref) fr = steps.findIndex(s => (s.cond || '') === 'replied' && s.canal === pref);
-        if (fr < 0) fr = steps.findIndex(s => (s.cond || '') === 'replied');
-        // Paso anterior para el trazo (dónde estaba el contacto antes del salto).
-        const { rows: prevRow } = await pool.query(`SELECT paso FROM lm_contact_sequences WHERE user_id=$1 AND contact_id=$2 AND sequence_id=$3`, [uid, cid, sq]);
-        const pasoPrev = prevRow[0]?.paso || null;
-        if (fr >= 0) {
-          const r = await pool.query(`UPDATE lm_contact_sequences SET paso=$1, paso_date=CURRENT_DATE, estado='activo', paused_reason='' WHERE user_id=$2 AND contact_id=$3 AND sequence_id=$4 AND estado IN ('activo','pausado')`, [fr + 1, uid, cid, sq]);
-          rerouted += r.rowCount;
-          if (r.rowCount) {
-            const stTarget = steps[fr];
-            const causa = disp === 'aceptado' ? 'aceptó la conexión de LinkedIn' : 'respondió';
-            const canalStr = stTarget.canal.charAt(0).toUpperCase() + stTarget.canal.slice(1);
-            const nota = `🔀 Re-enrutado en la secuencia "${seqName}"${pasoPrev ? ` del paso ${pasoPrev}` : ''} al paso ${fr + 1} (${canalStr}${stTarget.titulo ? ' — ' + String(stTarget.titulo).slice(0, 60) : ''}) porque el contacto ${causa}${pref ? ` · canal preferido: ${pref}` : ''}.`;
-            await pool.query(
-              `INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, nota, fecha, estado)
-               VALUES ($1,$2,$3,'reruta',$4,NOW(),'hecha')`,
-              [uid, cid, obcId, nota]).catch(() => {});
+    let paused = 0, rerouted = 0, review_task_id = null;
+
+    // Registrar el CAMBIO de disposition (solo cuando hay transición real).
+    if (disp !== oldDisp) {
+      await pool.query(
+        `INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, nota, fecha, estado)
+         VALUES ($1,$2,$3,'disposition_change',$4,NOW(),'hecha')`,
+        [uid, cid, obcId,
+         `Estado: ${LM_DISP_LBL[oldDisp] || oldDisp || '(sin estado)'} → ${LM_DISP_LBL[disp] || disp || '(sin estado)'}`]
+      ).catch(() => {});
+    }
+
+    // ── RESPONDIO (real o marcado a mano): pausar siempre + crear tarea de revisión ──
+    if (disp === 'respondio') {
+      // 1. Pausar TODOS los enrolamientos activos con paused_reason claro.
+      const rp = seqId
+        ? await pool.query(`UPDATE lm_contact_sequences SET estado='pausado', paused_reason='reply_received' WHERE user_id=$1 AND contact_id=$2 AND sequence_id=$3 AND estado='activo'`, [uid, cid, seqId])
+        : await pool.query(`UPDATE lm_contact_sequences SET estado='pausado', paused_reason='reply_received' WHERE user_id=$1 AND contact_id=$2 AND estado='activo'`, [uid, cid]);
+      paused = rp.rowCount;
+      if (paused > 0) {
+        await pool.query(
+          `INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, nota, fecha, estado)
+           VALUES ($1,$2,$3,'pausa_secuencia',$4,NOW(),'hecha')`,
+          [uid, cid, obcId, `Secuencia pausada (${paused}) — motivo: respuesta recibida. Requiere decisión humana para reanudar.`]
+        ).catch(() => {});
+      }
+      // 2. Crear UNA tarea de revisión (idempotente).
+      const { rows: existing } = await pool.query(
+        `SELECT id FROM activities WHERE user_id=$1 AND contact_id=$2 AND tipo='revisar_respuesta' AND estado='pendiente' LIMIT 1`,
+        [uid, cid]);
+      if (existing.length) {
+        review_task_id = existing[0].id;
+      } else {
+        const ins = await pool.query(
+          `INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, canal, nota, fecha, estado)
+           VALUES ($1,$2,$3,'revisar_respuesta','email',$4,NOW(),'pendiente') RETURNING id`,
+          [uid, cid, obcId, `Revisar respuesta del contacto${nota ? ' — ' + nota : ''}`]);
+        review_task_id = ins.rows[0].id;
+      }
+    }
+    // ── ACEPTADO (LinkedIn accepted): NO pausa. Re-enruta al canal principal si hay ──
+    else if (disp === 'aceptado') {
+      // yaDisparo solo aplica AQUÍ (para no re-enrutar dos veces si ya se aceptó antes).
+      if (oldDisp !== 'aceptado') {
+        const seqs = seqId
+          ? [seqId]
+          : (await pool.query(`SELECT sequence_id FROM lm_contact_sequences WHERE user_id=$1 AND contact_id=$2 AND estado IN ('activo','pausado')`, [uid, cid])).rows.map(r => r.sequence_id);
+        for (const sq of seqs) {
+          const { rows: sqRow } = await pool.query(`SELECT preferred_channel, nombre FROM sequences WHERE id=$1 AND user_id=$2`, [sq, uid]);
+          const pref = (sqRow[0]?.preferred_channel) || '';
+          const seqName = sqRow[0]?.nombre || `#${sq}`;
+          const steps = (await pool.query(`SELECT id, cond, canal, titulo FROM sequence_steps WHERE sequence_id=$1 AND user_id=$2 ORDER BY dia ASC, orden ASC, id ASC`, [sq, uid])).rows;
+          // Prioriza canal preferido; fallback a primer replied de cualquier canal.
+          let fr = -1;
+          if (pref) fr = steps.findIndex(s => (s.cond || '') === 'replied' && s.canal === pref);
+          if (fr < 0) fr = steps.findIndex(s => (s.cond || '') === 'replied');
+          const { rows: prevRow } = await pool.query(`SELECT paso, estado FROM lm_contact_sequences WHERE user_id=$1 AND contact_id=$2 AND sequence_id=$3`, [uid, cid, sq]);
+          const pasoPrev = prevRow[0]?.paso || null;
+          const estadoPrev = prevRow[0]?.estado || null;
+          if (fr >= 0 && (pasoPrev == null || fr + 1 > pasoPrev)) {
+            // Solo re-enrutar HACIA ADELANTE (nunca "atrás" a pasos ya ejecutados).
+            const r = await pool.query(`UPDATE lm_contact_sequences SET paso=$1, paso_date=CURRENT_DATE, estado='activo', paused_reason='' WHERE user_id=$2 AND contact_id=$3 AND sequence_id=$4 AND estado IN ('activo','pausado')`, [fr + 1, uid, cid, sq]);
+            rerouted += r.rowCount;
+            if (r.rowCount) {
+              const stTarget = steps[fr];
+              const canalStr = stTarget.canal.charAt(0).toUpperCase() + stTarget.canal.slice(1);
+              await pool.query(
+                `INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, nota, fecha, estado)
+                 VALUES ($1,$2,$3,'reruta',$4,NOW(),'hecha')`,
+                [uid, cid, obcId,
+                 `🔀 Re-enrutado en "${seqName}"${pasoPrev ? ` del paso ${pasoPrev}` : ''} al paso ${fr + 1} (${canalStr}${stTarget.titulo ? ' — ' + String(stTarget.titulo).slice(0, 60) : ''}) porque el contacto aceptó la conexión de LinkedIn${pref ? ` · canal preferido: ${pref}` : ''}.`]
+              ).catch(() => {});
+            }
           }
-        } else {
-          const r = await pool.query(`UPDATE lm_contact_sequences SET estado='pausado' WHERE user_id=$1 AND contact_id=$2 AND sequence_id=$3 AND estado='activo'`, [uid, cid, sq]);
-          paused += r.rowCount;
         }
       }
-    } else if (LM_DISP_EXIT.includes(disp)) {
-      // Todo lo que saca al contacto de la cola activa pausa su(s) secuencia(s): si viene
-      // sequence_id solo esa, si no, todas (marcar desde Leads no lleva secuencia).
-      const r = seqId
+    }
+    // ── EXIT dispositions (no_interesado, no_contactar, etc.): pausar ──────────
+    else if (LM_DISP_EXIT.includes(disp)) {
+      const rp = seqId
         ? await pool.query(`UPDATE lm_contact_sequences SET estado='pausado', paused_reason=$4 WHERE user_id=$1 AND contact_id=$2 AND sequence_id=$3 AND estado='activo'`, [uid, cid, seqId, 'disposition_' + disp])
         : await pool.query(`UPDATE lm_contact_sequences SET estado='pausado', paused_reason=$3 WHERE user_id=$1 AND contact_id=$2 AND estado='activo'`, [uid, cid, 'disposition_' + disp]);
-      paused = r.rowCount;
+      paused = rp.rowCount;
+      // Al pasar a un estado terminal (no_interesado etc.), cerrar tarea pendiente
+      // de revisión si existía (ya no requiere decisión — el humano decidió).
+      await pool.query(
+        `UPDATE activities SET estado='hecha' WHERE user_id=$1 AND contact_id=$2 AND tipo='revisar_respuesta' AND estado='pendiente'`,
+        [uid, cid]).catch(() => {});
     }
-    // "Más adelante": guarda cuándo hay que retomarlo (nurturing). Vacío = sin fecha.
+
+    // "Más adelante": guarda cuándo hay que retomarlo (nurturing).
     if (disp === 'mas_adelante') {
       await pool.query(`UPDATE lm_contacts SET nurture_at=$1 WHERE id=$2 AND user_id=$3`,
         [_sanDate((req.body || {}).nurture_at), cid, uid]);
     }
-    if (disp) {
-      await pool.query(`INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, nota, fecha, estado) VALUES ($1,$2,$3,$4,$5,NOW(),'hecha')`,
-        [uid, cid, obcId, LM_DISP_TIPO[disp] || 'nota', `Disposición: ${LM_DISP_LBL[disp] || disp}${nota ? ' — ' + nota : ''}`]);
+
+    // Actividad tipada por disposition (respuesta/reunion/aceptacion/nota) — SOLO
+    // en el primer paso a esa disposition (idempotente por transición). Sin la
+    // guarda se creaba una actividad extra cada vez que se re-guardaba el mismo estado.
+    if (disp && disp !== oldDisp) {
+      await pool.query(
+        `INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, nota, fecha, estado)
+         VALUES ($1,$2,$3,$4,$5,NOW(),'hecha')`,
+        [uid, cid, obcId, LM_DISP_TIPO[disp] || 'nota',
+         `Disposición: ${LM_DISP_LBL[disp] || disp}${nota ? ' — ' + nota : ''}`]);
     }
-    // La disposición alimenta el pipeline (solo hacia adelante). Los derivados NO son
-    // pérdida: la cuenta sigue viva con otra persona, así que no se tocan de etapa.
+    // La disposición alimenta el pipeline (solo hacia adelante).
     const stage = disp ? await _lmAdvanceStage(uid, cid, LM_STAGE_BY_DISP[disp]) : null;
-    res.json({ ok: true, disposition: disp, paused, rerouted, stage });
+    res.json({ ok: true, disposition: disp, paused, rerouted, stage, review_task_id });
   } catch (err) { console.error('[lm-disp]', err.message); res.status(500).json({ error: 'Error al actualizar disposición' }); }
 });
+// ── Reanudar manualmente una secuencia pausada (Bloque B: decisión humana) ─────
+// Solo aplica a enrolamientos pausados. Registra el evento en activities.
+// Opcional body { next_action_at }: si viene, la próxima acción sale en esa fecha;
+// si no, sale ahora. Cierra la tarea de "revisar_respuesta" pendiente asociada.
+app.post('/api/lm/contacts/:id/resume-sequence', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId, cid = parseInt(req.params.id);
+  const seqId = (req.body || {}).sequence_id ? (parseInt(req.body.sequence_id) || null) : null;
+  const nextAt = _sanDate((req.body || {}).next_action_at);
+  const nextIso = nextAt ? new Date(nextAt).toISOString() : null;
+  try {
+    const q = seqId
+      ? await pool.query(
+          `UPDATE lm_contact_sequences SET estado='activo', paused_reason='',
+                  next_action_at=COALESCE($4::timestamptz, NOW())
+            WHERE user_id=$1 AND contact_id=$2 AND sequence_id=$3 AND estado IN ('pausado','respondido')
+          RETURNING sequence_id, paso`,
+          [uid, cid, seqId, nextIso])
+      : await pool.query(
+          `UPDATE lm_contact_sequences SET estado='activo', paused_reason='',
+                  next_action_at=COALESCE($3::timestamptz, NOW())
+            WHERE user_id=$1 AND contact_id=$2 AND estado IN ('pausado','respondido')
+          RETURNING sequence_id, paso`,
+          [uid, cid, nextIso]);
+    const resumed = q.rowCount;
+    if (resumed > 0) {
+      const { rows: [oc] } = await pool.query(`SELECT outbound_client_id FROM lm_contacts WHERE id=$1 AND user_id=$2`, [cid, uid]);
+      await pool.query(
+        `INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, nota, fecha, estado)
+         VALUES ($1,$2,$3,'reanudacion_secuencia',$4,NOW(),'hecha')`,
+        [uid, cid, oc?.outbound_client_id || null,
+         `Secuencia reanudada manualmente (${resumed})${nextAt ? ` — próxima acción: ${nextAt}` : ''}.`]
+      ).catch(() => {});
+      // Cerrar tarea de revisión pendiente (ya no requiere decisión — se decidió).
+      await pool.query(
+        `UPDATE activities SET estado='hecha' WHERE user_id=$1 AND contact_id=$2 AND tipo='revisar_respuesta' AND estado='pendiente'`,
+        [uid, cid]).catch(() => {});
+    }
+    res.json({ ok: true, resumed });
+  } catch (err) { console.error('[lm-resume]', err.message); res.status(500).json({ error: 'Error al reanudar secuencia' }); }
+});
+
+// ── Inbox de tareas prioritarias (Bloque D: 4 categorías iniciales) ──────────
+// Devuelve una lista plana con cada tarea etiquetada por category y reason_code,
+// sin duplicados entre categorías (respuestas > aprobaciones > vencidas > hoy).
+app.get('/api/lm/tasks/inbox', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId;
+  try {
+    // 1. RESPUESTAS pendientes de revisar (tarea real, no solo disposition).
+    const { rows: reps } = await pool.query(`
+      SELECT a.id, a.contact_id, a.outbound_client_id, a.fecha AS due_at, a.nota AS reason,
+             k.nombre, k.apellido, k.email,
+             (SELECT sequence_id FROM lm_contact_sequences cs2
+                WHERE cs2.contact_id=k.id AND cs2.estado IN ('respondido','pausado','activo')
+                ORDER BY cs2.updated_at DESC NULLS LAST, cs2.id DESC LIMIT 1) AS sequence_id,
+             (SELECT paso FROM lm_contact_sequences cs2
+                WHERE cs2.contact_id=k.id AND cs2.estado IN ('respondido','pausado','activo')
+                ORDER BY cs2.updated_at DESC NULLS LAST, cs2.id DESC LIMIT 1) AS paso
+        FROM activities a JOIN lm_contacts k ON k.id=a.contact_id
+       WHERE a.user_id=$1 AND a.tipo='revisar_respuesta' AND a.estado='pendiente'
+       ORDER BY a.fecha ASC`, [uid]);
+
+    // Contactos ya representados en respuestas (para no duplicarlos en otras cats).
+    const respContactIds = new Set(reps.map(r => r.contact_id));
+
+    // 2. APROBACIONES pendientes (borradores email en 'awaiting') — próximos 3 días.
+    const { rows: apps } = await pool.query(`
+      SELECT m.id, m.contact_id, m.sequence_id, m.step_id, m.scheduled_at AS due_at,
+             m.to_email AS reason, k.nombre, k.apellido, k.email,
+             s.outbound_client_id, s.campaign_id
+        FROM lm_messages m
+        JOIN lm_contacts k ON k.id=m.contact_id
+        JOIN sequences s ON s.id=m.sequence_id
+       WHERE m.user_id=$1 AND m.estado='awaiting'
+         AND (m.scheduled_at IS NULL OR m.scheduled_at <= NOW() + interval '3 days')
+       ORDER BY m.scheduled_at ASC NULLS FIRST`, [uid]);
+
+    // 3. VENCIDAS (actividades pendientes con fecha pasada) — excluir contactos con
+    //    respuesta pendiente (aparecen prioritariamente ahí, no se duplican).
+    const { rows: over } = await pool.query(`
+      SELECT a.id, a.contact_id, a.outbound_client_id, a.canal, a.fecha AS due_at, a.nota AS reason,
+             k.nombre, k.apellido, k.email
+        FROM activities a JOIN lm_contacts k ON k.id=a.contact_id
+       WHERE a.user_id=$1 AND a.tipo IN ('tarea','followup') AND a.estado='pendiente'
+         AND a.fecha < NOW() - interval '1 day'
+       ORDER BY a.fecha ASC`, [uid]);
+
+    // 4. HOY (actividades pendientes con fecha de hoy y no vencidas aún).
+    const { rows: today } = await pool.query(`
+      SELECT a.id, a.contact_id, a.outbound_client_id, a.canal, a.fecha AS due_at, a.nota AS reason,
+             k.nombre, k.apellido, k.email
+        FROM activities a JOIN lm_contacts k ON k.id=a.contact_id
+       WHERE a.user_id=$1 AND a.tipo IN ('tarea','followup') AND a.estado='pendiente'
+         AND a.fecha >= NOW() - interval '1 day' AND a.fecha <= NOW() + interval '1 day'
+       ORDER BY a.fecha ASC`, [uid]);
+
+    const nameOf = r => [r.nombre, r.apellido].filter(Boolean).join(' ') || r.email || `#${r.contact_id}`;
+    const mk = (r, category, task_type, reason_code) => ({
+      category, task_type, reason_code,
+      activity_id: r.id, message_id: r.id,
+      contact_id: r.contact_id, contact_name: nameOf(r), email: r.email,
+      outbound_client_id: r.outbound_client_id || null,
+      sequence_id: r.sequence_id || null, step_id: r.step_id || null,
+      campaign_id: r.campaign_id || null,
+      channel: r.canal || 'email', due_at: r.due_at, status: 'pendiente',
+      source: 'nova', reason: (r.reason || '').slice(0, 220),
+    });
+
+    const list = [];
+    for (const r of reps)  list.push(mk(r, 'respuestas',    'review_reply', 'reply_pending'));
+    // Aprobaciones: si el contacto ya tiene tarea de respuesta, saltar (respuestas prioriza)
+    for (const r of apps)  if (!respContactIds.has(r.contact_id)) list.push({ ...mk(r, 'aprobaciones', 'approve_email', 'draft_awaiting'), message_id: r.id, activity_id: null });
+    for (const r of over)  if (!respContactIds.has(r.contact_id)) list.push(mk(r, 'vencidas',      'manual_touch', 'overdue'));
+    for (const r of today) if (!respContactIds.has(r.contact_id)) list.push(mk(r, 'hoy',           'manual_touch', 'due_today'));
+
+    const counts = list.reduce((a, x) => ((a[x.category] = (a[x.category] || 0) + 1), a), {});
+    res.json({ ok: true, counts, items: list });
+  } catch (err) { console.error('[lm-tasks-inbox]', err.message); res.status(500).json({ error: 'Error al cargar inbox de tareas' }); }
+});
+
 // ── Derivación: el lead no es la persona correcta → se registra al contacto NUEVO de la
 // MISMA empresa (te lo dio él, o lo conseguiste tú) y se enrola en la misma secuencia
 // desde el paso 1. El original NO se marca como perdido: la cuenta sigue viva.

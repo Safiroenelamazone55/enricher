@@ -93,11 +93,14 @@ function bounceRecipients(parsed) {
 
 async function _onReply(pool, mb, contact, parsed, snippet) {
   // Auto-pausa TODAS las secuencias activas del contacto (jamás seguir tras respuesta).
+  // paused_reason normalizado a 'reply_received' (mismo código que usa el endpoint de
+  // disposición manual, así el histórico queda consistente).
   const paused = await pool.query(
-    `UPDATE lm_contact_sequences SET estado='respondido', paused_reason='respondio', next_action_at=NULL
+    `UPDATE lm_contact_sequences SET estado='respondido', paused_reason='reply_received', next_action_at=NULL
       WHERE user_id=$1 AND contact_id=$2 AND estado='activo'`,
     [mb.user_id, contact.id]
   );
+  // disposition='respondio' solo si estaba vacía (no pisa una decisión humana previa).
   await pool.query(
     `UPDATE lm_contacts SET disposition='respondio', updated_at=NOW()
       WHERE id=$1 AND (disposition='' OR disposition IS NULL)`,
@@ -123,7 +126,28 @@ async function _onReply(pool, mb, contact, parsed, snippet) {
     [mb.user_id, contact.id,
      `Respondió a "${parsed.subject || '(sin asunto)'}"${snippet ? ' — ' + snippet.slice(0, 200) : ''}`]
   );
-  console.log(`[imap-watcher] respuesta de ${contact.email} → auto-pausa (${paused.rowCount} secuencias)`);
+  // Registrar la pausa como evento (para el timeline).
+  if (paused.rowCount > 0) {
+    await pool.query(
+      `INSERT INTO activities (user_id, contact_id, tipo, nota, fecha, estado)
+       VALUES ($1,$2,'pausa_secuencia',$3,NOW(),'hecha')`,
+      [mb.user_id, contact.id,
+       `Secuencia pausada (${paused.rowCount}) — motivo: respuesta recibida por email. Requiere decisión humana para reanudar.`]
+    ).catch(() => {});
+  }
+  // Tarea de revisión idempotente: si ya hay una pendiente para este contacto, no crear otra.
+  const { rows: existing } = await pool.query(
+    `SELECT id FROM activities WHERE user_id=$1 AND contact_id=$2 AND tipo='revisar_respuesta' AND estado='pendiente' LIMIT 1`,
+    [mb.user_id, contact.id]);
+  if (!existing.length) {
+    await pool.query(
+      `INSERT INTO activities (user_id, contact_id, tipo, canal, nota, fecha, estado)
+       VALUES ($1,$2,'revisar_respuesta','email',$3,NOW(),'pendiente')`,
+      [mb.user_id, contact.id,
+       `Revisar respuesta: "${(parsed.subject || '(sin asunto)').slice(0, 100)}"${snippet ? ' — ' + snippet.slice(0, 120) : ''}`]
+    ).catch(() => {});
+  }
+  console.log(`[imap-watcher] respuesta de ${contact.email} → auto-pausa (${paused.rowCount} secuencias) + tarea revisión`);
 }
 
 async function _onBounce(pool, mb, parsed) {
