@@ -14090,7 +14090,8 @@ const LeadManagerModule = (() => {
   let _tplSeqOpts = [];       // sugerencias del selector de secuencias
   let _repCharts = [];        // instancias Chart.js de Reportes (para destruir al re-render)
   let _repChartData = null;   // datos calculados para los charts de Reportes
-  let _taskView = 'list';     // 'list' | 'calendar' en Tareas comerciales
+  let _taskView = 'list';     // 'list' | 'calendar' | 'priority' en Tareas comerciales
+  let _tiData = null;         // cache de GET /api/lm/tasks/inbox (Bloque 8: Centro de tareas por prioridad)
   let _taskFCamp = '', _taskFSeq = ''; // filtros de Tareas comerciales (campaña / secuencia)
   let _calRef = null;         // mes mostrado en el calendario (Date al día 1)
   let _section = 'dashboard'; // sección activa del workspace
@@ -15224,6 +15225,7 @@ ${foot}
     try { const r = await apiFetch(`${API}/activities`); if (r && r.ok) { const a = await r.json(); if (Array.isArray(a)) { _activities = a; if (_section === 'leads') _ldPaint(); } } } catch {}
   }
   async function lmSetDisposition(cid, disp) {
+    if (disp === 'no_contactar' && !confirm('¿Bloquear todos los envíos futuros a este contacto en este workspace? Podrás revertirlo manualmente después.')) return;
     try {
       const nota = disp ? await novaNote({ title: _dispoLabel(disp), message: '¿Quieres dejar una nota? Quedará en la actividad del contacto y en Leads.' }) : '';
       const r = await _lmSetDispositionCore(cid, disp, null, nota);
@@ -16464,13 +16466,69 @@ ${foot}
     return `
       <div class="lm-sec-head">
         <div><h2 class="lm-sec-title">Tareas comerciales</h2><p class="lm-sec-sub">Secuencias y follow-ups, ordenados por fecha</p></div>
-        <div class="lm-hd-actions"><div class="task-viewtoggle"><button class="tvt${_taskView === 'calendar' ? '' : ' on'}" onclick="LeadManagerModule.taskSetView('list')">Lista</button><button class="tvt${_taskView === 'calendar' ? ' on' : ''}" onclick="LeadManagerModule.taskSetView('calendar')">Calendario</button></div>${_data.length ? `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openActivityDrawer(null,null,1)">＋ Nueva tarea</button>` : ''}</div>
+        <div class="lm-hd-actions"><div class="task-viewtoggle"><button class="tvt${_taskView === 'list' ? ' on' : ''}" onclick="LeadManagerModule.taskSetView('list')">Lista</button><button class="tvt${_taskView === 'calendar' ? ' on' : ''}" onclick="LeadManagerModule.taskSetView('calendar')">Calendario</button><button class="tvt${_taskView === 'priority' ? ' on' : ''}" onclick="LeadManagerModule.taskSetView('priority')" title="Centro de tareas por prioridad: respuestas, aprobaciones, fallos, vencidas, hoy, LinkedIn aceptado y datos faltantes">Prioridad</button></div>${_data.length ? `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openActivityDrawer(null,null,1)">＋ Nueva tarea</button>` : ''}</div>
       </div>
-      ${statStrip}${paCta}${filterRow}${_taskView === 'calendar' ? _vTaskCalendar() : listHtml}`;
+      ${_taskView === 'priority' ? _vTaskInboxPriority() : ''}
+      ${_taskView === 'calendar' ? _vTaskCalendar() : ''}
+      ${_taskView === 'list' ? `${statStrip}${paCta}${filterRow}${listHtml}` : ''}`;
   }
   function _monthStart(d) { return new Date(d.getFullYear(), d.getMonth(), 1); }
   function _dayKey(d) { const x = _dayOf(d); return x.getFullYear() + '-' + (x.getMonth() + 1) + '-' + x.getDate(); }
-  function taskSetView(v) { _taskView = v; _renderBody(); }
+  function taskSetView(v) { _taskView = v; if (v === 'priority' && _tiData === null) _tiReload(); _renderBody(); }
+  // ── Bloque 8: Centro de tareas por prioridad (GET /api/lm/tasks/inbox) ──
+  async function _tiReload() {
+    _tiData = { loading: true };
+    try {
+      const r = await apiFetch(`${API}/lm/tasks/inbox`);
+      _tiData = (r && r.ok) ? await r.json() : { ok: false, items: [] };
+    } catch { _tiData = { ok: false, items: [] }; }
+    if (_section === 'tasks' && _taskView === 'priority') _renderBody();
+  }
+  const _TI_CATS = [
+    ['respuestas', 'Respuestas pendientes de revisar'],
+    ['aprobaciones', 'Aprobaciones urgentes'],
+    ['fallos', 'Fallos y bloqueos'],
+    ['vencidas', 'Tareas vencidas'],
+    ['hoy', 'Acciones de hoy'],
+    ['linkedin_aceptado', 'LinkedIn aceptado — con siguiente acción'],
+    ['datos_faltantes', 'Datos obligatorios faltantes'],
+  ];
+  const _TI_ACTION_LBL = {
+    review_reply: 'Revisar respuesta', approve_email: 'Aprobar mensaje', resolve_failure: 'Resolver buzón',
+    manual_touch: 'Marcar hecha', next_step: 'Abrir LinkedIn', fix_data: 'Corregir dato',
+  };
+  function _tiCard(it) {
+    const cli = (_clients || []).find(x => x.id === it.outbound_client_id);
+    const seq = it.sequence_id ? (_sequences || []).find(x => x.id === it.sequence_id) : null;
+    const due = it.due_at ? new Date(it.due_at) : null;
+    const dueTxt = due && !isNaN(due) ? due.toLocaleDateString('es', { day: 'numeric', month: 'short' }) : '';
+    const meta = [it.contact_name, cli ? cli.nombre : '', seq ? seq.nombre : '', it.channel, dueTxt ? 'Vence: ' + dueTxt : ''].filter(Boolean);
+    const mainBtn = _TI_ACTION_LBL[it.task_type] || 'Ver';
+    let mainAction = `LeadManagerModule.openContactPage(${it.contact_id})`;
+    if (it.task_type === 'review_reply') mainAction = `LeadManagerModule.openContactPage(${it.contact_id})`;
+    else if (it.task_type === 'approve_email') mainAction = `LeadManagerModule.go('tasks');LeadManagerModule.taskSetView('list')`;
+    else if (it.task_type === 'fix_data') mainAction = `LeadManagerModule.openContactPage(${it.contact_id})`;
+    else if (it.task_type === 'next_step') mainAction = `LeadManagerModule.openContactPage(${it.contact_id})`;
+    return `<div class="cp-card" style="margin-bottom:8px;padding:10px 12px">
+      <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap">
+        <div><b>${esc(it.contact_name || '')}</b><div class="cp-f__ro">${esc(meta.join(' · '))}</div>${it.reason ? `<div class="cp-f__ro" style="margin-top:2px">${esc(it.reason)}</div>` : ''}</div>
+        <div style="display:flex;gap:6px;align-items:flex-start;flex-wrap:wrap">
+          <button class="cp-dispo-b" onclick="${mainAction}">${mainBtn}</button>
+          <button class="cp-dispo-b" onclick="LeadManagerModule.openContactPage(${it.contact_id})">Ver ficha</button>
+        </div>
+      </div>
+    </div>`;
+  }
+  function _vTaskInboxPriority() {
+    if (!_tiData || _tiData.loading) return `<div class="lm-task-empty">Cargando centro de tareas…</div>`;
+    const items = Array.isArray(_tiData.items) ? _tiData.items : [];
+    if (!items.length) return `<div class="lm-task-empty"><span class="lm-task-empty__i">${NI('check', 13)}</span>Sin tareas prioritarias — todo al día.</div>`;
+    const byCat = {};
+    for (const it of items) (byCat[it.category] = byCat[it.category] || []).push(it);
+    return _TI_CATS.filter(([k]) => byCat[k] && byCat[k].length).map(([k, lbl]) =>
+      `<div class="lm-tsec-h"><span class="lm-tsec-h__dot"></span>${esc(lbl)}<span class="lm-tsec-h__n">${byCat[k].length}</span></div>${byCat[k].map(_tiCard).join('')}`
+    ).join('');
+  }
   // taskSetFilter definido junto a _vTasks
   function calPrev() { const r = _calRef || _monthStart(new Date()); _calRef = new Date(r.getFullYear(), r.getMonth() - 1, 1); _renderBody(); }
   function calNext() { const r = _calRef || _monthStart(new Date()); _calRef = new Date(r.getFullYear(), r.getMonth() + 1, 1); _renderBody(); }
@@ -16628,6 +16686,25 @@ ${foot}
       <div class="ibx-m__body">${esc(m.cuerpo || '').replace(/\n/g, '<br>')}</div>
     </div>`;
   }
+  // ── Bloque 5: acciones rápidas de "Resolver respuesta" dentro del chat — sin salir de la conversación ──
+  function _ibResolveBar(c) {
+    const id = c.id;
+    const quick = _DISPOS.filter(d => d[0] !== 'aceptado');
+    return `<div class="cp-card" style="margin:0 0 10px;padding:10px 12px">
+      <div class="cp-card__t" style="margin-bottom:6px">Resolver respuesta</div>
+      <div class="cp-dispo">
+        <button class="cp-cta" style="padding:5px 12px;font-size:.78rem" onclick="LeadManagerModule.cpOpenRegisterReply(${id})">＋ Registrar respuesta</button>
+        ${quick.map(d => `<button class="cp-dispo-b${c.disposition === d[0] ? ' on' : ''}" style="${c.disposition === d[0] ? `background:${d[3]};color:${d[2]};border-color:${d[2]}` : ''}" onclick="LeadManagerModule.ibResolveDisp(${id},'${d[0]}')">${d[1]}</button>`).join('')}
+        <button class="cp-dispo-b" onclick="LeadManagerModule.ldRefer(${id},'derivado')">＋ Crear referido</button>
+      </div>
+    </div>`;
+  }
+  async function ibResolveDisp(cid, disp) {
+    if (disp === 'mas_adelante') return ldNurture(cid);
+    if (disp === 'derivado' || disp === 'no_es_persona') return ldRefer(cid, disp);
+    await lmSetDisposition(cid, disp);
+    if (_ibActive === cid) await ibOpen(cid);
+  }
   function _ibConvHtml() {
     if (!_ibActive) return `<div class="ibx-empty">Elige una conversación de la lista para leerla y responder desde el buzón del cliente.</div>`;
     if (!_ibThread) return `<div class="ibx-empty">Cargando conversación…</div>`;
@@ -16643,6 +16720,7 @@ ${foot}
         <div class="ibx-conv__seq">${seqInfo}</div></div>
         <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openContactPage(${c.id})">Ver ficha</button>
       </div>
+      ${c.id ? _ibResolveBar(c) : ''}
       <div class="ibx-msgs" id="ibx-msgs">${(_ibThread.messages || []).map(_ibMsg).join('') || '<div class="ibx-empty">Sin mensajes aún.</div>'}</div>
       <div class="ibx-replybox">
         ${canSend
@@ -17996,6 +18074,7 @@ ${foot}
   function _vLeadsHub() {
     return `<div class="lm-sec-head">
         <div><h2 class="lm-sec-title">Leads</h2><p class="lm-sec-sub">Quiénes respondieron y su siguiente paso — se llena al marcar el resultado en las tareas</p></div>
+        <div class="lm-hd-actions"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openContact()">＋ Agregar prospecto</button></div>
       </div>
       <div class="ldh-toolbar">
         <div class="ldh-pills" id="ldh-pills"></div>
@@ -18133,7 +18212,7 @@ ${foot}
       </div>
       <div class="fin-pi-box__ft"><span class="fin-cfg-hint" id="ref-hint"></span><div class="fin-pi-ft-btns">
         <button class="btn btn--ghost btn--sm" onclick="document.getElementById('lm-ref-modal').remove()">Cancelar</button>
-        <button class="btn btn--primary btn--sm" id="ref-save" onclick="LeadManagerModule.ldReferSave(${cid},'${disp}')">Guardar y enrolar</button>
+        <button class="btn btn--primary btn--sm" id="ref-save" onclick="LeadManagerModule.ldReferSave(${cid},'${disp}')">Guardar</button>
       </div></div></div>`;
     document.body.appendChild(m);
     setTimeout(() => $('ref-nombre')?.focus(), 60);
@@ -18151,13 +18230,25 @@ ${foot}
       });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || 'Error');
-      document.getElementById('lm-ref-modal')?.remove();
       await load();
+      if (_section === 'inbox' && _ibActive === cid) await ibOpen(cid);
       const nom = [d.contacto?.nombre, d.contacto?.apellido].filter(Boolean).join(' ') || d.contacto?.email || 'el contacto';
-      showBanner(`✓ ${esc(nom)} agregado a la misma empresa${d.enrolado ? ` y enrolado en ${d.enrolado} secuencia(s) desde el paso 1` : ''}`, 'success');
+      const newId = d.contacto?.id;
+      const m = document.getElementById('lm-ref-modal');
+      if (m) m.innerHTML = `<div class="fin-pi-box" style="max-width:400px">
+        <div class="fin-pi-box__hd"><h3>Referido creado o vinculado</h3><button class="fin-pi-x" onclick="document.getElementById('lm-ref-modal').remove()">✕</button></div>
+        <div class="fin-pi-form"><div class="fin-pi-full seq-drip-hint">✓ <b>${esc(nom)}</b> queda en la misma empresa, en etapa <b>Nuevo</b>, sin enrolar — decide tú el siguiente paso.</div></div>
+        <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns" style="flex-wrap:wrap;justify-content:flex-end">
+          ${newId ? `<button class="btn btn--ghost btn--sm" onclick="document.getElementById('lm-ref-modal').remove();LeadManagerModule.openContactPage(${newId})">Ver prospecto</button>` : ''}
+          ${newId ? `<button class="btn btn--ghost btn--sm" onclick="document.getElementById('lm-ref-modal').remove();LeadManagerModule.bulkAddOpen('campaign',[${newId}])">＋ Campaña</button>` : ''}
+          ${newId ? `<button class="btn btn--ghost btn--sm" onclick="document.getElementById('lm-ref-modal').remove();LeadManagerModule.bulkAddOpen('sequence',[${newId}])">＋ Secuencia</button>` : ''}
+          ${newId ? `<button class="btn btn--ghost btn--sm" onclick="document.getElementById('lm-ref-modal').remove();LeadManagerModule.openContactPage(${newId});LeadManagerModule.cpActOpen('tarea')">＋ Tarea</button>` : ''}
+          <button class="btn btn--primary btn--sm" onclick="document.getElementById('lm-ref-modal').remove()">Cerrar</button>
+        </div></div></div>`;
+      showBanner(`✓ ${esc(nom)} agregado — pendiente de revisión`, 'success');
     } catch (e) {
       if (hint) { hint.textContent = e.message; hint.className = 'fin-cfg-hint fin-cfg-hint--err'; }
-      if (btn) { btn.disabled = false; btn.textContent = 'Guardar y enrolar'; }
+      if (btn) { btn.disabled = false; btn.textContent = 'Guardar'; }
     }
   }
   // "Más adelante" (nurturing): pide CUÁNDO retomarlo, con atajos de 1/3/6 meses.
@@ -18198,6 +18289,7 @@ ${foot}
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Error');
       document.getElementById('lm-nur-modal')?.remove();
       await load();
+      if (_section === 'inbox' && _ibActive === cid) await ibOpen(cid);
       showBanner(`✓ Marcado para retomar${fecha ? ' el ' + fecha : ''}`, 'success');
     } catch (e) {
       const h = $('nur-hint'); if (h) { h.textContent = e.message; h.className = 'fin-cfg-hint fin-cfg-hint--err'; }
@@ -19594,7 +19686,7 @@ ${foot}
         <div><h2 class="lm-sec-title">Contactos</h2><p class="lm-sec-sub">Personas ligadas a su empresa — importa desde Excel / CSV</p></div>
         <div class="lm-hd-actions">
           <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.exportCsv('contacts')">${_ico('down')} Exportar</button>
-          <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openContact()">＋ Contacto</button>
+          <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openContact()">＋ Agregar prospecto</button>
           <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openImport('contacts')">${_ico('up')} Importar</button>
         </div>
       </div>
@@ -19892,7 +19984,6 @@ ${foot}
     const loc = [c.ciudad, c.pais].filter(Boolean).join(', ');
     const F = (f, label, val) => `<label class="cp-f"><span class="cp-f__l">${label}</span><input class="cp-f__i" data-f="${f}" value="${esc(val || '')}" placeholder="＋ Añadir" onchange="LeadManagerModule.cpSave(${id})"></label>`;
     const coOpts = `<option value="">— Sin empresa —</option>` + _companies.map(co => `<option value="${co.id}"${String(c.company_id) === String(co.id) ? ' selected' : ''}>${esc(co.nombre || co.dominio)}</option>`).join('');
-    const estOpts = _ORDER.map(s => `<option value="${s}"${(c.estado || 'nuevo') === s ? ' selected' : ''}>${STAGE_LABELS[s]}</option>`).join('');
     const raw = (c.raw && typeof c.raw === 'object') ? c.raw : {};
     const rawKeys = Object.keys(raw).filter(k => raw[k]);
     return `<div class="cp" id="lm-cp">
@@ -19907,14 +19998,19 @@ ${foot}
           ${_cpStrip(c)}
         </div>
         <div class="cp-actions">
-          <button class="cp-cta" onclick="LeadManagerModule.cpActOpen('')">＋ Registrar actividad</button>
+          <button class="cp-cta" onclick="LeadManagerModule.cpOpenRegisterReply(${id})">＋ Registrar respuesta</button>
+          <button class="cp-act" onclick="LeadManagerModule.ldRefer(${id},'derivado')">＋ Crear referido</button>
+          <button class="cp-act" onclick="LeadManagerModule.cpActOpen('tarea')">＋ Crear tarea</button>
           ${c.linkedin ? `<a class="cp-act cp-act--in" href="${esc(c.linkedin)}" target="_blank" rel="noopener">LinkedIn ›</a>` : ''}
+          ${_waDigits(c) ? `<a class="cp-act" href="https://wa.me/${_waDigits(c)}" target="_blank" rel="noopener">WhatsApp ›</a>` : ''}
           ${c.email ? `<a class="cp-act" href="mailto:${esc(c.email)}">Email</a>` : ''}
+          <button class="cp-act" onclick="LeadManagerModule.cpActOpen('')">＋ Registrar actividad</button>
           <button class="cp-act" onclick="LeadManagerModule.bulkAddOpen('sequence',[${id}])">＋ Secuencia</button>
           <button class="cp-act" onclick="LeadManagerModule.bulkAddOpen('campaign',[${id}])">＋ Campaña</button>
           <button class="cp-act cp-act--danger" onclick="LeadManagerModule.cpDelete(${id})">Eliminar</button>
         </div>
       </div>
+      <div class="cp-f__l" style="margin:2px 0 4px 2px">Etapa comercial</div>
       ${_cpStepper(c, id)}
       <div class="cp-grid">
         <div class="cp-left">
@@ -19932,17 +20028,32 @@ ${foot}
           <div class="cp-card"><div class="cp-card__t">Empresa</div><div class="cp-fields">
             <label class="cp-f cp-f--full"><span class="cp-f__l">Empresa</span><select class="cp-f__i" data-f="company_id" onchange="LeadManagerModule.cpSave(${id})">${coOpts}</select></label>
             ${c.company_id ? `<div class="cp-f cp-f--full"><button class="cp-golink" onclick="LeadManagerModule.openCompany(${c.company_id})">Ver ficha de la empresa ›</button></div>` : ''}
-          </div></div>
-          <div class="cp-card"><div class="cp-card__t">CRM</div><div class="cp-fields">
-            <label class="cp-f"><span class="cp-f__l">Estado</span><select class="cp-f__i" data-f="estado" onchange="LeadManagerModule.cpSave(${id})">${estOpts}</select></label>
             ${F('fuente', 'Fuente', c.fuente)}
-            <div class="cp-f cp-f--full"><span class="cp-f__l">Disposición outbound</span><div class="cp-dispo">${_DISPOS.map(d => `<button class="cp-dispo-b${c.disposition === d[0] ? ' on' : ''}" style="${c.disposition === d[0] ? `background:${d[3]};color:${d[2]};border-color:${d[2]}` : ''}" onclick="LeadManagerModule.lmSetDisposition(${id},'${c.disposition === d[0] ? '' : d[0]}')">${d[1]}</button>`).join('')}</div></div>
-            <div class="cp-f cp-f--full"><span class="cp-f__l">Canales / email</span><div class="cp-dispo">
-              <button class="cp-dispo-b${c.no_linkedin ? ' on' : ''}" style="${c.no_linkedin ? 'background:#FEF3C7;color:#B45309;border-color:#B45309' : ''}" title="Perfil falso/inactivo: salta los pasos de LinkedIn y sigue por email — no lo saca de la secuencia" onclick="LeadManagerModule.lmToggleNoLinkedIn(${id})">🚫 LinkedIn no válido</button>
-              <button class="cp-dispo-b${c.email_status === 'bounced' ? ' on' : ''}" style="${c.email_status === 'bounced' ? 'background:#F1EFEB;color:#C4342B;border-color:#C4342B' : ''}" title="El email rebotó: pausa sus secuencias; corrige el email (se re-verifica solo) y reanuda" onclick="LeadManagerModule.lmToggleBounced(${id})">↩ Email rebotó</button>
-              <button class="cp-dispo-b${c.email_status === 'manual' ? ' on' : ''}" style="${c.email_status === 'manual' ? 'background:#E0F2FE;color:#0369A1;border-color:#0369A1' : ''}" title="Email conseguido/confirmado a mano (Google/MS contacts, respuesta directa…): se trata como enviable sin sonda" onclick="LeadManagerModule.lmToggleManualEmail(${id})">✍ Email manual OK</button>
-            </div></div>
+          </div></div>
+          ${_seqEnrollCard(c, id)}
+          <div class="cp-card"><div class="cp-card__t">Resultado de la interacción</div><div class="cp-fields">
+            <div class="cp-f cp-f--full"><div class="cp-dispo">${_DISPOS.map(d => `<button class="cp-dispo-b${c.disposition === d[0] ? ' on' : ''}" style="${c.disposition === d[0] ? `background:${d[3]};color:${d[2]};border-color:${d[2]}` : ''}" onclick="LeadManagerModule.lmSetDisposition(${id},'${c.disposition === d[0] ? '' : d[0]}')">${d[1]}</button>`).join('')}</div></div>
+            ${_cpLastResultInfo(c)}
             ${c.data_issue ? `<div class="cp-f cp-f--full"><span class="cp-f__l">Por corregir</span><div class="cp-dispo" style="align-items:center;gap:8px"><span class="client-badge" style="background:#FEF3C7;color:#B45309">⚠ ${_DATA_ISSUE_LBL[c.data_issue] || c.data_issue}</span><button class="cp-dispo-b" title="Marca el dato como corregido y reanuda sus secuencias pausadas" onclick="LeadManagerModule.lmResumeDataIssue(${id})">✓ Corregido — reanudar</button></div></div>` : ''}
+          </div></div>
+          <div class="cp-card"><div class="cp-card__t">Disponibilidad de canales</div><div class="cp-fields">
+            ${_cpChannelRow('LinkedIn', c.linkedin ? (c.no_linkedin ? ['URL no válida', '#B45309', '#FEF3C7'] : ['Disponible', '#065F46', '#D1FAE5']) : ['Sin URL', '#6C6862', '#F1EFEB'],
+              [c.linkedin ? `<a class="cp-dispo-b cp-dispo-b--xs" href="${esc(c.linkedin)}" target="_blank" rel="noopener">Abrir</a>` : '',
+               c.linkedin ? `<button class="cp-dispo-b cp-dispo-b--xs" onclick="LeadManagerModule.lmCopy('${esc(c.linkedin.replace(/'/g, '&#39;'))}','Copiado')">Copiar</button>` : '',
+               `<button class="cp-dispo-b cp-dispo-b--xs" onclick="LeadManagerModule.cpFocusField('linkedin')">Corregir</button>`,
+               `<button class="cp-dispo-b cp-dispo-b--xs${c.no_linkedin ? ' on' : ''}" onclick="LeadManagerModule.lmToggleNoLinkedIn(${id})">${c.no_linkedin ? 'Marcar válida' : 'Marcar no válida'}</button>`].filter(Boolean))}
+            ${_cpChannelRow('Email', !c.email ? ['Sin email', '#6C6862', '#F1EFEB'] : c.email_status === 'bounced' ? ['Rebotado', '#C4342B', '#F1EFEB'] : c.email_status === 'manual' ? ['Manual', '#0369A1', '#E0F2FE'] : (c.email_status === 'valid' || c.email_status === 'catch-all') ? ['Verificado', '#065F46', '#D1FAE5'] : ['Sin verificar', '#6C6862', '#F1EFEB'],
+              [c.email ? `<button class="cp-dispo-b cp-dispo-b--xs" onclick="LeadManagerModule.lmCopy('${esc(c.email.replace(/'/g, '&#39;'))}','Copiado')">Copiar</button>` : '',
+               c.email ? `<button class="cp-dispo-b cp-dispo-b--xs" onclick="LeadManagerModule.go('inbox');LeadManagerModule.ibOpen(${id})">Abrir conversación</button>` : '',
+               `<button class="cp-dispo-b cp-dispo-b--xs" onclick="LeadManagerModule.cpFocusField('email')">Corregir</button>`,
+               `<button class="cp-dispo-b cp-dispo-b--xs${c.email_status === 'manual' ? ' on' : ''}" onclick="LeadManagerModule.lmToggleManualEmail(${id})">Email enviado manualmente</button>`].filter(Boolean))}
+            ${_cpChannelRow('WhatsApp', _waDigits(c) ? ['Disponible', '#065F46', '#D1FAE5'] : ['Sin número', '#6C6862', '#F1EFEB'],
+              [_waDigits(c) ? `<a class="cp-dispo-b cp-dispo-b--xs" href="https://wa.me/${_waDigits(c)}" target="_blank" rel="noopener">Abrir</a>` : '',
+               _waDigits(c) ? `<button class="cp-dispo-b cp-dispo-b--xs" onclick="LeadManagerModule.lmCopy('${esc(String(c.movil || c.telefono || '').replace(/'/g, '&#39;'))}','Copiado')">Copiar</button>` : '',
+               `<button class="cp-dispo-b cp-dispo-b--xs" onclick="LeadManagerModule.cpOpenRegisterReply(${id},'whatsapp')">Registrar respuesta</button>`].filter(Boolean))}
+            ${_cpChannelRow('Teléfono', (c.telefono || c.movil) ? ['Disponible', '#065F46', '#D1FAE5'] : ['No disponible', '#6C6862', '#F1EFEB'],
+              [(c.telefono || c.movil) ? `<button class="cp-dispo-b cp-dispo-b--xs" onclick="LeadManagerModule.lmCopy('${esc(String(c.telefono || c.movil || '').replace(/'/g, '&#39;'))}','Copiado')">Copiar</button>` : '',
+               (c.telefono || c.movil) ? `<button class="cp-dispo-b cp-dispo-b--xs" onclick="LeadManagerModule.cpActOpen('llamada')">Registrar llamada</button>` : ''].filter(Boolean))}
           </div></div>
           ${rawKeys.length ? `<div class="cp-card"><div class="cp-card__t">Datos importados (sin mapear)</div><div class="cp-fields">${rawKeys.map(k => `<div class="cp-f"><span class="cp-f__l">${esc(k)}</span><span class="cp-f__ro">${esc(raw[k])}</span></div>`).join('')}</div></div>` : ''}
         </div>
@@ -19985,6 +20096,112 @@ ${foot}
       const cls = active ? ' is-active' : done ? ' is-done' : '';
       return `<button class="cp-step${cls}" ${active ? `style="${STAGE_STYLES[s] || ''}"` : ''} onclick="LeadManagerModule.cpSetStage(${id},'${s}')" title="Marcar “${STAGE_LABELS[s]}”">${STAGE_LABELS[s]}</button>`;
     }).join('')}</div>`;
+  }
+  // ── Bloque 3D: estado de la secuencia — una tarjeta por enrollment, separada de la etapa comercial ──
+  function _pauseLbl(pr) {
+    if (!pr) return '';
+    if (pr === 'reply_received') return 'Esperando revisión de respuesta';
+    if (pr.startsWith('disposition_')) { const d = pr.slice('disposition_'.length); return _dispoLabel(d) || d; }
+    if (pr.startsWith('dato_')) return 'Falta corregir un dato';
+    return pr;
+  }
+  function _cpFmtDate(d) { if (!d) return ''; const x = new Date(d); return isNaN(x) ? '' : x.toLocaleDateString('es', { day: 'numeric', month: 'short' }); }
+  function _seqEnrollCard(c, id) {
+    const seqs = Array.isArray(c.sequences) ? c.sequences : [];
+    if (!seqs.length) return '';
+    const row = s => {
+      const est = s.estado || '—';
+      const badgeSt = est === 'activo' ? 'background:#D1FAE5;color:#065F46' : est === 'pausado' ? 'background:#FEF3C7;color:#B45309' : est === 'respondido' ? 'background:#E0F2FE;color:#0369A1' : 'background:#F1EFEB;color:#6C6862';
+      const canResume = est === 'pausado' || est === 'respondido';
+      const meta = [];
+      if (s.paso) meta.push(`Paso ${esc(String(s.paso))}`);
+      if (s.paused_reason) meta.push(esc(_pauseLbl(s.paused_reason)));
+      if (s.paso_date) meta.push(`Última acción: ${_cpFmtDate(s.paso_date)}`);
+      if (s.next_action_at) meta.push(`Próxima: ${_cpFmtDate(s.next_action_at)}`);
+      return `<div class="cp-f cp-f--full" style="border-bottom:1px solid #EAE7E2;padding-bottom:8px;margin-bottom:8px">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><b>${esc(s.nombre)}</b><span class="client-badge" style="${badgeSt}">${esc(est)}</span>${canResume ? `<button class="cp-dispo-b" onclick="LeadManagerModule.cpResumeSeq(${id},${s.id})">▶ Reanudar</button>` : ''}</div>
+        ${meta.length ? `<div class="cp-f__ro" style="margin-top:4px">${meta.join(' · ')}</div>` : ''}
+      </div>`;
+    };
+    return `<div class="cp-card"><div class="cp-card__t">Estado de la secuencia</div><div class="cp-fields">${seqs.map(row).join('')}</div></div>`;
+  }
+  async function cpResumeSeq(cid, seqId) {
+    try {
+      const res = await apiFetch(`${API}/lm/contacts/${cid}/resume-sequence`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sequence_id: seqId }) });
+      if (!res.ok) throw new Error((await res.json()).error || 'Error');
+      await _reloadContacts();
+      if (_section === 'contact-view') _renderBody();
+      showBanner('✓ Secuencia reanudada', 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  // ── Bloque 3C: última nota/fecha del resultado de la interacción (de _cpActs si ya están cargados) ──
+  function _cpLastResultInfo(c) {
+    if (!c.disposition) return '';
+    const acts = Array.isArray(_cpActs) ? _cpActs : [];
+    const last = acts.find(a => /^disposici[oó]n:/i.test(a.nota || '')) || null;
+    if (!last) return '';
+    return `<div class="cp-f cp-f--full cp-f__ro" style="margin-top:-4px">${esc(last.nota)} · ${_fmtActDate(last.fecha)}</div>`;
+  }
+  // ── Bloque 3E: fila de un canal en "Disponibilidad de canales" ──
+  function _cpChannelRow(label, statusPair, actions) {
+    const [txt, fg, bg] = statusPair;
+    return `<div class="cp-f cp-f--full" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;border-bottom:1px solid #EAE7E2;padding-bottom:8px;margin-bottom:8px">
+      <b style="min-width:76px">${esc(label)}</b><span class="client-badge" style="background:${bg};color:${fg}">${esc(txt)}</span>
+      <span style="display:flex;gap:6px;flex-wrap:wrap;margin-left:auto">${actions.join('')}</span>
+    </div>`;
+  }
+  function cpFocusField(f) {
+    const el = document.querySelector(`#lm-cp [data-f="${f}"]`);
+    if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.focus(); }
+  }
+  // ── Bloque 6: Registrar respuesta — canal + enrollment afectado + resultado opcional ──
+  function cpOpenRegisterReply(cid, presetChannel) {
+    const c = _contacts.find(x => x.id === cid); if (!c) return;
+    document.getElementById('lm-reply-modal')?.remove();
+    const seqs = (Array.isArray(c.sequences) ? c.sequences : []).filter(s => s.estado === 'activo');
+    const m = document.createElement('div'); m.id = 'lm-reply-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) m.remove(); };
+    const chanOpts = [['email', 'Email conectado'], ['email_manual', 'Email no conectado'], ['whatsapp', 'WhatsApp'], ['linkedin', 'LinkedIn'], ['llamada', 'Llamada'], ['otro', 'Otro']];
+    const seqOpts = seqs.length > 1
+      ? `<label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Inscripción a pausar</span><select class="form-input" id="rr-seq">${seqs.map(s => `<option value="${s.id}">${esc(s.nombre)}</option>`).join('')}</select></label>`
+      : (seqs.length ? `<div class="fin-cfg-hint">Se pausará: <b>${esc(seqs[0].nombre)}</b></div>` : `<div class="fin-cfg-hint">Este contacto no tiene una inscripción activa — solo se actualizará la etapa comercial.</div>`);
+    const resultOpts = _DISPOS.filter(d => d[0] !== 'aceptado');
+    m.innerHTML = `<div class="fin-pi-box">
+      <div class="fin-pi-box__hd"><h3>Registrar respuesta</h3><button class="fin-pi-x" onclick="document.getElementById('lm-reply-modal').remove()">✕</button></div>
+      <div class="fin-pi-form">
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Canal</span><select class="form-input" id="rr-canal">${chanOpts.map(([v, l]) => `<option value="${v}"${v === (presetChannel || 'email') ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Resultado</span><select class="form-input" id="rr-result"><option value="respondio" selected>Interesado (respuesta genérica)</option>${resultOpts.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select></label>
+        <div class="fin-pi-full">${seqOpts}</div>
+        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Nota</span><textarea class="form-input" id="rr-nota" rows="3" placeholder="Qué respondió…"></textarea></label>
+      </div>
+      <div class="fin-pi-box__ft"><span class="fin-cfg-hint" id="rr-hint"></span><div class="fin-pi-ft-btns">
+        <button class="btn btn--ghost btn--sm" onclick="document.getElementById('lm-reply-modal').remove()">Cancelar</button>
+        <button class="btn btn--primary btn--sm" id="rr-save" onclick="LeadManagerModule.cpSaveRegisterReply(${cid},${seqs.length === 1 ? seqs[0].id : 'null'})">Guardar</button>
+      </div></div></div>`;
+    document.body.appendChild(m);
+    setTimeout(() => $('rr-nota')?.focus(), 60);
+  }
+  async function cpSaveRegisterReply(cid, singleSeqId) {
+    const hint = $('rr-hint');
+    const seqSel = $('rr-seq');
+    const seqId = seqSel ? Number(seqSel.value) : singleSeqId;
+    const canal = $('rr-canal')?.value || 'email';
+    const resultado = $('rr-result')?.value || 'respondio';
+    const nota = ($('rr-nota')?.value || '').trim();
+    const btn = $('rr-save'); if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+    try {
+      const chanLbl = { email: 'Email conectado', email_manual: 'Email no conectado', whatsapp: 'WhatsApp', linkedin: 'LinkedIn', llamada: 'Llamada', otro: 'Otro' }[canal] || canal;
+      const r = await _lmSetDispositionCore(cid, resultado, seqId || null, `[${chanLbl}]${nota ? ' ' + nota : ''}`);
+      document.getElementById('lm-reply-modal')?.remove();
+      if (_activeSeq && Array.isArray(_seqContacts)) { _seqContacts = null; await _seqLoadContacts(_activeSeq); }
+      if (_section === 'contact-view') { _renderBody(); _cpReloadActs(cid); }
+      else if (_section === 'inbox') { if (_ibActive === cid) await ibOpen(cid); else _ibPaint(); }
+      else _renderBody();
+      showBanner(`✓ Respuesta registrada · ${_dispoLabel(resultado)}${r.paused ? ` · pausado en ${r.paused} secuencia${r.paused === 1 ? '' : 's'}` : ''}`, 'success');
+    } catch (e) {
+      if (hint) { hint.textContent = 'Error: ' + e.message; hint.className = 'fin-cfg-hint fin-cfg-hint--err'; }
+      if (btn) { btn.disabled = false; btn.textContent = 'Guardar'; }
+    }
   }
   async function cpSetStage(id, estado) {
     const c = _contacts.find(x => x.id === id); if (!c || c.estado === estado) return;
@@ -20115,7 +20332,7 @@ ${foot}
     const co = coId ? _companies.find(x => x.id === coId) : null;
     payload.company_id = coId;
     payload.empresa_nombre = co ? (co.nombre || co.dominio || '') : '';
-    payload.estado = payload.estado || 'nuevo';
+    payload.estado = payload.estado || c.estado || 'nuevo';
     payload.fuente = payload.fuente || 'manual';
     payload.outbound_client_id = c.outbound_client_id || null;
     if (!payload.nombre && !payload.apellido && !payload.email) { showBanner('El contacto necesita nombre o email', 'error'); return; }
@@ -20502,15 +20719,16 @@ ${foot}
 
   // ── Drawer: Contacto (crear / editar) ──
   function _lmFld(fid, lbl, val, ph, full) { return `<label class="fin-cfg-field${full ? ' fin-pi-full' : ''}"><span class="fin-cfg-lbl">${lbl}</span><input class="form-input" id="${fid}" value="${val ? esc(val) : ''}" placeholder="${ph || ''}"></label>`; }
-  function openContact(id) {
+  function openContact(id, presetCompanyId) {
     const c = id ? _contacts.find(x => x.id === id) : null;
     document.getElementById('lm-ct-modal')?.remove();
     const m = document.createElement('div');
     m.id = 'lm-ct-modal'; m.className = 'fin-pi-backdrop';
     m.onclick = e => { if (e.target === m) closeContact(); };
-    const coOpts = `<option value="">— Sin empresa —</option>` + _companies.map(co => `<option value="${co.id}"${c && String(c.company_id) === String(co.id) ? ' selected' : ''}>${esc(co.nombre || co.dominio)}</option>`).join('');
+    const selCompanyId = c ? c.company_id : (presetCompanyId || null);
+    const coOpts = `<option value="">— Sin empresa —</option>` + _companies.map(co => `<option value="${co.id}"${String(selCompanyId) === String(co.id) ? ' selected' : ''}>${esc(co.nombre || co.dominio)}</option>`).join('');
     m.innerHTML = `<div class="fin-pi-box lm-drawer-box">
-      ${_impHd(c ? 'Editar contacto' : 'Nuevo contacto').replace('closeImport', 'closeContact')}
+      ${_impHd(c ? 'Editar contacto' : '＋ Agregar prospecto').replace('closeImport', 'closeContact')}
       <div class="fin-pi-form">
         ${_lmFld('ct-nombre', 'Nombre', c?.nombre)}
         ${_lmFld('ct-apellido', 'Apellido', c?.apellido)}
@@ -20542,6 +20760,23 @@ ${foot}
     setTimeout(() => $('ct-nombre')?.focus(), 60);
   }
   function closeContact() { document.getElementById('lm-ct-modal')?.remove(); }
+  // ── Bloque 8: duplicados por email / LinkedIn / teléfono / nombre+empresa antes de crear ──
+  function _ctFindDup(payload, excludeId) {
+    const email = String(payload.email || '').trim().toLowerCase();
+    const li = String(payload.linkedin || '').trim().toLowerCase().replace(/\/$/, '');
+    const tel = String(payload.telefono || payload.movil || '').replace(/\D/g, '');
+    const nom = String(payload.nombre || '').trim().toLowerCase();
+    const emp = String(payload.empresa_nombre || '').trim().toLowerCase();
+    for (const c of _contacts) {
+      if (excludeId && c.id === excludeId) continue;
+      if (email && String(c.email || '').trim().toLowerCase() === email) return { c, reason: 'mismo email' };
+      if (li && String(c.linkedin || '').trim().toLowerCase().replace(/\/$/, '') === li) return { c, reason: 'mismo LinkedIn' };
+      const cTel = String(c.telefono || c.movil || '').replace(/\D/g, '');
+      if (tel.length >= 7 && cTel === tel) return { c, reason: 'mismo teléfono' };
+      if (nom && emp && String(c.nombre || '').trim().toLowerCase() === nom && String(c.company_nombre || c.empresa_nombre || '').trim().toLowerCase() === emp) return { c, reason: 'mismo nombre y empresa' };
+    }
+    return null;
+  }
   async function saveContact(id) {
     const g = fid => ($(fid)?.value || '').trim();
     const companyId = $('ct-company')?.value ? Number($('ct-company').value) : null;
@@ -20558,11 +20793,19 @@ ${foot}
     const hint = $('ct-hint');
     if (!payload.nombre && !payload.apellido && !payload.email) { if (hint) { hint.textContent = 'Nombre o email requerido'; hint.style.color = '#C4342B'; } return; }
     if (_clients.length && !payload.outbound_client_id) { if (hint) { hint.textContent = 'Elige un cliente outbound'; hint.style.color = '#C4342B'; } return; }
+    const dup = _ctFindDup(payload, id);
+    if (dup) {
+      const dupNom = [dup.c.nombre, dup.c.apellido].filter(Boolean).join(' ') || dup.c.email || `#${dup.c.id}`;
+      if (hint) hint.innerHTML = `Ya existe un contacto con ${dup.reason}: <a href="javascript:void(0)" onclick="LeadManagerModule.closeContact();LeadManagerModule.openContactPage(${dup.c.id})" style="text-decoration:underline">${esc(dupNom)} — ver ficha ›</a>`;
+      if (!confirm(`Ya existe un contacto con ${dup.reason}: ${dupNom}.\n\n¿Crear de todas formas? Cancelar para revisar el existente.`)) return;
+    }
     const btn = $('ct-save'); if (btn) btn.disabled = true;
     try {
       const res = await apiFetch(`${API}/lm/contacts${id ? `/${id}` : ''}`, { method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-      if (!res.ok) throw new Error((await res.json()).error || 'Error');
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Error');
       closeContact(); await load();
+      if (!id && d?.id) openContactPage(d.id);
     } catch (e) { if (hint) { hint.textContent = 'Error: ' + e.message; hint.style.color = '#C4342B'; } if (btn) btn.disabled = false; }
   }
   async function deleteContact(id, fromDrawer) {
@@ -20603,6 +20846,7 @@ ${foot}
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Notas</span><textarea class="form-input" id="co-notas" rows="2">${c ? esc(c.notas) : ''}</textarea></label>
       </div>
       <div class="fin-pi-box__ft"><span class="fin-cfg-hint" id="co-hint"></span><div class="fin-pi-ft-btns">
+        ${c ? `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.closeCompany();LeadManagerModule.openContact(null,${c.id})">＋ Agregar prospecto</button>` : ''}
         ${c ? `<button class="btn btn--ghost btn--danger btn--sm" onclick="LeadManagerModule.deleteCompany(${c.id},1)">Eliminar</button>` : ''}
         <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.closeCompany()">Cancelar</button>
         <button class="btn btn--primary btn--sm" id="co-save" onclick="LeadManagerModule.saveCompany(${c ? c.id : 'null'})">${c ? 'Guardar' : 'Crear'}</button>
@@ -21077,6 +21321,7 @@ ${foot}
     openImport, closeImport, impFile, impToggleHeader, impSetObc, impNewClient, impRun, exportCsv,
     cbxOpen, cbxFilter, cbxPick, cbxBlur,
     openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, bulkDeleteContacts, bulkAddOpen, bulkAddDo, openContactPage, cpTab, cpSave, cpDelete, cpActOpen, cpActSave, cpActToggle, cpActDel,
+    cpResumeSeq, cpFocusField, cpOpenRegisterReply, cpSaveRegisterReply,
     openCompany, closeCompany, saveCompany, deleteCompany, filterCompanies, toggleCo, toggleCoAll, clearCoSel, toggleCoSelMode, bulkDeleteCompanies,
     openDrawer, closeDrawer, save, confirmDelete, convertToClient,
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
@@ -21110,7 +21355,7 @@ ${foot}
     mbSignatureOpen, mbSignaturePreview, mbSignatureClear, mbSignatureInsertLink, mbSignatureImg, mbSignatureSave,
     mbAdminConsentSync, mbAdminConsentToggleHtml,
     mbAdminConsentSetSigner, mbAdminConsentAddChip, mbAdminConsentRmChip, mbAdminConsentInputKey, mbAdminConsentClearRecipients,
-    ibOpen, ibTab, ibCli, ibSend, ibSchedToggle, ibSchedPick, ibCancelSched,
+    ibOpen, ibTab, ibCli, ibSend, ibSchedToggle, ibSchedPick, ibCancelSched, ibResolveDisp,
     ibRowMenu, ibCloseMenu, ibMarkUnread,
     pendingAcceptOpen, pendingAcceptToggleAll, pendingAcceptApplyFilters, pendingAcceptMark,
     openActivityDrawer, closeActivityDrawer, saveActivity, confirmDeleteActivity, markActDone,

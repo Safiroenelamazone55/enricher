@@ -3098,7 +3098,7 @@ app.get('/api/lm/contacts', requireAuth, async (req, res) => {
       SELECT k.*, co.nombre AS company_nombre, co.dominio AS company_dominio,
         co.website AS company_website, co.industria AS company_industria, co.tamano AS company_tamano,
         co.ingresos AS company_ingresos, co.ciudad AS company_ciudad, co.pais AS company_pais, co.target_tier AS company_target_tier, co.segmento AS company_segmento,
-        COALESCE((SELECT json_agg(json_build_object('id', s.id, 'nombre', s.nombre, 'paso', cs.paso, 'estado', cs.estado, 'enrolled_at', COALESCE((cs.start_date + TIME '12:00')::timestamptz, cs.created_at), 'paso_date', cs.paso_date::text) ORDER BY s.nombre)
+        COALESCE((SELECT json_agg(json_build_object('id', s.id, 'nombre', s.nombre, 'paso', cs.paso, 'estado', cs.estado, 'enrolled_at', COALESCE((cs.start_date + TIME '12:00')::timestamptz, cs.created_at), 'paso_date', cs.paso_date::text, 'contact_sequence_id', cs.id, 'paused_reason', cs.paused_reason, 'next_action_at', cs.next_action_at) ORDER BY s.nombre)
                   FROM lm_contact_sequences cs JOIN sequences s ON s.id = cs.sequence_id
                   WHERE cs.contact_id = k.id), '[]') AS sequences,
         COALESCE((SELECT json_agg(json_build_object('id', cp.id, 'nombre', cp.nombre) ORDER BY cp.nombre)
@@ -3658,6 +3658,32 @@ app.get('/api/lm/tasks/inbox', requireAuth, async (req, res) => {
          AND a.fecha >= NOW() - interval '1 day' AND a.fecha <= NOW() + interval '1 day'
        ORDER BY a.fecha ASC`, [uid]);
 
+    // 5. FALLOS Y BLOQUEOS — mensajes que fallaron o rebotaron en los últimos 14 días.
+    const { rows: fails } = await pool.query(`
+      SELECT m.id, m.contact_id, m.sequence_id, m.step_id, COALESCE(m.sent_at, m.created_at) AS due_at,
+             COALESCE(m.error,'') AS reason, k.nombre, k.apellido, k.email,
+             s.outbound_client_id, s.campaign_id
+        FROM lm_messages m
+        JOIN lm_contacts k ON k.id=m.contact_id
+        LEFT JOIN sequences s ON s.id=m.sequence_id
+       WHERE m.user_id=$1 AND m.estado IN ('failed','bounced')
+         AND COALESCE(m.sent_at, m.created_at) > NOW() - interval '14 days'
+       ORDER BY due_at DESC`, [uid]);
+
+    // 6. DATOS OBLIGATORIOS FALTANTES — contactos pausados por falta/error de dato.
+    const { rows: dataIssues } = await pool.query(`
+      SELECT k.id AS contact_id, k.outbound_client_id, k.nombre, k.apellido, k.email, k.data_issue AS reason
+        FROM lm_contacts k WHERE k.user_id=$1 AND k.data_issue <> ''
+       ORDER BY k.updated_at DESC NULLS LAST`, [uid]);
+
+    // 7. LINKEDIN ACEPTADO CON SIGUIENTE ACCIÓN — aceptó la invitación y tiene una secuencia activa esperando el siguiente paso.
+    const { rows: liAccepted } = await pool.query(`
+      SELECT DISTINCT k.id AS contact_id, k.outbound_client_id, k.nombre, k.apellido, k.email,
+             cs.sequence_id, cs.next_action_at AS due_at
+        FROM lm_contacts k JOIN lm_contact_sequences cs ON cs.contact_id=k.id AND cs.user_id=k.user_id
+       WHERE k.user_id=$1 AND k.disposition='aceptado' AND cs.estado='activo'
+       ORDER BY due_at ASC NULLS LAST`, [uid]);
+
     const nameOf = r => [r.nombre, r.apellido].filter(Boolean).join(' ') || r.email || `#${r.contact_id}`;
     const mk = (r, category, task_type, reason_code) => ({
       category, task_type, reason_code,
@@ -3674,8 +3700,13 @@ app.get('/api/lm/tasks/inbox', requireAuth, async (req, res) => {
     for (const r of reps)  list.push(mk(r, 'respuestas',    'review_reply', 'reply_pending'));
     // Aprobaciones: si el contacto ya tiene tarea de respuesta, saltar (respuestas prioriza)
     for (const r of apps)  if (!respContactIds.has(r.contact_id)) list.push({ ...mk(r, 'aprobaciones', 'approve_email', 'draft_awaiting'), message_id: r.id, activity_id: null });
+    for (const r of fails) if (!respContactIds.has(r.contact_id)) list.push({ ...mk(r, 'fallos', 'resolve_failure', 'send_failed'), message_id: r.id, activity_id: null });
     for (const r of over)  if (!respContactIds.has(r.contact_id)) list.push(mk(r, 'vencidas',      'manual_touch', 'overdue'));
     for (const r of today) if (!respContactIds.has(r.contact_id)) list.push(mk(r, 'hoy',           'manual_touch', 'due_today'));
+    // LinkedIn aceptado y Datos faltantes van al final — no compiten con lo urgente, solo se agregan si el contacto no salió ya en otra categoría.
+    const seenSoFar = new Set(list.map(x => x.contact_id));
+    for (const r of liAccepted) if (!seenSoFar.has(r.contact_id)) { list.push({ ...mk(r, 'linkedin_aceptado', 'next_step', 'li_accepted'), message_id: null, activity_id: null }); seenSoFar.add(r.contact_id); }
+    for (const r of dataIssues) if (!seenSoFar.has(r.contact_id)) { list.push({ ...mk(r, 'datos_faltantes', 'fix_data', 'missing_data'), message_id: null, activity_id: null }); seenSoFar.add(r.contact_id); }
 
     const counts = list.reduce((a, x) => ((a[x.category] = (a[x.category] || 0) + 1), a), {});
     res.json({ ok: true, counts, items: list });
@@ -3718,16 +3749,19 @@ app.post('/api/lm/contacts/:id/refer', requireAuth, async (req, res) => {
         [cid, orig.company_id, nuevo.id]);
     }
 
-    // Enrolar al nuevo en las mismas secuencias del original, desde el paso 1 (no vio los envíos previos).
-    const { rows: seqs } = await client.query(
-      `SELECT DISTINCT sequence_id FROM lm_contact_sequences WHERE user_id=$1 AND contact_id=$2`, [uid, cid]);
+    // El nuevo referido NO se enrola automáticamente (requiere acción humana explícita después
+    // de crearlo/vincularlo) — se informan las secuencias del original como sugerencia para el frontend.
     let enrolado = 0;
-    for (const s of seqs) {
-      const r = await client.query(
-        `INSERT INTO lm_contact_sequences (user_id, contact_id, sequence_id, paso, estado, start_date, next_action_at)
-         VALUES ($1,$2,$3,1,'activo',CURRENT_DATE,NOW()) ON CONFLICT (contact_id, sequence_id) DO NOTHING`,
-        [uid, nuevo.id, s.sequence_id]);
-      enrolado += r.rowCount;
+    const { rows: origSeqs } = await client.query(
+      `SELECT DISTINCT sequence_id FROM lm_contact_sequences WHERE user_id=$1 AND contact_id=$2`, [uid, cid]);
+    if (b.auto_enroll === true) {
+      for (const s of origSeqs) {
+        const r = await client.query(
+          `INSERT INTO lm_contact_sequences (user_id, contact_id, sequence_id, paso, estado, start_date, next_action_at)
+           VALUES ($1,$2,$3,1,'activo',CURRENT_DATE,NOW()) ON CONFLICT (contact_id, sequence_id) DO NOTHING`,
+          [uid, nuevo.id, s.sequence_id]);
+        enrolado += r.rowCount;
+      }
     }
 
     // El original sale de la cola (sin marcarse como perdido) y queda la traza en ambos.
@@ -3740,7 +3774,7 @@ app.post('/api/lm/contacts/:id/refer', requireAuth, async (req, res) => {
     await client.query(`INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, nota, fecha, estado) VALUES ($1,$2,$3,'nota',$4,NOW(),'hecha')`,
       [uid, nuevo.id, orig.outbound_client_id, `Referido por ${nomOrig} (misma empresa)`]);
     await client.query('COMMIT');
-    res.status(201).json({ ok: true, contacto: nuevo, enrolado, disposition: disp });
+    res.status(201).json({ ok: true, contacto: nuevo, enrolado, disposition: disp, suggested_sequence_ids: origSeqs.map(s => s.sequence_id) });
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
     console.error('[lm-refer]', err.message);
