@@ -376,7 +376,7 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback) {
       const sent = await sendFromMailbox(mbx, auth, {
         to: enr.email, subject: asunto, html,
         text: cuerpoTxt + (firmaEfectiva ? `\n\n${String(firmaEfectiva).replace(/<[^>]+>/g, '')}` : ''),
-        fromName: cfg.from_name,
+        fromName: mbx.from_name || cfg.from_name,
         cc: (!step.cc_off && mbx.cc_email) || undefined,  // CC del cliente, salvo que el paso lo desactive
         inReplyTo: inReplyTo || undefined,
         references: inReplyTo || undefined,
@@ -435,7 +435,7 @@ async function _flushScheduled(pool) {
            mb.id AS mb_ok, mb.email AS mb_email, mb.pass_enc, mb.smtp_host, mb.smtp_port, mb.smtp_secure,
            mb.imap_host, mb.imap_port, mb.provider, mb.sent_folder, mb.estado AS mb_estado,
            mb.auth_method, mb.oauth_provider, mb.oauth_access_enc, mb.oauth_refresh_enc, mb.oauth_expires_at,
-           cfg.from_name
+           mb.from_name AS mb_from_name, cfg.from_name AS cfg_from_name
       FROM lm_messages m
       LEFT JOIN lm_mailboxes mb ON mb.id = m.mailbox_id
       LEFT JOIN lm_send_settings cfg ON cfg.user_id = m.user_id
@@ -459,7 +459,7 @@ async function _flushScheduled(pool) {
       const sent = await sendFromMailbox(mb, auth, {
         to: m.to_email, cc: m.cc_emails || undefined,   // conserva a los de copia
         subject: m.asunto, text: m.cuerpo, html,
-        fromName: m.from_name || undefined,
+        fromName: m.mb_from_name || m.cfg_from_name || undefined,
         inReplyTo: m.in_reply_to || undefined,
         references: m.in_reply_to || undefined,
       });
@@ -503,8 +503,8 @@ async function _flushApproved(pool, apiBase) {
            mb.id AS mb_ok, mb.email AS mb_email, mb.pass_enc, mb.smtp_host, mb.smtp_port, mb.smtp_secure,
            mb.imap_host, mb.imap_port, mb.provider, mb.sent_folder, mb.estado AS mb_estado,
            mb.auth_method, mb.oauth_provider, mb.oauth_access_enc, mb.oauth_refresh_enc, mb.oauth_expires_at,
-           mb.signature_html AS mb_signature,
-           cfg.from_name, cfg.firma, cfg.track_opens, cfg.track_clicks,
+           mb.signature_html AS mb_signature, mb.from_name AS mb_from_name,
+           cfg.from_name AS cfg_from_name, cfg.firma, cfg.track_opens, cfg.track_clicks,
            cfg.window_start, cfg.window_end, cfg.send_weekends, cfg.timezone,
            s.send_days,
            COALESCE(oc.cc_email,'') AS cc_email, COALESCE(st.cc_off, FALSE) AS cc_off,
@@ -576,7 +576,7 @@ async function _flushApproved(pool, apiBase) {
       const sent = await sendFromMailbox(mb, auth, {
         to: m.to_email, subject, html,
         text: m.cuerpo + (firmaEfectiva ? `\n\n${String(firmaEfectiva).replace(/<[^>]+>/g, '')}` : ''),
-        fromName: m.from_name || undefined,
+        fromName: m.mb_from_name || m.cfg_from_name || undefined,
         cc: (!m.cc_off && m.cc_email) || undefined,  // CC del cliente, salvo que el paso lo desactive
         inReplyTo: inReplyTo || undefined,
         references: inReplyTo || undefined,

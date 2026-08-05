@@ -3616,10 +3616,10 @@ app.get('/api/lm/tasks/inbox', requireAuth, async (req, res) => {
              k.nombre, k.apellido, k.email,
              (SELECT sequence_id FROM lm_contact_sequences cs2
                 WHERE cs2.contact_id=k.id AND cs2.estado IN ('respondido','pausado','activo')
-                ORDER BY cs2.updated_at DESC NULLS LAST, cs2.id DESC LIMIT 1) AS sequence_id,
+                ORDER BY cs2.created_at DESC NULLS LAST, cs2.id DESC LIMIT 1) AS sequence_id,
              (SELECT paso FROM lm_contact_sequences cs2
                 WHERE cs2.contact_id=k.id AND cs2.estado IN ('respondido','pausado','activo')
-                ORDER BY cs2.updated_at DESC NULLS LAST, cs2.id DESC LIMIT 1) AS paso
+                ORDER BY cs2.created_at DESC NULLS LAST, cs2.id DESC LIMIT 1) AS paso
         FROM activities a JOIN lm_contacts k ON k.id=a.contact_id
        WHERE a.user_id=$1 AND a.tipo='revisar_respuesta' AND a.estado='pendiente'
        ORDER BY a.fecha ASC`, [uid]);
@@ -3930,7 +3930,7 @@ app.get('/api/lm/sequences/:id/metrics', requireAuth, async (req, res) => {
 const mailboxSvc = require('./services/mailboxService');
 app.get('/api/lm/mailboxes', requireAuth, async (req, res) => {
   try {
-    const { rows } = await pool.query(`SELECT id, outbound_client_id, email, provider, smtp_host, smtp_port, imap_host, imap_port, estado, last_error, verified_at FROM lm_mailboxes WHERE user_id=$1 ORDER BY id`, [req.workspaceOwnerId]);
+    const { rows } = await pool.query(`SELECT id, outbound_client_id, email, provider, smtp_host, smtp_port, imap_host, imap_port, estado, last_error, verified_at, signature_html, from_name FROM lm_mailboxes WHERE user_id=$1 ORDER BY id`, [req.workspaceOwnerId]);
     res.json(rows);
   } catch (err) { console.error('[mailbox] GET', err.message); res.status(500).json({ error: 'Error al cargar buzones' }); }
 });
@@ -3997,11 +3997,12 @@ app.put('/api/lm/mailboxes/:id/signature', requireAuth, async (req, res) => {
   try {
     const html = String((req.body || {}).signature_html || '');
     if (html.length > 524288) return res.status(400).json({ error: 'La firma pesa más de 512KB — reduce el tamaño de la imagen (usa una URL en vez de base64, o comprímela).' });
+    const fromName = String((req.body || {}).from_name || '').trim().slice(0, 120);
     const { rowCount } = await pool.query(
-      `UPDATE lm_mailboxes SET signature_html=$1 WHERE id=$2 AND user_id=$3`,
-      [html, req.params.id, req.workspaceOwnerId]);
+      `UPDATE lm_mailboxes SET signature_html=$1, from_name=$2 WHERE id=$3 AND user_id=$4`,
+      [html, fromName, req.params.id, req.workspaceOwnerId]);
     if (!rowCount) return res.status(404).json({ error: 'Buzón no encontrado' });
-    res.json({ ok: true, length: html.length });
+    res.json({ ok: true, length: html.length, from_name: fromName });
   } catch (err) { console.error('[mailbox] signature PUT', err.message); res.status(500).json({ error: 'Error al guardar la firma' }); }
 });
 
@@ -4708,7 +4709,7 @@ app.post('/api/lm/inbox/reply', requireAuth, async (req, res) => {
     const sent = await mailboxSvc.sendFromMailbox(mb, auth, {
       to: to.join(', '), cc: cc.length ? cc.join(', ') : undefined,
       subject: asunto, text: cuerpo, html,
-      fromName: String(b.from_name || '').trim() || undefined,
+      fromName: String(b.from_name || '').trim() || mb.from_name || undefined,
       inReplyTo: lastIn?.message_id || undefined,
       references: lastIn?.message_id || undefined,
     });

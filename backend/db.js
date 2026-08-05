@@ -1214,6 +1214,11 @@ async function initDb() {
     await pool.query(`ALTER TABLE lm_mailboxes ADD COLUMN IF NOT EXISTS needs_admin_consent BOOLEAN NOT NULL DEFAULT FALSE;`);
     await pool.query(`ALTER TABLE lm_mailboxes ADD COLUMN IF NOT EXISTS admin_consent_requested_at TIMESTAMPTZ;`);
     await pool.query(`ALTER TABLE lm_mailboxes ADD COLUMN IF NOT EXISTS admin_consent_sent_to TEXT NOT NULL DEFAULT '';`);
+    // Nombre del remitente POR BUZÓN: antes todo envío usaba lm_send_settings.from_name
+    // (global por usuario), así que un cliente veía el nombre de OTRO (bug real: MWHAds
+    // mostrando "Alberto Santos", el nombre configurado para Greglo). Vacío = usa el
+    // global como fallback (sin romper buzones que aún no lo configuraron).
+    await pool.query(`ALTER TABLE lm_mailboxes ADD COLUMN IF NOT EXISTS from_name TEXT NOT NULL DEFAULT '';`);
 
     // lm_inbox_messages: correos ENTRANTES detectados por el vigilante IMAP (F2).
     // Solo se guardan los relevantes: remitente que es contacto del CRM, o rebotes.

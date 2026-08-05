@@ -17086,7 +17086,7 @@ ${foot}
            <div class="mbx-acts">
              ${!needsConsent ? `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.mbTest(${mb.id})">Probar envío</button>` : ''}
              <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.mbOpen(${c.id})">Cambiar</button>
-             <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.mbSignatureOpen(${mb.id})" title="Editar la firma HTML de este buzón">✎ Firma${mb.signature_html ? ' <span style=\"color:#15803D\">●</span>' : ''}</button>
+             <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.mbSignatureOpen(${mb.id})" title="Editar el nombre de remitente y la firma HTML de este buzón">✎ Remitente/Firma${(mb.signature_html || mb.from_name) ? ' <span style=\"color:#15803D\">●</span>' : ''}</button>
              ${mb.provider === 'microsoft' && !needsConsent ? `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.mbAdminConsentQuick(${c.id})" title="Si Microsoft pidió aprobación del admin del tenant">📧 Pedir consent al admin</button>` : ''}
              <button class="btn btn--ghost btn--sm" style="color:var(--danger)" onclick="LeadManagerModule.mbDelete(${mb.id})">Quitar</button>
            </div>`
@@ -17236,13 +17236,14 @@ ${foot}
     m.innerHTML = `<div class="fin-pi-box dle-box" style="max-width:940px;width:96vw;max-height:90vh;display:flex;flex-direction:column;padding:0">
       <div class="dle-hd" style="flex:0 0 auto;padding:18px 22px;border-bottom:1px solid #E5E4E1">
         <div style="flex:1;min-width:0">
-          <div class="dle-hd__t">✎ Firma del buzón · ${esc(mb.email)}</div>
-          <div class="dle-hd__s">Esta firma se añade automáticamente al final de cada correo que salga por este buzón. Pisa a la firma global. Acepta HTML completo (imagen base64, links, estilos inline).</div>
+          <div class="dle-hd__t">✎ Remitente y firma del buzón · ${esc(mb.email)}</div>
+          <div class="dle-hd__s">El nombre y la firma de aquí pisan a los globales de Configuración solo para este buzón. Firma acepta HTML completo (imagen base64, links, estilos inline).</div>
         </div>
         <button class="fin-pi-x" onclick="document.getElementById('mbx-sig-modal').remove()">✕</button>
       </div>
       <div style="flex:1 1 auto;overflow-y:auto;padding:18px 22px">
         <div class="dle-grid">
+          <label class="dle-f dle-f--full"><span class="dle-l">Nombre del remitente (así lo ve el destinatario)</span><input class="dle-i" id="mbx-from-name" value="${esc(mb.from_name || '')}" placeholder="Ej. Jenny · MWH Advertising — vacío usa el nombre global de Configuración"></label>
           <div class="dle-f dle-f--full">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
               <span class="dle-l" style="margin:0">HTML de la firma</span>
@@ -17314,18 +17315,19 @@ ${foot}
   }
   async function mbSignatureSave(mbId) {
     const html = ($('mbx-sig-html')?.value || '');
+    const fromName = ($('mbx-from-name')?.value || '').trim();
     const err = $('mbx-sig-err');
     const btn = $('mbx-sig-save'); if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
     try {
       const r = await apiFetch(`${API}/lm/mailboxes/${mbId}/signature`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ signature_html: html })
+        body: JSON.stringify({ signature_html: html, from_name: fromName })
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'Error');
       document.getElementById('mbx-sig-modal').remove();
       await _mbReload();
-      showBanner(`✓ Firma guardada${html ? ` (${(html.length/1024).toFixed(1)} KB)` : ' — vacía, se usará la firma global si la hay'}`, 'success');
+      showBanner(`✓ Guardado${fromName ? ` · remitente: "${fromName}"` : ''}${html ? ` · firma ${(html.length/1024).toFixed(1)} KB` : ''}`, 'success');
     } catch (e) {
       if (err) { err.textContent = e.message; err.style.display = ''; }
       if (btn) { btn.disabled = false; btn.textContent = 'Guardar firma'; }

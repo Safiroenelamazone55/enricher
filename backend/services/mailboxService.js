@@ -28,7 +28,7 @@ function decPass(enc) {
 // Presets por proveedor. Microsoft usa 587+STARTTLS; el resto 465 SSL.
 const PROVIDERS = {
   google:    { smtp: ['smtp.gmail.com', 465, true],      imap: ['imap.gmail.com', 993],        sentAuto: true  },
-  microsoft: { smtp: ['smtp.office365.com', 587, false], imap: ['outlook.office365.com', 993], sentAuto: false },
+  microsoft: { smtp: ['smtp.office365.com', 587, false], imap: ['outlook.office365.com', 993], sentAuto: true  },
   zoho:      { smtp: ['smtp.zoho.com', 465, true],       imap: ['imap.zoho.com', 993],         sentAuto: false },
   otro:      null,
 };
