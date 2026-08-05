@@ -3814,6 +3814,29 @@ app.post('/api/lm/contacts/:id/no-linkedin', requireAuth, async (req, res) => {
     res.json({ ok: true, no_linkedin: value });
   } catch (err) { console.error('[lm-noli]', err.message); res.status(500).json({ error: 'Error al actualizar' }); }
 });
+// Mismo patrón que no-linkedin, para WhatsApp y Llamada (número presente pero confirmado incorrecto).
+app.post('/api/lm/contacts/:id/no-whatsapp', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId, cid = req.params.id;
+  const value = !!(req.body || {}).value;
+  try {
+    const r = await pool.query(`UPDATE lm_contacts SET no_whatsapp=$1, updated_at=NOW() WHERE id=$2 AND user_id=$3 RETURNING outbound_client_id`, [value, cid, uid]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Contacto no encontrado' });
+    await pool.query(`INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, nota, fecha, estado) VALUES ($1,$2,$3,'nota',$4,NOW(),'hecha')`,
+      [uid, cid, r.rows[0].outbound_client_id || null, value ? 'WhatsApp marcado como número no válido → salta sus pasos de WhatsApp' : 'WhatsApp habilitado de nuevo para este contacto']);
+    res.json({ ok: true, no_whatsapp: value });
+  } catch (err) { console.error('[lm-nowa]', err.message); res.status(500).json({ error: 'Error al actualizar' }); }
+});
+app.post('/api/lm/contacts/:id/no-phone', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId, cid = req.params.id;
+  const value = !!(req.body || {}).value;
+  try {
+    const r = await pool.query(`UPDATE lm_contacts SET no_phone=$1, updated_at=NOW() WHERE id=$2 AND user_id=$3 RETURNING outbound_client_id`, [value, cid, uid]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Contacto no encontrado' });
+    await pool.query(`INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, nota, fecha, estado) VALUES ($1,$2,$3,'nota',$4,NOW(),'hecha')`,
+      [uid, cid, r.rows[0].outbound_client_id || null, value ? 'Teléfono marcado como número no válido → salta sus pasos de llamada' : 'Teléfono habilitado de nuevo para este contacto']);
+    res.json({ ok: true, no_phone: value });
+  } catch (err) { console.error('[lm-nophone]', err.message); res.status(500).json({ error: 'Error al actualizar' }); }
+});
 // Estado manual del email: 'bounced' (rebotó — pausa sus secuencias para corregirlo),
 // 'manual' (ingresado/confirmado a mano → enviable) o '' (volver a "sin verificar").
 app.post('/api/lm/contacts/:id/email-status', requireAuth, async (req, res) => {

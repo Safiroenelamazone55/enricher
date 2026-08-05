@@ -11501,9 +11501,10 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .cp-mark-btn { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border); background: var(--surface); color: var(--text-secondary); font-size: .78rem; font-weight: 500; padding: 6px 12px; border-radius: 9px; cursor: pointer; font-family: inherit; transition: border-color .12s, background .12s; }
 .cp-mark-btn:hover { border-color: var(--border-strong); background: var(--surface-hover); }
 .cp-mark-btn svg { opacity: .6; }
-.cp-mark-menu { position: fixed; z-index: 10050; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 24px rgba(16,24,20,.10); padding: 5px; min-width: 216px; display: flex; flex-direction: column; gap: 1px; font-family: var(--font); }
-.cp-mark-menu__h { font-size: .72rem; font-weight: 500; color: var(--text-muted); padding: 6px 10px 4px; }
-.cp-mark-menu__b { display: flex; align-items: center; gap: 9px; width: 100%; text-align: left; background: none; border: none; font: inherit; font-size: .84rem; font-weight: 500; color: var(--text-primary); padding: 8px 10px; border-radius: 8px; cursor: pointer; }
+.cp-mark-menu { position: fixed; z-index: 10050; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 24px rgba(16,24,20,.10); padding: 5px; min-width: 300px; max-width: 340px; display: flex; flex-direction: column; gap: 1px; font-family: var(--font); }
+.cp-mark-menu__h { font-size: .72rem; font-weight: 500; color: var(--text-muted); padding: 4px 8px 3px; }
+.cp-mark-menu__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; }
+.cp-mark-menu__b { display: flex; align-items: center; gap: 7px; width: 100%; text-align: left; background: none; border: none; font: inherit; font-size: .78rem; font-weight: 500; color: var(--text-primary); padding: 6px 8px; border-radius: 7px; cursor: pointer; line-height: 1.2; }
 .cp-mark-menu__b:hover { background: var(--surface-hover); }
 .cp-mark-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 .cp-mark-menu__sep { height: 1px; background: var(--border, #EAE7E2); margin: 4px 6px; }

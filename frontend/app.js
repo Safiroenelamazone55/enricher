@@ -15262,6 +15262,16 @@ ${foot}
     if (!res.ok) throw new Error((await res.json()).error || 'Error');
     return await res.json();
   }
+  async function _noWhatsappCore(cid, value) {
+    const res = await apiFetch(`${API}/lm/contacts/${cid}/no-whatsapp`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ value }) });
+    if (!res.ok) throw new Error((await res.json()).error || 'Error');
+    return await res.json();
+  }
+  async function _noPhoneCore(cid, value) {
+    const res = await apiFetch(`${API}/lm/contacts/${cid}/no-phone`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ value }) });
+    if (!res.ok) throw new Error((await res.json()).error || 'Error');
+    return await res.json();
+  }
   async function _emailStatusCore(cid, status) {
     const res = await apiFetch(`${API}/lm/contacts/${cid}/email-status`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) });
     if (!res.ok) throw new Error((await res.json()).error || 'Error');
@@ -15283,20 +15293,28 @@ ${foot}
     const close = "document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove())";
     const item = (label, onclick, dot) => `<button class="cp-mark-menu__b" onclick="${close};${onclick}">${dot ? `<span class="cp-mark-dot" style="background:${dot}"></span>` : ''}${label}</button>`;
     let html = `<div class="cp-mark-menu__h">Resultado del contacto</div>`;
-    html += _DISPOS.map(d => item(esc(d[1]), `LeadManagerModule.seqDoDisposition('${d[0]}')`, d[2])).join('');
+    html += `<div class="cp-mark-menu__grid">` + _DISPOS.map(d => item(esc(d[1]), `LeadManagerModule.seqDoDisposition('${d[0]}')`, d[2])).join('') + `</div>`;
     html += `<div class="cp-mark-menu__sep"></div>`;
-    if (canal === 'linkedin') html += item('🚫 LinkedIn no válido', 'LeadManagerModule.seqDoNoLinkedIn()');
-    if (canal === 'email') html += item('↩ Email rebotó', 'LeadManagerModule.seqDoBounced()');
-    html += item('✉ Falta email', "LeadManagerModule.seqDoDataIssuePick('falta_email')");
-    html += item('🔗 Falta LinkedIn', "LeadManagerModule.seqDoDataIssuePick('falta_linkedin')");
-    html += item('⚠ Dato incorrecto', "LeadManagerModule.seqDoDataIssuePick('dato_incorrecto')");
+    // El problema del canal ACTUAL de la tarea va primero — es la opción que Jenny busca
+    // cuando el paso de hoy no se puede ejecutar (LinkedIn falso, email rebotado, WhatsApp
+    // o llamada sin número válido). Sin esto, la única salida era "Hecha", que es incorrecto:
+    // no se contactó a nadie, solo se saltó el paso.
+    const probItems = [];
+    if (canal === 'linkedin') probItems.push(item('🚫 LinkedIn no válido', 'LeadManagerModule.seqDoNoLinkedIn()'));
+    if (canal === 'email') probItems.push(item('↩ Email rebotó', 'LeadManagerModule.seqDoBounced()'));
+    if (canal === 'whatsapp') probItems.push(item('📵 WhatsApp no válido', 'LeadManagerModule.seqDoNoWhatsapp()'));
+    if (canal === 'call') probItems.push(item('📵 Teléfono no válido', 'LeadManagerModule.seqDoNoPhone()'));
+    probItems.push(item('✉ Falta email', "LeadManagerModule.seqDoDataIssuePick('falta_email')"));
+    probItems.push(item('🔗 Falta LinkedIn', "LeadManagerModule.seqDoDataIssuePick('falta_linkedin')"));
+    probItems.push(item('⚠ Dato incorrecto', "LeadManagerModule.seqDoDataIssuePick('dato_incorrecto')"));
+    html += `<div class="cp-mark-menu__grid">` + probItems.join('') + `</div>`;
     const menu = document.createElement('div');
     menu.className = 'cp-mark-menu';
     menu.innerHTML = html;
     document.body.appendChild(menu);
     const t = (ev && (ev.currentTarget || ev.target)) || document.body;
     const r = t.getBoundingClientRect();
-    menu.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 250))}px`;
+    menu.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 340))}px`;
     menu.style.top = `${r.top - 6}px`;
     menu.style.transform = 'translateY(-100%)';
     setTimeout(() => document.addEventListener('click', function onDoc(e) { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', onDoc); } }), 0);
@@ -15346,6 +15364,32 @@ ${foot}
       if (next) openContactPage(next.e.contact_id, { seqId: seqId }); else seqDoExit();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
+  // Mismo patrón que seqDoNoLinkedIn, para cuando el número de WhatsApp/teléfono SÍ existe
+  // pero está confirmado incorrecto (el caso "no hay número" ya se salta solo, sin marcar nada).
+  async function seqDoNoWhatsapp() {
+    if (!_cpTaskCtx) return;
+    const seqId = _cpTaskCtx.seqId, cid = _contactView;
+    if (!confirm('¿Marcar el número de WhatsApp como incorrecto para este contacto?\n\nNo lo saca de la secuencia: salta sus pasos de WhatsApp y sigue por el siguiente paso que aplique.')) return;
+    try {
+      await _noWhatsappCore(cid, true);
+      const c = (_contacts || []).find(x => x.id === cid); if (c) c.no_whatsapp = true;
+      showBanner('📵 WhatsApp no válido — salta sus pasos de WhatsApp', 'success');
+      const next = _cpNextTask(seqId, cid);
+      if (next) openContactPage(next.e.contact_id, { seqId: seqId }); else seqDoExit();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  async function seqDoNoPhone() {
+    if (!_cpTaskCtx) return;
+    const seqId = _cpTaskCtx.seqId, cid = _contactView;
+    if (!confirm('¿Marcar el teléfono como incorrecto para este contacto?\n\nNo lo saca de la secuencia: salta sus pasos de llamada y sigue por el siguiente paso que aplique.')) return;
+    try {
+      await _noPhoneCore(cid, true);
+      const c = (_contacts || []).find(x => x.id === cid); if (c) c.no_phone = true;
+      showBanner('📵 Teléfono no válido — salta sus pasos de llamada', 'success');
+      const next = _cpNextTask(seqId, cid);
+      if (next) openContactPage(next.e.contact_id, { seqId: seqId }); else seqDoExit();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
   // Desde la barra de tarea (paso email): el email rebotó → pausa y va a la lista Rebotados.
   async function seqDoBounced() {
     if (!_cpTaskCtx) return;
@@ -15368,6 +15412,26 @@ ${foot}
       await _noLinkedInCore(cid, to);
       if (c) c.no_linkedin = to;
       showBanner(to ? '🚫 LinkedIn no válido — seguirá por email' : '✓ LinkedIn habilitado de nuevo', 'success');
+      _renderBody();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  async function lmToggleNoWhatsapp(cid) {
+    const c = (_contacts || []).find(x => x.id === cid); const to = !(c && c.no_whatsapp);
+    if (to && !confirm('¿Marcar el número de WhatsApp como incorrecto para este contacto?\n\nSalta sus pasos de WhatsApp y sigue por el siguiente paso que aplique.')) return;
+    try {
+      await _noWhatsappCore(cid, to);
+      if (c) c.no_whatsapp = to;
+      showBanner(to ? '📵 WhatsApp no válido — saltará sus pasos' : '✓ WhatsApp habilitado de nuevo', 'success');
+      _renderBody();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  async function lmToggleNoPhone(cid) {
+    const c = (_contacts || []).find(x => x.id === cid); const to = !(c && c.no_phone);
+    if (to && !confirm('¿Marcar el teléfono como incorrecto para este contacto?\n\nSalta sus pasos de llamada y sigue por el siguiente paso que aplique.')) return;
+    try {
+      await _noPhoneCore(cid, to);
+      if (c) c.no_phone = to;
+      showBanner(to ? '📵 Teléfono no válido — saltará sus pasos' : '✓ Teléfono habilitado de nuevo', 'success');
       _renderBody();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
@@ -15780,9 +15844,16 @@ ${foot}
   // de la secuencia: ambas son "hubo señal, sigue por la ruta de seguimiento".
   function _respondedC(cid) { const c = (_contacts || []).find(x => x.id === cid); return !!(c && (c.disposition === 'respondio' || c.disposition === 'aceptado')); }
   function _noLinkedInC(cid) { const c = (_contacts || []).find(x => x.id === cid); return !!(c && c.no_linkedin); }
+  // WhatsApp/Llamada se saltan solas si el contacto NO TIENE número (nada que marcar a mano
+  // para ese caso — es un hecho de los datos) o si Jenny lo marcó a mano como número incorrecto
+  // (mismo patrón que no_linkedin, para cuando el número SÍ existe pero está mal).
+  function _noWhatsappC(cid) { const c = (_contacts || []).find(x => x.id === cid); return !c || !_waDigits(c) || !!c.no_whatsapp; }
+  function _noPhoneC(cid) { const c = (_contacts || []).find(x => x.id === cid); return !c || !String(c.movil || c.celular || c.telefono || c.phone || '').trim() || !!c.no_phone; }
   function _stepCondMatch(st, cid) {
     // Canal LinkedIn no válido para este contacto (perfil falso/inactivo) → sus pasos de LinkedIn se saltan.
     if (st && st.canal === 'linkedin' && _noLinkedInC(cid)) return false;
+    if (st && st.canal === 'whatsapp' && _noWhatsappC(cid)) return false;
+    if (st && st.canal === 'call' && _noPhoneC(cid)) return false;
     const cd = (st && st.cond) || ''; if (!cd) return true; const r = _respondedC(cid); return cd === 'replied' ? r : cd === 'no_reply' ? !r : true;
   }
   // Índice del paso EFECTIVO: el primero desde fromIdx cuya condición aplica al contacto, o -1 si ninguno.
@@ -20058,13 +20129,15 @@ ${foot}
                c.email ? `<button class="cp-dispo-b cp-dispo-b--xs" onclick="LeadManagerModule.go('inbox');LeadManagerModule.ibOpen(${id})">Abrir conversación</button>` : '',
                `<button class="cp-dispo-b cp-dispo-b--xs" onclick="LeadManagerModule.cpFocusField('email')">Corregir</button>`,
                `<button class="cp-dispo-b cp-dispo-b--xs${c.email_status === 'manual' ? ' on' : ''}" onclick="LeadManagerModule.lmToggleManualEmail(${id})">Email enviado manualmente</button>`].filter(Boolean))}
-            ${_cpChannelRow('WhatsApp', _waDigits(c) ? ['Disponible', '#065F46', '#D1FAE5'] : ['Sin número', '#6C6862', '#F1EFEB'],
-              [_waDigits(c) ? `<a class="cp-dispo-b cp-dispo-b--xs" href="https://wa.me/${_waDigits(c)}" target="_blank" rel="noopener">Abrir</a>` : '',
+            ${_cpChannelRow('WhatsApp', !_waDigits(c) ? ['Sin número', '#6C6862', '#F1EFEB'] : c.no_whatsapp ? ['Número no válido', '#B45309', '#FEF3C7'] : ['Disponible', '#065F46', '#D1FAE5'],
+              [(_waDigits(c) && !c.no_whatsapp) ? `<a class="cp-dispo-b cp-dispo-b--xs" href="https://wa.me/${_waDigits(c)}" target="_blank" rel="noopener">Abrir</a>` : '',
                _waDigits(c) ? `<button class="cp-dispo-b cp-dispo-b--xs" onclick="LeadManagerModule.lmCopy('${esc(String(c.movil || c.telefono || '').replace(/'/g, '&#39;'))}','Copiado')">Copiar</button>` : '',
-               `<button class="cp-dispo-b cp-dispo-b--xs" onclick="LeadManagerModule.cpOpenRegisterReply(${id},'whatsapp')">Registrar respuesta</button>`].filter(Boolean))}
-            ${_cpChannelRow('Teléfono', (c.telefono || c.movil) ? ['Disponible', '#065F46', '#D1FAE5'] : ['No disponible', '#6C6862', '#F1EFEB'],
+               `<button class="cp-dispo-b cp-dispo-b--xs" onclick="LeadManagerModule.cpOpenRegisterReply(${id},'whatsapp')">Registrar respuesta</button>`,
+               _waDigits(c) ? `<button class="cp-dispo-b cp-dispo-b--xs${c.no_whatsapp ? ' on' : ''}" onclick="LeadManagerModule.lmToggleNoWhatsapp(${id})">${c.no_whatsapp ? 'Marcar válido' : 'Marcar no válido'}</button>` : ''].filter(Boolean))}
+            ${_cpChannelRow('Teléfono', !(c.telefono || c.movil) ? ['No disponible', '#6C6862', '#F1EFEB'] : c.no_phone ? ['Número no válido', '#B45309', '#FEF3C7'] : ['Disponible', '#065F46', '#D1FAE5'],
               [(c.telefono || c.movil) ? `<button class="cp-dispo-b cp-dispo-b--xs" onclick="LeadManagerModule.lmCopy('${esc(String(c.telefono || c.movil || '').replace(/'/g, '&#39;'))}','Copiado')">Copiar</button>` : '',
-               (c.telefono || c.movil) ? `<button class="cp-dispo-b cp-dispo-b--xs" onclick="LeadManagerModule.cpActOpen('llamada')">Registrar llamada</button>` : ''].filter(Boolean))}
+               (c.telefono || c.movil) ? `<button class="cp-dispo-b cp-dispo-b--xs" onclick="LeadManagerModule.cpActOpen('llamada')">Registrar llamada</button>` : '',
+               (c.telefono || c.movil) ? `<button class="cp-dispo-b cp-dispo-b--xs${c.no_phone ? ' on' : ''}" onclick="LeadManagerModule.lmToggleNoPhone(${id})">${c.no_phone ? 'Marcar válido' : 'Marcar no válido'}</button>` : ''].filter(Boolean))}
           </div></div>
           ${rawKeys.length ? `<div class="cp-card"><div class="cp-card__t">Datos importados (sin mapear)</div><div class="cp-fields">${rawKeys.map(k => `<div class="cp-f"><span class="cp-f__l">${esc(k)}</span><span class="cp-f__ro">${esc(raw[k])}</span></div>`).join('')}</div></div>` : ''}
         </div>
@@ -21353,7 +21426,7 @@ ${foot}
     openViews, applyView, saveView, deleteView, clearAllViews,
     taskSetView, taskSetFilter, calPrev, calNext, calToday,
     lmSetDisposition, seqDoDisposition, cpSetStage,
-    seqDoNoLinkedIn, seqDoBounced, lmToggleNoLinkedIn, lmToggleBounced, lmToggleManualEmail, ctToggleBounced,
+    seqDoNoLinkedIn, seqDoBounced, seqDoNoWhatsapp, seqDoNoPhone, lmToggleNoLinkedIn, lmToggleNoWhatsapp, lmToggleNoPhone, lmToggleBounced, lmToggleManualEmail, ctToggleBounced,
     seqDoDataIssue, seqDoDataIssuePick, ctToggleDataIssue, lmResumeDataIssue, seqOpenMark,
     lmSetPageSize, ctGoPage, coGoPage, seqCtSetEstado, seqTaskSetCanal,
     ldPill, ldSetCli, ldSetSeq, ldSetCamp, ldSetQ, ldAddNote, ldMeet, ldToDeal, ldEditNote, ldExport,

@@ -1132,6 +1132,10 @@ async function initDb() {
     // Canal LinkedIn no válido para este contacto (perfil falso/inactivo): el motor de tareas
     // salta sus pasos de LinkedIn y sigue por la ruta de email — NO se saca de la secuencia.
     await pool.query(`ALTER TABLE lm_contacts ADD COLUMN IF NOT EXISTS no_linkedin BOOLEAN NOT NULL DEFAULT FALSE;`);
+    // Mismo patrón que no_linkedin, para WhatsApp/Llamada: número presente pero confirmado
+    // incorrecto (no ausente — la ausencia de dato ya se detecta sola sin necesitar esta marca).
+    await pool.query(`ALTER TABLE lm_contacts ADD COLUMN IF NOT EXISTS no_whatsapp BOOLEAN NOT NULL DEFAULT FALSE;`);
+    await pool.query(`ALTER TABLE lm_contacts ADD COLUMN IF NOT EXISTS no_phone    BOOLEAN NOT NULL DEFAULT FALSE;`);
     // "Por corregir": falta/está mal un dato para contactar → pausa sus secuencias hasta arreglarlo.
     // '' (ok) | falta_email | falta_linkedin | dato_incorrecto
     await pool.query(`ALTER TABLE lm_contacts ADD COLUMN IF NOT EXISTS data_issue TEXT NOT NULL DEFAULT '';`);
