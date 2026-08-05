@@ -17225,7 +17225,7 @@ ${foot}
     r.onload = () => {
       const dataUrl = String(r.result);
       const ta = $('mbx-sig-html'); if (!ta) return;
-      const ins = `<img src="${dataUrl}" alt="firma" style="max-width:180px;height:auto;display:block">`;
+      const ins = `<img src="${dataUrl}" alt="firma" style="max-width:520px;width:100%;height:auto;display:block">`;
       const s = ta.selectionStart || 0, e = ta.selectionEnd || 0;
       ta.value = ta.value.slice(0, s) + ins + ta.value.slice(e);
       ta.focus(); const pos = s + ins.length; ta.setSelectionRange(pos, pos);
