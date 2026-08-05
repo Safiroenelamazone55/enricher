@@ -14132,7 +14132,7 @@ const LeadManagerModule = (() => {
     // Config de envío (ventana/fines de semana) para calcular la fecha real de envío en Aprobar.
     if (_sendCfg === null) apiFetch(`${API}/lm/send-settings`).then(r => r && r.ok && r.json().then(j => { _sendCfg = j; })).catch(() => {});
     try {
-      const [lr, cr, cmr, sr, str, ar, cor, ctr, tplr] = await Promise.all([
+      const [lr, cr, cmr, sr, str, ar, cor, ctr, tplr, mbr] = await Promise.all([
         apiFetch(`${API}/leads`).catch(() => null),
         apiFetch(`${API}/outbound-clients`).catch(() => null),
         apiFetch(`${API}/campaigns`).catch(() => null),
@@ -14142,6 +14142,7 @@ const LeadManagerModule = (() => {
         apiFetch(`${API}/lm/companies`).catch(() => null),
         apiFetch(`${API}/lm/contacts`).catch(() => null),
         apiFetch(`${API}/lm/templates`).catch(() => null),
+        apiFetch(`${API}/lm/mailboxes`).catch(() => null),
       ]);
       _data       = (lr && lr.ok)   ? await lr.json()  : [];
       _clients    = (cr && cr.ok)   ? await cr.json()  : [];
@@ -14152,6 +14153,13 @@ const LeadManagerModule = (() => {
       _companies  = (cor && cor.ok) ? await cor.json() : [];
       _contacts   = (ctr && ctr.ok) ? await ctr.json() : [];
       _lmTpls     = (tplr && tplr.ok) ? await tplr.json() : [];
+      // Bloque: _mailboxes se cargaba solo al abrir "Clientes outbound → [cliente]"
+      // (openClient → _mbReload). Si se entraba directo a Aprobar/Editar desde otra
+      // vista (Tareas, Prioridad, Secuencia), _mbFor() veía _mailboxes===null y
+      // mostraba "⚠ sin buzón" aunque SÍ hubiera uno conectado — se corregía solo
+      // al abrir un cliente y disparar esa carga lazy. Cargarlo aquí (una vez, al
+      // entrar al módulo) elimina la carrera para cualquier vista de entrada.
+      if (_mailboxes === null) _mailboxes = (mbr && mbr.ok) ? await mbr.json() : [];
       if (!Array.isArray(_data)) _data = [];
       if (!Array.isArray(_clients)) _clients = [];
       if (!Array.isArray(_campaigns)) _campaigns = [];
@@ -14161,6 +14169,7 @@ const LeadManagerModule = (() => {
       if (!Array.isArray(_companies)) _companies = [];
       if (!Array.isArray(_contacts)) _contacts = [];
       if (!Array.isArray(_lmTpls)) _lmTpls = [];
+      if (!Array.isArray(_mailboxes)) _mailboxes = [];
     } catch (e) { console.warn('[lm] load error:', e.message); _data = []; _clients = []; _campaigns = []; _sequences = []; _steps = []; _activities = []; }
     _renderBody();
     _loadNavCounts();                          // insignias visibles desde el primer momento
