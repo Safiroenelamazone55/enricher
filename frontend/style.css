@@ -12615,22 +12615,21 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   background: #FAF6EF;
 }
-.home-page__hd { flex-shrink: 0; margin-bottom: 12px; max-width: 1000px; display: flex; align-items: center; justify-content: flex-end; }
 
-/* Grilla fija 3×3 (como la referencia): las columnas mantienen el ancho de
-   tarjeta aprobado, las filas se reparten el alto disponible para que la
-   Home entre completa en pantalla, sin scroll. */
+/* Grilla fija 3×3 (como la referencia): las tarjetas mantienen su alto natural
+   y compacto (no se estiran), alineadas arriba; el bloque completo siempre
+   entra en el alto disponible sin necesitar scroll. */
 .home-grid {
   flex: 1; min-height: 0; display: grid; gap: 14px; max-width: 1000px; width: 100%;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  grid-template-rows: repeat(3, minmax(0, 1fr));
+  grid-auto-rows: min-content;
+  align-content: start;
 }
 .home-card {
-  display: flex; flex-direction: column; gap: 14px; position: relative;
+  display: flex; flex-direction: column; gap: 12px; position: relative;
   padding: 16px 16px 14px; background: #fff; border: 1px solid #E8E4DE;
   border-radius: 12px; cursor: pointer; text-align: left; font-family: inherit;
   transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
-  height: 100%; min-height: 0;
 }
 .home-card:hover {
   border-color: #C9C4BC; box-shadow: 0 4px 14px rgba(16,24,40,.06);
@@ -12638,26 +12637,28 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
 }
 .home-card--placeholder { cursor: default; background: #FBFAF8; border-style: dashed; }
 .home-card--placeholder:hover { transform: none; box-shadow: none; border-color: #E8E4DE; }
-.home-card__kebab {
-  position: absolute; top: 10px; right: 10px; width: 22px; height: 22px; border-radius: 6px;
-  background: none; border: none; color: #B4AFA8; font-size: 15px; line-height: 1; cursor: pointer;
-  display: grid; place-items: center;
+
+/* Estructura de 2 filas como la referencia: arriba título+desc con el ícono
+   pequeño a la derecha; abajo el estado y el kebab, pegados al fondo de la card. */
+.home-card__top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.home-card__body { flex: 1; min-width: 0; }
+.home-card__title { font-weight: 700; font-size: 14.5px; color: #1F1D1B; margin-bottom: 4px; letter-spacing: -.005em; }
+.home-card__desc {
+  font-size: 12.5px; color: #6C6862; line-height: 1.4;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
-.home-card__kebab:hover { background: #F1EFEB; color: #6C6862; }
-/* Ícono estilo referencia: insignia sólida y saturada con el glyph en blanco (antes: pastel + trazo de color) */
 .home-card__icon {
-  width: 40px; height: 40px; border-radius: 10px; flex-shrink: 0;
+  width: 32px; height: 32px; border-radius: 9px; flex-shrink: 0;
   display: grid; place-items: center; color: #fff;
 }
-.home-card__icon svg { stroke: #fff; }
+.home-card__icon svg { width: 16px; height: 16px; stroke: #fff; }
 .home-card__icon--orange { background: #EA580C; }
 .home-card__icon--green  { background: #15803D; }
 .home-card__icon--red    { background: #DC2626; }
 .home-card__icon--blue   { background: #2563EB; }
 .home-card__icon--purple { background: #7C3AED; }
-.home-card__body { flex: 1; min-width: 0; }
-.home-card__title { font-weight: 700; font-size: 14.5px; color: #1F1D1B; margin-bottom: 3px; letter-spacing: -.005em; }
-.home-card__desc { font-size: 12.5px; color: #6C6862; line-height: 1.4; margin-bottom: 10px; }
+
+.home-card__foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .home-card__chip {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 3px 9px 3px 8px; background: #DCFCE7; color: #166534;
@@ -12666,6 +12667,12 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
 .home-card__chip--soon { background: #F1EFEB; color: #918C85; }
 .home-card__chip-dot { width: 6px; height: 6px; background: #22C55E; border-radius: 50%; }
 .home-card__chip-dot--soon { background: #B4AFA8; }
+.home-card__kebab {
+  width: 22px; height: 22px; border-radius: 6px; flex-shrink: 0;
+  background: none; border: none; color: #B4AFA8; font-size: 15px; line-height: 1; cursor: pointer;
+  display: grid; place-items: center;
+}
+.home-card__kebab:hover { background: #F1EFEB; color: #6C6862; }
 
 @media (max-width: 640px) {
   #appShell.home-mode .app-main { overflow-y: auto; }

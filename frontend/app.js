@@ -537,22 +537,30 @@ function renderHome() {
   if (!grid) return;
   const cards = HOME_MODULES.map(m => `
     <div class="home-card" role="button" tabindex="0" onclick="selectModule('${m.id}')" onkeydown="if(event.key==='Enter')selectModule('${m.id}')" aria-label="${m.name}">
-      <button class="home-card__kebab" onclick="event.stopPropagation();selectModule('${m.id}')" title="Abrir ${m.name}" aria-label="Abrir ${m.name}">⋮</button>
-      <div class="home-card__body">
-        <div class="home-card__title">${m.name}</div>
-        <div class="home-card__desc">${m.desc}</div>
-        <span class="home-card__chip"><span class="home-card__chip-dot"></span>Activo</span>
+      <div class="home-card__top">
+        <div class="home-card__body">
+          <div class="home-card__title">${m.name}</div>
+          <div class="home-card__desc">${m.desc}</div>
+        </div>
+        <div class="home-card__icon home-card__icon--${m.color}">${m.icon}</div>
       </div>
-      <div class="home-card__icon home-card__icon--${m.color}">${m.icon}</div>
+      <div class="home-card__foot">
+        <span class="home-card__chip"><span class="home-card__chip-dot"></span>Activo</span>
+        <button class="home-card__kebab" onclick="event.stopPropagation();selectModule('${m.id}')" title="Abrir ${m.name}" aria-label="Abrir ${m.name}">⋮</button>
+      </div>
     </div>
   `);
   // Espacios reservados para módulos futuros: mismo tamaño/estilo de card, sin acción —
   // no son módulos reales, solo mantienen la grilla 3×3 llena mientras se agregan más.
   for (let i = HOME_MODULES.length; i < 9; i++) {
     cards.push(`<div class="home-card home-card--placeholder" aria-hidden="true">
-      <div class="home-card__body">
-        <div class="home-card__title" style="color:#B4AFA8">Próximamente</div>
-        <div class="home-card__desc">Nuevo módulo</div>
+      <div class="home-card__top">
+        <div class="home-card__body">
+          <div class="home-card__title" style="color:#B4AFA8">Próximamente</div>
+          <div class="home-card__desc">Nuevo módulo</div>
+        </div>
+      </div>
+      <div class="home-card__foot">
         <span class="home-card__chip home-card__chip--soon"><span class="home-card__chip-dot home-card__chip-dot--soon"></span>Pronto</span>
       </div>
     </div>`);
