@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260807e"/>
+  <link rel="stylesheet" href="style.css?v=20260807f"/>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -207,6 +207,39 @@
       <button class="global-topbar__tab" type="button" id="gtb-tab-dash" title="Próximamente">Dashboard</button>
     </div>
     <div class="global-topbar__right">
+      <div class="rchat__strip">
+        <button class="rchat__strip-btn" onclick="RChatPanel.open('chat')" title="Chat del equipo">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            <circle cx="8.5" cy="10" r="1.2" fill="currentColor" stroke="none"/>
+            <circle cx="12"   cy="10" r="1.2" fill="currentColor" stroke="none"/>
+            <circle cx="15.5" cy="10" r="1.2" fill="currentColor" stroke="none"/>
+          </svg>
+          <span class="rchat__strip-badge hidden" id="rchat-badge"></span>
+        </button>
+        <button class="rchat__strip-btn" onclick="RChatPanel.open('notifs')" title="Alertas del sistema">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10.5 3a1.5 1.5 0 0 1 3 0" stroke-width="1.3" opacity="0.6"/>
+            <path d="M12 4.5C8.7 4.5 6 7.2 6 10.5c0 5-2 7-2 7h16s-2-2-2-7c0-3.3-2.7-6-6-6z"/>
+            <path d="M4.5 17.5h15" stroke-width="1.3" opacity="0.5"/>
+            <path d="M13.7 21a2 2 0 0 1-3.4 0"/>
+          </svg>
+          <span class="rchat__strip-badge hidden" id="rchat-notif-badge"></span>
+        </button>
+        <button class="rchat__strip-btn" onclick="RChatPanel.open('notes')" title="Notas rápidas">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+          </svg>
+        </button>
+        <div class="rchat__strip-sep"></div>
+        <button class="rchat__strip-btn rtt" id="rtt-btn" onclick="TimerModule.railToggle()" title="Iniciar seguimiento de tiempo">
+          <span class="rtt__pulse"></span>
+          <svg class="rtt__ico rtt__ico--play" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M8 5.5v13l11-6.5z"/></svg>
+          <svg class="rtt__ico rtt__ico--stop" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="6" width="12" height="12" rx="2.5"/></svg>
+        </button>
+        <span class="rtt__time" id="rtt-time"></span>
+      </div>
       <span class="global-topbar__ws" id="gtb-ws"></span>
       <div class="global-topbar__avwrap">
         <button class="global-topbar__avbtn" id="gtb-avbtn" onclick="toggleUserMenu(event)" aria-label="Cuenta">
@@ -1551,45 +1584,10 @@
   </main>
 
   <!-- ── RIGHT PANEL (chat + alertas) ─────────────────────────── -->
+  <!-- Los iconos de acceso (chat/alertas/notas/timer) viven ahora en la
+       barra superior global (.rchat__strip, junto a "Novacentrax"); este
+       aside solo se expande como panel al abrirlos. -->
   <aside class="rchat rchat--collapsed" id="rchat">
-
-    <!-- Collapsed strip: dos iconos en la parte SUPERIOR -->
-    <div class="rchat__strip">
-      <button class="rchat__strip-btn" onclick="RChatPanel.open('chat')" title="Chat del equipo">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-          <circle cx="8.5" cy="10" r="1.2" fill="currentColor" stroke="none"/>
-          <circle cx="12"   cy="10" r="1.2" fill="currentColor" stroke="none"/>
-          <circle cx="15.5" cy="10" r="1.2" fill="currentColor" stroke="none"/>
-        </svg>
-        <span class="rchat__strip-badge hidden" id="rchat-badge"></span>
-      </button>
-      <button class="rchat__strip-btn" onclick="RChatPanel.open('notifs')" title="Alertas del sistema">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M10.5 3a1.5 1.5 0 0 1 3 0" stroke-width="1.3" opacity="0.6"/>
-          <path d="M12 4.5C8.7 4.5 6 7.2 6 10.5c0 5-2 7-2 7h16s-2-2-2-7c0-3.3-2.7-6-6-6z"/>
-          <path d="M4.5 17.5h15" stroke-width="1.3" opacity="0.5"/>
-          <path d="M13.7 21a2 2 0 0 1-3.4 0"/>
-        </svg>
-        <span class="rchat__strip-badge hidden" id="rchat-notif-badge"></span>
-      </button>
-      <button class="rchat__strip-btn" onclick="RChatPanel.open('notes')" title="Notas rápidas">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-        </svg>
-      </button>
-
-      <!-- Seguimiento de tiempo: prender/apagar desde cualquier módulo.
-           Rojo = detenido · Verde con pulso = corriendo (muestra el tiempo). -->
-      <div class="rchat__strip-sep"></div>
-      <button class="rchat__strip-btn rtt" id="rtt-btn" onclick="TimerModule.railToggle()" title="Iniciar seguimiento de tiempo">
-        <span class="rtt__pulse"></span>
-        <svg class="rtt__ico rtt__ico--play" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M8 5.5v13l11-6.5z"/></svg>
-        <svg class="rtt__ico rtt__ico--stop" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="6" width="12" height="12" rx="2.5"/></svg>
-      </button>
-      <span class="rtt__time" id="rtt-time"></span>
-    </div>
 
     <!-- Expanded body (hidden when collapsed) -->
     <div class="rchat__body">
@@ -2611,7 +2609,7 @@
 })();
 </script>
 
-<script src="app.js?v=20260805m"></script>
+<script src="app.js?v=20260805n"></script>
 <div id="task-quick-edit" style="display:none;position:fixed;z-index:9999"></div>
 </body>
 </html>

@@ -4298,27 +4298,18 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
   overflow: hidden;
 }
 .rchat--collapsed {
-  width: 54px;
-  min-width: 54px;
-  border-left-color: #F1EFEB;
+  width: 0;
+  min-width: 0;
+  border-left: none;
 }
-/* Colapsado SIEMPRE gana el ancho (54px), aunque quede la clase de vista
+/* Colapsado SIEMPRE gana el ancho (0), aunque quede la clase de vista
    .rchat--notifs (344px): mayor especificidad evita que el panel cerrado
    siga empujando el contenido y deje un hueco a la derecha. */
-.rchat.rchat--collapsed { width: 54px; min-width: 54px; }
+.rchat.rchat--collapsed { width: 0; min-width: 0; border-left: none; }
 
-/* Collapsed strip: dos iconos en la parte SUPERIOR */
-.rchat__strip {
-  display: none;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  padding-top: 10px;
-  gap: 4px;
-  width: 100%;
-  flex-shrink: 0;
-}
-.rchat--collapsed .rchat__strip { display: flex; }
+/* El strip (chat/alertas/notas/timer) ya no vive en este aside — se movió
+   a la barra superior global, ver ".global-topbar .rchat__strip" abajo. */
+.rchat__strip { display: none; }
 
 .rchat__strip-btn {
   width: 42px;
@@ -12592,6 +12583,22 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
 .global-topbar__tab.active { color: #fff; border-bottom-color: var(--brand-accent); }
 .global-topbar__right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
 .global-topbar__ws { font-size: 10.5px; color: rgba(255,255,255,.6); }
+
+/* Iconos de acceso rápido (chat/alertas/notas/timer), reubicados desde el
+   panel lateral derecho: mismas clases rchat__strip y rtt, re-skineadas
+   en horizontal y en chico para caber en esta barra oscura y compacta. */
+.global-topbar .rchat__strip {
+  display: flex; flex-direction: row; align-items: center; gap: 1px;
+  padding-top: 0; width: auto; flex-shrink: 0;
+}
+.global-topbar .rchat__strip-btn { width: 20px; height: 20px; border-radius: 5px; color: rgba(255,255,255,.62); }
+.global-topbar .rchat__strip-btn svg { width: 13px; height: 13px; }
+.global-topbar .rchat__strip-btn:hover { background: rgba(255,255,255,.14); color: #fff; }
+.global-topbar .rchat__strip-btn.active { background: rgba(255,255,255,.2); color: #fff; }
+.global-topbar .rchat__strip-sep { width: 1px; height: 13px; background: rgba(255,255,255,.2); margin: 0 3px; }
+.global-topbar .rchat__strip-badge { top: -3px; right: -3px; border-color: var(--navy); transform: scale(.82); }
+.global-topbar .rtt__pulse { background: rgba(255,255,255,.14); }
+.global-topbar .rtt__time { margin-top: 0; margin-left: 2px; color: rgba(255,255,255,.85); }
 .global-topbar__avwrap { position: relative; }
 .global-topbar__avbtn { background: none; border: none; padding: 0; cursor: pointer; border-radius: 50%; line-height: 0; }
 .global-topbar__av { width: 18px; height: 18px; border-radius: 50%; object-fit: cover; background: rgba(255,255,255,.15); display: block; }
