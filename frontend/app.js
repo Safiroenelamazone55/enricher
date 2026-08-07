@@ -535,14 +535,6 @@ const HOME_MODULES = [
 function renderHome() {
   const grid = document.getElementById('home-grid');
   if (!grid) return;
-  // Saludo con nombre si lo tenemos en el DOM
-  const nameEl = document.querySelector('.rail-user__av');
-  const first = (nameEl?.title || '').split(/\s+/)[0] || '';
-  const h = new Date().getHours();
-  const saludo = h < 12 ? 'Buenos días' : h < 19 ? 'Buenas tardes' : 'Buenas noches';
-  const greet = document.getElementById('home-greeting');
-  if (greet) greet.textContent = first ? `${saludo}, ${first}` : saludo;
-
   const cards = HOME_MODULES.map(m => `
     <div class="home-card" role="button" tabindex="0" onclick="selectModule('${m.id}')" onkeydown="if(event.key==='Enter')selectModule('${m.id}')" aria-label="${m.name}">
       <button class="home-card__kebab" onclick="event.stopPropagation();selectModule('${m.id}')" title="Abrir ${m.name}" aria-label="Abrir ${m.name}">⋮</button>
@@ -555,8 +547,8 @@ function renderHome() {
     </div>
   `);
   // Espacios reservados para módulos futuros: mismo tamaño/estilo de card, sin acción —
-  // no son módulos reales, solo mantienen la grilla llena mientras se agregan más.
-  for (let i = HOME_MODULES.length; i < 6; i++) {
+  // no son módulos reales, solo mantienen la grilla 3×3 llena mientras se agregan más.
+  for (let i = HOME_MODULES.length; i < 9; i++) {
     cards.push(`<div class="home-card home-card--placeholder" aria-hidden="true">
       <div class="home-card__body">
         <div class="home-card__title" style="color:#B4AFA8">Próximamente</div>

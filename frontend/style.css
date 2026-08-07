@@ -12568,27 +12568,33 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
 #appShell.home-mode #pane-home { display: block; }
 #pane-home { display: none; }
 #appShell.home-mode .pane:not(#pane-home) { display: none !important; }
+/* En home-mode, la Home ocupa exactamente el espacio disponible bajo la barra
+   superior, sin heredar el padding/scroll de .app-main pensado para las demás
+   secciones — así la grilla 3×3 siempre entra completa, sin scroll. */
+#appShell.home-mode:not(.standalone-users) .app-main { padding: 0; overflow: hidden; }
+#appShell.home-mode:not(.standalone-users) .content-wrap { max-width: none; padding: 0; height: 100%; }
+#appShell.home-mode:not(.standalone-users) #pane-home { height: 100%; }
 
 /* ── Barra superior GLOBAL (Home y dentro de cada módulo), paleta de Nova ── */
 .global-topbar {
-  display: flex; align-items: center; gap: 22px; height: 52px; padding: 0 18px;
+  display: flex; align-items: center; gap: 14px; height: 26px; padding: 0 14px;
   background: var(--navy); color: #fff; font-family: var(--font); flex-shrink: 0;
 }
-.global-topbar__brand { display: flex; align-items: center; gap: 8px; color: var(--brand-accent); flex-shrink: 0; }
-.global-topbar__name { font-weight: 700; font-size: 14px; color: #fff; letter-spacing: -.01em; }
-.global-topbar__tabs { display: flex; align-items: center; gap: 4px; height: 100%; }
+.global-topbar__brand { display: flex; align-items: center; gap: 6px; color: var(--brand-accent); flex-shrink: 0; }
+.global-topbar__name { font-weight: 700; font-size: 12px; color: #fff; letter-spacing: -.01em; }
+.global-topbar__tabs { display: flex; align-items: center; gap: 2px; height: 100%; }
 .global-topbar__tab {
   background: none; border: none; font: inherit; font-family: var(--font);
-  color: rgba(255,255,255,.62); font-size: 13px; font-weight: 600; cursor: pointer;
-  height: 100%; padding: 0 12px; border-bottom: 2px solid transparent; transition: color .14s ease, border-color .14s ease;
+  color: rgba(255,255,255,.62); font-size: 11.5px; font-weight: 600; cursor: pointer;
+  height: 100%; padding: 0 9px; border-bottom: 2px solid transparent; transition: color .14s ease, border-color .14s ease;
 }
 .global-topbar__tab:hover { color: #fff; }
 .global-topbar__tab.active { color: #fff; border-bottom-color: var(--brand-accent); }
-.global-topbar__right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
-.global-topbar__ws { font-size: 12px; color: rgba(255,255,255,.6); }
+.global-topbar__right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.global-topbar__ws { font-size: 10.5px; color: rgba(255,255,255,.6); }
 .global-topbar__avwrap { position: relative; }
 .global-topbar__avbtn { background: none; border: none; padding: 0; cursor: pointer; border-radius: 50%; line-height: 0; }
-.global-topbar__av { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; background: rgba(255,255,255,.15); display: block; }
+.global-topbar__av { width: 18px; height: 18px; border-radius: 50%; object-fit: cover; background: rgba(255,255,255,.15); display: block; }
 .global-topbar__avbtn:hover .global-topbar__av { box-shadow: 0 0 0 2px rgba(255,255,255,.35); }
 .global-topbar__menu {
   position: absolute; top: calc(100% + 8px); right: 0; width: 220px; z-index: 400;
@@ -12604,25 +12610,27 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
 .global-topbar__menu-item--danger { color: #D94B4B; }
 
 .home-page {
-  min-height: calc(100vh - 52px); padding: 40px 40px 60px;
+  height: 100%; box-sizing: border-box; padding: 18px 40px 20px;
+  display: flex; flex-direction: column;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   background: #FAF6EF;
 }
-.home-page__hd { margin-bottom: 28px; max-width: 1000px; display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
-.home-page__title { font-size: 26px; font-weight: 700; color: #1F1D1B; letter-spacing: -.01em; }
-.home-page__sub { font-size: 14px; color: #6C6862; margin-top: 6px; }
+.home-page__hd { flex-shrink: 0; margin-bottom: 12px; max-width: 1000px; display: flex; align-items: center; justify-content: flex-end; }
 
-/* Tamaño de tarjeta ajustado a la referencia (más angosta/compacta que la v1) */
+/* Grilla fija 3×3 (como la referencia): las columnas mantienen el ancho de
+   tarjeta aprobado, las filas se reparten el alto disponible para que la
+   Home entre completa en pantalla, sin scroll. */
 .home-grid {
-  display: grid; gap: 16px; max-width: 1000px;
-  grid-template-columns: repeat(auto-fill, minmax(228px, 1fr));
+  flex: 1; min-height: 0; display: grid; gap: 14px; max-width: 1000px; width: 100%;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: repeat(3, minmax(0, 1fr));
 }
 .home-card {
   display: flex; flex-direction: column; gap: 14px; position: relative;
   padding: 16px 16px 14px; background: #fff; border: 1px solid #E8E4DE;
   border-radius: 12px; cursor: pointer; text-align: left; font-family: inherit;
   transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
-  min-height: 128px;
+  height: 100%; min-height: 0;
 }
 .home-card:hover {
   border-color: #C9C4BC; box-shadow: 0 4px 14px rgba(16,24,40,.06);
@@ -12660,8 +12668,12 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
 .home-card__chip-dot--soon { background: #B4AFA8; }
 
 @media (max-width: 640px) {
-  .home-page { padding: 32px 20px 40px; }
-  .home-grid { grid-template-columns: 1fr; }
+  #appShell.home-mode .app-main { overflow-y: auto; }
+  #appShell.home-mode .content-wrap { height: auto; }
+  #pane-home { height: auto; }
+  .home-page { height: auto; padding: 24px 20px 40px; }
+  .home-grid { flex: none; grid-template-columns: 1fr; grid-template-rows: none; max-width: none; }
+  .home-card { height: auto; min-height: 110px; }
 }
 
 /* ── "Usuarios" como pantalla independiente: reutiliza #pane-mgmt-team (misma
