@@ -323,17 +323,22 @@ async function initAuth() {
       authWall.classList.add('hidden');
       appShell.classList.remove('hidden');
       initApp();
-      // Restaurar la última sección visitada (en vez de volver siempre al Dashboard al recargar).
+      // Restaurar la última sección visitada (en vez de volver siempre al Home al recargar).
       // Activamos el pane/nav SÍNCRONAMENTE aquí (antes del await) para que la 1ª pintura ya sea
-      // la sección correcta → sin "flash" del Dashboard. Los datos se cargan después de FxRates.
-      // Al hacer login, siempre entrar al HOME (grid de módulos estilo Creatio).
-      // La usuaria decide desde ahí a qué módulo entrar — más claro que "recordar"
-      // el último tab, sobre todo en workspaces con varios miembros.
-      const _initTab = 'home';
-      document.querySelectorAll('.tab,.snav-item').forEach(t => t.classList.toggle('active', t.dataset.tab === _initTab));
-      document.querySelectorAll('.pane').forEach(p => p.classList.toggle('active', p.id === 'pane-' + _initTab));
-      renderHome();
-      _applyHomeMode(true);
+      // la sección correcta → sin "flash" del Home. kw_activeTab es por navegador/perfil (no
+      // se comparte entre miembros del workspace), así que cada quien recupera SU propia última
+      // pantalla sin pisar la de nadie más.
+      let _initTab = 'home';
+      try { const saved = localStorage.getItem('kw_activeTab'); if (saved && saved !== 'home' && document.querySelector(`.snav-item[data-tab="${saved}"]`)) _initTab = saved; } catch (_) {}
+      if (_initTab === 'home') {
+        document.querySelectorAll('.tab,.snav-item').forEach(t => t.classList.toggle('active', t.dataset.tab === _initTab));
+        document.querySelectorAll('.pane').forEach(p => p.classList.toggle('active', p.id === 'pane-' + _initTab));
+        renderHome();
+        _applyHomeMode(true);
+      } else {
+        _applyHomeMode(false);
+        if (typeof window._novaSwitchTab === 'function') window._novaSwitchTab(_initTab);
+      }
       await FxRatesModule.load();
       ChatModule.init();
       TimerModule.init();
@@ -14095,6 +14100,7 @@ const LeadManagerModule = (() => {
   let _taskFCamp = '', _taskFSeq = ''; // filtros de Tareas comerciales (campaña / secuencia)
   let _calRef = null;         // mes mostrado en el calendario (Date al día 1)
   let _section = 'dashboard'; // sección activa del workspace
+  let _lmBootRestored = false; // solo restaura la última sección UNA vez por carga de página, no en cada clic a Outreach
   let _activeClient = null;   // id del cliente outbound en detalle
   let _activeSeq = null;      // id de la secuencia en editor
   let _lastDone = null;       // { seqId, cid } último paso marcado hecho → para "Deshacer"
@@ -14171,7 +14177,16 @@ const LeadManagerModule = (() => {
       if (!Array.isArray(_lmTpls)) _lmTpls = [];
       if (!Array.isArray(_mailboxes)) _mailboxes = [];
     } catch (e) { console.warn('[lm] load error:', e.message); _data = []; _clients = []; _campaigns = []; _sequences = []; _steps = []; _activities = []; }
-    _renderBody();
+    // Restaura la última sección (sin parámetros) visitada dentro de Outreach — solo la
+    // primera vez que se entra al módulo en esta carga de página, no en clics posteriores.
+    let _restored = false;
+    if (!_lmBootRestored) {
+      _lmBootRestored = true;
+      let saved = null;
+      try { saved = localStorage.getItem('lm_last_section'); } catch (_) {}
+      if (saved && saved !== _section && saved !== 'client' && saved !== 'sequence' && saved !== 'contact-view') { go(saved); _restored = true; }
+    }
+    if (!_restored) _renderBody();
     _loadNavCounts();                          // insignias visibles desde el primer momento
     if (_section === 'dashboard') _loadToday(); // card Hoy del motor de envío
   }
@@ -14260,6 +14275,9 @@ const LeadManagerModule = (() => {
   }
   function go(section) {
     _section = section; _activeClient = null; _seqTaskCanal = ''; _refreshNav(); _renderBody();
+    // Recuerda la última sección (sin parámetros — no vistas de un contacto/secuencia/cliente
+    // puntual) para volver aquí si se recarga la página en vez de caer siempre al Dashboard.
+    try { localStorage.setItem('lm_last_section', section); } catch (_) {}
     // LM Fase A: cargas lazy por sección (motor de envío)
     if (section === 'dashboard') _loadToday();
     if (section === 'settings')  { _loadSendCfg(); _loadAiCfg(); }
