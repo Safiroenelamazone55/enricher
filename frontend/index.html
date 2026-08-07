@@ -194,9 +194,36 @@
 
 <!-- APP SHELL -->
 <div id="appShell" class="hidden">
+
+  <!-- ── BARRA SUPERIOR GLOBAL: visible en Home y dentro de cada módulo ── -->
+  <div class="global-topbar" id="global-topbar">
+    <div class="global-topbar__brand">
+      <span class="global-topbar__logo"><svg width="20" height="20" viewBox="0 0 100 100" fill="none"><path d="M50 3 L63 38 L97 50 L63 62 L50 97 L37 62 L3 50 L37 38 Z" fill="currentColor"/></svg></span>
+      <span class="global-topbar__name">Nova</span>
+    </div>
+    <div class="global-topbar__tabs">
+      <button class="global-topbar__tab active" type="button" id="gtb-tab-apps" onclick="goHome()">Aplicaciones</button>
+      <button class="global-topbar__tab" type="button" id="gtb-tab-users" onclick="openStandaloneUsers()">Usuarios</button>
+      <button class="global-topbar__tab" type="button" id="gtb-tab-dash" title="Próximamente">Dashboard</button>
+    </div>
+    <div class="global-topbar__right">
+      <span class="global-topbar__ws" id="gtb-ws"></span>
+      <div class="global-topbar__avwrap">
+        <button class="global-topbar__avbtn" id="gtb-avbtn" onclick="toggleUserMenu(event)" aria-label="Cuenta">
+          <img class="global-topbar__av" id="gtb-av" alt="">
+        </button>
+        <div class="global-topbar__menu hidden" id="gtb-menu">
+          <div class="global-topbar__menu-who" id="gtb-menu-who"></div>
+          <button class="global-topbar__menu-item" type="button" onclick="closeUserMenu();WorkspaceModule.openNameModal()">Configuración</button>
+          <button class="global-topbar__menu-item global-topbar__menu-item--danger" type="button" onclick="closeUserMenu();novaLogout()">Salir de la cuenta</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
 <div class="app-layout">
 
-  <!-- ── PRIMARY RAIL: módulos + configuración general ── -->
+  <!-- ── PRIMARY RAIL: módulos ── -->
   <div class="snav-rail" id="snav-rail">
     <div class="snav-rail__brand" id="sidebar-brand" title="Nova">
       <div class="sidebar__brand-icon" id="brand-icon-wrap">
@@ -457,49 +484,15 @@
 
     <!-- ── HOME (default) — cards de módulos estilo Creatio ── -->
     <div class="pane active" id="pane-home">
-      <div class="home-topbar">
-        <div class="home-topbar__brand">
-          <span class="home-topbar__logo"><svg width="20" height="20" viewBox="0 0 100 100" fill="none"><path d="M50 3 L63 38 L97 50 L63 62 L50 97 L37 62 L3 50 L37 38 Z" fill="currentColor"/></svg></span>
-          <span class="home-topbar__name">Nova</span>
-        </div>
-        <div class="home-topbar__tabs">
-          <button class="home-topbar__tab active" type="button">Módulos</button>
-          <button class="home-topbar__tab" type="button" onclick="_applyHomeMode(false);window._novaSwitchTab('mgmt-team')">Equipo</button>
-          <button class="home-topbar__tab" type="button" onclick="WorkspaceModule.openNameModal()">Configuración</button>
-        </div>
-        <div class="home-topbar__right">
-          <span class="home-topbar__ws" id="home-topbar-ws"></span>
-          <img class="home-topbar__av" id="home-topbar-av" alt="">
-        </div>
-      </div>
       <div class="home-page">
-        <div class="home-page__row">
-          <div class="home-page__main">
-            <div class="home-page__hd">
-              <div>
-                <div class="home-page__title" id="home-greeting">Buen día</div>
-                <div class="home-page__sub">Elige un módulo para empezar</div>
-              </div>
-              <button class="btn btn--ghost btn--sm" type="button" onclick="showBanner('Más módulos, próximamente','info')">＋ Nuevo módulo</button>
-            </div>
-            <div class="home-grid" id="home-grid"></div>
+        <div class="home-page__hd">
+          <div>
+            <div class="home-page__title" id="home-greeting">Buen día</div>
+            <div class="home-page__sub">Elige un módulo para empezar</div>
           </div>
-          <aside class="home-aipanel" id="home-aipanel">
-            <div class="home-aipanel__hd">
-              <span class="home-aipanel__logo"><svg width="16" height="16" viewBox="0 0 100 100" fill="none"><path d="M50 3 L63 38 L97 50 L63 62 L50 97 L37 62 L3 50 L37 38 Z" fill="currentColor"/></svg></span>
-              <b>Nova</b>
-              <button class="home-aipanel__x" type="button" onclick="dismissHomeTips()" aria-label="Cerrar">✕</button>
-            </div>
-            <p class="home-aipanel__title">¡Bienvenida! 👋</p>
-            <p class="home-aipanel__body">Elige un módulo para empezar. Cada uno guarda dónde te quedaste — al recargar vuelves justo ahí.</p>
-            <div class="home-aipanel__tips">
-              <div class="home-aipanel__tips-h">Tips</div>
-              <div class="home-aipanel__tip">1. Outreach lleva tu CRM, campañas y secuencias.</div>
-              <div class="home-aipanel__tip">2. Enriquecimiento prepara y verifica leads antes de contactarlos.</div>
-              <div class="home-aipanel__tip">3. Operaciones agrupa proyectos, tareas, clientes y finanzas.</div>
-            </div>
-          </aside>
+          <button class="btn btn--ghost btn--sm" type="button" onclick="showBanner('Más módulos, próximamente','info')">＋ Nuevo módulo</button>
         </div>
+        <div class="home-grid" id="home-grid"></div>
       </div>
     </div>
 
@@ -2625,7 +2618,7 @@
 })();
 </script>
 
-<script src="app.js?v=20260805i"></script>
+<script src="app.js?v=20260805k"></script>
 <div id="task-quick-edit" style="display:none;position:fixed;z-index:9999"></div>
 </body>
 </html>

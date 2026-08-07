@@ -298,6 +298,7 @@ async function initAuth() {
 
       // ── Store auth info globally for modules to read ────────
       window._authUser = data;
+      _paintGlobalTopbar();
 
       // ── Pie de la barra: nombre + rol del usuario (visible para todos) ──
       const _footUser = document.getElementById('snav-foot-user');
@@ -508,6 +509,8 @@ function toggleNavPanel() { _setNavCollapsed(!_navCollapsed()); }
 function selectModule(mod) {
   if (_navCollapsed()) _setNavCollapsed(false);
   _applyHomeMode(false);
+  document.getElementById('appShell')?.classList.remove('standalone-users');
+  document.querySelectorAll('.global-topbar__tab').forEach(t => t.classList.remove('active'));
   _setActiveModule(mod);
   let target = null;
   try { target = localStorage.getItem('kw_lastTab_' + mod); } catch (_) {}
@@ -540,7 +543,7 @@ function renderHome() {
   const greet = document.getElementById('home-greeting');
   if (greet) greet.textContent = first ? `${saludo}, ${first}` : saludo;
 
-  grid.innerHTML = HOME_MODULES.map(m => `
+  const cards = HOME_MODULES.map(m => `
     <div class="home-card" role="button" tabindex="0" onclick="selectModule('${m.id}')" onkeydown="if(event.key==='Enter')selectModule('${m.id}')" aria-label="${m.name}">
       <button class="home-card__kebab" onclick="event.stopPropagation();selectModule('${m.id}')" title="Abrir ${m.name}" aria-label="Abrir ${m.name}">⋮</button>
       <div class="home-card__body">
@@ -550,23 +553,58 @@ function renderHome() {
       </div>
       <div class="home-card__icon home-card__icon--${m.color}">${m.icon}</div>
     </div>
-  `).join('');
-
-  // Barra superior: avatar + nombre de workspace (mismos datos que ya carga initAuth).
-  const u = window._authUser || {};
-  const wsEl = document.getElementById('home-topbar-ws');
-  if (wsEl) wsEl.textContent = u.workspaceName || u.name || '';
-  const avEl = document.getElementById('home-topbar-av');
-  if (avEl) avEl.src = u.avatar || `https://api.dicebear.com/9.x/lorelei/svg?seed=${encodeURIComponent(u.name || u.email || 'user')}`;
-
-  // Panel de bienvenida: se puede cerrar y queda cerrado (no vuelve a insistir).
-  const panel = document.getElementById('home-aipanel');
-  if (panel) { let dismissed = false; try { dismissed = localStorage.getItem('nova_home_tips_dismissed') === '1'; } catch (_) {} panel.style.display = dismissed ? 'none' : ''; }
+  `);
+  // Espacios reservados para módulos futuros: mismo tamaño/estilo de card, sin acción —
+  // no son módulos reales, solo mantienen la grilla llena mientras se agregan más.
+  for (let i = HOME_MODULES.length; i < 6; i++) {
+    cards.push(`<div class="home-card home-card--placeholder" aria-hidden="true">
+      <div class="home-card__body">
+        <div class="home-card__title" style="color:#B4AFA8">Próximamente</div>
+        <div class="home-card__desc">Nuevo módulo</div>
+        <span class="home-card__chip home-card__chip--soon"><span class="home-card__chip-dot home-card__chip-dot--soon"></span>Pronto</span>
+      </div>
+    </div>`);
+  }
+  grid.innerHTML = cards.join('');
 }
-function dismissHomeTips() {
-  try { localStorage.setItem('nova_home_tips_dismissed', '1'); } catch (_) {}
-  const panel = document.getElementById('home-aipanel');
-  if (panel) panel.style.display = 'none';
+// ── Barra superior global: avatar + workspace + menú (Configuración / Salir) ──
+function _paintGlobalTopbar() {
+  const u = window._authUser || {};
+  const wsEl = document.getElementById('gtb-ws');
+  if (wsEl) wsEl.textContent = u.workspaceName || '';
+  const avEl = document.getElementById('gtb-av');
+  if (avEl) avEl.src = u.avatar || `https://api.dicebear.com/9.x/lorelei/svg?seed=${encodeURIComponent(u.name || u.email || 'user')}`;
+  const whoEl = document.getElementById('gtb-menu-who');
+  if (whoEl) whoEl.textContent = u.email || u.name || '';
+}
+function toggleUserMenu(ev) {
+  if (ev) ev.stopPropagation();
+  const menu = document.getElementById('gtb-menu');
+  if (!menu) return;
+  const wasHidden = menu.classList.contains('hidden');
+  closeUserMenu();
+  if (wasHidden) {
+    menu.classList.remove('hidden');
+    setTimeout(() => document.addEventListener('mousedown', _gtbMenuOutside), 0);
+  }
+}
+function _gtbMenuOutside(e) {
+  const menu = document.getElementById('gtb-menu');
+  const btn = document.getElementById('gtb-avbtn');
+  if (menu && !menu.contains(e.target) && e.target !== btn) closeUserMenu();
+}
+function closeUserMenu() {
+  document.getElementById('gtb-menu')?.classList.add('hidden');
+  document.removeEventListener('mousedown', _gtbMenuOutside);
+}
+// "Usuarios": pantalla independiente (reutiliza los datos/tabla de TeamModule,
+// pero sin el sidebar ancho de Operaciones alrededor — no pasa por selectModule).
+function openStandaloneUsers() {
+  _applyHomeMode(true);
+  document.getElementById('appShell')?.classList.add('standalone-users');
+  document.querySelectorAll('.global-topbar__tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('gtb-tab-users')?.classList.add('active');
+  TeamModule.load();
 }
 
 // Alterna el "modo home": oculta la sidebar secundaria (que muestra items
@@ -581,8 +619,11 @@ function _applyHomeMode(on) {
 // que sustituyó al viejo dropdown de cambio de módulo).
 function goHome() {
   _applyHomeMode(true);
+  document.getElementById('appShell')?.classList.remove('standalone-users');
   document.querySelectorAll('.tab,.snav-item').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.pane').forEach(p => p.classList.toggle('active', p.id === 'pane-home'));
+  document.querySelectorAll('.global-topbar__tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('gtb-tab-apps')?.classList.add('active');
   try { localStorage.setItem('kw_activeTab', 'home'); } catch (_) {}
   renderHome();
 }

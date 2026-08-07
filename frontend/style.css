@@ -69,9 +69,11 @@ body {
 .col3  { display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px }
 
 /* ── App layout ──────────────────────────────────────────── */
+#appShell { display:flex; flex-direction:column; height:100vh; }
 .app-layout {
   display:flex;
-  height:100vh;
+  flex:1;
+  min-height:0;
   overflow:hidden;
 }
 
@@ -11703,10 +11705,13 @@ a.cp-strip__i:hover svg { color: var(--brand, #007AFF); }
 .snav-mod__badge--lead { background: #6366F1; }
 .snav-mod.active .snav-mod__badge { box-shadow: 0 0 0 2px rgba(219,230,76,.55); }
 .snav-rail__spacer { flex: 1; }
-.snav-rail__btn { position: relative; width: 44px; height: 44px; border: none; background: transparent; border-radius: 12px; color: rgba(255,255,255,.7); cursor: pointer; display: grid; place-items: center; transition: background .13s, color .13s; flex-shrink: 0; }
+/* Configuración y la cuenta ahora viven en la barra superior global (avatar → menú),
+   no repetidas al pie del riel de cada módulo. */
+.snav-rail__btn, .snav-rail__user, .snav-foot { display: none !important; }
+.snav-rail__btn { position: relative; width: 44px; height: 44px; border: none; background: transparent; border-radius: 12px; color: rgba(255,255,255,.7); cursor: pointer; place-items: center; transition: background .13s, color .13s; flex-shrink: 0; }
 .snav-rail__btn svg { width: 20px; height: 20px; }
 .snav-rail__btn:hover { background: rgba(255,255,255,.08); color: #fff; }
-.snav-rail__user { display: flex; flex-direction: column; align-items: center; gap: 7px; margin-top: 8px; flex-shrink: 0; }
+.snav-rail__user { flex-direction: column; align-items: center; gap: 7px; margin-top: 8px; flex-shrink: 0; }
 .rail-user__av { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 1.5px solid rgba(255,255,255,.22); }
 .rail-user__out { color: rgba(255,255,255,.55); display: grid; place-items: center; width: 30px; height: 26px; border-radius: 8px; }
 .rail-user__out:hover { color: #fff; background: rgba(255,255,255,.08); }
@@ -12564,94 +12569,105 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
 #pane-home { display: none; }
 #appShell.home-mode .pane:not(#pane-home) { display: none !important; }
 
-/* ── Home: barra superior estilo Creatio, con la paleta de Nova (no naranja) ── */
-.home-topbar {
-  display: flex; align-items: center; gap: 22px; height: 52px; padding: 0 22px;
-  background: var(--navy); color: #fff; font-family: var(--font);
+/* ── Barra superior GLOBAL (Home y dentro de cada módulo), paleta de Nova ── */
+.global-topbar {
+  display: flex; align-items: center; gap: 22px; height: 52px; padding: 0 18px;
+  background: var(--navy); color: #fff; font-family: var(--font); flex-shrink: 0;
 }
-.home-topbar__brand { display: flex; align-items: center; gap: 8px; color: var(--brand-accent); flex-shrink: 0; }
-.home-topbar__name { font-weight: 700; font-size: 14px; color: #fff; letter-spacing: -.01em; }
-.home-topbar__tabs { display: flex; align-items: center; gap: 4px; height: 100%; }
-.home-topbar__tab {
+.global-topbar__brand { display: flex; align-items: center; gap: 8px; color: var(--brand-accent); flex-shrink: 0; }
+.global-topbar__name { font-weight: 700; font-size: 14px; color: #fff; letter-spacing: -.01em; }
+.global-topbar__tabs { display: flex; align-items: center; gap: 4px; height: 100%; }
+.global-topbar__tab {
   background: none; border: none; font: inherit; font-family: var(--font);
   color: rgba(255,255,255,.62); font-size: 13px; font-weight: 600; cursor: pointer;
   height: 100%; padding: 0 12px; border-bottom: 2px solid transparent; transition: color .14s ease, border-color .14s ease;
 }
-.home-topbar__tab:hover { color: #fff; }
-.home-topbar__tab.active { color: #fff; border-bottom-color: var(--brand-accent); }
-.home-topbar__right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
-.home-topbar__ws { font-size: 12px; color: rgba(255,255,255,.6); }
-.home-topbar__av { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; background: rgba(255,255,255,.15); }
+.global-topbar__tab:hover { color: #fff; }
+.global-topbar__tab.active { color: #fff; border-bottom-color: var(--brand-accent); }
+.global-topbar__right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.global-topbar__ws { font-size: 12px; color: rgba(255,255,255,.6); }
+.global-topbar__avwrap { position: relative; }
+.global-topbar__avbtn { background: none; border: none; padding: 0; cursor: pointer; border-radius: 50%; line-height: 0; }
+.global-topbar__av { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; background: rgba(255,255,255,.15); display: block; }
+.global-topbar__avbtn:hover .global-topbar__av { box-shadow: 0 0 0 2px rgba(255,255,255,.35); }
+.global-topbar__menu {
+  position: absolute; top: calc(100% + 8px); right: 0; width: 220px; z-index: 400;
+  background: #fff; border-radius: 12px; box-shadow: 0 12px 32px rgba(16,24,40,.18); padding: 6px;
+  color: #1F1D1B; font-family: var(--font);
+}
+.global-topbar__menu-who { padding: 8px 10px 9px; font-size: 12.5px; color: #6C6862; border-bottom: 1px solid #EAE7E2; margin-bottom: 4px; word-break: break-all; }
+.global-topbar__menu-item {
+  display: block; width: 100%; text-align: left; background: none; border: none; font: inherit;
+  padding: 9px 10px; border-radius: 8px; cursor: pointer; font-size: 13.5px; color: #1F1D1B;
+}
+.global-topbar__menu-item:hover { background: #F1EFEB; }
+.global-topbar__menu-item--danger { color: #D94B4B; }
 
 .home-page {
   min-height: calc(100vh - 52px); padding: 40px 40px 60px;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   background: #FAF6EF;
 }
-.home-page__row { display: flex; gap: 32px; align-items: flex-start; max-width: 1440px; }
-.home-page__main { flex: 1; min-width: 0; }
-.home-page__hd { margin-bottom: 28px; max-width: 1100px; display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.home-page__hd { margin-bottom: 28px; max-width: 1000px; display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .home-page__title { font-size: 26px; font-weight: 700; color: #1F1D1B; letter-spacing: -.01em; }
 .home-page__sub { font-size: 14px; color: #6C6862; margin-top: 6px; }
 
-/* ── Home: panel lateral de bienvenida (equivalente al panel "Creatio.ai", estático) ── */
-.home-aipanel {
-  width: 280px; flex-shrink: 0; background: #fff; border: 1px solid #E8E4DE; border-radius: 14px;
-  padding: 18px 18px 20px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-}
-.home-aipanel__hd { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; color: var(--brand); }
-.home-aipanel__hd b { color: #1F1D1B; font-size: 13px; flex: 1; }
-.home-aipanel__x { background: none; border: none; color: #918C85; cursor: pointer; font-size: 13px; line-height: 1; padding: 2px; }
-.home-aipanel__x:hover { color: #1F1D1B; }
-.home-aipanel__title { font-weight: 700; font-size: 15px; color: #1F1D1B; margin-bottom: 8px; }
-.home-aipanel__body { font-size: 13px; color: #6C6862; line-height: 1.5; margin-bottom: 16px; }
-.home-aipanel__tips-h { font-size: 11px; font-weight: 700; color: #918C85; text-transform: uppercase; letter-spacing: .03em; margin-bottom: 8px; }
-.home-aipanel__tip { font-size: 12.5px; color: #45403A; line-height: 1.5; margin-bottom: 7px; }
-@media (max-width: 980px) { .home-page__row { flex-direction: column; } .home-aipanel { width: 100%; } }
+/* Tamaño de tarjeta ajustado a la referencia (más angosta/compacta que la v1) */
 .home-grid {
-  display: grid; gap: 16px; max-width: 1100px;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 380px));
+  display: grid; gap: 16px; max-width: 1000px;
+  grid-template-columns: repeat(auto-fill, minmax(228px, 1fr));
 }
 .home-card {
-  display: flex; align-items: center; gap: 16px; position: relative;
-  padding: 20px 22px; background: #fff; border: 1px solid #E8E4DE;
+  display: flex; flex-direction: column; gap: 14px; position: relative;
+  padding: 16px 16px 14px; background: #fff; border: 1px solid #E8E4DE;
   border-radius: 12px; cursor: pointer; text-align: left; font-family: inherit;
   transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
-  min-height: 108px;
+  min-height: 128px;
 }
 .home-card:hover {
   border-color: #C9C4BC; box-shadow: 0 4px 14px rgba(16,24,40,.06);
   transform: translateY(-1px);
 }
+.home-card--placeholder { cursor: default; background: #FBFAF8; border-style: dashed; }
+.home-card--placeholder:hover { transform: none; box-shadow: none; border-color: #E8E4DE; }
 .home-card__kebab {
   position: absolute; top: 10px; right: 10px; width: 22px; height: 22px; border-radius: 6px;
   background: none; border: none; color: #B4AFA8; font-size: 15px; line-height: 1; cursor: pointer;
   display: grid; place-items: center;
 }
 .home-card__kebab:hover { background: #F1EFEB; color: #6C6862; }
+/* Ícono estilo referencia: insignia sólida y saturada con el glyph en blanco (antes: pastel + trazo de color) */
+.home-card__icon {
+  width: 40px; height: 40px; border-radius: 10px; flex-shrink: 0;
+  display: grid; place-items: center; color: #fff;
+}
+.home-card__icon svg { stroke: #fff; }
+.home-card__icon--orange { background: #EA580C; }
+.home-card__icon--green  { background: #15803D; }
+.home-card__icon--red    { background: #DC2626; }
+.home-card__icon--blue   { background: #2563EB; }
+.home-card__icon--purple { background: #7C3AED; }
 .home-card__body { flex: 1; min-width: 0; }
-.home-card__title { font-weight: 700; font-size: 16px; color: #1F1D1B; margin-bottom: 4px; letter-spacing: -.005em; }
-.home-card__desc { font-size: 13px; color: #6C6862; line-height: 1.4; margin-bottom: 10px; }
+.home-card__title { font-weight: 700; font-size: 14.5px; color: #1F1D1B; margin-bottom: 3px; letter-spacing: -.005em; }
+.home-card__desc { font-size: 12.5px; color: #6C6862; line-height: 1.4; margin-bottom: 10px; }
 .home-card__chip {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 3px 9px 3px 8px; background: #DCFCE7; color: #166534;
   font-size: 11px; font-weight: 600; border-radius: 999px;
 }
+.home-card__chip--soon { background: #F1EFEB; color: #918C85; }
 .home-card__chip-dot { width: 6px; height: 6px; background: #22C55E; border-radius: 50%; }
-.home-card__icon {
-  width: 44px; height: 44px; border-radius: 10px; flex-shrink: 0;
-  display: grid; place-items: center;
-}
-.home-card__icon--orange { background: #FED7AA; color: #EA580C; }
-.home-card__icon--green  { background: #DCFCE7; color: #15803D; }
-.home-card__icon--red    { background: #FEE2E2; color: #DC2626; }
-.home-card__icon--blue   { background: #DBEAFE; color: #2563EB; }
-.home-card__icon--purple { background: #EDE9FE; color: #7C3AED; }
+.home-card__chip-dot--soon { background: #B4AFA8; }
 
 @media (max-width: 640px) {
   .home-page { padding: 32px 20px 40px; }
   .home-grid { grid-template-columns: 1fr; }
 }
+
+/* ── "Usuarios" como pantalla independiente: reutiliza #pane-mgmt-team (misma
+   data/lógica de TeamModule) pero SIN el sidebar ancho de Operaciones alrededor. ── */
+#appShell.standalone-users .pane#pane-home { display: none !important; }
+#appShell.standalone-users .pane#pane-mgmt-team { display: block !important; }
 
 /* Popover del menú de workspace */
 .ws-menu {
