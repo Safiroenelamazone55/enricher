@@ -4654,6 +4654,8 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 .lm2-body { padding: 26px 30px 60px; max-width: 1200px; }
 
 .lm-sec-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+.lm-sec-head--compact { margin-bottom: 10px; align-items: center; }
+.lm-sec-head--compact .lm-sec-title { font-size: 1.1rem; }
 .lm-sec-title { margin: 0; font-size: 1.42rem; font-weight: 750; letter-spacing: -.02em; color: #1F1D1B; }
 .lm-sec-sub { margin: 4px 0 0; font-size: .82rem; color: #918C85; max-width: 560px; }
 .lm-sec-actions { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -13025,13 +13027,17 @@ td.ldh-acts { padding-left: 6px; padding-right: 10px; }
 /* ── Modo pre-aprobado: tab Aprobar ── */
 .seq-app-n { display: inline-block; font-size: .64rem; font-weight: 700; background: #F1EFEB; color: #A96D0C; border-radius: 8px; padding: 1px 7px; vertical-align: 1px; }
 .seq-app-list { display: flex; flex-direction: column; gap: 10px; }
+.seq-app-nav { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
+.seq-app-nav__count { font-size: .78rem; color: var(--text-muted); }
+.seq-app-nav__arrows { display: flex; gap: 6px; }
 .seq-app { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; }
 .seq-app--ok { border-color: var(--primary-border, var(--border)); background: var(--primary-soft); }
 .seq-app__hd { display: flex; align-items: center; gap: 8px; justify-content: space-between; margin-bottom: 8px; flex-wrap: wrap; }
-.seq-app__who { font-size: .8rem; color: var(--text-primary); min-width: 0; }
+.seq-app__who { font-size: .78rem; color: var(--text-muted); min-width: 0; }
 .seq-app__who span { color: var(--text-muted); font-size: .74rem; }
 .seq-app__subj { font-weight: 600; margin-bottom: 6px; }
 .seq-app__body { resize: vertical; min-height: 90px; font-size: .8rem; line-height: 1.5; }
+.seq-app__body--full { min-height: min(50vh, 420px); font-size: .85rem; }
 .seq-app__ft { display: flex; gap: 6px; align-items: center; margin-top: 8px; }
 
 /* ── Drawer de paso: secciones + vista previa ── */

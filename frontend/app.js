@@ -14679,18 +14679,18 @@ const LeadManagerModule = (() => {
       : null;
     return `
       <button class="lm-back" onclick="LeadManagerModule.go('sequences')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg> Secuencias</button>
-      <div class="lm-sec-head">
+      <div class="lm-sec-head${_seqTab === 'aprobar' ? ' lm-sec-head--compact' : ''}">
         <div>
           <h2 class="lm-sec-title">${esc(s.nombre)} ${_seqBadge(s.estado)} ${_seqModeChip(s)}</h2>
-          <p class="lm-sec-sub">${[cli && '◆ ' + esc(cli), cmp && '📣 ' + esc(cmp), s.objetivo && esc(s.objetivo)].filter(Boolean).join(' · ') || 'Secuencia outbound'}</p>
-          ${_seqTzChip(s) ? `<div class="seq-tz-line">${_seqTzChip(s)}</div>` : ''}
+          ${_seqTab === 'aprobar' ? '' : `<p class="lm-sec-sub">${[cli && '◆ ' + esc(cli), cmp && '📣 ' + esc(cmp), s.objetivo && esc(s.objetivo)].filter(Boolean).join(' · ') || 'Secuencia outbound'}</p>
+          ${_seqTzChip(s) ? `<div class="seq-tz-line">${_seqTzChip(s)}</div>` : ''}`}
         </div>
         <div class="lm-sec-actions">
-          <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqReportOpen(${s.id})">${_ico('down')} Informe PDF</button>
-          <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openSequenceDrawer(${s.id})">Editar</button>
+          ${_seqTab === 'aprobar' ? '' : `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqReportOpen(${s.id})">${_ico('down')} Informe PDF</button>`}
+          ${_seqTab === 'aprobar' ? '' : `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openSequenceDrawer(${s.id})">Editar</button>`}
           ${_seqTab === 'pasos'
             ? `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openStepDrawer(${s.id})">＋ Añadir paso</button>`
-            : `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.seqEnrolOpen(${s.id})">＋ Enrolar contacto</button>`}
+            : _seqTab === 'aprobar' ? '' : `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.seqEnrolOpen(${s.id})">＋ Enrolar contacto</button>`}
         </div>
       </div>
       <div class="cp-tabs">
@@ -15168,9 +15168,21 @@ ${foot}
     if (_seqTab === 'aprobar') {
       if (_seqApprovals === null) return `<div class="cp-empty2" style="padding:22px">Cargando borradores…</div>`;
       if (!_seqApprovals.length) return `<div class="cp-empty2" style="padding:22px">No hay emails esperando aprobación.<br><span style="color:var(--muted);font-size:12px">En modo pre-aprobado, el motor redacta cada email cuando toca su paso y lo deja aquí para tu OK. Revísalo, edítalo si quieres y apruébalo — sale solo respetando el intervalo.</span></div>`;
-      const wait = _seqApprovals.filter(a => a.estado === 'awaiting').length;
-      return `<div class="seq-tasks-hd">${wait} email${wait !== 1 ? 's' : ''} por aprobar${_seqApprovals.length - wait ? ` · ${_seqApprovals.length - wait} aprobado(s) en cola` : ''}</div>
-        <div class="seq-app-list">${_seqApprovals.map(_seqAppCard).join('')}</div>`;
+      // Bloque: una tarjeta a la vez (antes: lista con scroll infinito de tarjetas completas).
+      // "Anterior/Siguiente" avanza sin recargar toda la lista ni perder de vista el mensaje.
+      const pend = _seqApprovals.filter(a => a.estado === 'awaiting');
+      const queue = pend.length ? pend : _seqApprovals; // si ya no quedan pendientes, deja ver los aprobados
+      _seqAppIdx = Math.max(0, Math.min(_seqAppIdx, queue.length - 1));
+      const a = queue[_seqAppIdx];
+      const doneCount = _seqApprovals.length - pend.length;
+      return `<div class="seq-app-nav">
+          <div class="seq-app-nav__count"><b>${_seqAppIdx + 1}</b> de ${queue.length} · ${pend.length} por aprobar${doneCount ? ` · ${doneCount} en cola` : ''}</div>
+          <div class="seq-app-nav__arrows">
+            <button class="btn btn--ghost btn--sm" ${_seqAppIdx <= 0 ? 'disabled' : ''} onclick="LeadManagerModule.seqAppNav(-1)">‹ Anterior</button>
+            <button class="btn btn--ghost btn--sm" ${_seqAppIdx >= queue.length - 1 ? 'disabled' : ''} onclick="LeadManagerModule.seqAppNav(1)">Siguiente ›</button>
+          </div>
+        </div>
+        ${_seqAppCard(a)}`;
     }
     if (_seqTab === 'metricas') {
       const mt = _seqMetrics;
@@ -15674,7 +15686,7 @@ ${foot}
     try { const r = await apiFetch(`${API}/lm/sequences/${id}/metrics`); _seqMetrics = (r && r.ok) ? await r.json() : {}; } catch { _seqMetrics = {}; }
     if (_section === 'sequence' && _activeSeq === id && _seqTab === 'metricas') { const el = document.getElementById('seq-tabwrap'); if (el) el.innerHTML = _seqTabContent(id); }
   }
-  function seqTab(t) { _seqTab = t; _renderBody(); if ((t === 'contactos' || t === 'tareas') && !Array.isArray(_seqContacts)) _seqLoadContacts(_activeSeq); if (t === 'metricas') { if (_seqMetrics === null) _seqLoadMetrics(_activeSeq); _seqAb = null; _seqLoadAb(_activeSeq); } if (t === 'envios') { _seqMsgs = null; _seqLoadMsgs(_activeSeq); } if (t === 'aprobar' || t === 'tareas') { _seqApprovals = null; _seqLoadApprovals(_activeSeq); } }
+  function seqTab(t) { _seqTab = t; if (t === 'aprobar') _seqAppIdx = 0; _renderBody(); if ((t === 'contactos' || t === 'tareas') && !Array.isArray(_seqContacts)) _seqLoadContacts(_activeSeq); if (t === 'metricas') { if (_seqMetrics === null) _seqLoadMetrics(_activeSeq); _seqAb = null; _seqLoadAb(_activeSeq); } if (t === 'envios') { _seqMsgs = null; _seqLoadMsgs(_activeSeq); } if (t === 'aprobar' || t === 'tareas') { _seqApprovals = null; _seqLoadApprovals(_activeSeq); } }
   // Filas de aprobación DENTRO de la pestaña Tareas: el email automático se revisa,
   // edita y aprueba aquí mismo — no es una tarea de "marcar hecho".
   function _seqApRowsHtml(seqId) {
@@ -15698,12 +15710,18 @@ ${foot}
 
   // ── Aprobaciones (modo pre-aprobado): borradores del motor esperando OK ──
   let _seqApprovals = null;
+  let _seqAppIdx = 0; // Bloque: índice del email por aprobar mostrado (una tarjeta a la vez, no lista con scroll)
   async function _seqLoadApprovals(id) {
     try { const r = await apiFetch(`${API}/lm/sequences/${id}/approvals`); _seqApprovals = (r && r.ok) ? await r.json() : []; }
     catch { _seqApprovals = []; }
     if (_section === 'sequence' && _activeSeq === id && _seqTab === 'aprobar') {
       const el = document.getElementById('seq-tabwrap'); if (el) el.innerHTML = _seqTabContent(id);
     }
+  }
+  // Navega la cola de aprobación una tarjeta a la vez (‹ Anterior / Siguiente ›).
+  function seqAppNav(delta) {
+    _seqAppIdx = Math.max(0, _seqAppIdx + delta);
+    const el = document.getElementById('seq-tabwrap'); if (el) el.innerHTML = _seqTabContent(_activeSeq);
   }
   async function seqAppAction(mid, action) {
     const asunto = document.getElementById(`app-subj-${mid}`)?.value;
@@ -15719,6 +15737,8 @@ ${foot}
         if (action === 'discard') { _seqApprovals = _seqApprovals.filter(x => x.id !== mid); if (s && s.awaiting > 0) s.awaiting--; }
         else if (it) { it.estado = d.message?.estado || it.estado; it.asunto = d.message?.asunto ?? it.asunto; it.cuerpo = d.message?.cuerpo ?? it.cuerpo; if (action === 'approve' && s && s.awaiting > 0) s.awaiting--; }
       }
+      // Aprobar o descartar SIEMPRE achica la cola de "por aprobar" en ese índice — se queda
+      // mostrando el que ahora ocupa ese lugar (no hace falta avanzar el índice a mano).
       const el = document.getElementById('seq-tabwrap'); if (el) el.innerHTML = _seqTabContent(_activeSeq);
       showBanner(action === 'approve' ? '✓ Aprobado — saldrá solo respetando el intervalo de la secuencia'
                : action === 'discard' ? '✓ Descartado — el contacto avanza al siguiente paso'
@@ -15732,14 +15752,17 @@ ${foot}
     const s = (_sequences || []).find(x => x.id === _activeSeq);
     const cli = (_clients || []).find(c => c.id === s?.outbound_client_id);
     const mb = cli ? _mbFor(cli.id) : null;
+    // Bloque: encabezado condensado a UNA línea (antes: nombre+cargo+destino en una fila,
+    // buzón+CC en otra, cada una con su propio padding) — libera alto para el mensaje.
+    const meta = [esc(nm), a.cargo || a.empresa ? esc([a.cargo, a.empresa].filter(Boolean).join(', ')) : '', `→ ${esc(a.to_email)}`,
+                  `De ${mb ? esc(mb.email) : '⚠ sin buzón'}`, a.cc_off ? 'CC desactivado' : cli?.cc_email ? `CC ${esc(cli.cc_email)}` : ''].filter(Boolean).join(' · ');
     return `<div class="seq-app${approved ? ' seq-app--ok' : ''}">
       <div class="seq-app__hd">
-        <div class="seq-app__who"><b>${esc(nm)}</b>${a.cargo || a.empresa ? ` <span>· ${esc([a.cargo, a.empresa].filter(Boolean).join(', '))}</span>` : ''} <span>→ ${esc(a.to_email)}</span></div>
+        <div class="seq-app__who">${meta}</div>
         ${approved ? `<span class="ibx-b" style="background:var(--primary-soft);color:var(--primary)">Aprobado · sale ${esc(_apFmtDate(a.scheduled_at, _activeSeq))}</span>` : `<span class="ibx-b ibx-b--ooo">Paso día ${a.paso_dia || '?'} · envío ${esc(_apFmtDate(a.scheduled_at, _activeSeq))}</span>`}
       </div>
-      <div class="seq-app__route">De <b>${mb ? esc(mb.email) : '⚠ sin buzón'}</b>${a.cc_off ? ' · CC desactivado en este paso' : cli?.cc_email ? ` · CC <b>${esc(cli.cc_email)}</b>` : ' · sin CC'}</div>
       <input class="form-input seq-app__subj" id="app-subj-${a.id}" value="${esc(a.asunto)}" ${approved ? 'disabled' : ''} placeholder="Asunto">
-      <textarea class="form-input seq-app__body" id="app-body-${a.id}" rows="5" ${approved ? 'disabled' : ''}>${esc(a.cuerpo)}</textarea>
+      <textarea class="form-input seq-app__body seq-app__body--full" id="app-body-${a.id}" ${approved ? 'disabled' : ''}>${esc(a.cuerpo)}</textarea>
       <div class="seq-app__ft">
         ${approved ? '' : `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqAppAction(${a.id},'save')">Guardar cambios</button>`}
         <span class="sp"></span>
@@ -21429,7 +21452,7 @@ ${foot}
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
     openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
     openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, confirmDeleteSequence, seqTab, seqCtAdvance, seqCtPause, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
-    seqAppAction, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, taskApprove,
+    seqAppAction, seqAppNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, taskApprove,
     seqTaskOpen, seqDoClose, seqDoCopy, seqDoDone, seqDoSkip, seqDoPrev, seqDoEditStep, seqDoExit, seqOpenLinkedIn,
     openStepDrawer, closeStepDrawer, saveStep, confirmDeleteStep, seqInsertVar, stepUseTpl, tzSearch, tzPick, tzBlur,
     stepSetMode, stepSetField, stepAddVariant, stepDelVariant, stepFocusTa,
