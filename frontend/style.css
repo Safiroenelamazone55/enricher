@@ -12628,6 +12628,7 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
    entra en el alto disponible sin necesitar scroll. */
 .home-grid {
   flex: 1; min-height: 0; display: grid; gap: 14px; max-width: 1000px; width: 100%;
+  margin: 0 auto;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   grid-auto-rows: min-content;
   align-content: start;
