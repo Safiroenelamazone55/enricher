@@ -457,12 +457,49 @@
 
     <!-- ── HOME (default) — cards de módulos estilo Creatio ── -->
     <div class="pane active" id="pane-home">
-      <div class="home-page">
-        <div class="home-page__hd">
-          <div class="home-page__title" id="home-greeting">Buen día</div>
-          <div class="home-page__sub">Elige un módulo para empezar</div>
+      <div class="home-topbar">
+        <div class="home-topbar__brand">
+          <span class="home-topbar__logo"><svg width="20" height="20" viewBox="0 0 100 100" fill="none"><path d="M50 3 L63 38 L97 50 L63 62 L50 97 L37 62 L3 50 L37 38 Z" fill="currentColor"/></svg></span>
+          <span class="home-topbar__name">Nova</span>
         </div>
-        <div class="home-grid" id="home-grid"></div>
+        <div class="home-topbar__tabs">
+          <button class="home-topbar__tab active" type="button">Módulos</button>
+          <button class="home-topbar__tab" type="button" onclick="_applyHomeMode(false);window._novaSwitchTab('mgmt-team')">Equipo</button>
+          <button class="home-topbar__tab" type="button" onclick="WorkspaceModule.openNameModal()">Configuración</button>
+        </div>
+        <div class="home-topbar__right">
+          <span class="home-topbar__ws" id="home-topbar-ws"></span>
+          <img class="home-topbar__av" id="home-topbar-av" alt="">
+        </div>
+      </div>
+      <div class="home-page">
+        <div class="home-page__row">
+          <div class="home-page__main">
+            <div class="home-page__hd">
+              <div>
+                <div class="home-page__title" id="home-greeting">Buen día</div>
+                <div class="home-page__sub">Elige un módulo para empezar</div>
+              </div>
+              <button class="btn btn--ghost btn--sm" type="button" onclick="showBanner('Más módulos, próximamente','info')">＋ Nuevo módulo</button>
+            </div>
+            <div class="home-grid" id="home-grid"></div>
+          </div>
+          <aside class="home-aipanel" id="home-aipanel">
+            <div class="home-aipanel__hd">
+              <span class="home-aipanel__logo"><svg width="16" height="16" viewBox="0 0 100 100" fill="none"><path d="M50 3 L63 38 L97 50 L63 62 L50 97 L37 62 L3 50 L37 38 Z" fill="currentColor"/></svg></span>
+              <b>Nova</b>
+              <button class="home-aipanel__x" type="button" onclick="dismissHomeTips()" aria-label="Cerrar">✕</button>
+            </div>
+            <p class="home-aipanel__title">¡Bienvenida! 👋</p>
+            <p class="home-aipanel__body">Elige un módulo para empezar. Cada uno guarda dónde te quedaste — al recargar vuelves justo ahí.</p>
+            <div class="home-aipanel__tips">
+              <div class="home-aipanel__tips-h">Tips</div>
+              <div class="home-aipanel__tip">1. Outreach lleva tu CRM, campañas y secuencias.</div>
+              <div class="home-aipanel__tip">2. Enriquecimiento prepara y verifica leads antes de contactarlos.</div>
+              <div class="home-aipanel__tip">3. Operaciones agrupa proyectos, tareas, clientes y finanzas.</div>
+            </div>
+          </aside>
+        </div>
       </div>
     </div>
 
@@ -2588,7 +2625,7 @@
 })();
 </script>
 
-<script src="app.js?v=20260805g"></script>
+<script src="app.js?v=20260805i"></script>
 <div id="task-quick-edit" style="display:none;position:fixed;z-index:9999"></div>
 </body>
 </html>

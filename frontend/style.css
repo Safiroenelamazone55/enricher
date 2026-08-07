@@ -12564,20 +12564,56 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
 #pane-home { display: none; }
 #appShell.home-mode .pane:not(#pane-home) { display: none !important; }
 
+/* ── Home: barra superior estilo Creatio, con la paleta de Nova (no naranja) ── */
+.home-topbar {
+  display: flex; align-items: center; gap: 22px; height: 52px; padding: 0 22px;
+  background: var(--navy); color: #fff; font-family: var(--font);
+}
+.home-topbar__brand { display: flex; align-items: center; gap: 8px; color: var(--brand-accent); flex-shrink: 0; }
+.home-topbar__name { font-weight: 700; font-size: 14px; color: #fff; letter-spacing: -.01em; }
+.home-topbar__tabs { display: flex; align-items: center; gap: 4px; height: 100%; }
+.home-topbar__tab {
+  background: none; border: none; font: inherit; font-family: var(--font);
+  color: rgba(255,255,255,.62); font-size: 13px; font-weight: 600; cursor: pointer;
+  height: 100%; padding: 0 12px; border-bottom: 2px solid transparent; transition: color .14s ease, border-color .14s ease;
+}
+.home-topbar__tab:hover { color: #fff; }
+.home-topbar__tab.active { color: #fff; border-bottom-color: var(--brand-accent); }
+.home-topbar__right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.home-topbar__ws { font-size: 12px; color: rgba(255,255,255,.6); }
+.home-topbar__av { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; background: rgba(255,255,255,.15); }
+
 .home-page {
-  min-height: 100vh; padding: 48px 40px 60px;
+  min-height: calc(100vh - 52px); padding: 40px 40px 60px;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   background: #FAF6EF;
 }
-.home-page__hd { margin-bottom: 32px; max-width: 1100px; }
+.home-page__row { display: flex; gap: 32px; align-items: flex-start; max-width: 1440px; }
+.home-page__main { flex: 1; min-width: 0; }
+.home-page__hd { margin-bottom: 28px; max-width: 1100px; display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .home-page__title { font-size: 26px; font-weight: 700; color: #1F1D1B; letter-spacing: -.01em; }
 .home-page__sub { font-size: 14px; color: #6C6862; margin-top: 6px; }
+
+/* ── Home: panel lateral de bienvenida (equivalente al panel "Creatio.ai", estático) ── */
+.home-aipanel {
+  width: 280px; flex-shrink: 0; background: #fff; border: 1px solid #E8E4DE; border-radius: 14px;
+  padding: 18px 18px 20px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+}
+.home-aipanel__hd { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; color: var(--brand); }
+.home-aipanel__hd b { color: #1F1D1B; font-size: 13px; flex: 1; }
+.home-aipanel__x { background: none; border: none; color: #918C85; cursor: pointer; font-size: 13px; line-height: 1; padding: 2px; }
+.home-aipanel__x:hover { color: #1F1D1B; }
+.home-aipanel__title { font-weight: 700; font-size: 15px; color: #1F1D1B; margin-bottom: 8px; }
+.home-aipanel__body { font-size: 13px; color: #6C6862; line-height: 1.5; margin-bottom: 16px; }
+.home-aipanel__tips-h { font-size: 11px; font-weight: 700; color: #918C85; text-transform: uppercase; letter-spacing: .03em; margin-bottom: 8px; }
+.home-aipanel__tip { font-size: 12.5px; color: #45403A; line-height: 1.5; margin-bottom: 7px; }
+@media (max-width: 980px) { .home-page__row { flex-direction: column; } .home-aipanel { width: 100%; } }
 .home-grid {
   display: grid; gap: 16px; max-width: 1100px;
   grid-template-columns: repeat(auto-fill, minmax(320px, 380px));
 }
 .home-card {
-  display: flex; align-items: center; gap: 16px;
+  display: flex; align-items: center; gap: 16px; position: relative;
   padding: 20px 22px; background: #fff; border: 1px solid #E8E4DE;
   border-radius: 12px; cursor: pointer; text-align: left; font-family: inherit;
   transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
@@ -12587,6 +12623,12 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
   border-color: #C9C4BC; box-shadow: 0 4px 14px rgba(16,24,40,.06);
   transform: translateY(-1px);
 }
+.home-card__kebab {
+  position: absolute; top: 10px; right: 10px; width: 22px; height: 22px; border-radius: 6px;
+  background: none; border: none; color: #B4AFA8; font-size: 15px; line-height: 1; cursor: pointer;
+  display: grid; place-items: center;
+}
+.home-card__kebab:hover { background: #F1EFEB; color: #6C6862; }
 .home-card__body { flex: 1; min-width: 0; }
 .home-card__title { font-weight: 700; font-size: 16px; color: #1F1D1B; margin-bottom: 4px; letter-spacing: -.005em; }
 .home-card__desc { font-size: 13px; color: #6C6862; line-height: 1.4; margin-bottom: 10px; }

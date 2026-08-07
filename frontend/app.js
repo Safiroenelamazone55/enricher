@@ -541,15 +541,32 @@ function renderHome() {
   if (greet) greet.textContent = first ? `${saludo}, ${first}` : saludo;
 
   grid.innerHTML = HOME_MODULES.map(m => `
-    <button class="home-card" onclick="selectModule('${m.id}')" aria-label="${m.name}">
+    <div class="home-card" role="button" tabindex="0" onclick="selectModule('${m.id}')" onkeydown="if(event.key==='Enter')selectModule('${m.id}')" aria-label="${m.name}">
+      <button class="home-card__kebab" onclick="event.stopPropagation();selectModule('${m.id}')" title="Abrir ${m.name}" aria-label="Abrir ${m.name}">⋮</button>
       <div class="home-card__body">
         <div class="home-card__title">${m.name}</div>
         <div class="home-card__desc">${m.desc}</div>
         <span class="home-card__chip"><span class="home-card__chip-dot"></span>Activo</span>
       </div>
       <div class="home-card__icon home-card__icon--${m.color}">${m.icon}</div>
-    </button>
+    </div>
   `).join('');
+
+  // Barra superior: avatar + nombre de workspace (mismos datos que ya carga initAuth).
+  const u = window._authUser || {};
+  const wsEl = document.getElementById('home-topbar-ws');
+  if (wsEl) wsEl.textContent = u.workspaceName || u.name || '';
+  const avEl = document.getElementById('home-topbar-av');
+  if (avEl) avEl.src = u.avatar || `https://api.dicebear.com/9.x/lorelei/svg?seed=${encodeURIComponent(u.name || u.email || 'user')}`;
+
+  // Panel de bienvenida: se puede cerrar y queda cerrado (no vuelve a insistir).
+  const panel = document.getElementById('home-aipanel');
+  if (panel) { let dismissed = false; try { dismissed = localStorage.getItem('nova_home_tips_dismissed') === '1'; } catch (_) {} panel.style.display = dismissed ? 'none' : ''; }
+}
+function dismissHomeTips() {
+  try { localStorage.setItem('nova_home_tips_dismissed', '1'); } catch (_) {}
+  const panel = document.getElementById('home-aipanel');
+  if (panel) panel.style.display = 'none';
 }
 
 // Alterna el "modo home": oculta la sidebar secundaria (que muestra items
