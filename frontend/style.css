@@ -14326,7 +14326,18 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .slk-reac { font-size: 11.5px; color: #6C6862; background: #F1EFEB; border: 1px solid #E7E3DD; border-radius: 999px; padding: 1px 7px; }
 .slk-thread { display: inline-block; margin-top: 5px; font: inherit; font-size: 12px; font-weight: 500; color: #007AFF; background: none; border: none; padding: 0; cursor: pointer; }
 .slk-thread:hover { text-decoration: underline; }
-.slk-file { font-size: 12px; color: #6C6862; margin-top: 4px; }
+.slk-file { display: inline-block; font-size: 12px; color: #6C6862; margin-top: 4px; text-decoration: none; }
+.slk-file:hover { text-decoration: underline; color: #007AFF; }
+/* Fotos/videos/audios ya enviados: antes solo se veía "📎 nombre.ext" — ahora
+   se pueden ver/escuchar directo en el mensaje, como en Slack de verdad. */
+.slk-file-img { display: block; max-width: 280px; max-height: 280px; border-radius: 10px; margin-top: 5px; object-fit: cover; border: 1px solid #E7E3DD; cursor: zoom-in; }
+.slk-file-video { display: block; max-width: 320px; max-height: 320px; border-radius: 10px; margin-top: 5px; background: #000; }
+.slk-file-audio {
+  display: inline-flex; flex-direction: column; gap: 5px; margin-top: 5px;
+  padding: 8px 10px; background: #F1EFEB; border: 1px solid #E7E3DD; border-radius: 10px; min-width: 240px;
+}
+.slk-file-audio__nm { font-size: 11.5px; font-weight: 600; color: #6C6862; }
+.slk-file-audio audio { width: 100%; height: 32px; }
 .slk-volver { display: block; margin: 0 0 10px; font: inherit; font-size: 12.5px; color: #007AFF; background: none; border: none; padding: 0; cursor: pointer; }
 .slk-blank { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; height: 100%; text-align: center; padding: 40px 20px; }
 .slk-blank__t { margin: 0; font-size: 16px; font-weight: 600; color: #1F1D1B; }

@@ -22160,6 +22160,34 @@ const SlackChat = (() => {
     return (id && _avatars[id]) || `https://api.dicebear.com/9.x/lorelei/svg?seed=${encodeURIComponent(nombreFallback || id || 'user')}`;
   }
 
+  // Los archivos de Slack (fotos/videos/audios) no se veían: solo salía un
+  // renglón de texto "📎 nombre.ext" sin poder abrirlo ni escucharlo. url_private
+  // exige el token para verse, así que pasa por el proxy del backend en vez de
+  // cargarse directo.
+  function _fileUrl(f) {
+    const raw = f.url_private_download || f.url_private || '';
+    return raw ? `${API}/slack/workspaces/${_wsAct}/archivo-proxy?url=${encodeURIComponent(raw)}` : '';
+  }
+  function _archivoHtml(f) {
+    const mt = f.mimetype || '';
+    const nombre = f.name || 'archivo';
+    const src = _fileUrl(f);
+    if (!src) return `<div class="slk-file">📎 ${esc(nombre)}</div>`;
+    if (mt.startsWith('image/')) {
+      return `<a href="${src}" target="_blank" rel="noopener"><img class="slk-file-img" src="${src}" alt="${esc(nombre)}" loading="lazy"></a>`;
+    }
+    if (mt.startsWith('video/')) {
+      return `<video class="slk-file-video" controls preload="metadata" src="${src}"></video>`;
+    }
+    if (mt.startsWith('audio/')) {
+      return `<div class="slk-file-audio">
+        <span class="slk-file-audio__nm">🎧 ${esc(nombre)}</span>
+        <audio controls preload="metadata" src="${src}"></audio>
+      </div>`;
+    }
+    return `<a class="slk-file" href="${esc(f.permalink || src)}" target="_blank" rel="noopener">📎 ${esc(nombre)}</a>`;
+  }
+
   // Un directo no trae nombre: trae el id de la otra persona, hay que resolverlo.
   // El directo conmigo misma se marca "(yo)" — Slack lo llama "You" en su propio cliente.
   function _nombreDe(c) {
@@ -22453,7 +22481,7 @@ const SlackChat = (() => {
         `<span class="slk-reac">${_emojiImg(_emoji(':' + r.name + ':'), 'e-img')} ${r.count}</span>`).join('');
       const hilo = (!enHilo && m.reply_count)
         ? `<button class="slk-thread" onclick="SlackChat.verHilo('${m.ts}')">${m.reply_count} respuesta${m.reply_count > 1 ? 's' : ''}</button>` : '';
-      const files = (m.files || []).map(f2 => `<div class="slk-file">📎 ${esc(f2.name || 'archivo')}</div>`).join('');
+      const files = (m.files || []).map(_archivoHtml).join('');
       html += `<div class="chat-msg${esRaiz ? ' slk-root' : ''}${esResp ? ' slk-reply' : ''}" data-ts="${m.ts}"
                     oncontextmenu="SlackChat.menuMsg(event,'${m.ts}',${m.reply_count || 0})">
         <img class="chat-msg__av" src="${_avatarUrl(m.user, quien)}" alt="">

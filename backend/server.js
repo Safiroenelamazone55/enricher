@@ -7040,6 +7040,31 @@ async function _slackWs(uid, id) {
   return w || null;
 }
 
+// Los archivos de Slack (url_private, thumb_*) exigen el Bearer token del
+// workspace para verse — un <img>/<video>/<audio> directo a esa URL da 401
+// porque el navegador no puede mandar ese header. Este proxy hace el fetch
+// con el token y lo retransmite. Solo se aceptan URLs de *.slack.com para
+// que esto no se pueda usar como proxy abierto a cualquier sitio.
+app.get('/api/slack/workspaces/:id/archivo-proxy', requireAuth, async (req, res) => {
+  const url = String(req.query.url || '');
+  if (!/^https:\/\/[a-z0-9.-]+\.slack\.com\//i.test(url)) {
+    return res.status(400).json({ error: 'URL inválida' });
+  }
+  try {
+    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
+    const token = mailboxSvc.decPass(w.token_enc);
+    const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!r.ok) return res.status(r.status).json({ error: 'No se pudo cargar el archivo' });
+    res.set('Content-Type', r.headers.get('content-type') || 'application/octet-stream');
+    res.set('Cache-Control', 'private, max-age=3600');
+    res.send(Buffer.from(await r.arrayBuffer()));
+  } catch (e) {
+    console.error('[slack] archivo-proxy:', e.message);
+    res.status(500).json({ error: 'Error al cargar el archivo' });
+  }
+});
+
 // Equipo del workspace: es lo que permite ver a la gente y resolver las menciones.
 app.get('/api/slack/workspaces/:id/miembros', requireAuth, async (req, res) => {
   try {
