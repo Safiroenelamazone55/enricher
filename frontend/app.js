@@ -22249,6 +22249,7 @@ const SlackChat = (() => {
   async function abrir(canalId) {
     const c = _canales.find(x => x.id === canalId);
     if (!c) return;
+    if (_canal && _canal.id !== canalId) cancelAttach();   // no arrastrar un adjunto sin enviar a otro canal
     _canal = { id: c.id, name: _nombreDe(c), topic: (c.topic && c.topic.value) || '' };
     _hilo = null;
     if (_noLeidos[c.id] || _marcadoNL[c.id]) {   // al abrirlo deja de estar pendiente
@@ -22411,6 +22412,7 @@ const SlackChat = (() => {
 
   // Si hay un hilo abierto se responde DENTRO del hilo, no suelto en el canal.
   async function enviar() {
+    if (_pendingFile) return _enviarConAdjunto();
     const inp = $$('chat-input');
     let texto = (inp?.value || '').trim();
     if (!texto || !_canal) return;
@@ -22534,35 +22536,100 @@ const SlackChat = (() => {
     ChatModule.onInputChange(inp);
   }
 
-  // Adjuntar: abre el selector, sube a Slack (no se guarda en Nova) y refresca.
+  // Adjuntar: abre el selector y muestra una preview (thumbnail si es imagen,
+  // chip de archivo si es doc/pdf/etc) SIN subir todavía — el archivo se sube
+  // recién al darle Enviar, igual que iOS Mensajes / Slack, para poder revisarlo
+  // o quitarlo antes de mandarlo.
+  let _pendingFile = null, _pendingFileUrl = null;
   function adjuntar() {
     if (!_canal) { showBanner('Abre un canal primero', 'info'); return; }
     let inp = document.getElementById('slk-file');
     if (!inp) {
       inp = document.createElement('input');
       inp.type = 'file'; inp.id = 'slk-file'; inp.style.display = 'none';
-      inp.onchange = () => { if (inp.files[0]) _subir(inp.files[0]); inp.value = ''; };
+      inp.onchange = () => {
+        if (inp.files[0]) {
+          _pendingFile = inp.files[0];
+          _renderAttachPreview();
+          const btn = $$('chat-send-btn'); if (btn) btn.disabled = false;
+          $$('chat-input')?.focus();
+        }
+        inp.value = '';
+      };
       document.body.appendChild(inp);
     }
     inp.click();
   }
-
-  async function _subir(file) {
-    const comentario = ($$('chat-input') && $$('chat-input').value || '').trim();
+  // Tipo → {sigla, color}, estilo chip de archivo de Slack (para lo que no es imagen).
+  const _FILE_KIND = {
+    pdf: ['PDF', '#DC2626'], doc: ['DOC', '#2563EB'], docx: ['DOC', '#2563EB'],
+    xls: ['XLS', '#15803D'], xlsx: ['XLS', '#15803D'], csv: ['CSV', '#15803D'],
+    ppt: ['PPT', '#EA580C'], pptx: ['PPT', '#EA580C'],
+    zip: ['ZIP', '#57534E'], rar: ['ZIP', '#57534E'], txt: ['TXT', '#78716C'],
+  };
+  function _fileKind(name) {
+    const ext = (String(name).split('.').pop() || '').toLowerCase();
+    return _FILE_KIND[ext] || [(ext || 'FILE').slice(0, 4).toUpperCase(), '#78716C'];
+  }
+  function _fmtBytes(n) {
+    if (n < 1024) return n + ' B';
+    if (n < 1024 * 1024) return Math.round(n / 1024) + ' KB';
+    return (n / (1024 * 1024)).toFixed(1) + ' MB';
+  }
+  function _renderAttachPreview() {
+    const box = document.getElementById('chat-attach-preview');
+    if (!box) return;
+    if (_pendingFileUrl) { URL.revokeObjectURL(_pendingFileUrl); _pendingFileUrl = null; }
+    if (!_pendingFile) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+    const f = _pendingFile;
+    const isImg = f.type && f.type.startsWith('image/');
+    let thumb;
+    if (isImg) {
+      _pendingFileUrl = URL.createObjectURL(f);
+      thumb = `<img src="${_pendingFileUrl}" class="chat-attach-preview__img" alt="">`;
+    } else {
+      const [label, color] = _fileKind(f.name);
+      thumb = `<div class="chat-attach-preview__ico" style="background:${color}">${label}</div>`;
+    }
+    box.innerHTML = `<div class="chat-attach-preview__card">
+      ${thumb}
+      <div class="chat-attach-preview__info">
+        <div class="chat-attach-preview__name">${esc(f.name)}</div>
+        <div class="chat-attach-preview__size">${_fmtBytes(f.size)}</div>
+      </div>
+      <button class="chat-attach-preview__close" onclick="SlackChat.cancelAttach()" title="Quitar adjunto">×</button>
+    </div>`;
+    box.classList.remove('hidden');
+  }
+  function cancelAttach() {
+    _pendingFile = null;
+    _renderAttachPreview();
+    const btn = $$('chat-send-btn'); if (btn) btn.disabled = !($$('chat-input')?.value || '').trim();
+  }
+  function hasPendingFile() { return !!_pendingFile; }
+  async function _enviarConAdjunto() {
+    const file = _pendingFile;
+    const inp = $$('chat-input');
+    const comentario = (inp?.value || '').trim();
     const fd = new FormData();
     fd.append('file', file);
     if (comentario) fd.append('comentario', comentario);
     if (_hilo) fd.append('thread_ts', _hilo);
+    const sendBtn = $$('chat-send-btn'); if (sendBtn) sendBtn.disabled = true;
     showBanner('Subiendo ' + file.name + '...', 'info');
     try {
       const r = await apiFetch(API + '/slack/workspaces/' + _wsAct + '/canales/' + _canal.id + '/archivo',
         { method: 'POST', body: fd });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'No se pudo subir');
-      const box = $$('chat-input'); if (box) { box.value = ''; ChatModule.onInputChange(box); }
+      if (inp) { inp.value = ''; inp.style.height = 'auto'; }
+      cancelAttach();
       showBanner('Archivo enviado', 'success');
-      if (_hilo) verHilo(_hilo); else abrir(_canal.id);
-    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+      if (_hilo) await verHilo(_hilo); else await abrir(_canal.id);
+    } catch (e) {
+      showBanner('Error: ' + e.message, 'error');
+      if (sendBtn) sendBtn.disabled = false;
+    }
   }
 
   // Grabar audio con el microfono y enviarlo como nota de voz.
@@ -22729,7 +22796,7 @@ const SlackChat = (() => {
   }
 
   return { load, irA, abrir, buscar, verHilo, enviar, detener: _pararSondeo,
-           fmt, insertar, adjuntar, grabarAudio, emojiPicker, _emojiIns,
+           fmt, insertar, adjuntar, cancelAttach, hasPendingFile, grabarAudio, emojiPicker, _emojiIns,
            menuMsg, reaccionar, anclar, copiar,
            menuCanal, verProyecto, verTareas, copiarNombre, archivarCanal, marcarNoLeido,
            seccion, menciones, _mencionar, detectarArroba };
@@ -23243,7 +23310,9 @@ const ChatModule = (() => {
 
   function onInputChange(el) {
     const btn = $('chat-send-btn');
-    if (btn) btn.disabled = !el.value.trim();
+    // Con un adjunto pendiente el botón queda habilitado aunque no haya texto
+    // (se puede enviar solo el archivo, sin comentario, como en iOS/Slack).
+    if (btn) btn.disabled = !el.value.trim() && !(typeof SlackChat !== 'undefined' && SlackChat.hasPendingFile && SlackChat.hasPendingFile());
   }
 
   function focusInput() {

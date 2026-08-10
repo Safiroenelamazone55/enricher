@@ -5440,6 +5440,34 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 }
 .chat-reply-banner__close:hover { background: #CFCAC3; color: #1F1D1B; }
 
+/* Preview del adjunto antes de enviar — thumbnail grande si es imagen (estilo
+   iOS Mensajes) o chip de archivo con ícono por tipo si es doc/pdf/etc (estilo
+   Slack). Vive arriba del composer, igual que el banner de "Respondiendo a". */
+.chat-attach-preview { padding: 10px 16px 0; flex-shrink: 0; }
+.chat-attach-preview.hidden { display: none; }
+.chat-attach-preview__card {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px; background: #F1EFEB; border: 1px solid #EAE7E2; border-radius: 12px;
+  animation: attachPreviewIn .16s ease;
+}
+@keyframes attachPreviewIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.chat-attach-preview__img { width: 44px; height: 44px; border-radius: 9px; object-fit: cover; flex-shrink: 0; background: #E5E1D9; }
+.chat-attach-preview__ico {
+  width: 44px; height: 44px; border-radius: 9px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: .62rem; font-weight: 800; letter-spacing: .02em;
+}
+.chat-attach-preview__info { flex: 1; min-width: 0; }
+.chat-attach-preview__name { font-size: .82rem; font-weight: 600; color: #1F1D1B; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-attach-preview__size { font-size: .72rem; color: #6C6862; margin-top: 1px; }
+.chat-attach-preview__close {
+  width: 24px; height: 24px; border-radius: 50%; border: none;
+  background: #EAE7E2; color: #6C6862; cursor: pointer; font-size: .9rem;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  transition: background .1s, color .1s;
+}
+.chat-attach-preview__close:hover { background: #DC2626; color: #fff; }
+
 /* 3-dot context menu */
 .chat-ctx-menu {
   position: fixed; background: #fff;
