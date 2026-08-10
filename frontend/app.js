@@ -16795,6 +16795,7 @@ ${foot}
   let _ibPoll    = null;   // refresco periódico del contador sin-leer
   let _ibTab     = 'sin';  // sin | resp | env | reb
   let _ibCli     = 0;      // filtro por cliente outbound (0 = todos)
+  let _ibDisp    = '';     // filtro por etiqueta/disposición ('' = todas)
   let _ibActive  = null;   // contact_id del hilo abierto
   let _ibThread  = null;   // { contact, messages } del hilo abierto
   let _ibSending = false;
@@ -16820,7 +16821,7 @@ ${foot}
   }
   function _ibFiltered() {
     const all = Array.isArray(_ibThreads) ? _ibThreads : [];
-    return _ibCli ? all.filter(t => t.outbound_client_id === _ibCli) : all;
+    return all.filter(t => (!_ibCli || t.outbound_client_id === _ibCli) && (!_ibDisp || t.disposition === _ibDisp));
   }
   function _ibFmtAgo(d) {
     if (!d) return '';
@@ -17058,6 +17059,7 @@ ${foot}
         <span class="sp"></span>
         ${unread ? `<span class="ibx-unread">${unread} sin leer</span>` : ''}
         <select class="dle-i ibx-fcli" onchange="LeadManagerModule.ibCli(this.value)"><option value="0">Todos los clientes</option>${_clients.map(c => `<option value="${c.id}"${_ibCli === c.id ? ' selected' : ''}>${esc(c.nombre)}</option>`).join('')}</select>
+        <select class="dle-i ibx-fcli" onchange="LeadManagerModule.ibDisp(this.value)"><option value="">Todas las etiquetas</option>${_DISPOS.map(d => `<option value="${d[0]}"${_ibDisp === d[0] ? ' selected' : ''}>${esc(d[1])}</option>`).join('')}</select>
       </div>
       ${_ibTab === 'env'
         ? `<div id="lm-real-inbox">${_realInboxHtml()}</div>`
@@ -17082,6 +17084,7 @@ ${foot}
   }
   function ibTab(k) { _ibTab = k; _ibPaint(); if (k === 'env' && _lmMsgs === null) _loadLmMsgs(); }
   function ibCli(v) { _ibCli = parseInt(v) || 0; _ibPaint(); }
+  function ibDisp(v) { _ibDisp = v || ''; _ibPaint(); }
   async function ibSend(schedIso) {
     if (_ibSending || !_ibActive) return;
     const ta = document.getElementById('ibx-ta'); const cuerpo = (ta?.value || '').trim();
@@ -21587,7 +21590,7 @@ ${foot}
     mbSignatureOpen, mbSignaturePreview, mbSignatureClear, mbSignatureInsertLink, mbSignatureImg, mbSignatureSave,
     mbAdminConsentSync, mbAdminConsentToggleHtml,
     mbAdminConsentSetSigner, mbAdminConsentAddChip, mbAdminConsentRmChip, mbAdminConsentInputKey, mbAdminConsentClearRecipients,
-    ibOpen, ibTab, ibCli, ibSend, ibSchedToggle, ibSchedPick, ibCancelSched, ibResolveDisp, ibOpenResolveMenu,
+    ibOpen, ibTab, ibCli, ibDisp, ibSend, ibSchedToggle, ibSchedPick, ibCancelSched, ibResolveDisp, ibOpenResolveMenu,
     ibRowMenu, ibCloseMenu, ibMarkUnread,
     pendingAcceptOpen, pendingAcceptToggleAll, pendingAcceptApplyFilters, pendingAcceptMark,
     openActivityDrawer, closeActivityDrawer, saveActivity, confirmDeleteActivity, markActDone,
