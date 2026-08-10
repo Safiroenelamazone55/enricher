@@ -16891,24 +16891,18 @@ ${foot}
     </div>`;
   }
   // ── Bloque 5: acciones rápidas de "Resolver respuesta" dentro del chat — sin salir de la conversación ──
-  // Antes era una card con 9 botones de disposición siempre visibles (ocupaba mucho
-  // alto). Ahora solo el CTA principal + la disposición actual (si hay) quedan a la
-  // vista; el resto vive en un menú de 3 puntos (mismo patrón que "Marcar resultado").
-  function _ibResolveBar(c) {
-    const id = c.id;
-    return `<div class="ibx-resolve">
-      <button class="cp-cta" style="padding:5px 12px;font-size:.78rem" onclick="LeadManagerModule.cpOpenRegisterReply(${id})">＋ Registrar respuesta</button>
-      ${c.disposition ? _dispoBadge(c.disposition) : ''}
-      <button class="ibx-resolve__more" onclick="LeadManagerModule.ibOpenResolveMenu(event,${id})" title="Marcar resultado">⋮</button>
-    </div>`;
-  }
+  // Antes era su propia fila (CTA + badge + "⋮"). Ahora vive junto al header de la
+  // conversación: el badge de disposición al lado del nombre, y "⋮" junto a "Ver
+  // ficha" — "+ Registrar respuesta" pasó a ser la primera opción del menú.
   function ibOpenResolveMenu(ev, cid) {
     if (ev && ev.stopPropagation) ev.stopPropagation();
     document.querySelectorAll('.cp-mark-menu').forEach(m => m.remove());
     const close = "document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove())";
     const item = (label, onclick, dot) => `<button class="cp-mark-menu__b" onclick="${close};${onclick}">${dot ? `<span class="cp-mark-dot" style="background:${dot}"></span>` : ''}${label}</button>`;
     const quick = _DISPOS.filter(d => d[0] !== 'aceptado');
-    let html = `<div class="cp-mark-menu__h">Resolver respuesta</div>`;
+    let html = `<div class="cp-mark-menu__grid">` + item('＋ Registrar respuesta', `LeadManagerModule.cpOpenRegisterReply(${cid})`) + `</div>`;
+    html += `<div class="cp-mark-menu__sep"></div>`;
+    html += `<div class="cp-mark-menu__h">Resolver respuesta</div>`;
     html += `<div class="cp-mark-menu__grid">` + quick.map(d => item(esc(d[1]), `LeadManagerModule.ibResolveDisp(${cid},'${d[0]}')`, d[2])).join('') + `</div>`;
     html += `<div class="cp-mark-menu__sep"></div>`;
     html += `<div class="cp-mark-menu__grid">` + item('＋ Crear referido', `LeadManagerModule.ldRefer(${cid},'derivado')`) + `</div>`;
@@ -16939,11 +16933,11 @@ ${foot}
     return `
       <div class="ibx-conv__hd">
         <div class="ibx-av">${esc(ini)}</div>
-        <div class="ibx-conv__who"><div class="ibx-conv__nm">${esc(nm)}${c.cargo || c.empresa ? ` <span class="ibx-conv__sub">· ${esc([c.cargo, c.empresa].filter(Boolean).join(', '))}</span>` : ''}</div>
+        <div class="ibx-conv__who"><div class="ibx-conv__nm">${esc(nm)}${c.cargo || c.empresa ? ` <span class="ibx-conv__sub">· ${esc([c.cargo, c.empresa].filter(Boolean).join(', '))}</span>` : ''}${c.disposition ? ' ' + _dispoBadge(c.disposition) : ''}</div>
         <div class="ibx-conv__seq">${seqInfo}</div></div>
         <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openContactPage(${c.id})">Ver ficha</button>
+        ${c.id ? `<button class="ibx-resolve__more" onclick="LeadManagerModule.ibOpenResolveMenu(event,${c.id})" title="Resolver respuesta">⋮</button>` : ''}
       </div>
-      ${c.id ? _ibResolveBar(c) : ''}
       <div class="ibx-msgs" id="ibx-msgs">${(_ibThread.messages || []).map(_ibMsg).join('') || '<div class="ibx-empty">Sin mensajes aún.</div>'}</div>
       <div class="ibx-replybox">
         ${canSend
