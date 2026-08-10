@@ -2682,16 +2682,16 @@ app.get('/api/mgmt/meetings', requireAuth, async (req, res) => {
 
 // ── POST /api/mgmt/meetings ───────────────────────────────────────
 app.post('/api/mgmt/meetings', requireAuth, async (req, res) => {
-  const { titulo, fecha, hora_inicio, hora_fin, descripcion, link, attendees, estado } = req.body;
+  const { titulo, fecha, hora_inicio, hora_fin, descripcion, link, attendees, estado, recordatorio_min } = req.body;
   try {
     const { rows } = await pool.query(
-      `INSERT INTO meetings (user_id, titulo, fecha, hora_inicio, hora_fin, descripcion, link, attendees, estado)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+      `INSERT INTO meetings (user_id, titulo, fecha, hora_inicio, hora_fin, descripcion, link, attendees, estado, recordatorio_min)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
       [req.workspaceOwnerId, titulo||'', fecha,
        hora_inicio||null, hora_fin||null,
        descripcion||'', link||'',
        JSON.stringify(Array.isArray(attendees) ? attendees : []),
-       estado||'programada']
+       estado||'programada', recordatorio_min || null]
     );
     res.json(rows[0]);
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -2699,18 +2699,19 @@ app.post('/api/mgmt/meetings', requireAuth, async (req, res) => {
 
 // ── PUT /api/mgmt/meetings/:id ────────────────────────────────────
 app.put('/api/mgmt/meetings/:id', requireAuth, async (req, res) => {
-  const { titulo, fecha, hora_inicio, hora_fin, descripcion, link, attendees, estado } = req.body;
+  const { titulo, fecha, hora_inicio, hora_fin, descripcion, link, attendees, estado, recordatorio_min } = req.body;
   try {
     const { rows } = await pool.query(
       `UPDATE meetings
        SET titulo=$1, fecha=$2, hora_inicio=$3, hora_fin=$4,
-           descripcion=$5, link=$6, attendees=$7, estado=$8
-       WHERE id=$9 AND user_id=$10 RETURNING *`,
+           descripcion=$5, link=$6, attendees=$7, estado=$8, recordatorio_min=$9,
+           recordatorio_enviado=FALSE
+       WHERE id=$10 AND user_id=$11 RETURNING *`,
       [titulo||'', fecha,
        hora_inicio||null, hora_fin||null,
        descripcion||'', link||'',
        JSON.stringify(Array.isArray(attendees) ? attendees : []),
-       estado||'programada',
+       estado||'programada', recordatorio_min || null,
        req.params.id, req.workspaceOwnerId]
     );
     if (!rows.length) return res.status(404).json({ error: 'No encontrada' });
@@ -6908,15 +6909,51 @@ app.post('/api/gcal/sync-task', requireAuth, async (req, res) => {
 // =================================================================
 const slackSvc = require('./services/slackService');
 
+// Rol del usuario que hace la petición DENTRO de ese workspace (el dueño de la
+// cuenta siempre es 'admin'; para invitados se busca en team_members por email).
+async function _resolveRol(req) {
+  if (!req.user.workspace_id) return 'admin';
+  try {
+    const { rows } = await pool.query(
+      `SELECT rol FROM team_members WHERE user_id=$1 AND LOWER(email)=LOWER($2) LIMIT 1`,
+      [req.workspaceOwnerId, req.user.email]);
+    return rows[0]?.rol || 'miembro';
+  } catch (_) { return 'miembro'; }
+}
+
 // Lista de workspaces. NUNCA devuelve el token, solo si esta conectado.
+// Cada espacio tiene una visibilidad ('todos'/'admin'/'solo_yo') — se filtra
+// aquí según quién pregunta, no solo por pertenecer al mismo workspace de Nova.
 app.get('/api/slack/workspaces', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT id, team_id, team_name, etiqueta, token_tipo, bot_user_id, estado,
-              ultimo_error, created_at
+              ultimo_error, created_at, icon_url, visibilidad, connected_by
          FROM slack_workspaces WHERE user_id=$1 ORDER BY created_at`,
       [req.workspaceOwnerId]);
-    res.json(rows);
+    // Backfill perezoso: los workspaces conectados antes de tener icon_url se
+    // completan solos en la primera carga, sin que haya que reconectarlos.
+    const faltantes = rows.filter(w => !w.icon_url);
+    if (faltantes.length) {
+      const { rows: tokens } = await pool.query(
+        `SELECT id, token_enc FROM slack_workspaces WHERE id = ANY($1::int[])`,
+        [faltantes.map(w => w.id)]);
+      await Promise.all(tokens.map(async t => {
+        try {
+          const info = await slackSvc.teamInfoFromEnc(t.token_enc);
+          if (info.icon_url) {
+            await pool.query(`UPDATE slack_workspaces SET icon_url=$1 WHERE id=$2`, [info.icon_url, t.id]);
+            const w = faltantes.find(x => x.id === t.id); if (w) w.icon_url = info.icon_url;
+          }
+        } catch (_) {}
+      }));
+    }
+    const rol = await _resolveRol(req);
+    const visibles = rows.filter(w =>
+      w.visibilidad === 'solo_yo' ? w.connected_by === req.user.id
+      : w.visibilidad === 'admin' ? (rol === 'admin' || w.connected_by === req.user.id)
+      : true);
+    res.json(visibles);
   } catch (err) {
     console.error('[slack] list:', err.message);
     res.status(500).json({ error: 'Error al leer los workspaces' });
@@ -6933,20 +6970,49 @@ app.post('/api/slack/workspaces', requireAuth, async (req, res) => {
   }
   try {
     const info = await slackSvc.verificar(token);
+    let iconUrl = '';
+    try { iconUrl = (await slackSvc.teamInfo(token)).icon_url; } catch (_) {}
+    // connected_by/visibilidad solo se fijan en el INSERT inicial — reconectar
+    // (mismo team_id) no le cambia el dueño ni la visibilidad a nadie más.
+    const visibilidad = ['todos', 'admin', 'solo_yo'].includes(req.body?.visibilidad) ? req.body.visibilidad : 'todos';
     const { rows } = await pool.query(
-      `INSERT INTO slack_workspaces (user_id, team_id, team_name, etiqueta, token_enc, token_tipo, bot_user_id, estado)
-            VALUES ($1,$2,$3,$4,$5,$6,$7,'conectado')
+      `INSERT INTO slack_workspaces (user_id, team_id, team_name, etiqueta, token_enc, token_tipo, bot_user_id, estado, icon_url, visibilidad, connected_by)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,'conectado',$8,$9,$10)
        ON CONFLICT (user_id, team_id)
        DO UPDATE SET token_enc=EXCLUDED.token_enc, token_tipo=EXCLUDED.token_tipo,
                      team_name=EXCLUDED.team_name, etiqueta=EXCLUDED.etiqueta,
-                     bot_user_id=EXCLUDED.bot_user_id, estado='conectado', ultimo_error=''
-       RETURNING id, team_id, team_name, etiqueta, token_tipo, estado`,
+                     bot_user_id=EXCLUDED.bot_user_id, estado='conectado', ultimo_error='',
+                     icon_url=EXCLUDED.icon_url
+       RETURNING id, team_id, team_name, etiqueta, token_tipo, estado, icon_url, visibilidad, connected_by`,
       [req.workspaceOwnerId, info.team_id, info.team_name, etiqueta || info.team_name,
-       slackSvc.encPass(token), info.tipo, info.bot_id || '']);
+       slackSvc.encPass(token), info.tipo, info.bot_id || '', iconUrl, visibilidad, req.user.id]);
     res.status(201).json({ ok: true, workspace: rows[0], info });
   } catch (err) {
     console.error('[slack] connect:', err.message);
     res.status(400).json({ error: err.message });
+  }
+});
+
+// Cambiar quién puede ver este espacio conectado — solo quien lo conectó o un admin.
+app.patch('/api/slack/workspaces/:id/visibilidad', requireAuth, async (req, res) => {
+  const visibilidad = String(req.body?.visibilidad || '');
+  if (!['todos', 'admin', 'solo_yo'].includes(visibilidad)) {
+    return res.status(400).json({ error: 'Valor de visibilidad inválido' });
+  }
+  try {
+    const { rows } = await pool.query(
+      `SELECT connected_by FROM slack_workspaces WHERE id=$1 AND user_id=$2`,
+      [req.params.id, req.workspaceOwnerId]);
+    if (!rows.length) return res.status(404).json({ error: 'No encontrado' });
+    const rol = await _resolveRol(req);
+    if (rows[0].connected_by !== req.user.id && rol !== 'admin') {
+      return res.status(403).json({ error: 'Solo quien lo conectó o un admin puede cambiar esto' });
+    }
+    await pool.query(`UPDATE slack_workspaces SET visibilidad=$1 WHERE id=$2`, [visibilidad, req.params.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[slack] visibilidad:', err.message);
+    res.status(500).json({ error: 'No se pudo actualizar' });
   }
 });
 
@@ -8086,6 +8152,31 @@ async function start() {
 
     console.log(`[socket] connected uid=${socket.userId} ws=${wid}`);
   });
+
+  // ── Recordatorios de reuniones: cada minuto, revisa qué reuniones entraron
+  //    en su ventana "recordatorio_min antes de la hora de inicio" y avisa por
+  //    socket a todo el workspace. recordatorio_enviado evita que se repita.
+  setInterval(async () => {
+    try {
+      const tz = process.env.TZ_DEFAULT || 'America/Lima';
+      const { rows } = await pool.query(`
+        SELECT id, user_id, titulo, fecha, hora_inicio, link
+          FROM meetings
+         WHERE recordatorio_min IS NOT NULL
+           AND recordatorio_enviado = FALSE
+           AND estado <> 'cancelada'
+           AND hora_inicio IS NOT NULL
+           AND (fecha + hora_inicio) AT TIME ZONE $1 - (recordatorio_min * INTERVAL '1 minute') <= NOW()
+           AND (fecha + hora_inicio) AT TIME ZONE $1 > NOW()
+      `, [tz]);
+      for (const m of rows) {
+        io.to(`ws:${m.user_id}`).emit('meeting_reminder', {
+          id: m.id, titulo: m.titulo, fecha: m.fecha, hora_inicio: m.hora_inicio, link: m.link,
+        });
+        await pool.query(`UPDATE meetings SET recordatorio_enviado = TRUE WHERE id = $1`, [m.id]);
+      }
+    } catch (e) { console.error('[meetings] recordatorio job:', e.message); }
+  }, 60 * 1000);
 
   // ── LM Fase A: workers de outreach (persisten estado en DB, PM2-safe) ──
   try {

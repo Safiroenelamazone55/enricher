@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260807n"/>
+  <link rel="stylesheet" href="style.css?v=20260807p"/>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -2509,6 +2509,17 @@
       <span class="form-hint" id="mtg-meet-hint">Guarda la reunión primero; el enlace se crea en tu Google Calendar.</span>
     </div>
     <div class="form-row">
+      <label class="form-label">Recordatorio</label>
+      <select name="recordatorio_min" class="form-input form-select">
+        <option value="">Sin recordatorio</option>
+        <option value="5">5 minutos antes</option>
+        <option value="15">15 minutos antes</option>
+        <option value="30">30 minutos antes</option>
+        <option value="60">1 hora antes</option>
+        <option value="1440">1 día antes</option>
+      </select>
+    </div>
+    <div class="form-row">
       <label class="form-label">Participantes</label>
       <div class="meeting-attendees" id="meeting-attendees-list">
         <span class="muted" style="font-size:.8rem">Cargando equipo…</span>
@@ -2613,7 +2624,7 @@
 })();
 </script>
 
-<script src="app.js?v=20260805u"></script>
+<script src="app.js?v=20260805x"></script>
 <div id="task-quick-edit" style="display:none;position:fixed;z-index:9999"></div>
 </body>
 </html>

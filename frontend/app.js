@@ -10417,7 +10417,12 @@ const SlackModule = (() => {
       cont.innerHTML = `<div class="slk-empty">Todavía no hay ningún Slack conectado.</div>`;
       return;
     }
-    cont.innerHTML = _ws.map(w => `
+    const myId  = window._authUser?.id;
+    const myRol = window._authUser?.memberRol;
+    cont.innerHTML = _ws.map(w => {
+      // Solo quien lo conectó o un admin puede cambiar quién más lo ve.
+      const canEdit = w.connected_by === myId || myRol === 'admin';
+      return `
       <div class="slk-row">
         <span class="slk-dot${w.estado === 'conectado' ? ' slk-dot--on' : ''}"></span>
         <div class="slk-row__id">
@@ -10425,8 +10430,27 @@ const SlackModule = (() => {
           <div class="slk-row__meta">${esc(w.team_name)}${w.token_tipo === 'user' ? ' · a tu nombre' : ' · como app'}</div>
         </div>
         ${w.ultimo_error ? `<span class="slk-err" title="${esc(w.ultimo_error)}">Con error</span>` : ''}
+        <select class="slk-vis" title="Quién puede ver este Slack conectado"
+                onchange="SlackModule.cambiarVisibilidad(${w.id},this.value)" ${canEdit ? '' : 'disabled'}>
+          <option value="todos"${w.visibilidad === 'todos' ? ' selected' : ''}>Todos los miembros</option>
+          <option value="admin"${w.visibilidad === 'admin' ? ' selected' : ''}>Solo admins</option>
+          <option value="solo_yo"${w.visibilidad === 'solo_yo' ? ' selected' : ''}>Solo yo (privado)</option>
+        </select>
         <button class="slk-x" onclick="SlackModule.desconectar(${w.id})" title="Desconectar">✕</button>
-      </div>`).join('');
+      </div>`;
+    }).join('');
+  }
+
+  async function cambiarVisibilidad(id, visibilidad) {
+    try {
+      const r = await apiFetch(`${API}/slack/workspaces/${id}/visibilidad`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ visibilidad }),
+      });
+      if (!r.ok) throw new Error((await r.json()).error || 'No se pudo cambiar');
+      const w = _ws.find(x => x.id === id); if (w) w.visibilidad = visibilidad;
+      showBanner('✓ Visibilidad actualizada', 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); await cargar(); }
   }
 
   async function conectar() {
@@ -10462,7 +10486,7 @@ const SlackModule = (() => {
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
-  return { cargar, conectar, desconectar };
+  return { cargar, conectar, desconectar, cambiarVisibilidad };
 })();
 
 const MeetingsModule = (() => {
@@ -10493,6 +10517,7 @@ const MeetingsModule = (() => {
       form.link.value        = m.link || '';
       form.descripcion.value = m.descripcion || '';
       form.estado.value      = m.estado || 'programada';
+      form.recordatorio_min.value = m.recordatorio_min || '';
       let atts = []; try { atts = JSON.parse(m.attendees || '[]'); } catch {}
       document.querySelectorAll('#meeting-attendees-list input[type=checkbox]').forEach(cb => {
         cb.checked = atts.includes(cb.value);
@@ -10556,6 +10581,7 @@ const MeetingsModule = (() => {
       link:        form.link.value.trim(),
       attendees,
       estado:      form.estado.value,
+      recordatorio_min: form.recordatorio_min.value ? parseInt(form.recordatorio_min.value) : null,
     };
     const orig = saveBtn.textContent;
     saveBtn.disabled = true; saveBtn.textContent = 'Guardando…';
@@ -22032,7 +22058,9 @@ const SlackChat = (() => {
       <button class="chat-rail__b${String(_wsAct) === String(w.id) ? ' on' : ''}"
               title="${esc(w.etiqueta || w.team_name)}${_nlPorWs[w.id] ? ` — ${_nlPorWs[w.id]} sin leer` : ''}"
               onclick="SlackChat.irA(${w.id})">
-        <span class="chat-rail__ico">${esc(ini(w.etiqueta || w.team_name))}</span>
+        ${w.icon_url
+          ? `<img class="chat-rail__ico chat-rail__ico--img" src="${esc(w.icon_url)}" alt="">`
+          : `<span class="chat-rail__ico">${esc(ini(w.etiqueta || w.team_name))}</span>`}
         ${_nlPorWs[w.id] ? `<span class="chat-rail__n">${_nlPorWs[w.id] > 99 ? '99+' : _nlPorWs[w.id]}</span>` : ''}
       </button>`).join('')
       + `<button class="chat-rail__add" title="Conectar otro Slack"
@@ -22909,6 +22937,20 @@ const ChatModule = (() => {
     });
     _socket.on('disconnect', () => { _connected = false; });
     _socket.on('new_message', msg => _appendMessage(msg));
+    _socket.on('meeting_reminder', m => _showMeetingReminder(m));
+  }
+
+  // Aviso de recordatorio de reunión — llega por socket (siempre conectado
+  // desde el login, ver init()), así que suena aunque el Chat no esté abierto.
+  function _showMeetingReminder(m) {
+    const hora = m.hora_inicio ? String(m.hora_inicio).slice(0, 5) : '';
+    const el = document.createElement('div');
+    el.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#1e3a5f;color:#fff;font-size:.84rem;font-weight:600;padding:11px 20px;display:flex;align-items:center;gap:12px;box-shadow:0 2px 8px rgba(0,0,0,.2);animation:slideDown .2s ease';
+    el.innerHTML = `<span style="flex:1">📅 “${esc(m.titulo || 'Reunión')}”${hora ? ` empieza a las ${hora}` : ' está por empezar'}</span>`
+      + (m.link ? `<a href="${esc(m.link)}" target="_blank" rel="noopener" style="background:rgba(255,255,255,.18);border-radius:5px;color:#fff;padding:4px 12px;text-decoration:none;font-size:.78rem">Unirse</a>` : '')
+      + `<button onclick="this.parentElement.remove()" style="background:rgba(255,255,255,.18);border:none;border-radius:5px;color:#fff;padding:3px 10px;cursor:pointer;font-size:.78rem">✕</button>`;
+    document.body.prepend(el);
+    setTimeout(() => el.remove(), 20000);
   }
 
   async function load() {

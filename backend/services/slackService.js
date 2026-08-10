@@ -70,6 +70,15 @@ async function verificar(token) {
 
 const token = ws => decPass(ws.token_enc);
 
+// Icono real del workspace (team.info). image_default=true significa que el team
+// no puso logo propio — ahí no hay nada mejor que mostrar que la inicial.
+async function teamInfo(tok) {
+  const d = await _call(tok, 'team.info');
+  const icon = d.team?.icon;
+  return { icon_url: (icon && !icon.image_default) ? (icon.image_88 || icon.image_132 || icon.image_68 || icon.image_44 || '') : '' };
+}
+async function teamInfoFromEnc(token_enc) { return teamInfo(decPass(token_enc)); }
+
 // Todo lo que se puede abrir: canales públicos y privados, mensajes directos (im) y
 // grupos de directos (mpim). Sin 'im' no aparecían las conversaciones con el equipo,
 // que es justo donde se habla del día a día.
@@ -281,4 +290,5 @@ module.exports = {
   encPass, verificar, canales, miembros, noLeidos, historial, hilo,
   enviar, directo, crearCanal, archivarCanal, normalizarNombre, _errorClaro,
   reaccionar, quitarReaccion, anclar, desanclar, anclados, subirArchivo, renombrarCanal, marcarNoLeido, marcarLeido, guardados,
+  teamInfo, teamInfoFromEnc,
 };

@@ -441,6 +441,16 @@ async function initDb() {
       );`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_tpo_user_fecha ON task_plan_overrides(user_id, fecha);`);
     await pool.query(`ALTER TABLE slack_workspaces ADD COLUMN IF NOT EXISTS es_default_proyectos BOOLEAN NOT NULL DEFAULT false;`);
+    // Logo real del team (team.info) en vez de mostrar solo la inicial en el riel de chat.
+    await pool.query(`ALTER TABLE slack_workspaces ADD COLUMN IF NOT EXISTS icon_url TEXT NOT NULL DEFAULT '';`);
+    // Visibilidad por espacio conectado: 'todos' (todo el equipo) | 'admin' (solo
+    // admins) | 'solo_yo' (privado, solo quien lo conectó). connected_by guarda a
+    // la PERSONA real que conectó (user_id sigue siendo el dueño del workspace,
+    // compartido por todos — hacía falta distinguir quién conectó cada uno para
+    // poder marcarlo privado).
+    await pool.query(`ALTER TABLE slack_workspaces ADD COLUMN IF NOT EXISTS visibilidad TEXT NOT NULL DEFAULT 'todos';`);
+    await pool.query(`ALTER TABLE slack_workspaces ADD COLUMN IF NOT EXISTS connected_by INTEGER;`);
+    await pool.query(`UPDATE slack_workspaces SET connected_by = user_id WHERE connected_by IS NULL;`);
     // Programación en Calendario (cuándo planeo trabajar la tarea — independiente del deadline)
     await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS prog_fecha DATE;`);
     await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS prog_inicio TEXT;`);
@@ -469,6 +479,10 @@ async function initDb() {
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS meetings_user_idx  ON meetings (user_id);`);
     await pool.query(`CREATE INDEX IF NOT EXISTS meetings_fecha_idx ON meetings (fecha);`);
+    // Recordatorio: minutos antes de la hora de inicio para avisar (NULL = sin
+    // recordatorio). "enviado" evita que el job de recordatorios lo repita.
+    await pool.query(`ALTER TABLE meetings ADD COLUMN IF NOT EXISTS recordatorio_min INTEGER;`);
+    await pool.query(`ALTER TABLE meetings ADD COLUMN IF NOT EXISTS recordatorio_enviado BOOLEAN NOT NULL DEFAULT FALSE;`);
 
     // ── time_off table ────────────────────────────────────────────────
     await pool.query(`
