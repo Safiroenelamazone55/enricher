@@ -21964,6 +21964,7 @@ const SlackChat = (() => {
   let _canales = [];
   let _canal   = null;    // { id, name, topic }
   let _users   = {};      // id -> nombre, para resolver las menciones
+  let _avatars = {};      // id -> foto real de Slack (profile.image_72), si la hay
   let _hilo    = null;    // ts del hilo abierto, si hay uno
   let _noLeidos = {};     // canal -> nº sin leer (del workspace que se mira)
   let _actividad = {};    // canal -> ts del ultimo mensaje (orden por reciente)
@@ -22133,7 +22134,8 @@ const SlackChat = (() => {
       // solo a los activos. Para resolver nombres hace falta el indice completo.
       _users = { ...(dm.indice || {}) };
       _miembros = dm.miembros || [];
-      _miembros.forEach(u => { _users[u.id] = u.nombre || u.usuario; });
+      _avatars = {};
+      _miembros.forEach(u => { _users[u.id] = u.nombre || u.usuario; if (u.avatar) _avatars[u.id] = u.avatar; });
       _canales = dc.canales || [];
       apiFetch(`${API}/slack/workspaces/${wsId}/vinculos`).then(r => r.json())
         .then(v => { _vinculos = v || {}; _pintaCanales(); }).catch(() => {});
@@ -22147,6 +22149,13 @@ const SlackChat = (() => {
     } catch (e) {
       if (cont) cont.innerHTML = `<div class="chat-ch-empty">${esc(e.message)}</div>`;
     }
+  }
+
+  // Foto real del perfil de Slack (profile.image_72) si ya la tenemos indexada;
+  // si no (persona que ya no está en el índice, o el workspace aún no cargó
+  // miembros), cae al avatar generado como antes.
+  function _avatarUrl(id, nombreFallback) {
+    return (id && _avatars[id]) || `https://api.dicebear.com/9.x/lorelei/svg?seed=${encodeURIComponent(nombreFallback || id || 'user')}`;
   }
 
   // Un directo no trae nombre: trae el id de la otra persona, hay que resolverlo.
@@ -22165,7 +22174,7 @@ const SlackChat = (() => {
     return `<button class="chat-ch${_canal && _canal.id === c.id ? ' active' : ''}${n ? ' unread' : ''}${vinc}"
                     onclick="SlackChat.abrir('${c.id}')"
                     oncontextmenu="SlackChat.menuCanal(event,'${c.id}')">
-      ${c.is_im ? `<img class="chat-ch__av" src="https://api.dicebear.com/9.x/lorelei/svg?seed=${encodeURIComponent(nm)}" alt="">`
+      ${c.is_im ? `<img class="chat-ch__av" src="${_avatarUrl(c.user, nm)}" alt="">`
                 : `<span class="chat-ch__hash">${ico}</span>`}
       <span class="chat-ch__name">${c.is_im ? escNom(nm) : esc(nm)}</span>
       ${n ? `<span class="chat-ch__n">${n > 99 ? '99+' : n}</span>` : ''}
@@ -22437,7 +22446,7 @@ const SlackChat = (() => {
       const files = (m.files || []).map(f2 => `<div class="slk-file">📎 ${esc(f2.name || 'archivo')}</div>`).join('');
       html += `<div class="chat-msg${esRaiz ? ' slk-root' : ''}${esResp ? ' slk-reply' : ''}" data-ts="${m.ts}"
                     oncontextmenu="SlackChat.menuMsg(event,'${m.ts}',${m.reply_count || 0})">
-        <img class="chat-msg__av" src="https://api.dicebear.com/9.x/lorelei/svg?seed=${encodeURIComponent(quien)}" alt="">
+        <img class="chat-msg__av" src="${_avatarUrl(m.user, quien)}" alt="">
         <div class="chat-msg__body">
           <div class="chat-msg__hd"><span class="chat-msg__who">${escNom(quien)}</span><span class="chat-msg__t">${hora}</span></div>
           <div class="chat-msg__txt">${_fmt(m.text)}</div>
@@ -22551,7 +22560,7 @@ const SlackChat = (() => {
     pop.innerHTML = lista.length
       ? lista.map(m =>
           `<button class="slk-men-it" data-id="${m.id}" data-nm="${esc((m.nombre||m.usuario).replace(/"/g,''))}">
-             <img src="https://api.dicebear.com/9.x/lorelei/svg?seed=${encodeURIComponent(m.nombre||m.usuario)}"><span>${escNom(m.nombre||m.usuario)}</span>
+             <img src="${_avatarUrl(m.id, m.nombre||m.usuario)}"><span>${escNom(m.nombre||m.usuario)}</span>
            </button>`).join('')
       : `<div class="slk-men-empty">Sin resultados</div>`;
     pop.querySelectorAll('.slk-men-it').forEach(b =>
