@@ -22586,21 +22586,29 @@ const SlackChat = (() => {
     if (!_pendingFile) { box.classList.add('hidden'); box.innerHTML = ''; return; }
     const f = _pendingFile;
     const isImg = f.type && f.type.startsWith('image/');
-    let thumb;
+    const isAudio = f.type && f.type.startsWith('audio/');
+    let thumb, player = '';
     if (isImg) {
       _pendingFileUrl = URL.createObjectURL(f);
       thumb = `<img src="${_pendingFileUrl}" class="chat-attach-preview__img" alt="">`;
+    } else if (isAudio) {
+      _pendingFileUrl = URL.createObjectURL(f);
+      thumb = `<div class="chat-attach-preview__ico" style="background:#7C3AED">🎤</div>`;
+      player = `<audio controls src="${_pendingFileUrl}" class="chat-attach-preview__audio"></audio>`;
     } else {
       const [label, color] = _fileKind(f.name);
       thumb = `<div class="chat-attach-preview__ico" style="background:${color}">${label}</div>`;
     }
     box.innerHTML = `<div class="chat-attach-preview__card">
-      ${thumb}
-      <div class="chat-attach-preview__info">
-        <div class="chat-attach-preview__name">${esc(f.name)}</div>
-        <div class="chat-attach-preview__size">${_fmtBytes(f.size)}</div>
+      <div class="chat-attach-preview__row">
+        ${thumb}
+        <div class="chat-attach-preview__info">
+          <div class="chat-attach-preview__name">${esc(f.name)}</div>
+          <div class="chat-attach-preview__size">${_fmtBytes(f.size)}</div>
+        </div>
+        <button class="chat-attach-preview__close" onclick="SlackChat.cancelAttach()" title="Quitar adjunto">×</button>
       </div>
-      <button class="chat-attach-preview__close" onclick="SlackChat.cancelAttach()" title="Quitar adjunto">×</button>
+      ${player}
     </div>`;
     box.classList.remove('hidden');
   }
@@ -22647,12 +22655,16 @@ const SlackChat = (() => {
         stream.getTracks().forEach(t => t.stop());
         const blob = new Blob(_trozos, { type: 'audio/webm' });
         const marca = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
-        _subir(new File([blob], 'nota-de-voz-' + marca + '.webm', { type: 'audio/webm' }));
+        // Igual que adjuntar un archivo: queda pendiente con preview (acá, poder
+        // escucharla) en vez de mandarse sola al soltar el mic.
+        _pendingFile = new File([blob], 'nota-de-voz-' + marca + '.webm', { type: 'audio/webm' });
+        _renderAttachPreview();
+        const sendBtn = $$('chat-send-btn'); if (sendBtn) sendBtn.disabled = false;
         const b = document.getElementById('slk-rec-btn'); if (b) b.classList.remove('grabando');
       };
       _rec.start();
       const b = document.getElementById('slk-rec-btn'); if (b) b.classList.add('grabando');
-      showBanner('Grabando... pulsa de nuevo para enviar', 'info');
+      showBanner('Grabando... pulsa de nuevo para detener', 'info');
     } catch (_) { showBanner('No se pudo acceder al microfono', 'error'); }
   }
 

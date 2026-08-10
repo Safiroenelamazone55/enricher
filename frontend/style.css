@@ -5446,11 +5446,12 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 .chat-attach-preview { padding: 10px 16px 0; flex-shrink: 0; }
 .chat-attach-preview.hidden { display: none; }
 .chat-attach-preview__card {
-  display: flex; align-items: center; gap: 10px;
+  display: flex; flex-direction: column; gap: 8px;
   padding: 8px 10px; background: #F1EFEB; border: 1px solid #EAE7E2; border-radius: 12px;
   animation: attachPreviewIn .16s ease;
 }
 @keyframes attachPreviewIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.chat-attach-preview__row { display: flex; align-items: center; gap: 10px; }
 .chat-attach-preview__img { width: 44px; height: 44px; border-radius: 9px; object-fit: cover; flex-shrink: 0; background: #E5E1D9; }
 .chat-attach-preview__ico {
   width: 44px; height: 44px; border-radius: 9px; flex-shrink: 0;
@@ -5467,6 +5468,8 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
   transition: background .1s, color .1s;
 }
 .chat-attach-preview__close:hover { background: #DC2626; color: #fff; }
+/* Reproductor de la nota de voz — para poder escucharla antes de mandarla. */
+.chat-attach-preview__audio { width: 100%; height: 34px; }
 
 /* 3-dot context menu */
 .chat-ctx-menu {
