@@ -1189,7 +1189,8 @@
               <textarea id="chat-input" class="chat-composer__field" rows="1"
                 placeholder="Mensaje en #general"
                 onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();SlackChat.enviar()}"
-                oninput="ChatModule.autoResize(this); ChatModule.onInputChange(this); SlackChat.detectarArroba(this)"></textarea>
+                oninput="ChatModule.autoResize(this); ChatModule.onInputChange(this); SlackChat.detectarArroba(this)"
+                onpaste="SlackChat.onPaste(event)"></textarea>
               <div class="chat-composer__toolbar">
                 <!-- Formatting: Bold / Italic / Code -->
                 <button class="chat-tool-btn" title="Negrita" onclick="SlackChat.fmt('bold')">
@@ -2629,7 +2630,7 @@
 })();
 </script>
 
-<script src="app.js?v=20260805y"></script>
+<script src="app.js?v=20260805z"></script>
 <div id="task-quick-edit" style="display:none;position:fixed;z-index:9999"></div>
 </body>
 </html>

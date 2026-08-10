@@ -22094,6 +22094,27 @@ const SlackChat = (() => {
     MeetingsModule.openDrawer(null, _canal.name ? `Reunión — ${_canal.name}` : '');
   }
 
+  // Pegar una imagen copiada (Ctrl+V) — no había ningún manejo de "paste" en el
+  // composer, así que el navegador simplemente no hacía nada. Reusa el mismo
+  // mecanismo de "adjunto pendiente con preview" que el botón de adjuntar.
+  function onPaste(ev) {
+    const items = ev.clipboardData?.items;
+    if (!items) return;
+    for (const item of items) {
+      if (item.type && item.type.startsWith('image/')) {
+        ev.preventDefault();
+        const file = item.getAsFile();
+        if (!file) continue;
+        const ext = (file.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
+        const marca = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+        _pendingFile = new File([file], `imagen-pegada-${marca}.${ext}`, { type: file.type });
+        _renderAttachPreview();
+        const btn = $$('chat-send-btn'); if (btn) btn.disabled = false;
+        return;
+      }
+    }
+  }
+
   async function irA(wsId) {
     _pararSondeo();
     _wsAct = wsId; _hilo = null; _marcadoNL = {};
@@ -22849,7 +22870,7 @@ const SlackChat = (() => {
 
   return { load, irA, abrir, buscar, verHilo, enviar, detener: _pararSondeo,
            fmt, insertar, adjuntar, cancelAttach, hasPendingFile, grabarAudio, emojiPicker, _emojiIns,
-           menuMsg, reaccionar, anclar, copiar, programarReunion,
+           menuMsg, reaccionar, anclar, copiar, programarReunion, onPaste,
            menuCanal, verProyecto, verTareas, copiarNombre, archivarCanal, marcarNoLeido,
            seccion, menciones, _mencionar, detectarArroba };
 })();
