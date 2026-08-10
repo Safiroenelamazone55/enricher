@@ -78,6 +78,7 @@ async function teamInfo(tok) {
   return { icon_url: (icon && !icon.image_default) ? (icon.image_88 || icon.image_132 || icon.image_68 || icon.image_44 || '') : '' };
 }
 async function teamInfoFromEnc(token_enc) { return teamInfo(decPass(token_enc)); }
+async function verificarFromEnc(token_enc) { return verificar(decPass(token_enc)); }
 
 // Todo lo que se puede abrir: canales públicos y privados, mensajes directos (im) y
 // grupos de directos (mpim). Sin 'im' no aparecían las conversaciones con el equipo,
@@ -290,5 +291,5 @@ module.exports = {
   encPass, verificar, canales, miembros, noLeidos, historial, hilo,
   enviar, directo, crearCanal, archivarCanal, normalizarNombre, _errorClaro,
   reaccionar, quitarReaccion, anclar, desanclar, anclados, subirArchivo, renombrarCanal, marcarNoLeido, marcarLeido, guardados,
-  teamInfo, teamInfoFromEnc,
+  teamInfo, teamInfoFromEnc, verificarFromEnc,
 };

@@ -21965,6 +21965,7 @@ const SlackChat = (() => {
   let _canal   = null;    // { id, name, topic }
   let _users   = {};      // id -> nombre, para resolver las menciones
   let _avatars = {};      // id -> foto real de Slack (profile.image_72), si la hay
+  let _miId    = '';      // mi propio id de Slack en el workspace activo (auth.test)
   let _hilo    = null;    // ts del hilo abierto, si hay uno
   let _noLeidos = {};     // canal -> nº sin leer (del workspace que se mira)
   let _actividad = {};    // canal -> ts del ultimo mensaje (orden por reciente)
@@ -22119,6 +22120,7 @@ const SlackChat = (() => {
   async function irA(wsId) {
     _pararSondeo();
     _wsAct = wsId; _hilo = null; _marcadoNL = {};
+    _miId = _ws.find(w => String(w.id) === String(wsId))?.slack_user_id || '';
     localStorage.setItem('slk_ws', String(wsId));
     _riel();
     const cont = $$('chat-channels');
@@ -22159,8 +22161,9 @@ const SlackChat = (() => {
   }
 
   // Un directo no trae nombre: trae el id de la otra persona, hay que resolverlo.
+  // El directo conmigo misma se marca "(yo)" — Slack lo llama "You" en su propio cliente.
   function _nombreDe(c) {
-    if (c.is_im)   return _users[c.user] || 'Directo';
+    if (c.is_im)   return (_users[c.user] || 'Directo') + (_miId && c.user === _miId ? ' (yo)' : '');
     if (c.is_mpim) return (c.name || '').replace(/^mpdm-|-1$/g, '').replace(/--/g, ', ');
     return c.name || '';
   }
@@ -22189,6 +22192,13 @@ const SlackChat = (() => {
     if (ta !== tb) return tb - ta;
     return (a._nm || '').localeCompare(b._nm || '');
   }
+  // En "Mensajes directos": mi propio directo (notas para mí) siempre primero,
+  // por delante incluso de lo no leído — es "mi" espacio, no una conversación más.
+  function _ordenCanalConYo(a, b) {
+    const ya = (_miId && a.user === _miId) ? 1 : 0, yb = (_miId && b.user === _miId) ? 1 : 0;
+    if (ya !== yb) return yb - ya;
+    return _ordenCanal(a, b);
+  }
 
   // La lista lateral cambia según la sección elegida en el riel.
   function _pintaCanales(filtro = '') {
@@ -22200,7 +22210,7 @@ const SlackChat = (() => {
     const conNombre = _canales.map(c => ({ ...c, _nm: _nombreDe(c) }));
     const dm = _seccion === 'directos';
     const base = conNombre.filter(c => dm ? (c.is_im || c.is_mpim) : (!c.is_im && !c.is_mpim));
-    const lista = (q ? base.filter(c => c._nm.toLowerCase().includes(q)) : base).sort(_ordenCanal);
+    const lista = (q ? base.filter(c => c._nm.toLowerCase().includes(q)) : base).sort(dm ? _ordenCanalConYo : _ordenCanal);
     cont.innerHTML =
       `<div class="chat-sec-title">${dm ? 'Mensajes directos' : 'Canales'}</div>`
       + (lista.length ? lista.map(_filaCanal).join('')

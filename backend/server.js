@@ -6928,24 +6928,30 @@ app.get('/api/slack/workspaces', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT id, team_id, team_name, etiqueta, token_tipo, bot_user_id, estado,
-              ultimo_error, created_at, icon_url, visibilidad, connected_by
+              ultimo_error, created_at, icon_url, visibilidad, connected_by, slack_user_id
          FROM slack_workspaces WHERE user_id=$1 ORDER BY created_at`,
       [req.workspaceOwnerId]);
-    // Backfill perezoso: los workspaces conectados antes de tener icon_url se
-    // completan solos en la primera carga, sin que haya que reconectarlos.
-    const faltantes = rows.filter(w => !w.icon_url);
+    // Backfill perezoso: los workspaces conectados antes de tener icon_url o
+    // slack_user_id se completan solos en la primera carga, sin reconectarlos.
+    const faltantes = rows.filter(w => !w.icon_url || !w.slack_user_id);
     if (faltantes.length) {
       const { rows: tokens } = await pool.query(
         `SELECT id, token_enc FROM slack_workspaces WHERE id = ANY($1::int[])`,
         [faltantes.map(w => w.id)]);
       await Promise.all(tokens.map(async t => {
-        try {
-          const info = await slackSvc.teamInfoFromEnc(t.token_enc);
-          if (info.icon_url) {
-            await pool.query(`UPDATE slack_workspaces SET icon_url=$1 WHERE id=$2`, [info.icon_url, t.id]);
-            const w = faltantes.find(x => x.id === t.id); if (w) w.icon_url = info.icon_url;
-          }
-        } catch (_) {}
+        const w = faltantes.find(x => x.id === t.id); if (!w) return;
+        if (!w.icon_url) {
+          try {
+            const info = await slackSvc.teamInfoFromEnc(t.token_enc);
+            if (info.icon_url) { await pool.query(`UPDATE slack_workspaces SET icon_url=$1 WHERE id=$2`, [info.icon_url, t.id]); w.icon_url = info.icon_url; }
+          } catch (_) {}
+        }
+        if (!w.slack_user_id) {
+          try {
+            const info = await slackSvc.verificarFromEnc(t.token_enc);
+            if (info.user_id) { await pool.query(`UPDATE slack_workspaces SET slack_user_id=$1 WHERE id=$2`, [info.user_id, t.id]); w.slack_user_id = info.user_id; }
+          } catch (_) {}
+        }
       }));
     }
     const rol = await _resolveRol(req);
@@ -6976,16 +6982,16 @@ app.post('/api/slack/workspaces', requireAuth, async (req, res) => {
     // (mismo team_id) no le cambia el dueño ni la visibilidad a nadie más.
     const visibilidad = ['todos', 'admin', 'solo_yo'].includes(req.body?.visibilidad) ? req.body.visibilidad : 'todos';
     const { rows } = await pool.query(
-      `INSERT INTO slack_workspaces (user_id, team_id, team_name, etiqueta, token_enc, token_tipo, bot_user_id, estado, icon_url, visibilidad, connected_by)
-            VALUES ($1,$2,$3,$4,$5,$6,$7,'conectado',$8,$9,$10)
+      `INSERT INTO slack_workspaces (user_id, team_id, team_name, etiqueta, token_enc, token_tipo, bot_user_id, estado, icon_url, visibilidad, connected_by, slack_user_id)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,'conectado',$8,$9,$10,$11)
        ON CONFLICT (user_id, team_id)
        DO UPDATE SET token_enc=EXCLUDED.token_enc, token_tipo=EXCLUDED.token_tipo,
                      team_name=EXCLUDED.team_name, etiqueta=EXCLUDED.etiqueta,
                      bot_user_id=EXCLUDED.bot_user_id, estado='conectado', ultimo_error='',
-                     icon_url=EXCLUDED.icon_url
-       RETURNING id, team_id, team_name, etiqueta, token_tipo, estado, icon_url, visibilidad, connected_by`,
+                     icon_url=EXCLUDED.icon_url, slack_user_id=EXCLUDED.slack_user_id
+       RETURNING id, team_id, team_name, etiqueta, token_tipo, estado, icon_url, visibilidad, connected_by, slack_user_id`,
       [req.workspaceOwnerId, info.team_id, info.team_name, etiqueta || info.team_name,
-       slackSvc.encPass(token), info.tipo, info.bot_id || '', iconUrl, visibilidad, req.user.id]);
+       slackSvc.encPass(token), info.tipo, info.bot_id || '', iconUrl, visibilidad, req.user.id, info.user_id || '']);
     res.status(201).json({ ok: true, workspace: rows[0], info });
   } catch (err) {
     console.error('[slack] connect:', err.message);

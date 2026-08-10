@@ -451,6 +451,9 @@ async function initDb() {
     await pool.query(`ALTER TABLE slack_workspaces ADD COLUMN IF NOT EXISTS visibilidad TEXT NOT NULL DEFAULT 'todos';`);
     await pool.query(`ALTER TABLE slack_workspaces ADD COLUMN IF NOT EXISTS connected_by INTEGER;`);
     await pool.query(`UPDATE slack_workspaces SET connected_by = user_id WHERE connected_by IS NULL;`);
+    // Id de la persona DENTRO de Slack (auth.test) para ese token — sirve para
+    // detectar "ese directo soy yo" y mostrarlo primero, marcado "(yo)".
+    await pool.query(`ALTER TABLE slack_workspaces ADD COLUMN IF NOT EXISTS slack_user_id TEXT NOT NULL DEFAULT '';`);
     // Programación en Calendario (cuándo planeo trabajar la tarea — independiente del deadline)
     await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS prog_fecha DATE;`);
     await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS prog_inicio TEXT;`);
