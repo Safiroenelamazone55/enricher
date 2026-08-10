@@ -10492,7 +10492,7 @@ const SlackModule = (() => {
 const MeetingsModule = (() => {
   let _editId = null;
 
-  async function openDrawer(id = null) {
+  async function openDrawer(id = null, presetTitulo = '') {
     _editId = id ?? null;
     const form    = $('meetings-form');
     const title   = $('meeting-drawer-title');
@@ -10528,6 +10528,7 @@ const MeetingsModule = (() => {
       delBtn.style.display = 'none';
       const now = new Date();
       form.fecha.value = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+      if (presetTitulo) form.titulo.value = presetTitulo;
     }
 
     $('meeting-drawer').classList.add('open');
@@ -22085,6 +22086,14 @@ const SlackChat = (() => {
     r.innerHTML = wsHtml + secHtml;
   }
 
+  // Programar reunión desde el chat: Slack no tiene esto de forma nativa, así
+  // que se abre el mismo drawer de reuniones de Nova, con el canal/DM actual
+  // como contexto en el título.
+  function programarReunion() {
+    if (!_canal) { showBanner('Abre un canal primero', 'info'); return; }
+    MeetingsModule.openDrawer(null, _canal.name ? `Reunión — ${_canal.name}` : '');
+  }
+
   async function irA(wsId) {
     _pararSondeo();
     _wsAct = wsId; _hilo = null; _marcadoNL = {};
@@ -22840,7 +22849,7 @@ const SlackChat = (() => {
 
   return { load, irA, abrir, buscar, verHilo, enviar, detener: _pararSondeo,
            fmt, insertar, adjuntar, cancelAttach, hasPendingFile, grabarAudio, emojiPicker, _emojiIns,
-           menuMsg, reaccionar, anclar, copiar,
+           menuMsg, reaccionar, anclar, copiar, programarReunion,
            menuCanal, verProyecto, verTareas, copiarNombre, archivarCanal, marcarNoLeido,
            seccion, menciones, _mencionar, detectarArroba };
 })();
