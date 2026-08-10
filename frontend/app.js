@@ -16844,6 +16844,31 @@ ${foot}
       <div class="ibx-row__meta">${esc(t.buzon || '')}${t.cliente ? ` · ${esc(t.cliente)}` : ''} ${badge}</div>
     </div>`;
   }
+  // Los correos de respuesta suelen traer todo el hilo citado debajo (firma +
+  // "De: ... / Enviado: ... / Para: ..." de Outlook, o "El ... escribió:" /
+  // "On ... wrote:" de Gmail, o líneas con ">"). Sin recortarlo, dos mensajes
+  // distintos se ven como un solo bloque continuo de miles de caracteres —
+  // esto separa "lo nuevo" (visible) de "lo citado" (plegado, expandible).
+  const _IBX_QUOTE_RE = /^\s*(_{5,}|-{5,}|>|On\s.+\swrote:\s*$|El\s.+\sescribi[oó]:\s*$|De:\s|From:\s)/i;
+  function _ibStripQuote(text) {
+    const raw = String(text || '');
+    const lines = raw.split('\n');
+    let cut = -1;
+    for (let i = 0; i < lines.length; i++) { if (_IBX_QUOTE_RE.test(lines[i])) { cut = i; break; } }
+    if (cut <= 0) return { visible: raw.trim(), quoted: '' };
+    const visible = lines.slice(0, cut).join('\n').trim();
+    const quoted = lines.slice(cut).join('\n').trim();
+    return visible ? { visible, quoted } : { visible: raw.trim(), quoted: '' };
+  }
+  function _ibBodyHtml(cuerpo) {
+    const { visible, quoted } = _ibStripQuote(cuerpo);
+    let html = `<div class="ibx-m__body">${esc(visible).replace(/\n/g, '<br>')}</div>`;
+    if (quoted) {
+      html += `<button class="ibx-m__quotetoggle" onclick="const q=this.nextElementSibling;q.classList.toggle('hidden');this.textContent=q.classList.contains('hidden')?'Ver mensaje citado ▾':'Ocultar mensaje citado ▴'">Ver mensaje citado ▾</button>`;
+      html += `<div class="ibx-m__quoted hidden">${esc(quoted).replace(/\n/g, '<br>')}</div>`;
+    }
+    return html;
+  }
   function _ibMsg(m) {
     const inMsg = m.dir === 'in';
     const when = m.at ? new Date(m.at).toLocaleString('es-PE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
@@ -16853,7 +16878,7 @@ ${foot}
         <div class="ibx-m__meta"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:-1px"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg> Programado · saldrá el ${when}
           <button class="ibx-m__cancel" onclick="LeadManagerModule.ibCancelSched(${m.id})">Cancelar</button></div>
         ${m.asunto ? `<div class="ibx-m__subj">${esc(m.asunto)}</div>` : ''}
-        <div class="ibx-m__body">${esc(m.cuerpo || '').replace(/\n/g, '<br>')}</div>
+        ${_ibBodyHtml(m.cuerpo)}
       </div>`;
     }
     const tag = inMsg
@@ -16862,21 +16887,40 @@ ${foot}
     return `<div class="ibx-m ${inMsg ? (m.tipo === 'bounce' ? 'ibx-m--reb' : 'ibx-m--in') : 'ibx-m--out'}">
       <div class="ibx-m__meta">${esc(inMsg ? (m.buzon || '') : ('Tú · ' + (m.buzon || '')))}${tag} · ${when}</div>
       ${m.asunto ? `<div class="ibx-m__subj">${esc(m.asunto)}</div>` : ''}
-      <div class="ibx-m__body">${esc(m.cuerpo || '').replace(/\n/g, '<br>')}</div>
+      ${_ibBodyHtml(m.cuerpo)}
     </div>`;
   }
   // ── Bloque 5: acciones rápidas de "Resolver respuesta" dentro del chat — sin salir de la conversación ──
+  // Antes era una card con 9 botones de disposición siempre visibles (ocupaba mucho
+  // alto). Ahora solo el CTA principal + la disposición actual (si hay) quedan a la
+  // vista; el resto vive en un menú de 3 puntos (mismo patrón que "Marcar resultado").
   function _ibResolveBar(c) {
     const id = c.id;
-    const quick = _DISPOS.filter(d => d[0] !== 'aceptado');
-    return `<div class="cp-card" style="margin:0 0 10px;padding:10px 12px">
-      <div class="cp-card__t" style="margin-bottom:6px">Resolver respuesta</div>
-      <div class="cp-dispo">
-        <button class="cp-cta" style="padding:5px 12px;font-size:.78rem" onclick="LeadManagerModule.cpOpenRegisterReply(${id})">＋ Registrar respuesta</button>
-        ${quick.map(d => `<button class="cp-dispo-b${c.disposition === d[0] ? ' on' : ''}" style="${c.disposition === d[0] ? `background:${d[3]};color:${d[2]};border-color:${d[2]}` : ''}" onclick="LeadManagerModule.ibResolveDisp(${id},'${d[0]}')">${d[1]}</button>`).join('')}
-        <button class="cp-dispo-b" onclick="LeadManagerModule.ldRefer(${id},'derivado')">＋ Crear referido</button>
-      </div>
+    return `<div class="ibx-resolve">
+      <button class="cp-cta" style="padding:5px 12px;font-size:.78rem" onclick="LeadManagerModule.cpOpenRegisterReply(${id})">＋ Registrar respuesta</button>
+      ${c.disposition ? _dispoBadge(c.disposition) : ''}
+      <button class="ibx-resolve__more" onclick="LeadManagerModule.ibOpenResolveMenu(event,${id})" title="Marcar resultado">⋮</button>
     </div>`;
+  }
+  function ibOpenResolveMenu(ev, cid) {
+    if (ev && ev.stopPropagation) ev.stopPropagation();
+    document.querySelectorAll('.cp-mark-menu').forEach(m => m.remove());
+    const close = "document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove())";
+    const item = (label, onclick, dot) => `<button class="cp-mark-menu__b" onclick="${close};${onclick}">${dot ? `<span class="cp-mark-dot" style="background:${dot}"></span>` : ''}${label}</button>`;
+    const quick = _DISPOS.filter(d => d[0] !== 'aceptado');
+    let html = `<div class="cp-mark-menu__h">Resolver respuesta</div>`;
+    html += `<div class="cp-mark-menu__grid">` + quick.map(d => item(esc(d[1]), `LeadManagerModule.ibResolveDisp(${cid},'${d[0]}')`, d[2])).join('') + `</div>`;
+    html += `<div class="cp-mark-menu__sep"></div>`;
+    html += `<div class="cp-mark-menu__grid">` + item('＋ Crear referido', `LeadManagerModule.ldRefer(${cid},'derivado')`) + `</div>`;
+    const menu = document.createElement('div');
+    menu.className = 'cp-mark-menu';
+    menu.innerHTML = html;
+    document.body.appendChild(menu);
+    const t = (ev && (ev.currentTarget || ev.target)) || document.body;
+    const r = t.getBoundingClientRect();
+    menu.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 340))}px`;
+    menu.style.top = `${r.bottom + 6}px`;
+    setTimeout(() => document.addEventListener('click', function onDoc(e) { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', onDoc); } }), 0);
   }
   async function ibResolveDisp(cid, disp) {
     if (disp === 'mas_adelante') return ldNurture(cid);
@@ -17115,7 +17159,7 @@ ${foot}
   function _vInbox() {
     const reps = _replies();
     return `
-      <div class="lm-sec-head">
+      <div class="lm-sec-head lm-sec-head--compact">
         <div><h2 class="lm-sec-title">Inbox</h2></div>
         ${_data.length ? `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openActivityDrawer(null,null,0,'respuesta')">＋ Registrar respuesta manual</button>` : ''}
       </div>
@@ -21549,7 +21593,7 @@ ${foot}
     mbSignatureOpen, mbSignaturePreview, mbSignatureClear, mbSignatureInsertLink, mbSignatureImg, mbSignatureSave,
     mbAdminConsentSync, mbAdminConsentToggleHtml,
     mbAdminConsentSetSigner, mbAdminConsentAddChip, mbAdminConsentRmChip, mbAdminConsentInputKey, mbAdminConsentClearRecipients,
-    ibOpen, ibTab, ibCli, ibSend, ibSchedToggle, ibSchedPick, ibCancelSched, ibResolveDisp,
+    ibOpen, ibTab, ibCli, ibSend, ibSchedToggle, ibSchedPick, ibCancelSched, ibResolveDisp, ibOpenResolveMenu,
     ibRowMenu, ibCloseMenu, ibMarkUnread,
     pendingAcceptOpen, pendingAcceptToggleAll, pendingAcceptApplyFilters, pendingAcceptMark,
     openActivityDrawer, closeActivityDrawer, saveActivity, confirmDeleteActivity, markActDone,

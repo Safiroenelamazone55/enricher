@@ -13045,9 +13045,9 @@ td.ldh-acts { padding-left: 6px; padding-right: 10px; }
 .mbx-chip--warn { background: var(--warning-soft); color: #A96D0C; }
 
 /* ── Inbox unificado (Mailboxes F3) ─────────────────────────────── */
-.ibx-top { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+.ibx-top { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
 .ibx-tabs { display: flex; gap: 2px; }
-.ibx-tab { border: none; background: none; cursor: pointer; padding: 7px 11px; font-size: .8rem; font-weight: 500; color: var(--text-muted); border-bottom: 2px solid transparent; font-family: inherit; transition: color .12s; }
+.ibx-tab { border: none; background: none; cursor: pointer; padding: 5px 9px; font-size: .78rem; font-weight: 500; color: var(--text-muted); border-bottom: 2px solid transparent; font-family: inherit; transition: color .12s; }
 .ibx-tab:hover { color: var(--text-primary); }
 .ibx-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
 .ibx-tab__n { font-size: .68rem; font-weight: 600; background: var(--surface-secondary); border-radius: 8px; padding: 1px 6px; margin-left: 2px; }
@@ -13080,6 +13080,12 @@ td.ldh-acts { padding-left: 6px; padding-right: 10px; }
 .ibx-msgs { flex: 1; min-height: 0; overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
 .ibx-conv__hd, .ibx-replybox { flex: 0 0 auto; }
 .ibx-list { min-height: 0; }
+/* Barra "Resolver respuesta" compacta: antes una card con 9 botones siempre
+   visibles; ahora el CTA principal + badge de disposición + un "⋮" que abre
+   el resto en un menú (mismo patrón que "Marcar resultado"). */
+.ibx-resolve { display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-bottom: 1px solid var(--border); flex: 0 0 auto; }
+.ibx-resolve__more { width: 26px; height: 26px; flex-shrink: 0; margin-left: auto; border: 1px solid var(--border); border-radius: 7px; background: none; cursor: pointer; font-size: 15px; line-height: 1; color: var(--text-muted); }
+.ibx-resolve__more:hover { background: var(--surface-hover); color: var(--text-primary); }
 .ibx-m { max-width: 86%; border-radius: 10px; padding: 8px 11px; font-size: .8rem; line-height: 1.5; }
 .ibx-m--out { align-self: flex-end; background: var(--surface-secondary); border: 1px solid var(--border); border-bottom-right-radius: 3px; }
 .ibx-m--in { align-self: flex-start; background: var(--primary-soft); border-bottom-left-radius: 3px; }
@@ -13088,6 +13094,13 @@ td.ldh-acts { padding-left: 6px; padding-right: 10px; }
 .ibx-m--in .ibx-m__meta { color: var(--brand-d, var(--primary)); }
 .ibx-m__subj { font-size: .74rem; font-weight: 600; color: var(--text-primary); margin-bottom: 2px; }
 .ibx-m__body { color: var(--text-primary); word-break: break-word; }
+/* Historial citado (firma/hilo anterior que el correo repite) plegado por
+   defecto — sin esto, cada burbuja mostraba miles de caracteres de texto
+   citado y dos mensajes distintos se veían como un solo bloque continuo. */
+.ibx-m__quotetoggle { display: block; margin-top: 6px; border: none; background: none; padding: 0; cursor: pointer; font-family: inherit; font-size: .68rem; font-weight: 600; color: var(--text-muted); text-decoration: underline; }
+.ibx-m__quotetoggle:hover { color: var(--text-primary); }
+.ibx-m__quoted { margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--border); color: var(--text-muted); font-size: .76rem; }
+.ibx-m__quoted.hidden { display: none; }
 .ibx-replybox { display: flex; gap: 8px; align-items: flex-end; padding: 10px 14px; border-top: 1px solid var(--border); }
 .ibx-ta { flex: 1; resize: vertical; min-height: 40px; max-height: 160px; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: .8rem; font-family: inherit; background: var(--surface); color: var(--text-primary); }
 .ibx-ta:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
