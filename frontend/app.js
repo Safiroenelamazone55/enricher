@@ -16972,11 +16972,22 @@ ${foot}
   }
 
   // El alto fijo (100vh - 340px) dejaba la caja de respuesta fuera de pantalla en
-  // ventanas bajas. Se mide lo que queda de verdad.
+  // ventanas bajas. Se mide lo que queda de verdad. El piso de 300px era menor
+  // que el header+"Resolver respuesta"+caja de responder juntos (~360px), así
+  // que en ventanas bajas los mensajes quedaban aplastados a casi 0px — el piso
+  // ahora se calcula sumando ese "chrome" real + un mínimo visible para leer.
   let _ibFitBound = false;
   function _ibFit() {
     const g = document.querySelector('.ibx-grid'); if (!g) return;
-    g.style.height = Math.max(300, window.innerHeight - g.getBoundingClientRect().top - 16) + 'px';
+    const conv = document.querySelector('.ibx-conv');
+    let floor = 340;
+    if (conv) {
+      const chrome = [...conv.children]
+        .filter(el => !el.classList.contains('ibx-msgs'))
+        .reduce((s, el) => s + el.getBoundingClientRect().height, 0);
+      floor = chrome + 180;
+    }
+    g.style.height = Math.max(floor, window.innerHeight - g.getBoundingClientRect().top - 16) + 'px';
     if (!_ibFitBound) { _ibFitBound = true; window.addEventListener('resize', () => _ibFit()); }
   }
 
@@ -17105,7 +17116,7 @@ ${foot}
     const reps = _replies();
     return `
       <div class="lm-sec-head">
-        <div><h2 class="lm-sec-title">Inbox</h2><p class="lm-sec-sub">Conversaciones reales por buzón: respuestas, rebotes y todo lo enviado</p></div>
+        <div><h2 class="lm-sec-title">Inbox</h2></div>
         ${_data.length ? `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openActivityDrawer(null,null,0,'respuesta')">＋ Registrar respuesta manual</button>` : ''}
       </div>
       ${_ibWrapHtml()}

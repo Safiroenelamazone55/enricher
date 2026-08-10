@@ -13856,7 +13856,11 @@ body:has(#pane-mgmt-projects.active) .content-wrap { max-width: 1400px; }
    terminaba fuera de la pantalla. */
 .ibx-grid { grid-template-rows: minmax(0, 1fr); }
 .ibx-conv, .ibx-list { min-height: 0; }
-.ibx-msgs { min-height: 0; }
+/* Piso propio de 160px: sin esto, si el contenedor quedaba bajo (ventanas
+   cortas), el header + "Resolver respuesta" + caja de responder aplastaban
+   los mensajes a casi 0px visibles. _ibFit() en app.js reserva ese mismo
+   espacio al calcular el alto de .ibx-grid. */
+.ibx-msgs { min-height: 160px; }
 
 /* Los destinatarios van ARRIBA, a lo ancho; el texto y el boton debajo. En fila
    quedaban a un lado, apretando la caja de escritura a la mitad. */
