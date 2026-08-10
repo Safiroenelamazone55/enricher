@@ -22120,7 +22120,12 @@ const SlackChat = (() => {
   async function irA(wsId) {
     _pararSondeo();
     _wsAct = wsId; _hilo = null; _marcadoNL = {};
-    _miId = _ws.find(w => String(w.id) === String(wsId))?.slack_user_id || '';
+    const wActivo = _ws.find(w => String(w.id) === String(wsId));
+    _miId = wActivo?.slack_user_id || '';
+    // El header de la lista mostraba siempre "Nova" fijo, sin decir a qué Slack
+    // corresponde — ahora refleja el nombre real del espacio activo.
+    const nmEl = $$('chat-ws-name');
+    if (nmEl) nmEl.textContent = (wActivo && (wActivo.etiqueta || wActivo.team_name)) || 'Slack';
     localStorage.setItem('slk_ws', String(wsId));
     _riel();
     const cont = $$('chat-channels');

@@ -7191,23 +7191,47 @@ app.get('/api/slack/workspaces/:id/guardados', requireAuth, async (req, res) => 
   } catch (err) { res.status(400).json({ error: err.message }); }
 });
 
-// Marcar una conversacion como leida en Slack (al abrirla desde aqui).
+// Marcar una conversacion como leida en Slack (al abrirla desde aqui). El
+// respaldo propio (slack_leido_override) se guarda SIEMPRE con la hora real,
+// sin importar si conversations.mark de Slack tuvo éxito — en conversaciones
+// fuera del historial de ~90 días (plan gratis) Slack nunca deja de reportarlas
+// como sin leer, así que lo que manda para el badge es nuestra propia hora.
 app.post('/api/slack/workspaces/:id/canales/:canal/leido', requireAuth, async (req, res) => {
   try {
     const w = await _slackWs(req.workspaceOwnerId, req.params.id);
     if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
     await slackSvc.marcarLeido(w, req.params.canal);
+    await pool.query(
+      `INSERT INTO slack_leido_override (workspace_id, canal_id, marcado_at)
+            VALUES ($1,$2,NOW())
+       ON CONFLICT (workspace_id, canal_id) DO UPDATE SET marcado_at=NOW()`,
+      [w.id, req.params.canal]);
     res.json({ ok: true });
   } catch (err) { res.status(400).json({ error: err.message }); }
 });
 
-// No leidos del workspace: el numero que va sobre la letra en el riel.
+// No leidos del workspace: el numero que va sobre la letra en el riel. Se
+// cruza con slack_leido_override para no repetir conversaciones que YA
+// marcamos leídas y donde no hay actividad de Slack más nueva que esa hora —
+// aunque Slack siga reportando unread_count_display=1 para ellas.
 app.get('/api/slack/workspaces/:id/no-leidos', requireAuth, async (req, res) => {
   try {
     const w = await _slackWs(req.workspaceOwnerId, req.params.id);
     if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
     const { canales } = await slackSvc.canales(w);
-    res.json(await slackSvc.noLeidos(w, canales));
+    const datos = await slackSvc.noLeidos(w, canales);
+    const { rows: overrides } = await pool.query(
+      `SELECT canal_id, EXTRACT(EPOCH FROM marcado_at) AS marcado_epoch FROM slack_leido_override WHERE workspace_id=$1`, [w.id]);
+    const marcados = {}; overrides.forEach(o => { marcados[o.canal_id] = parseFloat(o.marcado_epoch); });
+    let total = 0;
+    const porCanal = {};
+    for (const [canalId, n] of Object.entries(datos.porCanal || {})) {
+      const marcado = marcados[canalId];
+      const actividadEpoch = datos.actividad?.[canalId] ? parseFloat(datos.actividad[canalId]) : null;
+      if (marcado !== undefined && (actividadEpoch === null || actividadEpoch <= marcado)) continue;
+      porCanal[canalId] = n; total += n;
+    }
+    res.json({ total, porCanal, actividad: datos.actividad || {} });
   } catch (err) {
     console.error('[slack] no-leidos:', err.message);
     res.json({ total: 0, porCanal: {} });   // una insignia no debe romper el chat

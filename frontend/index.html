@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260807p"/>
+  <link rel="stylesheet" href="style.css?v=20260810d"/>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -1101,8 +1101,7 @@
 
           <!-- Workspace header -->
           <div class="chat-sidebar__ws-hdr">
-            <div class="chat-ws-logo">N</div>
-            <span class="chat-ws-name">Nova</span>
+            <span class="chat-ws-name" id="chat-ws-name">Nova</span>
             <div class="chat-ws-online" title="En línea"></div>
             <button class="chat-ws-compose-btn" title="Nueva conversación" onclick="ChatModule.focusInput()">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
@@ -2630,7 +2629,7 @@
 })();
 </script>
 
-<script src="app.js?v=20260805z"></script>
+<script src="app.js?v=20260810d"></script>
 <div id="task-quick-edit" style="display:none;position:fixed;z-index:9999"></div>
 </body>
 </html>

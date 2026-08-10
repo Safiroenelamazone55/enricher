@@ -249,12 +249,16 @@ async function marcarNoLeido(ws, canalId) {
 // Marcar como leido: mueve el marcador al ultimo mensaje. Se usa al ABRIR una
 // conversacion, para que quede leida tambien en Slack/el telefono, no solo aqui
 // (y para que el sondeo no vuelva a pintar la insignia de algo que ya se abrio).
+// Best-effort: en conversaciones viejas (fuera del historial de ~90 días del
+// plan gratis de Slack) conversations.history no trae nada, así que no hay ts
+// que darle al mark — no revienta por eso. El llamador siempre guarda su
+// propio respaldo (slack_leido_override) sin importar si esto tuvo éxito.
 async function marcarLeido(ws, canalId) {
-  const h = await _call(token(ws), 'conversations.history', { channel: canalId, limit: 1 });
-  const ts = (h.messages || [])[0]?.ts;
-  if (!ts) return false;
-  await _call(token(ws), 'conversations.mark', { channel: canalId, ts }, 'POST');
-  return true;
+  try {
+    const h = await _call(token(ws), 'conversations.history', { channel: canalId, limit: 1 });
+    const ts = (h.messages || [])[0]?.ts;
+    if (ts) await _call(token(ws), 'conversations.mark', { channel: canalId, ts }, 'POST');
+  } catch (_) {}
 }
 
 // "Guardados" = lo que la persona marcó para después en Slack (stars.list). Devuelve

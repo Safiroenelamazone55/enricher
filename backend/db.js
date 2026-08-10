@@ -454,6 +454,26 @@ async function initDb() {
     // Id de la persona DENTRO de Slack (auth.test) para ese token — sirve para
     // detectar "ese directo soy yo" y mostrarlo primero, marcado "(yo)".
     await pool.query(`ALTER TABLE slack_workspaces ADD COLUMN IF NOT EXISTS slack_user_id TEXT NOT NULL DEFAULT '';`);
+    // Respaldo de "ya lo marqué leído": para conversaciones viejas (fuera del
+    // historial que retiene el plan gratis de Slack, ~90 días) Slack se queda
+    // pegado en unread_count_display=1 pese a conversations.mark — y como no se
+    // puede traer conversations.history tan atrás, tampoco hay ts que darle al
+    // mark. Por eso el respaldo usa la HORA REAL en la que se marcó leído
+    // (marcado_at), no un ts de Slack: si no hay actividad de Slack más nueva
+    // que esa hora, se ignora su conteo aunque Slack siga reportándolo.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS slack_leido_override (
+        id           SERIAL PRIMARY KEY,
+        workspace_id INTEGER NOT NULL,
+        canal_id     TEXT    NOT NULL,
+        marcado_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE (workspace_id, canal_id)
+      )`);
+    // CREATE TABLE IF NOT EXISTS no toca columnas de una tabla que ya existía de
+    // un primer intento con leido_ts NOT NULL — sin este ALTER, todo INSERT
+    // fallaba en silencio (atrapado por el try/catch del endpoint) y el respaldo
+    // nunca se guardaba.
+    await pool.query(`ALTER TABLE slack_leido_override DROP COLUMN IF EXISTS leido_ts;`);
     // Programación en Calendario (cuándo planeo trabajar la tarea — independiente del deadline)
     await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS prog_fecha DATE;`);
     await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS prog_inicio TEXT;`);
