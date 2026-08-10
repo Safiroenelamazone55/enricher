@@ -16839,7 +16839,7 @@ ${foot}
     const badge = cat === 'reb' ? `<span class="ibx-b ibx-b--reb">Rebote</span>`
                 : t.last_in_tipo === 'ooo' ? `<span class="ibx-b ibx-b--ooo">OOO</span>` : '';
     return `<div class="ibx-row${_ibActive === t.contact_id ? ' active' : ''}${t.unread > 0 ? ' unread' : ''}" onclick="LeadManagerModule.ibOpen(${t.contact_id})" oncontextmenu="LeadManagerModule.ibRowMenu(event,${t.contact_id})">
-      <div class="ibx-row__l1"><span class="ibx-row__nm">${t.unread > 0 ? '<span class="ibx-dot"></span>' : ''}${esc(nm)}</span><span class="ibx-row__t">${when}</span></div>
+      <div class="ibx-row__l1"><span class="ibx-row__nm">${t.unread > 0 ? '<span class="ibx-dot"></span>' : ''}<span class="ibx-row__nm-txt">${esc(nm)}</span>${t.disposition ? _dispoBadge(t.disposition) : ''}</span><span class="ibx-row__t">${when}</span></div>
       <div class="ibx-row__sn">${esc(String(snippet).slice(0, 90))}</div>
       <div class="ibx-row__meta">${esc(t.buzon || '')}${t.cliente ? ` · ${esc(t.cliente)}` : ''} ${badge}</div>
     </div>`;
@@ -16933,8 +16933,8 @@ ${foot}
     return `
       <div class="ibx-conv__hd">
         <div class="ibx-av">${esc(ini)}</div>
-        <div class="ibx-conv__who"><div class="ibx-conv__nm">${esc(nm)}${c.cargo || c.empresa ? ` <span class="ibx-conv__sub">· ${esc([c.cargo, c.empresa].filter(Boolean).join(', '))}</span>` : ''}${c.disposition ? ' ' + _dispoBadge(c.disposition) : ''}</div>
-        <div class="ibx-conv__seq">${seqInfo}</div></div>
+        <div class="ibx-conv__who"><div class="ibx-conv__nm">${esc(nm)}${c.cargo || c.empresa ? ` <span class="ibx-conv__sub">· ${esc([c.cargo, c.empresa].filter(Boolean).join(', '))}</span>` : ''}</div>
+        <div class="ibx-conv__seq">${seqInfo}${c.disposition ? ' ' + _dispoBadge(c.disposition) : ''}</div></div>
         <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openContactPage(${c.id})">Ver ficha</button>
         ${c.id ? `<button class="ibx-resolve__more" onclick="LeadManagerModule.ibOpenResolveMenu(event,${c.id})" title="Resolver respuesta">⋮</button>` : ''}
       </div>
