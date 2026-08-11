@@ -10955,6 +10955,12 @@ const ProjectsModule = (() => {
 
   /* ── main render dispatcher ─────────────────── */
   function render() {
+    // Si hay una vista de proyecto enfocada abierta, un load() en vuelo (p.ej. el que
+    // dispara el propio click de la pestaña Proyectos) no debe reconstruir la lista
+    // debajo y taparla — closeDetail() ya llama a render() explícitamente al salir.
+    const dv = $('project-detail-view');
+    if (dv && dv.style.display !== 'none' && dv.innerHTML.trim()) return;
+
     const empty     = $('projects-empty');
     const cards     = $('projects-cards');
     const tableWrap = $('projects-table-wrap');
