@@ -22897,7 +22897,12 @@ const SlackChat = (() => {
         `<span class="slk-reac">${_emojiImg(_emoji(':' + r.name + ':'), 'e-img')} ${r.count}</span>`).join('');
       const hilo = (!enHilo && m.reply_count)
         ? `<button class="slk-thread" onclick="SlackChat.verHilo('${m.ts}')">${m.reply_count} respuesta${m.reply_count > 1 ? 's' : ''}</button>` : '';
-      const files = (m.files || []).map(_archivoHtml).join('');
+      // OJO: .map(_archivoHtml) directo pasa el índice del array como 2º argumento
+      // (wsId) — con un solo archivo por mensaje (el caso normal) siempre daba
+      // wsId=0, workspace inexistente, y el proxy fallaba con 404 en TODO adjunto
+      // que no fuera imagen/video/audio (esos usaban <img src> sin darse cuenta del
+      // 404). Hay que envolverlo para que solo viaje el archivo.
+      const files = (m.files || []).map(fl => _archivoHtml(fl)).join('');
       html += `<div class="chat-msg${esRaiz ? ' slk-root' : ''}${esResp ? ' slk-reply' : ''}" data-ts="${m.ts}"
                     oncontextmenu="SlackChat.menuMsg(event,'${m.ts}',${m.reply_count || 0})">
         <img class="chat-msg__av" src="${_avatarUrl(m.user, quien)}" alt="">
