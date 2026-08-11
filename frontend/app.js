@@ -22488,6 +22488,19 @@ const SlackChat = (() => {
     const raw = f.url_private_download || f.url_private || '';
     return raw ? `${API}/slack/workspaces/${wsId}/archivo-proxy?url=${encodeURIComponent(raw)}` : '';
   }
+  // Excel/Word: antes solo salía un link que llevaba a Slack. Ahora se genera una
+  // vista previa real (tabla/documento) que corre por nuestro proxy — nunca sale de
+  // la app — y un click la abre completa con opción de descargar.
+  function _docKind(f) {
+    const ft = (f.filetype || '').toLowerCase();
+    const nm = (f.name || '').toLowerCase();
+    if (ft === 'xlsx' || ft === 'xls' || nm.endsWith('.xlsx') || nm.endsWith('.xls')) return 'xlsx';
+    if (ft === 'docx' || nm.endsWith('.docx')) return 'docx';
+    return null;
+  }
+  let _docPreviewQueue = [];          // se llena al armar el HTML de los mensajes
+  let _docPreviewCache = {};          // f.id -> { kind, nombre, src, xlsxRows|docHtml } ya parseado
+
   function _archivoHtml(f, wsId = _wsAct) {
     const mt = f.mimetype || '';
     const nombre = f.name || 'archivo';
@@ -22505,7 +22518,88 @@ const SlackChat = (() => {
         <audio controls preload="metadata" src="${src}"></audio>
       </div>`;
     }
-    return `<a class="slk-file" href="${esc(f.permalink || src)}" target="_blank" rel="noopener">📎 ${esc(nombre)}</a>`;
+    const kind = _docKind(f);
+    if (kind && f.id) {
+      const elId = `slk-doc-${f.id}`;
+      _docPreviewQueue.push({ elId, f, wsId, kind });
+      return `<div class="slk-doc" id="${elId}">
+        <div class="slk-doc__hd">
+          <span class="slk-doc__ico">${kind === 'xlsx' ? '📊' : '📄'}</span>
+          <span class="slk-doc__nm">${esc(nombre)}</span>
+        </div>
+        <div class="slk-doc__body"><div class="clients-loading" style="padding:14px 0"><div class="clients-spin"></div></div></div>
+      </div>`;
+    }
+    // Cualquier otro tipo: se queda en nuestra app (proxy propio), ya no manda a Slack.
+    return `<a class="slk-file" href="${src}" target="_blank" rel="noopener">📎 ${esc(nombre)}</a>`;
+  }
+
+  // Se llama después de setear box.innerHTML — recién ahí existen los contenedores
+  // #slk-doc-* en el DOM para poder pintarles la vista previa parseada.
+  function _flushDocPreviews() {
+    const queue = _docPreviewQueue; _docPreviewQueue = [];
+    queue.forEach(_cargarDocPreview);
+  }
+
+  function _arrToTableHtml(rows, limit) {
+    const shown = limit ? rows.slice(0, limit) : rows;
+    return `<table class="slk-doc-table">${shown.map(row =>
+      `<tr>${row.map(c => `<td>${esc(c == null ? '' : String(c))}</td>`).join('')}</tr>`).join('')}</table>`;
+  }
+
+  async function _cargarDocPreview({ elId, f, wsId, kind }) {
+    const card = document.getElementById(elId);
+    if (!card) return;
+    const body = card.querySelector('.slk-doc__body');
+    try {
+      let entry = _docPreviewCache[f.id];
+      if (!entry) {
+        const url = _fileUrl(f, wsId);
+        const buf = await (await apiFetch(url)).arrayBuffer();
+        entry = { kind, nombre: f.name || 'archivo', src: url };
+        if (kind === 'xlsx') {
+          const wb = XLSX.read(buf, { type: 'array' });
+          entry.xlsxRows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '' });
+        } else {
+          entry.docHtml = (await mammoth.convertToHtml({ arrayBuffer: buf })).value;
+        }
+        _docPreviewCache[f.id] = entry;
+      }
+      if (body) {
+        body.innerHTML = kind === 'xlsx'
+          ? `<div class="slk-doc-table-wrap">${_arrToTableHtml(entry.xlsxRows, 8)}</div>`
+          : `<div class="slk-doc-html">${entry.docHtml}</div>`;
+      }
+      card.classList.add('slk-doc--ready');
+      card.onclick = () => verDocumento(f.id);
+    } catch (e) {
+      if (body) body.innerHTML = `<div class="pjfin__empty-tasks">No se pudo generar la vista previa.</div>`;
+    }
+  }
+
+  // Pantalla completa con el documento entero (no solo el recorte de la tarjeta) + descargar.
+  function verDocumento(fid) {
+    const entry = _docPreviewCache[fid];
+    if (!entry) return;
+    document.querySelectorAll('.slk-doc-modal-ov').forEach(x => x.remove());
+    const bodyHtml = entry.kind === 'xlsx'
+      ? `<div class="slk-doc-table-wrap slk-doc-table-wrap--full">${_arrToTableHtml(entry.xlsxRows)}</div>`
+      : `<div class="slk-doc-html slk-doc-html--full">${entry.docHtml}</div>`;
+    const ov = document.createElement('div');
+    ov.className = 'slk-doc-modal-ov';
+    ov.innerHTML = `
+      <div class="slk-doc-modal" onclick="event.stopPropagation()">
+        <div class="slk-doc-modal__hd">
+          <span class="slk-doc-modal__nm">${esc(entry.nombre)}</span>
+          <div class="slk-doc-modal__acts">
+            <a class="btn btn--ghost btn--sm" href="${entry.src}" download="${esc(entry.nombre)}">⭳ Descargar</a>
+            <button class="slk-doc-modal__close" onclick="this.closest('.slk-doc-modal-ov').remove()">✕</button>
+          </div>
+        </div>
+        <div class="slk-doc-modal__body">${bodyHtml}</div>
+      </div>`;
+    ov.onclick = () => ov.remove();
+    document.body.appendChild(ov);
   }
 
   // Un directo no trae nombre: trae el id de la otra persona, hay que resolverlo.
@@ -22815,6 +22909,7 @@ const SlackChat = (() => {
     const prev = box.scrollTop;
     box.style.scrollBehavior = 'auto';   // sin barrido animado
     box.innerHTML = html;
+    _flushDocPreviews();
     // Si la usuaria estaba leyendo mas arriba, no la arrastramos al final.
     box.scrollTop = conservarScroll ? prev : box.scrollHeight;
     // Y de nuevo tras el layout, por si algo cambia el alto (evita quedar a medias).
@@ -23326,6 +23421,7 @@ const SlackChat = (() => {
       </div>`;
     });
     box.innerHTML = html;
+    _flushDocPreviews();
     box.scrollTop = box.scrollHeight;
     requestAnimationFrame(() => { box.scrollTop = box.scrollHeight; });
   }

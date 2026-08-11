@@ -5213,6 +5213,9 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 #rchat-messages .slk-file-video { display: block; max-width: 100%; max-height: 220px; border-radius: 8px; margin-top: 4px; background: #000; }
 #rchat-messages .slk-file-audio audio { width: 100%; height: 30px; margin-top: 3px; }
 #rchat-messages .slk-file-audio__nm { font-size: 10.5px; font-weight: 600; color: #6C6862; }
+#rchat-messages .slk-doc { max-width: 100%; }
+#rchat-messages .slk-doc__body { max-height: 130px; font-size: 10.5px; }
+#rchat-messages .slk-doc-table td { padding: 2px 5px; }
 
 /* Messages scroll area */
 .rchat__messages {
@@ -14489,6 +14492,51 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 }
 .slk-file-audio__nm { font-size: 11.5px; font-weight: 600; color: #6C6862; }
 .slk-file-audio audio { width: 100%; height: 32px; }
+
+/* ── Excel/Word: vista previa real en vez de un link que llevaba a Slack ── */
+.slk-doc {
+  margin-top: 6px; max-width: 420px; border: 1px solid #E7E3DD; border-radius: 10px;
+  overflow: hidden; background: #fff; transition: border-color .12s;
+}
+.slk-doc--ready { cursor: pointer; }
+.slk-doc--ready:hover { border-color: #007AFF; }
+.slk-doc__hd { display: flex; align-items: center; gap: 6px; padding: 7px 10px; background: #F1EFEB; border-bottom: 1px solid #E7E3DD; }
+.slk-doc__ico { font-size: 13px; flex-shrink: 0; }
+.slk-doc__nm { font-size: 11.5px; font-weight: 600; color: #1F1D1B; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.slk-doc__body { position: relative; max-height: 170px; overflow: hidden; font-size: 11.5px; }
+.slk-doc--ready .slk-doc__body::after {
+  content: 'Ver documento completo ⤢'; position: absolute; bottom: 0; left: 0; right: 0;
+  padding: 22px 10px 6px; text-align: center; font-size: 10.5px; font-weight: 600; color: #007AFF;
+  background: linear-gradient(to bottom, rgba(255,255,255,0) 0%, rgba(255,255,255,.96) 55%);
+}
+.slk-doc-table-wrap { overflow: auto; }
+.slk-doc-table { border-collapse: collapse; width: 100%; }
+.slk-doc-table td { border: 1px solid #EAE7E2; padding: 3px 6px; white-space: nowrap; color: #3D3A36; }
+.slk-doc-html { padding: 8px 10px; color: #3D3A36; line-height: 1.4; }
+.slk-doc-html p { margin: 0 0 6px; }
+.slk-doc-html table { border-collapse: collapse; }
+.slk-doc-html td, .slk-doc-html th { border: 1px solid #EAE7E2; padding: 3px 6px; }
+
+/* Modal de pantalla completa */
+.slk-doc-modal-ov {
+  position: fixed; inset: 0; z-index: 10060; background: rgba(20,18,16,.55);
+  display: flex; align-items: center; justify-content: center; padding: 30px;
+}
+.slk-doc-modal {
+  width: 100%; max-width: 1000px; height: 100%; max-height: 85vh; background: #fff;
+  border-radius: 14px; overflow: hidden; display: flex; flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0,0,0,.3);
+}
+.slk-doc-modal__hd { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid #EAE7E2; flex-shrink: 0; }
+.slk-doc-modal__nm { flex: 1; min-width: 0; font-size: 14px; font-weight: 700; color: #1F1D1B; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.slk-doc-modal__acts { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.slk-doc-modal__close { width: 28px; height: 28px; border: none; background: #F1EFEB; border-radius: 8px; color: #6C6862; font-size: 13px; cursor: pointer; }
+.slk-doc-modal__close:hover { background: #EAE7E2; color: #1F1D1B; }
+.slk-doc-modal__body { flex: 1; min-height: 0; overflow: auto; }
+.slk-doc-table-wrap--full { padding: 12px; }
+.slk-doc-table-wrap--full .slk-doc-table { font-size: 12.5px; }
+.slk-doc-html--full { font-size: 13.5px; padding: 20px 26px; }
+
 .slk-volver { display: block; margin: 0 0 10px; font: inherit; font-size: 12.5px; color: #007AFF; background: none; border: none; padding: 0; cursor: pointer; }
 .slk-blank { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; height: 100%; text-align: center; padding: 40px 20px; }
 .slk-blank__t { margin: 0; font-size: 16px; font-weight: 600; color: #1F1D1B; }
