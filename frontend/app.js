@@ -12510,6 +12510,13 @@ const ProjectsModule = (() => {
     ['projects-loading', 'projects-empty', 'projects-cards', 'projects-table-wrap'].forEach(id2 => {
       const el = $(id2); if (el) el.style.display = 'none';
     });
+    // _cardHtml(p) reutiliza ids como pjcard-${id}/pjcontent-${id} — si la tarjeta de
+    // este mismo proyecto sigue en el DOM de la lista (solo oculta, no removida),
+    // getElementById encuentra SIEMPRE esa copia oculta primero y todas las acciones
+    // (pestañas, cobrado, etc.) terminan editando un elemento que nadie ve. Se vacía
+    // la lista al entrar; closeDetail() la reconstruye entera al volver.
+    const cardsC = $('projects-cards'); if (cardsC) cardsC.innerHTML = '';
+    const tbodyC = $('projects-tbody'); if (tbodyC) tbodyC.innerHTML = '';
     dv.style.display = '';
     dv.innerHTML = `
       <div class="pjdetail-hd">
