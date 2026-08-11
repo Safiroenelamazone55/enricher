@@ -5087,6 +5087,52 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 }
 .rchat__chdrop.hidden { display: none; }
 
+/* Fila de workspaces de Slack conectados — solo aparece con más de uno. */
+.rchat-ws-row {
+  display: flex;
+  gap: 6px;
+  padding: 8px 10px 2px;
+  flex-shrink: 0;
+  background: #FAF8F5;
+}
+.rchat-ws-row.hidden { display: none; }
+.rchat-ws-b {
+  position: relative;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1.5px solid transparent;
+  border-radius: 8px;
+  background: #EAE7E2;
+  color: #6B665F;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: .68rem;
+  font-weight: 800;
+  overflow: visible;
+}
+.rchat-ws-b img { width: 100%; height: 100%; object-fit: cover; border-radius: 6.5px; }
+.rchat-ws-b.on { border-color: #007AFF; }
+.rchat-ws-b:hover { filter: brightness(.97); }
+.rchat-ws-b__n {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 7px;
+  background: #E5484D;
+  color: #fff;
+  font-size: .58rem;
+  font-weight: 800;
+  line-height: 14px;
+  text-align: center;
+  border: 1.5px solid #FAF8F5;
+}
+
 /* Search input inside dropdown */
 .rchat__chsearch {
   padding: 7px 10px 6px;
@@ -5127,6 +5173,46 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 #rchat-channels::-webkit-scrollbar { width: 3px; }
 #rchat-channels::-webkit-scrollbar-track { background: transparent; }
 #rchat-channels::-webkit-scrollbar-thumb { background: #EAE7E2; border-radius: 3px; }
+
+/* Fila de canal/DM real de Slack dentro del panel rápido — mismas clases que
+   usa el Chat completo (#chat-channels .chat-ch) pero acotadas al ancho
+   angosto de este panel (308px). */
+#rchat-channels .chat-ch {
+  display: flex; align-items: center; gap: 7px; width: 100%; text-align: left;
+  border: none !important; background: none !important; box-shadow: none !important;
+  border-radius: 7px; padding: 6px 10px; font-size: 13px; color: #6C6862; cursor: pointer;
+}
+#rchat-channels .chat-ch:hover { background: rgba(0,0,0,.035) !important; color: #1F1D1B; }
+#rchat-channels .chat-ch.active { background: #EAE7E2 !important; color: #1F1D1B; font-weight: 600; }
+#rchat-channels .chat-ch__hash { color: #B4AFA8; flex-shrink: 0; font-size: 12.5px; width: 16px; text-align: center; }
+#rchat-channels .chat-ch__av { width: 20px; height: 20px; border-radius: 5px; flex-shrink: 0; background: #F1EFEB; object-fit: cover; }
+#rchat-channels .chat-ch__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#rchat-channels .chat-ch.unread .chat-ch__name { font-weight: 700; color: #1F1D1B; }
+#rchat-channels .chat-ch__n {
+  flex-shrink: 0; min-width: 17px; height: 17px; padding: 0 5px;
+  display: flex; align-items: center; justify-content: center;
+  background: #FF3B30; color: #fff; border-radius: 999px;
+  font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+
+/* Mensajes reales de Slack dentro del panel rápido — mismas clases que
+   #chat-messages .chat-msg del Chat completo, acotadas al mismo ancho. */
+#rchat-messages .chat-msg { display: flex; gap: 8px; align-items: flex-start; padding: 5px 2px; }
+#rchat-messages .chat-msg__av { width: 28px !important; height: 28px !important; flex: 0 0 28px !important; border-radius: 7px; background: #F1EFEB; object-fit: cover; }
+#rchat-messages .chat-msg__body { flex: 1; min-width: 0; }
+#rchat-messages .chat-msg__hd { display: flex; align-items: baseline; gap: 6px; }
+#rchat-messages .chat-msg__who { font-size: 12.5px; font-weight: 600; color: #1F1D1B; }
+#rchat-messages .chat-msg__t { font-size: 10.5px; color: #B4AFA8; }
+#rchat-messages .chat-msg__txt { font-size: 12.8px; line-height: 1.45; color: #3D3A36; margin-top: 1px; overflow-wrap: anywhere; }
+#rchat-messages .chat-msg__txt img { max-width: 100%; height: auto; }
+#rchat-messages .chat-msg__txt code { background: #F1EFEB; border-radius: 4px; padding: 1px 4px; font-size: 11.5px; }
+#rchat-messages .chat-daysep { display: flex; align-items: center; gap: 8px; margin: 10px 2px 6px; }
+#rchat-messages .chat-daysep::before, #rchat-messages .chat-daysep::after { content: ''; flex: 1; height: 1px; background: #E7E3DD; }
+#rchat-messages .chat-daysep span { font-size: 10.5px; font-weight: 600; color: #918C85; }
+#rchat-messages .slk-file-img { display: block; max-width: 100%; max-height: 220px; border-radius: 8px; margin-top: 4px; object-fit: cover; border: 1px solid #E7E3DD; cursor: zoom-in; }
+#rchat-messages .slk-file-video { display: block; max-width: 100%; max-height: 220px; border-radius: 8px; margin-top: 4px; background: #000; }
+#rchat-messages .slk-file-audio audio { width: 100%; height: 30px; margin-top: 3px; }
+#rchat-messages .slk-file-audio__nm { font-size: 10.5px; font-weight: 600; color: #6C6862; }
 
 /* Messages scroll area */
 .rchat__messages {

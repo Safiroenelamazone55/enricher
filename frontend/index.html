@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260810d"/>
+  <link rel="stylesheet" href="style.css?v=20260810e"/>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -1630,12 +1630,13 @@
         </button>
       </div>
 
-      <!-- Channel / project dropdown (chat only) -->
+      <!-- Channel / DM dropdown (chat only) -->
       <div class="rchat__chdrop hidden" id="rchat-chdrop">
+        <div class="rchat-ws-row hidden" id="rchat-ws-row"></div>
         <div class="rchat__chsearch">
           <div class="rchat__chsearch-pill">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-            <input id="rchat-chsearch" type="text" placeholder="Buscar canal, proyecto o cliente…" oninput="ChatModule.filterChannels(this.value)" autocomplete="off">
+            <input id="rchat-chsearch" type="text" placeholder="Buscar canal o persona…" oninput="SlackChat.miniBuscar(this.value)" autocomplete="off">
           </div>
         </div>
         <div id="rchat-channels"></div>
@@ -1649,8 +1650,8 @@
         <div class="rchat__input-wrap">
           <div class="rchat__input-pill">
             <input type="text" id="rchat-input" class="rchat__input" placeholder="Escribe un mensaje…"
-                   onkeydown="if(event.key==='Enter')ChatModule.rsend()">
-            <button class="rchat__send" onclick="ChatModule.rsend()">
+                   onkeydown="if(event.key==='Enter')SlackChat.miniEnviar()">
+            <button class="rchat__send" onclick="SlackChat.miniEnviar()">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
             </button>
           </div>
@@ -2629,7 +2630,7 @@
 })();
 </script>
 
-<script src="app.js?v=20260810d"></script>
+<script src="app.js?v=20260810e"></script>
 <div id="task-quick-edit" style="display:none;position:fixed;z-index:9999"></div>
 </body>
 </html>

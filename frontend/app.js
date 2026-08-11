@@ -343,6 +343,8 @@ async function initAuth() {
       await FxRatesModule.load();
       ChatModule.init();
       TimerModule.init();
+      SlackChat.refreshMiniBadge();
+      setInterval(() => SlackChat.refreshMiniBadge(), 60000);
 
     } else {
       // ── Not logged in ─────────────────────────────────────
@@ -21981,6 +21983,20 @@ const SlackChat = (() => {
   let _seccion   = localStorage.getItem('slk_sec') || 'canales';  // sección del riel
   let _guardados = null;   // cache de la sección Guardados (null = aún sin cargar)
 
+  // --- Mini-panel (icono de chat en la barra superior) --------------------
+  // Estado propio y separado del Chat completo: la usuaria puede tener el
+  // Chat abierto en una pestaña de contenido y el panel rápido a la vez, y
+  // no deben pisarse (workspace/canal abierto pueden ser distintos en cada uno).
+  let _mWsAct    = null;
+  let _mCanales  = [];
+  let _mCanal    = null;
+  let _mUsers    = {};
+  let _mAvatars  = {};
+  let _mMiId     = '';
+  let _mNoLeidos = {};
+  let _mActividad = {};
+  let _mTCanal   = null;
+
   const $$ = id => document.getElementById(id);
 
   // Total sin leer del workspace que se mira (insignia del riel), contando también lo
@@ -22169,14 +22185,14 @@ const SlackChat = (() => {
   // renglón de texto "📎 nombre.ext" sin poder abrirlo ni escucharlo. url_private
   // exige el token para verse, así que pasa por el proxy del backend en vez de
   // cargarse directo.
-  function _fileUrl(f) {
+  function _fileUrl(f, wsId = _wsAct) {
     const raw = f.url_private_download || f.url_private || '';
-    return raw ? `${API}/slack/workspaces/${_wsAct}/archivo-proxy?url=${encodeURIComponent(raw)}` : '';
+    return raw ? `${API}/slack/workspaces/${wsId}/archivo-proxy?url=${encodeURIComponent(raw)}` : '';
   }
-  function _archivoHtml(f) {
+  function _archivoHtml(f, wsId = _wsAct) {
     const mt = f.mimetype || '';
     const nombre = f.name || 'archivo';
-    const src = _fileUrl(f);
+    const src = _fileUrl(f, wsId);
     if (!src) return `<div class="slk-file">📎 ${esc(nombre)}</div>`;
     if (mt.startsWith('image/')) {
       return `<a href="${src}" target="_blank" rel="noopener"><img class="slk-file-img" src="${src}" alt="${esc(nombre)}" loading="lazy"></a>`;
@@ -22447,9 +22463,9 @@ const SlackChat = (() => {
   // traducirlo, el mensaje se lee como un volcado de codigo.
   // Detecta emojis unicode en el texto ya formateado y los cambia por imagen Apple.
   const _RE_EMOJI = /(\p{Extended_Pictographic}(‍\p{Extended_Pictographic})*[️⃣]?)/gu;
-  function _fmt(t) {
+  function _fmt(t, usersMap = _users) {
     return esc(_emoji(t))
-      .replace(/&lt;@([A-Z0-9]+)&gt;/g, (_, id) => `<span class="slk-men">@${esc(_users[id] || id)}</span>`)
+      .replace(/&lt;@([A-Z0-9]+)&gt;/g, (_, id) => `<span class="slk-men">@${esc(usersMap[id] || id)}</span>`)
       .replace(/&lt;#([A-Z0-9]+)\|([^&]*)&gt;/g, (_, id, nm) => `<span class="slk-men">#${esc(nm || id)}</span>`)
       .replace(/&lt;!(here|channel|everyone)&gt;/g, (_, k) => `<span class="slk-men">@${k}</span>`)
       .replace(/&lt;(https?:[^|&]+)\|([^&]*)&gt;/g, (_, u, x) => `<a href="${u}" target="_blank" rel="noopener">${esc(x)}</a>`)
@@ -22920,11 +22936,262 @@ const SlackChat = (() => {
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
+  // ==========================================================================
+  // MINI-PANEL — el mismo Slack real, versión compacta para el icono de chat
+  // de la barra superior. Antes ese panel mostraba un chat interno viejo
+  // (sin relación con Slack); ahora reusa los mismos endpoints/datos de Slack,
+  // con su propio estado (_m*) para no interferir con el Chat completo.
+  // ==========================================================================
+
+  function _mNombreDe(c) {
+    if (c.is_im)   return (_mUsers[c.user] || 'Directo') + (_mMiId && c.user === _mMiId ? ' (yo)' : '');
+    if (c.is_mpim) return (c.name || '').replace(/^mpdm-|-1$/g, '').replace(/--/g, ', ');
+    return c.name || '';
+  }
+
+  function _mAvatarUrl(id, nombreFallback) {
+    return (id && _mAvatars[id]) || `https://api.dicebear.com/9.x/lorelei/svg?seed=${encodeURIComponent(nombreFallback || id || 'user')}`;
+  }
+
+  // Fila de iconos de workspace arriba del buscador — solo si hay más de uno
+  // conectado; con uno solo estorba y no aporta nada.
+  function _miniRiel() {
+    const cont = $$('rchat-ws-row');
+    if (!cont) return;
+    if (_ws.length < 2) { cont.innerHTML = ''; cont.classList.add('hidden'); return; }
+    cont.classList.remove('hidden');
+    cont.innerHTML = _ws.map(w => `
+      <button class="rchat-ws-b${String(_mWsAct) === String(w.id) ? ' on' : ''}" title="${esc(w.etiqueta || w.team_name || 'Slack')}" onclick="SlackChat.miniIrA(${w.id})">
+        ${w.icon_url ? `<img src="${esc(w.icon_url)}" alt="">` : `<span>${esc(ini(w.etiqueta || w.team_name))}</span>`}
+        ${_nlPorWs[w.id] ? `<span class="rchat-ws-b__n">${_nlPorWs[w.id] > 9 ? '9+' : _nlPorWs[w.id]}</span>` : ''}
+      </button>`).join('');
+  }
+
+  function _mOrdenCanal(a, b) {
+    const ya = (_mMiId && a.user === _mMiId) ? 1 : 0, yb = (_mMiId && b.user === _mMiId) ? 1 : 0;
+    if (ya !== yb) return yb - ya;
+    const ua = _mNoLeidos[a.id] ? 1 : 0, ub = _mNoLeidos[b.id] ? 1 : 0;
+    if (ua !== ub) return ub - ua;
+    const ta = +(_mActividad[a.id] || 0), tb = +(_mActividad[b.id] || 0);
+    if (ta !== tb) return tb - ta;
+    return (a._nm || '').localeCompare(b._nm || '');
+  }
+
+  function _mFilaCanal(c) {
+    const nm = c._nm || _mNombreDe(c);
+    const n = _mNoLeidos[c.id] || 0;
+    const ico = c.is_im ? '' : (c.is_private || c.is_mpim) ? '🔒' : '#';
+    return `<button class="chat-ch${_mCanal && _mCanal.id === c.id ? ' active' : ''}${n ? ' unread' : ''}"
+                    onclick="SlackChat.miniAbrir('${c.id}')">
+      ${c.is_im ? `<img class="chat-ch__av" src="${_mAvatarUrl(c.user, nm)}" alt="">`
+                : `<span class="chat-ch__hash">${ico}</span>`}
+      <span class="chat-ch__name">${c.is_im ? escNom(nm) : esc(nm)}</span>
+      ${n ? `<span class="chat-ch__n">${n > 99 ? '99+' : n}</span>` : ''}
+    </button>`;
+  }
+
+  function _pintaMiniCanales(filtro = '') {
+    const cont = $$('rchat-channels');
+    if (!cont) return;
+    const q = filtro.trim().toLowerCase();
+    const conNombre = _mCanales.map(c => ({ ...c, _nm: _mNombreDe(c) }));
+    const lista = (q ? conNombre.filter(c => c._nm.toLowerCase().includes(q)) : conNombre).sort(_mOrdenCanal);
+    cont.innerHTML = lista.length ? lista.map(_mFilaCanal).join('')
+      : `<div class="chat-ch-empty">${q ? `Sin resultados para "${esc(filtro)}".` : 'Sin conversaciones.'}</div>`;
+  }
+
+  function miniBuscar(v) { _pintaMiniCanales(v || ''); }
+
+  function _pintaMiniMsgs(msgs) {
+    const box = $$('rchat-messages');
+    if (!box) return;
+    const orden = [...msgs].reverse();
+    if (!orden.length) { box.innerHTML = `<div class="chat-ch-empty">Sin mensajes en este canal.</div>`; return; }
+    let dia = '';
+    let html = '';
+    orden.forEach(m => {
+      const f = new Date(+m.ts * 1000);
+      const d2 = f.toLocaleDateString('es-PE', { day: 'numeric', month: 'long' });
+      if (d2 !== dia) { html += `<div class="chat-daysep"><span>${d2}</span></div>`; dia = d2; }
+      const quien = _mUsers[m.user] || m.username || 'Slack';
+      const hora = f.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
+      const files = (m.files || []).map(fl => _archivoHtml(fl, _mWsAct)).join('');
+      html += `<div class="chat-msg" data-ts="${m.ts}">
+        <img class="chat-msg__av" src="${_mAvatarUrl(m.user, quien)}" alt="">
+        <div class="chat-msg__body">
+          <div class="chat-msg__hd"><span class="chat-msg__who">${escNom(quien)}</span><span class="chat-msg__t">${hora}</span></div>
+          <div class="chat-msg__txt">${_fmt(m.text, _mUsers)}</div>
+          ${files}
+        </div>
+      </div>`;
+    });
+    box.innerHTML = html;
+    box.scrollTop = box.scrollHeight;
+    requestAnimationFrame(() => { box.scrollTop = box.scrollHeight; });
+  }
+
+  function _pararSondeoMini() {
+    if (_mTCanal) { clearInterval(_mTCanal); _mTCanal = null; }
+  }
+  function _arrancarSondeoMini() {
+    _pararSondeoMini();
+    _mTCanal = setInterval(async () => {
+      const panel = document.getElementById('rchat');
+      if (document.hidden || !_mCanal || !panel || panel.classList.contains('rchat--collapsed')) { _pararSondeoMini(); return; }
+      try {
+        const r = await apiFetch(`${API}/slack/workspaces/${_mWsAct}/canales/${_mCanal.id}/mensajes?limit=30`);
+        const d = await r.json();
+        if (!d.error) _pintaMiniMsgs(d.mensajes || []);
+      } catch (_) {}
+    }, 8000);
+  }
+
+  async function miniAbrir(canalId) {
+    const c = _mCanales.find(x => x.id === canalId);
+    if (!c) return;
+    _mCanal = { id: c.id, name: _mNombreDe(c) };
+    localStorage.setItem(`slk_mini_ch_${_mWsAct}`, canalId);
+    if (_mNoLeidos[c.id]) {
+      delete _mNoLeidos[c.id];
+      _nlPorWs[_mWsAct] = Object.values(_mNoLeidos).reduce((a, b) => a + (+b || 0), 0);
+      apiFetch(`${API}/slack/workspaces/${_mWsAct}/canales/${c.id}/leido`, { method: 'POST' }).catch(() => {});
+    }
+    _pintaMiniCanales();
+    _miniRiel();
+    const lbl = $$('rchat-ch-label'), hash = $$('rchat-ctx-hash');
+    if (hash) hash.textContent = c.is_im ? '@' : '#';
+    if (lbl)  lbl.textContent  = _mCanal.name;
+    const inp = $$('rchat-input');
+    if (inp) inp.placeholder = c.is_im ? `Mensaje a ${_mCanal.name}` : `Mensaje en #${_mCanal.name}`;
+    const box = $$('rchat-messages');
+    if (box) box.innerHTML = `<div class="clients-loading"><div class="clients-spin"></div></div>`;
+    $$('rchat-chdrop')?.classList.add('hidden');
+    try {
+      const r = await apiFetch(`${API}/slack/workspaces/${_mWsAct}/canales/${canalId}/mensajes?limit=30`);
+      const d = await r.json();
+      if (d.error) throw new Error(d.error);
+      _pintaMiniMsgs(d.mensajes || []);
+      _arrancarSondeoMini();
+    } catch (e) {
+      if (box) box.innerHTML = `<div class="chat-ch-empty">${esc(e.message)}</div>`;
+    }
+  }
+
+  async function miniIrA(wsId) {
+    _pararSondeoMini();
+    _mWsAct = wsId; _mCanal = null;
+    const wActivo = _ws.find(w => String(w.id) === String(wsId));
+    _mMiId = wActivo?.slack_user_id || '';
+    localStorage.setItem('slk_mini_ws', String(wsId));
+    const t = $$('rchat-panel-title');
+    if (t) t.textContent = (wActivo && (wActivo.etiqueta || wActivo.team_name)) || 'Slack';
+    _miniRiel();
+    const cont = $$('rchat-channels');
+    if (cont) cont.innerHTML = `<div class="chat-ch-empty">Cargando canales…</div>`;
+    const box = $$('rchat-messages');
+    if (box) box.innerHTML = `<div class="clients-loading"><div class="clients-spin"></div></div>`;
+    try {
+      const [rc, rm] = await Promise.all([
+        apiFetch(`${API}/slack/workspaces/${wsId}/canales`),
+        apiFetch(`${API}/slack/workspaces/${wsId}/miembros`),
+      ]);
+      const dc = await rc.json(), dm = await rm.json();
+      if (dc.error) throw new Error(dc.error);
+      _mUsers = { ...(dm.indice || {}) };
+      _mAvatars = {};
+      (dm.miembros || []).forEach(u => { _mUsers[u.id] = u.nombre || u.usuario; if (u.avatar) _mAvatars[u.id] = u.avatar; });
+      _mCanales = dc.canales || [];
+      apiFetch(`${API}/slack/workspaces/${wsId}/no-leidos`).then(r => r.json())
+        .then(d => { _mNoLeidos = d.porCanal || {}; _mActividad = d.actividad || {}; _pintaMiniCanales(); }).catch(() => {});
+      _pintaMiniCanales();
+      if (_mCanales.length) {
+        const guardadoCh = localStorage.getItem(`slk_mini_ch_${wsId}`);
+        const primero = _mCanales.find(x => x.id === guardadoCh) || _mCanales[0];
+        await miniAbrir(primero.id);
+      } else if (box) box.innerHTML = `<div class="chat-ch-empty">Este Slack no tiene canales visibles.</div>`;
+    } catch (e) {
+      if (cont) cont.innerHTML = `<div class="chat-ch-empty">${esc(e.message)}</div>`;
+    }
+  }
+
+  async function miniLoad() {
+    const box = $$('rchat-messages');
+    if (box) box.innerHTML = `<div class="clients-loading"><div class="clients-spin"></div></div>`;
+    if (!_ws.length) {
+      try { const r = await apiFetch(`${API}/slack/workspaces`); _ws = r.ok ? await r.json() : []; } catch (_) { _ws = []; }
+    }
+    _miniRiel();
+    if (!_ws.length) {
+      if (box) box.innerHTML = `<div class="chat-ch-empty">Sin Slack conectado. Ve a Configuración → Integraciones.</div>`;
+      const t = $$('rchat-panel-title'); if (t) t.textContent = 'Chat';
+      const cont = $$('rchat-channels'); if (cont) cont.innerHTML = '';
+      return;
+    }
+    const guardado = localStorage.getItem('slk_mini_ws') || localStorage.getItem('slk_ws');
+    const inicial = _ws.find(w => String(w.id) === String(guardado)) || _ws[0];
+    await miniIrA(inicial.id);
+  }
+
+  // Punto de entrada único desde RChatPanel: si ya había estado cargado
+  // (la usuaria cerró y volvió a abrir el panel) solo refresca en vez de
+  // recargar todo desde cero, para que no parpadee cada vez que se abre.
+  function miniOpen() {
+    if (_mWsAct) {
+      _arrancarSondeoMini();
+      if (_mCanal) miniAbrir(_mCanal.id); else miniIrA(_mWsAct);
+      refreshMiniBadge();
+    } else {
+      miniLoad();
+    }
+  }
+
+  async function miniEnviar() {
+    const inp = $$('rchat-input');
+    const texto = (inp?.value || '').trim();
+    if (!texto || !_mCanal) return;
+    inp.value = '';
+    try {
+      const r = await apiFetch(`${API}/slack/workspaces/${_mWsAct}/canales/${_mCanal.id}/mensajes`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ texto }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'No se pudo enviar');
+      await miniAbrir(_mCanal.id);
+    } catch (e) {
+      if (inp) inp.value = texto;
+      showBanner('Error: ' + e.message, 'error');
+    }
+  }
+
+  // Total sin leer de todos los workspaces conectados, para la insignia del
+  // icono de chat en la barra superior — corre aunque el panel esté cerrado,
+  // así se ve de un vistazo si hay algo pendiente sin tener que abrirlo.
+  async function refreshMiniBadge() {
+    if (!_ws.length) {
+      try { const r = await apiFetch(`${API}/slack/workspaces`); _ws = r.ok ? await r.json() : []; } catch (_) { _ws = []; }
+    }
+    let total = 0;
+    await Promise.all(_ws.map(async w => {
+      try {
+        const r = await apiFetch(`${API}/slack/workspaces/${w.id}/no-leidos`);
+        const d = await r.json();
+        _nlPorWs[w.id] = d.total || 0;
+        total += _nlPorWs[w.id];
+      } catch (_) { _nlPorWs[w.id] = _nlPorWs[w.id] || 0; }
+    }));
+    const el = $$('rchat-badge');
+    if (el) { el.textContent = total > 99 ? '99+' : (total || ''); el.classList.toggle('hidden', !total); }
+    _miniRiel();
+  }
+
   return { load, irA, abrir, buscar, verHilo, enviar, detener: _pararSondeo,
            fmt, insertar, adjuntar, cancelAttach, hasPendingFile, grabarAudio, emojiPicker, _emojiIns,
            menuMsg, reaccionar, anclar, copiar, programarReunion, onPaste,
            menuCanal, verProyecto, verTareas, copiarNombre, archivarCanal, marcarNoLeido,
-           seccion, menciones, _mencionar, detectarArroba };
+           seccion, menciones, _mencionar, detectarArroba,
+           miniOpen, miniLoad, miniIrA, miniAbrir, miniEnviar, miniBuscar,
+           miniDetener: _pararSondeoMini, refreshMiniBadge };
 })();
 
 const ChatModule = (() => {
@@ -23769,7 +24036,7 @@ const RChatPanel = (() => {
     _open = true;
     panel.classList.remove('rchat--collapsed');
     _applyView();
-    if (view === 'chat')   { ChatModule.load(); ChatModule.clearCurrentUnread(); }
+    if (view === 'chat')   SlackChat.miniOpen();
     if (view === 'notifs') RNotifPanel.load();
     if (view === 'notes')  NotesModule.load();
   }
@@ -23778,13 +24045,14 @@ const RChatPanel = (() => {
     if (_view === view) return;
     _view = view;
     _applyView();
-    if (view === 'chat')   ChatModule.load();
+    if (view === 'chat')   SlackChat.miniOpen();
     if (view === 'notifs') RNotifPanel.load();
     if (view === 'notes')  NotesModule.load();
   }
 
   function close() {
     _open = false;
+    SlackChat.miniDetener();
     const p = $('rchat');
     if (p) { p.classList.add('rchat--collapsed'); p.classList.remove('rchat--notifs'); }
   }
@@ -23810,7 +24078,7 @@ const RChatPanel = (() => {
     notesView?.classList.toggle('hidden', !isNotes);
     if (ctxBtn) ctxBtn.style.display = isChat ? '' : 'none';
     panel?.classList.toggle('rchat--notifs', isNotifs);
-    if (title) title.textContent = isChat ? 'Equipo' : isNotes ? 'Notas' : 'Notificaciones';
+    if (title) title.textContent = isChat ? 'Chat' : isNotes ? 'Notas' : 'Notificaciones';
     vswChat?.classList.toggle('active', isChat);
     vswNotif?.classList.toggle('active', isNotifs);
     vswNotes?.classList.toggle('active', isNotes);
@@ -23827,7 +24095,7 @@ const RChatPanel = (() => {
     if (opening) {
       const inp = $('rchat-chsearch');
       if (inp) { inp.value = ''; inp.focus(); }
-      ChatModule.filterChannels('');
+      SlackChat.miniBuscar('');
     }
   }
 
