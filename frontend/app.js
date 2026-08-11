@@ -12507,6 +12507,11 @@ const ProjectsModule = (() => {
 
     const topbar = document.querySelector('#pane-mgmt-projects .pv-topbar');
     if (topbar) topbar.style.display = 'none';
+    // Jenny pidió que se sienta como una pantalla propia, no encajonada junto al menú
+    // de secciones (Dashboard/Oportunidades/.../Proyectos) — se oculta ESE panel; la
+    // barra superior de Nova y el riel angosto de módulos se quedan (navegación global).
+    const modSidebar = $('sidebar');
+    if (modSidebar) modSidebar.style.display = 'none';
     ['projects-loading', 'projects-empty', 'projects-cards', 'projects-table-wrap'].forEach(id2 => {
       const el = $(id2); if (el) el.style.display = 'none';
     });
@@ -12534,6 +12539,8 @@ const ProjectsModule = (() => {
   function closeDetail() {
     const dv = $('project-detail-view');
     if (dv) { dv.style.display = 'none'; dv.innerHTML = ''; }
+    const modSidebar = $('sidebar');
+    if (modSidebar) modSidebar.style.display = '';
     const topbar = document.querySelector('#pane-mgmt-projects .pv-topbar');
     if (topbar) topbar.style.display = '';
     render();
