@@ -1416,6 +1416,37 @@ async function initDb() {
     await pool.query(`CREATE INDEX IF NOT EXISTS lm_ai_drafts_user_idx    ON lm_ai_drafts (user_id, created_at DESC);`);
     await pool.query(`CREATE INDEX IF NOT EXISTS lm_ai_drafts_contact_idx ON lm_ai_drafts (contact_id, step_id);`);
 
+    // ── Recurrencia multi-cadencia (escala "Trabajo semanal" a semanal/mensual/
+    // trimestral) — semana_auto sigue siendo el on/off; recur_freq elige la
+    // cadencia. Default 'weekly' deja el comportamiento actual intacto para
+    // todos los proyectos que ya tenían semana_auto=true.
+    await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS recur_freq TEXT NOT NULL DEFAULT 'weekly';`);
+    // Plantillas de SUBTAREAS recurrentes por proyecto — antes solo existía
+    // "copiar subtareas de la semana anterior" (manual); esto las genera solas,
+    // con su propia cadencia (puede ser distinta a la del contenedor).
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS project_recur_subtasks (
+        id           SERIAL      PRIMARY KEY,
+        user_id      INTEGER     NOT NULL REFERENCES users(id)    ON DELETE CASCADE,
+        project_id   INTEGER     NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        titulo       TEXT        NOT NULL,
+        descripcion  TEXT        NOT NULL DEFAULT '',
+        prioridad    TEXT        NOT NULL DEFAULT 'media',
+        responsable  TEXT        NOT NULL DEFAULT '',
+        responsables TEXT[]      NOT NULL DEFAULT '{}',
+        freq         TEXT        NOT NULL DEFAULT 'weekly',
+        activo       BOOLEAN     NOT NULL DEFAULT TRUE,
+        orden        INTEGER     NOT NULL DEFAULT 0,
+        created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS project_recur_subtasks_proj_idx ON project_recur_subtasks (project_id);`);
+    // Traza + idempotencia de las subtareas que generó una plantilla: una fila
+    // por (plantilla, período) — sin esto se duplicaría cada vez que corre el cron.
+    await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS recur_template_id INTEGER REFERENCES project_recur_subtasks(id) ON DELETE SET NULL;`);
+    await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS recur_anchor DATE;`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS tasks_recur_idx ON tasks (recur_template_id, recur_anchor);`);
+
     console.log('[db] tables ready (users, verifications, batch_jobs, clients, projects, tasks, payments, team_members, workspaces, workspace_invites, chat_messages, leads, meetings, fin_config, fin_member_config, pagos_internos, opportunities, opportunity_tasks)');
   } catch (err) {
     console.error('[db] initDb failed:', err.message);

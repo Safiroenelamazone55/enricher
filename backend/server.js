@@ -2593,6 +2593,97 @@ app.post('/api/mgmt/billing/ensure-weekly', requireAuth, async (req, res) => {
   }
 });
 
+// ── Recurrencia MENSUAL/TRIMESTRAL del contenedor (recur_freq) ─────
+// La cadencia SEMANAL (default de recur_freq, o sea TODOS los proyectos existentes)
+// sigue 100% en _ensureWeeklyTaskCore arriba, sin tocar — billing_week/cobro_semanal
+// viven ahí y no se mezclan con esto. Esto solo corre para proyectos que explícitamente
+// eligieron recur_freq='monthly'|'quarterly' (opt-in, nadie lo tiene hoy).
+function _anchorFor(freq, refDateStr) {
+  const d = new Date(String(refDateStr).slice(0, 10) + 'T12:00:00Z');
+  if (isNaN(d)) return null;
+  if (freq === 'monthly') {
+    return {
+      start: new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)),
+      end:   new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)),
+    };
+  }
+  if (freq === 'quarterly') {
+    const q = Math.floor(d.getUTCMonth() / 3);
+    return {
+      start: new Date(Date.UTC(d.getUTCFullYear(), q * 3, 1)),
+      end:   new Date(Date.UTC(d.getUTCFullYear(), q * 3 + 3, 0)),
+    };
+  }
+  const s = _semanaDe(refDateStr);
+  return s ? { start: s.lun, end: s.dom } : null;
+}
+function _tituloPeriodo(proyecto, freq, anchor) {
+  const ab = (proyecto.abrev || '').trim() || _abrevProyecto(proyecto.nombre);
+  if (freq === 'monthly') return `${ab} · ${_MES_AB[anchor.start.getUTCMonth()]} ${anchor.start.getUTCFullYear()}`;
+  const q = Math.floor(anchor.start.getUTCMonth() / 3) + 1;
+  return `${ab} · T${q} ${anchor.start.getUTCFullYear()}`;
+}
+async function _ensureRecurringContainerCore(wid, freq, refDateStr) {
+  if (freq === 'weekly') return { created: [], checked: 0 }; // ese caso lo cubre _ensureWeeklyTaskCore
+  const anchor = _anchorFor(freq, refDateStr);
+  if (!anchor) return { created: [], checked: 0 };
+  const startStr = anchor.start.toISOString().slice(0, 10), endStr = anchor.end.toISOString().slice(0, 10);
+  const projs = (await pool.query(
+    `SELECT id, nombre, abrev, responsable, responsables, plan_dias, plan_horas, plan_hora
+       FROM projects WHERE user_id=$1 AND semana_auto=TRUE AND recur_freq=$2 AND estado='activo'`,
+    [wid, freq])).rows;
+  const created = [];
+  for (const p of projs) {
+    const ex = await pool.query(
+      `SELECT id FROM tasks WHERE user_id=$1 AND project_id=$2 AND parent_task_id IS NULL AND fecha_inicio=$3 LIMIT 1`,
+      [wid, p.id, startStr]);
+    if (ex.rows.length) continue;
+    const respArr = (p.responsables && p.responsables.length) ? p.responsables : (p.responsable ? [p.responsable] : []);
+    const ins = await pool.query(
+      `INSERT INTO tasks (user_id, project_id, titulo, estado, prioridad, responsable, responsables,
+                          fecha_inicio, deadline, plan_dias, plan_horas, plan_hora)
+       VALUES ($1,$2,$3,'pendiente','media',$4,$5,$6,$7,$8,$9,$10) RETURNING id, titulo, project_id`,
+      [wid, p.id, _tituloPeriodo(p, freq, anchor), respArr[0] || '', respArr, startStr, endStr,
+       p.plan_dias || '', p.plan_horas ?? null, p.plan_hora ?? null]);
+    created.push(ins.rows[0]);
+  }
+  return { created, checked: projs.length };
+}
+
+// ── Subtareas recurrentes (project_recur_subtasks) ──────────────────
+// Antes solo existía "copiar subtareas de la semana anterior" (manual, TasksModule.
+// copiarSemanaAnterior). Esto las genera solas, con SU PROPIA cadencia — puede ser
+// semanal aunque el contenedor sea mensual, por ejemplo. Se anclan bajo el contenedor
+// VIGENTE del proyecto (el que cubre la fecha de hoy); si no hay ninguno, se saltan
+// (no hay dónde colgarlas).
+async function _ensureRecurSubtasksCore(wid, freq, refDateStr) {
+  const anchor = _anchorFor(freq, refDateStr);
+  if (!anchor) return { created: [], checked: 0 };
+  const startStr = anchor.start.toISOString().slice(0, 10);
+  const tpls = (await pool.query(
+    `SELECT * FROM project_recur_subtasks WHERE user_id=$1 AND activo=TRUE AND freq=$2`, [wid, freq])).rows;
+  const created = [];
+  for (const t of tpls) {
+    const ex = await pool.query(
+      `SELECT id FROM tasks WHERE recur_template_id=$1 AND recur_anchor=$2 LIMIT 1`, [t.id, startStr]);
+    if (ex.rows.length) continue;
+    const cont = (await pool.query(
+      `SELECT id, deadline FROM tasks WHERE user_id=$1 AND project_id=$2 AND parent_task_id IS NULL
+         AND fecha_inicio<=$3 AND deadline>=$3 ORDER BY fecha_inicio DESC LIMIT 1`,
+      [wid, t.project_id, refDateStr])).rows[0];
+    if (!cont) continue;
+    const respArr = (t.responsables && t.responsables.length) ? t.responsables : (t.responsable ? [t.responsable] : []);
+    const ins = await pool.query(
+      `INSERT INTO tasks (user_id, project_id, parent_task_id, titulo, descripcion, estado, prioridad,
+                          responsable, responsables, deadline, recur_template_id, recur_anchor)
+       VALUES ($1,$2,$3,$4,$5,'pendiente',$6,$7,$8,$9,$10,$11) RETURNING id, titulo, project_id`,
+      [wid, t.project_id, cont.id, t.titulo, t.descripcion || '', t.prioridad || 'media',
+       respArr[0] || '', respArr, cont.deadline, t.id, startStr]);
+    created.push(ins.rows[0]);
+  }
+  return { created, checked: tpls.length };
+}
+
 // Cron: cada hora revisa (hora de Lima). El domingo ya crea la tarea de la SEMANA ENTRANTE
 // ("todos los domingos pasada la medianoche"), y de lunes a sábado asegura la semana en curso.
 async function _weeklyBillingTick() {
@@ -2611,6 +2702,24 @@ async function _weeklyBillingTick() {
     for (const o of owners) {
       const r = await _ensureWeeklyTaskCore(o.user_id, ws);
       if (r.created.length) console.log(`[semana-auto] user ${o.user_id}: ${r.created.length} semana(s) para ${ws} — ${r.created.map(x => x.titulo).join(', ')}`);
+    }
+    // Contenedores mensuales/trimestrales — opt-in, no toca nada de lo de arriba.
+    for (const freq of ['monthly', 'quarterly']) {
+      const owners2 = (await pool.query(
+        `SELECT DISTINCT user_id FROM projects WHERE semana_auto=TRUE AND recur_freq=$1 AND estado='activo'`, [freq])).rows;
+      for (const o of owners2) {
+        const r = await _ensureRecurringContainerCore(o.user_id, freq, ymd);
+        if (r.created.length) console.log(`[recur-${freq}] user ${o.user_id}: ${r.created.length} período(s) — ${r.created.map(x => x.titulo).join(', ')}`);
+      }
+    }
+    // Subtareas recurrentes — independientes de la cadencia del contenedor.
+    for (const freq of ['weekly', 'monthly', 'quarterly']) {
+      const owners3 = (await pool.query(
+        `SELECT DISTINCT user_id FROM project_recur_subtasks WHERE activo=TRUE AND freq=$1`, [freq])).rows;
+      for (const o of owners3) {
+        const r = await _ensureRecurSubtasksCore(o.user_id, freq, ymd);
+        if (r.created.length) console.log(`[recur-sub-${freq}] user ${o.user_id}: ${r.created.length} subtarea(s)`);
+      }
     }
   } catch (e) { console.error('[semana-auto]', e.message); }
 }
@@ -2632,6 +2741,7 @@ app.patch('/api/mgmt/projects/:id/billing-cfg', requireAuth, async (req, res) =>
     if (b.plan_horas !== undefined) sets.push(`plan_horas=$${vals.push(b.plan_horas === null || b.plan_horas === '' ? null : +b.plan_horas)}`);
     if (b.plan_hora !== undefined) sets.push(`plan_hora=$${vals.push(b.plan_hora === null || b.plan_hora === '' ? null : Math.max(0, Math.min(23, parseInt(b.plan_hora))))}`);
     if (b.precio_semanal !== undefined) sets.push(`precio_semanal=$${vals.push(b.precio_semanal === null || b.precio_semanal === '' ? null : +b.precio_semanal)}`);
+    if (b.recur_freq !== undefined) sets.push(`recur_freq=$${vals.push(['weekly', 'monthly', 'quarterly'].includes(b.recur_freq) ? b.recur_freq : 'weekly')}`);
     if (b.reparto !== undefined) {
       const rep = Array.isArray(b.reparto)
         ? b.reparto.map(r => ({ nombre: String(r.nombre || '').trim(), pct: Math.max(0, Math.min(100, +r.pct || 0)) })).filter(r => r.nombre)
@@ -2641,12 +2751,113 @@ app.patch('/api/mgmt/projects/:id/billing-cfg', requireAuth, async (req, res) =>
     if (!sets.length) return res.json({ ok: true });
     sets.push('updated_at=NOW()');
     const { rows } = await pool.query(
-      `UPDATE projects SET ${sets.join(',')} WHERE id=$1 AND user_id=$2 RETURNING id, cobro_semanal, precio_semanal, reparto, semana_auto, abrev, plan_dias, plan_horas, plan_hora`, vals);
+      `UPDATE projects SET ${sets.join(',')} WHERE id=$1 AND user_id=$2 RETURNING id, cobro_semanal, precio_semanal, reparto, semana_auto, abrev, plan_dias, plan_horas, plan_hora, recur_freq`, vals);
     if (!rows[0]) return res.status(404).json({ error: 'Proyecto no encontrado' });
     res.json(rows[0]);
   } catch (err) {
     console.error('[projects/billing-cfg]', err.message);
     res.status(500).json({ error: 'Error al guardar la configuración de cobro' });
+  }
+});
+
+// ── Plantillas de subtareas recurrentes (project_recur_subtasks) ───
+const _RECUR_FREQS = ['weekly', 'monthly', 'quarterly'];
+
+app.get('/api/mgmt/projects/:id/recur-subtasks', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT * FROM project_recur_subtasks WHERE project_id=$1 AND user_id=$2 ORDER BY orden, id`,
+      [req.params.id, req.workspaceOwnerId]);
+    res.json(rows);
+  } catch (err) {
+    console.error('[recur-subtasks] GET error:', err.message);
+    res.status(500).json({ error: 'Error al cargar las plantillas recurrentes' });
+  }
+});
+
+app.post('/api/mgmt/projects/:id/recur-subtasks', requireAuth, async (req, res) => {
+  const b = req.body || {};
+  const titulo = String(b.titulo || '').trim();
+  if (!titulo) return res.status(400).json({ error: 'Título requerido' });
+  const freq = _RECUR_FREQS.includes(b.freq) ? b.freq : 'weekly';
+  const responsables = Array.isArray(b.responsables) ? b.responsables.filter(Boolean) : (b.responsable ? [b.responsable] : []);
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO project_recur_subtasks (user_id, project_id, titulo, descripcion, prioridad, responsable, responsables, freq)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+      [req.workspaceOwnerId, req.params.id, titulo, String(b.descripcion || ''), b.prioridad || 'media',
+       responsables[0] || '', responsables, freq]);
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    console.error('[recur-subtasks] POST error:', err.message);
+    res.status(500).json({ error: 'Error al crear la plantilla recurrente' });
+  }
+});
+
+app.put('/api/mgmt/recur-subtasks/:id', requireAuth, async (req, res) => {
+  const b = req.body || {};
+  const titulo = String(b.titulo || '').trim();
+  if (!titulo) return res.status(400).json({ error: 'Título requerido' });
+  const freq = _RECUR_FREQS.includes(b.freq) ? b.freq : 'weekly';
+  const responsables = Array.isArray(b.responsables) ? b.responsables.filter(Boolean) : (b.responsable ? [b.responsable] : []);
+  try {
+    const { rows } = await pool.query(
+      `UPDATE project_recur_subtasks SET titulo=$1, descripcion=$2, prioridad=$3, responsable=$4, responsables=$5, freq=$6
+        WHERE id=$7 AND user_id=$8 RETURNING *`,
+      [titulo, String(b.descripcion || ''), b.prioridad || 'media', responsables[0] || '', responsables, freq,
+       req.params.id, req.workspaceOwnerId]);
+    if (!rows[0]) return res.status(404).json({ error: 'Plantilla no encontrada' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[recur-subtasks] PUT error:', err.message);
+    res.status(500).json({ error: 'Error al actualizar la plantilla recurrente' });
+  }
+});
+
+app.patch('/api/mgmt/recur-subtasks/:id/activo', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `UPDATE project_recur_subtasks SET activo=$1 WHERE id=$2 AND user_id=$3 RETURNING *`,
+      [!!(req.body || {}).activo, req.params.id, req.workspaceOwnerId]);
+    if (!rows[0]) return res.status(404).json({ error: 'Plantilla no encontrada' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[recur-subtasks/activo] PATCH error:', err.message);
+    res.status(500).json({ error: 'Error al actualizar la plantilla' });
+  }
+});
+
+app.delete('/api/mgmt/recur-subtasks/:id', requireAuth, async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(
+      `DELETE FROM project_recur_subtasks WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId]);
+    if (!rowCount) return res.status(404).json({ error: 'Plantilla no encontrada' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[recur-subtasks] DELETE error:', err.message);
+    res.status(500).json({ error: 'Error al eliminar la plantilla' });
+  }
+});
+
+// Backfill manual — no esperar el cron cada hora al recién crear una plantilla.
+app.post('/api/mgmt/projects/:id/recur-subtasks/:tid/generar-ahora', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT * FROM project_recur_subtasks WHERE id=$1 AND project_id=$2 AND user_id=$3`,
+      [req.params.tid, req.params.id, req.workspaceOwnerId]);
+    const tpl = rows[0];
+    if (!tpl) return res.status(404).json({ error: 'Plantilla no encontrada' });
+    const ymd = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' });
+    await _ensureRecurSubtasksCore(req.workspaceOwnerId, tpl.freq, ymd);
+    const anchor = _anchorFor(tpl.freq, ymd);
+    const startStr = anchor ? anchor.start.toISOString().slice(0, 10) : null;
+    const chk = await pool.query(
+      `SELECT id, titulo FROM tasks WHERE recur_template_id=$1 AND recur_anchor=$2 LIMIT 1`, [tpl.id, startStr]);
+    if (chk.rows[0]) return res.json({ ok: true, creada: chk.rows[0] });
+    return res.json({ ok: true, creada: null, aviso: 'No hay una tarea contenedora vigente en este proyecto para este período — activa "Trabajo semanal/mensual/trimestral" primero.' });
+  } catch (err) {
+    console.error('[recur-subtasks/generar-ahora] error:', err.message);
+    res.status(500).json({ error: 'Error al generar la subtarea' });
   }
 });
 
@@ -5579,6 +5790,7 @@ app.patch('/api/lm/activities/:id', requireAuth, async (req, res) => {
 
 // ── GET /api/mgmt/payments ────────────────────────────────────────
 app.get('/api/mgmt/payments', requireAuth, async (req, res) => {
+  const pid = parseInt(req.query.project_id) || null;
   try {
     const { rows } = await pool.query(`
       SELECT * FROM (
@@ -5644,6 +5856,7 @@ app.get('/api/mgmt/payments', requireAuth, async (req, res) => {
         LEFT JOIN clients  c2 ON p2.client_id = c2.id
         WHERE  t.user_id = $1 AND t.cobrado = true AND t.monto IS NOT NULL AND t.monto > 0
       ) combined
+      ${pid ? 'WHERE project_id = $2' : ''}
       ORDER BY
         CASE estado
           WHEN 'pendiente' THEN 1
@@ -5653,7 +5866,7 @@ app.get('/api/mgmt/payments', requireAuth, async (req, res) => {
         END,
         fecha_esperada ASC NULLS LAST,
         created_at DESC
-    `, [req.workspaceOwnerId]);
+    `, pid ? [req.workspaceOwnerId, pid] : [req.workspaceOwnerId]);
     res.json(rows);
   } catch (err) {
     console.error('[mgmt/payments] GET error:', err.message);

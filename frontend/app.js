@@ -5458,7 +5458,7 @@ const DashboardModule = (() => {
       const rows = pending.slice(0, 14).map(t => {
         const fecha = t.fecha_limite ? new Date(String(t.fecha_limite).split('T')[0] + 'T00:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }) : '';
         const sub = [t.opp_titulo, fecha].filter(Boolean).map(esc).join(' · ');
-        return `<div class="d3-opp-row" onclick="document.querySelector('[data-tab=mgmt-opportunities]').click()">
+        return `<div class="d3-opp-row" onclick="document.querySelector('[data-tab=mgmt-opportunities]').click();setTimeout(()=>OpportunitiesModule.openDetail(${t.opportunity_id}),250)">
           <button class="d3-status-btn d3-status-btn--${oppTaskMeta(t.estado)[4]}" title="Cambiar estado" onclick="event.stopPropagation();openOppTaskStatusMenu(event,${t.id},'${oppTaskNorm(t.estado)}','DashboardModule.setOppTaskStatus')">${oppTaskStatusSvg(t.estado)}</button>
           <div class="d3-opp-body">
             <span class="d3-opp-name">${esc(t.titulo)}</span>
@@ -5995,6 +5995,7 @@ const DashboardModule = (() => {
           <button class="d3xp-chip${asgShort ? '' : ' d3xp-chip--empty'}" title="Cambiar responsable" onclick="event.stopPropagation();DashboardModule.expEditAssignee(${id},this)">${asgShort ? _expAvatar(asgName) : _icoUsr}<span class="d3xp-chip__tx">${asgShort ? esc(asgShort) : 'Asignar'}</span></button>
           ${t.prioridad === 'alta' ? '<span class="d3xp-chip d3xp-chip--prio">Alta</span>' : ''}
           <button class="d3xp__open" onclick="event.stopPropagation();TasksModule.openDrawer(${id})">Abrir tarea<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>
+          ${t.project_id ? `<button class="d3xp__open" onclick="event.stopPropagation();document.querySelector('[data-tab=mgmt-projects]').click();setTimeout(()=>ProjectsModule.openDetail(${t.project_id}),250)">Abrir proyecto<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></button>` : ''}
         </div>
       </div>`;
 
@@ -11080,6 +11081,7 @@ const ProjectsModule = (() => {
           <button class="pjcard__tab${tab==='general'   ?' pjcard__tab--active':''}" onclick="ProjectsModule.switchTab(${p.id},'general')">General</button>
           <button class="pjcard__tab${tab==='info'      ?' pjcard__tab--active':''}" onclick="ProjectsModule.switchTab(${p.id},'info')">Más info</button>
           <button class="pjcard__tab${tab==='financials'?' pjcard__tab--active':''}" onclick="ProjectsModule.switchTab(${p.id},'financials')">Finanzas del proyecto</button>
+          <button class="pjcard__tab${tab==='recurrencia'?' pjcard__tab--active':''}" onclick="ProjectsModule.switchTab(${p.id},'recurrencia')">Recurrencia</button>
           <button class="pjcard__tab${tab==='links'      ?' pjcard__tab--active':''}" onclick="ProjectsModule.switchTab(${p.id},'links')">Archivos</button>
         </div>
 
@@ -11093,9 +11095,10 @@ const ProjectsModule = (() => {
 
   /* ── tab content by name ────────────────────── */
   function _tabContent(p, tab, tasks) {
-    if (tab === 'general')    return _tabGeneral(p, tasks);
-    if (tab === 'financials') return _tabFinancials(p, tasks);
-    if (tab === 'links')      return _tabLinks(p);
+    if (tab === 'general')     return _tabGeneral(p, tasks);
+    if (tab === 'financials')  return _tabFinancials(p, tasks);
+    if (tab === 'links')       return _tabLinks(p);
+    if (tab === 'recurrencia') return _tabRecurrencia(p);
     return _tabInfo(p);
   }
 
@@ -11933,7 +11936,217 @@ const ProjectsModule = (() => {
            <button type="button" class="pjfin__gofact" onclick="event.stopPropagation();FinanceModule.openFacturacion(${p.id})" title="Fechas de cobro, en-mi-cuenta y cobros semanales se editan allá">Ver en Facturación →</button></span>
          </div>
          <div class="pjfin__tasks">${taskRows}</div>`
-      : `<div class="pjfin__empty-tasks">Agrega tareas principales para distribuir el valor del proyecto. <button type="button" class="pjfin__gofact" onclick="event.stopPropagation();FinanceModule.openFacturacion(${p.id})">Ver en Facturación →</button></div>`}`;
+      : `<div class="pjfin__empty-tasks">Agrega tareas principales para distribuir el valor del proyecto. <button type="button" class="pjfin__gofact" onclick="event.stopPropagation();FinanceModule.openFacturacion(${p.id})">Ver en Facturación →</button></div>`}
+
+    <div class="pjfin__section-hdr"><span class="pjfin__section-title">REPARTO</span></div>
+    <div class="pjfin__rep-chips">${_pjRepartoHtml(p)}</div>
+
+    <div class="pjfin__section-hdr"><span class="pjfin__section-title">RENTABILIDAD</span></div>
+    <div class="pjfin__rent">${_pjRentabilidadHtml(p, mainTasks)}</div>
+
+    <div class="pjfin__section-hdr"><span class="pjfin__section-title">HISTORIAL DE COBROS</span></div>
+    <div class="pjfin__cobros" id="pjfin-cobros-${p.id}"><div class="clients-loading" style="padding:16px 0"><div class="clients-spin"></div></div></div>`;
+  }
+
+  // ── Reparto / rentabilidad / cobros — extensión de la pestaña Finanzas ──
+  function _pjMoney(v, m) {
+    if (v === null || v === undefined || v === '') return '—';
+    const n = +v;
+    if (isNaN(n)) return '—';
+    try { return new Intl.NumberFormat('es-MX', { style: 'currency', currency: m || 'USD', maximumFractionDigits: 0 }).format(n); }
+    catch { return `${m || 'USD'} ${n}`; }
+  }
+  // Peso del miembro en el proyecto: reparto ([{nombre,pct}]) manda; sin reparto, 100% del/los responsable(s).
+  function _pjRepartoHtml(p) {
+    const rep = Array.isArray(p.reparto) ? p.reparto : [];
+    if (!rep.length) return `<span class="pjfin__rep-chip pjfin__rep-chip--full">100% — sin repartir</span>`;
+    return rep.map(r => `<span class="pjfin__rep-chip">${esc(r.nombre)} <b>${+r.pct || 0}%</b></span>`).join('');
+  }
+  function _pjRentabilidadHtml(p, mainTasks) {
+    const horas = (mainTasks || []).reduce((s, t) => s + (+t.horas_track || 0), 0);
+    const mon = p.moneda || 'USD';
+    if (!horas) return `<div class="pjfin__empty-tasks">Sin horas trackeadas todavía en este proyecto.</div>`;
+    const tipo = p.tipo_proyecto || 'fijo';
+    if (tipo === 'horas' && p.tarifa_hora > 0) {
+      const valorHoras = horas * p.tarifa_hora;
+      return `<div class="pjfin__rent-row"><span>Horas trackeadas</span><b>${horas.toFixed(1)} h</b></div>
+              <div class="pjfin__rent-row"><span>Valor a tarifa (${_pjMoney(p.tarifa_hora, mon)}/h)</span><b>${_pjMoney(valorHoras, mon)}</b></div>`;
+    }
+    const total = p.valor_total || 0;
+    const efectiva = total > 0 ? total / horas : 0;
+    return `<div class="pjfin__rent-row"><span>Horas invertidas</span><b>${horas.toFixed(1)} h</b></div>
+            ${efectiva ? `<div class="pjfin__rent-row"><span>Tarifa efectiva</span><b>${_pjMoney(efectiva, mon)}/h</b></div>` : ''}`;
+  }
+  function _pjCobroRowHtml(r) {
+    const fecha = r.fecha_pagada || r.fecha_esperada;
+    const fechaFmt = fecha ? new Date(String(fecha).split('T')[0] + 'T00:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+    const estLbl = { pendiente: 'Pendiente', vencido: 'Vencido', cobrado: 'Cobrado' }[r.estado] || r.estado || '';
+    return `<div class="pjfin__cobro-row">
+      <span class="pjfin__cobro-concepto">${esc(r.concepto || '')}</span>
+      <span class="pjfin__cobro-fecha">${fechaFmt}</span>
+      <span class="pjfin__cobro-badge pjfin__cobro-badge--${esc(r.estado || '')}">${esc(estLbl)}</span>
+      <span class="pjfin__cobro-monto">${_pjMoney(r.monto_neto ?? r.monto_bruto, r.moneda || r.project_moneda)}</span>
+    </div>`;
+  }
+  async function _pintaCobrosProyecto(pid) {
+    const box = $(`pjfin-cobros-${pid}`);
+    if (!box) return;
+    try {
+      const r = await apiFetch(`${API}/mgmt/payments?project_id=${pid}`);
+      const rows = r.ok ? await r.json() : [];
+      box.innerHTML = rows.length
+        ? rows.slice(0, 15).map(_pjCobroRowHtml).join('')
+        : `<div class="pjfin__empty-tasks">Sin cobros registrados aún.</div>`;
+    } catch (_) {
+      box.innerHTML = `<div class="pjfin__empty-tasks">No se pudo cargar el historial de cobros.</div>`;
+    }
+  }
+
+  /* ── RECURRENCIA tab ─────────────────────────
+     Contenedor: resumen de lo que ya se configura en el drawer (on/off + cadencia) con
+     un atajo para editarlo ahí — no se duplica el toggle/chips de días en dos lugares.
+     Subtareas recurrentes: plantillas nuevas, con SU PROPIA cadencia (puede ser semanal
+     aunque el contenedor sea mensual), que el cron genera solas bajo el contenedor vigente. */
+  const _FREQ_LBL = { weekly: 'Semanal', monthly: 'Mensual', quarterly: 'Trimestral' };
+  let _recurTpls      = {};   // pid → plantillas cacheadas
+  let _addingRecTplFor = null; // pid | null — formulario de nueva plantilla abierto
+  let _editingRecTplId = null; // id  | null — plantilla en edición
+
+  function _tabRecurrencia(p) {
+    const auto = !!(p.semana_auto || p.cobro_semanal);
+    const freqLbl = _FREQ_LBL[p.recur_freq] || 'Semanal';
+    return `
+    <div class="pjfin__section-hdr"><span class="pjfin__section-title">CONTENEDOR</span></div>
+    <div class="pjrec__summary">
+      <span class="pjrec__summary-dot pjrec__summary-dot--${auto ? 'on' : 'off'}"></span>
+      <span>${auto ? `Automático — <b>${esc(freqLbl)}</b>` : 'Manual (no se genera solo)'}</span>
+      <button type="button" class="pjfin__gofact" onclick="event.stopPropagation();ProjectsModule.openDrawer(${p.id})">Editar →</button>
+    </div>
+
+    <div class="pjfin__section-hdr">
+      <span class="pjfin__section-title">SUBTAREAS RECURRENTES</span>
+      ${_addingRecTplFor === p.id ? '' : `<button type="button" class="pjfin__gofact" onclick="event.stopPropagation();ProjectsModule.recNewTpl(${p.id})">+ Nueva plantilla</button>`}
+    </div>
+    <div class="pjrec__tpls" id="pjrec-tpls-${p.id}"><div class="clients-loading" style="padding:16px 0"><div class="clients-spin"></div></div></div>`;
+  }
+
+  async function _rerenderRecurTab(pid) {
+    const p = _projects.find(x => x.id === pid);
+    const cont = $(`pjcontent-${pid}`);
+    if (p && cont && (_activeTabs[pid] || 'general') === 'recurrencia') cont.innerHTML = _tabRecurrencia(p);
+    await _pintaRecurTab(pid);
+  }
+
+  async function _pintaRecurTab(pid) {
+    const box = $(`pjrec-tpls-${pid}`);
+    if (!box) return;
+    try {
+      const r = await apiFetch(`${API}/mgmt/projects/${pid}/recur-subtasks`);
+      const tpls = r.ok ? await r.json() : [];
+      _recurTpls[pid] = tpls;
+      const form = _addingRecTplFor === pid ? _recTplFormHtml(pid, null) : '';
+      box.innerHTML = form + (tpls.length ? tpls.map(t => _recurTplRow(pid, t)).join('')
+        : (form ? '' : `<div class="pjfin__empty-tasks">Sin plantillas — crea una para que las subtareas se generen solas (semanal, mensual o trimestral).</div>`));
+    } catch (_) {
+      box.innerHTML = `<div class="pjfin__empty-tasks">No se pudieron cargar las plantillas.</div>`;
+    }
+  }
+
+  function _recurTplRow(pid, t) {
+    if (_editingRecTplId === t.id) return _recTplFormHtml(pid, t);
+    return `<div class="pjrec__tpl-row${t.activo ? '' : ' pjrec__tpl-row--off'}">
+      <button type="button" class="pjrec__tpl-toggle" title="${t.activo ? 'Desactivar' : 'Activar'}" onclick="event.stopPropagation();ProjectsModule.recToggleTpl(${pid},${t.id},${!t.activo})">${t.activo ? '●' : '○'}</button>
+      <div class="pjrec__tpl-body">
+        <span class="pjrec__tpl-titulo">${esc(t.titulo)}</span>
+        <span class="pjrec__tpl-meta">${esc(_FREQ_LBL[t.freq] || t.freq)}${t.responsable ? ' · ' + esc(t.responsable) : ''}</span>
+      </div>
+      <button type="button" class="pjfin__gofact" onclick="event.stopPropagation();ProjectsModule.recGenerarAhora(${pid},${t.id})">Generar ahora</button>
+      <button type="button" class="pjlinks__act-btn" title="Editar" onclick="event.stopPropagation();ProjectsModule.recEditTpl(${pid},${t.id})">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+      </button>
+      <button type="button" class="pjlinks__act-btn pjlinks__act-btn--del" title="Eliminar" onclick="event.stopPropagation();ProjectsModule.recDeleteTpl(${pid},${t.id})">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+      </button>
+    </div>`;
+  }
+
+  function _recTplFormHtml(pid, t) {
+    const isEdit = !!t;
+    const members = (_teamCache || []).map(m => m.nombre).filter(Boolean);
+    const respOpts = `<option value="">Sin asignar</option>` + members.map(n => `<option value="${esc(n)}"${t?.responsable === n ? ' selected' : ''}>${esc(n)}</option>`).join('');
+    const freqOpts = Object.entries(_FREQ_LBL).map(([k, l]) => `<option value="${k}"${(t?.freq || 'weekly') === k ? ' selected' : ''}>${esc(l)}</option>`).join('');
+    const cancelFn = isEdit ? `ProjectsModule.recCancelEdit(${pid})` : `ProjectsModule.recCancelNew(${pid})`;
+    const saveFn   = isEdit ? `ProjectsModule.recSaveTpl(${pid},${t.id})` : `ProjectsModule.recSaveTpl(${pid})`;
+    return `<div class="pjlinks__form" onclick="event.stopPropagation()">
+      <div class="pjlinks__form-row">
+        <input class="pjlinks__form-input" id="pjrec-tit-${pid}" type="text" placeholder="Título de la subtarea *" value="${esc(t?.titulo || '')}">
+      </div>
+      <div class="pjlinks__form-row pjlinks__form-row--sm">
+        <select class="pjlinks__form-select" id="pjrec-freq-${pid}">${freqOpts}</select>
+        <select class="pjlinks__form-select" id="pjrec-resp-${pid}">${respOpts}</select>
+      </div>
+      <div class="pjlinks__form-actions">
+        <button type="button" class="btn btn--ghost btn--sm" onclick="event.stopPropagation();${cancelFn}">Cancelar</button>
+        <button type="button" class="btn btn--primary btn--sm" onclick="event.stopPropagation();${saveFn}">Guardar</button>
+      </div>
+    </div>`;
+  }
+
+  async function recNewTpl(pid) {
+    await _ensureTeamLoaded();
+    _addingRecTplFor = pid; _editingRecTplId = null;
+    await _rerenderRecurTab(pid);
+  }
+  async function recEditTpl(pid, tid) {
+    await _ensureTeamLoaded();
+    _editingRecTplId = tid; _addingRecTplFor = null;
+    await _rerenderRecurTab(pid);
+  }
+  async function recCancelNew(pid) { _addingRecTplFor = null; await _rerenderRecurTab(pid); }
+  async function recCancelEdit(pid) { _editingRecTplId = null; await _rerenderRecurTab(pid); }
+
+  async function recSaveTpl(pid, tid) {
+    const titulo = ($(`pjrec-tit-${pid}`)?.value || '').trim();
+    if (!titulo) { showBanner('El título es obligatorio', 'error'); return; }
+    const freq = $(`pjrec-freq-${pid}`)?.value || 'weekly';
+    const responsable = $(`pjrec-resp-${pid}`)?.value || '';
+    const body = { titulo, freq, responsable, responsables: responsable ? [responsable] : [] };
+    try {
+      const url = tid ? `${API}/mgmt/recur-subtasks/${tid}` : `${API}/mgmt/projects/${pid}/recur-subtasks`;
+      const res = await apiFetch(url, { method: tid ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (!res.ok) throw new Error((await res.json()).error || 'No se pudo guardar');
+      _addingRecTplFor = null; _editingRecTplId = null;
+      await _rerenderRecurTab(pid);
+      showBanner('✓ Plantilla guardada', 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+
+  async function recToggleTpl(pid, tid, activo) {
+    try {
+      const res = await apiFetch(`${API}/mgmt/recur-subtasks/${tid}/activo`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ activo }) });
+      if (!res.ok) throw new Error('fail');
+      await _pintaRecurTab(pid);
+    } catch (_) { showBanner('Error al actualizar la plantilla', 'error'); }
+  }
+
+  async function recDeleteTpl(pid, tid) {
+    if (!confirm('¿Eliminar esta plantilla recurrente? Las subtareas ya generadas no se borran.')) return;
+    try {
+      const res = await apiFetch(`${API}/mgmt/recur-subtasks/${tid}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('fail');
+      await _pintaRecurTab(pid);
+    } catch (_) { showBanner('Error al eliminar la plantilla', 'error'); }
+  }
+
+  async function recGenerarAhora(pid, tid) {
+    try {
+      const res = await apiFetch(`${API}/mgmt/projects/${pid}/recur-subtasks/${tid}/generar-ahora`, { method: 'POST' });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'No se pudo generar');
+      if (d.creada) { showBanner(`✓ "${d.creada.titulo}" generada`, 'success'); await _ensureAllTasksLoaded(); refreshCard(pid); }
+      else showBanner(d.aviso || 'Ya existía para este período', 'info');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
   /* ── MORE INFO tab ──────────────────────────── */
@@ -12251,7 +12464,7 @@ const ProjectsModule = (() => {
   }
 
   /* ── switch sub-tab ─────────────────────────── */
-  const _TAB_PREFIX = { general: 'gen', info: 'más', financials: 'fin', links: 'arch' };
+  const _TAB_PREFIX = { general: 'gen', info: 'más', financials: 'fin', links: 'arch', recurrencia: 'recu' };
   function switchTab(pid, tab) {
     _activeTabs[pid] = tab;
     const card = $(`pjcard-${pid}`);
@@ -12265,8 +12478,52 @@ const ProjectsModule = (() => {
       if (p) {
         content.innerHTML = _tabContent(p, tab, _taskCache[pid] || []);
         if (tab === 'info') setTimeout(() => _initInfoExpand(pid), 0);
+        if (tab === 'financials') _pintaCobrosProyecto(pid);
+        if (tab === 'recurrencia') _pintaRecurTab(pid);
       }
     }
+  }
+
+  /* ── vista enfocada de UN proyecto (reemplaza la lista) ─────
+     Reusa _cardHtml(p) tal cual (ya trae sus 4 pestañas) en vez de
+     scrollear entre todas las tarjetas del Timeline para encontrar la tuya. */
+  async function openDetail(id) {
+    if (!_projects.length) await load();
+    let p = _projects.find(x => x.id === id);
+    if (!p) {
+      try {
+        const r = await apiFetch(`${API}/mgmt/projects/${id}`);
+        if (r.ok) { p = await r.json(); _projects.push(p); }
+      } catch (_) {}
+    }
+    const dv = $('project-detail-view');
+    if (!p || !dv) { showBanner('No se pudo abrir el proyecto.', 'error'); return; }
+
+    const topbar = document.querySelector('#pane-mgmt-projects .pv-topbar');
+    if (topbar) topbar.style.display = 'none';
+    ['projects-loading', 'projects-empty', 'projects-cards', 'projects-table-wrap'].forEach(id2 => {
+      const el = $(id2); if (el) el.style.display = 'none';
+    });
+    dv.style.display = '';
+    dv.innerHTML = `
+      <div class="pjdetail-hd">
+        <button class="pjdetail-back" onclick="ProjectsModule.closeDetail()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+          Volver a Proyectos
+        </button>
+      </div>
+      <div class="pjdetail-body">${_cardHtml(p)}</div>`;
+
+    if (!_taskCache[id]) await _ensureAllTasksLoaded();
+    await _loadAndRenderGeneral(p);
+  }
+
+  function closeDetail() {
+    const dv = $('project-detail-view');
+    if (dv) { dv.style.display = 'none'; dv.innerHTML = ''; }
+    const topbar = document.querySelector('#pane-mgmt-projects .pv-topbar');
+    if (topbar) topbar.style.display = '';
+    render();
   }
 
   /* ── async-load tasks for a card ────────────── */
@@ -12290,7 +12547,7 @@ const ProjectsModule = (() => {
       const cont = $(`pjcontent-${p.id}`);
       if (cont) {
         if (tab === 'general')    cont.innerHTML = _tabGeneral(p, tasks);
-        if (tab === 'financials') cont.innerHTML = _tabFinancials(p, tasks);
+        if (tab === 'financials') { cont.innerHTML = _tabFinancials(p, tasks); _pintaCobrosProyecto(p.id); }
       }
     } catch { /* silent */ }
   }
@@ -12319,6 +12576,7 @@ const ProjectsModule = (() => {
       if (p && (_activeTabs[projectId] || 'general') === 'financials') {
         const cont = $(`pjcontent-${projectId}`);
         if (cont) cont.innerHTML = _tabFinancials(p, _taskCache[projectId] || []);
+        _pintaCobrosProyecto(projectId);
       }
     } catch {}
   }
@@ -12337,6 +12595,7 @@ const ProjectsModule = (() => {
       if (p && (_activeTabs[projectId] || 'general') === 'financials') {
         const cont = $(`pjcontent-${projectId}`);
         if (cont) cont.innerHTML = _tabFinancials(p, _taskCache[projectId] || []);
+        _pintaCobrosProyecto(projectId);
       }
     } catch {}
   }
@@ -12686,10 +12945,18 @@ const ProjectsModule = (() => {
     $('proj-semana-auto').checked = wkOn;
     $('proj-semana-cfg').style.display = wkOn ? '' : 'none';
     $('proj-abrev').value = (p && p.abrev) ? p.abrev : '';
+    $('proj-recur-freq').value = (p && p.recur_freq) || 'weekly';
     _planDias = new Set(String((p && p.plan_dias) || '').split(',').map(s => s.trim()).filter(s => /^[0-6]$/.test(s)).map(Number));
     _planDiasRender();
     $('proj-plan-horas').value = (p && p.plan_horas != null) ? p.plan_horas : '';
     $('proj-plan-hora').value = (p && p.plan_hora != null) ? String(p.plan_hora).padStart(2, '0') + ':00' : '';
+    onRecurFreqChange();
+    planHint();
+  }
+  // Días de la semana solo aplican a la cadencia SEMANAL — con mensual/trimestral se ocultan.
+  function onRecurFreqChange() {
+    const row = $('proj-wk-days-row');
+    if (row) row.style.display = ($('proj-recur-freq')?.value === 'weekly') ? '' : 'none';
     planHint();
   }
   // Días del plan (0 = lunes … 6 = domingo)
@@ -12708,15 +12975,24 @@ const ProjectsModule = (() => {
     const h = $('proj-abrev-hint'); if (!h) return;
     const ab = ($('proj-abrev')?.value || '').trim() || _abrevAuto($('proj-nombre')?.value || '');
     const MES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
-    const d = new Date(), dow = (d.getDay() + 6) % 7;
-    const lun = new Date(d); lun.setDate(d.getDate() - dow);
-    const dom = new Date(lun); dom.setDate(lun.getDate() + 6);
-    const rango = lun.getMonth() === dom.getMonth()
-      ? `${lun.getDate()}–${dom.getDate()} ${MES[dom.getMonth()]}`
-      : `${lun.getDate()} ${MES[lun.getMonth()]} – ${dom.getDate()} ${MES[dom.getMonth()]}`;
+    const freq = $('proj-recur-freq')?.value || 'weekly';
+    const d = new Date();
+    let rango;
+    if (freq === 'monthly') {
+      rango = `${MES[d.getMonth()]} ${d.getFullYear()}`;
+    } else if (freq === 'quarterly') {
+      rango = `T${Math.floor(d.getMonth() / 3) + 1} ${d.getFullYear()}`;
+    } else {
+      const dow = (d.getDay() + 6) % 7;
+      const lun = new Date(d); lun.setDate(d.getDate() - dow);
+      const dom = new Date(lun); dom.setDate(lun.getDate() + 6);
+      rango = lun.getMonth() === dom.getMonth()
+        ? `${lun.getDate()}–${dom.getDate()} ${MES[dom.getMonth()]}`
+        : `${lun.getDate()} ${MES[lun.getMonth()]} – ${dom.getDate()} ${MES[dom.getMonth()]}`;
+    }
     const horas = parseFloat($('proj-plan-horas')?.value) || 0;
     const nd = _planDias.size;
-    const reparto = (horas > 0 && nd > 0)
+    const reparto = (freq === 'weekly' && horas > 0 && nd > 0)
       ? ` · ${(horas / nd).toFixed(1).replace('.0', '')} h/día en ${nd} día${nd > 1 ? 's' : ''}`
       : '';
     // En contratos por horas el cobro se deriva de tarifa × meta (lo pactado), y se
@@ -12880,6 +13156,7 @@ const ProjectsModule = (() => {
             method: 'PATCH', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ cobro_semanal: cobroSem, precio_semanal: precioSem === '' ? null : parseFloat(precioSem), reparto,
               semana_auto: $('proj-semana-auto')?.checked || false, abrev: ($('proj-abrev')?.value || '').trim(),
+              recur_freq: $('proj-recur-freq')?.value || 'weekly',
               plan_dias: [..._planDias].sort((a, b) => a - b).join(','),
               plan_horas: $('proj-plan-horas')?.value || null,
               plan_hora: ($('proj-plan-hora')?.value || '').slice(0, 2) }),
@@ -12933,9 +13210,11 @@ const ProjectsModule = (() => {
 
   return { load, filter, setFilter, setMemberFilter, render, onTipoChange, openDrawer, closeDrawer, save, confirmDelete, setView, switchTab, toggleVerTodo, toggleTaskCobrado, updateTaskMonto, updateDescripcion, addLink, removeLink, _setLinkField, saveLinks, refreshCard, closeQuickClientModal, saveQuickClient, toggleTaskExpand, toggleProjectExpand, openTaskMenu, _onTaskMenuEdit, _onTaskMenuAddSub, _onTaskMenuDelete, openQuickEditPopover, tqpNav, tqpPick, tqpToggleRange, tqpClear, openInlineDate, startInlineSubtask, cancelInlineSubtask, saveInlineSubtask, startEditTask, cancelEditTask, saveEditTask, deleteTaskInline, toggleSubrowExpand, distributeTaskMontos, openLinkForm, cancelLinkForm, saveLinkForm, startLinkEdit, cancelLinkEdit, saveLinkEdit, enterInfoEdit, cancelInfoEdit, saveInfoEdit, toggleInfoExpand,
     onRespChange, onRepartoToggle, repartoIgual, repartoHint: _repartoHint, onCobroSemanalToggle, onSemanaAutoToggle,
-    togglePlanDia, planHint,
+    togglePlanDia, planHint, onRecurFreqChange,
     onHorasFijasToggle, openProjFechas,
-    openConvertToSub, convertToSub, convertToMain };
+    openConvertToSub, convertToSub, convertToMain,
+    openDetail, closeDetail,
+    recNewTpl, recEditTpl, recCancelNew, recCancelEdit, recSaveTpl, recToggleTpl, recDeleteTpl, recGenerarAhora };
 })();
 
 // =================================================================

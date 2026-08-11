@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260810e"/>
+  <link rel="stylesheet" href="style.css?v=20260810f"/>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -636,6 +636,8 @@
             <div id="projects-tbody"></div>
           </div>
         </div>
+        <!-- Vista enfocada de UN proyecto (reemplaza toolbar+lista al abrir) -->
+        <div id="project-detail-view" style="display:none"></div>
       </div>
     </div>
 
@@ -2048,11 +2050,19 @@
 
     <!-- Facturación semanal -->
     <div class="form-row">
-      <label class="proj-share-toggle"><input type="checkbox" id="proj-semana-auto" onchange="ProjectsModule.onSemanaAutoToggle()"> <b>Trabajo semanal</b> — cada domingo se crea la tarea de la semana</label>
+      <label class="proj-share-toggle"><input type="checkbox" id="proj-semana-auto" onchange="ProjectsModule.onSemanaAutoToggle()"> <b>Trabajo recurrente</b> — se crea automáticamente la tarea del período</label>
 
       <div id="proj-semana-cfg" style="display:none">
         <div class="proj-wk">
           <div class="proj-wk__row">
+            <span class="proj-wk__lbl">Repetir</span>
+            <select class="form-input proj-wk__num" id="proj-recur-freq" style="width:150px" onchange="ProjectsModule.onRecurFreqChange()">
+              <option value="weekly">Cada semana</option>
+              <option value="monthly">Cada mes</option>
+              <option value="quarterly">Cada trimestre</option>
+            </select>
+          </div>
+          <div class="proj-wk__row" id="proj-wk-days-row">
             <span class="proj-wk__lbl">Días</span>
             <div class="proj-wk__days" id="proj-plan-dias">
               ${''}<button type="button" class="proj-wk__day" data-d="0" onclick="ProjectsModule.togglePlanDia(0)">L</button><button type="button" class="proj-wk__day" data-d="1" onclick="ProjectsModule.togglePlanDia(1)">M</button><button type="button" class="proj-wk__day" data-d="2" onclick="ProjectsModule.togglePlanDia(2)">X</button><button type="button" class="proj-wk__day" data-d="3" onclick="ProjectsModule.togglePlanDia(3)">J</button><button type="button" class="proj-wk__day" data-d="4" onclick="ProjectsModule.togglePlanDia(4)">V</button><button type="button" class="proj-wk__day" data-d="5" onclick="ProjectsModule.togglePlanDia(5)">S</button><button type="button" class="proj-wk__day" data-d="6" onclick="ProjectsModule.togglePlanDia(6)">D</button>
@@ -2630,7 +2640,7 @@
 })();
 </script>
 
-<script src="app.js?v=20260810e"></script>
+<script src="app.js?v=20260810f"></script>
 <div id="task-quick-edit" style="display:none;position:fixed;z-index:9999"></div>
 </body>
 </html>

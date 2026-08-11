@@ -7024,6 +7024,20 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 }
 .projects-list-row .client-badge::before { width: 6px; height: 6px; }
 
+/* ── Vista enfocada de un solo proyecto ─────────────
+   Reemplaza el toolbar+lista del Timeline al abrir un proyecto puntual
+   (desde el Dashboard, Slack, etc.) — reusa .pjcard tal cual, solo agrega
+   el botón de volver arriba y le da ancho completo. */
+#project-detail-view { display: flex; flex-direction: column; gap: 12px; }
+.pjdetail-hd { display: flex; align-items: center; }
+.pjdetail-back {
+  display: flex; align-items: center; gap: 6px;
+  background: none; border: none; color: var(--muted); font-size: .82rem;
+  font-weight: 600; cursor: pointer; padding: 4px 0; font-family: inherit;
+}
+.pjdetail-back:hover { color: var(--brand, #007AFF); }
+.pjdetail-body .pjcard { box-shadow: none; border-color: #EAE7E2; }
+
 /* ── Project card ────────────────────────────────── */
 .pjcard {
   background: var(--white);
@@ -7785,6 +7799,63 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
   border-color: #86EFAC;
   color: #16A34A;
 }
+
+/* ── Finanzas: reparto / rentabilidad / cobros (extensión) ── */
+.pjfin__rep-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.pjfin__rep-chip {
+  font-size: .78rem; color: var(--text2); background: var(--surface2, #F1EFEB);
+  border-radius: var(--r-pill, 999px); padding: 4px 10px;
+}
+.pjfin__rep-chip b { color: var(--text); font-weight: 700; }
+.pjfin__rep-chip--full { color: var(--muted); font-style: italic; }
+.pjfin__rent { display: flex; flex-direction: column; gap: 2px; }
+.pjfin__rent-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 6px 10px; font-size: .8rem; color: var(--text2);
+}
+.pjfin__rent-row b { color: var(--text); }
+.pjfin__cobros { display: flex; flex-direction: column; gap: 2px; }
+.pjfin__cobro-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 10px; border-radius: var(--r-sm, 6px); font-size: .8rem;
+}
+.pjfin__cobro-row:hover { background: var(--surface2, #F1EFEB); }
+.pjfin__cobro-concepto { flex: 1; min-width: 0; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pjfin__cobro-fecha { flex-shrink: 0; color: var(--muted); font-size: .74rem; }
+.pjfin__cobro-monto { flex-shrink: 0; font-weight: 700; color: var(--text); min-width: 70px; text-align: right; }
+.pjfin__cobro-badge {
+  flex-shrink: 0; padding: 2px 8px; border-radius: var(--r-pill, 999px);
+  font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .03em;
+}
+.pjfin__cobro-badge--cobrado   { background: #DCFCE7; color: #16A34A; }
+.pjfin__cobro-badge--pendiente { background: #FEF3C7; color: #B45309; }
+.pjfin__cobro-badge--vencido   { background: #FEE2E2; color: #DC2626; }
+
+/* ── Recurrencia tab ── */
+.pjrec__summary {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px; background: #FAF8F5; border-radius: var(--r-sm, 8px);
+  font-size: .82rem; color: var(--text2);
+}
+.pjrec__summary-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.pjrec__summary-dot--on  { background: #16A34A; }
+.pjrec__summary-dot--off { background: var(--muted); }
+.pjrec__summary .pjfin__gofact { margin-left: auto; }
+.pjrec__tpls { display: flex; flex-direction: column; gap: 2px; }
+.pjrec__tpl-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 10px; border-radius: var(--r-sm, 6px); transition: background .1s;
+}
+.pjrec__tpl-row:hover { background: var(--surface2, #F1EFEB); }
+.pjrec__tpl-row--off { opacity: .55; }
+.pjrec__tpl-toggle {
+  flex-shrink: 0; width: 20px; height: 20px; border: none; background: none;
+  color: #16A34A; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
+.pjrec__tpl-row--off .pjrec__tpl-toggle { color: var(--muted); }
+.pjrec__tpl-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.pjrec__tpl-titulo { font-size: .82rem; color: var(--text); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pjrec__tpl-meta { font-size: .72rem; color: var(--muted); }
 
 /* ─────────── MORE INFO tab ──────────────────────── */
 /* ── Más info — nota pública ── */
