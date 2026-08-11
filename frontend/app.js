@@ -23239,6 +23239,7 @@ const SlackChat = (() => {
     if (!cont) return;
     if (_ws.length < 2) { cont.innerHTML = ''; cont.classList.add('hidden'); return; }
     cont.classList.remove('hidden');
+    const ini = t => (String(t || '?').trim()[0] || '?').toUpperCase();
     cont.innerHTML = _ws.map(w => `
       <button class="rchat-ws-b${String(_mWsAct) === String(w.id) ? ' on' : ''}" title="${esc(w.etiqueta || w.team_name || 'Slack')}" onclick="SlackChat.miniIrA(${w.id})">
         ${w.icon_url ? `<img src="${esc(w.icon_url)}" alt="">` : `<span>${esc(ini(w.etiqueta || w.team_name))}</span>`}
