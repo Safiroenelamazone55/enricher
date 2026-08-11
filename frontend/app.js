@@ -22555,7 +22555,9 @@ const SlackChat = (() => {
       let entry = _docPreviewCache[f.id];
       if (!entry) {
         const url = _fileUrl(f, wsId);
-        const buf = await (await apiFetch(url)).arrayBuffer();
+        const r = await apiFetch(url);
+        if (!r.ok) throw new Error((await r.json().catch(() => null))?.error || `HTTP ${r.status}`);
+        const buf = await r.arrayBuffer();
         entry = { kind, nombre: f.name || 'archivo', src: url };
         if (kind === 'xlsx') {
           const wb = XLSX.read(buf, { type: 'array' });
