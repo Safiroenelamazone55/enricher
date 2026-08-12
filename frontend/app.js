@@ -15662,21 +15662,14 @@ ${foot}
   }
   function _coQueueAddForm(row) {
     const rid = row.company_sequence_id;
-    return `<div class="seq-co-form">
+    return `<div class="seq-co-form seq-co-form--compact">
       <div class="seq-co-form__row">
         <input class="form-input" id="coq-nombre-${rid}" placeholder="Nombre *">
         <input class="form-input" id="coq-apellido-${rid}" placeholder="Apellido">
       </div>
       <div class="seq-co-form__row">
         <input class="form-input" id="coq-linkedin-${rid}" placeholder="URL de LinkedIn *">
-      </div>
-      <div class="seq-co-form__row">
         <input class="form-input" id="coq-email-${rid}" placeholder="Email (opcional)">
-      </div>
-      <div class="seq-co-form__acts">
-        <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.coQueueAddCancel()">Cancelar</button>
-        <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.coQueueSave(${rid},'secundario')">＋ Agregar como secundario</button>
-        <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.coQueueSave(${rid},'primario')">＋ Agregar como principal</button>
       </div>
     </div>`;
   }
@@ -15755,7 +15748,6 @@ ${foot}
     const touch = st ? (_TOUCH[st.canal] || _TOUCH.email) : _TOUCH.email;
     const li = _liSalesNavUrl(row.linkedin_sales_nav, row.linkedin);
     const meta = [row.industria, row.tamano && `${row.tamano} emp.`, row.pais].filter(Boolean).join(' · ');
-    const chip = (lbl, val) => val ? `<span class="seqdo-chip"><b>${lbl}:</b> ${esc(val)}</span>` : '';
     const rendered = st ? _seqRenderTpl(st.plantilla, { company: row.nombre, company_domain: row.dominio, company_industry: row.industria, company_size: row.tamano, company_target_tier: row.target_tier, company_segmento: row.segmento }) : '';
     const disp = esc(rendered).replace(/(\{\{[^}]+\}\})/g, '<span class="seqdo-miss">$1</span>').replace(/\n/g, '<br>');
     document.getElementById('seq-co-do-modal')?.remove();
@@ -15767,29 +15759,27 @@ ${foot}
         <div class="seqdo-hd__tt"><div class="seqdo-hd__t">${esc((st && st.titulo) || 'Buscar decisor en LinkedIn')} <b style="color:${touch[1]}">${touch[0]}</b></div><div class="seqdo-hd__s">Empresa · Paso 1</div></div>
         <button class="fin-pi-x" onclick="LeadManagerModule.seqCoDoClose()">✕</button>
       </div>
-      <div class="seqdo-body">
-        <div class="seqdo-contact">
-          <div class="lm-co-logo"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4M10 10h4M10 14h4M10 18h4"/></svg></div>
+      <div class="seqdo-body seqdo-body--co">
+        <div class="seqdo-contact seqdo-contact--co">
+          <div class="lm-co-logo"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4M10 10h4M10 14h4M10 18h4"/></svg></div>
           <div class="seqdo-contact__i">
             <div class="seqdo-name">${esc(row.nombre || row.dominio || '—')}${row.target_tier ? ` <span class="seq-co-card__tier">${esc(row.target_tier)}</span>` : ''}</div>
-            <div class="seqdo-role">${esc(meta) || '—'}</div>
-            <div class="seqdo-chips">${chip('Segmento', row.segmento)}</div>
+            <div class="seqdo-role">${esc(meta) || '—'}${row.segmento ? ` · ${esc(row.segmento)}` : ''}</div>
           </div>
+          ${li ? `<button class="btn btn--primary btn--sm seqdo-li" onclick="LeadManagerModule.seqOpenCompanyLinkedIn(${companySeqId})">LinkedIn (Sales Navigator) ↗</button>` : `<span class="seqdo-nolink">Sin LinkedIn</span>`}
         </div>
-        <div class="seqdo-do">
-          ${li ? `<button class="btn btn--primary btn--sm seqdo-li" onclick="LeadManagerModule.seqOpenCompanyLinkedIn(${companySeqId})">Abrir LinkedIn (Sales Navigator) ↗</button>` : `<span class="seqdo-nolink">Sin LinkedIn en la ficha</span>`}
-        </div>
-        ${st ? `<div class="seqdo-tplwrap">
+        ${(st && st.plantilla) ? `<div class="seqdo-tplwrap">
           <div class="seqdo-tpl-hd"><span>Mensaje del paso</span></div>
-          ${st.plantilla ? `<div class="seqdo-tpl">${disp}</div>` : `<div class="seqdo-tpl seqdo-tpl--empty">Este paso aún no tiene plantilla. <a href="#" onclick="LeadManagerModule.seqDoEditStep(${st.id});return false;">Añádela en el paso</a>.</div>`}
+          <div class="seqdo-tpl seqdo-tpl--slim">${disp}</div>
         </div>` : ''}
-        <div class="seqdo-tplwrap">
-          <div class="seqdo-tpl-hd"><span>＋ Agregar contacto — encontrar al decisor completa el Paso 1</span></div>
-          <div style="padding:12px 14px">${_coQueueAddForm(row)}</div>
-        </div>
+        <div class="seqdo-co-formhint">＋ Agregar contacto — encontrar al decisor completa el Paso 1</div>
+        ${_coQueueAddForm(row)}
       </div>
-      <div class="seqdo-ft">
-        <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.coQueueDiscard(${companySeqId})">No encontré a nadie viable — Descartar</button>
+      <div class="seqdo-ft seqdo-ft--co">
+        <button class="seqdo-discard" onclick="LeadManagerModule.coQueueDiscard(${companySeqId})">No encontré a nadie viable — Descartar</button>
+        <div class="seqdo-ft__spacer"></div>
+        <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.coQueueSave(${companySeqId},'secundario')">＋ Secundario</button>
+        <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.coQueueSave(${companySeqId},'primario')">＋ Agregar como principal</button>
       </div>
     </div>`;
     document.body.appendChild(m);

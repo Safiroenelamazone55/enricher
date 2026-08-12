@@ -11639,6 +11639,18 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .seqdo-tpl code { background: var(--bg2, #F1EFEB); padding: 1px 5px; border-radius: 5px; font-size: .82em; }
 .seqdo-miss { background: #F1EFEB; color: #C4342B; border-radius: 4px; padding: 0 3px; font-weight: 600; }
 .seqdo-ft { display: flex; justify-content: flex-end; gap: 10px; padding: 13px 18px; border-top: 1px solid var(--border, #EAE7E2); }
+/* ── Modal de tarea de empresa (Cola de empresas): más compacto, botones de guardar
+   siempre visibles en el pie fijo (nunca dentro del área con scroll interno). ── */
+.seqdo-body--co { padding: 14px 18px; gap: 10px; }
+.seqdo-contact--co { flex-wrap: wrap; row-gap: 8px; }
+.seqdo-contact--co .seqdo-li { margin-left: auto; white-space: nowrap; }
+.seqdo-co-formhint { font-size: .74rem; color: var(--muted, #B4AFA8); margin-top: -2px; }
+.seq-co-form--compact { gap: 8px; }
+.seqdo-ft--co { align-items: center; flex-wrap: wrap; }
+.seqdo-discard { border: none; background: none; color: var(--muted, #B4AFA8); font-size: .76rem; cursor: pointer; padding: 6px 2px; white-space: nowrap; }
+.seqdo-discard:hover { color: #C4342B; }
+.seqdo-ft__spacer { flex: 1; min-width: 8px; }
+@media (max-width: 480px) { .seqdo-contact--co .seqdo-li { margin-left: 0; } .seqdo-ft--co { justify-content: flex-end; } .seqdo-discard { width: 100%; text-align: left; } }
 /* Variables en el editor de paso */
 .step-vars { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; }
 .step-vars__l { font-size: .72rem; font-weight: 600; color: var(--muted, #B4AFA8); }
