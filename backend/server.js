@@ -3317,6 +3317,7 @@ app.post('/api/lm/companies/bulk-enroll', requireAuth, async (req, res) => {
   try {
     const ok = (await pool.query(`SELECT 1 FROM sequences WHERE id=$1 AND user_id=$2`, [seqId, uid])).rowCount;
     if (!ok) return res.status(404).json({ error: 'Secuencia no encontrada' });
+    if (await _seqHasDirectContacts(uid, seqId)) return res.status(400).json({ error: 'Esta secuencia ya tiene contactos enrolados directamente — no se puede usar como Empresa primero. Elige otra secuencia (o crea una nueva) para la cola de empresas.' });
     const r = await pool.query(`
       INSERT INTO lm_company_sequences (user_id, company_id, sequence_id)
       SELECT $1, c.id, $2 FROM lm_companies c WHERE c.user_id=$1 AND c.id = ANY($3::int[])
@@ -3539,6 +3540,19 @@ function _rollFwd(d, mask) { const x = new Date(d.getTime()); for (let i = 0; i 
 function _nthAllowed(start, k, mask) { let x = _rollFwd(start, mask); for (let c = 0; c < k; c++) { x.setUTCDate(x.getUTCDate() + 1); x = _rollFwd(x, mask); } return x; }
 function _ymd(d) { return d.toISOString().slice(0, 10); }
 
+// ── Modalidad de secuencia: "Empresa primero" (cola) y "Contacto directo" no se mezclan en
+// la misma secuencia. Se infiere del uso real, sin campo nuevo: en cuanto una secuencia tiene
+// un contacto enrolado directamente ya no admite empresas en cola, y viceversa. Los contactos
+// creados vía cola de empresas (fuente='cola_empresas') no cuentan como "enrolamiento directo".
+async function _seqHasDirectContacts(uid, sid) {
+  return !!(await pool.query(`
+    SELECT 1 FROM lm_contact_sequences cs JOIN lm_contacts c ON c.id = cs.contact_id
+     WHERE cs.user_id=$1 AND cs.sequence_id=$2 AND COALESCE(c.fuente,'') <> 'cola_empresas' LIMIT 1
+  `, [uid, sid])).rowCount;
+}
+async function _seqHasCompanyQueue(uid, sid) {
+  return !!(await pool.query(`SELECT 1 FROM lm_company_sequences WHERE user_id=$1 AND sequence_id=$2 LIMIT 1`, [uid, sid])).rowCount;
+}
 async function _lmAddMembership(req, res, kind) {
   const uid = req.workspaceOwnerId;
   const b = req.body || {};
@@ -3552,6 +3566,9 @@ async function _lmAddMembership(req, res, kind) {
   try {
     const ok = (await pool.query(`SELECT 1 FROM ${parent} WHERE id=$1 AND user_id=$2`, [targetId, uid])).rowCount;
     if (!ok) return res.status(404).json({ error: (kind === 'sequence' ? 'Secuencia' : 'Campaña') + ' no encontrada' });
+    if (kind === 'sequence' && await _seqHasCompanyQueue(uid, targetId)) {
+      return res.status(400).json({ error: 'Esta secuencia está en modalidad Empresa primero — agrega contactos desde la pestaña Empresas (＋ Agregar contacto), no por enrolamiento directo.' });
+    }
     if (kind !== 'sequence') {
       const r = await pool.query(`
         INSERT INTO ${table} (user_id, contact_id, ${col})
