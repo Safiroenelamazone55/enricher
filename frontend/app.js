@@ -15074,6 +15074,9 @@ const LeadManagerModule = (() => {
         <div class="lm-sec-actions">
           ${_seqTab === 'aprobar' ? '' : `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqReportOpen(${s.id})">${_ico('down')} Informe PDF</button>`}
           ${_seqTab === 'aprobar' ? '' : `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openSequenceDrawer(${s.id})">Editar</button>`}
+          ${_seqTab === 'aprobar' ? '' : (s.estado === 'pausada'
+            ? `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqResumeAll(${s.id})">► Reactivar todo</button>`
+            : `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqPauseAll(${s.id})">II Pausar todo</button>`)}
           ${_seqTab === 'pasos'
             ? `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openStepDrawer(${s.id})">＋ Añadir paso</button>`
             : _seqTab === 'aprobar' ? '' : `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.seqEnrolOpen(${s.id})">＋ Enrolar contacto</button>`}
@@ -16184,6 +16187,33 @@ ${foot}
   function seqCtPause(seqId, cid) {
     const e = (_seqContacts || []).find(x => x.contact_id === cid); if (!e) return;
     _seqPatch(seqId, cid, { estado: e.estado === 'pausado' ? 'activo' : 'pausado' });
+  }
+  // Pausar la secuencia sola frena el motor pero NO toca a cada contacto — sus
+  // tareas manuales seguían apareciendo en "Tareas". Esto pausa las dos cosas
+  // de una vez (pedido de Jenny: cambio de ICP, quiere silenciar todo TENTSOFT).
+  async function seqPauseAll(id) {
+    if (!confirm('¿Pausar TODA la secuencia?\n\nSe detienen los envíos automáticos y se pausan todos los contactos activos — sus tareas manuales dejan de aparecer en "Tareas". Podrás reactivarlo todo después con "Reactivar todo".')) return;
+    try {
+      const r = await apiFetch(`${API}/sequences/${id}/pause-all`, { method: 'POST' });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Error al pausar todo');
+      const s = _sequences.find(x => x.id === id); if (s) s.estado = 'pausada';
+      _seqContacts = null; await _seqLoadContacts(id);
+      _renderBody();
+      showBanner(`⏸ Secuencia pausada — ${d.paused} contacto${d.paused === 1 ? '' : 's'} pausado${d.paused === 1 ? '' : 's'}`, 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  async function seqResumeAll(id) {
+    if (!confirm('¿Reactivar toda la secuencia?\n\nVuelve a "Activa" y reactiva los contactos que se pausaron con "Pausar todo" (no toca los que están pausados por otra razón, como respuesta o rebote).')) return;
+    try {
+      const r = await apiFetch(`${API}/sequences/${id}/resume-all`, { method: 'POST' });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Error al reactivar todo');
+      const s = _sequences.find(x => x.id === id); if (s) s.estado = 'activa';
+      _seqContacts = null; await _seqLoadContacts(id);
+      _renderBody();
+      showBanner(`► Secuencia reactivada — ${d.resumed} contacto${d.resumed === 1 ? '' : 's'} reactivado${d.resumed === 1 ? '' : 's'}`, 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
   async function seqCtRemove(seqId, cid) {
     if (!confirm('¿Quitar este contacto de la secuencia?')) return;
@@ -21889,7 +21919,7 @@ ${foot}
     openDrawer, closeDrawer, save, confirmDelete, convertToClient,
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
     openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
-    openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, confirmDeleteSequence, seqTab, seqCtAdvance, seqCtPause, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
+    openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, confirmDeleteSequence, seqTab, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
     seqAppAction, seqAppNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, taskApprove,
     seqTaskOpen, seqDoClose, seqDoCopy, seqDoDone, seqDoSkip, seqDoPrev, seqDoEditStep, seqDoExit, seqOpenLinkedIn,
     openStepDrawer, closeStepDrawer, saveStep, confirmDeleteStep, seqInsertVar, stepUseTpl, tzSearch, tzPick, tzBlur,

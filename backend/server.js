@@ -5658,6 +5658,43 @@ app.delete('/api/sequences/:id', requireAuth, async (req, res) => {
   } catch (err) { console.error('[seq] DELETE error:', err.message); res.status(500).json({ error: 'Error al eliminar secuencia' }); }
 });
 
+// ── Pausar/reactivar TODO de una vez ────────────────────────────────
+// Pausar la secuencia por sí sola frena el motor (ver JOIN s.estado='activa' en
+// sendEngine), pero NO toca el estado de cada contacto — sus tareas manuales
+// seguían apareciendo en la pestaña "Tareas". Esto pausa ambas cosas juntas.
+// paused_reason='pausada_manual' marca CUÁLES se pausaron por esto (a diferencia
+// de los que ya estaban pausados por respuesta/rebote/dato faltante), para que
+// "reactivar todo" solo revierta lo que esta acción pausó.
+app.post('/api/sequences/:id/pause-all', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId;
+  try {
+    const { rows: sRows } = await pool.query(
+      `UPDATE sequences SET estado='pausada', updated_at=NOW() WHERE id=$1 AND user_id=$2 RETURNING id`,
+      [req.params.id, uid]);
+    if (!sRows.length) return res.status(404).json({ error: 'Secuencia no encontrada' });
+    const { rowCount } = await pool.query(
+      `UPDATE lm_contact_sequences SET estado='pausado', paused_reason='pausada_manual'
+        WHERE user_id=$1 AND sequence_id=$2 AND estado='activo'`,
+      [uid, req.params.id]);
+    res.json({ ok: true, paused: rowCount });
+  } catch (err) { console.error('[seq] pause-all error:', err.message); res.status(500).json({ error: 'Error al pausar todo' }); }
+});
+app.post('/api/sequences/:id/resume-all', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId;
+  try {
+    const { rows: sRows } = await pool.query(
+      `UPDATE sequences SET estado='activa', updated_at=NOW() WHERE id=$1 AND user_id=$2 RETURNING id`,
+      [req.params.id, uid]);
+    if (!sRows.length) return res.status(404).json({ error: 'Secuencia no encontrada' });
+    // Solo reactiva lo que "Pausar todo" pausó — no toca pausas por respuesta/rebote/dato faltante/manuales de antes.
+    const { rowCount } = await pool.query(
+      `UPDATE lm_contact_sequences SET estado='activo', paused_reason='', next_action_at=NOW()
+        WHERE user_id=$1 AND sequence_id=$2 AND estado='pausado' AND paused_reason='pausada_manual'`,
+      [uid, req.params.id]);
+    res.json({ ok: true, resumed: rowCount });
+  } catch (err) { console.error('[seq] resume-all error:', err.message); res.status(500).json({ error: 'Error al reactivar todo' }); }
+});
+
 app.get('/api/sequence-steps', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(`SELECT * FROM sequence_steps WHERE user_id=$1 ORDER BY dia ASC, orden ASC, id ASC`, [req.workspaceOwnerId]);
