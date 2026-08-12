@@ -15506,9 +15506,10 @@ ${foot}
     }
     if (_seqTab === 'tareas') {
       const list = Array.isArray(_seqContacts) ? _seqContacts : null;
-      if (list === null) return `<div class="cp-empty2" style="padding:22px">Cargando…</div>`;
+      const cosList = Array.isArray(_seqPendingCos) ? _seqPendingCos : null;
+      if (list === null || cosList === null) return `<div class="cp-empty2" style="padding:22px">Cargando…</div>`;
       const today = new Date(new Date().toDateString());
-      const tasks = _seqTasks(id);
+      const tasks = _seqTasks(id).map(t => ({ ...t, kind: 'contact' })).concat(_seqCoTasks(id));
       if (!tasks.length) {
         const steps = _seqSteps(id);
         const activos = list.filter(e => e.estado === 'activo');
@@ -15549,11 +15550,13 @@ ${foot}
       const nextLine = future.length ? `<div class="seq-next">${NI('calendar', 12)} Siguiente tarea: <b>${_relDay(future[0].due)}</b>${future.length > 1 ? ` · +${future.length - 1} más` : ''}</div>` : '';
       const canalLbl = _seqTaskCanal ? ` de ${_TOUCH[_seqTaskCanal][0]}` : '';
       const dueLbl = _seqTaskDue === 'over' ? ' vencidas' : _seqTaskDue === 'today' ? ' de hoy' : '';
+      const _startArgs = visibles.length ? (visibles[0].kind === 'company' ? `LeadManagerModule.seqCoTaskOpen(${id},${visibles[0].row.company_sequence_id})` : `LeadManagerModule.seqTaskOpen(${id},${visibles[0].e.contact_id})`) : '';
       const head = visibles.length
-        ? `<div class="seq-tasks-hd">${visibles.length} ${visibles.length === 1 ? 'tarea' : 'tareas'}${canalLbl}${dueLbl} por hacer<button class="seq-tasks-start" onclick="LeadManagerModule.seqTaskOpen(${id},${visibles[0].e.contact_id})">▶ Empezar</button></div>`
+        ? `<div class="seq-tasks-hd">${visibles.length} ${visibles.length === 1 ? 'tarea' : 'tareas'}${canalLbl}${dueLbl} por hacer<button class="seq-tasks-start" onclick="${_startArgs}">▶ Empezar</button></div>`
         : `<div class="seq-tasks-hd seq-tasks-hd--none">Sin tareas${canalLbl}${dueLbl} para hoy</div>`;
-      const grp = (showOver && over.length ? `<div class="lm-tsec-h lm-tsec-h--over"><span class="lm-tsec-h__dot"></span>Vencidas<span class="lm-tsec-h__n">${over.length}</span></div><div class="seq-tasks">${over.map(t => _seqTaskRow(t, id, today)).join('')}</div>` : '')
-                + (showToday && hoy.length ? `<div class="lm-tsec-h lm-tsec-h--today"><span class="lm-tsec-h__dot"></span>Hoy<span class="lm-tsec-h__n">${hoy.length}</span></div><div class="seq-tasks">${hoy.map(t => _seqTaskRow(t, id, today)).join('')}</div>` : '');
+      const _tRow = t => t.kind === 'company' ? _seqCoTaskRow(t, id, today) : _seqTaskRow(t, id, today);
+      const grp = (showOver && over.length ? `<div class="lm-tsec-h lm-tsec-h--over"><span class="lm-tsec-h__dot"></span>Vencidas<span class="lm-tsec-h__n">${over.length}</span></div><div class="seq-tasks">${over.map(_tRow).join('')}</div>` : '')
+                + (showToday && hoy.length ? `<div class="lm-tsec-h lm-tsec-h--today"><span class="lm-tsec-h__dot"></span>Hoy<span class="lm-tsec-h__n">${hoy.length}</span></div><div class="seq-tasks">${hoy.map(_tRow).join('')}</div>` : '');
       return `${_seqApRowsHtml(id)}${_acceptCtaHtml(id)}${fltRow}${head}${grp}${nextLine}`;
     }
     if (_seqTab === 'envios') {
@@ -15636,25 +15639,23 @@ ${foot}
     const list = Array.isArray(_seqPendingCos) ? _seqPendingCos : null;
     if (list === null) return `<div class="cp-empty2" style="padding:22px">Cargando…</div>`;
     if (!list.length) return _empty('contacts', 'Sin empresas en cola', 'Ve a Empresas, filtra tu lista calificada (p. ej. por Target Tier) y usa "＋ Enrolar en secuencia" para mandarlas acá.', 'Ir a Empresas', `LeadManagerModule.go('companies')`);
+    const steps = _seqSteps(id);
     return `<div class="seq-co-hint">Para cada empresa: abre su LinkedIn, encuentra al decisor, agrégalo — el Paso 1 (invitación) queda registrado solo.</div>
-      <div class="seq-co-list">${list.map(_coQueueRow).join('')}</div>`;
+      <div class="clients-table-wrap"><table class="clients-table lm-dt"><thead><tr><th>Empresa</th><th>Progreso</th><th>Estado</th><th></th></tr></thead><tbody>${list.map(row => _coQueueRow(row, id, steps)).join('')}</tbody></table></div>`;
   }
-  function _coQueueRow(row) {
-    const meta = [row.industria, row.tamano && `${row.tamano} emp.`, row.pais].filter(Boolean).join(' · ');
+  function _coQueueRow(row, seqId, steps) {
     const li = (row.linkedin_sales_nav || row.linkedin || '').trim();
-    const open = _seqCoAddOpen === row.company_sequence_id;
-    return `<div class="seq-co-card">
-      <div class="seq-co-card__hd">
-        <div class="seq-co-card__nm">${esc(row.nombre || row.dominio || '—')}${row.target_tier ? `<span class="seq-co-card__tier">${esc(row.target_tier)}</span>` : ''}</div>
-        ${meta ? `<div class="seq-co-card__meta">${esc(meta)}</div>` : ''}
-      </div>
-      <div class="seq-co-card__acts">
-        ${li ? `<a class="btn btn--primary btn--sm" href="${esc(li)}" target="_blank" rel="noopener">LinkedIn ↗</a>` : `<span class="seq-co-card__noli">Sin LinkedIn en la ficha</span>`}
-        ${open ? '' : `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.coQueueAddOpen(${row.company_sequence_id})">＋ Agregar contacto</button>`}
-        ${open ? '' : `<button class="seq-co-card__discard" title="No encontré a nadie viable" onclick="LeadManagerModule.coQueueDiscard(${row.company_sequence_id})">Descartar</button>`}
-      </div>
-      ${open ? _coQueueAddForm(row) : ''}
-    </div>`;
+    const N = steps.length;
+    const stTitle = N ? (steps[0].titulo || (_TOUCH[steps[0].canal] || _TOUCH.email)[0]) : '—';
+    return `<tr class="clients-table__row" onclick="LeadManagerModule.seqCoTaskOpen(${seqId},${row.company_sequence_id})" style="cursor:pointer">
+      <td><div class="client-cell-name"><div class="lm-co-logo"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4M10 10h4M10 14h4M10 18h4"/></svg></div><div><div class="client-nombre">${esc(row.nombre || row.dominio || '—')}${row.target_tier ? `<span class="seq-co-card__tier" style="margin-left:6px">${esc(row.target_tier)}</span>` : ''}</div>${row.industria ? `<div class="client-empresa">${esc([row.industria, row.tamano && `${row.tamano} emp.`, row.pais].filter(Boolean).join(' · '))}</div>` : ''}</div></div></td>
+      <td class="client-meta"><div class="seq-prog"><div class="seq-prog__bar"><span style="width:0%"></span></div><span class="seq-prog__t">Paso 1/${N || '—'} · ${esc(stTitle)}</span></div></td>
+      <td><span class="client-badge" style="background:#F1EFEB;color:#92400E">Pendiente</span></td>
+      <td class="lm-dt-act" onclick="event.stopPropagation()">
+        ${li ? `<a class="lm-mini-b" title="Abrir LinkedIn" href="${esc(li)}" target="_blank" rel="noopener">in</a>` : ''}
+        <button class="lm-mini-b" title="No encontré a nadie viable" onclick="LeadManagerModule.coQueueDiscard(${row.company_sequence_id})">✕</button>
+      </td>
+    </tr>`;
   }
   function _coQueueAddForm(row) {
     const rid = row.company_sequence_id;
@@ -15677,7 +15678,7 @@ ${foot}
     </div>`;
   }
   function coQueueAddOpen(rowId) { _seqCoAddOpen = rowId; _renderBody(); setTimeout(() => $(`coq-nombre-${rowId}`)?.focus(), 60); }
-  function coQueueAddCancel() { _seqCoAddOpen = null; _renderBody(); }
+  function coQueueAddCancel() { _seqCoAddOpen = null; if (_seqCoDo) seqCoDoClose(); else _renderBody(); }
   async function coQueueSave(rowId, role) {
     const nombre = ($(`coq-nombre-${rowId}`)?.value || '').trim();
     const linkedin = ($(`coq-linkedin-${rowId}`)?.value || '').trim();
@@ -15695,6 +15696,7 @@ ${foot}
       if (!r.ok) throw new Error(d.error || 'Error al agregar');
       showBanner(`✓ ${d.nombre} agregado como ${role === 'primario' ? 'principal — Paso 1 registrado' : 'secundario'}`, 'success');
       _seqCoAddOpen = null;
+      if (_seqCoDo && _seqCoDo.companySeqId === rowId) seqCoDoClose();
       await _reloadContacts();
       if (role === 'primario') { _seqPendingCos = (_seqPendingCos || []).filter(x => x.company_sequence_id !== rowId); }
       _seqContacts = null; await _seqLoadContacts(_activeSeq);
@@ -15707,8 +15709,78 @@ ${foot}
       const r = await apiFetch(`${API}/lm/company-sequences/${rowId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ estado: 'descartada' }) });
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Error');
       _seqPendingCos = (_seqPendingCos || []).filter(x => x.company_sequence_id !== rowId);
+      if (_seqCoDo && _seqCoDo.companySeqId === rowId) seqCoDoClose();
       _renderBody();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  // ── Modal de tarea "Paso 1" para empresa — encontrar al decisor en LinkedIn y agregarlo
+  // ES completar la tarea (reusa /convert, ya arranca Paso 2 si se agrega como principal). ──
+  let _seqCoDo = null;   // { seqId, companySeqId }
+  function seqCoTaskOpen(seqId, companySeqId) {
+    if (!companySeqId) return;
+    _seqCoDo = { seqId, companySeqId };
+    _seqCoDoRender();
+  }
+  function seqCoDoClose() { document.getElementById('seq-co-do-modal')?.remove(); _seqCoDo = null; }
+  function seqOpenCompanyLinkedIn(companySeqId) {
+    const row = (_seqPendingCos || []).find(x => x.company_sequence_id === companySeqId);
+    const url = row && (row.linkedin_sales_nav || row.linkedin); if (!url) return;
+    try {
+      const w = screen.availWidth || window.innerWidth || 1280, h = screen.availHeight || window.innerHeight || 800;
+      const pw = Math.max(560, Math.floor(w / 2));
+      const win = window.open(url, 'nova_linkedin_co', `width=${pw},height=${h},left=${w - pw},top=0`);
+      if (win) win.focus(); else window.open(url, '_blank');
+    } catch (e) { window.open(url, '_blank'); }
+  }
+  function _seqCoDoRender() {
+    if (!_seqCoDo) return;
+    const { seqId, companySeqId } = _seqCoDo;
+    const row = (_seqPendingCos || []).find(x => x.company_sequence_id === companySeqId);
+    if (!row) { seqCoDoClose(); return; }
+    const steps = _seqSteps(seqId);
+    const st = steps[0] || null;
+    const touch = st ? (_TOUCH[st.canal] || _TOUCH.email) : _TOUCH.email;
+    const li = (row.linkedin_sales_nav || row.linkedin || '').trim();
+    const meta = [row.industria, row.tamano && `${row.tamano} emp.`, row.pais].filter(Boolean).join(' · ');
+    const chip = (lbl, val) => val ? `<span class="seqdo-chip"><b>${lbl}:</b> ${esc(val)}</span>` : '';
+    const rendered = st ? _seqRenderTpl(st.plantilla, { company: row.nombre, company_domain: row.dominio, company_industry: row.industria, company_size: row.tamano, company_target_tier: row.target_tier, company_segmento: row.segmento }) : '';
+    const disp = esc(rendered).replace(/(\{\{[^}]+\}\})/g, '<span class="seqdo-miss">$1</span>').replace(/\n/g, '<br>');
+    document.getElementById('seq-co-do-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'seq-co-do-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = ev => { if (ev.target === m) seqCoDoClose(); };
+    m.innerHTML = `<div class="fin-pi-box seqdo-box">
+      <div class="seqdo-hd">
+        <span class="seqdo-ico" style="background:${touch[1]}1a;color:${touch[1]}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${touch[2]}</svg></span>
+        <div class="seqdo-hd__tt"><div class="seqdo-hd__t">${esc((st && st.titulo) || 'Buscar decisor en LinkedIn')} <b style="color:${touch[1]}">${touch[0]}</b></div><div class="seqdo-hd__s">Empresa · Paso 1</div></div>
+        <button class="fin-pi-x" onclick="LeadManagerModule.seqCoDoClose()">✕</button>
+      </div>
+      <div class="seqdo-body">
+        <div class="seqdo-contact">
+          <div class="lm-co-logo"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4M10 10h4M10 14h4M10 18h4"/></svg></div>
+          <div class="seqdo-contact__i">
+            <div class="seqdo-name">${esc(row.nombre || row.dominio || '—')}${row.target_tier ? ` <span class="seq-co-card__tier">${esc(row.target_tier)}</span>` : ''}</div>
+            <div class="seqdo-role">${esc(meta) || '—'}</div>
+            <div class="seqdo-chips">${chip('Segmento', row.segmento)}</div>
+          </div>
+        </div>
+        <div class="seqdo-do">
+          ${li ? `<button class="btn btn--primary btn--sm seqdo-li" onclick="LeadManagerModule.seqOpenCompanyLinkedIn(${companySeqId})">Abrir LinkedIn (Sales Navigator) ↗</button>` : `<span class="seqdo-nolink">Sin LinkedIn en la ficha</span>`}
+        </div>
+        ${st ? `<div class="seqdo-tplwrap">
+          <div class="seqdo-tpl-hd"><span>Mensaje del paso</span></div>
+          ${st.plantilla ? `<div class="seqdo-tpl">${disp}</div>` : `<div class="seqdo-tpl seqdo-tpl--empty">Este paso aún no tiene plantilla. <a href="#" onclick="LeadManagerModule.seqDoEditStep(${st.id});return false;">Añádela en el paso</a>.</div>`}
+        </div>` : ''}
+        <div class="seqdo-tplwrap">
+          <div class="seqdo-tpl-hd"><span>＋ Agregar contacto — encontrar al decisor completa el Paso 1</span></div>
+          <div style="padding:12px 14px">${_coQueueAddForm(row)}</div>
+        </div>
+      </div>
+      <div class="seqdo-ft">
+        <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.coQueueDiscard(${companySeqId})">No encontré a nadie viable — Descartar</button>
+      </div>
+    </div>`;
+    document.body.appendChild(m);
+    setTimeout(() => $(`coq-nombre-${companySeqId}`)?.focus(), 60);
   }
   async function _reloadContacts() {
     try { const r = await apiFetch(`${API}/lm/contacts`); if (r && r.ok) { const d = await r.json(); if (Array.isArray(d)) _contacts = d; } } catch (e) {}
@@ -16170,7 +16242,7 @@ ${foot}
     try { const r = await apiFetch(`${API}/lm/sequences/${id}/metrics`); _seqMetrics = (r && r.ok) ? await r.json() : {}; } catch { _seqMetrics = {}; }
     if (_section === 'sequence' && _activeSeq === id && _seqTab === 'metricas') { const el = document.getElementById('seq-tabwrap'); if (el) el.innerHTML = _seqTabContent(id); }
   }
-  function seqTab(t) { _seqTab = t; if (t === 'aprobar') _seqAppIdx = 0; _renderBody(); if ((t === 'contactos' || t === 'tareas') && !Array.isArray(_seqContacts)) _seqLoadContacts(_activeSeq); if (t === 'empresas' && !Array.isArray(_seqPendingCos)) _seqLoadPendingCos(_activeSeq); if (t === 'metricas') { if (_seqMetrics === null) _seqLoadMetrics(_activeSeq); _seqAb = null; _seqLoadAb(_activeSeq); } if (t === 'envios') { _seqMsgs = null; _seqLoadMsgs(_activeSeq); } if (t === 'aprobar' || t === 'tareas') { _seqApprovals = null; _seqLoadApprovals(_activeSeq); } }
+  function seqTab(t) { _seqTab = t; if (t === 'aprobar') _seqAppIdx = 0; _renderBody(); if ((t === 'contactos' || t === 'tareas') && !Array.isArray(_seqContacts)) _seqLoadContacts(_activeSeq); if ((t === 'empresas' || t === 'tareas') && !Array.isArray(_seqPendingCos)) _seqLoadPendingCos(_activeSeq); if (t === 'metricas') { if (_seqMetrics === null) _seqLoadMetrics(_activeSeq); _seqAb = null; _seqLoadAb(_activeSeq); } if (t === 'envios') { _seqMsgs = null; _seqLoadMsgs(_activeSeq); } if (t === 'aprobar' || t === 'tareas') { _seqApprovals = null; _seqLoadApprovals(_activeSeq); } }
   // Filas de aprobación DENTRO de la pestaña Tareas: el email automático se revisa,
   // edita y aprueba aquí mismo — no es una tarea de "marcar hecho".
   function _seqApRowsHtml(seqId) {
@@ -16432,6 +16504,29 @@ ${foot}
       const due = _dueForEff(steps, e.contact_id, eff, e.enrolled_at, e.paso_date, mask);
       return { e, st, due };
     }).filter(Boolean).sort((a, b) => a.due - b.due || (a.st.hora || '99:99').localeCompare(b.st.hora || '99:99'));
+  }
+  // Cola de empresas: cada fila pendiente ES la tarea "Paso 1" (buscar y agregar al decisor)
+  // — mismo shape {st, due} que _seqTasks para reusar canal-chips/orden/agrupado sin duplicar esa lógica.
+  function _seqCoTasks(id) {
+    const list = Array.isArray(_seqPendingCos) ? _seqPendingCos : [];
+    const steps = _seqSteps(id);
+    if (!steps.length || !list.length) return [];
+    const st = steps[0];
+    return list.map(row => {
+      const d = row.created_at ? new Date(row.created_at) : new Date();
+      return { kind: 'company', row, st, due: new Date(d.toDateString()) };
+    }).sort((a, b) => a.due - b.due);
+  }
+  function _seqCoTaskRow(t, seqId, today) {
+    const { row, st, due } = t;
+    const touch = _TOUCH[st.canal] || _TOUCH.email;
+    const overdue = due < today; const isToday = due.getTime() === today.getTime();
+    return `<div class="seq-task${overdue ? ' over' : ''}${isToday ? ' today' : ''}" onclick="LeadManagerModule.seqCoTaskOpen(${seqId},${row.company_sequence_id})">
+      <span class="seq-task__ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${touch[2]}</svg></span>
+      <div class="seq-task__body"><div class="seq-task__t">${esc(st.titulo || 'Buscar decisor en LinkedIn')}<span class="seq-task__ch">${touch[0]}</span></div><div class="seq-task__who">${esc(row.nombre || row.dominio || '—')}${row.target_tier ? ` · ${esc(row.target_tier)}` : ''}</div></div>
+      ${_taskTimeHtml(st, seqId, null)}
+      <span class="seq-task__go">Hacer tarea ›</span>
+    </div>`;
   }
   // Etiqueta de hora: la hora fija del paso, o si no hay, la sugerida por la zona del PROSPECTO
   // (derivada de su estado si se puede — campañas US multi-estado — o la de la secuencia).
@@ -22387,6 +22482,7 @@ ${foot}
     cpResumeSeq, cpFocusField, cpOpenRegisterReply, cpSaveRegisterReply,
     openCompany, closeCompany, saveCompany, deleteCompany, filterCompanies, toggleCo, toggleCoAll, clearCoSel, toggleCoSelMode, bulkDeleteCompanies, coEnrolOpen, coEnrolFilter, coEnrolPick,
     coQueueAddOpen, coQueueAddCancel, coQueueSave, coQueueDiscard,
+    seqCoTaskOpen, seqCoDoClose, seqOpenCompanyLinkedIn,
     openDrawer, closeDrawer, save, confirmDelete, convertToClient,
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
     openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
