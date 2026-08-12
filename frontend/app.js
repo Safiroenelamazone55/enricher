@@ -15647,7 +15647,7 @@ ${foot}
       <div class="clients-table-wrap"><table class="clients-table lm-dt"><thead><tr><th>Empresa</th><th>Progreso</th><th>Estado</th><th></th></tr></thead><tbody>${list.map(row => _coQueueRow(row, id, steps)).join('')}</tbody></table></div>`;
   }
   function _coQueueRow(row, seqId, steps) {
-    const li = (row.linkedin_sales_nav || row.linkedin || '').trim();
+    const li = _liSalesNavUrl(row.linkedin_sales_nav, row.linkedin);
     const N = steps.length;
     const stTitle = N ? (steps[0].titulo || (_TOUCH[steps[0].canal] || _TOUCH.email)[0]) : '—';
     return `<tr class="clients-table__row" onclick="LeadManagerModule.seqCoTaskOpen(${seqId},${row.company_sequence_id})" style="cursor:pointer">
@@ -15725,9 +15725,19 @@ ${foot}
     _seqCoDoRender();
   }
   function seqCoDoClose() { document.getElementById('seq-co-do-modal')?.remove(); _seqCoDo = null; }
+  // Si no hay LinkedIn Sales Navigator explícito pero el LinkedIn normal es
+  // linkedin.com/company/<id numérico>, Sales Navigator usa el MISMO id bajo
+  // /sales/company/<id> — se deriva solo, sin pedirle a Jenny que llene el campo a mano.
+  function _liSalesNavUrl(salesNav, linkedin) {
+    const explicit = (salesNav || '').trim();
+    if (explicit) return explicit;
+    const li = (linkedin || '').trim();
+    const m = li.match(/linkedin\.com\/company\/(\d+)\/?/i);
+    return m ? `https://www.linkedin.com/sales/company/${m[1]}` : li;
+  }
   function seqOpenCompanyLinkedIn(companySeqId) {
     const row = (_seqPendingCos || []).find(x => x.company_sequence_id === companySeqId);
-    const url = row && (row.linkedin_sales_nav || row.linkedin); if (!url) return;
+    const url = row && _liSalesNavUrl(row.linkedin_sales_nav, row.linkedin); if (!url) return;
     try {
       const w = screen.availWidth || window.innerWidth || 1280, h = screen.availHeight || window.innerHeight || 800;
       const pw = Math.max(560, Math.floor(w / 2));
@@ -15743,7 +15753,7 @@ ${foot}
     const steps = _seqSteps(seqId);
     const st = steps[0] || null;
     const touch = st ? (_TOUCH[st.canal] || _TOUCH.email) : _TOUCH.email;
-    const li = (row.linkedin_sales_nav || row.linkedin || '').trim();
+    const li = _liSalesNavUrl(row.linkedin_sales_nav, row.linkedin);
     const meta = [row.industria, row.tamano && `${row.tamano} emp.`, row.pais].filter(Boolean).join(' · ');
     const chip = (lbl, val) => val ? `<span class="seqdo-chip"><b>${lbl}:</b> ${esc(val)}</span>` : '';
     const rendered = st ? _seqRenderTpl(st.plantilla, { company: row.nombre, company_domain: row.dominio, company_industry: row.industria, company_size: row.tamano, company_target_tier: row.target_tier, company_segmento: row.segmento }) : '';
@@ -21256,7 +21266,7 @@ ${foot}
   function _coRow(c) {
     const dom = c.dominio || '';
     const name = c.nombre || dom || '—';
-    const li = c.linkedin_sales_nav || c.linkedin || '';
+    const li = _liSalesNavUrl(c.linkedin_sales_nav, c.linkedin);
     return `<tr class="clients-table__row${_coSel.has(c.id) ? ' sel' : ''}" onclick="LeadManagerModule.openCompany(${c.id})" style="cursor:pointer">
       <td class="lm-ck-col" onclick="event.stopPropagation()"><input type="checkbox" class="lm-ck" ${_coSel.has(c.id) ? 'checked' : ''} onclick="LeadManagerModule.toggleCo(event,${c.id})"></td>
       <td><div class="client-cell-name"><div class="lm-co-logo"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4M10 10h4M10 14h4M10 18h4"/></svg></div><div><div class="client-nombre">${esc(name)}${li ? `<a class="lm-co-li" href="${esc(li)}" target="_blank" rel="noopener" title="Abrir LinkedIn" onclick="event.stopPropagation()">in</a>` : ''}</div>${dom ? `<div class="client-empresa">${esc(dom)}</div>` : ''}</div></div></td>
