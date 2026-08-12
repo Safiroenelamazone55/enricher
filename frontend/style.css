@@ -11370,6 +11370,8 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 .lm-emp-chip { display: inline-flex; align-items: center; background: var(--brand-ll, #F1EFEB); color: var(--brand-d, #0062CC); font-weight: 600; font-size: .74rem; border-radius: 6px; padding: 2px 8px; max-width: 190px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lm-cnt-chip { display: inline-flex; min-width: 22px; justify-content: center; background: var(--bg, #F1EFEB); color: var(--text2, #45586A); font-weight: 700; font-size: .72rem; border-radius: 999px; padding: 1px 8px; border: 1px solid var(--border, #EAE7E2); }
 .lm-co-logo { width: 34px; height: 34px; border-radius: 9px; background: linear-gradient(135deg, var(--brand, #007AFF), var(--brand-d, #0062CC)); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: .9rem; flex-shrink: 0; }
+.lm-co-li { display: inline-flex; align-items: center; justify-content: center; width: 15px; height: 15px; margin-left: 6px; border-radius: 3px; background: #0A66C2; color: #fff; font-size: .58rem; font-weight: 800; text-decoration: none; vertical-align: middle; }
+.lm-co-li:hover { background: #004182; }
 .lm-dt-act { width: 44px; text-align: right; }
 .lm-mini-x { border: none; background: none; color: #CFCAC3; cursor: pointer; font-size: 14px; line-height: 1; padding: 4px 6px; border-radius: 6px; opacity: 0; transition: opacity .12s, color .12s, background .12s; }
 .clients-table__row:hover .lm-mini-x { opacity: 1; }
@@ -11529,6 +11531,22 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .seq-tasks-start { margin-left: auto; border: none; background: var(--brand, #007AFF); color: #fff; font-weight: 700; font-size: .8rem; padding: 7px 14px; border-radius: 9px; cursor: pointer; }
 .seq-tasks-start:hover { background: var(--brand-d, #0062CC); }
 .seq-tasks-hd--none { color: var(--muted, #B4AFA8); }
+/* Cola de empresas ("empresa primero" — Empresas → Enrolar en secuencia → pestaña Empresas) */
+.seq-co-hint { font-size: .8rem; color: var(--muted, #B4AFA8); margin-bottom: 12px; }
+.seq-co-list { display: flex; flex-direction: column; gap: 8px; }
+.seq-co-card { background: #fff; border: 1px solid var(--border, #EAE7E2); border-radius: 12px; padding: 12px 14px; }
+.seq-co-card__hd { margin-bottom: 8px; }
+.seq-co-card__nm { font-size: .9rem; font-weight: 700; color: var(--text, #0A2540); display: flex; align-items: center; gap: 8px; }
+.seq-co-card__tier { font-size: .66rem; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--brand-d, #0062CC); background: var(--brand-ll, #F1EFEB); padding: 2px 8px; border-radius: 999px; }
+.seq-co-card__meta { font-size: .78rem; color: var(--text2, #45586A); margin-top: 2px; }
+.seq-co-card__acts { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.seq-co-card__noli { font-size: .78rem; color: var(--muted, #B4AFA8); font-style: italic; }
+.seq-co-card__discard { margin-left: auto; border: none; background: none; color: var(--muted, #B4AFA8); font-size: .78rem; cursor: pointer; padding: 6px 4px; }
+.seq-co-card__discard:hover { color: #C4342B; }
+.seq-co-form { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border, #EAE7E2); display: flex; flex-direction: column; gap: 8px; }
+.seq-co-form__row { display: flex; gap: 8px; }
+.seq-co-form__row .form-input { flex: 1; min-width: 0; }
+.seq-co-form__acts { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
 .seq-tz-line { margin-top: 9px; }
 .seq-tz-chip { display: inline-flex; align-items: center; gap: 5px; background: var(--brand-ll, #F1EFEB); border: 1px solid var(--brand-l, #B8D9FF); color: var(--brand-d, #0062CC); font-size: .76rem; font-weight: 600; padding: 4px 11px; border-radius: 999px; }
 .seq-start-chip { display: inline-flex; align-items: center; gap: 5px; background: #F1EFEB; border: 1px solid #C7D2F0; color: #1E3A8A; font-size: .76rem; font-weight: 600; padding: 4px 11px; border-radius: 999px; margin-right: 6px; }

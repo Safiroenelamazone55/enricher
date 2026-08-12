@@ -14889,7 +14889,7 @@ const LeadManagerModule = (() => {
   function sqSetCli(v) { _sqCli = v; _sqPaint(); }
   function sqSetEst(v) { _sqEst = v; _sqPaint(); }
   function sqSetQ(v) { _sqQ = v; _sqPaint(); }
-  function openSequence(id) { _activeSeq = id; _section = 'sequence'; _seqTab = 'pasos'; _seqContacts = null; _seqMetrics = null; _seqDo = null; _seqCtEstado = ''; _seqTaskCanal = ''; _seqTaskDue = ''; _refreshNav(); _renderBody(); _seqLoadContacts(id); }
+  function openSequence(id) { _activeSeq = id; _section = 'sequence'; _seqTab = 'pasos'; _seqContacts = null; _seqPendingCos = null; _seqCoAddOpen = null; _seqMetrics = null; _seqDo = null; _seqCtEstado = ''; _seqTaskCanal = ''; _seqTaskDue = ''; _refreshNav(); _renderBody(); _seqLoadContacts(id); }
   const _TZ = [
     ['', 'Sin zona (sin sugerencia de hora)'],
     ['Europe/Madrid', 'España — Madrid'], ['America/New_York', 'EE. UU. Este — New York'], ['America/Chicago', 'EE. UU. Centro — Chicago'],
@@ -15084,6 +15084,7 @@ const LeadManagerModule = (() => {
       </div>
       <div class="cp-tabs">
         <button class="cp-tab${_seqTab === 'pasos' ? ' active' : ''}" onclick="LeadManagerModule.seqTab('pasos')">Pasos</button>
+        <button class="cp-tab${_seqTab === 'empresas' ? ' active' : ''}" onclick="LeadManagerModule.seqTab('empresas')">Empresas${Array.isArray(_seqPendingCos) ? ` (${_seqPendingCos.length})` : ''}</button>
         <button class="cp-tab${_seqTab === 'contactos' ? ' active' : ''}" onclick="LeadManagerModule.seqTab('contactos')">Contactos${Array.isArray(_seqContacts) ? ` (${_seqContacts.length})` : ''}</button>
         <button class="cp-tab${_seqTab === 'tareas' ? ' active' : ''}" onclick="LeadManagerModule.seqTab('tareas')">Tareas${_seqTaskN ? ` (${_seqTaskN})` : ''}</button>
         <button class="cp-tab${_seqTab === 'metricas' ? ' active' : ''}" onclick="LeadManagerModule.seqTab('metricas')">Métricas</button>
@@ -15481,6 +15482,7 @@ ${foot}
   }
   function _seqTabContent(id) {
     const steps = _seqSteps(id);
+    if (_seqTab === 'empresas') return _seqEmpresasTab(id);
     if (_seqTab === 'contactos') {
       const list = Array.isArray(_seqContacts) ? _seqContacts : null;
       if (list === null) return `<div class="cp-empty2" style="padding:22px">Cargando…</div>`;
@@ -15614,6 +15616,94 @@ ${foot}
     try { const r = await apiFetch(`${API}/lm/sequences/${id}/contacts`); _seqContacts = (r && r.ok) ? await r.json() : []; } catch { _seqContacts = []; }
     if (!Array.isArray(_seqContacts)) _seqContacts = [];
     if (_section === 'sequence' && _activeSeq === id) _renderBody();
+  }
+
+  // ══════════ Pestaña "Empresas" — cola de empresas, método "empresa primero" ══════════
+  // (pedido de Jenny: trabajar una lista de empresas ya calificadas tipo LinkedIn Sales
+  // Navigator — para cada una, abrir su LinkedIn, encontrar al decisor, agregarlo y de
+  // paso dejar registrada la invitación, sin salir del flujo.)
+  async function _seqLoadPendingCos(id) {
+    try { const r = await apiFetch(`${API}/lm/sequences/${id}/pending-companies`); _seqPendingCos = (r && r.ok) ? await r.json() : []; } catch { _seqPendingCos = []; }
+    if (!Array.isArray(_seqPendingCos)) _seqPendingCos = [];
+    if (_section === 'sequence' && _activeSeq === id) _renderBody();
+  }
+  function _seqEmpresasTab(id) {
+    const list = Array.isArray(_seqPendingCos) ? _seqPendingCos : null;
+    if (list === null) return `<div class="cp-empty2" style="padding:22px">Cargando…</div>`;
+    if (!list.length) return _empty('contacts', 'Sin empresas en cola', 'Ve a Empresas, filtra tu lista calificada (p. ej. por Target Tier) y usa "＋ Enrolar en secuencia" para mandarlas acá.', 'Ir a Empresas', `LeadManagerModule.go('companies')`);
+    return `<div class="seq-co-hint">Para cada empresa: abre su LinkedIn, encuentra al decisor, agrégalo — el Paso 1 (invitación) queda registrado solo.</div>
+      <div class="seq-co-list">${list.map(_coQueueRow).join('')}</div>`;
+  }
+  function _coQueueRow(row) {
+    const meta = [row.industria, row.tamano && `${row.tamano} emp.`, row.pais].filter(Boolean).join(' · ');
+    const li = (row.linkedin || '').trim();
+    const open = _seqCoAddOpen === row.company_sequence_id;
+    return `<div class="seq-co-card">
+      <div class="seq-co-card__hd">
+        <div class="seq-co-card__nm">${esc(row.nombre || row.dominio || '—')}${row.target_tier ? `<span class="seq-co-card__tier">${esc(row.target_tier)}</span>` : ''}</div>
+        ${meta ? `<div class="seq-co-card__meta">${esc(meta)}</div>` : ''}
+      </div>
+      <div class="seq-co-card__acts">
+        ${li ? `<a class="btn btn--primary btn--sm" href="${esc(li)}" target="_blank" rel="noopener">LinkedIn ↗</a>` : `<span class="seq-co-card__noli">Sin LinkedIn en la ficha</span>`}
+        ${open ? '' : `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.coQueueAddOpen(${row.company_sequence_id})">＋ Agregar contacto</button>`}
+        ${open ? '' : `<button class="seq-co-card__discard" title="No encontré a nadie viable" onclick="LeadManagerModule.coQueueDiscard(${row.company_sequence_id})">Descartar</button>`}
+      </div>
+      ${open ? _coQueueAddForm(row) : ''}
+    </div>`;
+  }
+  function _coQueueAddForm(row) {
+    const rid = row.company_sequence_id;
+    return `<div class="seq-co-form">
+      <div class="seq-co-form__row">
+        <input class="form-input" id="coq-nombre-${rid}" placeholder="Nombre *">
+        <input class="form-input" id="coq-apellido-${rid}" placeholder="Apellido">
+      </div>
+      <div class="seq-co-form__row">
+        <input class="form-input" id="coq-linkedin-${rid}" placeholder="URL de LinkedIn *">
+      </div>
+      <div class="seq-co-form__row">
+        <input class="form-input" id="coq-email-${rid}" placeholder="Email (opcional)">
+      </div>
+      <div class="seq-co-form__acts">
+        <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.coQueueAddCancel()">Cancelar</button>
+        <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.coQueueSave(${rid},'secundario')">＋ Agregar como secundario</button>
+        <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.coQueueSave(${rid},'primario')">＋ Agregar como principal</button>
+      </div>
+    </div>`;
+  }
+  function coQueueAddOpen(rowId) { _seqCoAddOpen = rowId; _renderBody(); setTimeout(() => $(`coq-nombre-${rowId}`)?.focus(), 60); }
+  function coQueueAddCancel() { _seqCoAddOpen = null; _renderBody(); }
+  async function coQueueSave(rowId, role) {
+    const nombre = ($(`coq-nombre-${rowId}`)?.value || '').trim();
+    const linkedin = ($(`coq-linkedin-${rowId}`)?.value || '').trim();
+    if (!nombre) { showBanner('El nombre es obligatorio', 'error'); return; }
+    if (!linkedin) { showBanner('El URL de LinkedIn es obligatorio', 'error'); return; }
+    const body = {
+      nombre, role,
+      apellido: ($(`coq-apellido-${rowId}`)?.value || '').trim(),
+      linkedin,
+      email: ($(`coq-email-${rowId}`)?.value || '').trim(),
+    };
+    try {
+      const r = await apiFetch(`${API}/lm/company-sequences/${rowId}/convert`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Error al agregar');
+      showBanner(`✓ ${d.nombre} agregado como ${role === 'primario' ? 'principal — Paso 1 registrado' : 'secundario'}`, 'success');
+      _seqCoAddOpen = null;
+      await _reloadContacts();
+      if (role === 'primario') { _seqPendingCos = (_seqPendingCos || []).filter(x => x.company_sequence_id !== rowId); }
+      _seqContacts = null; await _seqLoadContacts(_activeSeq);
+      _renderBody();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  async function coQueueDiscard(rowId) {
+    if (!confirm('¿Descartar esta empresa? No se encontró a nadie viable — sale de la cola pero la empresa sigue existiendo en Empresas.')) return;
+    try {
+      const r = await apiFetch(`${API}/lm/company-sequences/${rowId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ estado: 'descartada' }) });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Error');
+      _seqPendingCos = (_seqPendingCos || []).filter(x => x.company_sequence_id !== rowId);
+      _renderBody();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
   async function _reloadContacts() {
     try { const r = await apiFetch(`${API}/lm/contacts`); if (r && r.ok) { const d = await r.json(); if (Array.isArray(d)) _contacts = d; } } catch (e) {}
@@ -16075,7 +16165,7 @@ ${foot}
     try { const r = await apiFetch(`${API}/lm/sequences/${id}/metrics`); _seqMetrics = (r && r.ok) ? await r.json() : {}; } catch { _seqMetrics = {}; }
     if (_section === 'sequence' && _activeSeq === id && _seqTab === 'metricas') { const el = document.getElementById('seq-tabwrap'); if (el) el.innerHTML = _seqTabContent(id); }
   }
-  function seqTab(t) { _seqTab = t; if (t === 'aprobar') _seqAppIdx = 0; _renderBody(); if ((t === 'contactos' || t === 'tareas') && !Array.isArray(_seqContacts)) _seqLoadContacts(_activeSeq); if (t === 'metricas') { if (_seqMetrics === null) _seqLoadMetrics(_activeSeq); _seqAb = null; _seqLoadAb(_activeSeq); } if (t === 'envios') { _seqMsgs = null; _seqLoadMsgs(_activeSeq); } if (t === 'aprobar' || t === 'tareas') { _seqApprovals = null; _seqLoadApprovals(_activeSeq); } }
+  function seqTab(t) { _seqTab = t; if (t === 'aprobar') _seqAppIdx = 0; _renderBody(); if ((t === 'contactos' || t === 'tareas') && !Array.isArray(_seqContacts)) _seqLoadContacts(_activeSeq); if (t === 'empresas' && !Array.isArray(_seqPendingCos)) _seqLoadPendingCos(_activeSeq); if (t === 'metricas') { if (_seqMetrics === null) _seqLoadMetrics(_activeSeq); _seqAb = null; _seqLoadAb(_activeSeq); } if (t === 'envios') { _seqMsgs = null; _seqLoadMsgs(_activeSeq); } if (t === 'aprobar' || t === 'tareas') { _seqApprovals = null; _seqLoadApprovals(_activeSeq); } }
   // Filas de aprobación DENTRO de la pestaña Tareas: el email automático se revisa,
   // edita y aprueba aquí mismo — no es una tarea de "marcar hecho".
   function _seqApRowsHtml(seqId) {
@@ -19931,6 +20021,8 @@ ${foot}
   let _seqTaskCanal = ''; // filtro por canal en la pestaña Tareas de la secuencia
   let _seqTaskDue = '';   // filtro por estatus de tarea: '' todas | 'over' vencidas | 'today' hoy
   let _seqContacts = null;
+  let _seqPendingCos = null;  // cola de empresas (Paso 1: falta encontrar a la persona) — pestaña "Empresas"
+  let _seqCoAddOpen = null;   // company_sequence_id con el mini-form de "+ Agregar contacto" abierto
   let _seqMetrics = null;
   let _seqDo = null;          // { seqId, cid } — tarea abierta en el panel de ejecución
   let _seqDoText = '';        // plantilla ya renderizada (texto plano para copiar)
@@ -19981,7 +20073,7 @@ ${foot}
         ['ciudad', 'Ciudad'], ['region', 'Región / Estado'], ['pais', 'País'],
         ['direccion', 'Dirección'], ['codigo_postal', 'Código postal'], ['fundada', 'Año fundación'],
         ['descripcion', 'Descripción'], ['tecnologias', 'Tecnologías'], ['funding', 'Funding'],
-        ['target_tier', 'Target Tier / Focus'], ['notas', 'Notas'],
+        ['target_tier', 'Target Tier / Focus'], ['segmento', 'Segmento / ICP'], ['notas', 'Notas'],
       ] },
     ],
   };
@@ -21001,7 +21093,7 @@ ${foot}
     const name = c.nombre || dom || '—';
     return `<tr class="clients-table__row${_coSel.has(c.id) ? ' sel' : ''}" onclick="LeadManagerModule.openCompany(${c.id})" style="cursor:pointer">
       <td class="lm-ck-col" onclick="event.stopPropagation()"><input type="checkbox" class="lm-ck" ${_coSel.has(c.id) ? 'checked' : ''} onclick="LeadManagerModule.toggleCo(event,${c.id})"></td>
-      <td><div class="client-cell-name"><div class="lm-co-logo"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4M10 10h4M10 14h4M10 18h4"/></svg></div><div><div class="client-nombre">${esc(name)}</div>${dom ? `<div class="client-empresa">${esc(dom)}</div>` : ''}</div></div></td>
+      <td><div class="client-cell-name"><div class="lm-co-logo"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4M10 10h4M10 14h4M10 18h4"/></svg></div><div><div class="client-nombre">${esc(name)}${c.linkedin ? `<a class="lm-co-li" href="${esc(c.linkedin)}" target="_blank" rel="noopener" title="Abrir LinkedIn" onclick="event.stopPropagation()">in</a>` : ''}</div>${dom ? `<div class="client-empresa">${esc(dom)}</div>` : ''}</div></div></td>
       <td class="client-meta">${c.industria ? esc(c.industria) : '—'}</td>
       <td class="client-meta">${c.tamano ? esc(c.tamano) : '—'}</td>
       <td class="client-meta">${c.pais ? esc(c.pais) : '—'}</td>
@@ -21023,6 +21115,7 @@ ${foot}
     const selAll = n < total ? `<button class="lm-bulk-ghost" onclick="LeadManagerModule.toggleCoAll(true)">Seleccionar todas (${total})</button>` : '';
     const acts = n > 0 ? `
         <button class="lm-bulk-ghost" onclick="LeadManagerModule.clearCoSel()">Ninguna</button>
+        <button class="lm-bulk-ghost" onclick="LeadManagerModule.coEnrolOpen()">＋ Enrolar en secuencia</button>
         <button class="lm-bulk-del" onclick="LeadManagerModule.bulkDeleteCompanies(false)">Eliminar empresas</button>
         <button class="lm-bulk-del" onclick="LeadManagerModule.bulkDeleteCompanies(true)">Eliminar + sus contactos</button>` : '';
     bar.innerHTML = `<span class="lm-bulk-n">${n ? `${n} seleccionada${n === 1 ? '' : 's'}` : 'Modo selección — elige empresas'}</span>
@@ -21049,6 +21142,43 @@ ${foot}
     } catch (e) { alert('Error al eliminar: ' + e.message); }
     _coSel.clear();
     await load();
+  }
+
+  // ── Cola de empresas: enrolar en bloque las empresas seleccionadas ──
+  // Método "empresa primero" (pedido de Jenny, estilo LinkedIn Sales Navigator): entran
+  // a la pestaña "Empresas" de la secuencia como pendientes de encontrar a la persona —
+  // no se crea ningún contacto todavía, eso pasa en la pestaña Empresas (ver coConvert).
+  function coEnrolOpen() {
+    const ids = [..._coSel]; if (!ids.length) return;
+    document.getElementById('lm-co-enrol-modal')?.remove();
+    const seqs = (_sequences || []).filter(s => s.estado !== 'archivada');
+    const rows = seqs.length
+      ? seqs.map(s => `<button class="lm-pick-item" data-nm="${esc((s.nombre || '').toLowerCase())}" onclick="LeadManagerModule.coEnrolPick(${s.id})"><span>${esc(s.nombre)}</span><span class="lm-pick-est">${esc(s.estado)}</span></button>`).join('')
+      : `<div class="lm-pick-empty">No tienes secuencias todavía.</div>`;
+    const m = document.createElement('div'); m.id = 'lm-co-enrol-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) m.remove(); };
+    m.innerHTML = `<div class="fin-pi-box lm-pick-box">
+      <div class="fin-pi-box__hd"><h3>Enrolar ${ids.length} empresa${ids.length === 1 ? '' : 's'}</h3><button class="fin-pi-x" onclick="document.getElementById('lm-co-enrol-modal').remove()">✕</button></div>
+      <div style="padding:10px 16px 0"><input class="form-input" id="co-enrol-q" placeholder="Buscar secuencia…" oninput="LeadManagerModule.coEnrolFilter()"></div>
+      <div class="lm-pick-list" id="co-enrol-list">${rows}</div>
+    </div>`;
+    document.body.appendChild(m);
+    setTimeout(() => $('co-enrol-q')?.focus(), 60);
+  }
+  function coEnrolFilter() {
+    const q = ($('co-enrol-q')?.value || '').toLowerCase().trim();
+    document.querySelectorAll('#co-enrol-list .lm-pick-item').forEach(b => { b.style.display = (!q || b.dataset.nm.includes(q)) ? '' : 'none'; });
+  }
+  async function coEnrolPick(seqId) {
+    document.getElementById('lm-co-enrol-modal')?.remove();
+    const ids = [..._coSel]; if (!ids.length) return;
+    try {
+      const res = await apiFetch(`${API}/lm/companies/bulk-enroll`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ company_ids: ids, sequence_id: seqId }) });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Error');
+      const d = await res.json();
+      showBanner(`✓ ${d.added} empresa(s) enrolada(s) — pendientes de encontrar a la persona en la pestaña "Empresas" de la secuencia`, 'success');
+      _coSel.clear(); _coSelMode = false; _renderCoBulkBar(); _renderBody();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
   // ── Export CSV (client-side) ──
@@ -21915,7 +22045,8 @@ ${foot}
     cbxOpen, cbxFilter, cbxPick, cbxBlur,
     openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, bulkDeleteContacts, bulkAddOpen, bulkAddDo, openContactPage, cpTab, cpSave, cpDelete, cpActOpen, cpActSave, cpActToggle, cpActDel,
     cpResumeSeq, cpFocusField, cpOpenRegisterReply, cpSaveRegisterReply,
-    openCompany, closeCompany, saveCompany, deleteCompany, filterCompanies, toggleCo, toggleCoAll, clearCoSel, toggleCoSelMode, bulkDeleteCompanies,
+    openCompany, closeCompany, saveCompany, deleteCompany, filterCompanies, toggleCo, toggleCoAll, clearCoSel, toggleCoSelMode, bulkDeleteCompanies, coEnrolOpen, coEnrolFilter, coEnrolPick,
+    coQueueAddOpen, coQueueAddCancel, coQueueSave, coQueueDiscard,
     openDrawer, closeDrawer, save, confirmDelete, convertToClient,
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
     openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,

@@ -1447,6 +1447,26 @@ async function initDb() {
     await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS recur_anchor DATE;`);
     await pool.query(`CREATE INDEX IF NOT EXISTS tasks_recur_idx ON tasks (recur_template_id, recur_anchor);`);
 
+    // ── Cola de empresas (outreach "empresa primero", estilo LinkedIn Sales Navigator) ──
+    // Puente entre "tengo la empresa calificada" y "tengo a la persona": mucho más simple
+    // que lm_contact_sequences (sin paso/paso_date) porque SIEMPRE representa "Paso 1:
+    // falta encontrar al decisor en LinkedIn y mandarle la invitación". Al agregar el
+    // contacto encontrado, la fila pasa a 'trabajada' y el contacto sigue el pipeline
+    // normal desde el Paso 2 (ver POST /api/lm/company-sequences/:id/convert).
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS lm_company_sequences (
+        id          SERIAL      PRIMARY KEY,
+        user_id     INTEGER     REFERENCES users(id) ON DELETE SET NULL,
+        company_id  INTEGER     NOT NULL REFERENCES lm_companies(id) ON DELETE CASCADE,
+        sequence_id INTEGER     NOT NULL REFERENCES sequences(id) ON DELETE CASCADE,
+        estado      TEXT        NOT NULL DEFAULT 'pendiente',
+        created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE (company_id, sequence_id)
+      );
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS lm_cocseq_user_idx ON lm_company_sequences (user_id);`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS lm_cocseq_seq_idx  ON lm_company_sequences (sequence_id, estado);`);
+
     console.log('[db] tables ready (users, verifications, batch_jobs, clients, projects, tasks, payments, team_members, workspaces, workspace_invites, chat_messages, leads, meetings, fin_config, fin_member_config, pagos_internos, opportunities, opportunity_tasks)');
   } catch (err) {
     console.error('[db] initDb failed:', err.message);

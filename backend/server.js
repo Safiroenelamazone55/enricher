@@ -3302,6 +3302,108 @@ app.post('/api/lm/companies/bulk-delete', requireAuth, async (req, res) => {
   finally { cl.release(); }
 });
 
+// ── Cola de empresas ("empresa primero", estilo LinkedIn Sales Navigator) ──
+// Puente entre "ya califiqué la empresa" y "ya tengo a la persona": lm_company_sequences
+// SIEMPRE representa "falta encontrar al decisor en LinkedIn". Al agregar el contacto
+// encontrado (endpoint /convert) el contacto arranca YA en Paso 2 del pipeline normal —
+// Paso 1 se da por hecho porque la invitación se manda en la misma acción de agregarlo.
+app.post('/api/lm/companies/bulk-enroll', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId;
+  const b = req.body || {};
+  const ids = Array.isArray(b.company_ids) ? b.company_ids.map(Number).filter(Boolean) : [];
+  const seqId = parseInt(b.sequence_id);
+  if (!ids.length) return res.status(400).json({ error: 'Sin empresas seleccionadas' });
+  if (!seqId) return res.status(400).json({ error: 'Falta la secuencia' });
+  try {
+    const ok = (await pool.query(`SELECT 1 FROM sequences WHERE id=$1 AND user_id=$2`, [seqId, uid])).rowCount;
+    if (!ok) return res.status(404).json({ error: 'Secuencia no encontrada' });
+    const r = await pool.query(`
+      INSERT INTO lm_company_sequences (user_id, company_id, sequence_id)
+      SELECT $1, c.id, $2 FROM lm_companies c WHERE c.user_id=$1 AND c.id = ANY($3::int[])
+      ON CONFLICT (company_id, sequence_id) DO NOTHING
+    `, [uid, seqId, ids]);
+    res.json({ added: r.rowCount, requested: ids.length });
+  } catch (err) { console.error('[lm-co-seq] bulk-enroll', err.message); res.status(500).json({ error: 'Error al enrolar empresas' }); }
+});
+app.get('/api/lm/sequences/:id/pending-companies', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT cs.id AS company_sequence_id, cs.estado, cs.created_at,
+             c.id AS company_id, c.nombre, c.dominio, c.linkedin, c.industria, c.tamano, c.pais, c.target_tier, c.segmento
+        FROM lm_company_sequences cs JOIN lm_companies c ON c.id = cs.company_id
+       WHERE cs.user_id=$1 AND cs.sequence_id=$2 AND cs.estado='pendiente'
+       ORDER BY cs.created_at ASC`, [req.workspaceOwnerId, req.params.id]);
+    res.json(rows);
+  } catch (err) { console.error('[lm-co-seq] pending', err.message); res.status(500).json({ error: 'Error al cargar empresas pendientes' }); }
+});
+app.patch('/api/lm/company-sequences/:id', requireAuth, async (req, res) => {
+  const estado = String((req.body || {}).estado || '');
+  if (!['pendiente', 'trabajada', 'descartada'].includes(estado)) return res.status(400).json({ error: 'Estado inválido' });
+  try {
+    const { rows } = await pool.query(
+      `UPDATE lm_company_sequences SET estado=$1 WHERE id=$2 AND user_id=$3 RETURNING *`,
+      [estado, req.params.id, req.workspaceOwnerId]);
+    if (!rows.length) return res.status(404).json({ error: 'No encontrado' });
+    res.json(rows[0]);
+  } catch (err) { console.error('[lm-co-seq] PATCH', err.message); res.status(500).json({ error: 'Error al actualizar' }); }
+});
+// role='primario' (default): ya se le mandó la invitación LinkedIn en esta misma acción
+// → arranca YA en Paso 2, activo, con actividad registrada. role='secundario': persona de
+// respaldo detectada en la misma empresa, se guarda linkeada pero SIN enrolar todavía —
+// Jenny la activa a mano (flujo normal de "Enrolar contacto") si el primario no responde.
+// Se puede llamar más de una vez por fila (agregar principal Y secundario) — solo se exige
+// 'pendiente' la PRIMERA vez; de ahí en adelante solo se bloquea si ya la descartó.
+app.post('/api/lm/company-sequences/:id/convert', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId;
+  const b = req.body || {};
+  const role = b.role === 'secundario' ? 'secundario' : 'primario';
+  if (!_lmS(b.nombre) && !_lmS(b.apellido) && !_lmS(b.email)) return res.status(400).json({ error: 'Nombre o email requerido' });
+  const cl = await pool.connect();
+  try {
+    await cl.query('BEGIN');
+    const cq = (await cl.query(
+      `SELECT cs.id, cs.company_id, cs.sequence_id, cs.estado, s.nombre AS seq_nombre
+         FROM lm_company_sequences cs JOIN sequences s ON s.id=cs.sequence_id
+        WHERE cs.id=$1 AND cs.user_id=$2 FOR UPDATE`, [req.params.id, uid])).rows[0];
+    if (!cq) { await cl.query('ROLLBACK'); return res.status(404).json({ error: 'No encontrado' }); }
+    if (cq.estado === 'descartada') { await cl.query('ROLLBACK'); return res.status(400).json({ error: 'Esta empresa está descartada — reactívala primero' }); }
+    const vals = LM_CT_COLS.map(k =>
+      k === 'estado' ? (role === 'primario' ? 'contactado' : 'nuevo') :
+      k === 'fuente' ? 'cola_empresas' :
+      k === 'contact_priority' ? (role === 'primario' ? 'Primario' : 'Secundario') :
+      _lmS(b[k]));
+    const { rows: ctRows } = await cl.query(`
+      INSERT INTO lm_contacts (user_id,${LM_CT_COLS.join(',')},company_id,outbound_client_id)
+      VALUES ($1,${LM_CT_COLS.map((_, i) => '$' + (i + 2)).join(',')},$${LM_CT_COLS.length + 2},$${LM_CT_COLS.length + 3}) RETURNING *
+    `, [uid, ...vals, cq.company_id, b.outbound_client_id || null]);
+    const contact = ctRows[0];
+    if (role === 'primario') {
+      // Paso 2 directo: Paso 1 (invitación LinkedIn) se da por hecho — se acaba de mandar
+      // como parte de esta misma acción. paso_date/start_date=hoy, next_action_at=ahora
+      // para que el paso 2 aparezca de inmediato en "Tareas" (el motor lo toma como vencido/hoy).
+      await cl.query(`
+        INSERT INTO lm_contact_sequences (user_id, contact_id, sequence_id, paso, estado, start_date, paso_date, next_action_at)
+        VALUES ($1,$2,$3,2,'activo',CURRENT_DATE,CURRENT_DATE,NOW())
+        ON CONFLICT (contact_id, sequence_id) DO NOTHING
+      `, [uid, contact.id, cq.sequence_id]);
+      await cl.query(`
+        INSERT INTO activities (user_id, contact_id, tipo, canal, nota, fecha, estado)
+        VALUES ($1,$2,'linkedin_msg','linkedin',$3,NOW(),'hecha')
+      `, [uid, contact.id, `Paso 1: Invitación LinkedIn enviada — agregado desde Cola de empresas (${cq.seq_nombre})`]);
+    }
+    // Solo pasa de 'pendiente' a 'trabajada' la primera vez — si ya estaba trabajada
+    // (agregando un secundario después del principal) se deja como está.
+    if (cq.estado === 'pendiente') await cl.query(`UPDATE lm_company_sequences SET estado='trabajada' WHERE id=$1`, [cq.id]);
+    await cl.query('COMMIT');
+    if (b.auto_verify !== false && contact.email) {
+      try { const { queueVerify } = require('./services/lmVerifyService'); queueVerify(pool, uid, [contact.id]); } catch (e) { console.warn('[lm-co-seq] auto-verify:', e.message); }
+    }
+    const nombreCompleto = [contact.nombre, contact.apellido].filter(Boolean).join(' ') || contact.email || `#${contact.id}`;
+    res.status(201).json({ contact, nombre: nombreCompleto, role });
+  } catch (err) { await cl.query('ROLLBACK').catch(() => {}); console.error('[lm-co-seq] convert', err.message); res.status(500).json({ error: 'Error al agregar el contacto' }); }
+  finally { cl.release(); }
+});
+
 // ── Contactos (lm_contacts) ────────────────────────────────────────
 const LM_CT_COLS = ['nombre','apellido','email','email_personal','telefono','movil','cargo','seniority','departamento','linkedin','empresa_nombre','ciudad','region','pais','estado','fuente','contact_priority','buyer_role','notas'];
 app.get('/api/lm/contacts', requireAuth, async (req, res) => {
