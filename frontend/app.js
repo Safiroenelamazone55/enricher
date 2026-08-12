@@ -15065,8 +15065,11 @@ const LeadManagerModule = (() => {
     const timeline = steps.length ? steps.map(_stepRow).join('') : `<div class="lm-act-empty"><div class="lm-act-empty__i">🪜</div><p>Esta secuencia no tiene pasos</p><span>Agrega el primero (Día 1 · Email).</span></div>`;
     // Conteo "por hacer" (vencidas + hoy) para mostrarlo en la pestaña Tareas, como Contactos (N).
     // El contador incluye los emails por aprobar: también son trabajo del día.
-    const _seqTaskN = Array.isArray(_seqContacts)
-      ? _seqTasks(id).filter(t => t.due <= new Date(new Date().toDateString())).length + (s.awaiting || 0)
+    const _today0 = new Date(new Date().toDateString());
+    const _seqTaskN = (Array.isArray(_seqContacts) || Array.isArray(_seqPendingCos))
+      ? (Array.isArray(_seqContacts) ? _seqTasks(id).filter(t => t.due <= _today0).length : 0)
+        + (Array.isArray(_seqPendingCos) ? _seqCoTasks(id).filter(t => t.due <= _today0).length : 0)
+        + (s.awaiting || 0)
       : null;
     return `
       <button class="lm-back" onclick="LeadManagerModule.go('sequences')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg> Secuencias</button>
@@ -16513,7 +16516,8 @@ ${foot}
     if (!steps.length || !list.length) return [];
     const st = steps[0];
     return list.map(row => {
-      const d = row.created_at ? new Date(row.created_at) : new Date();
+      const raw = row.due_date || row.created_at;
+      const d = raw ? new Date(raw + (row.due_date ? 'T00:00:00' : '')) : new Date();
       return { kind: 'company', row, st, due: new Date(d.toDateString()) };
     }).sort((a, b) => a.due - b.due);
   }
@@ -19696,13 +19700,14 @@ ${foot}
       : `El motor redacta cada email y lo deja en la pestaña “Aprobar” — tras tu OK, sale solo desde ${mb.email}.`;
   }
   async function seqRedistribute(id) {
-    if (!confirm('¿Repartir de nuevo los contactos que AÚN NO empiezan (paso 1) según “contactos por día”?\n\nLos que ya avanzaron de paso no se tocan. Guarda la secuencia antes si acabas de cambiar el número.')) return;
+    if (!confirm('¿Repartir de nuevo los contactos/empresas que AÚN NO empiezan según “X por día”?\n\nLos que ya avanzaron no se tocan. Guarda la secuencia antes si acabas de cambiar el número.')) return;
     try {
       const res = await apiFetch(`${API}/lm/sequences/${id}/redistribute`, { method: 'POST' });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(d.error || 'Error');
-      showBanner(`✓ ${d.updated} contacto(s) repartidos en ${d.spread_days} día(s) (${d.per_day}/día)`, 'success');
+      showBanner(`✓ ${d.updated} repartido(s) en ${d.spread_days} día(s) (${d.per_day}/día)`, 'success');
       closeSequenceDrawer(); await load();
+      _seqPendingCos = null; if (_activeSeq === id) await _seqLoadPendingCos(id);
     } catch (e) { alert('Error: ' + e.message); }
   }
   function _seqDaysRender() { const inp = $('seq-senddays'); const m = _sanSendDays(inp?.value); document.querySelectorAll('#seq-days .seq-day').forEach(b => { const i = +b.dataset.d; b.classList.toggle('on', m[i] === '1'); }); }

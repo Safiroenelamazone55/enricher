@@ -1496,6 +1496,13 @@ async function initDb() {
     await pool.query(`ALTER TABLE lm_companies ADD COLUMN IF NOT EXISTS analisis TEXT NOT NULL DEFAULT '';`);
     await pool.query(`ALTER TABLE lm_contacts  ADD COLUMN IF NOT EXISTS analisis TEXT NOT NULL DEFAULT '';`);
 
+    // Reparto por día de la Cola de empresas (mismo "arranque escalonado · X por día" que ya
+    // usan los contactos) — sin esto, TODAS las empresas enroladas de una vez caían como
+    // tareas "para hoy" sin respetar el límite diario configurado en la secuencia.
+    await pool.query(`ALTER TABLE lm_company_sequences ADD COLUMN IF NOT EXISTS due_date DATE;`);
+    await pool.query(`UPDATE lm_company_sequences SET due_date = created_at::date WHERE due_date IS NULL;`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS lm_cocseq_due_idx ON lm_company_sequences (sequence_id, due_date);`);
+
     console.log('[db] tables ready (users, verifications, batch_jobs, clients, projects, tasks, payments, team_members, workspaces, workspace_invites, chat_messages, leads, meetings, fin_config, fin_member_config, pagos_internos, opportunities, opportunity_tasks)');
   } catch (err) {
     console.error('[db] initDb failed:', err.message);

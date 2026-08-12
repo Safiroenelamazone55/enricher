@@ -3385,25 +3385,50 @@ app.post('/api/lm/companies/bulk-enroll', requireAuth, async (req, res) => {
   if (!ids.length) return res.status(400).json({ error: 'Sin empresas seleccionadas' });
   if (!seqId) return res.status(400).json({ error: 'Falta la secuencia' });
   try {
-    const ok = (await pool.query(`SELECT 1 FROM sequences WHERE id=$1 AND user_id=$2`, [seqId, uid])).rowCount;
-    if (!ok) return res.status(404).json({ error: 'Secuencia no encontrada' });
+    const sq = (await pool.query(`SELECT drip_per_day, send_days, starts_on::text AS starts_on FROM sequences WHERE id=$1 AND user_id=$2`, [seqId, uid])).rows[0];
+    if (!sq) return res.status(404).json({ error: 'Secuencia no encontrada' });
     if (await _seqHasDirectContacts(uid, seqId)) return res.status(400).json({ error: 'Esta secuencia ya tiene contactos enrolados directamente — no se puede usar como Empresa primero. Elige otra secuencia (o crea una nueva) para la cola de empresas.' });
+    // Solo empresas del usuario que no estén ya en la cola de esta secuencia.
+    const already = new Set((await pool.query(`SELECT company_id FROM lm_company_sequences WHERE user_id=$1 AND sequence_id=$2 AND company_id = ANY($3::int[])`, [uid, seqId, ids])).rows.map(r => r.company_id));
+    const valid = new Set((await pool.query(`SELECT id FROM lm_companies WHERE user_id=$1 AND id = ANY($2::int[])`, [uid, ids])).rows.map(r => r.id));
+    const toAdd = ids.filter(id => valid.has(id) && !already.has(id));
+    if (!toAdd.length) return res.json({ added: 0, requested: ids.length, spread_days: 0 });
+    // ── Mismo "arranque escalonado · X por día" que ya usan los contactos (_lmAddMembership) ──
+    const drip = Math.max(0, parseInt(sq.drip_per_day) || 0);
+    const mask = _sanSendDays(sq.send_days);
+    const usedByDate = {};
+    (await pool.query(`SELECT due_date::text d, COUNT(*)::int n FROM lm_company_sequences WHERE user_id=$1 AND sequence_id=$2 AND due_date >= CURRENT_DATE GROUP BY due_date`, [uid, seqId]))
+      .rows.forEach(r => { usedByDate[r.d] = r.n; });
+    let base = _todayUTC();
+    if (sq.starts_on && /^\d{4}-\d{2}-\d{2}$/.test(sq.starts_on)) {
+      const [y, mo, d] = sq.starts_on.split('-').map(Number);
+      const so = new Date(Date.UTC(y, mo - 1, d));
+      if (so > base) base = so;
+    }
+    const perDay = drip > 0 ? drip : Infinity;
+    const dates = [];
+    let slot = 0, cur = _nthAllowed(base, 0, mask), curStr = _ymd(cur), inDay = usedByDate[curStr] || 0;
+    for (let i = 0; i < toAdd.length; i++) {
+      while (inDay >= perDay) { slot++; cur = _nthAllowed(base, slot, mask); curStr = _ymd(cur); inDay = usedByDate[curStr] || 0; }
+      dates.push(curStr); inDay++;
+    }
     const r = await pool.query(`
-      INSERT INTO lm_company_sequences (user_id, company_id, sequence_id)
-      SELECT $1, c.id, $2 FROM lm_companies c WHERE c.user_id=$1 AND c.id = ANY($3::int[])
+      INSERT INTO lm_company_sequences (user_id, company_id, sequence_id, due_date)
+      SELECT $1, t.cid, $2, t.sd::date
+      FROM unnest($3::int[], $4::text[]) AS t(cid, sd)
       ON CONFLICT (company_id, sequence_id) DO NOTHING
-    `, [uid, seqId, ids]);
-    res.json({ added: r.rowCount, requested: ids.length });
+    `, [uid, seqId, toAdd, dates]);
+    res.json({ added: r.rowCount, requested: ids.length, spread_days: new Set(dates).size, per_day: drip });
   } catch (err) { console.error('[lm-co-seq] bulk-enroll', err.message); res.status(500).json({ error: 'Error al enrolar empresas' }); }
 });
 app.get('/api/lm/sequences/:id/pending-companies', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(`
-      SELECT cs.id AS company_sequence_id, cs.estado, cs.created_at,
+      SELECT cs.id AS company_sequence_id, cs.estado, cs.created_at, cs.due_date::text AS due_date,
              c.id AS company_id, c.nombre, c.dominio, c.linkedin, c.linkedin_sales_nav, c.industria, c.tamano, c.pais, c.target_tier, c.segmento
         FROM lm_company_sequences cs JOIN lm_companies c ON c.id = cs.company_id
        WHERE cs.user_id=$1 AND cs.sequence_id=$2 AND cs.estado='pendiente'
-       ORDER BY cs.created_at ASC`, [req.workspaceOwnerId, req.params.id]);
+       ORDER BY cs.due_date ASC NULLS LAST, cs.created_at ASC`, [req.workspaceOwnerId, req.params.id]);
     res.json(rows);
   } catch (err) { console.error('[lm-co-seq] pending', err.message); res.status(500).json({ error: 'Error al cargar empresas pendientes' }); }
 });
@@ -3755,20 +3780,42 @@ app.post('/api/lm/sequences/:id/redistribute', requireAuth, async (req, res) => 
     const sq = (await pool.query(`SELECT drip_per_day, send_days, starts_on::text AS starts_on FROM sequences WHERE id=$1 AND user_id=$2`, [sid, uid])).rows[0];
     if (!sq) return res.status(404).json({ error: 'Secuencia no encontrada' });
     const drip = Math.max(0, parseInt(sq.drip_per_day) || 0);
-    if (!drip) return res.status(400).json({ error: 'Define primero “Arranque escalonado · contactos por día” en la secuencia' });
+    if (!drip) return res.status(400).json({ error: 'Define primero “Arranque escalonado · X por día” en la secuencia' });
     const mask = _sanSendDays(sq.send_days);
-    const { rows: enrs } = await pool.query(`SELECT id FROM lm_contact_sequences WHERE user_id=$1 AND sequence_id=$2 AND estado='activo' AND paso=1 ORDER BY start_date ASC NULLS FIRST, created_at ASC, id ASC`, [uid, sid]);
-    if (!enrs.length) return res.json({ updated: 0, spread_days: 0, per_day: drip });
     let base = _todayUTC();
     if (sq.starts_on && /^\d{4}-\d{2}-\d{2}$/.test(sq.starts_on)) { const [y, mo, d] = sq.starts_on.split('-').map(Number); const so = new Date(Date.UTC(y, mo - 1, d)); if (so > base) base = so; }
-    const ids = [], dates = [];
-    let slot = 0, cur = _nthAllowed(base, 0, mask), curStr = _ymd(cur), inDay = 0;
-    for (const e of enrs) {
-      while (inDay >= drip) { slot++; cur = _nthAllowed(base, slot, mask); curStr = _ymd(cur); inDay = 0; }
-      ids.push(e.id); dates.push(curStr); inDay++;
+
+    const allDates = new Set();
+    const { rows: enrs } = await pool.query(`SELECT id FROM lm_contact_sequences WHERE user_id=$1 AND sequence_id=$2 AND estado='activo' AND paso=1 ORDER BY start_date ASC NULLS FIRST, created_at ASC, id ASC`, [uid, sid]);
+    let updatedContacts = 0;
+    if (enrs.length) {
+      const ids = [], dates = [];
+      let slot = 0, cur = _nthAllowed(base, 0, mask), curStr = _ymd(cur), inDay = 0;
+      for (const e of enrs) {
+        while (inDay >= drip) { slot++; cur = _nthAllowed(base, slot, mask); curStr = _ymd(cur); inDay = 0; }
+        ids.push(e.id); dates.push(curStr); inDay++;
+      }
+      dates.forEach(d => allDates.add(d));
+      await pool.query(`UPDATE lm_contact_sequences cs SET start_date=t.sd::date, next_action_at=t.sd::timestamptz FROM unnest($1::int[],$2::text[]) AS t(id,sd) WHERE cs.id=t.id`, [ids, dates]);
+      updatedContacts = ids.length;
     }
-    await pool.query(`UPDATE lm_contact_sequences cs SET start_date=t.sd::date, next_action_at=t.sd::timestamptz FROM unnest($1::int[],$2::text[]) AS t(id,sd) WHERE cs.id=t.id`, [ids, dates]);
-    res.json({ updated: ids.length, spread_days: new Set(dates).size, per_day: drip });
+
+    // Cola de empresas ("Empresa primero"): mismo reparto, pero sobre due_date de las pendientes.
+    const { rows: coRows } = await pool.query(`SELECT id FROM lm_company_sequences WHERE user_id=$1 AND sequence_id=$2 AND estado='pendiente' ORDER BY due_date ASC NULLS FIRST, created_at ASC, id ASC`, [uid, sid]);
+    let updatedCos = 0;
+    if (coRows.length) {
+      const ids2 = [], dates2 = [];
+      let slot2 = 0, cur2 = _nthAllowed(base, 0, mask), curStr2 = _ymd(cur2), inDay2 = 0;
+      for (const r2 of coRows) {
+        while (inDay2 >= drip) { slot2++; cur2 = _nthAllowed(base, slot2, mask); curStr2 = _ymd(cur2); inDay2 = 0; }
+        ids2.push(r2.id); dates2.push(curStr2); inDay2++;
+      }
+      dates2.forEach(d => allDates.add(d));
+      await pool.query(`UPDATE lm_company_sequences cs SET due_date=t.sd::date FROM unnest($1::int[],$2::text[]) AS t(id,sd) WHERE cs.id=t.id`, [ids2, dates2]);
+      updatedCos = ids2.length;
+    }
+
+    res.json({ updated: updatedContacts + updatedCos, updatedContacts, updatedCompanies: updatedCos, spread_days: allDates.size, per_day: drip });
   } catch (err) { console.error('[lm-seq-redist]', err.message); res.status(500).json({ error: 'Error al repartir' }); }
 });
 // Deshacer el último "Hecha": retrocede un paso (o reactiva si estaba terminado), re-ancla la fecha
