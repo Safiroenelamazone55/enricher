@@ -14523,6 +14523,11 @@ const LeadManagerModule = (() => {
     if (!_ibPoll) { _ibPoll = setInterval(_ibReload, 3 * 60 * 1000); }
     // Config de envío (ventana/fines de semana) para calcular la fecha real de envío en Aprobar.
     if (_sendCfg === null) apiFetch(`${API}/lm/send-settings`).then(r => r && r.ok && r.json().then(j => { _sendCfg = j; })).catch(() => {});
+    // Campos personalizados (Field1..10 renombrables) — gatean qué aparece en filtros/import/modal/export.
+    if (!_lmCustomFieldsLoaded) {
+      _lmCustomFieldsLoaded = true;
+      apiFetch(`${API}/lm/custom-fields`).then(r => r && r.ok && r.json().then(j => { _lmCustomFields = { company: j.company || [], contact: j.contact || [] }; _renderBody(); })).catch(() => {});
+    }
     try {
       const [lr, cr, cmr, sr, str, ar, cor, ctr, tplr, mbr] = await Promise.all([
         apiFetch(`${API}/leads`).catch(() => null),
@@ -15636,7 +15641,7 @@ ${foot}
   }
   function _coQueueRow(row) {
     const meta = [row.industria, row.tamano && `${row.tamano} emp.`, row.pais].filter(Boolean).join(' · ');
-    const li = (row.linkedin || '').trim();
+    const li = (row.linkedin_sales_nav || row.linkedin || '').trim();
     const open = _seqCoAddOpen === row.company_sequence_id;
     return `<div class="seq-co-card">
       <div class="seq-co-card__hd">
@@ -18443,6 +18448,7 @@ ${foot}
         <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.exportCsv('companies')">${_ico('down')} Exportar empresas</button>
         <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.clearAllViews()">Limpiar vistas guardadas (${views.length})</button>
       </div></div>
+      ${_cfFieldsCard()}
       <div class="cp-card"><div class="cp-card__t">${NI('zap')} Envío automático (Gmail)</div><div id="lm-send-cfg">${_sendCfg ? _sendCfgHtml() : '<div class="cp-empty2" style="padding:14px">Cargando configuración…</div>'}</div></div>
       <div class="cp-card"><div class="cp-card__t">${NI('sparkles')} Personalización con IA (Fable 5 · Haiku)</div><div id="lm-ai-cfg">${_aiCfg ? _aiCfgHtml() : '<div class="cp-empty2" style="padding:14px">Cargando…</div>'}</div></div>
       <div class="cp-card"><div class="cp-card__t">Integraciones</div><div class="set-integr">
@@ -20043,6 +20049,26 @@ ${foot}
     return `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${I[k] || ''}</svg>`;
   }
 
+  // ── Campos personalizados (Field1..10 renombrables desde Configuración) ──
+  const LM_CUSTOM_KEYS = Array.from({ length: 10 }, (_, i) => `campo${i + 1}`);
+  function _cfCol(entity, label) {
+    const cur = new Map((_lmCustomFields[entity] || []).map(f => [f.field_key, f.label]));
+    return `<div class="cf-col"><div class="cf-col__t">${label}</div>${LM_CUSTOM_KEYS.map((k, i) => `<label class="cf-row"><span>Campo ${i + 1}</span><input class="form-input" value="${esc(cur.get(k) || '')}" placeholder="Sin usar" onblur="LeadManagerModule.cfSaveLabel('${entity}','${k}',this)"></label>`).join('')}</div>`;
+  }
+  function _cfFieldsCard() {
+    return `<div class="cp-card"><div class="cp-card__t">Campos personalizados</div><p class="lm-sec-sub" style="margin:-4px 0 12px">Nómbralos para que aparezcan en el formulario, los filtros, la importación y la exportación. Vacío = no se usa.</p><div class="cf-grid">${_cfCol('company', 'Empresas')}${_cfCol('contact', 'Contactos')}</div></div>`;
+  }
+  async function cfSaveLabel(entity, fieldKey, el) {
+    const label = (el.value || '').trim();
+    try {
+      const r = await apiFetch(`${API}/lm/custom-fields`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entity, field_key: fieldKey, label }) });
+      if (!r.ok) throw new Error('Error al guardar');
+      const arr = _lmCustomFields[entity] || (_lmCustomFields[entity] = []);
+      const f = arr.find(x => x.field_key === fieldKey);
+      if (f) f.label = label; else arr.push({ entity, field_key: fieldKey, label });
+      showBanner(label ? `✓ “${label}” activado` : 'Campo desactivado', 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
   // ── Catálogo de campos para el mapeo (por destino) ──
   const LM_FIELDS = {
     contacts: [
@@ -20058,7 +20084,7 @@ ${foot}
       { g: 'Empresa (se crea y enlaza)', opts: [
         ['co_nombre', 'Empresa · Nombre'], ['co_dominio', 'Empresa · Dominio'], ['co_website', 'Empresa · Website'],
         ['co_industria', 'Empresa · Industria'], ['co_tamano', 'Empresa · Nº empleados'], ['co_ingresos', 'Empresa · Ingresos'],
-        ['co_telefono', 'Empresa · Teléfono'], ['co_linkedin', 'Empresa · LinkedIn'],
+        ['co_telefono', 'Empresa · Teléfono'], ['co_linkedin', 'Empresa · LinkedIn'], ['co_linkedin_sales_nav', 'Empresa · LinkedIn (Sales Navigator)'],
         ['co_ciudad', 'Empresa · Ciudad'], ['co_region', 'Empresa · Región/Estado'], ['co_pais', 'Empresa · País'],
         ['co_direccion', 'Empresa · Dirección'], ['co_cp', 'Empresa · Código postal'], ['co_fundada', 'Empresa · Año fundación'],
         ['co_descripcion', 'Empresa · Descripción'], ['co_tecnologias', 'Empresa · Tecnologías'], ['co_funding', 'Empresa · Funding'],
@@ -20069,7 +20095,7 @@ ${foot}
       { g: 'Empresa', opts: [
         ['nombre', 'Nombre'], ['dominio', 'Dominio'], ['website', 'Website (URL)'],
         ['industria', 'Industria'], ['tamano', 'Nº empleados'], ['ingresos', 'Ingresos anuales'],
-        ['telefono', 'Teléfono'], ['linkedin', 'LinkedIn'],
+        ['telefono', 'Teléfono'], ['linkedin', 'LinkedIn'], ['linkedin_sales_nav', 'LinkedIn (Sales Navigator)'],
         ['ciudad', 'Ciudad'], ['region', 'Región / Estado'], ['pais', 'País'],
         ['direccion', 'Dirección'], ['codigo_postal', 'Código postal'], ['fundada', 'Año fundación'],
         ['descripcion', 'Descripción'], ['tecnologias', 'Tecnologías'], ['funding', 'Funding'],
@@ -20109,6 +20135,7 @@ ${foot}
     ingresos: ['annual revenue', 'revenue', 'company annual revenue', 'ingresos', 'ingresos anuales', 'facturacion'],
     telefono: ['phone', 'company phone', 'telefono'],
     linkedin: ['linkedin', 'company linkedin', 'linkedin url'],
+    linkedin_sales_nav: ['sales navigator', 'sales nav url', 'linkedin sales navigator', 'linkedin sales nav', 'sales navigator url', 'company sales navigator'],
     ciudad: ['city', 'company city', 'ciudad'],
     region: ['state', 'region', 'company state', 'provincia'],
     pais: ['country', 'company country', 'pais'],
@@ -20158,10 +20185,14 @@ ${foot}
   // ── Vista: Contactos ──
   // ── Filtrado avanzado de Contactos / Empresas (por campo importado) ──
   const _FLT_ICON = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>';
-  const _FLT_OPS = [['in', 'es uno de'], ['nin', 'no es ninguno de'], ['contains', 'contiene'], ['starts', 'empieza por'], ['empty', 'está vacío'], ['nempty', 'tiene valor']];
-  const _CT_FILTER_FIELDS = [['nombre', 'Nombre'], ['apellido', 'Apellido'], ['email', 'Email'], ['email_personal', 'Email personal'], ['telefono', 'Teléfono'], ['movil', 'Móvil'], ['cargo', 'Cargo'], ['seniority', 'Seniority'], ['departamento', 'Departamento'], ['buyer_role', 'Buyer Role'], ['contact_priority', 'Contact Priority'], ['linkedin', 'LinkedIn'], ['company_nombre', 'Empresa'], ['company_segmento', 'Segmento / ICP (empresa)'], ['company_target_tier', 'Target Tier / Focus (empresa)'], ['company_industria', 'Industria (empresa)'], ['ciudad', 'Ciudad'], ['region', 'Región'], ['pais', 'País'], ['estado', 'Estado'], ['fuente', 'Fuente']];
-  const _CO_FILTER_FIELDS = [['nombre', 'Nombre'], ['dominio', 'Dominio'], ['website', 'Website'], ['industria', 'Industria'], ['tamano', 'Nº empleados'], ['ingresos', 'Ingresos'], ['telefono', 'Teléfono'], ['linkedin', 'LinkedIn'], ['ciudad', 'Ciudad'], ['region', 'Región'], ['pais', 'País'], ['direccion', 'Dirección'], ['codigo_postal', 'Código postal'], ['fundada', 'Año fundación'], ['descripcion', 'Descripción'], ['tecnologias', 'Tecnologías'], ['funding', 'Funding'], ['target_tier', 'Target Tier / Focus'], ['segmento', 'Segmento / ICP']];
-  function _fltFields(entity) { return entity === 'contacts' ? _CT_FILTER_FIELDS : _CO_FILTER_FIELDS; }
+  const _FLT_OPS = [['in', 'es uno de'], ['nin', 'no es ninguno de'], ['contains', 'contiene'], ['starts', 'empieza por'], ['between', 'está entre'], ['empty', 'está vacío'], ['nempty', 'tiene valor']];
+  const _CT_FILTER_FIELDS = [['nombre', 'Nombre'], ['apellido', 'Apellido'], ['email', 'Email'], ['email_personal', 'Email personal'], ['telefono', 'Teléfono'], ['movil', 'Móvil'], ['cargo', 'Cargo'], ['seniority', 'Seniority'], ['departamento', 'Departamento'], ['buyer_role', 'Buyer Role'], ['contact_priority', 'Contact Priority'], ['linkedin', 'LinkedIn'], ['company_nombre', 'Empresa'], ['company_segmento', 'Segmento / ICP (empresa)'], ['company_target_tier', 'Target Tier / Focus (empresa)'], ['company_industria', 'Industria (empresa)'], ['ciudad', 'Ciudad'], ['region', 'Región'], ['pais', 'País'], ['estado', 'Estado'], ['fuente', 'Fuente'], ['created_at', 'Fecha de importación']];
+  const _CO_FILTER_FIELDS = [['nombre', 'Nombre'], ['dominio', 'Dominio'], ['website', 'Website'], ['industria', 'Industria'], ['tamano', 'Nº empleados'], ['ingresos', 'Ingresos'], ['telefono', 'Teléfono'], ['linkedin', 'LinkedIn'], ['linkedin_sales_nav', 'LinkedIn (Sales Navigator)'], ['ciudad', 'Ciudad'], ['region', 'Región'], ['pais', 'País'], ['direccion', 'Dirección'], ['codigo_postal', 'Código postal'], ['fundada', 'Año fundación'], ['descripcion', 'Descripción'], ['tecnologias', 'Tecnologías'], ['funding', 'Funding'], ['target_tier', 'Target Tier / Focus'], ['segmento', 'Segmento / ICP'], ['created_at', 'Fecha de importación']];
+  function _fltFields(entity) {
+    const base = entity === 'contacts' ? _CT_FILTER_FIELDS : _CO_FILTER_FIELDS;
+    const active = _lmActiveCustomFields(entity === 'contacts' ? 'contact' : 'company');
+    return active.length ? base.concat(active.map(f => [f.field_key, f.label])) : base;
+  }
   function _fltFieldLabel(entity, key) { return (_fltFields(entity).find(x => x[0] === key) || ['', key])[1]; }
   function _fltOpLabel(op) { return (_FLT_OPS.find(x => x[0] === op) || ['', op])[1]; }
   function _fltDistinct(entity, field) {
@@ -20178,6 +20209,8 @@ ${foot}
   const _FLT_RANGE_FIELDS = ['tamano'];
   function _fltIsRange(field) { return _FLT_RANGE_FIELDS.indexOf(field) >= 0; }
   function _fltRangeVals(field) { return field === 'tamano' ? _EMP_RANGES : []; }
+  const _FLT_DATE_FIELDS = ['created_at'];
+  function _fltIsDate(field) { return _FLT_DATE_FIELDS.indexOf(field) >= 0; }
   function _numIn(raw, labels) {
     const n = parseFloat(String(raw == null ? '' : raw).replace(/[^0-9.]/g, ''));
     if (isNaN(n)) return false;
@@ -20186,6 +20219,13 @@ ${foot}
   function _fmsSummary(arr) { return (arr && arr.length) ? `${arr.length} seleccionado${arr.length === 1 ? '' : 's'}` : 'Elegir valor…'; }
   function _lmMatch(row, filters) {
     return filters.every(f => {
+      if (_fltIsDate(f.field)) {
+        if (f.op === 'empty') return !row[f.field];
+        if (f.op === 'nempty') return !!row[f.field];
+        if (!row[f.field] || !f.val || !f.val.start || !f.val.end) return false;
+        const d = String(row[f.field]).slice(0, 10);
+        return d >= f.val.start && d <= f.val.end;
+      }
       const raw = f.field === 'company_nombre' ? (row.company_nombre || row.empresa_nombre) : row[f.field];
       const v = (raw == null ? '' : String(raw)).trim().toLowerCase();
       if (f.op === 'empty') return !v;
@@ -20202,6 +20242,7 @@ ${foot}
   }
   function _fltValTxt(f) {
     if (f.op === 'empty' || f.op === 'nempty') return '';
+    if (f.op === 'between') return (f.val && f.val.start && f.val.end) ? `${RangePicker.fmt(f.val.start)} → ${RangePicker.fmt(f.val.end)}` : '';
     if (f.op === 'in' || f.op === 'nin') { const a = Array.isArray(f.val) ? f.val : []; return a.length <= 2 ? a.map(x => `“${esc(x)}”`).join(', ') : `${a.length} valores`; }
     return `“${esc(typeof f.val === 'string' ? f.val : '')}”`;
   }
@@ -20236,9 +20277,15 @@ ${foot}
     const fields = _fltFields(_fltEntity);
     el.innerHTML = _fltDraft.map((f, i) => {
       const fieldOpts = fields.map(x => `<option value="${x[0]}"${f.field === x[0] ? ' selected' : ''}>${x[1]}</option>`).join('');
-      const opOpts = _FLT_OPS.map(o => `<option value="${o[0]}"${f.op === o[0] ? ' selected' : ''}>${o[1]}</option>`).join('');
+      const isDate = _fltIsDate(f.field);
+      const opChoices = isDate ? _FLT_OPS.filter(o => o[0] === 'between' || o[0] === 'empty' || o[0] === 'nempty') : _FLT_OPS.filter(o => o[0] !== 'between');
+      const opOpts = opChoices.map(o => `<option value="${o[0]}"${f.op === o[0] ? ' selected' : ''}>${o[1]}</option>`).join('');
       let valCell;
       if (f.op === 'empty' || f.op === 'nempty') valCell = '<span class="flt-noval">sin valor</span>';
+      else if (f.op === 'between') {
+        const lbl = (f.val && f.val.start && f.val.end) ? `${RangePicker.fmt(f.val.start)} → ${RangePicker.fmt(f.val.end)}` : 'Elegir fechas…';
+        valCell = `<div class="fms" id="fms-box-${i}" onclick="LeadManagerModule.fltOpenDate(${i})"><span class="fms-lbl">${lbl}</span><svg class="fms-chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></div>`;
+      }
       else if (f.op === 'in' || f.op === 'nin') valCell = `<div class="fms" id="fms-box-${i}" onclick="LeadManagerModule.fmsToggle(${i})"><span class="fms-lbl" id="fms-lbl-${i}">${_fmsSummary(Array.isArray(f.val) ? f.val : [])}</span><svg class="fms-chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>`;
       else valCell = `<input class="form-input" value="${esc(typeof f.val === 'string' ? f.val : '')}" placeholder="Valor…" oninput="LeadManagerModule.fltSet(${i},'val',this.value,1)">`;
       return `<div class="flt-row">
@@ -20252,20 +20299,36 @@ ${foot}
   function _fltResetVal(i) {
     const op = _fltDraft[i].op;
     if (op === 'in' || op === 'nin') { if (!Array.isArray(_fltDraft[i].val)) _fltDraft[i].val = []; }
+    else if (op === 'between') { if (!_fltDraft[i].val || typeof _fltDraft[i].val !== 'object' || Array.isArray(_fltDraft[i].val)) _fltDraft[i].val = { start: null, end: null }; }
     else if (Array.isArray(_fltDraft[i].val)) _fltDraft[i].val = '';
   }
   function fltSet(i, key, val, noRerender) {
     if (!_fltDraft[i]) return;
     _fltDraft[i][key] = val;
-    if (key === 'field' && (_fltDraft[i].op === 'in' || _fltDraft[i].op === 'nin')) _fltDraft[i].val = [];
+    if (key === 'field') {
+      if (_fltIsDate(val)) { _fltDraft[i].op = 'between'; _fltDraft[i].val = { start: null, end: null }; }
+      else if (_fltDraft[i].op === 'between') { _fltDraft[i].op = 'in'; _fltDraft[i].val = []; }
+      else if (_fltDraft[i].op === 'in' || _fltDraft[i].op === 'nin') _fltDraft[i].val = [];
+    }
     if (key === 'op') _fltResetVal(i);
     if (!noRerender) { fmsClose(); _fltRenderRows(); }
+  }
+  function fltOpenDate(i) {
+    const box = document.getElementById('fms-box-' + i); if (!box || !_fltDraft[i]) return;
+    const cur = (_fltDraft[i].val && typeof _fltDraft[i].val === 'object') ? _fltDraft[i].val : { start: null, end: null };
+    RangePicker.open(box, { start: cur.start, end: cur.end }, out => {
+      const end = out.deadline || out.fecha_inicio || null;
+      const start = out.fecha_inicio || end;
+      _fltDraft[i].val = (start && end) ? { start, end } : { start: null, end: null };
+      _fltRenderRows();
+    });
   }
   function fltAddRow() { fmsClose(); _fltDraft.push(_fltNewRow()); _fltRenderRows(); }
   function fltDelRow(i) { fmsClose(); _fltDraft.splice(i, 1); if (!_fltDraft.length) _fltDraft.push(_fltNewRow()); _fltRenderRows(); }
   function fltApply() {
     const clean = _fltDraft.filter(f => {
       if (f.op === 'empty' || f.op === 'nempty') return true;
+      if (f.op === 'between') return !!(f.val && f.val.start && f.val.end);
       if (f.op === 'in' || f.op === 'nin') return Array.isArray(f.val) && f.val.length;
       return typeof f.val === 'string' && f.val.trim();
     });
@@ -21091,9 +21154,10 @@ ${foot}
   function _coRow(c) {
     const dom = c.dominio || '';
     const name = c.nombre || dom || '—';
+    const li = c.linkedin_sales_nav || c.linkedin || '';
     return `<tr class="clients-table__row${_coSel.has(c.id) ? ' sel' : ''}" onclick="LeadManagerModule.openCompany(${c.id})" style="cursor:pointer">
       <td class="lm-ck-col" onclick="event.stopPropagation()"><input type="checkbox" class="lm-ck" ${_coSel.has(c.id) ? 'checked' : ''} onclick="LeadManagerModule.toggleCo(event,${c.id})"></td>
-      <td><div class="client-cell-name"><div class="lm-co-logo"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4M10 10h4M10 14h4M10 18h4"/></svg></div><div><div class="client-nombre">${esc(name)}${c.linkedin ? `<a class="lm-co-li" href="${esc(c.linkedin)}" target="_blank" rel="noopener" title="Abrir LinkedIn" onclick="event.stopPropagation()">in</a>` : ''}</div>${dom ? `<div class="client-empresa">${esc(dom)}</div>` : ''}</div></div></td>
+      <td><div class="client-cell-name"><div class="lm-co-logo"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4M10 10h4M10 14h4M10 18h4"/></svg></div><div><div class="client-nombre">${esc(name)}${li ? `<a class="lm-co-li" href="${esc(li)}" target="_blank" rel="noopener" title="Abrir LinkedIn" onclick="event.stopPropagation()">in</a>` : ''}</div>${dom ? `<div class="client-empresa">${esc(dom)}</div>` : ''}</div></div></td>
       <td class="client-meta">${c.industria ? esc(c.industria) : '—'}</td>
       <td class="client-meta">${c.tamano ? esc(c.tamano) : '—'}</td>
       <td class="client-meta">${c.pais ? esc(c.pais) : '—'}</td>
@@ -21189,9 +21253,10 @@ ${foot}
     const filtered = isCo ? !!(_coQuery || _coFilters.length) : _ctHasFilters();
     if (!rows.length) { alert(filtered ? 'El filtro actual no tiene resultados para exportar.' : 'No hay nada para exportar.'); return; }
     // La columna ID permite re-importar ACTUALIZANDO el contacto exacto (sin duplicar).
-    const cols = isCo
-      ? [['id', 'ID'], ['nombre', 'Nombre'], ['dominio', 'Dominio'], ['website', 'Website'], ['industria', 'Industria'], ['tamano', 'Nº empleados'], ['ingresos', 'Ingresos'], ['telefono', 'Teléfono'], ['linkedin', 'LinkedIn'], ['ciudad', 'Ciudad'], ['region', 'Región'], ['pais', 'País'], ['direccion', 'Dirección'], ['codigo_postal', 'Código postal'], ['fundada', 'Fundada'], ['descripcion', 'Descripción'], ['tecnologias', 'Tecnologías'], ['funding', 'Funding'], ['target_tier', 'Target Tier / Focus'], ['segmento', 'Segmento / ICP'], ['notas', 'Notas']]
-      : [['id', 'ID'], ['nombre', 'Nombre'], ['apellido', 'Apellido'], ['email', 'Email'], ['email_personal', 'Email personal'], ['telefono', 'Teléfono'], ['movil', 'Móvil'], ['cargo', 'Cargo'], ['seniority', 'Seniority'], ['departamento', 'Departamento'], ['buyer_role', 'Buyer Role'], ['linkedin', 'LinkedIn'], ['company_nombre', 'Empresa'], ['ciudad', 'Ciudad'], ['region', 'Región'], ['pais', 'País'], ['estado', 'Estado'], ['contact_priority', 'Contact Priority'], ['fuente', 'Fuente'], ['notas', 'Notas']];
+    const cols = (isCo
+      ? [['id', 'ID'], ['nombre', 'Nombre'], ['dominio', 'Dominio'], ['website', 'Website'], ['industria', 'Industria'], ['tamano', 'Nº empleados'], ['ingresos', 'Ingresos'], ['telefono', 'Teléfono'], ['linkedin', 'LinkedIn'], ['linkedin_sales_nav', 'LinkedIn (Sales Navigator)'], ['ciudad', 'Ciudad'], ['region', 'Región'], ['pais', 'País'], ['direccion', 'Dirección'], ['codigo_postal', 'Código postal'], ['fundada', 'Fundada'], ['descripcion', 'Descripción'], ['tecnologias', 'Tecnologías'], ['funding', 'Funding'], ['target_tier', 'Target Tier / Focus'], ['segmento', 'Segmento / ICP'], ['notas', 'Notas']]
+      : [['id', 'ID'], ['nombre', 'Nombre'], ['apellido', 'Apellido'], ['email', 'Email'], ['email_personal', 'Email personal'], ['telefono', 'Teléfono'], ['movil', 'Móvil'], ['cargo', 'Cargo'], ['seniority', 'Seniority'], ['departamento', 'Departamento'], ['buyer_role', 'Buyer Role'], ['linkedin', 'LinkedIn'], ['company_nombre', 'Empresa'], ['ciudad', 'Ciudad'], ['region', 'Región'], ['pais', 'País'], ['estado', 'Estado'], ['contact_priority', 'Contact Priority'], ['fuente', 'Fuente'], ['notas', 'Notas']]
+    ).concat(_lmActiveCustomFields(isCo ? 'company' : 'contact').map(f => [f.field_key, f.label]));
     const cell = v => { v = v == null ? '' : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
     const csv = '﻿' + cols.map(c => c[1]).join(',') + '\n' + rows.map(r => cols.map(c => cell(r[c[0]] != null ? r[c[0]] : r[c[0] === 'company_nombre' ? 'empresa_nombre' : c[0]])).join(',')).join('\n');
     const a = document.createElement('a');
@@ -21314,6 +21379,7 @@ ${foot}
   function _lmFlatOpts(target) {
     const out = [{ key: '', label: '— Extra (se conserva) —', grp: '' }, { key: '__ignore__', label: '✕ Ignorar', grp: '' }];
     LM_FIELDS[target].forEach(g => g.opts.forEach(([k, l]) => out.push({ key: k, label: l, grp: g.g })));
+    _lmActiveCustomFields(target === 'companies' ? 'company' : 'contact').forEach(f => out.push({ key: f.field_key, label: f.label, grp: 'Personalizado' }));
     return out;
   }
   function _impStepMap() {
@@ -21442,6 +21508,18 @@ ${foot}
 
   // ── Drawer: Contacto (crear / editar) ──
   function _lmFld(fid, lbl, val, ph, full) { return `<label class="fin-cfg-field${full ? ' fin-pi-full' : ''}"><span class="fin-cfg-lbl">${lbl}</span><input class="form-input" id="${fid}" value="${val ? esc(val) : ''}" placeholder="${ph || ''}"></label>`; }
+  // Campos personalizados activos (con label) de una entidad — solo estos se muestran en modal/filtros/import/export.
+  function _lmActiveCustomFields(entity) { return (_lmCustomFields[entity] || []).filter(f => f.label); }
+  function _lmCustomFieldsHtml(entity, row, prefix) {
+    const active = _lmActiveCustomFields(entity);
+    if (!active.length) return '';
+    return active.map(f => _lmFld(`${prefix}-${f.field_key}`, f.label, row ? row[f.field_key] : '')).join('');
+  }
+  function _lmCustomFieldsPayload(entity, prefix) {
+    const out = {};
+    _lmActiveCustomFields(entity).forEach(f => { out[f.field_key] = ($(`${prefix}-${f.field_key}`)?.value || '').trim(); });
+    return out;
+  }
   function openContact(id, presetCompanyId) {
     const c = id ? _contacts.find(x => x.id === id) : null;
     document.getElementById('lm-ct-modal')?.remove();
@@ -21473,6 +21551,7 @@ ${foot}
         ${_lmFld('ct-contact_priority', 'Prioridad de contacto', c?.contact_priority)}
         ${_lmFld('ct-fuente', 'Fuente', c?.fuente)}
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Notas</span><textarea class="form-input" id="ct-notas" rows="2">${c ? esc(c.notas) : ''}</textarea></label>
+        ${_lmCustomFieldsHtml('contact', c, 'ct')}
       </div>
       <div class="fin-pi-box__ft"><span class="fin-cfg-hint" id="ct-hint"></span><div class="fin-pi-ft-btns">
         ${c ? `<button class="btn btn--ghost btn--danger btn--sm" onclick="LeadManagerModule.deleteContact(${c.id},1)">Eliminar</button>` : ''}
@@ -21512,6 +21591,7 @@ ${foot}
       estado: $('ct-estado')?.value || 'nuevo', fuente: g('ct-fuente') || 'manual', notas: g('ct-notas'),
       company_id: companyId, empresa_nombre: co ? (co.nombre || co.dominio || '') : '',
       outbound_client_id: $('ct-obc')?.value ? Number($('ct-obc').value) : null,
+      ..._lmCustomFieldsPayload('contact', 'ct'),
     };
     const hint = $('ct-hint');
     if (!payload.nombre && !payload.apellido && !payload.email) { if (hint) { hint.textContent = 'Nombre o email requerido'; hint.style.color = '#C4342B'; } return; }
@@ -21555,6 +21635,7 @@ ${foot}
         ${_lmFld('co-ingresos', 'Ingresos anuales', c?.ingresos)}
         ${_lmFld('co-telefono', 'Teléfono', c?.telefono)}
         ${_lmFld('co-linkedin', 'LinkedIn', c?.linkedin)}
+        ${_lmFld('co-linkedin_sales_nav', 'LinkedIn (Sales Navigator)', c?.linkedin_sales_nav)}
         ${_lmFld('co-ciudad', 'Ciudad', c?.ciudad)}
         ${_lmFld('co-region', 'Región', c?.region)}
         ${_lmFld('co-pais', 'País', c?.pais)}
@@ -21567,6 +21648,7 @@ ${foot}
         ${_lmFld('co-descripcion', 'Descripción', c?.descripcion, '', true)}
         ${_lmFld('co-tecnologias', 'Tecnologías', c?.tecnologias, '', true)}
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Notas</span><textarea class="form-input" id="co-notas" rows="2">${c ? esc(c.notas) : ''}</textarea></label>
+        ${_lmCustomFieldsHtml('company', c, 'co')}
       </div>
       <div class="fin-pi-box__ft"><span class="fin-cfg-hint" id="co-hint"></span><div class="fin-pi-ft-btns">
         ${c ? `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.closeCompany();LeadManagerModule.openContact(null,${c.id})">＋ Agregar prospecto</button>` : ''}
@@ -21582,9 +21664,10 @@ ${foot}
     const g = fid => ($(fid)?.value || '').trim();
     const payload = {
       nombre: g('co-nombre'), dominio: g('co-dominio'), website: g('co-website'), industria: g('co-industria'),
-      tamano: g('co-tamano'), ingresos: g('co-ingresos'), telefono: g('co-telefono'), linkedin: g('co-linkedin'),
+      tamano: g('co-tamano'), ingresos: g('co-ingresos'), telefono: g('co-telefono'), linkedin: g('co-linkedin'), linkedin_sales_nav: g('co-linkedin_sales_nav'),
       ciudad: g('co-ciudad'), region: g('co-region'), pais: g('co-pais'), fundada: g('co-fundada'),
       direccion: g('co-direccion'), codigo_postal: g('co-codigo_postal'), descripcion: g('co-descripcion'), tecnologias: g('co-tecnologias'), funding: g('co-funding'), target_tier: g('co-target_tier'), segmento: g('co-segmento'), notas: g('co-notas'),
+      ..._lmCustomFieldsPayload('company', 'co'),
     };
     const hint = $('co-hint');
     if (!payload.nombre && !payload.dominio) { if (hint) { hint.textContent = 'Nombre o dominio requerido'; hint.style.color = '#C4342B'; } return; }
@@ -21604,6 +21687,8 @@ ${foot}
   // ═══════════════════════════════════════════════════════════════
   // LM FASE A — motor de envío: card Hoy, settings, verificación, envíos
   // ═══════════════════════════════════════════════════════════════
+  let _lmCustomFields = { company: [], contact: [] }; // campos personalizados (Field1..10), lazy
+  let _lmCustomFieldsLoaded = false;
   let _sendCfg = null;      // configuración de envío (lazy)
   let _todayData = null;    // datos de la card Hoy (lazy)
   let _lmMsgs = null;       // mensajes enviados (inbox real, lazy)
@@ -22040,6 +22125,221 @@ ${foot}
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
+  // ═══════════════════════════════════════════════════════════════
+  // Enriquecimiento → "Datos": grid tipo Excel de Empresas/Contactos
+  // Editable inline, filtrable por Cliente/Secuencia/Campaña, con "Limpiar" en bloque.
+  // ═══════════════════════════════════════════════════════════════
+  let _dgContainerId = null;
+  let _dgEntity = 'companies';   // 'companies' | 'contacts'
+  let _dgCliente = '', _dgSeq = '', _dgCamp = '', _dgQ = '';
+  let _dgSel = new Set();
+  let _dgCleanPreview = null;
+  const DG_CLEAN_FIELDS = { companies: ['nombre', 'tamano'], contacts: ['cargo'] };
+  const DG_EDITABLE_BASE = {
+    companies: ['nombre', 'dominio', 'industria', 'tamano', 'ciudad', 'pais', 'target_tier', 'segmento'],
+    contacts:  ['nombre', 'apellido', 'cargo', 'email', 'telefono', 'linkedin', 'estado'],
+  };
+  function DG_COLS_FOR(entity) {
+    const base = entity === 'companies'
+      ? [['nombre', 'Nombre'], ['dominio', 'Dominio'], ['industria', 'Industria'], ['tamano', 'Nº empleados'], ['ciudad', 'Ciudad'], ['pais', 'País'], ['target_tier', 'Target Tier'], ['segmento', 'Segmento / ICP']]
+      : [['nombre', 'Nombre'], ['apellido', 'Apellido'], ['cargo', 'Cargo'], ['company_nombre', 'Empresa'], ['email', 'Email'], ['telefono', 'Teléfono'], ['linkedin', 'LinkedIn'], ['estado', 'Estado']];
+    const active = _lmActiveCustomFields(entity === 'companies' ? 'company' : 'contact');
+    return base.concat(active.map(f => [f.field_key, f.label]));
+  }
+  function _dgEditableFields(entity) {
+    const active = _lmActiveCustomFields(entity === 'companies' ? 'company' : 'contact').map(f => f.field_key);
+    return DG_EDITABLE_BASE[entity].concat(active);
+  }
+  function _dgFieldLabel(field) { return (DG_COLS_FOR(_dgEntity).find(x => x[0] === field) || [field, field])[1]; }
+  function renderDataGrid(containerId) {
+    _dgContainerId = containerId;
+    const el = document.getElementById(containerId); if (!el) return;
+    el.innerHTML = `<div class="cp-empty2" style="padding:22px">Cargando…</div>`;
+    load().then(() => { el.innerHTML = _dgShellHtml(); _dgRenderRows(); });
+  }
+  function _dgShellHtml() {
+    return `<div class="lm-sec-head"><div><h2 class="lm-sec-title">Datos</h2><p class="lm-sec-sub">Empresas y Contactos en vista de tabla — edita, limpia y corrige. Los cambios se guardan en todo el sistema.</p></div></div>
+      ${_dgToolbar()}
+      <div id="dg-bulkbar"></div>
+      <div class="lm-dt-wrap"><table class="clients-table dg-table"><thead><tr id="dg-head-row"></tr></thead><tbody id="dg-tbody"></tbody></table></div>
+      <p class="lm-sec-sub" id="dg-cap-hint"></p>`;
+  }
+  function _dgToolbar() {
+    const isCo = _dgEntity === 'companies';
+    const cliOpts = `<option value="">Cliente: todos</option>` + _clients.map(c => `<option value="${c.id}"${String(_dgCliente) === String(c.id) ? ' selected' : ''}>${esc(c.nombre)}</option>`).join('');
+    const seqOpts = `<option value="">Secuencia: todas</option>` + _sequences.map(s => `<option value="${s.id}"${String(_dgSeq) === String(s.id) ? ' selected' : ''}>${esc(s.nombre)}</option>`).join('');
+    const campOpts = `<option value="">Campaña: todas</option>` + _campaigns.map(c => `<option value="${c.id}"${String(_dgCamp) === String(c.id) ? ' selected' : ''}>${esc(c.nombre)}</option>`).join('');
+    return `<div class="lm-toolbar">
+      <div class="dg-toggle">
+        <button class="dg-toggle__b${isCo ? ' active' : ''}" onclick="LeadManagerModule.dgSetEntity('companies')">Empresas</button>
+        <button class="dg-toggle__b${!isCo ? ' active' : ''}" onclick="LeadManagerModule.dgSetEntity('contacts')">Contactos</button>
+      </div>
+      <select class="form-input" onchange="LeadManagerModule.dgSetCliente(this.value)">${cliOpts}</select>
+      <select class="form-input"${isCo ? ' disabled title="Disponible al ver Contactos"' : ''} onchange="LeadManagerModule.dgSetSeq(this.value)">${seqOpts}</select>
+      ${!isCo ? `<select class="form-input" onchange="LeadManagerModule.dgSetCamp(this.value)">${campOpts}</select>` : ''}
+      <input class="form-input" id="dg-q" placeholder="Buscar empresa o contacto…" value="${esc(_dgQ)}" oninput="LeadManagerModule.dgSetQ(this.value)">
+    </div>`;
+  }
+  function _dgVisible() {
+    const isCo = _dgEntity === 'companies';
+    const src = isCo ? _companies : _contacts;
+    const q = _dgQ.toLowerCase().trim();
+    return (src || []).filter(r => {
+      if (_dgCliente && String(r.outbound_client_id) !== String(_dgCliente)) return false;
+      if (!isCo && _dgSeq && !(r.sequences || []).some(s => String(s.id) === String(_dgSeq))) return false;
+      if (!isCo && _dgCamp && !(r.campaigns || []).some(c => String(c.id) === String(_dgCamp))) return false;
+      if (q) {
+        const hay = [r.nombre, r.apellido, r.dominio, r.email, r.company_nombre, r.empresa_nombre].filter(Boolean).join(' ').toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }
+  function _dgRow(r, cols, editable) {
+    const cells = cols.map(([k]) => {
+      const val = k === 'company_nombre' ? (r.company_nombre || r.empresa_nombre || '') : (r[k] || '');
+      if (editable.includes(k)) return `<td class="dg-cell" data-id="${r.id}" data-field="${k}" onclick="LeadManagerModule.dgEditCell(this)">${val ? esc(val) : '<span class="dg-empty">—</span>'}</td>`;
+      return `<td class="dg-cell dg-cell--ro">${val ? esc(val) : '—'}</td>`;
+    }).join('');
+    return `<tr class="${_dgSel.has(r.id) ? 'sel' : ''}">
+      <td class="lm-ck-col"><input type="checkbox" class="lm-ck" ${_dgSel.has(r.id) ? 'checked' : ''} onclick="LeadManagerModule.dgToggleSel(${r.id},this.checked)"></td>
+      ${cells}
+    </tr>`;
+  }
+  function _dgBulkBar(rows) {
+    const n = _dgSel.size;
+    return `<div class="lm-bulk-bar show dg-bulkbar">
+      <span class="lm-bulk-n">${n ? `${n} seleccionado(s)` : `${rows.length} filtrado(s)`}</span>
+      <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.dgCleanOpen()">🧹 Limpiar</button>
+      <button class="btn btn--ghost btn--sm" disabled title="Próximamente">✨ Enriquecer</button>
+      ${n ? `<button class="lm-bulk-ghost" onclick="LeadManagerModule.dgClearSel()">Ninguna</button>` : ''}
+    </div>`;
+  }
+  function _dgRenderRows() {
+    const rows = _dgVisible();
+    const cols = DG_COLS_FOR(_dgEntity);
+    const editable = _dgEditableFields(_dgEntity);
+    const headRow = document.getElementById('dg-head-row');
+    if (headRow) headRow.innerHTML = `<th class="lm-ck-col"><input type="checkbox" class="lm-ck" onclick="LeadManagerModule.dgToggleAll(this.checked)"></th>${cols.map(([, l]) => `<th>${esc(l)}</th>`).join('')}`;
+    const CAP = 300;
+    const shown = rows.slice(0, CAP);
+    const tbody = document.getElementById('dg-tbody');
+    if (tbody) tbody.innerHTML = shown.length ? shown.map(r => _dgRow(r, cols, editable)).join('') : `<tr><td colspan="${cols.length + 1}" class="cp-empty2">Sin resultados</td></tr>`;
+    const hint = document.getElementById('dg-cap-hint');
+    if (hint) hint.textContent = rows.length > CAP ? `Mostrando ${CAP} de ${rows.length} — usa los filtros para acotar.` : '';
+    const bar = document.getElementById('dg-bulkbar');
+    if (bar) bar.innerHTML = _dgBulkBar(rows);
+  }
+  function _dgRepaint() { const el = document.getElementById(_dgContainerId); if (!el) return; el.innerHTML = _dgShellHtml(); _dgRenderRows(); }
+  function dgSetEntity(e) { _dgEntity = e; _dgSel.clear(); _dgSeq = ''; _dgCamp = ''; _dgRepaint(); }
+  function dgSetCliente(v) { _dgCliente = v; _dgRenderRows(); }
+  function dgSetSeq(v) { _dgSeq = v; _dgRenderRows(); }
+  function dgSetCamp(v) { _dgCamp = v; _dgRenderRows(); }
+  function dgSetQ(v) { _dgQ = v; _dgRenderRows(); }
+  function dgToggleSel(id, checked) { if (checked) _dgSel.add(id); else _dgSel.delete(id); _dgRenderRows(); }
+  function dgToggleAll(checked) { const rows = _dgVisible(); if (checked) rows.forEach(r => _dgSel.add(r.id)); else rows.forEach(r => _dgSel.delete(r.id)); _dgRenderRows(); }
+  function dgClearSel() { _dgSel.clear(); _dgRenderRows(); }
+  // ── Edición inline (mismo patrón que Finanzas/Conciliación: _cnSwapToInput/_cnEditKey) ──
+  function dgEditCell(el) { _dgSwapToInput(el, Number(el.dataset.id), el.dataset.field); }
+  function _dgSwapToInput(el, id, field) {
+    if (!el || el.querySelector('input')) return;
+    const current = el.querySelector('.dg-empty') ? '' : el.textContent.trim();
+    el.innerHTML = `<input type="text" class="dg-cell-input" value="${esc(current)}" onclick="event.stopPropagation()" onkeydown="LeadManagerModule.dgEditKey(event)" onblur="LeadManagerModule.dgSaveCell(this,${id},'${field}')">`;
+    const input = el.querySelector('input'); input.focus(); input.select();
+  }
+  function dgEditKey(e) {
+    if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); }
+    else if (e.key === 'Escape') { e.preventDefault(); e.target._cancelled = true; e.target.blur(); }
+  }
+  function _dgCoPayload(row) {
+    const out = {
+      nombre: row.nombre || '', dominio: row.dominio || '', website: row.website || '', industria: row.industria || '',
+      tamano: row.tamano || '', ingresos: row.ingresos || '', telefono: row.telefono || '', linkedin: row.linkedin || '', linkedin_sales_nav: row.linkedin_sales_nav || '',
+      ciudad: row.ciudad || '', region: row.region || '', pais: row.pais || '', fundada: row.fundada || '',
+      direccion: row.direccion || '', codigo_postal: row.codigo_postal || '', descripcion: row.descripcion || '', tecnologias: row.tecnologias || '', funding: row.funding || '', target_tier: row.target_tier || '', segmento: row.segmento || '', notas: row.notas || '',
+    };
+    _lmActiveCustomFields('company').forEach(f => { out[f.field_key] = row[f.field_key] || ''; });
+    return out;
+  }
+  function _dgCtPayload(row) {
+    const out = {
+      nombre: row.nombre || '', apellido: row.apellido || '', email: row.email || '', email_personal: row.email_personal || '', cargo: row.cargo || '',
+      telefono: row.telefono || '', movil: row.movil || '', seniority: row.seniority || '', departamento: row.departamento || '',
+      buyer_role: row.buyer_role || '', contact_priority: row.contact_priority || '',
+      linkedin: row.linkedin || '', ciudad: row.ciudad || '', region: row.region || '', pais: row.pais || '',
+      estado: row.estado || 'nuevo', fuente: row.fuente || 'manual', notas: row.notas || '',
+      company_id: row.company_id || null, empresa_nombre: row.empresa_nombre || '',
+      outbound_client_id: row.outbound_client_id || null,
+    };
+    _lmActiveCustomFields('contact').forEach(f => { out[f.field_key] = row[f.field_key] || ''; });
+    return out;
+  }
+  async function dgSaveCell(input, id, field) {
+    if (input._cancelled) { _dgRenderRows(); return; }
+    const isCo = _dgEntity === 'companies';
+    const arr = isCo ? _companies : _contacts;
+    const row = arr.find(x => x.id === id);
+    if (!row) { _dgRenderRows(); return; }
+    const val = (input.value || '').trim();
+    const prev = row[field] == null ? '' : String(row[field]);
+    if (val === prev) { _dgRenderRows(); return; }
+    row[field] = val;
+    if (isCo && field === 'nombre') (_contacts || []).forEach(c => { if (c.company_id === id) { c.company_nombre = val; c.empresa_nombre = val; } });
+    _dgRenderRows();
+    try {
+      const payload = isCo ? _dgCoPayload(row) : _dgCtPayload(row);
+      const res = await apiFetch(`${API}/lm/${isCo ? 'companies' : 'contacts'}/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Error al guardar');
+    } catch (e) {
+      row[field] = prev;
+      if (isCo && field === 'nombre') (_contacts || []).forEach(c => { if (c.company_id === id) { c.company_nombre = prev; c.empresa_nombre = prev; } });
+      _dgRenderRows();
+      showBanner('Error al guardar: ' + e.message, 'error');
+    }
+  }
+  // ── Limpiar en bloque: preview antes/después → confirmar → aplica ──
+  async function dgCleanOpen() {
+    const ids = _dgSel.size ? [..._dgSel] : _dgVisible().map(r => r.id);
+    if (!ids.length) { showBanner('No hay filas para limpiar', 'info'); return; }
+    try {
+      const res = await apiFetch(`${API}/lm/bulk-clean`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entity: _dgEntity, ids, fields: DG_CLEAN_FIELDS[_dgEntity], apply: false }) });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Error');
+      _dgCleanPreview = d.changes || [];
+      _dgCleanOpenModal();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  function _dgCleanOpenModal() {
+    document.getElementById('lm-dgclean-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'lm-dgclean-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) dgCleanClose(); };
+    const changes = _dgCleanPreview || [];
+    const body = changes.length
+      ? `<div class="dg-clean-list">${changes.map(c => `<div class="dg-clean-row"><span class="dg-clean-f">${esc(_dgFieldLabel(c.campo))}</span><span class="dg-clean-a">${esc(c.antes) || '—'}</span><span class="dg-clean-arrow">→</span><span class="dg-clean-d">${esc(c.despues) || '—'}</span></div>`).join('')}</div>`
+      : `<div class="cp-empty2" style="padding:22px">Nada que limpiar — ya está todo bien formateado.</div>`;
+    m.innerHTML = `<div class="fin-pi-box lm-flt-box">
+      <div class="fin-pi-box__hd"><h3>Limpiar · vista previa (${changes.length})</h3><button class="fin-pi-x" onclick="LeadManagerModule.dgCleanClose()">✕</button></div>
+      <div class="flt-body">${body}</div>
+      <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns">
+        <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.dgCleanClose()">Cancelar</button>
+        ${changes.length ? `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.dgCleanApply()">Aplicar ${changes.length} cambio(s)</button>` : ''}
+      </div></div></div>`;
+    document.body.appendChild(m);
+  }
+  function dgCleanClose() { document.getElementById('lm-dgclean-modal')?.remove(); _dgCleanPreview = null; }
+  async function dgCleanApply() {
+    const changes = _dgCleanPreview || []; if (!changes.length) return;
+    const ids = _dgSel.size ? [..._dgSel] : _dgVisible().map(r => r.id);
+    try {
+      const res = await apiFetch(`${API}/lm/bulk-clean`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entity: _dgEntity, ids, fields: DG_CLEAN_FIELDS[_dgEntity], apply: true }) });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Error');
+      dgCleanClose();
+      showBanner(`✓ ${d.applied} campo(s) limpiado(s)${d.syncedNames ? ` · ${d.syncedNames} contacto(s) actualizado(s)` : ''}`, 'success');
+      await load(); _dgRenderRows();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+
   return { load, filter, setFilter, setView, go, openClient, clientTab,
     openImport, closeImport, impFile, impToggleHeader, impSetObc, impNewClient, impRun, exportCsv,
     cbxOpen, cbxFilter, cbxPick, cbxBlur,
@@ -22061,7 +22361,9 @@ ${foot}
     openTemplate, closeTemplate, saveTemplate, deleteTemplate, tplInsertVar, tplSetFilter, tplSetTag, tplSetSeq, tplCanalChange,
     tplTagInput, tplTagKey, tplTagPick, tplTagAddTyped, tplTagRemove, tplTagBlur,
     tplSeqInput, tplSeqKey, tplSeqPick, tplSeqRemove, tplSeqBlur,
-    openFilters, closeFilters, fltSet, fltAddRow, fltDelRow, fltApply, clearFilters, removeFilter,
+    openFilters, closeFilters, fltSet, fltAddRow, fltDelRow, fltApply, clearFilters, removeFilter, fltOpenDate, cfSaveLabel,
+    renderDataGrid, dgSetEntity, dgSetCliente, dgSetSeq, dgSetCamp, dgSetQ, dgToggleSel, dgToggleAll, dgClearSel,
+    dgEditCell, dgEditKey, dgSaveCell, dgCleanOpen, dgCleanClose, dgCleanApply,
     fmsToggle, fmsFilter, fmsPick,
     openViews, applyView, saveView, deleteView, clearAllViews,
     taskSetView, taskSetFilter, calPrev, calNext, calToday,
@@ -26487,6 +26789,7 @@ function initApp() {
       loadTagSuggestions();
       loadVerifications();
     }
+    if (tabName === 'datos') LeadManagerModule.renderDataGrid('dg-body');
     if (tabName === 'mgmt-dashboard') DashboardModule.load();
     if (tabName === 'mgmt-finance')   FinanceModule.load();
     if (tabName === 'mgmt-clients')   ClientsModule.load();

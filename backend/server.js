@@ -3236,7 +3236,8 @@ function _lmNormDomain(raw) {
 }
 
 // ── Empresas (lm_companies) ────────────────────────────────────────
-const LM_CO_COLS = ['nombre','dominio','website','industria','tamano','ingresos','telefono','linkedin','ciudad','region','pais','fundada','direccion','codigo_postal','descripcion','tecnologias','funding','target_tier','segmento','notas'];
+const LM_CUSTOM_KEYS = Array.from({ length: 10 }, (_, i) => `campo${i + 1}`);
+const LM_CO_COLS = ['nombre','dominio','website','industria','tamano','ingresos','telefono','linkedin','linkedin_sales_nav','ciudad','region','pais','fundada','direccion','codigo_postal','descripcion','tecnologias','funding','target_tier','segmento','notas', ...LM_CUSTOM_KEYS];
 app.get('/api/lm/companies', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(`
@@ -3268,6 +3269,9 @@ app.put('/api/lm/companies/:id', requireAuth, async (req, res) => {
       WHERE id=$${LM_CO_COLS.length + 2} AND user_id=$${LM_CO_COLS.length + 3} RETURNING *
     `, [...vals, b.outbound_client_id || null, req.params.id, req.workspaceOwnerId]);
     if (!rows.length) return res.status(404).json({ error: 'Empresa no encontrada' });
+    // El nombre de empresa vive duplicado en lm_contacts.empresa_nombre (snapshot de import) —
+    // sin esto, editar el nombre acá dejaba desincronizados a sus contactos.
+    if (_lmS(b.nombre)) await pool.query(`UPDATE lm_contacts SET empresa_nombre=$1, updated_at=NOW() WHERE user_id=$2 AND company_id=$3`, [_lmS(b.nombre), req.workspaceOwnerId, req.params.id]);
     res.json(rows[0]);
   } catch (err) { console.error('[lm-co] PUT', err.message); res.status(500).json({ error: 'Error al actualizar empresa' }); }
 });
@@ -3302,6 +3306,72 @@ app.post('/api/lm/companies/bulk-delete', requireAuth, async (req, res) => {
   finally { cl.release(); }
 });
 
+// ── Campos personalizados (Field 1..10 renombrables, Empresas/Contactos) ──
+// Un slot solo "existe" para el usuario si tiene label — el front filtra por eso.
+app.get('/api/lm/custom-fields', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`SELECT entity, field_key, label FROM lm_custom_field_labels WHERE user_id=$1`, [req.workspaceOwnerId]);
+    const byKey = new Map(rows.map(r => [r.entity + ':' + r.field_key, r.label]));
+    const build = entity => LM_CUSTOM_KEYS.map(k => ({ entity, field_key: k, label: byKey.get(entity + ':' + k) || '' }));
+    res.json({ company: build('company'), contact: build('contact') });
+  } catch (err) { console.error('[lm-cf] GET', err.message); res.status(500).json({ error: 'Error al cargar campos personalizados' }); }
+});
+app.put('/api/lm/custom-fields', requireAuth, async (req, res) => {
+  const entity = String((req.body || {}).entity || '');
+  const fieldKey = String((req.body || {}).field_key || '');
+  const label = _lmS((req.body || {}).label);
+  if (!['company', 'contact'].includes(entity)) return res.status(400).json({ error: 'Entidad inválida' });
+  if (!LM_CUSTOM_KEYS.includes(fieldKey)) return res.status(400).json({ error: 'Campo inválido' });
+  try {
+    await pool.query(`
+      INSERT INTO lm_custom_field_labels (user_id, entity, field_key, label) VALUES ($1,$2,$3,$4)
+      ON CONFLICT (user_id, entity, field_key) DO UPDATE SET label=$4
+    `, [req.workspaceOwnerId, entity, fieldKey, label]);
+    res.json({ ok: true });
+  } catch (err) { console.error('[lm-cf] PUT', err.message); res.status(500).json({ error: 'Error al guardar' }); }
+});
+
+// ── Limpiar en bloque (Enriquecimiento → Datos) ──
+// Modo preview (default): calcula qué cambiaría sin escribir nada. apply:true sí escribe.
+// Si se limpia el nombre de una empresa, sincroniza lm_contacts.empresa_nombre (duplicado
+// plano) de sus contactos para que no quede desincronizado en ningún lado.
+app.post('/api/lm/bulk-clean', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId;
+  const b = req.body || {};
+  const entity = b.entity === 'companies' ? 'companies' : (b.entity === 'contacts' ? 'contacts' : '');
+  const ids = Array.isArray(b.ids) ? b.ids.map(Number).filter(Boolean) : [];
+  const { cleanableFields, cleanValue } = require('./services/dataCleanService');
+  const allowed = cleanableFields(entity);
+  const fields = (Array.isArray(b.fields) ? b.fields : []).filter(f => allowed.includes(f));
+  const apply = !!b.apply;
+  if (!entity) return res.status(400).json({ error: 'Entidad inválida' });
+  if (!ids.length) return res.status(400).json({ error: 'Sin filas seleccionadas' });
+  if (!fields.length) return res.status(400).json({ error: 'Sin campos para limpiar' });
+  const table = entity === 'companies' ? 'lm_companies' : 'lm_contacts';
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, ${fields.join(',')} FROM ${table} WHERE user_id=$1 AND id = ANY($2::int[])`, [uid, ids]);
+    const changes = [];
+    for (const row of rows) {
+      for (const field of fields) {
+        const before = row[field] == null ? '' : String(row[field]);
+        const after = cleanValue(entity, field, before);
+        if (after !== before) changes.push({ id: row.id, campo: field, antes: before, despues: after });
+      }
+    }
+    if (!apply) return res.json({ preview: true, changes });
+    let syncedNames = 0;
+    for (const ch of changes) {
+      await pool.query(`UPDATE ${table} SET ${ch.campo}=$1, updated_at=NOW() WHERE id=$2 AND user_id=$3`, [ch.despues, ch.id, uid]);
+      if (entity === 'companies' && ch.campo === 'nombre') {
+        const r = await pool.query(`UPDATE lm_contacts SET empresa_nombre=$1, updated_at=NOW() WHERE user_id=$2 AND company_id=$3`, [ch.despues, uid, ch.id]);
+        syncedNames += r.rowCount;
+      }
+    }
+    res.json({ preview: false, applied: changes.length, syncedNames, changes });
+  } catch (err) { console.error('[lm-clean]', err.message); res.status(500).json({ error: 'Error al limpiar' }); }
+});
+
 // ── Cola de empresas ("empresa primero", estilo LinkedIn Sales Navigator) ──
 // Puente entre "ya califiqué la empresa" y "ya tengo a la persona": lm_company_sequences
 // SIEMPRE representa "falta encontrar al decisor en LinkedIn". Al agregar el contacto
@@ -3330,7 +3400,7 @@ app.get('/api/lm/sequences/:id/pending-companies', requireAuth, async (req, res)
   try {
     const { rows } = await pool.query(`
       SELECT cs.id AS company_sequence_id, cs.estado, cs.created_at,
-             c.id AS company_id, c.nombre, c.dominio, c.linkedin, c.industria, c.tamano, c.pais, c.target_tier, c.segmento
+             c.id AS company_id, c.nombre, c.dominio, c.linkedin, c.linkedin_sales_nav, c.industria, c.tamano, c.pais, c.target_tier, c.segmento
         FROM lm_company_sequences cs JOIN lm_companies c ON c.id = cs.company_id
        WHERE cs.user_id=$1 AND cs.sequence_id=$2 AND cs.estado='pendiente'
        ORDER BY cs.created_at ASC`, [req.workspaceOwnerId, req.params.id]);
@@ -3406,7 +3476,7 @@ app.post('/api/lm/company-sequences/:id/convert', requireAuth, async (req, res) 
 });
 
 // ── Contactos (lm_contacts) ────────────────────────────────────────
-const LM_CT_COLS = ['nombre','apellido','email','email_personal','telefono','movil','cargo','seniority','departamento','linkedin','empresa_nombre','ciudad','region','pais','estado','fuente','contact_priority','buyer_role','notas'];
+const LM_CT_COLS = ['nombre','apellido','email','email_personal','telefono','movil','cargo','seniority','departamento','linkedin','empresa_nombre','ciudad','region','pais','estado','fuente','contact_priority','buyer_role','notas', ...LM_CUSTOM_KEYS];
 app.get('/api/lm/contacts', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(`

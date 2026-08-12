@@ -1467,6 +1467,30 @@ async function initDb() {
     await pool.query(`CREATE INDEX IF NOT EXISTS lm_cocseq_user_idx ON lm_company_sequences (user_id);`);
     await pool.query(`CREATE INDEX IF NOT EXISTS lm_cocseq_seq_idx  ON lm_company_sequences (sequence_id, estado);`);
 
+    // URL de LinkedIn Sales Navigator de la empresa — distinta del LinkedIn público (linkedin),
+    // que es la que ella usa de verdad para prospectar. El botón "LinkedIn ↗" de Cola de
+    // empresas prioriza esta si existe.
+    await pool.query(`ALTER TABLE lm_companies ADD COLUMN IF NOT EXISTS linkedin_sales_nav TEXT NOT NULL DEFAULT '';`);
+
+    // ── Campos personalizados (Field 1..10, renombrables desde Configuración) ──
+    // Slots genéricos en companies/contacts + tabla de labels por usuario. Un campo solo
+    // aparece en filtros/import/modal/export si tiene label no vacío (ver lm_custom_field_labels).
+    for (let i = 1; i <= 10; i++) {
+      await pool.query(`ALTER TABLE lm_companies ADD COLUMN IF NOT EXISTS campo${i} TEXT NOT NULL DEFAULT '';`);
+      await pool.query(`ALTER TABLE lm_contacts  ADD COLUMN IF NOT EXISTS campo${i} TEXT NOT NULL DEFAULT '';`);
+    }
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS lm_custom_field_labels (
+        id         SERIAL      PRIMARY KEY,
+        user_id    INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        entity     TEXT        NOT NULL,
+        field_key  TEXT        NOT NULL,
+        label      TEXT        NOT NULL DEFAULT '',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE (user_id, entity, field_key)
+      );
+    `);
+
     console.log('[db] tables ready (users, verifications, batch_jobs, clients, projects, tasks, payments, team_members, workspaces, workspace_invites, chat_messages, leads, meetings, fin_config, fin_member_config, pagos_internos, opportunities, opportunity_tasks)');
   } catch (err) {
     console.error('[db] initDb failed:', err.message);
