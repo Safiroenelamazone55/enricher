@@ -21298,7 +21298,7 @@ ${foot}
   let _imp = null;
   function openImport(target, withCompanies) {
     const t = target === 'companies' ? 'companies' : 'contacts';
-    _imp = { target: t, withCompanies: t === 'contacts' ? (withCompanies !== false) : true, file: null, origHeader: [], samplesOrig: [], headers: [], samples: [], hasHeader: true, obc: '' };
+    _imp = { target: t, withCompanies: t === 'contacts' ? (withCompanies !== false) : true, updateExisting: true, file: null, origHeader: [], samplesOrig: [], headers: [], samples: [], hasHeader: true, obc: '' };
     document.getElementById('lm-imp-modal')?.remove();
     const m = document.createElement('div');
     m.id = 'lm-imp-modal'; m.className = 'fin-pi-backdrop';
@@ -21401,6 +21401,7 @@ ${foot}
     else { _imp.headers = _imp.origHeader.map((_, i) => `Columna ${i + 1}`); _imp.samples = [_imp.origHeader.slice(), ..._imp.samplesOrig]; }
     _impStepMap();
   }
+  function impToggleUpdateExisting(chk) { if (_imp) _imp.updateExisting = chk; }
   function impSetObc(v) { if (!_imp) return; _imp.obc = v; const go = $('lm-imp-go'); if (go && _imp.target === 'contacts') go.disabled = !v; }
   function impNewClient() { closeImport(); openClientDrawer(); }
 
@@ -21443,6 +21444,7 @@ ${foot}
         ${_impSteps(2)}
         <div class="lm-map-bar">
           <label class="lm-chk"><input type="checkbox" ${_imp.hasHeader ? 'checked' : ''} onchange="LeadManagerModule.impToggleHeader(this.checked)"> Primera fila = encabezado</label>
+          <label class="lm-chk" title="Si ya existe (mismo email/ID de contacto, o mismo dominio/nombre de empresa) se actualiza en vez de duplicarse."><input type="checkbox" ${_imp.updateExisting ? 'checked' : ''} onchange="LeadManagerModule.impToggleUpdateExisting(this.checked)"> Actualizar si ya existe</label>
           ${_obcBar}
         </div>
         <div class="lm-map-headrow"><span>Columna del archivo</span><span>Ejemplo</span><span></span><span>Asignar a (escribe para buscar)</span></div>
@@ -21505,6 +21507,7 @@ ${foot}
       fd.append('target', _imp.target);
       fd.append('mapping', JSON.stringify(mapping));
       fd.append('hasHeader', _imp.hasHeader ? '1' : '0');
+      fd.append('updateExisting', _imp.updateExisting !== false ? '1' : '0');
       if (_imp.obc) fd.append('outbound_client_id', _imp.obc);
       const res = await apiFetch(`${API}/lm/import`, { method: 'POST', body: fd });
       const d = await res.json().catch(() => ({}));
@@ -21526,11 +21529,12 @@ ${foot}
         <div class="lm-imp-done">
           <div class="lm-imp-done__ico">${_ico('check')}</div>
           <div class="lm-imp-done__stats">
-            ${isCo ? '' : stat(d.contactsCreated, 'contactos creados')}
+            ${isCo ? '' : stat(d.contactsCreated, 'contactos nuevos')}
             ${isCo ? '' : stat(d.contactsUpdated, 'contactos actualizados')}
-            ${isCo ? '' : stat(d.contactsSkipped, 'sin cambios')}
+            ${isCo ? '' : stat(d.contactsSkipped, 'contactos sin cambios')}
             ${stat(d.companiesCreated, 'empresas nuevas')}
-            ${stat(d.companiesMatched, 'empresas enlazadas')}
+            ${stat(d.companiesUpdated, 'empresas actualizadas')}
+            ${stat(d.companiesSkipped, 'empresas sin cambios')}
           </div>
           ${d.errors && d.errors.length ? `<div class="lm-imp-err">${d.errors.length} fila(s) con error — ${esc(d.errors.slice(0, 3).join(' · '))}</div>` : ''}
         </div>
@@ -22373,7 +22377,7 @@ ${foot}
   }
 
   return { load, filter, setFilter, setView, go, openClient, clientTab,
-    openImportPicker, closeImportPicker, openImport, closeImport, impFile, impToggleHeader, impSetObc, impNewClient, impRun, exportCsv,
+    openImportPicker, closeImportPicker, openImport, closeImport, impFile, impToggleHeader, impToggleUpdateExisting, impSetObc, impNewClient, impRun, exportCsv,
     cbxOpen, cbxFilter, cbxPick, cbxBlur,
     openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, bulkDeleteContacts, bulkAddOpen, bulkAddDo, openContactPage, cpTab, cpSave, cpDelete, cpActOpen, cpActSave, cpActToggle, cpActDel,
     cpResumeSeq, cpFocusField, cpOpenRegisterReply, cpSaveRegisterReply,

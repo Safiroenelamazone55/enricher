@@ -5540,6 +5540,9 @@ app.post('/api/lm/import', requireAuth, upload.single('file'), async (req, res) 
   const target    = req.body?.target === 'companies' ? 'companies' : 'contacts';
   const obcId     = req.body?.outbound_client_id ? (parseInt(req.body.outbound_client_id) || null) : null;
   const hasHeader = req.body?.hasHeader !== '0' && req.body?.hasHeader !== 'false';
+  // Activo por defecto: si el contacto/empresa ya existe (por ID/email, o por dominio/nombre de
+  // empresa), se actualiza en vez de duplicarse. Si se apaga, las filas que ya existen se saltan tal cual.
+  const updateExisting = req.body?.updateExisting !== '0' && req.body?.updateExisting !== 'false';
   let mapping = {};
   try { mapping = JSON.parse(req.body?.mapping || '{}') || {}; } catch (_) {}
 
@@ -5566,7 +5569,7 @@ app.post('/api/lm/import', requireAuth, upload.single('file'), async (req, res) 
     if (field) colMap[idx] = field;
   }
 
-  const summary = { rows: 0, contactsCreated: 0, contactsUpdated: 0, contactsSkipped: 0, companiesCreated: 0, companiesMatched: 0, errors: [] };
+  const summary = { rows: 0, contactsCreated: 0, contactsUpdated: 0, contactsSkipped: 0, companiesCreated: 0, companiesUpdated: 0, companiesSkipped: 0, errors: [] };
   const coCache = new Map();
   async function _co(f) {
     const dominio = _lmNormDomain(f.dominio || f.website || '');
@@ -5577,7 +5580,27 @@ app.post('/api/lm/import', requireAuth, upload.single('file'), async (req, res) 
     let found;
     if (dominio) found = (await pool.query(`SELECT id FROM lm_companies WHERE user_id=$1 AND dominio=$2 LIMIT 1`, [uid, dominio])).rows[0];
     else         found = (await pool.query(`SELECT id FROM lm_companies WHERE user_id=$1 AND dominio='' AND LOWER(nombre)=$2 LIMIT 1`, [uid, nombre.toLowerCase()])).rows[0];
-    if (found) { coCache.set(key, found.id); summary.companiesMatched++; return found.id; }
+    if (found) {
+      coCache.set(key, found.id);
+      // Actualiza los campos de la empresa YA existente (antes solo se enlazaba sin tocar sus datos).
+      // Solo se pisan los campos que vienen con valor — una celda vacía nunca borra datos.
+      if (updateExisting) {
+        const sets = []; const vals = [found.id, uid];
+        const upd = {
+          nombre, website: _lmS(f.website), industria: _lmS(f.industria), tamano: _lmS(f.tamano), ingresos: _lmS(f.ingresos),
+          telefono: _lmS(f.telefono), linkedin: _lmS(f.linkedin), ciudad: _lmS(f.ciudad), region: _lmS(f.region), pais: _lmS(f.pais),
+          fundada: _lmS(f.fundada), direccion: _lmS(f.direccion), codigo_postal: _lmS(f.codigo_postal), descripcion: _lmS(f.descripcion),
+          tecnologias: _lmS(f.tecnologias), funding: _lmS(f.funding), target_tier: _lmS(f.target_tier), segmento: _lmS(f.segmento),
+        };
+        for (const [k, v] of Object.entries(upd)) if (v) sets.push(`${k}=$${vals.push(v)}`);
+        if (sets.length) {
+          sets.push('updated_at=NOW()');
+          await pool.query(`UPDATE lm_companies SET ${sets.join(',')} WHERE id=$1 AND user_id=$2`, vals);
+          summary.companiesUpdated++;
+        } else summary.companiesSkipped++;
+      } else summary.companiesSkipped++;
+      return found.id;
+    }
     const ins = await pool.query(`
       INSERT INTO lm_companies (user_id,nombre,dominio,website,industria,tamano,ingresos,telefono,linkedin,ciudad,region,pais,fundada,direccion,codigo_postal,descripcion,tecnologias,funding,target_tier,segmento,outbound_client_id,notas)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22) RETURNING id
@@ -5619,6 +5642,7 @@ app.post('/api/lm/import', requireAuth, upload.single('file'), async (req, res) 
           existing = (await pool.query(`SELECT id, email FROM lm_contacts WHERE user_id=$1 AND LOWER(email)=$2 LIMIT 1`, [uid, email])).rows[0] || null;
         }
         if (existing) {
+          if (!updateExisting) { summary.contactsSkipped++; continue; }
           const sets = []; const vals = [existing.id, uid];
           const upd = {
             nombre, apellido,
