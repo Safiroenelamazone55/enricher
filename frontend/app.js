@@ -20433,7 +20433,7 @@ ${foot}
         <div class="lm-hd-actions">
           <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.exportCsv('contacts')">${_ico('down')} Exportar</button>
           <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openContact()">＋ Agregar prospecto</button>
-          <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openImport('contacts')">${_ico('up')} Importar</button>
+          <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openImportPicker()">${_ico('up')} Importar</button>
         </div>
       </div>
       <div class="lm-toolbar">
@@ -21104,7 +21104,7 @@ ${foot}
         <div class="lm-hd-actions">
           <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.exportCsv('companies')">${_ico('down')} Exportar</button>
           <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openCompany()">＋ Empresa</button>
-          <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openImport('companies')">${_ico('up')} Importar</button>
+          <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openImportPicker()">${_ico('up')} Importar</button>
         </div>
       </div>
       <div class="lm-toolbar">
@@ -21267,10 +21267,38 @@ ${foot}
     showBanner(`✓ Exportados ${rows.length} ${isCo ? 'empresas' : 'contactos'}${filtered ? ' (con los filtros aplicados)' : ''}`, 'success');
   }
 
+  // ── Selector de modalidad de import: 3 opciones (estilo Apollo/HubSpot) que van
+  // al mismo lugar en el sistema — solo cambia qué columnas se ofrecen para mapear. ──
+  function openImportPicker() {
+    document.getElementById('lm-impick-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'lm-impick-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) closeImportPicker(); };
+    m.innerHTML = `<div class="fin-pi-box lm-impick-box">
+      <div class="fin-pi-box__hd"><h3>Importar</h3><button class="fin-pi-x" onclick="LeadManagerModule.closeImportPicker()">✕</button></div>
+      <div class="lm-impick-body">
+        <button class="lm-impick-card" onclick="LeadManagerModule.closeImportPicker();LeadManagerModule.openImport('contacts',false)">
+          <div class="lm-impick-t">Contactos</div>
+          <div class="lm-impick-s">Solo personas — nombre, email, cargo, teléfono…</div>
+        </button>
+        <button class="lm-impick-card" onclick="LeadManagerModule.closeImportPicker();LeadManagerModule.openImport('companies')">
+          <div class="lm-impick-t">Empresas</div>
+          <div class="lm-impick-s">Solo cuentas — nombre, dominio, industria, tamaño…</div>
+        </button>
+        <button class="lm-impick-card" onclick="LeadManagerModule.closeImportPicker();LeadManagerModule.openImport('contacts',true)">
+          <div class="lm-impick-t">Contactos + Empresas</div>
+          <div class="lm-impick-s">Tu archivo trae ambos — se crean y enlazan solas</div>
+        </button>
+      </div>
+    </div>`;
+    document.body.appendChild(m);
+  }
+  function closeImportPicker() { document.getElementById('lm-impick-modal')?.remove(); }
+
   // ── Importador (wizard con mapeo de columnas) ──
   let _imp = null;
-  function openImport(target) {
-    _imp = { target: target === 'companies' ? 'companies' : 'contacts', file: null, origHeader: [], samplesOrig: [], headers: [], samples: [], hasHeader: true, obc: '' };
+  function openImport(target, withCompanies) {
+    const t = target === 'companies' ? 'companies' : 'contacts';
+    _imp = { target: t, withCompanies: t === 'contacts' ? (withCompanies !== false) : true, file: null, origHeader: [], samplesOrig: [], headers: [], samples: [], hasHeader: true, obc: '' };
     document.getElementById('lm-imp-modal')?.remove();
     const m = document.createElement('div');
     m.id = 'lm-imp-modal'; m.className = 'fin-pi-backdrop';
@@ -21281,7 +21309,7 @@ ${foot}
   }
   function closeImport() { document.getElementById('lm-imp-modal')?.remove(); _imp = null; }
   function _impInner(html) { const el = $('lm-imp-inner'); if (el) el.innerHTML = html; }
-  function _impWord() { return _imp.target === 'companies' ? 'empresas' : 'contactos'; }
+  function _impWord() { return _imp.target === 'companies' ? 'empresas' : (_imp.withCompanies ? 'contactos y empresas' : 'contactos'); }
   function _impHd(title) { return `<div class="fin-pi-box__hd"><h3>${title}</h3><button class="fin-pi-x" onclick="LeadManagerModule.closeImport()">✕</button></div>`; }
   function _impSteps(n) { const s = ['1 · Archivo', '2 · Mapear', '3 · Listo']; return `<div class="lm-imp-steps">${s.map((t, i) => `<span class="${i + 1 < n ? 'done' : i + 1 === n ? 'on' : ''}">${t}</span>`).join('')}</div>`; }
 
@@ -21362,7 +21390,7 @@ ${foot}
       _impStepMap();
     } catch (e) {
       _impInner(`${_impHd('Importar ' + _impWord())}<div class="lm-imp-body">${_impSteps(1)}<div class="lm-imp-err">⚠️ ${esc(e.message)}</div></div>
-        <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openImport('${_imp.target}')">Reintentar</button></div></div>`);
+        <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openImport('${_imp.target}',${_imp.withCompanies})">Reintentar</button></div></div>`);
     }
   }
 
@@ -21378,7 +21406,11 @@ ${foot}
 
   function _lmFlatOpts(target) {
     const out = [{ key: '', label: '— Extra (se conserva) —', grp: '' }, { key: '__ignore__', label: '✕ Ignorar', grp: '' }];
-    LM_FIELDS[target].forEach(g => g.opts.forEach(([k, l]) => out.push({ key: k, label: l, grp: g.g })));
+    const showCoGroup = target === 'companies' || (_imp ? _imp.withCompanies : true);
+    LM_FIELDS[target].forEach(g => {
+      if (target === 'contacts' && g.g.indexOf('Empresa') === 0 && !showCoGroup) return; // "Contactos" puro: sin columnas de empresa
+      g.opts.forEach(([k, l]) => out.push({ key: k, label: l, grp: g.g }));
+    });
     _lmActiveCustomFields(target === 'companies' ? 'company' : 'contact').forEach(f => out.push({ key: f.field_key, label: f.label, grp: 'Personalizado' }));
     return out;
   }
@@ -22341,7 +22373,7 @@ ${foot}
   }
 
   return { load, filter, setFilter, setView, go, openClient, clientTab,
-    openImport, closeImport, impFile, impToggleHeader, impSetObc, impNewClient, impRun, exportCsv,
+    openImportPicker, closeImportPicker, openImport, closeImport, impFile, impToggleHeader, impSetObc, impNewClient, impRun, exportCsv,
     cbxOpen, cbxFilter, cbxPick, cbxBlur,
     openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, bulkDeleteContacts, bulkAddOpen, bulkAddDo, openContactPage, cpTab, cpSave, cpDelete, cpActOpen, cpActSave, cpActToggle, cpActDel,
     cpResumeSeq, cpFocusField, cpOpenRegisterReply, cpSaveRegisterReply,
