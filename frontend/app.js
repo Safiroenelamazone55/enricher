@@ -20079,7 +20079,7 @@ ${foot}
         ['cargo', 'Cargo / Puesto'], ['seniority', 'Seniority'], ['departamento', 'Departamento / Función'],
         ['buyer_role', 'Rol de compra (Buyer Role)'],
         ['linkedin', 'LinkedIn'], ['ciudad', 'Ciudad'], ['region', 'Región / Estado'], ['pais', 'País'],
-        ['estado', 'Etapa / Estado'], ['contact_priority', 'Prioridad (Contact Priority)'], ['fuente', 'Fuente'], ['notas', 'Notas'],
+        ['estado', 'Etapa / Estado'], ['contact_priority', 'Prioridad (Contact Priority)'], ['fuente', 'Fuente'], ['analisis', 'Análisis (por qué calificó)'], ['notas', 'Notas'],
       ] },
       { g: 'Empresa (se crea y enlaza)', opts: [
         ['co_nombre', 'Empresa · Nombre'], ['co_dominio', 'Empresa · Dominio'], ['co_website', 'Empresa · Website'],
@@ -20088,7 +20088,7 @@ ${foot}
         ['co_ciudad', 'Empresa · Ciudad'], ['co_region', 'Empresa · Región/Estado'], ['co_pais', 'Empresa · País'],
         ['co_direccion', 'Empresa · Dirección'], ['co_cp', 'Empresa · Código postal'], ['co_fundada', 'Empresa · Año fundación'],
         ['co_descripcion', 'Empresa · Descripción'], ['co_tecnologias', 'Empresa · Tecnologías'], ['co_funding', 'Empresa · Funding'],
-        ['co_target_tier', 'Empresa · Target Tier / Focus'], ['co_segmento', 'Empresa · Segmento / ICP'],
+        ['co_target_tier', 'Empresa · Target Tier / Focus'], ['co_segmento', 'Empresa · Segmento / ICP'], ['co_analisis', 'Empresa · Análisis (por qué calificó)'],
       ] },
     ],
     companies: [
@@ -20099,7 +20099,7 @@ ${foot}
         ['ciudad', 'Ciudad'], ['region', 'Región / Estado'], ['pais', 'País'],
         ['direccion', 'Dirección'], ['codigo_postal', 'Código postal'], ['fundada', 'Año fundación'],
         ['descripcion', 'Descripción'], ['tecnologias', 'Tecnologías'], ['funding', 'Funding'],
-        ['target_tier', 'Target Tier / Focus'], ['segmento', 'Segmento / ICP'], ['notas', 'Notas'],
+        ['target_tier', 'Target Tier / Focus'], ['segmento', 'Segmento / ICP'], ['analisis', 'Análisis (por qué calificó)'], ['notas', 'Notas'],
       ] },
     ],
   };
@@ -20124,6 +20124,7 @@ ${foot}
     notas: ['notes', 'notas', 'comments', 'comentarios', 'observaciones'],
     buyer_role: ['buyer role', 'buying role', 'buyer persona', 'rol de compra', 'rol comprador', 'rol de comprador', 'purchase role', 'buying center role'],
     contact_priority: ['contact priority', 'priority', 'prioridad', 'prioridad de contacto', 'prioridad contacto', 'lead priority'],
+    analisis: ['analysis', 'why qualified', 'qualification reason', 'qualification notes', 'analisis', 'motivo', 'justificacion', 'por que califico', 'razon de calificacion', 'icp reasoning', 'icp fit reason', 'fit reason'],
   };
   // Sinónimos de atributos de EMPRESA (con y sin el prefijo "company")
   const LM_CO_SYN = {
@@ -20147,6 +20148,7 @@ ${foot}
     funding: ['total funding', 'funding', 'company total funding'],
     target_tier: ['target tier', 'target tier focus', 'target account tier', 'account tier', 'tier', 'target focus', 'account focus', 'focus'],
     segmento: ['segmento', 'segment', 'icp', 'ideal customer profile', 'segmento icp', 'segment icp', 'segmento cliente', 'customer segment', 'buyer segment', 'perfil', 'perfil cliente', 'nicho'],
+    analisis: ['analysis', 'why qualified', 'qualification reason', 'qualification notes', 'analisis', 'motivo', 'justificacion', 'por que califico', 'razon de calificacion', 'icp reasoning', 'icp fit reason', 'fit reason'],
   };
   function _lmNorm(s) { return String(s || '').toLowerCase().trim().replace(/[_\-./]+/g, ' ').replace(/\s+/g, ' ').replace(/[áàä]/g, 'a').replace(/[éèë]/g, 'e').replace(/[íìï]/g, 'i').replace(/[óòö]/g, 'o').replace(/[úùü]/g, 'u').replace(/ñ/g, 'n'); }
   function _lmWord(h, s) { return new RegExp('(^| )' + s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '( |$)').test(h); }
@@ -20186,8 +20188,8 @@ ${foot}
   // ── Filtrado avanzado de Contactos / Empresas (por campo importado) ──
   const _FLT_ICON = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>';
   const _FLT_OPS = [['in', 'es uno de'], ['nin', 'no es ninguno de'], ['contains', 'contiene'], ['starts', 'empieza por'], ['between', 'está entre'], ['empty', 'está vacío'], ['nempty', 'tiene valor']];
-  const _CT_FILTER_FIELDS = [['nombre', 'Nombre'], ['apellido', 'Apellido'], ['email', 'Email'], ['email_personal', 'Email personal'], ['telefono', 'Teléfono'], ['movil', 'Móvil'], ['cargo', 'Cargo'], ['seniority', 'Seniority'], ['departamento', 'Departamento'], ['buyer_role', 'Buyer Role'], ['contact_priority', 'Contact Priority'], ['linkedin', 'LinkedIn'], ['company_nombre', 'Empresa'], ['company_segmento', 'Segmento / ICP (empresa)'], ['company_target_tier', 'Target Tier / Focus (empresa)'], ['company_industria', 'Industria (empresa)'], ['ciudad', 'Ciudad'], ['region', 'Región'], ['pais', 'País'], ['estado', 'Estado'], ['fuente', 'Fuente'], ['created_at', 'Fecha de importación']];
-  const _CO_FILTER_FIELDS = [['nombre', 'Nombre'], ['dominio', 'Dominio'], ['website', 'Website'], ['industria', 'Industria'], ['tamano', 'Nº empleados'], ['ingresos', 'Ingresos'], ['telefono', 'Teléfono'], ['linkedin', 'LinkedIn'], ['linkedin_sales_nav', 'LinkedIn (Sales Navigator)'], ['ciudad', 'Ciudad'], ['region', 'Región'], ['pais', 'País'], ['direccion', 'Dirección'], ['codigo_postal', 'Código postal'], ['fundada', 'Año fundación'], ['descripcion', 'Descripción'], ['tecnologias', 'Tecnologías'], ['funding', 'Funding'], ['target_tier', 'Target Tier / Focus'], ['segmento', 'Segmento / ICP'], ['created_at', 'Fecha de importación']];
+  const _CT_FILTER_FIELDS = [['nombre', 'Nombre'], ['apellido', 'Apellido'], ['email', 'Email'], ['email_personal', 'Email personal'], ['telefono', 'Teléfono'], ['movil', 'Móvil'], ['cargo', 'Cargo'], ['seniority', 'Seniority'], ['departamento', 'Departamento'], ['buyer_role', 'Buyer Role'], ['contact_priority', 'Contact Priority'], ['linkedin', 'LinkedIn'], ['company_nombre', 'Empresa'], ['company_segmento', 'Segmento / ICP (empresa)'], ['company_target_tier', 'Target Tier / Focus (empresa)'], ['company_industria', 'Industria (empresa)'], ['ciudad', 'Ciudad'], ['region', 'Región'], ['pais', 'País'], ['estado', 'Estado'], ['fuente', 'Fuente'], ['analisis', 'Análisis'], ['created_at', 'Fecha de importación']];
+  const _CO_FILTER_FIELDS = [['nombre', 'Nombre'], ['dominio', 'Dominio'], ['website', 'Website'], ['industria', 'Industria'], ['tamano', 'Nº empleados'], ['ingresos', 'Ingresos'], ['telefono', 'Teléfono'], ['linkedin', 'LinkedIn'], ['linkedin_sales_nav', 'LinkedIn (Sales Navigator)'], ['ciudad', 'Ciudad'], ['region', 'Región'], ['pais', 'País'], ['direccion', 'Dirección'], ['codigo_postal', 'Código postal'], ['fundada', 'Año fundación'], ['descripcion', 'Descripción'], ['tecnologias', 'Tecnologías'], ['funding', 'Funding'], ['target_tier', 'Target Tier / Focus'], ['segmento', 'Segmento / ICP'], ['analisis', 'Análisis'], ['created_at', 'Fecha de importación']];
   function _fltFields(entity) {
     const base = entity === 'contacts' ? _CT_FILTER_FIELDS : _CO_FILTER_FIELDS;
     const active = _lmActiveCustomFields(entity === 'contacts' ? 'contact' : 'company');
@@ -21254,8 +21256,8 @@ ${foot}
     if (!rows.length) { alert(filtered ? 'El filtro actual no tiene resultados para exportar.' : 'No hay nada para exportar.'); return; }
     // La columna ID permite re-importar ACTUALIZANDO el contacto exacto (sin duplicar).
     const cols = (isCo
-      ? [['id', 'ID'], ['nombre', 'Nombre'], ['dominio', 'Dominio'], ['website', 'Website'], ['industria', 'Industria'], ['tamano', 'Nº empleados'], ['ingresos', 'Ingresos'], ['telefono', 'Teléfono'], ['linkedin', 'LinkedIn'], ['linkedin_sales_nav', 'LinkedIn (Sales Navigator)'], ['ciudad', 'Ciudad'], ['region', 'Región'], ['pais', 'País'], ['direccion', 'Dirección'], ['codigo_postal', 'Código postal'], ['fundada', 'Fundada'], ['descripcion', 'Descripción'], ['tecnologias', 'Tecnologías'], ['funding', 'Funding'], ['target_tier', 'Target Tier / Focus'], ['segmento', 'Segmento / ICP'], ['notas', 'Notas']]
-      : [['id', 'ID'], ['nombre', 'Nombre'], ['apellido', 'Apellido'], ['email', 'Email'], ['email_personal', 'Email personal'], ['telefono', 'Teléfono'], ['movil', 'Móvil'], ['cargo', 'Cargo'], ['seniority', 'Seniority'], ['departamento', 'Departamento'], ['buyer_role', 'Buyer Role'], ['linkedin', 'LinkedIn'], ['company_nombre', 'Empresa'], ['ciudad', 'Ciudad'], ['region', 'Región'], ['pais', 'País'], ['estado', 'Estado'], ['contact_priority', 'Contact Priority'], ['fuente', 'Fuente'], ['notas', 'Notas']]
+      ? [['id', 'ID'], ['nombre', 'Nombre'], ['dominio', 'Dominio'], ['website', 'Website'], ['industria', 'Industria'], ['tamano', 'Nº empleados'], ['ingresos', 'Ingresos'], ['telefono', 'Teléfono'], ['linkedin', 'LinkedIn'], ['linkedin_sales_nav', 'LinkedIn (Sales Navigator)'], ['ciudad', 'Ciudad'], ['region', 'Región'], ['pais', 'País'], ['direccion', 'Dirección'], ['codigo_postal', 'Código postal'], ['fundada', 'Fundada'], ['descripcion', 'Descripción'], ['tecnologias', 'Tecnologías'], ['funding', 'Funding'], ['target_tier', 'Target Tier / Focus'], ['segmento', 'Segmento / ICP'], ['analisis', 'Análisis'], ['notas', 'Notas']]
+      : [['id', 'ID'], ['nombre', 'Nombre'], ['apellido', 'Apellido'], ['email', 'Email'], ['email_personal', 'Email personal'], ['telefono', 'Teléfono'], ['movil', 'Móvil'], ['cargo', 'Cargo'], ['seniority', 'Seniority'], ['departamento', 'Departamento'], ['buyer_role', 'Buyer Role'], ['linkedin', 'LinkedIn'], ['company_nombre', 'Empresa'], ['ciudad', 'Ciudad'], ['region', 'Región'], ['pais', 'País'], ['estado', 'Estado'], ['contact_priority', 'Contact Priority'], ['fuente', 'Fuente'], ['analisis', 'Análisis'], ['notas', 'Notas']]
     ).concat(_lmActiveCustomFields(isCo ? 'company' : 'contact').map(f => [f.field_key, f.label]));
     const cell = v => { v = v == null ? '' : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
     const csv = '﻿' + cols.map(c => c[1]).join(',') + '\n' + rows.map(r => cols.map(c => cell(r[c[0]] != null ? r[c[0]] : r[c[0] === 'company_nombre' ? 'empresa_nombre' : c[0]])).join(',')).join('\n');
@@ -21586,6 +21588,7 @@ ${foot}
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Estado</span><select class="form-input" id="ct-estado">${_ORDER.map(s => `<option value="${s}"${(c?.estado || 'nuevo') === s ? ' selected' : ''}>${STAGE_LABELS[s]}</option>`).join('')}</select></label>
         ${_lmFld('ct-contact_priority', 'Prioridad de contacto', c?.contact_priority)}
         ${_lmFld('ct-fuente', 'Fuente', c?.fuente)}
+        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Análisis · por qué calificó</span><textarea class="form-input" id="ct-analisis" rows="3">${c ? esc(c.analisis) : ''}</textarea></label>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Notas</span><textarea class="form-input" id="ct-notas" rows="2">${c ? esc(c.notas) : ''}</textarea></label>
         ${_lmCustomFieldsHtml('contact', c, 'ct')}
       </div>
@@ -21624,7 +21627,7 @@ ${foot}
       telefono: g('ct-telefono'), movil: g('ct-movil'), seniority: g('ct-seniority'), departamento: g('ct-departamento'),
       buyer_role: g('ct-buyer_role'), contact_priority: g('ct-contact_priority'),
       linkedin: g('ct-linkedin'), ciudad: g('ct-ciudad'), region: g('ct-region'), pais: g('ct-pais'),
-      estado: $('ct-estado')?.value || 'nuevo', fuente: g('ct-fuente') || 'manual', notas: g('ct-notas'),
+      estado: $('ct-estado')?.value || 'nuevo', fuente: g('ct-fuente') || 'manual', analisis: g('ct-analisis'), notas: g('ct-notas'),
       company_id: companyId, empresa_nombre: co ? (co.nombre || co.dominio || '') : '',
       outbound_client_id: $('ct-obc')?.value ? Number($('ct-obc').value) : null,
       ..._lmCustomFieldsPayload('contact', 'ct'),
@@ -21683,6 +21686,7 @@ ${foot}
         ${_lmFld('co-segmento', 'Segmento / ICP', c?.segmento)}
         ${_lmFld('co-descripcion', 'Descripción', c?.descripcion, '', true)}
         ${_lmFld('co-tecnologias', 'Tecnologías', c?.tecnologias, '', true)}
+        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Análisis · por qué calificó</span><textarea class="form-input" id="co-analisis" rows="3">${c ? esc(c.analisis) : ''}</textarea></label>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Notas</span><textarea class="form-input" id="co-notas" rows="2">${c ? esc(c.notas) : ''}</textarea></label>
         ${_lmCustomFieldsHtml('company', c, 'co')}
       </div>
@@ -21702,7 +21706,7 @@ ${foot}
       nombre: g('co-nombre'), dominio: g('co-dominio'), website: g('co-website'), industria: g('co-industria'),
       tamano: g('co-tamano'), ingresos: g('co-ingresos'), telefono: g('co-telefono'), linkedin: g('co-linkedin'), linkedin_sales_nav: g('co-linkedin_sales_nav'),
       ciudad: g('co-ciudad'), region: g('co-region'), pais: g('co-pais'), fundada: g('co-fundada'),
-      direccion: g('co-direccion'), codigo_postal: g('co-codigo_postal'), descripcion: g('co-descripcion'), tecnologias: g('co-tecnologias'), funding: g('co-funding'), target_tier: g('co-target_tier'), segmento: g('co-segmento'), notas: g('co-notas'),
+      direccion: g('co-direccion'), codigo_postal: g('co-codigo_postal'), descripcion: g('co-descripcion'), tecnologias: g('co-tecnologias'), funding: g('co-funding'), target_tier: g('co-target_tier'), segmento: g('co-segmento'), analisis: g('co-analisis'), notas: g('co-notas'),
       ..._lmCustomFieldsPayload('company', 'co'),
     };
     const hint = $('co-hint');
@@ -22172,13 +22176,13 @@ ${foot}
   let _dgCleanPreview = null;
   const DG_CLEAN_FIELDS = { companies: ['nombre', 'tamano'], contacts: ['cargo'] };
   const DG_EDITABLE_BASE = {
-    companies: ['nombre', 'dominio', 'industria', 'tamano', 'ciudad', 'pais', 'target_tier', 'segmento'],
-    contacts:  ['nombre', 'apellido', 'cargo', 'email', 'telefono', 'linkedin', 'estado'],
+    companies: ['nombre', 'dominio', 'industria', 'tamano', 'ciudad', 'pais', 'target_tier', 'segmento', 'analisis'],
+    contacts:  ['nombre', 'apellido', 'cargo', 'email', 'telefono', 'linkedin', 'estado', 'analisis'],
   };
   function DG_COLS_FOR(entity) {
     const base = entity === 'companies'
-      ? [['nombre', 'Nombre'], ['dominio', 'Dominio'], ['industria', 'Industria'], ['tamano', 'Nº empleados'], ['ciudad', 'Ciudad'], ['pais', 'País'], ['target_tier', 'Target Tier'], ['segmento', 'Segmento / ICP']]
-      : [['nombre', 'Nombre'], ['apellido', 'Apellido'], ['cargo', 'Cargo'], ['company_nombre', 'Empresa'], ['email', 'Email'], ['telefono', 'Teléfono'], ['linkedin', 'LinkedIn'], ['estado', 'Estado']];
+      ? [['nombre', 'Nombre'], ['dominio', 'Dominio'], ['industria', 'Industria'], ['tamano', 'Nº empleados'], ['ciudad', 'Ciudad'], ['pais', 'País'], ['target_tier', 'Target Tier'], ['segmento', 'Segmento / ICP'], ['analisis', 'Análisis']]
+      : [['nombre', 'Nombre'], ['apellido', 'Apellido'], ['cargo', 'Cargo'], ['company_nombre', 'Empresa'], ['email', 'Email'], ['telefono', 'Teléfono'], ['linkedin', 'LinkedIn'], ['estado', 'Estado'], ['analisis', 'Análisis']];
     const active = _lmActiveCustomFields(entity === 'companies' ? 'company' : 'contact');
     return base.concat(active.map(f => [f.field_key, f.label]));
   }
@@ -22292,7 +22296,7 @@ ${foot}
       nombre: row.nombre || '', dominio: row.dominio || '', website: row.website || '', industria: row.industria || '',
       tamano: row.tamano || '', ingresos: row.ingresos || '', telefono: row.telefono || '', linkedin: row.linkedin || '', linkedin_sales_nav: row.linkedin_sales_nav || '',
       ciudad: row.ciudad || '', region: row.region || '', pais: row.pais || '', fundada: row.fundada || '',
-      direccion: row.direccion || '', codigo_postal: row.codigo_postal || '', descripcion: row.descripcion || '', tecnologias: row.tecnologias || '', funding: row.funding || '', target_tier: row.target_tier || '', segmento: row.segmento || '', notas: row.notas || '',
+      direccion: row.direccion || '', codigo_postal: row.codigo_postal || '', descripcion: row.descripcion || '', tecnologias: row.tecnologias || '', funding: row.funding || '', target_tier: row.target_tier || '', segmento: row.segmento || '', analisis: row.analisis || '', notas: row.notas || '',
     };
     _lmActiveCustomFields('company').forEach(f => { out[f.field_key] = row[f.field_key] || ''; });
     return out;
@@ -22303,7 +22307,7 @@ ${foot}
       telefono: row.telefono || '', movil: row.movil || '', seniority: row.seniority || '', departamento: row.departamento || '',
       buyer_role: row.buyer_role || '', contact_priority: row.contact_priority || '',
       linkedin: row.linkedin || '', ciudad: row.ciudad || '', region: row.region || '', pais: row.pais || '',
-      estado: row.estado || 'nuevo', fuente: row.fuente || 'manual', notas: row.notas || '',
+      estado: row.estado || 'nuevo', fuente: row.fuente || 'manual', analisis: row.analisis || '', notas: row.notas || '',
       company_id: row.company_id || null, empresa_nombre: row.empresa_nombre || '',
       outbound_client_id: row.outbound_client_id || null,
     };

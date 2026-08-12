@@ -1491,6 +1491,11 @@ async function initDb() {
       );
     `);
 
+    // Análisis / por qué calificó — texto libre (ICP research), independiente en empresa y
+    // contacto: la empresa puede calificar por un motivo y el contacto en particular por otro.
+    await pool.query(`ALTER TABLE lm_companies ADD COLUMN IF NOT EXISTS analisis TEXT NOT NULL DEFAULT '';`);
+    await pool.query(`ALTER TABLE lm_contacts  ADD COLUMN IF NOT EXISTS analisis TEXT NOT NULL DEFAULT '';`);
+
     console.log('[db] tables ready (users, verifications, batch_jobs, clients, projects, tasks, payments, team_members, workspaces, workspace_invites, chat_messages, leads, meetings, fin_config, fin_member_config, pagos_internos, opportunities, opportunity_tasks)');
   } catch (err) {
     console.error('[db] initDb failed:', err.message);

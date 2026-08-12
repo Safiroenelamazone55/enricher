@@ -3237,7 +3237,7 @@ function _lmNormDomain(raw) {
 
 // ── Empresas (lm_companies) ────────────────────────────────────────
 const LM_CUSTOM_KEYS = Array.from({ length: 10 }, (_, i) => `campo${i + 1}`);
-const LM_CO_COLS = ['nombre','dominio','website','industria','tamano','ingresos','telefono','linkedin','linkedin_sales_nav','ciudad','region','pais','fundada','direccion','codigo_postal','descripcion','tecnologias','funding','target_tier','segmento','notas', ...LM_CUSTOM_KEYS];
+const LM_CO_COLS = ['nombre','dominio','website','industria','tamano','ingresos','telefono','linkedin','linkedin_sales_nav','ciudad','region','pais','fundada','direccion','codigo_postal','descripcion','tecnologias','funding','target_tier','segmento','analisis','notas', ...LM_CUSTOM_KEYS];
 app.get('/api/lm/companies', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(`
@@ -3476,7 +3476,7 @@ app.post('/api/lm/company-sequences/:id/convert', requireAuth, async (req, res) 
 });
 
 // ── Contactos (lm_contacts) ────────────────────────────────────────
-const LM_CT_COLS = ['nombre','apellido','email','email_personal','telefono','movil','cargo','seniority','departamento','linkedin','empresa_nombre','ciudad','region','pais','estado','fuente','contact_priority','buyer_role','notas', ...LM_CUSTOM_KEYS];
+const LM_CT_COLS = ['nombre','apellido','email','email_personal','telefono','movil','cargo','seniority','departamento','linkedin','empresa_nombre','ciudad','region','pais','estado','fuente','contact_priority','buyer_role','analisis','notas', ...LM_CUSTOM_KEYS];
 app.get('/api/lm/contacts', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(`
@@ -5590,7 +5590,7 @@ app.post('/api/lm/import', requireAuth, upload.single('file'), async (req, res) 
           nombre, website: _lmS(f.website), industria: _lmS(f.industria), tamano: _lmS(f.tamano), ingresos: _lmS(f.ingresos),
           telefono: _lmS(f.telefono), linkedin: _lmS(f.linkedin), ciudad: _lmS(f.ciudad), region: _lmS(f.region), pais: _lmS(f.pais),
           fundada: _lmS(f.fundada), direccion: _lmS(f.direccion), codigo_postal: _lmS(f.codigo_postal), descripcion: _lmS(f.descripcion),
-          tecnologias: _lmS(f.tecnologias), funding: _lmS(f.funding), target_tier: _lmS(f.target_tier), segmento: _lmS(f.segmento),
+          tecnologias: _lmS(f.tecnologias), funding: _lmS(f.funding), target_tier: _lmS(f.target_tier), segmento: _lmS(f.segmento), analisis: _lmS(f.analisis),
         };
         for (const [k, v] of Object.entries(upd)) if (v) sets.push(`${k}=$${vals.push(v)}`);
         if (sets.length) {
@@ -5602,11 +5602,11 @@ app.post('/api/lm/import', requireAuth, upload.single('file'), async (req, res) 
       return found.id;
     }
     const ins = await pool.query(`
-      INSERT INTO lm_companies (user_id,nombre,dominio,website,industria,tamano,ingresos,telefono,linkedin,ciudad,region,pais,fundada,direccion,codigo_postal,descripcion,tecnologias,funding,target_tier,segmento,outbound_client_id,notas)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22) RETURNING id
+      INSERT INTO lm_companies (user_id,nombre,dominio,website,industria,tamano,ingresos,telefono,linkedin,ciudad,region,pais,fundada,direccion,codigo_postal,descripcion,tecnologias,funding,target_tier,segmento,analisis,outbound_client_id,notas)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23) RETURNING id
     `, [uid, nombre || dominio, dominio, _lmS(f.website), _lmS(f.industria), _lmS(f.tamano), _lmS(f.ingresos),
         _lmS(f.telefono), _lmS(f.linkedin), _lmS(f.ciudad), _lmS(f.region), _lmS(f.pais), _lmS(f.fundada),
-        _lmS(f.direccion), _lmS(f.codigo_postal), _lmS(f.descripcion), _lmS(f.tecnologias), _lmS(f.funding), _lmS(f.target_tier), _lmS(f.segmento), obcId, _lmS(f.notas)]);
+        _lmS(f.direccion), _lmS(f.codigo_postal), _lmS(f.descripcion), _lmS(f.tecnologias), _lmS(f.funding), _lmS(f.target_tier), _lmS(f.segmento), _lmS(f.analisis), obcId, _lmS(f.notas)]);
     coCache.set(key, ins.rows[0].id); summary.companiesCreated++; return ins.rows[0].id;
   }
 
@@ -5650,7 +5650,7 @@ app.post('/api/lm/import', requireAuth, upload.single('file'), async (req, res) 
             cargo: _lmS(f.cargo), seniority: _lmS(f.seniority), departamento: _lmS(f.departamento),
             linkedin: _lmS(f.linkedin), ciudad: _lmS(f.ciudad), region: _lmS(f.region), pais: _lmS(f.pais),
             estado: _lmS(f.estado), fuente: _lmS(f.fuente),
-            contact_priority: _lmS(f.contact_priority), buyer_role: _lmS(f.buyer_role), notas: _lmS(f.notas),
+            contact_priority: _lmS(f.contact_priority), buyer_role: _lmS(f.buyer_role), analisis: _lmS(f.analisis), notas: _lmS(f.notas),
           };
           for (const [k, v] of Object.entries(upd)) if (v) sets.push(`${k}=$${vals.push(v)}`);
           // Email nuevo/corregido → se actualiza y su verificación vuelve a "sin verificar"
@@ -5665,7 +5665,7 @@ app.post('/api/lm/import', requireAuth, upload.single('file'), async (req, res) 
               tamano: f.co_tamano, ingresos: f.co_ingresos, telefono: f.co_telefono, linkedin: f.co_linkedin,
               ciudad: f.co_ciudad, region: f.co_region, pais: f.co_pais, direccion: f.co_direccion,
               codigo_postal: f.co_cp, fundada: f.co_fundada, descripcion: f.co_descripcion,
-              tecnologias: f.co_tecnologias, funding: f.co_funding, target_tier: f.co_target_tier, segmento: f.co_segmento,
+              tecnologias: f.co_tecnologias, funding: f.co_funding, target_tier: f.co_target_tier, segmento: f.co_segmento, analisis: f.co_analisis,
             });
             if (cid2) { sets.push(`company_id=$${vals.push(cid2)}`); if (_lmS(f.co_nombre)) sets.push(`empresa_nombre=$${vals.push(_lmS(f.co_nombre))}`); }
           }
@@ -5687,10 +5687,10 @@ app.post('/api/lm/import', requireAuth, upload.single('file'), async (req, res) 
           tecnologias: f.co_tecnologias, funding: f.co_funding, target_tier: f.co_target_tier, segmento: f.co_segmento,
         });
         await pool.query(`
-          INSERT INTO lm_contacts (user_id,company_id,nombre,apellido,email,email_personal,telefono,movil,cargo,seniority,departamento,linkedin,empresa_nombre,ciudad,region,pais,estado,fuente,contact_priority,buyer_role,outbound_client_id,notas,raw)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
+          INSERT INTO lm_contacts (user_id,company_id,nombre,apellido,email,email_personal,telefono,movil,cargo,seniority,departamento,linkedin,empresa_nombre,ciudad,region,pais,estado,fuente,contact_priority,buyer_role,analisis,outbound_client_id,notas,raw)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
         `, [uid, companyId, nombre, apellido, email, _lmS(f.email_personal), _lmS(f.telefono), _lmS(f.movil), _lmS(f.cargo), _lmS(f.seniority), _lmS(f.departamento),
-            _lmS(f.linkedin), _lmS(f.co_nombre), _lmS(f.ciudad), _lmS(f.region), _lmS(f.pais), _lmS(f.estado) || 'nuevo', _lmS(f.fuente) || 'import', _lmS(f.contact_priority), _lmS(f.buyer_role), obcId, _lmS(f.notas), JSON.stringify(raw)]);
+            _lmS(f.linkedin), _lmS(f.co_nombre), _lmS(f.ciudad), _lmS(f.region), _lmS(f.pais), _lmS(f.estado) || 'nuevo', _lmS(f.fuente) || 'import', _lmS(f.contact_priority), _lmS(f.buyer_role), _lmS(f.analisis), obcId, _lmS(f.notas), JSON.stringify(raw)]);
         summary.contactsCreated++;
       }
     } catch (e) {
