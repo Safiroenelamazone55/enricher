@@ -15777,6 +15777,11 @@ ${foot}
     const row = (_seqPendingCos || []).find(x => x.company_sequence_id === companySeqId);
     const existing = (row ? (_contacts || []).filter(c => c.company_id === row.company_id && c.fuente === 'cola_empresas') : [])
       .map(c => ({ id: c.id, nombre: [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || `#${c.id}`, role: c.contact_priority === 'Primario' ? 'primario' : 'secundario' }));
+    // Si el principal YA está activamente enrolado en esta secuencia (ej. la caché de la cola
+    // quedó un paso atrás), no tiene sentido mostrar el formulario de nuevo — va directo a su
+    // tarea, como cualquier otro contacto en curso.
+    const activePrimary = existing.find(c => c.role === 'primario' && (_seqContacts || []).some(e => e.contact_id === c.id && e.estado === 'activo'));
+    if (activePrimary) { openContactPage(activePrimary.id, { seqId }); return; }
     _seqCoDo = { seqId, companySeqId, contacts: existing };
     _seqCoDoRender();
   }

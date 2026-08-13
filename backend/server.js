@@ -3473,8 +3473,11 @@ app.post('/api/lm/company-sequences/:id/add-contact', requireAuth, async (req, r
     let contact = li ? (await cl.query(
       `SELECT * FROM lm_contacts WHERE user_id=$1 AND company_id=$2 AND linkedin=$3 LIMIT 1`, [uid, cq.company_id, li])).rows[0] : null;
     if (!contact) {
+      // estado SIEMPRE 'nuevo' al crearlo — recién agregarlo no es "ya lo contacté", eso
+      // pasa cuando de verdad se marca la tarea (Paso 1) como hecha. El resto del sistema
+      // nunca mueve `estado` solo; es manual (igual que cualquier otro contacto).
       const vals = LM_CT_COLS.map(k =>
-        k === 'estado' ? (role === 'primario' ? 'contactado' : 'nuevo') :
+        k === 'estado' ? 'nuevo' :
         k === 'fuente' ? 'cola_empresas' :
         k === 'contact_priority' ? (role === 'primario' ? 'Primario' : 'Secundario') :
         _lmS(b[k]));
@@ -3522,7 +3525,7 @@ app.post('/api/lm/company-sequences/:id/select-primary', requireAuth, async (req
     const contact = (await cl.query(`SELECT id, nombre, apellido, email FROM lm_contacts WHERE id=$1 AND user_id=$2 AND company_id=$3`, [contactId, uid, cq.company_id])).rows[0];
     if (!contact) { await cl.query('ROLLBACK'); return res.status(404).json({ error: 'Contacto no encontrado en esta empresa' }); }
     await cl.query(`UPDATE lm_contacts SET contact_priority='Secundario' WHERE user_id=$1 AND company_id=$2 AND contact_priority='Primario' AND id<>$3`, [uid, cq.company_id, contact.id]);
-    await cl.query(`UPDATE lm_contacts SET contact_priority='Primario', estado='contactado' WHERE id=$1`, [contact.id]);
+    await cl.query(`UPDATE lm_contacts SET contact_priority='Primario' WHERE id=$1`, [contact.id]);
     await cl.query(`
       INSERT INTO lm_contact_sequences (user_id, contact_id, sequence_id, paso, estado, start_date, paso_date, next_action_at)
       VALUES ($1,$2,$3,1,'activo',CURRENT_DATE,CURRENT_DATE,NOW())
