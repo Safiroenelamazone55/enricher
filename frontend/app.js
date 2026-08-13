@@ -15822,8 +15822,10 @@ ${foot}
     const disp = esc(rendered).replace(/(\{\{[^}]+\}\})/g, '<span class="seqdo-miss">$1</span>').replace(/\n/g, '<br>');
     const addedContacts = _seqCoDo.contacts || [];
     document.getElementById('seq-co-do-modal')?.remove();
+    // Sin cierre por clic afuera: este modal puede tener un formulario a medio llenar o
+    // contactos ya agregados esperando "Guardar" — un clic accidental fuera no debe botar
+    // ese progreso. Solo la ✕ o "Descartar" lo cierran.
     const m = document.createElement('div'); m.id = 'seq-co-do-modal'; m.className = 'fin-pi-backdrop';
-    m.onclick = ev => { if (ev.target === m) seqCoDoClose(); };
     m.innerHTML = `<div class="fin-pi-box seqdo-box">
       <div class="seqdo-hd seqdo-hd--co">
         <span class="seqdo-ico" style="background:${touch[1]}1a;color:${touch[1]}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${touch[2]}</svg></span>
