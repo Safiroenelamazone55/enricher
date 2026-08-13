@@ -16968,6 +16968,14 @@ ${foot}
   function _cpNextTask(seqId, excludeCid) {
     return _cpOrderedQueue(seqId).find(t => t.e.contact_id !== excludeCid) || null;
   }
+  // Cuando ya no quedan tareas de CONTACTO por hoy, sigue con la cola de EMPRESAS (Paso 1) —
+  // para que trabajar una secuencia "empresa primero" sea fluido: hecha una tarea, sigue la
+  // siguiente empresa sola, sin volver a la lista.
+  function _cpNextCoTask(seqId) {
+    const today = new Date(new Date().toDateString());
+    const list = _seqCoTasks(seqId).filter(t => t.due <= today);
+    return list.length ? list[0] : null;
+  }
   async function seqDoDone() {
     if (!_cpTaskCtx) return;
     const seqId = _cpTaskCtx.seqId, cid = _contactView;
@@ -16978,7 +16986,9 @@ ${foot}
       await _reloadContacts();
       const next = _cpNextTask(seqId, cid);
       const undoLink = ' &nbsp; <a href="#" onclick="LeadManagerModule.seqUndoLast();return false;" style="color:#fff;text-decoration:underline">↩ Deshacer</a>';
-      if (next) { openContactPage(next.e.contact_id, { seqId: seqId }); showBanner('✓ Hecha · siguiente' + undoLink, 'success'); }
+      if (next) { openContactPage(next.e.contact_id, { seqId: seqId }); showBanner('✓ Hecha · siguiente' + undoLink, 'success'); return; }
+      const nextCo = _cpNextCoTask(seqId);
+      if (nextCo) { seqCoTaskOpen(seqId, nextCo.row.company_sequence_id); showBanner('✓ Hecha · siguiente empresa' + undoLink, 'success'); }
       else { seqDoExit(); showBanner('🎉 ¡No quedan tareas para hoy!' + undoLink, 'success'); }
     } catch (err) { if (btn) btn.disabled = false; showBanner('Error: ' + err.message, 'error'); }
   }
@@ -16988,7 +16998,9 @@ ${foot}
     // Saltar = mandarlo al FINAL de la cola de la corrida (para retomarlo al final, no enseguida).
     _cpSkipped = _cpSkipped.filter(x => x !== cid); _cpSkipped.push(cid);
     const next = _cpNextTask(seqId, cid);
-    if (next) { _cpTaskHist.push(cid); openContactPage(next.e.contact_id, { seqId: seqId }); }
+    if (next) { _cpTaskHist.push(cid); openContactPage(next.e.contact_id, { seqId: seqId }); return; }
+    const nextCo = _cpNextCoTask(seqId);
+    if (nextCo) { _cpTaskHist.push(cid); seqCoTaskOpen(seqId, nextCo.row.company_sequence_id); }
     else seqDoExit();
   }
   function seqDoPrev() {
