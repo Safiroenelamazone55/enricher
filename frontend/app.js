@@ -15681,7 +15681,9 @@ ${foot}
   // acá se cierra este modal y se abre la ficha normal del contacto con su tarea de Paso 1
   // ya activa: de ahí en adelante es el mismo flujo de "✓ Hecha → siguiente" que cualquier
   // otro paso, sin un botón aparte de "marcar hecho" en este modal.
+  let _seqCoAddBusy = false;   // evita doble-clic → doble contacto (ej. dos "Pedro" duplicados)
   async function coQueueAddContact(rowId, role) {
+    if (_seqCoAddBusy) return;
     const nombre = ($(`coq-nombre-${rowId}`)?.value || '').trim();
     const linkedin = ($(`coq-linkedin-${rowId}`)?.value || '').trim();
     if (!nombre) { showBanner('El nombre es obligatorio', 'error'); return; }
@@ -15694,6 +15696,8 @@ ${foot}
       email: ($(`coq-email-${rowId}`)?.value || '').trim(),
     };
     const seqId = _seqCoDo?.seqId || _activeSeq;
+    _seqCoAddBusy = true;
+    document.querySelectorAll('.seqdo-ft--co button').forEach(b => b.disabled = true);
     try {
       const r = await apiFetch(`${API}/lm/company-sequences/${rowId}/add-contact`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const d = await r.json();
@@ -15713,7 +15717,10 @@ ${foot}
           _seqCoDoRender();
         } else { _renderBody(); }
       }
-    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+    } catch (e) {
+      showBanner('Error: ' + e.message, 'error');
+      document.querySelectorAll('.seqdo-ft--co button').forEach(b => b.disabled = false);
+    } finally { _seqCoAddBusy = false; }
   }
   async function coQueueDiscard(rowId) {
     if (!confirm('¿Descartar esta empresa? No se encontró a nadie viable — sale de la cola pero la empresa sigue existiendo en Empresas.')) return;

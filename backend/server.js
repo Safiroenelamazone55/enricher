@@ -3466,16 +3466,24 @@ app.post('/api/lm/company-sequences/:id/add-contact', requireAuth, async (req, r
       `SELECT cs.id, cs.company_id, cs.sequence_id, cs.estado FROM lm_company_sequences cs WHERE cs.id=$1 AND cs.user_id=$2 FOR UPDATE`, [req.params.id, uid])).rows[0];
     if (!cq) { await cl.query('ROLLBACK'); return res.status(404).json({ error: 'No encontrado' }); }
     if (cq.estado === 'descartada') { await cl.query('ROLLBACK'); return res.status(400).json({ error: 'Esta empresa está descartada — reactívala primero' }); }
-    const vals = LM_CT_COLS.map(k =>
-      k === 'estado' ? (role === 'primario' ? 'contactado' : 'nuevo') :
-      k === 'fuente' ? 'cola_empresas' :
-      k === 'contact_priority' ? (role === 'primario' ? 'Primario' : 'Secundario') :
-      _lmS(b[k]));
-    const { rows: ctRows } = await cl.query(`
-      INSERT INTO lm_contacts (user_id,${LM_CT_COLS.join(',')},company_id,outbound_client_id)
-      VALUES ($1,${LM_CT_COLS.map((_, i) => '$' + (i + 2)).join(',')},$${LM_CT_COLS.length + 2},$${LM_CT_COLS.length + 3}) RETURNING *
-    `, [uid, ...vals, cq.company_id, b.outbound_client_id || null]);
-    const contact = ctRows[0];
+    // Red de seguridad contra doble-clic/doble-envío: el FOR UPDATE de arriba ya serializa
+    // solicitudes concurrentes para esta misma empresa — si la primera ya creó este mismo
+    // LinkedIn, la segunda reusa ese contacto en vez de duplicarlo.
+    const li = _lmS(b.linkedin);
+    let contact = li ? (await cl.query(
+      `SELECT * FROM lm_contacts WHERE user_id=$1 AND company_id=$2 AND linkedin=$3 LIMIT 1`, [uid, cq.company_id, li])).rows[0] : null;
+    if (!contact) {
+      const vals = LM_CT_COLS.map(k =>
+        k === 'estado' ? (role === 'primario' ? 'contactado' : 'nuevo') :
+        k === 'fuente' ? 'cola_empresas' :
+        k === 'contact_priority' ? (role === 'primario' ? 'Primario' : 'Secundario') :
+        _lmS(b[k]));
+      const { rows: ctRows } = await cl.query(`
+        INSERT INTO lm_contacts (user_id,${LM_CT_COLS.join(',')},company_id,outbound_client_id)
+        VALUES ($1,${LM_CT_COLS.map((_, i) => '$' + (i + 2)).join(',')},$${LM_CT_COLS.length + 2},$${LM_CT_COLS.length + 3}) RETURNING *
+      `, [uid, ...vals, cq.company_id, b.outbound_client_id || null]);
+      contact = ctRows[0];
+    }
     if (role === 'primario') {
       // paso=1 (NO paso 2): la tarea de verdad — enviar la invitación — todavía no está hecha,
       // solo se encontró al decisor. next_action_at=ahora para que aparezca de inmediato como
