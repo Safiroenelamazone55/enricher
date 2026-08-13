@@ -762,6 +762,15 @@ async function initDb() {
     await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS mercado TEXT NOT NULL DEFAULT '';`);
     await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS icp     TEXT NOT NULL DEFAULT '';`);
     await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS notas   TEXT NOT NULL DEFAULT '';`);
+    // A quién buscar en LinkedIn dentro de cada empresa, EN ORDEN DE PRIORIDAD (target 1 = puesto
+    // ideal, target 2 = alternativa si no lo encuentra). Distinto de `icp` (que describe el perfil
+    // de la empresa, no el puesto de la persona) — se muestra en el task-runner de Cola de empresas
+    // para saber a quién buscar antes de abrir LinkedIn Sales Navigator. Dos columnas cortas en vez
+    // de una sola de texto libre: un solo input largo activaba el autocompletado de Chrome (sugería
+    // texto guardado de otros formularios, ej. búsquedas de LinkedIn), pisando lo que se escribía.
+    await pool.query(`ALTER TABLE sequences DROP COLUMN IF EXISTS target_roles;`);
+    await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS target_role_1 TEXT NOT NULL DEFAULT '';`);
+    await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS target_role_2 TEXT NOT NULL DEFAULT '';`);
     // Modo de envío por secuencia (estilo Outreach.io):
     //   manual      → se maneja externamente (tareas); el motor NO envía nada. Default.
     //   auto        → el motor envía solo por el buzón del cliente.

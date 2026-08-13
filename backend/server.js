@@ -5875,9 +5875,9 @@ app.post('/api/sequences', requireAuth, async (req, res) => {
     const sendDays = _sanSendDays(b.send_days);
     const dLim = Math.max(0, parseInt(b.daily_limit) || 0);
     const { rows } = await pool.query(`
-      INSERT INTO sequences (user_id,outbound_client_id,campaign_id,nombre,objetivo,estado,timezone,drip_per_day,send_days,starts_on,daily_limit,mercado,icp,notas,send_mode,send_interval_min,auto_activar,preferred_channel)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING *
-    `, [req.workspaceOwnerId, b.outbound_client_id || null, b.campaign_id || null, b.nombre.trim(), b.objetivo || '', estado, b.timezone || '', drip, sendDays, _sanDate(b.starts_on), dLim, b.mercado || '', b.icp || '', b.notas || '', _sanSendMode(b.send_mode), _sanInterval(b.send_interval_min), !!b.auto_activar, _sanPreferredChannel(b.preferred_channel)]);
+      INSERT INTO sequences (user_id,outbound_client_id,campaign_id,nombre,objetivo,estado,timezone,drip_per_day,send_days,starts_on,daily_limit,mercado,icp,notas,send_mode,send_interval_min,auto_activar,preferred_channel,target_role_1,target_role_2)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20) RETURNING *
+    `, [req.workspaceOwnerId, b.outbound_client_id || null, b.campaign_id || null, b.nombre.trim(), b.objetivo || '', estado, b.timezone || '', drip, sendDays, _sanDate(b.starts_on), dLim, b.mercado || '', b.icp || '', b.notas || '', _sanSendMode(b.send_mode), _sanInterval(b.send_interval_min), !!b.auto_activar, _sanPreferredChannel(b.preferred_channel), b.target_role_1 || '', b.target_role_2 || '']);
     res.status(201).json(rows[0]);
   } catch (err) { console.error('[seq] POST error:', err.message); res.status(500).json({ error: 'Error al crear secuencia' }); }
 });
@@ -5894,9 +5894,9 @@ app.put('/api/sequences/:id', requireAuth, async (req, res) => {
       `SELECT send_days, starts_on::text AS starts_on, drip_per_day FROM sequences WHERE id=$1 AND user_id=$2`,
       [req.params.id, req.workspaceOwnerId]);
     const { rows } = await pool.query(`
-      UPDATE sequences SET outbound_client_id=$1,campaign_id=$2,nombre=$3,objetivo=$4,estado=$5,timezone=$6,drip_per_day=$7,send_days=$8,starts_on=$9,daily_limit=$10,mercado=$11,icp=$12,notas=$13,send_mode=$14,send_interval_min=$15,auto_activar=$16,preferred_channel=$17,updated_at=NOW()
-      WHERE id=$18 AND user_id=$19 RETURNING *
-    `, [b.outbound_client_id || null, b.campaign_id || null, b.nombre.trim(), b.objetivo || '', estado, b.timezone || '', drip, sendDays, _sanDate(b.starts_on), dLim, b.mercado || '', b.icp || '', b.notas || '', _sanSendMode(b.send_mode), _sanInterval(b.send_interval_min), !!b.auto_activar, _sanPreferredChannel(b.preferred_channel), req.params.id, req.workspaceOwnerId]);
+      UPDATE sequences SET outbound_client_id=$1,campaign_id=$2,nombre=$3,objetivo=$4,estado=$5,timezone=$6,drip_per_day=$7,send_days=$8,starts_on=$9,daily_limit=$10,mercado=$11,icp=$12,notas=$13,send_mode=$14,send_interval_min=$15,auto_activar=$16,preferred_channel=$17,target_role_1=$18,target_role_2=$19,updated_at=NOW()
+      WHERE id=$20 AND user_id=$21 RETURNING *
+    `, [b.outbound_client_id || null, b.campaign_id || null, b.nombre.trim(), b.objetivo || '', estado, b.timezone || '', drip, sendDays, _sanDate(b.starts_on), dLim, b.mercado || '', b.icp || '', b.notas || '', _sanSendMode(b.send_mode), _sanInterval(b.send_interval_min), !!b.auto_activar, _sanPreferredChannel(b.preferred_channel), b.target_role_1 || '', b.target_role_2 || '', req.params.id, req.workspaceOwnerId]);
     if (!rows.length) return res.status(404).json({ error: 'Secuencia no encontrada' });
     // Cambió la cadencia, la fecha de inicio o el drip → recalcular las fechas de los
     // que aún no empiezan (paso 1). Sin esto, activar S/D después de enrolar no movía nada.

@@ -15668,8 +15668,11 @@ ${foot}
         <input class="form-input" id="coq-apellido-${rid}" placeholder="Apellido">
       </div>
       <div class="seq-co-form__row">
-        <input class="form-input" id="coq-linkedin-${rid}" placeholder="URL de LinkedIn *">
+        <input class="form-input" id="coq-cargo-${rid}" placeholder="Cargo / Título">
         <input class="form-input" id="coq-email-${rid}" placeholder="Email (opcional)">
+      </div>
+      <div class="seq-co-form__row">
+        <input class="form-input" id="coq-linkedin-${rid}" placeholder="URL de LinkedIn *">
       </div>
     </div>`;
   }
@@ -15683,6 +15686,7 @@ ${foot}
     const body = {
       nombre, role,
       apellido: ($(`coq-apellido-${rowId}`)?.value || '').trim(),
+      cargo: ($(`coq-cargo-${rowId}`)?.value || '').trim(),
       linkedin,
       email: ($(`coq-email-${rowId}`)?.value || '').trim(),
     };
@@ -15743,6 +15747,8 @@ ${foot}
     const { seqId, companySeqId } = _seqCoDo;
     const row = (_seqPendingCos || []).find(x => x.company_sequence_id === companySeqId);
     if (!row) { seqCoDoClose(); return; }
+    const seq = _sequences.find(x => x.id === seqId);
+    const targetRoles = [seq?.target_role_1, seq?.target_role_2].map(x => (x || '').trim()).filter(Boolean);
     const steps = _seqSteps(seqId);
     const st = steps[0] || null;
     const touch = st ? (_TOUCH[st.canal] || _TOUCH.email) : _TOUCH.email;
@@ -15768,6 +15774,7 @@ ${foot}
           </div>
           ${li ? `<button class="btn btn--primary btn--sm seqdo-li" onclick="LeadManagerModule.seqOpenCompanyLinkedIn(${companySeqId})">LinkedIn (Sales Navigator) ↗</button>` : `<span class="seqdo-nolink">Sin LinkedIn</span>`}
         </div>
+        ${targetRoles.length ? `<div class="seqdo-target"><span class="seqdo-target__lbl">🎯 Buscar</span>${targetRoles.map((r, i) => `<span class="seqdo-target__chip"><span class="seqdo-target__n">${i + 1}</span>${esc(r)}</span>`).join('')}</div>` : ''}
         ${(st && st.plantilla) ? `<div class="seqdo-tplwrap">
           <div class="seqdo-tpl-hd"><span>Mensaje del paso</span></div>
           <div class="seqdo-tpl seqdo-tpl--slim">${disp}</div>
@@ -19670,6 +19677,10 @@ ${foot}
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Objetivo</span><textarea class="form-input lm-ta-grow" id="seq-objetivo" rows="2" placeholder="Ej. Agendar demo">${s ? esc(s.objetivo) : ''}</textarea></label>
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Mercado (de esta secuencia)</span><textarea class="form-input lm-ta-grow" id="seq-mercado" rows="2" placeholder="Ej. EE. UU. · Field services">${s ? esc(s.mercado || '') : ''}</textarea></label>
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">ICP (de esta secuencia)</span><textarea class="form-input lm-ta-grow" id="seq-icp" rows="2" placeholder="Ej. Owners 5–50 empleados">${s ? esc(s.icp || '') : ''}</textarea></label>
+        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Target por prioridad (a quién buscar en LinkedIn)</span><div class="seq-co-form__row">
+          <input class="form-input" id="seq-target-1" autocomplete="off" placeholder="Target 1 (prioridad) — Ej. CEO" value="${s ? esc(s.target_role_1 || '') : ''}">
+          <input class="form-input" id="seq-target-2" autocomplete="off" placeholder="Target 2 (alternativa) — Ej. Jefe de Operaciones" value="${s ? esc(s.target_role_2 || '') : ''}">
+        </div><span class="seq-drip-hint">El target 1 es el puesto ideal; el target 2 es a quién buscar si no encuentras al primero. Aparece en la tarea de Cola de empresas.</span></label>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Notas del segmento</span><textarea class="form-input lm-ta-grow" id="seq-notas" rows="3" placeholder="Ángulo, contexto del segmento, aprendizajes…">${s ? esc(s.notas || '') : ''}</textarea><span class="seq-drip-hint">Cada secuencia puede atacar un mercado/ICP distinto de su campaña (ej. Tier 1 · EE. UU.). Mercado, ICP y notas salen en el informe PDF; si los dejas vacíos, el informe usa los de la campaña. Los saltos de línea que pegues se conservan.</span></label>
       </div>
       <div class="fin-pi-box__ft"><span class="fin-cfg-hint" id="seq-hint"></span><div class="fin-pi-ft-btns">
@@ -19719,7 +19730,7 @@ ${foot}
     const fail = m => { if (hint) { hint.textContent = m; hint.className = 'fin-cfg-hint fin-cfg-hint--err'; } };
     if (!nombre) return fail('El nombre es requerido');
     if (!clientId) return fail('Selecciona el cliente outbound');
-    const body = { nombre, outbound_client_id: Number(clientId), campaign_id: $('seq-campaign')?.value ? Number($('seq-campaign').value) : null, estado: $('seq-estado')?.value || 'draft', objetivo: $('seq-objetivo')?.value.trim() || '', timezone: $('seq-tz')?.value || '', drip_per_day: Math.max(0, parseInt($('seq-drip')?.value) || 0), send_days: _sanSendDays($('seq-senddays')?.value), starts_on: $('seq-starts')?.value || null, daily_limit: Math.max(0, parseInt($('seq-dlim')?.value) || 0), mercado: $('seq-mercado')?.value.trim() || '', icp: $('seq-icp')?.value.trim() || '', notas: $('seq-notas')?.value.trim() || '', send_mode: $('seq-mode')?.value || 'manual', send_interval_min: parseInt($('seq-interval')?.value) || 5, auto_activar: !!$('seq-autoact')?.checked, preferred_channel: $('seq-pref-channel')?.value || '' };
+    const body = { nombre, outbound_client_id: Number(clientId), campaign_id: $('seq-campaign')?.value ? Number($('seq-campaign').value) : null, estado: $('seq-estado')?.value || 'draft', objetivo: $('seq-objetivo')?.value.trim() || '', timezone: $('seq-tz')?.value || '', drip_per_day: Math.max(0, parseInt($('seq-drip')?.value) || 0), send_days: _sanSendDays($('seq-senddays')?.value), starts_on: $('seq-starts')?.value || null, daily_limit: Math.max(0, parseInt($('seq-dlim')?.value) || 0), mercado: $('seq-mercado')?.value.trim() || '', icp: $('seq-icp')?.value.trim() || '', target_role_1: $('seq-target-1')?.value.trim() || '', target_role_2: $('seq-target-2')?.value.trim() || '', notas: $('seq-notas')?.value.trim() || '', send_mode: $('seq-mode')?.value || 'manual', send_interval_min: parseInt($('seq-interval')?.value) || 5, auto_activar: !!$('seq-autoact')?.checked, preferred_channel: $('seq-pref-channel')?.value || '' };
     const btn = $('seq-save'); if (btn) btn.disabled = true;
     try {
       const res = await apiFetch(`${API}/sequences${id ? '/' + id : ''}`, { method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
