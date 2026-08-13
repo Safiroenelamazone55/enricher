@@ -13183,6 +13183,12 @@ const ProjectsModule = (() => {
           });
         } catch (e) { console.error('[projects] billing-cfg:', e); }
       }
+      // Si es un proyecto nuevo y no se pudo crear su canal de Slack (ej. no hay workspace
+      // marcado como default, o Slack falló), avisar de una — antes quedaba en silencio y
+      // el chat "no aparecía" sin que nada lo señalara.
+      if (!_editId && saved && !saved.slack_channel) {
+        showBanner('⚠ Proyecto creado, pero no se pudo crear su chat de Slack — revísalo en Configuración › Slack', 'error');
+      }
       closeDrawer();
       await load();
     } catch (err) {
@@ -23653,7 +23659,14 @@ const SlackChat = (() => {
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'No se pudo enviar');
-      if (_hilo) await verHilo(_hilo); else await abrir(_canal.id);
+      // Antes esto llamaba a abrir(), que BORRA todo el panel y muestra "Cargando
+      // mensajes…" — de ahí el parpadeo en blanco al enviar. _refrescarCanal() solo
+      // repinta lo que cambió, sin ese vaciado — y como Slack a veces tarda un
+      // instante en reflejar el mensaje recién posteado, se reintenta una vez más
+      // 1.5s después para no depender de que el primer refresco ya lo tenga (la
+      // causa más probable de "mandé un mensaje y desapareció hasta recargar").
+      if (_hilo) await verHilo(_hilo);
+      else { await _refrescarCanal(); setTimeout(_refrescarCanal, 1500); }
     } catch (e) {
       if (inp) inp.value = texto;                 // no se pierde lo escrito
       showBanner('Error: ' + e.message, 'error');
