@@ -3488,13 +3488,23 @@ app.post('/api/lm/company-sequences/:id/add-contact', requireAuth, async (req, r
       contact = ctRows[0];
     }
     if (role === 'primario') {
+      // Si ya había otro principal para esta empresa (ej. Jenny agrega dos candidatos como
+      // principal en la misma visita, sin haber guardado todavía), lo desmarca y pausa su
+      // enrolamiento — evita dos "principales" activos a la vez para una misma empresa.
+      await cl.query(`UPDATE lm_contacts SET contact_priority='Secundario' WHERE user_id=$1 AND company_id=$2 AND contact_priority='Primario' AND id<>$3`, [uid, cq.company_id, contact.id]);
+      await cl.query(`
+        UPDATE lm_contact_sequences SET estado='pausado'
+        WHERE user_id=$1 AND sequence_id=$2 AND estado='activo' AND contact_id IN (
+          SELECT id FROM lm_contacts WHERE user_id=$1 AND company_id=$3 AND id<>$4
+        )
+      `, [uid, cq.sequence_id, cq.company_id, contact.id]);
       // paso=1 (NO paso 2): la tarea de verdad — enviar la invitación — todavía no está hecha,
       // solo se encontró al decisor. next_action_at=ahora para que aparezca de inmediato como
       // tarea vencida/hoy en su ficha.
       await cl.query(`
         INSERT INTO lm_contact_sequences (user_id, contact_id, sequence_id, paso, estado, start_date, paso_date, next_action_at)
         VALUES ($1,$2,$3,1,'activo',CURRENT_DATE,CURRENT_DATE,NOW())
-        ON CONFLICT (contact_id, sequence_id) DO NOTHING
+        ON CONFLICT (contact_id, sequence_id) DO UPDATE SET estado='activo', next_action_at=NOW()
       `, [uid, contact.id, cq.sequence_id]);
       if (cq.estado === 'pendiente') await cl.query(`UPDATE lm_company_sequences SET estado='trabajada' WHERE id=$1`, [cq.id]);
     }
@@ -3526,10 +3536,19 @@ app.post('/api/lm/company-sequences/:id/select-primary', requireAuth, async (req
     if (!contact) { await cl.query('ROLLBACK'); return res.status(404).json({ error: 'Contacto no encontrado en esta empresa' }); }
     await cl.query(`UPDATE lm_contacts SET contact_priority='Secundario' WHERE user_id=$1 AND company_id=$2 AND contact_priority='Primario' AND id<>$3`, [uid, cq.company_id, contact.id]);
     await cl.query(`UPDATE lm_contacts SET contact_priority='Primario' WHERE id=$1`, [contact.id]);
+    // Si otro contacto de esta misma empresa ya había quedado activo en esta secuencia (ej.
+    // se agregó primero como principal y Jenny cambió de opinión con la estrella antes de
+    // Guardar), lo pausa — evita dos tareas activas "principales" a la vez para una empresa.
+    await cl.query(`
+      UPDATE lm_contact_sequences SET estado='pausado'
+      WHERE user_id=$1 AND sequence_id=$2 AND estado='activo' AND contact_id IN (
+        SELECT id FROM lm_contacts WHERE user_id=$1 AND company_id=$3 AND id<>$4
+      )
+    `, [uid, cq.sequence_id, cq.company_id, contact.id]);
     await cl.query(`
       INSERT INTO lm_contact_sequences (user_id, contact_id, sequence_id, paso, estado, start_date, paso_date, next_action_at)
       VALUES ($1,$2,$3,1,'activo',CURRENT_DATE,CURRENT_DATE,NOW())
-      ON CONFLICT (contact_id, sequence_id) DO NOTHING
+      ON CONFLICT (contact_id, sequence_id) DO UPDATE SET estado='activo', next_action_at=NOW()
     `, [uid, contact.id, cq.sequence_id]);
     if (cq.estado === 'pendiente') await cl.query(`UPDATE lm_company_sequences SET estado='trabajada' WHERE id=$1`, [cq.id]);
     await cl.query('COMMIT');

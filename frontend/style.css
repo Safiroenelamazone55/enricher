@@ -11543,9 +11543,10 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .seq-co-card__noli { font-size: .78rem; color: var(--muted, #B4AFA8); font-style: italic; }
 .seq-co-card__discard { margin-left: auto; border: none; background: none; color: var(--muted, #B4AFA8); font-size: .78rem; cursor: pointer; padding: 6px 4px; }
 .seq-co-card__discard:hover { color: #C4342B; }
-.seq-co-form { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border, #EAE7E2); display: flex; flex-direction: column; gap: 8px; }
+.seq-co-form { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border, #EAE7E2); display: flex; flex-direction: column; gap: 6px; }
 .seq-co-form__row { display: flex; gap: 8px; }
 .seq-co-form__row .form-input { flex: 1; min-width: 0; }
+.seq-co-form--compact .form-input { padding: 6px 10px; font-size: .82rem; }
 .seq-co-form__acts { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
 /* ── Selector de modalidad de import (Contactos / Empresas / Contactos+Empresas) ── */
 .lm-impick-box { width: 560px; max-width: 92vw; }
@@ -11641,17 +11642,18 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .seqdo-ft { display: flex; justify-content: flex-end; gap: 10px; padding: 13px 18px; border-top: 1px solid var(--border, #EAE7E2); }
 /* ── Modal de tarea de empresa (Cola de empresas): más compacto, botones de guardar
    siempre visibles en el pie fijo (nunca dentro del área con scroll interno). ── */
-.seqdo-body--co { padding: 14px 18px; gap: 10px; }
+.seqdo-hd--co { padding: 12px 16px; gap: 10px; }
+.seqdo-body--co { padding: 12px 16px 10px; gap: 8px; }
 .seqdo-contact--co { flex-wrap: wrap; row-gap: 8px; }
 .seqdo-contact--co .seqdo-li { margin-left: auto; white-space: nowrap; }
 .seqdo-co-formhint { font-size: .74rem; color: var(--muted, #B4AFA8); margin-top: -2px; }
-.seq-co-form--compact { gap: 8px; }
-.seqdo-ft--co { align-items: center; flex-wrap: wrap; }
+.seq-co-form--compact { gap: 6px; }
+.seqdo-ft--co { align-items: center; flex-wrap: wrap; padding: 10px 16px; }
 .seqdo-discard { border: none; background: none; color: var(--muted, #B4AFA8); font-size: .76rem; cursor: pointer; padding: 6px 2px; white-space: nowrap; }
 .seqdo-discard:hover { color: #C4342B; }
 .seqdo-ft__spacer { flex: 1; min-width: 8px; }
 @media (max-width: 480px) { .seqdo-contact--co .seqdo-li { margin-left: 0; } .seqdo-ft--co { justify-content: flex-end; } .seqdo-discard { width: 100%; text-align: left; } }
-.seqdo-target { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; background: var(--primary-soft, #EAF3EF); border-radius: 10px; padding: 8px 12px; font-size: .82rem; }
+.seqdo-target { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; background: var(--primary-soft, #EAF3EF); border-radius: 10px; padding: 6px 10px; font-size: .82rem; }
 .seqdo-target__lbl { font-weight: 700; color: var(--primary, #00804C); margin-right: 2px; }
 .seqdo-target__chip { display: inline-flex; align-items: center; gap: 6px; background: #fff; border-radius: 999px; padding: 3px 11px 3px 4px; font-weight: 600; color: var(--text, #0A2540); box-shadow: 0 1px 2px rgba(0,0,0,.05); }
 .seqdo-target__n { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; background: var(--primary, #00804C); color: #fff; font-size: .62rem; font-weight: 800; flex-shrink: 0; }

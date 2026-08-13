@@ -15672,26 +15672,25 @@ ${foot}
       <div class="seq-co-form__row">
         <input class="form-input" id="coq-nombre-${rid}" placeholder="Nombre *">
         <input class="form-input" id="coq-apellido-${rid}" placeholder="Apellido">
-      </div>
-      <div class="seq-co-form__row">
         <input class="form-input" id="coq-cargo-${rid}" readonly onfocus="this.removeAttribute('readonly')" autocomplete="new-password" placeholder="Cargo / Título">
-        <input class="form-input" id="coq-email-${rid}" placeholder="Email (opcional)">
       </div>
       <div class="seq-co-form__row">
+        <input class="form-input" id="coq-email-${rid}" placeholder="Email (opcional)">
         <input class="form-input" id="coq-linkedin-${rid}" placeholder="URL de LinkedIn *">
       </div>
     </div>`;
   }
-  // Clic en la estrella de un contacto ya agregado (ej. de una sesión anterior): solo
-  // cambia la selección LOCAL de quién es el principal — no guarda nada todavía, eso lo
-  // hace "Continuar →".
+  // Clic en la estrella de un contacto ya agregado: cambia la selección LOCAL de quién es
+  // el principal — no guarda nada todavía, eso lo hace "Guardar →".
   function coQueueTogglePrimary(contactId) {
     if (!_seqCoDo) return;
     _seqCoDo.contacts = _seqCoDo.contacts.map(c => ({ ...c, role: c.id === contactId ? 'primario' : (c.role === 'primario' ? 'secundario' : c.role) }));
     _seqCoDoRender();
   }
-  // "Continuar →": confirma como principal al contacto ya seleccionado con la estrella (sin
-  // crear uno nuevo) — lo enrola en el Paso 1 y pasa a su ficha, igual que agregar uno nuevo.
+  // "Guardar →": confirma como principal al contacto marcado con la estrella (ya sea que se
+  // agregó como principal directamente o se promovió luego) — lo enrola en el Paso 1, saca la
+  // empresa de la cola y recién ACÁ se pasa a su ficha. Es el único paso que navega, para que
+  // agregar un principal y un secundario en la misma visita no la saque de la modal a medias.
   async function coQueueContinue(rowId) {
     if (_seqCoAddBusy) return;
     const primary = (_seqCoDo?.contacts || []).find(c => c.role === 'primario');
@@ -15702,7 +15701,7 @@ ${foot}
     try {
       const r = await apiFetch(`${API}/lm/company-sequences/${rowId}/select-primary`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact_id: primary.id }) });
       const d = await r.json();
-      if (!r.ok) throw new Error(d.error || 'Error al continuar');
+      if (!r.ok) throw new Error(d.error || 'Error al guardar');
       await _reloadContacts();
       _seqPendingCos = (_seqPendingCos || []).filter(x => x.company_sequence_id !== rowId);
       seqCoDoClose();
@@ -15714,11 +15713,10 @@ ${foot}
       document.querySelectorAll('.seqdo-ft--co button').forEach(b => b.disabled = false);
     } finally { _seqCoAddBusy = false; }
   }
-  // Agregar contacto: si es SECUNDARIO solo se crea y el modal se queda abierto (puede
-  // agregar más). Si es PRINCIPAL, el backend ya lo enrola en el Paso 1 (ver /add-contact) —
-  // acá se cierra este modal y se abre la ficha normal del contacto con su tarea de Paso 1
-  // ya activa: de ahí en adelante es el mismo flujo de "✓ Hecha → siguiente" que cualquier
-  // otro paso, sin un botón aparte de "marcar hecho" en este modal.
+  // Agregar contacto (principal o secundario): SOLO guarda y suma el chip a la lista de
+  // "ya agregados" — el modal se queda abierto para poder agregar a alguien más (ej. un
+  // principal y de respaldo un secundario) antes de decidir. Pasar a la ficha y marcar la
+  // tarea es un paso aparte y explícito: el botón "Guardar →" del pie (coQueueContinue).
   let _seqCoAddBusy = false;   // evita doble-clic → doble contacto (ej. dos "Pedro" duplicados)
   async function coQueueAddContact(rowId, role) {
     if (_seqCoAddBusy) return;
@@ -15733,7 +15731,6 @@ ${foot}
       linkedin,
       email: ($(`coq-email-${rowId}`)?.value || '').trim(),
     };
-    const seqId = _seqCoDo?.seqId || _activeSeq;
     _seqCoAddBusy = true;
     document.querySelectorAll('.seqdo-ft--co button').forEach(b => b.disabled = true);
     try {
@@ -15741,19 +15738,16 @@ ${foot}
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'Error al agregar');
       await _reloadContacts();
-      // Guardar SIEMPRE pasa a la ficha del contacto, sea principal o secundario — antes
-      // el secundario se quedaba "guardado" sin ninguna confirmación visible de que pasó
-      // algo, dando la sensación de que faltaba un botón de guardar. La única diferencia
-      // real sigue siendo del backend: el principal ya arranca el Paso 1 y saca la
-      // empresa de la cola; el secundario solo queda linkeado — la empresa sigue
-      // pendiente para volver luego a elegir/agregar al principal.
-      if (role === 'primario') { _seqPendingCos = (_seqPendingCos || []).filter(x => x.company_sequence_id !== rowId); }
-      seqCoDoClose();
-      _seqContacts = null; await _seqLoadContacts(seqId);
-      openContactPage(d.contact.id, { seqId });
+      if (_seqCoDo) {
+        _seqCoDo.contacts = [
+          ...(_seqCoDo.contacts || []).map(c => role === 'primario' ? { ...c, role: 'secundario' } : c),
+          { id: d.contact.id, nombre: d.nombre, role },
+        ];
+        _seqCoDoRender();
+      }
       showBanner(role === 'primario'
-        ? `✓ ${d.nombre} agregado como principal — continúa la tarea aquí`
-        : `✓ ${d.nombre} agregado como secundario — la empresa sigue pendiente`, 'success');
+        ? `✓ ${d.nombre} agregado como principal — agrega otro contacto o pulsa "Guardar" para continuar`
+        : `✓ ${d.nombre} agregado como secundario`, 'success');
     } catch (e) {
       showBanner('Error: ' + e.message, 'error');
       document.querySelectorAll('.seqdo-ft--co button').forEach(b => b.disabled = false);
@@ -15770,8 +15764,9 @@ ${foot}
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
   // ── Modal de tarea "Paso 1" para empresa — SOLO existe para encontrar y agregar al
-  // decisor (no hay contacto todavía). Al agregarlo como principal, el backend ya lo
-  // enrola en el Paso 1 y de ahí se pasa a la ficha normal del contacto — la tarea de
+  // decisor (no hay contacto todavía). Agregar (principal o secundario) SOLO guarda, sin
+  // salir del modal — así se puede sumar a más de uno antes de decidir. "Guardar →" es el
+  // único paso que enrola en el Paso 1 y pasa a la ficha normal del contacto — la tarea de
   // verdad (enviar la invitación) se marca hecha con el mismo "✓ Hecha → siguiente" de
   // siempre, no con un botón aparte acá. ──
   let _seqCoDo = null;   // { seqId, companySeqId, contacts: [{id,nombre,role}] }
@@ -15830,7 +15825,7 @@ ${foot}
     const m = document.createElement('div'); m.id = 'seq-co-do-modal'; m.className = 'fin-pi-backdrop';
     m.onclick = ev => { if (ev.target === m) seqCoDoClose(); };
     m.innerHTML = `<div class="fin-pi-box seqdo-box">
-      <div class="seqdo-hd">
+      <div class="seqdo-hd seqdo-hd--co">
         <span class="seqdo-ico" style="background:${touch[1]}1a;color:${touch[1]}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${touch[2]}</svg></span>
         <div class="seqdo-hd__tt"><div class="seqdo-hd__t">${esc((st && (st.titulo || _accionLabel(st.canal, st.accion))) || 'Conectar en LinkedIn')} <b style="color:${touch[1]}">${touch[0]}</b></div><div class="seqdo-hd__s">Empresa · Paso 1</div></div>
         <button class="fin-pi-x" onclick="LeadManagerModule.seqCoDoClose()">✕</button>
@@ -15852,16 +15847,17 @@ ${foot}
         ${addedContacts.length ? `<div class="seqdo-co-added">${addedContacts.map(c => `<button type="button" class="seqdo-co-chip${c.role === 'primario' ? ' seqdo-co-chip--primary' : ''}" onclick="LeadManagerModule.coQueueTogglePrimary(${c.id})" title="Marcar como principal">
           <span class="seqdo-co-chip__star">${c.role === 'primario' ? '★' : '☆'}</span>${esc(c.nombre)}
         </button>`).join('')}<span class="seqdo-co-added__hint">Clic en la estrella para elegir el principal</span></div>` : ''}
-        <div class="seqdo-co-formhint">＋ Agregar contacto — el principal pasa directo a su ficha para enviar la invitación</div>
+        <div class="seqdo-co-formhint">＋ Agrega al principal y, si quieres, a un secundario de respaldo — luego pulsa "Guardar" para pasar a la tarea</div>
         ${_coQueueAddForm(row)}
       </div>
       <div class="seqdo-ft seqdo-ft--co">
         <button class="seqdo-discard" onclick="LeadManagerModule.coQueueDiscard(${companySeqId})">No encontré a nadie viable — Descartar</button>
         <div class="seqdo-ft__spacer"></div>
         <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.coQueueAddContact(${companySeqId},'secundario')">＋ Secundario</button>
+        <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.coQueueAddContact(${companySeqId},'primario')">＋ Principal</button>
         ${addedContacts.some(c => c.role === 'primario')
-          ? `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.coQueueContinue(${companySeqId})">Continuar →</button>`
-          : `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.coQueueAddContact(${companySeqId},'primario')">＋ Agregar como principal</button>`}
+          ? `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.coQueueContinue(${companySeqId})">Guardar →</button>`
+          : ''}
       </div>
     </div>`;
     document.body.appendChild(m);
