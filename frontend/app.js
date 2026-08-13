@@ -15668,13 +15668,45 @@ ${foot}
         <input class="form-input" id="coq-apellido-${rid}" placeholder="Apellido">
       </div>
       <div class="seq-co-form__row">
-        <input class="form-input" id="coq-cargo-${rid}" autocomplete="new-password" placeholder="Cargo / Título">
+        <input class="form-input" id="coq-cargo-${rid}" readonly onfocus="this.removeAttribute('readonly')" autocomplete="new-password" placeholder="Cargo / Título">
         <input class="form-input" id="coq-email-${rid}" placeholder="Email (opcional)">
       </div>
       <div class="seq-co-form__row">
         <input class="form-input" id="coq-linkedin-${rid}" placeholder="URL de LinkedIn *">
       </div>
     </div>`;
+  }
+  // Clic en la estrella de un contacto ya agregado (ej. de una sesión anterior): solo
+  // cambia la selección LOCAL de quién es el principal — no guarda nada todavía, eso lo
+  // hace "Continuar →".
+  function coQueueTogglePrimary(contactId) {
+    if (!_seqCoDo) return;
+    _seqCoDo.contacts = _seqCoDo.contacts.map(c => ({ ...c, role: c.id === contactId ? 'primario' : (c.role === 'primario' ? 'secundario' : c.role) }));
+    _seqCoDoRender();
+  }
+  // "Continuar →": confirma como principal al contacto ya seleccionado con la estrella (sin
+  // crear uno nuevo) — lo enrola en el Paso 1 y pasa a su ficha, igual que agregar uno nuevo.
+  async function coQueueContinue(rowId) {
+    if (_seqCoAddBusy) return;
+    const primary = (_seqCoDo?.contacts || []).find(c => c.role === 'primario');
+    if (!primary) return;
+    const seqId = _seqCoDo?.seqId || _activeSeq;
+    _seqCoAddBusy = true;
+    document.querySelectorAll('.seqdo-ft--co button').forEach(b => b.disabled = true);
+    try {
+      const r = await apiFetch(`${API}/lm/company-sequences/${rowId}/select-primary`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact_id: primary.id }) });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Error al continuar');
+      await _reloadContacts();
+      _seqPendingCos = (_seqPendingCos || []).filter(x => x.company_sequence_id !== rowId);
+      seqCoDoClose();
+      _seqContacts = null; await _seqLoadContacts(seqId);
+      openContactPage(d.contact_id, { seqId });
+      showBanner(`✓ ${d.nombre} como principal — continúa la tarea aquí`, 'success');
+    } catch (e) {
+      showBanner('Error: ' + e.message, 'error');
+      document.querySelectorAll('.seqdo-ft--co button').forEach(b => b.disabled = false);
+    } finally { _seqCoAddBusy = false; }
   }
   // Agregar contacto: si es SECUNDARIO solo se crea y el modal se queda abierto (puede
   // agregar más). Si es PRINCIPAL, el backend ya lo enrola en el Paso 1 (ver /add-contact) —
@@ -15807,7 +15839,9 @@ ${foot}
           <div class="seqdo-tpl-hd"><span>Mensaje del paso</span></div>
           <div class="seqdo-tpl seqdo-tpl--slim">${disp}</div>
         </div>` : ''}
-        ${addedContacts.length ? `<div class="seqdo-co-added">${addedContacts.map(c => `<span class="seqdo-co-chip${c.role === 'primario' ? ' seqdo-co-chip--primary' : ''}">${c.role === 'primario' ? '★' : '☆'} ${esc(c.nombre)}</span>`).join('')}</div>` : ''}
+        ${addedContacts.length ? `<div class="seqdo-co-added">${addedContacts.map(c => `<button type="button" class="seqdo-co-chip${c.role === 'primario' ? ' seqdo-co-chip--primary' : ''}" onclick="LeadManagerModule.coQueueTogglePrimary(${c.id})" title="Marcar como principal">
+          <span class="seqdo-co-chip__star">${c.role === 'primario' ? '★' : '☆'}</span>${esc(c.nombre)}
+        </button>`).join('')}<span class="seqdo-co-added__hint">Clic en la estrella para elegir el principal</span></div>` : ''}
         <div class="seqdo-co-formhint">＋ Agregar contacto — el principal pasa directo a su ficha para enviar la invitación</div>
         ${_coQueueAddForm(row)}
       </div>
@@ -15815,7 +15849,9 @@ ${foot}
         <button class="seqdo-discard" onclick="LeadManagerModule.coQueueDiscard(${companySeqId})">No encontré a nadie viable — Descartar</button>
         <div class="seqdo-ft__spacer"></div>
         <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.coQueueAddContact(${companySeqId},'secundario')">＋ Secundario</button>
-        <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.coQueueAddContact(${companySeqId},'primario')">＋ Agregar como principal</button>
+        ${addedContacts.some(c => c.role === 'primario')
+          ? `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.coQueueContinue(${companySeqId})">Continuar →</button>`
+          : `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.coQueueAddContact(${companySeqId},'primario')">＋ Agregar como principal</button>`}
       </div>
     </div>`;
     document.body.appendChild(m);
@@ -19719,8 +19755,8 @@ ${foot}
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Mercado (de esta secuencia)</span><textarea class="form-input lm-ta-grow" id="seq-mercado" rows="2" placeholder="Ej. EE. UU. · Field services">${s ? esc(s.mercado || '') : ''}</textarea></label>
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">ICP (de esta secuencia)</span><textarea class="form-input lm-ta-grow" id="seq-icp" rows="2" placeholder="Ej. Owners 5–50 empleados">${s ? esc(s.icp || '') : ''}</textarea></label>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Target por prioridad (a quién buscar en LinkedIn)</span><div class="seq-co-form__row">
-          <input class="form-input" id="seq-target-1" autocomplete="new-password" placeholder="Target 1 (prioridad) — Ej. CEO" value="${s ? esc(s.target_role_1 || '') : ''}">
-          <input class="form-input" id="seq-target-2" autocomplete="new-password" placeholder="Target 2 (alternativa) — Ej. Jefe de Operaciones" value="${s ? esc(s.target_role_2 || '') : ''}">
+          <input class="form-input" id="seq-target-1" readonly onfocus="this.removeAttribute('readonly')" autocomplete="new-password" placeholder="Target 1 (prioridad) — Ej. CEO" value="${s ? esc(s.target_role_1 || '') : ''}">
+          <input class="form-input" id="seq-target-2" readonly onfocus="this.removeAttribute('readonly')" autocomplete="new-password" placeholder="Target 2 (alternativa) — Ej. Jefe de Operaciones" value="${s ? esc(s.target_role_2 || '') : ''}">
         </div><span class="seq-drip-hint">El target 1 es el puesto ideal; el target 2 es a quién buscar si no encuentras al primero. Aparece en la tarea de Cola de empresas.</span></label>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Notas del segmento</span><textarea class="form-input lm-ta-grow" id="seq-notas" rows="3" placeholder="Ángulo, contexto del segmento, aprendizajes…">${s ? esc(s.notas || '') : ''}</textarea><span class="seq-drip-hint">Cada secuencia puede atacar un mercado/ICP distinto de su campaña (ej. Tier 1 · EE. UU.). Mercado, ICP y notas salen en el informe PDF; si los dejas vacíos, el informe usa los de la campaña. Los saltos de línea que pegues se conservan.</span></label>
       </div>
@@ -22537,7 +22573,7 @@ ${foot}
     openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, bulkDeleteContacts, bulkAddOpen, bulkAddDo, openContactPage, cpTab, cpSave, cpDelete, cpActOpen, cpActSave, cpActToggle, cpActDel,
     cpResumeSeq, cpFocusField, cpOpenRegisterReply, cpSaveRegisterReply,
     openCompany, closeCompany, saveCompany, deleteCompany, filterCompanies, toggleCo, toggleCoAll, clearCoSel, toggleCoSelMode, bulkDeleteCompanies, coEnrolOpen, coEnrolFilter, coEnrolPick,
-    coQueueAddContact, coQueueDiscard,
+    coQueueAddContact, coQueueDiscard, coQueueTogglePrimary, coQueueContinue,
     seqCoTaskOpen, seqCoDoClose, seqOpenCompanyLinkedIn,
     openDrawer, closeDrawer, save, confirmDelete, convertToClient,
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,

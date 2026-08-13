@@ -3504,6 +3504,37 @@ app.post('/api/lm/company-sequences/:id/add-contact', requireAuth, async (req, r
   } catch (err) { await cl.query('ROLLBACK').catch(() => {}); console.error('[lm-co-seq] add-contact', err.message); res.status(500).json({ error: 'Error al agregar el contacto' }); }
   finally { cl.release(); }
 });
+// Elegir como principal a un contacto que YA existe para esta empresa (ej. quedó de una
+// sesión anterior, o vino de un import) — sin crear uno nuevo. Hace lo mismo que agregar
+// como principal: lo marca Primario (y desmarca a cualquier otro que lo fuera), lo enrola
+// en el Paso 1, y saca la empresa de la cola.
+app.post('/api/lm/company-sequences/:id/select-primary', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId;
+  const contactId = parseInt(req.body?.contact_id);
+  if (!contactId) return res.status(400).json({ error: 'Falta el contacto' });
+  const cl = await pool.connect();
+  try {
+    await cl.query('BEGIN');
+    const cq = (await cl.query(
+      `SELECT cs.id, cs.company_id, cs.sequence_id, cs.estado FROM lm_company_sequences cs WHERE cs.id=$1 AND cs.user_id=$2 FOR UPDATE`, [req.params.id, uid])).rows[0];
+    if (!cq) { await cl.query('ROLLBACK'); return res.status(404).json({ error: 'No encontrado' }); }
+    if (cq.estado === 'descartada') { await cl.query('ROLLBACK'); return res.status(400).json({ error: 'Esta empresa está descartada — reactívala primero' }); }
+    const contact = (await cl.query(`SELECT id, nombre, apellido, email FROM lm_contacts WHERE id=$1 AND user_id=$2 AND company_id=$3`, [contactId, uid, cq.company_id])).rows[0];
+    if (!contact) { await cl.query('ROLLBACK'); return res.status(404).json({ error: 'Contacto no encontrado en esta empresa' }); }
+    await cl.query(`UPDATE lm_contacts SET contact_priority='Secundario' WHERE user_id=$1 AND company_id=$2 AND contact_priority='Primario' AND id<>$3`, [uid, cq.company_id, contact.id]);
+    await cl.query(`UPDATE lm_contacts SET contact_priority='Primario', estado='contactado' WHERE id=$1`, [contact.id]);
+    await cl.query(`
+      INSERT INTO lm_contact_sequences (user_id, contact_id, sequence_id, paso, estado, start_date, paso_date, next_action_at)
+      VALUES ($1,$2,$3,1,'activo',CURRENT_DATE,CURRENT_DATE,NOW())
+      ON CONFLICT (contact_id, sequence_id) DO NOTHING
+    `, [uid, contact.id, cq.sequence_id]);
+    if (cq.estado === 'pendiente') await cl.query(`UPDATE lm_company_sequences SET estado='trabajada' WHERE id=$1`, [cq.id]);
+    await cl.query('COMMIT');
+    const nombreCompleto = [contact.nombre, contact.apellido].filter(Boolean).join(' ') || contact.email || `#${contact.id}`;
+    res.json({ ok: true, contact_id: contact.id, nombre: nombreCompleto });
+  } catch (err) { await cl.query('ROLLBACK').catch(() => {}); console.error('[lm-co-seq] select-primary', err.message); res.status(500).json({ error: 'Error al continuar' }); }
+  finally { cl.release(); }
+});
 
 // ── Contactos (lm_contacts) ────────────────────────────────────────
 const LM_CT_COLS = ['nombre','apellido','email','email_personal','telefono','movil','cargo','seniority','departamento','linkedin','empresa_nombre','ciudad','region','pais','estado','fuente','contact_priority','buyer_role','analisis','notas', ...LM_CUSTOM_KEYS];
