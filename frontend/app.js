@@ -15741,20 +15741,19 @@ ${foot}
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'Error al agregar');
       await _reloadContacts();
-      if (role === 'primario') {
-        _seqPendingCos = (_seqPendingCos || []).filter(x => x.company_sequence_id !== rowId);
-        seqCoDoClose();
-        _seqContacts = null; await _seqLoadContacts(seqId);
-        openContactPage(d.contact.id, { seqId });
-        showBanner(`✓ ${d.nombre} agregado como principal — continúa la tarea aquí`, 'success');
-      } else {
-        showBanner(`✓ ${d.nombre} agregado como secundario`, 'success');
-        _seqContacts = null; await _seqLoadContacts(seqId);
-        if (_seqCoDo && _seqCoDo.companySeqId === rowId) {
-          _seqCoDo.contacts.push({ id: d.contact.id, nombre: d.nombre, role });
-          _seqCoDoRender();
-        } else { _renderBody(); }
-      }
+      // Guardar SIEMPRE pasa a la ficha del contacto, sea principal o secundario — antes
+      // el secundario se quedaba "guardado" sin ninguna confirmación visible de que pasó
+      // algo, dando la sensación de que faltaba un botón de guardar. La única diferencia
+      // real sigue siendo del backend: el principal ya arranca el Paso 1 y saca la
+      // empresa de la cola; el secundario solo queda linkeado — la empresa sigue
+      // pendiente para volver luego a elegir/agregar al principal.
+      if (role === 'primario') { _seqPendingCos = (_seqPendingCos || []).filter(x => x.company_sequence_id !== rowId); }
+      seqCoDoClose();
+      _seqContacts = null; await _seqLoadContacts(seqId);
+      openContactPage(d.contact.id, { seqId });
+      showBanner(role === 'primario'
+        ? `✓ ${d.nombre} agregado como principal — continúa la tarea aquí`
+        : `✓ ${d.nombre} agregado como secundario — la empresa sigue pendiente`, 'success');
     } catch (e) {
       showBanner('Error: ' + e.message, 'error');
       document.querySelectorAll('.seqdo-ft--co button').forEach(b => b.disabled = false);
