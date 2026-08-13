@@ -14894,7 +14894,7 @@ const LeadManagerModule = (() => {
   function sqSetCli(v) { _sqCli = v; _sqPaint(); }
   function sqSetEst(v) { _sqEst = v; _sqPaint(); }
   function sqSetQ(v) { _sqQ = v; _sqPaint(); }
-  function openSequence(id) { _activeSeq = id; _section = 'sequence'; _seqTab = 'pasos'; _seqContacts = null; _seqPendingCos = null; _seqCoAddOpen = null; _seqMetrics = null; _seqDo = null; _seqCtEstado = ''; _seqTaskCanal = ''; _seqTaskDue = ''; _refreshNav(); _renderBody(); _seqLoadContacts(id); }
+  function openSequence(id) { _activeSeq = id; _section = 'sequence'; _seqTab = 'pasos'; _seqContacts = null; _seqPendingCos = null; _seqMetrics = null; _seqDo = null; _seqCtEstado = ''; _seqTaskCanal = ''; _seqTaskDue = ''; _refreshNav(); _renderBody(); _seqLoadContacts(id); }
   const _TZ = [
     ['', 'Sin zona (sin sugerencia de hora)'],
     ['Europe/Madrid', 'España — Madrid'], ['America/New_York', 'EE. UU. Este — New York'], ['America/Chicago', 'EE. UU. Centro — Chicago'],
@@ -15668,7 +15668,7 @@ ${foot}
         <input class="form-input" id="coq-apellido-${rid}" placeholder="Apellido">
       </div>
       <div class="seq-co-form__row">
-        <input class="form-input" id="coq-cargo-${rid}" placeholder="Cargo / Título">
+        <input class="form-input" id="coq-cargo-${rid}" autocomplete="new-password" placeholder="Cargo / Título">
         <input class="form-input" id="coq-email-${rid}" placeholder="Email (opcional)">
       </div>
       <div class="seq-co-form__row">
@@ -15676,9 +15676,10 @@ ${foot}
       </div>
     </div>`;
   }
-  function coQueueAddOpen(rowId) { _seqCoAddOpen = rowId; _renderBody(); setTimeout(() => $(`coq-nombre-${rowId}`)?.focus(), 60); }
-  function coQueueAddCancel() { _seqCoAddOpen = null; if (_seqCoDo) seqCoDoClose(); else _renderBody(); }
-  async function coQueueSave(rowId, role) {
+  // Agregar contacto: SOLO lo crea (fuente=cola_empresas). No completa el Paso 1 — eso es
+  // una acción aparte y explícita (coQueueComplete), porque "encontré al decisor" y "ya le
+  // envié la invitación" son dos cosas distintas aunque casi siempre pasen seguidas.
+  async function coQueueAddContact(rowId, role) {
     const nombre = ($(`coq-nombre-${rowId}`)?.value || '').trim();
     const linkedin = ($(`coq-linkedin-${rowId}`)?.value || '').trim();
     if (!nombre) { showBanner('El nombre es obligatorio', 'error'); return; }
@@ -15691,14 +15692,29 @@ ${foot}
       email: ($(`coq-email-${rowId}`)?.value || '').trim(),
     };
     try {
-      const r = await apiFetch(`${API}/lm/company-sequences/${rowId}/convert`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const r = await apiFetch(`${API}/lm/company-sequences/${rowId}/add-contact`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'Error al agregar');
-      showBanner(`✓ ${d.nombre} agregado como ${role === 'primario' ? 'principal — Paso 1 registrado' : 'secundario'}`, 'success');
-      _seqCoAddOpen = null;
-      if (_seqCoDo && _seqCoDo.companySeqId === rowId) seqCoDoClose();
+      showBanner(`✓ ${d.nombre} agregado como ${role === 'primario' ? 'principal' : 'secundario'}`, 'success');
       await _reloadContacts();
-      if (role === 'primario') { _seqPendingCos = (_seqPendingCos || []).filter(x => x.company_sequence_id !== rowId); }
+      _seqContacts = null; await _seqLoadContacts(_activeSeq);
+      if (_seqCoDo && _seqCoDo.companySeqId === rowId) {
+        _seqCoDo.contacts.push({ id: d.contact.id, nombre: d.nombre, role });
+        _seqCoDoRender();
+      } else { _renderBody(); }
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  // Marcar el Paso 1 como hecho — requiere que ya se haya agregado un principal en este modal.
+  async function coQueueComplete(rowId) {
+    const primary = (_seqCoDo?.contacts || []).find(c => c.role === 'primario');
+    if (!primary) return;
+    try {
+      const r = await apiFetch(`${API}/lm/company-sequences/${rowId}/complete`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact_id: primary.id }) });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Error al marcar la tarea');
+      showBanner(`✓ Paso 1 completado — ${d.nombre} pasa a Paso 2`, 'success');
+      _seqPendingCos = (_seqPendingCos || []).filter(x => x.company_sequence_id !== rowId);
+      seqCoDoClose();
       _seqContacts = null; await _seqLoadContacts(_activeSeq);
       _renderBody();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
@@ -15714,11 +15730,17 @@ ${foot}
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
   // ── Modal de tarea "Paso 1" para empresa — encontrar al decisor en LinkedIn y agregarlo
-  // ES completar la tarea (reusa /convert, ya arranca Paso 2 si se agrega como principal). ──
-  let _seqCoDo = null;   // { seqId, companySeqId }
+  // es UN paso (coQueueAddContact); marcar la tarea como hecha (coQueueComplete) es OTRO,
+  // explícito, porque "encontré al decisor" ≠ "ya le envié la invitación". ──
+  let _seqCoDo = null;   // { seqId, companySeqId, contacts: [{id,nombre,role}] }
   function seqCoTaskOpen(seqId, companySeqId) {
     if (!companySeqId) return;
-    _seqCoDo = { seqId, companySeqId };
+    // Si ya se había agregado un contacto para esta empresa (ej. en una sesión anterior, sin
+    // llegar a marcar la tarea como hecha), lo reconoce en vez de pedir agregarlo de nuevo.
+    const row = (_seqPendingCos || []).find(x => x.company_sequence_id === companySeqId);
+    const existing = (row ? (_contacts || []).filter(c => c.company_id === row.company_id && c.fuente === 'cola_empresas') : [])
+      .map(c => ({ id: c.id, nombre: [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || `#${c.id}`, role: c.contact_priority === 'Primario' ? 'primario' : 'secundario' }));
+    _seqCoDo = { seqId, companySeqId, contacts: existing };
     _seqCoDoRender();
   }
   function seqCoDoClose() { document.getElementById('seq-co-do-modal')?.remove(); _seqCoDo = null; }
@@ -15756,6 +15778,8 @@ ${foot}
     const meta = [row.industria, row.tamano && `${row.tamano} emp.`, row.pais].filter(Boolean).join(' · ');
     const rendered = st ? _seqRenderTpl(st.plantilla, { company: row.nombre, company_domain: row.dominio, company_industry: row.industria, company_size: row.tamano, company_target_tier: row.target_tier, company_segmento: row.segmento }) : '';
     const disp = esc(rendered).replace(/(\{\{[^}]+\}\})/g, '<span class="seqdo-miss">$1</span>').replace(/\n/g, '<br>');
+    const addedContacts = _seqCoDo.contacts || [];
+    const primary = addedContacts.find(c => c.role === 'primario');
     document.getElementById('seq-co-do-modal')?.remove();
     const m = document.createElement('div'); m.id = 'seq-co-do-modal'; m.className = 'fin-pi-backdrop';
     m.onclick = ev => { if (ev.target === m) seqCoDoClose(); };
@@ -15779,14 +15803,17 @@ ${foot}
           <div class="seqdo-tpl-hd"><span>Mensaje del paso</span></div>
           <div class="seqdo-tpl seqdo-tpl--slim">${disp}</div>
         </div>` : ''}
-        <div class="seqdo-co-formhint">＋ Agregar contacto — encontrar al decisor completa el Paso 1</div>
+        ${addedContacts.length ? `<div class="seqdo-co-added">${addedContacts.map(c => `<span class="seqdo-co-chip${c.role === 'primario' ? ' seqdo-co-chip--primary' : ''}">${c.role === 'primario' ? '★' : '☆'} ${esc(c.nombre)}</span>`).join('')}</div>` : ''}
+        <div class="seqdo-co-formhint">${primary ? '＋ Agregar otro contacto (opcional)' : '＋ Agregar contacto — el principal habilita marcar la tarea como hecha'}</div>
         ${_coQueueAddForm(row)}
       </div>
       <div class="seqdo-ft seqdo-ft--co">
         <button class="seqdo-discard" onclick="LeadManagerModule.coQueueDiscard(${companySeqId})">No encontré a nadie viable — Descartar</button>
         <div class="seqdo-ft__spacer"></div>
-        <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.coQueueSave(${companySeqId},'secundario')">＋ Secundario</button>
-        <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.coQueueSave(${companySeqId},'primario')">＋ Agregar como principal</button>
+        <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.coQueueAddContact(${companySeqId},'secundario')">＋ Secundario</button>
+        ${primary
+          ? `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.coQueueComplete(${companySeqId})">✓ Marcar Paso 1 como hecha</button>`
+          : `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.coQueueAddContact(${companySeqId},'primario')">＋ Agregar como principal</button>`}
       </div>
     </div>`;
     document.body.appendChild(m);
@@ -19678,8 +19705,8 @@ ${foot}
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Mercado (de esta secuencia)</span><textarea class="form-input lm-ta-grow" id="seq-mercado" rows="2" placeholder="Ej. EE. UU. · Field services">${s ? esc(s.mercado || '') : ''}</textarea></label>
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">ICP (de esta secuencia)</span><textarea class="form-input lm-ta-grow" id="seq-icp" rows="2" placeholder="Ej. Owners 5–50 empleados">${s ? esc(s.icp || '') : ''}</textarea></label>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Target por prioridad (a quién buscar en LinkedIn)</span><div class="seq-co-form__row">
-          <input class="form-input" id="seq-target-1" autocomplete="off" placeholder="Target 1 (prioridad) — Ej. CEO" value="${s ? esc(s.target_role_1 || '') : ''}">
-          <input class="form-input" id="seq-target-2" autocomplete="off" placeholder="Target 2 (alternativa) — Ej. Jefe de Operaciones" value="${s ? esc(s.target_role_2 || '') : ''}">
+          <input class="form-input" id="seq-target-1" autocomplete="new-password" placeholder="Target 1 (prioridad) — Ej. CEO" value="${s ? esc(s.target_role_1 || '') : ''}">
+          <input class="form-input" id="seq-target-2" autocomplete="new-password" placeholder="Target 2 (alternativa) — Ej. Jefe de Operaciones" value="${s ? esc(s.target_role_2 || '') : ''}">
         </div><span class="seq-drip-hint">El target 1 es el puesto ideal; el target 2 es a quién buscar si no encuentras al primero. Aparece en la tarea de Cola de empresas.</span></label>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Notas del segmento</span><textarea class="form-input lm-ta-grow" id="seq-notas" rows="3" placeholder="Ángulo, contexto del segmento, aprendizajes…">${s ? esc(s.notas || '') : ''}</textarea><span class="seq-drip-hint">Cada secuencia puede atacar un mercado/ICP distinto de su campaña (ej. Tier 1 · EE. UU.). Mercado, ICP y notas salen en el informe PDF; si los dejas vacíos, el informe usa los de la campaña. Los saltos de línea que pegues se conservan.</span></label>
       </div>
@@ -20139,7 +20166,6 @@ ${foot}
   let _seqTaskDue = '';   // filtro por estatus de tarea: '' todas | 'over' vencidas | 'today' hoy
   let _seqContacts = null;
   let _seqPendingCos = null;  // cola de empresas (Paso 1: falta encontrar a la persona) — pestaña "Empresas"
-  let _seqCoAddOpen = null;   // company_sequence_id con el mini-form de "+ Agregar contacto" abierto
   let _seqMetrics = null;
   let _seqDo = null;          // { seqId, cid } — tarea abierta en el panel de ejecución
   let _seqDoText = '';        // plantilla ya renderizada (texto plano para copiar)
@@ -22497,7 +22523,7 @@ ${foot}
     openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, bulkDeleteContacts, bulkAddOpen, bulkAddDo, openContactPage, cpTab, cpSave, cpDelete, cpActOpen, cpActSave, cpActToggle, cpActDel,
     cpResumeSeq, cpFocusField, cpOpenRegisterReply, cpSaveRegisterReply,
     openCompany, closeCompany, saveCompany, deleteCompany, filterCompanies, toggleCo, toggleCoAll, clearCoSel, toggleCoSelMode, bulkDeleteCompanies, coEnrolOpen, coEnrolFilter, coEnrolPick,
-    coQueueAddOpen, coQueueAddCancel, coQueueSave, coQueueDiscard,
+    coQueueAddContact, coQueueComplete, coQueueDiscard,
     seqCoTaskOpen, seqCoDoClose, seqOpenCompanyLinkedIn,
     openDrawer, closeDrawer, save, confirmDelete, convertToClient,
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
