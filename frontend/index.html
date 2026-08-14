@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260814b"/>
+  <link rel="stylesheet" href="style.css?v=20260814d"/>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -206,7 +206,7 @@
     <div class="global-topbar__tabs">
       <button class="global-topbar__tab active" type="button" id="gtb-tab-apps" onclick="goHome()">Aplicaciones</button>
       <button class="global-topbar__tab" type="button" id="gtb-tab-users" onclick="openStandaloneUsers()">Usuarios</button>
-      <button class="global-topbar__tab" type="button" id="gtb-tab-dash" title="Próximamente">Dashboard</button>
+      <button class="global-topbar__tab" type="button" id="gtb-tab-dash" onclick="WorkspaceModule.openNameModal()">Configuración</button>
     </div>
     <div class="global-topbar__right">
       <div class="rchat__strip">
@@ -242,14 +242,13 @@
         </button>
         <span class="rtt__time" id="rtt-time"></span>
       </div>
-      <span class="global-topbar__ws" id="gtb-ws"></span>
+      <span class="global-topbar__ws" id="gtb-ws" onclick="toggleUserMenu(event)">Mi cuenta</span>
       <div class="global-topbar__avwrap">
         <button class="global-topbar__avbtn" id="gtb-avbtn" onclick="toggleUserMenu(event)" aria-label="Cuenta">
           <img class="global-topbar__av" id="gtb-av" alt="">
         </button>
         <div class="global-topbar__menu hidden" id="gtb-menu">
           <div class="global-topbar__menu-who" id="gtb-menu-who"></div>
-          <button class="global-topbar__menu-item" type="button" onclick="closeUserMenu();WorkspaceModule.openNameModal()">Configuración</button>
           <button class="global-topbar__menu-item global-topbar__menu-item--danger" type="button" onclick="closeUserMenu();novaLogout()">Salir de la cuenta</button>
         </div>
       </div>
@@ -2656,7 +2655,7 @@
 })();
 </script>
 
-<script src="app.js?v=20260814b"></script>
+<script src="app.js?v=20260814d"></script>
 <div id="task-quick-edit" style="display:none;position:fixed;z-index:9999"></div>
 </body>
 </html>

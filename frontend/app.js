@@ -572,8 +572,8 @@ function renderHome() {
 // ── Barra superior global: avatar + workspace + menú (Configuración / Salir) ──
 function _paintGlobalTopbar() {
   const u = window._authUser || {};
-  const wsEl = document.getElementById('gtb-ws');
-  if (wsEl) wsEl.textContent = (u.workspaceName || '').replace(/^Team\s+/i, '');
+  // "Mi cuenta" es fijo — antes mostraba el nombre del workspace (siempre "Novacentrax"),
+  // redundante con el logo que ya está a la izquierda del header.
   const avEl = document.getElementById('gtb-av');
   if (avEl) avEl.src = u.avatar || `https://api.dicebear.com/9.x/lorelei/svg?seed=${encodeURIComponent(u.name || u.email || 'user')}`;
   const whoEl = document.getElementById('gtb-menu-who');

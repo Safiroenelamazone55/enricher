@@ -12854,7 +12854,8 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
 .global-topbar__tab:hover { color: #fff; }
 .global-topbar__tab.active { color: #fff; border-bottom-color: var(--brand-accent); }
 .global-topbar__right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
-.global-topbar__ws { font-size: 10.5px; color: rgba(255,255,255,.6); }
+.global-topbar__ws { font-size: 10.5px; color: rgba(255,255,255,.6); cursor: pointer; transition: color .12s; }
+.global-topbar__ws:hover { color: rgba(255,255,255,.9); }
 
 /* Iconos de acceso rápido (chat/alertas/notas/timer), reubicados desde el
    panel lateral derecho: mismas clases rchat__strip y rtt, re-skineadas
