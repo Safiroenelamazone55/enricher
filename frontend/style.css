@@ -12861,14 +12861,14 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
    panel lateral derecho: mismas clases rchat__strip y rtt, re-skineadas
    en horizontal y en chico para caber en esta barra oscura y compacta. */
 .global-topbar .rchat__strip {
-  display: flex; flex-direction: row; align-items: center; gap: 1px;
+  display: flex; flex-direction: row; align-items: center; gap: 7px;
   padding-top: 0; width: auto; flex-shrink: 0;
 }
 .global-topbar .rchat__strip-btn { width: 20px; height: 20px; border-radius: 5px; color: rgba(255,255,255,.62); }
 .global-topbar .rchat__strip-btn svg { width: 13px; height: 13px; }
 .global-topbar .rchat__strip-btn:hover { background: rgba(255,255,255,.14); color: #fff; }
 .global-topbar .rchat__strip-btn.active { background: rgba(255,255,255,.2); color: #fff; }
-.global-topbar .rchat__strip-sep { width: 1px; height: 13px; background: rgba(255,255,255,.2); margin: 0 3px; }
+.global-topbar .rchat__strip-sep { width: 1px; height: 13px; background: rgba(255,255,255,.2); margin: 0 2px; }
 .global-topbar .rchat__strip-badge { top: -3px; right: -3px; border-color: var(--navy); transform: scale(.82); }
 .global-topbar .rtt__pulse { background: rgba(255,255,255,.14); }
 .global-topbar .rtt__time { margin-top: 0; margin-left: 2px; color: rgba(255,255,255,.85); }
