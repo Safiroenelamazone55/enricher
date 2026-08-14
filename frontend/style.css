@@ -9522,6 +9522,7 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
   transition: opacity .15s, background .12s, color .12s;
 }
 .d3-task-row:hover .d3-play-btn,
+.d3-opp-row:hover .d3-play-btn,
 .d3-play-btn:focus-visible { opacity: 1; }
 .d3-play-btn:hover { background: #F1EFEB; color: #6366F1; }
 

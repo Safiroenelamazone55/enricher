@@ -5494,7 +5494,7 @@ const DashboardModule = (() => {
     const it = [..._tpTasks, ..._tpOpp].find(x => x.kind === _tpSel.kind && x.id === _tpSel.id);
     if (!it) return;
     const ctxLabel = (it.kind === 'oportunidad' ? 'Oportunidad · ' : 'Proyecto · ') + it.ctx;
-    const ctx = { taskId: it.kind === 'proyecto' ? it.id : null, kind: it.kind, titulo: it.titulo, ctx: it.ctx, ctxLabel, cliente: it.cliente };
+    const ctx = { taskId: it.kind === 'proyecto' ? it.id : null, oppTaskId: it.kind === 'oportunidad' ? it.id : null, kind: it.kind, titulo: it.titulo, ctx: it.ctx, ctxLabel, cliente: it.cliente };
     closeTrackPicker();
     try { await TimerModule.start(ctx.taskId, ctx); } catch (e) { console.error('[dashboard] start tracking:', e); }
     // _setHrsCtx + _renderHours se disparan desde TimerModule.start
@@ -5522,6 +5522,11 @@ const DashboardModule = (() => {
             <span class="d3-opp-name">${esc(t.titulo)}</span>
             ${sub ? `<span class="d3-opp-sub">${sub}</span>` : ''}
           </div>
+          <button class="d3-play-btn" data-timer-opp-task="${t.id}" data-opp-titulo="${esc(t.titulo)}" data-opp-ctx="${esc(t.opp_titulo || '')}" data-opp-cliente="${esc(t.opp_cliente || '')}" title="Iniciar timer"
+                  onclick="event.stopPropagation();TimerModule.toggleOppTask(this)">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          </button>
+          <span class="task-elapsed" data-timer-opp-display="${t.id}" hidden></span>
         </div>`;
       }).join('');
       el.innerHTML = `
@@ -25906,6 +25911,7 @@ const TimerModule = (() => {
   let _idleTimer    = null;
   let _displayTimer = null;
   let _taskId       = null;
+  let _oppTaskId    = null;   // id en opportunity_tasks cuando el timer corre para una tarea de oportunidad (no vive en `tasks`, taskId queda null)
   let _taskTitle    = '';
   let _isAdmin      = false;
 
@@ -25918,6 +25924,7 @@ const TimerModule = (() => {
         _activeS   = s.activeS || 0;
         _idleS     = s.idleS   || 0;
         _taskId    = s.taskId  || null;
+        _oppTaskId = s.oppTaskId || null;
         _taskTitle = s.taskTitle || '';
         return true;
       }
@@ -25929,7 +25936,7 @@ const TimerModule = (() => {
     if (!_entryId) { localStorage.removeItem(LS_KEY); return; }
     localStorage.setItem(LS_KEY, JSON.stringify({
       entryId: _entryId, startedAt: _startedAt?.toISOString(),
-      activeS: _activeS, idleS: _idleS, taskId: _taskId, taskTitle: _taskTitle,
+      activeS: _activeS, idleS: _idleS, taskId: _taskId, oppTaskId: _oppTaskId, taskTitle: _taskTitle,
     }));
   }
 
@@ -26096,7 +26103,7 @@ const TimerModule = (() => {
       const data = await res.json();
       _entryId   = data.entryId;
       _startedAt = new Date(data.startedAt);
-      _activeS   = 0; _idleS = 0; _taskId = taskId;
+      _activeS   = 0; _idleS = 0; _taskId = taskId; _oppTaskId = ctx?.oppTaskId || null;
       _taskTitle = data.taskTitulo || ctx?.titulo || '';
       _isIdle    = false; _lastActivity = Date.now();
       _saveSession();
@@ -26135,7 +26142,7 @@ const TimerModule = (() => {
         body: JSON.stringify({ active_s: activeS || 0, idle_s: idleS || 0, ...(endedAt ? { ended_at: endedAt.toISOString() } : {}) }),
       });
     } catch (_) {}
-    _entryId = null; _startedAt = null; _activeS = 0; _idleS = 0; _taskId = null; _taskTitle = '';
+    _entryId = null; _startedAt = null; _activeS = 0; _idleS = 0; _taskId = null; _oppTaskId = null; _taskTitle = '';
     _isIdle  = false;
     _saveSession(); _stopListeners(); _updateWidget();
     try { DashboardModule._renderHours(); } catch {}
@@ -26158,12 +26165,36 @@ const TimerModule = (() => {
         disp.textContent = active ? hms : ''; disp.hidden = !active;
       });
     });
+    document.querySelectorAll('[data-timer-opp-task]').forEach(btn => {
+      const tid = parseInt(btn.dataset.timerOppTask, 10);
+      const active = !!_entryId && _oppTaskId === tid;
+      btn.innerHTML = active ? _PAUSE_SVG : _PLAY_SVG;
+      btn.classList.toggle('tt-btn--active', active);
+      btn.title = active ? 'Pausar / Detener timer' : 'Iniciar timer';
+      document.querySelectorAll(`[data-timer-opp-display="${tid}"]`).forEach(disp => {
+        disp.textContent = active ? hms : ''; disp.hidden = !active;
+      });
+    });
     CalendarModule.tickRunning();
   }
 
   function toggleTask(taskId) {
     if (_entryId && _taskId === taskId) stop();
     else start(taskId);
+  }
+
+  // Tarea de OPORTUNIDAD: no vive en `tasks`, así que el timer se registra por título (task_id
+  // null) y se identifica localmente por _oppTaskId — igual espíritu que toggleTask pero para
+  // opportunity_tasks. Lee los datos del propio botón (data-*) para no depender de escapar
+  // texto libre (título/nombres pueden traer comillas) dentro de un onclick.
+  function toggleOppTask(btnEl) {
+    const id = parseInt(btnEl.dataset.timerOppTask, 10);
+    if (_entryId && _oppTaskId === id) { stop(); return; }
+    const titulo = btnEl.dataset.oppTitulo || '';
+    const oppCtx = btnEl.dataset.oppCtx || '';
+    const cliente = btnEl.dataset.oppCliente || '';
+    start(null, { taskId: null, oppTaskId: id, kind: 'oportunidad', titulo, ctx: oppCtx,
+      ctxLabel: 'Oportunidad · ' + oppCtx, cliente });
   }
 
   function startFromTask(taskId) { start(taskId); }
@@ -27066,7 +27097,7 @@ const TimerModule = (() => {
     document.body.appendChild(back);
   }
 
-  return { init, start, stop, startFromTask, toggleTask, loadReport, deleteEntry, connectExtension, setPeriod, navPeriod, setCustom, setTtMember, setTtClient, setTtProject, clearTtFilters, printReport, syncButtons: _updatePlayButtons, railToggle,
+  return { init, start, stop, startFromTask, toggleTask, toggleOppTask, loadReport, deleteEntry, connectExtension, setPeriod, navPeriod, setCustom, setTtMember, setTtClient, setTtProject, clearTtFilters, printReport, syncButtons: _updatePlayButtons, railToggle,
     openEntryEdit, closeEntryEdit, saveEntryEdit, approveEntry, approveAll, unapproveAll };
 })();
 
