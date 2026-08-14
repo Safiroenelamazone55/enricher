@@ -5328,10 +5328,10 @@ const DashboardModule = (() => {
   async function hrsChangeTask() { _hrsPaused = false; _hrsCtx = null; try { await TimerModule.stop(); } catch {} openTrackPicker(); }
 
   // ── Modal selector de tarea (premium) ───────────────────────────
-  let _tpTasks = [], _tpOpp = [], _tpSel = null;
+  let _tpTasks = [], _tpOpp = [], _tpSel = null, _tpNewOpen = false, _tpProjects = null;
 
   async function openTrackPicker() {
-    _tpSel = null;
+    _tpSel = null; _tpNewOpen = false; _tpProjects = null;
     let back = $('tp-backdrop');
     if (!back) { back = document.createElement('div'); back.id = 'tp-backdrop'; back.className = 'tp-backdrop'; document.body.appendChild(back); }
     back.innerHTML = `
@@ -5343,6 +5343,17 @@ const DashboardModule = (() => {
         <div class="tp-search">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
           <input id="tp-search-input" placeholder="Buscar tarea, proyecto, cliente u oportunidad…" oninput="DashboardModule._tpFilter()" autocomplete="off">
+        </div>
+        <div class="tp-new">
+          <button class="tp-new__toggle" id="tp-new-toggle" onclick="DashboardModule._tpToggleNew()">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Nueva tarea
+          </button>
+          <div class="tp-new__form" id="tp-new-form" style="display:none">
+            <select class="tp-new__proj" id="tp-new-proj" onchange="DashboardModule._tpNewCheck()"><option value="">Proyecto…</option></select>
+            <input class="tp-new__title" id="tp-new-title" placeholder="¿Qué vas a hacer?" autocomplete="off" oninput="DashboardModule._tpNewCheck()">
+            <button class="tp-new__go" id="tp-new-go" disabled onclick="DashboardModule._tpCreateAndStart()">Crear y empezar →</button>
+          </div>
         </div>
         <div class="tp-list" id="tp-list"><div class="tp-skel">${Array.from({length:4}).map(()=>'<div class="tp-skel-row"></div>').join('')}</div></div>
         <div class="tp-foot">
@@ -5356,6 +5367,53 @@ const DashboardModule = (() => {
     setTimeout(() => $('tp-search-input')?.focus(), 60);
     document.addEventListener('keydown', _tpEsc);
     await _tpLoad();
+  }
+
+  // "＋ Nueva tarea": para que nada se escape sin quedar asociado a un proyecto — si la
+  // tarea que necesita no existe todavía, la crea y arranca el timer ahí mismo, sin salir
+  // de este selector ni tener que ir primero a Tareas.
+  async function _tpToggleNew() {
+    _tpNewOpen = !_tpNewOpen;
+    const form = $('tp-new-form'), toggle = $('tp-new-toggle');
+    if (form) form.style.display = _tpNewOpen ? 'flex' : 'none';
+    if (toggle) toggle.classList.toggle('is-open', _tpNewOpen);
+    if (_tpNewOpen) { await _tpLoadProjects(); setTimeout(() => $('tp-new-title')?.focus(), 30); }
+  }
+  async function _tpLoadProjects() {
+    const sel = $('tp-new-proj'); if (!sel) return;
+    try {
+      const r = await apiFetch(`${API}/mgmt/projects`);
+      const all = r.ok ? await r.json() : [];
+      _tpProjects = all.filter(p => !['completado', 'cancelado'].includes(p.estado));
+      sel.innerHTML = `<option value="">Proyecto…</option>` + _tpProjects.map(p =>
+        `<option value="${p.id}">${esc(p.nombre)}${p.client_nombre ? ' · ' + esc(p.client_nombre) : ''}</option>`).join('');
+    } catch (e) { sel.innerHTML = `<option value="">No se pudieron cargar los proyectos</option>`; }
+    _tpNewCheck();
+  }
+  function _tpNewCheck() {
+    const btn = $('tp-new-go'); if (!btn) return;
+    btn.disabled = !($('tp-new-proj')?.value && ($('tp-new-title')?.value || '').trim());
+  }
+  async function _tpCreateAndStart() {
+    const projId = $('tp-new-proj')?.value, title = ($('tp-new-title')?.value || '').trim();
+    if (!projId || !title) return;
+    const btn = $('tp-new-go'); if (btn) { btn.disabled = true; btn.textContent = 'Creando…'; }
+    try {
+      const me = window._authUser?.memberNombre || window._authUser?.name || '';
+      const r = await apiFetch(`${API}/mgmt/tasks`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ titulo: title, project_id: +projId, responsable: me, estado: 'pendiente' }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'No se pudo crear la tarea');
+      const proj = (_tpProjects || []).find(p => p.id === +projId);
+      const ctx = { taskId: d.id, kind: 'proyecto', titulo: d.titulo, ctx: proj?.nombre || '', ctxLabel: 'Proyecto · ' + (proj?.nombre || ''), cliente: proj?.client_nombre || '' };
+      closeTrackPicker();
+      try { await TimerModule.start(ctx.taskId, ctx); } catch (e) { console.error('[dashboard] start tracking:', e); }
+    } catch (e) {
+      showBanner('Error: ' + e.message, 'error');
+      if (btn) { btn.disabled = false; btn.textContent = 'Crear y empezar →'; }
+    }
   }
   function _tpEsc(e) { if (e.key === 'Escape') closeTrackPicker(); }
   function closeTrackPicker() {
@@ -6342,6 +6400,7 @@ const DashboardModule = (() => {
 
   return { load, openStatusMenu, setTaskStatus, toggleExpand, setOppTaskStatus, _renderHours, _setHrsCtx, setOvPeriod,
     openTrackPicker, closeTrackPicker, _tpFilter, _tpSelect, trackPickerStart, hrsPause, hrsResume, hrsStop, hrsChangeTask,
+    _tpToggleNew, _tpNewCheck, _tpCreateAndStart,
     goFinance, goTasks,
     _onAvatarClick, openAvatarPicker, closeAvatarPicker, selectAvatar, resetAvatar, _avSwitchTab,
     expEditStatus, expPickStatus, expEditDate, expEditStart, expCalNav, expPickDate, expClearDate, expEditAssignee, expAsgFilter, expPickAssignee };
@@ -25977,12 +26036,17 @@ const TimerModule = (() => {
     }
   }
   // Prender/apagar desde el rail: sin tarea concreta = seguimiento general.
+  // Encender desde la barra superior ya NO arranca un timer suelto sin tarea — abre el
+  // mismo selector "¿En qué vas a trabajar?" del Dashboard (elegir una existente o crear
+  // una nueva al vuelo), así ningún tiempo trackeado queda sin proyecto/tarea asociada.
   async function railToggle() {
-    try {
-      if (_entryId) { await stop(); showBanner('■ Seguimiento detenido', 'info'); }
-      else { await start(_taskId || null); showBanner('▶ Seguimiento iniciado', 'success'); }
-    } catch (e) { try { showBanner('Error: ' + e.message, 'error'); } catch {} }
-    _updateRailBtn();
+    if (_entryId) {
+      try { await stop(); showBanner('■ Seguimiento detenido', 'info'); }
+      catch (e) { try { showBanner('Error: ' + e.message, 'error'); } catch {} }
+      _updateRailBtn();
+    } else {
+      try { await DashboardModule.openTrackPicker(); } catch (e) { console.error('[timer] openTrackPicker:', e); }
+    }
   }
 
   async function _pulse() {
