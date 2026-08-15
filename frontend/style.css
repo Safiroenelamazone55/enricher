@@ -9005,7 +9005,7 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 /* ── Grid ────────────────────────────────────────────────── */
 .d3-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
   gap: 18px;
   align-items: start;
   margin-bottom: 2px;
@@ -9033,14 +9033,14 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
   gap: 8px;
 }
 
-/* Fila 2 del dashboard: "Tareas totales" + "Tiempo de hoy" lado a lado, mismo ancho */
+/* "Tareas totales" + "Tiempo de hoy" lado a lado, mismo ancho, dentro de la
+   columna derecha (junto a "Mis tareas" — no debajo, para no dejar hueco). */
 .d3-row2 {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 18px;
-  margin-top: 18px;
+  gap: 10px;
 }
-@media (max-width: 760px) {
+@media (max-width: 480px) {
   .d3-row2 { grid-template-columns: 1fr; }
 }
 
@@ -10133,7 +10133,7 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 /* ── Responsive ──────────────────────────────────────────── */
 /* Medio: 2 columnas — Mis tareas (izq) | Horas de trabajo + Oportunidades (der) */
 @media (max-width: 1100px) {
-  .d3-grid     { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); }
+  .d3-grid     { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); }
 }
 @media (max-width: 960px) {
   .d3-hero  { padding: 30px 24px 24px; gap: 20px; }
