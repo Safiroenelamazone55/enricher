@@ -242,20 +242,44 @@ async function _checkMailbox(pool, mb) {
           contact = rows[0] || null;
 
           // No es el prospecto quien escribe (es otra persona — típicamente alguien del
-          // equipo llevando la cuenta y respondiéndole directo, con este buzón en copia).
-          // Igual vale guardarlo para ver el hilo completo: se matchea por DESTINATARIO
-          // (To/Cc) contra los contactos del CRM. Se marca 'equipo' (no 'reply') para que
-          // no dispare la auto-pausa de secuencia ni cambie la disposición — el prospecto
-          // no respondió, solo alguien le escribió.
+          // equipo llevando la cuenta, o alguien que Jenny puso en copia, respondiendo
+          // dentro del mismo hilo). Igual vale guardarlo para ver la conversación completa.
+          // Se marca 'equipo' (no 'reply') para que no dispare la auto-pausa de secuencia
+          // ni cambie la disposición — el prospecto no respondió, solo alguien le escribió.
           if (!contact) {
-            const recipients = [..._addrList(parsed.to), ..._addrList(parsed.cc)].filter(a => a !== fromAddr);
-            if (recipients.length) {
-              const { rows: rrows } = await pool.query(
-                `SELECT id, email, nombre, apellido FROM lm_contacts
-                  WHERE user_id=$1 AND (LOWER(email)=ANY($2) OR LOWER(email_personal)=ANY($2)) LIMIT 1`,
-                [mb.user_id, recipients]
+            // 1) Por HILO real (In-Reply-To/References contra el Message-ID de algo que
+            //    Nova mandó o recibió antes de/para ese contacto): funciona incluso con un
+            //    "Responder" simple que solo vuelve al buzón, sin mencionar al prospecto en
+            //    ningún lado del mensaje nuevo — es la forma confiable de saber de qué
+            //    conversación se trata.
+            const refs = [parsed.inReplyTo, ...(Array.isArray(parsed.references) ? parsed.references : (parsed.references ? [parsed.references] : []))].filter(Boolean);
+            if (refs.length) {
+              const { rows: trows } = await pool.query(
+                `SELECT contact_id FROM lm_messages WHERE user_id=$1 AND smtp_message_id=ANY($2) AND contact_id IS NOT NULL
+                 UNION
+                 SELECT contact_id FROM lm_inbox_messages WHERE user_id=$1 AND message_id=ANY($2) AND contact_id IS NOT NULL
+                 LIMIT 1`,
+                [mb.user_id, refs]
               );
-              if (rrows[0]) { contact = rrows[0]; tipo = 'equipo'; }
+              if (trows[0]) {
+                const { rows: crows } = await pool.query(
+                  `SELECT id, email, nombre, apellido FROM lm_contacts WHERE id=$1`, [trows[0].contact_id]);
+                if (crows[0]) { contact = crows[0]; tipo = 'equipo'; }
+              }
+            }
+            // 2) Si no hay hilo reconocible (mensaje nuevo, no una respuesta), por
+            //    DESTINATARIO (To/Cc) contra los contactos del CRM — cubre a alguien
+            //    escribiéndole fresco al prospecto con este buzón en copia.
+            if (!contact) {
+              const recipients = [..._addrList(parsed.to), ..._addrList(parsed.cc)].filter(a => a !== fromAddr);
+              if (recipients.length) {
+                const { rows: rrows } = await pool.query(
+                  `SELECT id, email, nombre, apellido FROM lm_contacts
+                    WHERE user_id=$1 AND (LOWER(email)=ANY($2) OR LOWER(email_personal)=ANY($2)) LIMIT 1`,
+                  [mb.user_id, recipients]
+                );
+                if (rrows[0]) { contact = rrows[0]; tipo = 'equipo'; }
+              }
             }
           }
         }
