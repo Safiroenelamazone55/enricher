@@ -17674,10 +17674,13 @@ ${foot}
   function _ibMsg(m) {
     const when = m.at ? new Date(m.at).toLocaleString('es-PE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
     // Nota interna: nunca se envió nada, por eso se ve distinta a proposito (ni
-    // "entrante" ni "saliente" — full-width, tono ambar, sin destinatarios).
+    // "entrante" ni "saliente" — full-width, tono ambar, sin destinatarios). Se
+    // etiqueta con el BUZÓN del hilo (mismo "quién" que ya usan los demás mensajes),
+    // no con el nombre de la persona que la escribió — evita mezclar convenciones.
     if (m.dir === 'note') {
+      const buzonLbl = (_ibThread && _ibThread.contact && _ibThread.contact.buzon) || 'Equipo';
       return `<div class="ibx-m ibx-m--note">
-        <div class="ibx-m__meta">🗒 ${esc(m.buzon || 'Equipo')} · nota interna, no se envió · ${when}</div>
+        <div class="ibx-m__meta">🗒 ${esc(buzonLbl)} · nota interna, no se envió · ${when}</div>
         ${_ibBodyHtml(m.cuerpo)}
       </div>`;
     }
