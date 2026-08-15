@@ -5313,6 +5313,8 @@ const DashboardModule = (() => {
   // Tarjeta "Tiempo de hoy" (columna derecha, debajo de "Tareas totales") — mismo espíritu
   // que la tarjeta de Ingresos (línea + degradado), con los últimos 7 días reales de
   // /timer/daily y el total de hoy en vivo (mismo totalSec que ya calculó _renderHours).
+  const _ICO_DETAIL = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>`;
+  const _ICO_CHECK = `<svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
   function _hrsSvgLine(pts, todayIdx, niceMax, W, H, padL, padR, padT, padB) {
     const plotW = W - padL - padR, plotH = H - padT - padB;
     const line = pts.reduce((acc, p, i) => {
@@ -5327,8 +5329,9 @@ const DashboardModule = (() => {
       return `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${W - padR}" y2="${y.toFixed(1)}" stroke="#F1EFEB" stroke-width="1"/><text x="${padL - 5}" y="${(y + 3).toFixed(1)}" text-anchor="end" font-size="8" fill="#B4AFA8">${lbl}h</text>`;
     }).join('');
     const dots = pts.map((p, i) => `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${i === todayIdx ? 4 : 2.5}" fill="${i === todayIdx ? '#6366F1' : '#fff'}" stroke="#6366F1" stroke-width="${i === todayIdx ? 0 : 1.6}"/>`).join('');
+    const guide = `<line x1="${pts[todayIdx].x.toFixed(1)}" y1="${pts[todayIdx].y.toFixed(1)}" x2="${pts[todayIdx].x.toFixed(1)}" y2="${(padT + plotH).toFixed(1)}" stroke="#C7D2FE" stroke-width="1" stroke-dasharray="2.5 2.5"/>`;
     const uid = 'hc' + Math.random().toString(36).slice(2, 7);
-    return { svgBody: `<defs><linearGradient id="${uid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#6366F1" stop-opacity=".22"/><stop offset="100%" stop-color="#6366F1" stop-opacity="0"/></linearGradient></defs>${gridLines}<path d="${areaFill}" fill="url(#${uid})"/><path d="${line}" fill="none" stroke="#6366F1" stroke-width="2"/>${dots}` };
+    return { svgBody: `<defs><linearGradient id="${uid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#6366F1" stop-opacity=".22"/><stop offset="100%" stop-color="#6366F1" stop-opacity="0"/></linearGradient></defs>${gridLines}<path d="${areaFill}" fill="url(#${uid})"/>${guide}<path d="${line}" fill="none" stroke="#6366F1" stroke-width="2"/>${dots}` };
   }
   function _renderTimeCard(daily, totalSec, now, _isoD, _todayKey) {
     const el = $('dash2-timecard');
@@ -5346,7 +5349,7 @@ const DashboardModule = (() => {
     const hasCompare = totalSec > 0 || yestSec > 0;
     const deltaPct = yestSec > 0 ? Math.round((totalSec - yestSec) / yestSec * 100) : (totalSec > 0 ? 100 : 0);
     el.style.display = '';
-    const W = 280, H = 96, padL = 24, padR = 8, padT = 12, padB = 18;
+    const W = 280, H = 100, padL = 24, padR = 8, padT = 16, padB = 18;
     const maxH = Math.max(...last7.map(p => p.sec / 3600), 1);
     const niceMax = Math.max(1, Math.ceil(maxH));
     const plotW = W - padL - padR, plotH = H - padT - padB;
@@ -5358,14 +5361,19 @@ const DashboardModule = (() => {
     const { svgBody } = _hrsSvgLine(pts, todayIdx, niceMax, W, H, padL, padR, padT, padB);
     const dayLbls = last7.map((p, i) => `<text x="${pts[i].x.toFixed(1)}" y="${H - 4}" text-anchor="middle" font-size="8.5" font-weight="${i === todayIdx ? 700 : 500}" fill="${i === todayIdx ? '#0A2540' : '#B4AFA8'}">${p.lbl}</text>`).join('');
     const todayPt = pts[todayIdx];
-    const callout = `<g transform="translate(${todayPt.x.toFixed(1)},${todayPt.y.toFixed(1)})"><rect x="-22" y="-24" width="44" height="16" rx="8" fill="#0A2540"/><text x="0" y="-12.5" text-anchor="middle" font-size="8.5" font-weight="700" fill="#fff">${(totalSec / 3600).toFixed(1)}h</text></g>`;
+    const calloutY = Math.max(20, todayPt.y);
+    const callout = `<g transform="translate(${todayPt.x.toFixed(1)},${calloutY.toFixed(1)})">
+        <rect x="-25" y="-26" width="50" height="17" rx="8.5" fill="#0A2540"/>
+        <path d="M-4,-9 L0,-4 L4,-9 Z" fill="#0A2540"/>
+        <text x="0" y="-14.5" text-anchor="middle" font-size="8.5" font-weight="700" fill="#fff">${(totalSec / 3600).toFixed(1)}h</text>
+      </g>`;
     el.innerHTML = `
-      <div class="d3-card-header">
-        <span class="d3-card-title">Tiempo de hoy</span>
-        <button class="d3-ov-detail-btn" onclick="document.querySelector('[data-tab=mgmt-timetracking]').click()">Ver detalle</button>
+      <div class="d3-hc-head">
+        <span class="d3-ov-total-lbl">Tiempo de hoy</span>
+        <button class="d3-ov-detail-btn" onclick="document.querySelector('[data-tab=mgmt-timetracking]').click()">${_ICO_DETAIL}Ver detalle</button>
       </div>
       <div class="d3-hc-body">
-        <div class="d3-hc-total">${_fmtHrs(totalSec)}${hasCompare ? `<span class="d3-hc-delta ${deltaPct >= 0 ? 'd3-hc-delta--up' : 'd3-hc-delta--down'}">${deltaPct >= 0 ? '▲' : '▼'} ${Math.abs(deltaPct)}% vs ayer</span>` : ''}</div>
+        <div class="d3-hc-total">${_fmtHrs(totalSec)}${hasCompare ? `<span class="d3-hc-delta ${deltaPct >= 0 ? 'd3-hc-delta--up' : 'd3-hc-delta--down'}">${_ICO_CHECK} ${Math.abs(deltaPct)}% vs ayer</span>` : ''}</div>
         <svg class="d3-hc-svg" viewBox="0 0 ${W} ${H}">${svgBody}${dayLbls}${callout}</svg>
       </div>`;
   }
@@ -5777,7 +5785,7 @@ const DashboardModule = (() => {
       : `<div class="d3-ov-total">
            <div class="d3-ov-total-row">
              <span class="d3-ov-total-lbl">Tareas totales</span>
-             <button class="d3-ov-detail-btn" onclick="document.querySelector('[data-tab=mgmt-tasks]').click()">Ver detalle</button>
+             <button class="d3-ov-detail-btn" onclick="document.querySelector('[data-tab=mgmt-tasks]').click()">${_ICO_DETAIL}Ver detalle</button>
            </div>
            <div class="d3-ov-total-n">${total}<span class="d3-ov-total-unit">${total === 1 ? 'Tarea' : 'Tareas'}</span></div>
          </div>
