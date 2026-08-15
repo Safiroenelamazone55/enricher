@@ -17592,6 +17592,7 @@ ${foot}
   let _ibDisp    = '';     // filtro por etiqueta/disposición ('' = todas)
   let _ibActive  = null;   // contact_id del hilo abierto
   let _ibThread  = null;   // { contact, messages } del hilo abierto
+  let _ibMsgIdx  = 0;      // índice del correo visible dentro del hilo (paginado 1 a 1)
   let _ibSending = false;
 
   async function _ibReload() {
@@ -17718,6 +17719,29 @@ ${foot}
     await lmSetDisposition(cid, disp);
     if (_ibActive === cid) await ibOpen(cid);
   }
+  // Paginador del hilo: antes se apilaban TODOS los correos en un solo scroll
+  // largo (con las citas de Outlook/Gmail, un hilo de 10 idas y vueltas se
+  // volvía kilométrico). Ahora se ve un correo a la vez, como página — se
+  // navega con ‹ › y se ve de una el total de correos que tiene el hilo.
+  function _ibPagerHtml() {
+    const total = (_ibThread?.messages || []).length;
+    if (!total) return '';
+    const idx = Math.min(_ibMsgIdx, total - 1);
+    return `<div class="ibx-pager">
+      <button class="ibx-pager__b" ${idx <= 0 ? 'disabled' : ''} onclick="LeadManagerModule.ibMsgNav(-1)" title="Correo anterior">‹</button>
+      <span class="ibx-pager__n">${idx + 1} de ${total}</span>
+      <button class="ibx-pager__b" ${idx >= total - 1 ? 'disabled' : ''} onclick="LeadManagerModule.ibMsgNav(1)" title="Correo siguiente">›</button>
+    </div>`;
+  }
+  function ibMsgNav(delta) {
+    const total = (_ibThread?.messages || []).length;
+    if (!total) return;
+    _ibMsgIdx = Math.min(total - 1, Math.max(0, _ibMsgIdx + delta));
+    const hd = document.querySelector('.ibx-conv__hd .ibx-pager');
+    if (hd) hd.outerHTML = _ibPagerHtml();
+    const box = document.getElementById('ibx-msgs');
+    if (box) { box.innerHTML = _ibMsg(_ibThread.messages[_ibMsgIdx]); box.scrollTop = 0; }
+  }
   function _ibConvHtml() {
     if (!_ibActive) return `<div class="ibx-empty">Elige una conversación de la lista para leerla y responder desde el buzón del cliente.</div>`;
     if (!_ibThread) return `<div class="ibx-empty">Cargando conversación…</div>`;
@@ -17726,15 +17750,18 @@ ${foot}
     const ini = (nm || '?').split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
     const seqInfo = c.seq_nombre ? `${esc(c.seq_nombre)}${c.seq_estado === 'respondido' ? ' · <span style="color:var(--brand)">pausada por respuesta</span>' : c.seq_estado ? ` · ${esc(c.seq_estado)}` : ''}` : 'Sin secuencia';
     const canSend = !!c.mailbox_id;
+    const msgs = _ibThread.messages || [];
+    const curMsg = msgs.length ? msgs[Math.min(_ibMsgIdx, msgs.length - 1)] : null;
     return `
       <div class="ibx-conv__hd">
         <div class="ibx-av">${esc(ini)}</div>
         <div class="ibx-conv__who"><div class="ibx-conv__nm">${esc(nm)}${c.cargo || c.empresa ? ` <span class="ibx-conv__sub">· ${esc([c.cargo, c.empresa].filter(Boolean).join(', '))}</span>` : ''}</div>
         <div class="ibx-conv__seq">${seqInfo}${c.disposition ? ' ' + _dispoBadge(c.disposition) : ''}</div></div>
+        ${_ibPagerHtml()}
         <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openContactPage(${c.id})">Ver ficha</button>
         ${c.id ? `<button class="ibx-resolve__more" onclick="LeadManagerModule.ibOpenResolveMenu(event,${c.id})" title="Resolver respuesta">⋮</button>` : ''}
       </div>
-      <div class="ibx-msgs" id="ibx-msgs">${(_ibThread.messages || []).map(_ibMsg).join('') || '<div class="ibx-empty">Sin mensajes aún.</div>'}</div>
+      <div class="ibx-msgs" id="ibx-msgs">${curMsg ? _ibMsg(curMsg) : '<div class="ibx-empty">Sin mensajes aún.</div>'}</div>
       <div class="ibx-replybox">
         ${canSend
           ? `${_ibDestHtml(c)}
@@ -17865,17 +17892,17 @@ ${foot}
     </div>`;
   }
   async function ibOpen(cid) {
-    _ibActive = cid; _ibThread = null;
+    _ibActive = cid; _ibThread = null; _ibMsgIdx = 0;
     const t = (_ibThreads || []).find(x => x.contact_id === cid); if (t) t.unread = 0;
     _ibPaint(); _refreshNav();
     try {
       const r = await apiFetch(`${API}/lm/inbox/thread/${cid}`);
       _ibThread = (r && r.ok) ? await r.json() : { contact: null, messages: [] };
     } catch { _ibThread = { contact: null, messages: [] }; }
-    if (_section === 'inbox' && _ibActive === cid) {
-      _ibPaint();
-      const box = document.getElementById('ibx-msgs'); if (box) box.scrollTop = box.scrollHeight;
-    }
+    // Arranca en el correo más reciente (lo último que pasó en la conversación),
+    // no en el más viejo — así no hay que pasar página para ver qué hay de nuevo.
+    _ibMsgIdx = Math.max(0, (_ibThread.messages || []).length - 1);
+    if (_section === 'inbox' && _ibActive === cid) _ibPaint();
   }
   function ibTab(k) { _ibTab = k; _ibPaint(); if (k === 'env' && _lmMsgs === null) _loadLmMsgs(); }
   function ibCli(v) { _ibCli = parseInt(v) || 0; _ibPaint(); }
@@ -17899,8 +17926,8 @@ ${foot}
         : { dir: 'out', asunto: d.message?.asunto || '', cuerpo, at: new Date().toISOString(), estado: 'sent', buzon: _ibThread.contact?.buzon || '' });
       const t = (_ibThreads || []).find(x => x.contact_id === _ibActive);
       if (t && !d.scheduled) { t.last_out_at = new Date().toISOString(); }
+      _ibMsgIdx = _ibThread.messages.length - 1; // pasa a la página del correo recién enviado
       _ibPaint();
-      const box = document.getElementById('ibx-msgs'); if (box) box.scrollTop = box.scrollHeight;
       showBanner(d.scheduled
         ? `🕑 Programado — saldrá el ${new Date(d.message?.scheduled_at || schedIso).toLocaleString('es-PE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}`
         : '✓ Respuesta enviada desde el buzón del cliente', 'success');
@@ -17942,7 +17969,10 @@ ${foot}
       const res = await apiFetch(`${API}/lm/inbox/scheduled/${id}`, { method: 'DELETE' });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(d.error || 'No se pudo cancelar');
-      if (_ibThread) _ibThread.messages = _ibThread.messages.filter(m => !(m.estado === 'scheduled' && m.id === id));
+      if (_ibThread) {
+        _ibThread.messages = _ibThread.messages.filter(m => !(m.estado === 'scheduled' && m.id === id));
+        _ibMsgIdx = Math.min(_ibMsgIdx, Math.max(0, _ibThread.messages.length - 1));
+      }
       _ibPaint();
       showBanner('✓ Envío programado cancelado', 'success');
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
@@ -22768,7 +22798,7 @@ ${foot}
     mbSignatureOpen, mbSignaturePreview, mbSignatureClear, mbSignatureInsertLink, mbSignatureImg, mbSignatureSave,
     mbAdminConsentSync, mbAdminConsentToggleHtml,
     mbAdminConsentSetSigner, mbAdminConsentAddChip, mbAdminConsentRmChip, mbAdminConsentInputKey, mbAdminConsentClearRecipients,
-    ibOpen, ibTab, ibCli, ibDisp, ibSend, ibSchedToggle, ibSchedPick, ibCancelSched, ibResolveDisp, ibOpenResolveMenu,
+    ibOpen, ibTab, ibCli, ibDisp, ibSend, ibMsgNav, ibSchedToggle, ibSchedPick, ibCancelSched, ibResolveDisp, ibOpenResolveMenu,
     ibRowMenu, ibCloseMenu, ibMarkUnread,
     pendingAcceptOpen, pendingAcceptToggleAll, pendingAcceptApplyFilters, pendingAcceptMark,
     openActivityDrawer, closeActivityDrawer, saveActivity, confirmDeleteActivity, markActDone,
