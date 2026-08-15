@@ -9015,13 +9015,29 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
    para que no empuje el dashboard. Las 3 columnas se alinean arriba (align-items:start),
    así "Acciones pendientes" (col 3) queda visible sin scroll. */
 #dash2-tasks {
-  max-height: none;
-  overflow: visible;
+  max-height: min(316px, calc(100vh - 264px));
+  overflow: hidden auto;
 }
+/* Scroll interno, pero sutil — no una barra gruesa y notoria. */
+#dash2-tasks::-webkit-scrollbar { width: 6px; }
+#dash2-tasks::-webkit-scrollbar-track { background: transparent; }
+#dash2-tasks::-webkit-scrollbar-thumb { background: #EAE7E2; border-radius: 99px; }
+#dash2-tasks:hover::-webkit-scrollbar-thumb { background: #DAD5CE; }
 #dash2-tasks .d3-card-header {
-  position: static;
+  position: sticky;
+  top: 0;
+  z-index: 3;
   background: #fff;
   border-bottom: 1px solid #F1EFEB;
+}
+/* Mismo estilo de título (sentence case, sin versalitas) que "Tareas totales" /
+   "Tiempo de hoy" — "Mis tareas" no debe ser la excepción. */
+#dash2-tasks .d3-card-title {
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--muted, #918C85);
 }
 #dash2-hours .d3-card-header { padding: 12px 20px 9px; }
 
