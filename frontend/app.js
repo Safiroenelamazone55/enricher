@@ -627,6 +627,7 @@ function goHome() {
   document.querySelectorAll('.global-topbar__tab').forEach(t => t.classList.remove('active'));
   document.getElementById('gtb-tab-apps')?.classList.add('active');
   try { localStorage.setItem('kw_activeTab', 'home'); } catch (_) {}
+  try { RChatPanel.close(); } catch (_) {}
   renderHome();
 }
 
