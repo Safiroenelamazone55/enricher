@@ -17646,7 +17646,12 @@ ${foot}
   // "On ... wrote:" de Gmail, o líneas con ">"). Sin recortarlo, dos mensajes
   // distintos se ven como un solo bloque continuo de miles de caracteres —
   // esto separa "lo nuevo" (visible) de "lo citado" (plegado, expandible).
-  const _IBX_QUOTE_RE = /^\s*(_{5,}|-{5,}|>|On\s.+\swrote:\s*$|El\s.+\sescribi[oó]:\s*$|De:\s|From:\s)/i;
+  // El separador de "citado" varía mucho según el cliente de correo: Gmail
+  // ("On ... wrote:"), Zoho/otros webmail ("---- On ... wrote ----", sin
+  // ":" y con guiones alrededor), Outlook ("De:"/"From:"), etc. Antes solo
+  // se reconocía el formato exacto de Gmail — un correo de Zoho con guiones
+  // no cortaba nada y se veía TODO el hilo citado como si fuera mensaje nuevo.
+  const _IBX_QUOTE_RE = /^\s*(_{5,}|-{5,}|>|(-{2,}\s*)?(On\s.{3,160}\bwrote\b|El\s.{3,160}\sescribi[oó])[\s:-]*$|De:\s|From:\s|Enviado:\s|Sent:\s)/i;
   function _ibStripQuote(text) {
     const raw = String(text || '');
     const lines = raw.split('\n');
