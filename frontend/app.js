@@ -5840,9 +5840,11 @@ const DashboardModule = (() => {
       </div>`;
     if (active.length === 0) {
       el.innerHTML = header + `
-        <div class="d3-clients-total" onclick="document.querySelector('[data-tab=mgmt-tasks]').click()">
-          <span class="d3-clients-num">0</span>
-          <span class="d3-clients-label">tareas pendientes</span>
+        <div class="d3-tasks-scroll">
+          <div class="d3-clients-total" onclick="document.querySelector('[data-tab=mgmt-tasks]').click()">
+            <span class="d3-clients-num">0</span>
+            <span class="d3-clients-label">tareas pendientes</span>
+          </div>
         </div>`;
       return;
     }
@@ -5886,12 +5888,15 @@ const DashboardModule = (() => {
 
     // Orden pedido por Jenny: VENCIDAS primero (fondo rojizo apagado), luego HOY (tono normal),
     // y después lo que siga por fecha (Mañana / próximas).
-    el.innerHTML = header + `${overdueHtml}
-      <div class="d3-section-label">
-        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
-        Hoy
-      </div>
-      ${todayHtml}${tomorrowHtml}`;
+    el.innerHTML = header + `
+      <div class="d3-tasks-scroll">
+        ${overdueHtml}
+        <div class="d3-section-label">
+          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
+          Hoy
+        </div>
+        ${todayHtml}${tomorrowHtml}
+      </div>`;
   }
 
   const _STATUS_CFG = {
@@ -6885,7 +6890,9 @@ const AnalyticsModule = (() => {
       if ((e.activity_type || 'active_work') === 'website_usage') continue;
       const src = e.source || 'manual_timer';
       if (src === 'browser_extension' || src === 'desktop_agent') continue;
-      const dur = e.ended_at ? (+e.duration_s || 0) : 0;
+      // El timer que sigue corriendo (sin ended_at) también cuenta — igual que "Tiempo
+      // trabajado hoy" — si no, mientras trabajás la franja de ahora se ve vacía en el mapa.
+      const dur = e.ended_at ? (+e.duration_s || 0) : (e.started_at ? Math.max(0, Math.round((Date.now() - new Date(e.started_at).getTime()) / 1000)) : 0);
       if (dur <= 0 || !e.started_at) continue;
       const s = new Date(e.started_at);
       const wd = (s.getDay() + 6) % 7;   // 0=Lun … 6=Dom
