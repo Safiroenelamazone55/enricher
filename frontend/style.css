@@ -8562,6 +8562,10 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+  /* Jenny: a 100% de zoom del navegador quiere ver este dashboard igual de
+     compacto que si el navegador estuviera al 90% — más denso sin tener
+     que zoomear ella misma cada vez que entra. */
+  zoom: .9;
 }
 
 /* ── Hero ────────────────────────────────────────────────── */
