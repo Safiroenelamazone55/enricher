@@ -5304,9 +5304,70 @@ const DashboardModule = (() => {
           ${metricsStrip}
         </div>`;
     el.innerHTML = `${ctxBlock}${statsHtml}${actions}`;
+    _renderTimeCard(daily, totalSec, now, _isoD, _todayKey);
 
     clearInterval(_hrsTimer);
     if (running) _hrsTimer = setInterval(_hoursTick, 1000);
+  }
+
+  // Tarjeta "Tiempo de hoy" (columna derecha, debajo de "Tareas totales") — mismo espíritu
+  // que la tarjeta de Ingresos (línea + degradado), con los últimos 7 días reales de
+  // /timer/daily y el total de hoy en vivo (mismo totalSec que ya calculó _renderHours).
+  function _hrsSvgLine(pts, todayIdx, niceMax, W, H, padL, padR, padT, padB) {
+    const plotW = W - padL - padR, plotH = H - padT - padB;
+    const line = pts.reduce((acc, p, i) => {
+      if (i === 0) return `M${p.x.toFixed(1)},${p.y.toFixed(1)}`;
+      const p0 = pts[i - 1]; const cx = ((p0.x + p.x) / 2).toFixed(1);
+      return `${acc} C${cx},${p0.y.toFixed(1)} ${cx},${p.y.toFixed(1)} ${p.x.toFixed(1)},${p.y.toFixed(1)}`;
+    }, '');
+    const areaFill = `${line} L${pts[pts.length - 1].x.toFixed(1)},${(padT + plotH).toFixed(1)} L${pts[0].x.toFixed(1)},${(padT + plotH).toFixed(1)} Z`;
+    const gridLines = [0, .5, 1].map(f => {
+      const y = padT + plotH * (1 - f);
+      const lbl = Math.round(niceMax * f * 10) / 10;
+      return `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${W - padR}" y2="${y.toFixed(1)}" stroke="#F1EFEB" stroke-width="1"/><text x="${padL - 5}" y="${(y + 3).toFixed(1)}" text-anchor="end" font-size="8" fill="#B4AFA8">${lbl}h</text>`;
+    }).join('');
+    const dots = pts.map((p, i) => `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${i === todayIdx ? 4 : 2.5}" fill="${i === todayIdx ? '#6366F1' : '#fff'}" stroke="#6366F1" stroke-width="${i === todayIdx ? 0 : 1.6}"/>`).join('');
+    const uid = 'hc' + Math.random().toString(36).slice(2, 7);
+    return { svgBody: `<defs><linearGradient id="${uid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#6366F1" stop-opacity=".22"/><stop offset="100%" stop-color="#6366F1" stop-opacity="0"/></linearGradient></defs>${gridLines}<path d="${areaFill}" fill="url(#${uid})"/><path d="${line}" fill="none" stroke="#6366F1" stroke-width="2"/>${dots}` };
+  }
+  function _renderTimeCard(daily, totalSec, now, _isoD, _todayKey) {
+    const el = $('dash2-timecard');
+    if (!el) return;
+    const DOW = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+    const last7 = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now); d.setDate(d.getDate() - i); d.setHours(0, 0, 0, 0);
+      const key = _isoD(d);
+      const sec = key === _todayKey ? totalSec : ((daily || []).find(x => x.day === key)?.duration_s || 0);
+      last7.push({ lbl: DOW[d.getDay()], sec });
+    }
+    const yestKey = _isoD(new Date(now.getTime() - 86400000));
+    const yestSec = (daily || []).find(x => x.day === yestKey)?.duration_s || 0;
+    const hasCompare = totalSec > 0 || yestSec > 0;
+    const deltaPct = yestSec > 0 ? Math.round((totalSec - yestSec) / yestSec * 100) : (totalSec > 0 ? 100 : 0);
+    el.style.display = '';
+    const W = 280, H = 96, padL = 24, padR = 8, padT = 12, padB = 18;
+    const maxH = Math.max(...last7.map(p => p.sec / 3600), 1);
+    const niceMax = Math.max(1, Math.ceil(maxH));
+    const plotW = W - padL - padR, plotH = H - padT - padB;
+    const todayIdx = last7.length - 1;
+    const pts = last7.map((p, i) => ({
+      x: padL + (i / Math.max(last7.length - 1, 1)) * plotW,
+      y: padT + plotH - Math.min(1, (p.sec / 3600) / niceMax) * plotH,
+    }));
+    const { svgBody } = _hrsSvgLine(pts, todayIdx, niceMax, W, H, padL, padR, padT, padB);
+    const dayLbls = last7.map((p, i) => `<text x="${pts[i].x.toFixed(1)}" y="${H - 4}" text-anchor="middle" font-size="8.5" font-weight="${i === todayIdx ? 700 : 500}" fill="${i === todayIdx ? '#0A2540' : '#B4AFA8'}">${p.lbl}</text>`).join('');
+    const todayPt = pts[todayIdx];
+    const callout = `<g transform="translate(${todayPt.x.toFixed(1)},${todayPt.y.toFixed(1)})"><rect x="-22" y="-24" width="44" height="16" rx="8" fill="#0A2540"/><text x="0" y="-12.5" text-anchor="middle" font-size="8.5" font-weight="700" fill="#fff">${(totalSec / 3600).toFixed(1)}h</text></g>`;
+    el.innerHTML = `
+      <div class="d3-card-header">
+        <span class="d3-card-title">Tiempo de hoy</span>
+        <button class="d3-ov-detail-btn" onclick="document.querySelector('[data-tab=mgmt-timetracking]').click()">Ver detalle</button>
+      </div>
+      <div class="d3-hc-body">
+        <div class="d3-hc-total">${_fmtHrs(totalSec)}${hasCompare ? `<span class="d3-hc-delta ${deltaPct >= 0 ? 'd3-hc-delta--up' : 'd3-hc-delta--down'}">${deltaPct >= 0 ? '▲' : '▼'} ${Math.abs(deltaPct)}% vs ayer</span>` : ''}</div>
+        <svg class="d3-hc-svg" viewBox="0 0 ${W} ${H}">${svgBody}${dayLbls}${callout}</svg>
+      </div>`;
   }
 
   function _hoursTick() {

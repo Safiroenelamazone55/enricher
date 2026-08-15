@@ -9033,6 +9033,17 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
   gap: 8px;
 }
 
+/* Fila 2 del dashboard: "Tareas totales" + "Tiempo de hoy" lado a lado, mismo ancho */
+.d3-row2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  margin-top: 18px;
+}
+@media (max-width: 760px) {
+  .d3-row2 { grid-template-columns: 1fr; }
+}
+
 /* ── Cards ───────────────────────────────────────────────── */
 .d3-card {
   background: #fff;
@@ -9331,6 +9342,15 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 .d3-ov-dot { width: 12px; height: 12px; border-radius: 3.5px; flex-shrink: 0; }
 .d3-ov-leg-lbl { color: #45586A; flex: 1; }
 .d3-ov-leg-n { color: #0A2540; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* Tarjeta "Tiempo de hoy" (columna derecha, debajo de "Tareas totales") */
+.d3-card--timecard { padding-bottom: 10px; }
+.d3-hc-body { padding: 10px 18px 2px; }
+.d3-hc-total { font-size: 22px; font-weight: 800; color: #0A2540; letter-spacing: -.4px; font-variant-numeric: tabular-nums; display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.d3-hc-delta { font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 999px; }
+.d3-hc-delta--up { background: #E7F8EE; color: #15803D; }
+.d3-hc-delta--down { background: #FEF2F2; color: #C4342B; }
+.d3-hc-svg { width: 100%; height: 96px; display: block; margin-top: 4px; }
 
 /* Subtask rows — indented with vertical guide */
 .d3-task-row--sub {
