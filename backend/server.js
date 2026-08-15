@@ -5132,6 +5132,10 @@ app.get('/api/lm/inbox/thread/:contactId', requireAuth, async (req, res) => {
         SELECT 'in', im.id, im.asunto, im.cuerpo, im.received_at, '', im.tipo, '', NULL, im.from_email
           FROM lm_inbox_messages im
          WHERE im.user_id=$1 AND im.contact_id=$2
+        UNION ALL
+        SELECT 'note', n.id, '', n.texto, n.created_at, '', 'nota', '', NULL, n.autor
+          FROM lm_notes n
+         WHERE n.user_id=$1 AND n.contact_id=$2
       ) t ORDER BY at ASC NULLS FIRST
     `, [req.workspaceOwnerId, cid]);
     await pool.query(`UPDATE lm_inbox_messages SET leido=TRUE WHERE user_id=$1 AND contact_id=$2 AND NOT leido`,
@@ -5174,6 +5178,32 @@ app.get('/api/lm/inbox/thread/:contactId', requireAuth, async (req, res) => {
     }
     res.json({ contact: contact || null, messages: msgs, destinatarios });
   } catch (err) { console.error('[inbox] THREAD', err.message); res.status(500).json({ error: 'Error al cargar el hilo' }); }
+});
+
+// Nota interna sobre un contacto (modo "Nota" del Inbox) — NUNCA se manda como
+// email, solo queda visible para el equipo dentro del mismo hilo. Sirve para
+// preguntas/comentarios internos (ej. "¿qué le contesto a esto?") sin arriesgar
+// que le llegue nada al prospecto por error.
+app.post('/api/lm/inbox/note', requireAuth, async (req, res) => {
+  const b = req.body || {};
+  const cid = parseInt(b.contact_id);
+  const texto = String(b.texto || '').trim();
+  if (!cid || !texto) return res.status(400).json({ error: 'Falta el contacto o el texto' });
+  try {
+    const { rows: [k] } = await pool.query(
+      `SELECT id FROM lm_contacts WHERE id=$1 AND user_id=$2`, [cid, req.workspaceOwnerId]);
+    if (!k) return res.status(404).json({ error: 'Contacto no encontrado' });
+    const { rows: tm } = await pool.query(
+      `SELECT id, nombre FROM team_members WHERE user_id=$1 AND LOWER(email)=LOWER($2) LIMIT 1`,
+      [req.workspaceOwnerId, req.user.email]);
+    const memberId = tm[0]?.id || null;
+    const autor = tm[0]?.nombre || req.user.name || 'Equipo';
+    const { rows: [nota] } = await pool.query(
+      `INSERT INTO lm_notes (user_id, contact_id, member_id, autor, texto)
+       VALUES ($1,$2,$3,$4,$5) RETURNING id, autor, texto, created_at`,
+      [req.workspaceOwnerId, cid, memberId, autor, texto]);
+    res.json({ ok: true, nota });
+  } catch (err) { console.error('[inbox] NOTE', err.message); res.status(500).json({ error: 'No se pudo guardar la nota' }); }
 });
 
 // Responder desde el buzón del cliente (threading real con In-Reply-To).

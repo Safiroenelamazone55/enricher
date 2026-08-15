@@ -17593,6 +17593,7 @@ ${foot}
   let _ibActive  = null;   // contact_id del hilo abierto
   let _ibThread  = null;   // { contact, messages } del hilo abierto
   let _ibMsgIdx  = 0;      // índice del correo visible dentro del hilo (paginado 1 a 1)
+  let _ibMode    = 'reply'; // 'reply' (email real) | 'note' (nota interna, no se envía)
   let _ibSending = false;
 
   async function _ibReload() {
@@ -17671,8 +17672,16 @@ ${foot}
     return html;
   }
   function _ibMsg(m) {
-    const inMsg = m.dir === 'in';
     const when = m.at ? new Date(m.at).toLocaleString('es-PE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+    // Nota interna: nunca se envió nada, por eso se ve distinta a proposito (ni
+    // "entrante" ni "saliente" — full-width, tono ambar, sin destinatarios).
+    if (m.dir === 'note') {
+      return `<div class="ibx-m ibx-m--note">
+        <div class="ibx-m__meta">🗒 ${esc(m.buzon || 'Equipo')} · nota interna, no se envió · ${when}</div>
+        ${_ibBodyHtml(m.cuerpo)}
+      </div>`;
+    }
+    const inMsg = m.dir === 'in';
     // Envío programado pendiente: burbuja punteada con hora y botón para cancelar.
     if (!inMsg && m.estado === 'scheduled') {
       return `<div class="ibx-m ibx-m--out ibx-m--sched">
@@ -17753,7 +17762,6 @@ ${foot}
     const nm = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || '';
     const ini = (nm || '?').split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
     const seqInfo = c.seq_nombre ? `${esc(c.seq_nombre)}${c.seq_estado === 'respondido' ? ' · <span style="color:var(--brand)">pausada por respuesta</span>' : c.seq_estado ? ` · ${esc(c.seq_estado)}` : ''}` : 'Sin secuencia';
-    const canSend = !!c.mailbox_id;
     const msgs = _ibThread.messages || [];
     const curMsg = msgs.length ? msgs[Math.min(_ibMsgIdx, msgs.length - 1)] : null;
     return `
@@ -17766,29 +17774,60 @@ ${foot}
         ${c.id ? `<button class="ibx-resolve__more" onclick="LeadManagerModule.ibOpenResolveMenu(event,${c.id})" title="Resolver respuesta">⋮</button>` : ''}
       </div>
       <div class="ibx-msgs" id="ibx-msgs">${curMsg ? _ibMsg(curMsg) : '<div class="ibx-empty">Sin mensajes aún.</div>'}</div>
-      <div class="ibx-replybox">
-        ${canSend
-          ? `${_ibDestHtml(c)}
-             <div class="ibx-tawrap">
-               <textarea class="ibx-ta" id="ibx-ta" rows="3" placeholder="Responder como ${esc(c.buzon)}…"></textarea>
-               <div class="ibx-sendgrp">
-                 <button class="ibx-clock" title="Programar envío" onclick="LeadManagerModule.ibSchedToggle(event)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg></button>
-                 <button class="btn btn--primary btn--sm" id="ibx-send" onclick="LeadManagerModule.ibSend()">Enviar</button>
-                 <div class="ibx-sched" id="ibx-sched" style="display:none" onclick="event.stopPropagation()">
-                   <div class="ibx-sched__t">Programar envío</div>
-                   <button class="ibx-sched__opt" onclick="LeadManagerModule.ibSchedPick('h1')">En 1 hora</button>
-                   <button class="ibx-sched__opt" onclick="LeadManagerModule.ibSchedPick('h3')">En 3 horas</button>
-                   <button class="ibx-sched__opt" onclick="LeadManagerModule.ibSchedPick('man9')">Mañana 9:00</button>
-                   <button class="ibx-sched__opt" onclick="LeadManagerModule.ibSchedPick('lun9')">Lunes 9:00</button>
-                   <div class="ibx-sched__custom">
-                     <input type="datetime-local" class="dle-i" id="ibx-sched-dt" style="font-size:.74rem;padding:5px 7px">
-                     <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.ibSchedPick('custom')">OK</button>
-                   </div>
+      ${_ibReplyboxHtml(c)}`;
+  }
+  // "Responder" manda un email real (al prospecto, con CC editable) — "Nota interna"
+  // NO manda nada: queda visible solo para el equipo, en el mismo hilo (misma ruta),
+  // para preguntas/comentarios internos sobre la conversación sin arriesgar que le
+  // llegue algo al prospecto por error. Mismo patrón que HubSpot/Front/Intercom.
+  function _ibReplyboxHtml(c) {
+    const canSend = !!c.mailbox_id;
+    const mode = _ibMode === 'note' ? 'note' : 'reply';
+    const modeToggle = c.id ? `
+      <div class="ibx-replymode">
+        <button class="ibx-replymode__b${mode === 'reply' ? ' active' : ''}" onclick="LeadManagerModule.ibSetMode('reply')">Responder</button>
+        <button class="ibx-replymode__b${mode === 'note' ? ' active' : ''}" onclick="LeadManagerModule.ibSetMode('note')">Nota interna</button>
+      </div>` : '';
+    if (mode === 'note') {
+      return `<div class="ibx-replybox">
+        ${modeToggle}
+        <div class="ibx-tawrap">
+          <textarea class="ibx-ta" id="ibx-ta" rows="3" placeholder="Escribe una nota interna — no se envía nada, solo la ve tu equipo…"></textarea>
+          <div class="ibx-sendgrp">
+            <button class="btn btn--primary btn--sm" id="ibx-send" onclick="LeadManagerModule.ibSaveNote()">Guardar nota</button>
+          </div>
+        </div>
+      </div>`;
+    }
+    return `<div class="ibx-replybox">
+      ${modeToggle}
+      ${canSend
+        ? `${_ibDestHtml(c)}
+           <div class="ibx-tawrap">
+             <textarea class="ibx-ta" id="ibx-ta" rows="3" placeholder="Responder como ${esc(c.buzon)}…"></textarea>
+             <div class="ibx-sendgrp">
+               <button class="ibx-clock" title="Programar envío" onclick="LeadManagerModule.ibSchedToggle(event)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg></button>
+               <button class="btn btn--primary btn--sm" id="ibx-send" onclick="LeadManagerModule.ibSend()">Enviar</button>
+               <div class="ibx-sched" id="ibx-sched" style="display:none" onclick="event.stopPropagation()">
+                 <div class="ibx-sched__t">Programar envío</div>
+                 <button class="ibx-sched__opt" onclick="LeadManagerModule.ibSchedPick('h1')">En 1 hora</button>
+                 <button class="ibx-sched__opt" onclick="LeadManagerModule.ibSchedPick('h3')">En 3 horas</button>
+                 <button class="ibx-sched__opt" onclick="LeadManagerModule.ibSchedPick('man9')">Mañana 9:00</button>
+                 <button class="ibx-sched__opt" onclick="LeadManagerModule.ibSchedPick('lun9')">Lunes 9:00</button>
+                 <div class="ibx-sched__custom">
+                   <input type="datetime-local" class="dle-i" id="ibx-sched-dt" style="font-size:.74rem;padding:5px 7px">
+                   <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.ibSchedPick('custom')">OK</button>
                  </div>
                </div>
-             </div>`
-          : `<div class="ibx-nosend">El cliente <b>${esc(c.cliente || '')}</b> no tiene buzón conectado — conéctalo en su ficha para responder desde aquí.</div>`}
-      </div>`;
+             </div>
+           </div>`
+        : `<div class="ibx-nosend">El cliente <b>${esc(c.cliente || '')}</b> no tiene buzón conectado — conéctalo en su ficha para responder desde aquí.</div>`}
+    </div>`;
+  }
+  function ibSetMode(mode) {
+    _ibMode = mode === 'note' ? 'note' : 'reply';
+    const rb = document.querySelector('.ibx-replybox');
+    if (rb) rb.outerHTML = _ibReplyboxHtml((_ibThread && _ibThread.contact) || {});
   }
   // Destinatarios de la respuesta, a la vista y editables: hasta ahora se enviaba
   // solo al contacto y no habia forma de saber a quien iba a llegar.
@@ -17902,7 +17941,7 @@ ${foot}
     </div>`;
   }
   async function ibOpen(cid) {
-    _ibActive = cid; _ibThread = null; _ibMsgIdx = 0;
+    _ibActive = cid; _ibThread = null; _ibMsgIdx = 0; _ibMode = 'reply';
     const t = (_ibThreads || []).find(x => x.contact_id === cid); if (t) t.unread = 0;
     _ibPaint(); _refreshNav();
     try {
@@ -17917,6 +17956,27 @@ ${foot}
   function ibTab(k) { _ibTab = k; _ibPaint(); if (k === 'env' && _lmMsgs === null) _loadLmMsgs(); }
   function ibCli(v) { _ibCli = parseInt(v) || 0; _ibPaint(); }
   function ibDisp(v) { _ibDisp = v || ''; _ibPaint(); }
+  // Nota interna: NO llama a /reply ni toca lm_messages/mailboxes — no sale ningún
+  // email. Solo se guarda para que el equipo la vea en este mismo hilo (misma ruta).
+  async function ibSaveNote() {
+    if (_ibSending || !_ibActive) return;
+    const ta = document.getElementById('ibx-ta'); const texto = (ta?.value || '').trim();
+    if (!texto) return;
+    _ibSending = true;
+    const btn = document.getElementById('ibx-send'); if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+    try {
+      const res = await apiFetch(`${API}/lm/inbox/note`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact_id: _ibActive, texto }) });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'No se pudo guardar la nota');
+      if (_ibThread) {
+        _ibThread.messages.push({ dir: 'note', id: d.nota?.id, cuerpo: texto, at: d.nota?.created_at || new Date().toISOString(), tipo: 'nota', buzon: d.nota?.autor || '' });
+        _ibMsgIdx = _ibThread.messages.length - 1;
+      }
+      _ibPaint();
+      showBanner('✓ Nota guardada — no se envió ningún correo', 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+    finally { _ibSending = false; const b = document.getElementById('ibx-send'); if (b) { b.disabled = false; b.textContent = 'Guardar nota'; } }
+  }
   async function ibSend(schedIso) {
     if (_ibSending || !_ibActive) return;
     const ta = document.getElementById('ibx-ta'); const cuerpo = (ta?.value || '').trim();
@@ -22808,7 +22868,7 @@ ${foot}
     mbSignatureOpen, mbSignaturePreview, mbSignatureClear, mbSignatureInsertLink, mbSignatureImg, mbSignatureSave,
     mbAdminConsentSync, mbAdminConsentToggleHtml,
     mbAdminConsentSetSigner, mbAdminConsentAddChip, mbAdminConsentRmChip, mbAdminConsentInputKey, mbAdminConsentClearRecipients,
-    ibOpen, ibTab, ibCli, ibDisp, ibSend, ibMsgNav, ibSchedToggle, ibSchedPick, ibCancelSched, ibResolveDisp, ibOpenResolveMenu,
+    ibOpen, ibTab, ibCli, ibDisp, ibSend, ibSaveNote, ibSetMode, ibMsgNav, ibSchedToggle, ibSchedPick, ibCancelSched, ibResolveDisp, ibOpenResolveMenu,
     ibRowMenu, ibCloseMenu, ibMarkUnread,
     pendingAcceptOpen, pendingAcceptToggleAll, pendingAcceptApplyFilters, pendingAcceptMark,
     openActivityDrawer, closeActivityDrawer, saveActivity, confirmDeleteActivity, markActDone,

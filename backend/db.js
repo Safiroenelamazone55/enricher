@@ -1297,6 +1297,23 @@ async function initDb() {
     await pool.query(`CREATE INDEX IF NOT EXISTS lm_inbox_user_idx    ON lm_inbox_messages (user_id, received_at DESC);`);
     await pool.query(`CREATE INDEX IF NOT EXISTS lm_inbox_contact_idx ON lm_inbox_messages (contact_id);`);
 
+    // lm_notes: notas internas sobre un contacto (Inbox → modo "Nota interna").
+    // A diferencia de lm_inbox_messages/lm_messages, NUNCA se manda como email —
+    // solo queda visible para el equipo dentro del mismo hilo de conversación.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS lm_notes (
+        id          SERIAL      PRIMARY KEY,
+        user_id     INTEGER     REFERENCES users(id)        ON DELETE CASCADE,
+        contact_id  INTEGER     REFERENCES lm_contacts(id)  ON DELETE CASCADE,
+        member_id   INTEGER     REFERENCES team_members(id) ON DELETE SET NULL,
+        autor       TEXT        NOT NULL DEFAULT '',
+        texto       TEXT        NOT NULL DEFAULT '',
+        created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS lm_notes_contact_idx ON lm_notes (contact_id);`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS lm_notes_user_idx    ON lm_notes (user_id, created_at DESC);`);
+
     // lm_messages: cada email real enviado por el motor (asunto/cuerpo ya renderizados).
     // estado: queued | sent | bounced | replied | failed
     await pool.query(`

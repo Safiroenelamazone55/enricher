@@ -13424,6 +13424,10 @@ td.ldh-acts { padding-left: 6px; padding-right: 10px; }
 .ibx-m__meta { font-size: .66rem; color: var(--text-muted); margin-bottom: 3px; }
 .ibx-m--in .ibx-m__meta { color: var(--brand-d, var(--primary)); }
 .ibx-m--team .ibx-m__meta { color: #4F46E5; }
+/* Nota interna: ni "entrante" ni "saliente" — a propósito full-width y en tono
+   ámbar, para que salte a la vista que nunca se envió como email. */
+.ibx-m--note { align-self: center; width: 96%; max-width: 96%; background: var(--warning-soft, #FFF5DF); border: 1px dashed var(--warning, #D58A16); }
+.ibx-m--note .ibx-m__meta { color: var(--warning, #D58A16); font-weight: 600; }
 .ibx-m__subj { font-size: .7rem; font-weight: 600; color: var(--text-primary); margin-bottom: 2px; }
 .ibx-m__body { color: var(--text-primary); word-break: break-word; }
 /* Historial citado (firma/hilo anterior que el correo repite) plegado por
@@ -13434,6 +13438,13 @@ td.ldh-acts { padding-left: 6px; padding-right: 10px; }
 .ibx-m__quoted { margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--border); color: var(--text-muted); font-size: .76rem; }
 .ibx-m__quoted.hidden { display: none; }
 .ibx-replybox { display: flex; gap: 8px; align-items: flex-end; padding: 10px 14px; border-top: 1px solid var(--border); }
+/* Toggle "Responder" (email real) / "Nota interna" (no se envía nada) — mismo
+   patrón de HubSpot/Front/Intercom para preguntas de equipo sin arriesgar que
+   le llegue algo al prospecto por error. */
+.ibx-replymode { display: flex; gap: 2px; background: var(--surface-secondary); border-radius: 8px; padding: 2px; width: max-content; }
+.ibx-replymode__b { border: none; background: none; cursor: pointer; font-family: inherit; font-size: .72rem; font-weight: 600; color: var(--text-muted); padding: 5px 10px; border-radius: 6px; transition: all .12s; }
+.ibx-replymode__b:hover { color: var(--text-primary); }
+.ibx-replymode__b.active { background: var(--surface); color: var(--text-primary); box-shadow: 0 1px 2px rgba(20,33,27,.08); }
 /* El textarea y el grupo Enviar/programar comparten una misma caja: el botón
    vive SUPERPUESTO adentro (esquina inferior derecha), no en una fila aparte
    debajo — así no se pierde una fila entera de alto solo para el botón. */
