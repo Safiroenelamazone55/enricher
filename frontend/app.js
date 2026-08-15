@@ -17844,15 +17844,14 @@ ${foot}
   let _ibFitBound = false;
   function _ibFit() {
     const g = document.querySelector('.ibx-grid'); if (!g) return;
-    const conv = document.querySelector('.ibx-conv');
-    let floor = 340;
-    if (conv) {
-      const chrome = [...conv.children]
-        .filter(el => !el.classList.contains('ibx-msgs'))
-        .reduce((s, el) => s + el.getBoundingClientRect().height, 0);
-      floor = chrome + 180;
-    }
-    g.style.height = Math.max(floor, window.innerHeight - g.getBoundingClientRect().top - 16) + 'px';
+    // Nunca más alto que el espacio real visible: si el header + caja de responder
+    // no dejan suficiente lugar, el que se achica es .ibx-msgs (scrollea por dentro,
+    // ya tiene overflow-y:auto) — pero la caja de responder, con el botón Enviar,
+    // SIEMPRE tiene que quedar completa dentro de la pantalla, nunca cortada abajo
+    // (antes un "piso" mínimo podía forzar el grid a ser MÁS alto que lo visible,
+    // y como el grid recorta con overflow:hidden, el botón Enviar quedaba tapado).
+    const available = window.innerHeight - g.getBoundingClientRect().top - 16;
+    g.style.height = Math.max(260, available) + 'px';
     if (!_ibFitBound) { _ibFitBound = true; window.addEventListener('resize', () => _ibFit()); }
   }
 
