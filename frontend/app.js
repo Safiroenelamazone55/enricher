@@ -5159,6 +5159,7 @@ const DashboardModule = (() => {
   let _hrsCtx      = null;   // {taskId, kind, titulo, ctx, ctxLabel, cliente} de la tarea en curso
   let _hrsPaused   = false;
   let _hrsRunEntry = null;   // entry corriendo (fallback de contexto tras recargar)
+  let _hrsDailyCache = [], _hrsIsoDFn = null, _hrsTodayKeyCache = '';   // para refrescar "Tiempo de hoy" cada segundo sin repetir el fetch
   const HRS_WORKDAY = 8 * 3600;
   const HRS_START_H = 8, HRS_END_H = 17;   // 8 AM – 5 PM
 
@@ -5304,6 +5305,7 @@ const DashboardModule = (() => {
           ${metricsStrip}
         </div>`;
     el.innerHTML = `${ctxBlock}${statsHtml}${actions}`;
+    _hrsDailyCache = daily; _hrsIsoDFn = _isoD; _hrsTodayKeyCache = _todayKey;
     _renderTimeCard(daily, totalSec, now, _isoD, _todayKey);
 
     clearInterval(_hrsTimer);
@@ -5389,6 +5391,8 @@ const DashboardModule = (() => {
     if (p) p.textContent = `${Math.round(totalSec / HRS_WORKDAY * 100)}%`;
     const el = $('dash2-hrs-elapsed');
     if (el) el.textContent = _fmtClock(elapsed);
+    // "Tiempo de hoy": mismo total en vivo, para que no quede congelada mientras corre el timer.
+    if (_hrsIsoDFn) _renderTimeCard(_hrsDailyCache, totalSec, new Date(), _hrsIsoDFn, _hrsTodayKeyCache);
   }
 
   // Acciones del estado activo
@@ -6853,7 +6857,7 @@ const AnalyticsModule = (() => {
   const _AC_WD = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
   const _AC_HLBL = { 0:'0', 4:'4', 8:'8', 12:'12', 16:'16', 20:'20' };
   function _acHead(extra) {
-    return `<div class="ac-head"><span class="ac-title">Tu ritmo de trabajo</span>${extra || ''}</div>`;
+    return `<div class="ac-head"><span class="ac-title">Ritmo de trabajo</span>${extra || ''}</div>`;
   }
   async function mountActivityCard() {
     const el = $('dash2-act-heatmap');
