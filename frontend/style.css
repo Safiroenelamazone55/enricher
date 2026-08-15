@@ -13397,7 +13397,7 @@ td.ldh-acts { padding-left: 6px; padding-right: 10px; }
 .ibx-b--ooo { background: var(--surface-secondary); color: var(--text-secondary); }
 .ibx-b--reb { background: var(--danger-soft); color: var(--danger); }
 .ibx-conv { display: flex; flex-direction: column; min-width: 0; }
-.ibx-conv__hd { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+.ibx-conv__hd { display: flex; align-items: center; gap: 10px; padding: 7px 14px; border-bottom: 1px solid var(--border); }
 .ibx-av { width: 32px; height: 32px; border-radius: 50%; background: var(--primary-soft); color: var(--primary); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: .72rem; flex: 0 0 auto; }
 .ibx-conv__who { flex: 1; min-width: 0; }
 .ibx-conv__nm { font-size: .84rem; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
