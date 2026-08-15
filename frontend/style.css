@@ -9317,14 +9317,18 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 .d3-ov-tab.on { background: var(--white, #fff); color: var(--brand-d, #0062CC); box-shadow: 0 1px 2px rgba(0,0,0,.06); }
 .d3-ov-empty { padding: 10px 18px 6px; font-size: 12.5px; color: var(--muted, #918C85); }
 .d3-ov-sub { display: none; }
-.d3-ov-total { display: flex; align-items: baseline; justify-content: space-between; padding: 7px 18px 4px; }
-.d3-ov-total-lbl { font-size: 13px; font-weight: 700; color: #0A2540; }
-.d3-ov-total-n { font-size: 23px; font-weight: 800; color: #0A2540; letter-spacing: -.5px; font-variant-numeric: tabular-nums; }
-.d3-ov-bar { display: flex; gap: 3px; height: 10px; margin: 4px 18px 6px; }
+.d3-ov-total { display: flex; flex-direction: column; gap: 7px; padding: 10px 18px 6px; }
+.d3-ov-total-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.d3-ov-total-lbl { font-size: 12px; font-weight: 600; color: var(--muted, #918C85); }
+.d3-ov-detail-btn { border: none; background: var(--bg, #F1EFEB); color: #45586A; font: inherit; font-size: 11px; font-weight: 700; padding: 5px 12px; border-radius: 999px; cursor: pointer; transition: background .12s, color .12s; }
+.d3-ov-detail-btn:hover { background: var(--brand-ll, #E9F1FF); color: var(--brand-d, #0062CC); }
+.d3-ov-total-n { display: flex; align-items: baseline; gap: 6px; font-size: 27px; font-weight: 800; color: #0A2540; letter-spacing: -.5px; font-variant-numeric: tabular-nums; }
+.d3-ov-total-unit { font-size: 15px; font-weight: 700; color: #45586A; }
+.d3-ov-bar { display: flex; gap: 4px; height: 12px; margin: 4px 18px 8px; }
 .d3-ov-seg { border-radius: 99px; min-width: 6px; transition: flex .3s ease; }
-.d3-ov-legend { display: flex; flex-direction: column; gap: 2px; padding: 0 18px; }
+.d3-ov-legend { display: flex; flex-direction: column; gap: 7px; padding: 0 18px 4px; }
 .d3-ov-leg { display: flex; align-items: center; gap: 9px; font-size: 12.5px; line-height: 1.3; }
-.d3-ov-dot { width: 11px; height: 11px; border-radius: 3.5px; flex-shrink: 0; }
+.d3-ov-dot { width: 12px; height: 12px; border-radius: 3.5px; flex-shrink: 0; }
 .d3-ov-leg-lbl { color: #45586A; flex: 1; }
 .d3-ov-leg-n { color: #0A2540; font-weight: 700; font-variant-numeric: tabular-nums; }
 

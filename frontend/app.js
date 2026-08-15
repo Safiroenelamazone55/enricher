@@ -5701,7 +5701,7 @@ const DashboardModule = (() => {
     units.forEach(t => { const e = t.estado || 'pendiente'; cnt[e] = (cnt[e] || 0) + 1; });
     const SEG = [
       { k: 'en_progreso', label: 'En progreso', color: '#6366F1' },
-      { k: 'pendiente',   label: 'Pendiente',   color: '#CFCAC3' },
+      { k: 'pendiente',   label: 'Pendiente',   color: '#2563EB' },
       { k: 'bloqueado',   label: 'Bloqueado',   color: '#EF4444' },
       { k: 'completado',  label: 'Completado',  color: '#22C55E' },
     ].filter(s => (cnt[s.k] || 0) > 0);
@@ -5713,7 +5713,13 @@ const DashboardModule = (() => {
     </div>`;
     const body = total === 0
       ? `<div class="d3-ov-empty">Sin tareas con fecha ${_ovPeriod === 'semana' ? 'esta semana' : 'este mes'}.</div>`
-      : `<div class="d3-ov-total"><span class="d3-ov-total-lbl">Tareas</span><span class="d3-ov-total-n">${total}</span></div>
+      : `<div class="d3-ov-total">
+           <div class="d3-ov-total-row">
+             <span class="d3-ov-total-lbl">Tareas totales</span>
+             <button class="d3-ov-detail-btn" onclick="document.querySelector('[data-tab=mgmt-tasks]').click()">Ver detalle</button>
+           </div>
+           <div class="d3-ov-total-n">${total}<span class="d3-ov-total-unit">${total === 1 ? 'Tarea' : 'Tareas'}</span></div>
+         </div>
          <div class="d3-ov-bar">${bar}</div>
          <div class="d3-ov-legend">${legend}</div>`;
     el.innerHTML = `
