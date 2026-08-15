@@ -13438,14 +13438,19 @@ td.ldh-acts { padding-left: 6px; padding-right: 10px; }
    vive SUPERPUESTO adentro (esquina inferior derecha), no en una fila aparte
    debajo — así no se pierde una fila entera de alto solo para el botón. */
 .ibx-tawrap { position: relative; }
-.ibx-ta { width: 100%; resize: none; min-height: 40px; max-height: 160px; border: 1px solid var(--border); border-radius: 8px; padding: 8px 88px 8px 10px; font-size: .8rem; font-family: inherit; background: var(--surface); color: var(--text-primary); }
+/* display:block es necesario: un <textarea> es inline-block por defecto y deja
+   un renglón fantasma de aire abajo (el clásico "space below image/inline-block"
+   de CSS) — sin esto, .ibx-tawrap quedaba unos px más alto que el propio
+   textarea, y el botón (posicionado desde el borde del WRAPPER) terminaba
+   pegado al borde REAL de la caja en vez de tener margen. */
+.ibx-ta { display: block; width: 100%; resize: none; min-height: 40px; max-height: 160px; border: 1px solid var(--border); border-radius: 8px; padding: 8px 88px 8px 10px; font-size: .8rem; font-family: inherit; background: var(--surface); color: var(--text-primary); }
 .ibx-ta:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
 .ibx-nosend { font-size: .76rem; color: var(--text-muted); padding: 4px 0; }
 .ibx-empty { padding: 26px 16px; text-align: center; font-size: .78rem; color: var(--text-muted); }
 @media (max-width: 900px) { .ibx-grid { grid-template-columns: 1fr; } .ibx-list { max-height: 240px; border-right: none; border-bottom: 1px solid var(--border); } }
 
 /* ── Programar envío (Inbox) ── */
-.ibx-sendgrp { position: absolute; right: 6px; bottom: 6px; display: flex; gap: 5px; align-items: center; z-index: 2; }
+.ibx-sendgrp { position: absolute; right: 8px; bottom: 9px; display: flex; gap: 5px; align-items: center; z-index: 2; }
 .ibx-clock { border: 1px solid var(--border); background: var(--surface); border-radius: 8px; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text-secondary); transition: all .12s; }
 .ibx-clock:hover { color: var(--primary); border-color: var(--primary); background: var(--primary-soft); }
 .ibx-sched { position: absolute; bottom: 32px; right: 0; z-index: 60; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 8px 24px rgba(20,33,27,.12); padding: 8px; min-width: 190px; }
