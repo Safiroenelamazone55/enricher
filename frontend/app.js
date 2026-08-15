@@ -17632,7 +17632,8 @@ ${foot}
     const when = _ibFmtAgo(t.last_in_at && (!t.last_out_at || new Date(t.last_in_at) > new Date(t.last_out_at)) ? t.last_in_at : t.last_out_at);
     const snippet = t.last_snippet || t.last_asunto || (t.sent_count ? `${t.sent_count} enviados, sin respuesta` : '');
     const badge = cat === 'reb' ? `<span class="ibx-b ibx-b--reb">Rebote</span>`
-                : t.last_in_tipo === 'ooo' ? `<span class="ibx-b ibx-b--ooo">OOO</span>` : '';
+                : t.last_in_tipo === 'ooo' ? `<span class="ibx-b ibx-b--ooo">OOO</span>`
+                : t.last_in_tipo === 'equipo' ? `<span class="ibx-b ibx-b--team">Equipo</span>` : '';
     return `<div class="ibx-row${_ibActive === t.contact_id ? ' active' : ''}${t.unread > 0 ? ' unread' : ''}" onclick="LeadManagerModule.ibOpen(${t.contact_id})" oncontextmenu="LeadManagerModule.ibRowMenu(event,${t.contact_id})">
       <div class="ibx-row__l1"><span class="ibx-row__nm">${t.unread > 0 ? '<span class="ibx-dot"></span>' : ''}<span class="ibx-row__nm-txt">${esc(nm)}</span>${t.disposition ? _dispoBadge(t.disposition) : ''}</span><span class="ibx-row__t">${when}</span></div>
       <div class="ibx-row__sn">${esc(String(snippet).slice(0, 90))}</div>
@@ -17677,9 +17678,9 @@ ${foot}
       </div>`;
     }
     const tag = inMsg
-      ? (m.tipo === 'ooo' ? ' · respuesta automática' : m.tipo === 'bounce' ? ' · rebote' : '')
+      ? (m.tipo === 'ooo' ? ' · respuesta automática' : m.tipo === 'bounce' ? ' · rebote' : m.tipo === 'equipo' ? ' · tu equipo, no el prospecto' : '')
       : (m.seq_nombre ? ` · ${esc(m.seq_nombre)}` : '') + (m.estado === 'failed' ? ' · FALLÓ' : '');
-    return `<div class="ibx-m ${inMsg ? (m.tipo === 'bounce' ? 'ibx-m--reb' : 'ibx-m--in') : 'ibx-m--out'}">
+    return `<div class="ibx-m ${inMsg ? (m.tipo === 'bounce' ? 'ibx-m--reb' : m.tipo === 'equipo' ? 'ibx-m--team' : 'ibx-m--in') : 'ibx-m--out'}">
       <div class="ibx-m__meta">${esc(inMsg ? (m.buzon || '') : ('Tú · ' + (m.buzon || '')))}${tag} · ${when}</div>
       ${m.asunto ? `<div class="ibx-m__subj">${esc(m.asunto)}</div>` : ''}
       ${_ibBodyHtml(m.cuerpo)}

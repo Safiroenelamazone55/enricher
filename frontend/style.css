@@ -13396,6 +13396,7 @@ td.ldh-acts { padding-left: 6px; padding-right: 10px; }
 .ibx-b { display: inline-block; font-size: .62rem; font-weight: 600; border-radius: 7px; padding: 0 6px; vertical-align: 1px; }
 .ibx-b--ooo { background: var(--surface-secondary); color: var(--text-secondary); }
 .ibx-b--reb { background: var(--danger-soft); color: var(--danger); }
+.ibx-b--team { background: rgba(99,102,241,.12); color: #4F46E5; }
 .ibx-conv { display: flex; flex-direction: column; min-width: 0; }
 .ibx-conv__hd { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--border); }
 .ibx-av { width: 32px; height: 32px; border-radius: 50%; background: var(--primary-soft); color: var(--primary); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: .72rem; flex: 0 0 auto; }
@@ -13415,8 +13416,10 @@ td.ldh-acts { padding-left: 6px; padding-right: 10px; }
 .ibx-m--out { align-self: flex-end; background: var(--surface-secondary); border: 1px solid var(--border); border-bottom-right-radius: 3px; }
 .ibx-m--in { align-self: flex-start; background: var(--primary-soft); border-bottom-left-radius: 3px; }
 .ibx-m--reb { align-self: flex-start; background: var(--danger-soft); border-bottom-left-radius: 3px; }
+.ibx-m--team { align-self: flex-start; background: rgba(99,102,241,.08); border-bottom-left-radius: 3px; }
 .ibx-m__meta { font-size: .66rem; color: var(--text-muted); margin-bottom: 3px; }
 .ibx-m--in .ibx-m__meta { color: var(--brand-d, var(--primary)); }
+.ibx-m--team .ibx-m__meta { color: #4F46E5; }
 .ibx-m__subj { font-size: .74rem; font-weight: 600; color: var(--text-primary); margin-bottom: 2px; }
 .ibx-m__body { color: var(--text-primary); word-break: break-word; }
 /* Historial citado (firma/hilo anterior que el correo repite) plegado por

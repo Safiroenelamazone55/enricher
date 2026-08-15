@@ -40,16 +40,20 @@ const BOUNCE_FROM = /mailer-daemon|postmaster|mail delivery|maildelivery/i;
 const BOUNCE_SUBJ = /undeliver|delivery (status|failure|has failed)|returned mail|mail delivery failed|failure notice|no se pudo entregar|entrega fallida/i;
 const OOO_SUBJ    = /out of office|automatic reply|auto[- ]?reply|autoreply|away from|vacation|fuera de (la )?oficina|respuesta automática|ausen(te|cia)/i;
 
-// "Nombre <a@b.com>, otro@c.com" -> "a@b.com, otro@c.com". Guardamos solo direcciones
-// para poder responder a todos sin volver a parsear cabeceras.
-function _dirs(campo) {
-  if (!campo) return '';
+// "Nombre <a@b.com>, otro@c.com" -> ["a@b.com","otro@c.com"], dedupeado.
+function _addrList(campo) {
+  if (!campo) return [];
   const arr = Array.isArray(campo) ? campo : [campo];
   const out = [];
   for (const c of arr) {
     for (const v of (c && c.value) || []) if (v && v.address) out.push(String(v.address).toLowerCase());
   }
-  return [...new Set(out)].join(', ').slice(0, 2000);
+  return [...new Set(out)];
+}
+// Igual que _addrList pero como string "a@b.com, otro@c.com" para guardar en DB
+// (así se puede responder a todos sin volver a parsear cabeceras).
+function _dirs(campo) {
+  return _addrList(campo).join(', ').slice(0, 2000);
 }
 
 function classify(parsed) {
@@ -220,7 +224,7 @@ async function _checkMailbox(pool, mb) {
 
       try {
         const parsed = await simpleParser(msg.source);
-        const tipo = classify(parsed);
+        let tipo = classify(parsed);
         const fromAddr = (parsed.from?.value?.[0]?.address || '').toLowerCase();
         const fromName = parsed.from?.value?.[0]?.name || '';
         if (!fromAddr) continue;
@@ -236,6 +240,24 @@ async function _checkMailbox(pool, mb) {
             [mb.user_id, fromAddr]
           );
           contact = rows[0] || null;
+
+          // No es el prospecto quien escribe (es otra persona — típicamente alguien del
+          // equipo llevando la cuenta y respondiéndole directo, con este buzón en copia).
+          // Igual vale guardarlo para ver el hilo completo: se matchea por DESTINATARIO
+          // (To/Cc) contra los contactos del CRM. Se marca 'equipo' (no 'reply') para que
+          // no dispare la auto-pausa de secuencia ni cambie la disposición — el prospecto
+          // no respondió, solo alguien le escribió.
+          if (!contact) {
+            const recipients = [..._addrList(parsed.to), ..._addrList(parsed.cc)].filter(a => a !== fromAddr);
+            if (recipients.length) {
+              const { rows: rrows } = await pool.query(
+                `SELECT id, email, nombre, apellido FROM lm_contacts
+                  WHERE user_id=$1 AND (LOWER(email)=ANY($2) OR LOWER(email_personal)=ANY($2)) LIMIT 1`,
+                [mb.user_id, recipients]
+              );
+              if (rrows[0]) { contact = rrows[0]; tipo = 'equipo'; }
+            }
+          }
         }
 
         // Solo guardar lo relevante: contacto del CRM, o rebote (aunque no matchee).

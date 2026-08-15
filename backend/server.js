@@ -5074,9 +5074,9 @@ app.get('/api/lm/inbox/threads', requireAuth, async (req, res) => {
     const { rows } = await pool.query(`
       WITH inx AS (
         SELECT contact_id,
-               MAX(received_at) FILTER (WHERE tipo IN ('reply','ooo'))          AS last_in_at,
-               COUNT(*)         FILTER (WHERE NOT leido AND tipo='reply')::int  AS unread,
-               COUNT(*)         FILTER (WHERE tipo='bounce')::int               AS bounces
+               MAX(received_at) FILTER (WHERE tipo IN ('reply','ooo','equipo'))  AS last_in_at,
+               COUNT(*)         FILTER (WHERE NOT leido AND tipo='reply')::int   AS unread,
+               COUNT(*)         FILTER (WHERE tipo='bounce')::int                AS bounces
           FROM lm_inbox_messages
          WHERE user_id=$1 AND contact_id IS NOT NULL
          GROUP BY contact_id
@@ -5103,7 +5103,7 @@ app.get('/api/lm/inbox/threads', requireAuth, async (req, res) => {
         LEFT JOIN LATERAL (
           SELECT asunto, LEFT(cuerpo, 160) AS cuerpo, tipo
             FROM lm_inbox_messages
-           WHERE contact_id = k.id AND tipo IN ('reply','ooo')
+           WHERE contact_id = k.id AND tipo IN ('reply','ooo','equipo')
            ORDER BY received_at DESC LIMIT 1
         ) li ON TRUE
        WHERE k.user_id=$1 AND (i.contact_id IS NOT NULL OR o.contact_id IS NOT NULL)
