@@ -17769,19 +17769,21 @@ ${foot}
       <div class="ibx-replybox">
         ${canSend
           ? `${_ibDestHtml(c)}
-             <textarea class="ibx-ta" id="ibx-ta" rows="3" placeholder="Responder como ${esc(c.buzon)}…"></textarea>
-             <div class="ibx-sendgrp">
-               <button class="btn btn--primary btn--sm" id="ibx-send" onclick="LeadManagerModule.ibSend()">Enviar</button>
-               <button class="ibx-clock" title="Programar envío" onclick="LeadManagerModule.ibSchedToggle(event)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg></button>
-               <div class="ibx-sched" id="ibx-sched" style="display:none" onclick="event.stopPropagation()">
-                 <div class="ibx-sched__t">Programar envío</div>
-                 <button class="ibx-sched__opt" onclick="LeadManagerModule.ibSchedPick('h1')">En 1 hora</button>
-                 <button class="ibx-sched__opt" onclick="LeadManagerModule.ibSchedPick('h3')">En 3 horas</button>
-                 <button class="ibx-sched__opt" onclick="LeadManagerModule.ibSchedPick('man9')">Mañana 9:00</button>
-                 <button class="ibx-sched__opt" onclick="LeadManagerModule.ibSchedPick('lun9')">Lunes 9:00</button>
-                 <div class="ibx-sched__custom">
-                   <input type="datetime-local" class="dle-i" id="ibx-sched-dt" style="font-size:.74rem;padding:5px 7px">
-                   <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.ibSchedPick('custom')">OK</button>
+             <div class="ibx-tawrap">
+               <textarea class="ibx-ta" id="ibx-ta" rows="3" placeholder="Responder como ${esc(c.buzon)}…"></textarea>
+               <div class="ibx-sendgrp">
+                 <button class="ibx-clock" title="Programar envío" onclick="LeadManagerModule.ibSchedToggle(event)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg></button>
+                 <button class="btn btn--primary btn--sm" id="ibx-send" onclick="LeadManagerModule.ibSend()">Enviar</button>
+                 <div class="ibx-sched" id="ibx-sched" style="display:none" onclick="event.stopPropagation()">
+                   <div class="ibx-sched__t">Programar envío</div>
+                   <button class="ibx-sched__opt" onclick="LeadManagerModule.ibSchedPick('h1')">En 1 hora</button>
+                   <button class="ibx-sched__opt" onclick="LeadManagerModule.ibSchedPick('h3')">En 3 horas</button>
+                   <button class="ibx-sched__opt" onclick="LeadManagerModule.ibSchedPick('man9')">Mañana 9:00</button>
+                   <button class="ibx-sched__opt" onclick="LeadManagerModule.ibSchedPick('lun9')">Lunes 9:00</button>
+                   <div class="ibx-sched__custom">
+                     <input type="datetime-local" class="dle-i" id="ibx-sched-dt" style="font-size:.74rem;padding:5px 7px">
+                     <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.ibSchedPick('custom')">OK</button>
+                   </div>
                  </div>
                </div>
              </div>`
@@ -17790,17 +17792,22 @@ ${foot}
   }
   // Destinatarios de la respuesta, a la vista y editables: hasta ahora se enviaba
   // solo al contacto y no habia forma de saber a quien iba a llegar.
+  // Para/CC en UNA sola fila (no dos) — no hay que perder una fila entera para un
+  // "CC" que la mitad de las veces esta vacio. "Para" no se edita (siempre es el
+  // ultimo interlocutor real detectado); "CC" si — asi Jenny decide "responder a
+  // todos" (default, viene precargado con quienes estaban en el hilo) o solo al
+  // prospecto con solo borrar el campo.
   function _ibDestHtml(c) {
     const d = (_ibThread && _ibThread.destinatarios) || {};
-    const to = (d.to || [c.email]).filter(Boolean);
-    const cc = (d.cc || []).filter(Boolean);
+    const to = (d.to || [c.email]).filter(Boolean).join(', ');
+    const cc = (d.cc || []).filter(Boolean).join(', ');
     return `<div class="ibx-dest">
-      <div class="ibx-dest__l"><span class="ibx-dest__k">Para</span><span class="ibx-dest__v">${esc(to.join(', '))}</span></div>
-      <div class="ibx-dest__l">
-        <span class="ibx-dest__k">CC</span>
-        <input class="ibx-dest__i" id="ibx-cc" value="${esc(cc.join(', '))}" placeholder="nadie en copia"
-               title="Separa varios con comas. Se rellena con quienes venian en el hilo.">
-      </div>
+      <span class="ibx-dest__k">Para</span>
+      <span class="ibx-dest__v" title="${esc(to)}">${esc(to)}</span>
+      <span class="ibx-dest__sep">·</span>
+      <span class="ibx-dest__k">CC</span>
+      <input class="ibx-dest__i" id="ibx-cc" value="${esc(cc)}" placeholder="nadie en copia"
+             title="Separa varios con comas. Se rellena con quienes venian en el hilo.">
     </div>`;
   }
 
