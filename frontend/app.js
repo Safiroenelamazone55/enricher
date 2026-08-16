@@ -14672,8 +14672,26 @@ const LeadManagerModule = (() => {
   };
 
   async function load() {
+    // Restaura la última sección (sin parámetros) visitada dentro de Outreach — solo la
+    // primera vez que se entra al módulo en esta carga de página, no en clics posteriores.
+    // Se decide ANTES del primer render para no pintar el Dashboard un instante y luego
+    // saltar a la sección guardada (eso se veía como un parpadeo al refrescar la página).
+    let _sectionRestored = false;
+    if (!_lmBootRestored) {
+      _lmBootRestored = true;
+      let saved = null;
+      try { saved = localStorage.getItem('lm_last_section'); } catch (_) {}
+      if (saved && saved !== _section && saved !== 'client' && saved !== 'sequence' && saved !== 'contact-view') { _section = saved; _sectionRestored = true; }
+    }
     if (!$('lm2-body')) _renderShell();
     _renderBody();
+    if (_sectionRestored) {
+      // Mismas cargas lazy por sección que dispara go() en una navegación normal.
+      if (_section === 'settings')  { _loadSendCfg(); _loadAiCfg(); }
+      if (_section === 'inbox')     { _lmMsgs = null; _ibThreads = null; _ibActive = null; _ibThread = null; _ibReload(); _loadLmMsgs(); }
+      if (_section === 'tasks')     { _apList = null; _apReload(); }
+      if (_section === 'leads')     _reloadActivities();
+    }
     // Contador de Inbox en la barra: carga al entrar al módulo y refresca cada 3 min.
     _ibReload();
     if (!_ibPoll) { _ibPoll = setInterval(_ibReload, 3 * 60 * 1000); }
@@ -14724,16 +14742,7 @@ const LeadManagerModule = (() => {
       if (!Array.isArray(_lmTpls)) _lmTpls = [];
       if (!Array.isArray(_mailboxes)) _mailboxes = [];
     } catch (e) { console.warn('[lm] load error:', e.message); _data = []; _clients = []; _campaigns = []; _sequences = []; _steps = []; _activities = []; }
-    // Restaura la última sección (sin parámetros) visitada dentro de Outreach — solo la
-    // primera vez que se entra al módulo en esta carga de página, no en clics posteriores.
-    let _restored = false;
-    if (!_lmBootRestored) {
-      _lmBootRestored = true;
-      let saved = null;
-      try { saved = localStorage.getItem('lm_last_section'); } catch (_) {}
-      if (saved && saved !== _section && saved !== 'client' && saved !== 'sequence' && saved !== 'contact-view') { go(saved); _restored = true; }
-    }
-    if (!_restored) _renderBody();
+    _renderBody();                              // repinta con los datos ya cargados, misma sección — sin saltos
     _loadNavCounts();                          // insignias visibles desde el primer momento
     if (_section === 'dashboard') _loadToday(); // card Hoy del motor de envío
   }
