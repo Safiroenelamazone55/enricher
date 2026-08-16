@@ -4783,6 +4783,20 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 .lm-step__btn:hover { color: #3D3A36; border-color: #DAD5CE; }
 .lm-step__btn--del:hover { color: #DC2626; border-color: #F3C4C4; }
 
+/* Pestaña Pasos: Pasos a la izquierda (medio de pantalla) + fila seleccionable
+   del resto de secciones a la derecha — al elegir una, seqTab() la manda a
+   pantalla completa (ver lm-sec-head--compact) y este split desaparece. */
+.seq-split { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+.seq-split__pasos { background: #fff; border: 1px solid var(--border, #EAE7E2); border-radius: 14px; padding: 2px 18px; max-height: calc(100vh - 260px); min-height: 220px; overflow-y: auto; }
+.seq-split__nav { background: #fff; border: 1px solid var(--border, #EAE7E2); border-radius: 14px; padding: 8px; display: flex; flex-direction: column; }
+.seq-side-nav__row { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; background: none; border: none; border-radius: 10px; padding: 14px; font-family: inherit; font-size: .88rem; font-weight: 600; color: #1F1D1B; cursor: pointer; transition: background .12s; }
+.seq-side-nav__row:hover { background: var(--surface-hover, #F7F5F2); }
+.seq-side-nav__row + .seq-side-nav__row { border-top: 1px solid #F1EFEB; }
+.seq-side-nav__lbl { flex: 1; }
+.seq-side-nav__n { font-size: .74rem; font-weight: 700; color: var(--text-muted, #918C85); background: var(--surface-secondary, #F1EFEB); border-radius: 999px; padding: 2px 9px; }
+.seq-side-nav__chev { color: #CFCAC3; font-size: .8rem; }
+@media (max-width: 900px) { .seq-split { grid-template-columns: 1fr; } .seq-split__pasos { max-height: none; } }
+
 /* Actividades / tareas comerciales (Fase 4) */
 .lm-feed { background: #fff; border: 1px solid var(--border, #EAE7E2); border-radius: 18px; padding: 6px 16px; box-shadow: 0 1px 2px rgba(28,25,23,.03); }
 .lm-feed--mini { padding: 0; box-shadow: none; border: none; background: none; }

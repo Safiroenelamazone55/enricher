@@ -15781,7 +15781,33 @@ ${foot}
         <div id="seq-ab-wrap">${_seqAbHtml(id)}</div>`;
     }
     const _states = steps.length ? _stepStates(steps) : [];
-    return `<div class="lm-seq-tl">${steps.length ? steps.map((st, i) => _stepRow(st, _states[i])).join('') : `<div class="lm-act-empty"><div class="lm-act-empty__i">🪜</div><p>Esta secuencia no tiene pasos</p><span>Agrega el primero (Día 1 · Email).</span></div>`}</div>`;
+    const pasosHtml = `<div class="lm-seq-tl">${steps.length ? steps.map((st, i) => _stepRow(st, _states[i])).join('') : `<div class="lm-act-empty"><div class="lm-act-empty__i">🪜</div><p>Esta secuencia no tiene pasos</p><span>Agrega el primero (Día 1 · Email).</span></div>`}</div>`;
+    return `<div class="seq-split"><div class="seq-split__pasos">${pasosHtml}</div><div class="seq-split__nav">${_seqSideNav(id)}</div></div>`;
+  }
+  // Panel derecho junto a Pasos: fila seleccionable con el resto de secciones —
+  // al elegir una, seqTab() ya se encarga de que ocupe el 100% (ver _vSequenceDetail,
+  // el header solo se expande completo cuando _seqTab === 'pasos').
+  function _seqSideNav(id) {
+    const s = _sequences.find(x => x.id === id) || {};
+    const today0 = new Date(new Date().toDateString());
+    const taskN = (Array.isArray(_seqContacts) || Array.isArray(_seqPendingCos))
+      ? (Array.isArray(_seqContacts) ? _seqTasks(id).filter(t => t.due <= today0).length : 0)
+        + (Array.isArray(_seqPendingCos) ? _seqCoTasks(id).filter(t => t.due <= today0).length : 0)
+        + (s.awaiting || 0)
+      : null;
+    const rows = [
+      ['empresas', 'Empresas', Array.isArray(_seqPendingCos) ? _seqPendingCos.length : null],
+      ['contactos', 'Contactos', Array.isArray(_seqContacts) ? _seqContacts.length : null],
+      ['tareas', 'Tareas', taskN],
+      ['metricas', 'Métricas', null],
+      ['envios', 'Envíos', null],
+    ];
+    if (s.send_mode === 'preaprobado' || (s.awaiting || 0) > 0) rows.push(['aprobar', 'Aprobar', (s.awaiting || 0) || null]);
+    return rows.map(([key, label, n]) => `<button class="seq-side-nav__row" onclick="LeadManagerModule.seqTab('${key}')">
+      <span class="seq-side-nav__lbl">${label}</span>
+      ${n != null ? `<span class="seq-side-nav__n">${n}</span>` : ''}
+      <span class="seq-side-nav__chev">›</span>
+    </button>`).join('');
   }
   function _seqCtRow(e, steps, seqId) {
     const full = [e.nombre, e.apellido].filter(Boolean).join(' ') || (e.email || '—');
