@@ -17684,6 +17684,14 @@ ${foot}
         ${_ibBodyHtml(m.cuerpo)}
       </div>`;
     }
+    // Reenvío: SÍ es un email real (por eso lleva "buzón"), pero no es una
+    // respuesta al prospecto — va marcado aparte para no confundirlo con eso.
+    if (m.dir === 'fwd') {
+      return `<div class="ibx-m ibx-m--fwd">
+        <div class="ibx-m__meta">↗ Reenviado a ${esc(m.buzon || '')} · ${when}</div>
+        ${_ibBodyHtml(m.cuerpo)}
+      </div>`;
+    }
     const inMsg = m.dir === 'in';
     // Envío programado pendiente: burbuja punteada con hora y botón para cancelar.
     if (!inMsg && m.estado === 'scheduled') {
@@ -17714,6 +17722,8 @@ ${foot}
     const item = (label, onclick, dot) => `<button class="cp-mark-menu__b" onclick="${close};${onclick}">${dot ? `<span class="cp-mark-dot" style="background:${dot}"></span>` : ''}${label}</button>`;
     const quick = _DISPOS.filter(d => d[0] !== 'aceptado');
     let html = `<div class="cp-mark-menu__grid">` + item('＋ Registrar respuesta', `LeadManagerModule.cpOpenRegisterReply(${cid})`) + `</div>`;
+    html += `<div class="cp-mark-menu__sep"></div>`;
+    html += `<div class="cp-mark-menu__grid">` + item('↗ Reenviar', `LeadManagerModule.ibSetMode('fwd')`) + item('🗒 Nota interna', `LeadManagerModule.ibSetMode('note')`) + `</div>`;
     html += `<div class="cp-mark-menu__sep"></div>`;
     html += `<div class="cp-mark-menu__h">Resolver respuesta</div>`;
     html += `<div class="cp-mark-menu__grid">` + quick.map(d => item(esc(d[1]), `LeadManagerModule.ibResolveDisp(${cid},'${d[0]}')`, d[2])).join('') + `</div>`;
@@ -17785,10 +17795,11 @@ ${foot}
   // llegue algo al prospecto por error. Mismo patrón que HubSpot/Front/Intercom.
   function _ibReplyboxHtml(c) {
     const canSend = !!c.mailbox_id;
-    const mode = _ibMode === 'note' ? 'note' : 'reply';
+    const mode = _ibMode === 'note' ? 'note' : _ibMode === 'fwd' ? 'fwd' : 'reply';
     const modeToggle = c.id ? `
       <div class="ibx-replymode">
         <button class="ibx-replymode__b${mode === 'reply' ? ' active' : ''}" onclick="LeadManagerModule.ibSetMode('reply')">Responder</button>
+        <button class="ibx-replymode__b${mode === 'fwd' ? ' active' : ''}" onclick="LeadManagerModule.ibSetMode('fwd')">Reenviar</button>
         <button class="ibx-replymode__b${mode === 'note' ? ' active' : ''}" onclick="LeadManagerModule.ibSetMode('note')">Nota interna</button>
       </div>` : '';
     if (mode === 'note') {
@@ -17798,6 +17809,25 @@ ${foot}
           <textarea class="ibx-ta" id="ibx-ta" rows="3" placeholder="Escribe una nota interna — no se envía nada, solo la ve tu equipo…"></textarea>
           <div class="ibx-sendgrp">
             <button class="btn btn--primary btn--sm" id="ibx-send" onclick="LeadManagerModule.ibSaveNote()">Guardar nota</button>
+          </div>
+        </div>
+      </div>`;
+    }
+    if (mode === 'fwd') {
+      const msgs = _ibThread.messages || [];
+      const total = msgs.length;
+      if (!canSend) return `<div class="ibx-replybox">${modeToggle}<div class="ibx-nosend">El cliente <b>${esc(c.cliente || '')}</b> no tiene buzón conectado — conéctalo en su ficha para reenviar desde aquí.</div></div>`;
+      return `<div class="ibx-replybox">
+        ${modeToggle}
+        <div class="ibx-dest">
+          <span class="ibx-dest__k">Para</span>
+          <input class="ibx-dest__i" id="ibx-fwd-to" placeholder="email de la persona (separá varios con coma)…">
+        </div>
+        ${total ? `<div class="ibx-fwd-hint">Se reenvía el correo que estás viendo ahora (${Math.min(_ibMsgIdx, total - 1) + 1} de ${total}), citado debajo de lo que escribas.</div>` : ''}
+        <div class="ibx-tawrap">
+          <textarea class="ibx-ta" id="ibx-ta" rows="3" placeholder="Tu mensaje para quien lo reciba…"></textarea>
+          <div class="ibx-sendgrp">
+            <button class="btn btn--primary btn--sm" id="ibx-send" onclick="LeadManagerModule.ibForward()">Reenviar</button>
           </div>
         </div>
       </div>`;
@@ -17828,7 +17858,7 @@ ${foot}
     </div>`;
   }
   function ibSetMode(mode) {
-    _ibMode = mode === 'note' ? 'note' : 'reply';
+    _ibMode = (mode === 'note' || mode === 'fwd') ? mode : 'reply';
     const rb = document.querySelector('.ibx-replybox');
     if (rb) rb.outerHTML = _ibReplyboxHtml((_ibThread && _ibThread.contact) || {});
   }
@@ -17979,6 +18009,39 @@ ${foot}
       showBanner('✓ Nota guardada — no se envió ningún correo', 'success');
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
     finally { _ibSending = false; const b = document.getElementById('ibx-send'); if (b) { b.disabled = false; b.textContent = 'Guardar nota'; } }
+  }
+  // Reenviar: manda el correo que se está viendo del hilo (paginado) a alguien
+  // que NO es el prospecto — un compañero, alguien nuevo, quien sea. Sale del
+  // mismo buzón conectado, así que si esa persona responde, el vigilante IMAP
+  // ya lo captura solo en este mismo hilo (tipo='equipo').
+  async function ibForward() {
+    if (_ibSending || !_ibActive) return;
+    const toEl = document.getElementById('ibx-fwd-to');
+    const to = (toEl?.value || '').trim();
+    if (!to || !to.includes('@')) { showBanner('Escribe al menos un email válido en "Para"', 'info'); return; }
+    const ta = document.getElementById('ibx-ta'); const texto = (ta?.value || '').trim();
+    const msgs = _ibThread?.messages || [];
+    const orig = msgs[Math.min(_ibMsgIdx, msgs.length - 1)];
+    if (!orig) { showBanner('No hay ningún correo para reenviar', 'info'); return; }
+    _ibSending = true;
+    const btn = document.getElementById('ibx-send'); if (btn) { btn.disabled = true; btn.textContent = 'Reenviando…'; }
+    try {
+      const origFrom = orig.dir === 'out' ? 'Tú' : orig.dir === 'note' ? 'Nota interna' : (orig.buzon || '');
+      const body = {
+        contact_id: _ibActive, to, texto,
+        orig_asunto: orig.asunto || '', orig_cuerpo: orig.cuerpo || '', orig_from: origFrom, orig_at: orig.at || '',
+      };
+      const res = await apiFetch(`${API}/lm/inbox/forward`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'No se pudo reenviar');
+      if (_ibThread) {
+        _ibThread.messages.push({ dir: 'fwd', id: d.fwd?.id, cuerpo: texto, at: d.fwd?.sent_at || new Date().toISOString(), tipo: 'fwd', buzon: to });
+        _ibMsgIdx = _ibThread.messages.length - 1;
+      }
+      _ibPaint();
+      showBanner(`✓ Reenviado a ${to}`, 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+    finally { _ibSending = false; const b = document.getElementById('ibx-send'); if (b) { b.disabled = false; b.textContent = 'Reenviar'; } }
   }
   async function ibSend(schedIso) {
     if (_ibSending || !_ibActive) return;
@@ -22871,7 +22934,7 @@ ${foot}
     mbSignatureOpen, mbSignaturePreview, mbSignatureClear, mbSignatureInsertLink, mbSignatureImg, mbSignatureSave,
     mbAdminConsentSync, mbAdminConsentToggleHtml,
     mbAdminConsentSetSigner, mbAdminConsentAddChip, mbAdminConsentRmChip, mbAdminConsentInputKey, mbAdminConsentClearRecipients,
-    ibOpen, ibTab, ibCli, ibDisp, ibSend, ibSaveNote, ibSetMode, ibMsgNav, ibSchedToggle, ibSchedPick, ibCancelSched, ibResolveDisp, ibOpenResolveMenu,
+    ibOpen, ibTab, ibCli, ibDisp, ibSend, ibSaveNote, ibForward, ibSetMode, ibMsgNav, ibSchedToggle, ibSchedPick, ibCancelSched, ibResolveDisp, ibOpenResolveMenu,
     ibRowMenu, ibCloseMenu, ibMarkUnread,
     pendingAcceptOpen, pendingAcceptToggleAll, pendingAcceptApplyFilters, pendingAcceptMark,
     openActivityDrawer, closeActivityDrawer, saveActivity, confirmDeleteActivity, markActDone,

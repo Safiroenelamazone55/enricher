@@ -5136,6 +5136,10 @@ app.get('/api/lm/inbox/thread/:contactId', requireAuth, async (req, res) => {
         SELECT 'note', n.id, '', n.texto, n.created_at, '', 'nota', '', NULL, n.autor
           FROM lm_notes n
          WHERE n.user_id=$1 AND n.contact_id=$2
+        UNION ALL
+        SELECT 'fwd', f.id, f.asunto, f.cuerpo, f.sent_at, '', 'fwd', '', NULL, f.to_email
+          FROM lm_forwards f
+         WHERE f.user_id=$1 AND f.contact_id=$2
       ) t ORDER BY at ASC NULLS FIRST
     `, [req.workspaceOwnerId, cid]);
     await pool.query(`UPDATE lm_inbox_messages SET leido=TRUE WHERE user_id=$1 AND contact_id=$2 AND NOT leido`,
@@ -5283,6 +5287,60 @@ app.post('/api/lm/inbox/reply', requireAuth, async (req, res) => {
     res.status(201).json({ ok: true, message: msg, to, cc });
   } catch (err) {
     console.error('[inbox] REPLY', err.message);
+    res.status(500).json({ error: mailboxSvc._friendlyErr(err) });
+  }
+});
+
+// Reenviar (Forward): manda por email real el mensaje que se está viendo del
+// hilo a alguien que NO es el prospecto (un compañero, alguien nuevo) — sale
+// del MISMO buzón, así que si esa persona responde, el vigilante IMAP ya lo
+// captura solo en este mismo hilo (tipo='equipo'). Se guarda en lm_forwards,
+// separado de lm_messages, para no contar como "ya le respondí al prospecto".
+app.post('/api/lm/inbox/forward', requireAuth, async (req, res) => {
+  const b = req.body || {};
+  const cid = parseInt(b.contact_id);
+  const to = String(b.to || '').trim();
+  const texto = String(b.texto || '').trim();
+  if (!cid || !to) return res.status(400).json({ error: 'Falta el contacto o el destinatario' });
+  try {
+    const { rows: [k] } = await pool.query(
+      `SELECT k.*, mb.id AS mb_id FROM lm_contacts k
+        LEFT JOIN lm_mailboxes mb ON mb.outbound_client_id = k.outbound_client_id
+             AND mb.user_id = k.user_id AND mb.estado IN ('conectado','solo_envio')
+       WHERE k.id=$1 AND k.user_id=$2`, [cid, req.workspaceOwnerId]);
+    if (!k) return res.status(404).json({ error: 'Contacto no encontrado' });
+    if (!k.mb_id) return res.status(400).json({ error: 'El cliente de este contacto no tiene buzón conectado' });
+    const { rows: [mb] } = await pool.query(`SELECT * FROM lm_mailboxes WHERE id=$1`, [k.mb_id]);
+
+    const origAsunto = String(b.orig_asunto || '').trim();
+    const origCuerpo = String(b.orig_cuerpo || '');
+    const origFrom   = String(b.orig_from || '').trim();
+    const origAt     = b.orig_at ? new Date(b.orig_at) : null;
+    const origAtStr  = origAt && !isNaN(origAt) ? origAt.toLocaleString('es-PE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+
+    const asunto = origAsunto ? (/^fwd:/i.test(origAsunto) ? origAsunto : `Fwd: ${origAsunto}`) : 'Fwd: (sin asunto)';
+    const cuerpo = `${texto}${texto ? '\n\n' : ''}---------- Mensaje reenviado ----------\n`
+      + `${origFrom ? `De: ${origFrom}\n` : ''}${origAtStr ? `Fecha: ${origAtStr}\n` : ''}${origAsunto ? `Asunto: ${origAsunto}\n` : ''}\n${origCuerpo}`;
+
+    const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const html = `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.55;color:#1a1a2e">${esc(texto).replace(/\n/g, '<br>')}`
+      + `<div style="margin-top:14px;padding-top:10px;border-top:1px solid #ddd;color:#555;font-size:13px">`
+      + `<b>---------- Mensaje reenviado ----------</b><br>`
+      + `${origFrom ? `De: ${esc(origFrom)}<br>` : ''}${origAtStr ? `Fecha: ${esc(origAtStr)}<br>` : ''}${origAsunto ? `Asunto: ${esc(origAsunto)}<br>` : ''}`
+      + `<br>${esc(origCuerpo).replace(/\n/g, '<br>')}</div></div>`;
+
+    const auth = await mailboxSvc.getMailboxAuth(pool, mb);
+    const sent = await mailboxSvc.sendFromMailbox(mb, auth, {
+      to, subject: asunto, text: cuerpo, html,
+      fromName: mb.from_name || undefined,
+    });
+    const { rows: [fwd] } = await pool.query(
+      `INSERT INTO lm_forwards (user_id, contact_id, mailbox_id, to_email, asunto, cuerpo, smtp_message_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, to_email, asunto, cuerpo, sent_at`,
+      [req.workspaceOwnerId, cid, mb.id, to, asunto, texto, sent.messageId || '']);
+    res.status(201).json({ ok: true, fwd });
+  } catch (err) {
+    console.error('[inbox] FORWARD', err.message);
     res.status(500).json({ error: mailboxSvc._friendlyErr(err) });
   }
 });

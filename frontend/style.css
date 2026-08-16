@@ -13428,6 +13428,12 @@ td.ldh-acts { padding-left: 6px; padding-right: 10px; }
    ámbar, para que salte a la vista que nunca se envió como email. */
 .ibx-m--note { align-self: center; width: 96%; max-width: 96%; background: var(--warning-soft, #FFF5DF); border: 1px dashed var(--warning, #D58A16); }
 .ibx-m--note .ibx-m__meta { color: var(--warning, #D58A16); font-weight: 600; }
+/* Reenvío: SÍ es un email real (por eso a la derecha, como "saliente"), pero
+   NO al prospecto — mismo tono índigo que "Equipo" (misma familia: hilo con
+   el equipo, solo que en esta dirección salió de acá). */
+.ibx-m--fwd { align-self: flex-end; background: rgba(99,102,241,.10); border: 1px solid rgba(99,102,241,.25); border-bottom-right-radius: 3px; }
+.ibx-m--fwd .ibx-m__meta { color: #4F46E5; font-weight: 600; }
+.ibx-fwd-hint { font-size: .68rem; color: var(--text-muted); padding: 2px 2px 6px; }
 .ibx-m__subj { font-size: .7rem; font-weight: 600; color: var(--text-primary); margin-bottom: 2px; }
 .ibx-m__body { color: var(--text-primary); word-break: break-word; }
 /* Historial citado (firma/hilo anterior que el correo repite) plegado por

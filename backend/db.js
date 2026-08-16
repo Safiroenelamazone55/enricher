@@ -1314,6 +1314,27 @@ async function initDb() {
     await pool.query(`CREATE INDEX IF NOT EXISTS lm_notes_contact_idx ON lm_notes (contact_id);`);
     await pool.query(`CREATE INDEX IF NOT EXISTS lm_notes_user_idx    ON lm_notes (user_id, created_at DESC);`);
 
+    // lm_forwards: reenvíos reales por email a alguien que NO es el prospecto (un
+    // compañero, alguien nuevo) — "Reenviar" del Inbox. Va en tabla propia, separada
+    // de lm_messages, para que NO cuente como "ya le respondí al prospecto" en las
+    // métricas/estado del hilo (last_out_at, sent_count, etc.) — es una conversación
+    // interna que sale por el mismo buzón, no una respuesta al prospecto.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS lm_forwards (
+        id               SERIAL      PRIMARY KEY,
+        user_id          INTEGER     REFERENCES users(id)       ON DELETE CASCADE,
+        contact_id       INTEGER     REFERENCES lm_contacts(id) ON DELETE CASCADE,
+        mailbox_id       INTEGER     REFERENCES lm_mailboxes(id) ON DELETE SET NULL,
+        to_email         TEXT        NOT NULL DEFAULT '',
+        asunto           TEXT        NOT NULL DEFAULT '',
+        cuerpo           TEXT        NOT NULL DEFAULT '',
+        smtp_message_id  TEXT        NOT NULL DEFAULT '',
+        sent_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS lm_forwards_contact_idx ON lm_forwards (contact_id);`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS lm_forwards_user_idx    ON lm_forwards (user_id, sent_at DESC);`);
+
     // lm_messages: cada email real enviado por el motor (asunto/cuerpo ya renderizados).
     // estado: queued | sent | bounced | replied | failed
     await pool.query(`
