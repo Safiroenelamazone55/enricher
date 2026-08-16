@@ -4758,47 +4758,62 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 .lm-seq__dot { width: 10px; height: 10px; border-radius: 50%; }
 .lm-seq__none { font-size: .72rem; color: #B4AFA8; }
 .lm-seq-tl { background: #fff; border: 1px solid var(--border, #EAE7E2); border-radius: 18px; padding: 6px 16px; box-shadow: 0 1px 2px rgba(28,25,23,.03); }
-.lm-step { display: grid; grid-template-columns: 44px 30px 1fr auto; align-items: center; gap: 12px; padding: 12px 0; }
+.lm-step { display: flex; align-items: flex-start; gap: 10px; padding: 12px 4px; cursor: pointer; min-width: 0; }
 .lm-step + .lm-step { border-top: 1px solid #F1EFEB; }
-.lm-step__day { text-align: center; }
-.lm-step__day span { display: block; font-size: .55rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #B4AFA8; }
-.lm-step__day b { font-size: 1.1rem; font-weight: 800; color: #1F1D1B; font-variant-numeric: tabular-nums; }
-.lm-step__rail { position: relative; display: flex; align-self: stretch; align-items: center; justify-content: center; }
-.lm-step__rail::before { content: ''; position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; background: #EAE7E2; transform: translateX(-50%); }
+.lm-step:hover { background: var(--surface-hover, #F7F5F2); }
+.lm-step__rail { position: relative; display: flex; align-self: stretch; align-items: center; justify-content: center; flex-shrink: 0; }
+.lm-step__rail::before { content: ''; position: absolute; left: 50%; top: -12px; bottom: -12px; width: 2px; background: #EAE7E2; transform: translateX(-50%); }
+.lm-step:first-child .lm-step__rail::before { top: 50%; }
+.lm-step:last-child .lm-step__rail::before { bottom: 50%; }
 /* Tracker de envíos: check verde (ya pasó) / círculo azul (paso actual) / círculo gris (todavía no) */
 .lm-step__node { position: relative; z-index: 1; width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: .72rem; font-weight: 800; font-variant-numeric: tabular-nums; flex-shrink: 0; }
 .lm-step--done .lm-step__node { background: #15803D; color: #fff; }
 .lm-step--current .lm-step__node { background: var(--brand, #007AFF); color: #fff; box-shadow: 0 0 0 4px rgba(0,122,255,.16); }
 .lm-step--future .lm-step__node { background: #fff; border: 2px solid #EAE7E2; color: #B4AFA8; }
-.lm-step__body { min-width: 0; }
+.lm-step__ico { flex-shrink: 0; width: 26px; height: 26px; border-radius: 8px; display: flex; align-items: center; justify-content: center; margin-top: 2px; }
+.lm-step__body { flex: 1; min-width: 0; }
 .lm-step__top { display: flex; align-items: center; gap: 6px 8px; flex-wrap: wrap; }
 .lm-step__t { font-size: .86rem; font-weight: 650; color: #1F1D1B; }
 .lm-step--current .lm-step__t { color: var(--brand, #007AFF); font-weight: 800; }
-.lm-step--future .lm-step__t, .lm-step--future .lm-step__canal, .lm-step--future .lm-step__day b, .lm-step--future .lm-step__cal { color: #B4AFA8; }
-.lm-step__canal { font-size: .64rem; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
-.lm-step__tpl { font-size: .74rem; color: #918C85; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 520px; }
-.lm-step__acts { display: flex; gap: 4px; opacity: 0; transition: opacity .12s; }
-.lm-step:hover .lm-step__acts { opacity: 1; }
+.lm-step--future .lm-step__t { color: #B4AFA8; }
+.lm-step__tpl { font-size: .74rem; color: #918C85; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lm-step__status { flex-shrink: 0; text-align: right; display: flex; flex-direction: column; gap: 1px; }
+.lm-step__status__lbl { font-size: .72rem; font-weight: 700; white-space: nowrap; }
+.lm-step--done .lm-step__status__lbl { color: #15803D; }
+.lm-step--current .lm-step__status__lbl { color: var(--brand, #007AFF); }
+.lm-step--future .lm-step__status__lbl { color: #B4AFA8; }
+.lm-step__status__at { font-size: .66rem; color: #B4AFA8; white-space: nowrap; }
+.lm-step__chev { flex-shrink: 0; color: #CFCAC3; font-size: .82rem; align-self: center; }
+.lm-step__del { flex-shrink: 0; width: 24px; height: 24px; border: none; background: none; color: #CFCAC3; cursor: pointer; display: none; align-items: center; justify-content: center; border-radius: 6px; align-self: center; }
+.lm-step:hover .lm-step__del { display: inline-flex; }
+.lm-step__del:hover { color: #DC2626; background: #FCEBEB; }
 .lm-step__btn { width: 26px; height: 26px; border: 1px solid var(--border, #EAE7E2); background: #fff; border-radius: 7px; color: #B4AFA8; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
 .lm-step__btn:hover { color: #3D3A36; border-color: #DAD5CE; }
 .lm-step__btn--del:hover { color: #DC2626; border-color: #F3C4C4; }
 
-/* Pestaña Pasos: Pasos a la izquierda (medio de pantalla) + fila seleccionable
-   del resto de secciones a la derecha — al elegir una, seqTab() la manda a
-   pantalla completa (ver lm-sec-head--compact) y este split desaparece. */
+/* Pestaña Pasos: tarjeta de pasos colapsable a la izquierda + panel derecho fijo
+   (fila de KPIs seleccionable + contenido de esa sección) — cambiar de sección
+   ya NO oculta Pasos; eso solo lo hace el botón «/›. */
 .seq-split { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; margin-top: 14px; }
-.seq-split__pasos { background: #fff; border: 1px solid var(--border, #EAE7E2); border-radius: 14px; padding: 0 18px 14px; display: flex; flex-direction: column; min-width: 0; max-height: calc(100vh - 220px); min-height: 320px; }
-.lm-seqhd { flex-shrink: 0; padding-top: 16px; padding-bottom: 12px; border-bottom: 1px solid #F1EFEB; }
+.seq-split--closed { grid-template-columns: auto 1fr; }
+.seq-split__pasos { position: relative; background: #fff; border: 1px solid var(--border, #EAE7E2); border-radius: 14px; padding: 0 18px 14px; display: flex; flex-direction: column; min-width: 0; max-height: calc(100vh - 220px); min-height: 320px; }
+.lm-seqhd { flex-shrink: 0; padding: 16px 34px 12px 0; border-bottom: 1px solid #F1EFEB; position: relative; }
 .lm-seqhd .lm-sec-title { font-size: 1.08rem; }
 .lm-seqhd__acts { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.seq-collapse-btn { position: absolute; top: 14px; right: 0; width: 26px; height: 26px; border: 1px solid var(--border, #EAE7E2); background: #fff; border-radius: 7px; color: #918C85; cursor: pointer; font-size: .8rem; line-height: 1; }
+.seq-collapse-btn:hover { color: #3D3A36; border-color: #DAD5CE; }
+.seq-collapse-strip { align-self: stretch; width: 30px; border: 1px solid var(--border, #EAE7E2); background: #fff; border-radius: 14px; color: #918C85; cursor: pointer; font-size: 1rem; }
+.seq-collapse-strip:hover { color: #3D3A36; background: var(--surface-hover, #F7F5F2); }
 .seq-split .lm-seq-tl { flex: 1 1 auto; min-height: 0; min-width: 0; overflow-y: auto; overflow-x: hidden; background: none; border: none; box-shadow: none; padding: 0; border-radius: 0; }
-.seq-split__nav { background: #fff; border: 1px solid var(--border, #EAE7E2); border-radius: 14px; padding: 8px; display: flex; flex-direction: column; }
-.seq-side-nav__row { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; background: none; border: none; border-radius: 10px; padding: 14px; font-family: inherit; font-size: .88rem; font-weight: 600; color: #1F1D1B; cursor: pointer; transition: background .12s; }
-.seq-side-nav__row:hover { background: var(--surface-hover, #F7F5F2); }
-.seq-side-nav__row + .seq-side-nav__row { border-top: 1px solid #F1EFEB; }
-.seq-side-nav__lbl { flex: 1; }
-.seq-side-nav__n { font-size: .74rem; font-weight: 700; color: var(--text-muted, #918C85); background: var(--surface-secondary, #F1EFEB); border-radius: 999px; padding: 2px 9px; }
-.seq-side-nav__chev { color: #CFCAC3; font-size: .8rem; }
+.seq-split__right { min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+.seq-stat-tabs { display: flex; gap: 4px; background: #fff; border: 1px solid var(--border, #EAE7E2); border-radius: 14px; padding: 6px; overflow-x: auto; }
+.seq-stat-tab { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 9px 6px; border: none; background: none; border-radius: 9px; cursor: pointer; color: #918C85; font-family: inherit; }
+.seq-stat-tab:hover { background: var(--surface-hover, #F7F5F2); }
+.seq-stat-tab.active { background: var(--primary-soft, #EAF2FF); color: var(--brand, #007AFF); }
+.seq-stat-tab__lbl { font-size: .68rem; font-weight: 600; white-space: nowrap; }
+.seq-stat-tab__n { font-size: 1.05rem; font-weight: 800; color: #1F1D1B; font-variant-numeric: tabular-nums; }
+.seq-stat-tab.active .seq-stat-tab__n { color: var(--brand, #007AFF); }
+.seq-split__content { min-width: 0; }
 @media (max-width: 900px) { .seq-split { grid-template-columns: 1fr; } .seq-split__pasos { max-height: none; } }
 
 /* Actividades / tareas comerciales (Fase 4) */
