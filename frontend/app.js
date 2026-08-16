@@ -19338,13 +19338,13 @@ ${foot}
   // Filtros de Leads: los GRUPOS (pos/der/desc) suman exactamente el total; debajo, los
   // estados individuales. Cada lead cae en un solo grupo y en un solo estado → los
   // números siempre cuadran, aunque se combinen varios chips.
-  let _ldPills = [], _ldCli = '', _ldSeq = '', _ldCamp = '', _ldQ = '';
+  let _ldSel = '', _ldCli = '', _ldSeq = '', _ldCamp = '', _ldQ = '';
   function _ldMatchPill(c, pill) {
     const d = c.disposition || '';
     if (['pos', 'der', 'desc'].includes(pill)) return _dispGrupo(d) === pill;
     return d === pill;
   }
-  function _ldMatchSel(c) { return !_ldPills.length || _ldPills.some(p => _ldMatchPill(c, p)); }
+  function _ldMatchSel(c) { return !_ldSel || _ldMatchPill(c, _ldSel); }
   // Paso en el que está el contacto dentro de su secuencia (donde respondió).
   function _ldPaso(c) {
     const sq = (c.sequences || [])[0]; if (!sq) return '';
@@ -19387,30 +19387,30 @@ ${foot}
         <div class="lm-hd-actions"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openContact()">＋ Agregar prospecto</button></div>
       </div>
       <div class="ldh-toolbar">
-        <div class="ldh-pills" id="ldh-pills"></div>
-        <span class="ldh-toolbar__sp"></span>
+        <select class="ldh-sel" id="ldh-res" onchange="LeadManagerModule.ldSetResult(this.value)"></select>
         <select class="ldh-sel" id="ldh-cli" onchange="LeadManagerModule.ldSetCli(this.value)"></select>
         <select class="ldh-sel" id="ldh-seq" onchange="LeadManagerModule.ldSetSeq(this.value)"></select>
         <select class="ldh-sel" id="ldh-camp" onchange="LeadManagerModule.ldSetCamp(this.value)"></select>
+        <span class="ldh-toolbar__sp"></span>
         <div class="lm-search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" id="ldh-q" placeholder="Buscar lead…" oninput="LeadManagerModule.ldSetQ(this.value)"></div>
         <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.ldExport()" title="Exporta lo que ves (con los filtros aplicados) a Excel">${_ico('down')} Exportar</button>
       </div>
       <div id="ldh-wrap"></div>`;
   }
   function _ldPaint() {
-    const pillsEl = $('ldh-pills'), wrap = $('ldh-wrap');
-    if (!pillsEl || !wrap) return;
+    const resEl = $('ldh-res'), wrap = $('ldh-wrap');
+    if (!resEl || !wrap) return;
     const base = _ldBase();
     const cnt = p => base.filter(c => _ldMatchPill(c, p)).length;
-    // Fila 1: Todos + los 3 grupos (suman el total). Fila 2: estados individuales.
-    // Solo se listan los estados que existen en los datos (no llenar de chips en cero).
-    const grupos = _DISP_GRUPOS.map(([k, l]) => `<button class="ldh-pill${_ldPills.includes(k) ? ' on' : ''}" onclick="LeadManagerModule.ldPill('${k}')" title="Grupo — se puede combinar con otros">${l}<span>${cnt(k)}</span></button>`).join('');
-    const estados = _DISPOS.filter(d => cnt(d[0]) > 0 || _ldPills.includes(d[0]))
-      .map(d => `<button class="ldh-pill ldh-pill--sm${_ldPills.includes(d[0]) ? ' on' : ''}" onclick="LeadManagerModule.ldPill('${d[0]}')">${d[1]}<span>${cnt(d[0])}</span></button>`).join('');
-    pillsEl.innerHTML = `<div class="ldh-pillrow">
-        <button class="ldh-pill${!_ldPills.length ? ' on' : ''}" onclick="LeadManagerModule.ldPill('')" title="Quitar el filtro de resultado">Todos<span>${base.length}</span></button>
-        <span class="ldh-pillsep"></span>${grupos}
-      </div>${estados ? `<div class="ldh-pillrow ldh-pillrow--sub">${estados}</div>` : ''}`;
+    // Un solo desplegable: Todos, luego los 3 grupos (suman el total) y, aparte,
+    // los estados individuales — reemplaza las 2 filas de chips que antes se
+    // repetían (el grupo y su único estado mostraban el mismo número dos veces).
+    const grupos = _DISP_GRUPOS.map(([k, l]) => `<option value="${k}"${_ldSel === k ? ' selected' : ''}>${l} (${cnt(k)})</option>`).join('');
+    const estados = _DISPOS.filter(d => cnt(d[0]) > 0 || _ldSel === d[0])
+      .map(d => `<option value="${d[0]}"${_ldSel === d[0] ? ' selected' : ''}>${d[1]} (${cnt(d[0])})</option>`).join('');
+    resEl.innerHTML = `<option value=""${!_ldSel ? ' selected' : ''}>Resultado: todos (${base.length})</option>`
+      + (grupos ? `<optgroup label="Grupo">${grupos}</optgroup>` : '')
+      + (estados ? `<optgroup label="Estado">${estados}</optgroup>` : '');
     const fill = (id, arr, lbl, val) => { const el = $(id); if (el) el.innerHTML = `<option value="">${lbl}</option>` + arr.map(x => `<option value="${x.id}"${String(val) === String(x.id) ? ' selected' : ''}>${esc(x.nombre || x.dominio || ('#' + x.id))}</option>`).join(''); };
     fill('ldh-cli', _clients, 'Cliente: todos', _ldCli);
     fill('ldh-seq', _sequences, 'Secuencia: todas', _ldSeq);
@@ -19467,13 +19467,7 @@ ${foot}
       <thead><tr><th>Lead</th><th>Contacto</th><th>Cliente</th><th>Secuencia · paso</th><th>Resultado</th><th>Fecha</th><th>Nota (clic para editar)</th><th></th></tr></thead>
       <tbody>${rows}</tbody></table></div>`;
   }
-  // Multi-selección: '' = Todos; si no, alterna el chip (se pueden combinar varios).
-  function ldPill(k) {
-    if (!k) _ldPills = [];
-    else if (_ldPills.includes(k)) _ldPills = _ldPills.filter(x => x !== k);
-    else _ldPills = _ldPills.concat(k);
-    _ldPaint();
-  }
+  function ldSetResult(k) { _ldSel = k || ''; _ldPaint(); }
   // Editar la última nota del lead (o crear una si no hay), con el texto precargado.
   async function ldEditNote(cid, actId) {
     const c = _contacts.find(x => x.id === cid); if (!c) return;
@@ -23039,7 +23033,7 @@ ${foot}
     seqDoNoLinkedIn, seqDoBounced, seqDoNoWhatsapp, seqDoNoPhone, lmToggleNoLinkedIn, lmToggleNoWhatsapp, lmToggleNoPhone, lmToggleBounced, lmToggleManualEmail, ctToggleBounced,
     seqDoDataIssue, seqDoDataIssuePick, ctToggleDataIssue, lmResumeDataIssue, seqOpenMark,
     lmSetPageSize, ctGoPage, coGoPage, seqCtSetEstado, seqTaskSetCanal,
-    ldPill, ldSetCli, ldSetSeq, ldSetCamp, ldSetQ, ldAddNote, ldMeet, ldToDeal, ldEditNote, ldExport,
+    ldSetResult, ldSetCli, ldSetSeq, ldSetCamp, ldSetQ, ldAddNote, ldMeet, ldToDeal, ldEditNote, ldExport,
     ldRefer, ldReferSave, ldNurture, ldNurtureSave,
     dlSetCli, dlOpen, dlClose, dlSave,
     sqSetCli, sqSetEst, sqSetQ, cmSetCli, cmSetEst, cmSetQ,

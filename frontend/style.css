@@ -13303,16 +13303,12 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
 .ac-empty { padding: 22px 0; font-size: 12.5px; color: var(--muted, #B4AFA8); text-align: center; line-height: 1.6; }
 
 /* ── Leads hub: respuestas y siguientes pasos (DS v2) ── */
-.ldh-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 2px 0 14px; }
+.ldh-toolbar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 2px 0 14px; }
 .ldh-toolbar__sp { flex: 1; }
-.ldh-pills { display: flex; gap: 6px; flex-wrap: wrap; }
-.ldh-pill { display: inline-flex; align-items: center; gap: 7px; font-family: inherit; font-size: .8rem; font-weight: 500; color: var(--text-secondary); background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 6px 13px; cursor: pointer; transition: background .12s, border-color .12s, color .12s; }
-.ldh-pill span { font-size: .72rem; font-weight: 600; color: var(--text-muted); background: var(--surface-secondary); border-radius: 999px; padding: 1px 7px; }
-.ldh-pill:hover { border-color: var(--border-strong); }
-.ldh-pill.on { background: var(--primary-soft); border-color: var(--primary-border); color: var(--primary-hover); font-weight: 600; }
-.ldh-pill.on span { background: #fff; color: var(--primary-hover); }
+.ldh-toolbar .lm-search { min-width: 170px; }
 .ldh-sel { font-family: inherit; font-size: .8rem; color: var(--text-secondary); background: var(--surface); border: 1px solid var(--border); border-radius: 9px; padding: 7px 10px; cursor: pointer; max-width: 180px; }
 .ldh-sel:focus { outline: none; border-color: var(--primary-border); box-shadow: 0 0 0 3px var(--primary-soft); }
+#ldh-res { max-width: 190px; }
 .ldh-table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow-x: auto; }
 .ldh-table { width: 100%; min-width: 760px; border-collapse: collapse; table-layout: fixed; }
 .ldh-table th { text-align: left; font-size: .72rem; font-weight: 600; color: var(--text-muted); background: var(--surface-secondary); padding: 9px 14px; border-bottom: 1px solid var(--border); white-space: nowrap; }
@@ -13604,13 +13600,6 @@ td.ldh-acts { padding-left: 6px; padding-right: 10px; }
 .ldh-note__in { white-space: pre-wrap; word-break: break-word; line-height: 1.4; max-height: 58px; overflow-y: auto; border-radius: 6px; padding: 4px 6px; font-size: .76rem; transition: background .12s; }
 .ldh-note--full:hover .ldh-note__in { background: var(--primary-soft); }
 .ldh-table td.ldh-note--full { vertical-align: middle; }
-
-/* Chips de Leads en 2 niveles: grupos (suman el total) + estados individuales */
-.ldh-pillrow { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.ldh-pillrow--sub { margin-top: 6px; padding-left: 2px; }
-.ldh-pillsep { width: 1px; height: 18px; background: var(--border); margin: 0 2px; }
-.ldh-pill--sm { font-size: .72rem; padding: 4px 9px; opacity: .92; }
-.ldh-pill--sm span { font-size: .66rem; }
 
 /* ── Tareas · lista: limpieza visual (mismo lenguaje que el dashboard) ──────────
    Cabeceras de grupo sin barra de fondo (solo tipografía + separador), dots y
