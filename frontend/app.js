@@ -17792,7 +17792,7 @@ ${foot}
     document.getElementById('lm-track-modal')?.remove();
     const m = document.createElement('div'); m.id = 'lm-track-modal'; m.className = 'fin-pi-backdrop';
     m.onclick = e => { if (e.target === m) m.remove(); };
-    m.innerHTML = `<div class="fin-pi-box" style="max-width:460px">
+    m.innerHTML = `<div class="fin-pi-box" style="max-width:640px">
       <div class="fin-pi-box__hd"><h3>Acciones del lead</h3><button class="fin-pi-x" onclick="document.getElementById('lm-track-modal').remove()">✕</button></div>
       <div class="lm-track-list" id="lm-track-body" style="max-height:60vh"><div class="fin-cfg-hint">Cargando…</div></div>
     </div>`;
@@ -17812,6 +17812,10 @@ ${foot}
         ...received.map(r => ({ kind: 'received', at: r.received_at, d: r })),
       ].sort((a, b) => new Date(b.at) - new Date(a.at));
       const TIPO_LBL = { reply: 'Respuesta', ooo: 'Auto-respuesta', equipo: 'Equipo', bounce: 'Rebote', nota: 'Nota interna' };
+      // CC completo — antes solo se veía el remitente, no el resto de gente en copia
+      // cuando alguien contesta "a todos".
+      const ccOf = (d, exclude) => (d.cc_emails || '').split(',').map(s => s.trim()).filter(Boolean)
+        .filter(e => !exclude.some(x => x && x.toLowerCase() === e.toLowerCase()));
       const EYE_SVG = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
       const CLICK_SVG = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/><path d="M13 13l6 6"/></svg>';
       let html = '', lastDay = null;
@@ -17819,7 +17823,8 @@ ${foot}
         const dk = dayKey(r.at);
         if (dk !== lastDay) { html += `<div class="lm-track-date">${fmtDate(r.at)}</div>`; lastDay = dk; }
         if (r.kind === 'received') {
-          const sub = [r.d.from_email, r.d.mailbox_email].filter(Boolean).join(' → ');
+          const cc = ccOf(r.d, [r.d.from_email, r.d.mailbox_email]);
+          const sub = [r.d.from_email, r.d.mailbox_email].filter(Boolean).join(' → ') + (cc.length ? ` · CC: ${cc.join(', ')}` : '');
           html += `<div class="lm-track-row">
             <span class="lm-track-row__time">${fmtTime(r.at)}</span>
             <div class="lm-track-row__main">
@@ -17839,11 +17844,13 @@ ${foot}
         const items = [{ label: 'Enviado', at: r.d.sent_at },
           ...opens.map((o, oi) => ({ ico: EYE_SVG, label: opens.length > 1 ? `Abrió (${oi + 1}ª vez)` : 'Abrió el correo', at: o.created_at })),
           ...clicks.map(c => ({ ico: CLICK_SVG, label: `Clic: ${(c.url || '').length > 46 ? c.url.slice(0, 43) + '…' : c.url}`, at: c.created_at }))];
+        const sentCc = ccOf(r.d, [r.d.mailbox_email, r.d.to_email]);
+        const sentSub = r.d.mailbox_email + (sentCc.length ? ` · CC: ${sentCc.join(', ')}` : '');
         html += `<div class="lm-track-row lm-track-row--sent" onclick="const d=document.getElementById('${detId}');d.classList.toggle('hidden');this.querySelector('.lm-track-row__chev').classList.toggle('open')">
           <span class="lm-track-row__time">${fmtTime(r.at)}</span>
           <div class="lm-track-row__main">
             <span class="lm-track-row__lbl">${esc(r.d.asunto || '(sin asunto)')}</span>
-            ${r.d.mailbox_email ? `<span class="lm-track-row__sub">${esc(r.d.mailbox_email)}</span>` : ''}
+            ${r.d.mailbox_email ? `<span class="lm-track-row__sub">${esc(sentSub)}</span>` : ''}
           </div>
           <span class="lm-track-row__badges${badges.length ? '' : ' lm-track-row__nobadge'}">${badges.length ? badges.join('') : 'Sin abrir'}</span>
           <span class="lm-track-row__chev">›</span>
