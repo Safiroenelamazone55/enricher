@@ -17736,8 +17736,8 @@ ${foot}
     html += `<div class="cp-mark-menu__sep"></div>`;
     html += `<div class="cp-mark-menu__list">` + item('Responder', `LeadManagerModule.ibSetMode('reply')`) + item('Reenviar', `LeadManagerModule.ibSetMode('fwd')`) + item('Nota interna', `LeadManagerModule.ibSetMode('note')`) + `</div>`;
     html += `<div class="cp-mark-menu__sep"></div>`;
-    html += `<div class="cp-mark-menu__list">` + item('Crear referido', `LeadManagerModule.ldRefer(${cid},'derivado')`) + `</div>`;
-    html += `<div class="cp-mark-menu__sep"></div>`;
+    // "＋ Crear referido" se sacó de acá: era 100% duplicado de "Derivó a otro" dentro
+    // de "Resolver respuesta" (llamaban a la misma ldRefer(cid,'derivado')).
     html += `<div class="cp-mark-menu__list">` + item('Acciones del lead', `LeadManagerModule.ibShowLeadActions(${cid})`) + `</div>`;
     const menu = document.createElement('div');
     menu.className = 'cp-mark-menu';
