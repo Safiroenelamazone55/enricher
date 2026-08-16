@@ -15079,6 +15079,30 @@ const LeadManagerModule = (() => {
   function sqSetQ(v) { _sqQ = v; _sqPaint(); }
   function openSequence(id) { _activeSeq = id; _section = 'sequence'; _seqTab = 'empresas'; _seqPasosOpen = true; _seqContacts = null; _seqPendingCos = null; _seqMetrics = null; _seqDo = null; _seqCtEstado = ''; _seqTaskCanal = ''; _seqTaskDue = ''; _refreshNav(); _renderBody(); _seqLoadContacts(id); _seqLoadPendingCos(id); }
   function seqPasosToggle() { _seqPasosOpen = !_seqPasosOpen; _renderBody(); }
+  // Informe/Editar/Pausar/Añadir paso — antes una fila de botones en la tarjeta,
+  // ahora agrupados detrás del "⋮" para que la tarjeta quede limpia como el mockup.
+  function seqMoreMenu(ev, seqId) {
+    if (ev && ev.stopPropagation) ev.stopPropagation();
+    document.querySelectorAll('.cp-mark-menu').forEach(m => m.remove());
+    const s = _sequences.find(x => x.id === seqId);
+    const close = "document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove())";
+    const item = (label, onclick) => `<button class="cp-mark-menu__b" onclick="${close};${onclick}">${label}</button>`;
+    let html = `<div class="cp-mark-menu__list">`
+      + item('＋ Añadir paso', `LeadManagerModule.openStepDrawer(${seqId})`)
+      + item('Editar secuencia', `LeadManagerModule.openSequenceDrawer(${seqId})`)
+      + item(s && s.estado === 'pausada' ? '► Reactivar todo' : 'II Pausar todo', s && s.estado === 'pausada' ? `LeadManagerModule.seqResumeAll(${seqId})` : `LeadManagerModule.seqPauseAll(${seqId})`)
+      + item('Informe PDF', `LeadManagerModule.seqReportOpen(${seqId})`)
+      + `</div>`;
+    const menu = document.createElement('div');
+    menu.className = 'cp-mark-menu';
+    menu.style.minWidth = '190px';
+    menu.innerHTML = html;
+    document.body.appendChild(menu);
+    const t = (ev && (ev.currentTarget || ev.target)) || document.body;
+    const r = t.getBoundingClientRect();
+    menu.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 200))}px`;
+    menu.style.top = `${r.bottom + 6}px`;
+  }
   const _TZ = [
     ['', 'Sin zona (sin sugerencia de hora)'],
     ['Europe/Madrid', 'España — Madrid'], ['America/New_York', 'EE. UU. Este — New York'], ['America/Chicago', 'EE. UU. Centro — Chicago'],
@@ -15218,9 +15242,9 @@ const LeadManagerModule = (() => {
     if (so) {
       const d = new Date(so + 'T00:00:00'), today = _dayOf(new Date());
       const future = d > today;
-      out += `<span class="seq-start-chip" title="Fecha de inicio de la secuencia">📅 ${future ? 'Arranca' : 'Inició'} ${d.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}</span>`;
+      out += `<span class="seq-start-chip" title="Fecha de inicio de la secuencia">${NI('calendar', 12)} ${future ? 'Arranca' : 'Inició'} ${d.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}</span>`;
     }
-    if (s.timezone) { const w = _suggestWindow(s.timezone); out += `<span class="seq-tz-chip" title="Zona del prospecto: ${esc(s.timezone)}. Ventana recomendada 9–11 h de su hora local.">🕐 ${esc(_tzShort(s.timezone))} · envía ≈ ${w.her} tu hora</span>`; }
+    if (s.timezone) { const w = _suggestWindow(s.timezone); out += `<span class="seq-tz-chip" title="Zona del prospecto: ${esc(s.timezone)}. Ventana recomendada 9–11 h de su hora local.">${NI('clock', 12)} ${esc(_tzShort(s.timezone))} · envía ≈ ${w.her} tu hora</span>`; }
     return out;
   }
   function tzSearch() {
@@ -15262,18 +15286,17 @@ const LeadManagerModule = (() => {
     const pasosHtml = steps.length ? steps.map((st, i) => _stepRow(st, _states[i])).join('') : `<div class="lm-act-empty"><div class="lm-act-empty__i">🪜</div><p>Esta secuencia no tiene pasos</p><span>Agrega el primero (Día 1 · Email).</span></div>`;
     const pasosCard = _seqPasosOpen ? `<div class="seq-split__pasos">
         <div class="lm-seqhd">
-          <button class="seq-collapse-btn" onclick="LeadManagerModule.seqPasosToggle()" title="Ocultar secuencia">«</button>
-          <h2 class="lm-sec-title">${esc(s.nombre)} ${_seqBadge(s.estado)} ${_seqModeChip(s)}</h2>
-          <p class="lm-sec-sub">${[cli && '◆ ' + esc(cli), cmp && '📣 ' + esc(cmp), s.objetivo && esc(s.objetivo)].filter(Boolean).join(' · ') || 'Secuencia outbound'}</p>
-          ${_seqTzChip(s) ? `<div class="seq-tz-line">${_seqTzChip(s)}</div>` : ''}
-          <div class="lm-seqhd__acts">
-            <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqReportOpen(${s.id})">${_ico('down')} Informe PDF</button>
-            <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openSequenceDrawer(${s.id})">Editar</button>
-            ${s.estado === 'pausada'
-              ? `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqResumeAll(${s.id})">► Reactivar todo</button>`
-              : `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqPauseAll(${s.id})">II Pausar todo</button>`}
-            <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openStepDrawer(${s.id})">＋ Añadir paso</button>
+          <div class="lm-seqhd__btns">
+            <button class="seq-more-btn" onclick="LeadManagerModule.seqMoreMenu(event,${s.id})" title="Más acciones">⋮</button>
+            <button class="seq-collapse-btn" onclick="LeadManagerModule.seqPasosToggle()" title="Ocultar secuencia">«</button>
           </div>
+          <div class="lm-seqhd__top">
+            <span class="lm-seqhd__ico">${NI('send', 15)}</span>
+            <div class="lm-seqhd__badges">${_seqBadge(s.estado)}${_seqModeChip(s)}</div>
+          </div>
+          <h2 class="lm-sec-title">${esc(s.nombre)}</h2>
+          <p class="lm-sec-sub">${s.objetivo ? esc(s.objetivo) : [cli, cmp].filter(Boolean).join(' · ') || 'Secuencia outbound'}</p>
+          ${_seqTzChip(s) ? `<div class="seq-tz-line">${_seqTzChip(s)}</div>` : ''}
         </div>
         <div class="lm-seq-tl">${pasosHtml}</div>
       </div>`
@@ -15308,8 +15331,7 @@ const LeadManagerModule = (() => {
     if (s.send_mode === 'preaprobado' || (s.awaiting || 0) > 0) tabs.push(['aprobar', 'Aprobar', (s.awaiting || 0) || null]);
     return `<div class="seq-stat-tabs">${tabs.map(([key, label, n]) => `<button class="seq-stat-tab${_seqTab === key ? ' active' : ''}" onclick="LeadManagerModule.seqTab('${key}')">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICO[key] || ''}</svg>
-        <span class="seq-stat-tab__lbl">${label}</span>
-        <span class="seq-stat-tab__n">${n != null ? n : '—'}</span>
+        <span class="seq-stat-tab__txt"><span class="seq-stat-tab__lbl">${label}</span><span class="seq-stat-tab__n">${n != null ? n : '—'}</span></span>
       </button>`).join('')}</div>`;
   }
   // ════════════ INFORME PDF DE SECUENCIA (diseño propio, multi-idioma) ════════════
@@ -16619,7 +16641,7 @@ ${foot}
   }
   // Chip del modo de envío en el título de la secuencia.
   function _seqModeChip(s) {
-    const M = { auto: ['⚡ Envío automático', 'var(--primary-soft)', 'var(--primary)'], preaprobado: ['✋ Pre-aprobado', '#F1EFEB', '#A96D0C'] };
+    const M = { auto: ['Envío automático', 'var(--primary-soft)', 'var(--primary)'], preaprobado: ['Pre-aprobado', '#F1EFEB', '#A96D0C'] };
     const m = M[s?.send_mode]; if (!m) return '';
     return `<span class="client-badge" style="background:${m[1]};color:${m[2]};font-size:.62rem;vertical-align:3px">${m[0]}</span>`;
   }
@@ -23105,7 +23127,7 @@ ${foot}
     openDrawer, closeDrawer, save, confirmDelete, convertToClient,
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
     openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
-    openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, confirmDeleteSequence, seqTab, seqPasosToggle, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
+    openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, confirmDeleteSequence, seqTab, seqPasosToggle, seqMoreMenu, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
     seqAppAction, seqAppNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, taskApprove,
     seqTaskOpen, seqDoClose, seqDoCopy, seqDoDone, seqDoSkip, seqDoPrev, seqDoEditStep, seqDoExit, seqOpenLinkedIn,
     openStepDrawer, closeStepDrawer, saveStep, confirmDeleteStep, seqInsertVar, stepUseTpl, tzSearch, tzPick, tzBlur,
