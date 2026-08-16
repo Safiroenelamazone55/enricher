@@ -15272,7 +15272,7 @@ const LeadManagerModule = (() => {
             : _seqTab === 'aprobar' ? '' : `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.seqEnrolOpen(${s.id})">＋ Enrolar contacto</button>`}
         </div>
       </div>
-      <div class="cp-tabs">
+      ${_seqTab === 'pasos' ? '' : `<div class="cp-tabs">
         <button class="cp-tab${_seqTab === 'pasos' ? ' active' : ''}" onclick="LeadManagerModule.seqTab('pasos')">Pasos</button>
         <button class="cp-tab${_seqTab === 'empresas' ? ' active' : ''}" onclick="LeadManagerModule.seqTab('empresas')">Empresas${Array.isArray(_seqPendingCos) ? ` (${_seqPendingCos.length})` : ''}</button>
         <button class="cp-tab${_seqTab === 'contactos' ? ' active' : ''}" onclick="LeadManagerModule.seqTab('contactos')">Contactos${Array.isArray(_seqContacts) ? ` (${_seqContacts.length})` : ''}</button>
@@ -15280,7 +15280,7 @@ const LeadManagerModule = (() => {
         <button class="cp-tab${_seqTab === 'metricas' ? ' active' : ''}" onclick="LeadManagerModule.seqTab('metricas')">Métricas</button>
         <button class="cp-tab${_seqTab === 'envios' ? ' active' : ''}" onclick="LeadManagerModule.seqTab('envios')">Envíos</button>
         ${(s.send_mode === 'preaprobado' || (s.awaiting || 0) > 0) ? `<button class="cp-tab${_seqTab === 'aprobar' ? ' active' : ''}" onclick="LeadManagerModule.seqTab('aprobar')">Aprobar${(s.awaiting || 0) > 0 ? ` <span class="seq-app-n">${s.awaiting}</span>` : ''}</button>` : ''}
-      </div>
+      </div>`}
       <div id="seq-tabwrap">${_seqTabContent(id)}</div>`;
   }
   // ════════════ INFORME PDF DE SECUENCIA (diseño propio, multi-idioma) ════════════

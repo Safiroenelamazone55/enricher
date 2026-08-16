@@ -4786,7 +4786,7 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 /* Pestaña Pasos: Pasos a la izquierda (medio de pantalla) + fila seleccionable
    del resto de secciones a la derecha — al elegir una, seqTab() la manda a
    pantalla completa (ver lm-sec-head--compact) y este split desaparece. */
-.seq-split { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+.seq-split { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; margin-top: 14px; }
 .seq-split__pasos { background: #fff; border: 1px solid var(--border, #EAE7E2); border-radius: 14px; padding: 2px 18px; max-height: calc(100vh - 260px); min-height: 220px; overflow-y: auto; }
 .seq-split__nav { background: #fff; border: 1px solid var(--border, #EAE7E2); border-radius: 14px; padding: 8px; display: flex; flex-direction: column; }
 .seq-side-nav__row { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; background: none; border: none; border-radius: 10px; padding: 14px; font-family: inherit; font-size: .88rem; font-weight: 600; color: #1F1D1B; cursor: pointer; transition: background .12s; }
