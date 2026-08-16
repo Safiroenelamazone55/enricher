@@ -15245,7 +15245,6 @@ const LeadManagerModule = (() => {
     if (!s) return _vSequences();
     const steps = _seqSteps(id);
     const cli = _clientName(s.outbound_client_id), cmp = _campaignName(s.campaign_id);
-    const timeline = steps.length ? steps.map(_stepRow).join('') : `<div class="lm-act-empty"><div class="lm-act-empty__i">🪜</div><p>Esta secuencia no tiene pasos</p><span>Agrega el primero (Día 1 · Email).</span></div>`;
     // Conteo "por hacer" (vencidas + hoy) para mostrarlo en la pestaña Tareas, como Contactos (N).
     // El contador incluye los emails por aprobar: también son trabajo del día.
     const _today0 = new Date(new Date().toDateString());
@@ -15256,16 +15255,16 @@ const LeadManagerModule = (() => {
       : null;
     return `
       <button class="lm-back" onclick="LeadManagerModule.go('sequences')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg> Secuencias</button>
-      <div class="lm-sec-head${_seqTab === 'aprobar' ? ' lm-sec-head--compact' : ''}">
+      <div class="lm-sec-head${_seqTab !== 'pasos' ? ' lm-sec-head--compact' : ''}">
         <div>
           <h2 class="lm-sec-title">${esc(s.nombre)} ${_seqBadge(s.estado)} ${_seqModeChip(s)}</h2>
-          ${_seqTab === 'aprobar' ? '' : `<p class="lm-sec-sub">${[cli && '◆ ' + esc(cli), cmp && '📣 ' + esc(cmp), s.objetivo && esc(s.objetivo)].filter(Boolean).join(' · ') || 'Secuencia outbound'}</p>
+          ${_seqTab !== 'pasos' ? '' : `<p class="lm-sec-sub">${[cli && '◆ ' + esc(cli), cmp && '📣 ' + esc(cmp), s.objetivo && esc(s.objetivo)].filter(Boolean).join(' · ') || 'Secuencia outbound'}</p>
           ${_seqTzChip(s) ? `<div class="seq-tz-line">${_seqTzChip(s)}</div>` : ''}`}
         </div>
         <div class="lm-sec-actions">
-          ${_seqTab === 'aprobar' ? '' : `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqReportOpen(${s.id})">${_ico('down')} Informe PDF</button>`}
-          ${_seqTab === 'aprobar' ? '' : `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openSequenceDrawer(${s.id})">Editar</button>`}
-          ${_seqTab === 'aprobar' ? '' : (s.estado === 'pausada'
+          ${_seqTab !== 'pasos' ? '' : `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqReportOpen(${s.id})">${_ico('down')} Informe PDF</button>`}
+          ${_seqTab !== 'pasos' ? '' : `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openSequenceDrawer(${s.id})">Editar</button>`}
+          ${_seqTab !== 'pasos' ? '' : (s.estado === 'pausada'
             ? `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqResumeAll(${s.id})">► Reactivar todo</button>`
             : `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqPauseAll(${s.id})">II Pausar todo</button>`)}
           ${_seqTab === 'pasos'
@@ -15781,7 +15780,8 @@ ${foot}
         <div class="seq-mc-row">${mc(pct(mt.aceptaciones, mt.contactados) + '%', 'Acceptance rate')}${mc(pct(mt.respuestas, mt.contactados) + '%', 'Reply rate')}${mc(pct(mt.reuniones, en) + '%', 'Meeting rate')}${mc(mt.activos, 'Activos')}${mc(mt.terminados, 'Terminados')}</div>
         <div id="seq-ab-wrap">${_seqAbHtml(id)}</div>`;
     }
-    return `<div class="lm-seq-tl">${steps.length ? steps.map(_stepRow).join('') : `<div class="lm-act-empty"><div class="lm-act-empty__i">🪜</div><p>Esta secuencia no tiene pasos</p><span>Agrega el primero (Día 1 · Email).</span></div>`}</div>`;
+    const _states = steps.length ? _stepStates(steps) : [];
+    return `<div class="lm-seq-tl">${steps.length ? steps.map((st, i) => _stepRow(st, _states[i])).join('') : `<div class="lm-act-empty"><div class="lm-act-empty__i">🪜</div><p>Esta secuencia no tiene pasos</p><span>Agrega el primero (Día 1 · Email).</span></div>`}</div>`;
   }
   function _seqCtRow(e, steps, seqId) {
     const full = [e.nombre, e.apellido].filter(Boolean).join(' ') || (e.email || '—');
@@ -17232,22 +17232,33 @@ ${foot}
   // Fecha calendario del paso: fecha de inicio de la secuencia + (día-1), rodada a la
   // cadencia permitida. Solo si la secuencia tiene fecha de inicio (si no, el día 1 es
   // el del enrolamiento de cada contacto y no hay una fecha única).
-  function _stepCalDate(st) {
+  // Fecha real (Date) del paso según el arranque de la secuencia y sus días de
+  // cadencia — null si aún no tiene fecha de inicio (borrador sin lanzar).
+  function _stepDateObj(st) {
     const s = (_sequences || []).find(x => x.id === st.sequence_id);
-    if (!s || !s.starts_on) return '';
+    if (!s || !s.starts_on) return null;
     const base = new Date(String(s.starts_on).slice(0, 10) + 'T00:00:00');
-    if (isNaN(base)) return '';
+    if (isNaN(base)) return null;
     const d = new Date(base); d.setDate(d.getDate() + ((st.dia || 1) - 1));
-    return _rollFwdLocal(d, _sanSendDays(s.send_days)).toLocaleDateString('es-PE', { weekday: 'short', day: '2-digit', month: 'short' });
+    return _rollFwdLocal(d, _sanSendDays(s.send_days));
   }
-  function _stepRow(st) {
+  function _stepCalDate(st) {
+    const d = _stepDateObj(st);
+    return d ? d.toLocaleDateString('es-PE', { weekday: 'short', day: '2-digit', month: 'short' }) : '';
+  }
+  // state: 'done' (ya pasó, check verde) | 'current' (el próximo/en curso, círculo azul)
+  // | 'future' (todavía no llega, círculo gris) — estilo tracker de envíos.
+  function _stepRow(st, state) {
     const t = _TOUCH[st.canal] || _TOUCH.email;
     const cal = _stepCalDate(st);
     const cb = st.cond === 'replied' ? '<span class="lm-vb" style="background:#F1EFEB;color:#15803D" title="Solo para contactos que respondieron o aceptaron la conexión de LinkedIn">↳ si respondió/aceptó</span>'
              : st.cond === 'no_reply' ? '<span class="lm-vb" style="background:#FEF3C7;color:#B45309" title="Solo para contactos que NO respondieron">↳ si no respondió</span>' : '';
-    return `<div class="lm-step">
+    const node = state === 'done'
+      ? '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
+      : `<span>${st.dia}</span>`;
+    return `<div class="lm-step lm-step--${state}">
       <div class="lm-step__day"><span>Día</span><b>${st.dia}</b>${cal ? `<span class="lm-step__cal" title="Fecha real según la fecha de inicio y los días de cadencia">${cal}</span>` : ''}</div>
-      <div class="lm-step__rail"><span class="lm-step__ico" style="background:${t[1]}1a;color:${t[1]}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${t[2]}</svg></span></div>
+      <div class="lm-step__rail"><span class="lm-step__node">${node}</span></div>
       <div class="lm-step__body">
         <div class="lm-step__top"><span class="lm-step__t">${esc(st.titulo || _accionLabel(st.canal, st.accion) || t[0])}</span><span class="lm-step__canal" style="color:${t[1]}">${t[0]}</span>${st.accion ? `<span class="lm-vb" style="background:var(--surface-secondary,#F1EFEB);color:var(--text2,#6C6862)">${_accionLabel(st.canal, st.accion)}</span>` : ''}${cb}</div>
         ${st.plantilla ? `<div class="lm-step__tpl">${esc(st.plantilla)}</div>` : ''}
@@ -17257,6 +17268,16 @@ ${foot}
         <button class="lm-step__btn lm-step__btn--del" onclick="LeadManagerModule.confirmDeleteStep(${st.id})" title="Eliminar"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>
       </div>
     </div>`;
+  }
+  // Clasifica cada paso en done/current/future comparando su fecha real con hoy
+  // — si la secuencia aún no tiene fecha de inicio, el paso 1 se marca "current".
+  function _stepStates(steps) {
+    const today0 = new Date(new Date().toDateString());
+    const dates = steps.map(st => _stepDateObj(st));
+    const hasDates = dates.some(Boolean);
+    let currentIdx = hasDates ? dates.findIndex(d => d && d >= today0) : 0;
+    if (currentIdx === -1) currentIdx = steps.length;
+    return steps.map((st, i) => i < currentIdx ? 'done' : i === currentIdx ? 'current' : 'future');
   }
 
   // ── Helpers de actividad (Fase 4) ──
