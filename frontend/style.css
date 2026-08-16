@@ -4758,29 +4758,29 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 .lm-seq__dot { width: 10px; height: 10px; border-radius: 50%; }
 .lm-seq__none { font-size: .72rem; color: #B4AFA8; }
 .lm-seq-tl { background: #fff; border: 1px solid var(--border, #EAE7E2); border-radius: 18px; padding: 6px 16px; box-shadow: 0 1px 2px rgba(28,25,23,.03); }
-.lm-step { display: flex; align-items: flex-start; gap: 10px; padding: 12px 4px; cursor: pointer; min-width: 0; }
+.lm-step { display: flex; align-items: flex-start; gap: 10px; padding: 10px 4px; cursor: pointer; min-width: 0; }
 .lm-step + .lm-step { border-top: 1px solid #F1EFEB; }
 .lm-step:hover { background: var(--surface-hover, #F7F5F2); }
 .lm-step__rail { position: relative; display: flex; align-self: stretch; align-items: center; justify-content: center; flex-shrink: 0; }
-.lm-step__rail::before { content: ''; position: absolute; left: 50%; top: -12px; bottom: -12px; width: 2px; background: #EAE7E2; transform: translateX(-50%); }
+.lm-step__rail::before { content: ''; position: absolute; left: 50%; top: -10px; bottom: -10px; width: 2px; background: #EAE7E2; transform: translateX(-50%); }
+.lm-step--done .lm-step__rail::before, .lm-step--current .lm-step__rail::before { background: var(--brand, #007AFF); }
 .lm-step:first-child .lm-step__rail::before { top: 50%; }
 .lm-step:last-child .lm-step__rail::before { bottom: 50%; }
-/* Tracker de envíos: check verde (ya pasó) / círculo azul (paso actual) / círculo gris (todavía no) */
-.lm-step__node { position: relative; z-index: 1; width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: .72rem; font-weight: 800; font-variant-numeric: tabular-nums; flex-shrink: 0; }
-.lm-step--done .lm-step__node { background: #15803D; color: #fff; }
-.lm-step--current .lm-step__node { background: var(--brand, #007AFF); color: #fff; box-shadow: 0 0 0 4px rgba(0,122,255,.16); }
+/* Tracker de envíos: círculo azul con número (ya pasó / paso actual) / círculo gris (todavía no) */
+.lm-step__node { position: relative; z-index: 1; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: .7rem; font-weight: 800; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.lm-step--done .lm-step__node, .lm-step--current .lm-step__node { background: var(--brand, #007AFF); color: #fff; }
 .lm-step--future .lm-step__node { background: #fff; border: 2px solid #EAE7E2; color: #B4AFA8; }
-.lm-step__ico { flex-shrink: 0; width: 26px; height: 26px; border-radius: 8px; display: flex; align-items: center; justify-content: center; margin-top: 2px; }
+.lm-step__ico { flex-shrink: 0; width: 24px; height: 24px; border-radius: 8px; display: flex; align-items: center; justify-content: center; margin-top: 2px; }
 .lm-step__body { flex: 1; min-width: 0; }
-.lm-step__top { display: flex; align-items: center; gap: 6px 8px; flex-wrap: wrap; }
-.lm-step__t { font-size: .86rem; font-weight: 650; color: #1F1D1B; }
+.lm-step__top { display: flex; align-items: center; gap: 6px 8px; flex-wrap: wrap; min-width: 0; }
+.lm-step__t { font-size: .86rem; font-weight: 650; color: #1F1D1B; min-width: 0; overflow-wrap: anywhere; }
 .lm-step--current .lm-step__t { color: var(--brand, #007AFF); font-weight: 800; }
 .lm-step--future .lm-step__t { color: #B4AFA8; }
 .lm-step__tpl { font-size: .74rem; color: #918C85; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lm-step__status { flex-shrink: 0; text-align: right; display: flex; flex-direction: column; gap: 1px; }
 .lm-step__status__lbl { font-size: .72rem; font-weight: 700; white-space: nowrap; }
 .lm-step--done .lm-step__status__lbl { color: #15803D; }
-.lm-step--current .lm-step__status__lbl { color: var(--brand, #007AFF); }
+.lm-step--current .lm-step__status__lbl { color: #B45309; }
 .lm-step--future .lm-step__status__lbl { color: #B4AFA8; }
 .lm-step__status__at { font-size: .66rem; color: #B4AFA8; white-space: nowrap; }
 .lm-step__chev { flex-shrink: 0; color: #CFCAC3; font-size: .82rem; align-self: center; }
