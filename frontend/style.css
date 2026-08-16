@@ -13447,10 +13447,10 @@ td.ldh-acts { padding-left: 6px; padding-right: 10px; }
 /* Toggle "Responder" (email real) / "Nota interna" (no se envía nada) — mismo
    patrón de HubSpot/Front/Intercom para preguntas de equipo sin arriesgar que
    le llegue algo al prospecto por error. */
-.ibx-replymode { display: flex; gap: 2px; background: var(--surface-secondary); border-radius: 8px; padding: 2px; width: max-content; }
-.ibx-replymode__b { border: none; background: none; cursor: pointer; font-family: inherit; font-size: .72rem; font-weight: 600; color: var(--text-muted); padding: 5px 10px; border-radius: 6px; transition: all .12s; }
-.ibx-replymode__b:hover { color: var(--text-primary); }
-.ibx-replymode__b.active { background: var(--surface); color: var(--text-primary); box-shadow: 0 1px 2px rgba(20,33,27,.08); }
+/* "Reenviar"/"Nota interna" se eligen solo desde el menú "⋮" — este es el único
+   botón visible en la caja para salir de ese modo sin volver a abrir el menú. */
+.ibx-modecancel { border: none; background: none; cursor: pointer; font-family: inherit; font-size: .72rem; font-weight: 600; color: var(--text-muted); padding: 0 4px; }
+.ibx-modecancel:hover { color: var(--text-primary); text-decoration: underline; }
 /* El textarea y el grupo Enviar/programar comparten una misma caja: el botón
    vive SUPERPUESTO adentro (esquina inferior derecha), no en una fila aparte
    debajo — así no se pierde una fila entera de alto solo para el botón. */
@@ -13461,6 +13461,10 @@ td.ldh-acts { padding-left: 6px; padding-right: 10px; }
    textarea, y el botón (posicionado desde el borde del WRAPPER) terminaba
    pegado al borde REAL de la caja en vez de tener margen. */
 .ibx-ta { display: block; width: 100%; resize: none; min-height: 40px; max-height: 160px; border: 1px solid var(--border); border-radius: 8px; padding: 8px 88px 8px 10px; font-size: .8rem; font-family: inherit; background: var(--surface); color: var(--text-primary); }
+/* "Nota interna"/"Reenviar" tienen DOS botones superpuestos (Cancelar + la
+   acción) — más anchos que el único botón de "Responder", así que necesitan
+   más margen reservado para que el texto no quede tapado. */
+.ibx-tawrap--wide .ibx-ta { padding-right: 172px; }
 .ibx-ta:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
 .ibx-nosend { font-size: .76rem; color: var(--text-muted); padding: 4px 0; }
 .ibx-empty { padding: 26px 16px; text-align: center; font-size: .78rem; color: var(--text-muted); }

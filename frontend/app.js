@@ -17796,18 +17796,16 @@ ${foot}
   function _ibReplyboxHtml(c) {
     const canSend = !!c.mailbox_id;
     const mode = _ibMode === 'note' ? 'note' : _ibMode === 'fwd' ? 'fwd' : 'reply';
-    const modeToggle = c.id ? `
-      <div class="ibx-replymode">
-        <button class="ibx-replymode__b${mode === 'reply' ? ' active' : ''}" onclick="LeadManagerModule.ibSetMode('reply')">Responder</button>
-        <button class="ibx-replymode__b${mode === 'fwd' ? ' active' : ''}" onclick="LeadManagerModule.ibSetMode('fwd')">Reenviar</button>
-        <button class="ibx-replymode__b${mode === 'note' ? ' active' : ''}" onclick="LeadManagerModule.ibSetMode('note')">Nota interna</button>
-      </div>` : '';
+    // Sin pestañas visibles arriba: "Reenviar"/"Nota interna" se eligen SOLO desde
+    // el menú "⋮" (junto a "Registrar respuesta") — acá solo un "Cancelar" chiquito
+    // para volver a "Responder" sin tener que reabrir ese menú.
+    const cancelLink = `<button class="ibx-modecancel" onclick="LeadManagerModule.ibSetMode('reply')">Cancelar</button>`;
     if (mode === 'note') {
       return `<div class="ibx-replybox">
-        ${modeToggle}
-        <div class="ibx-tawrap">
+        <div class="ibx-tawrap ibx-tawrap--wide">
           <textarea class="ibx-ta" id="ibx-ta" rows="3" placeholder="Escribe una nota interna — no se envía nada, solo la ve tu equipo…"></textarea>
           <div class="ibx-sendgrp">
+            ${cancelLink}
             <button class="btn btn--primary btn--sm" id="ibx-send" onclick="LeadManagerModule.ibSaveNote()">Guardar nota</button>
           </div>
         </div>
@@ -17816,24 +17814,23 @@ ${foot}
     if (mode === 'fwd') {
       const msgs = _ibThread.messages || [];
       const total = msgs.length;
-      if (!canSend) return `<div class="ibx-replybox">${modeToggle}<div class="ibx-nosend">El cliente <b>${esc(c.cliente || '')}</b> no tiene buzón conectado — conéctalo en su ficha para reenviar desde aquí.</div></div>`;
+      if (!canSend) return `<div class="ibx-replybox"><div class="ibx-nosend">El cliente <b>${esc(c.cliente || '')}</b> no tiene buzón conectado — conéctalo en su ficha para reenviar desde aquí.</div></div>`;
       return `<div class="ibx-replybox">
-        ${modeToggle}
         <div class="ibx-dest">
           <span class="ibx-dest__k">Para</span>
           <input class="ibx-dest__i" id="ibx-fwd-to" placeholder="email de la persona (separá varios con coma)…">
         </div>
         ${total ? `<div class="ibx-fwd-hint">Se reenvía el correo que estás viendo ahora (${Math.min(_ibMsgIdx, total - 1) + 1} de ${total}), citado debajo de lo que escribas.</div>` : ''}
-        <div class="ibx-tawrap">
+        <div class="ibx-tawrap ibx-tawrap--wide">
           <textarea class="ibx-ta" id="ibx-ta" rows="3" placeholder="Tu mensaje para quien lo reciba…"></textarea>
           <div class="ibx-sendgrp">
+            ${cancelLink}
             <button class="btn btn--primary btn--sm" id="ibx-send" onclick="LeadManagerModule.ibForward()">Reenviar</button>
           </div>
         </div>
       </div>`;
     }
     return `<div class="ibx-replybox">
-      ${modeToggle}
       ${canSend
         ? `${_ibDestHtml(c)}
            <div class="ibx-tawrap">
@@ -18005,6 +18002,7 @@ ${foot}
         _ibThread.messages.push({ dir: 'note', id: d.nota?.id, cuerpo: texto, at: d.nota?.created_at || new Date().toISOString(), tipo: 'nota', buzon: d.nota?.autor || '' });
         _ibMsgIdx = _ibThread.messages.length - 1;
       }
+      _ibMode = 'reply'; // listo, vuelve solo a "Responder" — sin pestañas visibles, no hay otra forma de salir
       _ibPaint();
       showBanner('✓ Nota guardada — no se envió ningún correo', 'success');
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
@@ -18038,6 +18036,7 @@ ${foot}
         _ibThread.messages.push({ dir: 'fwd', id: d.fwd?.id, cuerpo: texto, at: d.fwd?.sent_at || new Date().toISOString(), tipo: 'fwd', buzon: to });
         _ibMsgIdx = _ibThread.messages.length - 1;
       }
+      _ibMode = 'reply'; // listo, vuelve solo a "Responder" — sin pestañas visibles, no hay otra forma de salir
       _ibPaint();
       showBanner(`✓ Reenviado a ${to}`, 'success');
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
