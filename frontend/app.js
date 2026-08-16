@@ -17747,6 +17747,27 @@ ${foot}
     const r = t.getBoundingClientRect();
     menu.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 340))}px`;
     menu.style.top = `${r.bottom + 6}px`;
+    // El "⋮" vive pegado al borde derecho del panel, así que el menú casi siempre
+    // termina clampeado ahí mismo — abrir el submenu "Resolver respuesta" siempre
+    // hacia la derecha lo saca de la pantalla. Se mide el lugar real disponible a
+    // cada lado en el momento de pasar el cursor y se elige el que entra completo.
+    const sub = menu.querySelector('.cp-mark-menu__sub');
+    const subpanel = menu.querySelector('.cp-mark-menu__subpanel');
+    if (sub && subpanel) {
+      sub.addEventListener('mouseenter', () => {
+        const subRect = sub.getBoundingClientRect();
+        const needed = 310; // ancho del submenu + margen
+        if (window.innerWidth - subRect.right < needed && subRect.left >= needed) {
+          subpanel.style.left = 'auto'; subpanel.style.right = '100%';
+          subpanel.style.marginLeft = '0'; subpanel.style.marginRight = '4px';
+        } else {
+          subpanel.style.left = '100%'; subpanel.style.right = 'auto';
+          subpanel.style.marginLeft = '4px'; subpanel.style.marginRight = '0';
+        }
+        subpanel.style.display = 'block';
+      });
+      sub.addEventListener('mouseleave', () => { subpanel.style.display = 'none'; });
+    }
     setTimeout(() => document.addEventListener('click', function onDoc(e) { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', onDoc); } }), 0);
   }
   // "Acciones del lead": línea de tiempo real de apertura/clics por cada correo

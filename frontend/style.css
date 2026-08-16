@@ -11822,12 +11822,13 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .cp-mark-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 .cp-mark-menu__sep { height: 1px; background: var(--border, #EAE7E2); margin: 4px 6px; }
 /* "Resolver respuesta": submenu que se abre SOLO al pasar el cursor (no al
-   clickear) — pegado al costado del ítem, como un menú de escritorio. */
+   clickear) — pegado al costado del ítem, como un menú de escritorio. El lado
+   (izquierda/derecha) y el display se deciden por JS al pasar el cursor (mide el
+   espacio real disponible) — acá solo el look, sin left/right ni :hover fijos. */
 .cp-mark-menu__sub { position: relative; }
 .cp-mark-menu__b--sub { justify-content: space-between; }
 .cp-mark-menu__arrow { color: var(--text-muted); font-size: .68rem; }
-.cp-mark-menu__subpanel { display: none; position: absolute; left: 100%; top: -5px; margin-left: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 24px rgba(16,24,20,.10); padding: 5px; min-width: 300px; max-width: 340px; z-index: 10051; }
-.cp-mark-menu__sub:hover .cp-mark-menu__subpanel { display: block; }
+.cp-mark-menu__subpanel { display: none; position: absolute; top: -5px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 24px rgba(16,24,20,.10); padding: 5px; min-width: 300px; max-width: 340px; z-index: 10051; }
 .cp-mark-menu__sub:hover .cp-mark-menu__b--sub { background: var(--surface-hover); }
 /* "Acciones del lead": historial de apertura/clics por correo enviado. */
 .lm-track-msg { padding: 10px 4px; border-bottom: 1px solid var(--border); }
