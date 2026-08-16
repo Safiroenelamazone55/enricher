@@ -4771,7 +4771,7 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 .lm-step--current .lm-step__node { background: var(--brand, #007AFF); color: #fff; box-shadow: 0 0 0 4px rgba(0,122,255,.16); }
 .lm-step--future .lm-step__node { background: #fff; border: 2px solid #EAE7E2; color: #B4AFA8; }
 .lm-step__body { min-width: 0; }
-.lm-step__top { display: flex; align-items: center; gap: 8px; }
+.lm-step__top { display: flex; align-items: center; gap: 6px 8px; flex-wrap: wrap; }
 .lm-step__t { font-size: .86rem; font-weight: 650; color: #1F1D1B; }
 .lm-step--current .lm-step__t { color: var(--brand, #007AFF); font-weight: 800; }
 .lm-step--future .lm-step__t, .lm-step--future .lm-step__canal, .lm-step--future .lm-step__day b, .lm-step--future .lm-step__cal { color: #B4AFA8; }
@@ -4787,7 +4787,11 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
    del resto de secciones a la derecha — al elegir una, seqTab() la manda a
    pantalla completa (ver lm-sec-head--compact) y este split desaparece. */
 .seq-split { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; margin-top: 14px; }
-.seq-split__pasos { background: #fff; border: 1px solid var(--border, #EAE7E2); border-radius: 14px; padding: 2px 18px; max-height: calc(100vh - 260px); min-height: 220px; overflow-y: auto; }
+.seq-split__pasos { background: #fff; border: 1px solid var(--border, #EAE7E2); border-radius: 14px; padding: 0 18px 14px; display: flex; flex-direction: column; min-width: 0; max-height: calc(100vh - 220px); min-height: 320px; }
+.lm-seqhd { flex-shrink: 0; padding-top: 16px; padding-bottom: 12px; border-bottom: 1px solid #F1EFEB; }
+.lm-seqhd .lm-sec-title { font-size: 1.08rem; }
+.lm-seqhd__acts { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.seq-split .lm-seq-tl { flex: 1 1 auto; min-height: 0; min-width: 0; overflow-y: auto; overflow-x: hidden; background: none; border: none; box-shadow: none; padding: 0; border-radius: 0; }
 .seq-split__nav { background: #fff; border: 1px solid var(--border, #EAE7E2); border-radius: 14px; padding: 8px; display: flex; flex-direction: column; }
 .seq-side-nav__row { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; background: none; border: none; border-radius: 10px; padding: 14px; font-family: inherit; font-size: .88rem; font-weight: 600; color: #1F1D1B; cursor: pointer; transition: background .12s; }
 .seq-side-nav__row:hover { background: var(--surface-hover, #F7F5F2); }

@@ -15253,26 +15253,41 @@ const LeadManagerModule = (() => {
         + (Array.isArray(_seqPendingCos) ? _seqCoTasks(id).filter(t => t.due <= _today0).length : 0)
         + (s.awaiting || 0)
       : null;
-    return `
-      <button class="lm-back" onclick="LeadManagerModule.go('sequences')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg> Secuencias</button>
-      <div class="lm-sec-head${_seqTab !== 'pasos' ? ' lm-sec-head--compact' : ''}">
-        <div>
-          <h2 class="lm-sec-title">${esc(s.nombre)} ${_seqBadge(s.estado)} ${_seqModeChip(s)}</h2>
-          ${_seqTab !== 'pasos' ? '' : `<p class="lm-sec-sub">${[cli && '◆ ' + esc(cli), cmp && '📣 ' + esc(cmp), s.objetivo && esc(s.objetivo)].filter(Boolean).join(' · ') || 'Secuencia outbound'}</p>
-          ${_seqTzChip(s) ? `<div class="seq-tz-line">${_seqTzChip(s)}</div>` : ''}`}
-        </div>
+    const backBtn = `<button class="lm-back" onclick="LeadManagerModule.go('sequences')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg> Secuencias</button>`;
+    if (_seqTab === 'pasos') {
+      // Pasos vive DENTRO de la misma tarjeta que la info de la secuencia — un
+      // solo cuadro (no la info suelta arriba y los pasos en otra tarjeta abajo).
+      const _states = steps.length ? _stepStates(steps) : [];
+      const pasosHtml = steps.length ? steps.map((st, i) => _stepRow(st, _states[i])).join('') : `<div class="lm-act-empty"><div class="lm-act-empty__i">🪜</div><p>Esta secuencia no tiene pasos</p><span>Agrega el primero (Día 1 · Email).</span></div>`;
+      return `${backBtn}
+        <div class="seq-split">
+          <div class="seq-split__pasos">
+            <div class="lm-seqhd">
+              <h2 class="lm-sec-title">${esc(s.nombre)} ${_seqBadge(s.estado)} ${_seqModeChip(s)}</h2>
+              <p class="lm-sec-sub">${[cli && '◆ ' + esc(cli), cmp && '📣 ' + esc(cmp), s.objetivo && esc(s.objetivo)].filter(Boolean).join(' · ') || 'Secuencia outbound'}</p>
+              ${_seqTzChip(s) ? `<div class="seq-tz-line">${_seqTzChip(s)}</div>` : ''}
+              <div class="lm-seqhd__acts">
+                <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqReportOpen(${s.id})">${_ico('down')} Informe PDF</button>
+                <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openSequenceDrawer(${s.id})">Editar</button>
+                ${s.estado === 'pausada'
+                  ? `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqResumeAll(${s.id})">► Reactivar todo</button>`
+                  : `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqPauseAll(${s.id})">II Pausar todo</button>`}
+                <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openStepDrawer(${s.id})">＋ Añadir paso</button>
+              </div>
+            </div>
+            <div class="lm-seq-tl">${pasosHtml}</div>
+          </div>
+          <div class="seq-split__nav">${_seqSideNav(id)}</div>
+        </div>`;
+    }
+    return `${backBtn}
+      <div class="lm-sec-head lm-sec-head--compact">
+        <div><h2 class="lm-sec-title">${esc(s.nombre)} ${_seqBadge(s.estado)} ${_seqModeChip(s)}</h2></div>
         <div class="lm-sec-actions">
-          ${_seqTab !== 'pasos' ? '' : `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqReportOpen(${s.id})">${_ico('down')} Informe PDF</button>`}
-          ${_seqTab !== 'pasos' ? '' : `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openSequenceDrawer(${s.id})">Editar</button>`}
-          ${_seqTab !== 'pasos' ? '' : (s.estado === 'pausada'
-            ? `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqResumeAll(${s.id})">► Reactivar todo</button>`
-            : `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqPauseAll(${s.id})">II Pausar todo</button>`)}
-          ${_seqTab === 'pasos'
-            ? `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openStepDrawer(${s.id})">＋ Añadir paso</button>`
-            : _seqTab === 'aprobar' ? '' : `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.seqEnrolOpen(${s.id})">＋ Enrolar contacto</button>`}
+          ${_seqTab === 'aprobar' ? '' : `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.seqEnrolOpen(${s.id})">＋ Enrolar contacto</button>`}
         </div>
       </div>
-      ${_seqTab === 'pasos' ? '' : `<div class="cp-tabs">
+      <div class="cp-tabs">
         <button class="cp-tab${_seqTab === 'pasos' ? ' active' : ''}" onclick="LeadManagerModule.seqTab('pasos')">Pasos</button>
         <button class="cp-tab${_seqTab === 'empresas' ? ' active' : ''}" onclick="LeadManagerModule.seqTab('empresas')">Empresas${Array.isArray(_seqPendingCos) ? ` (${_seqPendingCos.length})` : ''}</button>
         <button class="cp-tab${_seqTab === 'contactos' ? ' active' : ''}" onclick="LeadManagerModule.seqTab('contactos')">Contactos${Array.isArray(_seqContacts) ? ` (${_seqContacts.length})` : ''}</button>
@@ -15280,7 +15295,7 @@ const LeadManagerModule = (() => {
         <button class="cp-tab${_seqTab === 'metricas' ? ' active' : ''}" onclick="LeadManagerModule.seqTab('metricas')">Métricas</button>
         <button class="cp-tab${_seqTab === 'envios' ? ' active' : ''}" onclick="LeadManagerModule.seqTab('envios')">Envíos</button>
         ${(s.send_mode === 'preaprobado' || (s.awaiting || 0) > 0) ? `<button class="cp-tab${_seqTab === 'aprobar' ? ' active' : ''}" onclick="LeadManagerModule.seqTab('aprobar')">Aprobar${(s.awaiting || 0) > 0 ? ` <span class="seq-app-n">${s.awaiting}</span>` : ''}</button>` : ''}
-      </div>`}
+      </div>
       <div id="seq-tabwrap">${_seqTabContent(id)}</div>`;
   }
   // ════════════ INFORME PDF DE SECUENCIA (diseño propio, multi-idioma) ════════════
@@ -15780,9 +15795,9 @@ ${foot}
         <div class="seq-mc-row">${mc(pct(mt.aceptaciones, mt.contactados) + '%', 'Acceptance rate')}${mc(pct(mt.respuestas, mt.contactados) + '%', 'Reply rate')}${mc(pct(mt.reuniones, en) + '%', 'Meeting rate')}${mc(mt.activos, 'Activos')}${mc(mt.terminados, 'Terminados')}</div>
         <div id="seq-ab-wrap">${_seqAbHtml(id)}</div>`;
     }
-    const _states = steps.length ? _stepStates(steps) : [];
-    const pasosHtml = `<div class="lm-seq-tl">${steps.length ? steps.map((st, i) => _stepRow(st, _states[i])).join('') : `<div class="lm-act-empty"><div class="lm-act-empty__i">🪜</div><p>Esta secuencia no tiene pasos</p><span>Agrega el primero (Día 1 · Email).</span></div>`}</div>`;
-    return `<div class="seq-split"><div class="seq-split__pasos">${pasosHtml}</div><div class="seq-split__nav">${_seqSideNav(id)}</div></div>`;
+    // 'pasos' no llega aquí — _vSequenceDetail lo resuelve directo (ver ahí el
+    // split de una sola tarjeta con la info de la secuencia + los pasos).
+    return '';
   }
   // Panel derecho junto a Pasos: fila seleccionable con el resto de secciones —
   // al elegir una, seqTab() ya se encarga de que ocupe el 100% (ver _vSequenceDetail,
