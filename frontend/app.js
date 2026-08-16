@@ -17785,7 +17785,7 @@ ${foot}
     m.onclick = e => { if (e.target === m) m.remove(); };
     m.innerHTML = `<div class="fin-pi-box" style="max-width:460px">
       <div class="fin-pi-box__hd"><h3>Acciones del lead</h3><button class="fin-pi-x" onclick="document.getElementById('lm-track-modal').remove()">✕</button></div>
-      <div class="fin-pi-form" id="lm-track-body" style="max-height:60vh;overflow-y:auto"><div class="fin-cfg-hint">Cargando…</div></div>
+      <div class="lm-track-list" id="lm-track-body" style="max-height:60vh"><div class="fin-cfg-hint">Cargando…</div></div>
     </div>`;
     document.body.appendChild(m);
     const body = document.getElementById('lm-track-body');
@@ -17795,35 +17795,44 @@ ${foot}
       if (!body) return;
       const sent = data.sent || [], received = data.received || [];
       if (!sent.length && !received.length) { body.innerHTML = `<div class="fin-cfg-hint">Todavía no hay correos con este contacto.</div>`; return; }
-      const fmt = d => d ? new Date(d).toLocaleString('es-PE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+      const dayKey = d => d ? new Date(d).toISOString().slice(0, 10) : '';
+      const fmtDate = d => d ? new Date(d).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
+      const fmtTime = d => d ? new Date(d).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }) : '';
       const rows = [
         ...sent.map(s => ({ kind: 'sent', at: s.sent_at, d: s })),
         ...received.map(r => ({ kind: 'received', at: r.received_at, d: r })),
       ].sort((a, b) => new Date(b.at) - new Date(a.at));
       const TIPO_LBL = { reply: 'Respuesta', ooo: 'Auto-respuesta', equipo: 'Equipo', bounce: 'Rebote', nota: 'Nota interna' };
-      body.innerHTML = rows.map((r, i) => {
+      let html = '', lastDay = null;
+      rows.forEach((r, i) => {
+        const dk = dayKey(r.at);
+        if (dk !== lastDay) { html += `<div class="lm-track-date">${fmtDate(r.at)}</div>`; lastDay = dk; }
         if (r.kind === 'received') {
-          return `<div class="lm-track-row">
-            <span class="lm-track-row__ico">📥</span>
-            <span class="lm-track-row__lbl">${esc(r.d.asunto || '(sin asunto)')} <span class="lm-track-row__tag">· ${esc(TIPO_LBL[r.d.tipo] || 'Recibido')}</span></span>
-            <span class="lm-track-row__at">${fmt(r.at)}</span>
+          html += `<div class="lm-track-row">
+            <span class="lm-track-row__time">${fmtTime(r.at)}</span>
+            <span class="lm-track-row__lbl">${esc(r.d.asunto || '(sin asunto)')}</span>
+            <span class="lm-track-row__tag">${esc(TIPO_LBL[r.d.tipo] || 'Recibido')}</span>
           </div>`;
+          return;
         }
         const opens = r.d.events.filter(e => e.tipo === 'open');
         const clicks = r.d.events.filter(e => e.tipo === 'click');
         const detId = `lm-track-det-${i}`;
-        const items = [{ icon: '📤', label: 'Enviado', at: r.d.sent_at },
-          ...opens.map((o, oi) => ({ icon: '👁', label: opens.length > 1 ? `Abrió (${oi + 1}ª vez)` : 'Abrió el correo', at: o.created_at })),
-          ...clicks.map(c => ({ icon: '🖱', label: `Clic en ${(c.url || '').length > 46 ? c.url.slice(0, 43) + '…' : c.url}`, at: c.created_at }))];
-        return `<div class="lm-track-row lm-track-row--sent" onclick="const d=document.getElementById('${detId}');d.classList.toggle('hidden');this.querySelector('.lm-track-row__chev').classList.toggle('open')">
-          <span class="lm-track-row__ico">📤</span>
+        const badgeParts = [];
+        if (opens.length) badgeParts.push(`${opens.length} apertura${opens.length > 1 ? 's' : ''}`);
+        if (clicks.length) badgeParts.push(`${clicks.length} clic${clicks.length > 1 ? 's' : ''}`);
+        const items = [{ label: 'Enviado', at: r.d.sent_at },
+          ...opens.map((o, oi) => ({ label: opens.length > 1 ? `Abrió (${oi + 1}ª vez)` : 'Abrió el correo', at: o.created_at })),
+          ...clicks.map(c => ({ label: `Clic: ${(c.url || '').length > 46 ? c.url.slice(0, 43) + '…' : c.url}`, at: c.created_at }))];
+        html += `<div class="lm-track-row lm-track-row--sent" onclick="const d=document.getElementById('${detId}');d.classList.toggle('hidden');this.querySelector('.lm-track-row__chev').classList.toggle('open')">
+          <span class="lm-track-row__time">${fmtTime(r.at)}</span>
           <span class="lm-track-row__lbl">${esc(r.d.asunto || '(sin asunto)')}</span>
-          <span class="lm-track-row__badges">${opens.length ? `👁 ${opens.length}` : '<span class="lm-track-row__nobadge">Sin abrir</span>'}${clicks.length ? ` 🖱 ${clicks.length}` : ''}</span>
-          <span class="lm-track-row__at">${fmt(r.at)}</span>
-          <span class="lm-track-row__chev">▾</span>
+          <span class="lm-track-row__badges${badgeParts.length ? '' : ' lm-track-row__nobadge'}">${badgeParts.length ? badgeParts.join(' · ') : 'Sin abrir'}</span>
+          <span class="lm-track-row__chev">›</span>
         </div>
-        <div class="lm-track-det hidden" id="${detId}">${items.map(it => `<div class="lm-track-tl__row"><span class="lm-track-tl__ico">${it.icon}</span><span class="lm-track-tl__lbl">${esc(it.label)}</span><span class="lm-track-tl__at">${fmt(it.at)}</span></div>`).join('')}</div>`;
-      }).join('');
+        <div class="lm-track-det hidden" id="${detId}">${items.map(it => `<div class="lm-track-tl__row"><span class="lm-track-tl__lbl">${esc(it.label)}</span><span class="lm-track-tl__at">${fmtTime(it.at)}</span></div>`).join('')}</div>`;
+      });
+      body.innerHTML = html;
     } catch (e) {
       if (body) body.innerHTML = `<div class="fin-cfg-hint fin-cfg-hint--err">Error: ${esc(e.message)}</div>`;
     }
