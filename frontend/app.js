@@ -18973,7 +18973,7 @@ ${foot}
     const paso = _ldPaso(c);
     const stg = _dealStage(c);
     return `<tr class="ldh-row" onclick="LeadManagerModule.openContactPage(${c.id})">
-      <td><div class="ldh-name">${esc(full)}</div><div class="ldh-sub">${esc([c.cargo, c.company_nombre].filter(Boolean).join(' · ')) || '&nbsp;'}</div></td>
+      <td class="ldh-name">${esc(full)}</td>
       <td class="ldh-dim">${seqs.length ? esc(seqs[0].nombre) : '—'}${paso ? `<div class="ldh-sub">${esc(paso)}</div>` : ''}</td>
       <td><span class="ldh-chip" style="${STAGE_STYLES[stg] || ''}">${STAGE_LABELS[stg] || stg}</span></td>
       <td class="ldh-date">${_ldFmtDate(c.updated_at)}</td>

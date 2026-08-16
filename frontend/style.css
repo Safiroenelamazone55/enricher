@@ -4793,6 +4793,16 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 .lm-act__ctx { font-size: .7rem; color: #918C85; margin-top: 3px; }
 .lm-act__acts { display: flex; gap: 4px; opacity: 0; transition: opacity .12s; flex-shrink: 0; }
 .lm-act:hover .lm-act__acts { opacity: 1; }
+/* Actividad reciente (Overview del cliente): 1 línea por item, no tarjeta multi-línea */
+.lm-feed--mini .lm-act { padding: 6px 0; gap: 8px; align-items: center; }
+.lm-feed--mini .lm-act__ico { width: 22px; height: 22px; border-radius: 7px; margin-top: 0; }
+.lm-feed--mini .lm-act__ico svg { width: 11px; height: 11px; }
+.lm-feed--mini .lm-act__body { display: flex; align-items: baseline; gap: 6px; }
+.lm-feed--mini .lm-act__top { display: contents; }
+.lm-feed--mini .lm-act__t { order: 1; flex-shrink: 0; font-size: .78rem; }
+.lm-feed--mini .lm-act__note { order: 2; flex: 1; min-width: 0; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: .76rem; }
+.lm-feed--mini .lm-act__date { order: 3; margin-left: auto; }
+.lm-feed--mini .lm-act__ctx, .lm-feed--mini .lm-act__acts { display: none; }
 .lm-card__next { font-size: .68rem; font-weight: 600; color: #C28A0B; background: #FAF8F5; border-radius: 7px; padding: 4px 8px; margin-top: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* Inbox / Respuestas (Fase 5) */
