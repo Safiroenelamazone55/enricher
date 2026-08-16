@@ -15026,7 +15026,7 @@ const LeadManagerModule = (() => {
       <div class="lm-sec-head">
         <div><h2 class="lm-sec-title">Secuencias</h2><p class="lm-sec-sub">Pasos de outbound (Email, LinkedIn, llamada…) — planificación y registro manual</p></div>
         <div style="display:flex;gap:8px;align-items:center">
-          <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.pendingAcceptOpen()" title="Marca en lote quién aceptó tu conexión de LinkedIn → saltan a la Ruta A (mensaje)">🔗 Pendientes de aceptación${paN ? ` <b style="color:var(--brand,#007AFF)">(${paN})</b>` : ''}</button>
+          <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.pendingAcceptOpen()" title="Marca en lote quién aceptó tu conexión de LinkedIn → saltan a la Ruta A (mensaje)">Pendientes de aceptación${paN ? ` <b style="color:var(--brand,#007AFF)">(${paN})</b>` : ''}</button>
           ${_clients.length ? `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openSequenceDrawer()">＋ Nueva secuencia</button>` : ''}
         </div>
       </div>
@@ -15057,16 +15057,19 @@ const LeadManagerModule = (() => {
       const steps = _seqSteps(s.id);
       const cli = _clientName(s.outbound_client_id);
       const cmp = _campaignName(s.campaign_id);
-      const dots = steps.slice(0, 8).map(st => { const t = _TOUCH[st.canal] || _TOUCH.email; return `<span class="lm-seq__dot" style="background:${t[1]}" title="Día ${st.dia} · ${t[0]}"></span>`; }).join('');
+      const canalCounts = {};
+      steps.forEach(st => { const k = st.canal || 'email'; canalCounts[k] = (canalCounts[k] || 0) + 1; });
+      const mainCanal = Object.keys(canalCounts).sort((a, b) => canalCounts[b] - canalCounts[a])[0];
+      const mt = mainCanal ? (_TOUCH[mainCanal] || _TOUCH.email) : null;
       return `<tr class="ldh-row" onclick="LeadManagerModule.openSequence(${s.id})">
-        <td><div class="ldh-name">${esc(s.nombre)}</div><div class="ldh-sub">${cmp ? '📣 ' + esc(cmp) : '&nbsp;'}</div></td>
+        <td><div class="ldh-name">${esc(s.nombre)}</div><div class="ldh-sub">${cmp ? esc(cmp) : '&nbsp;'}</div></td>
         <td class="ldh-dim">${cli ? esc(cli) : '—'}</td>
-        <td>${_seqBadge(s.estado)}${(s.awaiting || 0) > 0 ? ` <span class="seq-app-n" title="Emails esperando tu aprobación">${s.awaiting} por aprobar</span>` : ''}${s.send_mode === 'auto' ? ' <span class="ldh-dim" title="Envío automático">⚡</span>' : s.send_mode === 'preaprobado' ? ' <span class="ldh-dim" title="Pre-aprobado">✋</span>' : ''}</td>
-        <td><span class="sq-dots">${dots || '<span class="ldh-none">Sin pasos</span>'}</span></td>
+        <td class="sq-estado">${_seqBadge(s.estado)}${(s.awaiting || 0) > 0 ? ` <span class="seq-app-n" title="Emails esperando tu aprobación">${s.awaiting} por aprobar</span>` : ''}</td>
+        <td>${mt ? `<span style="color:${mt[1]};font-weight:600">${mt[0]}</span>` : '<span class="ldh-none">Sin pasos</span>'}</td>
         <td class="ldh-dim">${steps.length ? `${steps.length} paso${steps.length !== 1 ? 's' : ''} · ${steps[steps.length - 1].dia} días` : '—'}</td>
       </tr>`;
     }).join('');
-    wrap.innerHTML = `<div class="ldh-table-wrap"><table class="ldh-table">
+    wrap.innerHTML = `<div class="ldh-table-wrap"><table class="ldh-table ldh-table--seq">
       <colgroup><col style="width:34%"><col style="width:17%"><col style="width:12%"><col style="width:19%"><col style="width:18%"></colgroup>
       <thead><tr><th>Secuencia</th><th>Cliente</th><th>Estado</th><th>Canales</th><th>Pasos</th></tr></thead>
       <tbody>${rows}</tbody></table></div>`;

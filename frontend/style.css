@@ -13330,6 +13330,16 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
 .ldh-sub { font-size: .74rem; color: var(--text-muted); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ldh-dim { color: var(--text-secondary); font-size: .8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ldh-more { font-size: .7rem; font-weight: 600; color: var(--text-muted); background: var(--surface-secondary); border-radius: 999px; padding: 1px 6px; }
+/* Secuencias: tabla más compacta — filas bajas, letra más chica, sin wrap a 2 líneas */
+.ldh-table--seq { table-layout: auto; width: auto; min-width: 100%; }
+.ldh-table--seq th { padding: 6px 12px; font-size: .66rem; }
+.ldh-table--seq td { padding: 5px 12px; font-size: .78rem; }
+.ldh-table--seq .ldh-name { font-size: .8rem; }
+.ldh-table--seq .ldh-sub { font-size: .68rem; }
+.ldh-table--seq .ldh-dim { font-size: .74rem; }
+.ldh-table--seq .lm-seq__dot { width: 7px; height: 7px; }
+.ldh-table--seq .lm-obc-badge { font-size: .66rem; padding: 1px 7px; }
+.ldh-table--seq .sq-estado { white-space: nowrap; }
 .ldh-chip { display: inline-block; font-size: .72rem; font-weight: 600; padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
 .ldh-date { font-size: .78rem; color: var(--text-secondary); white-space: nowrap; }
 .ldh-note { font-size: .8rem; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
