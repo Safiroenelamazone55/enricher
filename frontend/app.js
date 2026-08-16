@@ -18970,11 +18970,10 @@ ${foot}
   function _clientLeadRow(c) {
     const full = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || '—';
     const seqs = c.sequences || [];
-    const paso = _ldPaso(c);
     const stg = _dealStage(c);
     return `<tr class="ldh-row" onclick="LeadManagerModule.openContactPage(${c.id})">
       <td class="ldh-name">${esc(full)}</td>
-      <td class="ldh-dim">${seqs.length ? esc(seqs[0].nombre) : '—'}${paso ? `<div class="ldh-sub">${esc(paso)}</div>` : ''}</td>
+      <td class="ldh-dim">${seqs.length ? esc(seqs[0].nombre) : '—'}</td>
       <td><span class="ldh-chip" style="${STAGE_STYLES[stg] || ''}">${STAGE_LABELS[stg] || stg}</span></td>
       <td class="ldh-date">${_ldFmtDate(c.updated_at)}</td>
     </tr>`;
@@ -18984,7 +18983,7 @@ ${foot}
       if (!leads.length) return _empty('leads', 'Sin leads para este cliente', 'Se asocian por "Cliente outbound" desde Contactos, o al enrolarlos en una secuencia de este cliente.', '', '');
       return `<div class="ldh-table-wrap"><table class="ldh-table ldh-lead-table">
         <colgroup><col style="width:220px"><col style="width:200px"><col style="width:120px"><col style="width:90px"></colgroup>
-        <thead><tr><th>Lead</th><th>Secuencia · paso</th><th>Resultado</th><th>Fecha</th></tr></thead>
+        <thead><tr><th>Lead</th><th>Secuencia</th><th>Resultado</th><th>Fecha</th></tr></thead>
         <tbody>${leads.map(_clientLeadRow).join('')}</tbody></table></div>`;
     }
     if (tab === 'Campañas') {
