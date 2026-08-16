@@ -14869,8 +14869,23 @@ const LeadManagerModule = (() => {
   const _OBC = { preparacion:['Preparación','#FEF3C7','#92400E'], activo:['Activo','#D1FAE5','#065F46'], pausado:['Pausado','#FFEDD5','#9A3412'], cerrado:['Cerrado','#F1EFEB','#6C6862'] };
   function _obcBadge(e) { const s = _OBC[e] || _OBC.preparacion; return `<span class="lm-obc-badge" style="background:${s[1]};color:${s[2]}">${s[0]}</span>`; }
   function _clientName(id) { const c = _clients.find(x => x.id === id); return c ? c.nombre : null; }
-  function _clientLeads(id) { return _data.filter(l => l.outbound_client_id === id); }
-  function _sumv(arr) { return arr.reduce((a, l) => a + (Number(l.valor_estimado) || 0), 0); }
+  // Los "leads" de un cliente son sus CONTACTOS reales (lm_contacts) — la tabla vieja
+  // `leads` (_data) quedó sin uso desde que el flujo pasó a Contactos/Secuencias/Deals,
+  // por eso el workspace del cliente mostraba todo en 0 aunque sí hubiera actividad real.
+  function _clientLeads(id) { return _contacts.filter(c => c.outbound_client_id === id); }
+  // Compat: actividades viejas que solo tienen `lead_id` (tabla `leads`, no contact_id).
+  function _legacyLeadIds(id) { return _data.filter(l => l.outbound_client_id === id).map(l => l.id); }
+  function _sumv(arr) { return arr.reduce((a, l) => a + (Number(l.deal_valor) || 0), 0); }
+  // Etapa "visual" de un contacto para el pipeline del cliente: reusa las etapas de Deal
+  // (propuesta/negociación/ganado/perdido) cuando existen; si no, aproxima con disposición
+  // y estado de secuencia (respondió / contactado / nuevo).
+  function _dealStage(c) {
+    if (_DL_STAGES.includes(c.estado)) return c.estado;
+    if (['no_interesado', 'no_califica', 'no_contactar'].includes(c.disposition)) return 'perdido';
+    if (c.disposition) return 'respondio';
+    if ((c.sequences || []).length) return 'contactado';
+    return 'nuevo';
+  }
 
   // ── Helpers de campaña (Fase 2) ──
   const _CMP = { draft: ['Draft', '#F1EFEB', '#6C6862'], activa: ['Activa', '#D1FAE5', '#065F46'], pausada: ['Pausada', '#FFEDD5', '#9A3412'], cerrada: ['Cerrada', '#F1EFEB', '#3B5573'] };
@@ -17261,7 +17276,7 @@ ${foot}
   function _leadClientId(id) { const l = _data.find(x => x.id === id); return l ? l.outbound_client_id : null; }
   function _actClient(a) { return a.outbound_client_id || _leadClientId(a.lead_id); }
   function _leadActs(leadId) { return _activities.filter(a => a.lead_id === leadId).sort((x, y) => new Date(y.fecha) - new Date(x.fecha)); }
-  function _clientActs(cid) { const ids = new Set(_clientLeads(cid).map(l => l.id)); return _activities.filter(a => _actClient(a) === cid || ids.has(a.lead_id)).sort((x, y) => new Date(y.fecha) - new Date(x.fecha)); }
+  function _clientActs(cid) { const ids = new Set(_legacyLeadIds(cid)); return _activities.filter(a => _actClient(a) === cid || ids.has(a.lead_id)).sort((x, y) => new Date(y.fecha) - new Date(x.fecha)); }
   function _leadNextTask(leadId) { return _leadActs(leadId).filter(a => a.estado === 'pendiente').sort((x, y) => new Date(x.fecha) - new Date(y.fecha))[0] || null; }
   function _fmtActDate(f) {
     if (!f) return ''; const d = new Date(f), now = new Date();
@@ -18918,8 +18933,8 @@ ${foot}
     const c = _clients.find(x => x.id === id);
     if (!c) return _vClients();
     const leads = _clientLeads(id);
-    const byStage = {}; _ORDER.forEach(s => byStage[s] = leads.filter(l => l.stage === s).length);
-    const pipe = leads.filter(l => !['ganado', 'perdido'].includes(l.stage));
+    const byStage = {}; _ORDER.forEach(s => byStage[s] = leads.filter(l => _dealStage(l) === s).length);
+    const pipe = leads.filter(l => !['ganado', 'perdido'].includes(_dealStage(l)));
     const tabs = ['Overview', 'Leads', 'Campañas', 'Secuencias', 'Actividades', 'Respuestas', 'Reportes', 'Notas'];
     const tabBtns = tabs.map((t, i) => `<button class="lm-ws-tab${i === 0 ? ' active' : ''}" onclick="LeadManagerModule.clientTab(this,'${t}')">${t}</button>`).join('');
     const pipeBar = _ORDER.map(s => `<div class="lm-pipe__seg lm-pipe__seg--${s}"><span class="lm-pipe__n">${byStage[s]}</span><span class="lm-pipe__l">${STAGE_LABELS[s]}</span></div>`).join('');
@@ -18930,10 +18945,9 @@ ${foot}
         <aside class="lm-ws-side">
           <div class="lm-ws-side__top"><div class="lm-ws-side__ava">${esc((c.nombre || '?').slice(0, 1).toUpperCase())}</div><div><div class="lm-ws-side__nm">${esc(c.nombre)}</div>${_obcBadge(c.estado)}</div></div>
           <div class="lm-ws-side__acts">
-            <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openDrawer(null,${c.id})">＋ Nuevo lead</button>
             <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openClientDrawer(${c.id})">Editar cliente</button>
-            <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.clientCmpReport(${c.id})">${_ico('down')} Informe de campaña</button>
-            <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.clientSeqReport(${c.id})">${_ico('down')} Informe de secuencia</button>
+            <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.clientCmpReport(${c.id})">Informe de campaña</button>
+            <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.clientSeqReport(${c.id})">Informe de secuencia</button>
           </div>
           ${field('Responsable', esc(c.responsable))}
           ${field('Website', c.website ? `<a href="${esc(c.website)}" target="_blank" rel="noopener" class="lm-link">${esc(c.website)}</a>` : '—')}
@@ -18953,10 +18967,25 @@ ${foot}
     const c = _clients.find(x => x.id === _activeClient); const body = $('lm-ws-tabbody');
     if (c && body) body.innerHTML = _clientTabBody(tab, c, _clientLeads(c.id));
   }
+  function _clientLeadRow(c) {
+    const full = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || '—';
+    const seqs = c.sequences || [];
+    const paso = _ldPaso(c);
+    const stg = _dealStage(c);
+    return `<tr class="ldh-row" onclick="LeadManagerModule.openContactPage(${c.id})">
+      <td><div class="ldh-name">${esc(full)}</div><div class="ldh-sub">${esc([c.cargo, c.company_nombre].filter(Boolean).join(' · ')) || '&nbsp;'}</div></td>
+      <td class="ldh-dim">${seqs.length ? esc(seqs[0].nombre) : '—'}${paso ? `<div class="ldh-sub">${esc(paso)}</div>` : ''}</td>
+      <td><span class="ldh-chip" style="${STAGE_STYLES[stg] || ''}">${STAGE_LABELS[stg] || stg}</span></td>
+      <td class="ldh-date">${_ldFmtDate(c.updated_at)}</td>
+    </tr>`;
+  }
   function _clientTabBody(tab, c, leads) {
     if (tab === 'Leads') {
-      return leads.length ? `<div class="lm-cards">${leads.map(_lmCard).join('')}</div>`
-        : _empty('leads', 'Sin leads para este cliente', 'Crea leads y quedarán asociados a este cliente outbound.', 'Nuevo lead', `LeadManagerModule.openDrawer(null,${c.id})`);
+      if (!leads.length) return _empty('leads', 'Sin leads para este cliente', 'Se asocian por "Cliente outbound" desde Contactos, o al enrolarlos en una secuencia de este cliente.', '', '');
+      return `<div class="ldh-table-wrap"><table class="ldh-table ldh-lead-table">
+        <colgroup><col style="width:220px"><col style="width:200px"><col style="width:120px"><col style="width:90px"></colgroup>
+        <thead><tr><th>Lead</th><th>Secuencia · paso</th><th>Resultado</th><th>Fecha</th></tr></thead>
+        <tbody>${leads.map(_clientLeadRow).join('')}</tbody></table></div>`;
     }
     if (tab === 'Campañas') {
       const cs = _sortCmp(_campaignsByClient(c.id));
@@ -18991,8 +19020,8 @@ ${foot}
         <div class="lm-ov__col">
           <h4 class="lm-ov__h">Resumen</h4>
           <div class="lm-ov__row"><span>Leads</span><b>${leads.length}</b></div>
-          <div class="lm-ov__row"><span>En pipeline</span><b>${leads.filter(l => !['ganado','perdido'].includes(l.stage)).length}</b></div>
-          <div class="lm-ov__row"><span>Ganados</span><b>${leads.filter(l => l.stage === 'ganado').length}</b></div>
+          <div class="lm-ov__row"><span>En pipeline</span><b>${leads.filter(l => !['ganado','perdido'].includes(_dealStage(l))).length}</b></div>
+          <div class="lm-ov__row"><span>Ganados</span><b>${leads.filter(l => _dealStage(l) === 'ganado').length}</b></div>
           <div class="lm-ov__row"><span>Valor estimado</span><b>${_money(_sumv(leads))}</b></div>
           ${c.notas ? `<h4 class="lm-ov__h" style="margin-top:16px">Notas</h4><p class="lm-ov__notes">${esc(c.notas)}</p>` : ''}
         </div>
