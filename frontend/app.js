@@ -17721,22 +17721,24 @@ ${foot}
     const close = "document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove())";
     const item = (label, onclick, dot) => `<button class="cp-mark-menu__b" onclick="${close};${onclick}">${dot ? `<span class="cp-mark-dot" style="background:${dot}"></span>` : ''}${label}</button>`;
     const quick = _DISPOS.filter(d => d[0] !== 'aceptado');
-    let html = `<div class="cp-mark-menu__grid">` + item('＋ Registrar respuesta', `LeadManagerModule.cpOpenRegisterReply(${cid})`) + `</div>`;
+    let html = `<div class="cp-mark-menu__list">` + item('Registrar respuesta', `LeadManagerModule.cpOpenRegisterReply(${cid})`) + `</div>`;
     html += `<div class="cp-mark-menu__sep"></div>`;
     // "Resolver respuesta" es un submenu que se abre solo al pasar el cursor (no al
     // clickear) — así el menú principal no se llena de golpe con las 8 opciones.
+    // cp-mark-menu__list (no __grid): una opción por fila, sin íconos — __grid sigue
+    // usándose tal cual en otros menús (ej. "Marcar resultado" del task-runner).
     html += `<div class="cp-mark-menu__sub">
       <div class="cp-mark-menu__b cp-mark-menu__b--sub">Resolver respuesta <span class="cp-mark-menu__arrow">▸</span></div>
-      <div class="cp-mark-menu__subpanel"><div class="cp-mark-menu__grid">`
+      <div class="cp-mark-menu__subpanel"><div class="cp-mark-menu__list">`
       + quick.map(d => item(esc(d[1]), `LeadManagerModule.ibResolveDisp(${cid},'${d[0]}')`, d[2])).join('')
       + `</div></div>
     </div>`;
     html += `<div class="cp-mark-menu__sep"></div>`;
-    html += `<div class="cp-mark-menu__grid">` + item('↩ Responder', `LeadManagerModule.ibSetMode('reply')`) + item('↗ Reenviar', `LeadManagerModule.ibSetMode('fwd')`) + item('🗒 Nota interna', `LeadManagerModule.ibSetMode('note')`) + `</div>`;
+    html += `<div class="cp-mark-menu__list">` + item('Responder', `LeadManagerModule.ibSetMode('reply')`) + item('Reenviar', `LeadManagerModule.ibSetMode('fwd')`) + item('Nota interna', `LeadManagerModule.ibSetMode('note')`) + `</div>`;
     html += `<div class="cp-mark-menu__sep"></div>`;
-    html += `<div class="cp-mark-menu__grid">` + item('＋ Crear referido', `LeadManagerModule.ldRefer(${cid},'derivado')`) + `</div>`;
+    html += `<div class="cp-mark-menu__list">` + item('Crear referido', `LeadManagerModule.ldRefer(${cid},'derivado')`) + `</div>`;
     html += `<div class="cp-mark-menu__sep"></div>`;
-    html += `<div class="cp-mark-menu__grid">` + item('📊 Acciones del lead', `LeadManagerModule.ibShowLeadActions(${cid})`) + `</div>`;
+    html += `<div class="cp-mark-menu__list">` + item('Acciones del lead', `LeadManagerModule.ibShowLeadActions(${cid})`) + `</div>`;
     const menu = document.createElement('div');
     menu.className = 'cp-mark-menu';
     menu.innerHTML = html;

@@ -11814,6 +11814,9 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .cp-mark-menu { position: fixed; z-index: 10050; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 24px rgba(16,24,20,.10); padding: 5px; min-width: 300px; max-width: 340px; display: flex; flex-direction: column; gap: 1px; font-family: var(--font); }
 .cp-mark-menu__h { font-size: .72rem; font-weight: 500; color: var(--text-muted); padding: 4px 8px 3px; }
 .cp-mark-menu__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; }
+/* Una opción por fila (sin columnas) — usado en el menú "⋮" del Inbox; __grid
+   sigue igual para los menús que la necesitan (ej. "Marcar resultado"). */
+.cp-mark-menu__list { display: flex; flex-direction: column; gap: 1px; }
 .cp-mark-menu__b { display: flex; align-items: center; gap: 7px; width: 100%; text-align: left; background: none; border: none; font: inherit; font-size: .78rem; font-weight: 500; color: var(--text-primary); padding: 6px 8px; border-radius: 7px; cursor: pointer; line-height: 1.2; }
 .cp-mark-menu__b:hover { background: var(--surface-hover); }
 .cp-mark-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
