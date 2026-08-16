@@ -5539,6 +5539,33 @@ app.get('/api/lm/messages', requireAuth, async (req, res) => {
   } catch (err) { console.error('[lm-msgs] GET', err.message); res.status(500).json({ error: 'Error al cargar mensajes' }); }
 });
 
+// "Acciones del lead": línea de tiempo real de cada email enviado a este contacto —
+// cuándo se mandó, cada apertura (con hora) y cada clic (con hora y qué link) — no
+// solo el conteo agregado que ya devuelve /api/lm/messages. Los eventos ya se
+// capturan hace rato en lm_message_events (pixel de apertura + redirect de clics);
+// esto solo expone esa data cruda para mostrarla como historial.
+app.get('/api/lm/contacts/:id/track-events', requireAuth, async (req, res) => {
+  const cid = parseInt(req.params.id);
+  if (!cid) return res.status(400).json({ error: 'Contacto inválido' });
+  try {
+    const { rows: messages } = await pool.query(
+      `SELECT id, asunto, to_email, estado, sent_at FROM lm_messages
+        WHERE user_id=$1 AND contact_id=$2 AND sent_at IS NOT NULL
+        ORDER BY sent_at DESC LIMIT 50`, [req.workspaceOwnerId, cid]);
+    const ids = messages.map(m => m.id);
+    let events = [];
+    if (ids.length) {
+      const { rows } = await pool.query(
+        `SELECT message_id, tipo, url, created_at FROM lm_message_events
+          WHERE message_id = ANY($1) ORDER BY created_at ASC`, [ids]);
+      events = rows;
+    }
+    const byMsg = new Map(messages.map(m => [m.id, { ...m, events: [] }]));
+    for (const e of events) { const m = byMsg.get(e.message_id); if (m) m.events.push(e); }
+    res.json([...byMsg.values()]);
+  } catch (err) { console.error('[track-events] GET', err.message); res.status(500).json({ error: 'Error al cargar el historial' }); }
+});
+
 // ── Verificación/enriquecimiento de contactos (cola con el pipeline propio) ──
 app.post('/api/lm/contacts/verify-email', requireAuth, (req, res) => {
   const ids = Array.isArray((req.body || {}).ids) ? req.body.ids.map(Number).filter(Boolean) : [];

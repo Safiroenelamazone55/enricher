@@ -17723,12 +17723,20 @@ ${foot}
     const quick = _DISPOS.filter(d => d[0] !== 'aceptado');
     let html = `<div class="cp-mark-menu__grid">` + item('＋ Registrar respuesta', `LeadManagerModule.cpOpenRegisterReply(${cid})`) + `</div>`;
     html += `<div class="cp-mark-menu__sep"></div>`;
-    html += `<div class="cp-mark-menu__grid">` + item('↗ Reenviar', `LeadManagerModule.ibSetMode('fwd')`) + item('🗒 Nota interna', `LeadManagerModule.ibSetMode('note')`) + `</div>`;
+    // "Resolver respuesta" es un submenu que se abre solo al pasar el cursor (no al
+    // clickear) — así el menú principal no se llena de golpe con las 8 opciones.
+    html += `<div class="cp-mark-menu__sub">
+      <div class="cp-mark-menu__b cp-mark-menu__b--sub">Resolver respuesta <span class="cp-mark-menu__arrow">▸</span></div>
+      <div class="cp-mark-menu__subpanel"><div class="cp-mark-menu__grid">`
+      + quick.map(d => item(esc(d[1]), `LeadManagerModule.ibResolveDisp(${cid},'${d[0]}')`, d[2])).join('')
+      + `</div></div>
+    </div>`;
     html += `<div class="cp-mark-menu__sep"></div>`;
-    html += `<div class="cp-mark-menu__h">Resolver respuesta</div>`;
-    html += `<div class="cp-mark-menu__grid">` + quick.map(d => item(esc(d[1]), `LeadManagerModule.ibResolveDisp(${cid},'${d[0]}')`, d[2])).join('') + `</div>`;
+    html += `<div class="cp-mark-menu__grid">` + item('↩ Responder', `LeadManagerModule.ibSetMode('reply')`) + item('↗ Reenviar', `LeadManagerModule.ibSetMode('fwd')`) + item('🗒 Nota interna', `LeadManagerModule.ibSetMode('note')`) + `</div>`;
     html += `<div class="cp-mark-menu__sep"></div>`;
     html += `<div class="cp-mark-menu__grid">` + item('＋ Crear referido', `LeadManagerModule.ldRefer(${cid},'derivado')`) + `</div>`;
+    html += `<div class="cp-mark-menu__sep"></div>`;
+    html += `<div class="cp-mark-menu__grid">` + item('📊 Acciones del lead', `LeadManagerModule.ibShowLeadActions(${cid})`) + `</div>`;
     const menu = document.createElement('div');
     menu.className = 'cp-mark-menu';
     menu.innerHTML = html;
@@ -17738,6 +17746,43 @@ ${foot}
     menu.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 340))}px`;
     menu.style.top = `${r.bottom + 6}px`;
     setTimeout(() => document.addEventListener('click', function onDoc(e) { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', onDoc); } }), 0);
+  }
+  // "Acciones del lead": línea de tiempo real de apertura/clics por cada correo
+  // enviado — no solo el conteo agregado. El trackeo (píxel de apertura + redirect
+  // de clics con la URL) ya existía hace rato en lm_message_events; esto solo lo
+  // expone. Formato: "Enviado — fecha/hora", luego cada apertura y cada clic (con
+  // qué link) en orden, incluyendo reaperturas/re-clics si los hay.
+  async function ibShowLeadActions(cid) {
+    document.getElementById('lm-track-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'lm-track-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) m.remove(); };
+    m.innerHTML = `<div class="fin-pi-box" style="max-width:460px">
+      <div class="fin-pi-box__hd"><h3>Acciones del lead</h3><button class="fin-pi-x" onclick="document.getElementById('lm-track-modal').remove()">✕</button></div>
+      <div class="fin-pi-form" id="lm-track-body" style="max-height:60vh;overflow-y:auto"><div class="fin-cfg-hint">Cargando…</div></div>
+    </div>`;
+    document.body.appendChild(m);
+    const body = document.getElementById('lm-track-body');
+    try {
+      const res = await apiFetch(`${API}/lm/contacts/${cid}/track-events`);
+      const rows = res.ok ? await res.json() : [];
+      if (!body) return;
+      if (!rows.length) { body.innerHTML = `<div class="fin-cfg-hint">Todavía no se le mandó ningún correo trackeado.</div>`; return; }
+      const fmt = d => d ? new Date(d).toLocaleString('es-PE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+      body.innerHTML = rows.map(msg => {
+        const opens = msg.events.filter(e => e.tipo === 'open');
+        const clicks = msg.events.filter(e => e.tipo === 'click');
+        const items = [{ icon: '📤', label: 'Enviado', at: msg.sent_at }];
+        opens.forEach((o, i) => items.push({ icon: '👁', label: opens.length > 1 ? `Abrió (${i + 1}ª vez)` : 'Abrió el correo', at: o.created_at }));
+        clicks.forEach(c => items.push({ icon: '🖱', label: `Clic en ${(c.url || '').length > 46 ? c.url.slice(0, 43) + '…' : c.url}`, at: c.created_at }));
+        return `<div class="lm-track-msg">
+          <div class="lm-track-msg__subj">${esc(msg.asunto || '(sin asunto)')}</div>
+          <div class="lm-track-msg__meta">${opens.length ? `👁 ${opens.length} apertura${opens.length === 1 ? '' : 's'}` : 'Sin abrir'}${clicks.length ? ` · 🖱 ${clicks.length} clic${clicks.length === 1 ? '' : 's'}` : ''}</div>
+          <div class="lm-track-tl">${items.map(it => `<div class="lm-track-tl__row"><span class="lm-track-tl__ico">${it.icon}</span><span class="lm-track-tl__lbl">${esc(it.label)}</span><span class="lm-track-tl__at">${fmt(it.at)}</span></div>`).join('')}</div>
+        </div>`;
+      }).join('');
+    } catch (e) {
+      if (body) body.innerHTML = `<div class="fin-cfg-hint fin-cfg-hint--err">Error: ${esc(e.message)}</div>`;
+    }
   }
   async function ibResolveDisp(cid, disp) {
     if (disp === 'mas_adelante') return ldNurture(cid);
@@ -22933,7 +22978,7 @@ ${foot}
     mbSignatureOpen, mbSignaturePreview, mbSignatureClear, mbSignatureInsertLink, mbSignatureImg, mbSignatureSave,
     mbAdminConsentSync, mbAdminConsentToggleHtml,
     mbAdminConsentSetSigner, mbAdminConsentAddChip, mbAdminConsentRmChip, mbAdminConsentInputKey, mbAdminConsentClearRecipients,
-    ibOpen, ibTab, ibCli, ibDisp, ibSend, ibSaveNote, ibForward, ibSetMode, ibMsgNav, ibSchedToggle, ibSchedPick, ibCancelSched, ibResolveDisp, ibOpenResolveMenu,
+    ibOpen, ibTab, ibCli, ibDisp, ibSend, ibSaveNote, ibForward, ibSetMode, ibMsgNav, ibSchedToggle, ibSchedPick, ibCancelSched, ibResolveDisp, ibOpenResolveMenu, ibShowLeadActions,
     ibRowMenu, ibCloseMenu, ibMarkUnread,
     pendingAcceptOpen, pendingAcceptToggleAll, pendingAcceptApplyFilters, pendingAcceptMark,
     openActivityDrawer, closeActivityDrawer, saveActivity, confirmDeleteActivity, markActDone,
