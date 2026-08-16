@@ -11650,17 +11650,25 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .seq-tasks-start:hover { background: var(--brand-d, #0062CC); }
 .seq-tasks-hd--none { color: var(--muted, #B4AFA8); }
 /* Cola de empresas ("empresa primero" — Empresas → Enrolar en secuencia → pestaña Empresas) */
-.seq-co-hint { font-size: .8rem; color: var(--muted, #B4AFA8); margin-bottom: 12px; }
+.seq-list-hd { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 10px; }
+.seq-list-hd h3 { font-size: .92rem; font-weight: 700; color: var(--text, #0A2540); margin: 0; }
+.seq-list-hd__all { font-size: .78rem; font-weight: 600; color: var(--brand-d, #0062CC); text-decoration: none; }
+.seq-list-hd__all:hover { text-decoration: underline; }
 .seq-co-list { display: flex; flex-direction: column; gap: 8px; }
-.seq-co-card { background: #fff; border: 1px solid var(--border, #EAE7E2); border-radius: 12px; padding: 12px 14px; }
-.seq-co-card__hd { margin-bottom: 8px; }
-.seq-co-card__nm { font-size: .9rem; font-weight: 700; color: var(--text, #0A2540); display: flex; align-items: center; gap: 8px; }
-.seq-co-card__tier { font-size: .66rem; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--brand-d, #0062CC); background: var(--brand-ll, #F1EFEB); padding: 2px 8px; border-radius: 999px; }
-.seq-co-card__meta { font-size: .78rem; color: var(--text2, #45586A); margin-top: 2px; }
-.seq-co-card__acts { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.seq-co-card__noli { font-size: .78rem; color: var(--muted, #B4AFA8); font-style: italic; }
-.seq-co-card__discard { margin-left: auto; border: none; background: none; color: var(--muted, #B4AFA8); font-size: .78rem; cursor: pointer; padding: 6px 4px; }
-.seq-co-card__discard:hover { color: #C4342B; }
+.seq-co-card { display: flex; align-items: center; gap: 12px; background: #fff; border: 1px solid var(--border, #EAE7E2); border-radius: 12px; padding: 10px 12px; cursor: pointer; transition: border-color .12s, box-shadow .12s; }
+.seq-co-card:hover { border-color: var(--brand-l, #B8D9FF); box-shadow: 0 2px 10px rgba(0,31,63,.06); }
+.seq-co-card__main { flex: 1; min-width: 0; }
+.seq-co-card__name { font-size: .9rem; font-weight: 700; color: var(--text, #0A2540); display: flex; align-items: center; gap: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.seq-co-card__tier { font-size: .66rem; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--brand-d, #0062CC); background: var(--brand-ll, #F1EFEB); padding: 2px 8px; border-radius: 999px; flex-shrink: 0; }
+.seq-co-card__sub { font-size: .78rem; color: var(--text2, #45586A); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.seq-co-card__right { text-align: right; flex-shrink: 0; }
+.seq-co-card__paso { font-size: .78rem; color: var(--text, #0A2540); font-weight: 500; white-space: nowrap; }
+.seq-co-card__status { font-size: .74rem; color: #92400E; margin-top: 2px; display: flex; align-items: center; justify-content: flex-end; gap: 5px; white-space: nowrap; }
+.seq-co-card__dot { width: 6px; height: 6px; border-radius: 50%; background: #D97706; flex-shrink: 0; }
+.seq-co-card__menu { border: none; background: none; color: #B4AFA8; cursor: pointer; font-size: 15px; font-weight: 700; line-height: 1; padding: 4px 8px; border-radius: 6px; flex-shrink: 0; }
+.seq-co-card__menu:hover { background: var(--bg, #F1EFEB); color: var(--text, #0A2540); }
+.seq-co-more { display: flex; align-items: center; justify-content: center; gap: 5px; width: 100%; margin-top: 8px; border: none; background: none; color: var(--brand-d, #0062CC); font-size: .8rem; font-weight: 600; padding: 9px; cursor: pointer; border-radius: 8px; font-family: inherit; }
+.seq-co-more:hover { background: var(--bg, #F1EFEB); }
 .seq-co-form { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border, #EAE7E2); display: flex; flex-direction: column; gap: 6px; }
 .seq-co-form__row { display: flex; gap: 8px; }
 .seq-co-form__row .form-input { flex: 1; min-width: 0; }

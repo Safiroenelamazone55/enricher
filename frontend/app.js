@@ -15077,7 +15077,7 @@ const LeadManagerModule = (() => {
   function sqSetCli(v) { _sqCli = v; _sqPaint(); }
   function sqSetEst(v) { _sqEst = v; _sqPaint(); }
   function sqSetQ(v) { _sqQ = v; _sqPaint(); }
-  function openSequence(id) { _activeSeq = id; _section = 'sequence'; _seqTab = 'empresas'; _seqPasosOpen = true; _seqContacts = null; _seqPendingCos = null; _seqMetrics = null; _seqDo = null; _seqCtEstado = ''; _seqTaskCanal = ''; _seqTaskDue = ''; _refreshNav(); _renderBody(); _seqLoadContacts(id); _seqLoadPendingCos(id); }
+  function openSequence(id) { _activeSeq = id; _section = 'sequence'; _seqTab = 'empresas'; _seqPasosOpen = true; _seqCoExpanded = false; _seqContacts = null; _seqPendingCos = null; _seqMetrics = null; _seqDo = null; _seqCtEstado = ''; _seqTaskCanal = ''; _seqTaskDue = ''; _refreshNav(); _renderBody(); _seqLoadContacts(id); _seqLoadPendingCos(id); }
   function seqPasosToggle() { _seqPasosOpen = !_seqPasosOpen; _renderBody(); }
   // Informe/Editar/Pausar/Añadir paso — antes una fila de botones en la tarjeta,
   // ahora agrupados detrás del "⋮" para que la tarjeta quede limpia como el mockup.
@@ -15878,22 +15878,53 @@ ${foot}
     if (list === null) return `<div class="cp-empty2" style="padding:22px">Cargando…</div>`;
     if (!list.length) return _empty('contacts', 'Sin empresas en cola', 'Ve a Empresas, filtra tu lista calificada (p. ej. por Target Tier) y usa "＋ Enrolar en secuencia" para mandarlas acá.', 'Ir a Empresas', `LeadManagerModule.go('companies')`);
     const steps = _seqSteps(id);
-    return `<div class="seq-co-hint">Para cada empresa: abre su LinkedIn, encuentra al decisor, agrégalo — el Paso 1 (invitación) queda registrado solo.</div>
-      <div class="clients-table-wrap"><table class="clients-table lm-dt"><thead><tr><th>Empresa</th><th>Progreso</th><th>Estado</th><th></th></tr></thead><tbody>${list.map(row => _coQueueRow(row, id, steps)).join('')}</tbody></table></div>`;
+    const LIMIT = 5;
+    const visible = _seqCoExpanded ? list : list.slice(0, LIMIT);
+    const remaining = list.length - visible.length;
+    return `<div class="seq-list-hd"><h3>Empresas (${list.length})</h3><a href="javascript:void(0)" class="seq-list-hd__all" onclick="LeadManagerModule.go('companies')">Ver todas</a></div>
+      <div class="seq-co-list">${visible.map(row => _seqCoCard(row, id, steps)).join('')}</div>
+      ${remaining > 0 ? `<button class="seq-co-more" onclick="LeadManagerModule.seqCoExpandToggle()">Ver ${remaining} empresa${remaining !== 1 ? 's' : ''} más <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>` : ''}`;
   }
-  function _coQueueRow(row, seqId, steps) {
-    const li = _liSalesNavUrl(row.linkedin_sales_nav, row.linkedin);
+  function _seqCoCard(row, seqId, steps) {
     const N = steps.length;
     const stTitle = N ? (steps[0].titulo || _accionLabel(steps[0].canal, steps[0].accion) || (_TOUCH[steps[0].canal] || _TOUCH.email)[0]) : '—';
-    return `<tr class="clients-table__row" onclick="LeadManagerModule.seqCoTaskOpen(${seqId},${row.company_sequence_id})" style="cursor:pointer">
-      <td><div class="client-cell-name"><div class="lm-co-logo"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4M10 10h4M10 14h4M10 18h4"/></svg></div><div><div class="client-nombre">${esc(row.nombre || row.dominio || '—')}${row.target_tier ? `<span class="seq-co-card__tier" style="margin-left:6px">${esc(row.target_tier)}</span>` : ''}</div>${row.industria ? `<div class="client-empresa">${esc([row.industria, row.tamano && `${row.tamano} emp.`, row.pais].filter(Boolean).join(' · '))}</div>` : ''}</div></div></td>
-      <td class="client-meta"><div class="seq-prog"><div class="seq-prog__bar"><span style="width:0%"></span></div><span class="seq-prog__t">Paso 1/${N || '—'} · ${esc(stTitle)}</span></div></td>
-      <td><span class="client-badge" style="background:#F1EFEB;color:#92400E">Pendiente</span></td>
-      <td class="lm-dt-act" onclick="event.stopPropagation()">
-        ${li ? `<a class="lm-mini-b" title="Abrir LinkedIn" href="${esc(li)}" target="_blank" rel="noopener">in</a>` : ''}
-        <button class="lm-mini-b" title="No encontré a nadie viable" onclick="LeadManagerModule.coQueueDiscard(${row.company_sequence_id})">✕</button>
-      </td>
-    </tr>`;
+    return `<div class="seq-co-card" onclick="LeadManagerModule.seqCoTaskOpen(${seqId},${row.company_sequence_id})">
+      <div class="lm-co-logo"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4M10 10h4M10 14h4M10 18h4"/></svg></div>
+      <div class="seq-co-card__main">
+        <div class="seq-co-card__name">${esc(row.nombre || row.dominio || '—')}${row.target_tier ? `<span class="seq-co-card__tier">${esc(row.target_tier)}</span>` : ''}</div>
+        ${(row.industria || row.tamano || row.pais) ? `<div class="seq-co-card__sub">${esc([row.industria, row.tamano && `${row.tamano} employees`, row.pais].filter(Boolean).join(' · '))}</div>` : ''}
+      </div>
+      <div class="seq-co-card__right">
+        <div class="seq-co-card__paso">Paso 1/${N || '—'} · ${esc(stTitle)}</div>
+        <div class="seq-co-card__status"><span class="seq-co-card__dot"></span>Pendiente</div>
+      </div>
+      <button class="seq-co-card__menu" onclick="event.stopPropagation();LeadManagerModule.seqCoRowMenu(event,${row.company_sequence_id})">⋮</button>
+    </div>`;
+  }
+  function seqCoExpandToggle() {
+    _seqCoExpanded = !_seqCoExpanded;
+    const el = document.getElementById('seq-tabwrap');
+    if (el && _activeSeq) el.innerHTML = _seqTabContent(_activeSeq); else _renderBody();
+  }
+  function seqCoRowMenu(ev, companySeqId) {
+    if (ev && ev.stopPropagation) ev.stopPropagation();
+    document.querySelectorAll('.cp-mark-menu').forEach(m => m.remove());
+    const row = (_seqPendingCos || []).find(r => r.company_sequence_id === companySeqId);
+    if (!row) return;
+    const li = _liSalesNavUrl(row.linkedin_sales_nav, row.linkedin);
+    const close = "document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove())";
+    let html = `<div class="cp-mark-menu__list">`;
+    if (li) html += `<a class="cp-mark-menu__b" href="${esc(li)}" target="_blank" rel="noopener" onclick="${close}">Abrir LinkedIn</a>`;
+    html += `<button class="cp-mark-menu__b" onclick="${close};LeadManagerModule.coQueueDiscard(${companySeqId})">No encontré a nadie viable</button></div>`;
+    const menu = document.createElement('div');
+    menu.className = 'cp-mark-menu';
+    menu.style.minWidth = '210px';
+    menu.innerHTML = html;
+    document.body.appendChild(menu);
+    const t = (ev && (ev.currentTarget || ev.target)) || document.body;
+    const r = t.getBoundingClientRect();
+    menu.style.left = `${Math.max(8, Math.min(r.right - 210, window.innerWidth - 220))}px`;
+    menu.style.top = `${r.bottom + 6}px`;
   }
   function _coQueueAddForm(row) {
     const rid = row.company_sequence_id;
@@ -20760,6 +20791,7 @@ ${foot}
   let _cpDone = 0;            // tareas COMPLETADAS en la corrida → para el progreso "X de Y" (Y = hechas + restantes)
   let _seqTab = 'empresas'; // qué sección se ve en el panel derecho (Pasos ya no es un "tab" — vive siempre en la tarjeta izquierda)
   let _seqPasosOpen = true; // tarjeta de Pasos visible (split) vs colapsada (« / › manual)
+  let _seqCoExpanded = false; // lista de Empresas en cola: mostrar todas (true) o solo las primeras 5 (false)
   let _seqCtEstado = ''; // filtro de estado en la pestaña Contactos de la secuencia
   let _seqTaskCanal = ''; // filtro por canal en la pestaña Tareas de la secuencia
   let _seqTaskDue = '';   // filtro por estatus de tarea: '' todas | 'over' vencidas | 'today' hoy
@@ -23123,7 +23155,7 @@ ${foot}
     cpResumeSeq, cpFocusField, cpOpenRegisterReply, cpSaveRegisterReply,
     openCompany, closeCompany, saveCompany, deleteCompany, filterCompanies, toggleCo, toggleCoAll, clearCoSel, toggleCoSelMode, bulkDeleteCompanies, coEnrolOpen, coEnrolFilter, coEnrolPick,
     coQueueAddContact, coQueueDiscard, coQueueTogglePrimary, coQueueContinue,
-    seqCoTaskOpen, seqCoDoClose, seqOpenCompanyLinkedIn,
+    seqCoTaskOpen, seqCoDoClose, seqOpenCompanyLinkedIn, seqCoRowMenu, seqCoExpandToggle,
     openDrawer, closeDrawer, save, confirmDelete, convertToClient,
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
     openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
