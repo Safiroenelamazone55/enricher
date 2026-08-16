@@ -5562,7 +5562,16 @@ app.get('/api/lm/contacts/:id/track-events', requireAuth, async (req, res) => {
     }
     const byMsg = new Map(messages.map(m => [m.id, { ...m, events: [] }]));
     for (const e of events) { const m = byMsg.get(e.message_id); if (m) m.events.push(e); }
-    res.json([...byMsg.values()]);
+
+    // También los RECIBIDOS (respuestas reales, auto-respuestas, mensajes del
+    // equipo) — Jenny quiere ver la correspondencia completa acá, no solo lo
+    // que se mandó.
+    const { rows: received } = await pool.query(
+      `SELECT id, asunto, from_email, tipo, received_at FROM lm_inbox_messages
+        WHERE user_id=$1 AND contact_id=$2 ORDER BY received_at DESC LIMIT 50`,
+      [req.workspaceOwnerId, cid]);
+
+    res.json({ sent: [...byMsg.values()], received });
   } catch (err) { console.error('[track-events] GET', err.message); res.status(500).json({ error: 'Error al cargar el historial' }); }
 });
 

@@ -17775,6 +17775,10 @@ ${foot}
   // de clics con la URL) ya existía hace rato en lm_message_events; esto solo lo
   // expone. Formato: "Enviado — fecha/hora", luego cada apertura y cada clic (con
   // qué link) en orden, incluyendo reaperturas/re-clics si los hay.
+  // Correspondencia completa (enviados + recibidos) en una sola línea de tiempo.
+  // Cada correo ENVIADO viene colapsado por default (fecha + insignias 👁/🖱) — un
+  // clic despliega el detalle: cada apertura y cada clic con su hora exacta (y qué
+  // link, si fue un clic). Los RECIBIDOS son solo informativos, sin desplegable.
   async function ibShowLeadActions(cid) {
     document.getElementById('lm-track-modal')?.remove();
     const m = document.createElement('div'); m.id = 'lm-track-modal'; m.className = 'fin-pi-backdrop';
@@ -17787,21 +17791,38 @@ ${foot}
     const body = document.getElementById('lm-track-body');
     try {
       const res = await apiFetch(`${API}/lm/contacts/${cid}/track-events`);
-      const rows = res.ok ? await res.json() : [];
+      const data = res.ok ? await res.json() : { sent: [], received: [] };
       if (!body) return;
-      if (!rows.length) { body.innerHTML = `<div class="fin-cfg-hint">Todavía no se le mandó ningún correo trackeado.</div>`; return; }
+      const sent = data.sent || [], received = data.received || [];
+      if (!sent.length && !received.length) { body.innerHTML = `<div class="fin-cfg-hint">Todavía no hay correos con este contacto.</div>`; return; }
       const fmt = d => d ? new Date(d).toLocaleString('es-PE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
-      body.innerHTML = rows.map(msg => {
-        const opens = msg.events.filter(e => e.tipo === 'open');
-        const clicks = msg.events.filter(e => e.tipo === 'click');
-        const items = [{ icon: '📤', label: 'Enviado', at: msg.sent_at }];
-        opens.forEach((o, i) => items.push({ icon: '👁', label: opens.length > 1 ? `Abrió (${i + 1}ª vez)` : 'Abrió el correo', at: o.created_at }));
-        clicks.forEach(c => items.push({ icon: '🖱', label: `Clic en ${(c.url || '').length > 46 ? c.url.slice(0, 43) + '…' : c.url}`, at: c.created_at }));
-        return `<div class="lm-track-msg">
-          <div class="lm-track-msg__subj">${esc(msg.asunto || '(sin asunto)')}</div>
-          <div class="lm-track-msg__meta">${opens.length ? `👁 ${opens.length} apertura${opens.length === 1 ? '' : 's'}` : 'Sin abrir'}${clicks.length ? ` · 🖱 ${clicks.length} clic${clicks.length === 1 ? '' : 's'}` : ''}</div>
-          <div class="lm-track-tl">${items.map(it => `<div class="lm-track-tl__row"><span class="lm-track-tl__ico">${it.icon}</span><span class="lm-track-tl__lbl">${esc(it.label)}</span><span class="lm-track-tl__at">${fmt(it.at)}</span></div>`).join('')}</div>
-        </div>`;
+      const rows = [
+        ...sent.map(s => ({ kind: 'sent', at: s.sent_at, d: s })),
+        ...received.map(r => ({ kind: 'received', at: r.received_at, d: r })),
+      ].sort((a, b) => new Date(b.at) - new Date(a.at));
+      const TIPO_LBL = { reply: 'Respuesta', ooo: 'Auto-respuesta', equipo: 'Equipo', bounce: 'Rebote', nota: 'Nota interna' };
+      body.innerHTML = rows.map((r, i) => {
+        if (r.kind === 'received') {
+          return `<div class="lm-track-row">
+            <span class="lm-track-row__ico">📥</span>
+            <span class="lm-track-row__lbl">${esc(r.d.asunto || '(sin asunto)')} <span class="lm-track-row__tag">· ${esc(TIPO_LBL[r.d.tipo] || 'Recibido')}</span></span>
+            <span class="lm-track-row__at">${fmt(r.at)}</span>
+          </div>`;
+        }
+        const opens = r.d.events.filter(e => e.tipo === 'open');
+        const clicks = r.d.events.filter(e => e.tipo === 'click');
+        const detId = `lm-track-det-${i}`;
+        const items = [{ icon: '📤', label: 'Enviado', at: r.d.sent_at },
+          ...opens.map((o, oi) => ({ icon: '👁', label: opens.length > 1 ? `Abrió (${oi + 1}ª vez)` : 'Abrió el correo', at: o.created_at })),
+          ...clicks.map(c => ({ icon: '🖱', label: `Clic en ${(c.url || '').length > 46 ? c.url.slice(0, 43) + '…' : c.url}`, at: c.created_at }))];
+        return `<div class="lm-track-row lm-track-row--sent" onclick="const d=document.getElementById('${detId}');d.classList.toggle('hidden');this.querySelector('.lm-track-row__chev').classList.toggle('open')">
+          <span class="lm-track-row__ico">📤</span>
+          <span class="lm-track-row__lbl">${esc(r.d.asunto || '(sin asunto)')}</span>
+          <span class="lm-track-row__badges">${opens.length ? `👁 ${opens.length}` : '<span class="lm-track-row__nobadge">Sin abrir</span>'}${clicks.length ? ` 🖱 ${clicks.length}` : ''}</span>
+          <span class="lm-track-row__at">${fmt(r.at)}</span>
+          <span class="lm-track-row__chev">▾</span>
+        </div>
+        <div class="lm-track-det hidden" id="${detId}">${items.map(it => `<div class="lm-track-tl__row"><span class="lm-track-tl__ico">${it.icon}</span><span class="lm-track-tl__lbl">${esc(it.label)}</span><span class="lm-track-tl__at">${fmt(it.at)}</span></div>`).join('')}</div>`;
       }).join('');
     } catch (e) {
       if (body) body.innerHTML = `<div class="fin-cfg-hint fin-cfg-hint--err">Error: ${esc(e.message)}</div>`;

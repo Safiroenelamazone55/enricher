@@ -11830,13 +11830,22 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .cp-mark-menu__arrow { color: var(--text-muted); font-size: .68rem; }
 .cp-mark-menu__subpanel { display: none; position: absolute; top: -5px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 24px rgba(16,24,20,.10); padding: 5px; min-width: 300px; max-width: 340px; z-index: 10051; }
 .cp-mark-menu__sub:hover .cp-mark-menu__b--sub { background: var(--surface-hover); }
-/* "Acciones del lead": historial de apertura/clics por correo enviado. */
-.lm-track-msg { padding: 10px 4px; border-bottom: 1px solid var(--border); }
-.lm-track-msg:last-child { border-bottom: none; }
-.lm-track-msg__subj { font-size: .82rem; font-weight: 600; color: var(--text-primary); }
-.lm-track-msg__meta { font-size: .72rem; color: var(--text-muted); margin: 2px 0 8px; }
-.lm-track-tl { display: flex; flex-direction: column; gap: 5px; }
-.lm-track-tl__row { display: flex; align-items: center; gap: 8px; font-size: .76rem; }
+/* "Acciones del lead": correspondencia completa, enviados con desplegable de
+   apertura/clics (colapsado por default) + recibidos como fila informativa. */
+.lm-track-row { display: flex; align-items: center; gap: 8px; padding: 8px 4px; border-bottom: 1px solid var(--border); font-size: .78rem; }
+.lm-track-row--sent { cursor: pointer; }
+.lm-track-row--sent:hover { background: var(--surface-hover); }
+.lm-track-row__ico { flex-shrink: 0; width: 18px; text-align: center; }
+.lm-track-row__lbl { flex: 1; min-width: 0; color: var(--text-primary); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lm-track-row__tag { color: var(--text-muted); font-weight: 400; }
+.lm-track-row__badges { flex-shrink: 0; font-size: .72rem; color: var(--text-secondary); white-space: nowrap; }
+.lm-track-row__nobadge { color: var(--text-muted); }
+.lm-track-row__at { flex-shrink: 0; font-size: .68rem; color: var(--text-muted); white-space: nowrap; }
+.lm-track-row__chev { flex-shrink: 0; font-size: .64rem; color: var(--text-muted); transition: transform .12s; }
+.lm-track-row__chev.open { transform: rotate(180deg); }
+.lm-track-det { padding: 2px 4px 10px 30px; display: flex; flex-direction: column; gap: 5px; border-bottom: 1px solid var(--border); }
+.lm-track-det.hidden { display: none; }
+.lm-track-tl__row { display: flex; align-items: center; gap: 8px; font-size: .74rem; }
 .lm-track-tl__ico { flex-shrink: 0; width: 18px; text-align: center; }
 .lm-track-tl__lbl { flex: 1; min-width: 0; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lm-track-tl__at { flex-shrink: 0; font-size: .68rem; color: var(--text-muted); }
