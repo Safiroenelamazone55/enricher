@@ -19469,8 +19469,8 @@ ${foot}
           <button class="ldh-act" title="Convertir en deal (valor · probabilidad · cierre)" onclick="LeadManagerModule.ldToDeal(${c.id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></button>
         </td></tr>`;
     }).join('');
-    wrap.innerHTML = `<div class="ldh-table-wrap"><table class="ldh-table">
-      <colgroup><col style="width:16%"><col style="width:10%"><col style="width:8%"><col style="width:14%"><col style="width:8%"><col style="width:6%"><col><col style="width:106px"></colgroup>
+    wrap.innerHTML = `<div class="ldh-table-wrap"><table class="ldh-table ldh-lead-table">
+      <colgroup><col style="width:170px"><col style="width:110px"><col style="width:90px"><col style="width:160px"><col style="width:110px"><col style="width:70px"><col><col style="width:106px"></colgroup>
       <thead><tr><th>Lead</th><th>Contacto</th><th>Cliente</th><th>Secuencia · paso</th><th>Resultado</th><th>Fecha</th><th>Nota (clic para editar)</th><th></th></tr></thead>
       <tbody>${rows}</tbody></table></div>`;
   }

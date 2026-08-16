@@ -13324,6 +13324,12 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
 .ldh-date { font-size: .78rem; color: var(--text-secondary); white-space: nowrap; }
 .ldh-note { font-size: .8rem; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ldh-none { color: var(--text-muted); }
+/* Cada lead SIEMPRE en una sola fila: la nota ya no se envuelve en varias líneas
+   (eso descuadraba el alto de la fila) — crece a su ancho real y la tabla scrollea
+   horizontal, como una hoja de Excel, en vez de comprimir la fila verticalmente. */
+.ldh-lead-table { table-layout: auto; width: auto; min-width: 100%; }
+.ldh-lead-table .ldh-name, .ldh-lead-table .ldh-sub, .ldh-lead-table .ldh-dim, .ldh-lead-table .ldh-cto__txt { max-width: 170px; }
+.ldh-lead-table .ldh-note__in { white-space: nowrap; overflow: visible; text-overflow: clip; max-height: none; overflow-y: visible; }
 .ldh-acts { white-space: nowrap; text-align: right; }
 td.ldh-acts { padding-left: 6px; padding-right: 10px; }
 .ldh-act { border: 1px solid var(--border); background: var(--surface); color: var(--text-muted); width: 28px; height: 28px; border-radius: 8px; cursor: pointer; display: inline-grid; place-items: center; margin-left: 5px; transition: color .12s, border-color .12s, background .12s; }
