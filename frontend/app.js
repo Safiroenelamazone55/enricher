@@ -17812,14 +17812,20 @@ ${foot}
         ...received.map(r => ({ kind: 'received', at: r.received_at, d: r })),
       ].sort((a, b) => new Date(b.at) - new Date(a.at));
       const TIPO_LBL = { reply: 'Respuesta', ooo: 'Auto-respuesta', equipo: 'Equipo', bounce: 'Rebote', nota: 'Nota interna' };
+      const EYE_SVG = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+      const CLICK_SVG = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/><path d="M13 13l6 6"/></svg>';
       let html = '', lastDay = null;
       rows.forEach((r, i) => {
         const dk = dayKey(r.at);
         if (dk !== lastDay) { html += `<div class="lm-track-date">${fmtDate(r.at)}</div>`; lastDay = dk; }
         if (r.kind === 'received') {
+          const sub = [r.d.from_email, r.d.mailbox_email].filter(Boolean).join(' → ');
           html += `<div class="lm-track-row">
             <span class="lm-track-row__time">${fmtTime(r.at)}</span>
-            <span class="lm-track-row__lbl">${esc(r.d.asunto || '(sin asunto)')}</span>
+            <div class="lm-track-row__main">
+              <span class="lm-track-row__lbl">${esc(r.d.asunto || '(sin asunto)')}</span>
+              ${sub ? `<span class="lm-track-row__sub">${esc(sub)}</span>` : ''}
+            </div>
             <span class="lm-track-row__tag">${esc(TIPO_LBL[r.d.tipo] || 'Recibido')}</span>
           </div>`;
           return;
@@ -17827,19 +17833,22 @@ ${foot}
         const opens = r.d.events.filter(e => e.tipo === 'open');
         const clicks = r.d.events.filter(e => e.tipo === 'click');
         const detId = `lm-track-det-${i}`;
-        const badgeParts = [];
-        if (opens.length) badgeParts.push(`${opens.length} apertura${opens.length > 1 ? 's' : ''}`);
-        if (clicks.length) badgeParts.push(`${clicks.length} clic${clicks.length > 1 ? 's' : ''}`);
+        const badges = [];
+        if (opens.length) badges.push(`<span class="lm-track-badge">${EYE_SVG}${opens.length}</span>`);
+        if (clicks.length) badges.push(`<span class="lm-track-badge">${CLICK_SVG}${clicks.length}</span>`);
         const items = [{ label: 'Enviado', at: r.d.sent_at },
-          ...opens.map((o, oi) => ({ label: opens.length > 1 ? `Abrió (${oi + 1}ª vez)` : 'Abrió el correo', at: o.created_at })),
-          ...clicks.map(c => ({ label: `Clic: ${(c.url || '').length > 46 ? c.url.slice(0, 43) + '…' : c.url}`, at: c.created_at }))];
+          ...opens.map((o, oi) => ({ ico: EYE_SVG, label: opens.length > 1 ? `Abrió (${oi + 1}ª vez)` : 'Abrió el correo', at: o.created_at })),
+          ...clicks.map(c => ({ ico: CLICK_SVG, label: `Clic: ${(c.url || '').length > 46 ? c.url.slice(0, 43) + '…' : c.url}`, at: c.created_at }))];
         html += `<div class="lm-track-row lm-track-row--sent" onclick="const d=document.getElementById('${detId}');d.classList.toggle('hidden');this.querySelector('.lm-track-row__chev').classList.toggle('open')">
           <span class="lm-track-row__time">${fmtTime(r.at)}</span>
-          <span class="lm-track-row__lbl">${esc(r.d.asunto || '(sin asunto)')}</span>
-          <span class="lm-track-row__badges${badgeParts.length ? '' : ' lm-track-row__nobadge'}">${badgeParts.length ? badgeParts.join(' · ') : 'Sin abrir'}</span>
+          <div class="lm-track-row__main">
+            <span class="lm-track-row__lbl">${esc(r.d.asunto || '(sin asunto)')}</span>
+            ${r.d.mailbox_email ? `<span class="lm-track-row__sub">${esc(r.d.mailbox_email)}</span>` : ''}
+          </div>
+          <span class="lm-track-row__badges${badges.length ? '' : ' lm-track-row__nobadge'}">${badges.length ? badges.join('') : 'Sin abrir'}</span>
           <span class="lm-track-row__chev">›</span>
         </div>
-        <div class="lm-track-det hidden" id="${detId}">${items.map(it => `<div class="lm-track-tl__row"><span class="lm-track-tl__lbl">${esc(it.label)}</span><span class="lm-track-tl__at">${fmtTime(it.at)}</span></div>`).join('')}</div>`;
+        <div class="lm-track-det hidden" id="${detId}">${items.map(it => `<div class="lm-track-tl__row">${it.ico ? `<span class="lm-track-tl__ico">${it.ico}</span>` : ''}<span class="lm-track-tl__lbl">${esc(it.label)}</span><span class="lm-track-tl__at">${fmtTime(it.at)}</span></div>`).join('')}</div>`;
       });
       body.innerHTML = html;
     } catch (e) {

@@ -11839,15 +11839,20 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .lm-track-row--sent { cursor: pointer; }
 .lm-track-row--sent:hover { background: var(--surface-hover); }
 .lm-track-row__time { flex-shrink: 0; width: 54px; font-size: .68rem; color: var(--text-muted); }
-.lm-track-row__lbl { flex: 1; min-width: 0; color: var(--text-primary); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lm-track-row__main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.lm-track-row__lbl { color: var(--text-primary); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lm-track-row__sub { font-size: .68rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lm-track-row__tag { flex-shrink: 0; font-size: .68rem; color: var(--text-muted); font-weight: 400; }
-.lm-track-row__badges { flex-shrink: 0; font-size: .72rem; color: var(--text-secondary); white-space: nowrap; }
+.lm-track-row__badges { flex-shrink: 0; display: flex; align-items: center; gap: 8px; font-size: .72rem; color: var(--text-secondary); white-space: nowrap; }
 .lm-track-row__nobadge { color: var(--text-muted); }
+.lm-track-badge { display: inline-flex; align-items: center; gap: 3px; }
+.lm-track-badge svg { flex-shrink: 0; }
 .lm-track-row__chev { flex-shrink: 0; font-size: .72rem; color: var(--text-muted); transition: transform .12s; }
 .lm-track-row__chev.open { transform: rotate(90deg); }
 .lm-track-det { padding: 2px 4px 8px 58px; display: flex; flex-direction: column; gap: 4px; border-bottom: 1px solid var(--border); }
 .lm-track-det.hidden { display: none; }
-.lm-track-tl__row { display: flex; align-items: center; gap: 8px; font-size: .72rem; min-width: 0; }
+.lm-track-tl__row { display: flex; align-items: center; gap: 6px; font-size: .72rem; min-width: 0; }
+.lm-track-tl__ico { flex-shrink: 0; display: inline-flex; color: var(--text-muted); }
 .lm-track-tl__lbl { flex: 1; min-width: 0; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lm-track-tl__at { flex-shrink: 0; font-size: .66rem; color: var(--text-muted); }
 .cp-dispo-badge { display: inline-block; font-size: .68rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; margin-left: 6px; vertical-align: middle; }

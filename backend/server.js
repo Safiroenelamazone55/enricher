@@ -5549,9 +5549,10 @@ app.get('/api/lm/contacts/:id/track-events', requireAuth, async (req, res) => {
   if (!cid) return res.status(400).json({ error: 'Contacto inválido' });
   try {
     const { rows: messages } = await pool.query(
-      `SELECT id, asunto, to_email, estado, sent_at FROM lm_messages
-        WHERE user_id=$1 AND contact_id=$2 AND sent_at IS NOT NULL
-        ORDER BY sent_at DESC LIMIT 50`, [req.workspaceOwnerId, cid]);
+      `SELECT m.id, m.asunto, m.to_email, m.estado, m.sent_at, mb.email AS mailbox_email
+        FROM lm_messages m LEFT JOIN lm_mailboxes mb ON mb.id = m.mailbox_id
+        WHERE m.user_id=$1 AND m.contact_id=$2 AND m.sent_at IS NOT NULL
+        ORDER BY m.sent_at DESC LIMIT 50`, [req.workspaceOwnerId, cid]);
     const ids = messages.map(m => m.id);
     let events = [];
     if (ids.length) {
@@ -5567,8 +5568,9 @@ app.get('/api/lm/contacts/:id/track-events', requireAuth, async (req, res) => {
     // equipo) — Jenny quiere ver la correspondencia completa acá, no solo lo
     // que se mandó.
     const { rows: received } = await pool.query(
-      `SELECT id, asunto, from_email, tipo, received_at FROM lm_inbox_messages
-        WHERE user_id=$1 AND contact_id=$2 ORDER BY received_at DESC LIMIT 50`,
+      `SELECT i.id, i.asunto, i.from_email, i.tipo, i.received_at, mb.email AS mailbox_email
+        FROM lm_inbox_messages i LEFT JOIN lm_mailboxes mb ON mb.id = i.mailbox_id
+        WHERE i.user_id=$1 AND i.contact_id=$2 ORDER BY i.received_at DESC LIMIT 50`,
       [req.workspaceOwnerId, cid]);
 
     res.json({ sent: [...byMsg.values()], received });
