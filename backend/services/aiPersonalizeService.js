@@ -244,4 +244,106 @@ async function _callModel(model, tier, cfg, contact, baseAsunto, baseCuerpo) {
   };
 }
 
-module.exports = { queuePersonalize, queueSize, getSettings, RATES };
+// ─────────────────────────────────────────────────────────────────────
+// Comentario de LinkedIn — generación en el momento (sin cola)
+//
+// Jenny pega la publicación en la tarea y la IA redacta el comentario con la
+// INSTRUCCIÓN del paso (sequence_steps.plantilla, que para accion='comentario'
+// deja de ser una plantilla de mensaje y pasa a ser el prompt). Devuelve el
+// texto al instante: ella copia, pega en LinkedIn y marca la tarea como hecha.
+//
+// No usa web_search (la publicación ya viene pegada) y el max_tokens es bajo,
+// así que aunque caiga en el modelo "alto" el costo por comentario es mínimo.
+// Se registra en lm_ai_drafts con status='comment' para que el presupuesto
+// mensual siga siendo honesto, sin ensuciar la bandeja de borradores.
+// ─────────────────────────────────────────────────────────────────────
+async function generateComment(pool, userId, { contactId, stepId, sequenceId, prompt, post }) {
+  const cfg = await getSettings(pool, userId);
+  if (cfg.enabled === false) throw new Error('IA desactivada en configuración');
+  if (cfg.spent_month >= Number(cfg.monthly_budget_usd)) {
+    throw new Error(`Presupuesto mensual agotado ($${cfg.monthly_budget_usd}). Súbelo en Configuración → IA.`);
+  }
+  const texto = String(post || '').trim();
+  if (!texto) throw new Error('Pega la publicación de LinkedIn primero');
+
+  const { rows: [c] } = await pool.query(`
+    SELECT k.id, k.nombre, k.apellido, k.cargo, k.seniority, k.departamento,
+           k.empresa_nombre, k.ciudad, k.pais, k.linkedin, k.target_tier, k.contact_priority,
+           k.buyer_role, co.nombre AS company_nombre, co.industria, co.tamano, co.website,
+           co.descripcion, co.tecnologias, co.funding, co.pais AS company_pais
+      FROM lm_contacts k
+      LEFT JOIN lm_companies co ON co.id = k.company_id
+     WHERE k.id=$1 AND k.user_id=$2
+  `, [contactId, userId]);
+  if (!c) throw new Error('Contacto no encontrado');
+
+  const tier  = _autoTier(c);
+  const model = tier === 'alto' ? (cfg.model_high || MODEL_HIGH) : (cfg.model_volume || MODEL_VOLUME);
+  const r = await _callComment(model, cfg, c, prompt, texto);
+
+  const rate = RATES[r.servedModel] || RATES[model] || { in: 1, out: 5 };
+  const cost = (r.inputTokens * rate.in + r.outputTokens * rate.out) / 1e6;
+
+  const { rows: [row] } = await pool.query(`
+    INSERT INTO lm_ai_drafts
+      (user_id, contact_id, step_id, sequence_id, tier, model, asunto, cuerpo,
+       input_tokens, output_tokens, cost_usd, status)
+    VALUES ($1,$2,$3,$4,$5,$6,'Comentario LinkedIn',$7,$8,$9,$10,'comment')
+    RETURNING id
+  `, [userId, contactId, stepId || null, sequenceId || null, tier, r.servedModel || model,
+      r.comentario, r.inputTokens, r.outputTokens, cost]);
+
+  return { id: row.id, comentario: r.comentario, model: r.servedModel || model, cost_usd: cost,
+           spent_month: cfg.spent_month + cost, monthly_budget_usd: Number(cfg.monthly_budget_usd) };
+}
+
+async function _callComment(model, cfg, contact, prompt, post) {
+  let Anthropic;
+  try { Anthropic = require('@anthropic-ai/sdk'); }
+  catch { throw new Error('Falta @anthropic-ai/sdk (npm install en backend)'); }
+  if (!process.env.ANTHROPIC_API_KEY) throw new Error('Falta ANTHROPIC_API_KEY en el entorno');
+  const client = new Anthropic();
+
+  const idioma = cfg.idioma && cfg.idioma !== 'auto'
+    ? `Escribe SIEMPRE en ${cfg.idioma}.`
+    : 'Escribe el comentario en el MISMO idioma de la publicación.';
+
+  const system =
+    `Escribes comentarios en publicaciones de LinkedIn en nombre de un profesional que quiere ` +
+    `iniciar conversación con el autor. ${idioma} ` +
+    `El comentario debe leerse humano y específico: reacciona a algo concreto que dice la publicación ` +
+    `(una idea, un dato, una decisión) y aporta valor — una observación desde la experiencia, un matiz o una pregunta genuina. ` +
+    `Prohibido: adulación vacía ("¡Gran post!", "Totalmente de acuerdo"), resumir lo que ya dijo el autor, ` +
+    `vender, mencionar productos o servicios, pedir una llamada, hashtags, emojis decorativos, ` +
+    `y cualquier placeholder tipo {{...}}. Máximo 60 palabras, 1-3 frases. ` +
+    `Devuelve ÚNICAMENTE el texto del comentario, sin comillas, sin encabezados y sin explicar nada.`;
+
+  const user =
+    `INSTRUCCIÓN PARA ESTE COMENTARIO:\n${String(prompt || '').trim() || '(sin instrucción específica: comenta de forma natural y relevante)'}\n\n` +
+    `AUTOR DE LA PUBLICACIÓN (a quien le comento):\n${_contactFacts(contact)}\n\n` +
+    `PUBLICACIÓN:\n"""\n${post.slice(0, 8000)}\n"""\n\n` +
+    `Escribe el comentario listo para pegar.`;
+
+  const isFable = (model === 'claude-fable-5' || model === 'claude-mythos-5');
+  const req = { model, max_tokens: 1000, system, messages: [{ role: 'user', content: user }] };
+  if (isFable) {
+    // Fable 5: thinking siempre on (omitir el parámetro), effort en output_config,
+    // y refusal fallbacks a Opus 4.8 por defecto (opt-in).
+    req.output_config = { effort: 'low' };
+    req.betas = ['server-side-fallback-2026-06-01'];
+    req.fallbacks = [{ model: 'claude-opus-4-8' }];
+  }
+  const resp = isFable ? await client.beta.messages.create(req) : await client.messages.create(req);
+  if (resp.stop_reason === 'refusal') {
+    throw new Error('El modelo rechazó la solicitud (safety): ' + (resp.stop_details?.category || ''));
+  }
+  const u = _sumUsage(resp.usage);
+  const texto = (resp.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
+
+  return {
+    comentario: texto.replace(/^["“”']+|["“”']+$/g, '').slice(0, 1500),
+    inputTokens: u.in, outputTokens: u.out, servedModel: resp.model || model,
+  };
+}
+
+module.exports = { queuePersonalize, queueSize, getSettings, generateComment, RATES };

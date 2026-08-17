@@ -1814,6 +1814,106 @@ body {
 }
 .clients-search-wrap input::placeholder { color: var(--muted); }
 
+/* Cabecera de proyecto en Tareas (TasksModule.setProjectFilter) — nombre,
+   fechas, presupuesto, asignados y horas del proyecto abierto, arriba del
+   Kanban filtrado a solo sus tareas. */
+.tpjh { margin: 16px 0 0; padding: 16px 18px; background: var(--white); border: 1px solid var(--border); border-radius: var(--r, 12px); }
+.tpjh.hidden { display: none; }
+.tpjh__top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.tpjh__id { min-width: 0; }
+.tpjh__name { font-size: 1.02rem; font-weight: 800; color: var(--text); line-height: 1.3; }
+.tpjh__client { display: block; font-size: .78rem; color: var(--muted); margin-top: 2px; }
+.tpjh__acts { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.tpjh__close { width: 28px; height: 28px; border: 1px solid var(--border); background: var(--white); border-radius: 8px; color: var(--muted); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background .12s, color .12s; }
+.tpjh__close:hover { background: #F1EFEB; color: var(--text); }
+.tpjh__stats { display: flex; flex-wrap: wrap; gap: 22px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
+.tpjh__stat { display: flex; flex-direction: column; gap: 3px; min-width: 90px; }
+.tpjh__stat-lbl { font-size: .66rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.tpjh__stat-val { font-size: .84rem; font-weight: 600; color: var(--text); }
+.tpjh__avs { display: flex; align-items: center; }
+.tpjh__av { width: 22px; height: 22px; border-radius: 50%; background: var(--brand-ll, #EAF2FF); color: var(--brand, #007AFF); font-size: .62rem; font-weight: 800; display: flex; align-items: center; justify-content: center; border: 1.5px solid var(--white); margin-left: -6px; }
+.tpjh__av:first-child { margin-left: 0; }
+.tpjh__av--more { background: #EAE7E2; color: var(--muted); }
+
+/* ── Pagina de detalle de tarea (pestaña nueva, TasksModule.openTaskPage) ──
+   Tarjeta estilo Trello/Odoo: titulo + descripcion + subtareas a la
+   izquierda, metadatos + chat de comentarios a la derecha. Pensada para
+   caber en una pantalla completa: la altura se fija por JS (ver
+   TasksModule._tdFitHeight) al alto disponible real del área de contenido,
+   y solo las dos columnas internas scrollean — nunca la página entera.
+   "Cuadros invisibles": sin bordes/fondo de tarjeta, solo separadores
+   sutiles y espacio en blanco, como Notion/Linear en vez de paneles. */
+.tskd { display: flex; flex-direction: column; padding: 14px 28px 0; max-width: 1180px; margin: 0 auto; box-sizing: border-box; }
+.tskd__crumb { flex-shrink: 0; display: flex; align-items: center; gap: 8px; font-size: .76rem; color: var(--muted); margin-bottom: 8px; }
+.tskd__back { display: inline-flex; align-items: center; gap: 6px; border: none; background: none; color: var(--muted); font: inherit; font-weight: 600; cursor: pointer; padding: 3px 6px; margin-left: -6px; border-radius: 7px; transition: background .12s, color .12s; }
+.tskd__back:hover { background: #F1EFEB; color: var(--text); }
+.tskd__crumb-sep { color: var(--border); }
+.tskd__crumb-txt { color: var(--muted); }
+.tskd__crumb-link { color: var(--brand, #007AFF); text-decoration: none; font-weight: 600; }
+.tskd__crumb-link:hover { text-decoration: underline; }
+
+.tskd__layout { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 300px; gap: 0 28px; }
+@media (max-width: 900px) { .tskd__layout { grid-template-columns: 1fr; overflow-y: auto; } .tskd__main, .tskd__side { overflow: visible !important; } }
+
+.tskd__main { min-height: 0; overflow-y: auto; padding: 2px 4px 16px 0; }
+.tskd__main::-webkit-scrollbar, .tskd__side::-webkit-scrollbar { width: 4px; }
+.tskd__main::-webkit-scrollbar-thumb, .tskd__side::-webkit-scrollbar-thumb { background: #EAE7E2; border-radius: 3px; }
+
+.tskd__title { display: block; width: 100%; border: 1.5px solid transparent; background: none; font-size: 1.28rem; font-weight: 800; color: var(--text); padding: 4px 6px; margin: -4px 0 10px -6px; border-radius: 8px; font-family: inherit; transition: border-color .12s, background .12s; }
+.tskd__title:hover { background: #F1EFEB; }
+.tskd__title:focus { outline: none; border-color: var(--brand, #007AFF); background: var(--white); }
+
+.tskd__block { margin-bottom: 14px; }
+.tskd__lbl { font-size: .64rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); margin-bottom: 5px; }
+.tskd__lbl-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; }
+.tskd__lbl-row .tskd__lbl { margin-bottom: 0; }
+.tskd__subs-count { font-size: .72rem; font-weight: 700; color: var(--muted); }
+/* Sin caja: fondo plano apenas distinto del bg, borde solo al enfocar. */
+.tskd__textarea { width: 100%; border: 1px solid transparent; background: #F1EFEB; border-radius: 8px; padding: 7px 9px; font: inherit; font-size: .82rem; line-height: 1.45; color: var(--text); resize: none; transition: border-color .12s, background .12s; }
+.tskd__textarea:focus { outline: none; border-color: var(--brand, #007AFF); background: var(--white); }
+.tskd__textarea::placeholder { color: var(--muted); }
+
+.tskd__subs-bar { height: 4px; border-radius: 3px; background: #EAE7E2; overflow: hidden; margin-bottom: 6px; }
+.tskd__subs-fill { height: 100%; background: #22C55E; transition: width .2s; }
+.tskd__subs-list { display: flex; flex-direction: column; gap: 1px; }
+.tskd__sub { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 6px; transition: background .12s; }
+.tskd__sub:hover { background: #F1EFEB; }
+.tskd__sub-chk { flex-shrink: 0; display: flex; cursor: pointer; }
+.tskd__sub-txt { flex: 1; min-width: 0; font-size: .82rem; color: var(--text); cursor: pointer; }
+.tskd__sub--done .tskd__sub-txt { color: var(--muted); text-decoration: line-through; }
+.tskd__add-sub { display: inline-flex; align-items: center; gap: 6px; margin-top: 4px; border: none; background: none; color: var(--muted); font: inherit; font-size: .78rem; font-weight: 600; cursor: pointer; padding: 4px 6px; border-radius: 7px; transition: background .12s, color .12s; }
+.tskd__add-sub:hover { background: #F1EFEB; color: var(--text); }
+
+/* Columna derecha: sin tarjeta/borde propio, solo un filete a la izquierda
+   que separa del contenido principal. Sus dos mitades (metadatos / chat)
+   se reparten el alto disponible: el chat crece y scrollea, el resto no. */
+.tskd__side { display: flex; flex-direction: column; min-height: 0; padding: 2px 4px 12px 20px; border-left: 1px solid var(--border); overflow-y: auto; }
+.tskd__meta { flex-shrink: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; }
+.tskd__field { display: flex; flex-direction: column; gap: 4px; }
+.tskd__field--full { grid-column: 1 / -1; }
+.tskd__field-val { font-size: .8rem; font-weight: 600; color: var(--text); }
+.tskd__select { border: 1px solid transparent; background: #F1EFEB; border-radius: 7px; padding: 5px 8px; font: inherit; font-size: .78rem; font-weight: 600; color: var(--text); cursor: pointer; }
+.tskd__select:focus { outline: none; border-color: var(--brand, #007AFF); background: var(--white); }
+.tskd__timer { display: flex; align-items: center; gap: 8px; }
+.tskd__edit-btn { grid-column: 1 / -1; justify-content: center; margin-top: 2px; }
+
+.tskd__chat { flex: 1; min-height: 120px; border-top: 1px solid var(--border); margin-top: 12px; padding-top: 10px; display: flex; flex-direction: column; }
+.tskd__chat-msgs { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 0; margin-bottom: 8px; }
+.tskd__chat-msgs::-webkit-scrollbar { width: 3px; }
+.tskd__chat-msgs::-webkit-scrollbar-thumb { background: #EAE7E2; border-radius: 3px; }
+.tskd-cm { display: flex; gap: 7px; padding: 4px 2px; }
+.tskd-cm__av { flex-shrink: 0; width: 21px; height: 21px; border-radius: 50%; background: var(--brand-ll, #EAF2FF); color: var(--brand, #007AFF); font-size: .56rem; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+.tskd-cm__body { flex: 1; min-width: 0; }
+.tskd-cm__hd { display: flex; align-items: baseline; gap: 6px; }
+.tskd-cm__who { font-size: .72rem; font-weight: 700; color: var(--text); }
+.tskd-cm__t { font-size: .6rem; color: var(--muted); }
+.tskd-cm__txt { font-size: .78rem; line-height: 1.4; color: var(--text); margin-top: 1px; overflow-wrap: anywhere; white-space: pre-wrap; }
+.tskd__chat-input-wrap { flex-shrink: 0; display: flex; align-items: center; gap: 8px; background: #F1EFEB; border: 1px solid transparent; border-radius: 9px; padding: 3px 3px 3px 10px; }
+.tskd__chat-input-wrap:focus-within { border-color: var(--brand, #007AFF); background: var(--white); }
+.tskd__chat-input-wrap input { flex: 1; border: none; outline: none; background: none; font: inherit; font-size: .8rem; color: var(--text); }
+.tskd__chat-send { flex-shrink: 0; width: 27px; height: 27px; border: none; border-radius: 7px; background: var(--brand, #007AFF); color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background .12s; }
+.tskd__chat-send:hover { background: var(--brand-d, #0062CC); }
+
 .clients-filters { display: flex; gap: 6px; flex-wrap: wrap; }
 
 .filter-pill {
@@ -4300,6 +4400,9 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
   height: 100%;
   transition: width .28s cubic-bezier(.4,0,.2,1), min-width .28s cubic-bezier(.4,0,.2,1);
   overflow: hidden;
+  /* Tamaño del panel del chat mini (solo este widget, no el resto de la
+     app). Vuelto a ~tamaño original tras el pedido de agrandarlo un poco. */
+  zoom: 1;
 }
 .rchat--collapsed {
   width: 0;
@@ -5135,16 +5238,27 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 .rchat--notifs .rchat__ctx-btn,
 .rchat--notifs .rchat__chdrop { display: none; }
 
+/* Fila: pill de canal/proyecto (ocupa el espacio disponible) + iconos de
+   workspace conectados, alineados a la derecha de la misma fila. */
+.rchat__ctx-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 12px 12px;
+}
+.rchat--notifs .rchat__ctx-row { display: none; }
+
 /* Context pill — channel / project selector */
 .rchat__ctx-btn {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 0 12px 12px;
+  flex: 1;
+  min-width: 0;
   background: #F1EFEB;
   border: 1.5px solid transparent;
   border-radius: 12px;
-  padding: 9px 11px;
+  padding: 8px 11px;
   cursor: pointer;
   font-size: .82rem;
   font-weight: 600;
@@ -5181,48 +5295,61 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 }
 .rchat__chdrop.hidden { display: none; }
 
-/* Fila de workspaces de Slack conectados — solo aparece con más de uno. */
+/* Iconos de workspace conectados, en la fila del selector de canal — solo
+   aparece con más de uno (con uno solo no hay nada que cambiar). Scroll
+   horizontal propio para que no empuje el pill de canal si hay varios. */
 .rchat-ws-row {
   display: flex;
-  gap: 6px;
-  padding: 8px 10px 2px;
+  gap: 5px;
   flex-shrink: 0;
-  background: #FAF8F5;
+  max-width: 96px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  /* overflow-x:auto obliga a overflow-y:auto tambien (regla CSS), lo que
+     recortaba el badge de no-leidos que sobresale arriba del icono
+     (top:-5px). Padding-top + margen negativo le da espacio sin mover
+     la fila. */
+  padding-top: 6px;
+  margin-top: -6px;
 }
+.rchat-ws-row::-webkit-scrollbar { display: none; }
 .rchat-ws-row.hidden { display: none; }
 .rchat-ws-b {
   position: relative;
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
   padding: 0;
-  border: 1.5px solid transparent;
-  border-radius: 8px;
-  background: #EAE7E2;
-  color: #6B665F;
+  border: 1px solid #E7E3DD;
+  border-radius: 7px;
+  background: #FAF8F5;
+  color: #8A857D;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: .68rem;
+  font-size: .62rem;
   font-weight: 800;
+  flex-shrink: 0;
   overflow: visible;
+  transition: border-color .15s, box-shadow .15s;
 }
-.rchat-ws-b img { width: 100%; height: 100%; object-fit: cover; border-radius: 6.5px; }
-.rchat-ws-b.on { border-color: #007AFF; }
-.rchat-ws-b:hover { filter: brightness(.97); }
+.rchat-ws-b img { width: 100%; height: 100%; object-fit: cover; border-radius: 6px; }
+.rchat-ws-b.on { border-color: #007AFF; box-shadow: 0 0 0 1px rgba(0,122,255,.15); }
+.rchat-ws-b:hover { border-color: #CFCAC3; }
+.rchat-ws-b.on:hover { border-color: #007AFF; }
 .rchat-ws-b__n {
   position: absolute;
-  top: -5px;
-  right: -5px;
-  min-width: 14px;
-  height: 14px;
+  top: -4px;
+  right: -4px;
+  min-width: 13px;
+  height: 13px;
   padding: 0 3px;
   border-radius: 7px;
   background: #E5484D;
   color: #fff;
-  font-size: .58rem;
+  font-size: .55rem;
   font-weight: 800;
-  line-height: 14px;
+  line-height: 13px;
   text-align: center;
   border: 1.5px solid #FAF8F5;
 }
@@ -6057,6 +6184,17 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 }
 .chat-msg--grouped:hover .chat-msg__hover-time { opacity: 1; }
 .chat-msg:not(.chat-msg--grouped) .chat-msg__hover-time { display: none; }
+
+/* ── Mini chat (rchat) only: message rows ~15% more compact ──
+   Scoped to #rchat-messages so the full-page chat (#chat-messages)
+   keeps its normal row height untouched. */
+#rchat-messages .chat-msg:not(.chat-msg--grouped) { margin-top: 8px; }
+#rchat-messages .chat-msg { gap: 7px; }
+#rchat-messages .chat-msg__avatar,
+#rchat-messages .chat-msg__avatar img,
+#rchat-messages .chat-msg__avatar-init { width: 24px; height: 24px; }
+#rchat-messages .chat-msg__bubble { line-height: 1.3; }
+#rchat-messages .chat-date-sep { padding: 10px 0 6px; }
 
 /* ── Reactions ── */
 .chat-reactions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
@@ -7239,6 +7377,9 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
   gap: 10px;
 }
 .pjcard__title-block { min-width: 0; flex: 1; }
+.pjcard__title-block--link { cursor: pointer; border-radius: 8px; margin: -4px -6px; padding: 4px 6px; transition: background .12s; }
+.pjcard__title-block--link:hover { background: #F1EFEB; }
+.pjcard__title-block--link:hover .pjcard__name { color: var(--brand, #007AFF); }
 .pjcard__name {
   font-size: .97rem;
   font-weight: 700;
@@ -11898,6 +12039,22 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .cp-taskbar__exit:hover { background: var(--surface-hover); color: var(--text-primary); }
 .cp-taskbar__tpl { margin-top: 9px; border: none; border-radius: 10px; overflow: hidden; background: var(--surface-secondary); }
 .cp-taskbar__notpl { margin-top: 8px; font-size: .8rem; color: var(--text-secondary); }
+/* Generador de comentarios de LinkedIn con IA (paso acción = "Comentar una publicación") */
+.cp-cmt { padding: 10px 12px 12px; }
+.cp-cmt__l { display: block; margin: 8px 0 4px; font-size: .74rem; font-weight: 600; color: var(--text-primary); }
+.cp-cmt__l:first-of-type { margin-top: 4px; }
+.cp-cmt__l span { font-weight: 400; color: var(--text-muted); }
+.cp-cmt__ta { width: 100%; font-size: .8rem; line-height: 1.45; resize: vertical; }
+.cp-cmt__row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 9px; }
+.cp-cmt__cfg { font-size: .74rem; color: var(--text-muted); text-decoration: none; }
+.cp-cmt__cfg:hover { color: var(--primary); text-decoration: underline; }
+.cp-cmt__out { margin-top: 11px; border: 1px solid var(--border); border-radius: 9px; padding: 10px 11px; background: var(--surface); }
+.cp-cmt__out--wait { color: var(--text-muted); font-size: .8rem; border-style: dashed; }
+.cp-cmt__out--err { color: #B45309; background: #FEF3C7; border-color: #FDE68A; font-size: .8rem; }
+.cp-cmt__outhd { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: .72rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; }
+.cp-cmt__cost { font-weight: 400; color: var(--text-muted); }
+.cp-cmt__txt { font-size: .84rem; line-height: 1.55; color: var(--text-primary); white-space: normal; }
+.cp-cmt__hint { display: block; margin-top: 7px; font-size: .72rem; color: var(--text-muted); }
 .cp-taskbar__acts { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
 .cp-taskbar__foot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
 .cp-taskbar__div { width: 1px; height: 20px; background: var(--border); margin: 0 3px; }
@@ -14816,7 +14973,10 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 /* ── Mensajes de Slack ──────────────────────────────────────────────────────── */
 .slk-men { color: #007AFF; background: #EBF4FF; border-radius: 4px; padding: 0 3px; font-weight: 500; }
 .slk-reacs { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
-.slk-reac { font-size: 11.5px; color: #6C6862; background: #F1EFEB; border: 1px solid #E7E3DD; border-radius: 999px; padding: 1px 7px; }
+.slk-reac { font-size: 11.5px; color: #6C6862; background: #F1EFEB; border: 1px solid #E7E3DD; border-radius: 999px; padding: 1px 7px; cursor: pointer; transition: background .12s, border-color .12s; }
+.slk-reac:hover { background: #E7E3DD; }
+.slk-reac.mine { background: #DCEEFF; border-color: #A9D2FF; color: #0062CC; }
+.slk-reac.mine:hover { background: #CBE4FF; }
 .slk-thread { display: inline-block; margin-top: 5px; font: inherit; font-size: 12px; font-weight: 500; color: #007AFF; background: none; border: none; padding: 0; cursor: pointer; }
 .slk-thread:hover { text-decoration: underline; }
 .slk-file { display: inline-block; font-size: 12px; color: #6C6862; margin-top: 4px; text-decoration: none; }
@@ -14947,12 +15107,13 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
   font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif;
 }
 
-/* ── Menu contextual del mensaje (clic derecho) ── */
-.slk-msgmenu { background:#fff; border:1px solid #E7E3DD; border-radius:11px; box-shadow:0 10px 34px rgba(0,0,0,.16); padding:5px; min-width:210px; }
-.slk-mm-reacs { display:flex; gap:2px; padding:3px 3px 6px; border-bottom:1px solid #F1EFEB; margin-bottom:4px; }
-.slk-mm-reac { flex:1; font-size:17px; background:none; border:none; border-radius:7px; padding:5px 0; cursor:pointer; }
-.slk-mm-reac:hover { background:#F1EFEB; transform:scale(1.15); }
-.slk-mm-op { display:block; width:100%; text-align:left; font:inherit; font-size:13px; color:#1F1D1B; background:none; border:none; border-radius:7px; padding:7px 10px; cursor:pointer; }
+/* ── Menu contextual del mensaje (clic derecho) — compacto y prolijo,
+   no la version "junior" con emojis grandes y mucho aire ── */
+.slk-msgmenu { background:#fff; border:1px solid #E7E3DD; border-radius:9px; box-shadow:0 4px 16px rgba(0,0,0,.12); padding:1px; min-width:172px; }
+.slk-mm-reacs { display:flex; gap:1px; padding:1px 1px; border-bottom:1px solid #F1EFEB; }
+.slk-mm-reac { flex:1; font-size:12.5px; background:none; border:none; border-radius:5px; padding:1px 0; cursor:pointer; transition: background .12s; }
+.slk-mm-reac:hover { background:#F1EFEB; }
+.slk-mm-op { display:block; width:100%; text-align:left; font:inherit; font-size:11px; color:#1F1D1B; background:none; border:none; border-radius:5px; padding:2px 8px; cursor:pointer; transition: background .12s; }
 .slk-mm-op:hover { background:#F1EFEB; }
 /* ── Picker de emoji del composer ── */
 .slk-emoji-pop { background:#fff; border:1px solid #E7E3DD; border-radius:12px; box-shadow:0 10px 34px rgba(0,0,0,.16); padding:8px; display:grid; grid-template-columns:repeat(5,1fr); gap:2px; width:224px; }
@@ -15000,6 +15161,10 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 /* El chat NO debe scrollear animado: al abrir o enviar, saltar directo al final sin
    el barrido desde arriba. (scroll-behavior:smooth es global y se heredaba). */
 #chat-messages, #chat-channels { scroll-behavior: auto !important; }
+/* Mismo fix para el chat mini (rchat): .rchat__messages tenia scroll-behavior:smooth
+   explicito, asi que "ir al ultimo mensaje" al abrir tardaba ~1.4s en animarse en vez
+   de saltar directo — parecia que se quedaba a medio camino. */
+#rchat-messages, #rchat-channels { scroll-behavior: auto !important; }
 
 /* Hilo con jerarquia tipo WhatsApp: el mensaje ORIGINAL destacado, las respuestas
    indentadas con una guia a la izquierda. */
@@ -15018,4 +15183,5 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 /* Emoji estilo Apple como imagen (para Windows) */
 .e-img { width:1.15em; height:1.15em; vertical-align:-0.18em; object-fit:contain; }
 .e-inline { margin:0 .5px; }
-.slk-emoji-pop button .e-img, .slk-mm-reac .e-img { width:20px; height:20px; vertical-align:middle; }
+.slk-emoji-pop button .e-img { width:20px; height:20px; vertical-align:middle; }
+.slk-mm-reac .e-img { width:12px; height:12px; vertical-align:middle; }

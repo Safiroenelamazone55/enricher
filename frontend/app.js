@@ -329,8 +329,17 @@ async function initAuth() {
       // la sección correcta → sin "flash" del Home. kw_activeTab es por navegador/perfil (no
       // se comparte entre miembros del workspace), así que cada quien recupera SU propia última
       // pantalla sin pisar la de nadie más.
+      // ?project=ID — pestaña nueva abierta desde Proyectos: aterriza directo
+      // en Tareas > Kanban filtrado a ese proyecto, en vez de la última sección
+      // guardada. Se limpia el query string para que un F5 no lo repita.
+      const _bootParams = new URLSearchParams(window.location.search);
+      const projectParam = _bootParams.get('project');
+      const taskParam    = _bootParams.get('task');
+      if (projectParam || taskParam) history.replaceState(null, '', window.location.pathname);
+
       let _initTab = 'home';
       try { const saved = localStorage.getItem('kw_activeTab'); if (saved && saved !== 'home' && document.querySelector(`.snav-item[data-tab="${saved}"]`)) _initTab = saved; } catch (_) {}
+      if (projectParam || taskParam) _initTab = 'mgmt-tasks';
       if (_initTab === 'home') {
         document.querySelectorAll('.tab,.snav-item').forEach(t => t.classList.toggle('active', t.dataset.tab === _initTab));
         document.querySelectorAll('.pane').forEach(p => p.classList.toggle('active', p.id === 'pane-' + _initTab));
@@ -339,6 +348,12 @@ async function initAuth() {
       } else {
         _applyHomeMode(false);
         if (typeof window._novaSwitchTab === 'function') window._novaSwitchTab(_initTab);
+      }
+      if (projectParam) {
+        ProjectsModule.load();
+        await TasksModule.setProjectFilter(+projectParam);
+      } else if (taskParam) {
+        await TasksModule.openTaskPage(+taskParam);
       }
       await FxRatesModule.load();
       ChatModule.init();
@@ -5973,6 +5988,12 @@ const DashboardModule = (() => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ estado: newStatus }),
       });
+      // Sin esto, _allTasksCache se queda con el estado viejo: el próximo
+      // _expRefresh (al editar/expandir CUALQUIER otra tarea) vuelve a
+      // pintar la lista completa desde la cache y "resucita" la tarea que
+      // ya se había marcado completada.
+      const cached = _allTasksCache.find(x => x.id === taskId);
+      if (cached) cached.estado = newStatus;
       const row = document.querySelector(`[data-task-id="${taskId}"]`);
       if (!row) return;
       if (newStatus === 'completado') {
@@ -7268,6 +7289,7 @@ const TasksModule = (() => {
   let _filterMember    = '';
   let _filterMemberSet = false; // true once default or user interaction applied
   let _filterFecha  = '';
+  let _filterProjectId = null; // set by setProjectFilter() — Tareas abierta enfocada en un solo proyecto
   let _teamMembers  = [];
   let _projectsForDateLimit = [];
   let _tlExpanded    = new Set((() => { try { return JSON.parse(localStorage.getItem('nova_tl_expanded') || '[]'); } catch { return []; } })());
@@ -7384,6 +7406,14 @@ const TasksModule = (() => {
   async function load() {
     const loading = $('tasks-loading');
     if (!loading) return;
+    // Un load() "normal" (click en Tareas desde el menu) siempre vuelve a la
+    // vista sin filtrar — setProjectFilter() se llama DESPUES de load() para
+    // volver a aplicar el filtro de proyecto cuando corresponde.
+    _filterProjectId = null;
+    _projectHeaderHide();
+    // Idem para la pagina de detalle de tarea: un load() normal siempre
+    // vuelve al Kanban/Lista, nunca se queda una tarjeta vieja tapando todo.
+    if (_tdCurrentId != null) closeTaskPage();
     loading.style.display = 'flex';
     _hideAllViews();
     try {
@@ -7430,6 +7460,7 @@ const TasksModule = (() => {
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const endOfWeek = new Date(today); endOfWeek.setDate(today.getDate() + (6 - today.getDay()));
     let list = _tasks;
+    if (_filterProjectId) list = list.filter(t => t.project_id === _filterProjectId);
     if (_filterPrioSet.size) list = list.filter(t => _filterPrioSet.has(t.prioridad));
     if (_filterMember === '__none__') {
       list = list.filter(t => !t.responsable && (!t.responsables || !t.responsables.length));
@@ -7454,6 +7485,347 @@ const TasksModule = (() => {
       (t.titulo + ' ' + (t.project_nombre || '') + ' ' + (t.client_nombre || '') + ' ' + (t.responsable || '') + ' ' + (t.responsables || []).join(' ')).toLowerCase().includes(q)
     );
     return list;
+  }
+
+  // ── Tareas de un solo proyecto (pestaña abierta desde Proyectos) ───────
+  // Reutiliza el Kanban normal: solo agrega un filtro mas a _getFilteredTasks
+  // y muestra una cabecera con info del proyecto arriba de la barra de vistas.
+
+  function _projectHeaderHide() {
+    const el = $('tasks-project-header');
+    if (el) { el.classList.add('hidden'); el.innerHTML = ''; }
+    const t = document.querySelector('#pane-mgmt-tasks .pane-title');
+    const s = document.querySelector('#pane-mgmt-tasks .pane-sub');
+    if (t) t.textContent = 'Tareas';
+    if (s) s.textContent = 'Acciones ejecutables dentro de cada proyecto — ordenadas por urgencia';
+  }
+
+  function clearProjectFilter() {
+    _filterProjectId = null;
+    _projectHeaderHide();
+    _rerender();
+  }
+
+  async function setProjectFilter(pid) {
+    if (!_tasks.length) await load();
+    _filterProjectId = pid;
+    _currentView = 'kanban';
+    document.querySelectorAll('#tasks-view-tabs .view-tab').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.view === 'kanban');
+    });
+    _applyView();
+    await _renderProjectHeader(pid);
+  }
+
+  async function _renderProjectHeader(pid) {
+    const el = $('tasks-project-header');
+    if (!el) return;
+    let p;
+    try {
+      const r = await apiFetch(`${API}/mgmt/projects/${pid}`);
+      if (!r.ok) throw new Error();
+      p = await r.json();
+    } catch (_) { return; }
+
+    const mine = _tasks.filter(t => t.project_id === pid && !t.parent_task_id);
+    const total = mine.length;
+    const done  = mine.filter(t => t.estado === 'completado').length;
+    const horas = mine.reduce((s, t) => s + (+t.horas_track || 0), 0);
+
+    const mon = p.moneda || 'USD';
+    const money = v => { try { return new Intl.NumberFormat('es-MX', { style: 'currency', currency: mon, maximumFractionDigits: 0 }).format(v); } catch { return `${mon} ${v}`; } };
+    let presupuesto = '<span class="muted">—</span>';
+    if (p.tipo_proyecto === 'horas' || p.tipo_proyecto === 'semanal') {
+      presupuesto = p.tarifa_hora ? `${money(p.tarifa_hora)}/h` : (p.horas_semanales ? `${p.horas_semanales}h fijas/sem` : presupuesto);
+    } else if (p.valor_total) {
+      presupuesto = money(p.valor_total);
+    }
+
+    const fmtD = d => d ? new Date(String(d).split('T')[0] + 'T00:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : null;
+    const ini = fmtD(p.fecha_inicio), fin = fmtD(p.fecha_fin);
+    const fechas = (ini || fin) ? `${ini || '—'} → ${fin || '—'}` : '<span class="muted">Sin fechas</span>';
+
+    const resps = (Array.isArray(p.responsables) && p.responsables.length) ? p.responsables : (p.responsable ? [p.responsable] : []);
+    const inic = n => String(n || '').trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
+    const asignados = resps.length
+      ? `<div class="tpjh__avs">${resps.slice(0, 5).map(n => `<span class="tpjh__av" title="${esc(n)}">${esc(inic(n))}</span>`).join('')}${resps.length > 5 ? `<span class="tpjh__av tpjh__av--more">+${resps.length - 5}</span>` : ''}</div>`
+      : '<span class="muted">Sin asignar</span>';
+
+    el.innerHTML = `
+      <div class="tpjh__top">
+        <div class="tpjh__id">
+          <span class="tpjh__name">${esc(p.nombre)}</span>
+          ${p.client_nombre ? `<span class="tpjh__client">${esc(p.client_nombre)}</span>` : ''}
+        </div>
+        <div class="tpjh__acts">
+          <button class="btn btn--ghost btn--sm" onclick="ProjectsModule.openDrawer(${p.id})">Editar</button>
+          <button class="tpjh__close" onclick="TasksModule.clearProjectFilter()" title="Quitar filtro de proyecto">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="tpjh__stats">
+        <div class="tpjh__stat"><span class="tpjh__stat-lbl">Fechas</span><span class="tpjh__stat-val">${fechas}</span></div>
+        <div class="tpjh__stat"><span class="tpjh__stat-lbl">Presupuesto</span><span class="tpjh__stat-val">${presupuesto}</span></div>
+        <div class="tpjh__stat"><span class="tpjh__stat-lbl">Asignados</span><span class="tpjh__stat-val">${asignados}</span></div>
+        <div class="tpjh__stat"><span class="tpjh__stat-lbl">Horas trabajadas</span><span class="tpjh__stat-val">${horas ? horas + 'h' : '<span class="muted">0h</span>'}</span></div>
+        <div class="tpjh__stat"><span class="tpjh__stat-lbl">Tareas</span><span class="tpjh__stat-val">${done}/${total} completadas</span></div>
+      </div>`;
+    el.classList.remove('hidden');
+
+    const t = document.querySelector('#pane-mgmt-tasks .pane-title');
+    const s = document.querySelector('#pane-mgmt-tasks .pane-sub');
+    if (t) t.textContent = `Tareas de ${p.nombre}`;
+    if (s) s.textContent = p.client_nombre ? `Proyecto de ${p.client_nombre}` : 'Kanban del proyecto';
+  }
+
+  // ── Pagina de detalle de UNA tarea (pestaña nueva) ──────────────────
+  // Estilo tarjeta Trello/Odoo: titulo, descripcion, subtareas, y un chat
+  // (comentarios) para hablar con el resto del equipo sobre esa tarea.
+  // Edicion de responsable/fechas/proyecto se deja al drawer existente
+  // (boton "Editar detalles") en vez de duplicar esos componentes aca.
+
+  let _tdCommentPoll = null;
+  let _tdCurrentId   = null;
+
+  async function openTaskPage(id) {
+    if (!_tasks.length) await load();
+    await _renderTaskDetail(id);
+  }
+
+  // Clic en una tarjeta del Kanban/lista → pestaña NUEVA del navegador con
+  // la tarjeta de la tarea (subtareas + comentarios), no una modal.
+  function openTaskPageNewTab(id) {
+    window.open(location.origin + location.pathname + '?task=' + id, '_blank');
+  }
+
+  function closeTaskPage() {
+    if (_tdCommentPoll) { clearInterval(_tdCommentPoll); _tdCommentPoll = null; }
+    if (_tdResizeBound) { window.removeEventListener('resize', _tdFitHeight); _tdResizeBound = false; }
+    _tdCurrentId = null;
+    const dv = $('task-detail-page');
+    if (dv) { dv.style.display = 'none'; dv.innerHTML = ''; }
+    const ph = document.querySelector('#pane-mgmt-tasks .pane-header');
+    if (ph) ph.style.display = '';
+    _applyView();
+  }
+
+  const _TD_ESTADOS = [['pendiente', 'Pendiente'], ['en_progreso', 'En progreso'], ['bloqueado', 'Bloqueado'], ['completado', 'Completado']];
+  const _TD_PRIOS   = [['baja', 'Baja'], ['media', 'Media'], ['alta', 'Alta']];
+
+  async function _renderTaskDetail(id) {
+    const dv = $('task-detail-page');
+    if (!dv) return;
+    const t = _tasks.find(x => x.id === id);
+    if (!t) { showBanner('Tarea no encontrada.', 'error'); return; }
+    _tdCurrentId = id;
+
+    _hideAllViews();
+    const ph = document.querySelector('#pane-mgmt-tasks .pane-header');
+    if (ph) ph.style.display = 'none';
+
+    const parent = t.parent_task_id ? _tasks.find(x => x.id === t.parent_task_id) : null;
+    const subs   = _tasks.filter(x => x.parent_task_id === id);
+    const subsDone = subs.filter(x => x.estado === 'completado').length;
+    const subsPct  = subs.length ? Math.round(subsDone / subs.length * 100) : 0;
+
+    const fmtD = d => d ? new Date(String(d).split('T')[0] + 'T00:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : null;
+    const ini = fmtD(t.fecha_inicio), fin = fmtD(t.deadline);
+    const fechasTxt = (ini || fin) ? `${ini || '—'} → ${fin || '—'}` : 'Sin fechas';
+    const resps = (t.responsables && t.responsables.length) ? t.responsables : (t.responsable ? [t.responsable] : []);
+
+    dv.innerHTML = `
+      <div class="tskd">
+        <div class="tskd__crumb">
+          <button class="tskd__back" onclick="TasksModule.closeTaskPage()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+            Tareas
+          </button>
+          ${t.project_nombre ? `<span class="tskd__crumb-sep">/</span><span class="tskd__crumb-txt">${esc(t.project_nombre)}</span>` : ''}
+          ${parent ? `<span class="tskd__crumb-sep">/</span><a class="tskd__crumb-link" href="javascript:void(0)" onclick="TasksModule._renderTaskDetail(${parent.id})">${esc(parent.titulo)}</a>` : ''}
+        </div>
+
+        <div class="tskd__layout">
+          <div class="tskd__main">
+            <input class="tskd__title" value="${esc(t.titulo)}" placeholder="Título de la tarea"
+                   onblur="TasksModule._tdSaveField(${id},'titulo',this.value)"
+                   onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">
+
+            <div class="tskd__block">
+              <div class="tskd__lbl">Descripción</div>
+              <textarea class="tskd__textarea" rows="2" placeholder="Qué hay que hacer exactamente…"
+                        onblur="TasksModule._tdSaveField(${id},'descripcion',this.value)">${esc(t.descripcion || '')}</textarea>
+            </div>
+
+            <div class="tskd__block">
+              <div class="tskd__lbl">Notas / bloqueos</div>
+              <textarea class="tskd__textarea" rows="2" placeholder="Dependencias, bloqueos, contexto adicional…"
+                        onblur="TasksModule._tdSaveField(${id},'notas',this.value)">${esc(t.notas || '')}</textarea>
+            </div>
+
+            <div class="tskd__block">
+              <div class="tskd__lbl-row">
+                <span class="tskd__lbl">Subtareas</span>
+                <span class="tskd__subs-count">${subsDone}/${subs.length}</span>
+              </div>
+              ${subs.length ? `<div class="tskd__subs-bar"><div class="tskd__subs-fill" style="width:${subsPct}%"></div></div>` : ''}
+              <div class="tskd__subs-list">
+                ${subs.map(s => `
+                  <div class="tskd__sub${s.estado === 'completado' ? ' tskd__sub--done' : ''}">
+                    <span class="tskd__sub-chk" onclick="TasksModule.toggleSubtaskStatus(${s.id},${id})">
+                      ${s.estado === 'completado'
+                        ? '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6.5" fill="#22C55E"/><polyline points="4,7 6.2,9.2 10,4.8" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+                        : '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6.3" stroke="#CFCAC3" stroke-width="1.4"/></svg>'}
+                    </span>
+                    <span class="tskd__sub-txt" onclick="TasksModule._renderTaskDetail(${s.id})">${esc(s.titulo)}</span>
+                  </div>`).join('')}
+              </div>
+              <button class="tskd__add-sub" onclick="TasksModule.openDrawer(null,${t.project_id || 'null'},${id})">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Agregar subtarea
+              </button>
+            </div>
+          </div>
+
+          <div class="tskd__side">
+            <div class="tskd__meta">
+              <div class="tskd__field">
+                <div class="tskd__lbl">Estado</div>
+                <select class="tskd__select" onchange="TasksModule._tdSaveField(${id},'estado',this.value)">
+                  ${_TD_ESTADOS.map(([v, l]) => `<option value="${v}"${t.estado === v ? ' selected' : ''}>${l}</option>`).join('')}
+                </select>
+              </div>
+              <div class="tskd__field">
+                <div class="tskd__lbl">Prioridad</div>
+                <select class="tskd__select" onchange="TasksModule._tdSaveField(${id},'prioridad',this.value)">
+                  ${_TD_PRIOS.map(([v, l]) => `<option value="${v}"${t.prioridad === v ? ' selected' : ''}>${l}</option>`).join('')}
+                </select>
+              </div>
+              <div class="tskd__field tskd__field--full">
+                <div class="tskd__lbl">Fechas</div>
+                <div class="tskd__field-val">${fechasTxt}</div>
+              </div>
+              <div class="tskd__field tskd__field--full">
+                <div class="tskd__lbl">Asignados</div>
+                <div class="tskd__field-val">${resps.length ? esc(resps.join(', ')) : 'Sin asignar'}</div>
+              </div>
+              <div class="tskd__field">
+                <div class="tskd__lbl">Tiempo</div>
+                <div class="tskd__field-val tskd__timer">
+                  <span class="task-elapsed" data-timer-display="${id}" hidden></span>
+                  ${_timerBtn(id)}
+                </div>
+              </div>
+              <button class="btn btn--ghost btn--sm tskd__edit-btn" onclick="TasksModule.openDrawer(${id})">Editar detalles</button>
+            </div>
+
+            <div class="tskd__chat">
+              <div class="tskd__lbl">Comentarios</div>
+              <div class="tskd__chat-msgs" id="tskd-chat-msgs"><div class="clients-loading"><div class="clients-spin"></div></div></div>
+              <div class="tskd__chat-input-wrap">
+                <input type="text" id="tskd-chat-input" placeholder="Escribe un comentario…"
+                       onkeydown="if(event.key==='Enter'){TasksModule._tdSendComment(${id})}">
+                <button class="tskd__chat-send" onclick="TasksModule._tdSendComment(${id})">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>`;
+    dv.style.display = '';
+    _tdFitHeight();
+    if (!_tdResizeBound) { window.addEventListener('resize', _tdFitHeight); _tdResizeBound = true; }
+    TimerModule.syncButtons();
+    _tdLoadComments(id);
+    if (_tdCommentPoll) clearInterval(_tdCommentPoll);
+    _tdCommentPoll = setInterval(() => { if (_tdCurrentId === id) _tdLoadComments(id, true); }, 8000);
+  }
+
+  // Cabe en una sola pantalla, sin scrollear la pagina: el alto de .tskd se
+  // fija al alto real disponible del contenedor que scrollea (.app-main u
+  // otro ancestro con overflow-y), no un porcentaje fijo — la altura del
+  // topbar/sidebar puede variar. Solo .tskd__main y .tskd__side scrollean
+  // por dentro si el contenido no entra.
+  let _tdResizeBound = false;
+  function _tdFitHeight() {
+    const dv = $('task-detail-page');
+    const inner = dv ? dv.querySelector('.tskd') : null;
+    if (!dv || !inner) return;
+    let scroller = dv.parentElement;
+    while (scroller && getComputedStyle(scroller).overflowY !== 'auto' && getComputedStyle(scroller).overflowY !== 'scroll') {
+      scroller = scroller.parentElement;
+    }
+    if (!scroller) { inner.style.height = window.innerHeight + 'px'; return; }
+    // clientHeight solo, sin restar el offset de dv, deja de sobrar/faltar
+    // porque dv arranca mas abajo que el top del scroller (headers ocultos
+    // que igual dejaban su lugar, breadcrumbs, etc.) — se resta ese hueco.
+    const offset = dv.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+    inner.style.height = Math.max(200, scroller.clientHeight - offset - 8) + 'px';
+  }
+
+  // Guardado generico de un campo de la tarjeta: usa _putTask (manda la fila
+  // completa) para no pisar el resto de los campos — mismo helper que usan
+  // los popovers rapidos del Kanban.
+  async function _tdSaveField(id, field, value) {
+    const t = _tasks.find(x => x.id === id);
+    if (!t) return;
+    const prev = t[field];
+    if (prev === value) return;
+    t[field] = value;
+    try {
+      await _putTask(t);
+      if (field === 'estado' || field === 'titulo') {
+        // Refleja el cambio si hay una vista Kanban/lista detras al volver.
+      }
+    } catch (e) {
+      t[field] = prev;
+      showBanner('No se pudo guardar. Reintenta.', 'error');
+    }
+  }
+
+  async function _tdLoadComments(id, silent) {
+    const box = $('tskd-chat-msgs');
+    if (!box) return;
+    try {
+      const r = await apiFetch(`${API}/chat/messages/${encodeURIComponent('task:' + id)}`);
+      const msgs = await r.json();
+      if (!Array.isArray(msgs)) return;
+      const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
+      if (!msgs.length) {
+        box.innerHTML = '<div class="chat-ch-empty">Sin comentarios aún. Sé el primero.</div>';
+        return;
+      }
+      box.innerHTML = msgs.map(m => {
+        const time = m.created_at ? new Date(m.created_at).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+        const ini = (m.sender_name || '?').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
+        return `<div class="tskd-cm">
+          <div class="tskd-cm__av">${ini}</div>
+          <div class="tskd-cm__body">
+            <div class="tskd-cm__hd"><span class="tskd-cm__who">${esc(m.sender_name || 'Alguien')}</span><span class="tskd-cm__t">${time}</span></div>
+            <div class="tskd-cm__txt">${esc(m.content)}</div>
+          </div>
+        </div>`;
+      }).join('');
+      if (!silent || atBottom) box.scrollTop = box.scrollHeight;
+    } catch (_) {}
+  }
+
+  async function _tdSendComment(id) {
+    const inp = $('tskd-chat-input');
+    const content = (inp?.value || '').trim();
+    if (!content) return;
+    inp.value = '';
+    try {
+      const r = await apiFetch(`${API}/chat/messages/${encodeURIComponent('task:' + id)}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }),
+      });
+      if (!r.ok) throw new Error((await r.json()).error || 'No se pudo enviar');
+      await _tdLoadComments(id);
+    } catch (e) {
+      inp.value = content;
+      showBanner('Error: ' + e.message, 'error');
+    }
   }
 
   function filter() { _rerender(); }
@@ -7925,6 +8297,7 @@ const TasksModule = (() => {
     }
 
     return `<div class="kanban-card" data-task-id="${t.id}" draggable="true"
+      onclick="TasksModule.openTaskPageNewTab(${t.id})"
       ondragstart="TasksModule.kanbanDragStart(event,${t.id})"
       ondragend="TasksModule.kanbanDragEnd(event)">
       <div class="kc-hdr">
@@ -9330,6 +9703,8 @@ const TasksModule = (() => {
   return {
     copiarSemanaAnterior,
     load, filter, setFilterMember, setFilterFecha, render,
+    setProjectFilter, clearProjectFilter,
+    openTaskPage, openTaskPageNewTab, closeTaskPage, _renderTaskDetail, _tdSaveField, _tdSendComment,
     openFilterMenu, toggleFilterOpt, clearFilter,
     setView, calPrev, calNext, setCalView, loadForCalPane,
     openDrawer, closeDrawer, save, confirmDelete, onProjectDateChange,
@@ -11218,7 +11593,7 @@ const ProjectsModule = (() => {
       <!-- MAIN CONTENT -->
       <div class="pjcard__main">
         <div class="pjcard__head">
-          <div class="pjcard__title-block">
+          <div class="pjcard__title-block pjcard__title-block--link" onclick="ProjectsModule.openInNewTab(${p.id})" title="Abrir en una pestaña nueva: info + Kanban del proyecto">
             <div class="pjcard__name">${esc(p.nombre)}</div>
             <div class="pjcard__client">${p.client_nombre ? esc(p.client_nombre) + (p.client_empresa ? ' · ' + esc(p.client_empresa) : '') : ''}</div>
           </div>
@@ -12640,6 +13015,13 @@ const ProjectsModule = (() => {
     }
   }
 
+  // Clic en un proyecto → pestaña NUEVA del navegador con la info del
+  // proyecto arriba y el Kanban de solo sus tareas abajo (Tareas > Kanban
+  // filtrado, ver TasksModule.setProjectFilter y el ?project= en initAuth).
+  function openInNewTab(id) {
+    window.open(location.origin + location.pathname + '?project=' + id, '_blank');
+  }
+
   /* ── vista enfocada de UN proyecto (reemplaza la lista) ─────
      Reusa _cardHtml(p) tal cual (ya trae sus 4 pestañas) en vez de
      scrollear entre todas las tarjetas del Timeline para encontrar la tuya. */
@@ -12888,7 +13270,7 @@ const ProjectsModule = (() => {
         ? `<div class="project-expanded-content">${_taskTreeHtml(p.id)}</div>`
         : '';
       return `<div class="project-row-wrapper">
-        <div class="projects-list-row projects-list-grid" onclick="ProjectsModule.toggleProjectExpand(${p.id})">
+        <div class="projects-list-row projects-list-grid" onclick="ProjectsModule.openInNewTab(${p.id})">
           <div class="pl-proj-cell">
             <button type="button" class="pjt-chevron${isOpen ? ' pjt-chevron--open' : ''}" onclick="event.stopPropagation();ProjectsModule.toggleProjectExpand(${p.id})">${_chevronSvg}</button>
             <div class="pl-prio" style="background:${prioColors[p.prioridad]||'#FBBF24'}"></div>
@@ -13389,7 +13771,7 @@ const ProjectsModule = (() => {
     togglePlanDia, planHint, onRecurFreqChange,
     onHorasFijasToggle, openProjFechas,
     openConvertToSub, convertToSub, convertToMain,
-    openDetail, closeDetail,
+    openDetail, closeDetail, openInNewTab,
     recNewTpl, recEditTpl, recCancelNew, recCancelEdit, recSaveTpl, recToggleTpl, recDeleteTpl, recGenerarAhora };
 })();
 
@@ -15087,13 +15469,13 @@ const LeadManagerModule = (() => {
   function sqSetQ(v) { _sqQ = v; _sqPaint(); }
   async function openSequence(id) {
     _activeSeq = id; _section = 'sequence'; _seqTab = 'empresas'; _seqPasosOpen = true; _seqCoExpanded = false;
-    _seqContacts = null; _seqPendingCos = null; _seqMetrics = null; _seqDo = null; _seqCtEstado = ''; _seqTaskCanal = ''; _seqTaskDue = '';
+    _seqContacts = null; _seqPendingCos = null; _seqCoStats = null; _seqMetrics = null; _seqDo = null; _seqCtEstado = ''; _seqTaskCanal = ''; _seqTaskDue = '';
     _refreshNav(); _renderBody();
     // Ambos en paralelo, pero un último _renderBody() DESPUÉS de que los dos terminen —
     // si cada uno pinta apenas resuelve, el que llega primero puede pintar con el otro
     // aún en null (ej. "Empresas 0" aunque los 117 contactos ya cargaron) y esa pintura
     // parcial se queda en pantalla si el segundo resuelve sin cambiar nada visible propio.
-    await Promise.all([_seqLoadContacts(id), _seqLoadPendingCos(id)]);
+    await Promise.all([_seqLoadContacts(id), _seqLoadPendingCos(id), _seqLoadCoStats(id)]);
     if (_section === 'sequence' && _activeSeq === id) _renderBody();
   }
   function seqPasosToggle() { _seqPasosOpen = !_seqPasosOpen; _renderBody(); }
@@ -15339,7 +15721,11 @@ const LeadManagerModule = (() => {
       envios: '<path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/>',
       aprobar: '<polyline points="20 6 9 17 4 12"/>',
     };
-    const empresasN = Array.isArray(_seqPendingCos) && _seqPendingCos.length ? _seqPendingCos.length
+    // Total REAL de empresas de la secuencia (pendientes + trabajadas + descartadas),
+    // no solo la cola pendiente — antes este badge mostraba lo mismo que "Tareas" y
+    // parecía que el número no bajaba aunque ya se hubieran trabajado varias.
+    const empresasN = _seqCoStats ? _seqCoStats.total
+      : Array.isArray(_seqPendingCos) && _seqPendingCos.length ? _seqPendingCos.length
       : Array.isArray(_seqContacts) ? new Set(_seqContacts.map(c => c.company_id != null ? `id:${c.company_id}` : `n:${(c.company_nombre || '').toLowerCase()}`)).size
       : (Array.isArray(_seqPendingCos) ? 0 : null);
     const tabs = [
@@ -15894,6 +16280,10 @@ ${foot}
     if (!Array.isArray(_seqPendingCos)) _seqPendingCos = [];
     if (_section === 'sequence' && _activeSeq === id) _renderBody();
   }
+  async function _seqLoadCoStats(id) {
+    try { const r = await apiFetch(`${API}/lm/sequences/${id}/companies-stats`); _seqCoStats = (r && r.ok) ? await r.json() : null; } catch { _seqCoStats = null; }
+    if (_section === 'sequence' && _activeSeq === id) _renderBody();
+  }
   function _seqEmpresasTab(id) {
     const list = Array.isArray(_seqPendingCos) ? _seqPendingCos : null;
     if (list === null) return `<div class="cp-empty2" style="padding:22px">Cargando…</div>`;
@@ -15903,7 +16293,8 @@ ${foot}
       const LIMIT = 5;
       const visible = _seqCoExpanded ? list : list.slice(0, LIMIT);
       const remaining = list.length - visible.length;
-      return `<div class="seq-list-hd"><h3>Empresas (${list.length})</h3><a href="javascript:void(0)" class="seq-list-hd__all" onclick="LeadManagerModule.go('companies')">Ver todas</a></div>
+      const hdTxt = _seqCoStats ? `Por contactar (${list.length} de ${_seqCoStats.total})` : `Empresas (${list.length})`;
+      return `<div class="seq-list-hd"><h3>${hdTxt}</h3><a href="javascript:void(0)" class="seq-list-hd__all" onclick="LeadManagerModule.go('companies')">Ver todas</a></div>
         <div class="seq-co-list">${visible.map(row => _seqCoCard(row, id, steps)).join('')}</div>
         ${remaining > 0 ? `<button class="seq-co-more" onclick="LeadManagerModule.seqCoExpandToggle()">Ver ${remaining} empresa${remaining !== 1 ? 's' : ''} más <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>` : ''}`;
     }
@@ -16004,6 +16395,7 @@ ${foot}
       if (!r.ok) throw new Error(d.error || 'Error al guardar');
       await _reloadContacts();
       _seqPendingCos = (_seqPendingCos || []).filter(x => x.company_sequence_id !== rowId);
+      if (_seqCoStats) { _seqCoStats.pendiente = Math.max(0, (_seqCoStats.pendiente || 0) - 1); _seqCoStats.trabajada = (_seqCoStats.trabajada || 0) + 1; }
       seqCoDoClose();
       _seqContacts = null; await _seqLoadContacts(seqId);
       openContactPage(d.contact_id, { seqId });
@@ -16059,6 +16451,7 @@ ${foot}
       const r = await apiFetch(`${API}/lm/company-sequences/${rowId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ estado: 'descartada' }) });
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Error');
       _seqPendingCos = (_seqPendingCos || []).filter(x => x.company_sequence_id !== rowId);
+      if (_seqCoStats) { _seqCoStats.pendiente = Math.max(0, (_seqCoStats.pendiente || 0) - 1); _seqCoStats.descartada = (_seqCoStats.descartada || 0) + 1; }
       if (_seqCoDo && _seqCoDo.companySeqId === rowId) seqCoDoClose();
       _renderBody();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
@@ -17123,6 +17516,88 @@ ${foot}
       }
     } catch { if (_cpTaskDraft && _cpTaskDraft.key === key) _cpTaskDraft.loading = false; }
   }
+
+  // ── Comentario de LinkedIn con IA (paso canal=linkedin, acción=comentario) ──
+  // La "plantilla" del paso es la INSTRUCCIÓN para la IA. Jenny pega la publicación,
+  // genera, copia y pega el comentario en LinkedIn a mano; luego marca la tarea hecha.
+  // El resultado se pinta solo en #cp-cmt-out para no perder lo que ya escribió.
+  let _cpCmt = null; // { key, cid, post, out, model, cost, loading, err }
+  function _cpCmtHtml(cid, st, seqId) {
+    const key = `${cid}:${st.id}`;
+    if (!_cpCmt || _cpCmt.key !== key) _cpCmt = { key, cid, post: '', out: '', model: '', cost: 0, loading: false, err: '' };
+    const prompt = st.plantilla || '';
+    return `<div class="cp-taskbar__tpl cp-cmt">
+      <div class="seqdo-tpl-hd"><span>${NI('sparkles')} Comentario con IA</span>
+        ${(_contacts.find(x => x.id === cid) || {}).linkedin
+          ? `<button class="seqdo-copy seqdo-copy--xs" onclick="LeadManagerModule.seqOpenLinkedIn(${cid})" title="Abrir el perfil al costado para buscar la publicación">${NI('linkedin')} Abrir perfil</button>` : ''}
+      </div>
+      <label class="cp-cmt__l" for="cp-cmt-prompt">Instrucción para la IA <span>— viene del paso; puedes ajustarla solo para esta vez</span></label>
+      <textarea class="form-input cp-cmt__ta" id="cp-cmt-prompt" rows="2" placeholder="Ej. Comenta aportando una observación concreta sobre el reto que menciona. Sin vender.">${esc(prompt)}</textarea>
+      <label class="cp-cmt__l" for="cp-cmt-post">Publicación de LinkedIn <span>— pega aquí el texto del post</span></label>
+      <textarea class="form-input cp-cmt__ta" id="cp-cmt-post" rows="4" placeholder="Pega aquí la publicación que quieres comentar…">${esc(_cpCmt.post)}</textarea>
+      <div class="cp-cmt__row">
+        <button class="btn btn--primary btn--sm" id="cp-cmt-go" onclick="LeadManagerModule.cmtGenerate(${cid},${st.id},${seqId})">${NI('sparkles')} Generar comentario</button>
+        <a class="cp-cmt__cfg" href="#" onclick="LeadManagerModule.seqDoEditStep(${st.id});return false;">Editar la instrucción del paso</a>
+      </div>
+      <div id="cp-cmt-out">${_cpCmtOutHtml()}</div>
+    </div>`;
+  }
+  function _cpCmtOutHtml() {
+    if (!_cpCmt) return '';
+    if (_cpCmt.loading) return `<div class="cp-cmt__out cp-cmt__out--wait">Escribiendo el comentario…</div>`;
+    if (_cpCmt.err) return `<div class="cp-cmt__out cp-cmt__out--err">${esc(_cpCmt.err)}</div>`;
+    if (!_cpCmt.out) return '';
+    return `<div class="cp-cmt__out">
+      <div class="cp-cmt__outhd"><span>Comentario propuesto</span><span class="cp-cmt__cost" title="Modelo usado y costo de esta generación">${esc(_cpCmt.model || '')}${_cpCmt.cost ? ` · $${_cpCmt.cost.toFixed(4)}` : ''}</span></div>
+      <div class="cp-cmt__txt">${esc(_cpCmt.out).replace(/\n/g, '<br>')}</div>
+      <div class="cp-cmt__row">
+        <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.cmtCopy()">${NI('copy')} Copiar y registrar</button>
+        <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.cmtGenerate()">↻ Regenerar</button>
+      </div>
+      <span class="cp-cmt__hint">Pégalo en LinkedIn y luego marca la tarea como hecha.</span>
+    </div>`;
+  }
+  function _cpCmtPaint() { const el = document.getElementById('cp-cmt-out'); if (el) el.innerHTML = _cpCmtOutHtml(); }
+  async function cmtGenerate(cid, stepId, seqId) {
+    if (!_cpCmt) return;
+    // Regenerar reutiliza el contexto de la generación anterior.
+    if (cid == null) { cid = _cpCmt.cid; stepId = _cpCmt.stepId; seqId = _cpCmt.seqId; }
+    _cpCmt.cid = cid; _cpCmt.stepId = stepId; _cpCmt.seqId = seqId;
+    const post = ($('cp-cmt-post')?.value || '').trim();
+    const prompt = ($('cp-cmt-prompt')?.value || '').trim();
+    _cpCmt.post = post;
+    if (!post) { showBanner('Pega primero la publicación de LinkedIn', 'error'); $('cp-cmt-post')?.focus(); return; }
+    _cpCmt.loading = true; _cpCmt.err = ''; _cpCmtPaint();
+    const btn = document.getElementById('cp-cmt-go'); if (btn) btn.disabled = true;
+    try {
+      const r = await apiFetch(`${API}/lm/ai/comment`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contact_id: cid, step_id: stepId, sequence_id: seqId, prompt, post }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || 'No se pudo generar el comentario');
+      _cpCmt.out = d.comentario || ''; _cpCmt.model = d.model || ''; _cpCmt.cost = d.cost_usd || 0;
+    } catch (e) { _cpCmt.err = e.message || 'No se pudo generar el comentario'; }
+    finally {
+      _cpCmt.loading = false; _cpCmtPaint();
+      const b = document.getElementById('cp-cmt-go'); if (b) b.disabled = false;
+    }
+  }
+  function cmtCopy() {
+    const txt = (_cpCmt && _cpCmt.out) || ''; if (!txt) return;
+    const ok = () => { showBanner('✓ Comentario copiado y registrado en el contacto', 'success'); _cmtLog(txt); };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(ok).catch(() => _seqDoCopyFallback(txt, ok));
+    else _seqDoCopyFallback(txt, ok);
+  }
+  async function _cmtLog(texto) {
+    if (!_cpCmt || !_cpCmt.cid) return;
+    try {
+      await apiFetch(`${API}/lm/ai/comment/log`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contact_id: _cpCmt.cid, comentario: texto }),
+      });
+    } catch (_) { /* el registro es complementario: no bloquea la tarea */ }
+  }
   // ── Hora local ACTUAL del prospecto (según la zona de la secuencia), en vivo ──
   let _cpClockTimer = null;
   function _prospectClockLabel(tz) {
@@ -17173,6 +17648,9 @@ ${foot}
     const subject = st.canal === 'email' ? _emailSubjectFor(seqId, st, src, draft) : '';
     _seqDoSubject = subject;
     const hasMsg = !!rendered.trim();
+    // Paso "Comentar una publicación": en vez del mensaje se muestra el generador de
+    // comentarios con IA (instrucción del paso + publicación pegada → comentario listo).
+    const isCmt = _isCommentStep(st.canal, st.accion);
     const vtag = draft ? ` <span class="cp-var-tag" style="background:#EAE7E2;color:#5B21B6">${NI('sparkles')} Mensaje IA</span>`
                : (_stepVariants(st).length > 1 ? ` <span class="cp-var-tag">Variante ${esc(variant.nombre || '?')}</span>` : '');
     const disp = esc(rendered).replace(/(\{\{[^}]+\}\})/g, '<span class="seqdo-miss">$1</span>').replace(/\n/g, '<br>');
@@ -17215,7 +17693,9 @@ ${foot}
           : `<span class="cp-taskbar__mt cp-taskbar__mt--nolink" title="Este contacto no tiene URL de LinkedIn en su ficha"><span class="cp-taskbar__subj-l">LinkedIn</span><span class="cp-taskbar__mt-v" style="color:#B45309">Sin URL en la ficha del contacto</span></span>`}
       </div>` : ''}
       ${st.canal === 'email' && subject ? `<div class="cp-taskbar__subj"><span class="cp-taskbar__subj-l">Asunto</span><span class="cp-taskbar__subj-v">${esc(subject)}</span>${/^re\s*:/i.test(subject) ? `<span class="lm-vb" style="background:#FEF3C7;color:#B45309" title="Follow-up: usa Re: del primer email para simular el hilo">Re:</span>` : ''}<button class="seqdo-copy seqdo-copy--xs" onclick="LeadManagerModule.seqDoCopySubject()">${NI('copy')}</button></div>` : ''}
-      ${hasMsg
+      ${isCmt
+        ? _cpCmtHtml(cid, st, seqId)
+        : hasMsg
         ? `<div class="cp-taskbar__tpl"><div class="seqdo-tpl-hd"><span>Mensaje${vtag}</span><span style="display:flex;gap:6px"><button class="seqdo-copy seqdo-copy--xs" onclick="LeadManagerModule.openAiDrafts(${cid},${seqId})">${NI('sparkles')} IA</button><button class="seqdo-copy seqdo-copy--xs" onclick="LeadManagerModule.seqDoCopy()">${NI('copy')} Copiar</button></span></div><div class="seqdo-tpl seqdo-tpl--slim">${disp}</div></div>`
         : `<div class="cp-taskbar__notpl">Este paso no tiene mensaje. <a href="#" onclick="LeadManagerModule.seqDoEditStep(${st.id});return false;">Añádelo</a> con variables — o <a href="#" onclick="LeadManagerModule.openAiDrafts(${cid},${seqId});return false;">✨ escríbelo con IA</a>.</div>`}
       <div class="cp-taskbar__foot">
@@ -20410,7 +20890,7 @@ ${foot}
       if (!res.ok) throw new Error(d.error || 'Error');
       showBanner(`✓ ${d.updated} repartido(s) en ${d.spread_days} día(s) (${d.per_day}/día)`, 'success');
       closeSequenceDrawer(); await load();
-      _seqPendingCos = null; if (_activeSeq === id) await _seqLoadPendingCos(id);
+      _seqPendingCos = null; if (_activeSeq === id) await Promise.all([_seqLoadPendingCos(id), _seqLoadCoStats(id)]);
     } catch (e) { alert('Error: ' + e.message); }
   }
   function _seqDaysRender() { const inp = $('seq-senddays'); const m = _sanSendDays(inp?.value); document.querySelectorAll('#seq-days .seq-day').forEach(b => { const i = +b.dataset.d; b.classList.toggle('on', m[i] === '1'); }); }
@@ -20506,17 +20986,26 @@ ${foot}
     return 'Vacío = tarea para todo el día. Define la zona horaria del prospecto en la secuencia para ver la hora sugerida.';
   }
   function stepUseSuggestedHour(hhmm) { const inp = $('step-hora'); if (inp) inp.value = hhmm; }
+  // Paso "Comentar una publicación" (LinkedIn): el cuadro de texto deja de ser una
+  // plantilla de mensaje y pasa a ser la INSTRUCCIÓN (prompt) para la IA. Al hacer la
+  // tarea, Jenny pega la publicación y la IA redacta el comentario con esta instrucción.
+  function _isCommentStep(canal, accion) { return canal === 'linkedin' && accion === 'comentario'; }
+  function stepAccionChange() { _stepSyncDraft(); _stepRenderMsg(); }
   function _stepRenderMsg() {
     const el = document.getElementById('step-msg'); if (!el || !_stepDraft) return;
     const d = _stepDraft;
-    const single = d.mode === 'off';
-    const modeSel = `<label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Mensaje del paso</span><select class="form-input" onchange="LeadManagerModule.stepSetMode(this.value)"><option value="off"${d.mode === 'off' ? ' selected' : ''}>Un solo mensaje</option><option value="random"${d.mode === 'random' ? ' selected' : ''}>A/B — repartir al azar</option><option value="segment"${d.mode === 'segment' ? ' selected' : ''}>Por segmento (según un campo)</option></select></label>`;
+    const canal  = $('step-canal')?.value || 'email';
+    const accion = $('step-accion')?.value || '';
+    const isCmt  = _isCommentStep(canal, accion);
+    const single = isCmt || d.mode === 'off';
+    const modeSel = isCmt
+      ? `<label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Instrucción para la IA (prompt)</span></label>`
+      : `<label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Mensaje del paso</span><select class="form-input" onchange="LeadManagerModule.stepSetMode(this.value)"><option value="off"${d.mode === 'off' ? ' selected' : ''}>Un solo mensaje</option><option value="random"${d.mode === 'random' ? ' selected' : ''}>A/B — repartir al azar</option><option value="segment"${d.mode === 'segment' ? ' selected' : ''}>Por segmento (según un campo)</option></select></label>`;
     let fieldSel = '';
-    if (d.mode === 'segment') {
+    if (!isCmt && d.mode === 'segment') {
       const opts = _CT_FILTER_FIELDS.map(f => `<option value="${f[0]}"${d.field === f[0] ? ' selected' : ''}>${f[1]}</option>`).join('');
       fieldSel = `<label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Campo del segmento</span><select class="form-input" onchange="LeadManagerModule.stepSetField(this.value)">${opts}</select></label>`;
     }
-    const canal = $('step-canal')?.value || 'email';
     const usesSubject = canal === 'email';
     const tplOpts = _lmTpls.length ? `<select class="step-var-tplsel" onchange="LeadManagerModule.stepVarUseTpl(${'IDX'},this.value);this.selectedIndex=0;"><option value="">↧ Usar plantilla…</option>${_lmTpls.map(tp => `<option value="${tp.id}">${esc(tp.nombre)} · ${esc(_tplCanalLabel(tp.canal))}</option>`).join('')}</select>` : '';
     const vars = single ? d.variants.slice(0, 1) : d.variants;
@@ -20525,10 +21014,15 @@ ${foot}
       const asunto = usesSubject ? `<label class="step-var-subjwrap"><span class="step-var-subjlbl">Asunto <span style="color:#918C85;font-weight:400;font-size:.72rem">— acepta variables</span></span><input class="form-input step-var-asunto" id="step-var-asu-${i}" data-i="${i}" placeholder="Ej. Consulta sobre {{company}}" value="${esc(v.asunto || '')}" oninput="LeadManagerModule.stepVarEdit(${i})" onfocus="LeadManagerModule.stepFocusTa('step-var-asu-${i}')"></label>` : '';
       const targets = (!single && d.mode === 'segment') ? _stepTargetsHtml(i) : '';
       const link = v.tplId ? `<span class="step-var-link" id="step-var-link-${i}" title="Vinculada a la plantilla — se actualiza sola. Editar el texto la desvincula.">🔗 ${esc(_tplName(v.tplId))} · en vivo</span>` : '';
-      return `<div class="step-var-box">${head}${link}${asunto}<textarea class="form-input step-var-ta" id="step-var-${i}" data-i="${i}" rows="${single ? 4 : 3}" placeholder="Ej. Hola {{first_name}}…" onfocus="LeadManagerModule.stepFocusTa('step-var-${i}')" oninput="LeadManagerModule.stepVarEdit(${i})">${esc(v.cuerpo || '')}</textarea>${targets}</div>`;
+      const ph = isCmt
+        ? 'Ej. Comenta aportando un dato o una observación concreta sobre el reto que menciona la publicación, desde la experiencia de trabajar con equipos parecidos. Nada de vender ni de elogios genéricos.'
+        : 'Ej. Hola {{first_name}}…';
+      return `<div class="step-var-box">${head}${link}${asunto}<textarea class="form-input step-var-ta" id="step-var-${i}" data-i="${i}" rows="${isCmt ? 5 : (single ? 4 : 3)}" placeholder="${esc(ph)}" onfocus="LeadManagerModule.stepFocusTa('step-var-${i}')" oninput="LeadManagerModule.stepVarEdit(${i})">${esc(v.cuerpo || '')}</textarea>${targets}</div>`;
     }).join('');
     const addBtn = single ? '' : `<button type="button" class="flt-add" onclick="LeadManagerModule.stepAddVariant()">＋ Añadir variante</button>`;
-    el.innerHTML = `${modeSel}${fieldSel}${varsHtml}${_varSelectHtml('seqInsertVar')}${addBtn}<span class="step-vars__hint">Las variables ({{first_name}}…) se reemplazan al hacer la tarea.${single ? '' : ' Cada variante toma su plantilla por segmento y se actualiza sola al editarla. Si escribes texto propio, se desvincula.'}</span>`;
+    el.innerHTML = isCmt
+      ? `${modeSel}${varsHtml}<span class="step-vars__hint">Esto <b>no se envía</b>: es lo que le pides a la IA. Al hacer la tarea pegas la publicación de LinkedIn, la IA redacta el comentario con esta instrucción, lo copias y lo pegas tú en LinkedIn.</span>`
+      : `${modeSel}${fieldSel}${varsHtml}${_varSelectHtml('seqInsertVar')}${addBtn}<span class="step-vars__hint">Las variables ({{first_name}}…) se reemplazan al hacer la tarea.${single ? '' : ' Cada variante toma su plantilla por segmento y se actualiza sola al editarla. Si escribes texto propio, se desvincula.'}</span>`;
     // El selector de plantilla de arriba solo aplica a "un solo mensaje"; en A/B o segmento cada variante usa el suyo.
     const topTpl = document.getElementById('step-tpl-top'); if (topTpl) topTpl.style.display = single ? '' : 'none';
   }
@@ -20607,7 +21101,7 @@ ${foot}
     const opts = _ACCIONES[canal];
     if (!opts) return '';
     return `<label class="fin-cfg-field"><span class="fin-cfg-lbl">Acción del paso</span>
-      <select class="form-input" id="step-accion">${opts.map(o => `<option value="${o[0]}"${cur === o[0] ? ' selected' : ''}>${o[1]}</option>`).join('')}</select>
+      <select class="form-input" id="step-accion" onchange="LeadManagerModule.stepAccionChange()">${opts.map(o => `<option value="${o[0]}"${cur === o[0] ? ' selected' : ''}>${o[1]}</option>`).join('')}</select>
       <span class="seq-drip-hint">Qué harás exactamente en este canal. Da el título por defecto de la tarea (ej. “Invitación con nota” vs “Mensaje directo”).</span></label>`;
   }
   function stepPickCanal(c) {
@@ -20833,6 +21327,8 @@ ${foot}
   let _seqTaskDue = '';   // filtro por estatus de tarea: '' todas | 'over' vencidas | 'today' hoy
   let _seqContacts = null;
   let _seqPendingCos = null;  // cola de empresas (Paso 1: falta encontrar a la persona) — pestaña "Empresas"
+  let _seqCoStats = null;     // { total, pendiente, trabajada, descartada } — total REAL de empresas de la secuencia,
+                               // para no mostrar solo la cola pendiente como si fuera el total (ver companies-stats)
   let _seqMetrics = null;
   let _seqDo = null;          // { seqId, cid } — tarea abierta en el panel de ejecución
   let _seqDoText = '';        // plantilla ya renderizada (texto plano para copiar)
@@ -23199,7 +23695,8 @@ ${foot}
     seqAppAction, seqAppNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, taskApprove,
     seqTaskOpen, seqDoClose, seqDoCopy, seqDoDone, seqDoSkip, seqDoPrev, seqDoEditStep, seqDoExit, seqOpenLinkedIn,
     openStepDrawer, closeStepDrawer, saveStep, confirmDeleteStep, seqInsertVar, stepUseTpl, tzSearch, tzPick, tzBlur,
-    stepSetMode, stepSetField, stepAddVariant, stepDelVariant, stepFocusTa,
+    stepSetMode, stepSetField, stepAddVariant, stepDelVariant, stepFocusTa, stepAccionChange,
+    cmtGenerate, cmtCopy,
     stepTagInput, stepTagKey, stepTagPick, stepTagAddTyped, stepTagRemove, stepTagBlur,
     stepCanalChange, stepPickCanal, stepVarUseTpl, stepVarEdit, stepAutoLink,
     seqDayToggle, seqDaysPreset, stepUseSuggestedHour, seqReportOpen, seqReportGen, cmpReportOpen, cmpReportGen, clientCmpReport, clientSeqReport, seqRedistribute,
@@ -24719,7 +25216,7 @@ const SlackChat = (() => {
 
   function miniBuscar(v) { _pintaMiniCanales(v || ''); }
 
-  function _pintaMiniMsgs(msgs) {
+  function _pintaMiniMsgs(msgs, conservarScroll = false) {
     const box = $$('rchat-messages');
     if (!box) return;
     const orden = [...msgs].reverse();
@@ -24733,19 +25230,105 @@ const SlackChat = (() => {
       const quien = _mUsers[m.user] || m.username || 'Slack';
       const hora = f.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
       const files = (m.files || []).map(fl => _archivoHtml(fl, _mWsAct)).join('');
-      html += `<div class="chat-msg" data-ts="${m.ts}">
+      // Reacciones existentes (mismo formato que el chat completo) — clic
+      // derecho en el mensaje abre el menu para reaccionar/copiar. Se marca
+      // con .mine la que ya puso la propia usuaria, para poder quitarla con
+      // un solo clic en vez de que Slack devuelva already_reacted.
+      const reacs = (m.reactions || []).map(r => {
+        const mine = _mMiId && (r.users || []).includes(_mMiId);
+        return `<span class="slk-reac${mine ? ' mine' : ''}" data-emoji="${esc(r.name)}" title="${mine ? 'Quitar reacción' : ''}"
+                      onclick="SlackChat.miniReaccionarPill(event,'${m.ts}','${esc(r.name)}')">${_emojiImg(_emoji(':' + r.name + ':'), 'e-img')} ${r.count}</span>`;
+      }).join('');
+      html += `<div class="chat-msg" data-ts="${m.ts}"
+                    oncontextmenu="SlackChat.miniMenuMsg(event,'${m.ts}')">
         <img class="chat-msg__av" src="${_mAvatarUrl(m.user, quien)}" alt="">
         <div class="chat-msg__body">
           <div class="chat-msg__hd"><span class="chat-msg__who">${escNom(quien)}</span><span class="chat-msg__t">${hora}</span></div>
           <div class="chat-msg__txt">${_fmt(m.text, _mUsers)}</div>
-          ${files}
+          ${files}${reacs ? `<div class="slk-reacs">${reacs}</div>` : ''}
         </div>
       </div>`;
     });
+    // OJO: capturar scrollTop ANTES de reemplazar innerHTML. Si se lee
+    // despues, el navegador ya recorto/reseteo el scroll al reemplazar el
+    // contenido (mas notorio si el nuevo contenido es mas corto), y ese
+    // valor "conservado" termina siendo el del final en vez del real —
+    // por eso el sondeo cada 8s parecia arrastrar de vuelta al ultimo
+    // mensaje aunque la usuaria estuviera leyendo mas arriba.
+    const prev = box.scrollTop;
     box.innerHTML = html;
     _flushDocPreviews();
-    box.scrollTop = box.scrollHeight;
-    requestAnimationFrame(() => { box.scrollTop = box.scrollHeight; });
+    box.scrollTop = conservarScroll ? prev : box.scrollHeight;
+    if (!conservarScroll) requestAnimationFrame(() => { box.scrollTop = box.scrollHeight; });
+  }
+
+  // Menu contextual del mensaje en el chat mini — version reducida del de
+  // #chat-messages (sin hilos/anclar, que no tienen vista propia acá):
+  // reaccionar y copiar texto, usando el workspace/canal ACTIVOS DEL MINI
+  // (_mWsAct/_mCanal), no los de la pagina completa de Chat.
+  function miniMenuMsg(ev, ts) {
+    ev.preventDefault(); ev.stopPropagation();
+    document.querySelectorAll('.slk-msgmenu').forEach(x => x.remove());
+    const reac = ['👍','❤️','😂','🎉','✅','🙏'].map(e =>
+      '<button class="slk-mm-reac" onclick="SlackChat.miniReaccionar(\'' + ts + '\',\'' + e + '\')">' + _emojiImg(e) + '</button>').join('');
+    const m = document.createElement('div');
+    m.className = 'slk-msgmenu';
+    m.innerHTML = '<div class="slk-mm-reacs">' + reac + '</div>'
+      + '<button class="slk-mm-op" onclick="SlackChat.miniCopiar(\'' + ts + '\')">Copiar texto</button>';
+    document.body.appendChild(m);
+    m.style.cssText += ';position:fixed;z-index:10050;top:' + Math.min(ev.clientY, window.innerHeight - 220) + 'px;left:' + Math.min(ev.clientX, window.innerWidth - 230) + 'px';
+    setTimeout(() => document.addEventListener('click', function o(e2) { if (!m.contains(e2.target)) { m.remove(); document.removeEventListener('click', o); } }), 0);
+  }
+
+  // ts: id del mensaje. emoji: el caracter (👍) del menu rapido — se traduce
+  // al nombre de Slack y se detecta en el DOM si esa reaccion ya es mia, para
+  // mandar quitar:true y hacerlo un toggle (si no, Slack responde
+  // already_reacted al reaccionar dos veces con lo mismo).
+  async function miniReaccionar(ts, emoji) {
+    document.querySelectorAll('.slk-msgmenu').forEach(x => x.remove());
+    const nombre = { '👍':'thumbsup','❤️':'heart','😂':'joy','🎉':'tada','✅':'white_check_mark','🙏':'pray' }[emoji] || 'thumbsup';
+    await _miniAlternarReaccion(ts, nombre);
+  }
+
+  // Clic directo sobre una reaccion ya puesta (la pill bajo el mensaje):
+  // si es mia, la quita; si es de otra persona, se suma con la misma.
+  async function miniReaccionarPill(ev, ts, nombre) {
+    ev.stopPropagation();
+    await _miniAlternarReaccion(ts, nombre);
+  }
+
+  async function _miniAlternarReaccion(ts, nombre) {
+    if (!_mCanal) return;
+    const yaReacciono = !!document.querySelector(
+      '#rchat-messages .chat-msg[data-ts="' + ts + '"] .slk-reac.mine[data-emoji="' + nombre + '"]');
+    try {
+      const r = await apiFetch(API + '/slack/workspaces/' + _mWsAct + '/canales/' + _mCanal.id + '/reaccion',
+        { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ts, emoji: nombre, quitar: yaReacciono }) });
+      if (!r.ok) throw new Error((await r.json()).error || 'No se pudo reaccionar');
+      await _miniRefrescar();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+
+  function miniCopiar(ts) {
+    document.querySelectorAll('.slk-msgmenu').forEach(x => x.remove());
+    const el = document.querySelector('#rchat-messages .chat-msg[data-ts="' + ts + '"] .chat-msg__txt');
+    if (el) navigator.clipboard.writeText(el.textContent).then(() => showBanner('Copiado', 'success'));
+  }
+
+  // Recarga el canal abierto en el mini chat conservando el scroll si la
+  // usuaria no estaba ya al final (misma logica que _refrescarCanal, pero
+  // sobre #rchat-messages y el estado _m* del mini panel).
+  async function _miniRefrescar() {
+    if (!_mCanal) return;
+    try {
+      const r = await apiFetch(`${API}/slack/workspaces/${_mWsAct}/canales/${_mCanal.id}/mensajes?limit=30`);
+      const d = await r.json();
+      if (d.error || !Array.isArray(d.mensajes)) return;
+      const box = $$('rchat-messages');
+      const alFinal = box ? (box.scrollHeight - box.scrollTop - box.clientHeight < 60) : true;
+      _pintaMiniMsgs(d.mensajes, !alFinal);
+    } catch (_) {}
   }
 
   function _pararSondeoMini() {
@@ -24759,7 +25342,11 @@ const SlackChat = (() => {
       try {
         const r = await apiFetch(`${API}/slack/workspaces/${_mWsAct}/canales/${_mCanal.id}/mensajes?limit=30`);
         const d = await r.json();
-        if (!d.error) _pintaMiniMsgs(d.mensajes || []);
+        if (!d.error) {
+          const box = $$('rchat-messages');
+          const alFinal = box ? (box.scrollHeight - box.scrollTop - box.clientHeight < 60) : true;
+          _pintaMiniMsgs(d.mensajes || [], !alFinal);
+        }
       } catch (_) {}
     }, 8000);
   }
@@ -24772,7 +25359,11 @@ const SlackChat = (() => {
     if (_mNoLeidos[c.id]) {
       delete _mNoLeidos[c.id];
       _nlPorWs[_mWsAct] = Object.values(_mNoLeidos).reduce((a, b) => a + (+b || 0), 0);
-      apiFetch(`${API}/slack/workspaces/${_mWsAct}/canales/${c.id}/leido`, { method: 'POST' }).catch(() => {});
+      // Esperado (no fire-and-forget): si un refreshMiniBadge() corre justo
+      // después y todavía no se registró la lectura en el server, pisa el
+      // contador local recién limpiado y el badge "revive" aunque ya se
+      // haya abierto el canal.
+      await apiFetch(`${API}/slack/workspaces/${_mWsAct}/canales/${c.id}/leido`, { method: 'POST' }).catch(() => {});
     }
     _pintaMiniCanales();
     _miniRiel();
@@ -24853,10 +25444,14 @@ const SlackChat = (() => {
   // Punto de entrada único desde RChatPanel: si ya había estado cargado
   // (la usuaria cerró y volvió a abrir el panel) solo refresca en vez de
   // recargar todo desde cero, para que no parpadee cada vez que se abre.
-  function miniOpen() {
+  async function miniOpen() {
     if (_mWsAct) {
       _arrancarSondeoMini();
-      if (_mCanal) miniAbrir(_mCanal.id); else miniIrA(_mWsAct);
+      // Esperar a que termine (y con eso, el POST /leido de miniAbrir) antes
+      // de refreshMiniBadge — si no, la consulta al server puede llegar
+      // antes de que se registre la lectura y devolver el conteo viejo,
+      // "resucitando" el badge que se acababa de limpiar.
+      if (_mCanal) await miniAbrir(_mCanal.id); else await miniIrA(_mWsAct);
       refreshMiniBadge();
     } else {
       miniLoad();
@@ -24909,6 +25504,7 @@ const SlackChat = (() => {
            menuCanal, verProyecto, verTareas, copiarNombre, archivarCanal, marcarNoLeido,
            seccion, menciones, _mencionar, detectarArroba,
            miniOpen, miniLoad, miniIrA, miniAbrir, miniEnviar, miniBuscar,
+           miniMenuMsg, miniReaccionar, miniReaccionarPill, miniCopiar,
            miniDetener: _pararSondeoMini, refreshMiniBadge };
 })();
 

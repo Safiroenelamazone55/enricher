@@ -3432,6 +3432,21 @@ app.get('/api/lm/sequences/:id/pending-companies', requireAuth, async (req, res)
     res.json(rows);
   } catch (err) { console.error('[lm-co-seq] pending', err.message); res.status(500).json({ error: 'Error al cargar empresas pendientes' }); }
 });
+// Conteo real por estado — el tab "Empresas" mostraba solo cs.estado='pendiente'
+// (la cola de trabajo) como si fuera el total de empresas de la secuencia, lo que
+// hacía parecer que el número no bajaba aunque ya se hubieran trabajado varias.
+app.get('/api/lm/sequences/:id/companies-stats', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT estado, COUNT(*)::int AS n
+        FROM lm_company_sequences
+       WHERE user_id=$1 AND sequence_id=$2
+       GROUP BY estado`, [req.workspaceOwnerId, req.params.id]);
+    const out = { total: 0, pendiente: 0, trabajada: 0, descartada: 0 };
+    for (const r of rows) { out[r.estado] = r.n; out.total += r.n; }
+    res.json(out);
+  } catch (err) { console.error('[lm-co-seq] companies-stats', err.message); res.status(500).json({ error: 'Error al cargar estadísticas de empresas' }); }
+});
 app.patch('/api/lm/company-sequences/:id', requireAuth, async (req, res) => {
   const estado = String((req.body || {}).estado || '');
   if (!['pendiente', 'trabajada', 'descartada'].includes(estado)) return res.status(400).json({ error: 'Estado inválido' });
@@ -5763,6 +5778,59 @@ app.delete('/api/lm/ai/drafts/:id', requireAuth, async (req, res) => {
   } catch (err) { console.error('[lm-ai-drafts] DEL', err.message); res.status(500).json({ error: 'Error al eliminar borrador' }); }
 });
 
+// ── LM · Comentario de LinkedIn generado con IA ────────────────────
+// Jenny pega la publicación, la IA redacta el comentario con la instrucción
+// del paso. Ella copia, pega en LinkedIn a mano y marca la tarea como hecha.
+app.post('/api/lm/ai/comment', requireAuth, async (req, res) => {
+  const b = req.body || {};
+  const contactId = parseInt(b.contact_id) || 0;
+  if (!contactId) return res.status(400).json({ error: 'Falta el contacto' });
+  try {
+    const { generateComment } = require('./services/aiPersonalizeService');
+    res.json(await generateComment(pool, req.workspaceOwnerId, {
+      contactId,
+      stepId:     parseInt(b.step_id) || null,
+      sequenceId: parseInt(b.sequence_id) || null,
+      prompt:     String(b.prompt || '').slice(0, 4000),
+      post:       String(b.post || '').slice(0, 12000),
+    }));
+  } catch (err) {
+    console.error('[lm-ai-comment]', err.message);
+    res.status(400).json({ error: err.message || 'No se pudo generar el comentario' });
+  }
+});
+// Registrar en el historial del contacto el comentario que Jenny copió.
+// Idempotente por contacto+día: regenerar y volver a copiar actualiza la misma fila.
+app.post('/api/lm/ai/comment/log', requireAuth, async (req, res) => {
+  const b = req.body || {};
+  const uid = req.workspaceOwnerId;
+  const cid = parseInt(b.contact_id) || 0;
+  const texto = String(b.comentario || '').trim().slice(0, 2000);
+  if (!cid || !texto) return res.status(400).json({ error: 'Faltan datos' });
+  try {
+    const { rows: [k] } = await pool.query(
+      `SELECT outbound_client_id FROM lm_contacts WHERE id=$1 AND user_id=$2`, [cid, uid]);
+    if (!k) return res.status(404).json({ error: 'Contacto no encontrado' });
+    const nota = `💬 Comentario en LinkedIn: ${texto}`;
+    const { rows: prev } = await pool.query(
+      `SELECT id FROM activities
+        WHERE user_id=$1 AND contact_id=$2 AND tipo='comentario_li' AND fecha::date = CURRENT_DATE
+        ORDER BY id DESC LIMIT 1`, [uid, cid]);
+    if (prev.length) {
+      await pool.query(`UPDATE activities SET nota=$1, fecha=NOW() WHERE id=$2`, [nota, prev[0].id]);
+      return res.json({ ok: true, id: prev[0].id, updated: true });
+    }
+    const { rows: [ins] } = await pool.query(
+      `INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, canal, nota, fecha, estado)
+       VALUES ($1,$2,$3,'comentario_li','linkedin',$4,NOW(),'hecha') RETURNING id`,
+      [uid, cid, k.outbound_client_id || null, nota]);
+    res.json({ ok: true, id: ins.id });
+  } catch (err) {
+    console.error('[lm-ai-comment-log]', err.message);
+    res.status(500).json({ error: 'No se pudo registrar el comentario' });
+  }
+});
+
 // ── Importación con mapeo (Excel/CSV → empresas + contactos) ───────
 const LM_IMPORT_MAX = 5000;
 app.post('/api/lm/import', requireAuth, upload.single('file'), async (req, res) => {
@@ -7399,6 +7467,24 @@ app.get('/api/chat/messages/:channel', requireAuth, async (req, res) => {
        LIMIT 120
     `, [req.workspaceOwnerId, req.params.channel]);
     res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── POST /api/chat/messages/:channel — enviar sin socket (usado por la
+//    pagina de detalle de tarea: channel = 'task:<id>'; el chat de equipo
+//    normal sigue mandando por socket.io, ver send_message mas abajo) ──
+app.post('/api/chat/messages/:channel', requireAuth, async (req, res) => {
+  const content = (req.body?.content || '').trim();
+  if (!content) return res.status(400).json({ error: 'Mensaje vacío' });
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO chat_messages (workspace_owner_id, channel, sender_id, content)
+       VALUES ($1,$2,$3,$4) RETURNING *`,
+      [req.workspaceOwnerId, req.params.channel, req.user.id, content]
+    );
+    res.status(201).json({ ...rows[0], sender_name: req.user.name, sender_avatar: req.user.avatar || null });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
