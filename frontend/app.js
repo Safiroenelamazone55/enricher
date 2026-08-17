@@ -17341,7 +17341,7 @@ ${foot}
       <div class="lm-step__rail"><span class="lm-step__node">${st.dia}</span></div>
       <span class="lm-step__ico" style="background:${t[1]}1a;color:${t[1]}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${t[2]}</svg></span>
       <div class="lm-step__body">
-        <div class="lm-step__top"><span class="lm-step__t">${esc(st.titulo || _accionLabel(st.canal, st.accion) || t[0])}</span>${cb}</div>
+        <div class="lm-step__top"><span class="lm-step__t">${esc(_accionLabel(st.canal, st.accion) || st.titulo || t[0])}</span>${cb}</div>
       </div>
       <div class="lm-step__status">
         <span class="lm-step__status__lbl">${_STEP_STATUS_LBL[state]}</span>
