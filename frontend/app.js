@@ -16623,7 +16623,7 @@ ${foot}
     try { const r = await apiFetch(`${API}/lm/sequences/${id}/metrics`); _seqMetrics = (r && r.ok) ? await r.json() : {}; } catch { _seqMetrics = {}; }
     if (_section === 'sequence' && _activeSeq === id && _seqTab === 'metricas') { const el = document.getElementById('seq-tabwrap'); if (el) el.innerHTML = _seqTabContent(id); }
   }
-  function seqTab(t) { _seqTab = t; if (t === 'aprobar') _seqAppIdx = 0; _renderBody(); if ((t === 'contactos' || t === 'tareas') && !Array.isArray(_seqContacts)) _seqLoadContacts(_activeSeq); if ((t === 'empresas' || t === 'tareas') && !Array.isArray(_seqPendingCos)) _seqLoadPendingCos(_activeSeq); if (t === 'metricas') { if (_seqMetrics === null) _seqLoadMetrics(_activeSeq); _seqAb = null; _seqLoadAb(_activeSeq); } if (t === 'envios') { _seqMsgs = null; _seqLoadMsgs(_activeSeq); } if (t === 'aprobar' || t === 'tareas') { _seqApprovals = null; _seqLoadApprovals(_activeSeq); } }
+  function seqTab(t) { _seqTab = t; _seqPasosOpen = false; if (t === 'aprobar') _seqAppIdx = 0; _renderBody(); if ((t === 'contactos' || t === 'tareas') && !Array.isArray(_seqContacts)) _seqLoadContacts(_activeSeq); if ((t === 'empresas' || t === 'tareas') && !Array.isArray(_seqPendingCos)) _seqLoadPendingCos(_activeSeq); if (t === 'metricas') { if (_seqMetrics === null) _seqLoadMetrics(_activeSeq); _seqAb = null; _seqLoadAb(_activeSeq); } if (t === 'envios') { _seqMsgs = null; _seqLoadMsgs(_activeSeq); } if (t === 'aprobar' || t === 'tareas') { _seqApprovals = null; _seqLoadApprovals(_activeSeq); } }
   // Filas de aprobación DENTRO de la pestaña Tareas: el email automático se revisa,
   // edita y aprueba aquí mismo — no es una tarea de "marcar hecho".
   function _seqApRowsHtml(seqId) {
