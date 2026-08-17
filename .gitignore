@@ -18,3 +18,4 @@ agent/Output/
 agent/sea-prep.blob
 *.exe
 extension/*.zip
+_upload_only.py
