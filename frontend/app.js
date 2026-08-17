@@ -15003,6 +15003,13 @@ const LeadManagerModule = (() => {
     call:     [['llamada', 'Llamada'], ['voicemail', 'Llamada + voicemail']],
   };
   function _accionLabel(canal, a) { const x = (_ACCIONES[canal] || []).find(y => y[0] === a); return x ? x[1] : ''; }
+  function _stepIcoPath(st) {
+    if (st.canal === 'linkedin') {
+      if (st.accion === 'comentario') return _TOUCH.whatsapp[2]; // burbuja de comentario
+      if (st.accion === 'mensaje') return '<path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/>'; // avión de papel
+    }
+    return (_TOUCH[st.canal] || _TOUCH.email)[2];
+  }
   function _seqBadge(e) { const s = _SEQ[e] || _SEQ.draft; return `<span class="lm-obc-badge" style="background:${s[1]};color:${s[2]}">${s[0]}</span>`; }
   function _seqSteps(id) { return _steps.filter(s => s.sequence_id === id).sort((a, b) => (a.dia - b.dia) || (a.orden - b.orden) || (a.id - b.id)); }
   function _sequencesByClient(cid) { return _sequences.filter(s => s.outbound_client_id === cid); }
@@ -17339,7 +17346,7 @@ ${foot}
              : st.cond === 'no_reply' ? '<span class="lm-vb" style="background:#FEF3C7;color:#B45309" title="Solo para contactos que NO respondieron">↳ si no respondió</span>' : '';
     return `<div class="lm-step lm-step--${state}" onclick="LeadManagerModule.openStepDrawer(${st.sequence_id},${st.id})">
       <div class="lm-step__rail"><span class="lm-step__node">${st.dia}</span></div>
-      <span class="lm-step__ico" style="background:${t[1]}1a;color:${t[1]}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${t[2]}</svg></span>
+      <span class="lm-step__ico"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${_stepIcoPath(st)}</svg></span>
       <div class="lm-step__body">
         <div class="lm-step__top"><span class="lm-step__t">${esc(_accionLabel(st.canal, st.accion) || st.titulo || t[0])}</span>${cb}</div>
       </div>
