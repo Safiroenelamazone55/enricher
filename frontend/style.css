@@ -4821,6 +4821,12 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 .seq-collapse-strip { align-self: stretch; width: 30px; border: 1px solid #E8EDF3; background: #fff; border-radius: 12px; color: #94A3B8; cursor: pointer; font-size: 1rem; }
 .seq-collapse-strip:hover { color: var(--sq-blue, #2563EB); background: #F8FAFC; }
 .seq-split .lm-seq-tl { flex: 1 1 auto; min-height: 0; min-width: 0; overflow-y: auto; overflow-x: hidden; background: none; border: none; box-shadow: none; padding: 0; border-radius: 0; }
+/* Scroll sutil (mismo patrón fino que el resto de la app, en gris frío) */
+.seq-split .lm-seq-tl, .seq-split__content { scrollbar-width: thin; scrollbar-color: #E2E8F0 transparent; }
+.seq-split .lm-seq-tl::-webkit-scrollbar, .seq-split__content::-webkit-scrollbar { width: 3px; }
+.seq-split .lm-seq-tl::-webkit-scrollbar-track, .seq-split__content::-webkit-scrollbar-track { background: transparent; }
+.seq-split .lm-seq-tl::-webkit-scrollbar-thumb, .seq-split__content::-webkit-scrollbar-thumb { background: #E2E8F0; border-radius: 3px; }
+.seq-split .lm-seq-tl:hover::-webkit-scrollbar-thumb, .seq-split__content:hover::-webkit-scrollbar-thumb { background: #CBD5E1; }
 .seq-split__right { min-width: 0; height: 100%; display: flex; flex-direction: column; gap: 12px; container-type: inline-size; }
 .seq-stat-tabs { display: flex; flex-shrink: 0; gap: 2px; background: #fff; border: 1px solid #E8EDF3; border-radius: 12px; padding: 0 6px; }
 .seq-stat-tab { flex: 0 1 auto; min-width: 0; display: flex; align-items: center; gap: 5px; padding: 9px 7px; border: none; border-bottom: 2px solid transparent; background: none; border-radius: 0; cursor: pointer; color: var(--sq-mute, #64748B); font-family: inherit; text-align: left; }
