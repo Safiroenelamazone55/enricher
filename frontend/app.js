@@ -14998,6 +14998,7 @@ const LeadManagerModule = (() => {
   // Acción dentro del canal: canal = POR DÓNDE contactas; acción = QUÉ haces exactamente.
   // Define el título por defecto de la tarea y deja claro el trabajo (ej. invitación con nota vs mensaje).
   const _ACCIONES = {
+    email:    [['inicial', 'Email inicial'], ['seguimiento', 'Email de seguimiento'], ['valor', 'Email con caso de éxito'], ['cierre', 'Email de cierre']],
     linkedin: [['invite_nota', 'Invitación con nota'], ['invite', 'Invitación sin nota'], ['mensaje', 'Mensaje directo'], ['follow', 'Seguir el perfil'], ['comentario', 'Comentar una publicación'], ['visita', 'Visitar el perfil']],
     whatsapp: [['mensaje', 'Mensaje'], ['llamada', 'Llamada por WhatsApp']],
     call:     [['llamada', 'Llamada'], ['voicemail', 'Llamada + voicemail']],
