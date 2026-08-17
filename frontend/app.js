@@ -15918,10 +15918,12 @@ ${foot}
       byCo.get(key).n++;
     });
     const cos = [...byCo.values()].sort((a, b) => b.n - a.n);
-    return `<details class="seq-co-derived">
-      <summary>Empresas (${cos.length}) <span class="seq-co-derived__hint">— de los contactos enrolados</span></summary>
-      <div class="seq-co-derived__list">${cos.map(c => `<div class="seq-co-derived__row"><span class="seq-co-derived__nm">${esc(c.nombre)}</span><span class="seq-co-derived__n">${c.n} contacto${c.n !== 1 ? 's' : ''}</span></div>`).join('')}</div>
-    </details>`;
+    return `<div class="seq-list-hd"><h3>Empresas (${cos.length})</h3><a href="javascript:void(0)" class="seq-list-hd__all" onclick="LeadManagerModule.go('companies')">Ver todas</a></div>
+      <div class="seq-co-list">${cos.map(c => `<div class="seq-co-card seq-co-card--plain">
+        <div class="lm-co-logo"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4M10 10h4M10 14h4M10 18h4"/></svg></div>
+        <div class="seq-co-card__main"><div class="seq-co-card__name">${esc(c.nombre)}</div></div>
+        <div class="seq-co-card__right"><div class="seq-co-card__paso">${c.n} contacto${c.n !== 1 ? 's' : ''}</div></div>
+      </div>`).join('')}</div>`;
   }
   function _seqCoCard(row, seqId, steps) {
     const N = steps.length;

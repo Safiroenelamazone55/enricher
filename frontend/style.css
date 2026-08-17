@@ -27,6 +27,10 @@
   --muted:#918C85;
   --border:#EAE7E2;
   --border2:#DAD5CE;
+  /* Alto de la barra superior global — los paneles sticky dentro de .app-main
+     deben restarlo de 100vh; si no, sobresalen justo esa cantidad y hacen
+     scrollear toda la página aunque su contenido quepa. */
+  --topbar-h:26px;
   /* Radius */
   --r:12px; --rs:9px; --rpill:99px;
   /* Shadow — muy sutil (DS v2) */
@@ -4806,7 +4810,14 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 }
 .seq-split--closed { grid-template-columns: auto 1fr; }
 /* Fondo frío del mockup, solo en esta pantalla (el resto de la app es cálido). */
-.app-main:has(.seq-split) { background: #F5F7FA; }
+/* padding-bottom 0: el nav sticky ya ocupa exactamente el alto visible, así que
+   cualquier padding aquí abajo hace scrollear la página por esos pocos píxeles.
+   Va con #appShell porque .app-main:has(#dash2-tasks) —que pone 6px— pesa más
+   por el id dentro del :has(), y ese pane sigue en el DOM aunque esté oculto. */
+#appShell .app-main:has(.seq-split) { background: #F5F7FA; padding-bottom: 0; }
+/* El split ya se dimensiona al viewport; los 60px de padding inferior por
+   defecto de .lm2-body sobraban y hacían scrollear la página. */
+.lm2-body:has(.seq-split) { padding-bottom: 12px; }
 .seq-split__pasos { position: relative; background: #fff; border: 1px solid #E8EDF3; border-radius: 12px; padding: 0 14px 10px; display: flex; flex-direction: column; min-width: 0; height: 100%; min-height: 320px; }
 .lm-seqhd { flex-shrink: 0; padding: 12px 48px 8px 0; border-bottom: 1px solid #F1F5F9; position: relative; }
 .lm-seqhd .lm-sec-title { font-size: 1rem; font-weight: 700; letter-spacing: -.01em; color: var(--sq-ink, #0F172A); margin-top: 6px; }
@@ -11685,34 +11696,30 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .seq-list-hd__all { font-size: .8rem; font-weight: 500; color: var(--sq-blue, #2563EB); text-decoration: none; }
 .seq-list-hd__all:hover { text-decoration: underline; }
 .seq-co-list { display: flex; flex-direction: column; gap: 0; }
-.seq-co-card { display: flex; align-items: center; gap: 12px; background: none; border: none; border-radius: 0; padding: 9px 16px; cursor: pointer; transition: background .12s; }
+.seq-co-card { display: flex; align-items: center; gap: 10px; background: none; border: none; border-radius: 0; padding: 8px 16px; cursor: pointer; transition: background .12s; }
 .seq-co-card + .seq-co-card { border-top: 1px solid #F1F5F9; }
 .seq-co-card:hover { background: #F8FAFC; }
 .seq-co-card__main { flex: 1; min-width: 0; }
-.seq-co-card__name { font-size: .89rem; font-weight: 700; letter-spacing: -.01em; color: var(--sq-ink, #0F172A); display: flex; align-items: center; gap: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.seq-co-card__tier { font-size: .62rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--sq-blue, #2563EB); background: var(--sq-blue-chip, #DBEAFE); padding: 2px 7px; border-radius: 999px; flex-shrink: 0; }
-.seq-co-card__sub { font-size: .78rem; font-weight: 400; color: var(--sq-mute, #64748B); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.seq-co-card__name { font-size: .89rem; font-weight: 700; line-height: 1.25; letter-spacing: -.01em; color: var(--sq-ink, #0F172A); display: flex; align-items: center; gap: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.seq-co-card__tier { font-size: .62rem; font-weight: 700; line-height: 1.35; text-transform: uppercase; letter-spacing: .04em; color: var(--sq-blue, #2563EB); background: var(--sq-blue-chip, #DBEAFE); padding: 0 7px; border-radius: 999px; flex-shrink: 0; }
+.seq-co-card__sub { font-size: .78rem; font-weight: 400; line-height: 1.3; color: var(--sq-mute, #64748B); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .seq-co-card__right { text-align: right; flex-shrink: 0; }
 .seq-co-card__paso { font-size: .78rem; color: var(--sq-body, #475569); font-weight: 400; white-space: nowrap; }
-.seq-co-card__status { font-size: .72rem; font-weight: 500; color: var(--sq-amber, #B45309); background: var(--sq-amber-soft, #FEF3C7); border-radius: 999px; padding: 2px 9px; margin-top: 4px; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; align-self: flex-end; }
+.seq-co-card__status { font-size: .7rem; font-weight: 500; color: var(--sq-amber, #B45309); background: var(--sq-amber-soft, #FEF3C7); border-radius: 999px; padding: 2px 8px; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; flex-shrink: 0; }
 .seq-co-card__dot { width: 5px; height: 5px; border-radius: 50%; background: #D97706; flex-shrink: 0; }
-.seq-co-card__right { display: flex; flex-direction: column; align-items: flex-end; }
-.seq-co-card .lm-co-logo { width: 38px; height: 38px; border-radius: 10px; background: linear-gradient(135deg, #2F7BF0, #1D4ED8); }
+/* Paso y estado en la MISMA línea (como el mockup): apilados sumaban alto de más. */
+.seq-co-card__right { display: flex; flex-direction: row; align-items: center; justify-content: flex-end; gap: 10px; }
+.seq-co-card .lm-co-logo { width: 30px; height: 30px; border-radius: 8px; background: linear-gradient(135deg, #2F7BF0, #1D4ED8); }
+.seq-co-card .lm-co-logo svg { width: 14px; height: 14px; }
 .seq-co-card__menu { color: #94A3B8; }
 .seq-co-card__menu { border: none; background: none; color: #B4AFA8; cursor: pointer; font-size: 15px; font-weight: 700; line-height: 1; padding: 4px 8px; border-radius: 6px; flex-shrink: 0; }
 .seq-co-card__menu:hover { background: var(--bg, #F1EFEB); color: var(--text, #0A2540); }
 .seq-co-more { display: flex; align-items: center; justify-content: center; gap: 5px; width: 100%; margin-top: 0; border: none; border-top: 1px solid #F1F5F9; background: none; color: var(--sq-mute, #64748B); font-size: .8rem; font-weight: 500; padding: 11px; cursor: pointer; border-radius: 0 0 12px 12px; font-family: inherit; }
 .seq-co-more:hover { background: #F8FAFC; color: var(--sq-blue, #2563EB); }
-/* Empresas derivadas de los contactos (modo "contacto primero", sin cola de empresas) */
-.seq-co-derived summary { cursor: pointer; list-style: none; font-size: .84rem; font-weight: 700; color: var(--text, #0A2540); padding: 10px 2px; }
-.seq-co-derived summary::-webkit-details-marker { display: none; }
-.seq-co-derived summary::before { content: '›'; display: inline-block; margin-right: 6px; transition: transform .12s; color: #918C85; }
-.seq-co-derived[open] summary::before { transform: rotate(90deg); }
-.seq-co-derived__hint { font-size: .74rem; font-weight: 400; color: var(--muted, #B4AFA8); }
-.seq-co-derived__list { display: flex; flex-direction: column; }
-.seq-co-derived__row { display: flex; align-items: center; justify-content: space-between; padding: 8px 2px; border-top: 1px solid #F1EFEB; font-size: .82rem; }
-.seq-co-derived__nm { color: var(--text, #0A2540); font-weight: 500; }
-.seq-co-derived__n { color: var(--muted, #B4AFA8); font-size: .76rem; flex-shrink: 0; }
+/* Empresas derivadas de los contactos (modo "contacto primero", sin cola de
+   empresas): mismas filas planas que la cola, sin acciones por fila. */
+.seq-co-card--plain { cursor: default; }
+.seq-co-card--plain:hover { background: none; }
 .seq-co-form { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border, #EAE7E2); display: flex; flex-direction: column; gap: 6px; }
 .seq-co-form__row { display: flex; gap: 8px; }
 .seq-co-form__row .form-input { flex: 1; min-width: 0; }
@@ -13034,7 +13041,7 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
 
 /* ── Barra superior GLOBAL (Home y dentro de cada módulo), paleta de Nova ── */
 .global-topbar {
-  display: flex; align-items: center; gap: 14px; height: 26px; padding: 0 14px;
+  display: flex; align-items: center; gap: 14px; height: var(--topbar-h, 26px); padding: 0 14px;
   background: var(--navy); color: #fff; font-family: var(--font); flex-shrink: 0;
 }
 .global-topbar__brand { display: flex; align-items: center; gap: 6px; color: var(--brand-accent); flex-shrink: 0; }
@@ -13227,7 +13234,9 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
    ══════════════════════════════════════════════════════════════ */
 #sidebar { overflow: hidden; }
 #sidebar .sidebar__nav { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
-.lm2-nav { height: 100vh; max-height: 100vh; overflow: hidden; }
+/* El nav es sticky DENTRO de .app-main, que arranca debajo de la barra global:
+   con 100vh sobresalía --topbar-h y hacía scrollear la página entera. */
+.lm2-nav { height: calc(100vh - var(--topbar-h, 26px)); max-height: calc(100vh - var(--topbar-h, 26px)); overflow: hidden; }
 .lm2-nav__list { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
 
 .snav-foot {
