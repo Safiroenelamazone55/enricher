@@ -17532,7 +17532,7 @@ ${foot}
           ? `<button class="seqdo-copy seqdo-copy--xs" onclick="LeadManagerModule.seqOpenLinkedIn(${cid})" title="Abrir el perfil al costado para buscar la publicación">${NI('linkedin')} Abrir perfil</button>` : ''}
       </div>
       <label class="cp-cmt__l" for="cp-cmt-prompt">Instrucción para la IA <span>— viene del paso; puedes ajustarla solo para esta vez</span></label>
-      <textarea class="form-input cp-cmt__ta" id="cp-cmt-prompt" rows="2" placeholder="Ej. Comenta aportando una observación concreta sobre el reto que menciona. Sin vender.">${esc(prompt)}</textarea>
+      <textarea class="form-input cp-cmt__ta" id="cp-cmt-prompt" rows="2" placeholder="Ej. Comento para acercarme antes de escribirle. Que encaje con el post sea del tema que sea.">${esc(prompt)}</textarea>
       <label class="cp-cmt__l" for="cp-cmt-post">Publicación de LinkedIn <span>— pega aquí el texto del post</span></label>
       <textarea class="form-input cp-cmt__ta" id="cp-cmt-post" rows="4" placeholder="Pega aquí la publicación que quieres comentar…">${esc(_cpCmt.post)}</textarea>
       <div class="cp-cmt__row">
@@ -21014,14 +21014,16 @@ ${foot}
       const asunto = usesSubject ? `<label class="step-var-subjwrap"><span class="step-var-subjlbl">Asunto <span style="color:#918C85;font-weight:400;font-size:.72rem">— acepta variables</span></span><input class="form-input step-var-asunto" id="step-var-asu-${i}" data-i="${i}" placeholder="Ej. Consulta sobre {{company}}" value="${esc(v.asunto || '')}" oninput="LeadManagerModule.stepVarEdit(${i})" onfocus="LeadManagerModule.stepFocusTa('step-var-asu-${i}')"></label>` : '';
       const targets = (!single && d.mode === 'segment') ? _stepTargetsHtml(i) : '';
       const link = v.tplId ? `<span class="step-var-link" id="step-var-link-${i}" title="Vinculada a la plantilla — se actualiza sola. Editar el texto la desvincula.">🔗 ${esc(_tplName(v.tplId))} · en vivo</span>` : '';
+      // Aquí va el CONTEXTO (por qué comentas), no el tema: el largo, el tono y el
+      // "adáptate a lo que sea el post" ya los impone el sistema en el backend.
       const ph = isCmt
-        ? 'Ej. Comenta aportando un dato o una observación concreta sobre el reto que menciona la publicación, desde la experiencia de trabajar con equipos parecidos. Nada de vender ni de elogios genéricos.'
+        ? 'Ej. Comento para acercarme antes de mandarle la invitación, para que no le llegue en frío. Que encaje con el post sea del tema que sea.'
         : 'Ej. Hola {{first_name}}…';
       return `<div class="step-var-box">${head}${link}${asunto}<textarea class="form-input step-var-ta" id="step-var-${i}" data-i="${i}" rows="${isCmt ? 5 : (single ? 4 : 3)}" placeholder="${esc(ph)}" onfocus="LeadManagerModule.stepFocusTa('step-var-${i}')" oninput="LeadManagerModule.stepVarEdit(${i})">${esc(v.cuerpo || '')}</textarea>${targets}</div>`;
     }).join('');
     const addBtn = single ? '' : `<button type="button" class="flt-add" onclick="LeadManagerModule.stepAddVariant()">＋ Añadir variante</button>`;
     el.innerHTML = isCmt
-      ? `${modeSel}${varsHtml}<span class="step-vars__hint">Esto <b>no se envía</b>: es lo que le pides a la IA. Al hacer la tarea pegas la publicación de LinkedIn, la IA redacta el comentario con esta instrucción, lo copias y lo pegas tú en LinkedIn.</span>`
+      ? `${modeSel}${varsHtml}<span class="step-vars__hint">Esto <b>no se envía</b>: es lo que le pides a la IA. Al hacer la tarea pegas la publicación de LinkedIn, la IA redacta el comentario con esta instrucción, lo copias y lo pegas tú en LinkedIn.<br>Escribe aquí <b>por qué</b> comentas, no de qué tema: el comentario siempre sale de una línea, en tono humano y encajando con lo que sea el post — eso ya está garantizado. Fijar un tema aquí hace que desencaje cuando el post va de otra cosa.</span>`
       : `${modeSel}${fieldSel}${varsHtml}${_varSelectHtml('seqInsertVar')}${addBtn}<span class="step-vars__hint">Las variables ({{first_name}}…) se reemplazan al hacer la tarea.${single ? '' : ' Cada variante toma su plantilla por segmento y se actualiza sola al editarla. Si escribes texto propio, se desvincula.'}</span>`;
     // El selector de plantilla de arriba solo aplica a "un solo mensaje"; en A/B o segmento cada variante usa el suyo.
     const topTpl = document.getElementById('step-tpl-top'); if (topTpl) topTpl.style.display = single ? '' : 'none';
