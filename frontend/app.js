@@ -17343,11 +17343,13 @@ ${foot}
   function _stepRow(st, state) {
     const t = _TOUCH[st.canal] || _TOUCH.email;
     const cal = _stepCalDate(st);
+    const cb = st.cond === 'replied' ? '<span class="lm-vb" style="background:#F1EFEB;color:#15803D" title="Solo para contactos que respondieron o aceptaron la conexión de LinkedIn">si respondió</span>'
+             : st.cond === 'no_reply' ? '<span class="lm-vb" style="background:#FEF3C7;color:#B45309" title="Solo para contactos que NO respondieron">si no respondió</span>' : '';
     return `<div class="lm-step lm-step--${state}" onclick="LeadManagerModule.openStepDrawer(${st.sequence_id},${st.id})">
       <div class="lm-step__rail"><span class="lm-step__node">${st.dia}</span></div>
-      <span class="lm-step__ico"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${_stepIcoPath(st)}</svg></span>
+      <span class="lm-step__ico"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${_stepIcoPath(st)}</svg></span>
       <div class="lm-step__body">
-        <div class="lm-step__top"><span class="lm-step__t">${esc(_accionLabel(st.canal, st.accion) || t[0])}</span></div>
+        <div class="lm-step__top"><span class="lm-step__t">${esc(_accionLabel(st.canal, st.accion) || t[0])}</span>${cb}</div>
       </div>
       <div class="lm-step__status">
         <span class="lm-step__status__lbl">${_STEP_STATUS_LBL[state]}</span>
