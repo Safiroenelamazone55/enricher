@@ -4793,7 +4793,7 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 /* Pestaña Pasos: tarjeta de pasos colapsable a la izquierda + panel derecho fijo
    (fila de KPIs seleccionable + contenido de esa sección) — cambiar de sección
    ya NO oculta Pasos; eso solo lo hace el botón «/›. */
-.seq-split { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: calc(100vh - 220px); gap: 16px; align-items: stretch; margin-top: 14px; }
+.seq-split { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: calc(100vh - 120px); gap: 16px; align-items: stretch; margin-top: 14px; }
 .seq-split--closed { grid-template-columns: auto 1fr; }
 .seq-split__pasos { position: relative; background: #fff; border: 1px solid var(--border, #EAE7E2); border-radius: 14px; padding: 0 18px 14px; display: flex; flex-direction: column; min-width: 0; height: 100%; min-height: 320px; }
 .lm-seqhd { flex-shrink: 0; padding: 16px 60px 14px 0; border-bottom: 1px solid #F1EFEB; position: relative; }
