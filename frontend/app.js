@@ -14986,7 +14986,7 @@ const LeadManagerModule = (() => {
   function cmSetQ(v) { _cmQ = v; _cmPaint(); }
 
   // ── Helpers de secuencia (Fase 3) ──
-  const _SEQ = { draft: ['Draft', '#F1EFEB', '#6C6862'], activa: ['Activa', '#D1FAE5', '#065F46'], pausada: ['Pausada', '#FFEDD5', '#9A3412'], archivada: ['Archivada', '#F1EFEB', '#3B5573'] };
+  const _SEQ = { draft: ['Draft', '#F1F5F9', '#64748B'], activa: ['Activa', '#DCFCE7', '#16A34A'], pausada: ['Pausada', '#FEF3C7', '#B45309'], archivada: ['Archivada', '#F1F5F9', '#475569'] };
   const _TOUCH = {
     email:    ['Email',    '#E07B12', '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 5L2 7"/>'],
     linkedin: ['LinkedIn', '#0A66C2', '<path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-4 0v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/>'],
