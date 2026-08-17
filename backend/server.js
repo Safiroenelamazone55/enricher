@@ -3375,8 +3375,10 @@ app.post('/api/lm/bulk-clean', requireAuth, async (req, res) => {
 // ── Cola de empresas ("empresa primero", estilo LinkedIn Sales Navigator) ──
 // Puente entre "ya califiqué la empresa" y "ya tengo a la persona": lm_company_sequences
 // SIEMPRE representa "falta encontrar al decisor en LinkedIn". Al agregar el contacto
-// encontrado (endpoint /convert) el contacto arranca YA en Paso 2 del pipeline normal —
-// Paso 1 se da por hecho porque la invitación se manda en la misma acción de agregarlo.
+// encontrado (endpoint /convert) el contacto arranca en **Paso 1** del pipeline normal:
+// encontrar al decisor no es hacer el Paso 1, solo desbloquearlo. Así la secuencia puede
+// empezar con cualquier acción (comentar una publicación, invitación, lo que sea) y el
+// contacto nuevo la recibe sin re-enrolar nada.
 app.post('/api/lm/companies/bulk-enroll', requireAuth, async (req, res) => {
   const uid = req.workspaceOwnerId;
   const b = req.body || {};
