@@ -11672,6 +11672,16 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .seq-co-card__menu:hover { background: var(--bg, #F1EFEB); color: var(--text, #0A2540); }
 .seq-co-more { display: flex; align-items: center; justify-content: center; gap: 5px; width: 100%; margin-top: 8px; border: none; background: none; color: var(--brand-d, #0062CC); font-size: .8rem; font-weight: 600; padding: 9px; cursor: pointer; border-radius: 8px; font-family: inherit; }
 .seq-co-more:hover { background: var(--bg, #F1EFEB); }
+/* Empresas derivadas de los contactos (modo "contacto primero", sin cola de empresas) */
+.seq-co-derived summary { cursor: pointer; list-style: none; font-size: .84rem; font-weight: 700; color: var(--text, #0A2540); padding: 10px 2px; }
+.seq-co-derived summary::-webkit-details-marker { display: none; }
+.seq-co-derived summary::before { content: '›'; display: inline-block; margin-right: 6px; transition: transform .12s; color: #918C85; }
+.seq-co-derived[open] summary::before { transform: rotate(90deg); }
+.seq-co-derived__hint { font-size: .74rem; font-weight: 400; color: var(--muted, #B4AFA8); }
+.seq-co-derived__list { display: flex; flex-direction: column; }
+.seq-co-derived__row { display: flex; align-items: center; justify-content: space-between; padding: 8px 2px; border-top: 1px solid #F1EFEB; font-size: .82rem; }
+.seq-co-derived__nm { color: var(--text, #0A2540); font-weight: 500; }
+.seq-co-derived__n { color: var(--muted, #B4AFA8); font-size: .76rem; flex-shrink: 0; }
 .seq-co-form { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border, #EAE7E2); display: flex; flex-direction: column; gap: 6px; }
 .seq-co-form__row { display: flex; gap: 8px; }
 .seq-co-form__row .form-input { flex: 1; min-width: 0; }

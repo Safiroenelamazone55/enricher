@@ -15085,7 +15085,17 @@ const LeadManagerModule = (() => {
   function sqSetCli(v) { _sqCli = v; _sqPaint(); }
   function sqSetEst(v) { _sqEst = v; _sqPaint(); }
   function sqSetQ(v) { _sqQ = v; _sqPaint(); }
-  function openSequence(id) { _activeSeq = id; _section = 'sequence'; _seqTab = 'empresas'; _seqPasosOpen = true; _seqCoExpanded = false; _seqContacts = null; _seqPendingCos = null; _seqMetrics = null; _seqDo = null; _seqCtEstado = ''; _seqTaskCanal = ''; _seqTaskDue = ''; _refreshNav(); _renderBody(); _seqLoadContacts(id); _seqLoadPendingCos(id); }
+  async function openSequence(id) {
+    _activeSeq = id; _section = 'sequence'; _seqTab = 'empresas'; _seqPasosOpen = true; _seqCoExpanded = false;
+    _seqContacts = null; _seqPendingCos = null; _seqMetrics = null; _seqDo = null; _seqCtEstado = ''; _seqTaskCanal = ''; _seqTaskDue = '';
+    _refreshNav(); _renderBody();
+    // Ambos en paralelo, pero un último _renderBody() DESPUÉS de que los dos terminen —
+    // si cada uno pinta apenas resuelve, el que llega primero puede pintar con el otro
+    // aún en null (ej. "Empresas 0" aunque los 117 contactos ya cargaron) y esa pintura
+    // parcial se queda en pantalla si el segundo resuelve sin cambiar nada visible propio.
+    await Promise.all([_seqLoadContacts(id), _seqLoadPendingCos(id)]);
+    if (_section === 'sequence' && _activeSeq === id) _renderBody();
+  }
   function seqPasosToggle() { _seqPasosOpen = !_seqPasosOpen; _renderBody(); }
   // Informe/Editar/Pausar/Añadir paso — antes una fila de botones en la tarjeta,
   // ahora agrupados detrás del "⋮" para que la tarjeta quede limpia como el mockup.
@@ -15329,8 +15339,11 @@ const LeadManagerModule = (() => {
       envios: '<path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/>',
       aprobar: '<polyline points="20 6 9 17 4 12"/>',
     };
+    const empresasN = Array.isArray(_seqPendingCos) && _seqPendingCos.length ? _seqPendingCos.length
+      : Array.isArray(_seqContacts) ? new Set(_seqContacts.map(c => c.company_id != null ? `id:${c.company_id}` : `n:${(c.company_nombre || '').toLowerCase()}`)).size
+      : (Array.isArray(_seqPendingCos) ? 0 : null);
     const tabs = [
-      ['empresas', 'Empresas', Array.isArray(_seqPendingCos) ? _seqPendingCos.length : null],
+      ['empresas', 'Empresas', empresasN],
       ['contactos', 'Contactos', Array.isArray(_seqContacts) ? _seqContacts.length : null],
       ['tareas', 'Tareas', taskN],
       ['metricas', 'Métricas', null],
@@ -15884,14 +15897,31 @@ ${foot}
   function _seqEmpresasTab(id) {
     const list = Array.isArray(_seqPendingCos) ? _seqPendingCos : null;
     if (list === null) return `<div class="cp-empty2" style="padding:22px">Cargando…</div>`;
-    if (!list.length) return _empty('contacts', 'Sin empresas en cola', 'Ve a Empresas, filtra tu lista calificada (p. ej. por Target Tier) y usa "＋ Enrolar en secuencia" para mandarlas acá.', 'Ir a Empresas', `LeadManagerModule.go('companies')`);
-    const steps = _seqSteps(id);
-    const LIMIT = 5;
-    const visible = _seqCoExpanded ? list : list.slice(0, LIMIT);
-    const remaining = list.length - visible.length;
-    return `<div class="seq-list-hd"><h3>Empresas (${list.length})</h3><a href="javascript:void(0)" class="seq-list-hd__all" onclick="LeadManagerModule.go('companies')">Ver todas</a></div>
-      <div class="seq-co-list">${visible.map(row => _seqCoCard(row, id, steps)).join('')}</div>
-      ${remaining > 0 ? `<button class="seq-co-more" onclick="LeadManagerModule.seqCoExpandToggle()">Ver ${remaining} empresa${remaining !== 1 ? 's' : ''} más <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>` : ''}`;
+    if (list.length) {
+      // Modo "empresa primero": cola de empresas (lm_company_sequences) — sin contacto asignado aún.
+      const steps = _seqSteps(id);
+      const LIMIT = 5;
+      const visible = _seqCoExpanded ? list : list.slice(0, LIMIT);
+      const remaining = list.length - visible.length;
+      return `<div class="seq-list-hd"><h3>Empresas (${list.length})</h3><a href="javascript:void(0)" class="seq-list-hd__all" onclick="LeadManagerModule.go('companies')">Ver todas</a></div>
+        <div class="seq-co-list">${visible.map(row => _seqCoCard(row, id, steps)).join('')}</div>
+        ${remaining > 0 ? `<button class="seq-co-more" onclick="LeadManagerModule.seqCoExpandToggle()">Ver ${remaining} empresa${remaining !== 1 ? 's' : ''} más <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>` : ''}`;
+    }
+    // Modo "contacto primero": no hay cola de empresas — se derivan de los contactos ya enrolados.
+    const contacts = Array.isArray(_seqContacts) ? _seqContacts : null;
+    if (contacts === null) return `<div class="cp-empty2" style="padding:22px">Cargando…</div>`;
+    if (!contacts.length) return _empty('contacts', 'Sin empresas en cola', 'Ve a Empresas, filtra tu lista calificada (p. ej. por Target Tier) y usa "＋ Enrolar en secuencia" para mandarlas acá.', 'Ir a Empresas', `LeadManagerModule.go('companies')`);
+    const byCo = new Map();
+    contacts.forEach(c => {
+      const key = c.company_id != null ? `id:${c.company_id}` : `n:${(c.company_nombre || '').toLowerCase()}`;
+      if (!byCo.has(key)) byCo.set(key, { nombre: c.company_nombre || '(sin empresa)', n: 0 });
+      byCo.get(key).n++;
+    });
+    const cos = [...byCo.values()].sort((a, b) => b.n - a.n);
+    return `<details class="seq-co-derived">
+      <summary>Empresas (${cos.length}) <span class="seq-co-derived__hint">— de los contactos enrolados</span></summary>
+      <div class="seq-co-derived__list">${cos.map(c => `<div class="seq-co-derived__row"><span class="seq-co-derived__nm">${esc(c.nombre)}</span><span class="seq-co-derived__n">${c.n} contacto${c.n !== 1 ? 's' : ''}</span></div>`).join('')}</div>
+    </details>`;
   }
   function _seqCoCard(row, seqId, steps) {
     const N = steps.length;
