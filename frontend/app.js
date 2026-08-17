@@ -15351,8 +15351,8 @@ const LeadManagerModule = (() => {
     ];
     if (s.send_mode === 'preaprobado' || (s.awaiting || 0) > 0) tabs.push(['aprobar', 'Aprobar', (s.awaiting || 0) || null]);
     return `<div class="seq-stat-tabs">${tabs.map(([key, label, n]) => `<button class="seq-stat-tab${_seqTab === key ? ' active' : ''}" onclick="LeadManagerModule.seqTab('${key}')">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICO[key] || ''}</svg>
-        <span class="seq-stat-tab__txt"><span class="seq-stat-tab__lbl">${label}</span><span class="seq-stat-tab__n">${n != null ? n : '—'}</span></span>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICO[key] || ''}</svg>
+        <span class="seq-stat-tab__lbl">${label}</span><span class="seq-stat-tab__n">${n != null ? n : '—'}</span>
       </button>`).join('')}</div>`;
   }
   // ════════════ INFORME PDF DE SECUENCIA (diseño propio, multi-idioma) ════════════

@@ -4813,14 +4813,13 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 .seq-collapse-strip:hover { color: #3D3A36; background: var(--surface-hover, #F7F5F2); }
 .seq-split .lm-seq-tl { flex: 1 1 auto; min-height: 0; min-width: 0; overflow-y: auto; overflow-x: hidden; background: none; border: none; box-shadow: none; padding: 0; border-radius: 0; }
 .seq-split__right { min-width: 0; height: 100%; display: flex; flex-direction: column; gap: 12px; }
-.seq-stat-tabs { display: flex; gap: 4px; background: #fff; border: 1px solid var(--border, #EAE7E2); border-radius: 14px; padding: 6px; overflow-x: auto; }
-.seq-stat-tab { flex: 1; display: flex; align-items: center; gap: 8px; padding: 9px 10px; border: none; background: none; border-radius: 9px; cursor: pointer; color: #918C85; font-family: inherit; text-align: left; white-space: nowrap; }
+.seq-stat-tabs { display: flex; gap: 3px; background: #fff; border: 1px solid var(--border, #EAE7E2); border-radius: 10px; padding: 4px; overflow-x: auto; }
+.seq-stat-tab { flex: 1; display: flex; align-items: center; gap: 5px; padding: 6px 8px; border: none; background: none; border-radius: 7px; cursor: pointer; color: #918C85; font-family: inherit; text-align: left; white-space: nowrap; }
 .seq-stat-tab:hover { background: var(--surface-hover, #F7F5F2); }
 .seq-stat-tab.active { background: var(--primary-soft, #EAF2FF); color: var(--brand, #007AFF); }
 .seq-stat-tab svg { flex-shrink: 0; }
-.seq-stat-tab__txt { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.seq-stat-tab__lbl { font-size: .68rem; font-weight: 600; white-space: nowrap; }
-.seq-stat-tab__n { font-size: 1rem; font-weight: 800; color: #1F1D1B; font-variant-numeric: tabular-nums; }
+.seq-stat-tab__lbl { font-size: .74rem; font-weight: 600; white-space: nowrap; }
+.seq-stat-tab__n { font-size: .74rem; font-weight: 800; color: #1F1D1B; font-variant-numeric: tabular-nums; margin-left: auto; padding-left: 6px; }
 .seq-stat-tab.active .seq-stat-tab__n { color: var(--brand, #007AFF); }
 .seq-split__content { min-width: 0; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; }
 .seq-split__content > .lm-empty2:only-child { flex: 1; justify-content: center; }
