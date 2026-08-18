@@ -1220,6 +1220,11 @@ async function initDb() {
     // del smtp_message_id anterior + prefijo "Re: " al asunto si falta). Permite
     // encadenar el segundo/tercer email en el mismo hilo, como hace Apollo/Instantly.
     await pool.query(`ALTER TABLE sequence_steps ADD COLUMN IF NOT EXISTS reply_to_prev BOOLEAN NOT NULL DEFAULT FALSE;`);
+    // Pasos que dependen de una publicación (comentar / reaccionar): ventana de antigüedad
+    // aceptable del post (0 = sin límite) y reacción sugerida. La ventana convierte
+    // "sin actividad reciente" en un criterio objetivo en vez de un juicio del momento.
+    await pool.query(`ALTER TABLE sequence_steps ADD COLUMN IF NOT EXISTS post_dias INTEGER NOT NULL DEFAULT 0;`);
+    await pool.query(`ALTER TABLE sequence_steps ADD COLUMN IF NOT EXISTS reaccion  TEXT    NOT NULL DEFAULT '';`);
     // lm_mailboxes: buzones reales por cliente outbound (SMTP+IMAP, cualquier proveedor).
     // pass_enc = contraseña de aplicación cifrada AES-256-GCM (nunca en claro).
     await pool.query(`

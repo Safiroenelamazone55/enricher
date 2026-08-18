@@ -3688,7 +3688,11 @@ function _sanHora(v) { const s = String(v || '').trim(); const m = s.match(/^(\d
 // Condición de rama de un paso: '' (todos) | 'replied' (respondió/aceptó) | 'no_reply' (no respondió).
 function _sanCond(v) { return ['replied', 'no_reply'].includes(v) ? v : ''; }
 // Acción del paso dentro del canal (invitación con/sin nota, mensaje, follow, comentario…)
-function _sanAccion(v) { return ['invite_nota', 'invite', 'mensaje', 'follow', 'comentario', 'visita', 'llamada', 'voicemail'].includes(v) ? v : ''; }
+function _sanAccion(v) { return ['invite_nota', 'invite', 'mensaje', 'inmail', 'follow', 'comentario', 'like', 'visita', 'llamada', 'voicemail'].includes(v) ? v : ''; }
+// Antigüedad máxima aceptable de la publicación, en días (0 = sin límite).
+function _sanPostDias(v) { const n = parseInt(v); return (n > 0 && n <= 365) ? n : 0; }
+const STEP_REACCIONES = ['recomendar', 'celebrar', 'apoyar', 'me_encanta', 'interesante'];
+function _sanReaccion(v) { return STEP_REACCIONES.includes(v) ? v : ''; }
 // ── Pipeline automático del contacto (estilo Apollo) ──
 // El estado avanza SOLO hacia adelante según la actividad: 1er paso completado → contactado;
 // disposición respondió/reunión → respondio; no interesado/no contactar → perdido.
@@ -6227,9 +6231,9 @@ app.post('/api/sequence-steps', requireAuth, async (req, res) => {
   const canal = STEP_CANALES.includes(b.canal) ? b.canal : 'email';
   try {
     const { rows } = await pool.query(`
-      INSERT INTO sequence_steps (user_id,sequence_id,dia,canal,titulo,plantilla,variants,variant_mode,variant_field,orden,hora,cond,accion,asunto,cc_off,reply_to_prev)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *
-    `, [req.workspaceOwnerId, b.sequence_id, parseInt(b.dia) || 1, canal, b.titulo || '', b.plantilla || '', JSON.stringify(Array.isArray(b.variants) ? b.variants : []), b.variant_mode || 'off', b.variant_field || '', parseInt(b.orden) || 0, _sanHora(b.hora), _sanCond(b.cond), _sanAccion(b.accion), String(b.asunto || '').slice(0, 500), !!b.cc_off, !!b.reply_to_prev]);
+      INSERT INTO sequence_steps (user_id,sequence_id,dia,canal,titulo,plantilla,variants,variant_mode,variant_field,orden,hora,cond,accion,asunto,cc_off,reply_to_prev,post_dias,reaccion)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING *
+    `, [req.workspaceOwnerId, b.sequence_id, parseInt(b.dia) || 1, canal, b.titulo || '', b.plantilla || '', JSON.stringify(Array.isArray(b.variants) ? b.variants : []), b.variant_mode || 'off', b.variant_field || '', parseInt(b.orden) || 0, _sanHora(b.hora), _sanCond(b.cond), _sanAccion(b.accion), String(b.asunto || '').slice(0, 500), !!b.cc_off, !!b.reply_to_prev, _sanPostDias(b.post_dias), _sanReaccion(b.reaccion)]);
     res.status(201).json(rows[0]);
   } catch (err) { console.error('[step] POST error:', err.message); res.status(500).json({ error: 'Error al crear paso' }); }
 });
@@ -6238,8 +6242,8 @@ app.put('/api/sequence-steps/:id', requireAuth, async (req, res) => {
   const canal = STEP_CANALES.includes(b.canal) ? b.canal : 'email';
   try {
     const { rows } = await pool.query(`
-      UPDATE sequence_steps SET dia=$1,canal=$2,titulo=$3,plantilla=$4,variants=$5,variant_mode=$6,variant_field=$7,orden=$8,hora=$9,cond=$10,accion=$11,asunto=$12,cc_off=$13,reply_to_prev=$14 WHERE id=$15 AND user_id=$16 RETURNING *
-    `, [parseInt(b.dia) || 1, canal, b.titulo || '', b.plantilla || '', JSON.stringify(Array.isArray(b.variants) ? b.variants : []), b.variant_mode || 'off', b.variant_field || '', parseInt(b.orden) || 0, _sanHora(b.hora), _sanCond(b.cond), _sanAccion(b.accion), String(b.asunto || '').slice(0, 500), !!b.cc_off, !!b.reply_to_prev, req.params.id, req.workspaceOwnerId]);
+      UPDATE sequence_steps SET dia=$1,canal=$2,titulo=$3,plantilla=$4,variants=$5,variant_mode=$6,variant_field=$7,orden=$8,hora=$9,cond=$10,accion=$11,asunto=$12,cc_off=$13,reply_to_prev=$14,post_dias=$15,reaccion=$16 WHERE id=$17 AND user_id=$18 RETURNING *
+    `, [parseInt(b.dia) || 1, canal, b.titulo || '', b.plantilla || '', JSON.stringify(Array.isArray(b.variants) ? b.variants : []), b.variant_mode || 'off', b.variant_field || '', parseInt(b.orden) || 0, _sanHora(b.hora), _sanCond(b.cond), _sanAccion(b.accion), String(b.asunto || '').slice(0, 500), !!b.cc_off, !!b.reply_to_prev, _sanPostDias(b.post_dias), _sanReaccion(b.reaccion), req.params.id, req.workspaceOwnerId]);
     if (!rows.length) return res.status(404).json({ error: 'Paso no encontrado' });
 
     // Re-generar los borradores 'awaiting' de este step con la nueva plantilla/asunto.

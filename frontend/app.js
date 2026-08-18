@@ -15381,7 +15381,7 @@ const LeadManagerModule = (() => {
   // Define el título por defecto de la tarea y deja claro el trabajo (ej. invitación con nota vs mensaje).
   const _ACCIONES = {
     email:    [['inicial', 'Email inicial'], ['seguimiento', 'Email de seguimiento'], ['valor', 'Email con caso de éxito'], ['cierre', 'Email de cierre']],
-    linkedin: [['invite_nota', 'Invitación con nota'], ['invite', 'Invitación sin nota'], ['mensaje', 'Mensaje directo'], ['follow', 'Seguir el perfil'], ['comentario', 'Comentar una publicación'], ['like', 'Reaccionar a una publicación'], ['visita', 'Visitar el perfil']],
+    linkedin: [['invite_nota', 'Invitación con nota'], ['invite', 'Invitación sin nota'], ['mensaje', 'Mensaje directo'], ['inmail', 'InMail'], ['follow', 'Seguir el perfil'], ['comentario', 'Comentar una publicación'], ['like', 'Reaccionar a una publicación'], ['visita', 'Visitar el perfil']],
     whatsapp: [['mensaje', 'Mensaje'], ['llamada', 'Llamada por WhatsApp']],
     call:     [['llamada', 'Llamada'], ['voicemail', 'Llamada + voicemail']],
   };
@@ -17768,6 +17768,15 @@ ${foot}
           : `<span class="cp-taskbar__mt cp-taskbar__mt--nolink" title="Este contacto no tiene URL de LinkedIn en su ficha"><span class="cp-taskbar__subj-l">LinkedIn</span><span class="cp-taskbar__mt-v" style="color:#B45309">Sin URL en la ficha del contacto</span></span>`}
       </div>` : ''}
       ${st.canal === 'email' && subject ? `<div class="cp-taskbar__subj"><span class="cp-taskbar__subj-l">Asunto</span><span class="cp-taskbar__subj-v">${esc(subject)}</span>${/^re\s*:/i.test(subject) ? `<span class="lm-vb" style="background:#FEF3C7;color:#B45309" title="Follow-up: usa Re: del primer email para simular el hilo">Re:</span>` : ''}<button class="seqdo-copy seqdo-copy--xs" onclick="LeadManagerModule.seqDoCopySubject()">${NI('copy')}</button></div>` : ''}
+      ${_isContentStep(st.canal, st.accion) ? (() => {
+        const dias = parseInt(st.post_dias) || 0;
+        const re = _reaccionLabel(st.reaccion);
+        const partes = [];
+        if (dias) partes.push(`Publicación de los <b>últimos ${dias} días</b>`);
+        if (re && _isLikeStep(st.canal, st.accion)) partes.push(`Reacción sugerida: <b>${esc(re)}</b>`);
+        if (!partes.length) return '';
+        return `<div class="cp-cmt__crit">${partes.join(' · ')} — si no hay ninguna, marca <b>Sin actividad reciente</b>.</div>`;
+      })() : ''}
       ${isCmt
         ? _cpCmtHtml(cid, st, seqId)
         : hasMsg
@@ -21013,6 +21022,8 @@ ${foot}
     _stepFocusTa = 'step-var-0';
     _stepDraft = {
       seqId,
+      postDias: (st && st.post_dias) ? String(st.post_dias) : '',
+      reaccion: (st && st.reaccion) || '',
       mode: (st && st.variant_mode) || 'off',
       field: (st && st.variant_field) || 'buyer_role',
       variants: (st && Array.isArray(st.variants) && st.variants.length) ? st.variants.map(v => { const r = _varResolve(v, st); return { nombre: v.nombre || '', asunto: r.asunto, cuerpo: r.cuerpo, targets: Array.isArray(v.targets) ? v.targets.slice() : [], tplId: r.tplId }; }) : [{ nombre: 'A', asunto: (st && st.asunto) || '', cuerpo: (st && st.plantilla) || '', targets: [], tplId: '' }],
@@ -21131,18 +21142,38 @@ ${foot}
   // Paso "Comentar una publicación" (LinkedIn): el cuadro de texto deja de ser una
   // plantilla de mensaje y pasa a ser la INSTRUCCIÓN (prompt) para la IA. Al hacer la
   // tarea, Jenny pega la publicación y la IA redacta el comentario con esta instrucción.
+  const _POST_DIAS = [['', 'Sin límite'], ['7', 'Últimos 7 días'], ['15', 'Últimos 15 días'], ['30', 'Últimos 30 días'], ['90', 'Últimos 90 días']];
+  const _REACCIONES = [['', 'La que encaje'], ['recomendar', '👍 Recomendar'], ['celebrar', '👏 Celebrar'], ['apoyar', '🤝 Apoyar'], ['me_encanta', '❤️ Me encanta'], ['interesante', '💡 Interesante']];
+  function _reaccionLabel(v) { const x = _REACCIONES.find(r => r[0] === v); return x ? x[1] : ''; }
+  function _isLikeStep(canal, accion) { return canal === 'linkedin' && accion === 'like'; }
   function _isCommentStep(canal, accion) { return canal === 'linkedin' && accion === 'comentario'; }
   // Pasos que solo se pueden hacer si el prospecto publicó algo. Son los únicos donde
   // "sin actividad reciente" es un resultado válido: invitar, escribir, seguir o visitar
   // el perfil funcionan igual aunque no haya publicaciones.
   function _isContentStep(canal, accion) { return canal === 'linkedin' && (accion === 'comentario' || accion === 'like'); }
   function stepAccionChange() { _stepSyncDraft(); _stepRenderMsg(); }
+  // Opciones de los pasos que dependen de una publicación. La ventana hace que
+  // "sin actividad reciente" sea un criterio objetivo (lo mismo que hace HeyReach)
+  // en vez de un juicio distinto en cada tarea.
+  function _stepContentOptsHtml(isLike) {
+    const d = _stepDraft || {};
+    const dias = _POST_DIAS.map(o => `<option value="${o[0]}"${(d.postDias || '') === o[0] ? ' selected' : ''}>${o[1]}</option>`).join('');
+    const reac = _REACCIONES.map(o => `<option value="${o[0]}"${(d.reaccion || '') === o[0] ? ' selected' : ''}>${o[1]}</option>`).join('');
+    return `<label class="fin-cfg-field"><span class="fin-cfg-lbl">Antigüedad máxima de la publicación</span>
+        <select class="form-input" id="step-post-dias">${dias}</select>
+        <span class="seq-drip-hint">Si no hay ninguna publicación más nueva que esto, la tarea se marca como <b>Sin actividad reciente</b> y el contacto pasa al siguiente paso.</span></label>` +
+      (isLike ? `<label class="fin-cfg-field"><span class="fin-cfg-lbl">Reacción sugerida</span>
+        <select class="form-input" id="step-reaccion">${reac}</select>
+        <span class="seq-drip-hint">Una reacción pensada se nota más que un “me gusta” por defecto. Es solo una sugerencia en la tarea.</span></label>`
+        : `<input type="hidden" id="step-reaccion" value="">`);
+  }
   function _stepRenderMsg() {
     const el = document.getElementById('step-msg'); if (!el || !_stepDraft) return;
     const d = _stepDraft;
     const canal  = $('step-canal')?.value || 'email';
     const accion = $('step-accion')?.value || '';
     const isCmt  = _isCommentStep(canal, accion);
+    const isLike = _isLikeStep(canal, accion);
     const single = isCmt || d.mode === 'off';
     const modeSel = isCmt
       ? `<label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Instrucción para la IA (prompt)</span></label>`
@@ -21168,8 +21199,16 @@ ${foot}
       return `<div class="step-var-box">${head}${link}${asunto}<textarea class="form-input step-var-ta" id="step-var-${i}" data-i="${i}" rows="${isCmt ? 5 : (single ? 4 : 3)}" placeholder="${esc(ph)}" onfocus="LeadManagerModule.stepFocusTa('step-var-${i}')" oninput="LeadManagerModule.stepVarEdit(${i})">${esc(v.cuerpo || '')}</textarea>${targets}</div>`;
     }).join('');
     const addBtn = single ? '' : `<button type="button" class="flt-add" onclick="LeadManagerModule.stepAddVariant()">＋ Añadir variante</button>`;
+    if (isLike) {
+      // Reaccionar no lleva texto: solo la ventana de la publicación y qué reacción usar.
+      el.innerHTML = `<label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Reaccionar a una publicación</span></label>`
+        + _stepContentOptsHtml(true)
+        + `<span class="step-vars__hint">Este paso no envía ni escribe nada: abres su perfil, buscas una publicación dentro de la ventana y reaccionas. Si no hay ninguna, márcalo como <b>Sin actividad reciente</b>.</span>`;
+      const topTplL = document.getElementById('step-tpl-top'); if (topTplL) topTplL.style.display = 'none';
+      return;
+    }
     el.innerHTML = isCmt
-      ? `${modeSel}${_liRoleHtml(_stepDraft.seqId)}${varsHtml}<span class="step-vars__hint">Esto <b>no se envía</b>: es lo que le pides a la IA. Al hacer la tarea pegas la publicación de LinkedIn, la IA redacta el comentario con esta instrucción, lo copias y lo pegas tú en LinkedIn.<br>Escribe aquí <b>por qué</b> comentas, no de qué tema: el comentario siempre sale de una línea, en tono humano y encajando con lo que sea el post — eso ya está garantizado. Fijar un tema aquí hace que desencaje cuando el post va de otra cosa.</span>`
+      ? `${modeSel}${_liRoleHtml(_stepDraft.seqId)}${varsHtml}${_stepContentOptsHtml(false)}<span class="step-vars__hint">Esto <b>no se envía</b>: es lo que le pides a la IA. Al hacer la tarea pegas la publicación de LinkedIn, la IA redacta el comentario con esta instrucción, lo copias y lo pegas tú en LinkedIn.<br>Escribe aquí <b>por qué</b> comentas, no de qué tema: el comentario siempre sale de una línea, en tono humano y encajando con lo que sea el post — eso ya está garantizado. Fijar un tema aquí hace que desencaje cuando el post va de otra cosa.</span>`
       : `${modeSel}${fieldSel}${varsHtml}${_varSelectHtml('seqInsertVar')}${addBtn}<span class="step-vars__hint">Las variables ({{first_name}}…) se reemplazan al hacer la tarea.${single ? '' : ' Cada variante toma su plantilla por segmento y se actualiza sola al editarla. Si escribes texto propio, se desvincula.'}</span>`;
     // El selector de plantilla de arriba solo aplica a "un solo mensaje"; en A/B o segmento cada variante usa el suyo.
     const topTpl = document.getElementById('step-tpl-top'); if (topTpl) topTpl.style.display = single ? '' : 'none';
@@ -21311,7 +21350,8 @@ ${foot}
     const asunto = ((d.variants[0] && d.variants[0].asunto) || '').trim();
     const ccBox = $('step-cc');
     const replyBox = $('step-reply');
-    const body = { sequence_id: seqId, dia, canal: $('step-canal')?.value || 'email', titulo: $('step-titulo')?.value.trim() || '', asunto, plantilla, variants, variant_mode: d.mode, variant_field: d.field, orden: dia, hora: $('step-hora')?.value || '', cond: $('step-cond')?.value || '', accion: $('step-accion')?.value || '', cc_off: ccBox ? !ccBox.checked : false, reply_to_prev: !!(replyBox && replyBox.checked) };
+    const body = { sequence_id: seqId, dia, canal: $('step-canal')?.value || 'email', titulo: $('step-titulo')?.value.trim() || '', asunto, plantilla, variants, variant_mode: d.mode, variant_field: d.field, orden: dia, hora: $('step-hora')?.value || '', cond: $('step-cond')?.value || '', accion: $('step-accion')?.value || '',
+      post_dias: $('step-post-dias')?.value || '', reaccion: $('step-reaccion')?.value || '', cc_off: ccBox ? !ccBox.checked : false, reply_to_prev: !!(replyBox && replyBox.checked) };
     const btn = $('step-save'); if (btn) btn.disabled = true;
     try {
       const res = await apiFetch(`${API}/sequence-steps${stepId ? '/' + stepId : ''}`, { method: stepId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
