@@ -15185,3 +15185,8 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .e-inline { margin:0 .5px; }
 .slk-emoji-pop button .e-img { width:20px; height:20px; vertical-align:middle; }
 .slk-mm-reac .e-img { width:12px; height:12px; vertical-align:middle; }
+/* Comentario IA: traducción y avisos — fuera de la caja copiable */
+.cp-cmt__lang { display: inline-block; margin-left: 5px; padding: 1px 5px; border-radius: 5px; background: var(--surface-secondary); color: var(--text-secondary); font-size: .66rem; font-weight: 700; letter-spacing: .3px; }
+.cp-cmt__trad { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border); font-size: .78rem; line-height: 1.5; color: var(--text-secondary); }
+.cp-cmt__trad b { color: var(--text-muted); font-weight: 600; }
+.cp-cmt__warn { margin-top: 8px; padding: 7px 9px; border-radius: 7px; background: #FEF3C7; color: #B45309; font-size: .75rem; line-height: 1.45; }

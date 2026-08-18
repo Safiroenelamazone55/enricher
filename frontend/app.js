@@ -17524,7 +17524,7 @@ ${foot}
   let _cpCmt = null; // { key, cid, post, out, model, cost, loading, err }
   function _cpCmtHtml(cid, st, seqId) {
     const key = `${cid}:${st.id}`;
-    if (!_cpCmt || _cpCmt.key !== key) _cpCmt = { key, cid, post: '', out: '', model: '', cost: 0, loading: false, err: '' };
+    if (!_cpCmt || _cpCmt.key !== key) _cpCmt = { key, cid, post: '', out: '', idioma: '', trad: '', sinId: false, model: '', cost: 0, loading: false, err: '' };
     const prompt = st.plantilla || '';
     return `<div class="cp-taskbar__tpl cp-cmt">
       <div class="seqdo-tpl-hd"><span>${NI('sparkles')} Comentario con IA</span>
@@ -17547,14 +17547,21 @@ ${foot}
     if (_cpCmt.loading) return `<div class="cp-cmt__out cp-cmt__out--wait">Escribiendo el comentario…</div>`;
     if (_cpCmt.err) return `<div class="cp-cmt__out cp-cmt__out--err">${esc(_cpCmt.err)}</div>`;
     if (!_cpCmt.out) return '';
+    // El comentario va en el idioma de la publicación. Si no es español se muestra además la
+    // traducción, FUERA de la caja del comentario y sin botón — "Copiar" copia solo el
+    // comentario, para que la traducción no acabe pegada en LinkedIn.
+    const idi = (_cpCmt.idioma || '').toUpperCase();
+    const trad = _cpCmt.trad || '';
     return `<div class="cp-cmt__out">
-      <div class="cp-cmt__outhd"><span>Comentario propuesto</span><span class="cp-cmt__cost" title="Modelo usado y costo de esta generación">${esc(_cpCmt.model || '')}${_cpCmt.cost ? ` · $${_cpCmt.cost.toFixed(4)}` : ''}</span></div>
+      <div class="cp-cmt__outhd"><span>Comentario propuesto${idi && !idi.startsWith('ES') ? ` <span class="cp-cmt__lang">${esc(idi)}</span>` : ''}</span><span class="cp-cmt__cost" title="Modelo usado y costo de esta generación">${esc(_cpCmt.model || '')}${_cpCmt.cost ? ` · $${_cpCmt.cost.toFixed(4)}` : ''}</span></div>
       <div class="cp-cmt__txt">${esc(_cpCmt.out).replace(/\n/g, '<br>')}</div>
+      ${trad ? `<div class="cp-cmt__trad"><b>En español (no se publica):</b> ${esc(trad)}</div>` : ''}
+      ${_cpCmt.sinId ? `<div class="cp-cmt__warn">Este cliente no tiene configurado el perfil de LinkedIn desde el que comenta, así que la IA escribió sin rol. Complétalo en <b>Editar cliente</b> para que suene como esa persona.</div>` : ''}
       <div class="cp-cmt__row">
         <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.cmtCopy()">${NI('copy')} Copiar y registrar</button>
         <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.cmtGenerate()">↻ Regenerar</button>
       </div>
-      <span class="cp-cmt__hint">Pégalo en LinkedIn y luego marca la tarea como hecha.</span>
+      <span class="cp-cmt__hint">Pégalo en LinkedIn y luego marca la tarea como hecha.${trad ? ' Se copia solo el comentario, no la traducción.' : ''}</span>
     </div>`;
   }
   function _cpCmtPaint() { const el = document.getElementById('cp-cmt-out'); if (el) el.innerHTML = _cpCmtOutHtml(); }
@@ -17577,6 +17584,7 @@ ${foot}
       const d = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(d.error || 'No se pudo generar el comentario');
       _cpCmt.out = d.comentario || ''; _cpCmt.model = d.model || ''; _cpCmt.cost = d.cost_usd || 0;
+      _cpCmt.idioma = d.idioma || ''; _cpCmt.trad = d.traduccion_es || ''; _cpCmt.sinId = !!d.sin_identidad;
     } catch (e) { _cpCmt.err = e.message || 'No se pudo generar el comentario'; }
     finally {
       _cpCmt.loading = false; _cpCmtPaint();
@@ -20661,6 +20669,13 @@ ${foot}
         ${fld('obc-from', 'Buzón de envío (De)', c?.from_email, 'ej. ventas@clientezoho.com')}
         ${fld('obc-cc', 'CC en emails', c?.cc_email, 'ej. gerente@cliente.com')}
         ${fld('obc-proxima', 'Próxima acción', c?.proxima_accion, 'Ej. Revisar respuestas', true)}
+        <div class="fin-pi-full" style="border-top:1px solid var(--border);margin-top:4px;padding-top:12px">
+          <div class="fin-cfg-lbl" style="margin-bottom:2px">Perfil de LinkedIn desde el que se comenta e invita</div>
+          <span class="seq-drip-hint">Cada cliente tiene su propio LinkedIn personal. La IA de comentarios usa esto para saber <b>quién</b> escribe — sin ello se inventa un rol. No aparece en el texto del comentario: sirve para que suene como esa persona y no como un vendedor.</span>
+        </div>
+        ${fld('obc-li-cargo', 'Cargo en su perfil', c?.li_cargo, 'Ej. Director de Operaciones')}
+        ${fld('obc-li-empresa', 'Empresa', c?.li_empresa, 'Ej. Tent Softlaft')}
+        ${fld('obc-li-quehace', 'A qué se dedica la empresa (una línea)', c?.li_que_hace, 'Ej. Software de planificación de rutas y flota para distribuidoras', true)}
         <span class="seq-drip-hint fin-pi-full">Canal, mercado, ICP y notas se definen por campaña y por secuencia (cada secuencia puede atacar un segmento distinto) — edítalos ahí y saldrán en el informe PDF.</span>
       </div>
       <div class="fin-pi-box__ft">
@@ -20704,6 +20719,9 @@ ${foot}
       from_email: $('obc-from')?.value.trim() || '', cc_email: $('obc-cc')?.value.trim() || '',
       icp: c0?.icp || '', proxima_accion: $('obc-proxima')?.value.trim() || '',
       notas: c0?.notas || '',
+      li_cargo: $('obc-li-cargo')?.value.trim() || '',
+      li_empresa: $('obc-li-empresa')?.value.trim() || '',
+      li_que_hace: $('obc-li-quehace')?.value.trim() || '',
     };
     const btn = $('obc-save'); if (btn) btn.disabled = true;
     try {

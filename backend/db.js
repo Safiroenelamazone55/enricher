@@ -672,6 +672,11 @@ async function initDb() {
     // Buzón de envío del cliente (ej. Zoho que él proporciona) y CC solicitado — informativos, se muestran en la tarea.
     await pool.query(`ALTER TABLE outbound_clients ADD COLUMN IF NOT EXISTS from_email TEXT NOT NULL DEFAULT '';`);
     await pool.query(`ALTER TABLE outbound_clients ADD COLUMN IF NOT EXISTS cc_email   TEXT NOT NULL DEFAULT '';`);
+    // Identidad del perfil de LinkedIn desde el que se comenta e invita (cada cliente tiene
+    // el suyo). La IA de comentarios la usa para saber QUIÉN escribe: sin esto inventa un rol.
+    await pool.query(`ALTER TABLE outbound_clients ADD COLUMN IF NOT EXISTS li_cargo    TEXT NOT NULL DEFAULT '';`);
+    await pool.query(`ALTER TABLE outbound_clients ADD COLUMN IF NOT EXISTS li_empresa  TEXT NOT NULL DEFAULT '';`);
+    await pool.query(`ALTER TABLE outbound_clients ADD COLUMN IF NOT EXISTS li_que_hace TEXT NOT NULL DEFAULT '';`);
     // leads ahora pueden pertenecer a un cliente outbound (nullable → no rompe leads existentes)
     await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS outbound_client_id INTEGER REFERENCES outbound_clients(id) ON DELETE SET NULL;`);
 

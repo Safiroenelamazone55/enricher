@@ -269,17 +269,25 @@ async function generateComment(pool, userId, { contactId, stepId, sequenceId, pr
   const { rows: [c] } = await pool.query(`
     SELECT k.id, k.nombre, k.apellido, k.cargo, k.seniority, k.departamento,
            k.empresa_nombre, k.ciudad, k.pais, k.linkedin, k.target_tier, k.contact_priority,
-           k.buyer_role, co.nombre AS company_nombre, co.industria, co.tamano, co.website,
-           co.descripcion, co.tecnologias, co.funding, co.pais AS company_pais
+           k.buyer_role, k.outbound_client_id, co.nombre AS company_nombre, co.industria,
+           co.tamano, co.website, co.descripcion, co.tecnologias, co.funding, co.pais AS company_pais
       FROM lm_contacts k
       LEFT JOIN lm_companies co ON co.id = k.company_id
      WHERE k.id=$1 AND k.user_id=$2
   `, [contactId, userId]);
   if (!c) throw new Error('Contacto no encontrado');
 
+  // QUIÉN escribe el comentario: el perfil de LinkedIn del cliente outbound. Cada cliente
+  // tiene el suyo, así que la identidad se configura una vez en su ficha y no se repite en
+  // cada paso. Se busca por el cliente del contacto y, si no lo tiene, por el de la secuencia.
+  const { rows: [yo] } = await pool.query(`
+    SELECT li_cargo, li_empresa, li_que_hace, nombre FROM outbound_clients
+     WHERE user_id=$1 AND id = COALESCE($2::int, (SELECT outbound_client_id FROM sequences WHERE id=$3))
+  `, [userId, c.outbound_client_id || null, sequenceId || null]);
+
   const tier  = _autoTier(c);
   const model = tier === 'alto' ? (cfg.model_high || MODEL_HIGH) : (cfg.model_volume || MODEL_VOLUME);
-  const r = await _callComment(model, cfg, c, prompt, texto);
+  const r = await _callComment(model, cfg, c, yo, prompt, texto);
 
   const rate = RATES[r.servedModel] || RATES[model] || { in: 1, out: 5 };
   const cost = (r.inputTokens * rate.in + r.outputTokens * rate.out) / 1e6;
@@ -293,20 +301,26 @@ async function generateComment(pool, userId, { contactId, stepId, sequenceId, pr
   `, [userId, contactId, stepId || null, sequenceId || null, tier, r.servedModel || model,
       r.comentario, r.inputTokens, r.outputTokens, cost]);
 
-  return { id: row.id, comentario: r.comentario, model: r.servedModel || model, cost_usd: cost,
+  return { id: row.id, comentario: r.comentario, idioma: r.idioma, traduccion_es: r.traduccion,
+           sin_identidad: !(yo && (yo.li_cargo || yo.li_empresa)),
+           model: r.servedModel || model, cost_usd: cost,
            spent_month: cfg.spent_month + cost, monthly_budget_usd: Number(cfg.monthly_budget_usd) };
 }
 
-async function _callComment(model, cfg, contact, prompt, post) {
+async function _callComment(model, cfg, contact, yo, prompt, post) {
   let Anthropic;
   try { Anthropic = require('@anthropic-ai/sdk'); }
   catch { throw new Error('Falta @anthropic-ai/sdk (npm install en backend)'); }
   if (!process.env.ANTHROPIC_API_KEY) throw new Error('Falta ANTHROPIC_API_KEY en el entorno');
   const client = new Anthropic();
 
-  const idioma = cfg.idioma && cfg.idioma !== 'auto'
-    ? `Escribe SIEMPRE en ${cfg.idioma}.`
-    : 'Escribe el comentario en el MISMO idioma de la publicación.';
+  // El idioma del comentario SIEMPRE lo manda la publicación — el ajuste global de idioma
+  // de la IA (cfg.idioma) no aplica aquí: comentar en español un post en inglés delata que
+  // es automático. La traducción al español va aparte, solo para que Jenny lo revise.
+  const idioma =
+    'Escribe el comentario en el MISMO idioma de la publicación, siempre. Si el post está en ' +
+    'inglés, el comentario va en inglés; si está en catalán, en catalán. No mezcles idiomas ' +
+    'ni traduzcas el post.';
 
   // Reglas de la casa (valen para cualquier campaña). La instrucción del paso aporta
   // el CONTEXTO (por qué se comenta), no el tema — forzar un tema produce comentarios
@@ -328,9 +342,29 @@ async function _callComment(model, cfg, contact, prompt, post) {
     `PROHIBIDO: elogios vacíos sin decir de qué ("¡Gran post!", "Totalmente de acuerdo", "Muy interesante"), ` +
     `resumir o repetir lo que ya dijo el autor, vender, mencionar productos, servicios o herramientas, ` +
     `pedir una llamada o un café, hashtags, emojis, y cualquier placeholder tipo {{...}}.\n\n` +
-    `Devuelve ÚNICAMENTE el texto del comentario, sin comillas, sin encabezados y sin explicar nada.`;
+    `Devuelve ÚNICAMENTE un objeto JSON válido, sin fences ni texto alrededor, con esta forma exacta:\n` +
+    `{"comentario": "...", "idioma": "es", "traduccion_es": ""}\n` +
+    `· comentario: el texto listo para pegar, en el idioma de la publicación, sin comillas alrededor.\n` +
+    `· idioma: código ISO de dos letras del idioma en el que escribiste el comentario.\n` +
+    `· traduccion_es: si ese idioma NO es español, la traducción al español del comentario ` +
+    `(solo para que la revise quien lo va a publicar; no se publica). Si es español, cadena vacía.`;
+
+  // Identidad del perfil desde el que se comenta (ficha del cliente outbound). Sin ella el
+  // modelo se inventa un rol, así que se le dice explícitamente que no lo haga.
+  const yoBloque = (yo && (yo.li_cargo || yo.li_empresa || yo.li_que_hace))
+    ? `QUIÉN SOY (el perfil de LinkedIn desde el que comento):\n` +
+      [['Cargo', yo.li_cargo], ['Empresa', yo.li_empresa], ['A qué se dedica', yo.li_que_hace]]
+        .filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`).join('\n') +
+      `\nEscribes como esa persona. NO digas dentro del comentario quién eres ni a qué te dedicas: ` +
+      `mi perfil está a un clic. Y precisamente porque mi perfil ya deja claro a qué se dedica mi ` +
+      `empresa, el comentario NO debe sonar a que vengo a colocar mi solución — escribo como quien ` +
+      `opina, no como quien vende. No te inventes credenciales, cifras, clientes ni anécdotas mías.`
+    : `QUIÉN SOY: no está configurada la identidad del perfil desde el que comento. ` +
+      `Escribe sin atribuirte ningún cargo, empresa ni experiencia: reacciona a la publicación ` +
+      `como lector, sin inventarte quién eres.`;
 
   const user =
+    `${yoBloque}\n\n` +
     `INSTRUCCIÓN PARA ESTE COMENTARIO:\n${String(prompt || '').trim() || '(sin instrucción específica: comenta de forma natural y relevante)'}\n\n` +
     `AUTOR DE LA PUBLICACIÓN (a quien le comento):\n${_contactFacts(contact)}\n\n` +
     `PUBLICACIÓN:\n"""\n${post.slice(0, 8000)}\n"""\n\n` +
@@ -352,8 +386,17 @@ async function _callComment(model, cfg, contact, prompt, post) {
   const u = _sumUsage(resp.usage);
   const texto = (resp.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
 
+  // Si el modelo se salta el JSON, el texto plano sigue siendo un comentario usable.
+  let p = {};
+  try { p = JSON.parse(_extractJson(texto)) || {}; } catch { p = { comentario: texto }; }
+  const limpia = s => String(s || '').trim().replace(/^["“”']+|["“”']+$/g, '');
+  const lang = String(p.idioma || '').trim().toLowerCase().slice(0, 5);
+
   return {
-    comentario: texto.replace(/^["“”']+|["“”']+$/g, '').slice(0, 1500),
+    comentario: limpia(p.comentario).slice(0, 1500),
+    idioma: lang,
+    // Solo tiene sentido devolver traducción si el comentario NO está en español.
+    traduccion: (!lang || lang.startsWith('es')) ? '' : limpia(p.traduccion_es).slice(0, 1500),
     inputTokens: u.in, outputTokens: u.out, servedModel: resp.model || model,
   };
 }
