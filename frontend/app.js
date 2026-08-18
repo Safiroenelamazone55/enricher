@@ -15381,7 +15381,7 @@ const LeadManagerModule = (() => {
   // Define el título por defecto de la tarea y deja claro el trabajo (ej. invitación con nota vs mensaje).
   const _ACCIONES = {
     email:    [['inicial', 'Email inicial'], ['seguimiento', 'Email de seguimiento'], ['valor', 'Email con caso de éxito'], ['cierre', 'Email de cierre']],
-    linkedin: [['invite_nota', 'Invitación con nota'], ['invite', 'Invitación sin nota'], ['mensaje', 'Mensaje directo'], ['follow', 'Seguir el perfil'], ['comentario', 'Comentar una publicación'], ['visita', 'Visitar el perfil']],
+    linkedin: [['invite_nota', 'Invitación con nota'], ['invite', 'Invitación sin nota'], ['mensaje', 'Mensaje directo'], ['follow', 'Seguir el perfil'], ['comentario', 'Comentar una publicación'], ['like', 'Reaccionar a una publicación'], ['visita', 'Visitar el perfil']],
     whatsapp: [['mensaje', 'Mensaje'], ['llamada', 'Llamada por WhatsApp']],
     call:     [['llamada', 'Llamada'], ['voicemail', 'Llamada + voicemail']],
   };
@@ -16649,7 +16649,7 @@ ${foot}
   }
   // Barra de tarea: menú "⚠ Falta dato" con los 3 motivos.
   // Menú "Marcar resultado" — agrupa disposiciones + problema para una barra más limpia.
-  function seqOpenMark(ev, canal) {
+  function seqOpenMark(ev, canal, accion) {
     if (ev && ev.stopPropagation) ev.stopPropagation();
     document.querySelectorAll('.cp-mark-menu, .lm-di-menu').forEach(m => m.remove());
     const close = "document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove())";
@@ -16666,6 +16666,10 @@ ${foot}
     if (canal === 'email') probItems.push(item('↩ Email rebotó', 'LeadManagerModule.seqDoBounced()'));
     if (canal === 'whatsapp') probItems.push(item('📵 WhatsApp no válido', 'LeadManagerModule.seqDoNoWhatsapp()'));
     if (canal === 'call') probItems.push(item('📵 Teléfono no válido', 'LeadManagerModule.seqDoNoPhone()'));
+    // El paso depende de que el prospecto haya publicado y hoy no hay nada: no es "hecha"
+    // (no se comentó) ni un problema de dato (el perfil está bien). Se registra como paso
+    // omitido y el contacto avanza — es como lo resuelven HubSpot, Apollo y Salesloft.
+    if (_isContentStep(canal, accion)) probItems.push(item('⤼ Sin actividad reciente', 'LeadManagerModule.seqDoNoActivity()'));
     probItems.push(item('✉ Falta email', "LeadManagerModule.seqDoDataIssuePick('falta_email')"));
     probItems.push(item('🔗 Falta LinkedIn', "LeadManagerModule.seqDoDataIssuePick('falta_linkedin')"));
     probItems.push(item('⚠ Dato incorrecto', "LeadManagerModule.seqDoDataIssuePick('dato_incorrecto')"));
@@ -16712,6 +16716,51 @@ ${foot}
       const next = _cpNextTask(seqId, cid);
       if (next) openContactPage(next.e.contact_id, { seqId: seqId }); else seqDoExit();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  // ── "Sin actividad reciente" (paso de comentar / reaccionar a una publicación) ──
+  // El prospecto no tiene publicaciones, así que el paso no se puede hacer. No es "hecha"
+  // —no se comentó nada— pero tampoco es un problema de dato: el perfil está bien y no hay
+  // nada que corregir, así que pausar sería dejarlo colgado para siempre. Se registra como
+  // paso omitido (queda en métricas e historial, separado de los completados) y el contacto
+  // avanza al siguiente paso en su fecha normal. Es el patrón "skip step" de HubSpot/Apollo.
+  async function seqDoNoActivity() {
+    if (!_cpTaskCtx) return;
+    const seqId = _cpTaskCtx.seqId, cid = _contactView;
+    const e = (_seqContacts || []).find(x => x.contact_id === cid); if (!e) return;
+    const steps = _seqSteps(seqId);
+    const eff = _effIdx(steps, cid, (e.paso || 1) - 1);
+    const st = eff >= 0 ? steps[eff] : null;
+    const c = (_contacts || []).find(x => x.id === cid);
+    const lbl = st ? (_accionLabel(st.canal, st.accion) || st.titulo || 'Este paso') : 'Este paso';
+    const nextEff = eff >= 0 ? _effIdx(steps, cid, eff + 1) : -1;
+    const sigue = nextEff >= 0
+      ? `Avanza al paso ${nextEff + 1} (${_accionLabel(steps[nextEff].canal, steps[nextEff].accion) || steps[nextEff].canal}) en su fecha.`
+      : 'Era el último paso: la secuencia queda terminada para este contacto.';
+    if (!confirm(`¿Marcar "${lbl}" como omitido por falta de actividad reciente?` + '\n\n' +
+      `No cuenta como hecho — queda registrado como paso omitido. ` + sigue)) return;
+    const btn = document.getElementById('seqdo-done'); if (btn) btn.disabled = true;
+    try {
+      await apiFetch(`${API}/activities`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contact_id: cid, outbound_client_id: (c && c.outbound_client_id) || null,
+          tipo: 'paso_omitido', canal: st ? st.canal : 'linkedin',
+          nota: `Paso ${e.paso}${st && st.titulo ? ': ' + st.titulo : ''} omitido — sin actividad reciente (el prospecto no tiene publicaciones con las que interactuar)`,
+          fecha: new Date().toISOString().slice(0, 10), estado: 'hecha',
+        }),
+      });
+      const body = nextEff < 0 ? { estado: 'terminado' } : { paso: nextEff + 1 };
+      await apiFetch(`${API}/lm/sequences/${seqId}/contacts/${cid}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      _lastDone = { seqId, cid }; _cpTaskHist.push(cid); _cpDone++;
+      _seqContacts = null; await _seqLoadContacts(seqId); await _reloadContacts();
+      const undo = ' &nbsp; <a href="#" onclick="LeadManagerModule.seqUndoLast();return false;" style="color:#fff;text-decoration:underline">↩ Deshacer</a>';
+      showBanner('⤼ Paso omitido — sin actividad reciente' + undo, 'success');
+      const next = _cpNextTask(seqId, cid);
+      if (next) { openContactPage(next.e.contact_id, { seqId: seqId }); return; }
+      const nextCo = _cpNextCoTask(seqId);
+      if (nextCo) seqCoTaskOpen(seqId, nextCo.row.company_sequence_id); else seqDoExit();
+    } catch (err) { showBanner('Error: ' + err.message, 'error'); if (btn) btn.disabled = false; }
   }
   // Desde la barra de tarea (paso LinkedIn): perfil falso/inactivo → sigue por email, no se saca.
   async function seqDoNoLinkedIn() {
@@ -17727,7 +17776,7 @@ ${foot}
       <div class="cp-taskbar__foot">
         ${chanHtml}
         <span class="cp-taskbar__sp"></span>
-        <button class="cp-mark-btn" onclick="LeadManagerModule.seqOpenMark(event,'${st.canal}')" title="Marcar el resultado de esta tarea (respondió, no contactar, falta dato…)">Marcar resultado <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+        <button class="cp-mark-btn" onclick="LeadManagerModule.seqOpenMark(event,'${st.canal}','${st.accion || ''}')" title="Marcar el resultado de esta tarea (respondió, no contactar, falta dato…)">Marcar resultado <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
         <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqDoPrev()"${_cpTaskHist.length ? '' : ' disabled'} title="Volver al contacto anterior (para revisar o deshacer)">‹ Anterior</button>
         <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqDoSkip()">Saltar ›</button>
         <button class="btn btn--primary btn--sm" id="seqdo-done" onclick="LeadManagerModule.seqDoDone()">✓ Hecha → siguiente</button>
@@ -17920,6 +17969,7 @@ ${foot}
     reunion:          ['Reunión agendada',   '#7C3AED', '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>'],
     nota:             ['Nota interna',       '#918C85', '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>'],
     stage:            ['Stage actualizado',  '#6C6862', '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>'],
+    paso_omitido:     ['Paso omitido',        '#B45309', '<polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/>'],
     reruta:           ['Secuencia re-enrutada','#0062CC', '<polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/>'],
   };
   const _ACT_OPTS = ['email_enviado', 'llamada', 'linkedin_msg', 'linkedin_connect', 'linkedin_visita', 'respuesta', 'reunion', 'followup', 'nota', 'stage'];
@@ -21082,6 +21132,10 @@ ${foot}
   // plantilla de mensaje y pasa a ser la INSTRUCCIÓN (prompt) para la IA. Al hacer la
   // tarea, Jenny pega la publicación y la IA redacta el comentario con esta instrucción.
   function _isCommentStep(canal, accion) { return canal === 'linkedin' && accion === 'comentario'; }
+  // Pasos que solo se pueden hacer si el prospecto publicó algo. Son los únicos donde
+  // "sin actividad reciente" es un resultado válido: invitar, escribir, seguir o visitar
+  // el perfil funcionan igual aunque no haya publicaciones.
+  function _isContentStep(canal, accion) { return canal === 'linkedin' && (accion === 'comentario' || accion === 'like'); }
   function stepAccionChange() { _stepSyncDraft(); _stepRenderMsg(); }
   function _stepRenderMsg() {
     const el = document.getElementById('step-msg'); if (!el || !_stepDraft) return;
@@ -23790,7 +23844,7 @@ ${foot}
     seqTaskOpen, seqDoClose, seqDoCopy, seqDoDone, seqDoSkip, seqDoPrev, seqDoEditStep, seqDoExit, seqOpenLinkedIn,
     openStepDrawer, closeStepDrawer, saveStep, confirmDeleteStep, seqInsertVar, stepUseTpl, tzSearch, tzPick, tzBlur,
     stepSetMode, stepSetField, stepAddVariant, stepDelVariant, stepFocusTa, stepAccionChange,
-    cmtGenerate, cmtCopy, cmtCopyPrompt,
+    cmtGenerate, cmtCopy, cmtCopyPrompt, seqDoNoActivity,
     stepTagInput, stepTagKey, stepTagPick, stepTagAddTyped, stepTagRemove, stepTagBlur,
     stepCanalChange, stepPickCanal, stepVarUseTpl, stepVarEdit, stepAutoLink,
     seqDayToggle, seqDaysPreset, stepUseSuggestedHour, seqReportOpen, seqReportGen, cmpReportOpen, cmpReportGen, clientCmpReport, clientSeqReport, seqRedistribute,
