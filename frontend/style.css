@@ -4961,6 +4961,12 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
   .seq-stat-tab__n { font-size: .78rem; padding-left: 4px; }
 }
 .seq-split__content { min-width: 0; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; }
+/* El scroll de la pestaña vive AQUÍ y en ningún hijo. Un hijo con overflow:hidden
+   (las tarjetas con esquinas redondeadas: .seq-tasks, .clients-table-wrap) pierde su
+   tamaño mínimo automático, así que dentro de este flex de alto fijo se encogía en vez
+   de empujar: la lista quedaba recortada y sin forma de llegar al resto. flex-shrink:0
+   la obliga a ocupar su alto real y el desbordamiento sube hasta este contenedor. */
+.seq-split__content > * { flex-shrink: 0; }
 .seq-split__content > .lm-empty2:only-child { flex: 1; justify-content: center; }
 @media (max-width: 900px) { .seq-split { grid-template-columns: 1fr; grid-template-rows: none; } .seq-split__pasos, .seq-split__right { height: auto; } }
 
