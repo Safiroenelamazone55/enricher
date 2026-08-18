@@ -17525,15 +17525,26 @@ ${foot}
   function _cpCmtHtml(cid, st, seqId) {
     const key = `${cid}:${st.id}`;
     if (!_cpCmt || _cpCmt.key !== key) _cpCmt = { key, cid, post: '', out: '', idioma: '', trad: '', sinId: false, model: '', cost: 0, loading: false, err: '' };
-    const prompt = st.plantilla || '';
+    // Un solo prompt: la identidad del cliente encabeza la instrucción del paso, igual
+    // que lo compone el backend. Así lo que ve, edita y copia es exactamente lo que se envía.
+    const cliId = (_contacts.find(x => x.id === cid) || {}).outbound_client_id;
+    const promptCompleto = _liRoleText(seqId, cliId) + '\n\n' + (st.plantilla || '');
     return `<div class="cp-taskbar__tpl cp-cmt">
       <div class="seqdo-tpl-hd"><span>${NI('sparkles')} Comentario con IA</span>
         ${(_contacts.find(x => x.id === cid) || {}).linkedin
           ? `<button class="seqdo-copy seqdo-copy--xs" onclick="LeadManagerModule.seqOpenLinkedIn(${cid})" title="Abrir el perfil al costado para buscar la publicación">${NI('linkedin')} Abrir perfil</button>` : ''}
       </div>
-      ${_liRoleHtml(seqId, (_contacts.find(x => x.id === cid) || {}).outbound_client_id)}
-      <label class="cp-cmt__l" for="cp-cmt-prompt">Instrucción para la IA <span>— viene del paso; puedes ajustarla solo para esta vez</span></label>
-      <textarea class="form-input cp-cmt__ta" id="cp-cmt-prompt" rows="2" placeholder="Ej. Comento para acercarme antes de escribirle. Que encaje con el post sea del tema que sea.">${esc(prompt)}</textarea>
+      ${(() => {
+        const r = _liRoleFor(seqId, cliId);
+        return (r && !r.hay)
+          ? `<div class="cp-cmt__warn">El cliente <b>${esc(r.c.nombre)}</b> no tiene configurado el perfil de LinkedIn desde el que comenta, así que el prompt va sin rol. <a href="#" onclick="LeadManagerModule.openClientDrawer(${r.c.id});return false;">Completar cargo y empresa ›</a></div>`
+          : '';
+      })()}
+      <div class="cp-cmt__lrow">
+        <label class="cp-cmt__l" for="cp-cmt-prompt">Prompt completo <span>— QUIÉN SOY sale del cliente; el resto, del paso. Puedes ajustarlo solo para esta vez</span></label>
+        <button class="seqdo-copy seqdo-copy--xs" onclick="LeadManagerModule.cmtCopyPrompt()" title="Copia el prompt entero tal como se le envía a la IA">${NI('copy')} Copiar prompt</button>
+      </div>
+      <textarea class="form-input cp-cmt__ta cp-cmt__ta--prompt" id="cp-cmt-prompt" rows="9" placeholder="Ej. Comento para acercarme antes de escribirle. Que encaje con el post sea del tema que sea.">${esc(promptCompleto)}</textarea>
       <label class="cp-cmt__l" for="cp-cmt-post">Publicación de LinkedIn <span>— pega aquí el texto del post</span></label>
       <textarea class="form-input cp-cmt__ta" id="cp-cmt-post" rows="4" placeholder="Pega aquí la publicación que quieres comentar…">${esc(_cpCmt.post)}</textarea>
       <div class="cp-cmt__row">
@@ -17580,7 +17591,7 @@ ${foot}
     try {
       const r = await apiFetch(`${API}/lm/ai/comment`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contact_id: cid, step_id: stepId, sequence_id: seqId, prompt, post }),
+        body: JSON.stringify({ contact_id: cid, step_id: stepId, sequence_id: seqId, prompt, post, identidad_incluida: true }),
       });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(d.error || 'No se pudo generar el comentario');
@@ -17591,6 +17602,12 @@ ${foot}
       _cpCmt.loading = false; _cpCmtPaint();
       const b = document.getElementById('cp-cmt-go'); if (b) b.disabled = false;
     }
+  }
+  function cmtCopyPrompt() {
+    const txt = ($('cp-cmt-prompt')?.value || '').trim(); if (!txt) return;
+    const ok = () => showBanner('✓ Prompt completo copiado', 'success');
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(ok).catch(() => _seqDoCopyFallback(txt, ok));
+    else _seqDoCopyFallback(txt, ok);
   }
   function cmtCopy() {
     const txt = (_cpCmt && _cpCmt.out) || ''; if (!txt) return;
@@ -21019,6 +21036,26 @@ ${foot}
     if (!c) return null;
     return { c, hay: !!(c.li_cargo || c.li_empresa || c.li_que_hace) };
   }
+  // Texto plano del bloque, para componer el prompt completo que se ve, se copia y se
+  // envía. Debe leerse igual que el que arma el backend en _callComment — si cambia uno,
+  // cambiar el otro (backend/services/aiPersonalizeService.js).
+  function _liRoleText(seqId, clientId) {
+    const r = _liRoleFor(seqId, clientId);
+    if (!r || !r.hay) {
+      return 'QUIÉN SOY: no está configurada la identidad del perfil desde el que comento. '
+           + 'Escribe sin atribuirte ningún cargo, empresa ni experiencia: reacciona a la '
+           + 'publicación como lector, sin inventarte quién eres.';
+    }
+    const c = r.c;
+    const campos = [['Cargo', c.li_cargo], ['Empresa', c.li_empresa], ['A qué se dedica', c.li_que_hace]]
+      .filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`).join('\n');
+    return 'QUIÉN SOY (el perfil de LinkedIn desde el que comento):\n' + campos
+      + '\nEscribes como esa persona. NO digas dentro del comentario quién eres ni a qué te '
+      + 'dedicas: mi perfil está a un clic. Y precisamente porque mi perfil ya deja claro a qué '
+      + 'se dedica mi empresa, el comentario NO debe sonar a que vengo a colocar mi solución — '
+      + 'escribo como quien opina, no como quien vende. No te inventes credenciales, cifras, '
+      + 'clientes ni anécdotas mías.';
+  }
   function _liRoleHtml(seqId, clientId) {
     const r = _liRoleFor(seqId, clientId);
     if (!r) return '';
@@ -23753,7 +23790,7 @@ ${foot}
     seqTaskOpen, seqDoClose, seqDoCopy, seqDoDone, seqDoSkip, seqDoPrev, seqDoEditStep, seqDoExit, seqOpenLinkedIn,
     openStepDrawer, closeStepDrawer, saveStep, confirmDeleteStep, seqInsertVar, stepUseTpl, tzSearch, tzPick, tzBlur,
     stepSetMode, stepSetField, stepAddVariant, stepDelVariant, stepFocusTa, stepAccionChange,
-    cmtGenerate, cmtCopy,
+    cmtGenerate, cmtCopy, cmtCopyPrompt,
     stepTagInput, stepTagKey, stepTagPick, stepTagAddTyped, stepTagRemove, stepTagBlur,
     stepCanalChange, stepPickCanal, stepVarUseTpl, stepVarEdit, stepAutoLink,
     seqDayToggle, seqDaysPreset, stepUseSuggestedHour, seqReportOpen, seqReportGen, cmpReportOpen, cmpReportGen, clientCmpReport, clientSeqReport, seqRedistribute,

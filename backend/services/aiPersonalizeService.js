@@ -257,7 +257,7 @@ async function _callModel(model, tier, cfg, contact, baseAsunto, baseCuerpo) {
 // Se registra en lm_ai_drafts con status='comment' para que el presupuesto
 // mensual siga siendo honesto, sin ensuciar la bandeja de borradores.
 // ─────────────────────────────────────────────────────────────────────
-async function generateComment(pool, userId, { contactId, stepId, sequenceId, prompt, post }) {
+async function generateComment(pool, userId, { contactId, stepId, sequenceId, prompt, post, identidadIncluida }) {
   const cfg = await getSettings(pool, userId);
   if (cfg.enabled === false) throw new Error('IA desactivada en configuración');
   if (cfg.spent_month >= Number(cfg.monthly_budget_usd)) {
@@ -287,7 +287,7 @@ async function generateComment(pool, userId, { contactId, stepId, sequenceId, pr
 
   const tier  = _autoTier(c);
   const model = tier === 'alto' ? (cfg.model_high || MODEL_HIGH) : (cfg.model_volume || MODEL_VOLUME);
-  const r = await _callComment(model, cfg, c, yo, prompt, texto);
+  const r = await _callComment(model, cfg, c, identidadIncluida ? null : yo, prompt, texto, identidadIncluida);
 
   const rate = RATES[r.servedModel] || RATES[model] || { in: 1, out: 5 };
   const cost = (r.inputTokens * rate.in + r.outputTokens * rate.out) / 1e6;
@@ -307,7 +307,7 @@ async function generateComment(pool, userId, { contactId, stepId, sequenceId, pr
            spent_month: cfg.spent_month + cost, monthly_budget_usd: Number(cfg.monthly_budget_usd) };
 }
 
-async function _callComment(model, cfg, contact, yo, prompt, post) {
+async function _callComment(model, cfg, contact, yo, prompt, post, identidadIncluida) {
   let Anthropic;
   try { Anthropic = require('@anthropic-ai/sdk'); }
   catch { throw new Error('Falta @anthropic-ai/sdk (npm install en backend)'); }
@@ -351,7 +351,10 @@ async function _callComment(model, cfg, contact, yo, prompt, post) {
 
   // Identidad del perfil desde el que se comenta (ficha del cliente outbound). Sin ella el
   // modelo se inventa un rol, así que se le dice explícitamente que no lo haga.
-  const yoBloque = (yo && (yo.li_cargo || yo.li_empresa || yo.li_que_hace))
+  // Si el prompt ya trae el bloque (lo compone el frontend para que la usuaria lo vea y
+  // lo copie completo), no se antepone otra vez.
+  const yoBloque = identidadIncluida ? ''
+    : (yo && (yo.li_cargo || yo.li_empresa || yo.li_que_hace))
     ? `QUIÉN SOY (el perfil de LinkedIn desde el que comento):\n` +
       [['Cargo', yo.li_cargo], ['Empresa', yo.li_empresa], ['A qué se dedica', yo.li_que_hace]]
         .filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`).join('\n') +
@@ -364,7 +367,7 @@ async function _callComment(model, cfg, contact, yo, prompt, post) {
       `como lector, sin inventarte quién eres.`;
 
   const user =
-    `${yoBloque}\n\n` +
+    (yoBloque ? `${yoBloque}\n\n` : '') +
     `INSTRUCCIÓN PARA ESTE COMENTARIO:\n${String(prompt || '').trim() || '(sin instrucción específica: comenta de forma natural y relevante)'}\n\n` +
     `AUTOR DE LA PUBLICACIÓN (a quien le comento):\n${_contactFacts(contact)}\n\n` +
     `PUBLICACIÓN:\n"""\n${post.slice(0, 8000)}\n"""\n\n` +

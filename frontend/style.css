@@ -15208,3 +15208,9 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .cmt-rol__body b { font-weight: 600; color: var(--text-secondary); }
 .cmt-rol__body a { color: var(--primary); font-weight: 600; }
 .cmt-rol__reglas { margin-top: 5px; padding-top: 5px; border-top: 1px dashed var(--border); font-size: .73rem; line-height: 1.45; color: var(--text-muted); }
+/* Fila etiqueta + botón "Copiar prompt" del generador de comentarios */
+.cp-cmt__lrow { display: flex; align-items: baseline; gap: 10px; margin: 8px 0 4px; }
+.cp-cmt__lrow .cp-cmt__l { margin: 0; flex: 1 1 auto; min-width: 0; }
+.cp-cmt__lrow .seqdo-copy { flex: 0 0 auto; }
+.cp-cmt__ta--prompt { font-size: .76rem; line-height: 1.5; max-height: 240px; }
+.cp-cmt__warn a { color: #B45309; font-weight: 700; }

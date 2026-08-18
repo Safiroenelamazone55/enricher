@@ -5796,8 +5796,11 @@ app.post('/api/lm/ai/comment', requireAuth, async (req, res) => {
       contactId,
       stepId:     parseInt(b.step_id) || null,
       sequenceId: parseInt(b.sequence_id) || null,
-      prompt:     String(b.prompt || '').slice(0, 4000),
+      prompt:     String(b.prompt || '').slice(0, 8000),
       post:       String(b.post || '').slice(0, 12000),
+      // El frontend manda el prompt YA compuesto (identidad del cliente + instrucción
+      // del paso) porque es lo que la usuaria ve, edita y copia. Sin esto se duplicaría.
+      identidadIncluida: b.identidad_incluida === true,
     }));
   } catch (err) {
     console.error('[lm-ai-comment]', err.message);
