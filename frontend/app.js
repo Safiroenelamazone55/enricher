@@ -17531,6 +17531,7 @@ ${foot}
         ${(_contacts.find(x => x.id === cid) || {}).linkedin
           ? `<button class="seqdo-copy seqdo-copy--xs" onclick="LeadManagerModule.seqOpenLinkedIn(${cid})" title="Abrir el perfil al costado para buscar la publicación">${NI('linkedin')} Abrir perfil</button>` : ''}
       </div>
+      ${_liRoleHtml(seqId, (_contacts.find(x => x.id === cid) || {}).outbound_client_id)}
       <label class="cp-cmt__l" for="cp-cmt-prompt">Instrucción para la IA <span>— viene del paso; puedes ajustarla solo para esta vez</span></label>
       <textarea class="form-input cp-cmt__ta" id="cp-cmt-prompt" rows="2" placeholder="Ej. Comento para acercarme antes de escribirle. Que encaje con el post sea del tema que sea.">${esc(prompt)}</textarea>
       <label class="cp-cmt__l" for="cp-cmt-post">Publicación de LinkedIn <span>— pega aquí el texto del post</span></label>
@@ -20944,6 +20945,7 @@ ${foot}
     const st = stepId ? _steps.find(x => x.id === stepId) : null;
     _stepFocusTa = 'step-var-0';
     _stepDraft = {
+      seqId,
       mode: (st && st.variant_mode) || 'off',
       field: (st && st.variant_field) || 'buyer_role',
       variants: (st && Array.isArray(st.variants) && st.variants.length) ? st.variants.map(v => { const r = _varResolve(v, st); return { nombre: v.nombre || '', asunto: r.asunto, cuerpo: r.cuerpo, targets: Array.isArray(v.targets) ? v.targets.slice() : [], tplId: r.tplId }; }) : [{ nombre: 'A', asunto: (st && st.asunto) || '', cuerpo: (st && st.plantilla) || '', targets: [], tplId: '' }],
@@ -21004,6 +21006,41 @@ ${foot}
     return 'Vacío = tarea para todo el día. Define la zona horaria del prospecto en la secuencia para ver la hora sugerida.';
   }
   function stepUseSuggestedHour(hhmm) { const inp = $('step-hora'); if (inp) inp.value = hhmm; }
+  // ── Bloque QUIÉN SOY del prompt ────────────────────────────────────────────
+  // El rol NO se escribe en la instrucción del paso: sale de la ficha del cliente
+  // outbound (cada cliente comenta desde su propio LinkedIn) y el backend lo antepone
+  // al prompt. Aquí se pinta tal como se va a enviar, para que la instrucción se lea
+  // completa sin duplicar el texto en cada paso — se edita en un sitio y cambia en todos.
+  function _liRoleFor(seqId, clientId) {
+    let cid = clientId || null;
+    if (!cid && seqId) { const s = (_sequences || []).find(x => x.id === seqId); cid = s && s.outbound_client_id; }
+    if (!cid) return null;
+    const c = (_clients || []).find(x => x.id === cid);
+    if (!c) return null;
+    return { c, hay: !!(c.li_cargo || c.li_empresa || c.li_que_hace) };
+  }
+  function _liRoleHtml(seqId, clientId) {
+    const r = _liRoleFor(seqId, clientId);
+    if (!r) return '';
+    const { c, hay } = r;
+    if (!hay) {
+      return `<div class="cmt-rol cmt-rol--falta">
+        <div class="cmt-rol__hd">QUIÉN SOY <span>— se añade solo desde el cliente</span></div>
+        <div class="cmt-rol__body">Sin configurar en <b>${esc(c.nombre)}</b>. La IA escribirá sin rol.
+          <a href="#" onclick="LeadManagerModule.openClientDrawer(${c.id});return false;">Completar cargo y empresa ›</a></div>
+      </div>`;
+    }
+    const linea = (k, v) => v ? `<div><b>${k}:</b> ${esc(v)}</div>` : '';
+    return `<div class="cmt-rol">
+      <div class="cmt-rol__hd">QUIÉN SOY <span>— se añade solo, desde ${esc(c.nombre)}</span>
+        <a href="#" onclick="LeadManagerModule.openClientDrawer(${c.id});return false;">Editar</a></div>
+      <div class="cmt-rol__body">
+        ${linea('Cargo', c.li_cargo)}${linea('Empresa', c.li_empresa)}${linea('A qué se dedica', c.li_que_hace)}
+        <div class="cmt-rol__reglas">Escribo como esa persona. No digo dentro del comentario quién soy ni a qué me dedico — mi perfil está a un clic. Y como el perfil ya deja claro a qué se dedica mi empresa, el comentario no debe sonar a que vengo a colocar mi solución: escribe quien opina, no quien vende. Sin inventar credenciales, cifras, clientes ni anécdotas mías.</div>
+      </div>
+    </div>`;
+  }
+
   // Paso "Comentar una publicación" (LinkedIn): el cuadro de texto deja de ser una
   // plantilla de mensaje y pasa a ser la INSTRUCCIÓN (prompt) para la IA. Al hacer la
   // tarea, Jenny pega la publicación y la IA redacta el comentario con esta instrucción.
@@ -21041,7 +21078,7 @@ ${foot}
     }).join('');
     const addBtn = single ? '' : `<button type="button" class="flt-add" onclick="LeadManagerModule.stepAddVariant()">＋ Añadir variante</button>`;
     el.innerHTML = isCmt
-      ? `${modeSel}${varsHtml}<span class="step-vars__hint">Esto <b>no se envía</b>: es lo que le pides a la IA. Al hacer la tarea pegas la publicación de LinkedIn, la IA redacta el comentario con esta instrucción, lo copias y lo pegas tú en LinkedIn.<br>Escribe aquí <b>por qué</b> comentas, no de qué tema: el comentario siempre sale de una línea, en tono humano y encajando con lo que sea el post — eso ya está garantizado. Fijar un tema aquí hace que desencaje cuando el post va de otra cosa.</span>`
+      ? `${modeSel}${_liRoleHtml(_stepDraft.seqId)}${varsHtml}<span class="step-vars__hint">Esto <b>no se envía</b>: es lo que le pides a la IA. Al hacer la tarea pegas la publicación de LinkedIn, la IA redacta el comentario con esta instrucción, lo copias y lo pegas tú en LinkedIn.<br>Escribe aquí <b>por qué</b> comentas, no de qué tema: el comentario siempre sale de una línea, en tono humano y encajando con lo que sea el post — eso ya está garantizado. Fijar un tema aquí hace que desencaje cuando el post va de otra cosa.</span>`
       : `${modeSel}${fieldSel}${varsHtml}${_varSelectHtml('seqInsertVar')}${addBtn}<span class="step-vars__hint">Las variables ({{first_name}}…) se reemplazan al hacer la tarea.${single ? '' : ' Cada variante toma su plantilla por segmento y se actualiza sola al editarla. Si escribes texto propio, se desvincula.'}</span>`;
     // El selector de plantilla de arriba solo aplica a "un solo mensaje"; en A/B o segmento cada variante usa el suyo.
     const topTpl = document.getElementById('step-tpl-top'); if (topTpl) topTpl.style.display = single ? '' : 'none';

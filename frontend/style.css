@@ -15196,3 +15196,15 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .cp-cmt__trad { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border); font-size: .78rem; line-height: 1.5; color: var(--text-secondary); }
 .cp-cmt__trad b { color: var(--text-muted); font-weight: 600; }
 .cp-cmt__warn { margin-top: 8px; padding: 7px 9px; border-radius: 7px; background: #FEF3C7; color: #B45309; font-size: .75rem; line-height: 1.45; }
+/* Bloque QUIÉN SOY del prompt de comentarios: se rellena solo desde la ficha del
+   cliente outbound, así que se muestra como parte del prompt pero no es editable aquí. */
+.cmt-rol { margin: 2px 0 10px; border: 1px solid var(--border); border-left: 3px solid var(--primary); border-radius: 8px; background: var(--surface-secondary); padding: 8px 11px; }
+.cmt-rol--falta { border-left-color: #B45309; background: #FEF3C7; }
+.cmt-rol__hd { display: flex; align-items: center; gap: 6px; font-size: .7rem; font-weight: 700; letter-spacing: .4px; color: var(--text-secondary); margin-bottom: 5px; }
+.cmt-rol__hd span { font-weight: 400; letter-spacing: 0; color: var(--text-muted); }
+.cmt-rol__hd a { margin-left: auto; font-weight: 600; letter-spacing: 0; color: var(--primary); text-decoration: none; }
+.cmt-rol__hd a:hover { text-decoration: underline; }
+.cmt-rol__body { font-size: .78rem; line-height: 1.5; color: var(--text-primary); }
+.cmt-rol__body b { font-weight: 600; color: var(--text-secondary); }
+.cmt-rol__body a { color: var(--primary); font-weight: 600; }
+.cmt-rol__reglas { margin-top: 5px; padding-top: 5px; border-top: 1px dashed var(--border); font-size: .73rem; line-height: 1.45; color: var(--text-muted); }
