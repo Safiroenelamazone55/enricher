@@ -15220,3 +15220,13 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 /* Mensaje provisional del chat mini mientras Slack confirma el envío */
 .chat-msg--pend { opacity: .5; }
 .chat-msg--pend .chat-msg__t { font-style: italic; }
+/* Hilos en el chat mini: botón de responder, contador y cabecera de la vista */
+.chat-msg { position: relative; }
+.chat-msg__reply { position: absolute; top: 4px; right: 6px; display: none; align-items: center; border: 1px solid var(--border); background: var(--surface); color: var(--text-muted); border-radius: 7px; padding: 3px 5px; cursor: pointer; line-height: 0; }
+.chat-msg:hover .chat-msg__reply { display: inline-flex; }
+.chat-msg__reply:hover { color: var(--primary); border-color: var(--primary); }
+.slk-hilo-pill { display: inline-flex; align-items: center; gap: 5px; margin-top: 5px; border: none; background: none; padding: 2px 0; color: var(--primary); font-family: inherit; font-size: .74rem; font-weight: 600; cursor: pointer; }
+.slk-hilo-pill:hover { text-decoration: underline; }
+.slk-hilo-hd { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 9px; padding: 7px 10px; margin: -4px -4px 8px; background: var(--surface); border-bottom: 1px solid var(--border); font-size: .76rem; font-weight: 600; color: var(--text-secondary); }
+.slk-hilo-back { border: none; background: var(--surface-secondary); color: var(--text-primary); font-family: inherit; font-size: .74rem; font-weight: 600; padding: 4px 9px; border-radius: 7px; cursor: pointer; }
+.slk-hilo-back:hover { background: var(--surface-hover); }

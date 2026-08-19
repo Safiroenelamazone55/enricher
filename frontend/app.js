@@ -14967,6 +14967,7 @@ const TeamModule = (() => {
 // Uso: NI('zap') → SVG inline 15px. NI('mail', 18) → 18px.
 // ═══════════════════════════════════════════════════════════════════
 const _NI_LIB = {
+  responder: '<polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/>',
   zap: '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
   sparkles: '<path d="M12 3l1.9 5.7a2 2 0 0 0 1.3 1.3L21 12l-5.8 1.9a2 2 0 0 0-1.3 1.3L12 21l-1.9-5.8a2 2 0 0 0-1.3-1.3L3 12l5.8-1.9a2 2 0 0 0 1.3-1.3L12 3z"/>',
   mail: '<rect x="2" y="4" width="20" height="16" rx="3"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>',
@@ -24285,6 +24286,7 @@ const SlackChat = (() => {
   let _mUsers    = {};
   let _mAvatars  = {};
   let _mMiId     = '';
+  let _mHilo     = '';   // ts RAÍZ del hilo abierto en el mini ('' = vista de canal)
   let _mNoLeidos = {};
   let _mActividad = {};
   let _mTCanal   = null;
@@ -25404,7 +25406,7 @@ const SlackChat = (() => {
 
   function miniBuscar(v) { _pintaMiniCanales(v || ''); }
 
-  function _pintaMiniMsgs(msgs, conservarScroll = false) {
+  function _pintaMiniMsgs(msgs, conservarScroll = false, enHilo = false) {
     const box = $$('rchat-messages');
     if (!box) return;
     // Deja constancia de qué canal está pintado: miniAbrir lo usa para distinguir
@@ -25430,14 +25432,23 @@ const SlackChat = (() => {
         return `<span class="slk-reac${mine ? ' mine' : ''}" data-emoji="${esc(r.name)}" title="${mine ? 'Quitar reacción' : ''}"
                       onclick="SlackChat.miniReaccionarPill(event,'${m.ts}','${esc(r.name)}')">${_emojiImg(_emoji(':' + r.name + ':'), 'e-img')} ${r.count}</span>`;
       }).join('');
+      // Respuestas del hilo: solo en la vista de canal. Dentro del hilo no se anidan
+      // más hilos — Slack tampoco lo permite.
+      const nResp = enHilo ? 0 : (+m.reply_count || 0);
+      const pill = nResp
+        ? `<button class="slk-hilo-pill" onclick="SlackChat.miniAbrirHilo('${m.thread_ts || m.ts}')">${NI('responder', 12)} ${nResp} ${nResp === 1 ? 'respuesta' : 'respuestas'}</button>`
+        : '';
+      const btnResp = enHilo ? '' :
+        `<button class="chat-msg__reply" title="Responder en hilo" onclick="SlackChat.miniAbrirHilo('${m.ts}')">${NI('responder', 13)}</button>`;
       html += `<div class="chat-msg" data-ts="${m.ts}"
                     oncontextmenu="SlackChat.miniMenuMsg(event,'${m.ts}')">
         <img class="chat-msg__av" src="${_mAvatarUrl(m.user, quien)}" alt="">
         <div class="chat-msg__body">
           <div class="chat-msg__hd"><span class="chat-msg__who">${escNom(quien)}</span><span class="chat-msg__t">${hora}</span></div>
           <div class="chat-msg__txt">${_fmt(m.text, _mUsers)}</div>
-          ${files}${reacs ? `<div class="slk-reacs">${reacs}</div>` : ''}
+          ${files}${reacs ? `<div class="slk-reacs">${reacs}</div>` : ''}${pill}
         </div>
+        ${btnResp}
       </div>`;
     });
     // OJO: capturar scrollTop ANTES de reemplazar innerHTML. Si se lee
@@ -25453,6 +25464,56 @@ const SlackChat = (() => {
     if (!conservarScroll) requestAnimationFrame(() => { box.scrollTop = box.scrollHeight; });
   }
 
+  // ── Hilos en el chat mini ─────────────────────────────────────────────────
+  // El panel es angosto, así que el hilo no se abre al lado como en Slack: sustituye la
+  // lista del canal, con "‹ Canal" para volver. Mientras está abierto, el sondeo refresca
+  // el HILO — si siguiera pidiendo el canal, a los 8s lo repintaría encima.
+  async function miniAbrirHilo(ts) {
+    if (!_mCanal || !ts) return;
+    _pararSondeoMini();
+    const box = $$('rchat-messages');
+    if (box) box.innerHTML = `<div class="clients-loading"><div class="clients-spin"></div></div>`;
+    await _miniCargarHilo(ts, false);
+    _mTCanal = setInterval(() => { if (!document.hidden && _mHilo) _miniCargarHilo(_mHilo, true); }, 8000);
+  }
+  async function _miniCargarHilo(ts, conservarScroll) {
+    if (!_mCanal || !ts) return;
+    const box = $$('rchat-messages');
+    const prev = box ? box.scrollTop : 0;
+    try {
+      const r = await apiFetch(`${API}/slack/workspaces/${_mWsAct}/canales/${_mCanal.id}/hilo/${ts}`);
+      const d = await r.json();
+      if (d.error) throw new Error(d.error);
+      const msgs = d.mensajes || [];
+      // Para responder hay que usar el ts del mensaje RAÍZ (el primero que devuelve
+      // Slack). Con el ts de una respuesta, Slack contesta cannot_reply_to_message.
+      const raiz = msgs[0] || {};
+      _mHilo = raiz.thread_ts || raiz.ts || ts;
+      _pintaMiniMsgs([...msgs].reverse(), conservarScroll, true);
+      const n = Math.max(0, msgs.length - 1);
+      box?.insertAdjacentHTML('afterbegin', `<div class="slk-hilo-hd">
+        <button class="slk-hilo-back" onclick="SlackChat.miniCerrarHilo()">‹ Canal</button>
+        <span>Hilo · ${n} ${n === 1 ? 'respuesta' : 'respuestas'}</span></div>`);
+      if (box) { box.dataset.canal = 'hilo:' + _mHilo; box.scrollTop = conservarScroll ? prev : box.scrollHeight; }
+      _miniSyncCompositor();
+    } catch (e) {
+      if (box && !conservarScroll) box.innerHTML = `<div class="chat-ch-empty">${esc(e.message)}</div>`;
+    }
+  }
+  async function miniCerrarHilo() {
+    _mHilo = '';
+    _pararSondeoMini();
+    const box = $$('rchat-messages'); if (box) box.dataset.canal = '';
+    if (_mCanal) await miniAbrir(_mCanal.id);
+    _miniSyncCompositor();
+  }
+  // El compositor siempre dice a dónde va lo que escribes: al canal o al hilo.
+  function _miniSyncCompositor() {
+    const inp = $$('rchat-input'); if (!inp) return;
+    if (_mHilo) inp.placeholder = 'Responder en el hilo…';
+    else if (_mCanal) inp.placeholder = `Mensaje en ${_mCanal.name}`;
+  }
+
   // Menu contextual del mensaje en el chat mini — version reducida del de
   // #chat-messages (sin hilos/anclar, que no tienen vista propia acá):
   // reaccionar y copiar texto, usando el workspace/canal ACTIVOS DEL MINI
@@ -25465,6 +25526,7 @@ const SlackChat = (() => {
     const m = document.createElement('div');
     m.className = 'slk-msgmenu';
     m.innerHTML = '<div class="slk-mm-reacs">' + reac + '</div>'
+      + '<button class="slk-mm-op" onclick="SlackChat.miniAbrirHilo(\'' + ts + '\')">Responder en hilo</button>'
       + '<button class="slk-mm-op" onclick="SlackChat.miniCopiar(\'' + ts + '\')">Copiar texto</button>';
     document.body.appendChild(m);
     m.style.cssText += ';position:fixed;z-index:10050;top:' + Math.min(ev.clientY, window.innerHeight - 220) + 'px;left:' + Math.min(ev.clientX, window.innerWidth - 230) + 'px';
@@ -25546,6 +25608,7 @@ const SlackChat = (() => {
     const c = _mCanales.find(x => x.id === canalId);
     if (!c) return;
     _mCanal = { id: c.id, name: _mNombreDe(c) };
+    _mHilo = '';   // volver/cambiar de canal siempre sale de la vista de hilo
     localStorage.setItem(`slk_mini_ch_${_mWsAct}`, canalId);
     if (_mNoLeidos[c.id]) {
       delete _mNoLeidos[c.id];
@@ -25678,11 +25741,11 @@ const SlackChat = (() => {
     try {
       const r = await apiFetch(`${API}/slack/workspaces/${_mWsAct}/canales/${_mCanal.id}/mensajes`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ texto }),
+        body: JSON.stringify({ texto, thread_ts: _mHilo || undefined }),
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'No se pudo enviar');
-      await miniAbrir(_mCanal.id);
+      if (_mHilo) await _miniCargarHilo(_mHilo, false); else await miniAbrir(_mCanal.id);
     } catch (e) {
       pend?.remove();
       if (inp) inp.value = texto;
@@ -25716,7 +25779,7 @@ const SlackChat = (() => {
            menuMsg, reaccionar, anclar, copiar, programarReunion, onPaste,
            menuCanal, verProyecto, verTareas, copiarNombre, archivarCanal, marcarNoLeido,
            seccion, menciones, _mencionar, detectarArroba,
-           miniOpen, miniLoad, miniIrA, miniAbrir, miniEnviar, miniBuscar,
+           miniOpen, miniLoad, miniIrA, miniAbrir, miniEnviar, miniBuscar, miniAbrirHilo, miniCerrarHilo,
            miniMenuMsg, miniReaccionar, miniReaccionarPill, miniCopiar,
            miniDetener: _pararSondeoMini, refreshMiniBadge };
 })();
