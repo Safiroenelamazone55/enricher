@@ -15217,3 +15217,6 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 /* Criterio del paso que depende de una publicación (ventana + reacción sugerida) */
 .cp-cmt__crit { margin-top: 9px; padding: 7px 11px; border-radius: 8px; background: var(--surface-secondary); border-left: 3px solid var(--primary); font-size: .77rem; line-height: 1.45; color: var(--text-secondary); }
 .cp-cmt__crit b { color: var(--text-primary); font-weight: 600; }
+/* Mensaje provisional del chat mini mientras Slack confirma el envío */
+.chat-msg--pend { opacity: .5; }
+.chat-msg--pend .chat-msg__t { font-style: italic; }

@@ -25407,6 +25407,9 @@ const SlackChat = (() => {
   function _pintaMiniMsgs(msgs, conservarScroll = false) {
     const box = $$('rchat-messages');
     if (!box) return;
+    // Deja constancia de qué canal está pintado: miniAbrir lo usa para distinguir
+    // "cambio de canal" (hay que limpiar) de "refresco del mismo" (no hay que limpiar).
+    box.dataset.canal = String((_mCanal && _mCanal.id) || '');
     const orden = [...msgs].reverse();
     if (!orden.length) { box.innerHTML = `<div class="chat-ch-empty">Sin mensajes en este canal.</div>`; return; }
     let dia = '';
@@ -25561,7 +25564,11 @@ const SlackChat = (() => {
     const inp = $$('rchat-input');
     if (inp) inp.placeholder = c.is_im ? `Mensaje a ${_mCanal.name}` : `Mensaje en #${_mCanal.name}`;
     const box = $$('rchat-messages');
-    if (box) box.innerHTML = `<div class="clients-loading"><div class="clients-spin"></div></div>`;
+    // Limpiar solo al CAMBIAR de canal. Refrescar el mismo (enviar un mensaje, reabrir el
+    // panel) reemplazaba la conversación por el spinner y dejaba el panel en blanco un
+    // instante antes de repintarla — el parpadeo que se veía al enviar.
+    const mismoCanal = box && box.dataset.canal === String(canalId) && box.querySelector('.chat-msg');
+    if (box && !mismoCanal) box.innerHTML = `<div class="clients-loading"><div class="clients-spin"></div></div>`;
     $$('rchat-chdrop')?.classList.add('hidden');
     try {
       const r = await apiFetch(`${API}/slack/workspaces/${_mWsAct}/canales/${canalId}/mensajes?limit=30`);
@@ -25646,11 +25653,28 @@ const SlackChat = (() => {
     }
   }
 
+  // Burbuja provisional: el mensaje se ve en cuanto se pulsa enviar, atenuado, y el
+  // repintado posterior lo sustituye por el real. Sin esto hay un hueco de ~1s (ida y
+  // vuelta a Slack) en el que parece que no pasó nada.
+  function _miniBurbujaPendiente(texto) {
+    const box = $$('rchat-messages'); if (!box || !box.querySelector('.chat-msg')) return null;
+    const el = document.createElement('div');
+    el.className = 'chat-msg chat-msg--pend';
+    el.innerHTML = `<img class="chat-msg__av" src="${_mAvatarUrl(_mMiId, 'Yo')}" alt="">
+      <div class="chat-msg__body">
+        <div class="chat-msg__hd"><span class="chat-msg__who">Tú</span><span class="chat-msg__t">enviando…</span></div>
+        <div class="chat-msg__txt">${esc(texto)}</div>
+      </div>`;
+    box.appendChild(el);
+    box.scrollTop = box.scrollHeight;
+    return el;
+  }
   async function miniEnviar() {
     const inp = $$('rchat-input');
     const texto = (inp?.value || '').trim();
     if (!texto || !_mCanal) return;
     inp.value = '';
+    const pend = _miniBurbujaPendiente(texto);
     try {
       const r = await apiFetch(`${API}/slack/workspaces/${_mWsAct}/canales/${_mCanal.id}/mensajes`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -25660,6 +25684,7 @@ const SlackChat = (() => {
       if (!r.ok) throw new Error(d.error || 'No se pudo enviar');
       await miniAbrir(_mCanal.id);
     } catch (e) {
+      pend?.remove();
       if (inp) inp.value = texto;
       showBanner('Error: ' + e.message, 'error');
     }
