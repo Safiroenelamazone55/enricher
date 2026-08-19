@@ -26118,9 +26118,9 @@ const WaChatModule = (() => {
       const quien = m.from_me ? 'Tú' : (m.nombre || 'Este contacto');
       const remitente = (_chatActGrupo && !m.from_me && m.nombre) ? `<div class="wa-msg__sender">${esc(m.nombre)}</div>` : '';
       const citado = m.reply_to_texto ? `<div class="wa-msg__quoted">${esc(m.reply_to_texto).slice(0, 100)}</div>` : '';
-      return `${sep}<div class="wa-msg chat-msg ${m.from_me ? 'wa-msg--out' : 'wa-msg--in'}">
+      return `${sep}<div class="wa-msg ${m.from_me ? 'wa-msg--out' : 'wa-msg--in'}">
         <div class="wa-msg__bubble">
-          <button class="chat-msg__reply" title="Responder a este mensaje"
+          <button class="wa-msg__reply" title="Responder a este mensaje"
             onclick="WaChatModule.responderA('${esc(m.msg_id).replace(/'/g, "\\'")}','${esc(quien).replace(/'/g, "\\'")}','${esc(m.texto).replace(/'/g, "\\'").replace(/\n/g, ' ')}')">${NI('responder', 13)}</button>
           ${remitente}${citado}${esc(m.texto)}<span class="wa-msg__time">${_fmtHora(m.ts)}</span>
         </div>
