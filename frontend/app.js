@@ -26118,13 +26118,12 @@ const WaChatModule = (() => {
       const quien = m.from_me ? 'Tú' : (m.nombre || 'Este contacto');
       const remitente = (_chatActGrupo && !m.from_me && m.nombre) ? `<div class="wa-msg__sender">${esc(m.nombre)}</div>` : '';
       const citado = m.reply_to_texto ? `<div class="wa-msg__quoted">${esc(m.reply_to_texto).slice(0, 100)}</div>` : '';
-      return `${sep}<div class="wa-msg ${m.from_me ? 'wa-msg--out' : 'wa-msg--in'}">
-        <div class="wa-msg__bubble">
-          <button class="wa-msg__reply" title="Responder a este mensaje"
-            onclick="WaChatModule.responderA('${esc(m.msg_id).replace(/'/g, "\\'")}','${esc(quien).replace(/'/g, "\\'")}','${esc(m.texto).replace(/'/g, "\\'").replace(/\n/g, ' ')}')">${NI('responder', 13)}</button>
-          ${remitente}${citado}${esc(m.texto)}<span class="wa-msg__time">${_fmtHora(m.ts)}</span>
-        </div>
-      </div>`;
+      const replyBtn = `<button class="wa-msg__reply" title="Responder a este mensaje" onclick="WaChatModule.responderA('${esc(m.msg_id).replace(/'/g, "\\'")}','${esc(quien).replace(/'/g, "\\'")}','${esc(m.texto).replace(/'/g, "\\'").replace(/\n/g, ' ')}')">${NI('responder', 13)}</button>`;
+      // OJO: .wa-msg__bubble usa white-space:pre-wrap, así que cualquier salto de línea
+      // o sangría de ESTE código (si se escribiera en varias líneas) se vería como
+      // espacio en blanco real dentro de la burbuja — por eso va todo en una sola línea.
+      const bubbleHtml = `${replyBtn}${remitente}${citado}${esc(m.texto)}<span class="wa-msg__time">${_fmtHora(m.ts)}</span>`;
+      return `${sep}<div class="wa-msg ${m.from_me ? 'wa-msg--out' : 'wa-msg--in'}"><div class="wa-msg__bubble">${bubbleHtml}</div></div>`;
     }).join('');
     if (atBottom) box.scrollTop = box.scrollHeight;
   }
