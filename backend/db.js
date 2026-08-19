@@ -1568,6 +1568,45 @@ async function initDb() {
     await pool.query(`UPDATE lm_company_sequences SET due_date = created_at::date WHERE due_date IS NULL;`);
     await pool.query(`CREATE INDEX IF NOT EXISTS lm_cocseq_due_idx ON lm_company_sequences (sequence_id, due_date);`);
 
+    // ── WhatsApp de trabajo (Baileys) — Operaciones ─────────────────────────
+    // v1: el WhatsApp propio de Jenny, conectado por QR (no Business API oficial —
+    // ver decisión en memoria). user_id permite en el futuro más de una conexión
+    // (ej. un WhatsApp por cliente outbound), aunque hoy la UI solo usa una.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS wa_connections (
+        id           SERIAL      PRIMARY KEY,
+        user_id      INTEGER     REFERENCES users(id) ON DELETE CASCADE,
+        nombre       TEXT        NOT NULL DEFAULT 'WhatsApp de trabajo',
+        numero       TEXT        NOT NULL DEFAULT '',
+        estado       TEXT        NOT NULL DEFAULT 'desconectado'
+                       CHECK (estado IN ('desconectado','esperando_qr','conectado')),
+        session_dir  TEXT        NOT NULL,
+        qr_actual    TEXT        NOT NULL DEFAULT '',
+        connected_at TIMESTAMPTZ,
+        created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS wa_connections_user_idx ON wa_connections (user_id);`);
+    // msg_id es el Baileys key.id — la clave real de deduplicación: el mismo mensaje
+    // puede llegar dos veces (reconexión, eco del propio envío) y sin este UNIQUE se
+    // duplicaría en el historial cada vez.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS wa_messages (
+        id            SERIAL      PRIMARY KEY,
+        connection_id INTEGER     NOT NULL REFERENCES wa_connections(id) ON DELETE CASCADE,
+        chat_jid      TEXT        NOT NULL,
+        msg_id        TEXT        NOT NULL,
+        from_me       BOOLEAN     NOT NULL DEFAULT FALSE,
+        nombre        TEXT        NOT NULL DEFAULT '',
+        texto         TEXT        NOT NULL DEFAULT '',
+        ts            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE (connection_id, msg_id)
+      );
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS wa_messages_chat_idx ON wa_messages (connection_id, chat_jid, ts);`);
+
     console.log('[db] tables ready (users, verifications, batch_jobs, clients, projects, tasks, payments, team_members, workspaces, workspace_invites, chat_messages, leads, meetings, fin_config, fin_member_config, pagos_internos, opportunities, opportunity_tasks)');
   } catch (err) {
     console.error('[db] initDb failed:', err.message);

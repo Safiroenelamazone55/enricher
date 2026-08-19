@@ -15254,3 +15254,54 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .rchat-quote__txt { font-size: .74rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rchat-quote__x { flex: 0 0 auto; border: none; background: none; color: var(--text-muted); font-size: .78rem; cursor: pointer; padding: 2px 4px; line-height: 1; }
 .rchat-quote__x:hover { color: var(--text-primary); }
+
+/* ── WhatsApp de trabajo (Operaciones) ──────────────────────────────── */
+.pane--wa { padding: 0; }
+.wa-shell { height: 100%; min-height: 520px; overflow: hidden; }
+.wa-shell .hidden { display: none !important; }
+
+/* Estados 1 y 2: sin conectar / esperando QR — misma caja centrada */
+.wa-empty-state { height: 100%; display: flex; align-items: center; justify-content: center; padding: 24px; }
+.wa-empty-state__box { max-width: 360px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.wa-empty-state__icon { color: var(--primary); margin-bottom: 4px; }
+.wa-empty-state__box h3 { margin: 0; font-size: 1.05rem; font-weight: 700; color: var(--text-primary); }
+.wa-empty-state__box p { margin: 0; font-size: .82rem; line-height: 1.5; color: var(--text-muted); }
+.wa-empty-state__box .btn { margin-top: 6px; }
+.wa-qr__img { width: 220px; height: 220px; border-radius: 10px; border: 1px solid var(--border); padding: 10px; background: #fff; margin: 6px 0; }
+.wa-qr__hint { font-size: .76rem; color: var(--primary); font-weight: 600; }
+
+/* Estado 3: conectado — dos columnas, misma altura que el shell de Slack */
+.wa-chat { display: flex; height: 100%; overflow: hidden; }
+.wa-sidebar { width: 280px; min-width: 280px; flex-shrink: 0; display: flex; flex-direction: column; background: var(--surface-secondary); border-right: 1px solid var(--border); overflow: hidden; }
+.wa-sidebar__hdr { display: flex; align-items: center; gap: 8px; padding: 0 12px; height: 48px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.wa-sidebar__hdr-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.wa-sidebar__title { font-size: .88rem; font-weight: 800; color: var(--text-primary); }
+.wa-sidebar__numero { font-size: .7rem; color: var(--text-muted); }
+.wa-sidebar__list { flex: 1; overflow-y: auto; padding: 4px 0 20px; }
+.wa-sidebar__list::-webkit-scrollbar { width: 3px; }
+.wa-sidebar__list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+.wa-chat-item { display: flex; align-items: center; gap: 9px; padding: 8px 12px; margin: 1px 6px; border-radius: 8px; cursor: pointer; transition: background .1s; }
+.wa-chat-item:hover { background: var(--surface-hover); }
+.wa-chat-item.on { background: var(--primary-soft, rgba(0,122,255,.1)); }
+.wa-chat-item__av { flex-shrink: 0; width: 34px; height: 34px; border-radius: 50%; background: var(--primary); color: #fff; font-size: .84rem; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.wa-chat-item__body { flex: 1; min-width: 0; }
+.wa-chat-item__top { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; }
+.wa-chat-item__name { font-size: .82rem; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wa-chat-item__time { font-size: .64rem; color: var(--text-muted); flex-shrink: 0; }
+.wa-chat-item__preview { font-size: .74rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.wa-main { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--surface); overflow: hidden; }
+.wa-main__header { display: flex; align-items: center; gap: 10px; height: 48px; padding: 0 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.wa-main__ch-name { font-size: .88rem; font-weight: 700; color: var(--text-primary); }
+.wa-main__msgs { flex: 1; overflow-y: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 2px; }
+.wa-main__composer { display: flex; align-items: flex-end; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border); flex-shrink: 0; }
+.wa-main__composer .chat-composer__field { flex: 1; }
+
+.wa-msg { display: flex; }
+.wa-msg--in { justify-content: flex-start; }
+.wa-msg--out { justify-content: flex-end; }
+.wa-msg__bubble { max-width: 62%; padding: 7px 11px; border-radius: 12px; font-size: .84rem; line-height: 1.4; color: var(--text-primary); white-space: pre-wrap; word-break: break-word; position: relative; }
+.wa-msg--in .wa-msg__bubble { background: var(--surface-secondary); border-bottom-left-radius: 3px; }
+.wa-msg--out .wa-msg__bubble { background: var(--primary-soft, #DDEBFF); border-bottom-right-radius: 3px; }
+.wa-msg__time { display: block; margin-top: 2px; font-size: .62rem; color: var(--text-muted); text-align: right; }

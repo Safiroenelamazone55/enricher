@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260818l"/>
+  <link rel="stylesheet" href="style.css?v=20260819a"/>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -422,6 +422,16 @@
           </svg>
         </span>
         <span class="snav-item__label">Chat <span class="snav-soon-badge hidden" id="chat-badge">0</span></span>
+      </button>
+
+      <button class="snav-item" data-tab="mgmt-wa" data-tooltip="WhatsApp de trabajo">
+        <span class="snav-item__icon">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 21l1.65-4.95A8.5 8.5 0 1 1 8.5 19.5L3 21z"/>
+            <path d="M8.5 12.5c0 2.5 2 4.5 4.5 4.5" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <span class="snav-item__label">WhatsApp</span>
       </button>
 
       <button class="snav-item" data-tab="mgmt-blocks" data-tooltip="Bloqueos">
@@ -1256,6 +1266,73 @@
         </div><!-- /chat-main -->
       </div><!-- /chat-shell -->
     </div><!-- /pane--chat -->
+
+    <!-- ── WHATSAPP (Operaciones) ───────────────────────────── -->
+    <div class="pane pane--wa" id="pane-mgmt-wa">
+      <div class="wa-shell" id="wa-shell">
+
+        <!-- Estado 1: sin conectar todavía -->
+        <div class="wa-empty-state" id="wa-connect">
+          <div class="wa-empty-state__box">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="wa-empty-state__icon">
+              <path d="M3 21l1.65-4.95A8.5 8.5 0 1 1 8.5 19.5L3 21z"/>
+              <path d="M8.5 12.5c0 2.5 2 4.5 4.5 4.5" stroke-linecap="round"/>
+            </svg>
+            <h3>Conectar WhatsApp de trabajo</h3>
+            <p>Vincula tu número real escaneando un código QR, igual que WhatsApp Web. Es tu WhatsApp de siempre — no se envía nada sin que tú lo escribas.</p>
+            <button class="btn btn--primary" onclick="WaChatModule.conectar()" id="wa-connect-btn">Conectar WhatsApp</button>
+          </div>
+        </div>
+
+        <!-- Estado 2: esperando que escanees el QR -->
+        <div class="wa-empty-state hidden" id="wa-qr">
+          <div class="wa-empty-state__box">
+            <h3>Escanea este código</h3>
+            <p>Abre WhatsApp en tu teléfono → Ajustes → Dispositivos vinculados → Vincular un dispositivo.</p>
+            <img id="wa-qr-img" class="wa-qr__img" alt="Código QR de WhatsApp">
+            <div class="wa-qr__hint" id="wa-qr-hint">Esperando que escanees…</div>
+          </div>
+        </div>
+
+        <!-- Estado 3: conectado — chat de dos columnas -->
+        <div class="wa-chat hidden" id="wa-chat">
+          <aside class="wa-sidebar">
+            <div class="wa-sidebar__hdr">
+              <div class="wa-sidebar__hdr-info">
+                <span class="wa-sidebar__title">WhatsApp</span>
+                <span class="wa-sidebar__numero" id="wa-numero"></span>
+              </div>
+              <button class="chat-hdr-btn" title="Desconectar" onclick="WaChatModule.desconectar()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
+              </button>
+            </div>
+            <div class="wa-sidebar__list" id="wa-chats">
+              <div class="clients-loading"><div class="clients-spin"></div></div>
+            </div>
+          </aside>
+          <div class="wa-main">
+            <header class="wa-main__header" id="wa-main-header">
+              <div class="wa-main__ch-info">
+                <span class="wa-main__ch-name" id="wa-main-name">Selecciona un chat</span>
+              </div>
+            </header>
+            <div class="wa-main__msgs" id="wa-messages">
+              <div class="chat-ch-empty">Elige una conversación de la izquierda</div>
+            </div>
+            <div class="wa-main__composer">
+              <textarea id="wa-input" class="chat-composer__field" rows="1"
+                placeholder="Escribe un mensaje…"
+                onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();WaChatModule.enviar()}"
+                oninput="ChatModule.autoResize(this)"></textarea>
+              <button class="chat-composer__send" onclick="WaChatModule.enviar()" title="Enviar (Enter)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22 11 13 2 9l20-7z"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /wa-shell -->
+    </div><!-- /pane--wa -->
 
     <!-- ── TIME TRACKING PANE ────────────────────────────────── -->
     <div class="pane" id="pane-mgmt-timetracking">
@@ -2656,7 +2733,7 @@
 })();
 </script>
 
-<script src="app.js?v=20260818o"></script>
+<script src="app.js?v=20260819a"></script>
 <div id="task-quick-edit" style="display:none;position:fixed;z-index:9999"></div>
 </body>
 </html>

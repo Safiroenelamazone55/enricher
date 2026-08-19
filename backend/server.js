@@ -8145,6 +8145,103 @@ app.post('/api/slack/workspaces/:id/canales/:canal/mensajes', requireAuth, async
   } catch (err) { res.status(400).json({ error: err.message }); }
 });
 
+// =================================================================
+// WHATSAPP DE TRABAJO (Operaciones) — Baileys, no la API oficial de Meta.
+// v1: una conexión (el WhatsApp propio de Jenny), pensada para seguimiento y nurture
+// con quien ya escribió — no para prospección fría masiva (ver waService.js).
+// =================================================================
+const waSvc = require('./services/waService');
+
+app.get('/api/wa/connections', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, nombre, numero, estado, qr_actual, connected_at, created_at
+         FROM wa_connections WHERE user_id=$1 ORDER BY id`, [req.workspaceOwnerId]);
+    res.json(rows);
+  } catch (err) { console.error('[wa] GET connections', err.message); res.status(500).json({ error: 'Error al cargar las conexiones' }); }
+});
+
+app.post('/api/wa/connections', requireAuth, async (req, res) => {
+  const nombre = String((req.body || {}).nombre || 'WhatsApp de trabajo').trim().slice(0, 80);
+  try {
+    const { rows: [row] } = await pool.query(
+      `INSERT INTO wa_connections (user_id, nombre, session_dir) VALUES ($1,$2,'') RETURNING id`,
+      [req.workspaceOwnerId, nombre]);
+    await pool.query(`UPDATE wa_connections SET session_dir=$1 WHERE id=$2`, [String(row.id), row.id]);
+    await waSvc.iniciar(pool, row.id); // arranca el socket → empieza a generar el QR
+    res.status(201).json({ id: row.id });
+  } catch (err) { console.error('[wa] POST connections', err.message); res.status(500).json({ error: 'Error al crear la conexión' }); }
+});
+
+// Estado + QR actual — el frontend hace poll de esto mientras espera que se escanee.
+app.get('/api/wa/connections/:id', requireAuth, async (req, res) => {
+  try {
+    const { rows: [row] } = await pool.query(
+      `SELECT id, nombre, numero, estado, qr_actual, connected_at FROM wa_connections
+        WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId]);
+    if (!row) return res.status(404).json({ error: 'No encontrada' });
+    res.json(row);
+  } catch (err) { res.status(500).json({ error: 'Error al consultar la conexión' }); }
+});
+
+app.post('/api/wa/connections/:id/reconectar', requireAuth, async (req, res) => {
+  try {
+    const { rows: [row] } = await pool.query(
+      `SELECT id FROM wa_connections WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId]);
+    if (!row) return res.status(404).json({ error: 'No encontrada' });
+    await waSvc.iniciar(pool, row.id);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: 'Error al reconectar' }); }
+});
+
+app.post('/api/wa/connections/:id/desconectar', requireAuth, async (req, res) => {
+  try {
+    const { rows: [row] } = await pool.query(
+      `SELECT id FROM wa_connections WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId]);
+    if (!row) return res.status(404).json({ error: 'No encontrada' });
+    await waSvc.desconectar(pool, row.id);
+    res.json({ ok: true });
+  } catch (err) { console.error('[wa] desconectar', err.message); res.status(500).json({ error: 'Error al desconectar' }); }
+});
+
+// Lista de chats (1 fila por número con actividad), con el último mensaje como preview —
+// mismo shape que la lista de canales del mini-chat de Slack.
+app.get('/api/wa/connections/:id/chats', requireAuth, async (req, res) => {
+  try {
+    const own = await pool.query(`SELECT id FROM wa_connections WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId]);
+    if (!own.rows.length) return res.status(404).json({ error: 'No encontrada' });
+    const { rows } = await pool.query(`
+      SELECT DISTINCT ON (chat_jid) chat_jid, nombre, texto AS ultimo_texto, ts AS ultimo_ts, from_me
+        FROM wa_messages WHERE connection_id=$1
+       ORDER BY chat_jid, ts DESC`, [req.params.id]);
+    rows.sort((a, b) => new Date(b.ultimo_ts) - new Date(a.ultimo_ts));
+    res.json(rows);
+  } catch (err) { console.error('[wa] chats', err.message); res.status(500).json({ error: 'Error al cargar los chats' }); }
+});
+
+app.get('/api/wa/connections/:id/chats/:jid/mensajes', requireAuth, async (req, res) => {
+  try {
+    const own = await pool.query(`SELECT id FROM wa_connections WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId]);
+    if (!own.rows.length) return res.status(404).json({ error: 'No encontrada' });
+    const { rows } = await pool.query(`
+      SELECT id, from_me, nombre, texto, ts FROM wa_messages
+       WHERE connection_id=$1 AND chat_jid=$2 ORDER BY ts DESC LIMIT 100`,
+      [req.params.id, req.params.jid]);
+    res.json(rows.reverse());
+  } catch (err) { res.status(500).json({ error: 'Error al cargar los mensajes' }); }
+});
+
+app.post('/api/wa/connections/:id/chats/:jid/mensajes', requireAuth, async (req, res) => {
+  const texto = String((req.body || {}).texto || '').trim();
+  if (!texto) return res.status(400).json({ error: 'El mensaje está vacío' });
+  try {
+    const own = await pool.query(`SELECT id FROM wa_connections WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId]);
+    if (!own.rows.length) return res.status(404).json({ error: 'No encontrada' });
+    const r = await waSvc.enviar(pool, +req.params.id, req.params.jid, texto);
+    res.status(201).json(r);
+  } catch (err) { console.error('[wa] enviar', err.message); res.status(400).json({ error: err.message || 'No se pudo enviar' }); }
+});
+
 // ── POST /api/gcal/meet ───────────────────────────────────────────
 // Crea la junta como evento de Google Calendar CON enlace de Meet. Se hace aqui y
 // no en Slack porque en el plan gratuito de Slack las llamadas son solo de dos
@@ -9115,6 +9212,10 @@ async function start() {
     require('./services/imapWatcher').startImapWatcher(pool);
     require('./services/dailyReport').startDailyReport(pool);
   } catch (e) { console.warn('[lm-workers] no iniciados:', e.message); }
+
+  // WhatsApp de trabajo (Operaciones): retoma las conexiones ya vinculadas sin pedir
+  // un QR nuevo en cada reinicio de PM2.
+  require('./services/waService').reanudarTodas(pool).catch(e => console.warn('[wa] boot:', e.message));
 
   // ── HTTP server listen ───────────────────────────────────────
   httpServer.listen(PORT, '0.0.0.0', () => {

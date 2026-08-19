@@ -1,6 +1,8 @@
 node_modules/
 backend/data/domainPatterns.json
 backend/data/domainPatterns.tmp.json
+# Sesiones de WhatsApp (Baileys) — llevan las credenciales del dispositivo vinculado.
+backend/data/wa-sessions/
 .env
 .env.*
 *.log

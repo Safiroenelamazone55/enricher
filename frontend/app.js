@@ -25898,6 +25898,201 @@ const SlackChat = (() => {
            miniDetener: _pararSondeoMini, refreshMiniBadge };
 })();
 
+// WhatsApp de trabajo (Operaciones) — vía Baileys, ver backend/services/waService.js.
+// v1: UNA sola conexión (el número real de Jenny), vinculada escaneando un QR.
+const WaChatModule = (() => {
+  let _conn     = null;   // { id, estado, numero, qr_actual } — la única conexión, si existe
+  let _chats    = [];
+  let _chatAct  = null;   // jid del chat abierto
+  let _pollQr   = null;
+  let _pollChat = null;
+
+  const $$ = id => document.getElementById(id);
+
+  function _estado(nombre) {
+    ['wa-connect', 'wa-qr', 'wa-chat'].forEach(id => {
+      const el = $$(id);
+      if (el) el.classList.toggle('hidden', id !== nombre);
+    });
+  }
+
+  function _pararSondeos() {
+    if (_pollQr)   { clearInterval(_pollQr);   _pollQr   = null; }
+    if (_pollChat) { clearInterval(_pollChat); _pollChat = null; }
+  }
+
+  async function load() {
+    try {
+      const r = await apiFetch(`${API}/wa/connections`);
+      const rows = r.ok ? await r.json() : [];
+      _conn = rows[0] || null;
+    } catch (_) { _conn = null; }
+    _aplicarEstado();
+  }
+
+  function _aplicarEstado() {
+    _pararSondeos();
+    if (!_conn || _conn.estado === 'desconectado') {
+      _estado('wa-connect');
+      return;
+    }
+    if (_conn.estado === 'esperando_qr') {
+      _estado('wa-qr');
+      _pintaQr();
+      _pollQr = setInterval(_sondearQr, 3000);
+      return;
+    }
+    // conectado
+    _estado('wa-chat');
+    const numEl = $$('wa-numero');
+    if (numEl) numEl.textContent = _conn.numero ? `+${_conn.numero}` : '';
+    _cargarChats();
+    _pollChat = setInterval(() => {
+      _cargarChats(true);
+      if (_chatAct) _cargarMensajes(_chatAct, true);
+    }, 5000);
+  }
+
+  function _pintaQr() {
+    const img = $$('wa-qr-img');
+    if (img && _conn?.qr_actual) img.src = _conn.qr_actual;
+    const hint = $$('wa-qr-hint');
+    if (hint) hint.textContent = _conn?.qr_actual ? 'Esperando que escanees…' : 'Generando código…';
+  }
+
+  async function _sondearQr() {
+    if (!_conn) return;
+    try {
+      const r = await apiFetch(`${API}/wa/connections/${_conn.id}`);
+      if (!r.ok) return;
+      _conn = await r.json();
+      if (_conn.estado === 'esperando_qr') { _pintaQr(); return; }
+      _aplicarEstado(); // pasó a conectado (o volvió a desconectado)
+    } catch (_) { /* red intermitente: se reintenta en el próximo tick */ }
+  }
+
+  async function conectar() {
+    const btn = $$('wa-connect-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Conectando…'; }
+    try {
+      const r = await apiFetch(`${API}/wa/connections`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nombre: 'WhatsApp de trabajo' })
+      });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'No se pudo crear la conexión');
+      const { id } = await r.json();
+      _conn = { id, estado: 'esperando_qr', qr_actual: '' };
+      _aplicarEstado();
+    } catch (e) {
+      alert('Error: ' + e.message);
+      if (btn) { btn.disabled = false; btn.textContent = 'Conectar WhatsApp'; }
+    }
+  }
+
+  async function desconectar() {
+    if (!_conn) return;
+    if (!confirm('¿Desconectar este WhatsApp? Vas a tener que escanear un QR nuevo para volver a usarlo.')) return;
+    try {
+      await apiFetch(`${API}/wa/connections/${_conn.id}/desconectar`, { method: 'POST' });
+    } catch (_) { /* igual se refleja al recargar */ }
+    _conn = null; _chats = []; _chatAct = null;
+    _aplicarEstado();
+  }
+
+  function _fmtHora(ts) {
+    try { return new Date(ts).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' }); }
+    catch (_) { return ''; }
+  }
+
+  function _nombreChat(row) {
+    return row.nombre || ('+' + String(row.chat_jid || '').split('@')[0]);
+  }
+
+  async function _cargarChats(silencioso) {
+    if (!_conn) return;
+    try {
+      const r = await apiFetch(`${API}/wa/connections/${_conn.id}/chats`);
+      _chats = r.ok ? await r.json() : [];
+    } catch (_) { if (!silencioso) _chats = []; }
+    _pintaChats();
+  }
+
+  function _pintaChats() {
+    const box = $$('wa-chats');
+    if (!box) return;
+    if (!_chats.length) {
+      box.innerHTML = `<div class="chat-ch-empty">Todavía no hay conversaciones.<br>Escríbele a alguien desde tu teléfono para verlo aquí.</div>`;
+      return;
+    }
+    box.innerHTML = _chats.map(c => `
+      <div class="wa-chat-item${String(c.chat_jid) === String(_chatAct) ? ' on' : ''}" onclick="WaChatModule.abrirChat('${esc(c.chat_jid).replace(/'/g, "\\'")}')">
+        <div class="wa-chat-item__av">${esc(_nombreChat(c)).slice(0, 1).toUpperCase()}</div>
+        <div class="wa-chat-item__body">
+          <div class="wa-chat-item__top">
+            <span class="wa-chat-item__name">${esc(_nombreChat(c))}</span>
+            <span class="wa-chat-item__time">${_fmtHora(c.ultimo_ts)}</span>
+          </div>
+          <div class="wa-chat-item__preview">${c.from_me ? 'Tú: ' : ''}${esc(c.ultimo_texto || '')}</div>
+        </div>
+      </div>`).join('');
+  }
+
+  async function abrirChat(jid) {
+    _chatAct = jid;
+    _pintaChats();
+    const nameEl = $$('wa-main-name');
+    const row = _chats.find(c => String(c.chat_jid) === String(jid));
+    if (nameEl) nameEl.textContent = row ? _nombreChat(row) : jid;
+    const box = $$('wa-messages');
+    if (box) box.innerHTML = `<div class="clients-loading"><div class="clients-spin"></div></div>`;
+    await _cargarMensajes(jid);
+  }
+
+  async function _cargarMensajes(jid, silencioso) {
+    if (!_conn) return;
+    try {
+      const r = await apiFetch(`${API}/wa/connections/${_conn.id}/chats/${encodeURIComponent(jid)}/mensajes`);
+      const rows = r.ok ? await r.json() : [];
+      _pintaMensajes(rows);
+    } catch (_) { if (!silencioso) { const box = $$('wa-messages'); if (box) box.innerHTML = `<div class="chat-ch-empty">No se pudieron cargar los mensajes.</div>`; } }
+  }
+
+  function _pintaMensajes(rows) {
+    const box = $$('wa-messages');
+    if (!box) return;
+    const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
+    if (!rows.length) {
+      box.innerHTML = `<div class="chat-ch-empty">Todavía no hay mensajes en este chat.</div>`;
+      return;
+    }
+    box.innerHTML = rows.map(m => `
+      <div class="wa-msg ${m.from_me ? 'wa-msg--out' : 'wa-msg--in'}">
+        <div class="wa-msg__bubble">${esc(m.texto)}<span class="wa-msg__time">${_fmtHora(m.ts)}</span></div>
+      </div>`).join('');
+    if (atBottom) box.scrollTop = box.scrollHeight;
+  }
+
+  async function enviar() {
+    const input = $$('wa-input');
+    const texto = (input?.value || '').trim();
+    if (!texto || !_conn || !_chatAct) return;
+    input.value = ''; ChatModule.autoResize(input);
+    try {
+      const r = await apiFetch(`${API}/wa/connections/${_conn.id}/chats/${encodeURIComponent(_chatAct)}/mensajes`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ texto })
+      });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'No se pudo enviar');
+      await _cargarMensajes(_chatAct, true);
+      await _cargarChats(true);
+    } catch (e) {
+      alert('Error: ' + e.message);
+      input.value = texto;
+    }
+  }
+
+  return { load, conectar, desconectar, abrirChat, enviar, detener: _pararSondeos };
+})();
+
 const ChatModule = (() => {
   let _socket    = null;
   let _channel   = 'general';
@@ -28670,6 +28865,8 @@ function initApp() {
     if (tabName === 'mgmt-team')      TeamModule.load();
     if (tabName === 'mgmt-chat')          SlackChat.load();
     else                                  SlackChat.detener();
+    if (tabName === 'mgmt-wa')            WaChatModule.load();
+    else                                  WaChatModule.detener();
     if (tabName === 'lead-manager')       LeadManagerModule.load();
     if (tabName === 'mgmt-timetracking')  TimerModule.loadReport();
   }
