@@ -25938,7 +25938,11 @@ const WaChatModule = (() => {
     try {
       const r = await apiFetch(`${API}/wa/connections`);
       const rows = r.ok ? await r.json() : [];
-      _conn = rows[0] || null;
+      // Puede haber más de una fila (reintentos de conexión anteriores) — la que importa
+      // es la que está realmente activa, no la primera que se creó.
+      _conn = rows.find(c => c.estado === 'conectado')
+           || rows.find(c => c.estado === 'esperando_qr')
+           || rows[rows.length - 1] || null;
     } catch (_) { _conn = null; }
     _aplicarEstado();
   }

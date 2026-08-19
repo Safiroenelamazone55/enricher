@@ -24,7 +24,11 @@ const QRCode = require('qrcode');
 const SESSIONS_DIR = path.join(__dirname, '..', 'data', 'wa-sessions');
 if (!fs.existsSync(SESSIONS_DIR)) fs.mkdirSync(SESSIONS_DIR, { recursive: true });
 
-const _socks = new Map(); // connectionId → sock vivo
+const _socks = new Map();   // connectionId → sock vivo
+const _reintentos = new Map(); // connectionId → cuántos cortes seguidos lleva
+const MAX_REINTENTOS = 5; // pasado esto, una sesión que nunca llegó a "open" está
+                           // muerta (creds corruptas, QR nunca escaneado, etc.) —
+                           // mejor dejarla desconectada que reintentar por siempre.
 
 function _sessionDir(id) { return path.join(SESSIONS_DIR, String(id)); }
 
@@ -91,6 +95,7 @@ async function _connect(pool, id) {
           [qrPng, id]);
       }
       if (connection === 'open') {
+        _reintentos.delete(id); // ya conectó bien — se olvida cualquier corte anterior
         const numero = (sock.user && sock.user.id) ? sock.user.id.split(':')[0] : '';
         await pool.query(
           `UPDATE wa_connections SET estado='conectado', numero=$1, qr_actual='', connected_at=NOW(), updated_at=NOW() WHERE id=$2`,
@@ -101,18 +106,23 @@ async function _connect(pool, id) {
         _socks.delete(id);
         const code = lastDisconnect?.error?.output?.statusCode;
         const loggedOut = code === DisconnectReason.loggedOut;
-        if (loggedOut) {
-          // Vinculación revocada desde el teléfono (o "cerrar sesión" nuestro) — hay
-          // que escanear un QR nuevo. Se limpia la sesión en disco para no arrastrar
-          // credenciales muertas.
+        const intentos = (_reintentos.get(id) || 0) + 1;
+        if (loggedOut || intentos > MAX_REINTENTOS) {
+          // Vinculación revocada desde el teléfono (o "cerrar sesión" nuestro), o una
+          // sesión que nunca prendió tras varios intentos — hay que escanear un QR
+          // nuevo. Se limpia la sesión en disco para no arrastrar credenciales muertas.
+          _reintentos.delete(id);
           await pool.query(
             `UPDATE wa_connections SET estado='desconectado', qr_actual='', numero='', updated_at=NOW() WHERE id=$1`,
             [id]);
           fs.rmSync(dir, { recursive: true, force: true });
-          console.log(`[wa] conexión ${id} cerró sesión — hace falta un QR nuevo`);
+          console.log(loggedOut
+            ? `[wa] conexión ${id} cerró sesión — hace falta un QR nuevo`
+            : `[wa] conexión ${id} no logró conectar tras ${MAX_REINTENTOS} intentos — se deja desconectada`);
         } else {
           // Cualquier otro corte (red, reinicio del servidor, etc.) se reintenta solo.
-          console.log(`[wa] conexión ${id} se cortó, reintentando…`);
+          _reintentos.set(id, intentos);
+          console.log(`[wa] conexión ${id} se cortó, reintentando… (${intentos}/${MAX_REINTENTOS})`);
           setTimeout(() => _connect(pool, id).catch(e => console.warn('[wa] reconectar:', e.message)), 3000);
         }
       }
