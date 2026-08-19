@@ -15257,7 +15257,7 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 
 /* ── WhatsApp de trabajo (Operaciones) ──────────────────────────────── */
 .pane--wa { padding: 0; }
-.wa-shell { height: 100%; min-height: 520px; overflow: hidden; }
+.wa-shell { height: 100%; min-height: 420px; overflow: hidden; }
 .wa-shell .hidden { display: none !important; }
 
 /* Estados 1 y 2: sin conectar / esperando QR — misma caja centrada */
