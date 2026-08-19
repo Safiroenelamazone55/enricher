@@ -2672,7 +2672,15 @@ async function _ensureRecurSubtasksCore(wid, freq, refDateStr) {
          AND fecha_inicio<=$3 AND deadline>=$3 ORDER BY fecha_inicio DESC LIMIT 1`,
       [wid, t.project_id, refDateStr])).rows[0];
     if (!cont) continue;
-    const respArr = (t.responsables && t.responsables.length) ? t.responsables : (t.responsable ? [t.responsable] : []);
+    // Sin responsable propio, hereda el del proyecto — si no, la tarea nace sin nadie
+    // asignado y el filtro "solo mis tareas" (que Tareas aplica solo al abrir) la esconde:
+    // existe, pero nadie la ve. Mismo criterio que ya usa el contenedor semanal/mensual.
+    let respArr = (t.responsables && t.responsables.length) ? t.responsables : (t.responsable ? [t.responsable] : []);
+    if (!respArr.length) {
+      const { rows: [pr] } = await pool.query(
+        `SELECT responsable, responsables FROM projects WHERE id=$1`, [t.project_id]);
+      respArr = (pr?.responsables && pr.responsables.length) ? pr.responsables : (pr?.responsable ? [pr.responsable] : []);
+    }
     const ins = await pool.query(
       `INSERT INTO tasks (user_id, project_id, parent_task_id, titulo, descripcion, estado, prioridad,
                           responsable, responsables, deadline, recur_template_id, recur_anchor)
@@ -2811,11 +2819,17 @@ app.post('/api/mgmt/projects/:id/outbound-link', requireAuth, async (req, res) =
       `SELECT 1 FROM project_recur_subtasks WHERE project_id=$1 AND origen='outbound_catalog' LIMIT 1`, [proj.id]);
     let creadas = 0;
     if (!ya) {
+      // El catálogo hereda el responsable del proyecto — sin esto las tareas nacen sin
+      // asignar y el filtro "solo mis tareas" (que Tareas aplica solo al abrir) las
+      // esconde: existen, pero no aparecen hasta que alguien quita el filtro a mano.
+      const { rows: [pr] } = await cl.query(`SELECT responsable, responsables FROM projects WHERE id=$1`, [proj.id]);
+      const responsable = pr?.responsable || '';
+      const responsables = (pr?.responsables && pr.responsables.length) ? pr.responsables : (responsable ? [responsable] : []);
       for (const t of OUTBOUND_TASK_CATALOG) {
         await cl.query(
-          `INSERT INTO project_recur_subtasks (user_id, project_id, titulo, descripcion, prioridad, freq, origen)
-           VALUES ($1,$2,$3,$4,'media',$5,'outbound_catalog')`,
-          [uid, proj.id, t.titulo, t.descripcion, t.freq]);
+          `INSERT INTO project_recur_subtasks (user_id, project_id, titulo, descripcion, prioridad, responsable, responsables, freq, origen)
+           VALUES ($1,$2,$3,$4,'media',$5,$6,$7,'outbound_catalog')`,
+          [uid, proj.id, t.titulo, t.descripcion, responsable, responsables, t.freq]);
         creadas++;
       }
     }
