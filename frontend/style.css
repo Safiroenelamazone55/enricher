@@ -15305,6 +15305,10 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .wa-msg--in .wa-msg__bubble { background: var(--surface-secondary); border-bottom-left-radius: 3px; }
 .wa-msg--out .wa-msg__bubble { background: var(--primary-soft, #DDEBFF); border-bottom-right-radius: 3px; }
 .wa-msg__time { display: block; margin-top: 2px; font-size: .62rem; color: var(--text-muted); text-align: right; }
+.wa-msg__sender { font-size: .72rem; font-weight: 700; color: var(--primary); margin-bottom: 2px; }
+.wa-msg__quoted { font-size: .74rem; color: var(--text-muted); border-left: 2px solid var(--border); padding: 1px 0 1px 7px; margin-bottom: 4px; opacity: .85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.wa-msg__bubble .chat-msg__reply { top: 4px; right: 4px; }
+#wa-quote { margin: 8px 14px 0; }
 
 /* "Nuevo chat" — modal de búsqueda de contactos / número directo */
 .wa-nc-box { max-width: 400px; }

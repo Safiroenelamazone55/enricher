@@ -1606,6 +1606,11 @@ async function initDb() {
       );
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS wa_messages_chat_idx ON wa_messages (connection_id, chat_jid, ts);`);
+    // "Responder a este mensaje": reply_to_id es el msg_id citado (si lo tenemos guardado
+    // se puede abrir); reply_to_texto es una copia del texto citado para poder mostrar la
+    // vista previa aunque el original sea de antes de conectar Nova y no esté en la tabla.
+    await pool.query(`ALTER TABLE wa_messages ADD COLUMN IF NOT EXISTS reply_to_id     TEXT NOT NULL DEFAULT '';`);
+    await pool.query(`ALTER TABLE wa_messages ADD COLUMN IF NOT EXISTS reply_to_texto  TEXT NOT NULL DEFAULT '';`);
     // Directorio de nombres (contactos guardados en el teléfono + gente que ya
     // escribió) — separado de wa_messages para poder listar "con quién puedo
     // escribir" (el "Nuevo chat") sin depender de que ya exista una conversación.

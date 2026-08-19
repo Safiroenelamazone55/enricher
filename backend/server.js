@@ -8212,7 +8212,9 @@ app.get('/api/wa/connections/:id/chats', requireAuth, async (req, res) => {
     if (!own.rows.length) return res.status(404).json({ error: 'No encontrada' });
     const { rows } = await pool.query(`
       SELECT DISTINCT ON (m.chat_jid) m.chat_jid,
-             COALESCE(NULLIF(m.nombre,''), c.nombre, '') AS nombre,
+             COALESCE(NULLIF(c.nombre,''),
+               CASE WHEN m.chat_jid LIKE '%@g.us' THEN NULL ELSE NULLIF(m.nombre,'') END, '') AS nombre,
+             (m.chat_jid LIKE '%@g.us') AS es_grupo,
              m.texto AS ultimo_texto, m.ts AS ultimo_ts, m.from_me
         FROM wa_messages m
         LEFT JOIN wa_contacts c ON c.connection_id = m.connection_id AND c.jid = m.chat_jid
@@ -8243,7 +8245,7 @@ app.get('/api/wa/connections/:id/chats/:jid/mensajes', requireAuth, async (req, 
     const own = await pool.query(`SELECT id FROM wa_connections WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId]);
     if (!own.rows.length) return res.status(404).json({ error: 'No encontrada' });
     const { rows } = await pool.query(`
-      SELECT id, from_me, nombre, texto, ts FROM wa_messages
+      SELECT id, from_me, nombre, texto, ts, reply_to_id, reply_to_texto, msg_id FROM wa_messages
        WHERE connection_id=$1 AND chat_jid=$2 ORDER BY ts DESC LIMIT 100`,
       [req.params.id, req.params.jid]);
     res.json(rows.reverse());
@@ -8252,11 +8254,12 @@ app.get('/api/wa/connections/:id/chats/:jid/mensajes', requireAuth, async (req, 
 
 app.post('/api/wa/connections/:id/chats/:jid/mensajes', requireAuth, async (req, res) => {
   const texto = String((req.body || {}).texto || '').trim();
+  const respondeA = String((req.body || {}).respondeA || '').trim() || undefined;
   if (!texto) return res.status(400).json({ error: 'El mensaje está vacío' });
   try {
     const own = await pool.query(`SELECT id FROM wa_connections WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId]);
     if (!own.rows.length) return res.status(404).json({ error: 'No encontrada' });
-    const r = await waSvc.enviar(pool, +req.params.id, req.params.jid, texto);
+    const r = await waSvc.enviar(pool, +req.params.id, req.params.jid, texto, respondeA);
     res.status(201).json(r);
   } catch (err) { console.error('[wa] enviar', err.message); res.status(400).json({ error: err.message || 'No se pudo enviar' }); }
 });

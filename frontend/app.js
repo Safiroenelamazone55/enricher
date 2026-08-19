@@ -25904,8 +25904,10 @@ const WaChatModule = (() => {
   let _conn     = null;   // { id, estado, numero, qr_actual } — la única conexión, si existe
   let _chats    = [];
   let _chatAct  = null;   // jid del chat abierto
+  let _chatActGrupo = false;
   let _pollQr   = null;
   let _pollChat = null;
+  let _replyTo  = null;   // { msg_id, quien, texto } — "responder a ESTE mensaje puntual"
 
   const $$ = id => document.getElementById(id);
 
@@ -26044,7 +26046,9 @@ const WaChatModule = (() => {
   }
 
   function _nombreChat(row) {
-    return row.nombre || ('+' + String(row.chat_jid || '').split('@')[0]);
+    if (row.nombre) return row.nombre;
+    const esGrupo = row.es_grupo || String(row.chat_jid || '').endsWith('@g.us');
+    return esGrupo ? 'Grupo sin nombre' : ('+' + String(row.chat_jid || '').split('@')[0]);
   }
 
   async function _cargarChats(silencioso) {
@@ -26065,7 +26069,7 @@ const WaChatModule = (() => {
     }
     box.innerHTML = _chats.map(c => `
       <div class="wa-chat-item${String(c.chat_jid) === String(_chatAct) ? ' on' : ''}" onclick="WaChatModule.abrirChat('${esc(c.chat_jid).replace(/'/g, "\\'")}')">
-        <div class="wa-chat-item__av">${esc(_nombreChat(c)).slice(0, 1).toUpperCase()}</div>
+        <div class="wa-chat-item__av">${c.es_grupo ? '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>' : esc(_nombreChat(c)).slice(0, 1).toUpperCase()}</div>
         <div class="wa-chat-item__body">
           <div class="wa-chat-item__top">
             <span class="wa-chat-item__name">${esc(_nombreChat(c))}</span>
@@ -26078,9 +26082,11 @@ const WaChatModule = (() => {
 
   async function abrirChat(jid, nombre) {
     _chatAct = jid;
+    _replyTo = null; _pintaQuote();
     _pintaChats();
     const nameEl = $$('wa-main-name');
     const row = _chats.find(c => String(c.chat_jid) === String(jid));
+    _chatActGrupo = row ? !!row.es_grupo : jid.endsWith('@g.us');
     if (nameEl) nameEl.textContent = row ? _nombreChat(row) : (nombre || _nombreChat({ chat_jid: jid }));
     const box = $$('wa-messages');
     if (box) box.innerHTML = `<div class="clients-loading"><div class="clients-spin"></div></div>`;
@@ -26109,21 +26115,47 @@ const WaChatModule = (() => {
       const dia = new Date(m.ts).toDateString();
       const sep = dia !== prevDia ? `<div class="chat-date-sep"><span>${_fmtSepFecha(m.ts)}</span></div>` : '';
       prevDia = dia;
-      return `${sep}<div class="wa-msg ${m.from_me ? 'wa-msg--out' : 'wa-msg--in'}">
-        <div class="wa-msg__bubble">${esc(m.texto)}<span class="wa-msg__time">${_fmtHora(m.ts)}</span></div>
+      const quien = m.from_me ? 'Tú' : (m.nombre || 'Este contacto');
+      const remitente = (_chatActGrupo && !m.from_me && m.nombre) ? `<div class="wa-msg__sender">${esc(m.nombre)}</div>` : '';
+      const citado = m.reply_to_texto ? `<div class="wa-msg__quoted">${esc(m.reply_to_texto).slice(0, 100)}</div>` : '';
+      return `${sep}<div class="wa-msg chat-msg ${m.from_me ? 'wa-msg--out' : 'wa-msg--in'}">
+        <div class="wa-msg__bubble">
+          <button class="chat-msg__reply" title="Responder a este mensaje"
+            onclick="WaChatModule.responderA('${esc(m.msg_id).replace(/'/g, "\\'")}','${esc(quien).replace(/'/g, "\\'")}','${esc(m.texto).replace(/'/g, "\\'").replace(/\n/g, ' ')}')">${NI('responder', 13)}</button>
+          ${remitente}${citado}${esc(m.texto)}<span class="wa-msg__time">${_fmtHora(m.ts)}</span>
+        </div>
       </div>`;
     }).join('');
     if (atBottom) box.scrollTop = box.scrollHeight;
+  }
+
+  function responderA(msgId, quien, texto) {
+    _replyTo = { msg_id: msgId, quien, texto };
+    _pintaQuote();
+    $$('wa-input')?.focus();
+  }
+  function cancelarRespuesta() { _replyTo = null; _pintaQuote(); }
+  function _pintaQuote() {
+    const box = $$('wa-quote'); if (!box) return;
+    if (!_replyTo) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+    box.classList.remove('hidden');
+    box.innerHTML = `<div class="rchat-quote__body">
+        <div class="rchat-quote__who">Respondiendo a ${esc(_replyTo.quien)}</div>
+        <div class="rchat-quote__txt">${esc(_replyTo.texto).slice(0, 100)}</div>
+      </div>
+      <button class="rchat-quote__x" onclick="WaChatModule.cancelarRespuesta()" title="Cancelar">✕</button>`;
   }
 
   async function enviar() {
     const input = $$('wa-input');
     const texto = (input?.value || '').trim();
     if (!texto || !_conn || !_chatAct) return;
+    const respondeA = _replyTo?.msg_id;
     input.value = ''; ChatModule.autoResize(input);
+    _replyTo = null; _pintaQuote();
     try {
       const r = await apiFetch(`${API}/wa/connections/${_conn.id}/chats/${encodeURIComponent(_chatAct)}/mensajes`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ texto })
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ texto, respondeA })
       });
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'No se pudo enviar');
       await _cargarMensajes(_chatAct, true);
@@ -26197,6 +26229,7 @@ const WaChatModule = (() => {
   }
 
   return { load, conectar, desconectar, abrirChat, enviar, detener: _pararSondeos,
+           responderA, cancelarRespuesta,
            nuevoChatAbrir, nuevoChatCerrar, _nuevoChatBuscar, nuevoChatElegir, nuevoChatUsarNumero };
 })();
 
