@@ -11297,6 +11297,7 @@ const ProjectsModule = (() => {
   let _expandedProjects = new Set();   // pid → tasks shown (Lista only)
   let _expandedSubrows  = new Set();   // subtask id → text expanded inline
   let _addingLinkFor    = null;        // pid | null — inline add-link form open
+  let _obcCache = null;   // clientes outbound (Outreach), cacheados para el selector de vínculo
   let _editingLinkIdx   = null;        // { pid, idx } | null — link being edited
 
   function _estadoBadge(estado) {
@@ -12547,6 +12548,9 @@ const ProjectsModule = (() => {
     const auto = !!(p.semana_auto || p.cobro_semanal);
     const freqLbl = _FREQ_LBL[p.recur_freq] || 'Semanal';
     return `
+    <div class="pjfin__section-hdr"><span class="pjfin__section-title">CLIENTE OUTBOUND</span></div>
+    <div class="pjrec__obc" id="pjrec-obc-${p.id}"><div class="clients-loading" style="padding:12px 0"><div class="clients-spin"></div></div></div>
+
     <div class="pjfin__section-hdr"><span class="pjfin__section-title">CONTENEDOR</span></div>
     <div class="pjrec__summary">
       <span class="pjrec__summary-dot pjrec__summary-dot--${auto ? 'on' : 'off'}"></span>
@@ -12565,7 +12569,78 @@ const ProjectsModule = (() => {
     const p = _projects.find(x => x.id === pid);
     const cont = $(`pjcontent-${pid}`);
     if (p && cont && (_activeTabs[pid] || 'general') === 'recurrencia') cont.innerHTML = _tabRecurrencia(p);
-    await _pintaRecurTab(pid);
+    await Promise.all([_pintaOutboundLink(pid), _pintaRecurTab(pid)]);
+  }
+  // ── Vinculo con el cliente outbound (Outreach) ────────────────────────────
+  // Mismo cliente, dos mundos: proyecto en Operaciones + cliente en Outreach, sin
+  // relacion entre ambos hasta que se vinculan. Al vincular, el backend activa el
+  // catalogo fijo de tareas recurrentes propias de outbound (ver server.js).
+  async function _pintaOutboundLink(pid) {
+    const box = $(`pjrec-obc-${pid}`);
+    const p = _projects.find(x => x.id === pid);
+    if (!box || !p) return;
+    if (!_obcCache) {
+      try { const r = await apiFetch(`${API}/outbound-clients`); _obcCache = r.ok ? await r.json() : []; }
+      catch (_) { _obcCache = []; }
+    }
+    const box2 = $(`pjrec-obc-${pid}`); if (!box2) return; // el drawer pudo cerrarse mientras cargaba
+    const linked = p.outbound_client_id ? _obcCache.find(c => c.id === p.outbound_client_id) : null;
+    if (linked) {
+      box2.innerHTML = `<div class="pjrec__obc-linked">
+        <span class="pjrec__obc-dot"></span>
+        <span>Vinculado a <b>${esc(linked.nombre)}</b> — tracking de outbound activo</span>
+        <button type="button" class="pjfin__gofact" onclick="event.stopPropagation();ProjectsModule.outboundIrA(${p.id})">Ver en Outreach →</button>
+        <button type="button" class="pjfin__gofact" onclick="event.stopPropagation();ProjectsModule.outboundDesvincular(${p.id})">Desvincular</button>
+      </div>`;
+      return;
+    }
+    if (!_obcCache.length) {
+      box2.innerHTML = `<div class="pjfin__empty-tasks">No hay clientes outbound creados todavia en Outreach.</div>`;
+      return;
+    }
+    const opts = `<option value="">— Elegir cliente outbound —</option>` +
+      _obcCache.map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('');
+    box2.innerHTML = `<div class="pjrec__obc-link">
+      <select class="form-input" id="pjrec-obc-sel-${p.id}">${opts}</select>
+      <button type="button" class="btn btn--primary btn--sm" onclick="event.stopPropagation();ProjectsModule.outboundVincular(${p.id})">Vincular y activar tracking</button>
+    </div>
+    <span class="seq-drip-hint">Al vincular se crea de una vez el paquete de tareas recurrentes propias de outbound (metricas, Inbox, ICP, listas nuevas…) — se editan o desactivan igual que cualquier plantilla de abajo.</span>`;
+  }
+  async function outboundVincular(pid) {
+    const sel = $(`pjrec-obc-sel-${pid}`);
+    const obcId = parseInt(sel && sel.value);
+    if (!obcId) { showBanner('Elige un cliente outbound primero', 'error'); return; }
+    try {
+      const r = await apiFetch(`${API}/mgmt/projects/${pid}/outbound-link`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ outbound_client_id: obcId }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Error al vincular');
+      const p = _projects.find(x => x.id === pid); if (p) p.outbound_client_id = d.outbound_client_id;
+      showBanner(d.catalogo_creado ? `✓ Vinculado — ${d.catalogo_creado} tareas recurrentes creadas` : '✓ Vinculado', 'success');
+      await _rerenderRecurTab(pid);
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  async function outboundDesvincular(pid) {
+    if (!confirm('¿Desvincular el cliente outbound de este proyecto?\n\nLas tareas recurrentes ya creadas se quedan — se editan o borran a mano si ya no hacen falta.')) return;
+    try {
+      const r = await apiFetch(`${API}/mgmt/projects/${pid}/outbound-link`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ outbound_client_id: null }),
+      });
+      if (!r.ok) throw new Error((await r.json()).error || 'Error al desvincular');
+      const p = _projects.find(x => x.id === pid); if (p) p.outbound_client_id = null;
+      showBanner('Desvinculado', 'success');
+      await _rerenderRecurTab(pid);
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  function outboundIrA(pid) {
+    const p = _projects.find(x => x.id === pid);
+    if (p && p.outbound_client_id && typeof LeadManagerModule !== 'undefined') {
+      selectModule('leadmanagement');
+      setTimeout(() => LeadManagerModule.openClient(p.outbound_client_id), 300);
+    }
   }
 
   async function _pintaRecurTab(pid) {
@@ -12588,7 +12663,7 @@ const ProjectsModule = (() => {
     return `<div class="pjrec__tpl-row${t.activo ? '' : ' pjrec__tpl-row--off'}">
       <button type="button" class="pjrec__tpl-toggle" title="${t.activo ? 'Desactivar' : 'Activar'}" onclick="event.stopPropagation();ProjectsModule.recToggleTpl(${pid},${t.id},${!t.activo})">${t.activo ? '●' : '○'}</button>
       <div class="pjrec__tpl-body">
-        <span class="pjrec__tpl-titulo">${esc(t.titulo)}</span>
+        <span class="pjrec__tpl-titulo">${esc(t.titulo)}${t.origen === 'outbound_catalog' ? ' <span class="pjrec__tpl-badge">outbound</span>' : ''}</span>
         <span class="pjrec__tpl-meta">${esc(_FREQ_LBL[t.freq] || t.freq)}${t.responsable ? ' · ' + esc(t.responsable) : ''}</span>
       </div>
       <button type="button" class="pjfin__gofact" onclick="event.stopPropagation();ProjectsModule.recGenerarAhora(${pid},${t.id})">Generar ahora</button>
@@ -13010,7 +13085,7 @@ const ProjectsModule = (() => {
         content.innerHTML = _tabContent(p, tab, _taskCache[pid] || []);
         if (tab === 'info') setTimeout(() => _initInfoExpand(pid), 0);
         if (tab === 'financials') _pintaCobrosProyecto(pid);
-        if (tab === 'recurrencia') _pintaRecurTab(pid);
+        if (tab === 'recurrencia') { _pintaOutboundLink(pid); _pintaRecurTab(pid); }
       }
     }
   }
@@ -13772,7 +13847,8 @@ const ProjectsModule = (() => {
     onHorasFijasToggle, openProjFechas,
     openConvertToSub, convertToSub, convertToMain,
     openDetail, closeDetail, openInNewTab,
-    recNewTpl, recEditTpl, recCancelNew, recCancelEdit, recSaveTpl, recToggleTpl, recDeleteTpl, recGenerarAhora };
+    recNewTpl, recEditTpl, recCancelNew, recCancelEdit, recSaveTpl, recToggleTpl, recDeleteTpl, recGenerarAhora,
+    outboundVincular, outboundDesvincular, outboundIrA };
 })();
 
 // =================================================================

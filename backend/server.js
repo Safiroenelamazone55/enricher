@@ -2760,8 +2760,73 @@ app.patch('/api/mgmt/projects/:id/billing-cfg', requireAuth, async (req, res) =>
   }
 });
 
+// Catálogo fijo de tareas recurrentes propias de un cliente outbound — los bloques que
+// se repiten en cualquier proceso de outreach, sea cual sea el cliente. Se insertan de una
+// sola vez al vincular; después son plantillas normales — se editan/desactivan/borran
+// igual que cualquier otra en la pestaña Recurrencia del proyecto.
+const OUTBOUND_TASK_CATALOG = [
+  { titulo: 'Revisar métricas de secuencias',          freq: 'weekly',  descripcion: 'Aperturas, respuestas y aceptación de LinkedIn de la semana — detectar qué paso o mensaje está bajando el rendimiento.' },
+  { titulo: 'Revisar Inbox y respuestas pendientes',    freq: 'weekly',  descripcion: 'Triage de respuestas nuevas: marcar disposición, agendar reuniones, cerrar los que no califican.' },
+  { titulo: 'Trabajar tareas y cola de empresas',       freq: 'weekly',  descripcion: 'Ponerse al día con las tareas vencidas del task-runner y la cola de empresas por trabajar.' },
+  { titulo: 'Cargar nueva lista de prospección',        freq: 'monthly', descripcion: 'Importar y calificar el siguiente lote de empresas/contactos objetivo.' },
+  { titulo: 'Ajustar ICP y mensajes',                   freq: 'monthly', descripcion: 'Revisar el ICP, los pasos de la secuencia y las plantillas contra los resultados del mes.' },
+  { titulo: 'Revisar presupuesto de IA',                freq: 'monthly', descripcion: 'Gasto del mes en personalización/comentarios con IA contra el presupuesto configurado.' },
+];
+
 // ── Plantillas de subtareas recurrentes (project_recur_subtasks) ───
 const _RECUR_FREQS = ['weekly', 'monthly', 'quarterly'];
+
+
+// ── Vincular proyecto ↔ cliente outbound ────────────────────────────
+// El mismo cliente puede tener un proyecto en Operaciones (tareas) y un cliente outbound
+// en Outreach (secuencias) sin relación entre ambos hoy. Vincularlos activa el catálogo
+// fijo de tareas recurrentes de arriba — no crea nada más, no toca secuencias ni contactos.
+app.post('/api/mgmt/projects/:id/outbound-link', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId;
+  const obcId = (req.body || {}).outbound_client_id;
+  const cl = await pool.connect();
+  try {
+    await cl.query('BEGIN');
+    const { rows: [proj] } = await cl.query(
+      `SELECT id, outbound_client_id FROM projects WHERE id=$1 AND user_id=$2 FOR UPDATE`, [req.params.id, uid]);
+    if (!proj) { await cl.query('ROLLBACK'); return res.status(404).json({ error: 'Proyecto no encontrado' }); }
+
+    if (obcId == null) {
+      // Desvincular: solo suelta la referencia. Las tareas recurrentes ya creadas se
+      // quedan — es trabajo real que ya se programó; se editan/borran a mano si hace falta.
+      await cl.query(`UPDATE projects SET outbound_client_id=NULL, updated_at=NOW() WHERE id=$1`, [proj.id]);
+      await cl.query('COMMIT');
+      return res.json({ ok: true, outbound_client_id: null, catalogo_creado: 0 });
+    }
+
+    const { rows: [obc] } = await cl.query(
+      `SELECT id, nombre FROM outbound_clients WHERE id=$1 AND user_id=$2`, [obcId, uid]);
+    if (!obc) { await cl.query('ROLLBACK'); return res.status(404).json({ error: 'Cliente outbound no encontrado' }); }
+
+    await cl.query(`UPDATE projects SET outbound_client_id=$1, updated_at=NOW() WHERE id=$2`, [obc.id, proj.id]);
+
+    // El catálogo se aplica UNA sola vez por proyecto — si ya tiene tareas del catálogo
+    // (de una vinculación anterior), no se duplican.
+    const { rows: [ya] } = await cl.query(
+      `SELECT 1 FROM project_recur_subtasks WHERE project_id=$1 AND origen='outbound_catalog' LIMIT 1`, [proj.id]);
+    let creadas = 0;
+    if (!ya) {
+      for (const t of OUTBOUND_TASK_CATALOG) {
+        await cl.query(
+          `INSERT INTO project_recur_subtasks (user_id, project_id, titulo, descripcion, prioridad, freq, origen)
+           VALUES ($1,$2,$3,$4,'media',$5,'outbound_catalog')`,
+          [uid, proj.id, t.titulo, t.descripcion, t.freq]);
+        creadas++;
+      }
+    }
+    await cl.query('COMMIT');
+    res.json({ ok: true, outbound_client_id: obc.id, outbound_client_nombre: obc.nombre, catalogo_creado: creadas });
+  } catch (err) {
+    await cl.query('ROLLBACK').catch(() => {});
+    console.error('[projects/outbound-link]', err.message);
+    res.status(500).json({ error: 'Error al vincular el cliente outbound' });
+  } finally { cl.release(); }
+});
 
 app.get('/api/mgmt/projects/:id/recur-subtasks', requireAuth, async (req, res) => {
   try {

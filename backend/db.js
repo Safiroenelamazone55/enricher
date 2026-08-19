@@ -1011,6 +1011,11 @@ async function initDb() {
     await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS links JSONB NOT NULL DEFAULT '[]';`);
     await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS descripcion_updated_by TEXT NOT NULL DEFAULT '';`);
     await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS descripcion_updated_at TIMESTAMPTZ;`);
+    // Vínculo con el cliente de Outreach (outbound_clients): el mismo cliente puede vivir
+    // como proyecto en Operaciones y como cliente outbound en Outreach sin relación entre
+    // ambos. Al vincularlos se activa el catálogo de tareas recurrentes propias de outbound
+    // (ver POST /api/mgmt/projects/:id/outbound-link).
+    await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS outbound_client_id INTEGER REFERENCES outbound_clients(id) ON DELETE SET NULL;`);
 
     // ── Finance: comisión variable por cobro (canal + monto fijo) ─────
     await pool.query(`ALTER TABLE payments ADD COLUMN IF NOT EXISTS canal          TEXT NOT NULL DEFAULT '';`);
@@ -1498,6 +1503,9 @@ async function initDb() {
       );
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS project_recur_subtasks_proj_idx ON project_recur_subtasks (project_id);`);
+    // 'outbound_catalog' marca las que se crearon solas al vincular el cliente outbound —
+    // así no se duplican si se vuelve a vincular, y la UI puede distinguirlas de las manuales.
+    await pool.query(`ALTER TABLE project_recur_subtasks ADD COLUMN IF NOT EXISTS origen TEXT NOT NULL DEFAULT '';`);
     // Traza + idempotencia de las subtareas que generó una plantilla: una fila
     // por (plantilla, período) — sin esto se duplicaría cada vez que corre el cron.
     await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS recur_template_id INTEGER REFERENCES project_recur_subtasks(id) ON DELETE SET NULL;`);
