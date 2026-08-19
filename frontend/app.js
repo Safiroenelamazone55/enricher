@@ -25909,6 +25909,18 @@ const WaChatModule = (() => {
 
   const $$ = id => document.getElementById(id);
 
+  // El shell no tiene de dónde tomar un alto fijo (el padre no define uno), así que
+  // sin esto crece con el contenido y obliga a scrollear toda la página en vez de
+  // que el chat quepa en pantalla y scrollee solo por dentro — mismo ajuste que ya
+  // usa SlackChat con #chat-shell.
+  let _fitBound = false;
+  function _fitWa() {
+    const sh = $$('wa-shell');
+    if (!sh) return;
+    sh.style.height = Math.max(420, window.innerHeight - sh.getBoundingClientRect().top - 12) + 'px';
+    if (!_fitBound) { _fitBound = true; window.addEventListener('resize', _fitWa); }
+  }
+
   function _estado(nombre) {
     ['wa-connect', 'wa-qr', 'wa-chat'].forEach(id => {
       const el = $$(id);
@@ -25922,6 +25934,7 @@ const WaChatModule = (() => {
   }
 
   async function load() {
+    requestAnimationFrame(_fitWa);
     try {
       const r = await apiFetch(`${API}/wa/connections`);
       const rows = r.ok ? await r.json() : [];
@@ -26004,6 +26017,28 @@ const WaChatModule = (() => {
     catch (_) { return ''; }
   }
 
+  // Para la lista de chats: como el historial trae conversaciones de días distintos,
+  // mostrar solo la hora hace parecer que todo es de hoy. Mismo criterio que WhatsApp.
+  function _fmtListaFecha(ts) {
+    try {
+      const d = new Date(ts);
+      const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+      const ayer = new Date(hoy.getTime() - 86400000);
+      const semana = new Date(hoy.getTime() - 6 * 86400000);
+      if (d >= hoy) return _fmtHora(ts);
+      if (d >= ayer) return 'Ayer';
+      if (d >= semana) { const s = d.toLocaleDateString('es', { weekday: 'short' }); return s.charAt(0).toUpperCase() + s.slice(1); }
+      return d.toLocaleDateString('es', { day: '2-digit', month: '2-digit' });
+    } catch (_) { return ''; }
+  }
+
+  function _fmtSepFecha(ts) {
+    const d = new Date(ts);
+    const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+    const ayer = new Date(hoy.getTime() - 86400000);
+    return d >= hoy ? 'Hoy' : d >= ayer ? 'Ayer' : d.toLocaleDateString('es-ES', { day: 'numeric', month: 'long' });
+  }
+
   function _nombreChat(row) {
     return row.nombre || ('+' + String(row.chat_jid || '').split('@')[0]);
   }
@@ -26030,7 +26065,7 @@ const WaChatModule = (() => {
         <div class="wa-chat-item__body">
           <div class="wa-chat-item__top">
             <span class="wa-chat-item__name">${esc(_nombreChat(c))}</span>
-            <span class="wa-chat-item__time">${_fmtHora(c.ultimo_ts)}</span>
+            <span class="wa-chat-item__time">${_fmtListaFecha(c.ultimo_ts)}</span>
           </div>
           <div class="wa-chat-item__preview">${c.from_me ? 'Tú: ' : ''}${esc(c.ultimo_texto || '')}</div>
         </div>
@@ -26065,10 +26100,15 @@ const WaChatModule = (() => {
       box.innerHTML = `<div class="chat-ch-empty">Todavía no hay mensajes en este chat.</div>`;
       return;
     }
-    box.innerHTML = rows.map(m => `
-      <div class="wa-msg ${m.from_me ? 'wa-msg--out' : 'wa-msg--in'}">
+    let prevDia = '';
+    box.innerHTML = rows.map(m => {
+      const dia = new Date(m.ts).toDateString();
+      const sep = dia !== prevDia ? `<div class="chat-date-sep"><span>${_fmtSepFecha(m.ts)}</span></div>` : '';
+      prevDia = dia;
+      return `${sep}<div class="wa-msg ${m.from_me ? 'wa-msg--out' : 'wa-msg--in'}">
         <div class="wa-msg__bubble">${esc(m.texto)}<span class="wa-msg__time">${_fmtHora(m.ts)}</span></div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
     if (atBottom) box.scrollTop = box.scrollHeight;
   }
 
