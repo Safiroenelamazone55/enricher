@@ -8211,12 +8211,31 @@ app.get('/api/wa/connections/:id/chats', requireAuth, async (req, res) => {
     const own = await pool.query(`SELECT id FROM wa_connections WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId]);
     if (!own.rows.length) return res.status(404).json({ error: 'No encontrada' });
     const { rows } = await pool.query(`
-      SELECT DISTINCT ON (chat_jid) chat_jid, nombre, texto AS ultimo_texto, ts AS ultimo_ts, from_me
-        FROM wa_messages WHERE connection_id=$1
-       ORDER BY chat_jid, ts DESC`, [req.params.id]);
+      SELECT DISTINCT ON (m.chat_jid) m.chat_jid,
+             COALESCE(NULLIF(m.nombre,''), c.nombre, '') AS nombre,
+             m.texto AS ultimo_texto, m.ts AS ultimo_ts, m.from_me
+        FROM wa_messages m
+        LEFT JOIN wa_contacts c ON c.connection_id = m.connection_id AND c.jid = m.chat_jid
+       WHERE m.connection_id=$1
+       ORDER BY m.chat_jid, m.ts DESC`, [req.params.id]);
     rows.sort((a, b) => new Date(b.ultimo_ts) - new Date(a.ultimo_ts));
     res.json(rows);
   } catch (err) { console.error('[wa] chats', err.message); res.status(500).json({ error: 'Error al cargar los chats' }); }
+});
+
+// Directorio de contactos (nombre + jid) para "Nuevo chat" — independiente de si ya
+// hay conversación. ?q= filtra por nombre; sin q, trae los últimos actualizados.
+app.get('/api/wa/connections/:id/contactos', requireAuth, async (req, res) => {
+  try {
+    const own = await pool.query(`SELECT id FROM wa_connections WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId]);
+    if (!own.rows.length) return res.status(404).json({ error: 'No encontrada' });
+    const q = String(req.query.q || '').trim().slice(0, 60);
+    const { rows } = await pool.query(`
+      SELECT jid, nombre FROM wa_contacts
+       WHERE connection_id=$1 AND ($2='' OR nombre ILIKE '%'||$2||'%')
+       ORDER BY nombre ASC LIMIT 30`, [req.params.id, q]);
+    res.json(rows);
+  } catch (err) { console.error('[wa] contactos', err.message); res.status(500).json({ error: 'Error al cargar los contactos' }); }
 });
 
 app.get('/api/wa/connections/:id/chats/:jid/mensajes', requireAuth, async (req, res) => {

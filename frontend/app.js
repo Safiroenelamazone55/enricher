@@ -26037,12 +26037,12 @@ const WaChatModule = (() => {
       </div>`).join('');
   }
 
-  async function abrirChat(jid) {
+  async function abrirChat(jid, nombre) {
     _chatAct = jid;
     _pintaChats();
     const nameEl = $$('wa-main-name');
     const row = _chats.find(c => String(c.chat_jid) === String(jid));
-    if (nameEl) nameEl.textContent = row ? _nombreChat(row) : jid;
+    if (nameEl) nameEl.textContent = row ? _nombreChat(row) : (nombre || _nombreChat({ chat_jid: jid }));
     const box = $$('wa-messages');
     if (box) box.innerHTML = `<div class="clients-loading"><div class="clients-spin"></div></div>`;
     await _cargarMensajes(jid);
@@ -26090,7 +26090,70 @@ const WaChatModule = (() => {
     }
   }
 
-  return { load, conectar, desconectar, abrirChat, enviar, detener: _pararSondeos };
+  // "Nuevo chat" — busca en el directorio de contactos (gente ya guardada en el
+  // teléfono, o que ya escribió) o, si no está, permite escribir el número directo.
+  let _ncTimer = null;
+
+  function nuevoChatAbrir() {
+    if (!_conn) return;
+    document.getElementById('wa-nc-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'wa-nc-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = ev => { if (ev.target === m) nuevoChatCerrar(); };
+    m.innerHTML = `<div class="fin-pi-box wa-nc-box">
+      <div class="fin-pi-box__hd"><h3>Nuevo chat</h3><button class="fin-pi-x" onclick="WaChatModule.nuevoChatCerrar()">✕</button></div>
+      <div class="fin-pi-box__bd">
+        <input type="text" class="wa-nc-input" id="wa-nc-buscar" placeholder="Buscar por nombre…" autocomplete="off"
+               oninput="WaChatModule._nuevoChatBuscar(this.value)">
+        <div class="wa-nc-results" id="wa-nc-results">
+          <div class="chat-ch-empty">Escribe un nombre para buscar entre tus contactos de WhatsApp.</div>
+        </div>
+        <div class="wa-nc-sep">o escribe el número directo</div>
+        <div class="wa-nc-numrow">
+          <input type="text" class="wa-nc-input" id="wa-nc-numero" placeholder="Ej: 51987654321 (código de país + número)" autocomplete="off"
+                 onkeydown="if(event.key==='Enter'){WaChatModule.nuevoChatUsarNumero()}">
+          <button class="btn btn--primary btn--sm" onclick="WaChatModule.nuevoChatUsarNumero()">Iniciar</button>
+        </div>
+      </div>
+    </div>`;
+    document.body.appendChild(m);
+    setTimeout(() => document.getElementById('wa-nc-buscar')?.focus(), 30);
+  }
+
+  function nuevoChatCerrar() { document.getElementById('wa-nc-modal')?.remove(); }
+
+  function _nuevoChatBuscar(q) {
+    clearTimeout(_ncTimer);
+    _ncTimer = setTimeout(async () => {
+      const box = document.getElementById('wa-nc-results');
+      if (!box || !_conn) return;
+      try {
+        const r = await apiFetch(`${API}/wa/connections/${_conn.id}/contactos?q=${encodeURIComponent(q.trim())}`);
+        const rows = r.ok ? await r.json() : [];
+        if (!rows.length) { box.innerHTML = `<div class="chat-ch-empty">${q.trim() ? 'Sin resultados.' : 'Todavía no hay contactos sincronizados.'}</div>`; return; }
+        box.innerHTML = rows.map(c => `
+          <div class="wa-nc-row" onclick="WaChatModule.nuevoChatElegir('${esc(c.jid).replace(/'/g, "\\'")}','${esc(c.nombre).replace(/'/g, "\\'")}')">
+            <div class="wa-chat-item__av">${esc(c.nombre || '?').slice(0, 1).toUpperCase()}</div>
+            <span>${esc(c.nombre) || ('+' + c.jid.split('@')[0])}</span>
+          </div>`).join('');
+      } catch (_) { box.innerHTML = `<div class="chat-ch-empty">No se pudo buscar.</div>`; }
+    }, 250);
+  }
+
+  function nuevoChatElegir(jid, nombre) {
+    nuevoChatCerrar();
+    abrirChat(jid, nombre);
+  }
+
+  function nuevoChatUsarNumero() {
+    const input = document.getElementById('wa-nc-numero');
+    const digits = (input?.value || '').replace(/\D/g, '');
+    if (digits.length < 8) { alert('Escribe el número completo, con el código de país (ej: 51987654321).'); return; }
+    nuevoChatCerrar();
+    abrirChat(`${digits}@s.whatsapp.net`);
+  }
+
+  return { load, conectar, desconectar, abrirChat, enviar, detener: _pararSondeos,
+           nuevoChatAbrir, nuevoChatCerrar, _nuevoChatBuscar, nuevoChatElegir, nuevoChatUsarNumero };
 })();
 
 const ChatModule = (() => {

@@ -28,6 +28,40 @@ const _socks = new Map(); // connectionId → sock vivo
 
 function _sessionDir(id) { return path.join(SESSIONS_DIR, String(id)); }
 
+function _esChat1a1(jid) {
+  return !!jid && !jid.endsWith('@g.us') && jid !== 'status@broadcast';
+}
+
+// Directorio de nombres — separado de wa_messages para poder listar "con quién
+// puedo escribir" (el "Nuevo chat") sin depender de que ya exista una conversación.
+// No pisa un nombre real con uno vacío (p.ej. un mensaje de alguien sin pushName).
+async function _guardarContacto(pool, connId, jid, nombre) {
+  if (!_esChat1a1(jid) || !nombre) return;
+  try {
+    await pool.query(`
+      INSERT INTO wa_contacts (connection_id, jid, nombre, updated_at)
+      VALUES ($1,$2,$3,NOW())
+      ON CONFLICT (connection_id, jid) DO UPDATE SET nombre=EXCLUDED.nombre, updated_at=NOW()`,
+      [connId, jid, nombre]);
+  } catch (e) { console.warn('[wa] guardar contacto:', e.message); }
+}
+
+async function _guardarMensaje(pool, connId, m) {
+  const jid = m.key?.remoteJid || '';
+  if (!_esChat1a1(jid)) return; // v1: solo chats 1:1
+  const texto = m.message?.conversation || m.message?.extendedTextMessage?.text || '';
+  const nombre = m.pushName || '';
+  if (nombre) await _guardarContacto(pool, connId, jid, nombre);
+  if (!texto) return; // v1: solo texto (fotos/audio/etc. quedan fuera por ahora)
+  const ts = m.messageTimestamp ? new Date(Number(m.messageTimestamp) * 1000) : new Date();
+  try {
+    await pool.query(`
+      INSERT INTO wa_messages (connection_id, chat_jid, msg_id, from_me, nombre, texto, ts)
+      VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (connection_id, msg_id) DO NOTHING`,
+      [connId, jid, m.key.id, !!m.key.fromMe, nombre, texto, ts]);
+  } catch (e) { console.warn('[wa] guardar mensaje:', e.message); }
+}
+
 async function _connect(pool, id) {
   // Import perezoso: Baileys es pesado y solo hace falta cuando de verdad se usa esto.
   const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } =
@@ -81,22 +115,39 @@ async function _connect(pool, id) {
   });
 
   sock.ev.on('messages.upsert', async (ev) => {
-    if (ev.type !== 'notify') return; // solo mensajes nuevos en vivo, no el volcado de historial
-    for (const m of ev.messages) {
-      try {
-        const jid = m.key?.remoteJid || '';
-        if (!jid || jid.endsWith('@g.us') || jid === 'status@broadcast') continue; // v1: solo chats 1:1
-        const texto = m.message?.conversation || m.message?.extendedTextMessage?.text || '';
-        if (!texto) continue; // v1: solo texto (fotos/audio/etc. quedan fuera por ahora)
-        const nombre = m.pushName || '';
-        const ts = m.messageTimestamp ? new Date(Number(m.messageTimestamp) * 1000) : new Date();
-        await pool.query(`
-          INSERT INTO wa_messages (connection_id, chat_jid, msg_id, from_me, nombre, texto, ts)
-          VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (connection_id, msg_id) DO NOTHING`,
-          [id, jid, m.key.id, !!m.key.fromMe, nombre, texto, ts]);
-      } catch (e) { console.warn('[wa] guardar mensaje:', e.message); }
-    }
+    // 'notify' = mensajes nuevos en vivo. El volcado de historial llega aparte,
+    // por 'messaging-history.set' (abajo) — así no se procesan dos veces.
+    if (ev.type !== 'notify') return;
+    for (const m of ev.messages) await _guardarMensaje(pool, id, m);
   });
+
+  // Se dispara una vez tras conectar (puede repetirse en tandas: progress/isLatest)
+  // con lo que el teléfono ya trae: contactos guardados y mensajes recientes de cada
+  // chat. Es lo que llena "chats previos" sin que Jenny tenga que escribir primero.
+  sock.ev.on('messaging-history.set', async (ev) => {
+    try {
+      const { chats, contacts, messages } = ev || {};
+      for (const c of (contacts || [])) {
+        const nombre = c.name || c.notify || c.verifiedName || '';
+        await _guardarContacto(pool, id, c.id, nombre);
+      }
+      // Los chats de grupo traen 'name' (el asunto); en 1:1 el nombre real viene
+      // de 'contacts' arriba, no de acá — igual sirve como respaldo si faltara.
+      for (const c of (chats || [])) {
+        if (c.name) await _guardarContacto(pool, id, c.id, c.name);
+      }
+      for (const m of (messages || [])) await _guardarMensaje(pool, id, m);
+    } catch (e) { console.warn('[wa] messaging-history.set:', e.message); }
+  });
+
+  const _sincronizarContactos = async (contactos) => {
+    for (const c of (contactos || [])) {
+      const nombre = c.name || c.notify || c.verifiedName || '';
+      if (c.id) await _guardarContacto(pool, id, c.id, nombre);
+    }
+  };
+  sock.ev.on('contacts.upsert', _sincronizarContactos);
+  sock.ev.on('contacts.update', _sincronizarContactos);
 
   return sock;
 }

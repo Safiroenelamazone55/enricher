@@ -1606,6 +1606,20 @@ async function initDb() {
       );
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS wa_messages_chat_idx ON wa_messages (connection_id, chat_jid, ts);`);
+    // Directorio de nombres (contactos guardados en el teléfono + gente que ya
+    // escribió) — separado de wa_messages para poder listar "con quién puedo
+    // escribir" (el "Nuevo chat") sin depender de que ya exista una conversación.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS wa_contacts (
+        id            SERIAL      PRIMARY KEY,
+        connection_id INTEGER     NOT NULL REFERENCES wa_connections(id) ON DELETE CASCADE,
+        jid           TEXT        NOT NULL,
+        nombre        TEXT        NOT NULL DEFAULT '',
+        updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE (connection_id, jid)
+      );
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS wa_contacts_conn_idx ON wa_contacts (connection_id);`);
 
     console.log('[db] tables ready (users, verifications, batch_jobs, clients, projects, tasks, payments, team_members, workspaces, workspace_invites, chat_messages, leads, meetings, fin_config, fin_member_config, pagos_internos, opportunities, opportunity_tasks)');
   } catch (err) {
