@@ -71,7 +71,12 @@ async function _connect(pool, id) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   const { state, saveCreds } = await useMultiFileAuthState(dir);
 
-  const sock = makeWASocket({ auth: state, syncFullHistory: false });
+  // syncFullHistory:true (es el default de la librería, lo dejamos explícito) es lo
+  // que hace que WhatsApp mande los chats/contactos/mensajes recientes al vincular
+  // — sin esto la conexión queda "en blanco" aunque el teléfono sí tenga historial.
+  // No trae TODO el historial desde siempre: Baileys igual filtra el tipo de sync
+  // más pesado (HistorySyncType.FULL) por default.
+  const sock = makeWASocket({ auth: state, syncFullHistory: true });
   _socks.set(id, sock);
 
   sock.ev.on('creds.update', saveCreds);
@@ -127,6 +132,7 @@ async function _connect(pool, id) {
   sock.ev.on('messaging-history.set', async (ev) => {
     try {
       const { chats, contacts, messages } = ev || {};
+      console.log(`[wa] historial recibido (conexión ${id}): ${contacts?.length || 0} contactos, ${chats?.length || 0} chats, ${messages?.length || 0} mensajes`);
       for (const c of (contacts || [])) {
         const nombre = c.name || c.notify || c.verifiedName || '';
         await _guardarContacto(pool, id, c.id, nombre);
