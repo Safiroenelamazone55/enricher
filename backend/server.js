@@ -8052,6 +8052,9 @@ app.get('/api/slack/workspaces/:id/canales/:canal/hilo/:ts', requireAuth, async 
 });
 
 // Enviar. Con thread_ts la respuesta entra DENTRO del hilo, no suelta en el canal.
+// reply_broadcast (solo junto con thread_ts): la respuesta queda enlazada al mensaje
+// original pero se ve en el chat principal — es "responder a ESTE mensaje sin abrir el
+// hilo", distinto de "responder en hilo" (que la deja escondida hasta abrirlo).
 app.post('/api/slack/workspaces/:id/canales/:canal/mensajes', requireAuth, async (req, res) => {
   const texto = String(req.body?.texto || '').trim();
   if (!texto) return res.status(400).json({ error: 'El mensaje está vacío' });
@@ -8059,7 +8062,7 @@ app.post('/api/slack/workspaces/:id/canales/:canal/mensajes', requireAuth, async
     const w = await _slackWs(req.workspaceOwnerId, req.params.id);
     if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
     res.status(201).json(await slackSvc.enviar(w, req.params.canal, texto,
-      { thread_ts: req.body?.thread_ts }));
+      { thread_ts: req.body?.thread_ts, reply_broadcast: req.body?.reply_broadcast === true }));
   } catch (err) { res.status(400).json({ error: err.message }); }
 });
 

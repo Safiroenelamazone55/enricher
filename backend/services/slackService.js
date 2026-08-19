@@ -150,9 +150,13 @@ async function hilo(ws, canal, ts, { limit = 100 } = {}) {
 
 // thread_ts convierte el envío en una respuesta dentro del hilo, en vez de un
 // mensaje suelto en el canal.
-async function enviar(ws, canal, texto, { thread_ts } = {}) {
+// reply_broadcast: SOLO tiene efecto junto con thread_ts. Es la respuesta que Slack manda
+// "también al canal" — queda enlazada al mensaje original (thread_ts) pero se ve en el
+// chat principal en vez de escondida dentro del hilo. Sin thread_ts es un mensaje normal.
+async function enviar(ws, canal, texto, { thread_ts, reply_broadcast } = {}) {
   const d = await _call(token(ws), 'chat.postMessage',
-    { channel: canal, text: texto, thread_ts: thread_ts || undefined }, 'POST');
+    { channel: canal, text: texto, thread_ts: thread_ts || undefined,
+      reply_broadcast: (thread_ts && reply_broadcast) || undefined }, 'POST');
   return { ts: d.ts, canal: d.channel };
 }
 

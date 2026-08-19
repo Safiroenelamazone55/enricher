@@ -15230,3 +15230,11 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .slk-hilo-hd { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 9px; padding: 7px 10px; margin: -4px -4px 8px; background: var(--surface); border-bottom: 1px solid var(--border); font-size: .76rem; font-weight: 600; color: var(--text-secondary); }
 .slk-hilo-back { border: none; background: var(--surface-secondary); color: var(--text-primary); font-family: inherit; font-size: .74rem; font-weight: 600; padding: 4px 9px; border-radius: 7px; cursor: pointer; }
 .slk-hilo-back:hover { background: var(--surface-hover); }
+/* "Respondiendo a…" — reply_broadcast del chat mini (queda en el canal, no en el hilo) */
+.rchat-quote { display: flex; align-items: center; gap: 8px; margin: 0 0 6px; padding: 6px 9px; border-radius: 8px; background: var(--surface-secondary); border-left: 3px solid var(--primary); }
+.rchat-quote.hidden { display: none; }
+.rchat-quote__body { flex: 1 1 auto; min-width: 0; }
+.rchat-quote__who { font-size: .72rem; font-weight: 700; color: var(--primary); }
+.rchat-quote__txt { font-size: .74rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rchat-quote__x { flex: 0 0 auto; border: none; background: none; color: var(--text-muted); font-size: .78rem; cursor: pointer; padding: 2px 4px; line-height: 1; }
+.rchat-quote__x:hover { color: var(--text-primary); }

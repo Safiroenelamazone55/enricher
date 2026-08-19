@@ -24287,6 +24287,8 @@ const SlackChat = (() => {
   let _mAvatars  = {};
   let _mMiId     = '';
   let _mHilo     = '';   // ts RAÍZ del hilo abierto en el mini ('' = vista de canal)
+  let _mReplyTo  = null;  // { ts, quien, texto } — "responder a ESTE mensaje EN EL MISMO chat"
+                          // (reply_broadcast), distinto de abrir el hilo (_mHilo).
   let _mNoLeidos = {};
   let _mActividad = {};
   let _mTCanal   = null;
@@ -25470,6 +25472,7 @@ const SlackChat = (() => {
   // el HILO — si siguiera pidiendo el canal, a los 8s lo repintaría encima.
   async function miniAbrirHilo(ts) {
     if (!_mCanal || !ts) return;
+    _mReplyTo = null; _pintaMiniQuote();
     _pararSondeoMini();
     const box = $$('rchat-messages');
     if (box) box.innerHTML = `<div class="clients-loading"><div class="clients-spin"></div></div>`;
@@ -25514,6 +25517,31 @@ const SlackChat = (() => {
     else if (_mCanal) inp.placeholder = `Mensaje en ${_mCanal.name}`;
   }
 
+  // ── "Responder en este chat" (reply_broadcast) ─────────────────────────────
+  // Distinta de "Responder en hilo": la respuesta queda enlazada al mensaje pero se ve
+  // de inmediato en el chat principal, sin esconderse en el hilo hasta que alguien lo
+  // abra. Se lee el autor/texto del propio DOM — no hace falta guardar los mensajes
+  // aparte, y siempre está pintado cuando se puede hacer clic en "Responder".
+  function miniResponderAqui(ts) {
+    document.querySelectorAll('.slk-msgmenu').forEach(x => x.remove());
+    const el = document.querySelector(`#rchat-messages [data-ts="${ts}"]`);
+    _mReplyTo = { ts, quien: el?.querySelector('.chat-msg__who')?.innerText || 'Slack',
+                  texto: el?.querySelector('.chat-msg__txt')?.innerText || '' };
+    _pintaMiniQuote();
+    $$('rchat-input')?.focus();
+  }
+  function miniCancelarRespuesta() { _mReplyTo = null; _pintaMiniQuote(); }
+  function _pintaMiniQuote() {
+    const box = $$('rchat-quote'); if (!box) return;
+    if (!_mReplyTo) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+    box.classList.remove('hidden');
+    box.innerHTML = `<div class="rchat-quote__body">
+        <div class="rchat-quote__who">Respondiendo a ${escNom(_mReplyTo.quien)}</div>
+        <div class="rchat-quote__txt">${esc(_mReplyTo.texto).slice(0, 100)}</div>
+      </div>
+      <button class="rchat-quote__x" onclick="SlackChat.miniCancelarRespuesta()" title="Cancelar">✕</button>`;
+  }
+
   // Menu contextual del mensaje en el chat mini — version reducida del de
   // #chat-messages (sin hilos/anclar, que no tienen vista propia acá):
   // reaccionar y copiar texto, usando el workspace/canal ACTIVOS DEL MINI
@@ -25527,6 +25555,7 @@ const SlackChat = (() => {
     m.className = 'slk-msgmenu';
     m.innerHTML = '<div class="slk-mm-reacs">' + reac + '</div>'
       + '<button class="slk-mm-op" onclick="SlackChat.miniAbrirHilo(\'' + ts + '\')">Responder en hilo</button>'
+      + '<button class="slk-mm-op" onclick="SlackChat.miniResponderAqui(\'' + ts + '\')">Responder en este chat</button>'
       + '<button class="slk-mm-op" onclick="SlackChat.miniCopiar(\'' + ts + '\')">Copiar texto</button>';
     document.body.appendChild(m);
     m.style.cssText += ';position:fixed;z-index:10050;top:' + Math.min(ev.clientY, window.innerHeight - 220) + 'px;left:' + Math.min(ev.clientX, window.innerWidth - 230) + 'px';
@@ -25608,7 +25637,8 @@ const SlackChat = (() => {
     const c = _mCanales.find(x => x.id === canalId);
     if (!c) return;
     _mCanal = { id: c.id, name: _mNombreDe(c) };
-    _mHilo = '';   // volver/cambiar de canal siempre sale de la vista de hilo
+    _mHilo = '';         // volver/cambiar de canal siempre sale de la vista de hilo
+    _mReplyTo = null;    // y cancela cualquier "respondiendo a…" que quedara pendiente
     localStorage.setItem(`slk_mini_ch_${_mWsAct}`, canalId);
     if (_mNoLeidos[c.id]) {
       delete _mNoLeidos[c.id];
@@ -25738,13 +25768,21 @@ const SlackChat = (() => {
     if (!texto || !_mCanal) return;
     inp.value = '';
     const pend = _miniBurbujaPendiente(texto);
+    // Tres modos, mutuamente excluyentes: dentro del hilo abierto (_mHilo), respondiendo
+    // a un mensaje concreto pero visible en el canal (_mReplyTo → reply_broadcast), o
+    // mensaje normal. Se captura antes de limpiar por si el envío falla.
+    const replyTo = !_mHilo ? _mReplyTo : null;
+    const body = _mHilo ? { texto, thread_ts: _mHilo }
+               : replyTo ? { texto, thread_ts: replyTo.ts, reply_broadcast: true }
+               : { texto };
     try {
       const r = await apiFetch(`${API}/slack/workspaces/${_mWsAct}/canales/${_mCanal.id}/mensajes`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ texto, thread_ts: _mHilo || undefined }),
+        body: JSON.stringify(body),
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'No se pudo enviar');
+      if (replyTo) miniCancelarRespuesta();
       if (_mHilo) await _miniCargarHilo(_mHilo, false); else await miniAbrir(_mCanal.id);
     } catch (e) {
       pend?.remove();
@@ -25779,7 +25817,7 @@ const SlackChat = (() => {
            menuMsg, reaccionar, anclar, copiar, programarReunion, onPaste,
            menuCanal, verProyecto, verTareas, copiarNombre, archivarCanal, marcarNoLeido,
            seccion, menciones, _mencionar, detectarArroba,
-           miniOpen, miniLoad, miniIrA, miniAbrir, miniEnviar, miniBuscar, miniAbrirHilo, miniCerrarHilo,
+           miniOpen, miniLoad, miniIrA, miniAbrir, miniEnviar, miniBuscar, miniAbrirHilo, miniCerrarHilo, miniResponderAqui, miniCancelarRespuesta,
            miniMenuMsg, miniReaccionar, miniReaccionarPill, miniCopiar,
            miniDetener: _pararSondeoMini, refreshMiniBadge };
 })();
