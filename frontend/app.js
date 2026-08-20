@@ -11019,6 +11019,52 @@ const SlackModule = (() => {
   return { cargar, conectar, desconectar, cambiarVisibilidad };
 })();
 
+// Fila del WhatsApp de Operaciones en Configuración → Integraciones. Reusa
+// el mismo popover de visibilidad de WaChatModule (no un <select> como Slack)
+// porque ahí ya soporta niveles + miembros puntuales, no solo 3 opciones fijas.
+const IntegracionesModule = (() => {
+  let _conns = [];
+  const ETIQUETAS_VIS = { todos: 'Todos los miembros', nivel: 'Por nivel', miembros: 'Miembros específicos', solo_yo: 'Solo yo (privado)' };
+
+  async function cargarWa() {
+    const cont = document.getElementById('wa-int-list');
+    if (!cont) return;
+    try {
+      const r = await apiFetch(`${API}/wa/connections`);
+      _conns = r.ok ? await r.json() : [];
+    } catch (_) { _conns = []; }
+    pintarWa();
+  }
+
+  function pintarWa() {
+    const cont = document.getElementById('wa-int-list');
+    if (!cont) return;
+    if (!_conns.length) {
+      cont.innerHTML = `<div class="slk-empty">Todavía no hay ningún WhatsApp conectado.</div>`;
+      return;
+    }
+    cont.innerHTML = _conns.map(c => `
+      <div class="slk-row">
+        <span class="slk-dot${c.estado === 'conectado' ? ' slk-dot--on' : ''}"></span>
+        <div class="slk-row__id">
+          <div class="slk-row__nm">${esc(c.nombre || 'WhatsApp')}</div>
+          <div class="slk-row__meta">${esc(c.numero || '')}</div>
+        </div>
+        <button class="slk-vis" style="cursor:pointer" onclick="IntegracionesModule._abrirVisPop(event,${c.id})">${ETIQUETAS_VIS[c.visibilidad] || 'Solo yo (privado)'}</button>
+      </div>`).join('');
+  }
+
+  function _abrirVisPop(ev, id) {
+    const conn = _conns.find(c => c.id === id);
+    if (conn) WaChatModule.visPop(ev, id, conn);
+  }
+
+  function refrescarWa() { cargarWa(); }
+
+  return { cargarWa, refrescarWa, _abrirVisPop };
+})();
+window.IntegracionesModule = IntegracionesModule;
+
 const MeetingsModule = (() => {
   let _editId = null;
 
@@ -19725,7 +19771,7 @@ ${foot}
     const leads = _clientLeads(id);
     const byStage = {}; _ORDER.forEach(s => byStage[s] = leads.filter(l => _dealStage(l) === s).length);
     const pipe = leads.filter(l => !['ganado', 'perdido'].includes(_dealStage(l)));
-    const tabs = ['Overview', 'Leads', 'Campañas', 'Secuencias', 'Actividades', 'Respuestas', 'Reportes', 'Notas'];
+    const tabs = ['Overview', 'Leads', 'Campañas', 'Secuencias', 'Actividades', 'WhatsApp', 'Respuestas', 'Reportes', 'Notas'];
     const tabBtns = tabs.map((t, i) => `<button class="lm-ws-tab${i === 0 ? ' active' : ''}" onclick="LeadManagerModule.clientTab(this,'${t}')">${t}</button>`).join('');
     const pipeBar = _ORDER.map(s => `<div class="lm-pipe__seg lm-pipe__seg--${s}"><span class="lm-pipe__n">${byStage[s]}</span><span class="lm-pipe__l">${STAGE_LABELS[s]}</span></div>`).join('');
     const field = (l, v) => `<div class="lm-ws-field"><span class="lm-ws-field__l">${l}</span><span class="lm-ws-field__v">${v || '—'}</span></div>`;
@@ -19754,8 +19800,10 @@ ${foot}
   }
   function clientTab(btn, tab) {
     document.querySelectorAll('.lm-ws-tab').forEach(b => b.classList.toggle('active', b === btn));
+    ObcWaModule.detener(); // corta los sondeos del WhatsApp del cliente si se estaba viendo esa pestaña
     const c = _clients.find(x => x.id === _activeClient); const body = $('lm-ws-tabbody');
     if (c && body) body.innerHTML = _clientTabBody(tab, c, _clientLeads(c.id));
+    if (tab === 'WhatsApp' && c) ObcWaModule.load(c.id);
   }
   function _clientLeadRow(c) {
     const full = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || '—';
@@ -19793,6 +19841,9 @@ ${foot}
       return `<div class="lm-tab-head"><span class="lm-tab-head__c">${acts.length} actividad${acts.length !== 1 ? 'es' : ''}</span><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openActivityDrawer(null,${c.id})">＋ Registrar actividad</button></div>
         ${acts.length ? `<div class="lm-feed">${acts.map(a => _actRow(a, true)).join('')}</div>`
           : _empty('activities', 'Sin actividades para este cliente', 'Registra un touch o tarea sobre alguno de sus leads.', 'Registrar actividad', `LeadManagerModule.openActivityDrawer(null,${c.id})`)}`;
+    }
+    if (tab === 'WhatsApp') {
+      return ObcWaModule.shellHtml();
     }
     if (tab === 'Respuestas') {
       const reps = _clientActs(c.id).filter(a => a.tipo === 'respuesta');
@@ -24113,7 +24164,7 @@ const WorkspaceModule = (() => {
       .forEach(b => b.classList.toggle('on', b.dataset.sec === sec));
     document.querySelectorAll('#wsname-modal .cfg__sec')
       .forEach(s2 => { s2.hidden = s2.dataset.sec !== sec; });
-    if (sec === 'integraciones') SlackModule.cargar();
+    if (sec === 'integraciones') { SlackModule.cargar(); IntegracionesModule.cargarWa(); }
   }
 
   function closeNameModal() {
@@ -26012,13 +26063,22 @@ const WaChatModule = (() => {
     const btn = $$('wa-connect-btn');
     if (btn) { btn.disabled = true; btn.textContent = 'Conectando…'; }
     try {
-      const r = await apiFetch(`${API}/wa/connections`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nombre: 'WhatsApp de trabajo' })
-      });
-      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'No se pudo crear la conexión');
-      const { id } = await r.json();
-      _conn = { id, estado: 'esperando_qr', qr_actual: '' };
+      // Si ya existe una fila para esta conexión (se conectó y luego se desconectó
+      // sin recargar la página) hay que REACTIVARLA, no crear otra — para
+      // Operaciones da igual (nada la limita), pero para un WhatsApp por cliente
+      // outbound el índice único choca con un 409 si se intenta crear de nuevo.
+      if (_conn && _conn.id) {
+        const r = await apiFetch(`${API}/wa/connections/${_conn.id}/reconectar`, { method: 'POST' });
+        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'No se pudo reconectar');
+      } else {
+        const r = await apiFetch(`${API}/wa/connections`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nombre: 'WhatsApp de trabajo' })
+        });
+        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'No se pudo crear la conexión');
+        _conn = { id: (await r.json()).id };
+      }
+      _conn.estado = 'esperando_qr'; _conn.qr_actual = '';
       _aplicarEstado();
     } catch (e) {
       alert('Error: ' + e.message);
@@ -26032,7 +26092,10 @@ const WaChatModule = (() => {
     try {
       await apiFetch(`${API}/wa/connections/${_conn.id}/desconectar`, { method: 'POST' });
     } catch (_) { /* igual se refleja al recargar */ }
-    _conn = null; _chats = []; _chatAct = null;
+    // Se conserva _conn.id (no se pone _conn=null): conectar() lo necesita para
+    // reactivar la MISMA fila en vez de crear otra — ver comentario ahí arriba.
+    _conn.estado = 'desconectado'; _conn.numero = ''; _conn.qr_actual = '';
+    _chats = []; _chatAct = null;
     _aplicarEstado();
   }
 
@@ -26386,6 +26449,7 @@ const WaChatModule = (() => {
         _pintaBotonVis($$('wa-vis-btn'), _conn);
       }
       if (window.IntegracionesModule?.refrescarWa) window.IntegracionesModule.refrescarWa();
+      if (window.ObcWaModule?.refrescarVis) window.ObcWaModule.refrescarVis(connId);
     } catch (e) { alert('Error: ' + e.message); }
   }
 
@@ -26510,6 +26574,564 @@ const WaChatModule = (() => {
            visPop, abrirVisPop, _toggleVisSub, guardarVisibilidad, _pintaBotonVis, _cargarTeam,
            nuevoChatAbrir, nuevoChatCerrar, _nuevoChatBuscar, nuevoChatElegir, nuevoChatUsarNumero };
 })();
+window.WaChatModule = WaChatModule;
+
+// WhatsApp por cliente outbound (Outreach) — mismo mecanismo que WaChatModule
+// (Operaciones) pero UNA conexión por cliente, ids con prefijo ocwa- para no
+// chocar con #pane-mgmt-wa (que sigue en el DOM aunque esté oculto). Se
+// duplica a propósito en vez de generalizar WaChatModule: ese módulo ya tiene
+// ~40 sitios con ids fijos afinados hoy mismo y arriesgar el WhatsApp de
+// Operaciones (que ya funciona) por parametrizarlo no vale la pena. Si se
+// agrega una función nueva de WhatsApp más adelante, hay que replicarla acá
+// también — el popover de visibilidad es la única pieza que SÍ se reusa tal
+// cual (WaChatModule.visPop ya recibe connId+conn, no depende de sus ids).
+const ObcWaModule = (() => {
+  let _clientId = null;
+  let _conn     = null;
+  let _chats    = [];
+  let _chatAct  = null;
+  let _chatActGrupo = false;
+  let _pollQr   = null;
+  let _pollChat = null;
+  let _replyTo  = null;
+
+  const $$ = id => document.getElementById(id);
+
+  function shellHtml() {
+    return `<div class="ocwa-wrap">
+      <div class="wa-shell" id="ocwa-shell">
+        <div class="wa-empty-state" id="ocwa-connect">
+          <div class="wa-empty-state__box">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="wa-empty-state__icon">
+              <path d="M3 21l1.65-4.95A8.5 8.5 0 1 1 8.5 19.5L3 21z"/>
+              <path d="M8.5 12.5c0 2.5 2 4.5 4.5 4.5" stroke-linecap="round"/>
+            </svg>
+            <h3>Conectar WhatsApp de este cliente</h3>
+            <p>Vincula un número escaneando un código QR, igual que WhatsApp Web. Cada cliente outbound tiene su propio WhatsApp, separado del de Operaciones.</p>
+            <button class="btn btn--primary" onclick="ObcWaModule.conectar()" id="ocwa-connect-btn">Conectar WhatsApp</button>
+          </div>
+        </div>
+        <div class="wa-empty-state hidden" id="ocwa-qr">
+          <div class="wa-empty-state__box">
+            <h3>Escanea este código</h3>
+            <p>Abre WhatsApp en el teléfono de este cliente → Ajustes → Dispositivos vinculados → Vincular un dispositivo.</p>
+            <img id="ocwa-qr-img" class="wa-qr__img" alt="Código QR de WhatsApp">
+            <div class="wa-qr__hint" id="ocwa-qr-hint">Esperando que escanees…</div>
+          </div>
+        </div>
+        <div class="wa-chat hidden" id="ocwa-chat">
+          <aside class="wa-sidebar">
+            <div class="wa-sidebar__hdr">
+              <div class="wa-sidebar__hdr-info">
+                <span class="wa-sidebar__title">WhatsApp</span>
+                <span class="wa-sidebar__numero" id="ocwa-numero"></span>
+              </div>
+              <button class="chat-ws-compose-btn" title="Nuevo chat" onclick="ObcWaModule.nuevoChatAbrir()">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
+              </button>
+              <button class="chat-hdr-btn" id="ocwa-vis-btn" title="Quién puede ver este WhatsApp" onclick="ObcWaModule.abrirVisPop(event)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              </button>
+              <button class="chat-hdr-btn" title="Desconectar" onclick="ObcWaModule.desconectar()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
+              </button>
+            </div>
+            <div class="wa-sidebar__list" id="ocwa-chats">
+              <div class="clients-loading"><div class="clients-spin"></div></div>
+            </div>
+          </aside>
+          <div class="wa-main">
+            <header class="wa-main__header" id="ocwa-main-header">
+              <div class="wa-main__ch-info">
+                <span class="wa-main__ch-name" id="ocwa-main-name">Selecciona un chat</span>
+              </div>
+            </header>
+            <div class="wa-main__msgs" id="ocwa-messages">
+              <div class="chat-ch-empty">Elige una conversación de la izquierda</div>
+            </div>
+            <div id="ocwa-quote" class="rchat-quote hidden"></div>
+            <div class="wa-main__composer">
+              <textarea id="ocwa-input" class="chat-composer__field" rows="1"
+                placeholder="Escribe un mensaje…"
+                onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();ObcWaModule.enviar()}"
+                oninput="ChatModule.autoResize(this)"></textarea>
+              <button class="wa-clock" title="Emoji" onclick="ObcWaModule.emojiPicker(event)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+              </button>
+              <div class="wa-clock-wrap">
+                <button class="wa-clock" title="Programar envío" onclick="ObcWaModule.programarToggle(event)">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+                </button>
+                <div class="wa-sched" id="ocwa-sched" style="display:none" onclick="event.stopPropagation()">
+                  <div class="wa-sched__t">Programar envío</div>
+                  <button class="wa-sched__opt" onclick="ObcWaModule.programarPick('h1')">En 1 hora</button>
+                  <button class="wa-sched__opt" onclick="ObcWaModule.programarPick('h3')">En 3 horas</button>
+                  <button class="wa-sched__opt" onclick="ObcWaModule.programarPick('man9')">Mañana 9:00</button>
+                  <button class="wa-sched__opt" onclick="ObcWaModule.programarPick('lun9')">Lunes 9:00</button>
+                  <div class="wa-sched__custom">
+                    <input type="datetime-local" class="dle-i" id="ocwa-sched-dt" style="font-size:.74rem;padding:5px 7px">
+                    <button class="btn btn--primary btn--sm" onclick="ObcWaModule.programarPick('custom')">OK</button>
+                  </div>
+                </div>
+              </div>
+              <button class="chat-composer__send" onclick="ObcWaModule.enviar()" title="Enviar (Enter)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22 11 13 2 9l20-7z"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  function _estado(nombre) {
+    ['ocwa-connect', 'ocwa-qr', 'ocwa-chat'].forEach(id => {
+      const el = $$(id);
+      if (el) el.classList.toggle('hidden', id !== nombre);
+    });
+  }
+
+  function _pararSondeos() {
+    if (_pollQr)   { clearInterval(_pollQr);   _pollQr   = null; }
+    if (_pollChat) { clearInterval(_pollChat); _pollChat = null; }
+  }
+
+  async function load(outboundClientId) {
+    _clientId = outboundClientId;
+    try {
+      const r = await apiFetch(`${API}/wa/connections?outboundClientId=${outboundClientId}`);
+      const rows = r.ok ? await r.json() : [];
+      _conn = rows.find(c => c.estado === 'conectado')
+           || rows.find(c => c.estado === 'esperando_qr')
+           || rows[rows.length - 1] || null;
+    } catch (_) { _conn = null; }
+    _aplicarEstado();
+  }
+
+  function _aplicarEstado() {
+    _pararSondeos();
+    if (!_conn || _conn.estado === 'desconectado') {
+      _estado('ocwa-connect');
+      return;
+    }
+    if (_conn.estado === 'esperando_qr') {
+      _estado('ocwa-qr');
+      _pintaQr();
+      _pollQr = setInterval(_sondearQr, 3000);
+      return;
+    }
+    _estado('ocwa-chat');
+    const numEl = $$('ocwa-numero');
+    if (numEl) numEl.textContent = _conn.numero ? `+${_conn.numero}` : '';
+    WaChatModule._pintaBotonVis($$('ocwa-vis-btn'), _conn);
+    _cargarChats();
+    _pollChat = setInterval(() => {
+      _cargarChats(true);
+      if (_chatAct) { _cargarMensajes(_chatAct, true); _marcarLeido(_chatAct); }
+    }, 5000);
+  }
+
+  function _pintaQr() {
+    const img = $$('ocwa-qr-img');
+    if (img && _conn?.qr_actual) img.src = _conn.qr_actual;
+    const hint = $$('ocwa-qr-hint');
+    if (hint) hint.textContent = _conn?.qr_actual ? 'Esperando que escanees…' : 'Generando código…';
+  }
+
+  async function _sondearQr() {
+    if (!_conn) return;
+    try {
+      const r = await apiFetch(`${API}/wa/connections/${_conn.id}`);
+      if (!r.ok) return;
+      _conn = await r.json();
+      if (_conn.estado === 'esperando_qr') { _pintaQr(); return; }
+      _aplicarEstado();
+    } catch (_) { /* red intermitente: se reintenta en el próximo tick */ }
+  }
+
+  async function conectar() {
+    if (!_clientId) return;
+    const btn = $$('ocwa-connect-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Conectando…'; }
+    try {
+      // Solo puede haber UNA conexión por cliente (índice único en outbound_client_id):
+      // si ya existe una fila desconectada hay que reactivarla, no crear otra — crear
+      // otra siempre da 409 acá (a diferencia de Operaciones, donde nada lo limita).
+      if (_conn && _conn.id) {
+        const r = await apiFetch(`${API}/wa/connections/${_conn.id}/reconectar`, { method: 'POST' });
+        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'No se pudo reconectar');
+      } else {
+        const r = await apiFetch(`${API}/wa/connections`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nombre: 'WhatsApp de trabajo', outboundClientId: _clientId })
+        });
+        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'No se pudo crear la conexión');
+        _conn = { id: (await r.json()).id };
+      }
+      _conn.estado = 'esperando_qr'; _conn.qr_actual = '';
+      _aplicarEstado();
+    } catch (e) {
+      alert('Error: ' + e.message);
+      if (btn) { btn.disabled = false; btn.textContent = 'Conectar WhatsApp'; }
+    }
+  }
+
+  async function desconectar() {
+    if (!_conn) return;
+    if (!confirm('¿Desconectar este WhatsApp? Vas a tener que escanear un QR nuevo para volver a usarlo.')) return;
+    try {
+      await apiFetch(`${API}/wa/connections/${_conn.id}/desconectar`, { method: 'POST' });
+    } catch (_) { /* igual se refleja al recargar */ }
+    _conn.estado = 'desconectado'; _conn.numero = ''; _conn.qr_actual = '';
+    _chats = []; _chatAct = null;
+    _aplicarEstado();
+  }
+
+  function _fmtHora(ts) {
+    try { return new Date(ts).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' }); }
+    catch (_) { return ''; }
+  }
+
+  function _fmtListaFecha(ts) {
+    try {
+      const d = new Date(ts);
+      const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+      const ayer = new Date(hoy.getTime() - 86400000);
+      const semana = new Date(hoy.getTime() - 6 * 86400000);
+      if (d >= hoy) return _fmtHora(ts);
+      if (d >= ayer) return 'Ayer';
+      if (d >= semana) { const s = d.toLocaleDateString('es', { weekday: 'short' }); return s.charAt(0).toUpperCase() + s.slice(1); }
+      return d.toLocaleDateString('es', { day: '2-digit', month: '2-digit' });
+    } catch (_) { return ''; }
+  }
+
+  function _fmtSepFecha(ts) {
+    const d = new Date(ts);
+    const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+    const ayer = new Date(hoy.getTime() - 86400000);
+    return d >= hoy ? 'Hoy' : d >= ayer ? 'Ayer' : d.toLocaleDateString('es-ES', { day: 'numeric', month: 'long' });
+  }
+
+  function _nombreChat(row) {
+    if (row.nombre) return row.nombre;
+    const esGrupo = row.es_grupo || String(row.chat_jid || '').endsWith('@g.us');
+    return esGrupo ? 'Grupo sin nombre' : ('+' + String(row.chat_jid || '').split('@')[0]);
+  }
+
+  async function _cargarChats(silencioso) {
+    if (!_conn) return;
+    try {
+      const r = await apiFetch(`${API}/wa/connections/${_conn.id}/chats`);
+      _chats = r.ok ? await r.json() : [];
+    } catch (_) { if (!silencioso) _chats = []; }
+    _pintaChats();
+  }
+
+  function _pintaChats() {
+    const box = $$('ocwa-chats');
+    if (!box) return;
+    if (!_chats.length) {
+      box.innerHTML = `<div class="chat-ch-empty">Todavía no hay conversaciones.<br>Escríbele a alguien desde este número para verlo aquí.</div>`;
+      return;
+    }
+    box.innerHTML = _chats.map(c => {
+      const noLeidos = +c.no_leidos || 0;
+      const unreadCls = noLeidos ? ' unread' : '';
+      const badge = noLeidos ? `<span class="wa-chat-item__badge">${noLeidos > 99 ? '99+' : noLeidos}</span>` : '';
+      return `
+      <div class="wa-chat-item${String(c.chat_jid) === String(_chatAct) ? ' on' : ''}" onclick="ObcWaModule.abrirChat('${esc(c.chat_jid).replace(/'/g, "\\'")}')">
+        <div class="wa-chat-item__av">${c.es_grupo ? '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>' : esc(_nombreChat(c)).slice(0, 1).toUpperCase()}</div>
+        <div class="wa-chat-item__body">
+          <div class="wa-chat-item__top">
+            <span class="wa-chat-item__name${unreadCls}">${esc(_nombreChat(c))}</span>
+            <span class="wa-chat-item__time">${_fmtListaFecha(c.ultimo_ts)}</span>
+          </div>
+          <div class="wa-chat-item__top">
+            <span class="wa-chat-item__preview${unreadCls}">${c.ultimo_estado === 'programado' ? '🕑 Programado: ' : (c.from_me ? 'Tú: ' : '')}${esc(c.ultimo_texto || '')}</span>
+            ${badge}
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  async function abrirChat(jid, nombre) {
+    _chatAct = jid;
+    _replyTo = null; _pintaQuote();
+    const row = _chats.find(c => String(c.chat_jid) === String(jid));
+    if (row && +row.no_leidos) { row.no_leidos = 0; _marcarLeido(jid); }
+    _pintaChats();
+    const nameEl = $$('ocwa-main-name');
+    _chatActGrupo = row ? !!row.es_grupo : jid.endsWith('@g.us');
+    if (nameEl) nameEl.textContent = row ? _nombreChat(row) : (nombre || _nombreChat({ chat_jid: jid }));
+    const box = $$('ocwa-messages');
+    if (box) box.innerHTML = `<div class="clients-loading"><div class="clients-spin"></div></div>`;
+    await _cargarMensajes(jid);
+  }
+
+  async function _marcarLeido(jid) {
+    if (!_conn) return;
+    try { await apiFetch(`${API}/wa/connections/${_conn.id}/chats/${encodeURIComponent(jid)}/marcar-leido`, { method: 'POST' }); }
+    catch (_) { /* si falla, el próximo _cargarChats trae el número real igual */ }
+  }
+
+  async function _cargarMensajes(jid, silencioso) {
+    if (!_conn) return;
+    try {
+      const r = await apiFetch(`${API}/wa/connections/${_conn.id}/chats/${encodeURIComponent(jid)}/mensajes`);
+      const rows = r.ok ? await r.json() : [];
+      _pintaMensajes(rows);
+    } catch (_) { if (!silencioso) { const box = $$('ocwa-messages'); if (box) box.innerHTML = `<div class="chat-ch-empty">No se pudieron cargar los mensajes.</div>`; } }
+  }
+
+  function _pintaMensajes(rows) {
+    const box = $$('ocwa-messages');
+    if (!box) return;
+    const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
+    if (!rows.length) {
+      box.innerHTML = `<div class="chat-ch-empty">Todavía no hay mensajes en este chat.</div>`;
+      return;
+    }
+    let prevDia = '';
+    const rowChat = _chats.find(c => String(c.chat_jid) === String(_chatAct));
+    const contactName = rowChat ? _nombreChat(rowChat) : (document.getElementById('ocwa-main-name')?.textContent || 'Este contacto');
+    box.innerHTML = rows.map(m => {
+      const cuando = m.scheduled_at || m.ts;
+      const dia = new Date(cuando).toDateString();
+      const sep = dia !== prevDia ? `<div class="chat-date-sep"><span>${_fmtSepFecha(cuando)}</span></div>` : '';
+      prevDia = dia;
+
+      if (m.estado === 'programado' || m.estado === 'error_programado') {
+        const fecha = new Date(m.scheduled_at).toLocaleString('es-PE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+        const badge = m.estado === 'error_programado'
+          ? `⚠ No se pudo enviar (¿WhatsApp desconectado?)`
+          : `${NI('clock', 11)} Programado · saldrá el ${fecha}`;
+        const cancelBtn = m.estado === 'programado' ? `<button class="wa-msg__cancel" onclick="ObcWaModule.cancelarProgramado(${m.id})">Cancelar</button>` : '';
+        const bubbleHtml = `<div class="wa-msg__sched-badge">${badge}${cancelBtn}</div>${esc(m.texto)}`;
+        return `${sep}<div class="wa-msg wa-msg--out wa-msg--sched"><div class="wa-msg__bubble">${bubbleHtml}</div></div>`;
+      }
+
+      const quien = m.from_me ? 'Tú' : (m.nombre || 'Este contacto');
+      const remitente = (_chatActGrupo && !m.from_me && m.nombre) ? `<div class="wa-msg__sender">${esc(m.nombre)}</div>` : '';
+      const citado = m.reply_to_texto ? `<div class="wa-msg__quoted">${esc(m.reply_to_texto).slice(0, 100)}</div>` : '';
+      const msgIdJs = esc(m.msg_id).replace(/'/g, "\\'");
+      const miActualJs = esc(m.mi_reaccion || '').replace(/'/g, "\\'");
+      const actions = `<div class="wa-msg__actions">
+          <button class="wa-msg__react" title="Reaccionar" onclick="ObcWaModule.reactPop(event,'${msgIdJs}','${miActualJs}')">🙂</button>
+          <button class="wa-msg__reply" title="Responder a este mensaje" onclick="ObcWaModule.responderA('${msgIdJs}','${esc(quien).replace(/'/g, "\\'")}','${esc(m.texto).replace(/'/g, "\\'").replace(/\n/g, ' ')}')">${NI('responder', 13)}</button>
+        </div>`;
+      const reacBits = [];
+      if (m.su_reaccion) reacBits.push(`<span class="slk-reac" title="Su reacción">${esc(m.su_reaccion)} ${esc(contactName)}</span>`);
+      if (m.mi_reaccion) reacBits.push(`<span class="slk-reac mine" title="Tu reacción — clic para quitar" onclick="event.stopPropagation();ObcWaModule.reaccionar('${msgIdJs}','')">${esc(m.mi_reaccion)} Tú</span>`);
+      const reacHtml = reacBits.length ? `<div class="wa-msg__reactions">${reacBits.join('')}</div>` : '';
+      const bubbleHtml = `${actions}${remitente}${citado}${esc(m.texto)}<span class="wa-msg__time">${_fmtHora(m.ts)}</span>${reacHtml}`;
+      return `${sep}<div class="wa-msg ${m.from_me ? 'wa-msg--out' : 'wa-msg--in'}"><div class="wa-msg__bubble">${bubbleHtml}</div></div>`;
+    }).join('');
+    if (atBottom) box.scrollTop = box.scrollHeight;
+  }
+
+  function responderA(msgId, quien, texto) {
+    _replyTo = { msg_id: msgId, quien, texto };
+    _pintaQuote();
+    $$('ocwa-input')?.focus();
+  }
+  function cancelarRespuesta() { _replyTo = null; _pintaQuote(); }
+  function _pintaQuote() {
+    const box = $$('ocwa-quote'); if (!box) return;
+    if (!_replyTo) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+    box.classList.remove('hidden');
+    box.innerHTML = `<div class="rchat-quote__body">
+        <div class="rchat-quote__who">Respondiendo a ${esc(_replyTo.quien)}</div>
+        <div class="rchat-quote__txt">${esc(_replyTo.texto).slice(0, 100)}</div>
+      </div>
+      <button class="rchat-quote__x" onclick="ObcWaModule.cancelarRespuesta()" title="Cancelar">✕</button>`;
+  }
+
+  async function enviar(scheduledAt) {
+    const input = $$('ocwa-input');
+    const texto = (input?.value || '').trim();
+    if (!texto || !_conn || !_chatAct) return;
+    const respondeA = _replyTo?.msg_id;
+    input.value = ''; ChatModule.autoResize(input);
+    _replyTo = null; _pintaQuote();
+    try {
+      const r = await apiFetch(`${API}/wa/connections/${_conn.id}/chats/${encodeURIComponent(_chatAct)}/mensajes`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ texto, respondeA, scheduledAt })
+      });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'No se pudo enviar');
+      await _cargarMensajes(_chatAct, true);
+      await _cargarChats(true);
+    } catch (e) {
+      alert('Error: ' + e.message);
+      input.value = texto;
+    }
+  }
+
+  function programarToggle(ev) {
+    if (ev) ev.stopPropagation();
+    const p = $$('ocwa-sched'); if (!p) return;
+    const show = p.style.display === 'none';
+    p.style.display = show ? '' : 'none';
+    if (show) {
+      const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0);
+      const pad = n => String(n).padStart(2, '0');
+      const inp = $$('ocwa-sched-dt');
+      if (inp && !inp.value) inp.value = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      const close = e => { if (!p.contains(e.target)) { p.style.display = 'none'; document.removeEventListener('click', close); } };
+      setTimeout(() => document.addEventListener('click', close), 0);
+    }
+  }
+  function programarPick(kind) {
+    let d = new Date();
+    if (kind === 'h1') d = new Date(Date.now() + 60 * 60 * 1000);
+    else if (kind === 'h3') d = new Date(Date.now() + 3 * 60 * 60 * 1000);
+    else if (kind === 'man9') { d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0); }
+    else if (kind === 'lun9') { const add = ((8 - d.getDay()) % 7) || 7; d.setDate(d.getDate() + add); d.setHours(9, 0, 0, 0); }
+    else if (kind === 'custom') {
+      const v = $$('ocwa-sched-dt')?.value;
+      if (!v) return;
+      d = new Date(v);
+      if (isNaN(d) || d.getTime() < Date.now() + 60 * 1000) { alert('Elige una fecha futura.'); return; }
+    }
+    const p = $$('ocwa-sched'); if (p) p.style.display = 'none';
+    enviar(d.toISOString());
+  }
+
+  async function cancelarProgramado(rowId) {
+    if (!_conn) return;
+    try {
+      const r = await apiFetch(`${API}/wa/connections/${_conn.id}/scheduled/${rowId}`, { method: 'DELETE' });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'No se pudo cancelar');
+      await _cargarMensajes(_chatAct, true);
+      await _cargarChats(true);
+    } catch (e) { alert('Error: ' + e.message); }
+  }
+
+  // El popover en sí vive en WaChatModule (ya recibe connId+conn, no depende
+  // de sus ids fijos) — acá solo se abre con la conexión de ESTE cliente y,
+  // al guardar, WaChatModule avisa de vuelta para repintar el botón acá.
+  function abrirVisPop(ev) {
+    if (!_conn) return;
+    WaChatModule.visPop(ev, _conn.id, _conn);
+  }
+  async function refrescarVis(connId) {
+    if (!_conn || _conn.id !== connId) return;
+    try {
+      const r = await apiFetch(`${API}/wa/connections/${_conn.id}`);
+      if (r.ok) _conn = await r.json();
+    } catch (_) {}
+    WaChatModule._pintaBotonVis($$('ocwa-vis-btn'), _conn);
+  }
+
+  const _REAC_RAPIDAS = ['👍', '❤️', '😂', '🎉', '✅', '🙏'];
+  function reactPop(ev, msgId, miActual) {
+    ev.stopPropagation();
+    document.querySelectorAll('.wa-react-pop').forEach(x => x.remove());
+    const pop = document.createElement('div');
+    pop.className = 'wa-react-pop slk-msgmenu';
+    pop.innerHTML = '<div class="slk-mm-reacs">' + _REAC_RAPIDAS.map(e => {
+      const mine = e === miActual;
+      const val = mine ? '' : e;
+      return `<button class="slk-mm-reac${mine ? ' mine' : ''}" title="${mine ? 'Quitar' : ''}" onclick="ObcWaModule.reaccionar('${msgId}','${val}')">${e}</button>`;
+    }).join('') + '</div>';
+    document.body.appendChild(pop);
+    const r = ev.currentTarget.getBoundingClientRect();
+    pop.style.cssText += `;position:fixed;z-index:10050;top:${Math.max(8, r.top - 44)}px;left:${Math.min(r.left, window.innerWidth - 210)}px`;
+    setTimeout(() => document.addEventListener('click', function o(e2) { if (!pop.contains(e2.target)) { pop.remove(); document.removeEventListener('click', o); } }), 0);
+  }
+  async function reaccionar(msgId, emoji) {
+    document.querySelectorAll('.wa-react-pop').forEach(x => x.remove());
+    if (!_conn || !_chatAct) return;
+    try {
+      const r = await apiFetch(`${API}/wa/connections/${_conn.id}/chats/${encodeURIComponent(_chatAct)}/mensajes/${encodeURIComponent(msgId)}/reaccion`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ emoji })
+      });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'No se pudo reaccionar');
+      await _cargarMensajes(_chatAct, true);
+    } catch (e) { alert('Error: ' + e.message); }
+  }
+
+  const _EMOJIS_COMPOSER = ['👍', '🙏', '🔥', '✅', '❤️', '😂', '🎉', '👀', '💯', '🚀', '😍', '😅', '🤝', '💪', '👏', '⭐', '😎', '🤔', '😢', '😡'];
+  function emojiPicker(ev) {
+    ev.stopPropagation();
+    document.querySelectorAll('.slk-emoji-pop').forEach(x => x.remove());
+    const pop = document.createElement('div');
+    pop.className = 'slk-emoji-pop';
+    pop.innerHTML = _EMOJIS_COMPOSER.map(e => `<button onclick="ObcWaModule._emojiIns('${e}')">${e}</button>`).join('');
+    const r = ev.currentTarget.getBoundingClientRect();
+    document.body.appendChild(pop);
+    pop.style.cssText += `;position:fixed;z-index:10050;bottom:${window.innerHeight - r.top + 6}px;left:${Math.min(r.left, window.innerWidth - 240)}px`;
+    setTimeout(() => document.addEventListener('click', function o(e2) { if (!pop.contains(e2.target)) { pop.remove(); document.removeEventListener('click', o); } }), 0);
+  }
+  function _emojiIns(e) {
+    const inp = $$('ocwa-input'); if (!inp) return;
+    const ini = inp.selectionStart, fin = inp.selectionEnd;
+    inp.value = inp.value.slice(0, ini) + e + inp.value.slice(fin);
+    inp.focus(); inp.setSelectionRange(ini + e.length, ini + e.length);
+    ChatModule.autoResize(inp);
+    document.querySelectorAll('.slk-emoji-pop').forEach(x => x.remove());
+  }
+
+  let _ncTimer = null;
+  function nuevoChatAbrir() {
+    if (!_conn) return;
+    document.getElementById('ocwa-nc-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'ocwa-nc-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = ev => { if (ev.target === m) nuevoChatCerrar(); };
+    m.innerHTML = `<div class="fin-pi-box wa-nc-box">
+      <div class="fin-pi-box__hd"><h3>Nuevo chat</h3><button class="fin-pi-x" onclick="ObcWaModule.nuevoChatCerrar()">✕</button></div>
+      <div class="fin-pi-box__bd">
+        <input type="text" class="wa-nc-input" id="ocwa-nc-buscar" placeholder="Buscar por nombre…" autocomplete="off"
+               oninput="ObcWaModule._nuevoChatBuscar(this.value)">
+        <div class="wa-nc-results" id="ocwa-nc-results">
+          <div class="chat-ch-empty">Escribe un nombre para buscar entre los contactos de este WhatsApp.</div>
+        </div>
+        <div class="wa-nc-sep">o escribe el número directo</div>
+        <div class="wa-nc-numrow">
+          <input type="text" class="wa-nc-input" id="ocwa-nc-numero" placeholder="Ej: 51987654321 (código de país + número)" autocomplete="off"
+                 onkeydown="if(event.key==='Enter'){ObcWaModule.nuevoChatUsarNumero()}">
+          <button class="btn btn--primary btn--sm" onclick="ObcWaModule.nuevoChatUsarNumero()">Iniciar</button>
+        </div>
+      </div>
+    </div>`;
+    document.body.appendChild(m);
+    setTimeout(() => document.getElementById('ocwa-nc-buscar')?.focus(), 30);
+  }
+  function nuevoChatCerrar() { document.getElementById('ocwa-nc-modal')?.remove(); }
+  function _nuevoChatBuscar(q) {
+    clearTimeout(_ncTimer);
+    _ncTimer = setTimeout(async () => {
+      const box = document.getElementById('ocwa-nc-results');
+      if (!box || !_conn) return;
+      try {
+        const r = await apiFetch(`${API}/wa/connections/${_conn.id}/contactos?q=${encodeURIComponent(q.trim())}`);
+        const rows = r.ok ? await r.json() : [];
+        if (!rows.length) { box.innerHTML = `<div class="chat-ch-empty">${q.trim() ? 'Sin resultados.' : 'Todavía no hay contactos sincronizados.'}</div>`; return; }
+        box.innerHTML = rows.map(c => `
+          <div class="wa-nc-row" onclick="ObcWaModule.nuevoChatElegir('${esc(c.jid).replace(/'/g, "\\'")}','${esc(c.nombre).replace(/'/g, "\\'")}')">
+            <div class="wa-chat-item__av">${esc(c.nombre || '?').slice(0, 1).toUpperCase()}</div>
+            <span>${esc(c.nombre) || ('+' + c.jid.split('@')[0])}</span>
+          </div>`).join('');
+      } catch (_) { box.innerHTML = `<div class="chat-ch-empty">No se pudo buscar.</div>`; }
+    }, 250);
+  }
+  function nuevoChatElegir(jid, nombre) { nuevoChatCerrar(); abrirChat(jid, nombre); }
+  function nuevoChatUsarNumero() {
+    const input = document.getElementById('ocwa-nc-numero');
+    const digits = (input?.value || '').replace(/\D/g, '');
+    if (digits.length < 8) { alert('Escribe el número completo, con el código de país (ej: 51987654321).'); return; }
+    nuevoChatCerrar();
+    abrirChat(`${digits}@s.whatsapp.net`);
+  }
+
+  return { shellHtml, load, conectar, desconectar, abrirChat, enviar, detener: _pararSondeos,
+           responderA, cancelarRespuesta,
+           programarToggle, programarPick, cancelarProgramado,
+           reactPop, reaccionar, emojiPicker, _emojiIns,
+           abrirVisPop, refrescarVis,
+           nuevoChatAbrir, nuevoChatCerrar, _nuevoChatBuscar, nuevoChatElegir, nuevoChatUsarNumero };
+})();
+window.ObcWaModule = ObcWaModule;
 
 const ChatModule = (() => {
   let _socket    = null;

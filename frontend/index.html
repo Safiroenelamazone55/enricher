@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260820g"/>
+  <link rel="stylesheet" href="style.css?v=20260820h"/>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -2468,6 +2468,14 @@
         <b>User OAuth Token</b>. Se guarda cifrado y se comprueba contra Slack antes de aceptarlo.
       </p>
     </div>
+
+    <div class="slk-block">
+      <div class="slk-block__hd">
+        <h3 class="slk-block__t">WhatsApp conectado</h3>
+        <span class="slk-block__sub">El de Operaciones; conéctalo desde la sección WhatsApp</span>
+      </div>
+      <div id="wa-int-list" class="slk-list"><div class="slk-empty">Cargando…</div></div>
+    </div>
       </section>
     </div>
   </div>
@@ -2760,7 +2768,7 @@
 })();
 </script>
 
-<script src="app.js?v=20260820f"></script>
+<script src="app.js?v=20260820i"></script>
 <div id="task-quick-edit" style="display:none;position:fixed;z-index:9999"></div>
 </body>
 </html>
