@@ -65,13 +65,29 @@ async function _guardarContacto(pool, sock, connId, jid, nombre) {
   } catch (e) { console.warn('[wa] guardar contacto:', e.message); }
 }
 
+// El "chats[].name" que trae el volcado de historial NO siempre llega para todos los
+// grupos (varios quedan sin nombre pase lo que pase). sock.groupMetadata(jid) SÍ lo pide
+// directo a WhatsApp — más lento pero confiable. Se cachea en memoria por proceso para
+// no pedirlo de nuevo en cada mensaje del mismo grupo.
+const _gruposConsultados = new Set();
+async function _asegurarNombreGrupo(pool, sock, connId, jid) {
+  const clave = `${connId}:${jid}`;
+  if (_gruposConsultados.has(clave)) return;
+  _gruposConsultados.add(clave);
+  try {
+    const meta = await sock.groupMetadata(jid);
+    if (meta?.subject) await _guardarContacto(pool, sock, connId, jid, meta.subject);
+  } catch (e) { console.warn(`[wa] groupMetadata ${jid}:`, e.message); }
+}
+
 async function _guardarMensaje(pool, sock, connId, m) {
   let jid = m.key?.remoteJid || '';
   if (!_esChatValido(jid)) return;
   jid = await _resolverJid(sock, jid);
+  if (jid.endsWith('@g.us')) _asegurarNombreGrupo(pool, sock, connId, jid).catch(() => {});
   const texto = m.message?.conversation || m.message?.extendedTextMessage?.text || '';
   // En grupos pushName es quien mandó ESE mensaje puntual, no el grupo — el nombre del
-  // grupo en sí llega aparte por 'chats' (ver messaging-history.set) y no se pisa acá.
+  // grupo en sí se pide aparte con groupMetadata (arriba), no se pisa acá.
   const nombre = (!jid.endsWith('@g.us') && m.pushName) ? m.pushName : '';
   if (nombre) await _guardarContacto(pool, sock, connId, jid, nombre);
   if (!texto) return; // v1: solo texto (fotos/audio/etc. quedan fuera por ahora)
@@ -115,6 +131,20 @@ async function _normalizarLid(pool, sock, connId) {
   } catch (e) { console.warn('[wa] normalizarLid:', e.message); }
 }
 
+// Grupos que ya tienen mensajes guardados pero se quedaron sin nombre (el volcado de
+// historial no siempre lo trae) — se completan pidiéndolo directo a WhatsApp.
+async function _backfillNombresGrupo(pool, sock, connId) {
+  try {
+    const { rows } = await pool.query(`
+      SELECT DISTINCT m.chat_jid FROM wa_messages m
+      LEFT JOIN wa_contacts c ON c.connection_id = m.connection_id AND c.jid = m.chat_jid
+       WHERE m.connection_id=$1 AND m.chat_jid LIKE '%@g.us' AND COALESCE(c.nombre,'') = ''`,
+      [connId]);
+    for (const { chat_jid } of rows) await _asegurarNombreGrupo(pool, sock, connId, chat_jid);
+    if (rows.length) console.log(`[wa] conexión ${connId}: ${rows.length} grupo(s) revisados para completar nombre`);
+  } catch (e) { console.warn('[wa] backfillNombresGrupo:', e.message); }
+}
+
 async function _connect(pool, id) {
   // Import perezoso: Baileys es pesado y solo hace falta cuando de verdad se usa esto.
   const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } =
@@ -151,6 +181,7 @@ async function _connect(pool, id) {
           [numero, id]);
         console.log(`[wa] conexión ${id} vinculada (${numero})`);
         _normalizarLid(pool, sock, id).catch(e => console.warn('[wa] normalizarLid:', e.message));
+        _backfillNombresGrupo(pool, sock, id).catch(e => console.warn('[wa] backfillNombresGrupo:', e.message));
       }
       if (connection === 'close') {
         _socks.delete(id);
