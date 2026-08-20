@@ -5410,7 +5410,7 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
   border-radius: 7px; padding: 6px 10px; font-size: 13px; color: #6C6862; cursor: pointer;
 }
 #rchat-channels .chat-ch:hover { background: rgba(0,0,0,.035) !important; color: #1F1D1B; }
-#rchat-channels .chat-ch.active { background: #EAE7E2 !important; color: #1F1D1B; font-weight: 600; }
+#rchat-channels .chat-ch.active { background: #fff !important; color: #1F1D1B; font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.06) !important; }
 #rchat-channels .chat-ch__hash { color: #B4AFA8; flex-shrink: 0; font-size: 12.5px; width: 16px; text-align: center; }
 #rchat-channels .chat-ch__av { width: 20px; height: 20px; border-radius: 5px; flex-shrink: 0; background: #F1EFEB; object-fit: cover; }
 #rchat-channels .chat-ch__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -5418,7 +5418,7 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 #rchat-channels .chat-ch__n {
   flex-shrink: 0; min-width: 17px; height: 17px; padding: 0 5px;
   display: flex; align-items: center; justify-content: center;
-  background: #FF3B30; color: #fff; border-radius: 999px;
+  background: #474785; color: #fff; border-radius: 4px;
   font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums;
 }
 
@@ -5430,7 +5430,7 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 #rchat-messages .chat-msg__hd { display: flex; align-items: baseline; gap: 6px; }
 #rchat-messages .chat-msg__who { font-size: 12.5px; font-weight: 600; color: #1F1D1B; }
 #rchat-messages .chat-msg__t { font-size: 10.5px; color: #B4AFA8; }
-#rchat-messages .chat-msg__txt { font-size: 12.8px; line-height: 1.45; color: #3D3A36; margin-top: 1px; overflow-wrap: anywhere; }
+#rchat-messages .chat-msg__txt { font-size: 12.8px; line-height: 1.45; color: #262626; margin-top: 1px; overflow-wrap: anywhere; }
 #rchat-messages .chat-msg__txt img { max-width: 100%; height: auto; }
 #rchat-messages .chat-msg__txt code { background: #F1EFEB; border-radius: 4px; padding: 1px 4px; font-size: 11.5px; }
 #rchat-messages .chat-daysep { display: flex; align-items: center; gap: 8px; margin: 10px 2px 6px; }
@@ -5510,39 +5510,42 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
    FULL CHAT — Shell · Sidebar · Main · Composer · Messages
    ═══════════════════════════════════════════════════════════ */
 .pane--chat { padding: 0 !important; overflow: hidden; height: 100%; }
+/* Tipografía estilo Zulip, acotada al chat de Slack (pestaña completa + panel
+   flotante) — el resto de Nova sigue con su fuente de siempre. */
+#pane-mgmt-chat, #rchat { font-family: 'Source Sans 3', var(--font); }
 .chat-shell { display: flex; height: 100%; overflow: hidden; }
 
 /* ── Sidebar ── */
 .chat-sidebar {
   width: 262px; min-width: 262px; flex-shrink: 0;
   display: flex; flex-direction: column;
-  background: #FAF8F5; border-right: 1px solid #EAE7E2; overflow: hidden;
+  background: #F0F0F0; border-right: 1px solid #E3E3E3; overflow: hidden;
 }
 
 /* Workspace header */
 .chat-sidebar__ws-hdr {
   display: flex; align-items: center; gap: 8px;
   padding: 0 12px; height: 42px;
-  border-bottom: 1px solid #EAE7E2; flex-shrink: 0;
+  border-bottom: 1px solid #E3E3E3; flex-shrink: 0;
 }
 .chat-ws-name { flex: 1; font-size: .9rem; font-weight: 800; color: #1F1D1B; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.chat-ws-online { width: 9px; height: 9px; border-radius: 50%; background: #62c462; box-shadow: 0 0 0 2px #FAF8F5; flex-shrink: 0; }
+.chat-ws-online { width: 9px; height: 9px; border-radius: 50%; background: #62c462; box-shadow: 0 0 0 2px #F0F0F0; flex-shrink: 0; }
 .chat-ws-compose-btn {
   width: 28px; height: 28px; border-radius: 7px;
-  border: 1px solid #EAE7E2; background: #fff;
+  border: 1px solid #E3E3E3; background: #fff;
   display: flex; align-items: center; justify-content: center;
   cursor: pointer; color: #6C6862; flex-shrink: 0; transition: background .1s, color .1s;
 }
-.chat-ws-compose-btn:hover { background: #F1EFEB; color: #1F1D1B; }
+.chat-ws-compose-btn:hover { background: #E7E7E7; color: #1F1D1B; }
 
 /* Search */
 .chat-sidebar__search-bar { padding: 8px 10px; flex-shrink: 0; }
 .chat-sidebar__search-inner {
   display: flex; align-items: center; gap: 7px;
-  background: #F1EFEB; border: 1.5px solid transparent;
+  background: #fff; border: 1.5px solid #E3E3E3;
   border-radius: 8px; padding: 6px 10px; transition: border-color .15s, background .15s;
 }
-.chat-sidebar__search-inner:focus-within { background: #fff; border-color: #DAD5CE; }
+.chat-sidebar__search-inner:focus-within { background: #fff; border-color: #0088CC; }
 .chat-sidebar__search-inner svg { color: #B4AFA8; flex-shrink: 0; }
 .chat-sidebar__search { border: none; background: none; outline: none; font-size: .8rem; font-family: inherit; color: var(--text); width: 100%; }
 .chat-sidebar__search::placeholder { color: #B4AFA8; }
@@ -5700,7 +5703,7 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
   transition: background .12s, transform .1s;
   box-shadow: 0 2px 6px rgba(0,122,255,.30); flex-shrink: 0;
 }
-.chat-composer__send:hover { background: #E07E1A; transform: scale(1.06); }
+.chat-composer__send:hover { background: #0062CC; transform: scale(1.06); }
 .chat-composer__send:active { transform: scale(.92); }
 .chat-composer__send:disabled { background: #EAE7E2; box-shadow: none; transform: none; cursor: default; }
 
@@ -14948,12 +14951,12 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .chat-shell { display: flex; }
 .chat-rail {
   width: 62px; flex-shrink: 0; display: flex; flex-direction: column; align-items: center;
-  gap: 7px; padding: 12px 0; background: #F1EFEB; border-right: 1px solid #E7E3DD;
+  gap: 7px; padding: 12px 0; background: #F0F0F0; border-right: 1px solid #E3E3E3;
 }
 .chat-rail__b { position: relative; width: 38px; height: 38px; padding: 0; border: none; background: none; cursor: pointer; border-radius: 11px; }
 .chat-rail__ico {
   display: flex; align-items: center; justify-content: center; width: 38px; height: 38px;
-  border-radius: 11px; background: #FFFFFF; border: 1px solid #E7E3DD;
+  border-radius: 11px; background: #FFFFFF; border: 1px solid #E3E3E3;
   font-size: 15px; font-weight: 600; color: #6C6862; transition: border-radius .14s, background .14s, color .14s;
 }
 .chat-rail__b:hover .chat-rail__ico { border-radius: 9px; color: #1F1D1B; }
@@ -14984,7 +14987,7 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .chat-rail__sec.on { background: #007AFF; color: #fff; }
 .chat-rail__dot {
   position: absolute; top: 4px; right: 5px; width: 8px; height: 8px; border-radius: 50%;
-  background: #FF3B30; border: 2px solid #F1EFEB;
+  background: #FF3B30; border: 2px solid #F0F0F0;
 }
 .chat-rail__sec.on .chat-rail__dot { border-color: #007AFF; }
 /* Título de la sección, arriba de la lista lateral */
@@ -14995,10 +14998,10 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 /* ── Mensajes de Slack ──────────────────────────────────────────────────────── */
 .slk-men { color: #007AFF; background: #EBF4FF; border-radius: 4px; padding: 0 3px; font-weight: 500; }
 .slk-reacs { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
-.slk-reac { font-size: 11.5px; color: #6C6862; background: #F1EFEB; border: 1px solid #E7E3DD; border-radius: 999px; padding: 1px 7px; cursor: pointer; transition: background .12s, border-color .12s; }
-.slk-reac:hover { background: #E7E3DD; }
-.slk-reac.mine { background: #DCEEFF; border-color: #A9D2FF; color: #0062CC; }
-.slk-reac.mine:hover { background: #CBE4FF; }
+.slk-reac { font-size: 11.5px; color: #33404D; background: #fff; border: 1px solid #E0E0E0; border-radius: 999px; padding: 2.5px 8px; cursor: pointer; transition: background .12s, border-color .12s; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+.slk-reac:hover { background: #F5F5F5; }
+.slk-reac.mine { background: #EAF3FC; border-color: #A9D2FF; color: #0062CC; }
+.slk-reac.mine:hover { background: #DCEEFF; }
 .slk-thread { display: inline-block; margin-top: 5px; font: inherit; font-size: 12px; font-weight: 500; color: #007AFF; background: none; border: none; padding: 0; cursor: pointer; }
 .slk-thread:hover { text-decoration: underline; }
 .slk-file { display: inline-block; font-size: 12px; color: #6C6862; margin-top: 4px; text-decoration: none; }
@@ -15071,7 +15074,7 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
   border-radius: 7px; padding: 5px 9px; font-size: 13.5px; color: #6C6862; cursor: pointer;
 }
 #chat-channels .chat-ch:hover { background: rgba(0,0,0,.035) !important; color: #1F1D1B; }
-#chat-channels .chat-ch.active { background: #EAE7E2 !important; color: #1F1D1B; font-weight: 600; }
+#chat-channels .chat-ch.active { background: #fff !important; color: #1F1D1B; font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.06) !important; }
 #chat-channels .chat-ch__hash { color: #B4AFA8; flex-shrink: 0; font-size: 13px; }
 #chat-channels .chat-ch__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #chat-channels .chat-ch-slabel {
@@ -15092,7 +15095,7 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 #chat-messages .chat-msg__who { font-size: 13.5px; font-weight: 600; color: #1F1D1B; }
 #chat-messages .chat-msg__t { font-size: 11px; color: #B4AFA8; }
 #chat-messages .chat-msg__txt {
-  font-size: 13.5px; line-height: 1.5; color: #3D3A36; margin-top: 1px;
+  font-size: 13.5px; line-height: 1.5; color: #262626; margin-top: 1px;
   overflow-wrap: anywhere;
 }
 #chat-messages .chat-msg__txt img { max-width: 100%; height: auto; }
@@ -15106,8 +15109,8 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .chat-rail__n {
   position: absolute; top: -4px; right: -5px; min-width: 18px; height: 18px;
   display: flex; align-items: center; justify-content: center; padding: 0 5px;
-  background: #FF3B30; color: #fff; border: 2px solid #F1EFEB;
-  border-radius: 999px; font-size: 10.5px; font-weight: 700; line-height: 1;
+  background: #474785; color: #fff; border: 2px solid #F0F0F0;
+  border-radius: 4px; font-size: 10.5px; font-weight: 700; line-height: 1;
   font-variant-numeric: tabular-nums;
 }
 /* Canal con mensajes sin leer: nombre en negrita y su propio contador */
@@ -15115,7 +15118,7 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 #chat-channels .chat-ch__n {
   flex-shrink: 0; min-width: 18px; height: 18px; padding: 0 5px;
   display: flex; align-items: center; justify-content: center;
-  background: #FF3B30; color: #fff; border-radius: 999px;
+  background: #474785; color: #fff; border-radius: 4px;
   font-size: 10.5px; font-weight: 700; font-variant-numeric: tabular-nums;
 }
 #chat-channels .chat-ch__av { width: 20px; height: 20px; border-radius: 5px; flex-shrink: 0; background: #F1EFEB; }
@@ -15126,7 +15129,7 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
    regla entera, por eso salian con la fuente de la interfaz. */
 .slk-emoji, .slk-reac, .slk-mm-reac, .slk-emoji-pop button,
 #chat-messages .chat-msg__txt {
-  font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif;
+  font-family: 'Source Sans 3', 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif;
 }
 
 /* ── Menu contextual del mensaje (clic derecho) — compacto y prolijo,
