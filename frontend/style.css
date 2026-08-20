@@ -15371,6 +15371,17 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .wa-nc-numrow { display: flex; gap: 8px; }
 .wa-nc-numrow .wa-nc-input { flex: 1; }
 
+/* "Quién puede ver este WhatsApp" — popover compartido entre el panel y la fila
+   de Integraciones en Configuración. */
+.wa-vis-pop { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 10px 34px rgba(0,0,0,.16); padding: 10px; width: 240px; display: flex; flex-direction: column; gap: 2px; }
+.wa-vis-pop__t { font-size: .72rem; font-weight: 700; color: var(--text-muted); padding: 2px 4px 6px; }
+.wa-vis-opt { display: flex; align-items: center; gap: 7px; font-size: .82rem; color: var(--text-primary); padding: 5px 4px; border-radius: 6px; cursor: pointer; }
+.wa-vis-opt:hover { background: var(--surface-hover); }
+.wa-vis-sub { display: flex; flex-direction: column; gap: 2px; margin: 2px 0 2px 22px; padding: 4px 0 4px 8px; border-left: 2px solid var(--border); }
+.wa-vis-sub__item { display: flex; align-items: center; gap: 6px; font-size: .78rem; color: var(--text-secondary); padding: 2px 0; cursor: pointer; }
+.wa-vis-sub__vacio { font-size: .76rem; color: var(--text-muted); }
+#wa-vis-btn.wa-vis-btn--locked { opacity: .5; }
+
 /* No leídos — insignia en el nav (junto a "WhatsApp") y por chat en la lista */
 .wa-nav-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 99px; background: #E8311A; color: #fff; font-size: .62rem; font-weight: 700; margin-left: 5px; }
 .wa-chat-item__badge { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; min-width: 17px; height: 17px; padding: 0 5px; border-radius: 99px; background: #E8311A; color: #fff; font-size: .64rem; font-weight: 700; }

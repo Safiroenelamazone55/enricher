@@ -1653,6 +1653,20 @@ async function initDb() {
     await pool.query(`ALTER TABLE wa_messages ADD COLUMN IF NOT EXISTS leido BOOLEAN NOT NULL DEFAULT TRUE;`);
     await pool.query(`CREATE INDEX IF NOT EXISTS wa_messages_noleido_idx ON wa_messages (connection_id, chat_jid) WHERE NOT leido;`);
 
+    // Quién puede ver cada conexión (antes cualquiera con acceso a Operaciones la
+    // veía) + una conexión propia por cliente outbound en vez de una sola compartida.
+    // Mismo patrón que ya usa slack_workspaces.visibilidad/connected_by.
+    await pool.query(`ALTER TABLE wa_connections ADD COLUMN IF NOT EXISTS outbound_client_id   INTEGER REFERENCES outbound_clients(id) ON DELETE CASCADE;`);
+    await pool.query(`ALTER TABLE wa_connections ADD COLUMN IF NOT EXISTS connected_by         INTEGER;`);
+    await pool.query(`ALTER TABLE wa_connections ADD COLUMN IF NOT EXISTS visibilidad          TEXT NOT NULL DEFAULT 'solo_yo';`);
+    await pool.query(`ALTER TABLE wa_connections ADD COLUMN IF NOT EXISTS visibilidad_niveles  TEXT[] NOT NULL DEFAULT '{}';`);
+    await pool.query(`ALTER TABLE wa_connections ADD COLUMN IF NOT EXISTS visibilidad_miembros INTEGER[] NOT NULL DEFAULT '{}';`);
+    // La conexión de Operaciones que ya existía no tenía dueño ni control — pasa a
+    // privada (solo quien la conectó) desde ahora, decisión explícita de Jenny.
+    await pool.query(`UPDATE wa_connections SET connected_by = user_id, visibilidad = 'solo_yo' WHERE connected_by IS NULL;`);
+    // Un WhatsApp por cliente outbound como máximo (NULL = Operaciones, sin límite).
+    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS wa_connections_client_uq ON wa_connections (outbound_client_id) WHERE outbound_client_id IS NOT NULL;`);
+
     console.log('[db] tables ready (users, verifications, batch_jobs, clients, projects, tasks, payments, team_members, workspaces, workspace_invites, chat_messages, leads, meetings, fin_config, fin_member_config, pagos_internos, opportunities, opportunity_tasks)');
   } catch (err) {
     console.error('[db] initDb failed:', err.message);

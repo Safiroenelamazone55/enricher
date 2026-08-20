@@ -7792,6 +7792,44 @@ async function _resolveRol(req) {
   } catch (_) { return 'miembro'; }
 }
 
+// team_members.id de quien pregunta (no del dueño del workspace) — para poder
+// compartir un recurso con miembros puntuales, no solo por nivel/rol. El dueño
+// de la cuenta no tiene fila propia en team_members (esa tabla es "mi equipo").
+async function _miMemberId(req) {
+  if (req.user.id === req.workspaceOwnerId) return null;
+  try {
+    const { rows } = await pool.query(
+      `SELECT id FROM team_members WHERE user_id=$1 AND LOWER(email)=LOWER($2) LIMIT 1`,
+      [req.workspaceOwnerId, req.user.email]);
+    return rows[0]?.id ?? null;
+  } catch (_) { return null; }
+}
+
+// ¿req.user puede ver esta conexión de WhatsApp? Quien la conectó siempre puede;
+// si no, depende de la visibilidad que le hayan puesto.
+async function _puedeVerWa(req, conn) {
+  if (conn.connected_by === req.user.id) return true;
+  if (conn.visibilidad === 'todos') return true;
+  if (conn.visibilidad === 'nivel') return (conn.visibilidad_niveles || []).includes(await _resolveRol(req));
+  if (conn.visibilidad === 'miembros') {
+    const mid = await _miMemberId(req);
+    return mid != null && (conn.visibilidad_miembros || []).includes(mid);
+  }
+  return false; // 'solo_yo' y no soy quien la conectó
+}
+
+// Trae la conexión (scoped al workspace, como siempre) Y valida que quien pregunta
+// pueda verla — se usa al inicio de cada endpoint que opera sobre una conexión
+// puntual, para que el control de visibilidad no dependa solo del filtro de la
+// lista (alguien podría pedir el id directo si no se valida acá también).
+async function _cargarConexionAutorizada(req, res, id) {
+  const { rows: [conn] } = await pool.query(
+    `SELECT * FROM wa_connections WHERE id=$1 AND user_id=$2`, [id, req.workspaceOwnerId]);
+  if (!conn) { res.status(404).json({ error: 'No encontrada' }); return null; }
+  if (!(await _puedeVerWa(req, conn))) { res.status(403).json({ error: 'No tienes acceso a este WhatsApp' }); return null; }
+  return conn;
+}
+
 // Lista de workspaces. NUNCA devuelve el token, solo si esta conectado.
 // Cada espacio tiene una visibilidad ('todos'/'admin'/'solo_yo') — se filtra
 // aquí según quién pregunta, no solo por pertenecer al mismo workspace de Nova.
@@ -8152,64 +8190,101 @@ app.post('/api/slack/workspaces/:id/canales/:canal/mensajes', requireAuth, async
 // =================================================================
 const waSvc = require('./services/waService');
 
+// ?outboundClientId= trae la conexión de ESE cliente (Outreach); sin el parámetro,
+// trae la(s) de Operaciones (outbound_client_id NULL). Se filtra por quién puede
+// ver cada una — mismo criterio que ya usa la lista de Slacks conectados.
 app.get('/api/wa/connections', requireAuth, async (req, res) => {
   try {
+    const ocid = req.query.outboundClientId ? +req.query.outboundClientId : null;
     const { rows } = await pool.query(
-      `SELECT id, nombre, numero, estado, qr_actual, connected_at, created_at
-         FROM wa_connections WHERE user_id=$1 ORDER BY id`, [req.workspaceOwnerId]);
-    res.json(rows);
+      `SELECT id, nombre, numero, estado, qr_actual, connected_at, created_at,
+              outbound_client_id, connected_by, visibilidad, visibilidad_niveles, visibilidad_miembros
+         FROM wa_connections
+        WHERE user_id=$1 AND outbound_client_id ${ocid ? '=$2' : 'IS NULL'}
+        ORDER BY id`,
+      ocid ? [req.workspaceOwnerId, ocid] : [req.workspaceOwnerId]);
+    const visibles = [];
+    for (const r of rows) if (await _puedeVerWa(req, r)) visibles.push(r);
+    res.json(visibles);
   } catch (err) { console.error('[wa] GET connections', err.message); res.status(500).json({ error: 'Error al cargar las conexiones' }); }
 });
 
 app.post('/api/wa/connections', requireAuth, async (req, res) => {
   const nombre = String((req.body || {}).nombre || 'WhatsApp de trabajo').trim().slice(0, 80);
+  const outboundClientId = req.body?.outboundClientId ? +req.body.outboundClientId : null;
   try {
+    // Privado por defecto SIEMPRE al crear, sin importar quién la conecte — se
+    // comparte explícitamente después, nunca al revés.
     const { rows: [row] } = await pool.query(
-      `INSERT INTO wa_connections (user_id, nombre, session_dir) VALUES ($1,$2,'') RETURNING id`,
-      [req.workspaceOwnerId, nombre]);
+      `INSERT INTO wa_connections (user_id, nombre, session_dir, outbound_client_id, connected_by, visibilidad)
+       VALUES ($1,$2,'',$3,$4,'solo_yo') RETURNING id`,
+      [req.workspaceOwnerId, nombre, outboundClientId, req.user.id]);
     await pool.query(`UPDATE wa_connections SET session_dir=$1 WHERE id=$2`, [String(row.id), row.id]);
     await waSvc.iniciar(pool, row.id); // arranca el socket → empieza a generar el QR
     res.status(201).json({ id: row.id });
-  } catch (err) { console.error('[wa] POST connections', err.message); res.status(500).json({ error: 'Error al crear la conexión' }); }
+  } catch (err) {
+    if (err.code === '23505') return res.status(409).json({ error: 'Este cliente ya tiene un WhatsApp conectado' });
+    console.error('[wa] POST connections', err.message); res.status(500).json({ error: 'Error al crear la conexión' });
+  }
 });
 
 // Estado + QR actual — el frontend hace poll de esto mientras espera que se escanee.
 app.get('/api/wa/connections/:id', requireAuth, async (req, res) => {
   try {
-    const { rows: [row] } = await pool.query(
-      `SELECT id, nombre, numero, estado, qr_actual, connected_at FROM wa_connections
-        WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId]);
-    if (!row) return res.status(404).json({ error: 'No encontrada' });
-    res.json(row);
+    const conn = await _cargarConexionAutorizada(req, res, req.params.id);
+    if (!conn) return;
+    res.json(conn);
   } catch (err) { res.status(500).json({ error: 'Error al consultar la conexión' }); }
 });
 
 app.post('/api/wa/connections/:id/reconectar', requireAuth, async (req, res) => {
   try {
-    const { rows: [row] } = await pool.query(
-      `SELECT id FROM wa_connections WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId]);
-    if (!row) return res.status(404).json({ error: 'No encontrada' });
-    await waSvc.iniciar(pool, row.id);
+    const conn = await _cargarConexionAutorizada(req, res, req.params.id);
+    if (!conn) return;
+    await waSvc.iniciar(pool, conn.id);
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: 'Error al reconectar' }); }
 });
 
 app.post('/api/wa/connections/:id/desconectar', requireAuth, async (req, res) => {
   try {
-    const { rows: [row] } = await pool.query(
-      `SELECT id FROM wa_connections WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId]);
-    if (!row) return res.status(404).json({ error: 'No encontrada' });
-    await waSvc.desconectar(pool, row.id);
+    const conn = await _cargarConexionAutorizada(req, res, req.params.id);
+    if (!conn) return;
+    await waSvc.desconectar(pool, conn.id);
     res.json({ ok: true });
   } catch (err) { console.error('[wa] desconectar', err.message); res.status(500).json({ error: 'Error al desconectar' }); }
+});
+
+// Quién puede ver esta conexión — solo quien la conectó o un admin puede cambiarlo.
+app.patch('/api/wa/connections/:id/visibilidad', requireAuth, async (req, res) => {
+  const visibilidad = String(req.body?.visibilidad || '');
+  if (!['todos', 'nivel', 'miembros', 'solo_yo'].includes(visibilidad)) {
+    return res.status(400).json({ error: 'Valor de visibilidad inválido' });
+  }
+  const niveles = Array.isArray(req.body?.niveles) ? req.body.niveles.filter(n => ['miembro', 'manager', 'admin'].includes(n)) : [];
+  const miembros = Array.isArray(req.body?.miembros) ? req.body.miembros.map(Number).filter(Number.isFinite) : [];
+  try {
+    const { rows: [row] } = await pool.query(
+      `SELECT connected_by FROM wa_connections WHERE id=$1 AND user_id=$2`,
+      [req.params.id, req.workspaceOwnerId]);
+    if (!row) return res.status(404).json({ error: 'No encontrada' });
+    const rol = await _resolveRol(req);
+    if (row.connected_by !== req.user.id && rol !== 'admin') {
+      return res.status(403).json({ error: 'Solo quien la conectó o un admin puede cambiar esto' });
+    }
+    await pool.query(
+      `UPDATE wa_connections SET visibilidad=$1, visibilidad_niveles=$2, visibilidad_miembros=$3 WHERE id=$4`,
+      [visibilidad, niveles, miembros, req.params.id]);
+    res.json({ ok: true });
+  } catch (err) { console.error('[wa] visibilidad', err.message); res.status(500).json({ error: 'No se pudo cambiar' }); }
 });
 
 // Lista de chats (1 fila por número con actividad), con el último mensaje como preview —
 // mismo shape que la lista de canales del mini-chat de Slack.
 app.get('/api/wa/connections/:id/chats', requireAuth, async (req, res) => {
   try {
-    const own = await pool.query(`SELECT id FROM wa_connections WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId]);
-    if (!own.rows.length) return res.status(404).json({ error: 'No encontrada' });
+    const conn = await _cargarConexionAutorizada(req, res, req.params.id);
+    if (!conn) return;
     const { rows } = await pool.query(`
       SELECT DISTINCT ON (m.chat_jid) m.chat_jid,
              COALESCE(NULLIF(c.nombre,''),
@@ -8230,8 +8305,7 @@ app.get('/api/wa/connections/:id/chats', requireAuth, async (req, res) => {
 
 app.post('/api/wa/connections/:id/chats/:jid/marcar-leido', requireAuth, async (req, res) => {
   try {
-    const own = await pool.query(`SELECT id FROM wa_connections WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId]);
-    if (!own.rows.length) return res.status(404).json({ error: 'No encontrada' });
+    if (!(await _cargarConexionAutorizada(req, res, req.params.id))) return;
     await pool.query(
       `UPDATE wa_messages SET leido=TRUE WHERE connection_id=$1 AND chat_jid=$2 AND NOT leido AND NOT from_me`,
       [req.params.id, req.params.jid]);
@@ -8243,8 +8317,7 @@ app.post('/api/wa/connections/:id/chats/:jid/marcar-leido', requireAuth, async (
 // hay conversación. ?q= filtra por nombre; sin q, trae los últimos actualizados.
 app.get('/api/wa/connections/:id/contactos', requireAuth, async (req, res) => {
   try {
-    const own = await pool.query(`SELECT id FROM wa_connections WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId]);
-    if (!own.rows.length) return res.status(404).json({ error: 'No encontrada' });
+    if (!(await _cargarConexionAutorizada(req, res, req.params.id))) return;
     const q = String(req.query.q || '').trim().slice(0, 60);
     const { rows } = await pool.query(`
       SELECT jid, nombre FROM wa_contacts
@@ -8256,8 +8329,7 @@ app.get('/api/wa/connections/:id/contactos', requireAuth, async (req, res) => {
 
 app.get('/api/wa/connections/:id/chats/:jid/mensajes', requireAuth, async (req, res) => {
   try {
-    const own = await pool.query(`SELECT id FROM wa_connections WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId]);
-    if (!own.rows.length) return res.status(404).json({ error: 'No encontrada' });
+    if (!(await _cargarConexionAutorizada(req, res, req.params.id))) return;
     const { rows } = await pool.query(`
       SELECT m.id, m.from_me, m.nombre, m.texto, m.ts, m.reply_to_id, m.reply_to_texto, m.msg_id, m.estado, m.scheduled_at,
              rm.emoji AS mi_reaccion, ro.emoji AS su_reaccion
@@ -8277,8 +8349,7 @@ app.post('/api/wa/connections/:id/chats/:jid/mensajes', requireAuth, async (req,
   const scheduledAt = (req.body || {}).scheduledAt ? new Date(req.body.scheduledAt) : null;
   if (!texto) return res.status(400).json({ error: 'El mensaje está vacío' });
   try {
-    const own = await pool.query(`SELECT id FROM wa_connections WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId]);
-    if (!own.rows.length) return res.status(404).json({ error: 'No encontrada' });
+    if (!(await _cargarConexionAutorizada(req, res, req.params.id))) return;
 
     // Programado: se guarda para que lo mande waService.flushProgramados cuando toque,
     // en vez de enviarlo ya. Igual que en el Inbox de correo, <30s en el futuro se trata
@@ -8307,8 +8378,7 @@ app.post('/api/wa/connections/:id/chats/:jid/mensajes', requireAuth, async (req,
 
 app.delete('/api/wa/connections/:id/scheduled/:msgId', requireAuth, async (req, res) => {
   try {
-    const own = await pool.query(`SELECT id FROM wa_connections WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId]);
-    if (!own.rows.length) return res.status(404).json({ error: 'No encontrada' });
+    if (!(await _cargarConexionAutorizada(req, res, req.params.id))) return;
     const r = await pool.query(
       `DELETE FROM wa_messages WHERE id=$1 AND connection_id=$2 AND estado='programado'`,
       [req.params.msgId, req.params.id]);
@@ -8321,8 +8391,7 @@ app.delete('/api/wa/connections/:id/scheduled/:msgId', requireAuth, async (req, 
 app.post('/api/wa/connections/:id/chats/:jid/mensajes/:msgId/reaccion', requireAuth, async (req, res) => {
   const emoji = String((req.body || {}).emoji || '').trim();
   try {
-    const own = await pool.query(`SELECT id FROM wa_connections WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId]);
-    if (!own.rows.length) return res.status(404).json({ error: 'No encontrada' });
+    if (!(await _cargarConexionAutorizada(req, res, req.params.id))) return;
     await waSvc.reaccionar(pool, +req.params.id, req.params.jid, req.params.msgId, emoji);
     res.json({ ok: true });
   } catch (err) { console.error('[wa] reaccionar', err.message); res.status(400).json({ error: err.message || 'No se pudo reaccionar' }); }

@@ -25980,6 +25980,7 @@ const WaChatModule = (() => {
     _estado('wa-chat');
     const numEl = $$('wa-numero');
     if (numEl) numEl.textContent = _conn.numero ? `+${_conn.numero}` : '';
+    _pintaBotonVis($$('wa-vis-btn'), _conn);
     _cargarChats();
     _pollChat = setInterval(() => {
       _cargarChats(true);
@@ -26294,6 +26295,100 @@ const WaChatModule = (() => {
     } catch (e) { alert('Error: ' + e.message); }
   }
 
+  // ── Quién puede ver este WhatsApp — mismo mecanismo que ya existe para los
+  // Slacks conectados, extendido con "miembros específicos" (compartido entre el
+  // panel de WhatsApp y la fila de Integraciones en Configuración: ambos llaman
+  // a visPop con el id de conexión real). ──────────────────────────────────────
+  let _teamCache = null;
+  async function _cargarTeam() {
+    if (_teamCache) return _teamCache;
+    try { const r = await apiFetch(`${API}/mgmt/team`); _teamCache = r.ok ? await r.json() : []; }
+    catch (_) { _teamCache = []; }
+    return _teamCache;
+  }
+
+  function _pintaBotonVis(btn, conn) {
+    if (!btn || !conn) return;
+    const puedeEditar = conn.connected_by === window._authUser?.id
+      || window._authUser?.isOwner || window._authUser?.memberRol === 'admin';
+    btn.classList.toggle('wa-vis-btn--locked', !puedeEditar);
+    const etiquetas = { todos: 'Todos los miembros', nivel: 'Por nivel', miembros: 'Miembros específicos', solo_yo: 'Solo yo (privado)' };
+    btn.title = `Quién puede ver este WhatsApp: ${etiquetas[conn.visibilidad] || 'Solo yo'}`;
+  }
+
+  function abrirVisPop(ev) {
+    if (!_conn) return;
+    visPop(ev, _conn.id, _conn);
+  }
+
+  async function visPop(ev, connId, conn) {
+    ev.stopPropagation();
+    // OJO: event.currentTarget se vuelve null apenas termina el despacho síncrono
+    // del evento — hay que guardarlo ANTES del primer await, o revienta al usarlo
+    // más abajo (pasó en la primera prueba en vivo).
+    const btnRect = ev.currentTarget.getBoundingClientRect();
+    document.querySelectorAll('.wa-vis-pop').forEach(x => x.remove());
+    const puedeEditar = conn.connected_by === window._authUser?.id
+      || window._authUser?.isOwner || window._authUser?.memberRol === 'admin';
+    if (!puedeEditar) { alert('Solo quien conectó este WhatsApp o un admin puede cambiar quién lo ve.'); return; }
+    const team = await _cargarTeam();
+    const vis = conn.visibilidad || 'solo_yo';
+    const niveles = conn.visibilidad_niveles || [];
+    const miembros = (conn.visibilidad_miembros || []).map(Number);
+    const opt = (v, lbl) => `<label class="wa-vis-opt"><input type="radio" name="wavis-${connId}" value="${v}"${vis === v ? ' checked' : ''} onchange="WaChatModule._toggleVisSub(${connId})"> ${lbl}</label>`;
+    const nivelChk = (v, lbl) => `<label class="wa-vis-sub__item"><input type="checkbox" class="wavis-nivel-${connId}" value="${v}"${niveles.includes(v) ? ' checked' : ''}> ${lbl}</label>`;
+    const miembroChk = t => `<label class="wa-vis-sub__item"><input type="checkbox" class="wavis-mbr-${connId}" value="${t.id}"${miembros.includes(t.id) ? ' checked' : ''}> ${esc(t.nombre)}</label>`;
+    const pop = document.createElement('div');
+    pop.className = 'wa-vis-pop';
+    pop.id = `wa-vis-pop-${connId}`;
+    pop.onclick = e => e.stopPropagation();
+    pop.innerHTML = `
+      <div class="wa-vis-pop__t">¿Quién puede ver este WhatsApp?</div>
+      ${opt('todos', 'Todos los miembros')}
+      ${opt('nivel', 'Por nivel')}
+      <div class="wa-vis-sub" id="wavis-sub-nivel-${connId}" style="display:${vis === 'nivel' ? 'flex' : 'none'}">
+        ${nivelChk('admin', 'Admin')}${nivelChk('manager', 'Manager')}${nivelChk('miembro', 'Miembro')}
+      </div>
+      ${opt('miembros', 'Miembros específicos')}
+      <div class="wa-vis-sub" id="wavis-sub-miembros-${connId}" style="display:${vis === 'miembros' ? 'flex' : 'none'}">
+        ${team.length ? team.map(miembroChk).join('') : '<span class="wa-vis-sub__vacio">No hay miembros en el equipo todavía.</span>'}
+      </div>
+      ${opt('solo_yo', 'Solo yo (privado)')}
+      <button class="btn btn--primary btn--sm" style="margin-top:8px;width:100%" onclick="WaChatModule.guardarVisibilidad(${connId})">Guardar</button>`;
+    document.body.appendChild(pop);
+    pop.style.cssText += `;position:fixed;z-index:10050;top:${btnRect.bottom + 6}px;left:${Math.min(btnRect.left, window.innerWidth - 260)}px`;
+    setTimeout(() => document.addEventListener('click', function o(e2) { if (!pop.contains(e2.target)) { pop.remove(); document.removeEventListener('click', o); } }), 0);
+  }
+
+  function _toggleVisSub(connId) {
+    const pop = document.getElementById(`wa-vis-pop-${connId}`); if (!pop) return;
+    const val = pop.querySelector(`input[name="wavis-${connId}"]:checked`)?.value;
+    const nivelSub = document.getElementById(`wavis-sub-nivel-${connId}`);
+    const miembrosSub = document.getElementById(`wavis-sub-miembros-${connId}`);
+    if (nivelSub) nivelSub.style.display = val === 'nivel' ? 'flex' : 'none';
+    if (miembrosSub) miembrosSub.style.display = val === 'miembros' ? 'flex' : 'none';
+  }
+
+  async function guardarVisibilidad(connId) {
+    const pop = document.getElementById(`wa-vis-pop-${connId}`); if (!pop) return;
+    const visibilidad = pop.querySelector(`input[name="wavis-${connId}"]:checked`)?.value || 'solo_yo';
+    const niveles = [...pop.querySelectorAll(`.wavis-nivel-${connId}:checked`)].map(el => el.value);
+    const miembros = [...pop.querySelectorAll(`.wavis-mbr-${connId}:checked`)].map(el => +el.value);
+    try {
+      const r = await apiFetch(`${API}/wa/connections/${connId}/visibilidad`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ visibilidad, niveles, miembros })
+      });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'No se pudo guardar');
+      pop.remove();
+      if (_conn && _conn.id === connId) {
+        _conn.visibilidad = visibilidad; _conn.visibilidad_niveles = niveles; _conn.visibilidad_miembros = miembros;
+        _pintaBotonVis($$('wa-vis-btn'), _conn);
+      }
+      if (window.IntegracionesModule?.refrescarWa) window.IntegracionesModule.refrescarWa();
+    } catch (e) { alert('Error: ' + e.message); }
+  }
+
   // Reacciones rápidas (👍❤️😂...) — mismo set que ya usa el mini-chat de Slack.
   const _REAC_RAPIDAS = ['👍', '❤️', '😂', '🎉', '✅', '🙏'];
   function reactPop(ev, msgId, miActual) {
@@ -26412,6 +26507,7 @@ const WaChatModule = (() => {
            responderA, cancelarRespuesta,
            programarToggle, programarPick, cancelarProgramado,
            reactPop, reaccionar, emojiPicker, _emojiIns, refreshBadge,
+           visPop, abrirVisPop, _toggleVisSub, guardarVisibilidad, _pintaBotonVis, _cargarTeam,
            nuevoChatAbrir, nuevoChatCerrar, _nuevoChatBuscar, nuevoChatElegir, nuevoChatUsarNumero };
 })();
 
