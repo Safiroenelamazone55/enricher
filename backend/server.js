@@ -8215,7 +8215,10 @@ app.get('/api/wa/connections/:id/chats', requireAuth, async (req, res) => {
              COALESCE(NULLIF(c.nombre,''),
                CASE WHEN m.chat_jid LIKE '%@g.us' THEN NULL ELSE NULLIF(m.nombre,'') END, '') AS nombre,
              (m.chat_jid LIKE '%@g.us') AS es_grupo,
-             m.texto AS ultimo_texto, m.ts AS ultimo_ts, m.from_me, m.estado AS ultimo_estado
+             m.texto AS ultimo_texto, m.ts AS ultimo_ts, m.from_me, m.estado AS ultimo_estado,
+             (SELECT COUNT(*) FROM wa_messages nl
+               WHERE nl.connection_id = m.connection_id AND nl.chat_jid = m.chat_jid
+                 AND NOT nl.leido AND NOT nl.from_me) AS no_leidos
         FROM wa_messages m
         LEFT JOIN wa_contacts c ON c.connection_id = m.connection_id AND c.jid = m.chat_jid
        WHERE m.connection_id=$1
@@ -8223,6 +8226,17 @@ app.get('/api/wa/connections/:id/chats', requireAuth, async (req, res) => {
     rows.sort((a, b) => new Date(b.ultimo_ts) - new Date(a.ultimo_ts));
     res.json(rows);
   } catch (err) { console.error('[wa] chats', err.message); res.status(500).json({ error: 'Error al cargar los chats' }); }
+});
+
+app.post('/api/wa/connections/:id/chats/:jid/marcar-leido', requireAuth, async (req, res) => {
+  try {
+    const own = await pool.query(`SELECT id FROM wa_connections WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId]);
+    if (!own.rows.length) return res.status(404).json({ error: 'No encontrada' });
+    await pool.query(
+      `UPDATE wa_messages SET leido=TRUE WHERE connection_id=$1 AND chat_jid=$2 AND NOT leido AND NOT from_me`,
+      [req.params.id, req.params.jid]);
+    res.json({ ok: true });
+  } catch (err) { console.error('[wa] marcar leído', err.message); res.status(500).json({ error: 'No se pudo marcar como leído' }); }
 });
 
 // Directorio de contactos (nombre + jid) para "Nuevo chat" — independiente de si ya

@@ -360,6 +360,8 @@ async function initAuth() {
       TimerModule.init();
       SlackChat.refreshMiniBadge();
       setInterval(() => SlackChat.refreshMiniBadge(), 60000);
+      WaChatModule.refreshBadge();
+      setInterval(() => WaChatModule.refreshBadge(), 60000);
 
     } else {
       // ── Not logged in ─────────────────────────────────────
@@ -25968,7 +25970,9 @@ const WaChatModule = (() => {
     _cargarChats();
     _pollChat = setInterval(() => {
       _cargarChats(true);
-      if (_chatAct) _cargarMensajes(_chatAct, true);
+      // Si llega un mensaje nuevo mientras el chat sigue abierto, se marca leído solo
+      // (no tiene sentido que quede "no leído" algo que ya se está viendo).
+      if (_chatAct) { _cargarMensajes(_chatAct, true); _marcarLeido(_chatAct); }
     }, 5000);
   }
 
@@ -26062,35 +26066,80 @@ const WaChatModule = (() => {
 
   function _pintaChats() {
     const box = $$('wa-chats');
+    _actualizarBadgeNav();
     if (!box) return;
     if (!_chats.length) {
       box.innerHTML = `<div class="chat-ch-empty">Todavía no hay conversaciones.<br>Escríbele a alguien desde tu teléfono para verlo aquí.</div>`;
       return;
     }
-    box.innerHTML = _chats.map(c => `
+    box.innerHTML = _chats.map(c => {
+      const noLeidos = +c.no_leidos || 0;
+      const unreadCls = noLeidos ? ' unread' : '';
+      const badge = noLeidos ? `<span class="wa-chat-item__badge">${noLeidos > 99 ? '99+' : noLeidos}</span>` : '';
+      return `
       <div class="wa-chat-item${String(c.chat_jid) === String(_chatAct) ? ' on' : ''}" onclick="WaChatModule.abrirChat('${esc(c.chat_jid).replace(/'/g, "\\'")}')">
         <div class="wa-chat-item__av">${c.es_grupo ? '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>' : esc(_nombreChat(c)).slice(0, 1).toUpperCase()}</div>
         <div class="wa-chat-item__body">
           <div class="wa-chat-item__top">
-            <span class="wa-chat-item__name">${esc(_nombreChat(c))}</span>
+            <span class="wa-chat-item__name${unreadCls}">${esc(_nombreChat(c))}</span>
             <span class="wa-chat-item__time">${_fmtListaFecha(c.ultimo_ts)}</span>
           </div>
-          <div class="wa-chat-item__preview">${c.ultimo_estado === 'programado' ? '🕑 Programado: ' : (c.from_me ? 'Tú: ' : '')}${esc(c.ultimo_texto || '')}</div>
+          <div class="wa-chat-item__top">
+            <span class="wa-chat-item__preview${unreadCls}">${c.ultimo_estado === 'programado' ? '🕑 Programado: ' : (c.from_me ? 'Tú: ' : '')}${esc(c.ultimo_texto || '')}</span>
+            ${badge}
+          </div>
         </div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
+  }
+
+  function _actualizarBadgeNav() {
+    const total = _chats.reduce((a, c) => a + (+c.no_leidos || 0), 0);
+    const badge = document.getElementById('wa-badge');
+    if (!badge) return;
+    badge.textContent = total > 99 ? '99+' : (total || '');
+    badge.classList.toggle('hidden', !total);
+  }
+
+  // Refresco global del contador (aunque la pestaña WhatsApp no esté abierta) — mismo
+  // criterio que SlackChat.refreshMiniBadge para el ícono de Chat.
+  async function refreshBadge() {
+    try {
+      let conn = _conn;
+      if (!conn) {
+        const r = await apiFetch(`${API}/wa/connections`);
+        const rows = r.ok ? await r.json() : [];
+        conn = rows.find(c => c.estado === 'conectado') || null;
+      }
+      if (!conn) { const b = document.getElementById('wa-badge'); if (b) b.classList.add('hidden'); return; }
+      const r2 = await apiFetch(`${API}/wa/connections/${conn.id}/chats`);
+      const chats = r2.ok ? await r2.json() : [];
+      const total = chats.reduce((a, c) => a + (+c.no_leidos || 0), 0);
+      const badge = document.getElementById('wa-badge');
+      if (badge) { badge.textContent = total > 99 ? '99+' : (total || ''); badge.classList.toggle('hidden', !total); }
+    } catch (_) { /* se reintenta en el próximo tick */ }
   }
 
   async function abrirChat(jid, nombre) {
     _chatAct = jid;
     _replyTo = null; _pintaQuote();
+    const row = _chats.find(c => String(c.chat_jid) === String(jid));
+    // Se limpia el contador ya mismo (no hace falta esperar la confirmación del
+    // servidor) — es exactamente lo que se espera: se abre, desaparece.
+    if (row && +row.no_leidos) { row.no_leidos = 0; _marcarLeido(jid); }
     _pintaChats();
     const nameEl = $$('wa-main-name');
-    const row = _chats.find(c => String(c.chat_jid) === String(jid));
     _chatActGrupo = row ? !!row.es_grupo : jid.endsWith('@g.us');
     if (nameEl) nameEl.textContent = row ? _nombreChat(row) : (nombre || _nombreChat({ chat_jid: jid }));
     const box = $$('wa-messages');
     if (box) box.innerHTML = `<div class="clients-loading"><div class="clients-spin"></div></div>`;
     await _cargarMensajes(jid);
+  }
+
+  async function _marcarLeido(jid) {
+    if (!_conn) return;
+    try { await apiFetch(`${API}/wa/connections/${_conn.id}/chats/${encodeURIComponent(jid)}/marcar-leido`, { method: 'POST' }); }
+    catch (_) { /* si falla, el próximo _cargarChats trae el número real igual */ }
   }
 
   async function _cargarMensajes(jid, silencioso) {
@@ -26344,7 +26393,7 @@ const WaChatModule = (() => {
   return { load, conectar, desconectar, abrirChat, enviar, detener: _pararSondeos,
            responderA, cancelarRespuesta,
            programarToggle, programarPick, cancelarProgramado,
-           reactPop, reaccionar, emojiPicker, _emojiIns,
+           reactPop, reaccionar, emojiPicker, _emojiIns, refreshBadge,
            nuevoChatAbrir, nuevoChatCerrar, _nuevoChatBuscar, nuevoChatElegir, nuevoChatUsarNumero };
 })();
 

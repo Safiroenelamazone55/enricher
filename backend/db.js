@@ -1647,6 +1647,11 @@ async function initDb() {
       );
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS wa_reactions_msg_idx ON wa_reactions (connection_id, msg_id);`);
+    // No leídos: DEFAULT TRUE deja "leído" todo lo que ya existe (el historial recién
+    // sincronizado no debe aparecer como si fuera nuevo) — solo los mensajes que
+    // lleguen EN VIVO de ahora en más se insertan con leido=FALSE (ver waService).
+    await pool.query(`ALTER TABLE wa_messages ADD COLUMN IF NOT EXISTS leido BOOLEAN NOT NULL DEFAULT TRUE;`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS wa_messages_noleido_idx ON wa_messages (connection_id, chat_jid) WHERE NOT leido;`);
 
     console.log('[db] tables ready (users, verifications, batch_jobs, clients, projects, tasks, payments, team_members, workspaces, workspace_invites, chat_messages, leads, meetings, fin_config, fin_member_config, pagos_internos, opportunities, opportunity_tasks)');
   } catch (err) {

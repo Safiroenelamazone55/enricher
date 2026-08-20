@@ -80,7 +80,9 @@ async function _asegurarNombreGrupo(pool, sock, connId, jid) {
   } catch (e) { console.warn(`[wa] groupMetadata ${jid}:`, e.message); }
 }
 
-async function _guardarMensaje(pool, sock, connId, m) {
+// esHistorial=true (volcado al vincular) nunca cuenta como "no leído" — solo lo que
+// llega EN VIVO de ahí en más, y que no sea mío, empieza sin leer.
+async function _guardarMensaje(pool, sock, connId, m, esHistorial) {
   let jid = m.key?.remoteJid || '';
   if (!_esChatValido(jid)) return;
   jid = await _resolverJid(sock, jid);
@@ -96,11 +98,12 @@ async function _guardarMensaje(pool, sock, connId, m) {
   const ctx = m.message?.extendedTextMessage?.contextInfo;
   const replyToId = ctx?.stanzaId || '';
   const replyToTexto = ctx?.quotedMessage?.conversation || ctx?.quotedMessage?.extendedTextMessage?.text || '';
+  const leido = esHistorial || !!m.key.fromMe;
   try {
     await pool.query(`
-      INSERT INTO wa_messages (connection_id, chat_jid, msg_id, from_me, nombre, texto, ts, reply_to_id, reply_to_texto)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (connection_id, msg_id) DO NOTHING`,
-      [connId, jid, m.key.id, !!m.key.fromMe, remitente, texto, ts, replyToId, replyToTexto]);
+      INSERT INTO wa_messages (connection_id, chat_jid, msg_id, from_me, nombre, texto, ts, reply_to_id, reply_to_texto, leido)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT (connection_id, msg_id) DO NOTHING`,
+      [connId, jid, m.key.id, !!m.key.fromMe, remitente, texto, ts, replyToId, replyToTexto, leido]);
   } catch (e) { console.warn('[wa] guardar mensaje:', e.message); }
 }
 
@@ -257,7 +260,7 @@ async function _connect(pool, id) {
       for (const c of (chats || [])) {
         if (c.name) await _guardarContacto(pool, sock, id, c.id, c.name);
       }
-      for (const m of (messages || [])) await _guardarMensaje(pool, sock, id, m);
+      for (const m of (messages || [])) await _guardarMensaje(pool, sock, id, m, true);
     } catch (e) { console.warn('[wa] messaging-history.set:', e.message); }
   });
 

@@ -15343,3 +15343,8 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .wa-nc-sep { font-size: .7rem; color: var(--text-muted); text-align: center; margin: 2px 0; }
 .wa-nc-numrow { display: flex; gap: 8px; }
 .wa-nc-numrow .wa-nc-input { flex: 1; }
+
+/* No leídos — insignia en el nav (junto a "WhatsApp") y por chat en la lista */
+.wa-nav-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 99px; background: #E8311A; color: #fff; font-size: .62rem; font-weight: 700; margin-left: 5px; }
+.wa-chat-item__badge { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; min-width: 17px; height: 17px; padding: 0 5px; border-radius: 99px; background: #E8311A; color: #fff; font-size: .64rem; font-weight: 700; }
+.wa-chat-item__name.unread, .wa-chat-item__preview.unread { font-weight: 700; color: var(--text-primary); }
