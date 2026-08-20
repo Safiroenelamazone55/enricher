@@ -5424,12 +5424,21 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 
 /* Mensajes reales de Slack dentro del panel rápido — mismas clases que
    #chat-messages .chat-msg del Chat completo, acotadas al mismo ancho. */
-#rchat-messages .chat-msg { display: flex; gap: 8px; align-items: flex-start; padding: 5px 2px; }
-#rchat-messages .chat-msg__av { width: 28px !important; height: 28px !important; flex: 0 0 28px !important; border-radius: 7px; background: #F1EFEB; object-fit: cover; }
+#rchat-messages .chat-msg { display: flex; gap: 8px; align-items: flex-start; padding: 6px 2px; position: relative; }
+#rchat-messages .chat-msg__av { width: 32px !important; height: 32px !important; flex: 0 0 32px !important; border-radius: 8px; background: #F1EFEB; object-fit: cover; }
 #rchat-messages .chat-msg__body { flex: 1; min-width: 0; }
 #rchat-messages .chat-msg__hd { display: flex; align-items: baseline; gap: 6px; }
 #rchat-messages .chat-msg__who { font-size: 12.5px; font-weight: 600; color: #1F1D1B; }
 #rchat-messages .chat-msg__t { font-size: 10.5px; color: #B4AFA8; }
+#rchat-messages .chat-msg--grouped { padding-top: 1px; padding-bottom: 1px; }
+#rchat-messages .chat-msg--grouped .chat-msg__av { visibility: hidden; }
+#rchat-messages .chat-msg--grouped .chat-msg__hd { display: none; }
+#rchat-messages .chat-msg__t--grouped {
+  display: none; position: absolute; left: 2px; width: 32px; text-align: center;
+  font-size: 9.5px; color: #B4AFA8; line-height: 1;
+}
+#rchat-messages .chat-msg--grouped:hover .chat-msg__t--grouped { display: block; }
+#rchat-messages .chat-msg:not(.chat-msg--grouped) .chat-msg__t--grouped { display: none !important; }
 #rchat-messages .chat-msg__txt { font-size: 12.8px; line-height: 1.45; color: #262626; margin-top: 1px; overflow-wrap: anywhere; }
 #rchat-messages .chat-msg__txt img { max-width: 100%; height: auto; }
 #rchat-messages .chat-msg__txt code { background: #F1EFEB; border-radius: 4px; padding: 1px 4px; font-size: 11.5px; }
@@ -15084,16 +15093,28 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 
 /* Mensajes de Slack: el avatar es un SVG sin tamano propio, asi que sin acotarlo
    se estira a 509px y empuja el texto fuera de la pantalla. */
-#chat-messages .chat-msg { display: flex; gap: 10px; align-items: flex-start; padding: 6px 16px; }
+#chat-messages .chat-msg { display: flex; gap: 12px; align-items: flex-start; padding: 8px 16px; position: relative; }
+#chat-messages .chat-msg:not(.chat-msg--grouped) { margin-top: 4px; }
 #chat-messages .chat-msg:hover { background: rgba(0,0,0,.018); }
 #chat-messages .chat-msg__av {
-  width: 34px !important; height: 34px !important; flex: 0 0 34px !important;
-  border-radius: 8px; background: #F1EFEB; object-fit: cover;
+  width: 40px !important; height: 40px !important; flex: 0 0 40px !important;
+  border-radius: 9px; background: #F1EFEB; object-fit: cover;
 }
 #chat-messages .chat-msg__body { flex: 1; min-width: 0; }
 #chat-messages .chat-msg__hd { display: flex; align-items: baseline; gap: 8px; }
 #chat-messages .chat-msg__who { font-size: 13.5px; font-weight: 600; color: #1F1D1B; }
 #chat-messages .chat-msg__t { font-size: 11px; color: #B4AFA8; }
+/* Mensaje seguido del mismo remitente (menos de 5 min): no se repite avatar/nombre,
+   la hora aparece solo al pasar el mouse, donde iba el avatar — igual que Zulip/Slack. */
+#chat-messages .chat-msg--grouped { padding-top: 1px; padding-bottom: 1px; }
+#chat-messages .chat-msg--grouped .chat-msg__av { visibility: hidden; }
+#chat-messages .chat-msg--grouped .chat-msg__hd { display: none; }
+#chat-messages .chat-msg__t--grouped {
+  display: none; position: absolute; left: 16px; width: 40px; text-align: center;
+  font-size: 10px; color: #B4AFA8; line-height: 1;
+}
+#chat-messages .chat-msg--grouped:hover .chat-msg__t--grouped { display: block; }
+#chat-messages .chat-msg:not(.chat-msg--grouped) .chat-msg__t--grouped { display: none !important; }
 #chat-messages .chat-msg__txt {
   font-size: 13.5px; line-height: 1.5; color: #262626; margin-top: 1px;
   overflow-wrap: anywhere;

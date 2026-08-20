@@ -24957,10 +24957,12 @@ const SlackChat = (() => {
            <button class="slk-volver" onclick="SlackChat.abrir('${_canal.id}')">‹ Volver a #${esc(_canal.name)}</button>
            <span class="slk-hilo-tit">Hilo${orden.length > 1 ? ` · ${orden.length - 1} respuesta${orden.length - 1 > 1 ? 's' : ''}` : ''}</span>
          </div>` : '';
+    let prevUser = null, prevF = null;
     orden.forEach((m, i) => {
       const f = new Date(+m.ts * 1000);
       const d2 = f.toLocaleDateString('es-PE', { day: 'numeric', month: 'long' });
-      if (d2 !== dia) { html += `<div class="chat-daysep"><span>${d2}</span></div>`; dia = d2; }
+      const cambioDia = d2 !== dia;
+      if (cambioDia) { html += `<div class="chat-daysep"><span>${d2}</span></div>`; dia = d2; }
       // En un hilo: el primero es el mensaje ORIGINAL (destacado); del segundo en
       // adelante son respuestas, indentadas bajo un separador, como en WhatsApp.
       const esRaiz  = enHilo && i === 0;
@@ -24968,6 +24970,11 @@ const SlackChat = (() => {
       if (esResp && i === 1) html += `<div class="slk-resp-sep"><span>${orden.length - 1} respuesta${orden.length - 1 > 1 ? 's' : ''}</span></div>`;
       const quien = _users[m.user] || m.username || 'Slack';
       const hora = f.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
+      // Igual que Zulip/Slack real: si es el mismo remitente que el mensaje justo
+      // anterior y pasaron menos de 5 minutos, no se repite avatar/nombre — el
+      // texto queda "pegado" al bloque de arriba en vez de una fila completa cada vez.
+      const esAgrupado = !cambioDia && !esRaiz && !esResp && prevUser === m.user && prevF && (f - prevF) < 5 * 60 * 1000;
+      prevUser = m.user; prevF = f;
       const reacs = (m.reactions || []).map(r =>
         `<span class="slk-reac">${_emojiImg(_emoji(':' + r.name + ':'), 'e-img')} ${r.count}</span>`).join('');
       const hilo = (!enHilo && m.reply_count)
@@ -24978,11 +24985,12 @@ const SlackChat = (() => {
       // que no fuera imagen/video/audio (esos usaban <img src> sin darse cuenta del
       // 404). Hay que envolverlo para que solo viaje el archivo.
       const files = (m.files || []).map(fl => _archivoHtml(fl)).join('');
-      html += `<div class="chat-msg${esRaiz ? ' slk-root' : ''}${esResp ? ' slk-reply' : ''}" data-ts="${m.ts}"
+      html += `<div class="chat-msg${esRaiz ? ' slk-root' : ''}${esResp ? ' slk-reply' : ''}${esAgrupado ? ' chat-msg--grouped' : ''}" data-ts="${m.ts}"
                     oncontextmenu="SlackChat.menuMsg(event,'${m.ts}',${m.reply_count || 0})">
         <img class="chat-msg__av" src="${_avatarUrl(m.user, quien)}" alt="">
         <div class="chat-msg__body">
           <div class="chat-msg__hd"><span class="chat-msg__who">${escNom(quien)}</span><span class="chat-msg__t">${hora}</span></div>
+          <span class="chat-msg__t chat-msg__t--grouped">${hora}</span>
           <div class="chat-msg__txt">${_fmt(m.text)}</div>
           ${files}${reacs ? `<div class="slk-reacs">${reacs}</div>` : ''}${hilo}
         </div>
@@ -25496,10 +25504,14 @@ const SlackChat = (() => {
     if (!orden.length) { box.innerHTML = `<div class="chat-ch-empty">Sin mensajes en este canal.</div>`; return; }
     let dia = '';
     let html = '';
+    let prevUser = null, prevF = null;
     orden.forEach(m => {
       const f = new Date(+m.ts * 1000);
       const d2 = f.toLocaleDateString('es-PE', { day: 'numeric', month: 'long' });
-      if (d2 !== dia) { html += `<div class="chat-daysep"><span>${d2}</span></div>`; dia = d2; }
+      const cambioDia = d2 !== dia;
+      if (cambioDia) { html += `<div class="chat-daysep"><span>${d2}</span></div>`; dia = d2; }
+      const esAgrupado = !cambioDia && prevUser === m.user && prevF && (f - prevF) < 5 * 60 * 1000;
+      prevUser = m.user; prevF = f;
       const quien = _mUsers[m.user] || m.username || 'Slack';
       const hora = f.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
       const files = (m.files || []).map(fl => _archivoHtml(fl, _mWsAct)).join('');
@@ -25520,11 +25532,12 @@ const SlackChat = (() => {
         : '';
       const btnResp = enHilo ? '' :
         `<button class="chat-msg__reply" title="Responder en hilo" onclick="SlackChat.miniAbrirHilo('${m.ts}')">${NI('responder', 13)}</button>`;
-      html += `<div class="chat-msg" data-ts="${m.ts}"
+      html += `<div class="chat-msg${esAgrupado ? ' chat-msg--grouped' : ''}" data-ts="${m.ts}"
                     oncontextmenu="SlackChat.miniMenuMsg(event,'${m.ts}')">
         <img class="chat-msg__av" src="${_mAvatarUrl(m.user, quien)}" alt="">
         <div class="chat-msg__body">
           <div class="chat-msg__hd"><span class="chat-msg__who">${escNom(quien)}</span><span class="chat-msg__t">${hora}</span></div>
+          <span class="chat-msg__t chat-msg__t--grouped">${hora}</span>
           <div class="chat-msg__txt">${_fmt(m.text, _mUsers)}</div>
           ${files}${reacs ? `<div class="slk-reacs">${reacs}</div>` : ''}${pill}
         </div>
@@ -26160,6 +26173,8 @@ const WaChatModule = (() => {
       return;
     }
     let prevDia = '';
+    const rowChat = _chats.find(c => String(c.chat_jid) === String(_chatAct));
+    const contactName = rowChat ? _nombreChat(rowChat) : (document.getElementById('wa-main-name')?.textContent || 'Este contacto');
     box.innerHTML = rows.map(m => {
       const cuando = m.scheduled_at || m.ts;
       const dia = new Date(cuando).toDateString();
@@ -26185,9 +26200,12 @@ const WaChatModule = (() => {
           <button class="wa-msg__react" title="Reaccionar" onclick="WaChatModule.reactPop(event,'${msgIdJs}','${miActualJs}')">🙂</button>
           <button class="wa-msg__reply" title="Responder a este mensaje" onclick="WaChatModule.responderA('${msgIdJs}','${esc(quien).replace(/'/g, "\\'")}','${esc(m.texto).replace(/'/g, "\\'").replace(/\n/g, ' ')}')">${NI('responder', 13)}</button>
         </div>`;
+      // Como cada mensaje acá tiene como máximo dos reactores (yo y la otra persona),
+      // mostrar el nombre dice más que un número — igual que Zulip cuando reacciona
+      // una sola persona.
       const reacBits = [];
-      if (m.su_reaccion) reacBits.push(`<span class="slk-reac" title="Su reacción">${esc(m.su_reaccion)}</span>`);
-      if (m.mi_reaccion) reacBits.push(`<span class="slk-reac mine" title="Tu reacción — clic para quitar" onclick="event.stopPropagation();WaChatModule.reaccionar('${msgIdJs}','')">${esc(m.mi_reaccion)}</span>`);
+      if (m.su_reaccion) reacBits.push(`<span class="slk-reac" title="Su reacción">${esc(m.su_reaccion)} ${esc(contactName)}</span>`);
+      if (m.mi_reaccion) reacBits.push(`<span class="slk-reac mine" title="Tu reacción — clic para quitar" onclick="event.stopPropagation();WaChatModule.reaccionar('${msgIdJs}','')">${esc(m.mi_reaccion)} Tú</span>`);
       const reacHtml = reacBits.length ? `<div class="wa-msg__reactions">${reacBits.join('')}</div>` : '';
       // OJO: .wa-msg__bubble usa white-space:pre-wrap, así que cualquier salto de línea
       // o sangría de ESTE código (si se escribiera en varias líneas) se vería como
