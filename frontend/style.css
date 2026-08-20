@@ -15321,13 +15321,16 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .wa-msg__time { display: block; margin-top: 2px; font-size: .62rem; color: var(--text-muted); text-align: right; }
 .wa-msg__sender { font-size: .72rem; font-weight: 700; color: var(--primary); margin-bottom: 2px; }
 .wa-msg__quoted { font-size: .74rem; color: var(--text-muted); border-left: 2px solid var(--border); padding: 1px 0 1px 7px; margin-bottom: 4px; opacity: .85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
-.wa-msg__reply {
-  position: absolute; top: 4px; right: 4px; display: none; align-items: center;
+.wa-msg__actions { position: absolute; top: 4px; right: 4px; display: none; gap: 3px; }
+.wa-msg:hover .wa-msg__actions { display: flex; }
+.wa-msg__actions button {
+  display: inline-flex; align-items: center; justify-content: center;
   border: 1px solid var(--border); background: var(--surface); color: var(--text-muted);
-  border-radius: 7px; padding: 3px 5px; cursor: pointer; line-height: 0;
+  border-radius: 7px; padding: 3px 5px; cursor: pointer; line-height: 1; font-size: .78rem;
 }
-.wa-msg:hover .wa-msg__reply { display: inline-flex; }
-.wa-msg__reply:hover { color: var(--primary); border-color: var(--primary); }
+.wa-msg__actions button:hover { color: var(--primary); border-color: var(--primary); }
+.wa-msg__reactions { display: flex; gap: 3px; margin-top: 3px; }
+.slk-mm-reac.mine { background: var(--primary-soft); }
 #wa-quote { margin: 8px 14px 0; }
 
 /* "Nuevo chat" — modal de búsqueda de contactos / número directo */

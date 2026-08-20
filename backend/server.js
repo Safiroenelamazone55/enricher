@@ -8245,10 +8245,13 @@ app.get('/api/wa/connections/:id/chats/:jid/mensajes', requireAuth, async (req, 
     const own = await pool.query(`SELECT id FROM wa_connections WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId]);
     if (!own.rows.length) return res.status(404).json({ error: 'No encontrada' });
     const { rows } = await pool.query(`
-      SELECT id, from_me, nombre, texto, ts, reply_to_id, reply_to_texto, msg_id, estado, scheduled_at
-        FROM wa_messages
-       WHERE connection_id=$1 AND chat_jid=$2
-       ORDER BY COALESCE(scheduled_at, ts) DESC LIMIT 100`,
+      SELECT m.id, m.from_me, m.nombre, m.texto, m.ts, m.reply_to_id, m.reply_to_texto, m.msg_id, m.estado, m.scheduled_at,
+             rm.emoji AS mi_reaccion, ro.emoji AS su_reaccion
+        FROM wa_messages m
+        LEFT JOIN wa_reactions rm ON rm.connection_id = m.connection_id AND rm.msg_id = m.msg_id AND rm.from_me = TRUE
+        LEFT JOIN wa_reactions ro ON ro.connection_id = m.connection_id AND ro.msg_id = m.msg_id AND ro.from_me = FALSE
+       WHERE m.connection_id=$1 AND m.chat_jid=$2
+       ORDER BY COALESCE(m.scheduled_at, m.ts) DESC LIMIT 100`,
       [req.params.id, req.params.jid]);
     res.json(rows.reverse());
   } catch (err) { res.status(500).json({ error: 'Error al cargar los mensajes' }); }
@@ -8298,6 +8301,17 @@ app.delete('/api/wa/connections/:id/scheduled/:msgId', requireAuth, async (req, 
     if (!r.rowCount) return res.status(404).json({ error: 'No encontrado o ya se envió' });
     res.json({ ok: true });
   } catch (err) { console.error('[wa] cancelar programado', err.message); res.status(500).json({ error: 'No se pudo cancelar' }); }
+});
+
+// Reaccionar (👍❤️😂...) a un mensaje puntual. emoji='' quita mi reacción (toggle).
+app.post('/api/wa/connections/:id/chats/:jid/mensajes/:msgId/reaccion', requireAuth, async (req, res) => {
+  const emoji = String((req.body || {}).emoji || '').trim();
+  try {
+    const own = await pool.query(`SELECT id FROM wa_connections WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId]);
+    if (!own.rows.length) return res.status(404).json({ error: 'No encontrada' });
+    await waSvc.reaccionar(pool, +req.params.id, req.params.jid, req.params.msgId, emoji);
+    res.json({ ok: true });
+  } catch (err) { console.error('[wa] reaccionar', err.message); res.status(400).json({ error: err.message || 'No se pudo reaccionar' }); }
 });
 
 // ── POST /api/gcal/meet ───────────────────────────────────────────

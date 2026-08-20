@@ -186,6 +186,30 @@ async function _connect(pool, id) {
     for (const m of ev.messages) await _guardarMensaje(pool, sock, id, m);
   });
 
+  // Reacciones (👍❤️😂...) puestas desde el OTRO lado (el teléfono de la contraparte,
+  // o el mío si reacciono desde el celular en vez de acá). key = el mensaje original
+  // reaccionado; reaction.key.fromMe distingue si fui yo o la otra persona.
+  sock.ev.on('messages.reaction', async (reacciones) => {
+    for (const r of (reacciones || [])) {
+      try {
+        const jid = await _resolverJid(sock, r.key?.remoteJid || '');
+        const msgId = r.key?.id;
+        const emoji = r.reaction?.text || '';
+        const deMi = !!r.reaction?.key?.fromMe;
+        if (!msgId || !_esChatValido(jid)) continue;
+        if (!emoji) {
+          await pool.query(`DELETE FROM wa_reactions WHERE connection_id=$1 AND msg_id=$2 AND from_me=$3`, [id, msgId, deMi]);
+        } else {
+          await pool.query(`
+            INSERT INTO wa_reactions (connection_id, chat_jid, msg_id, from_me, emoji, updated_at)
+            VALUES ($1,$2,$3,$4,$5,NOW())
+            ON CONFLICT (connection_id, msg_id, from_me) DO UPDATE SET emoji=EXCLUDED.emoji, updated_at=NOW()`,
+            [id, jid, msgId, deMi, emoji]);
+        }
+      } catch (e) { console.warn('[wa] reacción entrante:', e.message); }
+    }
+  });
+
   // Se dispara una vez tras conectar (puede repetirse en tandas: progress/isLatest)
   // con lo que el teléfono ya trae: contactos guardados y mensajes recientes de cada
   // chat. Es lo que llena "chats previos" sin que Jenny tenga que escribir primero.
@@ -244,6 +268,28 @@ async function enviar(pool, id, jid, texto, respondeA) {
     VALUES ($1,$2,$3,TRUE,$4,NOW(),$5,$6) ON CONFLICT (connection_id, msg_id) DO NOTHING`,
     [id, jidFull, res.key.id, texto, quoted ? respondeA : '', quoted ? quoted.message.conversation : '']);
   return { jid: jidFull, msg_id: res.key.id };
+}
+
+// emoji='' quita la reacción que yo había puesto (toggle, ver frontend).
+async function reaccionar(pool, id, jid, msgId, emoji) {
+  const sock = _socks.get(id);
+  if (!sock) throw new Error('Este WhatsApp no está conectado ahora mismo');
+  const jidFull = jid.includes('@') ? jid : `${jid}@s.whatsapp.net`;
+  const { rows: [orig] } = await pool.query(
+    `SELECT msg_id, from_me FROM wa_messages WHERE connection_id=$1 AND chat_jid=$2 AND msg_id=$3`,
+    [id, jidFull, msgId]);
+  if (!orig) throw new Error('No se encontró el mensaje a reaccionar');
+  const key = { remoteJid: jidFull, id: orig.msg_id, fromMe: orig.from_me };
+  await sock.sendMessage(jidFull, { react: { text: emoji, key } });
+  if (!emoji) {
+    await pool.query(`DELETE FROM wa_reactions WHERE connection_id=$1 AND msg_id=$2 AND from_me=TRUE`, [id, msgId]);
+  } else {
+    await pool.query(`
+      INSERT INTO wa_reactions (connection_id, chat_jid, msg_id, from_me, emoji, updated_at)
+      VALUES ($1,$2,$3,TRUE,$4,NOW())
+      ON CONFLICT (connection_id, msg_id, from_me) DO UPDATE SET emoji=EXCLUDED.emoji, updated_at=NOW()`,
+      [id, jidFull, msgId, emoji]);
+  }
 }
 
 async function desconectar(pool, id) {
@@ -306,4 +352,4 @@ async function reanudarTodas(pool) {
   if (!_tickerProgramados) _tickerProgramados = setInterval(() => flushProgramados(pool), 30000);
 }
 
-module.exports = { iniciar, enviar, desconectar, reanudarTodas };
+module.exports = { iniciar, enviar, reaccionar, desconectar, reanudarTodas };

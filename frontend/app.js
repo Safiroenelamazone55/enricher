@@ -26130,11 +26130,20 @@ const WaChatModule = (() => {
       const quien = m.from_me ? 'Tú' : (m.nombre || 'Este contacto');
       const remitente = (_chatActGrupo && !m.from_me && m.nombre) ? `<div class="wa-msg__sender">${esc(m.nombre)}</div>` : '';
       const citado = m.reply_to_texto ? `<div class="wa-msg__quoted">${esc(m.reply_to_texto).slice(0, 100)}</div>` : '';
-      const replyBtn = `<button class="wa-msg__reply" title="Responder a este mensaje" onclick="WaChatModule.responderA('${esc(m.msg_id).replace(/'/g, "\\'")}','${esc(quien).replace(/'/g, "\\'")}','${esc(m.texto).replace(/'/g, "\\'").replace(/\n/g, ' ')}')">${NI('responder', 13)}</button>`;
+      const msgIdJs = esc(m.msg_id).replace(/'/g, "\\'");
+      const miActualJs = esc(m.mi_reaccion || '').replace(/'/g, "\\'");
+      const actions = `<div class="wa-msg__actions">
+          <button class="wa-msg__react" title="Reaccionar" onclick="WaChatModule.reactPop(event,'${msgIdJs}','${miActualJs}')">🙂</button>
+          <button class="wa-msg__reply" title="Responder a este mensaje" onclick="WaChatModule.responderA('${msgIdJs}','${esc(quien).replace(/'/g, "\\'")}','${esc(m.texto).replace(/'/g, "\\'").replace(/\n/g, ' ')}')">${NI('responder', 13)}</button>
+        </div>`;
+      const reacBits = [];
+      if (m.su_reaccion) reacBits.push(`<span class="slk-reac" title="Su reacción">${esc(m.su_reaccion)}</span>`);
+      if (m.mi_reaccion) reacBits.push(`<span class="slk-reac mine" title="Tu reacción — clic para quitar" onclick="event.stopPropagation();WaChatModule.reaccionar('${msgIdJs}','')">${esc(m.mi_reaccion)}</span>`);
+      const reacHtml = reacBits.length ? `<div class="wa-msg__reactions">${reacBits.join('')}</div>` : '';
       // OJO: .wa-msg__bubble usa white-space:pre-wrap, así que cualquier salto de línea
       // o sangría de ESTE código (si se escribiera en varias líneas) se vería como
       // espacio en blanco real dentro de la burbuja — por eso va todo en una sola línea.
-      const bubbleHtml = `${replyBtn}${remitente}${citado}${esc(m.texto)}<span class="wa-msg__time">${_fmtHora(m.ts)}</span>`;
+      const bubbleHtml = `${actions}${remitente}${citado}${esc(m.texto)}<span class="wa-msg__time">${_fmtHora(m.ts)}</span>${reacHtml}`;
       return `${sep}<div class="wa-msg ${m.from_me ? 'wa-msg--out' : 'wa-msg--in'}"><div class="wa-msg__bubble">${bubbleHtml}</div></div>`;
     }).join('');
     if (atBottom) box.scrollTop = box.scrollHeight;
@@ -26218,6 +26227,58 @@ const WaChatModule = (() => {
     } catch (e) { alert('Error: ' + e.message); }
   }
 
+  // Reacciones rápidas (👍❤️😂...) — mismo set que ya usa el mini-chat de Slack.
+  const _REAC_RAPIDAS = ['👍', '❤️', '😂', '🎉', '✅', '🙏'];
+  function reactPop(ev, msgId, miActual) {
+    ev.stopPropagation();
+    document.querySelectorAll('.wa-react-pop').forEach(x => x.remove());
+    const pop = document.createElement('div');
+    pop.className = 'wa-react-pop slk-msgmenu';
+    pop.innerHTML = '<div class="slk-mm-reacs">' + _REAC_RAPIDAS.map(e => {
+      const mine = e === miActual;
+      const val = mine ? '' : e; // clic sobre la misma que ya puse = quitarla
+      return `<button class="slk-mm-reac${mine ? ' mine' : ''}" title="${mine ? 'Quitar' : ''}" onclick="WaChatModule.reaccionar('${msgId}','${val}')">${e}</button>`;
+    }).join('') + '</div>';
+    document.body.appendChild(pop);
+    const r = ev.currentTarget.getBoundingClientRect();
+    pop.style.cssText += `;position:fixed;z-index:10050;top:${Math.max(8, r.top - 44)}px;left:${Math.min(r.left, window.innerWidth - 210)}px`;
+    setTimeout(() => document.addEventListener('click', function o(e2) { if (!pop.contains(e2.target)) { pop.remove(); document.removeEventListener('click', o); } }), 0);
+  }
+  async function reaccionar(msgId, emoji) {
+    document.querySelectorAll('.wa-react-pop').forEach(x => x.remove());
+    if (!_conn || !_chatAct) return;
+    try {
+      const r = await apiFetch(`${API}/wa/connections/${_conn.id}/chats/${encodeURIComponent(_chatAct)}/mensajes/${encodeURIComponent(msgId)}/reaccion`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ emoji })
+      });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'No se pudo reaccionar');
+      await _cargarMensajes(_chatAct, true);
+    } catch (e) { alert('Error: ' + e.message); }
+  }
+
+  // Emoji para el mensaje que se está escribiendo (no confundir con reaccionar a uno
+  // ya enviado) — mismo picker rápido que ya usa SlackChat.
+  const _EMOJIS_COMPOSER = ['👍', '🙏', '🔥', '✅', '❤️', '😂', '🎉', '👀', '💯', '🚀', '😍', '😅', '🤝', '💪', '👏', '⭐', '😎', '🤔', '😢', '😡'];
+  function emojiPicker(ev) {
+    ev.stopPropagation();
+    document.querySelectorAll('.slk-emoji-pop').forEach(x => x.remove());
+    const pop = document.createElement('div');
+    pop.className = 'slk-emoji-pop';
+    pop.innerHTML = _EMOJIS_COMPOSER.map(e => `<button onclick="WaChatModule._emojiIns('${e}')">${e}</button>`).join('');
+    const r = ev.currentTarget.getBoundingClientRect();
+    document.body.appendChild(pop);
+    pop.style.cssText += `;position:fixed;z-index:10050;bottom:${window.innerHeight - r.top + 6}px;left:${Math.min(r.left, window.innerWidth - 240)}px`;
+    setTimeout(() => document.addEventListener('click', function o(e2) { if (!pop.contains(e2.target)) { pop.remove(); document.removeEventListener('click', o); } }), 0);
+  }
+  function _emojiIns(e) {
+    const inp = $$('wa-input'); if (!inp) return;
+    const ini = inp.selectionStart, fin = inp.selectionEnd;
+    inp.value = inp.value.slice(0, ini) + e + inp.value.slice(fin);
+    inp.focus(); inp.setSelectionRange(ini + e.length, ini + e.length);
+    ChatModule.autoResize(inp);
+    document.querySelectorAll('.slk-emoji-pop').forEach(x => x.remove());
+  }
+
   // "Nuevo chat" — busca en el directorio de contactos (gente ya guardada en el
   // teléfono, o que ya escribió) o, si no está, permite escribir el número directo.
   let _ncTimer = null;
@@ -26283,6 +26344,7 @@ const WaChatModule = (() => {
   return { load, conectar, desconectar, abrirChat, enviar, detener: _pararSondeos,
            responderA, cancelarRespuesta,
            programarToggle, programarPick, cancelarProgramado,
+           reactPop, reaccionar, emojiPicker, _emojiIns,
            nuevoChatAbrir, nuevoChatCerrar, _nuevoChatBuscar, nuevoChatElegir, nuevoChatUsarNumero };
 })();
 

@@ -1631,6 +1631,22 @@ async function initDb() {
       );
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS wa_contacts_conn_idx ON wa_contacts (connection_id);`);
+    // Reacciones (👍❤️😂...) — un cupo para "la mía" y uno para "la del otro" por
+    // mensaje, que es como WhatsApp las maneja en 1:1 (una persona, una reacción
+    // vigente; mandar otra reemplaza la anterior, vacío la quita).
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS wa_reactions (
+        id            SERIAL      PRIMARY KEY,
+        connection_id INTEGER     NOT NULL REFERENCES wa_connections(id) ON DELETE CASCADE,
+        chat_jid      TEXT        NOT NULL,
+        msg_id        TEXT        NOT NULL,
+        from_me       BOOLEAN     NOT NULL DEFAULT FALSE,
+        emoji         TEXT        NOT NULL DEFAULT '',
+        updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE (connection_id, msg_id, from_me)
+      );
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS wa_reactions_msg_idx ON wa_reactions (connection_id, msg_id);`);
 
     console.log('[db] tables ready (users, verifications, batch_jobs, clients, projects, tasks, payments, team_members, workspaces, workspace_invites, chat_messages, leads, meetings, fin_config, fin_member_config, pagos_internos, opportunities, opportunity_tasks)');
   } catch (err) {

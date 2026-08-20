@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260819f"/>
+  <link rel="stylesheet" href="style.css?v=20260820a"/>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -1328,6 +1328,9 @@
                 placeholder="Escribe un mensaje…"
                 onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();WaChatModule.enviar()}"
                 oninput="ChatModule.autoResize(this)"></textarea>
+              <button class="wa-clock" title="Emoji" onclick="WaChatModule.emojiPicker(event)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+              </button>
               <div class="wa-clock-wrap">
                 <button class="wa-clock" title="Programar envío" onclick="WaChatModule.programarToggle(event)">
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
@@ -2753,7 +2756,7 @@
 })();
 </script>
 
-<script src="app.js?v=20260819h"></script>
+<script src="app.js?v=20260820a"></script>
 <div id="task-quick-edit" style="display:none;position:fixed;z-index:9999"></div>
 </body>
 </html>
