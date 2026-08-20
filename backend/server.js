@@ -8215,7 +8215,7 @@ app.get('/api/wa/connections/:id/chats', requireAuth, async (req, res) => {
              COALESCE(NULLIF(c.nombre,''),
                CASE WHEN m.chat_jid LIKE '%@g.us' THEN NULL ELSE NULLIF(m.nombre,'') END, '') AS nombre,
              (m.chat_jid LIKE '%@g.us') AS es_grupo,
-             m.texto AS ultimo_texto, m.ts AS ultimo_ts, m.from_me
+             m.texto AS ultimo_texto, m.ts AS ultimo_ts, m.from_me, m.estado AS ultimo_estado
         FROM wa_messages m
         LEFT JOIN wa_contacts c ON c.connection_id = m.connection_id AND c.jid = m.chat_jid
        WHERE m.connection_id=$1
@@ -8245,8 +8245,10 @@ app.get('/api/wa/connections/:id/chats/:jid/mensajes', requireAuth, async (req, 
     const own = await pool.query(`SELECT id FROM wa_connections WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId]);
     if (!own.rows.length) return res.status(404).json({ error: 'No encontrada' });
     const { rows } = await pool.query(`
-      SELECT id, from_me, nombre, texto, ts, reply_to_id, reply_to_texto, msg_id FROM wa_messages
-       WHERE connection_id=$1 AND chat_jid=$2 ORDER BY ts DESC LIMIT 100`,
+      SELECT id, from_me, nombre, texto, ts, reply_to_id, reply_to_texto, msg_id, estado, scheduled_at
+        FROM wa_messages
+       WHERE connection_id=$1 AND chat_jid=$2
+       ORDER BY COALESCE(scheduled_at, ts) DESC LIMIT 100`,
       [req.params.id, req.params.jid]);
     res.json(rows.reverse());
   } catch (err) { res.status(500).json({ error: 'Error al cargar los mensajes' }); }
@@ -8255,13 +8257,47 @@ app.get('/api/wa/connections/:id/chats/:jid/mensajes', requireAuth, async (req, 
 app.post('/api/wa/connections/:id/chats/:jid/mensajes', requireAuth, async (req, res) => {
   const texto = String((req.body || {}).texto || '').trim();
   const respondeA = String((req.body || {}).respondeA || '').trim() || undefined;
+  const scheduledAt = (req.body || {}).scheduledAt ? new Date(req.body.scheduledAt) : null;
   if (!texto) return res.status(400).json({ error: 'El mensaje está vacío' });
   try {
     const own = await pool.query(`SELECT id FROM wa_connections WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId]);
     if (!own.rows.length) return res.status(404).json({ error: 'No encontrada' });
+
+    // Programado: se guarda para que lo mande waService.flushProgramados cuando toque,
+    // en vez de enviarlo ya. Igual que en el Inbox de correo, <30s en el futuro se trata
+    // como "ahora" — no tiene sentido programar algo para dentro de un segundo.
+    if (scheduledAt && !isNaN(scheduledAt) && scheduledAt.getTime() > Date.now() + 30000) {
+      const jidFull = req.params.jid.includes('@') ? req.params.jid : `${req.params.jid}@s.whatsapp.net`;
+      let replyToTexto = '';
+      if (respondeA) {
+        const { rows: [orig] } = await pool.query(
+          `SELECT texto FROM wa_messages WHERE connection_id=$1 AND chat_jid=$2 AND msg_id=$3`,
+          [req.params.id, jidFull, respondeA]);
+        replyToTexto = orig?.texto || '';
+      }
+      const placeholder = 'sched_' + require('crypto').randomUUID();
+      const { rows: [row] } = await pool.query(`
+        INSERT INTO wa_messages (connection_id, chat_jid, msg_id, from_me, texto, ts, reply_to_id, reply_to_texto, estado, scheduled_at)
+        VALUES ($1,$2,$3,TRUE,$4,NOW(),$5,$6,'programado',$7) RETURNING id`,
+        [req.params.id, jidFull, placeholder, texto, respondeA || '', replyToTexto, scheduledAt]);
+      return res.status(201).json({ ok: true, scheduled: true, id: row.id, scheduledAt: scheduledAt.toISOString() });
+    }
+
     const r = await waSvc.enviar(pool, +req.params.id, req.params.jid, texto, respondeA);
     res.status(201).json(r);
   } catch (err) { console.error('[wa] enviar', err.message); res.status(400).json({ error: err.message || 'No se pudo enviar' }); }
+});
+
+app.delete('/api/wa/connections/:id/scheduled/:msgId', requireAuth, async (req, res) => {
+  try {
+    const own = await pool.query(`SELECT id FROM wa_connections WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId]);
+    if (!own.rows.length) return res.status(404).json({ error: 'No encontrada' });
+    const r = await pool.query(
+      `DELETE FROM wa_messages WHERE id=$1 AND connection_id=$2 AND estado='programado'`,
+      [req.params.msgId, req.params.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'No encontrado o ya se envió' });
+    res.json({ ok: true });
+  } catch (err) { console.error('[wa] cancelar programado', err.message); res.status(500).json({ error: 'No se pudo cancelar' }); }
 });
 
 // ── POST /api/gcal/meet ───────────────────────────────────────────

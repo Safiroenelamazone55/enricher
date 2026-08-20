@@ -15298,6 +15298,20 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .wa-main__composer { display: flex; align-items: flex-end; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border); flex-shrink: 0; }
 .wa-main__composer .chat-composer__field { flex: 1; }
 
+/* ── Programar envío ── */
+.wa-clock-wrap { position: relative; flex-shrink: 0; }
+.wa-clock { border: 1px solid var(--border); background: var(--surface); border-radius: 8px; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text-secondary); transition: all .12s; }
+.wa-clock:hover { color: var(--primary); border-color: var(--primary); background: var(--primary-soft); }
+.wa-sched { position: absolute; bottom: 40px; right: 0; z-index: 60; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 8px 24px rgba(20,33,27,.12); padding: 8px; min-width: 190px; }
+.wa-sched__t { font-size: .68rem; font-weight: 600; color: var(--text-muted); padding: 2px 6px 6px; }
+.wa-sched__opt { display: block; width: 100%; text-align: left; border: none; background: none; cursor: pointer; font-family: inherit; font-size: .78rem; color: var(--text-primary); padding: 6px 8px; border-radius: 6px; }
+.wa-sched__opt:hover { background: var(--primary-soft); color: var(--primary); }
+.wa-sched__custom { display: flex; gap: 5px; align-items: center; border-top: 1px solid var(--border); margin-top: 6px; padding-top: 8px; }
+.wa-msg--sched .wa-msg__bubble { border: 1.5px dashed var(--primary-border, var(--border)); background: var(--surface); opacity: .92; }
+.wa-msg__sched-badge { display: flex; align-items: center; gap: 4px; font-size: .68rem; font-weight: 600; color: var(--primary); margin-bottom: 3px; }
+.wa-msg__cancel { border: none; background: none; cursor: pointer; font-family: inherit; font-size: .66rem; font-weight: 600; color: var(--danger, #C4342B); margin-left: 6px; padding: 0 3px; }
+.wa-msg__cancel:hover { text-decoration: underline; }
+
 .wa-msg { display: flex; min-width: 0; }
 .wa-msg--in { justify-content: flex-start; }
 .wa-msg--out { justify-content: flex-end; }

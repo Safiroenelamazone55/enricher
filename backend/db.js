@@ -1611,6 +1611,12 @@ async function initDb() {
     // vista previa aunque el original sea de antes de conectar Nova y no esté en la tabla.
     await pool.query(`ALTER TABLE wa_messages ADD COLUMN IF NOT EXISTS reply_to_id     TEXT NOT NULL DEFAULT '';`);
     await pool.query(`ALTER TABLE wa_messages ADD COLUMN IF NOT EXISTS reply_to_texto  TEXT NOT NULL DEFAULT '';`);
+    // Envío programado: msg_id de una fila 'programado' es un placeholder local (no
+    // existe todavía en WhatsApp) hasta que waService la envía de verdad y reemplaza
+    // el msg_id por el real que devuelve Baileys.
+    await pool.query(`ALTER TABLE wa_messages ADD COLUMN IF NOT EXISTS estado        TEXT NOT NULL DEFAULT 'enviado';`);
+    await pool.query(`ALTER TABLE wa_messages ADD COLUMN IF NOT EXISTS scheduled_at  TIMESTAMPTZ;`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS wa_messages_sched_idx ON wa_messages (estado, scheduled_at) WHERE estado='programado';`);
     // Directorio de nombres (contactos guardados en el teléfono + gente que ya
     // escribió) — separado de wa_messages para poder listar "con quién puedo
     // escribir" (el "Nuevo chat") sin depender de que ya exista una conversación.

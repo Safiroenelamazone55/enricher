@@ -26075,7 +26075,7 @@ const WaChatModule = (() => {
             <span class="wa-chat-item__name">${esc(_nombreChat(c))}</span>
             <span class="wa-chat-item__time">${_fmtListaFecha(c.ultimo_ts)}</span>
           </div>
-          <div class="wa-chat-item__preview">${c.from_me ? 'Tú: ' : ''}${esc(c.ultimo_texto || '')}</div>
+          <div class="wa-chat-item__preview">${c.ultimo_estado === 'programado' ? '🕑 Programado: ' : (c.from_me ? 'Tú: ' : '')}${esc(c.ultimo_texto || '')}</div>
         </div>
       </div>`).join('');
   }
@@ -26112,9 +26112,21 @@ const WaChatModule = (() => {
     }
     let prevDia = '';
     box.innerHTML = rows.map(m => {
-      const dia = new Date(m.ts).toDateString();
-      const sep = dia !== prevDia ? `<div class="chat-date-sep"><span>${_fmtSepFecha(m.ts)}</span></div>` : '';
+      const cuando = m.scheduled_at || m.ts;
+      const dia = new Date(cuando).toDateString();
+      const sep = dia !== prevDia ? `<div class="chat-date-sep"><span>${_fmtSepFecha(cuando)}</span></div>` : '';
       prevDia = dia;
+
+      if (m.estado === 'programado' || m.estado === 'error_programado') {
+        const fecha = new Date(m.scheduled_at).toLocaleString('es-PE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+        const badge = m.estado === 'error_programado'
+          ? `⚠ No se pudo enviar (¿WhatsApp desconectado?)`
+          : `${NI('clock', 11)} Programado · saldrá el ${fecha}`;
+        const cancelBtn = m.estado === 'programado' ? `<button class="wa-msg__cancel" onclick="WaChatModule.cancelarProgramado(${m.id})">Cancelar</button>` : '';
+        const bubbleHtml = `<div class="wa-msg__sched-badge">${badge}${cancelBtn}</div>${esc(m.texto)}`;
+        return `${sep}<div class="wa-msg wa-msg--out wa-msg--sched"><div class="wa-msg__bubble">${bubbleHtml}</div></div>`;
+      }
+
       const quien = m.from_me ? 'Tú' : (m.nombre || 'Este contacto');
       const remitente = (_chatActGrupo && !m.from_me && m.nombre) ? `<div class="wa-msg__sender">${esc(m.nombre)}</div>` : '';
       const citado = m.reply_to_texto ? `<div class="wa-msg__quoted">${esc(m.reply_to_texto).slice(0, 100)}</div>` : '';
@@ -26145,7 +26157,7 @@ const WaChatModule = (() => {
       <button class="rchat-quote__x" onclick="WaChatModule.cancelarRespuesta()" title="Cancelar">✕</button>`;
   }
 
-  async function enviar() {
+  async function enviar(scheduledAt) {
     const input = $$('wa-input');
     const texto = (input?.value || '').trim();
     if (!texto || !_conn || !_chatAct) return;
@@ -26154,7 +26166,7 @@ const WaChatModule = (() => {
     _replyTo = null; _pintaQuote();
     try {
       const r = await apiFetch(`${API}/wa/connections/${_conn.id}/chats/${encodeURIComponent(_chatAct)}/mensajes`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ texto, respondeA })
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ texto, respondeA, scheduledAt })
       });
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'No se pudo enviar');
       await _cargarMensajes(_chatAct, true);
@@ -26163,6 +26175,47 @@ const WaChatModule = (() => {
       alert('Error: ' + e.message);
       input.value = texto;
     }
+  }
+
+  // "Programar envío" — mismo criterio de opciones rápidas que el Inbox de correo.
+  function programarToggle(ev) {
+    if (ev) ev.stopPropagation();
+    const p = $$('wa-sched'); if (!p) return;
+    const show = p.style.display === 'none';
+    p.style.display = show ? '' : 'none';
+    if (show) {
+      const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0);
+      const pad = n => String(n).padStart(2, '0');
+      const inp = $$('wa-sched-dt');
+      if (inp && !inp.value) inp.value = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      const close = e => { if (!p.contains(e.target)) { p.style.display = 'none'; document.removeEventListener('click', close); } };
+      setTimeout(() => document.addEventListener('click', close), 0);
+    }
+  }
+  function programarPick(kind) {
+    let d = new Date();
+    if (kind === 'h1') d = new Date(Date.now() + 60 * 60 * 1000);
+    else if (kind === 'h3') d = new Date(Date.now() + 3 * 60 * 60 * 1000);
+    else if (kind === 'man9') { d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0); }
+    else if (kind === 'lun9') { const add = ((8 - d.getDay()) % 7) || 7; d.setDate(d.getDate() + add); d.setHours(9, 0, 0, 0); }
+    else if (kind === 'custom') {
+      const v = $$('wa-sched-dt')?.value;
+      if (!v) return;
+      d = new Date(v);
+      if (isNaN(d) || d.getTime() < Date.now() + 60 * 1000) { alert('Elige una fecha futura.'); return; }
+    }
+    const p = $$('wa-sched'); if (p) p.style.display = 'none';
+    enviar(d.toISOString());
+  }
+
+  async function cancelarProgramado(rowId) {
+    if (!_conn) return;
+    try {
+      const r = await apiFetch(`${API}/wa/connections/${_conn.id}/scheduled/${rowId}`, { method: 'DELETE' });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'No se pudo cancelar');
+      await _cargarMensajes(_chatAct, true);
+      await _cargarChats(true);
+    } catch (e) { alert('Error: ' + e.message); }
   }
 
   // "Nuevo chat" — busca en el directorio de contactos (gente ya guardada en el
@@ -26229,6 +26282,7 @@ const WaChatModule = (() => {
 
   return { load, conectar, desconectar, abrirChat, enviar, detener: _pararSondeos,
            responderA, cancelarRespuesta,
+           programarToggle, programarPick, cancelarProgramado,
            nuevoChatAbrir, nuevoChatCerrar, _nuevoChatBuscar, nuevoChatElegir, nuevoChatUsarNumero };
 })();
 

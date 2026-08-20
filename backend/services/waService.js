@@ -255,6 +255,44 @@ async function desconectar(pool, id) {
     `UPDATE wa_connections SET estado='desconectado', qr_actual='', numero='', updated_at=NOW() WHERE id=$1`, [id]);
 }
 
+// Envía los mensajes programados que ya cumplieron su hora. A diferencia del correo
+// (que solo necesita las credenciales guardadas), acá hace falta que el socket siga
+// vivo AHORA MISMO — si se desconectó el WhatsApp, se marca error en vez de perderlo.
+async function flushProgramados(pool) {
+  try {
+    const { rows: due } = await pool.query(`
+      SELECT id, connection_id, chat_jid, texto, reply_to_id FROM wa_messages
+       WHERE estado='programado' AND scheduled_at <= NOW()
+       ORDER BY scheduled_at ASC LIMIT 20`);
+    for (const m of due) {
+      const sock = _socks.get(m.connection_id);
+      if (!sock) {
+        await pool.query(`UPDATE wa_messages SET estado='error_programado' WHERE id=$1`, [m.id]);
+        console.warn(`[wa] programado ${m.id}: la conexión ${m.connection_id} no está conectada ahora, no se pudo enviar`);
+        continue;
+      }
+      try {
+        let quoted;
+        if (m.reply_to_id) {
+          const { rows: [orig] } = await pool.query(
+            `SELECT msg_id, from_me, texto FROM wa_messages WHERE connection_id=$1 AND chat_jid=$2 AND msg_id=$3`,
+            [m.connection_id, m.chat_jid, m.reply_to_id]);
+          if (orig) quoted = { key: { remoteJid: m.chat_jid, id: orig.msg_id, fromMe: orig.from_me }, message: { conversation: orig.texto } };
+        }
+        const res = await sock.sendMessage(m.chat_jid, { text: m.texto }, quoted ? { quoted } : undefined);
+        await pool.query(
+          `UPDATE wa_messages SET msg_id=$1, estado='enviado', ts=NOW() WHERE id=$2`,
+          [res.key.id, m.id]);
+      } catch (e) {
+        await pool.query(`UPDATE wa_messages SET estado='error_programado' WHERE id=$1`, [m.id]);
+        console.warn(`[wa] programado ${m.id} falló:`, e.message);
+      }
+    }
+  } catch (e) { console.warn('[wa] flushProgramados:', e.message); }
+}
+
+let _tickerProgramados = null;
+
 // Al arrancar el server: retoma las conexiones que ya estaban vinculadas (o esperando
 // QR) sin que Jenny tenga que volver a escanear cada vez que se reinicia PM2.
 async function reanudarTodas(pool) {
@@ -265,6 +303,7 @@ async function reanudarTodas(pool) {
       iniciar(pool, r.id).catch(e => console.warn(`[wa] reanudar ${r.id}:`, e.message));
     }
   } catch (e) { console.warn('[wa] reanudarTodas:', e.message); }
+  if (!_tickerProgramados) _tickerProgramados = setInterval(() => flushProgramados(pool), 30000);
 }
 
 module.exports = { iniciar, enviar, desconectar, reanudarTodas };
