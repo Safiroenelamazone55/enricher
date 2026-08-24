@@ -9299,7 +9299,7 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 #dash2-tasks {
   display: flex;
   flex-direction: column;
-  max-height: min(316px, calc(100vh - 264px));
+  max-height: min(351px, calc(100vh - 229px));
 }
 #dash2-tasks .d3-card-header {
   flex: 0 0 auto;
@@ -13492,11 +13492,11 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
   background: #fff;
   border: 1px solid var(--border, #EAE7E2);
   border-radius: 16px;
-  padding: 16px 18px 14px;
+  padding: 12px 18px 10px;
   width: 100%; max-width: 440px;
   box-shadow: 0 1px 2px rgba(16,24,40,.05);
 }
-.rc-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.rc-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
 .rc-label { font-size: 13px; font-weight: 600; color: var(--text2, #6C6862); }
 .rc-val {
   display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap;
@@ -13508,24 +13508,24 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
 .rc-pct--up   { color: #067647; background: rgba(0,122,255,.10); }
 .rc-pct--down { color: #B42318; background: rgba(220,38,38,.10); }
 .rc-tabs {
-  display: inline-flex; gap: 2px; margin: 12px 0 10px;
+  display: inline-flex; gap: 2px; margin: 6px 0 4px;
   background: var(--bg2, #F1EFEB); border-radius: 9px; padding: 3px;
 }
 .rc-tab {
   border: 0; background: transparent; cursor: pointer; font-family: inherit;
-  padding: 5px 14px; border-radius: 7px;
+  padding: 4px 14px; border-radius: 7px;
   font-size: 12px; font-weight: 600; color: var(--muted, #6C6862);
   transition: background .12s, color .12s;
 }
 .rc-tab--on { background: #fff; color: var(--text, #1F1D1B); box-shadow: 0 1px 2px rgba(16,24,40,.10); }
-.rc-chart { height: 58px; }
-.rc-svg { width: 100%; height: 58px; display: block; }
+.rc-chart { height: 49px; }
+.rc-svg { width: 100%; height: 49px; display: block; }
 .rc-chart--skel {
   border-radius: 8px;
   background: linear-gradient(90deg, var(--bg,#F1EFEB), var(--bg2,#F1EFEB), var(--bg,#F1EFEB));
 }
-.rc-empty { padding: 14px 0; font-size: 12.5px; color: var(--muted, #B4AFA8); text-align: center; }
-.rc-foot { font-size: 11.5px; color: var(--muted, #B4AFA8); margin-top: 8px; }
+.rc-empty { padding: 6px 0; font-size: 12.5px; color: var(--muted, #B4AFA8); text-align: center; }
+.rc-foot { font-size: 11.5px; color: var(--muted, #B4AFA8); margin-top: 4px; }
 
 /* ══════════════════════════════════════════════════════════════
    HEATMAP DE ACTIVIDAD (día de la semana × hora) — al lado de Ingresos
@@ -13540,7 +13540,7 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
 .d3-actcard {
   flex: 1 1 auto; min-width: 0;
   background: #fff; border: 1px solid var(--border, #EAE7E2);
-  border-radius: 16px; padding: 14px 16px 12px;
+  border-radius: 16px; padding: 10px 16px 8px;
   box-shadow: 0 1px 2px rgba(16,24,40,.05);
   display: flex; gap: 20px; align-items: stretch;
 }
@@ -13581,16 +13581,16 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
 /* Cronómetro como COLUMNA a la derecha del heatmap (baja el alto de la tarjeta) */
 .d3-act-timer { flex: 1 1 280px; min-width: 260px; max-width: 440px; margin: 0; padding: 2px 0 2px 20px; border-top: none; border-left: 1px solid var(--border, #EAE7E2); display: flex; flex-direction: column; }
 .d3-act-timer:empty { display: none; }
-.d3-act-statsrow { display: flex; flex-direction: column; align-items: stretch; gap: 12px; margin-bottom: 12px; }
+.d3-act-statsrow { display: flex; flex-direction: column; align-items: stretch; gap: 8px; margin-bottom: 8px; }
 .d3-act-today { display: flex; align-items: center; gap: 11px; }
-.d3-act-today .d3-hrs-total { font-size: 1.45rem; font-weight: 800; }
+.d3-act-today .d3-hrs-total { font-size: 1.25rem; font-weight: 800; }
 .d3-act-today__meta { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .d3-act-today__lbl { font-size: 11.5px; color: var(--muted, #B4AFA8); }
 .d3-act-today .d3-hrs-pct { font-size: 13px; font-weight: 700; }
 /* Reusa el estilo del widget viejo, sin sus márgenes de 18px (ya vive dentro de la tarjeta) */
 .d3-act-timer .d3-hrs-now { margin: 0 0 12px; }
 .d3-act-timer .d3-hrs-metrics { padding: 0; border-top: none; grid-template-columns: repeat(2, 1fr); row-gap: 12px; }
-.d3-act-timer .d3-hrs-btn { width: 100%; margin: auto 0 0; height: 38px; font-size: .86rem; }
+.d3-act-timer .d3-hrs-btn { width: 100%; margin: auto 0 0; height: 32px; font-size: .86rem; }
 /* Timer ACTIVO compacto: tarjeta a la altura del heatmap, sin huecos ni desproporción */
 .d3-act-timer .d3-hrs-actions { padding: 0; margin-top: 4px; gap: 6px; }
 .d3-act-timer .d3-hrs-now { margin: 0 0 5px; padding: 5px 10px; }
@@ -13599,9 +13599,9 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
 .d3-act-timer .d3-hrs-now__ctx { margin-top: 0; font-size: .66rem; }
 .d3-act-timer .d3-hrs-now__time { font-size: .82rem; margin-top: 0; }
 .d3-act-timer .d3-hrs-act { height: 30px; }
-.d3-act-timer .d3-act-statsrow { gap: 7px; margin-bottom: 7px; }
+.d3-act-timer .d3-act-statsrow { gap: 6px; margin-bottom: 4px; }
 .d3-act-timer .d3-act-today .d3-hrs-total { font-size: 1.15rem; white-space: nowrap; }
-.d3-act-timer .d3-hrs-metrics { row-gap: 6px; column-gap: 8px; }
+.d3-act-timer .d3-hrs-metrics { row-gap: 4px; column-gap: 8px; }
 .d3-act-timer .d3-hrs-metric__v { font-size: .92rem; }
 .d3-act-timer .d3-hrs-act { height: 32px; padding: 0 10px; font-size: .76rem; }
 .d3-act-timer .d3-hrs-changetask { padding: 0 3px; white-space: nowrap; font-size: .76rem; }
@@ -13625,8 +13625,8 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
 .ac-legend i { width: 11px; height: 11px; border-radius: 2px; display: inline-block; }
 .ac-grid { display: grid; grid-template-columns: 28px repeat(24, minmax(0, 1fr)); gap: 2px; align-items: center; }
 .ac-hlbl { font-size: 9px; color: var(--muted, #B4AFA8); text-align: center; line-height: 1; }
-.ac-rowlbl { font-size: 10px; font-weight: 600; color: var(--text2, #6C6862); display: flex; align-items: center; height: 13px; }
-.ac-cell { height: 13px; border-radius: 3px; background: #F1EFEB; }
+.ac-rowlbl { font-size: 10px; font-weight: 600; color: var(--text2, #6C6862); display: flex; align-items: center; height: 11px; }
+.ac-cell { height: 11px; border-radius: 3px; background: #F1EFEB; }
 .ac-cell--l0 { background: #F1EFEB; }
 .ac-cell--l1 { background: #EAE7E2; }
 .ac-cell--l2 { background: #A3D9B6; }
