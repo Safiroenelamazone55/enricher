@@ -2095,7 +2095,7 @@ async function _syncParentEstado(uid, parentId) {
   const { rows: [p] } = await pool.query(`SELECT id, estado FROM tasks WHERE id=$1 AND user_id=$2`, [parentId, uid]);
   if (!p) return null;
   const { rows: [c] } = await pool.query(
-    `SELECT COUNT(*)::int AS n, COUNT(*) FILTER (WHERE estado='completado')::int AS ok
+    `SELECT COUNT(*)::int AS n, COUNT(*) FILTER (WHERE estado IN ('completado','cancelado'))::int AS ok
        FROM tasks WHERE parent_task_id=$1 AND user_id=$2`, [parentId, uid]);
   if (!c.n) return null;
   const todas = c.ok === c.n;
@@ -2113,7 +2113,7 @@ async function _syncParentEstado(uid, parentId) {
 // ── PATCH /api/mgmt/tasks/:id/status ─────────────────────────────
 app.patch('/api/mgmt/tasks/:id/status', requireAuth, async (req, res) => {
   const { estado } = req.body;
-  const VALID = ['pendiente', 'en_progreso', 'bloqueado', 'completado'];
+  const VALID = ['pendiente', 'en_progreso', 'bloqueado', 'completado', 'cancelado'];
   if (!VALID.includes(estado)) return res.status(400).json({ error: 'Estado inválido' });
   try {
     const { rows } = await pool.query(
@@ -3086,7 +3086,7 @@ app.get('/api/mgmt/team', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(`
       SELECT tm.*,
-             COUNT(t.id) FILTER (WHERE t.estado != 'completado') AS tareas_activas,
+             COUNT(t.id) FILTER (WHERE t.estado NOT IN ('completado','cancelado')) AS tareas_activas,
              COUNT(t.id)                                          AS tareas_total
       FROM   team_members tm
       LEFT JOIN tasks t ON LOWER(TRIM(t.responsable)) = LOWER(TRIM(tm.nombre))
@@ -6922,8 +6922,8 @@ app.delete('/api/mgmt/fin-movimientos/:id', requireAuth, async (req, res) => {
 
 const OPP_ESTADOS = ['activa', 'nueva', 'en_proceso', 'esperando', 'entrevista', 'propuesta', 'piloto', 'ganada', 'perdida', 'rechazada', 'archivada'];
 const OPP_ETAPAS  = ['aplicacion', 'conversacion', 'preseleccion', 'revision', 'entrevista', 'piloto', 'propuesta', 'contrato'];
-// Estados de tareas internas: idénticos a tareas normales (pendiente/en_progreso/completado/bloqueado)
-const OPP_TASK_ESTADOS = ['pendiente', 'en_progreso', 'completado', 'bloqueado'];
+// Estados de tareas internas: idénticos a tareas normales (pendiente/en_progreso/completado/bloqueado/cancelado)
+const OPP_TASK_ESTADOS = ['pendiente', 'en_progreso', 'completado', 'bloqueado', 'cancelado'];
 const normOppTaskEstado = e => {
   if (e === 'completada') e = 'completado';   // legacy
   return OPP_TASK_ESTADOS.includes(e) ? e : 'pendiente';
@@ -7288,7 +7288,7 @@ app.get('/api/mgmt/dashboard', requireAuth, async (req, res) => {
         SELECT COUNT(*) AS total
         FROM tasks t
         WHERE t.user_id = $1
-          AND t.estado != 'completado'
+          AND t.estado NOT IN ('completado','cancelado')
           AND ${_memberMatch('t')}
       `, [uid, memberNombre, userDispName]),
 
@@ -7301,7 +7301,7 @@ app.get('/api/mgmt/dashboard', requireAuth, async (req, res) => {
         LEFT JOIN projects p ON t.project_id = p.id
         LEFT JOIN clients  c ON p.client_id  = c.id
         WHERE  t.user_id = $1
-          AND  t.estado != 'completado'
+          AND  t.estado NOT IN ('completado','cancelado')
           AND  t.deadline = CURRENT_DATE
           AND  ${_memberMatch('t')}
         ORDER BY t.created_at DESC
@@ -7317,7 +7317,7 @@ app.get('/api/mgmt/dashboard', requireAuth, async (req, res) => {
         LEFT JOIN projects p ON t.project_id = p.id
         LEFT JOIN clients  c ON p.client_id  = c.id
         WHERE  t.user_id = $1
-          AND  t.estado != 'completado'
+          AND  t.estado NOT IN ('completado','cancelado')
           AND  ((t.deadline IS NOT NULL AND t.deadline < CURRENT_DATE) OR t.estado = 'bloqueado')
           AND  ${_memberMatch('t')}
         ORDER BY
@@ -7757,7 +7757,7 @@ app.post('/api/gcal/sync-task', requireAuth, async (req, res) => {
       description: [t.descripcion, t.project_nombre && `Proyecto: ${t.project_nombre}`, t.client_nombre && `Cliente: ${t.client_nombre}`].filter(Boolean).join('\n'),
       start: deadline ? { date: deadline } : { dateTime: new Date().toISOString(), timeZone: 'America/Bogota' },
       end:   deadline ? { date: deadline } : { dateTime: new Date(Date.now() + 3600000).toISOString(), timeZone: 'America/Bogota' },
-      colorId: t.estado === 'completado' ? '8' : t.estado === 'bloqueado' ? '11' : '5',
+      colorId: t.estado === 'completado' ? '8' : t.estado === 'bloqueado' ? '11' : t.estado === 'cancelado' ? '3' : '5',
     };
     let gcalEventId = t.gcal_event_id;
     if (gcalEventId) {
@@ -9053,7 +9053,7 @@ app.get('/api/analytics/summary', requireAuth, async (req, res) => {
                 COUNT(*) FILTER (WHERE estado='completado'
                   AND updated_at >= $2 AND updated_at < $3) AS completed,
                 COUNT(*) FILTER (WHERE deadline < NOW()::date
-                  AND estado NOT IN ('completado')) AS overdue
+                  AND estado NOT IN ('completado','cancelado')) AS overdue
          FROM tasks
          WHERE user_id=$1
            AND NULLIF(TRIM(responsable), '') IS NOT NULL
@@ -9061,7 +9061,7 @@ app.get('/api/analytics/summary', requireAuth, async (req, res) => {
          HAVING COUNT(*) FILTER (WHERE estado='completado'
                     AND updated_at >= $2 AND updated_at < $3) > 0
              OR COUNT(*) FILTER (WHERE deadline < NOW()::date
-                    AND estado NOT IN ('completado')) > 0
+                    AND estado NOT IN ('completado','cancelado')) > 0
          ORDER BY completed DESC`,
         [wid, start, end]
       ),

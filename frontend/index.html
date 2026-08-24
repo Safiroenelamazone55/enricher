@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260820i"/>
+  <link rel="stylesheet" href="style.css?v=20260820k"/>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -805,6 +805,16 @@
                 <button class="kanban-col__add" onclick="TasksModule.openDrawerWithStatus('completado')" title="Nueva tarea">+</button>
               </div>
               <div class="kanban-cards" id="kanban-col-completado"></div>
+            </div>
+            <div class="kanban-col" data-kanban-status="cancelado">
+              <div class="kanban-col__head" data-status="cancelado">
+                <div class="kanban-col__title">
+                  <span class="kanban-col__dot"></span>Cancelado
+                  <span class="kanban-count" id="kanban-count-cancelado">0</span>
+                </div>
+                <button class="kanban-col__add" onclick="TasksModule.openDrawerWithStatus('cancelado')" title="Nueva tarea">+</button>
+              </div>
+              <div class="kanban-cards" id="kanban-col-cancelado"></div>
             </div>
           </div>
         </div>
@@ -1955,6 +1965,7 @@
           <option value="en_progreso">En progreso</option>
           <option value="completado">Completado</option>
           <option value="bloqueado">Bloqueado</option>
+          <option value="cancelado">Cancelado</option>
         </select>
       </div>
       <div>
@@ -2768,7 +2779,7 @@
 })();
 </script>
 
-<script src="app.js?v=20260820j"></script>
+<script src="app.js?v=20260820k"></script>
 <div id="task-quick-edit" style="display:none;position:fixed;z-index:9999"></div>
 </body>
 </html>

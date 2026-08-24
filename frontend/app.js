@@ -47,6 +47,7 @@ const OPP_TASK_STATES = [
   ['en_progreso', 'En progreso', '#6366F1', true,  'inprogress'],
   ['completado',  'Completado',  '#22C55E', true,  'done'],
   ['bloqueado',   'Bloqueado',   '#EF4444', true,  'blocked'],
+  ['cancelado',   'Cancelado',   '#8E8A84', true,  'cancelled'],
 ];
 function oppTaskNorm(v) {
   if (v === 'completada') v = 'completado';   // legacy
@@ -59,6 +60,7 @@ function oppTaskStatusSvg(v) {
     en_progreso: '<circle cx="8" cy="8" r="6.5" fill="#6366F1"/><path d="M5.5 8a2.5 2.5 0 0 1 4.5-1.5" stroke="#fff" stroke-width="1.5" stroke-linecap="round" fill="none"/>',
     completado:  '<circle cx="8" cy="8" r="6.5" fill="#22C55E"/><path d="M5 8 L7.2 10.5 L11 6" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>',
     bloqueado:   '<circle cx="8" cy="8" r="6.5" fill="#EF4444"/><line x1="5.5" y1="8" x2="10.5" y2="8" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/>',
+    cancelado:   '<circle cx="8" cy="8" r="6.5" fill="#8E8A84"/><line x1="5.5" y1="5.5" x2="10.5" y2="10.5" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/><line x1="10.5" y1="5.5" x2="5.5" y2="10.5" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/>',
   }[oppTaskNorm(v)];
   return `<svg width="16" height="16" viewBox="0 0 16 16" fill="none">${ic}</svg>`;
 }
@@ -3622,7 +3624,7 @@ const FinanceModule = (() => {
     const opts = FIN_EF_STATES.map(([v, l]) => `<option value="${v}"${v === ef ? ' selected' : ''}>${l}</option>`).join('');
     const paid = _cnTaskPaid(t);
     const completedUnpaid = t.estado === 'completado' && !paid;
-    const opLbl = { pendiente: 'Pendiente', en_progreso: 'En progreso', bloqueado: 'Bloqueado', completado: 'Completado' }[t.estado] || '';
+    const opLbl = { pendiente: 'Pendiente', en_progreso: 'En progreso', bloqueado: 'Bloqueado', completado: 'Completado', cancelado: 'Cancelado' }[t.estado] || '';
     const opBadge = completedUnpaid
       ? '<span class="fin-cn-tbadge fin-cn-tbadge--pend">Completada sin cobro</span>'
       : (opLbl ? `<span class="fin-cn2-op">${opLbl}</span>` : '');
@@ -5794,6 +5796,7 @@ const DashboardModule = (() => {
       { k: 'pendiente',   label: 'Pendiente',   color: '#2563EB' },
       { k: 'bloqueado',   label: 'Bloqueado',   color: '#EF4444' },
       { k: 'completado',  label: 'Completado',  color: '#22C55E' },
+      { k: 'cancelado',   label: 'Cancelado',   color: '#8E8A84' },
     ].filter(s => (cnt[s.k] || 0) > 0);
     const bar = SEG.map(s => `<span class="d3-ov-seg" style="flex:${cnt[s.k]};background:${s.color}"></span>`).join('');
     const legend = SEG.map(s => `<div class="d3-ov-leg"><span class="d3-ov-dot" style="background:${s.color}"></span><span class="d3-ov-leg-lbl">${s.label}</span><span class="d3-ov-leg-n">${cnt[s.k]}</span></div>`).join('');
@@ -5921,6 +5924,7 @@ const DashboardModule = (() => {
     en_progreso: { dot: 'inprogress',  label: 'En progreso', icon: `<circle cx="8" cy="8" r="6.5" fill="#6366F1"/><path d="M5 8 L7.5 10.5 L11 6" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity=".4"/><path d="M5.5 8a2.5 2.5 0 0 1 4.5-1.5" stroke="#fff" stroke-width="1.5" stroke-linecap="round" fill="none"/>` },
     completado:  { dot: 'done',        label: 'Completado',  icon: `<circle cx="8" cy="8" r="6.5" fill="#22C55E"/><path d="M5 8 L7.2 10.5 L11 6" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>` },
     bloqueado:   { dot: 'blocked',     label: 'Bloqueado',   icon: `<circle cx="8" cy="8" r="6.5" fill="#EF4444"/><line x1="5.5" y1="8" x2="10.5" y2="8" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/>` },
+    cancelado:   { dot: 'cancelled',   label: 'Cancelado',   icon: `<circle cx="8" cy="8" r="6.5" fill="#8E8A84"/><line x1="5.5" y1="5.5" x2="10.5" y2="10.5" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/><line x1="10.5" y1="5.5" x2="5.5" y2="10.5" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/>` },
   };
 
   function _statusSvg(estado) {
@@ -5966,6 +5970,7 @@ const DashboardModule = (() => {
       { value: 'en_progreso', label: 'En progreso', dot: '#6366F1', fill: true },
       { value: 'completado',  label: 'Completado',  dot: '#22C55E', fill: true },
       { value: 'bloqueado',   label: 'Bloqueado',   dot: '#EF4444', fill: true },
+      { value: 'cancelado',   label: 'Cancelado',   dot: '#8E8A84', fill: true },
     ];
     menu.innerHTML = opts.map(o => `
       <button class="d3-status-opt" onclick="DashboardModule.setTaskStatus(${taskId},'${o.value}',this)">
@@ -6132,6 +6137,7 @@ const DashboardModule = (() => {
       en_progreso: { label: 'En progreso', cls: 'd3-expand-pill--inprogress' },
       completado:  { label: 'Completado',  cls: 'd3-expand-pill--done' },
       bloqueado:   { label: 'Bloqueado',   cls: 'd3-expand-pill--blocked' },
+      cancelado:   { label: 'Cancelado',   cls: 'd3-expand-pill--cancelled' },
     };
     const estadoCfg = estadoMap[t.estado] || estadoMap.pendiente;
     const prioLabel = { alta: 'Alta', media: 'Media', baja: 'Baja' }[t.prioridad] || t.prioridad;
@@ -6248,7 +6254,7 @@ const DashboardModule = (() => {
     _expOpenPop(anchor, _expStatusHtml(id, t.estado || 'pendiente'), 'd3xp-pop--menu');
   }
   function _expStatusHtml(id, cur) {
-    const opts = [['pendiente', 'Pendiente'], ['en_progreso', 'En progreso'], ['completado', 'Completado'], ['bloqueado', 'Bloqueado']];
+    const opts = [['pendiente', 'Pendiente'], ['en_progreso', 'En progreso'], ['completado', 'Completado'], ['bloqueado', 'Bloqueado'], ['cancelado', 'Cancelado']];
     return `<div class="d3xp-pop__hd">Cambiar estado</div><div class="d3xp-pop__list">${opts.map(([v, l]) =>
       `<button class="d3xp-opt${v === cur ? ' d3xp-opt--on' : ''}" onclick="DashboardModule.expPickStatus(${id},'${v}')"><span class="d3xp__dot d3xp__dot--${v}"></span><span class="d3xp-opt__nm">${l}</span>${v === cur ? _expChk : ''}</button>`).join('')}</div>`;
   }
@@ -7321,8 +7327,9 @@ const TasksModule = (() => {
       en_progreso: `<svg width="12" height="12" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5.5" stroke="#2E7BD6" stroke-width="1.5"/><path d="M7 1.5 A5.5 5.5 0 0 0 7 12.5 Z" fill="#2E7BD6"/></svg>`,
       bloqueado:   `<svg width="12" height="12" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5.5" stroke="#EF4444" stroke-width="1.5"/><line x1="4.5" y1="4.5" x2="9.5" y2="9.5" stroke="#EF4444" stroke-width="1.5" stroke-linecap="round"/><line x1="9.5" y1="4.5" x2="4.5" y2="9.5" stroke="#EF4444" stroke-width="1.5" stroke-linecap="round"/></svg>`,
       completado:  `<svg width="12" height="12" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5.5" fill="#22C55E"/><polyline points="4.5,7.5 6.5,9.5 9.5,5" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+      cancelado:   `<svg width="12" height="12" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5.5" fill="#8E8A84"/><line x1="4.7" y1="4.7" x2="9.3" y2="9.3" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/><line x1="9.3" y1="4.7" x2="4.7" y2="9.3" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/></svg>`,
     };
-    const labels = { pendiente:'Pendiente', en_progreso:'En progreso', bloqueado:'Bloqueado', completado:'Completado' };
+    const labels = { pendiente:'Pendiente', en_progreso:'En progreso', bloqueado:'Bloqueado', completado:'Completado', cancelado:'Cancelado' };
     const key = estado || 'pendiente';
     return `<span class="tsb tsb--${key} tsb--static">${icons[key]||icons.pendiente}${labels[key]||key}</span>`;
   }
@@ -7612,7 +7619,7 @@ const TasksModule = (() => {
     _applyView();
   }
 
-  const _TD_ESTADOS = [['pendiente', 'Pendiente'], ['en_progreso', 'En progreso'], ['bloqueado', 'Bloqueado'], ['completado', 'Completado']];
+  const _TD_ESTADOS = [['pendiente', 'Pendiente'], ['en_progreso', 'En progreso'], ['bloqueado', 'Bloqueado'], ['completado', 'Completado'], ['cancelado', 'Cancelado']];
   const _TD_PRIOS   = [['baja', 'Baja'], ['media', 'Media'], ['alta', 'Alta']];
 
   async function _renderTaskDetail(id) {
@@ -7839,6 +7846,7 @@ const TasksModule = (() => {
       { v: 'en_progreso', l: 'En progreso' },
       { v: 'bloqueado',   l: 'Bloqueado' },
       { v: 'completado',  l: 'Completado' },
+      { v: 'cancelado',   l: 'Cancelado' },
     ],
     prioridad: [
       { v: 'alta',  l: 'Alta' },
@@ -8186,7 +8194,7 @@ const TasksModule = (() => {
     mainInList.forEach(t => subsByParent.delete(t.id));   // estos padres están en la lista; sus subs no son huérfanas
 
     // Agrupar tareas raíz por estado (estilo ClickUp), grupos colapsables.
-    const GROUP_ORDER = ['pendiente', 'en_progreso', 'bloqueado', 'completado'];
+    const GROUP_ORDER = ['pendiente', 'en_progreso', 'bloqueado', 'completado', 'cancelado'];
     const byGroup = new Map(GROUP_ORDER.map(k => [k, []]));
     mainInList.forEach(t => (byGroup.get(oppTaskNorm(t.estado)) || byGroup.get('pendiente')).push(t));
 
@@ -8327,7 +8335,7 @@ const TasksModule = (() => {
   function _renderKanban() {
     const filtered = _getFilteredTasks().filter(t => !t.parent_task_id);
 
-    for (const estado of ['bloqueado', 'pendiente', 'en_progreso', 'completado']) {
+    for (const estado of ['bloqueado', 'pendiente', 'en_progreso', 'completado', 'cancelado']) {
       const colEl   = $('kanban-col-' + estado);
       const countEl = $('kanban-count-' + estado);
       if (!colEl) continue;
@@ -8487,6 +8495,7 @@ const TasksModule = (() => {
     const statuses = [
       ['bloqueado','Bloqueado'],['pendiente','Pendiente'],
       ['en_progreso','En progreso'],['completado','Completado'],
+      ['cancelado','Cancelado'],
     ];
     menu.innerHTML = `
       <button class="kc-ctx-item" onclick="TasksModule.openDrawer(${tid});TasksModule.closeKanbanMenu()">Abrir tarea</button>
@@ -8781,6 +8790,7 @@ const TasksModule = (() => {
       ['en_progreso', 'En progreso', '#F97316'],
       ['bloqueado',   'Bloqueado',   '#EF4444'],
       ['completado',  'Completado',  '#22C55E'],
+      ['cancelado',   'Cancelado',   '#8E8A84'],
     ];
     const html = `<div class="kcp-list">${items.map(([v, l, col]) =>
       `<button class="kcp-list-item${cur===v?' kcp-list-item--active':''}"
@@ -8956,9 +8966,9 @@ const TasksModule = (() => {
   const _DAYNAMES     = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
   const _PRIO_BG      = { alta: '#FBBFB0', media: '#FDE68A', baja: '#EAE7E2' };
   const _PRIO_COL     = { alta: '#9F1239', media: '#78350F', baja: '#6C6862' };
-  const _EST_BG       = { pendiente:'#EAE7E2', en_curso:'#A7F3D0', bloqueado:'#FBBFB0', completado:'#BAE6FD' };
-  const _EST_COL      = { pendiente:'#6C6862', en_curso:'#065F46', bloqueado:'#9F1239', completado:'#0369A1' };
-  const _EST_LBL      = { pendiente:'Pendiente', en_curso:'En curso', bloqueado:'Bloqueado', completado:'Completado' };
+  const _EST_BG       = { pendiente:'#EAE7E2', en_curso:'#A7F3D0', bloqueado:'#FBBFB0', completado:'#BAE6FD', cancelado:'#E5E2DC' };
+  const _EST_COL      = { pendiente:'#6C6862', en_curso:'#065F46', bloqueado:'#9F1239', completado:'#0369A1', cancelado:'#57534C' };
+  const _EST_LBL      = { pendiente:'Pendiente', en_curso:'En curso', bloqueado:'Bloqueado', completado:'Completado', cancelado:'Cancelado' };
   const _arrowL       = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>`;
   const _arrowR       = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>`;
 
@@ -9523,6 +9533,7 @@ const TasksModule = (() => {
     { val: 'en_progreso', label: 'En progreso', bg: '#FFE4CC', clr: '#92400E' },
     { val: 'bloqueado',   label: 'Bloqueado',   bg: '#FFD0D0', clr: '#991B1B' },
     { val: 'completado',  label: 'Completado',  bg: '#BBF7D0', clr: '#14532D' },
+    { val: 'cancelado',   label: 'Cancelado',   bg: '#E5E2DC', clr: '#57534C' },
   ];
   const _QE_PRIO = [
     { val: 'alta',  label: '↑ Alta',  bg: '#FECACA', clr: '#991B1B' },
@@ -9810,7 +9821,7 @@ const CalendarModule = (() => {
     const d = new Date(ds + 'T00:00:00');
     return `${d.getDate()} ${_MONS[d.getMonth()]}`;
   }
-  const _ESTADO_COL = { pendiente: '#CFCAC3', en_progreso: '#6366F1', completado: '#22C55E', bloqueado: '#EF4444' };
+  const _ESTADO_COL = { pendiente: '#CFCAC3', en_progreso: '#6366F1', completado: '#22C55E', bloqueado: '#EF4444', cancelado: '#8E8A84' };
 
   // ── Filtro por miembro (admin puede ver el calendario de otro) ──────
   function _calIsAdmin() {
@@ -11689,9 +11700,9 @@ const ProjectsModule = (() => {
     </div>`;
   }
 
-  const _TASK_ESTADO_BG  = { pendiente:'#F1EFEB', en_progreso:'#FFE4CC', bloqueado:'#FFD0D0', completado:'#BBF7D0' };
-  const _TASK_ESTADO_CLR = { pendiente:'#6C6862', en_progreso:'#92400E', bloqueado:'#991B1B', completado:'#14532D' };
-  const _TASK_ESTADO_LBL = { pendiente:'Pendiente', en_progreso:'En progreso', bloqueado:'Bloqueado', completado:'Completado' };
+  const _TASK_ESTADO_BG  = { pendiente:'#F1EFEB', en_progreso:'#FFE4CC', bloqueado:'#FFD0D0', completado:'#BBF7D0', cancelado:'#E5E2DC' };
+  const _TASK_ESTADO_CLR = { pendiente:'#6C6862', en_progreso:'#92400E', bloqueado:'#991B1B', completado:'#14532D', cancelado:'#57534C' };
+  const _TASK_ESTADO_LBL = { pendiente:'Pendiente', en_progreso:'En progreso', bloqueado:'Bloqueado', completado:'Completado', cancelado:'Cancelado' };
   const _TASK_PRIO_DOT   = { alta:'#EF4444', media:'#F59E0B', baja:'#10B981' };
 
   const _chevronSvg = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>`;
@@ -11801,6 +11812,7 @@ const ProjectsModule = (() => {
         <option value="en_progreso">En progreso</option>
         <option value="bloqueado">Bloqueado</option>
         <option value="completado">Completado</option>
+        <option value="cancelado">Cancelado</option>
       </select>
       <select id="subtask-inline-prioridad" class="pjt-inline-select" title="Prioridad">
         <option value="baja">Baja</option>
@@ -11898,6 +11910,7 @@ const ProjectsModule = (() => {
         <option value="en_progreso"${t.estado==='en_progreso'?' selected':''}>En progreso</option>
         <option value="bloqueado"${t.estado==='bloqueado'?' selected':''}>Bloqueado</option>
         <option value="completado"${t.estado==='completado'?' selected':''}>Completado</option>
+        <option value="cancelado"${t.estado==='cancelado'?' selected':''}>Cancelado</option>
       </select>
       <select id="tedit-prioridad" class="pjt-inline-select" title="Prioridad">
         <option value="baja"${t.prioridad==='baja'?' selected':''}>Baja</option>
@@ -12381,6 +12394,7 @@ const ProjectsModule = (() => {
           <option value="en_progreso"${t.estado==='en_progreso'?' selected':''}>En progreso</option>
           <option value="bloqueado"${t.estado==='bloqueado'?' selected':''}>Bloqueado</option>
           <option value="completado"${t.estado==='completado'?' selected':''}>Completado</option>
+          <option value="cancelado"${t.estado==='cancelado'?' selected':''}>Cancelado</option>
         </select>
       </div>
       <div class="tqp-field">
@@ -24305,9 +24319,9 @@ const WorkloadModule = (() => {
       return;
     }
 
-    const ESTADOS  = ['pendiente','en_curso','bloqueado','completado'];
-    const EST_BG   = { pendiente:'#EAE7E2', en_curso:'#A7F3D0', bloqueado:'#FBBFB0', completado:'#BAE6FD' };
-    const EST_LBL  = { pendiente:'Pendiente', en_curso:'En curso', bloqueado:'Bloqueado', completado:'Completado' };
+    const ESTADOS  = ['pendiente','en_curso','bloqueado','completado','cancelado'];
+    const EST_BG   = { pendiente:'#EAE7E2', en_curso:'#A7F3D0', bloqueado:'#FBBFB0', completado:'#BAE6FD', cancelado:'#E5E2DC' };
+    const EST_LBL  = { pendiente:'Pendiente', en_curso:'En curso', bloqueado:'Bloqueado', completado:'Completado', cancelado:'Cancelado' };
     const today    = new Date(); today.setHours(0,0,0,0);
 
     const cards = team.map(m => {
