@@ -334,14 +334,18 @@ async function initAuth() {
       // ?project=ID — pestaña nueva abierta desde Proyectos: aterriza directo
       // en Tareas > Kanban filtrado a ese proyecto, en vez de la última sección
       // guardada. Se limpia el query string para que un F5 no lo repita.
-      const _bootParams = new URLSearchParams(window.location.search);
+      const _bootParams  = new URLSearchParams(window.location.search);
+      const tabParam      = _bootParams.get('tab');
       const projectParam = _bootParams.get('project');
       const taskParam    = _bootParams.get('task');
-      if (projectParam || taskParam) history.replaceState(null, '', window.location.pathname);
 
       let _initTab = 'home';
       try { const saved = localStorage.getItem('kw_activeTab'); if (saved && saved !== 'home' && document.querySelector(`.snav-item[data-tab="${saved}"]`)) _initTab = saved; } catch (_) {}
+      if (tabParam && document.querySelector(`.snav-item[data-tab="${tabParam}"]`)) _initTab = tabParam;
       if (projectParam || taskParam) _initTab = 'mgmt-tasks';
+      // Refleja dónde se aterrizó de verdad y limpia project/task (deep-links de
+      // un solo uso — un F5 no debe repetir la acción de abrir ese proyecto/tarea).
+      history.replaceState(null, '', window.location.pathname + (_initTab !== 'home' ? `?tab=${_initTab}` : ''));
       if (_initTab === 'home') {
         document.querySelectorAll('.tab,.snav-item').forEach(t => t.classList.toggle('active', t.dataset.tab === _initTab));
         document.querySelectorAll('.pane').forEach(p => p.classList.toggle('active', p.id === 'pane-' + _initTab));
@@ -349,7 +353,7 @@ async function initAuth() {
         _applyHomeMode(true);
       } else {
         _applyHomeMode(false);
-        if (typeof window._novaSwitchTab === 'function') window._novaSwitchTab(_initTab);
+        if (typeof window._novaSwitchTab === 'function') window._novaSwitchTab(_initTab, { silent: true });
       }
       if (projectParam) {
         ProjectsModule.load();
@@ -540,6 +544,28 @@ function selectModule(mod) {
   if (target && typeof window._novaSwitchTab === 'function') window._novaSwitchTab(target);
 }
 
+// ── URL por sección: la barra de direcciones refleja el tab actual (?tab=X) ──
+// Alcance v1: solo módulo+pestaña (lo que ya identifica un data-tab), no
+// registros individuales (cliente/tarea puntual) — eso queda para más
+// adelante si se pide. Sin esto la URL nunca cambiaba de sitio (SPA de una
+// sola página), así que compartir/recargar/atrás del navegador no servían
+// de nada — cualquier otro CRM sí tiene una URL por sección.
+function _tabUrlHref(tabName) {
+  const url = new URL(window.location.href);
+  if (tabName && tabName !== 'home') url.searchParams.set('tab', tabName);
+  else url.searchParams.delete('tab');
+  return url.pathname + url.search + url.hash;
+}
+window.addEventListener('popstate', () => {
+  const tab = new URLSearchParams(window.location.search).get('tab');
+  if (tab && document.querySelector(`.snav-item[data-tab="${tab}"]`)) {
+    if (_navCollapsed()) _setNavCollapsed(false);
+    if (typeof window._novaSwitchTab === 'function') window._novaSwitchTab(tab, { silent: true });
+  } else if (typeof goHome === 'function') {
+    goHome({ silent: true });
+  }
+});
+
 // ── HOME: grid de módulos (default al hacer login) ─────────────────
 // Estilo Creatio: cards blancas con icono pastel a la derecha, título +
 // descripción + chip Activo. Tamaño moderado, mismo layout para todos
@@ -638,7 +664,9 @@ function _applyHomeMode(on) {
 
 // Vuelve al home desde cualquier módulo (llamado por el botón "← Módulos"
 // que sustituyó al viejo dropdown de cambio de módulo).
-function goHome() {
+// opts.silent=true: viene de popstate (el navegador ya movió la URL a home
+// solo) — no hay que volver a empujar un history.pushState acá.
+function goHome(opts = {}) {
   _applyHomeMode(true);
   document.getElementById('appShell')?.classList.remove('standalone-users');
   document.querySelectorAll('.tab,.snav-item').forEach(t => t.classList.remove('active'));
@@ -647,6 +675,7 @@ function goHome() {
   document.getElementById('gtb-tab-apps')?.classList.add('active');
   try { localStorage.setItem('kw_activeTab', 'home'); } catch (_) {}
   try { RChatPanel.close(); } catch (_) {}
+  if (!opts.silent) history.pushState({ novaTab: 'home' }, '', _tabUrlHref('home'));
   renderHome();
 }
 
@@ -5725,17 +5754,84 @@ const DashboardModule = (() => {
       .join('');
   }
 
-  // Grupo de subtareas de la MISMA tarea padre: las subtareas arriba (lo accionable)
-  // y el contexto compartido "tarea · cliente" una sola vez abajo.
+  // Grupos de subtareas colapsados por defecto — sobre todo pensado para las
+  // recurrentes (mismas 6-7 tareas cada semana, ver OUTBOUND_TASK_CATALOG en
+  // el backend): antes se veían siempre las N subtareas apiladas y para
+  // cambiarles el estado había que entrar una por una. Ahora el grupo es UNA
+  // fila con progreso + una acción "cambiar estado de todas", y se expande
+  // solo si hace falta revisar una subtarea puntual.
+  // El set guarda los EXPANDIDOS (no los colapsados): así un grupo nunca visto
+  // es colapsado por defecto sin necesitar un segundo flag de "ya lo vi".
+  let _expandedGroups = new Set();
+  try { _expandedGroups = new Set(JSON.parse(localStorage.getItem('d3_expanded_groups') || '[]')); } catch (_) {}
+  function _saveExpandedGroups() { try { localStorage.setItem('d3_expanded_groups', JSON.stringify([..._expandedGroups])); } catch (_) {} }
+  function toggleGroupCollapse(parentId) {
+    if (_expandedGroups.has(parentId)) _expandedGroups.delete(parentId); else _expandedGroups.add(parentId);
+    _saveExpandedGroups();
+    _renderTasks(0, [], [], _allTasksCache);
+  }
+
+  // Grupo de subtareas de la MISMA tarea padre: encabezado con contexto +
+  // progreso + acción en bloque (siempre visible), subtareas debajo solo si
+  // el grupo está expandido.
   function _subtaskGroup(arr, isOverdue, allTasksById) {
-    const parent = allTasksById ? allTasksById.get(arr[0].parent_task_id) : null;
+    const parentId = arr[0].parent_task_id;
+    const parent = allTasksById ? allTasksById.get(parentId) : null;
     const client = arr[0].client_nombre || arr[0].project_nombre || '';
     const ctx = [parent && parent.titulo, client].filter(Boolean).join(' · ');
+    const done = arr.filter(t => t.estado === 'completado' || t.estado === 'cancelado').length;
+    const collapsed = !_expandedGroups.has(parentId);
     const items = arr.map(t => _subtaskGroupItem(t, isOverdue)).join('');
     return `<div class="d3-task-group${isOverdue ? ' d3-task-group--overdue' : ''}">
-      <div class="d3-task-group__items">${items}</div>
-      ${ctx ? `<div class="d3-task-group__ctx"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg><span>${esc(ctx)}</span></div>` : ''}
+      <div class="d3-task-group__hd" onclick="DashboardModule.toggleGroupCollapse(${parentId})">
+        <svg class="d3-task-group__chev${collapsed ? '' : ' d3-task-group__chev--open'}" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
+        ${ctx ? `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg><span class="d3-task-group__ctx-t">${esc(ctx)}</span>` : ''}
+        <span class="d3-task-group__prog">${done}/${arr.length}</span>
+        <button class="d3-task-group__bulk" title="Cambiar estado de todas" onclick="event.stopPropagation();DashboardModule.openGroupStatusMenu(event,${parentId})">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+        </button>
+      </div>
+      ${collapsed ? '' : `<div class="d3-task-group__items">${items}</div>`}
     </div>`;
+  }
+
+  function openGroupStatusMenu(ev, parentId) {
+    ev.stopPropagation();
+    if (_statusMenuClose) { _statusMenuClose(); return; }
+    const btn = ev.currentTarget;
+    const rect = btn.getBoundingClientRect();
+    const menu = document.createElement('div');
+    menu.className = 'd3-status-menu';
+    const opts = [
+      { value: 'pendiente',   label: 'Pendiente',   dot: '#CFCAC3', fill: false },
+      { value: 'en_progreso', label: 'En progreso', dot: '#6366F1', fill: true },
+      { value: 'completado',  label: 'Completado',  dot: '#22C55E', fill: true },
+      { value: 'bloqueado',   label: 'Bloqueado',   dot: '#EF4444', fill: true },
+      { value: 'cancelado',   label: 'Cancelado',   dot: '#8E8A84', fill: true },
+    ];
+    menu.innerHTML = opts.map(o => `
+      <button class="d3-status-opt" onclick="DashboardModule.setGroupStatus(${parentId},'${o.value}')">
+        <span class="d3-status-opt__dot" style="background:${o.fill ? o.dot : 'transparent'};border:1.5px solid ${o.dot}"></span>
+        ${esc(o.label)}
+      </button>`).join('');
+    document.body.appendChild(menu);
+    const w = 148;
+    let left = rect.left; if (left + w > window.innerWidth - 8) left = window.innerWidth - w - 8;
+    menu.style.cssText = `position:fixed;z-index:10000;top:${rect.bottom + 6}px;left:${Math.max(8, left)}px`;
+    _statusMenuClose = () => { menu.remove(); document.removeEventListener('click', _statusMenuClose); _statusMenuClose = null; };
+    setTimeout(() => document.addEventListener('click', _statusMenuClose), 0);
+  }
+  async function setGroupStatus(parentId, estado) {
+    if (_statusMenuClose) _statusMenuClose();
+    const subs = _allTasksCache.filter(t => t.parent_task_id === parentId);
+    try {
+      await Promise.all(subs.map(t => apiFetch(`${API}/mgmt/tasks/${t.id}/status`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ estado }),
+      })));
+      subs.forEach(t => { t.estado = estado; });
+      _renderTasks(0, [], [], _allTasksCache);
+      _renderOverview(_allTasksCache);
+    } catch (e) { console.error('[dash] bulk status:', e); alert('No se pudo actualizar todo el grupo. Reintenta.'); }
   }
 
   // Fila compacta de subtarea dentro de un grupo (sin repetir el contexto).
@@ -6535,7 +6631,8 @@ const DashboardModule = (() => {
     _tpToggleNew, _tpNewCheck, _tpCreateAndStart,
     goFinance, goTasks,
     _onAvatarClick, openAvatarPicker, closeAvatarPicker, selectAvatar, resetAvatar, _avSwitchTab,
-    expEditStatus, expPickStatus, expEditDate, expEditStart, openDateFromRow, expCalNav, expPickDate, expClearDate, expEditAssignee, expAsgFilter, expPickAssignee };
+    expEditStatus, expPickStatus, expEditDate, expEditStart, openDateFromRow, expCalNav, expPickDate, expClearDate, expEditAssignee, expAsgFilter, expPickAssignee,
+    toggleGroupCollapse, openGroupStatusMenu, setGroupStatus };
 })();
 
 // =================================================================
@@ -29922,13 +30019,18 @@ function initApp() {
   let _verifLoaded = false;
 
   // Wire both old .tab buttons and new .snav-item sidebar buttons
-  function _switchTab(tabName) {
+  // opts.silent=true: viene de restaurar la sección al cargar o de popstate
+  // (atrás/adelante del navegador) — la URL YA está donde debe, no hay que
+  // volver a empujarla a history (eso duplicaría entradas o pisaría un ?tab=
+  // que el usuario acaba de pegar).
+  function _switchTab(tabName, opts = {}) {
     try { localStorage.setItem('kw_activeTab', tabName); } catch (_) {}   // recuerda la sección para restaurarla al recargar
     document.querySelectorAll('.tab,.snav-item').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.pane').forEach(p => p.classList.remove('active'));
     document.querySelectorAll(`[data-tab="${tabName}"]`).forEach(t => t.classList.add('active'));
     $(`pane-${tabName}`)?.classList.add('active');
     { const _m = _moduleOf(tabName); _setActiveModule(_m); try { localStorage.setItem('kw_lastTab_' + _m, tabName); } catch (_) {} }
+    if (!opts.silent) history.pushState({ novaTab: tabName }, '', _tabUrlHref(tabName));
     if (tabName === 'batch') { _checkPersistedJob(); _loadBatchHistory(); }
     if (tabName === 'verifications' && !_verifLoaded) {
       _verifLoaded = true;
