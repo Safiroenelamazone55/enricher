@@ -2694,17 +2694,25 @@ async function _ensureRecurSubtasksCore(wid, freq, refDateStr) {
   return { created, checked: tpls.length };
 }
 
-// Cron: cada hora revisa (hora de Lima). El domingo ya crea la tarea de la SEMANA ENTRANTE
-// ("todos los domingos pasada la medianoche"), y de lunes a sábado asegura la semana en curso.
+// Lunes (YYYY-MM-DD) de la semana que le toca asegurar HOY, hora de Lima. El domingo ya
+// devuelve el lunes de la semana ENTRANTE ("todos los domingos pasada la medianoche");
+// de lunes a sábado, el de la semana en curso. La usan el cron y el disparo inmediato
+// al activar semana automática/cobro semanal (billing-cfg), para no duplicar el cálculo.
+function _thisWeekStartLima() {
+  const ymd = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' }); // YYYY-MM-DD en Lima
+  const d = new Date(ymd + 'T12:00:00Z');
+  const dow = d.getUTCDay(); // 0=Dom
+  const mon = new Date(d);
+  if (dow === 0) mon.setUTCDate(d.getUTCDate() + 1);           // domingo → lunes de mañana
+  else mon.setUTCDate(d.getUTCDate() - ((dow + 6) % 7));       // resto → lunes de esta semana
+  return mon.toISOString().slice(0, 10);
+}
+
+// Cron: cada hora revisa (hora de Lima).
 async function _weeklyBillingTick() {
   try {
-    const ymd = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' }); // YYYY-MM-DD en Lima
-    const d = new Date(ymd + 'T12:00:00Z');
-    const dow = d.getUTCDay(); // 0=Dom
-    const mon = new Date(d);
-    if (dow === 0) mon.setUTCDate(d.getUTCDate() + 1);           // domingo → lunes de mañana
-    else mon.setUTCDate(d.getUTCDate() - ((dow + 6) % 7));       // resto → lunes de esta semana
-    const ws = mon.toISOString().slice(0, 10);
+    const ymd = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' });
+    const ws = _thisWeekStartLima();
     // UNA sola pasada: _ensureWeeklyTaskCore ya cubre los proyectos con semana automática
     // y los que cobran por semana (esa misma tarea lleva el monto).
     const owners = (await pool.query(
@@ -2763,6 +2771,12 @@ app.patch('/api/mgmt/projects/:id/billing-cfg', requireAuth, async (req, res) =>
     const { rows } = await pool.query(
       `UPDATE projects SET ${sets.join(',')} WHERE id=$1 AND user_id=$2 RETURNING id, cobro_semanal, precio_semanal, reparto, semana_auto, abrev, plan_dias, plan_horas, plan_hora, recur_freq`, vals);
     if (!rows[0]) return res.status(404).json({ error: 'Proyecto no encontrado' });
+    // Si queda con semana automática o cobro semanal activos, no hacer esperar al cron
+    // (corre cada hora): generar la tarea de ESTA semana ya mismo, si no existe aún.
+    if (rows[0].cobro_semanal || rows[0].semana_auto) {
+      try { await _ensureWeeklyTaskCore(req.workspaceOwnerId, _thisWeekStartLima()); }
+      catch (e) { console.error('[projects/billing-cfg] ensure-weekly inmediato:', e.message); }
+    }
     res.json(rows[0]);
   } catch (err) {
     console.error('[projects/billing-cfg]', err.message);
