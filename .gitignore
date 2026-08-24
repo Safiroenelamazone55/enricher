@@ -21,3 +21,9 @@ agent/sea-prep.blob
 *.exe
 extension/*.zip
 _upload_only.py
+
+# Bytecode compilado de Python — deploy_backend.py/check_deploy.py llevan
+# credenciales embebidas como constantes, así que su .pyc también las lleva
+# (incidente 2026-08-24: __pycache__/deploy_backend.*.pyc quedó trackeado).
+__pycache__/
+*.pyc

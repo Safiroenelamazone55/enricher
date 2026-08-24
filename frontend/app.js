@@ -9237,7 +9237,7 @@ const TasksModule = (() => {
     const items = [{ nombre: '', label: 'Sin asignar', none: true }, ..._teamMembers.map(m => ({ nombre: m.nombre, label: m.nombre }))];
     list.innerHTML = items.map(it => `
       <div class="cdd__item${it.none ? ' cdd__item--none' : ''}${it.nombre === value ? ' cdd__item--selected' : ''}"
-           onclick="TasksModule._pickResp('${esc(it.nombre)}')">
+           onclick="TasksModule._pickResp('${esc(it.nombre).replace(/'/g, "\\'")}')">
         ${esc(it.label)}
       </div>`).join('');
   }
@@ -25443,12 +25443,12 @@ const SlackChat = (() => {
          + `<button class="slk-mm-op" onclick="SlackChat.verTareas(${pj.projectId})">Ver tareas del proyecto</button>`
          + `<div class="slk-cm-sep"></div>`;
     }
-    h += `<button class="slk-mm-op" onclick="SlackChat.marcarNoLeido('${canalId}','${esc(nombre)}')">Marcar como no leído</button>`
+    h += `<button class="slk-mm-op" onclick="SlackChat.marcarNoLeido('${canalId}','${esc(nombre).replace(/'/g, "\\'")}')">Marcar como no leído</button>`
        + `<button class="slk-mm-op" onclick="SlackChat.abrir('${canalId}')">Abrir aquí</button>`;
     if (w && w.team_id) h += `<button class="slk-mm-op" onclick="window.open('https://app.slack.com/client/${w.team_id}/${canalId}','_blank')">Abrir en Slack</button>`;
-    h += `<button class="slk-mm-op" onclick="SlackChat.copiarNombre('${esc(nombre)}',${esDm})">Copiar nombre</button>`
+    h += `<button class="slk-mm-op" onclick="SlackChat.copiarNombre('${esc(nombre).replace(/'/g, "\\'")}',${esDm})">Copiar nombre</button>`
        + `<div class="slk-cm-sep"></div>`
-       + `<button class="slk-mm-op slk-mm-op--danger" onclick="SlackChat.archivarCanal('${canalId}','${esc(nombre)}',${esDm})">${esDm ? 'Cerrar conversación' : 'Archivar canal'}</button>`;
+       + `<button class="slk-mm-op slk-mm-op--danger" onclick="SlackChat.archivarCanal('${canalId}','${esc(nombre).replace(/'/g, "\\'")}',${esDm})">${esDm ? 'Cerrar conversación' : 'Archivar canal'}</button>`;
     m.innerHTML = h;
     document.body.appendChild(m);
     m.style.cssText += `;position:fixed;z-index:10050;top:${Math.min(ev.clientY, window.innerHeight - m.offsetHeight - 10)}px;left:${Math.min(ev.clientX, window.innerWidth - 240)}px`;
@@ -25601,7 +25601,7 @@ const SlackChat = (() => {
       const reacs = (m.reactions || []).map(r => {
         const mine = _mMiId && (r.users || []).includes(_mMiId);
         return `<span class="slk-reac${mine ? ' mine' : ''}" data-emoji="${esc(r.name)}" title="${mine ? 'Quitar reacción' : ''}"
-                      onclick="SlackChat.miniReaccionarPill(event,'${m.ts}','${esc(r.name)}')">${_emojiImg(_emoji(':' + r.name + ':'), 'e-img')} ${r.count}</span>`;
+                      onclick="SlackChat.miniReaccionarPill(event,'${m.ts}','${esc(r.name).replace(/'/g, "\\'")}')">${_emojiImg(_emoji(':' + r.name + ':'), 'e-img')} ${r.count}</span>`;
       }).join('');
       // Respuestas del hilo: solo en la vista de canal. Dentro del hilo no se anidan
       // más hilos — Slack tampoco lo permite.
@@ -28622,7 +28622,7 @@ const RNotifPanel = (() => {
         chips.innerHTML = _teamCache.length
           ? _teamCache.map(m => `
               <button type="button" class="rnotif-member-chip" data-name="${esc(m.nombre)}"
-                onclick="RNotifPanel._selectMember(this,'${esc(m.nombre)}')">
+                onclick="RNotifPanel._selectMember(this,'${esc(m.nombre).replace(/'/g, "\\'")}')">
                 ${esc(m.nombre)}
               </button>`).join('')
           : '<span style="color:var(--muted);font-size:12px">Sin miembros</span>';
