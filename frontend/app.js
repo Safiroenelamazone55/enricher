@@ -14011,17 +14011,52 @@ const ProjectsModule = (() => {
       // Si es un proyecto nuevo y no se pudo crear su canal de Slack (ej. no hay workspace
       // marcado como default, o Slack falló), avisar de una — antes quedaba en silencio y
       // el chat "no aparecía" sin que nada lo señalara.
-      if (!_editId && saved && !saved.slack_channel) {
+      const wasNew = !_editId;
+      if (wasNew && saved && !saved.slack_channel) {
         showBanner('⚠ Proyecto creado, pero no se pudo crear su chat de Slack — revísalo en Configuración › Slack', 'error');
       }
       closeDrawer();
       await load();
+      // Para que el proyecto no quede vacío: ofrecer crear la primera tarea
+      // justo al terminar de crearlo (no al editar uno existente).
+      if (wasNew && saved && saved.id) _openFirstTaskPrompt(saved.id, data.nombre);
     } catch (err) {
       alert('Error: ' + err.message);
     } finally {
       saveBtn.disabled    = false;
       saveBtn.textContent = orig;
     }
+  }
+
+  // Popup post-creación: sin esto un proyecto nuevo se queda vacío hasta que
+  // alguien recuerde entrar a Tareas — mejor ofrecer la primera de una vez.
+  function _openFirstTaskPrompt(pid, nombre) {
+    if ($('qtp-modal')) return;
+    const modal = document.createElement('div');
+    modal.id = 'qtp-modal';
+    modal.innerHTML = `
+      <div class="qc-backdrop" onclick="ProjectsModule.closeFirstTaskPrompt()"></div>
+      <div class="qc-box">
+        <div class="qc-header">
+          <span class="qc-title">Proyecto creado</span>
+          <button class="qc-close" onclick="ProjectsModule.closeFirstTaskPrompt()">✕</button>
+        </div>
+        <p style="margin:0 0 18px;font-size:.88rem;color:var(--text2,#6C6862);line-height:1.5">"${esc(nombre)}" ya está listo. Crea la primera tarea para tener de dónde partir.</p>
+        <div class="qc-actions">
+          <button type="button" class="qc-btn qc-btn--cancel" onclick="ProjectsModule.closeFirstTaskPrompt()">Ahora no</button>
+          <button type="button" class="qc-btn qc-btn--save" onclick="ProjectsModule.goCreateFirstTask(${pid})">Crear tarea</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+  }
+
+  function closeFirstTaskPrompt() {
+    $('qtp-modal')?.remove();
+  }
+
+  function goCreateFirstTask(pid) {
+    closeFirstTaskPrompt();
+    TasksModule.openDrawer(null, pid);
   }
 
   async function confirmDelete(id) {
@@ -14059,7 +14094,7 @@ const ProjectsModule = (() => {
     }
   }
 
-  return { load, filter, setFilter, setMemberFilter, render, onTipoChange, openDrawer, closeDrawer, save, confirmDelete, setView, switchTab, toggleVerTodo, toggleTaskCobrado, updateTaskMonto, updateDescripcion, addLink, removeLink, _setLinkField, saveLinks, refreshCard, closeQuickClientModal, saveQuickClient, toggleTaskExpand, toggleProjectExpand, openTaskMenu, _onTaskMenuEdit, _onTaskMenuAddSub, _onTaskMenuDelete, openQuickEditPopover, tqpNav, tqpPick, tqpToggleRange, tqpClear, openInlineDate, startInlineSubtask, cancelInlineSubtask, saveInlineSubtask, startEditTask, cancelEditTask, saveEditTask, deleteTaskInline, toggleSubrowExpand, distributeTaskMontos, openLinkForm, cancelLinkForm, saveLinkForm, startLinkEdit, cancelLinkEdit, saveLinkEdit, enterInfoEdit, cancelInfoEdit, saveInfoEdit, toggleInfoExpand,
+  return { load, filter, setFilter, setMemberFilter, render, onTipoChange, openDrawer, closeDrawer, save, confirmDelete, setView, switchTab, toggleVerTodo, toggleTaskCobrado, updateTaskMonto, updateDescripcion, addLink, removeLink, _setLinkField, saveLinks, refreshCard, closeQuickClientModal, saveQuickClient, closeFirstTaskPrompt, goCreateFirstTask, toggleTaskExpand, toggleProjectExpand, openTaskMenu, _onTaskMenuEdit, _onTaskMenuAddSub, _onTaskMenuDelete, openQuickEditPopover, tqpNav, tqpPick, tqpToggleRange, tqpClear, openInlineDate, startInlineSubtask, cancelInlineSubtask, saveInlineSubtask, startEditTask, cancelEditTask, saveEditTask, deleteTaskInline, toggleSubrowExpand, distributeTaskMontos, openLinkForm, cancelLinkForm, saveLinkForm, startLinkEdit, cancelLinkEdit, saveLinkEdit, enterInfoEdit, cancelInfoEdit, saveInfoEdit, toggleInfoExpand,
     onRespChange, onRepartoToggle, repartoIgual, repartoHint: _repartoHint, onCobroSemanalToggle, onSemanaAutoToggle,
     togglePlanDia, planHint, onRecurFreqChange,
     onHorasFijasToggle, openProjFechas,
