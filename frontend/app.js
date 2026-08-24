@@ -26162,7 +26162,7 @@ const WaChatModule = (() => {
             <span class="wa-chat-item__time">${_fmtListaFecha(c.ultimo_ts)}</span>
           </div>
           <div class="wa-chat-item__top">
-            <span class="wa-chat-item__preview${unreadCls}">${c.ultimo_estado === 'programado' ? '🕑 Programado: ' : (c.from_me ? 'Tú: ' : '')}${esc(c.ultimo_texto || '')}</span>
+            <span class="wa-chat-item__preview${unreadCls}${c.ultimo_eliminado ? ' wa-chat-item__preview--del' : ''}">${c.ultimo_eliminado ? '🚫 Se eliminó este mensaje' : `${c.ultimo_estado === 'programado' ? '🕑 Programado: ' : (c.from_me ? 'Tú: ' : '')}${esc(c.ultimo_texto || '')}`}</span>
             ${badge}
           </div>
         </div>
@@ -26244,6 +26244,13 @@ const WaChatModule = (() => {
       const dia = new Date(cuando).toDateString();
       const sep = dia !== prevDia ? `<div class="chat-date-sep"><span>${_fmtSepFecha(cuando)}</span></div>` : '';
       prevDia = dia;
+
+      // "Eliminar para todos" — se conserva la fila (no se borra: rompería el
+      // reply_to_texto de quien lo citó) pero se pinta como WhatsApp lo muestra,
+      // sin texto real ni acciones (no se puede reaccionar/responder a lo borrado).
+      if (m.eliminado) {
+        return `${sep}<div class="wa-msg ${m.from_me ? 'wa-msg--out' : 'wa-msg--in'} wa-msg--del"><div class="wa-msg__bubble">🚫 Se eliminó este mensaje<span class="wa-msg__time">${_fmtHora(m.ts)}</span></div></div>`;
+      }
 
       if (m.estado === 'programado' || m.estado === 'error_programado') {
         const fecha = new Date(m.scheduled_at).toLocaleString('es-PE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -26847,7 +26854,7 @@ const ObcWaModule = (() => {
             <span class="wa-chat-item__time">${_fmtListaFecha(c.ultimo_ts)}</span>
           </div>
           <div class="wa-chat-item__top">
-            <span class="wa-chat-item__preview${unreadCls}">${c.ultimo_estado === 'programado' ? '🕑 Programado: ' : (c.from_me ? 'Tú: ' : '')}${esc(c.ultimo_texto || '')}</span>
+            <span class="wa-chat-item__preview${unreadCls}${c.ultimo_eliminado ? ' wa-chat-item__preview--del' : ''}">${c.ultimo_eliminado ? '🚫 Se eliminó este mensaje' : `${c.ultimo_estado === 'programado' ? '🕑 Programado: ' : (c.from_me ? 'Tú: ' : '')}${esc(c.ultimo_texto || '')}`}</span>
             ${badge}
           </div>
         </div>
@@ -26900,6 +26907,13 @@ const ObcWaModule = (() => {
       const dia = new Date(cuando).toDateString();
       const sep = dia !== prevDia ? `<div class="chat-date-sep"><span>${_fmtSepFecha(cuando)}</span></div>` : '';
       prevDia = dia;
+
+      // "Eliminar para todos" — se conserva la fila (no se borra: rompería el
+      // reply_to_texto de quien lo citó) pero se pinta como WhatsApp lo muestra,
+      // sin texto real ni acciones (no se puede reaccionar/responder a lo borrado).
+      if (m.eliminado) {
+        return `${sep}<div class="wa-msg ${m.from_me ? 'wa-msg--out' : 'wa-msg--in'} wa-msg--del"><div class="wa-msg__bubble">🚫 Se eliminó este mensaje<span class="wa-msg__time">${_fmtHora(m.ts)}</span></div></div>`;
+      }
 
       if (m.estado === 'programado' || m.estado === 'error_programado') {
         const fecha = new Date(m.scheduled_at).toLocaleString('es-PE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });

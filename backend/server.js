@@ -8290,7 +8290,7 @@ app.get('/api/wa/connections/:id/chats', requireAuth, async (req, res) => {
              COALESCE(NULLIF(c.nombre,''),
                CASE WHEN m.chat_jid LIKE '%@g.us' THEN NULL ELSE NULLIF(m.nombre,'') END, '') AS nombre,
              (m.chat_jid LIKE '%@g.us') AS es_grupo,
-             m.texto AS ultimo_texto, m.ts AS ultimo_ts, m.from_me, m.estado AS ultimo_estado,
+             m.texto AS ultimo_texto, m.ts AS ultimo_ts, m.from_me, m.estado AS ultimo_estado, m.eliminado AS ultimo_eliminado,
              (SELECT COUNT(*) FROM wa_messages nl
                WHERE nl.connection_id = m.connection_id AND nl.chat_jid = m.chat_jid
                  AND NOT nl.leido AND NOT nl.from_me) AS no_leidos
@@ -8331,7 +8331,7 @@ app.get('/api/wa/connections/:id/chats/:jid/mensajes', requireAuth, async (req, 
   try {
     if (!(await _cargarConexionAutorizada(req, res, req.params.id))) return;
     const { rows } = await pool.query(`
-      SELECT m.id, m.from_me, m.nombre, m.texto, m.ts, m.reply_to_id, m.reply_to_texto, m.msg_id, m.estado, m.scheduled_at,
+      SELECT m.id, m.from_me, m.nombre, m.texto, m.ts, m.reply_to_id, m.reply_to_texto, m.msg_id, m.estado, m.scheduled_at, m.eliminado,
              rm.emoji AS mi_reaccion, ro.emoji AS su_reaccion
         FROM wa_messages m
         LEFT JOIN wa_reactions rm ON rm.connection_id = m.connection_id AND rm.msg_id = m.msg_id AND rm.from_me = TRUE

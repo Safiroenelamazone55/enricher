@@ -82,10 +82,27 @@ async function _asegurarNombreGrupo(pool, sock, connId, jid) {
 
 // esHistorial=true (volcado al vincular) nunca cuenta como "no leído" — solo lo que
 // llega EN VIVO de ahí en más, y que no sea mío, empieza sin leer.
+// "Eliminar para todos" llega como un mensaje NUEVO — un protocolMessage tipo REVOKE
+// (type===0, confirmado contra la versión instalada de Baileys) que apunta al key
+// del mensaje original. No trae texto propio: si no se intercepta acá, _guardarMensaje
+// lo descarta por "sin texto" (líneas de abajo) y el original se queda tal cual en Nova
+// aunque ya no exista en WhatsApp — la causa exacta de lo que reportó Jenny.
+async function _marcarEliminado(pool, connId, msgId) {
+  if (!msgId) return;
+  try {
+    await pool.query(`UPDATE wa_messages SET eliminado=TRUE WHERE connection_id=$1 AND msg_id=$2`, [connId, msgId]);
+    await pool.query(`DELETE FROM wa_reactions WHERE connection_id=$1 AND msg_id=$2`, [connId, msgId]);
+  } catch (e) { console.warn('[wa] marcar eliminado:', e.message); }
+}
+
 async function _guardarMensaje(pool, sock, connId, m, esHistorial) {
   let jid = m.key?.remoteJid || '';
   if (!_esChatValido(jid)) return;
   jid = await _resolverJid(sock, jid);
+
+  const revoke = m.message?.protocolMessage;
+  if (revoke && revoke.type === 0) { await _marcarEliminado(pool, connId, revoke.key?.id); return; }
+
   if (jid.endsWith('@g.us')) _asegurarNombreGrupo(pool, sock, connId, jid).catch(() => {});
   const texto = m.message?.conversation || m.message?.extendedTextMessage?.text || '';
   // En grupos pushName es quien mandó ESE mensaje puntual, no el grupo — el nombre del
@@ -272,6 +289,19 @@ async function _connect(pool, id) {
   };
   sock.ev.on('contacts.upsert', _sincronizarContactos);
   sock.ev.on('contacts.update', _sincronizarContactos);
+
+  // Respaldo del caso de arriba: algunas versiones/momentos entregan la eliminación
+  // como una ACTUALIZACIÓN del mensaje existente en vez de un protocolMessage nuevo
+  // (messageStubType===1 confirmado contra la versión instalada, o directamente
+  // update.message===null).
+  sock.ev.on('messages.update', async (updates) => {
+    for (const u of (updates || [])) {
+      try {
+        const eliminado = u.update?.messageStubType === 1 || u.update?.message === null;
+        if (eliminado) await _marcarEliminado(pool, id, u.key?.id);
+      } catch (e) { console.warn('[wa] messages.update (revoke):', e.message); }
+    }
+  });
 
   return sock;
 }

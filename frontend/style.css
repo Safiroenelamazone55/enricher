@@ -15344,6 +15344,8 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .wa-msg__sched-badge { display: flex; align-items: center; gap: 4px; font-size: .68rem; font-weight: 600; color: var(--primary); margin-bottom: 3px; }
 .wa-msg__cancel { border: none; background: none; cursor: pointer; font-family: inherit; font-size: .66rem; font-weight: 600; color: var(--danger, #C4342B); margin-left: 6px; padding: 0 3px; }
 .wa-msg__cancel:hover { text-decoration: underline; }
+.wa-msg--del .wa-msg__bubble { font-style: italic; color: var(--text-muted); }
+.wa-chat-item__preview--del { font-style: italic; }
 
 .wa-msg { display: flex; min-width: 0; }
 .wa-msg--in { justify-content: flex-start; }

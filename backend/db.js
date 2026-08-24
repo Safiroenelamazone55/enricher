@@ -1652,6 +1652,10 @@ async function initDb() {
     // lleguen EN VIVO de ahora en más se insertan con leido=FALSE (ver waService).
     await pool.query(`ALTER TABLE wa_messages ADD COLUMN IF NOT EXISTS leido BOOLEAN NOT NULL DEFAULT TRUE;`);
     await pool.query(`CREATE INDEX IF NOT EXISTS wa_messages_noleido_idx ON wa_messages (connection_id, chat_jid) WHERE NOT leido;`);
+    // "Eliminar para todos": no se borra la fila (rompería reply_to_id de quien lo citó
+    // y perdería el rastro) — se marca, y la burbuja se pinta como WhatsApp la muestra
+    // ("Se eliminó este mensaje"), ver waService._guardarMensaje.
+    await pool.query(`ALTER TABLE wa_messages ADD COLUMN IF NOT EXISTS eliminado BOOLEAN NOT NULL DEFAULT FALSE;`);
 
     // Quién puede ver cada conexión (antes cualquiera con acceso a Operaciones la
     // veía) + una conexión propia por cliente outbound en vez de una sola compartida.
