@@ -196,9 +196,13 @@ const BATCH_LIMIT = parseInt(process.env.BATCH_LIMIT) || 2000;
 app.set('trust proxy', 1);
 
 // ── CORS — first middleware, before everything else ───────────────
-// Allows any *.kiwoc.com, *.pages.dev, *.onrender.com origin.
-// Also honours the ALLOWED_ORIGINS env var for additional origins.
-// When credentials:true the origin must be explicit (never '*').
+// Allows any *.kiwoc.com / *.novacentrax.com origin — dominios propios, no
+// hosting compartido de terceros (quitados *.pages.dev/*.onrender.com: son
+// dominios gratuitos que cualquiera puede registrar, y con credentials:true
+// eso equivalía a dejar entrar cualquier sitio ajeno con la sesión de quien
+// lo visite — auditoría de seguridad 2026-08-24).
+// También honra la env var ALLOWED_ORIGINS para orígenes adicionales.
+// Con credentials:true el origin debe ser explícito (nunca '*').
 const _extraOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim().toLowerCase())
   : [];
@@ -211,8 +215,6 @@ function _isAllowedOrigin(origin) {
     o.endsWith('.kiwoc.com')         ||
     o === 'https://novacentrax.com'  ||
     o.endsWith('.novacentrax.com')   ||
-    o.endsWith('.pages.dev')         ||
-    o.endsWith('.onrender.com')      ||
     _extraOrigins.includes('*')      ||
     _extraOrigins.includes(o)
   );
