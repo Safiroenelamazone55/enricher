@@ -5840,7 +5840,7 @@ const DashboardModule = (() => {
     const tomorrowStr = _d1.toISOString().split('T')[0];
     const _me = (window._authUser?.memberNombre || window._authUser?.name || '').toLowerCase();
     const active = (allTasks || []).filter(t =>
-      t.estado !== 'completado' &&
+      t.estado !== 'completado' && t.estado !== 'cancelado' &&
       _me &&
       ((t.responsables || []).some(r => r.toLowerCase() === _me) ||
        (t.responsable  || '').toLowerCase() === _me)
@@ -6003,7 +6003,7 @@ const DashboardModule = (() => {
       if (cached) cached.estado = newStatus;
       const row = document.querySelector(`[data-task-id="${taskId}"]`);
       if (!row) return;
-      if (newStatus === 'completado') {
+      if (newStatus === 'completado' || newStatus === 'cancelado') {
         const expEl = document.getElementById(`d3-expand-${taskId}`);
         if (expEl) expEl.remove();
         if (_expandedTaskId === taskId) _expandedTaskId = null;
