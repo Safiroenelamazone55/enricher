@@ -1305,16 +1305,55 @@ const ClientsModule = (() => {
           : _estadoBadge(c.estado)}</div>
         <div class="client-col--actions">
           <div class="client-actions-cell">
-            <button class="client-action-btn" title="Editar" onclick="event.stopPropagation();ClientsModule.openDrawer(${c.id})">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-            </button>
-            <button class="client-action-btn client-action-btn--danger" title="Eliminar" onclick="event.stopPropagation();ClientsModule.confirmDelete(${c.id})">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+            <button class="client-action-btn" title="Más acciones" onclick="event.stopPropagation();ClientsModule.openRowMenu(event,${c.id})">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
             </button>
           </div>
         </div>
       </div>`;
     }).join('');
+  }
+
+  let _rowMenu = null;
+  function _closeRowMenu() {
+    if (_rowMenu) { _rowMenu.remove(); _rowMenu = null; }
+    document.removeEventListener('click', _closeRowMenu);
+  }
+  function openRowMenu(ev, id) {
+    ev.stopPropagation();
+    if (_rowMenu) { _closeRowMenu(); return; }
+    const rect = ev.currentTarget.getBoundingClientRect();
+    const menu = document.createElement('div');
+    menu.className = 'chat-ctx-menu';
+    menu.innerHTML = `
+      <button class="chat-ctx-item" id="_crm-edit">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        Editar
+      </button>
+      <button class="chat-ctx-item" id="_crm-proj">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        Crear proyecto
+      </button>
+      <div class="chat-ctx-sep"></div>
+      <button class="chat-ctx-item chat-ctx-item--danger" id="_crm-del">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+        Eliminar
+      </button>`;
+    const menuW = 170;
+    let left = rect.right - menuW;
+    if (left < 8) left = 8;
+    menu.style.top  = (rect.bottom + 6) + 'px';
+    menu.style.left = left + 'px';
+    document.body.appendChild(menu);
+    _rowMenu = menu;
+    menu.querySelector('#_crm-edit').onclick = () => { _closeRowMenu(); openDrawer(id); };
+    menu.querySelector('#_crm-proj').onclick = () => {
+      _closeRowMenu();
+      document.querySelector('[data-tab=mgmt-projects]').click();
+      setTimeout(() => ProjectsModule.openDrawer(null, id), 250);
+    };
+    menu.querySelector('#_crm-del').onclick = () => { _closeRowMenu(); confirmDelete(id); };
+    setTimeout(() => document.addEventListener('click', _closeRowMenu, { once: true }), 0);
   }
 
   function _mcnBlockHtml(i, count, d) {
@@ -1667,7 +1706,7 @@ const ClientsModule = (() => {
   return {
     load, filter, setFilter, render, sortBy,
     setViewTab, filterByEmpresa, openDrawerForEmpresa,
-    openDrawer, closeDrawer, save, confirmDelete,
+    openDrawer, closeDrawer, save, confirmDelete, openRowMenu,
     addMcn, removeMcn,
     openAddContact, openEditContact, closeContactForm, saveContact, deleteContact,
     copyClient: _copyClient,
@@ -13653,7 +13692,7 @@ const ProjectsModule = (() => {
     }
   }
 
-  async function openDrawer(id = null) {
+  async function openDrawer(id = null, presetClientId = null) {
     _editId = id ?? null;
     const title   = $('projects-drawer-title');
     const saveBtn = $('projects-save-btn');
@@ -13720,7 +13759,7 @@ const ProjectsModule = (() => {
       onHorasFijasToggle();
       if ($('proj-comision')) $('proj-comision').value = '';
       await _renderRespCobro(null);
-      await _fetchAndPopulateClients(null);
+      await _fetchAndPopulateClients(presetClientId);
     }
 
     $('projects-drawer').classList.add('open');
