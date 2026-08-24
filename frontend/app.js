@@ -5741,11 +5741,17 @@ const DashboardModule = (() => {
     for (const t of leaves) blocks.push({ k: _k(t), t: String(t.titulo || ''), html: _taskRow(t, isOverdue) });
     for (const [, arr] of groups) {
       arr.sort((a, b) => _k(a).localeCompare(_k(b)) || String(a.titulo || '').localeCompare(String(b.titulo || '')));
+      // Vencidas nunca se agrupan colapsadas: son las urgentes, no deben quedar
+      // escondidas detrás de un "0/2" — cada una se ve suelta con su propia fecha.
+      if (arr.length === 1 || isOverdue) {
+        for (const t of arr) blocks.push({ k: _k(t), t: String(t.titulo || ''), html: _subtaskRow(t, isOverdue, allTasksById) });
+        continue;
+      }
       const parent = allTasksById ? allTasksById.get(arr[0].parent_task_id) : null;
       blocks.push({
         k: _k(arr[0]),
         t: String((parent && parent.titulo) || arr[0].titulo || ''),
-        html: arr.length === 1 ? _subtaskRow(arr[0], isOverdue, allTasksById) : _subtaskGroup(arr, isOverdue, allTasksById),
+        html: _subtaskGroup(arr, isOverdue, allTasksById),
       });
     }
     return blocks
