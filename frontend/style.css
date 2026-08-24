@@ -9835,11 +9835,17 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
   white-space: nowrap;
   flex-shrink: 0;
   letter-spacing: 0;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 5px;
+  transition: background .12s, color .12s;
 }
+.d3-task-date:hover { background: #EAE7E2; color: #3D3A36; }
 /* Fecha vencida: rojo terroso APAGADO (no saturado) — el único acento de color de la fila. */
 .d3-task-date--overdue { color: #B07064; font-weight: 600; letter-spacing: 0; }
+.d3-task-date--overdue:hover { background: #F1DCD6; color: #8A4A3E; }
 
-.d3-play-btn {
+.d3-play-btn, .d3-openproj-btn {
   width: 20px; height: 20px;
   border-radius: 50%;
   border: none;
@@ -9852,9 +9858,12 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
   transition: opacity .15s, background .12s, color .12s;
 }
 .d3-task-row:hover .d3-play-btn,
+.d3-task-row:hover .d3-openproj-btn,
 .d3-opp-row:hover .d3-play-btn,
-.d3-play-btn:focus-visible { opacity: 1; }
+.d3-play-btn:focus-visible,
+.d3-openproj-btn:focus-visible { opacity: 1; }
 .d3-play-btn:hover { background: #F1EFEB; color: #6366F1; }
+.d3-openproj-btn:hover { background: #F1EFEB; color: #007AFF; }
 
 /* ── Empty state ─────────────────────────────────────────── */
 .d3-empty {

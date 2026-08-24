@@ -5162,7 +5162,10 @@ const DashboardModule = (() => {
         <span class="d3-task-name${isOverdue ? ' d3-task-name--overdue' : ''}">${esc(t.titulo)}</span>
         ${ctx ? `<span class="d3-task-meta">${esc(ctx)}</span>` : ''}
       </div>
-      ${dl ? `<span class="d3-task-date${isOverdue ? ' d3-task-date--overdue' : ''}">${dl}</span>` : ''}
+      ${dl ? `<span class="d3-task-date${isOverdue ? ' d3-task-date--overdue' : ''}" title="Cambiar fecha" onclick="event.stopPropagation();DashboardModule.openDateFromRow(event,${t.id})">${dl}</span>` : ''}
+      ${t.project_id ? `<button class="d3-openproj-btn" title="Abrir proyecto" onclick="event.stopPropagation();document.querySelector('[data-tab=mgmt-projects]').click();setTimeout(()=>ProjectsModule.openDetail(${t.project_id}),250)">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+      </button>` : ''}
       <button class="d3-play-btn" data-timer-task="${t.id}" title="Iniciar timer"
               onclick="event.stopPropagation();TimerModule.toggleTask(${t.id})">
         <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
@@ -5751,7 +5754,10 @@ const DashboardModule = (() => {
       <div class="d3-task-body">
         <span class="d3-task-name${isOverdue ? ' d3-task-name--overdue' : ''}">${esc(t.titulo)}</span>
       </div>
-      ${dl ? `<span class="d3-task-date${isOverdue ? ' d3-task-date--overdue' : ''}">${dl}</span>` : ''}
+      ${dl ? `<span class="d3-task-date${isOverdue ? ' d3-task-date--overdue' : ''}" title="Cambiar fecha" onclick="event.stopPropagation();DashboardModule.openDateFromRow(event,${t.id})">${dl}</span>` : ''}
+      ${t.project_id ? `<button class="d3-openproj-btn" title="Abrir proyecto" onclick="event.stopPropagation();document.querySelector('[data-tab=mgmt-projects]').click();setTimeout(()=>ProjectsModule.openDetail(${t.project_id}),250)">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+      </button>` : ''}
       <button class="d3-play-btn" data-timer-task="${t.id}" title="Iniciar timer"
               onclick="event.stopPropagation();TimerModule.toggleTask(${t.id})">
         <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
@@ -5949,7 +5955,10 @@ const DashboardModule = (() => {
         <span class="d3-task-name${isOverdue ? ' d3-task-name--overdue' : ''}">${esc(t.titulo)}</span>
         ${meta ? `<span class="d3-task-meta">${esc(meta)}</span>` : ''}
       </div>
-      ${dl ? `<span class="d3-task-date${isOverdue ? ' d3-task-date--overdue' : ''}">${dl}</span>` : ''}
+      ${dl ? `<span class="d3-task-date${isOverdue ? ' d3-task-date--overdue' : ''}" title="Cambiar fecha" onclick="event.stopPropagation();DashboardModule.openDateFromRow(event,${t.id})">${dl}</span>` : ''}
+      ${t.project_id ? `<button class="d3-openproj-btn" title="Abrir proyecto" onclick="event.stopPropagation();document.querySelector('[data-tab=mgmt-projects]').click();setTimeout(()=>ProjectsModule.openDetail(${t.project_id}),250)">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+      </button>` : ''}
       <button class="d3-play-btn" data-timer-task="${t.id}" title="Iniciar timer"
               onclick="event.stopPropagation();TimerModule.toggleTask(${t.id})">
         <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
@@ -6229,11 +6238,13 @@ const DashboardModule = (() => {
   }
 
   // Re-render del widget desde cache + re-abrir el mismo expand (refleja sección/estado nuevos).
-  function _expRefresh(id) {
+  // skipExpand=true: para ediciones rápidas hechas SIN abrir el panel (ej. clic directo en
+  // la fecha de la fila colapsada) — no tiene sentido expandir algo que el usuario no pidió ver.
+  function _expRefresh(id, skipExpand) {
     _expandedTaskId = null;
     _renderTasks(0, [], [], _allTasksCache);
     _renderOverview(_allTasksCache);
-    toggleExpand(id);
+    if (!skipExpand) toggleExpand(id);
   }
 
   // Guardado genérico: PATCH → actualiza cache → cierra popover → toast → re-render+re-expand.
@@ -6275,20 +6286,23 @@ const DashboardModule = (() => {
   // fijar [inicio → fin] de una sola vez (igual que en Proyectos y Tareas).
   function expEditDate(id, anchor)  { _expOpenRange(id, anchor); }
   function expEditStart(id, anchor) { _expOpenRange(id, anchor); }
-  function _expOpenRange(id, anchor) {
+  // Clic directo en la fecha de la fila COLAPSADA — sin pasar por el panel expandido
+  // (pedido de Jenny: el paso extra de expandir para solo cambiar la fecha sobraba).
+  function openDateFromRow(ev, id) { _expOpenRange(id, ev.currentTarget, true); }
+  function _expOpenRange(id, anchor, skipExpand) {
     const t = _allTasksCache.find(x => x.id === id); if (!t) return;
     RangePicker.open(anchor, {
       start: t.fecha_inicio ? String(t.fecha_inicio).split('T')[0] : null,
       end:   t.deadline     ? String(t.deadline).split('T')[0]     : null,
-    }, out => _expSaveRange(id, out));
+    }, out => _expSaveRange(id, out, skipExpand));
   }
-  async function _expSaveRange(id, { fecha_inicio, deadline }) {
+  async function _expSaveRange(id, { fecha_inicio, deadline }, skipExpand) {
     try {
       await apiFetch(`${API}/mgmt/tasks/${id}/fecha-inicio`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fecha_inicio: fecha_inicio || null }) });
       await apiFetch(`${API}/mgmt/tasks/${id}/deadline`,     { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ deadline: deadline || null }) });
       const t = _allTasksCache.find(x => x.id === id); if (t) { t.fecha_inicio = fecha_inicio || null; t.deadline = deadline || null; }
       _expToast('Fecha actualizada');
-      _expRefresh(id);
+      _expRefresh(id, skipExpand);
     } catch (e) { console.error('[dashboard] range save:', e); _expToast('No se pudo guardar. Reintenta.', true); }
   }
   function _expCalHtml() {
@@ -6521,7 +6535,7 @@ const DashboardModule = (() => {
     _tpToggleNew, _tpNewCheck, _tpCreateAndStart,
     goFinance, goTasks,
     _onAvatarClick, openAvatarPicker, closeAvatarPicker, selectAvatar, resetAvatar, _avSwitchTab,
-    expEditStatus, expPickStatus, expEditDate, expEditStart, expCalNav, expPickDate, expClearDate, expEditAssignee, expAsgFilter, expPickAssignee };
+    expEditStatus, expPickStatus, expEditDate, expEditStart, openDateFromRow, expCalNav, expPickDate, expClearDate, expEditAssignee, expAsgFilter, expPickAssignee };
 })();
 
 // =================================================================
