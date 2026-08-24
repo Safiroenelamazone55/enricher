@@ -5183,7 +5183,7 @@ const DashboardModule = (() => {
     const parent = allTasksById ? allTasksById.get(t.parent_task_id) : null;
     const ctx = [parent && parent.titulo, t.client_nombre || t.project_nombre].filter(Boolean).join(' · ');
     const estado = t.estado || 'pendiente';
-    return `<div class="d3-task-row${isOverdue ? ' d3-task-row--overdue' : ''}" data-task-id="${t.id}" onclick="DashboardModule.toggleExpand(${t.id})">
+    return `<div class="d3-task-row${isOverdue ? ' d3-task-row--overdue' : ''}" data-task-id="${t.id}">
       <button class="d3-status-btn d3-status-btn--${(_STATUS_CFG[estado]||_STATUS_CFG.pendiente).dot}"
               onclick="event.stopPropagation();DashboardModule.openStatusMenu(event,${t.id})"
               title="Cambiar estado">${_statusSvg(estado)}</button>
@@ -5843,7 +5843,7 @@ const DashboardModule = (() => {
       ? (_start && _start !== _end ? `${_fmtD(_start)} – ${_fmtD(_end)}` : _fmtD(_end))
       : null;
     const estado = t.estado || 'pendiente';
-    return `<div class="d3-task-row d3-task-row--grouped${isOverdue ? ' d3-task-row--overdue' : ''}" data-task-id="${t.id}" onclick="DashboardModule.toggleExpand(${t.id})">
+    return `<div class="d3-task-row d3-task-row--grouped${isOverdue ? ' d3-task-row--overdue' : ''}" data-task-id="${t.id}">
       <button class="d3-status-btn d3-status-btn--${(_STATUS_CFG[estado]||_STATUS_CFG.pendiente).dot}"
               onclick="event.stopPropagation();DashboardModule.openStatusMenu(event,${t.id})"
               title="Cambiar estado">${_statusSvg(estado)}</button>
@@ -6043,7 +6043,7 @@ const DashboardModule = (() => {
       : null;
     const meta = [t.project_nombre, t.client_nombre].filter(Boolean).join(' · ');
     const estado = t.estado || 'pendiente';
-    return `<div class="d3-task-row${isOverdue ? ' d3-task-row--overdue' : ''}" data-task-id="${t.id}" onclick="DashboardModule.toggleExpand(${t.id})">
+    return `<div class="d3-task-row${isOverdue ? ' d3-task-row--overdue' : ''}" data-task-id="${t.id}">
       <button class="d3-status-btn d3-status-btn--${(_STATUS_CFG[estado]||_STATUS_CFG.pendiente).dot}"
               onclick="event.stopPropagation();DashboardModule.openStatusMenu(event,${t.id})"
               title="Cambiar estado">${_statusSvg(estado)}</button>
