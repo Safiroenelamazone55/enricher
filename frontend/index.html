@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260825b"/>
+  <link rel="stylesheet" href="style.css?v=20260825c"/>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -1310,6 +1310,16 @@
 
     <!-- ── WHATSAPP (Operaciones) ───────────────────────────── -->
     <div class="pane pane--wa" id="pane-mgmt-wa">
+      <!-- Selector de cuentas: visible en cuanto hay 1+ WhatsApp conectado/en proceso.
+           Vive FUERA de wa-shell (arriba) para poder cambiar de cuenta sin importar
+           en qué estado esté la seleccionada (conectada, esperando QR, desconectada). -->
+      <div class="wa-accts-bar hidden" id="wa-accts-bar">
+        <button class="wa-accts-switch" id="wa-acct-btn" onclick="WaChatModule.abrirCuentasPop(event)" title="Cambiar de cuenta de WhatsApp">
+          <span class="wa-accts-dot" id="wa-acct-dot"></span>
+          <span class="wa-accts-label" id="wa-acct-label">WhatsApp</span>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+      </div>
       <div class="wa-shell" id="wa-shell">
 
         <!-- Estado 1: sin conectar todavía -->
@@ -2809,7 +2819,7 @@
 })();
 </script>
 
-<script src="app.js?v=20260820w"></script>
+<script src="app.js?v=20260820x"></script>
 <div id="task-quick-edit" style="display:none;position:fixed;z-index:9999"></div>
 </body>
 </html>

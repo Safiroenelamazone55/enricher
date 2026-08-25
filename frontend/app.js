@@ -26352,7 +26352,9 @@ const SlackChat = (() => {
 // WhatsApp de trabajo (Operaciones) — vía Baileys, ver backend/services/waService.js.
 // v1: UNA sola conexión (el número real de Jenny), vinculada escaneando un QR.
 const WaChatModule = (() => {
-  let _conn     = null;   // { id, estado, numero, qr_actual } — la única conexión, si existe
+  let _conn     = null;   // { id, estado, numero, qr_actual } — la conexión ACTIVA (seleccionada)
+  let _conns    = [];     // todas las conexiones de Operaciones (multi-cuenta)
+  let _acctPopClose = null;
   let _chats    = [];
   let _chatAct  = null;   // jid del chat abierto
   let _chatActGrupo = false;
@@ -26390,14 +26392,80 @@ const WaChatModule = (() => {
     requestAnimationFrame(_fitWa);
     try {
       const r = await apiFetch(`${API}/wa/connections`);
-      const rows = r.ok ? await r.json() : [];
-      // Puede haber más de una fila (reintentos de conexión anteriores) — la que importa
-      // es la que está realmente activa, no la primera que se creó.
-      _conn = rows.find(c => c.estado === 'conectado')
-           || rows.find(c => c.estado === 'esperando_qr')
-           || rows[rows.length - 1] || null;
-    } catch (_) { _conn = null; }
+      _conns = r.ok ? await r.json() : [];
+    } catch (_) { _conns = []; }
+    // Multi-cuenta: respeta la última seleccionada (si sigue existiendo); si no,
+    // prioriza una conectada, luego una esperando QR, luego la más reciente.
+    let selId = null;
+    try { selId = parseInt(localStorage.getItem('wa_selected_conn_id'), 10); } catch (_) {}
+    _conn = _conns.find(c => c.id === selId)
+         || _conns.find(c => c.estado === 'conectado')
+         || _conns.find(c => c.estado === 'esperando_qr')
+         || _conns[_conns.length - 1] || null;
+    _pintaBarraCuentas();
     _aplicarEstado();
+  }
+
+  function _pintaBarraCuentas() {
+    const bar = $$('wa-accts-bar');
+    if (!bar) return;
+    bar.classList.toggle('hidden', _conns.length === 0);
+    if (!_conn) return;
+    const dot = $$('wa-acct-dot'), label = $$('wa-acct-label');
+    const dotCls = _conn.estado === 'conectado' ? 'on' : _conn.estado === 'esperando_qr' ? 'qr' : 'off';
+    if (dot)   dot.className = 'wa-accts-dot wa-accts-dot--' + dotCls;
+    if (label) label.textContent = _conn.numero ? `+${_conn.numero}` : (_conn.nombre || 'WhatsApp');
+  }
+
+  function _selectConn(id) {
+    const c = _conns.find(x => x.id === id);
+    if (!c) return;
+    _conn = c;
+    try { localStorage.setItem('wa_selected_conn_id', String(id)); } catch (_) {}
+    _pintaBarraCuentas();
+    _aplicarEstado();
+  }
+  function _pickConn(id) { if (_acctPopClose) _acctPopClose(); _selectConn(id); }
+
+  function abrirCuentasPop(ev) {
+    ev.stopPropagation();
+    if (_acctPopClose) { _acctPopClose(); return; }
+    const menu = document.createElement('div');
+    menu.className = 'chat-ctx-menu';
+    const rows = _conns.map(c => {
+      const dotCls = c.estado === 'conectado' ? 'on' : c.estado === 'esperando_qr' ? 'qr' : 'off';
+      const label  = c.numero ? `+${c.numero}` : (c.nombre || 'WhatsApp');
+      const sub    = c.estado === 'conectado' ? '' : c.estado === 'esperando_qr' ? ' · QR pendiente' : ' · Desconectado';
+      const check  = c.id === _conn?.id ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" style="margin-left:auto"><polyline points="20 6 9 17 4 12"/></svg>' : '';
+      return `<button class="chat-ctx-item" onclick="WaChatModule._pickConn(${c.id})">
+        <span class="wa-accts-dot wa-accts-dot--${dotCls}"></span>${esc(label)}${sub}${check}
+      </button>`;
+    }).join('');
+    menu.innerHTML = rows + `<div class="chat-ctx-sep"></div>
+      <button class="chat-ctx-item" onclick="WaChatModule.agregarCuenta()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Agregar otra cuenta
+      </button>`;
+    const rect = ev.currentTarget.getBoundingClientRect();
+    menu.style.top = (rect.bottom + 6) + 'px';
+    menu.style.left = rect.left + 'px';
+    document.body.appendChild(menu);
+    _acctPopClose = () => { menu.remove(); document.removeEventListener('click', _acctPopClose); _acctPopClose = null; };
+    setTimeout(() => document.addEventListener('click', _acctPopClose), 0);
+  }
+
+  async function agregarCuenta() {
+    if (_acctPopClose) _acctPopClose();
+    try {
+      const r = await apiFetch(`${API}/wa/connections`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nombre: `WhatsApp ${_conns.length + 1}` }),
+      });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'No se pudo crear la conexión');
+      const { id } = await r.json();
+      _conns.push({ id, estado: 'esperando_qr', qr_actual: '', numero: '', nombre: `WhatsApp ${_conns.length + 1}` });
+      _selectConn(id);
+    } catch (e) { alert('Error: ' + e.message); }
   }
 
   function _aplicarEstado() {
@@ -26439,6 +26507,11 @@ const WaChatModule = (() => {
       const r = await apiFetch(`${API}/wa/connections/${_conn.id}`);
       if (!r.ok) return;
       _conn = await r.json();
+      // El fetch reemplaza el objeto entero: sincronizar la copia que vive en
+      // _conns (si no, el selector de cuentas se queda mostrando el estado viejo).
+      const idx = _conns.findIndex(c => c.id === _conn.id);
+      if (idx !== -1) _conns[idx] = _conn; else _conns.push(_conn);
+      _pintaBarraCuentas();
       if (_conn.estado === 'esperando_qr') { _pintaQr(); return; }
       _aplicarEstado(); // pasó a conectado (o volvió a desconectado)
     } catch (_) { /* red intermitente: se reintenta en el próximo tick */ }
@@ -26462,8 +26535,11 @@ const WaChatModule = (() => {
         });
         if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'No se pudo crear la conexión');
         _conn = { id: (await r.json()).id };
+        _conns.push(_conn);
+        try { localStorage.setItem('wa_selected_conn_id', String(_conn.id)); } catch (_) {}
       }
       _conn.estado = 'esperando_qr'; _conn.qr_actual = '';
+      _pintaBarraCuentas();
       _aplicarEstado();
     } catch (e) {
       alert('Error: ' + e.message);
@@ -26481,6 +26557,7 @@ const WaChatModule = (() => {
     // reactivar la MISMA fila en vez de crear otra — ver comentario ahí arriba.
     _conn.estado = 'desconectado'; _conn.numero = ''; _conn.qr_actual = '';
     _chats = []; _chatAct = null;
+    _pintaBarraCuentas();
     _aplicarEstado();
   }
 
@@ -26964,7 +27041,8 @@ const WaChatModule = (() => {
            programarToggle, programarPick, cancelarProgramado,
            reactPop, reaccionar, emojiPicker, _emojiIns, refreshBadge,
            visPop, abrirVisPop, _toggleVisSub, guardarVisibilidad, _pintaBotonVis, _cargarTeam,
-           nuevoChatAbrir, nuevoChatCerrar, _nuevoChatBuscar, nuevoChatElegir, nuevoChatUsarNumero };
+           nuevoChatAbrir, nuevoChatCerrar, _nuevoChatBuscar, nuevoChatElegir, nuevoChatUsarNumero,
+           abrirCuentasPop, _pickConn, agregarCuenta };
 })();
 window.WaChatModule = WaChatModule;
 

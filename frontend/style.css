@@ -15379,6 +15379,24 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .wa-qr__img { width: 220px; height: 220px; border-radius: 10px; border: 1px solid var(--border); padding: 10px; background: #fff; margin: 6px 0; }
 .wa-qr__hint { font-size: .76rem; color: var(--primary); font-weight: 600; }
 
+/* Selector de cuentas de WhatsApp (multi-cuenta en Operaciones) — barra fina arriba
+   del shell, visible sin importar el estado (conectado/QR/desconectado) de la
+   cuenta seleccionada, para poder saltar a otra cuenta desde cualquier pantalla. */
+.wa-accts-bar { padding: 8px 4px 0; }
+.wa-accts-switch {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 6px 10px; border-radius: var(--rs, 9px);
+  border: 1px solid var(--border); background: var(--surface, #fff);
+  color: var(--text, #1F1D1B); font-family: inherit; font-size: .8rem; font-weight: 600;
+  cursor: pointer; transition: background .12s, border-color .12s;
+}
+.wa-accts-switch:hover { background: var(--bg2); }
+.wa-accts-switch svg { color: var(--muted); flex-shrink: 0; }
+.wa-accts-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--muted, #918C85); }
+.wa-accts-dot--on  { background: #22C55E; }
+.wa-accts-dot--qr  { background: #F59E0B; }
+.wa-accts-dot--off { background: var(--muted, #918C85); }
+
 /* Estado 3: conectado — dos columnas, misma altura que el shell de Slack */
 .wa-chat { display: flex; height: 100%; overflow: hidden; }
 .wa-sidebar { width: 280px; min-width: 280px; flex-shrink: 0; display: flex; flex-direction: column; background: var(--surface-secondary); border-right: 1px solid var(--border); overflow: hidden; }
