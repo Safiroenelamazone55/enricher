@@ -9584,6 +9584,10 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 .d3-chevron { margin-left: auto; flex-shrink: 0; transition: transform .15s ease; }
 .d3-section-details[open] .d3-chevron { transform: rotate(180deg); }
 
+/* ── Mi trabajo (bandeja personal cross-proyecto) ─────────── */
+.mw-body { max-width: 760px; }
+.mw-card { padding-bottom: 6px; }
+
 /* ── Status button (Linear-style) ───────────────────────── */
 .d3-status-btn {
   width: 18px; height: 18px;

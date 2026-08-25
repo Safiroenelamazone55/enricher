@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260825a"/>
+  <link rel="stylesheet" href="style.css?v=20260825b"/>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -317,6 +317,17 @@
         <span class="snav-badge" style="display:none"></span>
       </button>
 
+      <button class="snav-item" data-tab="mgmt-mywork" data-tooltip="Mi trabajo">
+        <span class="snav-item__icon">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 11l3 3L22 4"/>
+            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+          </svg>
+        </span>
+        <span class="snav-item__label">Mi trabajo</span>
+        <span class="snav-badge" style="display:none"></span>
+      </button>
+
       <div class="snav-cat">Negocio</div>
       <button class="snav-item" data-tab="mgmt-opportunities" data-tooltip="Oportunidades">
         <span class="snav-item__icon">
@@ -592,6 +603,25 @@
           </div>
         </div>
         <div class="an-pane-wrap hidden" id="dash2-analytics-pane"></div>
+      </div>
+    </div>
+
+    <!-- ── MI TRABAJO ──────────────────────────────────────── -->
+    <div class="pane" id="pane-mgmt-mywork">
+      <div class="pane-header">
+        <div class="pane-header__row">
+          <div>
+            <h1 class="pane-title">Mi trabajo</h1>
+            <p class="pane-sub">Todo lo que tienes asignado, en cualquier proyecto o cliente</p>
+          </div>
+        </div>
+      </div>
+      <div class="mw-body">
+        <div class="clients-loading" id="mywork-loading">
+          <div class="clients-spin"></div>
+          <span>Cargando tu trabajo…</span>
+        </div>
+        <div class="d3-card mw-card" id="mywork-list" style="display:none"></div>
       </div>
     </div>
 
@@ -2779,7 +2809,7 @@
 })();
 </script>
 
-<script src="app.js?v=20260820v"></script>
+<script src="app.js?v=20260820w"></script>
 <div id="task-quick-edit" style="display:none;position:fixed;z-index:9999"></div>
 </body>
 </html>

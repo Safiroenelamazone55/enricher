@@ -6694,6 +6694,137 @@ const DashboardModule = (() => {
 })();
 
 // =================================================================
+// MI TRABAJO — bandeja personal cross-proyecto: todo lo asignado a mí,
+// de cualquier cliente/proyecto, en un solo lugar (a diferencia de "Mis
+// tareas" del Dashboard, que es un widget chico pensado para un vistazo).
+// Reusa las clases visuales de Dashboard (.d3-task-row y compañía) para
+// no duplicar CSS, y reusa DashboardModule.openStatusMenu/setTaskStatus
+// (no dependen de _allTasksCache, solo del taskId). La fecha SÍ necesita
+// su propio manejo: _expOpenRange de Dashboard lee de _allTasksCache, que
+// puede estar vacío si esta página se abre sin haber visitado el
+// Dashboard antes — por eso _openDate usa el cache propio de este módulo.
+// =================================================================
+const MyWorkModule = (() => {
+  let _tasks = [];
+
+  const _CFG = {
+    pendiente:   { dot: 'pendiente',   icon: `<circle cx="8" cy="8" r="5.5" stroke="#CFCAC3" stroke-width="1.5" fill="none"/>` },
+    en_progreso: { dot: 'inprogress',  icon: `<circle cx="8" cy="8" r="6.5" fill="#6366F1"/><path d="M5 8 L7.5 10.5 L11 6" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity=".4"/><path d="M5.5 8a2.5 2.5 0 0 1 4.5-1.5" stroke="#fff" stroke-width="1.5" stroke-linecap="round" fill="none"/>` },
+    completado:  { dot: 'done',        icon: `<circle cx="8" cy="8" r="6.5" fill="#22C55E"/><path d="M5 8 L7.2 10.5 L11 6" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>` },
+    bloqueado:   { dot: 'blocked',     icon: `<circle cx="8" cy="8" r="6.5" fill="#EF4444"/><line x1="5.5" y1="8" x2="10.5" y2="8" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/>` },
+    cancelado:   { dot: 'cancelled',   icon: `<circle cx="8" cy="8" r="6.5" fill="#8E8A84"/><line x1="5.5" y1="5.5" x2="10.5" y2="10.5" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/><line x1="10.5" y1="5.5" x2="5.5" y2="10.5" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/>` },
+  };
+  const _svg = estado => `<svg width="16" height="16" viewBox="0 0 16 16" fill="none">${(_CFG[estado] || _CFG.pendiente).icon}</svg>`;
+
+  async function load() {
+    const wrap = $('mywork-list'), loading = $('mywork-loading');
+    if (!wrap) return;
+    if (loading) loading.style.display = '';
+    wrap.style.display = 'none';
+    try {
+      const res = await apiFetch(`${API}/mgmt/tasks`);
+      _tasks = res.ok ? await res.json() : [];
+    } catch (e) { console.error('[mywork] load:', e); _tasks = []; }
+    if (loading) loading.style.display = 'none';
+    wrap.style.display = '';
+    render();
+  }
+
+  function render() {
+    const wrap = $('mywork-list');
+    if (!wrap) return;
+    const _me = (window._authUser?.memberNombre || window._authUser?.name || '').toLowerCase();
+    const byId = new Map(_tasks.map(t => [t.id, t]));
+    const mine = _me ? _tasks.filter(t =>
+      (t.responsables || []).some(r => (r || '').toLowerCase() === _me) ||
+      (t.responsable  || '').toLowerCase() === _me
+    ) : [];
+    const active = mine.filter(t => t.estado !== 'completado' && t.estado !== 'cancelado');
+    // Un padre con subtareas es un contenedor: el trabajo real está en sus
+    // subtareas, no cuenta como tarea propia (mismo criterio que Dashboard).
+    const parentIds = new Set(_tasks.filter(t => t.parent_task_id).map(t => t.parent_task_id));
+    const isActionable = t => !!t.parent_task_id || !parentIds.has(t.id);
+    const items = active.filter(isActionable);
+
+    if (!_me) { wrap.innerHTML = `<div class="d3-empty">No se pudo identificar tu usuario.</div>`; return; }
+    if (!items.length) {
+      wrap.innerHTML = `<div class="d3-empty"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>No tienes tareas asignadas. Vas al día.</div>`;
+      return;
+    }
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const win = t => { const end = t.deadline ? String(t.deadline).split('T')[0] : null; const start = t.fecha_inicio ? String(t.fecha_inicio).split('T')[0] : end; return { start, end }; };
+    const overdue  = items.filter(t => { const w = win(t); return w.end && w.end < todayStr; });
+    const today    = items.filter(t => { const w = win(t); return w.start && w.start <= todayStr && (!w.end || w.end >= todayStr); });
+    const upcoming = items.filter(t => { const w = win(t); return w.start && w.start > todayStr; });
+    const noDate   = items.filter(t => { const w = win(t); return !w.start && !w.end; });
+
+    const _key  = t => (t.deadline ? String(t.deadline).split('T')[0] : (t.fecha_inicio ? String(t.fecha_inicio).split('T')[0] : '9999-12-31'));
+    const _sort = arr => [...arr].sort((a, b) => _key(a).localeCompare(_key(b)) || String(a.titulo || '').localeCompare(String(b.titulo || '')));
+
+    const section = (iconSvg, label, arr, cls) => !arr.length ? '' : `
+      <div class="d3-section-label${cls ? ' ' + cls : ''}">${iconSvg}${label} · ${arr.length}</div>
+      ${_sort(arr).map(t => _row(t, byId, cls === 'd3-section-label--warn')).join('')}`;
+
+    const ICO_WARN = '<svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 100 20A10 10 0 0012 2zm1 14h-2v-2h2v2zm0-4h-2V7h2v5z"/></svg>';
+    const ICO_HOY  = '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>';
+    const ICO_PROX = '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 16 12"/></svg>';
+
+    wrap.innerHTML = [
+      section(ICO_WARN, 'Vencidas', overdue, 'd3-section-label--warn'),
+      section(ICO_HOY, 'Hoy', today),
+      section(ICO_PROX, 'Próximos días', upcoming, 'd3-section-label--muted'),
+      section('', 'Sin fecha', noDate, 'd3-section-label--muted'),
+    ].join('');
+  }
+
+  function _row(t, byId, isOverdue) {
+    const parent = t.parent_task_id ? byId.get(t.parent_task_id) : null;
+    const meta = [parent && parent.titulo, t.project_nombre, t.client_nombre].filter(Boolean).join(' · ');
+    const _fmtD = d => new Date(d + 'T00:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
+    const _end = t.deadline ? String(t.deadline).split('T')[0] : null;
+    const _start = t.fecha_inicio ? String(t.fecha_inicio).split('T')[0] : null;
+    const dl = _end
+      ? (_start && _start !== _end && !t.parent_task_id ? `${_fmtD(_start)} – ${_fmtD(_end)}` : _fmtD(_end))
+      : (_start ? _fmtD(_start) : null);
+    const estado = t.estado || 'pendiente';
+    return `<div class="d3-task-row${isOverdue ? ' d3-task-row--overdue' : ''}" data-task-id="${t.id}">
+      <button class="d3-status-btn d3-status-btn--${(_CFG[estado] || _CFG.pendiente).dot}"
+        onclick="event.stopPropagation();DashboardModule.openStatusMenu(event,${t.id})" title="Cambiar estado">${_svg(estado)}</button>
+      <div class="d3-task-body">
+        <span class="d3-task-name${isOverdue ? ' d3-task-name--overdue' : ''}">${esc(t.titulo)}</span>
+        ${meta ? `<span class="d3-task-meta">${esc(meta)}</span>` : ''}
+      </div>
+      <span class="d3-task-date${isOverdue ? ' d3-task-date--overdue' : ''}" title="${dl ? 'Cambiar fecha' : 'Poner fecha'}" onclick="event.stopPropagation();MyWorkModule._openDate(event,${t.id})">${dl || 'Fecha'}</span>
+      ${t.project_id ? `<button class="d3-openproj-btn" title="Abrir proyecto" onclick="event.stopPropagation();document.querySelector('[data-tab=mgmt-projects]').click();setTimeout(()=>ProjectsModule.openDetail(${t.project_id}),250)">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+      </button>` : ''}
+      <button class="d3-play-btn" data-timer-task="${t.id}" title="Iniciar timer" onclick="event.stopPropagation();TimerModule.toggleTask(${t.id})">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      </button>
+      <span class="task-elapsed" data-timer-display="${t.id}" hidden></span>
+    </div>`;
+  }
+
+  function _openDate(ev, id) {
+    const t = _tasks.find(x => x.id === id); if (!t) return;
+    RangePicker.open(ev.currentTarget, {
+      start: t.fecha_inicio ? String(t.fecha_inicio).split('T')[0] : null,
+      end:   t.deadline     ? String(t.deadline).split('T')[0]     : null,
+    }, async out => {
+      try {
+        await apiFetch(`${API}/mgmt/tasks/${id}/fecha-inicio`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fecha_inicio: out.fecha_inicio || null }) });
+        await apiFetch(`${API}/mgmt/tasks/${id}/deadline`,     { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ deadline: out.deadline || null }) });
+        t.fecha_inicio = out.fecha_inicio || null; t.deadline = out.deadline || null;
+        render();
+      } catch (e) { console.error('[mywork] date save:', e); }
+    });
+  }
+
+  return { load, _openDate };
+})();
+
+// =================================================================
 // ANALYTICS MODULE
 // =================================================================
 
@@ -30182,6 +30313,7 @@ function initApp() {
     }
     if (tabName === 'datos') LeadManagerModule.renderDataGrid('dg-body');
     if (tabName === 'mgmt-dashboard') DashboardModule.load();
+    if (tabName === 'mgmt-mywork')    MyWorkModule.load();
     if (tabName === 'mgmt-finance')   FinanceModule.load();
     if (tabName === 'mgmt-clients')   ClientsModule.load();
     if (tabName === 'mgmt-projects')  ProjectsModule.load();
