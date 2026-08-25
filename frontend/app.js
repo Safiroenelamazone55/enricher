@@ -11921,6 +11921,11 @@ const ProjectsModule = (() => {
       <span class="pjt-row__tag" style="background:${bg};color:${clr}">${lbl}</span>
       <button type="button" class="pjt-add-sub" title="Agregar subtarea"
         onclick="event.stopPropagation();ProjectsModule.startInlineSubtask(${t.id})">+ Subtarea</button>
+      <span class="task-elapsed" data-timer-display="${t.id}" hidden></span>
+      <button type="button" class="pjt-play-btn" data-timer-task="${t.id}" title="Iniciar timer"
+        onclick="event.stopPropagation();TimerModule.toggleTask(${t.id})">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      </button>
       <button type="button" class="pjt-more-btn" title="Más opciones"
         onclick="event.stopPropagation();ProjectsModule.openTaskMenu(event,${t.id})">⋯</button>
     </div>`;
@@ -11938,6 +11943,11 @@ const ProjectsModule = (() => {
       <span class="pjt-row__name pjt-row__name--sub">${escCap(t.titulo)}</span>
       ${_whenChip(t, true)}
       <span class="pjt-row__tag pjt-row__tag--sm" style="background:${bg};color:${clr}">${lbl}</span>
+      <span class="task-elapsed" data-timer-display="${t.id}" hidden></span>
+      <button type="button" class="pjt-play-btn pjt-play-btn--sm" data-timer-task="${t.id}" title="Iniciar timer"
+        onclick="event.stopPropagation();TimerModule.toggleTask(${t.id})">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      </button>
       <button type="button" class="pjt-more-btn pjt-more-btn--sm" title="Más opciones"
         onclick="event.stopPropagation();ProjectsModule.openTaskMenu(event,${t.id})">⋯</button>
     </div>`;

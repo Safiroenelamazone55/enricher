@@ -7609,6 +7609,27 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 .pjt-more-btn:hover { background: var(--bg2); color: var(--text2); }
 .pjt-more-btn--sm { width: 20px; height: 20px; font-size: .78rem; }
 
+.pjt-play-btn {
+  flex-shrink: 0;
+  width: 22px; height: 22px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 150ms, background 150ms, color 150ms;
+}
+.pjt-row:hover .pjt-play-btn,
+.pjt-subrow:hover .pjt-play-btn,
+.pjlist-task-row:hover .pjt-play-btn,
+.pjlist-sub-row:hover .pjt-play-btn,
+.pjt-play-btn:focus-visible { opacity: 1; }
+.pjt-play-btn:hover { background: var(--bg2); color: var(--brand); }
+.pjt-play-btn--sm { width: 20px; height: 20px; }
+.pjt-play-btn.tt-btn--active { opacity: 1; color: var(--brand); animation: tt-pulse 2s ease-in-out infinite; }
+
 /* ── Subtareas — fila hija (Timeline) ────────────────── */
 .pjt-subgroup {
   margin: 2px 0 4px 32px;
