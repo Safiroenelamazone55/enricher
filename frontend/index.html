@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260825g"/>
+  <link rel="stylesheet" href="style.css?v=20260826a"/>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -1362,6 +1362,19 @@
               <button class="chat-hdr-btn" title="Desconectar" onclick="WaChatModule.desconectar()">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
               </button>
+            </div>
+            <div class="wa-filters" id="wa-filters">
+              <div class="wa-filters__row" id="wa-filters-asig">
+                <button class="filter-pill wa-filter-pill active" data-val="mias" onclick="WaChatModule.setFiltroAsignado('mias')">Mías</button>
+                <button class="filter-pill wa-filter-pill" data-val="sin_asignar" onclick="WaChatModule.setFiltroAsignado('sin_asignar')">Sin asignar</button>
+                <button class="filter-pill wa-filter-pill" data-val="todas" onclick="WaChatModule.setFiltroAsignado('todas')">Todas</button>
+              </div>
+              <div class="wa-filters__row" id="wa-filters-estado">
+                <button class="filter-pill wa-filter-pill active" data-val="todas" onclick="WaChatModule.setFiltroEstado('todas')">Todas</button>
+                <button class="filter-pill wa-filter-pill" data-val="abierto" onclick="WaChatModule.setFiltroEstado('abierto')">Abiertas</button>
+                <button class="filter-pill wa-filter-pill" data-val="pendiente" onclick="WaChatModule.setFiltroEstado('pendiente')">Pendientes</button>
+                <button class="filter-pill wa-filter-pill" data-val="resuelto" onclick="WaChatModule.setFiltroEstado('resuelto')">Resueltas</button>
+              </div>
             </div>
             <div class="wa-sidebar__list" id="wa-chats">
               <div class="clients-loading"><div class="clients-spin"></div></div>
@@ -2819,7 +2832,7 @@
 })();
 </script>
 
-<script src="app.js?v=20260826a"></script>
+<script src="app.js?v=20260826b"></script>
 <div id="task-quick-edit" style="display:none;position:fixed;z-index:9999"></div>
 </body>
 </html>

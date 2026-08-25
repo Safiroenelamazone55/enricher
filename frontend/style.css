@@ -15507,6 +15507,11 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .wa-chat-item__name.unread, .wa-chat-item__preview.unread { font-weight: 700; color: var(--text-primary); }
 .wa-chat-item--snoozed { opacity: .6; }
 
+/* Filtros de la lista (asignado / estado) — arriba del listado de chats */
+.wa-filters { padding: 8px 10px 6px; border-bottom: 1px solid var(--border); flex-shrink: 0; display: flex; flex-direction: column; gap: 6px; }
+.wa-filters__row { display: flex; flex-wrap: wrap; gap: 5px; }
+.wa-filter-pill { padding: 3px 9px; font-size: .68rem; }
+
 /* Botón "⋯" por chat — hover-reveal, mismo criterio que el resto de la app */
 .wa-chat-item__more {
   flex-shrink: 0; align-self: center;

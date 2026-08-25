@@ -26369,6 +26369,10 @@ const WaChatModule = (() => {
   let _chatMenuAnchor = null;
   let _waTagsCache    = null;   // etiquetas del workspace (lazy, compartidas entre chats)
   let _notesCache     = {};     // { [jid]: [nota,...] } — notas internas, cargadas por chat
+  // Filtros de la lista — por defecto solo lo asignado a mí (pedido explícito de Jenny:
+  // sin esto la bandeja mezclaba TODO, asignado o no, y se perdía de vista lo propio).
+  let _filtroAsignado = 'mias'; // 'mias' | 'sin_asignar' | 'todas'
+  let _filtroEstado   = 'todas'; // 'todas' | 'abierto' | 'pendiente' | 'resuelto'
   const _WA_TAG_PALETTE = ['#6366F1', '#22C55E', '#EF4444', '#F59E0B', '#0EA5E9', '#EC4899', '#8B5CF6', '#14B8A6'];
 
   const $$ = id => document.getElementById(id);
@@ -26641,6 +26645,27 @@ const WaChatModule = (() => {
     _pintaChats();
   }
 
+  function setFiltroAsignado(val) {
+    _filtroAsignado = val;
+    document.querySelectorAll('#wa-filters-asig .wa-filter-pill').forEach(b => b.classList.toggle('active', b.dataset.val === val));
+    _pintaChats();
+  }
+  function setFiltroEstado(val) {
+    _filtroEstado = val;
+    document.querySelectorAll('#wa-filters-estado .wa-filter-pill').forEach(b => b.classList.toggle('active', b.dataset.val === val));
+    _pintaChats();
+  }
+  function _chatsFiltrados() {
+    const _me = (window._authUser?.memberNombre || window._authUser?.name || '').toLowerCase();
+    return _chats.filter(c => {
+      const asignado = (c.asignado_a || '').toLowerCase();
+      if (_filtroAsignado === 'mias' && asignado !== _me) return false;
+      if (_filtroAsignado === 'sin_asignar' && asignado) return false;
+      if (_filtroEstado !== 'todas' && (c.estado_conv || 'abierto') !== _filtroEstado) return false;
+      return true;
+    });
+  }
+
   function _pintaChats() {
     const box = $$('wa-chats');
     _actualizarBadgeNav();
@@ -26649,8 +26674,15 @@ const WaChatModule = (() => {
       box.innerHTML = `<div class="chat-ch-empty">Todavía no hay conversaciones.<br>Escríbele a alguien desde tu teléfono para verlo aquí.</div>`;
       return;
     }
+    const filtrados = _chatsFiltrados();
+    if (!filtrados.length) {
+      box.innerHTML = _filtroAsignado === 'mias'
+        ? `<div class="chat-ch-empty">No tienes chats asignados a ti.<br>Cambia el filtro a "Todas" o asigna conversaciones desde el menú ⋯.</div>`
+        : `<div class="chat-ch-empty">Ningún chat coincide con este filtro.</div>`;
+      return;
+    }
     const _now = Date.now();
-    box.innerHTML = _chats.map(c => {
+    box.innerHTML = filtrados.map(c => {
       const noLeidos = +c.no_leidos || 0;
       const unreadCls = noLeidos ? ' unread' : '';
       const badge = noLeidos ? `<span class="wa-chat-item__badge">${noLeidos > 99 ? '99+' : noLeidos}</span>` : '';
@@ -27508,7 +27540,8 @@ const WaChatModule = (() => {
            abrirCuentasPop, _pickConn, agregarCuenta, _eliminarConn,
            abrirChatMenu, _chatMenuGoto, _toggleFijado, _toggleTag, _crearTag, _editarTag, _borrarTag,
            _snoozePreset, _snoozeCustom, _quitarSnooze, _abrirContacto, _cerrarContacto, _guardarNombreContacto,
-           _asignarMiembro, _cambiarEstadoConv, _agregarNota, _borrarNota };
+           _asignarMiembro, _cambiarEstadoConv, _agregarNota, _borrarNota,
+           setFiltroAsignado, setFiltroEstado };
 })();
 window.WaChatModule = WaChatModule;
 
