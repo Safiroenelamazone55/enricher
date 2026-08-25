@@ -732,13 +732,17 @@ function snavToggle(id) {
   }
 }
 
+const _NOVA_TOAST_ICO = {
+  success: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
+  error:   '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="13"/><line x1="12" y1="16.5" x2="12.01" y2="16.5"/></svg>',
+  info:    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><line x1="12" y1="7.5" x2="12.01" y2="7.5"/></svg>',
+};
 function showBanner(msg, type) {
   const el = document.createElement('div');
-  const bg = type === 'success' ? '#166534' : type === 'error' ? '#7f1d1d' : '#1e3a5f';
-  el.style.cssText = `position:fixed;top:0;left:0;right:0;z-index:9999;background:${bg};color:#fff;font-size:.84rem;font-weight:600;padding:11px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px;box-shadow:0 2px 8px rgba(0,0,0,.2);animation:slideDown .2s ease`;
-  el.innerHTML = `<span>${msg}</span><button onclick="this.parentElement.remove()" style="background:rgba(255,255,255,.18);border:none;border-radius:5px;color:#fff;padding:3px 10px;cursor:pointer;font-size:.78rem">✕</button>`;
-  document.body.prepend(el);
-  setTimeout(() => el.remove(), 5000);
+  el.className = `nova-toast nova-toast--${type || 'info'}`;
+  el.innerHTML = `<span class="nova-toast__ico">${_NOVA_TOAST_ICO[type] || _NOVA_TOAST_ICO.info}</span><span class="nova-toast__msg">${msg}</span><button class="nova-toast__x" onclick="this.parentElement.remove()" aria-label="Cerrar">✕</button>`;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 4000);
 }
 
 // Confirmación estilizada (reemplaza el confirm() nativo del navegador).
@@ -5280,6 +5284,7 @@ const DashboardModule = (() => {
       if (dRes.ok) daily = await dRes.json();
     } catch (e) { console.error('[dashboard] hours:', e); el.style.display = 'none'; return; }
     el.style.display = '';
+    el.style.opacity = '';
 
     const now = new Date();
     _hrsBaseSec = 0; _hrsRunStart = null; _hrsRunEntry = null;
@@ -5485,11 +5490,19 @@ const DashboardModule = (() => {
     if (_hrsIsoDFn) _renderTimeCard(_hrsDailyCache, totalSec, new Date(), _hrsIsoDFn, _hrsTodayKeyCache);
   }
 
-  // Acciones del estado activo
-  async function hrsStop()  { _hrsPaused = false; _hrsCtx = null; try { await TimerModule.stop(); } catch {} _renderHours(); }
-  async function hrsPause() { _hrsPaused = true;  try { await TimerModule.stop(); } catch {} _renderHours(); }
-  async function hrsResume(){ const c = _hrsCtx; if (!c) { _hrsPaused = false; return _renderHours(); } _hrsPaused = false; try { await TimerModule.start(c.taskId || null, c); } catch {} }
-  async function hrsChangeTask() { _hrsPaused = false; _hrsCtx = null; try { await TimerModule.stop(); } catch {} openTrackPicker(); }
+  // Acciones del estado activo. hrsStop/Pause/Resume esperan el round-trip de
+  // TimerModule + los 2 fetch de _renderHours antes de refrescar — se sentía
+  // "trabado" al hacer clic. _hrsBusy() da feedback instantáneo (atenuar) sin
+  // esperar nada, para que el clic se sienta inmediato aunque el resultado
+  // real tarde un poco más en llegar.
+  function _hrsBusy() {
+    const box = $('dash2-act-timer');
+    if (box) box.style.opacity = '.5';
+  }
+  async function hrsStop()  { _hrsBusy(); _hrsPaused = false; _hrsCtx = null; try { await TimerModule.stop(); } catch {} _renderHours(); }
+  async function hrsPause() { _hrsBusy(); _hrsPaused = true;  try { await TimerModule.stop(); } catch {} _renderHours(); }
+  async function hrsResume(){ _hrsBusy(); const c = _hrsCtx; if (!c) { _hrsPaused = false; return _renderHours(); } _hrsPaused = false; try { await TimerModule.start(c.taskId || null, c); } catch {} }
+  async function hrsChangeTask() { _hrsBusy(); _hrsPaused = false; _hrsCtx = null; try { await TimerModule.stop(); } catch {} openTrackPicker(); }
 
   // ── Modal selector de tarea (premium) ───────────────────────────
   let _tpTasks = [], _tpOpp = [], _tpSel = null, _tpNewOpen = false, _tpProjects = null;
@@ -29200,6 +29213,15 @@ const TimerModule = (() => {
   }
 
   function toggleTask(taskId) {
+    // Feedback instantáneo en el botón clicado: antes esperaba el round-trip
+    // al servidor (start/stop) para recién ahí cambiar el ícono, y se sentía
+    // lento. _updateWidget() (tras la respuesta real) corrige cualquier caso
+    // donde el optimismo no coincida (ej. si el start falla).
+    const willBeActive = !(_entryId && _taskId === taskId);
+    document.querySelectorAll(`[data-timer-task="${taskId}"]`).forEach(btn => {
+      btn.innerHTML = willBeActive ? _PAUSE_SVG : _PLAY_SVG;
+      btn.classList.toggle('tt-btn--active', willBeActive);
+    });
     if (_entryId && _taskId === taskId) stop();
     else start(taskId);
   }
@@ -29210,6 +29232,11 @@ const TimerModule = (() => {
   // texto libre (título/nombres pueden traer comillas) dentro de un onclick.
   function toggleOppTask(btnEl) {
     const id = parseInt(btnEl.dataset.timerOppTask, 10);
+    const willBeActive = !(_entryId && _oppTaskId === id);
+    document.querySelectorAll(`[data-timer-opp-task="${id}"]`).forEach(btn => {
+      btn.innerHTML = willBeActive ? _PAUSE_SVG : _PLAY_SVG;
+      btn.classList.toggle('tt-btn--active', willBeActive);
+    });
     if (_entryId && _oppTaskId === id) { stop(); return; }
     const titulo = btnEl.dataset.oppTitulo || '';
     const oppCtx = btnEl.dataset.oppCtx || '';

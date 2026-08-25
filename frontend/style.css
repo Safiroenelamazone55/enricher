@@ -72,6 +72,34 @@ body {
 .split { display:grid; grid-template-columns:1fr 1fr; gap:20px }
 .col3  { display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px }
 
+/* ── Aviso flotante (showBanner) — pill compacta, no barra a todo el ancho.
+   El acento de color va solo en el ícono; el fondo se queda neutro (blanco). */
+.nova-toast {
+  position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
+  z-index: 9999;
+  display: flex; align-items: center; gap: 9px;
+  max-width: min(440px, calc(100vw - 32px));
+  padding: 7px 10px 7px 12px;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #EAE7E2);
+  border-radius: var(--rs, 9px);
+  box-shadow: var(--shadow-m, 0 2px 6px rgba(16,24,20,.05), 0 8px 24px rgba(16,24,20,.07));
+  animation: nova-toast-in .16s ease-out;
+}
+.nova-toast__ico { flex-shrink: 0; display: flex; }
+.nova-toast__msg { font-size: .82rem; font-weight: 500; color: var(--text, #1F1D1B); line-height: 1.35; }
+.nova-toast__x {
+  flex-shrink: 0; margin-left: 2px;
+  width: 18px; height: 18px; display: flex; align-items: center; justify-content: center;
+  border: none; background: transparent; color: var(--muted, #918C85);
+  font-size: .66rem; border-radius: 5px; cursor: pointer; transition: background .12s, color .12s;
+}
+.nova-toast__x:hover { background: var(--bg2, #F1EFEB); color: var(--text2, #6C6862); }
+.nova-toast--success .nova-toast__ico { color: var(--success, #16A064); }
+.nova-toast--error   .nova-toast__ico { color: var(--danger, #D94B4B); }
+.nova-toast--info    .nova-toast__ico { color: var(--brand, #007AFF); }
+@keyframes nova-toast-in { from { opacity: 0; transform: translate(-50%, -8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+
 /* ── App layout ──────────────────────────────────────────── */
 #appShell { display:flex; flex-direction:column; height:100vh; }
 .app-layout {
