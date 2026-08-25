@@ -15397,6 +15397,23 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .wa-accts-dot--qr  { background: #F59E0B; }
 .wa-accts-dot--off { background: var(--muted, #918C85); }
 
+/* Fila de cuenta desconectada en el popover: nombre+estado clicable a la izquierda,
+   boton de eliminar aparte a la derecha (no se puede anidar <button> en <button>). */
+.wa-acct-row { padding: 2px 4px 2px 12px; gap: 2px; }
+.wa-acct-row:hover { background: transparent; }
+.wa-acct-row__main {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 9px;
+  padding: 6px 6px 6px 0; border: none; background: transparent; cursor: pointer;
+  font-family: inherit; font-size: .85rem; color: #1F1D1B; text-align: left; border-radius: 7px;
+}
+.wa-acct-row__main:hover { background: #F1EFEB; }
+.wa-acct-row__del {
+  flex-shrink: 0; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;
+  border: none; background: transparent; color: var(--muted, #918C85); border-radius: 6px; cursor: pointer;
+  transition: background .12s, color .12s;
+}
+.wa-acct-row__del:hover { background: #FDE8E8; color: #DC2626; }
+
 /* Estado 3: conectado — dos columnas, misma altura que el shell de Slack */
 .wa-chat { display: flex; height: 100%; overflow: hidden; }
 .wa-sidebar { width: 280px; min-width: 280px; flex-shrink: 0; display: flex; flex-direction: column; background: var(--surface-secondary); border-right: 1px solid var(--border); overflow: hidden; }

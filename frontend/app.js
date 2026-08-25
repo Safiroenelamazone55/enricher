@@ -26437,9 +26437,20 @@ const WaChatModule = (() => {
       const label  = c.numero ? `+${c.numero}` : (c.nombre || 'WhatsApp');
       const sub    = c.estado === 'conectado' ? '' : c.estado === 'esperando_qr' ? ' · QR pendiente' : ' · Desconectado';
       const check  = c.id === _conn?.id ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" style="margin-left:auto"><polyline points="20 6 9 17 4 12"/></svg>' : '';
-      return `<button class="chat-ctx-item" onclick="WaChatModule._pickConn(${c.id})">
-        <span class="wa-accts-dot wa-accts-dot--${dotCls}"></span>${esc(label)}${sub}${check}
-      </button>`;
+      if (c.estado !== 'desconectado') {
+        return `<button class="chat-ctx-item" onclick="WaChatModule._pickConn(${c.id})">
+          <span class="wa-accts-dot wa-accts-dot--${dotCls}"></span>${esc(label)}${sub}${check}
+        </button>`;
+      }
+      // Desconectada: se puede reconectar (elegirla) o quitarla de la lista.
+      return `<div class="chat-ctx-item wa-acct-row">
+        <button class="wa-acct-row__main" onclick="WaChatModule._pickConn(${c.id})">
+          <span class="wa-accts-dot wa-accts-dot--${dotCls}"></span>${esc(label)}${sub}${check}
+        </button>
+        <button class="wa-acct-row__del" title="Eliminar esta conexión" onclick="event.stopPropagation();WaChatModule._eliminarConn(${c.id})">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+        </button>
+      </div>`;
     }).join('');
     menu.innerHTML = rows + `<div class="chat-ctx-sep"></div>
       <button class="chat-ctx-item" onclick="WaChatModule.agregarCuenta()">
@@ -26465,6 +26476,24 @@ const WaChatModule = (() => {
       const { id } = await r.json();
       _conns.push({ id, estado: 'esperando_qr', qr_actual: '', numero: '', nombre: `WhatsApp ${_conns.length + 1}` });
       _selectConn(id);
+    } catch (e) { alert('Error: ' + e.message); }
+  }
+
+  async function _eliminarConn(id) {
+    const c = _conns.find(x => x.id === id);
+    if (!c) return;
+    if (!confirm(`¿Eliminar "${c.numero ? '+' + c.numero : (c.nombre || 'esta conexión')}"? Se borra su historial de chats guardado en Nova (no en tu teléfono).`)) return;
+    try {
+      const r = await apiFetch(`${API}/wa/connections/${id}`, { method: 'DELETE' });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'No se pudo eliminar');
+      _conns = _conns.filter(x => x.id !== id);
+      if (_conn?.id === id) {
+        _conn = _conns.find(c2 => c2.estado === 'conectado') || _conns.find(c2 => c2.estado === 'esperando_qr') || _conns[0] || null;
+        try { if (_conn) localStorage.setItem('wa_selected_conn_id', String(_conn.id)); else localStorage.removeItem('wa_selected_conn_id'); } catch (_) {}
+      }
+      if (_acctPopClose) _acctPopClose();
+      _pintaBarraCuentas();
+      _aplicarEstado();
     } catch (e) { alert('Error: ' + e.message); }
   }
 
@@ -27042,7 +27071,7 @@ const WaChatModule = (() => {
            reactPop, reaccionar, emojiPicker, _emojiIns, refreshBadge,
            visPop, abrirVisPop, _toggleVisSub, guardarVisibilidad, _pintaBotonVis, _cargarTeam,
            nuevoChatAbrir, nuevoChatCerrar, _nuevoChatBuscar, nuevoChatElegir, nuevoChatUsarNumero,
-           abrirCuentasPop, _pickConn, agregarCuenta };
+           abrirCuentasPop, _pickConn, agregarCuenta, _eliminarConn };
 })();
 window.WaChatModule = WaChatModule;
 

@@ -273,9 +273,13 @@ async function _connect(pool, id) {
         await _guardarContacto(pool, sock, id, c.id, nombre);
       }
       // El nombre de un grupo (el asunto) viene por acá, no por 'contacts' — un grupo
-      // no es un contacto individual. En 1:1 sirve de respaldo si 'contacts' no trajo nombre.
+      // no es un contacto individual. Restringido a @g.us: para jids @lid (identificador
+      // de WhatsApp scoped al grupo, NO el número real) c.name puede traer el nombre DEL
+      // GRUPO en vez del contacto — confirmado en producción (2026-08-26: dos chats 1:1
+      // quedaron mostrando "Novacentrax", nombre de un grupo real, prestado por este
+      // fallback). El nombre real de un 1:1 sale de 'contacts'/pushName, nunca de acá.
       for (const c of (chats || [])) {
-        if (c.name) await _guardarContacto(pool, sock, id, c.id, c.name);
+        if (c.name && String(c.id || '').endsWith('@g.us')) await _guardarContacto(pool, sock, id, c.id, c.name);
       }
       for (const m of (messages || [])) await _guardarMensaje(pool, sock, id, m, true);
     } catch (e) { console.warn('[wa] messaging-history.set:', e.message); }

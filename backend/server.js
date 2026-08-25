@@ -8271,6 +8271,21 @@ app.post('/api/wa/connections/:id/desconectar', requireAuth, async (req, res) =>
   } catch (err) { console.error('[wa] desconectar', err.message); res.status(500).json({ error: 'Error al desconectar' }); }
 });
 
+// Borra una conexión desconectada (y en cascada sus mensajes/contactos/reacciones —
+// wa_messages/wa_contacts/wa_reactions referencian wa_connections ON DELETE CASCADE).
+// Solo desconectadas: una activa o esperando QR se desconecta primero, no se borra a ciegas.
+app.delete('/api/wa/connections/:id', requireAuth, async (req, res) => {
+  try {
+    const conn = await _cargarConexionAutorizada(req, res, req.params.id);
+    if (!conn) return;
+    if (conn.estado !== 'desconectado') {
+      return res.status(400).json({ error: 'Desconéctala primero para poder eliminarla' });
+    }
+    await pool.query(`DELETE FROM wa_connections WHERE id=$1 AND user_id=$2`, [conn.id, req.workspaceOwnerId]);
+    res.json({ ok: true });
+  } catch (err) { console.error('[wa] delete connection', err.message); res.status(500).json({ error: 'No se pudo eliminar' }); }
+});
+
 // Quién puede ver esta conexión — solo quien la conectó o un admin puede cambiarlo.
 app.patch('/api/wa/connections/:id/visibilidad', requireAuth, async (req, res) => {
   const visibilidad = String(req.body?.visibilidad || '');
