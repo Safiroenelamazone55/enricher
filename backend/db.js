@@ -1706,6 +1706,22 @@ async function initDb() {
         PRIMARY KEY (connection_id, chat_jid)
       );
     `);
+    // Asignado (nombre del miembro, mismo criterio que tasks.responsable — texto, no FK)
+    // y estado de la conversación (abierto/pendiente/resuelto, estilo Chatwoot).
+    await pool.query(`ALTER TABLE wa_chat_meta ADD COLUMN IF NOT EXISTS asignado_a TEXT NOT NULL DEFAULT '';`);
+    await pool.query(`ALTER TABLE wa_chat_meta ADD COLUMN IF NOT EXISTS estado_conv TEXT NOT NULL DEFAULT 'abierto';`);
+    // Notas internas por chat — nunca se envían al contacto, solo las ve el equipo.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS wa_chat_notes (
+        id            SERIAL      PRIMARY KEY,
+        connection_id INTEGER     NOT NULL REFERENCES wa_connections(id) ON DELETE CASCADE,
+        chat_jid      TEXT        NOT NULL,
+        autor         TEXT        NOT NULL DEFAULT '',
+        texto         TEXT        NOT NULL,
+        created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS wa_chat_notes_chat_idx ON wa_chat_notes (connection_id, chat_jid, created_at);`);
 
     console.log('[db] tables ready (users, verifications, batch_jobs, clients, projects, tasks, payments, team_members, workspaces, workspace_invites, chat_messages, leads, meetings, fin_config, fin_member_config, pagos_internos, opportunities, opportunity_tasks)');
   } catch (err) {

@@ -8324,6 +8324,9 @@ app.get('/api/wa/connections/:id/chats', requireAuth, async (req, res) => {
              (m.chat_jid LIKE '%@g.us') AS es_grupo,
              m.texto AS ultimo_texto, m.ts AS ultimo_ts, m.from_me, m.estado AS ultimo_estado, m.eliminado AS ultimo_eliminado,
              COALESCE(cm.pinned, FALSE) AS pinned, cm.snooze_until,
+             COALESCE(NULLIF(cm.asignado_a,''), NULL) AS asignado_a,
+             COALESCE(cm.estado_conv, 'abierto') AS estado_conv,
+             (SELECT COUNT(*) FROM wa_chat_notes n WHERE n.connection_id=m.connection_id AND n.chat_jid=m.chat_jid) AS notas_count,
              (SELECT COUNT(*) FROM wa_messages nl
                WHERE nl.connection_id = m.connection_id AND nl.chat_jid = m.chat_jid
                  AND NOT nl.leido AND NOT nl.from_me) AS no_leidos,
@@ -8436,6 +8439,8 @@ app.patch('/api/wa/connections/:id/chats/:jid/meta', requireAuth, async (req, re
     const sets = [], vals = [conn.id, req.params.jid];
     if (req.body?.pinned !== undefined) sets.push(`pinned=$${vals.push(!!req.body.pinned)}`);
     if (req.body?.snoozeUntil !== undefined) sets.push(`snooze_until=$${vals.push(req.body.snoozeUntil || null)}`);
+    if (req.body?.asignadoA !== undefined) sets.push(`asignado_a=$${vals.push(String(req.body.asignadoA || '').trim().slice(0, 100))}`);
+    if (req.body?.estadoConv !== undefined && ['abierto', 'pendiente', 'resuelto'].includes(req.body.estadoConv)) sets.push(`estado_conv=$${vals.push(req.body.estadoConv)}`);
     if (!sets.length) return res.json({ ok: true });
     await pool.query(
       `INSERT INTO wa_chat_meta (connection_id, chat_jid) VALUES ($1,$2) ON CONFLICT (connection_id, chat_jid) DO NOTHING`,
@@ -8443,6 +8448,39 @@ app.patch('/api/wa/connections/:id/chats/:jid/meta', requireAuth, async (req, re
     await pool.query(`UPDATE wa_chat_meta SET ${sets.join(',')}, updated_at=NOW() WHERE connection_id=$1 AND chat_jid=$2`, vals);
     res.json({ ok: true });
   } catch (err) { console.error('[wa] chat meta', err.message); res.status(500).json({ error: 'No se pudo guardar' }); }
+});
+
+// Notas internas por chat — nunca se envían al contacto, solo las ve el equipo.
+app.get('/api/wa/connections/:id/chats/:jid/notas', requireAuth, async (req, res) => {
+  try {
+    const conn = await _cargarConexionAutorizada(req, res, req.params.id);
+    if (!conn) return;
+    const { rows } = await pool.query(
+      `SELECT id, autor, texto, created_at FROM wa_chat_notes WHERE connection_id=$1 AND chat_jid=$2 ORDER BY created_at`,
+      [conn.id, req.params.jid]);
+    res.json(rows);
+  } catch (err) { console.error('[wa] notas GET', err.message); res.status(500).json({ error: 'Error al cargar las notas' }); }
+});
+app.post('/api/wa/connections/:id/chats/:jid/notas', requireAuth, async (req, res) => {
+  const texto = String(req.body?.texto || '').trim().slice(0, 2000);
+  if (!texto) return res.status(400).json({ error: 'La nota no puede estar vacía' });
+  try {
+    const conn = await _cargarConexionAutorizada(req, res, req.params.id);
+    if (!conn) return;
+    const autor = req.user.name || req.user.email || '';
+    const { rows: [row] } = await pool.query(
+      `INSERT INTO wa_chat_notes (connection_id, chat_jid, autor, texto) VALUES ($1,$2,$3,$4) RETURNING id, autor, texto, created_at`,
+      [conn.id, req.params.jid, autor, texto]);
+    res.status(201).json(row);
+  } catch (err) { console.error('[wa] notas POST', err.message); res.status(500).json({ error: 'No se pudo guardar la nota' }); }
+});
+app.delete('/api/wa/connections/:id/chats/:jid/notas/:notaId', requireAuth, async (req, res) => {
+  try {
+    const conn = await _cargarConexionAutorizada(req, res, req.params.id);
+    if (!conn) return;
+    await pool.query(`DELETE FROM wa_chat_notes WHERE id=$1 AND connection_id=$2 AND chat_jid=$3`, [req.params.notaId, conn.id, req.params.jid]);
+    res.json({ ok: true });
+  } catch (err) { console.error('[wa] notas DELETE', err.message); res.status(500).json({ error: 'No se pudo eliminar la nota' }); }
 });
 
 // Datos de contacto + estadísticas rápidas del chat (para el panel "Ver datos de contacto").
