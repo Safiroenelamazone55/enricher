@@ -9512,6 +9512,25 @@ const TasksModule = (() => {
       await _fetchAndPopulateTeam(inheritResp);
       _applyProjectDateLimits();
       if (projSel) projSel.disabled = !!presetParentTaskId;
+      // Por defecto arrancan HOY: si nadie toca la fecha, mejor que quede con
+      // hoy (algo de donde partir) a que se guarde sin fecha por descuido. Si
+      // hoy cae fuera del rango válido (padre ya vencido, o proyecto que
+      // todavía no empieza / ya terminó), se ajusta al límite más cercano
+      // para no bloquear el guardado con la validación de rango.
+      let _defDate = new Date().toISOString().split('T')[0];
+      if (presetParentTaskId) {
+        const _pt   = (_tasks || []).find(t => t.id === presetParentTaskId);
+        const _ptDl = _pt?.deadline ? String(_pt.deadline).split('T')[0] : null;
+        if (_ptDl && _defDate > _ptDl) _defDate = _ptDl;
+      } else {
+        const _proj   = (_projectsForDateLimit || []).find(p => String(p.id) === String(presetProjectId));
+        const _pStart = _proj?.fecha_inicio ? String(_proj.fecha_inicio).split('T')[0] : null;
+        const _pEnd   = _proj?.fecha_fin    ? String(_proj.fecha_fin).split('T')[0]    : null;
+        if (_pEnd && _defDate > _pEnd) _defDate = _pEnd;
+        else if (_pStart && _defDate < _pStart) _defDate = _pStart;
+      }
+      form.fecha_inicio.value = _defDate;
+      form.deadline.value     = _defDate;
     }
 
     $('tasks-drawer').classList.add('open');
@@ -11992,7 +12011,14 @@ const ProjectsModule = (() => {
   async function startInlineSubtask(parentTaskId) {
     if (_taskMenuClose) _taskMenuClose();
     if (_quickEditClose) _quickEditClose();
-    _inlineCreateDate = { mode: 'single', start: null, end: null };
+    // Arranca en HOY (editable) — igual que el drawer completo: mejor una fecha
+    // por defecto que guardarla sin fecha por descuido. Si la tarea padre ya
+    // venció, HOY quedaría fuera de su rango y bloquearía el guardado sin
+    // querer — en ese caso arranca en el límite del padre en vez de hoy.
+    const _today = new Date().toISOString().split('T')[0];
+    const _parentDl = _findTaskById(parentTaskId)?.deadline;
+    const _defDate = (_parentDl && _today > String(_parentDl).split('T')[0]) ? String(_parentDl).split('T')[0] : _today;
+    _inlineCreateDate = { mode: 'single', start: _defDate, end: null };
     await _ensureTeamLoaded();
     _inlineSubtaskFor = parentTaskId;
     _expandedTasks.add(parentTaskId);
