@@ -1671,6 +1671,42 @@ async function initDb() {
     // Un WhatsApp por cliente outbound como máximo (NULL = Operaciones, sin límite).
     await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS wa_connections_client_uq ON wa_connections (outbound_client_id) WHERE outbound_client_id IS NOT NULL;`);
 
+    // Etiquetas de chat (estilo Chatwoot) — a nivel de WORKSPACE (user_id), no por
+    // conexión: la misma etiqueta ("Cliente", "Urgente"...) sirve sin importar en cuál
+    // de tus WhatsApp esté el chat. wa_chat_tags es la asignación puntual chat↔etiqueta.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS wa_tags (
+        id         SERIAL      PRIMARY KEY,
+        user_id    INTEGER     NOT NULL,
+        nombre     TEXT        NOT NULL,
+        color      TEXT        NOT NULL DEFAULT '#6366F1',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE (user_id, nombre)
+      );
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS wa_chat_tags (
+        connection_id INTEGER NOT NULL REFERENCES wa_connections(id) ON DELETE CASCADE,
+        chat_jid      TEXT    NOT NULL,
+        tag_id        INTEGER NOT NULL REFERENCES wa_tags(id) ON DELETE CASCADE,
+        PRIMARY KEY (connection_id, chat_jid, tag_id)
+      );
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS wa_chat_tags_chat_idx ON wa_chat_tags (connection_id, chat_jid);`);
+    // Metadatos por chat que no viven en wa_messages (no hay una fila "chat" propia —
+    // el chat se deriva de sus mensajes): fijado y recordatorio de seguimiento.
+    // snooze_until en el futuro = "pospuesto", pasa a la sección normal solo.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS wa_chat_meta (
+        connection_id INTEGER     NOT NULL REFERENCES wa_connections(id) ON DELETE CASCADE,
+        chat_jid      TEXT        NOT NULL,
+        pinned        BOOLEAN     NOT NULL DEFAULT FALSE,
+        snooze_until  TIMESTAMPTZ,
+        updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (connection_id, chat_jid)
+      );
+    `);
+
     console.log('[db] tables ready (users, verifications, batch_jobs, clients, projects, tasks, payments, team_members, workspaces, workspace_invites, chat_messages, leads, meetings, fin_config, fin_member_config, pagos_internos, opportunities, opportunity_tasks)');
   } catch (err) {
     console.error('[db] initDb failed:', err.message);

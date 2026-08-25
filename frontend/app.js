@@ -26362,6 +26362,14 @@ const WaChatModule = (() => {
   let _pollChat = null;
   let _replyTo  = null;   // { msg_id, quien, texto } — "responder a ESTE mensaje puntual"
 
+  // Menú "⋯" por chat (etiquetas / fijar / recordar seguimiento / datos de contacto).
+  let _chatMenuEl     = null;
+  let _chatMenuJid    = null;
+  let _chatMenuMode   = 'main'; // 'main' | 'tags' | 'snooze'
+  let _chatMenuAnchor = null;
+  let _waTagsCache    = null;   // etiquetas del workspace (lazy, compartidas entre chats)
+  const _WA_TAG_PALETTE = ['#6366F1', '#22C55E', '#EF4444', '#F59E0B', '#0EA5E9', '#EC4899', '#8B5CF6', '#14B8A6'];
+
   const $$ = id => document.getElementById(id);
 
   // El shell no tiene de dónde tomar un alto fijo (el padre no define uno), así que
@@ -26640,25 +26648,314 @@ const WaChatModule = (() => {
       box.innerHTML = `<div class="chat-ch-empty">Todavía no hay conversaciones.<br>Escríbele a alguien desde tu teléfono para verlo aquí.</div>`;
       return;
     }
+    const _now = Date.now();
     box.innerHTML = _chats.map(c => {
       const noLeidos = +c.no_leidos || 0;
       const unreadCls = noLeidos ? ' unread' : '';
       const badge = noLeidos ? `<span class="wa-chat-item__badge">${noLeidos > 99 ? '99+' : noLeidos}</span>` : '';
+      const snoozed = c.snooze_until && new Date(c.snooze_until).getTime() > _now;
+      const jidEsc = esc(c.chat_jid).replace(/'/g, "\\'");
+      const tagsHtml = (c.etiquetas || []).length
+        ? `<div class="wa-chat-item__tags">${c.etiquetas.map(t => `<span class="wa-tag-pill" style="background:${t.color}22;color:${t.color}">${esc(t.nombre)}</span>`).join('')}</div>`
+        : '';
       return `
-      <div class="wa-chat-item${String(c.chat_jid) === String(_chatAct) ? ' on' : ''}" onclick="WaChatModule.abrirChat('${esc(c.chat_jid).replace(/'/g, "\\'")}')">
+      <div class="wa-chat-item${String(c.chat_jid) === String(_chatAct) ? ' on' : ''}${snoozed ? ' wa-chat-item--snoozed' : ''}" onclick="WaChatModule.abrirChat('${jidEsc}')">
         <div class="wa-chat-item__av">${c.es_grupo ? '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>' : esc(_nombreChat(c)).slice(0, 1).toUpperCase()}</div>
         <div class="wa-chat-item__body">
           <div class="wa-chat-item__top">
-            <span class="wa-chat-item__name${unreadCls}">${esc(_nombreChat(c))}</span>
-            <span class="wa-chat-item__time">${_fmtListaFecha(c.ultimo_ts)}</span>
+            <span class="wa-chat-item__name${unreadCls}">${c.pinned ? '📌 ' : ''}${esc(_nombreChat(c))}</span>
+            <span class="wa-chat-item__time">${snoozed ? '⏰' : _fmtListaFecha(c.ultimo_ts)}</span>
           </div>
           <div class="wa-chat-item__top">
             <span class="wa-chat-item__preview${unreadCls}${c.ultimo_eliminado ? ' wa-chat-item__preview--del' : ''}">${c.ultimo_eliminado ? '🚫 Se eliminó este mensaje' : `${c.ultimo_estado === 'programado' ? '🕑 Programado: ' : (c.from_me ? 'Tú: ' : '')}${esc(c.ultimo_texto || '')}`}</span>
             ${badge}
           </div>
+          ${tagsHtml}
         </div>
+        <button class="wa-chat-item__more" title="Más opciones" onclick="event.stopPropagation();WaChatModule.abrirChatMenu(event,'${jidEsc}')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+        </button>
       </div>`;
     }).join('');
+  }
+
+  // ── Menú "⋯" por chat: fijar, etiquetas (crear/editar/eliminar/asignar),
+  // recordar seguimiento (presets o fecha propia) y datos de contacto. ─────
+  function _chatMenuData() { return _chats.find(c => c.chat_jid === _chatMenuJid) || {}; }
+
+  function _closeChatMenu() {
+    if (_chatMenuEl) { _chatMenuEl.remove(); _chatMenuEl = null; }
+    document.removeEventListener('click', _closeChatMenu);
+    _chatMenuJid = null;
+  }
+
+  async function abrirChatMenu(ev, jid) {
+    ev.stopPropagation();
+    if (_chatMenuEl) { _closeChatMenu(); return; }
+    _chatMenuJid = jid;
+    _chatMenuMode = 'main';
+    _chatMenuAnchor = ev.currentTarget;
+    if (!_waTagsCache) {
+      try { const r = await apiFetch(`${API}/wa/tags`); _waTagsCache = r.ok ? await r.json() : []; }
+      catch (_) { _waTagsCache = []; }
+    }
+    _renderChatMenu();
+  }
+
+  function _chatMenuGoto(mode) { _chatMenuMode = mode; _renderChatMenu(); }
+
+  function _renderChatMenu() {
+    if (!_chatMenuJid) return;
+    if (_chatMenuEl) _chatMenuEl.remove();
+    const menu = document.createElement('div');
+    menu.className = 'chat-ctx-menu wa-chat-menu';
+    menu.onclick = e => e.stopPropagation();
+    const c = _chatMenuData();
+    menu.innerHTML = _chatMenuMode === 'tags' ? _chatMenuTagsHtml(c)
+                    : _chatMenuMode === 'snooze' ? _chatMenuSnoozeHtml(c)
+                    : _chatMenuMainHtml(c);
+    document.body.appendChild(menu);
+    const rect = _chatMenuAnchor.getBoundingClientRect();
+    const w = menu.offsetWidth || 230, h = menu.offsetHeight || 40;
+    let left = rect.right - w; if (left < 8) left = 8;
+    let top = rect.bottom + 6; if (top + h > window.innerHeight - 8) top = Math.max(8, rect.top - h - 6);
+    menu.style.top = top + 'px';
+    menu.style.left = left + 'px';
+    _chatMenuEl = menu;
+    setTimeout(() => document.addEventListener('click', _closeChatMenu), 0);
+  }
+
+  const _ICO_PIN = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg>';
+  const _ICO_TAG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>';
+  const _ICO_CLOCK = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>';
+  const _ICO_USER = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>';
+  const _ICO_BACK = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>';
+  const _ICO_CHECK = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" style="margin-left:auto"><polyline points="20 6 9 17 4 12"/></svg>';
+  const _ICO_PENCIL = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
+  const _ICO_TRASH = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>';
+
+  function _chatMenuMainHtml(c) {
+    const pinned  = !!c.pinned;
+    const snoozed = c.snooze_until && new Date(c.snooze_until) > new Date();
+    const nTags   = (c.etiquetas || []).length;
+    return `
+      <button class="chat-ctx-item" onclick="WaChatModule._toggleFijado()">${_ICO_PIN}${pinned ? 'Desfijar chat' : 'Fijar chat'}</button>
+      <button class="chat-ctx-item" onclick="WaChatModule._chatMenuGoto('tags')">${_ICO_TAG}Etiquetas${nTags ? ` (${nTags})` : ''}</button>
+      <button class="chat-ctx-item" onclick="WaChatModule._chatMenuGoto('snooze')">${_ICO_CLOCK}${snoozed ? 'Cambiar recordatorio' : 'Recordar seguimiento'}</button>
+      ${snoozed ? `<button class="chat-ctx-item" onclick="WaChatModule._quitarSnooze()">${_ICO_CLOCK}Quitar recordatorio</button>` : ''}
+      <div class="chat-ctx-sep"></div>
+      <button class="chat-ctx-item" onclick="WaChatModule._abrirContacto()">${_ICO_USER}Ver datos de contacto</button>`;
+  }
+
+  function _chatMenuTagsHtml(c) {
+    const asignadas = new Set((c.etiquetas || []).map(t => t.id));
+    const rows = (_waTagsCache || []).map(t => `
+      <div class="wa-tag-row">
+        <button class="wa-tag-row__toggle" onclick="WaChatModule._toggleTag(${t.id})">
+          <span class="wa-tag-dot" style="background:${t.color}"></span>
+          <span class="wa-tag-row__name">${esc(t.nombre)}</span>
+          ${asignadas.has(t.id) ? _ICO_CHECK : ''}
+        </button>
+        <button class="wa-tag-row__edit" title="Renombrar" onclick="WaChatModule._editarTag(${t.id})">${_ICO_PENCIL}</button>
+        <button class="wa-tag-row__del" title="Eliminar etiqueta" onclick="WaChatModule._borrarTag(${t.id})">${_ICO_TRASH}</button>
+      </div>`).join('');
+    return `
+      <button class="chat-ctx-item wa-chat-menu__back" onclick="WaChatModule._chatMenuGoto('main')">${_ICO_BACK}Etiquetas</button>
+      <div class="chat-ctx-sep"></div>
+      ${rows || '<div class="wa-tag-empty">Todavía no hay etiquetas.</div>'}
+      <div class="chat-ctx-sep"></div>
+      <div class="wa-tag-new">
+        <input type="text" id="wa-tag-new-input" placeholder="Nueva etiqueta…" maxlength="40"
+          onkeydown="if(event.key==='Enter'){event.preventDefault();WaChatModule._crearTag();}">
+        <button onclick="WaChatModule._crearTag()">+</button>
+      </div>`;
+  }
+
+  const _WA_SNOOZE_PRESETS = [
+    { key: '1h',     label: 'En 1 hora' },
+    { key: 'tarde',  label: 'Esta tarde (6pm)' },
+    { key: 'manana', label: 'Mañana (9am)' },
+    { key: '3dias',  label: 'En 3 días' },
+    { key: 'semana', label: 'La próxima semana' },
+  ];
+  function _chatMenuSnoozeHtml() {
+    return `
+      <button class="chat-ctx-item wa-chat-menu__back" onclick="WaChatModule._chatMenuGoto('main')">${_ICO_BACK}Recordar seguimiento</button>
+      <div class="chat-ctx-sep"></div>
+      ${_WA_SNOOZE_PRESETS.map(p => `<button class="chat-ctx-item" onclick="WaChatModule._snoozePreset('${p.key}')">${p.label}</button>`).join('')}
+      <div class="chat-ctx-sep"></div>
+      <div class="wa-snooze-custom">
+        <input type="datetime-local" id="wa-snooze-custom-input">
+        <button onclick="WaChatModule._snoozeCustom()">Programar</button>
+      </div>`;
+  }
+
+  async function _toggleFijado() {
+    const c = _chatMenuData(); const jid = _chatMenuJid;
+    const nuevo = !c.pinned;
+    try {
+      await apiFetch(`${API}/wa/connections/${_conn.id}/chats/${encodeURIComponent(jid)}/meta`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pinned: nuevo }),
+      });
+      if (c) c.pinned = nuevo;
+      _closeChatMenu();
+      await _cargarChats();
+    } catch (e) { console.error('[wa] pin:', e); }
+  }
+
+  async function _toggleTag(tagId) {
+    const c = _chatMenuData(); const jid = _chatMenuJid;
+    c.etiquetas = c.etiquetas || [];
+    const tiene = c.etiquetas.some(t => t.id === tagId);
+    try {
+      if (tiene) {
+        await apiFetch(`${API}/wa/connections/${_conn.id}/chats/${encodeURIComponent(jid)}/tags/${tagId}`, { method: 'DELETE' });
+        c.etiquetas = c.etiquetas.filter(t => t.id !== tagId);
+      } else {
+        await apiFetch(`${API}/wa/connections/${_conn.id}/chats/${encodeURIComponent(jid)}/tags`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tagId }),
+        });
+        const tag = (_waTagsCache || []).find(t => t.id === tagId);
+        if (tag) c.etiquetas.push(tag);
+      }
+      _renderChatMenu();
+      _pintaChats();
+    } catch (e) { console.error('[wa] tag toggle:', e); }
+  }
+
+  async function _crearTag() {
+    const input = document.getElementById('wa-tag-new-input');
+    const nombre = (input?.value || '').trim();
+    if (!nombre) return;
+    const color = _WA_TAG_PALETTE[(_waTagsCache || []).length % _WA_TAG_PALETTE.length];
+    try {
+      const r = await apiFetch(`${API}/wa/tags`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre, color }),
+      });
+      if (!r.ok) { alert((await r.json().catch(() => ({}))).error || 'No se pudo crear la etiqueta'); return; }
+      const tag = await r.json();
+      _waTagsCache = [...(_waTagsCache || []), tag].sort((a, b) => a.nombre.localeCompare(b.nombre));
+      _renderChatMenu();
+    } catch (e) { console.error('[wa] crear tag:', e); }
+  }
+
+  async function _editarTag(id) {
+    const tag = (_waTagsCache || []).find(t => t.id === id); if (!tag) return;
+    const nuevo = prompt('Nuevo nombre de la etiqueta:', tag.nombre);
+    if (nuevo == null) return;
+    const limpio = nuevo.trim();
+    if (!limpio || limpio === tag.nombre) return;
+    try {
+      const r = await apiFetch(`${API}/wa/tags/${id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre: limpio }),
+      });
+      if (!r.ok) { alert((await r.json().catch(() => ({}))).error || 'No se pudo renombrar'); return; }
+      tag.nombre = limpio;
+      _chats.forEach(c => (c.etiquetas || []).forEach(t => { if (t.id === id) t.nombre = limpio; }));
+      _renderChatMenu();
+      _pintaChats();
+    } catch (e) { console.error('[wa] editar tag:', e); }
+  }
+
+  async function _borrarTag(id) {
+    const tag = (_waTagsCache || []).find(t => t.id === id); if (!tag) return;
+    if (!confirm(`¿Eliminar la etiqueta "${tag.nombre}"? Se quita de todos los chats que la tengan.`)) return;
+    try {
+      await apiFetch(`${API}/wa/tags/${id}`, { method: 'DELETE' });
+      _waTagsCache = (_waTagsCache || []).filter(t => t.id !== id);
+      _chats.forEach(c => { if (c.etiquetas) c.etiquetas = c.etiquetas.filter(t => t.id !== id); });
+      _renderChatMenu();
+      _pintaChats();
+    } catch (e) { console.error('[wa] borrar tag:', e); }
+  }
+
+  function _snoozeAt(preset) {
+    const d = new Date();
+    if (preset === '1h') d.setHours(d.getHours() + 1);
+    else if (preset === 'tarde') { d.setHours(18, 0, 0, 0); if (d <= new Date()) d.setDate(d.getDate() + 1); }
+    else if (preset === 'manana') { d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0); }
+    else if (preset === '3dias') d.setDate(d.getDate() + 3);
+    else if (preset === 'semana') d.setDate(d.getDate() + 7);
+    return d;
+  }
+  async function _snoozePreset(preset) { await _guardarSnooze(_snoozeAt(preset)); }
+  async function _snoozeCustom() {
+    const input = document.getElementById('wa-snooze-custom-input');
+    if (!input?.value) return;
+    await _guardarSnooze(new Date(input.value));
+  }
+  async function _guardarSnooze(fecha) {
+    const c = _chatMenuData(); const jid = _chatMenuJid;
+    try {
+      await apiFetch(`${API}/wa/connections/${_conn.id}/chats/${encodeURIComponent(jid)}/meta`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ snoozeUntil: fecha.toISOString() }),
+      });
+      if (c) c.snooze_until = fecha.toISOString();
+      _closeChatMenu();
+      await _cargarChats();
+    } catch (e) { console.error('[wa] snooze:', e); }
+  }
+  async function _quitarSnooze() {
+    const c = _chatMenuData(); const jid = _chatMenuJid;
+    try {
+      await apiFetch(`${API}/wa/connections/${_conn.id}/chats/${encodeURIComponent(jid)}/meta`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ snoozeUntil: null }),
+      });
+      if (c) c.snooze_until = null;
+      _closeChatMenu();
+      await _cargarChats();
+    } catch (e) { console.error('[wa] quitar snooze:', e); }
+  }
+
+  let _contactModalJid = null;
+  async function _abrirContacto() {
+    const jid = _chatMenuJid;
+    _closeChatMenu();
+    if (!jid) return;
+    _contactModalJid = jid;
+    document.getElementById('wa-contact-modal')?.remove();
+    const modal = document.createElement('div');
+    modal.id = 'wa-contact-modal';
+    modal.innerHTML = `<div class="qc-backdrop" onclick="WaChatModule._cerrarContacto()"></div>
+      <div class="qc-box wa-contact-box">
+        <div class="qc-header"><span class="qc-title">Datos de contacto</span>
+          <button class="qc-close" onclick="WaChatModule._cerrarContacto()">✕</button></div>
+        <div id="wa-contact-body" class="wa-contact-body"><div class="clients-loading"><div class="clients-spin"></div></div></div>
+      </div>`;
+    document.body.appendChild(modal);
+    try {
+      const r = await apiFetch(`${API}/wa/connections/${_conn.id}/chats/${encodeURIComponent(jid)}/contacto`);
+      const d = r.ok ? await r.json() : null;
+      const body = document.getElementById('wa-contact-body');
+      if (!body) return;
+      if (!d) { body.innerHTML = '<div class="d3-empty">No se pudo cargar.</div>'; return; }
+      const fmtF = ts => ts ? new Date(ts).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+      body.innerHTML = `
+        <div class="wa-contact-row"><span class="wa-contact-lbl">Nombre</span>
+          <input type="text" class="wa-contact-input" id="wa-contact-nombre" value="${esc(d.nombre)}" placeholder="${d.es_grupo ? 'Nombre del grupo' : 'Sin nombre guardado'}"></div>
+        <div class="wa-contact-row"><span class="wa-contact-lbl">Tipo</span><span class="wa-contact-val">${d.es_grupo ? 'Grupo' : 'Contacto individual'}</span></div>
+        ${d.numero ? `<div class="wa-contact-row"><span class="wa-contact-lbl">Número</span><span class="wa-contact-val">+${esc(d.numero)}</span></div>` : ''}
+        <div class="wa-contact-row"><span class="wa-contact-lbl">Mensajes</span><span class="wa-contact-val">${d.total_mensajes}</span></div>
+        <div class="wa-contact-row"><span class="wa-contact-lbl">Primer contacto</span><span class="wa-contact-val">${fmtF(d.primer_mensaje)}</span></div>
+        <div class="wa-contact-row"><span class="wa-contact-lbl">Última actividad</span><span class="wa-contact-val">${fmtF(d.ultimo_mensaje)}</span></div>
+        <div class="qc-actions"><button class="qc-btn qc-btn--save" onclick="WaChatModule._guardarNombreContacto()">Guardar nombre</button></div>`;
+    } catch (e) { console.error('[wa] contacto:', e); }
+  }
+  function _cerrarContacto() { document.getElementById('wa-contact-modal')?.remove(); _contactModalJid = null; }
+  async function _guardarNombreContacto() {
+    const jid = _contactModalJid;
+    if (!jid) return;
+    const input = document.getElementById('wa-contact-nombre');
+    const nombre = (input?.value || '').trim();
+    try {
+      await apiFetch(`${API}/wa/connections/${_conn.id}/chats/${encodeURIComponent(jid)}/nombre`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre }),
+      });
+      const c = _chats.find(x => x.chat_jid === jid); if (c) c.nombre = nombre;
+      _cerrarContacto();
+      _pintaChats();
+      if (String(_chatAct) === String(jid)) { const nameEl = $$('wa-main-name'); if (nameEl) nameEl.textContent = nombre || _nombreChat({ chat_jid: jid }); }
+    } catch (e) { console.error('[wa] guardar nombre:', e); }
   }
 
   function _actualizarBadgeNav() {
@@ -27071,7 +27368,9 @@ const WaChatModule = (() => {
            reactPop, reaccionar, emojiPicker, _emojiIns, refreshBadge,
            visPop, abrirVisPop, _toggleVisSub, guardarVisibilidad, _pintaBotonVis, _cargarTeam,
            nuevoChatAbrir, nuevoChatCerrar, _nuevoChatBuscar, nuevoChatElegir, nuevoChatUsarNumero,
-           abrirCuentasPop, _pickConn, agregarCuenta, _eliminarConn };
+           abrirCuentasPop, _pickConn, agregarCuenta, _eliminarConn,
+           abrirChatMenu, _chatMenuGoto, _toggleFijado, _toggleTag, _crearTag, _editarTag, _borrarTag,
+           _snoozePreset, _snoozeCustom, _quitarSnooze, _abrirContacto, _cerrarContacto, _guardarNombreContacto };
 })();
 window.WaChatModule = WaChatModule;
 

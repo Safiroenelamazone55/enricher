@@ -8311,7 +8311,8 @@ app.patch('/api/wa/connections/:id/visibilidad', requireAuth, async (req, res) =
 });
 
 // Lista de chats (1 fila por número con actividad), con el último mensaje como preview —
-// mismo shape que la lista de canales del mini-chat de Slack.
+// mismo shape que la lista de canales del mini-chat de Slack. Incluye fijado/pospuesto
+// (wa_chat_meta) y etiquetas (wa_tags/wa_chat_tags) para pintarlas sin pedidos aparte.
 app.get('/api/wa/connections/:id/chats', requireAuth, async (req, res) => {
   try {
     const conn = await _cargarConexionAutorizada(req, res, req.params.id);
@@ -8322,16 +8323,158 @@ app.get('/api/wa/connections/:id/chats', requireAuth, async (req, res) => {
                CASE WHEN m.chat_jid LIKE '%@g.us' THEN NULL ELSE NULLIF(m.nombre,'') END, '') AS nombre,
              (m.chat_jid LIKE '%@g.us') AS es_grupo,
              m.texto AS ultimo_texto, m.ts AS ultimo_ts, m.from_me, m.estado AS ultimo_estado, m.eliminado AS ultimo_eliminado,
+             COALESCE(cm.pinned, FALSE) AS pinned, cm.snooze_until,
              (SELECT COUNT(*) FROM wa_messages nl
                WHERE nl.connection_id = m.connection_id AND nl.chat_jid = m.chat_jid
-                 AND NOT nl.leido AND NOT nl.from_me) AS no_leidos
+                 AND NOT nl.leido AND NOT nl.from_me) AS no_leidos,
+             COALESCE((SELECT json_agg(json_build_object('id',t.id,'nombre',t.nombre,'color',t.color) ORDER BY t.nombre)
+                         FROM wa_chat_tags ct JOIN wa_tags t ON t.id=ct.tag_id
+                        WHERE ct.connection_id=m.connection_id AND ct.chat_jid=m.chat_jid), '[]') AS etiquetas
         FROM wa_messages m
         LEFT JOIN wa_contacts c ON c.connection_id = m.connection_id AND c.jid = m.chat_jid
+        LEFT JOIN wa_chat_meta cm ON cm.connection_id = m.connection_id AND cm.chat_jid = m.chat_jid
        WHERE m.connection_id=$1
        ORDER BY m.chat_jid, m.ts DESC`, [req.params.id]);
-    rows.sort((a, b) => new Date(b.ultimo_ts) - new Date(a.ultimo_ts));
+    const ahora = Date.now();
+    rows.sort((a, b) => {
+      const aPos = a.snooze_until && new Date(a.snooze_until).getTime() > ahora;
+      const bPos = b.snooze_until && new Date(b.snooze_until).getTime() > ahora;
+      if (aPos !== bPos) return aPos ? 1 : -1;           // pospuestos al final
+      if (!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1; // fijados primero
+      return new Date(b.ultimo_ts) - new Date(a.ultimo_ts);
+    });
     res.json(rows);
   } catch (err) { console.error('[wa] chats', err.message); res.status(500).json({ error: 'Error al cargar los chats' }); }
+});
+
+// ── Etiquetas de WhatsApp — a nivel de workspace, no por conexión: la misma
+// etiqueta sirve sin importar cuál de tus WhatsApp tenga el chat.
+const _WA_TAG_DEFAULTS = [
+  { nombre: 'Cliente',     color: '#22C55E' },
+  { nombre: 'Prospecto',   color: '#6366F1' },
+  { nombre: 'Urgente',     color: '#EF4444' },
+  { nombre: 'Seguimiento', color: '#F59E0B' },
+  { nombre: 'Resuelto',    color: '#8E8A84' },
+];
+app.get('/api/wa/tags', requireAuth, async (req, res) => {
+  try {
+    let { rows } = await pool.query(`SELECT id, nombre, color FROM wa_tags WHERE user_id=$1 ORDER BY nombre`, [req.workspaceOwnerId]);
+    if (!rows.length) {
+      // Primera vez: siembra las etiquetas por defecto (editables/eliminables después).
+      for (const t of _WA_TAG_DEFAULTS) {
+        await pool.query(`INSERT INTO wa_tags (user_id, nombre, color) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`, [req.workspaceOwnerId, t.nombre, t.color]);
+      }
+      ({ rows } = await pool.query(`SELECT id, nombre, color FROM wa_tags WHERE user_id=$1 ORDER BY nombre`, [req.workspaceOwnerId]));
+    }
+    res.json(rows);
+  } catch (err) { console.error('[wa] tags GET', err.message); res.status(500).json({ error: 'Error al cargar etiquetas' }); }
+});
+app.post('/api/wa/tags', requireAuth, async (req, res) => {
+  const nombre = String(req.body?.nombre || '').trim().slice(0, 40);
+  const color  = /^#[0-9a-fA-F]{6}$/.test(req.body?.color || '') ? req.body.color : '#6366F1';
+  if (!nombre) return res.status(400).json({ error: 'El nombre de la etiqueta es requerido' });
+  try {
+    const { rows: [row] } = await pool.query(
+      `INSERT INTO wa_tags (user_id, nombre, color) VALUES ($1,$2,$3) RETURNING id, nombre, color`,
+      [req.workspaceOwnerId, nombre, color]);
+    res.status(201).json(row);
+  } catch (err) {
+    if (err.code === '23505') return res.status(409).json({ error: 'Ya existe una etiqueta con ese nombre' });
+    console.error('[wa] tags POST', err.message); res.status(500).json({ error: 'No se pudo crear la etiqueta' });
+  }
+});
+app.patch('/api/wa/tags/:id', requireAuth, async (req, res) => {
+  const sets = [], vals = [req.params.id, req.workspaceOwnerId];
+  if (req.body?.nombre !== undefined) sets.push(`nombre=$${vals.push(String(req.body.nombre).trim().slice(0, 40))}`);
+  if (req.body?.color !== undefined && /^#[0-9a-fA-F]{6}$/.test(req.body.color)) sets.push(`color=$${vals.push(req.body.color)}`);
+  if (!sets.length) return res.json({ ok: true });
+  try {
+    const { rowCount } = await pool.query(`UPDATE wa_tags SET ${sets.join(',')} WHERE id=$1 AND user_id=$2`, vals);
+    if (!rowCount) return res.status(404).json({ error: 'No encontrada' });
+    res.json({ ok: true });
+  } catch (err) {
+    if (err.code === '23505') return res.status(409).json({ error: 'Ya existe una etiqueta con ese nombre' });
+    console.error('[wa] tags PATCH', err.message); res.status(500).json({ error: 'No se pudo actualizar la etiqueta' });
+  }
+});
+app.delete('/api/wa/tags/:id', requireAuth, async (req, res) => {
+  try {
+    await pool.query(`DELETE FROM wa_tags WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId]);
+    res.json({ ok: true });
+  } catch (err) { console.error('[wa] tags DELETE', err.message); res.status(500).json({ error: 'No se pudo eliminar la etiqueta' }); }
+});
+
+// Asignar / quitar una etiqueta a UN chat puntual.
+app.post('/api/wa/connections/:id/chats/:jid/tags', requireAuth, async (req, res) => {
+  try {
+    const conn = await _cargarConexionAutorizada(req, res, req.params.id);
+    if (!conn) return;
+    const tagId = parseInt(req.body?.tagId, 10);
+    if (!tagId) return res.status(400).json({ error: 'tagId requerido' });
+    await pool.query(
+      `INSERT INTO wa_chat_tags (connection_id, chat_jid, tag_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`,
+      [conn.id, req.params.jid, tagId]);
+    res.json({ ok: true });
+  } catch (err) { console.error('[wa] chat tag assign', err.message); res.status(500).json({ error: 'No se pudo asignar la etiqueta' }); }
+});
+app.delete('/api/wa/connections/:id/chats/:jid/tags/:tagId', requireAuth, async (req, res) => {
+  try {
+    const conn = await _cargarConexionAutorizada(req, res, req.params.id);
+    if (!conn) return;
+    await pool.query(
+      `DELETE FROM wa_chat_tags WHERE connection_id=$1 AND chat_jid=$2 AND tag_id=$3`,
+      [conn.id, req.params.jid, req.params.tagId]);
+    res.json({ ok: true });
+  } catch (err) { console.error('[wa] chat tag remove', err.message); res.status(500).json({ error: 'No se pudo quitar la etiqueta' }); }
+});
+
+// Fijar / posponer un chat — metadatos que no viven en wa_messages (upsert perezoso).
+app.patch('/api/wa/connections/:id/chats/:jid/meta', requireAuth, async (req, res) => {
+  try {
+    const conn = await _cargarConexionAutorizada(req, res, req.params.id);
+    if (!conn) return;
+    const sets = [], vals = [conn.id, req.params.jid];
+    if (req.body?.pinned !== undefined) sets.push(`pinned=$${vals.push(!!req.body.pinned)}`);
+    if (req.body?.snoozeUntil !== undefined) sets.push(`snooze_until=$${vals.push(req.body.snoozeUntil || null)}`);
+    if (!sets.length) return res.json({ ok: true });
+    await pool.query(
+      `INSERT INTO wa_chat_meta (connection_id, chat_jid) VALUES ($1,$2) ON CONFLICT (connection_id, chat_jid) DO NOTHING`,
+      [conn.id, req.params.jid]);
+    await pool.query(`UPDATE wa_chat_meta SET ${sets.join(',')}, updated_at=NOW() WHERE connection_id=$1 AND chat_jid=$2`, vals);
+    res.json({ ok: true });
+  } catch (err) { console.error('[wa] chat meta', err.message); res.status(500).json({ error: 'No se pudo guardar' }); }
+});
+
+// Datos de contacto + estadísticas rápidas del chat (para el panel "Ver datos de contacto").
+app.get('/api/wa/connections/:id/chats/:jid/contacto', requireAuth, async (req, res) => {
+  try {
+    const conn = await _cargarConexionAutorizada(req, res, req.params.id);
+    if (!conn) return;
+    const jid = req.params.jid;
+    const { rows: [c] } = await pool.query(`SELECT nombre FROM wa_contacts WHERE connection_id=$1 AND jid=$2`, [conn.id, jid]);
+    const { rows: [stats] } = await pool.query(
+      `SELECT COUNT(*) AS total, MIN(ts) AS primer_mensaje, MAX(ts) AS ultimo_mensaje
+         FROM wa_messages WHERE connection_id=$1 AND chat_jid=$2`, [conn.id, jid]);
+    res.json({
+      jid, nombre: c?.nombre || '', es_grupo: jid.endsWith('@g.us'),
+      numero: jid.endsWith('@g.us') || jid.endsWith('@lid') ? null : jid.split('@')[0],
+      total_mensajes: +stats.total || 0, primer_mensaje: stats.primer_mensaje, ultimo_mensaje: stats.ultimo_mensaje,
+    });
+  } catch (err) { console.error('[wa] contacto', err.message); res.status(500).json({ error: 'Error al cargar datos de contacto' }); }
+});
+// Corrige a mano el nombre guardado — rescate manual para cuando queda vacío o
+// prestado de otro chat (ver fix del 2026-08-26 en waService._guardarMensaje).
+app.patch('/api/wa/connections/:id/chats/:jid/nombre', requireAuth, async (req, res) => {
+  try {
+    const conn = await _cargarConexionAutorizada(req, res, req.params.id);
+    if (!conn) return;
+    const nombre = String(req.body?.nombre || '').trim().slice(0, 100);
+    await pool.query(
+      `INSERT INTO wa_contacts (connection_id, jid, nombre) VALUES ($1,$2,$3)
+       ON CONFLICT (connection_id, jid) DO UPDATE SET nombre=EXCLUDED.nombre, updated_at=NOW()`,
+      [conn.id, req.params.jid, nombre]);
+    res.json({ ok: true });
+  } catch (err) { console.error('[wa] nombre', err.message); res.status(500).json({ error: 'No se pudo guardar el nombre' }); }
 });
 
 app.post('/api/wa/connections/:id/chats/:jid/marcar-leido', requireAuth, async (req, res) => {
