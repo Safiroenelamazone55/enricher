@@ -19323,7 +19323,7 @@ ${foot}
         </label>
         <div class="fin-cfg-field fin-pi-full">
           <span class="fin-cfg-lbl">Destinatario *</span>
-          <input class="form-input" id="cmp-buscar" placeholder="Elige primero el buzón…" autocomplete="off" disabled oninput="LeadManagerModule._cmpBuscar(this.value)">
+          <input class="form-input" id="cmp-buscar" placeholder="Busca por nombre o email…" autocomplete="off" oninput="LeadManagerModule._cmpBuscar(this.value)">
           <div class="lm-pick-list" id="cmp-results" style="padding:6px 0 0;max-height:180px"></div>
           <div id="cmp-selected" style="display:none"></div>
           <div id="cmp-newwrap" style="display:none">
@@ -19389,7 +19389,7 @@ ${foot}
   function _cmpClientChange() {
     const clientId = parseInt($('cmp-client')?.value) || 0;
     const buscar = $('cmp-buscar');
-    if (buscar) { buscar.disabled = !clientId; buscar.value = ''; buscar.placeholder = clientId ? 'Busca por nombre o email…' : 'Elige primero el buzón…'; }
+    if (buscar) buscar.value = '';
     const results = $('cmp-results'); if (results) results.innerHTML = '';
     _cmpClear();
     const nw = $('cmp-newwrap'); if (nw) nw.style.display = 'none';
@@ -19401,9 +19401,10 @@ ${foot}
   }
   function _cmpBuscar(q) {
     const clientId = parseInt($('cmp-client')?.value) || 0;
-    const box = $('cmp-results'); if (!box || !clientId) return;
+    const box = $('cmp-results'); if (!box) return;
     const query = q.trim().toLowerCase();
     if (!query) { box.innerHTML = ''; return; }
+    if (!clientId) { box.innerHTML = `<div class="lm-pick-empty" style="padding:10px 4px">Elige primero desde qué buzón vas a enviar — así se busca (o se crea) entre los contactos de ese cliente.</div>`; return; }
     const propios = _contacts.filter(c => c.outbound_client_id === clientId);
     const matches = propios.filter(c => {
       const full = [c.nombre, c.apellido].filter(Boolean).join(' ').toLowerCase();
