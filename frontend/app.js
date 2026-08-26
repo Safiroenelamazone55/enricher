@@ -15547,6 +15547,7 @@ const LeadManagerModule = (() => {
   let _clients = [];          // clientes outbound (unidad principal)
   let _campaigns = [];        // campañas (Fase 2)
   let _sequences = [];        // secuencias (Fase 3)
+  let _seqOnCreated = null;   // callback(seq) opcional — si está seteado, saveSequence lo llama en vez de navegar a la secuencia (usado por el compose del Inbox)
   let _steps = [];            // pasos de secuencia (Fase 3)
   let _activities = [];       // actividades / tareas comerciales (Fase 4)
   let _lmTpls = [];           // biblioteca de plantillas / assets
@@ -19301,6 +19302,178 @@ ${foot}
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
+  // ── Nuevo correo desde el Inbox: a un contacto que puede no existir todavía.
+  // El buzón real que sale a enviar SIEMPRE es el del outbound_client del contacto
+  // (así lo resuelve /lm/inbox/reply) — por eso acá el cliente elegido manda: el
+  // buscador de destinatario y la secuencia se filtran a ESE cliente, para que lo
+  // que se ve en el modal coincida con lo que de verdad va a pasar al enviar.
+  async function composeAbrir() {
+    if (_mailboxes === null) await _mbReload();
+    document.getElementById('lm-compose-modal')?.remove();
+    const conBuzon = _clients.filter(c => { const mb = _mbFor(c.id); return mb && ['conectado', 'solo_envio'].includes(mb.estado); });
+    const m = document.createElement('div'); m.id = 'lm-compose-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) composeCerrar(); };
+    const clientOpts = '<option value="">— Selecciona cliente —</option>' + conBuzon.map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('');
+    m.innerHTML = `<div class="fin-pi-box">
+      <div class="fin-pi-box__hd"><h3>Nuevo correo</h3><button class="fin-pi-x" onclick="LeadManagerModule.composeCerrar()">✕</button></div>
+      <div class="fin-pi-form">
+        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Enviar desde (buzón) *</span>
+          <select class="form-input" id="cmp-client" onchange="LeadManagerModule._cmpClientChange()">${clientOpts}</select>
+          ${!conBuzon.length ? '<span class="seq-drip-hint">Ningún cliente tiene buzón conectado todavía — conéctalo en su ficha.</span>' : ''}
+        </label>
+        <div class="fin-cfg-field fin-pi-full">
+          <span class="fin-cfg-lbl">Destinatario *</span>
+          <input class="form-input" id="cmp-buscar" placeholder="Elige primero el buzón…" autocomplete="off" disabled oninput="LeadManagerModule._cmpBuscar(this.value)">
+          <div class="lm-pick-list" id="cmp-results" style="padding:6px 0 0;max-height:180px"></div>
+          <div id="cmp-selected" style="display:none"></div>
+          <div id="cmp-newwrap" style="display:none">
+            <div style="display:flex;justify-content:space-between;align-items:center;font-size:.76rem;font-weight:700;color:var(--muted);margin:6px 0">
+              <span>Contacto nuevo — se crea al enviar</span>
+              <button type="button" class="fin-pi-x" onclick="LeadManagerModule._cmpNuevoCancel()" title="Cambiar destinatario">✕</button>
+            </div>
+            <div class="fin-pi-form" style="padding:0">
+              <label class="fin-cfg-field"><span class="fin-cfg-lbl">Email *</span><input class="form-input" id="cmp-new-email" placeholder="nombre@empresa.com"></label>
+              <label class="fin-cfg-field"><span class="fin-cfg-lbl">Nombre</span><input class="form-input" id="cmp-new-nombre" placeholder="Nombre"></label>
+              <label class="fin-cfg-field"><span class="fin-cfg-lbl">Apellido</span><input class="form-input" id="cmp-new-apellido" placeholder="Apellido"></label>
+              <label class="fin-cfg-field"><span class="fin-cfg-lbl">Empresa</span><input class="form-input" id="cmp-new-empresa" placeholder="Opcional"></label>
+            </div>
+          </div>
+        </div>
+        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Secuencia (opcional)</span>
+          <div style="display:flex;gap:8px">
+            <select class="form-input" id="cmp-seq" style="flex:1"><option value="">— Sin secuencia —</option></select>
+            <button type="button" class="btn btn--ghost btn--sm" onclick="LeadManagerModule._cmpSeqNueva()">＋ Nueva</button>
+          </div>
+        </label>
+        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Asunto *</span><input class="form-input" id="cmp-asunto" placeholder="Asunto del correo"></label>
+        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Mensaje *</span><textarea class="form-input lm-ta-grow" id="cmp-cuerpo" rows="7" placeholder="Escribe tu mensaje…"></textarea></label>
+      </div>
+      <div class="fin-pi-box__ft"><span class="fin-cfg-hint" id="cmp-hint"></span><div class="fin-pi-ft-btns">
+        <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.composeCerrar()">Cancelar</button>
+        <button class="btn btn--primary btn--sm" id="cmp-send" onclick="LeadManagerModule.composeEnviar()">Enviar</button>
+      </div></div>
+    </div>`;
+    document.body.appendChild(m);
+    setTimeout(() => document.getElementById('cmp-client')?.focus(), 60);
+  }
+  function composeCerrar() { document.getElementById('lm-compose-modal')?.remove(); }
+  function _cmpClientChange() {
+    const clientId = parseInt($('cmp-client')?.value) || 0;
+    const buscar = $('cmp-buscar');
+    if (buscar) { buscar.disabled = !clientId; buscar.value = ''; buscar.placeholder = clientId ? 'Busca por nombre o email…' : 'Elige primero el buzón…'; }
+    const results = $('cmp-results'); if (results) results.innerHTML = '';
+    _cmpClear();
+    const nw = $('cmp-newwrap'); if (nw) nw.style.display = 'none';
+    const seqSel = $('cmp-seq');
+    if (seqSel) {
+      const opts = _sequences.filter(s => s.outbound_client_id === clientId);
+      seqSel.innerHTML = '<option value="">— Sin secuencia —</option>' + opts.map(s => `<option value="${s.id}">${esc(s.nombre)}</option>`).join('');
+    }
+  }
+  function _cmpBuscar(q) {
+    const clientId = parseInt($('cmp-client')?.value) || 0;
+    const box = $('cmp-results'); if (!box || !clientId) return;
+    const query = q.trim().toLowerCase();
+    if (!query) { box.innerHTML = ''; return; }
+    const propios = _contacts.filter(c => c.outbound_client_id === clientId);
+    const matches = propios.filter(c => {
+      const full = [c.nombre, c.apellido].filter(Boolean).join(' ').toLowerCase();
+      return full.includes(query) || (c.email || '').toLowerCase().includes(query);
+    }).slice(0, 8);
+    let html = matches.map(c => {
+      const full = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email;
+      return `<button type="button" class="lm-pick-item" onclick="LeadManagerModule._cmpElegir(${c.id})"><span>${esc(full)}</span><span class="lm-pick-est">${esc(c.email || '')}</span></button>`;
+    }).join('');
+    const looksEmail = /^\S+@\S+\.\S+$/.test(query);
+    if (looksEmail && !matches.some(c => (c.email || '').toLowerCase() === query)) {
+      html += `<button type="button" class="lm-pick-item" style="border-style:dashed" onclick="LeadManagerModule._cmpNuevo('${esc(query).replace(/'/g, "\\'")}')"><span>＋ Crear contacto nuevo</span><span class="lm-pick-est">${esc(query)}</span></button>`;
+    }
+    box.innerHTML = html || `<div class="lm-pick-empty" style="padding:10px 4px">${query.includes('@') ? 'Escribe el email completo para crear un contacto nuevo.' : 'Sin resultados entre los contactos de este cliente.'}</div>`;
+  }
+  function _cmpElegir(id) {
+    const c = _contacts.find(x => x.id === id); if (!c) return;
+    $('cmp-buscar').style.display = 'none';
+    $('cmp-results').innerHTML = '';
+    const nw = $('cmp-newwrap'); if (nw) nw.style.display = 'none';
+    const full = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email;
+    const sel = $('cmp-selected');
+    sel.style.display = ''; sel.dataset.contactId = id;
+    sel.innerHTML = `<div class="lm-pick-item" style="cursor:default"><span>✓ ${esc(full)} <span class="lm-pick-est">${esc(c.email || '')}</span></span><button type="button" class="fin-pi-x" onclick="LeadManagerModule._cmpClear()">✕</button></div>`;
+  }
+  function _cmpClear() {
+    const sel = $('cmp-selected'); if (sel) { sel.style.display = 'none'; sel.innerHTML = ''; sel.dataset.contactId = ''; }
+    const buscar = $('cmp-buscar'); if (buscar) { buscar.style.display = ''; buscar.value = ''; }
+    const results = $('cmp-results'); if (results) results.innerHTML = '';
+  }
+  function _cmpNuevo(email) {
+    $('cmp-buscar').style.display = 'none';
+    $('cmp-results').innerHTML = '';
+    const sel = $('cmp-selected'); if (sel) { sel.style.display = 'none'; sel.dataset.contactId = ''; }
+    const wrap = $('cmp-newwrap'); wrap.style.display = '';
+    const emailInp = $('cmp-new-email'); if (emailInp) emailInp.value = email;
+    setTimeout(() => $('cmp-new-nombre')?.focus(), 30);
+  }
+  function _cmpNuevoCancel() {
+    const wrap = $('cmp-newwrap'); if (wrap) wrap.style.display = 'none';
+    ['cmp-new-email', 'cmp-new-nombre', 'cmp-new-apellido', 'cmp-new-empresa'].forEach(id => { const el = $(id); if (el) el.value = ''; });
+    _cmpClear();
+    $('cmp-buscar')?.focus();
+  }
+  function _cmpSeqNueva() {
+    const clientId = parseInt($('cmp-client')?.value) || 0;
+    if (!clientId) { showBanner('Elige primero el buzón/cliente', 'info'); return; }
+    openSequenceDrawer(null, clientId, (saved) => {
+      const seqSel = $('cmp-seq');
+      if (seqSel) {
+        const opts = _sequences.filter(s => s.outbound_client_id === clientId);
+        seqSel.innerHTML = '<option value="">— Sin secuencia —</option>' + opts.map(s => `<option value="${s.id}"${s.id === saved.id ? ' selected' : ''}>${esc(s.nombre)}</option>`).join('');
+      }
+    });
+  }
+  async function composeEnviar() {
+    const hint = $('cmp-hint');
+    const fail = m => { if (hint) { hint.textContent = m; hint.className = 'fin-cfg-hint fin-cfg-hint--err'; } };
+    const clientId = parseInt($('cmp-client')?.value) || 0;
+    if (!clientId) return fail('Elige desde qué buzón enviar');
+    const asunto = $('cmp-asunto')?.value.trim();
+    const cuerpo = $('cmp-cuerpo')?.value.trim();
+    if (!asunto) return fail('Escribe el asunto');
+    if (!cuerpo) return fail('Escribe el mensaje');
+    const sel = $('cmp-selected');
+    let contactId = (sel && sel.style.display !== 'none') ? parseInt(sel.dataset.contactId) || 0 : 0;
+    const newVisible = $('cmp-newwrap')?.style.display !== 'none';
+    const btn = $('cmp-send'); if (btn) btn.disabled = true;
+    try {
+      if (!contactId) {
+        if (!newVisible) return fail('Elige o crea un destinatario');
+        const email = $('cmp-new-email')?.value.trim().toLowerCase();
+        if (!email || !/^\S+@\S+\.\S+$/.test(email)) return fail('Escribe un email válido');
+        const dup = _contacts.find(c => c.outbound_client_id === clientId && (c.email || '').toLowerCase() === email);
+        if (dup) { contactId = dup.id; }
+        else {
+          const body = { email, nombre: $('cmp-new-nombre')?.value.trim() || '', apellido: $('cmp-new-apellido')?.value.trim() || '', empresa_nombre: $('cmp-new-empresa')?.value.trim() || '', outbound_client_id: clientId };
+          const r = await apiFetch(`${API}/lm/contacts`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+          const d = await r.json();
+          if (!r.ok) throw new Error(d.error || 'No se pudo crear el contacto');
+          contactId = d.id; _contacts.push(d);
+        }
+      }
+      const seqId = parseInt($('cmp-seq')?.value) || 0;
+      if (seqId) {
+        const r = await apiFetch(`${API}/lm/contacts/add-to-sequence`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact_ids: [contactId], sequence_id: seqId }) });
+        if (!r.ok) { const d = await r.json().catch(() => ({})); showBanner('Contacto listo, pero no se pudo enrolar: ' + (d.error || ''), 'info'); }
+      }
+      const r2 = await apiFetch(`${API}/lm/inbox/reply`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact_id: contactId, asunto, cuerpo }) });
+      const d2 = await r2.json();
+      if (!r2.ok) throw new Error(d2.error || 'No se pudo enviar');
+      composeCerrar();
+      showBanner('✓ Correo enviado', 'success');
+      await _ibReload();
+      ibOpen(contactId);
+    } catch (e) { fail(e.message); }
+    finally { if (btn) btn.disabled = false; }
+  }
+
   // El alto fijo (100vh - 340px) dejaba la caja de respuesta fuera de pantalla en
   // ventanas bajas. Se mide lo que queda de verdad. El piso de 300px era menor
   // que el header+"Resolver respuesta"+caja de responder juntos (~360px), así
@@ -19350,6 +19523,7 @@ ${foot}
         ${unread ? `<span class="ibx-unread">${unread} sin leer</span>` : ''}
         <select class="dle-i ibx-fcli" onchange="LeadManagerModule.ibCli(this.value)"><option value="0">Todos los clientes</option>${_clients.map(c => `<option value="${c.id}"${_ibCli === c.id ? ' selected' : ''}>${esc(c.nombre)}</option>`).join('')}</select>
         <select class="dle-i ibx-fcli" onchange="LeadManagerModule.ibDisp(this.value)"><option value="">Todas las etiquetas</option>${_DISPOS.map(d => `<option value="${d[0]}"${_ibDisp === d[0] ? ' selected' : ''}>${esc(d[1])}</option>`).join('')}</select>
+        <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.composeAbrir()">＋ Nuevo correo</button>
       </div>
       ${_ibTab === 'env'
         ? `<div id="lm-real-inbox">${_realInboxHtml()}</div>`
@@ -21452,7 +21626,8 @@ ${foot}
 
   // ── Secuencia: drawer crear/editar ──
   const _SEQ_OPTS = [['draft', 'Draft'], ['activa', 'Activa'], ['pausada', 'Pausada'], ['archivada', 'Archivada']];
-  function openSequenceDrawer(id, presetClient) {
+  function openSequenceDrawer(id, presetClient, onCreated) {
+    _seqOnCreated = onCreated || null;
     const s = id ? _sequences.find(x => x.id === id) : null;
     const clientId = s?.outbound_client_id ?? presetClient ?? '';
     document.getElementById('lm-seq-modal')?.remove();
@@ -21536,7 +21711,7 @@ ${foot}
   function _seqDaysRender() { const inp = $('seq-senddays'); const m = _sanSendDays(inp?.value); document.querySelectorAll('#seq-days .seq-day').forEach(b => { const i = +b.dataset.d; b.classList.toggle('on', m[i] === '1'); }); }
   function seqDayToggle(i) { const inp = $('seq-senddays'); if (!inp) return; const m = _sanSendDays(inp.value).split(''); m[i] = m[i] === '1' ? '0' : '1'; if (!m.includes('1')) m[i] = '1'; inp.value = m.join(''); _seqDaysRender(); }
   function seqDaysPreset(k) { const inp = $('seq-senddays'); if (!inp) return; inp.value = k === 'all' ? '1111111' : '1111100'; _seqDaysRender(); }
-  function closeSequenceDrawer() { document.getElementById('lm-seq-modal')?.remove(); }
+  function closeSequenceDrawer() { document.getElementById('lm-seq-modal')?.remove(); _seqOnCreated = null; }
   async function saveSequence(id) {
     const nombre = $('seq-nombre')?.value.trim(); const clientId = $('seq-client')?.value; const hint = $('seq-hint');
     const fail = m => { if (hint) { hint.textContent = m; hint.className = 'fin-cfg-hint fin-cfg-hint--err'; } };
@@ -21548,8 +21723,12 @@ ${foot}
       const res = await apiFetch(`${API}/sequences${id ? '/' + id : ''}`, { method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       if (!res.ok) throw new Error((await res.json()).error || 'Error');
       const saved = await res.json().catch(() => null);
+      const cb = _seqOnCreated;
       closeSequenceDrawer(); await load();
-      if (!id && saved && saved.id) openSequence(saved.id);
+      if (!id && saved && saved.id) {
+        if (cb) cb(saved);
+        else openSequence(saved.id);
+      }
     } catch (e) { fail(e.message); if (btn) btn.disabled = false; }
   }
   async function confirmDeleteSequence(id) {
@@ -24458,6 +24637,7 @@ ${foot}
     mbAdminConsentSetSigner, mbAdminConsentAddChip, mbAdminConsentRmChip, mbAdminConsentInputKey, mbAdminConsentClearRecipients,
     ibOpen, ibTab, ibCli, ibDisp, ibSend, ibSaveNote, ibForward, ibSetMode, ibMsgNav, ibSchedToggle, ibSchedPick, ibCancelSched, ibResolveDisp, ibOpenResolveMenu, ibShowLeadActions,
     ibRowMenu, ibCloseMenu, ibMarkUnread,
+    composeAbrir, composeCerrar, composeEnviar, _cmpClientChange, _cmpBuscar, _cmpElegir, _cmpClear, _cmpNuevo, _cmpNuevoCancel, _cmpSeqNueva,
     pendingAcceptOpen, pendingAcceptToggleAll, pendingAcceptApplyFilters, pendingAcceptMark,
     openActivityDrawer, closeActivityDrawer, saveActivity, confirmDeleteActivity, markActDone,
     setReplySentiment, setLeadStage,
