@@ -19386,6 +19386,14 @@ ${foot}
     setTimeout(() => document.getElementById('cmp-client')?.focus(), 60);
   }
   function composeCerrar() { document.getElementById('lm-compose-modal')?.remove(); }
+  // Refresca el <select> de secuencias para un cliente dado — lo usan tanto elegir
+  // buzón a mano como elegir un contacto ya existente (que trae su propio cliente).
+  function _cmpSyncSeq(clientId) {
+    const seqSel = $('cmp-seq');
+    if (!seqSel) return;
+    const opts = _sequences.filter(s => s.outbound_client_id === clientId);
+    seqSel.innerHTML = '<option value="">— Sin secuencia —</option>' + opts.map(s => `<option value="${s.id}">${esc(s.nombre)}</option>`).join('');
+  }
   function _cmpClientChange() {
     const clientId = parseInt($('cmp-client')?.value) || 0;
     const buscar = $('cmp-buscar');
@@ -19393,27 +19401,28 @@ ${foot}
     const results = $('cmp-results'); if (results) results.innerHTML = '';
     _cmpClear();
     const nw = $('cmp-newwrap'); if (nw) nw.style.display = 'none';
-    const seqSel = $('cmp-seq');
-    if (seqSel) {
-      const opts = _sequences.filter(s => s.outbound_client_id === clientId);
-      seqSel.innerHTML = '<option value="">— Sin secuencia —</option>' + opts.map(s => `<option value="${s.id}">${esc(s.nombre)}</option>`).join('');
-    }
+    _cmpSyncSeq(clientId);
   }
+  // El buzón NO hace falta para buscar — un contacto YA EXISTENTE ya sabe a qué cliente
+  // pertenece (así resuelve el buzón real /lm/inbox/reply), así que se busca en TODOS
+  // los contactos y, al elegir uno, el selector de arriba se sincroniza solo. El buzón
+  // recién hace falta si hay que CREAR un contacto nuevo (bug reportado 2026-08-26:
+  // escribir el destinatario antes de tocar el buzón no mostraba nada — ni resultados
+  // ni la opción de crear — porque el buscador exigía el buzón desde el primer tecleo).
   function _cmpBuscar(q) {
-    const clientId = parseInt($('cmp-client')?.value) || 0;
     const box = $('cmp-results'); if (!box) return;
     const query = q.trim();
     const queryLower = query.toLowerCase();
     if (!query) { box.innerHTML = ''; return; }
-    if (!clientId) { box.innerHTML = `<div class="lm-pick-empty" style="padding:10px 4px">Elige primero desde qué buzón vas a enviar — así se busca (o se crea) entre los contactos de ese cliente.</div>`; return; }
-    const propios = _contacts.filter(c => c.outbound_client_id === clientId);
-    const matches = propios.filter(c => {
+    const matches = _contacts.filter(c => {
       const full = [c.nombre, c.apellido].filter(Boolean).join(' ').toLowerCase();
       return full.includes(queryLower) || (c.email || '').toLowerCase().includes(queryLower);
     }).slice(0, 8);
+    const clienteDe = id => (_clients.find(x => x.id === id) || {}).nombre || '';
     let html = matches.map(c => {
       const full = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email;
-      return `<button type="button" class="lm-pick-item" onclick="LeadManagerModule._cmpElegir(${c.id})"><span>${esc(full)}</span><span class="lm-pick-est">${esc(c.email || '')}</span></button>`;
+      const meta = [c.email, clienteDe(c.outbound_client_id)].filter(Boolean).join(' · ');
+      return `<button type="button" class="lm-pick-item" onclick="LeadManagerModule._cmpElegir(${c.id})"><span>${esc(full)}</span><span class="lm-pick-est">${esc(meta)}</span></button>`;
     }).join('');
     // "＋ Crear contacto nuevo" sale para CUALQUIER texto sin match exacto (nombre o
     // email) — antes solo aparecía si lo escrito YA parecía un email completo, así que
@@ -19421,10 +19430,17 @@ ${foot}
     if (query.length >= 2 && !matches.some(c => (c.email || '').toLowerCase() === queryLower)) {
       html += `<button type="button" class="lm-pick-item" style="border-style:dashed" onclick="LeadManagerModule._cmpNuevo('${esc(query).replace(/'/g, "\\'")}')"><span>＋ Crear contacto nuevo</span><span class="lm-pick-est">${esc(query)}</span></button>`;
     }
-    box.innerHTML = html || `<div class="lm-pick-empty" style="padding:10px 4px">Sin resultados entre los contactos de este cliente.</div>`;
+    box.innerHTML = html || `<div class="lm-pick-empty" style="padding:10px 4px">Sin resultados — sigue escribiendo o crea un contacto nuevo.</div>`;
   }
   function _cmpElegir(id) {
     const c = _contacts.find(x => x.id === id); if (!c) return;
+    // El envío real sale del buzón del CLIENTE del contacto (así resuelve /lm/inbox/reply)
+    // — si ese cliente no tiene buzón conectado, no hay forma de mandarle nada desde acá.
+    const mb = c.outbound_client_id ? _mbFor(c.outbound_client_id) : null;
+    if (!c.outbound_client_id || !mb || !['conectado', 'solo_envio'].includes(mb.estado)) {
+      showBanner('Este contacto pertenece a un cliente sin buzón conectado — no se le puede escribir desde aquí todavía', 'info');
+      return;
+    }
     $('cmp-buscar').style.display = 'none';
     $('cmp-results').innerHTML = '';
     const nw = $('cmp-newwrap'); if (nw) nw.style.display = 'none';
@@ -19432,6 +19448,14 @@ ${foot}
     const sel = $('cmp-selected');
     sel.style.display = ''; sel.dataset.contactId = id;
     sel.innerHTML = `<div class="lm-pick-item" style="cursor:default"><span>✓ ${esc(full)} <span class="lm-pick-est">${esc(c.email || '')}</span></span><button type="button" class="fin-pi-x" onclick="LeadManagerModule._cmpClear()">✕</button></div>`;
+    // El contacto ya trae su propio cliente outbound — sincroniza el selector de
+    // buzón para que quede claro desde dónde va a salir la respuesta (y para que la
+    // secuencia mostrada sea la de ESE cliente), aunque ella no lo haya tocado.
+    const clientSel = $('cmp-client');
+    if (clientSel && c.outbound_client_id && String(clientSel.value) !== String(c.outbound_client_id)) {
+      clientSel.value = c.outbound_client_id;
+      _cmpSyncSeq(c.outbound_client_id);
+    }
     _cmpPreviewUpdate();
   }
   function _cmpClear() {
@@ -19441,6 +19465,15 @@ ${foot}
     _cmpPreviewUpdate();
   }
   function _cmpNuevo(texto) {
+    // Un contacto NUEVO sí necesita saber a qué cliente pertenece desde ya (así se sabe
+    // qué buzón lo va a enviar) — a diferencia de buscar uno existente, esto no se puede
+    // inferir solo. Si todavía no eligió, se lo pide claro acá en vez de dejarla avanzar
+    // a un formulario que después va a fallar al enviar.
+    if (!parseInt($('cmp-client')?.value)) {
+      showBanner('Elige primero desde qué buzón vas a enviar — el contacto nuevo queda ligado a ese cliente', 'info');
+      $('cmp-client')?.focus();
+      return;
+    }
     $('cmp-buscar').style.display = 'none';
     $('cmp-results').innerHTML = '';
     const sel = $('cmp-selected'); if (sel) { sel.style.display = 'none'; sel.dataset.contactId = ''; }
