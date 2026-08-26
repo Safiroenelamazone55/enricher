@@ -407,6 +407,31 @@ async function flushProgramados(pool) {
 
 let _tickerProgramados = null;
 
+// Guardia contra sockets "zombie": el WebSocket de Baileys puede morir en silencio
+// (el servidor de WhatsApp corta sin avisar, o un corte de red se traga el cierre)
+// SIN disparar 'connection.update' close — Baileys nunca se entera, así que nuestra
+// lógica de reconexión automática (arriba, en el propio evento close) tampoco corre.
+// _socks sigue teniendo la referencia muerta para siempre, e iniciar() la respeta
+// ("ya está corriendo") y no hace nada — la única salida hoy era un pm2 restart a
+// mano. Confirmado en producción (2026-08-26): dos conexiones dejaron de recibir
+// mensajes en vivo sin ningún log de corte. Cada 3 min se revisa el WebSocket real
+// (sock.ws.isOpen — getter propio de Baileys sobre el readyState nativo) de cada
+// conexión activa; si no está abierto, se fuerza sock.end() (cierre local, SIN
+// logout) para que Baileys dispare el close de verdad y entre la reconexión
+// automática que ya existe.
+async function _watchdogTick(pool) {
+  for (const [id, sock] of _socks) {
+    try {
+      if (sock?.ws?.isOpen) continue; // undefined también se salta — no arriesgar un false positive
+      console.warn(`[wa] watchdog: conexión ${id} tiene el socket muerto — forzando reconexión`);
+      _socks.delete(id);
+      try { sock.end(new Error('watchdog: socket no está abierto')); } catch (_) {}
+      setTimeout(() => iniciar(pool, id).catch(e => console.warn(`[wa] watchdog reconectar ${id}:`, e.message)), 1000);
+    } catch (e) { console.warn(`[wa] watchdog ${id}:`, e.message); }
+  }
+}
+let _tickerWatchdog = null;
+
 // Al arrancar el server: retoma las conexiones que ya estaban vinculadas (o esperando
 // QR) sin que Jenny tenga que volver a escanear cada vez que se reinicia PM2.
 async function reanudarTodas(pool) {
@@ -418,6 +443,7 @@ async function reanudarTodas(pool) {
     }
   } catch (e) { console.warn('[wa] reanudarTodas:', e.message); }
   if (!_tickerProgramados) _tickerProgramados = setInterval(() => flushProgramados(pool), 30000);
+  if (!_tickerWatchdog) _tickerWatchdog = setInterval(() => _watchdogTick(pool), 3 * 60 * 1000);
 }
 
 module.exports = { iniciar, enviar, reaccionar, desconectar, reanudarTodas };
