@@ -379,6 +379,11 @@ async function flushProgramados(pool) {
        WHERE estado='programado' AND scheduled_at <= NOW()
        ORDER BY scheduled_at ASC LIMIT 20`);
     for (const m of due) {
+      // Reclamo atómico antes de mandar: si un tick se demora más de 30s (conexión
+      // lenta) y se solapa con el siguiente, esto evita que los dos manden el MISMO
+      // programado — solo el que gana este UPDATE sigue adelante.
+      const { rowCount } = await pool.query(`UPDATE wa_messages SET estado='enviando' WHERE id=$1 AND estado='programado'`, [m.id]);
+      if (!rowCount) continue; // otro tick (o una cancelación) ya se lo llevó
       const sock = _socks.get(m.connection_id);
       if (!sock) {
         await pool.query(`UPDATE wa_messages SET estado='error_programado' WHERE id=$1`, [m.id]);
