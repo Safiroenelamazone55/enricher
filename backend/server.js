@@ -5219,10 +5219,13 @@ app.get('/api/lm/inbox/threads', requireAuth, async (req, res) => {
          GROUP BY contact_id
       ),
       outx AS (
-        SELECT m.contact_id, MAX(m.sent_at) AS last_out_at, COUNT(*)::int AS sent_count,
+        SELECT m.contact_id, MAX(m.sent_at) AS last_out_at,
+               COUNT(*) FILTER (WHERE m.estado IN ('sent','replied','bounced'))::int AS sent_count,
+               bool_or(m.estado='scheduled') AS tiene_programado,
+               MIN(m.scheduled_at) FILTER (WHERE m.estado='scheduled') AS proximo_programado,
                bool_or(EXISTS(SELECT 1 FROM lm_message_events e WHERE e.message_id=m.id AND e.tipo='open')) AS abierto
           FROM lm_messages m
-         WHERE m.user_id=$1 AND m.estado IN ('sent','replied','bounced')
+         WHERE m.user_id=$1 AND m.estado IN ('sent','replied','bounced','scheduled')
          GROUP BY m.contact_id
       )
       SELECT k.id AS contact_id, k.nombre, k.apellido, k.email, k.cargo,
@@ -5231,6 +5234,7 @@ app.get('/api/lm/inbox/threads', requireAuth, async (req, res) => {
              oc.nombre AS cliente, mb.email AS buzon,
              i.last_in_at, COALESCE(i.unread,0) AS unread, COALESCE(i.bounces,0) AS bounces,
              o.last_out_at, COALESCE(o.sent_count,0) AS sent_count, COALESCE(o.abierto,FALSE) AS abierto,
+             COALESCE(o.tiene_programado,FALSE) AS tiene_programado, o.proximo_programado,
              li.asunto AS last_asunto, li.cuerpo AS last_snippet, li.tipo AS last_in_tipo
         FROM lm_contacts k
         LEFT JOIN inx  i ON i.contact_id = k.id
@@ -5245,7 +5249,7 @@ app.get('/api/lm/inbox/threads', requireAuth, async (req, res) => {
            ORDER BY received_at DESC LIMIT 1
         ) li ON TRUE
        WHERE k.user_id=$1 AND (i.contact_id IS NOT NULL OR o.contact_id IS NOT NULL)
-       ORDER BY GREATEST(COALESCE(i.last_in_at,'epoch'), COALESCE(o.last_out_at,'epoch')) DESC
+       ORDER BY GREATEST(COALESCE(i.last_in_at,'epoch'), COALESCE(o.last_out_at, o.proximo_programado, 'epoch')) DESC
        LIMIT 400
     `, [req.workspaceOwnerId]);
     res.json(rows);

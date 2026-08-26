@@ -18971,21 +18971,40 @@ ${foot}
     const dd = Math.floor(h / 24); if (dd < 7) return `${dd}d`;
     return new Date(d).toLocaleDateString('es-PE', { day: '2-digit', month: 'short' });
   }
+  // Tiempo relativo hacia ADELANTE (opuesto a _ibFmtAgo) — para "sale en 3h" de un
+  // correo programado que todavía no salió.
+  function _ibFmtIn(d) {
+    if (!d) return '';
+    const ms = new Date(d).getTime() - Date.now();
+    if (ms <= 0) return 'ya mismo';
+    const m = Math.floor(ms / 60000);
+    if (m < 60) return `en ${m}m`;
+    const h = Math.floor(m / 60); if (h < 24) return `en ${h}h`;
+    const dd = Math.floor(h / 24); if (dd < 7) return `en ${dd}d`;
+    return 'el ' + new Date(d).toLocaleDateString('es-PE', { day: '2-digit', month: 'short' });
+  }
   function _ibRow(t) {
     const cat = _ibCat(t);
     const nm = [t.nombre, t.apellido].filter(Boolean).join(' ') || t.email;
     const when = _ibFmtAgo(t.last_in_at && (!t.last_out_at || new Date(t.last_in_at) > new Date(t.last_out_at)) ? t.last_in_at : t.last_out_at);
-    const snippet = t.last_snippet || t.last_asunto || (t.sent_count ? `${t.sent_count} enviados, sin respuesta` : '');
+    const snippet = t.last_snippet || t.last_asunto
+      || (t.sent_count ? `${t.sent_count} enviados, sin respuesta` : (t.tiene_programado ? 'Correo programado, todavía no sale' : ''));
     const badge = cat === 'reb' ? `<span class="ibx-b ibx-b--reb">Rebote</span>`
                 : t.last_in_tipo === 'ooo' ? `<span class="ibx-b ibx-b--ooo">OOO</span>` : '';
+    // Correo programado que aún no salió — antes era invisible en el Inbox hasta que
+    // realmente se enviaba (pedido explícito de Jenny 2026-08-26: verlo con cuánto
+    // falta, no solo cuando ya salió).
+    const schedBadge = t.tiene_programado
+      ? `<span class="ibx-b ibx-b--sched" title="Saldrá el ${new Date(t.proximo_programado).toLocaleString('es-PE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}">🕐 Envía ${_ibFmtIn(t.proximo_programado)}</span>`
+      : '';
     // Ojito de apertura — solo tiene sentido para lo que YO mandé (pestaña Enviados):
     // gris = todavía no lo abre, verde = ya lo abrió. Mismo dato que la tabla de
     // tracking (lm_messages.opens), ahora visible fila por fila sin cambiar de vista.
-    const eyeIco = cat === 'env' ? `<span class="ibx-row__eye" title="${t.abierto ? 'Abrió el correo' : 'Todavía no lo abre'}" style="color:${t.abierto ? '#22C55E' : 'var(--muted,#918C85)'}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></span>` : '';
+    const eyeIco = cat === 'env' && t.sent_count ? `<span class="ibx-row__eye" title="${t.abierto ? 'Abrió el correo' : 'Todavía no lo abre'}" style="color:${t.abierto ? '#22C55E' : 'var(--muted,#918C85)'}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></span>` : '';
     return `<div class="ibx-row${_ibActive === t.contact_id ? ' active' : ''}${t.unread > 0 ? ' unread' : ''}" onclick="LeadManagerModule.ibOpen(${t.contact_id})" oncontextmenu="LeadManagerModule.ibRowMenu(event,${t.contact_id})">
       <div class="ibx-row__l1"><span class="ibx-row__nm">${t.unread > 0 ? '<span class="ibx-dot"></span>' : ''}<span class="ibx-row__nm-txt">${esc(nm)}</span>${t.disposition ? _dispoBadge(t.disposition) : ''}</span><span style="display:flex;align-items:center;gap:5px;flex:0 0 auto"><span class="ibx-row__t">${when}</span>${eyeIco}</span></div>
       <div class="ibx-row__sn">${esc(String(snippet).slice(0, 90))}</div>
-      <div class="ibx-row__meta">${esc(t.buzon || '')}${t.cliente ? ` · ${esc(t.cliente)}` : ''} ${badge}</div>
+      <div class="ibx-row__meta"><span class="ibx-row__meta-txt">${esc(t.buzon || '')}${t.cliente ? ` · ${esc(t.cliente)}` : ''}</span>${(badge || schedBadge) ? `<span class="ibx-row__meta-badges">${badge}${schedBadge}</span>` : ''}</div>
     </div>`;
   }
   // Los correos de respuesta suelen traer todo el hilo citado debajo (firma +
