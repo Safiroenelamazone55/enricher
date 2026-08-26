@@ -19332,10 +19332,15 @@ ${foot}
               <button type="button" class="fin-pi-x" onclick="LeadManagerModule._cmpNuevoCancel()" title="Cambiar destinatario">✕</button>
             </div>
             <div class="fin-pi-form" style="padding:0">
-              <label class="fin-cfg-field"><span class="fin-cfg-lbl">Email *</span><input class="form-input" id="cmp-new-email" placeholder="nombre@empresa.com"></label>
+              <label class="fin-cfg-field"><span class="fin-cfg-lbl">Email *</span><input class="form-input" id="cmp-new-email" placeholder="nombre@empresa.com" oninput="LeadManagerModule._cmpPreviewUpdate()"></label>
               <label class="fin-cfg-field"><span class="fin-cfg-lbl">Nombre</span><input class="form-input" id="cmp-new-nombre" placeholder="Nombre"></label>
               <label class="fin-cfg-field"><span class="fin-cfg-lbl">Apellido</span><input class="form-input" id="cmp-new-apellido" placeholder="Apellido"></label>
-              <label class="fin-cfg-field"><span class="fin-cfg-lbl">Empresa</span><input class="form-input" id="cmp-new-empresa" placeholder="Opcional"></label>
+              <div class="fin-cfg-field fin-pi-full">
+                <span class="fin-cfg-lbl">Empresa</span>
+                <input class="form-input" id="cmp-co-buscar" placeholder="Busca la empresa o escribe una nueva…" autocomplete="off" oninput="LeadManagerModule._cmpCoBuscar(this.value)">
+                <div class="lm-pick-list" id="cmp-co-results" style="padding:6px 0 0;max-height:140px"></div>
+                <div id="cmp-co-selected" style="display:none"></div>
+              </div>
             </div>
           </div>
         </div>
@@ -19345,11 +19350,35 @@ ${foot}
             <button type="button" class="btn btn--ghost btn--sm" onclick="LeadManagerModule._cmpSeqNueva()">＋ Nueva</button>
           </div>
         </label>
-        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Asunto *</span><input class="form-input" id="cmp-asunto" placeholder="Asunto del correo"></label>
-        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Mensaje *</span><textarea class="form-input lm-ta-grow" id="cmp-cuerpo" rows="7" placeholder="Escribe tu mensaje…"></textarea></label>
+        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Asunto *</span><input class="form-input" id="cmp-asunto" placeholder="Asunto del correo" oninput="LeadManagerModule._cmpPreviewUpdate()"></label>
+        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Mensaje *</span><textarea class="form-input lm-ta-grow" id="cmp-cuerpo" rows="7" placeholder="Escribe tu mensaje…" oninput="LeadManagerModule._cmpPreviewUpdate()"></textarea></label>
+        <div class="fin-cfg-field fin-pi-full">
+          <span class="fin-cfg-lbl">Vista previa</span>
+          <div class="cmp-preview" id="cmp-preview">
+            <div class="cmp-preview__hd">
+              <div><b>Para</b> <span id="cmp-prev-to">—</span></div>
+              <div><b>Asunto</b> <span id="cmp-prev-asunto">(sin asunto)</span></div>
+            </div>
+            <div class="cmp-preview__body" id="cmp-prev-body"><span class="cmp-preview__ph">Escribe el mensaje para ver la vista previa…</span></div>
+          </div>
+        </div>
       </div>
       <div class="fin-pi-box__ft"><span class="fin-cfg-hint" id="cmp-hint"></span><div class="fin-pi-ft-btns">
         <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.composeCerrar()">Cancelar</button>
+        <div style="position:relative;display:inline-flex">
+          <button class="ibx-clock" title="Programar envío" onclick="LeadManagerModule.cmpSchedToggle(event)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg></button>
+          <div class="ibx-sched" id="cmp-sched" style="display:none" onclick="event.stopPropagation()">
+            <div class="ibx-sched__t">Programar envío</div>
+            <button class="ibx-sched__opt" onclick="LeadManagerModule.cmpSchedPick('h1')">En 1 hora</button>
+            <button class="ibx-sched__opt" onclick="LeadManagerModule.cmpSchedPick('h3')">En 3 horas</button>
+            <button class="ibx-sched__opt" onclick="LeadManagerModule.cmpSchedPick('man9')">Mañana 9:00</button>
+            <button class="ibx-sched__opt" onclick="LeadManagerModule.cmpSchedPick('lun9')">Lunes 9:00</button>
+            <div class="ibx-sched__custom">
+              <input type="datetime-local" class="dle-i" id="cmp-sched-dt" style="font-size:.74rem;padding:5px 7px">
+              <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.cmpSchedPick('custom')">OK</button>
+            </div>
+          </div>
+        </div>
         <button class="btn btn--primary btn--sm" id="cmp-send" onclick="LeadManagerModule.composeEnviar()">Enviar</button>
       </div></div>
     </div>`;
@@ -19399,11 +19428,13 @@ ${foot}
     const sel = $('cmp-selected');
     sel.style.display = ''; sel.dataset.contactId = id;
     sel.innerHTML = `<div class="lm-pick-item" style="cursor:default"><span>✓ ${esc(full)} <span class="lm-pick-est">${esc(c.email || '')}</span></span><button type="button" class="fin-pi-x" onclick="LeadManagerModule._cmpClear()">✕</button></div>`;
+    _cmpPreviewUpdate();
   }
   function _cmpClear() {
     const sel = $('cmp-selected'); if (sel) { sel.style.display = 'none'; sel.innerHTML = ''; sel.dataset.contactId = ''; }
     const buscar = $('cmp-buscar'); if (buscar) { buscar.style.display = ''; buscar.value = ''; }
     const results = $('cmp-results'); if (results) results.innerHTML = '';
+    _cmpPreviewUpdate();
   }
   function _cmpNuevo(email) {
     $('cmp-buscar').style.display = 'none';
@@ -19412,12 +19443,49 @@ ${foot}
     const wrap = $('cmp-newwrap'); wrap.style.display = '';
     const emailInp = $('cmp-new-email'); if (emailInp) emailInp.value = email;
     setTimeout(() => $('cmp-new-nombre')?.focus(), 30);
+    _cmpPreviewUpdate();
   }
   function _cmpNuevoCancel() {
     const wrap = $('cmp-newwrap'); if (wrap) wrap.style.display = 'none';
-    ['cmp-new-email', 'cmp-new-nombre', 'cmp-new-apellido', 'cmp-new-empresa'].forEach(id => { const el = $(id); if (el) el.value = ''; });
+    ['cmp-new-email', 'cmp-new-nombre', 'cmp-new-apellido'].forEach(id => { const el = $(id); if (el) el.value = ''; });
+    _cmpCoClear();
     _cmpClear();
     $('cmp-buscar')?.focus();
+  }
+  // ── Empresa del contacto nuevo: mismo patrón buscar-o-crear que el destinatario.
+  // Solo aplica al crear un contacto — si se elige uno YA existente, su empresa no se toca.
+  function _cmpCoBuscar(q) {
+    const clientId = parseInt($('cmp-client')?.value) || 0;
+    const box = $('cmp-co-results'); if (!box) return;
+    const query = q.trim().toLowerCase();
+    if (!query) { box.innerHTML = ''; return; }
+    const propias = _companies.filter(c => c.outbound_client_id === clientId);
+    const matches = propias.filter(c => (c.nombre || '').toLowerCase().includes(query)).slice(0, 6);
+    let html = matches.map(c => `<button type="button" class="lm-pick-item" onclick="LeadManagerModule._cmpCoElegir(${c.id})"><span>${esc(c.nombre)}</span>${c.contact_count ? `<span class="lm-pick-est">${c.contact_count} contacto(s)</span>` : ''}</button>`).join('');
+    if (!matches.some(c => (c.nombre || '').toLowerCase() === query)) {
+      html += `<button type="button" class="lm-pick-item" style="border-style:dashed" onclick="LeadManagerModule._cmpCoNueva('${esc(q.trim()).replace(/'/g, "\\'")}')"><span>＋ Crear empresa nueva</span><span class="lm-pick-est">${esc(q.trim())}</span></button>`;
+    }
+    box.innerHTML = html || `<div class="lm-pick-empty" style="padding:10px 4px">Sin resultados entre las empresas de este cliente.</div>`;
+  }
+  function _cmpCoElegir(id) {
+    const c = _companies.find(x => x.id === id); if (!c) return;
+    $('cmp-co-buscar').style.display = 'none';
+    $('cmp-co-results').innerHTML = '';
+    const sel = $('cmp-co-selected');
+    sel.style.display = ''; sel.dataset.companyId = id; sel.dataset.companyNew = '';
+    sel.innerHTML = `<div class="lm-pick-item" style="cursor:default"><span>✓ ${esc(c.nombre)}</span><button type="button" class="fin-pi-x" onclick="LeadManagerModule._cmpCoClear()">✕</button></div>`;
+  }
+  function _cmpCoNueva(nombre) {
+    $('cmp-co-buscar').style.display = 'none';
+    $('cmp-co-results').innerHTML = '';
+    const sel = $('cmp-co-selected');
+    sel.style.display = ''; sel.dataset.companyId = ''; sel.dataset.companyNew = nombre;
+    sel.innerHTML = `<div class="lm-pick-item" style="cursor:default"><span>＋ ${esc(nombre)} <span class="lm-pick-est">nueva</span></span><button type="button" class="fin-pi-x" onclick="LeadManagerModule._cmpCoClear()">✕</button></div>`;
+  }
+  function _cmpCoClear() {
+    const sel = $('cmp-co-selected'); if (sel) { sel.style.display = 'none'; sel.innerHTML = ''; sel.dataset.companyId = ''; sel.dataset.companyNew = ''; }
+    const buscar = $('cmp-co-buscar'); if (buscar) { buscar.style.display = ''; buscar.value = ''; }
+    const results = $('cmp-co-results'); if (results) results.innerHTML = '';
   }
   function _cmpSeqNueva() {
     const clientId = parseInt($('cmp-client')?.value) || 0;
@@ -19430,7 +19498,60 @@ ${foot}
       }
     });
   }
-  async function composeEnviar() {
+  // Email que vería el destinatario en este momento — para la vista previa, no para enviar.
+  function _cmpCurrentEmail() {
+    const sel = $('cmp-selected');
+    if (sel && sel.style.display !== 'none' && sel.dataset.contactId) {
+      const c = _contacts.find(x => x.id === parseInt(sel.dataset.contactId));
+      return c ? c.email : '';
+    }
+    const nw = $('cmp-newwrap');
+    if (nw && nw.style.display !== 'none') return $('cmp-new-email')?.value.trim() || '';
+    return '';
+  }
+  // Vista previa en vivo: mismo formato exacto que /lm/inbox/reply arma para el envío
+  // real (esc + saltos de línea a <br>) — lo que se ve acá es lo que le llega.
+  function _cmpPreviewUpdate() {
+    const toEl = $('cmp-prev-to'); if (toEl) toEl.textContent = _cmpCurrentEmail() || '—';
+    const asuntoEl = $('cmp-prev-asunto'); if (asuntoEl) asuntoEl.textContent = $('cmp-asunto')?.value.trim() || '(sin asunto)';
+    const bodyEl = $('cmp-prev-body');
+    if (bodyEl) {
+      const cuerpo = $('cmp-cuerpo')?.value || '';
+      bodyEl.innerHTML = cuerpo.trim()
+        ? esc(cuerpo).replace(/\n/g, '<br>')
+        : '<span class="cmp-preview__ph">Escribe el mensaje para ver la vista previa…</span>';
+    }
+  }
+  function cmpSchedToggle(ev) {
+    if (ev) ev.stopPropagation();
+    const p = $('cmp-sched'); if (!p) return;
+    const show = p.style.display === 'none';
+    p.style.display = show ? '' : 'none';
+    if (show) {
+      const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0);
+      const pad = n => String(n).padStart(2, '0');
+      const inp = $('cmp-sched-dt');
+      if (inp && !inp.value) inp.value = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      const close = e => { if (!p.contains(e.target)) { p.style.display = 'none'; document.removeEventListener('click', close); } };
+      setTimeout(() => document.addEventListener('click', close), 0);
+    }
+  }
+  function cmpSchedPick(kind) {
+    let d = new Date();
+    if (kind === 'h1') d = new Date(Date.now() + 60 * 60 * 1000);
+    else if (kind === 'h3') d = new Date(Date.now() + 3 * 60 * 60 * 1000);
+    else if (kind === 'man9') { d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0); }
+    else if (kind === 'lun9') { const add = ((8 - d.getDay()) % 7) || 7; d.setDate(d.getDate() + add); d.setHours(9, 0, 0, 0); }
+    else if (kind === 'custom') {
+      const v = $('cmp-sched-dt')?.value;
+      if (!v) return;
+      d = new Date(v);
+      if (isNaN(d) || d.getTime() < Date.now() + 60 * 1000) { showBanner('Elige una fecha futura', 'info'); return; }
+    }
+    const p = $('cmp-sched'); if (p) p.style.display = 'none';
+    composeEnviar(d.toISOString());
+  }
+  async function composeEnviar(schedIso) {
     const hint = $('cmp-hint');
     const fail = m => { if (hint) { hint.textContent = m; hint.className = 'fin-cfg-hint fin-cfg-hint--err'; } };
     const clientId = parseInt($('cmp-client')?.value) || 0;
@@ -19442,7 +19563,7 @@ ${foot}
     const sel = $('cmp-selected');
     let contactId = (sel && sel.style.display !== 'none') ? parseInt(sel.dataset.contactId) || 0 : 0;
     const newVisible = $('cmp-newwrap')?.style.display !== 'none';
-    const btn = $('cmp-send'); if (btn) btn.disabled = true;
+    const btn = $('cmp-send'); if (btn) { btn.disabled = true; btn.textContent = schedIso ? 'Programando…' : 'Enviando…'; }
     try {
       if (!contactId) {
         if (!newVisible) return fail('Elige o crea un destinatario');
@@ -19451,7 +19572,19 @@ ${foot}
         const dup = _contacts.find(c => c.outbound_client_id === clientId && (c.email || '').toLowerCase() === email);
         if (dup) { contactId = dup.id; }
         else {
-          const body = { email, nombre: $('cmp-new-nombre')?.value.trim() || '', apellido: $('cmp-new-apellido')?.value.trim() || '', empresa_nombre: $('cmp-new-empresa')?.value.trim() || '', outbound_client_id: clientId };
+          // Empresa: si eligió una existente usa su id; si escribió una nueva, se crea antes que el contacto.
+          let companyId = null;
+          const coSel = $('cmp-co-selected');
+          if (coSel && coSel.style.display !== 'none') {
+            if (coSel.dataset.companyId) companyId = parseInt(coSel.dataset.companyId);
+            else if (coSel.dataset.companyNew) {
+              const rc = await apiFetch(`${API}/lm/companies`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre: coSel.dataset.companyNew, outbound_client_id: clientId }) });
+              const dc = await rc.json();
+              if (!rc.ok) throw new Error(dc.error || 'No se pudo crear la empresa');
+              companyId = dc.id; _companies.push(dc);
+            }
+          }
+          const body = { email, nombre: $('cmp-new-nombre')?.value.trim() || '', apellido: $('cmp-new-apellido')?.value.trim() || '', company_id: companyId, outbound_client_id: clientId };
           const r = await apiFetch(`${API}/lm/contacts`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
           const d = await r.json();
           if (!r.ok) throw new Error(d.error || 'No se pudo crear el contacto');
@@ -19463,15 +19596,19 @@ ${foot}
         const r = await apiFetch(`${API}/lm/contacts/add-to-sequence`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact_ids: [contactId], sequence_id: seqId }) });
         if (!r.ok) { const d = await r.json().catch(() => ({})); showBanner('Contacto listo, pero no se pudo enrolar: ' + (d.error || ''), 'info'); }
       }
-      const r2 = await apiFetch(`${API}/lm/inbox/reply`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact_id: contactId, asunto, cuerpo }) });
+      const replyBody = { contact_id: contactId, asunto, cuerpo };
+      if (schedIso) replyBody.scheduled_at = schedIso;
+      const r2 = await apiFetch(`${API}/lm/inbox/reply`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(replyBody) });
       const d2 = await r2.json();
       if (!r2.ok) throw new Error(d2.error || 'No se pudo enviar');
       composeCerrar();
-      showBanner('✓ Correo enviado', 'success');
+      showBanner(d2.scheduled
+        ? `🕑 Programado — saldrá el ${new Date(d2.message?.scheduled_at || schedIso).toLocaleString('es-PE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}`
+        : '✓ Correo enviado', 'success');
       await _ibReload();
       ibOpen(contactId);
     } catch (e) { fail(e.message); }
-    finally { if (btn) btn.disabled = false; }
+    finally { if (btn) { btn.disabled = false; btn.textContent = 'Enviar'; } }
   }
 
   // El alto fijo (100vh - 340px) dejaba la caja de respuesta fuera de pantalla en
@@ -24638,6 +24775,7 @@ ${foot}
     ibOpen, ibTab, ibCli, ibDisp, ibSend, ibSaveNote, ibForward, ibSetMode, ibMsgNav, ibSchedToggle, ibSchedPick, ibCancelSched, ibResolveDisp, ibOpenResolveMenu, ibShowLeadActions,
     ibRowMenu, ibCloseMenu, ibMarkUnread,
     composeAbrir, composeCerrar, composeEnviar, _cmpClientChange, _cmpBuscar, _cmpElegir, _cmpClear, _cmpNuevo, _cmpNuevoCancel, _cmpSeqNueva,
+    _cmpCoBuscar, _cmpCoElegir, _cmpCoNueva, _cmpCoClear, _cmpPreviewUpdate, cmpSchedToggle, cmpSchedPick,
     pendingAcceptOpen, pendingAcceptToggleAll, pendingAcceptApplyFilters, pendingAcceptMark,
     openActivityDrawer, closeActivityDrawer, saveActivity, confirmDeleteActivity, markActDone,
     setReplySentiment, setLeadStage,
