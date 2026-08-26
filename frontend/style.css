@@ -13831,7 +13831,7 @@ td.ldh-acts { padding-left: 6px; padding-right: 10px; }
 .ibx-fcli { max-width: 200px; font-size: .78rem; padding: 6px 9px; }
 .ibx-grid { display: grid; grid-template-columns: minmax(0, 290px) minmax(0, 1fr); border: 1px solid var(--border); border-radius: 12px; background: var(--surface); overflow: hidden; min-height: 340px; height: calc(100vh - 340px); }
 .ibx-list { border-right: 1px solid var(--border); overflow-y: auto; }
-.ibx-row { padding: 9px 12px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background .1s; }
+.ibx-row { padding: 7px 12px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background .1s; }
 .ibx-row:hover { background: var(--surface-hover); }
 .ibx-row.active { background: var(--primary-soft); box-shadow: inset 3px 0 0 var(--primary); }
 .ibx-row__l1 { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
@@ -13842,8 +13842,8 @@ td.ldh-acts { padding-left: 6px; padding-right: 10px; }
 .ibx-row.unread .ibx-row__nm { font-weight: 700; }
 .ibx-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--primary); flex: 0 0 auto; }
 .ibx-row__t { font-size: .68rem; color: var(--text-muted); flex: 0 0 auto; }
-.ibx-row__sn { font-size: .74rem; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
-.ibx-row__meta { font-size: .68rem; color: var(--text-muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ibx-row__sn { font-size: .74rem; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 0; }
+.ibx-row__meta { font-size: .68rem; color: var(--text-muted); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ibx-b { display: inline-block; font-size: .62rem; font-weight: 600; border-radius: 7px; padding: 0 6px; vertical-align: 1px; }
 .ibx-b--ooo { background: var(--surface-secondary); color: var(--text-secondary); }
 .ibx-b--reb { background: var(--danger-soft); color: var(--danger); }

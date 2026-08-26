@@ -18866,6 +18866,12 @@ ${foot}
   let _ibTab     = 'sin';  // sin | resp | env | reb
   let _ibCli     = 0;      // filtro por cliente outbound (0 = todos)
   let _ibDisp    = '';     // filtro por etiqueta/disposición ('' = todas)
+  // Filtros extra (apertura/leído/secuencia) — mismo patrón compacto (ícono + popover)
+  // que _filtroEstado en WhatsApp: no ocupan espacio fijo en la barra, solo el ícono.
+  let _ibFApertura = 'todos'; // 'todos' | 'abierto' | 'no_abierto'
+  let _ibFLeido    = 'todos'; // 'todos' | 'no_leido'
+  let _ibFSeq      = 0;       // 0 = todas, o id de secuencia
+  let _ibFiltrosPopClose = null;
   let _ibActive  = null;   // contact_id del hilo abierto
   let _ibThread  = null;   // { contact, messages } del hilo abierto
   let _ibMsgIdx  = 0;      // índice del correo visible dentro del hilo (paginado 1 a 1)
@@ -18899,7 +18905,62 @@ ${foot}
   }
   function _ibFiltered() {
     const all = Array.isArray(_ibThreads) ? _ibThreads : [];
-    return all.filter(t => (!_ibCli || t.outbound_client_id === _ibCli) && (!_ibDisp || t.disposition === _ibDisp));
+    return all.filter(t => {
+      if (_ibCli && t.outbound_client_id !== _ibCli) return false;
+      if (_ibDisp && t.disposition !== _ibDisp) return false;
+      if (_ibFApertura === 'abierto' && !t.abierto) return false;
+      if (_ibFApertura === 'no_abierto' && t.abierto) return false;
+      if (_ibFLeido === 'no_leido' && !(t.unread > 0)) return false;
+      if (_ibFSeq) {
+        const c = _contacts.find(x => x.id === t.contact_id);
+        if (!(c?.sequences || []).some(s => s.id === _ibFSeq)) return false;
+      }
+      return true;
+    });
+  }
+  function _ibFiltrosActivos() {
+    let n = 0;
+    if (_ibFApertura !== 'todos') n++;
+    if (_ibFLeido !== 'todos') n++;
+    if (_ibFSeq) n++;
+    return n;
+  }
+  function _ibSetFApertura(v) { _ibFApertura = v; if (_ibFiltrosPopClose) _ibFiltrosPopClose(); _ibPaint(); }
+  function _ibSetFLeido(v) { _ibFLeido = v; if (_ibFiltrosPopClose) _ibFiltrosPopClose(); _ibPaint(); }
+  function _ibSetFSeq(v) { _ibFSeq = parseInt(v) || 0; if (_ibFiltrosPopClose) _ibFiltrosPopClose(); _ibPaint(); }
+  function _ibLimpiarFiltrosExtra() { _ibFApertura = 'todos'; _ibFLeido = 'todos'; _ibFSeq = 0; if (_ibFiltrosPopClose) _ibFiltrosPopClose(); _ibPaint(); }
+  // Mismo patrón que abrirFiltroEstado (WhatsApp): un ícono que no ocupa espacio fijo
+  // en la barra, con un popover que agrupa varios filtros — pedido explícito de Jenny
+  // 2026-08-26 para no repetir selects/pills que ya le habían quitado espacio antes.
+  function ibAbrirFiltros(ev) {
+    ev.stopPropagation();
+    if (_ibFiltrosPopClose) { _ibFiltrosPopClose(); return; }
+    const menu = document.createElement('div');
+    menu.className = 'chat-ctx-menu';
+    menu.style.maxHeight = '70vh'; menu.style.overflowY = 'auto';
+    menu.onclick = e => e.stopPropagation();
+    const label = t => `<div style="padding:7px 10px 3px;font-size:.62rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.03em">${t}</div>`;
+    const opt = (checked, onclick, txt) => `<button class="chat-ctx-item" onclick="${onclick}">${esc(txt)}${checked ? '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" style="margin-left:auto"><polyline points="20 6 9 17 4 12"/></svg>' : ''}</button>`;
+    const seqOpts = [...(_sequences || [])].sort((a, b) => a.nombre.localeCompare(b.nombre));
+    menu.innerHTML = label('Apertura')
+      + opt(_ibFApertura === 'todos', "LeadManagerModule._ibSetFApertura('todos')", 'Todas')
+      + opt(_ibFApertura === 'abierto', "LeadManagerModule._ibSetFApertura('abierto')", 'Abiertos')
+      + opt(_ibFApertura === 'no_abierto', "LeadManagerModule._ibSetFApertura('no_abierto')", 'No abiertos')
+      + '<div class="chat-ctx-sep"></div>' + label('Leído')
+      + opt(_ibFLeido === 'todos', "LeadManagerModule._ibSetFLeido('todos')", 'Todos')
+      + opt(_ibFLeido === 'no_leido', "LeadManagerModule._ibSetFLeido('no_leido')", 'No leídos')
+      + '<div class="chat-ctx-sep"></div>' + label('Secuencia')
+      + opt(!_ibFSeq, "LeadManagerModule._ibSetFSeq(0)", 'Todas')
+      + seqOpts.map(s => opt(_ibFSeq === s.id, `LeadManagerModule._ibSetFSeq(${s.id})`, s.nombre)).join('')
+      + (_ibFiltrosActivos() ? '<div class="chat-ctx-sep"></div>' + opt(false, 'LeadManagerModule._ibLimpiarFiltrosExtra()', '✕ Limpiar filtros') : '');
+    document.body.appendChild(menu);
+    const rect = ev.currentTarget.getBoundingClientRect();
+    const w = menu.offsetWidth || 200;
+    let left = rect.right - w; if (left < 8) left = 8;
+    menu.style.top = (rect.bottom + 6) + 'px';
+    menu.style.left = left + 'px';
+    _ibFiltrosPopClose = () => { menu.remove(); document.removeEventListener('click', _ibFiltrosPopClose); _ibFiltrosPopClose = null; };
+    setTimeout(() => document.addEventListener('click', _ibFiltrosPopClose), 0);
   }
   function _ibFmtAgo(d) {
     if (!d) return '';
@@ -19724,6 +19785,10 @@ ${foot}
         ${unread ? `<span class="ibx-unread">${unread} sin leer</span>` : ''}
         <select class="dle-i ibx-fcli" onchange="LeadManagerModule.ibCli(this.value)"><option value="0">Todos los clientes</option>${_clients.map(c => `<option value="${c.id}"${_ibCli === c.id ? ' selected' : ''}>${esc(c.nombre)}</option>`).join('')}</select>
         <select class="dle-i ibx-fcli" onchange="LeadManagerModule.ibDisp(this.value)"><option value="">Todas las etiquetas</option>${_DISPOS.map(d => `<option value="${d[0]}"${_ibDisp === d[0] ? ' selected' : ''}>${esc(d[1])}</option>`).join('')}</select>
+        <button class="wa-tab-filter${_ibFiltrosActivos() ? ' wa-tab-filter--active' : ''}" title="Más filtros: apertura, leído, secuencia" onclick="LeadManagerModule.ibAbrirFiltros(event)">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+          ${_ibFiltrosActivos() ? `<span>${_ibFiltrosActivos()}</span>` : ''}
+        </button>
         ${_ibTab === 'env' ? `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.ibToggleEnvVista()">${_ibEnvShowTable ? '💬 Ver conversaciones' : '📊 Ver tabla de tracking'}</button>` : ''}
         <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.composeAbrir()">＋ Nuevo correo</button>
       </div>
@@ -24844,7 +24909,7 @@ ${foot}
     mbAdminConsentSync, mbAdminConsentToggleHtml,
     mbAdminConsentSetSigner, mbAdminConsentAddChip, mbAdminConsentRmChip, mbAdminConsentInputKey, mbAdminConsentClearRecipients,
     ibOpen, ibTab, ibCli, ibDisp, ibSend, ibSaveNote, ibForward, ibSetMode, ibMsgNav, ibSchedToggle, ibSchedPick, ibCancelSched, ibResolveDisp, ibOpenResolveMenu, ibShowLeadActions,
-    ibAbrirDesdeEnviados, ibToggleEnvVista,
+    ibAbrirDesdeEnviados, ibToggleEnvVista, ibAbrirFiltros, _ibSetFApertura, _ibSetFLeido, _ibSetFSeq, _ibLimpiarFiltrosExtra,
     ibRowMenu, ibCloseMenu, ibMarkUnread,
     composeAbrir, composeCerrar, composeEnviar, _cmpClientChange, _cmpBuscar, _cmpElegir, _cmpClear, _cmpNuevo, _cmpNuevoCancel, _cmpSeqNueva,
     _cmpCoBuscar, _cmpCoElegir, _cmpCoNueva, _cmpCoClear, _cmpPreviewUpdate, cmpSchedToggle, cmpSchedPick,
