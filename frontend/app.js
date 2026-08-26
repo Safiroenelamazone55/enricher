@@ -18871,6 +18871,12 @@ ${foot}
   let _ibMsgIdx  = 0;      // índice del correo visible dentro del hilo (paginado 1 a 1)
   let _ibMode    = 'reply'; // 'reply' (email real) | 'note' (nota interna, no se envía)
   let _ibSending = false;
+  // "Enviados" mostraba una tabla de tracking (aperturas/clics) SIN forma de abrir la
+  // conversación real — clickear una fila mandaba directo a la ficha del contacto, algo
+  // distinto de las otras 3 pestañas (que sí abren el hilo). Con esto, un clic abre el
+  // mismo panel de conversación que usan "Sin responder"/"Respondidos"/"Rebotes"; la
+  // tabla sigue siendo la vista por defecto de "Enviados".
+  let _ibEnvShowTable = true;
 
   async function _ibReload() {
     try { const r = await apiFetch(`${API}/lm/inbox/threads`); _ibThreads = (r && r.ok) ? await r.json() : []; }
@@ -19170,6 +19176,7 @@ ${foot}
     const curMsg = msgs.length ? msgs[Math.min(_ibMsgIdx, msgs.length - 1)] : null;
     return `
       <div class="ibx-conv__hd">
+        ${_ibTab === 'env' ? `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.ibVolverTabla()">← Envíos</button>` : ''}
         <div class="ibx-av">${esc(ini)}</div>
         <div class="ibx-conv__who"><div class="ibx-conv__nm">${esc(nm)}${c.cargo || c.empresa ? ` <span class="ibx-conv__sub">· ${esc([c.cargo, c.empresa].filter(Boolean).join(', '))}</span>` : ''}</div>
         <div class="ibx-conv__seq">${seqInfo}${c.disposition ? ' ' + _dispoBadge(c.disposition) : ''}</div></div>
@@ -19716,7 +19723,7 @@ ${foot}
         <select class="dle-i ibx-fcli" onchange="LeadManagerModule.ibDisp(this.value)"><option value="">Todas las etiquetas</option>${_DISPOS.map(d => `<option value="${d[0]}"${_ibDisp === d[0] ? ' selected' : ''}>${esc(d[1])}</option>`).join('')}</select>
         <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.composeAbrir()">＋ Nuevo correo</button>
       </div>
-      ${_ibTab === 'env'
+      ${_ibTab === 'env' && _ibEnvShowTable
         ? `<div id="lm-real-inbox">${_realInboxHtml()}</div>`
         : `<div class="ibx-grid">
              <div class="ibx-list">${_ibListHtml()}</div>
@@ -19724,6 +19731,12 @@ ${foot}
            </div>`}
     </div>`;
   }
+  // Abrir una fila de la tabla de envíos como conversación real, no como ficha.
+  function ibAbrirDesdeEnviados(cid) {
+    _ibEnvShowTable = false;
+    if (_ibThreads === null) { _ibReload().then(() => ibOpen(cid)); } else { ibOpen(cid); }
+  }
+  function ibVolverTabla() { _ibEnvShowTable = true; _ibPaint(); }
   async function ibOpen(cid) {
     _ibActive = cid; _ibThread = null; _ibMsgIdx = 0; _ibMode = 'reply';
     const t = (_ibThreads || []).find(x => x.contact_id === cid); if (t) t.unread = 0;
@@ -19737,7 +19750,7 @@ ${foot}
     _ibMsgIdx = Math.max(0, (_ibThread.messages || []).length - 1);
     if (_section === 'inbox' && _ibActive === cid) _ibPaint();
   }
-  function ibTab(k) { _ibTab = k; _ibPaint(); if (k === 'env' && _lmMsgs === null) _loadLmMsgs(); }
+  function ibTab(k) { _ibTab = k; _ibEnvShowTable = true; _ibPaint(); if (k === 'env' && _lmMsgs === null) _loadLmMsgs(); }
   function ibCli(v) { _ibCli = parseInt(v) || 0; _ibPaint(); }
   function ibDisp(v) { _ibDisp = v || ''; _ibPaint(); }
   // Nota interna: NO llama a /reply ni toca lm_messages/mailboxes — no sale ningún
@@ -24295,7 +24308,7 @@ ${foot}
     const ST = { sent: ['Enviado', '#F1EFEB', '#1E5FA8'], replied: ['Respondió', '#F1EFEB', '#15803D'], failed: ['Falló', '#F1EFEB', '#C4342B'], queued: ['En cola', '#F1EFEB', '#6C6862'], bounced: ['Rebotó', '#F1EFEB', '#C4342B'] };
     const s = ST[m.estado] || ST.queued;
     const when = m.sent_at ? new Date(m.sent_at).toLocaleString('es-PE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
-    return `<tr class="clients-table__row" onclick="LeadManagerModule.openContactPage(${m.contact_id})" style="cursor:pointer">
+    return `<tr class="clients-table__row" onclick="LeadManagerModule.ibAbrirDesdeEnviados(${m.contact_id})" style="cursor:pointer">
       <td><div class="client-nombre">${esc([m.nombre, m.apellido].filter(Boolean).join(' ') || m.to_email)}</div><div class="client-empresa">${esc(m.to_email)}</div></td>
       <td class="client-meta">${esc(m.asunto)}${m.seq_nombre ? `<div class="client-empresa">${esc(m.seq_nombre)}</div>` : ''}</td>
       <td class="client-meta">${when}</td>
@@ -24827,6 +24840,7 @@ ${foot}
     mbAdminConsentSync, mbAdminConsentToggleHtml,
     mbAdminConsentSetSigner, mbAdminConsentAddChip, mbAdminConsentRmChip, mbAdminConsentInputKey, mbAdminConsentClearRecipients,
     ibOpen, ibTab, ibCli, ibDisp, ibSend, ibSaveNote, ibForward, ibSetMode, ibMsgNav, ibSchedToggle, ibSchedPick, ibCancelSched, ibResolveDisp, ibOpenResolveMenu, ibShowLeadActions,
+    ibAbrirDesdeEnviados, ibVolverTabla,
     ibRowMenu, ibCloseMenu, ibMarkUnread,
     composeAbrir, composeCerrar, composeEnviar, _cmpClientChange, _cmpBuscar, _cmpElegir, _cmpClear, _cmpNuevo, _cmpNuevoCancel, _cmpSeqNueva,
     _cmpCoBuscar, _cmpCoElegir, _cmpCoNueva, _cmpCoClear, _cmpPreviewUpdate, cmpSchedToggle, cmpSchedPick,
