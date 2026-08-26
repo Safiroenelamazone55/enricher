@@ -9603,6 +9603,16 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 .d3-play-btn:focus-visible,
 .d3-hrs-btn:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 
+/* Prioridad (Mi trabajo) — mismo tamaño/comportamiento que el punto de estado */
+.mw-prio-btn {
+  width: 18px; height: 18px; flex-shrink: 0;
+  border: none; background: none; padding: 0; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: transform .15s, opacity .15s; outline: none;
+}
+.mw-prio-btn:hover { transform: scale(1.15); opacity: .85; }
+.mw-prio-btn:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+
 /* Status menu */
 .d3-status-menu {
   background: #fff;

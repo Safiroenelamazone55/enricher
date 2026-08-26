@@ -2132,6 +2132,24 @@ app.patch('/api/mgmt/tasks/:id/status', requireAuth, async (req, res) => {
   }
 });
 
+// ── PATCH /api/mgmt/tasks/:id/prioridad ──────────────────────────
+app.patch('/api/mgmt/tasks/:id/prioridad', requireAuth, async (req, res) => {
+  const { prioridad } = req.body;
+  const VALID = ['alta', 'media', 'baja'];
+  if (!VALID.includes(prioridad)) return res.status(400).json({ error: 'Prioridad inválida' });
+  try {
+    const { rows } = await pool.query(
+      `UPDATE tasks SET prioridad=$3, updated_at=NOW() WHERE id=$1 AND user_id=$2 RETURNING id, prioridad`,
+      [req.params.id, req.workspaceOwnerId, prioridad]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Tarea no encontrada' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[tasks/prioridad] PATCH error:', err.message);
+    res.status(500).json({ error: 'Error al actualizar prioridad' });
+  }
+});
+
 // ── Dependencias entre tareas (ClickUp): :id ESPERA A depends_on_id ──
 async function _taskWaitingOn(taskId) {
   const { rows } = await pool.query(

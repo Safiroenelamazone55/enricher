@@ -6716,6 +6716,34 @@ const MyWorkModule = (() => {
   };
   const _svg = estado => `<svg width="16" height="16" viewBox="0 0 16 16" fill="none">${(_CFG[estado] || _CFG.pendiente).icon}</svg>`;
 
+  const _PRIO_CFG = { alta: { label: 'Alta', color: '#EF4444' }, media: { label: 'Media', color: '#F59E0B' }, baja: { label: 'Baja', color: '#10B981' } };
+  const _flagSvg = color => `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 22V4"/><path d="M5 4h11l-1.6 3.6L16 11H5z"/></svg>`;
+  let _prioMenuClose = null;
+  function openPrioMenu(ev, id) {
+    ev.stopPropagation();
+    if (_prioMenuClose) { _prioMenuClose(); return; }
+    const rect = ev.currentTarget.getBoundingClientRect();
+    const menu = document.createElement('div');
+    menu.className = 'd3-status-menu';
+    menu.innerHTML = Object.entries(_PRIO_CFG).map(([val, cfg]) => `
+      <button class="d3-status-opt" onclick="MyWorkModule.setTaskPrioridad(${id},'${val}')">
+        <span class="d3-status-opt__dot" style="background:${cfg.color};border:1.5px solid ${cfg.color}"></span>
+        ${esc(cfg.label)}
+      </button>`).join('');
+    menu.style.cssText = `position:fixed;z-index:9999;top:${rect.bottom + 6}px;left:${rect.left - 4}px`;
+    document.body.appendChild(menu);
+    _prioMenuClose = () => { menu.remove(); document.removeEventListener('click', _prioMenuClose); _prioMenuClose = null; };
+    setTimeout(() => document.addEventListener('click', _prioMenuClose), 0);
+  }
+  async function setTaskPrioridad(id, prioridad) {
+    if (_prioMenuClose) _prioMenuClose();
+    try {
+      await apiFetch(`${API}/mgmt/tasks/${id}/prioridad`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prioridad }) });
+      const t = _tasks.find(x => x.id === id); if (t) t.prioridad = prioridad;
+      render();
+    } catch (e) { console.error('[mywork] prioridad:', e); }
+  }
+
   async function load() {
     const wrap = $('mywork-list'), loading = $('mywork-loading');
     if (!wrap) return;
@@ -6788,9 +6816,11 @@ const MyWorkModule = (() => {
       ? (_start && _start !== _end && !t.parent_task_id ? `${_fmtD(_start)} – ${_fmtD(_end)}` : _fmtD(_end))
       : (_start ? _fmtD(_start) : null);
     const estado = t.estado || 'pendiente';
+    const prio = _PRIO_CFG[t.prioridad] || _PRIO_CFG.media;
     return `<div class="d3-task-row${isOverdue ? ' d3-task-row--overdue' : ''}" data-task-id="${t.id}">
       <button class="d3-status-btn d3-status-btn--${(_CFG[estado] || _CFG.pendiente).dot}"
         onclick="event.stopPropagation();DashboardModule.openStatusMenu(event,${t.id})" title="Cambiar estado">${_svg(estado)}</button>
+      <button class="mw-prio-btn" title="Prioridad: ${prio.label} — clic para cambiar" onclick="MyWorkModule.openPrioMenu(event,${t.id})">${_flagSvg(prio.color)}</button>
       <div class="d3-task-body">
         <span class="d3-task-name${isOverdue ? ' d3-task-name--overdue' : ''}">${esc(t.titulo)}</span>
         ${meta ? `<span class="d3-task-meta">${esc(meta)}</span>` : ''}
@@ -6821,7 +6851,7 @@ const MyWorkModule = (() => {
     });
   }
 
-  return { load, _openDate };
+  return { load, _openDate, openPrioMenu, setTaskPrioridad };
 })();
 
 // =================================================================
