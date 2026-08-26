@@ -19402,23 +19402,26 @@ ${foot}
   function _cmpBuscar(q) {
     const clientId = parseInt($('cmp-client')?.value) || 0;
     const box = $('cmp-results'); if (!box) return;
-    const query = q.trim().toLowerCase();
+    const query = q.trim();
+    const queryLower = query.toLowerCase();
     if (!query) { box.innerHTML = ''; return; }
     if (!clientId) { box.innerHTML = `<div class="lm-pick-empty" style="padding:10px 4px">Elige primero desde qué buzón vas a enviar — así se busca (o se crea) entre los contactos de ese cliente.</div>`; return; }
     const propios = _contacts.filter(c => c.outbound_client_id === clientId);
     const matches = propios.filter(c => {
       const full = [c.nombre, c.apellido].filter(Boolean).join(' ').toLowerCase();
-      return full.includes(query) || (c.email || '').toLowerCase().includes(query);
+      return full.includes(queryLower) || (c.email || '').toLowerCase().includes(queryLower);
     }).slice(0, 8);
     let html = matches.map(c => {
       const full = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email;
       return `<button type="button" class="lm-pick-item" onclick="LeadManagerModule._cmpElegir(${c.id})"><span>${esc(full)}</span><span class="lm-pick-est">${esc(c.email || '')}</span></button>`;
     }).join('');
-    const looksEmail = /^\S+@\S+\.\S+$/.test(query);
-    if (looksEmail && !matches.some(c => (c.email || '').toLowerCase() === query)) {
+    // "＋ Crear contacto nuevo" sale para CUALQUIER texto sin match exacto (nombre o
+    // email) — antes solo aparecía si lo escrito YA parecía un email completo, así que
+    // escribir un nombre primero (lo natural) no mostraba ninguna forma de crear.
+    if (query.length >= 2 && !matches.some(c => (c.email || '').toLowerCase() === queryLower)) {
       html += `<button type="button" class="lm-pick-item" style="border-style:dashed" onclick="LeadManagerModule._cmpNuevo('${esc(query).replace(/'/g, "\\'")}')"><span>＋ Crear contacto nuevo</span><span class="lm-pick-est">${esc(query)}</span></button>`;
     }
-    box.innerHTML = html || `<div class="lm-pick-empty" style="padding:10px 4px">${query.includes('@') ? 'Escribe el email completo para crear un contacto nuevo.' : 'Sin resultados entre los contactos de este cliente.'}</div>`;
+    box.innerHTML = html || `<div class="lm-pick-empty" style="padding:10px 4px">Sin resultados entre los contactos de este cliente.</div>`;
   }
   function _cmpElegir(id) {
     const c = _contacts.find(x => x.id === id); if (!c) return;
@@ -19437,13 +19440,18 @@ ${foot}
     const results = $('cmp-results'); if (results) results.innerHTML = '';
     _cmpPreviewUpdate();
   }
-  function _cmpNuevo(email) {
+  function _cmpNuevo(texto) {
     $('cmp-buscar').style.display = 'none';
     $('cmp-results').innerHTML = '';
     const sel = $('cmp-selected'); if (sel) { sel.style.display = 'none'; sel.dataset.contactId = ''; }
     const wrap = $('cmp-newwrap'); wrap.style.display = '';
-    const emailInp = $('cmp-new-email'); if (emailInp) emailInp.value = email;
-    setTimeout(() => $('cmp-new-nombre')?.focus(), 30);
+    // Lo que escribió puede ser un email completo o solo un nombre — cada uno va a su
+    // campo, y el foco pasa al OTRO (el que todavía le falta llenar).
+    const looksEmail = /^\S+@\S+\.\S+$/.test(texto);
+    const emailInp = $('cmp-new-email'), nombreInp = $('cmp-new-nombre');
+    if (looksEmail) { if (emailInp) emailInp.value = texto; }
+    else if (nombreInp) nombreInp.value = texto;
+    setTimeout(() => (looksEmail ? nombreInp : emailInp)?.focus(), 30);
     _cmpPreviewUpdate();
   }
   function _cmpNuevoCancel() {
