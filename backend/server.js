@@ -8876,6 +8876,30 @@ app.get('/api/timer/today', requireAuthOrToken, async (req, res) => {
 
 // GET /api/timer/entries?start=&end=  — entries COMPLETOS (con metadata) en un rango
 // arbitrario; alimenta la vista de Time Tracking por Día/Semana/Mes/Personalizado.
+// Overlap, no solo "empezó dentro": una sesión iniciada antes de $start pero que sigue
+// corriendo hasta después (p.ej. cruza medianoche Lima) debe contarse en AMBAS ventanas
+// que toca, con su porción real recortada — si no, un lado la pierde por completo y el
+// otro se queda con más de lo que en verdad ocurrió ahí (bug reportado 2026-08-26).
+function _clipTimerEntries(rows, start, end) {
+  const rangeStart = new Date(start), rangeEnd = new Date(end);
+  return rows.map(row => {
+    const s0 = new Date(row.started_at);
+    const e0 = row.ended_at ? new Date(row.ended_at) : null;
+    const s = s0 < rangeStart ? rangeStart : s0;
+    const e = (e0 && e0 > rangeEnd) ? rangeEnd : e0;
+    if (s.getTime() === s0.getTime() && (!e0 || e.getTime() === e0.getTime())) return row;
+    const origMs = e0 ? (e0 - s0) : null;
+    const clippedMs = e ? (e - s) : null;
+    const frac = (origMs && clippedMs != null && origMs > 0) ? clippedMs / origMs : 1;
+    return {
+      ...row,
+      started_at: s.toISOString(),
+      ended_at: e ? e.toISOString() : row.ended_at,
+      duration_s: e ? Math.round((row.duration_s || 0) * frac) : row.duration_s,
+      active_s: e ? Math.round((row.active_s || 0) * frac) : row.active_s,
+    };
+  });
+}
 app.get('/api/timer/entries', requireAuth, async (req, res) => {
   try {
     const uid = req.user.id;
@@ -8894,6 +8918,7 @@ app.get('/api/timer/entries', requireAuth, async (req, res) => {
        LEFT JOIN tasks t     ON t.id = te.task_id
        LEFT JOIN projects p  ON p.id = t.project_id
        LEFT JOIN clients c   ON c.id = p.client_id`;
+    const overlapClause = 'te.started_at < $3 AND (te.ended_at IS NULL OR te.ended_at > $2)';
 
     // Ver el detalle de OTRO miembro (o de todo el equipo): solo admin (owner o admin/manager).
     if (member && member !== 'me') {
@@ -8909,8 +8934,8 @@ app.get('/api/timer/entries', requireAuth, async (req, res) => {
       if (member === 'all') {
         const r = await pool.query(
           `${sel} WHERE te.user_id IN (SELECT id FROM users WHERE workspace_id=$1 OR id=$1)
-             AND te.started_at >= $2 AND te.started_at <= $3 ORDER BY te.started_at DESC`, [wid, start, end]);
-        return res.json(r.rows);
+             AND ${overlapClause} ORDER BY te.started_at DESC`, [wid, start, end]);
+        return res.json(_clipTimerEntries(r.rows, start, end));
       }
       // resolver nombre del miembro → user_id dentro del workspace
       const mr = await pool.query(
@@ -8920,15 +8945,15 @@ app.get('/api/timer/entries', requireAuth, async (req, res) => {
            AND lower(COALESCE(tm.nombre, u.name, u.email)) = lower($2) LIMIT 1`, [wid, member]);
       if (!mr.rows.length) return res.json([]);
       const r = await pool.query(
-        `${sel} WHERE te.user_id=$1 AND te.started_at >= $2 AND te.started_at <= $3 ORDER BY te.started_at DESC`,
+        `${sel} WHERE te.user_id=$1 AND ${overlapClause} ORDER BY te.started_at DESC`,
         [mr.rows[0].id, start, end]);
-      return res.json(r.rows);
+      return res.json(_clipTimerEntries(r.rows, start, end));
     }
 
     const r = await pool.query(
-      `${sel} WHERE te.user_id=$1 AND te.started_at >= $2 AND te.started_at <= $3 ORDER BY te.started_at DESC`,
+      `${sel} WHERE te.user_id=$1 AND ${overlapClause} ORDER BY te.started_at DESC`,
       [uid, start, end]);
-    res.json(r.rows);
+    res.json(_clipTimerEntries(r.rows, start, end));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -8960,6 +8985,44 @@ app.post('/api/timer/ingest', requireAuthOrToken, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Lima (Perú) es UTC-5 fijo, sin horario de verano. DATE(started_at) en Postgres trunca
+// según el timezone de la SESIÓN de la conexión (Supabase = UTC por defecto), no Lima —
+// una entrada iniciada a las 20:00 Lima ya cae en el día UTC siguiente aunque no cruce
+// medianoche real. Bug reportado por Jenny 2026-08-26: paró una tarea a las 00:43 Lima
+// y el reparto ayer/hoy no cuadraba. Fix: traer started_at/ended_at crudos (pg los da
+// como instantes UTC correctos sin importar el timezone de sesión) y repartir cada
+// segmento proporcionalmente sobre los días de calendario LIMA que realmente ocupa.
+const LIMA_OFFSET_MS = 5 * 60 * 60 * 1000;
+function _limaDayKey(d) { return new Date(d.getTime() - LIMA_OFFSET_MS).toISOString().split('T')[0]; }
+function _nextLimaMidnightUtc(d) {
+  const lima = new Date(d.getTime() - LIMA_OFFSET_MS);
+  const nextNaive = Date.UTC(lima.getUTCFullYear(), lima.getUTCMonth(), lima.getUTCDate() + 1);
+  return new Date(nextNaive + LIMA_OFFSET_MS);
+}
+function _splitEntriesByLimaDay(rows, { withActive = false } = {}) {
+  const byDay = new Map();
+  for (const row of rows) {
+    const s = new Date(row.started_at), e = new Date(row.ended_at);
+    const totalMs = e - s;
+    const totalDur = Number(row.duration_s) || 0;
+    if (!(totalMs > 0) || totalDur <= 0) continue;
+    const totalActive = withActive ? (Number(row.active_s) || 0) : 0;
+    let cursor = s;
+    while (cursor < e) {
+      const boundary = _nextLimaMidnightUtc(cursor);
+      const segEnd = boundary < e ? boundary : e;
+      const frac = (segEnd - cursor) / totalMs;
+      const key = _limaDayKey(cursor);
+      const cur = byDay.get(key) || { duration_s: 0, active_s: 0 };
+      cur.duration_s += totalDur * frac;
+      if (withActive) cur.active_s += totalActive * frac;
+      byDay.set(key, cur);
+      cursor = segEnd;
+    }
+  }
+  return byDay;
+}
+
 // GET /api/timer/report?start=&end=
 app.get('/api/timer/report', requireAuth, async (req, res) => {
   try {
@@ -8967,17 +9030,16 @@ app.get('/api/timer/report', requireAuth, async (req, res) => {
     const { start, end } = req.query;
     if (!start || !end) return res.status(400).json({ error: 'start and end required' });
 
-    const [totalR, byDayR, byTaskR] = await Promise.all([
+    const [totalR, entriesR, byTaskR] = await Promise.all([
       pool.query(
         `SELECT COALESCE(SUM(duration_s),0) AS total_s FROM time_entries
          WHERE user_id=$1 AND started_at>=$2 AND started_at<=$3 AND ended_at IS NOT NULL`,
         [uid, start, end]),
       pool.query(
-        `SELECT DATE(started_at) AS day, COALESCE(SUM(duration_s),0) AS duration_s,
-                COALESCE(SUM(active_s),0) AS active_s
+        `SELECT started_at, ended_at, duration_s, active_s
          FROM time_entries
-         WHERE user_id=$1 AND started_at>=$2 AND started_at<=$3 AND ended_at IS NOT NULL
-         GROUP BY day ORDER BY day`, [uid, start, end]),
+         WHERE user_id=$1 AND started_at>=$2 AND started_at<=$3 AND ended_at IS NOT NULL`,
+        [uid, start, end]),
       pool.query(
         `SELECT task_id, task_titulo, COALESCE(SUM(duration_s),0) AS total_s,
                 COALESCE(SUM(active_s),0) AS active_s
@@ -8989,15 +9051,14 @@ app.get('/api/timer/report', requireAuth, async (req, res) => {
 
     // Build full 7-day array (Mon-Sun)
     const startDate = new Date(start);
-    const byDayMap = {};
-    for (const row of byDayR.rows) byDayMap[row.day.toISOString().split('T')[0]] = row;
-    const today = new Date().toISOString().split('T')[0];
+    const byDayMap = _splitEntriesByLimaDay(entriesR.rows, { withActive: true });
+    const today = _limaDayKey(new Date());
     const byDay = Array.from({ length: 7 }, (_, i) => {
       const d = new Date(startDate.getTime() + i * 86400000);
       const key = d.toISOString().split('T')[0];
-      const row = byDayMap[key] || {};
-      return { day: key, duration_s: Number(row.duration_s || 0),
-               active_s: Number(row.active_s || 0), isToday: key === today };
+      const row = byDayMap.get(key) || {};
+      return { day: key, duration_s: Math.round(row.duration_s || 0),
+               active_s: Math.round(row.active_s || 0), isToday: key === today };
     });
 
     res.json({
@@ -9020,30 +9081,14 @@ app.get('/api/timer/daily', requireAuth, async (req, res) => {
     // Las fuentes de EVIDENCIA (extensión/agente) confirman actividad DENTRO de las sesiones
     // manuales; sumarlas duplicaría el mismo minuto (bug 2026-07-13: 4h34m reales → 7h39m).
     const r = await pool.query(
-      `SELECT DATE(started_at) AS day, COALESCE(SUM(duration_s),0) AS duration_s
+      `SELECT started_at, ended_at, duration_s
        FROM time_entries
        WHERE user_id=$1 AND started_at>=$2 AND started_at<=$3 AND ended_at IS NOT NULL${activeClause}
-         AND COALESCE(source,'manual_timer') NOT IN ('browser_extension','desktop_agent')
-       GROUP BY day ORDER BY day`, [uid, start, end]);
-    res.json(r.rows.map(row => ({ day: row.day.toISOString().split('T')[0], duration_s: Number(row.duration_s) })));
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// GET /api/timer/entries?start=&end=  — individual entries for calendar
-app.get('/api/timer/entries', requireAuth, async (req, res) => {
-  try {
-    const uid = req.user.id;
-    const { start, end } = req.query;
-    if (!start || !end) return res.status(400).json({ error: 'start and end required' });
-    const r = await pool.query(
-      `SELECT id, task_id, task_titulo, project_nombre,
-              started_at, ended_at, duration_s, active_s, notes
-       FROM time_entries
-       WHERE user_id=$1 AND started_at>=$2 AND started_at<$3
-       ORDER BY started_at ASC`,
-      [uid, start, end]
-    );
-    res.json(r.rows);
+         AND COALESCE(source,'manual_timer') NOT IN ('browser_extension','desktop_agent')`, [uid, start, end]);
+    const byDay = _splitEntriesByLimaDay(r.rows);
+    res.json([...byDay.entries()]
+      .map(([day, v]) => ({ day, duration_s: Math.round(v.duration_s) }))
+      .sort((a, b) => a.day.localeCompare(b.day)));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

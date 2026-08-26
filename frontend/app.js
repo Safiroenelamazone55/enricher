@@ -30488,7 +30488,18 @@ const TimerModule = (() => {
         const bs = _startOfDay(cur);
         const be = range.bucket === 'week' ? _endOfDay(new Date(bs.getTime() + 6 * 86400000)) : _endOfDay(cur);
         let sum = 0;
-        countable.forEach(e => { const t = new Date(e.started_at); if (t >= bs && t <= be) sum += _ttdDur(e, now); });
+        // Reparte proporcionalmente por tiempo real transcurrido, no por dónde arrancó
+        // la sesión — una sesión que cruza medianoche debe sumar a AMBOS días (bug
+        // reportado 2026-08-26: 66min de una sola sesión se contaban enteros en un
+        // solo día, dejando el otro con menos de lo real).
+        countable.forEach(e => {
+          const s = new Date(e.started_at), en = e.ended_at ? new Date(e.ended_at) : now;
+          const totalMs = en - s;
+          if (!(totalMs > 0)) return;
+          const ovStart = s < bs ? bs : s, ovEnd = en > be ? be : en;
+          if (ovEnd <= ovStart) return;
+          sum += _ttdDur(e, now) * ((ovEnd - ovStart) / totalMs);
+        });
         const lbl = range.bucket === 'week' ? `${bs.getDate()}/${bs.getMonth() + 1}`
                   : (_ttPeriod === 'week' ? days[(bs.getDay() + 6) % 7] : String(bs.getDate()));
         buckets.push({ sum, lbl, isToday: bs.getTime() === todayKey });
