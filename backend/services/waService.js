@@ -145,6 +145,22 @@ async function _normalizarLid(pool, sock, connId) {
         `SELECT 1 FROM wa_contacts WHERE connection_id=$1 AND jid=$2`, [connId, real]);
       if (existente) await pool.query(`DELETE FROM wa_contacts WHERE connection_id=$1 AND jid=$2`, [connId, lid]);
       else await pool.query(`UPDATE wa_contacts SET jid=$1 WHERE connection_id=$2 AND jid=$3`, [real, connId, lid]);
+      // Si ya se etiquetó/fijó/asignó/anotó el chat ANTES de que llegara el mapeo (el
+      // watchdog reintenta cada 3 min, no es instantáneo), esas filas quedaban huérfanas
+      // colgando del @lid viejo — se migran al jid real, sin pisar nada si el real ya
+      // tenía su propio meta/tag (entonces se descarta el del @lid, no se sobreescribe).
+      await pool.query(
+        `INSERT INTO wa_chat_meta (connection_id, chat_jid, pinned, snooze_until, asignado_a, estado_conv)
+         SELECT connection_id, $1, pinned, snooze_until, asignado_a, estado_conv FROM wa_chat_meta
+          WHERE connection_id=$2 AND chat_jid=$3
+         ON CONFLICT (connection_id, chat_jid) DO NOTHING`, [real, connId, lid]);
+      await pool.query(`DELETE FROM wa_chat_meta WHERE connection_id=$1 AND chat_jid=$2`, [connId, lid]);
+      await pool.query(
+        `INSERT INTO wa_chat_tags (connection_id, chat_jid, tag_id)
+         SELECT connection_id, $1, tag_id FROM wa_chat_tags WHERE connection_id=$2 AND chat_jid=$3
+         ON CONFLICT (connection_id, chat_jid, tag_id) DO NOTHING`, [real, connId, lid]);
+      await pool.query(`DELETE FROM wa_chat_tags WHERE connection_id=$1 AND chat_jid=$2`, [connId, lid]);
+      await pool.query(`UPDATE wa_chat_notes SET chat_jid=$1 WHERE connection_id=$2 AND chat_jid=$3`, [real, connId, lid]);
       resueltos++;
     }
     if (resueltos) console.log(`[wa] conexión ${connId}: ${resueltos}/${rows.length} @lid traducidos al número real`);
@@ -427,11 +443,22 @@ let _tickerProgramados = null;
 async function _watchdogTick(pool) {
   for (const [id, sock] of _socks) {
     try {
-      if (sock?.ws?.isOpen) continue; // undefined también se salta — no arriesgar un false positive
-      console.warn(`[wa] watchdog: conexión ${id} tiene el socket muerto — forzando reconexión`);
-      _socks.delete(id);
-      try { sock.end(new Error('watchdog: socket no está abierto')); } catch (_) {}
-      setTimeout(() => iniciar(pool, id).catch(e => console.warn(`[wa] watchdog reconectar ${id}:`, e.message)), 1000);
+      if (!sock?.ws?.isOpen) { // undefined también entra acá — no arriesgar un false positive de "vivo"
+        console.warn(`[wa] watchdog: conexión ${id} tiene el socket muerto — forzando reconexión`);
+        _socks.delete(id);
+        try { sock.end(new Error('watchdog: socket no está abierto')); } catch (_) {}
+        setTimeout(() => iniciar(pool, id).catch(e => console.warn(`[wa] watchdog reconectar ${id}:`, e.message)), 1000);
+        continue;
+      }
+      // _normalizarLid antes solo corría al ABRIR la conexión — un @lid que llegó sin
+      // mapeo todavía (WhatsApp lo manda con algo de retraso) se quedaba huérfano para
+      // siempre mientras la conexión siguiera viva días sin reconectar: un contacto YA
+      // asignado aparecía como chat NUEVO en "Sin asignar" cada vez que WhatsApp le
+      // enrutaba un mensaje por LID en vez de por el número real (bug reportado por
+      // Jenny 2026-08-26: la respuesta de un contacto llegó como chat separado, sin
+      // asignar, aunque el hilo real ya estaba asignado a ella). Reintentar cada 3 min
+      // en cada conexión viva hace que se auto-corrija solo, sin esperar un reconnect.
+      _normalizarLid(pool, sock, id).catch(e => console.warn(`[wa] watchdog normalizarLid ${id}:`, e.message));
     } catch (e) { console.warn(`[wa] watchdog ${id}:`, e.message); }
   }
 }
