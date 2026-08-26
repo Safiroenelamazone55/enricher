@@ -15411,6 +15411,8 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .wa-accts-dot--on  { background: #22C55E; }
 .wa-accts-dot--qr  { background: #F59E0B; }
 .wa-accts-dot--off { background: var(--muted, #918C85); }
+.wa-accts-alert { display: inline-flex; align-items: center; justify-content: center; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: #DC2626; color: #fff; font-size: .62rem; font-weight: 700; flex-shrink: 0; }
+.wa-accts-alert.hidden { display: none; }
 
 /* Fila de cuenta desconectada en el popover: nombre+estado clicable a la izquierda,
    boton de eliminar aparte a la derecha (no se puede anidar <button> en <button>). */

@@ -26703,6 +26703,12 @@ const WaChatModule = (() => {
   let _conn     = null;   // { id, estado, numero, qr_actual } — la conexión ACTIVA (seleccionada)
   let _conns    = [];     // todas las conexiones de Operaciones (multi-cuenta)
   let _acctPopClose = null;
+  // Sin leídos POR conexión (bug reportado 2026-08-26: el mismo contacto escribió a DOS
+  // números conectados — uno ya asignado a Jenny, el otro sin asignar — y el mensaje nuevo
+  // pasó desapercibido porque el badge global solo miraba la conexión activa. Se llenan en
+  // refreshBadge() y alimentan tanto el badge del nav como la alerta del selector de cuenta.
+  let _connUnread = {};        // { [connId]: no_leidos }
+  let _otherConnsUnread = 0;   // suma de _connUnread de TODAS menos la activa
   let _chats    = [];
   let _chatAct  = null;   // jid del chat abierto
   let _chatActGrupo = false;
@@ -26776,6 +26782,15 @@ const WaChatModule = (() => {
     const dotCls = _conn.estado === 'conectado' ? 'on' : _conn.estado === 'esperando_qr' ? 'qr' : 'off';
     if (dot)   dot.className = 'wa-accts-dot wa-accts-dot--' + dotCls;
     if (label) label.textContent = _conn.numero ? `+${_conn.numero}` : (_conn.nombre || 'WhatsApp');
+    // Alerta si OTRA cuenta (no la que se está viendo) tiene mensajes sin leer — sin esto
+    // es invisible que otro número también recibió algo mientras se mira solo este.
+    const alert = $$('wa-acct-alert');
+    if (alert) {
+      const n = _otherConnsUnread;
+      alert.textContent = n > 99 ? '99+' : String(n);
+      alert.classList.toggle('hidden', !n);
+      alert.title = n ? `${n} sin leer en otra(s) cuenta(s) — clic para cambiar` : '';
+    }
   }
 
   function _selectConn(id) {
@@ -26783,6 +26798,9 @@ const WaChatModule = (() => {
     if (!c) return;
     _conn = c;
     try { localStorage.setItem('wa_selected_conn_id', String(id)); } catch (_) {}
+    // Recalcula ya mismo (sin esperar el próximo tick de refreshBadge) para que la
+    // alerta deje de contar la cuenta a la que se acaba de cambiar.
+    _otherConnsUnread = _conns.reduce((a, x) => a + (x.id === id ? 0 : (_connUnread[x.id] || 0)), 0);
     _pintaBarraCuentas();
     _aplicarEstado();
   }
@@ -26797,10 +26815,12 @@ const WaChatModule = (() => {
       const dotCls = c.estado === 'conectado' ? 'on' : c.estado === 'esperando_qr' ? 'qr' : 'off';
       const label  = c.numero ? `+${c.numero}` : (c.nombre || 'WhatsApp');
       const sub    = c.estado === 'conectado' ? '' : c.estado === 'esperando_qr' ? ' · QR pendiente' : ' · Desconectado';
-      const check  = c.id === _conn?.id ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" style="margin-left:auto"><polyline points="20 6 9 17 4 12"/></svg>' : '';
+      const unread = _connUnread[c.id] || 0;
+      const unreadHtml = unread ? `<span class="wa-accts-alert" style="margin-left:auto">${unread > 99 ? '99+' : unread}</span>` : '';
+      const check  = c.id === _conn?.id ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" style="margin-left:${unread ? '6px' : 'auto'}"><polyline points="20 6 9 17 4 12"/></svg>` : '';
       if (c.estado !== 'desconectado') {
         return `<button class="chat-ctx-item" onclick="WaChatModule._pickConn(${c.id})">
-          <span class="wa-accts-dot wa-accts-dot--${dotCls}"></span>${esc(label)}${sub}${check}
+          <span class="wa-accts-dot wa-accts-dot--${dotCls}"></span>${esc(label)}${sub}${unreadHtml}${check}
         </button>`;
       }
       // Desconectada: se puede reconectar (elegirla) o quitarla de la lista.
@@ -27515,29 +27535,46 @@ const WaChatModule = (() => {
   }
 
   function _actualizarBadgeNav() {
-    const total = _chats.reduce((a, c) => a + (+c.no_leidos || 0), 0);
+    // Total = lo que se ve ahora mismo de ESTA conexión + lo último que refreshBadge()
+    // supo de las demás — así el nav no "baja" el número solo porque se abrió un chat
+    // de la conexión activa mientras otra conexión sigue con mensajes sin leer.
+    const total = _chats.reduce((a, c) => a + (+c.no_leidos || 0), 0) + _otherConnsUnread;
     const badge = document.getElementById('wa-badge');
     if (!badge) return;
     badge.textContent = total > 99 ? '99+' : (total || '');
     badge.classList.toggle('hidden', !total);
   }
 
-  // Refresco global del contador (aunque la pestaña WhatsApp no esté abierta) — mismo
-  // criterio que SlackChat.refreshMiniBadge para el ícono de Chat.
+  // Refresco global del contador (aunque la pestaña WhatsApp no esté abierta) — recorre
+  // TODAS las conexiones conectadas, no solo la activa. Bug 2026-08-26: un contacto le
+  // escribió a DOS números conectados; el badge solo miraba uno y el mensaje nuevo del
+  // otro número pasó desapercibido. Mismo criterio que SlackChat.refreshMiniBadge para
+  // el ícono de Chat, extendido a multi-cuenta.
   async function refreshBadge() {
     try {
-      let conn = _conn;
-      if (!conn) {
-        const r = await apiFetch(`${API}/wa/connections`);
-        const rows = r.ok ? await r.json() : [];
-        conn = rows.find(c => c.estado === 'conectado') || null;
-      }
-      if (!conn) { const b = document.getElementById('wa-badge'); if (b) b.classList.add('hidden'); return; }
-      const r2 = await apiFetch(`${API}/wa/connections/${conn.id}/chats`);
-      const chats = r2.ok ? await r2.json() : [];
-      const total = chats.reduce((a, c) => a + (+c.no_leidos || 0), 0);
+      const r = await apiFetch(`${API}/wa/connections`);
+      const conns = r.ok ? await r.json() : [];
+      const activas = conns.filter(c => c.estado === 'conectado');
       const badge = document.getElementById('wa-badge');
+      if (!activas.length) {
+        if (badge) badge.classList.add('hidden');
+        _connUnread = {}; _otherConnsUnread = 0;
+        _pintaBarraCuentas();
+        return;
+      }
+      let total = 0;
+      await Promise.all(activas.map(async c => {
+        try {
+          const r2 = await apiFetch(`${API}/wa/connections/${c.id}/chats`);
+          const chats = r2.ok ? await r2.json() : [];
+          const n = chats.reduce((a, x) => a + (+x.no_leidos || 0), 0);
+          _connUnread[c.id] = n;
+          total += n;
+        } catch (_) { /* esta conexión no respondió — no cuenta este tick */ }
+      }));
+      _otherConnsUnread = activas.reduce((a, c) => a + (c.id === _conn?.id ? 0 : (_connUnread[c.id] || 0)), 0);
       if (badge) { badge.textContent = total > 99 ? '99+' : (total || ''); badge.classList.toggle('hidden', !total); }
+      _pintaBarraCuentas();
     } catch (_) { /* se reintenta en el próximo tick */ }
   }
 
