@@ -19344,6 +19344,7 @@ ${foot}
             </div>
           </div>
         </div>
+        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">CC (opcional)</span><input class="form-input" id="cmp-cc" placeholder="Separa varios con comas…" autocomplete="off" oninput="LeadManagerModule._cmpPreviewUpdate()"></label>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Secuencia (opcional)</span>
           <div style="display:flex;gap:8px">
             <select class="form-input" id="cmp-seq" style="flex:1"><option value="">— Sin secuencia —</option></select>
@@ -19357,6 +19358,7 @@ ${foot}
           <div class="cmp-preview" id="cmp-preview">
             <div class="cmp-preview__hd">
               <div><b>Para</b> <span id="cmp-prev-to">—</span></div>
+              <div id="cmp-prev-cc-row" style="display:none"><b>CC</b> <span id="cmp-prev-cc">—</span></div>
               <div><b>Asunto</b> <span id="cmp-prev-asunto">(sin asunto)</span></div>
             </div>
             <div class="cmp-preview__body" id="cmp-prev-body"><span class="cmp-preview__ph">Escribe el mensaje para ver la vista previa…</span></div>
@@ -19553,8 +19555,15 @@ ${foot}
   }
   // Vista previa en vivo: mismo formato exacto que /lm/inbox/reply arma para el envío
   // real (esc + saltos de línea a <br>) — lo que se ve acá es lo que le llega.
+  function _cmpCcList() {
+    return ($('cmp-cc')?.value || '').split(/[,;]/).map(x => x.trim()).filter(x => x.includes('@'));
+  }
   function _cmpPreviewUpdate() {
     const toEl = $('cmp-prev-to'); if (toEl) toEl.textContent = _cmpCurrentEmail() || '—';
+    const ccList = _cmpCcList();
+    const ccRow = $('cmp-prev-cc-row'), ccEl = $('cmp-prev-cc');
+    if (ccRow) ccRow.style.display = ccList.length ? '' : 'none';
+    if (ccEl) ccEl.textContent = ccList.join(', ');
     const asuntoEl = $('cmp-prev-asunto'); if (asuntoEl) asuntoEl.textContent = $('cmp-asunto')?.value.trim() || '(sin asunto)';
     const bodyEl = $('cmp-prev-body');
     if (bodyEl) {
@@ -19639,6 +19648,8 @@ ${foot}
         if (!r.ok) { const d = await r.json().catch(() => ({})); showBanner('Contacto listo, pero no se pudo enrolar: ' + (d.error || ''), 'info'); }
       }
       const replyBody = { contact_id: contactId, asunto, cuerpo };
+      const ccList = _cmpCcList();
+      if (ccList.length) replyBody.cc = ccList;
       if (schedIso) replyBody.scheduled_at = schedIso;
       const r2 = await apiFetch(`${API}/lm/inbox/reply`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(replyBody) });
       const d2 = await r2.json();
