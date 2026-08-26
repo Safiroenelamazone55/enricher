@@ -15508,9 +15508,27 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .wa-chat-item--snoozed { opacity: .6; }
 
 /* Filtros de la lista (asignado / estado) — arriba del listado de chats */
-.wa-filters { padding: 8px 10px 6px; border-bottom: 1px solid var(--border); flex-shrink: 0; display: flex; flex-direction: column; gap: 6px; }
-.wa-filters__row { display: flex; flex-wrap: wrap; gap: 5px; }
-.wa-filter-pill { padding: 3px 9px; font-size: .68rem; }
+/* Compacto estilo Chatwoot: tabs subrayadas (Mías/Sin asignar/Todas) en una sola
+   línea + un botón de embudo aparte para Estado, que solo ocupa espacio si hay un
+   filtro puesto — antes eran 2 filas de píldoras que se comían media barra lateral. */
+.wa-filters { padding: 0 8px; border-bottom: 1px solid var(--border); flex-shrink: 0; display: flex; align-items: center; gap: 4px; }
+.wa-tabs { display: flex; align-items: center; gap: 14px; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.wa-tabs::-webkit-scrollbar { display: none; }
+.wa-tab {
+  flex-shrink: 0; padding: 9px 1px 7px; border: none; background: transparent; cursor: pointer;
+  font-family: inherit; font-size: .74rem; font-weight: 600; color: var(--muted, #918C85);
+  border-bottom: 2px solid transparent; white-space: nowrap; transition: color .12s, border-color .12s;
+}
+.wa-tab:hover { color: var(--text2, #6C6862); }
+.wa-tab.active { color: var(--brand, #007AFF); border-bottom-color: var(--brand, #007AFF); }
+.wa-tab-filter {
+  flex-shrink: 0; display: flex; align-items: center; gap: 4px;
+  padding: 5px 7px; border: none; background: transparent; color: var(--muted, #918C85);
+  border-radius: 6px; cursor: pointer; font-family: inherit; font-size: .7rem; font-weight: 700;
+  transition: background .12s, color .12s;
+}
+.wa-tab-filter:hover { background: var(--bg2, #F1EFEB); color: var(--text2, #6C6862); }
+.wa-tab-filter--active { background: var(--brand-ll, #F1EFEB); color: var(--brand, #007AFF); }
 
 /* Botón "⋯" por chat — hover-reveal, mismo criterio que el resto de la app */
 .wa-chat-item__more {

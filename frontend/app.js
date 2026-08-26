@@ -26647,13 +26647,51 @@ const WaChatModule = (() => {
 
   function setFiltroAsignado(val) {
     _filtroAsignado = val;
-    document.querySelectorAll('#wa-filters-asig .wa-filter-pill').forEach(b => b.classList.toggle('active', b.dataset.val === val));
+    document.querySelectorAll('#wa-filters-asig .wa-tab').forEach(b => b.classList.toggle('active', b.dataset.val === val));
     _pintaChats();
+  }
+
+  const _WA_ESTADO_FILTRO_LABEL = { todas: '', abierto: 'Abiertas', pendiente: 'Pendientes', resuelto: 'Resueltas' };
+  let _estadoFiltroPopClose = null;
+  function _pintaFiltroEstadoBtn() {
+    const btn = $$('wa-estado-filter-btn'), label = $$('wa-estado-filter-label');
+    if (!btn || !label) return;
+    label.textContent = _WA_ESTADO_FILTRO_LABEL[_filtroEstado] || '';
+    btn.classList.toggle('wa-tab-filter--active', _filtroEstado !== 'todas');
   }
   function setFiltroEstado(val) {
     _filtroEstado = val;
-    document.querySelectorAll('#wa-filters-estado .wa-filter-pill').forEach(b => b.classList.toggle('active', b.dataset.val === val));
+    if (_estadoFiltroPopClose) _estadoFiltroPopClose();
+    _pintaFiltroEstadoBtn();
     _pintaChats();
+  }
+  // Popover del embudo de Estado — mismo patrón que abrirCuentasPop/abrirChatMenu,
+  // pero ocupa cero espacio permanente en la barra (solo el ícono + una etiqueta
+  // corta cuando hay algo distinto de "Todas").
+  function abrirFiltroEstado(ev) {
+    ev.stopPropagation();
+    if (_estadoFiltroPopClose) { _estadoFiltroPopClose(); return; }
+    const menu = document.createElement('div');
+    menu.className = 'chat-ctx-menu';
+    menu.onclick = e => e.stopPropagation();
+    const opts = [
+      { val: 'todas', label: 'Todas' },
+      { val: 'abierto', label: 'Abiertas' },
+      { val: 'pendiente', label: 'Pendientes' },
+      { val: 'resuelto', label: 'Resueltas' },
+    ];
+    menu.innerHTML = opts.map(o => `
+      <button class="chat-ctx-item" onclick="WaChatModule.setFiltroEstado('${o.val}')">
+        ${o.label}${_filtroEstado === o.val ? '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" style="margin-left:auto"><polyline points="20 6 9 17 4 12"/></svg>' : ''}
+      </button>`).join('');
+    document.body.appendChild(menu);
+    const rect = ev.currentTarget.getBoundingClientRect();
+    const w = menu.offsetWidth || 160;
+    let left = rect.right - w; if (left < 8) left = 8;
+    menu.style.top = (rect.bottom + 6) + 'px';
+    menu.style.left = left + 'px';
+    _estadoFiltroPopClose = () => { menu.remove(); document.removeEventListener('click', _estadoFiltroPopClose); _estadoFiltroPopClose = null; };
+    setTimeout(() => document.addEventListener('click', _estadoFiltroPopClose), 0);
   }
   function _chatsFiltrados() {
     const _me = (window._authUser?.memberNombre || window._authUser?.name || '').toLowerCase();
@@ -26669,6 +26707,7 @@ const WaChatModule = (() => {
   function _pintaChats() {
     const box = $$('wa-chats');
     _actualizarBadgeNav();
+    _pintaFiltroEstadoBtn();
     if (!box) return;
     if (!_chats.length) {
       box.innerHTML = `<div class="chat-ch-empty">Todavía no hay conversaciones.<br>Escríbele a alguien desde tu teléfono para verlo aquí.</div>`;
@@ -27541,7 +27580,7 @@ const WaChatModule = (() => {
            abrirChatMenu, _chatMenuGoto, _toggleFijado, _toggleTag, _crearTag, _editarTag, _borrarTag,
            _snoozePreset, _snoozeCustom, _quitarSnooze, _abrirContacto, _cerrarContacto, _guardarNombreContacto,
            _asignarMiembro, _cambiarEstadoConv, _agregarNota, _borrarNota,
-           setFiltroAsignado, setFiltroEstado };
+           setFiltroAsignado, setFiltroEstado, abrirFiltroEstado };
 })();
 window.WaChatModule = WaChatModule;
 
