@@ -5260,21 +5260,21 @@ app.get('/api/lm/inbox/thread/:contactId', requireAuth, async (req, res) => {
     const { rows: msgs } = await pool.query(`
       SELECT * FROM (
         SELECT 'out' AS dir, m.id, m.asunto, m.cuerpo, COALESCE(m.sent_at, m.scheduled_at) AS at, m.estado, '' AS tipo,
-               COALESCE(s.nombre,'') AS seq_nombre, m.step_id, mb.email AS buzon
+               COALESCE(s.nombre,'') AS seq_nombre, m.step_id, mb.email AS buzon, COALESCE(m.cc_emails,'') AS cc_emails
           FROM lm_messages m
           LEFT JOIN sequences s ON s.id = m.sequence_id
           LEFT JOIN lm_mailboxes mb ON mb.id = m.mailbox_id
          WHERE m.user_id=$1 AND m.contact_id=$2 AND m.estado IN ('sent','replied','bounced','failed','scheduled')
         UNION ALL
-        SELECT 'in', im.id, im.asunto, im.cuerpo, im.received_at, '', im.tipo, '', NULL, im.from_email
+        SELECT 'in', im.id, im.asunto, im.cuerpo, im.received_at, '', im.tipo, '', NULL, im.from_email, ''
           FROM lm_inbox_messages im
          WHERE im.user_id=$1 AND im.contact_id=$2
         UNION ALL
-        SELECT 'note', n.id, '', n.texto, n.created_at, '', 'nota', '', NULL, n.autor
+        SELECT 'note', n.id, '', n.texto, n.created_at, '', 'nota', '', NULL, n.autor, ''
           FROM lm_notes n
          WHERE n.user_id=$1 AND n.contact_id=$2
         UNION ALL
-        SELECT 'fwd', f.id, f.asunto, f.cuerpo, f.sent_at, '', 'fwd', '', NULL, f.to_email
+        SELECT 'fwd', f.id, f.asunto, f.cuerpo, f.sent_at, '', 'fwd', '', NULL, f.to_email, ''
           FROM lm_forwards f
          WHERE f.user_id=$1 AND f.contact_id=$2
       ) t ORDER BY at ASC NULLS FIRST
@@ -5414,9 +5414,9 @@ app.post('/api/lm/inbox/reply', requireAuth, async (req, res) => {
       references: lastIn?.message_id || undefined,
     });
     const { rows: [msg] } = await pool.query(
-      `INSERT INTO lm_messages (user_id, contact_id, asunto, cuerpo, to_email, estado, sent_at, mailbox_id, smtp_message_id)
-       VALUES ($1,$2,$3,$4,$5,'sent',NOW(),$6,$7) RETURNING id, asunto, cuerpo, sent_at`,
-      [req.workspaceOwnerId, cid, asunto, cuerpo, to.join(', '), mb.id, sent.messageId || '']);
+      `INSERT INTO lm_messages (user_id, contact_id, asunto, cuerpo, to_email, estado, sent_at, mailbox_id, smtp_message_id, cc_emails)
+       VALUES ($1,$2,$3,$4,$5,'sent',NOW(),$6,$7,$8) RETURNING id, asunto, cuerpo, sent_at`,
+      [req.workspaceOwnerId, cid, asunto, cuerpo, to.join(', '), mb.id, sent.messageId || '', cc.join(', ')]);
     await pool.query(
       `INSERT INTO activities (user_id, contact_id, tipo, canal, nota, fecha, estado)
        VALUES ($1,$2,'email','email',$3,NOW(),'hecha')`,

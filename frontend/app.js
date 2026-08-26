@@ -18983,6 +18983,7 @@ ${foot}
       : (m.seq_nombre ? ` · ${esc(m.seq_nombre)}` : '') + (m.estado === 'failed' ? ' · FALLÓ' : '');
     return `<div class="ibx-m ${inMsg ? (m.tipo === 'bounce' ? 'ibx-m--reb' : m.tipo === 'equipo' ? 'ibx-m--team' : 'ibx-m--in') : 'ibx-m--out'}">
       <div class="ibx-m__meta">${esc(inMsg ? (m.buzon || '') : ('Tú · ' + (m.buzon || '')))}${tag} · ${when}</div>
+      ${!inMsg && m.cc_emails ? `<div class="ibx-m__subj" style="font-weight:400;color:var(--text-secondary)">CC: ${esc(m.cc_emails)}</div>` : ''}
       ${m.asunto ? `<div class="ibx-m__subj">${esc(m.asunto)}</div>` : ''}
       ${_ibBodyHtml(m.cuerpo)}
     </div>`;
