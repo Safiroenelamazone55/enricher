@@ -5219,17 +5219,18 @@ app.get('/api/lm/inbox/threads', requireAuth, async (req, res) => {
          GROUP BY contact_id
       ),
       outx AS (
-        SELECT contact_id, MAX(sent_at) AS last_out_at, COUNT(*)::int AS sent_count
-          FROM lm_messages
-         WHERE user_id=$1 AND estado IN ('sent','replied','bounced')
-         GROUP BY contact_id
+        SELECT m.contact_id, MAX(m.sent_at) AS last_out_at, COUNT(*)::int AS sent_count,
+               bool_or(EXISTS(SELECT 1 FROM lm_message_events e WHERE e.message_id=m.id AND e.tipo='open')) AS abierto
+          FROM lm_messages m
+         WHERE m.user_id=$1 AND m.estado IN ('sent','replied','bounced')
+         GROUP BY m.contact_id
       )
       SELECT k.id AS contact_id, k.nombre, k.apellido, k.email, k.cargo,
              COALESCE(NULLIF(k.empresa_nombre,''), co.nombre, '') AS empresa,
              k.estado AS pipeline, k.disposition, k.outbound_client_id,
              oc.nombre AS cliente, mb.email AS buzon,
              i.last_in_at, COALESCE(i.unread,0) AS unread, COALESCE(i.bounces,0) AS bounces,
-             o.last_out_at, COALESCE(o.sent_count,0) AS sent_count,
+             o.last_out_at, COALESCE(o.sent_count,0) AS sent_count, COALESCE(o.abierto,FALSE) AS abierto,
              li.asunto AS last_asunto, li.cuerpo AS last_snippet, li.tipo AS last_in_tipo
         FROM lm_contacts k
         LEFT JOIN inx  i ON i.contact_id = k.id
