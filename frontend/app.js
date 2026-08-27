@@ -10561,17 +10561,49 @@ const CalendarModule = (() => {
     const s = String(start).split('T')[0], e = String(end).split('T')[0];
     return ds >= s && ds <= e;
   }
+  // Planes de trabajo recurrente sin hora para un día — mismo cálculo que usa la banda
+  // "Por programar" de _grid(); se repite acá porque el popover puede abrirse/redibujarse
+  // fuera del ciclo de render de _grid() (ej. al programar uno y quedar el resto).
+  function _dpPlanesDelDia(ds) {
+    const d = new Date(ds + 'T00:00:00');
+    const dow = (d.getDay() + 6) % 7;
+    return _recurPlans().filter(p => ds >= p.start && (!p.end || ds <= p.end) && p.daysSet.has(dow))
+      .map(p => {
+        const ov = _planOv[`${p.id}|${ds}`];
+        if (ov && ov.skip) return null;
+        return { ...p, hour: ov && ov.hora != null ? +ov.hora : p.hour, perMin: ov && ov.minutos != null ? +ov.minutos : p.perMin };
+      }).filter(Boolean).filter(p => p.hour == null);
+  }
+  function _dpPlanRow(p, ds) {
+    const hrs = Math.round(p.perMin / 60 * 10) / 10;
+    return `<div class="cal2-dprow" style="--dp-accent:${_projColor(p.projectId)}">
+      <div class="cal2-dprow__main">
+        <span class="cal2-dprow__sp"></span><span class="cal2-dprow__dot"></span>
+        <div class="cal2-dprow__body">
+          <div class="cal2-dprow__t">${p.isSub ? '<span class="cal2-tblock__sub">SUB</span>' : ''}${esc(p.titulo)}</div>
+          <div class="cal2-dprow__meta"><span class="cal2-dptag cal2-dptag--task">Plan</span><span class="cal2-dpmeta">${p.weekly}h/sem ÷ ${p.nDays}${p.nDays === 1 ? ' día' : ' días'} = ${hrs}h hoy</span></div>
+        </div>
+        <button class="cal2-dpprog" onclick="event.stopPropagation();CalendarModule.openPlanPop(event,${p.id},'${ds}')">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 8 12 12 14.5 13.5"/></svg>Programar
+        </button>
+      </div>
+    </div>`;
+  }
   function _renderDayPop() {
     const listEl = $('cal-dp-list'); if (!listEl || !_dpDs) return;
     const ds = _dpDs;
     const scroll = listEl.scrollTop;
     const byId = {}; _tasks.forEach(t => byId[t.id] = t);
     let items = _tasks.filter(t => !t.prog_inicio && t.estado !== 'completado' && _taskAbiertaEse(t, ds, byId) && _taskForMember(t));
+    const plans = _dpQuery ? [] : _dpPlanesDelDia(ds);
     if (_dpQuery) items = items.filter(t => (t.titulo + ' ' + (t.project_nombre || '') + ' ' + (t.client_nombre || '')).toLowerCase().includes(_dpQuery));
-    if (!items.length) {
+    if (!items.length && !plans.length) {
       listEl.innerHTML = `<div class="cal2-dpop__empty">${_dpQuery ? 'Sin resultados para tu búsqueda.' : '🎉 Todo este día ya tiene su hora asignada.'}</div>`;
       return;
     }
+    const planHtml = plans.length
+      ? `<div class="cal2-dpgrp"><div class="cal2-dpgrp__hd"><span class="cal2-dptag cal2-dptag--proj">Planes</span><span class="cal2-dpgrp__nm">Trabajo recurrente sin hora</span></div>${plans.map(p => _dpPlanRow(p, ds)).join('')}</div>`
+      : '';
     const groups = {};
     for (const t of items) {
       const key = t.project_id || '_none';
@@ -10600,8 +10632,8 @@ const CalendarModule = (() => {
       html += `<div class="cal2-dpgrp">
         <div class="cal2-dpgrp__hd"><span class="cal2-dptag cal2-dptag--proj">Proyecto</span><span class="cal2-dpgrp__nm" title="${esc(g.nombre || '')}">${esc(g.nombre || 'Sin proyecto')}</span>${g.cliente ? `<span class="cal2-dpgrp__cli">· ${esc(g.cliente)}</span>` : ''}</div>${body}</div>`;
     }
-    if (!html) { listEl.innerHTML = `<div class="cal2-dpop__empty">No hay tareas por programar este día.</div>`; return; }
-    listEl.innerHTML = html;
+    if (!html && !planHtml) { listEl.innerHTML = `<div class="cal2-dpop__empty">No hay tareas por programar este día.</div>`; return; }
+    listEl.innerHTML = planHtml + html;
     listEl.scrollTop = scroll;
   }
 
@@ -10796,15 +10828,12 @@ const CalendarModule = (() => {
                    moved:  !!(ov && ov.hora != null) };
         }).filter(Boolean);
 
-      // Sin hora todavía → banda "Por programar" (no es un evento de todo el día: es trabajo
-      // que aún espera un hueco). Clic → elegir en qué subtarea trabajar y a qué hora.
-      const planFlexHtml = dayPlans.filter(p => p.hour == null).map(p => {
-        const hrs = Math.round(p.perMin / 60 * 10) / 10;
-        const col = _projColor(p.projectId);
-        return `<button class="cal2-planflex" style="--c:${col}" onclick="CalendarModule.openPlanPop(event,${p.id},'${ds}')"
-            title="${esc(p.titulo)} — ${p.weekly}h/semana ÷ ${p.nDays} ${p.nDays === 1 ? 'día' : 'días'} = ${hrs}h hoy · clic para darle hora o empezar">
-          <span class="cal2-planflex__t">${esc(p.titulo)}</span><span class="cal2-planflex__h">${hrs}h</span></button>`;
-      }).join('');
+      // Sin hora todavía = trabajo que aún espera un hueco (planes flexibles + tareas).
+      // Antes cada uno era su propio botón apilado — con 2-3 pendientes la banda "Por
+      // programar" crecía y esa altura se repetía en LOS 7 DÍAS (_syncBands iguala todas
+      // las columnas a la más alta). Ahora es un solo botón delgado con el total; el
+      // detalle vive en el popover (_renderDayPop ya lo arma completo con planes+tareas).
+      const nPlanesSinHora = dayPlans.filter(p => p.hour == null).length;
 
       const planBlocks = dayPlans.map(p => {
         if (p.hour == null || p.hour < GRID_S || p.hour >= GRID_E) return '';
@@ -10822,10 +10851,11 @@ const CalendarModule = (() => {
       }).join('');
 
       const dayNoHora = showTasks ? _tasks.filter(t => !t.prog_inicio && t.estado !== 'completado' && _taskAbiertaEse(t, ds, _byId) && _taskForMember(t) && _isSchedulable(t)) : [];
-      const noHoraPill = dayNoHora.length
-        ? `<button class="cal2-nohora" onclick="CalendarModule.openDayUnscheduled(event,'${ds}')" title="${dayNoHora.length} tarea(s) sin hora — clic para asignar">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 8 12 12 14.5 13.5"/></svg>
-            Sin hora · ${dayNoHora.length}
+      const nPorProgramar = nPlanesSinHora + dayNoHora.length;
+      const noHoraPill = nPorProgramar
+        ? `<button class="cal2-nohora" onclick="CalendarModule.openDayUnscheduled(event,'${ds}')" title="${nPorProgramar} por programar — clic para asignar hora">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></svg>
+            <span class="cal2-nohora__n">${nPorProgramar}</span>
           </button>`
         : '';
 
@@ -10923,7 +10953,7 @@ const CalendarModule = (() => {
           <span class="cal2-col__num${isToday ? ' cal2-col__num--today' : ''}">${d.getDate()}</span>
         </div>
         <div class="cal2-col__allday">${noTimeMtgs}${offChips}${gcalAllDay}</div>
-        <div class="cal2-col__todo">${planFlexHtml}${noHoraPill}</div>
+        <div class="cal2-col__todo">${noHoraPill}</div>
         <div class="cal2-col__body">${planBlocks}${taskBlocks}${timedBlocks}${gcalTimed}${timerBlocks}${nowLine}</div>
       </div>`;
     }).join('');
