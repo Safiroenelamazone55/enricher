@@ -116,12 +116,26 @@ async function _guardarMensaje(pool, sock, connId, m, esHistorial) {
   const replyToId = ctx?.stanzaId || '';
   const replyToTexto = ctx?.quotedMessage?.conversation || ctx?.quotedMessage?.extendedTextMessage?.text || '';
   const leido = esHistorial || !!m.key.fromMe;
-  try {
-    await pool.query(`
-      INSERT INTO wa_messages (connection_id, chat_jid, msg_id, from_me, nombre, texto, ts, reply_to_id, reply_to_texto, leido)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT (connection_id, msg_id) DO NOTHING`,
-      [connId, jid, m.key.id, !!m.key.fromMe, remitente, texto, ts, replyToId, replyToTexto, leido]);
-  } catch (e) { console.warn('[wa] guardar mensaje:', e.message); }
+  // Reportado por Jenny 2026-08-26: un mensaje entrante nunca llegó a la web aunque sí
+  // llegó al teléfono. Causa confirmada: la conexión a la base (Supabase) tiene cortes
+  // intermitentes ("Connection terminated due to connection timeout", visto en varios
+  // servicios del backend, no solo WhatsApp) — y este INSERT no reintentaba, así que un
+  // corte justo en ese instante perdía el mensaje para siempre (nunca vuelve a llegar
+  // por WhatsApp). ON CONFLICT DO NOTHING ya lo hace idempotente, así que reintentar es
+  // seguro — no genera duplicados si el primer intento en realidad sí se guardó.
+  for (let intento = 1; intento <= 3; intento++) {
+    try {
+      await pool.query(`
+        INSERT INTO wa_messages (connection_id, chat_jid, msg_id, from_me, nombre, texto, ts, reply_to_id, reply_to_texto, leido)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT (connection_id, msg_id) DO NOTHING`,
+        [connId, jid, m.key.id, !!m.key.fromMe, remitente, texto, ts, replyToId, replyToTexto, leido]);
+      break;
+    } catch (e) {
+      if (intento === 3) { console.warn(`[wa] guardar mensaje (falló tras ${intento} intentos):`, e.message); break; }
+      console.warn(`[wa] guardar mensaje, reintento ${intento}/3:`, e.message);
+      await new Promise(r => setTimeout(r, 500 * intento));
+    }
+  }
 }
 
 // Migración de una sola vez por conexión: los @lid que se guardaron ANTES de tener el
@@ -238,8 +252,10 @@ async function _connect(pool, id) {
             : `[wa] conexión ${id} no logró conectar tras ${MAX_REINTENTOS} intentos — se deja desconectada`);
         } else {
           // Cualquier otro corte (red, reinicio del servidor, etc.) se reintenta solo.
+          // Se loguea el código/motivo real (antes solo decía "se cortó" sin más detalle)
+          // — necesario para diagnosticar cortes frecuentes como el de 2026-08-26.
           _reintentos.set(id, intentos);
-          console.log(`[wa] conexión ${id} se cortó, reintentando… (${intentos}/${MAX_REINTENTOS})`);
+          console.log(`[wa] conexión ${id} se cortó, reintentando… (${intentos}/${MAX_REINTENTOS}) — código ${code || '?'}: ${lastDisconnect?.error?.message || 'sin detalle'}`);
           setTimeout(() => _connect(pool, id).catch(e => console.warn('[wa] reconectar:', e.message)), 3000);
         }
       }
@@ -284,7 +300,13 @@ async function _connect(pool, id) {
     try {
       const { chats, contacts, messages } = ev || {};
       console.log(`[wa] historial recibido (conexión ${id}): ${contacts?.length || 0} contactos, ${chats?.length || 0} chats, ${messages?.length || 0} mensajes`);
+      // Igual restricción que abajo para chats[]: un @lid sin mapeo todavía puede traer
+      // un nombre cruzado de otra identidad (confirmado en producción 2026-08-26 — un
+      // cliente real, Juan, quedó guardado como "NovaCentraX", el nombre del workspace,
+      // vía este mismo loop). Para @lid confiamos SOLO en el pushName de sus mensajes
+      // reales (_guardarMensaje) — nunca en el contacts[] del volcado de historial.
       for (const c of (contacts || [])) {
+        if (String(c.id || '').endsWith('@lid')) continue;
         const nombre = c.name || c.notify || c.verifiedName || '';
         await _guardarContacto(pool, sock, id, c.id, nombre);
       }
@@ -303,8 +325,9 @@ async function _connect(pool, id) {
 
   const _sincronizarContactos = async (contactos) => {
     for (const c of (contactos || [])) {
+      if (!c.id || String(c.id).endsWith('@lid')) continue; // ver comentario en messaging-history.set
       const nombre = c.name || c.notify || c.verifiedName || '';
-      if (c.id) await _guardarContacto(pool, sock, id, c.id, nombre);
+      await _guardarContacto(pool, sock, id, c.id, nombre);
     }
   };
   sock.ev.on('contacts.upsert', _sincronizarContactos);
