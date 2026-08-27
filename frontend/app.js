@@ -10544,12 +10544,29 @@ const CalendarModule = (() => {
   function closeDayPop() { if (_popClose) _popClose(); }
   function _dpSearch() { _dpQuery = ($('cal-dp-search')?.value || '').toLowerCase().trim(); _dpSched = null; _renderDayPop(); }
 
+  // Rango abierto (semanal): si la (sub)tarea no tiene un día puntual propio (prog_fecha,
+  // ni un deadline que caiga justo hoy) pero SÍ cae dentro de [fecha_inicio, deadline] del
+  // día que se está mirando — el caso típico de subtareas de una tarea semanal recurrente
+  // ("24–30 ago"), que heredan el deadline de fin de semana del padre sin fecha propia —
+  // se puede agendar igual ESE día. Antes solo el deadline exacto contaba como "su día",
+  // así que no aparecían en "hoy" hasta el último día de la semana (reportado 2026-08-27:
+  // subtareas de una tarea con cliente Emir no se podían agendar hoy).
+  function _taskAbiertaEse(t, ds, byId) {
+    if (_taskDay(t) === ds) return true;
+    if (t.prog_fecha) return false; // ya tiene un día puntual — si no calzó arriba, es otro día
+    const parent = t.parent_task_id ? byId[t.parent_task_id] : null;
+    const start = t.fecha_inicio || parent?.fecha_inicio;
+    const end = t.deadline || parent?.deadline;
+    if (!start || !end) return false;
+    const s = String(start).split('T')[0], e = String(end).split('T')[0];
+    return ds >= s && ds <= e;
+  }
   function _renderDayPop() {
     const listEl = $('cal-dp-list'); if (!listEl || !_dpDs) return;
     const ds = _dpDs;
     const scroll = listEl.scrollTop;
     const byId = {}; _tasks.forEach(t => byId[t.id] = t);
-    let items = _tasks.filter(t => !t.prog_inicio && t.estado !== 'completado' && _taskDay(t) === ds && _taskForMember(t));
+    let items = _tasks.filter(t => !t.prog_inicio && t.estado !== 'completado' && _taskAbiertaEse(t, ds, byId) && _taskForMember(t));
     if (_dpQuery) items = items.filter(t => (t.titulo + ' ' + (t.project_nombre || '') + ' ' + (t.client_nombre || '')).toLowerCase().includes(_dpQuery));
     if (!items.length) {
       listEl.innerHTML = `<div class="cal2-dpop__empty">${_dpQuery ? 'Sin resultados para tu búsqueda.' : '🎉 Todo este día ya tiene su hora asignada.'}</div>`;
@@ -10742,6 +10759,7 @@ const CalendarModule = (() => {
     const _personal = (_calMember === 'me');   // sesiones del cronómetro y Google Calendar son del usuario logueado
     const _parentIds = new Set(_tasks.filter(t => t.parent_task_id).map(t => t.parent_task_id));
     const _isSchedulable = t => !!t.parent_task_id || !_parentIds.has(t.id);   // agendable: subtarea o tarea-hoja (sin subtareas)
+    const _byId = {}; _tasks.forEach(t => _byId[t.id] = t);
 
     const cols = weekDays.map((day, i) => {
       const { d, ds, isToday } = day;
@@ -10803,7 +10821,7 @@ const CalendarModule = (() => {
         </div>`;
       }).join('');
 
-      const dayNoHora = showTasks ? _tasks.filter(t => !t.prog_inicio && t.estado !== 'completado' && _taskDay(t) === ds && _taskForMember(t) && _isSchedulable(t)) : [];
+      const dayNoHora = showTasks ? _tasks.filter(t => !t.prog_inicio && t.estado !== 'completado' && _taskAbiertaEse(t, ds, _byId) && _taskForMember(t) && _isSchedulable(t)) : [];
       const noHoraPill = dayNoHora.length
         ? `<button class="cal2-nohora" onclick="CalendarModule.openDayUnscheduled(event,'${ds}')" title="${dayNoHora.length} tarea(s) sin hora — clic para asignar">
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 8 12 12 14.5 13.5"/></svg>
