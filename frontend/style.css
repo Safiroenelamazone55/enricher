@@ -6837,7 +6837,7 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 .cal2-dprow { border-radius: 10px; transition: background .12s; }
 .cal2-dprow:hover { background: #FAF8F5; }
 .cal2-dprow--sched { background: #FAF8F5; }
-.cal2-dprow__main { display: flex; align-items: center; gap: 7px; padding: 4px 8px; }
+.cal2-dprow__main { display: flex; align-items: center; gap: 7px; padding: 3px 8px; }
 .cal2-dprow--parent .cal2-dprow__t { color: #6C6862; font-weight: 600; }
 .cal2-dprow--parent:hover { background: #FAF8F5; }
 .cal2-dprow--sub { margin-left: 18px; position: relative; }
@@ -6848,14 +6848,14 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 .cal2-dprow__sp { width: 18px; flex-shrink: 0; }
 .cal2-dprow__dot { width: 7px; height: 7px; border-radius: 50%; background: var(--dp-accent, #CFCAC3); flex-shrink: 0; }
 .cal2-dprow__body { flex: 1; min-width: 0; }
-.cal2-dprow__t { font-size: .75rem; font-weight: 600; color: #1F1D1B; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.25; }
-.cal2-dprow--sub .cal2-dprow__t { font-weight: 500; font-size: .7rem; color: #6C6862; }
-.cal2-dprow__meta { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; margin-top: 1px; }
-.cal2-dpmeta { font-size: .6rem; color: #B4AFA8; white-space: nowrap; }
+.cal2-dprow__t { font-size: .72rem; font-weight: 600; color: #1F1D1B; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.15; }
+.cal2-dprow--sub .cal2-dprow__t { font-weight: 500; font-size: .68rem; color: #6C6862; }
+.cal2-dprow__meta { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; margin-top: 0; }
+.cal2-dpmeta { font-size: .58rem; color: #B4AFA8; white-space: nowrap; }
 .cal2-dpmeta--ctx { color: #B4AFA8; }
 .cal2-dprio { font-size: .54rem; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: #DC2626; background: #EAE7E2; border-radius: 4px; padding: 1px 5px; }
 .cal2-dpsubs--collapsed { display: none; }
-.cal2-dpprog { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; height: 23px; padding: 0 9px; border-radius: 999px; border: 1px solid #F5D9A8; background: #FFF4E2; color: #B45309; font-family: inherit; font-size: .63rem; font-weight: 700; cursor: pointer; white-space: nowrap; transition: background .12s, color .12s, border-color .12s; }
+.cal2-dpprog { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; height: 21px; padding: 0 8px; border-radius: 999px; border: 1px solid #F5D9A8; background: #FFF4E2; color: #B45309; font-family: inherit; font-size: .61rem; font-weight: 700; cursor: pointer; white-space: nowrap; transition: background .12s, color .12s, border-color .12s; }
 .cal2-dpprog svg { width: 11px; height: 11px; }
 .cal2-dpprog:hover, .cal2-dpprog--on { background: var(--brand, #007AFF); color: #fff; border-color: var(--brand, #007AFF); }
 .cal2-dpsched { padding: 8px 10px 10px 30px; margin-top: 3px; border-top: 1px solid #F4E6D2; }
