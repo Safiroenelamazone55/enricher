@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="navy" x1="164" y1="512" x2="861" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#031E50"/>
+      <stop offset="0.5" stop-color="#001B3E"/>
+      <stop offset="1" stop-color="#062554"/>
+    </linearGradient>
+    <linearGradient id="teal" x1="377" y1="488" x2="649" y2="488" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#04B7B2"/>
+      <stop offset="0.48" stop-color="#00B9B1"/>
+      <stop offset="1" stop-color="#00C4AF"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Rombo exterior abierto en la base: trazado vectorial real -->
+  <path fill="url(#navy)" d="
+    M 506.5,153.8
+    Q 512,148.4 517.5,153.8
+    L 858.7,495.0
+    Q 864.4,500.7 858.7,506.4
+    L 571.4,793.7
+    L 571.4,682.0
+    L 753.3,500.7
+    L 512.0,259.4
+    L 270.7,500.7
+    L 453.8,683.8
+    L 453.8,793.3
+    L 165.7,506.8
+    Q 159.6,500.7 165.7,494.6
+    Z"/>
+
+  <!-- Rombo central -->
+  <path fill="url(#teal)" d="
+    M 506.7,351.8
+    Q 512.0,346.5 517.3,351.8
+    L 647.6,482.1
+    Q 653.0,487.5 647.6,492.9
+    L 517.3,623.2
+    Q 512.0,628.5 506.7,623.2
+    L 376.4,492.9
+    Q 371.0,487.5 376.4,482.1
+    Z"/>
+
+  <!-- Pie central -->
+  <path fill="url(#navy)" d="
+    M 474.6,623.7
+    L 506.2,655.3
+    Q 512.0,661.1 517.8,655.3
+    L 550.2,622.9
+    L 550.2,814.2
+    Q 550.2,818.0 547.5,820.7
+    L 518.2,850.0
+    Q 512.0,856.2 505.8,850.0
+    L 476.9,821.1
+    Q 474.6,818.8 474.6,815.5
+    Z"/>
+</svg>

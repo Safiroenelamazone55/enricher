@@ -849,7 +849,7 @@ body {
   align-items: center;
   padding: 34px 0 0 48px;
 }
-.auth-wall .login-logo svg { display: block; }
+.auth-wall .login-logo img { display: block; height: 80px; width: auto; }
 .auth-wall .login-panel-wrap {
   flex: 1;
   display: flex;
@@ -1138,7 +1138,7 @@ body {
 @media (max-height: 720px) and (min-width: 768px) {
   .auth-wall { --nc-field-h: 38px; --nc-button-h: 42px; }
   .auth-wall .login-topbar { padding: 12px 0 0 48px; }
-  .auth-wall .login-logo svg { width: 36px; height: 36px; }
+  .auth-wall .login-logo img { height: 44px; width: auto; }
   .auth-wall .login-panel-wrap { padding: 4px 40px 10px; }
   .auth-wall .login-title { font-size: 22px; margin: 0 0 2px; }
   .auth-wall .login-desc { font-size: 12px; margin: 0 0 8px; }
