@@ -810,9 +810,10 @@ body {
 .page-btn:disabled { opacity:.4; cursor:not-allowed }
 .page-info { font-size:.78rem; color:var(--muted) }
 
-/* ── Auth wall — same layout/visual language as novacentrax.com/acceso.html ──
-   This app is Google-only (team access), so it's a single CTA, no
-   email/password form and no Cliente/Equipo toggle. */
+/* ── Auth wall — identical to novacentrax.com/acceso.html ──
+   Cliente is kept fully in place (segmented toggle, email/password form,
+   Recordarme, honest pending-connection note) even though it has no real
+   destination yet — client access + email/password sign-in are planned. */
 .auth-wall {
   position: fixed;
   inset: 0;
@@ -823,6 +824,7 @@ body {
   --login-text: #20232A;
   --login-label: #252936;
   --login-muted: #555B68;
+  --login-placeholder: #9298A8;
   --login-border: #D7DAE3;
   --login-surface: #F5F6FA;
   --login-primary: #0F172A;
@@ -857,6 +859,7 @@ body {
   min-height: 0;
 }
 .auth-wall .login-panel { width: min(100%, 382px); }
+.auth-wall .login-panel-head { margin-bottom: 0; }
 .auth-wall .login-title {
   margin: 0 0 4px;
   font-size: 30px;
@@ -866,28 +869,173 @@ body {
   color: var(--login-text);
 }
 .auth-wall .login-desc {
-  margin: 0 0 22px;
+  margin: 0 0 14px;
   font-size: 13px;
   line-height: 1.4;
   font-weight: 400;
   color: var(--login-muted);
 }
+
+/* Segmented access toggle (Cliente / Equipo interno) */
+.auth-wall .seg {
+  position: relative;
+  display: grid; grid-template-columns: 1fr 1fr;
+  height: 46px;
+  padding: 4px; margin: 0 0 14px;
+  background: var(--login-surface);
+  border: 1px solid #E1E3EA;
+  border-radius: 7px;
+  box-sizing: border-box;
+}
+.auth-wall .seg-thumb {
+  position: absolute; top: 4px; left: 4px;
+  width: calc(50% - 4px); height: calc(100% - 8px);
+  background: var(--login-primary);
+  border-radius: 5px;
+  box-shadow: 0 4px 12px rgba(15,23,42,.20);
+  transition: transform 220ms ease;
+  z-index: 0;
+}
+.auth-wall .seg[data-active="team"] .seg-thumb { transform: translateX(100%); }
+.auth-wall .seg-btn {
+  position: relative; z-index: 1;
+  display: flex; align-items: center; justify-content: center;
+  height: 38px;
+  border: 0; background: transparent;
+  font-family: inherit;
+  font-size: 13px; font-weight: 500; line-height: 1;
+  color: var(--login-muted); cursor: pointer;
+  border-radius: 5px;
+  transition: background-color 180ms ease, color 180ms ease, box-shadow 180ms ease;
+}
+.auth-wall .seg-btn:hover { background: #E2E8F0; color: #292D3A; }
+.auth-wall .seg-btn:focus-visible { outline: 2px solid var(--login-primary); outline-offset: 2px; }
+.auth-wall .seg[data-active="client"] .seg-btn[data-seg="client"],
+.auth-wall .seg[data-active="team"]   .seg-btn[data-seg="team"] { color: #fff; }
+.auth-wall .seg[data-active="client"] .seg-btn[data-seg="client"]:hover,
+.auth-wall .seg[data-active="team"]   .seg-btn[data-seg="team"]:hover { background: transparent; color: #fff; }
+
+/* Login form (shared by both access types) */
+.auth-wall .lp { display: flex; flex-direction: column; gap: 13px; }
+.auth-wall .lp-field { display: flex; flex-direction: column; gap: 6px; }
+.auth-wall .lp-label {
+  display: block; margin: 0;
+  font-size: 13px; font-weight: 600; line-height: 1.3;
+  color: var(--login-label);
+}
+.auth-wall .lp-input {
+  width: 100%; height: var(--nc-field-h);
+  padding: 0 13px;
+  box-sizing: border-box;
+  font-family: inherit; font-size: 13px; font-weight: 400; line-height: 1; color: var(--login-text);
+  background: var(--login-white);
+  border: 1px solid var(--login-border); border-radius: 6px;
+  box-shadow: 0 1px 2px rgba(20,24,35,.02);
+  transition: border-color 170ms ease, box-shadow 170ms ease, background-color 170ms ease;
+}
+.auth-wall .lp-input::placeholder { color: var(--login-placeholder); opacity: 1; }
+.auth-wall .lp-input:hover:not(:disabled) { border-color: #BFC4D1; }
+.auth-wall .lp-input:focus { outline: none; border-color: var(--login-primary); box-shadow: 0 0 0 3px rgba(15,23,42,.11); }
+.auth-wall .lp-input:disabled { opacity: .6; cursor: not-allowed; background: var(--login-surface); }
+
+.auth-wall .lp-pass-wrap { position: relative; }
+.auth-wall .lp-pass-wrap .lp-input { padding-right: 44px; }
+.auth-wall .lp-pass-toggle {
+  position: absolute; top: 50%; right: 4px; transform: translateY(-50%);
+  width: 38px; height: 38px; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: transparent; border: 0; border-radius: 6px;
+  color: #747B8C; cursor: pointer;
+  transition: background 160ms ease, color 160ms ease;
+}
+.auth-wall .lp-pass-toggle:hover { background: var(--login-surface); color: var(--login-primary); }
+.auth-wall .lp-pass-toggle:focus-visible { outline: 2px solid var(--login-primary); outline-offset: 1px; }
+.auth-wall .lp-pass-toggle svg { width: 18px; height: 18px; }
+.auth-wall .lp-pass-toggle .icon-eye-off { display: none; }
+.auth-wall .lp-pass-toggle[data-visible="true"] .icon-eye { display: none; }
+.auth-wall .lp-pass-toggle[data-visible="true"] .icon-eye-off { display: block; }
+
+.auth-wall .lp-row {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 16px; row-gap: 6px;
+  min-height: 30px; margin: 2px 0 6px;
+}
+.auth-wall .lp-remember {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; line-height: 1.35; color: #5F6675; cursor: pointer;
+  user-select: none;
+}
+.auth-wall .lp-remember input[type="checkbox"] {
+  appearance: none; -webkit-appearance: none;
+  width: 14px; height: 14px; margin: 0;
+  border: 1px solid var(--login-border); border-radius: 3px;
+  background: #fff; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: background-color 160ms ease, border-color 160ms ease;
+}
+.auth-wall .lp-remember input[type="checkbox"]:checked {
+  background: var(--login-primary); border-color: var(--login-primary);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E");
+  background-size: 10px; background-repeat: no-repeat; background-position: center;
+}
+.auth-wall .lp-remember input[type="checkbox"]:focus-visible { outline: 2px solid var(--login-primary); outline-offset: 2px; }
+.auth-wall .lp-forgot {
+  font-size: 12px; font-weight: 500;
+  color: var(--login-primary); text-decoration: none;
+  background: none; border: 0; padding: 0; cursor: pointer;
+  min-height: 30px; display: inline-flex; align-items: center;
+}
+.auth-wall .lp-forgot:hover { text-decoration: underline; }
+.auth-wall .lp-forgot:focus-visible { outline: 2px solid var(--login-primary); outline-offset: 2px; }
+
 .auth-wall .lp-btn {
-  display: inline-flex; align-items: center; justify-content: center; gap: 10px;
-  width: 100%; height: var(--nc-button-h); padding: 0 18px;
-  font-family: inherit; font-size: 14px; font-weight: 600;
-  border-radius: 6px; border: 1px solid var(--login-border); cursor: pointer;
-  text-decoration: none; color: var(--login-label); background: #fff;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; padding: 0 16px;
+  font-family: inherit;
+  border-radius: 6px; border: 1px solid transparent; cursor: pointer;
+  text-decoration: none;
   transition: background-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
 }
-.auth-wall .lp-btn:hover { background: #FAFAFC; border-color: #C6CAD5; box-shadow: 0 4px 12px rgba(18,24,40,.06); transform: translateY(-1px); }
-.auth-wall .lp-btn:active { transform: translateY(0); }
-.auth-wall .lp-btn img { flex-shrink: 0; }
-.auth-wall .lp-note {
-  margin: 12px 0 0;
-  font-size: 12px; line-height: 1.5; color: var(--login-muted); text-align: center;
+.auth-wall .lp-btn--primary {
+  height: var(--nc-button-h); padding: 0 18px;
+  background: var(--login-primary); color: #fff;
+  font-size: 14px; font-weight: 600; line-height: 1;
+  box-shadow: 0 10px 22px rgba(15,23,42,.20);
 }
-.auth-wall .login-foot { text-align: center; margin-top: 22px; }
+.auth-wall .lp-btn--primary:hover { background: var(--login-primary-hover); box-shadow: 0 12px 24px rgba(15,23,42,.25); transform: translateY(-1px); }
+.auth-wall .lp-btn--primary:active { background: var(--login-primary-active); transform: translateY(0); }
+.auth-wall .lp-btn--primary:focus-visible { outline: 3px solid rgba(15,23,42,.23); outline-offset: 3px; }
+.auth-wall .lp-btn--google {
+  height: 44px; padding: 0 14px; gap: 10px;
+  background: #fff; color: var(--login-label); border-color: var(--login-border);
+  font-size: 13px; font-weight: 500;
+}
+.auth-wall .lp-btn--google:hover { background: #FAFAFC; border-color: #C6CAD5; box-shadow: 0 4px 12px rgba(18,24,40,.04); transform: translateY(-1px); }
+.auth-wall .lp-btn--google:active { transform: translateY(0); }
+.auth-wall .lp-btn--google svg, .auth-wall .lp-btn--google img { width: 20px; height: 20px; flex-shrink: 0; }
+
+.auth-wall .lp-or {
+  display: flex; align-items: center; gap: 14px;
+  margin: 12px 0;
+  font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: #777D8C;
+}
+.auth-wall .lp-or::before, .auth-wall .lp-or::after { content: ""; flex: 1; height: 1px; background: #E3E5EB; }
+
+.auth-wall .lp-note {
+  font-size: 12px; line-height: 1.4; color: var(--login-muted);
+  text-align: center; margin: 0;
+}
+.auth-wall .lp-status {
+  display: none;
+  font-size: 12px; line-height: 1.4; color: var(--login-muted);
+  background: var(--login-surface);
+  border: 1px solid var(--login-border); border-radius: 6px;
+  padding: 8px 10px;
+}
+.auth-wall .lp-status.is-visible { display: block; }
+.auth-wall .lp-status a { color: var(--login-primary); font-weight: 600; }
+
+.auth-wall .login-foot { text-align: center; margin-top: 14px; }
 .auth-wall .acc-back {
   display: table; margin: 0 auto; padding: 5px 0;
   font-size: 12px; font-weight: 500; color: #747B8C; text-decoration: none;
@@ -988,13 +1136,23 @@ body {
   .auth-wall .brand-panel { display: none; }
 }
 @media (max-height: 720px) and (min-width: 768px) {
-  .auth-wall .login-topbar { padding: 14px 0 0 48px; }
+  .auth-wall { --nc-field-h: 38px; --nc-button-h: 42px; }
+  .auth-wall .login-topbar { padding: 12px 0 0 48px; }
   .auth-wall .login-logo svg { width: 36px; height: 36px; }
-  .auth-wall .login-panel-wrap { padding: 4px 40px 12px; }
-  .auth-wall .login-title { font-size: 24px; margin-bottom: 3px; }
-  .auth-wall .login-desc { font-size: 12px; margin-bottom: 14px; }
+  .auth-wall .login-panel-wrap { padding: 4px 40px 10px; }
+  .auth-wall .login-title { font-size: 22px; margin: 0 0 2px; }
+  .auth-wall .login-desc { font-size: 12px; margin: 0 0 8px; }
+  .auth-wall .seg { height: 38px; margin: 0 0 8px; }
+  .auth-wall .seg-btn { height: 30px; font-size: 12px; }
+  .auth-wall .lp { gap: 7px; }
+  .auth-wall .lp-field { gap: 3px; }
+  .auth-wall .lp-label { font-size: 12px; }
+  .auth-wall .lp-row { min-height: 22px; margin: 0; }
+  .auth-wall .lp-remember, .auth-wall .lp-forgot { font-size: 11px; min-height: 22px; }
+  .auth-wall .lp-or { margin: 6px 0; }
+  .auth-wall .lp-btn--google { height: 38px; }
   .auth-wall .lp-note { font-size: 11px; }
-  .auth-wall .login-foot { margin-top: 10px; }
+  .auth-wall .login-foot { margin-top: 6px; }
 }
 
 /* Auth bar skeleton */

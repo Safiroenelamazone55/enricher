@@ -33,14 +33,61 @@
         <div class="login-panel">
           <div class="login-panel-head">
             <h1 class="login-title">Iniciar sesión</h1>
-            <p class="login-desc">Accede con tu cuenta de Google autorizada por Nova Centrax.</p>
+            <p class="login-desc">Elige tu tipo de acceso para continuar.</p>
           </div>
 
-          <a href="https://api.novacentrax.com/api/auth/google" class="lp-btn">
-            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="" width="20" height="20"/>
-            Continuar con Google
-          </a>
-          <p class="lp-note">Solo cuentas autorizadas · Tus datos no se comparten</p>
+          <!-- Segmented toggle: Cliente | Equipo interno -->
+          <div class="seg" id="acc-seg" data-active="team" role="tablist" aria-label="Tipo de acceso">
+            <span class="seg-thumb" aria-hidden="true"></span>
+            <button type="button" class="seg-btn" data-seg="client" role="tab">Cliente</button>
+            <button type="button" class="seg-btn" data-seg="team" role="tab">Equipo interno</button>
+          </div>
+
+          <!-- Single shared login form — context (cliente/equipo) tracked via #acc-tipo.
+               Equipo already has one real access path (Google OAuth, below), so its
+               primary submit routes straight there. Cliente + email/password sign-in
+               have no backend yet (planned) — kept in place, honest/inert for now. -->
+          <form class="lp" id="acc-form" novalidate>
+            <input type="hidden" id="acc-tipo" name="tipoAcceso" value="equipo" />
+
+            <div class="lp-field">
+              <label class="lp-label" for="acc-email">Correo electrónico</label>
+              <input class="lp-input" id="acc-email" type="email" placeholder="nombre@empresa.com" autocomplete="email" />
+            </div>
+            <div class="lp-field">
+              <label class="lp-label" for="acc-pass">Contraseña</label>
+              <div class="lp-pass-wrap">
+                <input class="lp-input" id="acc-pass" type="password" placeholder="Introduce tu contraseña" autocomplete="current-password" />
+                <button type="button" class="lp-pass-toggle" id="acc-pass-toggle" data-visible="false" aria-label="Mostrar contraseña">
+                  <svg class="icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1.5 12S5 5 12 5s10.5 7 10.5 7-3.5 7-10.5 7S1.5 12 1.5 12Z"/><circle cx="12" cy="12" r="3.2"/></svg>
+                  <svg class="icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 5.2A10.9 10.9 0 0 1 12 5c7 0 10.5 7 10.5 7a13.4 13.4 0 0 1-3.1 4.1M6.6 6.6C3.5 8.5 1.5 12 1.5 12s3.5 7 10.5 7a10.6 10.6 0 0 0 4.4-.9"/><path d="M9.5 9.8a3.2 3.2 0 0 0 4.5 4.5"/></svg>
+                </button>
+              </div>
+            </div>
+
+            <div class="lp-row">
+              <label class="lp-remember">
+                <input type="checkbox" id="acc-remember" />
+                <span>Recordarme</span>
+              </label>
+              <a class="lp-forgot" href="https://calendly.com/novacentrax/30min">¿Olvidaste tu contraseña?</a>
+            </div>
+
+            <button type="submit" class="lp-btn lp-btn--primary" id="acc-submit">Iniciar sesión como equipo</button>
+
+            <p class="lp-status" id="acc-status" role="status">
+              Este acceso todavía se está conectando — <a href="https://calendly.com/novacentrax/30min">escríbenos</a> si necesitas entrar ahora mismo.
+            </p>
+
+            <div id="acc-google-block">
+              <div class="lp-or"><span>O</span></div>
+              <a class="lp-btn lp-btn--google" href="https://api.novacentrax.com/api/auth/google">
+                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="" width="20" height="20"/>
+                Continuar con Google
+              </a>
+              <p class="lp-note">Ingresa con la cuenta de Google autorizada por Nova Centrax.</p>
+            </div>
+          </form>
 
           <div class="login-foot">
             <a href="https://novacentrax.com" class="acc-back">← Volver al inicio</a>
@@ -2784,6 +2831,63 @@
 (function() {
   try { localStorage.removeItem('sb-collapsed'); } catch (_) {}
 })();
+</script>
+
+<!-- Auth wall interactions — identical logic to novacentrax.com/acceso.html -->
+<script>
+  (function () {
+    var seg = document.getElementById('acc-seg');
+    if (!seg) return;
+    var tipo = document.getElementById('acc-tipo');
+    var submit = document.getElementById('acc-submit');
+    var status = document.getElementById('acc-status');
+
+    function setTab(tab) {
+      if (tab !== 'client' && tab !== 'team') tab = 'team';
+      seg.setAttribute('data-active', tab);
+      tipo.value = tab === 'client' ? 'cliente' : 'equipo';
+      submit.textContent = tab === 'client' ? 'Iniciar sesión como cliente' : 'Iniciar sesión como equipo';
+      status.classList.remove('is-visible');
+      try { localStorage.setItem('nc_acc_tab', tab); } catch (e) {}
+    }
+    seg.querySelectorAll('.seg-btn').forEach(function (b) {
+      b.addEventListener('click', function () { setTab(b.getAttribute('data-seg')); });
+    });
+    var saved = 'team';
+    try { saved = localStorage.getItem('nc_acc_tab') || 'team'; } catch (e) {}
+    setTab(saved);
+  })();
+
+  (function () {
+    var toggle = document.getElementById('acc-pass-toggle');
+    var input = document.getElementById('acc-pass');
+    if (!toggle || !input) return;
+    toggle.addEventListener('click', function () {
+      var showing = toggle.getAttribute('data-visible') === 'true';
+      toggle.setAttribute('data-visible', String(!showing));
+      toggle.setAttribute('aria-label', showing ? 'Mostrar contraseña' : 'Ocultar contraseña');
+      input.type = showing ? 'password' : 'text';
+    });
+  })();
+
+  /* Primary submit: "equipo" already has one real, working access path
+     (the same Google sign-in used by the secondary button below), so route
+     it straight there. "cliente" + email/password have no backend yet
+     (planned) — stays honest/inert until that exists. */
+  (function () {
+    var form = document.getElementById('acc-form');
+    var tipo = document.getElementById('acc-tipo');
+    var status = document.getElementById('acc-status');
+    if (!form || !status) return;
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      if (tipo.value === 'equipo') {
+        window.location.href = 'https://api.novacentrax.com/api/auth/google';
+        return;
+      }
+      status.classList.add('is-visible');
+    });
+  })();
 </script>
 
 <script src="app.js?v=20260827c"></script>
