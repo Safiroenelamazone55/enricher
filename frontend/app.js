@@ -710,12 +710,17 @@ function closeWorkspaceMenu() {
   document.removeEventListener('mousedown', _wsMenuOutside);
 }
 // Cerrar sesión desde el pie fijo de la barra (Salir de la cuenta)
+const LOGIN_URL = 'https://novacentrax.com/acceso.html';
 function novaLogout(e) {
   if (e) { e.preventDefault(); e.stopPropagation(); }
   try {
-    apiFetch(`${API}/auth/logout`).then(() => location.reload()).catch(() => location.reload());
-  } catch (_) { location.href = `${API}/auth/logout`; }
+    apiFetch(`${API}/auth/logout`).then(() => { location.href = LOGIN_URL; }).catch(() => { location.href = LOGIN_URL; });
+  } catch (_) { location.href = LOGIN_URL; }
 }
+// Called wherever an API response comes back 401 mid-session — send the
+// user to the real login page instead of reloading back into the same
+// (now-unauthenticated) view.
+function novaSessionExpired() { location.href = LOGIN_URL; }
 
 // Simple top toast
 function snavToggle(id) {
@@ -1172,7 +1177,7 @@ const ClientsModule = (() => {
     tableWrap.style.display = 'none';
     try {
       const res = await apiFetch(`${API}/mgmt/clients`);
-      if (res.status === 401) { location.reload(); return; }
+      if (res.status === 401) { novaSessionExpired(); return; }
       if (!res.ok) throw new Error(await res.text());
       _clients = await res.json();
       _updateEmpresaDatalist();
@@ -1980,7 +1985,7 @@ const FinanceModule = (() => {
     tableWrap.style.display = 'none';
     try {
       const res = await apiFetch(`${API}/mgmt/payments`);
-      if (res.status === 401) { location.reload(); return; }
+      if (res.status === 401) { novaSessionExpired(); return; }
       if (!res.ok) throw new Error(await res.text());
       _payments = await res.json();
       _updateStats();
@@ -5182,7 +5187,7 @@ const DashboardModule = (() => {
         apiFetch(`${API}/mgmt/clients`),
         apiFetch(`${API}/mgmt/tasks`),
       ]);
-      if (dashRes.status === 401) { location.reload(); return; }
+      if (dashRes.status === 401) { novaSessionExpired(); return; }
       if (!dashRes.ok) throw new Error(await dashRes.text());
 
       const dash     = await dashRes.json();
@@ -7760,7 +7765,7 @@ const TasksModule = (() => {
         apiFetch(`${API}/mgmt/tasks`),
         apiFetch(`${API}/mgmt/team`),
       ]);
-      if (tasksRes.status === 401) { location.reload(); return; }
+      if (tasksRes.status === 401) { novaSessionExpired(); return; }
       if (!tasksRes.ok) throw new Error(await tasksRes.text());
       _tasks       = await tasksRes.json();
       _teamMembers = teamRes.ok ? await teamRes.json() : [];
@@ -9500,7 +9505,7 @@ const TasksModule = (() => {
     try {
       if (!_tasks.length) {
         const res = await apiFetch(`${API}/mgmt/tasks`);
-        if (res.status === 401) { location.reload(); return; }
+        if (res.status === 401) { novaSessionExpired(); return; }
         if (res.ok) _tasks = await res.json();
       }
     } catch (e) { console.error('[tasks] cal-pane load:', e); }
@@ -11860,7 +11865,7 @@ const ProjectsModule = (() => {
     tableWrap.style.display = 'none';
     try {
       const res = await apiFetch(`${API}/mgmt/projects`);
-      if (res.status === 401) { location.reload(); return; }
+      if (res.status === 401) { novaSessionExpired(); return; }
       if (!res.ok) throw new Error(await res.text());
       _projects = await res.json();
       await Promise.all([_populateMemberDropdown(), _ensureAllTasksLoaded()]);
@@ -14447,7 +14452,7 @@ const OpportunitiesModule = (() => {
     $('opp-cards').innerHTML = '';
     try {
       const res = await apiFetch(`${API}/mgmt/opportunities`);
-      if (res.status === 401) { location.reload(); return; }
+      if (res.status === 401) { novaSessionExpired(); return; }
       if (!res.ok) throw new Error(await res.text());
       _opps = await res.json();
       render();
@@ -31596,8 +31601,8 @@ function initApp() {
       });
       const data = await res.json();
       if (res.status === 401) {
-        // Session expired — force re-login
-        location.reload();
+        // Session expired — send to the real login page
+        novaSessionExpired();
         return;
       }
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
@@ -32362,7 +32367,7 @@ function initApp() {
 
     try {
       const startRes = await apiFetch(`${API}/enrich/upload-async`, { method: 'POST', body: formData });
-      if (startRes.status === 401) { location.reload(); return; }
+      if (startRes.status === 401) { novaSessionExpired(); return; }
       if (!startRes.ok) {
         const err = await startRes.json().catch(() => ({ error: `HTTP ${startRes.status}` }));
         throw new Error(err.error || `HTTP ${startRes.status}`);
@@ -32570,7 +32575,7 @@ function initApp() {
       const qs  = _filtersToQS(filters);
       const url = `${API}/user/verifications${qs}`;
       const res  = await apiFetch(url);
-      if (res.status === 401) { location.reload(); return; }
+      if (res.status === 401) { novaSessionExpired(); return; }
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
 
@@ -33125,7 +33130,7 @@ function initApp() {
     const url = `${API}/user/verifications/export${_filtersToQS(_activeFilters)}`;
     try {
       const res = await apiFetch(url);
-      if (res.status === 401) { location.reload(); return; }
+      if (res.status === 401) { novaSessionExpired(); return; }
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
         throw new Error(err.error || `HTTP ${res.status}`);
