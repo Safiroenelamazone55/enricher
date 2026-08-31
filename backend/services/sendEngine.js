@@ -428,14 +428,15 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback) {
 // ── Envíos programados (Inbox): despacha los 'scheduled' vencidos ──
 // Corren FUERA de la ventana/límites del workspace: la usuaria eligió esa hora
 // a propósito (p. ej. la ventana recomendada del país del prospecto).
-async function _flushScheduled(pool) {
+async function _flushScheduled(pool, apiBase) {
   const { rows: due } = await pool.query(`
     SELECT m.id, m.user_id, m.contact_id, m.asunto, m.cuerpo, m.to_email, m.in_reply_to, m.mailbox_id,
-           COALESCE(m.cc_emails,'') AS cc_emails,
+           COALESCE(m.cc_emails,'') AS cc_emails, m.track_token,
            mb.id AS mb_ok, mb.email AS mb_email, mb.pass_enc, mb.smtp_host, mb.smtp_port, mb.smtp_secure,
            mb.imap_host, mb.imap_port, mb.provider, mb.sent_folder, mb.estado AS mb_estado,
            mb.auth_method, mb.oauth_provider, mb.oauth_access_enc, mb.oauth_refresh_enc, mb.oauth_expires_at,
-           mb.from_name AS mb_from_name, cfg.from_name AS cfg_from_name
+           mb.from_name AS mb_from_name, cfg.from_name AS cfg_from_name,
+           COALESCE(cfg.track_opens, true) AS track_opens, COALESCE(cfg.track_clicks, true) AS track_clicks
       FROM lm_messages m
       LEFT JOIN lm_mailboxes mb ON mb.id = m.mailbox_id
       LEFT JOIN lm_send_settings cfg ON cfg.user_id = m.user_id
@@ -449,8 +450,11 @@ async function _flushScheduled(pool) {
         throw new Error('El buzón ya no está conectado');
       }
       const { sendFromMailbox, getMailboxAuth } = require('./mailboxService');
-      const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      const html = `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.55;color:#1a1a2e">${esc(m.cuerpo).replace(/\n/g, '<br>')}</div>`;
+      const html = buildHtml({
+        text: m.cuerpo, firma: '', trackToken: m.track_token, apiBase,
+        trackOpens: !!(apiBase && m.track_token && m.track_opens),
+        trackClicks: !!(apiBase && m.track_token && m.track_clicks),
+      });
       const mb = { id: m.mb_ok, email: m.mb_email, pass_enc: m.pass_enc, smtp_host: m.smtp_host, smtp_port: m.smtp_port,
                    smtp_secure: m.smtp_secure, imap_host: m.imap_host, imap_port: m.imap_port, provider: m.provider, sent_folder: m.sent_folder,
                    auth_method: m.auth_method, oauth_provider: m.oauth_provider, oauth_access_enc: m.oauth_access_enc,
@@ -719,7 +723,7 @@ async function tick(pool, apiBase, gmailCallback) {
   try {
     await _autoActivate(pool).catch(e => console.warn('[send-engine] auto-activar:', e.message));
     await _draftPreapproved(pool).catch(e => console.warn('[send-engine] draft-preaprobado:', e.message));
-    await _flushScheduled(pool).catch(e => console.warn('[send-engine] scheduled:', e.message));
+    await _flushScheduled(pool, apiBase).catch(e => console.warn('[send-engine] scheduled:', e.message));
     await _flushApproved(pool, apiBase).catch(e => console.warn('[send-engine] approved:', e.message));
     const { rows: configs } = await pool.query(`SELECT * FROM lm_send_settings WHERE enabled = TRUE`);
     for (const cfg of configs) {

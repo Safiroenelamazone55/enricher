@@ -5397,16 +5397,25 @@ app.post('/api/lm/inbox/reply', requireAuth, async (req, res) => {
     let asunto = String(b.asunto || '').trim();
     if (!asunto) asunto = lastIn?.asunto ? (/^re:/i.test(lastIn.asunto) ? lastIn.asunto : `Re: ${lastIn.asunto}`) : '(sin asunto)';
 
-    const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    const html = `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.55;color:#1a1a2e">${esc(cuerpo).replace(/\n/g, '<br>')}</div>`;
+    // Tracking de apertura/clics: mismo mecanismo del motor de secuencias
+    // (buildHtml + pixel /t/o + redirect /t/c), antes ausente en las respuestas
+    // manuales del Inbox — por eso nunca registraban apertura (bug reportado 2026-08-31).
+    const crypto = require('crypto');
+    const { buildHtml } = require('./services/sendEngine');
+    const track_token = crypto.randomBytes(12).toString('hex');
+    const apiBase = process.env.API_BASE_URL || 'https://api.kiwoc.com';
+    const { rows: [sendCfg] } = await pool.query(`SELECT track_opens, track_clicks FROM lm_send_settings WHERE user_id=$1`, [req.workspaceOwnerId]);
+    const trackOpens  = sendCfg ? sendCfg.track_opens  !== false : true;
+    const trackClicks = sendCfg ? sendCfg.track_clicks !== false : true;
+    const html = buildHtml({ text: cuerpo, firma: '', trackToken: track_token, apiBase, trackOpens, trackClicks });
 
     // ── Envío programado: se guarda 'scheduled' y el motor lo despacha al vencer ──
     const schedAt = b.scheduled_at ? new Date(b.scheduled_at) : null;
     if (schedAt && !isNaN(schedAt) && schedAt.getTime() > Date.now() + 30 * 1000) {
       const { rows: [msg] } = await pool.query(
-        `INSERT INTO lm_messages (user_id, contact_id, asunto, cuerpo, to_email, estado, scheduled_at, mailbox_id, in_reply_to, cc_emails)
-         VALUES ($1,$2,$3,$4,$5,'scheduled',$6,$7,$8,$9) RETURNING id, asunto, cuerpo, scheduled_at`,
-        [req.workspaceOwnerId, cid, asunto, cuerpo, to.join(', '), schedAt.toISOString(), mb.id, lastIn?.message_id || '', cc.join(', ')]);
+        `INSERT INTO lm_messages (user_id, contact_id, asunto, cuerpo, to_email, estado, scheduled_at, mailbox_id, in_reply_to, cc_emails, track_token)
+         VALUES ($1,$2,$3,$4,$5,'scheduled',$6,$7,$8,$9,$10) RETURNING id, asunto, cuerpo, scheduled_at`,
+        [req.workspaceOwnerId, cid, asunto, cuerpo, to.join(', '), schedAt.toISOString(), mb.id, lastIn?.message_id || '', cc.join(', '), track_token]);
       return res.status(201).json({ ok: true, scheduled: true, message: msg });
     }
 
@@ -5419,9 +5428,9 @@ app.post('/api/lm/inbox/reply', requireAuth, async (req, res) => {
       references: lastIn?.message_id || undefined,
     });
     const { rows: [msg] } = await pool.query(
-      `INSERT INTO lm_messages (user_id, contact_id, asunto, cuerpo, to_email, estado, sent_at, mailbox_id, smtp_message_id, cc_emails)
-       VALUES ($1,$2,$3,$4,$5,'sent',NOW(),$6,$7,$8) RETURNING id, asunto, cuerpo, sent_at`,
-      [req.workspaceOwnerId, cid, asunto, cuerpo, to.join(', '), mb.id, sent.messageId || '', cc.join(', ')]);
+      `INSERT INTO lm_messages (user_id, contact_id, asunto, cuerpo, to_email, estado, sent_at, mailbox_id, smtp_message_id, cc_emails, track_token)
+       VALUES ($1,$2,$3,$4,$5,'sent',NOW(),$6,$7,$8,$9) RETURNING id, asunto, cuerpo, sent_at`,
+      [req.workspaceOwnerId, cid, asunto, cuerpo, to.join(', '), mb.id, sent.messageId || '', cc.join(', '), track_token]);
     await pool.query(
       `INSERT INTO activities (user_id, contact_id, tipo, canal, nota, fecha, estado)
        VALUES ($1,$2,'email','email',$3,NOW(),'hecha')`,
