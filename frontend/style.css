@@ -15707,7 +15707,12 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .wa-msg__time { display: block; margin-top: 2px; font-size: .62rem; color: var(--text-muted); text-align: right; }
 .wa-msg__sender { font-size: .72rem; font-weight: 700; color: var(--primary); margin-bottom: 2px; }
 .wa-msg__quoted { font-size: .74rem; color: var(--text-muted); border-left: 2px solid var(--border); padding: 1px 0 1px 7px; margin-bottom: 4px; opacity: .85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
-.wa-msg__actions { position: absolute; top: 4px; right: 4px; display: none; gap: 3px; }
+/* Fuera de la burbuja (pegadas al borde exterior), no encima del texto — antes
+   quedaban flotando sobre el mensaje (reportado 2026-09-01, tapaban el emoji
+   final de mensajes cortos). */
+.wa-msg__actions { position: absolute; top: 50%; transform: translateY(-50%); display: none; gap: 3px; z-index: 2; }
+.wa-msg--in .wa-msg__actions { left: 100%; margin-left: 6px; }
+.wa-msg--out .wa-msg__actions { right: 100%; margin-right: 6px; }
 .wa-msg:hover .wa-msg__actions { display: flex; }
 .wa-msg__actions button {
   display: inline-flex; align-items: center; justify-content: center;
