@@ -21225,7 +21225,8 @@ ${foot}
     return x.toLocaleDateString('es', x.getFullYear() === now.getFullYear() ? { day: 'numeric', month: 'short' } : { day: 'numeric', month: 'short', year: '2-digit' });
   }
   function _vLeadsHub() {
-    return `<div class="lm-sec-head">
+    return `<div class="ld-hub">
+      <div class="lm-sec-head">
         <div><h2 class="lm-sec-title">Leads</h2><p class="lm-sec-sub">Quiénes respondieron y su siguiente paso — se llena al marcar el resultado en las tareas</p></div>
         <div class="lm-hd-actions"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openContact()">＋ Agregar prospecto</button></div>
       </div>
@@ -21238,7 +21239,8 @@ ${foot}
         <div class="lm-search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" id="ldh-q" placeholder="Buscar lead…" oninput="LeadManagerModule.ldSetQ(this.value)"></div>
         <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.ldExport()" title="Exporta lo que ves (con los filtros aplicados) a Excel">${_ico('down')} Exportar</button>
       </div>
-      <div id="ldh-wrap"></div>`;
+      <div id="ldh-wrap"></div>
+    </div>`;
   }
   function _ldPaint() {
     const resEl = $('ldh-res'), wrap = $('ldh-wrap');

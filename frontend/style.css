@@ -13915,6 +13915,10 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
 .ac-empty { padding: 22px 0; font-size: 12.5px; color: var(--muted, #B4AFA8); text-align: center; line-height: 1.6; }
 
 /* ── Leads hub: respuestas y siguientes pasos (DS v2) ── */
+/* Jenny: a 100% de zoom del navegador quiere ver Leads (título, filtros y tabla,
+   todo) igual de compacto que si el navegador estuviera al 90% — mismo criterio
+   ya usado en el Dashboard (#pane-mgmt-dashboard, ver arriba). */
+.ld-hub { zoom: .9; }
 .ldh-toolbar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 2px 0 14px; }
 .ldh-toolbar__sp { flex: 1; }
 .ldh-toolbar .lm-search { min-width: 170px; }
