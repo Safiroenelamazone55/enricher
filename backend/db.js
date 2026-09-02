@@ -1665,6 +1665,9 @@ async function initDb() {
     // solo vale 'image' (video/documento quedan fuera por ahora).
     await pool.query(`ALTER TABLE wa_messages ADD COLUMN IF NOT EXISTS media_url  TEXT NOT NULL DEFAULT '';`);
     await pool.query(`ALTER TABLE wa_messages ADD COLUMN IF NOT EXISTS media_type TEXT NOT NULL DEFAULT '';`);
+    // Mensaje importante (⭐, como el "destacado" de WhatsApp) — toggle simple, sin lista
+    // aparte todavía: se ve como una estrellita junto a la hora del mensaje.
+    await pool.query(`ALTER TABLE wa_messages ADD COLUMN IF NOT EXISTS importante BOOLEAN NOT NULL DEFAULT FALSE;`);
 
     // Quién puede ver cada conexión (antes cualquiera con acceso a Operaciones la
     // veía) + una conexión propia por cliente outbound en vez de una sola compartida.

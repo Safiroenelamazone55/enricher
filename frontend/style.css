@@ -13961,7 +13961,13 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
    horizontal, como una hoja de Excel, en vez de comprimir la fila verticalmente. */
 .ldh-lead-table { table-layout: auto; width: auto; min-width: 100%; }
 .ldh-lead-table .ldh-name, .ldh-lead-table .ldh-sub, .ldh-lead-table .ldh-dim, .ldh-lead-table .ldh-cto__txt { max-width: 170px; }
-.ldh-lead-table .ldh-note__in { white-space: nowrap; overflow: visible; text-overflow: clip; max-height: none; overflow-y: visible; }
+/* La nota volvía a "su ancho real" (sin límite) para no envolverse en varias líneas —
+   con comentarios largos eso hacía crecer la columna muchísimo. Ahora se trunca como
+   sus vecinas (una sola línea + "…") y el clic (ldEditNote) ya muestra el texto
+   completo — no hace falta que la celda misma se estire. */
+.ld-hub .ldh-note__in { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-height: none; overflow-y: visible; max-width: 260px; }
+/* Fila 6% más baja (pedido 2026-09-01), encima del zoom .9 de .ld-hub. */
+.ld-hub .ldh-table td { padding: 9.4px 14px; }
 .ldh-acts { white-space: nowrap; text-align: right; }
 td.ldh-acts { padding-left: 6px; padding-right: 10px; }
 .ldh-act { border: 1px solid var(--border); background: var(--surface); color: var(--text-muted); width: 28px; height: 28px; border-radius: 8px; cursor: pointer; display: inline-grid; place-items: center; margin-left: 5px; transition: color .12s, border-color .12s, background .12s; }
@@ -15661,6 +15667,8 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .wa-sidebar__hdr-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .wa-sidebar__title { font-size: .88rem; font-weight: 800; color: var(--text-primary); }
 .wa-sidebar__numero { font-size: .7rem; color: var(--text-muted); }
+.wa-sidebar__numero--switch { cursor: pointer; border-radius: 5px; padding: 1px 4px; margin: -1px -4px; transition: background .12s, color .12s; }
+.wa-sidebar__numero--switch:hover { background: var(--primary-soft); color: var(--primary); }
 .wa-sidebar__list { flex: 1; overflow-y: auto; padding: 4px 0 20px; }
 .wa-sidebar__list::-webkit-scrollbar { width: 3px; }
 .wa-sidebar__list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
@@ -15721,6 +15729,12 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 }
 .wa-msg__actions button:hover { color: var(--primary); border-color: var(--primary); }
 .wa-msg__reactions { display: flex; gap: 3px; margin-top: 3px; }
+.wa-msg__star { margin-right: 3px; }
+/* "⋮" del mensaje: copiar / seleccionar / marcar importante — mismo look que
+   .cp-mark-menu pero angosto (3 opciones en una sola columna, no una grilla). */
+.wa-msg-menu { position: fixed; z-index: 10050; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 24px rgba(16,24,20,.10); padding: 5px; min-width: 190px; display: flex; flex-direction: column; gap: 1px; font-family: var(--font); }
+.wa-msg-menu__b { display: flex; align-items: center; gap: 7px; width: 100%; text-align: left; background: none; border: none; font: inherit; font-size: .78rem; font-weight: 500; color: var(--text-primary); padding: 6px 8px; border-radius: 7px; cursor: pointer; line-height: 1.2; }
+.wa-msg-menu__b:hover { background: var(--surface-hover); }
 .wa-msg__img { display: block; max-width: 260px; max-height: 260px; width: 100%; height: auto; border-radius: 9px; margin-bottom: 4px; cursor: zoom-in; object-fit: cover; }
 
 /* ── Foto pegada/adjunta: preview compacta arriba del composer ── */

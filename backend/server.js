@@ -8597,7 +8597,7 @@ app.get('/api/wa/connections/:id/chats/:jid/mensajes', requireAuth, async (req, 
     if (!(await _cargarConexionAutorizada(req, res, req.params.id))) return;
     const { rows } = await pool.query(`
       SELECT m.id, m.from_me, m.nombre, m.texto, m.ts, m.reply_to_id, m.reply_to_texto, m.msg_id, m.estado, m.scheduled_at, m.eliminado,
-             m.media_url, m.media_type,
+             m.media_url, m.media_type, m.importante,
              rm.emoji AS mi_reaccion, ro.emoji AS su_reaccion
         FROM wa_messages m
         LEFT JOIN wa_reactions rm ON rm.connection_id = m.connection_id AND rm.msg_id = m.msg_id AND rm.from_me = TRUE
@@ -8681,6 +8681,20 @@ app.post('/api/wa/connections/:id/chats/:jid/mensajes/:msgId/reaccion', requireA
     await waSvc.reaccionar(pool, +req.params.id, req.params.jid, req.params.msgId, emoji);
     res.json({ ok: true });
   } catch (err) { console.error('[wa] reaccionar', err.message); res.status(400).json({ error: err.message || 'No se pudo reaccionar' }); }
+});
+
+// "Mensaje importante" (⭐) — a diferencia de la reacción, esto NO es un evento de
+// WhatsApp (no existe en el protocolo): es local a Nova, un simple flag en la fila.
+app.post('/api/wa/connections/:id/chats/:jid/mensajes/:msgId/importante', requireAuth, async (req, res) => {
+  const value = !!(req.body || {}).value;
+  try {
+    if (!(await _cargarConexionAutorizada(req, res, req.params.id))) return;
+    const r = await pool.query(
+      `UPDATE wa_messages SET importante=$1 WHERE connection_id=$2 AND chat_jid=$3 AND msg_id=$4`,
+      [value, req.params.id, req.params.jid, req.params.msgId]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Mensaje no encontrado' });
+    res.json({ ok: true, importante: value });
+  } catch (err) { console.error('[wa] importante', err.message); res.status(400).json({ error: 'No se pudo marcar el mensaje' }); }
 });
 
 // ── POST /api/gcal/meet ───────────────────────────────────────────

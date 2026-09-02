@@ -15587,6 +15587,7 @@ const _NI_LIB = {
   reply: '<polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/>',
   trophy: '<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>',
   copy: '<rect x="9" y="9" width="13" height="13" rx="2.5"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+  select: '<rect x="3" y="3" width="18" height="18" rx="2" stroke-dasharray="3 3"/><rect x="9" y="9" width="6" height="6"/>',
   linkedin: '<path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-4 0v7h-4V8h4v1.8A5.9 5.9 0 0 1 16 8z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/>',
   check: '<polyline points="20 6 9 17 4 12"/>',
   checksq: '<path d="m9 11 3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
@@ -27424,9 +27425,13 @@ const WaChatModule = (() => {
     }
   }
 
+  // Doble confirmación (pedido explícito 2026-09-01: "para evitar accidentes" — el
+  // botón está pegado a Visibilidad/Nuevo chat en la cabecera, fácil de tocar sin querer).
   async function desconectar() {
     if (!_conn) return;
-    if (!confirm('¿Desconectar este WhatsApp? Vas a tener que escanear un QR nuevo para volver a usarlo.')) return;
+    const numero = _conn.numero ? `+${_conn.numero}` : 'este WhatsApp';
+    if (!confirm(`¿Desconectar ${numero}? Vas a tener que escanear un QR nuevo para volver a usarlo.`)) return;
+    if (!confirm('Confirma una vez más: se desconectará ahora mismo.')) return;
     try {
       await apiFetch(`${API}/wa/connections/${_conn.id}/desconectar`, { method: 'POST' });
     } catch (_) { /* igual se refleja al recargar */ }
@@ -28115,9 +28120,11 @@ const WaChatModule = (() => {
       const citado = m.reply_to_texto ? `<div class="wa-msg__quoted">${esc(m.reply_to_texto).slice(0, 100)}</div>` : '';
       const msgIdJs = esc(m.msg_id).replace(/'/g, "\\'");
       const miActualJs = esc(m.mi_reaccion || '').replace(/'/g, "\\'");
+      const textoJs = String(m.texto || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n');
       const actions = `<div class="wa-msg__actions">
           <button class="wa-msg__react" title="Reaccionar" onclick="WaChatModule.reactPop(event,'${msgIdJs}','${miActualJs}')">🙂</button>
           <button class="wa-msg__reply" title="Responder a este mensaje" onclick="WaChatModule.responderA('${msgIdJs}','${esc(quien).replace(/'/g, "\\'")}','${esc(m.texto).replace(/'/g, "\\'").replace(/\n/g, ' ')}')">${NI('responder', 13)}</button>
+          <button class="wa-msg__more" title="Más opciones" onclick="WaChatModule.msgMenu(event,'${msgIdJs}','${textoJs}',${!!m.importante})">⋮</button>
         </div>`;
       // Como cada mensaje acá tiene como máximo dos reactores (yo y la otra persona),
       // mostrar el nombre dice más que un número — igual que Zulip cuando reacciona
@@ -28132,10 +28139,65 @@ const WaChatModule = (() => {
       const mediaHtml = (m.media_type === 'image' && m.media_url)
         ? `<img src="${API_ORIGIN}${esc(m.media_url)}" class="wa-msg__img" onclick="window.open('${API_ORIGIN}${esc(m.media_url)}','_blank')" alt="">`
         : '';
-      const bubbleHtml = `${actions}${remitente}${citado}${mediaHtml}${esc(m.texto)}<span class="wa-msg__time">${_fmtHora(m.ts)}</span>${reacHtml}`;
+      const starHtml = m.importante ? `<span class="wa-msg__star" title="Mensaje destacado">⭐</span>` : '';
+      const bubbleHtml = `${actions}${remitente}${citado}${mediaHtml}<span class="wa-msg__text" data-mid="${msgIdJs}">${esc(m.texto)}</span><span class="wa-msg__time">${starHtml}${_fmtHora(m.ts)}</span>${reacHtml}`;
       return `${sep}<div class="wa-msg ${m.from_me ? 'wa-msg--out' : 'wa-msg--in'}"><div class="wa-msg__bubble">${bubbleHtml}</div></div>`;
     }).join('');
     if (atBottom) box.scrollTop = box.scrollHeight;
+  }
+
+  // "⋮" del mensaje: copiar, seleccionar (arregla el bug de que arrastrar el mouse
+  // selecciona TODO el chat en vez de solo este mensaje) y marcar importante (⭐,
+  // igual que el destacado de WhatsApp) — funciones simples que WhatsApp ya tiene.
+  function msgMenu(ev, msgId, texto, importante) {
+    if (ev && ev.stopPropagation) ev.stopPropagation();
+    document.querySelectorAll('.wa-msg-menu').forEach(m => m.remove());
+    const menu = document.createElement('div');
+    menu.className = 'wa-msg-menu';
+    menu.innerHTML = `
+      <button class="wa-msg-menu__b" data-act="copy">Copiar</button>
+      <button class="wa-msg-menu__b" data-act="select">Seleccionar</button>
+      <button class="wa-msg-menu__b" data-act="star">${importante ? 'Quitar destacado' : 'Destacar'}</button>`;
+    menu.querySelector('[data-act="copy"]').onclick = () => { menu.remove(); msgCopy(texto); };
+    menu.querySelector('[data-act="select"]').onclick = () => { menu.remove(); msgSelectText(msgId); };
+    menu.querySelector('[data-act="star"]').onclick = () => { menu.remove(); toggleImportante(msgId, !importante); };
+    document.body.appendChild(menu);
+    const t = (ev && (ev.currentTarget || ev.target)) || document.body;
+    const r = t.getBoundingClientRect();
+    // Si no cabe abajo (mensaje pegado al fondo del chat, el caso más común: el
+    // último mensaje) se abre hacia arriba en vez de cortarse fuera de la pantalla.
+    const estH = 130;
+    menu.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 210))}px`;
+    if (r.bottom + estH > window.innerHeight && r.top > estH) {
+      menu.style.top = `${r.top - 6}px`;
+      menu.style.transform = 'translateY(-100%)';
+    } else {
+      menu.style.top = `${r.bottom + 4}px`;
+    }
+    setTimeout(() => document.addEventListener('click', function onDoc(e) { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', onDoc); } }), 0);
+  }
+  async function msgCopy(texto) {
+    try { await navigator.clipboard.writeText(texto); showBanner('✓ Copiado', 'success'); }
+    catch (e) { showBanner('No se pudo copiar', 'error'); }
+  }
+  function msgSelectText(msgId) {
+    const el = document.querySelector(`.wa-msg__text[data-mid="${CSS.escape(msgId)}"]`);
+    if (!el) return;
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+  async function toggleImportante(msgId, value) {
+    if (!_conn || !_chatAct) return;
+    try {
+      const r = await apiFetch(`${API}/wa/connections/${_conn.id}/chats/${encodeURIComponent(_chatAct)}/mensajes/${encodeURIComponent(msgId)}/importante`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ value })
+      });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Error');
+      await _cargarMensajes(_chatAct, true);
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
   function responderA(msgId, quien, texto) {
@@ -28489,6 +28551,7 @@ const WaChatModule = (() => {
   return { load, conectar, desconectar, abrirChat, enviar, detener: _pararSondeos,
            responderA, cancelarRespuesta,
            onPasteInput, pickImage, editPendingImg, cancelImg,
+           msgMenu, msgCopy, msgSelectText, toggleImportante,
            programarToggle, programarPick, cancelarProgramado,
            reactPop, reaccionar, emojiPicker, _emojiIns, refreshBadge,
            visPop, abrirVisPop, _toggleVisSub, guardarVisibilidad, _pintaBotonVis, _cargarTeam,
@@ -28710,7 +28773,9 @@ const ObcWaModule = (() => {
 
   async function desconectar() {
     if (!_conn) return;
-    if (!confirm('¿Desconectar este WhatsApp? Vas a tener que escanear un QR nuevo para volver a usarlo.')) return;
+    const numero = _conn.numero ? `+${_conn.numero}` : 'este WhatsApp';
+    if (!confirm(`¿Desconectar ${numero}? Vas a tener que escanear un QR nuevo para volver a usarlo.`)) return;
+    if (!confirm('Confirma una vez más: se desconectará ahora mismo.')) return;
     try {
       await apiFetch(`${API}/wa/connections/${_conn.id}/desconectar`, { method: 'POST' });
     } catch (_) { /* igual se refleja al recargar */ }
@@ -28855,9 +28920,11 @@ const ObcWaModule = (() => {
       const citado = m.reply_to_texto ? `<div class="wa-msg__quoted">${esc(m.reply_to_texto).slice(0, 100)}</div>` : '';
       const msgIdJs = esc(m.msg_id).replace(/'/g, "\\'");
       const miActualJs = esc(m.mi_reaccion || '').replace(/'/g, "\\'");
+      const textoJs = String(m.texto || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n');
       const actions = `<div class="wa-msg__actions">
           <button class="wa-msg__react" title="Reaccionar" onclick="ObcWaModule.reactPop(event,'${msgIdJs}','${miActualJs}')">🙂</button>
           <button class="wa-msg__reply" title="Responder a este mensaje" onclick="ObcWaModule.responderA('${msgIdJs}','${esc(quien).replace(/'/g, "\\'")}','${esc(m.texto).replace(/'/g, "\\'").replace(/\n/g, ' ')}')">${NI('responder', 13)}</button>
+          <button class="wa-msg__more" title="Más opciones" onclick="ObcWaModule.msgMenu(event,'${msgIdJs}','${textoJs}',${!!m.importante})">⋮</button>
         </div>`;
       const reacBits = [];
       if (m.su_reaccion) reacBits.push(`<span class="slk-reac" title="Su reacción">${esc(m.su_reaccion)} ${esc(contactName)}</span>`);
@@ -28866,10 +28933,62 @@ const ObcWaModule = (() => {
       const mediaHtml = (m.media_type === 'image' && m.media_url)
         ? `<img src="${API_ORIGIN}${esc(m.media_url)}" class="wa-msg__img" onclick="window.open('${API_ORIGIN}${esc(m.media_url)}','_blank')" alt="">`
         : '';
-      const bubbleHtml = `${actions}${remitente}${citado}${mediaHtml}${esc(m.texto)}<span class="wa-msg__time">${_fmtHora(m.ts)}</span>${reacHtml}`;
+      const starHtml = m.importante ? `<span class="wa-msg__star" title="Mensaje destacado">⭐</span>` : '';
+      const bubbleHtml = `${actions}${remitente}${citado}${mediaHtml}<span class="wa-msg__text" data-mid="${msgIdJs}">${esc(m.texto)}</span><span class="wa-msg__time">${starHtml}${_fmtHora(m.ts)}</span>${reacHtml}`;
       return `${sep}<div class="wa-msg ${m.from_me ? 'wa-msg--out' : 'wa-msg--in'}"><div class="wa-msg__bubble">${bubbleHtml}</div></div>`;
     }).join('');
     if (atBottom) box.scrollTop = box.scrollHeight;
+  }
+
+  function msgMenu(ev, msgId, texto, importante) {
+    if (ev && ev.stopPropagation) ev.stopPropagation();
+    document.querySelectorAll('.wa-msg-menu').forEach(m => m.remove());
+    const menu = document.createElement('div');
+    menu.className = 'wa-msg-menu';
+    menu.innerHTML = `
+      <button class="wa-msg-menu__b" data-act="copy">Copiar</button>
+      <button class="wa-msg-menu__b" data-act="select">Seleccionar</button>
+      <button class="wa-msg-menu__b" data-act="star">${importante ? 'Quitar destacado' : 'Destacar'}</button>`;
+    menu.querySelector('[data-act="copy"]').onclick = () => { menu.remove(); msgCopy(texto); };
+    menu.querySelector('[data-act="select"]').onclick = () => { menu.remove(); msgSelectText(msgId); };
+    menu.querySelector('[data-act="star"]').onclick = () => { menu.remove(); toggleImportante(msgId, !importante); };
+    document.body.appendChild(menu);
+    const t = (ev && (ev.currentTarget || ev.target)) || document.body;
+    const r = t.getBoundingClientRect();
+    // Si no cabe abajo (mensaje pegado al fondo del chat, el caso más común: el
+    // último mensaje) se abre hacia arriba en vez de cortarse fuera de la pantalla.
+    const estH = 130;
+    menu.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 210))}px`;
+    if (r.bottom + estH > window.innerHeight && r.top > estH) {
+      menu.style.top = `${r.top - 6}px`;
+      menu.style.transform = 'translateY(-100%)';
+    } else {
+      menu.style.top = `${r.bottom + 4}px`;
+    }
+    setTimeout(() => document.addEventListener('click', function onDoc(e) { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', onDoc); } }), 0);
+  }
+  async function msgCopy(texto) {
+    try { await navigator.clipboard.writeText(texto); showBanner('✓ Copiado', 'success'); }
+    catch (e) { showBanner('No se pudo copiar', 'error'); }
+  }
+  function msgSelectText(msgId) {
+    const el = document.querySelector(`.wa-msg__text[data-mid="${CSS.escape(msgId)}"]`);
+    if (!el) return;
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+  async function toggleImportante(msgId, value) {
+    if (!_conn || !_chatAct) return;
+    try {
+      const r = await apiFetch(`${API}/wa/connections/${_conn.id}/chats/${encodeURIComponent(_chatAct)}/mensajes/${encodeURIComponent(msgId)}/importante`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ value })
+      });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Error');
+      await _cargarMensajes(_chatAct, true);
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
   function responderA(msgId, quien, texto) {
@@ -29130,6 +29249,7 @@ const ObcWaModule = (() => {
   return { shellHtml, load, conectar, desconectar, abrirChat, enviar, detener: _pararSondeos,
            responderA, cancelarRespuesta,
            onPasteInput, pickImage, editPendingImg, cancelImg,
+           msgMenu, msgCopy, msgSelectText, toggleImportante,
            programarToggle, programarPick, cancelarProgramado,
            reactPop, reaccionar, emojiPicker, _emojiIns,
            abrirVisPop, refrescarVis,

@@ -136,6 +136,16 @@ async function _guardarMensaje(pool, sock, connId, m, esHistorial) {
       await new Promise(r => setTimeout(r, 500 * intento));
     }
   }
+  // Reabrir un chat "resuelto" cuando llega un mensaje nuevo de la OTRA persona (no al
+  // volcado de historial ni a lo que yo mismo mando) — igual que Chatwoot/Intercom: un
+  // mensaje nuevo es señal de que hay algo pendiente otra vez, no debe quedar enterrado.
+  // Pedido explícito 2026-09-01: si se vuelve a marcar "resuelto" a mano, desaparece de
+  // nuevo — eso ya lo hace el filtro de estado, sin nada especial de este lado.
+  if (!esHistorial && !m.key.fromMe) {
+    await pool.query(
+      `UPDATE wa_chat_meta SET estado_conv='abierto', updated_at=NOW() WHERE connection_id=$1 AND chat_jid=$2 AND estado_conv='resuelto'`,
+      [connId, jid]).catch(() => {});
+  }
 }
 
 // Migración de una sola vez por conexión: los @lid que se guardaron ANTES de tener el
