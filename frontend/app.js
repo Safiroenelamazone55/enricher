@@ -485,14 +485,14 @@ function _respVal(hiddenId) {
 // Manual toggle (chevron click) only opens/closes that one group.
 // Selecting an area from the logo launcher (selectWorkspaceArea) instead
 // expands that group and collapses the other two — see toggleWorkspaceLauncher.
-const SNAV_GROUPS = ['management', 'enricher', 'leadmanagement'];
+const SNAV_GROUPS = ['management', 'enricher', 'leadmanagement', 'finance'];
 
 function _loadExpandedGroups() {
   try {
     const saved = JSON.parse(localStorage.getItem('sb-expanded-groups') || 'null');
     if (saved && typeof saved === 'object') return saved;
   } catch (_) {}
-  return { management: true, enricher: false, leadmanagement: false };
+  return { management: true, enricher: false, leadmanagement: false, finance: false };
 }
 
 function _applyExpandedGroups(state) {
@@ -507,14 +507,14 @@ function _applyExpandedGroups(state) {
 }
 
 function selectWorkspaceArea(area) {
-  const state = { management: area === 'management', enricher: area === 'enricher', leadmanagement: area === 'leadmanagement' };
+  const state = { management: area === 'management', enricher: area === 'enricher', leadmanagement: area === 'leadmanagement', finance: area === 'finance' };
   _applyExpandedGroups(state);
   localStorage.setItem('sb-expanded-groups', JSON.stringify(state));
 }
 
 // ── Doble sidebar: rail de módulos + panel de secciones ──
 let _activeModule = 'management';
-const _MOD_TITLES = { management: 'Operaciones', enricher: 'Enriquecimiento', leadmanagement: 'Outreach' };
+const _MOD_TITLES = { management: 'Operaciones', enricher: 'Enriquecimiento', leadmanagement: 'Outreach', finance: 'Finanzas' };
 function _moduleOf(tab) {
   return document.querySelector(`.snav-item[data-tab="${tab}"]`)?.closest('.snav-group')?.dataset.module || 'management';
 }
@@ -578,6 +578,13 @@ const HOME_MODULES = [
     icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 4.9 4.9 1.8-4.9 1.8L12 16.4l-1.8-4.9L5.3 9.5l4.9-1.8z"/><path d="M18.6 14.6l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/></svg>' },
   { id: 'leadmanagement', tab: 'lead-manager',   name: 'Outreach',       desc: 'CRM, campañas, secuencias y leads',            color: 'red',
     icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>' },
+  // Finanzas salió de Operaciones y pasa a ser su propio módulo (pedido explícito
+  // 2026-09-02: "todo lo que tenga que ver con contabilidad finanzas, lo quiero en
+  // un módulo separado") — el pane #pane-mgmt-finance no se movió de sitio (los
+  // panes se muestran/ocultan por id sin importar qué snav-group los referencia),
+  // solo se le quitó el snav-item de Operaciones y se le puso uno propio.
+  { id: 'finance',        tab: 'mgmt-finance',   name: 'Finanzas',       desc: 'Cobros, distribución y pagos internos',        color: 'blue',
+    icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 18 8 12.5 11.5 15 17 8 21 5.5"/><polyline points="16.5 5.5 21 5.5 21 10"/></svg>' },
   // "Empresa" no es un módulo con su propio sidebar/panes — abre el mismo panel de
   // Empresa (antes "Configuración") que ya existía, con Usuarios y Configuración
   // adentro como pestañas, en vez de sueltas en la barra superior (pedido 2026-09-02).

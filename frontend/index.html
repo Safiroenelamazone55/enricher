@@ -278,6 +278,9 @@
       <button class="snav-mod" data-module="leadmanagement" onclick="selectModule('leadmanagement')" data-tip="Outreach" aria-label="Outreach">
         <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>
       </button>
+      <button class="snav-mod" data-module="finance" onclick="selectModule('finance')" data-tip="Finanzas" aria-label="Finanzas">
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 18 8 12.5 11.5 15 17 8 21 5.5"/><polyline points="16.5 5.5 21 5.5 21 10"/></svg>
+      </button>
     </div>
     <div class="snav-rail__spacer"></div>
     <button class="snav-rail__btn" onclick="WorkspaceModule.openNameModal()" data-tip="Configuración" aria-label="Configuración general">
@@ -391,16 +394,6 @@
       </button>
 
       <div class="snav-cat">Gestión</div>
-      <button class="snav-item" data-tab="mgmt-finance" data-tooltip="Finanzas">
-        <span class="snav-item__icon">
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="3 18 8 12.5 11.5 15 17 8 21 5.5"/>
-            <polyline points="16.5 5.5 21 5.5 21 10"/>
-          </svg>
-        </span>
-        <span class="snav-item__label">Finanzas</span>
-      </button>
-
       <button class="snav-item" data-tab="mgmt-timetracking" data-tooltip="Time Tracking">
         <span class="snav-item__icon">
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -517,6 +510,24 @@
             </svg>
           </span>
           <span class="snav-item__label">Lead Manager</span>
+        </button>
+
+      </div>
+
+      <!-- Finanzas ya trae su propia navegación por pestañas dentro del pane
+           (fin-tabs: Resumen/Facturación/Conciliación/Cobros/Pagos internos/
+           Gastos/Distribución/Config) — este panel secundario solo necesita
+           un punto de entrada al pane, no repetir esas pestañas acá. -->
+      <div class="snav-group" data-module="finance" id="snav-body-finance">
+
+        <button class="snav-item" data-tab="mgmt-finance" data-tooltip="Finanzas">
+          <span class="snav-item__icon">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="3 18 8 12.5 11.5 15 17 8 21 5.5"/>
+              <polyline points="16.5 5.5 21 5.5 21 10"/>
+            </svg>
+          </span>
+          <span class="snav-item__label">Finanzas</span>
         </button>
 
       </div>
@@ -1900,6 +1911,10 @@
       <span class="ws-mod__ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg></span>
       <span class="ws-mod__lbl">Outreach</span><span class="ws-mod__chk"></span>
     </button>
+    <button class="snav-mod ws-mod" data-module="finance" onclick="selectModule('finance');closeWorkspaceMenu()" role="menuitem">
+      <span class="ws-mod__ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 18 8 12.5 11.5 15 17 8 21 5.5"/><polyline points="16.5 5.5 21 5.5 21 10"/></svg></span>
+      <span class="ws-mod__lbl">Finanzas</span><span class="ws-mod__chk"></span>
+    </button>
   </div>
 
 </div><!-- /appShell -->
@@ -2914,7 +2929,7 @@
   })();
 </script>
 
-<script src="app.js?v=20260903m"></script>
+<script src="app.js?v=20260903n"></script>
 <div id="task-quick-edit" style="display:none;position:fixed;z-index:9999"></div>
 </body>
 </html>
