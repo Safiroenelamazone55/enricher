@@ -27194,7 +27194,11 @@ const WaChatModule = (() => {
   // Filtros de la lista — por defecto solo lo asignado a mí (pedido explícito de Jenny:
   // sin esto la bandeja mezclaba TODO, asignado o no, y se perdía de vista lo propio).
   let _filtroAsignado = 'mias'; // 'mias' | 'sin_asignar' | 'todas'
-  let _filtroEstado   = 'todas'; // 'todas' | 'abierto' | 'pendiente' | 'resuelto'
+  // Por defecto oculta lo Resuelto (pedido explícito 2026-09-01: "si le doy resuelto
+  // tampoco se oculta" — antes 'todas' mostraba TODO siempre y "Resuelto" era solo una
+  // etiqueta decorativa). 'abierto' ahora significa "no resuelto" (ver _chatsFiltrados),
+  // así que Pendientes sigue visible por defecto — solo Resuelto se esconde.
+  let _filtroEstado   = 'abierto'; // 'todas' | 'abierto' | 'pendiente' | 'resuelto'
   const _WA_TAG_PALETTE = ['#6366F1', '#22C55E', '#EF4444', '#F59E0B', '#0EA5E9', '#EC4899', '#8B5CF6', '#14B8A6'];
 
   const $$ = id => document.getElementById(id);
@@ -27547,7 +27551,9 @@ const WaChatModule = (() => {
       const asignado = (c.asignado_a || '').toLowerCase();
       if (_filtroAsignado === 'mias' && asignado !== _me) return false;
       if (_filtroAsignado === 'sin_asignar' && asignado) return false;
-      if (_filtroEstado !== 'todas' && (c.estado_conv || 'abierto') !== _filtroEstado) return false;
+      const estadoConv = c.estado_conv || 'abierto';
+      if (_filtroEstado === 'abierto') { if (estadoConv === 'resuelto') return false; }
+      else if (_filtroEstado !== 'todas' && estadoConv !== _filtroEstado) return false;
       return true;
     });
   }
