@@ -27243,22 +27243,29 @@ const WaChatModule = (() => {
 
   function _pintaBarraCuentas() {
     const bar = $$('wa-accts-bar');
-    if (!bar) return;
-    bar.classList.toggle('hidden', _conns.length === 0);
+    // El número de la barra lateral (dentro del chat ya conectado) hace exactamente lo
+    // mismo que esta barra de arriba — mostrar las dos a la vez es redundante (pedido
+    // explícito 2026-09-01: "para qué queremos lo mismo 2 veces"). Esta sigue viva para
+    // los estados SIN chat (esperando QR / desconectado), donde el número lateral
+    // todavía no existe y es la única forma de cambiar de cuenta.
+    const enChatConectado = !!(_conn && _conn.estado === 'conectado');
+    if (bar) bar.classList.toggle('hidden', _conns.length === 0 || enChatConectado);
     if (!_conn) return;
     const dot = $$('wa-acct-dot'), label = $$('wa-acct-label');
     const dotCls = _conn.estado === 'conectado' ? 'on' : _conn.estado === 'esperando_qr' ? 'qr' : 'off';
     if (dot)   dot.className = 'wa-accts-dot wa-accts-dot--' + dotCls;
     if (label) label.textContent = _conn.numero ? `+${_conn.numero}` : (_conn.nombre || 'WhatsApp');
     // Alerta si OTRA cuenta (no la que se está viendo) tiene mensajes sin leer — sin esto
-    // es invisible que otro número también recibió algo mientras se mira solo este.
-    const alert = $$('wa-acct-alert');
-    if (alert) {
-      const n = _otherConnsUnread;
+    // es invisible que otro número también recibió algo mientras se mira solo este. Se
+    // pinta en LAS DOS barras (solo una está visible a la vez, según enChatConectado).
+    const n = _otherConnsUnread;
+    const title = n ? `${n} sin leer en otra(s) cuenta(s) — clic para cambiar` : '';
+    [$$('wa-acct-alert'), $$('wa-numero-alert')].forEach(alert => {
+      if (!alert) return;
       alert.textContent = n > 99 ? '99+' : String(n);
       alert.classList.toggle('hidden', !n);
-      alert.title = n ? `${n} sin leer en otra(s) cuenta(s) — clic para cambiar` : '';
-    }
+      alert.title = title;
+    });
   }
 
   function _selectConn(id) {
@@ -27360,8 +27367,9 @@ const WaChatModule = (() => {
     }
     // conectado
     _estado('wa-chat');
-    const numEl = $$('wa-numero');
+    const numEl = $$('wa-numero-txt');
     if (numEl) numEl.textContent = _conn.numero ? `+${_conn.numero}` : '';
+    _pintaBarraCuentas();   // esconde la barra de arriba: el número lateral ya cambia de cuenta
     _pintaBotonVis($$('wa-vis-btn'), _conn);
     _cargarChats();
     _pollChat = setInterval(() => {
