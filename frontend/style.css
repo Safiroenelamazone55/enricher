@@ -13943,6 +13943,12 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
 .ldh-table--seq .lm-obc-badge { font-size: .66rem; padding: 1px 7px; }
 .ldh-table--seq .sq-estado { white-space: nowrap; }
 .ldh-chip { display: inline-block; font-size: .72rem; font-weight: 600; padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
+.ldh-chip--btn { cursor: pointer; border: 1.5px solid transparent; font: inherit; transition: box-shadow .12s; }
+.ldh-chip--btn:hover { box-shadow: inset 0 0 0 1.5px currentColor; }
+.ldh-chip--empty { background: var(--surface-secondary); color: var(--text-muted); border-style: dashed; border-color: var(--border); }
+.ldh-deriv { display: block; font-size: .66rem; color: var(--primary); margin-top: 4px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 170px; }
+.ldh-deriv:hover { text-decoration: underline; }
+.ldh-deriv + .ldh-deriv { margin-top: 2px; }
 .ldh-date { font-size: .78rem; color: var(--text-secondary); white-space: nowrap; }
 .ldh-note { font-size: .8rem; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ldh-none { color: var(--text-muted); }

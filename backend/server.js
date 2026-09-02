@@ -4107,6 +4107,11 @@ app.post('/api/lm/contacts/:id/disposition', requireAuth, async (req, res) => {
     }
 
     await pool.query(`UPDATE lm_contacts SET disposition=$1, updated_at=NOW() WHERE id=$2 AND user_id=$3`, [disp, cid, uid]);
+    // Si se cambia de "Derivó a otro" a cualquier otra cosa (desde este endpoint, NO desde
+    // /refer), el link ya no aplica — se limpia para no dejar un "Derivó a X" fantasma.
+    if ((oldDisp === 'derivado' || oldDisp === 'no_es_persona') && disp !== 'derivado' && disp !== 'no_es_persona') {
+      await pool.query(`UPDATE lm_contacts SET derivado_a=NULL WHERE id=$1 AND user_id=$2`, [cid, uid]).catch(() => {});
+    }
 
     let paused = 0, rerouted = 0, review_task_id = null;
 
@@ -4420,9 +4425,12 @@ app.post('/api/lm/contacts/:id/refer', requireAuth, async (req, res) => {
       }
     }
 
-    // El original sale de la cola (sin marcarse como perdido) y queda la traza en ambos.
+    // El original sale de la cola (sin marcarse como perdido) y queda la traza en ambos:
+    // derivado_a en el original (éste) + referred_by en el nuevo (arriba) — con eso la
+    // ficha y la tabla de Leads pueden mostrar un link real, no solo el texto suelto de
+    // la actividad de abajo.
     const nomNuevo = [nombre, apellido].filter(Boolean).join(' ') || email;
-    await client.query(`UPDATE lm_contacts SET disposition=$1, updated_at=NOW() WHERE id=$2 AND user_id=$3`, [disp, cid, uid]);
+    await client.query(`UPDATE lm_contacts SET disposition=$1, derivado_a=$4, updated_at=NOW() WHERE id=$2 AND user_id=$3`, [disp, cid, uid, nuevo.id]);
     await client.query(`UPDATE lm_contact_sequences SET estado='pausado', paused_reason=$3 WHERE user_id=$1 AND contact_id=$2 AND estado='activo'`,
       [uid, cid, 'disposition_' + disp]);
     await client.query(`INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, nota, fecha, estado) VALUES ($1,$2,$3,'respuesta',$4,NOW(),'hecha')`,

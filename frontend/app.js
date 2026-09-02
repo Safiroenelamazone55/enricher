@@ -17189,6 +17189,25 @@ ${foot}
   function _dispGrupo(d) { const x = _DISPOS.find(y => y[0] === d); return x ? x[4] : ''; }
   function _dispoLabel(d) { const x = _DISPOS.find(y => y[0] === d); return x ? x[1] : ''; }
   function _dispoBadge(d) { const x = _DISPOS.find(y => y[0] === d); return x ? `<span class="cp-dispo-badge" style="background:${x[3]};color:${x[2]}">${x[1]}</span>` : ''; }
+  // Link visible hacia el contacto derivado/referido — antes esta traza SOLO vivía como
+  // texto suelto en la actividad ("Disposición: Derivó a otro → Ana Pérez"), sin forma de
+  // hacer clic y llegar al contacto real. Usa derivado_a/referred_by (columnas reales,
+  // ver /lm/contacts/:id/refer) — se resuelve contra _contacts, igual que ya hacía la
+  // columna "Referido por" del export de Leads.
+  function _derivLinkHtml(c) {
+    const parts = [];
+    if (c.derivado_a) {
+      const t = _contacts.find(x => x.id === c.derivado_a);
+      const nom = t ? ([t.nombre, t.apellido].filter(Boolean).join(' ') || t.email) : `contacto #${c.derivado_a}`;
+      parts.push(`<span class="ldh-deriv" onclick="event.stopPropagation();LeadManagerModule.openContactPage(${c.derivado_a})" title="Ver a ${esc(nom)}">↳ Derivó a <b>${esc(nom)}</b></span>`);
+    }
+    if (c.referred_by) {
+      const o = _contacts.find(x => x.id === c.referred_by);
+      const nom = o ? ([o.nombre, o.apellido].filter(Boolean).join(' ') || o.email) : `contacto #${c.referred_by}`;
+      parts.push(`<span class="ldh-deriv" onclick="event.stopPropagation();LeadManagerModule.openContactPage(${c.referred_by})" title="Ver a ${esc(nom)}">↰ Referido por <b>${esc(nom)}</b></span>`);
+    }
+    return parts.join('');
+  }
   async function _lmSetDispositionCore(cid, disp, seqId, nota) {
     const res = await apiFetch(`${API}/lm/contacts/${cid}/disposition`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ disposition: disp, sequence_id: seqId || null, nota: nota || '' }) });
     if (!res.ok) throw new Error((await res.json()).error || 'Error');
@@ -21275,7 +21294,10 @@ ${foot}
         <td>${contacto}</td>
         <td class="ldh-dim">${cli ? esc(cli.nombre) : '—'}</td>
         <td class="ldh-dim">${seqs.length ? esc(seqs[0].nombre) + (seqs.length > 1 ? ` <span class="ldh-more">+${seqs.length - 1}</span>` : '') : '—'}${paso ? `<div class="ldh-sub">${esc(paso)}</div>` : ''}</td>
-        <td>${d ? `<span class="ldh-chip" style="background:${d[3]};color:${d[2]}">${d[1]}</span>` : '—'}</td>
+        <td onclick="event.stopPropagation()">
+          <button class="ldh-chip ldh-chip--btn${d ? '' : ' ldh-chip--empty'}" style="${d ? `background:${d[3]};color:${d[2]}` : ''}" onclick="LeadManagerModule.ldOpenDispoMenu(event,${c.id})" title="Clic para cambiar el estado">${d ? d[1] : 'Sin estado'}</button>
+          ${_derivLinkHtml(c)}
+        </td>
         <td class="ldh-date">${fecha}</td>
         <td class="ldh-note ldh-note--full" onclick="event.stopPropagation();LeadManagerModule.ldEditNote(${c.id},${i.notaId || 'null'})" title="Clic para editar la nota"><div class="ldh-note__in">${i.nota ? esc(i.nota) : '<span class="ldh-none">＋ Añadir nota</span>'}</div></td>
         <td class="ldh-acts" onclick="event.stopPropagation()">
@@ -21316,6 +21338,37 @@ ${foot}
       showBanner('✓ Nota guardada', 'success');
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
+  // Menú "cambiar estado" desde la tabla de Leads — antes el chip de Resultado era
+  // solo lectura; ahora abre el mismo picker de disposiciones que ya usa el Inbox
+  // (ibResolveDisp ya sabe rutear 'derivado'/'no_es_persona' → ldRefer y 'mas_adelante'
+  // → ldNurture), así que el cambio queda registrado igual que desde cualquier otro
+  // lado: actividad "Disposición: …" (historial del cliente) + avance de etapa +
+  // nota opcional (novaNote, se puede omitir con Esc) — todo ya vive en esas funciones.
+  function ldOpenDispoMenu(ev, cid) {
+    if (ev && ev.stopPropagation) ev.stopPropagation();
+    document.querySelectorAll('.cp-mark-menu').forEach(m => m.remove());
+    const close = "document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove())";
+    const item = (label, onclick, dot) => `<button class="cp-mark-menu__b" onclick="${close};${onclick}">${dot ? `<span class="cp-mark-dot" style="background:${dot}"></span>` : ''}${label}</button>`;
+    const c = _contacts.find(x => x.id === cid);
+    let html = `<div class="cp-mark-menu__h">Cambiar estado del lead</div>`;
+    html += `<div class="cp-mark-menu__grid">` + _DISPOS.map(d => item(esc(d[1]), `LeadManagerModule.ibResolveDisp(${cid},'${d[0]}')`, d[2])).join('') + `</div>`;
+    if (c && c.disposition) {
+      html += `<div class="cp-mark-menu__sep"></div><div class="cp-mark-menu__list">` + item('— Quitar estado —', `LeadManagerModule.lmSetDisposition(${cid},'')`) + `</div>`;
+    }
+    const menu = document.createElement('div');
+    menu.className = 'cp-mark-menu';
+    menu.innerHTML = html;
+    document.body.appendChild(menu);
+    const t = (ev && (ev.currentTarget || ev.target)) || document.body;
+    const r = t.getBoundingClientRect();
+    const estH = 260;
+    const openUp = r.bottom + estH > window.innerHeight && r.top > estH;
+    menu.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 348))}px`;
+    if (openUp) { menu.style.top = `${r.top - 6}px`; menu.style.transform = 'translateY(-100%)'; }
+    else { menu.style.top = `${r.bottom + 6}px`; }
+    setTimeout(() => document.addEventListener('click', function onDoc(e) { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', onDoc); } }), 0);
+  }
+
   // ── Derivación: registrar al contacto correcto de la MISMA empresa ──
   // disp='derivado' (te lo dio el lead) | 'no_es_persona' (no dio datos, lo agregas tú).
   function ldRefer(cid, disp) {
@@ -21445,6 +21498,7 @@ ${foot}
       ['Grupo', r => ((_DISP_GRUPOS.find(g => g[0] === _dispGrupo(r.c.disposition)) || [])[1] || '')],
       ['Retomar el', r => (r.c.nurture_at ? String(r.c.nurture_at).slice(0, 10) : '')],
       ['Referido por', r => { const o = _contacts.find(x => x.id === r.c.referred_by); return o ? ([o.nombre, o.apellido].filter(Boolean).join(' ') || o.email) : ''; }],
+      ['Derivó a', r => { const t = _contacts.find(x => x.id === r.c.derivado_a); return t ? ([t.nombre, t.apellido].filter(Boolean).join(' ') || t.email) : ''; }],
       ['Fecha', r => { const f = r.i.fecha || r.c.updated_at; const x = new Date(f); return isNaN(x) ? '' : x.toISOString().slice(0, 10); }],
       ['Nota', r => r.i.nota],
     ];
@@ -23351,8 +23405,9 @@ ${foot}
           </div></div>
           ${_seqEnrollCard(c, id)}
           <div class="cp-card"><div class="cp-card__t">Resultado de la interacción</div><div class="cp-fields">
-            <div class="cp-f cp-f--full"><div class="cp-dispo">${_DISPOS.map(d => `<button class="cp-dispo-b${c.disposition === d[0] ? ' on' : ''}" style="${c.disposition === d[0] ? `background:${d[3]};color:${d[2]};border-color:${d[2]}` : ''}" onclick="LeadManagerModule.lmSetDisposition(${id},'${c.disposition === d[0] ? '' : d[0]}')">${d[1]}</button>`).join('')}</div></div>
+            <div class="cp-f cp-f--full"><div class="cp-dispo">${_DISPOS.map(d => `<button class="cp-dispo-b${c.disposition === d[0] ? ' on' : ''}" style="${c.disposition === d[0] ? `background:${d[3]};color:${d[2]};border-color:${d[2]}` : ''}" onclick="LeadManagerModule.ibResolveDisp(${id},'${c.disposition === d[0] ? '' : d[0]}')">${d[1]}</button>`).join('')}</div></div>
             ${_cpLastResultInfo(c)}
+            ${_derivLinkHtml(c) ? `<div class="cp-f cp-f--full" style="gap:5px">${_derivLinkHtml(c)}</div>` : ''}
             ${c.data_issue ? `<div class="cp-f cp-f--full"><span class="cp-f__l">Por corregir</span><div class="cp-dispo" style="align-items:center;gap:8px"><span class="client-badge" style="background:#FEF3C7;color:#B45309">⚠ ${_DATA_ISSUE_LBL[c.data_issue] || c.data_issue}</span><button class="cp-dispo-b" title="Marca el dato como corregido y reanuda sus secuencias pausadas" onclick="LeadManagerModule.lmResumeDataIssue(${id})">✓ Corregido — reanudar</button></div></div>` : ''}
           </div></div>
           <div class="cp-card"><div class="cp-card__t">Disponibilidad de canales</div><div class="cp-fields">
@@ -24985,7 +25040,7 @@ ${foot}
     seqDoDataIssue, seqDoDataIssuePick, ctToggleDataIssue, lmResumeDataIssue, seqOpenMark,
     lmSetPageSize, ctGoPage, coGoPage, seqCtSetEstado, seqTaskSetCanal,
     ldSetResult, ldSetCli, ldSetSeq, ldSetCamp, ldSetQ, ldAddNote, ldMeet, ldToDeal, ldEditNote, ldExport,
-    ldRefer, ldReferSave, ldNurture, ldNurtureSave,
+    ldRefer, ldReferSave, ldNurture, ldNurtureSave, ldOpenDispoMenu,
     dlSetCli, dlOpen, dlClose, dlSave,
     sqSetCli, sqSetEst, sqSetQ, cmSetCli, cmSetEst, cmSetQ,
     seqRunSetCanal, seqTaskSetDue,

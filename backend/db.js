@@ -886,6 +886,10 @@ async function initDb() {
     // Derivación: quién refirió a este contacto (el lead que dijo "habla con X" o al que
     // reemplaza). Da trazabilidad en ambos sentidos dentro de la misma empresa.
     await pool.query(`ALTER TABLE lm_contacts  ADD COLUMN IF NOT EXISTS referred_by      INTEGER REFERENCES lm_contacts(id) ON DELETE SET NULL;`);
+    // Sentido inverso: a quién derivó ESTE contacto (se setea junto con referred_by del
+    // nuevo, en /lm/contacts/:id/refer). Sin esto, la ficha/tabla del que derivó no tenía
+    // forma de saber a quién — solo quedaba como texto suelto en la actividad.
+    await pool.query(`ALTER TABLE lm_contacts  ADD COLUMN IF NOT EXISTS derivado_a       INTEGER REFERENCES lm_contacts(id) ON DELETE SET NULL;`);
     // Nurturing: fecha en la que hay que retomar a un contacto marcado "Más adelante".
     await pool.query(`ALTER TABLE lm_contacts  ADD COLUMN IF NOT EXISTS nurture_at       DATE;`);
     // Deals: capa financiera del pipeline por contacto (valor estimado · probabilidad · cierre)
