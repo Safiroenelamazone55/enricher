@@ -18216,6 +18216,18 @@ ${foot}
     const raw = String(c.whatsapp || c.movil || c.celular || c.telefono || c.phone || '').replace(/\D/g, '');
     return raw.length >= 7 ? raw : '';
   }
+  // Abre el panel de WhatsApp de Nova (QuickWaModule) para ESTE contacto — reemplaza
+  // los links "wa.me" de toda la sección, que abrían el WhatsApp PERSONAL de quien
+  // hace clic, no el número de negocio ya conectado. Resuelve la conexión acá (no en
+  // QuickWaModule) porque ya tenemos _contacts/_clients cargados en este closure.
+  function openWaFor(cid, prefill) {
+    const c = _contacts.find(x => x.id === cid);
+    if (!c) return;
+    const wa = _waDigits(c);
+    if (!wa) { showBanner('Este contacto no tiene número de WhatsApp', 'info'); return; }
+    const nombre = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || 'Contacto';
+    QuickWaModule.open({ contactId: cid, nombre, telefono: wa, outboundClientId: c.outbound_client_id || null, prefill: prefill || '' });
+  }
   function _gmailUrl(to, subject, body, cc) {
     return `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to || '')}${cc ? `&cc=${encodeURIComponent(cc)}` : ''}&su=${encodeURIComponent(subject || '')}&body=${encodeURIComponent(body || '')}`;
   }
@@ -18409,11 +18421,12 @@ ${foot}
     const wa = _waDigits(c);
     const _tel = String(c.movil || c.celular || c.telefono || c.phone || '').trim();
     let chanPrimary = '';
+    const waPrefillJs = rendered.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n');
     if (st.canal === 'email' && c.email) chanPrimary = `<a class="cp-ch cp-ch--primary" href="${esc(_gmailUrl(c.email, subject, rendered, ccMail))}" target="_blank" rel="noopener" title="Abre Gmail con destinatario${ccMail ? ', CC' : ''}, asunto y mensaje ya puestos">${NI('mail')}<span>Abrir Gmail</span></a>`;
-    else if (st.canal === 'whatsapp' && wa) chanPrimary = `<a class="cp-ch cp-ch--primary" href="https://wa.me/${wa}?text=${encodeURIComponent(rendered)}" target="_blank" rel="noopener" title="Abre WhatsApp con el mensaje ya puesto">${NI('whatsapp')}<span>WhatsApp</span></a>`;
+    else if (st.canal === 'whatsapp' && wa) chanPrimary = `<button class="cp-ch cp-ch--primary" onclick="LeadManagerModule.openWaFor(${cid},'${waPrefillJs}')" title="Abre el WhatsApp de Nova con el mensaje ya puesto">${NI('whatsapp')}<span>WhatsApp</span></button>`;
     else if (st.canal === 'call' && _tel) chanPrimary = `<a class="cp-ch cp-ch--primary" href="tel:${esc(_tel.replace(/\s/g, ''))}" title="Llamar ${esc(_tel)}">${NI('phone')}<span>Llamar</span></a>`;
     const chanIcons = [];
-    if (wa && st.canal !== 'whatsapp') chanIcons.push(`<a class="cp-ch cp-ch--ic" href="https://wa.me/${wa}?text=${encodeURIComponent(rendered)}" target="_blank" rel="noopener" title="WhatsApp — ${esc(_tel)}">${NI('whatsapp')}</a>`);
+    if (wa && st.canal !== 'whatsapp') chanIcons.push(`<button class="cp-ch cp-ch--ic" onclick="LeadManagerModule.openWaFor(${cid},'${waPrefillJs}')" title="WhatsApp — ${esc(_tel)}">${NI('whatsapp')}</button>`);
     if (_tel && st.canal !== 'call') chanIcons.push(`<a class="cp-ch cp-ch--ic" href="tel:${esc(_tel.replace(/\s/g, ''))}" title="Llamar — ${esc(_tel)}">${NI('phone')}</a>`);
     if (c.linkedin && st.canal !== 'linkedin') chanIcons.push(`<button class="cp-ch cp-ch--ic" onclick="LeadManagerModule.seqOpenLinkedIn(${cid})" title="Abrir el perfil de LinkedIn al costado">${NI('linkedin')}</button>`);
     if (c.email && st.canal !== 'email' && st.canal !== 'linkedin') chanIcons.push(`<a class="cp-ch cp-ch--ic" href="${esc(_gmailUrl(c.email, subject || _emailSubjectFor(seqId, st, src, draft), rendered))}" target="_blank" rel="noopener" title="Gmail — ${esc(c.email)}">${NI('mail')}</a>`);
@@ -21349,6 +21362,7 @@ ${foot}
         ${mail ? `<a class="ldh-cto__b" href="mailto:${esc(mail)}" title="${esc(mail)}">${NI('mail', 13)}</a>` : ''}
         ${tel ? `<a class="ldh-cto__b" href="tel:${esc(tel.replace(/\s/g, ''))}" title="${esc(tel)}">${NI('phone', 13)}</a>` : ''}
         ${li ? `<a class="ldh-cto__b" href="${esc(/^https?:/i.test(li) ? li : 'https://' + li)}" target="_blank" rel="noopener" title="LinkedIn">${NI('linkedin', 13)}</a>` : ''}
+        ${_waDigits(c) ? `<button class="ldh-cto__b" onclick="event.stopPropagation();LeadManagerModule.openWaFor(${c.id})" title="WhatsApp">${NI('whatsapp', 13)}</button>` : ''}
         ${(mail || tel || li) ? '' : '<span class="ldh-none">—</span>'}
         <div class="ldh-cto__txt">${mail ? esc(mail) : tel ? esc(tel) : '&nbsp;'}</div>
       </div>`;
@@ -23450,7 +23464,7 @@ ${foot}
           <button class="cp-act" onclick="LeadManagerModule.ldRefer(${id},'derivado')">＋ Crear referido</button>
           <button class="cp-act" onclick="LeadManagerModule.cpActOpen('tarea')">＋ Crear tarea</button>
           ${c.linkedin ? `<a class="cp-act cp-act--in" href="${esc(c.linkedin)}" target="_blank" rel="noopener">LinkedIn ›</a>` : ''}
-          ${_waDigits(c) ? `<a class="cp-act" href="https://wa.me/${_waDigits(c)}" target="_blank" rel="noopener">WhatsApp ›</a>` : ''}
+          ${_waDigits(c) ? `<button class="cp-act" onclick="LeadManagerModule.openWaFor(${id})">WhatsApp ›</button>` : ''}
           ${c.email ? `<a class="cp-act" href="mailto:${esc(c.email)}">Email</a>` : ''}
           <button class="cp-act" onclick="LeadManagerModule.cpActOpen('')">＋ Registrar actividad</button>
           <button class="cp-act" onclick="LeadManagerModule.bulkAddOpen('sequence',[${id}])">＋ Secuencia</button>
@@ -23497,7 +23511,7 @@ ${foot}
                `<button class="cp-dispo-b cp-dispo-b--xs" onclick="LeadManagerModule.cpFocusField('email')">Corregir</button>`,
                `<button class="cp-dispo-b cp-dispo-b--xs${c.email_status === 'manual' ? ' on' : ''}" onclick="LeadManagerModule.lmToggleManualEmail(${id})">Email enviado manualmente</button>`].filter(Boolean))}
             ${_cpChannelRow('WhatsApp', !_waDigits(c) ? ['Sin número', '#6C6862', '#F1EFEB'] : c.no_whatsapp ? ['Número no válido', '#B45309', '#FEF3C7'] : ['Disponible', '#065F46', '#D1FAE5'],
-              [(_waDigits(c) && !c.no_whatsapp) ? `<a class="cp-dispo-b cp-dispo-b--xs" href="https://wa.me/${_waDigits(c)}" target="_blank" rel="noopener">Abrir</a>` : '',
+              [(_waDigits(c) && !c.no_whatsapp) ? `<button class="cp-dispo-b cp-dispo-b--xs" onclick="LeadManagerModule.openWaFor(${id})">Abrir</button>` : '',
                _waDigits(c) ? `<button class="cp-dispo-b cp-dispo-b--xs" onclick="LeadManagerModule.lmCopy('${esc(String(c.movil || c.telefono || '').replace(/'/g, '&#39;'))}','Copiado')">Copiar</button>` : '',
                `<button class="cp-dispo-b cp-dispo-b--xs" onclick="LeadManagerModule.cpOpenRegisterReply(${id},'whatsapp')">Registrar respuesta</button>`,
                _waDigits(c) ? `<button class="cp-dispo-b cp-dispo-b--xs${c.no_whatsapp ? ' on' : ''}" onclick="LeadManagerModule.lmToggleNoWhatsapp(${id})">${c.no_whatsapp ? 'Marcar válido' : 'Marcar no válido'}</button>` : ''].filter(Boolean))}
@@ -25135,7 +25149,7 @@ ${foot}
     bulkVerifyEmails, connectGmail, sendCfgToggle, saveSendCfg,
     personalizeOne, bulkPersonalize, openAiDrafts, closeAiDrafts, aiGenerate,
     aiDraftSave, aiDraftStatus, aiDraftDelete, aiCfgToggle, saveAiCfg,
-    seqDoCopySubject, lmCopy,
+    seqDoCopySubject, lmCopy, openWaFor,
     openColsPicker, toggleCtCol, resetCtCols };
 })();
 
@@ -27049,6 +27063,122 @@ const SlackChat = (() => {
            miniMenuMsg, miniReaccionar, miniReaccionarPill, miniCopiar,
            miniDetener: _pararSondeoMini, refreshMiniBadge };
 })();
+
+// ── Panel rápido de WhatsApp — abre el chat de UN contacto puntual en un panel de
+// media pantalla, sin salir de donde se esté (ficha del contacto, tabla de Leads,
+// tarea de secuencia). Reemplaza los links "wa.me" que abrían el WhatsApp PERSONAL
+// de quien hacía clic — esto usa el WhatsApp de NEGOCIO ya conectado en Nova.
+// Resuelve la conexión: el del cliente outbound del contacto si existe y está
+// conectado, si no el de Operaciones (pedido explícito 2026-09-01).
+const QuickWaModule = (() => {
+  let _conn = null, _jid = null, _nombre = '', _poll = null;
+
+  async function open({ contactId, nombre, telefono, outboundClientId, prefill }) {
+    close();
+    _nombre = nombre || 'Contacto'; _jid = `${telefono}@s.whatsapp.net`;
+    _render(prefill || '');
+    _conn = await _resolverConexion(outboundClientId);
+    if (!_conn) { _setSinConexion(); return; }
+    const sub = document.getElementById('qwa-sub'); if (sub) sub.textContent = `+${_conn.numero || ''}`;
+    await _cargarMensajes();
+    _poll = setInterval(_cargarMensajes, 5000);
+  }
+
+  async function _resolverConexion(outboundClientId) {
+    try {
+      if (outboundClientId) {
+        const r = await apiFetch(`${API}/wa/connections?outboundClientId=${outboundClientId}`);
+        const rows = r.ok ? await r.json() : [];
+        const ok = rows.find(c => c.estado === 'conectado');
+        if (ok) return ok;
+      }
+      const r2 = await apiFetch(`${API}/wa/connections`);
+      const rows2 = r2.ok ? await r2.json() : [];
+      return rows2.find(c => c.estado === 'conectado') || null;
+    } catch (_) { return null; }
+  }
+
+  function _render(prefill) {
+    document.getElementById('qwa-panel')?.remove();
+    const panel = document.createElement('div');
+    panel.id = 'qwa-panel';
+    panel.className = 'qwa-panel';
+    panel.innerHTML = `
+      <div class="qwa-panel__backdrop" onclick="QuickWaModule.close()"></div>
+      <div class="qwa-panel__box">
+        <div class="qwa-panel__hdr">
+          <div class="qwa-panel__who">
+            <div class="qwa-panel__ava">${esc((_nombre || '?').charAt(0).toUpperCase())}</div>
+            <div><div class="qwa-panel__name">${esc(_nombre)}</div><div class="qwa-panel__sub" id="qwa-sub">Conectando…</div></div>
+          </div>
+          <button class="fin-pi-x" onclick="QuickWaModule.close()">✕</button>
+        </div>
+        <div class="qwa-panel__msgs" id="qwa-msgs"><div class="clients-loading"><div class="clients-spin"></div></div></div>
+        <div class="qwa-panel__composer">
+          <textarea id="qwa-input" class="chat-composer__field" rows="1" placeholder="Escribe un mensaje…"
+            onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();QuickWaModule.enviar()}"
+            oninput="ChatModule.autoResize(this)">${esc(prefill)}</textarea>
+          <button class="chat-composer__send" onclick="QuickWaModule.enviar()" title="Enviar (Enter)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22 11 13 2 9l20-7z"/></svg>
+          </button>
+        </div>
+      </div>`;
+    document.body.appendChild(panel);
+    if (prefill) setTimeout(() => { const el = document.getElementById('qwa-input'); if (el) ChatModule.autoResize(el); }, 30);
+  }
+
+  function _setSinConexion() {
+    const sub = document.getElementById('qwa-sub'); if (sub) sub.textContent = 'Sin WhatsApp conectado';
+    const box = document.getElementById('qwa-msgs');
+    if (box) box.innerHTML = `<div class="chat-ch-empty">No hay un WhatsApp conectado para este contacto todavía.<br>Conéctalo desde la sección WhatsApp.</div>`;
+  }
+
+  function _fmtHora(ts) { try { return new Date(ts).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' }); } catch (_) { return ''; } }
+
+  async function _cargarMensajes() {
+    if (!_conn) return;
+    try {
+      const r = await apiFetch(`${API}/wa/connections/${_conn.id}/chats/${encodeURIComponent(_jid)}/mensajes`);
+      const rows = r.ok ? await r.json() : [];
+      _pintar(rows);
+    } catch (_) { /* se reintenta en el próximo poll */ }
+  }
+
+  function _pintar(rows) {
+    const box = document.getElementById('qwa-msgs'); if (!box) return;
+    const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
+    if (!rows.length) { box.innerHTML = `<div class="chat-ch-empty">Todavía no hay mensajes en este chat.</div>`; return; }
+    box.innerHTML = rows.map(m => {
+      if (m.eliminado) return `<div class="wa-msg ${m.from_me ? 'wa-msg--out' : 'wa-msg--in'} wa-msg--del"><div class="wa-msg__bubble">🚫 Se eliminó este mensaje<span class="wa-msg__time">${_fmtHora(m.ts)}</span></div></div>`;
+      const mediaHtml = (m.media_type === 'image' && m.media_url) ? `<img src="${API_ORIGIN}${esc(m.media_url)}" class="wa-msg__img" onclick="window.open('${API_ORIGIN}${esc(m.media_url)}','_blank')" alt="">` : '';
+      return `<div class="wa-msg ${m.from_me ? 'wa-msg--out' : 'wa-msg--in'}"><div class="wa-msg__bubble">${mediaHtml}${esc(m.texto)}<span class="wa-msg__time">${_fmtHora(m.ts)}</span></div></div>`;
+    }).join('');
+    if (atBottom) box.scrollTop = box.scrollHeight;
+  }
+
+  async function enviar() {
+    const input = document.getElementById('qwa-input');
+    const texto = (input?.value || '').trim();
+    if (!texto || !_conn) return;
+    input.value = ''; ChatModule.autoResize(input);
+    try {
+      const r = await apiFetch(`${API}/wa/connections/${_conn.id}/chats/${encodeURIComponent(_jid)}/mensajes`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ texto })
+      });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'No se pudo enviar');
+      await _cargarMensajes();
+    } catch (e) { alert('Error: ' + e.message); input.value = texto; }
+  }
+
+  function close() {
+    if (_poll) { clearInterval(_poll); _poll = null; }
+    document.getElementById('qwa-panel')?.remove();
+    _conn = null; _jid = null;
+  }
+
+  return { open, close, enviar };
+})();
+window.QuickWaModule = QuickWaModule;
 
 // ── Editor de fotos, compartido por WaChatModule y ObcWaModule ──────────────
 // Vive aparte para no duplicar el canvas/las herramientas en los dos módulos de

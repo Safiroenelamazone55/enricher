@@ -15690,6 +15690,21 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .wa-main__composer { display: flex; align-items: flex-end; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border); flex-shrink: 0; }
 .wa-main__composer .chat-composer__field { flex: 1; }
 
+/* ── Panel rápido de WhatsApp (QuickWaModule) — media pantalla, sobre cualquier
+   sección (ficha de contacto, Leads, tarea de secuencia) ── */
+.qwa-panel { position: fixed; inset: 0; z-index: 10060; display: flex; justify-content: flex-end; }
+.qwa-panel__backdrop { position: absolute; inset: 0; background: rgba(28,25,23,.35); }
+.qwa-panel__box { position: relative; width: 50%; min-width: 380px; max-width: 640px; height: 100%; background: var(--surface); box-shadow: -8px 0 32px rgba(0,0,0,.18); display: flex; flex-direction: column; }
+.qwa-panel__hdr { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.qwa-panel__who { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.qwa-panel__ava { width: 36px; height: 36px; border-radius: 50%; background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0; }
+.qwa-panel__name { font-weight: 700; font-size: .9rem; color: var(--text-primary); }
+.qwa-panel__sub { font-size: .74rem; color: var(--text-muted); }
+.qwa-panel__msgs { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 14px 16px; display: flex; flex-direction: column; gap: 2px; }
+.qwa-panel__composer { display: flex; align-items: flex-end; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border); flex-shrink: 0; }
+.qwa-panel__composer .chat-composer__field { flex: 1; }
+@media (max-width: 760px) { .qwa-panel__box { width: 100%; max-width: none; min-width: 0; } }
+
 /* ── Programar envío ── */
 .wa-clock-wrap { position: relative; flex-shrink: 0; }
 .wa-clock { border: 1px solid var(--border); background: var(--surface); border-radius: 0; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text-secondary); transition: all .12s; }
