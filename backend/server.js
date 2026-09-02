@@ -8607,6 +8607,81 @@ app.get('/api/wa/connections/:id/chats', requireAuth, async (req, res) => {
   } catch (err) { console.error('[wa] chats', err.message); res.status(500).json({ error: 'Error al cargar los chats' }); }
 });
 
+// Outreach → pestaña "WhatsApp": mismo lugar que el Inbox de correo, pero para
+// WhatsApp. Pedido explícito 2026-09-02: "solo los contactos que tenemos en
+// secuencia, y con un chat previo activo" — NO arranca chats nuevos desde acá,
+// solo muestra los que YA existen (vínculo guardado en wa_jid_links, o el jid
+// armado desde su teléfono si ya tiene mensajes ahí). Abrir un contacto de esta
+// lista usa el mismo QuickWaModule.open() que el resto de la app.
+app.get('/api/lm/wa-list', requireAuth, async (req, res) => {
+  try {
+    // 'activo' o 'pausado' = "sigue en la secuencia" (mismo criterio que el resto del
+    // motor, ver estado IN ('activo','pausado') en /api/lm/contacts/:id/disposition) —
+    // un contacto que ya respondió por WhatsApp queda pausado, pero es justo el caso
+    // que esta pestaña debe mostrar, no excluir.
+    const { rows: contactos } = await pool.query(`
+      SELECT DISTINCT k.id, k.nombre, k.apellido, k.movil, k.telefono, k.outbound_client_id
+        FROM lm_contacts k
+        JOIN lm_contact_sequences cs ON cs.contact_id = k.id AND cs.estado IN ('activo','pausado')
+       WHERE k.user_id = $1`, [req.workspaceOwnerId]);
+    if (!contactos.length) return res.json([]);
+
+    const { rows: conns } = await pool.query(
+      `SELECT id, connected_by, visibilidad, visibilidad_niveles, visibilidad_miembros FROM wa_connections WHERE user_id=$1`,
+      [req.workspaceOwnerId]);
+    const visibles = [];
+    for (const c of conns) if (await _puedeVerWa(req, c)) visibles.push(c.id);
+    if (!visibles.length) return res.json([]);
+
+    const ids = contactos.map(c => c.id);
+    const { rows: links } = await pool.query(
+      `SELECT contact_id, connection_id, chat_jid FROM wa_jid_links WHERE contact_id = ANY($1) AND connection_id = ANY($2)`,
+      [ids, visibles]);
+    const linkMap = new Map(links.map(l => [l.contact_id, { connection_id: l.connection_id, chat_jid: l.chat_jid }]));
+
+    const resueltos = [];
+    for (const c of contactos) {
+      let hit = linkMap.get(c.id);
+      if (!hit) {
+        const telefono = String(c.movil || c.telefono || '').replace(/\D/g, '');
+        if (!telefono) continue;
+        const jid = `${telefono}@s.whatsapp.net`;
+        const { rows: [m] } = await pool.query(
+          `SELECT connection_id FROM wa_messages WHERE connection_id = ANY($1) AND chat_jid=$2 LIMIT 1`,
+          [visibles, jid]);
+        if (!m) continue;
+        hit = { connection_id: m.connection_id, chat_jid: jid };
+      }
+      resueltos.push({ contacto: c, connection_id: hit.connection_id, chat_jid: hit.chat_jid });
+    }
+    if (!resueltos.length) return res.json([]);
+
+    const out = [];
+    for (const r of resueltos) {
+      const { rows: [last] } = await pool.query(
+        `SELECT texto, ts, from_me, eliminado FROM wa_messages WHERE connection_id=$1 AND chat_jid=$2 ORDER BY ts DESC LIMIT 1`,
+        [r.connection_id, r.chat_jid]);
+      const { rows: [nl] } = await pool.query(
+        `SELECT COUNT(*)::int AS n FROM wa_messages WHERE connection_id=$1 AND chat_jid=$2 AND NOT leido AND NOT from_me`,
+        [r.connection_id, r.chat_jid]);
+      out.push({
+        contact_id: r.contacto.id,
+        nombre: [r.contacto.nombre, r.contacto.apellido].filter(Boolean).join(' '),
+        telefono: r.contacto.movil || r.contacto.telefono || '',
+        outbound_client_id: r.contacto.outbound_client_id,
+        connection_id: r.connection_id,
+        chat_jid: r.chat_jid,
+        ultimo_texto: last?.eliminado ? 'Se eliminó este mensaje' : (last?.texto || ''),
+        ultimo_ts: last?.ts || null,
+        from_me: !!last?.from_me,
+        no_leidos: nl?.n || 0,
+      });
+    }
+    out.sort((a, b) => new Date(b.ultimo_ts || 0) - new Date(a.ultimo_ts || 0));
+    res.json(out);
+  } catch (err) { console.error('[lm] wa-list', err.message); res.status(500).json({ error: 'Error al cargar' }); }
+});
+
 // ── Etiquetas de WhatsApp — a nivel de workspace, no por conexión: la misma
 // etiqueta sirve sin importar cuál de tus WhatsApp tenga el chat.
 const _WA_TAG_DEFAULTS = [

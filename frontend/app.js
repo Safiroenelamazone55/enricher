@@ -15760,6 +15760,7 @@ const LeadManagerModule = (() => {
     { k: 'deals',      l: 'Deals',              g: 'Comercial' },
     { k: 'activities', l: 'Actividades',        g: 'Comercial' },
     { k: 'inbox',      l: 'Inbox / Respuestas', g: 'Comercial' },
+    { k: 'wa',         l: 'WhatsApp',           g: 'Comercial' },
     { k: 'tasks',      l: 'Tareas comerciales', g: 'Comercial' },
     { k: 'reports',    l: 'Reportes',           g: 'Análisis' },
     { k: 'templates',  l: 'Plantillas',         g: 'Análisis' },
@@ -15776,6 +15777,7 @@ const LeadManagerModule = (() => {
     contacts:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>',
     activities:'<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
     inbox:'<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
+    wa:'<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>',
     tasks:'<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
     reports:'<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>',
     templates:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>',
@@ -15792,6 +15794,7 @@ const LeadManagerModule = (() => {
       const cnt = n.k === 'tasks'  ? (_pendingTaskCount() || nc.tasks || 0)
                 : n.k === 'leads'  ? ((_contacts.length ? _contacts.filter(c => c.disposition === 'respondio' || c.disposition === 'reunion').length : 0) || nc.leads || 0)
                 : n.k === 'inbox'  ? (Array.isArray(_ibThreads) ? _ibUnreadTotal() : (nc.inbox || 0))
+                : n.k === 'wa'     ? (Array.isArray(_waList) ? _waList.reduce((s, x) => s + (x.no_leidos || 0), 0) : (nc.wa || 0))
                 : 0;
       html += `<button class="lm2-nav__item${active ? ' active' : ''}" onclick="LeadManagerModule.go('${n.k}')">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${_NAV_ICON[n.k] || ''}</svg>
@@ -15828,6 +15831,7 @@ const LeadManagerModule = (() => {
     if (section === 'dashboard') _loadToday();
     if (section === 'settings')  { _loadSendCfg(); _loadAiCfg(); }
     if (section === 'inbox')     { _lmMsgs = null; _ibThreads = null; _ibActive = null; _ibThread = null; _ibReload(); _loadLmMsgs(); }
+    if (section === 'wa')        { _waList = null; _waReload(); }
     if (section === 'tasks')     { _apList = null; _apReload(); }
     if (section === 'leads')     _reloadActivities();
   }
@@ -15844,6 +15848,7 @@ const LeadManagerModule = (() => {
     else if (_section === 'activities') body.innerHTML = _vActivities();
     else if (_section === 'tasks')     body.innerHTML = _vTasks();
     else if (_section === 'inbox')     body.innerHTML = _vInbox();
+    else if (_section === 'wa')        body.innerHTML = _vWaList();
     else if (_section === 'leads')     { body.innerHTML = _vLeadsHub(); _ldPaint(); }
     else if (_section === 'deals')     { body.innerHTML = _vDeals(); _dlPaint(); }
     else if (_section === 'companies') { body.innerHTML = _vCompanies(); _renderCompanies(); }
@@ -20163,6 +20168,47 @@ ${foot}
       _ibPaint();
       showBanner('✓ Envío programado cancelado', 'success');
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+
+  // ── Outreach → WhatsApp: mismo lugar que el Inbox de correo, pero para WhatsApp.
+  // Solo contactos con secuencia activa y una conversación YA existente (ver
+  // GET /api/lm/wa-list) — no arranca chats nuevos, abre los que ya hay con el
+  // mismo QuickWaModule que usa el resto de la app.
+  let _waList = null; // null = cargando
+  async function _waReload() {
+    try { const r = await apiFetch(`${API}/lm/wa-list`); _waList = (r && r.ok) ? await r.json() : []; }
+    catch { _waList = []; }
+    if (_section === 'wa') { const body = $('lm2-body'); if (body) body.innerHTML = _vWaList(); }
+    _refreshNav();
+  }
+  function _vWaList() {
+    if (_waList === null) return `<div class="lm-sec-head lm-sec-head--compact"><div><h2 class="lm-sec-title">WhatsApp</h2></div></div><div class="clients-loading"><div class="clients-spin"></div></div>`;
+    const list = Array.isArray(_waList) ? _waList : [];
+    return `
+      <div class="lm-sec-head lm-sec-head--compact">
+        <div><h2 class="lm-sec-title">WhatsApp</h2><p class="lm-sec-sub">Contactos en secuencia con un chat de WhatsApp previo</p></div>
+      </div>
+      ${list.length
+        ? `<div class="ibx-list" style="border-right:none;max-width:640px">${list.map(_waRow).join('')}</div>`
+        : _empty('wa', 'Sin conversaciones todavía', 'Cuando un contacto en secuencia tenga un chat de WhatsApp activo, aparecerá aquí.')}`;
+  }
+  function _waRow(w) {
+    const when = _ibFmtAgo(w.ultimo_ts);
+    const snippet = (w.from_me ? 'Tú: ' : '') + (w.ultimo_texto || '');
+    return `<div class="ibx-row${w.no_leidos ? ' unread' : ''}" onclick="LeadManagerModule.openWaFromList(${w.contact_id})">
+      <div class="ibx-row__l1">
+        <span class="ibx-row__nm"><span class="ibx-row__nm-txt">${esc(w.nombre || w.telefono || 'Contacto')}</span></span>
+        <span class="ibx-row__t">${when}</span>
+      </div>
+      <div class="ibx-row__l1">
+        <span class="ibx-row__sn">${esc(snippet)}</span>
+        ${w.no_leidos ? `<span class="ibx-b" style="background:var(--primary);color:#fff">${w.no_leidos}</span>` : ''}
+      </div>
+    </div>`;
+  }
+  function openWaFromList(contactId) {
+    const w = (_waList || []).find(x => x.contact_id === contactId); if (!w) return;
+    QuickWaModule.open({ contactId: w.contact_id, nombre: w.nombre || w.telefono, telefono: w.telefono, outboundClientId: w.outbound_client_id || null });
   }
 
   function _vInbox() {
@@ -25327,6 +25373,7 @@ ${foot}
     ibOpen, ibTab, ibCli, ibDisp, ibSend, ibSaveNote, ibForward, ibSetMode, ibMsgNav, ibSchedToggle, ibSchedPick, ibCancelSched, ibResolveDisp, ibOpenResolveMenu, ibShowLeadActions, ibCopyConversation, _ibFwdSearch, _ibFwdPick,
     ibAbrirDesdeEnviados, ibToggleEnvVista, ibAbrirFiltros, _ibSetFApertura, _ibSetFLeido, _ibSetFSeq, _ibLimpiarFiltrosExtra,
     ibRowMenu, ibCloseMenu, ibMarkUnread,
+    openWaFromList,
     composeAbrir, composeCerrar, composeEnviar, _cmpClientChange, _cmpBuscar, _cmpElegir, _cmpClear, _cmpNuevo, _cmpNuevoCancel, _cmpSeqNueva,
     _cmpCoBuscar, _cmpCoElegir, _cmpCoNueva, _cmpCoClear, _cmpPreviewUpdate, cmpSchedToggle, cmpSchedPick,
     pendingAcceptOpen, pendingAcceptToggleAll, pendingAcceptApplyFilters, pendingAcceptMark,
