@@ -16098,6 +16098,7 @@ const LeadManagerModule = (() => {
     const item = (label, onclick) => `<button class="cp-mark-menu__b" onclick="${close};${onclick}">${label}</button>`;
     let html = `<div class="cp-mark-menu__list">`
       + item('＋ Añadir paso', `LeadManagerModule.openStepDrawer(${seqId})`)
+      + item('＋ Agregar contacto', `LeadManagerModule.seqAddContactOpen(${seqId})`)
       + item('Editar secuencia', `LeadManagerModule.openSequenceDrawer(${seqId})`)
       + item(s && s.estado === 'pausada' ? '► Reactivar todo' : 'II Pausar todo', s && s.estado === 'pausada' ? `LeadManagerModule.seqResumeAll(${seqId})` : `LeadManagerModule.seqPauseAll(${seqId})`)
       + item('Informe PDF', `LeadManagerModule.seqReportOpen(${seqId})`)
@@ -16111,6 +16112,49 @@ const LeadManagerModule = (() => {
     const r = t.getBoundingClientRect();
     menu.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 200))}px`;
     menu.style.top = `${r.bottom + 6}px`;
+    // Bug reportado 2026-09-01: le faltaba el cierre por clic afuera (todos los demás
+    // menús de este estilo lo tienen) — se quedaba flotando en pantalla hasta que se
+    // hacía clic en una de sus propias opciones, incluso cambiando de sección.
+    setTimeout(() => document.addEventListener('click', function onDoc(e) { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', onDoc); } }), 0);
+  }
+
+  // "＋ Agregar contacto" desde el "⋮" de la secuencia — busca entre TODOS los
+  // contactos (no solo los ya enrolados acá) y lo suma con bulkAddDo, que ya inserta
+  // en lm_contact_sequences con paso 1 por defecto (arranca la secuencia desde cero).
+  function seqAddContactOpen(seqId) {
+    document.getElementById('lm-seqadd-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'lm-seqadd-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) m.remove(); };
+    m.innerHTML = `<div class="fin-pi-box lm-pick-box">
+      <div class="fin-pi-box__hd"><h3>Agregar contacto a la secuencia</h3><button class="fin-pi-x" onclick="document.getElementById('lm-seqadd-modal').remove()">✕</button></div>
+      <div class="fin-pi-form" style="padding-bottom:0">
+        <input class="form-input fin-pi-full" id="seqadd-q" placeholder="Busca por nombre o email…" autocomplete="off" oninput="LeadManagerModule._seqAddSearch(${seqId},this.value)">
+      </div>
+      <div class="lm-pick-list" id="seqadd-results" style="padding:8px 20px 20px"></div>
+    </div>`;
+    document.body.appendChild(m);
+    setTimeout(() => $('seqadd-q')?.focus(), 60);
+  }
+  function _seqAddSearch(seqId, q) {
+    const box = $('seqadd-results'); if (!box) return;
+    q = String(q || '').trim().toLowerCase();
+    if (q.length < 2) { box.innerHTML = ''; return; }
+    const matches = _contacts.filter(c => {
+      const full = [c.nombre, c.apellido].filter(Boolean).join(' ').toLowerCase();
+      return full.includes(q) || String(c.email || '').toLowerCase().includes(q);
+    }).slice(0, 20);
+    box.innerHTML = matches.length
+      ? matches.map(c => {
+          const full = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || '(sin nombre)';
+          const emp = c.company_nombre || c.empresa_nombre || '';
+          return `<button class="lm-pick-item" onclick="LeadManagerModule.seqAddContactPick(${seqId},${c.id})"><span>${esc(full)}${emp ? ` · <span class="lm-pick-est">${esc(emp)}</span>` : ''}</span></button>`;
+        }).join('')
+      : `<div class="lm-pick-empty">Sin resultados.</div>`;
+  }
+  function seqAddContactPick(seqId, cid) {
+    document.getElementById('lm-seqadd-modal')?.remove();
+    _addIds = [cid];
+    bulkAddDo('sequence', seqId);
   }
   const _TZ = [
     ['', 'Sin zona (sin sugerencia de hora)'],
@@ -19124,6 +19168,21 @@ ${foot}
     }
     return html;
   }
+  // Copia TODA la conversación abierta a texto plano — sin importar cuántos mensajes
+  // tenga el hilo (el visor solo muestra uno a la vez con "‹ ›", pero acá se recorre
+  // el arreglo completo _ibThread.messages, no lo que está pintado en pantalla).
+  async function ibCopyConversation() {
+    const msgs = (_ibThread && _ibThread.messages) || [];
+    if (!msgs.length) { showBanner('No hay mensajes que copiar', 'info'); return; }
+    const quien = m => m.dir === 'in' ? (m.buzon || 'Contacto') : m.dir === 'note' ? 'Nota interna' : m.dir === 'fwd' ? `Reenviado a ${m.buzon || ''}` : `Tú (${m.buzon || ''})`;
+    const texto = msgs.map(m => {
+      const when = m.at ? new Date(m.at).toLocaleString('es-PE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+      const asunto = m.asunto ? `${m.asunto}\n` : '';
+      return `${quien(m)} — ${when}\n${asunto}${m.cuerpo || ''}`;
+    }).join('\n\n---\n\n');
+    try { await navigator.clipboard.writeText(texto); showBanner(`✓ Conversación copiada (${msgs.length} mensaje${msgs.length === 1 ? '' : 's'})`, 'success'); }
+    catch (e) { showBanner('No se pudo copiar', 'error'); }
+  }
   function _ibMsg(m) {
     const when = m.at ? new Date(m.at).toLocaleString('es-PE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
     // Nota interna: nunca se envió nada, por eso se ve distinta a proposito (ni
@@ -19189,6 +19248,8 @@ ${foot}
     </div>`;
     html += `<div class="cp-mark-menu__sep"></div>`;
     html += `<div class="cp-mark-menu__list">` + item('Responder', `LeadManagerModule.ibSetMode('reply')`) + item('Reenviar', `LeadManagerModule.ibSetMode('fwd')`) + item('Nota interna', `LeadManagerModule.ibSetMode('note')`) + `</div>`;
+    html += `<div class="cp-mark-menu__sep"></div>`;
+    html += `<div class="cp-mark-menu__list">` + item('Copiar conversación', `LeadManagerModule.ibCopyConversation()`) + `</div>`;
     html += `<div class="cp-mark-menu__sep"></div>`;
     // "＋ Crear referido" se sacó de acá: era 100% duplicado de "Derivó a otro" dentro
     // de "Resolver respuesta" (llamaban a la misma ldRefer(cid,'derivado')).
@@ -22645,6 +22706,11 @@ ${foot}
   let _cpActs = null;
   let _cpTaskCtx = null;      // { seqId } — ejecutando una tarea de secuencia sobre esta ficha
   let _cpTaskHist = [];       // historial de contactos ya recorridos en la corrida (para "‹ Anterior")
+  // De qué sección se abrió la ficha (Leads, Deals, Contactos…) — el botón "‹ Volver"
+  // regresa AHÍ en vez de ir siempre a Contactos (bug reportado 2026-09-01: abrir un
+  // contacto desde Leads y volver te mandaba a Contactos, no a Leads).
+  let _cpFrom = 'contacts';
+  const _CP_FROM_LABEL = { contacts: 'Contactos', leads: 'Leads', deals: 'Deals', client: 'Cliente' };
   let _cpSkipped = [];        // contactos SALTADOS en la corrida → van al FINAL de la cola (no reaparecen enseguida)
   let _cpDone = 0;            // tareas COMPLETADAS en la corrida → para el progreso "X de Y" (Y = hechas + restantes)
   let _seqTab = 'empresas'; // qué sección se ve en el panel derecho (Pasos ya no es un "tab" — vive siempre en la tarjeta izquierda)
@@ -23349,11 +23415,17 @@ ${foot}
   }
 
   // ── Página completa de contacto (estilo Outreach) — Fase 1 ──
-  function openContactPage(id, taskCtx) { _contactView = id; _cpTab = 'resumen'; _cpActs = null; _cpTaskCtx = taskCtx || null; _section = 'contact-view'; _renderBody(); const b = $('lm2-body'); if (b) b.scrollTop = 0; _cpReloadActs(id); }
+  function openContactPage(id, taskCtx) {
+    // Si ya se estaba en otra ficha (navegando entre contactos vía "Anterior/Siguiente"
+    // dentro de una tarea, o un link "Ver a" desde Leads) no se pisa _cpFrom — conserva
+    // la sección original desde la que arrancó todo este recorrido.
+    if (!taskCtx && _section !== 'contact-view') _cpFrom = _CP_FROM_LABEL[_section] ? _section : 'contacts';
+    _contactView = id; _cpTab = 'resumen'; _cpActs = null; _cpTaskCtx = taskCtx || null; _section = 'contact-view'; _renderBody(); const b = $('lm2-body'); if (b) b.scrollTop = 0; _cpReloadActs(id);
+  }
   function cpTab(t) { _cpTab = t; const el = document.getElementById('cp-tabwrap'); if (el) el.innerHTML = _cpTabContent(_contacts.find(x => x.id === _contactView)); document.querySelectorAll('.cp-tab').forEach(b => b.classList.toggle('active', b.dataset.t === t)); }
   function _vContactPage(id) {
     const c = _contacts.find(x => x.id === id);
-    if (!c) return `<div class="lm-sec-head"><div><button class="lm-back" onclick="LeadManagerModule.go('contacts')">‹ Contactos</button><h2 class="lm-sec-title">Contacto no encontrado</h2></div></div>`;
+    if (!c) return `<div class="lm-sec-head"><div><button class="lm-back" onclick="LeadManagerModule.go('${_cpFrom}')">‹ ${_CP_FROM_LABEL[_cpFrom] || 'Contactos'}</button><h2 class="lm-sec-title">Contacto no encontrado</h2></div></div>`;
     const full = [c.nombre, c.apellido].filter(Boolean).join(' ') || (c.email || 'Contacto');
     const emp = c.company_nombre || c.empresa_nombre || '';
     const eStyle = STAGE_STYLES[c.estado] || 'background:#F1EFEB;color:#475569';
@@ -23363,7 +23435,7 @@ ${foot}
     const raw = (c.raw && typeof c.raw === 'object') ? c.raw : {};
     const rawKeys = Object.keys(raw).filter(k => raw[k]);
     return `<div class="cp" id="lm-cp">
-      <button class="lm-back" onclick="${_cpTaskCtx ? 'LeadManagerModule.seqDoExit()' : "LeadManagerModule.go('contacts')"}">‹ ${_cpTaskCtx ? 'Tareas' : 'Contactos'}</button>
+      <button class="lm-back" onclick="${_cpTaskCtx ? 'LeadManagerModule.seqDoExit()' : `LeadManagerModule.go('${_cpFrom}')`}">‹ ${_cpTaskCtx ? 'Tareas' : (_CP_FROM_LABEL[_cpFrom] || 'Contactos')}</button>
       ${_cpTaskBar(id)}
       <div class="cp-head">
         <img class="cp-ava" src="${_av(full)}" alt="">
@@ -25020,7 +25092,7 @@ ${foot}
     openDrawer, closeDrawer, save, confirmDelete, convertToClient,
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
     openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
-    openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, confirmDeleteSequence, seqTab, seqPasosToggle, seqMoreMenu, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
+    openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, confirmDeleteSequence, seqTab, seqPasosToggle, seqMoreMenu, seqAddContactOpen, _seqAddSearch, seqAddContactPick, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
     seqAppAction, seqAppNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, taskApprove,
     seqTaskOpen, seqDoClose, seqDoCopy, seqDoDone, seqDoSkip, seqDoPrev, seqDoEditStep, seqDoExit, seqOpenLinkedIn,
     openStepDrawer, closeStepDrawer, saveStep, confirmDeleteStep, seqInsertVar, stepUseTpl, tzSearch, tzPick, tzBlur,
@@ -25052,7 +25124,7 @@ ${foot}
     mbSignatureOpen, mbSignaturePreview, mbSignatureClear, mbSignatureInsertLink, mbSignatureImg, mbSignatureSave,
     mbAdminConsentSync, mbAdminConsentToggleHtml,
     mbAdminConsentSetSigner, mbAdminConsentAddChip, mbAdminConsentRmChip, mbAdminConsentInputKey, mbAdminConsentClearRecipients,
-    ibOpen, ibTab, ibCli, ibDisp, ibSend, ibSaveNote, ibForward, ibSetMode, ibMsgNav, ibSchedToggle, ibSchedPick, ibCancelSched, ibResolveDisp, ibOpenResolveMenu, ibShowLeadActions,
+    ibOpen, ibTab, ibCli, ibDisp, ibSend, ibSaveNote, ibForward, ibSetMode, ibMsgNav, ibSchedToggle, ibSchedPick, ibCancelSched, ibResolveDisp, ibOpenResolveMenu, ibShowLeadActions, ibCopyConversation,
     ibAbrirDesdeEnviados, ibToggleEnvVista, ibAbrirFiltros, _ibSetFApertura, _ibSetFLeido, _ibSetFSeq, _ibLimpiarFiltrosExtra,
     ibRowMenu, ibCloseMenu, ibMarkUnread,
     composeAbrir, composeCerrar, composeEnviar, _cmpClientChange, _cmpBuscar, _cmpElegir, _cmpClear, _cmpNuevo, _cmpNuevoCancel, _cmpSeqNueva,
