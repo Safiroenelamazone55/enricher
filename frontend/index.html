@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260901g"/>
+  <link rel="stylesheet" href="style.css?v=20260903c"/>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -208,12 +208,10 @@
     </div>
     <div class="global-topbar__tabs">
       <button class="global-topbar__tab active" type="button" id="gtb-tab-apps" onclick="goHome()">Aplicaciones</button>
-      <button class="global-topbar__tab" type="button" id="gtb-tab-users" onclick="openStandaloneUsers()">Usuarios</button>
-      <button class="global-topbar__tab" type="button" id="gtb-tab-dash" onclick="WorkspaceModule.openNameModal()">Configuración</button>
     </div>
     <div class="global-topbar__right">
       <div class="rchat__strip">
-        <button class="rchat__strip-btn" onclick="RChatPanel.open('chat')" title="Chat del equipo">
+        <button class="rchat__strip-btn" onclick="RChatPanel.openFullChat()" title="Chat del equipo">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
             <circle cx="8.5" cy="10" r="1.2" fill="currentColor" stroke="none"/>
@@ -1878,6 +1876,13 @@
     </div><!-- /rchat__body -->
   </aside>
 
+  <!-- Chat de Slack en media pantalla (mismo #chat-shell de la sección Chat,
+       movido aquí temporalmente al abrir desde el ícono de la barra superior
+       y devuelto a su lugar al cerrar — así siempre es el mismo, no una copia). -->
+  <div class="rchat-fc-backdrop hidden" id="rchat-fc-backdrop" onclick="if(event.target===this)RChatPanel.closeFullChat()">
+    <div class="rchat-fc-box" id="rchat-fc-box"></div>
+  </div>
+
 </div><!-- /app-layout -->
 
   <!-- ── MENÚ DE WORKSPACE: cambiar módulo + configuración + usuario ── -->
@@ -2452,7 +2457,7 @@
 <div class="modal-overlay hidden" id="wsname-overlay" onclick="WorkspaceModule.closeNameModal()"></div>
 <div class="modal hidden" id="wsname-modal" style="max-width:1040px;width:calc(100vw - 64px)">
   <div class="modal__header">
-    <h2 class="modal__title">Configuración</h2>
+    <h2 class="modal__title">Empresa</h2>
     <button class="drawer__close" onclick="WorkspaceModule.closeNameModal()">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
     </button>
@@ -2468,6 +2473,10 @@
       <button class="cfg__navb" data-sec="integraciones" onclick="WorkspaceModule.setSection('integraciones')">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>
         Integraciones
+      </button>
+      <button class="cfg__navb" data-sec="usuarios" onclick="WorkspaceModule.setSection('usuarios')">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Usuarios
       </button>
     </aside>
 
@@ -2550,6 +2559,12 @@
       </div>
       <div id="wa-int-list" class="slk-list"><div class="slk-empty">Cargando…</div></div>
     </div>
+      </section>
+      <!-- Usuarios: el propio #pane-mgmt-team se muda para acá al entrar a esta
+           pestaña (y se devuelve a su lugar al salir) — mismo truco ya usado con el
+           chat de Slack en media pantalla, para no duplicar la tabla de equipo. -->
+      <section class="cfg__sec" data-sec="usuarios" hidden>
+        <div id="cfg-usuarios-mount"></div>
       </section>
     </div>
   </div>
@@ -2899,7 +2914,7 @@
   })();
 </script>
 
-<script src="app.js?v=20260901i"></script>
+<script src="app.js?v=20260903j"></script>
 <div id="task-quick-edit" style="display:none;position:fixed;z-index:9999"></div>
 </body>
 </html>

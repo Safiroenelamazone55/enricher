@@ -104,7 +104,35 @@ async function _guardarMensaje(pool, sock, connId, m, esHistorial) {
   if (revoke && revoke.type === 0) { await _marcarEliminado(pool, connId, revoke.key?.id); return; }
 
   if (jid.endsWith('@g.us')) _asegurarNombreGrupo(pool, sock, connId, jid).catch(() => {});
-  const texto = m.message?.conversation || m.message?.extendedTextMessage?.text || '';
+  // Reportado por Jenny 2026-09-02: le compartieron una tarjeta de contacto de WhatsApp
+  // y no aparecía en absoluto (solo se veían los mensajes de texto alrededor) — contactMessage/
+  // contactsArrayMessage no se leían, así que "texto" quedaba vacío y el mensaje se
+  // descartaba entero en el "if (!texto) return" de abajo. v1: se guarda como texto
+  // legible (sin vCard descargable todavía, igual que fotos/audio quedan fuera por ahora).
+  const contactoMsg = m.message?.contactMessage;
+  const contactosArr = m.message?.contactsArrayMessage;
+  // El número real vive dentro del vCard (línea TEL, con waid= si WhatsApp lo anotó —
+  // más confiable que el resto del número porque ya viene sin formato local). Se guarda
+  // para poder abrir un chat directo a esa persona con un clic (pedido 2026-09-02).
+  const _telDeVcard = vcard => {
+    if (!vcard) return '';
+    const waid = vcard.match(/waid=(\d+)/);
+    if (waid) return waid[1];
+    const tel = vcard.match(/TEL[^:]*:([+\d][\d\s-]{6,})/);
+    return tel ? tel[1].replace(/\D/g, '') : '';
+  };
+  let texto = m.message?.conversation || m.message?.extendedTextMessage?.text || '';
+  let contactPhone = '';
+  if (!texto && contactoMsg) {
+    texto = `📇 Contacto compartido: ${contactoMsg.displayName || 'sin nombre'}`;
+    contactPhone = _telDeVcard(contactoMsg.vcard);
+  } else if (!texto && contactosArr) {
+    const nombres = (contactosArr.contacts || []).map(c => c.displayName).filter(Boolean);
+    texto = `📇 ${nombres.length || (contactosArr.contacts || []).length} contacto(s) compartido(s)${nombres.length ? ': ' + nombres.join(', ') : ''}`;
+    // Con varios contactos solo se enlaza el primero — abrir uno con un clic ya cubre
+    // el caso real; para el resto Jenny puede pedir el número por chat si hace falta.
+    contactPhone = _telDeVcard((contactosArr.contacts || [])[0]?.vcard);
+  }
   // En grupos pushName es quien mandó ESE mensaje puntual, no el grupo — el nombre del
   // grupo en sí se pide aparte con groupMetadata (arriba), no se pisa acá.
   const nombre = (!jid.endsWith('@g.us') && m.pushName) ? m.pushName : '';
@@ -126,9 +154,9 @@ async function _guardarMensaje(pool, sock, connId, m, esHistorial) {
   for (let intento = 1; intento <= 3; intento++) {
     try {
       await pool.query(`
-        INSERT INTO wa_messages (connection_id, chat_jid, msg_id, from_me, nombre, texto, ts, reply_to_id, reply_to_texto, leido)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT (connection_id, msg_id) DO NOTHING`,
-        [connId, jid, m.key.id, !!m.key.fromMe, remitente, texto, ts, replyToId, replyToTexto, leido]);
+        INSERT INTO wa_messages (connection_id, chat_jid, msg_id, from_me, nombre, texto, ts, reply_to_id, reply_to_texto, leido, contact_phone)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT (connection_id, msg_id) DO NOTHING`,
+        [connId, jid, m.key.id, !!m.key.fromMe, remitente, texto, ts, replyToId, replyToTexto, leido, contactPhone]);
       break;
     } catch (e) {
       if (intento === 3) { console.warn(`[wa] guardar mensaje (falló tras ${intento} intentos):`, e.message); break; }
@@ -145,7 +173,41 @@ async function _guardarMensaje(pool, sock, connId, m, esHistorial) {
     await pool.query(
       `UPDATE wa_chat_meta SET estado_conv='abierto', updated_at=NOW() WHERE connection_id=$1 AND chat_jid=$2 AND estado_conv='resuelto'`,
       [connId, jid]).catch(() => {});
+    _autoRespondioPorWa(pool, connId, jid, texto).catch(e => console.warn('[wa] autoRespondio:', e.message));
   }
+}
+
+// Pedido 2026-09-02: lo mismo que ya hace replyWatcher.js para email (detectar la
+// respuesta sola, sin que Jenny tenga que marcarla a mano) pero para WhatsApp — un
+// mensaje entrante de un número que coincide con un contacto de Lead Manager pausa
+// SUS secuencias activas (estado='respondido') y marca la disposición.
+async function _autoRespondioPorWa(pool, connId, jid, texto) {
+  if (jid.endsWith('@g.us')) return; // grupos no son un contacto de secuencia
+  const digits = jid.replace(/\D/g, '');
+  if (digits.length < 6) return;
+  const { rows: [conn] } = await pool.query(`SELECT user_id FROM wa_connections WHERE id=$1`, [connId]);
+  if (!conn) return;
+  const { rows: [contacto] } = await pool.query(
+    `SELECT id, disposition FROM lm_contacts
+      WHERE user_id=$1 AND regexp_replace(COALESCE(telefono,''),'[^0-9]','','g') <> ''
+        AND ( regexp_replace(COALESCE(telefono,''),'[^0-9]','','g') LIKE '%' || right($2,8)
+              OR $2 LIKE '%' || right(regexp_replace(COALESCE(telefono,''),'[^0-9]','','g'),8) )
+      LIMIT 1`,
+    [conn.user_id, digits]);
+  if (!contacto) return;
+  const paused = await pool.query(
+    `UPDATE lm_contact_sequences SET estado='respondido', paused_reason='respondio', next_action_at=NULL
+      WHERE user_id=$1 AND contact_id=$2 AND estado='activo'`,
+    [conn.user_id, contacto.id]);
+  if (!paused.rowCount) return; // nada activo que pausar — no era parte de una secuencia en curso
+  await pool.query(
+    `UPDATE lm_contacts SET disposition='respondio', updated_at=NOW() WHERE id=$1 AND (disposition='' OR disposition IS NULL)`,
+    [contacto.id]);
+  await pool.query(
+    `INSERT INTO activities (user_id, contact_id, tipo, canal, nota, fecha, estado)
+     VALUES ($1,$2,'respuesta','whatsapp',$3,NOW(),'hecha')`,
+    [conn.user_id, contacto.id, `Respondió por WhatsApp${texto ? ' — ' + texto.slice(0, 200) : ''}`]);
+  console.log(`[wa] respuesta detectada en contacto ${contacto.id} → auto-pausa (${paused.rowCount} secuencias)`);
 }
 
 // Migración de una sola vez por conexión: los @lid que se guardaron ANTES de tener el
@@ -433,6 +495,24 @@ async function reaccionar(pool, id, jid, msgId, emoji) {
   }
 }
 
+// Pide al teléfono que reenvíe historial más antiguo de UN chat puntual — para cuando
+// un mensaje real nunca llegó a guardarse (bug ya corregido, o un error de descifrado
+// puntual de WhatsApp con jids "@lid", visto en los logs) y no hay forma de recuperarlo
+// con lo que ya está en la base. Usa fetchMessageHistory de Baileys sobre el socket YA
+// conectado; los mensajes que traiga vuelven a pasar por _guardarMensaje (esHistorial),
+// así que si algo faltaba, ahora sí se guarda — y lo que ya estaba, ON CONFLICT lo ignora.
+async function resincronizarChat(pool, id, jid) {
+  const sock = _socks.get(id);
+  if (!sock) throw new Error('Este WhatsApp no está conectado ahora mismo');
+  if (typeof sock.fetchMessageHistory !== 'function') throw new Error('Esta versión de Baileys no soporta pedir historial bajo demanda');
+  const { rows: [oldest] } = await pool.query(
+    `SELECT msg_id, from_me, ts FROM wa_messages WHERE connection_id=$1 AND chat_jid=$2 ORDER BY ts ASC LIMIT 1`,
+    [id, jid]);
+  if (!oldest) throw new Error('No hay ningún mensaje guardado de este chat para anclar la búsqueda');
+  const key = { remoteJid: jid, id: oldest.msg_id, fromMe: oldest.from_me };
+  await sock.fetchMessageHistory(80, key, new Date(oldest.ts).getTime()); // oldestMsgTimestampMs, en MILISEGUNDOS
+}
+
 async function desconectar(pool, id) {
   const sock = _socks.get(id);
   if (sock) { try { await sock.logout(); } catch (_) { /* logout dispara connection.update igual */ } }
@@ -535,4 +615,4 @@ async function reanudarTodas(pool) {
   if (!_tickerWatchdog) _tickerWatchdog = setInterval(() => _watchdogTick(pool), 3 * 60 * 1000);
 }
 
-module.exports = { iniciar, enviar, enviarImagen, reaccionar, desconectar, reanudarTodas };
+module.exports = { iniciar, enviar, enviarImagen, reaccionar, desconectar, reanudarTodas, resincronizarChat };

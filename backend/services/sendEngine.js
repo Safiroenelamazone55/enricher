@@ -108,6 +108,27 @@ function _delayDays(cur, next) {
   return next.canal === 'email' ? 3 : 0; // sin datos: 3 días entre emails, mismo día para tareas
 }
 
+// Nutrición automática al terminar una secuencia sin ninguna señal del contacto (ver
+// nurture_days en db.js — apagado por defecto, cada secuencia lo prende a propósito).
+// "Sin señal" = disposition vacío: si ya es 'respondio'/'perdido'/'mas_adelante'/etc.
+// algo ya pasó y una decisión humana ya está en juego — no se pisa.
+async function _maybeAutoNurture(pool, enrId) {
+  const { rows: [row] } = await pool.query(`
+    SELECT cs.contact_id, cs.user_id, s.nurture_days, k.disposition
+      FROM lm_contact_sequences cs
+      JOIN sequences s ON s.id = cs.sequence_id
+      JOIN lm_contacts k ON k.id = cs.contact_id
+     WHERE cs.id=$1`, [enrId]);
+  if (!row || !row.nurture_days || row.nurture_days <= 0 || row.disposition) return;
+  const nurtureAt = new Date(); nurtureAt.setDate(nurtureAt.getDate() + row.nurture_days);
+  const fecha = nurtureAt.toISOString().slice(0, 10);
+  await pool.query(`UPDATE lm_contacts SET disposition='mas_adelante', nurture_at=$1 WHERE id=$2`, [fecha, row.contact_id]);
+  await pool.query(
+    `INSERT INTO activities (user_id, contact_id, tipo, nota, fecha, estado)
+     VALUES ($1,$2,'disposition_change',$3,NOW(),'hecha')`,
+    [row.user_id, row.contact_id, `Estado: (sin estado) → Contactar más adelante — secuencia terminada sin respuesta, retomar el ${fecha} (automático)`]);
+}
+
 async function _pauseEnrollment(pool, enr, reason, taskNote) {
   await pool.query(
     `UPDATE lm_contact_sequences SET estado='pausado', paused_reason=$1 WHERE id=$2`,
@@ -129,6 +150,7 @@ async function _advance(pool, enr, steps, curIdx) {
       `UPDATE lm_contact_sequences SET estado='terminado', next_action_at=NULL WHERE id=$1`,
       [enr.enr_id]
     );
+    await _maybeAutoNurture(pool, enr.enr_id);
     return;
   }
   const days = _delayDays(steps[curIdx], next);

@@ -578,13 +578,20 @@ const HOME_MODULES = [
     icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 4.9 4.9 1.8-4.9 1.8L12 16.4l-1.8-4.9L5.3 9.5l4.9-1.8z"/><path d="M18.6 14.6l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/></svg>' },
   { id: 'leadmanagement', tab: 'lead-manager',   name: 'Outreach',       desc: 'CRM, campañas, secuencias y leads',            color: 'red',
     icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>' },
+  // "Empresa" no es un módulo con su propio sidebar/panes — abre el mismo panel de
+  // Empresa (antes "Configuración") que ya existía, con Usuarios y Configuración
+  // adentro como pestañas, en vez de sueltas en la barra superior (pedido 2026-09-02).
+  { id: 'empresa', action: "WorkspaceModule.openNameModal()", name: 'Empresa', desc: 'Datos de la empresa, usuarios y configuración', color: 'purple',
+    icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16"/><line x1="9" y1="7" x2="9.01" y2="7"/><line x1="15" y1="7" x2="15.01" y2="7"/><line x1="9" y1="11" x2="9.01" y2="11"/><line x1="15" y1="11" x2="15.01" y2="11"/><line x1="9" y1="15" x2="9.01" y2="15"/><line x1="15" y1="15" x2="15.01" y2="15"/></svg>' },
 ];
 
 function renderHome() {
   const grid = document.getElementById('home-grid');
   if (!grid) return;
-  const cards = HOME_MODULES.map(m => `
-    <div class="home-card" role="button" tabindex="0" onclick="selectModule('${m.id}')" onkeydown="if(event.key==='Enter')selectModule('${m.id}')" aria-label="${m.name}">
+  const cards = HOME_MODULES.map(m => {
+    const act = m.action || `selectModule('${m.id}')`;
+    return `
+    <div class="home-card" role="button" tabindex="0" onclick="${act}" onkeydown="if(event.key==='Enter'){${act}}" aria-label="${m.name}">
       <div class="home-card__top">
         <div class="home-card__body">
           <div class="home-card__title">${m.name}</div>
@@ -594,10 +601,11 @@ function renderHome() {
       </div>
       <div class="home-card__foot">
         <span class="home-card__chip"><span class="home-card__chip-dot"></span>Activo</span>
-        <button class="home-card__kebab" onclick="event.stopPropagation();selectModule('${m.id}')" title="Abrir ${m.name}" aria-label="Abrir ${m.name}">⋮</button>
+        <button class="home-card__kebab" onclick="event.stopPropagation();${act}" title="Abrir ${m.name}" aria-label="Abrir ${m.name}">⋮</button>
       </div>
     </div>
-  `);
+  `;
+  });
   // Espacios reservados para módulos futuros: mismo tamaño/estilo de card, sin acción —
   // no son módulos reales, solo mantienen la grilla 3×3 llena mientras se agregan más.
   for (let i = HOME_MODULES.length; i < 9; i++) {
@@ -644,15 +652,6 @@ function _gtbMenuOutside(e) {
 function closeUserMenu() {
   document.getElementById('gtb-menu')?.classList.add('hidden');
   document.removeEventListener('mousedown', _gtbMenuOutside);
-}
-// "Usuarios": pantalla independiente (reutiliza los datos/tabla de TeamModule,
-// pero sin el sidebar ancho de Operaciones alrededor — no pasa por selectModule).
-function openStandaloneUsers() {
-  _applyHomeMode(true);
-  document.getElementById('appShell')?.classList.add('standalone-users');
-  document.querySelectorAll('.global-topbar__tab').forEach(t => t.classList.remove('active'));
-  document.getElementById('gtb-tab-users')?.classList.add('active');
-  TeamModule.load();
 }
 
 // Alterna el "modo home": oculta la sidebar secundaria (que muestra items
@@ -17220,7 +17219,6 @@ ${foot}
   //   pos  = hay señal comercial · der = la persona no sirve pero la CUENTA sí · desc = cerrado
   // [valor, etiqueta, color texto, color fondo, grupo]
   const _DISPOS = [
-    ['aceptado',      'Aceptó en LinkedIn', '#0062CC', '#EAF2FF', 'pos'],
     ['respondio',     'Interesado',      '#15803D', '#F1EFEB', 'pos'],
     ['reunion',       'Reunión',         '#5B4BC4', '#EAE7E2', 'pos'],
     ['mas_adelante',  'Más adelante',    '#0E7490', '#E0F2FE', 'pos'],
@@ -17643,7 +17641,7 @@ ${foot}
     (_sequences || []).forEach(s => { branch[s.id] = _seqSteps(s.id).some(st => (st.cond || '') === 'replied'); });
     const out = [];
     (_contacts || []).forEach(c => {
-      if (c.disposition === 'respondio' || c.disposition === 'aceptado') return;
+      if (c.disposition === 'respondio' || c.li_aceptado_at) return;
       if (c.no_linkedin) return; // LinkedIn no válido → ya no espera aceptación; va por email
       const seqs = (c.sequences || []).filter(sq => branch[sq.id] && (sq.estado === 'activo' || sq.estado === 'pausado') && (sq.paso || 1) > 1);
       if (seqs.length) out.push({ c, seqs });
@@ -17963,7 +17961,7 @@ ${foot}
   // con cond='' en todos los pasos, _effIdx devuelve el mismo paso que hoy.
   // Aceptar la conexión de LinkedIn cuenta igual que responder para efectos de la rama
   // de la secuencia: ambas son "hubo señal, sigue por la ruta de seguimiento".
-  function _respondedC(cid) { const c = (_contacts || []).find(x => x.id === cid); return !!(c && (c.disposition === 'respondio' || c.disposition === 'aceptado')); }
+  function _respondedC(cid) { const c = (_contacts || []).find(x => x.id === cid); return !!(c && (c.disposition === 'respondio' || c.li_aceptado_at)); }
   function _noLinkedInC(cid) { const c = (_contacts || []).find(x => x.id === cid); return !!(c && c.no_linkedin); }
   // WhatsApp/Llamada se saltan solas si el contacto NO TIENE número (nada que marcar a mano
   // para ese caso — es un hecho de los datos) o si Jenny lo marcó a mano como número incorrecto
@@ -18879,6 +18877,8 @@ ${foot}
   }
   const _TI_CATS = [
     ['respuestas', 'Respuestas pendientes de revisar'],
+    ['seguimiento', 'Sin respuesta hace 24h — dale seguimiento'],
+    ['nutricion', 'Para retomar (nutrición)'],
     ['aprobaciones', 'Aprobaciones urgentes'],
     ['fallos', 'Fallos y bloqueos'],
     ['vencidas', 'Tareas vencidas'],
@@ -18888,7 +18888,7 @@ ${foot}
   ];
   const _TI_ACTION_LBL = {
     review_reply: 'Revisar respuesta', approve_email: 'Aprobar mensaje', resolve_failure: 'Resolver buzón',
-    manual_touch: 'Marcar hecha', next_step: 'Abrir LinkedIn', fix_data: 'Corregir dato',
+    manual_touch: 'Marcar hecha', next_step: 'Abrir LinkedIn', fix_data: 'Corregir dato', retomar_nurture: 'Retomar',
   };
   function _tiCard(it) {
     const cli = (_clients || []).find(x => x.id === it.outbound_client_id);
@@ -18902,6 +18902,7 @@ ${foot}
     else if (it.task_type === 'approve_email') mainAction = `LeadManagerModule.go('tasks');LeadManagerModule.taskSetView('list')`;
     else if (it.task_type === 'fix_data') mainAction = `LeadManagerModule.openContactPage(${it.contact_id})`;
     else if (it.task_type === 'next_step') mainAction = `LeadManagerModule.openContactPage(${it.contact_id})`;
+    else if (it.task_type === 'retomar_nurture') mainAction = `LeadManagerModule.nurtureRetomarMenu(event,${it.contact_id},${it.activity_id},${it.sequence_id || 'null'})`;
     return `<div class="cp-card" style="margin-bottom:8px;padding:10px 12px">
       <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap">
         <div><b>${esc(it.contact_name || '')}</b><div class="cp-f__ro">${esc(meta.join(' · '))}</div>${it.reason ? `<div class="cp-f__ro" style="margin-top:2px">${esc(it.reason)}</div>` : ''}</div>
@@ -19266,7 +19267,7 @@ ${foot}
     html += `<div class="cp-mark-menu__sep"></div>`;
     // "＋ Crear referido" se sacó de acá: era 100% duplicado de "Derivó a otro" dentro
     // de "Resolver respuesta" (llamaban a la misma ldRefer(cid,'derivado')).
-    html += `<div class="cp-mark-menu__list">` + item('Acciones del lead', `LeadManagerModule.ibShowLeadActions(${cid})`) + `</div>`;
+    html += `<div class="cp-mark-menu__list">` + item('Deal ›', `LeadManagerModule.dlOpen(${cid})`) + item('Acciones del lead', `LeadManagerModule.ibShowLeadActions(${cid})`) + `</div>`;
     const menu = document.createElement('div');
     menu.className = 'cp-mark-menu';
     menu.innerHTML = html;
@@ -19458,9 +19459,12 @@ ${foot}
       const total = msgs.length;
       if (!canSend) return `<div class="ibx-replybox"><div class="ibx-nosend">El cliente <b>${esc(c.cliente || '')}</b> no tiene buzón conectado — conéctalo en su ficha para reenviar desde aquí.</div></div>`;
       return `<div class="ibx-replybox">
-        <div class="ibx-dest">
+        <div class="ibx-dest" style="position:relative">
           <span class="ibx-dest__k">Para</span>
-          <input class="ibx-dest__i" id="ibx-fwd-to" placeholder="email de la persona (separá varios con coma)…">
+          <input class="ibx-dest__i" id="ibx-fwd-to" placeholder="Nombre o email…" autocomplete="off"
+            oninput="LeadManagerModule._ibFwdSearch(this.value)" onfocus="LeadManagerModule._ibFwdSearch(this.value)"
+            onblur="setTimeout(()=>document.getElementById('ibx-fwd-drop')?.classList.add('hidden'),150)">
+          <div class="lm-pick-list ibx-fwd-drop hidden" id="ibx-fwd-drop" style="position:absolute;top:100%;left:0;right:0;z-index:50;background:var(--surface,#fff);border:1px solid var(--border,#EAE7E2);max-height:220px;overflow:auto"></div>
         </div>
         ${total ? `<div class="ibx-fwd-hint">Se reenvía el correo que estás viendo ahora (${Math.min(_ibMsgIdx, total - 1) + 1} de ${total}), citado debajo de lo que escribas.</div>` : ''}
         <div class="ibx-tawrap ibx-tawrap--wide">
@@ -19500,6 +19504,38 @@ ${foot}
     _ibMode = (mode === 'note' || mode === 'fwd') ? mode : 'reply';
     const rb = document.querySelector('.ibx-replybox');
     if (rb) rb.outerHTML = _ibReplyboxHtml((_ibThread && _ibThread.contact) || {});
+  }
+  // Autocompletado del "Para" al reenviar (pedido 2026-09-02): sin escribir nada
+  // sugiere a quienes ya son parte DE ESTA conversación (destinatarios ya calculados
+  // por el backend); al escribir, busca por nombre o email entre todos los contactos.
+  function _ibFwdSearch(q) {
+    const drop = $('ibx-fwd-drop'); if (!drop) return;
+    q = (q || '').trim().toLowerCase();
+    const yaPuestos = new Set(($('ibx-fwd-to')?.value || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean));
+    let rows;
+    if (!q) {
+      const d = (_ibThread && _ibThread.destinatarios) || {};
+      const emails = [...new Set([...(d.to || []), ...(d.cc || [])])].filter(e => e && !yaPuestos.has(e.toLowerCase()));
+      rows = emails.map(email => {
+        const c = _contacts.find(x => (x.email || '').toLowerCase() === email.toLowerCase());
+        return { email, nombre: c ? [c.nombre, c.apellido].filter(Boolean).join(' ') : '' };
+      });
+    } else {
+      rows = _contacts.filter(c => c.email && !yaPuestos.has((c.email || '').toLowerCase()) &&
+        ([c.nombre, c.apellido].filter(Boolean).join(' ').toLowerCase().includes(q) || c.email.toLowerCase().includes(q))
+      ).slice(0, 8).map(c => ({ email: c.email, nombre: [c.nombre, c.apellido].filter(Boolean).join(' ') }));
+    }
+    if (!rows.length) { drop.classList.add('hidden'); drop.innerHTML = ''; return; }
+    drop.classList.remove('hidden');
+    drop.innerHTML = rows.map(r => `<button type="button" class="lm-pick-item" onmousedown="event.preventDefault();LeadManagerModule._ibFwdPick('${esc(r.email).replace(/'/g, "\\'")}')"><span>${r.nombre ? esc(r.nombre) : esc(r.email)}</span>${r.nombre ? `<span class="lm-pick-est">${esc(r.email)}</span>` : ''}</button>`).join('');
+  }
+  function _ibFwdPick(email) {
+    const inp = $('ibx-fwd-to'); if (!inp) return;
+    const actuales = inp.value.split(',').map(s => s.trim()).filter(Boolean);
+    if (!actuales.some(a => a.toLowerCase() === email.toLowerCase())) actuales.push(email);
+    inp.value = actuales.join(', ') + ', ';
+    _ibFwdSearch('');
+    inp.focus();
   }
   // Destinatarios de la respuesta, a la vista y editables: hasta ahora se enviaba
   // solo al contacto y no habia forma de saber a quien iba a llegar.
@@ -19970,7 +20006,7 @@ ${foot}
           ${_ibFiltrosActivos() ? `<span>${_ibFiltrosActivos()}</span>` : ''}
         </button>
         ${_ibTab === 'env' ? `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.ibToggleEnvVista()">${_ibEnvShowTable ? '💬 Ver conversaciones' : '📊 Ver tabla de tracking'}</button>` : ''}
-        <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.composeAbrir()">＋ Nuevo correo</button>
+        <button class="btn btn--primary btn--sm ibx-newmail-btn" title="Nuevo correo" onclick="LeadManagerModule.composeAbrir()">＋</button>
       </div>
       ${_ibTab === 'env' && _ibEnvShowTable
         ? `<div id="lm-real-inbox">${_realInboxHtml()}</div>`
@@ -20821,7 +20857,7 @@ ${foot}
       <button class="lm-back" onclick="LeadManagerModule.go('clients')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg> Clientes outbound</button>
       <div class="lm-ws">
         <aside class="lm-ws-side">
-          <div class="lm-ws-side__top"><div class="lm-ws-side__ava">${esc((c.nombre || '?').slice(0, 1).toUpperCase())}</div><div><div class="lm-ws-side__nm">${esc(c.nombre)}</div>${_obcBadge(c.estado)}</div></div>
+          <div class="lm-ws-side__top"><div class="lm-ws-side__ava">${esc((c.nombre || '?').slice(0, 1).toUpperCase())}</div><div style="flex:1;min-width:0"><div class="lm-ws-side__nm">${esc(c.nombre)}</div>${_obcBadge(c.estado)}</div><button class="seq-more-btn" onclick="LeadManagerModule.clientQuickMenu(event,${c.id})" title="Más acciones">⋮</button></div>
           <div class="lm-ws-side__acts">
             <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openClientDrawer(${c.id})">Editar cliente</button>
             <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.clientCmpReport(${c.id})">Informe de campaña</button>
@@ -20846,6 +20882,33 @@ ${foot}
     const c = _clients.find(x => x.id === _activeClient); const body = $('lm-ws-tabbody');
     if (c && body) body.innerHTML = _clientTabBody(tab, c, _clientLeads(c.id));
     if (tab === 'WhatsApp' && c) ObcWaModule.load(c.id);
+  }
+  function _clientGoTab(tabName) {
+    const btn = [...document.querySelectorAll('.lm-ws-tab')].find(b => b.textContent.trim() === tabName);
+    if (btn) clientTab(btn, tabName);
+  }
+  function clientQuickMenu(ev, id) {
+    if (ev && ev.stopPropagation) ev.stopPropagation();
+    document.querySelectorAll('.cp-mark-menu').forEach(m => m.remove());
+    const close = "document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove())";
+    const item = (label, onclick) => `<button class="cp-mark-menu__b" onclick="${close};${onclick}">${label}</button>`;
+    let html = `<div class="cp-mark-menu__list">`
+      + item('Conectar buzón', `LeadManagerModule.mbOpen(${id})`)
+      + item('Conectar WhatsApp', `LeadManagerModule._clientGoTab('WhatsApp')`)
+      + item('Editar cliente', `LeadManagerModule.openClientDrawer(${id})`)
+      + item('Informe de campaña', `LeadManagerModule.clientCmpReport(${id})`)
+      + item('Informe de secuencia', `LeadManagerModule.clientSeqReport(${id})`)
+      + `</div>`;
+    const menu = document.createElement('div');
+    menu.className = 'cp-mark-menu';
+    menu.style.minWidth = '190px';
+    menu.innerHTML = html;
+    document.body.appendChild(menu);
+    const t = (ev && (ev.currentTarget || ev.target)) || document.body;
+    const r = t.getBoundingClientRect();
+    menu.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 200))}px`;
+    menu.style.top = `${r.bottom + 6}px`;
+    setTimeout(() => document.addEventListener('click', function onDoc(e) { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', onDoc); } }), 0);
   }
   function _clientLeadRow(c) {
     const full = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || '—';
@@ -21429,7 +21492,18 @@ ${foot}
     const item = (label, onclick, dot) => `<button class="cp-mark-menu__b" onclick="${close};${onclick}">${dot ? `<span class="cp-mark-dot" style="background:${dot}"></span>` : ''}${label}</button>`;
     const c = _contacts.find(x => x.id === cid);
     let html = `<div class="cp-mark-menu__h">Cambiar estado del lead</div>`;
-    html += `<div class="cp-mark-menu__grid">` + _DISPOS.map(d => item(esc(d[1]), `LeadManagerModule.ibResolveDisp(${cid},'${d[0]}')`, d[2])).join('') + `</div>`;
+    // Los 3 "descartados" (No interesado/No califica/No contactar) ya colapsan al mismo
+    // lugar del pipeline (Perdido) — mostrarlos como 3 botones sueltos en la grilla era
+    // el ruido exacto que Jenny pidió quitar (2026-09-03). Un solo "Descartado ▸" con el
+    // motivo adentro, mismo patrón que "Resolver respuesta ▸" en el Inbox.
+    const descartados = _DISPOS.filter(d => d[4] === 'desc');
+    html += `<div class="cp-mark-menu__grid">` + _DISPOS.filter(d => d[4] !== 'desc').map(d => item(esc(d[1]), `LeadManagerModule.ibResolveDisp(${cid},'${d[0]}')`, d[2])).join('') + `</div>`;
+    html += `<div class="cp-mark-menu__sub">
+      <div class="cp-mark-menu__b cp-mark-menu__b--sub"><span class="cp-mark-dot" style="background:${descartados[0][2]}"></span>Descartado <span class="cp-mark-menu__arrow">▸</span></div>
+      <div class="cp-mark-menu__subpanel"><div class="cp-mark-menu__list">`
+      + descartados.map(d => item(esc(d[1]), `LeadManagerModule.ibResolveDisp(${cid},'${d[0]}')`)).join('')
+      + `</div></div>
+    </div>`;
     if (c && c.disposition) {
       html += `<div class="cp-mark-menu__sep"></div><div class="cp-mark-menu__list">` + item('— Quitar estado —', `LeadManagerModule.lmSetDisposition(${cid},'')`) + `</div>`;
     }
@@ -21446,6 +21520,53 @@ ${foot}
     else { menu.style.top = `${r.bottom + 6}px`; }
     setTimeout(() => document.addEventListener('click', function onDoc(e) { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', onDoc); } }), 0);
   }
+
+  // ── "Para retomar" (nutrición) — 3 rutas posibles, la usuaria decide cuál (nunca
+  // se reinscribe sola en nada, ver sendEngine.js _maybeAutoNurture): ──
+  //   1. Reinscribir en la MISMA secuencia donde estaba (retomar donde quedó).
+  //   2. Enrolar en OTRA secuencia (la de re-engagement que ella haya armado).
+  //   3. Solo un toque manual — cierra el aviso sin meterlo a ninguna secuencia.
+  function nurtureRetomarMenu(ev, cid, activityId, sequenceId) {
+    if (ev && ev.stopPropagation) ev.stopPropagation();
+    document.querySelectorAll('.cp-mark-menu').forEach(m => m.remove());
+    const close = "document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove())";
+    const item = (label, onclick) => `<button class="cp-mark-menu__b" onclick="${close};${onclick}">${label}</button>`;
+    const seq = sequenceId ? _sequences.find(x => x.id === sequenceId) : null;
+    let html = `<div class="cp-mark-menu__list">`
+      + (seq ? item(`Reinscribir en "${esc(seq.nombre)}"`, `LeadManagerModule.nurtureReinscribir(${cid},${sequenceId},${activityId})`) : '')
+      + item('Enrolar en otra secuencia…', `LeadManagerModule.nurtureOtraSecuencia(${cid},${activityId})`)
+      + item('Solo un toque manual (sin secuencia)', `LeadManagerModule.nurtureSoloManual(${cid},${activityId})`)
+      + `</div>`;
+    const menu = document.createElement('div');
+    menu.className = 'cp-mark-menu';
+    menu.style.minWidth = '230px';
+    menu.innerHTML = html;
+    document.body.appendChild(menu);
+    const t = (ev && (ev.currentTarget || ev.target)) || document.body;
+    const r = t.getBoundingClientRect();
+    menu.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 240))}px`;
+    menu.style.top = `${r.bottom + 6}px`;
+    setTimeout(() => document.addEventListener('click', function onDoc(e) { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', onDoc); } }), 0);
+  }
+  async function _nurtureCerrarAviso(activityId) {
+    if (!activityId) return;
+    try { await apiFetch(`${API}/lm/activities/${activityId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ estado: 'hecha' }) }); } catch (_) {}
+  }
+  async function nurtureReinscribir(cid, sequenceId, activityId) {
+    await seqEnrol(sequenceId, cid);
+    await _nurtureCerrarAviso(activityId);
+    if (_taskView === 'priority') _tiReload();
+  }
+  function nurtureOtraSecuencia(cid, activityId) {
+    _nurtureAvisoPendiente = activityId; // bulkAddDo no sabe de esto — se cierra al confirmar el enrolamiento, ver hook abajo
+    bulkAddOpen('sequence', [cid]);
+  }
+  async function nurtureSoloManual(cid, activityId) {
+    await _nurtureCerrarAviso(activityId);
+    showBanner('✓ Aviso cerrado — recuerda registrar el toque manual (llamada/WhatsApp) en su ficha', 'success');
+    if (_taskView === 'priority') _tiReload();
+  }
+  let _nurtureAvisoPendiente = null;
 
   // ── Derivación: registrar al contacto correcto de la MISMA empresa ──
   // disp='derivado' (te lo dio el lead) | 'no_es_persona' (no dio datos, lo agregas tú).
@@ -21697,14 +21818,20 @@ ${foot}
     const monOpts = ['USD', 'PEN', 'EUR'].map(x => `<option value="${x}"${(c.deal_moneda || 'USD') === x ? ' selected' : ''}>${x}</option>`).join('');
     const m = document.createElement('div'); m.id = 'dl-modal'; m.className = 'fin-pi-backdrop';
     m.onclick = ev => { if (ev.target === m) dlClose(); };
-    m.innerHTML = `<div class="fin-pi-box dle-box">
+    m.innerHTML = `<div class="fin-pi-box dle-box dle-box--wide">
       <div class="dle-hd"><div style="flex:1;min-width:0"><div class="dle-hd__t">${esc(full)}</div><div class="dle-hd__s">${esc([c.cargo, c.company_nombre].filter(Boolean).join(' · ')) || 'Deal'}</div></div><button class="fin-pi-x" onclick="LeadManagerModule.dlClose()">✕</button></div>
-      <div class="dle-grid">
-        <label class="dle-f dle-f--full"><span class="dle-l">Etapa del pipeline</span><select class="dle-i" id="dle-estado">${estOpts}</select></label>
-        <label class="dle-f"><span class="dle-l">Valor estimado</span><input class="dle-i" id="dle-valor" type="number" min="0" step="0.01" placeholder="0" value="${c.deal_valor == null ? '' : c.deal_valor}"></label>
-        <label class="dle-f"><span class="dle-l">Moneda</span><select class="dle-i" id="dle-moneda">${monOpts}</select></label>
-        <label class="dle-f"><span class="dle-l">Probabilidad de cierre</span><select class="dle-i" id="dle-prob">${probOpts}</select></label>
-        <label class="dle-f"><span class="dle-l">Fecha estimada de cierre</span><input class="dle-i" id="dle-cierre" type="date" value="${c.deal_cierre ? String(c.deal_cierre).slice(0, 10) : ''}"></label>
+      <div class="dle-cols">
+        <div class="dle-grid">
+          <label class="dle-f dle-f--full"><span class="dle-l">Etapa del pipeline</span><select class="dle-i" id="dle-estado">${estOpts}</select></label>
+          <label class="dle-f"><span class="dle-l">Valor estimado</span><input class="dle-i" id="dle-valor" type="number" min="0" step="0.01" placeholder="0" value="${c.deal_valor == null ? '' : c.deal_valor}"></label>
+          <label class="dle-f"><span class="dle-l">Moneda</span><select class="dle-i" id="dle-moneda">${monOpts}</select></label>
+          <label class="dle-f"><span class="dle-l">Probabilidad de cierre</span><select class="dle-i" id="dle-prob">${probOpts}</select></label>
+          <label class="dle-f"><span class="dle-l">Fecha estimada de cierre</span><input class="dle-i" id="dle-cierre" type="date" value="${c.deal_cierre ? String(c.deal_cierre).slice(0, 10) : ''}"></label>
+        </div>
+        <div class="dle-notas-col">
+          <span class="dle-l">Notas y comentarios</span>
+          <div id="dl-notas-wrap">${_dlNotasHtml(c.id)}</div>
+        </div>
       </div>
       <div class="dle-foot">
         <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.dlClose();LeadManagerModule.openContactPage(${c.id})">Ver ficha ›</button>
@@ -21715,6 +21842,48 @@ ${foot}
     </div>`;
     document.body.appendChild(m);
     setTimeout(() => document.getElementById('dle-valor')?.focus(), 40);
+  }
+  // Notas y comentarios del deal (pedido 2026-09-02: quedan con fecha y se pueden ir
+  // agregando — reusa el mismo log de actividades tipo='nota' que ya tiene el contacto
+  // en su ficha, así no hay dos historiales de notas separados para lo mismo).
+  function _dlNotasHtml(cid) {
+    const notas = (_activities || []).filter(a => a.contact_id === cid && a.tipo === 'nota').sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+    // Fecha+hora y autor SIEMPRE se guardan, pero como dato discreto al pie de la nota
+    // (no como título arriba) — pedido explícito 2026-09-02.
+    const fmt = f => { try { return new Date(f).toLocaleString('es-PE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }); } catch (_) { return ''; } };
+    return `<div class="dl-notas-list">${notas.length
+      ? notas.map(n => `<div class="dl-nota" style="padding:6px 0;border-bottom:1px solid var(--border,#EAE7E2);font-size:.82rem">
+          <div style="display:flex;justify-content:space-between;gap:6px"><div style="white-space:pre-wrap">${esc(n.nota || '')}</div><button class="fin-pi-x" style="flex-shrink:0;width:16px;height:16px;font-size:.7rem" title="Eliminar" onclick="LeadManagerModule.dlNotaDel(${cid},${n.id})">✕</button></div>
+          <div style="color:var(--text-muted,#918C85);font-size:.7rem;margin-top:3px">${[n.autor, fmt(n.fecha)].filter(Boolean).join(' · ')}</div>
+        </div>`).join('')
+      : `<div class="dle-hint" style="color:var(--text-muted,#918C85);font-size:.8rem;padding:4px 0">Sin notas todavía.</div>`}</div>
+      <div style="display:flex;gap:6px">
+        <input class="dle-i" id="dl-nota-nueva" placeholder="Escribe una nota o comentario…" style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();LeadManagerModule.dlNotaAdd(${cid})}">
+        <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.dlNotaAdd(${cid})">Agregar</button>
+      </div>`;
+  }
+  async function dlNotaAdd(cid) {
+    const inp = $('dl-nota-nueva');
+    const nota = (inp?.value || '').trim();
+    if (!nota) return;
+    const c = _contacts.find(x => x.id === cid); if (!c) return;
+    const autor = window._authUser?.memberNombre || window._authUser?.name || '';
+    try {
+      const res = await apiFetch(`${API}/activities`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact_id: cid, outbound_client_id: c.outbound_client_id || null, tipo: 'nota', nota, fecha: new Date().toISOString(), estado: 'hecha', autor }) });
+      if (!res.ok) throw new Error((await res.json()).error || 'Error');
+      const nueva = await res.json();
+      _activities = _activities || []; _activities.push(nueva);
+      if (inp) inp.value = '';
+      const wrap = $('dl-notas-wrap'); if (wrap) wrap.innerHTML = _dlNotasHtml(cid);
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  async function dlNotaDel(cid, actId) {
+    try {
+      const res = await apiFetch(`${API}/activities/${actId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Error');
+      _activities = (_activities || []).filter(a => a.id !== actId);
+      const wrap = $('dl-notas-wrap'); if (wrap) wrap.innerHTML = _dlNotasHtml(cid);
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
   async function dlSave(cid) {
     const c = _contacts.find(x => x.id === cid); if (!c) return;
@@ -22147,6 +22316,7 @@ ${foot}
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Días de cadencia</span><input type="hidden" id="seq-senddays" value="${_sanSendDays(s?.send_days)}"><div class="seq-days" id="seq-days">${['L', 'M', 'X', 'J', 'V', 'S', 'D'].map((lbl, i) => `<button type="button" class="seq-day${_sanSendDays(s?.send_days)[i] === '1' ? ' on' : ''}" data-d="${i}" onclick="LeadManagerModule.seqDayToggle(${i})">${lbl}</button>`).join('')}<span class="seq-days-sp"></span><button type="button" class="seq-days-preset" onclick="LeadManagerModule.seqDaysPreset('week')">L–V</button><button type="button" class="seq-days-preset" onclick="LeadManagerModule.seqDaysPreset('all')">Todos</button></div><span class="seq-drip-hint">Los pasos y tareas caen solo en los días marcados. Si un “día N” cae en un día no marcado, se mueve al siguiente permitido (ej. sáb/dom → lunes).</span></label>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Arranque escalonado · contactos por día</span><input class="form-input" type="number" id="seq-drip" min="0" step="1" value="${s?.drip_per_day ? s.drip_per_day : ''}" placeholder="0 = todos arrancan el mismo día"><span class="seq-drip-hint">Al enrolar muchos contactos a la vez, reparte su “día 1” en tandas (ej. 20/día) para no saturarte de tareas ni de envíos. Se distribuyen automáticamente en los días de cadencia permitidos.${s ? ` <button type="button" class="seq-days-preset" onclick="LeadManagerModule.seqRedistribute(${s.id})" title="Recalcula las fechas de los contactos que aún no empiezan, según el valor de arriba (guárdalo primero)">↻ Repartir ahora los ya enrolados</button>` : ''}</span></label>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Límite diario de envíos (esta secuencia)</span><input class="form-input" type="number" id="seq-dlim" min="0" step="1" value="${s?.daily_limit ? s.daily_limit : ''}" placeholder="0 = usa el límite global del workspace"><span class="seq-drip-hint">Tope de emails automáticos por día para el buzón de este cliente. Al llegar al tope, el motor sigue con las demás secuencias y esta continúa mañana.</span></label>
+        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Nutrición automática</span><input class="form-input" type="number" id="seq-nurture" min="0" step="1" value="${s?.nurture_days ? s.nurture_days : ''}" placeholder="Vacío = apagado, nunca se activa sola"><span class="seq-drip-hint">Si un contacto termina TODOS los pasos sin responder (ni ningún otro estado), pasa solo a "Contactar más adelante" con esta cantidad de días de espera — nunca se reinscribe en ninguna secuencia sola, solo crea un aviso en Tareas comerciales ("Para retomar") para que decidas qué hacer.</span></label>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Canal principal (para re-enrutar al aceptar/responder)</span><select class="form-input" id="seq-pref-channel">
           <option value=""${!(s?.preferred_channel) ? ' selected' : ''}>Auto — primer paso de rama replied (sin importar canal)</option>
           <option value="linkedin"${s?.preferred_channel === 'linkedin' ? ' selected' : ''}>LinkedIn preferido — si acepta la conexión, saltar al primer paso LinkedIn de la rama replied</option>
@@ -22208,7 +22378,7 @@ ${foot}
     const fail = m => { if (hint) { hint.textContent = m; hint.className = 'fin-cfg-hint fin-cfg-hint--err'; } };
     if (!nombre) return fail('El nombre es requerido');
     if (!clientId) return fail('Selecciona el cliente outbound');
-    const body = { nombre, outbound_client_id: Number(clientId), campaign_id: $('seq-campaign')?.value ? Number($('seq-campaign').value) : null, estado: $('seq-estado')?.value || 'draft', objetivo: $('seq-objetivo')?.value.trim() || '', timezone: $('seq-tz')?.value || '', drip_per_day: Math.max(0, parseInt($('seq-drip')?.value) || 0), send_days: _sanSendDays($('seq-senddays')?.value), starts_on: $('seq-starts')?.value || null, daily_limit: Math.max(0, parseInt($('seq-dlim')?.value) || 0), mercado: $('seq-mercado')?.value.trim() || '', icp: $('seq-icp')?.value.trim() || '', target_role_1: $('seq-target-1')?.value.trim() || '', target_role_2: $('seq-target-2')?.value.trim() || '', notas: $('seq-notas')?.value.trim() || '', send_mode: $('seq-mode')?.value || 'manual', send_interval_min: parseInt($('seq-interval')?.value) || 5, auto_activar: !!$('seq-autoact')?.checked, preferred_channel: $('seq-pref-channel')?.value || '' };
+    const body = { nombre, outbound_client_id: Number(clientId), campaign_id: $('seq-campaign')?.value ? Number($('seq-campaign').value) : null, estado: $('seq-estado')?.value || 'draft', objetivo: $('seq-objetivo')?.value.trim() || '', timezone: $('seq-tz')?.value || '', drip_per_day: Math.max(0, parseInt($('seq-drip')?.value) || 0), send_days: _sanSendDays($('seq-senddays')?.value), starts_on: $('seq-starts')?.value || null, daily_limit: Math.max(0, parseInt($('seq-dlim')?.value) || 0), mercado: $('seq-mercado')?.value.trim() || '', icp: $('seq-icp')?.value.trim() || '', target_role_1: $('seq-target-1')?.value.trim() || '', target_role_2: $('seq-target-2')?.value.trim() || '', notas: $('seq-notas')?.value.trim() || '', send_mode: $('seq-mode')?.value || 'manual', send_interval_min: parseInt($('seq-interval')?.value) || 5, auto_activar: !!$('seq-autoact')?.checked, preferred_channel: $('seq-pref-channel')?.value || '', nurture_days: $('seq-nurture')?.value ? parseInt($('seq-nurture').value) : null };
     const btn = $('seq-save'); if (btn) btn.disabled = true;
     try {
       const res = await apiFetch(`${API}/sequences${id ? '/' + id : ''}`, { method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -23425,6 +23595,9 @@ ${foot}
       const dup = (d.requested || ids.length) - (d.added || 0) - (d.skipped_company ? d.skipped_company.length : 0);
       const spread = (kind === 'sequence' && d.spread_days > 1) ? ` · repartidos en ${d.spread_days} días (${d.per_day}/día)` : '';
       showBanner(`✓ ${added} contacto(s) añadido(s)${dup > 0 ? ` · ${dup} ya pertenecían` : ''}${skipped > 0 ? ` · ${skipped} omitido(s) por regla 1-por-empresa` : ''}${spread}`, added ? 'success' : 'info');
+      // Si este enrolamiento vino de "Para retomar" (nutrición), cierra el aviso — ya
+      // se decidió qué hacer con él, no debe seguir apareciendo como pendiente.
+      if (_nurtureAvisoPendiente && added) { await _nurtureCerrarAviso(_nurtureAvisoPendiente); _nurtureAvisoPendiente = null; if (_taskView === 'priority') _tiReload(); }
     } catch (e) { alert('Error: ' + e.message); }
   }
 
@@ -23653,6 +23826,16 @@ ${foot}
     const canal = $('rr-canal')?.value || 'email';
     const resultado = $('rr-result')?.value || 'respondio';
     const nota = ($('rr-nota')?.value || '').trim();
+    // 'Contactar más adelante' y 'Derivó a otro'/'No es la persona' necesitan un dato
+    // extra (fecha de retomar / datos del contacto nuevo) que este formulario no pide —
+    // antes se guardaban a medias (sin ese dato) mientras que desde "Resolver respuesta"
+    // sí abrían el flujo completo. Bug encontrado 2026-09-02: se corrige enrutando acá
+    // también, en vez de tener dos caminos que hacen cosas distintas para el mismo valor.
+    if (resultado === 'mas_adelante' || resultado === 'derivado' || resultado === 'no_es_persona') {
+      document.getElementById('lm-reply-modal')?.remove();
+      if (resultado === 'mas_adelante') return ldNurture(cid);
+      return ldRefer(cid, resultado);
+    }
     const btn = $('rr-save'); if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
     try {
       const chanLbl = { email: 'Email conectado', email_manual: 'Email no conectado', whatsapp: 'WhatsApp', linkedin: 'LinkedIn', llamada: 'Llamada', otro: 'Otro' }[canal] || canal;
@@ -24565,6 +24748,7 @@ ${foot}
         ${F('Ventana horaria', `<div style="display:flex;gap:6px;align-items:center"><input class="lm-cfg-in" id="scfg-ws" type="number" min="0" max="23" value="${c.window_start}" style="width:64px"> a <input class="lm-cfg-in" id="scfg-we" type="number" min="1" max="24" value="${c.window_end}" style="width:64px"> h</div>`, 'Hora local del timezone')}
         ${F('Timezone', `<input class="lm-cfg-in" id="scfg-tz" value="${esc(c.timezone || 'America/Lima')}">`)}
         ${F('Fines de semana', `<select class="lm-cfg-in" id="scfg-wk"><option value="0"${!c.send_weekends ? ' selected' : ''}>No enviar</option><option value="1"${c.send_weekends ? ' selected' : ''}>Enviar</option></select>`)}
+        ${F('Recordatorio de inactividad', `<input class="lm-cfg-in" id="scfg-followup" type="number" min="0" max="168" value="${c.followup_hours ?? 24}">`, 'Horas sin respuesta tras un email automático para avisarte en Tareas comerciales (0 = apagado). Activo de fábrica en 24h.')}
       </div>
       ${F('Firma (texto o HTML)', `<textarea class="lm-cfg-in" id="scfg-firma" rows="3" placeholder="Jenny · Novacentrax&#10;novacentrax.com">${esc(c.firma || '')}</textarea>`)}
       <div class="lm-cfg-checks">
@@ -24587,6 +24771,7 @@ ${foot}
       window_end: v('scfg-we')?.value, timezone: v('scfg-tz')?.value,
       send_weekends: v('scfg-wk')?.value === '1', firma: v('scfg-firma')?.value || '',
       track_opens: !!v('scfg-opens')?.checked, track_clicks: !!v('scfg-clicks')?.checked,
+      followup_hours: v('scfg-followup')?.value,
     };
     try {
       const res = await apiFetch(`${API}/lm/send-settings`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -25095,7 +25280,7 @@ ${foot}
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
-  return { load, filter, setFilter, setView, go, openClient, clientTab,
+  return { load, filter, setFilter, setView, go, openClient, clientTab, _clientGoTab, clientQuickMenu,
     openImportPicker, closeImportPicker, openImport, closeImport, impFile, impToggleHeader, impToggleUpdateExisting, impSetObc, impNewClient, impRun, exportCsv,
     cbxOpen, cbxFilter, cbxPick, cbxBlur,
     openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, bulkDeleteContacts, bulkAddOpen, bulkAddDo, openContactPage, cpTab, cpSave, cpDelete, cpActOpen, cpActSave, cpActToggle, cpActDel,
@@ -25130,7 +25315,8 @@ ${foot}
     lmSetPageSize, ctGoPage, coGoPage, seqCtSetEstado, seqTaskSetCanal,
     ldSetResult, ldSetCli, ldSetSeq, ldSetCamp, ldSetQ, ldAddNote, ldMeet, ldToDeal, ldEditNote, ldExport,
     ldRefer, ldReferSave, ldNurture, ldNurtureSave, ldOpenDispoMenu,
-    dlSetCli, dlOpen, dlClose, dlSave,
+    nurtureRetomarMenu, nurtureReinscribir, nurtureOtraSecuencia, nurtureSoloManual,
+    dlSetCli, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel,
     sqSetCli, sqSetEst, sqSetQ, cmSetCli, cmSetEst, cmSetQ,
     seqRunSetCanal, seqTaskSetDue,
     mbOpen, mbClose, mbSave, mbTest, mbDelete, mbProv, mbOAuthStart,
@@ -25138,7 +25324,7 @@ ${foot}
     mbSignatureOpen, mbSignaturePreview, mbSignatureClear, mbSignatureInsertLink, mbSignatureImg, mbSignatureSave,
     mbAdminConsentSync, mbAdminConsentToggleHtml,
     mbAdminConsentSetSigner, mbAdminConsentAddChip, mbAdminConsentRmChip, mbAdminConsentInputKey, mbAdminConsentClearRecipients,
-    ibOpen, ibTab, ibCli, ibDisp, ibSend, ibSaveNote, ibForward, ibSetMode, ibMsgNav, ibSchedToggle, ibSchedPick, ibCancelSched, ibResolveDisp, ibOpenResolveMenu, ibShowLeadActions, ibCopyConversation,
+    ibOpen, ibTab, ibCli, ibDisp, ibSend, ibSaveNote, ibForward, ibSetMode, ibMsgNav, ibSchedToggle, ibSchedPick, ibCancelSched, ibResolveDisp, ibOpenResolveMenu, ibShowLeadActions, ibCopyConversation, _ibFwdSearch, _ibFwdPick,
     ibAbrirDesdeEnviados, ibToggleEnvVista, ibAbrirFiltros, _ibSetFApertura, _ibSetFLeido, _ibSetFSeq, _ibLimpiarFiltrosExtra,
     ibRowMenu, ibCloseMenu, ibMarkUnread,
     composeAbrir, composeCerrar, composeEnviar, _cmpClientChange, _cmpBuscar, _cmpElegir, _cmpClear, _cmpNuevo, _cmpNuevoCancel, _cmpSeqNueva,
@@ -25257,19 +25443,44 @@ const WorkspaceModule = (() => {
     $('wsname-input').oninput        = _updateLivePreview;
   }
 
-  // Cambia de seccion en Configuracion. Se cargan los datos de integraciones solo
-  // al entrar, no al abrir el modal: no hace falta pedirlos si vas a tocar el logo.
+  // Cambia de seccion en Empresa (antes "Configuración"). Se cargan los datos de
+  // integraciones/usuarios solo al entrar, no al abrir el modal.
+  let _teamParent = null, _teamNext = null;
   function setSection(sec) {
     document.querySelectorAll('#wsname-modal .cfg__navb')
       .forEach(b => b.classList.toggle('on', b.dataset.sec === sec));
     document.querySelectorAll('#wsname-modal .cfg__sec')
       .forEach(s2 => { s2.hidden = s2.dataset.sec !== sec; });
     if (sec === 'integraciones') { SlackModule.cargar(); IntegracionesModule.cargarWa(); }
+    // "Usuarios" pasó de ser una pestaña propia del header a vivir acá dentro —
+    // en vez de duplicar la tabla, se muda el propio #pane-mgmt-team (mismo truco que
+    // el chat de Slack en media pantalla: mover el nodo, no clonar el módulo).
+    if (sec === 'usuarios') {
+      const pane = $('pane-mgmt-team'), mount = $('cfg-usuarios-mount');
+      if (pane && mount && pane.parentElement !== mount) {
+        _teamParent = pane.parentElement; _teamNext = pane.nextSibling;
+        mount.appendChild(pane);
+      }
+      // .pane solo se ve con la clase "active" (display:none si no) — normalmente la
+      // pone/quita el switcher de pestañas de Operaciones, que acá no interviene.
+      pane?.classList.add('active');
+      TeamModule.load();
+    } else {
+      _volverPaneEquipo();
+    }
+  }
+  function _volverPaneEquipo() {
+    const pane = $('pane-mgmt-team');
+    if (pane && _teamParent && pane.parentElement === $('cfg-usuarios-mount')) {
+      pane.classList.remove('active');
+      _teamParent.insertBefore(pane, _teamNext);
+    }
   }
 
   function closeNameModal() {
     $('wsname-overlay').classList.add('hidden');
     $('wsname-modal').classList.add('hidden');
+    _volverPaneEquipo();
   }
 
   function onLogoFile(input) {
@@ -26255,7 +26466,9 @@ const SlackChat = (() => {
     const lista = _miembros
       .filter(m => (m.nombre || m.usuario || '').toLowerCase().includes(q))
       .slice(0, 8);
-    if (!lista.length && filtro) return;   // nada que ofrecer para ese texto
+    // Antes, sin coincidencias con texto escrito, no se mostraba NADA — parecía que
+    // el @mencionar simplemente no funcionaba (reportado 2026-09-02). Ahora siempre
+    // se ve el popover, con "Sin resultados" si el texto no matchea a nadie.
     const pop = document.createElement('div');
     pop.className = 'slk-men-pop';
     pop.innerHTML = lista.length
@@ -26263,15 +26476,21 @@ const SlackChat = (() => {
           `<button class="slk-men-it" data-id="${m.id}" data-nm="${esc((m.nombre||m.usuario).replace(/"/g,''))}">
              <img src="${_avatarUrl(m.id, m.nombre||m.usuario)}"><span>${escNom(m.nombre||m.usuario)}</span>
            </button>`).join('')
-      : `<div class="slk-men-empty">Sin resultados</div>`;
+      : `<div class="slk-men-empty">Sin resultados${filtro ? ` para "${esc(filtro)}"` : ''}</div>`;
     pop.querySelectorAll('.slk-men-it').forEach(b =>
       b.onclick = () => _mencionar(b.dataset.id, b.dataset.nm));
     pop.style.cssText = 'position:fixed;z-index:10050;width:250px;visibility:hidden';
     document.body.appendChild(pop);
     const btn = document.querySelector('.chat-tool-btn[title="Mencionar a alguien"]');
     const r = (btn || inp).getBoundingClientRect();
-    const alto = pop.offsetHeight || 240;
-    pop.style.top  = Math.max(8, r.top - alto - 6) + 'px';
+    // "bottom" en vez de "top - alto estimado": crece hacia arriba desde un ancla fija
+    // en la parte de abajo, así nunca puede terminar tapando el cuadro de escribir (el
+    // cálculo viejo con altura estimada sí podía quedarse corto y superponerse —
+    // reportado 2026-09-02).
+    pop.style.bottom = Math.max(8, window.innerHeight - r.top + 6) + 'px';
+    pop.style.top = 'auto';
+    pop.style.maxHeight = Math.max(120, r.top - 16) + 'px';
+    pop.style.overflowY = 'auto';
     pop.style.left = Math.min(r.left, window.innerWidth - 260) + 'px';
     pop.style.visibility = 'visible';
     setTimeout(() => document.addEventListener('click', function o(e2) {
@@ -27071,17 +27290,32 @@ const SlackChat = (() => {
 // Resuelve la conexión: el del cliente outbound del contacto si existe y está
 // conectado, si no el de Operaciones (pedido explícito 2026-09-01).
 const QuickWaModule = (() => {
-  let _conn = null, _jid = null, _nombre = '', _poll = null;
+  let _conn = null, _jid = null, _nombre = '', _poll = null, _contactId = null;
+  let _replyTo = null;
+  let _pendingImg = null, _pendingImgUrl = null;
+  const $$ = id => document.getElementById(id);
 
   async function open({ contactId, nombre, telefono, outboundClientId, prefill }) {
     close();
-    _nombre = nombre || 'Contacto'; _jid = `${telefono}@s.whatsapp.net`;
+    _nombre = nombre || 'Contacto'; _contactId = contactId;
+    _jid = `${telefono}@s.whatsapp.net`;
     _render(prefill || '');
     _conn = await _resolverConexion(outboundClientId);
     if (!_conn) { _setSinConexion(); return; }
-    const sub = document.getElementById('qwa-sub'); if (sub) sub.textContent = `+${_conn.numero || ''}`;
+    // Reconocimiento automático (pedido 2026-09-02: "yo solo debería elegir el wpp, si
+    // hubo conversación debería reconocerse en automático, no una tarea manual") —
+    // WhatsApp a veces no manda el número real de un contacto, solo un "@lid" interno
+    // que Baileys no siempre resuelve; el backend intenta encontrar la conversación real
+    // sola (vínculo ya guardado → número tal cual → único chat @lid que la menciona por
+    // nombre) y solo si de verdad es ambiguo queda sin resolver. "Vincular otra" en el
+    // header sigue como respaldo manual para ese caso ambiguo, no como el camino normal.
+    try {
+      const rl = await apiFetch(`${API}/wa/connections/${_conn.id}/resolve-contact/${_contactId}?telefono=${encodeURIComponent(telefono || '')}`);
+      if (rl.ok) { const d = await rl.json(); if (d.jid) _jid = d.jid; }
+    } catch (_) {}
+    const sub = $$('qwa-sub'); if (sub) sub.textContent = `+${_conn.numero || ''}`;
     await _cargarMensajes();
-    _poll = setInterval(_cargarMensajes, 5000);
+    _poll = setInterval(() => _cargarMensajes(true), 5000);
   }
 
   async function _resolverConexion(outboundClientId) {
@@ -27111,72 +27345,415 @@ const QuickWaModule = (() => {
             <div class="qwa-panel__ava">${esc((_nombre || '?').charAt(0).toUpperCase())}</div>
             <div><div class="qwa-panel__name">${esc(_nombre)}</div><div class="qwa-panel__sub" id="qwa-sub">Conectando…</div></div>
           </div>
+          <button class="cp-act" style="margin-right:6px;padding:4px 9px;font-size:.72rem" onclick="LeadManagerModule.dlOpen(${_contactId})">Mover a Deal</button>
+          <button class="cp-act" style="margin-right:6px;padding:4px 9px;font-size:.72rem" title="Si esta no es la conversación correcta (pasa con números que WhatsApp no reporta)" onclick="QuickWaModule.vincularAbrir()">¿No es esta? Vincular otra</button>
           <button class="fin-pi-x" onclick="QuickWaModule.close()">✕</button>
         </div>
-        <div class="qwa-panel__msgs" id="qwa-msgs"><div class="clients-loading"><div class="clients-spin"></div></div></div>
+        <div class="qwa-panel__msgs" id="qwa-messages"><div class="clients-loading"><div class="clients-spin"></div></div></div>
+        <div id="qwa-quote" class="rchat-quote hidden"></div>
+        <div id="qwa-img-preview" class="wa-img-prev hidden"></div>
         <div class="qwa-panel__composer">
+          <button class="wa-clock" title="Adjuntar foto" onclick="QuickWaModule.pickImage()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+          </button>
           <textarea id="qwa-input" class="chat-composer__field" rows="1" placeholder="Escribe un mensaje…"
+            onpaste="QuickWaModule.onPasteInput(event)"
             onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();QuickWaModule.enviar()}"
             oninput="ChatModule.autoResize(this)">${esc(prefill)}</textarea>
+          <button class="wa-clock" title="Emoji" onclick="QuickWaModule.emojiPicker(event)">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+          </button>
+          <div class="wa-clock-wrap">
+            <button class="wa-clock" title="Programar envío" onclick="QuickWaModule.programarToggle(event)">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+            </button>
+            <div class="wa-sched" id="qwa-sched" style="display:none" onclick="event.stopPropagation()">
+              <div class="wa-sched__t">Programar envío</div>
+              <button class="wa-sched__opt" onclick="QuickWaModule.programarPick('h1')">En 1 hora</button>
+              <button class="wa-sched__opt" onclick="QuickWaModule.programarPick('h3')">En 3 horas</button>
+              <button class="wa-sched__opt" onclick="QuickWaModule.programarPick('man9')">Mañana 9:00</button>
+              <button class="wa-sched__opt" onclick="QuickWaModule.programarPick('lun9')">Lunes 9:00</button>
+              <div class="wa-sched__custom">
+                <input type="datetime-local" class="dle-i" id="qwa-sched-dt" style="font-size:.74rem;padding:5px 7px">
+                <button class="btn btn--primary btn--sm" onclick="QuickWaModule.programarPick('custom')">OK</button>
+              </div>
+            </div>
+          </div>
           <button class="chat-composer__send" onclick="QuickWaModule.enviar()" title="Enviar (Enter)">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22 11 13 2 9l20-7z"/></svg>
           </button>
         </div>
       </div>`;
     document.body.appendChild(panel);
-    if (prefill) setTimeout(() => { const el = document.getElementById('qwa-input'); if (el) ChatModule.autoResize(el); }, 30);
+    if (prefill) setTimeout(() => { const el = $$('qwa-input'); if (el) ChatModule.autoResize(el); }, 30);
+  }
+
+  // Picker manual de conversación real — para el caso "@lid" sin resolver: se listan
+  // TODOS los chats de la conexión (aunque no tengan nombre, solo el jid) y al elegir
+  // uno se guarda el vínculo (wa_jid_links) para que la próxima vez abra directo ahí.
+  async function vincularAbrir() {
+    if (!_conn || !_contactId) return;
+    document.getElementById('qwa-link-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'qwa-link-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) m.remove(); };
+    m.innerHTML = `<div class="fin-pi-box lm-pick-box">
+      <div class="fin-pi-box__hd"><h3>Vincular la conversación real</h3><button class="fin-pi-x" onclick="document.getElementById('qwa-link-modal').remove()">✕</button></div>
+      <p style="padding:0 20px;margin:0 0 8px;font-size:.8rem;color:var(--muted,#918C85)">WhatsApp a veces no manda el número real de un contacto — si su conversación aparece vacía pero sabes que ya escribió antes, búscala aquí por nombre o mensaje y vincúlala.</p>
+      <div class="fin-pi-form" style="padding-bottom:0">
+        <input class="form-input fin-pi-full" id="qwa-link-q" placeholder="Busca por nombre o texto del último mensaje…" autocomplete="off" oninput="QuickWaModule._vincularFiltrar(this.value)">
+      </div>
+      <div id="qwa-link-list" class="fin-pi-form" style="padding-top:8px;max-height:50vh;overflow:auto"><div class="clients-loading"><div class="clients-spin"></div></div></div>
+    </div>`;
+    document.body.appendChild(m);
+    try {
+      const r = await apiFetch(`${API}/wa/connections/${_conn.id}/chats`);
+      _vincularChats = r.ok ? await r.json() : [];
+      _vincularPinta(_vincularChats);
+    } catch (e) {
+      const list = $$('qwa-link-list'); if (list) list.innerHTML = `<p style="color:var(--danger)">Error: ${esc(e.message)}</p>`;
+    }
+  }
+  let _vincularChats = [];
+  function _vincularPinta(rows) {
+    const list = $$('qwa-link-list'); if (!list) return;
+    if (!rows.length) { list.innerHTML = `<div class="lm-pick-empty">Sin conversaciones en este WhatsApp.</div>`; return; }
+    list.innerHTML = `<div class="lm-pick-list">${rows.map(c => `
+      <button class="lm-pick-item" onclick="QuickWaModule.vincularPick('${esc(c.chat_jid).replace(/'/g, "\\'")}')">
+        <span>${esc(c.nombre || c.chat_jid)}</span>
+        <span class="lm-pick-est">${esc((c.ultimo_texto || '').slice(0, 40))}</span>
+      </button>`).join('')}</div>`;
+  }
+  function _vincularFiltrar(q) {
+    q = (q || '').trim().toLowerCase();
+    const rows = !q ? _vincularChats : _vincularChats.filter(c =>
+      (c.nombre || '').toLowerCase().includes(q) || (c.ultimo_texto || '').toLowerCase().includes(q) || c.chat_jid.includes(q));
+    _vincularPinta(rows);
+  }
+  async function vincularPick(jid) {
+    if (!_conn || !_contactId) return;
+    try {
+      const r = await apiFetch(`${API}/wa/connections/${_conn.id}/link`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contactId: _contactId, jid })
+      });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'No se pudo vincular');
+      document.getElementById('qwa-link-modal')?.remove();
+      _jid = jid;
+      showBanner('✓ Conversación vinculada', 'success');
+      await _cargarMensajes();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
   function _setSinConexion() {
-    const sub = document.getElementById('qwa-sub'); if (sub) sub.textContent = 'Sin WhatsApp conectado';
-    const box = document.getElementById('qwa-msgs');
+    const sub = $$('qwa-sub'); if (sub) sub.textContent = 'Sin WhatsApp conectado';
+    const box = $$('qwa-messages');
     if (box) box.innerHTML = `<div class="chat-ch-empty">No hay un WhatsApp conectado para este contacto todavía.<br>Conéctalo desde la sección WhatsApp.</div>`;
   }
 
   function _fmtHora(ts) { try { return new Date(ts).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' }); } catch (_) { return ''; } }
+  function _fmtSepFecha(ts) {
+    const d = new Date(ts);
+    const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+    const ayer = new Date(hoy.getTime() - 86400000);
+    return d >= hoy ? 'Hoy' : d >= ayer ? 'Ayer' : d.toLocaleDateString('es-ES', { day: 'numeric', month: 'long' });
+  }
 
-  async function _cargarMensajes() {
+  async function _cargarMensajes(silencioso) {
     if (!_conn) return;
     try {
       const r = await apiFetch(`${API}/wa/connections/${_conn.id}/chats/${encodeURIComponent(_jid)}/mensajes`);
       const rows = r.ok ? await r.json() : [];
       _pintar(rows);
-    } catch (_) { /* se reintenta en el próximo poll */ }
+    } catch (_) { if (!silencioso) { const box = $$('qwa-messages'); if (box) box.innerHTML = `<div class="chat-ch-empty">No se pudieron cargar los mensajes.</div>`; } }
   }
 
+  // Mismo bubble que WaChatModule (programados, eliminados, reacciones, ⋮, fotos,
+  // destacados) — duplicado con ids qwa- en vez de wa- porque este panel no tiene
+  // lista de chats propia (es SIEMPRE un solo contacto puntual).
   function _pintar(rows) {
-    const box = document.getElementById('qwa-msgs'); if (!box) return;
+    const box = $$('qwa-messages'); if (!box) return;
     const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
     if (!rows.length) { box.innerHTML = `<div class="chat-ch-empty">Todavía no hay mensajes en este chat.</div>`; return; }
+    let prevDia = '';
     box.innerHTML = rows.map(m => {
-      if (m.eliminado) return `<div class="wa-msg ${m.from_me ? 'wa-msg--out' : 'wa-msg--in'} wa-msg--del"><div class="wa-msg__bubble">🚫 Se eliminó este mensaje<span class="wa-msg__time">${_fmtHora(m.ts)}</span></div></div>`;
-      const mediaHtml = (m.media_type === 'image' && m.media_url) ? `<img src="${API_ORIGIN}${esc(m.media_url)}" class="wa-msg__img" onclick="window.open('${API_ORIGIN}${esc(m.media_url)}','_blank')" alt="">` : '';
-      return `<div class="wa-msg ${m.from_me ? 'wa-msg--out' : 'wa-msg--in'}"><div class="wa-msg__bubble">${mediaHtml}${esc(m.texto)}<span class="wa-msg__time">${_fmtHora(m.ts)}</span></div></div>`;
+      const cuando = m.scheduled_at || m.ts;
+      const dia = new Date(cuando).toDateString();
+      const sep = dia !== prevDia ? `<div class="chat-date-sep"><span>${_fmtSepFecha(cuando)}</span></div>` : '';
+      prevDia = dia;
+
+      if (m.eliminado) {
+        return `${sep}<div class="wa-msg ${m.from_me ? 'wa-msg--out' : 'wa-msg--in'} wa-msg--del"><div class="wa-msg__bubble">🚫 Se eliminó este mensaje<span class="wa-msg__time">${_fmtHora(m.ts)}</span></div></div>`;
+      }
+      if (m.estado === 'programado' || m.estado === 'error_programado') {
+        const fecha = new Date(m.scheduled_at).toLocaleString('es-PE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+        const badge = m.estado === 'error_programado'
+          ? `⚠ No se pudo enviar (¿WhatsApp desconectado?)`
+          : `${NI('clock', 11)} Programado · saldrá el ${fecha}`;
+        const cancelBtn = m.estado === 'programado' ? `<button class="wa-msg__cancel" onclick="QuickWaModule.cancelarProgramado(${m.id})">Cancelar</button>` : '';
+        const bubbleHtml = `<div class="wa-msg__sched-badge">${badge}${cancelBtn}</div>${esc(m.texto)}`;
+        return `${sep}<div class="wa-msg wa-msg--out wa-msg--sched"><div class="wa-msg__bubble">${bubbleHtml}</div></div>`;
+      }
+
+      const quien = m.from_me ? 'Tú' : (m.nombre || _nombre || 'Este contacto');
+      const citado = m.reply_to_texto ? `<div class="wa-msg__quoted">${esc(m.reply_to_texto).slice(0, 100)}</div>` : '';
+      const msgIdJs = esc(m.msg_id).replace(/'/g, "\\'");
+      const miActualJs = esc(m.mi_reaccion || '').replace(/'/g, "\\'");
+      const textoJs = String(m.texto || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n');
+      const actions = `<div class="wa-msg__actions">
+          <button class="wa-msg__react" title="Reaccionar" onclick="QuickWaModule.reactPop(event,'${msgIdJs}','${miActualJs}')">🙂</button>
+          <button class="wa-msg__reply" title="Responder a este mensaje" onclick="QuickWaModule.responderA('${msgIdJs}','${esc(quien).replace(/'/g, "\\'")}','${esc(m.texto).replace(/'/g, "\\'").replace(/\n/g, ' ')}')">${NI('responder', 13)}</button>
+          <button class="wa-msg__more" title="Más opciones" onclick="QuickWaModule.msgMenu(event,'${msgIdJs}','${textoJs}',${!!m.importante})">⋮</button>
+        </div>`;
+      const reacBits = [];
+      if (m.su_reaccion) reacBits.push(`<span class="slk-reac" title="Su reacción">${esc(m.su_reaccion)} ${esc(_nombre)}</span>`);
+      if (m.mi_reaccion) reacBits.push(`<span class="slk-reac mine" title="Tu reacción — clic para quitar" onclick="event.stopPropagation();QuickWaModule.reaccionar('${msgIdJs}','')">${esc(m.mi_reaccion)} Tú</span>`);
+      const reacHtml = reacBits.length ? `<div class="wa-msg__reactions">${reacBits.join('')}</div>` : '';
+      const mediaHtml = (m.media_type === 'image' && m.media_url)
+        ? `<img src="${API_ORIGIN}${esc(m.media_url)}" class="wa-msg__img" onclick="window.open('${API_ORIGIN}${esc(m.media_url)}','_blank')" alt="">`
+        : '';
+      const starHtml = m.importante ? `<span class="wa-msg__star" title="Mensaje destacado">⭐</span>` : '';
+      const bubbleHtml = `${actions}${citado}${mediaHtml}<span class="wa-msg__text" data-mid="${msgIdJs}">${esc(m.texto)}</span><span class="wa-msg__time">${starHtml}${_fmtHora(m.ts)}</span>${reacHtml}`;
+      return `${sep}<div class="wa-msg ${m.from_me ? 'wa-msg--out' : 'wa-msg--in'}"><div class="wa-msg__bubble">${bubbleHtml}</div></div>`;
     }).join('');
     if (atBottom) box.scrollTop = box.scrollHeight;
   }
 
-  async function enviar() {
-    const input = document.getElementById('qwa-input');
+  // "⋮" del mensaje — mismo trío que en WaChatModule: copiar / seleccionar / destacar.
+  function msgMenu(ev, msgId, texto, importante) {
+    if (ev && ev.stopPropagation) ev.stopPropagation();
+    document.querySelectorAll('.wa-msg-menu').forEach(m => m.remove());
+    const menu = document.createElement('div');
+    menu.className = 'wa-msg-menu';
+    menu.innerHTML = `
+      <button class="wa-msg-menu__b" data-act="copy">Copiar</button>
+      <button class="wa-msg-menu__b" data-act="select">Seleccionar</button>
+      <button class="wa-msg-menu__b" data-act="star">${importante ? 'Quitar destacado' : 'Destacar'}</button>`;
+    menu.querySelector('[data-act="copy"]').onclick = () => { menu.remove(); msgCopy(texto); };
+    menu.querySelector('[data-act="select"]').onclick = () => { menu.remove(); msgSelectText(msgId); };
+    menu.querySelector('[data-act="star"]').onclick = () => { menu.remove(); toggleImportante(msgId, !importante); };
+    document.body.appendChild(menu);
+    const t = (ev && (ev.currentTarget || ev.target)) || document.body;
+    const r = t.getBoundingClientRect();
+    const estH = 130;
+    menu.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 210))}px`;
+    if (r.bottom + estH > window.innerHeight && r.top > estH) { menu.style.top = `${r.top - 6}px`; menu.style.transform = 'translateY(-100%)'; }
+    else { menu.style.top = `${r.bottom + 4}px`; }
+    setTimeout(() => document.addEventListener('click', function onDoc(e) { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', onDoc); } }), 0);
+  }
+  async function msgCopy(texto) {
+    try { await navigator.clipboard.writeText(texto); showBanner('✓ Copiado', 'success'); }
+    catch (e) { showBanner('No se pudo copiar', 'error'); }
+  }
+  function msgSelectText(msgId) {
+    const el = document.querySelector(`.wa-msg__text[data-mid="${CSS.escape(msgId)}"]`);
+    if (!el) return;
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+  async function toggleImportante(msgId, value) {
+    if (!_conn) return;
+    try {
+      const r = await apiFetch(`${API}/wa/connections/${_conn.id}/chats/${encodeURIComponent(_jid)}/mensajes/${encodeURIComponent(msgId)}/importante`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ value })
+      });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Error');
+      await _cargarMensajes(true);
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+
+  const _REAC_RAPIDAS = ['👍', '❤️', '😂', '🎉', '✅', '🙏'];
+  function reactPop(ev, msgId, miActual) {
+    ev.stopPropagation();
+    document.querySelectorAll('.wa-react-pop').forEach(x => x.remove());
+    const pop = document.createElement('div');
+    pop.className = 'wa-react-pop slk-msgmenu';
+    pop.innerHTML = '<div class="slk-mm-reacs">' + _REAC_RAPIDAS.map(e => {
+      const mine = e === miActual;
+      const val = mine ? '' : e;
+      return `<button class="slk-mm-reac${mine ? ' mine' : ''}" title="${mine ? 'Quitar' : ''}" onclick="QuickWaModule.reaccionar('${msgId}','${val}')">${e}</button>`;
+    }).join('') + '</div>';
+    document.body.appendChild(pop);
+    const r = ev.currentTarget.getBoundingClientRect();
+    pop.style.cssText += `;position:fixed;z-index:10050;top:${Math.max(8, r.top - 44)}px;left:${Math.min(r.left, window.innerWidth - 210)}px`;
+    setTimeout(() => document.addEventListener('click', function o(e2) { if (!pop.contains(e2.target)) { pop.remove(); document.removeEventListener('click', o); } }), 0);
+  }
+  async function reaccionar(msgId, emoji) {
+    document.querySelectorAll('.wa-react-pop').forEach(x => x.remove());
+    if (!_conn) return;
+    try {
+      const r = await apiFetch(`${API}/wa/connections/${_conn.id}/chats/${encodeURIComponent(_jid)}/mensajes/${encodeURIComponent(msgId)}/reaccion`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ emoji })
+      });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'No se pudo reaccionar');
+      await _cargarMensajes(true);
+    } catch (e) { alert('Error: ' + e.message); }
+  }
+
+  const _EMOJIS_COMPOSER = ['👍', '🙏', '🔥', '✅', '❤️', '😂', '🎉', '👀', '💯', '🚀', '😍', '😅', '🤝', '💪', '👏', '⭐', '😎', '🤔', '😢', '😡'];
+  function emojiPicker(ev) {
+    ev.stopPropagation();
+    document.querySelectorAll('.slk-emoji-pop').forEach(x => x.remove());
+    const pop = document.createElement('div');
+    pop.className = 'slk-emoji-pop';
+    pop.innerHTML = _EMOJIS_COMPOSER.map(e => `<button onclick="QuickWaModule._emojiIns('${e}')">${e}</button>`).join('');
+    const r = ev.currentTarget.getBoundingClientRect();
+    document.body.appendChild(pop);
+    pop.style.cssText += `;position:fixed;z-index:10050;bottom:${window.innerHeight - r.top + 6}px;left:${Math.min(r.left, window.innerWidth - 240)}px`;
+    setTimeout(() => document.addEventListener('click', function o(e2) { if (!pop.contains(e2.target)) { pop.remove(); document.removeEventListener('click', o); } }), 0);
+  }
+  function _emojiIns(e) {
+    const inp = $$('qwa-input'); if (!inp) return;
+    const ini = inp.selectionStart, fin = inp.selectionEnd;
+    inp.value = inp.value.slice(0, ini) + e + inp.value.slice(fin);
+    inp.focus(); inp.setSelectionRange(ini + e.length, ini + e.length);
+    ChatModule.autoResize(inp);
+    document.querySelectorAll('.slk-emoji-pop').forEach(x => x.remove());
+  }
+
+  function responderA(msgId, quien, texto) {
+    _replyTo = { msg_id: msgId, quien, texto };
+    _pintaQuote();
+    $$('qwa-input')?.focus();
+  }
+  function cancelarRespuesta() { _replyTo = null; _pintaQuote(); }
+  function _pintaQuote() {
+    const box = $$('qwa-quote'); if (!box) return;
+    if (!_replyTo) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+    box.classList.remove('hidden');
+    box.innerHTML = `<div class="rchat-quote__body">
+        <div class="rchat-quote__who">Respondiendo a ${esc(_replyTo.quien)}</div>
+        <div class="rchat-quote__txt">${esc(_replyTo.texto).slice(0, 100)}</div>
+      </div>
+      <button class="rchat-quote__x" onclick="QuickWaModule.cancelarRespuesta()" title="Cancelar">✕</button>`;
+  }
+
+  function onPasteInput(ev) {
+    const items = ev.clipboardData?.items;
+    if (!items) return;
+    for (const item of items) {
+      if (item.type && item.type.startsWith('image/')) {
+        ev.preventDefault();
+        const file = item.getAsFile();
+        if (file) { _pendingImg = file; _renderImgPreview(); }
+        return;
+      }
+    }
+  }
+  function pickImage() {
+    const inp = document.createElement('input');
+    inp.type = 'file'; inp.accept = 'image/*';
+    inp.onchange = () => { if (inp.files[0]) { _pendingImg = inp.files[0]; _renderImgPreview(); } };
+    inp.click();
+  }
+  function editPendingImg() {
+    if (!_pendingImg) return;
+    WaImageEditor.open(_pendingImg, blob => { _pendingImg = blob; _renderImgPreview(); });
+  }
+  function cancelImg() { _pendingImg = null; _renderImgPreview(); }
+  function _renderImgPreview() {
+    const box = $$('qwa-img-preview'); if (!box) return;
+    if (_pendingImgUrl) { URL.revokeObjectURL(_pendingImgUrl); _pendingImgUrl = null; }
+    if (!_pendingImg) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+    _pendingImgUrl = URL.createObjectURL(_pendingImg);
+    box.innerHTML = `<div class="wa-img-prev__card">
+        <img src="${_pendingImgUrl}" class="wa-img-prev__thumb" alt="">
+        <div class="wa-img-prev__actions">
+          <button class="wa-img-prev__btn" onclick="QuickWaModule.editPendingImg()" title="Editar">✏️</button>
+          <button class="wa-img-prev__btn" onclick="QuickWaModule.cancelImg()" title="Quitar">✕</button>
+        </div>
+      </div>`;
+    box.classList.remove('hidden');
+    $$('qwa-input')?.focus();
+  }
+  async function _enviarImagen(caption) {
+    if (!_pendingImg || !_conn) return;
+    const file = _pendingImg, respondeA = _replyTo?.msg_id;
+    const input = $$('qwa-input');
+    _pendingImg = null; _renderImgPreview();
+    if (input) { input.value = ''; ChatModule.autoResize(input); }
+    _replyTo = null; _pintaQuote();
+    try {
+      const fd = new FormData();
+      fd.append('file', file, file.name || 'foto.jpg');
+      fd.append('caption', caption || '');
+      if (respondeA) fd.append('respondeA', respondeA);
+      const r = await apiFetch(`${API}/wa/connections/${_conn.id}/chats/${encodeURIComponent(_jid)}/mensajes/imagen`, { method: 'POST', body: fd });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'No se pudo enviar la imagen');
+      await _cargarMensajes(true);
+    } catch (e) { alert('Error: ' + e.message); }
+  }
+
+  function programarToggle(ev) {
+    if (ev) ev.stopPropagation();
+    const p = $$('qwa-sched'); if (!p) return;
+    const show = p.style.display === 'none';
+    p.style.display = show ? '' : 'none';
+    if (show) {
+      const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0);
+      const pad = n => String(n).padStart(2, '0');
+      const inp = $$('qwa-sched-dt');
+      if (inp && !inp.value) inp.value = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      const close2 = e => { if (!p.contains(e.target)) { p.style.display = 'none'; document.removeEventListener('click', close2); } };
+      setTimeout(() => document.addEventListener('click', close2), 0);
+    }
+  }
+  function programarPick(kind) {
+    if (_pendingImg) { alert('Las fotos no se pueden programar todavía — usa "Enviar" para mandarla ahora.'); return; }
+    let d = new Date();
+    if (kind === 'h1') d = new Date(Date.now() + 60 * 60 * 1000);
+    else if (kind === 'h3') d = new Date(Date.now() + 3 * 60 * 60 * 1000);
+    else if (kind === 'man9') { d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0); }
+    else if (kind === 'lun9') { const add = ((8 - d.getDay()) % 7) || 7; d.setDate(d.getDate() + add); d.setHours(9, 0, 0, 0); }
+    else if (kind === 'custom') {
+      const v = $$('qwa-sched-dt')?.value;
+      if (!v) return;
+      d = new Date(v);
+      if (isNaN(d) || d.getTime() < Date.now() + 60 * 1000) { alert('Elige una fecha futura.'); return; }
+    }
+    const p = $$('qwa-sched'); if (p) p.style.display = 'none';
+    enviar(d.toISOString());
+  }
+  async function cancelarProgramado(rowId) {
+    if (!_conn) return;
+    try {
+      const r = await apiFetch(`${API}/wa/connections/${_conn.id}/scheduled/${rowId}`, { method: 'DELETE' });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'No se pudo cancelar');
+      await _cargarMensajes(true);
+    } catch (e) { alert('Error: ' + e.message); }
+  }
+
+  async function enviar(scheduledAt) {
+    const input = $$('qwa-input');
     const texto = (input?.value || '').trim();
+    if (_pendingImg) return _enviarImagen(texto);
     if (!texto || !_conn) return;
+    const respondeA = _replyTo?.msg_id;
     input.value = ''; ChatModule.autoResize(input);
+    _replyTo = null; _pintaQuote();
     try {
       const r = await apiFetch(`${API}/wa/connections/${_conn.id}/chats/${encodeURIComponent(_jid)}/mensajes`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ texto })
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ texto, respondeA, scheduledAt })
       });
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'No se pudo enviar');
-      await _cargarMensajes();
+      await _cargarMensajes(true);
     } catch (e) { alert('Error: ' + e.message); input.value = texto; }
   }
 
   function close() {
     if (_poll) { clearInterval(_poll); _poll = null; }
     document.getElementById('qwa-panel')?.remove();
-    _conn = null; _jid = null;
+    _conn = null; _jid = null; _replyTo = null; _pendingImg = null;
+    if (_pendingImgUrl) { URL.revokeObjectURL(_pendingImgUrl); _pendingImgUrl = null; }
   }
 
-  return { open, close, enviar };
+  return {
+    open, close, enviar, onPasteInput, pickImage, editPendingImg, cancelImg,
+    responderA, cancelarRespuesta, programarToggle, programarPick, cancelarProgramado,
+    reactPop, reaccionar, emojiPicker, _emojiIns, msgMenu, toggleImportante,
+    vincularAbrir, vincularPick, _vincularFiltrar,
+  };
 })();
 window.QuickWaModule = QuickWaModule;
 
@@ -28356,7 +28933,8 @@ const WaChatModule = (() => {
         ? `<img src="${API_ORIGIN}${esc(m.media_url)}" class="wa-msg__img" onclick="window.open('${API_ORIGIN}${esc(m.media_url)}','_blank')" alt="">`
         : '';
       const starHtml = m.importante ? `<span class="wa-msg__star" title="Mensaje destacado">⭐</span>` : '';
-      const bubbleHtml = `${actions}${remitente}${citado}${mediaHtml}<span class="wa-msg__text" data-mid="${msgIdJs}">${esc(m.texto)}</span><span class="wa-msg__time">${starHtml}${_fmtHora(m.ts)}</span>${reacHtml}`;
+      const contactoBtn = m.contact_phone ? `<button class="wa-msg__cancel" style="margin-top:6px" onclick="event.stopPropagation();WaChatModule.abrirChat('${esc(m.contact_phone)}@s.whatsapp.net')">Escribirle por WhatsApp ›</button>` : '';
+      const bubbleHtml = `${actions}${remitente}${citado}${mediaHtml}<span class="wa-msg__text" data-mid="${msgIdJs}">${esc(m.texto)}</span>${contactoBtn}<span class="wa-msg__time">${starHtml}${_fmtHora(m.ts)}</span>${reacHtml}`;
       return `${sep}<div class="wa-msg ${m.from_me ? 'wa-msg--out' : 'wa-msg--in'}"><div class="wa-msg__bubble">${bubbleHtml}</div></div>`;
     }).join('');
     if (atBottom) box.scrollTop = box.scrollHeight;
@@ -28632,8 +29210,12 @@ const WaChatModule = (() => {
   async function guardarVisibilidad(connId) {
     const pop = document.getElementById(`wa-vis-pop-${connId}`); if (!pop) return;
     const visibilidad = pop.querySelector(`input[name="wavis-${connId}"]:checked`)?.value || 'solo_yo';
-    const niveles = [...pop.querySelectorAll(`.wavis-nivel-${connId}:checked`)].map(el => el.value);
-    const miembros = [...pop.querySelectorAll(`.wavis-mbr-${connId}:checked`)].map(el => +el.value);
+    // Solo se manda lo del grupo activo: cambiar de radio oculta el otro checklist
+    // pero no lo desmarca, así que sin este filtro un check viejo de "Por nivel"
+    // podía quedar guardado (sin efecto real, pero confuso) aunque el modo elegido
+    // fuera otro — bug detectado 2026-09-02 revisando el WhatsApp de Operaciones.
+    const niveles = visibilidad === 'nivel' ? [...pop.querySelectorAll(`.wavis-nivel-${connId}:checked`)].map(el => el.value) : [];
+    const miembros = visibilidad === 'miembros' ? [...pop.querySelectorAll(`.wavis-mbr-${connId}:checked`)].map(el => +el.value) : [];
     try {
       const r = await apiFetch(`${API}/wa/connections/${connId}/visibilidad`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
@@ -28813,8 +29395,11 @@ const ObcWaModule = (() => {
               <path d="M8.5 12.5c0 2.5 2 4.5 4.5 4.5" stroke-linecap="round"/>
             </svg>
             <h3>Conectar WhatsApp de este cliente</h3>
-            <p>Vincula un número escaneando un código QR, igual que WhatsApp Web. Cada cliente outbound tiene su propio WhatsApp, separado del de Operaciones.</p>
-            <button class="btn btn--primary" onclick="ObcWaModule.conectar()" id="ocwa-connect-btn">Conectar WhatsApp</button>
+            <p>Puedes vincular un número nuevo escaneando un código QR, o asignarle a este cliente un WhatsApp que ya tienes conectado (el mismo número puede servir para varios clientes a la vez).</p>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
+              <button class="btn btn--primary" onclick="ObcWaModule.conectar()" id="ocwa-connect-btn">Conectar uno nuevo</button>
+              <button class="btn btn--ghost" onclick="ObcWaModule.usarExistenteAbrir()">Usar uno existente</button>
+            </div>
           </div>
         </div>
         <div class="wa-empty-state hidden" id="ocwa-qr">
@@ -28823,6 +29408,7 @@ const ObcWaModule = (() => {
             <p>Abre WhatsApp en el teléfono de este cliente → Ajustes → Dispositivos vinculados → Vincular un dispositivo.</p>
             <img id="ocwa-qr-img" class="wa-qr__img" alt="Código QR de WhatsApp">
             <div class="wa-qr__hint" id="ocwa-qr-hint">Esperando que escanees…</div>
+            <button class="btn btn--ghost btn--sm" style="margin-top:10px" onclick="ObcWaModule.usarExistenteAbrir()">Usar un WhatsApp existente en su lugar</button>
           </div>
         </div>
         <div class="wa-chat hidden" id="ocwa-chat">
@@ -28960,14 +29546,49 @@ const ObcWaModule = (() => {
     } catch (_) { /* red intermitente: se reintenta en el próximo tick */ }
   }
 
+  // Asignar un WhatsApp ya conectado (de Operaciones o de otro cliente) a ESTE cliente,
+  // en vez de vincular un número nuevo — pedido 2026-09-02: el mismo WhatsApp puede
+  // atender a varios clientes outbound a la vez, no hace falta escanear QR cada vez.
+  async function usarExistenteAbrir() {
+    document.getElementById('ocwa-pick-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'ocwa-pick-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) m.remove(); };
+    m.innerHTML = `<div class="fin-pi-box lm-pick-box">
+      <div class="fin-pi-box__hd"><h3>Usar un WhatsApp existente</h3><button class="fin-pi-x" onclick="document.getElementById('ocwa-pick-modal').remove()">✕</button></div>
+      <div id="ocwa-pick-list" class="fin-pi-form" style="padding-bottom:14px">
+        <div class="clients-loading"><div class="clients-spin"></div></div>
+      </div></div>`;
+    document.body.appendChild(m);
+    try {
+      const r = await apiFetch(`${API}/wa/connections`);
+      const rows = r.ok ? await r.json() : [];
+      const list = $$('ocwa-pick-list'); if (!list) return;
+      const conectadas = rows.filter(c => c.estado === 'conectado');
+      if (!conectadas.length) { list.innerHTML = `<div class="lm-pick-empty">No tienes ningún WhatsApp conectado todavía. Conecta uno nuevo primero.</div>`; return; }
+      list.innerHTML = `<div class="lm-pick-list">${conectadas.map(c => `
+        <button class="lm-pick-item" onclick="ObcWaModule.usarExistentePick(${c.id})"><span>${esc(c.nombre || 'WhatsApp')}</span><span class="lm-pick-est">${c.numero ? '+' + esc(c.numero) : 'Sin número'}</span></button>`).join('')}</div>`;
+    } catch (e) {
+      const list = $$('ocwa-pick-list'); if (list) list.innerHTML = `<p style="color:var(--danger)">Error: ${esc(e.message)}</p>`;
+    }
+  }
+  async function usarExistentePick(connId) {
+    if (!_clientId) return;
+    try {
+      const r = await apiFetch(`${API}/wa/connections/${connId}/clientes`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ outboundClientId: _clientId })
+      });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'No se pudo asignar');
+      document.getElementById('ocwa-pick-modal')?.remove();
+      showBanner('✓ WhatsApp asignado a este cliente', 'success');
+      await load(_clientId);
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+
   async function conectar() {
     if (!_clientId) return;
     const btn = $$('ocwa-connect-btn');
     if (btn) { btn.disabled = true; btn.textContent = 'Conectando…'; }
     try {
-      // Solo puede haber UNA conexión por cliente (índice único en outbound_client_id):
-      // si ya existe una fila desconectada hay que reactivarla, no crear otra — crear
-      // otra siempre da 409 acá (a diferencia de Operaciones, donde nada lo limita).
       if (_conn && _conn.id) {
         const r = await apiFetch(`${API}/wa/connections/${_conn.id}/reconectar`, { method: 'POST' });
         if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'No se pudo reconectar');
@@ -29150,7 +29771,8 @@ const ObcWaModule = (() => {
         ? `<img src="${API_ORIGIN}${esc(m.media_url)}" class="wa-msg__img" onclick="window.open('${API_ORIGIN}${esc(m.media_url)}','_blank')" alt="">`
         : '';
       const starHtml = m.importante ? `<span class="wa-msg__star" title="Mensaje destacado">⭐</span>` : '';
-      const bubbleHtml = `${actions}${remitente}${citado}${mediaHtml}<span class="wa-msg__text" data-mid="${msgIdJs}">${esc(m.texto)}</span><span class="wa-msg__time">${starHtml}${_fmtHora(m.ts)}</span>${reacHtml}`;
+      const contactoBtn = m.contact_phone ? `<button class="wa-msg__cancel" style="margin-top:6px" onclick="event.stopPropagation();ObcWaModule.abrirChat('${esc(m.contact_phone)}@s.whatsapp.net')">Escribirle por WhatsApp ›</button>` : '';
+      const bubbleHtml = `${actions}${remitente}${citado}${mediaHtml}<span class="wa-msg__text" data-mid="${msgIdJs}">${esc(m.texto)}</span>${contactoBtn}<span class="wa-msg__time">${starHtml}${_fmtHora(m.ts)}</span>${reacHtml}`;
       return `${sep}<div class="wa-msg ${m.from_me ? 'wa-msg--out' : 'wa-msg--in'}"><div class="wa-msg__bubble">${bubbleHtml}</div></div>`;
     }).join('');
     if (atBottom) box.scrollTop = box.scrollHeight;
@@ -29463,6 +30085,7 @@ const ObcWaModule = (() => {
   }
 
   return { shellHtml, load, conectar, desconectar, abrirChat, enviar, detener: _pararSondeos,
+           usarExistenteAbrir, usarExistentePick,
            responderA, cancelarRespuesta,
            onPasteInput, pickImage, editPendingImg, cancelImg,
            msgMenu, msgCopy, msgSelectText, toggleImportante,
@@ -30378,7 +31001,34 @@ const RChatPanel = (() => {
     }
   }
 
-  return { open, close, toggle, switchTab, toggleChannels };
+  // --- Chat completo en media pantalla (pedido 2026-09-02: que el ícono de la
+  // barra superior ya no abra el mini-panel recortado, sino el MISMO chat que se
+  // ve al entrar a la sección Chat — se logra moviendo el propio #chat-shell a
+  // un overlay temporal, en vez de duplicar el módulo SlackChat). ---
+  let _fcParent = null, _fcNext = null, _fcOpen = false;
+  function openFullChat() {
+    if (_fcOpen) { closeFullChat(); return; }
+    const shell = $('chat-shell'); const box = $('rchat-fc-box'); const backdrop = $('rchat-fc-backdrop');
+    if (!shell || !box || !backdrop) return;
+    _fcParent = shell.parentElement; _fcNext = shell.nextSibling;
+    box.appendChild(shell);
+    backdrop.classList.remove('hidden');
+    _fcOpen = true;
+    // Reportado 2026-09-02: cerrar y volver a abrir desde este ícono SIEMPRE recargaba
+    // (SlackChat.load() vuelve al workspace/canal guardado por defecto), así que el
+    // canal donde estaba se perdía cada vez. Si el chat YA se cargó antes en esta
+    // sesión (acá o entrando a la sección Chat), no se vuelve a pedir nada — el propio
+    // #chat-shell ya tiene todo montado, solo se está reubicando en el overlay.
+    if (!document.getElementById('chat-rail')?.children.length) SlackChat.load();
+  }
+  function closeFullChat() {
+    const shell = $('chat-shell'); const backdrop = $('rchat-fc-backdrop');
+    if (shell && _fcParent) _fcParent.insertBefore(shell, _fcNext);
+    if (backdrop) backdrop.classList.add('hidden');
+    _fcOpen = false;
+  }
+
+  return { open, close, toggle, switchTab, toggleChannels, openFullChat, closeFullChat };
 })();
 
 // =================================================================
@@ -30515,6 +31165,7 @@ const RNotifPanel = (() => {
   let _teamCache      = null;
   let _lastTasks      = [];   // tareas del último load (para el picker "+ Subtarea" por proyecto)
   let _lastProjects   = [];   // proyectos del último load (para los textos de confirmación)
+  let _dismissed      = new Set(); // "kind:id" descartados a mano por esta persona
 
   // ── Avisos de CIERRE (calculados en el frontend, sin tocar el backend) ──
   // Tarea "lista": tarea padre con subtareas, todas las subtareas completadas, pero
@@ -30582,6 +31233,20 @@ const RNotifPanel = (() => {
         if (tVenc.length)   { data.tareas_vencidas    = tVenc;   data.total = (data.total || 0) + tVenc.length; }
         if (pVenc.length)   { data.proyectos_vencidos = pVenc;   data.total = (data.total || 0) + pVenc.length; }
       } catch (_) { /* si falla, se muestran solo las alertas de integridad */ }
+      // Descartadas a mano (pedido 2026-09-02) — se filtran de TODAS las categorías
+      // antes de contar/mostrar, sin importar de dónde salió el dato.
+      try {
+        const dr = await apiFetch(`${API}/notif-dismissals`);
+        _dismissed = new Set((dr.ok ? await dr.json() : []).map(d => `${d.kind}:${d.ref_id}`));
+      } catch (_) { _dismissed = new Set(); }
+      if (_dismissed.size) {
+        for (const key of ['tareas_completas', 'proyectos_completos', 'tareas_vencidas', 'proyectos_vencidos', 'tareas_sin_responsable', 'tareas_sin_deadline', 'proyectos_sin_tareas']) {
+          if (!Array.isArray(data[key])) continue;
+          const before = data[key].length;
+          data[key] = data[key].filter(x => !_dismissed.has(`${key}:${x.id}`));
+          data.total = Math.max(0, (data.total || 0) - (before - data[key].length));
+        }
+      }
       _render(data);
       _updateBadge(data.total || 0);
     } catch (e) {
@@ -30604,7 +31269,7 @@ const RNotifPanel = (() => {
         body: JSON.stringify({ estado: 'completado' }),
       });
       showBanner('✓ Tarea completada', 'success');
-      load();
+      _removeCardByTaskId(id);
       try { DashboardModule.load(); } catch (_) {}
     } catch (e) { showBanner('No se pudo completar. Reintenta.', 'error'); }
   }
@@ -30630,7 +31295,7 @@ const RNotifPanel = (() => {
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Error');
       const d = await res.json();
       showBanner(`✓ Proyecto completado${d.client_inactivated ? ` · ${esc(d.client_nombre)} pasó a cliente inactivo (sin proyectos activos)` : ''}`, 'success');
-      load();
+      _removeCardByProjId(id);
       try { DashboardModule.load(); } catch (_) {}
       try { ProjectsModule.load(); } catch (_) {}
     } catch (e) { alert('No se pudo completar el proyecto: ' + e.message); }
@@ -30719,6 +31384,10 @@ const RNotifPanel = (() => {
 
     let html = '';
     let hidden = 0;
+    // Botón "Descartar" con doble clic de confirmación (pedido 2026-09-02) — se agrega
+    // a TODAS las tarjetas, sea cual sea su tipo. El primer clic solo arma el botón
+    // (cambia texto/color); el segundo, dentro de los 4s, sí descarta.
+    const discardBtn = (key, id) => `<button class="rnf-act rnf-act--discard" data-discard="${key}:${id}" onclick="event.stopPropagation();RNotifPanel.dismiss(event,'${key}',${id})">Descartar</button>`;
     for (const cat of cats) {
       const items = data[cat.key] || [];
       const shown = items.slice(0, 6);
@@ -30726,10 +31395,11 @@ const RNotifPanel = (() => {
       for (const t of shown) {
         const name = esc(t[cat.nameKey] || '');
         const sub  = cat.sub(t);
+        const notifId = `${cat.key}:${t.id}`;
         if (cat.actions) {
           // Tarjeta con DOS acciones (cierres): completar o seguir añadiendo trabajo.
           const acts = cat.actions(t);
-          html += `<div class="rnf-card rnf-card--static" ${cat.task ? `data-task-id="${t.id}"` : ''}>
+          html += `<div class="rnf-card rnf-card--static" data-notif-id="${notifId}" ${cat.task ? `data-task-id="${t.id}"` : `data-proj-id="${t.id}"`}>
             <span class="rnf-ico rnf-ico--${cat.tone}">${ICO[cat.ico]}</span>
             <div class="rnf-main">
               <div class="rnf-row1">
@@ -30738,12 +31408,12 @@ const RNotifPanel = (() => {
               </div>
               <span class="rnf-badge rnf-badge--${cat.tone}">${cat.badge}</span>
               ${sub ? `<p class="rnf-sub">${sub}</p>` : ''}
-              <div class="rnf-acts">${acts.map(a => `<button class="rnf-act${a.pri ? ' rnf-act--pri' : ''}" onclick="${a.on}">${a.lbl}</button>`).join('')}</div>
+              <div class="rnf-acts">${acts.map(a => `<button class="rnf-act${a.pri ? ' rnf-act--pri' : ''}" onclick="${a.on}">${a.lbl}</button>`).join('')}${discardBtn(cat.key, t.id)}</div>
             </div>
           </div>`;
           continue;
         }
-        html += `<button class="rnf-card" ${cat.task ? `data-task-id="${t.id}"` : ''} onclick="${cat.action(t)}">
+        html += `<div class="rnf-card" data-notif-id="${notifId}" ${cat.task ? `data-task-id="${t.id}"` : `data-proj-id="${t.id}"`}>
           <span class="rnf-ico rnf-ico--${cat.tone}">${ICO[cat.ico]}</span>
           <div class="rnf-main">
             <div class="rnf-row1">
@@ -30752,9 +31422,12 @@ const RNotifPanel = (() => {
             </div>
             <span class="rnf-badge rnf-badge--${cat.tone}">${cat.badge}</span>
             ${sub ? `<p class="rnf-sub">${sub}</p>` : ''}
-            <span class="rnf-link rnf-link--${cat.tone}">${cat.link}${ARROW}</span>
+            <div class="rnf-acts">
+              <button class="rnf-link rnf-link--${cat.tone}" onclick="${cat.action(t)}">${cat.link}${ARROW}</button>
+              ${discardBtn(cat.key, t.id)}
+            </div>
           </div>
-        </button>`;
+        </div>`;
       }
     }
     if (hidden > 0) html += `<div class="rnf-more">+${hidden} alertas más</div>`;
@@ -30844,6 +31517,61 @@ const RNotifPanel = (() => {
     }), 0);
   }
 
+  // Quita UNA tarjeta del panel ya renderizado (fade + remove), sin recargar todo el
+  // panel — pedido 2026-09-02: antes cualquier acción (completar, ampliar plazo,
+  // descartar) volvía a pedir /mgmt/integrity entero y la pantalla se ponía en blanco
+  // ("Cargando alertas…") mientras llegaba la respuesta, un parpadeo feo e innecesario
+  // ya que sabemos exactamente qué tarjeta resolver.
+  function _removeCard(kind, id) { _removeCardEl(document.querySelector(`[data-notif-id="${kind}:${id}"]`)); }
+  function _removeCardByTaskId(id) { _removeCardEl(document.querySelector(`[data-task-id="${id}"]`)); }
+  function _removeCardByProjId(id) { _removeCardEl(document.querySelector(`[data-proj-id="${id}"]`)); }
+  function _removeCardEl(row) {
+    if (row) {
+      row.style.transition = 'opacity .22s, transform .22s, max-height .22s ease-in .1s, margin .22s ease-in .1s, padding .22s ease-in .1s';
+      row.style.opacity = '0';
+      row.style.transform = 'translateX(10px)';
+      setTimeout(() => {
+        row.style.maxHeight = '0'; row.style.margin = '0'; row.style.padding = '0'; row.style.overflow = 'hidden'; row.style.border = 'none';
+        setTimeout(() => {
+          row.remove();
+          const left = document.querySelectorAll('#rnotif-content [data-notif-id]').length;
+          _setFooter(left);
+          _updateBadge(left);
+          if (!left) _render({ total: 0 });
+        }, 220);
+      }, 220);
+    }
+    // El total mostrado en el footer/badge no depende de un nuevo fetch — se recalcula
+    // contando lo que queda realmente en pantalla, arriba.
+  }
+  // "Descartar" — doble clic de confirmación: el primero solo arma el botón (4s para
+  // confirmar o se desarma solo), el segundo sí descarta. Pedido explícito 2026-09-02.
+  let _armedDiscard = null;
+  let _armedTimer = null;
+  function dismiss(ev, kind, id) {
+    const btn = ev?.currentTarget || document.querySelector(`[data-discard="${kind}:${id}"]`);
+    const key = `${kind}:${id}`;
+    if (_armedDiscard !== key) {
+      // Desarma cualquier otro botón que hubiera quedado armado.
+      if (_armedTimer) clearTimeout(_armedTimer);
+      document.querySelectorAll('.rnf-act--discard.rnf-act--armed').forEach(b => { b.classList.remove('rnf-act--armed'); b.textContent = 'Descartar'; });
+      _armedDiscard = key;
+      if (btn) { btn.classList.add('rnf-act--armed'); btn.textContent = '¿Seguro? Confirmar'; }
+      _armedTimer = setTimeout(() => {
+        if (btn) { btn.classList.remove('rnf-act--armed'); btn.textContent = 'Descartar'; }
+        _armedDiscard = null;
+      }, 4000);
+      return;
+    }
+    // Segundo clic dentro de los 4s: sí descarta.
+    if (_armedTimer) clearTimeout(_armedTimer);
+    _armedDiscard = null;
+    apiFetch(`${API}/notif-dismissals`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind, ref_id: id }) })
+      .catch(() => {});
+    _dismissed.add(key);
+    _removeCard(kind, id);
+  }
+
   function _popOutside(e) {
     const pop = $('rnotif-date-pop');
     if (pop && !pop.contains(e.target)) closeDatePop();
@@ -30872,16 +31600,8 @@ const RNotifPanel = (() => {
       if (!res.ok) throw new Error('Error al guardar');
       closeDatePop();
       if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Guardar'; }
-      // Animate item out then reload
-      const row = document.querySelector(`[data-task-id="${taskId}"]`);
-      if (row) {
-        row.style.transition = 'opacity .25s, transform .25s';
-        row.style.opacity = '0';
-        row.style.transform = 'translateX(12px)';
-        setTimeout(() => load(), 300);
-      } else {
-        load();
-      }
+      showBanner('✓ Fecha actualizada', 'success');
+      if (projId) _removeCardByProjId(projId); else _removeCardByTaskId(taskId);
     } catch (err) {
       alert('Error: ' + err.message);
       if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Guardar'; }
@@ -30975,15 +31695,8 @@ const RNotifPanel = (() => {
       });
       if (!res.ok) throw new Error('Error al guardar');
       closeMemberPop();
-      const row = document.querySelector(`[data-task-id="${taskId}"]`);
-      if (row) {
-        row.style.transition = 'opacity .25s, transform .25s';
-        row.style.opacity    = '0';
-        row.style.transform  = 'translateX(12px)';
-        setTimeout(() => load(), 300);
-      } else {
-        load();
-      }
+      showBanner('✓ Responsable asignado', 'success');
+      _removeCardByTaskId(taskId);
     } catch (err) {
       alert('Error: ' + err.message);
       if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Guardar'; }
@@ -30995,6 +31708,7 @@ const RNotifPanel = (() => {
     pickDeadline, closeDatePop, confirmDeadline,
     pickMember, _selectMember, closeMemberPop, confirmMember,
     completeTask, goToProject, completeProject, pickProjFecha, addSubToProject,
+    dismiss,
   };
 })();
 
@@ -33983,11 +34697,14 @@ function initApp() {
   // Check for a persisted job from a previous session on initial load
   _checkPersistedJob();
 
-  // Pre-cargar badge de alertas de integridad al iniciar
-  apiFetch(`${API}/mgmt/integrity`)
-    .then(r => r.json())
-    .then(d => RNotifPanel.updateBadge(d.total || 0))
-    .catch(() => {});
+  // Pre-cargar badge de alertas al iniciar — bug real encontrado 2026-09-02: esto
+  // llamaba a /mgmt/integrity en crudo, SIN el enriquecido de vencidas/completas ni el
+  // filtro de descartadas que sí aplica RNotifPanel.load() al abrir el panel — por eso
+  // el badge decía "3" al abrir la app y, al entrar, no había nada (load() con los
+  // mismos datos pero bien calculados corregía el número). Se llama a la MISMA función
+  // que usa el panel — #rnotif-content ya existe en el DOM aunque el panel esté
+  // colapsado, así que puede calcular y pintar el badge sin abrir nada.
+  RNotifPanel.load();
 
 } // end initApp()
 

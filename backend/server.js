@@ -4093,10 +4093,60 @@ app.post('/api/lm/contacts/:id/disposition', requireAuth, async (req, res) => {
   const nota = _lmS((req.body || {}).nota);
   const seqId = (req.body || {}).sequence_id ? (parseInt((req.body).sequence_id) || null) : null;
   try {
-    const before = await pool.query(`SELECT disposition, outbound_client_id FROM lm_contacts WHERE id=$1 AND user_id=$2`, [cid, uid]);
+    const before = await pool.query(`SELECT disposition, outbound_client_id, li_aceptado_at FROM lm_contacts WHERE id=$1 AND user_id=$2`, [cid, uid]);
     if (!before.rowCount) return res.status(404).json({ error: 'Contacto no encontrado' });
     const oldDisp = before.rows[0].disposition || '';
     const obcId = before.rows[0].outbound_client_id || null;
+    const yaAceptado = !!before.rows[0].li_aceptado_at;
+
+    // 'aceptado' ya NO ocupa disposition (2026-09-03) — es un evento de LinkedIn, no un
+    // estado del contacto. Rama aparte, aislada del resto: el resto de la función
+    // (respondio/exit/mas_adelante/etc.) sigue exactamente igual, sin tocar.
+    if (disp === 'aceptado') {
+      if (yaAceptado && !nota) {
+        await pool.query(`UPDATE lm_contacts SET updated_at=NOW() WHERE id=$1 AND user_id=$2`, [cid, uid]);
+        return res.json({ ok: true, disposition: oldDisp, paused: 0, rerouted: 0, stage: null, no_change: true });
+      }
+      await pool.query(`UPDATE lm_contacts SET li_aceptado_at=NOW(), updated_at=NOW() WHERE id=$1 AND user_id=$2`, [cid, uid]);
+      await pool.query(
+        `INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, nota, fecha, estado)
+         VALUES ($1,$2,$3,'nota',$4,NOW(),'hecha')`,
+        [uid, cid, obcId, `Aceptó la conexión en LinkedIn${nota ? ' — ' + nota : ''}`]
+      ).catch(() => {});
+      let rerouted = 0;
+      // yaAceptado evita re-enrutar dos veces si ya se había marcado antes.
+      if (!yaAceptado) {
+        const seqs = seqId
+          ? [seqId]
+          : (await pool.query(`SELECT sequence_id FROM lm_contact_sequences WHERE user_id=$1 AND contact_id=$2 AND estado IN ('activo','pausado')`, [uid, cid])).rows.map(r => r.sequence_id);
+        for (const sq of seqs) {
+          const { rows: sqRow } = await pool.query(`SELECT preferred_channel, nombre FROM sequences WHERE id=$1 AND user_id=$2`, [sq, uid]);
+          const pref = (sqRow[0]?.preferred_channel) || '';
+          const seqName = sqRow[0]?.nombre || `#${sq}`;
+          const steps = (await pool.query(`SELECT id, cond, canal, titulo FROM sequence_steps WHERE sequence_id=$1 AND user_id=$2 ORDER BY dia ASC, orden ASC, id ASC`, [sq, uid])).rows;
+          let fr = -1;
+          if (pref) fr = steps.findIndex(s => (s.cond || '') === 'replied' && s.canal === pref);
+          if (fr < 0) fr = steps.findIndex(s => (s.cond || '') === 'replied');
+          const { rows: prevRow } = await pool.query(`SELECT paso, estado FROM lm_contact_sequences WHERE user_id=$1 AND contact_id=$2 AND sequence_id=$3`, [uid, cid, sq]);
+          const pasoPrev = prevRow[0]?.paso || null;
+          if (fr >= 0 && (pasoPrev == null || fr + 1 > pasoPrev)) {
+            const r = await pool.query(`UPDATE lm_contact_sequences SET paso=$1, paso_date=CURRENT_DATE, estado='activo', paused_reason='' WHERE user_id=$2 AND contact_id=$3 AND sequence_id=$4 AND estado IN ('activo','pausado')`, [fr + 1, uid, cid, sq]);
+            rerouted += r.rowCount;
+            if (r.rowCount) {
+              const stTarget = steps[fr];
+              const canalStr = stTarget.canal.charAt(0).toUpperCase() + stTarget.canal.slice(1);
+              await pool.query(
+                `INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, nota, fecha, estado)
+                 VALUES ($1,$2,$3,'reruta',$4,NOW(),'hecha')`,
+                [uid, cid, obcId,
+                 `🔀 Re-enrutado en "${seqName}"${pasoPrev ? ` del paso ${pasoPrev}` : ''} al paso ${fr + 1} (${canalStr}${stTarget.titulo ? ' — ' + String(stTarget.titulo).slice(0, 60) : ''}) porque el contacto aceptó la conexión de LinkedIn${pref ? ` · canal preferido: ${pref}` : ''}.`]
+              ).catch(() => {});
+            }
+          }
+        }
+      }
+      return res.json({ ok: true, disposition: oldDisp, paused: 0, rerouted, stage: null });
+    }
 
     // Idempotencia clave: si el estado no cambió y no viene una nota nueva,
     // no ejecutamos efectos secundarios — solo tocamos updated_at.
@@ -4151,43 +4201,6 @@ app.post('/api/lm/contacts/:id/disposition', requireAuth, async (req, res) => {
            VALUES ($1,$2,$3,'revisar_respuesta','email',$4,NOW(),'pendiente') RETURNING id`,
           [uid, cid, obcId, `Revisar respuesta del contacto${nota ? ' — ' + nota : ''}`]);
         review_task_id = ins.rows[0].id;
-      }
-    }
-    // ── ACEPTADO (LinkedIn accepted): NO pausa. Re-enruta al canal principal si hay ──
-    else if (disp === 'aceptado') {
-      // yaDisparo solo aplica AQUÍ (para no re-enrutar dos veces si ya se aceptó antes).
-      if (oldDisp !== 'aceptado') {
-        const seqs = seqId
-          ? [seqId]
-          : (await pool.query(`SELECT sequence_id FROM lm_contact_sequences WHERE user_id=$1 AND contact_id=$2 AND estado IN ('activo','pausado')`, [uid, cid])).rows.map(r => r.sequence_id);
-        for (const sq of seqs) {
-          const { rows: sqRow } = await pool.query(`SELECT preferred_channel, nombre FROM sequences WHERE id=$1 AND user_id=$2`, [sq, uid]);
-          const pref = (sqRow[0]?.preferred_channel) || '';
-          const seqName = sqRow[0]?.nombre || `#${sq}`;
-          const steps = (await pool.query(`SELECT id, cond, canal, titulo FROM sequence_steps WHERE sequence_id=$1 AND user_id=$2 ORDER BY dia ASC, orden ASC, id ASC`, [sq, uid])).rows;
-          // Prioriza canal preferido; fallback a primer replied de cualquier canal.
-          let fr = -1;
-          if (pref) fr = steps.findIndex(s => (s.cond || '') === 'replied' && s.canal === pref);
-          if (fr < 0) fr = steps.findIndex(s => (s.cond || '') === 'replied');
-          const { rows: prevRow } = await pool.query(`SELECT paso, estado FROM lm_contact_sequences WHERE user_id=$1 AND contact_id=$2 AND sequence_id=$3`, [uid, cid, sq]);
-          const pasoPrev = prevRow[0]?.paso || null;
-          const estadoPrev = prevRow[0]?.estado || null;
-          if (fr >= 0 && (pasoPrev == null || fr + 1 > pasoPrev)) {
-            // Solo re-enrutar HACIA ADELANTE (nunca "atrás" a pasos ya ejecutados).
-            const r = await pool.query(`UPDATE lm_contact_sequences SET paso=$1, paso_date=CURRENT_DATE, estado='activo', paused_reason='' WHERE user_id=$2 AND contact_id=$3 AND sequence_id=$4 AND estado IN ('activo','pausado')`, [fr + 1, uid, cid, sq]);
-            rerouted += r.rowCount;
-            if (r.rowCount) {
-              const stTarget = steps[fr];
-              const canalStr = stTarget.canal.charAt(0).toUpperCase() + stTarget.canal.slice(1);
-              await pool.query(
-                `INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, nota, fecha, estado)
-                 VALUES ($1,$2,$3,'reruta',$4,NOW(),'hecha')`,
-                [uid, cid, obcId,
-                 `🔀 Re-enrutado en "${seqName}"${pasoPrev ? ` del paso ${pasoPrev}` : ''} al paso ${fr + 1} (${canalStr}${stTarget.titulo ? ' — ' + String(stTarget.titulo).slice(0, 60) : ''}) porque el contacto aceptó la conexión de LinkedIn${pref ? ` · canal preferido: ${pref}` : ''}.`]
-              ).catch(() => {});
-            }
-          }
-        }
       }
     }
     // ── EXIT dispositions (no_interesado, no_contactar, etc.): pausar ──────────
@@ -4288,6 +4301,27 @@ app.get('/api/lm/tasks/inbox', requireAuth, async (req, res) => {
     // Contactos ya representados en respuestas (para no duplicarlos en otras cats).
     const respContactIds = new Set(reps.map(r => r.contact_id));
 
+    // 1b. PARA RETOMAR (nutrición) — llegó la fecha de "mas_adelante" (revisar_nurture,
+    // creada por nurtureWatcher). sequence_id = la última secuencia donde estuvo (para
+    // ofrecer "reinscribir en la misma" sin que la usuaria tenga que buscarla).
+    const { rows: nurture } = await pool.query(`
+      SELECT a.id, a.contact_id, a.outbound_client_id, a.fecha AS due_at, a.nota AS reason,
+             k.nombre, k.apellido, k.email,
+             (SELECT sequence_id FROM lm_contact_sequences cs2
+                WHERE cs2.contact_id=k.id ORDER BY cs2.created_at DESC NULLS LAST, cs2.id DESC LIMIT 1) AS sequence_id
+        FROM activities a JOIN lm_contacts k ON k.id=a.contact_id
+       WHERE a.user_id=$1 AND a.tipo='revisar_nurture' AND a.estado='pendiente'
+       ORDER BY a.fecha ASC`, [uid]);
+
+    // 1c. SEGUIMIENTO POR INACTIVIDAD — followupWatcher avisa cuando un email
+    // automático lleva N horas sin respuesta (default 24h, ver lm_send_settings).
+    const { rows: seguimiento } = await pool.query(`
+      SELECT a.id, a.contact_id, a.outbound_client_id, a.canal, a.fecha AS due_at, a.nota AS reason,
+             k.nombre, k.apellido, k.email
+        FROM activities a JOIN lm_contacts k ON k.id=a.contact_id
+       WHERE a.user_id=$1 AND a.tipo='seguimiento_inactivo' AND a.estado='pendiente'
+       ORDER BY a.fecha ASC`, [uid]);
+
     // 2. APROBACIONES pendientes (borradores email en 'awaiting') — próximos 3 días.
     const { rows: apps } = await pool.query(`
       SELECT m.id, m.contact_id, m.sequence_id, m.step_id, m.scheduled_at AS due_at,
@@ -4342,7 +4376,7 @@ app.get('/api/lm/tasks/inbox', requireAuth, async (req, res) => {
       SELECT DISTINCT k.id AS contact_id, k.outbound_client_id, k.nombre, k.apellido, k.email,
              cs.sequence_id, cs.next_action_at AS due_at
         FROM lm_contacts k JOIN lm_contact_sequences cs ON cs.contact_id=k.id AND cs.user_id=k.user_id
-       WHERE k.user_id=$1 AND k.disposition='aceptado' AND cs.estado='activo'
+       WHERE k.user_id=$1 AND k.li_aceptado_at IS NOT NULL AND cs.estado='activo'
        ORDER BY due_at ASC NULLS LAST`, [uid]);
 
     const nameOf = r => [r.nombre, r.apellido].filter(Boolean).join(' ') || r.email || `#${r.contact_id}`;
@@ -4359,6 +4393,8 @@ app.get('/api/lm/tasks/inbox', requireAuth, async (req, res) => {
 
     const list = [];
     for (const r of reps)  list.push(mk(r, 'respuestas',    'review_reply', 'reply_pending'));
+    for (const r of nurture) list.push(mk(r, 'nutricion', 'retomar_nurture', 'nurture_due'));
+    for (const r of seguimiento) if (!respContactIds.has(r.contact_id)) list.push(mk(r, 'seguimiento', 'manual_touch', 'inactivity'));
     // Aprobaciones: si el contacto ya tiene tarea de respuesta, saltar (respuestas prioriza)
     for (const r of apps)  if (!respContactIds.has(r.contact_id)) list.push({ ...mk(r, 'aprobaciones', 'approve_email', 'draft_awaiting'), message_id: r.id, activity_id: null });
     for (const r of fails) if (!respContactIds.has(r.contact_id)) list.push({ ...mk(r, 'fallos', 'resolve_failure', 'send_failed'), message_id: r.id, activity_id: null });
@@ -5658,7 +5694,7 @@ app.get('/api/lm/send-settings', requireAuth, async (req, res) => {
     res.json(rows[0] || {
       user_id: req.workspaceOwnerId, enabled: false, from_name: '', daily_limit: 30,
       throttle_seconds: 90, window_start: 9, window_end: 18, send_weekends: false,
-      timezone: 'America/Lima', firma: '', track_opens: true, track_clicks: true,
+      timezone: 'America/Lima', firma: '', track_opens: true, track_clicks: true, followup_hours: 24,
     });
   } catch (err) { console.error('[lm-send-cfg] GET', err.message); res.status(500).json({ error: 'Error al cargar configuración' }); }
 });
@@ -5668,12 +5704,12 @@ app.put('/api/lm/send-settings', requireAuth, async (req, res) => {
     const { rows } = await pool.query(`
       INSERT INTO lm_send_settings (user_id, enabled, from_name, daily_limit, throttle_seconds,
                                     window_start, window_end, send_weekends, timezone, firma,
-                                    track_opens, track_clicks, updated_at)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW())
+                                    track_opens, track_clicks, followup_hours, updated_at)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NOW())
       ON CONFLICT (user_id) DO UPDATE SET
         enabled=$2, from_name=$3, daily_limit=$4, throttle_seconds=$5, window_start=$6,
         window_end=$7, send_weekends=$8, timezone=$9, firma=$10, track_opens=$11,
-        track_clicks=$12, updated_at=NOW()
+        track_clicks=$12, followup_hours=$13, updated_at=NOW()
       RETURNING *
     `, [req.workspaceOwnerId, !!b.enabled, String(b.from_name || '').slice(0, 120),
         Math.min(Math.max(parseInt(b.daily_limit) || 30, 1), 200),
@@ -5681,7 +5717,8 @@ app.put('/api/lm/send-settings', requireAuth, async (req, res) => {
         Math.min(Math.max(parseInt(b.window_start) ?? 9, 0), 23),
         Math.min(Math.max(parseInt(b.window_end) ?? 18, 1), 24),
         !!b.send_weekends, String(b.timezone || 'America/Lima').slice(0, 60),
-        String(b.firma || '').slice(0, 4000), b.track_opens !== false, b.track_clicks !== false]);
+        String(b.firma || '').slice(0, 4000), b.track_opens !== false, b.track_clicks !== false,
+        Math.min(Math.max(parseInt(b.followup_hours) ?? 24, 0), 168)]);
     res.json(rows[0]);
   } catch (err) { console.error('[lm-send-cfg] PUT', err.message); res.status(500).json({ error: 'Error al guardar configuración' }); }
 });
@@ -6268,6 +6305,9 @@ function _sanSendMode(v) { return SEQ_SEND_MODES.includes(v) ? v : 'manual'; }
 function _sanInterval(v) { const n = parseInt(v); return (n >= 1 && n <= 1440) ? n : 5; }
 // Canal preferido de la secuencia para re-enrutar al aceptar/responder.
 function _sanPreferredChannel(v) { return ['linkedin', 'email'].includes(v) ? v : ''; }
+// Días de espera antes de nutrir automáticamente al terminar sin respuesta. '' /
+// null / 0 = apagado (nunca se activa sola en esta secuencia).
+function _sanNurtureDays(v) { const n = parseInt(v); return (n > 0 && n <= 365) ? n : null; }
 
 app.get('/api/sequences', requireAuth, async (req, res) => {
   try {
@@ -6287,9 +6327,9 @@ app.post('/api/sequences', requireAuth, async (req, res) => {
     const sendDays = _sanSendDays(b.send_days);
     const dLim = Math.max(0, parseInt(b.daily_limit) || 0);
     const { rows } = await pool.query(`
-      INSERT INTO sequences (user_id,outbound_client_id,campaign_id,nombre,objetivo,estado,timezone,drip_per_day,send_days,starts_on,daily_limit,mercado,icp,notas,send_mode,send_interval_min,auto_activar,preferred_channel,target_role_1,target_role_2)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20) RETURNING *
-    `, [req.workspaceOwnerId, b.outbound_client_id || null, b.campaign_id || null, b.nombre.trim(), b.objetivo || '', estado, b.timezone || '', drip, sendDays, _sanDate(b.starts_on), dLim, b.mercado || '', b.icp || '', b.notas || '', _sanSendMode(b.send_mode), _sanInterval(b.send_interval_min), !!b.auto_activar, _sanPreferredChannel(b.preferred_channel), b.target_role_1 || '', b.target_role_2 || '']);
+      INSERT INTO sequences (user_id,outbound_client_id,campaign_id,nombre,objetivo,estado,timezone,drip_per_day,send_days,starts_on,daily_limit,mercado,icp,notas,send_mode,send_interval_min,auto_activar,preferred_channel,target_role_1,target_role_2,nurture_days)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21) RETURNING *
+    `, [req.workspaceOwnerId, b.outbound_client_id || null, b.campaign_id || null, b.nombre.trim(), b.objetivo || '', estado, b.timezone || '', drip, sendDays, _sanDate(b.starts_on), dLim, b.mercado || '', b.icp || '', b.notas || '', _sanSendMode(b.send_mode), _sanInterval(b.send_interval_min), !!b.auto_activar, _sanPreferredChannel(b.preferred_channel), b.target_role_1 || '', b.target_role_2 || '', _sanNurtureDays(b.nurture_days)]);
     res.status(201).json(rows[0]);
   } catch (err) { console.error('[seq] POST error:', err.message); res.status(500).json({ error: 'Error al crear secuencia' }); }
 });
@@ -6306,9 +6346,9 @@ app.put('/api/sequences/:id', requireAuth, async (req, res) => {
       `SELECT send_days, starts_on::text AS starts_on, drip_per_day FROM sequences WHERE id=$1 AND user_id=$2`,
       [req.params.id, req.workspaceOwnerId]);
     const { rows } = await pool.query(`
-      UPDATE sequences SET outbound_client_id=$1,campaign_id=$2,nombre=$3,objetivo=$4,estado=$5,timezone=$6,drip_per_day=$7,send_days=$8,starts_on=$9,daily_limit=$10,mercado=$11,icp=$12,notas=$13,send_mode=$14,send_interval_min=$15,auto_activar=$16,preferred_channel=$17,target_role_1=$18,target_role_2=$19,updated_at=NOW()
-      WHERE id=$20 AND user_id=$21 RETURNING *
-    `, [b.outbound_client_id || null, b.campaign_id || null, b.nombre.trim(), b.objetivo || '', estado, b.timezone || '', drip, sendDays, _sanDate(b.starts_on), dLim, b.mercado || '', b.icp || '', b.notas || '', _sanSendMode(b.send_mode), _sanInterval(b.send_interval_min), !!b.auto_activar, _sanPreferredChannel(b.preferred_channel), b.target_role_1 || '', b.target_role_2 || '', req.params.id, req.workspaceOwnerId]);
+      UPDATE sequences SET outbound_client_id=$1,campaign_id=$2,nombre=$3,objetivo=$4,estado=$5,timezone=$6,drip_per_day=$7,send_days=$8,starts_on=$9,daily_limit=$10,mercado=$11,icp=$12,notas=$13,send_mode=$14,send_interval_min=$15,auto_activar=$16,preferred_channel=$17,target_role_1=$18,target_role_2=$19,nurture_days=$20,updated_at=NOW()
+      WHERE id=$21 AND user_id=$22 RETURNING *
+    `, [b.outbound_client_id || null, b.campaign_id || null, b.nombre.trim(), b.objetivo || '', estado, b.timezone || '', drip, sendDays, _sanDate(b.starts_on), dLim, b.mercado || '', b.icp || '', b.notas || '', _sanSendMode(b.send_mode), _sanInterval(b.send_interval_min), !!b.auto_activar, _sanPreferredChannel(b.preferred_channel), b.target_role_1 || '', b.target_role_2 || '', _sanNurtureDays(b.nurture_days), req.params.id, req.workspaceOwnerId]);
     if (!rows.length) return res.status(404).json({ error: 'Secuencia no encontrada' });
     // Cambió la cadencia, la fecha de inicio o el drip → recalcular las fechas de los
     // que aún no empiezan (paso 1). Sin esto, activar S/D después de enrolar no movía nada.
@@ -6448,11 +6488,11 @@ app.post('/api/activities', requireAuth, async (req, res) => {
   const estado = b.estado === 'pendiente' ? 'pendiente' : 'hecha';
   try {
     const { rows } = await pool.query(`
-      INSERT INTO activities (user_id,lead_id,contact_id,outbound_client_id,campaign_id,tipo,canal,nota,fecha,estado,sentimiento,variant)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *
+      INSERT INTO activities (user_id,lead_id,contact_id,outbound_client_id,campaign_id,tipo,canal,nota,fecha,estado,sentimiento,variant,autor)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *
     `, [req.workspaceOwnerId, b.lead_id || null, b.contact_id || null, b.outbound_client_id || null, b.campaign_id || null,
         String(b.tipo).slice(0, 40), b.canal || '', b.nota || '', b.fecha || new Date().toISOString(), estado, b.sentimiento || '',
-        String(b.variant || '').slice(0, 60)]);
+        String(b.variant || '').slice(0, 60), String(b.autor || '').slice(0, 120)]);
     res.status(201).json(rows[0]);
   } catch (err) { console.error('[act] POST error:', err.message); res.status(500).json({ error: 'Error al crear actividad' }); }
 });
@@ -7422,6 +7462,26 @@ app.get('/api/mgmt/dashboard', requireAuth, async (req, res) => {
 });
 
 // ── GET /api/mgmt/integrity ───────────────────────────────────────
+// Notificaciones descartadas a mano — personal de quien descarta (no del workspace),
+// así un compañero sigue viendo la alerta aunque Jenny ya la haya descartado.
+app.get('/api/notif-dismissals', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`SELECT kind, ref_id FROM notif_dismissals WHERE user_id=$1`, [req.user.id]);
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: 'Error al cargar' }); }
+});
+app.post('/api/notif-dismissals', requireAuth, async (req, res) => {
+  const kind = String(req.body?.kind || '').slice(0, 40);
+  const refId = parseInt(req.body?.ref_id, 10);
+  if (!kind || !refId) return res.status(400).json({ error: 'Falta kind o ref_id' });
+  try {
+    await pool.query(
+      `INSERT INTO notif_dismissals (user_id, kind, ref_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`,
+      [req.user.id, kind, refId]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: 'No se pudo descartar' }); }
+});
+
 app.get('/api/mgmt/integrity', requireAuth, async (req, res) => {
   const wid = req.workspaceOwnerId;
   try {
@@ -8259,18 +8319,28 @@ app.post('/api/slack/workspaces/:id/canales/:canal/mensajes', requireAuth, async
 // =================================================================
 const waSvc = require('./services/waService');
 
-// ?outboundClientId= trae la conexión de ESE cliente (Outreach); sin el parámetro,
-// trae la(s) de Operaciones (outbound_client_id NULL). Se filtra por quién puede
-// ver cada una — mismo criterio que ya usa la lista de Slacks conectados.
+// ?outboundClientId= trae SOLO las conexiones asignadas a ESE cliente (Outreach),
+// vía wa_connection_clients — una conexión puede estar asignada a varios clientes a
+// la vez. Sin el parámetro, trae TODAS las conexiones del workspace (vista de
+// Operaciones/Integraciones — el mismo WhatsApp puede aparecer ahí y en uno o más
+// clientes, no es exclusivo). Se filtra por quién puede ver cada una — mismo
+// criterio que ya usa la lista de Slacks conectados.
 app.get('/api/wa/connections', requireAuth, async (req, res) => {
   try {
     const ocid = req.query.outboundClientId ? +req.query.outboundClientId : null;
     const { rows } = await pool.query(
-      `SELECT id, nombre, numero, estado, qr_actual, connected_at, created_at,
-              outbound_client_id, connected_by, visibilidad, visibilidad_niveles, visibilidad_miembros
-         FROM wa_connections
-        WHERE user_id=$1 AND outbound_client_id ${ocid ? '=$2' : 'IS NULL'}
-        ORDER BY id`,
+      ocid
+        ? `SELECT c.id, c.nombre, c.numero, c.estado, c.qr_actual, c.connected_at, c.created_at,
+                  c.connected_by, c.visibilidad, c.visibilidad_niveles, c.visibilidad_miembros
+             FROM wa_connections c
+             JOIN wa_connection_clients wcc ON wcc.connection_id = c.id AND wcc.outbound_client_id = $2
+            WHERE c.user_id=$1
+            ORDER BY c.id`
+        : `SELECT id, nombre, numero, estado, qr_actual, connected_at, created_at,
+                  connected_by, visibilidad, visibilidad_niveles, visibilidad_miembros
+             FROM wa_connections
+            WHERE user_id=$1
+            ORDER BY id`,
       ocid ? [req.workspaceOwnerId, ocid] : [req.workspaceOwnerId]);
     const visibles = [];
     for (const r of rows) if (await _puedeVerWa(req, r)) visibles.push(r);
@@ -8285,16 +8355,150 @@ app.post('/api/wa/connections', requireAuth, async (req, res) => {
     // Privado por defecto SIEMPRE al crear, sin importar quién la conecte — se
     // comparte explícitamente después, nunca al revés.
     const { rows: [row] } = await pool.query(
-      `INSERT INTO wa_connections (user_id, nombre, session_dir, outbound_client_id, connected_by, visibilidad)
-       VALUES ($1,$2,'',$3,$4,'solo_yo') RETURNING id`,
-      [req.workspaceOwnerId, nombre, outboundClientId, req.user.id]);
+      `INSERT INTO wa_connections (user_id, nombre, session_dir, connected_by, visibilidad)
+       VALUES ($1,$2,'',$3,'solo_yo') RETURNING id`,
+      [req.workspaceOwnerId, nombre, req.user.id]);
     await pool.query(`UPDATE wa_connections SET session_dir=$1 WHERE id=$2`, [String(row.id), row.id]);
+    if (outboundClientId) {
+      await pool.query(
+        `INSERT INTO wa_connection_clients (connection_id, outbound_client_id) VALUES ($1,$2) ON CONFLICT DO NOTHING`,
+        [row.id, outboundClientId]);
+    }
     await waSvc.iniciar(pool, row.id); // arranca el socket → empieza a generar el QR
     res.status(201).json({ id: row.id });
   } catch (err) {
-    if (err.code === '23505') return res.status(409).json({ error: 'Este cliente ya tiene un WhatsApp conectado' });
     console.error('[wa] POST connections', err.message); res.status(500).json({ error: 'Error al crear la conexión' });
   }
+});
+
+// Asignar una conexión YA conectada a otro cliente outbound más (o quitarla de uno) —
+// el mismo WhatsApp puede servir a varios clientes a la vez. Mismo permiso que cambiar
+// la visibilidad: solo quien la conectó o un admin del workspace.
+async function _puedeAsignarWa(req, conn) {
+  if (conn.connected_by === req.user.id) return true;
+  return (await _resolveRol(req)) === 'admin';
+}
+app.post('/api/wa/connections/:id/clientes', requireAuth, async (req, res) => {
+  const outboundClientId = parseInt(req.body?.outboundClientId, 10);
+  if (!outboundClientId) return res.status(400).json({ error: 'Falta outboundClientId' });
+  try {
+    const { rows: [conn] } = await pool.query(
+      `SELECT connected_by FROM wa_connections WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId]);
+    if (!conn) return res.status(404).json({ error: 'No encontrada' });
+    if (!(await _puedeAsignarWa(req, conn))) return res.status(403).json({ error: 'Solo quien la conectó o un admin puede asignarla' });
+    await pool.query(
+      `INSERT INTO wa_connection_clients (connection_id, outbound_client_id) VALUES ($1,$2) ON CONFLICT DO NOTHING`,
+      [req.params.id, outboundClientId]);
+    res.json({ ok: true });
+  } catch (err) { console.error('[wa] asignar cliente', err.message); res.status(500).json({ error: 'No se pudo asignar' }); }
+});
+app.delete('/api/wa/connections/:id/clientes/:clientId', requireAuth, async (req, res) => {
+  try {
+    const { rows: [conn] } = await pool.query(
+      `SELECT connected_by FROM wa_connections WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId]);
+    if (!conn) return res.status(404).json({ error: 'No encontrada' });
+    if (!(await _puedeAsignarWa(req, conn))) return res.status(403).json({ error: 'Solo quien la conectó o un admin puede quitarla' });
+    await pool.query(
+      `DELETE FROM wa_connection_clients WHERE connection_id=$1 AND outbound_client_id=$2`,
+      [req.params.id, req.params.clientId]);
+    res.json({ ok: true });
+  } catch (err) { console.error('[wa] quitar cliente', err.message); res.status(500).json({ error: 'No se pudo quitar' }); }
+});
+// Clientes a los que está asignada esta conexión — para pintar la lista en el popover
+// de "Usar un WhatsApp existente" (qué ya tiene marcado) y en el ícono de asignación.
+app.get('/api/wa/connections/:id/clientes', requireAuth, async (req, res) => {
+  try {
+    const conn = await _cargarConexionAutorizada(req, res, req.params.id);
+    if (!conn) return;
+    const { rows } = await pool.query(
+      `SELECT oc.id, oc.nombre FROM wa_connection_clients wcc
+         JOIN outbound_clients oc ON oc.id = wcc.outbound_client_id
+        WHERE wcc.connection_id=$1 ORDER BY oc.nombre`, [req.params.id]);
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: 'Error al consultar' }); }
+});
+
+// Vínculo manual contacto↔chat_jid — cuando el jid armado desde el teléfono del
+// contacto (arriba) no encuentra su conversación real (jid "@lid" sin resolver, ver
+// wa_jid_links en db.js). GET la consulta (QuickWaModule la revisa antes de abrir),
+// POST la crea/actualiza.
+app.get('/api/wa/connections/:id/link/:contactId', requireAuth, async (req, res) => {
+  try {
+    const conn = await _cargarConexionAutorizada(req, res, req.params.id);
+    if (!conn) return;
+    const { rows: [row] } = await pool.query(
+      `SELECT chat_jid FROM wa_jid_links WHERE connection_id=$1 AND contact_id=$2`,
+      [req.params.id, req.params.contactId]);
+    res.json({ jid: row?.chat_jid || null });
+  } catch (err) { res.status(500).json({ error: 'Error al consultar' }); }
+});
+app.post('/api/wa/connections/:id/link', requireAuth, async (req, res) => {
+  const contactId = parseInt(req.body?.contactId, 10);
+  const jid = String(req.body?.jid || '').trim();
+  if (!contactId || !jid) return res.status(400).json({ error: 'Falta contactId o jid' });
+  try {
+    const conn = await _cargarConexionAutorizada(req, res, req.params.id);
+    if (!conn) return;
+    const { rows: [c] } = await pool.query(`SELECT id FROM lm_contacts WHERE id=$1 AND user_id=$2`, [contactId, req.workspaceOwnerId]);
+    if (!c) return res.status(404).json({ error: 'Contacto no encontrado' });
+    await pool.query(
+      `INSERT INTO wa_jid_links (connection_id, contact_id, chat_jid) VALUES ($1,$2,$3)
+       ON CONFLICT (connection_id, contact_id) DO UPDATE SET chat_jid=EXCLUDED.chat_jid, created_at=NOW()`,
+      [req.params.id, contactId, jid]);
+    res.json({ ok: true });
+  } catch (err) { console.error('[wa] link contacto', err.message); res.status(500).json({ error: 'No se pudo vincular' }); }
+});
+
+// Resuelve SOLO el jid del chat de este contacto en esta conexión — sin que Jenny
+// tenga que buscarlo a mano. Pedido explícito 2026-09-02: "yo solo debería elegir el
+// wpp, si hubo conversación debería reconocerse en automático". Orden de intentos:
+//   1. Vínculo ya guardado (manual de antes, o automático de una resolución anterior).
+//   2. El jid armado desde su teléfono, SI ya tiene mensajes ahí (número normal).
+//   3. Si WhatsApp nunca reportó el número real (queda como "...@lid", ver
+//      wa_jid_links en db.js), se busca entre los chats @lid de esta conexión cuyo
+//      texto mencione el nombre completo del contacto — si hay UNA sola coincidencia
+//      inequívoca, se vincula sola. Con 0 o varias coincidencias no se adivina: se
+//      deja para "¿No es esta? Vincular otra" (el respaldo manual, no el camino normal).
+app.get('/api/wa/connections/:id/resolve-contact/:contactId', requireAuth, async (req, res) => {
+  try {
+    const conn = await _cargarConexionAutorizada(req, res, req.params.id);
+    if (!conn) return;
+    const contactId = req.params.contactId;
+    const telefono = String(req.query.telefono || '').replace(/\D/g, '');
+    const { rows: [linked] } = await pool.query(
+      `SELECT chat_jid FROM wa_jid_links WHERE connection_id=$1 AND contact_id=$2`, [req.params.id, contactId]);
+    if (linked) return res.json({ jid: linked.chat_jid, source: 'link' });
+
+    const phoneJid = telefono ? `${telefono}@s.whatsapp.net` : null;
+    if (phoneJid) {
+      const { rows: [hay] } = await pool.query(
+        `SELECT 1 FROM wa_messages WHERE connection_id=$1 AND chat_jid=$2 LIMIT 1`, [req.params.id, phoneJid]);
+      if (hay) return res.json({ jid: phoneJid, source: 'telefono' });
+    }
+
+    const { rows: [c] } = await pool.query(
+      `SELECT nombre, apellido FROM lm_contacts WHERE id=$1 AND user_id=$2`, [contactId, req.workspaceOwnerId]);
+    // Solo el primer nombre: en la práctica los mensajes saludan "Hola Johanna…", casi
+    // nunca con el apellido — exigir los dos (como se hacía antes) nunca encontraba
+    // nada. El riesgo de falso positivo con un nombre común se acota exigiendo que la
+    // coincidencia sea ÚNICA entre los chats @lid de ESTA conexión (no de todo Nova).
+    const primerNombre = (c?.nombre || '').trim();
+    if (primerNombre.length >= 3) {
+      const { rows: candidatos } = await pool.query(
+        `SELECT DISTINCT chat_jid FROM wa_messages
+          WHERE connection_id=$1 AND chat_jid LIKE '%@lid' AND texto ILIKE '%'||$2||'%'`,
+        [req.params.id, primerNombre]);
+      if (candidatos.length === 1) {
+        const jid = candidatos[0].chat_jid;
+        await pool.query(
+          `INSERT INTO wa_jid_links (connection_id, contact_id, chat_jid) VALUES ($1,$2,$3)
+           ON CONFLICT (connection_id, contact_id) DO UPDATE SET chat_jid=EXCLUDED.chat_jid, created_at=NOW()`,
+          [req.params.id, contactId, jid]);
+        return res.json({ jid, source: 'auto' });
+      }
+    }
+    res.json({ jid: phoneJid, source: 'none' });
+  } catch (err) { console.error('[wa] resolve-contact', err.message); res.status(500).json({ error: 'Error al resolver' }); }
 });
 
 // Estado + QR actual — el frontend hace poll de esto mientras espera que se escanee.
@@ -8592,12 +8796,24 @@ app.get('/api/wa/connections/:id/contactos', requireAuth, async (req, res) => {
   } catch (err) { console.error('[wa] contactos', err.message); res.status(500).json({ error: 'Error al cargar los contactos' }); }
 });
 
+// Pide al teléfono historial más antiguo de ESTE chat puntual — para un mensaje real
+// que nunca llegó a guardarse (bug ya corregido, o un fallo de descifrado de WhatsApp
+// con jids "@lid") y no está en lo que ya se sincronizó. No garantiza encontrarlo — solo
+// pide, no se puede forzar que WhatsApp lo tenga disponible para reenviar.
+app.post('/api/wa/connections/:id/chats/:jid/resync', requireAuth, async (req, res) => {
+  try {
+    if (!(await _cargarConexionAutorizada(req, res, req.params.id))) return;
+    await waSvc.resincronizarChat(pool, +req.params.id, req.params.jid);
+    res.json({ ok: true });
+  } catch (err) { console.error('[wa] resync', err.message); res.status(500).json({ error: err.message || 'No se pudo pedir el historial' }); }
+});
+
 app.get('/api/wa/connections/:id/chats/:jid/mensajes', requireAuth, async (req, res) => {
   try {
     if (!(await _cargarConexionAutorizada(req, res, req.params.id))) return;
     const { rows } = await pool.query(`
       SELECT m.id, m.from_me, m.nombre, m.texto, m.ts, m.reply_to_id, m.reply_to_texto, m.msg_id, m.estado, m.scheduled_at, m.eliminado,
-             m.media_url, m.media_type, m.importante,
+             m.media_url, m.media_type, m.importante, m.contact_phone,
              rm.emoji AS mi_reaccion, ro.emoji AS su_reaccion
         FROM wa_messages m
         LEFT JOIN wa_reactions rm ON rm.connection_id = m.connection_id AND rm.msg_id = m.msg_id AND rm.from_me = TRUE
@@ -9713,6 +9929,8 @@ async function start() {
     const apiBase = process.env.API_BASE_URL || 'https://api.kiwoc.com';
     require('./services/sendEngine').startSendEngine(pool, { apiBase, gmailCallback: GMAIL_CALLBACK });
     require('./services/replyWatcher').startReplyWatcher(pool, { gmailCallback: GMAIL_CALLBACK });
+    require('./services/nurtureWatcher').startNurtureWatcher(pool);
+    require('./services/followupWatcher').startFollowupWatcher(pool);
     require('./services/imapWatcher').startImapWatcher(pool);
     require('./services/dailyReport').startDailyReport(pool);
   } catch (e) { console.warn('[lm-workers] no iniciados:', e.message); }

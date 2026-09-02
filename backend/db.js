@@ -789,6 +789,31 @@ async function initDb() {
     // re-enrutado a la rama 'replied' PRIORIZA pasos de este canal (linkedin/email).
     // '' = auto (comportamiento clásico: primer paso replied sin importar canal).
     await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS preferred_channel TEXT NOT NULL DEFAULT '';`);
+    // Nutrición automática (diseño acordado 2026-09-02): si esta secuencia termina TODOS
+    // sus pasos sin que el contacto haya dado ninguna señal (disposition vacío), se le
+    // asigna disposition='mas_adelante' con nurture_at = hoy + este número de días —
+    // NULL/0 = apagado, nunca se reinscribe sola en ninguna secuencia (ver sendEngine.js
+    // _maybeAutoNurture y services/nurtureWatcher.js). Por defecto NULL: no se activa
+    // retroactivamente en secuencias existentes, cada una lo prende a propósito.
+    await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS nurture_days INTEGER;`);
+
+    // Notificaciones descartadas a mano (pedido 2026-09-02: "Descartar" con doble clic
+    // en el panel de Notificaciones) — kind+ref_id identifica la alerta puntual (ej.
+    // 'tareas_vencidas'+task.id); se filtra en el próximo cálculo mientras el dato
+    // subyacente no cambie (si la tarea vuelve a vencer con OTRA fecha, no aplica un
+    // dismissal viejo porque ref_id es siempre el id de la tarea/proyecto, no de "un
+    // vencimiento" — un descarte de "vencida" dura hasta que la propia tarea cambie de
+    // categoría, ej. se completa o se le pone fecha nueva, momento en que deja de
+    // aparecer en esa categoría de todas formas).
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS notif_dismissals (
+        user_id    INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        kind       TEXT        NOT NULL,
+        ref_id     INTEGER     NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (user_id, kind, ref_id)
+      );
+    `);
 
     // ── activities (Lead Manager Fase 4: touches registrados + tareas comerciales) ──
     await pool.query(`
@@ -810,6 +835,9 @@ async function initDb() {
     await pool.query(`CREATE INDEX IF NOT EXISTS activities_user_idx ON activities (user_id);`);
     // Fase 5: clasificación de sentimiento para respuestas (Inbox)
     await pool.query(`ALTER TABLE activities ADD COLUMN IF NOT EXISTS sentimiento TEXT NOT NULL DEFAULT '';`);
+    // Quién escribió la nota/comentario (pedido 2026-09-02: notas de Deal con fecha+hora
+    // y miembro, sin que se vea como título — solo un dato de contexto discreto).
+    await pool.query(`ALTER TABLE activities ADD COLUMN IF NOT EXISTS autor TEXT NOT NULL DEFAULT '';`);
 
     // ── Lead Manager · Empresas + Contactos (importables, estilo Apollo/HubSpot) ──
     // lm_companies: cuentas objetivo. Se deduplican por dominio normalizado (o nombre).
@@ -892,6 +920,14 @@ async function initDb() {
     await pool.query(`ALTER TABLE lm_contacts  ADD COLUMN IF NOT EXISTS derivado_a       INTEGER REFERENCES lm_contacts(id) ON DELETE SET NULL;`);
     // Nurturing: fecha en la que hay que retomar a un contacto marcado "Más adelante".
     await pool.query(`ALTER TABLE lm_contacts  ADD COLUMN IF NOT EXISTS nurture_at       DATE;`);
+    // "Aceptó en LinkedIn" deja de ocupar disposition (2026-09-03, a pedido de Jenny):
+    // es un evento de UN canal, no un estado del contacto — antes tapaba una respuesta
+    // real (compartía el mismo campo que "Interesado") y confundía el pipeline. Pasa a
+    // ser su propio timestamp; sigue disparando el re-enrutado a la rama "replied" igual
+    // que antes, solo que ya no pisa disposition. Ver server.js /contacts/:id/disposition.
+    await pool.query(`ALTER TABLE lm_contacts  ADD COLUMN IF NOT EXISTS li_aceptado_at   TIMESTAMPTZ;`);
+    await pool.query(`UPDATE lm_contacts SET li_aceptado_at = COALESCE(li_aceptado_at, updated_at) WHERE disposition = 'aceptado';`);
+    await pool.query(`UPDATE lm_contacts SET disposition = '' WHERE disposition = 'aceptado';`);
     // Deals: capa financiera del pipeline por contacto (valor estimado · probabilidad · cierre)
     await pool.query(`ALTER TABLE lm_contacts  ADD COLUMN IF NOT EXISTS deal_valor       NUMERIC(12,2);`);
     await pool.query(`ALTER TABLE lm_contacts  ADD COLUMN IF NOT EXISTS deal_moneda      TEXT NOT NULL DEFAULT 'USD';`);
@@ -1411,6 +1447,10 @@ async function initDb() {
         updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
     `);
+    // Recordatorio por inactividad (pedido 2026-09-02: "necesito que el sistema me
+    // recuerde por defecto, no que yo tenga que configurarlo"). Prendido de fábrica en
+    // 24h — 0 lo apaga para quien no lo quiera. Ver services/followupWatcher.js.
+    await pool.query(`ALTER TABLE lm_send_settings ADD COLUMN IF NOT EXISTS followup_hours INTEGER NOT NULL DEFAULT 24;`);
     // lm_daily_reports: snapshot del reporte diario (1 por día por workspace).
     await pool.query(`
       CREATE TABLE IF NOT EXISTS lm_daily_reports (
@@ -1668,6 +1708,10 @@ async function initDb() {
     // Mensaje importante (⭐, como el "destacado" de WhatsApp) — toggle simple, sin lista
     // aparte todavía: se ve como una estrellita junto a la hora del mensaje.
     await pool.query(`ALTER TABLE wa_messages ADD COLUMN IF NOT EXISTS importante BOOLEAN NOT NULL DEFAULT FALSE;`);
+    // Tarjetas de contacto compartidas por WhatsApp: se guarda el número (si el vCard
+    // lo trae) para poder abrir un chat directo a ESA persona con un clic, en vez de
+    // solo mostrar el nombre como texto plano. Ver waService.js _guardarMensaje.
+    await pool.query(`ALTER TABLE wa_messages ADD COLUMN IF NOT EXISTS contact_phone TEXT NOT NULL DEFAULT '';`);
 
     // Quién puede ver cada conexión (antes cualquiera con acceso a Operaciones la
     // veía) + una conexión propia por cliente outbound en vez de una sola compartida.
@@ -1681,7 +1725,49 @@ async function initDb() {
     // privada (solo quien la conectó) desde ahora, decisión explícita de Jenny.
     await pool.query(`UPDATE wa_connections SET connected_by = user_id, visibilidad = 'solo_yo' WHERE connected_by IS NULL;`);
     // Un WhatsApp por cliente outbound como máximo (NULL = Operaciones, sin límite).
-    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS wa_connections_client_uq ON wa_connections (outbound_client_id) WHERE outbound_client_id IS NOT NULL;`);
+    // Reemplazado abajo por wa_connection_clients (many-to-many) — pedido 2026-09-02:
+    // Jenny quiere asignar el MISMO WhatsApp a varios clientes outbound a la vez (p.
+    // ej. el de Operaciones sirviendo también de contacto directo para 2-3 clientes).
+    await pool.query(`DROP INDEX IF EXISTS wa_connections_client_uq;`);
+
+    // wa_connection_clients: a qué clientes outbound está asignada cada conexión.
+    // outbound_client_id en wa_connections queda como dato histórico de cómo se creó
+    // (no se usa más para resolver a quién pertenece) — la fuente de verdad pasa a ser
+    // esta tabla, que sí permite una conexión en varios clientes. Sin fila acá = solo
+    // vive en Operaciones (comportamiento de siempre para lo que nunca se asignó).
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS wa_connection_clients (
+        connection_id      INTEGER NOT NULL REFERENCES wa_connections(id) ON DELETE CASCADE,
+        outbound_client_id INTEGER NOT NULL REFERENCES outbound_clients(id) ON DELETE CASCADE,
+        created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (connection_id, outbound_client_id)
+      );
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS wa_connection_clients_client_idx ON wa_connection_clients (outbound_client_id);`);
+    // Migra lo que ya estaba asignado 1-a-1 antes de este cambio.
+    await pool.query(`
+      INSERT INTO wa_connection_clients (connection_id, outbound_client_id)
+      SELECT id, outbound_client_id FROM wa_connections WHERE outbound_client_id IS NOT NULL
+      ON CONFLICT DO NOTHING;
+    `);
+
+    // Vínculo manual contacto↔chat — necesario porque WhatsApp a veces no manda el
+    // número real del contacto, solo un "@lid" (identificador interno, privacidad de
+    // negocio) que Baileys no siempre logra traducir a un número. En esos casos abrir
+    // el WhatsApp de un contacto desde Leads/Ficha (que arma el jid a partir de su
+    // teléfono) no encuentra la conversación real, aunque ya exista con mensajes e
+    // incluso uno programado — caso real detectado 2026-09-02 con Johanna Albarracin
+    // (chat guardado como "238989361594370@lid", su ficha nunca tuvo ese jid). Este
+    // vínculo permite decir a mano "esta conversación específica es de este contacto".
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS wa_jid_links (
+        connection_id INTEGER NOT NULL REFERENCES wa_connections(id) ON DELETE CASCADE,
+        contact_id    INTEGER NOT NULL REFERENCES lm_contacts(id) ON DELETE CASCADE,
+        chat_jid      TEXT    NOT NULL,
+        created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (connection_id, contact_id)
+      );
+    `);
 
     // Etiquetas de chat (estilo Chatwoot) — a nivel de WORKSPACE (user_id), no por
     // conexión: la misma etiqueta ("Cliente", "Urgente"...) sirve sin importar en cuál

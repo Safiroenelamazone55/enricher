@@ -30,7 +30,7 @@
   /* Alto de la barra superior global — los paneles sticky dentro de .app-main
      deben restarlo de 100vh; si no, sobresalen justo esa cantidad y hacen
      scrollear toda la página aunque su contenido quepa. */
-  --topbar-h:26px;
+  --topbar-h:29px; /* +10% (pedido 2026-09-02), antes 26px */
   /* Radius */
   --r:12px; --rs:9px; --rpill:99px;
   /* Shadow — muy sutil (DS v2) */
@@ -4833,7 +4833,10 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 
 /* ── Notificaciones — cards estilo referencia (icono, badge, acción) — COMPACTAS ── */
 #rnotif-content { gap: 6px; }
-.rnf-card { display: flex; gap: 8px; width: 100%; text-align: left; background: #FAF8F5; border: 1px solid #EAE7E2; border-radius: 0; padding: 8px 10px; cursor: pointer; font-family: inherit; transition: border-color .14s, box-shadow .14s, background .14s; }
+/* Antes .rnf-card (el tipo "simple") era el propio <button> clicable — pasó a <div>
+   (2026-09-02) para poder meterle un botón "Descartar" al lado sin anidar
+   button-dentro-de-button (HTML inválido, disparaba las dos acciones a la vez). */
+.rnf-card { display: flex; gap: 8px; width: 100%; text-align: left; background: #FAF8F5; border: 1px solid #EAE7E2; border-radius: 0; padding: 8px 10px; cursor: default; font-family: inherit; transition: border-color .14s, box-shadow .14s, background .14s; }
 .rnf-card:hover { background: #fff; border-color: #DAD5CE; box-shadow: 0 4px 14px rgba(28,25,23,.06); }
 .rnf-ico { flex-shrink: 0; width: 26px; height: 26px; border-radius: 0; display: inline-flex; align-items: center; justify-content: center; }
 .rnf-ico svg { width: 14px; height: 14px; }
@@ -4848,15 +4851,22 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 .rnf-badge--red { background: #F1EFEB; color: #B91C1C; }
 .rnf-dot--red { background: #EF4444; }
 .rnf-link--red { color: #DC2626; }
-.rnf-link { display: inline-flex; align-items: center; gap: 2px; font-size: .71rem; font-weight: 600; margin-top: 1px; }
+.rnf-link { display: inline-flex; align-items: center; gap: 2px; font-size: .71rem; font-weight: 600; margin-top: 1px; border: none; background: none; padding: 0; cursor: pointer; font-family: inherit; }
 .rnf-link svg { width: 11px; height: 11px; }
 /* Tarjeta de cierre con DOS acciones (completar o añadir trabajo) */
 .rnf-card--static { cursor: default; }
-.rnf-acts { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 4px; }
+.rnf-acts { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 4px; align-items: center; }
 .rnf-act { border: 1px solid var(--border, #EAE7E2); background: #fff; color: var(--text2, #45586A); font-size: .67rem; font-weight: 700; padding: 3px 9px; border-radius: 0; cursor: pointer; font-family: inherit; transition: all .12s; white-space: nowrap; }
 .rnf-act:hover { border-color: var(--brand-l, #B8D9FF); color: var(--brand-d, #0062CC); }
 .rnf-act--pri { background: var(--brand, #007AFF); border-color: var(--brand, #007AFF); color: #fff; }
 .rnf-act--pri:hover { background: var(--brand-d, #0062CC); color: #fff; }
+/* "Descartar" (pedido 2026-09-02) — discreto hasta que se arma con el primer clic;
+   el segundo clic (dentro de 4s) sí descarta. Sin esto un solo clic accidental
+   podía ocultar una alerta real sin darse cuenta. */
+.rnf-act--discard { margin-left: auto; color: #918C85; border-color: transparent; background: transparent; }
+.rnf-act--discard:hover { color: #C4342B; border-color: #F0C9C9; background: #FBEEEE; }
+.rnf-act--discard.rnf-act--armed { color: #fff; background: #C4342B; border-color: #C4342B; }
+.rnf-act--discard.rnf-act--armed:hover { background: #A82C22; }
 .rnf-more { text-align: center; font-size: .72rem; color: #B4AFA8; padding: 4px 0 2px; }
 .rnf-ico--orange { background: #FFF1E2; color: #E07B12; } .rnf-dot--orange { background: #007AFF; } .rnf-badge--orange { background: #FFF1E2; color: #C2740B; } .rnf-link--orange { color: #E07B12; }
 .rnf-ico--amber  { background: #FEF6E0; color: #C28A0B; } .rnf-dot--amber  { background: #F5C24B; } .rnf-badge--amber  { background: #FEF6E0; color: #A9790A; } .rnf-link--amber  { color: #C28A0B; }
@@ -5924,23 +5934,32 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 .chat-main__composer { padding: 0 16px 14px; flex-shrink: 0; }
 /* Estilo WhatsApp: todo en una sola fila alineada abajo, en vez de un textarea
    arriba + una fila entera de herramientas debajo (eso era lo que "perdía espacio"). */
+/* Antes .chat-composer era una fila (textarea + barra de herramientas lado a lado),
+   así que el cuadro de escribir quedaba angosto y apretado contra los íconos —
+   reportado 2026-09-02, con Slack nativo de referencia: el texto ocupa todo el ancho
+   arriba, y la barra de herramientas (formato + adjuntar + enviar) va DEBAJO, en su
+   propia fila de ancho completo. */
 .chat-composer {
-  display: flex; align-items: flex-end;
+  display: flex; flex-direction: column;
   border: 1.5px solid #DAD5CE; border-radius: 0;
   background: #fff; overflow: hidden;
   transition: border-color .15s, box-shadow .15s;
 }
 .chat-composer:focus-within { border-color: #CFCAC3; box-shadow: 0 0 0 3px rgba(0,122,255,.08); }
+/* flex:1 (no width:100%) a propósito: esta misma clase la reutilizan los composers de
+   WhatsApp (wa-input, qwa-input), que SÍ van en fila (ícono-texto-ícono-enviar) — con
+   flex-direction:column en .chat-composer (arriba) y el align-items:stretch por
+   defecto, esto ya ocupa todo el ancho igual, sin romper esos otros usos. */
 .chat-composer__field {
   flex: 1; min-width: 0; border: none; outline: none; resize: none;
   font-family: inherit; background: transparent;
   font-size: .9rem; color: #1F1D1B; line-height: 1.5;
-  padding: 10px 6px 10px 14px; max-height: 120px; overflow-y: auto; box-sizing: border-box;
+  padding: 10px 14px 4px; max-height: 120px; overflow-y: auto; box-sizing: border-box;
 }
 .chat-composer__field::placeholder { color: #CFCAC3; }
 .chat-composer__toolbar {
-  display: flex; align-items: center; flex-shrink: 0;
-  padding: 5px 8px 5px 2px; gap: 1px;
+  display: flex; align-items: center; flex-shrink: 0; width: 100%; box-sizing: border-box;
+  padding: 4px 8px 6px 6px; gap: 1px;
 }
 .chat-composer__divider { width: 1px; height: 18px; background: #EAE7E2; margin: 0 4px; }
 .chat-tool-btn {
@@ -12602,7 +12621,7 @@ a.cp-strip__i:hover svg { color: var(--brand, #007AFF); }
 .fms-opt input { flex-shrink: 0; cursor: pointer; }
 .fms-opt span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fms-empty { font-size: .8rem; color: var(--muted, #B4AFA8); padding: 10px 6px; text-align: center; }
-.lm2-nav__cnt { margin-left: auto; background: var(--brand, #007AFF); color: #fff; font-size: .68rem; font-weight: 700; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; }
+.lm2-nav__cnt { margin-left: auto; background: var(--brand, #007AFF); color: #fff; font-size: .68rem; font-weight: 700; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 0; display: inline-flex; align-items: center; justify-content: center; }
 .lm2-nav__item.active .lm2-nav__cnt { background: var(--brand-d, #0062CC); }
 .lm-tsec-h { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted, #B4AFA8); margin: 16px 2px 9px; }
 .lm-tsec-h:first-child { margin-top: 4px; }
@@ -13540,12 +13559,12 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
   background: var(--navy); color: #fff; font-family: var(--font); flex-shrink: 0;
 }
 .global-topbar__brand { display: flex; align-items: center; gap: 6px; color: var(--brand-accent); flex-shrink: 0; }
-.global-topbar__logo { display: block; width: 16px; height: 16px; object-fit: contain; flex-shrink: 0; }
-.global-topbar__name { font-weight: 700; font-size: 12px; color: #fff; letter-spacing: -.01em; }
+.global-topbar__logo { display: block; width: 18px; height: 18px; object-fit: contain; flex-shrink: 0; }
+.global-topbar__name { font-weight: 700; font-size: 12.5px; color: #fff; letter-spacing: -.01em; }
 .global-topbar__tabs { display: flex; align-items: center; gap: 2px; height: 100%; }
 .global-topbar__tab {
   background: none; border: none; font: inherit; font-family: var(--font);
-  color: rgba(255,255,255,.62); font-size: 11.5px; font-weight: 600; cursor: pointer;
+  color: rgba(255,255,255,.62); font-size: 12px; font-weight: 600; cursor: pointer;
   height: 100%; padding: 0 9px; border-bottom: 2px solid transparent; transition: color .14s ease, border-color .14s ease;
 }
 .global-topbar__tab:hover { color: #fff; }
@@ -13561,8 +13580,8 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
   display: flex; flex-direction: row; align-items: center; gap: 7px;
   padding-top: 0; width: auto; flex-shrink: 0;
 }
-.global-topbar .rchat__strip-btn { width: 20px; height: 20px; border-radius: 0; color: rgba(255,255,255,.62); }
-.global-topbar .rchat__strip-btn svg { width: 13px; height: 13px; }
+.global-topbar .rchat__strip-btn { width: 23px; height: 23px; border-radius: 0; color: rgba(255,255,255,.62); }
+.global-topbar .rchat__strip-btn svg { width: 15px; height: 15px; }
 .global-topbar .rchat__strip-btn:hover { background: rgba(255,255,255,.14); color: #fff; }
 .global-topbar .rchat__strip-btn.active { background: rgba(255,255,255,.2); color: #fff; }
 .global-topbar .rchat__strip-sep { width: 1px; height: 13px; background: rgba(255,255,255,.2); margin: 0 2px; }
@@ -13571,7 +13590,7 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
 .global-topbar .rtt__time { margin-top: 0; margin-left: 2px; color: rgba(255,255,255,.85); }
 .global-topbar__avwrap { position: relative; }
 .global-topbar__avbtn { background: none; border: none; padding: 0; cursor: pointer; border-radius: 50%; line-height: 0; }
-.global-topbar__av { width: 18px; height: 18px; border-radius: 50%; object-fit: cover; background: rgba(255,255,255,.15); display: block; }
+.global-topbar__av { width: 20px; height: 20px; border-radius: 50%; object-fit: cover; background: rgba(255,255,255,.15); display: block; }
 .global-topbar__avbtn:hover .global-topbar__av { box-shadow: 0 0 0 2px rgba(255,255,255,.35); }
 .global-topbar__menu {
   position: absolute; top: calc(100% + 8px); right: 0; width: 220px; z-index: 400;
@@ -14005,6 +14024,20 @@ td.ldh-acts { padding-left: 6px; padding-right: 10px; }
 .dl-col--perdido { opacity: .88; }
 .dl-empty-col { font-size: .74rem; color: var(--text-muted); text-align: center; padding: 14px 6px 10px; }
 .dle-box { width: 400px; max-width: 94vw; padding: 18px; }
+/* Deal con notas: panel lateral a la derecha, como pidió Jenny (referencia dibujada
+   2026-09-02) — no notas apiladas debajo de los campos. */
+.dle-box--wide { width: 880px; }
+.dle-cols { display: flex; gap: 24px; align-items: flex-start; }
+.dle-cols .dle-grid { flex: 1 1 auto; min-width: 0; }
+.dle-notas-col { flex: 0 0 380px; min-width: 0; display: flex; flex-direction: column; gap: 6px; padding-left: 20px; border-left: 1px solid var(--border, #EAE7E2); }
+/* La nota (y su fila con el botón de borrar) no debe poder empujar el ancho del
+   panel — texto largo se envuelve en vez de forzar scroll horizontal (reportado
+   2026-09-02: "tengo que usar el scroll para ver el mensaje completo"). */
+.dl-nota { min-width: 0; }
+.dl-nota > div:first-child { min-width: 0; }
+.dl-nota > div:first-child > div:first-child { min-width: 0; overflow-wrap: break-word; word-break: break-word; }
+.dl-notas-list { max-height: 280px; overflow-y: auto; margin: 2px 0 6px; }
+@media (max-width: 640px) { .dle-box--wide { width: 94vw; } .dle-cols { flex-direction: column; } .dle-notas-col { flex-basis: auto; padding-left: 0; border-left: none; border-top: 1px solid var(--border, #EAE7E2); padding-top: 12px; } }
 .dle-hd { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 14px; }
 .dle-hd__t { font-size: .98rem; font-weight: 600; color: var(--text-primary); }
 .dle-hd__s { font-size: .78rem; color: var(--text-muted); margin-top: 1px; }
@@ -14046,6 +14079,10 @@ td.ldh-acts { padding-left: 6px; padding-right: 10px; }
 
 /* ── Inbox unificado (Mailboxes F3) ─────────────────────────────── */
 .ibx-top { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+/* Botón compacto de "Nuevo correo" (pedido 2026-09-02: alinearlo con la fila de
+   pestañas — antes se iba solo a una fila aparte por falta de espacio). flex-shrink:0
+   evita que se achique/oculte cuando el resto de filtros ya ocupa todo el ancho. */
+.ibx-newmail-btn { flex-shrink: 0; width: 30px; height: 30px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 1rem; font-weight: 700; line-height: 1; }
 .ibx-tabs { display: flex; gap: 2px; }
 .ibx-tab { border: none; background: none; cursor: pointer; padding: 5px 9px; font-size: .78rem; font-weight: 500; color: var(--text-muted); border-bottom: 2px solid transparent; font-family: inherit; transition: color .12s; }
 .ibx-tab:hover { color: var(--text-primary); }
@@ -14054,7 +14091,14 @@ td.ldh-acts { padding-left: 6px; padding-right: 10px; }
 .ibx-tab.active .ibx-tab__n { background: var(--primary-soft); color: var(--primary); }
 .ibx-tab--warn .ibx-tab__n { background: var(--danger-soft); color: var(--danger); }
 .ibx-unread { font-size: .72rem; font-weight: 600; color: var(--primary); background: var(--primary-soft); border-radius: 0; padding: 3px 9px; }
-.ibx-fcli { max-width: 200px; font-size: .78rem; padding: 6px 9px; }
+/* min-width para poder encoger (flex-shrink) — antes tenían un ancho fijo que, sumado
+   a las pestañas y el botón de nuevo correo, se pasaba por unos pocos px del ancho
+   disponible y empujaba el botón a su propia fila (reportado 2026-09-02). */
+/* flex-wrap:wrap en .ibx-top hace que flex-shrink nunca entre en juego (el navegador
+   wrappea ANTES de encoger) — por eso el fix anterior con flex-shrink no alcanzaba.
+   Bajar el ancho máximo de una vez es lo que de verdad libera los ~5px que faltaban
+   y evita que el botón de nuevo correo se vaya a su propia fila. */
+.ibx-fcli { max-width: 178px; font-size: .78rem; padding: 6px 9px; }
 .ibx-grid { display: grid; grid-template-columns: minmax(0, 290px) minmax(0, 1fr); border: 1px solid var(--border); border-radius: 0; background: var(--surface); overflow: hidden; min-height: 340px; height: calc(100vh - 340px); }
 .ibx-list { border-right: 1px solid var(--border); overflow-y: auto; }
 .ibx-row { padding: 7px 12px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background .1s; }
@@ -14852,7 +14896,7 @@ body:has(#pane-mgmt-projects.active) .content-wrap { max-width: 1400px; }
   background: #FF3B30 !important; color: #fff !important;
   font-size: 11px !important; font-weight: 600 !important; letter-spacing: -.01em;
   min-width: 19px !important; height: 19px !important; padding: 0 6px !important;
-  border-radius: 999px !important; line-height: 1;
+  border-radius: 0 !important; line-height: 1;
   font-variant-numeric: tabular-nums;
   box-shadow: 0 1px 2px rgba(255,59,48,.35);
 }
@@ -15692,9 +15736,24 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 
 /* ── Panel rápido de WhatsApp (QuickWaModule) — media pantalla, sobre cualquier
    sección (ficha de contacto, Leads, tarea de secuencia) ── */
-.qwa-panel { position: fixed; inset: 0; z-index: 10060; display: flex; justify-content: flex-end; }
+/* top en vez de 0: pedido 2026-09-02, que no tape el header de arriba — se abre
+   DEBAJO de la barra superior, no encima. 60% en vez de 50% (pedido mismo día).
+   z-index 500, NO 10060: los menús/popovers internos del chat (mencionar, "⋮" de
+   mensaje, Deal, emoji…) usan 10001-10062 — con el panel a 10060 quedaban DIBUJADOS
+   pero tapados detrás del propio panel (bug real, reportado 2026-09-02: "no funciona
+   al etiquetar a un miembro" — sí funcionaba, solo que invisible). 500 alcanza de
+   sobra para ir encima de toda la app normal y deja el rango 1000+ libre para esos
+   popovers internos, que sí deben ir por encima del panel que los contiene. */
+.qwa-panel { position: fixed; top: var(--topbar-h, 26px); right: 0; bottom: 0; left: 0; z-index: 500; display: flex; justify-content: flex-end; }
 .qwa-panel__backdrop { position: absolute; inset: 0; background: rgba(28,25,23,.35); }
-.qwa-panel__box { position: relative; width: 50%; min-width: 380px; max-width: 640px; height: 100%; background: var(--surface); box-shadow: -8px 0 32px rgba(0,0,0,.18); display: flex; flex-direction: column; }
+.qwa-panel__box { position: relative; width: 60%; min-width: 380px; max-width: 760px; height: 100%; background: var(--surface); box-shadow: -8px 0 32px rgba(0,0,0,.18); display: flex; flex-direction: column; }
+
+/* Chat de Slack completo en media pantalla, misma dimensión que .qwa-panel (WhatsApp). */
+.rchat-fc-backdrop { position: fixed; top: var(--topbar-h, 26px); right: 0; bottom: 0; left: 0; z-index: 500; display: flex; justify-content: flex-end; background: rgba(28,25,23,.35); }
+.rchat-fc-backdrop.hidden { display: none; }
+.rchat-fc-box { position: relative; width: 60%; min-width: 380px; max-width: 760px; height: 100%; background: var(--surface); box-shadow: -8px 0 32px rgba(0,0,0,.18); display: flex; flex-direction: column; overflow: hidden; }
+.rchat-fc-box #chat-shell { height: 100%; }
+@media (max-width: 760px) { .rchat-fc-box { width: 100%; max-width: none; min-width: 0; } }
 .qwa-panel__hdr { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
 .qwa-panel__who { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .qwa-panel__ava { width: 36px; height: 36px; border-radius: 50%; background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0; }
