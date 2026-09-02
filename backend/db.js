@@ -1656,6 +1656,11 @@ async function initDb() {
     // y perdería el rastro) — se marca, y la burbuja se pinta como WhatsApp la muestra
     // ("Se eliminó este mensaje"), ver waService._guardarMensaje.
     await pool.query(`ALTER TABLE wa_messages ADD COLUMN IF NOT EXISTS eliminado BOOLEAN NOT NULL DEFAULT FALSE;`);
+    // Fotos: media_url apunta a /wa-media/... (servido desde disco, ver server.js —
+    // WhatsApp no da una URL pública propia); texto hace de caption. media_type hoy
+    // solo vale 'image' (video/documento quedan fuera por ahora).
+    await pool.query(`ALTER TABLE wa_messages ADD COLUMN IF NOT EXISTS media_url  TEXT NOT NULL DEFAULT '';`);
+    await pool.query(`ALTER TABLE wa_messages ADD COLUMN IF NOT EXISTS media_type TEXT NOT NULL DEFAULT '';`);
 
     // Quién puede ver cada conexión (antes cualquiera con acceso a Operaciones la
     // veía) + una conexión propia por cliente outbound en vez de una sola compartida.

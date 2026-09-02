@@ -13,6 +13,8 @@ const session   = require('express-session');
 const passport  = require('passport');
 const https     = require('https');
 const http      = require('http');
+const path      = require('path');
+const fs        = require('fs');
 const { Server: SocketIOServer } = require('socket.io');
 
 // ── Database (PostgreSQL) — imported early so initDb() runs at startup ──
@@ -307,6 +309,17 @@ const uploadSlack = multer({
   storage: multer.memoryStorage(),
   limits:  { fileSize: 50 * 1024 * 1024 },
 });
+
+// Fotos pegadas/adjuntas en WhatsApp: solo imágenes, se guardan en disco (no en la
+// BD) para poder servirlas de vuelta al recargar el chat — ver /wa-media abajo.
+const uploadWa = multer({
+  storage: multer.memoryStorage(),
+  limits:  { fileSize: 15 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => cb(/^image\//.test(file.mimetype) ? null : new Error('Solo se pueden enviar imágenes'), /^image\//.test(file.mimetype)),
+});
+const WA_MEDIA_DIR = path.join(__dirname, 'wa_media');
+try { fs.mkdirSync(WA_MEDIA_DIR, { recursive: true }); } catch (_) {}
+app.use('/wa-media', express.static(WA_MEDIA_DIR, { maxAge: '30d', immutable: true }));
 
 // ── Auth middleware ───────────────────────────────────────────────
 function requireAuth(req, res, next) {
@@ -8576,6 +8589,7 @@ app.get('/api/wa/connections/:id/chats/:jid/mensajes', requireAuth, async (req, 
     if (!(await _cargarConexionAutorizada(req, res, req.params.id))) return;
     const { rows } = await pool.query(`
       SELECT m.id, m.from_me, m.nombre, m.texto, m.ts, m.reply_to_id, m.reply_to_texto, m.msg_id, m.estado, m.scheduled_at, m.eliminado,
+             m.media_url, m.media_type,
              rm.emoji AS mi_reaccion, ro.emoji AS su_reaccion
         FROM wa_messages m
         LEFT JOIN wa_reactions rm ON rm.connection_id = m.connection_id AND rm.msg_id = m.msg_id AND rm.from_me = TRUE
@@ -8618,6 +8632,26 @@ app.post('/api/wa/connections/:id/chats/:jid/mensajes', requireAuth, async (req,
     const r = await waSvc.enviar(pool, +req.params.id, req.params.jid, texto, respondeA);
     res.status(201).json(r);
   } catch (err) { console.error('[wa] enviar', err.message); res.status(400).json({ error: err.message || 'No se pudo enviar' }); }
+});
+
+// Enviar una foto (pegada o adjunta desde el picker, con o sin edición previa en
+// el navegador). El archivo se guarda en disco bajo /wa-media/:connId/ para poder
+// mostrarlo de nuevo cuando se recarga el chat — WhatsApp no da una URL pública.
+app.post('/api/wa/connections/:id/chats/:jid/mensajes/imagen', requireAuth, uploadWa.single('file'), async (req, res) => {
+  const caption = String((req.body || {}).caption || '').trim();
+  const respondeA = String((req.body || {}).respondeA || '').trim() || undefined;
+  if (!req.file) return res.status(400).json({ error: 'Falta la imagen' });
+  try {
+    if (!(await _cargarConexionAutorizada(req, res, req.params.id))) return;
+    const ext = (req.file.mimetype.split('/')[1] || 'jpg').replace(/[^a-z0-9]/gi, '').slice(0, 10) || 'jpg';
+    const fname = `${require('crypto').randomBytes(10).toString('hex')}.${ext}`;
+    const dir = path.join(WA_MEDIA_DIR, String(req.params.id));
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, fname), req.file.buffer);
+    const mediaUrl = `/wa-media/${req.params.id}/${fname}`;
+    const r = await waSvc.enviarImagen(pool, +req.params.id, req.params.jid, req.file.buffer, req.file.mimetype, caption, mediaUrl, respondeA);
+    res.status(201).json({ ...r, media_url: mediaUrl });
+  } catch (err) { console.error('[wa] enviar imagen', err.message); res.status(400).json({ error: err.message || 'No se pudo enviar la imagen' }); }
 });
 
 app.delete('/api/wa/connections/:id/scheduled/:msgId', requireAuth, async (req, res) => {
@@ -9533,6 +9567,10 @@ app.use((_req, res) => res.status(404).json({ error: 'Route not found' }));
 app.use((err, _req, res, _next) => {
   if (err.message?.includes('Only .xlsx'))
     return res.status(400).json({ error: err.message });
+  if (err.message?.includes('Solo se pueden enviar imágenes'))
+    return res.status(400).json({ error: err.message });
+  if (err.code === 'LIMIT_FILE_SIZE')
+    return res.status(400).json({ error: 'El archivo es demasiado grande.' });
   console.error('[unhandled]', err);
   res.status(500).json({ error: 'Internal server error' });
 });

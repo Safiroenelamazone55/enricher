@@ -377,6 +377,30 @@ async function enviar(pool, id, jid, texto, respondeA) {
   return { jid: jidFull, msg_id: res.key.id };
 }
 
+// Foto (pegada/adjunta, editada o no en el navegador). El archivo ya está guardado
+// en disco por el endpoint (mediaUrl) — acá solo se manda por Baileys y se deja
+// el registro con caption=texto, igual que un mensaje normal.
+async function enviarImagen(pool, id, jid, buffer, mimetype, caption, mediaUrl, respondeA) {
+  const sock = _socks.get(id);
+  if (!sock) throw new Error('Este WhatsApp no está conectado ahora mismo');
+  const jidFull = jid.includes('@') ? jid : `${jid}@s.whatsapp.net`;
+
+  let quoted;
+  if (respondeA) {
+    const { rows: [orig] } = await pool.query(
+      `SELECT msg_id, from_me, texto FROM wa_messages WHERE connection_id=$1 AND chat_jid=$2 AND msg_id=$3`,
+      [id, jidFull, respondeA]);
+    if (orig) quoted = { key: { remoteJid: jidFull, id: orig.msg_id, fromMe: orig.from_me }, message: { conversation: orig.texto } };
+  }
+
+  const res = await sock.sendMessage(jidFull, { image: buffer, mimetype, caption: caption || undefined }, quoted ? { quoted } : undefined);
+  await pool.query(`
+    INSERT INTO wa_messages (connection_id, chat_jid, msg_id, from_me, texto, ts, reply_to_id, reply_to_texto, media_url, media_type)
+    VALUES ($1,$2,$3,TRUE,$4,NOW(),$5,$6,$7,'image') ON CONFLICT (connection_id, msg_id) DO NOTHING`,
+    [id, jidFull, res.key.id, caption || '', quoted ? respondeA : '', quoted ? quoted.message.conversation : '', mediaUrl]);
+  return { jid: jidFull, msg_id: res.key.id };
+}
+
 // emoji='' quita la reacción que yo había puesto (toggle, ver frontend).
 async function reaccionar(pool, id, jid, msgId, emoji) {
   const sock = _socks.get(id);
@@ -501,4 +525,4 @@ async function reanudarTodas(pool) {
   if (!_tickerWatchdog) _tickerWatchdog = setInterval(() => _watchdogTick(pool), 3 * 60 * 1000);
 }
 
-module.exports = { iniciar, enviar, reaccionar, desconectar, reanudarTodas };
+module.exports = { iniciar, enviar, enviarImagen, reaccionar, desconectar, reanudarTodas };

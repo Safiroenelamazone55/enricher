@@ -7,6 +7,7 @@ console.log('[Enricher] app.js v2026-05-28-B loaded');
  */
 
 const API = 'https://api.novacentrax.com/api';
+const API_ORIGIN = API.replace(/\/api$/, '');   // para servir archivos estáticos (fotos de WhatsApp, etc.)
 
 // ── Helpers ──────────────────────────────────────────────────────
 const $   = id => document.getElementById(id);
@@ -26919,6 +26920,191 @@ const SlackChat = (() => {
            miniDetener: _pararSondeoMini, refreshMiniBadge };
 })();
 
+// ── Editor de fotos, compartido por WaChatModule y ObcWaModule ──────────────
+// Vive aparte para no duplicar el canvas/las herramientas en los dos módulos de
+// WhatsApp (solo el "pegar y mandar" se duplica, ver nota en ObcWaModule) — este
+// componente no sabe nada de conexiones ni de chats: recibe un File/Blob y un
+// callback, y devuelve el blob editado por ese callback al guardar.
+const WaImageEditor = (() => {
+  let _onDone = null, _cv = null, _ctx = null, _ov = null, _octx = null;
+  let _tool = 'draw', _color = '#FF3B30', _thick = 4;
+  let _undo = [], _drawing = false, _cropStart = null, _cropSel = null, _outType = 'image/jpeg';
+  let _bound = false;
+
+  function open(file, onDone) {
+    _onDone = onDone; _undo = []; _cropSel = null; _tool = 'draw'; _bound = false;
+    _outType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+    document.getElementById('wimg-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'wimg-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) close(); };
+    const colors = ['#FF3B30', '#FFCC00', '#34C759', '#007AFF', '#FFFFFF', '#1F1D1B'];
+    m.innerHTML = `<div class="fin-pi-box wimg-box">
+      <div class="fin-pi-box__hd"><h3>Editar foto</h3><button class="fin-pi-x" onclick="WaImageEditor.close()">✕</button></div>
+      <div class="wimg-tools">
+        <button class="wimg-tbtn active" data-tool="draw" onclick="WaImageEditor.setTool('draw')" title="Dibujar">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+        </button>
+        <button class="wimg-tbtn" data-tool="crop" onclick="WaImageEditor.setTool('crop')" title="Recortar">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/></svg>
+        </button>
+        <div class="wimg-sep"></div>
+        <div class="wimg-colors">${colors.map(c => `<button class="wimg-color${c === _color ? ' active' : ''}" data-color="${c}" style="background:${c}" onclick="WaImageEditor.setColor('${c}')" title="${c}"></button>`).join('')}</div>
+        <div class="wimg-sep"></div>
+        <button class="wimg-tbtn" onclick="WaImageEditor.rotate()" title="Rotar 90°">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 3 21 9 15 9"/></svg>
+        </button>
+        <button class="wimg-tbtn" onclick="WaImageEditor.undo()" title="Deshacer">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/></svg>
+        </button>
+        <button class="wimg-tbtn wimg-tbtn--wide hidden" id="wimg-crop-apply" onclick="WaImageEditor.applyCrop()">Aplicar recorte</button>
+      </div>
+      <div class="wimg-canvas-wrap"><canvas id="wimg-canvas"></canvas><canvas id="wimg-overlay"></canvas></div>
+      <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns">
+        <button class="btn btn--ghost btn--sm" onclick="WaImageEditor.close()">Cancelar</button>
+        <button class="btn btn--primary btn--sm" onclick="WaImageEditor.save()">Guardar cambios</button>
+      </div></div>
+    </div>`;
+    document.body.appendChild(m);
+    const reader = new FileReader();
+    reader.onload = ev => { const img = new Image(); img.onload = () => _init(img); img.src = ev.target.result; };
+    reader.readAsDataURL(file);
+  }
+
+  function _init(img) {
+    const MAXD = 1600;
+    const scale = Math.min(1, MAXD / Math.max(img.naturalWidth, img.naturalHeight));
+    const w = Math.round(img.naturalWidth * scale), h = Math.round(img.naturalHeight * scale);
+    _cv = document.getElementById('wimg-canvas'); _ov = document.getElementById('wimg-overlay');
+    if (!_cv || !_ov) return;
+    _cv.width = w; _cv.height = h; _ov.width = w; _ov.height = h;
+    _ctx = _cv.getContext('2d'); _octx = _ov.getContext('2d');
+    _ctx.drawImage(img, 0, 0, w, h);
+    _fitDisplay();
+    _bindEvents();
+    setTool('draw');
+  }
+
+  function _fitDisplay() {
+    if (!_cv) return;
+    const maxW = Math.min(560, window.innerWidth - 80);
+    const maxH = Math.min(420, window.innerHeight - 300);
+    const s = Math.min(1, maxW / _cv.width, maxH / _cv.height);
+    const dw = Math.round(_cv.width * s), dh = Math.round(_cv.height * s);
+    [_cv, _ov].forEach(c => { c.style.width = dw + 'px'; c.style.height = dh + 'px'; });
+  }
+
+  function _pos(e) {
+    const r = _cv.getBoundingClientRect();
+    const t = e.touches ? e.touches[0] : e;
+    return { x: (t.clientX - r.left) * (_cv.width / r.width), y: (t.clientY - r.top) * (_cv.height / r.height) };
+  }
+
+  function _bindEvents() {
+    if (_bound) return; _bound = true;
+    const down = e => {
+      e.preventDefault();
+      const p = _pos(e);
+      if (_tool === 'draw') {
+        _pushUndo(); _drawing = true;
+        _ctx.strokeStyle = _color; _ctx.lineWidth = _thick; _ctx.lineCap = 'round'; _ctx.lineJoin = 'round';
+        _ctx.beginPath(); _ctx.moveTo(p.x, p.y);
+      } else if (_tool === 'crop') {
+        _drawing = true; _cropStart = p; _cropSel = { x: p.x, y: p.y, w: 0, h: 0 };
+      }
+    };
+    const move = e => {
+      if (!_drawing) return;
+      e.preventDefault();
+      const p = _pos(e);
+      if (_tool === 'draw') { _ctx.lineTo(p.x, p.y); _ctx.stroke(); }
+      else if (_tool === 'crop') {
+        _cropSel = { x: Math.min(_cropStart.x, p.x), y: Math.min(_cropStart.y, p.y), w: Math.abs(p.x - _cropStart.x), h: Math.abs(p.y - _cropStart.y) };
+        _drawCropOverlay();
+      }
+    };
+    const up = () => { _drawing = false; };
+    _cv.addEventListener('mousedown', down); window.addEventListener('mousemove', move); window.addEventListener('mouseup', up);
+    _cv.addEventListener('touchstart', down, { passive: false }); _cv.addEventListener('touchmove', move, { passive: false }); _cv.addEventListener('touchend', up);
+  }
+
+  function _drawCropOverlay() {
+    _octx.clearRect(0, 0, _ov.width, _ov.height);
+    if (!_cropSel) return;
+    _octx.fillStyle = 'rgba(0,0,0,.5)'; _octx.fillRect(0, 0, _ov.width, _ov.height);
+    _octx.clearRect(_cropSel.x, _cropSel.y, _cropSel.w, _cropSel.h);
+    _octx.strokeStyle = '#fff'; _octx.lineWidth = 1.5; _octx.setLineDash([6, 4]);
+    _octx.strokeRect(_cropSel.x, _cropSel.y, _cropSel.w, _cropSel.h);
+  }
+
+  function setTool(t) {
+    _tool = t;
+    document.querySelectorAll('.wimg-tbtn[data-tool]').forEach(b => b.classList.toggle('active', b.dataset.tool === t));
+    if (_ov) _ov.style.pointerEvents = t === 'crop' ? 'auto' : 'none';
+    document.getElementById('wimg-crop-apply')?.classList.toggle('hidden', t !== 'crop');
+    if (t !== 'crop') { _cropSel = null; _octx?.clearRect(0, 0, _ov.width, _ov.height); }
+  }
+  function setColor(c) {
+    _color = c;
+    document.querySelectorAll('.wimg-color').forEach(b => b.classList.toggle('active', b.dataset.color === c));
+  }
+
+  function _pushUndo() {
+    if (!_cv) return;
+    _undo.push(_cv.toDataURL());
+    if (_undo.length > 15) _undo.shift();
+  }
+  function undo() {
+    if (!_undo.length) return;
+    const data = _undo.pop();
+    const img = new Image();
+    img.onload = () => {
+      _cv.width = img.width; _cv.height = img.height; _ov.width = img.width; _ov.height = img.height;
+      _ctx.drawImage(img, 0, 0);
+      _fitDisplay();
+      _octx.clearRect(0, 0, _ov.width, _ov.height);
+    };
+    img.src = data;
+  }
+
+  function rotate() {
+    _pushUndo();
+    const tmp = document.createElement('canvas');
+    tmp.width = _cv.height; tmp.height = _cv.width;
+    const tctx = tmp.getContext('2d');
+    tctx.translate(tmp.width / 2, tmp.height / 2);
+    tctx.rotate(Math.PI / 2);
+    tctx.drawImage(_cv, -_cv.width / 2, -_cv.height / 2);
+    _cv.width = tmp.width; _cv.height = tmp.height; _ov.width = tmp.width; _ov.height = tmp.height;
+    _ctx.drawImage(tmp, 0, 0);
+    _fitDisplay();
+  }
+
+  function applyCrop() {
+    if (!_cropSel || _cropSel.w < 6 || _cropSel.h < 6) return;
+    _pushUndo();
+    const tmp = document.createElement('canvas');
+    tmp.width = Math.round(_cropSel.w); tmp.height = Math.round(_cropSel.h);
+    tmp.getContext('2d').drawImage(_cv, _cropSel.x, _cropSel.y, _cropSel.w, _cropSel.h, 0, 0, tmp.width, tmp.height);
+    _cv.width = tmp.width; _cv.height = tmp.height; _ov.width = tmp.width; _ov.height = tmp.height;
+    _ctx.drawImage(tmp, 0, 0);
+    _cropSel = null;
+    _octx.clearRect(0, 0, _ov.width, _ov.height);
+    _fitDisplay();
+  }
+
+  function save() {
+    if (!_cv) return;
+    _cv.toBlob(blob => { if (blob && _onDone) _onDone(blob); close(); }, _outType, 0.92);
+  }
+  function close() {
+    document.getElementById('wimg-modal')?.remove();
+    _onDone = null; _cv = null; _ctx = null; _ov = null; _octx = null; _undo = []; _cropSel = null; _bound = false;
+  }
+
+  return { open, close, setTool, setColor, rotate, undo, applyCrop, save };
+})();
+window.WaImageEditor = WaImageEditor;
+
 // WhatsApp de trabajo (Operaciones) — vía Baileys, ver backend/services/waService.js.
 // v1: UNA sola conexión (el número real de Jenny), vinculada escaneando un QR.
 const WaChatModule = (() => {
@@ -26937,6 +27123,8 @@ const WaChatModule = (() => {
   let _pollQr   = null;
   let _pollChat = null;
   let _replyTo  = null;   // { msg_id, quien, texto } — "responder a ESTE mensaje puntual"
+  let _pendingImg    = null;   // File/Blob pegado o elegido, en espera de enviarse (con o sin edición)
+  let _pendingImgUrl = null;   // object URL de la miniatura, para poder revocarlo
 
   // Menú "⋯" por chat (etiquetas / fijar / recordar seguimiento / datos de contacto).
   let _chatMenuEl     = null;
@@ -27884,7 +28072,10 @@ const WaChatModule = (() => {
       // OJO: .wa-msg__bubble usa white-space:pre-wrap, así que cualquier salto de línea
       // o sangría de ESTE código (si se escribiera en varias líneas) se vería como
       // espacio en blanco real dentro de la burbuja — por eso va todo en una sola línea.
-      const bubbleHtml = `${actions}${remitente}${citado}${esc(m.texto)}<span class="wa-msg__time">${_fmtHora(m.ts)}</span>${reacHtml}`;
+      const mediaHtml = (m.media_type === 'image' && m.media_url)
+        ? `<img src="${API_ORIGIN}${esc(m.media_url)}" class="wa-msg__img" onclick="window.open('${API_ORIGIN}${esc(m.media_url)}','_blank')" alt="">`
+        : '';
+      const bubbleHtml = `${actions}${remitente}${citado}${mediaHtml}${esc(m.texto)}<span class="wa-msg__time">${_fmtHora(m.ts)}</span>${reacHtml}`;
       return `${sep}<div class="wa-msg ${m.from_me ? 'wa-msg--out' : 'wa-msg--in'}"><div class="wa-msg__bubble">${bubbleHtml}</div></div>`;
     }).join('');
     if (atBottom) box.scrollTop = box.scrollHeight;
@@ -27910,6 +28101,7 @@ const WaChatModule = (() => {
   async function enviar(scheduledAt) {
     const input = $$('wa-input');
     const texto = (input?.value || '').trim();
+    if (_pendingImg) return _enviarImagen(texto);
     if (!texto || !_conn || !_chatAct) return;
     const respondeA = _replyTo?.msg_id;
     input.value = ''; ChatModule.autoResize(input);
@@ -27925,6 +28117,65 @@ const WaChatModule = (() => {
       alert('Error: ' + e.message);
       input.value = texto;
     }
+  }
+
+  // Pegar (Ctrl+V) o elegir una foto para enviarla — con opción de editarla antes
+  // (WaImageEditor, compartido con ObcWaModule) o mandarla tal cual con Enter/enviar.
+  function onPasteInput(ev) {
+    const items = ev.clipboardData?.items;
+    if (!items) return;
+    for (const item of items) {
+      if (item.type && item.type.startsWith('image/')) {
+        ev.preventDefault();
+        const file = item.getAsFile();
+        if (file) { _pendingImg = file; _renderImgPreview(); }
+        return;
+      }
+    }
+  }
+  function pickImage() {
+    const inp = document.createElement('input');
+    inp.type = 'file'; inp.accept = 'image/*';
+    inp.onchange = () => { if (inp.files[0]) { _pendingImg = inp.files[0]; _renderImgPreview(); } };
+    inp.click();
+  }
+  function editPendingImg() {
+    if (!_pendingImg) return;
+    WaImageEditor.open(_pendingImg, blob => { _pendingImg = blob; _renderImgPreview(); });
+  }
+  function cancelImg() { _pendingImg = null; _renderImgPreview(); }
+  function _renderImgPreview() {
+    const box = $$('wa-img-preview'); if (!box) return;
+    if (_pendingImgUrl) { URL.revokeObjectURL(_pendingImgUrl); _pendingImgUrl = null; }
+    if (!_pendingImg) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+    _pendingImgUrl = URL.createObjectURL(_pendingImg);
+    box.innerHTML = `<div class="wa-img-prev__card">
+        <img src="${_pendingImgUrl}" class="wa-img-prev__thumb" alt="">
+        <div class="wa-img-prev__actions">
+          <button class="wa-img-prev__btn" onclick="WaChatModule.editPendingImg()" title="Editar">✏️</button>
+          <button class="wa-img-prev__btn" onclick="WaChatModule.cancelImg()" title="Quitar">✕</button>
+        </div>
+      </div>`;
+    box.classList.remove('hidden');
+    $$('wa-input')?.focus();
+  }
+  async function _enviarImagen(caption) {
+    if (!_pendingImg || !_conn || !_chatAct) return;
+    const file = _pendingImg, respondeA = _replyTo?.msg_id;
+    const input = $$('wa-input');
+    _pendingImg = null; _renderImgPreview();
+    if (input) { input.value = ''; ChatModule.autoResize(input); }
+    _replyTo = null; _pintaQuote();
+    try {
+      const fd = new FormData();
+      fd.append('file', file, file.name || 'foto.jpg');
+      fd.append('caption', caption || '');
+      if (respondeA) fd.append('respondeA', respondeA);
+      const r = await apiFetch(`${API}/wa/connections/${_conn.id}/chats/${encodeURIComponent(_chatAct)}/mensajes/imagen`, { method: 'POST', body: fd });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'No se pudo enviar la imagen');
+      await _cargarMensajes(_chatAct, true);
+      await _cargarChats(true);
+    } catch (e) { alert('Error: ' + e.message); }
   }
 
   // "Programar envío" — mismo criterio de opciones rápidas que el Inbox de correo.
@@ -27943,6 +28194,7 @@ const WaChatModule = (() => {
     }
   }
   function programarPick(kind) {
+    if (_pendingImg) { alert('Las fotos no se pueden programar todavía — usa "Enviar" para mandarla ahora.'); return; }
     let d = new Date();
     if (kind === 'h1') d = new Date(Date.now() + 60 * 60 * 1000);
     else if (kind === 'h3') d = new Date(Date.now() + 3 * 60 * 60 * 1000);
@@ -28179,6 +28431,7 @@ const WaChatModule = (() => {
 
   return { load, conectar, desconectar, abrirChat, enviar, detener: _pararSondeos,
            responderA, cancelarRespuesta,
+           onPasteInput, pickImage, editPendingImg, cancelImg,
            programarToggle, programarPick, cancelarProgramado,
            reactPop, reaccionar, emojiPicker, _emojiIns, refreshBadge,
            visPop, abrirVisPop, _toggleVisSub, guardarVisibilidad, _pintaBotonVis, _cargarTeam,
@@ -28209,6 +28462,8 @@ const ObcWaModule = (() => {
   let _pollQr   = null;
   let _pollChat = null;
   let _replyTo  = null;
+  let _pendingImg    = null;
+  let _pendingImgUrl = null;
 
   const $$ = id => document.getElementById(id);
 
@@ -28265,9 +28520,14 @@ const ObcWaModule = (() => {
               <div class="chat-ch-empty">Elige una conversación de la izquierda</div>
             </div>
             <div id="ocwa-quote" class="rchat-quote hidden"></div>
+            <div id="ocwa-img-preview" class="wa-img-prev hidden"></div>
             <div class="wa-main__composer">
+              <button class="wa-clock" title="Adjuntar foto" onclick="ObcWaModule.pickImage()">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+              </button>
               <textarea id="ocwa-input" class="chat-composer__field" rows="1"
                 placeholder="Escribe un mensaje…"
+                onpaste="ObcWaModule.onPasteInput(event)"
                 onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();ObcWaModule.enviar()}"
                 oninput="ChatModule.autoResize(this)"></textarea>
               <button class="wa-clock" title="Emoji" onclick="ObcWaModule.emojiPicker(event)">
@@ -28546,7 +28806,10 @@ const ObcWaModule = (() => {
       if (m.su_reaccion) reacBits.push(`<span class="slk-reac" title="Su reacción">${esc(m.su_reaccion)} ${esc(contactName)}</span>`);
       if (m.mi_reaccion) reacBits.push(`<span class="slk-reac mine" title="Tu reacción — clic para quitar" onclick="event.stopPropagation();ObcWaModule.reaccionar('${msgIdJs}','')">${esc(m.mi_reaccion)} Tú</span>`);
       const reacHtml = reacBits.length ? `<div class="wa-msg__reactions">${reacBits.join('')}</div>` : '';
-      const bubbleHtml = `${actions}${remitente}${citado}${esc(m.texto)}<span class="wa-msg__time">${_fmtHora(m.ts)}</span>${reacHtml}`;
+      const mediaHtml = (m.media_type === 'image' && m.media_url)
+        ? `<img src="${API_ORIGIN}${esc(m.media_url)}" class="wa-msg__img" onclick="window.open('${API_ORIGIN}${esc(m.media_url)}','_blank')" alt="">`
+        : '';
+      const bubbleHtml = `${actions}${remitente}${citado}${mediaHtml}${esc(m.texto)}<span class="wa-msg__time">${_fmtHora(m.ts)}</span>${reacHtml}`;
       return `${sep}<div class="wa-msg ${m.from_me ? 'wa-msg--out' : 'wa-msg--in'}"><div class="wa-msg__bubble">${bubbleHtml}</div></div>`;
     }).join('');
     if (atBottom) box.scrollTop = box.scrollHeight;
@@ -28572,6 +28835,7 @@ const ObcWaModule = (() => {
   async function enviar(scheduledAt) {
     const input = $$('ocwa-input');
     const texto = (input?.value || '').trim();
+    if (_pendingImg) return _enviarImagen(texto);
     if (!texto || !_conn || !_chatAct) return;
     const respondeA = _replyTo?.msg_id;
     input.value = ''; ChatModule.autoResize(input);
@@ -28589,6 +28853,65 @@ const ObcWaModule = (() => {
     }
   }
 
+  // Pegar/elegir foto — ver el mismo bloque en WaChatModule (idéntico a propósito,
+  // este módulo se duplica en vez de generalizarse, ver nota arriba).
+  function onPasteInput(ev) {
+    const items = ev.clipboardData?.items;
+    if (!items) return;
+    for (const item of items) {
+      if (item.type && item.type.startsWith('image/')) {
+        ev.preventDefault();
+        const file = item.getAsFile();
+        if (file) { _pendingImg = file; _renderImgPreview(); }
+        return;
+      }
+    }
+  }
+  function pickImage() {
+    const inp = document.createElement('input');
+    inp.type = 'file'; inp.accept = 'image/*';
+    inp.onchange = () => { if (inp.files[0]) { _pendingImg = inp.files[0]; _renderImgPreview(); } };
+    inp.click();
+  }
+  function editPendingImg() {
+    if (!_pendingImg) return;
+    WaImageEditor.open(_pendingImg, blob => { _pendingImg = blob; _renderImgPreview(); });
+  }
+  function cancelImg() { _pendingImg = null; _renderImgPreview(); }
+  function _renderImgPreview() {
+    const box = $$('ocwa-img-preview'); if (!box) return;
+    if (_pendingImgUrl) { URL.revokeObjectURL(_pendingImgUrl); _pendingImgUrl = null; }
+    if (!_pendingImg) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+    _pendingImgUrl = URL.createObjectURL(_pendingImg);
+    box.innerHTML = `<div class="wa-img-prev__card">
+        <img src="${_pendingImgUrl}" class="wa-img-prev__thumb" alt="">
+        <div class="wa-img-prev__actions">
+          <button class="wa-img-prev__btn" onclick="ObcWaModule.editPendingImg()" title="Editar">✏️</button>
+          <button class="wa-img-prev__btn" onclick="ObcWaModule.cancelImg()" title="Quitar">✕</button>
+        </div>
+      </div>`;
+    box.classList.remove('hidden');
+    $$('ocwa-input')?.focus();
+  }
+  async function _enviarImagen(caption) {
+    if (!_pendingImg || !_conn || !_chatAct) return;
+    const file = _pendingImg, respondeA = _replyTo?.msg_id;
+    const input = $$('ocwa-input');
+    _pendingImg = null; _renderImgPreview();
+    if (input) { input.value = ''; ChatModule.autoResize(input); }
+    _replyTo = null; _pintaQuote();
+    try {
+      const fd = new FormData();
+      fd.append('file', file, file.name || 'foto.jpg');
+      fd.append('caption', caption || '');
+      if (respondeA) fd.append('respondeA', respondeA);
+      const r = await apiFetch(`${API}/wa/connections/${_conn.id}/chats/${encodeURIComponent(_chatAct)}/mensajes/imagen`, { method: 'POST', body: fd });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'No se pudo enviar la imagen');
+      await _cargarMensajes(_chatAct, true);
+      await _cargarChats(true);
+    } catch (e) { alert('Error: ' + e.message); }
+  }
+
   function programarToggle(ev) {
     if (ev) ev.stopPropagation();
     const p = $$('ocwa-sched'); if (!p) return;
@@ -28604,6 +28927,7 @@ const ObcWaModule = (() => {
     }
   }
   function programarPick(kind) {
+    if (_pendingImg) { alert('Las fotos no se pueden programar todavía — usa "Enviar" para mandarla ahora.'); return; }
     let d = new Date();
     if (kind === 'h1') d = new Date(Date.now() + 60 * 60 * 1000);
     else if (kind === 'h3') d = new Date(Date.now() + 3 * 60 * 60 * 1000);
@@ -28748,6 +29072,7 @@ const ObcWaModule = (() => {
 
   return { shellHtml, load, conectar, desconectar, abrirChat, enviar, detener: _pararSondeos,
            responderA, cancelarRespuesta,
+           onPasteInput, pickImage, editPendingImg, cancelImg,
            programarToggle, programarPick, cancelarProgramado,
            reactPop, reaccionar, emojiPicker, _emojiIns,
            abrirVisPop, refrescarVis,

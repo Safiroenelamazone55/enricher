@@ -15706,6 +15706,34 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 }
 .wa-msg__actions button:hover { color: var(--primary); border-color: var(--primary); }
 .wa-msg__reactions { display: flex; gap: 3px; margin-top: 3px; }
+.wa-msg__img { display: block; max-width: 260px; max-height: 260px; width: 100%; height: auto; border-radius: 9px; margin-bottom: 4px; cursor: zoom-in; object-fit: cover; }
+
+/* ── Foto pegada/adjunta: preview compacta arriba del composer ── */
+.wa-img-prev { padding: 0 14px 8px; flex-shrink: 0; }
+.wa-img-prev__card { display: flex; align-items: center; gap: 10px; background: var(--surface-secondary); border-radius: 10px; padding: 7px 10px; }
+.wa-img-prev__thumb { width: 44px; height: 44px; border-radius: 7px; object-fit: cover; flex-shrink: 0; }
+.wa-img-prev__actions { display: flex; gap: 6px; margin-left: auto; }
+.wa-img-prev__btn { border: 1px solid var(--border); background: var(--surface); border-radius: 7px; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: .82rem; }
+.wa-img-prev__btn:hover { border-color: var(--primary); background: var(--primary-soft); }
+
+/* ── Editor de fotos (WaImageEditor) — modal con canvas + herramientas ── */
+.wimg-box { max-width: 680px; }
+.wimg-tools { display: flex; align-items: center; gap: 6px; padding: 10px 20px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.wimg-sep { width: 1px; height: 22px; background: var(--border); flex-shrink: 0; }
+.wimg-tbtn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text-secondary);
+  border-radius: 8px; width: 32px; height: 32px; cursor: pointer; transition: all .12s; flex-shrink: 0;
+}
+.wimg-tbtn:hover { color: var(--primary); border-color: var(--primary); }
+.wimg-tbtn.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+.wimg-tbtn--wide { width: auto; padding: 0 12px; font-size: .76rem; font-weight: 600; }
+.wimg-colors { display: flex; gap: 5px; }
+.wimg-color { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--border); cursor: pointer; padding: 0; flex-shrink: 0; }
+.wimg-color.active { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-soft); }
+.wimg-canvas-wrap { position: relative; padding: 16px 20px; background: #F1EFEB; min-height: 240px; }
+.wimg-canvas-wrap canvas { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); border-radius: 6px; box-shadow: 0 2px 14px rgba(0,0,0,.18); background: #fff; touch-action: none; }
+#wimg-overlay { pointer-events: none; box-shadow: none; background: transparent; }
 .slk-mm-reac.mine { background: var(--primary-soft); }
 #wa-quote { margin: 8px 14px 0; }
 
