@@ -8583,6 +8583,7 @@ app.get('/api/wa/connections/:id/chats', requireAuth, async (req, res) => {
              COALESCE(cm.pinned, FALSE) AS pinned, cm.snooze_until,
              COALESCE(NULLIF(cm.asignado_a,''), NULL) AS asignado_a,
              COALESCE(cm.estado_conv, 'abierto') AS estado_conv,
+             COALESCE(cm.prioridad, '') AS prioridad,
              (SELECT COUNT(*) FROM wa_chat_notes n WHERE n.connection_id=m.connection_id AND n.chat_jid=m.chat_jid) AS notas_count,
              (SELECT COUNT(*) FROM wa_messages nl
                WHERE nl.connection_id = m.connection_id AND nl.chat_jid = m.chat_jid
@@ -8664,6 +8665,9 @@ app.get('/api/lm/wa-list', requireAuth, async (req, res) => {
       const { rows: [nl] } = await pool.query(
         `SELECT COUNT(*)::int AS n FROM wa_messages WHERE connection_id=$1 AND chat_jid=$2 AND NOT leido AND NOT from_me`,
         [r.connection_id, r.chat_jid]);
+      const { rows: [meta] } = await pool.query(
+        `SELECT prioridad FROM wa_chat_meta WHERE connection_id=$1 AND chat_jid=$2`,
+        [r.connection_id, r.chat_jid]);
       out.push({
         contact_id: r.contacto.id,
         nombre: [r.contacto.nombre, r.contacto.apellido].filter(Boolean).join(' '),
@@ -8675,6 +8679,7 @@ app.get('/api/lm/wa-list', requireAuth, async (req, res) => {
         ultimo_ts: last?.ts || null,
         from_me: !!last?.from_me,
         no_leidos: nl?.n || 0,
+        prioridad: meta?.prioridad || '',
       });
     }
     out.sort((a, b) => new Date(b.ultimo_ts || 0) - new Date(a.ultimo_ts || 0));
@@ -8773,6 +8778,7 @@ app.patch('/api/wa/connections/:id/chats/:jid/meta', requireAuth, async (req, re
     if (req.body?.snoozeUntil !== undefined) sets.push(`snooze_until=$${vals.push(req.body.snoozeUntil || null)}`);
     if (req.body?.asignadoA !== undefined) sets.push(`asignado_a=$${vals.push(String(req.body.asignadoA || '').trim().slice(0, 100))}`);
     if (req.body?.estadoConv !== undefined && ['abierto', 'pendiente', 'resuelto'].includes(req.body.estadoConv)) sets.push(`estado_conv=$${vals.push(req.body.estadoConv)}`);
+    if (req.body?.prioridad !== undefined && ['', 'baja', 'media', 'alta'].includes(req.body.prioridad)) sets.push(`prioridad=$${vals.push(req.body.prioridad)}`);
     if (!sets.length) return res.json({ ok: true });
     await pool.query(
       `INSERT INTO wa_chat_meta (connection_id, chat_jid) VALUES ($1,$2) ON CONFLICT (connection_id, chat_jid) DO NOTHING`,
@@ -8780,6 +8786,19 @@ app.patch('/api/wa/connections/:id/chats/:jid/meta', requireAuth, async (req, re
     await pool.query(`UPDATE wa_chat_meta SET ${sets.join(',')}, updated_at=NOW() WHERE connection_id=$1 AND chat_jid=$2`, vals);
     res.json({ ok: true });
   } catch (err) { console.error('[wa] chat meta', err.message); res.status(500).json({ error: 'No se pudo guardar' }); }
+});
+
+// Metadatos de UN chat puntual — usado por QuickWaModule (el panel liviano) para
+// saber la prioridad actual al abrir, sin traer la lista completa de chats.
+app.get('/api/wa/connections/:id/chats/:jid/meta', requireAuth, async (req, res) => {
+  try {
+    const conn = await _cargarConexionAutorizada(req, res, req.params.id);
+    if (!conn) return;
+    const { rows: [row] } = await pool.query(
+      `SELECT pinned, snooze_until, asignado_a, estado_conv, prioridad FROM wa_chat_meta WHERE connection_id=$1 AND chat_jid=$2`,
+      [conn.id, req.params.jid]);
+    res.json(row || { pinned: false, snooze_until: null, asignado_a: '', estado_conv: 'abierto', prioridad: '' });
+  } catch (err) { console.error('[wa] chat meta GET', err.message); res.status(500).json({ error: 'Error al consultar' }); }
 });
 
 // Notas internas por chat — nunca se envían al contacto, solo las ve el equipo.

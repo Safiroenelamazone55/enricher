@@ -1808,6 +1808,10 @@ async function initDb() {
     // y estado de la conversación (abierto/pendiente/resuelto, estilo Chatwoot).
     await pool.query(`ALTER TABLE wa_chat_meta ADD COLUMN IF NOT EXISTS asignado_a TEXT NOT NULL DEFAULT '';`);
     await pool.query(`ALTER TABLE wa_chat_meta ADD COLUMN IF NOT EXISTS estado_conv TEXT NOT NULL DEFAULT 'abierto';`);
+    // Prioridad del chat ('' | baja | media | alta) — pedido explícito 2026-09-02,
+    // mismo patrón que estado_conv. Visible con color en la lista de chats (Operaciones
+    // y la pestaña WhatsApp de Outreach) y editable desde el menú "⋮" en ambos lugares.
+    await pool.query(`ALTER TABLE wa_chat_meta ADD COLUMN IF NOT EXISTS prioridad TEXT NOT NULL DEFAULT '';`);
     // Notas internas por chat — nunca se envían al contacto, solo las ve el equipo.
     await pool.query(`
       CREATE TABLE IF NOT EXISTS wa_chat_notes (

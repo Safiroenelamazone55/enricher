@@ -20208,15 +20208,23 @@ ${foot}
         ? `<div class="ibx-list" style="border-right:none;max-width:640px">${list.map(_waRow).join('')}</div>`
         : _empty('wa', 'Sin conversaciones todavía', 'Cuando un contacto en secuencia tenga un chat de WhatsApp activo, aparecerá aquí.')}`;
   }
+  // Mismo mapa que WaChatModule._WA_PRIORIDADES — duplicado a propósito (módulos
+  // separados, ver convención de este archivo) en vez de compartir estado.
+  const _WA_PRIO = { '': { label: 'Sin prioridad', color: '#B4AFA8' }, baja: { label: 'Baja', color: '#22C55E' }, media: { label: 'Media', color: '#F59E0B' }, alta: { label: 'Alta', color: '#EF4444' } };
   function _waRow(w) {
     const when = _ibFmtAgo(w.ultimo_ts);
     const snippet = (w.from_me ? 'Tú: ' : '') + (w.ultimo_texto || '');
-    return `<div class="ibx-row${w.no_leidos ? ' unread' : ''}" onclick="LeadManagerModule.openWaFromList(${w.contact_id})">
+    const prio = w.prioridad ? _WA_PRIO[w.prioridad] : null;
+    return `<div class="ibx-row${w.no_leidos ? ' unread' : ''}">
       <div class="ibx-row__l1">
-        <span class="ibx-row__nm"><span class="ibx-row__nm-txt">${esc(w.nombre || w.telefono || 'Contacto')}</span></span>
+        <span class="ibx-row__nm" onclick="LeadManagerModule.openWaFromList(${w.contact_id})" style="cursor:pointer">
+          ${prio ? `<span class="wa-estado-dot" style="background:${prio.color}" title="Prioridad: ${prio.label}"></span>` : ''}
+          <span class="ibx-row__nm-txt">${esc(w.nombre || w.telefono || 'Contacto')}</span>
+        </span>
         <span class="ibx-row__t">${when}</span>
+        <button class="cp-act" style="padding:2px 6px;margin-left:6px" title="Prioridad" onclick="event.stopPropagation();LeadManagerModule.waRowMenu(event,${w.contact_id})">⋮</button>
       </div>
-      <div class="ibx-row__l1">
+      <div class="ibx-row__l1" onclick="LeadManagerModule.openWaFromList(${w.contact_id})" style="cursor:pointer">
         <span class="ibx-row__sn">${esc(snippet)}</span>
         ${w.no_leidos ? `<span class="ibx-b" style="background:var(--primary);color:#fff">${w.no_leidos}</span>` : ''}
       </div>
@@ -20225,6 +20233,33 @@ ${foot}
   function openWaFromList(contactId) {
     const w = (_waList || []).find(x => x.contact_id === contactId); if (!w) return;
     QuickWaModule.open({ contactId: w.contact_id, nombre: w.nombre || w.telefono, telefono: w.telefono, outboundClientId: w.outbound_client_id || null });
+  }
+  function waRowMenu(ev, contactId) {
+    ev.stopPropagation();
+    document.querySelectorAll('.cp-mark-menu').forEach(m => m.remove());
+    const w = (_waList || []).find(x => x.contact_id === contactId); if (!w) return;
+    const close = "document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove())";
+    const actual = w.prioridad || '';
+    const item = (key, cfg) => `<button class="cp-mark-menu__b" onclick="${close};LeadManagerModule.waSetPrioridad(${contactId},'${key}')"><span class="wa-estado-dot" style="background:${cfg.color};margin-right:6px"></span>${cfg.label}${actual === key ? ' ✓' : ''}</button>`;
+    const menu = document.createElement('div');
+    menu.className = 'cp-mark-menu';
+    menu.style.minWidth = '170px';
+    menu.innerHTML = `<div class="cp-mark-menu__list">${Object.entries(_WA_PRIO).map(([k, cfg]) => item(k, cfg)).join('')}</div>`;
+    document.body.appendChild(menu);
+    const r = ev.currentTarget.getBoundingClientRect();
+    menu.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 180))}px`;
+    menu.style.top = `${r.bottom + 6}px`;
+    setTimeout(() => document.addEventListener('click', function onDoc(e) { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', onDoc); } }), 0);
+  }
+  async function waSetPrioridad(contactId, nivel) {
+    const w = (_waList || []).find(x => x.contact_id === contactId); if (!w) return;
+    w.prioridad = nivel;
+    if (_section === 'wa') { const body = $('lm2-body'); if (body) body.innerHTML = _vWaList(); }
+    try {
+      await apiFetch(`${API}/wa/connections/${w.connection_id}/chats/${encodeURIComponent(w.chat_jid)}/meta`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prioridad: nivel }),
+      });
+    } catch (e) { console.error('[lm] wa prioridad:', e); }
   }
 
   function _vInbox() {
@@ -25389,7 +25424,7 @@ ${foot}
     ibOpen, ibTab, ibCli, ibDisp, ibSend, ibSaveNote, ibForward, ibSetMode, ibMsgNav, ibSchedToggle, ibSchedPick, ibCancelSched, ibResolveDisp, ibOpenResolveMenu, ibShowLeadActions, ibCopyConversation, _ibFwdSearch, _ibFwdPick,
     ibAbrirDesdeEnviados, ibToggleEnvVista, ibAbrirFiltros, _ibSetFApertura, _ibSetFLeido, _ibSetFSeq, _ibLimpiarFiltrosExtra,
     ibRowMenu, ibCloseMenu, ibMarkUnread,
-    openWaFromList, waCli,
+    openWaFromList, waCli, waRowMenu, waSetPrioridad,
     composeAbrir, composeCerrar, composeEnviar, _cmpClientChange, _cmpBuscar, _cmpElegir, _cmpClear, _cmpNuevo, _cmpNuevoCancel, _cmpSeqNueva,
     _cmpCoBuscar, _cmpCoElegir, _cmpCoNueva, _cmpCoClear, _cmpPreviewUpdate, cmpSchedToggle, cmpSchedPick,
     pendingAcceptOpen, pendingAcceptToggleAll, pendingAcceptApplyFilters, pendingAcceptMark,
@@ -27378,7 +27413,35 @@ const QuickWaModule = (() => {
     } catch (_) {}
     const sub = $$('qwa-sub'); if (sub) sub.textContent = `+${_conn.numero || ''}`;
     await _cargarMensajes();
+    _cargarPrioridad();
     _poll = setInterval(() => _cargarMensajes(true), 5000);
+  }
+
+  const _QWA_PRIO = { '': { label: 'Sin prioridad', color: '#B4AFA8' }, baja: { label: 'Baja', color: '#22C55E' }, media: { label: 'Media', color: '#F59E0B' }, alta: { label: 'Alta', color: '#EF4444' } };
+  let _prioridad = '';
+  async function _cargarPrioridad() {
+    _prioridad = '';
+    try {
+      const r = await apiFetch(`${API}/wa/connections/${_conn.id}/chats/${encodeURIComponent(_jid)}/meta`);
+      if (r.ok) _prioridad = (await r.json()).prioridad || '';
+    } catch (_) {}
+    _pintarPrioridadDot();
+  }
+  function _pintarPrioridadDot() {
+    const el = $$('qwa-prio-dot'); if (!el) return;
+    const cfg = _QWA_PRIO[_prioridad] || _QWA_PRIO[''];
+    el.style.background = cfg.color;
+    el.title = 'Prioridad: ' + cfg.label;
+    el.hidden = !_prioridad;
+  }
+  async function setPrioridad(nivel) {
+    _prioridad = nivel;
+    _pintarPrioridadDot();
+    try {
+      await apiFetch(`${API}/wa/connections/${_conn.id}/chats/${encodeURIComponent(_jid)}/meta`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prioridad: nivel }),
+      });
+    } catch (e) { console.error('[qwa] prioridad:', e); }
   }
 
   async function _resolverConexion(outboundClientId) {
@@ -27406,10 +27469,12 @@ const QuickWaModule = (() => {
         <div class="qwa-panel__hdr">
           <div class="qwa-panel__who">
             <div class="qwa-panel__ava">${esc((_nombre || '?').charAt(0).toUpperCase())}</div>
-            <div><div class="qwa-panel__name">${esc(_nombre)}</div><div class="qwa-panel__sub" id="qwa-sub">Conectando…</div></div>
+            <div><div class="qwa-panel__name"><span class="wa-estado-dot" id="qwa-prio-dot" hidden style="margin-right:5px"></span>${esc(_nombre)}</div><div class="qwa-panel__sub" id="qwa-sub">Conectando…</div></div>
           </div>
-          <button class="cp-act" style="margin-right:2px;padding:4px 7px" title="Más acciones" onclick="QuickWaModule.menuAcciones(event)">⋮</button>
-          <button class="fin-pi-x" onclick="QuickWaModule.close()">✕</button>
+          <div style="display:flex;align-items:center;gap:2px">
+            <button class="cp-act" style="padding:4px 7px" title="Más acciones" onclick="QuickWaModule.menuAcciones(event)">⋮</button>
+            <button class="fin-pi-x" onclick="QuickWaModule.close()">✕</button>
+          </div>
         </div>
         <div class="qwa-panel__msgs" id="qwa-messages"><div class="clients-loading"><div class="clients-spin"></div></div></div>
         <div id="qwa-quote" class="rchat-quote hidden"></div>
@@ -27461,7 +27526,10 @@ const QuickWaModule = (() => {
     const menu = document.createElement('div');
     menu.className = 'cp-mark-menu';
     menu.style.minWidth = '210px';
+    const prioItem = (key, cfg) => `<button class="cp-mark-menu__b" onclick="${close};QuickWaModule.setPrioridad('${key}')"><span class="wa-estado-dot" style="background:${cfg.color};margin-right:6px"></span>${cfg.label}${_prioridad === key ? ' ✓' : ''}</button>`;
     menu.innerHTML = `<div class="cp-mark-menu__list">`
+      + Object.entries(_QWA_PRIO).map(([k, cfg]) => prioItem(k, cfg)).join('')
+      + `<div class="cp-mark-menu__sep"></div>`
       + item('Mover a Deal', `LeadManagerModule.dlOpen(${_contactId})`)
       + item('¿No es esta? Vincular otra', 'QuickWaModule.vincularAbrir()')
       + `</div>`;
@@ -27837,7 +27905,7 @@ const QuickWaModule = (() => {
     open, close, enviar, onPasteInput, pickImage, editPendingImg, cancelImg,
     responderA, cancelarRespuesta, programarToggle, programarPick, cancelarProgramado,
     reactPop, reaccionar, emojiPicker, _emojiIns, msgMenu, toggleImportante,
-    menuAcciones, vincularAbrir, vincularPick, _vincularFiltrar,
+    menuAcciones, setPrioridad, vincularAbrir, vincularPick, _vincularFiltrar,
   };
 })();
 window.QuickWaModule = QuickWaModule;
@@ -28446,7 +28514,9 @@ const WaChatModule = (() => {
       const snoozed = c.snooze_until && new Date(c.snooze_until).getTime() > _now;
       const jidEsc = esc(c.chat_jid).replace(/'/g, "\\'");
       const estadoConv = c.estado_conv && c.estado_conv !== 'abierto' ? (_WA_ESTADOS[c.estado_conv] || null) : null;
+      const prioridadC = c.prioridad ? (_WA_PRIORIDADES[c.prioridad] || null) : null;
       const metaPills = [
+        prioridadC ? `<span class="wa-tag-pill" style="background:${prioridadC.color}22;color:${prioridadC.color}">${_ICO_FLAG}${prioridadC.label}</span>` : '',
         estadoConv ? `<span class="wa-tag-pill" style="background:${estadoConv.color}22;color:${estadoConv.color}">${estadoConv.label}</span>` : '',
         c.asignado_a ? `<span class="wa-tag-pill wa-tag-pill--asig">${_ICO_ASSIGN}${esc(c.asignado_a)}</span>` : '',
         ...(c.etiquetas || []).map(t => `<span class="wa-tag-pill" style="background:${t.color}22;color:${t.color}">${esc(t.nombre)}</span>`),
@@ -28514,6 +28584,7 @@ const WaChatModule = (() => {
                     : _chatMenuMode === 'snooze' ? _chatMenuSnoozeHtml(c)
                     : _chatMenuMode === 'assign' ? _chatMenuAssignHtml(c)
                     : _chatMenuMode === 'status' ? _chatMenuStatusHtml(c)
+                    : _chatMenuMode === 'priority' ? _chatMenuPriorityHtml(c)
                     : _chatMenuMode === 'notes' ? _chatMenuNotesHtml(c)
                     : _chatMenuMainHtml(c);
     document.body.appendChild(menu);
@@ -28540,6 +28611,10 @@ const WaChatModule = (() => {
   const _ICO_NOTE = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="14 3 14 9 20 9"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg>';
 
   const _WA_ESTADOS = { abierto: { label: 'Abierto', color: '#22C55E' }, pendiente: { label: 'Pendiente', color: '#F59E0B' }, resuelto: { label: 'Resuelto', color: '#8E8A84' } };
+  // Prioridad del chat — pedido explícito 2026-09-02, visible con color en la lista
+  // (acá y en la pestaña WhatsApp de Outreach) y editable desde el menú "⋮".
+  const _WA_PRIORIDADES = { '': { label: 'Sin prioridad', color: '#B4AFA8' }, baja: { label: 'Baja', color: '#22C55E' }, media: { label: 'Media', color: '#F59E0B' }, alta: { label: 'Alta', color: '#EF4444' } };
+  const _ICO_FLAG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="3"/></svg>';
 
   function _chatMenuMainHtml(c) {
     const pinned  = !!c.pinned;
@@ -28547,6 +28622,7 @@ const WaChatModule = (() => {
     const nTags   = (c.etiquetas || []).length;
     const nNotas  = +c.notas_count || 0;
     const estado  = _WA_ESTADOS[c.estado_conv] || _WA_ESTADOS.abierto;
+    const prioridad = _WA_PRIORIDADES[c.prioridad || ''] || _WA_PRIORIDADES[''];
     return `
       <button class="chat-ctx-item" onclick="WaChatModule._toggleFijado()">${_ICO_PIN}${pinned ? 'Desfijar chat' : 'Fijar chat'}</button>
       <button class="chat-ctx-item" onclick="WaChatModule._chatMenuGoto('tags')">${_ICO_TAG}Etiquetas${nTags ? ` (${nTags})` : ''}</button>
@@ -28555,6 +28631,7 @@ const WaChatModule = (() => {
       <div class="chat-ctx-sep"></div>
       <button class="chat-ctx-item" onclick="WaChatModule._chatMenuGoto('assign')">${_ICO_ASSIGN}${c.asignado_a ? `Asignado: ${esc(c.asignado_a)}` : 'Asignar a…'}</button>
       <button class="chat-ctx-item" onclick="WaChatModule._chatMenuGoto('status')">${_ICO_STATUS}<span class="wa-estado-dot" style="background:${estado.color}"></span>Estado: ${estado.label}</button>
+      <button class="chat-ctx-item" onclick="WaChatModule._chatMenuGoto('priority')">${_ICO_FLAG}<span class="wa-estado-dot" style="background:${prioridad.color}"></span>Prioridad: ${prioridad.label}</button>
       <button class="chat-ctx-item" onclick="WaChatModule._chatMenuGoto('notes')">${_ICO_NOTE}Notas internas${nNotas ? ` (${nNotas})` : ''}</button>
       <div class="chat-ctx-sep"></div>
       <button class="chat-ctx-item" onclick="WaChatModule._abrirContacto()">${_ICO_USER}Ver datos de contacto</button>`;
@@ -28582,6 +28659,18 @@ const WaChatModule = (() => {
       </button>`).join('');
     return `
       <button class="chat-ctx-item wa-chat-menu__back" onclick="WaChatModule._chatMenuGoto('main')">${_ICO_BACK}Estado de la conversación</button>
+      <div class="chat-ctx-sep"></div>
+      ${rows}`;
+  }
+
+  function _chatMenuPriorityHtml(c) {
+    const actual = c.prioridad || '';
+    const rows = Object.entries(_WA_PRIORIDADES).map(([key, cfg]) => `
+      <button class="chat-ctx-item" onclick="WaChatModule._cambiarPrioridad('${key}')">
+        <span class="wa-estado-dot" style="background:${cfg.color}"></span>${cfg.label}${actual === key ? _ICO_CHECK : ''}
+      </button>`).join('');
+    return `
+      <button class="chat-ctx-item wa-chat-menu__back" onclick="WaChatModule._chatMenuGoto('main')">${_ICO_BACK}Prioridad</button>
       <div class="chat-ctx-sep"></div>
       ${rows}`;
   }
@@ -28794,6 +28883,18 @@ const WaChatModule = (() => {
       _closeChatMenu();
       await _cargarChats();
     } catch (e) { console.error('[wa] estado conv:', e); }
+  }
+
+  async function _cambiarPrioridad(nivel) {
+    const c = _chatMenuData(); const jid = _chatMenuJid;
+    try {
+      await apiFetch(`${API}/wa/connections/${_conn.id}/chats/${encodeURIComponent(jid)}/meta`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prioridad: nivel }),
+      });
+      if (c) c.prioridad = nivel;
+      _closeChatMenu();
+      await _cargarChats();
+    } catch (e) { console.error('[wa] prioridad:', e); }
   }
 
   async function _cargarNotas() {
@@ -29442,7 +29543,7 @@ const WaChatModule = (() => {
            abrirCuentasPop, _pickConn, agregarCuenta, _eliminarConn,
            abrirChatMenu, _chatMenuGoto, _toggleFijado, _toggleTag, _crearTag, _editarTag, _borrarTag,
            _snoozePreset, _snoozeCustom, _quitarSnooze, _abrirContacto, _cerrarContacto, _guardarNombreContacto,
-           _asignarMiembro, _cambiarEstadoConv, _agregarNota, _borrarNota,
+           _asignarMiembro, _cambiarEstadoConv, _cambiarPrioridad, _agregarNota, _borrarNota,
            setFiltroAsignado, setFiltroEstado, abrirFiltroEstado };
 })();
 window.WaChatModule = WaChatModule;
