@@ -27408,8 +27408,7 @@ const QuickWaModule = (() => {
             <div class="qwa-panel__ava">${esc((_nombre || '?').charAt(0).toUpperCase())}</div>
             <div><div class="qwa-panel__name">${esc(_nombre)}</div><div class="qwa-panel__sub" id="qwa-sub">Conectando…</div></div>
           </div>
-          <button class="cp-act" style="margin-right:6px;padding:4px 9px;font-size:.72rem" onclick="LeadManagerModule.dlOpen(${_contactId})">Mover a Deal</button>
-          <button class="cp-act" style="margin-right:6px;padding:4px 9px;font-size:.72rem" title="Si esta no es la conversación correcta (pasa con números que WhatsApp no reporta)" onclick="QuickWaModule.vincularAbrir()">¿No es esta? Vincular otra</button>
+          <button class="cp-act" style="margin-right:2px;padding:4px 7px" title="Más acciones" onclick="QuickWaModule.menuAcciones(event)">⋮</button>
           <button class="fin-pi-x" onclick="QuickWaModule.close()">✕</button>
         </div>
         <div class="qwa-panel__msgs" id="qwa-messages"><div class="clients-loading"><div class="clients-spin"></div></div></div>
@@ -27449,6 +27448,29 @@ const QuickWaModule = (() => {
       </div>`;
     document.body.appendChild(panel);
     if (prefill) setTimeout(() => { const el = $$('qwa-input'); if (el) ChatModule.autoResize(el); }, 30);
+  }
+
+  // Menú "⋮" del header — antes eran dos botones de texto sueltos ocupando espacio
+  // fijo (pedido explícito 2026-09-02: consolidarlos en un menú, mismo patrón que
+  // nurtureRetomarMenu/ldOpenDispoMenu).
+  function menuAcciones(ev) {
+    if (ev && ev.stopPropagation) ev.stopPropagation();
+    document.querySelectorAll('.cp-mark-menu').forEach(m => m.remove());
+    const close = "document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove())";
+    const item = (label, onclick) => `<button class="cp-mark-menu__b" onclick="${close};${onclick}">${label}</button>`;
+    const menu = document.createElement('div');
+    menu.className = 'cp-mark-menu';
+    menu.style.minWidth = '210px';
+    menu.innerHTML = `<div class="cp-mark-menu__list">`
+      + item('Mover a Deal', `LeadManagerModule.dlOpen(${_contactId})`)
+      + item('¿No es esta? Vincular otra', 'QuickWaModule.vincularAbrir()')
+      + `</div>`;
+    document.body.appendChild(menu);
+    const t = (ev && (ev.currentTarget || ev.target)) || document.body;
+    const r = t.getBoundingClientRect();
+    menu.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 220))}px`;
+    menu.style.top = `${r.bottom + 6}px`;
+    setTimeout(() => document.addEventListener('click', function onDoc(e) { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', onDoc); } }), 0);
   }
 
   // Picker manual de conversación real — para el caso "@lid" sin resolver: se listan
@@ -27815,7 +27837,7 @@ const QuickWaModule = (() => {
     open, close, enviar, onPasteInput, pickImage, editPendingImg, cancelImg,
     responderA, cancelarRespuesta, programarToggle, programarPick, cancelarProgramado,
     reactPop, reaccionar, emojiPicker, _emojiIns, msgMenu, toggleImportante,
-    vincularAbrir, vincularPick, _vincularFiltrar,
+    menuAcciones, vincularAbrir, vincularPick, _vincularFiltrar,
   };
 })();
 window.QuickWaModule = QuickWaModule;
