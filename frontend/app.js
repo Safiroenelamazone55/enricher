@@ -20175,18 +20175,27 @@ ${foot}
   // GET /api/lm/wa-list) — no arranca chats nuevos, abre los que ya hay con el
   // mismo QuickWaModule que usa el resto de la app.
   let _waList = null; // null = cargando
+  let _waCli  = 0;    // filtro por cliente outbound (0 = todos) — mismo patrón que _ibCli.
+  // A propósito NO se comporta como el switcher de cuentas de Operaciones (uno a la
+  // vez): acá se ven TODOS los números juntos, mezclados en una sola lista; lo único
+  // que se puede acotar es por cliente outbound (pedido explícito 2026-09-02).
   async function _waReload() {
     try { const r = await apiFetch(`${API}/lm/wa-list`); _waList = (r && r.ok) ? await r.json() : []; }
     catch { _waList = []; }
     if (_section === 'wa') { const body = $('lm2-body'); if (body) body.innerHTML = _vWaList(); }
     _refreshNav();
   }
+  function waCli(v) { _waCli = parseInt(v) || 0; const body = $('lm2-body'); if (body) body.innerHTML = _vWaList(); }
   function _vWaList() {
     if (_waList === null) return `<div class="lm-sec-head lm-sec-head--compact"><div><h2 class="lm-sec-title">WhatsApp</h2></div></div><div class="clients-loading"><div class="clients-spin"></div></div>`;
-    const list = Array.isArray(_waList) ? _waList : [];
+    const all = Array.isArray(_waList) ? _waList : [];
+    const list = _waCli ? all.filter(w => w.outbound_client_id === _waCli) : all;
+    const cliOpts = [...new Set(all.map(w => w.outbound_client_id).filter(Boolean))]
+      .map(id => _clients.find(c => c.id === id)).filter(Boolean);
     return `
       <div class="lm-sec-head lm-sec-head--compact">
-        <div><h2 class="lm-sec-title">WhatsApp</h2><p class="lm-sec-sub">Contactos en secuencia con un chat de WhatsApp previo</p></div>
+        <div><h2 class="lm-sec-title">WhatsApp</h2><p class="lm-sec-sub">Contactos en secuencia con un chat de WhatsApp previo — todos los números juntos</p></div>
+        ${all.length ? `<select class="dle-i ibx-fcli" onchange="LeadManagerModule.waCli(this.value)"><option value="0">Todos los clientes</option>${cliOpts.map(c => `<option value="${c.id}"${_waCli === c.id ? ' selected' : ''}>${esc(c.nombre)}</option>`).join('')}</select>` : ''}
       </div>
       ${list.length
         ? `<div class="ibx-list" style="border-right:none;max-width:640px">${list.map(_waRow).join('')}</div>`
@@ -25373,7 +25382,7 @@ ${foot}
     ibOpen, ibTab, ibCli, ibDisp, ibSend, ibSaveNote, ibForward, ibSetMode, ibMsgNav, ibSchedToggle, ibSchedPick, ibCancelSched, ibResolveDisp, ibOpenResolveMenu, ibShowLeadActions, ibCopyConversation, _ibFwdSearch, _ibFwdPick,
     ibAbrirDesdeEnviados, ibToggleEnvVista, ibAbrirFiltros, _ibSetFApertura, _ibSetFLeido, _ibSetFSeq, _ibLimpiarFiltrosExtra,
     ibRowMenu, ibCloseMenu, ibMarkUnread,
-    openWaFromList,
+    openWaFromList, waCli,
     composeAbrir, composeCerrar, composeEnviar, _cmpClientChange, _cmpBuscar, _cmpElegir, _cmpClear, _cmpNuevo, _cmpNuevoCancel, _cmpSeqNueva,
     _cmpCoBuscar, _cmpCoElegir, _cmpCoNueva, _cmpCoClear, _cmpPreviewUpdate, cmpSchedToggle, cmpSchedPick,
     pendingAcceptOpen, pendingAcceptToggleAll, pendingAcceptApplyFilters, pendingAcceptMark,
