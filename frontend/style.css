@@ -15498,6 +15498,12 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 #chat-messages .chat-daysep::before, #chat-messages .chat-daysep::after { content: ''; flex: 1; height: 1px; background: #E7E3DD; }
 #chat-messages .chat-daysep span { font-size: 11.5px; font-weight: 600; color: #918C85; }
 
+/* Divisor rojo "N mensajes nuevos" — estilo Slack nativo, ver marcarLeidoActual. */
+.slk-unread-sep { display: flex; align-items: center; gap: 10px; margin: 12px 16px; }
+.slk-unread-sep::before, .slk-unread-sep::after { content: ''; flex: 1; height: 1px; background: var(--danger, #E01E5A); }
+.slk-unread-sep span { font-size: 11.5px; font-weight: 700; color: var(--danger, #E01E5A); white-space: nowrap; }
+#rchat-messages .slk-unread-sep { margin: 10px 8px; }
+
 /* Insignia de no leidos sobre la letra del workspace, como en Slack */
 .chat-rail__b { position: relative; }
 .chat-rail__n {

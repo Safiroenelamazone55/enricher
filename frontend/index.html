@@ -1346,7 +1346,8 @@
                 placeholder="Mensaje en #general"
                 onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();SlackChat.enviar()}"
                 oninput="ChatModule.autoResize(this); ChatModule.onInputChange(this); SlackChat.detectarArroba(this)"
-                onpaste="SlackChat.onPaste(event)"></textarea>
+                onpaste="SlackChat.onPaste(event)"
+                onfocus="SlackChat.marcarLeidoActual()"></textarea>
               <div class="chat-composer__toolbar">
                 <!-- Formatting: Bold / Italic / Code -->
                 <button class="chat-tool-btn" title="Negrita" onclick="SlackChat.fmt('bold')">
@@ -1929,7 +1930,8 @@
           <div id="rchat-quote" class="rchat-quote hidden"></div>
           <div class="rchat__input-pill">
             <input type="text" id="rchat-input" class="rchat__input" placeholder="Escribe un mensaje…"
-                   onkeydown="if(event.key==='Enter')SlackChat.miniEnviar()">
+                   onkeydown="if(event.key==='Enter')SlackChat.miniEnviar()"
+                   onfocus="SlackChat.miniMarcarLeidoActual()">
             <button class="rchat__send" onclick="SlackChat.miniEnviar()">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
             </button>
@@ -3021,7 +3023,7 @@
   })();
 </script>
 
-<script src="app.js?v=20260903x"></script>
+<script src="app.js?v=20260903y"></script>
 <div id="task-quick-edit" style="display:none;position:fixed;z-index:9999"></div>
 </body>
 </html>

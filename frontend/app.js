@@ -25907,6 +25907,12 @@ const SlackChat = (() => {
                           // puesta. Aquí la fijamos nosotros hasta que se abra el chat.
   let _seccion   = localStorage.getItem('slk_sec') || 'canales';  // sección del riel
   let _guardados = null;   // cache de la sección Guardados (null = aún sin cargar)
+  // Estilo Slack nativo — pedido explícito 2026-09-02: abrir el canal YA NO lo marca
+  // leído solo por abrirlo; se muestra el divisor rojo "N mensajes nuevos" (como
+  // Slack real) y recién se marca leído cuando se enfoca el cuadro de escribir
+  // (marcarLeidoActual/miniMarcarLeidoActual, ver onfocus en index.html).
+  let _pendienteDivisor  = 0;  // chat completo
+  let _mPendienteDivisor = 0;  // mini panel
 
   // --- Mini-panel (icono de chat en la barra superior) --------------------
   // Estado propio y separado del Chat completo: la usuaria puede tener el
@@ -26405,12 +26411,9 @@ const SlackChat = (() => {
     if (_canal && _canal.id !== canalId) cancelAttach();   // no arrastrar un adjunto sin enviar a otro canal
     _canal = { id: c.id, name: _nombreDe(c), topic: (c.topic && c.topic.value) || '' };
     _hilo = null;
-    if (_noLeidos[c.id] || _marcadoNL[c.id]) {   // al abrirlo deja de estar pendiente
-      delete _noLeidos[c.id]; delete _marcadoNL[c.id];
-      _nlPorWs[_wsAct] = _totalNoLeidos(); _riel();
-      // Que quede leído también en Slack/el teléfono, y que el sondeo no lo re-pinte.
-      apiFetch(`${API}/slack/workspaces/${_wsAct}/canales/${c.id}/leido`, { method: 'POST' }).catch(() => {});
-    }
+    // Ya NO se marca leído acá — recién al enfocar el cuadro de escribir (ver
+    // marcarLeidoActual). Se guarda cuántos había pendientes para el divisor.
+    _pendienteDivisor = _noLeidos[c.id] || (_marcadoNL[c.id] ? 1 : 0);
     _pintaCanales();
     _cab(_canal.name, _canal.topic);
     const inp = $$('chat-input');
@@ -26512,11 +26515,15 @@ const SlackChat = (() => {
            <span class="slk-hilo-tit">Hilo${orden.length > 1 ? ` · ${orden.length - 1} respuesta${orden.length - 1 > 1 ? 's' : ''}` : ''}</span>
          </div>` : '';
     let prevUser = null, prevF = null;
+    // Divisor rojo "N mensajes nuevos" (estilo Slack nativo) — se dibuja antes del
+    // primero de los últimos _pendienteDivisor mensajes. No aplica dentro de un hilo.
+    const divisorEnIdx = (!enHilo && _pendienteDivisor > 0) ? Math.max(0, orden.length - _pendienteDivisor) : -1;
     orden.forEach((m, i) => {
       const f = new Date(+m.ts * 1000);
       const d2 = f.toLocaleDateString('es-PE', { day: 'numeric', month: 'long' });
       const cambioDia = d2 !== dia;
       if (cambioDia) { html += `<div class="chat-daysep"><span>${d2}</span></div>`; dia = d2; }
+      if (i === divisorEnIdx) html += `<div class="slk-unread-sep" id="slk-unread-sep"><span>${_pendienteDivisor} mensaje${_pendienteDivisor > 1 ? 's' : ''} nuevo${_pendienteDivisor > 1 ? 's' : ''}</span></div>`;
       // En un hilo: el primero es el mensaje ORIGINAL (destacado); del segundo en
       // adelante son respuestas, indentadas bajo un separador, como en WhatsApp.
       const esRaiz  = enHilo && i === 0;
@@ -26558,6 +26565,20 @@ const SlackChat = (() => {
     box.scrollTop = conservarScroll ? prev : box.scrollHeight;
     // Y de nuevo tras el layout, por si algo cambia el alto (evita quedar a medias).
     if (!conservarScroll) requestAnimationFrame(() => { box.scrollTop = box.scrollHeight; });
+  }
+
+  // Se llama al enfocar #chat-input — recién ahí se marca leído de verdad (estilo
+  // Slack nativo). Quita el divisor del DOM directamente (sin re-pintar todo, para
+  // no perder el scroll) y avisa a Slack/el badge.
+  function marcarLeidoActual() {
+    if (!_canal || (!_pendienteDivisor && !_marcadoNL[_canal.id])) return;
+    const canalId = _canal.id;
+    _pendienteDivisor = 0;
+    delete _noLeidos[canalId]; delete _marcadoNL[canalId];
+    _nlPorWs[_wsAct] = _totalNoLeidos(); _riel();
+    _pintaCanales();
+    document.getElementById('slk-unread-sep')?.remove();
+    apiFetch(`${API}/slack/workspaces/${_wsAct}/canales/${canalId}/leido`, { method: 'POST' }).catch(() => {});
   }
 
   async function verHilo(ts) {
@@ -27067,11 +27088,13 @@ const SlackChat = (() => {
     let dia = '';
     let html = '';
     let prevUser = null, prevF = null;
-    orden.forEach(m => {
+    const divisorEnIdx = (!enHilo && _mPendienteDivisor > 0) ? Math.max(0, orden.length - _mPendienteDivisor) : -1;
+    orden.forEach((m, i) => {
       const f = new Date(+m.ts * 1000);
       const d2 = f.toLocaleDateString('es-PE', { day: 'numeric', month: 'long' });
       const cambioDia = d2 !== dia;
       if (cambioDia) { html += `<div class="chat-daysep"><span>${d2}</span></div>`; dia = d2; }
+      if (i === divisorEnIdx) html += `<div class="slk-unread-sep" id="slk-mini-unread-sep"><span>${_mPendienteDivisor} mensaje${_mPendienteDivisor > 1 ? 's' : ''} nuevo${_mPendienteDivisor > 1 ? 's' : ''}</span></div>`;
       const esAgrupado = !cambioDia && prevUser === m.user && prevF && (f - prevF) < 5 * 60 * 1000;
       prevUser = m.user; prevF = f;
       const quien = _mUsers[m.user] || m.username || 'Slack';
@@ -27117,6 +27140,19 @@ const SlackChat = (() => {
     _flushDocPreviews();
     box.scrollTop = conservarScroll ? prev : box.scrollHeight;
     if (!conservarScroll) requestAnimationFrame(() => { box.scrollTop = box.scrollHeight; });
+  }
+
+  // Mismo criterio que marcarLeidoActual (chat completo), para el mini panel.
+  function miniMarcarLeidoActual() {
+    if (!_mCanal || !_mPendienteDivisor) return;
+    const canalId = _mCanal.id;
+    _mPendienteDivisor = 0;
+    delete _mNoLeidos[canalId];
+    _nlPorWs[_mWsAct] = Object.values(_mNoLeidos).reduce((a, b) => a + (+b || 0), 0);
+    _pintaMiniCanales();
+    _miniRiel();
+    document.getElementById('slk-mini-unread-sep')?.remove();
+    apiFetch(`${API}/slack/workspaces/${_mWsAct}/canales/${canalId}/leido`, { method: 'POST' }).catch(() => {});
   }
 
   // ── Hilos en el chat mini ─────────────────────────────────────────────────
@@ -27293,15 +27329,9 @@ const SlackChat = (() => {
     _mHilo = '';         // volver/cambiar de canal siempre sale de la vista de hilo
     _mReplyTo = null;    // y cancela cualquier "respondiendo a…" que quedara pendiente
     localStorage.setItem(`slk_mini_ch_${_mWsAct}`, canalId);
-    if (_mNoLeidos[c.id]) {
-      delete _mNoLeidos[c.id];
-      _nlPorWs[_mWsAct] = Object.values(_mNoLeidos).reduce((a, b) => a + (+b || 0), 0);
-      // Esperado (no fire-and-forget): si un refreshMiniBadge() corre justo
-      // después y todavía no se registró la lectura en el server, pisa el
-      // contador local recién limpiado y el badge "revive" aunque ya se
-      // haya abierto el canal.
-      await apiFetch(`${API}/slack/workspaces/${_mWsAct}/canales/${c.id}/leido`, { method: 'POST' }).catch(() => {});
-    }
+    // Ya NO se marca leído acá — recién al enfocar el cuadro de escribir (ver
+    // miniMarcarLeidoActual). Se guarda cuántos había pendientes para el divisor.
+    _mPendienteDivisor = _mNoLeidos[c.id] || 0;
     _pintaMiniCanales();
     _miniRiel();
     const lbl = $$('rchat-ch-label'), hash = $$('rchat-ctx-hash');
@@ -27469,9 +27499,9 @@ const SlackChat = (() => {
            fmt, insertar, adjuntar, cancelAttach, hasPendingFile, grabarAudio, emojiPicker, _emojiIns,
            menuMsg, reaccionar, anclar, copiar, programarReunion, onPaste,
            menuCanal, verProyecto, verTareas, copiarNombre, archivarCanal, marcarNoLeido,
-           seccion, menciones, _mencionar, detectarArroba,
+           seccion, menciones, _mencionar, detectarArroba, marcarLeidoActual,
            miniOpen, miniLoad, miniIrA, miniAbrir, miniEnviar, miniBuscar, miniAbrirHilo, miniCerrarHilo, miniResponderAqui, miniCancelarRespuesta,
-           miniMenuMsg, miniReaccionar, miniReaccionarPill, miniCopiar,
+           miniMenuMsg, miniReaccionar, miniReaccionarPill, miniCopiar, miniMarcarLeidoActual,
            miniDetener: _pararSondeoMini, refreshMiniBadge };
 })();
 
