@@ -129,6 +129,22 @@ async function _maybeAutoNurture(pool, enrId) {
     [row.user_id, row.contact_id, `Estado: (sin estado) → Contactar más adelante — secuencia terminada sin respuesta, retomar el ${fecha} (automático)`]);
 }
 
+// Ramificación por respuesta — MISMA regla que el frontend (_stepCondMatch en
+// app.js): '' = para todos; 'replied' = solo si respondió/aceptó LinkedIn;
+// 'no_reply' = solo si NO respondió. "Respondió" = disposition='respondio' O
+// aceptó la invitación de LinkedIn (li_aceptado_at) — igual que _respondedC.
+function _condMatch(step, enr) {
+  const cd = (step && step.cond) || '';
+  if (!cd) return true;
+  const responded = enr.disposition === 'respondio' || !!enr.li_aceptado_at;
+  return cd === 'replied' ? responded : cd === 'no_reply' ? !responded : true;
+}
+// Primer índice desde fromIdx (inclusive) cuya condición aplica al contacto, o -1.
+function _nextEffIdx(steps, enr, fromIdx) {
+  for (let i = Math.max(0, fromIdx); i < steps.length; i++) if (_condMatch(steps[i], enr)) return i;
+  return -1;
+}
+
 async function _pauseEnrollment(pool, enr, reason, taskNote) {
   await pool.query(
     `UPDATE lm_contact_sequences SET estado='pausado', paused_reason=$1 WHERE id=$2`,
@@ -144,7 +160,10 @@ async function _pauseEnrollment(pool, enr, reason, taskNote) {
 }
 
 async function _advance(pool, enr, steps, curIdx) {
-  const next = steps[curIdx + 1];
+  // Salta los pasos cuya condición ('replied'/'no_reply') no aplique al contacto —
+  // ramificación automática, mismo criterio que _effIdx en el frontend.
+  const nextIdx = _nextEffIdx(steps, enr, curIdx + 1);
+  const next = nextIdx >= 0 ? steps[nextIdx] : null;
   if (!next) {
     await pool.query(
       `UPDATE lm_contact_sequences SET estado='terminado', next_action_at=NULL WHERE id=$1`,
@@ -160,7 +179,7 @@ async function _advance(pool, enr, steps, curIdx) {
   const target = _rollFwd(base, mask);
   await pool.query(
     `UPDATE lm_contact_sequences SET paso=$1, next_action_at=$2, paso_date=CURRENT_DATE WHERE id=$3`,
-    [curIdx + 2, target.toISOString(), enr.enr_id]
+    [nextIdx + 1, target.toISOString(), enr.enr_id]
   );
 }
 
@@ -192,7 +211,7 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback) {
     SELECT cs.id AS enr_id, cs.user_id, cs.contact_id, cs.sequence_id, cs.paso, cs.next_action_at,
            k.nombre, k.apellido, k.email, k.cargo, k.empresa_nombre, k.ciudad, k.pais,
            k.seniority, k.departamento, k.buyer_role, k.region, k.contact_priority,
-           k.email_status, k.disposition, co.nombre AS company_nombre, s.nombre AS seq_nombre, s.send_days,
+           k.email_status, k.disposition, k.li_aceptado_at, co.nombre AS company_nombre, s.nombre AS seq_nombre, s.send_days,
            s.send_mode, s.send_interval_min
       FROM lm_contact_sequences cs
       JOIN sequences   s  ON s.id = cs.sequence_id AND s.estado = 'activa'
@@ -248,7 +267,7 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback) {
   }
 
   const { rows: steps } = await pool.query(
-    `SELECT id, dia, canal, titulo, plantilla, espera_dias, variants, variant_mode, variant_field, asunto, cc_off, reply_to_prev
+    `SELECT id, dia, canal, titulo, plantilla, espera_dias, variants, variant_mode, variant_field, asunto, cc_off, reply_to_prev, cond
        FROM sequence_steps WHERE sequence_id=$1 ORDER BY dia ASC, orden ASC, id ASC`,
     [enr.sequence_id]
   );
@@ -256,6 +275,17 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback) {
   const step = steps[curIdx];
   if (!step) { // sin pasos restantes → terminado
     await pool.query(`UPDATE lm_contact_sequences SET estado='terminado', next_action_at=NULL WHERE id=$1`, [enr.enr_id]);
+    return false;
+  }
+  // Ramificación por respuesta (mismo criterio que el task-runner en el frontend,
+  // ver _stepCondMatch/_effIdx): si el paso donde quedó el contacto ya NO aplica
+  // (p. ej. "solo si no respondió" y justo respondió), el motor lo saltaba
+  // igual y mandaba el correo de todas formas — acá se corrige el paso YA MISMO
+  // (sin enviar nada en este tick) y se reintenta en el próximo (60s).
+  if (!_condMatch(step, enr)) {
+    const skipIdx = _nextEffIdx(steps, enr, curIdx);
+    if (skipIdx < 0) await pool.query(`UPDATE lm_contact_sequences SET estado='terminado', next_action_at=NULL WHERE id=$1`, [enr.enr_id]);
+    else await pool.query(`UPDATE lm_contact_sequences SET paso=$1, next_action_at=NOW() WHERE id=$2`, [skipIdx + 1, enr.enr_id]);
     return false;
   }
 
@@ -507,13 +537,14 @@ async function _flushScheduled(pool, apiBase) {
 // ── Avanza un enrolamiento saltando el paso indicado (aprobación enviada o descartada) ──
 async function advancePastStep(pool, userId, contactId, sequenceId, stepId) {
   const { rows: [enr] } = await pool.query(
-    `SELECT cs.id AS enr_id, cs.user_id, cs.contact_id, s.send_days
+    `SELECT cs.id AS enr_id, cs.user_id, cs.contact_id, s.send_days, k.disposition, k.li_aceptado_at
        FROM lm_contact_sequences cs JOIN sequences s ON s.id = cs.sequence_id
+       JOIN lm_contacts k ON k.id = cs.contact_id
       WHERE cs.user_id=$1 AND cs.contact_id=$2 AND cs.sequence_id=$3 AND cs.estado='activo'`,
     [userId, contactId, sequenceId]);
   if (!enr) return false;
   const { rows: steps } = await pool.query(
-    `SELECT id, dia, canal, espera_dias FROM sequence_steps WHERE sequence_id=$1 ORDER BY dia ASC, orden ASC, id ASC`,
+    `SELECT id, dia, canal, espera_dias, cond FROM sequence_steps WHERE sequence_id=$1 ORDER BY dia ASC, orden ASC, id ASC`,
     [sequenceId]);
   const curIdx = steps.findIndex(x => x.id === stepId);
   if (curIdx < 0) return false;
@@ -631,7 +662,7 @@ async function _draftPreapproved(pool) {
     SELECT cs.id AS enr_id, cs.user_id, cs.contact_id, cs.sequence_id, cs.paso, cs.next_action_at,
            k.nombre, k.apellido, k.email, k.cargo, k.empresa_nombre, k.ciudad, k.pais,
            k.seniority, k.departamento, k.buyer_role, k.region, k.contact_priority, k.email_status,
-           k.disposition, co.nombre AS company_nombre, s.nombre AS seq_nombre
+           k.disposition, k.li_aceptado_at, co.nombre AS company_nombre, s.nombre AS seq_nombre
       FROM lm_contact_sequences cs
       JOIN sequences s ON s.id = cs.sequence_id AND s.estado='activa' AND s.send_mode='preaprobado'
       JOIN lm_contacts k ON k.id = cs.contact_id
@@ -649,9 +680,19 @@ async function _draftPreapproved(pool) {
       // Opt-out: a un contacto descartado no se le redacta ni el borrador.
       if (['no_interesado', 'no_contactar'].includes(enr.disposition)) continue;
       const { rows: steps } = await pool.query(
-        `SELECT id, dia, canal, titulo, plantilla, espera_dias, variants, variant_mode, variant_field, asunto, cc_off
+        `SELECT id, dia, canal, titulo, plantilla, espera_dias, variants, variant_mode, variant_field, asunto, cc_off, cond
            FROM sequence_steps WHERE sequence_id=$1 ORDER BY dia ASC, orden ASC, id ASC`, [enr.sequence_id]);
-      const step = steps[(enr.paso || 1) - 1];
+      const curIdx0 = (enr.paso || 1) - 1;
+      let step = steps[curIdx0];
+      // Mismo auto-salto que _tickWorkspace: si el paso donde está ya no aplica
+      // (ramificación por respuesta), corrige el paso YA y no redacta un borrador
+      // que no debería salir — la próxima pasada retoma desde el paso correcto.
+      if (step && !_condMatch(step, enr)) {
+        const skipIdx = _nextEffIdx(steps, enr, curIdx0);
+        if (skipIdx < 0) await pool.query(`UPDATE lm_contact_sequences SET estado='terminado', next_action_at=NULL WHERE id=$1`, [enr.enr_id]);
+        else await pool.query(`UPDATE lm_contact_sequences SET paso=$1 WHERE id=$2`, [skipIdx + 1, enr.enr_id]);
+        continue;
+      }
       if (!step || step.canal !== 'email') continue;
       const { rows: [waiting] } = await pool.query(
         `SELECT id FROM lm_messages WHERE user_id=$1 AND contact_id=$2 AND step_id=$3 AND estado IN ('awaiting','approved') LIMIT 1`,
