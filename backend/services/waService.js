@@ -19,10 +19,16 @@
 
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const QRCode = require('qrcode');
 
 const SESSIONS_DIR = path.join(__dirname, '..', 'data', 'wa-sessions');
 if (!fs.existsSync(SESSIONS_DIR)) fs.mkdirSync(SESSIONS_DIR, { recursive: true });
+
+// Mismo directorio que server.js sirve como estático en /wa-media (WA_MEDIA_DIR
+// ahí) — se recalcula acá en vez de importarlo para no crear una dependencia
+// circular entre server.js y este servicio.
+const MEDIA_DIR = path.join(__dirname, '..', 'wa_media');
 
 const _socks = new Map();   // connectionId → sock vivo
 const _reintentos = new Map(); // connectionId → cuántos cortes seguidos lleva
@@ -133,11 +139,35 @@ async function _guardarMensaje(pool, sock, connId, m, esHistorial) {
     // el caso real; para el resto Jenny puede pedir el número por chat si hace falta.
     contactPhone = _telDeVcard((contactosArr.contacts || [])[0]?.vcard);
   }
+  // Fotos/documentos entrantes (o reenviados por Jenny desde su teléfono, no desde
+  // Nova) — reportado 2026-09-02: "reenvié un documento y no lo veo/descargo". Antes
+  // se descartaban enteros (if (!texto) return de abajo) porque el caption de una
+  // foto/documento NO vive en conversation/extendedTextMessage, vive en su propio
+  // campo .caption — así que ni con foto/documento CON texto se guardaba nada.
+  let mediaUrl = '', mediaType = '';
+  const docMsg = m.message?.documentMessage || m.message?.documentWithCaptionMessage?.message?.documentMessage;
+  const imgMsg = m.message?.imageMessage;
+  if (!texto) texto = docMsg?.caption || imgMsg?.caption || '';
+  if (docMsg || imgMsg) {
+    try {
+      const { downloadMediaMessage } = require('@whiskeysockets/baileys');
+      const buffer = await downloadMediaMessage(m, 'buffer', {}, { logger: undefined, reuploadRequest: sock.updateMediaMessage });
+      const extRaw = docMsg ? (docMsg.fileName || '').split('.').pop() : (imgMsg.mimetype || '').split('/').pop();
+      const ext = (extRaw || (docMsg ? 'bin' : 'jpg')).replace(/[^a-z0-9]/gi, '').slice(0, 10) || 'bin';
+      const fname = `${crypto.randomBytes(10).toString('hex')}.${ext}`;
+      const dir = path.join(MEDIA_DIR, String(connId));
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, fname), buffer);
+      mediaUrl = `/wa-media/${connId}/${fname}`;
+      mediaType = docMsg ? 'document' : 'image';
+      if (!texto) texto = docMsg ? `📎 ${docMsg.fileName || 'Documento'}` : '📷 Foto';
+    } catch (e) { console.warn('[wa] descargar media entrante:', e.message); }
+  }
   // En grupos pushName es quien mandó ESE mensaje puntual, no el grupo — el nombre del
   // grupo en sí se pide aparte con groupMetadata (arriba), no se pisa acá.
   const nombre = (!jid.endsWith('@g.us') && m.pushName) ? m.pushName : '';
   if (nombre) await _guardarContacto(pool, sock, connId, jid, nombre);
-  if (!texto) return; // v1: solo texto (fotos/audio/etc. quedan fuera por ahora)
+  if (!texto) return; // v1: audio/video/sticker todavía quedan fuera
   const ts = m.messageTimestamp ? new Date(Number(m.messageTimestamp) * 1000) : new Date();
   const remitente = jid.endsWith('@g.us') ? (m.pushName || '') : '';
   const ctx = m.message?.extendedTextMessage?.contextInfo;
@@ -154,9 +184,9 @@ async function _guardarMensaje(pool, sock, connId, m, esHistorial) {
   for (let intento = 1; intento <= 3; intento++) {
     try {
       await pool.query(`
-        INSERT INTO wa_messages (connection_id, chat_jid, msg_id, from_me, nombre, texto, ts, reply_to_id, reply_to_texto, leido, contact_phone)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT (connection_id, msg_id) DO NOTHING`,
-        [connId, jid, m.key.id, !!m.key.fromMe, remitente, texto, ts, replyToId, replyToTexto, leido, contactPhone]);
+        INSERT INTO wa_messages (connection_id, chat_jid, msg_id, from_me, nombre, texto, ts, reply_to_id, reply_to_texto, leido, contact_phone, media_url, media_type)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) ON CONFLICT (connection_id, msg_id) DO NOTHING`,
+        [connId, jid, m.key.id, !!m.key.fromMe, remitente, texto, ts, replyToId, replyToTexto, leido, contactPhone, mediaUrl, mediaType]);
       break;
     } catch (e) {
       if (intento === 3) { console.warn(`[wa] guardar mensaje (falló tras ${intento} intentos):`, e.message); break; }

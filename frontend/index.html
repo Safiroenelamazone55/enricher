@@ -514,20 +514,97 @@
 
       </div>
 
-      <!-- Finanzas ya trae su propia navegación por pestañas dentro del pane
-           (fin-tabs: Resumen/Facturación/Conciliación/Cobros/Pagos internos/
-           Gastos/Distribución/Config) — este panel secundario solo necesita
-           un punto de entrada al pane, no repetir esas pestañas acá. -->
+      <!-- Finanzas: las 8 secciones que antes eran pestañas horizontales arriba del
+           pane (fin-tabs) ahora viven acá, en el panel vertical, como el resto de los
+           módulos (pedido explícito 2026-09-02). "Resumen" carga data-tab="mgmt-finance"
+           (punto de entrada real al módulo, ver selectModule) además de data-fintab —
+           las demás solo data-fintab, que es lo que FinanceModule.setTab() usa para
+           mostrar/ocultar el .fin-panel correspondiente (ver app.js). -->
       <div class="snav-group" data-module="finance" id="snav-body-finance">
 
-        <button class="snav-item" data-tab="mgmt-finance" data-tooltip="Finanzas">
+        <button class="snav-item fin-side-tab active" data-tab="mgmt-finance" data-fintab="resumen" data-tooltip="Resumen" onclick="FinanceModule.setTab('resumen')">
           <span class="snav-item__icon">
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="3 18 8 12.5 11.5 15 17 8 21 5.5"/>
               <polyline points="16.5 5.5 21 5.5 21 10"/>
             </svg>
           </span>
-          <span class="snav-item__label">Finanzas</span>
+          <span class="snav-item__label">Resumen</span>
+        </button>
+
+        <button class="snav-item fin-side-tab" data-fintab="facturacion" data-tooltip="Facturación" onclick="FinanceModule.setTab('facturacion')">
+          <span class="snav-item__icon">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="8" y1="13" x2="16" y2="13"/>
+              <line x1="8" y1="17" x2="13" y2="17"/>
+            </svg>
+          </span>
+          <span class="snav-item__label">Facturación</span>
+        </button>
+
+        <button class="snav-item fin-side-tab" data-fintab="conciliacion" data-tooltip="Conciliación" onclick="FinanceModule.setTab('conciliacion')">
+          <span class="snav-item__icon">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="9"/>
+              <path d="M8 12.5l2.5 2.5L16 9"/>
+            </svg>
+          </span>
+          <span class="snav-item__label">Conciliación</span>
+        </button>
+
+        <button class="snav-item fin-side-tab" data-fintab="cobros" data-tooltip="Cobros" onclick="FinanceModule.setTab('cobros')">
+          <span class="snav-item__icon">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="1" x2="12" y2="23"/>
+              <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+            </svg>
+          </span>
+          <span class="snav-item__label">Cobros</span>
+        </button>
+
+        <button class="snav-item fin-side-tab" data-fintab="pagos-internos" data-tooltip="Pagos internos" onclick="FinanceModule.setTab('pagos-internos')">
+          <span class="snav-item__icon">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+              <circle cx="9" cy="7" r="4"/>
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+              <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+            </svg>
+          </span>
+          <span class="snav-item__label">Pagos internos</span>
+        </button>
+
+        <button class="snav-item fin-side-tab" data-fintab="gastos" data-tooltip="Gastos / Caja" onclick="FinanceModule.setTab('gastos')">
+          <span class="snav-item__icon">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 7h18v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+              <path d="M3 7l2.5-4h13L21 7"/>
+              <line x1="12" y1="12" x2="12" y2="15"/>
+            </svg>
+          </span>
+          <span class="snav-item__label">Gastos / Caja</span>
+        </button>
+
+        <button class="snav-item fin-side-tab" data-fintab="distribucion" data-tooltip="Distribución" onclick="FinanceModule.setTab('distribucion')">
+          <span class="snav-item__icon">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21.21 15.89A10 10 0 1 1 8 2.83"/>
+              <path d="M22 12A10 10 0 0 0 12 2v10z"/>
+            </svg>
+          </span>
+          <span class="snav-item__label">Distribución</span>
+        </button>
+
+        <button class="snav-item fin-side-tab" data-fintab="config" data-tooltip="Configuración" onclick="FinanceModule.setTab('config')">
+          <span class="snav-item__icon">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+          </span>
+          <span class="snav-item__label">Configuración</span>
         </button>
 
       </div>
@@ -902,16 +979,6 @@
             <h1 class="pane-title">Finanzas</h1>
             <p class="pane-sub">Control financiero interno — cobros, distribución y pagos del equipo</p>
           </div>
-        </div>
-        <div class="fin-tabs" id="fin-tabs">
-          <button class="fin-tab active" data-fintab="resumen"        onclick="FinanceModule.setTab('resumen')">Resumen</button>
-          <button class="fin-tab"        data-fintab="facturacion"    onclick="FinanceModule.setTab('facturacion')">Facturación</button>
-          <button class="fin-tab"        data-fintab="conciliacion"   onclick="FinanceModule.setTab('conciliacion')">Conciliación</button>
-          <button class="fin-tab"        data-fintab="cobros"         onclick="FinanceModule.setTab('cobros')">Cobros</button>
-          <button class="fin-tab"        data-fintab="pagos-internos" onclick="FinanceModule.setTab('pagos-internos')">Pagos internos</button>
-          <button class="fin-tab"        data-fintab="gastos"         onclick="FinanceModule.setTab('gastos')">Gastos / Caja</button>
-          <button class="fin-tab"        data-fintab="distribucion"   onclick="FinanceModule.setTab('distribucion')">Distribución</button>
-          <button class="fin-tab"        data-fintab="config"         onclick="FinanceModule.setTab('config')">Configuración</button>
         </div>
       </div>
 
@@ -2929,7 +2996,7 @@
   })();
 </script>
 
-<script src="app.js?v=20260903q"></script>
+<script src="app.js?v=20260903t"></script>
 <div id="task-quick-edit" style="display:none;position:fixed;z-index:9999"></div>
 </body>
 </html>

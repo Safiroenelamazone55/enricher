@@ -2676,7 +2676,7 @@ const FinanceModule = (() => {
 
   function setTab(tab) {
     _currentTab = tab;
-    document.querySelectorAll('#fin-tabs .fin-tab').forEach(b =>
+    document.querySelectorAll('.fin-side-tab').forEach(b =>
       b.classList.toggle('active', b.dataset.fintab === tab));
     document.querySelectorAll('.fin-panels .fin-panel').forEach(p =>
       p.classList.toggle('active', p.id === 'fin-panel-' + tab));
@@ -8649,7 +8649,7 @@ const TasksModule = (() => {
     }
 
     return `<div class="kanban-card" data-task-id="${t.id}" draggable="true"
-      onclick="TasksModule.openTaskPageNewTab(${t.id})"
+      onclick="TasksModule.openTaskPage(${t.id})"
       ondragstart="TasksModule.kanbanDragStart(event,${t.id})"
       ondragend="TasksModule.kanbanDragEnd(event)">
       <div class="kc-hdr">
@@ -9270,6 +9270,7 @@ const TasksModule = (() => {
   async function duplicateTask(tid) {
     const t = _tasks.find(x => x.id === tid);
     if (!t) return;
+    const _reaplicarFiltro = _filterProjectId; // ver mismo fix en save()
     try {
       await apiFetch(`${API}/mgmt/tasks`, {
         method: 'POST',
@@ -9288,11 +9289,16 @@ const TasksModule = (() => {
         })
       });
       await load();
+      if (_reaplicarFiltro) await setProjectFilter(_reaplicarFiltro);
     } catch(err) { alert('Error al duplicar: ' + err.message); }
   }
 
   function openDrawerWithStatus(estado) {
-    openDrawer();
+    // El "+" de cada columna vive DENTRO del kanban — si hay un proyecto
+    // enfocado (_filterProjectId, ver setProjectFilter), la tarea nueva debe
+    // nacer en ESE proyecto (y heredar su responsable, ver openDrawer), no
+    // quedar sin proyecto. Antes no se pasaba y salía en blanco.
+    openDrawer(null, _filterProjectId);
     setTimeout(() => {
       const form = document.getElementById('tasks-form');
       if (form?.estado) form.estado.value = estado;
@@ -9816,6 +9822,11 @@ const TasksModule = (() => {
 
   async function save(e) {
     e.preventDefault();
+    // load() (llamado más abajo) SIEMPRE resetea _filterProjectId — a propósito,
+    // para el caso normal "clic en Tareas desde el menú". Guardar una tarea desde
+    // el kanban de UN proyecto es otro caso: hay que reaplicar el filtro después,
+    // o el guardado te saca al kanban global (bug reportado 2026-09-02).
+    const _reaplicarFiltro = _filterProjectId;
     const form    = e.target;
     const saveBtn = $('tasks-save-btn');
     const responsable = $('task-responsable-select')?.value || '';
@@ -9862,6 +9873,7 @@ const TasksModule = (() => {
       if (!res.ok) { const err = await res.json(); throw new Error(err.error || `HTTP ${res.status}`); }
       closeDrawer();
       await load();
+      if (_reaplicarFiltro) await setProjectFilter(_reaplicarFiltro);
       if (data.project_id) ProjectsModule.refreshCard(data.project_id);
     } catch (err) {
       alert('Error: ' + err.message);
@@ -9879,11 +9891,13 @@ const TasksModule = (() => {
       ? `Esta tarea tiene ${kids.length} subtarea${kids.length !== 1 ? 's' : ''}. ¿Deseas eliminar todo?`
       : `¿Eliminar "${t?.titulo}"? Esta acción no se puede deshacer.`;
     if (!confirm(msg)) return;
+    const _reaplicarFiltro = _filterProjectId; // ver mismo fix en save()
     closeDrawer();
     try {
       const res = await apiFetch(`${API}/mgmt/tasks/${targetId}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Error al eliminar');
       await load();
+      if (_reaplicarFiltro) await setProjectFilter(_reaplicarFiltro);
       if (t?.project_id) ProjectsModule.refreshCard(t.project_id);
     } catch (e) { alert('Error: ' + e.message); }
   }
@@ -10070,7 +10084,9 @@ const TasksModule = (() => {
         if (res.ok) n++;
       } catch (_) {}
     }
+    const _reaplicarFiltro = _filterProjectId; // ver mismo fix en save()
     await load();
+    if (_reaplicarFiltro) await setProjectFilter(_reaplicarFiltro);
     showBanner(`✓ ${n} subtarea(s) copiadas de ${esc(prev.titulo)}`, 'success');
   }
 
@@ -27610,11 +27626,13 @@ const QuickWaModule = (() => {
     return d >= hoy ? 'Hoy' : d >= ayer ? 'Ayer' : d.toLocaleDateString('es-ES', { day: 'numeric', month: 'long' });
   }
 
+  let _lastRows = [];
   async function _cargarMensajes(silencioso) {
     if (!_conn) return;
     try {
       const r = await apiFetch(`${API}/wa/connections/${_conn.id}/chats/${encodeURIComponent(_jid)}/mensajes`);
       const rows = r.ok ? await r.json() : [];
+      _lastRows = rows;
       _pintar(rows);
     } catch (_) { if (!silencioso) { const box = $$('qwa-messages'); if (box) box.innerHTML = `<div class="chat-ch-empty">No se pudieron cargar los mensajes.</div>`; } }
   }
@@ -27662,9 +27680,12 @@ const QuickWaModule = (() => {
       const reacHtml = reacBits.length ? `<div class="wa-msg__reactions">${reacBits.join('')}</div>` : '';
       const mediaHtml = (m.media_type === 'image' && m.media_url)
         ? `<img src="${API_ORIGIN}${esc(m.media_url)}" class="wa-msg__img" onclick="window.open('${API_ORIGIN}${esc(m.media_url)}','_blank')" alt="">`
+        : (m.media_type === 'document' && m.media_url)
+        ? `<a class="wa-msg__doc" href="${API_ORIGIN}${esc(m.media_url)}" target="_blank" rel="noopener" download><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><span class="wa-msg__doc-name">${esc((m.texto || 'Documento').replace(/^📎\s*/, ''))}</span></a>`
         : '';
       const starHtml = m.importante ? `<span class="wa-msg__star" title="Mensaje destacado">⭐</span>` : '';
-      const bubbleHtml = `${actions}${citado}${mediaHtml}<span class="wa-msg__text" data-mid="${msgIdJs}">${esc(m.texto)}</span><span class="wa-msg__time">${starHtml}${_fmtHora(m.ts)}</span>${reacHtml}`;
+      const textoHtml = m.media_type === 'document' ? '' : `<span class="wa-msg__text" data-mid="${msgIdJs}">${esc(m.texto)}</span>`;
+      const bubbleHtml = `${actions}${citado}${mediaHtml}${textoHtml}<span class="wa-msg__time">${starHtml}${_fmtHora(m.ts)}</span>${reacHtml}`;
       return `${sep}<div class="wa-msg ${m.from_me ? 'wa-msg--out' : 'wa-msg--in'}"><div class="wa-msg__bubble">${bubbleHtml}</div></div>`;
     }).join('');
     if (atBottom) box.scrollTop = box.scrollHeight;
@@ -27883,15 +27904,23 @@ const QuickWaModule = (() => {
     if (_pendingImg) return _enviarImagen(texto);
     if (!texto || !_conn) return;
     const respondeA = _replyTo?.msg_id;
+    const replyTextoLocal = _replyTo?.texto || '';
     input.value = ''; ChatModule.autoResize(input);
     _replyTo = null; _pintaQuote();
+    // Optimista (pedido 2026-09-02: "se demora 1 segundo, no es inmediato") — antes
+    // el mensaje solo aparecía después del POST + un segundo GET de recarga completo.
+    // Se pinta ya mismo con un id temporal; _cargarMensajes lo reemplaza por el real
+    // en cuanto responde el servidor (o lo quita si falló, ver catch).
+    if (!scheduledAt) {
+      _pintar([..._lastRows, { id: '_tmp', msg_id: '_tmp', from_me: true, texto, ts: new Date().toISOString(), estado: 'enviado', reply_to_texto: replyTextoLocal }]);
+    }
     try {
       const r = await apiFetch(`${API}/wa/connections/${_conn.id}/chats/${encodeURIComponent(_jid)}/mensajes`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ texto, respondeA, scheduledAt })
       });
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'No se pudo enviar');
       await _cargarMensajes(true);
-    } catch (e) { alert('Error: ' + e.message); input.value = texto; }
+    } catch (e) { alert('Error: ' + e.message); input.value = texto; _pintar(_lastRows); }
   }
 
   function close() {
@@ -29051,11 +29080,13 @@ const WaChatModule = (() => {
     catch (_) { /* si falla, el próximo _cargarChats trae el número real igual */ }
   }
 
+  let _lastRows = [];
   async function _cargarMensajes(jid, silencioso) {
     if (!_conn) return;
     try {
       const r = await apiFetch(`${API}/wa/connections/${_conn.id}/chats/${encodeURIComponent(jid)}/mensajes`);
       const rows = r.ok ? await r.json() : [];
+      _lastRows = rows;
       _pintaMensajes(rows);
     } catch (_) { if (!silencioso) { const box = $$('wa-messages'); if (box) box.innerHTML = `<div class="chat-ch-empty">No se pudieron cargar los mensajes.</div>`; } }
   }
@@ -29117,10 +29148,13 @@ const WaChatModule = (() => {
       // espacio en blanco real dentro de la burbuja — por eso va todo en una sola línea.
       const mediaHtml = (m.media_type === 'image' && m.media_url)
         ? `<img src="${API_ORIGIN}${esc(m.media_url)}" class="wa-msg__img" onclick="window.open('${API_ORIGIN}${esc(m.media_url)}','_blank')" alt="">`
+        : (m.media_type === 'document' && m.media_url)
+        ? `<a class="wa-msg__doc" href="${API_ORIGIN}${esc(m.media_url)}" target="_blank" rel="noopener" download><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><span class="wa-msg__doc-name">${esc((m.texto || 'Documento').replace(/^📎\s*/, ''))}</span></a>`
         : '';
       const starHtml = m.importante ? `<span class="wa-msg__star" title="Mensaje destacado">⭐</span>` : '';
       const contactoBtn = m.contact_phone ? `<button class="wa-msg__cancel" style="margin-top:6px" onclick="event.stopPropagation();WaChatModule.abrirChat('${esc(m.contact_phone)}@s.whatsapp.net')">Escribirle por WhatsApp ›</button>` : '';
-      const bubbleHtml = `${actions}${remitente}${citado}${mediaHtml}<span class="wa-msg__text" data-mid="${msgIdJs}">${esc(m.texto)}</span>${contactoBtn}<span class="wa-msg__time">${starHtml}${_fmtHora(m.ts)}</span>${reacHtml}`;
+      const textoHtml = m.media_type === 'document' ? '' : `<span class="wa-msg__text" data-mid="${msgIdJs}">${esc(m.texto)}</span>`;
+      const bubbleHtml = `${actions}${remitente}${citado}${mediaHtml}${textoHtml}${contactoBtn}<span class="wa-msg__time">${starHtml}${_fmtHora(m.ts)}</span>${reacHtml}`;
       return `${sep}<div class="wa-msg ${m.from_me ? 'wa-msg--out' : 'wa-msg--in'}"><div class="wa-msg__bubble">${bubbleHtml}</div></div>`;
     }).join('');
     if (atBottom) box.scrollTop = box.scrollHeight;
@@ -29203,8 +29237,14 @@ const WaChatModule = (() => {
     if (_pendingImg) return _enviarImagen(texto);
     if (!texto || !_conn || !_chatAct) return;
     const respondeA = _replyTo?.msg_id;
+    const replyTextoLocal = _replyTo?.texto || '';
     input.value = ''; ChatModule.autoResize(input);
     _replyTo = null; _pintaQuote();
+    // Optimista (pedido 2026-09-02: "se demora 1 segundo, no es inmediato") — ver
+    // mismo fix en QuickWaModule.enviar.
+    if (!scheduledAt) {
+      _pintaMensajes([..._lastRows, { id: '_tmp', msg_id: '_tmp', from_me: true, texto, ts: new Date().toISOString(), estado: 'enviado', reply_to_texto: replyTextoLocal }]);
+    }
     try {
       const r = await apiFetch(`${API}/wa/connections/${_conn.id}/chats/${encodeURIComponent(_chatAct)}/mensajes`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ texto, respondeA, scheduledAt })
@@ -29215,6 +29255,7 @@ const WaChatModule = (() => {
     } catch (e) {
       alert('Error: ' + e.message);
       input.value = texto;
+      _pintaMensajes(_lastRows);
     }
   }
 
@@ -29895,11 +29936,13 @@ const ObcWaModule = (() => {
     catch (_) { /* si falla, el próximo _cargarChats trae el número real igual */ }
   }
 
+  let _lastRows = [];
   async function _cargarMensajes(jid, silencioso) {
     if (!_conn) return;
     try {
       const r = await apiFetch(`${API}/wa/connections/${_conn.id}/chats/${encodeURIComponent(jid)}/mensajes`);
       const rows = r.ok ? await r.json() : [];
+      _lastRows = rows;
       _pintaMensajes(rows);
     } catch (_) { if (!silencioso) { const box = $$('ocwa-messages'); if (box) box.innerHTML = `<div class="chat-ch-empty">No se pudieron cargar los mensajes.</div>`; } }
   }
@@ -29955,10 +29998,13 @@ const ObcWaModule = (() => {
       const reacHtml = reacBits.length ? `<div class="wa-msg__reactions">${reacBits.join('')}</div>` : '';
       const mediaHtml = (m.media_type === 'image' && m.media_url)
         ? `<img src="${API_ORIGIN}${esc(m.media_url)}" class="wa-msg__img" onclick="window.open('${API_ORIGIN}${esc(m.media_url)}','_blank')" alt="">`
+        : (m.media_type === 'document' && m.media_url)
+        ? `<a class="wa-msg__doc" href="${API_ORIGIN}${esc(m.media_url)}" target="_blank" rel="noopener" download><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><span class="wa-msg__doc-name">${esc((m.texto || 'Documento').replace(/^📎\s*/, ''))}</span></a>`
         : '';
       const starHtml = m.importante ? `<span class="wa-msg__star" title="Mensaje destacado">⭐</span>` : '';
       const contactoBtn = m.contact_phone ? `<button class="wa-msg__cancel" style="margin-top:6px" onclick="event.stopPropagation();ObcWaModule.abrirChat('${esc(m.contact_phone)}@s.whatsapp.net')">Escribirle por WhatsApp ›</button>` : '';
-      const bubbleHtml = `${actions}${remitente}${citado}${mediaHtml}<span class="wa-msg__text" data-mid="${msgIdJs}">${esc(m.texto)}</span>${contactoBtn}<span class="wa-msg__time">${starHtml}${_fmtHora(m.ts)}</span>${reacHtml}`;
+      const textoHtml = m.media_type === 'document' ? '' : `<span class="wa-msg__text" data-mid="${msgIdJs}">${esc(m.texto)}</span>`;
+      const bubbleHtml = `${actions}${remitente}${citado}${mediaHtml}${textoHtml}${contactoBtn}<span class="wa-msg__time">${starHtml}${_fmtHora(m.ts)}</span>${reacHtml}`;
       return `${sep}<div class="wa-msg ${m.from_me ? 'wa-msg--out' : 'wa-msg--in'}"><div class="wa-msg__bubble">${bubbleHtml}</div></div>`;
     }).join('');
     if (atBottom) box.scrollTop = box.scrollHeight;
@@ -30038,8 +30084,14 @@ const ObcWaModule = (() => {
     if (_pendingImg) return _enviarImagen(texto);
     if (!texto || !_conn || !_chatAct) return;
     const respondeA = _replyTo?.msg_id;
+    const replyTextoLocal = _replyTo?.texto || '';
     input.value = ''; ChatModule.autoResize(input);
     _replyTo = null; _pintaQuote();
+    // Optimista (pedido 2026-09-02: "se demora 1 segundo, no es inmediato") — ver
+    // mismo fix en QuickWaModule.enviar.
+    if (!scheduledAt) {
+      _pintaMensajes([..._lastRows, { id: '_tmp', msg_id: '_tmp', from_me: true, texto, ts: new Date().toISOString(), estado: 'enviado', reply_to_texto: replyTextoLocal }]);
+    }
     try {
       const r = await apiFetch(`${API}/wa/connections/${_conn.id}/chats/${encodeURIComponent(_chatAct)}/mensajes`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ texto, respondeA, scheduledAt })
@@ -30050,6 +30102,7 @@ const ObcWaModule = (() => {
     } catch (e) {
       alert('Error: ' + e.message);
       input.value = texto;
+      _pintaMensajes(_lastRows);
     }
   }
 
@@ -31213,6 +31266,19 @@ const RChatPanel = (() => {
     if (backdrop) backdrop.classList.add('hidden');
     _fcOpen = false;
   }
+
+  // Clic afuera del panel (notificaciones/chat/notas) lo cierra — pedido explícito
+  // 2026-09-02. Excluye los botones que lo abren (si no, un mousedown ahí lo
+  // cerraría justo antes de que el click los reabra) y los popovers propios que
+  // viven fuera de #rchat (fecha límite/responsable de una notificación, el picker
+  // de subtarea) — si no, elegir una fecha ahí cerraría todo el panel encima.
+  document.addEventListener('mousedown', e => {
+    const panel = $('rchat');
+    if (!panel || panel.classList.contains('rchat--collapsed')) return;
+    if (panel.contains(e.target)) return;
+    if (e.target.closest('.rchat__strip-btn, .rnotif-date-pop, .rnf-subpick')) return;
+    close();
+  });
 
   return { open, close, toggle, switchTab, toggleChannels, openFullChat, closeFullChat };
 })();
@@ -33183,7 +33249,11 @@ function initApp() {
   }
 
   document.querySelectorAll('.tab, .snav-item').forEach(btn => {
-    btn.addEventListener('click', () => _switchTab(btn.dataset.tab));
+    // Guard: los sub-ítems de Finanzas (fin-side-tab) son navegación INTERNA del
+    // pane (ver FinanceModule.setTab en su propio onclick) y a propósito no llevan
+    // data-tab — sin este guard, _switchTab(undefined) mandaba a Operaciones
+    // (_moduleOf cae a 'management' por defecto y borra el ?tab= de la URL).
+    if (btn.dataset.tab) btn.addEventListener('click', () => _switchTab(btn.dataset.tab));
   });
   window._novaSwitchTab = _switchTab;   // expuesto para restaurar la última sección al recargar (desde initAuth)
 

@@ -283,7 +283,10 @@ try {
 // ── Rate limiter ──────────────────────────────────────────────────
 const limiter = rateLimit({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 60_000,
-  max:      parseInt(process.env.RATE_LIMIT_MAX)       || 100,
+  // 100/min se quedó corto: WhatsApp sondea cada 5s, Slack y notificaciones cada
+  // rato, y cada pestaña nueva de Nova (antes: abrir una tarea abría una pestaña
+  // completa) suma su propio set de timers sobre el mismo límite por IP.
+  max:      parseInt(process.env.RATE_LIMIT_MAX)       || 300,
   standardHeaders: true, legacyHeaders: false,
   message: { error: 'Too many requests — wait a moment.' },
 });
