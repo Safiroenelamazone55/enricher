@@ -29069,10 +29069,11 @@ const WaChatModule = (() => {
     // supo de las demás — así el nav no "baja" el número solo porque se abrió un chat
     // de la conexión activa mientras otra conexión sigue con mensajes sin leer.
     const total = _chats.reduce((a, c) => a + (+c.no_leidos || 0), 0) + _otherConnsUnread;
-    const badge = document.getElementById('wa-badge');
-    if (!badge) return;
-    badge.textContent = total > 99 ? '99+' : (total || '');
-    badge.classList.toggle('hidden', !total);
+    [document.getElementById('wa-badge'), document.getElementById('rwa-badge')].forEach(badge => {
+      if (!badge) return;
+      badge.textContent = total > 99 ? '99+' : (total || '');
+      badge.classList.toggle('hidden', !total);
+    });
   }
 
   // Refresco global del contador (aunque la pestaña WhatsApp no esté abierta) — recorre
@@ -29085,9 +29086,9 @@ const WaChatModule = (() => {
       const r = await apiFetch(`${API}/wa/connections`);
       const conns = r.ok ? await r.json() : [];
       const activas = conns.filter(c => c.estado === 'conectado');
-      const badge = document.getElementById('wa-badge');
+      const badges = [document.getElementById('wa-badge'), document.getElementById('rwa-badge')];
       if (!activas.length) {
-        if (badge) badge.classList.add('hidden');
+        badges.forEach(badge => badge?.classList.add('hidden'));
         _connUnread = {}; _otherConnsUnread = 0;
         _pintaBarraCuentas();
         return;
@@ -29103,7 +29104,7 @@ const WaChatModule = (() => {
         } catch (_) { /* esta conexión no respondió — no cuenta este tick */ }
       }));
       _otherConnsUnread = activas.reduce((a, c) => a + (c.id === _conn?.id ? 0 : (_connUnread[c.id] || 0)), 0);
-      if (badge) { badge.textContent = total > 99 ? '99+' : (total || ''); badge.classList.toggle('hidden', !total); }
+      badges.forEach(badge => { if (badge) { badge.textContent = total > 99 ? '99+' : (total || ''); badge.classList.toggle('hidden', !total); } });
       _pintaBarraCuentas();
     } catch (_) { /* se reintenta en el próximo tick */ }
   }
@@ -31317,6 +31318,30 @@ const RChatPanel = (() => {
     _fcOpen = false;
   }
 
+  // WhatsApp de Operaciones en media pantalla desde el header — mismo patrón que
+  // openFullChat de arriba: mueve el propio #wa-fc-inner (no una copia, la MISMA
+  // conexión/chats) a este overlay y lo devuelve a su lugar al cerrar. Pedido
+  // explícito 2026-09-02: "debe ser idéntico al wpp de operaciones, no más no
+  // menos, una copia, conectada" — reusa .rchat-fc-box, así queda del mismo
+  // tamaño que el chat de Slack.
+  let _fwParent = null, _fwNext = null, _fwOpen = false;
+  function openFullWa() {
+    if (_fwOpen) { closeFullWa(); return; }
+    const inner = $('wa-fc-inner'); const box = $('rwa-fc-box'); const backdrop = $('rwa-fc-backdrop');
+    if (!inner || !box || !backdrop) return;
+    _fwParent = inner.parentElement; _fwNext = inner.nextSibling;
+    box.appendChild(inner);
+    backdrop.classList.remove('hidden');
+    _fwOpen = true;
+    WaChatModule.load();
+  }
+  function closeFullWa() {
+    const inner = $('wa-fc-inner'); const backdrop = $('rwa-fc-backdrop');
+    if (inner && _fwParent) _fwParent.insertBefore(inner, _fwNext);
+    if (backdrop) backdrop.classList.add('hidden');
+    _fwOpen = false;
+  }
+
   // Clic afuera del panel (notificaciones/chat/notas) lo cierra — pedido explícito
   // 2026-09-02. Excluye los botones que lo abren (si no, un mousedown ahí lo
   // cerraría justo antes de que el click los reabra) y los popovers propios que
@@ -31330,7 +31355,7 @@ const RChatPanel = (() => {
     close();
   });
 
-  return { open, close, toggle, switchTab, toggleChannels, openFullChat, closeFullChat };
+  return { open, close, toggle, switchTab, toggleChannels, openFullChat, closeFullChat, openFullWa, closeFullWa };
 })();
 
 // =================================================================
