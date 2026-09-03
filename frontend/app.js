@@ -9925,10 +9925,13 @@ const TasksModule = (() => {
       return;
     }
     if (data.deadline && !data.parent_task_id) {
-      const sel = $('tasks-project-select');
-      const opt = sel?.options[sel.selectedIndex];
-      const projStart = opt?.dataset.start || '';
-      const projEnd   = opt?.dataset.end   || '';
+      // El campo Proyecto pasó de <select> a un input oculto + combo (.cdd) — este
+      // chequeo seguía leyendo sel.options de un <select> que ya no existe, tiraba
+      // TypeError y save() moría en silencio (drawer se quedaba abierto sin guardar
+      // ni avisar nada — bug real reportado 2026-09-03: "el botón no funciona").
+      const p = _curProj();
+      const projStart = p?.fecha_inicio ? String(p.fecha_inicio).split('T')[0] : '';
+      const projEnd   = p?.fecha_fin    ? String(p.fecha_fin).split('T')[0]    : '';
       if ((projStart && data.deadline < projStart) || (projEnd && data.deadline > projEnd)) {
         alert('La tarea debe estar dentro del rango de fechas del proyecto.');
         return;
@@ -29123,6 +29126,10 @@ const WaChatModule = (() => {
       <div class="wa-snooze-custom">
         <input type="datetime-local" id="wa-snooze-custom-input">
         <button onclick="WaChatModule._snoozeCustom()">Programar</button>
+      </div>
+      <div class="chat-ctx-sep"></div>
+      <div class="wa-note-new" style="padding:0 12px 10px">
+        <textarea id="wa-snooze-note-input" placeholder="Nota opcional — por qué recordarlo (queda en Notas internas)…" rows="2"></textarea>
       </div>`;
   }
 
@@ -29214,19 +29221,33 @@ const WaChatModule = (() => {
     else if (preset === 'semana') d.setDate(d.getDate() + 7);
     return d;
   }
-  async function _snoozePreset(preset) { await _guardarSnooze(_snoozeAt(preset)); }
+  function _snoozeNota() { return (document.getElementById('wa-snooze-note-input')?.value || '').trim(); }
+  async function _snoozePreset(preset) { await _guardarSnooze(_snoozeAt(preset), _snoozeNota()); }
   async function _snoozeCustom() {
     const input = document.getElementById('wa-snooze-custom-input');
     if (!input?.value) return;
-    await _guardarSnooze(new Date(input.value));
+    await _guardarSnooze(new Date(input.value), _snoozeNota());
   }
-  async function _guardarSnooze(fecha) {
+  // Nota opcional al programar el recordatorio — pedido explícito 2026-09-03: antes
+  // había que salir a "Notas internas" aparte para dejar por qué se estaba posponiendo
+  // el seguimiento. Se guarda como una nota interna más (misma lista, mismo endpoint),
+  // solo con el contexto de la fecha al frente para que se entienda de un vistazo.
+  async function _guardarSnooze(fecha, nota) {
     const c = _chatMenuData(); const jid = _chatMenuJid;
     try {
       await apiFetch(`${API}/wa/connections/${_conn.id}/chats/${encodeURIComponent(jid)}/meta`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ snoozeUntil: fecha.toISOString() }),
       });
       if (c) c.snooze_until = fecha.toISOString();
+      if (nota) {
+        const fFmt = fecha.toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+        try {
+          const r = await apiFetch(`${API}/wa/connections/${_conn.id}/chats/${encodeURIComponent(jid)}/notas`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ texto: `[Seguimiento ${fFmt}] ${nota}` }),
+          });
+          if (r.ok) { const n = await r.json(); _notesCache[jid] = [...(_notesCache[jid] || []), n]; if (c) c.notas_count = (+c.notas_count || 0) + 1; }
+        } catch (e) { console.error('[wa] nota de seguimiento:', e); }
+      }
       _closeChatMenu();
       await _cargarChats();
     } catch (e) { console.error('[wa] snooze:', e); }

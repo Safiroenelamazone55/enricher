@@ -2222,12 +2222,12 @@
         <span>Esta tarea tiene subtareas — el plan de trabajo se define en cada <b>subtarea</b>.</span>
       </div>
     </div>
-    <div class="drawer__footer">
-      <button type="button" class="btn btn--ghost btn--danger" id="tasks-delete-btn" style="display:none" onclick="TasksModule.confirmDelete()">Eliminar</button>
-      <button type="button" class="btn btn--ghost" onclick="TasksModule.closeDrawer()">Cancelar</button>
-      <button type="submit" class="btn btn--primary" id="tasks-save-btn">Crear tarea</button>
-    </div>
   </form>
+  <div class="drawer__footer">
+    <button type="button" class="btn btn--ghost btn--danger" id="tasks-delete-btn" style="display:none" onclick="TasksModule.confirmDelete()">Eliminar</button>
+    <button type="button" class="btn btn--ghost" onclick="TasksModule.closeDrawer()">Cancelar</button>
+    <button type="submit" form="tasks-form" class="btn btn--primary" id="tasks-save-btn">Crear tarea</button>
+  </div>
 </aside>
 
 <!-- ── PROJECTS DRAWER ───────────────────────────────── -->
@@ -3023,7 +3023,7 @@
   })();
 </script>
 
-<script src="app.js?v=20260903ze"></script>
+<script src="app.js?v=20260903zg"></script>
 <div id="task-quick-edit" style="display:none;position:fixed;z-index:9999"></div>
 </body>
 </html>
