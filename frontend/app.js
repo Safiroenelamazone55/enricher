@@ -28692,6 +28692,7 @@ const WaChatModule = (() => {
                     : _chatMenuMode === 'assign' ? _chatMenuAssignHtml(c)
                     : _chatMenuMode === 'status' ? _chatMenuStatusHtml(c)
                     : _chatMenuMode === 'priority' ? _chatMenuPriorityHtml(c)
+                    : _chatMenuMode === 'fusionar' ? _chatMenuFusionarHtml()
                     : _chatMenuMode === 'notes' ? _chatMenuNotesHtml(c)
                     : _chatMenuMainHtml(c);
     document.body.appendChild(menu);
@@ -28722,6 +28723,10 @@ const WaChatModule = (() => {
   // (acá y en la pestaña WhatsApp de Outreach) y editable desde el menú "⋮".
   const _WA_PRIORIDADES = { '': { label: 'Sin prioridad', color: '#B4AFA8' }, baja: { label: 'Baja', color: '#22C55E' }, media: { label: 'Media', color: '#F59E0B' }, alta: { label: 'Alta', color: '#EF4444' } };
   const _ICO_FLAG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="3"/></svg>';
+  // Fusionar: caso real 2026-09-02 (Martin Hilson) — WhatsApp empezó a reportar
+  // su chat por un jid "@lid" nuevo a mitad de camino, quedó partido en dos
+  // (uno viejo asignado, otro nuevo "sin asignar" con los mensajes de verdad).
+  const _ICO_MERGE = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v12a3 3 0 0 0 3 3h3"/><path d="M18 3v12a3 3 0 0 1-3 3h-3"/><circle cx="6" cy="3" r="2"/><circle cx="18" cy="3" r="2"/></svg>';
 
   function _chatMenuMainHtml(c) {
     const pinned  = !!c.pinned;
@@ -28741,7 +28746,8 @@ const WaChatModule = (() => {
       <button class="chat-ctx-item" onclick="WaChatModule._chatMenuGoto('priority')">${_ICO_FLAG}<span class="wa-estado-dot" style="background:${prioridad.color}"></span>Prioridad: ${prioridad.label}</button>
       <button class="chat-ctx-item" onclick="WaChatModule._chatMenuGoto('notes')">${_ICO_NOTE}Notas internas${nNotas ? ` (${nNotas})` : ''}</button>
       <div class="chat-ctx-sep"></div>
-      <button class="chat-ctx-item" onclick="WaChatModule._abrirContacto()">${_ICO_USER}Ver datos de contacto</button>`;
+      <button class="chat-ctx-item" onclick="WaChatModule._abrirContacto()">${_ICO_USER}Ver datos de contacto</button>
+      <button class="chat-ctx-item" onclick="WaChatModule._chatMenuGoto('fusionar')" title="Cuando WhatsApp reporta a la misma persona con dos números/jid distintos y termina duplicado en la lista">${_ICO_MERGE}Fusionar con otro chat…</button>`;
   }
 
   function _chatMenuAssignHtml(c) {
@@ -28806,6 +28812,48 @@ const WaChatModule = (() => {
         <textarea id="wa-note-new-input" placeholder="Escribe una nota interna…" rows="2"></textarea>
         <button onclick="WaChatModule._agregarNota()">Agregar</button>
       </div>`;
+  }
+
+  function _chatMenuFusionarHtml() {
+    return `
+      <button class="chat-ctx-item wa-chat-menu__back" onclick="WaChatModule._chatMenuGoto('main')">${_ICO_BACK}Fusionar con otro chat</button>
+      <div class="chat-ctx-sep"></div>
+      <p style="padding:0 12px;margin:6px 0;font-size:.72rem;color:var(--muted,#918C85)">Elige el otro chat de esta misma persona. Se quedan los mensajes de los DOS, unidos en uno solo — no se puede deshacer.</p>
+      <input type="text" id="wa-fusion-q" class="cdd__search" placeholder="Buscar por nombre…" autocomplete="off" oninput="WaChatModule._fusionarFiltrar(this.value)">
+      <div id="wa-fusion-list">${_fusionarListaHtml('')}</div>`;
+  }
+  function _fusionarListaHtml(q) {
+    const jidActual = _chatMenuJid;
+    const query = (q || '').toLowerCase().trim();
+    const candidatos = (_chats || [])
+      .filter(c => c.chat_jid !== jidActual && !c.es_grupo)
+      .filter(c => !query || _nombreChat(c).toLowerCase().includes(query));
+    if (!candidatos.length) return `<div class="wa-tag-empty">Sin coincidencias.</div>`;
+    return candidatos.slice(0, 30).map(c => `
+      <button class="chat-ctx-item" onclick="WaChatModule._fusionarConfirmar('${esc(c.chat_jid).replace(/'/g, "\\'")}')">
+        ${esc(_nombreChat(c))}
+      </button>`).join('');
+  }
+  function _fusionarFiltrar(q) { const list = $$('wa-fusion-list'); if (list) list.innerHTML = _fusionarListaHtml(q); }
+  async function _fusionarConfirmar(otroJid) {
+    const jid = _chatMenuJid;
+    const nombreOtro = _nombreChat((_chats || []).find(c => c.chat_jid === otroJid) || {});
+    const ok = await novaConfirm({
+      title: 'Fusionar chats',
+      message: `Se van a unir estos dos chats en uno solo, con ${esc(nombreOtro || 'este contacto')}. Los mensajes de ambos quedan juntos, ordenados por fecha. Esta acción no se puede deshacer.`,
+      ok: 'Fusionar', cancel: 'Cancelar',
+    });
+    if (!ok) return;
+    try {
+      const r = await apiFetch(`${API}/wa/connections/${_conn.id}/chats/${encodeURIComponent(jid)}/fusionar`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ otroJid }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || 'No se pudo fusionar');
+      _closeChatMenu();
+      await _cargarChats();
+      if (d.jidFinal) abrirChat(d.jidFinal);
+    } catch (e) { alert('Error: ' + e.message); }
   }
 
   function _chatMenuTagsHtml(c) {
@@ -29664,6 +29712,7 @@ const WaChatModule = (() => {
            abrirChatMenu, _chatMenuGoto, _toggleFijado, _toggleTag, _crearTag, _editarTag, _borrarTag,
            _snoozePreset, _snoozeCustom, _quitarSnooze, _abrirContacto, _cerrarContacto, _guardarNombreContacto,
            _asignarMiembro, _cambiarEstadoConv, _cambiarPrioridad, _agregarNota, _borrarNota,
+           _fusionarFiltrar, _fusionarConfirmar,
            setFiltroAsignado, setFiltroEstado, abrirFiltroEstado };
 })();
 window.WaChatModule = WaChatModule;
