@@ -25986,6 +25986,7 @@ const SlackChat = (() => {
       } catch (_) { _nlPorWs[w.id] = 0; }
     }));
     _riel();
+    _pintarBadgeHeader();
   }
 
   function _vacio() {
@@ -26575,7 +26576,7 @@ const SlackChat = (() => {
     const canalId = _canal.id;
     _pendienteDivisor = 0;
     delete _noLeidos[canalId]; delete _marcadoNL[canalId];
-    _nlPorWs[_wsAct] = _totalNoLeidos(); _riel();
+    _nlPorWs[_wsAct] = _totalNoLeidos(); _riel(); _pintarBadgeHeader();
     _pintaCanales();
     document.getElementById('slk-unread-sep')?.remove();
     apiFetch(`${API}/slack/workspaces/${_wsAct}/canales/${canalId}/leido`, { method: 'POST' }).catch(() => {});
@@ -27151,6 +27152,7 @@ const SlackChat = (() => {
     _nlPorWs[_mWsAct] = Object.values(_mNoLeidos).reduce((a, b) => a + (+b || 0), 0);
     _pintaMiniCanales();
     _miniRiel();
+    _pintarBadgeHeader();
     document.getElementById('slk-mini-unread-sep')?.remove();
     apiFetch(`${API}/slack/workspaces/${_mWsAct}/canales/${canalId}/leido`, { method: 'POST' }).catch(() => {});
   }
@@ -27477,21 +27479,30 @@ const SlackChat = (() => {
   // Total sin leer de todos los workspaces conectados, para la insignia del
   // icono de chat en la barra superior — corre aunque el panel esté cerrado,
   // así se ve de un vistazo si hay algo pendiente sin tener que abrirlo.
+  // Pinta el globito del HEADER (visible en toda la app, no solo dentro de Chat) a
+  // partir de _nlPorWs ya en memoria — sin pedir nada nuevo. Antes solo lo tocaba
+  // refreshMiniBadge() cada 60s (el intervalo global); reportado 2026-09-02 que
+  // tardaba en "verse" aunque ya se había leído — ahora también se llama desde
+  // _refrescarNoLeidos (cada 30s mientras el chat está abierto) y desde
+  // marcarLeidoActual/miniMarcarLeidoActual (al instante, sin esperar ningún poll).
+  function _pintarBadgeHeader() {
+    const total = Object.values(_nlPorWs).reduce((a, b) => a + (+b || 0), 0);
+    const el = $$('rchat-badge');
+    if (el) { el.textContent = total > 99 ? '99+' : (total || ''); el.classList.toggle('hidden', !total); }
+  }
+
   async function refreshMiniBadge() {
     if (!_ws.length) {
       try { const r = await apiFetch(`${API}/slack/workspaces`); _ws = r.ok ? await r.json() : []; } catch (_) { _ws = []; }
     }
-    let total = 0;
     await Promise.all(_ws.map(async w => {
       try {
         const r = await apiFetch(`${API}/slack/workspaces/${w.id}/no-leidos`);
         const d = await r.json();
         _nlPorWs[w.id] = d.total || 0;
-        total += _nlPorWs[w.id];
       } catch (_) { _nlPorWs[w.id] = _nlPorWs[w.id] || 0; }
     }));
-    const el = $$('rchat-badge');
-    if (el) { el.textContent = total > 99 ? '99+' : (total || ''); el.classList.toggle('hidden', !total); }
+    _pintarBadgeHeader();
     _miniRiel();
   }
 
