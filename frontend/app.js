@@ -19354,13 +19354,15 @@ ${foot}
     const close = "document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove())";
     const item = (label, onclick, dot) => `<button class="cp-mark-menu__b" onclick="${close};${onclick}">${dot ? `<span class="cp-mark-dot" style="background:${dot}"></span>` : ''}${label}</button>`;
     const quick = _DISPOS.filter(d => d[0] !== 'aceptado');
-    let html = `<div class="cp-mark-menu__list">` + item('Registrar respuesta', `LeadManagerModule.cpOpenRegisterReply(${cid})`) + `</div>`;
-    html += `<div class="cp-mark-menu__sep"></div>`;
+    // "Registrar respuesta" (con selector de Canal) se sacó de acá: dentro del Inbox
+    // ya estás parado en un correo puntual, así que preguntar el canal era ruido —
+    // ambas opciones terminan llamando al mismo lmSetDisposition/_lmSetDispositionCore,
+    // "Resolver respuesta" hace lo mismo en un clic sin ese selector redundante (2026-09-03).
     // "Resolver respuesta" es un submenu que se abre solo al pasar el cursor (no al
     // clickear) — así el menú principal no se llena de golpe con las 8 opciones.
     // cp-mark-menu__list (no __grid): una opción por fila, sin íconos — __grid sigue
     // usándose tal cual en otros menús (ej. "Marcar resultado" del task-runner).
-    html += `<div class="cp-mark-menu__sub">
+    let html = `<div class="cp-mark-menu__sub">
       <div class="cp-mark-menu__b cp-mark-menu__b--sub">Resolver respuesta <span class="cp-mark-menu__arrow">▸</span></div>
       <div class="cp-mark-menu__subpanel"><div class="cp-mark-menu__list">`
       + quick.map(d => item(esc(d[1]), `LeadManagerModule.ibResolveDisp(${cid},'${d[0]}')`, d[2])).join('')
@@ -20335,14 +20337,44 @@ ${foot}
     const close = "document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove())";
     const actual = w.prioridad || '';
     const item = (key, cfg) => `<button class="cp-mark-menu__b" onclick="${close};LeadManagerModule.waSetPrioridad(${contactId},'${key}')"><span class="wa-estado-dot" style="background:${cfg.color};margin-right:6px"></span>${cfg.label}${actual === key ? ' ✓' : ''}</button>`;
+    // Mismo "Resolver respuesta" del Inbox de email, reutilizando ibResolveDisp
+    // (mismo lmSetDisposition: pausa la secuencia, ofrece dejar nota en el historial
+    // del contacto, y "Derivó a otro"/"No es la persona" abren el modal de derivado) —
+    // pedido explícito 2026-09-03: el WhatsApp de Outreach necesita el mismo menú.
+    const quick = _DISPOS.filter(d => d[0] !== 'aceptado');
+    const dispoItem = d => `<button class="cp-mark-menu__b" onclick="${close};LeadManagerModule.ibResolveDisp(${contactId},'${d[0]}')"><span class="cp-mark-dot" style="background:${d[2]}"></span>${esc(d[1])}</button>`;
     const menu = document.createElement('div');
     menu.className = 'cp-mark-menu';
     menu.style.minWidth = '170px';
-    menu.innerHTML = `<div class="cp-mark-menu__list">${Object.entries(_WA_PRIO).map(([k, cfg]) => item(k, cfg)).join('')}</div>`;
+    menu.innerHTML = `<div class="cp-mark-menu__list">${Object.entries(_WA_PRIO).map(([k, cfg]) => item(k, cfg)).join('')}</div>
+      <div class="cp-mark-menu__sep"></div>
+      <div class="cp-mark-menu__sub">
+        <div class="cp-mark-menu__b cp-mark-menu__b--sub">Resolver respuesta <span class="cp-mark-menu__arrow">▸</span></div>
+        <div class="cp-mark-menu__subpanel"><div class="cp-mark-menu__list">${quick.map(dispoItem).join('')}</div></div>
+      </div>`;
     document.body.appendChild(menu);
     const r = ev.currentTarget.getBoundingClientRect();
     menu.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 180))}px`;
     menu.style.top = `${r.bottom + 6}px`;
+    // Mismo ajuste de lado que el submenu del Inbox — el "⋮" suele estar pegado al
+    // borde derecho, así que se mide el espacio real antes de abrir hacia la derecha.
+    const sub = menu.querySelector('.cp-mark-menu__sub');
+    const subpanel = menu.querySelector('.cp-mark-menu__subpanel');
+    if (sub && subpanel) {
+      sub.addEventListener('mouseenter', () => {
+        const subRect = sub.getBoundingClientRect();
+        const needed = 310;
+        if (window.innerWidth - subRect.right < needed && subRect.left >= needed) {
+          subpanel.style.left = 'auto'; subpanel.style.right = '100%';
+          subpanel.style.marginLeft = '0'; subpanel.style.marginRight = '4px';
+        } else {
+          subpanel.style.left = '100%'; subpanel.style.right = 'auto';
+          subpanel.style.marginLeft = '4px'; subpanel.style.marginRight = '0';
+        }
+        subpanel.style.display = 'block';
+      });
+      sub.addEventListener('mouseleave', () => { subpanel.style.display = 'none'; });
+    }
     setTimeout(() => document.addEventListener('click', function onDoc(e) { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', onDoc); } }), 0);
   }
   async function waSetPrioridad(contactId, nivel) {
@@ -25518,7 +25550,7 @@ ${foot}
     ibOpen, ibTab, ibCli, ibDisp, ibSend, ibSaveNote, ibForward, ibSetMode, ibMsgNav, ibSchedToggle, ibSchedPick, ibCancelSched, ibResolveDisp, ibOpenResolveMenu, ibShowLeadActions, ibCopyConversation, _ibFwdSearch, _ibFwdPick,
     ibAbrirDesdeEnviados, ibToggleEnvVista, ibAbrirFiltros, _ibSetFApertura, _ibSetFLeido, _ibSetFSeq, _ibLimpiarFiltrosExtra,
     ibRowMenu, ibCloseMenu, ibMarkUnread,
-    openWaFromList, waCli, waRowMenu, waSetPrioridad,
+    openWaFromList, waCli, waRowMenu, waSetPrioridad, _DISPOS,
     composeAbrir, composeCerrar, composeEnviar, _cmpClientChange, _cmpBuscar, _cmpElegir, _cmpClear, _cmpNuevo, _cmpNuevoCancel, _cmpSeqNueva,
     _cmpCoBuscar, _cmpCoElegir, _cmpCoNueva, _cmpCoClear, _cmpPreviewUpdate, cmpSchedToggle, cmpSchedPick,
     pendingAcceptOpen, pendingAcceptToggleAll, pendingAcceptApplyFilters, pendingAcceptMark,
@@ -27662,17 +27694,44 @@ const QuickWaModule = (() => {
     menu.className = 'cp-mark-menu';
     menu.style.minWidth = '210px';
     const prioItem = (key, cfg) => `<button class="cp-mark-menu__b" onclick="${close};QuickWaModule.setPrioridad('${key}')"><span class="wa-estado-dot" style="background:${cfg.color};margin-right:6px"></span>${cfg.label}${_prioridad === key ? ' ✓' : ''}</button>`;
+    // Mismo "Resolver respuesta" del Inbox de email — reutiliza LeadManagerModule.ibResolveDisp
+    // (pausa la secuencia, ofrece dejar nota en el historial del contacto, y "Derivó a
+    // otro"/"No es la persona" abren el modal de derivado) — pedido 2026-09-03.
+    const quick = (LeadManagerModule._DISPOS || []).filter(d => d[0] !== 'aceptado');
+    const dispoItem = d => `<button class="cp-mark-menu__b" onclick="${close};LeadManagerModule.ibResolveDisp(${_contactId},'${d[0]}')"><span class="cp-mark-dot" style="background:${d[2]}"></span>${esc(d[1])}</button>`;
     menu.innerHTML = `<div class="cp-mark-menu__list">`
       + Object.entries(_QWA_PRIO).map(([k, cfg]) => prioItem(k, cfg)).join('')
       + `<div class="cp-mark-menu__sep"></div>`
       + item('Mover a Deal', `LeadManagerModule.dlOpen(${_contactId})`)
       + item('¿No es esta? Vincular otra', 'QuickWaModule.vincularAbrir()')
-      + `</div>`;
+      + `</div>`
+      + (_contactId ? `<div class="cp-mark-menu__sep"></div>
+      <div class="cp-mark-menu__sub">
+        <div class="cp-mark-menu__b cp-mark-menu__b--sub">Resolver respuesta <span class="cp-mark-menu__arrow">▸</span></div>
+        <div class="cp-mark-menu__subpanel"><div class="cp-mark-menu__list">${quick.map(dispoItem).join('')}</div></div>
+      </div>` : '');
     document.body.appendChild(menu);
     const t = (ev && (ev.currentTarget || ev.target)) || document.body;
     const r = t.getBoundingClientRect();
     menu.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 220))}px`;
     menu.style.top = `${r.bottom + 6}px`;
+    const sub = menu.querySelector('.cp-mark-menu__sub');
+    const subpanel = menu.querySelector('.cp-mark-menu__subpanel');
+    if (sub && subpanel) {
+      sub.addEventListener('mouseenter', () => {
+        const subRect = sub.getBoundingClientRect();
+        const needed = 310;
+        if (window.innerWidth - subRect.right < needed && subRect.left >= needed) {
+          subpanel.style.left = 'auto'; subpanel.style.right = '100%';
+          subpanel.style.marginLeft = '0'; subpanel.style.marginRight = '4px';
+        } else {
+          subpanel.style.left = '100%'; subpanel.style.right = 'auto';
+          subpanel.style.marginLeft = '4px'; subpanel.style.marginRight = '0';
+        }
+        subpanel.style.display = 'block';
+      });
+      sub.addEventListener('mouseleave', () => { subpanel.style.display = 'none'; });
+    }
     setTimeout(() => document.addEventListener('click', function onDoc(e) { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', onDoc); } }), 0);
   }
 
