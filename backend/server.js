@@ -8643,35 +8643,70 @@ app.get('/api/lm/wa-list', requireAuth, async (req, res) => {
       [ids, visibles]);
     const linkMap = new Map(links.map(l => [l.contact_id, { connection_id: l.connection_id, chat_jid: l.chat_jid }]));
 
+    // Contactos sin vínculo explícito: resolver por teléfono. Antes era 1 consulta
+    // POR CONTACTO acá — con cientos de contactos en secuencia eso eran cientos de
+    // round-trips y era la causa real de la demora reportada (2026-09-03). Ahora es
+    // 1 sola consulta para TODOS los teléfonos candidatos.
+    const sinLink = contactos.filter(c => !linkMap.has(c.id));
+    const jidPorContacto = new Map(); // contact_id -> jid candidato
+    for (const c of sinLink) {
+      const telefono = String(c.movil || c.telefono || '').replace(/\D/g, '');
+      if (telefono) jidPorContacto.set(c.id, `${telefono}@s.whatsapp.net`);
+    }
+    const candidateJids = [...new Set(jidPorContacto.values())];
+    const jidHallado = new Map(); // jid -> connection_id (primera conexión donde aparece)
+    if (candidateJids.length) {
+      const { rows: found } = await pool.query(
+        `SELECT DISTINCT connection_id, chat_jid FROM wa_messages WHERE connection_id = ANY($1) AND chat_jid = ANY($2)`,
+        [visibles, candidateJids]);
+      for (const f of found) if (!jidHallado.has(f.chat_jid)) jidHallado.set(f.chat_jid, f.connection_id);
+    }
+
     const resueltos = [];
     for (const c of contactos) {
-      let hit = linkMap.get(c.id);
-      if (!hit) {
-        const telefono = String(c.movil || c.telefono || '').replace(/\D/g, '');
-        if (!telefono) continue;
-        const jid = `${telefono}@s.whatsapp.net`;
-        const { rows: [m] } = await pool.query(
-          `SELECT connection_id FROM wa_messages WHERE connection_id = ANY($1) AND chat_jid=$2 LIMIT 1`,
-          [visibles, jid]);
-        if (!m) continue;
-        hit = { connection_id: m.connection_id, chat_jid: jid };
-      }
-      resueltos.push({ contacto: c, connection_id: hit.connection_id, chat_jid: hit.chat_jid });
+      const link = linkMap.get(c.id);
+      if (link) { resueltos.push({ contacto: c, connection_id: link.connection_id, chat_jid: link.chat_jid }); continue; }
+      const jid = jidPorContacto.get(c.id);
+      if (!jid) continue;
+      const connId = jidHallado.get(jid);
+      if (!connId) continue;
+      resueltos.push({ contacto: c, connection_id: connId, chat_jid: jid });
     }
     if (!resueltos.length) return res.json([]);
 
-    const out = [];
+    // Último mensaje, no leídos y prioridad: antes eran 3 consultas POR CONTACTO
+    // (el grueso de la demora). Ahora se agrupa por conexión (normalmente 1-2) y se
+    // trae todo de una sola vez por conexión, no por contacto.
+    const porConexion = new Map(); // connection_id -> chat_jids[]
     for (const r of resueltos) {
-      const { rows: [last] } = await pool.query(
-        `SELECT texto, ts, from_me, eliminado FROM wa_messages WHERE connection_id=$1 AND chat_jid=$2 ORDER BY ts DESC LIMIT 1`,
-        [r.connection_id, r.chat_jid]);
-      const { rows: [nl] } = await pool.query(
-        `SELECT COUNT(*)::int AS n FROM wa_messages WHERE connection_id=$1 AND chat_jid=$2 AND NOT leido AND NOT from_me`,
-        [r.connection_id, r.chat_jid]);
-      const { rows: [meta] } = await pool.query(
-        `SELECT prioridad FROM wa_chat_meta WHERE connection_id=$1 AND chat_jid=$2`,
-        [r.connection_id, r.chat_jid]);
-      out.push({
+      if (!porConexion.has(r.connection_id)) porConexion.set(r.connection_id, new Set());
+      porConexion.get(r.connection_id).add(r.chat_jid);
+    }
+    const lastMap = new Map();   // `${connId}|${jid}` -> {texto,ts,from_me,eliminado}
+    const unreadMap = new Map();
+    const metaMap = new Map();
+    for (const [connId, jidSet] of porConexion) {
+      const jids = [...jidSet];
+      const { rows: lasts } = await pool.query(
+        `SELECT DISTINCT ON (chat_jid) chat_jid, texto, ts, from_me, eliminado
+           FROM wa_messages WHERE connection_id=$1 AND chat_jid = ANY($2)
+          ORDER BY chat_jid, ts DESC`, [connId, jids]);
+      for (const l of lasts) lastMap.set(`${connId}|${l.chat_jid}`, l);
+      const { rows: unreads } = await pool.query(
+        `SELECT chat_jid, COUNT(*)::int AS n FROM wa_messages
+          WHERE connection_id=$1 AND chat_jid = ANY($2) AND NOT leido AND NOT from_me
+          GROUP BY chat_jid`, [connId, jids]);
+      for (const u of unreads) unreadMap.set(`${connId}|${u.chat_jid}`, u.n);
+      const { rows: metas } = await pool.query(
+        `SELECT chat_jid, prioridad FROM wa_chat_meta WHERE connection_id=$1 AND chat_jid = ANY($2)`,
+        [connId, jids]);
+      for (const m of metas) metaMap.set(`${connId}|${m.chat_jid}`, m.prioridad);
+    }
+
+    const out = resueltos.map(r => {
+      const key = `${r.connection_id}|${r.chat_jid}`;
+      const last = lastMap.get(key);
+      return {
         contact_id: r.contacto.id,
         nombre: [r.contacto.nombre, r.contacto.apellido].filter(Boolean).join(' '),
         telefono: r.contacto.movil || r.contacto.telefono || '',
@@ -8681,10 +8716,10 @@ app.get('/api/lm/wa-list', requireAuth, async (req, res) => {
         ultimo_texto: last?.eliminado ? 'Se eliminó este mensaje' : (last?.texto || ''),
         ultimo_ts: last?.ts || null,
         from_me: !!last?.from_me,
-        no_leidos: nl?.n || 0,
-        prioridad: meta?.prioridad || '',
-      });
-    }
+        no_leidos: unreadMap.get(key) || 0,
+        prioridad: metaMap.get(key) || '',
+      };
+    });
     out.sort((a, b) => new Date(b.ultimo_ts || 0) - new Date(a.ultimo_ts || 0));
     res.json(out);
   } catch (err) { console.error('[lm] wa-list', err.message); res.status(500).json({ error: 'Error al cargar' }); }
