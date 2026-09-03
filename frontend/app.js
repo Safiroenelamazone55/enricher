@@ -15716,6 +15716,7 @@ const LeadManagerModule = (() => {
   let _campaigns = [];        // campañas (Fase 2)
   let _sequences = [];        // secuencias (Fase 3)
   let _seqOnCreated = null;   // callback(seq) opcional — si está seteado, saveSequence lo llama en vez de navegar a la secuencia (usado por el compose del Inbox)
+  let _cmpOnCreated = null;   // mismo patrón que _seqOnCreated pero para campañas — usado por "Crear nueva" en bulkAddOpen
   let _steps = [];            // pasos de secuencia (Fase 3)
   let _activities = [];       // actividades / tareas comerciales (Fase 4)
   let _lmTpls = [];           // biblioteca de plantillas / assets
@@ -22447,7 +22448,8 @@ ${foot}
 
   // ── Campaña: drawer crear/editar (modal dinámico) ──
   const _CMP_OPTS = [['draft', 'Draft'], ['activa', 'Activa'], ['pausada', 'Pausada'], ['cerrada', 'Cerrada']];
-  function openCampaignDrawer(id, presetClient) {
+  function openCampaignDrawer(id, presetClient, onCreated) {
+    _cmpOnCreated = onCreated || null;
     const c = id ? _campaigns.find(x => x.id === id) : null;
     const clientId = c?.outbound_client_id ?? presetClient ?? '';
     document.getElementById('lm-cmp-modal')?.remove();
@@ -22488,7 +22490,7 @@ ${foot}
     document.body.appendChild(m);
     setTimeout(() => $('cmp-nombre')?.focus(), 60);
   }
-  function closeCampaignDrawer() { document.getElementById('lm-cmp-modal')?.remove(); }
+  function closeCampaignDrawer() { document.getElementById('lm-cmp-modal')?.remove(); _cmpOnCreated = null; }
   async function saveCampaign(id) {
     const nombre = $('cmp-nombre')?.value.trim();
     const clientId = $('cmp-client')?.value;
@@ -22507,8 +22509,11 @@ ${foot}
     try {
       const res = await apiFetch(`${API}/campaigns${id ? '/' + id : ''}`, { method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       if (!res.ok) throw new Error((await res.json()).error || 'Error');
+      const saved = await res.json().catch(() => null);
+      const cb = _cmpOnCreated;
       closeCampaignDrawer();
       await load();
+      if (!id && saved && saved.id && cb) cb(saved);
     } catch (e) { fail(e.message); if (btn) btn.disabled = false; }
   }
   async function confirmDeleteCampaign(id) {
@@ -23124,6 +23129,8 @@ ${foot}
   let _contactView = null;
   let _cpTab = 'resumen';
   let _addIds = [];
+  let _bulkAddKind = 'sequence'; // 'sequence'|'campaign' — con qué se creó el picker que abrió "Crear nueva…"
+  function _bulkAddAfterCreate(saved) { bulkAddDo(_bulkAddKind, saved.id); }
   let _cpActs = null;
   let _cpTaskCtx = null;      // { seqId } — ejecutando una tarea de secuencia sobre esta ficha
   let _cpTaskHist = [];       // historial de contactos ya recorridos en la corrida (para "‹ Anterior")
@@ -23804,9 +23811,19 @@ ${foot}
     const list = items.length
       ? items.map(it => `<button class="lm-pick-item" onclick="LeadManagerModule.bulkAddDo('${kind}',${it.id})"><span>${esc(it.nombre)}</span>${it.estado ? `<span class="lm-pick-est">${esc(it.estado)}</span>` : ''}</button>`).join('')
       : `<div class="lm-pick-empty">Aún no hay ${word}s. Crea una en su sección primero.</div>`;
+    // "Crear nueva ▸" arriba del picker — antes había que salir, crear la secuencia/
+    // campaña en su sección, y volver a buscar al contacto para recién ahí enrolarlo.
+    // Precarga el cliente outbound del primer contacto (normal en el flujo de un solo
+    // contacto recién derivado) y, al crearla, lo enrola de una vez (pedido 2026-09-03).
+    const firstC = _contacts.find(x => x.id === _addIds[0]);
+    const presetClient = firstC?.outbound_client_id || '';
+    const createBtn = kind === 'sequence'
+      ? `<button class="lm-pick-item lm-pick-item--new" onclick="document.getElementById('lm-add-modal').remove();LeadManagerModule.openSequenceDrawer(null,${presetClient || 'null'},LeadManagerModule._bulkAddAfterCreate)">＋ Crear nueva secuencia…</button>`
+      : `<button class="lm-pick-item lm-pick-item--new" onclick="document.getElementById('lm-add-modal').remove();LeadManagerModule.openCampaignDrawer(null,${presetClient || 'null'},LeadManagerModule._bulkAddAfterCreate)">＋ Crear nueva campaña…</button>`;
+    _bulkAddKind = kind;
     m.innerHTML = `<div class="fin-pi-box lm-pick-box">
       <div class="fin-pi-box__hd"><h3>Añadir ${_addIds.length} contacto(s) a una ${word}</h3><button class="fin-pi-x" onclick="document.getElementById('lm-add-modal').remove()">✕</button></div>
-      <div class="lm-pick-list">${list}</div>
+      <div class="lm-pick-list">${createBtn}${items.length ? '<div class="lm-pick-sep"></div>' : ''}${list}</div>
     </div>`;
     document.body.appendChild(m);
   }
@@ -25521,7 +25538,7 @@ ${foot}
   return { load, filter, setFilter, setView, go, openClient, clientTab, _clientGoTab, clientQuickMenu,
     openImportPicker, closeImportPicker, openImport, closeImport, impFile, impToggleHeader, impToggleUpdateExisting, impSetObc, impNewClient, impRun, exportCsv,
     cbxOpen, cbxFilter, cbxPick, cbxBlur,
-    openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, bulkDeleteContacts, bulkAddOpen, bulkAddDo, openContactPage, cpTab, cpSave, cpDelete, cpActOpen, cpActSave, cpActToggle, cpActDel,
+    openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, bulkDeleteContacts, bulkAddOpen, bulkAddDo, _bulkAddAfterCreate, openContactPage, cpTab, cpSave, cpDelete, cpActOpen, cpActSave, cpActToggle, cpActDel,
     cpResumeSeq, cpFocusField, cpOpenRegisterReply, cpSaveRegisterReply,
     openCompany, closeCompany, saveCompany, deleteCompany, filterCompanies, toggleCo, toggleCoAll, clearCoSel, toggleCoSelMode, bulkDeleteCompanies, coEnrolOpen, coEnrolFilter, coEnrolPick,
     coQueueAddContact, coQueueDiscard, coQueueTogglePrimary, coQueueContinue,
