@@ -8351,6 +8351,27 @@ app.get('/api/wa/connections', requireAuth, async (req, res) => {
   } catch (err) { console.error('[wa] GET connections', err.message); res.status(500).json({ error: 'Error al cargar las conexiones' }); }
 });
 
+// Solo el listado de qué clientes outbound YA tienen un WhatsApp conectado/pendiente
+// (sin traer chats ni nada pesado) — lo usa el menú "⋮" de cada cliente en Outreach
+// para decidir si el ítem dice "Conectar WhatsApp" o "Editar WhatsApp" (2026-09-03).
+app.get('/api/lm/wa-status', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT c.id, c.connected_by, c.visibilidad, c.visibilidad_niveles, c.visibilidad_miembros,
+             array_agg(DISTINCT wcc.outbound_client_id) FILTER (WHERE wcc.outbound_client_id IS NOT NULL) AS clientes
+        FROM wa_connections c
+        LEFT JOIN wa_connection_clients wcc ON wcc.connection_id = c.id
+       WHERE c.user_id=$1 AND c.estado IN ('conectado','esperando_qr')
+       GROUP BY c.id`, [req.workspaceOwnerId]);
+    const out = new Set();
+    for (const r of rows) {
+      if (!(await _puedeVerWa(req, r))) continue;
+      for (const cid of (r.clientes || [])) out.add(cid);
+    }
+    res.json([...out]);
+  } catch (err) { console.error('[lm] wa-status', err.message); res.status(500).json({ error: 'Error al cargar' }); }
+});
+
 app.post('/api/wa/connections', requireAuth, async (req, res) => {
   const nombre = String((req.body || {}).nombre || 'WhatsApp de trabajo').trim().slice(0, 80);
   const outboundClientId = req.body?.outboundClientId ? +req.body.outboundClientId : null;

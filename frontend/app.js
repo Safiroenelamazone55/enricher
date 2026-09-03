@@ -15937,7 +15937,7 @@ const LeadManagerModule = (() => {
     if (section === 'tasks')     { _apList = null; _apReload(); }
     if (section === 'leads')     _reloadActivities();
   }
-  function openClient(id) { _activeClient = id; _section = 'client'; _refreshNav(); _renderBody(); if (_mailboxes === null) _mbReload(); }
+  function openClient(id) { _activeClient = id; _section = 'client'; _refreshNav(); _renderBody(); if (_mailboxes === null) _mbReload(); if (_waClientIds === null) _waStatusReload(); }
   function _refreshNav() { const n = $('lm2-nav-list'); if (n) n.innerHTML = _navHtml(); }
   function _renderBody() {
     const body = $('lm2-body'); if (!body) return;
@@ -20534,9 +20534,31 @@ ${foot}
   async function _mbReload() {
     try { const r = await apiFetch(`${API}/lm/mailboxes`); _mailboxes = (r && r.ok) ? await r.json() : []; } catch { _mailboxes = []; }
     if (_section === 'client') _renderBody();
+    // El buzón ya no vive suelto en la barra lateral (2026-09-03) — si el modal de
+    // "Editar/Conectar buzón" está abierto, se refresca su contenido acá también.
+    if (_mbManageClientId) {
+      const body = document.getElementById('mbx-manage-body');
+      const c = _clients.find(x => x.id === _mbManageClientId);
+      if (body && c) body.innerHTML = _mbBodyHtml(c);
+    }
   }
   function _mbFor(clientId) { return Array.isArray(_mailboxes) ? _mailboxes.find(m => m.outbound_client_id === clientId) : null; }
-  function _mbSideHtml(c) {
+  let _mbManageClientId = null;
+  async function mbManageOpen(clientId) {
+    mbManageClose();
+    const c = _clients.find(x => x.id === clientId); if (!c) return;
+    _mbManageClientId = clientId;
+    const m = document.createElement('div'); m.id = 'mbx-manage-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = ev => { if (ev.target === m) mbManageClose(); };
+    m.innerHTML = `<div class="fin-pi-box" style="max-width:420px">
+      <div class="dle-hd"><div style="flex:1;min-width:0"><div class="dle-hd__t">Buzón de ${esc(c.nombre)}</div></div><button class="fin-pi-x" onclick="LeadManagerModule.mbManageClose()">✕</button></div>
+      <div id="mbx-manage-body" style="padding:16px 20px 20px">${_mailboxes === null ? '<div class="mbx-sub">Cargando…</div>' : _mbBodyHtml(c)}</div>
+    </div>`;
+    document.body.appendChild(m);
+    if (_mailboxes === null) await _mbReload();
+  }
+  function mbManageClose() { document.getElementById('mbx-manage-modal')?.remove(); _mbManageClientId = null; }
+  function _mbBodyHtml(c) {
     const mb = _mbFor(c.id);
     const provLbl = mb ? (_MB_PROV.find(p => p[0] === mb.provider) || ['', mb.provider])[1] : '';
     // Estado "necesita aprobación del admin" pisa el chip normal: es un caso especial
@@ -20573,7 +20595,66 @@ ${foot}
            </div>`
         : `<div class="mbx-sub">Conecta el buzón real de este cliente (jenny@sudominio…) para enviar, leer respuestas y rebotes desde Nova.</div>
            <button class="btn btn--primary btn--sm" style="margin-top:8px" onclick="LeadManagerModule.mbOpen(${c.id})">Conectar buzón</button>`;
-    return `<div class="mbx"><div class="mbx-t">Buzón de envío</div>${inner}</div>`;
+    return `<div class="mbx">${inner}</div>`;
+  }
+  // ── WhatsApp del cliente outbound: mismo patrón que el buzón — un modal desde el
+  // "⋮" en vez de vivir suelto, y el ítem del menú dice "Conectar"/"Editar" según si
+  // ya hay una conexión (pedido explícito 2026-09-03). _waClientIds es un Set liviano
+  // (solo ids) para poder decidir la etiqueta del menú sin awaitear nada al abrirlo.
+  let _waClientIds = null;
+  async function _waStatusReload() {
+    try { const r = await apiFetch(`${API}/lm/wa-status`); _waClientIds = new Set(r.ok ? await r.json() : []); }
+    catch { _waClientIds = new Set(); }
+  }
+  let _wamClientId = null;
+  async function wamOpen(clientId) {
+    wamClose();
+    const c = _clients.find(x => x.id === clientId); if (!c) return;
+    _wamClientId = clientId;
+    const m = document.createElement('div'); m.id = 'wam-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = ev => { if (ev.target === m) wamClose(); };
+    m.innerHTML = `<div class="fin-pi-box" style="max-width:420px">
+      <div class="dle-hd"><div style="flex:1;min-width:0"><div class="dle-hd__t">WhatsApp de ${esc(c.nombre)}</div></div><button class="fin-pi-x" onclick="LeadManagerModule.wamClose()">✕</button></div>
+      <div id="wam-body" class="mbx" style="padding:16px 20px 20px"><div class="mbx-sub">Cargando…</div></div>
+    </div>`;
+    document.body.appendChild(m);
+    await _wamRefresh(clientId);
+  }
+  function wamClose() { document.getElementById('wam-modal')?.remove(); _wamClientId = null; }
+  async function _wamRefresh(clientId) {
+    const body = document.getElementById('wam-body'); if (!body) return;
+    try {
+      const r = await apiFetch(`${API}/wa/connections?outboundClientId=${clientId}`);
+      const rows = r.ok ? await r.json() : [];
+      const conn = rows.find(x => x.estado === 'conectado') || rows.find(x => x.estado === 'esperando_qr') || rows[rows.length - 1] || null;
+      body.innerHTML = _wamBodyHtml(clientId, conn);
+    } catch (e) { body.innerHTML = `<div class="mbx-sub">Error al cargar: ${esc(e.message)}</div>`; }
+  }
+  function _wamBodyHtml(clientId, conn) {
+    if (!conn || conn.estado === 'desconectado') {
+      return `<div class="mbx-sub">Conecta un WhatsApp para este cliente (uno nuevo escaneando QR, o uno que ya tengas) para escribir y recibir mensajes desde Nova.</div>
+        <button class="btn btn--primary btn--sm" style="margin-top:8px" onclick="LeadManagerModule.wamClose();LeadManagerModule._clientGoTab('WhatsApp')">Conectar WhatsApp ›</button>`;
+    }
+    const conectado = conn.estado === 'conectado';
+    const chipCls = 'mbx-chip' + (conectado ? ' mbx-chip--ok' : ' mbx-chip--warn');
+    const chipTxt = conectado ? '✓ Conectado' : '⏳ Esperando que escanees el QR';
+    return `<div class="mbx-row"><span class="${chipCls}">${chipTxt}</span></div>
+      <div class="mbx-mail">${conn.numero ? '+' + esc(conn.numero) : esc(conn.nombre || 'WhatsApp')}</div>
+      <div class="mbx-acts">
+        <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.wamClose();LeadManagerModule._clientGoTab('WhatsApp')">${conectado ? 'Abrir WhatsApp ›' : 'Ir a escanear ›'}</button>
+        <button class="btn btn--ghost btn--sm" style="color:var(--danger)" onclick="LeadManagerModule.wamDesconectar(${clientId},${conn.id})">Desconectar</button>
+      </div>`;
+  }
+  async function wamDesconectar(clientId, connId) {
+    const ok = await novaConfirm({ title: '¿Desconectar este WhatsApp?', message: 'Vas a tener que escanear un QR nuevo para volver a usarlo con este cliente.', ok: 'Desconectar', cancel: 'Cancelar', tone: 'danger' });
+    if (!ok) return;
+    try {
+      const r = await apiFetch(`${API}/wa/connections/${connId}/desconectar`, { method: 'POST' });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Error');
+      showBanner('✓ WhatsApp desconectado', 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+    await _wamRefresh(clientId);
+    await _waStatusReload();
   }
   // "hace 3 h" / "hace 2 d" para el timestamp del último envío al admin.
   function _ago(ts) {
@@ -21105,7 +21186,6 @@ ${foot}
           ${field('Website', c.website ? `<a href="${esc(c.website)}" target="_blank" rel="noopener" class="lm-link">${esc(c.website)}</a>` : '—')}
           ${field('Leads cargados', String(leads.length))}
           ${field('Valor estimado', _money(_sumv(leads)))}
-          ${_mbSideHtml(c)}
         </aside>
         <section class="lm-ws-main">
           <div class="lm-ws-pipe"><div class="lm-ws-pipe__hd">Pipeline · ${pipe.length} en juego</div><div class="lm-pipe">${pipeBar}</div></div>
@@ -21130,9 +21210,16 @@ ${foot}
     document.querySelectorAll('.cp-mark-menu').forEach(m => m.remove());
     const close = "document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove())";
     const item = (label, onclick) => `<button class="cp-mark-menu__b" onclick="${close};${onclick}">${label}</button>`;
+    // Antes "Conectar buzón" abría directo el formulario de credenciales (aunque ya
+    // hubiera uno conectado) y "Conectar WhatsApp" saltaba de una a la pestaña — ahora
+    // ambos abren un modal de estado propio y el label dice Editar/Conectar según si
+    // ya existe la conexión (pedido explícito 2026-09-03: que no viva suelto en la
+    // info del cliente sino dentro de los 3 puntos).
+    const mbYa = !!_mbFor(id);
+    const waYa = _waClientIds instanceof Set && _waClientIds.has(id);
     let html = `<div class="cp-mark-menu__list">`
-      + item('Conectar buzón', `LeadManagerModule.mbOpen(${id})`)
-      + item('Conectar WhatsApp', `LeadManagerModule._clientGoTab('WhatsApp')`)
+      + item(mbYa ? 'Editar buzón' : 'Conectar buzón', `LeadManagerModule.mbManageOpen(${id})`)
+      + item(waYa ? 'Editar WhatsApp' : 'Conectar WhatsApp', `LeadManagerModule.wamOpen(${id})`)
       + item('Editar cliente', `LeadManagerModule.openClientDrawer(${id})`)
       + item('Informe de campaña', `LeadManagerModule.clientCmpReport(${id})`)
       + item('Informe de secuencia', `LeadManagerModule.clientSeqReport(${id})`)
@@ -25574,7 +25661,8 @@ ${foot}
     dlSetCli, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel,
     sqSetCli, sqSetEst, sqSetQ, cmSetCli, cmSetEst, cmSetQ,
     seqRunSetCanal, seqTaskSetDue,
-    mbOpen, mbClose, mbSave, mbTest, mbDelete, mbProv, mbOAuthStart,
+    mbOpen, mbClose, mbSave, mbTest, mbDelete, mbProv, mbOAuthStart, mbManageOpen, mbManageClose,
+    wamOpen, wamClose, wamDesconectar,
     mbAdminConsentOpen, mbAdminConsentLang, mbAdminConsentSend, mbAdminConsentQuick,
     mbSignatureOpen, mbSignaturePreview, mbSignatureClear, mbSignatureInsertLink, mbSignatureImg, mbSignatureSave,
     mbAdminConsentSync, mbAdminConsentToggleHtml,
