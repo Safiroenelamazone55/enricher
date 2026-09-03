@@ -15787,6 +15787,10 @@ const LeadManagerModule = (() => {
     // Contador de Inbox en la barra: carga al entrar al módulo y refresca cada 3 min.
     _ibReload();
     if (!_ibPoll) { _ibPoll = setInterval(_ibReload, 3 * 60 * 1000); }
+    // WhatsApp de Outreach: mismo patrón, pero cada 45s — es el canal donde una
+    // respuesta "en tiempo real" importa más que en email.
+    _waReload();
+    if (!_waPoll) { _waPoll = setInterval(_waReload, 45 * 1000); }
     // Config de envío (ventana/fines de semana) para calcular la fecha real de envío en Aprobar.
     if (_sendCfg === null) apiFetch(`${API}/lm/send-settings`).then(r => r && r.ok && r.json().then(j => { _sendCfg = j; })).catch(() => {});
     // Campos personalizados (Field1..10 renombrables) — gatean qué aparece en filtros/import/modal/export.
@@ -20293,6 +20297,9 @@ ${foot}
   // GET /api/lm/wa-list) — no arranca chats nuevos, abre los que ya hay con el
   // mismo QuickWaModule que usa el resto de la app.
   let _waList = null; // null = cargando
+  let _waPoll = null;  // refresco periódico — antes solo cargaba al entrar a la pestaña
+                        // y se quedaba desactualizado ahí adentro (pedido 2026-09-03:
+                        // que las respuestas lleguen "en tiempo real" sin recargar).
   let _waCli  = 0;    // filtro por cliente outbound (0 = todos) — mismo patrón que _ibCli.
   // A propósito NO se comporta como el switcher de cuentas de Operaciones (uno a la
   // vez): acá se ven TODOS los números juntos, mezclados en una sola lista; lo único

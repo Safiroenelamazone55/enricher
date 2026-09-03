@@ -5249,7 +5249,7 @@ setTimeout(()=>window.close(), ${kind === 'ok' ? 1200 : 3500});
 app.get('/api/lm/nav-counts', requireAuth, async (req, res) => {
   const uid = req.workspaceOwnerId;
   try {
-    const [inbox, acts, aprob, leads] = await Promise.all([
+    const [inbox, acts, aprob, leads, wa] = await Promise.all([
       pool.query(`SELECT COUNT(*)::int n FROM lm_inbox_messages
                    WHERE user_id=$1 AND NOT leido AND tipo='reply'`, [uid]),
       pool.query(`SELECT COUNT(*)::int n FROM activities
@@ -5258,11 +5258,31 @@ app.get('/api/lm/nav-counts', requireAuth, async (req, res) => {
                    WHERE user_id=$1 AND estado='awaiting'`, [uid]),
       pool.query(`SELECT COUNT(*)::int n FROM lm_contacts
                    WHERE user_id=$1 AND disposition IN ('respondio','reunion')`, [uid]),
+      // El total de "sin leer" del WhatsApp de Outreach — antes la insignia del nav
+      // solo se llenaba DESPUÉS de haber abierto esa pestaña una vez (dependía de
+      // _waList cargado en el cliente); ahora viene del servidor como las demás
+      // (pedido 2026-09-03: verlo sin tener que entrar primero).
+      _lmWaResolve(req).then(async resueltos => {
+        if (!resueltos.length) return 0;
+        const porConexion = new Map();
+        for (const r of resueltos) {
+          if (!porConexion.has(r.connection_id)) porConexion.set(r.connection_id, new Set());
+          porConexion.get(r.connection_id).add(r.chat_jid);
+        }
+        let total = 0;
+        for (const [connId, jidSet] of porConexion) {
+          const { rows } = await pool.query(
+            `SELECT COUNT(*)::int n FROM wa_messages WHERE connection_id=$1 AND chat_jid = ANY($2) AND NOT leido AND NOT from_me`,
+            [connId, [...jidSet]]);
+          total += rows[0].n;
+        }
+        return total;
+      }).catch(() => 0),
     ]);
-    res.json({ inbox: inbox.rows[0].n, tasks: acts.rows[0].n + aprob.rows[0].n, leads: leads.rows[0].n });
+    res.json({ inbox: inbox.rows[0].n, tasks: acts.rows[0].n + aprob.rows[0].n, leads: leads.rows[0].n, wa });
   } catch (err) {
     console.error('[lm/nav-counts] error:', err.message);
-    res.json({ inbox: 0, tasks: 0, leads: 0 });   // una insignia no debe tumbar el modulo
+    res.json({ inbox: 0, tasks: 0, leads: 0, wa: 0 });   // una insignia no debe tumbar el modulo
   }
 });
 
@@ -8638,61 +8658,70 @@ app.get('/api/wa/connections/:id/chats', requireAuth, async (req, res) => {
 // solo muestra los que YA existen (vínculo guardado en wa_jid_links, o el jid
 // armado desde su teléfono si ya tiene mensajes ahí). Abrir un contacto de esta
 // lista usa el mismo QuickWaModule.open() que el resto de la app.
-app.get('/api/lm/wa-list', requireAuth, async (req, res) => {
-  try {
-    // 'activo' o 'pausado' = "sigue en la secuencia" (mismo criterio que el resto del
-    // motor, ver estado IN ('activo','pausado') en /api/lm/contacts/:id/disposition) —
-    // un contacto que ya respondió por WhatsApp queda pausado, pero es justo el caso
-    // que esta pestaña debe mostrar, no excluir.
-    const { rows: contactos } = await pool.query(`
+// Resuelve qué contactos (en secuencia activa/pausada) tienen un chat de WhatsApp
+// real, ya sea por vínculo guardado (wa_jid_links) o por coincidencia de teléfono.
+// Compartido por /api/lm/wa-list (fila completa) y /api/lm/nav-counts (solo el total
+// de no leídos) — antes esta resolución vivía duplicada, con riesgo de que un cambio
+// se aplicara en un lado y no en el otro.
+async function _lmWaResolve(req) {
+  // 'activo' o 'pausado' = "sigue en la secuencia" (mismo criterio que el resto del
+  // motor, ver estado IN ('activo','pausado') en /api/lm/contacts/:id/disposition) —
+  // un contacto que ya respondió por WhatsApp queda pausado, pero es justo el caso
+  // que esta pestaña debe mostrar, no excluir.
+  const { rows: contactos } = await pool.query(`
       SELECT DISTINCT k.id, k.nombre, k.apellido, k.movil, k.telefono, k.outbound_client_id
         FROM lm_contacts k
         JOIN lm_contact_sequences cs ON cs.contact_id = k.id AND cs.estado IN ('activo','pausado')
        WHERE k.user_id = $1`, [req.workspaceOwnerId]);
-    if (!contactos.length) return res.json([]);
+  if (!contactos.length) return [];
 
-    const { rows: conns } = await pool.query(
-      `SELECT id, connected_by, visibilidad, visibilidad_niveles, visibilidad_miembros FROM wa_connections WHERE user_id=$1`,
-      [req.workspaceOwnerId]);
-    const visibles = [];
-    for (const c of conns) if (await _puedeVerWa(req, c)) visibles.push(c.id);
-    if (!visibles.length) return res.json([]);
+  const { rows: conns } = await pool.query(
+    `SELECT id, connected_by, visibilidad, visibilidad_niveles, visibilidad_miembros FROM wa_connections WHERE user_id=$1`,
+    [req.workspaceOwnerId]);
+  const visibles = [];
+  for (const c of conns) if (await _puedeVerWa(req, c)) visibles.push(c.id);
+  if (!visibles.length) return [];
 
-    const ids = contactos.map(c => c.id);
-    const { rows: links } = await pool.query(
-      `SELECT contact_id, connection_id, chat_jid FROM wa_jid_links WHERE contact_id = ANY($1) AND connection_id = ANY($2)`,
-      [ids, visibles]);
-    const linkMap = new Map(links.map(l => [l.contact_id, { connection_id: l.connection_id, chat_jid: l.chat_jid }]));
+  const ids = contactos.map(c => c.id);
+  const { rows: links } = await pool.query(
+    `SELECT contact_id, connection_id, chat_jid FROM wa_jid_links WHERE contact_id = ANY($1) AND connection_id = ANY($2)`,
+    [ids, visibles]);
+  const linkMap = new Map(links.map(l => [l.contact_id, { connection_id: l.connection_id, chat_jid: l.chat_jid }]));
 
-    // Contactos sin vínculo explícito: resolver por teléfono. Antes era 1 consulta
-    // POR CONTACTO acá — con cientos de contactos en secuencia eso eran cientos de
-    // round-trips y era la causa real de la demora reportada (2026-09-03). Ahora es
-    // 1 sola consulta para TODOS los teléfonos candidatos.
-    const sinLink = contactos.filter(c => !linkMap.has(c.id));
-    const jidPorContacto = new Map(); // contact_id -> jid candidato
-    for (const c of sinLink) {
-      const telefono = String(c.movil || c.telefono || '').replace(/\D/g, '');
-      if (telefono) jidPorContacto.set(c.id, `${telefono}@s.whatsapp.net`);
-    }
-    const candidateJids = [...new Set(jidPorContacto.values())];
-    const jidHallado = new Map(); // jid -> connection_id (primera conexión donde aparece)
-    if (candidateJids.length) {
-      const { rows: found } = await pool.query(
-        `SELECT DISTINCT connection_id, chat_jid FROM wa_messages WHERE connection_id = ANY($1) AND chat_jid = ANY($2)`,
-        [visibles, candidateJids]);
-      for (const f of found) if (!jidHallado.has(f.chat_jid)) jidHallado.set(f.chat_jid, f.connection_id);
-    }
+  // Contactos sin vínculo explícito: resolver por teléfono. Antes era 1 consulta
+  // POR CONTACTO acá — con cientos de contactos en secuencia eso eran cientos de
+  // round-trips y era la causa real de la demora reportada (2026-09-03). Ahora es
+  // 1 sola consulta para TODOS los teléfonos candidatos.
+  const sinLink = contactos.filter(c => !linkMap.has(c.id));
+  const jidPorContacto = new Map(); // contact_id -> jid candidato
+  for (const c of sinLink) {
+    const telefono = String(c.movil || c.telefono || '').replace(/\D/g, '');
+    if (telefono) jidPorContacto.set(c.id, `${telefono}@s.whatsapp.net`);
+  }
+  const candidateJids = [...new Set(jidPorContacto.values())];
+  const jidHallado = new Map(); // jid -> connection_id (primera conexión donde aparece)
+  if (candidateJids.length) {
+    const { rows: found } = await pool.query(
+      `SELECT DISTINCT connection_id, chat_jid FROM wa_messages WHERE connection_id = ANY($1) AND chat_jid = ANY($2)`,
+      [visibles, candidateJids]);
+    for (const f of found) if (!jidHallado.has(f.chat_jid)) jidHallado.set(f.chat_jid, f.connection_id);
+  }
 
-    const resueltos = [];
-    for (const c of contactos) {
-      const link = linkMap.get(c.id);
-      if (link) { resueltos.push({ contacto: c, connection_id: link.connection_id, chat_jid: link.chat_jid }); continue; }
-      const jid = jidPorContacto.get(c.id);
-      if (!jid) continue;
-      const connId = jidHallado.get(jid);
-      if (!connId) continue;
-      resueltos.push({ contacto: c, connection_id: connId, chat_jid: jid });
-    }
+  const resueltos = [];
+  for (const c of contactos) {
+    const link = linkMap.get(c.id);
+    if (link) { resueltos.push({ contacto: c, connection_id: link.connection_id, chat_jid: link.chat_jid }); continue; }
+    const jid = jidPorContacto.get(c.id);
+    if (!jid) continue;
+    const connId = jidHallado.get(jid);
+    if (!connId) continue;
+    resueltos.push({ contacto: c, connection_id: connId, chat_jid: jid });
+  }
+  return resueltos;
+}
+app.get('/api/lm/wa-list', requireAuth, async (req, res) => {
+  try {
+    const resueltos = await _lmWaResolve(req);
     if (!resueltos.length) return res.json([]);
 
     // Último mensaje, no leídos y prioridad: antes eran 3 consultas POR CONTACTO

@@ -277,6 +277,12 @@ async function _normalizarLid(pool, sock, connId) {
          ON CONFLICT (connection_id, chat_jid, tag_id) DO NOTHING`, [real, connId, lid]);
       await pool.query(`DELETE FROM wa_chat_tags WHERE connection_id=$1 AND chat_jid=$2`, [connId, lid]);
       await pool.query(`UPDATE wa_chat_notes SET chat_jid=$1 WHERE connection_id=$2 AND chat_jid=$3`, [real, connId, lid]);
+      // wa_jid_links (el vínculo manual "esta conversación es de este contacto", usado
+      // por Outreach → WhatsApp) se había quedado afuera de esta migración — un vínculo
+      // creado a mano contra un @lid quedaba huérfano en cuanto WhatsApp mandaba el mapeo
+      // real, y el contacto volvía a aparecer "sin chat" en la lista (bug encontrado
+      // 2026-09-03 revisando por qué una respuesta no aparecía).
+      await pool.query(`UPDATE wa_jid_links SET chat_jid=$1 WHERE connection_id=$2 AND chat_jid=$3`, [real, connId, lid]);
       resueltos++;
     }
     if (resueltos) console.log(`[wa] conexión ${connId}: ${resueltos}/${rows.length} @lid traducidos al número real`);
