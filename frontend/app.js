@@ -669,6 +669,18 @@ function _applyHomeMode(on) {
   document.querySelectorAll('.snav-mod').forEach(b => b.classList.remove('active'));
 }
 
+// "Ventana" de un proyecto puntual — pedido explícito 2026-09-02: entrar a un
+// proyecto (desde Proyectos o desde el ícono de carpeta del Dashboard) siempre
+// debe caer AQUÍ, no a veces a Tareas-con-filtro y a veces a la tarjeta inline
+// de Proyectos. Reusa el Kanban/Lista/Calendario de Tareas (setProjectFilter ya
+// le quita el resaltado de "Tareas" y deja ?project= en la URL para que un F5
+// vuelva al mismo proyecto) — global porque se llama desde onclick de varios
+// módulos (Dashboard, Mi trabajo, Proyectos).
+function abrirVentanaProyecto(pid) {
+  document.querySelector('.snav-item[data-tab="mgmt-tasks"]')?.click();
+  setTimeout(() => TasksModule.setProjectFilter(pid), 250);
+}
+
 // Vuelve al home desde cualquier módulo (llamado por el botón "← Módulos"
 // que sustituyó al viejo dropdown de cambio de módulo).
 // opts.silent=true: viene de popstate (el navegador ya movió la URL a home
@@ -5247,7 +5259,7 @@ const DashboardModule = (() => {
         ${ctx ? `<span class="d3-task-meta">${esc(ctx)}</span>` : ''}
       </div>
       ${dl ? `<span class="d3-task-date${isOverdue ? ' d3-task-date--overdue' : ''}" title="Cambiar fecha" onclick="event.stopPropagation();DashboardModule.openDateFromRow(event,${t.id})">${dl}</span>` : ''}
-      ${t.project_id ? `<button class="d3-openproj-btn" title="Abrir proyecto" onclick="event.stopPropagation();document.querySelector('[data-tab=mgmt-projects]').click();setTimeout(()=>ProjectsModule.openDetail(${t.project_id}),250)">
+      ${t.project_id ? `<button class="d3-openproj-btn" title="Abrir proyecto" onclick="event.stopPropagation();abrirVentanaProyecto(${t.project_id})">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
       </button>` : ''}
       <button class="d3-play-btn" data-timer-task="${t.id}" title="Iniciar timer"
@@ -5921,7 +5933,7 @@ const DashboardModule = (() => {
         <span class="d3-task-name${isOverdue ? ' d3-task-name--overdue' : ''}">${esc(t.titulo)}</span>
       </div>
       ${dl ? `<span class="d3-task-date${isOverdue ? ' d3-task-date--overdue' : ''}" title="Cambiar fecha" onclick="event.stopPropagation();DashboardModule.openDateFromRow(event,${t.id})">${dl}</span>` : ''}
-      ${t.project_id ? `<button class="d3-openproj-btn" title="Abrir proyecto" onclick="event.stopPropagation();document.querySelector('[data-tab=mgmt-projects]').click();setTimeout(()=>ProjectsModule.openDetail(${t.project_id}),250)">
+      ${t.project_id ? `<button class="d3-openproj-btn" title="Abrir proyecto" onclick="event.stopPropagation();abrirVentanaProyecto(${t.project_id})">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
       </button>` : ''}
       <button class="d3-play-btn" data-timer-task="${t.id}" title="Iniciar timer"
@@ -6122,7 +6134,7 @@ const DashboardModule = (() => {
         ${meta ? `<span class="d3-task-meta">${esc(meta)}</span>` : ''}
       </div>
       ${dl ? `<span class="d3-task-date${isOverdue ? ' d3-task-date--overdue' : ''}" title="Cambiar fecha" onclick="event.stopPropagation();DashboardModule.openDateFromRow(event,${t.id})">${dl}</span>` : ''}
-      ${t.project_id ? `<button class="d3-openproj-btn" title="Abrir proyecto" onclick="event.stopPropagation();document.querySelector('[data-tab=mgmt-projects]').click();setTimeout(()=>ProjectsModule.openDetail(${t.project_id}),250)">
+      ${t.project_id ? `<button class="d3-openproj-btn" title="Abrir proyecto" onclick="event.stopPropagation();abrirVentanaProyecto(${t.project_id})">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
       </button>` : ''}
       <button class="d3-play-btn" data-timer-task="${t.id}" title="Iniciar timer"
@@ -6346,7 +6358,7 @@ const DashboardModule = (() => {
           <button class="d3xp-chip${asgShort ? '' : ' d3xp-chip--empty'}" title="Cambiar responsable" onclick="event.stopPropagation();DashboardModule.expEditAssignee(${id},this)">${asgShort ? _expAvatar(asgName) : _icoUsr}<span class="d3xp-chip__tx">${asgShort ? esc(asgShort) : 'Asignar'}</span></button>
           ${t.prioridad === 'alta' ? '<span class="d3xp-chip d3xp-chip--prio">Alta</span>' : ''}
           <button class="d3xp__open" onclick="event.stopPropagation();TasksModule.openDrawer(${id})">Abrir tarea<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>
-          ${t.project_id ? `<button class="d3xp__open" onclick="event.stopPropagation();document.querySelector('[data-tab=mgmt-projects]').click();setTimeout(()=>ProjectsModule.openDetail(${t.project_id}),250)">Abrir proyecto<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></button>` : ''}
+          ${t.project_id ? `<button class="d3xp__open" onclick="event.stopPropagation();abrirVentanaProyecto(${t.project_id})">Abrir proyecto<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></button>` : ''}
         </div>
       </div>`;
 
@@ -6838,7 +6850,7 @@ const MyWorkModule = (() => {
         ${meta ? `<span class="d3-task-meta">${esc(meta)}</span>` : ''}
       </div>
       <span class="d3-task-date${isOverdue ? ' d3-task-date--overdue' : ''}" title="${dl ? 'Cambiar fecha' : 'Poner fecha'}" onclick="event.stopPropagation();MyWorkModule._openDate(event,${t.id})">${dl || 'Fecha'}</span>
-      ${t.project_id ? `<button class="d3-openproj-btn" title="Abrir proyecto" onclick="event.stopPropagation();document.querySelector('[data-tab=mgmt-projects]').click();setTimeout(()=>ProjectsModule.openDetail(${t.project_id}),250)">
+      ${t.project_id ? `<button class="d3-openproj-btn" title="Abrir proyecto" onclick="event.stopPropagation();abrirVentanaProyecto(${t.project_id})">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
       </button>` : ''}
       <button class="d3-play-btn" data-timer-task="${t.id}" title="Iniciar timer" onclick="event.stopPropagation();TimerModule.toggleTask(${t.id})">
@@ -7855,6 +7867,10 @@ const TasksModule = (() => {
     _filterProjectId = null;
     _projectHeaderHide();
     _rerender();
+    // Vuelve a marcar "Tareas" como activa en el rail — ver por qué se le quita
+    // en setProjectFilter.
+    document.querySelectorAll('.snav-item[data-tab="mgmt-tasks"]').forEach(t => t.classList.add('active'));
+    history.replaceState(null, '', _tabUrlHref('mgmt-tasks'));
   }
 
   async function setProjectFilter(pid) {
@@ -7866,6 +7882,17 @@ const TasksModule = (() => {
     });
     _applyView();
     await _renderProjectHeader(pid);
+    // Pedido explícito 2026-09-02: "no me debería llevar a Tareas" — reusa el
+    // mismo Kanban/Lista/Calendario (por eso sigue siendo el pane mgmt-tasks por
+    // debajo), pero visualmente ya no debe sentirse como si hubiera entrado a la
+    // sección Tareas: se le quita el resaltado de "Tareas" en el rail (el título
+    // del pane ya cambia a "Tareas de <proyecto>" en _renderProjectHeader) y la
+    // URL queda en ?project=ID en vez de ?tab=mgmt-tasks, así un F5 vuelve a ESTE
+    // proyecto en vez de caer en el Kanban global.
+    document.querySelectorAll('.snav-item[data-tab="mgmt-tasks"]').forEach(t => t.classList.remove('active'));
+    const url = new URL(window.location.href);
+    url.searchParams.delete('tab'); url.searchParams.set('project', pid);
+    history.replaceState(null, '', url.pathname + url.search + url.hash);
   }
 
   async function _renderProjectHeader(pid) {
@@ -13657,11 +13684,12 @@ const ProjectsModule = (() => {
     }
   }
 
-  // Clic en un proyecto → pestaña NUEVA del navegador con la info del
-  // proyecto arriba y el Kanban de solo sus tareas abajo (Tareas > Kanban
-  // filtrado, ver TasksModule.setProjectFilter y el ?project= en initAuth).
+  // Clic en un proyecto → su "ventana" de proyecto (Kanban/Lista/Calendario de
+  // solo sus tareas, ver abrirVentanaProyecto). Antes abría una pestaña NUEVA del
+  // navegador (recarga completa de la app) — mismo patrón que causó el bug de
+  // "Too many requests" en Tareas; ahora navega en la misma pestaña.
   function openInNewTab(id) {
-    window.open(location.origin + location.pathname + '?project=' + id, '_blank');
+    abrirVentanaProyecto(id);
   }
 
   /* ── vista enfocada de UN proyecto (reemplaza la lista) ─────
