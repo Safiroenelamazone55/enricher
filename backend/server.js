@@ -8476,6 +8476,46 @@ app.get('/api/wa/connections/:id/link/:contactId', requireAuth, async (req, res)
     res.json({ jid: row?.chat_jid || null });
   } catch (err) { res.status(500).json({ error: 'Error al consultar' }); }
 });
+// Fusiona dos chat_jid de la MISMA conexión en uno solo — jidFinal se queda con TODOS
+// los mensajes de ambos (y meta/tags/notas/reacciones), jidViejo desaparece. Compartida
+// por /chats/:jid/fusionar (elegís vos los dos) y /link (ver comentario ahí abajo:
+// evita que vincular a mano un contacto a OTRO jid le "borre" de la vista los mensajes
+// que ya tenía bajo el jid anterior — bug real reportado 2026-09-03, la respuesta de
+// un contacto llegó completa en la BD pero solo se veía 1 mensaje en el chat).
+async function _waMergeJids(connId, jidFinal, jidViejo) {
+  if (jidFinal === jidViejo) return;
+  const { rows: [metaFinal] } = await pool.query(`SELECT * FROM wa_chat_meta WHERE connection_id=$1 AND chat_jid=$2`, [connId, jidFinal]);
+  const { rows: [metaViejo] } = await pool.query(`SELECT * FROM wa_chat_meta WHERE connection_id=$1 AND chat_jid=$2`, [connId, jidViejo]);
+  if (metaViejo) {
+    if (!metaFinal) {
+      await pool.query(
+        `INSERT INTO wa_chat_meta (connection_id, chat_jid, pinned, asignado_a, estado_conv, prioridad) VALUES ($1,$2,$3,$4,$5,$6)`,
+        [connId, jidFinal, metaViejo.pinned, metaViejo.asignado_a, metaViejo.estado_conv, metaViejo.prioridad]);
+    } else {
+      const sets = [], vals = [connId, jidFinal];
+      if (!metaFinal.asignado_a && metaViejo.asignado_a) sets.push(`asignado_a=$${vals.push(metaViejo.asignado_a)}`);
+      if ((!metaFinal.prioridad || metaFinal.prioridad === '') && metaViejo.prioridad) sets.push(`prioridad=$${vals.push(metaViejo.prioridad)}`);
+      if (metaViejo.pinned && !metaFinal.pinned) sets.push(`pinned=TRUE`);
+      if (sets.length) await pool.query(`UPDATE wa_chat_meta SET ${sets.join(',')} WHERE connection_id=$1 AND chat_jid=$2`, vals);
+    }
+  }
+  await pool.query(
+    `INSERT INTO wa_chat_tags (connection_id, chat_jid, tag_id) SELECT connection_id, $3, tag_id FROM wa_chat_tags WHERE connection_id=$1 AND chat_jid=$2 ON CONFLICT DO NOTHING`,
+    [connId, jidViejo, jidFinal]);
+  await pool.query(`UPDATE wa_chat_notes SET chat_jid=$3 WHERE connection_id=$1 AND chat_jid=$2`, [connId, jidViejo, jidFinal]);
+  await pool.query(
+    `UPDATE wa_jid_links SET chat_jid=$3 WHERE connection_id=$1 AND chat_jid=$2
+     AND NOT EXISTS (SELECT 1 FROM wa_jid_links x WHERE x.connection_id=$1 AND x.chat_jid=$3 AND x.contact_id=wa_jid_links.contact_id)`,
+    [connId, jidViejo, jidFinal]);
+  await pool.query(`DELETE FROM wa_jid_links WHERE connection_id=$1 AND chat_jid=$2`, [connId, jidViejo]);
+  // msg_id es único de por sí (lo asigna WhatsApp) — reasignar el chat_jid no choca
+  // con la UNIQUE (connection_id, msg_id) de wa_messages.
+  await pool.query(`UPDATE wa_messages SET chat_jid=$3 WHERE connection_id=$1 AND chat_jid=$2`, [connId, jidViejo, jidFinal]);
+  await pool.query(`DELETE FROM wa_chat_meta WHERE connection_id=$1 AND chat_jid=$2`, [connId, jidViejo]);
+  await pool.query(`DELETE FROM wa_chat_tags WHERE connection_id=$1 AND chat_jid=$2`, [connId, jidViejo]);
+  await pool.query(`DELETE FROM wa_reactions WHERE connection_id=$1 AND chat_jid=$2`, [connId, jidViejo]);
+  await pool.query(`DELETE FROM wa_contacts WHERE connection_id=$1 AND jid=$2`, [connId, jidViejo]);
+}
 app.post('/api/wa/connections/:id/link', requireAuth, async (req, res) => {
   const contactId = parseInt(req.body?.contactId, 10);
   const jid = String(req.body?.jid || '').trim();
@@ -8483,8 +8523,25 @@ app.post('/api/wa/connections/:id/link', requireAuth, async (req, res) => {
   try {
     const conn = await _cargarConexionAutorizada(req, res, req.params.id);
     if (!conn) return;
-    const { rows: [c] } = await pool.query(`SELECT id FROM lm_contacts WHERE id=$1 AND user_id=$2`, [contactId, req.workspaceOwnerId]);
+    const { rows: [c] } = await pool.query(`SELECT id, movil, telefono FROM lm_contacts WHERE id=$1 AND user_id=$2`, [contactId, req.workspaceOwnerId]);
     if (!c) return res.status(404).json({ error: 'Contacto no encontrado' });
+    // Antes esto solo movía el puntero (wa_jid_links) — si el contacto YA tenía
+    // mensajes bajo otro jid (el de su teléfono, o un vínculo previo), vincularlo a
+    // uno nuevo los dejaba huérfanos: seguían en la BD pero desaparecían del chat que
+    // Jenny ve. Ahora, si hay un jid "viejo" con mensajes propios, se fusiona de
+    // verdad (mismo mecanismo que "Fusionar con otro chat…") antes de fijar el link.
+    const { rows: [linkPrevio] } = await pool.query(
+      `SELECT chat_jid FROM wa_jid_links WHERE connection_id=$1 AND contact_id=$2`, [req.params.id, contactId]);
+    const telefono = String(c.movil || c.telefono || '').replace(/\D/g, '');
+    const jidsViejos = new Set();
+    if (linkPrevio?.chat_jid) jidsViejos.add(linkPrevio.chat_jid);
+    if (telefono) jidsViejos.add(`${telefono}@s.whatsapp.net`);
+    jidsViejos.delete(jid);
+    for (const jidViejo of jidsViejos) {
+      const { rows: [tiene] } = await pool.query(
+        `SELECT 1 FROM wa_messages WHERE connection_id=$1 AND chat_jid=$2 LIMIT 1`, [req.params.id, jidViejo]);
+      if (tiene) await _waMergeJids(req.params.id, jid, jidViejo);
+    }
     await pool.query(
       `INSERT INTO wa_jid_links (connection_id, contact_id, chat_jid) VALUES ($1,$2,$3)
        ON CONFLICT (connection_id, contact_id) DO UPDATE SET chat_jid=EXCLUDED.chat_jid, created_at=NOW()`,
@@ -8878,40 +8935,7 @@ app.post('/api/wa/connections/:id/chats/:jid/fusionar', requireAuth, async (req,
     if (!ultA?.ts && !ultB?.ts) return res.status(404).json({ error: 'Ninguno de los dos chats tiene mensajes' });
     const jidFinal = (new Date(ultB?.ts || 0) > new Date(ultA?.ts || 0)) ? jidB : jidA;
     const jidViejo = jidFinal === jidA ? jidB : jidA;
-
-    const { rows: [metaFinal] } = await pool.query(`SELECT * FROM wa_chat_meta WHERE connection_id=$1 AND chat_jid=$2`, [conn.id, jidFinal]);
-    const { rows: [metaViejo] } = await pool.query(`SELECT * FROM wa_chat_meta WHERE connection_id=$1 AND chat_jid=$2`, [conn.id, jidViejo]);
-    if (metaViejo) {
-      if (!metaFinal) {
-        await pool.query(
-          `INSERT INTO wa_chat_meta (connection_id, chat_jid, pinned, asignado_a, estado_conv, prioridad) VALUES ($1,$2,$3,$4,$5,$6)`,
-          [conn.id, jidFinal, metaViejo.pinned, metaViejo.asignado_a, metaViejo.estado_conv, metaViejo.prioridad]);
-      } else {
-        const sets = [], vals = [conn.id, jidFinal];
-        if (!metaFinal.asignado_a && metaViejo.asignado_a) sets.push(`asignado_a=$${vals.push(metaViejo.asignado_a)}`);
-        if ((!metaFinal.prioridad || metaFinal.prioridad === '') && metaViejo.prioridad) sets.push(`prioridad=$${vals.push(metaViejo.prioridad)}`);
-        if (metaViejo.pinned && !metaFinal.pinned) sets.push(`pinned=TRUE`);
-        if (sets.length) await pool.query(`UPDATE wa_chat_meta SET ${sets.join(',')} WHERE connection_id=$1 AND chat_jid=$2`, vals);
-      }
-    }
-    await pool.query(
-      `INSERT INTO wa_chat_tags (connection_id, chat_jid, tag_id) SELECT connection_id, $3, tag_id FROM wa_chat_tags WHERE connection_id=$1 AND chat_jid=$2 ON CONFLICT DO NOTHING`,
-      [conn.id, jidViejo, jidFinal]);
-    await pool.query(
-      `UPDATE wa_chat_notes SET chat_jid=$3 WHERE connection_id=$1 AND chat_jid=$2`,
-      [conn.id, jidViejo, jidFinal]);
-    await pool.query(
-      `UPDATE wa_jid_links SET chat_jid=$3 WHERE connection_id=$1 AND chat_jid=$2
-       AND NOT EXISTS (SELECT 1 FROM wa_jid_links x WHERE x.connection_id=$1 AND x.chat_jid=$3 AND x.contact_id=wa_jid_links.contact_id)`,
-      [conn.id, jidViejo, jidFinal]);
-    await pool.query(`DELETE FROM wa_jid_links WHERE connection_id=$1 AND chat_jid=$2`, [conn.id, jidViejo]);
-    // msg_id es único de por sí (lo asigna WhatsApp) — reasignar el chat_jid no
-    // choca con la UNIQUE (connection_id, msg_id) de wa_messages.
-    await pool.query(`UPDATE wa_messages SET chat_jid=$3 WHERE connection_id=$1 AND chat_jid=$2`, [conn.id, jidViejo, jidFinal]);
-    await pool.query(`DELETE FROM wa_chat_meta WHERE connection_id=$1 AND chat_jid=$2`, [conn.id, jidViejo]);
-    await pool.query(`DELETE FROM wa_chat_tags WHERE connection_id=$1 AND chat_jid=$2`, [conn.id, jidViejo]);
-    await pool.query(`DELETE FROM wa_reactions WHERE connection_id=$1 AND chat_jid=$2`, [conn.id, jidViejo]);
-    await pool.query(`DELETE FROM wa_contacts WHERE connection_id=$1 AND jid=$2`, [conn.id, jidViejo]);
+    await _waMergeJids(conn.id, jidFinal, jidViejo);
     res.json({ ok: true, jidFinal });
   } catch (err) { console.error('[wa] fusionar chats', err.message); res.status(500).json({ error: 'No se pudo fusionar' }); }
 });
