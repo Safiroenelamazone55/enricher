@@ -9531,24 +9531,68 @@ const TasksModule = (() => {
 
   // ── Drawer ─────────────────────────────────────────────────────────
 
+  // Proyecto: antes era un <select> nativo — pedido explícito 2026-09-02, "debería
+  // poder escribir y que me salga en coincidencias" + el desplegable se salía del
+  // ancho del modal (un <select> nativo lo decide el navegador, no CSS). Mismo
+  // patrón .cdd ya usado acá mismo para Responsable, con un buscador arriba.
   async function _fetchAndPopulateProjects(selectedId) {
-    const sel = $('tasks-project-select');
-    if (!sel) return;
-    sel.innerHTML = '<option value="">Cargando proyectos…</option>';
+    const hidden = $('tasks-project-select');
+    const label  = $('task-proj-label');
+    if (!hidden) return;
+    if (label) label.textContent = 'Cargando proyectos…';
     try {
       const res = await apiFetch(`${API}/mgmt/projects`);
-      const projects = res.ok ? await res.json() : [];
-      _projectsForDateLimit = projects;
-      sel.innerHTML = '<option value="">Seleccionar proyecto…</option>' +
-        projects.map(p =>
-          `<option value="${p.id}" ${selectedId == p.id ? 'selected' : ''}` +
-          `${p.fecha_inicio ? ` data-start="${String(p.fecha_inicio).split('T')[0]}"` : ''}` +
-          `${p.fecha_fin    ? ` data-end="${String(p.fecha_fin).split('T')[0]}"` : ''}` +
-          `>${esc(p.nombre)}${p.client_nombre ? ' · ' + esc(p.client_nombre) : ''}</option>`
-        ).join('');
-    } catch {
-      sel.innerHTML = '<option value="">Error al cargar proyectos</option>';
-    }
+      _projectsForDateLimit = res.ok ? await res.json() : [];
+    } catch { _projectsForDateLimit = []; }
+    _setProjDd(selectedId || '');
+  }
+  function _projLabel(p) { return p ? (p.nombre + (p.client_nombre ? ' · ' + p.client_nombre : '')) : ''; }
+  function _setProjDd(value) {
+    const hidden = $('tasks-project-select');
+    const label  = $('task-proj-label');
+    if (hidden) hidden.value = value || '';
+    const p = value ? (_projectsForDateLimit || []).find(x => String(x.id) === String(value)) : null;
+    if (label) label.textContent = p ? _projLabel(p) : 'Seleccionar proyecto…';
+    _renderProjDdItems('');
+  }
+  function _renderProjDdItems(q) {
+    const list = $('task-proj-items');
+    if (!list) return;
+    const cur = $('tasks-project-select')?.value || '';
+    const query = (q || '').toLowerCase().trim();
+    const items = (_projectsForDateLimit || []).filter(p => !query || _projLabel(p).toLowerCase().includes(query));
+    list.innerHTML = items.length
+      ? items.map(p => `<div class="cdd__item${String(p.id) === String(cur) ? ' cdd__item--selected' : ''}" onclick="TasksModule._pickProj(${p.id})">${esc(_projLabel(p))}</div>`).join('')
+      : `<div class="cdd__item cdd__item--none">Sin coincidencias</div>`;
+  }
+  function _filterProjDd(q) { _renderProjDdItems(q); }
+  function _pickProj(id) {
+    _setProjDd(id);
+    _closeProjDd();
+    onProjectDateChange();
+  }
+  function toggleProjDd() {
+    const dd = $('task-proj-dd');
+    if (dd?.classList.contains('cdd--disabled')) return;
+    const list = $('task-proj-list');
+    if (!dd || !list) return;
+    const open = list.style.display !== 'none';
+    if (open) { _closeProjDd(); return; }
+    _renderProjDdItems('');
+    list.style.display = 'block';
+    dd.classList.add('cdd--open');
+    const s = $('task-proj-search'); if (s) { s.value = ''; setTimeout(() => s.focus(), 0); }
+    setTimeout(() => document.addEventListener('click', _projDdOutside), 0);
+  }
+  function _closeProjDd() {
+    const dd = $('task-proj-dd'), list = $('task-proj-list');
+    if (list) list.style.display = 'none';
+    if (dd)   dd.classList.remove('cdd--open');
+    document.removeEventListener('click', _projDdOutside);
+  }
+  function _projDdOutside(e) {
+    const dd = $('task-proj-dd');
+    if (dd && !dd.contains(e.target)) _closeProjDd();
   }
 
   async function _fetchAndPopulateTeam(selected = '') {
@@ -9625,14 +9669,16 @@ const TasksModule = (() => {
     badge.style.display = '';
   }
 
+  function _curProj() {
+    const id = $('tasks-project-select')?.value;
+    return id ? (_projectsForDateLimit || []).find(p => String(p.id) === String(id)) : null;
+  }
   function _applyProjectDateLimits() {
-    const sel     = $('tasks-project-select');
     const dlInput = document.querySelector('#tasks-form [name="deadline"]');
     const fiInput = document.querySelector('#tasks-form [name="fecha_inicio"]');
-    if (!sel) return;
-    const opt = sel.options[sel.selectedIndex];
-    const start = opt?.dataset.start || '';
-    const end   = opt?.dataset.end   || '';
+    const p = _curProj();
+    const start = p?.fecha_inicio ? String(p.fecha_inicio).split('T')[0] : '';
+    const end   = p?.fecha_fin    ? String(p.fecha_fin).split('T')[0]    : '';
     if (dlInput) { dlInput.min = start; dlInput.max = end; }
     if (fiInput) { fiInput.min = start; fiInput.max = end; }
   }
@@ -9641,10 +9687,9 @@ const TasksModule = (() => {
     _applyProjectDateLimits();
     const dlInput = document.querySelector('#tasks-form [name="deadline"]');
     if (!dlInput?.value) return;
-    const sel = $('tasks-project-select');
-    const opt = sel?.options[sel.selectedIndex];
-    const start = opt?.dataset.start || '';
-    const end   = opt?.dataset.end   || '';
+    const p = _curProj();
+    const start = p?.fecha_inicio ? String(p.fecha_inicio).split('T')[0] : '';
+    const end   = p?.fecha_fin    ? String(p.fecha_fin).split('T')[0]    : '';
     if ((start && dlInput.value < start) || (end && dlInput.value > end)) {
       dlInput.value = '';
     }
@@ -9656,10 +9701,10 @@ const TasksModule = (() => {
     const title   = $('tasks-drawer-title');
     const saveBtn = $('tasks-save-btn');
     const delBtn  = $('tasks-delete-btn');
-    const projSel = $('tasks-project-select');
     if (!form) return;
     form.reset();
-    if (projSel) projSel.disabled = false;
+    $('task-proj-dd')?.classList.remove('cdd--disabled');
+    _setProjDd('');
     await _applyParentBadge(null);
 
     if (_editId) {
@@ -9703,7 +9748,7 @@ const TasksModule = (() => {
       if (!inheritResp && presetProjectId) { const _pp = (_projectsForDateLimit || []).find(p => String(p.id) === String(presetProjectId)); if (_pp) inheritResp = _pp.responsable || (Array.isArray(_pp.responsables) && _pp.responsables[0]) || ''; }
       await _fetchAndPopulateTeam(inheritResp);
       _applyProjectDateLimits();
-      if (projSel) projSel.disabled = !!presetParentTaskId;
+      $('task-proj-dd')?.classList.toggle('cdd--disabled', !!presetParentTaskId);
       // Por defecto arrancan HOY: si nadie toca la fecha, mejor que quede con
       // hoy (algo de donde partir) a que se guarde sin fecha por descuido. Si
       // hoy cae fuera del rango válido (padre ya vencido, o proyecto que
@@ -9830,6 +9875,10 @@ const TasksModule = (() => {
     const form    = e.target;
     const saveBtn = $('tasks-save-btn');
     const responsable = $('task-responsable-select')?.value || '';
+    // El campo Proyecto pasó de <select required> a un input oculto (ver cdd de
+    // Proyecto) — un hidden NUNCA participa de la validación nativa del form (lo
+    // ignora el navegador), así que hay que validarlo a mano.
+    if (!form.project_id.value) { alert('Selecciona un proyecto.'); toggleProjDd(); return; }
     const data = {
       titulo:        form.titulo.value.trim(),
       project_id:    parseInt(form.project_id.value),
@@ -10109,6 +10158,7 @@ const TasksModule = (() => {
     closeKcPopover,
     tlOpenEstadoPop, tlSaveEstado, _tlToggleSubStatus,
     toggleRespDd, _pickResp,
+    toggleProjDd, _filterProjDd, _pickProj,
     plDay, plHours, plStep, plWheel, plKey, plAmpm,
   };
 })();

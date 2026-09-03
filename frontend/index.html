@@ -2103,9 +2103,18 @@
     </div>
     <div class="form-row">
       <label class="form-label">Proyecto <span class="form-required">*</span></label>
-      <select class="form-input form-select" name="project_id" required id="tasks-project-select" onchange="TasksModule.onProjectDateChange()">
-        <option value="">Seleccionar proyecto…</option>
-      </select>
+      <div class="cdd" id="task-proj-dd">
+        <button type="button" class="cdd__btn" id="task-proj-btn" onclick="TasksModule.toggleProjDd()">
+          <span id="task-proj-label">Seleccionar proyecto…</span>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="cdd__list" id="task-proj-list" style="display:none">
+          <input type="text" class="cdd__search" id="task-proj-search" placeholder="Buscar proyecto o cliente…" autocomplete="off"
+            oninput="TasksModule._filterProjDd(this.value)" onclick="event.stopPropagation()" onkeydown="event.stopPropagation()">
+          <div id="task-proj-items"></div>
+        </div>
+        <input type="hidden" id="tasks-project-select" name="project_id" value="">
+      </div>
     </div>
     <div class="form-row form-row--2col">
       <div>
@@ -2996,7 +3005,7 @@
   })();
 </script>
 
-<script src="app.js?v=20260903t"></script>
+<script src="app.js?v=20260903u"></script>
 <div id="task-quick-edit" style="display:none;position:fixed;z-index:9999"></div>
 </body>
 </html>

@@ -2998,6 +2998,7 @@ body {
 
 /* ── custom dropdown (responsable task) ─────────── */
 .cdd { position: relative; width: 100%; }
+.cdd--disabled .cdd__btn { opacity: .6; cursor: not-allowed; pointer-events: none; }
 .cdd__btn {
   display: flex; align-items: center; justify-content: space-between;
   width: 100%; padding: 8px 11px; min-height: 38px;
@@ -3025,6 +3026,12 @@ body {
 .cdd__item:hover { background: var(--hover); }
 .cdd__item--selected { color: var(--brand); font-weight: 600; }
 .cdd__item--none { color: var(--muted); }
+.cdd__search {
+  position: sticky; top: 0; z-index: 1; width: 100%; box-sizing: border-box;
+  padding: 8px 12px; border: none; border-bottom: 1px solid var(--border);
+  font: inherit; font-size: .875rem; background: var(--surface); color: var(--text1);
+}
+.cdd__search:focus { outline: none; }
 
 /* ── multi-responsable chips ───────────────────── */
 .resp-chips {
