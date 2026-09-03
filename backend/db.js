@@ -918,6 +918,10 @@ async function initDb() {
     // nuevo, en /lm/contacts/:id/refer). Sin esto, la ficha/tabla del que derivó no tenía
     // forma de saber a quién — solo quedaba como texto suelto en la actividad.
     await pool.query(`ALTER TABLE lm_contacts  ADD COLUMN IF NOT EXISTS derivado_a       INTEGER REFERENCES lm_contacts(id) ON DELETE SET NULL;`);
+    // Nota opcional dejada al derivar (ej. "me pasó su correo directo") — vive en el
+    // NUEVO contacto para poder mostrarla en un banner fijo de su ficha/tarea (pedido
+    // 2026-09-03: que no se pueda evitar leerla al trabajar a un contacto derivado).
+    await pool.query(`ALTER TABLE lm_contacts  ADD COLUMN IF NOT EXISTS referred_note    TEXT NOT NULL DEFAULT '';`);
     // Nurturing: fecha en la que hay que retomar a un contacto marcado "Más adelante".
     await pool.query(`ALTER TABLE lm_contacts  ADD COLUMN IF NOT EXISTS nurture_at       DATE;`);
     // "Aceptó en LinkedIn" deja de ocupar disposition (2026-09-03, a pedido de Jenny):

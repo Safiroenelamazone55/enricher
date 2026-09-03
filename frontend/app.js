@@ -17357,6 +17357,20 @@ ${foot}
     }
     return parts.join('');
   }
+  // Banner fijo arriba de la ficha/tarea de un contacto DERIVADO — a diferencia del
+  // chip chico de _derivLinkHtml (que hay que buscar dentro de la tarjeta de resultado),
+  // este va justo debajo del back-button, ancho completo, en un color que no se puede
+  // evitar leer — pedido explícito 2026-09-03: se pierde de vista quién lo derivó y
+  // con qué nota cuando ya se está trabajando la tarea del referido.
+  function _derivBanner(c) {
+    if (!c.referred_by) return '';
+    const o = _contacts.find(x => x.id === c.referred_by);
+    const nom = o ? ([o.nombre, o.apellido].filter(Boolean).join(' ') || o.email) : `contacto #${c.referred_by}`;
+    return `<div class="cp-deriv-banner" onclick="LeadManagerModule.openContactPage(${c.referred_by})" title="Ver a ${esc(nom)}">
+      <span class="cp-deriv-banner__ico">↰</span>
+      <span class="cp-deriv-banner__txt"><b>Derivado de ${esc(nom)}</b>${c.referred_note ? ` — ${esc(c.referred_note)}` : ''}</span>
+    </div>`;
+  }
   async function _lmSetDispositionCore(cid, disp, seqId, nota) {
     const res = await apiFetch(`${API}/lm/contacts/${cid}/disposition`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ disposition: disp, sequence_id: seqId || null, nota: nota || '' }) });
     if (!res.ok) throw new Error((await res.json()).error || 'Error');
@@ -23846,6 +23860,7 @@ ${foot}
     const rawKeys = Object.keys(raw).filter(k => raw[k]);
     return `<div class="cp" id="lm-cp">
       <button class="lm-back" onclick="${_cpTaskCtx ? 'LeadManagerModule.seqDoExit()' : `LeadManagerModule.go('${_cpFrom}')`}">‹ ${_cpTaskCtx ? 'Tareas' : (_CP_FROM_LABEL[_cpFrom] || 'Contactos')}</button>
+      ${_derivBanner(c)}
       ${_cpTaskBar(id)}
       <div class="cp-head">
         <img class="cp-ava" src="${_av(full)}" alt="">

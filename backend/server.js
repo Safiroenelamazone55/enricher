@@ -4439,14 +4439,14 @@ app.post('/api/lm/contacts/:id/refer', requireAuth, async (req, res) => {
     if (!nuevo) {
       const { rows: [ins] } = await client.query(`
         INSERT INTO lm_contacts (user_id, company_id, nombre, apellido, email, telefono, movil, cargo, linkedin,
-                                 empresa_nombre, outbound_client_id, estado, fuente, referred_by, notas)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'nuevo','derivado',$12,$13) RETURNING *`,
+                                 empresa_nombre, outbound_client_id, estado, fuente, referred_by, referred_note, notas)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'nuevo','derivado',$12,$13,$14) RETURNING *`,
         [uid, orig.company_id, nombre, apellido, email, _lmS(b.telefono), _lmS(b.movil), _lmS(b.cargo), _lmS(b.linkedin),
-         orig.empresa_nombre, orig.outbound_client_id, cid, `Referido por ${nomOrig}`]);
+         orig.empresa_nombre, orig.outbound_client_id, cid, _lmS(b.nota), `Referido por ${nomOrig}`]);
       nuevo = ins;
     } else {
-      await client.query(`UPDATE lm_contacts SET referred_by=COALESCE(referred_by,$1), company_id=COALESCE(company_id,$2), updated_at=NOW() WHERE id=$3`,
-        [cid, orig.company_id, nuevo.id]);
+      await client.query(`UPDATE lm_contacts SET referred_by=COALESCE(referred_by,$1), referred_note=COALESCE(NULLIF(referred_note,''),$2), company_id=COALESCE(company_id,$3), updated_at=NOW() WHERE id=$4`,
+        [cid, _lmS(b.nota), orig.company_id, nuevo.id]);
     }
 
     // El nuevo referido NO se enrola automáticamente (requiere acción humana explícita después
