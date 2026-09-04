@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260903i"/>
+  <link rel="stylesheet" href="style.css?v=20260903j"/>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -1260,7 +1260,7 @@
           <div class="chat-sidebar__ws-hdr">
             <span class="chat-ws-name" id="chat-ws-name">Nova</span>
             <div class="chat-ws-online" title="En línea"></div>
-            <button class="chat-ws-compose-btn" title="Nueva conversación" onclick="ChatModule.focusInput()">
+            <button class="chat-ws-compose-btn" title="Nueva conversación" onclick="SlackChat.nuevaConversacionAbrir()">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
             </button>
           </div>
@@ -1299,6 +1299,10 @@
               <!-- Pin -->
               <button class="chat-hdr-btn" id="chat-hdr-pin-btn" title="Mensajes fijados" onclick="ChatModule.togglePinnedPanel()">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m12 17-1-1-4.5-4.5A4 4 0 0 1 12 5.5l4.5 4.5 1 1"/><line x1="12" y1="17" x2="12" y2="22"/><line x1="5" y1="12" x2="3" y2="12"/></svg>
+              </button>
+              <!-- Miembros del canal -->
+              <button class="chat-hdr-btn" title="Ver miembros" onclick="SlackChat.verMiembros(event)">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
               </button>
             </div>
           </header>
@@ -3047,7 +3051,7 @@
   })();
 </script>
 
-<script src="app.js?v=20260903zh"></script>
+<script src="app.js?v=20260903zi"></script>
 <div id="task-quick-edit" style="display:none;position:fixed;z-index:9999"></div>
 </body>
 </html>

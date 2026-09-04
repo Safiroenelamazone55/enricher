@@ -8143,6 +8143,55 @@ app.get('/api/slack/workspaces/:id/canales', requireAuth, async (req, res) => {
   } catch (err) { res.status(400).json({ error: err.message }); }
 });
 
+// "Nueva conversación" del compose del sidebar — abre (o reabre) un DM sin mandar
+// nada, para que el frontend salte directo con SlackChat.abrir(). Pedido explícito
+// 2026-09-04 (inspirado en Mattermost): antes solo se podía abrir un DM que YA
+// estuviera en la lista sincronizada.
+app.post('/api/slack/workspaces/:id/directo', requireAuth, async (req, res) => {
+  try {
+    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
+    const usuarioId = String(req.body?.usuarioId || '').trim();
+    if (!usuarioId) return res.status(400).json({ error: 'Falta el usuario' });
+    const canal = await slackSvc.abrirDirecto(w, usuarioId);
+    res.json({ canal });
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
+// Miembros de UN canal — panel "Ver miembros" del header, mismo pedido.
+app.get('/api/slack/workspaces/:id/canales/:canal/miembros', requireAuth, async (req, res) => {
+  try {
+    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
+    const ids = await slackSvc.miembrosCanal(w, req.params.canal);
+    res.json({ ids });
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
+// Silenciar canal — a diferencia del resto, esto vive SOLO del lado de Nova (Slack
+// no expone de forma práctica el "mute" real de cada usuario vía API de bot/user
+// token). Un canal silenciado deja de sumar al contador de no leídos del riel.
+app.get('/api/slack/workspaces/:id/mutes', requireAuth, async (req, res) => {
+  try {
+    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
+    const { rows } = await pool.query(`SELECT canal_id FROM slack_mutes WHERE workspace_id=$1`, [w.id]);
+    res.json({ canales: rows.map(r => r.canal_id) });
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+app.post('/api/slack/workspaces/:id/canales/:canal/silenciar', requireAuth, async (req, res) => {
+  try {
+    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
+    if (req.body?.silenciar) {
+      await pool.query(`INSERT INTO slack_mutes (workspace_id, canal_id) VALUES ($1,$2) ON CONFLICT DO NOTHING`, [w.id, req.params.canal]);
+    } else {
+      await pool.query(`DELETE FROM slack_mutes WHERE workspace_id=$1 AND canal_id=$2`, [w.id, req.params.canal]);
+    }
+    res.json({ ok: true });
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
 // Reaccionar a un mensaje.
 app.post('/api/slack/workspaces/:id/canales/:canal/reaccion', requireAuth, async (req, res) => {
   const { ts, emoji, quitar } = req.body || {};

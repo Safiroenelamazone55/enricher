@@ -15413,6 +15413,14 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .slk-remind-chip { flex-shrink: 0; font-size: .62rem; font-weight: 700; color: #6C6862; background: #F1EFEB; border-radius: 999px; padding: 1px 7px; white-space: nowrap; margin-top: 1px; }
 .slk-remind-chip.due { color: #fff; background: #DC2626; }
 .slk-remind-pop { position: fixed; z-index: 10052; background: #fff; border: 1px solid var(--border, #EAE7E2); border-radius: 0; box-shadow: 0 8px 24px rgba(16,24,20,.14); padding: 5px; min-width: 190px; }
+/* Silenciar canal — icono discreto junto al nombre, la fila deja de resaltar. */
+.chat-ch--muted { opacity: .62; }
+.chat-ch__mute { flex-shrink: 0; font-size: 11px; opacity: .8; }
+/* Panel "Ver miembros" del header — mismo look que slk-remind-pop pero con lista */
+.slk-members-pop { max-width: 260px; max-height: 340px; overflow-y: auto; padding: 8px; }
+.slk-members-hd { font-size: .74rem; font-weight: 700; color: #1F1D1B; padding: 2px 4px 8px; }
+.slk-member-row { display: flex; align-items: center; gap: 8px; padding: 5px 4px; font-size: .82rem; color: #3D3A36; }
+.slk-member-row__av { width: 24px; height: 24px; border-radius: 0; object-fit: cover; flex-shrink: 0; }
 
 /* ── Mensajes de Slack ──────────────────────────────────────────────────────── */
 .slk-men { color: #007AFF; background: #EBF4FF; border-radius: 0; padding: 0 3px; font-weight: 500; }
@@ -15647,6 +15655,7 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .chat-shell .slk-remind-chip { background: rgba(255,255,255,.16); color: #fff; }
 .chat-shell .chat-saved__clock { color: rgba(255,255,255,.6); }
 .chat-shell .chat-saved__clock:hover { color: #fff; }
+.chat-shell .chat-ch--muted { opacity: .55; }
 
 /* Área principal — ya era blanca (coincide con centerChannelBg de Mattermost);
    se ajustan enlaces/acentos al azul de botón real de Mattermost (#166de0). */

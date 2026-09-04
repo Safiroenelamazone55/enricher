@@ -167,6 +167,27 @@ async function directo(ws, usuarioId, texto) {
   return enviar(ws, c.channel.id, texto);
 }
 
+// Abrir (o reabrir) una conversación directa SIN mandar nada — "Nueva conversación"
+// del compose del sidebar, pedido explícito 2026-09-04 (inspirado en Mattermost:
+// hoy solo se podía saltar a un DM que YA existiera en la lista sincronizada).
+async function abrirDirecto(ws, usuarioId) {
+  const c = await _call(token(ws), 'conversations.open', { users: usuarioId }, 'POST');
+  return c.channel;
+}
+
+// Miembros de UN canal puntual — distinto de miembros() (todo el workspace).
+// Para el panel "Ver miembros" del header, mismo pedido que abrirDirecto arriba.
+async function miembrosCanal(ws, canalId) {
+  const ids = [];
+  let cursor;
+  do {
+    const d = await _call(token(ws), 'conversations.members', { channel: canalId, limit: 200, cursor });
+    ids.push(...(d.members || []));
+    cursor = d.response_metadata?.next_cursor || '';
+  } while (cursor && ids.length < 500); // tope de seguridad — canales gigantes no deberían colgar el panel
+  return ids;
+}
+
 // Slack exige nombres en minúscula, sin espacios ni acentos y como máximo 80
 // caracteres, así que normalizar no es una preferencia: es un requisito suyo.
 function normalizarNombre(texto, prefijo = 'pj') {
@@ -297,7 +318,7 @@ async function archivarCanal(ws, canalId, { dm = false } = {}) {
 
 module.exports = {
   encPass, verificar, canales, miembros, noLeidos, historial, hilo,
-  enviar, directo, crearCanal, archivarCanal, normalizarNombre, _errorClaro,
+  enviar, directo, abrirDirecto, miembrosCanal, crearCanal, archivarCanal, normalizarNombre, _errorClaro,
   reaccionar, quitarReaccion, anclar, desanclar, anclados, subirArchivo, renombrarCanal, marcarNoLeido, marcarLeido, guardados,
   teamInfo, teamInfoFromEnc, verificarFromEnc,
 };

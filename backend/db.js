@@ -478,6 +478,16 @@ async function initDb() {
     // inspirado en "Remind me" de Mattermost/Slack. Vive del lado de Nova (Slack no
     // expone su propia API de recordatorios de forma práctica para esto); se
     // identifica el mensaje por canal_id+ts, igual que hace guardados() en el service.
+    // Silenciar canal — vive solo en Nova (Slack no expone el mute real del usuario
+    // de forma práctica vía API), pedido explícito 2026-09-04 inspirado en
+    // Mattermost. Un canal silenciado no suma al contador de no leídos del riel.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS slack_mutes (
+        workspace_id INTEGER NOT NULL REFERENCES slack_workspaces(id) ON DELETE CASCADE,
+        canal_id     TEXT    NOT NULL,
+        created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (workspace_id, canal_id)
+      )`);
     await pool.query(`
       CREATE TABLE IF NOT EXISTS slack_recordatorios (
         id           SERIAL PRIMARY KEY,

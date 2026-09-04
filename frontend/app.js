@@ -26095,9 +26095,15 @@ const SlackChat = (() => {
 
   const $$ = id => document.getElementById(id);
 
+  // Canales silenciados (mute) — vive solo en Nova, no en Slack. Pedido explícito
+  // 2026-09-04, inspirado en Mattermost. Se excluyen del contador de no leídos del
+  // riel: para eso sirve, dejar de que un canal ruidoso avise todo el tiempo.
+  let _mutes = new Set();
   // Total sin leer del workspace que se mira (insignia del riel), contando también lo
-  // que marqué a mano.
-  function _totalNoLeidos() { return Object.values(_noLeidos).reduce((a, b) => a + (+b || 0), 0); }
+  // que marqué a mano, PERO sin lo que está silenciado.
+  function _totalNoLeidos() {
+    return Object.entries(_noLeidos).reduce((a, [id, n]) => a + (_mutes.has(id) ? 0 : (+n || 0)), 0);
+  }
   // Reaplica los "no leído" manuales sobre lo que devuelve el sondeo de Slack.
   function _fusionaSticky() { Object.keys(_marcadoNL).forEach(id => { _noLeidos[id] = Math.max(1, _noLeidos[id] || 0); }); }
 
@@ -26338,6 +26344,8 @@ const SlackChat = (() => {
       _canales = dc.canales || [];
       apiFetch(`${API}/slack/workspaces/${wsId}/vinculos`).then(r => r.json())
         .then(v => { _vinculos = v || {}; _pintaCanales(); }).catch(() => {});
+      apiFetch(`${API}/slack/workspaces/${wsId}/mutes`).then(r => r.json())
+        .then(d => { _mutes = new Set(d.canales || []); _pintaCanales(); _riel(); }).catch(() => { _mutes = new Set(); });
       _pintaCanales();
       apiFetch(`${API}/slack/workspaces/${wsId}/no-leidos`)
         .then(r => r.json())
@@ -26492,15 +26500,17 @@ const SlackChat = (() => {
   // Una fila de la lista (canal o directo). Se reutiliza en todas las secciones.
   function _filaCanal(c) {
     const nm = c._nm || _nombreDe(c);
-    const n = _noLeidos[c.id] || 0;
+    const muted = _mutes.has(c.id);
+    const n = muted ? 0 : (_noLeidos[c.id] || 0);
     const ico = c.is_im ? '' : (c.is_private || c.is_mpim) ? '🔒' : '#';
     const vinc = _vinculos[c.id] ? ' chat-ch--pj' : '';
-    return `<button class="chat-ch${_canal && _canal.id === c.id ? ' active' : ''}${n ? ' unread' : ''}${vinc}"
+    return `<button class="chat-ch${_canal && _canal.id === c.id ? ' active' : ''}${n ? ' unread' : ''}${vinc}${muted ? ' chat-ch--muted' : ''}"
                     onclick="SlackChat.abrir('${c.id}')"
                     oncontextmenu="SlackChat.menuCanal(event,'${c.id}')">
       ${c.is_im ? `<img class="chat-ch__av" src="${_avatarUrl(c.user, nm)}" alt="">`
                 : `<span class="chat-ch__hash">${ico}</span>`}
       <span class="chat-ch__name">${c.is_im ? escNom(nm) : esc(nm)}</span>
+      ${muted ? '<span class="chat-ch__mute" title="Silenciado">🔕</span>' : ''}
       ${n ? `<span class="chat-ch__n">${n > 99 ? '99+' : n}</span>` : ''}
     </button>`;
   }
@@ -27294,7 +27304,9 @@ const SlackChat = (() => {
          + `<button class="slk-mm-op" onclick="SlackChat.verTareas(${pj.projectId})">Ver tareas del proyecto</button>`
          + `<div class="slk-cm-sep"></div>`;
     }
+    const muted = _mutes.has(canalId);
     h += `<button class="slk-mm-op" onclick="SlackChat.marcarNoLeido('${canalId}','${esc(nombre).replace(/'/g, "\\'")}')">Marcar como no leído</button>`
+       + `<button class="slk-mm-op" onclick="SlackChat.toggleSilenciar('${canalId}',${!muted})">${muted ? '🔔 Reactivar notificaciones' : '🔕 Silenciar canal'}</button>`
        + `<button class="slk-mm-op" onclick="SlackChat.abrir('${canalId}')">Abrir aquí</button>`;
     if (w && w.team_id) h += `<button class="slk-mm-op" onclick="window.open('https://app.slack.com/client/${w.team_id}/${canalId}','_blank')">Abrir en Slack</button>`;
     h += `<button class="slk-mm-op" onclick="SlackChat.copiarNombre('${esc(nombre).replace(/'/g, "\\'")}',${esDm})">Copiar nombre</button>`
@@ -27333,9 +27345,99 @@ const SlackChat = (() => {
     }
   }
 
+  async function toggleSilenciar(canalId, silenciar) {
+    document.querySelectorAll('.slk-msgmenu').forEach(x => x.remove());
+    if (silenciar) _mutes.add(canalId); else _mutes.delete(canalId);
+    _nlPorWs[_wsAct] = _totalNoLeidos();
+    _pintaCanales(); _riel();
+    try {
+      const r = await apiFetch(`${API}/slack/workspaces/${_wsAct}/canales/${canalId}/silenciar`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ silenciar }),
+      });
+      if (!r.ok) throw new Error((await r.json()).error || 'No se pudo guardar');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+
   function copiarNombre(nombre, esDm) {
     document.querySelectorAll('.slk-msgmenu').forEach(x => x.remove());
     navigator.clipboard.writeText((esDm ? '' : '#') + nombre).then(() => showBanner('Copiado', 'success'));
+  }
+
+  // ── Ver miembros del canal — pedido explícito 2026-09-04, inspirado en
+  // Mattermost. Cruza los ids que devuelve Slack con _users/_avatars (el índice
+  // del workspace, ya cargado) para no tener que pedir cada perfil suelto.
+  async function verMiembros(ev) {
+    if (!_canal) return;
+    document.querySelectorAll('.slk-remind-pop').forEach(m => m.remove());
+    const pop = document.createElement('div');
+    pop.className = 'slk-remind-pop slk-members-pop';
+    pop.innerHTML = `<div class="slk-members-hd">Miembros de ${_canal.is_im ? '' : '#'}${esc(_canal.name)}</div><div class="lm-pick-empty">Cargando…</div>`;
+    document.body.appendChild(pop);
+    const r = (ev.currentTarget || ev.target).getBoundingClientRect();
+    pop.style.right = `${Math.max(8, window.innerWidth - r.right)}px`;
+    pop.style.top = `${r.bottom + 6}px`;
+    setTimeout(() => document.addEventListener('click', function onDoc(e) { if (!pop.contains(e.target)) { pop.remove(); document.removeEventListener('click', onDoc); } }), 0);
+    try {
+      const res = await apiFetch(`${API}/slack/workspaces/${_wsAct}/canales/${_canal.id}/miembros`);
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'No se pudo cargar');
+      const ids = d.ids || [];
+      const rows = ids.map(id => `<div class="slk-member-row">
+          <img class="slk-member-row__av" src="${_avatarUrl(id, _users[id] || id)}" alt="">
+          <span class="slk-member-row__nm">${escNom(_users[id] || 'Ex-miembro')}${_miId === id ? ' (yo)' : ''}</span>
+        </div>`).join('');
+      pop.innerHTML = `<div class="slk-members-hd">Miembros de ${_canal.is_im ? '' : '#'}${esc(_canal.name)} · ${ids.length}</div>`
+        + (rows || `<div class="lm-pick-empty">Sin miembros.</div>`);
+    } catch (e) {
+      pop.innerHTML = `<div class="slk-members-hd">Miembros</div><div class="lm-pick-empty">${esc(e.message)}</div>`;
+    }
+  }
+
+  // ── Nueva conversación — abre (o reabre) un DM sin que ya estuviera en la lista
+  // sincronizada, buscando por nombre entre el equipo del workspace. Pedido
+  // explícito 2026-09-04, inspirado en Mattermost.
+  function nuevaConversacionAbrir() {
+    document.getElementById('slk-nc-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'slk-nc-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) m.remove(); };
+    m.innerHTML = `<div class="fin-pi-box lm-pick-box">
+      <div class="fin-pi-box__hd"><h3>Nueva conversación</h3><button class="fin-pi-x" onclick="document.getElementById('slk-nc-modal').remove()">✕</button></div>
+      <div class="fin-pi-form" style="padding-bottom:0">
+        <input class="form-input fin-pi-full" id="slk-nc-q" placeholder="Buscar a alguien del equipo…" autocomplete="off" oninput="SlackChat._ncFiltrar(this.value)">
+      </div>
+      <div id="slk-nc-list" class="lm-pick-list" style="padding:10px 16px 16px"></div>
+    </div>`;
+    document.body.appendChild(m);
+    _ncFiltrar('');
+    setTimeout(() => document.getElementById('slk-nc-q')?.focus(), 60);
+  }
+  function _ncFiltrar(q) {
+    const list = $$('slk-nc-list'); if (!list) return;
+    const query = (q || '').toLowerCase().trim();
+    const items = (_miembros || [])
+      .filter(u => u.id !== _miId && (!query || (u.nombre || '').toLowerCase().includes(query)))
+      .slice(0, 40);
+    list.innerHTML = items.length
+      ? items.map(u => `<button class="lm-pick-item" onclick="SlackChat._ncPick('${u.id}')">
+          <img class="slk-member-row__av" src="${_avatarUrl(u.id, u.nombre)}" alt="" style="margin-right:8px">
+          <span>${escNom(u.nombre)}</span>
+        </button>`).join('')
+      : `<div class="lm-pick-empty">Sin coincidencias.</div>`;
+  }
+  async function _ncPick(userId) {
+    document.getElementById('slk-nc-modal')?.remove();
+    try {
+      const r = await apiFetch(`${API}/slack/workspaces/${_wsAct}/directo`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ usuarioId: userId }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'No se pudo abrir la conversación');
+      const canalId = d.canal?.id;
+      if (!canalId) throw new Error('Slack no devolvió el canal');
+      if (!_canales.some(c => c.id === canalId)) _canales.push(d.canal);
+      seccion('directos');
+      abrir(canalId);
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
   // Archiva un canal o CIERRA un directo. Slack no archiva directos, así que para esos
   // se cierra la conversación (se quita de la barra; se reabre al escribir de nuevo).
@@ -27861,7 +27963,8 @@ const SlackChat = (() => {
            miniMenuMsg, miniReaccionar, miniReaccionarPill, miniCopiar, miniMarcarLeidoActual,
            miniDetener: _pararSondeoMini, refreshMiniBadge,
            abrirSwitcher, cerrarSwitcher, _swFiltrar, _swKey, _swHover, _swPick,
-           _remindOpen, _remindPreset, _remindCustom, _remindClear, cerrarHilo };
+           _remindOpen, _remindPreset, _remindCustom, _remindClear, cerrarHilo,
+           toggleSilenciar, verMiembros, nuevaConversacionAbrir, _ncFiltrar, _ncPick };
 })();
 
 // ── Panel rápido de WhatsApp — abre el chat de UN contacto puntual en un panel de
