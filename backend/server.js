@@ -8422,6 +8422,54 @@ app.post('/api/slack/workspaces/:id/canales/:canal/mensajes', requireAuth, async
   } catch (err) { res.status(400).json({ error: err.message }); }
 });
 
+// Editar/borrar SOLO funcionan sobre mensajes propios — Slack ya lo exige de su lado.
+app.patch('/api/slack/workspaces/:id/canales/:canal/mensajes/:ts', requireAuth, async (req, res) => {
+  const texto = String(req.body?.texto || '').trim();
+  if (!texto) return res.status(400).json({ error: 'El mensaje está vacío' });
+  try {
+    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
+    await slackSvc.editarMensaje(w, req.params.canal, req.params.ts, texto);
+    res.json({ editado: true });
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+app.delete('/api/slack/workspaces/:id/canales/:canal/mensajes/:ts', requireAuth, async (req, res) => {
+  try {
+    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
+    await slackSvc.borrarMensaje(w, req.params.canal, req.params.ts);
+    res.json({ borrado: true });
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
+// Búsqueda de texto — opcionalmente acotada a un canal (?canal=ID).
+app.get('/api/slack/workspaces/:id/buscar', requireAuth, async (req, res) => {
+  const q = String(req.query.q || '').trim();
+  if (!q) return res.json({ resultados: [] });
+  try {
+    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
+    res.json({ resultados: await slackSvc.buscarMensajes(w, q, req.query.canal || null) });
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
+// Favoritos: canales marcados con ⭐ (mismo stars.list de "Guardados", otro tipo de item).
+app.get('/api/slack/workspaces/:id/favoritos', requireAuth, async (req, res) => {
+  try {
+    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
+    res.json({ canales: await slackSvc.canalesFavoritos(w) });
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+app.post('/api/slack/workspaces/:id/canales/:canal/estrella', requireAuth, async (req, res) => {
+  try {
+    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
+    await slackSvc.estrella(w, req.params.canal, req.body?.marcar !== false);
+    res.json({ ok: true });
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
 // =================================================================
 // WHATSAPP DE TRABAJO (Operaciones) — Baileys, no la API oficial de Meta.
 // v1: una conexión (el WhatsApp propio de Jenny), pensada para seguimiento y nurture

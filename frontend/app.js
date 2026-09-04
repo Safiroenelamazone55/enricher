@@ -26099,6 +26099,12 @@ const SlackChat = (() => {
   // 2026-09-04, inspirado en Mattermost. Se excluyen del contador de no leídos del
   // riel: para eso sirve, dejar de que un canal ruidoso avise todo el tiempo.
   let _mutes = new Set();
+  // Favoritos de canal (⭐ real de Slack, stars.add/remove) — pedido explícito
+  // 2026-09-04 mirando un screenshot de Slack: sección "Favoritos" arriba del todo.
+  let _favoritos = new Set();
+  // Texto CRUDO (con <@U123>, *negrita* etc. tal cual lo manda Slack) de cada
+  // mensaje ya pintado — hace falta para poder editarlo sin perder ese formato.
+  let _msgTexts = {};
   // Total sin leer del workspace que se mira (insignia del riel), contando también lo
   // que marqué a mano, PERO sin lo que está silenciado.
   function _totalNoLeidos() {
@@ -26346,6 +26352,8 @@ const SlackChat = (() => {
         .then(v => { _vinculos = v || {}; _pintaCanales(); }).catch(() => {});
       apiFetch(`${API}/slack/workspaces/${wsId}/mutes`).then(r => r.json())
         .then(d => { _mutes = new Set(d.canales || []); _pintaCanales(); _riel(); }).catch(() => { _mutes = new Set(); });
+      apiFetch(`${API}/slack/workspaces/${wsId}/favoritos`).then(r => r.json())
+        .then(d => { _favoritos = new Set(d.canales || []); _pintaCanales(); _pintaEstrellaHeader(); }).catch(() => { _favoritos = new Set(); });
       _pintaCanales();
       apiFetch(`${API}/slack/workspaces/${wsId}/no-leidos`)
         .then(r => r.json())
@@ -26541,11 +26549,15 @@ const SlackChat = (() => {
     const conNombre = _canales.map(c => ({ ...c, _nm: _nombreDe(c) }));
     const dm = _seccion === 'directos';
     const base = conNombre.filter(c => dm ? (c.is_im || c.is_mpim) : (!c.is_im && !c.is_mpim));
-    const lista = (q ? base.filter(c => c._nm.toLowerCase().includes(q)) : base).sort(dm ? _ordenCanalConYo : _ordenCanal);
+    const filtrada = q ? base.filter(c => c._nm.toLowerCase().includes(q)) : base;
+    // Favoritos primero, como en Slack real — solo si hay al menos uno marcado.
+    const favs  = filtrada.filter(c => _favoritos.has(c.id)).sort(dm ? _ordenCanalConYo : _ordenCanal);
+    const resto = filtrada.filter(c => !_favoritos.has(c.id)).sort(dm ? _ordenCanalConYo : _ordenCanal);
     cont.innerHTML =
-      `<div class="chat-sec-title">${dm ? 'Mensajes directos' : 'Canales'}</div>`
-      + (lista.length ? lista.map(_filaCanal).join('')
-         : `<div class="chat-ch-empty">${q ? `Sin resultados para "${esc(filtro)}".` : (dm ? 'Sin conversaciones directas.' : 'Sin canales.')}</div>`);
+      (favs.length ? `<div class="chat-sec-title">⭐ Favoritos</div>${favs.map(_filaCanal).join('')}` : '')
+      + `<div class="chat-sec-title">${dm ? 'Mensajes directos' : 'Canales'}</div>`
+      + (resto.length ? resto.map(_filaCanal).join('')
+         : (favs.length ? '' : `<div class="chat-ch-empty">${q ? `Sin resultados para "${esc(filtro)}".` : (dm ? 'Sin conversaciones directas.' : 'Sin canales.')}</div>`));
   }
 
   // Notificaciones: todo lo que tiene mensajes sin leer, junto y de lo más reciente a
@@ -26699,6 +26711,43 @@ const SlackChat = (() => {
     if (tp) tp.textContent = topic || '';
   }
 
+  // ⭐ favorito del canal abierto — refleja el estado en el botón del header.
+  function _pintaEstrellaHeader() {
+    const btn = $$('chat-hdr-star-btn');
+    if (!btn) return;
+    const on = !!(_canal && _favoritos.has(_canal.id));
+    btn.classList.toggle('chat-hdr-btn--active', on);
+    btn.title = on ? 'Quitar de favoritos' : 'Marcar como favorito';
+  }
+  async function toggleFavorito(canalId, marcar) {
+    const on = marcar != null ? marcar : !_favoritos.has(canalId);
+    if (on) _favoritos.add(canalId); else _favoritos.delete(canalId);
+    _pintaCanales(); _pintaEstrellaHeader();
+    try {
+      const r = await apiFetch(`${API}/slack/workspaces/${_wsAct}/canales/${canalId}/estrella`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ marcar: on }) });
+      if (!r.ok) throw new Error((await r.json()).error || 'No se pudo');
+    } catch (e) {
+      if (on) _favoritos.delete(canalId); else _favoritos.add(canalId);
+      _pintaCanales(); _pintaEstrellaHeader();
+      showBanner('Error: ' + e.message, 'error');
+    }
+  }
+  function toggleFavoritoActual() { if (_canal) toggleFavorito(_canal.id); }
+
+  // Nº de miembros del canal abierto, junto al ícono "Ver miembros" del header —
+  // mismo endpoint que ya usa verMiembros(), un fetch extra liviano por canal.
+  async function _cargarConteoMiembros(canalId) {
+    const el = $$('chat-hdr-member-count');
+    if (!el) return;
+    el.textContent = '';
+    try {
+      const r = await apiFetch(`${API}/slack/workspaces/${_wsAct}/canales/${canalId}/miembros`);
+      const d = await r.json();
+      if (_canal && _canal.id === canalId) el.textContent = (d.ids || []).length || '';
+    } catch (_) {}
+  }
+
   let _tCanal = null, _tNL = null, _ultimoTs = null;
 
   function _pararSondeo() {
@@ -26755,6 +26804,8 @@ const SlackChat = (() => {
     _pendienteDivisor = _noLeidos[c.id] || (_marcadoNL[c.id] ? 1 : 0);
     _pintaCanales();
     _cab(_canal.name, _canal.topic);
+    _pintaEstrellaHeader();
+    _cargarConteoMiembros(canalId);
     const inp = $$('chat-input');
     const c2 = _canales.find(x => x.id === canalId);
     if (inp) inp.placeholder = c2 && c2.is_im ? `Mensaje a ${_canal.name}` : `Mensaje en #${_canal.name}`;
@@ -26884,7 +26935,8 @@ const SlackChat = (() => {
       // que no fuera imagen/video/audio (esos usaban <img src> sin darse cuenta del
       // 404). Hay que envolverlo para que solo viaje el archivo.
       const files = (m.files || []).map(fl => _archivoHtml(fl)).join('');
-      html += `<div class="chat-msg${esRaiz ? ' slk-root' : ''}${esResp ? ' slk-reply' : ''}${esAgrupado ? ' chat-msg--grouped' : ''}" data-ts="${m.ts}"
+      _msgTexts[m.ts] = m.text || '';
+      html += `<div class="chat-msg${esRaiz ? ' slk-root' : ''}${esResp ? ' slk-reply' : ''}${esAgrupado ? ' chat-msg--grouped' : ''}" data-ts="${m.ts}" data-user="${esc(m.user || '')}"
                     oncontextmenu="SlackChat.menuMsg(event,'${m.ts}',${m.reply_count || 0})">
         <img class="chat-msg__av" src="${_avatarUrl(m.user, quien)}" alt="">
         <div class="chat-msg__body">
@@ -27243,6 +27295,8 @@ const SlackChat = (() => {
   function menuMsg(ev, ts, replies) {
     ev.preventDefault(); ev.stopPropagation();
     document.querySelectorAll('.slk-msgmenu').forEach(x => x.remove());
+    const el = document.querySelector('.chat-msg[data-ts="' + CSS.escape(ts) + '"]');
+    const esMio = !!(el && _miId && el.dataset.user === _miId);
     const reac = ['👍','❤️','😂','🎉','✅','🙏'].map(e =>
       '<button class="slk-mm-reac" onclick="SlackChat.reaccionar(\'' + ts + '\',\'' + e + '\')">' + _emojiImg(e) + '</button>').join('');
     const m = document.createElement('div');
@@ -27252,7 +27306,9 @@ const SlackChat = (() => {
       + (replies ? '<button class="slk-mm-op" onclick="SlackChat.verHilo(\'' + ts + '\')">Ver hilo (' + replies + ')</button>'
                  : '<button class="slk-mm-op" onclick="SlackChat.verHilo(\'' + ts + '\')">Responder en hilo</button>')
       + '<button class="slk-mm-op" onclick="SlackChat.anclar(\'' + ts + '\')">Anclar al canal</button>'
-      + '<button class="slk-mm-op" onclick="SlackChat.copiar(\'' + ts + '\')">Copiar texto</button>';
+      + '<button class="slk-mm-op" onclick="SlackChat.copiar(\'' + ts + '\')">Copiar texto</button>'
+      + (esMio ? '<button class="slk-mm-op" onclick="SlackChat.editarMsg(\'' + ts + '\')">Editar mensaje</button>'
+                + '<button class="slk-mm-op slk-mm-op--danger" onclick="SlackChat.eliminarMsg(\'' + ts + '\')">Eliminar mensaje</button>' : '');
     document.body.appendChild(m);
     m.style.cssText += ';position:fixed;z-index:10050;top:' + Math.min(ev.clientY, window.innerHeight - 220) + 'px;left:' + Math.min(ev.clientX, window.innerWidth - 230) + 'px';
     setTimeout(() => document.addEventListener('click', function o(e2) { if (!m.contains(e2.target)) { m.remove(); document.removeEventListener('click', o); } }), 0);
@@ -27285,6 +27341,110 @@ const SlackChat = (() => {
     if (el) navigator.clipboard.writeText(el.textContent).then(() => showBanner('Copiado', 'success'));
   }
 
+  // Re-carga el canal SIEMPRE (a diferencia de _refrescarCanal, que se salta el
+  // repintado si el ts más reciente no cambió — editar/borrar algo que no es el
+  // último mensaje no mueve ese ts, así que ahí ese atajo no sirve).
+  async function _recargarMensajes() {
+    if (!_canal) return;
+    try {
+      const r = await apiFetch(`${API}/slack/workspaces/${_wsAct}/canales/${_canal.id}/mensajes?limit=50`);
+      const d = await r.json();
+      if (d.error || !Array.isArray(d.mensajes)) return;
+      _ultimoTs = d.mensajes[0]?.ts || null;
+      _pinta(d.mensajes, false, true);
+    } catch (_) {}
+  }
+
+  // Editar / eliminar SOLO aparecen en el menú para mensajes propios (menuMsg ya lo
+  // filtra) — Slack igual lo exigiría de su lado si se intentara con otro.
+  function editarMsg(ts) {
+    document.querySelectorAll('.slk-msgmenu').forEach(x => x.remove());
+    const wrap = document.querySelector('.chat-msg[data-ts="' + CSS.escape(ts) + '"] .chat-msg__txt');
+    if (!wrap) return;
+    const texto = _msgTexts[ts] || '';
+    wrap.innerHTML = `<textarea class="slk-edit-box" id="slk-edit-box">${esc(texto)}</textarea>
+      <div class="slk-edit-acts">
+        <button class="btn btn--sm btn--primary" onclick="SlackChat._guardarEdicion('${ts}')">Guardar</button>
+        <button class="btn btn--sm btn--ghost" onclick="SlackChat._cancelarEdicion()">Cancelar</button>
+      </div>`;
+    const ta = $$('slk-edit-box');
+    if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+  }
+  function _cancelarEdicion() { _recargarMensajes(); }
+  async function _guardarEdicion(ts) {
+    const ta = $$('slk-edit-box');
+    if (!ta) return;
+    const texto = ta.value.trim();
+    if (!texto) { showBanner('El mensaje no puede quedar vacío', 'error'); return; }
+    try {
+      const r = await apiFetch(`${API}/slack/workspaces/${_wsAct}/canales/${_canal.id}/mensajes/${encodeURIComponent(ts)}`,
+        { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ texto }) });
+      if (!r.ok) throw new Error((await r.json()).error || 'No se pudo editar');
+      _msgTexts[ts] = texto;
+      await _recargarMensajes();
+      showBanner('Mensaje editado', 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  async function eliminarMsg(ts) {
+    document.querySelectorAll('.slk-msgmenu').forEach(x => x.remove());
+    if (!confirm('¿Eliminar este mensaje? No se puede deshacer.')) return;
+    try {
+      const r = await apiFetch(`${API}/slack/workspaces/${_wsAct}/canales/${_canal.id}/mensajes/${encodeURIComponent(ts)}`, { method: 'DELETE' });
+      if (!r.ok) throw new Error((await r.json()).error || 'No se pudo eliminar');
+      await _recargarMensajes();
+      showBanner('Mensaje eliminado', 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+
+  // Buscar mensajes DENTRO del canal abierto — el ícono de lupa del header estaba
+  // ahí de adorno, sin función. Pedido explícito 2026-09-04.
+  function abrirBusqueda(ev) {
+    document.querySelectorAll('.slk-search-pop').forEach(x => x.remove());
+    if (!_canal) return;
+    const pop = document.createElement('div');
+    pop.className = 'slk-search-pop';
+    pop.innerHTML = `<input type="text" id="slk-search-input" placeholder="Buscar en #${esc(_canal.name)}…" autocomplete="off">
+      <div class="slk-search-results" id="slk-search-results"></div>`;
+    document.body.appendChild(pop);
+    const r = (ev.currentTarget || ev.target).getBoundingClientRect();
+    pop.style.left = Math.max(8, Math.min(r.left - 260, window.innerWidth - 340)) + 'px';
+    pop.style.top = (r.bottom + 6) + 'px';
+    const inp = $$('slk-search-input');
+    inp.focus();
+    let t = null;
+    inp.oninput = () => { clearTimeout(t); t = setTimeout(() => _buscarEjecutar(inp.value), 350); };
+    setTimeout(() => document.addEventListener('click', function onDoc(e) {
+      if (!pop.contains(e.target)) { pop.remove(); document.removeEventListener('click', onDoc); }
+    }), 0);
+  }
+  async function _buscarEjecutar(q) {
+    const box = $$('slk-search-results');
+    if (!box) return;
+    q = q.trim();
+    if (!q) { box.innerHTML = ''; return; }
+    box.innerHTML = `<div class="chat-ch-empty">Buscando…</div>`;
+    try {
+      const r = await apiFetch(`${API}/slack/workspaces/${_wsAct}/buscar?q=${encodeURIComponent(q)}&canal=${encodeURIComponent(_canal.id)}`);
+      const d = await r.json();
+      if (d.error) throw new Error(d.error);
+      const res = d.resultados || [];
+      box.innerHTML = res.length ? res.map(m => `
+        <button class="slk-search-item" onclick="SlackChat._buscarIr('${esc(m.canalId)}','${esc(m.ts)}')">
+          <span class="slk-search-item__quien">${escNom(_users[m.usuario] || 'Slack')}</span>
+          <span class="slk-search-item__txt">${esc((m.texto || '').slice(0, 120))}</span>
+        </button>`).join('') : `<div class="chat-ch-empty">Sin resultados.</div>`;
+    } catch (e) { box.innerHTML = `<div class="chat-ch-empty">${esc(e.message)}</div>`; }
+  }
+  async function _buscarIr(canalId, ts) {
+    document.querySelectorAll('.slk-search-pop').forEach(x => x.remove());
+    if (!_canal || _canal.id !== canalId) await abrir(canalId);
+    setTimeout(() => {
+      const el = document.querySelector('.chat-msg[data-ts="' + CSS.escape(ts) + '"]');
+      if (el) { el.scrollIntoView({ block: 'center' }); el.classList.add('chat-msg--flash'); setTimeout(() => el.classList.remove('chat-msg--flash'), 1600); }
+      else showBanner('Canal abierto — el mensaje puede estar más arriba en el historial.', 'info');
+    }, 400);
+  }
+
   // Menu contextual del canal. Si esta ligado a un proyecto, ofrece saltar a el y a
   // sus tareas; siempre, abrir en Slack, copiar el nombre y archivar.
   function menuCanal(ev, canalId) {
@@ -27305,7 +27465,9 @@ const SlackChat = (() => {
          + `<div class="slk-cm-sep"></div>`;
     }
     const muted = _mutes.has(canalId);
+    const fav = _favoritos.has(canalId);
     h += `<button class="slk-mm-op" onclick="SlackChat.marcarNoLeido('${canalId}','${esc(nombre).replace(/'/g, "\\'")}')">Marcar como no leído</button>`
+       + `<button class="slk-mm-op" onclick="SlackChat.toggleFavorito('${canalId}',${!fav})">${fav ? '☆ Quitar de favoritos' : '⭐ Marcar como favorito'}</button>`
        + `<button class="slk-mm-op" onclick="SlackChat.toggleSilenciar('${canalId}',${!muted})">${muted ? '🔔 Reactivar notificaciones' : '🔕 Silenciar canal'}</button>`
        + `<button class="slk-mm-op" onclick="SlackChat.abrir('${canalId}')">Abrir aquí</button>`;
     if (w && w.team_id) h += `<button class="slk-mm-op" onclick="window.open('https://app.slack.com/client/${w.team_id}/${canalId}','_blank')">Abrir en Slack</button>`;
@@ -27964,7 +28126,9 @@ const SlackChat = (() => {
            miniDetener: _pararSondeoMini, refreshMiniBadge,
            abrirSwitcher, cerrarSwitcher, _swFiltrar, _swKey, _swHover, _swPick,
            _remindOpen, _remindPreset, _remindCustom, _remindClear, cerrarHilo,
-           toggleSilenciar, verMiembros, nuevaConversacionAbrir, _ncFiltrar, _ncPick };
+           toggleSilenciar, verMiembros, nuevaConversacionAbrir, _ncFiltrar, _ncPick,
+           toggleFavorito, toggleFavoritoActual, editarMsg, _guardarEdicion, _cancelarEdicion, eliminarMsg,
+           abrirBusqueda, _buscarIr };
 })();
 
 // ── Panel rápido de WhatsApp — abre el chat de UN contacto puntual en un panel de

@@ -16137,3 +16137,41 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
   color: #fff; font-size: .78rem; font-weight: 700; cursor: pointer;
 }
 .wa-note-new button:hover { filter: brightness(1.06); }
+
+/* ── Chat: favoritos, buscador de canal, editar mensaje ───────────────────────
+   Pedido explícito 2026-09-04 mirando un screenshot real de Slack: favoritos,
+   nº de miembros en el header, buscador (el botón ya existía pero no hacía
+   nada), y editar/eliminar mensajes propios. */
+.chat-hdr-btn--active { color: #F5A623; }
+.chat-hdr-btn--active svg { fill: #F5A623; }
+.chat-hdr-btn--count { position: relative; width: auto; padding: 0 6px 0 4px; gap: 3px; }
+.chat-hdr-btn--count span { font-size: 11px; font-weight: 700; line-height: 1; }
+.chat-hdr-btn--count span:empty { display: none; }
+
+.slk-search-pop {
+  position: fixed; z-index: 10052; background: #fff; border: 1px solid var(--border, #EAE7E2);
+  border-radius: 0; box-shadow: 0 8px 24px rgba(16,24,20,.14); width: 320px; max-width: calc(100vw - 16px);
+  padding: 8px;
+}
+.slk-search-pop input {
+  width: 100%; padding: 7px 9px; border: 1px solid var(--border, #EAE7E2); border-radius: 0;
+  font: inherit; font-size: .82rem; color: var(--text, #1F1D1B); background: var(--bg, #FAF8F5);
+}
+.slk-search-pop input:focus { outline: none; border-color: var(--brand, #007AFF); }
+.slk-search-results { max-height: 320px; overflow-y: auto; margin-top: 6px; }
+.slk-search-item {
+  display: flex; flex-direction: column; gap: 1px; width: 100%; text-align: left; padding: 6px 7px;
+  border: none; background: none; border-radius: 0; cursor: pointer; font: inherit;
+}
+.slk-search-item:hover { background: var(--bg2, #F1EFEB); }
+.slk-search-item__quien { font-size: .74rem; font-weight: 700; color: var(--text, #1F1D1B); }
+.slk-search-item__txt { font-size: .78rem; color: var(--text2, #6C6862); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.slk-edit-box {
+  width: 100%; min-height: 54px; resize: vertical; padding: 6px 8px; border: 1px solid var(--brand, #007AFF);
+  border-radius: 0; font: inherit; font-size: inherit; color: inherit; background: var(--bg, #FAF8F5);
+}
+.slk-edit-acts { display: flex; gap: 6px; margin-top: 5px; }
+
+@keyframes chatMsgFlash { 0%, 100% { background: transparent; } 30% { background: #FFF3C4; } }
+.chat-msg--flash { animation: chatMsgFlash 1.6s ease-out; }

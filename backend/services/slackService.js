@@ -167,6 +167,32 @@ async function directo(ws, usuarioId, texto) {
   return enviar(ws, c.channel.id, texto);
 }
 
+// Editar/borrar solo funcionan sobre mensajes que la propia usuaria mandó —eso ya
+// lo aplica Slack del lado suyo (edit_message/message_not_found si no es dueña).
+async function editarMensaje(ws, canal, ts, texto) {
+  await _call(token(ws), 'chat.update', { channel: canal, ts, text: texto }, 'POST');
+  return true;
+}
+async function borrarMensaje(ws, canal, ts) {
+  await _call(token(ws), 'chat.delete', { channel: canal, ts }, 'POST');
+  return true;
+}
+
+// Búsqueda de texto. Requiere token de USUARIO (el que ya se usa acá, no bot) — es
+// la única forma que soporta search.messages en la API de Slack. Si el token no
+// tiene el scope search:read, _call ya traduce el error a "faltan permisos".
+// canalId opcional: como el API no filtra por id de forma confiable via query,
+// se pide de más (100) y se filtra acá por channel.id.
+async function buscarMensajes(ws, query, canalId) {
+  const d = await _call(token(ws), 'search.messages', { query, count: 100, sort: 'timestamp' });
+  let matches = d.messages?.matches || [];
+  if (canalId) matches = matches.filter(m => m.channel?.id === canalId);
+  return matches.slice(0, 30).map(m => ({
+    ts: m.ts, texto: m.text || '', usuario: m.user || '', canalId: m.channel?.id || '',
+    canalNombre: m.channel?.name || '', permalink: m.permalink || '',
+  }));
+}
+
 // Abrir (o reabrir) una conversación directa SIN mandar nada — "Nueva conversación"
 // del compose del sidebar, pedido explícito 2026-09-04 (inspirado en Mattermost:
 // hoy solo se podía saltar a un DM que YA existiera en la lista sincronizada).
@@ -297,6 +323,18 @@ async function guardados(ws) {
     .map(i => ({ channel: i.channel, user: i.message.user, text: i.message.text || '', ts: i.message.ts }));
 }
 
+// Canales marcados como favoritos — mismo stars.list que guardados(), pero
+// filtrando el otro tipo de item (type:'channel' en vez de 'message'). Un solo
+// scope (stars:read) cubre ambas cosas.
+async function canalesFavoritos(ws) {
+  const d = await _call(token(ws), 'stars.list', { limit: 100 });
+  return (d.items || []).filter(i => i.type === 'channel').map(i => i.channel);
+}
+async function estrella(ws, canalId, marcar) {
+  await _call(token(ws), marcar ? 'stars.add' : 'stars.remove', { channel: canalId }, 'POST');
+  return true;
+}
+
 async function renombrarCanal(ws, canalId, nombre) {
   const d = await _call(token(ws), 'conversations.rename', { channel: canalId, name: nombre }, 'POST');
   return d.channel;
@@ -320,5 +358,6 @@ module.exports = {
   encPass, verificar, canales, miembros, noLeidos, historial, hilo,
   enviar, directo, abrirDirecto, miembrosCanal, crearCanal, archivarCanal, normalizarNombre, _errorClaro,
   reaccionar, quitarReaccion, anclar, desanclar, anclados, subirArchivo, renombrarCanal, marcarNoLeido, marcarLeido, guardados,
+  editarMensaje, borrarMensaje, buscarMensajes, canalesFavoritos, estrella,
   teamInfo, teamInfoFromEnc, verificarFromEnc,
 };
