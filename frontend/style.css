@@ -12280,6 +12280,13 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .dg-issues-toggle { font-size: .8rem; font-weight: 600; padding: 7px 13px; border: 1px solid var(--border, #EAE7E2); background: #fff; color: var(--text2, #45586A); cursor: pointer; white-space: nowrap; }
 .dg-issues-toggle.active { background: #D33; border-color: #D33; color: #fff; }
 .dg-issues-toggle .n { opacity: .85; }
+.dg-dup-list { display: flex; flex-direction: column; gap: 12px; max-height: 55vh; overflow-y: auto; }
+.dg-dup-group { border: 1px solid var(--border, #EAE7E2); border-radius: 0; padding: 10px 12px; }
+.dg-dup-key { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--muted, #B4AFA8); margin-bottom: 6px; }
+.dg-dup-row { display: block; font-size: .85rem; padding: 4px 0; cursor: pointer; }
+.dg-dup-row input { margin-right: 7px; }
+.dg-dup-sub { color: var(--muted, #B4AFA8); font-size: .78rem; margin-left: 6px; }
+.dg-dup-act { margin-top: 8px; }
 .dg-cell-input { width: 100%; border: 1px solid var(--brand, #007AFF); border-radius: 0; padding: 3px 6px; font: inherit; font-size: .82rem; }
 .dg-clean-list { display: flex; flex-direction: column; gap: 6px; max-height: 50vh; overflow-y: auto; }
 .dg-clean-row { display: grid; grid-template-columns: 110px 1fr 20px 1fr; align-items: center; gap: 8px; font-size: .8rem; padding: 7px 9px; border: 1px solid var(--border, #EAE7E2); border-radius: 0; }

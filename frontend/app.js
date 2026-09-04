@@ -25570,11 +25570,13 @@ ${foot}
     const n = _dgSel.size;
     const tieneEnrich = (DG_ENRICH_FIELDS[_dgEntity] || []).length > 0;
     const nIssues = (allRows || rows).filter(r => _dgRowIssues(r).length).length;
+    const nDup = _dgDupGroups().length;
     return `<div class="lm-bulk-bar show dg-bulkbar">
       <span class="lm-bulk-n">${n ? `${n} seleccionado(s)` : `${rows.length} filtrado(s)`}</span>
       <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.dgCleanOpen()">🧹 Limpiar</button>
       <button class="btn btn--ghost btn--sm"${tieneEnrich ? '' : ' disabled title="Sin campos calculables para esta vista todavía"'} onclick="LeadManagerModule.dgEnrichOpen()">✨ Enriquecer</button>
       <button class="dg-issues-toggle${_dgOnlyIssues ? ' active' : ''}" onclick="LeadManagerModule.dgToggleIssues()" title="Filtrar filas con email/dominio/teléfono inválido o email faltante">⚠ Con problemas <span class="n">(${nIssues})</span></button>
+      <button class="btn btn--ghost btn--sm"${nDup ? '' : ' disabled title="Sin duplicados detectados"'} onclick="LeadManagerModule.dgDupOpen()" title="Agrupa por ${_dgEntity === 'companies' ? 'dominio' : 'email'} exacto">🔗 Duplicados (${nDup})</button>
       ${n ? `<button class="lm-bulk-ghost" onclick="LeadManagerModule.dgClearSel()">Ninguna</button>` : ''}
     </div>`;
   }
@@ -25762,6 +25764,114 @@ ${foot}
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
+  // ── Deduplicación (categoría B) — SOLO agrupa lo que ya está cargado por una
+  // clave exacta (dominio de empresa / email de contacto); nunca actúa sola.
+  // Empresas: se elige cuál SOBREVIVE (radio) y se fusiona (sus contactos se
+  // reasignan, las demás se borran). Contactos: se eligen cuáles BORRAR
+  // (checkbox, todas menos la primera preseleccionadas) — sin fusión de
+  // contacto porque tienen demasiadas tablas relacionadas (secuencias,
+  // mensajes, actividades) para reasignar con seguridad en un primer corte.
+  function _dgDupGroups() {
+    const isCo = _dgEntity === 'companies';
+    const src = isCo ? _companies : _contacts;
+    const by = new Map();
+    (src || []).forEach(r => {
+      const key = isCo ? (r.dominio || '').toLowerCase().trim() : (r.email || '').toLowerCase().trim();
+      if (!key) return;
+      if (!by.has(key)) by.set(key, []);
+      by.get(key).push(r);
+    });
+    const groups = [...by.entries()].filter(([, rows]) => rows.length > 1)
+      .map(([clave, rows]) => ({ clave, rows: rows.sort((a, b) => a.id - b.id) }));
+    groups.sort((a, b) => b.rows.length - a.rows.length);
+    return groups;
+  }
+  let _dgDupSel = null; // Map(clave -> id sobreviviente) | Map(clave -> Set(ids a borrar))
+  function dgDupOpen() {
+    const groups = _dgDupGroups();
+    _dgDupSel = new Map();
+    const isCo = _dgEntity === 'companies';
+    groups.forEach(g => {
+      if (isCo) {
+        const best = [...g.rows].sort((a, b) => (b.contact_count || 0) - (a.contact_count || 0))[0];
+        _dgDupSel.set(g.clave, best.id);
+      } else {
+        _dgDupSel.set(g.clave, new Set(g.rows.slice(1).map(r => r.id)));
+      }
+    });
+    _dgDupOpenModal(groups);
+  }
+  function _dgDupRowLabel(r) {
+    return _dgEntity === 'companies'
+      ? `${esc(r.nombre || '(sin nombre)')} <span class="dg-dup-sub">${r.contact_count || 0} contacto(s)</span>`
+      : `${esc([r.nombre, r.apellido].filter(Boolean).join(' ') || '(sin nombre)')} <span class="dg-dup-sub">${esc(r.company_nombre || r.empresa_nombre || '—')}</span>`;
+  }
+  function _dgDupGroupHtml(g, idx) {
+    const isCo = _dgEntity === 'companies';
+    const rowsHtml = g.rows.map(r => {
+      if (isCo) {
+        const checked = _dgDupSel.get(g.clave) === r.id;
+        return `<label class="dg-dup-row"><input type="radio" name="dgdup-${idx}" ${checked ? 'checked' : ''} onchange="LeadManagerModule.dgDupPickSurvivor('${esc(g.clave)}',${r.id})"> ${_dgDupRowLabel(r)}${checked ? ' <b>· se conserva</b>' : ''}</label>`;
+      }
+      const delSet = _dgDupSel.get(g.clave);
+      const checked = delSet.has(r.id);
+      return `<label class="dg-dup-row"><input type="checkbox" ${checked ? 'checked' : ''} onchange="LeadManagerModule.dgDupToggleDel('${esc(g.clave)}',${r.id},this.checked)"> ${_dgDupRowLabel(r)}${checked ? ' <b>· se elimina</b>' : ''}</label>`;
+    }).join('');
+    const actionBtn = isCo
+      ? `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.dgDupMergeGroup('${esc(g.clave)}')">Fusionar (${g.rows.length})</button>`
+      : `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.dgDupDeleteGroup('${esc(g.clave)}')">Eliminar seleccionados</button>`;
+    return `<div class="dg-dup-group" data-clave="${esc(g.clave)}"><div class="dg-dup-key">${esc(g.clave)}</div>${rowsHtml}<div class="dg-dup-act">${actionBtn}</div></div>`;
+  }
+  function _dgDupOpenModal(groups) {
+    document.getElementById('lm-dgdup-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'lm-dgdup-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) dgDupClose(); };
+    const body = groups.length
+      ? `<div class="dg-dup-list">${groups.map((g, i) => _dgDupGroupHtml(g, i)).join('')}</div>`
+      : `<div class="cp-empty2" style="padding:22px">Sin duplicados — no hay dos registros con el mismo ${_dgEntity === 'companies' ? 'dominio' : 'email'}.</div>`;
+    m.innerHTML = `<div class="fin-pi-box lm-flt-box">
+      <div class="fin-pi-box__hd"><h3>Duplicados · ${groups.length} grupo(s)</h3><button class="fin-pi-x" onclick="LeadManagerModule.dgDupClose()">✕</button></div>
+      <div class="flt-body">${body}</div>
+      <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns">
+        <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.dgDupClose()">Cerrar</button>
+      </div></div></div>`;
+    document.body.appendChild(m);
+  }
+  function dgDupClose() { document.getElementById('lm-dgdup-modal')?.remove(); _dgDupSel = null; }
+  function dgDupPickSurvivor(clave, id) { if (_dgDupSel) { _dgDupSel.set(clave, id); _dgDupRepaint(); } }
+  function dgDupToggleDel(clave, id, checked) {
+    if (!_dgDupSel) return;
+    const set = _dgDupSel.get(clave);
+    if (checked) set.add(id); else set.delete(id);
+    _dgDupRepaint();
+  }
+  function _dgDupRepaint() { if (_dgDupSel) _dgDupOpenModal(_dgDupGroups()); }
+  async function dgDupMergeGroup(clave) {
+    const groups = _dgDupGroups();
+    const g = groups.find(x => x.clave === clave); if (!g) return;
+    const survivorId = _dgDupSel.get(clave);
+    const dupIds = g.rows.map(r => r.id).filter(id => id !== survivorId);
+    try {
+      const res = await apiFetch(`${API}/lm/companies/merge`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ survivor_id: survivorId, duplicate_ids: dupIds }) });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Error');
+      showBanner(`✓ Fusionadas ${d.merged} empresa(s) · ${d.contactsMoved} contacto(s) reasignado(s)`, 'success');
+      await load(); _dgRenderRows(); dgDupOpen();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  async function dgDupDeleteGroup(clave) {
+    const delSet = _dgDupSel.get(clave);
+    if (!delSet || !delSet.size) { showBanner('Marca al menos uno para eliminar', 'info'); return; }
+    const ids = [...delSet];
+    try {
+      const res = await apiFetch(`${API}/lm/contacts/bulk-delete`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids }) });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Error');
+      showBanner(`✓ ${d.deleted} contacto(s) eliminado(s)`, 'success');
+      await load(); _dgRenderRows(); dgDupOpen();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+
   return { load, filter, setFilter, setView, go, openClient, clientTab, _clientGoTab, clientQuickMenu,
     openImportPicker, closeImportPicker, openImport, closeImport, impFile, impToggleHeader, impToggleUpdateExisting, impSetObc, impNewClient, impRun, exportCsv,
     cbxOpen, cbxFilter, cbxPick, cbxBlur,
@@ -25789,6 +25899,7 @@ ${foot}
     renderDataGrid, dgSetEntity, dgSetCliente, dgSetSeq, dgSetCamp, dgSetQ, dgToggleSel, dgToggleAll, dgClearSel,
     dgEditCell, dgEditKey, dgSaveCell, dgCleanOpen, dgCleanClose, dgCleanApply,
     dgEnrichOpen, dgEnrichClose, dgEnrichApply, dgToggleIssues,
+    dgDupOpen, dgDupClose, dgDupPickSurvivor, dgDupToggleDel, dgDupMergeGroup, dgDupDeleteGroup,
     fmsToggle, fmsFilter, fmsPick,
     openViews, applyView, saveView, deleteView, clearAllViews,
     taskSetView, taskSetFilter, calPrev, calNext, calToday,

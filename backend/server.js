@@ -3438,6 +3438,34 @@ app.post('/api/lm/companies/bulk-delete', requireAuth, async (req, res) => {
   finally { cl.release(); }
 });
 
+// ── Deduplicación (categoría B) — la DETECCIÓN vive en el frontend (agrupa lo
+// que ya tiene cargado, mismo patrón que "Con problemas"); acá solo la acción
+// real de fusionar empresas duplicadas, que sí necesita transacción en DB.
+// Reasigna los contactos de las duplicadas al
+// sobreviviente y borra las duplicadas (lm_company_sequences de las duplicadas
+// se borra en cascada — es la cola "empresa sin contacto" de una empresa que
+// ya no va a existir).
+app.post('/api/lm/companies/merge', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId;
+  const b = req.body || {};
+  const survivorId = parseInt(b.survivor_id);
+  const dupIds = Array.isArray(b.duplicate_ids) ? b.duplicate_ids.map(Number).filter(id => id && id !== survivorId) : [];
+  if (!survivorId || !dupIds.length) return res.status(400).json({ error: 'Falta survivor_id o duplicate_ids' });
+  const cl = await pool.connect();
+  try {
+    await cl.query('BEGIN');
+    const chk = await cl.query(`SELECT id FROM lm_companies WHERE user_id=$1 AND id=$2`, [uid, survivorId]);
+    if (!chk.rows.length) throw new Error('Empresa sobreviviente no encontrada');
+    const moved = await cl.query(
+      `UPDATE lm_contacts SET company_id=$1, updated_at=NOW() WHERE user_id=$2 AND company_id = ANY($3::int[])`,
+      [survivorId, uid, dupIds]);
+    const del = await cl.query(`DELETE FROM lm_companies WHERE user_id=$1 AND id = ANY($2::int[])`, [uid, dupIds]);
+    await cl.query('COMMIT');
+    res.json({ merged: del.rowCount, contactsMoved: moved.rowCount });
+  } catch (err) { await cl.query('ROLLBACK').catch(() => {}); console.error('[lm-co] merge', err.message); res.status(500).json({ error: 'Error al fusionar empresas' }); }
+  finally { cl.release(); }
+});
+
 // ── Campos personalizados (Field 1..10 renombrables, Empresas/Contactos) ──
 // Un slot solo "existe" para el usuario si tiene label — el front filtra por eso.
 app.get('/api/lm/custom-fields', requireAuth, async (req, res) => {
