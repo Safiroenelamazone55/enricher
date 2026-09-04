@@ -9193,6 +9193,80 @@ app.get('/api/wa/connections/:id/chats/:jid/buscar', requireAuth, async (req, re
   } catch (err) { console.error('[wa] buscar', err.message); res.status(500).json({ error: 'Error al buscar' }); }
 });
 
+// Participantes ("watchers") de una conversación — alguien que la sigue sin ser
+// el responsable (asignado_a). Igual patrón que las notas, pero es una lista.
+app.get('/api/wa/connections/:id/chats/:jid/watchers', requireAuth, async (req, res) => {
+  try {
+    if (!(await _cargarConexionAutorizada(req, res, req.params.id))) return;
+    const { rows } = await pool.query(
+      `SELECT nombre FROM wa_chat_watchers WHERE connection_id=$1 AND chat_jid=$2 ORDER BY nombre`,
+      [req.params.id, req.params.jid]);
+    res.json(rows.map(r => r.nombre));
+  } catch (err) { console.error('[wa] watchers GET', err.message); res.status(500).json({ error: 'Error al cargar' }); }
+});
+app.post('/api/wa/connections/:id/chats/:jid/watchers', requireAuth, async (req, res) => {
+  const nombre = String(req.body?.nombre || '').trim().slice(0, 100);
+  if (!nombre) return res.status(400).json({ error: 'Falta el nombre' });
+  try {
+    const conn = await _cargarConexionAutorizada(req, res, req.params.id);
+    if (!conn) return;
+    await pool.query(
+      `INSERT INTO wa_chat_watchers (connection_id, chat_jid, nombre) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`,
+      [conn.id, req.params.jid, nombre]);
+    res.status(201).json({ ok: true });
+  } catch (err) { console.error('[wa] watchers POST', err.message); res.status(500).json({ error: 'No se pudo agregar' }); }
+});
+app.delete('/api/wa/connections/:id/chats/:jid/watchers/:nombre', requireAuth, async (req, res) => {
+  try {
+    if (!(await _cargarConexionAutorizada(req, res, req.params.id))) return;
+    await pool.query(
+      `DELETE FROM wa_chat_watchers WHERE connection_id=$1 AND chat_jid=$2 AND nombre=$3`,
+      [req.params.id, req.params.jid, req.params.nombre]);
+    res.json({ ok: true });
+  } catch (err) { console.error('[wa] watchers DELETE', err.message); res.status(500).json({ error: 'No se pudo quitar' }); }
+});
+
+// Métricas básicas del equipo (no por persona — Baileys manda todo como el mismo
+// número, no hay autor por mensaje saliente). Mensajes de hoy, chats resueltos y
+// tiempo promedio de primera respuesta (de los últimos 7 días), calculado sobre
+// wa_messages tal cual está — sin tabla nueva de historial de estados.
+app.get('/api/wa/connections/:id/metricas', requireAuth, async (req, res) => {
+  try {
+    if (!(await _cargarConexionAutorizada(req, res, req.params.id))) return;
+    const connId = req.params.id;
+    const { rows: [hoy] } = await pool.query(`
+      SELECT
+        COUNT(*) FILTER (WHERE from_me AND ts >= CURRENT_DATE)      AS enviados_hoy,
+        COUNT(*) FILTER (WHERE NOT from_me AND ts >= CURRENT_DATE)  AS recibidos_hoy
+      FROM wa_messages WHERE connection_id=$1 AND NOT eliminado AND estado != 'programado'`, [connId]);
+    const { rows: [estados] } = await pool.query(`
+      SELECT
+        COUNT(*) FILTER (WHERE estado_conv = 'resuelto')  AS resueltos,
+        COUNT(*) FILTER (WHERE estado_conv = 'pendiente') AS pendientes
+      FROM wa_chat_meta WHERE connection_id=$1`, [connId]);
+    // Tiempo promedio de primera respuesta: para cada mensaje entrante, el primer
+    // saliente que le sigue en el mismo chat, en los últimos 7 días.
+    const { rows: [resp] } = await pool.query(`
+      WITH pares AS (
+        SELECT m1.chat_jid, m1.ts AS entrada,
+               MIN(m2.ts) FILTER (WHERE m2.from_me AND m2.ts > m1.ts) AS salida
+        FROM wa_messages m1
+        LEFT JOIN wa_messages m2 ON m2.connection_id=m1.connection_id AND m2.chat_jid=m1.chat_jid AND m2.ts > m1.ts
+        WHERE m1.connection_id=$1 AND NOT m1.from_me AND m1.ts >= NOW() - INTERVAL '7 days'
+        GROUP BY m1.chat_jid, m1.ts
+      )
+      SELECT EXTRACT(EPOCH FROM AVG(salida - entrada)) AS seg_promedio
+      FROM pares WHERE salida IS NOT NULL AND salida - entrada < INTERVAL '24 hours'`, [connId]);
+    res.json({
+      enviadosHoy: +hoy.enviados_hoy || 0,
+      recibidosHoy: +hoy.recibidos_hoy || 0,
+      resueltos: +estados.resueltos || 0,
+      pendientes: +estados.pendientes || 0,
+      respuestaSegPromedio: resp.seg_promedio != null ? Math.round(+resp.seg_promedio) : null,
+    });
+  } catch (err) { console.error('[wa] metricas', err.message); res.status(500).json({ error: 'Error al calcular métricas' }); }
+});
+
 // Notas internas por chat — nunca se envían al contacto, solo las ve el equipo.
 app.get('/api/wa/connections/:id/chats/:jid/notas', requireAuth, async (req, res) => {
   try {
@@ -9299,7 +9373,7 @@ app.get('/api/wa/connections/:id/chats/:jid/mensajes', requireAuth, async (req, 
     if (!(await _cargarConexionAutorizada(req, res, req.params.id))) return;
     const { rows } = await pool.query(`
       SELECT m.id, m.from_me, m.nombre, m.texto, m.ts, m.reply_to_id, m.reply_to_texto, m.msg_id, m.estado, m.scheduled_at, m.eliminado,
-             m.media_url, m.media_type, m.importante, m.contact_phone,
+             m.media_url, m.media_type, m.importante, m.contact_phone, m.ack,
              rm.emoji AS mi_reaccion, ro.emoji AS su_reaccion
         FROM wa_messages m
         LEFT JOIN wa_reactions rm ON rm.connection_id = m.connection_id AND rm.msg_id = m.msg_id AND rm.from_me = TRUE

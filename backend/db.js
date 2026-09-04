@@ -1853,6 +1853,23 @@ async function initDb() {
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS wa_chat_notes_chat_idx ON wa_chat_notes (connection_id, chat_jid, created_at);`);
 
+    // Ticks de entrega/leído (estilo Chatwoot/WhatsApp real) — Baileys ya manda este
+    // dato en messages.update (u.update.status: 1 pendiente, 2 enviado al server,
+    // 3 entregado, 4 leído); antes se descartaba. Solo aplica a from_me=TRUE.
+    await pool.query(`ALTER TABLE wa_messages ADD COLUMN IF NOT EXISTS ack SMALLINT NOT NULL DEFAULT 0;`);
+
+    // Participantes de una conversación — alguien que la sigue SIN ser el
+    // responsable (asignado_a ya cubre eso). Pedido explícito 2026-09-04.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS wa_chat_watchers (
+        connection_id INTEGER NOT NULL REFERENCES wa_connections(id) ON DELETE CASCADE,
+        chat_jid      TEXT    NOT NULL,
+        nombre        TEXT    NOT NULL,
+        created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (connection_id, chat_jid, nombre)
+      );
+    `);
+
     // Respuestas rápidas ("canned responses" de Chatwoot) — texto reusable que se
     // inserta escribiendo "/atajo" en el composer. Mismo patrón que wa_tags: por
     // user_id (compartidas entre todas las conexiones/cuentas de WhatsApp del

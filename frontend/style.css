@@ -16249,3 +16249,34 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .pane--wa .wa-msg--out .wa-msg__bubble { background: #0090FF; color: #fff; }
 .pane--wa .wa-msg--out .wa-msg__time { color: rgba(255,255,255,.8); }
 .pane--wa .wa-msg--sched .wa-msg__bubble { background: #fff; }
+
+/* ── WhatsApp: ticks de entrega/leído, "sin responder", borrador, participantes,
+   switcher (Ctrl+K), métricas — pedido explícito 2026-09-04 "todo". ── */
+.wa-msg__tick { vertical-align: -1px; margin-left: 3px; color: inherit; opacity: .75; }
+.pane--wa .wa-msg--out .wa-msg__tick--read { color: #7CD4FD; opacity: 1; }
+.wa-msg--in .wa-msg__tick { display: none; }
+
+.wa-chat-item__overdue { font-size: .62rem; font-weight: 700; padding: 1px 7px; border-radius: 0; background: #FEF3C7; color: #92400E; white-space: nowrap; }
+
+.wa-sw-pop {
+  position: fixed; top: 12%; left: 50%; transform: translateX(-50%); z-index: 10060;
+  width: 420px; max-width: calc(100vw - 32px); background: #fff; border: 1px solid var(--border, #EAE7E2);
+  box-shadow: 0 16px 48px rgba(0,0,0,.2); max-height: 60vh; display: flex; flex-direction: column;
+}
+.wa-sw-pop input { width: 100%; border: none; border-bottom: 1px solid var(--border, #EAE7E2); padding: 12px 14px; font: inherit; font-size: .92rem; background: transparent; color: var(--text, #1F1D1B); }
+.wa-sw-pop input:focus { outline: none; }
+.wa-sw-list { overflow-y: auto; padding: 6px; }
+.wa-sw-item { display: flex; align-items: center; gap: 9px; width: 100%; text-align: left; padding: 8px 9px; border: none; background: none; cursor: pointer; font: inherit; }
+.wa-sw-item.on, .wa-sw-item:hover { background: var(--bg2, #F1EFEB); }
+.wa-sw-item__av { flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%; background: #0090FF; color: #fff; font-size: .7rem; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.wa-sw-item__nm { font-size: .82rem; color: var(--text, #1F1D1B); }
+
+.wa-watchers { display: flex; flex-wrap: wrap; gap: 5px; padding: 8px 12px; }
+.wa-watcher-chip { display: inline-flex; align-items: center; gap: 4px; font-size: .72rem; padding: 2px 8px; background: var(--bg2, #F1EFEB); color: var(--text2, #6C6862); }
+.wa-watcher-chip button { border: none; background: none; cursor: pointer; color: inherit; opacity: .6; font-size: .7rem; padding: 0; }
+.wa-watcher-chip button:hover { opacity: 1; }
+
+.wa-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; padding: 10px 12px; }
+.wa-metric-card { background: var(--bg2, #F1EFEB); padding: 8px 10px; }
+.wa-metric-card__n { font-size: 1.1rem; font-weight: 800; color: var(--text, #1F1D1B); }
+.wa-metric-card__l { font-size: .66rem; color: var(--text2, #6C6862); }

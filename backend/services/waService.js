@@ -449,8 +449,15 @@ async function _connect(pool, id) {
     for (const u of (updates || [])) {
       try {
         const eliminado = u.update?.messageStubType === 1 || u.update?.message === null;
-        if (eliminado) await _marcarEliminado(pool, id, u.key?.id);
-      } catch (e) { console.warn('[wa] messages.update (revoke):', e.message); }
+        if (eliminado) { await _marcarEliminado(pool, id, u.key?.id); continue; }
+        // Ticks de entrega/leído — solo sube (1 pendiente → 4 leído), nunca baja,
+        // por si las actualizaciones llegan desordenadas.
+        if (u.update?.status != null && u.key?.id) {
+          await pool.query(
+            `UPDATE wa_messages SET ack=$1 WHERE connection_id=$2 AND msg_id=$3 AND ack < $1`,
+            [u.update.status, id, u.key.id]);
+        }
+      } catch (e) { console.warn('[wa] messages.update:', e.message); }
     }
   });
 

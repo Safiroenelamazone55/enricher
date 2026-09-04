@@ -28932,6 +28932,10 @@ const WaChatModule = (() => {
   // todas las conexiones (igual que _waTagsCache).
   let _cannedCache = null;
 
+  // Selector rápido de chats (Ctrl/Cmd+K, igual al de Slack) — pedido explícito
+  // 2026-09-04.
+  let _swMatches = [], _swSel = 0;
+
   const $$ = id => document.getElementById(id);
 
   // El shell no tiene de dónde tomar un alto fijo (el padre no define uno), así que
@@ -29314,7 +29318,14 @@ const WaChatModule = (() => {
       const jidEsc = esc(c.chat_jid).replace(/'/g, "\\'");
       const estadoConv = c.estado_conv && c.estado_conv !== 'abierto' ? (_WA_ESTADOS[c.estado_conv] || null) : null;
       const prioridadC = c.prioridad ? (_WA_PRIORIDADES[c.prioridad] || null) : null;
+      // "Sin responder hace Xh" — estilo SLA de Chatwoot, simplificado: el último
+      // mensaje es del contacto, el chat no está resuelto, y pasaron 2h+.
+      const horasSinResp = (!c.from_me && c.estado_conv !== 'resuelto' && c.ultimo_ts)
+        ? (_now - new Date(c.ultimo_ts).getTime()) / 3600000 : 0;
+      const overdueHtml = horasSinResp >= 2
+        ? `<span class="wa-chat-item__overdue">⏱ Sin responder ${horasSinResp >= 48 ? Math.floor(horasSinResp / 24) + 'd' : Math.floor(horasSinResp) + 'h'}</span>` : '';
       const metaPills = [
+        overdueHtml,
         prioridadC ? `<span class="wa-tag-pill" style="background:${prioridadC.color}22;color:${prioridadC.color}">${_ICO_FLAG}${prioridadC.label}</span>` : '',
         estadoConv ? `<span class="wa-tag-pill" style="background:${estadoConv.color}22;color:${estadoConv.color}">${estadoConv.label}</span>` : '',
         c.asignado_a ? `<span class="wa-tag-pill wa-tag-pill--asig">${_ICO_ASSIGN}${esc(c.asignado_a)}</span>` : '',
@@ -29385,6 +29396,118 @@ const WaChatModule = (() => {
       _pintaBulkBar();
       await _cargarChats();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+
+  // ── Métricas básicas del equipo (no por persona — Baileys manda todo desde
+  // el mismo número, no hay autor por mensaje saliente). Pedido explícito
+  // 2026-09-04, calculado sobre wa_messages/wa_chat_meta tal cual están. ──
+  function _fmtDuracionCorta(seg) {
+    if (seg == null) return '—';
+    if (seg < 60) return Math.round(seg) + 's';
+    if (seg < 3600) return Math.round(seg / 60) + 'm';
+    return (seg / 3600).toFixed(1) + 'h';
+  }
+  async function metricasAbrir(ev) {
+    document.querySelectorAll('.wa-sw-pop').forEach(x => x.remove());
+    if (!_conn) return;
+    const pop = document.createElement('div');
+    pop.className = 'wa-sw-pop';
+    pop.style.top = '64px';
+    pop.innerHTML = `<div style="padding:10px 12px 0;font-size:.8rem;font-weight:700;color:var(--text,#1F1D1B)">Métricas del equipo</div>
+      <div class="wa-metrics" id="wa-metrics-body"><div class="chat-ch-empty">Calculando…</div></div>`;
+    document.body.appendChild(pop);
+    setTimeout(() => document.addEventListener('click', function onDoc(e) {
+      if (!pop.contains(e.target)) { pop.remove(); document.removeEventListener('click', onDoc); }
+    }), 0);
+    try {
+      const r = await apiFetch(`${API}/wa/connections/${_conn.id}/metricas`);
+      const d = await r.json();
+      const body = document.getElementById('wa-metrics-body');
+      if (!body) return;
+      body.innerHTML = `
+        <div class="wa-metric-card"><div class="wa-metric-card__n">${d.enviadosHoy}</div><div class="wa-metric-card__l">Enviados hoy</div></div>
+        <div class="wa-metric-card"><div class="wa-metric-card__n">${d.recibidosHoy}</div><div class="wa-metric-card__l">Recibidos hoy</div></div>
+        <div class="wa-metric-card"><div class="wa-metric-card__n">${d.pendientes}</div><div class="wa-metric-card__l">Pendientes</div></div>
+        <div class="wa-metric-card"><div class="wa-metric-card__n">${d.resueltos}</div><div class="wa-metric-card__l">Resueltos</div></div>
+        <div class="wa-metric-card"><div class="wa-metric-card__n">${_fmtDuracionCorta(d.respuestaSegPromedio)}</div><div class="wa-metric-card__l">Resp. promedio (7d)</div></div>`;
+    } catch (e) {
+      const body = document.getElementById('wa-metrics-body');
+      if (body) body.innerHTML = `<div class="chat-ch-empty">No se pudo calcular.</div>`;
+    }
+  }
+
+  // ── Selector rápido de chats (Ctrl/Cmd+K) — mismo patrón que el de Slack. ──
+  function _swAbrir() {
+    if (!_chats.length) return;
+    document.querySelectorAll('.wa-sw-pop').forEach(x => x.remove());
+    const pop = document.createElement('div');
+    pop.className = 'wa-sw-pop';
+    pop.innerHTML = `<input type="text" id="wa-sw-input" placeholder="Saltar a un chat…" autocomplete="off">
+      <div class="wa-sw-list" id="wa-sw-list"></div>`;
+    document.body.appendChild(pop);
+    const inp = $$('wa-sw-input');
+    inp.oninput = () => _swFiltrar(inp.value);
+    inp.onkeydown = _swKey;
+    _swFiltrar('');
+    inp.focus();
+    setTimeout(() => document.addEventListener('click', function onDoc(e) {
+      if (!pop.contains(e.target)) { pop.remove(); document.removeEventListener('click', onDoc); }
+    }), 0);
+  }
+  function _swFiltrar(q) {
+    q = q.trim().toLowerCase();
+    _swMatches = (q ? _chats.filter(c => _nombreChat(c).toLowerCase().includes(q)) : _chats).slice(0, 30);
+    _swSel = 0;
+    _swPinta();
+  }
+  function _swPinta() {
+    const box = $$('wa-sw-list');
+    if (!box) return;
+    box.innerHTML = _swMatches.length ? _swMatches.map((c, i) => `
+      <button class="wa-sw-item${i === _swSel ? ' on' : ''}" onmousedown="event.preventDefault();WaChatModule._swPick(${i})">
+        <span class="wa-sw-item__av">${c.es_grupo ? '#' : esc(_nombreChat(c)).slice(0, 1).toUpperCase()}</span>
+        <span class="wa-sw-item__nm">${esc(_nombreChat(c))}</span>
+      </button>`).join('') : `<div class="chat-ch-empty">Sin resultados.</div>`;
+  }
+  function _swKey(ev) {
+    if (ev.key === 'ArrowDown') { ev.preventDefault(); _swSel = Math.min(_swSel + 1, _swMatches.length - 1); _swPinta(); }
+    else if (ev.key === 'ArrowUp') { ev.preventDefault(); _swSel = Math.max(_swSel - 1, 0); _swPinta(); }
+    else if (ev.key === 'Enter') { ev.preventDefault(); _swPick(_swSel); }
+    else if (ev.key === 'Escape') { document.querySelectorAll('.wa-sw-pop').forEach(x => x.remove()); }
+  }
+  function _swPick(i) {
+    const c = _swMatches[i];
+    document.querySelectorAll('.wa-sw-pop').forEach(x => x.remove());
+    if (c) abrirChat(c.chat_jid);
+  }
+  // Ctrl/Cmd+K: solo cuando el panel de WhatsApp está activo — no pisa el mismo
+  // atajo de Slack ni el buscador nativo del navegador en otras pestañas.
+  document.addEventListener('keydown', ev => {
+    if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'k' && document.getElementById('pane-mgmt-wa')?.classList.contains('active')) {
+      ev.preventDefault();
+      _swAbrir();
+    }
+  });
+
+  // Atajos de un carácter, estilo Chatwoot (e=resolver, p=pendiente) — SOLO
+  // cuando hay un chat abierto y la usuaria no está escribiendo en ningún campo
+  // (si no, "e" se comería cada letra "e" del mensaje). Pedido explícito
+  // 2026-09-04.
+  document.addEventListener('keydown', ev => {
+    if (!document.getElementById('pane-mgmt-wa')?.classList.contains('active')) return;
+    if (!_chatAct || ev.ctrlKey || ev.metaKey || ev.altKey) return;
+    const tag = (document.activeElement?.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || document.activeElement?.isContentEditable) return;
+    if (ev.key === 'e') { ev.preventDefault(); _atajoEstado('resuelto'); }
+    else if (ev.key === 'p') { ev.preventDefault(); _atajoEstado('pendiente'); }
+  });
+  function _atajoEstado(estado) {
+    const c = _chats.find(x => String(x.chat_jid) === String(_chatAct));
+    if (!c) return;
+    apiFetch(`${API}/wa/connections/${_conn.id}/chats/${encodeURIComponent(_chatAct)}/meta`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ estadoConv: estado }),
+    }).then(() => { c.estado_conv = estado; _pintaChats(); showBanner(estado === 'resuelto' ? 'Chat resuelto' : 'Marcado pendiente', 'success'); })
+      .catch(() => {});
   }
 
   // ── Buscar DENTRO de la conversación abierta (estilo Chatwoot/Slack) ───────
@@ -29549,6 +29672,7 @@ const WaChatModule = (() => {
     _chatMenuMode = mode;
     _renderChatMenu();
     if (mode === 'notes') _cargarNotas();
+    if (mode === 'watchers') _cargarWatchers();
   }
 
   function _renderChatMenu() {
@@ -29565,6 +29689,7 @@ const WaChatModule = (() => {
                     : _chatMenuMode === 'priority' ? _chatMenuPriorityHtml(c)
                     : _chatMenuMode === 'fusionar' ? _chatMenuFusionarHtml()
                     : _chatMenuMode === 'notes' ? _chatMenuNotesHtml(c)
+                    : _chatMenuMode === 'watchers' ? _chatMenuWatchersHtml()
                     : _chatMenuMainHtml(c);
     document.body.appendChild(menu);
     const rect = _chatMenuAnchor.getBoundingClientRect();
@@ -29616,6 +29741,7 @@ const WaChatModule = (() => {
       <button class="chat-ctx-item" onclick="WaChatModule._chatMenuGoto('status')">${_ICO_STATUS}<span class="wa-estado-dot" style="background:${estado.color}"></span>Estado: ${estado.label}</button>
       <button class="chat-ctx-item" onclick="WaChatModule._chatMenuGoto('priority')">${_ICO_FLAG}<span class="wa-estado-dot" style="background:${prioridad.color}"></span>Prioridad: ${prioridad.label}</button>
       <button class="chat-ctx-item" onclick="WaChatModule._chatMenuGoto('notes')">${_ICO_NOTE}Notas internas${nNotas ? ` (${nNotas})` : ''}</button>
+      <button class="chat-ctx-item" onclick="WaChatModule._chatMenuGoto('watchers')">${_ICO_USER}Participantes</button>
       <div class="chat-ctx-sep"></div>
       <button class="chat-ctx-item" onclick="WaChatModule._abrirContacto()">${_ICO_USER}Ver datos de contacto</button>
       <button class="chat-ctx-item" onclick="WaChatModule._chatMenuGoto('fusionar')" title="Cuando WhatsApp reporta a la misma persona con dos números/jid distintos y termina duplicado en la lista">${_ICO_MERGE}Fusionar con otro chat…</button>`;
@@ -29672,7 +29798,7 @@ const WaChatModule = (() => {
               <span class="wa-note__fecha">${new Date(n.created_at).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}</span>
               <button class="wa-note__del" title="Eliminar nota" onclick="WaChatModule._borrarNota(${n.id})">${_ICO_TRASH}</button>
             </div>
-            <div class="wa-note__texto">${esc(n.texto)}</div>
+            <div class="wa-note__texto">${_resaltarMenciones(n.texto)}</div>
           </div>`).join('');
     return `
       <button class="chat-ctx-item wa-chat-menu__back" onclick="WaChatModule._chatMenuGoto('main')">${_ICO_BACK}Notas internas</button>
@@ -29680,9 +29806,95 @@ const WaChatModule = (() => {
       <div class="wa-notes-list">${lista}</div>
       <div class="chat-ctx-sep"></div>
       <div class="wa-note-new">
-        <textarea id="wa-note-new-input" placeholder="Escribe una nota interna…" rows="2"></textarea>
-        <button onclick="WaChatModule._agregarNota()">Agregar</button>
+        <textarea id="wa-note-new-input" placeholder="Escribe una nota interna… (@ para mencionar)" rows="2" onclick="event.stopPropagation()"></textarea>
+        <div style="display:flex;gap:6px">
+          <button type="button" title="Mencionar a alguien del equipo" onclick="event.stopPropagation();WaChatModule._notaMencionarAbrir(event)" style="flex-shrink:0">@</button>
+          <button onclick="WaChatModule._agregarNota()">Agregar</button>
+        </div>
       </div>`;
+  }
+  // @menciones en notas internas — solo resalta y ayuda a insertar el nombre;
+  // no manda notificación push (no hay ese canal para notas hoy), pero deja
+  // claro en el texto a quién iba dirigido. Pedido explícito 2026-09-04.
+  function _resaltarMenciones(texto) {
+    const nombres = (_teamCache || []).map(m => m.nombre).filter(Boolean).sort((a, b) => b.length - a.length);
+    let html = esc(texto);
+    nombres.forEach(n => {
+      const re = new RegExp('@' + esc(n).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+      html = html.replace(re, `<span class="slk-men">@${esc(n)}</span>`);
+    });
+    return html;
+  }
+  function _notaMencionarAbrir(ev) {
+    document.querySelectorAll('.wa-sw-pop').forEach(x => x.remove());
+    const miembros = (_teamCache || []).map(m => m.nombre).filter(Boolean);
+    if (!miembros.length) return;
+    const pop = document.createElement('div');
+    pop.className = 'wa-sw-pop';
+    const r = ev.currentTarget.getBoundingClientRect();
+    pop.style.top = r.bottom + 6 + 'px'; pop.style.left = r.left + 'px'; pop.style.transform = 'none'; pop.style.width = '220px';
+    pop.innerHTML = `<div class="wa-sw-list">${miembros.map(n => `
+      <button class="wa-sw-item" onmousedown="event.preventDefault();WaChatModule._notaMencionarPick('${esc(n).replace(/'/g, "\\'")}')">
+        <span class="wa-sw-item__av">${esc(n).slice(0, 1).toUpperCase()}</span><span class="wa-sw-item__nm">${esc(n)}</span>
+      </button>`).join('')}</div>`;
+    document.body.appendChild(pop);
+    setTimeout(() => document.addEventListener('click', function onDoc(e) {
+      if (!pop.contains(e.target)) { pop.remove(); document.removeEventListener('click', onDoc); }
+    }), 0);
+  }
+  function _notaMencionarPick(nombre) {
+    document.querySelectorAll('.wa-sw-pop').forEach(x => x.remove());
+    const ta = document.getElementById('wa-note-new-input');
+    if (!ta) return;
+    const ini = ta.selectionStart ?? ta.value.length;
+    ta.value = ta.value.slice(0, ini) + '@' + nombre + ' ' + ta.value.slice(ini);
+    ta.focus();
+  }
+
+  // Participantes de la conversación — alguien que la sigue sin ser el
+  // responsable (eso ya lo cubre "Asignar a"). Pedido explícito 2026-09-04.
+  let _watchersCache = {}; // { [jid]: [nombre,...] }
+  async function _cargarWatchers() {
+    const jid = _chatMenuJid;
+    try {
+      const r = await apiFetch(`${API}/wa/connections/${_conn.id}/chats/${encodeURIComponent(jid)}/watchers`);
+      _watchersCache[jid] = r.ok ? await r.json() : [];
+    } catch (_) { _watchersCache[jid] = []; }
+    if (_chatMenuJid === jid && _chatMenuMode === 'watchers') _renderChatMenu();
+  }
+  function _chatMenuWatchersHtml() {
+    const jid = _chatMenuJid;
+    const actuales = _watchersCache[jid];
+    const miembros = (_teamCache || []).map(m => m.nombre).filter(Boolean);
+    const chips = (actuales || []).map(n => `
+      <span class="wa-watcher-chip">${esc(n)}<button title="Quitar" onclick="WaChatModule._watcherQuitar('${esc(n).replace(/'/g, "\\'")}')">✕</button></span>`).join('');
+    const disponibles = miembros.filter(n => !(actuales || []).includes(n));
+    const rows = disponibles.map(n => `
+      <button class="chat-ctx-item" onclick="WaChatModule._watcherAgregar('${esc(n).replace(/'/g, "\\'")}')">${_ICO_USER}${esc(n)}</button>`).join('');
+    return `
+      <button class="chat-ctx-item wa-chat-menu__back" onclick="WaChatModule._chatMenuGoto('main')">${_ICO_BACK}Participantes</button>
+      <div class="chat-ctx-sep"></div>
+      ${actuales === undefined ? '<div class="wa-tag-empty">Cargando…</div>'
+        : chips ? `<div class="wa-watchers">${chips}</div><div class="chat-ctx-sep"></div>` : ''}
+      ${rows || (actuales !== undefined ? '<div class="wa-tag-empty">Sin más miembros del equipo para agregar.</div>' : '')}`;
+  }
+  async function _watcherAgregar(nombre) {
+    const jid = _chatMenuJid;
+    try {
+      await apiFetch(`${API}/wa/connections/${_conn.id}/chats/${encodeURIComponent(jid)}/watchers`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre }),
+      });
+      _watchersCache[jid] = [...(_watchersCache[jid] || []), nombre];
+      _renderChatMenu();
+    } catch (e) { console.error('[wa] watcher agregar:', e); }
+  }
+  async function _watcherQuitar(nombre) {
+    const jid = _chatMenuJid;
+    try {
+      await apiFetch(`${API}/wa/connections/${_conn.id}/chats/${encodeURIComponent(jid)}/watchers/${encodeURIComponent(nombre)}`, { method: 'DELETE' });
+      _watchersCache[jid] = (_watchersCache[jid] || []).filter(n => n !== nombre);
+      _renderChatMenu();
+    } catch (e) { console.error('[wa] watcher quitar:', e); }
   }
 
   function _chatMenuFusionarHtml() {
@@ -30075,6 +30287,7 @@ const WaChatModule = (() => {
   }
 
   async function abrirChat(jid, nombre) {
+    _draftGuardar();
     _chatAct = jid;
     _replyTo = null; _pintaQuote();
     const row = _chats.find(c => String(c.chat_jid) === String(jid));
@@ -30088,6 +30301,26 @@ const WaChatModule = (() => {
     const box = $$('wa-messages');
     if (box) box.innerHTML = `<div class="clients-loading"><div class="clients-spin"></div></div>`;
     await _cargarMensajes(jid);
+    _draftRestaurar();
+  }
+
+  // Borrador por chat (pedido explícito 2026-09-04) — se pierde al cambiar de
+  // conversación sin enviar; se guarda en localStorage por conexión+chat, nunca
+  // llega al servidor (es solo texto que la usuaria todavía no mandó).
+  function _draftKey(jid) { return `wa_draft_${_conn?.id}_${jid}`; }
+  function _draftGuardar() {
+    if (!_chatAct || !_conn) return;
+    const ta = $$('wa-input');
+    const v = (ta?.value || '').trim();
+    try { if (v) localStorage.setItem(_draftKey(_chatAct), v); else localStorage.removeItem(_draftKey(_chatAct)); } catch (_) {}
+  }
+  function _draftRestaurar() {
+    const ta = $$('wa-input');
+    if (!ta || !_chatAct) return;
+    let v = '';
+    try { v = localStorage.getItem(_draftKey(_chatAct)) || ''; } catch (_) {}
+    ta.value = v;
+    ChatModule.autoResize(ta);
   }
 
   async function _marcarLeido(jid) {
@@ -30170,10 +30403,20 @@ const WaChatModule = (() => {
       const starHtml = m.importante ? `<span class="wa-msg__star" title="Mensaje destacado">⭐</span>` : '';
       const contactoBtn = m.contact_phone ? `<button class="wa-msg__cancel" style="margin-top:6px" onclick="event.stopPropagation();WaChatModule.abrirChat('${esc(m.contact_phone)}@s.whatsapp.net')">Escribirle por WhatsApp ›</button>` : '';
       const textoHtml = m.media_type === 'document' ? '' : `<span class="wa-msg__text" data-mid="${msgIdJs}">${esc(m.texto)}</span>`;
-      const bubbleHtml = `${actions}${remitente}${citado}${mediaHtml}${textoHtml}${contactoBtn}<span class="wa-msg__time">${starHtml}${_fmtHora(m.ts)}</span>${reacHtml}`;
+      const tickHtml = m.from_me ? _tickHtml(m.ack) : '';
+      const bubbleHtml = `${actions}${remitente}${citado}${mediaHtml}${textoHtml}${contactoBtn}<span class="wa-msg__time">${starHtml}${_fmtHora(m.ts)}${tickHtml}</span>${reacHtml}`;
       return `${sep}<div class="wa-msg ${m.from_me ? 'wa-msg--out' : 'wa-msg--in'}"><div class="wa-msg__bubble">${bubbleHtml}</div></div>`;
     }).join('');
     if (atBottom) box.scrollTop = box.scrollHeight;
+  }
+
+  // Ticks de entrega/leído (estilo WhatsApp/Chatwoot real). ack de Baileys:
+  // 1 pendiente, 2 enviado al server (✓), 3 entregado (✓✓ gris), 4 leído (✓✓ azul).
+  function _tickHtml(ack) {
+    const a = +ack || 0;
+    if (a >= 3) return `<svg class="wa-msg__tick${a >= 4 ? ' wa-msg__tick--read' : ''}" width="15" height="10" viewBox="0 0 16 11" fill="none"><path d="M1 5.5l3 3L9 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 5.5l3 3L15 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    if (a >= 2) return `<svg class="wa-msg__tick" width="11" height="10" viewBox="0 0 12 11" fill="none"><path d="M1 5.5l3 3L11 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    return `<svg class="wa-msg__tick" width="11" height="10" viewBox="0 0 12 11" fill="none"><circle cx="6" cy="5.5" r="4.3" stroke="currentColor" stroke-width="1.2"/></svg>`;
   }
 
   // "⋮" del mensaje: copiar, seleccionar (arregla el bug de que arrastrar el mouse
@@ -30255,6 +30498,7 @@ const WaChatModule = (() => {
     const respondeA = _replyTo?.msg_id;
     const replyTextoLocal = _replyTo?.texto || '';
     input.value = ''; ChatModule.autoResize(input);
+    try { localStorage.removeItem(_draftKey(_chatAct)); } catch (_) {}
     _replyTo = null; _pintaQuote();
     // Optimista (pedido 2026-09-02: "se demora 1 segundo, no es inmediato") — ver
     // mismo fix en QuickWaModule.enviar.
@@ -30606,7 +30850,11 @@ const WaChatModule = (() => {
            toggleBulkMode, bulkToggle, bulkAplicar,
            abrirBusquedaWa, _buscarWaIr,
            composerKeydown, _cannedCheck, _cannedPick,
-           cannedManageOpen, cannedManageClose, cannedAdd, cannedDel };
+           cannedManageOpen, cannedManageClose, cannedAdd, cannedDel,
+           _draftGuardar,
+           metricasAbrir, _swPick,
+           _watcherAgregar, _watcherQuitar,
+           _notaMencionarAbrir, _notaMencionarPick };
 })();
 window.WaChatModule = WaChatModule;
 

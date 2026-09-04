@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260904d"/>
+  <link rel="stylesheet" href="style.css?v=20260904e"/>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -1486,6 +1486,9 @@
               <button class="chat-hdr-btn" title="Seleccionar varios" onclick="WaChatModule.toggleBulkMode()">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
               </button>
+              <button class="chat-hdr-btn" title="Métricas del equipo" onclick="WaChatModule.metricasAbrir(event)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>
+              </button>
               <button class="chat-hdr-btn" title="Desconectar" onclick="WaChatModule.desconectar()">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
               </button>
@@ -1528,7 +1531,7 @@
                 placeholder="Escribe un mensaje… (&quot;/&quot; para respuestas rápidas)"
                 onpaste="WaChatModule.onPasteInput(event)"
                 onkeydown="WaChatModule.composerKeydown(event)"
-                oninput="ChatModule.autoResize(this);WaChatModule._cannedCheck(this)"></textarea>
+                oninput="ChatModule.autoResize(this);WaChatModule._cannedCheck(this);WaChatModule._draftGuardar()"></textarea>
               <button class="wa-clock" title="Respuestas rápidas" onclick="WaChatModule.cannedManageOpen()">⚡</button>
               <button class="wa-clock" title="Emoji" onclick="WaChatModule.emojiPicker(event)">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
@@ -3064,7 +3067,7 @@
   })();
 </script>
 
-<script src="app.js?v=20260904b"></script>
+<script src="app.js?v=20260904c"></script>
 <div id="task-quick-edit" style="display:none;position:fixed;z-index:9999"></div>
 </body>
 </html>
