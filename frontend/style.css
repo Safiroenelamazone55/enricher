@@ -15614,46 +15614,48 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
    / .chat-thread — el panel mini del header (#rchat-*) usa OTROS ids y sigue
    con el estilo cálido de siempre, a propósito: no se pidió tocar ese. ── */
 
-/* Riel de espacios (team bar) — el más oscuro de los tres tonos de azul */
-.chat-shell .chat-rail { background: #0b428c; border-right: none; }
-.chat-shell .chat-rail__ico { background: rgba(255,255,255,.14); border: none; color: #fff; font-weight: 700; }
-.chat-shell .chat-rail__b:hover .chat-rail__ico { background: rgba(255,255,255,.24); color: #fff; }
-.chat-shell .chat-rail__b.on .chat-rail__ico { background: #166de0; border-color: #166de0; color: #fff; }
+/* Riel de espacios (team bar) — más oscuro que el sidebar, casi negro-azulado.
+   Pedido explícito 2026-09-04: el azul quedó "claro", lo quiere oscuro como la
+   referencia que vio (screenshot de Slack real con sidebar navy oscuro). */
+.chat-shell .chat-rail { background: #0d1526; border-right: none; }
+.chat-shell .chat-rail__ico { background: rgba(255,255,255,.1); border: none; color: #fff; font-weight: 700; }
+.chat-shell .chat-rail__b:hover .chat-rail__ico { background: rgba(255,255,255,.2); color: #fff; }
+.chat-shell .chat-rail__b.on .chat-rail__ico { background: #1264a3; border-color: #1264a3; color: #fff; }
 .chat-shell .chat-rail__b.on::before { background: #fff; }
-.chat-shell .chat-rail__add { border-color: rgba(255,255,255,.35); color: rgba(255,255,255,.7); }
+.chat-shell .chat-rail__add { border-color: rgba(255,255,255,.3); color: rgba(255,255,255,.65); }
 .chat-shell .chat-rail__add:hover { border-color: #fff; color: #fff; }
-.chat-shell .chat-rail__sep { background: rgba(255,255,255,.2); }
-.chat-shell .chat-rail__sec { color: rgba(255,255,255,.75); }
-.chat-shell .chat-rail__sec:hover { background: rgba(255,255,255,.14); color: #fff; }
-.chat-shell .chat-rail__sec.on { background: #166de0; color: #fff; }
-.chat-shell .chat-rail__n { background: #ff8800; border-color: #0b428c; }
-.chat-shell .chat-rail__dot { border-color: #0b428c; }
-.chat-shell .chat-rail__sec.on .chat-rail__dot { border-color: #166de0; }
+.chat-shell .chat-rail__sep { background: rgba(255,255,255,.16); }
+.chat-shell .chat-rail__sec { color: rgba(255,255,255,.7); }
+.chat-shell .chat-rail__sec:hover { background: rgba(255,255,255,.1); color: #fff; }
+.chat-shell .chat-rail__sec.on { background: #1264a3; color: #fff; }
+.chat-shell .chat-rail__n { background: #ff8800; border-color: #0d1526; }
+.chat-shell .chat-rail__dot { border-color: #0d1526; }
+.chat-shell .chat-rail__sec.on .chat-rail__dot { border-color: #1264a3; }
 
-/* Sidebar — el azul medio del tema, texto blanco */
-.chat-shell .chat-sidebar { background: #145dbf; border-right: none; }
-.chat-shell .chat-sidebar__ws-hdr { background: #1153ab; border-bottom-color: rgba(255,255,255,.12); }
+/* Sidebar — navy oscuro (no el azul medio de antes), texto blanco */
+.chat-shell .chat-sidebar { background: #1a2332; border-right: none; }
+.chat-shell .chat-sidebar__ws-hdr { background: #141b28; border-bottom-color: rgba(255,255,255,.08); }
 .chat-shell .chat-ws-name { color: #fff; }
-.chat-shell .chat-ws-online { background: #06d6a0; box-shadow: 0 0 0 2px #1153ab; }
-.chat-shell .chat-ws-compose-btn { background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.18); color: #fff; }
-.chat-shell .chat-ws-compose-btn:hover { background: rgba(255,255,255,.22); color: #fff; }
-.chat-shell .chat-sidebar__search-inner { background: rgba(255,255,255,.12); border-color: transparent; }
-.chat-shell .chat-sidebar__search-inner:focus-within { background: rgba(255,255,255,.18); border-color: #fff; }
-.chat-shell .chat-sidebar__search-inner svg { color: rgba(255,255,255,.6); }
+.chat-shell .chat-ws-online { background: #06d6a0; box-shadow: 0 0 0 2px #141b28; }
+.chat-shell .chat-ws-compose-btn { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.14); color: #fff; }
+.chat-shell .chat-ws-compose-btn:hover { background: rgba(255,255,255,.16); color: #fff; }
+.chat-shell .chat-sidebar__search-inner { background: rgba(255,255,255,.08); border-color: transparent; }
+.chat-shell .chat-sidebar__search-inner:focus-within { background: rgba(255,255,255,.14); border-color: #fff; }
+.chat-shell .chat-sidebar__search-inner svg { color: rgba(255,255,255,.55); }
 .chat-shell .chat-sidebar__search { color: #fff; }
-.chat-shell .chat-sidebar__search::placeholder { color: rgba(255,255,255,.55); }
-.chat-shell .chat-sidebar__list::-webkit-scrollbar-thumb { background: rgba(255,255,255,.25); }
-.chat-shell #chat-channels .chat-ch-slabel, .chat-shell .chat-sec-title { color: rgba(255,255,255,.6); }
-.chat-shell #chat-channels .chat-ch { color: rgba(255,255,255,.8); }
-.chat-shell #chat-channels .chat-ch:hover { background: #4578bf !important; color: #fff; }
-.chat-shell #chat-channels .chat-ch.active { background: #4578bf !important; color: #fff; box-shadow: none !important; border-left: 3px solid #579eff; padding-left: 6px; }
+.chat-shell .chat-sidebar__search::placeholder { color: rgba(255,255,255,.5); }
+.chat-shell .chat-sidebar__list::-webkit-scrollbar-thumb { background: rgba(255,255,255,.2); }
+.chat-shell #chat-channels .chat-ch-slabel, .chat-shell .chat-sec-title { color: rgba(255,255,255,.55); }
+.chat-shell #chat-channels .chat-ch { color: rgba(255,255,255,.78); }
+.chat-shell #chat-channels .chat-ch:hover { background: #2b3a52 !important; color: #fff; }
+.chat-shell #chat-channels .chat-ch.active { background: #2b3a52 !important; color: #fff; box-shadow: none !important; border-left: 3px solid #1264a3; padding-left: 6px; }
 .chat-shell #chat-channels .chat-ch.unread .chat-ch__name { color: #fff; }
-.chat-shell #chat-channels .chat-ch__hash { color: rgba(255,255,255,.5); }
+.chat-shell #chat-channels .chat-ch__hash { color: rgba(255,255,255,.45); }
 .chat-shell #chat-channels .chat-ch__n { background: #ff8800; color: #fff; }
-.chat-shell .chat-ch-empty { color: rgba(255,255,255,.6); }
+.chat-shell .chat-ch-empty { color: rgba(255,255,255,.55); }
 .chat-shell .chat-saved .chat-ch__name b { color: #fff; }
-.chat-shell .slk-remind-chip { background: rgba(255,255,255,.16); color: #fff; }
-.chat-shell .chat-saved__clock { color: rgba(255,255,255,.6); }
+.chat-shell .slk-remind-chip { background: rgba(255,255,255,.14); color: #fff; }
+.chat-shell .chat-saved__clock { color: rgba(255,255,255,.55); }
 .chat-shell .chat-saved__clock:hover { color: #fff; }
 .chat-shell .chat-ch--muted { opacity: .55; }
 
