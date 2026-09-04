@@ -25609,7 +25609,7 @@ ${foot}
     const nIssues = (allRows || rows).filter(r => _dgRowIssues(r).length).length;
     const nDup = _dgDupGroups().length;
     return `<div class="lm-bulk-bar show dg-bulkbar">
-      <span class="lm-bulk-n">${n ? `${n} seleccionado(s)` : `${rows.length} filtrado(s)`}</span>
+      <span class="lm-bulk-n">${n ? `${n} seleccionado(s)` : `Ninguna marcada · ${rows.length} filtrado(s)`}</span>
       <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.dgCleanMenu(event)">🧹 Limpiar ▾</button>
       <button class="btn btn--ghost btn--sm"${tieneEnrich ? '' : ' disabled title="Sin campos calculables para esta vista todavía"'} onclick="LeadManagerModule.dgEnrichMenu(event)">✨ Enriquecer ▾</button>
       <button class="dg-issues-toggle${_dgOnlyIssues ? ' active' : ''}" onclick="LeadManagerModule.dgToggleIssues()" title="Filtrar filas con email/dominio/teléfono inválido o email faltante">⚠ Con problemas <span class="n">(${nIssues})</span></button>
@@ -25625,7 +25625,10 @@ ${foot}
     const cols = DG_COLS_FOR(_dgEntity);
     const editable = _dgEditableFields(_dgEntity);
     const headRow = document.getElementById('dg-head-row');
-    if (headRow) headRow.innerHTML = `<th class="lm-ck-col"><input type="checkbox" class="lm-ck" onclick="LeadManagerModule.dgToggleAll(this.checked)"></th>${cols.map(([, l], i) => `<th${i === 0 ? ' class="dg-cell--frozen"' : ''}>${esc(l)}</th>`).join('')}`;
+    // El check de la cabecera refleja si TODAS las visibles están marcadas —
+    // antes salía siempre destildado aunque ya estuviera todo seleccionado.
+    const allChecked = rows.length > 0 && rows.every(r => _dgSel.has(r.id));
+    if (headRow) headRow.innerHTML = `<th class="lm-ck-col"><input type="checkbox" class="lm-ck" ${allChecked ? 'checked' : ''} onclick="LeadManagerModule.dgToggleAll(this.checked)"></th>${cols.map(([, l], i) => `<th${i === 0 ? ' class="dg-cell--frozen"' : ''}>${esc(l)}</th>`).join('')}`;
     const CAP = 300;
     const shown = rows.slice(0, CAP);
     const tbody = document.getElementById('dg-tbody');
@@ -25739,9 +25742,15 @@ ${foot}
     menu.style.top = `${r.bottom + 6}px`;
     setTimeout(() => document.addEventListener('click', function onDoc(e) { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', onDoc); } }), 0);
   }
+  let _dgCleanIds = null;
   async function dgCleanOpen(field) {
-    const ids = _dgSel.size ? [..._dgSel] : _dgVisible().map(r => r.id);
-    if (!ids.length) { showBanner('No hay filas para limpiar', 'info'); return; }
+    // SOLO lo marcado — antes, si no había checks, actuaba sobre TODO lo
+    // filtrado en silencio; eso hacía parecer que "o se selecciona todo o
+    // nada" (feedback de Jenny 2026-09-04). Ahora exige marcar filas primero
+    // (a mano o con el check de la cabecera para elegir todas a propósito).
+    const ids = [..._dgSel];
+    if (!ids.length) { showBanner('Marca al menos una fila (el check de la cabecera selecciona todas)', 'info'); return; }
+    _dgCleanIds = ids;
     _dgCleanFields = field ? [field] : DG_CLEAN_FIELDS[_dgEntity];
     try {
       const res = await apiFetch(`${API}/lm/bulk-clean`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entity: _dgEntity, ids, fields: _dgCleanFields, apply: false }) });
@@ -25769,10 +25778,10 @@ ${foot}
       </div></div></div>`;
     document.body.appendChild(m);
   }
-  function dgCleanClose() { document.getElementById('lm-dgclean-modal')?.remove(); _dgCleanPreview = null; _dgCleanFields = null; }
+  function dgCleanClose() { document.getElementById('lm-dgclean-modal')?.remove(); _dgCleanPreview = null; _dgCleanFields = null; _dgCleanIds = null; }
   async function dgCleanApply() {
     const changes = _dgCleanPreview || []; if (!changes.length) return;
-    const ids = _dgSel.size ? [..._dgSel] : _dgVisible().map(r => r.id);
+    const ids = _dgCleanIds || [..._dgSel];
     try {
       const res = await apiFetch(`${API}/lm/bulk-clean`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entity: _dgEntity, ids, fields: _dgCleanFields || DG_CLEAN_FIELDS[_dgEntity], apply: true }) });
       const d = await res.json();
@@ -25810,12 +25819,14 @@ ${foot}
     menu.style.top = `${r.bottom + 6}px`;
     setTimeout(() => document.addEventListener('click', function onDoc(e) { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', onDoc); } }), 0);
   }
+  let _dgEnrichIds = null;
   async function dgEnrichOpen(field) {
     const all = DG_ENRICH_FIELDS[_dgEntity] || [];
     if (!all.length) return;
     const fields = field ? [field] : all;
-    const ids = _dgSel.size ? [..._dgSel] : _dgVisible().map(r => r.id);
-    if (!ids.length) { showBanner('No hay filas para enriquecer', 'info'); return; }
+    const ids = [..._dgSel];
+    if (!ids.length) { showBanner('Marca al menos una fila (el check de la cabecera selecciona todas)', 'info'); return; }
+    _dgEnrichIds = ids;
     _dgEnrichFields = fields;
     try {
       const res = await apiFetch(`${API}/lm/bulk-enrich`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entity: _dgEntity, ids, fields, apply: false }) });
@@ -25843,10 +25854,10 @@ ${foot}
       </div></div></div>`;
     document.body.appendChild(m);
   }
-  function dgEnrichClose() { document.getElementById('lm-dgclean-modal')?.remove(); _dgEnrichPreview = null; _dgEnrichFields = null; }
+  function dgEnrichClose() { document.getElementById('lm-dgclean-modal')?.remove(); _dgEnrichPreview = null; _dgEnrichFields = null; _dgEnrichIds = null; }
   async function dgEnrichApply() {
     const changes = _dgEnrichPreview || []; if (!changes.length) return;
-    const ids = _dgSel.size ? [..._dgSel] : _dgVisible().map(r => r.id);
+    const ids = _dgEnrichIds || [..._dgSel];
     try {
       const res = await apiFetch(`${API}/lm/bulk-enrich`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entity: _dgEntity, ids, fields: _dgEnrichFields || DG_ENRICH_FIELDS[_dgEntity], apply: true }) });
       const d = await res.json();

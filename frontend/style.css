@@ -12280,6 +12280,15 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 @media (max-width: 900px) { .dg-toolbar { flex-wrap: wrap; } .dg-toolbar .dg-flt-sel { flex: 1 1 140px; } }
 .dg-bulkbar--slim { background: transparent; border: none; padding: 0 2px; }
 .dg-bulkbar--slim .lm-bulk-n { color: var(--muted, #B4AFA8); }
+/* La barra de acciones (modo selección) va del mismo tono que la cabecera de
+   la tabla, no navy — y con el mismo alto compacto (feedback de Jenny
+   2026-09-04: quería "el mismo color de fondo de arriba" y "un alto mucho
+   menor"). Los botones "ghost" (Ninguna/Salir) traían texto blanco pensado
+   para fondo oscuro — se recolorean para verse sobre un fondo claro. */
+.dg-bulkbar { background: #F1EFEB; color: var(--text, #0A2540); padding: 5px 10px; margin-bottom: 0; border: 1px solid var(--border, #EAE7E2); border-bottom: none; min-height: 0; }
+.dg-bulkbar .lm-bulk-n { color: var(--text2, #45586A); }
+.dg-bulkbar .lm-bulk-ghost { background: rgba(11,30,58,.08); color: var(--text, #0A2540); }
+.dg-bulkbar .lm-bulk-ghost:hover { background: rgba(11,30,58,.14); }
 
 /* Grilla estilo Excel: líneas verticales entre columnas, cabecera más marcada,
    scroll horizontal con la columna de check + Nombre "congeladas" a la izquierda.
@@ -12288,7 +12297,10 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
    (no nth-child: su posición cambia según si el check está visible o no).*/
 .dg-dt-wrap { overflow-x: auto; }
 .dg-table { table-layout: auto; }
-.dg-table thead th { background: #F1EFEB; }
+.dg-table thead th { background: #F1EFEB; padding: 6px 10px; }
+/* Filas más compactas (feedback de Jenny 2026-09-04: "el alto se reduzca") —
+   .clients-table td trae height:46px pensado para otras listas del sistema. */
+.dg-table td { height: 30px; padding: 0 10px; }
 .dg-table th:not(:last-child), .dg-table td:not(:last-child) { border-right: 1px solid var(--border, #EAE7E2); }
 .dg-table tbody tr.sel td { background: var(--brand-ll, #F1EFEB); }
 .dg-table .lm-ck-col { display: none; }
