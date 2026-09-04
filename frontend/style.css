@@ -16230,3 +16230,22 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .wa-canned-row p { margin: 2px 0 0; font-size: .78rem; color: var(--text2, #6C6862); white-space: pre-wrap; }
 .wa-canned-row button { flex-shrink: 0; border: none; background: none; cursor: pointer; font-size: .82rem; opacity: .6; }
 .wa-canned-row button:hover { opacity: 1; }
+
+/* ── WhatsApp: look de Chatwoot (pedido explícito 2026-09-04, "todo — visual y
+   funcional"). Azul real de Chatwoot (radix blueDark9, ~#0090FF) en vez del azul
+   por defecto de Nova — se redefinen las variables DENTRO de .pane--wa, así que
+   TODO lo que ya usa var(--primary)/var(--brand) en este panel (hover de
+   .wa-clock, tabs activos, botón enviar, avatares…) se retiñe solo, sin tocar
+   el resto de la app. Burbujas: agente en azul sólido con texto blanco, contacto
+   en tarjeta blanca con borde — así se ven en Chatwoot real, no como WhatsApp. */
+.pane--wa {
+  --brand: #0090FF; --brand-d: #0074D9; --brand-l: #B3E0FF; --brand-ll: #E6F4FF;
+  --primary: #0090FF; --primary-hover: #0074D9; --primary-soft: #E6F4FF; --primary-border: #B3E0FF;
+}
+.pane--wa .chat-composer__send { box-shadow: 0 2px 6px rgba(0,144,255,.30); }
+.pane--wa .chat-composer__send:hover { background: #0074D9; }
+.pane--wa .wa-main__msgs { background: #F9FAFB; }
+.pane--wa .wa-msg--in .wa-msg__bubble { background: #fff; border: 1px solid #E4E7EC; }
+.pane--wa .wa-msg--out .wa-msg__bubble { background: #0090FF; color: #fff; }
+.pane--wa .wa-msg--out .wa-msg__time { color: rgba(255,255,255,.8); }
+.pane--wa .wa-msg--sched .wa-msg__bubble { background: #fff; }
