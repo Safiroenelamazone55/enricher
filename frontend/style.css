@@ -12266,9 +12266,32 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .lm-impick-s { font-size: .76rem; color: var(--text2, #45586A); line-height: 1.35; }
 @media (max-width: 560px) { .lm-impick-body { grid-template-columns: 1fr; } }
 /* ── Enriquecimiento → Datos: grid tipo Excel ── */
-.dg-toggle { display: flex; border: 1px solid var(--border, #EAE7E2); border-radius: 0; overflow: hidden; }
+.dg-toggle { display: flex; border: 1px solid var(--border, #EAE7E2); border-radius: 0; overflow: hidden; flex: 0 0 auto; }
 .dg-toggle__b { font-family: inherit; font-size: .8rem; font-weight: 600; padding: 7px 13px; border: none; background: #fff; color: var(--text2, #45586A); cursor: pointer; }
 .dg-toggle__b.active { background: var(--navy, #001F3F); color: #fff; }
+/* Toolbar en UNA sola fila: el toggle y los selects no crecen, el buscador
+   se lleva el espacio que sobra. .form-input trae width:100% por defecto
+   (para formularios normales) — acá se anula para que convivan en fila. */
+.dg-toolbar { flex-wrap: nowrap; }
+.dg-toolbar .dg-flt-sel { width: auto; flex: 0 0 168px; min-width: 0; }
+.dg-toolbar .dg-flt-q { flex: 1 1 auto; min-width: 140px; }
+@media (max-width: 900px) { .dg-toolbar { flex-wrap: wrap; } .dg-toolbar .dg-flt-sel { flex: 1 1 140px; } }
+
+/* Grilla estilo Excel: líneas verticales entre columnas, cabecera más marcada,
+   scroll horizontal con la columna de check + Nombre "congeladas" a la izquierda. */
+.dg-dt-wrap { overflow-x: auto; }
+.dg-table { table-layout: auto; }
+.dg-table thead th { background: #F1EFEB; }
+.dg-table th:not(:last-child), .dg-table td:not(:last-child) { border-right: 1px solid var(--border, #EAE7E2); }
+.dg-table tbody tr.sel td { background: var(--brand-ll, #F1EFEB); }
+.dg-table th.lm-ck-col, .dg-table td.lm-ck-col,
+.dg-table th:nth-child(2), .dg-table td:nth-child(2) {
+  position: sticky; background: #fff; z-index: 1;
+}
+.dg-table th.lm-ck-col, .dg-table td.lm-ck-col { left: 0; }
+.dg-table th:nth-child(2), .dg-table td:nth-child(2) { left: 34px; box-shadow: 2px 0 4px -2px rgba(11,30,58,.18); }
+.dg-table thead th.lm-ck-col, .dg-table thead th:nth-child(2) { background: #F1EFEB; z-index: 2; }
+.dg-table tbody tr.sel td.lm-ck-col, .dg-table tbody tr.sel td:nth-child(2) { background: var(--brand-ll, #F1EFEB); }
 .dg-table .dg-cell { cursor: text; }
 .dg-table .dg-cell:hover { background: var(--brand-ll, #F1EFEB); }
 .dg-table .dg-cell--ro { color: var(--muted, #B4AFA8); cursor: default; }

@@ -25512,10 +25512,10 @@ ${foot}
     load().then(() => { el.innerHTML = _dgShellHtml(); _dgRenderRows(); });
   }
   function _dgShellHtml() {
-    return `<div class="lm-sec-head"><div><h2 class="lm-sec-title">Datos</h2><p class="lm-sec-sub">Empresas y Contactos en vista de tabla — edita, limpia y corrige. Los cambios se guardan en todo el sistema.</p></div></div>
+    return `<div class="lm-sec-head lm-sec-head--compact"><div><h2 class="lm-sec-title">Datos</h2></div></div>
       ${_dgToolbar()}
       <div id="dg-bulkbar"></div>
-      <div class="lm-dt-wrap"><table class="clients-table dg-table"><thead><tr id="dg-head-row"></tr></thead><tbody id="dg-tbody"></tbody></table></div>
+      <div class="lm-dt-wrap dg-dt-wrap"><table class="clients-table dg-table"><thead><tr id="dg-head-row"></tr></thead><tbody id="dg-tbody"></tbody></table></div>
       <p class="lm-sec-sub" id="dg-cap-hint"></p>`;
   }
   function _dgToolbar() {
@@ -25523,15 +25523,15 @@ ${foot}
     const cliOpts = `<option value="">Cliente: todos</option>` + _clients.map(c => `<option value="${c.id}"${String(_dgCliente) === String(c.id) ? ' selected' : ''}>${esc(c.nombre)}</option>`).join('');
     const seqOpts = `<option value="">Secuencia: todas</option>` + _sequences.map(s => `<option value="${s.id}"${String(_dgSeq) === String(s.id) ? ' selected' : ''}>${esc(s.nombre)}</option>`).join('');
     const campOpts = `<option value="">Campaña: todas</option>` + _campaigns.map(c => `<option value="${c.id}"${String(_dgCamp) === String(c.id) ? ' selected' : ''}>${esc(c.nombre)}</option>`).join('');
-    return `<div class="lm-toolbar">
+    return `<div class="lm-toolbar dg-toolbar">
       <div class="dg-toggle">
         <button class="dg-toggle__b${isCo ? ' active' : ''}" onclick="LeadManagerModule.dgSetEntity('companies')">Empresas</button>
         <button class="dg-toggle__b${!isCo ? ' active' : ''}" onclick="LeadManagerModule.dgSetEntity('contacts')">Contactos</button>
       </div>
-      <select class="form-input" onchange="LeadManagerModule.dgSetCliente(this.value)">${cliOpts}</select>
-      <select class="form-input"${isCo ? ' disabled title="Disponible al ver Contactos"' : ''} onchange="LeadManagerModule.dgSetSeq(this.value)">${seqOpts}</select>
-      ${!isCo ? `<select class="form-input" onchange="LeadManagerModule.dgSetCamp(this.value)">${campOpts}</select>` : ''}
-      <input class="form-input" id="dg-q" placeholder="Buscar empresa o contacto…" value="${esc(_dgQ)}" oninput="LeadManagerModule.dgSetQ(this.value)">
+      <select class="form-input dg-flt-sel" onchange="LeadManagerModule.dgSetCliente(this.value)">${cliOpts}</select>
+      <select class="form-input dg-flt-sel"${isCo ? ' disabled title="Disponible al ver Contactos"' : ''} onchange="LeadManagerModule.dgSetSeq(this.value)">${seqOpts}</select>
+      ${!isCo ? `<select class="form-input dg-flt-sel" onchange="LeadManagerModule.dgSetCamp(this.value)">${campOpts}</select>` : ''}
+      <input class="form-input dg-flt-q" id="dg-q" placeholder="Buscar empresa o contacto…" value="${esc(_dgQ)}" oninput="LeadManagerModule.dgSetQ(this.value)">
     </div>`;
   }
   function _dgVisible() {
