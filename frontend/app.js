@@ -18318,18 +18318,35 @@ ${foot}
 
   // Asunto estilo Outreach: el 1er email de la secuencia define el asunto;
   // los follow-ups usan "Re: <asunto del 1er email>" para simular el hilo
-  // aunque el buzón sea externo y no haya threading real.
+  // aunque el buzón sea externo y no haya threading real — PERO solo cuando
+  // ese paso no tiene su propio asunto elegido. Fix 2026-09-04 (bug reportado
+  // por Jenny, urgente): antes esto pisaba SIEMPRE el asunto de la plantilla
+  // que ella eligió para un paso que no fuera el primero, mostrando "Re: <asunto
+  // del primer email>" en la tarea aunque el paso tuviera su propio asunto
+  // distinto. El motor de envío (sendEngine.js) YA respetaba el asunto propio
+  // del paso — este fix solo alinea la vista previa de la tarea con eso.
   function _emailSubjectFor(seqId, st, src, draft) {
     const emails = _seqSteps(seqId).filter(s => s.canal === 'email')
       .sort((a, b) => (a.dia || 0) - (b.dia || 0) || (a.orden || 0) - (b.orden || 0) || a.id - b.id);
     const first = emails[0];
     const isFirst = !first || first.id === st.id;
     // Asunto propio de la variante/ángulo que le toca a este contacto (si lo tiene).
-    const vAsun = s => { const v = _stepVariant(s, src); return (v && v.asunto) ? _seqRenderTpl(v.asunto, src).trim() : ''; };
+    // Ojo: cuando el paso no usa variantes (variants=[], el caso normal de "Un solo
+    // mensaje"), _stepVariant() no lleva el asunto del paso — hay que caer a s.asunto.
+    const vAsun = s => {
+      const v = _stepVariant(s, src);
+      const raw = (v && v.asunto) ? v.asunto : (s && s.asunto) || '';
+      return raw ? _seqRenderTpl(raw, src).trim() : '';
+    };
     if (isFirst) {
       return (draft && draft.asunto) ? draft.asunto
            : (vAsun(st) || _seqRenderTpl(st.titulo || '', src).trim() || 'Seguimiento');
     }
+    // Este paso SÍ eligió su propio asunto (plantilla con asunto propio, o
+    // borrador de IA aprobado con asunto) → se respeta tal cual, sin forzar "Re:".
+    const ownSubject = (draft && draft.asunto) ? draft.asunto : vAsun(st);
+    if (ownSubject) return ownSubject;
+    // Sin asunto propio en este paso: se sigue el hilo del primer email, como antes.
     const base = (first && vAsun(first)) || _seqRenderTpl((first && first.titulo) || '', src).trim()
               || _seqRenderTpl(st.titulo || '', src).trim() || 'Seguimiento';
     return /^re\s*:/i.test(base) ? base : 'Re: ' + base;
