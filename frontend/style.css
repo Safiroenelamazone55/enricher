@@ -5178,7 +5178,7 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
    cualquier padding aquí abajo hace scrollear la página por esos pocos píxeles.
    Va con #appShell porque .app-main:has(#dash2-tasks) —que pone 6px— pesa más
    por el id dentro del :has(), y ese pane sigue en el DOM aunque esté oculto. */
-#appShell .app-main:has(.seq-split) { background: #F5F7FA; padding-bottom: 0; }
+#appShell .app-main:has(.seq-split) { background: var(--bg, #FAF8F5); padding-bottom: 0; }
 /* El split ya se dimensiona al viewport; los 60px de padding inferior por
    defecto de .lm2-body sobraban y hacían scrollear la página. */
 .lm2-body:has(.seq-split) { padding-bottom: 12px; }
