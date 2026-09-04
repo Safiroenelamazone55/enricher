@@ -3504,8 +3504,43 @@ app.post('/api/lm/bulk-clean', requireAuth, async (req, res) => {
   } catch (err) { console.error('[lm-clean]', err.message); res.status(500).json({ error: 'Error al limpiar' }); }
 });
 
+// Dominios de correo gratuitos/genéricos — nunca se usan para inferir el dominio
+// de una empresa aunque sean el más frecuente entre sus contactos (ej. varios
+// contactos con gmail.com no significa que "gmail.com" sea el sitio de la empresa).
+const FREE_EMAIL_DOMAINS = new Set([
+  'gmail.com', 'hotmail.com', 'outlook.com', 'yahoo.com', 'yahoo.es', 'live.com',
+  'icloud.com', 'me.com', 'aol.com', 'protonmail.com', 'proton.me', 'msn.com',
+  'hotmail.es', 'live.com.mx', 'googlemail.com',
+]);
+// companies.dominio/website a partir de los emails corporativos de SUS contactos
+// (join, no una función pura por fila — por eso vive aquí y no en dataCleanService).
+// Se enriquece con el dominio MÁS FRECUENTE entre los contactos de esa empresa,
+// ignorando proveedores gratuitos. Solo llena si el campo destino está vacío.
+async function _inferCompanyDomains(uid, companyIds) {
+  if (!companyIds.length) return {};
+  const { rows } = await pool.query(
+    `SELECT company_id, email FROM lm_contacts
+      WHERE user_id=$1 AND company_id = ANY($2::int[]) AND COALESCE(email,'') <> ''`,
+    [uid, companyIds]);
+  const counts = {}; // company_id -> { domain -> count }
+  for (const r of rows) {
+    const m = String(r.email).toLowerCase().match(/@([a-z0-9.-]+\.[a-z]{2,})$/);
+    if (!m) continue;
+    const dom = m[1];
+    if (FREE_EMAIL_DOMAINS.has(dom)) continue;
+    (counts[r.company_id] = counts[r.company_id] || {})[dom] = (counts[r.company_id][dom] || 0) + 1;
+  }
+  const best = {};
+  for (const cid of Object.keys(counts)) {
+    const entries = Object.entries(counts[cid]).sort((a, b) => b[1] - a[1]);
+    if (entries.length) best[cid] = entries[0][0];
+  }
+  return best; // { company_id: 'dominio.com' }
+}
+
 // Enriquecimiento CALCULADO (sin fuente externa) — deriva un campo vacío a partir
-// de otro que sí tiene el registro (ej. seniority/departamento a partir del cargo).
+// de otro que sí tiene el registro (ej. seniority/departamento a partir del cargo,
+// o dominio/website de empresa a partir de los emails de sus contactos).
 // Mismo patrón preview/apply que bulk-clean, pero SOLO llena si el campo destino
 // está vacío — no pisa un valor que alguien ya puso a mano.
 app.post('/api/lm/bulk-enrich', requireAuth, async (req, res) => {
@@ -3514,25 +3549,41 @@ app.post('/api/lm/bulk-enrich', requireAuth, async (req, res) => {
   const entity = b.entity === 'companies' ? 'companies' : (b.entity === 'contacts' ? 'contacts' : '');
   const ids = Array.isArray(b.ids) ? b.ids.map(Number).filter(Boolean) : [];
   const { enrichableFields, enrichSource, enrichValue } = require('./services/dataCleanService');
-  const allowed = enrichableFields(entity);
+  const DOMAIN_FIELDS = ['dominio', 'website'];
+  const allowed = entity === 'companies' ? [...enrichableFields(entity), ...DOMAIN_FIELDS] : enrichableFields(entity);
   const fields = (Array.isArray(b.fields) ? b.fields : []).filter(f => allowed.includes(f));
   const apply = !!b.apply;
   if (!entity) return res.status(400).json({ error: 'Entidad inválida' });
   if (!ids.length) return res.status(400).json({ error: 'Sin filas seleccionadas' });
   if (!fields.length) return res.status(400).json({ error: 'Sin campos para enriquecer' });
   const table = entity === 'companies' ? 'lm_companies' : 'lm_contacts';
-  const sources = [...new Set(fields.map(f => enrichSource(entity, f)))];
+  const domainFields = entity === 'companies' ? fields.filter(f => DOMAIN_FIELDS.includes(f)) : [];
+  const normalFields = fields.filter(f => !domainFields.includes(f));
+  const sources = [...new Set(normalFields.map(f => enrichSource(entity, f)))];
   try {
+    const selectCols = [...new Set(['id', ...normalFields, ...sources, ...domainFields])];
     const { rows } = await pool.query(
-      `SELECT id, ${[...new Set([...fields, ...sources])].join(',')} FROM ${table} WHERE user_id=$1 AND id = ANY($2::int[])`, [uid, ids]);
+      `SELECT ${selectCols.join(',')} FROM ${table} WHERE user_id=$1 AND id = ANY($2::int[])`, [uid, ids]);
     const changes = [];
     for (const row of rows) {
-      for (const field of fields) {
+      for (const field of normalFields) {
         const actual = row[field] == null ? '' : String(row[field]);
         if (actual) continue; // ya tiene algo — no se toca
         const src = row[enrichSource(entity, field)] == null ? '' : String(row[enrichSource(entity, field)]);
         const val = enrichValue(entity, field, src);
         if (val) changes.push({ id: row.id, campo: field, antes: '', despues: val });
+      }
+    }
+    if (domainFields.length) {
+      const inferred = await _inferCompanyDomains(uid, rows.map(r => r.id));
+      for (const row of rows) {
+        const dom = inferred[String(row.id)];
+        if (!dom) continue;
+        for (const field of domainFields) {
+          const actual = row[field] == null ? '' : String(row[field]);
+          if (actual) continue;
+          changes.push({ id: row.id, campo: field, antes: '', despues: dom });
+        }
       }
     }
     if (!apply) return res.json({ preview: true, changes });

@@ -25466,7 +25466,7 @@ ${foot}
   let _dgSel = new Set();
   let _dgCleanPreview = null;
   const DG_CLEAN_FIELDS = { companies: ['nombre', 'tamano', 'dominio', 'website', 'telefono'], contacts: ['cargo', 'email', 'email_personal', 'telefono', 'movil'] };
-  const DG_ENRICH_FIELDS = { companies: [], contacts: ['seniority', 'departamento'] };
+  const DG_ENRICH_FIELDS = { companies: ['dominio', 'website'], contacts: ['seniority', 'departamento'] };
   const DG_EDITABLE_BASE = {
     companies: ['nombre', 'dominio', 'industria', 'tamano', 'ciudad', 'pais', 'target_tier', 'segmento', 'analisis'],
     contacts:  ['nombre', 'apellido', 'cargo', 'email', 'telefono', 'linkedin', 'estado', 'analisis'],
