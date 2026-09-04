@@ -12275,23 +12275,33 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .dg-toolbar { flex-wrap: nowrap; }
 .dg-toolbar .dg-flt-sel { width: auto; flex: 0 0 168px; min-width: 0; }
 .dg-toolbar .dg-flt-q { flex: 1 1 auto; min-width: 140px; }
+.dg-kebab { flex: 0 0 auto; width: 34px; height: 34px; border: 1px solid var(--border, #EAE7E2); background: #fff; color: var(--text2, #45586A); font-size: 1.1rem; line-height: 1; cursor: pointer; }
+.dg-kebab:hover { background: var(--brand-ll, #F1EFEB); }
 @media (max-width: 900px) { .dg-toolbar { flex-wrap: wrap; } .dg-toolbar .dg-flt-sel { flex: 1 1 140px; } }
+.dg-bulkbar--slim { background: transparent; border: none; padding: 0 2px; }
+.dg-bulkbar--slim .lm-bulk-n { color: var(--muted, #B4AFA8); }
 
 /* Grilla estilo Excel: líneas verticales entre columnas, cabecera más marcada,
-   scroll horizontal con la columna de check + Nombre "congeladas" a la izquierda. */
+   scroll horizontal con la columna de check + Nombre "congeladas" a la izquierda.
+   El check solo existe visualmente en modo selección (⋮ → Seleccionar); la
+   columna congelada es la PRIMERA columna de datos, marcada con .dg-cell--frozen
+   (no nth-child: su posición cambia según si el check está visible o no).*/
 .dg-dt-wrap { overflow-x: auto; }
 .dg-table { table-layout: auto; }
 .dg-table thead th { background: #F1EFEB; }
 .dg-table th:not(:last-child), .dg-table td:not(:last-child) { border-right: 1px solid var(--border, #EAE7E2); }
 .dg-table tbody tr.sel td { background: var(--brand-ll, #F1EFEB); }
+.dg-table .lm-ck-col { display: none; }
+.dg-table.sel-on .lm-ck-col { display: table-cell; }
 .dg-table th.lm-ck-col, .dg-table td.lm-ck-col,
-.dg-table th:nth-child(2), .dg-table td:nth-child(2) {
+.dg-table th.dg-cell--frozen, .dg-table td.dg-cell--frozen {
   position: sticky; background: #fff; z-index: 1;
 }
 .dg-table th.lm-ck-col, .dg-table td.lm-ck-col { left: 0; }
-.dg-table th:nth-child(2), .dg-table td:nth-child(2) { left: 34px; box-shadow: 2px 0 4px -2px rgba(11,30,58,.18); }
-.dg-table thead th.lm-ck-col, .dg-table thead th:nth-child(2) { background: #F1EFEB; z-index: 2; }
-.dg-table tbody tr.sel td.lm-ck-col, .dg-table tbody tr.sel td:nth-child(2) { background: var(--brand-ll, #F1EFEB); }
+.dg-table th.dg-cell--frozen, .dg-table td.dg-cell--frozen { left: 0; }
+.dg-table.sel-on th.dg-cell--frozen, .dg-table.sel-on td.dg-cell--frozen { left: 34px; box-shadow: 2px 0 4px -2px rgba(11,30,58,.18); }
+.dg-table thead th.lm-ck-col, .dg-table thead th.dg-cell--frozen { background: #F1EFEB; z-index: 2; }
+.dg-table tbody tr.sel td.lm-ck-col, .dg-table tbody tr.sel td.dg-cell--frozen { background: var(--brand-ll, #F1EFEB); }
 .dg-table .dg-cell { cursor: text; }
 .dg-table .dg-cell:hover { background: var(--brand-ll, #F1EFEB); }
 .dg-table .dg-cell--ro { color: var(--muted, #B4AFA8); cursor: default; }
@@ -12312,8 +12322,9 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .dg-dup-act { margin-top: 8px; }
 .dg-cell-input { width: 100%; border: 1px solid var(--brand, #007AFF); border-radius: 0; padding: 3px 6px; font: inherit; font-size: .82rem; }
 .dg-clean-list { display: flex; flex-direction: column; gap: 6px; max-height: 50vh; overflow-y: auto; }
-.dg-clean-row { display: grid; grid-template-columns: 110px 1fr 20px 1fr; align-items: center; gap: 8px; font-size: .8rem; padding: 7px 9px; border: 1px solid var(--border, #EAE7E2); border-radius: 0; }
-.dg-clean-f { font-weight: 700; color: var(--text, #0A2540); }
+.dg-clean-row { display: grid; grid-template-columns: 130px 100px 1fr 20px 1fr; align-items: center; gap: 8px; font-size: .8rem; padding: 7px 9px; border: 1px solid var(--border, #EAE7E2); border-radius: 0; }
+.dg-clean-n { font-weight: 600; color: var(--text, #0A2540); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dg-clean-f { color: var(--muted, #B4AFA8); font-size: .74rem; text-transform: uppercase; letter-spacing: .03em; }
 .dg-clean-a { color: var(--muted, #B4AFA8); text-decoration: line-through; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dg-clean-arrow { text-align: center; color: var(--muted, #B4AFA8); }
 .dg-clean-d { color: #1E7A34; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -25466,6 +25466,7 @@ ${foot}
   let _dgSel = new Set();
   let _dgCleanPreview = null;
   let _dgOnlyIssues = false;
+  let _dgSelMode = false;
   const DG_CLEAN_FIELDS = { companies: ['nombre', 'tamano', 'dominio', 'website', 'telefono'], contacts: ['cargo', 'email', 'email_personal', 'telefono', 'movil'] };
   const DG_ENRICH_FIELDS = { companies: ['dominio', 'website'], contacts: ['seniority', 'departamento'] };
   // ── Validación (categoría C): SOLO detecta y marca visualmente — nunca corrige
@@ -25505,6 +25506,15 @@ ${foot}
     return DG_EDITABLE_BASE[entity].concat(active);
   }
   function _dgFieldLabel(field) { return (DG_COLS_FOR(_dgEntity).find(x => x[0] === field) || [field, field])[1]; }
+  // Nombre del registro al que pertenece un cambio — sin esto, una vista previa
+  // de 30 filas solo mostraba "antes → después" sin decir DE CUÁL empresa o
+  // contacto (feedback de Jenny 2026-09-04: "yo sepa que se está editando").
+  function _dgRecName(id) {
+    const isCo = _dgEntity === 'companies';
+    const r = (isCo ? _companies : _contacts).find(x => x.id === id);
+    if (!r) return `#${id}`;
+    return isCo ? (r.nombre || `#${id}`) : ([r.nombre, r.apellido].filter(Boolean).join(' ') || `#${id}`);
+  }
   function renderDataGrid(containerId) {
     _dgContainerId = containerId;
     const el = document.getElementById(containerId); if (!el) return;
@@ -25515,7 +25525,7 @@ ${foot}
     return `<div class="lm-sec-head lm-sec-head--compact"><div><h2 class="lm-sec-title">Datos</h2></div></div>
       ${_dgToolbar()}
       <div id="dg-bulkbar"></div>
-      <div class="lm-dt-wrap dg-dt-wrap"><table class="clients-table dg-table"><thead><tr id="dg-head-row"></tr></thead><tbody id="dg-tbody"></tbody></table></div>
+      <div class="lm-dt-wrap dg-dt-wrap"><table id="dg-table-el" class="clients-table dg-table"><thead><tr id="dg-head-row"></tr></thead><tbody id="dg-tbody"></tbody></table></div>
       <p class="lm-sec-sub" id="dg-cap-hint"></p>`;
   }
   function _dgToolbar() {
@@ -25532,7 +25542,33 @@ ${foot}
       <select class="form-input dg-flt-sel"${isCo ? ' disabled title="Disponible al ver Contactos"' : ''} onchange="LeadManagerModule.dgSetSeq(this.value)">${seqOpts}</select>
       ${!isCo ? `<select class="form-input dg-flt-sel" onchange="LeadManagerModule.dgSetCamp(this.value)">${campOpts}</select>` : ''}
       <input class="form-input dg-flt-q" id="dg-q" placeholder="Buscar empresa o contacto…" value="${esc(_dgQ)}" oninput="LeadManagerModule.dgSetQ(this.value)">
+      <button class="dg-kebab" onclick="LeadManagerModule.dgMoreMenu(event)" title="Más opciones">⋮</button>
     </div>`;
+  }
+  function dgMoreMenu(ev) {
+    if (ev && ev.stopPropagation) ev.stopPropagation();
+    document.querySelectorAll('.cp-mark-menu').forEach(m => m.remove());
+    const close = "document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove())";
+    const item = (label, onclick) => `<button class="cp-mark-menu__b" onclick="${close};${onclick}">${label}</button>`;
+    const html = `<div class="cp-mark-menu__list">`
+      + item(_dgSelMode ? '✕ Salir de selección' : '☑ Seleccionar', `LeadManagerModule.dgToggleSelMode()`)
+      + `</div>`;
+    const menu = document.createElement('div');
+    menu.className = 'cp-mark-menu';
+    menu.style.minWidth = '190px';
+    menu.innerHTML = html;
+    document.body.appendChild(menu);
+    const t = (ev && (ev.currentTarget || ev.target)) || document.body;
+    const r = t.getBoundingClientRect();
+    menu.style.left = `${Math.max(8, Math.min(r.right - 190, window.innerWidth - 200))}px`;
+    menu.style.top = `${r.bottom + 6}px`;
+    setTimeout(() => document.addEventListener('click', function onDoc(e) { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', onDoc); } }), 0);
+  }
+  function dgToggleSelMode() {
+    _dgSelMode = !_dgSelMode;
+    if (!_dgSelMode) _dgSel.clear();
+    document.getElementById('dg-table-el')?.classList.toggle('sel-on', _dgSelMode);
+    _dgRenderRows();
   }
   function _dgVisible() {
     const isCo = _dgEntity === 'companies';
@@ -25552,10 +25588,10 @@ ${foot}
   }
   function _dgRow(r, cols, editable) {
     const issues = _dgRowIssues(r);
-    const cells = cols.map(([k]) => {
+    const cells = cols.map(([k], colIdx) => {
       const val = k === 'company_nombre' ? (r.company_nombre || r.empresa_nombre || '') : (r[k] || '');
-      const issue = issues.find(i => i.field === k);
-      const cls = 'dg-cell' + (issue ? ' dg-cell--invalid' : '');
+      const issue = issues.find(x => x.field === k);
+      const cls = 'dg-cell' + (colIdx === 0 ? ' dg-cell--frozen' : '') + (issue ? ' dg-cell--invalid' : '');
       const title = issue ? ` title="${esc(issue.msg)}"` : '';
       const dot = issue ? '<span class="dg-issue-dot"></span>' : '';
       if (editable.includes(k)) return `<td class="${cls}" data-id="${r.id}" data-field="${k}"${title} onclick="LeadManagerModule.dgEditCell(this)">${dot}${val ? esc(val) : '<span class="dg-empty">—</span>'}</td>`;
@@ -25567,17 +25603,19 @@ ${foot}
     </tr>`;
   }
   function _dgBulkBar(rows, allRows) {
+    if (!_dgSelMode) return `<div class="lm-bulk-bar show dg-bulkbar dg-bulkbar--slim"><span class="lm-bulk-n">${rows.length} filtrado(s)</span></div>`;
     const n = _dgSel.size;
     const tieneEnrich = (DG_ENRICH_FIELDS[_dgEntity] || []).length > 0;
     const nIssues = (allRows || rows).filter(r => _dgRowIssues(r).length).length;
     const nDup = _dgDupGroups().length;
     return `<div class="lm-bulk-bar show dg-bulkbar">
       <span class="lm-bulk-n">${n ? `${n} seleccionado(s)` : `${rows.length} filtrado(s)`}</span>
-      <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.dgCleanOpen()">🧹 Limpiar</button>
-      <button class="btn btn--ghost btn--sm"${tieneEnrich ? '' : ' disabled title="Sin campos calculables para esta vista todavía"'} onclick="LeadManagerModule.dgEnrichOpen()">✨ Enriquecer</button>
+      <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.dgCleanMenu(event)">🧹 Limpiar ▾</button>
+      <button class="btn btn--ghost btn--sm"${tieneEnrich ? '' : ' disabled title="Sin campos calculables para esta vista todavía"'} onclick="LeadManagerModule.dgEnrichMenu(event)">✨ Enriquecer ▾</button>
       <button class="dg-issues-toggle${_dgOnlyIssues ? ' active' : ''}" onclick="LeadManagerModule.dgToggleIssues()" title="Filtrar filas con email/dominio/teléfono inválido o email faltante">⚠ Con problemas <span class="n">(${nIssues})</span></button>
       <button class="btn btn--ghost btn--sm"${nDup ? '' : ' disabled title="Sin duplicados detectados"'} onclick="LeadManagerModule.dgDupOpen()" title="Agrupa por ${_dgEntity === 'companies' ? 'dominio' : 'email'} exacto">🔗 Duplicados (${nDup})</button>
       ${n ? `<button class="lm-bulk-ghost" onclick="LeadManagerModule.dgClearSel()">Ninguna</button>` : ''}
+      <button class="lm-bulk-ghost" onclick="LeadManagerModule.dgToggleSelMode()">Salir</button>
     </div>`;
   }
   function dgToggleIssues() { _dgOnlyIssues = !_dgOnlyIssues; _dgRenderRows(); }
@@ -25587,7 +25625,7 @@ ${foot}
     const cols = DG_COLS_FOR(_dgEntity);
     const editable = _dgEditableFields(_dgEntity);
     const headRow = document.getElementById('dg-head-row');
-    if (headRow) headRow.innerHTML = `<th class="lm-ck-col"><input type="checkbox" class="lm-ck" onclick="LeadManagerModule.dgToggleAll(this.checked)"></th>${cols.map(([, l]) => `<th>${esc(l)}</th>`).join('')}`;
+    if (headRow) headRow.innerHTML = `<th class="lm-ck-col"><input type="checkbox" class="lm-ck" onclick="LeadManagerModule.dgToggleAll(this.checked)"></th>${cols.map(([, l], i) => `<th${i === 0 ? ' class="dg-cell--frozen"' : ''}>${esc(l)}</th>`).join('')}`;
     const CAP = 300;
     const shown = rows.slice(0, CAP);
     const tbody = document.getElementById('dg-tbody');
@@ -25673,28 +25711,57 @@ ${foot}
       showBanner('Error al guardar: ' + e.message, 'error');
     }
   }
-  // ── Limpiar en bloque: preview antes/después → confirmar → aplica ──
-  async function dgCleanOpen() {
+  // ── Limpiar en bloque: preview antes/después → confirmar → aplica.
+  // Se elige el CAMPO específico desde un menú (dgCleanMenu) — nunca "limpiar
+  // todo junto", porque mezclar nombre/teléfono/dominio en un solo botón no
+  // deja claro qué se va a tocar (feedback de Jenny 2026-09-04).
+  let _dgCleanFields = null;
+  function dgCleanMenu(ev) {
+    if (ev && ev.stopPropagation) ev.stopPropagation();
+    document.querySelectorAll('.cp-mark-menu').forEach(m => m.remove());
+    const fields = DG_CLEAN_FIELDS[_dgEntity] || [];
+    if (!fields.length) return;
+    const close = "document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove())";
+    const item = (label, onclick) => `<button class="cp-mark-menu__b" onclick="${close};${onclick}">${label}</button>`;
+    const html = `<div class="cp-mark-menu__list">`
+      + fields.map(f => item(`Limpiar ${_dgFieldLabel(f)}`, `LeadManagerModule.dgCleanOpen('${f}')`)).join('')
+      + `<div class="cp-mark-menu__sep"></div>`
+      + item('Limpiar todos los campos', `LeadManagerModule.dgCleanOpen(null)`)
+      + `</div>`;
+    const menu = document.createElement('div');
+    menu.className = 'cp-mark-menu';
+    menu.style.minWidth = '210px';
+    menu.innerHTML = html;
+    document.body.appendChild(menu);
+    const t = (ev && (ev.currentTarget || ev.target)) || document.body;
+    const r = t.getBoundingClientRect();
+    menu.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 220))}px`;
+    menu.style.top = `${r.bottom + 6}px`;
+    setTimeout(() => document.addEventListener('click', function onDoc(e) { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', onDoc); } }), 0);
+  }
+  async function dgCleanOpen(field) {
     const ids = _dgSel.size ? [..._dgSel] : _dgVisible().map(r => r.id);
     if (!ids.length) { showBanner('No hay filas para limpiar', 'info'); return; }
+    _dgCleanFields = field ? [field] : DG_CLEAN_FIELDS[_dgEntity];
     try {
-      const res = await apiFetch(`${API}/lm/bulk-clean`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entity: _dgEntity, ids, fields: DG_CLEAN_FIELDS[_dgEntity], apply: false }) });
+      const res = await apiFetch(`${API}/lm/bulk-clean`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entity: _dgEntity, ids, fields: _dgCleanFields, apply: false }) });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || 'Error');
       _dgCleanPreview = d.changes || [];
-      _dgCleanOpenModal();
+      _dgCleanOpenModal(field);
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
-  function _dgCleanOpenModal() {
+  function _dgCleanOpenModal(field) {
     document.getElementById('lm-dgclean-modal')?.remove();
     const m = document.createElement('div'); m.id = 'lm-dgclean-modal'; m.className = 'fin-pi-backdrop';
     m.onclick = e => { if (e.target === m) dgCleanClose(); };
     const changes = _dgCleanPreview || [];
+    const titulo = field ? `Limpiar ${_dgFieldLabel(field)}` : 'Limpiar todos los campos';
     const body = changes.length
-      ? `<div class="dg-clean-list">${changes.map(c => `<div class="dg-clean-row"><span class="dg-clean-f">${esc(_dgFieldLabel(c.campo))}</span><span class="dg-clean-a">${esc(c.antes) || '—'}</span><span class="dg-clean-arrow">→</span><span class="dg-clean-d">${esc(c.despues) || '—'}</span></div>`).join('')}</div>`
+      ? `<div class="dg-clean-list">${changes.map(c => `<div class="dg-clean-row"><span class="dg-clean-n" title="${esc(_dgRecName(c.id))}">${esc(_dgRecName(c.id))}</span><span class="dg-clean-f">${esc(_dgFieldLabel(c.campo))}</span><span class="dg-clean-a">${esc(c.antes) || '—'}</span><span class="dg-clean-arrow">→</span><span class="dg-clean-d">${esc(c.despues) || '—'}</span></div>`).join('')}</div>`
       : `<div class="cp-empty2" style="padding:22px">Nada que limpiar — ya está todo bien formateado.</div>`;
     m.innerHTML = `<div class="fin-pi-box lm-flt-box">
-      <div class="fin-pi-box__hd"><h3>Limpiar · vista previa (${changes.length})</h3><button class="fin-pi-x" onclick="LeadManagerModule.dgCleanClose()">✕</button></div>
+      <div class="fin-pi-box__hd"><h3>${esc(titulo)} · vista previa (${changes.length})</h3><button class="fin-pi-x" onclick="LeadManagerModule.dgCleanClose()">✕</button></div>
       <div class="flt-body">${body}</div>
       <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns">
         <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.dgCleanClose()">Cancelar</button>
@@ -25702,12 +25769,12 @@ ${foot}
       </div></div></div>`;
     document.body.appendChild(m);
   }
-  function dgCleanClose() { document.getElementById('lm-dgclean-modal')?.remove(); _dgCleanPreview = null; }
+  function dgCleanClose() { document.getElementById('lm-dgclean-modal')?.remove(); _dgCleanPreview = null; _dgCleanFields = null; }
   async function dgCleanApply() {
     const changes = _dgCleanPreview || []; if (!changes.length) return;
     const ids = _dgSel.size ? [..._dgSel] : _dgVisible().map(r => r.id);
     try {
-      const res = await apiFetch(`${API}/lm/bulk-clean`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entity: _dgEntity, ids, fields: DG_CLEAN_FIELDS[_dgEntity], apply: true }) });
+      const res = await apiFetch(`${API}/lm/bulk-clean`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entity: _dgEntity, ids, fields: _dgCleanFields || DG_CLEAN_FIELDS[_dgEntity], apply: true }) });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || 'Error');
       dgCleanClose();
@@ -25720,29 +25787,55 @@ ${foot}
   // un valor que ya está puesto. Primera pieza de enriquecimiento CALCULADO, sin
   // ninguna fuente externa — el resto (URL/email/LinkedIn faltante) va después.
   let _dgEnrichPreview = null;
-  async function dgEnrichOpen() {
+  let _dgEnrichFields = null;
+  function dgEnrichMenu(ev) {
+    if (ev && ev.stopPropagation) ev.stopPropagation();
+    document.querySelectorAll('.cp-mark-menu').forEach(m => m.remove());
     const fields = DG_ENRICH_FIELDS[_dgEntity] || [];
     if (!fields.length) return;
+    const close = "document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove())";
+    const item = (label, onclick) => `<button class="cp-mark-menu__b" onclick="${close};${onclick}">${label}</button>`;
+    const html = `<div class="cp-mark-menu__list">`
+      + fields.map(f => item(`Enriquecer ${_dgFieldLabel(f)}`, `LeadManagerModule.dgEnrichOpen('${f}')`)).join('')
+      + (fields.length > 1 ? `<div class="cp-mark-menu__sep"></div>` + item('Enriquecer todos los campos', `LeadManagerModule.dgEnrichOpen(null)`) : '')
+      + `</div>`;
+    const menu = document.createElement('div');
+    menu.className = 'cp-mark-menu';
+    menu.style.minWidth = '210px';
+    menu.innerHTML = html;
+    document.body.appendChild(menu);
+    const t = (ev && (ev.currentTarget || ev.target)) || document.body;
+    const r = t.getBoundingClientRect();
+    menu.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 220))}px`;
+    menu.style.top = `${r.bottom + 6}px`;
+    setTimeout(() => document.addEventListener('click', function onDoc(e) { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', onDoc); } }), 0);
+  }
+  async function dgEnrichOpen(field) {
+    const all = DG_ENRICH_FIELDS[_dgEntity] || [];
+    if (!all.length) return;
+    const fields = field ? [field] : all;
     const ids = _dgSel.size ? [..._dgSel] : _dgVisible().map(r => r.id);
     if (!ids.length) { showBanner('No hay filas para enriquecer', 'info'); return; }
+    _dgEnrichFields = fields;
     try {
       const res = await apiFetch(`${API}/lm/bulk-enrich`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entity: _dgEntity, ids, fields, apply: false }) });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || 'Error');
       _dgEnrichPreview = d.changes || [];
-      _dgEnrichOpenModal();
+      _dgEnrichOpenModal(field);
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
-  function _dgEnrichOpenModal() {
+  function _dgEnrichOpenModal(field) {
     document.getElementById('lm-dgclean-modal')?.remove();
     const m = document.createElement('div'); m.id = 'lm-dgclean-modal'; m.className = 'fin-pi-backdrop';
     m.onclick = e => { if (e.target === m) dgEnrichClose(); };
     const changes = _dgEnrichPreview || [];
+    const titulo = field ? `Enriquecer ${_dgFieldLabel(field)}` : 'Enriquecer todos los campos';
     const body = changes.length
-      ? `<div class="dg-clean-list">${changes.map(c => `<div class="dg-clean-row"><span class="dg-clean-f">${esc(_dgFieldLabel(c.campo))}</span><span class="dg-clean-a">vacío</span><span class="dg-clean-arrow">→</span><span class="dg-clean-d">${esc(c.despues)}</span></div>`).join('')}</div>`
+      ? `<div class="dg-clean-list">${changes.map(c => `<div class="dg-clean-row"><span class="dg-clean-n" title="${esc(_dgRecName(c.id))}">${esc(_dgRecName(c.id))}</span><span class="dg-clean-f">${esc(_dgFieldLabel(c.campo))}</span><span class="dg-clean-a">vacío</span><span class="dg-clean-arrow">→</span><span class="dg-clean-d">${esc(c.despues)}</span></div>`).join('')}</div>`
       : `<div class="cp-empty2" style="padding:22px">Nada que completar — no se pudo derivar ningún dato nuevo de lo seleccionado.</div>`;
     m.innerHTML = `<div class="fin-pi-box lm-flt-box">
-      <div class="fin-pi-box__hd"><h3>Enriquecer · vista previa (${changes.length})</h3><button class="fin-pi-x" onclick="LeadManagerModule.dgEnrichClose()">✕</button></div>
+      <div class="fin-pi-box__hd"><h3>${esc(titulo)} · vista previa (${changes.length})</h3><button class="fin-pi-x" onclick="LeadManagerModule.dgEnrichClose()">✕</button></div>
       <div class="flt-body">${body}</div>
       <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns">
         <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.dgEnrichClose()">Cancelar</button>
@@ -25750,12 +25843,12 @@ ${foot}
       </div></div></div>`;
     document.body.appendChild(m);
   }
-  function dgEnrichClose() { document.getElementById('lm-dgclean-modal')?.remove(); _dgEnrichPreview = null; }
+  function dgEnrichClose() { document.getElementById('lm-dgclean-modal')?.remove(); _dgEnrichPreview = null; _dgEnrichFields = null; }
   async function dgEnrichApply() {
     const changes = _dgEnrichPreview || []; if (!changes.length) return;
     const ids = _dgSel.size ? [..._dgSel] : _dgVisible().map(r => r.id);
     try {
-      const res = await apiFetch(`${API}/lm/bulk-enrich`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entity: _dgEntity, ids, fields: DG_ENRICH_FIELDS[_dgEntity], apply: true }) });
+      const res = await apiFetch(`${API}/lm/bulk-enrich`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entity: _dgEntity, ids, fields: _dgEnrichFields || DG_ENRICH_FIELDS[_dgEntity], apply: true }) });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || 'Error');
       dgEnrichClose();
@@ -25897,8 +25990,8 @@ ${foot}
     tplSeqInput, tplSeqKey, tplSeqPick, tplSeqRemove, tplSeqBlur,
     openFilters, closeFilters, fltSet, fltAddRow, fltDelRow, fltApply, clearFilters, removeFilter, fltOpenDate, cfSaveLabel,
     renderDataGrid, dgSetEntity, dgSetCliente, dgSetSeq, dgSetCamp, dgSetQ, dgToggleSel, dgToggleAll, dgClearSel,
-    dgEditCell, dgEditKey, dgSaveCell, dgCleanOpen, dgCleanClose, dgCleanApply,
-    dgEnrichOpen, dgEnrichClose, dgEnrichApply, dgToggleIssues,
+    dgEditCell, dgEditKey, dgSaveCell, dgCleanMenu, dgCleanOpen, dgCleanClose, dgCleanApply,
+    dgEnrichMenu, dgEnrichOpen, dgEnrichClose, dgEnrichApply, dgToggleIssues, dgMoreMenu, dgToggleSelMode,
     dgDupOpen, dgDupClose, dgDupPickSurvivor, dgDupToggleDel, dgDupMergeGroup, dgDupDeleteGroup,
     fmsToggle, fmsFilter, fmsPick,
     openViews, applyView, saveView, deleteView, clearAllViews,
