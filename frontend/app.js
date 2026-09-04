@@ -26201,6 +26201,85 @@ const SlackChat = (() => {
     r.innerHTML = wsHtml + secHtml;
   }
 
+  // ── Quick switcher (Ctrl/Cmd+K) — pedido explícito 2026-09-03, inspirado en
+  // Mattermost/Slack. Busca entre los canales/DMs YA cargados del workspace activo
+  // (full o mini, según desde dónde se abrió) — no cruza workspaces, igual que el
+  // Cmd+K real de Slack. Enter abre, ↑↓ navega, Esc cierra.
+  let _swCtx = null;   // { modo, chans, users, noLeidos, actividad }
+  let _swSel = 0;
+  let _swFiltered = [];
+  function abrirSwitcher(modo) {
+    cerrarSwitcher();
+    const full = modo !== 'mini';
+    _swCtx = {
+      modo,
+      chans: full ? _canales : _mCanales,
+      users: full ? _users : _mUsers,
+      noLeidos: full ? _noLeidos : _mNoLeidos,
+      actividad: full ? _actividad : _mActividad,
+    };
+    const m = document.createElement('div');
+    m.id = 'slk-switcher'; m.className = 'fin-pi-backdrop slk-sw-backdrop';
+    m.onclick = e => { if (e.target === m) cerrarSwitcher(); };
+    m.innerHTML = `<div class="slk-sw-box">
+      <input type="text" class="slk-sw-input" id="slk-sw-input" placeholder="Ir a un canal o persona…" autocomplete="off"
+        oninput="SlackChat._swFiltrar(this.value)" onkeydown="SlackChat._swKey(event)">
+      <div class="slk-sw-list" id="slk-sw-list"></div>
+    </div>`;
+    document.body.appendChild(m);
+    _swFiltrar('');
+    setTimeout(() => $$('slk-sw-input')?.focus(), 30);
+  }
+  function cerrarSwitcher() { document.getElementById('slk-switcher')?.remove(); _swCtx = null; _swSel = 0; }
+  function _swNombre(c) {
+    const users = _swCtx.users;
+    if (c.is_im) return users[c.user] || c.name || 'Mensaje directo';
+    return (c.is_mpim ? '' : '#') + (c.name || '');
+  }
+  function _swFiltrar(q) {
+    if (!_swCtx) return;
+    const query = (q || '').toLowerCase().trim();
+    _swFiltered = _swCtx.chans
+      .filter(c => !query || _swNombre(c).toLowerCase().includes(query))
+      .sort((a, b) => (_swCtx.actividad[b.id] || 0) - (_swCtx.actividad[a.id] || 0))
+      .slice(0, 30);
+    _swSel = 0;
+    _swPinta();
+  }
+  function _swPinta() {
+    const list = $$('slk-sw-list'); if (!list) return;
+    if (!_swFiltered.length) { list.innerHTML = `<div class="lm-pick-empty">Sin coincidencias.</div>`; return; }
+    list.innerHTML = _swFiltered.map((c, i) => {
+      const nl = _swCtx.noLeidos[c.id];
+      return `<button class="slk-sw-item${i === _swSel ? ' on' : ''}" onmouseenter="SlackChat._swHover(${i})" onclick="SlackChat._swPick('${c.id}')">
+        <span class="slk-sw-item__nm">${esc(_swNombre(c))}</span>
+        ${nl ? `<span class="slk-sw-item__n">${nl}</span>` : ''}
+      </button>`;
+    }).join('');
+  }
+  function _swHover(i) { _swSel = i; _swPinta(); }
+  function _swKey(ev) {
+    if (ev.key === 'Escape') { ev.preventDefault(); cerrarSwitcher(); return; }
+    if (ev.key === 'ArrowDown') { ev.preventDefault(); _swSel = Math.min(_swFiltered.length - 1, _swSel + 1); _swPinta(); _swScrollSel(); return; }
+    if (ev.key === 'ArrowUp') { ev.preventDefault(); _swSel = Math.max(0, _swSel - 1); _swPinta(); _swScrollSel(); return; }
+    if (ev.key === 'Enter') { ev.preventDefault(); const c = _swFiltered[_swSel]; if (c) _swPick(c.id); }
+  }
+  function _swScrollSel() { $$('slk-sw-list')?.querySelector('.slk-sw-item.on')?.scrollIntoView({ block: 'nearest' }); }
+  function _swPick(id) {
+    const modo = _swCtx?.modo;
+    cerrarSwitcher();
+    if (modo === 'mini') miniAbrir(id); else abrir(id);
+  }
+  document.addEventListener('keydown', ev => {
+    if (!(ev.ctrlKey || ev.metaKey) || ev.key.toLowerCase() !== 'k') return;
+    if (document.getElementById('slk-switcher')) return; // ya abierto, deja que Esc/Enter lo manejen
+    const fullOpen = document.getElementById('pane-mgmt-chat')?.classList.contains('active');
+    const miniOpen = document.getElementById('rchat') && !document.getElementById('rchat').classList.contains('rchat--collapsed');
+    if (!fullOpen && !miniOpen) return;
+    ev.preventDefault();
+    abrirSwitcher(fullOpen ? 'full' : 'mini');
+  });
+
   // Programar reunión desde el chat: Slack no tiene esto de forma nativa, así
   // que se abre el mismo drawer de reuniones de Nova, con el canal/DM actual
   // como contexto en el título.
@@ -26491,21 +26570,103 @@ const SlackChat = (() => {
          : `<div class="chat-ch-empty">No tienes mensajes guardados.</div>`);
   }
 
+  // Recordatorio sobre un guardado — "Remind me" de Mattermost/Slack, pedido
+  // explícito 2026-09-03. Se guarda del lado de Nova, identificado por canal+ts
+  // (igual que slackSvc.guardados()).
+  let _recordatorios = {}; // `${canal}|${ts}` -> remind_at ISO
+  const _REMIND_PRESETS = [
+    { key: '1h',     label: 'En 1 hora' },
+    { key: 'tarde',  label: 'Esta tarde (6pm)' },
+    { key: 'manana', label: 'Mañana (9am)' },
+    { key: '3dias',  label: 'En 3 días' },
+    { key: 'semana', label: 'La próxima semana' },
+  ];
+  function _fmtRecordFecha(iso) {
+    try { return new Date(iso).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }); }
+    catch (_) { return ''; }
+  }
   function _filaGuardado(it) {
     const quien = _users[it.user] || 'Alguien';
     const txt = (it.text || '').replace(/\s+/g, ' ').slice(0, 90);
-    return `<button class="chat-ch chat-saved" onclick="SlackChat.abrir('${it.channel}')" title="Ir a la conversación">
-      <span class="chat-ch__hash">🔖</span>
-      <span class="chat-ch__name"><b>${escNom(quien)}</b> ${esc(txt) || '(archivo)'}</span>
-    </button>`;
+    const key = `${it.channel}|${it.ts}`;
+    const remindAt = _recordatorios[key];
+    const vencido = remindAt && new Date(remindAt) <= new Date();
+    const chip = remindAt
+      ? `<span class="slk-remind-chip${vencido ? ' due' : ''}" title="Recordatorio: ${esc(_fmtRecordFecha(remindAt))}">⏰ ${vencido ? '¡Ahora!' : esc(_fmtRecordFecha(remindAt))}</span>`
+      : '';
+    return `<div class="chat-ch chat-saved">
+      <button class="chat-saved__b" onclick="SlackChat.abrir('${it.channel}')" title="Ir a la conversación">
+        <span class="chat-ch__hash">🔖</span>
+        <span class="chat-ch__name"><b>${escNom(quien)}</b> ${esc(txt) || '(archivo)'}</span>
+      </button>
+      ${chip}
+      <button class="chat-saved__clock" title="${remindAt ? 'Cambiar recordatorio' : 'Recordarme esto más tarde'}"
+              onclick="event.stopPropagation();SlackChat._remindOpen(event,'${esc(it.channel)}','${esc(it.ts)}')">🕐</button>
+    </div>`;
+  }
+  let _remindCtx = null;
+  function _remindOpen(ev, canal, ts) {
+    document.querySelectorAll('.slk-remind-pop').forEach(m => m.remove());
+    _remindCtx = { canal, ts };
+    const tiene = !!_recordatorios[`${canal}|${ts}`];
+    const pop = document.createElement('div');
+    pop.className = 'slk-remind-pop';
+    pop.innerHTML = _REMIND_PRESETS.map(p => `<button class="chat-ctx-item" onclick="SlackChat._remindPreset('${p.key}')">${p.label}</button>`).join('')
+      + `<div class="chat-ctx-sep"></div>
+         <div class="wa-snooze-custom"><input type="datetime-local" id="slk-remind-custom"><button onclick="SlackChat._remindCustom()">Programar</button></div>`
+      + (tiene ? `<div class="chat-ctx-sep"></div><button class="chat-ctx-item" style="color:var(--danger)" onclick="SlackChat._remindClear()">Quitar recordatorio</button>` : '');
+    document.body.appendChild(pop);
+    const r = (ev.currentTarget || ev.target).getBoundingClientRect();
+    pop.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 220))}px`;
+    pop.style.top = `${r.bottom + 6}px`;
+    setTimeout(() => document.addEventListener('click', function onDoc(e) { if (!pop.contains(e.target)) { pop.remove(); document.removeEventListener('click', onDoc); } }), 0);
+  }
+  function _remindAtPreset(preset) {
+    const d = new Date();
+    if (preset === '1h') d.setHours(d.getHours() + 1);
+    else if (preset === 'tarde') { d.setHours(18, 0, 0, 0); if (d <= new Date()) d.setDate(d.getDate() + 1); }
+    else if (preset === 'manana') { d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0); }
+    else if (preset === '3dias') d.setDate(d.getDate() + 3);
+    else if (preset === 'semana') d.setDate(d.getDate() + 7);
+    return d;
+  }
+  async function _remindSave(fecha) {
+    const { canal, ts } = _remindCtx || {};
+    if (!canal) return;
+    try {
+      await apiFetch(`${API}/slack/workspaces/${_wsAct}/recordatorios`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ canal, ts, remindAt: fecha.toISOString() }),
+      });
+      _recordatorios[`${canal}|${ts}`] = fecha.toISOString();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+    document.querySelectorAll('.slk-remind-pop').forEach(m => m.remove());
+    _pintaGuardados();
+  }
+  function _remindPreset(preset) { _remindSave(_remindAtPreset(preset)); }
+  function _remindCustom() { const inp = $$('slk-remind-custom'); if (!inp?.value) return; _remindSave(new Date(inp.value)); }
+  async function _remindClear() {
+    const { canal, ts } = _remindCtx || {};
+    if (!canal) return;
+    try {
+      await apiFetch(`${API}/slack/workspaces/${_wsAct}/recordatorios/${encodeURIComponent(canal)}/${encodeURIComponent(ts)}`, { method: 'DELETE' });
+      delete _recordatorios[`${canal}|${ts}`];
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+    document.querySelectorAll('.slk-remind-pop').forEach(m => m.remove());
+    _pintaGuardados();
   }
 
   async function _cargarGuardados() {
     _guardados = null; _pintaGuardados();
     try {
-      const r = await apiFetch(`${API}/slack/workspaces/${_wsAct}/guardados`);
+      const [r, rr] = await Promise.all([
+        apiFetch(`${API}/slack/workspaces/${_wsAct}/guardados`),
+        apiFetch(`${API}/slack/workspaces/${_wsAct}/recordatorios`).catch(() => null),
+      ]);
       const d = await r.json();
       _guardados = r.ok ? { items: d.items || [] } : { error: d.error || 'No se pudo' };
+      _recordatorios = {};
+      if (rr && rr.ok) { const dr = await rr.json(); (dr.items || []).forEach(x => { _recordatorios[`${x.canal_id}|${x.ts}`] = x.remind_at; }); }
     } catch (e) { _guardados = { error: e.message }; }
     if (_seccion === 'guardados') _pintaGuardados();
   }
@@ -26574,6 +26735,11 @@ const SlackChat = (() => {
     if (_canal && _canal.id !== canalId) cancelAttach();   // no arrastrar un adjunto sin enviar a otro canal
     _canal = { id: c.id, name: _nombreDe(c), topic: (c.topic && c.topic.value) || '' };
     _hilo = null;
+    // Un hilo es de UN canal — al saltar a otro se cierra el panel (mismo motivo
+    // por el que _hilo se limpia arriba) y el composer vuelve a su lugar normal.
+    $$('chat-thread')?.classList.add('hidden');
+    { const grupo = $$('chat-composer-group'), mainSlot = document.querySelector('.chat-main');
+      if (grupo && mainSlot && grupo.parentElement !== mainSlot) mainSlot.appendChild(grupo); }
     // Ya NO se marca leído acá — recién al enfocar el cuadro de escribir (ver
     // marcarLeidoActual). Se guarda cuántos había pendientes para el divisor.
     _pendienteDivisor = _noLeidos[c.id] || (_marcadoNL[c.id] ? 1 : 0);
@@ -26666,17 +26832,16 @@ const SlackChat = (() => {
       .replace(/\n/g, '<br>');
   }
 
-  function _pinta(msgs, enHilo = false, conservarScroll = false) {
-    const box = $$('chat-messages');
+  function _pinta(msgs, enHilo = false, conservarScroll = false, targetId = 'chat-messages') {
+    const box = $$(targetId);
     if (!box) return;
     const orden = [...msgs].reverse();     // Slack devuelve del mas nuevo al mas viejo
     if (!orden.length) { box.innerHTML = `<div class="chat-ch-empty">Sin mensajes en este canal.</div>`; return; }
     let dia = '';
-    let html = enHilo
-      ? `<div class="slk-hilo-bar">
-           <button class="slk-volver" onclick="SlackChat.abrir('${_canal.id}')">‹ Volver a #${esc(_canal.name)}</button>
-           <span class="slk-hilo-tit">Hilo${orden.length > 1 ? ` · ${orden.length - 1} respuesta${orden.length - 1 > 1 ? 's' : ''}` : ''}</span>
-         </div>` : '';
+    // El hilo ahora vive en su propio panel lateral (header propio con "Hilo" y ✕,
+    // ver #chat-thread) — antes esta barra "‹ Volver" hacía falta porque abrir un
+    // hilo TAPABA el canal entero; ya no aplica.
+    let html = '';
     let prevUser = null, prevF = null;
     // Divisor rojo "N mensajes nuevos" (estilo Slack nativo) — se dibuja antes del
     // primero de los últimos _pendienteDivisor mensajes. No aplica dentro de un hilo.
@@ -26755,10 +26920,29 @@ const SlackChat = (() => {
       // cannot_reply_to_message. thread_ts propio -> ese; si no, su ts.
       const raiz = msgs[0] || {};
       _hilo = raiz.thread_ts || raiz.ts || ts;
+      _abrirPanelHilo();
       const inp = $$('chat-input');
       if (inp) inp.placeholder = 'Responder en el hilo…';
-      _pinta([...msgs].reverse(), true);
+      const sub = $$('chat-thread-sub');
+      if (sub) sub.textContent = msgs.length > 1 ? `${msgs.length - 1} respuesta${msgs.length - 1 > 1 ? 's' : ''}` : 'Sin respuestas todavía';
+      _pinta([...msgs].reverse(), true, false, 'chat-thread-messages');
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  // Panel de hilo real (Mattermost/Slack): se muestra al lado del canal, que sigue
+  // visible. El composer se MUEVE ahí adentro (mismo nodo, no uno duplicado) para
+  // que "Enter para enviar" siga funcionando igual sin reescribir enviar().
+  function _abrirPanelHilo() {
+    $$('chat-thread')?.classList.remove('hidden');
+    const grupo = $$('chat-composer-group'), slot = $$('chat-thread-composer-slot');
+    if (grupo && slot && grupo.parentElement !== slot) slot.appendChild(grupo);
+  }
+  function cerrarHilo() {
+    _hilo = null;
+    $$('chat-thread')?.classList.add('hidden');
+    const grupo = $$('chat-composer-group'), mainSlot = document.querySelector('.chat-main');
+    if (grupo && mainSlot && grupo.parentElement !== mainSlot) mainSlot.appendChild(grupo);
+    const inp = $$('chat-input');
+    if (inp && _canal) inp.placeholder = _canal.is_im ? `Mensaje a ${_canal.name}` : `Mensaje en #${_canal.name}`;
   }
 
   // Si hay un hilo abierto se responde DENTRO del hilo, no suelto en el canal.
@@ -27675,7 +27859,9 @@ const SlackChat = (() => {
            seccion, menciones, _mencionar, detectarArroba, marcarLeidoActual,
            miniOpen, miniLoad, miniIrA, miniAbrir, miniEnviar, miniBuscar, miniAbrirHilo, miniCerrarHilo, miniResponderAqui, miniCancelarRespuesta,
            miniMenuMsg, miniReaccionar, miniReaccionarPill, miniCopiar, miniMarcarLeidoActual,
-           miniDetener: _pararSondeoMini, refreshMiniBadge };
+           miniDetener: _pararSondeoMini, refreshMiniBadge,
+           abrirSwitcher, cerrarSwitcher, _swFiltrar, _swKey, _swHover, _swPick,
+           _remindOpen, _remindPreset, _remindCustom, _remindClear, cerrarHilo };
 })();
 
 // ── Panel rápido de WhatsApp — abre el chat de UN contacto puntual en un panel de

@@ -474,6 +474,20 @@ async function initDb() {
     // fallaba en silencio (atrapado por el try/catch del endpoint) y el respaldo
     // nunca se guardaba.
     await pool.query(`ALTER TABLE slack_leido_override DROP COLUMN IF EXISTS leido_ts;`);
+    // Recordatorios sobre un mensaje guardado (⭐) — pedido explícito 2026-09-03,
+    // inspirado en "Remind me" de Mattermost/Slack. Vive del lado de Nova (Slack no
+    // expone su propia API de recordatorios de forma práctica para esto); se
+    // identifica el mensaje por canal_id+ts, igual que hace guardados() en el service.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS slack_recordatorios (
+        id           SERIAL PRIMARY KEY,
+        workspace_id INTEGER NOT NULL REFERENCES slack_workspaces(id) ON DELETE CASCADE,
+        canal_id     TEXT    NOT NULL,
+        ts           TEXT    NOT NULL,
+        remind_at    TIMESTAMPTZ NOT NULL,
+        created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE (workspace_id, canal_id, ts)
+      )`);
     // Programación en Calendario (cuándo planeo trabajar la tarea — independiente del deadline)
     await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS prog_fecha DATE;`);
     await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS prog_inicio TEXT;`);

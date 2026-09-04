@@ -8252,6 +8252,44 @@ app.get('/api/slack/workspaces/:id/guardados', requireAuth, async (req, res) => 
   } catch (err) { res.status(400).json({ error: err.message }); }
 });
 
+// Recordatorios sobre un guardado — "Remind me" de Mattermost/Slack, del lado de
+// Nova. GET lista los activos del workspace (para pintarlos sobre cada guardado);
+// POST fija/actualiza uno; DELETE lo cancela.
+app.get('/api/slack/workspaces/:id/recordatorios', requireAuth, async (req, res) => {
+  try {
+    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
+    const { rows } = await pool.query(
+      `SELECT canal_id, ts, remind_at FROM slack_recordatorios WHERE workspace_id=$1`, [w.id]);
+    res.json({ items: rows });
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+app.post('/api/slack/workspaces/:id/recordatorios', requireAuth, async (req, res) => {
+  try {
+    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
+    const canal = String(req.body?.canal || '').trim();
+    const ts = String(req.body?.ts || '').trim();
+    const remindAt = req.body?.remindAt ? new Date(req.body.remindAt) : null;
+    if (!canal || !ts || !remindAt || isNaN(remindAt)) return res.status(400).json({ error: 'Faltan datos' });
+    await pool.query(
+      `INSERT INTO slack_recordatorios (workspace_id, canal_id, ts, remind_at) VALUES ($1,$2,$3,$4)
+       ON CONFLICT (workspace_id, canal_id, ts) DO UPDATE SET remind_at=EXCLUDED.remind_at`,
+      [w.id, canal, ts, remindAt.toISOString()]);
+    res.json({ ok: true });
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+app.delete('/api/slack/workspaces/:id/recordatorios/:canal/:ts', requireAuth, async (req, res) => {
+  try {
+    const w = await _slackWs(req.workspaceOwnerId, req.params.id);
+    if (!w) return res.status(404).json({ error: 'Workspace no encontrado' });
+    await pool.query(
+      `DELETE FROM slack_recordatorios WHERE workspace_id=$1 AND canal_id=$2 AND ts=$3`,
+      [w.id, req.params.canal, req.params.ts]);
+    res.json({ ok: true });
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
 // Marcar una conversacion como leida en Slack (al abrirla desde aqui). El
 // respaldo propio (slack_leido_override) se guarda SIEMPRE con la hora real,
 // sin importar si conversations.mark de Slack tuvo éxito — en conversaciones
