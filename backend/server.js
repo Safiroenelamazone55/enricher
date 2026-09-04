@@ -6498,11 +6498,32 @@ app.post('/api/sequence-steps', requireAuth, async (req, res) => {
   if (!b.sequence_id) return res.status(400).json({ error: 'sequence_id requerido' });
   const canal = STEP_CANALES.includes(b.canal) ? b.canal : 'email';
   try {
+    const { rows: before } = await pool.query(
+      `SELECT id FROM sequence_steps WHERE sequence_id=$1 ORDER BY dia ASC, orden ASC, id ASC`, [b.sequence_id]);
+    const oldCount = before.length;
     const { rows } = await pool.query(`
       INSERT INTO sequence_steps (user_id,sequence_id,dia,canal,titulo,plantilla,variants,variant_mode,variant_field,orden,hora,cond,accion,asunto,cc_off,reply_to_prev,post_dias,reaccion)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING *
     `, [req.workspaceOwnerId, b.sequence_id, parseInt(b.dia) || 1, canal, b.titulo || '', b.plantilla || '', JSON.stringify(Array.isArray(b.variants) ? b.variants : []), b.variant_mode || 'off', b.variant_field || '', parseInt(b.orden) || 0, _sanHora(b.hora), _sanCond(b.cond), _sanAccion(b.accion), String(b.asunto || '').slice(0, 500), !!b.cc_off, !!b.reply_to_prev, _sanPostDias(b.post_dias), _sanReaccion(b.reaccion)]);
-    res.status(201).json(rows[0]);
+
+    // Si el paso nuevo quedó AL FINAL de la secuencia, los contactos que ya estaban
+    // "terminado" (no había más pasos cuando acabaron el suyo) se quedarían atascados
+    // sin recibir nunca el paso nuevo. Se reactivan automáticamente hacia él.
+    let reactivated = 0;
+    try {
+      const { rows: after } = await pool.query(
+        `SELECT id FROM sequence_steps WHERE sequence_id=$1 ORDER BY dia ASC, orden ASC, id ASC`, [b.sequence_id]);
+      const newIdx = after.findIndex(s => s.id === rows[0].id) + 1; // posición 1-based
+      if (newIdx === after.length && oldCount > 0) { // se agregó al final, no es el primer paso
+        const upd = await pool.query(
+          `UPDATE lm_contact_sequences SET estado='activo', paso=$1, next_action_at=NOW()
+            WHERE user_id=$2 AND sequence_id=$3 AND estado='terminado' AND paso=$4`,
+          [newIdx, req.workspaceOwnerId, b.sequence_id, oldCount]);
+        reactivated = upd.rowCount;
+      }
+    } catch (e) { console.warn('[step] reactivate terminados warn:', e.message); }
+
+    res.status(201).json({ ...rows[0], reactivated });
   } catch (err) { console.error('[step] POST error:', err.message); res.status(500).json({ error: 'Error al crear paso' }); }
 });
 app.put('/api/sequence-steps/:id', requireAuth, async (req, res) => {
