@@ -15865,6 +15865,7 @@ const LeadManagerModule = (() => {
     { k: 'sequences',  l: 'Secuencias',         g: 'Workspace' },
     { k: 'companies',  l: 'Empresas',           g: 'Datos' },
     { k: 'contacts',   l: 'Contactos',          g: 'Datos' },
+    { k: 'datos',      l: 'Limpieza y enriquecimiento', g: 'Datos' },
     { k: 'leads',      l: 'Leads',              g: 'Comercial' },
     { k: 'deals',      l: 'Deals',              g: 'Comercial' },
     { k: 'activities', l: 'Actividades',        g: 'Comercial' },
@@ -15884,6 +15885,7 @@ const LeadManagerModule = (() => {
     deals:'<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
     companies:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M3 9h6"/>',
     contacts:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>',
+    datos:'<path d="M3 3h18v18H3z"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/>',
     activities:'<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
     inbox:'<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
     wa:'<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>',
@@ -15962,6 +15964,7 @@ const LeadManagerModule = (() => {
     else if (_section === 'deals')     { body.innerHTML = _vDeals(); _dlPaint(); }
     else if (_section === 'companies') { body.innerHTML = _vCompanies(); _renderCompanies(); }
     else if (_section === 'contacts')  { body.innerHTML = _vContacts();  _renderContacts(); }
+    else if (_section === 'datos')     { body.innerHTML = '<div id="dg-body"></div>'; renderDataGrid('dg-body'); }
     else if (_section === 'contact-view') { body.innerHTML = _vContactPage(_contactView); _cpLoadMap(_contacts.find(x => x.id === _contactView)); }
     else if (_section === 'templates') body.innerHTML = _vTemplates();
     else if (_section === 'reports') { body.innerHTML = _vReports(); _repInitCharts(); }
@@ -18072,16 +18075,12 @@ ${foot}
   async function seqEnrol(seqId, cid) {
     document.getElementById('lm-enrol-modal')?.remove();
     try {
-      let res = await apiFetch(`${API}/lm/contacts/add-to-sequence`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact_ids: [cid], sequence_id: seqId }) });
+      const res = await apiFetch(`${API}/lm/contacts/add-to-sequence`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact_ids: [cid], sequence_id: seqId }) });
       if (!res.ok) throw new Error((await res.json()).error || 'Error');
-      let d = await res.json();
-      if (d.skipped_company && d.skipped_company.length) {
-        if (!confirm(_companyRuleMsg(d.skipped_company))) { showBanner('No se enroló — su empresa ya tiene una persona activa en secuencia', 'info'); return; }
-        res = await apiFetch(`${API}/lm/contacts/add-to-sequence`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact_ids: [cid], sequence_id: seqId, force: true }) });
-        if (!res.ok) throw new Error((await res.json()).error || 'Error');
-      }
+      const d = await res.json();
       _seqContacts = null; await _seqLoadContacts(seqId);
-      showBanner('✓ Contacto enrolado', 'success');
+      const nota = (d.misma_empresa && d.misma_empresa.length) ? ' · comparte empresa con otro contacto ya activo' : '';
+      showBanner(d.added ? `✓ Contacto enrolado${nota}` : 'Ya estaba enrolado', d.added ? 'success' : 'info');
     } catch (e) { showBanner('No se pudo enrolar: ' + e.message, 'error'); }
   }
   // ── Ramas por condición: el motor salta los pasos que no aplican al contacto ──
@@ -23933,19 +23932,14 @@ ${foot}
       const res = await apiFetch(`${API}/lm/contacts/${ep}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact_ids: ids, [key]: id }) });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(d.error || 'Error');
-      // Regla "1 persona por empresa a la vez": ofrecer forzar los omitidos con su detalle.
-      let forced = 0;
-      if (kind === 'sequence' && d.skipped_company && d.skipped_company.length && confirm(_companyRuleMsg(d.skipped_company))) {
-        const res2 = await apiFetch(`${API}/lm/contacts/${ep}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact_ids: d.skipped_company.map(s => s.id), [key]: id, force: true }) });
-        const d2 = await res2.json().catch(() => ({}));
-        if (res2.ok) forced = d2.added || 0;
-      }
       await load();
-      const added = (d.added || 0) + forced;
-      const skipped = (d.skipped_company && d.skipped_company.length || 0) - forced;
-      const dup = (d.requested || ids.length) - (d.added || 0) - (d.skipped_company ? d.skipped_company.length : 0);
+      const added = d.added || 0;
+      const mismaEmpresa = (kind === 'sequence' && d.misma_empresa) ? d.misma_empresa.length : 0;
+      const dup = (d.requested || ids.length) - added;
       const spread = (kind === 'sequence' && d.spread_days > 1) ? ` · repartidos en ${d.spread_days} días (${d.per_day}/día)` : '';
-      showBanner(`✓ ${added} contacto(s) añadido(s)${dup > 0 ? ` · ${dup} ya pertenecían` : ''}${skipped > 0 ? ` · ${skipped} omitido(s) por regla 1-por-empresa` : ''}${spread}`, added ? 'success' : 'info');
+      // Ya NO bloquea por "misma empresa" (pedido explícito 2026-09-04) — solo informa,
+      // de forma que quede claro que el sistema sí lo detectó aunque los haya enrolado igual.
+      showBanner(`✓ ${added} contacto(s) añadido(s)${dup > 0 ? ` · ${dup} ya pertenecían` : ''}${mismaEmpresa > 0 ? ` · ${mismaEmpresa} comparten empresa con otro contacto ya activo` : ''}${spread}`, added ? 'success' : 'info');
       // Si este enrolamiento vino de "Para retomar" (nutrición), cierra el aviso — ya
       // se decidió qué hacer con él, no debe seguir apareciendo como pendiente.
       if (_nurtureAvisoPendiente && added) { await _nurtureCerrarAviso(_nurtureAvisoPendiente); _nurtureAvisoPendiente = null; if (_taskView === 'priority') _tiReload(); }
@@ -25426,7 +25420,8 @@ ${foot}
   let _dgCliente = '', _dgSeq = '', _dgCamp = '', _dgQ = '';
   let _dgSel = new Set();
   let _dgCleanPreview = null;
-  const DG_CLEAN_FIELDS = { companies: ['nombre', 'tamano'], contacts: ['cargo'] };
+  const DG_CLEAN_FIELDS = { companies: ['nombre', 'tamano', 'dominio', 'website', 'telefono'], contacts: ['cargo', 'email', 'email_personal', 'telefono', 'movil'] };
+  const DG_ENRICH_FIELDS = { companies: [], contacts: ['seniority', 'departamento'] };
   const DG_EDITABLE_BASE = {
     companies: ['nombre', 'dominio', 'industria', 'tamano', 'ciudad', 'pais', 'target_tier', 'segmento', 'analisis'],
     contacts:  ['nombre', 'apellido', 'cargo', 'email', 'telefono', 'linkedin', 'estado', 'analisis'],
@@ -25500,10 +25495,11 @@ ${foot}
   }
   function _dgBulkBar(rows) {
     const n = _dgSel.size;
+    const tieneEnrich = (DG_ENRICH_FIELDS[_dgEntity] || []).length > 0;
     return `<div class="lm-bulk-bar show dg-bulkbar">
       <span class="lm-bulk-n">${n ? `${n} seleccionado(s)` : `${rows.length} filtrado(s)`}</span>
       <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.dgCleanOpen()">🧹 Limpiar</button>
-      <button class="btn btn--ghost btn--sm" disabled title="Próximamente">✨ Enriquecer</button>
+      <button class="btn btn--ghost btn--sm"${tieneEnrich ? '' : ' disabled title="Sin campos calculables para esta vista todavía"'} onclick="LeadManagerModule.dgEnrichOpen()">✨ Enriquecer</button>
       ${n ? `<button class="lm-bulk-ghost" onclick="LeadManagerModule.dgClearSel()">Ninguna</button>` : ''}
     </div>`;
   }
@@ -25631,6 +25627,54 @@ ${foot}
       await load(); _dgRenderRows();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
+  // ── Enriquecer en bloque: mismo patrón preview/aplicar que Limpiar, pero SOLO
+  // llena campos vacíos (seniority/departamento a partir del cargo) — nunca pisa
+  // un valor que ya está puesto. Primera pieza de enriquecimiento CALCULADO, sin
+  // ninguna fuente externa — el resto (URL/email/LinkedIn faltante) va después.
+  let _dgEnrichPreview = null;
+  async function dgEnrichOpen() {
+    const fields = DG_ENRICH_FIELDS[_dgEntity] || [];
+    if (!fields.length) return;
+    const ids = _dgSel.size ? [..._dgSel] : _dgVisible().map(r => r.id);
+    if (!ids.length) { showBanner('No hay filas para enriquecer', 'info'); return; }
+    try {
+      const res = await apiFetch(`${API}/lm/bulk-enrich`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entity: _dgEntity, ids, fields, apply: false }) });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Error');
+      _dgEnrichPreview = d.changes || [];
+      _dgEnrichOpenModal();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  function _dgEnrichOpenModal() {
+    document.getElementById('lm-dgclean-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'lm-dgclean-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) dgEnrichClose(); };
+    const changes = _dgEnrichPreview || [];
+    const body = changes.length
+      ? `<div class="dg-clean-list">${changes.map(c => `<div class="dg-clean-row"><span class="dg-clean-f">${esc(_dgFieldLabel(c.campo))}</span><span class="dg-clean-a">vacío</span><span class="dg-clean-arrow">→</span><span class="dg-clean-d">${esc(c.despues)}</span></div>`).join('')}</div>`
+      : `<div class="cp-empty2" style="padding:22px">Nada que completar — no se pudo derivar ningún dato nuevo de lo seleccionado.</div>`;
+    m.innerHTML = `<div class="fin-pi-box lm-flt-box">
+      <div class="fin-pi-box__hd"><h3>Enriquecer · vista previa (${changes.length})</h3><button class="fin-pi-x" onclick="LeadManagerModule.dgEnrichClose()">✕</button></div>
+      <div class="flt-body">${body}</div>
+      <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns">
+        <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.dgEnrichClose()">Cancelar</button>
+        ${changes.length ? `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.dgEnrichApply()">Aplicar ${changes.length} cambio(s)</button>` : ''}
+      </div></div></div>`;
+    document.body.appendChild(m);
+  }
+  function dgEnrichClose() { document.getElementById('lm-dgclean-modal')?.remove(); _dgEnrichPreview = null; }
+  async function dgEnrichApply() {
+    const changes = _dgEnrichPreview || []; if (!changes.length) return;
+    const ids = _dgSel.size ? [..._dgSel] : _dgVisible().map(r => r.id);
+    try {
+      const res = await apiFetch(`${API}/lm/bulk-enrich`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entity: _dgEntity, ids, fields: DG_ENRICH_FIELDS[_dgEntity], apply: true }) });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Error');
+      dgEnrichClose();
+      showBanner(`✓ ${d.applied} campo(s) completado(s)`, 'success');
+      await load(); _dgRenderRows();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
 
   return { load, filter, setFilter, setView, go, openClient, clientTab, _clientGoTab, clientQuickMenu,
     openImportPicker, closeImportPicker, openImport, closeImport, impFile, impToggleHeader, impToggleUpdateExisting, impSetObc, impNewClient, impRun, exportCsv,
@@ -25658,6 +25702,7 @@ ${foot}
     openFilters, closeFilters, fltSet, fltAddRow, fltDelRow, fltApply, clearFilters, removeFilter, fltOpenDate, cfSaveLabel,
     renderDataGrid, dgSetEntity, dgSetCliente, dgSetSeq, dgSetCamp, dgSetQ, dgToggleSel, dgToggleAll, dgClearSel,
     dgEditCell, dgEditKey, dgSaveCell, dgCleanOpen, dgCleanClose, dgCleanApply,
+    dgEnrichOpen, dgEnrichClose, dgEnrichApply,
     fmsToggle, fmsFilter, fmsPick,
     openViews, applyView, saveView, deleteView, clearAllViews,
     taskSetView, taskSetFilter, calPrev, calNext, calToday,

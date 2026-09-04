@@ -16299,3 +16299,9 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .lm2-nav__item.active .lm2-nav__lbl { color: #1F1D1B; }
 #sidebar .snav-item.active .snav-item__icon,
 .lm2-nav__item.active svg { color: #6C6862; }
+
+/* Quitar contacto de una secuencia — el "✕" ya existía pero solo aparecía al
+   pasar el mouse por la fila (mismo patrón que el resto de la app); pedido
+   explícito 2026-09-04: no era descubrible. Siempre visible SOLO acá. */
+#seq-tabwrap .lm-mini-x { opacity: .55; }
+#seq-tabwrap .lm-mini-x:hover { opacity: 1; }

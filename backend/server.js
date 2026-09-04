@@ -3504,6 +3504,45 @@ app.post('/api/lm/bulk-clean', requireAuth, async (req, res) => {
   } catch (err) { console.error('[lm-clean]', err.message); res.status(500).json({ error: 'Error al limpiar' }); }
 });
 
+// Enriquecimiento CALCULADO (sin fuente externa) — deriva un campo vacío a partir
+// de otro que sí tiene el registro (ej. seniority/departamento a partir del cargo).
+// Mismo patrón preview/apply que bulk-clean, pero SOLO llena si el campo destino
+// está vacío — no pisa un valor que alguien ya puso a mano.
+app.post('/api/lm/bulk-enrich', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId;
+  const b = req.body || {};
+  const entity = b.entity === 'companies' ? 'companies' : (b.entity === 'contacts' ? 'contacts' : '');
+  const ids = Array.isArray(b.ids) ? b.ids.map(Number).filter(Boolean) : [];
+  const { enrichableFields, enrichSource, enrichValue } = require('./services/dataCleanService');
+  const allowed = enrichableFields(entity);
+  const fields = (Array.isArray(b.fields) ? b.fields : []).filter(f => allowed.includes(f));
+  const apply = !!b.apply;
+  if (!entity) return res.status(400).json({ error: 'Entidad inválida' });
+  if (!ids.length) return res.status(400).json({ error: 'Sin filas seleccionadas' });
+  if (!fields.length) return res.status(400).json({ error: 'Sin campos para enriquecer' });
+  const table = entity === 'companies' ? 'lm_companies' : 'lm_contacts';
+  const sources = [...new Set(fields.map(f => enrichSource(entity, f)))];
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, ${[...new Set([...fields, ...sources])].join(',')} FROM ${table} WHERE user_id=$1 AND id = ANY($2::int[])`, [uid, ids]);
+    const changes = [];
+    for (const row of rows) {
+      for (const field of fields) {
+        const actual = row[field] == null ? '' : String(row[field]);
+        if (actual) continue; // ya tiene algo — no se toca
+        const src = row[enrichSource(entity, field)] == null ? '' : String(row[enrichSource(entity, field)]);
+        const val = enrichValue(entity, field, src);
+        if (val) changes.push({ id: row.id, campo: field, antes: '', despues: val });
+      }
+    }
+    if (!apply) return res.json({ preview: true, changes });
+    for (const ch of changes) {
+      await pool.query(`UPDATE ${table} SET ${ch.campo}=$1, updated_at=NOW() WHERE id=$2 AND user_id=$3`, [ch.despues, ch.id, uid]);
+    }
+    res.json({ preview: false, applied: changes.length, changes });
+  } catch (err) { console.error('[lm-enrich]', err.message); res.status(500).json({ error: 'Error al enriquecer' }); }
+});
+
 // ── Cola de empresas ("empresa primero", estilo LinkedIn Sales Navigator) ──
 // Puente entre "ya califiqué la empresa" y "ya tengo a la persona": lm_company_sequences
 // SIEMPRE representa "falta encontrar al decisor en LinkedIn". Al agregar el contacto
@@ -3893,11 +3932,14 @@ async function _lmAddMembership(req, res, kind) {
     let toAdd = ids.filter(id => exist.has(id) && !already.has(id));
     if (!toAdd.length) return res.json({ added: 0, requested: ids.length, spread_days: 0 });
 
-    // ── Regla outbound: 1 persona por empresa A LA VEZ ──
-    // Omite contactos cuya empresa ya tiene OTRA persona activa en cualquier secuencia
-    // (y duplicados de empresa dentro del mismo lote). body.force=true ignora la regla.
-    const skipped = [];
-    if (!b.force) {
+    // ── Varios contactos de una misma empresa: pedido explícito 2026-09-04 —
+    // "el sistema sí identifique que son de la misma empresa, pero no debe impedirme
+    // enrolarlos". Antes esto BLOQUEABA por defecto (regla "1 persona por empresa a
+    // la vez", solo se pasaba con force:true) — con 60 prospectos en 15 empresas la
+    // mayoría se omitía en silencio. Ahora se detecta y se informa (mismo_empresa),
+    // pero YA NO bloquea salvo que se pida explícitamente con enforce_one_per_company.
+    const mismaEmpresa = [];
+    {
       const info = (await pool.query(`SELECT id, company_id, nombre, apellido, empresa_nombre FROM lm_contacts WHERE user_id=$1 AND id = ANY($2::int[])`, [uid, toAdd])).rows;
       const byId = new Map(info.map(c => [c.id, c]));
       const compIds = [...new Set(info.map(c => c.company_id).filter(Boolean))];
@@ -3910,16 +3952,18 @@ async function _lmAddMembership(req, res, kind) {
         `, [uid, compIds, toAdd])).rows.forEach(r => busy.set(r.company_id, [r.nombre, r.apellido].filter(Boolean).join(' ') || '(sin nombre)'));
       }
       const seenComp = new Set();
-      const pass = [];
       for (const id of toAdd) {
         const c = byId.get(id); const co = c && c.company_id;
         const nm = c ? ([c.nombre, c.apellido].filter(Boolean).join(' ') || '(sin nombre)') : String(id);
-        if (co && busy.has(co)) { skipped.push({ id, nombre: nm, empresa: c.empresa_nombre || '', con: busy.get(co) }); continue; }
-        if (co) { if (seenComp.has(co)) { skipped.push({ id, nombre: nm, empresa: c.empresa_nombre || '', con: 'otro contacto del mismo lote' }); continue; } seenComp.add(co); }
-        pass.push(id);
+        if (co && busy.has(co)) mismaEmpresa.push({ id, nombre: nm, empresa: c.empresa_nombre || '', con: busy.get(co) });
+        else if (co && seenComp.has(co)) mismaEmpresa.push({ id, nombre: nm, empresa: c.empresa_nombre || '', con: 'otro contacto del mismo lote' });
+        if (co) seenComp.add(co);
       }
-      toAdd = pass;
-      if (!toAdd.length) return res.json({ added: 0, requested: ids.length, spread_days: 0, skipped_company: skipped });
+      if (b.enforce_one_per_company === true) {
+        const skipIds = new Set(mismaEmpresa.map(s => s.id));
+        toAdd = toAdd.filter(id => !skipIds.has(id));
+        if (!toAdd.length) return res.json({ added: 0, requested: ids.length, spread_days: 0, skipped_company: mismaEmpresa });
+      }
     }
 
     // Cupos ya usados por fecha (para encadenar tandas sin pasar el límite/día permitido).
@@ -3948,7 +3992,7 @@ async function _lmAddMembership(req, res, kind) {
       ON CONFLICT (contact_id, ${col}) DO NOTHING
     `, [uid, targetId, toAdd, dates]);
     const spreadDays = new Set(dates).size;
-    res.json({ added: r.rowCount, requested: ids.length, spread_days: spreadDays, per_day: drip, skipped_company: skipped });
+    res.json({ added: r.rowCount, requested: ids.length, spread_days: spreadDays, per_day: drip, misma_empresa: mismaEmpresa });
   } catch (err) { console.error('[lm-mem]', err.message); res.status(500).json({ error: 'Error al añadir' }); }
 }
 // Re-ancla start_date/next_action_at de los enrolamientos que AÚN NO empiezan (paso 1,
