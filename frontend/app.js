@@ -15865,7 +15865,6 @@ const LeadManagerModule = (() => {
     { k: 'sequences',  l: 'Secuencias',         g: 'Workspace' },
     { k: 'companies',  l: 'Empresas',           g: 'Datos' },
     { k: 'contacts',   l: 'Contactos',          g: 'Datos' },
-    { k: 'datos',      l: 'Limpieza y enriquecimiento', g: 'Datos' },
     { k: 'leads',      l: 'Leads',              g: 'Comercial' },
     { k: 'deals',      l: 'Deals',              g: 'Comercial' },
     { k: 'activities', l: 'Actividades',        g: 'Comercial' },
@@ -15885,7 +15884,6 @@ const LeadManagerModule = (() => {
     deals:'<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
     companies:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M3 9h6"/>',
     contacts:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>',
-    datos:'<path d="M3 3h18v18H3z"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/>',
     activities:'<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
     inbox:'<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
     wa:'<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>',
@@ -15964,7 +15962,6 @@ const LeadManagerModule = (() => {
     else if (_section === 'deals')     { body.innerHTML = _vDeals(); _dlPaint(); }
     else if (_section === 'companies') { body.innerHTML = _vCompanies(); _renderCompanies(); }
     else if (_section === 'contacts')  { body.innerHTML = _vContacts();  _renderContacts(); }
-    else if (_section === 'datos')     { body.innerHTML = '<div id="dg-body"></div>'; renderDataGrid('dg-body'); }
     else if (_section === 'contact-view') { body.innerHTML = _vContactPage(_contactView); _cpLoadMap(_contacts.find(x => x.id === _contactView)); }
     else if (_section === 'templates') body.innerHTML = _vTemplates();
     else if (_section === 'reports') { body.innerHTML = _vReports(); _repInitCharts(); }
@@ -23845,6 +23842,7 @@ ${foot}
         <button class="lm-bulk-ghost" onclick="LeadManagerModule.clearCtSel()">Ninguno</button>
         <button class="lm-bulk-act" onclick="LeadManagerModule.bulkAddOpen('sequence')">＋ Secuencia</button>
         <button class="lm-bulk-act" onclick="LeadManagerModule.bulkAddOpen('campaign')">＋ Campaña</button>
+        <button class="lm-bulk-act" title="Sacar los contactos seleccionados de una secuencia (antes de que empiece a enviar)" onclick="LeadManagerModule.bulkRemoveSeqOpen()">✕ Quitar de secuencia</button>
         <button class="lm-bulk-act lm-bulk-act--vf" title="Verifica emails con el pipeline propio (SMTP) — y busca el email si falta" onclick="LeadManagerModule.bulkVerifyEmails()">${NI('zap')} Verificar emails</button>
         <button class="lm-bulk-act lm-bulk-act--ai" title="Genera un borrador de email personalizado por IA (Fable 5 para cuentas de alto valor, Haiku para el resto)" onclick="LeadManagerModule.bulkPersonalize()">${NI('sparkles')} Personalizar (IA)</button>
         <button class="lm-bulk-del" onclick="LeadManagerModule.bulkDeleteContacts(false)">Eliminar</button>
@@ -23944,6 +23942,36 @@ ${foot}
       // se decidió qué hacer con él, no debe seguir apareciendo como pendiente.
       if (_nurtureAvisoPendiente && added) { await _nurtureCerrarAviso(_nurtureAvisoPendiente); _nurtureAvisoPendiente = null; if (_taskView === 'priority') _tiReload(); }
     } catch (e) { alert('Error: ' + e.message); }
+  }
+
+  // ── Quitar en bloque de una secuencia — pedido explícito 2026-09-04, para
+  // deshacer un enrolamiento masivo (ej. tras un import) sin ir contacto por
+  // contacto. Reusa el mismo picker visual de "＋ Secuencia".
+  function bulkRemoveSeqOpen() {
+    const ids = [..._ctSel]; if (!ids.length) return;
+    _addIds = ids;
+    document.getElementById('lm-add-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'lm-add-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) m.remove(); };
+    const list = _sequences.length
+      ? _sequences.map(s => `<button class="lm-pick-item" onclick="LeadManagerModule.bulkRemoveSeqDo(${s.id})"><span>${esc(s.nombre)}</span>${s.estado ? `<span class="lm-pick-est">${esc(s.estado)}</span>` : ''}</button>`).join('')
+      : `<div class="lm-pick-empty">Aún no hay secuencias.</div>`;
+    m.innerHTML = `<div class="fin-pi-box lm-pick-box">
+      <div class="fin-pi-box__hd"><h3>Quitar ${ids.length} contacto(s) de una secuencia</h3><button class="fin-pi-x" onclick="document.getElementById('lm-add-modal').remove()">✕</button></div>
+      <div class="lm-pick-list">${list}</div>
+    </div>`;
+    document.body.appendChild(m);
+  }
+  async function bulkRemoveSeqDo(seqId) {
+    const ids = _addIds; if (!ids.length) return;
+    document.getElementById('lm-add-modal')?.remove();
+    try {
+      const res = await apiFetch(`${API}/lm/sequences/${seqId}/contacts/bulk-remove`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact_ids: ids }) });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || 'Error');
+      await load();
+      showBanner(`✓ ${d.removed} contacto(s) quitado(s) de la secuencia`, d.removed ? 'success' : 'info');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
   // ── Página completa de contacto (estilo Outreach) — Fase 1 ──
@@ -25679,7 +25707,7 @@ ${foot}
   return { load, filter, setFilter, setView, go, openClient, clientTab, _clientGoTab, clientQuickMenu,
     openImportPicker, closeImportPicker, openImport, closeImport, impFile, impToggleHeader, impToggleUpdateExisting, impSetObc, impNewClient, impRun, exportCsv,
     cbxOpen, cbxFilter, cbxPick, cbxBlur,
-    openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, bulkDeleteContacts, bulkAddOpen, bulkAddDo, _bulkAddAfterCreate, openContactPage, cpTab, cpSave, cpDelete, cpActOpen, cpActSave, cpActToggle, cpActDel,
+    openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, bulkDeleteContacts, bulkAddOpen, bulkAddDo, _bulkAddAfterCreate, bulkRemoveSeqOpen, bulkRemoveSeqDo, openContactPage, cpTab, cpSave, cpDelete, cpActOpen, cpActSave, cpActToggle, cpActDel,
     cpResumeSeq, cpFocusField, cpOpenRegisterReply, cpSaveRegisterReply,
     openCompany, closeCompany, saveCompany, deleteCompany, filterCompanies, toggleCo, toggleCoAll, clearCoSel, toggleCoSelMode, bulkDeleteCompanies, coEnrolOpen, coEnrolFilter, coEnrolPick,
     coQueueAddContact, coQueueDiscard, coQueueTogglePrimary, coQueueContinue,

@@ -4669,6 +4669,19 @@ app.patch('/api/lm/sequences/:id/contacts/:cid', requireAuth, async (req, res) =
     res.json({ ...rows[0], stage });
   } catch (err) { console.error('[lm-seq-ct] PATCH', err.message); res.status(500).json({ error: 'Error al actualizar' }); }
 });
+// Quitar VARIOS contactos de una secuencia de una vez — pedido explícito 2026-09-04:
+// tras enrolar en bloque (ej. un import de 60), poder deshacer en bloque también,
+// sin tener que entrar a la secuencia y sacarlos uno por uno.
+app.post('/api/lm/sequences/:id/contacts/bulk-remove', requireAuth, async (req, res) => {
+  const ids = Array.isArray(req.body?.contact_ids) ? req.body.contact_ids.map(Number).filter(Boolean) : [];
+  if (!ids.length) return res.status(400).json({ error: 'Sin contactos seleccionados' });
+  try {
+    const { rowCount } = await pool.query(
+      `DELETE FROM lm_contact_sequences WHERE user_id=$1 AND sequence_id=$2 AND contact_id = ANY($3::int[])`,
+      [req.workspaceOwnerId, req.params.id, ids]);
+    res.json({ removed: rowCount, requested: ids.length });
+  } catch (err) { console.error('[lm-seq-ct] bulk-remove', err.message); res.status(500).json({ error: 'Error al quitar' }); }
+});
 app.delete('/api/lm/sequences/:id/contacts/:cid', requireAuth, async (req, res) => {
   try {
     const { rowCount } = await pool.query(`DELETE FROM lm_contact_sequences WHERE user_id=$1 AND sequence_id=$2 AND contact_id=$3`, [req.workspaceOwnerId, req.params.id, req.params.cid]);
