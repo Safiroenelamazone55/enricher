@@ -12757,9 +12757,7 @@ a.cp-strip__i:hover svg { color: var(--brand, #007AFF); }
 #sidebar .snav-item__icon svg { width: 16px; height: 16px; }
 #sidebar .snav-item__icon { color: var(--muted); }
 #sidebar .snav-item:hover:not(.active) { background: var(--bg); color: var(--text); }
-#sidebar .snav-item.active { height: 23.4px; min-height: 23.4px; background: var(--brand-ll); color: var(--brand-d); box-shadow: none; }
-#sidebar .snav-item.active .snav-item__icon,
-#sidebar .snav-item.active .snav-item__label { color: var(--brand-d); }
+#sidebar .snav-item.active { height: 23.4px; min-height: 23.4px; box-shadow: none; }
 
 /* Barra del Lead Manager: cabecera estilo Management (título + contraer), blanca, sin scroll, ítems bajos */
 #appShell.lm-active .app-main { padding-top: 0; }
@@ -16280,3 +16278,24 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .wa-metric-card { background: var(--bg2, #F1EFEB); padding: 8px 10px; }
 .wa-metric-card__n { font-size: 1.1rem; font-weight: 800; color: var(--text, #1F1D1B); }
 .wa-metric-card__l { font-size: .66rem; color: var(--text2, #6C6862); }
+
+/* ── Barra lateral de Outreach (.lm2-nav) igual a la de Operaciones (.snav-item)
+   — pedido explícito 2026-09-04: "es diferente, corrige". Era un componente
+   aparte con su propio tamaño y forma de píldora; se empareja al tamaño de
+   fila, tipografía e ícono de la barra de Operaciones, plana (sin caps),
+   igual al resto del design system. ── */
+.lm2-nav__item { border-radius: 0; height: 36px; min-height: 36px; padding: 0 12px; font-size: 14px; font-weight: 500; }
+.lm2-nav__item.active { height: 36px; min-height: 36px; }
+.lm2-nav__item svg { width: 17px !important; height: 17px !important; stroke-width: 1.75 !important; }
+.lm2-nav__lbl { font-size: 14px; }
+.lm2-nav__item.active .lm2-nav__lbl { font-weight: 600; }
+
+/* Resto de un tema oscuro viejo (.sidebar{background:navy}, ~línea 11531) seguía
+   ganando el color del texto/ícono activo por especificidad de selector aun con
+   el fondo ya neutro — se fija acá, al final, para que gane siempre. Mismo
+   gris/oscuro "Finder" en Operaciones Y Outreach, sin importar cuál CSS viejo
+   quede debajo. */
+#sidebar .snav-item.active .snav-item__label,
+.lm2-nav__item.active .lm2-nav__lbl { color: #1F1D1B; }
+#sidebar .snav-item.active .snav-item__icon,
+.lm2-nav__item.active svg { color: #6C6862; }
