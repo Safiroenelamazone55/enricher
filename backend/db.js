@@ -1853,6 +1853,21 @@ async function initDb() {
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS wa_chat_notes_chat_idx ON wa_chat_notes (connection_id, chat_jid, created_at);`);
 
+    // Respuestas rápidas ("canned responses" de Chatwoot) — texto reusable que se
+    // inserta escribiendo "/atajo" en el composer. Mismo patrón que wa_tags: por
+    // user_id (compartidas entre todas las conexiones/cuentas de WhatsApp del
+    // equipo), no por conexión puntual. Pedido explícito 2026-09-04.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS wa_canned (
+        id         SERIAL      PRIMARY KEY,
+        user_id    INTEGER     NOT NULL,
+        atajo      TEXT        NOT NULL,
+        texto      TEXT        NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE (user_id, atajo)
+      );
+    `);
+
     console.log('[db] tables ready (users, verifications, batch_jobs, clients, projects, tasks, payments, team_members, workspaces, workspace_invites, chat_messages, leads, meetings, fin_config, fin_member_config, pagos_internos, opportunities, opportunity_tasks)');
   } catch (err) {
     console.error('[db] initDb failed:', err.message);

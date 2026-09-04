@@ -28923,6 +28923,15 @@ const WaChatModule = (() => {
   let _filtroEstado   = 'abierto'; // 'todas' | 'abierto' | 'pendiente' | 'resuelto'
   const _WA_TAG_PALETTE = ['#6366F1', '#22C55E', '#EF4444', '#F59E0B', '#0EA5E9', '#EC4899', '#8B5CF6', '#14B8A6'];
 
+  // Selección masiva (checkbox por chat, estilo Chatwoot) — pedido explícito
+  // 2026-09-04. Vive fuera de _pintaChats para no perderse en cada repintado.
+  let _bulkMode = false;
+  let _bulkSel  = new Set();
+
+  // Respuestas rápidas ("/atajo" en el composer) — cache lazy, compartida por
+  // todas las conexiones (igual que _waTagsCache).
+  let _cannedCache = null;
+
   const $$ = id => document.getElementById(id);
 
   // El shell no tiene de dónde tomar un alto fijo (el padre no define uno), así que
@@ -29312,8 +29321,13 @@ const WaChatModule = (() => {
         ...(c.etiquetas || []).map(t => `<span class="wa-tag-pill" style="background:${t.color}22;color:${t.color}">${esc(t.nombre)}</span>`),
       ].filter(Boolean).join('');
       const tagsHtml = metaPills ? `<div class="wa-chat-item__tags">${metaPills}</div>` : '';
+      const checkbox = _bulkMode
+        ? `<input type="checkbox" class="wa-chat-item__cb" onclick="event.stopPropagation();WaChatModule.bulkToggle('${jidEsc}')" ${_bulkSel.has(c.chat_jid) ? 'checked' : ''}>`
+        : '';
+      const rowClick = _bulkMode ? `WaChatModule.bulkToggle('${jidEsc}')` : `WaChatModule.abrirChat('${jidEsc}')`;
       return `
-      <div class="wa-chat-item${String(c.chat_jid) === String(_chatAct) ? ' on' : ''}${snoozed ? ' wa-chat-item--snoozed' : ''}" onclick="WaChatModule.abrirChat('${jidEsc}')">
+      <div class="wa-chat-item${String(c.chat_jid) === String(_chatAct) ? ' on' : ''}${snoozed ? ' wa-chat-item--snoozed' : ''}${_bulkSel.has(c.chat_jid) ? ' wa-chat-item--sel' : ''}" onclick="${rowClick}">
+        ${checkbox}
         <div class="wa-chat-item__av">${c.es_grupo ? '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>' : esc(_nombreChat(c)).slice(0, 1).toUpperCase()}</div>
         <div class="wa-chat-item__body">
           <div class="wa-chat-item__top">
@@ -29326,12 +29340,186 @@ const WaChatModule = (() => {
           </div>
           ${tagsHtml}
         </div>
-        <button class="wa-chat-item__more" title="Más opciones" onclick="event.stopPropagation();WaChatModule.abrirChatMenu(event,'${jidEsc}')">
+        ${_bulkMode ? '' : `<button class="wa-chat-item__more" title="Más opciones" onclick="event.stopPropagation();WaChatModule.abrirChatMenu(event,'${jidEsc}')">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
-        </button>
+        </button>`}
       </div>`;
     }).join('');
   }
+
+  // ── Selección masiva ("acciones masivas" estilo Chatwoot) ──────────────────
+  function toggleBulkMode() {
+    _bulkMode = !_bulkMode;
+    if (!_bulkMode) _bulkSel.clear();
+    _pintaChats();
+    _pintaBulkBar();
+  }
+  function bulkToggle(jid) {
+    if (_bulkSel.has(jid)) _bulkSel.delete(jid); else _bulkSel.add(jid);
+    _pintaChats();
+    _pintaBulkBar();
+  }
+  function _pintaBulkBar() {
+    const bar = $$('wa-bulk-bar');
+    if (!bar) return;
+    if (!_bulkMode) { bar.classList.add('hidden'); return; }
+    bar.classList.remove('hidden');
+    const n = _bulkSel.size;
+    bar.innerHTML = `
+      <span class="wa-bulk-bar__n">${n} seleccionado${n === 1 ? '' : 's'}</span>
+      <button class="wa-bulk-bar__b" ${n ? '' : 'disabled'} onclick="WaChatModule.bulkAplicar('estadoConv','resuelto')">Resolver</button>
+      <button class="wa-bulk-bar__b" ${n ? '' : 'disabled'} onclick="WaChatModule.bulkAplicar('estadoConv','pendiente')">Pendiente</button>
+      <button class="wa-bulk-bar__b" ${n ? '' : 'disabled'} onclick="WaChatModule.bulkAplicar('prioridad','alta')">🚩 Prioridad alta</button>
+      <button class="wa-bulk-bar__b wa-bulk-bar__b--x" onclick="WaChatModule.toggleBulkMode()">Cancelar</button>`;
+  }
+  async function bulkAplicar(campo, valor) {
+    if (!_bulkSel.size) return;
+    const jids = [..._bulkSel];
+    const body = { jids }; body[campo] = valor;
+    try {
+      const r = await apiFetch(`${API}/wa/connections/${_conn.id}/chats/bulk-meta`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (!r.ok) throw new Error((await r.json()).error || 'No se pudo aplicar');
+      showBanner(`Aplicado a ${jids.length} chat${jids.length === 1 ? '' : 's'}`, 'success');
+      _bulkMode = false; _bulkSel.clear();
+      _pintaBulkBar();
+      await _cargarChats();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+
+  // ── Buscar DENTRO de la conversación abierta (estilo Chatwoot/Slack) ───────
+  function abrirBusquedaWa(ev) {
+    document.querySelectorAll('.wa-search-pop').forEach(x => x.remove());
+    if (!_chatAct) return;
+    const pop = document.createElement('div');
+    pop.className = 'wa-search-pop';
+    pop.innerHTML = `<input type="text" id="wa-search-input" placeholder="Buscar en esta conversación…" autocomplete="off">
+      <div class="wa-search-results" id="wa-search-results"></div>`;
+    document.body.appendChild(pop);
+    const r = (ev.currentTarget || ev.target).getBoundingClientRect();
+    pop.style.left = Math.max(8, Math.min(r.left - 260, window.innerWidth - 340)) + 'px';
+    pop.style.top = (r.bottom + 6) + 'px';
+    const inp = $$('wa-search-input');
+    inp.focus();
+    let t = null;
+    inp.oninput = () => { clearTimeout(t); t = setTimeout(() => _buscarWaEjecutar(inp.value), 350); };
+    setTimeout(() => document.addEventListener('click', function onDoc(e) {
+      if (!pop.contains(e.target)) { pop.remove(); document.removeEventListener('click', onDoc); }
+    }), 0);
+  }
+  async function _buscarWaEjecutar(q) {
+    const box = $$('wa-search-results');
+    if (!box) return;
+    q = q.trim();
+    if (!q) { box.innerHTML = ''; return; }
+    box.innerHTML = `<div class="chat-ch-empty">Buscando…</div>`;
+    try {
+      const r = await apiFetch(`${API}/wa/connections/${_conn.id}/chats/${encodeURIComponent(_chatAct)}/buscar?q=${encodeURIComponent(q)}`);
+      const res = r.ok ? await r.json() : [];
+      box.innerHTML = res.length ? res.map(m => `
+        <button class="wa-search-item" onclick="WaChatModule._buscarWaIr('${esc(m.msg_id).replace(/'/g, "\\'")}')">
+          <span class="wa-search-item__quien">${m.from_me ? 'Tú' : esc(m.nombre || 'Contacto')}</span>
+          <span class="wa-search-item__txt">${esc((m.texto || '').slice(0, 120))}</span>
+        </button>`).join('') : `<div class="chat-ch-empty">Sin resultados.</div>`;
+    } catch (e) { box.innerHTML = `<div class="chat-ch-empty">Error al buscar.</div>`; }
+  }
+  function _buscarWaIr(msgId) {
+    document.querySelectorAll('.wa-search-pop').forEach(x => x.remove());
+    const txtEl = document.querySelector(`.wa-msg__text[data-mid="${CSS.escape(msgId)}"]`);
+    const el = txtEl?.closest('.wa-msg');
+    if (el) { el.scrollIntoView({ block: 'center' }); el.classList.add('wa-msg--flash'); setTimeout(() => el.classList.remove('wa-msg--flash'), 1600); }
+    else showBanner('El mensaje puede estar más arriba en el historial.', 'info');
+  }
+
+  // ── Respuestas rápidas ("/atajo" en el composer, estilo Chatwoot) ──────────
+  let _cannedPop = null, _cannedMatches = [];
+  async function _cannedLoad(forzar) {
+    if (_cannedCache && !forzar) return _cannedCache;
+    try { const r = await apiFetch(`${API}/wa/canned`); _cannedCache = r.ok ? await r.json() : []; }
+    catch (_) { _cannedCache = []; }
+    return _cannedCache;
+  }
+  async function _cannedCheck(ta) {
+    const v = ta.value;
+    if (v[0] !== '/' || v.includes(' ') || v.includes('\n')) { _cannedClose(); return; }
+    const list = await _cannedLoad();
+    const q = v.slice(1).toLowerCase();
+    _cannedMatches = list.filter(c => c.atajo.toLowerCase().startsWith(q));
+    if (!_cannedMatches.length) { _cannedClose(); return; }
+    _cannedRender();
+  }
+  function _cannedRender() {
+    if (!_cannedPop) {
+      _cannedPop = document.createElement('div');
+      _cannedPop.className = 'wa-canned-pop';
+      document.querySelector('.wa-main__composer')?.parentElement?.appendChild(_cannedPop);
+    }
+    _cannedPop.innerHTML = _cannedMatches.map((c, i) => `
+      <div class="wa-canned-item${i === 0 ? ' on' : ''}" onmousedown="event.preventDefault();WaChatModule._cannedPick(${i})">
+        <b>/${esc(c.atajo)}</b><span>${esc(c.texto).slice(0, 60)}</span>
+      </div>`).join('');
+  }
+  function _cannedClose() { if (_cannedPop) { _cannedPop.remove(); _cannedPop = null; } _cannedMatches = []; }
+  function _cannedPick(i) {
+    const c = _cannedMatches[i]; if (!c) return;
+    const ta = $$('wa-input');
+    ta.value = c.texto;
+    ChatModule.autoResize(ta);
+    _cannedClose();
+    ta.focus();
+  }
+  function composerKeydown(ev) {
+    if (ev.key === 'Enter' && !ev.shiftKey) {
+      ev.preventDefault();
+      if (_cannedMatches.length) { _cannedPick(0); return; }
+      enviar();
+    } else if (ev.key === 'Escape' && _cannedMatches.length) {
+      _cannedClose();
+    }
+  }
+  function cannedManageOpen() {
+    document.getElementById('wa-canned-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'wa-canned-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = ev => { if (ev.target === m) cannedManageClose(); };
+    m.innerHTML = `<div class="fin-pi-box wa-canned-box">
+      <div class="fin-pi-box__hd"><h3>Respuestas rápidas</h3><button class="fin-pi-x" onclick="WaChatModule.cannedManageClose()">✕</button></div>
+      <div class="fin-pi-box__bd">
+        <div id="wa-canned-list"></div>
+        <div class="wa-note-new" style="padding:10px 0 0">
+          <input type="text" class="wa-nc-input" id="wa-canned-new-atajo" placeholder="atajo (ej: precio)" style="margin-bottom:6px">
+          <textarea id="wa-canned-new-texto" placeholder="Texto que se insertará…" rows="3"></textarea>
+          <button onclick="WaChatModule.cannedAdd()">+ Agregar</button>
+        </div>
+      </div>
+    </div>`;
+    document.body.appendChild(m);
+    _cannedRenderList();
+  }
+  async function _cannedRenderList() {
+    const box = document.getElementById('wa-canned-list');
+    if (!box) return;
+    const list = await _cannedLoad(true);
+    box.innerHTML = list.length ? list.map(c => `
+      <div class="wa-canned-row">
+        <div><b>/${esc(c.atajo)}</b><p>${esc(c.texto)}</p></div>
+        <button onclick="WaChatModule.cannedDel(${c.id})">🗑</button>
+      </div>`).join('') : `<div class="chat-ch-empty">Sin respuestas rápidas todavía.</div>`;
+  }
+  async function cannedAdd() {
+    const atajoEl = document.getElementById('wa-canned-new-atajo'), textoEl = document.getElementById('wa-canned-new-texto');
+    const atajo = (atajoEl?.value || '').trim(), texto = (textoEl?.value || '').trim();
+    if (!atajo || !texto) return;
+    try {
+      const r = await apiFetch(`${API}/wa/canned`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ atajo, texto }) });
+      if (!r.ok) throw new Error((await r.json()).error || 'No se pudo crear');
+      atajoEl.value = ''; textoEl.value = '';
+      await _cannedRenderList();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  async function cannedDel(id) {
+    try { await apiFetch(`${API}/wa/canned/${id}`, { method: 'DELETE' }); await _cannedRenderList(); } catch (_) {}
+  }
+  function cannedManageClose() { document.getElementById('wa-canned-modal')?.remove(); }
 
   // ── Menú "⋯" por chat: fijar, etiquetas (crear/editar/eliminar/asignar),
   // recordar seguimiento (presets o fecha propia) y datos de contacto. ─────
@@ -30414,7 +30602,11 @@ const WaChatModule = (() => {
            _snoozePreset, _snoozeCustom, _quitarSnooze, _abrirContacto, _cerrarContacto, _guardarNombreContacto,
            _asignarMiembro, _cambiarEstadoConv, _cambiarPrioridad, _agregarNota, _borrarNota,
            _fusionarFiltrar, _fusionarConfirmar,
-           setFiltroAsignado, setFiltroEstado, abrirFiltroEstado };
+           setFiltroAsignado, setFiltroEstado, abrirFiltroEstado,
+           toggleBulkMode, bulkToggle, bulkAplicar,
+           abrirBusquedaWa, _buscarWaIr,
+           composerKeydown, _cannedCheck, _cannedPick,
+           cannedManageOpen, cannedManageClose, cannedAdd, cannedDel };
 })();
 window.WaChatModule = WaChatModule;
 

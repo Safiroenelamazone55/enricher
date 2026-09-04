@@ -15865,7 +15865,7 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .wa-chat-item__time { font-size: .64rem; color: var(--text-muted); flex-shrink: 0; }
 .wa-chat-item__preview { font-size: .74rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.wa-main { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--surface); overflow: hidden; }
+.wa-main { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--surface); overflow: hidden; position: relative; }
 .wa-main__header { display: flex; align-items: center; gap: 10px; height: 48px; padding: 0 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
 .wa-main__ch-name { font-size: .88rem; font-weight: 700; color: var(--text-primary); }
 .wa-main__msgs { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 14px 16px; display: flex; flex-direction: column; gap: 2px; }
@@ -16177,3 +16177,56 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 
 @keyframes chatMsgFlash { 0%, 100% { background: transparent; } 30% { background: #FFF3C4; } }
 .chat-msg--flash { animation: chatMsgFlash 1.6s ease-out; }
+
+/* ── WhatsApp: acciones masivas, buscar en la conversación, respuestas rápidas
+   ("/atajo") — estilo Chatwoot, pedido explícito 2026-09-04. ── */
+.wa-main__ch-info { flex: 1; min-width: 0; }
+.wa-chat-item__cb { flex-shrink: 0; width: 15px; height: 15px; accent-color: var(--brand, #007AFF); cursor: pointer; }
+.wa-chat-item--sel { background: var(--primary-soft, rgba(0,122,255,.1)); }
+
+.wa-bulk-bar { display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: var(--primary-soft, rgba(0,122,255,.1)); border-bottom: 1px solid var(--border); }
+.wa-bulk-bar.hidden { display: none; }
+.wa-bulk-bar__n { font-size: .76rem; color: var(--text-primary); font-weight: 700; margin-right: 4px; }
+.wa-bulk-bar__b { font-size: .72rem; padding: 5px 9px; border: 1px solid var(--border); border-radius: 0; background: var(--surface); color: var(--text-primary); cursor: pointer; }
+.wa-bulk-bar__b:hover:not(:disabled) { background: var(--bg2, #F1EFEB); }
+.wa-bulk-bar__b:disabled { opacity: .4; cursor: default; }
+.wa-bulk-bar__b--x { margin-left: auto; border-color: transparent; color: var(--text-muted); }
+
+.wa-search-pop {
+  position: fixed; z-index: 10052; background: #fff; border: 1px solid var(--border, #EAE7E2);
+  border-radius: 0; box-shadow: 0 8px 24px rgba(16,24,20,.14); width: 320px; max-width: calc(100vw - 16px);
+  padding: 8px;
+}
+.wa-search-pop input {
+  width: 100%; padding: 7px 9px; border: 1px solid var(--border, #EAE7E2); border-radius: 0;
+  font: inherit; font-size: .82rem; color: var(--text, #1F1D1B); background: var(--bg, #FAF8F5);
+}
+.wa-search-pop input:focus { outline: none; border-color: var(--brand, #007AFF); }
+.wa-search-results { max-height: 320px; overflow-y: auto; margin-top: 6px; }
+.wa-search-item {
+  display: flex; flex-direction: column; gap: 1px; width: 100%; text-align: left; padding: 6px 7px;
+  border: none; background: none; border-radius: 0; cursor: pointer; font: inherit;
+}
+.wa-search-item:hover { background: var(--bg2, #F1EFEB); }
+.wa-search-item__quien { font-size: .74rem; font-weight: 700; color: var(--text, #1F1D1B); }
+.wa-search-item__txt { font-size: .78rem; color: var(--text2, #6C6862); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+@keyframes waMsgFlash { 0%, 100% { background: transparent; } 30% { background: #FFF3C4; } }
+.wa-msg--flash .wa-msg__bubble { animation: waMsgFlash 1.6s ease-out; }
+
+.wa-canned-pop {
+  position: absolute; bottom: 58px; left: 14px; right: 14px; z-index: 40;
+  background: #fff; border: 1px solid var(--border, #EAE7E2); border-radius: 0;
+  box-shadow: 0 -4px 16px rgba(0,0,0,.1); max-height: 200px; overflow-y: auto;
+}
+.wa-canned-item { display: flex; gap: 8px; align-items: baseline; padding: 7px 10px; cursor: pointer; font-size: .8rem; }
+.wa-canned-item b { color: var(--brand, #007AFF); flex-shrink: 0; }
+.wa-canned-item span { color: var(--text2, #6C6862); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wa-canned-item:hover, .wa-canned-item.on { background: var(--bg2, #F1EFEB); }
+
+.wa-canned-box { max-width: 440px; width: 100%; }
+.wa-canned-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border, #EAE7E2); }
+.wa-canned-row b { color: var(--brand, #007AFF); font-size: .82rem; }
+.wa-canned-row p { margin: 2px 0 0; font-size: .78rem; color: var(--text2, #6C6862); white-space: pre-wrap; }
+.wa-canned-row button { flex-shrink: 0; border: none; background: none; cursor: pointer; font-size: .82rem; opacity: .6; }
+.wa-canned-row button:hover { opacity: 1; }

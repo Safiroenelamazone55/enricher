@@ -9024,6 +9024,50 @@ app.delete('/api/wa/tags/:id', requireAuth, async (req, res) => {
   } catch (err) { console.error('[wa] tags DELETE', err.message); res.status(500).json({ error: 'No se pudo eliminar la etiqueta' }); }
 });
 
+// Respuestas rápidas ("canned responses" de Chatwoot) — texto reusable que se
+// inserta escribiendo "/atajo" en el composer. Compartidas por todas las
+// conexiones de WhatsApp del equipo (mismo criterio que wa_tags).
+app.get('/api/wa/canned', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`SELECT id, atajo, texto FROM wa_canned WHERE user_id=$1 ORDER BY atajo`, [req.workspaceOwnerId]);
+    res.json(rows);
+  } catch (err) { console.error('[wa] canned GET', err.message); res.status(500).json({ error: 'Error al cargar las respuestas rápidas' }); }
+});
+app.post('/api/wa/canned', requireAuth, async (req, res) => {
+  const atajo = String(req.body?.atajo || '').trim().toLowerCase().replace(/^\/+/, '').slice(0, 40);
+  const texto = String(req.body?.texto || '').trim().slice(0, 2000);
+  if (!atajo || !texto) return res.status(400).json({ error: 'Atajo y texto son requeridos' });
+  try {
+    const { rows: [row] } = await pool.query(
+      `INSERT INTO wa_canned (user_id, atajo, texto) VALUES ($1,$2,$3) RETURNING id, atajo, texto`,
+      [req.workspaceOwnerId, atajo, texto]);
+    res.status(201).json(row);
+  } catch (err) {
+    if (err.code === '23505') return res.status(409).json({ error: 'Ya existe una respuesta rápida con ese atajo' });
+    console.error('[wa] canned POST', err.message); res.status(500).json({ error: 'No se pudo crear' });
+  }
+});
+app.patch('/api/wa/canned/:id', requireAuth, async (req, res) => {
+  const sets = [], vals = [req.params.id, req.workspaceOwnerId];
+  if (req.body?.atajo !== undefined) sets.push(`atajo=$${vals.push(String(req.body.atajo).trim().toLowerCase().replace(/^\/+/, '').slice(0, 40))}`);
+  if (req.body?.texto !== undefined) sets.push(`texto=$${vals.push(String(req.body.texto).trim().slice(0, 2000))}`);
+  if (!sets.length) return res.json({ ok: true });
+  try {
+    const { rowCount } = await pool.query(`UPDATE wa_canned SET ${sets.join(',')} WHERE id=$1 AND user_id=$2`, vals);
+    if (!rowCount) return res.status(404).json({ error: 'No encontrada' });
+    res.json({ ok: true });
+  } catch (err) {
+    if (err.code === '23505') return res.status(409).json({ error: 'Ya existe una respuesta rápida con ese atajo' });
+    console.error('[wa] canned PATCH', err.message); res.status(500).json({ error: 'No se pudo actualizar' });
+  }
+});
+app.delete('/api/wa/canned/:id', requireAuth, async (req, res) => {
+  try {
+    await pool.query(`DELETE FROM wa_canned WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId]);
+    res.json({ ok: true });
+  } catch (err) { console.error('[wa] canned DELETE', err.message); res.status(500).json({ error: 'No se pudo eliminar' }); }
+});
+
 // Asignar / quitar una etiqueta a UN chat puntual.
 app.post('/api/wa/connections/:id/chats/:jid/tags', requireAuth, async (req, res) => {
   try {
@@ -9106,6 +9150,47 @@ app.get('/api/wa/connections/:id/chats/:jid/meta', requireAuth, async (req, res)
       [conn.id, req.params.jid]);
     res.json(row || { pinned: false, snooze_until: null, asignado_a: '', estado_conv: 'abierto', prioridad: '' });
   } catch (err) { console.error('[wa] chat meta GET', err.message); res.status(500).json({ error: 'Error al consultar' }); }
+});
+
+// Acciones masivas — mismo campo que PATCH .../meta, pero sobre varios chats a la
+// vez (checkbox en la lista, estilo Chatwoot). Reusa la misma validación de campos.
+app.post('/api/wa/connections/:id/chats/bulk-meta', requireAuth, async (req, res) => {
+  const jids = Array.isArray(req.body?.jids) ? req.body.jids.filter(j => typeof j === 'string' && j).slice(0, 200) : [];
+  if (!jids.length) return res.status(400).json({ error: 'Selecciona al menos un chat' });
+  try {
+    const conn = await _cargarConexionAutorizada(req, res, req.params.id);
+    if (!conn) return;
+    const sets = [], vals = [conn.id];
+    if (req.body?.asignadoA !== undefined) sets.push(`asignado_a=$${vals.push(String(req.body.asignadoA || '').trim().slice(0, 100))}`);
+    if (req.body?.estadoConv !== undefined && ['abierto', 'pendiente', 'resuelto'].includes(req.body.estadoConv)) sets.push(`estado_conv=$${vals.push(req.body.estadoConv)}`);
+    if (req.body?.prioridad !== undefined && ['', 'baja', 'media', 'alta'].includes(req.body.prioridad)) sets.push(`prioridad=$${vals.push(req.body.prioridad)}`);
+    if (!sets.length) return res.json({ ok: true });
+    for (const jid of jids) {
+      await pool.query(
+        `INSERT INTO wa_chat_meta (connection_id, chat_jid) VALUES ($1,$2) ON CONFLICT (connection_id, chat_jid) DO NOTHING`,
+        [conn.id, jid]);
+    }
+    const jidsIdx = vals.push(jids);
+    await pool.query(`UPDATE wa_chat_meta SET ${sets.join(',')}, updated_at=NOW() WHERE connection_id=$1 AND chat_jid=ANY($${jidsIdx})`, vals);
+    res.json({ ok: true, actualizados: jids.length });
+  } catch (err) { console.error('[wa] bulk-meta', err.message); res.status(500).json({ error: 'No se pudo aplicar a los chats seleccionados' }); }
+});
+
+// Buscar texto DENTRO de un chat — los mensajes ya viven en Postgres (wa_messages),
+// así que es una consulta directa, sin depender de ninguna API externa.
+app.get('/api/wa/connections/:id/chats/:jid/buscar', requireAuth, async (req, res) => {
+  const q = String(req.query.q || '').trim();
+  if (!q) return res.json([]);
+  try {
+    if (!(await _cargarConexionAutorizada(req, res, req.params.id))) return;
+    const { rows } = await pool.query(`
+      SELECT msg_id, from_me, nombre, texto, ts
+        FROM wa_messages
+       WHERE connection_id=$1 AND chat_jid=$2 AND NOT eliminado AND texto ILIKE $3
+       ORDER BY ts DESC LIMIT 30`,
+      [req.params.id, req.params.jid, `%${q.replace(/[%_]/g, c => '\\' + c)}%`]);
+    res.json(rows);
+  } catch (err) { console.error('[wa] buscar', err.message); res.status(500).json({ error: 'Error al buscar' }); }
 });
 
 // Notas internas por chat — nunca se envían al contacto, solo las ve el equipo.
