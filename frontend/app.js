@@ -25465,8 +25465,30 @@ ${foot}
   let _dgCliente = '', _dgSeq = '', _dgCamp = '', _dgQ = '';
   let _dgSel = new Set();
   let _dgCleanPreview = null;
+  let _dgOnlyIssues = false;
   const DG_CLEAN_FIELDS = { companies: ['nombre', 'tamano', 'dominio', 'website', 'telefono'], contacts: ['cargo', 'email', 'email_personal', 'telefono', 'movil'] };
   const DG_ENRICH_FIELDS = { companies: ['dominio', 'website'], contacts: ['seniority', 'departamento'] };
+  // ── Validación (categoría C): SOLO detecta y marca visualmente — nunca corrige
+  // sola. Cada validador recibe el valor ya recortado y devuelve '' (ok) o un
+  // mensaje corto explicando el problema (se muestra como tooltip en la celda).
+  const DG_VALIDATORS = {
+    companies: {
+      dominio: v => v && !/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/i.test(v) ? 'Dominio con formato inválido' : '',
+    },
+    contacts: {
+      email: v => !v ? 'Sin email' : (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) ? 'Email con formato inválido' : ''),
+      telefono: v => { if (!v) return ''; const d = v.replace(/\D/g, ''); return (d.length < 6 || d.length > 15) ? 'Teléfono con formato dudoso' : ''; },
+    },
+  };
+  function _dgRowIssues(r) {
+    const V = DG_VALIDATORS[_dgEntity] || {};
+    const out = [];
+    for (const field of Object.keys(V)) {
+      const msg = V[field](String(r[field] || '').trim());
+      if (msg) out.push({ field, msg });
+    }
+    return out;
+  }
   const DG_EDITABLE_BASE = {
     companies: ['nombre', 'dominio', 'industria', 'tamano', 'ciudad', 'pais', 'target_tier', 'segmento', 'analisis'],
     contacts:  ['nombre', 'apellido', 'cargo', 'email', 'telefono', 'linkedin', 'estado', 'analisis'],
@@ -25524,31 +25546,41 @@ ${foot}
         const hay = [r.nombre, r.apellido, r.dominio, r.email, r.company_nombre, r.empresa_nombre].filter(Boolean).join(' ').toLowerCase();
         if (!hay.includes(q)) return false;
       }
+      if (_dgOnlyIssues && !_dgRowIssues(r).length) return false;
       return true;
     });
   }
   function _dgRow(r, cols, editable) {
+    const issues = _dgRowIssues(r);
     const cells = cols.map(([k]) => {
       const val = k === 'company_nombre' ? (r.company_nombre || r.empresa_nombre || '') : (r[k] || '');
-      if (editable.includes(k)) return `<td class="dg-cell" data-id="${r.id}" data-field="${k}" onclick="LeadManagerModule.dgEditCell(this)">${val ? esc(val) : '<span class="dg-empty">—</span>'}</td>`;
-      return `<td class="dg-cell dg-cell--ro">${val ? esc(val) : '—'}</td>`;
+      const issue = issues.find(i => i.field === k);
+      const cls = 'dg-cell' + (issue ? ' dg-cell--invalid' : '');
+      const title = issue ? ` title="${esc(issue.msg)}"` : '';
+      const dot = issue ? '<span class="dg-issue-dot"></span>' : '';
+      if (editable.includes(k)) return `<td class="${cls}" data-id="${r.id}" data-field="${k}"${title} onclick="LeadManagerModule.dgEditCell(this)">${dot}${val ? esc(val) : '<span class="dg-empty">—</span>'}</td>`;
+      return `<td class="${cls} dg-cell--ro"${title}>${dot}${val ? esc(val) : '—'}</td>`;
     }).join('');
     return `<tr class="${_dgSel.has(r.id) ? 'sel' : ''}">
       <td class="lm-ck-col"><input type="checkbox" class="lm-ck" ${_dgSel.has(r.id) ? 'checked' : ''} onclick="LeadManagerModule.dgToggleSel(${r.id},this.checked)"></td>
       ${cells}
     </tr>`;
   }
-  function _dgBulkBar(rows) {
+  function _dgBulkBar(rows, allRows) {
     const n = _dgSel.size;
     const tieneEnrich = (DG_ENRICH_FIELDS[_dgEntity] || []).length > 0;
+    const nIssues = (allRows || rows).filter(r => _dgRowIssues(r).length).length;
     return `<div class="lm-bulk-bar show dg-bulkbar">
       <span class="lm-bulk-n">${n ? `${n} seleccionado(s)` : `${rows.length} filtrado(s)`}</span>
       <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.dgCleanOpen()">🧹 Limpiar</button>
       <button class="btn btn--ghost btn--sm"${tieneEnrich ? '' : ' disabled title="Sin campos calculables para esta vista todavía"'} onclick="LeadManagerModule.dgEnrichOpen()">✨ Enriquecer</button>
+      <button class="dg-issues-toggle${_dgOnlyIssues ? ' active' : ''}" onclick="LeadManagerModule.dgToggleIssues()" title="Filtrar filas con email/dominio/teléfono inválido o email faltante">⚠ Con problemas <span class="n">(${nIssues})</span></button>
       ${n ? `<button class="lm-bulk-ghost" onclick="LeadManagerModule.dgClearSel()">Ninguna</button>` : ''}
     </div>`;
   }
+  function dgToggleIssues() { _dgOnlyIssues = !_dgOnlyIssues; _dgRenderRows(); }
   function _dgRenderRows() {
+    const allRows = _dgAllForCount();
     const rows = _dgVisible();
     const cols = DG_COLS_FOR(_dgEntity);
     const editable = _dgEditableFields(_dgEntity);
@@ -25561,7 +25593,16 @@ ${foot}
     const hint = document.getElementById('dg-cap-hint');
     if (hint) hint.textContent = rows.length > CAP ? `Mostrando ${CAP} de ${rows.length} — usa los filtros para acotar.` : '';
     const bar = document.getElementById('dg-bulkbar');
-    if (bar) bar.innerHTML = _dgBulkBar(rows);
+    if (bar) bar.innerHTML = _dgBulkBar(rows, allRows);
+  }
+  // Cuenta de "con problemas" sobre TODO lo filtrado (cliente/secuencia/búsqueda)
+  // sin aplicar aún el propio toggle de issues — si no, el contador se
+  // congelaría en su propio total al activarlo.
+  function _dgAllForCount() {
+    const save = _dgOnlyIssues; _dgOnlyIssues = false;
+    const rows = _dgVisible();
+    _dgOnlyIssues = save;
+    return rows;
   }
   function _dgRepaint() { const el = document.getElementById(_dgContainerId); if (!el) return; el.innerHTML = _dgShellHtml(); _dgRenderRows(); }
   function dgSetEntity(e) { _dgEntity = e; _dgSel.clear(); _dgSeq = ''; _dgCamp = ''; _dgRepaint(); }
@@ -25747,7 +25788,7 @@ ${foot}
     openFilters, closeFilters, fltSet, fltAddRow, fltDelRow, fltApply, clearFilters, removeFilter, fltOpenDate, cfSaveLabel,
     renderDataGrid, dgSetEntity, dgSetCliente, dgSetSeq, dgSetCamp, dgSetQ, dgToggleSel, dgToggleAll, dgClearSel,
     dgEditCell, dgEditKey, dgSaveCell, dgCleanOpen, dgCleanClose, dgCleanApply,
-    dgEnrichOpen, dgEnrichClose, dgEnrichApply,
+    dgEnrichOpen, dgEnrichClose, dgEnrichApply, dgToggleIssues,
     fmsToggle, fmsFilter, fmsPick,
     openViews, applyView, saveView, deleteView, clearAllViews,
     taskSetView, taskSetFilter, calPrev, calNext, calToday,
