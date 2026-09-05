@@ -4956,6 +4956,11 @@ const CanteraModule = (() => {
   let _current = null;      // batch abierto en detalle
   let _companies = [];
   let _onlyFailed = false;
+  // Detalle del borrador por pasos (pedido explícito 2026-09-06: "que se vea paso
+  // 1,2,3,4 y cambiar de ventana solo dándole click" — sin esto el scroll de la
+  // página tenía que bajar por las 4 secciones completas para llegar a Resultados).
+  // Los pasos son navegables libremente (no hay orden forzado), no es un wizard lineal.
+  let _step = 1;
   let _coSel = new Set(); // selección de empresas en la tabla de Resultados, para Limpiar/Enriquecer
 
   // ── Importador con previsualización + mapeo editable (mismo patrón que el
@@ -5059,7 +5064,7 @@ const CanteraModule = (() => {
   }
   let _cImp = null;
   function openImportModal() {
-    _cImp = { file: null, origHeader: [], samplesOrig: [], headers: [], samples: [], hasHeader: true, opts: [] };
+    _cImp = { file: null, origHeader: [], samplesOrig: [], headers: [], samples: [], hasHeader: true, opts: [], mode: 'actualizar' };
     document.getElementById('cant-imp-modal')?.remove();
     const m = document.createElement('div'); m.id = 'cant-imp-modal'; m.className = 'fin-pi-backdrop';
     m.onclick = e => { if (e.target === m) closeImportModal(); };
@@ -5119,6 +5124,7 @@ const CanteraModule = (() => {
     else { _cImp.headers = _cImp.origHeader.map((_, i) => `Columna ${i + 1}`); _cImp.samples = [_cImp.origHeader.slice(), ..._cImp.samplesOrig]; }
     _cImpStepMap();
   }
+  function impSetMode(m) { if (_cImp) _cImp.mode = m; }
   function _cImpOpts() {
     const out = [{ key: '', label: '— Extra (se conserva) —', grp: '' }, { key: '__ignore__', label: '✕ Ignorar', grp: '' }];
     CANT_FIELDS.forEach(g => g.opts.forEach(([k, l]) => out.push({ key: k, label: l, grp: g.g })));
@@ -5148,6 +5154,11 @@ const CanteraModule = (() => {
         <div class="lm-map-bar">
           <label class="lm-chk"><input type="checkbox" ${_cImp.hasHeader ? 'checked' : ''} onchange="CanteraModule.impToggleHeader(this.checked)"> Primera fila = encabezado</label>
         </div>
+        ${_companies.length ? `<div class="cant-imp-mode">
+          <span class="cant-imp-mode__lbl">Este borrador ya tiene ${_companies.length} empresa(s) — ¿qué hago con el archivo nuevo?</span>
+          <label class="lm-chk"><input type="radio" name="cant-imp-mode" value="actualizar" ${_cImp.mode === 'actualizar' ? 'checked' : ''} onchange="CanteraModule.impSetMode('actualizar')"> Actualizar existentes y agregar nuevas (nunca borra nada)</label>
+          <label class="lm-chk"><input type="radio" name="cant-imp-mode" value="reemplazar" ${_cImp.mode === 'reemplazar' ? 'checked' : ''} onchange="CanteraModule.impSetMode('reemplazar')"> Borrar todo y volver a cargar desde cero</label>
+        </div>` : ''}
         <div class="lm-map-headrow"><span>Columna del archivo</span><span>Ejemplo</span><span></span><span>Asignar a (escribe para buscar)</span></div>
         <div class="lm-map-list">${rowsHtml}</div>
       </div>
@@ -5203,11 +5214,13 @@ const CanteraModule = (() => {
       fd.append('file', _cImp.file);
       fd.append('mapping', JSON.stringify(mapping));
       fd.append('hasHeader', _cImp.hasHeader ? '1' : '0');
+      fd.append('mode', _cImp.mode || 'actualizar');
       const res = await apiFetch(`${API}/cantera/batches/${_current.id}/import`, { method: 'POST', body: fd });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(d.error || `Error ${res.status}`);
       _cImpInner(`${_cImpHd('Importación completa')}
         <div class="lm-imp-body">${_cImpSteps(3)}
+          ${d.companiesDeleted ? `<p class="cant-hint" style="margin:0 0 10px">Se borraron ${d.companiesDeleted} empresa(s) anteriores antes de cargar el archivo nuevo.</p>` : ''}
           <div class="lm-imp-done"><div class="lm-imp-done__stats">
             <div class="lm-stat"><b>${d.rows || 0}</b><span>filas leídas</span></div>
             <div class="lm-stat"><b>${d.companiesCreated || 0}</b><span>empresas nuevas</span></div>
@@ -5271,7 +5284,7 @@ const CanteraModule = (() => {
     const r = await apiFetch(`${API}/cantera/batches/${id}`); _current = r.ok ? await r.json() : null;
     if (!_current) { showBanner('Borrador no encontrado', 'error'); return; }
     _current.filtros = _current.filtros || {};
-    _coSel = new Set(); _expanded = new Set(); _contactsByCompany = {};
+    _coSel = new Set(); _expanded = new Set(); _contactsByCompany = {}; _step = 1;
     if (!_filtroOpts) { try { _filtroOpts = await (await apiFetch(`${API}/cantera/opciones-filtro`)).json(); } catch { _filtroOpts = {}; } }
     await _loadCompanies();
     _view = 'detail'; _paint();
@@ -5340,10 +5353,15 @@ const CanteraModule = (() => {
         <button class="cant-chip cant-chip--btn" onclick="CanteraModule.openScope()">Secuencia: ${b.sequence_id ? esc(b.secuencia_nombre || 'asignada') : 'sin asignar (opcional)'}</button>
         <button class="cant-x" onclick="CanteraModule.openScope()" title="Asignar cliente / campaña / secuencia">✎</button>
       </div>
-      <p class="cant-hint" style="margin:6px 0 0">Esto es solo una anotación en esta etapa — no envía nada a Outreach ni activa ninguna secuencia. Recién se vincula de verdad cuando muevas empresas al CRM.</p>
 
-      <div class="cant-section">
-        <div class="cant-section__hd"><span class="cant-section__num">01</span><h3>Filtros básicos</h3></div>
+      <div class="cant-stepbar">
+        <button class="cant-step${_step === 1 ? ' on' : ''}" onclick="CanteraModule.setStep(1)"><span class="cant-step__n">1</span>Filtros básicos</button>
+        <button class="cant-step${_step === 2 ? ' on' : ''}" onclick="CanteraModule.setStep(2)"><span class="cant-step__n">2</span>Criterio de calificación</button>
+        <button class="cant-step${_step === 3 ? ' on' : ''}" onclick="CanteraModule.setStep(3)"><span class="cant-step__n">3</span>Importar prospectos</button>
+        <button class="cant-step${_step === 4 ? ' on' : ''}" onclick="CanteraModule.setStep(4)"><span class="cant-step__n">4</span>Resultados${_companies.length ? ` (${_companies.length})` : ''}</button>
+      </div>
+
+      ${_step === 1 ? `<div class="cant-section">
         <p class="cant-hint">Selecciona de una lista real — nunca escribes el valor a mano, así "España" y "Spain" siempre se reconocen como el mismo país.</p>
         <div class="filters-grid">
           ${_taField('pais', 'País')}
@@ -5353,10 +5371,9 @@ const CanteraModule = (() => {
           ${_taField('departamento', 'Departamento del contacto')}
         </div>
         <div class="cant-save-row"><button class="btn btn--ghost btn--sm" onclick="CanteraModule.saveFiltros()">Guardar filtros</button></div>
-      </div>
+      </div>` : ''}
 
-      <div class="cant-section">
-        <div class="cant-section__hd"><span class="cant-section__num">02</span><h3>Criterio de calificación</h3></div>
+      ${_step === 2 ? `<div class="cant-section">
         <p class="cant-hint">Esto es lo único que escribes — el motor que investiga y decide es fijo, no lo tocas.</p>
         <label class="cant-flabel" style="display:block;margin-bottom:12px">ICP<textarea id="cant-icp" class="form-input" rows="3" placeholder="¿A quién buscamos?">${esc(b.icp || '')}</textarea></label>
 
@@ -5395,18 +5412,16 @@ const CanteraModule = (() => {
           </div>`).join('') || `<p class="cant-hint">Agrega al menos un Tier con su clave para definir puestos.</p>`}
         </div>
         <div class="cant-save-row"><button class="btn btn--primary btn--sm" onclick="CanteraModule.saveCriterio()">Guardar criterio</button></div>
-      </div>
+      </div>` : ''}
 
-      <div class="cant-section">
-        <div class="cant-section__hd"><span class="cant-section__num">03</span><h3>Importar prospectos</h3></div>
+      ${_step === 3 ? `<div class="cant-section">
         <div class="cant-import-row">
           <button class="btn btn--primary btn--sm" onclick="CanteraModule.openImportModal()">Importar archivo…</button>
           <span class="cant-import-hint">Previsualiza y ajusta el mapeo de columnas antes de guardar — igual que al importar en el CRM.</span>
         </div>
-      </div>
+      </div>` : ''}
 
-      <div class="cant-section">
-        <div class="cant-section__hd"><span class="cant-section__num">04</span><h3>Resultados</h3></div>
+      ${_step === 4 ? `<div class="cant-section">
         <div class="cant-results-bar">
           <span class="cant-count">${_coSel.size ? `${_coSel.size} seleccionada(s)` : `${_companies.length} empresa(s)`} · ${aprobadas} pasaron filtro · ${descartadas} descartadas (paso 1) · ${calificadas} calificada(s) (paso 2)</span>
           <button class="btn btn--primary btn--sm" onclick="CanteraModule.runFiltros()">1. Correr filtros básicos</button>
@@ -5422,8 +5437,9 @@ const CanteraModule = (() => {
           <thead><tr><th class="lm-ck-col"><input type="checkbox" class="lm-ck" onclick="CanteraModule.toggleCoSelAll(this.checked)"></th><th class="dg-cell--frozen">Nombre</th><th>Dominio</th><th>País</th><th>Paso 1</th><th>Motivo paso 1</th><th>Tier</th><th>Confianza</th><th>Paso 2</th><th>Motivo paso 2</th><th>Contactos</th></tr></thead>
           <tbody>${rows || `<tr><td colspan="11" class="cp-empty2">Importa un archivo para empezar.</td></tr>`}</tbody>
         </table></div>
-      </div>`;
+      </div>` : ''}`;
   }
+  function setStep(n) { _step = n; _paint(); }
   function toggleCoSel(id, checked) { if (checked) _coSel.add(id); else _coSel.delete(id); _paint(); }
   function toggleCoSelAll(checked) { if (checked) _companies.forEach(c => _coSel.add(c.id)); else _coSel.clear(); _paint(); }
 
@@ -5888,8 +5904,8 @@ const CanteraModule = (() => {
   return { render, open, openCreate, backToList, saveFiltros, runFiltros, toggleFailed, moreMenu, remove, saveAsTemplate,
     toggleExpand, addTier, removeTier, setTierField, addPuesto, removePuesto, setPuestoField, saveCriterio, runValidacion,
     openPromote, closePromote, doPromote,
-    openScope, closeScope, scopeMaybeCreate, saveScope,
-    openImportModal, closeImportModal, impFile, impToggleHeader, impRun, cbxOpen, cbxFilter, cbxPick, cbxBlur,
+    openScope, closeScope, scopeMaybeCreate, saveScope, setStep,
+    openImportModal, closeImportModal, impFile, impToggleHeader, impRun, impSetMode, cbxOpen, cbxFilter, cbxPick, cbxBlur,
     taOpen, taFilter, taBlur, addFiltro, removeFiltro,
     toggleCoSel, toggleCoSelAll, cleanMenu, enrichMenu, runClean, runEnrich, closeCantOp, applyCantOp,
     quickCleanContact, quickEnrichContact, setContactPrioridad,

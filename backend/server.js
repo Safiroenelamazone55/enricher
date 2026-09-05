@@ -6484,6 +6484,20 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
   } catch (e) { return res.status(400).json({ error: 'No se pudo leer el archivo: ' + e.message }); }
   if (!rows.length) return res.status(400).json({ error: 'El archivo está vacío.' });
 
+  // Reimportar sobre un borrador que YA tiene datos (pedido explícito 2026-09-06):
+  // 'reemplazar' borra las empresas/contactos actuales del borrador antes de leer el
+  // archivo nuevo; 'actualizar' (default, nunca borra nada) cruza contra lo que ya
+  // existe en ESTE borrador — mismas claves que la deduplicación normal (dominio,
+  // LinkedIn de empresa, nombre para empresas; LinkedIn o email para contactos) — y
+  // solo completa campos vacíos o agrega lo genuinamente nuevo, nunca pisa un dato
+  // que ya estaba lleno.
+  const importMode = req.body?.mode === 'reemplazar' ? 'reemplazar' : 'actualizar';
+  let companiesDeleted = 0;
+  if (importMode === 'reemplazar') {
+    const del = await pool.query(`DELETE FROM cantera_companies WHERE batch_id=$1 AND user_id=$2`, [batchId, uid]);
+    companiesDeleted = del.rowCount || 0;
+  }
+
   const headerRow = (rows[0] || []).map(h => _lmS(h));
   const dataRows = hasHeader ? rows.slice(1) : rows;
   if (dataRows.length > LM_IMPORT_MAX) return res.status(400).json({ error: `El archivo tiene ${dataRows.length} filas; el máximo por importación es ${LM_IMPORT_MAX}.` });
@@ -6544,8 +6558,26 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
     });
   }
 
-  const summary = { rows: 0, companiesCreated: 0, contactsCreated: 0, contactsSkipped: 0, errors: [] };
+  const summary = { rows: 0, companiesCreated: 0, contactsCreated: 0, contactsSkipped: 0, companiesDeleted, mode: importMode, errors: [] };
   const coCache = new Map();
+  const contactCachePreloaded = new Set();
+  if (importMode === 'actualizar') {
+    // Precarga la identidad de lo que YA existe en este borrador, para que la misma
+    // lógica de cruce (dominio/LinkedIn/nombre para empresas, LinkedIn/email para
+    // contactos) que ya dedupea dentro de un archivo también reconozca lo importado
+    // en una corrida anterior — así una fila que ya existe no crea un duplicado.
+    const { rows: existingCos } = await pool.query(`SELECT id, dominio, linkedin, nombre FROM cantera_companies WHERE batch_id=$1 AND user_id=$2`, [batchId, uid]);
+    for (const e of existingCos) {
+      if (e.dominio) coCache.set('d:' + e.dominio, e.id);
+      if (e.linkedin) coCache.set('l:' + e.linkedin.toLowerCase(), e.id);
+      if (e.nombre) coCache.set('n:' + e.nombre.toLowerCase(), e.id);
+    }
+    const { rows: existingCts } = await pool.query(`SELECT linkedin, email FROM cantera_contacts WHERE batch_id=$1 AND user_id=$2`, [batchId, uid]);
+    for (const e of existingCts) {
+      const k = (e.linkedin || '').toLowerCase() || (e.email || '').toLowerCase();
+      if (k) contactCachePreloaded.add(k);
+    }
+  }
   // "Company Location" del export de Sales Nav viene como "Ciudad, Región, País" en
   // un solo texto — si no hay co_pais explícito, se infiere del último segmento sin
   // reescribir el campo crudo (co_ubicacion se guarda tal cual, para no perder nada).
@@ -6577,16 +6609,27 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
       if (!coCache.has(k)) continue;
       const id = coCache.get(k);
       // Esta fila puede traer un dato que la empresa ya registrada no tenía todavía
-      // (ej. la primera fila vista traía "N/A" y esta sí trae el dominio real) — se
-      // completa sin pisar lo que ya había, y se registran también las claves nuevas.
+      // (ej. la primera vez se vio con "N/A", o venía de una importación anterior
+      // incompleta) — se completa cualquier campo que esté vacío, nunca se pisa lo
+      // que ya había con dato.
       const website = _lmCleanUrlish(f.co_website);
-      if (dominio || website || linkedin) {
+      const industria = _lmCleanUrlish(f.co_industria);
+      const tamano = _lmCleanUrlish(f.co_tamano);
+      const ciudad = _lmCleanUrlish(f.co_ciudad);
+      const pais2 = _lmCleanUrlish(f.co_pais) || _lastLocSegment(f.co_ubicacion);
+      const ubicacion = _lmS(f.co_ubicacion);
+      if (dominio || website || linkedin || industria || tamano || ciudad || pais2 || ubicacion) {
         await pool.query(`
           UPDATE cantera_companies SET
             dominio = CASE WHEN dominio='' THEN $1 ELSE dominio END,
             website = CASE WHEN website='' THEN $2 ELSE website END,
-            linkedin = CASE WHEN linkedin='' THEN $3 ELSE linkedin END
-          WHERE id=$4`, [dominio, website, linkedin, id]);
+            linkedin = CASE WHEN linkedin='' THEN $3 ELSE linkedin END,
+            industria = CASE WHEN industria='' THEN $4 ELSE industria END,
+            tamano = CASE WHEN tamano='' THEN $5 ELSE tamano END,
+            ciudad = CASE WHEN ciudad='' THEN $6 ELSE ciudad END,
+            pais = CASE WHEN pais='' THEN $7 ELSE pais END,
+            ubicacion = CASE WHEN ubicacion='' THEN $8 ELSE ubicacion END
+          WHERE id=$9`, [dominio, website, linkedin, industria, tamano, ciudad, pais2, ubicacion, id]);
       }
       keys.forEach(k2 => coCache.set(k2, id));
       return id;
@@ -6605,7 +6648,7 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
   // cargo y empresa, fila por fila idéntica) — sin esto cada repetición se importaba
   // como un contacto nuevo, inflando el conteo de contactos por empresa. Se identifica
   // a la persona por su LinkedIn (o email si no hay LinkedIn) y solo se crea una vez.
-  const contactCache = new Set();
+  const contactCache = new Set(contactCachePreloaded);
   for (const row of dataRows) {
     if (!Array.isArray(row) || row.every(c => !_lmS(c))) continue;
     summary.rows++;
