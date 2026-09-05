@@ -6646,20 +6646,72 @@ app.post('/api/cantera/batches/:id/run-filtros', requireAuth, async (req, res) =
 
 // Listas de opciones para los selectores de filtros básicos (típeahead con
 // datos reales en vez de texto libre — pedido explícito de Jenny 2026-09-05).
+// La industria usa la taxonomía real de LinkedIn (de donde vienen sus exports de
+// Sales Navigator) — no una lista corta genérica, porque faltaban justo los rubros
+// más específicos (ej. "Food and Beverage Manufacturing", el más común en su propio
+// archivo) — reportado explícito 2026-09-06: "faltan industrias... faltan muchas otras".
+const CANTERA_INDUSTRIAS_BASE = [
+  'Farming', 'Ranching', 'Fisheries', 'Dairy Product Manufacturing', 'Animal Feed Manufacturing',
+  'Farming, Ranching, Forestry', 'Wineries', 'Wine & Spirits', 'Breweries',
+  'Food and Beverage Manufacturing', 'Food and Beverage Services', 'Food and Beverage Retail',
+  'Food Production', 'Food & Beverages', 'Beverage Manufacturing', 'Meat Products Manufacturing',
+  'Seafood Product Manufacturing', 'Fruit and Vegetable Preserves Manufacturing', 'Baked Goods Manufacturing',
+  'Sugar and Confectionery Product Manufacturing', 'Restaurants', 'Caterers', 'Agriculture',
+  'Manufacturing', 'Industrial Machinery Manufacturing', 'Machinery Manufacturing', 'Chemical Manufacturing',
+  'Chemicals', 'Plastics Manufacturing', 'Packaging and Containers Manufacturing', 'Packaging and Containers',
+  'Textile Manufacturing', 'Textiles', 'Furniture and Home Furnishings Manufacturing', 'Furniture',
+  'Motor Vehicle Manufacturing', 'Motor Vehicle Parts Manufacturing', 'Automotive', 'Fabricated Metal Products',
+  'Personal Care Product Manufacturing', 'Pharmaceutical Manufacturing', 'Pharmaceuticals',
+  'Renewable Energy Semiconductor Manufacturing', 'Automation Machinery Manufacturing', 'Industrial Automation',
+  'Consumer Goods', 'Consumer Electronics', 'Cosmetics', 'Mining and Metals',
+  'Wholesale Metals and Minerals', 'Oil and Gas', 'Renewables and Environment', 'Environmental Services',
+  'Transportation, Logistics, Supply Chain and Storage', 'Logistics and Supply Chain', 'Freight and Package Transportation',
+  'Transportation/Trucking/Railroad', 'Import and Export', 'Wholesale Import and Export',
+  'Wholesale', 'Wholesale Building Materials', 'Wholesale Alcoholic Beverages', 'Retail', 'Retail Motor Vehicles',
+  'Construction', 'Facilities Services', 'Engineering Services', 'Architecture and Planning', 'Design Services',
+  'Information Technology and Services', 'Software', 'Software Development', 'Information Services',
+  'IT System Data Services', 'Technology, Information and Internet', 'Telecommunications', 'Satellite Telecommunications',
+  'Financial Services', 'Insurance', 'Accounting', 'Venture Capital and Private Equity Principals', 'Real Estate',
+  'Hospitality', 'Hotels and Motels', 'Leisure, Travel & Tourism', 'Travel Arrangements', 'Events Services',
+  'Golf Courses and Country Clubs', 'Recreational Facilities', 'Entertainment', 'Animation and Post-production',
+  'Health Wellness and Fitness', 'Wellness and Fitness Services', 'Hospitals and Health Care', 'Medical Practices',
+  'Mental Health Care', 'Public Health', 'Veterinary Services', 'Veterinary', 'Pet Services',
+  'Biotechnology Research', 'Research Services', 'Research', 'Market Research',
+  'Government Administration', 'Public Policy Offices', 'Political Organizations', 'International Affairs',
+  'Education Management', 'Education Administration Programs', 'Primary and Secondary Education', 'Higher Education',
+  'Professional Training and Coaching', 'Non Profit Organization Management', 'Non-profit Organization Management',
+  'Non-profit Organizations', 'Civic and Social Organizations', 'Industry Associations', 'Human Resources Services',
+  'Business Consulting and Services', 'Advertising Services', 'Online Media', 'Photography', 'Printing Services',
+  'Business Supplies & Equipment', 'International Trade and Development', 'Security and Investigations',
+  'Legal Services', 'Executive Offices',
+];
 app.get('/api/cantera/opciones-filtro', requireAuth, async (req, res) => {
-  res.json({
-    pais: Object.keys(CANTERA_PAISES).map(k => k.replace(/\b\w/g, c => c.toUpperCase())),
-    industria: ['Farming', 'Food Production', 'Food & Beverages', 'Agriculture', 'Manufacturing', 'Logistics and Supply Chain',
-      'Transportation/Trucking/Railroad', 'Import and Export', 'Wholesale', 'Retail', 'Construction', 'Consumer Goods',
-      'Textiles', 'Automotive', 'Pharmaceuticals', 'Chemicals', 'Machinery', 'Packaging and Containers', 'Mining and Metals',
-      'Oil and Gas', 'Renewables and Environment', 'Information Technology and Services', 'Software', 'Telecommunications',
-      'Financial Services', 'Insurance', 'Real Estate', 'Hospitality', 'Health Wellness and Fitness', 'Pharmaceuticals',
-      'Government Administration', 'Education Management', 'Non Profit Organization Management', 'Consumer Electronics',
-      'Furniture', 'Cosmetics'],
-    tamano: ['1-10', '11-50', '51-200', '201-500', '501-1000', '1001-5000', '5001-10000', '10001+'],
-    seniority: ['founder', 'c-level', 'vp', 'director', 'manager', 'senior', 'junior'],
-    departamento: ['ventas', 'marketing', 'operaciones', 'finanzas', 'rrhh', 'ti', 'legal', 'compras', 'servicio al cliente'],
-  });
+  const uid = req.workspaceOwnerId;
+  try {
+    // Además de la taxonomía base, se suma cualquier valor real que Jenny ya tenga
+    // importado (de cualquier borrador) — así el filtro nunca se queda corto frente
+    // a un export nuevo con rubros que la lista fija todavía no cubre.
+    const { rows } = await pool.query(
+      `SELECT DISTINCT industria FROM cantera_companies WHERE user_id=$1 AND industria <> '' AND industria <> 'N/A'`, [uid]);
+    const industriaSet = new Set(CANTERA_INDUSTRIAS_BASE);
+    rows.forEach(r => industriaSet.add(r.industria));
+    res.json({
+      pais: Object.keys(CANTERA_PAISES).map(k => k.replace(/\b\w/g, c => c.toUpperCase())),
+      industria: [...industriaSet].sort((a, b) => a.localeCompare(b)),
+      tamano: ['1-10', '11-50', '51-200', '201-500', '501-1000', '1001-5000', '5001-10000', '10001+'],
+      seniority: ['founder', 'c-level', 'vp', 'director', 'manager', 'senior', 'junior'],
+      departamento: ['ventas', 'marketing', 'operaciones', 'finanzas', 'rrhh', 'ti', 'legal', 'compras', 'servicio al cliente'],
+    });
+  } catch (err) {
+    console.error('[cantera] opciones-filtro', err.message);
+    res.json({
+      pais: Object.keys(CANTERA_PAISES).map(k => k.replace(/\b\w/g, c => c.toUpperCase())),
+      industria: CANTERA_INDUSTRIAS_BASE,
+      tamano: ['1-10', '11-50', '51-200', '201-500', '501-1000', '1001-5000', '5001-10000', '10001+'],
+      seniority: ['founder', 'c-level', 'vp', 'director', 'manager', 'senior', 'junior'],
+      departamento: ['ventas', 'marketing', 'operaciones', 'finanzas', 'rrhh', 'ti', 'legal', 'compras', 'servicio al cliente'],
+    });
+  }
 });
 
 // ── Criterios guardados — plantillas reusables de ICP+Tiers+Puestos+Filtros,
