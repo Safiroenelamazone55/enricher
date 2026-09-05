@@ -1998,6 +1998,23 @@ async function initDb() {
     // 2026-09-05: "la etiqueta del sistema sería validación manual".
     await pool.query(`ALTER TABLE cantera_companies ADD COLUMN IF NOT EXISTS nota_manual TEXT NOT NULL DEFAULT '';`);
 
+    // Más campos del export real de LinkedIn Sales Navigator que Jenny va a cargar
+    // en Cantera (pedido explícito 2026-09-05, adjuntó el archivo real: trae más
+    // columnas de las que el importador reconocía — Connection Degree, Premium
+    // Account, Tenure in Role, Mutual Connections, señales de intención (cambió de
+    // trabajo / publicó recientemente / sigue tu empresa), y la ubicación cruda del
+    // lead y de la empresa tal como vienen en el export, sin forzar el split en
+    // ciudad/país que ya usan los filtros de paso 1).
+    await pool.query(`ALTER TABLE cantera_contacts ADD COLUMN IF NOT EXISTS ubicacion         TEXT NOT NULL DEFAULT '';`);
+    await pool.query(`ALTER TABLE cantera_contacts ADD COLUMN IF NOT EXISTS conexion_grado    TEXT NOT NULL DEFAULT '';`);
+    await pool.query(`ALTER TABLE cantera_contacts ADD COLUMN IF NOT EXISTS premium           TEXT NOT NULL DEFAULT '';`);
+    await pool.query(`ALTER TABLE cantera_contacts ADD COLUMN IF NOT EXISTS antiguedad_cargo  TEXT NOT NULL DEFAULT '';`);
+    await pool.query(`ALTER TABLE cantera_contacts ADD COLUMN IF NOT EXISTS conexiones_mutuas TEXT NOT NULL DEFAULT '';`);
+    await pool.query(`ALTER TABLE cantera_contacts ADD COLUMN IF NOT EXISTS cambio_reciente   TEXT NOT NULL DEFAULT '';`);
+    await pool.query(`ALTER TABLE cantera_contacts ADD COLUMN IF NOT EXISTS publico_reciente  TEXT NOT NULL DEFAULT '';`);
+    await pool.query(`ALTER TABLE cantera_contacts ADD COLUMN IF NOT EXISTS sigue_empresa     TEXT NOT NULL DEFAULT '';`);
+    await pool.query(`ALTER TABLE cantera_companies ADD COLUMN IF NOT EXISTS ubicacion         TEXT NOT NULL DEFAULT '';`);
+
     console.log('[db] tables ready (users, verifications, batch_jobs, clients, projects, tasks, payments, team_members, workspaces, workspace_invites, chat_messages, leads, meetings, fin_config, fin_member_config, pagos_internos, opportunities, opportunity_tasks, cantera_batches, cantera_companies, cantera_contacts, cantera_criterio_templates)');
   } catch (err) {
     console.error('[db] initDb failed:', err.message);

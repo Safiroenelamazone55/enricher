@@ -4966,11 +4966,16 @@ const CanteraModule = (() => {
     { g: 'Contacto', opts: [
       ['nombre', 'Nombre'], ['apellido', 'Apellido'], ['nombre_completo', 'Nombre completo'],
       ['cargo', 'Cargo / Puesto'], ['email', 'Email'], ['linkedin', 'LinkedIn'],
+      ['ubicacion', 'Ubicación del contacto'], ['conexion_grado', 'Grado de conexión'],
+      ['premium', 'Cuenta Premium'], ['antiguedad_cargo', 'Antigüedad en el cargo'],
+      ['conexiones_mutuas', 'Conexiones mutuas'], ['cambio_reciente', 'Cambió de trabajo recientemente'],
+      ['publico_reciente', 'Publicó en LinkedIn recientemente'], ['sigue_empresa', 'Sigue tu empresa'],
     ] },
     { g: 'Empresa (se crea y enlaza)', opts: [
       ['co_nombre', 'Empresa · Nombre'], ['co_dominio', 'Empresa · Dominio'], ['co_website', 'Empresa · Website'],
       ['co_industria', 'Empresa · Industria'], ['co_tamano', 'Empresa · Nº empleados'],
-      ['co_pais', 'Empresa · País'], ['co_ciudad', 'Empresa · Ciudad'], ['co_linkedin', 'Empresa · LinkedIn'],
+      ['co_pais', 'Empresa · País'], ['co_ciudad', 'Empresa · Ciudad'], ['co_ubicacion', 'Empresa · Ubicación (texto completo)'],
+      ['co_linkedin', 'Empresa · LinkedIn'],
     ] },
   ];
   const CANT_CT_SYN = {
@@ -4978,18 +4983,27 @@ const CanteraModule = (() => {
     apellido: ['last name', 'lastname', 'last', 'apellido', 'apellidos', 'surname'],
     nombre_completo: ['full name', 'name', 'nombre completo', 'contact name'],
     cargo: ['title', 'job title', 'cargo', 'puesto', 'position', 'role', 'headline'],
-    email: ['email', 'e mail', 'correo', 'mail', 'email address', 'work email'],
-    linkedin: ['linkedin', 'linkedin url', 'linkedin profile', 'perfil linkedin', 'person linkedin url'],
+    email: ['email', 'e mail', 'correo', 'mail', 'email address', 'work email', 'email in summary'],
+    linkedin: ['linkedin', 'linkedin url', 'linkedin profile', 'perfil linkedin', 'person linkedin url', 'lead linkedin url'],
+    ubicacion: ['lead location', 'contact location', 'ubicacion', 'ubicacion del contacto'],
+    conexion_grado: ['connection degree', 'grado de conexion'],
+    premium: ['premium account', 'cuenta premium'],
+    antiguedad_cargo: ['tenure in role', 'antiguedad en el cargo', 'antiguedad'],
+    conexiones_mutuas: ['mutual connections', 'conexiones mutuas'],
+    cambio_reciente: ['recently changed jobs', 'cambio reciente de trabajo'],
+    publico_reciente: ['posted on linkedin recently', 'publico en linkedin recientemente'],
+    sigue_empresa: ['follows your company', 'sigue tu empresa'],
   };
   const CANT_CO_SYN = {
     nombre: ['name', 'company', 'company name', 'account name', 'organization', 'razon social', 'empresa'],
     dominio: ['domain', 'company domain'],
     website: ['website', 'company website', 'web', 'url', 'sitio web'],
-    industria: ['industry', 'industria', 'sector', 'vertical'],
+    industria: ['industry', 'industria', 'sector', 'vertical', 'company industry'],
     tamano: ['size', 'company size', 'employees', 'number of employees', 'headcount'],
     pais: ['country', 'company country', 'pais'],
     ciudad: ['city', 'company city', 'ciudad'],
-    linkedin: ['linkedin', 'company linkedin', 'linkedin url'],
+    ubicacion: ['location', 'company location', 'ubicacion', 'ubicacion de la empresa'],
+    linkedin: ['linkedin', 'company linkedin', 'linkedin url', 'company linkedin url'],
   };
   function _cNorm(s) { return String(s || '').toLowerCase().trim().replace(/[_\-./]+/g, ' ').replace(/\s+/g, ' ').replace(/[áàä]/g, 'a').replace(/[éèë]/g, 'e').replace(/[íìï]/g, 'i').replace(/[óòö]/g, 'o').replace(/[úùü]/g, 'u').replace(/ñ/g, 'n'); }
   function _cWord(h, s) { return new RegExp('(^| )' + s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '( |$)').test(h); }
@@ -5299,6 +5313,10 @@ const CanteraModule = (() => {
           ${esc([k.nombre, k.apellido].filter(Boolean).join(' '))} — ${esc(k.cargo || '(sin cargo)')}
           <span class="cant-estado cant-estado--${k.puesto_estado === 'decide' ? 'aprobado' : k.puesto_estado === 'descartado' ? 'descartado' : 'pendiente'}">${k.puesto_estado === 'decide' ? 'Decide' : k.puesto_estado === 'respaldo' ? 'Respaldo' : k.puesto_estado === 'descartado' ? 'Descartado' : 'Pendiente'}</span>
           ${k.seniority ? `<span class="tag" style="margin-left:4px">${esc(k.seniority)}</span>` : ''}${k.departamento ? `<span class="tag">${esc(k.departamento)}</span>` : ''}
+          ${k.conexion_grado ? `<span class="tag" title="Grado de conexión en LinkedIn">${esc(k.conexion_grado)}</span>` : ''}
+          ${_cantSignalOn(k.cambio_reciente) ? `<span class="tag" title="Cambió de trabajo recientemente">↻ cambio reciente</span>` : ''}
+          ${_cantSignalOn(k.publico_reciente) ? `<span class="tag" title="${esc(k.publico_reciente)}">✎ activo en LinkedIn</span>` : ''}
+          ${_cantSignalOn(k.sigue_empresa) ? `<span class="tag" title="Ya sigue tu empresa en LinkedIn">★ sigue tu empresa</span>` : ''}
           ${k.puesto_motivo ? ` — ${esc(k.puesto_motivo)}` : ''}
           <button class="add-role" style="display:inline;margin-left:8px" onclick="CanteraModule.quickCleanContact(${k.id},'cargo')">Limpiar cargo</button>
           <button class="add-role" style="display:inline" onclick="CanteraModule.quickEnrichContact(${k.id})">Enriquecer seniority/depto</button>
@@ -5590,6 +5608,10 @@ const CanteraModule = (() => {
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
   function _estadoLabel(s) { return s === 'aprobado' ? 'Aprobado' : s === 'validacion_manual' ? 'Validación manual' : s === 'descartado' ? 'Descartado' : s === 'error' ? 'Error' : 'Pendiente'; }
+  // Señales de actividad del export de LinkedIn Sales Navigator vienen como texto
+  // libre ("2 recent posts on Linkedin"), no true/false — cualquier valor que no
+  // sea un "no hay señal" explícito cuenta como señal presente.
+  function _cantSignalOn(v) { const s = String(v || '').trim(); return !!s && !/^(no|false|n\/a|none|0)$/i.test(s); }
   function toggleFailed() { _onlyFailed = !_onlyFailed; _paint(); }
   let _expanded = new Set();
   let _contactsByCompany = {};

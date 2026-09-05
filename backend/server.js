@@ -6479,11 +6479,15 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
       'nombre completo': 'nombre_completo', 'full name': 'nombre_completo', 'name': 'nombre_completo',
       'cargo': 'cargo', 'puesto': 'cargo', 'title': 'cargo', 'job title': 'cargo', 'position': 'cargo',
       'email': 'email', 'correo': 'email', 'email address': 'email',
+      // Export de LinkedIn Sales Navigator: no trae columna "Email" propia — el único
+      // correo disponible es el que aparece dentro del resumen del perfil.
+      'email in summary': 'email',
       'linkedin': 'linkedin', 'linkedin url': 'linkedin', 'perfil linkedin': 'linkedin', 'profile url': 'linkedin',
+      'lead linkedin url': 'linkedin',
       'empresa': 'co_nombre', 'compania': 'co_nombre', 'company': 'co_nombre', 'company name': 'co_nombre', 'organization': 'co_nombre',
       'dominio': 'co_dominio', 'domain': 'co_dominio', 'company domain': 'co_dominio',
       'website': 'co_website', 'sitio web': 'co_website', 'company website': 'co_website',
-      'industria': 'co_industria', 'industry': 'co_industria',
+      'industria': 'co_industria', 'industry': 'co_industria', 'company industry': 'co_industria',
       'tamano': 'co_tamano', 'tamaño': 'co_tamano', 'company size': 'co_tamano', 'employees': 'co_tamano', '# employees': 'co_tamano',
       'pais': 'co_pais', 'país': 'co_pais', 'country': 'co_pais', 'company country': 'co_pais',
       'ciudad': 'co_ciudad', 'city': 'co_ciudad',
@@ -6494,6 +6498,17 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
       'nombre completo': 'nombre_completo', 'co nombre': 'co_nombre', 'co dominio': 'co_dominio',
       'co website': 'co_website', 'co industria': 'co_industria', 'co tamano': 'co_tamano', 'co tamaño': 'co_tamano',
       'co pais': 'co_pais', 'co país': 'co_pais', 'co ciudad': 'co_ciudad', 'co linkedin': 'co_linkedin',
+      // Campos nuevos del export real de Sales Navigator (pedido explícito 2026-09-05,
+      // "aquí hay más [campos], agrega más") — ubicación cruda (sin forzar split) +
+      // señales de intención de compra/actividad reciente.
+      'lead location': 'ubicacion', 'company location': 'co_ubicacion',
+      'connection degree': 'conexion_grado',
+      'premium account': 'premium',
+      'tenure in role': 'antiguedad_cargo',
+      'mutual connections': 'conexiones_mutuas',
+      'recently changed jobs': 'cambio_reciente',
+      'posted on linkedin recently': 'publico_reciente',
+      'follows your company': 'sigue_empresa',
     };
     headerRow.forEach((h, idx) => {
       if (colMap[idx] || ignored.has(idx)) return;
@@ -6504,16 +6519,24 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
 
   const summary = { rows: 0, companiesCreated: 0, contactsCreated: 0, errors: [] };
   const coCache = new Map();
+  // "Company Location" del export de Sales Nav viene como "Ciudad, Región, País" en
+  // un solo texto — si no hay co_pais explícito, se infiere del último segmento sin
+  // reescribir el campo crudo (co_ubicacion se guarda tal cual, para no perder nada).
+  function _lastLocSegment(s) {
+    const parts = String(s || '').split(',').map(x => x.trim()).filter(Boolean);
+    return parts.length ? parts[parts.length - 1] : '';
+  }
   async function _co(f) {
     const dominio = _lmNormDomain(f.co_dominio || f.co_website || '');
     const nombre = _lmS(f.co_nombre);
     if (!dominio && !nombre) return null;
     const key = dominio ? 'd:' + dominio : 'n:' + nombre.toLowerCase();
     if (coCache.has(key)) return coCache.get(key);
+    const pais = _lmS(f.co_pais) || _lastLocSegment(f.co_ubicacion);
     const ins = await pool.query(`
-      INSERT INTO cantera_companies (batch_id,user_id,nombre,dominio,website,industria,tamano,pais,ciudad,linkedin)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id
-    `, [batchId, uid, nombre || dominio, dominio, _lmS(f.co_website), _lmS(f.co_industria), _lmS(f.co_tamano), _lmS(f.co_pais), _lmS(f.co_ciudad), _lmS(f.co_linkedin)]);
+      INSERT INTO cantera_companies (batch_id,user_id,nombre,dominio,website,industria,tamano,pais,ciudad,linkedin,ubicacion)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id
+    `, [batchId, uid, nombre || dominio, dominio, _lmS(f.co_website), _lmS(f.co_industria), _lmS(f.co_tamano), pais, _lmS(f.co_ciudad), _lmS(f.co_linkedin), _lmS(f.co_ubicacion)]);
     coCache.set(key, ins.rows[0].id); summary.companiesCreated++; return ins.rows[0].id;
   }
 
@@ -6535,9 +6558,12 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
         nombre = parts.shift() || ''; apellido = parts.join(' ');
       }
       await pool.query(`
-        INSERT INTO cantera_contacts (batch_id,company_id,user_id,nombre,apellido,cargo,email,linkedin,raw)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-      `, [batchId, companyId, uid, nombre, apellido, _lmS(f.cargo), _lmS(f.email).toLowerCase(), _lmS(f.linkedin), JSON.stringify(raw)]);
+        INSERT INTO cantera_contacts (batch_id,company_id,user_id,nombre,apellido,cargo,email,linkedin,raw,
+          ubicacion,conexion_grado,premium,antiguedad_cargo,conexiones_mutuas,cambio_reciente,publico_reciente,sigue_empresa)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+      `, [batchId, companyId, uid, nombre, apellido, _lmS(f.cargo), _lmS(f.email).toLowerCase(), _lmS(f.linkedin), JSON.stringify(raw),
+          _lmS(f.ubicacion), _lmS(f.conexion_grado), _lmS(f.premium), _lmS(f.antiguedad_cargo), _lmS(f.conexiones_mutuas),
+          _lmS(f.cambio_reciente), _lmS(f.publico_reciente), _lmS(f.sigue_empresa)]);
       summary.contactsCreated++;
     } catch (e) { if (summary.errors.length < 10) summary.errors.push(`Fila ${summary.rows}: ${e.message}`); }
   }
