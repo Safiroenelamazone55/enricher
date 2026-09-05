@@ -6652,8 +6652,12 @@ app.delete('/api/cantera/criterios/:id', requireAuth, async (req, res) => {
 app.get('/api/cantera/global', requireAuth, async (req, res) => {
   const uid = req.workspaceOwnerId;
   const q = `%${(req.query.q || '').trim()}%`;
+  const paises = String(req.query.pais || '').split(',').map(_cantNormPais).filter(Boolean);
+  const industrias = String(req.query.industria || '').split(',').map(s => _cantNormText(s)).filter(Boolean);
+  const tamanos = String(req.query.tamano || '').split(',').filter(Boolean);
+  const origen = req.query.origen === 'crm' || req.query.origen === 'borrador' ? req.query.origen : '';
   try {
-    const { rows } = await pool.query(`
+    const { rows: all } = await pool.query(`
       SELECT id, nombre, dominio, pais, industria, tamano, 'crm' AS origen,
              (SELECT nombre FROM outbound_clients oc WHERE oc.id = lc.outbound_client_id) AS referencia,
              updated_at
@@ -6663,8 +6667,16 @@ app.get('/api/cantera/global', requireAuth, async (req, res) => {
              'borrador_' || cb.estado AS origen, cb.nombre AS referencia, cc.created_at AS updated_at
         FROM cantera_companies cc JOIN cantera_batches cb ON cb.id = cc.batch_id
        WHERE cc.user_id=$1 AND ($2 = '%%' OR cc.nombre ILIKE $2 OR cc.dominio ILIKE $2)
-       ORDER BY updated_at DESC LIMIT 500
+       ORDER BY updated_at DESC LIMIT 2000
     `, [uid, q]);
+    const rows = all.filter(r => {
+      if (origen === 'crm' && r.origen !== 'crm') return false;
+      if (origen === 'borrador' && r.origen === 'crm') return false;
+      if (paises.length && !paises.includes(_cantNormPais(r.pais))) return false;
+      if (industrias.length && !industrias.some(i => _cantNormText(r.industria).includes(i))) return false;
+      if (tamanos.length && r.tamano && !tamanos.includes(r.tamano)) return false;
+      return true;
+    }).slice(0, 500);
     res.json(rows);
   } catch (err) { console.error('[cantera] GET global', err.message); res.status(500).json({ error: 'Error al buscar en la base global' }); }
 });

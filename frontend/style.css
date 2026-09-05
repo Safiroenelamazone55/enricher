@@ -12362,6 +12362,21 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .cant-subrow td { background: var(--brand-ll, #F1EFEB); font-size: .82rem; color: var(--text2, #6C6862); padding: 6px 10px; }
 .cant-save-row { margin-top: 10px; }
 
+/* Base global — panel de filtros colapsable + lista, estilo Sales Nav */
+.cant-global-layout { display: flex; align-items: flex-start; gap: 18px; }
+.cant-global-panel { flex: 0 0 260px; background: var(--white, #fff); border: 1px solid var(--border, #EAE7E2); border-radius: 0; padding: 14px; position: sticky; top: 0; }
+.cant-global-layout.collapsed .cant-global-panel { flex: 0 0 auto; padding: 6px; }
+.cant-global-panel-hd { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.cant-global-results { flex: 1 1 auto; min-width: 0; }
+.cant-global-results__hd { font-size: .82rem; color: var(--muted, #918C85); margin-bottom: 10px; }
+.cant-global-list { display: flex; flex-direction: column; gap: 1px; background: var(--border, #EAE7E2); border: 1px solid var(--border, #EAE7E2); }
+.cant-global-row { display: flex; align-items: center; gap: 12px; background: var(--white, #fff); padding: 10px 14px; }
+.cant-global-row__main { flex: 1 1 auto; min-width: 0; }
+.cant-global-row__name { font-size: .88rem; font-weight: 700; color: var(--text, #0A2540); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cant-global-row__sub { font-size: .78rem; color: var(--muted, #918C85); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cant-global-row__ref { flex: 0 0 auto; font-size: .78rem; color: var(--text2, #45586A); max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 860px) { .cant-global-layout { flex-direction: column; } .cant-global-panel { flex: 1 1 auto; width: 100%; position: static; } }
+
 /* Selector con autocompletado (Filtros básicos) — nunca texto libre. */
 .filters-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; margin-bottom: 6px; }
 .filter-field { background: var(--white, #fff); border: 1px solid var(--border, #EAE7E2); border-radius: 0; padding: 10px 12px; }

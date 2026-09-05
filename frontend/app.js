@@ -5696,14 +5696,23 @@ const CanteraModule = (() => {
 // ellos), para saber si una empresa ya se vio antes en el sistema.
 // =================================================================
 const CanteraGlobalModule = (() => {
-  let _rows = []; let _q = '';
+  let _rows = []; let _q = ''; let _origen = ''; let _collapsed = false;
+  let _filtros = { pais: [], industria: [], tamano: [] };
+  let _opts = null;
   async function render(containerId) {
     const el = document.getElementById(containerId); if (!el) return;
     el.innerHTML = `<div class="cp-empty2" style="padding:22px">Cargando…</div>`;
+    if (!_opts) { try { _opts = await (await apiFetch(`${API}/cantera/opciones-filtro`)).json(); } catch { _opts = {}; } }
     await _search(); el.innerHTML = _html();
   }
   async function _search() {
-    try { const r = await apiFetch(`${API}/cantera/global?q=${encodeURIComponent(_q)}`); _rows = r.ok ? await r.json() : []; }
+    const p = new URLSearchParams();
+    if (_q) p.set('q', _q);
+    if (_origen) p.set('origen', _origen);
+    if (_filtros.pais.length) p.set('pais', _filtros.pais.join(','));
+    if (_filtros.industria.length) p.set('industria', _filtros.industria.join(','));
+    if (_filtros.tamano.length) p.set('tamano', _filtros.tamano.join(','));
+    try { const r = await apiFetch(`${API}/cantera/global?${p.toString()}`); _rows = r.ok ? await r.json() : []; }
     catch { _rows = []; }
   }
   function _origenLabel(o) {
@@ -5712,31 +5721,87 @@ const CanteraGlobalModule = (() => {
     if (o === 'borrador_promovido') return 'Borrador (ya movido)';
     return o;
   }
+  // Panel de filtros vertical, colapsable — mismo espíritu que el rail de
+  // filtros de LinkedIn Sales Nav (pedido explícito 2026-09-05).
+  function _taFieldG(field, label) {
+    const chips = (_filtros[field] || []).map((v, i) => `<span class="tag">${esc(v)} <span class="x" onclick="CanteraGlobalModule.removeFiltro('${field}',${i})">✕</span></span>`).join('');
+    return `<div class="filter-field" data-ta="${field}">
+      <label class="field-label">${esc(label)}</label>
+      <div class="tag-list">${chips}</div>
+      <div class="ta-wrap">
+        <input type="text" class="ta-input" placeholder="Escribe para buscar…" autocomplete="off"
+          onfocus="CanteraGlobalModule.taOpen('${field}')" oninput="CanteraGlobalModule.taFilter('${field}')" onblur="CanteraGlobalModule.taBlur('${field}')">
+        <div class="ta-menu" id="tag-menu-${field}" hidden></div>
+      </div>
+    </div>`;
+  }
+  function _panelHtml() {
+    return `<div class="cant-global-panel-hd">
+        <h3 style="margin:0;font-size:.92rem">Criterios</h3>
+        <button class="cant-x" onclick="CanteraGlobalModule.toggleCollapse()" title="Ocultar panel">‹</button>
+      </div>
+      <label class="field-label">Buscar</label>
+      <input type="text" class="form-input" style="margin-bottom:12px" placeholder="Nombre o dominio…" value="${esc(_q)}" oninput="CanteraGlobalModule.setQ(this.value)">
+      <label class="field-label">Dónde está</label>
+      <select class="form-input" style="margin-bottom:12px" onchange="CanteraGlobalModule.setOrigen(this.value)">
+        <option value="">Todos</option>
+        <option value="crm"${_origen === 'crm' ? ' selected' : ''}>Solo en CRM</option>
+        <option value="borrador"${_origen === 'borrador' ? ' selected' : ''}>Solo en borradores</option>
+      </select>
+      ${_taFieldG('pais', 'País')}
+      ${_taFieldG('industria', 'Industria')}
+      ${_taFieldG('tamano', 'Tamaño de empresa')}`;
+  }
+  function _resultsHtml() {
+    if (!_rows.length) return `<div class="cp-empty2" style="padding:22px">Sin resultados${_q ? ' para "' + esc(_q) + '"' : ' — ajusta los criterios de la izquierda'}</div>`;
+    return `<div class="cant-global-list">${_rows.map(r => `
+      <div class="cant-global-row">
+        <div class="cant-global-row__main">
+          <div class="cant-global-row__name">${esc(r.nombre)}</div>
+          <div class="cant-global-row__sub">${esc(r.dominio || 'sin dominio')}${r.pais ? ' · ' + esc(r.pais) : ''}${r.industria ? ' · ' + esc(r.industria) : ''}</div>
+        </div>
+        <span class="cant-estado cant-estado--${r.origen === 'crm' ? 'aprobado' : 'pendiente'}">${_origenLabel(r.origen)}</span>
+        <span class="cant-global-row__ref">${esc(r.referencia || '—')}</span>
+      </div>`).join('')}</div>`;
+  }
   function _html() {
-    const rows = _rows.map(r => `<tr>
-      <td class="dg-cell--frozen">${esc(r.nombre)}</td>
-      <td class="dg-cell--ro">${esc(r.dominio || '—')}</td>
-      <td class="dg-cell--ro">${esc(r.pais || '—')}</td>
-      <td class="dg-cell--ro">${esc(r.industria || '—')}</td>
-      <td class="dg-cell--ro"><span class="cant-estado cant-estado--${r.origen === 'crm' ? 'aprobado' : 'pendiente'}">${_origenLabel(r.origen)}</span></td>
-      <td class="dg-cell--ro">${esc(r.referencia || '—')}</td>
-    </tr>`).join('');
     return `<div class="lm-sec-head lm-sec-head--compact"><div><h2 class="lm-sec-title">Base global</h2></div></div>
       <p class="lm-sec-sub" style="margin-bottom:14px">Todo lo que el sistema conoce — ya sea que esté en el CRM de un cliente o todavía en un borrador de Cantera — antes de salir a buscarlo de nuevo.</p>
-      <div class="cant-filters-row" style="margin-bottom:14px">
-        <input type="text" class="form-input" style="max-width:320px" placeholder="Buscar por nombre o dominio…" value="${esc(_q)}" oninput="CanteraGlobalModule.setQ(this.value)">
-      </div>
-      <div class="lm-dt-wrap dg-dt-wrap"><table class="clients-table dg-table sel-on" style="table-layout:auto">
-        <thead><tr><th>Nombre</th><th>Dominio</th><th>País</th><th>Industria</th><th>Dónde está</th><th>Cliente / Borrador</th></tr></thead>
-        <tbody>${rows || `<tr><td colspan="6" class="cp-empty2">Sin resultados${_q ? ' para "' + esc(_q) + '"' : ' — todavía no hay nada en el sistema'}</td></tr>`}</tbody>
-      </table></div>`;
+      <div class="cant-global-layout${_collapsed ? ' collapsed' : ''}">
+        <div class="cant-global-panel">${_collapsed ? `<button class="cant-x" onclick="CanteraGlobalModule.toggleCollapse()" title="Mostrar criterios">›</button>` : _panelHtml()}</div>
+        <div class="cant-global-results">
+          <div class="cant-global-results__hd">${_rows.length} resultado(s)</div>
+          ${_resultsHtml()}
+        </div>
+      </div>`;
   }
+  function _repaint() { const el = document.getElementById('cantera-global-body'); if (el) el.innerHTML = _html(); }
   let _t = null;
-  function setQ(v) {
-    _q = v; clearTimeout(_t);
-    _t = setTimeout(async () => { await _search(); const el = document.getElementById('cantera-global-body'); if (el) el.innerHTML = _html(); }, 300);
+  function setQ(v) { _q = v; clearTimeout(_t); _t = setTimeout(async () => { await _search(); _repaint(); }, 300); }
+  async function setOrigen(v) { _origen = v; await _search(); _repaint(); }
+  function toggleCollapse() { _collapsed = !_collapsed; _repaint(); }
+  function _gOptions(field) {
+    const all = (_opts && _opts[field]) || [];
+    const chosen = new Set((_filtros[field] || []).map(v => v.toLowerCase()));
+    return all.filter(o => !chosen.has(o.toLowerCase()));
   }
-  return { render, setQ };
+  function taOpen(field) {
+    const menu = document.getElementById('tag-menu-' + field); if (!menu) return;
+    menu.innerHTML = _gOptions(field).map(o => `<div class="ta-opt" onmousedown="event.preventDefault();CanteraGlobalModule.addFiltro('${field}','${esc(o).replace(/'/g, "\\'")}')">${esc(o)}</div>`).join('') || `<div class="ta-none">Sin opciones</div>`;
+    menu.hidden = false;
+  }
+  function taFilter(field) {
+    const wrap = document.querySelector(`.filter-field[data-ta="${field}"]`); const inp = wrap?.querySelector('.ta-input'); const menu = document.getElementById('tag-menu-' + field);
+    if (!inp || !menu) return;
+    const f = inp.value.toLowerCase().trim();
+    const opts = _gOptions(field).filter(o => o.toLowerCase().includes(f));
+    menu.innerHTML = opts.map(o => `<div class="ta-opt" onmousedown="event.preventDefault();CanteraGlobalModule.addFiltro('${field}','${esc(o).replace(/'/g, "\\'")}')">${esc(o)}</div>`).join('') || `<div class="ta-none">Sin coincidencias</div>`;
+    menu.hidden = false;
+  }
+  function taBlur(field) { setTimeout(() => { const m = document.getElementById('tag-menu-' + field); if (m) m.hidden = true; }, 160); }
+  async function addFiltro(field, value) { _filtros[field] = [...(_filtros[field] || []), value]; await _search(); _repaint(); }
+  async function removeFiltro(field, idx) { _filtros[field].splice(idx, 1); await _search(); _repaint(); }
+  return { render, setQ, setOrigen, toggleCollapse, taOpen, taFilter, taBlur, addFiltro, removeFiltro };
 })();
 
 // =================================================================
