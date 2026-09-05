@@ -1885,7 +1885,88 @@ async function initDb() {
       );
     `);
 
-    console.log('[db] tables ready (users, verifications, batch_jobs, clients, projects, tasks, payments, team_members, workspaces, workspace_invites, chat_messages, leads, meetings, fin_config, fin_member_config, pagos_internos, opportunities, opportunity_tasks)');
+    // ── Cantera — módulo de prospección en borrador, separado del CRM real ──
+    // Un "batch" de Cantera es una secuencia en borrador: vive sola, con su propio
+    // criterio de calificación (filtros básicos + ICP + Tiers + puestos), hasta que
+    // se "mueve al CRM" (promote) y recién ahí se crean lm_companies/lm_contacts +
+    // una sequence real. Cliente y campaña son OPCIONALES desde el inicio (pueden
+    // decidirse en el momento de mover al CRM, o la campaña puede ser una que ya
+    // existe) — solo la secuencia (este batch) es la unidad obligatoria.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS cantera_batches (
+        id                  SERIAL        PRIMARY KEY,
+        user_id             INTEGER       NOT NULL,
+        nombre              TEXT          NOT NULL,
+        outbound_client_id  INTEGER       REFERENCES outbound_clients(id) ON DELETE SET NULL,
+        campaign_id         INTEGER       REFERENCES campaigns(id) ON DELETE SET NULL,
+        estado              TEXT          NOT NULL DEFAULT 'borrador',   -- borrador | promovido
+        filtros             JSONB         NOT NULL DEFAULT '{}',          -- {tamano:[...], pais:[...], industria:[...]}
+        icp                 TEXT          NOT NULL DEFAULT '',
+        tiers               JSONB         NOT NULL DEFAULT '[]',          -- [{clave,nombre,orden,criterio,descarte}]
+        puestos              JSONB         NOT NULL DEFAULT '{}',          -- {tierClave: [{titulo,exclusion,tipo,orden}]}
+        promoted_at         TIMESTAMPTZ,
+        created_at          TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+        updated_at          TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+      );
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS cantera_batches_user_idx ON cantera_batches (user_id);`);
+
+    // Empresas del borrador — independientes de lm_companies hasta que se promueven.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS cantera_companies (
+        id              SERIAL        PRIMARY KEY,
+        batch_id        INTEGER       NOT NULL REFERENCES cantera_batches(id) ON DELETE CASCADE,
+        user_id         INTEGER       NOT NULL,
+        nombre          TEXT          NOT NULL DEFAULT '',
+        dominio         TEXT          NOT NULL DEFAULT '',
+        website         TEXT          NOT NULL DEFAULT '',
+        industria       TEXT          NOT NULL DEFAULT '',
+        tamano          TEXT          NOT NULL DEFAULT '',
+        pais            TEXT          NOT NULL DEFAULT '',
+        ciudad          TEXT          NOT NULL DEFAULT '',
+        linkedin        TEXT          NOT NULL DEFAULT '',
+        raw             JSONB         NOT NULL DEFAULT '{}',   -- columnas del archivo sin mapear
+        -- Resultado del paso 1 (filtros básicos, sin IA):
+        paso1_estado    TEXT          NOT NULL DEFAULT 'pendiente',  -- pendiente | aprobado | descartado
+        paso1_motivo    TEXT          NOT NULL DEFAULT '',
+        -- Resultado del paso 2 (investigación profunda con IA):
+        paso2_estado    TEXT          NOT NULL DEFAULT 'pendiente',  -- pendiente | aprobado | descartado | error
+        tier_clave      TEXT          NOT NULL DEFAULT '',
+        confianza       TEXT          NOT NULL DEFAULT '',           -- alta | media | baja
+        evidencia       JSONB         NOT NULL DEFAULT '[]',         -- [{fuente,url,resumen}]
+        motivo_descarte TEXT          NOT NULL DEFAULT '',
+        validado_at     TIMESTAMPTZ,
+        promoted_company_id INTEGER,   -- lm_companies.id, una vez promovida
+        created_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+      );
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS cantera_companies_batch_idx ON cantera_companies (batch_id);`);
+
+    // Contactos del borrador, agrupados por empresa del mismo borrador.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS cantera_contacts (
+        id              SERIAL        PRIMARY KEY,
+        batch_id        INTEGER       NOT NULL REFERENCES cantera_batches(id) ON DELETE CASCADE,
+        company_id      INTEGER       REFERENCES cantera_companies(id) ON DELETE CASCADE,
+        user_id         INTEGER       NOT NULL,
+        nombre          TEXT          NOT NULL DEFAULT '',
+        apellido        TEXT          NOT NULL DEFAULT '',
+        cargo           TEXT          NOT NULL DEFAULT '',
+        email           TEXT          NOT NULL DEFAULT '',
+        linkedin        TEXT          NOT NULL DEFAULT '',
+        raw             JSONB         NOT NULL DEFAULT '{}',
+        -- Resultado de la validación de puesto (paso 2, junto con la empresa):
+        puesto_estado   TEXT          NOT NULL DEFAULT 'pendiente',  -- pendiente | decide | respaldo | descartado
+        puesto_motivo   TEXT          NOT NULL DEFAULT '',
+        prioridad       INTEGER       NOT NULL DEFAULT 0,
+        promoted_contact_id INTEGER,  -- lm_contacts.id, una vez promovido
+        created_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+      );
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS cantera_contacts_batch_idx ON cantera_contacts (batch_id);`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS cantera_contacts_company_idx ON cantera_contacts (company_id);`);
+
+    console.log('[db] tables ready (users, verifications, batch_jobs, clients, projects, tasks, payments, team_members, workspaces, workspace_invites, chat_messages, leads, meetings, fin_config, fin_member_config, pagos_internos, opportunities, opportunity_tasks, cantera_batches, cantera_companies, cantera_contacts)');
   } catch (err) {
     console.error('[db] initDb failed:', err.message);
     throw err;

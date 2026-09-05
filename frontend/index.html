@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260904o"/>
+  <link rel="stylesheet" href="style.css?v=20260904p"/>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -287,6 +287,9 @@
       <button class="snav-mod" data-module="finance" onclick="selectModule('finance')" data-tip="Finanzas" aria-label="Finanzas">
         <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 18 8 12.5 11.5 15 17 8 21 5.5"/><polyline points="16.5 5.5 21 5.5 21 10"/></svg>
       </button>
+      <button class="snav-mod" data-module="cantera" onclick="selectModule('cantera')" data-tip="Cantera" aria-label="Cantera">
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 3 7l9 5 9-5-9-5z"/><path d="M3 12l9 5 9-5"/><path d="M3 17l9 5 9-5"/></svg>
+      </button>
     </div>
     <div class="snav-rail__spacer"></div>
     <button class="snav-rail__btn" onclick="WorkspaceModule.openNameModal()" data-tip="Configuración" aria-label="Configuración general">
@@ -516,6 +519,19 @@
             </svg>
           </span>
           <span class="snav-item__label">Lead Manager</span>
+        </button>
+
+      </div>
+
+      <div class="snav-group" data-module="cantera" id="snav-body-cantera">
+
+        <button class="snav-item" data-tab="cantera" data-tooltip="Cantera">
+          <span class="snav-item__icon">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2 3 7l9 5 9-5-9-5z"/><path d="M3 12l9 5 9-5"/><path d="M3 17l9 5 9-5"/>
+            </svg>
+          </span>
+          <span class="snav-item__label">Cantera</span>
         </button>
 
       </div>
@@ -1859,6 +1875,10 @@
       <div id="dg-body"></div>
     </div><!-- /pane-datos -->
 
+    <div class="pane" id="pane-cantera">
+      <div id="cantera-body"></div>
+    </div><!-- /pane-cantera -->
+
     <!-- Lead Manager vive FUERA de .content-wrap (full-width workspace) — ver abajo -->
 
 
@@ -2043,6 +2063,10 @@
     <button class="snav-mod ws-mod" data-module="finance" onclick="selectModule('finance');closeWorkspaceMenu()" role="menuitem">
       <span class="ws-mod__ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 18 8 12.5 11.5 15 17 8 21 5.5"/><polyline points="16.5 5.5 21 5.5 21 10"/></svg></span>
       <span class="ws-mod__lbl">Finanzas</span><span class="ws-mod__chk"></span>
+    </button>
+    <button class="snav-mod ws-mod" data-module="cantera" onclick="selectModule('cantera');closeWorkspaceMenu()" role="menuitem">
+      <span class="ws-mod__ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 3 7l9 5 9-5-9-5z"/><path d="M3 12l9 5 9-5"/><path d="M3 17l9 5 9-5"/></svg></span>
+      <span class="ws-mod__lbl">Cantera</span><span class="ws-mod__chk"></span>
     </button>
   </div>
 
@@ -3067,7 +3091,7 @@
   })();
 </script>
 
-<script src="app.js?v=20260904n"></script>
+<script src="app.js?v=20260904o"></script>
 <div id="task-quick-edit" style="display:none;position:fixed;z-index:9999"></div>
 </body>
 </html>

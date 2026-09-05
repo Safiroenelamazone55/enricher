@@ -514,7 +514,7 @@ function selectWorkspaceArea(area) {
 
 // ── Doble sidebar: rail de módulos + panel de secciones ──
 let _activeModule = 'management';
-const _MOD_TITLES = { management: 'Operaciones', enricher: 'Enriquecimiento', leadmanagement: 'Outreach', finance: 'Finanzas' };
+const _MOD_TITLES = { management: 'Operaciones', enricher: 'Enriquecimiento', leadmanagement: 'Outreach', finance: 'Finanzas', cantera: 'Cantera' };
 function _moduleOf(tab) {
   return document.querySelector(`.snav-item[data-tab="${tab}"]`)?.closest('.snav-group')?.dataset.module || 'management';
 }
@@ -585,6 +585,11 @@ const HOME_MODULES = [
   // solo se le quitó el snav-item de Operaciones y se le puso uno propio.
   { id: 'finance',        tab: 'mgmt-finance',   name: 'Finanzas',       desc: 'Cobros, distribución y pagos internos',        color: 'blue',
     icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 18 8 12.5 11.5 15 17 8 21 5.5"/><polyline points="16.5 5.5 21 5.5 21 10"/></svg>' },
+  // Cantera: prospección en borrador, separada del CRM real hasta que se
+  // "mueve" — no comparte pane ni datos con Enriquecimiento ni Outreach
+  // (pedido explícito 2026-09-04: evitar confundir lo real con lo investigado).
+  { id: 'cantera',        tab: 'cantera',        name: 'Cantera',        desc: 'Prospección en borrador: calificar antes de sumar al CRM', color: 'stone',
+    icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 3 7l9 5 9-5-9-5z"/><path d="M3 12l9 5 9-5"/><path d="M3 17l9 5 9-5"/></svg>' },
   // "Empresa" no es un módulo con su propio sidebar/panes — abre el mismo panel de
   // Empresa (antes "Configuración") que ya existía, con Usuarios y Configuración
   // adentro como pestañas, en vez de sueltas en la barra superior (pedido 2026-09-02).
@@ -4935,6 +4940,196 @@ const TasksColumns = (() => {
     if (_menuClose) _menuClose();
   }
   return { init, toggleMenu, setVisible, reset };
+})();
+
+// =================================================================
+// CANTERA MODULE — prospección en borrador, separada del CRM real.
+// Un batch = una secuencia borrador con su propio criterio (filtros
+// básicos + ICP + Tiers + puestos). Nada de esto toca lm_companies/
+// lm_contacts hasta que se "mueve al CRM" (promote, aún no implementado
+// en esta primera pasada — ver TODO en canteraPromote).
+// =================================================================
+const CanteraModule = (() => {
+  let _containerId = 'cantera-body';
+  let _view = 'list';       // list | detail
+  let _batches = [];
+  let _current = null;      // batch abierto en detalle
+  let _companies = [];
+  let _onlyFailed = false;
+
+  async function load() {
+    try { const r = await apiFetch(`${API}/cantera/batches`); _batches = r.ok ? await r.json() : []; }
+    catch { _batches = []; }
+  }
+  function render(containerId) {
+    _containerId = containerId || _containerId;
+    const el = document.getElementById(_containerId); if (!el) return;
+    el.innerHTML = `<div class="cp-empty2" style="padding:22px">Cargando…</div>`;
+    load().then(() => { _view = 'list'; _paint(); });
+  }
+  function _paint() {
+    const el = document.getElementById(_containerId); if (!el) return;
+    el.innerHTML = _view === 'detail' && _current ? _detailHtml() : _listHtml();
+  }
+
+  // ── Lista de borradores ──────────────────────────────────────────
+  function _listHtml() {
+    const rows = _batches.map(b => `
+      <tr class="clients-table__row" onclick="CanteraModule.open(${b.id})">
+        <td>${esc(b.nombre)}</td>
+        <td class="dg-cell--ro">${esc(b.cliente_nombre || '—')}</td>
+        <td class="dg-cell--ro">${esc(b.campana_nombre || '—')}</td>
+        <td class="dg-cell--ro">${b.total_empresas}</td>
+        <td class="dg-cell--ro">${b.pasaron_filtro}</td>
+        <td class="dg-cell--ro">${b.calificadas}</td>
+        <td class="dg-cell--ro"><span class="cant-estado cant-estado--${esc(b.estado)}">${b.estado === 'borrador' ? 'Borrador' : 'Movido al CRM'}</span></td>
+      </tr>`).join('');
+    return `<div class="lm-sec-head lm-sec-head--compact"><div><h2 class="lm-sec-title">Cantera</h2></div>
+        <button class="btn btn--primary btn--sm" onclick="CanteraModule.openCreate()">+ Nuevo borrador</button>
+      </div>
+      <p class="lm-sec-sub" style="margin-bottom:16px">Prospección sin validar todavía — nada de esto existe en el CRM hasta que lo muevas.</p>
+      <div class="lm-dt-wrap dg-dt-wrap"><table class="clients-table dg-table sel-on" style="table-layout:auto">
+        <thead><tr><th>Nombre</th><th>Cliente</th><th>Campaña</th><th>Empresas</th><th>Pasaron filtro</th><th>Calificadas</th><th>Estado</th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="7" class="cp-empty2">Sin borradores todavía — crea el primero.</td></tr>`}</tbody>
+      </table></div>`;
+  }
+  function openCreate() {
+    const nombre = prompt('Nombre del borrador (ej. "Rutas de reparto LatAm")');
+    if (!nombre) return;
+    apiFetch(`${API}/cantera/batches`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre }) })
+      .then(r => r.json()).then(b => { open(b.id); }).catch(e => showBanner('Error: ' + e.message, 'error'));
+  }
+  async function open(id) {
+    const r = await apiFetch(`${API}/cantera/batches/${id}`); _current = r.ok ? await r.json() : null;
+    if (!_current) { showBanner('Borrador no encontrado', 'error'); return; }
+    await _loadCompanies();
+    _view = 'detail'; _paint();
+  }
+  function backToList() { _view = 'list'; _current = null; _paint(); }
+  async function _loadCompanies() {
+    const r = await apiFetch(`${API}/cantera/batches/${_current.id}/companies`);
+    _companies = r.ok ? await r.json() : [];
+  }
+
+  // ── Detalle: criterio + import + resultados ──────────────────────
+  function _detailHtml() {
+    const b = _current;
+    const filtros = b.filtros || {};
+    const rows = (_onlyFailed ? _companies.filter(c => c.paso1_estado === 'descartado') : _companies).map(c => `
+      <tr>
+        <td class="dg-cell--frozen">${esc(c.nombre)}</td>
+        <td class="dg-cell--ro">${esc(c.dominio || '—')}</td>
+        <td class="dg-cell--ro">${esc(c.pais || '—')}</td>
+        <td class="dg-cell--ro">${esc(c.industria || '—')}</td>
+        <td class="dg-cell--ro">${esc(c.tamano || '—')}</td>
+        <td class="dg-cell--ro">${c.contactos}</td>
+        <td class="dg-cell--ro"><span class="cant-estado cant-estado--${esc(c.paso1_estado)}">${_paso1Label(c.paso1_estado)}</span></td>
+        <td class="dg-cell--ro" title="${esc(c.paso1_motivo)}">${esc(c.paso1_motivo || '—')}</td>
+      </tr>`).join('');
+    const aprobadas = _companies.filter(c => c.paso1_estado === 'aprobado').length;
+    const descartadas = _companies.filter(c => c.paso1_estado === 'descartado').length;
+    const pendientes = _companies.filter(c => c.paso1_estado === 'pendiente').length;
+
+    return `<div class="lm-sec-head lm-sec-head--compact">
+        <div><button class="lm-bulk-ghost" style="color:var(--muted,#B4AFA8);background:none;padding:0 0 4px" onclick="CanteraModule.backToList()">‹ Cantera</button><h2 class="lm-sec-title">${esc(b.nombre)}</h2></div>
+        <button class="dg-kebab" onclick="CanteraModule.moreMenu(event)" title="Más opciones">⋮</button>
+      </div>
+
+      <div class="scope-bar-cant">
+        <span class="cant-chip">${b.outbound_client_id ? esc(b.cliente_nombre || 'Cliente asignado') : 'Cliente: sin asignar (opcional)'}</span>
+        <span class="cant-chip">${b.campaign_id ? esc(b.campana_nombre || 'Campaña asignada') : 'Campaña: sin asignar (opcional)'}</span>
+      </div>
+
+      <div class="cant-section">
+        <div class="cant-section__hd"><span class="cant-section__num">01</span><h3>Filtros básicos</h3></div>
+        <div class="cant-filters-row">
+          <label class="cant-flabel">País<input type="text" id="cant-f-pais" class="form-input" style="width:auto" value="${esc((filtros.pais || []).join(', '))}" placeholder="Perú, Chile…"></label>
+          <label class="cant-flabel">Industria<input type="text" id="cant-f-industria" class="form-input" style="width:auto" value="${esc((filtros.industria || []).join(', '))}" placeholder="Farming, Food…"></label>
+          <label class="cant-flabel">Tamaño<input type="text" id="cant-f-tamano" class="form-input" style="width:auto" value="${esc((filtros.tamano || []).join(', '))}" placeholder="11-50, 51-200…"></label>
+          <button class="btn btn--ghost btn--sm" onclick="CanteraModule.saveFiltros()">Guardar</button>
+        </div>
+      </div>
+
+      <div class="cant-section">
+        <div class="cant-section__hd"><span class="cant-section__num">02</span><h3>Importar prospectos</h3></div>
+        <div class="cant-import-row">
+          <input type="file" id="cant-file" accept=".csv,.xlsx,.xls" style="max-width:280px">
+          <button class="btn btn--primary btn--sm" onclick="CanteraModule.doImport()">Importar</button>
+          <span class="cant-import-hint">Mismo formato que el importador de Contactos: nombre, apellido, cargo, email, linkedin, co_nombre, co_dominio, co_industria, co_tamano, co_pais.</span>
+        </div>
+      </div>
+
+      <div class="cant-section">
+        <div class="cant-section__hd"><span class="cant-section__num">03</span><h3>Resultados</h3></div>
+        <div class="cant-results-bar">
+          <span class="cant-count">${_companies.length} empresa(s) · ${aprobadas} aprobada(s) · ${descartadas} descartada(s) · ${pendientes} pendiente(s)</span>
+          <button class="btn btn--primary btn--sm" onclick="CanteraModule.runFiltros()">Correr filtros básicos</button>
+          <button class="dg-issues-toggle${_onlyFailed ? ' active' : ''}" onclick="CanteraModule.toggleFailed()">Ver solo descartadas</button>
+        </div>
+        <div class="lm-dt-wrap dg-dt-wrap"><table class="clients-table dg-table" style="table-layout:auto">
+          <thead><tr><th class="dg-cell--frozen">Nombre</th><th>Dominio</th><th>País</th><th>Industria</th><th>Tamaño</th><th>Contactos</th><th>Paso 1</th><th>Motivo</th></tr></thead>
+          <tbody>${rows || `<tr><td colspan="8" class="cp-empty2">Importa un archivo para empezar.</td></tr>`}</tbody>
+        </table></div>
+      </div>`;
+  }
+  function _paso1Label(s) { return s === 'aprobado' ? 'Aprobado' : s === 'descartado' ? 'Descartado' : 'Pendiente'; }
+  function toggleFailed() { _onlyFailed = !_onlyFailed; _paint(); }
+
+  async function saveFiltros() {
+    const split = v => (v || '').split(',').map(s => s.trim()).filter(Boolean);
+    const filtros = {
+      pais: split(document.getElementById('cant-f-pais')?.value),
+      industria: split(document.getElementById('cant-f-industria')?.value),
+      tamano: split(document.getElementById('cant-f-tamano')?.value),
+    };
+    try {
+      const res = await apiFetch(`${API}/cantera/batches/${_current.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ..._current, filtros }) });
+      _current = await res.json();
+      showBanner('✓ Filtros guardados', 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  async function doImport() {
+    const input = document.getElementById('cant-file');
+    if (!input?.files?.length) { showBanner('Elige un archivo primero', 'info'); return; }
+    const fd = new FormData(); fd.append('file', input.files[0]);
+    try {
+      const res = await apiFetch(`${API}/cantera/batches/${_current.id}/import`, { method: 'POST', body: fd });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Error');
+      showBanner(`✓ ${d.companiesCreated} empresa(s) y ${d.contactsCreated} contacto(s) importados`, 'success');
+      await _loadCompanies(); _paint();
+    } catch (e) { showBanner('Error al importar: ' + e.message, 'error'); }
+  }
+  async function runFiltros() {
+    try {
+      const res = await apiFetch(`${API}/cantera/batches/${_current.id}/run-filtros`, { method: 'POST' });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Error');
+      showBanner(`✓ ${d.aprobadas} aprobada(s) · ${d.descartadas} descartada(s) de ${d.total}`, 'success');
+      await _loadCompanies(); _paint();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  function moreMenu(ev) {
+    if (ev && ev.stopPropagation) ev.stopPropagation();
+    document.querySelectorAll('.cp-mark-menu').forEach(m => m.remove());
+    const close = "document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove())";
+    const item = (label, onclick) => `<button class="cp-mark-menu__b" onclick="${close};${onclick}">${label}</button>`;
+    const html = `<div class="cp-mark-menu__list">` + item('Eliminar borrador', `CanteraModule.remove(${_current.id})`) + `</div>`;
+    const menu = document.createElement('div'); menu.className = 'cp-mark-menu'; menu.style.minWidth = '190px'; menu.innerHTML = html;
+    document.body.appendChild(menu);
+    const t = (ev && (ev.currentTarget || ev.target)) || document.body; const r = t.getBoundingClientRect();
+    menu.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 200))}px`; menu.style.top = `${r.bottom + 6}px`;
+    setTimeout(() => document.addEventListener('click', function onDoc(e) { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', onDoc); } }), 0);
+  }
+  async function remove(id) {
+    if (!confirm('¿Eliminar este borrador? No se puede deshacer.')) return;
+    try {
+      await apiFetch(`${API}/cantera/batches/${id}`, { method: 'DELETE' });
+      backToList(); await load(); _paint();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+
+  return { render, open, openCreate, backToList, saveFiltros, doImport, runFiltros, toggleFailed, moreMenu, remove };
 })();
 
 // =================================================================
@@ -34869,6 +35064,7 @@ function initApp() {
       loadVerifications();
     }
     if (tabName === 'datos') LeadManagerModule.renderDataGrid('dg-body');
+    if (tabName === 'cantera') CanteraModule.render('cantera-body');
     if (tabName === 'mgmt-dashboard') DashboardModule.load();
     if (tabName === 'mgmt-mywork')    MyWorkModule.load();
     if (tabName === 'mgmt-finance')   FinanceModule.load();

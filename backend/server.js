@@ -6355,6 +6355,220 @@ app.post('/api/lm/import', requireAuth, upload.single('file'), async (req, res) 
   res.json(summary);
 });
 
+// ═══════════════════════════════════════════════════════════════════
+// Cantera — prospección en borrador, separada del CRM real (lm_companies/
+// lm_contacts no se tocan hasta el "promote"). Un batch = una secuencia
+// borrador con su propio criterio (filtros básicos + ICP + Tiers + puestos).
+// ═══════════════════════════════════════════════════════════════════
+app.get('/api/cantera/batches', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT b.*, oc.nombre AS cliente_nombre, cam.nombre AS campana_nombre,
+             (SELECT COUNT(*) FROM cantera_companies c WHERE c.batch_id=b.id)::int AS total_empresas,
+             (SELECT COUNT(*) FROM cantera_companies c WHERE c.batch_id=b.id AND c.paso1_estado='aprobado')::int AS pasaron_filtro,
+             (SELECT COUNT(*) FROM cantera_companies c WHERE c.batch_id=b.id AND c.paso2_estado='aprobado')::int AS calificadas
+        FROM cantera_batches b
+        LEFT JOIN outbound_clients oc ON oc.id = b.outbound_client_id
+        LEFT JOIN campaigns cam ON cam.id = b.campaign_id
+       WHERE b.user_id=$1 ORDER BY b.updated_at DESC`, [req.workspaceOwnerId]);
+    res.json(rows);
+  } catch (err) { console.error('[cantera] GET batches', err.message); res.status(500).json({ error: 'Error al cargar Cantera' }); }
+});
+app.post('/api/cantera/batches', requireAuth, async (req, res) => {
+  const b = req.body || {};
+  if (!_lmS(b.nombre)) return res.status(400).json({ error: 'El nombre es requerido' });
+  try {
+    const { rows } = await pool.query(`
+      INSERT INTO cantera_batches (user_id, nombre, outbound_client_id, campaign_id)
+      VALUES ($1,$2,$3,$4) RETURNING *
+    `, [req.workspaceOwnerId, _lmS(b.nombre), b.outbound_client_id || null, b.campaign_id || null]);
+    res.status(201).json(rows[0]);
+  } catch (err) { console.error('[cantera] POST batch', err.message); res.status(500).json({ error: 'Error al crear el borrador' }); }
+});
+app.get('/api/cantera/batches/:id', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`SELECT * FROM cantera_batches WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId]);
+    if (!rows.length) return res.status(404).json({ error: 'Borrador no encontrado' });
+    res.json(rows[0]);
+  } catch (err) { console.error('[cantera] GET batch', err.message); res.status(500).json({ error: 'Error al cargar el borrador' }); }
+});
+app.put('/api/cantera/batches/:id', requireAuth, async (req, res) => {
+  const b = req.body || {};
+  try {
+    const { rows } = await pool.query(`
+      UPDATE cantera_batches SET
+        nombre=$1, outbound_client_id=$2, campaign_id=$3,
+        filtros=$4::jsonb, icp=$5, tiers=$6::jsonb, puestos=$7::jsonb, updated_at=NOW()
+      WHERE id=$8 AND user_id=$9 AND estado='borrador' RETURNING *
+    `, [_lmS(b.nombre), b.outbound_client_id || null, b.campaign_id || null,
+        JSON.stringify(b.filtros || {}), _lmS(b.icp), JSON.stringify(b.tiers || []), JSON.stringify(b.puestos || {}),
+        req.params.id, req.workspaceOwnerId]);
+    if (!rows.length) return res.status(404).json({ error: 'Borrador no encontrado (o ya fue movido al CRM)' });
+    res.json(rows[0]);
+  } catch (err) { console.error('[cantera] PUT batch', err.message); res.status(500).json({ error: 'Error al guardar el criterio' }); }
+});
+app.delete('/api/cantera/batches/:id', requireAuth, async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(`DELETE FROM cantera_batches WHERE id=$1 AND user_id=$2 AND estado='borrador'`, [req.params.id, req.workspaceOwnerId]);
+    if (!rowCount) return res.status(404).json({ error: 'Borrador no encontrado (o ya fue movido al CRM)' });
+    res.json({ ok: true });
+  } catch (err) { console.error('[cantera] DELETE batch', err.message); res.status(500).json({ error: 'Error al eliminar el borrador' }); }
+});
+
+// Importar el lote de prospección (mismo lector robusto que /api/lm/import,
+// mismo vocabulario de columnas: nombre/apellido/cargo/email/linkedin del
+// contacto + co_nombre/co_dominio/co_industria/co_tamano/co_pais/co_website
+// de su empresa — así tu export "personas primero, agrupadas por empresa"
+// entra tal cual, sin remapear nada a mano).
+app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), async (req, res) => {
+  const uid = req.workspaceOwnerId;
+  const batchId = req.params.id;
+  if (!req.file) return res.status(400).json({ error: 'No se subió ningún archivo.' });
+  const chk = await pool.query(`SELECT id FROM cantera_batches WHERE id=$1 AND user_id=$2 AND estado='borrador'`, [batchId, uid]);
+  if (!chk.rows.length) return res.status(404).json({ error: 'Borrador no encontrado (o ya fue movido al CRM)' });
+  const hasHeader = req.body?.hasHeader !== '0' && req.body?.hasHeader !== 'false';
+  let mapping = {};
+  try { mapping = JSON.parse(req.body?.mapping || '{}') || {}; } catch (_) {}
+
+  let rows;
+  try {
+    const { readTabular } = require('./services/excelService');
+    rows = readTabular(req.file.buffer, req.file.originalname || '');
+  } catch (e) { return res.status(400).json({ error: 'No se pudo leer el archivo: ' + e.message }); }
+  if (!rows.length) return res.status(400).json({ error: 'El archivo está vacío.' });
+
+  const headerRow = (rows[0] || []).map(h => _lmS(h));
+  const dataRows = hasHeader ? rows.slice(1) : rows;
+  if (dataRows.length > LM_IMPORT_MAX) return res.status(400).json({ error: `El archivo tiene ${dataRows.length} filas; el máximo por importación es ${LM_IMPORT_MAX}.` });
+
+  const colMap = {}; const ignored = new Set();
+  for (const [idxStr, field] of Object.entries(mapping)) {
+    const idx = parseInt(idxStr); if (isNaN(idx)) continue;
+    if (field === '__ignore__') { ignored.add(idx); continue; }
+    if (field) colMap[idx] = field;
+  }
+  // Cantera no tiene (todavía) un paso de mapeo manual en la UI — mientras tanto,
+  // si el encabezado de una columna coincide (o se parece, para los exports típicos
+  // de Sales Nav/Apollo/Snov.io) con un campo conocido, se mapea sola. `mapping`
+  // explícito (si llega) sigue teniendo prioridad sobre esto.
+  if (hasHeader) {
+    const norm = s => String(s || '').toLowerCase().trim().replace(/[\s._-]+/g, ' ');
+    const AUTO = {
+      'nombre': 'nombre', 'first name': 'nombre', 'firstname': 'nombre',
+      'apellido': 'apellido', 'last name': 'apellido', 'lastname': 'apellido',
+      'nombre completo': 'nombre_completo', 'full name': 'nombre_completo', 'name': 'nombre_completo',
+      'cargo': 'cargo', 'puesto': 'cargo', 'title': 'cargo', 'job title': 'cargo', 'position': 'cargo',
+      'email': 'email', 'correo': 'email', 'email address': 'email',
+      'linkedin': 'linkedin', 'linkedin url': 'linkedin', 'perfil linkedin': 'linkedin', 'profile url': 'linkedin',
+      'empresa': 'co_nombre', 'compania': 'co_nombre', 'company': 'co_nombre', 'company name': 'co_nombre', 'organization': 'co_nombre',
+      'dominio': 'co_dominio', 'domain': 'co_dominio', 'company domain': 'co_dominio',
+      'website': 'co_website', 'sitio web': 'co_website', 'company website': 'co_website',
+      'industria': 'co_industria', 'industry': 'co_industria',
+      'tamano': 'co_tamano', 'tamaño': 'co_tamano', 'company size': 'co_tamano', 'employees': 'co_tamano', '# employees': 'co_tamano',
+      'pais': 'co_pais', 'país': 'co_pais', 'country': 'co_pais', 'company country': 'co_pais',
+      'ciudad': 'co_ciudad', 'city': 'co_ciudad',
+      'linkedin empresa': 'co_linkedin', 'company linkedin url': 'co_linkedin', 'company linkedin': 'co_linkedin',
+      // Identidad: si el encabezado YA es el nombre interno del campo (ej. quien arma
+      // el archivo a mano usa "co_nombre" tal cual) — norm() convierte "_" en espacio,
+      // así que se compara en esa misma forma.
+      'nombre completo': 'nombre_completo', 'co nombre': 'co_nombre', 'co dominio': 'co_dominio',
+      'co website': 'co_website', 'co industria': 'co_industria', 'co tamano': 'co_tamano', 'co tamaño': 'co_tamano',
+      'co pais': 'co_pais', 'co país': 'co_pais', 'co ciudad': 'co_ciudad', 'co linkedin': 'co_linkedin',
+    };
+    headerRow.forEach((h, idx) => {
+      if (colMap[idx] || ignored.has(idx)) return;
+      const field = AUTO[norm(h)];
+      if (field) colMap[idx] = field;
+    });
+  }
+
+  const summary = { rows: 0, companiesCreated: 0, contactsCreated: 0, errors: [] };
+  const coCache = new Map();
+  async function _co(f) {
+    const dominio = _lmNormDomain(f.co_dominio || f.co_website || '');
+    const nombre = _lmS(f.co_nombre);
+    if (!dominio && !nombre) return null;
+    const key = dominio ? 'd:' + dominio : 'n:' + nombre.toLowerCase();
+    if (coCache.has(key)) return coCache.get(key);
+    const ins = await pool.query(`
+      INSERT INTO cantera_companies (batch_id,user_id,nombre,dominio,website,industria,tamano,pais,ciudad,linkedin)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id
+    `, [batchId, uid, nombre || dominio, dominio, _lmS(f.co_website), _lmS(f.co_industria), _lmS(f.co_tamano), _lmS(f.co_pais), _lmS(f.co_ciudad), _lmS(f.co_linkedin)]);
+    coCache.set(key, ins.rows[0].id); summary.companiesCreated++; return ins.rows[0].id;
+  }
+
+  for (const row of dataRows) {
+    if (!Array.isArray(row) || row.every(c => !_lmS(c))) continue;
+    summary.rows++;
+    const f = {}; const raw = {};
+    const maxLen = Math.max(row.length, headerRow.length);
+    for (let idx = 0; idx < maxLen; idx++) {
+      const val = _lmS(row[idx]);
+      if (colMap[idx]) { const k = colMap[idx]; f[k] = f[k] ? `${f[k]} ${val}` : val; }
+      else if (!ignored.has(idx) && val) { raw[headerRow[idx] || `Columna ${idx + 1}`] = val; }
+    }
+    try {
+      const companyId = await _co(f);
+      let nombre = _lmS(f.nombre), apellido = _lmS(f.apellido);
+      if (!nombre && !apellido && _lmS(f.nombre_completo)) {
+        const parts = _lmS(f.nombre_completo).split(/\s+/);
+        nombre = parts.shift() || ''; apellido = parts.join(' ');
+      }
+      await pool.query(`
+        INSERT INTO cantera_contacts (batch_id,company_id,user_id,nombre,apellido,cargo,email,linkedin,raw)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+      `, [batchId, companyId, uid, nombre, apellido, _lmS(f.cargo), _lmS(f.email).toLowerCase(), _lmS(f.linkedin), JSON.stringify(raw)]);
+      summary.contactsCreated++;
+    } catch (e) { if (summary.errors.length < 10) summary.errors.push(`Fila ${summary.rows}: ${e.message}`); }
+  }
+  res.json(summary);
+});
+
+// Paso 1 — filtros básicos: SIN IA, solo compara los datos ya importados
+// contra los criterios (tamaño/país/industria). Lo que no calza queda
+// descartado con el motivo exacto y nunca llega al paso 2 (el caro).
+app.post('/api/cantera/batches/:id/run-filtros', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId;
+  try {
+    const { rows: [batch] } = await pool.query(`SELECT * FROM cantera_batches WHERE id=$1 AND user_id=$2`, [req.params.id, uid]);
+    if (!batch) return res.status(404).json({ error: 'Borrador no encontrado' });
+    const filtros = batch.filtros || {};
+    const paises = (filtros.pais || []).map(s => String(s).toLowerCase().trim()).filter(Boolean);
+    const industrias = (filtros.industria || []).map(s => String(s).toLowerCase().trim()).filter(Boolean);
+    const tamanos = filtros.tamano || []; // rangos tipo ["1-10","11-50",...] — comparación textual simple por ahora
+
+    const { rows: companies } = await pool.query(`SELECT * FROM cantera_companies WHERE batch_id=$1 AND user_id=$2`, [req.params.id, uid]);
+    let aprobadas = 0, descartadas = 0;
+    for (const c of companies) {
+      const motivos = [];
+      if (paises.length && !paises.includes((c.pais || '').toLowerCase().trim())) motivos.push(`país no incluido: ${c.pais || '(vacío)'}`);
+      if (industrias.length && !industrias.some(i => (c.industria || '').toLowerCase().includes(i))) motivos.push(`industria no incluida: ${c.industria || '(vacío)'}`);
+      if (tamanos.length && c.tamano && !tamanos.includes(c.tamano)) motivos.push(`tamaño fuera de rango: ${c.tamano}`);
+      const estado = motivos.length ? 'descartado' : 'aprobado';
+      if (estado === 'aprobado') aprobadas++; else descartadas++;
+      await pool.query(`UPDATE cantera_companies SET paso1_estado=$1, paso1_motivo=$2 WHERE id=$3`, [estado, motivos.join(' · '), c.id]);
+    }
+    res.json({ total: companies.length, aprobadas, descartadas });
+  } catch (err) { console.error('[cantera] run-filtros', err.message); res.status(500).json({ error: 'Error al correr los filtros básicos' }); }
+});
+
+// Resultados del borrador (empresas + contadores), filtrable desde el front.
+app.get('/api/cantera/batches/:id/companies', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT c.*, (SELECT COUNT(*) FROM cantera_contacts k WHERE k.company_id=c.id)::int AS contactos
+        FROM cantera_companies c WHERE c.batch_id=$1 AND c.user_id=$2 ORDER BY c.id ASC`,
+      [req.params.id, req.workspaceOwnerId]);
+    res.json(rows);
+  } catch (err) { console.error('[cantera] GET companies', err.message); res.status(500).json({ error: 'Error al cargar empresas' }); }
+});
+app.get('/api/cantera/batches/:id/contacts', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`SELECT * FROM cantera_contacts WHERE batch_id=$1 AND user_id=$2 ORDER BY id ASC`, [req.params.id, req.workspaceOwnerId]);
+    res.json(rows);
+  } catch (err) { console.error('[cantera] GET contacts', err.message); res.status(500).json({ error: 'Error al cargar contactos' }); }
+});
+
 // ── Plantillas / Assets (lm_templates) ─────────────────────────────
 const LM_TPL_COLS = ['nombre', 'canal', 'tipo', 'asunto', 'cuerpo', 'tags', 'sequence_ids'];
 app.get('/api/lm/templates', requireAuth, async (req, res) => {

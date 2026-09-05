@@ -12341,6 +12341,24 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .dg-clean-arrow { text-align: center; color: var(--muted, #B4AFA8); }
 .dg-clean-d { color: #1E7A34; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 640px) { .dg-clean-row { grid-template-columns: 1fr; } .dg-clean-arrow { display: none; } }
+
+/* ── Cantera — tonos claros, sin emojis, compacto (mismo criterio que Datos) ── */
+.cant-estado { font-family: var(--font-display, inherit); font-size: .72rem; font-weight: 700; padding: 2px 8px; border-radius: 0; white-space: nowrap; }
+.cant-estado--borrador, .cant-estado--pendiente { background: var(--brand-ll, #F1EFEB); color: var(--text2, #45586A); }
+.cant-estado--promovido, .cant-estado--aprobado { background: #E3F1EA; color: #1E7A34; }
+.cant-estado--descartado { background: #FCEEEE; color: #B3261E; }
+.scope-bar-cant { display: flex; gap: 8px; flex-wrap: wrap; margin: 6px 0 18px; }
+.cant-chip { font-size: .78rem; font-weight: 600; color: var(--muted, #B4AFA8); background: none; border: 1px dashed var(--border, #EAE7E2); border-radius: 0; padding: 3px 9px; }
+.cant-section { margin-bottom: 24px; }
+.cant-section__hd { display: flex; align-items: baseline; gap: 8px; margin-bottom: 10px; }
+.cant-section__num { font-size: .7rem; font-weight: 700; color: var(--muted, #B4AFA8); letter-spacing: .05em; }
+.cant-section__hd h3 { font-size: .95rem; font-weight: 700; margin: 0; color: var(--text, #0A2540); }
+.cant-filters-row, .cant-import-row, .cant-results-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.cant-flabel { display: flex; flex-direction: column; gap: 4px; font-size: .74rem; font-weight: 600; color: var(--text2, #45586A); }
+.cant-flabel input { min-width: 160px; }
+.cant-import-hint { color: var(--muted, #B4AFA8); font-size: .76rem; flex: 1 1 260px; }
+.cant-count { color: var(--text2, #45586A); font-size: .84rem; margin-right: auto; }
+
 .seq-tz-line { margin-top: 6px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .seq-tz-chip, .seq-start-chip { display: inline-flex; align-items: center; gap: 5px; background: none; border: none; color: var(--sq-mute, #64748B); font-size: .76rem; font-weight: 400; padding: 0; border-radius: 0; margin-right: 0; }
 .lm-seqhd .seq-tz-line svg, .lm-seqhd .seq-tz-chip svg, .lm-seqhd .seq-start-chip svg { width: 11px; height: 11px; }
@@ -13745,6 +13763,7 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
 .home-card__icon--red    { background: #DC2626; }
 .home-card__icon--blue   { background: #2563EB; }
 .home-card__icon--purple { background: #7C3AED; }
+.home-card__icon--stone  { background: #8A6D3B; }
 
 .home-card__foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .home-card__chip {
