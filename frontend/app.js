@@ -5015,20 +5015,31 @@ const CanteraModule = (() => {
   function _detailHtml() {
     const b = _current;
     const filtros = b.filtros || {};
-    const rows = (_onlyFailed ? _companies.filter(c => c.paso1_estado === 'descartado') : _companies).map(c => `
-      <tr>
+    const tiers = b.tiers || [];
+    const puestos = b.puestos || {};
+    const expanded = _expanded || new Set();
+    const rows = (_onlyFailed ? _companies.filter(c => c.paso1_estado === 'descartado') : _companies).map(c => {
+      const main = `<tr onclick="CanteraModule.toggleExpand(${c.id})" style="cursor:pointer">
         <td class="dg-cell--frozen">${esc(c.nombre)}</td>
         <td class="dg-cell--ro">${esc(c.dominio || '—')}</td>
         <td class="dg-cell--ro">${esc(c.pais || '—')}</td>
-        <td class="dg-cell--ro">${esc(c.industria || '—')}</td>
-        <td class="dg-cell--ro">${esc(c.tamano || '—')}</td>
-        <td class="dg-cell--ro">${c.contactos}</td>
-        <td class="dg-cell--ro"><span class="cant-estado cant-estado--${esc(c.paso1_estado)}">${_paso1Label(c.paso1_estado)}</span></td>
+        <td class="dg-cell--ro"><span class="cant-estado cant-estado--${esc(c.paso1_estado)}">${_estadoLabel(c.paso1_estado)}</span></td>
         <td class="dg-cell--ro" title="${esc(c.paso1_motivo)}">${esc(c.paso1_motivo || '—')}</td>
-      </tr>`).join('');
+        <td class="dg-cell--ro">${esc(c.tier_clave || '—')}</td>
+        <td class="dg-cell--ro">${esc(c.confianza || '—')}</td>
+        <td class="dg-cell--ro"><span class="cant-estado cant-estado--${esc(c.paso2_estado)}">${_estadoLabel(c.paso2_estado)}</span></td>
+        <td class="dg-cell--ro" title="${esc(c.motivo_descarte)}">${esc(c.motivo_descarte || '—')}</td>
+        <td class="dg-cell--ro">${c.contactos}</td>
+      </tr>`;
+      if (!expanded.has(c.id)) return main;
+      const cts = (_contactsByCompany[c.id] || []);
+      const sub = cts.map(k => `<tr class="cant-subrow"><td></td><td colspan="8">${esc([k.nombre, k.apellido].filter(Boolean).join(' '))} — ${esc(k.cargo || '(sin cargo)')} <span class="cant-estado cant-estado--${k.puesto_estado === 'decide' ? 'aprobado' : k.puesto_estado === 'descartado' ? 'descartado' : 'pendiente'}">${k.puesto_estado === 'decide' ? 'Decide' : k.puesto_estado === 'respaldo' ? 'Respaldo' : k.puesto_estado === 'descartado' ? 'Descartado' : 'Pendiente'}</span>${k.puesto_motivo ? ` — ${esc(k.puesto_motivo)}` : ''}</td><td></td></tr>`).join('');
+      return main + (sub || `<tr class="cant-subrow"><td></td><td colspan="9" class="cp-empty2">Sin contactos</td></tr>`);
+    }).join('');
     const aprobadas = _companies.filter(c => c.paso1_estado === 'aprobado').length;
     const descartadas = _companies.filter(c => c.paso1_estado === 'descartado').length;
     const pendientes = _companies.filter(c => c.paso1_estado === 'pendiente').length;
+    const calificadas = _companies.filter(c => c.paso2_estado === 'aprobado').length;
 
     return `<div class="lm-sec-head lm-sec-head--compact">
         <div><button class="lm-bulk-ghost" style="color:var(--muted,#B4AFA8);background:none;padding:0 0 4px" onclick="CanteraModule.backToList()">‹ Cantera</button><h2 class="lm-sec-title">${esc(b.nombre)}</h2></div>
@@ -5051,7 +5062,49 @@ const CanteraModule = (() => {
       </div>
 
       <div class="cant-section">
-        <div class="cant-section__hd"><span class="cant-section__num">02</span><h3>Importar prospectos</h3></div>
+        <div class="cant-section__hd"><span class="cant-section__num">02</span><h3>Criterio de calificación</h3></div>
+        <p class="cant-hint">Esto es lo único que escribes — el motor que investiga y decide es fijo, no lo tocas.</p>
+        <label class="cant-flabel" style="display:block;margin-bottom:12px">ICP<textarea id="cant-icp" class="form-input" rows="3" placeholder="¿A quién buscamos?">${esc(b.icp || '')}</textarea></label>
+
+        <div class="cant-tiers">${tiers.map((t, i) => `
+          <div class="cant-tier-card">
+            <div class="cant-tier-row">
+              <input type="text" class="form-input cant-tier-clave" placeholder="TIER_1A" value="${esc(t.clave || '')}" oninput="CanteraModule.setTierField(${i},'clave',this.value)">
+              <input type="text" class="form-input" placeholder="Nombre del Tier" value="${esc(t.nombre || '')}" oninput="CanteraModule.setTierField(${i},'nombre',this.value)">
+              <button class="lm-bulk-ghost cant-x" onclick="CanteraModule.removeTier(${i})">✕</button>
+            </div>
+            <textarea class="form-input" rows="2" placeholder="Criterio de entrada…" oninput="CanteraModule.setTierField(${i},'criterio',this.value)">${esc(t.criterio || '')}</textarea>
+            <textarea class="form-input" rows="1" placeholder="Esto NO califica si… (opcional)" oninput="CanteraModule.setTierField(${i},'descarte',this.value)">${esc(t.descarte || '')}</textarea>
+          </div>`).join('')}
+        </div>
+        <button class="add-tier" onclick="CanteraModule.addTier()">+ Agregar Tier</button>
+
+        <div class="cant-puestos" style="margin-top:16px">${tiers.filter(t => t.clave).map(t => `
+          <div class="roles-tier">
+            <div class="roles-tier-label"><span class="tier-badge t1a">${esc(t.clave)}</span></div>
+            <div class="roles-grid">${(puestos[t.clave] || []).map((p, i) => `
+              <div class="role-row${p.tipo === 'descarte' ? ' discard' : ''}">
+                <span class="role-drag">⠿</span>
+                <span class="role-title">
+                  <input type="text" class="cant-puesto-input" placeholder="Cargo/título" value="${esc(p.titulo || '')}" oninput="CanteraModule.setPuestoField('${esc(t.clave)}',${i},'titulo',this.value)">
+                  <input type="text" class="cant-puesto-input cant-puesto-excl" placeholder="Excluir si… (opcional)" value="${esc(p.exclusion || '')}" oninput="CanteraModule.setPuestoField('${esc(t.clave)}',${i},'exclusion',this.value)">
+                </span>
+                <select class="form-input" style="width:auto" onchange="CanteraModule.setPuestoField('${esc(t.clave)}',${i},'tipo',this.value)">
+                  <option value="decide"${p.tipo === 'decide' || !p.tipo ? ' selected' : ''}>Decide</option>
+                  <option value="respaldo"${p.tipo === 'respaldo' ? ' selected' : ''}>Respaldo</option>
+                  <option value="descarte"${p.tipo === 'descarte' ? ' selected' : ''}>Descartar</option>
+                </select>
+                <button class="lm-bulk-ghost cant-x" onclick="CanteraModule.removePuesto('${esc(t.clave)}',${i})">✕</button>
+              </div>`).join('')}
+              <button class="add-role" onclick="CanteraModule.addPuesto('${esc(t.clave)}')">+ Agregar puesto</button>
+            </div>
+          </div>`).join('') || `<p class="cant-hint">Agrega al menos un Tier con su clave para definir puestos.</p>`}
+        </div>
+        <div class="cant-save-row"><button class="btn btn--primary btn--sm" onclick="CanteraModule.saveCriterio()">Guardar criterio</button></div>
+      </div>
+
+      <div class="cant-section">
+        <div class="cant-section__hd"><span class="cant-section__num">03</span><h3>Importar prospectos</h3></div>
         <div class="cant-import-row">
           <input type="file" id="cant-file" accept=".csv,.xlsx,.xls" style="max-width:280px">
           <button class="btn btn--primary btn--sm" onclick="CanteraModule.doImport()">Importar</button>
@@ -5060,20 +5113,71 @@ const CanteraModule = (() => {
       </div>
 
       <div class="cant-section">
-        <div class="cant-section__hd"><span class="cant-section__num">03</span><h3>Resultados</h3></div>
+        <div class="cant-section__hd"><span class="cant-section__num">04</span><h3>Resultados</h3></div>
         <div class="cant-results-bar">
-          <span class="cant-count">${_companies.length} empresa(s) · ${aprobadas} aprobada(s) · ${descartadas} descartada(s) · ${pendientes} pendiente(s)</span>
-          <button class="btn btn--primary btn--sm" onclick="CanteraModule.runFiltros()">Correr filtros básicos</button>
+          <span class="cant-count">${_companies.length} empresa(s) · ${aprobadas} pasaron filtro · ${descartadas} descartadas (paso 1) · ${pendientes} pendiente(s) · ${calificadas} calificada(s) (paso 2)</span>
+          <button class="btn btn--primary btn--sm" onclick="CanteraModule.runFiltros()">1. Correr filtros básicos</button>
+          <button class="btn btn--primary btn--sm" onclick="CanteraModule.runValidacion()"${_jobRunning ? ' disabled' : ''}>2. Investigación profunda${_jobRunning ? '…' : ''}</button>
           <button class="dg-issues-toggle${_onlyFailed ? ' active' : ''}" onclick="CanteraModule.toggleFailed()">Ver solo descartadas</button>
         </div>
+        ${_jobRunning ? `<p class="cant-hint">Investigando ${_jobProgress.done} de ${_jobProgress.total}… puedes seguir en el sistema, esto sigue en segundo plano.</p>` : ''}
         <div class="lm-dt-wrap dg-dt-wrap"><table class="clients-table dg-table" style="table-layout:auto">
-          <thead><tr><th class="dg-cell--frozen">Nombre</th><th>Dominio</th><th>País</th><th>Industria</th><th>Tamaño</th><th>Contactos</th><th>Paso 1</th><th>Motivo</th></tr></thead>
-          <tbody>${rows || `<tr><td colspan="8" class="cp-empty2">Importa un archivo para empezar.</td></tr>`}</tbody>
+          <thead><tr><th class="dg-cell--frozen">Nombre</th><th>Dominio</th><th>País</th><th>Paso 1</th><th>Motivo paso 1</th><th>Tier</th><th>Confianza</th><th>Paso 2</th><th>Motivo paso 2</th><th>Contactos</th></tr></thead>
+          <tbody>${rows || `<tr><td colspan="10" class="cp-empty2">Importa un archivo para empezar.</td></tr>`}</tbody>
         </table></div>
       </div>`;
   }
-  function _paso1Label(s) { return s === 'aprobado' ? 'Aprobado' : s === 'descartado' ? 'Descartado' : 'Pendiente'; }
+  function _estadoLabel(s) { return s === 'aprobado' ? 'Aprobado' : s === 'descartado' ? 'Descartado' : s === 'error' ? 'Error' : 'Pendiente'; }
   function toggleFailed() { _onlyFailed = !_onlyFailed; _paint(); }
+  let _expanded = new Set();
+  let _contactsByCompany = {};
+  async function toggleExpand(companyId) {
+    if (_expanded.has(companyId)) { _expanded.delete(companyId); _paint(); return; }
+    _expanded.add(companyId);
+    if (!_contactsByCompany[companyId]) {
+      const r = await apiFetch(`${API}/cantera/batches/${_current.id}/contacts`);
+      const all = r.ok ? await r.json() : [];
+      all.forEach(k => { (_contactsByCompany[k.company_id] = _contactsByCompany[k.company_id] || []).push(k); });
+    }
+    _paint();
+  }
+
+  // ── Criterio (ICP + Tiers + Puestos) ──────────────────────────────
+  function addTier() { _current.tiers = [...(_current.tiers || []), { clave: '', nombre: '', criterio: '', descarte: '' }]; _paint(); }
+  function removeTier(i) { _current.tiers.splice(i, 1); _paint(); }
+  function setTierField(i, k, v) { _current.tiers[i][k] = v; }
+  function addPuesto(clave) { _current.puestos = _current.puestos || {}; _current.puestos[clave] = [...(_current.puestos[clave] || []), { titulo: '', tipo: 'decide', exclusion: '' }]; _paint(); }
+  function removePuesto(clave, i) { _current.puestos[clave].splice(i, 1); _paint(); }
+  function setPuestoField(clave, i, k, v) { _current.puestos[clave][i][k] = v; }
+  async function saveCriterio() {
+    _current.icp = document.getElementById('cant-icp')?.value || '';
+    try {
+      const res = await apiFetch(`${API}/cantera/batches/${_current.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_current) });
+      _current = await res.json();
+      showBanner('✓ Criterio guardado', 'success');
+      _paint();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  let _jobRunning = false, _jobProgress = { done: 0, total: 0 }, _jobTimer = null;
+  async function runValidacion() {
+    try {
+      const res = await apiFetch(`${API}/cantera/batches/${_current.id}/run-validacion`, { method: 'POST' });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Error');
+      if (!d.started) { showBanner(d.mensaje || 'Nada que investigar', 'info'); return; }
+      _jobRunning = true; _jobProgress = { done: 0, total: d.total }; _paint();
+      clearInterval(_jobTimer);
+      _jobTimer = setInterval(async () => {
+        const st = await (await apiFetch(`${API}/cantera/batches/${_current.id}/validacion-status`)).json();
+        _jobProgress = { done: st.done, total: st.total };
+        if (!st.running) {
+          clearInterval(_jobTimer); _jobRunning = false;
+          showBanner(`✓ Investigación terminada · ${st.done - st.errores} ok · ${st.errores} error(es) · $${(st.costoTotal || 0).toFixed(3)}`, 'success');
+          _contactsByCompany = {}; await _loadCompanies(); _paint();
+        } else _paint();
+      }, 4000);
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
 
   async function saveFiltros() {
     const split = v => (v || '').split(',').map(s => s.trim()).filter(Boolean);
@@ -5129,7 +5233,8 @@ const CanteraModule = (() => {
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
-  return { render, open, openCreate, backToList, saveFiltros, doImport, runFiltros, toggleFailed, moreMenu, remove };
+  return { render, open, openCreate, backToList, saveFiltros, doImport, runFiltros, toggleFailed, moreMenu, remove,
+    toggleExpand, addTier, removeTier, setTierField, addPuesto, removePuesto, setPuestoField, saveCriterio, runValidacion };
 })();
 
 // =================================================================
