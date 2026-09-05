@@ -12382,11 +12382,23 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .cant-count { color: var(--text2, #45586A); font-size: .84rem; margin-right: auto; }
 .cant-hint { color: var(--muted, #918C85); font-size: .8rem; margin: 0 0 12px; max-width: 62ch; }
 .cant-subrow td { background: var(--brand-ll, #F1EFEB); font-size: .82rem; color: var(--text2, #6C6862); padding: 8px 10px; height: auto; }
+/* Las 2 celdas vacías (checkbox + Nombre) de la fila de contacto deben quedar
+   TAMBIÉN congeladas/sticky, igual que en la fila de la empresa — si no, al
+   hacer scroll horizontal se desplazan por su cuenta y el bloque del contacto
+   queda corrido/superpuesto con la columna Nombre (reportado 2026-09-06). */
+.cant-subrow td.lm-ck-col, .cant-subrow td.dg-cell--frozen { background: var(--brand-ll, #F1EFEB); }
 .cant-subrow + tr:not(.cant-subrow) td { border-top: 2px solid var(--border, #EAE7E2); }
 .cant-subrow__line { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
 .cant-subrow__line b { color: var(--text, #0A2540); font-weight: 700; white-space: nowrap; }
 .cant-subrow__motivo { color: var(--muted, #918C85); font-style: italic; }
 .cant-subrow__actions { display: flex; gap: 8px; margin-top: 4px; }
+/* El bloque del contacto queda SIEMPRE visible justo después de la columna
+   congelada, sin importar el scroll horizontal — position:sticky en un <td>
+   con colspan no es confiable entre navegadores, así que se aplica al DIV de
+   adentro (bloque normal, no celda de tabla), igual que cualquier sidebar
+   sticky común. Sin esto, al desplazar la tabla el bloque se corría y quedaba
+   tapado por la columna Nombre (reportado 2026-09-06). */
+.cant-restbl .cant-subrow__pin { position: sticky; left: calc(34px + var(--cant-nombre-w, 220px)); display: inline-block; max-width: calc(100vw - 400px); }
 /* Columna Nombre redimensionable (solo en la tabla de Resultados de Cantera) */
 .cant-restbl th.dg-cell--frozen, .cant-restbl td.dg-cell--frozen { width: var(--cant-nombre-w, 220px); max-width: var(--cant-nombre-w, 220px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cant-colresize { position: absolute; top: 0; right: 0; width: 6px; height: 100%; cursor: col-resize; }

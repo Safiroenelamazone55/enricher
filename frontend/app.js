@@ -5426,7 +5426,8 @@ const CanteraModule = (() => {
       if (!expanded.has(c.id)) return main;
       const cts = [...(_contactsByCompany[c.id] || [])].sort((a, b) => (a.prioridad || 99) - (b.prioridad || 99) || a.id - b.id);
       const multi = cts.length > 1;
-      const sub = cts.map(k => `<tr class="cant-subrow"><td></td><td></td><td colspan="${subColspan}">
+      const sub = cts.map(k => `<tr class="cant-subrow"><td class="lm-ck-col"></td><td class="dg-cell--frozen"></td><td colspan="${subColspan}">
+      <div class="cant-subrow__pin">
         <div class="cant-subrow__line">
           ${multi ? `<select class="form-input" style="width:auto" onchange="CanteraModule.setContactPrioridad(${k.id},this.value)" title="Prioridad de contacto — si el primero no responde, pasa al siguiente">
             <option value="0"${!k.prioridad ? ' selected' : ''}>Sin prioridad</option>
@@ -5446,8 +5447,9 @@ const CanteraModule = (() => {
           <button class="add-role" onclick="CanteraModule.quickCleanContact(${k.id},'cargo')">Limpiar cargo</button>
           <button class="add-role" onclick="CanteraModule.quickEnrichContact(${k.id})">Enriquecer seniority/depto</button>
         </div>
+      </div>
       </td></tr>`).join('');
-      return main + (sub || `<tr class="cant-subrow"><td></td><td></td><td colspan="${subColspan}" class="cp-empty2">Sin contactos</td></tr>`);
+      return main + (sub || `<tr class="cant-subrow"><td class="lm-ck-col"></td><td class="dg-cell--frozen"></td><td colspan="${subColspan}" class="cp-empty2">Sin contactos</td></tr>`);
     }).join('');
     const aprobadas = _companies.filter(c => c.paso1_estado === 'aprobado').length;
     const descartadas = _companies.filter(c => c.paso1_estado === 'descartado').length;
