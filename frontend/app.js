@@ -5284,13 +5284,18 @@ const CanteraModule = (() => {
         <td class="dg-cell--ro" title="${esc(c.paso1_motivo)}">${esc(c.paso1_motivo || '—')}</td>
         <td class="dg-cell--ro">${esc(c.tier_clave || '—')}</td>
         <td class="dg-cell--ro">${esc(c.confianza || '—')}</td>
-        <td class="dg-cell--ro"><span class="cant-estado cant-estado--${esc(c.paso2_estado)}">${_estadoLabel(c.paso2_estado)}</span></td>
-        <td class="dg-cell--ro" title="${esc(c.motivo_descarte)}">${esc(c.motivo_descarte || '—')}</td>
-        <td class="dg-cell--ro" onclick="CanteraModule.toggleExpand(${c.id})" style="cursor:pointer">${c.contactos}</td>
+        <td class="dg-cell--ro"><span class="cant-estado cant-estado--${esc(c.paso2_estado)}">${_estadoLabel(c.paso2_estado)}</span> <button class="cant-x" style="font-size:.72rem" onclick="event.stopPropagation();CanteraModule.openManualValidation(${c.id})" title="Validar manualmente">✎ Manual</button></td>
+        <td class="dg-cell--ro" title="${esc(c.motivo_descarte)}">${c.paso2_estado === 'validacion_manual' ? esc(c.nota_manual || '(sin nota)') : esc(c.motivo_descarte || '—')}</td>
+        <td class="dg-cell--ro" onclick="CanteraModule.toggleExpand(${c.id})" style="cursor:pointer">${c.contactos}${c.contactos > 1 ? ' <span class="tag" style="margin-left:4px">multi</span>' : ''}</td>
       </tr>`;
       if (!expanded.has(c.id)) return main;
-      const cts = (_contactsByCompany[c.id] || []);
+      const cts = [...(_contactsByCompany[c.id] || [])].sort((a, b) => (a.prioridad || 99) - (b.prioridad || 99) || a.id - b.id);
+      const multi = cts.length > 1;
       const sub = cts.map(k => `<tr class="cant-subrow"><td></td><td></td><td colspan="8">
+          ${multi ? `<select class="form-input" style="width:auto;display:inline-block;margin-right:6px" onchange="CanteraModule.setContactPrioridad(${k.id},this.value)" title="Prioridad de contacto — si el primero no responde, pasa al siguiente">
+            <option value="0"${!k.prioridad ? ' selected' : ''}>Sin prioridad</option>
+            ${[1, 2, 3, 4, 5].map(n => `<option value="${n}"${k.prioridad === n ? ' selected' : ''}>${n}º contacto</option>`).join('')}
+          </select>` : ''}
           ${esc([k.nombre, k.apellido].filter(Boolean).join(' '))} — ${esc(k.cargo || '(sin cargo)')}
           <span class="cant-estado cant-estado--${k.puesto_estado === 'decide' ? 'aprobado' : k.puesto_estado === 'descartado' ? 'descartado' : 'pendiente'}">${k.puesto_estado === 'decide' ? 'Decide' : k.puesto_estado === 'respaldo' ? 'Respaldo' : k.puesto_estado === 'descartado' ? 'Descartado' : 'Pendiente'}</span>
           ${k.seniority ? `<span class="tag" style="margin-left:4px">${esc(k.seniority)}</span>` : ''}${k.departamento ? `<span class="tag">${esc(k.departamento)}</span>` : ''}
@@ -5303,7 +5308,7 @@ const CanteraModule = (() => {
     const aprobadas = _companies.filter(c => c.paso1_estado === 'aprobado').length;
     const descartadas = _companies.filter(c => c.paso1_estado === 'descartado').length;
     const pendientes = _companies.filter(c => c.paso1_estado === 'pendiente').length;
-    const calificadas = _companies.filter(c => c.paso2_estado === 'aprobado').length;
+    const calificadas = _companies.filter(c => c.paso2_estado === 'aprobado' || c.paso2_estado === 'validacion_manual').length;
 
     return `<div class="lm-sec-head lm-sec-head--compact">
         <div><button class="lm-bulk-ghost" style="color:var(--muted,#B4AFA8);background:none;padding:0 0 4px" onclick="CanteraModule.backToList()">‹ Cantera</button><h2 class="lm-sec-title">${esc(b.nombre)}</h2></div>
@@ -5466,6 +5471,15 @@ const CanteraModule = (() => {
       await _loadCompanies(); _paint();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
+  // Recarga los contactos ya cacheados (empresas expandidas) en vez de solo
+  // vaciar el cache — si no, una fila que sigue expandida muestra "Sin
+  // contactos" hasta que se colapsa y se vuelve a abrir.
+  async function _refreshContacts() {
+    const r = await apiFetch(`${API}/cantera/batches/${_current.id}/contacts`);
+    const all = r.ok ? await r.json() : [];
+    _contactsByCompany = {};
+    all.forEach(k => { (_contactsByCompany[k.company_id] = _contactsByCompany[k.company_id] || []).push(k); });
+  }
   // Contactos: acciones rápidas de una sola fila (sin selección múltiple —
   // se abren desde la fila expandida de su empresa).
   async function quickCleanContact(contactId, field) {
@@ -5474,7 +5488,7 @@ const CanteraModule = (() => {
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || 'Error');
       showBanner(d.applied ? `✓ ${field} limpiado` : 'Ya estaba limpio', d.applied ? 'success' : 'info');
-      _contactsByCompany = {}; await _loadCompanies(); _paint();
+      await _refreshContacts(); await _loadCompanies(); _paint();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
   async function quickEnrichContact(contactId) {
@@ -5483,10 +5497,99 @@ const CanteraModule = (() => {
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || 'Error');
       showBanner(d.applied ? `✓ ${d.applied} campo(s) completado(s)` : 'Nada que derivar del cargo', d.applied ? 'success' : 'info');
-      _contactsByCompany = {}; await _loadCompanies(); _paint();
+      await _refreshContacts(); await _loadCompanies(); _paint();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
-  function _estadoLabel(s) { return s === 'aprobado' ? 'Aprobado' : s === 'descartado' ? 'Descartado' : s === 'error' ? 'Error' : 'Pendiente'; }
+  // Prioridad manual del contacto dentro de su empresa — para empresas con
+  // varios prospectos, decide a quién se contacta primero (1º/2º/3º…),
+  // independiente del puesto_estado que asignó la IA. 0 = sin asignar.
+  async function setContactPrioridad(contactId, val) {
+    const prioridad = parseInt(val, 10) || 0;
+    try {
+      const res = await apiFetch(`${API}/cantera/batches/${_current.id}/contacts/${contactId}/prioridad`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prioridad }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Error');
+      await _refreshContacts(); _paint();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  // ── Validación manual de empresa — camino alterno al motor de IA: Jenny
+  // copia todos los datos de la empresa (nunca de contactos), los valida ella
+  // misma fuera del sistema, y vuelve aquí a asignar el Tier a mano con una
+  // nota opcional. Pedido explícito 2026-09-05, con prioridad sobre seguir
+  // afinando el motor de IA: "no tengo el tiempo ahorita... dale prioridad a eso."
+  function _manualCopyText(co) {
+    return [
+      `Empresa: ${co.nombre || '—'}`,
+      `País: ${co.pais || '—'}`,
+      `Ciudad: ${co.ciudad || '—'}`,
+      `Industria: ${co.industria || '—'}`,
+      `Tamaño: ${co.tamano || '—'}`,
+      `Dominio: ${co.dominio || '—'}`,
+      `Website: ${co.website || '—'}`,
+      `LinkedIn: ${co.linkedin || '—'}`,
+    ].join('\n');
+  }
+  async function openManualValidation(companyId) {
+    const co = _companies.find(c => c.id === companyId); if (!co) return;
+    const tiers = (_current.tiers || []).filter(t => t.clave);
+    document.getElementById('cant-manual-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'cant-manual-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) closeManualValidation(); };
+    m.innerHTML = `<div class="fin-pi-box lm-flt-box" style="max-width:520px">
+      <div class="fin-pi-box__hd"><h3>Validación manual · ${esc(co.nombre)}</h3><button class="fin-pi-x" onclick="CanteraModule.closeManualValidation()">✕</button></div>
+      <div class="flt-body" style="display:flex;flex-direction:column;gap:12px">
+        <p class="cant-hint" style="margin:0">Copia estos datos, valídalos donde quieras, y vuelve a asignar el Tier aquí. Solo datos de la empresa — los contactos se priorizan aparte.</p>
+        <label class="cant-flabel">Datos de la empresa<textarea id="cant-manual-copy" class="form-input" rows="8" readonly onclick="this.select()">${esc(_manualCopyText(co))}</textarea></label>
+        <button class="btn btn--ghost btn--sm" onclick="CanteraModule.copyManualData()">Copiar todo</button>
+        <label class="cant-flabel">Tier<select id="cant-manual-tier" class="form-input">
+          <option value="">— elegir —</option>
+          ${tiers.map(t => `<option value="${esc(t.clave)}"${co.tier_clave === t.clave ? ' selected' : ''}>${esc(t.clave)}${t.nombre ? ' — ' + esc(t.nombre) : ''}</option>`).join('')}
+        </select></label>
+        <label class="cant-flabel">Nota<span class="field-note">opcional</span><textarea id="cant-manual-nota" class="form-input" rows="2" placeholder="Por qué este Tier…">${esc(co.nota_manual || '')}</textarea></label>
+      </div>
+      <div class="fin-pi-box__ft">
+        <span>${co.paso2_estado === 'validacion_manual' ? `<button class="lm-bulk-ghost" onclick="CanteraModule.quitarValidacionManual(${co.id})">Quitar validación manual</button>` : ''}</span>
+        <div class="fin-pi-ft-btns">
+          <button class="btn btn--ghost btn--sm" onclick="CanteraModule.closeManualValidation()">Cancelar</button>
+          <button class="btn btn--primary btn--sm" onclick="CanteraModule.saveManualValidation(${co.id})">Guardar validación</button>
+        </div>
+      </div></div>`;
+    document.body.appendChild(m);
+  }
+  function closeManualValidation() { document.getElementById('cant-manual-modal')?.remove(); }
+  async function copyManualData() {
+    const ta = document.getElementById('cant-manual-copy'); if (!ta) return;
+    try { await navigator.clipboard.writeText(ta.value); showBanner('✓ Copiado', 'success'); }
+    catch { ta.select(); document.execCommand('copy'); showBanner('✓ Copiado', 'success'); }
+  }
+  async function saveManualValidation(companyId) {
+    const tier = document.getElementById('cant-manual-tier')?.value;
+    if (!tier) { showBanner('Elige un Tier', 'info'); return; }
+    const nota = document.getElementById('cant-manual-nota')?.value || '';
+    try {
+      const res = await apiFetch(`${API}/cantera/batches/${_current.id}/companies/${companyId}/validar-manual`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tier_clave: tier, nota }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Error');
+      closeManualValidation();
+      showBanner('✓ Validación manual guardada', 'success');
+      await _loadCompanies(); _paint();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  async function quitarValidacionManual(companyId) {
+    try {
+      const res = await apiFetch(`${API}/cantera/batches/${_current.id}/companies/${companyId}/quitar-validacion`, { method: 'PATCH' });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Error');
+      closeManualValidation();
+      showBanner('Validación manual retirada', 'info');
+      await _loadCompanies(); _paint();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  function _estadoLabel(s) { return s === 'aprobado' ? 'Aprobado' : s === 'validacion_manual' ? 'Validación manual' : s === 'descartado' ? 'Descartado' : s === 'error' ? 'Error' : 'Pendiente'; }
   function toggleFailed() { _onlyFailed = !_onlyFailed; _paint(); }
   let _expanded = new Set();
   let _contactsByCompany = {};
@@ -5532,7 +5635,7 @@ const CanteraModule = (() => {
         if (!st.running) {
           clearInterval(_jobTimer); _jobRunning = false;
           showBanner(`✓ Investigación terminada · ${st.done - st.errores} ok · ${st.errores} error(es) · $${(st.costoTotal || 0).toFixed(3)}`, 'success');
-          _contactsByCompany = {}; await _loadCompanies(); _paint();
+          await _refreshContacts(); await _loadCompanies(); _paint();
         } else _paint();
       }, 4000);
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
@@ -5633,7 +5736,7 @@ const CanteraModule = (() => {
 
   // ── Mover al CRM: única salida de Cantera — irreversible. ─────────
   async function openPromote() {
-    const calificadas = _companies.filter(c => c.paso2_estado === 'aprobado').length;
+    const calificadas = _companies.filter(c => c.paso2_estado === 'aprobado' || c.paso2_estado === 'validacion_manual').length;
     if (!calificadas) { showBanner('Todavía no hay empresas calificadas (paso 2) para mover', 'info'); return; }
     const [clientes, campanas] = await Promise.all([
       apiFetch(`${API}/outbound-clients`).then(r => r.ok ? r.json() : []),
@@ -5687,7 +5790,8 @@ const CanteraModule = (() => {
     openImportModal, closeImportModal, impFile, impToggleHeader, impRun, cbxOpen, cbxFilter, cbxPick, cbxBlur,
     taOpen, taFilter, taBlur, addFiltro, removeFiltro,
     toggleCoSel, toggleCoSelAll, cleanMenu, enrichMenu, runClean, runEnrich, closeCantOp, applyCantOp,
-    quickCleanContact, quickEnrichContact };
+    quickCleanContact, quickEnrichContact, setContactPrioridad,
+    openManualValidation, closeManualValidation, copyManualData, saveManualValidation, quitarValidacionManual };
 })();
 
 // =================================================================

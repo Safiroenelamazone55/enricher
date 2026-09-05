@@ -6366,7 +6366,7 @@ app.get('/api/cantera/batches', requireAuth, async (req, res) => {
       SELECT b.*, oc.nombre AS cliente_nombre, cam.nombre AS campana_nombre,
              (SELECT COUNT(*) FROM cantera_companies c WHERE c.batch_id=b.id)::int AS total_empresas,
              (SELECT COUNT(*) FROM cantera_companies c WHERE c.batch_id=b.id AND c.paso1_estado='aprobado')::int AS pasaron_filtro,
-             (SELECT COUNT(*) FROM cantera_companies c WHERE c.batch_id=b.id AND c.paso2_estado='aprobado')::int AS calificadas
+             (SELECT COUNT(*) FROM cantera_companies c WHERE c.batch_id=b.id AND c.paso2_estado IN ('aprobado','validacion_manual'))::int AS calificadas
         FROM cantera_batches b
         LEFT JOIN outbound_clients oc ON oc.id = b.outbound_client_id
         LEFT JOIN campaigns cam ON cam.id = b.campaign_id
@@ -6733,6 +6733,57 @@ app.get('/api/cantera/batches/:id/contacts', requireAuth, async (req, res) => {
   } catch (err) { console.error('[cantera] GET contacts', err.message); res.status(500).json({ error: 'Error al cargar contactos' }); }
 });
 
+// Validación manual de una empresa — camino alterno al motor de IA (paso 2)
+// para cuando Jenny no tiene tiempo de esperar/afinar la IA: copia los datos
+// de la empresa, los valida ella misma fuera del sistema, y vuelve aquí a
+// asignar el Tier a mano con una nota opcional. Queda etiquetada distinta
+// ('validacion_manual') de lo que valida la IA ('aprobado'), pero es
+// igualmente elegible para "Mover al CRM" — pedido explícito 2026-09-05:
+// "las conexiones siguen siendo iguales, sea manual o automático con IA".
+app.patch('/api/cantera/batches/:id/companies/:companyId/validar-manual', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId;
+  const b = req.body || {};
+  const tierClave = _lmS(b.tier_clave);
+  if (!tierClave) return res.status(400).json({ error: 'Elige un Tier' });
+  try {
+    const { rows } = await pool.query(`
+      UPDATE cantera_companies
+         SET paso2_estado='validacion_manual', tier_clave=$1, nota_manual=$2, motivo_descarte='', confianza='', evidencia='[]', validado_at=NOW()
+       WHERE id=$3 AND batch_id=$4 AND user_id=$5 RETURNING *
+    `, [tierClave, _lmS(b.nota), req.params.companyId, req.params.id, uid]);
+    if (!rows.length) return res.status(404).json({ error: 'Empresa no encontrada' });
+    res.json(rows[0]);
+  } catch (err) { console.error('[cantera] validar-manual', err.message); res.status(500).json({ error: 'Error al guardar la validación manual' }); }
+});
+// Deshacer una validación manual (vuelve la empresa a pendiente de paso 2).
+app.patch('/api/cantera/batches/:id/companies/:companyId/quitar-validacion', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      UPDATE cantera_companies SET paso2_estado='pendiente', tier_clave='', nota_manual='', validado_at=NULL
+       WHERE id=$1 AND batch_id=$2 AND user_id=$3 AND paso2_estado='validacion_manual' RETURNING *
+    `, [req.params.companyId, req.params.id, req.workspaceOwnerId]);
+    if (!rows.length) return res.status(404).json({ error: 'Empresa no encontrada (o no tiene validación manual)' });
+    res.json(rows[0]);
+  } catch (err) { console.error('[cantera] quitar-validacion', err.message); res.status(500).json({ error: 'Error al deshacer' }); }
+});
+
+// Prioridad manual de contacto — para empresas con 2+ contactos, Jenny decide
+// a quién se contacta primero (1, 2, 3…), independiente del puesto_estado que
+// asignó la IA. 0 = sin prioridad asignada. Pedido explícito 2026-09-05:
+// "identificar qué empresas tienen doble o triple prospectos y asignar a cuál
+// vamos a contactar y el segundo... si no me contesta, ¿hay alguien más esperando?"
+app.patch('/api/cantera/batches/:id/contacts/:contactId/prioridad', requireAuth, async (req, res) => {
+  const prioridad = parseInt((req.body || {}).prioridad, 10);
+  if (!Number.isInteger(prioridad) || prioridad < 0) return res.status(400).json({ error: 'Prioridad inválida' });
+  try {
+    const { rows } = await pool.query(
+      `UPDATE cantera_contacts SET prioridad=$1 WHERE id=$2 AND batch_id=$3 AND user_id=$4 RETURNING *`,
+      [prioridad, req.params.contactId, req.params.id, req.workspaceOwnerId]);
+    if (!rows.length) return res.status(404).json({ error: 'Contacto no encontrado' });
+    res.json(rows[0]);
+  } catch (err) { console.error('[cantera] prioridad', err.message); res.status(500).json({ error: 'Error al guardar prioridad' }); }
+});
+
 // ── Limpieza/enriquecimiento DENTRO de Cantera — mismo motor de reglas que
 // Enriquecimiento → Datos (dataCleanService.js, funciones puras sin tabla
 // propia), pero como acción separada que solo toca este borrador
@@ -6841,7 +6892,7 @@ app.post('/api/cantera/batches/:id/promote', requireAuth, async (req, res) => {
     await cl.query('BEGIN');
     const { rows: [batch] } = await cl.query(`SELECT * FROM cantera_batches WHERE id=$1 AND user_id=$2 AND estado='borrador'`, [batchId, uid]);
     if (!batch) throw new Error('Borrador no encontrado (o ya fue movido al CRM)');
-    const { rows: companies } = await cl.query(`SELECT * FROM cantera_companies WHERE batch_id=$1 AND user_id=$2 AND paso2_estado='aprobado'`, [batchId, uid]);
+    const { rows: companies } = await cl.query(`SELECT * FROM cantera_companies WHERE batch_id=$1 AND user_id=$2 AND paso2_estado IN ('aprobado','validacion_manual')`, [batchId, uid]);
     if (!companies.length) throw new Error('No hay empresas calificadas todavía (paso 2) para mover');
 
     let companiesPromoted = 0, contactsPromoted = 0;

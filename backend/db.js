@@ -1990,6 +1990,14 @@ async function initDb() {
     await pool.query(`ALTER TABLE cantera_contacts ADD COLUMN IF NOT EXISTS seniority    TEXT NOT NULL DEFAULT '';`);
     await pool.query(`ALTER TABLE cantera_contacts ADD COLUMN IF NOT EXISTS departamento TEXT NOT NULL DEFAULT '';`);
 
+    // Validación manual — cuando Jenny no tiene tiempo de esperar la IA, valida
+    // la empresa ella misma fuera del sistema (copia los datos, la revisa en su
+    // propia herramienta) y vuelve a asignar el Tier a mano. paso2_estado pasa a
+    // tomar el valor 'validacion_manual' (además de pendiente/aprobado/descartado/
+    // error) para que quede claro que NO pasó por el motor de IA — pedido explícito
+    // 2026-09-05: "la etiqueta del sistema sería validación manual".
+    await pool.query(`ALTER TABLE cantera_companies ADD COLUMN IF NOT EXISTS nota_manual TEXT NOT NULL DEFAULT '';`);
+
     console.log('[db] tables ready (users, verifications, batch_jobs, clients, projects, tasks, payments, team_members, workspaces, workspace_invites, chat_messages, leads, meetings, fin_config, fin_member_config, pagos_internos, opportunities, opportunity_tasks, cantera_batches, cantera_companies, cantera_contacts, cantera_criterio_templates)');
   } catch (err) {
     console.error('[db] initDb failed:', err.message);
