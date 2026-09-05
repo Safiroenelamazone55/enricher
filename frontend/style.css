@@ -12350,6 +12350,8 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .cant-estado--descartado, .cant-estado--error { background: #FCEEEE; color: #B3261E; }
 .scope-bar-cant { display: flex; gap: 8px; flex-wrap: wrap; margin: 6px 0 18px; }
 .cant-chip { font-size: .78rem; font-weight: 600; color: var(--muted, #B4AFA8); background: none; border: 1px dashed var(--border, #EAE7E2); border-radius: 0; padding: 3px 9px; }
+.cant-chip.cant-chip--btn { font-family: inherit; cursor: pointer; }
+.cant-chip.cant-chip--btn:hover { border-color: var(--brand, #007AFF); color: var(--brand-d, #0062CC); }
 .cant-section { margin-bottom: 24px; }
 .cant-section__hd { display: flex; align-items: baseline; gap: 8px; margin-bottom: 10px; }
 .cant-section__num { font-size: .7rem; font-weight: 700; color: var(--muted, #B4AFA8); letter-spacing: .05em; }

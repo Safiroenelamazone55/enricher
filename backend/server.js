@@ -3358,6 +3358,16 @@ app.delete('/api/outbound-clients/:id', requireAuth, async (req, res) => {
 // LEAD MANAGER — EMPRESAS + CONTACTOS (directorio importable estilo Apollo/HubSpot)
 // =================================================================
 function _lmS(v) { return (v == null ? '' : String(v)).trim(); }
+// Exports (LinkedIn Sales Navigator y otros) usan "N/A" literal cuando no hay dato
+// en vez de dejar la celda vacía — si eso se trata como dominio real, TODAS las
+// empresas sin website conocido terminan compartiendo el mismo "dominio" (n/a) y
+// se fusionan entre sí como si fueran una sola empresa. Filtra esos valores antes
+// de usarlos como dominio/website/LinkedIn.
+function _lmCleanUrlish(v) {
+  const s = _lmS(v);
+  if (!s || /^(n\s*\/?\s*a|none|null|-|n\.?a\.?|tbd|not\s*applicable|not\s*available)$/i.test(s)) return '';
+  return s;
+}
 function _lmNormDomain(raw) {
   let s = _lmS(raw).toLowerCase();
   if (!s) return '';
@@ -6247,13 +6257,19 @@ app.post('/api/lm/import', requireAuth, upload.single('file'), async (req, res) 
   const summary = { rows: 0, contactsCreated: 0, contactsUpdated: 0, contactsSkipped: 0, companiesCreated: 0, companiesUpdated: 0, companiesSkipped: 0, errors: [] };
   const coCache = new Map();
   async function _co(f) {
-    const dominio = _lmNormDomain(f.dominio || f.website || '');
+    // Misma cascada que Cantera: dominio real > LinkedIn de la empresa > nombre, con
+    // sentinelas tipo "N/A" filtrados ANTES de normalizar como dominio (si no, todas
+    // las empresas sin website conocido se fusionan en una sola — bug reportado
+    // 2026-09-06 al importar un export real de LinkedIn Sales Navigator).
+    const dominio = _lmNormDomain(_lmCleanUrlish(f.dominio) || _lmCleanUrlish(f.website));
+    const linkedin = _lmCleanUrlish(f.linkedin).toLowerCase();
     const nombre  = _lmS(f.nombre);
-    if (!dominio && !nombre) return null;
-    const key = dominio ? 'd:' + dominio : 'n:' + nombre.toLowerCase();
+    if (!dominio && !linkedin && !nombre) return null;
+    const key = dominio ? 'd:' + dominio : linkedin ? 'l:' + linkedin : 'n:' + nombre.toLowerCase();
     if (coCache.has(key)) return coCache.get(key);
     let found;
     if (dominio) found = (await pool.query(`SELECT id FROM lm_companies WHERE user_id=$1 AND dominio=$2 LIMIT 1`, [uid, dominio])).rows[0];
+    else if (linkedin) found = (await pool.query(`SELECT id FROM lm_companies WHERE user_id=$1 AND dominio='' AND LOWER(linkedin)=$2 LIMIT 1`, [uid, linkedin])).rows[0];
     else         found = (await pool.query(`SELECT id FROM lm_companies WHERE user_id=$1 AND dominio='' AND LOWER(nombre)=$2 LIMIT 1`, [uid, nombre.toLowerCase()])).rows[0];
     if (found) {
       coCache.set(key, found.id);
@@ -6279,8 +6295,8 @@ app.post('/api/lm/import', requireAuth, upload.single('file'), async (req, res) 
     const ins = await pool.query(`
       INSERT INTO lm_companies (user_id,nombre,dominio,website,industria,tamano,ingresos,telefono,linkedin,ciudad,region,pais,fundada,direccion,codigo_postal,descripcion,tecnologias,funding,target_tier,segmento,analisis,outbound_client_id,notas)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23) RETURNING id
-    `, [uid, nombre || dominio, dominio, _lmS(f.website), _lmS(f.industria), _lmS(f.tamano), _lmS(f.ingresos),
-        _lmS(f.telefono), _lmS(f.linkedin), _lmS(f.ciudad), _lmS(f.region), _lmS(f.pais), _lmS(f.fundada),
+    `, [uid, nombre || dominio, dominio, _lmCleanUrlish(f.website), _lmS(f.industria), _lmS(f.tamano), _lmS(f.ingresos),
+        _lmS(f.telefono), _lmCleanUrlish(f.linkedin), _lmS(f.ciudad), _lmS(f.region), _lmS(f.pais), _lmS(f.fundada),
         _lmS(f.direccion), _lmS(f.codigo_postal), _lmS(f.descripcion), _lmS(f.tecnologias), _lmS(f.funding), _lmS(f.target_tier), _lmS(f.segmento), _lmS(f.analisis), obcId, _lmS(f.notas)]);
     coCache.set(key, ins.rows[0].id); summary.companiesCreated++; return ins.rows[0].id;
   }
@@ -6407,7 +6423,13 @@ app.post('/api/cantera/batches', requireAuth, async (req, res) => {
 });
 app.get('/api/cantera/batches/:id', requireAuth, async (req, res) => {
   try {
-    const { rows } = await pool.query(`SELECT * FROM cantera_batches WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId]);
+    const { rows } = await pool.query(`
+      SELECT b.*, oc.nombre AS cliente_nombre, cam.nombre AS campana_nombre, seq.nombre AS secuencia_nombre
+        FROM cantera_batches b
+        LEFT JOIN outbound_clients oc ON oc.id = b.outbound_client_id
+        LEFT JOIN campaigns cam ON cam.id = b.campaign_id
+        LEFT JOIN sequences seq ON seq.id = b.sequence_id
+       WHERE b.id=$1 AND b.user_id=$2`, [req.params.id, req.workspaceOwnerId]);
     if (!rows.length) return res.status(404).json({ error: 'Borrador no encontrado' });
     res.json(rows[0]);
   } catch (err) { console.error('[cantera] GET batch', err.message); res.status(500).json({ error: 'Error al cargar el borrador' }); }
@@ -6417,12 +6439,12 @@ app.put('/api/cantera/batches/:id', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(`
       UPDATE cantera_batches SET
-        nombre=$1, outbound_client_id=$2, campaign_id=$3,
+        nombre=$1, outbound_client_id=$2, campaign_id=$3, sequence_id=$10,
         filtros=$4::jsonb, icp=$5, tiers=$6::jsonb, puestos=$7::jsonb, updated_at=NOW()
       WHERE id=$8 AND user_id=$9 AND estado='borrador' RETURNING *
     `, [_lmS(b.nombre), b.outbound_client_id || null, b.campaign_id || null,
         JSON.stringify(b.filtros || {}), _lmS(b.icp), JSON.stringify(b.tiers || []), JSON.stringify(b.puestos || {}),
-        req.params.id, req.workspaceOwnerId]);
+        req.params.id, req.workspaceOwnerId, b.sequence_id || null]);
     if (!rows.length) return res.status(404).json({ error: 'Borrador no encontrado (o ya fue movido al CRM)' });
     res.json(rows[0]);
   } catch (err) { console.error('[cantera] PUT batch', err.message); res.status(500).json({ error: 'Error al guardar el criterio' }); }
@@ -6527,16 +6549,22 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
     return parts.length ? parts[parts.length - 1] : '';
   }
   async function _co(f) {
-    const dominio = _lmNormDomain(f.co_dominio || f.co_website || '');
+    // Cascada de identidad de empresa: dominio real > LinkedIn de la empresa > nombre.
+    // "N/A"/"none"/etc. (comunes en exports cuando no hay website) se descartan ANTES
+    // de normalizar como dominio — si no, todas las empresas sin website terminan
+    // compartiendo el mismo "dominio" falso y se fusionan en una sola (bug reportado
+    // 2026-09-06: 1537 contactos → 734 empresas cuando debían ser ~896 distintas).
+    const dominio = _lmNormDomain(_lmCleanUrlish(f.co_dominio) || _lmCleanUrlish(f.co_website));
+    const linkedin = _lmCleanUrlish(f.co_linkedin).toLowerCase();
     const nombre = _lmS(f.co_nombre);
-    if (!dominio && !nombre) return null;
-    const key = dominio ? 'd:' + dominio : 'n:' + nombre.toLowerCase();
+    if (!dominio && !linkedin && !nombre) return null;
+    const key = dominio ? 'd:' + dominio : linkedin ? 'l:' + linkedin : 'n:' + nombre.toLowerCase();
     if (coCache.has(key)) return coCache.get(key);
     const pais = _lmS(f.co_pais) || _lastLocSegment(f.co_ubicacion);
     const ins = await pool.query(`
       INSERT INTO cantera_companies (batch_id,user_id,nombre,dominio,website,industria,tamano,pais,ciudad,linkedin,ubicacion)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id
-    `, [batchId, uid, nombre || dominio, dominio, _lmS(f.co_website), _lmS(f.co_industria), _lmS(f.co_tamano), pais, _lmS(f.co_ciudad), _lmS(f.co_linkedin), _lmS(f.co_ubicacion)]);
+    `, [batchId, uid, nombre || dominio, dominio, _lmCleanUrlish(f.co_website), _lmS(f.co_industria), _lmS(f.co_tamano), pais, _lmS(f.co_ciudad), _lmCleanUrlish(f.co_linkedin), _lmS(f.co_ubicacion)]);
     coCache.set(key, ins.rows[0].id); summary.companiesCreated++; return ins.rows[0].id;
   }
 
@@ -6561,7 +6589,7 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
         INSERT INTO cantera_contacts (batch_id,company_id,user_id,nombre,apellido,cargo,email,linkedin,raw,
           ubicacion,conexion_grado,premium,antiguedad_cargo,conexiones_mutuas,cambio_reciente,publico_reciente,sigue_empresa)
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
-      `, [batchId, companyId, uid, nombre, apellido, _lmS(f.cargo), _lmS(f.email).toLowerCase(), _lmS(f.linkedin), JSON.stringify(raw),
+      `, [batchId, companyId, uid, nombre, apellido, _lmS(f.cargo), _lmCleanUrlish(f.email).toLowerCase(), _lmCleanUrlish(f.linkedin), JSON.stringify(raw),
           _lmS(f.ubicacion), _lmS(f.conexion_grado), _lmS(f.premium), _lmS(f.antiguedad_cargo), _lmS(f.conexiones_mutuas),
           _lmS(f.cambio_reciente), _lmS(f.publico_reciente), _lmS(f.sigue_empresa)]);
       summary.contactsCreated++;

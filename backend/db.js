@@ -2015,6 +2015,13 @@ async function initDb() {
     await pool.query(`ALTER TABLE cantera_contacts ADD COLUMN IF NOT EXISTS sigue_empresa     TEXT NOT NULL DEFAULT '';`);
     await pool.query(`ALTER TABLE cantera_companies ADD COLUMN IF NOT EXISTS ubicacion         TEXT NOT NULL DEFAULT '';`);
 
+    // Secuencia opcional del borrador — mismo criterio que Cliente/Campaña, que ya
+    // existían: es solo una anotación en esta etapa (no enrola nada, no envía nada a
+    // Outreach) hasta que las empresas se promuevan al CRM. Pedido explícito
+    // 2026-09-06: poder asignar (o crear como borrador) Cliente/Campaña/Secuencia
+    // directamente desde Cantera, sin que eso "toque" Outreach todavía.
+    await pool.query(`ALTER TABLE cantera_batches ADD COLUMN IF NOT EXISTS sequence_id INTEGER REFERENCES sequences(id) ON DELETE SET NULL;`);
+
     console.log('[db] tables ready (users, verifications, batch_jobs, clients, projects, tasks, payments, team_members, workspaces, workspace_invites, chat_messages, leads, meetings, fin_config, fin_member_config, pagos_internos, opportunities, opportunity_tasks, cantera_batches, cantera_companies, cantera_contacts, cantera_criterio_templates)');
   } catch (err) {
     console.error('[db] initDb failed:', err.message);

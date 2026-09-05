@@ -5334,9 +5334,12 @@ const CanteraModule = (() => {
       </div>
 
       <div class="scope-bar-cant">
-        <span class="cant-chip">${b.outbound_client_id ? esc(b.cliente_nombre || 'Cliente asignado') : 'Cliente: sin asignar (opcional)'}</span>
-        <span class="cant-chip">${b.campaign_id ? esc(b.campana_nombre || 'Campaña asignada') : 'Campaña: sin asignar (opcional)'}</span>
+        <button class="cant-chip cant-chip--btn" onclick="CanteraModule.openScope()">Cliente: ${b.outbound_client_id ? esc(b.cliente_nombre || 'asignado') : 'sin asignar (opcional)'}</button>
+        <button class="cant-chip cant-chip--btn" onclick="CanteraModule.openScope()">Campaña: ${b.campaign_id ? esc(b.campana_nombre || 'asignada') : 'sin asignar (opcional)'}</button>
+        <button class="cant-chip cant-chip--btn" onclick="CanteraModule.openScope()">Secuencia: ${b.sequence_id ? esc(b.secuencia_nombre || 'asignada') : 'sin asignar (opcional)'}</button>
+        <button class="cant-x" onclick="CanteraModule.openScope()" title="Asignar cliente / campaña / secuencia">✎</button>
       </div>
+      <p class="cant-hint" style="margin:6px 0 0">Esto es solo una anotación en esta etapa — no envía nada a Outreach ni activa ninguna secuencia. Recién se vincula de verdad cuando muevas empresas al CRM.</p>
 
       <div class="cant-section">
         <div class="cant-section__hd"><span class="cant-section__num">01</span><h3>Filtros básicos</h3></div>
@@ -5757,6 +5760,81 @@ const CanteraModule = (() => {
   }
 
   // ── Mover al CRM: única salida de Cantera — irreversible. ─────────
+  // ── Cliente / Campaña / Secuencia del borrador — opcional, solo anotación
+  // (pedido explícito 2026-09-06): no enrola nada ni envía nada a Outreach, es
+  // "capa superficial" hasta que las empresas se muevan al CRM (ver openPromote,
+  // que ya preselecciona lo mismo asignado aquí). Permite crear cliente/campaña/
+  // secuencia nuevos como borrador sin salir de Cantera — POST /api/campaigns y
+  // /api/sequences ya crean con estado='draft' por defecto, así que "crear" aquí
+  // ya es "crear sin activar/enviar", sin lógica adicional.
+  async function openScope() {
+    const [clientes, campanas, secuencias] = await Promise.all([
+      apiFetch(`${API}/outbound-clients`).then(r => r.ok ? r.json() : []),
+      apiFetch(`${API}/campaigns`).then(r => r.ok ? r.json() : []),
+      apiFetch(`${API}/sequences`).then(r => r.ok ? r.json() : []),
+    ]);
+    document.getElementById('cant-scope-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'cant-scope-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) closeScope(); };
+    const opt = (list, current, none) => `<option value=""${!current ? ' selected' : ''}>${none}</option>`
+      + list.map(x => `<option value="${x.id}"${String(current) === String(x.id) ? ' selected' : ''}>${esc(x.nombre)}</option>`).join('');
+    m.innerHTML = `<div class="fin-pi-box lm-flt-box" style="max-width:440px">
+      <div class="fin-pi-box__hd"><h3>Cliente / Campaña / Secuencia</h3><button class="fin-pi-x" onclick="CanteraModule.closeScope()">✕</button></div>
+      <div class="flt-body" style="display:flex;flex-direction:column;gap:12px">
+        <p class="cant-hint" style="margin:0">Los tres son opcionales aquí — es solo una anotación, no envía nada a Outreach ni activa nada todavía. Si eliges "+ Crear nueva…" se crea como borrador.</p>
+        <label class="cant-flabel">Cliente<select id="cant-sc-client" class="form-input" onchange="CanteraModule.scopeMaybeCreate(this,'client')">
+          <option value="__new__">+ Crear cliente nuevo…</option>
+          ${opt(clientes, _current.outbound_client_id, '— sin asignar —')}
+        </select></label>
+        <label class="cant-flabel">Campaña<select id="cant-sc-camp" class="form-input" onchange="CanteraModule.scopeMaybeCreate(this,'campaign')">
+          <option value="__new__">+ Crear campaña nueva (borrador)…</option>
+          ${opt(campanas, _current.campaign_id, '— sin asignar —')}
+        </select></label>
+        <label class="cant-flabel">Secuencia<select id="cant-sc-seq" class="form-input" onchange="CanteraModule.scopeMaybeCreate(this,'sequence')">
+          <option value="__new__">+ Crear secuencia nueva (borrador)…</option>
+          ${opt(secuencias, _current.sequence_id, '— sin asignar —')}
+        </select></label>
+      </div>
+      <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns">
+        <button class="btn btn--ghost btn--sm" onclick="CanteraModule.closeScope()">Cancelar</button>
+        <button class="btn btn--primary btn--sm" onclick="CanteraModule.saveScope()">Guardar</button>
+      </div></div></div>`;
+    document.body.appendChild(m);
+  }
+  function closeScope() { document.getElementById('cant-scope-modal')?.remove(); }
+  const _SCOPE_EP = { client: 'outbound-clients', campaign: 'campaigns', sequence: 'sequences' };
+  const _SCOPE_LBL = { client: 'cliente', campaign: 'campaña', sequence: 'secuencia' };
+  async function scopeMaybeCreate(sel, kind) {
+    if (sel.value !== '__new__') return;
+    const nombre = prompt(`Nombre de la nueva ${_SCOPE_LBL[kind]} (se crea como borrador — no se envía nada a Outreach)`);
+    if (!nombre || !nombre.trim()) { sel.value = ''; return; }
+    try {
+      const res = await apiFetch(`${API}/${_SCOPE_EP[kind]}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre: nombre.trim() }) });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Error');
+      const o = document.createElement('option'); o.value = d.id; o.textContent = d.nombre;
+      sel.insertBefore(o, sel.options[1] || null);
+      sel.value = String(d.id);
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); sel.value = ''; }
+  }
+  async function saveScope() {
+    _current.outbound_client_id = document.getElementById('cant-sc-client')?.value || null;
+    _current.campaign_id = document.getElementById('cant-sc-camp')?.value || null;
+    _current.sequence_id = document.getElementById('cant-sc-seq')?.value || null;
+    try {
+      const res = await apiFetch(`${API}/cantera/batches/${_current.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_current) });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Error');
+      // Recarga con joins (cliente_nombre/campana_nombre/secuencia_nombre) — el PUT
+      // solo devuelve la fila cruda, sin esos nombres, y se verían desactualizados.
+      const r2 = await apiFetch(`${API}/cantera/batches/${_current.id}`);
+      _current = r2.ok ? await r2.json() : { ..._current, ...d };
+      closeScope();
+      showBanner('✓ Guardado', 'success');
+      _paint();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+
   async function openPromote() {
     const calificadas = _companies.filter(c => c.paso2_estado === 'aprobado' || c.paso2_estado === 'validacion_manual').length;
     if (!calificadas) { showBanner('Todavía no hay empresas calificadas (paso 2) para mover', 'info'); return; }
@@ -5773,11 +5851,11 @@ const CanteraModule = (() => {
         <p class="cant-hint" style="margin:0">${calificadas} empresa(s) calificada(s) se crearán como reales, con sus contactos "Decide"/"Respaldo". Esto no se puede deshacer.</p>
         <label class="cant-flabel">Cliente<select id="cant-pr-client" class="form-input">
           <option value="">— elegir —</option>
-          ${clientes.map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('')}
+          ${clientes.map(c => `<option value="${c.id}"${String(_current.outbound_client_id) === String(c.id) ? ' selected' : ''}>${esc(c.nombre)}</option>`).join('')}
         </select></label>
         <label class="cant-flabel">Campaña<span class="field-note">opcional</span><select id="cant-pr-camp" class="form-input">
           <option value="">Sin campaña</option>
-          ${campanas.map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('')}
+          ${campanas.map(c => `<option value="${c.id}"${String(_current.campaign_id) === String(c.id) ? ' selected' : ''}>${esc(c.nombre)}</option>`).join('')}
         </select></label>
         <label style="display:flex;align-items:center;gap:6px;font-size:.84rem"><input type="checkbox" id="cant-pr-resp" checked> Incluir también los contactos "Respaldo" (no solo "Decide")</label>
       </div>
@@ -5809,6 +5887,7 @@ const CanteraModule = (() => {
   return { render, open, openCreate, backToList, saveFiltros, runFiltros, toggleFailed, moreMenu, remove, saveAsTemplate,
     toggleExpand, addTier, removeTier, setTierField, addPuesto, removePuesto, setPuestoField, saveCriterio, runValidacion,
     openPromote, closePromote, doPromote,
+    openScope, closeScope, scopeMaybeCreate, saveScope,
     openImportModal, closeImportModal, impFile, impToggleHeader, impRun, cbxOpen, cbxFilter, cbxPick, cbxBlur,
     taOpen, taFilter, taBlur, addFiltro, removeFiltro,
     toggleCoSel, toggleCoSelAll, cleanMenu, enrichMenu, runClean, runEnrich, closeCantOp, applyCantOp,
