@@ -6681,7 +6681,23 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
       summary.contactsCreated++;
     } catch (e) { if (summary.errors.length < 10) summary.errors.push(`Fila ${summary.rows}: ${e.message}`); }
   }
+  await pool.query(`UPDATE cantera_batches SET archivo_nombre=$1, updated_at=NOW() WHERE id=$2`, [req.file.originalname || '', batchId]);
   res.json(summary);
+});
+
+// Vacía el borrador (empresas + contactos, cascada) sin borrar el borrador en sí —
+// para "eliminar todo y volver a cargar" desde el paso Importar prospectos, visible
+// como acción directa ahí (pedido explícito 2026-09-06, no escondida dentro del
+// modal de importar).
+app.delete('/api/cantera/batches/:id/companies', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId;
+  try {
+    const chk = await pool.query(`SELECT id FROM cantera_batches WHERE id=$1 AND user_id=$2 AND estado='borrador'`, [req.params.id, uid]);
+    if (!chk.rows.length) return res.status(404).json({ error: 'Borrador no encontrado (o ya fue movido al CRM)' });
+    const del = await pool.query(`DELETE FROM cantera_companies WHERE batch_id=$1 AND user_id=$2`, [req.params.id, uid]);
+    await pool.query(`UPDATE cantera_batches SET archivo_nombre='' WHERE id=$1`, [req.params.id]);
+    res.json({ ok: true, companiesDeleted: del.rowCount || 0 });
+  } catch (err) { console.error('[cantera] DELETE companies', err.message); res.status(500).json({ error: 'Error al eliminar' }); }
 });
 
 // Normalización de país: "España" y "Spain" deben calzar como el MISMO país

@@ -12371,6 +12371,14 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .cant-flabel { display: flex; flex-direction: column; gap: 4px; font-size: .74rem; font-weight: 600; color: var(--text2, #45586A); }
 .cant-flabel input { min-width: 160px; }
 .cant-import-hint { color: var(--muted, #B4AFA8); font-size: .76rem; flex: 1 1 260px; }
+.cant-imp-done-box { display: flex; align-items: center; gap: 14px; background: var(--white, #fff); border: 1px solid var(--border, #EAE7E2); padding: 14px 16px; flex-wrap: wrap; }
+.cant-imp-done-box__ico { font-size: 1.6rem; flex-shrink: 0; }
+.cant-imp-done-box__txt { display: flex; flex-direction: column; gap: 2px; flex: 1 1 220px; min-width: 0; }
+.cant-imp-done-box__txt b { font-size: .88rem; color: var(--text, #0A2540); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cant-imp-done-box__txt span { font-size: .78rem; color: var(--muted, #918C85); }
+.cant-imp-done-box__btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn.cant-danger { color: #B3261E; border-color: #F6C9C4; }
+.btn.cant-danger:hover { background: #FCEEEE; }
 .cant-count { color: var(--text2, #45586A); font-size: .84rem; margin-right: auto; }
 .cant-hint { color: var(--muted, #918C85); font-size: .8rem; margin: 0 0 12px; max-width: 62ch; }
 .cant-subrow td { background: var(--brand-ll, #F1EFEB); font-size: .82rem; color: var(--text2, #6C6862); padding: 6px 10px; }

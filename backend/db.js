@@ -2022,6 +2022,11 @@ async function initDb() {
     // directamente desde Cantera, sin que eso "toque" Outreach todavía.
     await pool.query(`ALTER TABLE cantera_batches ADD COLUMN IF NOT EXISTS sequence_id INTEGER REFERENCES sequences(id) ON DELETE SET NULL;`);
 
+    // Nombre del último archivo importado — pedido explícito 2026-09-06: el paso
+    // "Importar prospectos" debe decir qué archivo ya se cargó, no solo mostrar el
+    // botón como si nunca se hubiera importado nada.
+    await pool.query(`ALTER TABLE cantera_batches ADD COLUMN IF NOT EXISTS archivo_nombre TEXT NOT NULL DEFAULT '';`);
+
     console.log('[db] tables ready (users, verifications, batch_jobs, clients, projects, tasks, payments, team_members, workspaces, workspace_invites, chat_messages, leads, meetings, fin_config, fin_member_config, pagos_internos, opportunities, opportunity_tasks, cantera_batches, cantera_companies, cantera_contacts, cantera_criterio_templates)');
   } catch (err) {
     console.error('[db] initDb failed:', err.message);

@@ -5073,6 +5073,21 @@ const CanteraModule = (() => {
     _cImpStepFile();
   }
   function closeImportModal() { document.getElementById('cant-imp-modal')?.remove(); _cImp = null; }
+  // Acción directa desde el paso "Importar prospectos" (pedido explícito 2026-09-06,
+  // visible ahí mismo, no escondida dentro del modal) — borra TODAS las empresas y
+  // contactos de este borrador y abre el importador limpio para cargar de nuevo.
+  async function deleteAndReimport() {
+    if (!confirm(`Esto borra las ${_companies.length} empresa(s) y sus contactos de este borrador (no se puede deshacer). ¿Continuar?`)) return;
+    try {
+      const res = await apiFetch(`${API}/cantera/batches/${_current.id}/companies`, { method: 'DELETE' });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Error');
+      _current.archivo_nombre = '';
+      await _loadCompanies();
+      showBanner(`✓ ${d.companiesDeleted} empresa(s) eliminadas`, 'success');
+      openImportModal();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
   function _cImpInner(html) { const el = document.getElementById('cant-imp-inner'); if (el) el.innerHTML = html; }
   function _cImpHd(title) { return `<div class="fin-pi-box__hd"><h3>${esc(title)}</h3><button class="fin-pi-x" onclick="CanteraModule.closeImportModal()">✕</button></div>`; }
   function _cImpSteps(n) { const s = ['1 · Archivo', '2 · Mapear', '3 · Listo']; return `<div class="lm-imp-steps">${s.map((t, i) => `<span class="${i + 1 < n ? 'done' : i + 1 === n ? 'on' : ''}">${t}</span>`).join('')}</div>`; }
@@ -5415,10 +5430,20 @@ const CanteraModule = (() => {
       </div>` : ''}
 
       ${_step === 3 ? `<div class="cant-section">
-        <div class="cant-import-row">
+        ${_companies.length ? `<div class="cant-imp-done-box">
+          <div class="cant-imp-done-box__ico">📄</div>
+          <div class="cant-imp-done-box__txt">
+            <b>${b.archivo_nombre ? esc(b.archivo_nombre) : 'Archivo importado'}</b>
+            <span>${_companies.length} empresa(s) ya cargadas en este borrador</span>
+          </div>
+          <div class="cant-imp-done-box__btns">
+            <button class="btn btn--ghost btn--sm" onclick="CanteraModule.openImportModal()">Importar otro archivo…</button>
+            <button class="btn btn--ghost btn--sm cant-danger" onclick="CanteraModule.deleteAndReimport()">🗑 Eliminar todo y volver a cargar</button>
+          </div>
+        </div>` : `<div class="cant-import-row">
           <button class="btn btn--primary btn--sm" onclick="CanteraModule.openImportModal()">Importar archivo…</button>
           <span class="cant-import-hint">Previsualiza y ajusta el mapeo de columnas antes de guardar — igual que al importar en el CRM.</span>
-        </div>
+        </div>`}
       </div>` : ''}
 
       ${_step === 4 ? `<div class="cant-section">
@@ -5905,7 +5930,7 @@ const CanteraModule = (() => {
     toggleExpand, addTier, removeTier, setTierField, addPuesto, removePuesto, setPuestoField, saveCriterio, runValidacion,
     openPromote, closePromote, doPromote,
     openScope, closeScope, scopeMaybeCreate, saveScope, setStep,
-    openImportModal, closeImportModal, impFile, impToggleHeader, impRun, impSetMode, cbxOpen, cbxFilter, cbxPick, cbxBlur,
+    openImportModal, closeImportModal, impFile, impToggleHeader, impRun, impSetMode, deleteAndReimport, cbxOpen, cbxFilter, cbxPick, cbxBlur,
     taOpen, taFilter, taBlur, addFiltro, removeFiltro,
     toggleCoSel, toggleCoSelAll, cleanMenu, enrichMenu, runClean, runEnrich, closeCantOp, applyCantOp,
     quickCleanContact, quickEnrichContact, setContactPrioridad,
