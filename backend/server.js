@@ -6467,10 +6467,17 @@ app.delete('/api/cantera/batches/:id', requireAuth, async (req, res) => {
 // contacto + co_nombre/co_dominio/co_industria/co_tamano/co_pais/co_website
 // de su empresa — así tu export "personas primero, agrupadas por empresa"
 // entra tal cual, sin remapear nada a mano).
+// Corre en segundo plano (mismo patrón que run-validacion/_canteraJobs) — un
+// archivo real de miles de filas tarda más de lo que el navegador espera una
+// respuesta, y sin esto se veía "Failed to fetch" aunque la importación seguía
+// y terminaba bien del lado del servidor (reportado 2026-09-06: Jenny vio el
+// error pero sus 1242 empresas sí quedaron cargadas correctamente).
+const _canteraImportJobs = new Map(); // batchId -> { running, done, total, summary, error }
 app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), async (req, res) => {
   const uid = req.workspaceOwnerId;
   const batchId = req.params.id;
   if (!req.file) return res.status(400).json({ error: 'No se subió ningún archivo.' });
+  if (_canteraImportJobs.get(batchId)?.running) return res.status(409).json({ error: 'Ya hay una importación en curso para este borrador' });
   const chk = await pool.query(`SELECT id FROM cantera_batches WHERE id=$1 AND user_id=$2 AND estado='borrador'`, [batchId, uid]);
   if (!chk.rows.length) return res.status(404).json({ error: 'Borrador no encontrado (o ya fue movido al CRM)' });
   const hasHeader = req.body?.hasHeader !== '0' && req.body?.hasHeader !== 'false';
@@ -6558,6 +6565,13 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
     });
   }
 
+  // A partir de aquí todo es lento (una fila a la vez, con consultas a la BD por
+  // fila) — se responde YA con "empezó" y el resto corre en segundo plano; el
+  // front hace polling a /import-status como ya hace con la investigación de IA.
+  const job = { running: true, done: 0, total: dataRows.length, summary: null, error: null };
+  _canteraImportJobs.set(batchId, job);
+  res.json({ started: true, total: dataRows.length });
+
   const summary = { rows: 0, companiesCreated: 0, contactsCreated: 0, contactsSkipped: 0, companiesDeleted, mode: importMode, errors: [] };
   const coCache = new Map();
   const contactCachePreloaded = new Set();
@@ -6566,6 +6580,9 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
     // lógica de cruce (dominio/LinkedIn/nombre para empresas, LinkedIn/email para
     // contactos) que ya dedupea dentro de un archivo también reconozca lo importado
     // en una corrida anterior — así una fila que ya existe no crea un duplicado.
+    // Si esta precarga falla, no se aborta el import — sigue sin cruzar contra lo
+    // ya existente (pierde el "actualizar", no los datos).
+    try {
     const { rows: existingCos } = await pool.query(`SELECT id, dominio, linkedin, nombre FROM cantera_companies WHERE batch_id=$1 AND user_id=$2`, [batchId, uid]);
     for (const e of existingCos) {
       if (e.dominio) coCache.set('d:' + e.dominio, e.id);
@@ -6577,6 +6594,7 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
       const k = (e.linkedin || '').toLowerCase() || (e.email || '').toLowerCase();
       if (k) contactCachePreloaded.add(k);
     }
+    } catch (e) { console.error('[cantera] import preload', e.message); }
   }
   // "Company Location" del export de Sales Nav viene como "Ciudad, Región, País" en
   // un solo texto — si no hay co_pais explícito, se infiere del último segmento sin
@@ -6680,9 +6698,16 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
           _lmS(f.cambio_reciente), _lmS(f.publico_reciente), _lmS(f.sigue_empresa)]);
       summary.contactsCreated++;
     } catch (e) { if (summary.errors.length < 10) summary.errors.push(`Fila ${summary.rows}: ${e.message}`); }
+    job.done = summary.rows;
   }
-  await pool.query(`UPDATE cantera_batches SET archivo_nombre=$1, updated_at=NOW() WHERE id=$2`, [req.file.originalname || '', batchId]);
-  res.json(summary);
+  try {
+    await pool.query(`UPDATE cantera_batches SET archivo_nombre=$1, updated_at=NOW() WHERE id=$2`, [req.file.originalname || '', batchId]);
+  } catch (e) { console.error('[cantera] import archivo_nombre', e.message); }
+  job.running = false; job.summary = summary;
+});
+app.get('/api/cantera/batches/:id/import-status', requireAuth, async (req, res) => {
+  const job = _canteraImportJobs.get(req.params.id) || { running: false, done: 0, total: 0, summary: null, error: null };
+  res.json(job);
 });
 
 // Vacía el borrador (empresas + contactos, cascada) sin borrar el borrador en sí —
