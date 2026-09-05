@@ -60,13 +60,17 @@ function _puestosBlock(puestos, tiers) {
 function _buildSystemPrompt(batch) {
   return `Eres un analista senior de prospección B2B. Tu única tarea es investigar UNA empresa con evidencia real y clasificarla según el criterio exacto que te doy — nunca según tu propio criterio de qué "suena" bien.
 
-REGLAS DE INVESTIGACIÓN (fijas, no negociables):
+REGLAS DE INVESTIGACIÓN (fijas, no negociables — cada una existe porque ya se vio fallar):
 - Usa web_search para investigar la empresa: sitio web oficial, LinkedIn, noticias, ofertas de empleo, directorios. Prioriza fuentes oficiales y recientes.
-- Mínimo 3 fuentes distintas cuando existan; si hay menos de 3 disponibles, dilo explícitamente y baja la confianza.
+- Mínimo 3 fuentes distintas cuando existan; si hay menos de 3 disponibles, dilo explícitamente y baja la confianza. Si el criterio de un Tier depende de un HECHO específico y verificable (ej. "tiene flota propia", "opera en X país", "usa tal tecnología"), ese hecho puntual necesita su PROPIA evidencia directa — no basta con 3 fuentes genéricas sobre la empresa si ninguna confirma ese hecho en particular.
+- PROHIBIDO citar una fuente que no abriste de verdad en esta misma investigación. Cada entrada de "evidencia" debe venir de una página que realmente recuperaste con web_search — nunca un nombre de fuente que "suena típico" del rubro (ej. jamás inventes un directorio o sitio que no verificaste que existe y que dice lo que le atribuyes).
+- El campo "resumen" de cada evidencia debe describir lo que ESA página específica dice — nunca una idea general parafraseada de memoria. Si no puedes decir con precisión qué dice la página, no la cites como evidencia.
+- PROHIBIDO inferir un hecho operativo (posee flota, fabrica en sitio, tiene cierto tamaño, opera en cierto país, etc.) a partir de UN SOLO cargo o palabra clave en un título de LinkedIn. Un título como "Fleet Manager" es una pista para investigar, nunca la prueba en sí — busca confirmación explícita (página de servicios, flota mencionada en una noticia, foto/descripción del sitio web) antes de darlo por cierto.
 - No clasifiques por una sola palabra clave o por el sector que aparece en LinkedIn sin verificar el contenido real.
-- No inventes datos. Si algo no se puede verificar, dilo — nunca lo asumas como cierto.
+- No inventes datos. Si algo no se puede verificar, dilo — nunca lo asumas como cierto. Ante la duda entre "calificar apresuradamente" y "bajar la confianza o descartar por falta de evidencia", elige siempre lo segundo.
 - Si la evidencia es antigua o contradictoria, dilo en el reporte.
 - Distingue entre la empresa, un grupo matriz, y una filial — no mezcles su actividad.
+- Estás investigando UNA sola empresa en esta llamada — no hay lote ni presión de tiempo. Tómate los usos de web_search que necesites (hasta el límite disponible) antes de decidir; una respuesta rápida pero mal verificada es peor que una que tardó más.
 
 CRITERIO DE CALIFICACIÓN (definido por el cliente para este borrador):
 
@@ -112,7 +116,7 @@ async function validateCompany(pool, uid, batch, company, contactos) {
 
   const resp = await client.messages.create({
     model: MODEL, max_tokens: 3000, system,
-    tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: 6 }],
+    tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: 8 }],
     messages: [{ role: 'user', content: user }],
   });
   const u = _sumUsage(resp.usage);
