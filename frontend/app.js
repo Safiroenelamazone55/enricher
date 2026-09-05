@@ -5416,40 +5416,53 @@ const CanteraModule = (() => {
     const puestos = b.puestos || {};
     const expanded = _expanded || new Set();
     const visCols = CANT_RESULT_COLS.filter(c => _loadVisibleCols().has(c.key));
-    const subColspan = 2 + visCols.length;
+    // Contacto/Puesto/Prioridad son columnas propias y fijas (pedido explícito
+    // 2026-09-06: "que se encuentren en la columna donde le corresponden... si
+    // muevo la tabla, todo sigue en su lugar") — celdas reales, no un bloque de
+    // texto suelto, así el scroll horizontal las alinea igual que cualquier
+    // otra columna, sin trucos.
+    const detailColspan = visCols.length || 1;
+    const emptyColspan = 3 + visCols.length;
     const rows = (_onlyFailed ? _companies.filter(c => c.paso1_estado === 'descartado') : _companies).map(c => {
       const main = `<tr>
         <td class="lm-ck-col" onclick="event.stopPropagation()"><input type="checkbox" class="lm-ck" ${_coSel.has(c.id) ? 'checked' : ''} onclick="CanteraModule.toggleCoSel(${c.id},this.checked)"></td>
         <td class="dg-cell--frozen" onclick="CanteraModule.toggleExpand(${c.id})" style="cursor:pointer">${esc(c.nombre)}</td>
+        <td class="dg-cell--ro">—</td>
+        <td class="dg-cell--ro">—</td>
+        <td class="dg-cell--ro">—</td>
         ${visCols.map(col => `<td class="dg-cell--ro"${col.key === 'contactos' ? ` onclick="CanteraModule.toggleExpand(${c.id})" style="cursor:pointer"` : ''}>${_colCellHtml(c, col.key)}</td>`).join('')}
       </tr>`;
       if (!expanded.has(c.id)) return main;
       const cts = [...(_contactsByCompany[c.id] || [])].sort((a, b) => (a.prioridad || 99) - (b.prioridad || 99) || a.id - b.id);
-      const multi = cts.length > 1;
-      const sub = cts.map(k => `<tr class="cant-subrow"><td class="lm-ck-col"></td><td class="dg-cell--frozen"></td><td colspan="${subColspan}">
-      <div class="cant-subrow__pin">
-        <div class="cant-subrow__line">
-          ${multi ? `<select class="form-input" style="width:auto" onchange="CanteraModule.setContactPrioridad(${k.id},this.value)" title="Prioridad de contacto — si el primero no responde, pasa al siguiente">
+      const n = cts.length;
+      const sub = cts.map(k => `<tr class="cant-subrow">
+        <td class="lm-ck-col"></td>
+        <td class="dg-cell--frozen"></td>
+        <td class="dg-cell--ro"><b>${esc([k.nombre, k.apellido].filter(Boolean).join(' ')) || '(sin nombre)'}</b></td>
+        <td class="dg-cell--ro">${esc(k.cargo || '(sin cargo)')}</td>
+        <td class="dg-cell--ro">
+          <select class="form-input" style="width:auto" onchange="CanteraModule.setContactPrioridad(${k.id},this.value)" title="Prioridad de contacto — si el primero no responde, pasa al siguiente">
             <option value="0"${!k.prioridad ? ' selected' : ''}>Sin prioridad</option>
-            ${[1, 2, 3, 4, 5].map(n => `<option value="${n}"${k.prioridad === n ? ' selected' : ''}>${n}º contacto</option>`).join('')}
-          </select>` : ''}
-          <b>${esc([k.nombre, k.apellido].filter(Boolean).join(' '))}</b>
-          <span>${esc(k.cargo || '(sin cargo)')}</span>
-          <span class="cant-estado cant-estado--${k.puesto_estado === 'decide' ? 'aprobado' : k.puesto_estado === 'descartado' ? 'descartado' : 'pendiente'}">${k.puesto_estado === 'decide' ? 'Decide' : k.puesto_estado === 'respaldo' ? 'Respaldo' : k.puesto_estado === 'descartado' ? 'Descartado' : 'Pendiente'}</span>
-          ${k.seniority ? `<span class="tag">${esc(k.seniority)}</span>` : ''}${k.departamento ? `<span class="tag">${esc(k.departamento)}</span>` : ''}
-          ${k.conexion_grado ? `<span class="tag" title="Grado de conexión en LinkedIn">${esc(k.conexion_grado)}</span>` : ''}
-          ${_cantSignalOn(k.cambio_reciente) ? `<span class="tag" title="Cambió de trabajo recientemente">↻ cambio reciente</span>` : ''}
-          ${_cantSignalOn(k.publico_reciente) ? `<span class="tag" title="${esc(k.publico_reciente)}">✎ activo en LinkedIn</span>` : ''}
-          ${_cantSignalOn(k.sigue_empresa) ? `<span class="tag" title="Ya sigue tu empresa en LinkedIn">★ sigue tu empresa</span>` : ''}
-          ${k.puesto_motivo ? `<span class="cant-subrow__motivo">— ${esc(k.puesto_motivo)}</span>` : ''}
-        </div>
-        <div class="cant-subrow__actions">
-          <button class="add-role" onclick="CanteraModule.quickCleanContact(${k.id},'cargo')">Limpiar cargo</button>
-          <button class="add-role" onclick="CanteraModule.quickEnrichContact(${k.id})">Enriquecer seniority/depto</button>
-        </div>
-      </div>
-      </td></tr>`).join('');
-      return main + (sub || `<tr class="cant-subrow"><td class="lm-ck-col"></td><td class="dg-cell--frozen"></td><td colspan="${subColspan}" class="cp-empty2">Sin contactos</td></tr>`);
+            ${Array.from({ length: n }, (_, i) => i + 1).map(num => `<option value="${num}"${k.prioridad === num ? ' selected' : ''}>${num}</option>`).join('')}
+          </select>
+        </td>
+        <td colspan="${detailColspan}">
+          <div class="cant-subrow__line">
+            <span class="cant-estado cant-estado--${k.puesto_estado === 'decide' ? 'aprobado' : k.puesto_estado === 'descartado' ? 'descartado' : 'pendiente'}">${k.puesto_estado === 'decide' ? 'Decide' : k.puesto_estado === 'respaldo' ? 'Respaldo' : k.puesto_estado === 'descartado' ? 'Descartado' : 'Pendiente'}</span>
+            ${k.seniority ? `<span class="tag">${esc(k.seniority)}</span>` : ''}${k.departamento ? `<span class="tag">${esc(k.departamento)}</span>` : ''}
+            ${k.conexion_grado ? `<span class="tag" title="Grado de conexión en LinkedIn">${esc(k.conexion_grado)}</span>` : ''}
+            ${_cantSignalOn(k.cambio_reciente) ? `<span class="tag" title="Cambió de trabajo recientemente">↻ cambio reciente</span>` : ''}
+            ${_cantSignalOn(k.publico_reciente) ? `<span class="tag" title="${esc(k.publico_reciente)}">✎ activo en LinkedIn</span>` : ''}
+            ${_cantSignalOn(k.sigue_empresa) ? `<span class="tag" title="Ya sigue tu empresa en LinkedIn">★ sigue tu empresa</span>` : ''}
+            ${k.puesto_motivo ? `<span class="cant-subrow__motivo">— ${esc(k.puesto_motivo)}</span>` : ''}
+          </div>
+          <div class="cant-subrow__actions">
+            <button class="add-role" onclick="CanteraModule.quickCleanContact(${k.id},'cargo')">Limpiar cargo</button>
+            <button class="add-role" onclick="CanteraModule.quickEnrichContact(${k.id})">Enriquecer seniority/depto</button>
+          </div>
+        </td>
+      </tr>`).join('');
+      return main + (sub || `<tr class="cant-subrow"><td class="lm-ck-col"></td><td class="dg-cell--frozen"></td><td colspan="${emptyColspan}" class="cp-empty2">Sin contactos</td></tr>`);
     }).join('');
     const aprobadas = _companies.filter(c => c.paso1_estado === 'aprobado').length;
     const descartadas = _companies.filter(c => c.paso1_estado === 'descartado').length;
@@ -5548,19 +5561,20 @@ const CanteraModule = (() => {
       ${_step === 4 ? `<div class="cant-section">
         <div class="cant-results-bar">
           <span class="cant-count">${_coSel.size ? `${_coSel.size} seleccionada(s)` : `${_companies.length} empresa(s)`} · ${aprobadas} pasaron filtro · ${descartadas} descartadas (paso 1) · ${calificadas} calificada(s) (paso 2)</span>
-          <button class="btn btn--primary btn--sm" onclick="CanteraModule.runFiltros()">Correr filtros básicos</button>
-          <button class="btn btn--ghost btn--sm" onclick="CanteraModule.cleanMenu(event)">Limpiar empresas ▾</button>
-          <button class="btn btn--ghost btn--sm" onclick="CanteraModule.enrichMenu(event)">Enriquecer empresas ▾</button>
-          <button class="btn btn--primary btn--sm" onclick="CanteraModule.runValidacion()"${_jobRunning ? ' disabled' : ''}>Investigación profunda (IA)${_jobRunning ? '…' : ''}</button>
-          <button class="dg-issues-toggle${_onlyFailed ? ' active' : ''}" onclick="CanteraModule.toggleFailed()">Ver solo descartadas</button>
-          ${calificadas ? `<button class="btn btn--ghost btn--sm" onclick="CanteraModule.openPromote()">Mover al CRM (${calificadas})</button>` : ''}
-          <button class="dg-kebab" style="margin-left:auto" onclick="CanteraModule.columnsMenu(event)" title="Elegir columnas visibles">⋮</button>
+          <div class="cant-results-actions">
+            <button class="btn btn--primary btn--sm" onclick="CanteraModule.runFiltros()">Correr filtros básicos</button>
+            <button class="btn btn--ghost btn--sm" onclick="CanteraModule.cleanMenu(event)">Limpiar empresas ▾</button>
+            <button class="btn btn--ghost btn--sm" onclick="CanteraModule.enrichMenu(event)">Enriquecer empresas ▾</button>
+            <button class="btn btn--primary btn--sm" onclick="CanteraModule.runValidacion()"${_jobRunning ? ' disabled' : ''}>Investigación profunda (IA)${_jobRunning ? '…' : ''}</button>
+            <button class="dg-issues-toggle${_onlyFailed ? ' active' : ''}" onclick="CanteraModule.toggleFailed()">Ver solo descartadas</button>
+            ${calificadas ? `<button class="btn btn--ghost btn--sm" onclick="CanteraModule.openPromote()">Mover al CRM (${calificadas})</button>` : ''}
+            <button class="dg-kebab" onclick="CanteraModule.columnsMenu(event)" title="Elegir columnas visibles">⋮</button>
+          </div>
         </div>
         ${_jobRunning ? `<p class="cant-hint">Investigando ${_jobProgress.done} de ${_jobProgress.total}… puedes seguir en el sistema, esto sigue en segundo plano.</p>` : ''}
-        <p class="cant-hint">Marca filas con el check para Limpiar/Enriquecer solo esas empresas — abre los contactos de una fila (clic en el nombre) para limpiarlos/enriquecerlos uno por uno.</p>
         <div class="lm-dt-wrap dg-dt-wrap"><table class="clients-table dg-table sel-on cant-restbl" style="table-layout:auto">
-          <thead><tr><th class="lm-ck-col"><input type="checkbox" class="lm-ck" ${_companies.length && _companies.every(c => _coSel.has(c.id)) ? 'checked' : ''} onclick="CanteraModule.toggleCoSelAll(this.checked)"></th><th class="dg-cell--frozen" id="cant-th-nombre">Nombre<span class="cant-colresize" onmousedown="CanteraModule.startColResize(event)"></span></th>${visCols.map(col => `<th>${esc(col.label)}</th>`).join('')}</tr></thead>
-          <tbody>${rows || `<tr><td colspan="${subColspan}" class="cp-empty2">Importa un archivo para empezar.</td></tr>`}</tbody>
+          <thead><tr><th class="lm-ck-col"><input type="checkbox" class="lm-ck" ${_companies.length && _companies.every(c => _coSel.has(c.id)) ? 'checked' : ''} onclick="CanteraModule.toggleCoSelAll(this.checked)"></th><th class="dg-cell--frozen" id="cant-th-nombre">Nombre<span class="cant-colresize" onmousedown="CanteraModule.startColResize(event)"></span></th><th>Contacto</th><th>Puesto</th><th>Prioridad</th>${visCols.map(col => `<th>${esc(col.label)}</th>`).join('')}</tr></thead>
+          <tbody>${rows || `<tr><td colspan="${emptyColspan}" class="cp-empty2">Importa un archivo para empezar.</td></tr>`}</tbody>
         </table></div>
       </div>` : ''}`;
   }

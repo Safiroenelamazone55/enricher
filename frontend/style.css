@@ -12367,7 +12367,14 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .cant-step__n { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 50%; font-size: .68rem; font-weight: 700; background: var(--bg, #F1EFEB); color: var(--muted, #B4AFA8); }
 .cant-step.on .cant-step__n { background: var(--brand, #007AFF); color: #fff; }
 @media (max-width: 760px) { .cant-stepbar { overflow-x: auto; flex-wrap: nowrap; } }
-.cant-filters-row, .cant-import-row, .cant-results-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.cant-filters-row, .cant-import-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+/* Una sola barra angosta: selección a la izquierda, acciones a la derecha —
+   nunca se parte en 2 líneas (pedido explícito 2026-09-06, "liberaría mucho
+   espacio"). Si no caben todos los botones, la franja de acciones scrollea
+   horizontal en vez de bajar a una segunda fila. */
+.cant-results-bar { display: flex; align-items: center; gap: 10px; flex-wrap: nowrap; min-width: 0; }
+.cant-results-actions { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; margin-left: auto; overflow-x: auto; overflow-y: hidden; padding-bottom: 2px; scrollbar-width: thin; }
+.cant-results-actions > * { flex-shrink: 0; }
 .cant-flabel { display: flex; flex-direction: column; gap: 4px; font-size: .74rem; font-weight: 600; color: var(--text2, #45586A); }
 .cant-flabel input { min-width: 160px; }
 .cant-import-hint { color: var(--muted, #B4AFA8); font-size: .76rem; flex: 1 1 260px; }
@@ -12379,7 +12386,7 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .cant-imp-done-box__btns { display: flex; gap: 8px; flex-wrap: wrap; }
 .btn.cant-danger { color: #B3261E; border-color: #F6C9C4; }
 .btn.cant-danger:hover { background: #FCEEEE; }
-.cant-count { color: var(--text2, #45586A); font-size: .84rem; margin-right: auto; }
+.cant-count { color: var(--text2, #45586A); font-size: .84rem; flex-shrink: 0; white-space: nowrap; }
 .cant-hint { color: var(--muted, #918C85); font-size: .8rem; margin: 0 0 12px; max-width: 62ch; }
 .cant-subrow td { background: var(--brand-ll, #F1EFEB); font-size: .82rem; color: var(--text2, #6C6862); padding: 8px 10px; height: auto; }
 /* Las 2 celdas vacías (checkbox + Nombre) de la fila de contacto deben quedar
@@ -12392,13 +12399,6 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .cant-subrow__line b { color: var(--text, #0A2540); font-weight: 700; white-space: nowrap; }
 .cant-subrow__motivo { color: var(--muted, #918C85); font-style: italic; }
 .cant-subrow__actions { display: flex; gap: 8px; margin-top: 4px; }
-/* El bloque del contacto queda SIEMPRE visible justo después de la columna
-   congelada, sin importar el scroll horizontal — position:sticky en un <td>
-   con colspan no es confiable entre navegadores, así que se aplica al DIV de
-   adentro (bloque normal, no celda de tabla), igual que cualquier sidebar
-   sticky común. Sin esto, al desplazar la tabla el bloque se corría y quedaba
-   tapado por la columna Nombre (reportado 2026-09-06). */
-.cant-restbl .cant-subrow__pin { position: sticky; left: calc(34px + var(--cant-nombre-w, 220px)); display: inline-block; max-width: calc(100vw - 400px); }
 /* Columna Nombre redimensionable (solo en la tabla de Resultados de Cantera) */
 .cant-restbl th.dg-cell--frozen, .cant-restbl td.dg-cell--frozen { width: var(--cant-nombre-w, 220px); max-width: var(--cant-nombre-w, 220px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cant-colresize { position: absolute; top: 0; right: 0; width: 6px; height: 100%; cursor: col-resize; }
