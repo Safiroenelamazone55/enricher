@@ -129,15 +129,19 @@ async function validateCompany(pool, uid, batch, company, contactos) {
   return { parsed, cost, model: resp.model || MODEL, inputTokens: u.in, outputTokens: u.out };
 }
 
-// Corre el paso 2 sobre todas las empresas de un batch que ya pasaron el
-// paso 1 (filtros básicos) y siguen pendientes. Secuencial (concurrencia 1)
-// a propósito: cada llamada investiga en internet y cuesta dinero real —
-// no queremos 50 llamadas en paralelo por un click.
+// Corre el paso 2 sobre las empresas del batch que siguen pendientes de
+// investigar. NO exige que el paso 1 (filtros básicos) se haya corrido antes
+// — el orden de los pasos lo decide la usuaria, no el sistema (pedido
+// explícito 2026-09-06: "no quiero que el sistema reconozca ese proceso como
+// pasos en orden"). Solo se excluye lo que el paso 1 descartó explícitamente
+// (esa decisión sí se respeta); lo "pendiente" (filtro nunca corrido) entra
+// igual. Secuencial (concurrencia 1) a propósito: cada llamada investiga en
+// internet y cuesta dinero real — no queremos 50 llamadas en paralelo.
 async function runBatchValidation(pool, uid, batchId, { onProgress } = {}) {
   const { rows: [batch] } = await pool.query(`SELECT * FROM cantera_batches WHERE id=$1 AND user_id=$2`, [batchId, uid]);
   if (!batch) throw new Error('Borrador no encontrado');
   const { rows: companies } = await pool.query(
-    `SELECT * FROM cantera_companies WHERE batch_id=$1 AND user_id=$2 AND paso1_estado='aprobado' AND paso2_estado='pendiente' ORDER BY id ASC`,
+    `SELECT * FROM cantera_companies WHERE batch_id=$1 AND user_id=$2 AND paso1_estado <> 'descartado' AND paso2_estado='pendiente' ORDER BY id ASC`,
     [batchId, uid]);
 
   let done = 0, errores = 0, costoTotal = 0;

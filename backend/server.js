@@ -6952,10 +6952,10 @@ app.post('/api/cantera/batches/:id/run-validacion', requireAuth, async (req, res
   const batchId = req.params.id;
   if (_canteraJobs.get(batchId)?.running) return res.status(409).json({ error: 'Ya hay una investigación en curso para este borrador' });
   const { rows: pend } = await pool.query(
-    `SELECT COUNT(*)::int AS n FROM cantera_companies WHERE batch_id=$1 AND user_id=$2 AND paso1_estado='aprobado' AND paso2_estado='pendiente'`,
+    `SELECT COUNT(*)::int AS n FROM cantera_companies WHERE batch_id=$1 AND user_id=$2 AND paso1_estado <> 'descartado' AND paso2_estado='pendiente'`,
     [batchId, uid]);
   const total = pend[0]?.n || 0;
-  if (!total) return res.json({ started: false, total: 0, mensaje: 'No hay empresas pendientes de investigar (todas ya pasaron el paso 2, o ninguna pasó el paso 1 todavía)' });
+  if (!total) return res.json({ started: false, total: 0, mensaje: 'No hay empresas pendientes de investigar (todas ya pasaron el paso 2, o todas quedaron descartadas en el filtro básico)' });
   const job = { running: true, done: 0, total, errores: 0, costoTotal: 0 };
   _canteraJobs.set(batchId, job);
   const { runBatchValidation } = require('./services/canteraValidateService');

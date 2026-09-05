@@ -5546,12 +5546,12 @@ const CanteraModule = (() => {
       ${_step === 4 ? `<div class="cant-section">
         <div class="cant-results-bar">
           <span class="cant-count">${_coSel.size ? `${_coSel.size} seleccionada(s)` : `${_companies.length} empresa(s)`} · ${aprobadas} pasaron filtro · ${descartadas} descartadas (paso 1) · ${calificadas} calificada(s) (paso 2)</span>
-          <button class="btn btn--primary btn--sm" onclick="CanteraModule.runFiltros()">1. Correr filtros básicos</button>
+          <button class="btn btn--primary btn--sm" onclick="CanteraModule.runFiltros()">Correr filtros básicos</button>
           <button class="btn btn--ghost btn--sm" onclick="CanteraModule.cleanMenu(event)">Limpiar empresas ▾</button>
           <button class="btn btn--ghost btn--sm" onclick="CanteraModule.enrichMenu(event)">Enriquecer empresas ▾</button>
-          <button class="btn btn--primary btn--sm" onclick="CanteraModule.runValidacion()"${_jobRunning ? ' disabled' : ''}>2. Investigación profunda${_jobRunning ? '…' : ''}</button>
+          <button class="btn btn--primary btn--sm" onclick="CanteraModule.runValidacion()"${_jobRunning ? ' disabled' : ''}>Investigación profunda (IA)${_jobRunning ? '…' : ''}</button>
           <button class="dg-issues-toggle${_onlyFailed ? ' active' : ''}" onclick="CanteraModule.toggleFailed()">Ver solo descartadas</button>
-          ${calificadas ? `<button class="btn btn--ghost btn--sm" onclick="CanteraModule.openPromote()">3. Mover al CRM (${calificadas})</button>` : ''}
+          ${calificadas ? `<button class="btn btn--ghost btn--sm" onclick="CanteraModule.openPromote()">Mover al CRM (${calificadas})</button>` : ''}
           <button class="dg-kebab" style="margin-left:auto" onclick="CanteraModule.columnsMenu(event)" title="Elegir columnas visibles">⋮</button>
         </div>
         ${_jobRunning ? `<p class="cant-hint">Investigando ${_jobProgress.done} de ${_jobProgress.total}… puedes seguir en el sistema, esto sigue en segundo plano.</p>` : ''}
