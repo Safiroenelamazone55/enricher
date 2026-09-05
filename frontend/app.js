@@ -20059,6 +20059,7 @@ ${foot}
   const _TI_CATS = [
     ['respuestas', 'Respuestas pendientes de revisar'],
     ['seguimiento', 'Sin respuesta hace 24h — dale seguimiento'],
+    ['esperando', 'Terminó sin respuesta — hay otro contacto esperando'],
     ['nutricion', 'Para retomar (nutrición)'],
     ['aprobaciones', 'Aprobaciones urgentes'],
     ['fallos', 'Fallos y bloqueos'],
@@ -20070,6 +20071,7 @@ ${foot}
   const _TI_ACTION_LBL = {
     review_reply: 'Revisar respuesta', approve_email: 'Aprobar mensaje', resolve_failure: 'Resolver buzón',
     manual_touch: 'Marcar hecha', next_step: 'Abrir LinkedIn', fix_data: 'Corregir dato', retomar_nurture: 'Retomar',
+    activar_siguiente: 'Activar siguiente',
   };
   function _tiCard(it) {
     const cli = (_clients || []).find(x => x.id === it.outbound_client_id);
@@ -20084,6 +20086,7 @@ ${foot}
     else if (it.task_type === 'fix_data') mainAction = `LeadManagerModule.openContactPage(${it.contact_id})`;
     else if (it.task_type === 'next_step') mainAction = `LeadManagerModule.openContactPage(${it.contact_id})`;
     else if (it.task_type === 'retomar_nurture') mainAction = `LeadManagerModule.nurtureRetomarMenu(event,${it.contact_id},${it.activity_id},${it.sequence_id || 'null'})`;
+    else if (it.task_type === 'activar_siguiente') mainAction = `LeadManagerModule.waitingContactMenu(event,${it.activity_id})`;
     return `<div class="cp-card" style="margin-bottom:8px;padding:10px 12px">
       <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap">
         <div><b>${esc(it.contact_name || '')}</b><div class="cp-f__ro">${esc(meta.join(' · '))}</div>${it.reason ? `<div class="cp-f__ro" style="margin-top:2px">${esc(it.reason)}</div>` : ''}</div>
@@ -22955,6 +22958,56 @@ ${foot}
     if (_taskView === 'priority') _tiReload();
   }
   let _nurtureAvisoPendiente = null;
+
+  // ── "Contacto esperando" — el Principal terminó su secuencia sin respuesta
+  // y hay Secundario(s) de la misma empresa nunca enrolados. Reusa el mismo
+  // endpoint que ya elige principal en la Cola de empresas — aquí solo se
+  // ofrece el atajo desde el centro de tareas. Pedido explícito 2026-09-05.
+  function waitingContactMenu(ev, activityId) {
+    if (ev && ev.stopPropagation) ev.stopPropagation();
+    const it = (_tiData && Array.isArray(_tiData.items)) ? _tiData.items.find(x => x.activity_id === activityId) : null;
+    document.querySelectorAll('.cp-mark-menu').forEach(m => m.remove());
+    const close = "document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove())";
+    const item = (label, onclick) => `<button class="cp-mark-menu__b" onclick="${close};${onclick}">${label}</button>`;
+    const candidatos = (it && it.waiting_contacts) || [];
+    let html = `<div class="cp-mark-menu__list">`;
+    if (!it || !it.company_sequence_id || !candidatos.length) {
+      html += `<div class="ta-none" style="padding:7px 10px">Ya no hay nadie esperando para esta empresa (revisa la ficha).</div>`;
+    } else {
+      html += candidatos.map(c => item(
+        esc([c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || `#${c.id}`) + (c.cargo ? ` — ${esc(c.cargo)}` : ''),
+        `LeadManagerModule.activarSiguienteContacto(${it.company_sequence_id},${c.id},${activityId})`
+      )).join('');
+    }
+    html += item('Solo cerrar el aviso (lo veré después)', `LeadManagerModule.waitingCerrarAviso(${activityId})`);
+    html += `</div>`;
+    const menu = document.createElement('div');
+    menu.className = 'cp-mark-menu';
+    menu.style.minWidth = '260px';
+    menu.innerHTML = html;
+    document.body.appendChild(menu);
+    const t = (ev && (ev.currentTarget || ev.target)) || document.body;
+    const r = t.getBoundingClientRect();
+    menu.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 270))}px`;
+    menu.style.top = `${r.bottom + 6}px`;
+    setTimeout(() => document.addEventListener('click', function onDoc(e) { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', onDoc); } }), 0);
+  }
+  async function waitingCerrarAviso(activityId) {
+    await _nurtureCerrarAviso(activityId);
+    if (_taskView === 'priority') _tiReload();
+  }
+  async function activarSiguienteContacto(companySequenceId, contactId, activityId) {
+    try {
+      const res = await apiFetch(`${API}/lm/company-sequences/${companySequenceId}/select-primary`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact_id: contactId }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Error');
+      await _nurtureCerrarAviso(activityId);
+      showBanner(`✓ ${d.nombre || 'Contacto'} activado como principal`, 'success');
+      if (_taskView === 'priority') _tiReload();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
 
   // ── Derivación: registrar al contacto correcto de la MISMA empresa ──
   // disp='derivado' (te lo dio el lead) | 'no_es_persona' (no dio datos, lo agregas tú).
@@ -27054,6 +27107,7 @@ ${foot}
     ldSetResult, ldSetCli, ldSetSeq, ldSetCamp, ldSetQ, ldAddNote, ldMeet, ldToDeal, ldEditNote, ldExport,
     ldRefer, ldReferSave, ldNurture, ldNurtureSave, ldOpenDispoMenu,
     nurtureRetomarMenu, nurtureReinscribir, nurtureOtraSecuencia, nurtureSoloManual,
+    waitingContactMenu, activarSiguienteContacto, waitingCerrarAviso,
     dlSetCli, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel,
     sqSetCli, sqSetEst, sqSetQ, cmSetCli, cmSetEst, cmSetQ,
     seqRunSetCanal, seqTaskSetDue,

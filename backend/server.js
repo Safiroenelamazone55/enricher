@@ -4448,6 +4448,25 @@ app.get('/api/lm/tasks/inbox', requireAuth, async (req, res) => {
        WHERE a.user_id=$1 AND a.tipo='seguimiento_inactivo' AND a.estado='pendiente'
        ORDER BY a.fecha ASC`, [uid]);
 
+    // 1d. CONTACTO ESPERANDO — el Principal terminó su secuencia sin respuesta y hay
+    // un Secundario de la misma empresa nunca enrolado (contacto_esperando, creada
+    // por backupContactWatcher). Se manda la lista de candidatos y el id de la cola
+    // de empresas para poder activar al siguiente con un clic (mismo endpoint que
+    // ya usa la Cola de empresas para elegir principal).
+    const { rows: waiting } = await pool.query(`
+      SELECT a.id, a.contact_id, a.outbound_client_id, a.fecha AS due_at, a.nota AS reason,
+             k.nombre, k.apellido, k.email,
+             (SELECT json_agg(json_build_object('id', nx.id, 'nombre', nx.nombre, 'apellido', nx.apellido, 'cargo', nx.cargo, 'email', nx.email))
+                FROM lm_contacts nx
+               WHERE nx.company_id = k.company_id AND nx.user_id = k.user_id AND nx.id <> k.id
+                 AND nx.contact_priority = 'Secundario'
+                 AND NOT EXISTS (SELECT 1 FROM lm_contact_sequences cs3 WHERE cs3.contact_id = nx.id)
+             ) AS waiting_contacts,
+             (SELECT cs2.id FROM lm_company_sequences cs2 WHERE cs2.company_id=k.company_id AND cs2.user_id=k.user_id ORDER BY cs2.id DESC LIMIT 1) AS company_sequence_id
+        FROM activities a JOIN lm_contacts k ON k.id=a.contact_id
+       WHERE a.user_id=$1 AND a.tipo='contacto_esperando' AND a.estado='pendiente'
+       ORDER BY a.fecha ASC`, [uid]);
+
     // 2. APROBACIONES pendientes (borradores email en 'awaiting') — próximos 3 días.
     const { rows: apps } = await pool.query(`
       SELECT m.id, m.contact_id, m.sequence_id, m.step_id, m.scheduled_at AS due_at,
@@ -4520,6 +4539,7 @@ app.get('/api/lm/tasks/inbox', requireAuth, async (req, res) => {
     const list = [];
     for (const r of reps)  list.push(mk(r, 'respuestas',    'review_reply', 'reply_pending'));
     for (const r of nurture) list.push(mk(r, 'nutricion', 'retomar_nurture', 'nurture_due'));
+    for (const r of waiting) list.push({ ...mk(r, 'esperando', 'activar_siguiente', 'backup_waiting'), waiting_contacts: r.waiting_contacts || [], company_sequence_id: r.company_sequence_id || null });
     for (const r of seguimiento) if (!respContactIds.has(r.contact_id)) list.push(mk(r, 'seguimiento', 'manual_touch', 'inactivity'));
     // Aprobaciones: si el contacto ya tiene tarea de respuesta, saltar (respuestas prioriza)
     for (const r of apps)  if (!respContactIds.has(r.contact_id)) list.push({ ...mk(r, 'aprobaciones', 'approve_email', 'draft_awaiting'), message_id: r.id, activity_id: null });
@@ -11242,6 +11262,7 @@ async function start() {
     require('./services/sendEngine').startSendEngine(pool, { apiBase, gmailCallback: GMAIL_CALLBACK });
     require('./services/replyWatcher').startReplyWatcher(pool, { gmailCallback: GMAIL_CALLBACK });
     require('./services/nurtureWatcher').startNurtureWatcher(pool);
+    require('./services/backupContactWatcher').startBackupContactWatcher(pool);
     require('./services/followupWatcher').startFollowupWatcher(pool);
     require('./services/imapWatcher').startImapWatcher(pool);
     require('./services/dailyReport').startDailyReport(pool);
