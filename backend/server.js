@@ -6524,32 +6524,96 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
   res.json(summary);
 });
 
+// Normalización de país: "España" y "Spain" deben calzar como el MISMO país
+// sin importar en qué idioma vino el dato importado (bug puntual reportado
+// por Jenny 2026-09-05). Canon = nombre en español; cada entrada trae sus
+// alias en inglés y variantes comunes. Lo que no está en la lista se compara
+// tal cual (normalizado), para no romper países no cubiertos.
+const CANTERA_PAISES = {
+  'peru': ['peru', 'pe'], 'mexico': ['mexico', 'mx'], 'colombia': ['colombia', 'co'],
+  'chile': ['chile', 'cl'], 'argentina': ['argentina', 'ar'], 'ecuador': ['ecuador', 'ec'],
+  'bolivia': ['bolivia', 'bo'], 'paraguay': ['paraguay', 'py'], 'uruguay': ['uruguay', 'uy'],
+  'venezuela': ['venezuela', 've'], 'brasil': ['brasil', 'brazil', 'br'], 'panama': ['panama', 'pa'],
+  'costa rica': ['costa rica', 'cr'], 'guatemala': ['guatemala', 'gt'], 'honduras': ['honduras', 'hn'],
+  'el salvador': ['el salvador', 'sv'], 'nicaragua': ['nicaragua', 'ni'], 'republica dominicana': ['republica dominicana', 'dominican republic', 'do'],
+  'cuba': ['cuba', 'cu'], 'puerto rico': ['puerto rico', 'pr'],
+  'espana': ['espana', 'spain', 'es'], 'portugal': ['portugal', 'pt'], 'francia': ['francia', 'france', 'fr'],
+  'alemania': ['alemania', 'germany', 'deutschland', 'de'], 'italia': ['italia', 'italy', 'it'],
+  'reino unido': ['reino unido', 'united kingdom', 'uk', 'great britain', 'inglaterra', 'england', 'gb'],
+  'paises bajos': ['paises bajos', 'netherlands', 'holland', 'holanda', 'nl'], 'belgica': ['belgica', 'belgium', 'be'],
+  'suiza': ['suiza', 'switzerland', 'ch'], 'irlanda': ['irlanda', 'ireland', 'ie'], 'polonia': ['polonia', 'poland', 'pl'],
+  'suecia': ['suecia', 'sweden', 'se'], 'noruega': ['noruega', 'norway', 'no'], 'dinamarca': ['dinamarca', 'denmark', 'dk'],
+  'austria': ['austria', 'at'], 'grecia': ['grecia', 'greece', 'gr'],
+  'estados unidos': ['estados unidos', 'united states', 'usa', 'us', 'eeuu', 'united states of america'],
+  'canada': ['canada', 'ca'], 'china': ['china', 'cn'], 'japon': ['japon', 'japan', 'jp'],
+  'india': ['india', 'in'], 'australia': ['australia', 'au'], 'sudafrica': ['sudafrica', 'south africa', 'za'],
+};
+const _CANTERA_PAIS_ALIAS = {}; // alias normalizado -> clave canónica
+for (const [key, aliases] of Object.entries(CANTERA_PAISES)) for (const a of aliases) _CANTERA_PAIS_ALIAS[a] = key;
+function _cantNormText(s) {
+  return String(s || '').toLowerCase().trim()
+    .normalize('NFD').replace(/[̀-ͯ]/g, ''); // quita acentos
+}
+function _cantNormPais(raw) {
+  const n = _cantNormText(raw); if (!n) return '';
+  return _CANTERA_PAIS_ALIAS[n] || n;
+}
+
 // Paso 1 — filtros básicos: SIN IA, solo compara los datos ya importados
-// contra los criterios (tamaño/país/industria). Lo que no calza queda
-// descartado con el motivo exacto y nunca llega al paso 2 (el caro).
+// contra los criterios (país/industria/tamaño/seniority/departamento). Lo
+// que no calza queda descartado con el motivo exacto y nunca llega al
+// paso 2 (el caro). Seniority/departamento se infieren del cargo de los
+// CONTACTOS de la empresa (mismas reglas que dataCleanService) — si al
+// menos uno de sus contactos calza, la empresa se conserva.
 app.post('/api/cantera/batches/:id/run-filtros', requireAuth, async (req, res) => {
   const uid = req.workspaceOwnerId;
   try {
     const { rows: [batch] } = await pool.query(`SELECT * FROM cantera_batches WHERE id=$1 AND user_id=$2`, [req.params.id, uid]);
     if (!batch) return res.status(404).json({ error: 'Borrador no encontrado' });
     const filtros = batch.filtros || {};
-    const paises = (filtros.pais || []).map(s => String(s).toLowerCase().trim()).filter(Boolean);
-    const industrias = (filtros.industria || []).map(s => String(s).toLowerCase().trim()).filter(Boolean);
-    const tamanos = filtros.tamano || []; // rangos tipo ["1-10","11-50",...] — comparación textual simple por ahora
+    const paises = (filtros.pais || []).map(_cantNormPais).filter(Boolean);
+    const industrias = (filtros.industria || []).map(s => _cantNormText(s)).filter(Boolean);
+    const tamanos = (filtros.tamano || []).filter(Boolean);
+    const seniorities = (filtros.seniority || []).filter(Boolean);
+    const deptos = (filtros.departamento || []).filter(Boolean);
+    const { inferSeniority, inferDepartamento } = require('./services/dataCleanService');
 
     const { rows: companies } = await pool.query(`SELECT * FROM cantera_companies WHERE batch_id=$1 AND user_id=$2`, [req.params.id, uid]);
     let aprobadas = 0, descartadas = 0;
     for (const c of companies) {
       const motivos = [];
-      if (paises.length && !paises.includes((c.pais || '').toLowerCase().trim())) motivos.push(`país no incluido: ${c.pais || '(vacío)'}`);
-      if (industrias.length && !industrias.some(i => (c.industria || '').toLowerCase().includes(i))) motivos.push(`industria no incluida: ${c.industria || '(vacío)'}`);
+      if (paises.length && !paises.includes(_cantNormPais(c.pais))) motivos.push(`país no incluido: ${c.pais || '(vacío)'}`);
+      if (industrias.length && !industrias.some(i => _cantNormText(c.industria).includes(i))) motivos.push(`industria no incluida: ${c.industria || '(vacío)'}`);
       if (tamanos.length && c.tamano && !tamanos.includes(c.tamano)) motivos.push(`tamaño fuera de rango: ${c.tamano}`);
+      if (seniorities.length || deptos.length) {
+        const { rows: contactos } = await pool.query(`SELECT cargo FROM cantera_contacts WHERE company_id=$1 AND user_id=$2`, [c.id, uid]);
+        if (seniorities.length && !contactos.some(k => seniorities.includes(inferSeniority(k.cargo)))) motivos.push(`ningún contacto con seniority buscado`);
+        if (deptos.length && !contactos.some(k => deptos.includes(inferDepartamento(k.cargo)))) motivos.push(`ningún contacto en el departamento buscado`);
+      }
       const estado = motivos.length ? 'descartado' : 'aprobado';
       if (estado === 'aprobado') aprobadas++; else descartadas++;
       await pool.query(`UPDATE cantera_companies SET paso1_estado=$1, paso1_motivo=$2 WHERE id=$3`, [estado, motivos.join(' · '), c.id]);
     }
     res.json({ total: companies.length, aprobadas, descartadas });
   } catch (err) { console.error('[cantera] run-filtros', err.message); res.status(500).json({ error: 'Error al correr los filtros básicos' }); }
+});
+
+// Listas de opciones para los selectores de filtros básicos (típeahead con
+// datos reales en vez de texto libre — pedido explícito de Jenny 2026-09-05).
+app.get('/api/cantera/opciones-filtro', requireAuth, async (req, res) => {
+  res.json({
+    pais: Object.keys(CANTERA_PAISES).map(k => k.replace(/\b\w/g, c => c.toUpperCase())),
+    industria: ['Farming', 'Food Production', 'Food & Beverages', 'Agriculture', 'Manufacturing', 'Logistics and Supply Chain',
+      'Transportation/Trucking/Railroad', 'Import and Export', 'Wholesale', 'Retail', 'Construction', 'Consumer Goods',
+      'Textiles', 'Automotive', 'Pharmaceuticals', 'Chemicals', 'Machinery', 'Packaging and Containers', 'Mining and Metals',
+      'Oil and Gas', 'Renewables and Environment', 'Information Technology and Services', 'Software', 'Telecommunications',
+      'Financial Services', 'Insurance', 'Real Estate', 'Hospitality', 'Health Wellness and Fitness', 'Pharmaceuticals',
+      'Government Administration', 'Education Management', 'Non Profit Organization Management', 'Consumer Electronics',
+      'Furniture', 'Cosmetics'],
+    tamano: ['1-10', '11-50', '51-200', '201-500', '501-1000', '1001-5000', '5001-10000', '10001+'],
+    seniority: ['founder', 'c-level', 'vp', 'director', 'manager', 'senior', 'junior'],
+    departamento: ['ventas', 'marketing', 'operaciones', 'finanzas', 'rrhh', 'ti', 'legal', 'compras', 'servicio al cliente'],
+  });
 });
 
 // Paso 2 — investigación profunda con IA: solo sobre lo que ya pasó el paso 1.

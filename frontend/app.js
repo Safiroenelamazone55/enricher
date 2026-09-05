@@ -4957,6 +4957,257 @@ const CanteraModule = (() => {
   let _companies = [];
   let _onlyFailed = false;
 
+  // ── Importador con previsualización + mapeo editable (mismo patrón que el
+  // importador real de Contactos/Empresas del CRM — pedido explícito de
+  // Jenny 2026-09-05: "tiene que haber una validación manual... poderlo
+  // editar, así como cuando se importan directamente en el CRM"). ─────────
+  const CANT_FIELDS = [
+    { g: 'Contacto', opts: [
+      ['nombre', 'Nombre'], ['apellido', 'Apellido'], ['nombre_completo', 'Nombre completo'],
+      ['cargo', 'Cargo / Puesto'], ['email', 'Email'], ['linkedin', 'LinkedIn'],
+    ] },
+    { g: 'Empresa (se crea y enlaza)', opts: [
+      ['co_nombre', 'Empresa · Nombre'], ['co_dominio', 'Empresa · Dominio'], ['co_website', 'Empresa · Website'],
+      ['co_industria', 'Empresa · Industria'], ['co_tamano', 'Empresa · Nº empleados'],
+      ['co_pais', 'Empresa · País'], ['co_ciudad', 'Empresa · Ciudad'], ['co_linkedin', 'Empresa · LinkedIn'],
+    ] },
+  ];
+  const CANT_CT_SYN = {
+    nombre: ['first name', 'firstname', 'first', 'nombre', 'nombres', 'given name'],
+    apellido: ['last name', 'lastname', 'last', 'apellido', 'apellidos', 'surname'],
+    nombre_completo: ['full name', 'name', 'nombre completo', 'contact name'],
+    cargo: ['title', 'job title', 'cargo', 'puesto', 'position', 'role', 'headline'],
+    email: ['email', 'e mail', 'correo', 'mail', 'email address', 'work email'],
+    linkedin: ['linkedin', 'linkedin url', 'linkedin profile', 'perfil linkedin', 'person linkedin url'],
+  };
+  const CANT_CO_SYN = {
+    nombre: ['name', 'company', 'company name', 'account name', 'organization', 'razon social', 'empresa'],
+    dominio: ['domain', 'company domain'],
+    website: ['website', 'company website', 'web', 'url', 'sitio web'],
+    industria: ['industry', 'industria', 'sector', 'vertical'],
+    tamano: ['size', 'company size', 'employees', 'number of employees', 'headcount'],
+    pais: ['country', 'company country', 'pais'],
+    ciudad: ['city', 'company city', 'ciudad'],
+    linkedin: ['linkedin', 'company linkedin', 'linkedin url'],
+  };
+  function _cNorm(s) { return String(s || '').toLowerCase().trim().replace(/[_\-./]+/g, ' ').replace(/\s+/g, ' ').replace(/[áàä]/g, 'a').replace(/[éèë]/g, 'e').replace(/[íìï]/g, 'i').replace(/[óòö]/g, 'o').replace(/[úùü]/g, 'u').replace(/ñ/g, 'n'); }
+  function _cWord(h, s) { return new RegExp('(^| )' + s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '( |$)').test(h); }
+  function _cBest(h, synMap) {
+    let best = '', score = 0;
+    for (const [key, syns] of Object.entries(synMap)) for (const raw of syns) {
+      const s = _cNorm(raw); if (!s) continue;
+      let sc = 0;
+      if (h === s) sc = 1000 + s.length; else if (_cWord(h, s)) sc = 100 + s.length;
+      if (sc > score) { score = sc; best = key; }
+    }
+    return best;
+  }
+  const _C_CO_PFX = /^(company|empresa|account|org|organization)\s+(.+)$/;
+  function _cGuess(headerRaw) {
+    const h = _cNorm(headerRaw); if (!h) return '';
+    const m = h.match(_C_CO_PFX);
+    if (m) { const a = _cBest(m[2], CANT_CO_SYN); if (a) return 'co_' + a; }
+    const c = _cBest(h, CANT_CT_SYN); if (c) return c;
+    const a = _cBest(h, CANT_CO_SYN); if (a) return 'co_' + a;
+    return '';
+  }
+  function _cCsvParse(text, delim) {
+    const rows = []; let row = [], field = '', q = false, i = 0; const n = text.length;
+    while (i < n) {
+      const c = text[i];
+      if (q) { if (c === '"') { if (text[i + 1] === '"') { field += '"'; i += 2; continue; } q = false; i++; continue; } field += c; i++; continue; }
+      if (c === '"') { q = true; i++; continue; }
+      if (c === delim) { row.push(field); field = ''; i++; continue; }
+      if (c === '\n') { row.push(field); rows.push(row); row = []; field = ''; i++; continue; }
+      if (c === '\r') { i++; continue; }
+      field += c; i++;
+    }
+    if (field.length || row.length) { row.push(field); rows.push(row); }
+    return rows;
+  }
+  function _cReadCsv(file) {
+    return new Promise((resolve, reject) => {
+      const rd = new FileReader();
+      rd.onload = e => {
+        let text = String(e.target.result || '');
+        if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+        const firstLine = text.split(/\r?\n/)[0] || '';
+        const d = firstLine.includes('\t') ? '\t' : (firstLine.split(';').length > firstLine.split(',').length ? ';' : ',');
+        const rows = _cCsvParse(text, d).filter(r => r.some(c => String(c).trim().length));
+        if (!rows.length) { resolve({ headers: [], sampleRows: [] }); return; }
+        const trim = r => r.map(x => String(x).trim());
+        resolve({ headers: trim(rows[0]), sampleRows: rows.slice(1, 6).map(trim) });
+      };
+      rd.onerror = () => reject(new Error('No se pudo leer el archivo.'));
+      rd.readAsText(file);
+    });
+  }
+  let _cImp = null;
+  function openImportModal() {
+    _cImp = { file: null, origHeader: [], samplesOrig: [], headers: [], samples: [], hasHeader: true, opts: [] };
+    document.getElementById('cant-imp-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'cant-imp-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) closeImportModal(); };
+    m.innerHTML = `<div class="fin-pi-box lm-imp-box"><div id="cant-imp-inner"></div></div>`;
+    document.body.appendChild(m);
+    _cImpStepFile();
+  }
+  function closeImportModal() { document.getElementById('cant-imp-modal')?.remove(); _cImp = null; }
+  function _cImpInner(html) { const el = document.getElementById('cant-imp-inner'); if (el) el.innerHTML = html; }
+  function _cImpHd(title) { return `<div class="fin-pi-box__hd"><h3>${esc(title)}</h3><button class="fin-pi-x" onclick="CanteraModule.closeImportModal()">✕</button></div>`; }
+  function _cImpSteps(n) { const s = ['1 · Archivo', '2 · Mapear', '3 · Listo']; return `<div class="lm-imp-steps">${s.map((t, i) => `<span class="${i + 1 < n ? 'done' : i + 1 === n ? 'on' : ''}">${t}</span>`).join('')}</div>`; }
+  function _cImpStepFile() {
+    _cImpInner(`${_cImpHd('Importar prospectos')}
+      <div class="lm-imp-body">
+        ${_cImpSteps(1)}
+        <label class="lm-drop" id="cant-drop">
+          <input type="file" accept=".csv,.xlsx,.xls,.tsv" style="display:none" onchange="CanteraModule.impFile(this.files[0])">
+          <div class="lm-drop__t">Arrastra tu Excel / CSV aquí o haz clic para elegir</div>
+          <div class="lm-drop__s">.xlsx · .xls · .csv — hasta 10 MB</div>
+        </label>
+        <div class="lm-imp-hint">Detectaremos las columnas automáticamente; podrás revisarlas y corregirlas antes de guardar.</div>
+      </div>`);
+    const drop = document.getElementById('cant-drop');
+    if (drop) {
+      ['dragover', 'dragenter'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('drag'); }));
+      ['dragleave', 'dragend'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('drag'); }));
+      drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('drag'); const f = e.dataTransfer?.files?.[0]; if (f) impFile(f); });
+    }
+  }
+  async function impFile(file) {
+    if (!file || !_cImp) return;
+    _cImp.file = file;
+    _cImpInner(`${_cImpHd('Importar prospectos')}<div class="lm-imp-body">${_cImpSteps(1)}<div class="lm-imp-load">Leyendo <b>${esc(file.name)}</b>…</div></div>`);
+    try {
+      let headers = [], samples = [];
+      if (/\.(csv|tsv|txt)$/i.test(file.name)) {
+        const r = await _cReadCsv(file); headers = r.headers; samples = r.sampleRows;
+      } else {
+        const fd = new FormData(); fd.append('file', file);
+        const res = await apiFetch(`${API}/enrich/parse-headers`, { method: 'POST', body: fd });
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `Error ${res.status}`);
+        const dd = await res.json(); headers = dd.headers || []; samples = dd.sampleRows || [];
+      }
+      if (!headers.length) throw new Error('No se encontraron columnas en el archivo.');
+      _cImp.origHeader = headers.slice(); _cImp.samplesOrig = samples.slice();
+      _cImp.hasHeader = true; _cImp.headers = headers; _cImp.samples = samples;
+      _cImpStepMap();
+    } catch (e) {
+      _cImpInner(`${_cImpHd('Importar prospectos')}<div class="lm-imp-body">${_cImpSteps(1)}<div class="lm-imp-err">${esc(e.message)}</div></div>
+        <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns"><button class="btn btn--primary btn--sm" onclick="CanteraModule.openImportModal()">Reintentar</button></div></div>`);
+    }
+  }
+  function impToggleHeader(chk) {
+    if (!_cImp) return;
+    _cImp.hasHeader = chk;
+    if (chk) { _cImp.headers = _cImp.origHeader.slice(); _cImp.samples = _cImp.samplesOrig.slice(); }
+    else { _cImp.headers = _cImp.origHeader.map((_, i) => `Columna ${i + 1}`); _cImp.samples = [_cImp.origHeader.slice(), ..._cImp.samplesOrig]; }
+    _cImpStepMap();
+  }
+  function _cImpOpts() {
+    const out = [{ key: '', label: '— Extra (se conserva) —', grp: '' }, { key: '__ignore__', label: '✕ Ignorar', grp: '' }];
+    CANT_FIELDS.forEach(g => g.opts.forEach(([k, l]) => out.push({ key: k, label: l, grp: g.g })));
+    return out;
+  }
+  function _cImpStepMap() {
+    _cImp.opts = _cImpOpts();
+    const rowsHtml = _cImp.headers.map((h, idx) => {
+      const samples = _cImp.samples.map(r => r[idx] || '').filter(Boolean).slice(0, 2);
+      const gKey = _cGuess(h);
+      const gOpt = _cImp.opts.find(o => o.key === gKey) || _cImp.opts[0];
+      const chips = samples.length ? samples.map(v => `<span class="lm-map-chip">${esc(v.length > 22 ? v.slice(0, 20) + '…' : v)}</span>`).join('') : '<span class="lm-map-empty">sin datos</span>';
+      return `<div class="lm-map-row${gKey ? ' mapped' : ''}" data-idx="${idx}">
+        <div class="lm-map-src" title="${esc(h)}">${esc(h || ('Columna ' + (idx + 1)))}</div>
+        <div class="lm-map-ex">${chips}</div>
+        <div class="lm-map-arrow">→</div>
+        <div class="lm-cbx" data-idx="${idx}">
+          <input class="lm-cbx-input form-input" data-value="${esc(gKey)}" value="${esc(gOpt.label)}" placeholder="Buscar campo…" autocomplete="off" spellcheck="false"
+            onfocus="CanteraModule.cbxOpen(${idx})" oninput="CanteraModule.cbxFilter(${idx})" onblur="CanteraModule.cbxBlur(${idx})">
+          <div class="lm-cbx-menu" id="cant-cbx-menu-${idx}"></div>
+        </div>
+      </div>`;
+    }).join('');
+    _cImpInner(`${_cImpHd('Importar prospectos — asigna las columnas')}
+      <div class="lm-imp-body">
+        ${_cImpSteps(2)}
+        <div class="lm-map-bar">
+          <label class="lm-chk"><input type="checkbox" ${_cImp.hasHeader ? 'checked' : ''} onchange="CanteraModule.impToggleHeader(this.checked)"> Primera fila = encabezado</label>
+        </div>
+        <div class="lm-map-headrow"><span>Columna del archivo</span><span>Ejemplo</span><span></span><span>Asignar a (escribe para buscar)</span></div>
+        <div class="lm-map-list">${rowsHtml}</div>
+      </div>
+      <div class="fin-pi-box__ft">
+        <span class="fin-cfg-hint" id="cant-imp-msg">${_cImp.headers.length} columnas · las no asignadas se conservan como extra</span>
+        <div class="fin-pi-ft-btns">
+          <button class="btn btn--ghost btn--sm" onclick="CanteraModule.closeImportModal()">Cancelar</button>
+          <button class="btn btn--primary btn--sm" id="cant-imp-go" onclick="CanteraModule.impRun()">Importar prospectos</button>
+        </div>
+      </div>`);
+  }
+  function _cCbxMenuHtml(idx, filter) {
+    const f = _cNorm(filter || '');
+    let lastGrp = null, h = '';
+    _cImp.opts.forEach(o => {
+      const special = (o.key === '' || o.key === '__ignore__');
+      if (f && !special && !_cNorm(o.label).includes(f)) return;
+      if (o.grp !== lastGrp && o.grp) { h += `<div class="lm-cbx-grp">${esc(o.grp)}</div>`; lastGrp = o.grp; }
+      h += `<div class="lm-cbx-opt" onmousedown="event.preventDefault();CanteraModule.cbxPick(${idx},'${o.key}')">${esc(o.label)}</div>`;
+    });
+    return h || `<div class="lm-cbx-none">Sin coincidencias</div>`;
+  }
+  function cbxOpen(idx) {
+    const wrap = document.querySelector(`#cant-imp-modal .lm-cbx[data-idx="${idx}"]`); if (!wrap) return;
+    const inp = wrap.querySelector('.lm-cbx-input'); const menu = document.getElementById('cant-cbx-menu-' + idx); if (!inp || !menu) return;
+    menu.innerHTML = _cCbxMenuHtml(idx, '');
+    const r = inp.getBoundingClientRect();
+    menu.style.left = r.left + 'px'; menu.style.top = (r.bottom + 3) + 'px'; menu.style.width = r.width + 'px';
+    menu.classList.add('open');
+    setTimeout(() => inp.select(), 0);
+  }
+  function cbxFilter(idx) {
+    const inp = document.querySelector(`#cant-imp-modal .lm-cbx[data-idx="${idx}"] .lm-cbx-input`); const menu = document.getElementById('cant-cbx-menu-' + idx); if (!inp || !menu) return;
+    menu.innerHTML = _cCbxMenuHtml(idx, inp.value);
+    menu.classList.add('open');
+  }
+  function cbxPick(idx, key) {
+    const o = _cImp.opts.find(x => x.key === key) || _cImp.opts[0];
+    const inp = document.querySelector(`#cant-imp-modal .lm-cbx[data-idx="${idx}"] .lm-cbx-input`);
+    if (inp) { inp.value = o.label; inp.dataset.value = o.key; }
+    document.getElementById('cant-cbx-menu-' + idx)?.classList.remove('open');
+    const row = document.querySelector(`#cant-imp-modal .lm-map-row[data-idx="${idx}"]`);
+    if (row) row.classList.toggle('mapped', !!o.key && o.key !== '__ignore__');
+  }
+  function cbxBlur(idx) { setTimeout(() => document.getElementById('cant-cbx-menu-' + idx)?.classList.remove('open'), 160); }
+  async function impRun() {
+    if (!_cImp || !_cImp.file) return;
+    const mapping = {};
+    document.querySelectorAll('#cant-imp-modal .lm-cbx-input').forEach(inp => { const v = inp.dataset.value; if (v) mapping[inp.closest('.lm-cbx').dataset.idx] = v; });
+    const go = document.getElementById('cant-imp-go'); if (go) { go.disabled = true; go.textContent = 'Importando…'; }
+    try {
+      const fd = new FormData();
+      fd.append('file', _cImp.file);
+      fd.append('mapping', JSON.stringify(mapping));
+      fd.append('hasHeader', _cImp.hasHeader ? '1' : '0');
+      const res = await apiFetch(`${API}/cantera/batches/${_current.id}/import`, { method: 'POST', body: fd });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || `Error ${res.status}`);
+      _cImpInner(`${_cImpHd('Importación completa')}
+        <div class="lm-imp-body">${_cImpSteps(3)}
+          <div class="lm-imp-done"><div class="lm-imp-done__stats">
+            <div class="lm-stat"><b>${d.rows || 0}</b><span>filas leídas</span></div>
+            <div class="lm-stat"><b>${d.companiesCreated || 0}</b><span>empresas nuevas</span></div>
+            <div class="lm-stat"><b>${d.contactsCreated || 0}</b><span>contactos nuevos</span></div>
+          </div></div>
+          ${(d.errors || []).length ? `<div class="lm-imp-err">${d.errors.map(e => esc(e)).join('<br>')}</div>` : ''}
+        </div>
+        <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns"><button class="btn btn--primary btn--sm" onclick="CanteraModule.closeImportModal()">Listo</button></div></div>`);
+      await _loadCompanies(); _paint();
+    } catch (e) {
+      if (go) { go.disabled = false; go.textContent = 'Importar prospectos'; }
+      const msg = document.getElementById('cant-imp-msg'); if (msg) { msg.textContent = e.message; msg.style.color = '#B3261E'; }
+    }
+  }
+
   async function load() {
     try { const r = await apiFetch(`${API}/cantera/batches`); _batches = r.ok ? await r.json() : []; }
     catch { _batches = []; }
@@ -4999,9 +5250,12 @@ const CanteraModule = (() => {
     apiFetch(`${API}/cantera/batches`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre }) })
       .then(r => r.json()).then(b => { open(b.id); }).catch(e => showBanner('Error: ' + e.message, 'error'));
   }
+  let _filtroOpts = null;
   async function open(id) {
     const r = await apiFetch(`${API}/cantera/batches/${id}`); _current = r.ok ? await r.json() : null;
     if (!_current) { showBanner('Borrador no encontrado', 'error'); return; }
+    _current.filtros = _current.filtros || {};
+    if (!_filtroOpts) { try { _filtroOpts = await (await apiFetch(`${API}/cantera/opciones-filtro`)).json(); } catch { _filtroOpts = {}; } }
     await _loadCompanies();
     _view = 'detail'; _paint();
   }
@@ -5053,12 +5307,15 @@ const CanteraModule = (() => {
 
       <div class="cant-section">
         <div class="cant-section__hd"><span class="cant-section__num">01</span><h3>Filtros básicos</h3></div>
-        <div class="cant-filters-row">
-          <label class="cant-flabel">País<input type="text" id="cant-f-pais" class="form-input" style="width:auto" value="${esc((filtros.pais || []).join(', '))}" placeholder="Perú, Chile…"></label>
-          <label class="cant-flabel">Industria<input type="text" id="cant-f-industria" class="form-input" style="width:auto" value="${esc((filtros.industria || []).join(', '))}" placeholder="Farming, Food…"></label>
-          <label class="cant-flabel">Tamaño<input type="text" id="cant-f-tamano" class="form-input" style="width:auto" value="${esc((filtros.tamano || []).join(', '))}" placeholder="11-50, 51-200…"></label>
-          <button class="btn btn--ghost btn--sm" onclick="CanteraModule.saveFiltros()">Guardar</button>
+        <p class="cant-hint">Selecciona de una lista real — nunca escribes el valor a mano, así "España" y "Spain" siempre se reconocen como el mismo país.</p>
+        <div class="filters-grid">
+          ${_taField('pais', 'País')}
+          ${_taField('industria', 'Industria')}
+          ${_taField('tamano', 'Tamaño de empresa')}
+          ${_taField('seniority', 'Seniority del contacto')}
+          ${_taField('departamento', 'Departamento del contacto')}
         </div>
+        <div class="cant-save-row"><button class="btn btn--ghost btn--sm" onclick="CanteraModule.saveFiltros()">Guardar filtros</button></div>
       </div>
 
       <div class="cant-section">
@@ -5106,9 +5363,8 @@ const CanteraModule = (() => {
       <div class="cant-section">
         <div class="cant-section__hd"><span class="cant-section__num">03</span><h3>Importar prospectos</h3></div>
         <div class="cant-import-row">
-          <input type="file" id="cant-file" accept=".csv,.xlsx,.xls" style="max-width:280px">
-          <button class="btn btn--primary btn--sm" onclick="CanteraModule.doImport()">Importar</button>
-          <span class="cant-import-hint">Mismo formato que el importador de Contactos: nombre, apellido, cargo, email, linkedin, co_nombre, co_dominio, co_industria, co_tamano, co_pais.</span>
+          <button class="btn btn--primary btn--sm" onclick="CanteraModule.openImportModal()">Importar archivo…</button>
+          <span class="cant-import-hint">Previsualiza y ajusta el mapeo de columnas antes de guardar — igual que al importar en el CRM.</span>
         </div>
       </div>
 
@@ -5180,30 +5436,56 @@ const CanteraModule = (() => {
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
+  // ── Selector con autocompletado para los filtros básicos — se elige de
+  // una lista real (nunca texto libre), pedido explícito de Jenny 2026-09-05.
+  const _TA_LABEL = { pais: 'País', industria: 'Industria', tamano: 'Tamaño de empresa', seniority: 'Seniority', departamento: 'Departamento' };
+  function _taField(field, label) {
+    const chips = (_current.filtros[field] || []).map((v, i) =>
+      `<span class="tag">${esc(v)} <span class="x" onclick="CanteraModule.removeFiltro('${field}',${i})">✕</span></span>`).join('');
+    return `<div class="filter-field" data-ta="${field}">
+      <label class="field-label">${esc(label)}</label>
+      <div class="tag-list">${chips}</div>
+      <div class="ta-wrap">
+        <input type="text" class="ta-input" placeholder="Escribe para buscar…" autocomplete="off"
+          onfocus="CanteraModule.taOpen('${field}')" oninput="CanteraModule.taFilter('${field}')" onblur="CanteraModule.taBlur('${field}')">
+        <div class="ta-menu" id="ta-menu-${field}" hidden></div>
+      </div>
+    </div>`;
+  }
+  function _taOptions(field) {
+    const all = (_filtroOpts && _filtroOpts[field]) || [];
+    const chosen = new Set((_current.filtros[field] || []).map(v => v.toLowerCase()));
+    return all.filter(o => !chosen.has(o.toLowerCase()));
+  }
+  function taOpen(field) {
+    const menu = document.getElementById('ta-menu-' + field); if (!menu) return;
+    menu.innerHTML = _taOptions(field).map(o => `<div class="ta-opt" onmousedown="event.preventDefault();CanteraModule.addFiltro('${field}','${esc(o).replace(/'/g, "\\'")}')">${esc(o)}</div>`).join('') || `<div class="ta-none">Sin opciones</div>`;
+    menu.hidden = false;
+  }
+  function taFilter(field) {
+    const wrap = document.querySelector(`.filter-field[data-ta="${field}"]`); const inp = wrap?.querySelector('.ta-input'); const menu = document.getElementById('ta-menu-' + field);
+    if (!inp || !menu) return;
+    const f = inp.value.toLowerCase().trim();
+    const opts = _taOptions(field).filter(o => o.toLowerCase().includes(f));
+    menu.innerHTML = opts.map(o => `<div class="ta-opt" onmousedown="event.preventDefault();CanteraModule.addFiltro('${field}','${esc(o).replace(/'/g, "\\'")}')">${esc(o)}</div>`).join('') || `<div class="ta-none">Sin coincidencias</div>`;
+    menu.hidden = false;
+  }
+  function taBlur(field) { setTimeout(() => { const m = document.getElementById('ta-menu-' + field); if (m) m.hidden = true; }, 160); }
+  function addFiltro(field, value) {
+    _current.filtros[field] = [...(_current.filtros[field] || []), value];
+    _paint();
+  }
+  function removeFiltro(field, idx) {
+    _current.filtros[field].splice(idx, 1);
+    _paint();
+  }
+
   async function saveFiltros() {
-    const split = v => (v || '').split(',').map(s => s.trim()).filter(Boolean);
-    const filtros = {
-      pais: split(document.getElementById('cant-f-pais')?.value),
-      industria: split(document.getElementById('cant-f-industria')?.value),
-      tamano: split(document.getElementById('cant-f-tamano')?.value),
-    };
     try {
-      const res = await apiFetch(`${API}/cantera/batches/${_current.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ..._current, filtros }) });
+      const res = await apiFetch(`${API}/cantera/batches/${_current.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_current) });
       _current = await res.json();
       showBanner('✓ Filtros guardados', 'success');
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
-  }
-  async function doImport() {
-    const input = document.getElementById('cant-file');
-    if (!input?.files?.length) { showBanner('Elige un archivo primero', 'info'); return; }
-    const fd = new FormData(); fd.append('file', input.files[0]);
-    try {
-      const res = await apiFetch(`${API}/cantera/batches/${_current.id}/import`, { method: 'POST', body: fd });
-      const d = await res.json();
-      if (!res.ok) throw new Error(d.error || 'Error');
-      showBanner(`✓ ${d.companiesCreated} empresa(s) y ${d.contactsCreated} contacto(s) importados`, 'success');
-      await _loadCompanies(); _paint();
-    } catch (e) { showBanner('Error al importar: ' + e.message, 'error'); }
   }
   async function runFiltros() {
     try {
@@ -5287,9 +5569,11 @@ const CanteraModule = (() => {
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
-  return { render, open, openCreate, backToList, saveFiltros, doImport, runFiltros, toggleFailed, moreMenu, remove,
+  return { render, open, openCreate, backToList, saveFiltros, runFiltros, toggleFailed, moreMenu, remove,
     toggleExpand, addTier, removeTier, setTierField, addPuesto, removePuesto, setPuestoField, saveCriterio, runValidacion,
-    openPromote, closePromote, doPromote };
+    openPromote, closePromote, doPromote,
+    openImportModal, closeImportModal, impFile, impToggleHeader, impRun, cbxOpen, cbxFilter, cbxPick, cbxBlur,
+    taOpen, taFilter, taBlur, addFiltro, removeFiltro };
 })();
 
 // =================================================================

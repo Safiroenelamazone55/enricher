@@ -12362,6 +12362,23 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .cant-subrow td { background: var(--brand-ll, #F1EFEB); font-size: .82rem; color: var(--text2, #6C6862); padding: 6px 10px; }
 .cant-save-row { margin-top: 10px; }
 
+/* Selector con autocompletado (Filtros básicos) — nunca texto libre. */
+.filters-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; margin-bottom: 6px; }
+.filter-field { background: var(--white, #fff); border: 1px solid var(--border, #EAE7E2); border-radius: 0; padding: 10px 12px; }
+.field-label { display: block; font-size: .74rem; font-weight: 700; color: var(--text2, #6C6862); margin-bottom: 6px; }
+.tag-list { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 6px; }
+.tag-list:empty { margin-bottom: 0; }
+.tag { display: inline-flex; align-items: center; gap: 5px; font-size: .78rem; font-weight: 600; background: var(--brand-ll, #F1EFEB); color: var(--text, #1F1D1B); padding: 3px 5px 3px 9px; border-radius: 0; }
+.tag .x { cursor: pointer; opacity: .55; font-size: .82rem; line-height: 1; }
+.tag .x:hover { opacity: 1; color: #B3261E; }
+.ta-wrap { position: relative; }
+.ta-input { width: 100%; border: 1px solid var(--border, #EAE7E2); background: var(--bg, #FAF9F7); font: inherit; font-size: .82rem; padding: 6px 8px; color: var(--text, #1F1D1B); }
+.ta-input:focus { outline: none; border-color: var(--brand, #007AFF); background: #fff; }
+.ta-menu { position: absolute; top: 100%; left: 0; right: 0; z-index: 20; background: #fff; border: 1px solid var(--border, #EAE7E2); border-top: none; max-height: 200px; overflow-y: auto; box-shadow: 0 6px 16px rgba(0,0,0,.08); }
+.ta-opt { padding: 7px 10px; font-size: .82rem; cursor: pointer; }
+.ta-opt:hover { background: var(--brand-ll, #F1EFEB); }
+.ta-none { padding: 7px 10px; font-size: .8rem; color: var(--muted, #918C85); }
+
 /* Tiers */
 .cant-tiers { display: flex; flex-direction: column; gap: 10px; margin-bottom: 8px; }
 .cant-tier-card { border: 1px solid var(--border, #EAE7E2); border-radius: 0; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
