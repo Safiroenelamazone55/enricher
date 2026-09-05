@@ -6596,6 +6596,85 @@ app.get('/api/cantera/batches/:id/contacts', requireAuth, async (req, res) => {
   } catch (err) { console.error('[cantera] GET contacts', err.message); res.status(500).json({ error: 'Error al cargar contactos' }); }
 });
 
+// Mover al CRM: la única puerta de salida de Cantera. Solo empresas con
+// paso2_estado='aprobado' se convierten en lm_companies reales, y solo sus
+// contactos con puesto_estado 'decide'/'respaldo' (nunca 'descartado') se
+// convierten en lm_contacts — cada uno con su prioridad según ese puesto.
+// El cliente SÍ es obligatorio en este paso (aunque no lo era al crear el
+// borrador) porque una empresa/contacto real siempre pertenece a alguien;
+// la campaña sigue siendo opcional (puede ser una que ya existe, o ninguna).
+app.post('/api/cantera/batches/:id/promote', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId;
+  const batchId = req.params.id;
+  const b = req.body || {};
+  const outboundClientId = parseInt(b.outbound_client_id);
+  if (!outboundClientId) return res.status(400).json({ error: 'Elige a qué cliente pertenecen estas empresas' });
+  const campaignId = b.campaign_id ? parseInt(b.campaign_id) : null;
+  const includeRespaldo = b.include_respaldo !== false;
+
+  const cl = await pool.connect();
+  try {
+    await cl.query('BEGIN');
+    const { rows: [batch] } = await cl.query(`SELECT * FROM cantera_batches WHERE id=$1 AND user_id=$2 AND estado='borrador'`, [batchId, uid]);
+    if (!batch) throw new Error('Borrador no encontrado (o ya fue movido al CRM)');
+    const { rows: companies } = await cl.query(`SELECT * FROM cantera_companies WHERE batch_id=$1 AND user_id=$2 AND paso2_estado='aprobado'`, [batchId, uid]);
+    if (!companies.length) throw new Error('No hay empresas calificadas todavía (paso 2) para mover');
+
+    let companiesPromoted = 0, contactsPromoted = 0;
+    for (const co of companies) {
+      const dominio = _lmNormDomain(co.dominio || co.website || '');
+      let coId;
+      const existing = dominio
+        ? (await cl.query(`SELECT id FROM lm_companies WHERE user_id=$1 AND dominio=$2 LIMIT 1`, [uid, dominio])).rows[0]
+        : (await cl.query(`SELECT id FROM lm_companies WHERE user_id=$1 AND dominio='' AND LOWER(nombre)=$2 LIMIT 1`, [uid, (co.nombre || '').toLowerCase()])).rows[0];
+      if (existing) {
+        coId = existing.id;
+      } else {
+        const ev = (co.evidencia || []).map(e => `${e.fuente}: ${e.resumen}`).join(' · ');
+        const ins = await cl.query(`
+          INSERT INTO lm_companies (user_id,nombre,dominio,website,industria,tamano,linkedin,ciudad,pais,target_tier,analisis,outbound_client_id,notas)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id
+        `, [uid, co.nombre, dominio, co.website, co.industria, co.tamano, co.linkedin, co.ciudad, co.pais, co.tier_clave,
+            ev, outboundClientId, `Cantera "${batch.nombre}" · confianza ${co.confianza || '—'}`]);
+        coId = ins.rows[0].id;
+      }
+      await cl.query(`UPDATE cantera_companies SET promoted_company_id=$1 WHERE id=$2`, [coId, co.id]);
+      companiesPromoted++;
+
+      const estados = includeRespaldo ? ['decide', 'respaldo'] : ['decide'];
+      const { rows: contactos } = await cl.query(
+        `SELECT * FROM cantera_contacts WHERE company_id=$1 AND user_id=$2 AND puesto_estado = ANY($3::text[])`,
+        [co.id, uid, estados]);
+      for (const k of contactos) {
+        const email = (k.email || '').toLowerCase();
+        const dup = email ? (await cl.query(`SELECT id FROM lm_contacts WHERE user_id=$1 AND LOWER(email)=$2 LIMIT 1`, [uid, email])).rows[0] : null;
+        let contactId;
+        if (dup) {
+          contactId = dup.id;
+        } else {
+          const ins = await cl.query(`
+            INSERT INTO lm_contacts (user_id,company_id,nombre,apellido,email,cargo,linkedin,empresa_nombre,estado,fuente,contact_priority,buyer_role,analisis,outbound_client_id)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'nuevo','cantera',$9,$10,$11,$12) RETURNING id
+          `, [uid, coId, k.nombre, k.apellido, email, k.cargo, k.linkedin, co.nombre,
+              k.puesto_estado === 'decide' ? 'alta' : 'media', co.tier_clave, k.puesto_motivo, outboundClientId]);
+          contactId = ins.rows[0].id;
+        }
+        await cl.query(`UPDATE cantera_contacts SET promoted_contact_id=$1 WHERE id=$2`, [contactId, k.id]);
+        if (campaignId) await cl.query(`INSERT INTO lm_contact_campaigns (user_id,contact_id,campaign_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`, [uid, contactId, campaignId]);
+        contactsPromoted++;
+      }
+    }
+
+    await cl.query(`UPDATE cantera_batches SET estado='promovido', outbound_client_id=$1, campaign_id=$2, promoted_at=NOW() WHERE id=$3`, [outboundClientId, campaignId, batchId]);
+    await cl.query('COMMIT');
+    res.json({ companiesPromoted, contactsPromoted });
+  } catch (err) {
+    await cl.query('ROLLBACK').catch(() => {});
+    console.error('[cantera] promote', err.message);
+    res.status(400).json({ error: err.message || 'Error al mover al CRM' });
+  } finally { cl.release(); }
+});
+
 // ── Plantillas / Assets (lm_templates) ─────────────────────────────
 const LM_TPL_COLS = ['nombre', 'canal', 'tipo', 'asunto', 'cuerpo', 'tags', 'sequence_ids'];
 app.get('/api/lm/templates', requireAuth, async (req, res) => {

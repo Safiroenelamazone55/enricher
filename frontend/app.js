@@ -5119,6 +5119,7 @@ const CanteraModule = (() => {
           <button class="btn btn--primary btn--sm" onclick="CanteraModule.runFiltros()">1. Correr filtros básicos</button>
           <button class="btn btn--primary btn--sm" onclick="CanteraModule.runValidacion()"${_jobRunning ? ' disabled' : ''}>2. Investigación profunda${_jobRunning ? '…' : ''}</button>
           <button class="dg-issues-toggle${_onlyFailed ? ' active' : ''}" onclick="CanteraModule.toggleFailed()">Ver solo descartadas</button>
+          ${calificadas ? `<button class="btn btn--ghost btn--sm" onclick="CanteraModule.openPromote()">3. Mover al CRM (${calificadas})</button>` : ''}
         </div>
         ${_jobRunning ? `<p class="cant-hint">Investigando ${_jobProgress.done} de ${_jobProgress.total}… puedes seguir en el sistema, esto sigue en segundo plano.</p>` : ''}
         <div class="lm-dt-wrap dg-dt-wrap"><table class="clients-table dg-table" style="table-layout:auto">
@@ -5218,7 +5219,10 @@ const CanteraModule = (() => {
     document.querySelectorAll('.cp-mark-menu').forEach(m => m.remove());
     const close = "document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove())";
     const item = (label, onclick) => `<button class="cp-mark-menu__b" onclick="${close};${onclick}">${label}</button>`;
-    const html = `<div class="cp-mark-menu__list">` + item('Eliminar borrador', `CanteraModule.remove(${_current.id})`) + `</div>`;
+    const html = `<div class="cp-mark-menu__list">`
+      + item('Mover al CRM…', `CanteraModule.openPromote()`)
+      + `<div class="cp-mark-menu__sep"></div>`
+      + item('Eliminar borrador', `CanteraModule.remove(${_current.id})`) + `</div>`;
     const menu = document.createElement('div'); menu.className = 'cp-mark-menu'; menu.style.minWidth = '190px'; menu.innerHTML = html;
     document.body.appendChild(menu);
     const t = (ev && (ev.currentTarget || ev.target)) || document.body; const r = t.getBoundingClientRect();
@@ -5233,8 +5237,59 @@ const CanteraModule = (() => {
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
+  // ── Mover al CRM: única salida de Cantera — irreversible. ─────────
+  async function openPromote() {
+    const calificadas = _companies.filter(c => c.paso2_estado === 'aprobado').length;
+    if (!calificadas) { showBanner('Todavía no hay empresas calificadas (paso 2) para mover', 'info'); return; }
+    const [clientes, campanas] = await Promise.all([
+      apiFetch(`${API}/outbound-clients`).then(r => r.ok ? r.json() : []),
+      apiFetch(`${API}/campaigns`).then(r => r.ok ? r.json() : []),
+    ]);
+    document.getElementById('cant-promote-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'cant-promote-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) closePromote(); };
+    m.innerHTML = `<div class="fin-pi-box lm-flt-box" style="max-width:420px">
+      <div class="fin-pi-box__hd"><h3>Mover al CRM</h3><button class="fin-pi-x" onclick="CanteraModule.closePromote()">✕</button></div>
+      <div class="flt-body" style="display:flex;flex-direction:column;gap:12px">
+        <p class="cant-hint" style="margin:0">${calificadas} empresa(s) calificada(s) se crearán como reales, con sus contactos "Decide"/"Respaldo". Esto no se puede deshacer.</p>
+        <label class="cant-flabel">Cliente<select id="cant-pr-client" class="form-input">
+          <option value="">— elegir —</option>
+          ${clientes.map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('')}
+        </select></label>
+        <label class="cant-flabel">Campaña<span class="field-note">opcional</span><select id="cant-pr-camp" class="form-input">
+          <option value="">Sin campaña</option>
+          ${campanas.map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('')}
+        </select></label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:.84rem"><input type="checkbox" id="cant-pr-resp" checked> Incluir también los contactos "Respaldo" (no solo "Decide")</label>
+      </div>
+      <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns">
+        <button class="btn btn--ghost btn--sm" onclick="CanteraModule.closePromote()">Cancelar</button>
+        <button class="btn btn--primary btn--sm" onclick="CanteraModule.doPromote()">Mover al CRM</button>
+      </div></div></div>`;
+    document.body.appendChild(m);
+  }
+  function closePromote() { document.getElementById('cant-promote-modal')?.remove(); }
+  async function doPromote() {
+    const clientId = document.getElementById('cant-pr-client')?.value;
+    if (!clientId) { showBanner('Elige a qué cliente pertenecen', 'info'); return; }
+    const campId = document.getElementById('cant-pr-camp')?.value || null;
+    const includeResp = !!document.getElementById('cant-pr-resp')?.checked;
+    try {
+      const res = await apiFetch(`${API}/cantera/batches/${_current.id}/promote`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ outbound_client_id: clientId, campaign_id: campId, include_respaldo: includeResp }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Error');
+      closePromote();
+      showBanner(`✓ ${d.companiesPromoted} empresa(s) y ${d.contactsPromoted} contacto(s) movidos al CRM`, 'success');
+      backToList(); await load(); _paint();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+
   return { render, open, openCreate, backToList, saveFiltros, doImport, runFiltros, toggleFailed, moreMenu, remove,
-    toggleExpand, addTier, removeTier, setTierField, addPuesto, removePuesto, setPuestoField, saveCriterio, runValidacion };
+    toggleExpand, addTier, removeTier, setTierField, addPuesto, removePuesto, setPuestoField, saveCriterio, runValidacion,
+    openPromote, closePromote, doPromote };
 })();
 
 // =================================================================
