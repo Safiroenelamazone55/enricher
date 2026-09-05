@@ -6616,6 +6616,67 @@ app.get('/api/cantera/opciones-filtro', requireAuth, async (req, res) => {
   });
 });
 
+// ── Criterios guardados — plantillas reusables de ICP+Tiers+Puestos+Filtros,
+// para no reescribir el mismo criterio en cada borrador nuevo. ──────────
+app.get('/api/cantera/criterios', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`SELECT * FROM cantera_criterio_templates WHERE user_id=$1 ORDER BY created_at DESC`, [req.workspaceOwnerId]);
+    res.json(rows);
+  } catch (err) { console.error('[cantera] GET criterios', err.message); res.status(500).json({ error: 'Error al cargar criterios' }); }
+});
+app.post('/api/cantera/criterios', requireAuth, async (req, res) => {
+  const b = req.body || {};
+  if (!_lmS(b.nombre)) return res.status(400).json({ error: 'El nombre es requerido' });
+  try {
+    const { rows } = await pool.query(`
+      INSERT INTO cantera_criterio_templates (user_id,nombre,icp,tiers,puestos,filtros)
+      VALUES ($1,$2,$3,$4::jsonb,$5::jsonb,$6::jsonb) RETURNING *
+    `, [req.workspaceOwnerId, _lmS(b.nombre), _lmS(b.icp), JSON.stringify(b.tiers || []), JSON.stringify(b.puestos || {}), JSON.stringify(b.filtros || {})]);
+    res.status(201).json(rows[0]);
+  } catch (err) { console.error('[cantera] POST criterios', err.message); res.status(500).json({ error: 'Error al guardar la plantilla' }); }
+});
+app.delete('/api/cantera/criterios/:id', requireAuth, async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(`DELETE FROM cantera_criterio_templates WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId]);
+    if (!rowCount) return res.status(404).json({ error: 'Plantilla no encontrada' });
+    res.json({ ok: true });
+  } catch (err) { console.error('[cantera] DELETE criterios', err.message); res.status(500).json({ error: 'Error al eliminar la plantilla' }); }
+});
+
+// ── Base global — el "universo grande" que cruza lo que YA está en el CRM
+// real (lm_companies) con lo que sigue en borradores de Cantera (cantera_
+// companies, de CUALQUIER borrador), para saber si una empresa ya se vio en
+// el sistema antes de salir a buscarla de nuevo (pedido explícito 2026-09-05:
+// "un universo más grande donde finalmente se sabe lo que se encuentra
+// dentro del sistema", "unos criterios tal cual como un filtro de Apollo").
+app.get('/api/cantera/global', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId;
+  const q = `%${(req.query.q || '').trim()}%`;
+  try {
+    const { rows } = await pool.query(`
+      SELECT id, nombre, dominio, pais, industria, tamano, 'crm' AS origen,
+             (SELECT nombre FROM outbound_clients oc WHERE oc.id = lc.outbound_client_id) AS referencia,
+             updated_at
+        FROM lm_companies lc WHERE user_id=$1 AND ($2 = '%%' OR nombre ILIKE $2 OR dominio ILIKE $2)
+      UNION ALL
+      SELECT cc.id, cc.nombre, cc.dominio, cc.pais, cc.industria, cc.tamano,
+             'borrador_' || cb.estado AS origen, cb.nombre AS referencia, cc.created_at AS updated_at
+        FROM cantera_companies cc JOIN cantera_batches cb ON cb.id = cc.batch_id
+       WHERE cc.user_id=$1 AND ($2 = '%%' OR cc.nombre ILIKE $2 OR cc.dominio ILIKE $2)
+       ORDER BY updated_at DESC LIMIT 500
+    `, [uid, q]);
+    res.json(rows);
+  } catch (err) { console.error('[cantera] GET global', err.message); res.status(500).json({ error: 'Error al buscar en la base global' }); }
+});
+
+// ── Configuración del motor de IA — estado real, no adivinado. ──────────
+app.get('/api/cantera/config-status', requireAuth, async (req, res) => {
+  res.json({
+    anthropicKeyConfigured: !!process.env.ANTHROPIC_API_KEY,
+    model: 'claude-sonnet-5',
+  });
+});
+
 // Paso 2 — investigación profunda con IA: solo sobre lo que ya pasó el paso 1.
 // Corre en segundo plano (cada empresa investiga en internet, tarda y cuesta
 // dinero real) — el front consulta el progreso con GET companies mientras tanto

@@ -5503,6 +5503,7 @@ const CanteraModule = (() => {
     const item = (label, onclick) => `<button class="cp-mark-menu__b" onclick="${close};${onclick}">${label}</button>`;
     const html = `<div class="cp-mark-menu__list">`
       + item('Mover al CRM…', `CanteraModule.openPromote()`)
+      + item('Guardar criterio como plantilla…', `CanteraModule.saveAsTemplate()`)
       + `<div class="cp-mark-menu__sep"></div>`
       + item('Eliminar borrador', `CanteraModule.remove(${_current.id})`) + `</div>`;
     const menu = document.createElement('div'); menu.className = 'cp-mark-menu'; menu.style.minWidth = '190px'; menu.innerHTML = html;
@@ -5516,6 +5517,15 @@ const CanteraModule = (() => {
     try {
       await apiFetch(`${API}/cantera/batches/${id}`, { method: 'DELETE' });
       backToList(); await load(); _paint();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  async function saveAsTemplate() {
+    const nombre = prompt('Nombre de la plantilla');
+    if (!nombre) return;
+    try {
+      await apiFetch(`${API}/cantera/criterios`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nombre, icp: _current.icp, tiers: _current.tiers, puestos: _current.puestos, filtros: _current.filtros }) });
+      showBanner('✓ Plantilla guardada — disponible en Cantera › Criterios guardados', 'success');
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
@@ -5569,11 +5579,129 @@ const CanteraModule = (() => {
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
-  return { render, open, openCreate, backToList, saveFiltros, runFiltros, toggleFailed, moreMenu, remove,
+  return { render, open, openCreate, backToList, saveFiltros, runFiltros, toggleFailed, moreMenu, remove, saveAsTemplate,
     toggleExpand, addTier, removeTier, setTierField, addPuesto, removePuesto, setPuestoField, saveCriterio, runValidacion,
     openPromote, closePromote, doPromote,
     openImportModal, closeImportModal, impFile, impToggleHeader, impRun, cbxOpen, cbxFilter, cbxPick, cbxBlur,
     taOpen, taFilter, taBlur, addFiltro, removeFiltro };
+})();
+
+// =================================================================
+// CANTERA · BASE GLOBAL — el "universo grande": cruza lo que ya está en el
+// CRM real con lo que sigue en borradores de Cantera (de cualquiera de
+// ellos), para saber si una empresa ya se vio antes en el sistema.
+// =================================================================
+const CanteraGlobalModule = (() => {
+  let _rows = []; let _q = '';
+  async function render(containerId) {
+    const el = document.getElementById(containerId); if (!el) return;
+    el.innerHTML = `<div class="cp-empty2" style="padding:22px">Cargando…</div>`;
+    await _search(); el.innerHTML = _html();
+  }
+  async function _search() {
+    try { const r = await apiFetch(`${API}/cantera/global?q=${encodeURIComponent(_q)}`); _rows = r.ok ? await r.json() : []; }
+    catch { _rows = []; }
+  }
+  function _origenLabel(o) {
+    if (o === 'crm') return 'En CRM';
+    if (o === 'borrador_borrador') return 'Borrador (en curso)';
+    if (o === 'borrador_promovido') return 'Borrador (ya movido)';
+    return o;
+  }
+  function _html() {
+    const rows = _rows.map(r => `<tr>
+      <td class="dg-cell--frozen">${esc(r.nombre)}</td>
+      <td class="dg-cell--ro">${esc(r.dominio || '—')}</td>
+      <td class="dg-cell--ro">${esc(r.pais || '—')}</td>
+      <td class="dg-cell--ro">${esc(r.industria || '—')}</td>
+      <td class="dg-cell--ro"><span class="cant-estado cant-estado--${r.origen === 'crm' ? 'aprobado' : 'pendiente'}">${_origenLabel(r.origen)}</span></td>
+      <td class="dg-cell--ro">${esc(r.referencia || '—')}</td>
+    </tr>`).join('');
+    return `<div class="lm-sec-head lm-sec-head--compact"><div><h2 class="lm-sec-title">Base global</h2></div></div>
+      <p class="lm-sec-sub" style="margin-bottom:14px">Todo lo que el sistema conoce — ya sea que esté en el CRM de un cliente o todavía en un borrador de Cantera — antes de salir a buscarlo de nuevo.</p>
+      <div class="cant-filters-row" style="margin-bottom:14px">
+        <input type="text" class="form-input" style="max-width:320px" placeholder="Buscar por nombre o dominio…" value="${esc(_q)}" oninput="CanteraGlobalModule.setQ(this.value)">
+      </div>
+      <div class="lm-dt-wrap dg-dt-wrap"><table class="clients-table dg-table sel-on" style="table-layout:auto">
+        <thead><tr><th>Nombre</th><th>Dominio</th><th>País</th><th>Industria</th><th>Dónde está</th><th>Cliente / Borrador</th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="6" class="cp-empty2">Sin resultados${_q ? ' para "' + esc(_q) + '"' : ' — todavía no hay nada en el sistema'}</td></tr>`}</tbody>
+      </table></div>`;
+  }
+  let _t = null;
+  function setQ(v) {
+    _q = v; clearTimeout(_t);
+    _t = setTimeout(async () => { await _search(); const el = document.getElementById('cantera-global-body'); if (el) el.innerHTML = _html(); }, 300);
+  }
+  return { render, setQ };
+})();
+
+// =================================================================
+// CANTERA · CRITERIOS GUARDADOS — plantillas reusables de ICP+Tiers+Puestos
+// para no reescribir el mismo criterio en cada borrador nuevo.
+// =================================================================
+const CanteraCriteriosModule = (() => {
+  let _list = [];
+  async function render(containerId) {
+    const el = document.getElementById(containerId); if (!el) return;
+    el.innerHTML = `<div class="cp-empty2" style="padding:22px">Cargando…</div>`;
+    try { const r = await apiFetch(`${API}/cantera/criterios`); _list = r.ok ? await r.json() : []; } catch { _list = []; }
+    el.innerHTML = _html();
+  }
+  function _html() {
+    const rows = _list.map(t => `
+      <div class="cant-tier-card">
+        <div class="cant-tier-row">
+          <span class="tier-badge t1a" style="flex-shrink:0">${(t.tiers || []).length} Tier(s)</span>
+          <span style="font-weight:700;flex:1">${esc(t.nombre)}</span>
+          <button class="btn btn--primary btn--sm" onclick="CanteraCriteriosModule.useTemplate(${t.id})">Usar en borrador nuevo</button>
+          <button class="cant-x" onclick="CanteraCriteriosModule.remove(${t.id})">✕</button>
+        </div>
+        <p class="cant-hint" style="margin:2px 0 0">${esc((t.icp || '').slice(0, 160))}${(t.icp || '').length > 160 ? '…' : ''}</p>
+      </div>`).join('');
+    return `<div class="lm-sec-head lm-sec-head--compact"><div><h2 class="lm-sec-title">Criterios guardados</h2></div></div>
+      <p class="lm-sec-sub" style="margin-bottom:14px">Guarda el ICP + Tiers + Puestos de un borrador ya afinado como plantilla, y arranca el siguiente borrador desde ahí en vez de escribirlo de nuevo. Se guarda desde el detalle de cualquier borrador (⋮ → Guardar criterio como plantilla).</p>
+      <div class="cant-tiers">${rows || `<p class="cp-empty2">Todavía no guardaste ninguna plantilla.</p>`}</div>`;
+  }
+  async function useTemplate(id) {
+    const t = _list.find(x => x.id === id); if (!t) return;
+    const nombre = prompt('Nombre del nuevo borrador');
+    if (!nombre) return;
+    try {
+      const b = await (await apiFetch(`${API}/cantera/batches`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre }) })).json();
+      await apiFetch(`${API}/cantera/batches/${b.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...b, icp: t.icp, tiers: t.tiers, puestos: t.puestos, filtros: t.filtros }) });
+      showBanner('✓ Borrador creado desde la plantilla — ábrelo en Cantera › Borradores', 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  async function remove(id) {
+    if (!confirm('¿Eliminar esta plantilla?')) return;
+    try { await apiFetch(`${API}/cantera/criterios/${id}`, { method: 'DELETE' }); render('cantera-criterios-body'); }
+    catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  return { render, useTemplate, remove };
+})();
+
+// =================================================================
+// CANTERA · CONFIGURACIÓN — estado real del motor de IA (nada adivinado).
+// =================================================================
+const CanteraConfigModule = (() => {
+  async function render(containerId) {
+    const el = document.getElementById(containerId); if (!el) return;
+    el.innerHTML = `<div class="cp-empty2" style="padding:22px">Cargando…</div>`;
+    let st = { anthropicKeyConfigured: false, model: '—' };
+    try { st = await (await apiFetch(`${API}/cantera/config-status`)).json(); } catch {}
+    el.innerHTML = `<div class="lm-sec-head lm-sec-head--compact"><div><h2 class="lm-sec-title">Configuración</h2></div></div>
+      <div class="cant-section">
+        <div class="cant-section__hd"><h3 style="margin:0">Motor de investigación profunda (paso 2)</h3></div>
+        <div class="filter-field" style="max-width:420px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+            <span class="cant-estado cant-estado--${st.anthropicKeyConfigured ? 'aprobado' : 'descartado'}">${st.anthropicKeyConfigured ? 'Configurada' : 'Falta configurar'}</span>
+            <span style="font-size:.84rem;color:var(--text2,#6C6862)">Clave de Anthropic (ANTHROPIC_API_KEY)</span>
+          </div>
+          <p class="cant-hint" style="margin:0">Modelo: ${esc(st.model)}. ${st.anthropicKeyConfigured ? 'La investigación profunda de Cantera puede correr con normalidad.' : 'Sin esta clave, el paso 2 (investigación profunda) falla en cada empresa con el motivo exacto — agrégala al .env del servidor y reinicia el proceso.'}</p>
+        </div>
+      </div>`;
+  }
+  return { render };
 })();
 
 // =================================================================
@@ -35509,6 +35637,9 @@ function initApp() {
     }
     if (tabName === 'datos') LeadManagerModule.renderDataGrid('dg-body');
     if (tabName === 'cantera') CanteraModule.render('cantera-body');
+    if (tabName === 'cantera-global') CanteraGlobalModule.render('cantera-global-body');
+    if (tabName === 'cantera-criterios') CanteraCriteriosModule.render('cantera-criterios-body');
+    if (tabName === 'cantera-config') CanteraConfigModule.render('cantera-config-body');
     if (tabName === 'mgmt-dashboard') DashboardModule.load();
     if (tabName === 'mgmt-mywork')    MyWorkModule.load();
     if (tabName === 'mgmt-finance')   FinanceModule.load();

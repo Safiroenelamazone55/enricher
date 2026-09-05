@@ -1966,7 +1966,24 @@ async function initDb() {
     await pool.query(`CREATE INDEX IF NOT EXISTS cantera_contacts_batch_idx ON cantera_contacts (batch_id);`);
     await pool.query(`CREATE INDEX IF NOT EXISTS cantera_contacts_company_idx ON cantera_contacts (company_id);`);
 
-    console.log('[db] tables ready (users, verifications, batch_jobs, clients, projects, tasks, payments, team_members, workspaces, workspace_invites, chat_messages, leads, meetings, fin_config, fin_member_config, pagos_internos, opportunities, opportunity_tasks, cantera_batches, cantera_companies, cantera_contacts)');
+    // Criterios guardados — plantillas reusables de ICP+Tiers+Puestos, para no
+    // reescribir el mismo criterio cada vez que se crea un borrador nuevo
+    // (pedido explícito 2026-09-05, sección "Criterios guardados" del módulo).
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS cantera_criterio_templates (
+        id         SERIAL      PRIMARY KEY,
+        user_id    INTEGER     NOT NULL,
+        nombre     TEXT        NOT NULL,
+        icp        TEXT        NOT NULL DEFAULT '',
+        tiers      JSONB       NOT NULL DEFAULT '[]',
+        puestos    JSONB       NOT NULL DEFAULT '{}',
+        filtros    JSONB       NOT NULL DEFAULT '{}',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS cantera_criterio_templates_user_idx ON cantera_criterio_templates (user_id);`);
+
+    console.log('[db] tables ready (users, verifications, batch_jobs, clients, projects, tasks, payments, team_members, workspaces, workspace_invites, chat_messages, leads, meetings, fin_config, fin_member_config, pagos_internos, opportunities, opportunity_tasks, cantera_batches, cantera_companies, cantera_contacts, cantera_criterio_templates)');
   } catch (err) {
     console.error('[db] initDb failed:', err.message);
     throw err;
