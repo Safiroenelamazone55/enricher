@@ -6721,6 +6721,93 @@ app.get('/api/cantera/batches/:id/contacts', requireAuth, async (req, res) => {
   } catch (err) { console.error('[cantera] GET contacts', err.message); res.status(500).json({ error: 'Error al cargar contactos' }); }
 });
 
+// ── Limpieza/enriquecimiento DENTRO de Cantera — mismo motor de reglas que
+// Enriquecimiento → Datos (dataCleanService.js, funciones puras sin tabla
+// propia), pero como acción separada que solo toca este borrador
+// (cantera_companies/cantera_contacts) — nunca el CRM real. Pedido explícito
+// 2026-09-05: "los datos importados van a tener errores... esto se limpia
+// en la etapa de prospección" pero sin mezclar los dos universos.
+const CANT_CLEAN_FIELDS = { companies: ['nombre', 'tamano', 'dominio', 'website'], contacts: ['cargo', 'email'] };
+const CANT_ENRICH_FIELDS = { companies: ['dominio', 'website'], contacts: ['seniority', 'departamento'] };
+app.post('/api/cantera/batches/:id/bulk-clean', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId;
+  const b = req.body || {};
+  const entity = b.entity === 'companies' ? 'companies' : (b.entity === 'contacts' ? 'contacts' : '');
+  const ids = Array.isArray(b.ids) ? b.ids.map(Number).filter(Boolean) : [];
+  const { cleanValue } = require('./services/dataCleanService');
+  const allowed = CANT_CLEAN_FIELDS[entity] || [];
+  const fields = (Array.isArray(b.fields) ? b.fields : []).filter(f => allowed.includes(f));
+  const apply = !!b.apply;
+  if (!entity) return res.status(400).json({ error: 'Entidad inválida' });
+  if (!ids.length) return res.status(400).json({ error: 'Sin filas seleccionadas' });
+  if (!fields.length) return res.status(400).json({ error: 'Sin campos para limpiar' });
+  const table = entity === 'companies' ? 'cantera_companies' : 'cantera_contacts';
+  try {
+    const { rows } = await pool.query(`SELECT id, ${fields.join(',')} FROM ${table} WHERE user_id=$1 AND batch_id=$2 AND id = ANY($3::int[])`, [uid, req.params.id, ids]);
+    const changes = [];
+    for (const row of rows) for (const field of fields) {
+      const before = row[field] == null ? '' : String(row[field]);
+      const after = cleanValue(entity, field, before);
+      if (after !== before) changes.push({ id: row.id, campo: field, antes: before, despues: after });
+    }
+    if (!apply) return res.json({ preview: true, changes });
+    for (const ch of changes) await pool.query(`UPDATE ${table} SET ${ch.campo}=$1 WHERE id=$2 AND user_id=$3`, [ch.despues, ch.id, uid]);
+    res.json({ preview: false, applied: changes.length, changes });
+  } catch (err) { console.error('[cantera] bulk-clean', err.message); res.status(500).json({ error: 'Error al limpiar' }); }
+});
+app.post('/api/cantera/batches/:id/bulk-enrich', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId;
+  const batchId = req.params.id;
+  const b = req.body || {};
+  const entity = b.entity === 'companies' ? 'companies' : (b.entity === 'contacts' ? 'contacts' : '');
+  const ids = Array.isArray(b.ids) ? b.ids.map(Number).filter(Boolean) : [];
+  const { enrichSource, enrichValue } = require('./services/dataCleanService');
+  const allowed = CANT_ENRICH_FIELDS[entity] || [];
+  const fields = (Array.isArray(b.fields) ? b.fields : []).filter(f => allowed.includes(f));
+  const apply = !!b.apply;
+  if (!entity) return res.status(400).json({ error: 'Entidad inválida' });
+  if (!ids.length) return res.status(400).json({ error: 'Sin filas seleccionadas' });
+  if (!fields.length) return res.status(400).json({ error: 'Sin campos para enriquecer' });
+  const table = entity === 'companies' ? 'cantera_companies' : 'cantera_contacts';
+  try {
+    const changes = [];
+    if (entity === 'contacts') {
+      const sources = [...new Set(fields.map(f => enrichSource(entity, f)))];
+      const { rows } = await pool.query(`SELECT id, ${[...new Set(['id', ...fields, ...sources])].join(',')} FROM ${table} WHERE user_id=$1 AND batch_id=$2 AND id = ANY($3::int[])`, [uid, batchId, ids]);
+      for (const row of rows) for (const field of fields) {
+        const actual = row[field] == null ? '' : String(row[field]);
+        if (actual) continue;
+        const src = row[enrichSource(entity, field)] == null ? '' : String(row[enrichSource(entity, field)]);
+        const val = enrichValue(entity, field, src);
+        if (val) changes.push({ id: row.id, campo: field, antes: '', despues: val });
+      }
+    } else {
+      // Empresas: dominio/website inferido de los emails de SUS contactos dentro
+      // de este mismo borrador (igual criterio que ya existe para el CRM real).
+      const { rows } = await pool.query(`SELECT id, dominio, website FROM ${table} WHERE user_id=$1 AND batch_id=$2 AND id = ANY($3::int[])`, [uid, batchId, ids]);
+      const { rows: emails } = await pool.query(`SELECT company_id, email FROM cantera_contacts WHERE batch_id=$1 AND user_id=$2 AND company_id = ANY($3::int[]) AND COALESCE(email,'')<>''`, [batchId, uid, ids]);
+      const counts = {};
+      for (const e of emails) {
+        const m = String(e.email).toLowerCase().match(/@([a-z0-9.-]+\.[a-z]{2,})$/); if (!m) continue;
+        const dom = m[1];
+        if (['gmail.com', 'hotmail.com', 'outlook.com', 'yahoo.com', 'live.com', 'icloud.com'].includes(dom)) continue;
+        (counts[e.company_id] = counts[e.company_id] || {})[dom] = (counts[e.company_id][dom] || 0) + 1;
+      }
+      for (const row of rows) {
+        const dist = counts[row.id]; if (!dist) continue;
+        const best = Object.entries(dist).sort((a, b2) => b2[1] - a[1])[0][0];
+        for (const field of fields) {
+          const actual = row[field] == null ? '' : String(row[field]);
+          if (!actual) changes.push({ id: row.id, campo: field, antes: '', despues: best });
+        }
+      }
+    }
+    if (!apply) return res.json({ preview: true, changes });
+    for (const ch of changes) await pool.query(`UPDATE ${table} SET ${ch.campo}=$1 WHERE id=$2 AND user_id=$3`, [ch.despues, ch.id, uid]);
+    res.json({ preview: false, applied: changes.length, changes });
+  } catch (err) { console.error('[cantera] bulk-enrich', err.message); res.status(500).json({ error: 'Error al enriquecer' }); }
+});
+
 // Mover al CRM: la única puerta de salida de Cantera. Solo empresas con
 // paso2_estado='aprobado' se convierten en lm_companies reales, y solo sus
 // contactos con puesto_estado 'decide'/'respaldo' (nunca 'descartado') se

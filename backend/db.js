@@ -1983,6 +1983,13 @@ async function initDb() {
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS cantera_criterio_templates_user_idx ON cantera_criterio_templates (user_id);`);
 
+    // Para poder ENRIQUECER (no solo filtrar al vuelo) seniority/departamento de
+    // un contacto de Cantera y que quede guardado — mismo criterio que ya existe
+    // para lm_contacts (limpieza/enriquecimiento pedido 2026-09-05, "en la etapa
+    // de prospección también hace falta limpiar/enriquecer, con el mismo motor").
+    await pool.query(`ALTER TABLE cantera_contacts ADD COLUMN IF NOT EXISTS seniority    TEXT NOT NULL DEFAULT '';`);
+    await pool.query(`ALTER TABLE cantera_contacts ADD COLUMN IF NOT EXISTS departamento TEXT NOT NULL DEFAULT '';`);
+
     console.log('[db] tables ready (users, verifications, batch_jobs, clients, projects, tasks, payments, team_members, workspaces, workspace_invites, chat_messages, leads, meetings, fin_config, fin_member_config, pagos_internos, opportunities, opportunity_tasks, cantera_batches, cantera_companies, cantera_contacts, cantera_criterio_templates)');
   } catch (err) {
     console.error('[db] initDb failed:', err.message);
