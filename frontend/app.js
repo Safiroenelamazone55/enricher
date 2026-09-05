@@ -5212,6 +5212,7 @@ const CanteraModule = (() => {
             <div class="lm-stat"><b>${d.rows || 0}</b><span>filas leídas</span></div>
             <div class="lm-stat"><b>${d.companiesCreated || 0}</b><span>empresas nuevas</span></div>
             <div class="lm-stat"><b>${d.contactsCreated || 0}</b><span>contactos nuevos</span></div>
+            ${d.contactsSkipped ? `<div class="lm-stat"><b>${d.contactsSkipped}</b><span>duplicados (misma persona, se ignoró)</span></div>` : ''}
           </div></div>
           ${(d.errors || []).length ? `<div class="lm-imp-err">${d.errors.map(e => esc(e)).join('<br>')}</div>` : ''}
         </div>

@@ -6257,22 +6257,27 @@ app.post('/api/lm/import', requireAuth, upload.single('file'), async (req, res) 
   const summary = { rows: 0, contactsCreated: 0, contactsUpdated: 0, contactsSkipped: 0, companiesCreated: 0, companiesUpdated: 0, companiesSkipped: 0, errors: [] };
   const coCache = new Map();
   async function _co(f) {
-    // Misma cascada que Cantera: dominio real > LinkedIn de la empresa > nombre, con
-    // sentinelas tipo "N/A" filtrados ANTES de normalizar como dominio (si no, todas
-    // las empresas sin website conocido se fusionan en una sola — bug reportado
-    // 2026-09-06 al importar un export real de LinkedIn Sales Navigator).
+    // Identidad CRUZADA (mismo criterio que Cantera): dominio, LinkedIn y nombre se
+    // consultan los tres, no en cascada estricta — una misma empresa real puede traer
+    // "N/A" en dominio/LinkedIn en algunas filas del export y datos reales en otras
+    // (bug reportado 2026-09-06: una sola empresa se partía en varias porque la fila
+    // sin dominio/LinkedIn nunca se cruzaba con la fila que sí los traía).
     const dominio = _lmNormDomain(_lmCleanUrlish(f.dominio) || _lmCleanUrlish(f.website));
     const linkedin = _lmCleanUrlish(f.linkedin).toLowerCase();
     const nombre  = _lmS(f.nombre);
-    if (!dominio && !linkedin && !nombre) return null;
-    const key = dominio ? 'd:' + dominio : linkedin ? 'l:' + linkedin : 'n:' + nombre.toLowerCase();
-    if (coCache.has(key)) return coCache.get(key);
+    const nombreKey = nombre.toLowerCase();
+    if (!dominio && !linkedin && !nombreKey) return null;
+    const keys = [];
+    if (dominio) keys.push('d:' + dominio);
+    if (linkedin) keys.push('l:' + linkedin);
+    if (nombreKey) keys.push('n:' + nombreKey);
+    for (const k of keys) if (coCache.has(k)) return coCache.get(k);
     let found;
     if (dominio) found = (await pool.query(`SELECT id FROM lm_companies WHERE user_id=$1 AND dominio=$2 LIMIT 1`, [uid, dominio])).rows[0];
-    else if (linkedin) found = (await pool.query(`SELECT id FROM lm_companies WHERE user_id=$1 AND dominio='' AND LOWER(linkedin)=$2 LIMIT 1`, [uid, linkedin])).rows[0];
-    else         found = (await pool.query(`SELECT id FROM lm_companies WHERE user_id=$1 AND dominio='' AND LOWER(nombre)=$2 LIMIT 1`, [uid, nombre.toLowerCase()])).rows[0];
+    if (!found && linkedin) found = (await pool.query(`SELECT id FROM lm_companies WHERE user_id=$1 AND LOWER(linkedin)=$2 LIMIT 1`, [uid, linkedin])).rows[0];
+    if (!found && nombreKey) found = (await pool.query(`SELECT id FROM lm_companies WHERE user_id=$1 AND dominio='' AND LOWER(nombre)=$2 LIMIT 1`, [uid, nombreKey])).rows[0];
     if (found) {
-      coCache.set(key, found.id);
+      keys.forEach(k => coCache.set(k, found.id));
       // Actualiza los campos de la empresa YA existente (antes solo se enlazaba sin tocar sus datos).
       // Solo se pisan los campos que vienen con valor — una celda vacía nunca borra datos.
       if (updateExisting) {
@@ -6298,7 +6303,7 @@ app.post('/api/lm/import', requireAuth, upload.single('file'), async (req, res) 
     `, [uid, nombre || dominio, dominio, _lmCleanUrlish(f.website), _lmS(f.industria), _lmS(f.tamano), _lmS(f.ingresos),
         _lmS(f.telefono), _lmCleanUrlish(f.linkedin), _lmS(f.ciudad), _lmS(f.region), _lmS(f.pais), _lmS(f.fundada),
         _lmS(f.direccion), _lmS(f.codigo_postal), _lmS(f.descripcion), _lmS(f.tecnologias), _lmS(f.funding), _lmS(f.target_tier), _lmS(f.segmento), _lmS(f.analisis), obcId, _lmS(f.notas)]);
-    coCache.set(key, ins.rows[0].id); summary.companiesCreated++; return ins.rows[0].id;
+    keys.forEach(k => coCache.set(k, ins.rows[0].id)); summary.companiesCreated++; return ins.rows[0].id;
   }
 
   for (const row of dataRows) {
@@ -6539,7 +6544,7 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
     });
   }
 
-  const summary = { rows: 0, companiesCreated: 0, contactsCreated: 0, errors: [] };
+  const summary = { rows: 0, companiesCreated: 0, contactsCreated: 0, contactsSkipped: 0, errors: [] };
   const coCache = new Map();
   // "Company Location" del export de Sales Nav viene como "Ciudad, Región, País" en
   // un solo texto — si no hay co_pais explícito, se infiere del último segmento sin
@@ -6549,25 +6554,58 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
     return parts.length ? parts[parts.length - 1] : '';
   }
   async function _co(f) {
-    // Cascada de identidad de empresa: dominio real > LinkedIn de la empresa > nombre.
-    // "N/A"/"none"/etc. (comunes en exports cuando no hay website) se descartan ANTES
-    // de normalizar como dominio — si no, todas las empresas sin website terminan
-    // compartiendo el mismo "dominio" falso y se fusionan en una sola (bug reportado
-    // 2026-09-06: 1537 contactos → 734 empresas cuando debían ser ~896 distintas).
+    // Identidad de empresa CRUZADA (pedido explícito de Jenny 2026-09-06: "que sea
+    // cruzada, dominio web, linkedin empresa, nombre") — no una cascada de prioridad,
+    // sino que CUALQUIERA de las tres señales que ya se vio antes identifica a la
+    // misma empresa. Hace falta cruzar así porque en el export real la MISMA empresa
+    // trae "N/A" en dominio/LinkedIn en algunas de sus filas (unos contactos) y los
+    // datos reales en otras — con solo cascada (dominio > linkedin > nombre) cada fila
+    // "N/A" quedaba huérfana con una clave por nombre que nunca se cruzaba con la fila
+    // que sí tenía el dominio/LinkedIn real, partiendo una sola empresa en varias
+    // (bug reportado 2026-09-06: 1537 contactos → 1249 empresas cuando eran ~896).
     const dominio = _lmNormDomain(_lmCleanUrlish(f.co_dominio) || _lmCleanUrlish(f.co_website));
     const linkedin = _lmCleanUrlish(f.co_linkedin).toLowerCase();
     const nombre = _lmS(f.co_nombre);
-    if (!dominio && !linkedin && !nombre) return null;
-    const key = dominio ? 'd:' + dominio : linkedin ? 'l:' + linkedin : 'n:' + nombre.toLowerCase();
-    if (coCache.has(key)) return coCache.get(key);
-    const pais = _lmS(f.co_pais) || _lastLocSegment(f.co_ubicacion);
+    const nombreKey = nombre.toLowerCase();
+    if (!dominio && !linkedin && !nombreKey) return null;
+    const keys = [];
+    if (dominio) keys.push('d:' + dominio);
+    if (linkedin) keys.push('l:' + linkedin);
+    if (nombreKey) keys.push('n:' + nombreKey);
+
+    for (const k of keys) {
+      if (!coCache.has(k)) continue;
+      const id = coCache.get(k);
+      // Esta fila puede traer un dato que la empresa ya registrada no tenía todavía
+      // (ej. la primera fila vista traía "N/A" y esta sí trae el dominio real) — se
+      // completa sin pisar lo que ya había, y se registran también las claves nuevas.
+      const website = _lmCleanUrlish(f.co_website);
+      if (dominio || website || linkedin) {
+        await pool.query(`
+          UPDATE cantera_companies SET
+            dominio = CASE WHEN dominio='' THEN $1 ELSE dominio END,
+            website = CASE WHEN website='' THEN $2 ELSE website END,
+            linkedin = CASE WHEN linkedin='' THEN $3 ELSE linkedin END
+          WHERE id=$4`, [dominio, website, linkedin, id]);
+      }
+      keys.forEach(k2 => coCache.set(k2, id));
+      return id;
+    }
+
+    const pais = _lmCleanUrlish(f.co_pais) || _lastLocSegment(f.co_ubicacion);
     const ins = await pool.query(`
       INSERT INTO cantera_companies (batch_id,user_id,nombre,dominio,website,industria,tamano,pais,ciudad,linkedin,ubicacion)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id
-    `, [batchId, uid, nombre || dominio, dominio, _lmCleanUrlish(f.co_website), _lmS(f.co_industria), _lmS(f.co_tamano), pais, _lmS(f.co_ciudad), _lmCleanUrlish(f.co_linkedin), _lmS(f.co_ubicacion)]);
-    coCache.set(key, ins.rows[0].id); summary.companiesCreated++; return ins.rows[0].id;
+    `, [batchId, uid, nombre || dominio, dominio, _lmCleanUrlish(f.co_website), _lmCleanUrlish(f.co_industria), _lmCleanUrlish(f.co_tamano), pais, _lmCleanUrlish(f.co_ciudad), _lmCleanUrlish(f.co_linkedin), _lmS(f.co_ubicacion)]);
+    keys.forEach(k => coCache.set(k, ins.rows[0].id));
+    summary.companiesCreated++; return ins.rows[0].id;
   }
 
+  // Exports reales suelen traer al mismo lead repetido varias veces (mismo nombre,
+  // cargo y empresa, fila por fila idéntica) — sin esto cada repetición se importaba
+  // como un contacto nuevo, inflando el conteo de contactos por empresa. Se identifica
+  // a la persona por su LinkedIn (o email si no hay LinkedIn) y solo se crea una vez.
+  const contactCache = new Set();
   for (const row of dataRows) {
     if (!Array.isArray(row) || row.every(c => !_lmS(c))) continue;
     summary.rows++;
@@ -6579,6 +6617,11 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
       else if (!ignored.has(idx) && val) { raw[headerRow[idx] || `Columna ${idx + 1}`] = val; }
     }
     try {
+      const contactKey = _lmCleanUrlish(f.linkedin).toLowerCase() || _lmCleanUrlish(f.email).toLowerCase();
+      if (contactKey) {
+        if (contactCache.has(contactKey)) { summary.contactsSkipped++; continue; }
+        contactCache.add(contactKey);
+      }
       const companyId = await _co(f);
       let nombre = _lmS(f.nombre), apellido = _lmS(f.apellido);
       if (!nombre && !apellido && _lmS(f.nombre_completo)) {
@@ -6589,8 +6632,8 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
         INSERT INTO cantera_contacts (batch_id,company_id,user_id,nombre,apellido,cargo,email,linkedin,raw,
           ubicacion,conexion_grado,premium,antiguedad_cargo,conexiones_mutuas,cambio_reciente,publico_reciente,sigue_empresa)
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
-      `, [batchId, companyId, uid, nombre, apellido, _lmS(f.cargo), _lmCleanUrlish(f.email).toLowerCase(), _lmCleanUrlish(f.linkedin), JSON.stringify(raw),
-          _lmS(f.ubicacion), _lmS(f.conexion_grado), _lmS(f.premium), _lmS(f.antiguedad_cargo), _lmS(f.conexiones_mutuas),
+      `, [batchId, companyId, uid, nombre, apellido, _lmCleanUrlish(f.cargo), _lmCleanUrlish(f.email).toLowerCase(), _lmCleanUrlish(f.linkedin), JSON.stringify(raw),
+          _lmCleanUrlish(f.ubicacion), _lmS(f.conexion_grado), _lmS(f.premium), _lmCleanUrlish(f.antiguedad_cargo), _lmCleanUrlish(f.conexiones_mutuas),
           _lmS(f.cambio_reciente), _lmS(f.publico_reciente), _lmS(f.sigue_empresa)]);
       summary.contactsCreated++;
     } catch (e) { if (summary.errors.length < 10) summary.errors.push(`Fila ${summary.rows}: ${e.message}`); }
