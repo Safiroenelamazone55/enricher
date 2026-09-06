@@ -12399,6 +12399,8 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
    filas de empresa — pedido explícito 2026-09-06: "debe ser del mismo alto
    que lo demás". */
 .cant-subrow select.form-input { padding: 3px 8px; }
+.cant-audit-ev { padding: 8px 0; border-bottom: 1px solid var(--border, #EAE7E2); font-size: .82rem; }
+.cant-audit-ev:last-child { border-bottom: none; }
 /* Las 2 celdas vacías (checkbox + Nombre) de la fila de contacto deben quedar
    TAMBIÉN congeladas/sticky, igual que en la fila de la empresa — si no, al
    hacer scroll horizontal se desplazan por su cuenta y el bloque del contacto

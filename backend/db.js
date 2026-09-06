@@ -2015,6 +2015,15 @@ async function initDb() {
     await pool.query(`ALTER TABLE cantera_contacts ADD COLUMN IF NOT EXISTS sigue_empresa     TEXT NOT NULL DEFAULT '';`);
     await pool.query(`ALTER TABLE cantera_companies ADD COLUMN IF NOT EXISTS ubicacion         TEXT NOT NULL DEFAULT '';`);
 
+    // Auditoría por muestra de la investigación profunda (IA) — pedido explícito
+    // 2026-09-06: "necesito saber si el motor está calificando bien de verdad".
+    // Jenny revisa una muestra al azar de aprobadas/descartadas y marca si está
+    // de acuerdo con la evidencia que usó la IA; el veredicto queda pegado a la
+    // fila para siempre (se ve en Resultados y en Mesa de trabajo, no desaparece).
+    await pool.query(`ALTER TABLE cantera_companies ADD COLUMN IF NOT EXISTS auditoria_veredicto TEXT NOT NULL DEFAULT '';`); // '' | 'de_acuerdo' | 'en_desacuerdo'
+    await pool.query(`ALTER TABLE cantera_companies ADD COLUMN IF NOT EXISTS auditoria_nota      TEXT NOT NULL DEFAULT '';`);
+    await pool.query(`ALTER TABLE cantera_companies ADD COLUMN IF NOT EXISTS auditoria_at         TIMESTAMPTZ;`);
+
     // Secuencia opcional del borrador — mismo criterio que Cliente/Campaña, que ya
     // existían: es solo una anotación en esta etapa (no enrola nada, no envía nada a
     // Outreach) hasta que las empresas se promuevan al CRM. Pedido explícito

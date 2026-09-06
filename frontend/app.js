@@ -5458,6 +5458,7 @@ const CanteraModule = (() => {
     { key: 'paso2_estado', label: 'Paso 2', def: true },
     { key: 'motivo_descarte', label: 'Motivo paso 2', def: true },
     { key: 'contactos', label: 'Contactos', def: true },
+    { key: 'auditoria', label: 'Auditoría', def: true },
   ];
   let _visibleCols = null;
   function _loadVisibleCols() {
@@ -5492,6 +5493,9 @@ const CanteraModule = (() => {
       case 'paso2_estado': return `<span class="cant-estado cant-estado--${esc(c.paso2_estado)}">${_estadoLabel(c.paso2_estado)}</span> <button class="cant-x" style="font-size:.72rem" onclick="event.stopPropagation();CanteraModule.openManualValidation(${c.id})" title="Validar manualmente">✎ Manual</button>`;
       case 'motivo_descarte': return c.paso2_estado === 'validacion_manual' ? esc(c.nota_manual || '(sin nota)') : `<span title="${esc(c.motivo_descarte)}">${esc(c.motivo_descarte || '—')}</span>`;
       case 'contactos': return `${c.contactos}${c.contactos > 1 ? ' <span class="tag" style="margin-left:4px">multi</span>' : ''}`;
+      case 'auditoria': return c.auditoria_veredicto === 'de_acuerdo' ? `<span class="cant-estado cant-estado--aprobado" title="${esc(c.auditoria_nota)}">✓ Confirmado</span>`
+        : c.auditoria_veredicto === 'en_desacuerdo' ? `<span class="cant-estado cant-estado--descartado" title="${esc(c.auditoria_nota)}">✕ En desacuerdo</span>`
+        : '<span class="cant-hint" style="margin:0">Sin auditar</span>';
       default: return '—';
     }
   }
@@ -5822,6 +5826,7 @@ const CanteraModule = (() => {
       <div class="cp-mark-menu__sep"></div>
       <div class="cp-mark-menu__list">
         ${item(_jobRunning ? 'Investigación profunda (IA)…' : (_lastIA ? `Investigación completa (${_lastIA.done})` : 'Investigación profunda (IA)'), 'CanteraModule.runValidacion()')}
+        ${item('Auditar muestra (IA)', 'CanteraModule.openAudit()')}
         ${item(`${_onlyFailed ? '✓ ' : ''}Ver solo descartadas`, 'CanteraModule.toggleFailed()')}
       </div>
       <div class="cp-mark-menu__sep"></div>
@@ -6158,6 +6163,7 @@ const CanteraModule = (() => {
     _pendingRevalIds = [..._coSel];
   }
   function _confirmRevalidar() { _runValidacionExec(_pendingRevalIds); _pendingRevalIds = []; }
+  function openAudit() { CanteraAuditModule.open({ batchId: _current.id }, async () => { await _loadCompanies(); _paint(); }); }
   async function _runValidacionExec(companyIds) {
     try {
       const res = await apiFetch(`${API}/cantera/batches/${_current.id}/run-validacion`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ company_ids: companyIds }) });
@@ -6486,7 +6492,106 @@ const CanteraModule = (() => {
     toggleCoSel, toggleCoSelAll, resultsMenu, runClean, runEnrich, closeCantOp, applyCantOp,
     toggleResultCol, startColResize,
     setContactPrioridad, cantGoPage, cantSetPageSize, bdSetFiltro, bdSetPageSize, bdGoPage, _confirmRevalidar,
-    openManualValidation, closeManualValidation, copyManualData, saveManualValidation, quitarValidacionManual };
+    openManualValidation, closeManualValidation, copyManualData, saveManualValidation, quitarValidacionManual, openAudit };
+})();
+
+// =================================================================
+// CANTERA · AUDITORÍA POR MUESTRA — control de calidad manual de la
+// Investigación profunda (IA), pedido explícito 2026-09-06: "necesito saber
+// si el motor está calificando bien de verdad, no solo confiar en él". Trae
+// una muestra al azar de empresas ya investigadas (aprobadas Y descartadas
+// por separado, para no perder de vista falsos negativos que desaparecen de
+// la vista normal), y por cada una Jenny marca "de acuerdo"/"en desacuerdo"
+// leyendo la evidencia real que usó la IA. El veredicto queda guardado en la
+// empresa para siempre — se ve como columna en Resultados y en Mesa de
+// trabajo, no desaparece al cerrar esta ventana.
+// Módulo compartido (no duplicado) entre CanteraModule y CanteraMesaModule:
+// a diferencia de la tabla de columnas/localStorage (que sí es preferencia
+// por módulo), este flujo no tiene estado propio de cada módulo — solo abre
+// una ventana, guarda veredictos, y al cerrar avisa con un callback para que
+// quien lo invocó refresque su propia tabla.
+// =================================================================
+const CanteraAuditModule = (() => {
+  let _queue = []; let _idx = 0; let _tally = { ok: 0, bad: 0, skip: 0 }; let _onDone = null;
+
+  async function open(scope, onDone) {
+    _onDone = onDone || null;
+    const p = new URLSearchParams();
+    if (scope.batchId) p.set('batchId', scope.batchId);
+    if (scope.cliente) p.set('cliente', scope.cliente);
+    if (scope.campana) p.set('campana', scope.campana);
+    if (scope.secuencia) p.set('secuencia', scope.secuencia);
+    p.set('n', 10);
+    let data;
+    try { data = await (await apiFetch(`${API}/cantera/audit/sample?${p.toString()}`)).json(); }
+    catch { showBanner('Error al cargar la muestra', 'error'); return; }
+    _queue = [...(data.aprobadas || []), ...(data.descartadas || [])];
+    if (!_queue.length) { showBanner('Todavía no hay empresas investigadas con IA para auditar en este alcance', 'info'); return; }
+    _idx = 0; _tally = { ok: 0, bad: 0, skip: 0 };
+    _paint();
+  }
+  function _paint() {
+    document.getElementById('cant-audit-modal')?.remove();
+    if (_idx >= _queue.length) { _finish(); return; }
+    const c = _queue[_idx];
+    const ev = (c.evidencia || []).length
+      ? c.evidencia.map(e => `<div class="cant-audit-ev">
+          <b>${esc(e.fuente || '—')}</b>${e.url ? ` — <a href="${esc(e.url)}" target="_blank" rel="noopener">ver fuente</a>` : ''}
+          <div class="cant-hint" style="margin:2px 0 0">${esc(e.resumen || '')}</div>
+        </div>`).join('')
+      : '<div class="cp-empty2" style="padding:8px 0">Sin evidencia registrada</div>';
+    const yaAuditada = c.auditoria_veredicto ? `<div class="cant-hint">Ya auditada antes: ${c.auditoria_veredicto === 'de_acuerdo' ? 'De acuerdo' : 'En desacuerdo'}${c.auditoria_nota ? ' — ' + esc(c.auditoria_nota) : ''}</div>` : '';
+    const m = document.createElement('div'); m.id = 'cant-audit-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) close(); };
+    m.innerHTML = `<div class="fin-pi-box lm-flt-box" style="max-width:580px">
+      <div class="fin-pi-box__hd"><h3>Auditar muestra · ${_idx + 1} de ${_queue.length}</h3><button class="fin-pi-x" onclick="CanteraAuditModule.close()">✕</button></div>
+      <div class="flt-body" style="display:flex;flex-direction:column;gap:10px;max-height:58vh;overflow-y:auto">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <b>${esc(c.nombre)}</b>
+          <span class="cant-estado cant-estado--${esc(c.paso2_estado)}">${c.paso2_estado === 'aprobado' ? 'Aprobado' : 'Descartado'}</span>
+          ${c.tier_clave ? `<span class="tag">${esc(c.tier_clave)}</span>` : ''}
+          <span class="cant-hint">Borrador: ${esc(c.batch_nombre)} · Confianza reportada: ${esc(c.confianza || '—')}</span>
+        </div>
+        ${c.paso2_estado === 'descartado' ? `<div class="cant-hint"><b>Motivo del descarte:</b> ${esc(c.motivo_descarte || '—')}</div>` : ''}
+        <div><b>Evidencia usada por la IA:</b>${ev}</div>
+        ${yaAuditada}
+        <label class="cant-flabel">Nota<span class="field-note">opcional, especialmente si estás en desacuerdo</span>
+          <textarea id="cant-audit-nota" class="form-input" rows="2" placeholder="Por qué estás o no de acuerdo…"></textarea>
+        </label>
+      </div>
+      <div class="fin-pi-box__ft">
+        <span class="cant-hint">${_tally.ok} de acuerdo · ${_tally.bad} en desacuerdo${_tally.skip ? ` · ${_tally.skip} saltada(s)` : ''}</span>
+        <div class="fin-pi-ft-btns">
+          <button class="btn btn--ghost btn--sm" onclick="CanteraAuditModule.skip()">Saltar</button>
+          <button class="btn btn--danger btn--sm" onclick="CanteraAuditModule.vote('en_desacuerdo')">En desacuerdo</button>
+          <button class="btn btn--primary btn--sm" onclick="CanteraAuditModule.vote('de_acuerdo')">De acuerdo</button>
+        </div>
+      </div>
+    </div>`;
+    document.body.appendChild(m);
+  }
+  async function vote(v) {
+    const c = _queue[_idx];
+    const nota = document.getElementById('cant-audit-nota')?.value || '';
+    try {
+      await apiFetch(`${API}/cantera/companies/${c.id}/audit`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ veredicto: v, nota }) });
+      if (v === 'de_acuerdo') _tally.ok++; else _tally.bad++;
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+    _idx++; _paint();
+  }
+  function skip() { _tally.skip++; _idx++; _paint(); }
+  function close() { document.getElementById('cant-audit-modal')?.remove(); if (_onDone) _onDone(); }
+  function _finish() {
+    document.getElementById('cant-audit-modal')?.remove();
+    const total = _tally.ok + _tally.bad;
+    const pct = total ? Math.round((_tally.ok / total) * 100) : 0;
+    showBanner(
+      total ? `Auditoría terminada: ${_tally.ok}/${total} de acuerdo (${pct}%)${_tally.bad ? ` — revisa las ${_tally.bad} en desacuerdo` : ''}` : 'Auditoría cerrada sin votos',
+      _tally.bad ? 'info' : 'success'
+    );
+    if (_onDone) _onDone();
+  }
+  return { open, vote, skip, close };
 })();
 
 // =================================================================
@@ -6532,6 +6637,7 @@ const CanteraMesaModule = (() => {
     { key: 'paso2_estado', label: 'Paso 2', def: true },
     { key: 'motivo_descarte', label: 'Motivo paso 2', def: false },
     { key: 'contactos', label: 'Contactos', def: true },
+    { key: 'auditoria', label: 'Auditoría', def: true },
   ];
   let _visibleCols = null;
   function _loadVisibleCols() {
@@ -6560,6 +6666,9 @@ const CanteraMesaModule = (() => {
       case 'paso2_estado': return `<span class="cant-estado cant-estado--${esc(c.paso2_estado)}">${_estadoLabel(c.paso2_estado)}</span> <button class="cant-x" style="font-size:.72rem" onclick="event.stopPropagation();CanteraMesaModule.openManualValidation(${c.id},${c.batch_id})" title="Validar manualmente">✎ Manual</button>`;
       case 'motivo_descarte': return c.paso2_estado === 'validacion_manual' ? esc(c.nota_manual || '(sin nota)') : `<span title="${esc(c.motivo_descarte)}">${esc(c.motivo_descarte || '—')}</span>`;
       case 'contactos': return `${c.contactos}${c.contactos > 1 ? ' <span class="tag" style="margin-left:4px">multi</span>' : ''}`;
+      case 'auditoria': return c.auditoria_veredicto === 'de_acuerdo' ? `<span class="cant-estado cant-estado--aprobado" title="${esc(c.auditoria_nota)}">✓ Confirmado</span>`
+        : c.auditoria_veredicto === 'en_desacuerdo' ? `<span class="cant-estado cant-estado--descartado" title="${esc(c.auditoria_nota)}">✕ En desacuerdo</span>`
+        : '<span class="cant-hint" style="margin:0">Sin auditar</span>';
       default: return '—';
     }
   }
@@ -6665,7 +6774,7 @@ const CanteraMesaModule = (() => {
     const calificadas = _coSel.size ? [..._coSel].filter(id => { const r = _knownRows[id]; return r && (r.paso2_estado === 'aprobado' || r.paso2_estado === 'validacion_manual'); }).length : 0;
     const html = `<div class="cp-mark-menu__list">${sub('Limpiar', cleanPanel)}${sub('Enriquecer', enrichPanel)}</div>
       <div class="cp-mark-menu__sep"></div>
-      <div class="cp-mark-menu__list">${item('Investigación profunda (IA)', 'CanteraMesaModule.runValidacion()')}${item(`${_onlyFailed ? '✓ ' : ''}Ver solo descartadas`, 'CanteraMesaModule.toggleFailed()')}</div>
+      <div class="cp-mark-menu__list">${item('Investigación profunda (IA)', 'CanteraMesaModule.runValidacion()')}${item('Auditar muestra (IA)', 'CanteraMesaModule.openAudit()')}${item(`${_onlyFailed ? '✓ ' : ''}Ver solo descartadas`, 'CanteraMesaModule.toggleFailed()')}</div>
       <div class="cp-mark-menu__sep"></div>
       <div class="cp-mark-menu__list">${sub('Filtrar por Tier', tierPanel)}${sub('Filtrar por prioridad', prioPanel)}</div>
       <div class="cp-mark-menu__sep"></div>
@@ -6750,6 +6859,7 @@ const CanteraMesaModule = (() => {
     _pendingRevalIds = [..._coSel];
   }
   function _confirmRevalidar() { _runValidacionExec(_pendingRevalIds); _pendingRevalIds = []; }
+  function openAudit() { CanteraAuditModule.open({ ..._filtro }, _refresh); }
   async function _runValidacionExec(ids) {
     const groups = _groupByBatch(ids);
     let totalOk = 0, totalErr = 0;
@@ -6969,7 +7079,7 @@ const CanteraMesaModule = (() => {
 
   return { render, setFiltro, setPageSize, goPage, toggleFailed, toggleTierFiltro, togglePrioFiltro,
     toggleCoSel, toggleCoSelAll, toggleExpand, setContactPrioridad, toggleCol, menu,
-    runClean, runEnrich, runValidacion, _confirmRevalidar,
+    runClean, runEnrich, runValidacion, _confirmRevalidar, openAudit,
     openPromote, doPromote, openSendSeq, doSendSeq, openManualValidation, saveManualValidation };
 })();
 

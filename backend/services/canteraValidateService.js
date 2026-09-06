@@ -67,7 +67,7 @@ PROTOCOLO DE INVESTIGACIÓN (en orden)
 ═══════════════════════════════════
 1. IDENTIFICA la empresa exacta. Si el nombre es genérico o común, confírmalo cruzando dominio/sitio web, país y sector antes de seguir — nunca asumas que el primer resultado con un nombre parecido es la empresa correcta. Si hay varias empresas con nombres similares y no puedes confirmar cuál es, dilo explícitamente y baja la confianza.
 2. DISTINGUE estructura societaria: si la empresa es una filial, marca o división de un grupo mayor, evalúa el ICP contra LA ENTIDAD QUE REALMENTE OPERA (la que aparece en los datos importados) — no contra el grupo matriz completo, salvo que el ICP pida explícitamente evaluar al grupo.
-3. RECOLECTA evidencia de al menos 3 fuentes independientes cuando existan (sitio oficial, LinkedIn, noticias/prensa, ofertas de empleo activas, registros públicos, directorios de industria). Prioriza fuentes oficiales y recientes sobre agregadores de terceros — los directorios tipo Crunchbase/ZoomInfo pueden estar desactualizados o mal categorizados; trátalos como pista, nunca como prueba final.
+3. RECOLECTA evidencia de al menos 5 FUENTES independientes cuando existan (sitio oficial, LinkedIn, noticias/prensa, ofertas de empleo activas, registros públicos, directorios de industria). Una FUENTE es un origen distinto de información — no cada página individual dentro del mismo sitio. Visitar 5 páginas distintas del sitio web oficial (Inicio, Nosotros, Servicios, Equipo, Noticias) cuenta como UNA sola fuente, no cinco. Cuando el sitio web oficial sea relevante, revisa TODAS sus páginas relevantes antes de darlo por agotado — no te quedes solo en la portada. Prioriza fuentes oficiales y recientes sobre agregadores de terceros — los directorios tipo Crunchbase/ZoomInfo pueden estar desactualizados o mal categorizados; trátalos como pista, nunca como prueba final. Si después de una búsqueda exhaustiva no existen 5 fuentes distintas para esta empresa (empresas pequeñas o con poca presencia digital), dilo explícitamente y baja la confianza en vez de forzar el número.
 4. VERIFICA CADA CRITERIO DEL TIER por separado con su propia evidencia directa. Si el criterio depende de un HECHO puntual y verificable (ej. "tiene flota propia", "opera en X país", "usa tal tecnología"), ese hecho necesita SU PROPIA evidencia directa — no basta con fuentes genéricas sobre la empresa si ninguna confirma ese hecho en particular.
 5. CLASIFICA los contactos importados por cargo, cruzando la lista de Puestos a Contactar de abajo.
 6. AUTOCHEQUEO antes de responder (hazlo en tu razonamiento, no lo muestres en la respuesta final):
@@ -88,9 +88,9 @@ REGLAS DE EVIDENCIA (fijas, no negociables — cada una existe porque ya se vio 
 - Las fuentes pueden estar en cualquier idioma — léelas en su idioma original, pero escribe tus resúmenes en español.
 
 CALIBRACIÓN DE CONFIANZA (usa este criterio exacto, no una impresión general):
-- "alta": 3 o más fuentes independientes confirman el criterio decisivo del Tier, incluyendo al menos una fuente primaria (sitio oficial, comunicado propio, oferta de empleo activa).
-- "media": evidencia razonable pero incompleta — 2 fuentes, o fuentes indirectas que apuntan al criterio sin confirmarlo del todo.
-- "baja": 1 fuente o ninguna fuente directa del criterio decisivo; clasificaste por indicios razonables pero sin confirmación sólida.
+- "alta": 5 o más fuentes independientes confirman el criterio decisivo del Tier, incluyendo al menos una fuente primaria (sitio oficial, comunicado propio, oferta de empleo activa).
+- "media": evidencia razonable pero incompleta — entre 3 y 4 fuentes, o fuentes indirectas que apuntan al criterio sin confirmarlo del todo.
+- "baja": 1 o 2 fuentes, o ninguna fuente directa del criterio decisivo; clasificaste por indicios razonables pero sin confirmación sólida.
 
 - Estás investigando UNA sola empresa en esta llamada — no hay lote ni presión de tiempo. Tómate los usos de web_search que necesites (hasta el límite disponible) antes de decidir; una respuesta rápida pero mal verificada es peor que una que tardó más. No hay ninguna ventaja en responder rápido — la única métrica que importa es que cada afirmación esté respaldada por lo que de verdad encontraste.
 
@@ -139,7 +139,7 @@ async function validateCompany(pool, uid, batch, company, contactos) {
   const resp = await client.messages.create({
     model: MODEL, max_tokens: 8000, system,
     thinking: { type: 'adaptive' },
-    tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: 10 }],
+    tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: 20 }],
     messages: [{ role: 'user', content: user }],
   });
   const u = _sumUsage(resp.usage);

@@ -7109,6 +7109,57 @@ app.get('/api/cantera/mesa/tiers', requireAuth, async (req, res) => {
   } catch (err) { console.error('[cantera] mesa tiers', err.message); res.status(500).json({ error: 'Error al cargar tiers' }); }
 });
 
+// Auditoría por muestra de la investigación profunda (IA) — pedido explícito
+// 2026-09-06: control de calidad manual, aparte y sin depender de "confiar" en
+// el motor. Trae una muestra al azar de empresas ya investigadas (aprobadas Y
+// descartadas por separado, para no perder de vista los falsos negativos que
+// desaparecen de la vista normal) priorizando las que nunca se auditaron.
+// Funciona tanto para un borrador puntual (?batchId=) como cruzando todos los
+// borradores con los mismos filtros que usa Mesa de trabajo.
+app.get('/api/cantera/audit/sample', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId;
+  const n = Math.min(50, Math.max(1, parseInt(req.query.n) || 10));
+  const batchId = req.query.batchId ? parseInt(req.query.batchId) : null;
+  const cliente = req.query.cliente ? parseInt(req.query.cliente) : null;
+  const campana = req.query.campana ? parseInt(req.query.campana) : null;
+  const secuencia = req.query.secuencia ? parseInt(req.query.secuencia) : null;
+  try {
+    const conds = ['c.user_id=$1'];
+    const params = [uid];
+    if (batchId) { params.push(batchId); conds.push(`c.batch_id=$${params.length}`); }
+    if (cliente) { params.push(cliente); conds.push(`b.outbound_client_id=$${params.length}`); }
+    if (campana) { params.push(campana); conds.push(`b.campaign_id=$${params.length}`); }
+    if (secuencia) { params.push(secuencia); conds.push(`b.sequence_id=$${params.length}`); }
+    const where = conds.join(' AND ');
+    const pick = async (estado) => {
+      const p2 = [...params, estado, n];
+      const { rows } = await pool.query(`
+        SELECT c.id, c.batch_id, b.nombre AS batch_nombre, c.nombre, c.dominio, c.tier_clave, c.confianza,
+               c.paso2_estado, c.motivo_descarte, c.evidencia, c.auditoria_veredicto, c.auditoria_nota
+          FROM cantera_companies c JOIN cantera_batches b ON b.id=c.batch_id
+         WHERE ${where} AND c.paso2_estado=$${params.length + 1}
+         ORDER BY (c.auditoria_veredicto = '') DESC, RANDOM() LIMIT $${params.length + 2}
+      `, p2);
+      return rows;
+    };
+    const [aprobadas, descartadas] = await Promise.all([pick('aprobado'), pick('descartado')]);
+    res.json({ aprobadas, descartadas });
+  } catch (err) { console.error('[cantera] audit sample', err.message); res.status(500).json({ error: 'Error al cargar la muestra' }); }
+});
+app.patch('/api/cantera/companies/:id/audit', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId;
+  const b = req.body || {};
+  const veredicto = ['de_acuerdo', 'en_desacuerdo'].includes(b.veredicto) ? b.veredicto : '';
+  const nota = String(b.nota || '').slice(0, 2000);
+  try {
+    const { rows } = await pool.query(
+      `UPDATE cantera_companies SET auditoria_veredicto=$1, auditoria_nota=$2, auditoria_at=NOW() WHERE id=$3 AND user_id=$4 RETURNING id`,
+      [veredicto, nota, req.params.id, uid]);
+    if (!rows.length) return res.status(404).json({ error: 'Empresa no encontrada' });
+    res.json({ ok: true });
+  } catch (err) { console.error('[cantera] audit patch', err.message); res.status(500).json({ error: 'Error al guardar la auditoría' }); }
+});
+
 // Validación manual de una empresa — camino alterno al motor de IA (paso 2)
 // para cuando Jenny no tiene tiempo de esperar/afinar la IA: copia los datos
 // de la empresa, los valida ella misma fuera del sistema, y vuelve aquí a
