@@ -12399,6 +12399,11 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
    filas de empresa — pedido explícito 2026-09-06: "debe ser del mismo alto
    que lo demás". */
 .cant-subrow select.form-input { padding: 3px 8px; }
+/* La columna "Nota" (resumen de la IA o manual) puede traer texto largo —
+   pedido explícito 2026-09-06: "no significa que el ancho va a ser
+   exagerado". Se trunca con puntos suspensivos a un ancho normal; el texto
+   completo sigue disponible en el title (tooltip al pasar el mouse). */
+.cant-nota-cell { display: inline-block; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
 .cant-audit-ev { padding: 8px 0; border-bottom: 1px solid var(--border, #EAE7E2); font-size: .82rem; }
 .cant-audit-ev:last-child { border-bottom: none; }
 /* Las 2 celdas vacías (checkbox + Nombre) de la fila de contacto deben quedar
