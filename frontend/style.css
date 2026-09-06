@@ -12367,6 +12367,7 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .cant-step__n { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 50%; font-size: .68rem; font-weight: 700; background: var(--bg, #F1EFEB); color: var(--muted, #B4AFA8); }
 .cant-step.on .cant-step__n { background: var(--brand, #007AFF); color: #fff; }
 @media (max-width: 760px) { .cant-stepbar { overflow-x: auto; flex-wrap: nowrap; } }
+.cant-stepbar__more { margin-left: auto; align-self: center; }
 .cant-filters-row, .cant-import-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 /* Una sola barra angosta: selección a la izquierda, acciones a la derecha —
    nunca se parte en 2 líneas (pedido explícito 2026-09-06, "liberaría mucho

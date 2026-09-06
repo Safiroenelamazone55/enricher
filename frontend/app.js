@@ -5503,6 +5503,7 @@ const CanteraModule = (() => {
         <button class="cant-step${_step === 2 ? ' on' : ''}" onclick="CanteraModule.setStep(2)"><span class="cant-step__n">2</span>Criterio de calificación</button>
         <button class="cant-step${_step === 3 ? ' on' : ''}" onclick="CanteraModule.setStep(3)"><span class="cant-step__n">3</span>Importar prospectos</button>
         <button class="cant-step${_step === 4 ? ' on' : ''}" onclick="CanteraModule.setStep(4)"><span class="cant-step__n">4</span>Resultados${_companies.length ? ` (${_companies.length})` : ''}</button>
+        ${_step === 4 && _companies.length ? `<button class="dg-kebab cant-stepbar__more" onclick="CanteraModule.resultsMenu(event)" title="Filtros, limpieza, enriquecimiento e investigación">⋮</button>` : ''}
       </div>
 
       ${_step === 1 ? `<div class="cant-section">
@@ -5577,13 +5578,8 @@ const CanteraModule = (() => {
 
       ${_step === 4 ? `<div class="cant-section">
         <div class="cant-results-bar">
-          <span class="cant-count">${_coSel.size ? `${_coSel.size} seleccionada(s)` : ''}</span>
+          <span class="cant-count">${_coSel.size ? `${_coSel.size} seleccionada(s)` : ''}${_onlyFailed ? ' · viendo solo descartadas' : ''}</span>
           <div class="cant-results-actions">
-            <button class="btn btn--primary btn--sm" onclick="CanteraModule.runFiltros()">${_lastFiltros ? `Filtros corridos (${_lastFiltros.aprobadas} aprobada(s))` : 'Correr filtros básicos'}</button>
-            <button class="btn btn--ghost btn--sm" onclick="CanteraModule.cleanMenu(event)">${_lastClean ? `Empresas limpiadas (${_lastClean.count})` : 'Limpiar empresas'} ▾</button>
-            <button class="btn btn--ghost btn--sm" onclick="CanteraModule.enrichMenu(event)">${_lastEnrich ? `Empresas enriquecidas (${_lastEnrich.count})` : 'Enriquecer empresas'} ▾</button>
-            <button class="btn btn--primary btn--sm" onclick="CanteraModule.runValidacion()"${_jobRunning ? ' disabled' : ''}>${_jobRunning ? 'Investigación profunda (IA)…' : (_lastIA ? `Investigación completa (${_lastIA.ok} ok)` : 'Investigación profunda (IA)')}</button>
-            <button class="dg-issues-toggle${_onlyFailed ? ' active' : ''}" onclick="CanteraModule.toggleFailed()">Ver solo descartadas</button>
             ${calificadas ? `<button class="btn btn--ghost btn--sm" onclick="CanteraModule.openPromote()">Mover al CRM (${calificadas})</button>` : ''}
             <button class="dg-kebab" onclick="CanteraModule.columnsMenu(event)" title="Elegir columnas visibles">⋮</button>
           </div>
@@ -5643,23 +5639,37 @@ const CanteraModule = (() => {
   // ya probado en Datos (pedido explícito 2026-09-05).
   const CANT_CLEAN_LABELS = { nombre: 'Nombre', tamano: 'Nº empleados', dominio: 'Dominio', website: 'Website' };
   const CANT_ENRICH_LABELS = { dominio: 'Dominio', website: 'Website' };
-  function _cantFieldMenu(ev, fields, labels, prefix, action) {
+  // Menú único de acciones de Resultados — pedido explícito 2026-09-06:
+  // "Correr filtros básicos / Limpiar empresas / Enriquecer empresas /
+  // Investigación profunda (IA) / Ver solo descartadas" pasan a vivir dentro
+  // de un solo "⋮" en vez de ocupar toda una fila de botones.
+  function resultsMenu(ev) {
     if (ev && ev.stopPropagation) ev.stopPropagation();
-    if (!_coSel.size) { showBanner('Marca al menos una empresa primero', 'info'); return; }
     document.querySelectorAll('.cp-mark-menu').forEach(m => m.remove());
     const close = "document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove())";
     const item = (label, onclick) => `<button class="cp-mark-menu__b" onclick="${close};${onclick}">${label}</button>`;
-    const html = `<div class="cp-mark-menu__list">`
-      + fields.map(f => item(`${prefix} ${labels[f]}`, `CanteraModule.${action}('${f}')`)).join('')
-      + `<div class="cp-mark-menu__sep"></div>` + item(`${prefix} todos los campos`, `CanteraModule.${action}(null)`) + `</div>`;
-    const menu = document.createElement('div'); menu.className = 'cp-mark-menu'; menu.style.minWidth = '200px'; menu.innerHTML = html;
+    const cleanItems = Object.keys(CANT_CLEAN_LABELS).map(f => item(`Limpiar ${CANT_CLEAN_LABELS[f]}`, `CanteraModule.runClean('${f}')`)).join('')
+      + item('Limpiar todos los campos', `CanteraModule.runClean(null)`);
+    const enrichItems = Object.keys(CANT_ENRICH_LABELS).map(f => item(`Enriquecer ${CANT_ENRICH_LABELS[f]}`, `CanteraModule.runEnrich('${f}')`)).join('')
+      + item('Enriquecer todos los campos', `CanteraModule.runEnrich(null)`);
+    const html = `<div class="cp-mark-menu__list">${item(_lastFiltros ? `Filtros corridos (${_lastFiltros.aprobadas} aprobada(s))` : 'Correr filtros básicos', 'CanteraModule.runFiltros()')}</div>
+      <div class="cp-mark-menu__sep"></div>
+      <div class="cp-mark-menu__h">${_lastClean ? `Empresas limpiadas (${_lastClean.count})` : 'Limpiar'}</div>
+      <div class="cp-mark-menu__list">${cleanItems}</div>
+      <div class="cp-mark-menu__sep"></div>
+      <div class="cp-mark-menu__h">${_lastEnrich ? `Empresas enriquecidas (${_lastEnrich.count})` : 'Enriquecer'}</div>
+      <div class="cp-mark-menu__list">${enrichItems}</div>
+      <div class="cp-mark-menu__sep"></div>
+      <div class="cp-mark-menu__list">
+        ${item(_jobRunning ? 'Investigación profunda (IA)…' : (_lastIA ? `Investigación completa (${_lastIA.ok} ok)` : 'Investigación profunda (IA)'), 'CanteraModule.runValidacion()')}
+        ${item(`${_onlyFailed ? '✓ ' : ''}Ver solo descartadas`, 'CanteraModule.toggleFailed()')}
+      </div>`;
+    const menu = document.createElement('div'); menu.className = 'cp-mark-menu'; menu.style.minWidth = '240px'; menu.innerHTML = html;
     document.body.appendChild(menu);
     const t = (ev && (ev.currentTarget || ev.target)) || document.body; const r = t.getBoundingClientRect();
-    menu.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 210))}px`; menu.style.top = `${r.bottom + 6}px`;
+    menu.style.left = `${Math.max(8, Math.min(r.right - 240, window.innerWidth - 250))}px`; menu.style.top = `${r.bottom + 6}px`;
     setTimeout(() => document.addEventListener('click', function onDoc(e) { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', onDoc); } }), 0);
   }
-  function cleanMenu(ev) { _cantFieldMenu(ev, Object.keys(CANT_CLEAN_LABELS), CANT_CLEAN_LABELS, 'Limpiar', 'runClean'); }
-  function enrichMenu(ev) { _cantFieldMenu(ev, Object.keys(CANT_ENRICH_LABELS), CANT_ENRICH_LABELS, 'Enriquecer', 'runEnrich'); }
   let _cantOpState = null; // { kind:'clean'|'enrich', field, changes }
   async function _cantPreview(kind, field, endpoint, labels, titlePrefix) {
     const fields = field ? [field] : Object.keys(labels);
@@ -5671,8 +5681,8 @@ const CanteraModule = (() => {
       _cantOpModal(titlePrefix + (field ? ' ' + labels[field] : ' todos los campos'));
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
-  function runClean(field) { _cantPreview('clean', field, 'bulk-clean', CANT_CLEAN_LABELS, 'Limpiar'); }
-  function runEnrich(field) { _cantPreview('enrich', field, 'bulk-enrich', CANT_ENRICH_LABELS, 'Enriquecer'); }
+  function runClean(field) { if (!_coSel.size) { showBanner('Marca al menos una empresa primero', 'info'); return; } _cantPreview('clean', field, 'bulk-clean', CANT_CLEAN_LABELS, 'Limpiar'); }
+  function runEnrich(field) { if (!_coSel.size) { showBanner('Marca al menos una empresa primero', 'info'); return; } _cantPreview('enrich', field, 'bulk-enrich', CANT_ENRICH_LABELS, 'Enriquecer'); }
   function _cantOpModal(titulo) {
     document.getElementById('cant-op-modal')?.remove();
     const changes = _cantOpState.changes;
@@ -6126,7 +6136,7 @@ const CanteraModule = (() => {
     openScope, closeScope, scopeMaybeCreate, saveScope, setStep,
     openImportModal, closeImportModal, impFile, impToggleHeader, impRun, impSetMode, deleteAndReimport, cbxOpen, cbxFilter, cbxPick, cbxBlur,
     taOpen, taFilter, taBlur, addFiltro, removeFiltro,
-    toggleCoSel, toggleCoSelAll, cleanMenu, enrichMenu, runClean, runEnrich, closeCantOp, applyCantOp,
+    toggleCoSel, toggleCoSelAll, resultsMenu, runClean, runEnrich, closeCantOp, applyCantOp,
     toggleResultCol, columnsMenu, startColResize,
     setContactPrioridad, cantGoPage, cantSetPageSize,
     openManualValidation, closeManualValidation, copyManualData, saveManualValidation, quitarValidacionManual };
