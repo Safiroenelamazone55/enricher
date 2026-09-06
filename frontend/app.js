@@ -5701,7 +5701,19 @@ const CanteraModule = (() => {
       const res = await apiFetch(`${API}/cantera/batches/${_current.id}/${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entity: 'companies', ids: [..._coSel], fields, apply: false }) });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || 'Error');
-      _cantOpState = { kind, field, endpoint, fields, changes: d.changes || [] };
+      const changes = d.changes || [];
+      if (!changes.length) {
+        // Nada que cambiar no significa que la acción no se corrió — sin esto la
+        // opción se quedaba diciendo "Limpiar Nombre" para siempre si los datos
+        // ya estaban limpios, como si nunca se hubiera tocado (reportado
+        // 2026-09-06: "eso debe verse, debe cambiar si ya se hizo").
+        const key = field || 'todos';
+        if (kind === 'clean') _lastClean[key] = 0; else _lastEnrich[key] = 0;
+        showBanner(kind === 'clean' ? 'Ya estaba limpio — nada que cambiar' : 'Ya estaba completo — nada que enriquecer', 'info');
+        _paint();
+        return;
+      }
+      _cantOpState = { kind, field, endpoint, fields, changes };
       _cantOpModal(titlePrefix + (field ? ' ' + labels[field] : ' todos los campos'));
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
