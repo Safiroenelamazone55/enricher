@@ -4974,9 +4974,14 @@ const CanteraModule = (() => {
   // lo que ÉL hizo ("Empresas limpiadas (N)" en vez de "Limpiar empresas"), así se
   // sabe de un vistazo qué se corrió y qué falta.
   let _lastFiltros = null; // { aprobadas, descartadas, total }
-  let _lastClean = {};     // { [field|'todos']: count } — pedido explícito 2026-09-06: cada
-  let _lastEnrich = {};    // opción del menú (no solo el botón general) muestra su propio resultado.
-  let _lastIA = null;      // { ok, errores }
+  // { [field]: count } por cada campo corrido suelto, + `total` acumulado de
+  // TODO lo limpiado/enriquecido en este borrador (suma de cada corrida, sea
+  // por campo o "todos los campos") — pedido explícito 2026-09-06: "si limpié
+  // website 20 y nombre 30, Limpiar todo debe decir Limpiado todo (50)", el
+  // total no es solo el resultado de la última corrida de "todos los campos".
+  let _lastClean = { total: 0 };
+  let _lastEnrich = { total: 0 };
+  let _lastIA = null;      // { done, ok, errores }
 
   // ── Importador con previsualización + mapeo editable (mismo patrón que el
   // importador real de Contactos/Empresas del CRM — pedido explícito de
@@ -5342,7 +5347,7 @@ const CanteraModule = (() => {
     if (!_current) { showBanner('Borrador no encontrado', 'error'); return; }
     _current.filtros = _current.filtros || {};
     _coSel = new Set(); _expanded = new Set(); _contactsByCompany = {}; _contactsLoaded = false; _step = 1;
-    _cantPageIdx = 0; _lastFiltros = null; _lastClean = {}; _lastEnrich = {}; _lastIA = null;
+    _cantPageIdx = 0; _lastFiltros = null; _lastClean = { total: 0 }; _lastEnrich = { total: 0 }; _lastIA = null;
     if (!_filtroOpts) { try { _filtroOpts = await (await apiFetch(`${API}/cantera/opciones-filtro`)).json(); } catch { _filtroOpts = {}; } }
     await _loadCompanies();
     _view = 'detail'; _paint();
@@ -5640,15 +5645,17 @@ const CanteraModule = (() => {
       <div class="cp-mark-menu__b cp-mark-menu__b--sub">${label} <span class="cp-mark-menu__arrow">▸</span></div>
       <div class="cp-mark-menu__subpanel"><div class="cp-mark-menu__list"${scrollable ? ' style="max-height:320px;overflow-y:auto"' : ''}>${panelHtml}</div></div>
     </div>`;
-    // Cada opción refleja SU PROPIO resultado, no un total general — pedido
-    // explícito 2026-09-06: "si le doy Limpiar todo y la limpié todo, debe
-    // salir 'Limpiado todo (80)' en vez de 'Limpiar todo'".
+    // Cada campo suelto refleja SU PROPIA última corrida; "todos los campos"
+    // refleja el TOTAL acumulado de todo lo limpiado/enriquecido en este
+    // borrador — pedido explícito 2026-09-06: "si limpié website 20 y nombre
+    // 30, Limpiar todo debe decir Limpiado todo (50)", no solo el resultado
+    // de la última vez que se corrió "todos los campos" directamente.
     const cleanPanel = Object.keys(CANT_CLEAN_LABELS).map(f =>
       item(_lastClean[f] !== undefined ? `${CANT_CLEAN_LABELS[f]} limpiado (${_lastClean[f]})` : `Limpiar ${CANT_CLEAN_LABELS[f]}`, `CanteraModule.runClean('${f}')`)
-    ).join('') + item(_lastClean.todos !== undefined ? `Limpiado todo (${_lastClean.todos})` : 'Limpiar todos los campos', `CanteraModule.runClean(null)`);
+    ).join('') + item(_lastClean.ran ? `Limpiado todo (${_lastClean.total})` : 'Limpiar todos los campos', `CanteraModule.runClean(null)`);
     const enrichPanel = Object.keys(CANT_ENRICH_LABELS).map(f =>
       item(_lastEnrich[f] !== undefined ? `${CANT_ENRICH_LABELS[f]} enriquecido (${_lastEnrich[f]})` : `Enriquecer ${CANT_ENRICH_LABELS[f]}`, `CanteraModule.runEnrich('${f}')`)
-    ).join('') + item(_lastEnrich.todos !== undefined ? `Enriquecido todo (${_lastEnrich.todos})` : 'Enriquecer todos los campos', `CanteraModule.runEnrich(null)`);
+    ).join('') + item(_lastEnrich.ran ? `Enriquecido todo (${_lastEnrich.total})` : 'Enriquecer todos los campos', `CanteraModule.runEnrich(null)`);
     const visCols = _loadVisibleCols();
     const colsPanel = CANT_RESULT_COLS.map(c => `<label class="cant-colchk"><input type="checkbox" ${visCols.has(c.key) ? 'checked' : ''} onchange="CanteraModule.toggleResultCol('${c.key}')"> ${esc(c.label)}</label>`).join('');
     const html = `<div class="cp-mark-menu__list">${item(_lastFiltros ? `Filtros corridos (${_lastFiltros.aprobadas} aprobada(s))` : 'Correr filtros básicos', 'CanteraModule.runFiltros()')}</div>
@@ -5656,7 +5663,7 @@ const CanteraModule = (() => {
       <div class="cp-mark-menu__list">${sub('Limpiar', cleanPanel)}${sub('Enriquecer', enrichPanel)}</div>
       <div class="cp-mark-menu__sep"></div>
       <div class="cp-mark-menu__list">
-        ${item(_jobRunning ? 'Investigación profunda (IA)…' : (_lastIA ? `Investigación completa (${_lastIA.ok} ok)` : 'Investigación profunda (IA)'), 'CanteraModule.runValidacion()')}
+        ${item(_jobRunning ? 'Investigación profunda (IA)…' : (_lastIA ? `Validado (${_lastIA.done})` : 'Investigación profunda (IA)'), 'CanteraModule.runValidacion()')}
         ${item(`${_onlyFailed ? '✓ ' : ''}Ver solo descartadas`, 'CanteraModule.toggleFailed()')}
       </div>
       <div class="cp-mark-menu__sep"></div>
@@ -5708,7 +5715,8 @@ const CanteraModule = (() => {
         // ya estaban limpios, como si nunca se hubiera tocado (reportado
         // 2026-09-06: "eso debe verse, debe cambiar si ya se hizo").
         const key = field || 'todos';
-        if (kind === 'clean') _lastClean[key] = 0; else _lastEnrich[key] = 0;
+        const store0 = kind === 'clean' ? _lastClean : _lastEnrich;
+        store0[key] = 0; store0.ran = true;
         showBanner(kind === 'clean' ? 'Ya estaba limpio — nada que cambiar' : 'Ya estaba completo — nada que enriquecer', 'info');
         _paint();
         return;
@@ -5775,8 +5783,10 @@ const CanteraModule = (() => {
         else {
           showBanner(`✓ ${jst.applied} campo(s) actualizado(s)`, 'success');
           const key = st.field || 'todos';
-          if (st.kind === 'clean') _lastClean[key] = jst.applied;
-          else _lastEnrich[key] = jst.applied;
+          const store = st.kind === 'clean' ? _lastClean : _lastEnrich;
+          store[key] = jst.applied;
+          store.total = (store.total || 0) + jst.applied;
+          store.ran = true;
         }
         await _loadCompanies(); _paint();
       }, 1200);
@@ -5940,7 +5950,7 @@ const CanteraModule = (() => {
         _jobProgress = { done: st.done, total: st.total };
         if (!st.running) {
           clearInterval(_jobTimer); _jobRunning = false;
-          _lastIA = { ok: st.done - st.errores, errores: st.errores };
+          _lastIA = { done: st.done, ok: st.done - st.errores, errores: st.errores };
           showBanner(`✓ Investigación terminada · ${st.done - st.errores} ok · ${st.errores} error(es) · $${(st.costoTotal || 0).toFixed(3)}`, 'success');
           await _refreshContacts(); await _loadCompanies(); _paint();
         } else _paint();
