@@ -6339,15 +6339,14 @@ const CanteraGlobalModule = (() => {
       </div>
     </div>`;
   }
-  // Panel de filtros vertical a la DERECHA, contraído por defecto — pedido
-  // explícito 2026-09-06: "que tenga el estilo de filtro que tenía antes,
-  // pero que se oculte/contraiga en automático a la derecha". Colapsado
-  // muestra solo el tirador "‹"; expandido, el panel completo con "›" para
-  // volver a ocultarlo (las flechas apuntan hacia dónde se mueve el panel).
+  // Panel de filtros vertical a la IZQUIERDA, contraído por defecto — pedido
+  // explícito 2026-09-06, corregido: "lo pusiste a la derecha, debe ser
+  // izquierda". Colapsado muestra solo el tirador "›"; expandido, el panel
+  // completo con "‹" para volver a ocultarlo.
   function _panelHtml() {
     return `<div class="cant-global-panel-hd">
         <h3 style="margin:0;font-size:.92rem">Criterios</h3>
-        <button class="cant-x" onclick="CanteraGlobalModule.toggleCollapse()" title="Ocultar panel">›</button>
+        <button class="cant-x" onclick="CanteraGlobalModule.toggleCollapse()" title="Ocultar panel">‹</button>
       </div>
       <label class="field-label">Buscar</label>
       <input type="text" class="form-input" style="margin-bottom:12px" placeholder="Nombre o dominio…" value="${esc(_q)}" oninput="CanteraGlobalModule.setQ(this.value)">
@@ -6392,6 +6391,7 @@ const CanteraGlobalModule = (() => {
     return `<div class="lm-sec-head lm-sec-head--compact"><div><h2 class="lm-sec-title">Base global</h2></div></div>
       <p class="lm-sec-sub" style="margin-bottom:14px">Todo lo que el sistema conoce — ya sea que esté en el CRM de un cliente o todavía en cualquier borrador de Cantera — en una sola tabla, sin importar de qué borrador venga.</p>
       <div class="cant-global-layout${_collapsed ? ' collapsed' : ''}">
+        <div class="cant-global-panel">${_collapsed ? `<button class="cant-x" onclick="CanteraGlobalModule.toggleCollapse()" title="Mostrar criterios">›</button>` : _panelHtml()}</div>
         <div class="cant-global-results">
           <div class="lm-dt-wrap dg-dt-wrap"><table class="clients-table dg-table sel-on" style="table-layout:auto">
             <thead><tr><th>Nombre</th><th>Dominio</th><th>País</th><th>Industria</th><th>Dónde está</th><th>Referencia</th></tr></thead>
@@ -6399,7 +6399,6 @@ const CanteraGlobalModule = (() => {
           </table></div>
           ${_pagerHtml()}
         </div>
-        <div class="cant-global-panel">${_collapsed ? `<button class="cant-x" onclick="CanteraGlobalModule.toggleCollapse()" title="Mostrar criterios">‹</button>` : _panelHtml()}</div>
       </div>`;
   }
   function _repaint() { const el = document.getElementById('cantera-global-body'); if (el) el.innerHTML = _html(); }

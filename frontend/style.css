@@ -12410,17 +12410,15 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .cant-colchk:hover { background: var(--brand-ll, #F1EFEB); }
 .cant-save-row { margin-top: 10px; }
 
-/* Base global — rail de filtros a la DERECHA, contraído por defecto (pedido
-   explícito 2026-09-06: "el estilo que tenía antes, pero que se contraiga en
-   automático a la derecha"). Resultados primero (izquierda), panel después
-   (derecha) — orden natural del flex row, sin position:sticky para no pelear
-   con el layout de la página. */
+/* Base global — rail de filtros a la IZQUIERDA, contraído por defecto
+   (pedido explícito 2026-09-06, corregido de derecha a izquierda). Panel
+   primero (izquierda), resultados después — orden natural del flex row. */
 .cant-global-layout { display: flex; align-items: flex-start; gap: 18px; }
 .cant-global-results { flex: 1 1 auto; min-width: 0; }
 .cant-global-panel { flex: 0 0 260px; background: var(--white, #fff); border: 1px solid var(--border, #EAE7E2); border-radius: 0; padding: 14px; }
 .cant-global-layout.collapsed .cant-global-panel { flex: 0 0 auto; padding: 6px; }
 .cant-global-panel-hd { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-@media (max-width: 860px) { .cant-global-layout { flex-direction: column-reverse; } .cant-global-panel { flex: 1 1 auto; width: 100%; } }
+@media (max-width: 860px) { .cant-global-layout { flex-direction: column; } .cant-global-panel { flex: 1 1 auto; width: 100%; } }
 
 /* Selector con autocompletado (Filtros básicos) — nunca texto libre. */
 .filters-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; margin-bottom: 6px; }
