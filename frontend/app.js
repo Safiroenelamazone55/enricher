@@ -6392,7 +6392,6 @@ const CanteraGlobalModule = (() => {
   }
   function _html() {
     return `<div class="lm-sec-head lm-sec-head--compact"><div><h2 class="lm-sec-title">Base global</h2></div></div>
-      <p class="lm-sec-sub" style="margin-bottom:14px">Todo lo que el sistema conoce — contactos y empresas, ya sea que estén en el CRM de un cliente o todavía en cualquier borrador de Cantera — en una sola tabla, sin importar de qué borrador venga.</p>
       <div class="cant-global-layout${_collapsed ? ' collapsed' : ''}">
         <div class="cant-global-panel">${_collapsed ? `<button class="cant-x" onclick="CanteraGlobalModule.toggleCollapse()" title="Mostrar criterios">›</button>` : _panelHtml()}</div>
         <div class="cant-global-results">
