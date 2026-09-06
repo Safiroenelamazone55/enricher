@@ -5490,7 +5490,7 @@ const CanteraModule = (() => {
       case 'paso1_motivo': return `<span title="${esc(c.paso1_motivo)}">${esc(c.paso1_motivo || '—')}</span>`;
       case 'tier_clave': return esc(c.tier_clave || '—');
       case 'confianza': return esc(c.confianza || '—');
-      case 'paso2_estado': return `<span class="cant-estado cant-estado--${esc(c.paso2_estado)}">${_estadoLabel(c.paso2_estado)}</span> <button class="cant-x" style="font-size:.72rem" onclick="event.stopPropagation();CanteraModule.openManualValidation(${c.id})" title="Validar manualmente">✎ Manual</button>`;
+      case 'paso2_estado': return `<span class="cant-estado cant-estado--${esc(c.paso2_estado)}">${_estadoLabel(c.paso2_estado)}</span> <button class="cant-x" style="font-size:.72rem" onclick="event.stopPropagation();CanteraModule.openManualValidation(${c.id})" title="${c.paso2_estado === 'validacion_manual' ? 'Editar validación manual' : 'Validar manualmente'}">✎</button>`;
       case 'motivo_descarte': return c.paso2_estado === 'validacion_manual' ? esc(c.nota_manual || '(sin nota)') : `<span title="${esc(c.motivo_descarte)}">${esc(c.motivo_descarte || '—')}</span>`;
       case 'contactos': return `${c.contactos}${c.contactos > 1 ? ' <span class="tag" style="margin-left:4px">multi</span>' : ''}`;
       case 'auditoria': return c.auditoria_veredicto === 'de_acuerdo' ? `<span class="cant-estado cant-estado--aprobado" title="${esc(c.auditoria_nota)}">✓ Confirmado</span>`
@@ -6083,7 +6083,7 @@ const CanteraModule = (() => {
       await _loadCompanies(); _paint();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
-  function _estadoLabel(s) { return s === 'aprobado' ? 'Aprobado' : s === 'validacion_manual' ? 'Validación manual' : s === 'descartado' ? 'Descartado' : s === 'error' ? 'Error' : 'Pendiente'; }
+  function _estadoLabel(s) { return s === 'aprobado' ? 'Aprobado' : s === 'validacion_manual' ? 'Hecho manual' : s === 'descartado' ? 'Descartado' : s === 'error' ? 'Error' : 'Pendiente'; }
   // Señales de actividad del export de LinkedIn Sales Navigator vienen como texto
   // libre ("2 recent posts on Linkedin"), no true/false — cualquier valor que no
   // sea un "no hay señal" explícito cuenta como señal presente.
@@ -6655,7 +6655,7 @@ const CanteraMesaModule = (() => {
   }
   function _saveVisibleCols() { try { localStorage.setItem('cantera_mesa_cols', JSON.stringify([..._loadVisibleCols()])); } catch (_) {} }
   function toggleCol(key) { const s = _loadVisibleCols(); if (s.has(key)) s.delete(key); else s.add(key); _saveVisibleCols(); _paint(); }
-  function _estadoLabel(s) { return s === 'aprobado' ? 'Aprobado' : s === 'validacion_manual' ? 'Validación manual' : s === 'descartado' ? 'Descartado' : s === 'error' ? 'Error' : 'Pendiente'; }
+  function _estadoLabel(s) { return s === 'aprobado' ? 'Aprobado' : s === 'validacion_manual' ? 'Hecho manual' : s === 'descartado' ? 'Descartado' : s === 'error' ? 'Error' : 'Pendiente'; }
   function _colCellHtml(c, key) {
     switch (key) {
       case 'dominio': return esc(c.dominio || '—');
@@ -6670,7 +6670,7 @@ const CanteraMesaModule = (() => {
       case 'paso1_motivo': return `<span title="${esc(c.paso1_motivo)}">${esc(c.paso1_motivo || '—')}</span>`;
       case 'tier_clave': return esc(c.tier_clave || '—');
       case 'confianza': return esc(c.confianza || '—');
-      case 'paso2_estado': return `<span class="cant-estado cant-estado--${esc(c.paso2_estado)}">${_estadoLabel(c.paso2_estado)}</span> <button class="cant-x" style="font-size:.72rem" onclick="event.stopPropagation();CanteraMesaModule.openManualValidation(${c.id},${c.batch_id})" title="Validar manualmente">✎ Manual</button>`;
+      case 'paso2_estado': return `<span class="cant-estado cant-estado--${esc(c.paso2_estado)}">${_estadoLabel(c.paso2_estado)}</span> <button class="cant-x" style="font-size:.72rem" onclick="event.stopPropagation();CanteraMesaModule.openManualValidation(${c.id},${c.batch_id})" title="${c.paso2_estado === 'validacion_manual' ? 'Editar validación manual' : 'Validar manualmente'}">✎</button>`;
       case 'motivo_descarte': return c.paso2_estado === 'validacion_manual' ? esc(c.nota_manual || '(sin nota)') : `<span title="${esc(c.motivo_descarte)}">${esc(c.motivo_descarte || '—')}</span>`;
       case 'contactos': return `${c.contactos}${c.contactos > 1 ? ' <span class="tag" style="margin-left:4px">multi</span>' : ''}`;
       case 'auditoria': return c.auditoria_veredicto === 'de_acuerdo' ? `<span class="cant-estado cant-estado--aprobado" title="${esc(c.auditoria_nota)}">✓ Confirmado</span>`
