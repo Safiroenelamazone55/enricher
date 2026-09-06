@@ -6290,8 +6290,11 @@ const CanteraGlobalModule = (() => {
   // Tabla única con TODO lo que el sistema conoce (CRM + cualquier borrador),
   // no separado por borrador — pedido explícito 2026-09-06: "digamos que
   // tengo 5000 en 5 borradores diferentes... todo se encuentra allí, vista de
-  // 50/100/200, y filtro directamente allí arriba" (no un panel lateral).
-  let _rows = []; let _total = 0; let _q = ''; let _origen = '';
+  // 50/100/200". El panel de filtros vuelve a ser el estilo anterior (rail
+  // vertical tipo Sales Nav), pero a la DERECHA y contraído por defecto —
+  // pedido explícito: "que tenga el estilo de filtro que tenía antes, pero
+  // que se oculte/contraiga en automático a la derecha".
+  let _rows = []; let _total = 0; let _q = ''; let _origen = ''; let _collapsed = true;
   let _filtros = { pais: [], industria: [], tamano: [] };
   let _opts = null;
   let _page = 0;
@@ -6336,26 +6339,27 @@ const CanteraGlobalModule = (() => {
       </div>
     </div>`;
   }
-  // Filtros en una barra horizontal ARRIBA de la tabla (no un panel lateral) —
-  // pedido explícito 2026-09-06: "puedo filtrar directamente allí arriba".
-  function _filterBarHtml() {
-    return `<div style="display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;margin-bottom:14px">
-      <div style="min-width:220px;flex:1 1 220px">
-        <label class="field-label">Buscar</label>
-        <input type="text" class="form-input" placeholder="Nombre o dominio…" value="${esc(_q)}" oninput="CanteraGlobalModule.setQ(this.value)">
+  // Panel de filtros vertical a la DERECHA, contraído por defecto — pedido
+  // explícito 2026-09-06: "que tenga el estilo de filtro que tenía antes,
+  // pero que se oculte/contraiga en automático a la derecha". Colapsado
+  // muestra solo el tirador "‹"; expandido, el panel completo con "›" para
+  // volver a ocultarlo (las flechas apuntan hacia dónde se mueve el panel).
+  function _panelHtml() {
+    return `<div class="cant-global-panel-hd">
+        <h3 style="margin:0;font-size:.92rem">Criterios</h3>
+        <button class="cant-x" onclick="CanteraGlobalModule.toggleCollapse()" title="Ocultar panel">›</button>
       </div>
-      <div style="min-width:160px">
-        <label class="field-label">Dónde está</label>
-        <select class="form-input" onchange="CanteraGlobalModule.setOrigen(this.value)">
-          <option value="">Todos</option>
-          <option value="crm"${_origen === 'crm' ? ' selected' : ''}>Solo en CRM</option>
-          <option value="borrador"${_origen === 'borrador' ? ' selected' : ''}>Solo en borradores</option>
-        </select>
-      </div>
-      <div style="min-width:180px;flex:1 1 180px">${_taFieldG('pais', 'País')}</div>
-      <div style="min-width:180px;flex:1 1 180px">${_taFieldG('industria', 'Industria')}</div>
-      <div style="min-width:180px;flex:1 1 180px">${_taFieldG('tamano', 'Tamaño de empresa')}</div>
-    </div>`;
+      <label class="field-label">Buscar</label>
+      <input type="text" class="form-input" style="margin-bottom:12px" placeholder="Nombre o dominio…" value="${esc(_q)}" oninput="CanteraGlobalModule.setQ(this.value)">
+      <label class="field-label">Dónde está</label>
+      <select class="form-input" style="margin-bottom:12px" onchange="CanteraGlobalModule.setOrigen(this.value)">
+        <option value="">Todos</option>
+        <option value="crm"${_origen === 'crm' ? ' selected' : ''}>Solo en CRM</option>
+        <option value="borrador"${_origen === 'borrador' ? ' selected' : ''}>Solo en borradores</option>
+      </select>
+      ${_taFieldG('pais', 'País')}
+      ${_taFieldG('industria', 'Industria')}
+      ${_taFieldG('tamano', 'Tamaño de empresa')}`;
   }
   function _resultsHtml() {
     if (!_rows.length) return `<tr><td colspan="6" class="cp-empty2">Sin resultados${_q ? ' para "' + esc(_q) + '"' : ' — ajusta los filtros de arriba'}</td></tr>`;
@@ -6387,14 +6391,19 @@ const CanteraGlobalModule = (() => {
   function _html() {
     return `<div class="lm-sec-head lm-sec-head--compact"><div><h2 class="lm-sec-title">Base global</h2></div></div>
       <p class="lm-sec-sub" style="margin-bottom:14px">Todo lo que el sistema conoce — ya sea que esté en el CRM de un cliente o todavía en cualquier borrador de Cantera — en una sola tabla, sin importar de qué borrador venga.</p>
-      ${_filterBarHtml()}
-      <div class="lm-dt-wrap dg-dt-wrap"><table class="clients-table dg-table sel-on" style="table-layout:auto">
-        <thead><tr><th>Nombre</th><th>Dominio</th><th>País</th><th>Industria</th><th>Dónde está</th><th>Referencia</th></tr></thead>
-        <tbody>${_resultsHtml()}</tbody>
-      </table></div>
-      ${_pagerHtml()}`;
+      <div class="cant-global-layout${_collapsed ? ' collapsed' : ''}">
+        <div class="cant-global-results">
+          <div class="lm-dt-wrap dg-dt-wrap"><table class="clients-table dg-table sel-on" style="table-layout:auto">
+            <thead><tr><th>Nombre</th><th>Dominio</th><th>País</th><th>Industria</th><th>Dónde está</th><th>Referencia</th></tr></thead>
+            <tbody>${_resultsHtml()}</tbody>
+          </table></div>
+          ${_pagerHtml()}
+        </div>
+        <div class="cant-global-panel">${_collapsed ? `<button class="cant-x" onclick="CanteraGlobalModule.toggleCollapse()" title="Mostrar criterios">‹</button>` : _panelHtml()}</div>
+      </div>`;
   }
   function _repaint() { const el = document.getElementById('cantera-global-body'); if (el) el.innerHTML = _html(); }
+  function toggleCollapse() { _collapsed = !_collapsed; _repaint(); }
   let _t = null;
   function setQ(v) { _q = v; _page = 0; clearTimeout(_t); _t = setTimeout(async () => { await _search(); _repaint(); }, 300); }
   async function setOrigen(v) { _origen = v; _page = 0; await _search(); _repaint(); }
@@ -6421,7 +6430,7 @@ const CanteraGlobalModule = (() => {
   function taBlur(field) { setTimeout(() => { const m = document.getElementById('tag-menu-' + field); if (m) m.hidden = true; }, 160); }
   async function addFiltro(field, value) { _filtros[field] = [...(_filtros[field] || []), value]; _page = 0; await _search(); _repaint(); }
   async function removeFiltro(field, idx) { _filtros[field].splice(idx, 1); _page = 0; await _search(); _repaint(); }
-  return { render, setQ, setOrigen, setPageSize, goPage, taOpen, taFilter, taBlur, addFiltro, removeFiltro };
+  return { render, setQ, setOrigen, setPageSize, goPage, toggleCollapse, taOpen, taFilter, taBlur, addFiltro, removeFiltro };
 })();
 
 // =================================================================
