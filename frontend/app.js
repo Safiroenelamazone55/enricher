@@ -4974,8 +4974,8 @@ const CanteraModule = (() => {
   // lo que ÉL hizo ("Empresas limpiadas (N)" en vez de "Limpiar empresas"), así se
   // sabe de un vistazo qué se corrió y qué falta.
   let _lastFiltros = null; // { aprobadas, descartadas, total }
-  let _lastClean = null;   // { count }
-  let _lastEnrich = null;  // { count }
+  let _lastClean = {};     // { [field|'todos']: count } — pedido explícito 2026-09-06: cada
+  let _lastEnrich = {};    // opción del menú (no solo el botón general) muestra su propio resultado.
   let _lastIA = null;      // { ok, errores }
 
   // ── Importador con previsualización + mapeo editable (mismo patrón que el
@@ -5342,7 +5342,7 @@ const CanteraModule = (() => {
     if (!_current) { showBanner('Borrador no encontrado', 'error'); return; }
     _current.filtros = _current.filtros || {};
     _coSel = new Set(); _expanded = new Set(); _contactsByCompany = {}; _contactsLoaded = false; _step = 1;
-    _cantPageIdx = 0; _lastFiltros = null; _lastClean = null; _lastEnrich = null; _lastIA = null;
+    _cantPageIdx = 0; _lastFiltros = null; _lastClean = {}; _lastEnrich = {}; _lastIA = null;
     if (!_filtroOpts) { try { _filtroOpts = await (await apiFetch(`${API}/cantera/opciones-filtro`)).json(); } catch { _filtroOpts = {}; } }
     await _loadCompanies();
     _view = 'detail'; _paint();
@@ -5648,16 +5648,21 @@ const CanteraModule = (() => {
     document.querySelectorAll('.cp-mark-menu').forEach(m => m.remove());
     const close = "document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove())";
     const item = (label, onclick) => `<button class="cp-mark-menu__b" onclick="${close};${onclick}">${label}</button>`;
-    const cleanItems = Object.keys(CANT_CLEAN_LABELS).map(f => item(`Limpiar ${CANT_CLEAN_LABELS[f]}`, `CanteraModule.runClean('${f}')`)).join('')
-      + item('Limpiar todos los campos', `CanteraModule.runClean(null)`);
-    const enrichItems = Object.keys(CANT_ENRICH_LABELS).map(f => item(`Enriquecer ${CANT_ENRICH_LABELS[f]}`, `CanteraModule.runEnrich('${f}')`)).join('')
-      + item('Enriquecer todos los campos', `CanteraModule.runEnrich(null)`);
+    // Cada opción refleja SU PROPIO resultado, no un total general — pedido
+    // explícito 2026-09-06: "si le doy Limpiar todo y la limpié todo, debe
+    // salir 'Limpiado todo (80)' en vez de 'Limpiar todo'".
+    const cleanItems = Object.keys(CANT_CLEAN_LABELS).map(f =>
+      item(_lastClean[f] !== undefined ? `${CANT_CLEAN_LABELS[f]} limpiado (${_lastClean[f]})` : `Limpiar ${CANT_CLEAN_LABELS[f]}`, `CanteraModule.runClean('${f}')`)
+    ).join('') + item(_lastClean.todos !== undefined ? `Limpiado todo (${_lastClean.todos})` : 'Limpiar todos los campos', `CanteraModule.runClean(null)`);
+    const enrichItems = Object.keys(CANT_ENRICH_LABELS).map(f =>
+      item(_lastEnrich[f] !== undefined ? `${CANT_ENRICH_LABELS[f]} enriquecido (${_lastEnrich[f]})` : `Enriquecer ${CANT_ENRICH_LABELS[f]}`, `CanteraModule.runEnrich('${f}')`)
+    ).join('') + item(_lastEnrich.todos !== undefined ? `Enriquecido todo (${_lastEnrich.todos})` : 'Enriquecer todos los campos', `CanteraModule.runEnrich(null)`);
     const html = `<div class="cp-mark-menu__list">${item(_lastFiltros ? `Filtros corridos (${_lastFiltros.aprobadas} aprobada(s))` : 'Correr filtros básicos', 'CanteraModule.runFiltros()')}</div>
       <div class="cp-mark-menu__sep"></div>
-      <div class="cp-mark-menu__h">${_lastClean ? `Empresas limpiadas (${_lastClean.count})` : 'Limpiar'}</div>
+      <div class="cp-mark-menu__h">Limpiar</div>
       <div class="cp-mark-menu__list">${cleanItems}</div>
       <div class="cp-mark-menu__sep"></div>
-      <div class="cp-mark-menu__h">${_lastEnrich ? `Empresas enriquecidas (${_lastEnrich.count})` : 'Enriquecer'}</div>
+      <div class="cp-mark-menu__h">Enriquecer</div>
       <div class="cp-mark-menu__list">${enrichItems}</div>
       <div class="cp-mark-menu__sep"></div>
       <div class="cp-mark-menu__list">
@@ -5738,8 +5743,9 @@ const CanteraModule = (() => {
         if (jst.error) showBanner('Error: ' + jst.error, 'error');
         else {
           showBanner(`✓ ${jst.applied} campo(s) actualizado(s)`, 'success');
-          if (st.kind === 'clean') _lastClean = { count: jst.applied };
-          else _lastEnrich = { count: jst.applied };
+          const key = st.field || 'todos';
+          if (st.kind === 'clean') _lastClean[key] = jst.applied;
+          else _lastEnrich[key] = jst.applied;
         }
         await _loadCompanies(); _paint();
       }, 1200);
