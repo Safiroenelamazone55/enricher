@@ -22,6 +22,8 @@
 
 const MODEL = 'claude-sonnet-5';
 const RATES = { 'claude-sonnet-5': { in: 3, out: 15 } };
+const NVIDIA_MODEL = 'moonshotai/kimi-k3';
+const { webSearch } = require('./webSearchService');
 
 function _sumUsage(u) {
   return {
@@ -116,14 +118,10 @@ FORMATO DE SALIDA — responde ÚNICAMENTE un objeto JSON válido, sin texto ni 
 El array "contactos" debe traer EXACTAMENTE los cargos que te paso abajo, uno por uno, en el mismo orden — nunca inventes contactos nuevos ni los omitas.`;
 }
 
-async function validateCompany(pool, uid, batch, company, contactos) {
-  let Anthropic;
-  try { Anthropic = require('@anthropic-ai/sdk'); }
-  catch { throw new Error('Falta @anthropic-ai/sdk (npm install en backend)'); }
-  if (!process.env.ANTHROPIC_API_KEY) throw new Error('Falta ANTHROPIC_API_KEY en el entorno');
-  const client = new Anthropic();
-
-  const system = _buildSystemPrompt(batch);
+// El prompt de usuario (los datos crudos de la empresa) es igual sin importar
+// qué modelo investigue — solo cambia el "cerebro" y quién ejecuta la
+// búsqueda, nunca el criterio ni los datos que se le entregan.
+function _buildUserPrompt(company, contactos) {
   const datos = [
     `Nombre: ${company.nombre}`,
     company.dominio ? `Dominio: ${company.dominio}` : '',
@@ -134,7 +132,28 @@ async function validateCompany(pool, uid, batch, company, contactos) {
     company.linkedin ? `LinkedIn: ${company.linkedin}` : '',
   ].filter(Boolean).join('\n');
   const cargos = contactos.map(c => `- ${c.cargo || '(sin cargo)'}`).join('\n') || '(sin contactos importados para esta empresa)';
-  const user = `EMPRESA A INVESTIGAR:\n${datos}\n\nCARGOS DE LOS CONTACTOS IMPORTADOS PARA ESTA EMPRESA (clasifica cada uno):\n${cargos}\n\nInvestiga y devuelve el JSON.`;
+  return `EMPRESA A INVESTIGAR:\n${datos}\n\nCARGOS DE LOS CONTACTOS IMPORTADOS PARA ESTA EMPRESA (clasifica cada uno):\n${cargos}\n\nInvestiga y devuelve el JSON.`;
+}
+
+// Despachador — el motor de IA es una elección por borrador (batch.motor_ia,
+// pedido explícito 2026-09-06: "no debe ser solo para Claude"), no algo fijo
+// en el código. El prompt fijo (_buildSystemPrompt) y el formato de salida
+// son EXACTAMENTE los mismos para cualquier motor — lo único que cambia es
+// quién razona y quién ejecuta la búsqueda real en internet.
+async function validateCompany(pool, uid, batch, company, contactos) {
+  const motor = batch.motor_ia === 'kimi' ? 'kimi' : 'claude';
+  return motor === 'kimi' ? _validateCompanyKimi(batch, company, contactos) : _validateCompanyClaude(batch, company, contactos);
+}
+
+async function _validateCompanyClaude(batch, company, contactos) {
+  let Anthropic;
+  try { Anthropic = require('@anthropic-ai/sdk'); }
+  catch { throw new Error('Falta @anthropic-ai/sdk (npm install en backend)'); }
+  if (!process.env.ANTHROPIC_API_KEY) throw new Error('Falta ANTHROPIC_API_KEY en el entorno');
+  const client = new Anthropic();
+
+  const system = _buildSystemPrompt(batch);
+  const user = _buildUserPrompt(company, contactos);
 
   const resp = await client.messages.create({
     model: MODEL, max_tokens: 8000, system,
@@ -150,6 +169,71 @@ async function validateCompany(pool, uid, batch, company, contactos) {
   const rate = RATES[resp.model] || RATES[MODEL];
   const cost = (u.in * rate.in + u.out * rate.out) / 1e6;
   return { parsed, cost, model: resp.model || MODEL, inputTokens: u.in, outputTokens: u.out };
+}
+
+// Kimi-K3 (vía NVIDIA) no trae búsqueda en internet incorporada como Claude
+// — solo sabe "pedir usar una herramienta". La búsqueda real la ejecutamos
+// nosotros (webSearchService, Brave Search) cada vez que el modelo la pide,
+// en un ciclo manual de ida-y-vuelta (formato estándar de function calling
+// tipo OpenAI: choices[0].message.tool_calls / role:"tool"). Mismo prompt
+// fijo, mismo límite de búsquedas (20) y mismo formato de salida que Claude.
+async function _nvidiaChat(messages, tools) {
+  if (!process.env.NVIDIA_API_KEY) throw new Error('Falta NVIDIA_API_KEY en el entorno');
+  const resp = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${process.env.NVIDIA_API_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: NVIDIA_MODEL, messages, tools, tool_choice: 'auto', max_tokens: 8000, temperature: 1, reasoning_effort: 'max' }),
+  });
+  if (!resp.ok) throw new Error(`NVIDIA API error ${resp.status}: ${(await resp.text()).slice(0, 300)}`);
+  return resp.json();
+}
+async function _validateCompanyKimi(batch, company, contactos) {
+  const system = _buildSystemPrompt(batch);
+  const user = _buildUserPrompt(company, contactos);
+  const tools = [{
+    type: 'function',
+    function: {
+      name: 'web_search',
+      description: 'Busca en internet y devuelve una lista de resultados (título, url, descripción) para la consulta dada. Úsala cuantas veces necesites antes de decidir.',
+      parameters: { type: 'object', properties: { query: { type: 'string', description: 'Los términos de búsqueda' } }, required: ['query'] },
+    },
+  }];
+  let messages = [{ role: 'system', content: system }, { role: 'user', content: user }];
+  let totalIn = 0, totalOut = 0, searches = 0;
+  const MAX_ROUNDS = 10, MAX_SEARCHES = 20;
+  let finalText = '';
+  for (let round = 0; round < MAX_ROUNDS; round++) {
+    const resp = await _nvidiaChat(messages, tools);
+    const choice = resp.choices?.[0];
+    if (!choice) throw new Error('Respuesta vacía de NVIDIA/Kimi-K3');
+    totalIn += resp.usage?.prompt_tokens || 0;
+    totalOut += resp.usage?.completion_tokens || 0;
+    messages.push(choice.message);
+    if (choice.finish_reason !== 'tool_calls' || !choice.message.tool_calls?.length) {
+      finalText = choice.message.content || '';
+      break;
+    }
+    for (const tc of choice.message.tool_calls) {
+      if (searches >= MAX_SEARCHES) {
+        messages.push({ role: 'tool', tool_call_id: tc.id, content: 'Límite de búsquedas alcanzado — decide con la evidencia que ya reuniste.' });
+        continue;
+      }
+      let args = {};
+      try { args = JSON.parse(tc.function.arguments || '{}'); } catch { /* args vacíos si el modelo mandó algo inválido */ }
+      let results;
+      try { results = await webSearch(args.query || company.nombre, 5); }
+      catch (e) { results = [{ error: e.message }]; }
+      searches++;
+      messages.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify(results) });
+    }
+  }
+  let parsed;
+  try { parsed = JSON.parse(_extractJson(finalText)); } catch (e) { throw new Error('El modelo no devolvió JSON válido: ' + e.message); }
+  // NVIDIA NIM todavía no tiene un precio confirmado para Kimi-K3 en nuestra
+  // tabla de tarifas — se reporta el costo en 0 en vez de inventar un número.
+  // Cuando se confirme el precio real, agregarlo a RATES y calcular aquí igual
+  // que con Claude.
+  return { parsed, cost: 0, model: NVIDIA_MODEL, inputTokens: totalIn, outputTokens: totalOut };
 }
 
 // Corre el paso 2 sobre las empresas del batch que siguen pendientes de

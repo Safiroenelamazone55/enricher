@@ -2024,6 +2024,13 @@ async function initDb() {
     await pool.query(`ALTER TABLE cantera_companies ADD COLUMN IF NOT EXISTS auditoria_nota      TEXT NOT NULL DEFAULT '';`);
     await pool.query(`ALTER TABLE cantera_companies ADD COLUMN IF NOT EXISTS auditoria_at         TIMESTAMPTZ;`);
 
+    // Motor de IA elegible por borrador — pedido explícito 2026-09-06: "no debe
+    // ser solo para Claude". 'claude' (default, con búsqueda nativa de
+    // Anthropic) o 'kimi' (Kimi-K3 vía NVIDIA, con búsqueda propia vía
+    // webSearchService/Brave). Mismo prompt y mismo formato de salida para
+    // ambos — ver canteraValidateService.js.
+    await pool.query(`ALTER TABLE cantera_batches ADD COLUMN IF NOT EXISTS motor_ia TEXT NOT NULL DEFAULT 'claude';`);
+
     // Secuencia opcional del borrador — mismo criterio que Cliente/Campaña, que ya
     // existían: es solo una anotación en esta etapa (no enrola nada, no envía nada a
     // Outreach) hasta que las empresas se promuevan al CRM. Pedido explícito

@@ -5596,7 +5596,13 @@ const CanteraModule = (() => {
       </div>` : ''}
 
       ${_step === 2 ? `<div class="cant-section">
-        <p class="cant-hint">Esto es lo único que escribes — el motor que investiga y decide es fijo, no lo tocas.</p>
+        <p class="cant-hint">Esto es lo único que escribes — el criterio de investigación (protocolo, evidencia, formato) es fijo para cualquier motor que elijas abajo.</p>
+        <label class="cant-flabel" style="display:block;margin-bottom:12px">Motor de investigación profunda (IA)
+          <select id="cant-motor-ia" class="form-input" onchange="CanteraModule.setMotorIA(this.value)">
+            <option value="claude"${(b.motor_ia || 'claude') === 'claude' ? ' selected' : ''}>Claude (con búsqueda propia de Anthropic)</option>
+            <option value="kimi"${b.motor_ia === 'kimi' ? ' selected' : ''}>Kimi-K3 vía NVIDIA (con búsqueda propia vía Brave)</option>
+          </select>
+        </label>
         <label class="cant-flabel" style="display:block;margin-bottom:12px">ICP<textarea id="cant-icp" class="form-input" rows="10" placeholder="¿A quién buscamos?">${esc(b.icp || '')}</textarea></label>
 
         <div class="cant-tiers">${tiers.map((t, i) => `
@@ -6122,6 +6128,7 @@ const CanteraModule = (() => {
   function addPuesto(clave) { _current.puestos = _current.puestos || {}; _current.puestos[clave] = [...(_current.puestos[clave] || []), { titulo: '', tipo: 'decide', exclusion: '' }]; _paint(); }
   function removePuesto(clave, i) { _current.puestos[clave].splice(i, 1); _paint(); }
   function setPuestoField(clave, i, k, v) { _current.puestos[clave][i][k] = v; }
+  function setMotorIA(v) { _current.motor_ia = v === 'kimi' ? 'kimi' : 'claude'; }
   async function saveCriterio() {
     _current.icp = document.getElementById('cant-icp')?.value || '';
     try {
@@ -6484,7 +6491,7 @@ const CanteraModule = (() => {
   }
 
   return { render, open, openCreate, backToList, saveFiltros, runFiltros, toggleFailed, toggleTierFiltro, togglePrioFiltro, moreMenu, remove, saveAsTemplate,
-    toggleExpand, addTier, removeTier, setTierField, addPuesto, removePuesto, setPuestoField, saveCriterio, runValidacion,
+    toggleExpand, addTier, removeTier, setTierField, addPuesto, removePuesto, setPuestoField, saveCriterio, setMotorIA, runValidacion,
     openPromote, closePromote, doPromote, openSendSeq, closeSendSeq, doSendSeq,
     openScope, closeScope, scopeMaybeCreate, saveScope, setStep,
     openImportModal, closeImportModal, impFile, impToggleHeader, impRun, impSetMode, deleteAndReimport, cbxOpen, cbxFilter, cbxPick, cbxBlur,
@@ -7288,17 +7295,20 @@ const CanteraConfigModule = (() => {
   async function render(containerId) {
     const el = document.getElementById(containerId); if (!el) return;
     el.innerHTML = `<div class="cp-empty2" style="padding:22px">Cargando…</div>`;
-    let st = { anthropicKeyConfigured: false, model: '—' };
+    let st = { anthropicKeyConfigured: false, model: '—', nvidiaKeyConfigured: false, braveKeyConfigured: false, kimiModel: '—' };
     try { st = await (await apiFetch(`${API}/cantera/config-status`)).json(); } catch {}
+    const row = (ok, label, detalle) => `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <span class="cant-estado cant-estado--${ok ? 'aprobado' : 'descartado'}">${ok ? 'Configurada' : 'Falta configurar'}</span>
+      <span style="font-size:.84rem;color:var(--text2,#6C6862)">${esc(label)}</span>
+    </div><p class="cant-hint" style="margin:0 0 14px">${detalle}</p>`;
     el.innerHTML = `<div class="lm-sec-head lm-sec-head--compact"><div><h2 class="lm-sec-title">Configuración</h2></div></div>
       <div class="cant-section">
-        <div class="cant-section__hd"><h3 style="margin:0">Motor de investigación profunda (paso 2)</h3></div>
-        <div class="filter-field" style="max-width:420px">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-            <span class="cant-estado cant-estado--${st.anthropicKeyConfigured ? 'aprobado' : 'descartado'}">${st.anthropicKeyConfigured ? 'Configurada' : 'Falta configurar'}</span>
-            <span style="font-size:.84rem;color:var(--text2,#6C6862)">Clave de Anthropic (ANTHROPIC_API_KEY)</span>
-          </div>
-          <p class="cant-hint" style="margin:0">Modelo: ${esc(st.model)}. ${st.anthropicKeyConfigured ? 'La investigación profunda de Cantera puede correr con normalidad.' : 'Sin esta clave, el paso 2 (investigación profunda) falla en cada empresa con el motivo exacto — agrégala al .env del servidor y reinicia el proceso.'}</p>
+        <div class="cant-section__hd"><h3 style="margin:0">Motores de investigación profunda (paso 2)</h3></div>
+        <p class="cant-hint">Cada borrador elige su motor en el paso "Criterio de calificación" — esto solo dice si el servidor tiene las claves listas para que ese motor funcione.</p>
+        <div class="filter-field" style="max-width:460px">
+          ${row(st.anthropicKeyConfigured, `Claude (${esc(st.model)}) — ANTHROPIC_API_KEY`, st.anthropicKeyConfigured ? 'Trae su propia búsqueda en internet, operada por Anthropic. Listo para usarse.' : 'Sin esta clave, el motor Claude falla en cada empresa con el motivo exacto — agrégala al .env del servidor y reinicia.')}
+          ${row(st.nvidiaKeyConfigured, `Kimi-K3 vía NVIDIA (${esc(st.kimiModel)}) — NVIDIA_API_KEY`, st.nvidiaKeyConfigured ? 'Necesita además la búsqueda propia (fila de abajo) para poder investigar en internet.' : 'Sin esta clave, el motor Kimi-K3 falla en cada empresa — agrégala al .env del servidor y reinicia.')}
+          ${row(st.braveKeyConfigured, 'Búsqueda en internet (Brave Search) — BRAVE_API_KEY', st.braveKeyConfigured ? 'Kimi-K3 puede buscar en internet de verdad usando esta clave.' : 'Sin esta clave, Kimi-K3 no puede abrir ninguna página real — solo respondería de memoria. Necesaria para usar el motor Kimi-K3.')}
         </div>
       </div>`;
   }

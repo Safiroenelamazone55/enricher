@@ -6463,15 +6463,16 @@ app.get('/api/cantera/batches/:id', requireAuth, async (req, res) => {
 });
 app.put('/api/cantera/batches/:id', requireAuth, async (req, res) => {
   const b = req.body || {};
+  const motorIa = b.motor_ia === 'kimi' ? 'kimi' : 'claude';
   try {
     const { rows } = await pool.query(`
       UPDATE cantera_batches SET
         nombre=$1, outbound_client_id=$2, campaign_id=$3, sequence_id=$10,
-        filtros=$4::jsonb, icp=$5, tiers=$6::jsonb, puestos=$7::jsonb, updated_at=NOW()
+        filtros=$4::jsonb, icp=$5, tiers=$6::jsonb, puestos=$7::jsonb, motor_ia=$11, updated_at=NOW()
       WHERE id=$8 AND user_id=$9 AND estado='borrador' RETURNING *
     `, [_lmS(b.nombre), b.outbound_client_id || null, b.campaign_id || null,
         JSON.stringify(b.filtros || {}), _lmS(b.icp), JSON.stringify(b.tiers || []), JSON.stringify(b.puestos || {}),
-        req.params.id, req.workspaceOwnerId, b.sequence_id || null]);
+        req.params.id, req.workspaceOwnerId, b.sequence_id || null, motorIa]);
     if (!rows.length) return res.status(404).json({ error: 'Borrador no encontrado (o ya fue movido al CRM)' });
     res.json(rows[0]);
   } catch (err) { console.error('[cantera] PUT batch', err.message); res.status(500).json({ error: 'Error al guardar el criterio' }); }
@@ -7002,6 +7003,9 @@ app.get('/api/cantera/config-status', requireAuth, async (req, res) => {
   res.json({
     anthropicKeyConfigured: !!process.env.ANTHROPIC_API_KEY,
     model: 'claude-sonnet-5',
+    nvidiaKeyConfigured: !!process.env.NVIDIA_API_KEY,
+    braveKeyConfigured: !!process.env.BRAVE_API_KEY,
+    kimiModel: 'moonshotai/kimi-k3',
   });
 });
 
