@@ -6047,20 +6047,20 @@ const CanteraModule = (() => {
           ${tiers.map(t => `<option value="${esc(t.clave)}"${co.tier_clave === t.clave ? ' selected' : ''}>${esc(t.clave)}${t.nombre ? ' — ' + esc(t.nombre) : ''}</option>`).join('')}
           <option value="__descartar__"${co.paso2_estado === 'descartado_manual' ? ' selected' : ''}>✕ Descartar — no encaja en ningún Tier</option>
         </select></label>
-        <label class="cant-flabel">Confianza<span class="field-note">opcional — la IA siempre la completa, a mano es tu decisión</span>
-          <select id="cant-manual-confianza" class="form-input" onchange="CanteraModule.saveManualValidation(${co.id})">
-            <option value="">— sin definir —</option>
-            <option value="alta"${co.confianza === 'alta' ? ' selected' : ''}>Alta</option>
-            <option value="media"${co.confianza === 'media' ? ' selected' : ''}>Media</option>
-            <option value="baja"${co.confianza === 'baja' ? ' selected' : ''}>Baja</option>
-          </select>
-        </label>
-        <label class="cant-flabel">Prioridad<span class="field-note">opcional — la IA siempre la completa, a mano es tu decisión</span>
+        <label class="cant-flabel">Prioridad
           <select id="cant-manual-prioridad" class="form-input" onchange="CanteraModule.saveManualValidation(${co.id})">
             <option value="">— sin definir —</option>
             <option value="alta"${co.prioridad === 'alta' ? ' selected' : ''}>Alta</option>
             <option value="media"${co.prioridad === 'media' ? ' selected' : ''}>Media</option>
             <option value="baja"${co.prioridad === 'baja' ? ' selected' : ''}>Baja</option>
+          </select>
+        </label>
+        <label class="cant-flabel">Confianza
+          <select id="cant-manual-confianza" class="form-input" onchange="CanteraModule.saveManualValidation(${co.id})">
+            <option value="">— sin definir —</option>
+            <option value="alta"${co.confianza === 'alta' ? ' selected' : ''}>Alta</option>
+            <option value="media"${co.confianza === 'media' ? ' selected' : ''}>Media</option>
+            <option value="baja"${co.confianza === 'baja' ? ' selected' : ''}>Baja</option>
           </select>
         </label>
         <label class="cant-flabel">Nota<span class="field-note">opcional — resumen útil de la empresa</span><textarea id="cant-manual-nota" class="form-input" rows="2" placeholder="Por qué este Tier (o por qué se descarta)…" onblur="CanteraModule.saveManualValidation(${co.id})">${esc(co.nota_manual || '')}</textarea></label>
@@ -7049,20 +7049,20 @@ const CanteraMesaModule = (() => {
           ${tiers.map(t => `<option value="${esc(t.clave)}"${co.tier_clave === t.clave ? ' selected' : ''}>${esc(t.clave)}${t.nombre ? ' — ' + esc(t.nombre) : ''}</option>`).join('')}
           <option value="__descartar__"${co.paso2_estado === 'descartado_manual' ? ' selected' : ''}>✕ Descartar — no encaja en ningún Tier</option>
         </select></label>
-        <label class="cant-flabel">Confianza<span class="field-note">opcional — la IA siempre la completa, a mano es tu decisión</span>
-          <select id="mesa-manual-confianza" class="form-input" onchange="CanteraMesaModule.saveManualValidation(${companyId},${batchId})">
-            <option value="">— sin definir —</option>
-            <option value="alta"${co.confianza === 'alta' ? ' selected' : ''}>Alta</option>
-            <option value="media"${co.confianza === 'media' ? ' selected' : ''}>Media</option>
-            <option value="baja"${co.confianza === 'baja' ? ' selected' : ''}>Baja</option>
-          </select>
-        </label>
-        <label class="cant-flabel">Prioridad<span class="field-note">opcional — la IA siempre la completa, a mano es tu decisión</span>
+        <label class="cant-flabel">Prioridad
           <select id="mesa-manual-prioridad" class="form-input" onchange="CanteraMesaModule.saveManualValidation(${companyId},${batchId})">
             <option value="">— sin definir —</option>
             <option value="alta"${co.prioridad === 'alta' ? ' selected' : ''}>Alta</option>
             <option value="media"${co.prioridad === 'media' ? ' selected' : ''}>Media</option>
             <option value="baja"${co.prioridad === 'baja' ? ' selected' : ''}>Baja</option>
+          </select>
+        </label>
+        <label class="cant-flabel">Confianza
+          <select id="mesa-manual-confianza" class="form-input" onchange="CanteraMesaModule.saveManualValidation(${companyId},${batchId})">
+            <option value="">— sin definir —</option>
+            <option value="alta"${co.confianza === 'alta' ? ' selected' : ''}>Alta</option>
+            <option value="media"${co.confianza === 'media' ? ' selected' : ''}>Media</option>
+            <option value="baja"${co.confianza === 'baja' ? ' selected' : ''}>Baja</option>
           </select>
         </label>
         <label class="cant-flabel">Nota<span class="field-note">opcional — resumen útil de la empresa</span><textarea id="mesa-manual-nota" class="form-input" rows="2" placeholder="Por qué este Tier (o por qué se descarta)…" onblur="CanteraMesaModule.saveManualValidation(${companyId},${batchId})">${esc(co.nota_manual || '')}</textarea></label>
