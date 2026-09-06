@@ -6998,6 +6998,7 @@ const CanteraMesaModule = (() => {
       <div class="fin-pi-box__hd"><h3>Validación manual · ${esc(co.nombre)}</h3><button class="fin-pi-x" onclick="document.getElementById('mesa-manual-modal').remove()">✕</button></div>
       <div class="flt-body" style="display:flex;flex-direction:column;gap:12px">
         <label class="cant-flabel">Datos de la empresa<textarea id="mesa-manual-copy" class="form-input" rows="8" readonly onclick="this.select()">${esc(_manualCopyText(co))}</textarea></label>
+        <button class="btn btn--ghost btn--sm" onclick="CanteraMesaModule.copyManualData()">Copiar todo</button>
         <label class="cant-flabel">Tier<select id="mesa-manual-tier" class="form-input" onchange="CanteraMesaModule.saveManualValidation(${companyId},${batchId})">
           <option value="">— elegir —</option>
           ${tiers.map(t => `<option value="${esc(t.clave)}"${co.tier_clave === t.clave ? ' selected' : ''}>${esc(t.clave)}${t.nombre ? ' — ' + esc(t.nombre) : ''}</option>`).join('')}
@@ -7006,6 +7007,11 @@ const CanteraMesaModule = (() => {
       </div>
       <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns"><button class="btn btn--ghost btn--sm" onclick="document.getElementById('mesa-manual-modal').remove()">Cerrar</button></div></div></div>`;
     document.body.appendChild(m);
+  }
+  async function copyManualData() {
+    const ta = document.getElementById('mesa-manual-copy'); if (!ta) return;
+    try { await navigator.clipboard.writeText(ta.value); showBanner('✓ Copiado', 'success'); }
+    catch { ta.select(); document.execCommand('copy'); showBanner('✓ Copiado', 'success'); }
   }
   async function saveManualValidation(companyId, batchId) {
     const tier = document.getElementById('mesa-manual-tier')?.value;
@@ -7087,7 +7093,7 @@ const CanteraMesaModule = (() => {
   return { render, setFiltro, setPageSize, goPage, toggleFailed, toggleTierFiltro, togglePrioFiltro,
     toggleCoSel, toggleCoSelAll, toggleExpand, setContactPrioridad, toggleCol, menu,
     runClean, runEnrich, runValidacion, _confirmRevalidar, openAudit,
-    openPromote, doPromote, openSendSeq, doSendSeq, openManualValidation, saveManualValidation };
+    openPromote, doPromote, openSendSeq, doSendSeq, openManualValidation, saveManualValidation, copyManualData };
 })();
 
 // =================================================================
