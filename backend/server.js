@@ -7058,6 +7058,57 @@ app.get('/api/cantera/batches/:id/contacts', requireAuth, async (req, res) => {
   } catch (err) { console.error('[cantera] GET contacts', err.message); res.status(500).json({ error: 'Error al cargar contactos' }); }
 });
 
+// ── Mesa de trabajo: la misma tabla de Resultados, pero de TODOS los
+// borradores a la vez, con filtro por Cliente/Campaña/Secuencia arriba —
+// pedido explícito 2026-09-06: "que básicamente sea la misma tabla... con
+// todos los resultados de todos los borradores... las mismas opciones que
+// tengo en Resultados dentro del borrador". Cada fila trae su batch_id para
+// que las acciones (Limpiar/Enriquecer/IA/Mover al CRM/Enviar a secuencia)
+// se agrupen y corran por borrador de origen del lado del frontend, sin
+// duplicar la lógica de cada una — reusan los mismos endpoints por borrador.
+app.get('/api/cantera/mesa/companies', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId;
+  const cliente = req.query.cliente ? parseInt(req.query.cliente) : null;
+  const campana = req.query.campana ? parseInt(req.query.campana) : null;
+  const secuencia = req.query.secuencia ? parseInt(req.query.secuencia) : null;
+  const tiers = String(req.query.tier || '').split(',').filter(Boolean);
+  const prioridades = String(req.query.prioridad || '').split(',').map(Number).filter(n => n > 0);
+  const onlyFailed = req.query.onlyFailed === '1';
+  const page = Math.max(0, parseInt(req.query.page) || 0);
+  const pageSize = [50, 100, 200].includes(parseInt(req.query.pageSize)) ? parseInt(req.query.pageSize) : 100;
+  try {
+    const conds = ['c.user_id=$1'];
+    const params = [uid];
+    if (cliente) { params.push(cliente); conds.push(`b.outbound_client_id=$${params.length}`); }
+    if (campana) { params.push(campana); conds.push(`b.campaign_id=$${params.length}`); }
+    if (secuencia) { params.push(secuencia); conds.push(`b.sequence_id=$${params.length}`); }
+    if (onlyFailed) conds.push(`c.paso1_estado='descartado'`);
+    if (tiers.length) { params.push(tiers); conds.push(`c.tier_clave = ANY($${params.length}::text[])`); }
+    if (prioridades.length) { params.push(prioridades); conds.push(`EXISTS (SELECT 1 FROM cantera_contacts k2 WHERE k2.company_id=c.id AND k2.prioridad = ANY($${params.length}::int[]))`); }
+    const where = conds.join(' AND ');
+    const { rows: totalRows } = await pool.query(
+      `SELECT COUNT(*)::int AS n FROM cantera_companies c JOIN cantera_batches b ON b.id=c.batch_id WHERE ${where}`, params);
+    const total = totalRows[0]?.n || 0;
+    const limitIdx = params.length + 1, offsetIdx = params.length + 2;
+    const { rows } = await pool.query(`
+      SELECT c.*, b.nombre AS batch_nombre,
+             b.outbound_client_id, b.campaign_id, b.sequence_id,
+             (SELECT COUNT(*) FROM cantera_contacts k WHERE k.company_id=c.id)::int AS contactos
+        FROM cantera_companies c JOIN cantera_batches b ON b.id=c.batch_id
+       WHERE ${where}
+       ORDER BY c.id ASC LIMIT $${limitIdx} OFFSET $${offsetIdx}
+    `, [...params, pageSize, page * pageSize]);
+    res.json({ rows, total });
+  } catch (err) { console.error('[cantera] mesa companies', err.message); res.status(500).json({ error: 'Error al cargar la mesa de trabajo' }); }
+});
+app.get('/api/cantera/mesa/tiers', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT DISTINCT tier_clave FROM cantera_companies WHERE user_id=$1 AND tier_clave <> '' ORDER BY tier_clave`, [req.workspaceOwnerId]);
+    res.json(rows.map(r => r.tier_clave));
+  } catch (err) { console.error('[cantera] mesa tiers', err.message); res.status(500).json({ error: 'Error al cargar tiers' }); }
+});
+
 // Validación manual de una empresa — camino alterno al motor de IA (paso 2)
 // para cuando Jenny no tiene tiempo de esperar/afinar la IA: copia los datos
 // de la empresa, los valida ella misma fuera del sistema, y vuelve aquí a
@@ -7255,6 +7306,11 @@ app.post('/api/cantera/batches/:id/bulk-enrich', requireAuth, async (req, res) =
 // El cliente SÍ es obligatorio en este paso (aunque no lo era al crear el
 // borrador) porque una empresa/contacto real siempre pertenece a alguien;
 // la campaña sigue siendo opcional (puede ser una que ya existe, o ninguna).
+// `company_ids` (opcional): promoción SELECTIVA — solo esas empresas, y el
+// borrador NO se marca 'promovido' (queda disponible para seguir moviendo el
+// resto después). Usado por Mesa de trabajo, donde la selección puede venir
+// de varios borradores a la vez. Sin `company_ids`, comportamiento de
+// siempre: todo el borrador de una vez, y lo marca 'promovido'.
 app.post('/api/cantera/batches/:id/promote', requireAuth, async (req, res) => {
   const uid = req.workspaceOwnerId;
   const batchId = req.params.id;
@@ -7263,13 +7319,22 @@ app.post('/api/cantera/batches/:id/promote', requireAuth, async (req, res) => {
   if (!outboundClientId) return res.status(400).json({ error: 'Elige a qué cliente pertenecen estas empresas' });
   const campaignId = b.campaign_id ? parseInt(b.campaign_id) : null;
   const includeRespaldo = b.include_respaldo !== false;
+  const companyIds = Array.isArray(b.company_ids) ? b.company_ids.map(Number).filter(Boolean) : [];
 
   const cl = await pool.connect();
   try {
     await cl.query('BEGIN');
-    const { rows: [batch] } = await cl.query(`SELECT * FROM cantera_batches WHERE id=$1 AND user_id=$2 AND estado='borrador'`, [batchId, uid]);
+    const { rows: [batch] } = await cl.query(
+      companyIds.length
+        ? `SELECT * FROM cantera_batches WHERE id=$1 AND user_id=$2`
+        : `SELECT * FROM cantera_batches WHERE id=$1 AND user_id=$2 AND estado='borrador'`,
+      [batchId, uid]);
     if (!batch) throw new Error('Borrador no encontrado (o ya fue movido al CRM)');
-    const { rows: companies } = await cl.query(`SELECT * FROM cantera_companies WHERE batch_id=$1 AND user_id=$2 AND paso2_estado IN ('aprobado','validacion_manual')`, [batchId, uid]);
+    const { rows: companies } = await cl.query(
+      companyIds.length
+        ? `SELECT * FROM cantera_companies WHERE batch_id=$1 AND user_id=$2 AND paso2_estado IN ('aprobado','validacion_manual') AND id = ANY($3::int[])`
+        : `SELECT * FROM cantera_companies WHERE batch_id=$1 AND user_id=$2 AND paso2_estado IN ('aprobado','validacion_manual')`,
+      companyIds.length ? [batchId, uid, companyIds] : [batchId, uid]);
     if (!companies.length) throw new Error('No hay empresas calificadas todavía (paso 2) para mover');
 
     let companiesPromoted = 0, contactsPromoted = 0;
@@ -7317,7 +7382,9 @@ app.post('/api/cantera/batches/:id/promote', requireAuth, async (req, res) => {
       }
     }
 
-    await cl.query(`UPDATE cantera_batches SET estado='promovido', outbound_client_id=$1, campaign_id=$2, promoted_at=NOW() WHERE id=$3`, [outboundClientId, campaignId, batchId]);
+    if (!companyIds.length) {
+      await cl.query(`UPDATE cantera_batches SET estado='promovido', outbound_client_id=$1, campaign_id=$2, promoted_at=NOW() WHERE id=$3`, [outboundClientId, campaignId, batchId]);
+    }
     await cl.query('COMMIT');
     res.json({ companiesPromoted, contactsPromoted });
   } catch (err) {

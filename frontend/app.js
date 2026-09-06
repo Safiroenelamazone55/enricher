@@ -6490,6 +6490,490 @@ const CanteraModule = (() => {
 })();
 
 // =================================================================
+// CANTERA · MESA DE TRABAJO — la misma tabla de Resultados de un borrador,
+// pero de TODOS los borradores a la vez, con filtro por Cliente/Campaña/
+// Secuencia arriba — pedido explícito 2026-09-06: "la misma tabla... con
+// todos los resultados de todos los borradores... las mismas opciones que
+// tengo en Resultados". Cada acción agrupa la selección por el borrador de
+// origen de cada empresa y llama a los MISMOS endpoints por borrador que ya
+// usa CanteraModule — no se duplica esa lógica de servidor, solo se
+// orquesta desde aquí. Simplificación consciente: Limpiar/Enriquecer aquí
+// aplican directo (sin la vista previa fila-por-fila), y "Correr filtros
+// básicos" no se replicó (depende del criterio propio de cada borrador,
+// se sigue corriendo desde adentro de cada uno).
+// =================================================================
+const CanteraMesaModule = (() => {
+  let _containerId = 'cantera-mesa-body';
+  let _rows = []; let _total = 0;
+  let _filtro = { cliente: '', campana: '', secuencia: '' };
+  let _opts = null; // { clientes, campanas, secuencias }
+  let _tierOpts = [];
+  let _tierFiltro = new Set(); let _prioFiltro = new Set(); let _onlyFailed = false;
+  let _page = 0;
+  function _pageSize() { try { return parseInt(localStorage.getItem('cantera_mesa_page_size')) || 100; } catch (_) { return 100; } }
+  let _coSel = new Set();
+  let _expanded = new Set();
+  let _contactsByBatch = {}; // batchId -> { companyId: [contactos] }
+  const _knownRows = {}; // companyId -> fila (persiste entre páginas para acciones sobre selección)
+
+  const MESA_COLS = [
+    { key: 'dominio', label: 'Dominio', def: true },
+    { key: 'pais', label: 'País', def: true },
+    { key: 'industria', label: 'Industria', def: false },
+    { key: 'tamano', label: 'Tamaño', def: false },
+    { key: 'ciudad', label: 'Ciudad', def: false },
+    { key: 'ubicacion', label: 'Ubicación', def: false },
+    { key: 'website', label: 'Website', def: false },
+    { key: 'linkedin', label: 'LinkedIn', def: false },
+    { key: 'paso1_estado', label: 'Paso 1', def: true },
+    { key: 'paso1_motivo', label: 'Motivo paso 1', def: false },
+    { key: 'tier_clave', label: 'Tier', def: true },
+    { key: 'confianza', label: 'Confianza', def: false },
+    { key: 'paso2_estado', label: 'Paso 2', def: true },
+    { key: 'motivo_descarte', label: 'Motivo paso 2', def: false },
+    { key: 'contactos', label: 'Contactos', def: true },
+  ];
+  let _visibleCols = null;
+  function _loadVisibleCols() {
+    if (_visibleCols) return _visibleCols;
+    try { const saved = JSON.parse(localStorage.getItem('cantera_mesa_cols') || 'null'); if (Array.isArray(saved)) { _visibleCols = new Set(saved); return _visibleCols; } } catch (_) {}
+    _visibleCols = new Set(MESA_COLS.filter(c => c.def).map(c => c.key));
+    return _visibleCols;
+  }
+  function _saveVisibleCols() { try { localStorage.setItem('cantera_mesa_cols', JSON.stringify([..._loadVisibleCols()])); } catch (_) {} }
+  function toggleCol(key) { const s = _loadVisibleCols(); if (s.has(key)) s.delete(key); else s.add(key); _saveVisibleCols(); _paint(); }
+  function _estadoLabel(s) { return s === 'aprobado' ? 'Aprobado' : s === 'validacion_manual' ? 'Validación manual' : s === 'descartado' ? 'Descartado' : s === 'error' ? 'Error' : 'Pendiente'; }
+  function _colCellHtml(c, key) {
+    switch (key) {
+      case 'dominio': return esc(c.dominio || '—');
+      case 'pais': return esc(c.pais || '—');
+      case 'industria': return esc(c.industria || '—');
+      case 'tamano': return esc(c.tamano || '—');
+      case 'ciudad': return esc(c.ciudad || '—');
+      case 'ubicacion': return esc(c.ubicacion || '—');
+      case 'website': return c.website ? `<a href="${/^https?:/i.test(c.website) ? esc(c.website) : 'https://' + esc(c.website)}" target="_blank" rel="noopener">${esc(c.website)}</a>` : '—';
+      case 'linkedin': return c.linkedin ? `<a href="${esc(c.linkedin)}" target="_blank" rel="noopener">Ver perfil</a>` : '—';
+      case 'paso1_estado': return `<span class="cant-estado cant-estado--${esc(c.paso1_estado)}">${_estadoLabel(c.paso1_estado)}</span>`;
+      case 'paso1_motivo': return `<span title="${esc(c.paso1_motivo)}">${esc(c.paso1_motivo || '—')}</span>`;
+      case 'tier_clave': return esc(c.tier_clave || '—');
+      case 'confianza': return esc(c.confianza || '—');
+      case 'paso2_estado': return `<span class="cant-estado cant-estado--${esc(c.paso2_estado)}">${_estadoLabel(c.paso2_estado)}</span> <button class="cant-x" style="font-size:.72rem" onclick="event.stopPropagation();CanteraMesaModule.openManualValidation(${c.id},${c.batch_id})" title="Validar manualmente">✎ Manual</button>`;
+      case 'motivo_descarte': return c.paso2_estado === 'validacion_manual' ? esc(c.nota_manual || '(sin nota)') : `<span title="${esc(c.motivo_descarte)}">${esc(c.motivo_descarte || '—')}</span>`;
+      case 'contactos': return `${c.contactos}${c.contactos > 1 ? ' <span class="tag" style="margin-left:4px">multi</span>' : ''}`;
+      default: return '—';
+    }
+  }
+
+  async function render(containerId) {
+    _containerId = containerId || _containerId;
+    const el = document.getElementById(_containerId); if (!el) return;
+    el.innerHTML = `<div class="cp-empty2" style="padding:22px">Cargando…</div>`;
+    if (!_opts) {
+      try {
+        const [clientes, campanas, secuencias] = await Promise.all([
+          apiFetch(`${API}/outbound-clients`).then(r => r.ok ? r.json() : []),
+          apiFetch(`${API}/campaigns`).then(r => r.ok ? r.json() : []),
+          apiFetch(`${API}/sequences`).then(r => r.ok ? r.json() : []),
+        ]);
+        _opts = { clientes, campanas, secuencias };
+      } catch { _opts = { clientes: [], campanas: [], secuencias: [] }; }
+    }
+    try { _tierOpts = await (await apiFetch(`${API}/cantera/mesa/tiers`)).json(); } catch { _tierOpts = []; }
+    await _search();
+    _paint();
+  }
+  async function _search() {
+    const p = new URLSearchParams();
+    if (_filtro.cliente) p.set('cliente', _filtro.cliente);
+    if (_filtro.campana) p.set('campana', _filtro.campana);
+    if (_filtro.secuencia) p.set('secuencia', _filtro.secuencia);
+    if (_tierFiltro.size) p.set('tier', [..._tierFiltro].join(','));
+    if (_prioFiltro.size) p.set('prioridad', [..._prioFiltro].join(','));
+    if (_onlyFailed) p.set('onlyFailed', '1');
+    p.set('page', _page); p.set('pageSize', _pageSize());
+    try {
+      const r = await apiFetch(`${API}/cantera/mesa/companies?${p.toString()}`);
+      const d = r.ok ? await r.json() : { rows: [], total: 0 };
+      _rows = d.rows || []; _total = d.total || 0;
+      _rows.forEach(row => { _knownRows[row.id] = row; });
+    } catch { _rows = []; _total = 0; }
+  }
+  function _paint() { const el = document.getElementById(_containerId); if (el) el.innerHTML = _html(); }
+  async function _refresh() { await _search(); _paint(); }
+  function setFiltro(kind, val) { _filtro[kind] = val; _page = 0; _refresh(); }
+  function setPageSize(n) { try { localStorage.setItem('cantera_mesa_page_size', String(parseInt(n) || 100)); } catch (_) {} _page = 0; _refresh(); }
+  function goPage(d) { _page = Math.max(0, _page + d); _refresh(); }
+  function toggleFailed() { _onlyFailed = !_onlyFailed; _page = 0; _refresh(); }
+  function toggleTierFiltro(clave) { if (_tierFiltro.has(clave)) _tierFiltro.delete(clave); else _tierFiltro.add(clave); _page = 0; _refresh(); }
+  function togglePrioFiltro(n) { if (_prioFiltro.has(n)) _prioFiltro.delete(n); else _prioFiltro.add(n); _page = 0; _refresh(); }
+  function toggleCoSel(id, checked) { if (checked) _coSel.add(id); else _coSel.delete(id); _paint(); }
+  function toggleCoSelAll(checked) { if (checked) _rows.forEach(c => _coSel.add(c.id)); else _rows.forEach(c => _coSel.delete(c.id)); _paint(); }
+  function _groupByBatch(ids) {
+    const g = {};
+    ids.forEach(id => { const row = _knownRows[id]; if (!row) return; (g[row.batch_id] = g[row.batch_id] || []).push(id); });
+    return g;
+  }
+
+  async function _ensureContactsForBatch(batchId) {
+    if (_contactsByBatch[batchId]) return;
+    const r = await apiFetch(`${API}/cantera/batches/${batchId}/contacts`);
+    const all = r.ok ? await r.json() : [];
+    const map = {};
+    all.forEach(k => { (map[k.company_id] = map[k.company_id] || []).push(k); });
+    _contactsByBatch[batchId] = map;
+  }
+  async function toggleExpand(companyId, batchId) {
+    if (_expanded.has(companyId)) { _expanded.delete(companyId); _paint(); return; }
+    _expanded.add(companyId);
+    await _ensureContactsForBatch(batchId);
+    _paint();
+  }
+  async function setContactPrioridad(contactId, batchId, val) {
+    const prioridad = parseInt(val, 10) || 0;
+    try {
+      const res = await apiFetch(`${API}/cantera/batches/${batchId}/contacts/${contactId}/prioridad`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prioridad }) });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Error');
+      delete _contactsByBatch[batchId];
+      await _ensureContactsForBatch(batchId);
+      _paint();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+
+  // ── Menú "⋮" — Limpiar/Enriquecer/Investigación IA/filtros/columnas/Mover
+  // al CRM/Enviar a secuencia, las mismas opciones que en Resultados de un
+  // borrador (pedido explícito), agrupando la selección por borrador.
+  const MESA_CLEAN_LABELS = { nombre: 'Nombre', tamano: 'Nº empleados', dominio: 'Dominio', website: 'Website' };
+  const MESA_ENRICH_LABELS = { dominio: 'Dominio', website: 'Website' };
+  function menu(ev) {
+    if (ev && ev.stopPropagation) ev.stopPropagation();
+    document.querySelectorAll('.cp-mark-menu').forEach(m => m.remove());
+    const close = "document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove())";
+    const item = (label, onclick, disabled) => `<button class="cp-mark-menu__b" ${disabled ? 'disabled' : ''} onclick="${close};${onclick}">${label}</button>`;
+    const sub = (label, panelHtml, scrollable) => `<div class="cp-mark-menu__sub">
+      <div class="cp-mark-menu__b cp-mark-menu__b--sub">${label} <span class="cp-mark-menu__arrow">▸</span></div>
+      <div class="cp-mark-menu__subpanel"><div class="cp-mark-menu__list"${scrollable ? ' style="max-height:320px;overflow-y:auto"' : ''}>${panelHtml}</div></div>
+    </div>`;
+    const cleanPanel = Object.keys(MESA_CLEAN_LABELS).map(f => item(`Limpiar ${MESA_CLEAN_LABELS[f]}`, `CanteraMesaModule.runClean('${f}')`)).join('')
+      + item('Limpiar todos los campos', `CanteraMesaModule.runClean(null)`);
+    const enrichPanel = Object.keys(MESA_ENRICH_LABELS).map(f => item(`Enriquecer ${MESA_ENRICH_LABELS[f]}`, `CanteraMesaModule.runEnrich('${f}')`)).join('')
+      + item('Enriquecer todos los campos', `CanteraMesaModule.runEnrich(null)`);
+    const tierPanel = _tierOpts.map(t => `<label class="cant-colchk"><input type="checkbox" ${_tierFiltro.has(t) ? 'checked' : ''} onchange="CanteraMesaModule.toggleTierFiltro('${esc(t)}')"> ${esc(t)}</label>`).join('') || '<div class="cp-empty2" style="padding:10px 12px">Sin Tiers todavía</div>';
+    const prioPanel = [1, 2, 3, 4, 5].map(n => `<label class="cant-colchk"><input type="checkbox" ${_prioFiltro.has(n) ? 'checked' : ''} onchange="CanteraMesaModule.togglePrioFiltro(${n})"> Prioridad ${n}</label>`).join('');
+    const vis = _loadVisibleCols();
+    const colsPanel = MESA_COLS.map(c => `<label class="cant-colchk"><input type="checkbox" ${vis.has(c.key) ? 'checked' : ''} onchange="CanteraMesaModule.toggleCol('${c.key}')"> ${esc(c.label)}</label>`).join('');
+    const calificadas = _coSel.size ? [..._coSel].filter(id => { const r = _knownRows[id]; return r && (r.paso2_estado === 'aprobado' || r.paso2_estado === 'validacion_manual'); }).length : 0;
+    const html = `<div class="cp-mark-menu__list">${sub('Limpiar', cleanPanel)}${sub('Enriquecer', enrichPanel)}</div>
+      <div class="cp-mark-menu__sep"></div>
+      <div class="cp-mark-menu__list">${item('Investigación profunda (IA)', 'CanteraMesaModule.runValidacion()')}${item(`${_onlyFailed ? '✓ ' : ''}Ver solo descartadas`, 'CanteraMesaModule.toggleFailed()')}</div>
+      <div class="cp-mark-menu__sep"></div>
+      <div class="cp-mark-menu__list">${sub('Filtrar por Tier', tierPanel)}${sub('Filtrar por prioridad', prioPanel)}</div>
+      <div class="cp-mark-menu__sep"></div>
+      <div class="cp-mark-menu__list">${sub('Elegir columnas visibles', colsPanel, true)}</div>
+      ${calificadas ? `<div class="cp-mark-menu__sep"></div><div class="cp-mark-menu__list">${item(`Mover al CRM (${calificadas})`, 'CanteraMesaModule.openPromote()')}</div>` : ''}`;
+    const m = document.createElement('div'); m.className = 'cp-mark-menu'; m.style.minWidth = '240px'; m.innerHTML = html;
+    document.body.appendChild(m);
+    const t = (ev && (ev.currentTarget || ev.target)) || document.body; const r = t.getBoundingClientRect();
+    m.style.left = `${Math.max(8, Math.min(r.right - 240, window.innerWidth - 250))}px`; m.style.top = `${r.bottom + 6}px`;
+    m.querySelectorAll('.cp-mark-menu__sub').forEach(subEl => {
+      const panel = subEl.querySelector('.cp-mark-menu__subpanel'); if (!panel) return;
+      let hideTimer = null;
+      subEl.addEventListener('mouseenter', () => {
+        clearTimeout(hideTimer);
+        const subRect = subEl.getBoundingClientRect(); const needed = 310;
+        if (window.innerWidth - subRect.right < needed && subRect.left >= needed) { panel.style.left = 'auto'; panel.style.right = '100%'; }
+        else { panel.style.left = '100%'; panel.style.right = 'auto'; }
+        panel.style.marginLeft = '0'; panel.style.marginRight = '0'; panel.style.display = 'block';
+      });
+      subEl.addEventListener('mouseleave', () => { hideTimer = setTimeout(() => { panel.style.display = 'none'; }, 200); });
+    });
+    const onScroll = () => closeMenu();
+    const onDoc = e => { if (!m.contains(e.target)) closeMenu(); };
+    function closeMenu() { m.remove(); document.removeEventListener('click', onDoc); window.removeEventListener('scroll', onScroll, true); }
+    setTimeout(() => { document.addEventListener('click', onDoc); window.addEventListener('scroll', onScroll, true); }, 0);
+  }
+
+  // Limpiar/Enriquecer — simplificado: sin vista previa (aplica directo por
+  // borrador), para no reconstruir esa UI multiplicada por cada borrador de
+  // origen. Se agrupa la selección, se corre en cada borrador, y se suma.
+  async function _runBulk(kind, field) {
+    if (!_coSel.size) { showBanner('Marca al menos una empresa primero', 'info'); return; }
+    const endpoint = kind === 'clean' ? 'bulk-clean' : 'bulk-enrich';
+    const fields = field ? [field] : Object.keys(kind === 'clean' ? MESA_CLEAN_LABELS : MESA_ENRICH_LABELS);
+    const groups = _groupByBatch([..._coSel]);
+    let totalApplied = 0, batchesTocados = 0;
+    try {
+      for (const [batchId, ids] of Object.entries(groups)) {
+        const res = await apiFetch(`${API}/cantera/batches/${batchId}/${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entity: 'companies', ids, fields, apply: true }) });
+        const d = await res.json();
+        if (!res.ok || !d.started) continue;
+        // Job en segundo plano por borrador — se espera a que termine antes de seguir con el próximo.
+        let st;
+        do {
+          await new Promise(r => setTimeout(r, 1200));
+          st = await (await apiFetch(`${API}/cantera/batches/${batchId}/bulk-status`)).json();
+        } while (st.running);
+        totalApplied += st.applied || 0;
+        batchesTocados++;
+      }
+      showBanner(`✓ ${totalApplied} campo(s) actualizado(s) en ${batchesTocados} borrador(es)`, 'success');
+      _coSel = new Set();
+      await _refresh();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  function runClean(field) { _runBulk('clean', field); }
+  function runEnrich(field) { _runBulk('enrich', field); }
+
+  // Investigación profunda (IA): mismo aviso que dentro de un borrador si
+  // alguna ya se investigó antes (manual o con IA) — agrupado por borrador.
+  let _pendingRevalIds = [];
+  function runValidacion() {
+    if (!_coSel.size) { showBanner('Marca al menos una empresa primero', 'info'); return; }
+    const seleccionadas = [..._coSel].map(id => _knownRows[id]).filter(Boolean);
+    const yaManual = seleccionadas.filter(c => c.paso2_estado === 'validacion_manual').length;
+    const yaIA = seleccionadas.filter(c => c.paso2_estado === 'aprobado' || c.paso2_estado === 'descartado').length;
+    if (!yaManual && !yaIA) { _runValidacionExec([..._coSel]); return; }
+    const partes = [];
+    if (yaManual) partes.push(`${yaManual} de las empresas seleccionadas ya se ${yaManual === 1 ? 'investigó' : 'investigaron'} con validación manual`);
+    if (yaIA) partes.push(`${yaIA} de las empresas seleccionadas ya se ${yaIA === 1 ? 'investigó' : 'investigaron'} con investigación profunda (IA)`);
+    document.getElementById('mesa-reval-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'mesa-reval-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) m.remove(); };
+    m.innerHTML = `<div class="fin-pi-box lm-flt-box" style="max-width:420px">
+      <div class="fin-pi-box__hd"><h3>¿Volver a investigar?</h3><button class="fin-pi-x" onclick="document.getElementById('mesa-reval-modal').remove()">✕</button></div>
+      <div class="flt-body"><p class="cant-hint" style="margin:0">${esc(partes.join(' y '))}. ¿Aun así deseas continuar? Se procesarán las ${_coSel.size} empresa(s) seleccionadas.</p></div>
+      <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns">
+        <button class="btn btn--ghost btn--sm" onclick="document.getElementById('mesa-reval-modal').remove()">No</button>
+        <button class="btn btn--primary btn--sm" onclick="document.getElementById('mesa-reval-modal').remove();CanteraMesaModule._confirmRevalidar()">Sí, continuar</button>
+      </div></div></div>`;
+    document.body.appendChild(m);
+    _pendingRevalIds = [..._coSel];
+  }
+  function _confirmRevalidar() { _runValidacionExec(_pendingRevalIds); _pendingRevalIds = []; }
+  async function _runValidacionExec(ids) {
+    const groups = _groupByBatch(ids);
+    let totalOk = 0, totalErr = 0;
+    try {
+      for (const [batchId, batchIds] of Object.entries(groups)) {
+        const res = await apiFetch(`${API}/cantera/batches/${batchId}/run-validacion`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ company_ids: batchIds }) });
+        const d = await res.json();
+        if (!res.ok || !d.started) continue;
+        let st;
+        do {
+          await new Promise(r => setTimeout(r, 3000));
+          st = await (await apiFetch(`${API}/cantera/batches/${batchId}/validacion-status`)).json();
+        } while (st.running);
+        totalOk += (st.done || 0) - (st.errores || 0); totalErr += st.errores || 0;
+      }
+      showBanner(`✓ Investigación terminada · ${totalOk} ok · ${totalErr} error(es)`, 'success');
+      _coSel = new Set();
+      await _refresh();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+
+  // Mover al CRM / Enviar a secuencia — agrupado por borrador, mismo modal
+  // que dentro de un borrador (Cliente/Campaña/Secuencia + prioridades).
+  async function openPromote() {
+    const [clientes, campanas] = await Promise.all([
+      apiFetch(`${API}/outbound-clients`).then(r => r.ok ? r.json() : []),
+      apiFetch(`${API}/campaigns`).then(r => r.ok ? r.json() : []),
+    ]);
+    document.getElementById('mesa-promote-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'mesa-promote-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) m.remove(); };
+    m.innerHTML = `<div class="fin-pi-box lm-flt-box" style="max-width:420px">
+      <div class="fin-pi-box__hd"><h3>Mover al CRM</h3><button class="fin-pi-x" onclick="document.getElementById('mesa-promote-modal').remove()">✕</button></div>
+      <div class="flt-body" style="display:flex;flex-direction:column;gap:12px">
+        <p class="cant-hint" style="margin:0">Las empresas calificadas de tu selección, con sus contactos "Decide"/"Respaldo", se crean como reales. Esto no se puede deshacer.</p>
+        <label class="cant-flabel">Cliente<select id="mesa-pr-client" class="form-input"><option value="">— elegir —</option>${clientes.map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('')}</select></label>
+        <label class="cant-flabel">Campaña<span class="field-note">opcional</span><select id="mesa-pr-camp" class="form-input"><option value="">Sin campaña</option>${campanas.map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('')}</select></label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:.84rem"><input type="checkbox" id="mesa-pr-resp" checked> Incluir también los contactos "Respaldo" (no solo "Decide")</label>
+      </div>
+      <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns">
+        <button class="btn btn--ghost btn--sm" onclick="document.getElementById('mesa-promote-modal').remove()">Cancelar</button>
+        <button class="btn btn--primary btn--sm" onclick="CanteraMesaModule.doPromote()">Mover al CRM</button>
+      </div></div></div>`;
+    document.body.appendChild(m);
+  }
+  async function doPromote() {
+    const clientId = document.getElementById('mesa-pr-client')?.value;
+    if (!clientId) { showBanner('Elige a qué cliente pertenecen', 'info'); return; }
+    const campId = document.getElementById('mesa-pr-camp')?.value || null;
+    const includeResp = !!document.getElementById('mesa-pr-resp')?.checked;
+    const groups = _groupByBatch([..._coSel]);
+    let companiesPromoted = 0, contactsPromoted = 0;
+    try {
+      for (const [batchId, ids] of Object.entries(groups)) {
+        const res = await apiFetch(`${API}/cantera/batches/${batchId}/promote`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ outbound_client_id: clientId, campaign_id: campId, include_respaldo: includeResp, company_ids: ids }) });
+        const d = await res.json();
+        if (!res.ok) continue;
+        companiesPromoted += d.companiesPromoted || 0; contactsPromoted += d.contactsPromoted || 0;
+      }
+      document.getElementById('mesa-promote-modal')?.remove();
+      showBanner(`✓ ${companiesPromoted} empresa(s) y ${contactsPromoted} contacto(s) movidos al CRM`, 'success');
+      _coSel = new Set();
+      await _refresh();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  async function openSendSeq() {
+    if (!_coSel.size) { showBanner('Marca al menos una empresa primero', 'info'); return; }
+    const [clientes, secuencias, campanas] = await Promise.all([
+      apiFetch(`${API}/outbound-clients`).then(r => r.ok ? r.json() : []),
+      apiFetch(`${API}/sequences`).then(r => r.ok ? r.json() : []),
+      apiFetch(`${API}/campaigns`).then(r => r.ok ? r.json() : []),
+    ]);
+    document.getElementById('mesa-seq-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'mesa-seq-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) m.remove(); };
+    const prioChk = n => `<label style="display:flex;align-items:center;gap:6px;font-size:.84rem"><input type="checkbox" class="mesa-seq-prio" value="${n}" ${_prioFiltro.has(n) || !_prioFiltro.size ? 'checked' : ''}> Prioridad ${n}</label>`;
+    m.innerHTML = `<div class="fin-pi-box lm-flt-box" style="max-width:440px">
+      <div class="fin-pi-box__hd"><h3>Enviar a secuencia</h3><button class="fin-pi-x" onclick="document.getElementById('mesa-seq-modal').remove()">✕</button></div>
+      <div class="flt-body" style="display:flex;flex-direction:column;gap:12px">
+        <p class="cant-hint" style="margin:0">${_coSel.size} empresa(s) seleccionada(s) se crean como reales en el CRM (si no existen ya) y sus contactos con la prioridad elegida quedan enrolados de una vez.</p>
+        <label class="cant-flabel">Cliente<select id="mesa-sq-client" class="form-input"><option value="">— elegir —</option>${clientes.map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('')}</select></label>
+        <label class="cant-flabel">Secuencia<select id="mesa-sq-seq" class="form-input"><option value="">— elegir —</option>${secuencias.map(s => `<option value="${s.id}">${esc(s.nombre)}</option>`).join('')}</select></label>
+        <label class="cant-flabel">Campaña<span class="field-note">opcional</span><select id="mesa-sq-camp" class="form-input"><option value="">Sin campaña</option>${campanas.map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('')}</select></label>
+        <div class="cant-flabel">Prioridad de contacto a enviar<div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:6px">${[1, 2, 3, 4, 5].map(prioChk).join('')}</div></div>
+      </div>
+      <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns">
+        <button class="btn btn--ghost btn--sm" onclick="document.getElementById('mesa-seq-modal').remove()">Cancelar</button>
+        <button class="btn btn--primary btn--sm" onclick="CanteraMesaModule.doSendSeq()">Enviar</button>
+      </div></div></div>`;
+    document.body.appendChild(m);
+  }
+  async function doSendSeq() {
+    const clientId = document.getElementById('mesa-sq-client')?.value;
+    if (!clientId) { showBanner('Elige a qué cliente pertenecen', 'info'); return; }
+    const sequenceId = document.getElementById('mesa-sq-seq')?.value;
+    if (!sequenceId) { showBanner('Elige una secuencia', 'info'); return; }
+    const campId = document.getElementById('mesa-sq-camp')?.value || null;
+    const prioridades = [...document.querySelectorAll('.mesa-seq-prio:checked')].map(el => parseInt(el.value));
+    const groups = _groupByBatch([..._coSel]);
+    let companiesPromoted = 0, contactsPromoted = 0, enrolled = 0;
+    try {
+      for (const [batchId, ids] of Object.entries(groups)) {
+        const res = await apiFetch(`${API}/cantera/batches/${batchId}/send-to-sequence`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ company_ids: ids, outbound_client_id: clientId, sequence_id: sequenceId, campaign_id: campId, prioridades }) });
+        const d = await res.json();
+        if (!res.ok) continue;
+        companiesPromoted += d.companiesPromoted || 0; contactsPromoted += d.contactsPromoted || 0; enrolled += d.enrolled || 0;
+      }
+      document.getElementById('mesa-seq-modal')?.remove();
+      showBanner(`✓ ${companiesPromoted} empresa(s), ${contactsPromoted} contacto(s) movidos · ${enrolled} enrolado(s) en la secuencia`, 'success');
+      _coSel = new Set();
+      await _refresh();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+
+  // Validación manual — igual a la de dentro de un borrador, pero recibe el
+  // batch_id de la fila en vez de asumir _current.
+  function _manualCopyText(co) {
+    return [`Empresa: ${co.nombre || '—'}`, `País: ${co.pais || '—'}`, `Ciudad: ${co.ciudad || '—'}`, `Industria: ${co.industria || '—'}`,
+      `Tamaño: ${co.tamano || '—'}`, `Dominio: ${co.dominio || '—'}`, `Website: ${co.website || '—'}`, `LinkedIn: ${co.linkedin || '—'}`].join('\n');
+  }
+  async function openManualValidation(companyId, batchId) {
+    const co = _knownRows[companyId]; if (!co) return;
+    let tiers = [];
+    try { tiers = ((await (await apiFetch(`${API}/cantera/batches/${batchId}`)).json()).tiers || []).filter(t => t.clave); } catch { /* sin tiers */ }
+    document.getElementById('mesa-manual-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'mesa-manual-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) m.remove(); };
+    m.innerHTML = `<div class="fin-pi-box lm-flt-box" style="max-width:520px">
+      <div class="fin-pi-box__hd"><h3>Validación manual · ${esc(co.nombre)}</h3><button class="fin-pi-x" onclick="document.getElementById('mesa-manual-modal').remove()">✕</button></div>
+      <div class="flt-body" style="display:flex;flex-direction:column;gap:12px">
+        <label class="cant-flabel">Datos de la empresa<textarea id="mesa-manual-copy" class="form-input" rows="8" readonly onclick="this.select()">${esc(_manualCopyText(co))}</textarea></label>
+        <label class="cant-flabel">Tier<select id="mesa-manual-tier" class="form-input" onchange="CanteraMesaModule.saveManualValidation(${companyId},${batchId})">
+          <option value="">— elegir —</option>
+          ${tiers.map(t => `<option value="${esc(t.clave)}"${co.tier_clave === t.clave ? ' selected' : ''}>${esc(t.clave)}${t.nombre ? ' — ' + esc(t.nombre) : ''}</option>`).join('')}
+        </select></label>
+        <label class="cant-flabel">Nota<span class="field-note">opcional</span><textarea id="mesa-manual-nota" class="form-input" rows="2" placeholder="Por qué este Tier…" onblur="CanteraMesaModule.saveManualValidation(${companyId},${batchId})">${esc(co.nota_manual || '')}</textarea></label>
+      </div>
+      <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns"><button class="btn btn--ghost btn--sm" onclick="document.getElementById('mesa-manual-modal').remove()">Cerrar</button></div></div></div>`;
+    document.body.appendChild(m);
+  }
+  async function saveManualValidation(companyId, batchId) {
+    const tier = document.getElementById('mesa-manual-tier')?.value;
+    if (!tier) return;
+    const nota = document.getElementById('mesa-manual-nota')?.value || '';
+    try {
+      const res = await apiFetch(`${API}/cantera/batches/${batchId}/companies/${companyId}/validar-manual`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tier_clave: tier, nota }) });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Error');
+      showBanner('✓ Guardado', 'success');
+      await _refresh();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+
+  function _filterSelect(kind, list, current) {
+    const label = { cliente: 'Cliente', campana: 'Campaña', secuencia: 'Secuencia' }[kind];
+    return `<select class="form-input" style="width:auto" onchange="CanteraMesaModule.setFiltro('${kind}',this.value)" title="Filtrar por ${label.toLowerCase()}">
+      <option value="">${label}: todos</option>
+      ${list.map(x => `<option value="${x.id}"${String(current) === String(x.id) ? ' selected' : ''}>${esc(x.nombre)}</option>`).join('')}
+    </select>`;
+  }
+  function _pagerHtml() {
+    const ps = _pageSize();
+    const pages = Math.max(1, Math.ceil(_total / ps));
+    const from = _total ? _page * ps + 1 : 0, to = Math.min(_total, (_page + 1) * ps);
+    const nav = (dir, dis, label) => `<button class="btn btn--ghost btn--sm" style="min-width:34px" ${dis ? 'disabled style="min-width:34px;opacity:.4;cursor:default"' : ''} onclick="CanteraMesaModule.goPage(${dir})">${label}</button>`;
+    return `<div class="lm-pager" style="display:flex;align-items:center;gap:10px;justify-content:flex-end;flex-wrap:wrap;padding:12px 4px 4px;font-size:.83rem;color:var(--text2,#45586A)">
+      <span>Mostrando <b>${from}–${to}</b> de <b>${_total}</b></span>
+      <select onchange="CanteraMesaModule.setPageSize(this.value)" style="padding:5px 9px;border:1px solid var(--border,#EAE7E2);border-radius:8px;background:#fff;font-size:.82rem;color:inherit;cursor:pointer">${[50, 100, 200].map(n => `<option value="${n}"${ps === n ? ' selected' : ''}>${n} / página</option>`).join('')}</select>
+      ${nav(-1, _page <= 0, '‹')}<span>${_page + 1} / ${pages}</span>${nav(1, _page >= pages - 1, '›')}
+    </div>`;
+  }
+  function _html() {
+    const opts = _opts || { clientes: [], campanas: [], secuencias: [] };
+    const visCols = MESA_COLS.filter(c => _loadVisibleCols().has(c.key));
+    const emptyColspan = 4 + visCols.length;
+    const rows = _rows.map(c => {
+      const main = `<tr>
+        <td class="lm-ck-col" onclick="event.stopPropagation()"><input type="checkbox" class="lm-ck" ${_coSel.has(c.id) ? 'checked' : ''} onclick="CanteraMesaModule.toggleCoSel(${c.id},this.checked)"></td>
+        <td class="dg-cell--frozen" onclick="CanteraMesaModule.toggleExpand(${c.id},${c.batch_id})" style="cursor:pointer">${esc(c.nombre)}</td>
+        <td class="dg-cell--ro">${esc(c.batch_nombre || '—')}</td>
+        ${visCols.map(col => `<td class="dg-cell--ro"${col.key === 'contactos' ? ` onclick="CanteraMesaModule.toggleExpand(${c.id},${c.batch_id})" style="cursor:pointer"` : ''}>${_colCellHtml(c, col.key)}</td>`).join('')}
+        <td class="dg-cell--ro">—</td><td class="dg-cell--ro">—</td><td class="dg-cell--ro">—</td>
+      </tr>`;
+      if (!_expanded.has(c.id)) return main;
+      const cts = [...((_contactsByBatch[c.batch_id] || {})[c.id] || [])].sort((a, b) => (a.prioridad || 99) - (b.prioridad || 99) || a.id - b.id);
+      const n = cts.length;
+      const fillCols = `<td class="dg-cell--ro"></td>` + visCols.map(() => `<td class="dg-cell--ro"></td>`).join('');
+      const sub = cts.map(k => `<tr class="cant-subrow">
+        <td class="lm-ck-col"></td><td class="dg-cell--frozen"></td>${fillCols}
+        <td class="dg-cell--ro"><b>${esc([k.nombre, k.apellido].filter(Boolean).join(' ')) || '(sin nombre)'}</b></td>
+        <td class="dg-cell--ro"><span class="cant-subrow__cargo">${esc(k.cargo || '(sin cargo)')}</span></td>
+        <td class="dg-cell--ro"><select class="form-input" style="width:auto" onchange="CanteraMesaModule.setContactPrioridad(${k.id},${c.batch_id},this.value)">
+          <option value="0"${!k.prioridad ? ' selected' : ''}>Sin prioridad</option>
+          ${Array.from({ length: n }, (_, i) => i + 1).map(num => `<option value="${num}"${k.prioridad === num ? ' selected' : ''}>${num}</option>`).join('')}
+        </select></td>
+      </tr>`).join('');
+      return main + (sub || `<tr class="cant-subrow"><td class="lm-ck-col"></td><td class="dg-cell--frozen"></td><td colspan="${emptyColspan}" class="cp-empty2">Sin contactos</td></tr>`);
+    }).join('');
+    return `<div class="lm-sec-head lm-sec-head--compact"><div><h2 class="lm-sec-title">Mesa de trabajo</h2></div>
+        <button class="dg-kebab" onclick="CanteraMesaModule.menu(event)" title="Acciones">⋮</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+        ${_filterSelect('cliente', opts.clientes, _filtro.cliente)}
+        ${_filterSelect('campana', opts.campanas, _filtro.campana)}
+        ${_filterSelect('secuencia', opts.secuencias, _filtro.secuencia)}
+        ${_coSel.size ? `<span class="cant-count">${_coSel.size} seleccionada(s)</span>` : ''}
+      </div>
+      <div class="lm-dt-wrap dg-dt-wrap"><table class="clients-table dg-table sel-on cant-restbl" style="table-layout:auto">
+        <thead><tr>
+          <th class="lm-ck-col"><input type="checkbox" class="lm-ck" ${_rows.length && _rows.every(c => _coSel.has(c.id)) ? 'checked' : ''} onclick="CanteraMesaModule.toggleCoSelAll(this.checked)"></th>
+          <th class="dg-cell--frozen">Nombre</th><th>Borrador</th>${visCols.map(col => `<th>${esc(col.label)}</th>`).join('')}<th>Contacto</th><th>Puesto</th><th>Prioridad</th>
+        </tr></thead>
+        <tbody>${rows || `<tr><td colspan="${emptyColspan}" class="cp-empty2">Sin resultados para este filtro.</td></tr>`}</tbody>
+      </table></div>
+      ${_pagerHtml()}`;
+  }
+
+  return { render, setFiltro, setPageSize, goPage, toggleFailed, toggleTierFiltro, togglePrioFiltro,
+    toggleCoSel, toggleCoSelAll, toggleExpand, setContactPrioridad, toggleCol, menu,
+    runClean, runEnrich, runValidacion, _confirmRevalidar,
+    openPromote, doPromote, openSendSeq, doSendSeq, openManualValidation, saveManualValidation };
+})();
+
+// =================================================================
 // CANTERA · BASE GLOBAL — el "universo grande": cruza lo que ya está en el
 // CRM real con lo que sigue en borradores de Cantera (de cualquiera de
 // ellos), para saber si una empresa ya se vio antes en el sistema.
@@ -36698,6 +37182,7 @@ function initApp() {
     }
     if (tabName === 'datos') LeadManagerModule.renderDataGrid('dg-body');
     if (tabName === 'cantera') CanteraModule.render('cantera-body');
+    if (tabName === 'cantera-mesa') CanteraMesaModule.render('cantera-mesa-body');
     if (tabName === 'cantera-global') CanteraGlobalModule.render('cantera-global-body');
     if (tabName === 'cantera-criterios') CanteraCriteriosModule.render('cantera-criterios-body');
     if (tabName === 'cantera-config') CanteraConfigModule.render('cantera-config-body');
