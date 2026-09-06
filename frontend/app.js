@@ -4953,6 +4953,19 @@ const CanteraModule = (() => {
   let _containerId = 'cantera-body';
   let _view = 'list';       // list | detail
   let _batches = [];
+  // Filtros de la lista de borradores (Cliente/Campaña/Secuencia) — pedido
+  // explícito 2026-09-06: "quiero ver la tabla de todos los borradores
+  // importados y filtrar por cliente, campaña y por algún otro" — Secuencia
+  // se eligió como el "algún otro" por ser el trío que ya se usa en todo
+  // Cantera (Cliente/Campaña/Secuencia, ver openScope). Paginación igual que
+  // Resultados (mismo patrón, otro namespace de estado).
+  let _bdFiltro = { cliente: '', campana: '', secuencia: '' };
+  let _bdOpts = null; // { clientes, campanas, secuencias } cacheado
+  let _bdPageIdx = 0;
+  function _bdPageSize() { try { return parseInt(localStorage.getItem('cantera_bd_page_size')) || 50; } catch (_) { return 50; } }
+  function bdSetPageSize(n) { try { localStorage.setItem('cantera_bd_page_size', String(parseInt(n) || 50)); } catch (_) {} _bdPageIdx = 0; _paint(); }
+  function bdGoPage(d) { _bdPageIdx = Math.max(0, _bdPageIdx + d); _paint(); }
+  function bdSetFiltro(kind, val) { _bdFiltro[kind] = val; _bdPageIdx = 0; _paint(); }
   let _current = null;      // batch abierto en detalle
   let _companies = [];
   let _onlyFailed = false;
@@ -5302,6 +5315,16 @@ const CanteraModule = (() => {
   async function load() {
     try { const r = await apiFetch(`${API}/cantera/batches`); _batches = r.ok ? await r.json() : []; }
     catch { _batches = []; }
+    if (!_bdOpts) {
+      try {
+        const [clientes, campanas, secuencias] = await Promise.all([
+          apiFetch(`${API}/outbound-clients`).then(r => r.ok ? r.json() : []),
+          apiFetch(`${API}/campaigns`).then(r => r.ok ? r.json() : []),
+          apiFetch(`${API}/sequences`).then(r => r.ok ? r.json() : []),
+        ]);
+        _bdOpts = { clientes, campanas, secuencias };
+      } catch { _bdOpts = { clientes: [], campanas: [], secuencias: [] }; }
+    }
   }
   function render(containerId) {
     _containerId = containerId || _containerId;
@@ -5314,13 +5337,47 @@ const CanteraModule = (() => {
     el.innerHTML = _view === 'detail' && _current ? _detailHtml() : _listHtml();
   }
 
-  // ── Lista de borradores ──────────────────────────────────────────
+  // ── Lista de borradores — tabla de TODOS los borradores importados, con
+  // filtro por Cliente/Campaña/Secuencia y paginación, mismo patrón que la
+  // tabla de Resultados (pedido explícito 2026-09-06: "quiero ver la tabla de
+  // todos los borradores y filtrar por cliente, campaña y por algún otro").
+  function _bdFilterSelect(kind, list, current) {
+    const label = { cliente: 'Cliente', campana: 'Campaña', secuencia: 'Secuencia' }[kind];
+    return `<select class="form-input" style="width:auto" onchange="CanteraModule.bdSetFiltro('${kind}',this.value)" title="Filtrar por ${label.toLowerCase()}">
+      <option value="">${label}: todos</option>
+      ${list.map(x => `<option value="${x.id}"${String(current) === String(x.id) ? ' selected' : ''}>${esc(x.nombre)}</option>`).join('')}
+    </select>`;
+  }
+  function _bdPagerHtml(total) {
+    const ps = _bdPageSize();
+    const pages = Math.max(1, Math.ceil(total / ps));
+    if (_bdPageIdx > pages - 1) _bdPageIdx = pages - 1;
+    if (_bdPageIdx < 0) _bdPageIdx = 0;
+    const from = total ? _bdPageIdx * ps + 1 : 0, to = Math.min(total, (_bdPageIdx + 1) * ps);
+    const nav = (dir, dis, label) => `<button class="btn btn--ghost btn--sm" style="min-width:34px" ${dis ? 'disabled style="min-width:34px;opacity:.4;cursor:default"' : ''} onclick="CanteraModule.bdGoPage(${dir})" title="${dir < 0 ? 'Página anterior' : 'Página siguiente'}">${label}</button>`;
+    return `<div class="lm-pager" style="display:flex;align-items:center;gap:10px;justify-content:flex-end;flex-wrap:wrap;padding:12px 4px 4px;font-size:.83rem;color:var(--text2,#45586A)">
+      <span>Mostrando <b>${from}–${to}</b> de <b>${total}</b></span>
+      <select onchange="CanteraModule.bdSetPageSize(this.value)" title="Filas por página" style="padding:5px 9px;border:1px solid var(--border,#EAE7E2);border-radius:8px;background:#fff;font-size:.82rem;color:inherit;cursor:pointer">${[50, 100, 200].map(n => `<option value="${n}"${ps === n ? ' selected' : ''}>${n} / página</option>`).join('')}</select>
+      ${nav(-1, _bdPageIdx <= 0, '‹')}
+      <span>${_bdPageIdx + 1} / ${pages}</span>
+      ${nav(1, _bdPageIdx >= pages - 1, '›')}
+    </div>`;
+  }
   function _listHtml() {
-    const rows = _batches.map(b => `
+    const opts = _bdOpts || { clientes: [], campanas: [], secuencias: [] };
+    const filtered = _batches.filter(b =>
+      (!_bdFiltro.cliente || String(b.outbound_client_id) === _bdFiltro.cliente) &&
+      (!_bdFiltro.campana || String(b.campaign_id) === _bdFiltro.campana) &&
+      (!_bdFiltro.secuencia || String(b.sequence_id) === _bdFiltro.secuencia)
+    );
+    const ps = _bdPageSize();
+    const pageBatches = filtered.slice(_bdPageIdx * ps, _bdPageIdx * ps + ps);
+    const rows = pageBatches.map(b => `
       <tr class="clients-table__row" onclick="CanteraModule.open(${b.id})">
         <td>${esc(b.nombre)}</td>
         <td class="dg-cell--ro">${esc(b.cliente_nombre || '—')}</td>
         <td class="dg-cell--ro">${esc(b.campana_nombre || '—')}</td>
+        <td class="dg-cell--ro">${esc(b.secuencia_nombre || '—')}</td>
         <td class="dg-cell--ro">${b.total_empresas}</td>
         <td class="dg-cell--ro">${b.pasaron_filtro}</td>
         <td class="dg-cell--ro">${b.calificadas}</td>
@@ -5330,10 +5387,16 @@ const CanteraModule = (() => {
         <button class="btn btn--primary btn--sm" onclick="CanteraModule.openCreate()">+ Nuevo borrador</button>
       </div>
       <p class="lm-sec-sub" style="margin-bottom:16px">Prospección sin validar todavía — nada de esto existe en el CRM hasta que lo muevas.</p>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+        ${_bdFilterSelect('cliente', opts.clientes, _bdFiltro.cliente)}
+        ${_bdFilterSelect('campana', opts.campanas, _bdFiltro.campana)}
+        ${_bdFilterSelect('secuencia', opts.secuencias, _bdFiltro.secuencia)}
+      </div>
       <div class="lm-dt-wrap dg-dt-wrap"><table class="clients-table dg-table sel-on" style="table-layout:auto">
-        <thead><tr><th>Nombre</th><th>Cliente</th><th>Campaña</th><th>Empresas</th><th>Pasaron filtro</th><th>Calificadas</th><th>Estado</th></tr></thead>
-        <tbody>${rows || `<tr><td colspan="7" class="cp-empty2">Sin borradores todavía — crea el primero.</td></tr>`}</tbody>
-      </table></div>`;
+        <thead><tr><th>Nombre</th><th>Cliente</th><th>Campaña</th><th>Secuencia</th><th>Empresas</th><th>Pasaron filtro</th><th>Calificadas</th><th>Estado</th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="8" class="cp-empty2">${_batches.length ? 'Ningún borrador coincide con el filtro.' : 'Sin borradores todavía — crea el primero.'}</td></tr>`}</tbody>
+      </table></div>
+      ${_bdPagerHtml(filtered.length)}`;
   }
   function openCreate() {
     const nombre = prompt('Nombre del borrador (ej. "Rutas de reparto LatAm")');
@@ -6214,7 +6277,7 @@ const CanteraModule = (() => {
     taOpen, taFilter, taBlur, addFiltro, removeFiltro,
     toggleCoSel, toggleCoSelAll, resultsMenu, runClean, runEnrich, closeCantOp, applyCantOp,
     toggleResultCol, startColResize,
-    setContactPrioridad, cantGoPage, cantSetPageSize,
+    setContactPrioridad, cantGoPage, cantSetPageSize, bdSetFiltro, bdSetPageSize, bdGoPage,
     openManualValidation, closeManualValidation, copyManualData, saveManualValidation, quitarValidacionManual };
 })();
 

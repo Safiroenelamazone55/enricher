@@ -6404,13 +6404,14 @@ app.post('/api/lm/import', requireAuth, upload.single('file'), async (req, res) 
 app.get('/api/cantera/batches', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(`
-      SELECT b.*, oc.nombre AS cliente_nombre, cam.nombre AS campana_nombre,
+      SELECT b.*, oc.nombre AS cliente_nombre, cam.nombre AS campana_nombre, seq.nombre AS secuencia_nombre,
              (SELECT COUNT(*) FROM cantera_companies c WHERE c.batch_id=b.id)::int AS total_empresas,
              (SELECT COUNT(*) FROM cantera_companies c WHERE c.batch_id=b.id AND c.paso1_estado='aprobado')::int AS pasaron_filtro,
              (SELECT COUNT(*) FROM cantera_companies c WHERE c.batch_id=b.id AND c.paso2_estado IN ('aprobado','validacion_manual'))::int AS calificadas
         FROM cantera_batches b
         LEFT JOIN outbound_clients oc ON oc.id = b.outbound_client_id
         LEFT JOIN campaigns cam ON cam.id = b.campaign_id
+        LEFT JOIN sequences seq ON seq.id = b.sequence_id
        WHERE b.user_id=$1 ORDER BY b.updated_at DESC`, [req.workspaceOwnerId]);
     res.json(rows);
   } catch (err) { console.error('[cantera] GET batches', err.message); res.status(500).json({ error: 'Error al cargar Cantera' }); }
