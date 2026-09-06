@@ -5347,7 +5347,14 @@ const CanteraModule = (() => {
     if (!_current) { showBanner('Borrador no encontrado', 'error'); return; }
     _current.filtros = _current.filtros || {};
     _coSel = new Set(); _expanded = new Set(); _contactsByCompany = {}; _contactsLoaded = false; _step = 1;
-    _cantPageIdx = 0; _lastFiltros = null; _lastClean = { total: 0 }; _lastEnrich = { total: 0 }; _lastIA = null;
+    _cantPageIdx = 0; _lastFiltros = null;
+    // Totales de Limpiar/Enriquecer/Validado vienen del borrador (persistidos en
+    // el servidor) — pedido explícito 2026-09-06: "ya limpiamos, no debería ser
+    // 0" al recargar la página o volver a entrar. `ran` marca si ya se corrió
+    // alguna vez, para distinguir "(0)" real de "todavía no se corrió".
+    _lastClean = { ...(_current.limpieza_stats || {}) };
+    _lastEnrich = { ...(_current.enriquecimiento_stats || {}) };
+    _lastIA = _current.validado_total ? { done: _current.validado_total } : null;
     if (!_filtroOpts) { try { _filtroOpts = await (await apiFetch(`${API}/cantera/opciones-filtro`)).json(); } catch { _filtroOpts = {}; } }
     await _loadCompanies();
     _view = 'detail'; _paint();
@@ -5716,9 +5723,13 @@ const CanteraModule = (() => {
         // 2026-09-06: "eso debe verse, debe cambiar si ya se hizo").
         const key = field || 'todos';
         const store0 = kind === 'clean' ? _lastClean : _lastEnrich;
-        store0[key] = 0; store0.ran = true;
+        store0[key] = store0[key] || 0; store0.ran = true;
         showBanner(kind === 'clean' ? 'Ya estaba limpio — nada que cambiar' : 'Ya estaba completo — nada que enriquecer', 'info');
         _paint();
+        // Aunque no haya nada que cambiar, la corrida en sí debe quedar guardada
+        // en el borrador — si no, se pierde al recargar y "Limpiar Nombre" vuelve
+        // a verse como si nunca se hubiera corrido (reportado 2026-09-06).
+        apiFetch(`${API}/cantera/batches/${_current.id}/${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entity: 'companies', ids: [..._coSel], fields, apply: true }) }).catch(() => {});
         return;
       }
       _cantOpState = { kind, field, endpoint, fields, changes };
@@ -5782,9 +5793,14 @@ const CanteraModule = (() => {
         if (jst.error) showBanner('Error: ' + jst.error, 'error');
         else {
           showBanner(`✓ ${jst.applied} campo(s) actualizado(s)`, 'success');
-          const key = st.field || 'todos';
+          // Tallea por el campo REAL de cada cambio (st.changes), igual que el
+          // servidor — así "todos los campos" también actualiza la etiqueta de
+          // cada campo suelto (Nombre/Dominio/…) en la misma sesión, no solo el
+          // total agregado.
           const store = st.kind === 'clean' ? _lastClean : _lastEnrich;
-          store[key] = jst.applied;
+          const tally = {};
+          for (const ch of st.changes) tally[ch.campo] = (tally[ch.campo] || 0) + 1;
+          for (const f of st.fields) store[f] = (store[f] || 0) + (tally[f] || 0);
           store.total = (store.total || 0) + jst.applied;
           store.ran = true;
         }
@@ -5950,9 +5966,15 @@ const CanteraModule = (() => {
         _jobProgress = { done: st.done, total: st.total };
         if (!st.running) {
           clearInterval(_jobTimer); _jobRunning = false;
-          _lastIA = { done: st.done, ok: st.done - st.errores, errores: st.errores };
           showBanner(`✓ Investigación terminada · ${st.done - st.errores} ok · ${st.errores} error(es) · $${(st.costoTotal || 0).toFixed(3)}`, 'success');
-          await _refreshContacts(); await _loadCompanies(); _paint();
+          await _refreshContacts(); await _loadCompanies();
+          // "Validado (N)" es el TOTAL acumulado de empresas ya investigadas alguna
+          // vez (persistido, validado_at IS NOT NULL) — no solo lo que procesó esta
+          // corrida puntual, así una corrida posterior sobre empresas nuevas no
+          // "resetea" el número hacia abajo.
+          try { _current = await (await apiFetch(`${API}/cantera/batches/${_current.id}`)).json(); } catch { /* usa lo que ya había */ }
+          _lastIA = _current.validado_total ? { done: _current.validado_total } : null;
+          _paint();
         } else _paint();
       }, 4000);
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }

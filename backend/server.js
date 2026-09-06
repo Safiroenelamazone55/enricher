@@ -6429,7 +6429,8 @@ app.post('/api/cantera/batches', requireAuth, async (req, res) => {
 app.get('/api/cantera/batches/:id', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(`
-      SELECT b.*, oc.nombre AS cliente_nombre, cam.nombre AS campana_nombre, seq.nombre AS secuencia_nombre
+      SELECT b.*, oc.nombre AS cliente_nombre, cam.nombre AS campana_nombre, seq.nombre AS secuencia_nombre,
+             (SELECT COUNT(*) FROM cantera_companies c WHERE c.batch_id=b.id AND c.validado_at IS NOT NULL)::int AS validado_total
         FROM cantera_batches b
         LEFT JOIN outbound_clients oc ON oc.id = b.outbound_client_id
         LEFT JOIN campaigns cam ON cam.id = b.campaign_id
@@ -7053,6 +7054,25 @@ const _canteraBulkJobs = new Map(); // key: batchId -> {running, done, total, ap
 app.get('/api/cantera/batches/:id/bulk-status', requireAuth, (req, res) => {
   res.json(_canteraBulkJobs.get(req.params.id) || { running: false });
 });
+// Total acumulado de Limpiar/Enriquecer por campo — pedido explícito
+// 2026-09-06: "ya limpiamos, no debería ser 0" al recargar. Vivía solo en
+// memoria del navegador; ahora se guarda en el borrador (columna JSONB) así
+// sobrevive a recargas y reaperturas. Se tallea por `campo` real de cada
+// cambio aplicado, no por el campo pedido en la request — así "todos los
+// campos" y una corrida por campo suman al mismo total sin duplicar lógica.
+async function _cantAccumulateStats(batchId, column, fields, changes) {
+  const tally = {};
+  for (const ch of changes) tally[ch.campo] = (tally[ch.campo] || 0) + 1;
+  const { rows } = await pool.query(`SELECT ${column} FROM cantera_batches WHERE id=$1`, [batchId]);
+  const stats = rows[0]?.[column] || {};
+  // Se corre SIEMPRE, incluso con 0 cambios: si no, una corrida que no encontró
+  // nada que tocar (datos ya limpios) se perdía al recargar y volvía a decir
+  // "Limpiar Nombre" como si nunca se hubiera corrido (reportado 2026-09-06).
+  for (const f of fields) stats[f] = (stats[f] || 0) + (tally[f] || 0);
+  stats.total = (stats.total || 0) + changes.length;
+  stats.ran = true;
+  await pool.query(`UPDATE cantera_batches SET ${column}=$1::jsonb WHERE id=$2`, [JSON.stringify(stats), batchId]);
+}
 app.post('/api/cantera/batches/:id/bulk-clean', requireAuth, async (req, res) => {
   const uid = req.workspaceOwnerId;
   const b = req.body || {};
@@ -7086,6 +7106,7 @@ app.post('/api/cantera/batches/:id/bulk-clean', requireAuth, async (req, res) =>
           job.done++;
         }
         job.applied = changes.length;
+        if (entity === 'companies') await _cantAccumulateStats(batchId, 'limpieza_stats', fields, changes);
       } catch (e) { job.error = e.message; }
       job.running = false;
     })();
@@ -7149,6 +7170,7 @@ app.post('/api/cantera/batches/:id/bulk-enrich', requireAuth, async (req, res) =
           job.done++;
         }
         job.applied = changes.length;
+        if (entity === 'companies') await _cantAccumulateStats(batchId, 'enriquecimiento_stats', fields, changes);
       } catch (e) { job.error = e.message; }
       job.running = false;
     })();

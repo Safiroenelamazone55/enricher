@@ -2027,6 +2027,14 @@ async function initDb() {
     // botón como si nunca se hubiera importado nada.
     await pool.query(`ALTER TABLE cantera_batches ADD COLUMN IF NOT EXISTS archivo_nombre TEXT NOT NULL DEFAULT '';`);
 
+    // Totales acumulados de Limpiar/Enriquecer, por campo + 'total' — pedido
+    // explícito 2026-09-06: "ya limpiamos, no debería ser 0" — el contador de
+    // qué se corrió no puede vivir solo en memoria del navegador (se perdía al
+    // recargar la página); ahora se guarda en el borrador y sobrevive a
+    // recargas/reaperturas.
+    await pool.query(`ALTER TABLE cantera_batches ADD COLUMN IF NOT EXISTS limpieza_stats JSONB NOT NULL DEFAULT '{}'::jsonb;`);
+    await pool.query(`ALTER TABLE cantera_batches ADD COLUMN IF NOT EXISTS enriquecimiento_stats JSONB NOT NULL DEFAULT '{}'::jsonb;`);
+
     console.log('[db] tables ready (users, verifications, batch_jobs, clients, projects, tasks, payments, team_members, workspaces, workspace_invites, chat_messages, leads, meetings, fin_config, fin_member_config, pagos_internos, opportunities, opportunity_tasks, cantera_batches, cantera_companies, cantera_contacts, cantera_criterio_templates)');
   } catch (err) {
     console.error('[db] initDb failed:', err.message);
