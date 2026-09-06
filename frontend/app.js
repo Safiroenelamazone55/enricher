@@ -5390,20 +5390,6 @@ const CanteraModule = (() => {
     if (s.has(key)) s.delete(key); else s.add(key);
     _saveVisibleCols(); _paint();
   }
-  function columnsMenu(ev) {
-    if (ev && ev.stopPropagation) ev.stopPropagation();
-    document.querySelectorAll('.cp-mark-menu').forEach(m => m.remove());
-    const s = _loadVisibleCols();
-    const html = `<div class="cp-mark-menu__list">` + CANT_RESULT_COLS.map(c =>
-      `<label class="cant-colchk"><input type="checkbox" ${s.has(c.key) ? 'checked' : ''} onchange="CanteraModule.toggleResultCol('${c.key}')"> ${esc(c.label)}</label>`
-    ).join('') + `</div>`;
-    const menu = document.createElement('div'); menu.className = 'cp-mark-menu'; menu.style.minWidth = '210px'; menu.innerHTML = html;
-    document.body.appendChild(menu);
-    const t = (ev && (ev.currentTarget || ev.target)) || document.body; const r = t.getBoundingClientRect();
-    menu.style.left = `${Math.max(8, Math.min(r.left - 180, window.innerWidth - 220))}px`;
-    menu.style.top = `${r.bottom + 6}px`;
-    setTimeout(() => document.addEventListener('click', function onDoc(e) { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', onDoc); } }), 0);
-  }
   function _colCellHtml(c, key) {
     switch (key) {
       case 'dominio': return esc(c.dominio || '—');
@@ -5577,13 +5563,12 @@ const CanteraModule = (() => {
       </div>` : ''}
 
       ${_step === 4 ? `<div class="cant-section">
-        <div class="cant-results-bar">
+        ${_coSel.size || _onlyFailed || calificadas ? `<div class="cant-results-bar">
           <span class="cant-count">${_coSel.size ? `${_coSel.size} seleccionada(s)` : ''}${_onlyFailed ? ' · viendo solo descartadas' : ''}</span>
           <div class="cant-results-actions">
             ${calificadas ? `<button class="btn btn--ghost btn--sm" onclick="CanteraModule.openPromote()">Mover al CRM (${calificadas})</button>` : ''}
-            <button class="dg-kebab" onclick="CanteraModule.columnsMenu(event)" title="Elegir columnas visibles">⋮</button>
           </div>
-        </div>
+        </div>` : ''}
         ${_jobRunning ? `<p class="cant-hint">Investigando ${_jobProgress.done} de ${_jobProgress.total}… puedes seguir en el sistema, esto sigue en segundo plano.</p>` : ''}
         <div class="lm-dt-wrap dg-dt-wrap"><table class="clients-table dg-table sel-on cant-restbl" style="table-layout:auto">
           <thead><tr><th class="lm-ck-col"><input type="checkbox" class="lm-ck" ${_companies.length && _companies.every(c => _coSel.has(c.id)) ? 'checked' : ''} onclick="CanteraModule.toggleCoSelAll(this.checked)"></th><th class="dg-cell--frozen" id="cant-th-nombre">Nombre<span class="cant-colresize" onmousedown="CanteraModule.startColResize(event)"></span></th>${visCols.map(col => `<th>${esc(col.label)}</th>`).join('')}<th>Contacto</th><th>Puesto</th><th>Prioridad</th></tr></thead>
@@ -5640,40 +5625,74 @@ const CanteraModule = (() => {
   const CANT_CLEAN_LABELS = { nombre: 'Nombre', tamano: 'Nº empleados', dominio: 'Dominio', website: 'Website' };
   const CANT_ENRICH_LABELS = { dominio: 'Dominio', website: 'Website' };
   // Menú único de acciones de Resultados — pedido explícito 2026-09-06:
-  // "Correr filtros básicos / Limpiar empresas / Enriquecer empresas /
-  // Investigación profunda (IA) / Ver solo descartadas" pasan a vivir dentro
-  // de un solo "⋮" en vez de ocupar toda una fila de botones.
+  // "Correr filtros básicos / Limpiar / Enriquecer / Investigación profunda
+  // (IA) / Ver solo descartadas / Elegir columnas" viven todas dentro de un
+  // solo "⋮" arriba (junto a la fila de pasos). "Limpiar", "Enriquecer" y
+  // "Elegir columnas" abren su propia "ventanita" (submenu lateral, mismo
+  // patrón hover-flyout que "Resolver respuesta" en el Inbox) en vez de
+  // listar todo de golpe en el menú principal.
   function resultsMenu(ev) {
     if (ev && ev.stopPropagation) ev.stopPropagation();
     document.querySelectorAll('.cp-mark-menu').forEach(m => m.remove());
     const close = "document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove())";
     const item = (label, onclick) => `<button class="cp-mark-menu__b" onclick="${close};${onclick}">${label}</button>`;
+    const sub = (label, panelHtml, scrollable) => `<div class="cp-mark-menu__sub">
+      <div class="cp-mark-menu__b cp-mark-menu__b--sub">${label} <span class="cp-mark-menu__arrow">▸</span></div>
+      <div class="cp-mark-menu__subpanel"><div class="cp-mark-menu__list"${scrollable ? ' style="max-height:320px;overflow-y:auto"' : ''}>${panelHtml}</div></div>
+    </div>`;
     // Cada opción refleja SU PROPIO resultado, no un total general — pedido
     // explícito 2026-09-06: "si le doy Limpiar todo y la limpié todo, debe
     // salir 'Limpiado todo (80)' en vez de 'Limpiar todo'".
-    const cleanItems = Object.keys(CANT_CLEAN_LABELS).map(f =>
+    const cleanPanel = Object.keys(CANT_CLEAN_LABELS).map(f =>
       item(_lastClean[f] !== undefined ? `${CANT_CLEAN_LABELS[f]} limpiado (${_lastClean[f]})` : `Limpiar ${CANT_CLEAN_LABELS[f]}`, `CanteraModule.runClean('${f}')`)
     ).join('') + item(_lastClean.todos !== undefined ? `Limpiado todo (${_lastClean.todos})` : 'Limpiar todos los campos', `CanteraModule.runClean(null)`);
-    const enrichItems = Object.keys(CANT_ENRICH_LABELS).map(f =>
+    const enrichPanel = Object.keys(CANT_ENRICH_LABELS).map(f =>
       item(_lastEnrich[f] !== undefined ? `${CANT_ENRICH_LABELS[f]} enriquecido (${_lastEnrich[f]})` : `Enriquecer ${CANT_ENRICH_LABELS[f]}`, `CanteraModule.runEnrich('${f}')`)
     ).join('') + item(_lastEnrich.todos !== undefined ? `Enriquecido todo (${_lastEnrich.todos})` : 'Enriquecer todos los campos', `CanteraModule.runEnrich(null)`);
+    const visCols = _loadVisibleCols();
+    const colsPanel = CANT_RESULT_COLS.map(c => `<label class="cant-colchk"><input type="checkbox" ${visCols.has(c.key) ? 'checked' : ''} onchange="CanteraModule.toggleResultCol('${c.key}')"> ${esc(c.label)}</label>`).join('');
     const html = `<div class="cp-mark-menu__list">${item(_lastFiltros ? `Filtros corridos (${_lastFiltros.aprobadas} aprobada(s))` : 'Correr filtros básicos', 'CanteraModule.runFiltros()')}</div>
       <div class="cp-mark-menu__sep"></div>
-      <div class="cp-mark-menu__h">Limpiar</div>
-      <div class="cp-mark-menu__list">${cleanItems}</div>
-      <div class="cp-mark-menu__sep"></div>
-      <div class="cp-mark-menu__h">Enriquecer</div>
-      <div class="cp-mark-menu__list">${enrichItems}</div>
+      <div class="cp-mark-menu__list">${sub('Limpiar', cleanPanel)}${sub('Enriquecer', enrichPanel)}</div>
       <div class="cp-mark-menu__sep"></div>
       <div class="cp-mark-menu__list">
         ${item(_jobRunning ? 'Investigación profunda (IA)…' : (_lastIA ? `Investigación completa (${_lastIA.ok} ok)` : 'Investigación profunda (IA)'), 'CanteraModule.runValidacion()')}
         ${item(`${_onlyFailed ? '✓ ' : ''}Ver solo descartadas`, 'CanteraModule.toggleFailed()')}
-      </div>`;
+      </div>
+      <div class="cp-mark-menu__sep"></div>
+      <div class="cp-mark-menu__list">${sub('Elegir columnas visibles', colsPanel, true)}</div>`;
     const menu = document.createElement('div'); menu.className = 'cp-mark-menu'; menu.style.minWidth = '240px'; menu.innerHTML = html;
     document.body.appendChild(menu);
     const t = (ev && (ev.currentTarget || ev.target)) || document.body; const r = t.getBoundingClientRect();
     menu.style.left = `${Math.max(8, Math.min(r.right - 240, window.innerWidth - 250))}px`; menu.style.top = `${r.bottom + 6}px`;
-    setTimeout(() => document.addEventListener('click', function onDoc(e) { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', onDoc); } }), 0);
+    // Mismo submenu-por-hover que "Resolver respuesta" del Inbox — mide el
+    // espacio real a cada lado para no salirse de la pantalla.
+    menu.querySelectorAll('.cp-mark-menu__sub').forEach(subEl => {
+      const panel = subEl.querySelector('.cp-mark-menu__subpanel');
+      if (!panel) return;
+      subEl.addEventListener('mouseenter', () => {
+        const subRect = subEl.getBoundingClientRect();
+        const needed = 310;
+        if (window.innerWidth - subRect.right < needed && subRect.left >= needed) {
+          panel.style.left = 'auto'; panel.style.right = '100%'; panel.style.marginLeft = '0'; panel.style.marginRight = '4px';
+        } else {
+          panel.style.left = '100%'; panel.style.right = 'auto'; panel.style.marginLeft = '4px'; panel.style.marginRight = '0';
+        }
+        panel.style.display = 'block';
+      });
+      subEl.addEventListener('mouseleave', () => { panel.style.display = 'none'; });
+    });
+    // El menú quedaba "flotando" en un punto fijo de la pantalla al hacer scroll
+    // de la página, lejos del botón que lo abrió — se cierra en vez de eso
+    // (reportado 2026-09-06: "seleccioné los 3 puntos pero scroleo, baja con todo").
+    const onScroll = () => closeMenu();
+    const onDoc = e => { if (!menu.contains(e.target)) closeMenu(); };
+    function closeMenu() {
+      menu.remove();
+      document.removeEventListener('click', onDoc);
+      window.removeEventListener('scroll', onScroll, true);
+    }
+    setTimeout(() => { document.addEventListener('click', onDoc); window.addEventListener('scroll', onScroll, true); }, 0);
   }
   let _cantOpState = null; // { kind:'clean'|'enrich', field, changes }
   async function _cantPreview(kind, field, endpoint, labels, titlePrefix) {
@@ -6143,7 +6162,7 @@ const CanteraModule = (() => {
     openImportModal, closeImportModal, impFile, impToggleHeader, impRun, impSetMode, deleteAndReimport, cbxOpen, cbxFilter, cbxPick, cbxBlur,
     taOpen, taFilter, taBlur, addFiltro, removeFiltro,
     toggleCoSel, toggleCoSelAll, resultsMenu, runClean, runEnrich, closeCantOp, applyCantOp,
-    toggleResultCol, columnsMenu, startColResize,
+    toggleResultCol, startColResize,
     setContactPrioridad, cantGoPage, cantSetPageSize,
     openManualValidation, closeManualValidation, copyManualData, saveManualValidation, quitarValidacionManual };
 })();
