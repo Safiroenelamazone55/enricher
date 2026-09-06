@@ -5463,8 +5463,9 @@ const CanteraModule = (() => {
     { key: 'paso1_motivo', label: 'Motivo paso 1', def: true },
     { key: 'tier_clave', label: 'Tier', def: true },
     { key: 'confianza', label: 'Confianza', def: true },
+    { key: 'prioridad', label: 'Prioridad (empresa)', def: true },
     { key: 'paso2_estado', label: 'Paso 2', def: true },
-    { key: 'motivo_descarte', label: 'Motivo paso 2', def: true },
+    { key: 'motivo_descarte', label: 'Nota', def: true },
     { key: 'contactos', label: 'Contactos', def: true },
     { key: 'auditoria', label: 'Auditoría', def: true },
   ];
@@ -5498,8 +5499,9 @@ const CanteraModule = (() => {
       case 'paso1_motivo': return `<span title="${esc(c.paso1_motivo)}">${esc(c.paso1_motivo || '—')}</span>`;
       case 'tier_clave': return esc(c.tier_clave || '—');
       case 'confianza': return esc(c.confianza || '—');
+      case 'prioridad': return esc(c.prioridad || '—');
       case 'paso2_estado': return `<span class="cant-estado cant-estado--${esc(c.paso2_estado)}">${_estadoLabel(c.paso2_estado)}</span> <button class="cant-x" style="font-size:.72rem" onclick="event.stopPropagation();CanteraModule.openManualValidation(${c.id})" title="${['validacion_manual', 'descartado_manual'].includes(c.paso2_estado) ? 'Editar validación manual' : 'Validar manualmente'}">✎</button>`;
-      case 'motivo_descarte': return ['validacion_manual', 'descartado_manual'].includes(c.paso2_estado) ? esc(c.nota_manual || '(sin nota)') : `<span title="${esc(c.motivo_descarte)}">${esc(c.motivo_descarte || '—')}</span>`;
+      case 'motivo_descarte': { const partes = [c.motivo_descarte, c.nota_manual].filter(Boolean); const texto = partes.join(' — '); return texto ? `<span title="${esc(texto)}">${esc(texto)}</span>` : '<span class="cant-hint" style="margin:0">—</span>'; }
       case 'contactos': return `${c.contactos}${c.contactos > 1 ? ' <span class="tag" style="margin-left:4px">multi</span>' : ''}`;
       case 'auditoria': return c.auditoria_veredicto === 'de_acuerdo' ? `<span class="cant-estado cant-estado--aprobado" title="${esc(c.auditoria_nota)}">✓ Confirmado</span>`
         : c.auditoria_veredicto === 'en_desacuerdo' ? `<span class="cant-estado cant-estado--descartado" title="${esc(c.auditoria_nota)}">✕ En desacuerdo</span>`
@@ -6053,7 +6055,15 @@ const CanteraModule = (() => {
             <option value="baja"${co.confianza === 'baja' ? ' selected' : ''}>Baja</option>
           </select>
         </label>
-        <label class="cant-flabel">Nota<span class="field-note">opcional</span><textarea id="cant-manual-nota" class="form-input" rows="2" placeholder="Por qué este Tier (o por qué se descarta)…" onblur="CanteraModule.saveManualValidation(${co.id})">${esc(co.nota_manual || '')}</textarea></label>
+        <label class="cant-flabel">Prioridad<span class="field-note">opcional — la IA siempre la completa, a mano es tu decisión</span>
+          <select id="cant-manual-prioridad" class="form-input" onchange="CanteraModule.saveManualValidation(${co.id})">
+            <option value="">— sin definir —</option>
+            <option value="alta"${co.prioridad === 'alta' ? ' selected' : ''}>Alta</option>
+            <option value="media"${co.prioridad === 'media' ? ' selected' : ''}>Media</option>
+            <option value="baja"${co.prioridad === 'baja' ? ' selected' : ''}>Baja</option>
+          </select>
+        </label>
+        <label class="cant-flabel">Nota<span class="field-note">opcional — resumen útil de la empresa</span><textarea id="cant-manual-nota" class="form-input" rows="2" placeholder="Por qué este Tier (o por qué se descarta)…" onblur="CanteraModule.saveManualValidation(${co.id})">${esc(co.nota_manual || '')}</textarea></label>
       </div>
       <div class="fin-pi-box__ft">
         <span>${['validacion_manual', 'descartado_manual'].includes(co.paso2_estado) ? `<button class="lm-bulk-ghost" onclick="CanteraModule.quitarValidacionManual(${co.id})">Quitar validación manual</button>` : ''}</span>
@@ -6078,9 +6088,10 @@ const CanteraModule = (() => {
     if (!tier) return; // la Nota puede perder el foco antes de elegir Tier — nada que guardar aún
     const nota = document.getElementById('cant-manual-nota')?.value || '';
     const confianza = document.getElementById('cant-manual-confianza')?.value || '';
+    const prioridad = document.getElementById('cant-manual-prioridad')?.value || '';
     try {
       const res = await apiFetch(`${API}/cantera/batches/${_current.id}/companies/${companyId}/validar-manual`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tier_clave: tier, nota, confianza }),
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tier_clave: tier, nota, confianza, prioridad }),
       });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || 'Error');
@@ -6658,9 +6669,10 @@ const CanteraMesaModule = (() => {
     { key: 'paso1_estado', label: 'Paso 1', def: true },
     { key: 'paso1_motivo', label: 'Motivo paso 1', def: false },
     { key: 'tier_clave', label: 'Tier', def: true },
-    { key: 'confianza', label: 'Confianza', def: false },
+    { key: 'confianza', label: 'Confianza', def: true },
+    { key: 'prioridad', label: 'Prioridad (empresa)', def: true },
     { key: 'paso2_estado', label: 'Paso 2', def: true },
-    { key: 'motivo_descarte', label: 'Motivo paso 2', def: false },
+    { key: 'motivo_descarte', label: 'Nota', def: true },
     { key: 'contactos', label: 'Contactos', def: true },
     { key: 'auditoria', label: 'Auditoría', def: true },
   ];
@@ -6688,8 +6700,9 @@ const CanteraMesaModule = (() => {
       case 'paso1_motivo': return `<span title="${esc(c.paso1_motivo)}">${esc(c.paso1_motivo || '—')}</span>`;
       case 'tier_clave': return esc(c.tier_clave || '—');
       case 'confianza': return esc(c.confianza || '—');
+      case 'prioridad': return esc(c.prioridad || '—');
       case 'paso2_estado': return `<span class="cant-estado cant-estado--${esc(c.paso2_estado)}">${_estadoLabel(c.paso2_estado)}</span> <button class="cant-x" style="font-size:.72rem" onclick="event.stopPropagation();CanteraMesaModule.openManualValidation(${c.id},${c.batch_id})" title="${['validacion_manual', 'descartado_manual'].includes(c.paso2_estado) ? 'Editar validación manual' : 'Validar manualmente'}">✎</button>`;
-      case 'motivo_descarte': return ['validacion_manual', 'descartado_manual'].includes(c.paso2_estado) ? esc(c.nota_manual || '(sin nota)') : `<span title="${esc(c.motivo_descarte)}">${esc(c.motivo_descarte || '—')}</span>`;
+      case 'motivo_descarte': { const partes = [c.motivo_descarte, c.nota_manual].filter(Boolean); const texto = partes.join(' — '); return texto ? `<span title="${esc(texto)}">${esc(texto)}</span>` : '<span class="cant-hint" style="margin:0">—</span>'; }
       case 'contactos': return `${c.contactos}${c.contactos > 1 ? ' <span class="tag" style="margin-left:4px">multi</span>' : ''}`;
       case 'auditoria': return c.auditoria_veredicto === 'de_acuerdo' ? `<span class="cant-estado cant-estado--aprobado" title="${esc(c.auditoria_nota)}">✓ Confirmado</span>`
         : c.auditoria_veredicto === 'en_desacuerdo' ? `<span class="cant-estado cant-estado--descartado" title="${esc(c.auditoria_nota)}">✕ En desacuerdo</span>`
@@ -6763,8 +6776,15 @@ const CanteraMesaModule = (() => {
     all.forEach(k => { (map[k.company_id] = map[k.company_id] || []).push(k); });
     _contactsByBatch[batchId] = map;
   }
+  // Solo una empresa expandida a la vez en Mesa de trabajo — pedido explícito
+  // 2026-09-06: "cuando se abre los contactos de una empresa, automáticamente
+  // se cierra los de la otra". A diferencia de Resultados de un borrador
+  // (mismo patrón, no tocado — ahí sí puede haber varias abiertas), acá hay
+  // muchas más filas visibles a la vez y varias abiertas se vuelve ilegible.
   async function toggleExpand(companyId, batchId) {
-    if (_expanded.has(companyId)) { _expanded.delete(companyId); _paint(); return; }
+    const yaAbierta = _expanded.has(companyId);
+    _expanded.clear();
+    if (yaAbierta) { _paint(); return; }
     _expanded.add(companyId);
     await _ensureContactsForBatch(batchId);
     _paint();
@@ -7037,7 +7057,15 @@ const CanteraMesaModule = (() => {
             <option value="baja"${co.confianza === 'baja' ? ' selected' : ''}>Baja</option>
           </select>
         </label>
-        <label class="cant-flabel">Nota<span class="field-note">opcional</span><textarea id="mesa-manual-nota" class="form-input" rows="2" placeholder="Por qué este Tier (o por qué se descarta)…" onblur="CanteraMesaModule.saveManualValidation(${companyId},${batchId})">${esc(co.nota_manual || '')}</textarea></label>
+        <label class="cant-flabel">Prioridad<span class="field-note">opcional — la IA siempre la completa, a mano es tu decisión</span>
+          <select id="mesa-manual-prioridad" class="form-input" onchange="CanteraMesaModule.saveManualValidation(${companyId},${batchId})">
+            <option value="">— sin definir —</option>
+            <option value="alta"${co.prioridad === 'alta' ? ' selected' : ''}>Alta</option>
+            <option value="media"${co.prioridad === 'media' ? ' selected' : ''}>Media</option>
+            <option value="baja"${co.prioridad === 'baja' ? ' selected' : ''}>Baja</option>
+          </select>
+        </label>
+        <label class="cant-flabel">Nota<span class="field-note">opcional — resumen útil de la empresa</span><textarea id="mesa-manual-nota" class="form-input" rows="2" placeholder="Por qué este Tier (o por qué se descarta)…" onblur="CanteraMesaModule.saveManualValidation(${companyId},${batchId})">${esc(co.nota_manual || '')}</textarea></label>
       </div>
       <div class="fin-pi-box__ft">
         <span>${['validacion_manual', 'descartado_manual'].includes(co.paso2_estado) ? `<button class="lm-bulk-ghost" onclick="CanteraMesaModule.quitarValidacionManual(${companyId},${batchId})">Quitar validación manual</button>` : ''}</span>
@@ -7055,8 +7083,9 @@ const CanteraMesaModule = (() => {
     if (!tier) return;
     const nota = document.getElementById('mesa-manual-nota')?.value || '';
     const confianza = document.getElementById('mesa-manual-confianza')?.value || '';
+    const prioridad = document.getElementById('mesa-manual-prioridad')?.value || '';
     try {
-      const res = await apiFetch(`${API}/cantera/batches/${batchId}/companies/${companyId}/validar-manual`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tier_clave: tier, nota, confianza }) });
+      const res = await apiFetch(`${API}/cantera/batches/${batchId}/companies/${companyId}/validar-manual`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tier_clave: tier, nota, confianza, prioridad }) });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || 'Error');
       showBanner('✓ Guardado', 'success');

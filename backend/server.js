@@ -7187,13 +7187,14 @@ app.patch('/api/cantera/batches/:id/companies/:companyId/validar-manual', requir
   const tierClave = descartar ? '' : _lmS(b.tier_clave);
   if (!descartar && !tierClave) return res.status(400).json({ error: 'Elige un Tier (o Descartar)' });
   const confianza = ['alta', 'media', 'baja'].includes(b.confianza) ? b.confianza : '';
+  const prioridad = ['alta', 'media', 'baja'].includes(b.prioridad) ? b.prioridad : '';
   const nota = _lmS(b.nota);
   try {
     const { rows } = await pool.query(`
       UPDATE cantera_companies
-         SET paso2_estado=$1, tier_clave=$2, nota_manual=$3, motivo_descarte='', confianza=$4, evidencia='[]', validado_at=NOW()
-       WHERE id=$5 AND batch_id=$6 AND user_id=$7 RETURNING *
-    `, [descartar ? 'descartado_manual' : 'validacion_manual', tierClave, nota, confianza, req.params.companyId, req.params.id, uid]);
+         SET paso2_estado=$1, tier_clave=$2, nota_manual=$3, motivo_descarte='', confianza=$4, prioridad=$5, evidencia='[]', validado_at=NOW()
+       WHERE id=$6 AND batch_id=$7 AND user_id=$8 RETURNING *
+    `, [descartar ? 'descartado_manual' : 'validacion_manual', tierClave, nota, confianza, prioridad, req.params.companyId, req.params.id, uid]);
     if (!rows.length) return res.status(404).json({ error: 'Empresa no encontrada' });
     res.json(rows[0]);
   } catch (err) { console.error('[cantera] validar-manual', err.message); res.status(500).json({ error: 'Error al guardar la validación manual' }); }
@@ -7203,7 +7204,7 @@ app.patch('/api/cantera/batches/:id/companies/:companyId/validar-manual', requir
 app.patch('/api/cantera/batches/:id/companies/:companyId/quitar-validacion', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(`
-      UPDATE cantera_companies SET paso2_estado='pendiente', tier_clave='', nota_manual='', confianza='', validado_at=NULL
+      UPDATE cantera_companies SET paso2_estado='pendiente', tier_clave='', nota_manual='', confianza='', prioridad='', validado_at=NULL
        WHERE id=$1 AND batch_id=$2 AND user_id=$3 AND paso2_estado IN ('validacion_manual','descartado_manual') RETURNING *
     `, [req.params.companyId, req.params.id, req.workspaceOwnerId]);
     if (!rows.length) return res.status(404).json({ error: 'Empresa no encontrada (o no tiene validación manual)' });

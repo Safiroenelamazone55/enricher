@@ -1997,6 +1997,12 @@ async function initDb() {
     // error) para que quede claro que NO pasó por el motor de IA — pedido explícito
     // 2026-09-05: "la etiqueta del sistema sería validación manual".
     await pool.query(`ALTER TABLE cantera_companies ADD COLUMN IF NOT EXISTS nota_manual TEXT NOT NULL DEFAULT '';`);
+    // nota_manual pasó a tener doble uso (pedido explícito 2026-09-06): también
+    // la completa la IA como resumen de una o dos frases en cada investigación
+    // — "la nota a modo de resumen, algo útil". Se reutiliza esta misma columna
+    // (nunca fue exclusiva de "manual" a nivel de dato, solo de nombre) en vez
+    // de crear una columna redundante.
+    await pool.query(`ALTER TABLE cantera_companies ADD COLUMN IF NOT EXISTS prioridad TEXT NOT NULL DEFAULT '';`); // alta | media | baja — nivel EMPRESA (no confundir con cantera_contacts.prioridad, que es por contacto)
 
     // Más campos del export real de LinkedIn Sales Navigator que Jenny va a cargar
     // en Cantera (pedido explícito 2026-09-05, adjuntó el archivo real: trae más

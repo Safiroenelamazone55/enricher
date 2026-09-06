@@ -107,10 +107,19 @@ ${_tiersBlock(batch.tiers)}
 PUESTOS A CONTACTAR POR TIER (para decidir prioridad de contacto una vez clasificada la empresa):
 ${_puestosBlock(batch.puestos, batch.tiers)}
 
+PRIORIDAD (qué tan urgente es trabajar esta empresa AHORA frente a las demás calificadas — no confundir con el Tier, que es a qué segmento pertenece):
+- "alta": calificó con margen claro en su Tier (no por poco) Y tiene al menos un contacto "decide" identificado.
+- "baja": calificó por un margen ajustado, o solo hay contactos "respaldo" disponibles (ningún "decide"), o se descartó.
+- "media": los demás casos.
+
+NOTA (resumen, SIEMPRE obligatorio, tanto si calificó como si se descartó): una o dos frases que cualquiera pueda leer sin abrir la evidencia completa — qué hace la empresa y por qué calificó (o por qué no). Nunca la dejes vacía.
+
 FORMATO DE SALIDA — responde ÚNICAMENTE un objeto JSON válido, sin texto ni fences alrededor, con esta forma exacta:
 {
   "tier_clave": "TIER_1A o vacío si se descarta",
   "confianza": "alta | media | baja",
+  "prioridad": "alta | media | baja",
+  "nota": "resumen breve y útil en una o dos frases — nunca vacío",
   "evidencia": [{"fuente": "nombre de la fuente", "url": "https://...", "resumen": "qué dice y por qué importa"}],
   "motivo_descarte": "vacío si calificó; si no, la razón exacta y específica a ESTA empresa",
   "contactos": [{"cargo": "el cargo tal como aparece en la lista que te paso", "puesto_estado": "decide | respaldo | descartado", "motivo": "por qué, especialmente si se descarta un cargo parecido"}]
@@ -268,10 +277,11 @@ async function runBatchValidation(pool, uid, batchId, { onProgress, companyIds }
       const aprobado = !!tierClave;
       await pool.query(`
         UPDATE cantera_companies SET
-          paso2_estado=$1, tier_clave=$2, confianza=$3, evidencia=$4::jsonb, motivo_descarte=$5, validado_at=NOW()
-        WHERE id=$6`,
+          paso2_estado=$1, tier_clave=$2, confianza=$3, evidencia=$4::jsonb, motivo_descarte=$5, prioridad=$6, nota_manual=$7, validado_at=NOW()
+        WHERE id=$8`,
         [aprobado ? 'aprobado' : 'descartado', tierClave, String(parsed.confianza || ''),
-         JSON.stringify(parsed.evidencia || []), String(parsed.motivo_descarte || ''), company.id]);
+         JSON.stringify(parsed.evidencia || []), String(parsed.motivo_descarte || ''),
+         String(parsed.prioridad || ''), String(parsed.nota || ''), company.id]);
 
       // Empareja cada contacto importado con su resultado por CARGO (mismo orden/texto
       // que se le mandó al modelo) — si no calza ninguno, queda pendiente sin tocar.
