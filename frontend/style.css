@@ -12419,7 +12419,7 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .cant-restbl th.dg-cell--frozen, .cant-restbl td.dg-cell--frozen { width: var(--cant-nombre-w, 220px); max-width: var(--cant-nombre-w, 220px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cant-colresize { position: absolute; top: 0; right: 0; width: 6px; height: 100%; cursor: col-resize; }
 .cant-colresize:hover, .cant-colresize:active { background: var(--brand, #007AFF); opacity: .4; }
-.cant-colchk { display: flex; align-items: center; gap: 8px; padding: 7px 10px; font-size: .82rem; color: var(--text, #0A2540); cursor: pointer; }
+.cant-colchk { display: flex; align-items: center; gap: 8px; padding: 3px 10px; font-size: .82rem; color: var(--text, #0A2540); cursor: pointer; }
 .cant-colchk:hover { background: var(--brand-ll, #F1EFEB); }
 .cant-save-row { margin-top: 10px; }
 

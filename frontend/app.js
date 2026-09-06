@@ -5809,20 +5809,27 @@ const CanteraModule = (() => {
     menu.style.left = `${Math.max(8, Math.min(r.right - 240, window.innerWidth - 250))}px`; menu.style.top = `${r.bottom + 6}px`;
     // Mismo submenu-por-hover que "Resolver respuesta" del Inbox — mide el
     // espacio real a cada lado para no salirse de la pantalla.
+    // Se cerraba solo al mover el mouse hacia la ventanita (reportado
+    // 2026-09-06) — el pequeño hueco entre la fila y el panel bastaba para
+    // que el navegador disparara mouseleave a mitad de camino. Se quita ese
+    // hueco (sin margen) y además se da un margen de tolerancia (200ms) antes
+    // de ocultar, por si el cursor sale un instante.
     menu.querySelectorAll('.cp-mark-menu__sub').forEach(subEl => {
       const panel = subEl.querySelector('.cp-mark-menu__subpanel');
       if (!panel) return;
+      let hideTimer = null;
       subEl.addEventListener('mouseenter', () => {
+        clearTimeout(hideTimer);
         const subRect = subEl.getBoundingClientRect();
         const needed = 310;
         if (window.innerWidth - subRect.right < needed && subRect.left >= needed) {
-          panel.style.left = 'auto'; panel.style.right = '100%'; panel.style.marginLeft = '0'; panel.style.marginRight = '4px';
+          panel.style.left = 'auto'; panel.style.right = '100%'; panel.style.marginLeft = '0'; panel.style.marginRight = '0';
         } else {
-          panel.style.left = '100%'; panel.style.right = 'auto'; panel.style.marginLeft = '4px'; panel.style.marginRight = '0';
+          panel.style.left = '100%'; panel.style.right = 'auto'; panel.style.marginLeft = '0'; panel.style.marginRight = '0';
         }
         panel.style.display = 'block';
       });
-      subEl.addEventListener('mouseleave', () => { panel.style.display = 'none'; });
+      subEl.addEventListener('mouseleave', () => { hideTimer = setTimeout(() => { panel.style.display = 'none'; }, 200); });
     });
     // El menú quedaba "flotando" en un punto fijo de la pantalla al hacer scroll
     // de la página, lejos del botón que lo abrió — se cierra en vez de eso
