@@ -6443,7 +6443,8 @@ app.get('/api/cantera/batches/:id', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(`
       SELECT b.*, oc.nombre AS cliente_nombre, cam.nombre AS campana_nombre, seq.nombre AS secuencia_nombre,
-             (SELECT COUNT(*) FROM cantera_companies c WHERE c.batch_id=b.id AND c.validado_at IS NOT NULL)::int AS validado_total,
+             (SELECT COUNT(*) FROM cantera_companies c WHERE c.batch_id=b.id AND c.paso2_estado IN ('aprobado','descartado'))::int AS validado_ia_total,
+             (SELECT COUNT(*) FROM cantera_companies c WHERE c.batch_id=b.id AND c.paso2_estado='validacion_manual')::int AS validado_manual_total,
              (SELECT COUNT(*) FROM cantera_companies c WHERE c.batch_id=b.id AND c.paso1_estado <> 'pendiente')::int AS filtro_total,
              (SELECT COUNT(*) FROM cantera_contacts k WHERE k.batch_id=b.id)::int AS contactos_total,
              (SELECT COUNT(*) FROM (SELECT company_id FROM cantera_contacts WHERE batch_id=b.id GROUP BY company_id HAVING COUNT(*) > 1) t)::int AS empresas_multi_contacto,

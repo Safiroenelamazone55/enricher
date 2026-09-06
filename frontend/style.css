@@ -12364,8 +12364,6 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .cant-step { display: flex; align-items: center; gap: 7px; font-family: inherit; font-size: .84rem; font-weight: 600; color: var(--muted, #B4AFA8); background: none; border: none; border-bottom: 2px solid transparent; padding: 9px 4px 10px; margin-bottom: -1px; cursor: pointer; white-space: nowrap; }
 .cant-step:hover { color: var(--text2, #45586A); }
 .cant-step.on { color: var(--text, #0A2540); border-bottom-color: var(--brand, #007AFF); }
-.cant-step__n { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 50%; font-size: .68rem; font-weight: 700; background: var(--bg, #F1EFEB); color: var(--muted, #B4AFA8); }
-.cant-step.on .cant-step__n { background: var(--brand, #007AFF); color: #fff; }
 @media (max-width: 760px) { .cant-stepbar { overflow-x: auto; flex-wrap: nowrap; } }
 .cant-stepbar__more { margin-left: auto; align-self: center; }
 .cant-filters-row, .cant-import-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -12434,7 +12432,15 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 @media (max-width: 860px) { .cant-global-layout { flex-direction: column; } .cant-global-panel { flex: 1 1 auto; width: 100%; } }
 
 /* Selector con autocompletado (Filtros básicos) — nunca texto libre. */
-.filters-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; margin-bottom: 6px; }
+/* 5 campos fijos (país/industria/tamaño/seniority/departamento) — antes con
+   auto-fill el 5º quedaba solo en una 2ª fila, más alto y descuadrado del
+   resto (reportado 2026-09-06: "se ve desordenado y muy alto, organiza
+   distribuye mejor"). Con columnas fijas los 5 quedan en una sola fila y el
+   grid los estira parejo a la misma altura automáticamente. */
+.filters-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 6px; align-items: stretch; }
+@media (max-width: 1200px) { .filters-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 720px) { .filters-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 480px) { .filters-grid { grid-template-columns: 1fr; } }
 .filter-field { background: var(--white, #fff); border: 1px solid var(--border, #EAE7E2); border-radius: 0; padding: 10px 12px; }
 .field-label { display: block; font-size: .74rem; font-weight: 700; color: var(--text2, #6C6862); margin-bottom: 6px; }
 .tag-list { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 6px; }

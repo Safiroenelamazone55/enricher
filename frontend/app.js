@@ -5427,7 +5427,7 @@ const CanteraModule = (() => {
     _lastFiltros = _current.filtro_total ? { total: _current.filtro_total } : null;
     _lastClean = { ...(_current.limpieza_stats || {}) };
     _lastEnrich = { ...(_current.enriquecimiento_stats || {}) };
-    _lastIA = _current.validado_total ? { done: _current.validado_total } : null;
+    _lastIA = _current.validado_ia_total ? { done: _current.validado_ia_total } : null;
     if (!_filtroOpts) { try { _filtroOpts = await (await apiFetch(`${API}/cantera/opciones-filtro`)).json(); } catch { _filtroOpts = {}; } }
     await _loadCompanies();
     _view = 'detail'; _paint();
@@ -5571,11 +5571,11 @@ const CanteraModule = (() => {
       </div>
 
       <div class="cant-stepbar">
-        <button class="cant-step${_step === 1 ? ' on' : ''}" onclick="CanteraModule.setStep(1)"><span class="cant-step__n">1</span>Filtros básicos</button>
-        <button class="cant-step${_step === 2 ? ' on' : ''}" onclick="CanteraModule.setStep(2)"><span class="cant-step__n">2</span>Criterio de calificación</button>
-        <button class="cant-step${_step === 3 ? ' on' : ''}" onclick="CanteraModule.setStep(3)"><span class="cant-step__n">3</span>Importar prospectos</button>
-        <button class="cant-step${_step === 4 ? ' on' : ''}" onclick="CanteraModule.setStep(4)"><span class="cant-step__n">4</span>Resultados${_companies.length ? ` (${_companies.length})` : ''}</button>
-        <button class="cant-step${_step === 5 ? ' on' : ''}" onclick="CanteraModule.setStep(5)"><span class="cant-step__n">5</span>Información</button>
+        <button class="cant-step${_step === 1 ? ' on' : ''}" onclick="CanteraModule.setStep(1)">Filtros básicos</button>
+        <button class="cant-step${_step === 2 ? ' on' : ''}" onclick="CanteraModule.setStep(2)">Criterio de calificación</button>
+        <button class="cant-step${_step === 3 ? ' on' : ''}" onclick="CanteraModule.setStep(3)">Importar prospectos</button>
+        <button class="cant-step${_step === 4 ? ' on' : ''}" onclick="CanteraModule.setStep(4)">Resultados${_companies.length ? ` (${_companies.length})` : ''}</button>
+        <button class="cant-step${_step === 5 ? ' on' : ''}" onclick="CanteraModule.setStep(5)">Información</button>
         ${_step === 4 && _companies.length ? `<button class="dg-kebab cant-stepbar__more" onclick="CanteraModule.resultsMenu(event)" title="Filtros, limpieza, enriquecimiento e investigación">⋮</button>` : ''}
       </div>
 
@@ -5650,11 +5650,10 @@ const CanteraModule = (() => {
       </div>` : ''}
 
       ${_step === 4 ? `<div class="cant-section">
-        ${_coSel.size || _onlyFailed || calificadas || _tierFiltro.size || _prioFiltro.size ? `<div class="cant-results-bar">
+        ${_coSel.size || _onlyFailed || _tierFiltro.size || _prioFiltro.size ? `<div class="cant-results-bar">
           <span class="cant-count">${_coSel.size ? `${_coSel.size} seleccionada(s)` : ''}${_onlyFailed ? ' · viendo solo descartadas' : ''}${_tierFiltro.size ? ` · Tier: ${[..._tierFiltro].join(', ')}` : ''}${_prioFiltro.size ? ` · Prioridad: ${[..._prioFiltro].join(', ')}` : ''}</span>
           <div class="cant-results-actions">
             ${_coSel.size ? `<button class="btn btn--primary btn--sm" onclick="CanteraModule.openSendSeq()">Enviar a secuencia (${_coSel.size})</button>` : ''}
-            ${calificadas ? `<button class="btn btn--ghost btn--sm" onclick="CanteraModule.openPromote()">Mover al CRM (${calificadas})</button>` : ''}
           </div>
         </div>` : ''}
         ${_jobRunning ? `<p class="cant-hint">Investigando ${_jobProgress.done} de ${_jobProgress.total}… puedes seguir en el sistema, esto sigue en segundo plano.</p>` : ''}
@@ -5696,7 +5695,8 @@ const CanteraModule = (() => {
           ${stat(aprobadas, 'aprobadas en el filtro básico')}
           ${stat(descartadas1, 'descartadas en el filtro básico')}
           ${stat(pendientes1, 'todavía sin correr el filtro básico')}
-          ${stat(_current.validado_total || 0, 'investigadas con IA (paso 2)')}
+          ${stat(_current.validado_ia_total || 0, 'investigadas con IA (paso 2)')}
+          ${stat(_current.validado_manual_total || 0, 'validadas a mano (paso 2)')}
           ${stat(calificadas, 'calificadas para mover al CRM')}
         </div>
       </div>
@@ -5787,6 +5787,7 @@ const CanteraModule = (() => {
   function resultsMenu(ev) {
     if (ev && ev.stopPropagation) ev.stopPropagation();
     document.querySelectorAll('.cp-mark-menu').forEach(m => m.remove());
+    const calificadas = _companies.filter(c => c.paso2_estado === 'aprobado' || c.paso2_estado === 'validacion_manual').length;
     const close = "document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove())";
     const item = (label, onclick) => `<button class="cp-mark-menu__b" onclick="${close};${onclick}">${label}</button>`;
     const sub = (label, panelHtml, scrollable) => `<div class="cp-mark-menu__sub">
@@ -5826,7 +5827,8 @@ const CanteraModule = (() => {
       <div class="cp-mark-menu__sep"></div>
       <div class="cp-mark-menu__list">${sub('Filtrar por Tier', tierPanel)}${sub('Filtrar por prioridad', prioPanel)}</div>
       <div class="cp-mark-menu__sep"></div>
-      <div class="cp-mark-menu__list">${sub('Elegir columnas visibles', colsPanel, true)}</div>`;
+      <div class="cp-mark-menu__list">${sub('Elegir columnas visibles', colsPanel, true)}</div>
+      ${calificadas ? `<div class="cp-mark-menu__sep"></div><div class="cp-mark-menu__list">${item(`Mover al CRM (${calificadas})`, 'CanteraModule.openPromote()')}</div>` : ''}`;
     const menu = document.createElement('div'); menu.className = 'cp-mark-menu'; menu.style.minWidth = '240px'; menu.innerHTML = html;
     document.body.appendChild(menu);
     const t = (ev && (ev.currentTarget || ev.target)) || document.body; const r = t.getBoundingClientRect();
@@ -6176,7 +6178,7 @@ const CanteraModule = (() => {
           // corrida puntual, así una corrida posterior sobre empresas nuevas no
           // "resetea" el número hacia abajo.
           try { _current = await (await apiFetch(`${API}/cantera/batches/${_current.id}`)).json(); } catch { /* usa lo que ya había */ }
-          _lastIA = _current.validado_total ? { done: _current.validado_total } : null;
+          _lastIA = _current.validado_ia_total ? { done: _current.validado_ia_total } : null;
           if (companyIds.length) _coSel = new Set();
           _paint();
         } else _paint();
