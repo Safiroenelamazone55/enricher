@@ -5675,13 +5675,27 @@ const CanteraModule = (() => {
   function _infoHtml(calificadas) {
     const imp = _current.import_stats || {};
     const stat = (n, label) => `<div class="lm-stat"><b>${n}</b><span>${esc(label)}</span></div>`;
+    // Desglose paso 1 — se calcula del lado del cliente (ya está cargado en
+    // _companies), sin pedirle otra columna al servidor.
+    const aprobadas = _companies.filter(c => c.paso1_estado === 'aprobado').length;
+    const descartadas1 = _companies.filter(c => c.paso1_estado === 'descartado').length;
+    const pendientes1 = _companies.filter(c => c.paso1_estado === 'pendiente').length;
     return `<div class="cant-section">
       <div class="cant-info-block">
         <h3 class="cant-info-block__h">Estado actual del borrador</h3>
         <div class="lm-imp-done__stats" style="flex-wrap:wrap">
           ${stat(_companies.length, 'empresas en el borrador')}
           ${stat(_current.contactos_total || 0, 'contactos en el borrador')}
-          ${stat(_lastFiltros ? _lastFiltros.total : 0, 'pasaron el filtro básico (paso 1)')}
+          ${stat(_current.empresas_multi_contacto || 0, 'empresas con más de 1 contacto')}
+          ${stat(_current.empresas_sin_contacto || 0, 'empresas sin ningún contacto')}
+        </div>
+      </div>
+      <div class="cant-info-block">
+        <h3 class="cant-info-block__h">Filtro básico y validación (pasos 1 y 2)</h3>
+        <div class="lm-imp-done__stats" style="flex-wrap:wrap">
+          ${stat(aprobadas, 'aprobadas en el filtro básico')}
+          ${stat(descartadas1, 'descartadas en el filtro básico')}
+          ${stat(pendientes1, 'todavía sin correr el filtro básico')}
           ${stat(_current.validado_total || 0, 'investigadas con IA (paso 2)')}
           ${stat(calificadas, 'calificadas para mover al CRM')}
         </div>
@@ -5689,12 +5703,22 @@ const CanteraModule = (() => {
       <div class="cant-info-block">
         <h3 class="cant-info-block__h">Importación</h3>
         <div class="lm-imp-done__stats" style="flex-wrap:wrap">
-          ${stat(imp.companiesCreated || 0, 'empresas agregadas en total')}
+          ${stat(imp.rows || 0, 'filas leídas en total')}
+          ${stat(imp.companiesCreated || 0, 'empresas nuevas creadas')}
+          ${stat(imp.companiesMatched || 0, 'empresas repetidas en el archivo (mismo dominio/LinkedIn/nombre — no se duplicaron)')}
           ${stat(imp.contactsCreated || 0, 'contactos agregados en total')}
           ${stat(imp.contactsSkipped || 0, 'duplicados omitidos al importar (misma persona)')}
           ${imp.companiesDeleted ? stat(imp.companiesDeleted, 'empresas eliminadas al reimportar') : ''}
         </div>
         ${!imp.imports ? '<p class="cant-hint" style="margin:10px 0 0">Todavía no se ha importado ningún archivo.</p>' : ''}
+      </div>
+      <div class="cant-info-block">
+        <h3 class="cant-info-block__h">Calidad de los contactos</h3>
+        <div class="lm-imp-done__stats" style="flex-wrap:wrap">
+          ${stat(_current.contactos_con_email || 0, 'contactos con email')}
+          ${stat(_current.contactos_con_linkedin || 0, 'contactos con LinkedIn')}
+          ${stat(_current.contactos_con_prioridad || 0, 'contactos con prioridad asignada')}
+        </div>
       </div>
       <div class="cant-info-block">
         <h3 class="cant-info-block__h">Limpieza y enriquecimiento</h3>

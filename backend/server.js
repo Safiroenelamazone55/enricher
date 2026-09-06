@@ -6445,7 +6445,12 @@ app.get('/api/cantera/batches/:id', requireAuth, async (req, res) => {
       SELECT b.*, oc.nombre AS cliente_nombre, cam.nombre AS campana_nombre, seq.nombre AS secuencia_nombre,
              (SELECT COUNT(*) FROM cantera_companies c WHERE c.batch_id=b.id AND c.validado_at IS NOT NULL)::int AS validado_total,
              (SELECT COUNT(*) FROM cantera_companies c WHERE c.batch_id=b.id AND c.paso1_estado <> 'pendiente')::int AS filtro_total,
-             (SELECT COUNT(*) FROM cantera_contacts k WHERE k.batch_id=b.id)::int AS contactos_total
+             (SELECT COUNT(*) FROM cantera_contacts k WHERE k.batch_id=b.id)::int AS contactos_total,
+             (SELECT COUNT(*) FROM (SELECT company_id FROM cantera_contacts WHERE batch_id=b.id GROUP BY company_id HAVING COUNT(*) > 1) t)::int AS empresas_multi_contacto,
+             (SELECT COUNT(*) FROM cantera_companies c WHERE c.batch_id=b.id AND NOT EXISTS (SELECT 1 FROM cantera_contacts k2 WHERE k2.company_id=c.id))::int AS empresas_sin_contacto,
+             (SELECT COUNT(*) FROM cantera_contacts k WHERE k.batch_id=b.id AND COALESCE(k.email,'')<>'')::int AS contactos_con_email,
+             (SELECT COUNT(*) FROM cantera_contacts k WHERE k.batch_id=b.id AND COALESCE(k.linkedin,'')<>'')::int AS contactos_con_linkedin,
+             (SELECT COUNT(*) FROM cantera_contacts k WHERE k.batch_id=b.id AND k.prioridad > 0)::int AS contactos_con_prioridad
         FROM cantera_batches b
         LEFT JOIN outbound_clients oc ON oc.id = b.outbound_client_id
         LEFT JOIN campaigns cam ON cam.id = b.campaign_id
@@ -6588,7 +6593,7 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
   _canteraImportJobs.set(batchId, job);
   res.json({ started: true, total: dataRows.length });
 
-  const summary = { rows: 0, companiesCreated: 0, contactsCreated: 0, contactsSkipped: 0, companiesDeleted, mode: importMode, errors: [] };
+  const summary = { rows: 0, companiesCreated: 0, companiesMatched: 0, contactsCreated: 0, contactsSkipped: 0, companiesDeleted, mode: importMode, errors: [] };
   const coCache = new Map();
   const contactCachePreloaded = new Set();
   if (importMode === 'actualizar') {
@@ -6666,6 +6671,7 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
           WHERE id=$9`, [dominio, website, linkedin, industria, tamano, ciudad, pais2, ubicacion, id]);
       }
       keys.forEach(k2 => coCache.set(k2, id));
+      summary.companiesMatched++;
       return id;
     }
 
@@ -6720,7 +6726,9 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
     const { rows: brows } = await pool.query('SELECT import_stats FROM cantera_batches WHERE id=$1', [batchId]);
     const stats = brows[0]?.import_stats || {};
     stats.imports = (stats.imports || 0) + 1;
+    stats.rows = (stats.rows || 0) + summary.rows;
     stats.companiesCreated = (stats.companiesCreated || 0) + summary.companiesCreated;
+    stats.companiesMatched = (stats.companiesMatched || 0) + (summary.companiesMatched || 0);
     stats.contactsCreated = (stats.contactsCreated || 0) + summary.contactsCreated;
     stats.contactsSkipped = (stats.contactsSkipped || 0) + summary.contactsSkipped;
     stats.companiesDeleted = (stats.companiesDeleted || 0) + (summary.companiesDeleted || 0);
