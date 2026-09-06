@@ -5326,7 +5326,7 @@ const CanteraModule = (() => {
     const r = await apiFetch(`${API}/cantera/batches/${id}`); _current = r.ok ? await r.json() : null;
     if (!_current) { showBanner('Borrador no encontrado', 'error'); return; }
     _current.filtros = _current.filtros || {};
-    _coSel = new Set(); _expanded = new Set(); _contactsByCompany = {}; _step = 1;
+    _coSel = new Set(); _expanded = new Set(); _contactsByCompany = {}; _contactsLoaded = false; _step = 1;
     if (!_filtroOpts) { try { _filtroOpts = await (await apiFetch(`${API}/cantera/opciones-filtro`)).json(); } catch { _filtroOpts = {}; } }
     await _loadCompanies();
     _view = 'detail'; _paint();
@@ -5421,45 +5421,43 @@ const CanteraModule = (() => {
     // muevo la tabla, todo sigue en su lugar") — celdas reales, no un bloque de
     // texto suelto, así el scroll horizontal las alinea igual que cualquier
     // otra columna, sin trucos.
-    const detailColspan = visCols.length || 1;
-    const emptyColspan = 3 + visCols.length;
+    // Contacto/Puesto/Prioridad van DESPUÉS de las columnas toggleables (incluida
+    // Contactos), no antes — pedido explícito 2026-09-05: son el detalle que se
+    // abre AL EXPANDIR, no datos de la empresa en sí.
+    const emptyColspan = 2 + visCols.length;
     const rows = (_onlyFailed ? _companies.filter(c => c.paso1_estado === 'descartado') : _companies).map(c => {
       const main = `<tr>
         <td class="lm-ck-col" onclick="event.stopPropagation()"><input type="checkbox" class="lm-ck" ${_coSel.has(c.id) ? 'checked' : ''} onclick="CanteraModule.toggleCoSel(${c.id},this.checked)"></td>
         <td class="dg-cell--frozen" onclick="CanteraModule.toggleExpand(${c.id})" style="cursor:pointer">${esc(c.nombre)}</td>
-        <td class="dg-cell--ro">—</td>
-        <td class="dg-cell--ro">—</td>
-        <td class="dg-cell--ro">—</td>
         ${visCols.map(col => `<td class="dg-cell--ro"${col.key === 'contactos' ? ` onclick="CanteraModule.toggleExpand(${c.id})" style="cursor:pointer"` : ''}>${_colCellHtml(c, col.key)}</td>`).join('')}
+        <td class="dg-cell--ro">—</td>
+        <td class="dg-cell--ro">—</td>
+        <td class="dg-cell--ro">—</td>
       </tr>`;
       if (!expanded.has(c.id)) return main;
       const cts = [...(_contactsByCompany[c.id] || [])].sort((a, b) => (a.prioridad || 99) - (b.prioridad || 99) || a.id - b.id);
       const n = cts.length;
+      const fillCols = visCols.map(() => `<td class="dg-cell--ro"></td>`).join('');
       const sub = cts.map(k => `<tr class="cant-subrow">
         <td class="lm-ck-col"></td>
         <td class="dg-cell--frozen"></td>
+        ${fillCols}
         <td class="dg-cell--ro"><b>${esc([k.nombre, k.apellido].filter(Boolean).join(' ')) || '(sin nombre)'}</b></td>
-        <td class="dg-cell--ro">${esc(k.cargo || '(sin cargo)')}</td>
+        <td class="dg-cell--ro">
+          ${esc(k.cargo || '(sin cargo)')}
+          ${(k.seniority || k.departamento || _cantSignalOn(k.cambio_reciente) || _cantSignalOn(k.publico_reciente) || _cantSignalOn(k.sigue_empresa) || k.puesto_motivo) ? `<div class="cant-subrow__line">
+            ${k.seniority ? `<span class="tag">${esc(k.seniority)}</span>` : ''}${k.departamento ? `<span class="tag">${esc(k.departamento)}</span>` : ''}
+            ${_cantSignalOn(k.cambio_reciente) ? `<span class="tag" title="Cambió de trabajo recientemente">↻ cambio reciente</span>` : ''}
+            ${_cantSignalOn(k.publico_reciente) ? `<span class="tag" title="${esc(k.publico_reciente)}">✎ activo en LinkedIn</span>` : ''}
+            ${_cantSignalOn(k.sigue_empresa) ? `<span class="tag" title="Ya sigue tu empresa en LinkedIn">★ sigue tu empresa</span>` : ''}
+            ${k.puesto_motivo ? `<span class="cant-subrow__motivo">— ${esc(k.puesto_motivo)}</span>` : ''}
+          </div>` : ''}
+        </td>
         <td class="dg-cell--ro">
           <select class="form-input" style="width:auto" onchange="CanteraModule.setContactPrioridad(${k.id},this.value)" title="Prioridad de contacto — si el primero no responde, pasa al siguiente">
             <option value="0"${!k.prioridad ? ' selected' : ''}>Sin prioridad</option>
             ${Array.from({ length: n }, (_, i) => i + 1).map(num => `<option value="${num}"${k.prioridad === num ? ' selected' : ''}>${num}</option>`).join('')}
           </select>
-        </td>
-        <td colspan="${detailColspan}">
-          <div class="cant-subrow__line">
-            <span class="cant-estado cant-estado--${k.puesto_estado === 'decide' ? 'aprobado' : k.puesto_estado === 'descartado' ? 'descartado' : 'pendiente'}">${k.puesto_estado === 'decide' ? 'Decide' : k.puesto_estado === 'respaldo' ? 'Respaldo' : k.puesto_estado === 'descartado' ? 'Descartado' : 'Pendiente'}</span>
-            ${k.seniority ? `<span class="tag">${esc(k.seniority)}</span>` : ''}${k.departamento ? `<span class="tag">${esc(k.departamento)}</span>` : ''}
-            ${k.conexion_grado ? `<span class="tag" title="Grado de conexión en LinkedIn">${esc(k.conexion_grado)}</span>` : ''}
-            ${_cantSignalOn(k.cambio_reciente) ? `<span class="tag" title="Cambió de trabajo recientemente">↻ cambio reciente</span>` : ''}
-            ${_cantSignalOn(k.publico_reciente) ? `<span class="tag" title="${esc(k.publico_reciente)}">✎ activo en LinkedIn</span>` : ''}
-            ${_cantSignalOn(k.sigue_empresa) ? `<span class="tag" title="Ya sigue tu empresa en LinkedIn">★ sigue tu empresa</span>` : ''}
-            ${k.puesto_motivo ? `<span class="cant-subrow__motivo">— ${esc(k.puesto_motivo)}</span>` : ''}
-          </div>
-          <div class="cant-subrow__actions">
-            <button class="add-role" onclick="CanteraModule.quickCleanContact(${k.id},'cargo')">Limpiar cargo</button>
-            <button class="add-role" onclick="CanteraModule.quickEnrichContact(${k.id})">Enriquecer seniority/depto</button>
-          </div>
         </td>
       </tr>`).join('');
       return main + (sub || `<tr class="cant-subrow"><td class="lm-ck-col"></td><td class="dg-cell--frozen"></td><td colspan="${emptyColspan}" class="cp-empty2">Sin contactos</td></tr>`);
@@ -5573,7 +5571,7 @@ const CanteraModule = (() => {
         </div>
         ${_jobRunning ? `<p class="cant-hint">Investigando ${_jobProgress.done} de ${_jobProgress.total}… puedes seguir en el sistema, esto sigue en segundo plano.</p>` : ''}
         <div class="lm-dt-wrap dg-dt-wrap"><table class="clients-table dg-table sel-on cant-restbl" style="table-layout:auto">
-          <thead><tr><th class="lm-ck-col"><input type="checkbox" class="lm-ck" ${_companies.length && _companies.every(c => _coSel.has(c.id)) ? 'checked' : ''} onclick="CanteraModule.toggleCoSelAll(this.checked)"></th><th class="dg-cell--frozen" id="cant-th-nombre">Nombre<span class="cant-colresize" onmousedown="CanteraModule.startColResize(event)"></span></th><th>Contacto</th><th>Puesto</th><th>Prioridad</th>${visCols.map(col => `<th>${esc(col.label)}</th>`).join('')}</tr></thead>
+          <thead><tr><th class="lm-ck-col"><input type="checkbox" class="lm-ck" ${_companies.length && _companies.every(c => _coSel.has(c.id)) ? 'checked' : ''} onclick="CanteraModule.toggleCoSelAll(this.checked)"></th><th class="dg-cell--frozen" id="cant-th-nombre">Nombre<span class="cant-colresize" onmousedown="CanteraModule.startColResize(event)"></span></th>${visCols.map(col => `<th>${esc(col.label)}</th>`).join('')}<th>Contacto</th><th>Puesto</th><th>Prioridad</th></tr></thead>
           <tbody>${rows || `<tr><td colspan="${emptyColspan}" class="cp-empty2">Importa un archivo para empezar.</td></tr>`}</tbody>
         </table></div>
       </div>` : ''}`;
@@ -5658,16 +5656,44 @@ const CanteraModule = (() => {
       </div></div></div>`;
     document.body.appendChild(m);
   }
-  function closeCantOp() { document.getElementById('cant-op-modal')?.remove(); _cantOpState = null; }
+  function closeCantOp() { clearInterval(_cantOpPollTimer); document.getElementById('cant-op-modal')?.remove(); _cantOpState = null; }
+  // Aplicar cientos de cambios corre en segundo plano en el servidor (mismo
+  // arreglo que la importación) — sin esto "Aplicar 931 cambio(s)" parecía no
+  // hacer nada aunque sí se aplicaba, reportado 2026-09-05.
+  let _cantOpPollTimer = null;
+  function _cantOpProgressHtml(done, total) {
+    const pct = total ? Math.round((done / total) * 100) : 0;
+    return `<div class="fin-pi-box__hd"><h3>Aplicando cambios…</h3></div>
+      <div class="flt-body" style="padding:22px">
+        <div class="cant-progress"><div class="cant-progress__bar" style="width:${pct}%"></div></div>
+        <p class="cant-hint" style="margin:10px 0 0">Procesando ${done} de ${total} cambio(s)…</p>
+      </div>`;
+  }
   async function applyCantOp() {
     const st = _cantOpState; if (!st || !st.changes.length) return;
     try {
       const res = await apiFetch(`${API}/cantera/batches/${_current.id}/${st.endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entity: 'companies', ids: [..._coSel], fields: st.fields, apply: true }) });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || 'Error');
-      closeCantOp();
-      showBanner(`✓ ${d.applied} campo(s) actualizado(s)`, 'success');
-      await _loadCompanies(); _paint();
+      if (!d.started) throw new Error('No se pudo iniciar');
+      const box = document.getElementById('cant-op-modal');
+      if (box) { const inner = box.querySelector('.fin-pi-box'); if (inner) inner.innerHTML = _cantOpProgressHtml(0, d.total); }
+      clearInterval(_cantOpPollTimer);
+      _cantOpPollTimer = setInterval(async () => {
+        let jst;
+        try { jst = await (await apiFetch(`${API}/cantera/batches/${_current.id}/bulk-status`)).json(); }
+        catch { return; }
+        const inner = document.querySelector('#cant-op-modal .fin-pi-box');
+        if (jst.running) {
+          if (inner) inner.innerHTML = _cantOpProgressHtml(jst.done, jst.total);
+          return;
+        }
+        clearInterval(_cantOpPollTimer);
+        closeCantOp();
+        if (jst.error) showBanner('Error: ' + jst.error, 'error');
+        else showBanner(`✓ ${jst.applied} campo(s) actualizado(s)`, 'success');
+        await _loadCompanies(); _paint();
+      }, 1200);
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
   // Recarga los contactos ya cacheados (empresas expandidas) en vez de solo
@@ -5678,26 +5704,7 @@ const CanteraModule = (() => {
     const all = r.ok ? await r.json() : [];
     _contactsByCompany = {};
     all.forEach(k => { (_contactsByCompany[k.company_id] = _contactsByCompany[k.company_id] || []).push(k); });
-  }
-  // Contactos: acciones rápidas de una sola fila (sin selección múltiple —
-  // se abren desde la fila expandida de su empresa).
-  async function quickCleanContact(contactId, field) {
-    try {
-      const res = await apiFetch(`${API}/cantera/batches/${_current.id}/bulk-clean`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entity: 'contacts', ids: [contactId], fields: [field], apply: true }) });
-      const d = await res.json();
-      if (!res.ok) throw new Error(d.error || 'Error');
-      showBanner(d.applied ? `✓ ${field} limpiado` : 'Ya estaba limpio', d.applied ? 'success' : 'info');
-      await _refreshContacts(); await _loadCompanies(); _paint();
-    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
-  }
-  async function quickEnrichContact(contactId) {
-    try {
-      const res = await apiFetch(`${API}/cantera/batches/${_current.id}/bulk-enrich`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entity: 'contacts', ids: [contactId], fields: ['seniority', 'departamento'], apply: true }) });
-      const d = await res.json();
-      if (!res.ok) throw new Error(d.error || 'Error');
-      showBanner(d.applied ? `✓ ${d.applied} campo(s) completado(s)` : 'Nada que derivar del cargo', d.applied ? 'success' : 'info');
-      await _refreshContacts(); await _loadCompanies(); _paint();
-    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+    _contactsLoaded = true;
   }
   // Prioridad manual del contacto dentro de su empresa — para empresas con
   // varios prospectos, decide a quién se contacta primero (1º/2º/3º…),
@@ -5796,13 +5803,23 @@ const CanteraModule = (() => {
   function toggleFailed() { _onlyFailed = !_onlyFailed; _paint(); }
   let _expanded = new Set();
   let _contactsByCompany = {};
+  // Bug encontrado 2026-09-05 al verificar el reordenamiento de columnas: el guard
+  // de este fetch era por EMPRESA (`!_contactsByCompany[companyId]`), pero la
+  // respuesta trae TODOS los contactos del borrador — al expandir una segunda
+  // empresa sin contactos cacheados, se volvía a pedir la lista completa y se
+  // volvía a hacer push() sobre arrays que ya tenían datos, duplicando contactos
+  // de empresas ya expandidas antes (fila repetida, selector de prioridad con
+  // más opciones de las reales). El guard ahora es por BORRADOR, una sola vez.
+  let _contactsLoaded = false;
   async function toggleExpand(companyId) {
     if (_expanded.has(companyId)) { _expanded.delete(companyId); _paint(); return; }
     _expanded.add(companyId);
-    if (!_contactsByCompany[companyId]) {
+    if (!_contactsLoaded) {
       const r = await apiFetch(`${API}/cantera/batches/${_current.id}/contacts`);
       const all = r.ok ? await r.json() : [];
+      _contactsByCompany = {};
       all.forEach(k => { (_contactsByCompany[k.company_id] = _contactsByCompany[k.company_id] || []).push(k); });
+      _contactsLoaded = true;
     }
     _paint();
   }
@@ -6070,7 +6087,7 @@ const CanteraModule = (() => {
     taOpen, taFilter, taBlur, addFiltro, removeFiltro,
     toggleCoSel, toggleCoSelAll, cleanMenu, enrichMenu, runClean, runEnrich, closeCantOp, applyCantOp,
     toggleResultCol, columnsMenu, startColResize,
-    quickCleanContact, quickEnrichContact, setContactPrioridad,
+    setContactPrioridad,
     openManualValidation, closeManualValidation, copyManualData, saveManualValidation, quitarValidacionManual };
 })();
 

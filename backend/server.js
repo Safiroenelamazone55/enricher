@@ -7045,6 +7045,14 @@ app.patch('/api/cantera/batches/:id/contacts/:contactId/prioridad', requireAuth,
 // en la etapa de prospección" pero sin mezclar los dos universos.
 const CANT_CLEAN_FIELDS = { companies: ['nombre', 'tamano', 'dominio', 'website'], contacts: ['cargo', 'email'] };
 const CANT_ENRICH_FIELDS = { companies: ['dominio', 'website'], contacts: ['seniority', 'departamento'] };
+// Aplicar cientos de cambios uno por uno (UPDATE por fila) tarda más de lo que
+// el navegador espera una respuesta — mismo problema y mismo arreglo que la
+// importación ("Aplicar 931 cambio(s) y no pasa nada", reportado 2026-09-05):
+// se corre en segundo plano y el frontend pregunta el avance con polling.
+const _canteraBulkJobs = new Map(); // key: batchId -> {running, done, total, applied, error}
+app.get('/api/cantera/batches/:id/bulk-status', requireAuth, (req, res) => {
+  res.json(_canteraBulkJobs.get(req.params.id) || { running: false });
+});
 app.post('/api/cantera/batches/:id/bulk-clean', requireAuth, async (req, res) => {
   const uid = req.workspaceOwnerId;
   const b = req.body || {};
@@ -7067,8 +7075,20 @@ app.post('/api/cantera/batches/:id/bulk-clean', requireAuth, async (req, res) =>
       if (after !== before) changes.push({ id: row.id, campo: field, antes: before, despues: after });
     }
     if (!apply) return res.json({ preview: true, changes });
-    for (const ch of changes) await pool.query(`UPDATE ${table} SET ${ch.campo}=$1 WHERE id=$2 AND user_id=$3`, [ch.despues, ch.id, uid]);
-    res.json({ preview: false, applied: changes.length, changes });
+    const batchId = req.params.id;
+    const job = { running: true, done: 0, total: changes.length, applied: 0, error: null };
+    _canteraBulkJobs.set(batchId, job);
+    res.json({ started: true, total: changes.length });
+    (async () => {
+      try {
+        for (const ch of changes) {
+          await pool.query(`UPDATE ${table} SET ${ch.campo}=$1 WHERE id=$2 AND user_id=$3`, [ch.despues, ch.id, uid]);
+          job.done++;
+        }
+        job.applied = changes.length;
+      } catch (e) { job.error = e.message; }
+      job.running = false;
+    })();
   } catch (err) { console.error('[cantera] bulk-clean', err.message); res.status(500).json({ error: 'Error al limpiar' }); }
 });
 app.post('/api/cantera/batches/:id/bulk-enrich', requireAuth, async (req, res) => {
@@ -7119,8 +7139,19 @@ app.post('/api/cantera/batches/:id/bulk-enrich', requireAuth, async (req, res) =
       }
     }
     if (!apply) return res.json({ preview: true, changes });
-    for (const ch of changes) await pool.query(`UPDATE ${table} SET ${ch.campo}=$1 WHERE id=$2 AND user_id=$3`, [ch.despues, ch.id, uid]);
-    res.json({ preview: false, applied: changes.length, changes });
+    const job = { running: true, done: 0, total: changes.length, applied: 0, error: null };
+    _canteraBulkJobs.set(batchId, job);
+    res.json({ started: true, total: changes.length });
+    (async () => {
+      try {
+        for (const ch of changes) {
+          await pool.query(`UPDATE ${table} SET ${ch.campo}=$1 WHERE id=$2 AND user_id=$3`, [ch.despues, ch.id, uid]);
+          job.done++;
+        }
+        job.applied = changes.length;
+      } catch (e) { job.error = e.message; }
+      job.running = false;
+    })();
   } catch (err) { console.error('[cantera] bulk-enrich', err.message); res.status(500).json({ error: 'Error al enriquecer' }); }
 });
 
