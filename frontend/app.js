@@ -6349,7 +6349,7 @@ const CanteraGlobalModule = (() => {
         <button class="cant-x" onclick="CanteraGlobalModule.toggleCollapse()" title="Ocultar panel">‹</button>
       </div>
       <label class="field-label">Buscar</label>
-      <input type="text" class="form-input" style="margin-bottom:12px" placeholder="Nombre o dominio…" value="${esc(_q)}" oninput="CanteraGlobalModule.setQ(this.value)">
+      <input type="text" class="form-input" style="margin-bottom:12px" placeholder="Nombre, apellido, empresa, email…" value="${esc(_q)}" oninput="CanteraGlobalModule.setQ(this.value)">
       <label class="field-label">Dónde está</label>
       <select class="form-input" style="margin-bottom:12px" onchange="CanteraGlobalModule.setOrigen(this.value)">
         <option value="">Todos</option>
@@ -6361,10 +6361,13 @@ const CanteraGlobalModule = (() => {
       ${_taFieldG('tamano', 'Tamaño de empresa')}`;
   }
   function _resultsHtml() {
-    if (!_rows.length) return `<tr><td colspan="6" class="cp-empty2">Sin resultados${_q ? ' para "' + esc(_q) + '"' : ' — ajusta los filtros de arriba'}</td></tr>`;
+    if (!_rows.length) return `<tr><td colspan="9" class="cp-empty2">Sin resultados${_q ? ' para "' + esc(_q) + '"' : ' — ajusta los filtros de la izquierda'}</td></tr>`;
     return _rows.map(r => `
       <tr>
-        <td>${esc(r.nombre)}</td>
+        <td>${esc(r.nombre || '—')}</td>
+        <td class="dg-cell--ro">${esc(r.apellido || '—')}</td>
+        <td class="dg-cell--ro">${esc(r.cargo || '—')}</td>
+        <td class="dg-cell--ro">${esc(r.empresa || '—')}</td>
         <td class="dg-cell--ro">${esc(r.dominio || '—')}</td>
         <td class="dg-cell--ro">${esc(r.pais || '—')}</td>
         <td class="dg-cell--ro">${esc(r.industria || '—')}</td>
@@ -6389,12 +6392,12 @@ const CanteraGlobalModule = (() => {
   }
   function _html() {
     return `<div class="lm-sec-head lm-sec-head--compact"><div><h2 class="lm-sec-title">Base global</h2></div></div>
-      <p class="lm-sec-sub" style="margin-bottom:14px">Todo lo que el sistema conoce — ya sea que esté en el CRM de un cliente o todavía en cualquier borrador de Cantera — en una sola tabla, sin importar de qué borrador venga.</p>
+      <p class="lm-sec-sub" style="margin-bottom:14px">Todo lo que el sistema conoce — contactos y empresas, ya sea que estén en el CRM de un cliente o todavía en cualquier borrador de Cantera — en una sola tabla, sin importar de qué borrador venga.</p>
       <div class="cant-global-layout${_collapsed ? ' collapsed' : ''}">
         <div class="cant-global-panel">${_collapsed ? `<button class="cant-x" onclick="CanteraGlobalModule.toggleCollapse()" title="Mostrar criterios">›</button>` : _panelHtml()}</div>
         <div class="cant-global-results">
           <div class="lm-dt-wrap dg-dt-wrap"><table class="clients-table dg-table sel-on" style="table-layout:auto">
-            <thead><tr><th>Nombre</th><th>Dominio</th><th>País</th><th>Industria</th><th>Dónde está</th><th>Referencia</th></tr></thead>
+            <thead><tr><th>Nombre</th><th>Apellido</th><th>Cargo</th><th>Empresa</th><th>Dominio</th><th>País</th><th>Industria</th><th>Dónde está</th><th>Referencia</th></tr></thead>
             <tbody>${_resultsHtml()}</tbody>
           </table></div>
           ${_pagerHtml()}
