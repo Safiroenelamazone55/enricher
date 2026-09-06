@@ -4975,6 +4975,13 @@ const CanteraModule = (() => {
   // Los pasos son navegables libremente (no hay orden forzado), no es un wizard lineal.
   let _step = 1;
   let _coSel = new Set(); // selección de empresas en la tabla de Resultados, para Limpiar/Enriquecer
+  // Filtro por Tier + prioridad de contacto en Resultados — pedido explícito
+  // 2026-09-06: "filtrar por empresas con tier 1 y contactos 1 o 2, y podré
+  // enviarlos a una secuencia... necesario, de otra forma no sabré cuáles
+  // enviar directamente". El filtro de prioridad necesita los contactos ya
+  // cargados (se cargan bajo demanda al activar el filtro, ver toggleFiltroPrioridad).
+  let _tierFiltro = new Set();
+  let _prioFiltro = new Set();
   // Paginación de la tabla de Resultados (pedido explícito 2026-09-06: "ver la
   // lista en bloques de 50, 100 o 200, opcional") — 1242 filas de golpe era
   // demasiado. Mismo patrón que la paginación de Contactos/Empresas del CRM.
@@ -5413,7 +5420,7 @@ const CanteraModule = (() => {
     if (!_current) { showBanner('Borrador no encontrado', 'error'); return; }
     _current.filtros = _current.filtros || {};
     _coSel = new Set(); _expanded = new Set(); _contactsByCompany = {}; _contactsLoaded = false; _step = 1;
-    _cantPageIdx = 0;
+    _cantPageIdx = 0; _tierFiltro = new Set(); _prioFiltro = new Set();
     // Totales de Filtros/Limpiar/Enriquecer/IA vienen del borrador (persistidos
     // en el servidor) — pedido explícito 2026-09-06: "ya limpiamos, no debería
     // ser 0" al recargar la página o volver a entrar.
@@ -5505,7 +5512,9 @@ const CanteraModule = (() => {
     // Contactos), no antes — pedido explícito 2026-09-05: son el detalle que se
     // abre AL EXPANDIR, no datos de la empresa en sí.
     const emptyColspan = 2 + visCols.length;
-    const filteredCompanies = _onlyFailed ? _companies.filter(c => c.paso1_estado === 'descartado') : _companies;
+    const filteredCompanies = (_onlyFailed ? _companies.filter(c => c.paso1_estado === 'descartado') : _companies)
+      .filter(c => !_tierFiltro.size || _tierFiltro.has(c.tier_clave))
+      .filter(c => !_prioFiltro.size || (_contactsByCompany[c.id] || []).some(k => _prioFiltro.has(k.prioridad)));
     const cantPs = _cantPageSize();
     const cantPages = Math.max(1, Math.ceil(filteredCompanies.length / cantPs));
     if (_cantPageIdx > cantPages - 1) _cantPageIdx = cantPages - 1;
@@ -5641,9 +5650,10 @@ const CanteraModule = (() => {
       </div>` : ''}
 
       ${_step === 4 ? `<div class="cant-section">
-        ${_coSel.size || _onlyFailed || calificadas ? `<div class="cant-results-bar">
-          <span class="cant-count">${_coSel.size ? `${_coSel.size} seleccionada(s)` : ''}${_onlyFailed ? ' · viendo solo descartadas' : ''}</span>
+        ${_coSel.size || _onlyFailed || calificadas || _tierFiltro.size || _prioFiltro.size ? `<div class="cant-results-bar">
+          <span class="cant-count">${_coSel.size ? `${_coSel.size} seleccionada(s)` : ''}${_onlyFailed ? ' · viendo solo descartadas' : ''}${_tierFiltro.size ? ` · Tier: ${[..._tierFiltro].join(', ')}` : ''}${_prioFiltro.size ? ` · Prioridad: ${[..._prioFiltro].join(', ')}` : ''}</span>
           <div class="cant-results-actions">
+            ${_coSel.size ? `<button class="btn btn--primary btn--sm" onclick="CanteraModule.openSendSeq()">Enviar a secuencia (${_coSel.size})</button>` : ''}
             ${calificadas ? `<button class="btn btn--ghost btn--sm" onclick="CanteraModule.openPromote()">Mover al CRM (${calificadas})</button>` : ''}
           </div>
         </div>` : ''}
@@ -5772,6 +5782,15 @@ const CanteraModule = (() => {
     ).join('') + item(_lastEnrich.ran ? `Enriquecido todo (${_lastEnrich.total})` : 'Enriquecer todos los campos', `CanteraModule.runEnrich(null)`);
     const visCols = _loadVisibleCols();
     const colsPanel = CANT_RESULT_COLS.map(c => `<label class="cant-colchk"><input type="checkbox" ${visCols.has(c.key) ? 'checked' : ''} onchange="CanteraModule.toggleResultCol('${c.key}')"> ${esc(c.label)}</label>`).join('');
+    // Filtro por Tier + prioridad de contacto — pedido explícito 2026-09-06:
+    // "filtrar por empresas con tier 1 y contactos 1 o 2, y podré enviarlos a
+    // una secuencia". Necesario para saber cuáles marcar y mandar de una vez.
+    const tierPanel = (_current.tiers || []).filter(t => t.clave).map(t =>
+      `<label class="cant-colchk"><input type="checkbox" ${_tierFiltro.has(t.clave) ? 'checked' : ''} onchange="CanteraModule.toggleTierFiltro('${esc(t.clave)}')"> ${esc(t.clave)}${t.nombre ? ' — ' + esc(t.nombre) : ''}</label>`
+    ).join('') || '<div class="cp-empty2" style="padding:10px 12px">Sin Tiers definidos todavía</div>';
+    const prioPanel = [1, 2, 3, 4, 5].map(n =>
+      `<label class="cant-colchk"><input type="checkbox" ${_prioFiltro.has(n) ? 'checked' : ''} onchange="CanteraModule.togglePrioFiltro(${n})"> Prioridad ${n}</label>`
+    ).join('');
     const html = `<div class="cp-mark-menu__list">${item(_lastFiltros ? `Validado (${_lastFiltros.total})` : 'Correr filtros básicos', 'CanteraModule.runFiltros()')}</div>
       <div class="cp-mark-menu__sep"></div>
       <div class="cp-mark-menu__list">${sub('Limpiar', cleanPanel)}${sub('Enriquecer', enrichPanel)}</div>
@@ -5780,6 +5799,8 @@ const CanteraModule = (() => {
         ${item(_jobRunning ? 'Investigación profunda (IA)…' : (_lastIA ? `Investigación completa (${_lastIA.done})` : 'Investigación profunda (IA)'), 'CanteraModule.runValidacion()')}
         ${item(`${_onlyFailed ? '✓ ' : ''}Ver solo descartadas`, 'CanteraModule.toggleFailed()')}
       </div>
+      <div class="cp-mark-menu__sep"></div>
+      <div class="cp-mark-menu__list">${sub('Filtrar por Tier', tierPanel)}${sub('Filtrar por prioridad', prioPanel)}</div>
       <div class="cp-mark-menu__sep"></div>
       <div class="cp-mark-menu__list">${sub('Elegir columnas visibles', colsPanel, true)}</div>`;
     const menu = document.createElement('div'); menu.className = 'cp-mark-menu'; menu.style.minWidth = '240px'; menu.innerHTML = html;
@@ -6024,6 +6045,13 @@ const CanteraModule = (() => {
   // sea un "no hay señal" explícito cuenta como señal presente.
   function _cantSignalOn(v) { const s = String(v || '').trim(); return !!s && !/^(no|false|n\/a|none|0)$/i.test(s); }
   function toggleFailed() { _onlyFailed = !_onlyFailed; _cantPageIdx = 0; _paint(); }
+  function toggleTierFiltro(clave) { if (_tierFiltro.has(clave)) _tierFiltro.delete(clave); else _tierFiltro.add(clave); _cantPageIdx = 0; _paint(); }
+  async function togglePrioFiltro(n) {
+    if (_prioFiltro.has(n)) _prioFiltro.delete(n); else _prioFiltro.add(n);
+    _cantPageIdx = 0;
+    await _ensureContactsLoaded();
+    _paint();
+  }
   let _expanded = new Set();
   let _contactsByCompany = {};
   // Bug encontrado 2026-09-05 al verificar el reordenamiento de columnas: el guard
@@ -6034,16 +6062,18 @@ const CanteraModule = (() => {
   // de empresas ya expandidas antes (fila repetida, selector de prioridad con
   // más opciones de las reales). El guard ahora es por BORRADOR, una sola vez.
   let _contactsLoaded = false;
+  async function _ensureContactsLoaded() {
+    if (_contactsLoaded) return;
+    const r = await apiFetch(`${API}/cantera/batches/${_current.id}/contacts`);
+    const all = r.ok ? await r.json() : [];
+    _contactsByCompany = {};
+    all.forEach(k => { (_contactsByCompany[k.company_id] = _contactsByCompany[k.company_id] || []).push(k); });
+    _contactsLoaded = true;
+  }
   async function toggleExpand(companyId) {
     if (_expanded.has(companyId)) { _expanded.delete(companyId); _paint(); return; }
     _expanded.add(companyId);
-    if (!_contactsLoaded) {
-      const r = await apiFetch(`${API}/cantera/batches/${_current.id}/contacts`);
-      const all = r.ok ? await r.json() : [];
-      _contactsByCompany = {};
-      all.forEach(k => { (_contactsByCompany[k.company_id] = _contactsByCompany[k.company_id] || []).push(k); });
-      _contactsLoaded = true;
-    }
+    await _ensureContactsLoaded();
     _paint();
   }
 
@@ -6317,9 +6347,74 @@ const CanteraModule = (() => {
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
-  return { render, open, openCreate, backToList, saveFiltros, runFiltros, toggleFailed, moreMenu, remove, saveAsTemplate,
+  // ── Enviar a secuencia: promoción SELECTIVA + enrolamiento en un solo paso —
+  // pedido explícito 2026-09-06: "filtrar por tier 1 y contactos 1 o 2, y
+  // enviarlos a una secuencia... necesario, de otra forma no sabré cuáles
+  // enviar directamente". A diferencia de "Mover al CRM" (todo el borrador de
+  // una vez), esto opera solo sobre las empresas marcadas con el check — se
+  // puede repetir con otro filtro/selección sin bloquear el resto.
+  async function openSendSeq() {
+    if (!_coSel.size) { showBanner('Marca al menos una empresa primero', 'info'); return; }
+    const [clientes, secuencias, campanas] = await Promise.all([
+      apiFetch(`${API}/outbound-clients`).then(r => r.ok ? r.json() : []),
+      apiFetch(`${API}/sequences`).then(r => r.ok ? r.json() : []),
+      apiFetch(`${API}/campaigns`).then(r => r.ok ? r.json() : []),
+    ]);
+    document.getElementById('cant-seq-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'cant-seq-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) closeSendSeq(); };
+    const prioChk = (n) => `<label style="display:flex;align-items:center;gap:6px;font-size:.84rem"><input type="checkbox" class="cant-seq-prio" value="${n}" ${_prioFiltro.has(n) || !_prioFiltro.size ? 'checked' : ''}> Prioridad ${n}</label>`;
+    m.innerHTML = `<div class="fin-pi-box lm-flt-box" style="max-width:440px">
+      <div class="fin-pi-box__hd"><h3>Enviar a secuencia</h3><button class="fin-pi-x" onclick="CanteraModule.closeSendSeq()">✕</button></div>
+      <div class="flt-body" style="display:flex;flex-direction:column;gap:12px">
+        <p class="cant-hint" style="margin:0">${_coSel.size} empresa(s) seleccionada(s) se crean como reales en el CRM (si no existen ya) y sus contactos con la prioridad elegida quedan enrolados de una vez en la secuencia.</p>
+        <label class="cant-flabel">Cliente<select id="cant-sq-client" class="form-input">
+          <option value="">— elegir —</option>
+          ${clientes.map(c => `<option value="${c.id}"${String(_current.outbound_client_id) === String(c.id) ? ' selected' : ''}>${esc(c.nombre)}</option>`).join('')}
+        </select></label>
+        <label class="cant-flabel">Secuencia<select id="cant-sq-seq" class="form-input">
+          <option value="">— elegir —</option>
+          ${secuencias.map(s => `<option value="${s.id}"${String(_current.sequence_id) === String(s.id) ? ' selected' : ''}>${esc(s.nombre)}</option>`).join('')}
+        </select></label>
+        <label class="cant-flabel">Campaña<span class="field-note">opcional</span><select id="cant-sq-camp" class="form-input">
+          <option value="">Sin campaña</option>
+          ${campanas.map(c => `<option value="${c.id}"${String(_current.campaign_id) === String(c.id) ? ' selected' : ''}>${esc(c.nombre)}</option>`).join('')}
+        </select></label>
+        <div class="cant-flabel">Prioridad de contacto a enviar
+          <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:6px">${[1, 2, 3, 4, 5].map(prioChk).join('')}</div>
+        </div>
+      </div>
+      <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns">
+        <button class="btn btn--ghost btn--sm" onclick="CanteraModule.closeSendSeq()">Cancelar</button>
+        <button class="btn btn--primary btn--sm" onclick="CanteraModule.doSendSeq()">Enviar</button>
+      </div></div></div>`;
+    document.body.appendChild(m);
+  }
+  function closeSendSeq() { document.getElementById('cant-seq-modal')?.remove(); }
+  async function doSendSeq() {
+    const clientId = document.getElementById('cant-sq-client')?.value;
+    if (!clientId) { showBanner('Elige a qué cliente pertenecen', 'info'); return; }
+    const sequenceId = document.getElementById('cant-sq-seq')?.value;
+    if (!sequenceId) { showBanner('Elige una secuencia', 'info'); return; }
+    const campId = document.getElementById('cant-sq-camp')?.value || null;
+    const prioridades = [...document.querySelectorAll('.cant-seq-prio:checked')].map(el => parseInt(el.value));
+    try {
+      const res = await apiFetch(`${API}/cantera/batches/${_current.id}/send-to-sequence`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ company_ids: [..._coSel], outbound_client_id: clientId, sequence_id: sequenceId, campaign_id: campId, prioridades }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Error');
+      closeSendSeq();
+      _coSel = new Set();
+      showBanner(`✓ ${d.companiesPromoted} empresa(s), ${d.contactsPromoted} contacto(s) movidos · ${d.enrolled} enrolado(s) en la secuencia`, 'success');
+      await _loadCompanies(); _paint();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+
+  return { render, open, openCreate, backToList, saveFiltros, runFiltros, toggleFailed, toggleTierFiltro, togglePrioFiltro, moreMenu, remove, saveAsTemplate,
     toggleExpand, addTier, removeTier, setTierField, addPuesto, removePuesto, setPuestoField, saveCriterio, runValidacion,
-    openPromote, closePromote, doPromote,
+    openPromote, closePromote, doPromote, openSendSeq, closeSendSeq, doSendSeq,
     openScope, closeScope, scopeMaybeCreate, saveScope, setStep,
     openImportModal, closeImportModal, impFile, impToggleHeader, impRun, impSetMode, deleteAndReimport, cbxOpen, cbxFilter, cbxPick, cbxBlur,
     taOpen, taFilter, taBlur, addFiltro, removeFiltro,

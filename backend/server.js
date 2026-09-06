@@ -4185,6 +4185,18 @@ app.post('/api/lm/sequences/:id/contacts/:cid/rollback', requireAuth, async (req
 });
 app.post('/api/lm/contacts/add-to-sequence', requireAuth, (req, res) => _lmAddMembership(req, res, 'sequence'));
 app.post('/api/lm/contacts/add-to-campaign', requireAuth, (req, res) => _lmAddMembership(req, res, 'campaign'));
+// Llama a _lmAddMembership desde código interno (no HTTP) reusando exactamente
+// la misma lógica de enrolamiento (arranque escalonado, cadencia, aviso de
+// "misma empresa") — usado por Cantera al "Enviar a secuencia" directamente,
+// para no duplicar la lógica de drip/cadencia en un segundo lugar.
+async function _lmAddMembershipCall(uid, kind, ids, targetId) {
+  const fakeReq = { workspaceOwnerId: uid, body: kind === 'sequence' ? { contact_ids: ids, sequence_id: targetId } : { contact_ids: ids, campaign_id: targetId } };
+  let statusCode = 200, body = null;
+  const fakeRes = { status(c) { statusCode = c; return this; }, json(b) { body = b; return this; } };
+  await _lmAddMembership(fakeReq, fakeRes, kind);
+  if (statusCode >= 400) throw new Error(body?.error || 'Error al enrolar');
+  return body;
+}
 // Disposición outbound: marca el contacto, registra actividad y (si aplica) lo pausa en TODAS sus secuencias activas.
 // ── Disposiciones outbound, en 3 grupos que SUMAN al total (sin solaparse) ──
 //   Positivos : respondio · reunion · mas_adelante   → hay señal comercial
@@ -7294,6 +7306,100 @@ app.post('/api/cantera/batches/:id/promote', requireAuth, async (req, res) => {
     await cl.query('ROLLBACK').catch(() => {});
     console.error('[cantera] promote', err.message);
     res.status(400).json({ error: err.message || 'Error al mover al CRM' });
+  } finally { cl.release(); }
+});
+
+// Enviar a secuencia: promoción SELECTIVA (solo las empresas elegidas, no todo
+// el borrador) que además enrola de una vez a la secuencia — pedido explícito
+// 2026-09-06: "filtrar por tier 1 y contactos 1 o 2, y enviarlos a una
+// secuencia... necesario, de otra forma no sabré cuáles enviar directamente".
+// A diferencia de /promote, esto NO marca el borrador como 'promovido' — se
+// puede repetir varias veces sobre distintos subconjuntos (otro tier, otra
+// prioridad) sin bloquear el resto del borrador.
+app.post('/api/cantera/batches/:id/send-to-sequence', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId;
+  const batchId = req.params.id;
+  const b = req.body || {};
+  const companyIds = Array.isArray(b.company_ids) ? b.company_ids.map(Number).filter(Boolean) : [];
+  const outboundClientId = parseInt(b.outbound_client_id);
+  const sequenceId = parseInt(b.sequence_id);
+  const campaignId = b.campaign_id ? parseInt(b.campaign_id) : null;
+  const prioridades = Array.isArray(b.prioridades) ? b.prioridades.map(Number).filter(n => n > 0) : [];
+  if (!companyIds.length) return res.status(400).json({ error: 'Selecciona al menos una empresa' });
+  if (!outboundClientId) return res.status(400).json({ error: 'Elige a qué cliente pertenecen estas empresas' });
+  if (!sequenceId) return res.status(400).json({ error: 'Elige una secuencia' });
+
+  const cl = await pool.connect();
+  let lmContactIds = [];
+  try {
+    await cl.query('BEGIN');
+    const { rows: [batch] } = await cl.query(`SELECT * FROM cantera_batches WHERE id=$1 AND user_id=$2`, [batchId, uid]);
+    if (!batch) throw new Error('Borrador no encontrado');
+    const { rows: companies } = await cl.query(`SELECT * FROM cantera_companies WHERE id = ANY($1::int[]) AND batch_id=$2 AND user_id=$3`, [companyIds, batchId, uid]);
+    if (!companies.length) throw new Error('Ninguna de las empresas seleccionadas existe en este borrador');
+
+    let companiesPromoted = 0, contactsPromoted = 0;
+    for (const co of companies) {
+      const dominio = _lmNormDomain(co.dominio || co.website || '');
+      let coId;
+      const existing = dominio
+        ? (await cl.query(`SELECT id FROM lm_companies WHERE user_id=$1 AND dominio=$2 LIMIT 1`, [uid, dominio])).rows[0]
+        : (await cl.query(`SELECT id FROM lm_companies WHERE user_id=$1 AND dominio='' AND LOWER(nombre)=$2 LIMIT 1`, [uid, (co.nombre || '').toLowerCase()])).rows[0];
+      if (existing) {
+        coId = existing.id;
+      } else {
+        const ev = (co.evidencia || []).map(e => `${e.fuente}: ${e.resumen}`).join(' · ');
+        const ins = await cl.query(`
+          INSERT INTO lm_companies (user_id,nombre,dominio,website,industria,tamano,linkedin,ciudad,pais,target_tier,analisis,outbound_client_id,notas)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id
+        `, [uid, co.nombre, dominio, co.website, co.industria, co.tamano, co.linkedin, co.ciudad, co.pais, co.tier_clave,
+            ev, outboundClientId, `Cantera "${batch.nombre}" · confianza ${co.confianza || '—'}`]);
+        coId = ins.rows[0].id;
+      }
+      await cl.query(`UPDATE cantera_companies SET promoted_company_id=$1 WHERE id=$2`, [coId, co.id]);
+      companiesPromoted++;
+
+      // Contactos: por prioridad explícita (lo que se filtró/seleccionó), no por
+      // decide/respaldo del motor — la prioridad manual pisa esa clasificación
+      // a propósito (confirmado 2026-09-06: sí se puede tierear/priorizar un
+      // contacto aunque su empresa haya quedado descartada en la validación).
+      const { rows: contactos } = await cl.query(
+        prioridades.length
+          ? `SELECT * FROM cantera_contacts WHERE company_id=$1 AND user_id=$2 AND prioridad = ANY($3::int[])`
+          : `SELECT * FROM cantera_contacts WHERE company_id=$1 AND user_id=$2 AND prioridad > 0`,
+        prioridades.length ? [co.id, uid, prioridades] : [co.id, uid]);
+      for (const k of contactos) {
+        const email = (k.email || '').toLowerCase();
+        const dup = email ? (await cl.query(`SELECT id FROM lm_contacts WHERE user_id=$1 AND LOWER(email)=$2 LIMIT 1`, [uid, email])).rows[0] : null;
+        let contactId;
+        if (dup) {
+          contactId = dup.id;
+        } else {
+          const ins = await cl.query(`
+            INSERT INTO lm_contacts (user_id,company_id,nombre,apellido,email,cargo,linkedin,empresa_nombre,estado,fuente,contact_priority,buyer_role,analisis,outbound_client_id)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'nuevo','cantera',$9,$10,$11,$12) RETURNING id
+          `, [uid, coId, k.nombre, k.apellido, email, k.cargo, k.linkedin, co.nombre,
+              k.prioridad === 1 ? 'alta' : 'media', co.tier_clave, k.puesto_motivo, outboundClientId]);
+          contactId = ins.rows[0].id;
+        }
+        await cl.query(`UPDATE cantera_contacts SET promoted_contact_id=$1 WHERE id=$2`, [contactId, k.id]);
+        if (campaignId) await cl.query(`INSERT INTO lm_contact_campaigns (user_id,contact_id,campaign_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`, [uid, contactId, campaignId]);
+        lmContactIds.push(contactId);
+        contactsPromoted++;
+      }
+    }
+    await cl.query('COMMIT');
+
+    let enroll = { added: 0 };
+    if (lmContactIds.length) {
+      try { enroll = await _lmAddMembershipCall(uid, 'sequence', lmContactIds, sequenceId); }
+      catch (e) { return res.json({ companiesPromoted, contactsPromoted, enrolled: 0, enrollError: e.message }); }
+    }
+    res.json({ companiesPromoted, contactsPromoted, enrolled: enroll.added || 0 });
+  } catch (err) {
+    await cl.query('ROLLBACK').catch(() => {});
+    console.error('[cantera] send-to-sequence', err.message);
+    res.status(400).json({ error: err.message || 'Error al enviar a la secuencia' });
   } finally { cl.release(); }
 });
 
