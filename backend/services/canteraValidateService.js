@@ -71,6 +71,7 @@ REGLAS DE INVESTIGACIÓN (fijas, no negociables — cada una existe porque ya se
 - Si la evidencia es antigua o contradictoria, dilo en el reporte.
 - Distingue entre la empresa, un grupo matriz, y una filial — no mezcles su actividad.
 - Estás investigando UNA sola empresa en esta llamada — no hay lote ni presión de tiempo. Tómate los usos de web_search que necesites (hasta el límite disponible) antes de decidir; una respuesta rápida pero mal verificada es peor que una que tardó más.
+- Piensa paso a paso antes de responder: qué necesitas confirmar, qué buscaste, qué encontraste, y solo entonces decide. No hay ninguna ventaja en responder rápido — la única métrica que importa es que cada afirmación esté respaldada por lo que de verdad encontraste.
 
 CRITERIO DE CALIFICACIÓN (definido por el cliente para este borrador):
 
@@ -115,8 +116,9 @@ async function validateCompany(pool, uid, batch, company, contactos) {
   const user = `EMPRESA A INVESTIGAR:\n${datos}\n\nCARGOS DE LOS CONTACTOS IMPORTADOS PARA ESTA EMPRESA (clasifica cada uno):\n${cargos}\n\nInvestiga y devuelve el JSON.`;
 
   const resp = await client.messages.create({
-    model: MODEL, max_tokens: 3000, system,
-    tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: 8 }],
+    model: MODEL, max_tokens: 8000, system,
+    thinking: { type: 'adaptive' },
+    tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: 10 }],
     messages: [{ role: 'user', content: user }],
   });
   const u = _sumUsage(resp.usage);
