@@ -4962,6 +4962,21 @@ const CanteraModule = (() => {
   // Los pasos son navegables libremente (no hay orden forzado), no es un wizard lineal.
   let _step = 1;
   let _coSel = new Set(); // selección de empresas en la tabla de Resultados, para Limpiar/Enriquecer
+  // Paginación de la tabla de Resultados (pedido explícito 2026-09-06: "ver la
+  // lista en bloques de 50, 100 o 200, opcional") — 1242 filas de golpe era
+  // demasiado. Mismo patrón que la paginación de Contactos/Empresas del CRM.
+  let _cantPageIdx = 0;
+  function _cantPageSize() { try { return parseInt(localStorage.getItem('cantera_page_size')) || 100; } catch (_) { return 100; } }
+  function cantSetPageSize(n) { try { localStorage.setItem('cantera_page_size', String(parseInt(n) || 100)); } catch (_) {} _cantPageIdx = 0; _paint(); }
+  function cantGoPage(d) { _cantPageIdx = Math.max(0, _cantPageIdx + d); _paint(); }
+  // Resultado de la última corrida de cada acción — pedido explícito 2026-09-06:
+  // en vez de una descripción fija con conteos generales, cada botón debe reflejar
+  // lo que ÉL hizo ("Empresas limpiadas (N)" en vez de "Limpiar empresas"), así se
+  // sabe de un vistazo qué se corrió y qué falta.
+  let _lastFiltros = null; // { aprobadas, descartadas, total }
+  let _lastClean = null;   // { count }
+  let _lastEnrich = null;  // { count }
+  let _lastIA = null;      // { ok, errores }
 
   // ── Importador con previsualización + mapeo editable (mismo patrón que el
   // importador real de Contactos/Empresas del CRM — pedido explícito de
@@ -5327,6 +5342,7 @@ const CanteraModule = (() => {
     if (!_current) { showBanner('Borrador no encontrado', 'error'); return; }
     _current.filtros = _current.filtros || {};
     _coSel = new Set(); _expanded = new Set(); _contactsByCompany = {}; _contactsLoaded = false; _step = 1;
+    _cantPageIdx = 0; _lastFiltros = null; _lastClean = null; _lastEnrich = null; _lastIA = null;
     if (!_filtroOpts) { try { _filtroOpts = await (await apiFetch(`${API}/cantera/opciones-filtro`)).json(); } catch { _filtroOpts = {}; } }
     await _loadCompanies();
     _view = 'detail'; _paint();
@@ -5425,7 +5441,13 @@ const CanteraModule = (() => {
     // Contactos), no antes — pedido explícito 2026-09-05: son el detalle que se
     // abre AL EXPANDIR, no datos de la empresa en sí.
     const emptyColspan = 2 + visCols.length;
-    const rows = (_onlyFailed ? _companies.filter(c => c.paso1_estado === 'descartado') : _companies).map(c => {
+    const filteredCompanies = _onlyFailed ? _companies.filter(c => c.paso1_estado === 'descartado') : _companies;
+    const cantPs = _cantPageSize();
+    const cantPages = Math.max(1, Math.ceil(filteredCompanies.length / cantPs));
+    if (_cantPageIdx > cantPages - 1) _cantPageIdx = cantPages - 1;
+    if (_cantPageIdx < 0) _cantPageIdx = 0;
+    const pageCompanies = filteredCompanies.slice(_cantPageIdx * cantPs, _cantPageIdx * cantPs + cantPs);
+    const rows = pageCompanies.map(c => {
       const main = `<tr>
         <td class="lm-ck-col" onclick="event.stopPropagation()"><input type="checkbox" class="lm-ck" ${_coSel.has(c.id) ? 'checked' : ''} onclick="CanteraModule.toggleCoSel(${c.id},this.checked)"></td>
         <td class="dg-cell--frozen" onclick="CanteraModule.toggleExpand(${c.id})" style="cursor:pointer">${esc(c.nombre)}</td>
@@ -5462,9 +5484,6 @@ const CanteraModule = (() => {
       </tr>`).join('');
       return main + (sub || `<tr class="cant-subrow"><td class="lm-ck-col"></td><td class="dg-cell--frozen"></td><td colspan="${emptyColspan}" class="cp-empty2">Sin contactos</td></tr>`);
     }).join('');
-    const aprobadas = _companies.filter(c => c.paso1_estado === 'aprobado').length;
-    const descartadas = _companies.filter(c => c.paso1_estado === 'descartado').length;
-    const pendientes = _companies.filter(c => c.paso1_estado === 'pendiente').length;
     const calificadas = _companies.filter(c => c.paso2_estado === 'aprobado' || c.paso2_estado === 'validacion_manual').length;
 
     return `<div class="lm-sec-head lm-sec-head--compact">
@@ -5558,12 +5577,12 @@ const CanteraModule = (() => {
 
       ${_step === 4 ? `<div class="cant-section">
         <div class="cant-results-bar">
-          <span class="cant-count">${_coSel.size ? `${_coSel.size} seleccionada(s)` : `${_companies.length} empresa(s)`} · ${aprobadas} pasaron filtro · ${descartadas} descartadas (paso 1) · ${calificadas} calificada(s) (paso 2)</span>
+          <span class="cant-count">${_coSel.size ? `${_coSel.size} seleccionada(s)` : ''}</span>
           <div class="cant-results-actions">
-            <button class="btn btn--primary btn--sm" onclick="CanteraModule.runFiltros()">Correr filtros básicos</button>
-            <button class="btn btn--ghost btn--sm" onclick="CanteraModule.cleanMenu(event)">Limpiar empresas ▾</button>
-            <button class="btn btn--ghost btn--sm" onclick="CanteraModule.enrichMenu(event)">Enriquecer empresas ▾</button>
-            <button class="btn btn--primary btn--sm" onclick="CanteraModule.runValidacion()"${_jobRunning ? ' disabled' : ''}>Investigación profunda (IA)${_jobRunning ? '…' : ''}</button>
+            <button class="btn btn--primary btn--sm" onclick="CanteraModule.runFiltros()">${_lastFiltros ? `Filtros corridos (${_lastFiltros.aprobadas} aprobada(s))` : 'Correr filtros básicos'}</button>
+            <button class="btn btn--ghost btn--sm" onclick="CanteraModule.cleanMenu(event)">${_lastClean ? `Empresas limpiadas (${_lastClean.count})` : 'Limpiar empresas'} ▾</button>
+            <button class="btn btn--ghost btn--sm" onclick="CanteraModule.enrichMenu(event)">${_lastEnrich ? `Empresas enriquecidas (${_lastEnrich.count})` : 'Enriquecer empresas'} ▾</button>
+            <button class="btn btn--primary btn--sm" onclick="CanteraModule.runValidacion()"${_jobRunning ? ' disabled' : ''}>${_jobRunning ? 'Investigación profunda (IA)…' : (_lastIA ? `Investigación completa (${_lastIA.ok} ok)` : 'Investigación profunda (IA)')}</button>
             <button class="dg-issues-toggle${_onlyFailed ? ' active' : ''}" onclick="CanteraModule.toggleFailed()">Ver solo descartadas</button>
             ${calificadas ? `<button class="btn btn--ghost btn--sm" onclick="CanteraModule.openPromote()">Mover al CRM (${calificadas})</button>` : ''}
             <button class="dg-kebab" onclick="CanteraModule.columnsMenu(event)" title="Elegir columnas visibles">⋮</button>
@@ -5574,7 +5593,23 @@ const CanteraModule = (() => {
           <thead><tr><th class="lm-ck-col"><input type="checkbox" class="lm-ck" ${_companies.length && _companies.every(c => _coSel.has(c.id)) ? 'checked' : ''} onclick="CanteraModule.toggleCoSelAll(this.checked)"></th><th class="dg-cell--frozen" id="cant-th-nombre">Nombre<span class="cant-colresize" onmousedown="CanteraModule.startColResize(event)"></span></th>${visCols.map(col => `<th>${esc(col.label)}</th>`).join('')}<th>Contacto</th><th>Puesto</th><th>Prioridad</th></tr></thead>
           <tbody>${rows || `<tr><td colspan="${emptyColspan}" class="cp-empty2">Importa un archivo para empezar.</td></tr>`}</tbody>
         </table></div>
+        ${_cantPagerHtml(filteredCompanies.length)}
       </div>` : ''}`;
+  }
+  // Paginación de la tabla de Resultados — bloques de 50/100/200 (opcional,
+  // pedido explícito 2026-09-06). Mismo patrón visual que el paginador del CRM.
+  function _cantPagerHtml(total) {
+    const ps = _cantPageSize();
+    const pages = Math.max(1, Math.ceil(total / ps));
+    const from = total ? _cantPageIdx * ps + 1 : 0, to = Math.min(total, (_cantPageIdx + 1) * ps);
+    const nav = (dir, dis, label) => `<button class="btn btn--ghost btn--sm" style="min-width:34px" ${dis ? 'disabled style="min-width:34px;opacity:.4;cursor:default"' : ''} onclick="CanteraModule.cantGoPage(${dir})" title="${dir < 0 ? 'Página anterior' : 'Página siguiente'}">${label}</button>`;
+    return `<div class="lm-pager" style="display:flex;align-items:center;gap:10px;justify-content:flex-end;flex-wrap:wrap;padding:12px 4px 4px;font-size:.83rem;color:var(--text2,#45586A)">
+      <span>Mostrando <b>${from}–${to}</b> de <b>${total}</b></span>
+      <select onchange="CanteraModule.cantSetPageSize(this.value)" title="Filas por página" style="padding:5px 9px;border:1px solid var(--border,#EAE7E2);border-radius:8px;background:#fff;font-size:.82rem;color:inherit;cursor:pointer">${[50, 100, 200].map(n => `<option value="${n}"${ps === n ? ' selected' : ''}>${n} / página</option>`).join('')}</select>
+      ${nav(-1, _cantPageIdx <= 0, '‹')}
+      <span>${_cantPageIdx + 1} / ${pages}</span>
+      ${nav(1, _cantPageIdx >= pages - 1, '›')}
+    </div>`;
   }
   function setStep(n) { _step = n; _paint(); }
   function toggleCoSel(id, checked) { if (checked) _coSel.add(id); else _coSel.delete(id); _paint(); }
@@ -5691,7 +5726,11 @@ const CanteraModule = (() => {
         clearInterval(_cantOpPollTimer);
         closeCantOp();
         if (jst.error) showBanner('Error: ' + jst.error, 'error');
-        else showBanner(`✓ ${jst.applied} campo(s) actualizado(s)`, 'success');
+        else {
+          showBanner(`✓ ${jst.applied} campo(s) actualizado(s)`, 'success');
+          if (st.kind === 'clean') _lastClean = { count: jst.applied };
+          else _lastEnrich = { count: jst.applied };
+        }
         await _loadCompanies(); _paint();
       }, 1200);
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
@@ -5800,7 +5839,7 @@ const CanteraModule = (() => {
   // libre ("2 recent posts on Linkedin"), no true/false — cualquier valor que no
   // sea un "no hay señal" explícito cuenta como señal presente.
   function _cantSignalOn(v) { const s = String(v || '').trim(); return !!s && !/^(no|false|n\/a|none|0)$/i.test(s); }
-  function toggleFailed() { _onlyFailed = !_onlyFailed; _paint(); }
+  function toggleFailed() { _onlyFailed = !_onlyFailed; _cantPageIdx = 0; _paint(); }
   let _expanded = new Set();
   let _contactsByCompany = {};
   // Bug encontrado 2026-09-05 al verificar el reordenamiento de columnas: el guard
@@ -5854,6 +5893,7 @@ const CanteraModule = (() => {
         _jobProgress = { done: st.done, total: st.total };
         if (!st.running) {
           clearInterval(_jobTimer); _jobRunning = false;
+          _lastIA = { ok: st.done - st.errores, errores: st.errores };
           showBanner(`✓ Investigación terminada · ${st.done - st.errores} ok · ${st.errores} error(es) · $${(st.costoTotal || 0).toFixed(3)}`, 'success');
           await _refreshContacts(); await _loadCompanies(); _paint();
         } else _paint();
@@ -5917,6 +5957,7 @@ const CanteraModule = (() => {
       const res = await apiFetch(`${API}/cantera/batches/${_current.id}/run-filtros`, { method: 'POST' });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || 'Error');
+      _lastFiltros = { aprobadas: d.aprobadas, descartadas: d.descartadas, total: d.total };
       showBanner(`✓ ${d.aprobadas} aprobada(s) · ${d.descartadas} descartada(s) de ${d.total}`, 'success');
       await _loadCompanies(); _paint();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
@@ -6087,7 +6128,7 @@ const CanteraModule = (() => {
     taOpen, taFilter, taBlur, addFiltro, removeFiltro,
     toggleCoSel, toggleCoSelAll, cleanMenu, enrichMenu, runClean, runEnrich, closeCantOp, applyCantOp,
     toggleResultCol, columnsMenu, startColResize,
-    setContactPrioridad,
+    setContactPrioridad, cantGoPage, cantSetPageSize,
     openManualValidation, closeManualValidation, copyManualData, saveManualValidation, quitarValidacionManual };
 })();
 
