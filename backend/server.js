@@ -6912,7 +6912,12 @@ app.get('/api/cantera/global', requireAuth, async (req, res) => {
   const industrias = String(req.query.industria || '').split(',').map(s => _cantNormText(s)).filter(Boolean);
   const tamanos = String(req.query.tamano || '').split(',').filter(Boolean);
   const origen = req.query.origen === 'crm' || req.query.origen === 'borrador' ? req.query.origen : '';
+  const page = Math.max(0, parseInt(req.query.page) || 0);
+  const pageSize = [50, 100, 200].includes(parseInt(req.query.pageSize)) ? parseInt(req.query.pageSize) : 50;
   try {
+    // Sin tope de 500 — pedido explícito 2026-09-06: "digamos que tengo 5000 en
+    // 5 borradores... todo se encuentra allí", con vista de 50/100/200 y
+    // paginación real en vez de cortar los resultados de golpe.
     const { rows: all } = await pool.query(`
       SELECT id, nombre, dominio, pais, industria, tamano, 'crm' AS origen,
              (SELECT nombre FROM outbound_clients oc WHERE oc.id = lc.outbound_client_id) AS referencia,
@@ -6923,17 +6928,18 @@ app.get('/api/cantera/global', requireAuth, async (req, res) => {
              'borrador_' || cb.estado AS origen, cb.nombre AS referencia, cc.created_at AS updated_at
         FROM cantera_companies cc JOIN cantera_batches cb ON cb.id = cc.batch_id
        WHERE cc.user_id=$1 AND ($2 = '%%' OR cc.nombre ILIKE $2 OR cc.dominio ILIKE $2)
-       ORDER BY updated_at DESC LIMIT 2000
+       ORDER BY updated_at DESC LIMIT 20000
     `, [uid, q]);
-    const rows = all.filter(r => {
+    const filtered = all.filter(r => {
       if (origen === 'crm' && r.origen !== 'crm') return false;
       if (origen === 'borrador' && r.origen === 'crm') return false;
       if (paises.length && !paises.includes(_cantNormPais(r.pais))) return false;
       if (industrias.length && !industrias.some(i => _cantNormText(r.industria).includes(i))) return false;
       if (tamanos.length && r.tamano && !tamanos.includes(r.tamano)) return false;
       return true;
-    }).slice(0, 500);
-    res.json(rows);
+    });
+    const rows = filtered.slice(page * pageSize, page * pageSize + pageSize);
+    res.json({ rows, total: filtered.length });
   } catch (err) { console.error('[cantera] GET global', err.message); res.status(500).json({ error: 'Error al buscar en la base global' }); }
 });
 

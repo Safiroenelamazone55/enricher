@@ -6287,9 +6287,15 @@ const CanteraModule = (() => {
 // ellos), para saber si una empresa ya se vio antes en el sistema.
 // =================================================================
 const CanteraGlobalModule = (() => {
-  let _rows = []; let _q = ''; let _origen = ''; let _collapsed = false;
+  // Tabla única con TODO lo que el sistema conoce (CRM + cualquier borrador),
+  // no separado por borrador — pedido explícito 2026-09-06: "digamos que
+  // tengo 5000 en 5 borradores diferentes... todo se encuentra allí, vista de
+  // 50/100/200, y filtro directamente allí arriba" (no un panel lateral).
+  let _rows = []; let _total = 0; let _q = ''; let _origen = '';
   let _filtros = { pais: [], industria: [], tamano: [] };
   let _opts = null;
+  let _page = 0;
+  function _pageSize() { try { return parseInt(localStorage.getItem('cantera_global_page_size')) || 50; } catch (_) { return 50; } }
   async function render(containerId) {
     const el = document.getElementById(containerId); if (!el) return;
     el.innerHTML = `<div class="cp-empty2" style="padding:22px">Cargando…</div>`;
@@ -6303,8 +6309,12 @@ const CanteraGlobalModule = (() => {
     if (_filtros.pais.length) p.set('pais', _filtros.pais.join(','));
     if (_filtros.industria.length) p.set('industria', _filtros.industria.join(','));
     if (_filtros.tamano.length) p.set('tamano', _filtros.tamano.join(','));
-    try { const r = await apiFetch(`${API}/cantera/global?${p.toString()}`); _rows = r.ok ? await r.json() : []; }
-    catch { _rows = []; }
+    p.set('page', _page); p.set('pageSize', _pageSize());
+    try {
+      const r = await apiFetch(`${API}/cantera/global?${p.toString()}`);
+      const d = r.ok ? await r.json() : { rows: [], total: 0 };
+      _rows = d.rows || []; _total = d.total || 0;
+    } catch { _rows = []; _total = 0; }
   }
   function _origenLabel(o) {
     if (o === 'crm') return 'En CRM';
@@ -6326,51 +6336,70 @@ const CanteraGlobalModule = (() => {
       </div>
     </div>`;
   }
-  function _panelHtml() {
-    return `<div class="cant-global-panel-hd">
-        <h3 style="margin:0;font-size:.92rem">Criterios</h3>
-        <button class="cant-x" onclick="CanteraGlobalModule.toggleCollapse()" title="Ocultar panel">‹</button>
+  // Filtros en una barra horizontal ARRIBA de la tabla (no un panel lateral) —
+  // pedido explícito 2026-09-06: "puedo filtrar directamente allí arriba".
+  function _filterBarHtml() {
+    return `<div style="display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+      <div style="min-width:220px;flex:1 1 220px">
+        <label class="field-label">Buscar</label>
+        <input type="text" class="form-input" placeholder="Nombre o dominio…" value="${esc(_q)}" oninput="CanteraGlobalModule.setQ(this.value)">
       </div>
-      <label class="field-label">Buscar</label>
-      <input type="text" class="form-input" style="margin-bottom:12px" placeholder="Nombre o dominio…" value="${esc(_q)}" oninput="CanteraGlobalModule.setQ(this.value)">
-      <label class="field-label">Dónde está</label>
-      <select class="form-input" style="margin-bottom:12px" onchange="CanteraGlobalModule.setOrigen(this.value)">
-        <option value="">Todos</option>
-        <option value="crm"${_origen === 'crm' ? ' selected' : ''}>Solo en CRM</option>
-        <option value="borrador"${_origen === 'borrador' ? ' selected' : ''}>Solo en borradores</option>
-      </select>
-      ${_taFieldG('pais', 'País')}
-      ${_taFieldG('industria', 'Industria')}
-      ${_taFieldG('tamano', 'Tamaño de empresa')}`;
+      <div style="min-width:160px">
+        <label class="field-label">Dónde está</label>
+        <select class="form-input" onchange="CanteraGlobalModule.setOrigen(this.value)">
+          <option value="">Todos</option>
+          <option value="crm"${_origen === 'crm' ? ' selected' : ''}>Solo en CRM</option>
+          <option value="borrador"${_origen === 'borrador' ? ' selected' : ''}>Solo en borradores</option>
+        </select>
+      </div>
+      <div style="min-width:180px;flex:1 1 180px">${_taFieldG('pais', 'País')}</div>
+      <div style="min-width:180px;flex:1 1 180px">${_taFieldG('industria', 'Industria')}</div>
+      <div style="min-width:180px;flex:1 1 180px">${_taFieldG('tamano', 'Tamaño de empresa')}</div>
+    </div>`;
   }
   function _resultsHtml() {
-    if (!_rows.length) return `<div class="cp-empty2" style="padding:22px">Sin resultados${_q ? ' para "' + esc(_q) + '"' : ' — ajusta los criterios de la izquierda'}</div>`;
-    return `<div class="cant-global-list">${_rows.map(r => `
-      <div class="cant-global-row">
-        <div class="cant-global-row__main">
-          <div class="cant-global-row__name">${esc(r.nombre)}</div>
-          <div class="cant-global-row__sub">${esc(r.dominio || 'sin dominio')}${r.pais ? ' · ' + esc(r.pais) : ''}${r.industria ? ' · ' + esc(r.industria) : ''}</div>
-        </div>
-        <span class="cant-estado cant-estado--${r.origen === 'crm' ? 'aprobado' : 'pendiente'}">${_origenLabel(r.origen)}</span>
-        <span class="cant-global-row__ref">${esc(r.referencia || '—')}</span>
-      </div>`).join('')}</div>`;
+    if (!_rows.length) return `<tr><td colspan="6" class="cp-empty2">Sin resultados${_q ? ' para "' + esc(_q) + '"' : ' — ajusta los filtros de arriba'}</td></tr>`;
+    return _rows.map(r => `
+      <tr>
+        <td>${esc(r.nombre)}</td>
+        <td class="dg-cell--ro">${esc(r.dominio || '—')}</td>
+        <td class="dg-cell--ro">${esc(r.pais || '—')}</td>
+        <td class="dg-cell--ro">${esc(r.industria || '—')}</td>
+        <td class="dg-cell--ro"><span class="cant-estado cant-estado--${r.origen === 'crm' ? 'aprobado' : 'pendiente'}">${_origenLabel(r.origen)}</span></td>
+        <td class="dg-cell--ro">${esc(r.referencia || '—')}</td>
+      </tr>`).join('');
+  }
+  function _pagerHtml() {
+    const ps = _pageSize();
+    const pages = Math.max(1, Math.ceil(_total / ps));
+    if (_page > pages - 1) _page = pages - 1;
+    if (_page < 0) _page = 0;
+    const from = _total ? _page * ps + 1 : 0, to = Math.min(_total, (_page + 1) * ps);
+    const nav = (dir, dis, label) => `<button class="btn btn--ghost btn--sm" style="min-width:34px" ${dis ? 'disabled style="min-width:34px;opacity:.4;cursor:default"' : ''} onclick="CanteraGlobalModule.goPage(${dir})" title="${dir < 0 ? 'Página anterior' : 'Página siguiente'}">${label}</button>`;
+    return `<div class="lm-pager" style="display:flex;align-items:center;gap:10px;justify-content:flex-end;flex-wrap:wrap;padding:12px 4px 4px;font-size:.83rem;color:var(--text2,#45586A)">
+      <span>Mostrando <b>${from}–${to}</b> de <b>${_total}</b></span>
+      <select onchange="CanteraGlobalModule.setPageSize(this.value)" title="Filas por página" style="padding:5px 9px;border:1px solid var(--border,#EAE7E2);border-radius:8px;background:#fff;font-size:.82rem;color:inherit;cursor:pointer">${[50, 100, 200].map(n => `<option value="${n}"${ps === n ? ' selected' : ''}>${n} / página</option>`).join('')}</select>
+      ${nav(-1, _page <= 0, '‹')}
+      <span>${_page + 1} / ${pages}</span>
+      ${nav(1, _page >= pages - 1, '›')}
+    </div>`;
   }
   function _html() {
     return `<div class="lm-sec-head lm-sec-head--compact"><div><h2 class="lm-sec-title">Base global</h2></div></div>
-      <p class="lm-sec-sub" style="margin-bottom:14px">Todo lo que el sistema conoce — ya sea que esté en el CRM de un cliente o todavía en un borrador de Cantera — antes de salir a buscarlo de nuevo.</p>
-      <div class="cant-global-layout${_collapsed ? ' collapsed' : ''}">
-        <div class="cant-global-panel">${_collapsed ? `<button class="cant-x" onclick="CanteraGlobalModule.toggleCollapse()" title="Mostrar criterios">›</button>` : _panelHtml()}</div>
-        <div class="cant-global-results">
-          <div class="cant-global-results__hd">${_rows.length} resultado(s)</div>
-          ${_resultsHtml()}
-        </div>
-      </div>`;
+      <p class="lm-sec-sub" style="margin-bottom:14px">Todo lo que el sistema conoce — ya sea que esté en el CRM de un cliente o todavía en cualquier borrador de Cantera — en una sola tabla, sin importar de qué borrador venga.</p>
+      ${_filterBarHtml()}
+      <div class="lm-dt-wrap dg-dt-wrap"><table class="clients-table dg-table sel-on" style="table-layout:auto">
+        <thead><tr><th>Nombre</th><th>Dominio</th><th>País</th><th>Industria</th><th>Dónde está</th><th>Referencia</th></tr></thead>
+        <tbody>${_resultsHtml()}</tbody>
+      </table></div>
+      ${_pagerHtml()}`;
   }
   function _repaint() { const el = document.getElementById('cantera-global-body'); if (el) el.innerHTML = _html(); }
   let _t = null;
-  function setQ(v) { _q = v; clearTimeout(_t); _t = setTimeout(async () => { await _search(); _repaint(); }, 300); }
-  async function setOrigen(v) { _origen = v; await _search(); _repaint(); }
-  function toggleCollapse() { _collapsed = !_collapsed; _repaint(); }
+  function setQ(v) { _q = v; _page = 0; clearTimeout(_t); _t = setTimeout(async () => { await _search(); _repaint(); }, 300); }
+  async function setOrigen(v) { _origen = v; _page = 0; await _search(); _repaint(); }
+  function setPageSize(n) { try { localStorage.setItem('cantera_global_page_size', String(parseInt(n) || 50)); } catch (_) {} _page = 0; _search().then(_repaint); }
+  function goPage(d) { _page = Math.max(0, _page + d); _search().then(_repaint); }
   function _gOptions(field) {
     const all = (_opts && _opts[field]) || [];
     const chosen = new Set((_filtros[field] || []).map(v => v.toLowerCase()));
@@ -6390,9 +6419,9 @@ const CanteraGlobalModule = (() => {
     menu.hidden = false;
   }
   function taBlur(field) { setTimeout(() => { const m = document.getElementById('tag-menu-' + field); if (m) m.hidden = true; }, 160); }
-  async function addFiltro(field, value) { _filtros[field] = [...(_filtros[field] || []), value]; await _search(); _repaint(); }
-  async function removeFiltro(field, idx) { _filtros[field].splice(idx, 1); await _search(); _repaint(); }
-  return { render, setQ, setOrigen, toggleCollapse, taOpen, taFilter, taBlur, addFiltro, removeFiltro };
+  async function addFiltro(field, value) { _filtros[field] = [...(_filtros[field] || []), value]; _page = 0; await _search(); _repaint(); }
+  async function removeFiltro(field, idx) { _filtros[field].splice(idx, 1); _page = 0; await _search(); _repaint(); }
+  return { render, setQ, setOrigen, setPageSize, goPage, taOpen, taFilter, taBlur, addFiltro, removeFiltro };
 })();
 
 // =================================================================
