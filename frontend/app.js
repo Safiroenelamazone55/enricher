@@ -5347,11 +5347,11 @@ const CanteraModule = (() => {
     if (!_current) { showBanner('Borrador no encontrado', 'error'); return; }
     _current.filtros = _current.filtros || {};
     _coSel = new Set(); _expanded = new Set(); _contactsByCompany = {}; _contactsLoaded = false; _step = 1;
-    _cantPageIdx = 0; _lastFiltros = null;
-    // Totales de Limpiar/Enriquecer/Validado vienen del borrador (persistidos en
-    // el servidor) — pedido explícito 2026-09-06: "ya limpiamos, no debería ser
-    // 0" al recargar la página o volver a entrar. `ran` marca si ya se corrió
-    // alguna vez, para distinguir "(0)" real de "todavía no se corrió".
+    _cantPageIdx = 0;
+    // Totales de Filtros/Limpiar/Enriquecer/IA vienen del borrador (persistidos
+    // en el servidor) — pedido explícito 2026-09-06: "ya limpiamos, no debería
+    // ser 0" al recargar la página o volver a entrar.
+    _lastFiltros = _current.filtro_total ? { total: _current.filtro_total } : null;
     _lastClean = { ...(_current.limpieza_stats || {}) };
     _lastEnrich = { ...(_current.enriquecimiento_stats || {}) };
     _lastIA = _current.validado_total ? { done: _current.validado_total } : null;
@@ -5665,12 +5665,12 @@ const CanteraModule = (() => {
     ).join('') + item(_lastEnrich.ran ? `Enriquecido todo (${_lastEnrich.total})` : 'Enriquecer todos los campos', `CanteraModule.runEnrich(null)`);
     const visCols = _loadVisibleCols();
     const colsPanel = CANT_RESULT_COLS.map(c => `<label class="cant-colchk"><input type="checkbox" ${visCols.has(c.key) ? 'checked' : ''} onchange="CanteraModule.toggleResultCol('${c.key}')"> ${esc(c.label)}</label>`).join('');
-    const html = `<div class="cp-mark-menu__list">${item(_lastFiltros ? `Filtros corridos (${_lastFiltros.aprobadas} aprobada(s))` : 'Correr filtros básicos', 'CanteraModule.runFiltros()')}</div>
+    const html = `<div class="cp-mark-menu__list">${item(_lastFiltros ? `Validado (${_lastFiltros.total})` : 'Correr filtros básicos', 'CanteraModule.runFiltros()')}</div>
       <div class="cp-mark-menu__sep"></div>
       <div class="cp-mark-menu__list">${sub('Limpiar', cleanPanel)}${sub('Enriquecer', enrichPanel)}</div>
       <div class="cp-mark-menu__sep"></div>
       <div class="cp-mark-menu__list">
-        ${item(_jobRunning ? 'Investigación profunda (IA)…' : (_lastIA ? `Validado (${_lastIA.done})` : 'Investigación profunda (IA)'), 'CanteraModule.runValidacion()')}
+        ${item(_jobRunning ? 'Investigación profunda (IA)…' : (_lastIA ? `Investigación completa (${_lastIA.done})` : 'Investigación profunda (IA)'), 'CanteraModule.runValidacion()')}
         ${item(`${_onlyFailed ? '✓ ' : ''}Ver solo descartadas`, 'CanteraModule.toggleFailed()')}
       </div>
       <div class="cp-mark-menu__sep"></div>
@@ -6036,9 +6036,16 @@ const CanteraModule = (() => {
       const res = await apiFetch(`${API}/cantera/batches/${_current.id}/run-filtros`, { method: 'POST' });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || 'Error');
-      _lastFiltros = { aprobadas: d.aprobadas, descartadas: d.descartadas, total: d.total };
       showBanner(`✓ ${d.aprobadas} aprobada(s) · ${d.descartadas} descartada(s) de ${d.total}`, 'success');
-      await _loadCompanies(); _paint();
+      await _loadCompanies();
+      // "Validado" es el paso 1 (filtros básicos) — pedido explícito 2026-09-06:
+      // "cuando dije validado no me refería a la investigación profunda... me
+      // refería al paso 1". El total es el conteo real y persistente de empresas
+      // que ya pasaron por el filtro (paso1_estado <> 'pendiente'), no solo lo
+      // que procesó esta corrida puntual.
+      try { _current = await (await apiFetch(`${API}/cantera/batches/${_current.id}`)).json(); } catch { /* usa lo que ya había */ }
+      _lastFiltros = _current.filtro_total ? { total: _current.filtro_total } : null;
+      _paint();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
   function moreMenu(ev) {
