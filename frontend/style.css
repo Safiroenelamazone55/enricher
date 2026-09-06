@@ -12360,8 +12360,10 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .cant-section__hd h3 { font-size: .95rem; font-weight: 700; margin: 0; color: var(--text, #0A2540); }
 /* Barra de pasos del borrador — navegación libre (no lineal), reemplaza el scroll
    largo por las 4 secciones (pedido explícito 2026-09-06). */
-.cant-stepbar { display: flex; flex-wrap: wrap; gap: 6px; margin: 14px 0 18px; border-bottom: 1px solid var(--border, #EAE7E2); padding-bottom: 0; }
-.cant-step { display: flex; align-items: center; gap: 7px; font-family: inherit; font-size: .84rem; font-weight: 600; color: var(--muted, #B4AFA8); background: none; border: none; border-bottom: 2px solid transparent; padding: 9px 4px 10px; margin-bottom: -1px; cursor: pointer; white-space: nowrap; }
+/* Sin el número de antes, las opciones quedaban pegadas y se leían como una
+   sola frase larga (reportado 2026-09-06) — más separación entre cada una. */
+.cant-stepbar { display: flex; flex-wrap: wrap; gap: 28px; margin: 14px 0 18px; border-bottom: 1px solid var(--border, #EAE7E2); padding-bottom: 0; }
+.cant-step { display: flex; align-items: center; gap: 7px; font-family: inherit; font-size: .84rem; font-weight: 600; color: var(--muted, #B4AFA8); background: none; border: none; border-bottom: 2px solid transparent; padding: 9px 2px 10px; margin-bottom: -1px; cursor: pointer; white-space: nowrap; }
 .cant-step:hover { color: var(--text2, #45586A); }
 .cant-step.on { color: var(--text, #0A2540); border-bottom-color: var(--brand, #007AFF); }
 @media (max-width: 760px) { .cant-stepbar { overflow-x: auto; flex-wrap: nowrap; } }

@@ -5542,8 +5542,8 @@ const CanteraModule = (() => {
           <span class="cant-subrow__cargo">${esc(k.cargo || '(sin cargo)')}</span>
           ${(k.seniority || k.departamento || _cantSignalOn(k.cambio_reciente) || _cantSignalOn(k.sigue_empresa) || k.puesto_motivo) ? `<div class="cant-subrow__line">
             ${k.seniority ? `<span class="tag">${esc(k.seniority)}</span>` : ''}${k.departamento ? `<span class="tag">${esc(k.departamento)}</span>` : ''}
-            ${_cantSignalOn(k.cambio_reciente) ? `<span class="tag" title="Cambió de trabajo recientemente">↻ cambio reciente</span>` : ''}
-            ${_cantSignalOn(k.sigue_empresa) ? `<span class="tag" title="Ya sigue tu empresa en LinkedIn">★ sigue tu empresa</span>` : ''}
+            ${_cantSignalOn(k.cambio_reciente) ? `<span class="tag" title="Cambió de trabajo recientemente"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:2px"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>cambio reciente</span>` : ''}
+            ${_cantSignalOn(k.sigue_empresa) ? `<span class="tag" title="Ya sigue tu empresa en LinkedIn"><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none" style="vertical-align:-1px;margin-right:2px"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>sigue tu empresa</span>` : ''}
             ${k.puesto_motivo ? `<span class="cant-subrow__motivo">— ${esc(k.puesto_motivo)}</span>` : ''}
           </div>` : ''}
         </td>
@@ -5593,7 +5593,7 @@ const CanteraModule = (() => {
 
       ${_step === 2 ? `<div class="cant-section">
         <p class="cant-hint">Esto es lo único que escribes — el motor que investiga y decide es fijo, no lo tocas.</p>
-        <label class="cant-flabel" style="display:block;margin-bottom:12px">ICP<textarea id="cant-icp" class="form-input" rows="3" placeholder="¿A quién buscamos?">${esc(b.icp || '')}</textarea></label>
+        <label class="cant-flabel" style="display:block;margin-bottom:12px">ICP<textarea id="cant-icp" class="form-input" rows="10" placeholder="¿A quién buscamos?">${esc(b.icp || '')}</textarea></label>
 
         <div class="cant-tiers">${tiers.map((t, i) => `
           <div class="cant-tier-card">
@@ -5634,14 +5634,14 @@ const CanteraModule = (() => {
 
       ${_step === 3 ? `<div class="cant-section">
         ${_companies.length ? `<div class="cant-imp-done-box">
-          <div class="cant-imp-done-box__ico">📄</div>
+          <div class="cant-imp-done-box__ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
           <div class="cant-imp-done-box__txt">
             <b>${b.archivo_nombre ? esc(b.archivo_nombre) : 'Archivo importado'}</b>
             <span>${_companies.length} empresa(s) ya cargadas en este borrador</span>
           </div>
           <div class="cant-imp-done-box__btns">
             <button class="btn btn--ghost btn--sm" onclick="CanteraModule.openImportModal()">Importar otro archivo…</button>
-            <button class="btn btn--ghost btn--sm cant-danger" onclick="CanteraModule.deleteAndReimport()">🗑 Eliminar todo y volver a cargar</button>
+            <button class="btn btn--ghost btn--sm cant-danger" onclick="CanteraModule.deleteAndReimport()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>Eliminar todo y volver a cargar</button>
           </div>
         </div>` : `<div class="cant-import-row">
           <button class="btn btn--primary btn--sm" onclick="CanteraModule.openImportModal()">Importar archivo…</button>
