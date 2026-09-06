@@ -6125,9 +6125,40 @@ const CanteraModule = (() => {
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
   let _jobRunning = false, _jobProgress = { done: 0, total: 0 }, _jobTimer = null;
-  async function runValidacion() {
+  let _pendingRevalIds = [];
+  // Si hay empresas marcadas y alguna ya se investigó antes (manual o con
+  // IA), avisa antes de reprocesar — pedido explícito 2026-09-06: "marco 30,
+  // 5 ya se investigaron... quiero un aviso preguntando si aun así deseo
+  // continuar, y que se procesen las 30". Sin selección, sigue como antes
+  // (todo el borrador, solo lo pendiente, sin aviso).
+  function runValidacion() {
+    if (!_coSel.size) { _runValidacionExec([]); return; }
+    const seleccionadas = _companies.filter(c => _coSel.has(c.id));
+    const yaManual = seleccionadas.filter(c => c.paso2_estado === 'validacion_manual').length;
+    const yaIA = seleccionadas.filter(c => c.paso2_estado === 'aprobado' || c.paso2_estado === 'descartado').length;
+    if (!yaManual && !yaIA) { _runValidacionExec([..._coSel]); return; }
+    const partes = [];
+    if (yaManual) partes.push(`${yaManual} de las empresas seleccionadas ya se ${yaManual === 1 ? 'investigó' : 'investigaron'} con validación manual`);
+    if (yaIA) partes.push(`${yaIA} de las empresas seleccionadas ya se ${yaIA === 1 ? 'investigó' : 'investigaron'} con investigación profunda (IA)`);
+    document.getElementById('cant-reval-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'cant-reval-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) m.remove(); };
+    m.innerHTML = `<div class="fin-pi-box lm-flt-box" style="max-width:420px">
+      <div class="fin-pi-box__hd"><h3>¿Volver a investigar?</h3><button class="fin-pi-x" onclick="document.getElementById('cant-reval-modal').remove()">✕</button></div>
+      <div class="flt-body">
+        <p class="cant-hint" style="margin:0">${esc(partes.join(' y '))}. ¿Aun así deseas continuar? Se procesarán las ${_coSel.size} empresa(s) seleccionadas.</p>
+      </div>
+      <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns">
+        <button class="btn btn--ghost btn--sm" onclick="document.getElementById('cant-reval-modal').remove()">No</button>
+        <button class="btn btn--primary btn--sm" onclick="document.getElementById('cant-reval-modal').remove();CanteraModule._confirmRevalidar()">Sí, continuar</button>
+      </div></div></div>`;
+    document.body.appendChild(m);
+    _pendingRevalIds = [..._coSel];
+  }
+  function _confirmRevalidar() { _runValidacionExec(_pendingRevalIds); _pendingRevalIds = []; }
+  async function _runValidacionExec(companyIds) {
     try {
-      const res = await apiFetch(`${API}/cantera/batches/${_current.id}/run-validacion`, { method: 'POST' });
+      const res = await apiFetch(`${API}/cantera/batches/${_current.id}/run-validacion`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ company_ids: companyIds }) });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || 'Error');
       if (!d.started) { showBanner(d.mensaje || 'Nada que investigar', 'info'); return; }
@@ -6146,6 +6177,7 @@ const CanteraModule = (() => {
           // "resetea" el número hacia abajo.
           try { _current = await (await apiFetch(`${API}/cantera/batches/${_current.id}`)).json(); } catch { /* usa lo que ya había */ }
           _lastIA = _current.validado_total ? { done: _current.validado_total } : null;
+          if (companyIds.length) _coSel = new Set();
           _paint();
         } else _paint();
       }, 4000);
@@ -6451,7 +6483,7 @@ const CanteraModule = (() => {
     taOpen, taFilter, taBlur, addFiltro, removeFiltro,
     toggleCoSel, toggleCoSelAll, resultsMenu, runClean, runEnrich, closeCantOp, applyCantOp,
     toggleResultCol, startColResize,
-    setContactPrioridad, cantGoPage, cantSetPageSize, bdSetFiltro, bdSetPageSize, bdGoPage,
+    setContactPrioridad, cantGoPage, cantSetPageSize, bdSetFiltro, bdSetPageSize, bdGoPage, _confirmRevalidar,
     openManualValidation, closeManualValidation, copyManualData, saveManualValidation, quitarValidacionManual };
 })();
 

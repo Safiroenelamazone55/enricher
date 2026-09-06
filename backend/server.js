@@ -7009,19 +7009,28 @@ app.get('/api/cantera/config-status', requireAuth, async (req, res) => {
 // dinero real) — el front consulta el progreso con GET companies mientras tanto
 // (paso2_estado por fila) o con este mismo endpoint de estado.
 const _canteraJobs = new Map(); // batchId -> { running, done, total, errores, costoTotal }
+// `company_ids` (opcional): si viene, FUERZA la (re)investigación de justo
+// esas empresas sin importar su paso2_estado actual — pedido explícito
+// 2026-09-06: "marco 30, 5 ya se investigaron (manual o con IA)... quiero un
+// aviso preguntando si aun así deseo continuar, y que se procesen las 30".
+// Sin `company_ids` se mantiene el comportamiento de siempre: todo el
+// borrador, solo lo que sigue 'pendiente'.
 app.post('/api/cantera/batches/:id/run-validacion', requireAuth, async (req, res) => {
   const uid = req.workspaceOwnerId;
   const batchId = req.params.id;
+  const companyIds = Array.isArray(req.body?.company_ids) ? req.body.company_ids.map(Number).filter(Boolean) : [];
   if (_canteraJobs.get(batchId)?.running) return res.status(409).json({ error: 'Ya hay una investigación en curso para este borrador' });
   const { rows: pend } = await pool.query(
-    `SELECT COUNT(*)::int AS n FROM cantera_companies WHERE batch_id=$1 AND user_id=$2 AND paso1_estado <> 'descartado' AND paso2_estado='pendiente'`,
-    [batchId, uid]);
+    companyIds.length
+      ? `SELECT COUNT(*)::int AS n FROM cantera_companies WHERE batch_id=$1 AND user_id=$2 AND paso1_estado <> 'descartado' AND id = ANY($3::int[])`
+      : `SELECT COUNT(*)::int AS n FROM cantera_companies WHERE batch_id=$1 AND user_id=$2 AND paso1_estado <> 'descartado' AND paso2_estado='pendiente'`,
+    companyIds.length ? [batchId, uid, companyIds] : [batchId, uid]);
   const total = pend[0]?.n || 0;
   if (!total) return res.json({ started: false, total: 0, mensaje: 'No hay empresas pendientes de investigar (todas ya pasaron el paso 2, o todas quedaron descartadas en el filtro básico)' });
   const job = { running: true, done: 0, total, errores: 0, costoTotal: 0 };
   _canteraJobs.set(batchId, job);
   const { runBatchValidation } = require('./services/canteraValidateService');
-  runBatchValidation(pool, uid, batchId, { onProgress: p => { job.done = p.done; } })
+  runBatchValidation(pool, uid, batchId, { onProgress: p => { job.done = p.done; }, companyIds })
     .then(r => { job.running = false; job.errores = r.errores; job.costoTotal = r.costoTotal; })
     .catch(e => { job.running = false; job.error = e.message; console.error('[cantera] run-validacion', e.message); });
   res.json({ started: true, total });

@@ -137,12 +137,18 @@ async function validateCompany(pool, uid, batch, company, contactos) {
 // (esa decisión sí se respeta); lo "pendiente" (filtro nunca corrido) entra
 // igual. Secuencial (concurrencia 1) a propósito: cada llamada investiga en
 // internet y cuesta dinero real — no queremos 50 llamadas en paralelo.
-async function runBatchValidation(pool, uid, batchId, { onProgress } = {}) {
+async function runBatchValidation(pool, uid, batchId, { onProgress, companyIds } = {}) {
   const { rows: [batch] } = await pool.query(`SELECT * FROM cantera_batches WHERE id=$1 AND user_id=$2`, [batchId, uid]);
   if (!batch) throw new Error('Borrador no encontrado');
+  // `companyIds`: selección explícita (con confirmación ya hecha en el
+  // frontend) que FUERZA la reinvestigación sin importar paso2_estado actual
+  // — pedido explícito 2026-09-06, para poder re-investigar con un Criterio
+  // de calificación nuevo sin tener que reabrir cada empresa a mano.
   const { rows: companies } = await pool.query(
-    `SELECT * FROM cantera_companies WHERE batch_id=$1 AND user_id=$2 AND paso1_estado <> 'descartado' AND paso2_estado='pendiente' ORDER BY id ASC`,
-    [batchId, uid]);
+    Array.isArray(companyIds) && companyIds.length
+      ? `SELECT * FROM cantera_companies WHERE batch_id=$1 AND user_id=$2 AND paso1_estado <> 'descartado' AND id = ANY($3::int[]) ORDER BY id ASC`
+      : `SELECT * FROM cantera_companies WHERE batch_id=$1 AND user_id=$2 AND paso1_estado <> 'descartado' AND paso2_estado='pendiente' ORDER BY id ASC`,
+    Array.isArray(companyIds) && companyIds.length ? [batchId, uid, companyIds] : [batchId, uid]);
 
   let done = 0, errores = 0, costoTotal = 0;
   for (const company of companies) {
