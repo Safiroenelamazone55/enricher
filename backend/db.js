@@ -2034,6 +2034,12 @@ async function initDb() {
     // recargas/reaperturas.
     await pool.query(`ALTER TABLE cantera_batches ADD COLUMN IF NOT EXISTS limpieza_stats JSONB NOT NULL DEFAULT '{}'::jsonb;`);
     await pool.query(`ALTER TABLE cantera_batches ADD COLUMN IF NOT EXISTS enriquecimiento_stats JSONB NOT NULL DEFAULT '{}'::jsonb;`);
+    // Total acumulado de cada importación (empresas/contactos creados, duplicados
+    // omitidos) — pedido explícito 2026-09-06: pestaña "Información" con "cuántos
+    // prospectos agregaron, cuántos fueron duplicados". El resumen de una
+    // importación solo se veía una vez, en la pantalla final del import; esto lo
+    // hace persistente igual que limpieza_stats/enriquecimiento_stats.
+    await pool.query(`ALTER TABLE cantera_batches ADD COLUMN IF NOT EXISTS import_stats JSONB NOT NULL DEFAULT '{}'::jsonb;`);
 
     console.log('[db] tables ready (users, verifications, batch_jobs, clients, projects, tasks, payments, team_members, workspaces, workspace_invites, chat_messages, leads, meetings, fin_config, fin_member_config, pagos_internos, opportunities, opportunity_tasks, cantera_batches, cantera_companies, cantera_contacts, cantera_criterio_templates)');
   } catch (err) {

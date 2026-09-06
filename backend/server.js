@@ -6432,7 +6432,8 @@ app.get('/api/cantera/batches/:id', requireAuth, async (req, res) => {
     const { rows } = await pool.query(`
       SELECT b.*, oc.nombre AS cliente_nombre, cam.nombre AS campana_nombre, seq.nombre AS secuencia_nombre,
              (SELECT COUNT(*) FROM cantera_companies c WHERE c.batch_id=b.id AND c.validado_at IS NOT NULL)::int AS validado_total,
-             (SELECT COUNT(*) FROM cantera_companies c WHERE c.batch_id=b.id AND c.paso1_estado <> 'pendiente')::int AS filtro_total
+             (SELECT COUNT(*) FROM cantera_companies c WHERE c.batch_id=b.id AND c.paso1_estado <> 'pendiente')::int AS filtro_total,
+             (SELECT COUNT(*) FROM cantera_contacts k WHERE k.batch_id=b.id)::int AS contactos_total
         FROM cantera_batches b
         LEFT JOIN outbound_clients oc ON oc.id = b.outbound_client_id
         LEFT JOIN campaigns cam ON cam.id = b.campaign_id
@@ -6704,7 +6705,14 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
     job.done = summary.rows;
   }
   try {
-    await pool.query(`UPDATE cantera_batches SET archivo_nombre=$1, updated_at=NOW() WHERE id=$2`, [req.file.originalname || '', batchId]);
+    const { rows: brows } = await pool.query('SELECT import_stats FROM cantera_batches WHERE id=$1', [batchId]);
+    const stats = brows[0]?.import_stats || {};
+    stats.imports = (stats.imports || 0) + 1;
+    stats.companiesCreated = (stats.companiesCreated || 0) + summary.companiesCreated;
+    stats.contactsCreated = (stats.contactsCreated || 0) + summary.contactsCreated;
+    stats.contactsSkipped = (stats.contactsSkipped || 0) + summary.contactsSkipped;
+    stats.companiesDeleted = (stats.companiesDeleted || 0) + (summary.companiesDeleted || 0);
+    await pool.query(`UPDATE cantera_batches SET archivo_nombre=$1, import_stats=$2::jsonb, updated_at=NOW() WHERE id=$3`, [req.file.originalname || '', JSON.stringify(stats), batchId]);
   } catch (e) { console.error('[cantera] import archivo_nombre', e.message); }
   job.running = false; job.summary = summary;
 });

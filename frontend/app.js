@@ -5304,6 +5304,9 @@ const CanteraModule = (() => {
         } else {
           showBanner(`✓ Importación completa · ${sm.companiesCreated || 0} empresa(s) nueva(s) · ${sm.contactsCreated || 0} contacto(s) nuevo(s)`, 'success');
         }
+        // Refresca el borrador — archivo_nombre e import_stats (pestaña
+        // Información) se actualizan en el servidor durante la importación.
+        try { _current = await (await apiFetch(`${API}/cantera/batches/${_current.id}`)).json(); } catch { /* usa lo que ya había */ }
         await _loadCompanies(); _paint();
       }, 2000);
     } catch (e) {
@@ -5527,11 +5530,10 @@ const CanteraModule = (() => {
         ${fillCols}
         <td class="dg-cell--ro"><b>${esc([k.nombre, k.apellido].filter(Boolean).join(' ')) || '(sin nombre)'}</b></td>
         <td class="dg-cell--ro">
-          ${esc(k.cargo || '(sin cargo)')}
-          ${(k.seniority || k.departamento || _cantSignalOn(k.cambio_reciente) || _cantSignalOn(k.publico_reciente) || _cantSignalOn(k.sigue_empresa) || k.puesto_motivo) ? `<div class="cant-subrow__line">
+          <span class="cant-subrow__cargo">${esc(k.cargo || '(sin cargo)')}</span>
+          ${(k.seniority || k.departamento || _cantSignalOn(k.cambio_reciente) || _cantSignalOn(k.sigue_empresa) || k.puesto_motivo) ? `<div class="cant-subrow__line">
             ${k.seniority ? `<span class="tag">${esc(k.seniority)}</span>` : ''}${k.departamento ? `<span class="tag">${esc(k.departamento)}</span>` : ''}
             ${_cantSignalOn(k.cambio_reciente) ? `<span class="tag" title="Cambió de trabajo recientemente">↻ cambio reciente</span>` : ''}
-            ${_cantSignalOn(k.publico_reciente) ? `<span class="tag" title="${esc(k.publico_reciente)}">✎ activo en LinkedIn</span>` : ''}
             ${_cantSignalOn(k.sigue_empresa) ? `<span class="tag" title="Ya sigue tu empresa en LinkedIn">★ sigue tu empresa</span>` : ''}
             ${k.puesto_motivo ? `<span class="cant-subrow__motivo">— ${esc(k.puesto_motivo)}</span>` : ''}
           </div>` : ''}
@@ -5564,6 +5566,7 @@ const CanteraModule = (() => {
         <button class="cant-step${_step === 2 ? ' on' : ''}" onclick="CanteraModule.setStep(2)"><span class="cant-step__n">2</span>Criterio de calificación</button>
         <button class="cant-step${_step === 3 ? ' on' : ''}" onclick="CanteraModule.setStep(3)"><span class="cant-step__n">3</span>Importar prospectos</button>
         <button class="cant-step${_step === 4 ? ' on' : ''}" onclick="CanteraModule.setStep(4)"><span class="cant-step__n">4</span>Resultados${_companies.length ? ` (${_companies.length})` : ''}</button>
+        <button class="cant-step${_step === 5 ? ' on' : ''}" onclick="CanteraModule.setStep(5)"><span class="cant-step__n">5</span>Información</button>
         ${_step === 4 && _companies.length ? `<button class="dg-kebab cant-stepbar__more" onclick="CanteraModule.resultsMenu(event)" title="Filtros, limpieza, enriquecimiento e investigación">⋮</button>` : ''}
       </div>
 
@@ -5650,7 +5653,48 @@ const CanteraModule = (() => {
           <tbody>${rows || `<tr><td colspan="${emptyColspan}" class="cp-empty2">Importa un archivo para empezar.</td></tr>`}</tbody>
         </table></div>
         ${_cantPagerHtml(filteredCompanies.length)}
-      </div>` : ''}`;
+      </div>` : ''}
+      ${_step === 5 ? _infoHtml(calificadas) : ''}`;
+  }
+  // Paso 5 · Información — pedido explícito 2026-09-06: "quiero que agregues
+  // algo que tenga que ver con información... si agregaron tantos prospectos,
+  // tantas empresas, cuántos fueron duplicados, se limpiaron o enriquecieron,
+  // cuántos duplicados eliminaron". Todo derivado de datos persistidos en el
+  // servidor (import_stats/limpieza_stats/enriquecimiento_stats/validado_at),
+  // no de contadores en memoria que se pierden al recargar.
+  function _infoHtml(calificadas) {
+    const imp = _current.import_stats || {};
+    const stat = (n, label) => `<div class="lm-stat"><b>${n}</b><span>${esc(label)}</span></div>`;
+    return `<div class="cant-section">
+      <div class="cant-info-block">
+        <h3 class="cant-info-block__h">Estado actual del borrador</h3>
+        <div class="lm-imp-done__stats" style="flex-wrap:wrap">
+          ${stat(_companies.length, 'empresas en el borrador')}
+          ${stat(_current.contactos_total || 0, 'contactos en el borrador')}
+          ${stat(_lastFiltros ? _lastFiltros.total : 0, 'pasaron el filtro básico (paso 1)')}
+          ${stat(_current.validado_total || 0, 'investigadas con IA (paso 2)')}
+          ${stat(calificadas, 'calificadas para mover al CRM')}
+        </div>
+      </div>
+      <div class="cant-info-block">
+        <h3 class="cant-info-block__h">Importación</h3>
+        <div class="lm-imp-done__stats" style="flex-wrap:wrap">
+          ${stat(imp.companiesCreated || 0, 'empresas agregadas en total')}
+          ${stat(imp.contactsCreated || 0, 'contactos agregados en total')}
+          ${stat(imp.contactsSkipped || 0, 'duplicados omitidos al importar (misma persona)')}
+          ${imp.companiesDeleted ? stat(imp.companiesDeleted, 'empresas eliminadas al reimportar') : ''}
+        </div>
+        ${!imp.imports ? '<p class="cant-hint" style="margin:10px 0 0">Todavía no se ha importado ningún archivo.</p>' : ''}
+      </div>
+      <div class="cant-info-block">
+        <h3 class="cant-info-block__h">Limpieza y enriquecimiento</h3>
+        <div class="lm-imp-done__stats" style="flex-wrap:wrap">
+          ${stat(_lastClean.total || 0, 'campos limpiados en total')}
+          ${stat(_lastEnrich.total || 0, 'campos enriquecidos en total')}
+        </div>
+        ${!_lastClean.ran && !_lastEnrich.ran ? '<p class="cant-hint" style="margin:10px 0 0">Todavía no se ha corrido Limpiar ni Enriquecer.</p>' : ''}
+      </div>
+    </div>`;
   }
   // Paginación de la tabla de Resultados — bloques de 50/100/200 (opcional,
   // pedido explícito 2026-09-06). Mismo patrón visual que el paginador del CRM.
@@ -5921,20 +5965,18 @@ const CanteraModule = (() => {
     m.innerHTML = `<div class="fin-pi-box lm-flt-box" style="max-width:520px">
       <div class="fin-pi-box__hd"><h3>Validación manual · ${esc(co.nombre)}</h3><button class="fin-pi-x" onclick="CanteraModule.closeManualValidation()">✕</button></div>
       <div class="flt-body" style="display:flex;flex-direction:column;gap:12px">
-        <p class="cant-hint" style="margin:0">Copia estos datos, valídalos donde quieras, y vuelve a asignar el Tier aquí. Solo datos de la empresa — los contactos se priorizan aparte.</p>
         <label class="cant-flabel">Datos de la empresa<textarea id="cant-manual-copy" class="form-input" rows="8" readonly onclick="this.select()">${esc(_manualCopyText(co))}</textarea></label>
         <button class="btn btn--ghost btn--sm" onclick="CanteraModule.copyManualData()">Copiar todo</button>
-        <label class="cant-flabel">Tier<select id="cant-manual-tier" class="form-input">
+        <label class="cant-flabel">Tier<select id="cant-manual-tier" class="form-input" onchange="CanteraModule.saveManualValidation(${co.id})">
           <option value="">— elegir —</option>
           ${tiers.map(t => `<option value="${esc(t.clave)}"${co.tier_clave === t.clave ? ' selected' : ''}>${esc(t.clave)}${t.nombre ? ' — ' + esc(t.nombre) : ''}</option>`).join('')}
         </select></label>
-        <label class="cant-flabel">Nota<span class="field-note">opcional</span><textarea id="cant-manual-nota" class="form-input" rows="2" placeholder="Por qué este Tier…">${esc(co.nota_manual || '')}</textarea></label>
+        <label class="cant-flabel">Nota<span class="field-note">opcional</span><textarea id="cant-manual-nota" class="form-input" rows="2" placeholder="Por qué este Tier…" onblur="CanteraModule.saveManualValidation(${co.id})">${esc(co.nota_manual || '')}</textarea></label>
       </div>
       <div class="fin-pi-box__ft">
         <span>${co.paso2_estado === 'validacion_manual' ? `<button class="lm-bulk-ghost" onclick="CanteraModule.quitarValidacionManual(${co.id})">Quitar validación manual</button>` : ''}</span>
         <div class="fin-pi-ft-btns">
-          <button class="btn btn--ghost btn--sm" onclick="CanteraModule.closeManualValidation()">Cancelar</button>
-          <button class="btn btn--primary btn--sm" onclick="CanteraModule.saveManualValidation(${co.id})">Guardar validación</button>
+          <button class="btn btn--ghost btn--sm" onclick="CanteraModule.closeManualValidation()">Cerrar</button>
         </div>
       </div></div>`;
     document.body.appendChild(m);
@@ -5945,9 +5987,13 @@ const CanteraModule = (() => {
     try { await navigator.clipboard.writeText(ta.value); showBanner('✓ Copiado', 'success'); }
     catch { ta.select(); document.execCommand('copy'); showBanner('✓ Copiado', 'success'); }
   }
+  // Autoguarda al elegir el Tier o al salir de la Nota — pedido explícito
+  // 2026-09-06: "quiero que al seleccionar, el tier se guarde en automático,
+  // pasa lo mismo si entro a actualizar". No cierra el modal (así se puede
+  // seguir escribiendo la nota después de elegir el Tier).
   async function saveManualValidation(companyId) {
     const tier = document.getElementById('cant-manual-tier')?.value;
-    if (!tier) { showBanner('Elige un Tier', 'info'); return; }
+    if (!tier) return; // la Nota puede perder el foco antes de elegir Tier — nada que guardar aún
     const nota = document.getElementById('cant-manual-nota')?.value || '';
     try {
       const res = await apiFetch(`${API}/cantera/batches/${_current.id}/companies/${companyId}/validar-manual`, {
@@ -5955,9 +6001,11 @@ const CanteraModule = (() => {
       });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || 'Error');
-      closeManualValidation();
-      showBanner('✓ Validación manual guardada', 'success');
-      await _loadCompanies(); _paint();
+      showBanner('✓ Guardado', 'success');
+      await _loadCompanies();
+      const co = _companies.find(c => c.id === companyId);
+      const btn = document.querySelector('#cant-manual-modal .fin-pi-box__ft span');
+      if (btn && co) btn.innerHTML = `<button class="lm-bulk-ghost" onclick="CanteraModule.quitarValidacionManual(${co.id})">Quitar validación manual</button>`;
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
   async function quitarValidacionManual(companyId) {
