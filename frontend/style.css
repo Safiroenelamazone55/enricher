@@ -12345,7 +12345,7 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 @media (max-width: 640px) { .dg-clean-row { grid-template-columns: 1fr; } .dg-clean-arrow { display: none; } }
 
 /* ── Cantera — tonos claros, sin emojis, compacto (mismo criterio que Datos) ── */
-.cant-estado { font-family: var(--font-display, inherit); font-size: .72rem; font-weight: 700; padding: 2px 8px; border-radius: 0; white-space: nowrap; }
+.cant-estado { font-family: var(--font-display, inherit); font-size: .72rem; font-weight: 700; padding: 2px 8px; border-radius: 0; white-space: nowrap; display: inline-block; min-width: 130px; text-align: center; }
 .cant-estado--borrador, .cant-estado--pendiente { background: var(--brand-ll, #F1EFEB); color: var(--text2, #45586A); }
 .cant-estado--promovido, .cant-estado--aprobado { background: #E3F1EA; color: #1E7A34; }
 .cant-estado--validacion_manual { background: #E9F0FC; color: #1E4FA3; }
