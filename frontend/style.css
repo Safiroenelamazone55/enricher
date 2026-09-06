@@ -12349,7 +12349,7 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .cant-estado--borrador, .cant-estado--pendiente { background: var(--brand-ll, #F1EFEB); color: var(--text2, #45586A); }
 .cant-estado--promovido, .cant-estado--aprobado { background: #E3F1EA; color: #1E7A34; }
 .cant-estado--validacion_manual { background: #E9F0FC; color: #1E4FA3; }
-.cant-estado--descartado, .cant-estado--error { background: #FCEEEE; color: #B3261E; }
+.cant-estado--descartado, .cant-estado--error, .cant-estado--descartado_manual { background: #FCEEEE; color: #B3261E; }
 .scope-bar-cant { display: flex; gap: 8px; flex-wrap: wrap; margin: 6px 0 18px; }
 .cant-chip { font-size: .78rem; font-weight: 600; color: var(--muted, #B4AFA8); background: none; border: 1px dashed var(--border, #EAE7E2); border-radius: 0; padding: 3px 9px; }
 .cant-chip.cant-chip--btn { font-family: inherit; cursor: pointer; }

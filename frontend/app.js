@@ -5344,7 +5344,15 @@ const CanteraModule = (() => {
   }
   function _paint() {
     const el = document.getElementById(_containerId); if (!el) return;
+    // El scroll horizontal de la tabla se perdía en cada repintado (ej. al
+    // guardar una validación manual) — pedido explícito 2026-09-06: "se movió
+    // a las primeras columnas" al trabajar con columnas como Tier/Auditoría
+    // que quedan a la derecha. Se guarda y se restaura en cada _paint().
+    const wrapBefore = el.querySelector('.lm-dt-wrap');
+    const scrollLeft = wrapBefore ? wrapBefore.scrollLeft : 0;
     el.innerHTML = _view === 'detail' && _current ? _detailHtml() : _listHtml();
+    const wrapAfter = el.querySelector('.lm-dt-wrap');
+    if (wrapAfter) wrapAfter.scrollLeft = scrollLeft;
   }
 
   // ── Lista de borradores — tabla de TODOS los borradores importados, con
@@ -5490,8 +5498,8 @@ const CanteraModule = (() => {
       case 'paso1_motivo': return `<span title="${esc(c.paso1_motivo)}">${esc(c.paso1_motivo || '—')}</span>`;
       case 'tier_clave': return esc(c.tier_clave || '—');
       case 'confianza': return esc(c.confianza || '—');
-      case 'paso2_estado': return `<span class="cant-estado cant-estado--${esc(c.paso2_estado)}">${_estadoLabel(c.paso2_estado)}</span> <button class="cant-x" style="font-size:.72rem" onclick="event.stopPropagation();CanteraModule.openManualValidation(${c.id})" title="${c.paso2_estado === 'validacion_manual' ? 'Editar validación manual' : 'Validar manualmente'}">✎</button>`;
-      case 'motivo_descarte': return c.paso2_estado === 'validacion_manual' ? esc(c.nota_manual || '(sin nota)') : `<span title="${esc(c.motivo_descarte)}">${esc(c.motivo_descarte || '—')}</span>`;
+      case 'paso2_estado': return `<span class="cant-estado cant-estado--${esc(c.paso2_estado)}">${_estadoLabel(c.paso2_estado)}</span> <button class="cant-x" style="font-size:.72rem" onclick="event.stopPropagation();CanteraModule.openManualValidation(${c.id})" title="${['validacion_manual', 'descartado_manual'].includes(c.paso2_estado) ? 'Editar validación manual' : 'Validar manualmente'}">✎</button>`;
+      case 'motivo_descarte': return ['validacion_manual', 'descartado_manual'].includes(c.paso2_estado) ? esc(c.nota_manual || '(sin nota)') : `<span title="${esc(c.motivo_descarte)}">${esc(c.motivo_descarte || '—')}</span>`;
       case 'contactos': return `${c.contactos}${c.contactos > 1 ? ' <span class="tag" style="margin-left:4px">multi</span>' : ''}`;
       case 'auditoria': return c.auditoria_veredicto === 'de_acuerdo' ? `<span class="cant-estado cant-estado--aprobado" title="${esc(c.auditoria_nota)}">✓ Confirmado</span>`
         : c.auditoria_veredicto === 'en_desacuerdo' ? `<span class="cant-estado cant-estado--descartado" title="${esc(c.auditoria_nota)}">✕ En desacuerdo</span>`
@@ -6035,11 +6043,20 @@ const CanteraModule = (() => {
         <label class="cant-flabel">Tier<select id="cant-manual-tier" class="form-input" onchange="CanteraModule.saveManualValidation(${co.id})">
           <option value="">— elegir —</option>
           ${tiers.map(t => `<option value="${esc(t.clave)}"${co.tier_clave === t.clave ? ' selected' : ''}>${esc(t.clave)}${t.nombre ? ' — ' + esc(t.nombre) : ''}</option>`).join('')}
+          <option value="__descartar__"${co.paso2_estado === 'descartado_manual' ? ' selected' : ''}>✕ Descartar — no encaja en ningún Tier</option>
         </select></label>
-        <label class="cant-flabel">Nota<span class="field-note">opcional</span><textarea id="cant-manual-nota" class="form-input" rows="2" placeholder="Por qué este Tier…" onblur="CanteraModule.saveManualValidation(${co.id})">${esc(co.nota_manual || '')}</textarea></label>
+        <label class="cant-flabel">Confianza<span class="field-note">opcional — la IA siempre la completa, a mano es tu decisión</span>
+          <select id="cant-manual-confianza" class="form-input" onchange="CanteraModule.saveManualValidation(${co.id})">
+            <option value="">— sin definir —</option>
+            <option value="alta"${co.confianza === 'alta' ? ' selected' : ''}>Alta</option>
+            <option value="media"${co.confianza === 'media' ? ' selected' : ''}>Media</option>
+            <option value="baja"${co.confianza === 'baja' ? ' selected' : ''}>Baja</option>
+          </select>
+        </label>
+        <label class="cant-flabel">Nota<span class="field-note">opcional</span><textarea id="cant-manual-nota" class="form-input" rows="2" placeholder="Por qué este Tier (o por qué se descarta)…" onblur="CanteraModule.saveManualValidation(${co.id})">${esc(co.nota_manual || '')}</textarea></label>
       </div>
       <div class="fin-pi-box__ft">
-        <span>${co.paso2_estado === 'validacion_manual' ? `<button class="lm-bulk-ghost" onclick="CanteraModule.quitarValidacionManual(${co.id})">Quitar validación manual</button>` : ''}</span>
+        <span>${['validacion_manual', 'descartado_manual'].includes(co.paso2_estado) ? `<button class="lm-bulk-ghost" onclick="CanteraModule.quitarValidacionManual(${co.id})">Quitar validación manual</button>` : ''}</span>
         <div class="fin-pi-ft-btns">
           <button class="btn btn--ghost btn--sm" onclick="CanteraModule.closeManualValidation()">Cerrar</button>
         </div>
@@ -6060,9 +6077,10 @@ const CanteraModule = (() => {
     const tier = document.getElementById('cant-manual-tier')?.value;
     if (!tier) return; // la Nota puede perder el foco antes de elegir Tier — nada que guardar aún
     const nota = document.getElementById('cant-manual-nota')?.value || '';
+    const confianza = document.getElementById('cant-manual-confianza')?.value || '';
     try {
       const res = await apiFetch(`${API}/cantera/batches/${_current.id}/companies/${companyId}/validar-manual`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tier_clave: tier, nota }),
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tier_clave: tier, nota, confianza }),
       });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || 'Error');
@@ -6083,7 +6101,7 @@ const CanteraModule = (() => {
       await _loadCompanies(); _paint();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
-  function _estadoLabel(s) { return s === 'aprobado' ? 'Aprobado' : s === 'validacion_manual' ? 'Hecho manual' : s === 'descartado' ? 'Descartado' : s === 'error' ? 'Error' : 'Pendiente'; }
+  function _estadoLabel(s) { return s === 'aprobado' ? 'Aprobado' : s === 'validacion_manual' ? 'Hecho manual' : s === 'descartado_manual' ? 'Descartado manual' : s === 'descartado' ? 'Descartado' : s === 'error' ? 'Error' : 'Pendiente'; }
   // Señales de actividad del export de LinkedIn Sales Navigator vienen como texto
   // libre ("2 recent posts on Linkedin"), no true/false — cualquier valor que no
   // sea un "no hay señal" explícito cuenta como señal presente.
@@ -6148,7 +6166,7 @@ const CanteraModule = (() => {
   function runValidacion() {
     if (!_coSel.size) { _runValidacionExec([]); return; }
     const seleccionadas = _companies.filter(c => _coSel.has(c.id));
-    const yaManual = seleccionadas.filter(c => c.paso2_estado === 'validacion_manual').length;
+    const yaManual = seleccionadas.filter(c => ['validacion_manual', 'descartado_manual'].includes(c.paso2_estado)).length;
     const yaIA = seleccionadas.filter(c => c.paso2_estado === 'aprobado' || c.paso2_estado === 'descartado').length;
     if (!yaManual && !yaIA) { _runValidacionExec([..._coSel]); return; }
     const partes = [];
@@ -6655,7 +6673,7 @@ const CanteraMesaModule = (() => {
   }
   function _saveVisibleCols() { try { localStorage.setItem('cantera_mesa_cols', JSON.stringify([..._loadVisibleCols()])); } catch (_) {} }
   function toggleCol(key) { const s = _loadVisibleCols(); if (s.has(key)) s.delete(key); else s.add(key); _saveVisibleCols(); _paint(); }
-  function _estadoLabel(s) { return s === 'aprobado' ? 'Aprobado' : s === 'validacion_manual' ? 'Hecho manual' : s === 'descartado' ? 'Descartado' : s === 'error' ? 'Error' : 'Pendiente'; }
+  function _estadoLabel(s) { return s === 'aprobado' ? 'Aprobado' : s === 'validacion_manual' ? 'Hecho manual' : s === 'descartado_manual' ? 'Descartado manual' : s === 'descartado' ? 'Descartado' : s === 'error' ? 'Error' : 'Pendiente'; }
   function _colCellHtml(c, key) {
     switch (key) {
       case 'dominio': return esc(c.dominio || '—');
@@ -6670,8 +6688,8 @@ const CanteraMesaModule = (() => {
       case 'paso1_motivo': return `<span title="${esc(c.paso1_motivo)}">${esc(c.paso1_motivo || '—')}</span>`;
       case 'tier_clave': return esc(c.tier_clave || '—');
       case 'confianza': return esc(c.confianza || '—');
-      case 'paso2_estado': return `<span class="cant-estado cant-estado--${esc(c.paso2_estado)}">${_estadoLabel(c.paso2_estado)}</span> <button class="cant-x" style="font-size:.72rem" onclick="event.stopPropagation();CanteraMesaModule.openManualValidation(${c.id},${c.batch_id})" title="${c.paso2_estado === 'validacion_manual' ? 'Editar validación manual' : 'Validar manualmente'}">✎</button>`;
-      case 'motivo_descarte': return c.paso2_estado === 'validacion_manual' ? esc(c.nota_manual || '(sin nota)') : `<span title="${esc(c.motivo_descarte)}">${esc(c.motivo_descarte || '—')}</span>`;
+      case 'paso2_estado': return `<span class="cant-estado cant-estado--${esc(c.paso2_estado)}">${_estadoLabel(c.paso2_estado)}</span> <button class="cant-x" style="font-size:.72rem" onclick="event.stopPropagation();CanteraMesaModule.openManualValidation(${c.id},${c.batch_id})" title="${['validacion_manual', 'descartado_manual'].includes(c.paso2_estado) ? 'Editar validación manual' : 'Validar manualmente'}">✎</button>`;
+      case 'motivo_descarte': return ['validacion_manual', 'descartado_manual'].includes(c.paso2_estado) ? esc(c.nota_manual || '(sin nota)') : `<span title="${esc(c.motivo_descarte)}">${esc(c.motivo_descarte || '—')}</span>`;
       case 'contactos': return `${c.contactos}${c.contactos > 1 ? ' <span class="tag" style="margin-left:4px">multi</span>' : ''}`;
       case 'auditoria': return c.auditoria_veredicto === 'de_acuerdo' ? `<span class="cant-estado cant-estado--aprobado" title="${esc(c.auditoria_nota)}">✓ Confirmado</span>`
         : c.auditoria_veredicto === 'en_desacuerdo' ? `<span class="cant-estado cant-estado--descartado" title="${esc(c.auditoria_nota)}">✕ En desacuerdo</span>`
@@ -6714,7 +6732,14 @@ const CanteraMesaModule = (() => {
       _rows.forEach(row => { _knownRows[row.id] = row; });
     } catch { _rows = []; _total = 0; }
   }
-  function _paint() { const el = document.getElementById(_containerId); if (el) el.innerHTML = _html(); }
+  function _paint() {
+    const el = document.getElementById(_containerId); if (!el) return;
+    const wrapBefore = el.querySelector('.lm-dt-wrap');
+    const scrollLeft = wrapBefore ? wrapBefore.scrollLeft : 0;
+    el.innerHTML = _html();
+    const wrapAfter = el.querySelector('.lm-dt-wrap');
+    if (wrapAfter) wrapAfter.scrollLeft = scrollLeft;
+  }
   async function _refresh() { await _search(); _paint(); }
   function setFiltro(kind, val) { _filtro[kind] = val; _page = 0; _refresh(); }
   function setPageSize(n) { try { localStorage.setItem('cantera_mesa_page_size', String(parseInt(n) || 100)); } catch (_) {} _page = 0; _refresh(); }
@@ -6846,7 +6871,7 @@ const CanteraMesaModule = (() => {
   function runValidacion() {
     if (!_coSel.size) { showBanner('Marca al menos una empresa primero', 'info'); return; }
     const seleccionadas = [..._coSel].map(id => _knownRows[id]).filter(Boolean);
-    const yaManual = seleccionadas.filter(c => c.paso2_estado === 'validacion_manual').length;
+    const yaManual = seleccionadas.filter(c => ['validacion_manual', 'descartado_manual'].includes(c.paso2_estado)).length;
     const yaIA = seleccionadas.filter(c => c.paso2_estado === 'aprobado' || c.paso2_estado === 'descartado').length;
     if (!yaManual && !yaIA) { _runValidacionExec([..._coSel]); return; }
     const partes = [];
@@ -7002,10 +7027,22 @@ const CanteraMesaModule = (() => {
         <label class="cant-flabel">Tier<select id="mesa-manual-tier" class="form-input" onchange="CanteraMesaModule.saveManualValidation(${companyId},${batchId})">
           <option value="">— elegir —</option>
           ${tiers.map(t => `<option value="${esc(t.clave)}"${co.tier_clave === t.clave ? ' selected' : ''}>${esc(t.clave)}${t.nombre ? ' — ' + esc(t.nombre) : ''}</option>`).join('')}
+          <option value="__descartar__"${co.paso2_estado === 'descartado_manual' ? ' selected' : ''}>✕ Descartar — no encaja en ningún Tier</option>
         </select></label>
-        <label class="cant-flabel">Nota<span class="field-note">opcional</span><textarea id="mesa-manual-nota" class="form-input" rows="2" placeholder="Por qué este Tier…" onblur="CanteraMesaModule.saveManualValidation(${companyId},${batchId})">${esc(co.nota_manual || '')}</textarea></label>
+        <label class="cant-flabel">Confianza<span class="field-note">opcional — la IA siempre la completa, a mano es tu decisión</span>
+          <select id="mesa-manual-confianza" class="form-input" onchange="CanteraMesaModule.saveManualValidation(${companyId},${batchId})">
+            <option value="">— sin definir —</option>
+            <option value="alta"${co.confianza === 'alta' ? ' selected' : ''}>Alta</option>
+            <option value="media"${co.confianza === 'media' ? ' selected' : ''}>Media</option>
+            <option value="baja"${co.confianza === 'baja' ? ' selected' : ''}>Baja</option>
+          </select>
+        </label>
+        <label class="cant-flabel">Nota<span class="field-note">opcional</span><textarea id="mesa-manual-nota" class="form-input" rows="2" placeholder="Por qué este Tier (o por qué se descarta)…" onblur="CanteraMesaModule.saveManualValidation(${companyId},${batchId})">${esc(co.nota_manual || '')}</textarea></label>
       </div>
-      <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns"><button class="btn btn--ghost btn--sm" onclick="document.getElementById('mesa-manual-modal').remove()">Cerrar</button></div></div></div>`;
+      <div class="fin-pi-box__ft">
+        <span>${['validacion_manual', 'descartado_manual'].includes(co.paso2_estado) ? `<button class="lm-bulk-ghost" onclick="CanteraMesaModule.quitarValidacionManual(${companyId},${batchId})">Quitar validación manual</button>` : ''}</span>
+        <div class="fin-pi-ft-btns"><button class="btn btn--ghost btn--sm" onclick="document.getElementById('mesa-manual-modal').remove()">Cerrar</button></div>
+      </div></div>`;
     document.body.appendChild(m);
   }
   async function copyManualData() {
@@ -7017,11 +7054,24 @@ const CanteraMesaModule = (() => {
     const tier = document.getElementById('mesa-manual-tier')?.value;
     if (!tier) return;
     const nota = document.getElementById('mesa-manual-nota')?.value || '';
+    const confianza = document.getElementById('mesa-manual-confianza')?.value || '';
     try {
-      const res = await apiFetch(`${API}/cantera/batches/${batchId}/companies/${companyId}/validar-manual`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tier_clave: tier, nota }) });
+      const res = await apiFetch(`${API}/cantera/batches/${batchId}/companies/${companyId}/validar-manual`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tier_clave: tier, nota, confianza }) });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || 'Error');
       showBanner('✓ Guardado', 'success');
+      const btn = document.querySelector('#mesa-manual-modal .fin-pi-box__ft span');
+      if (btn) btn.innerHTML = `<button class="lm-bulk-ghost" onclick="CanteraMesaModule.quitarValidacionManual(${companyId},${batchId})">Quitar validación manual</button>`;
+      await _refresh();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  async function quitarValidacionManual(companyId, batchId) {
+    try {
+      const res = await apiFetch(`${API}/cantera/batches/${batchId}/companies/${companyId}/quitar-validacion`, { method: 'PATCH' });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Error');
+      document.getElementById('mesa-manual-modal')?.remove();
+      showBanner('✓ Quitado', 'success');
       await _refresh();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
@@ -7093,7 +7143,7 @@ const CanteraMesaModule = (() => {
   return { render, setFiltro, setPageSize, goPage, toggleFailed, toggleTierFiltro, togglePrioFiltro,
     toggleCoSel, toggleCoSelAll, toggleExpand, setContactPrioridad, toggleCol, menu,
     runClean, runEnrich, runValidacion, _confirmRevalidar, openAudit,
-    openPromote, doPromote, openSendSeq, doSendSeq, openManualValidation, saveManualValidation, copyManualData };
+    openPromote, doPromote, openSendSeq, doSendSeq, openManualValidation, saveManualValidation, copyManualData, quitarValidacionManual };
 })();
 
 // =================================================================

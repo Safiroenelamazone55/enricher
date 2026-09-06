@@ -6444,7 +6444,7 @@ app.get('/api/cantera/batches/:id', requireAuth, async (req, res) => {
     const { rows } = await pool.query(`
       SELECT b.*, oc.nombre AS cliente_nombre, cam.nombre AS campana_nombre, seq.nombre AS secuencia_nombre,
              (SELECT COUNT(*) FROM cantera_companies c WHERE c.batch_id=b.id AND c.paso2_estado IN ('aprobado','descartado'))::int AS validado_ia_total,
-             (SELECT COUNT(*) FROM cantera_companies c WHERE c.batch_id=b.id AND c.paso2_estado='validacion_manual')::int AS validado_manual_total,
+             (SELECT COUNT(*) FROM cantera_companies c WHERE c.batch_id=b.id AND c.paso2_estado IN ('validacion_manual','descartado_manual'))::int AS validado_manual_total,
              (SELECT COUNT(*) FROM cantera_companies c WHERE c.batch_id=b.id AND c.paso1_estado <> 'pendiente')::int AS filtro_total,
              (SELECT COUNT(*) FROM cantera_contacts k WHERE k.batch_id=b.id)::int AS contactos_total,
              (SELECT COUNT(*) FROM (SELECT company_id FROM cantera_contacts WHERE batch_id=b.id GROUP BY company_id HAVING COUNT(*) > 1) t)::int AS empresas_multi_contacto,
@@ -7171,27 +7171,40 @@ app.patch('/api/cantera/companies/:id/audit', requireAuth, async (req, res) => {
 // ('validacion_manual') de lo que valida la IA ('aprobado'), pero es
 // igualmente elegible para "Mover al CRM" — pedido explícito 2026-09-05:
 // "las conexiones siguen siendo iguales, sea manual o automático con IA".
+// Validación manual — o bien se elige un Tier (califica), o se marca
+// "Descartar" cuando la empresa no encaja en ninguno (pedido explícito
+// 2026-09-06: "tengo algunas que no encajan con nada"). El descarte manual
+// usa un estado PROPIO ('descartado_manual'), distinto de 'descartado' (que
+// es del motor de IA) — mismo criterio ya aplicado a 'validacion_manual' vs
+// 'aprobado', para no repetir la confusión de contar algo manual como si
+// fuera de la IA. La Confianza es opcional en ambos casos: la IA siempre la
+// completa, a mano es decisión de quien valida (pedido explícito 2026-09-06:
+// "eso solo se completa con la IA, y con manual es opcional").
 app.patch('/api/cantera/batches/:id/companies/:companyId/validar-manual', requireAuth, async (req, res) => {
   const uid = req.workspaceOwnerId;
   const b = req.body || {};
-  const tierClave = _lmS(b.tier_clave);
-  if (!tierClave) return res.status(400).json({ error: 'Elige un Tier' });
+  const descartar = b.tier_clave === '__descartar__';
+  const tierClave = descartar ? '' : _lmS(b.tier_clave);
+  if (!descartar && !tierClave) return res.status(400).json({ error: 'Elige un Tier (o Descartar)' });
+  const confianza = ['alta', 'media', 'baja'].includes(b.confianza) ? b.confianza : '';
+  const nota = _lmS(b.nota);
   try {
     const { rows } = await pool.query(`
       UPDATE cantera_companies
-         SET paso2_estado='validacion_manual', tier_clave=$1, nota_manual=$2, motivo_descarte='', confianza='', evidencia='[]', validado_at=NOW()
-       WHERE id=$3 AND batch_id=$4 AND user_id=$5 RETURNING *
-    `, [tierClave, _lmS(b.nota), req.params.companyId, req.params.id, uid]);
+         SET paso2_estado=$1, tier_clave=$2, nota_manual=$3, motivo_descarte='', confianza=$4, evidencia='[]', validado_at=NOW()
+       WHERE id=$5 AND batch_id=$6 AND user_id=$7 RETURNING *
+    `, [descartar ? 'descartado_manual' : 'validacion_manual', tierClave, nota, confianza, req.params.companyId, req.params.id, uid]);
     if (!rows.length) return res.status(404).json({ error: 'Empresa no encontrada' });
     res.json(rows[0]);
   } catch (err) { console.error('[cantera] validar-manual', err.message); res.status(500).json({ error: 'Error al guardar la validación manual' }); }
 });
-// Deshacer una validación manual (vuelve la empresa a pendiente de paso 2).
+// Deshacer una validación manual (vuelve la empresa a pendiente de paso 2) —
+// cubre tanto un Tier asignado a mano como un descarte manual.
 app.patch('/api/cantera/batches/:id/companies/:companyId/quitar-validacion', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(`
-      UPDATE cantera_companies SET paso2_estado='pendiente', tier_clave='', nota_manual='', validado_at=NULL
-       WHERE id=$1 AND batch_id=$2 AND user_id=$3 AND paso2_estado='validacion_manual' RETURNING *
+      UPDATE cantera_companies SET paso2_estado='pendiente', tier_clave='', nota_manual='', confianza='', validado_at=NULL
+       WHERE id=$1 AND batch_id=$2 AND user_id=$3 AND paso2_estado IN ('validacion_manual','descartado_manual') RETURNING *
     `, [req.params.companyId, req.params.id, req.workspaceOwnerId]);
     if (!rows.length) return res.status(404).json({ error: 'Empresa no encontrada (o no tiene validación manual)' });
     res.json(rows[0]);
