@@ -5674,13 +5674,10 @@ const CanteraModule = (() => {
       ${_step === 4 ? `<div class="cant-section">
         ${_coSel.size || _onlyFailed || _tierFiltro.size || _prioFiltro.size ? `<div class="cant-results-bar">
           <span class="cant-count">${_coSel.size ? `${_coSel.size} seleccionada(s)` : ''}${_onlyFailed ? ' · viendo solo descartadas' : ''}${_tierFiltro.size ? ` · Tier: ${[..._tierFiltro].join(', ')}` : ''}${_prioFiltro.size ? ` · Prioridad: ${[..._prioFiltro].join(', ')}` : ''}</span>
-          <div class="cant-results-actions">
-            ${_coSel.size ? `<button class="btn btn--primary btn--sm" onclick="CanteraModule.openSendSeq()">Enviar a secuencia (${_coSel.size})</button>` : ''}
-          </div>
         </div>` : ''}
-        ${_jobRunning ? `<div style="margin-bottom:10px">
-          <p class="cant-hint" style="margin:0 0 4px">Investigando ${_jobProgress.done} de ${_jobProgress.total}… puedes seguir en el sistema, esto sigue en segundo plano.</p>
-          <div class="cant-progress"><div class="cant-progress__bar" style="width:${_jobProgress.total ? Math.round((_jobProgress.done / _jobProgress.total) * 100) : 0}%"></div></div>
+        ${_jobRunning ? `<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <span class="cant-hint" style="margin:0;white-space:nowrap">Investigando ${_jobProgress.done} de ${_jobProgress.total}…</span>
+          <div class="cant-progress" style="flex:1;max-width:200px"><div class="cant-progress__bar" style="width:${_jobProgress.total ? Math.round((_jobProgress.done / _jobProgress.total) * 100) : 0}%"></div></div>
         </div>` : ''}
         <div class="lm-dt-wrap dg-dt-wrap cant-tablewrap"><table class="clients-table dg-table sel-on cant-restbl" style="table-layout:auto">
           <thead><tr><th class="lm-ck-col"><input type="checkbox" class="lm-ck" ${_companies.length && _companies.every(c => _coSel.has(c.id)) ? 'checked' : ''} onclick="CanteraModule.toggleCoSelAll(this.checked)"></th><th class="dg-cell--frozen" id="cant-th-nombre">Nombre<span class="cant-colresize" onmousedown="CanteraModule.startColResize(event)"></span></th>${visCols.map(col => `<th>${esc(col.label)}</th>`).join('')}<th>Contacto</th><th>Puesto</th><th>Prioridad</th></tr></thead>
@@ -5854,7 +5851,10 @@ const CanteraModule = (() => {
       <div class="cp-mark-menu__list">${sub('Filtrar por Tier', tierPanel)}${sub('Filtrar por prioridad', prioPanel)}</div>
       <div class="cp-mark-menu__sep"></div>
       <div class="cp-mark-menu__list">${sub('Elegir columnas visibles', colsPanel, true)}</div>
-      ${calificadas ? `<div class="cp-mark-menu__sep"></div><div class="cp-mark-menu__list">${item(`Mover al CRM (${calificadas})`, 'CanteraModule.openPromote()')}</div>` : ''}`;
+      ${calificadas || _coSel.size ? `<div class="cp-mark-menu__sep"></div><div class="cp-mark-menu__list">
+        ${calificadas ? item(`Mover al CRM (${calificadas})`, 'CanteraModule.openPromote()') : ''}
+        ${_coSel.size ? item(`Enviar a secuencia (${_coSel.size})`, 'CanteraModule.openSendSeq()') : ''}
+      </div>` : ''}`;
     const menu = document.createElement('div'); menu.className = 'cp-mark-menu'; menu.style.minWidth = '240px'; menu.innerHTML = html;
     document.body.appendChild(menu);
     const t = (ev && (ev.currentTarget || ev.target)) || document.body; const r = t.getBoundingClientRect();
