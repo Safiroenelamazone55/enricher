@@ -2068,6 +2068,16 @@ async function initDb() {
     // de siempre, no rompe nada de lo ya configurado).
     await pool.query(`ALTER TABLE cantera_provider_keys ADD COLUMN IF NOT EXISTS modelo TEXT NOT NULL DEFAULT '';`);
 
+    // Respaldo retroactivo, una sola vez (idempotente — no pisa nada si se
+    // corre de nuevo): las empresas YA importadas con un solo contacto
+    // también quedan con prioridad 1 automática, mismo criterio que ahora
+    // aplica en cada importación nueva — pedido explícito 2026-09-07.
+    await pool.query(`
+      UPDATE cantera_contacts SET prioridad=1
+       WHERE prioridad=0
+         AND company_id IN (SELECT company_id FROM cantera_contacts GROUP BY company_id HAVING COUNT(*)=1)
+    `);
+
     // Secuencia opcional del borrador — mismo criterio que Cliente/Campaña, que ya
     // existían: es solo una anotación en esta etapa (no enrola nada, no envía nada a
     // Outreach) hasta que las empresas se promuevan al CRM. Pedido explícito

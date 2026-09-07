@@ -70,7 +70,31 @@ function _puestosBlock(puestos, tiers) {
   }).filter(Boolean).join('\n\n');
 }
 
-function _buildSystemPrompt(batch) {
+// `human=true` cambia SOLO el formato de salida final — todo el protocolo,
+// reglas de evidencia, ICP/Tiers/Puestos y rúbricas son EXACTAMENTE los
+// mismos. Pedido explícito 2026-09-07: "ya que no soy una máquina necesito
+// un output más amigable al humano" — el JSON es para que nuestro propio
+// backend lo parsee (motor real vía API); cuando Jenny pega la instrucción
+// a mano en otra IA, necesita algo legible de un vistazo, no JSON crudo.
+function _buildSystemPrompt(batch, human = false) {
+  const formato = human ? `FORMATO DE SALIDA — responde en este formato exacto, corto y legible (esto lo va a leer una persona, NUNCA uses JSON):
+Tier: [la clave del Tier, ej. TIER_1A — o "Descartada" si no calza en ninguno]
+Prioridad: [alta | media | baja]
+Confianza: [alta | media | baja]
+Razón: [una sola frase, menos de una línea — por qué este Tier o por qué se descarta]
+Evidencia: [2 a 5 líneas, una por fuente: "Nombre de la fuente — URL — qué dice en pocas palabras"]
+Contactos: [para cada cargo de la lista que te doy abajo, una línea: "Cargo — decide/respaldo/descartado — motivo corto"]`
+    : `FORMATO DE SALIDA — responde ÚNICAMENTE un objeto JSON válido, sin texto ni fences alrededor, con esta forma exacta:
+{
+  "tier_clave": "TIER_1A o vacío si se descarta",
+  "confianza": "alta | media | baja",
+  "prioridad": "alta | media | baja",
+  "nota": "resumen breve y útil en una o dos frases — nunca vacío",
+  "evidencia": [{"fuente": "nombre de la fuente", "url": "https://...", "resumen": "qué dice y por qué importa"}],
+  "motivo_descarte": "vacío si calificó; si no, la razón exacta y específica a ESTA empresa",
+  "contactos": [{"cargo": "el cargo tal como aparece en la lista que te paso", "puesto_estado": "decide | respaldo | descartado", "motivo": "por qué, especialmente si se descarta un cargo parecido"}]
+}
+El array "contactos" debe traer EXACTAMENTE los cargos que te paso abajo, uno por uno, en el mismo orden — nunca inventes contactos nuevos ni los omitas.`;
   return `Eres un analista de inteligencia comercial B2B especializado en debida diligencia de prospección. Tu estándar es el de un memo interno que un director va a leer y usar para decidir en qué empresa invertir tiempo de venta real — no el de un resumen superficial. Cada afirmación que hagas debe poder defenderse señalando la página exacta donde la viste.
 
 Tu única tarea en esta llamada: investigar UNA empresa específica y clasificarla según el criterio EXACTO que te doy abajo — nunca según tu propio criterio de qué "suena" bien o tu conocimiento previo del sector.
@@ -125,17 +149,7 @@ PRIORIDAD (qué tan urgente es trabajar esta empresa AHORA frente a las demás c
 
 NOTA (resumen, SIEMPRE obligatorio, tanto si calificó como si se descartó): una o dos frases que cualquiera pueda leer sin abrir la evidencia completa — qué hace la empresa y por qué calificó (o por qué no). Nunca la dejes vacía.
 
-FORMATO DE SALIDA — responde ÚNICAMENTE un objeto JSON válido, sin texto ni fences alrededor, con esta forma exacta:
-{
-  "tier_clave": "TIER_1A o vacío si se descarta",
-  "confianza": "alta | media | baja",
-  "prioridad": "alta | media | baja",
-  "nota": "resumen breve y útil en una o dos frases — nunca vacío",
-  "evidencia": [{"fuente": "nombre de la fuente", "url": "https://...", "resumen": "qué dice y por qué importa"}],
-  "motivo_descarte": "vacío si calificó; si no, la razón exacta y específica a ESTA empresa",
-  "contactos": [{"cargo": "el cargo tal como aparece en la lista que te paso", "puesto_estado": "decide | respaldo | descartado", "motivo": "por qué, especialmente si se descarta un cargo parecido"}]
-}
-El array "contactos" debe traer EXACTAMENTE los cargos que te paso abajo, uno por uno, en el mismo orden — nunca inventes contactos nuevos ni los omitas.`;
+${formato}`;
 }
 
 // El prompt de usuario (los datos crudos de la empresa) es igual sin importar
@@ -152,7 +166,7 @@ function _buildUserPrompt(company, contactos) {
     company.linkedin ? `LinkedIn: ${company.linkedin}` : '',
   ].filter(Boolean).join('\n');
   const cargos = contactos.map(c => `- ${c.cargo || '(sin cargo)'}`).join('\n') || '(sin contactos importados para esta empresa)';
-  return `EMPRESA A INVESTIGAR:\n${datos}\n\nCARGOS DE LOS CONTACTOS IMPORTADOS PARA ESTA EMPRESA (clasifica cada uno):\n${cargos}\n\nInvestiga y devuelve el JSON.`;
+  return `EMPRESA A INVESTIGAR:\n${datos}\n\nCARGOS DE LOS CONTACTOS IMPORTADOS PARA ESTA EMPRESA (clasifica cada uno):\n${cargos}\n\nInvestiga y responde en el formato pedido arriba.`;
 }
 
 // Despachador — el motor de IA es una elección por borrador (batch.motor_ia,

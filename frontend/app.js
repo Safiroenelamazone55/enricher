@@ -6052,7 +6052,7 @@ const CanteraModule = (() => {
     document.getElementById('cant-manual-modal')?.remove();
     const m = document.createElement('div'); m.id = 'cant-manual-modal'; m.className = 'fin-pi-backdrop';
     m.onclick = e => { if (e.target === m) closeManualValidation(); };
-    m.innerHTML = `<div class="fin-pi-box lm-flt-box" style="max-width:820px">
+    m.innerHTML = `<div class="fin-pi-box lm-flt-box" style="width:820px;max-width:94vw">
       <div class="fin-pi-box__hd"><h3>Validación manual · ${esc(co.nombre)}</h3><button class="fin-pi-x" onclick="CanteraModule.closeManualValidation()">✕</button></div>
       <div class="flt-body" style="display:flex;flex-direction:column;gap:10px">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
@@ -6102,7 +6102,7 @@ const CanteraModule = (() => {
       </div></div>`;
     document.body.appendChild(m);
     try {
-      const d = await (await apiFetch(`${API}/cantera/batches/${_current.id}/instruccion`)).json();
+      const d = await (await apiFetch(`${API}/cantera/batches/${_current.id}/instruccion?companyId=${co.id}`)).json();
       const ta = document.getElementById('cant-manual-instruccion');
       if (ta) ta.value = d.instruccion || '(sin instrucción)';
     } catch { const ta = document.getElementById('cant-manual-instruccion'); if (ta) ta.value = 'Error al cargar la instrucción.'; }
@@ -6710,6 +6710,10 @@ const CanteraMesaModule = (() => {
   let _opts = null; // { clientes, campanas, secuencias }
   let _tierOpts = [];
   let _tierFiltro = new Set(); let _prioFiltro = new Set(); let _onlyFailed = false;
+  // Filtros avanzados nuevos — pedido explícito 2026-09-07: encontrar rápido
+  // las empresas con 2+/3+ contactos (necesitan elegir prioridad a mano),
+  // las que aún no tienen NINGÚN contacto priorizado, y por estado de auditoría.
+  let _minContactos = 0; let _sinPrioridad = false; let _auditoriaFiltro = '';
   let _page = 0;
   function _pageSize() { try { return parseInt(localStorage.getItem('cantera_mesa_page_size')) || 100; } catch (_) { return 100; } }
   let _coSel = new Set();
@@ -6797,6 +6801,9 @@ const CanteraMesaModule = (() => {
     if (_tierFiltro.size) p.set('tier', [..._tierFiltro].join(','));
     if (_prioFiltro.size) p.set('prioridad', [..._prioFiltro].join(','));
     if (_onlyFailed) p.set('onlyFailed', '1');
+    if (_minContactos > 0) p.set('minContactos', _minContactos);
+    if (_sinPrioridad) p.set('sinPrioridad', '1');
+    if (_auditoriaFiltro) p.set('auditoria', _auditoriaFiltro);
     p.set('page', _page); p.set('pageSize', _pageSize());
     try {
       const r = await apiFetch(`${API}/cantera/mesa/companies?${p.toString()}`);
@@ -6821,6 +6828,9 @@ const CanteraMesaModule = (() => {
   function toggleFailed() { _onlyFailed = !_onlyFailed; _page = 0; _refresh(); }
   function toggleTierFiltro(clave) { if (_tierFiltro.has(clave)) _tierFiltro.delete(clave); else _tierFiltro.add(clave); _page = 0; _refresh(); }
   function togglePrioFiltro(n) { if (_prioFiltro.has(n)) _prioFiltro.delete(n); else _prioFiltro.add(n); _page = 0; _refresh(); }
+  function setMinContactos(n) { _minContactos = _minContactos === n ? 0 : n; _page = 0; _refresh(); }
+  function toggleSinPrioridad() { _sinPrioridad = !_sinPrioridad; _page = 0; _refresh(); }
+  function setAuditoriaFiltro(v) { _auditoriaFiltro = _auditoriaFiltro === v ? '' : v; _page = 0; _refresh(); }
   function toggleCoSel(id, checked) { if (checked) _coSel.add(id); else _coSel.delete(id); _paint(); }
   function toggleCoSelAll(checked) { if (checked) _rows.forEach(c => _coSel.add(c.id)); else _rows.forEach(c => _coSel.delete(c.id)); _paint(); }
   function _groupByBatch(ids) {
@@ -6882,6 +6892,18 @@ const CanteraMesaModule = (() => {
       + item('Enriquecer todos los campos', `CanteraMesaModule.runEnrich(null)`);
     const tierPanel = _tierOpts.map(t => `<label class="cant-colchk"><input type="checkbox" ${_tierFiltro.has(t) ? 'checked' : ''} onchange="CanteraMesaModule.toggleTierFiltro('${esc(t)}')"> ${esc(t)}</label>`).join('') || '<div class="cp-empty2" style="padding:10px 12px">Sin Tiers todavía</div>';
     const prioPanel = [1, 2, 3, 4, 5].map(n => `<label class="cant-colchk"><input type="checkbox" ${_prioFiltro.has(n) ? 'checked' : ''} onchange="CanteraMesaModule.togglePrioFiltro(${n})"> Prioridad ${n}</label>`).join('');
+    // Filtros avanzados nuevos — pedido explícito 2026-09-07: "encontrar
+    // rápidamente aquellas empresas que tienen 2 o más personas... una vista
+    // más práctica de lo que busco realmente". "Sin prioridad asignada" es el
+    // más útil de los tres: son justo las que faltan decidir a mano, sin
+    // importar si tienen 2, 3 o más contactos.
+    const numContactosPanel = [
+      { n: 2, label: '2 o más contactos' }, { n: 3, label: '3 o más contactos' }, { n: 4, label: '4 o más contactos' },
+    ].map(({ n, label }) => `<label class="cant-colchk"><input type="radio" name="mesa-num-contactos" ${_minContactos === n ? 'checked' : ''} onchange="CanteraMesaModule.setMinContactos(${n})"> ${label}</label>`).join('')
+      + `<label class="cant-colchk"><input type="checkbox" ${_sinPrioridad ? 'checked' : ''} onchange="CanteraMesaModule.toggleSinPrioridad()"> Sin ningún contacto priorizado todavía</label>`;
+    const auditoriaPanel = [
+      ['sin_auditar', 'Sin auditar'], ['de_acuerdo', 'Confirmadas (de acuerdo)'], ['en_desacuerdo', 'En desacuerdo'],
+    ].map(([v, label]) => `<label class="cant-colchk"><input type="radio" name="mesa-auditoria" ${_auditoriaFiltro === v ? 'checked' : ''} onchange="CanteraMesaModule.setAuditoriaFiltro('${v}')"> ${label}</label>`).join('');
     const vis = _loadVisibleCols();
     const colsPanel = MESA_COLS.map(c => `<label class="cant-colchk"><input type="checkbox" ${vis.has(c.key) ? 'checked' : ''} onchange="CanteraMesaModule.toggleCol('${c.key}')"> ${esc(c.label)}</label>`).join('');
     const calificadas = _coSel.size ? [..._coSel].filter(id => { const r = _knownRows[id]; return r && (r.paso2_estado === 'aprobado' || r.paso2_estado === 'validacion_manual'); }).length : 0;
@@ -6889,7 +6911,7 @@ const CanteraMesaModule = (() => {
       <div class="cp-mark-menu__sep"></div>
       <div class="cp-mark-menu__list">${item('Investigación profunda (IA)', 'CanteraMesaModule.runValidacion()')}${item('Auditar muestra (IA)', 'CanteraMesaModule.openAudit()')}${item(`${_onlyFailed ? '✓ ' : ''}Ver solo descartadas`, 'CanteraMesaModule.toggleFailed()')}</div>
       <div class="cp-mark-menu__sep"></div>
-      <div class="cp-mark-menu__list">${sub('Filtrar por Tier', tierPanel)}${sub('Filtrar por prioridad', prioPanel)}</div>
+      <div class="cp-mark-menu__list">${sub('Filtrar por Tier', tierPanel)}${sub('Filtrar por prioridad', prioPanel)}${sub('Filtrar por Nº de contactos', numContactosPanel)}${sub('Filtrar por Auditoría', auditoriaPanel)}</div>
       <div class="cp-mark-menu__sep"></div>
       <div class="cp-mark-menu__list">${sub('Elegir columnas visibles', colsPanel, true)}</div>
       ${calificadas ? `<div class="cp-mark-menu__sep"></div><div class="cp-mark-menu__list">${item(`Mover al CRM (${calificadas})`, 'CanteraMesaModule.openPromote()')}</div>` : ''}`;
@@ -7124,7 +7146,7 @@ const CanteraMesaModule = (() => {
     document.getElementById('mesa-manual-modal')?.remove();
     const m = document.createElement('div'); m.id = 'mesa-manual-modal'; m.className = 'fin-pi-backdrop';
     m.onclick = e => { if (e.target === m) m.remove(); };
-    m.innerHTML = `<div class="fin-pi-box lm-flt-box" style="max-width:820px">
+    m.innerHTML = `<div class="fin-pi-box lm-flt-box" style="width:820px;max-width:94vw">
       <div class="fin-pi-box__hd"><h3>Validación manual · ${esc(co.nombre)}</h3><button class="fin-pi-x" onclick="document.getElementById('mesa-manual-modal').remove()">✕</button></div>
       <div class="flt-body" style="display:flex;flex-direction:column;gap:10px">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
@@ -7172,7 +7194,7 @@ const CanteraMesaModule = (() => {
       </div></div>`;
     document.body.appendChild(m);
     try {
-      const d = await (await apiFetch(`${API}/cantera/batches/${batchId}/instruccion`)).json();
+      const d = await (await apiFetch(`${API}/cantera/batches/${batchId}/instruccion?companyId=${companyId}`)).json();
       const ta = document.getElementById('mesa-manual-instruccion');
       if (ta) ta.value = d.instruccion || '(sin instrucción)';
     } catch { const ta = document.getElementById('mesa-manual-instruccion'); if (ta) ta.value = 'Error al cargar la instrucción.'; }
@@ -7270,6 +7292,9 @@ const CanteraMesaModule = (() => {
         ${_filterSelect('campana', opts.campanas, _filtro.campana)}
         ${_filterSelect('secuencia', opts.secuencias, _filtro.secuencia)}
         ${_coSel.size ? `<span class="cant-count">${_coSel.size} seleccionada(s)</span>` : ''}
+        ${_minContactos ? `<span class="cant-count">· ${_minContactos}+ contactos</span>` : ''}
+        ${_sinPrioridad ? `<span class="cant-count">· sin priorizar</span>` : ''}
+        ${_auditoriaFiltro ? `<span class="cant-count">· auditoría: ${_auditoriaFiltro === 'sin_auditar' ? 'sin auditar' : _auditoriaFiltro === 'de_acuerdo' ? 'confirmadas' : 'en desacuerdo'}</span>` : ''}
       </div>
       <div class="lm-dt-wrap dg-dt-wrap cant-tablewrap"><table class="clients-table dg-table sel-on cant-restbl" style="table-layout:auto">
         <thead><tr>
@@ -7281,7 +7306,7 @@ const CanteraMesaModule = (() => {
       ${_pagerHtml()}`;
   }
 
-  return { render, setFiltro, setPageSize, goPage, toggleFailed, toggleTierFiltro, togglePrioFiltro,
+  return { render, setFiltro, setPageSize, goPage, toggleFailed, toggleTierFiltro, togglePrioFiltro, setMinContactos, toggleSinPrioridad, setAuditoriaFiltro,
     toggleCoSel, toggleCoSelAll, toggleExpand, setContactPrioridad, toggleCol, menu,
     runClean, runEnrich, runValidacion, _confirmRevalidar, openAudit,
     openPromote, doPromote, openSendSeq, doSendSeq, openManualValidation, saveManualValidation, copyManualData, copyManualInstruccion, quitarValidacionManual };

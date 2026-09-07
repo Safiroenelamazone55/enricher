@@ -6468,12 +6468,27 @@ app.get('/api/cantera/batches/:id', requireAuth, async (req, res) => {
 // no compensa. Reusa _buildSystemPrompt tal cual (misma función que ya usan
 // las llamadas reales) para que esto NUNCA se desincronice del protocolo de
 // verdad — si se ajusta el prompt más adelante, esta copia se actualiza sola.
+// companyId (opcional): si viene, la instrucción trae PEGADOS los datos de
+// la empresa y sus contactos al final — pedido explícito 2026-09-07: "en la
+// instrucción completa ya deben encontrarse los datos de la empresa" — así
+// Jenny copia UN solo cuadro y ya tiene todo listo para pegar en cualquier
+// IA, sin tener que juntar dos copias por separado. Formato de salida
+// siempre "humano" aquí (nunca JSON) — lo va a leer una persona, no un parser.
 app.get('/api/cantera/batches/:id/instruccion', requireAuth, async (req, res) => {
   try {
     const { rows: [batch] } = await pool.query(`SELECT * FROM cantera_batches WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId]);
     if (!batch) return res.status(404).json({ error: 'Borrador no encontrado' });
-    const { _buildSystemPrompt } = require('./services/canteraValidateService');
-    res.json({ instruccion: _buildSystemPrompt(batch) });
+    const { _buildSystemPrompt, _buildUserPrompt } = require('./services/canteraValidateService');
+    let instruccion = _buildSystemPrompt(batch, true);
+    const companyId = req.query.companyId ? parseInt(req.query.companyId) : null;
+    if (companyId) {
+      const { rows: [company] } = await pool.query(`SELECT * FROM cantera_companies WHERE id=$1 AND batch_id=$2 AND user_id=$3`, [companyId, req.params.id, req.workspaceOwnerId]);
+      if (company) {
+        const { rows: contactos } = await pool.query(`SELECT * FROM cantera_contacts WHERE company_id=$1 AND user_id=$2`, [companyId, req.workspaceOwnerId]);
+        instruccion += `\n\n${_buildUserPrompt(company, contactos)}`;
+      }
+    }
+    res.json({ instruccion });
   } catch (err) { console.error('[cantera] GET instruccion', err.message); res.status(500).json({ error: 'Error al generar la instrucción' }); }
 });
 app.put('/api/cantera/batches/:id', requireAuth, async (req, res) => {
@@ -6751,6 +6766,18 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
     stats.companiesDeleted = (stats.companiesDeleted || 0) + (summary.companiesDeleted || 0);
     await pool.query(`UPDATE cantera_batches SET archivo_nombre=$1, import_stats=$2::jsonb, updated_at=NOW() WHERE id=$3`, [req.file.originalname || '', JSON.stringify(stats), batchId]);
   } catch (e) { console.error('[cantera] import archivo_nombre', e.message); }
+  // Si una empresa tiene UN solo contacto, no hay nada que decidir — se
+  // asigna automático como prioridad 1 (pedido explícito 2026-09-07: "cuando
+  // el sistema tiene un contacto por empresa, debe asignar ese contacto...
+  // cuando tiene 2 o más tendré que hacerlo de forma manual"). Nunca pisa una
+  // prioridad ya puesta a mano (solo actúa sobre prioridad=0).
+  try {
+    await pool.query(`
+      UPDATE cantera_contacts SET prioridad=1
+       WHERE batch_id=$1 AND prioridad=0
+         AND company_id IN (SELECT company_id FROM cantera_contacts WHERE batch_id=$1 GROUP BY company_id HAVING COUNT(*)=1)
+    `, [batchId]);
+  } catch (e) { console.error('[cantera] auto-prioridad import', e.message); }
   job.running = false; job.summary = summary;
 });
 app.get('/api/cantera/batches/:id/import-status', requireAuth, async (req, res) => {
@@ -7154,6 +7181,12 @@ app.get('/api/cantera/mesa/companies', requireAuth, async (req, res) => {
   const tiers = String(req.query.tier || '').split(',').filter(Boolean);
   const prioridades = String(req.query.prioridad || '').split(',').map(Number).filter(n => n > 0);
   const onlyFailed = req.query.onlyFailed === '1';
+  // Filtros avanzados nuevos — pedido explícito 2026-09-07: "crea un filtro
+  // para encontrar rápidamente aquellas empresas que tienen 2 o más
+  // personas... una vista más práctica de lo que busco realmente".
+  const minContactos = Math.max(0, parseInt(req.query.minContactos) || 0); // 0 = cualquiera
+  const sinPrioridad = req.query.sinPrioridad === '1'; // ningún contacto con prioridad>0 todavía — lo que falta decidir a mano
+  const auditoria = ['sin_auditar', 'de_acuerdo', 'en_desacuerdo'].includes(req.query.auditoria) ? req.query.auditoria : '';
   const page = Math.max(0, parseInt(req.query.page) || 0);
   const pageSize = [50, 100, 200].includes(parseInt(req.query.pageSize)) ? parseInt(req.query.pageSize) : 100;
   try {
@@ -7165,6 +7198,10 @@ app.get('/api/cantera/mesa/companies', requireAuth, async (req, res) => {
     if (onlyFailed) conds.push(`c.paso1_estado='descartado'`);
     if (tiers.length) { params.push(tiers); conds.push(`c.tier_clave = ANY($${params.length}::text[])`); }
     if (prioridades.length) { params.push(prioridades); conds.push(`EXISTS (SELECT 1 FROM cantera_contacts k2 WHERE k2.company_id=c.id AND k2.prioridad = ANY($${params.length}::int[]))`); }
+    if (minContactos > 0) { params.push(minContactos); conds.push(`(SELECT COUNT(*) FROM cantera_contacts k3 WHERE k3.company_id=c.id) >= $${params.length}`); }
+    if (sinPrioridad) conds.push(`NOT EXISTS (SELECT 1 FROM cantera_contacts k4 WHERE k4.company_id=c.id AND k4.prioridad > 0)`);
+    if (auditoria === 'sin_auditar') conds.push(`c.auditoria_veredicto = ''`);
+    else if (auditoria) { params.push(auditoria); conds.push(`c.auditoria_veredicto = $${params.length}`); }
     const where = conds.join(' AND ');
     const { rows: totalRows } = await pool.query(
       `SELECT COUNT(*)::int AS n FROM cantera_companies c JOIN cantera_batches b ON b.id=c.batch_id WHERE ${where}`, params);
