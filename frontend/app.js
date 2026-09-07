@@ -6162,7 +6162,19 @@ const CanteraModule = (() => {
   function addPuesto(clave) { _current.puestos = _current.puestos || {}; _current.puestos[clave] = [...(_current.puestos[clave] || []), { titulo: '', tipo: 'decide', exclusion: '' }]; _paint(); }
   function removePuesto(clave, i) { _current.puestos[clave].splice(i, 1); _paint(); }
   function setPuestoField(clave, i, k, v) { _current.puestos[clave][i][k] = v; }
-  function setMotorIA(v) { _current.motor_ia = ['kimi', 'gemini'].includes(v) ? v : 'claude'; }
+  // Autoguarda al cambiar — pedido implícito 2026-09-07: dos veces seguidas
+  // se cambió el Motor de IA en el selector y se siguió investigando con el
+  // motor viejo porque no se le dio clic aparte a "Guardar criterio". Los
+  // demás selectores del sistema (Tier/Confianza/Prioridad en Validación
+  // manual) ya autoguardan — este debía ser igual, no una excepción.
+  async function setMotorIA(v) {
+    _current.motor_ia = ['kimi', 'gemini'].includes(v) ? v : 'claude';
+    try {
+      const res = await apiFetch(`${API}/cantera/batches/${_current.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_current) });
+      _current = await res.json();
+      showBanner('✓ Motor de IA guardado', 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
   async function saveCriterio() {
     _current.icp = document.getElementById('cant-icp')?.value || '';
     try {
