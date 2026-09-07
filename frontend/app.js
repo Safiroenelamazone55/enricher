@@ -6052,27 +6052,30 @@ const CanteraModule = (() => {
     document.getElementById('cant-manual-modal')?.remove();
     const m = document.createElement('div'); m.id = 'cant-manual-modal'; m.className = 'fin-pi-backdrop';
     m.onclick = e => { if (e.target === m) closeManualValidation(); };
-    m.innerHTML = `<div class="fin-pi-box lm-flt-box" style="max-width:560px">
+    m.innerHTML = `<div class="fin-pi-box lm-flt-box" style="max-width:820px">
       <div class="fin-pi-box__hd"><h3>Validación manual · ${esc(co.nombre)}</h3><button class="fin-pi-x" onclick="CanteraModule.closeManualValidation()">✕</button></div>
       <div class="flt-body" style="display:flex;flex-direction:column;gap:10px">
-        <label class="cant-flabel">Datos de la empresa
-          <div class="cant-copy-row">
-            <textarea id="cant-manual-copy" class="form-input" rows="4" readonly onclick="this.select()">${esc(_manualCopyText(co))}</textarea>
-            <button class="cant-copy-row__btn" title="Copiar datos de la empresa" onclick="CanteraModule.copyManualData()">${_copyIconSvg()}</button>
-          </div>
-        </label>
-        <label class="cant-flabel">Instrucción completa<span class="field-note">para pegar en cualquier IA (ChatGPT, Claude.ai, Gemini…), junto con los datos de arriba</span>
-          <div class="cant-copy-row">
-            <textarea id="cant-manual-instruccion" class="form-input" rows="4" readonly onclick="this.select()">Cargando…</textarea>
-            <button class="cant-copy-row__btn" title="Copiar la instrucción completa" onclick="CanteraModule.copyManualInstruccion()">${_copyIconSvg()}</button>
-          </div>
-        </label>
-        <label class="cant-flabel cant-flabel--row"><span class="cant-flabel__lbl">Tier</span><select id="cant-manual-tier" class="form-input" onchange="CanteraModule.saveManualValidation(${co.id})">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <label class="cant-flabel">Datos de la empresa
+            <div class="cant-copy-row">
+              <textarea id="cant-manual-copy" class="form-input" rows="4" readonly onclick="this.select()">${esc(_manualCopyText(co))}</textarea>
+              <button class="cant-copy-row__btn" title="Copiar datos de la empresa" onclick="CanteraModule.copyManualData()">${_copyIconSvg()}</button>
+            </div>
+          </label>
+          <label class="cant-flabel">Instrucción completa<span class="field-note">para pegar en cualquier IA, junto con los datos</span>
+            <div class="cant-copy-row">
+              <textarea id="cant-manual-instruccion" class="form-input" rows="4" readonly onclick="this.select()">Cargando…</textarea>
+              <button class="cant-copy-row__btn" title="Copiar la instrucción completa" onclick="CanteraModule.copyManualInstruccion()">${_copyIconSvg()}</button>
+            </div>
+          </label>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+        <label class="cant-flabel">Tier<select id="cant-manual-tier" class="form-input" onchange="CanteraModule.saveManualValidation(${co.id})">
           <option value="">— elegir —</option>
           ${tiers.map(t => `<option value="${esc(t.clave)}"${co.tier_clave === t.clave ? ' selected' : ''}>${esc(t.clave)}${t.nombre ? ' — ' + esc(t.nombre) : ''}</option>`).join('')}
           <option value="__descartar__"${co.paso2_estado === 'descartado_manual' ? ' selected' : ''}>✕ Descartar — no encaja en ningún Tier</option>
         </select></label>
-        <label class="cant-flabel cant-flabel--row"><span class="cant-flabel__lbl">Prioridad</span>
+        <label class="cant-flabel">Prioridad
           <select id="cant-manual-prioridad" class="form-input" onchange="CanteraModule.saveManualValidation(${co.id})">
             <option value="">— sin definir —</option>
             <option value="alta"${co.prioridad === 'alta' ? ' selected' : ''}>Alta</option>
@@ -6080,7 +6083,7 @@ const CanteraModule = (() => {
             <option value="baja"${co.prioridad === 'baja' ? ' selected' : ''}>Baja</option>
           </select>
         </label>
-        <label class="cant-flabel cant-flabel--row"><span class="cant-flabel__lbl">Confianza</span>
+        <label class="cant-flabel">Confianza
           <select id="cant-manual-confianza" class="form-input" onchange="CanteraModule.saveManualValidation(${co.id})">
             <option value="">— sin definir —</option>
             <option value="alta"${co.confianza === 'alta' ? ' selected' : ''}>Alta</option>
@@ -6088,7 +6091,8 @@ const CanteraModule = (() => {
             <option value="baja"${co.confianza === 'baja' ? ' selected' : ''}>Baja</option>
           </select>
         </label>
-        <label class="cant-flabel">Nota<span class="field-note">opcional — resumen útil de la empresa</span><textarea id="cant-manual-nota" class="form-input" rows="2" placeholder="Por qué este Tier (o por qué se descarta)…" onblur="CanteraModule.saveManualValidation(${co.id})">${esc(co.nota_manual || '')}</textarea></label>
+        </div>
+        <label class="cant-flabel">Nota<span class="field-note">opcional — resumen útil de la empresa</span><textarea id="cant-manual-nota" class="form-input" rows="4" placeholder="Por qué este Tier (o por qué se descarta)…" onblur="CanteraModule.saveManualValidation(${co.id})">${esc(co.nota_manual || '')}</textarea></label>
       </div>
       <div class="fin-pi-box__ft">
         <span>${['validacion_manual', 'descartado_manual'].includes(co.paso2_estado) ? `<button class="lm-bulk-ghost" onclick="CanteraModule.quitarValidacionManual(${co.id})">Quitar validación manual</button>` : ''}</span>
@@ -7120,27 +7124,30 @@ const CanteraMesaModule = (() => {
     document.getElementById('mesa-manual-modal')?.remove();
     const m = document.createElement('div'); m.id = 'mesa-manual-modal'; m.className = 'fin-pi-backdrop';
     m.onclick = e => { if (e.target === m) m.remove(); };
-    m.innerHTML = `<div class="fin-pi-box lm-flt-box" style="max-width:560px">
+    m.innerHTML = `<div class="fin-pi-box lm-flt-box" style="max-width:820px">
       <div class="fin-pi-box__hd"><h3>Validación manual · ${esc(co.nombre)}</h3><button class="fin-pi-x" onclick="document.getElementById('mesa-manual-modal').remove()">✕</button></div>
       <div class="flt-body" style="display:flex;flex-direction:column;gap:10px">
-        <label class="cant-flabel">Datos de la empresa
-          <div class="cant-copy-row">
-            <textarea id="mesa-manual-copy" class="form-input" rows="4" readonly onclick="this.select()">${esc(_manualCopyText(co))}</textarea>
-            <button class="cant-copy-row__btn" title="Copiar datos de la empresa" onclick="CanteraMesaModule.copyManualData()">${_copyIconSvg()}</button>
-          </div>
-        </label>
-        <label class="cant-flabel">Instrucción completa<span class="field-note">para pegar en cualquier IA (ChatGPT, Claude.ai, Gemini…), junto con los datos de arriba</span>
-          <div class="cant-copy-row">
-            <textarea id="mesa-manual-instruccion" class="form-input" rows="4" readonly onclick="this.select()">Cargando…</textarea>
-            <button class="cant-copy-row__btn" title="Copiar la instrucción completa" onclick="CanteraMesaModule.copyManualInstruccion()">${_copyIconSvg()}</button>
-          </div>
-        </label>
-        <label class="cant-flabel cant-flabel--row"><span class="cant-flabel__lbl">Tier</span><select id="mesa-manual-tier" class="form-input" onchange="CanteraMesaModule.saveManualValidation(${companyId},${batchId})">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <label class="cant-flabel">Datos de la empresa
+            <div class="cant-copy-row">
+              <textarea id="mesa-manual-copy" class="form-input" rows="4" readonly onclick="this.select()">${esc(_manualCopyText(co))}</textarea>
+              <button class="cant-copy-row__btn" title="Copiar datos de la empresa" onclick="CanteraMesaModule.copyManualData()">${_copyIconSvg()}</button>
+            </div>
+          </label>
+          <label class="cant-flabel">Instrucción completa<span class="field-note">para pegar en cualquier IA, junto con los datos</span>
+            <div class="cant-copy-row">
+              <textarea id="mesa-manual-instruccion" class="form-input" rows="4" readonly onclick="this.select()">Cargando…</textarea>
+              <button class="cant-copy-row__btn" title="Copiar la instrucción completa" onclick="CanteraMesaModule.copyManualInstruccion()">${_copyIconSvg()}</button>
+            </div>
+          </label>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+        <label class="cant-flabel">Tier<select id="mesa-manual-tier" class="form-input" onchange="CanteraMesaModule.saveManualValidation(${companyId},${batchId})">
           <option value="">— elegir —</option>
           ${tiers.map(t => `<option value="${esc(t.clave)}"${co.tier_clave === t.clave ? ' selected' : ''}>${esc(t.clave)}${t.nombre ? ' — ' + esc(t.nombre) : ''}</option>`).join('')}
           <option value="__descartar__"${co.paso2_estado === 'descartado_manual' ? ' selected' : ''}>✕ Descartar — no encaja en ningún Tier</option>
         </select></label>
-        <label class="cant-flabel cant-flabel--row"><span class="cant-flabel__lbl">Prioridad</span>
+        <label class="cant-flabel">Prioridad
           <select id="mesa-manual-prioridad" class="form-input" onchange="CanteraMesaModule.saveManualValidation(${companyId},${batchId})">
             <option value="">— sin definir —</option>
             <option value="alta"${co.prioridad === 'alta' ? ' selected' : ''}>Alta</option>
@@ -7148,7 +7155,7 @@ const CanteraMesaModule = (() => {
             <option value="baja"${co.prioridad === 'baja' ? ' selected' : ''}>Baja</option>
           </select>
         </label>
-        <label class="cant-flabel cant-flabel--row"><span class="cant-flabel__lbl">Confianza</span>
+        <label class="cant-flabel">Confianza
           <select id="mesa-manual-confianza" class="form-input" onchange="CanteraMesaModule.saveManualValidation(${companyId},${batchId})">
             <option value="">— sin definir —</option>
             <option value="alta"${co.confianza === 'alta' ? ' selected' : ''}>Alta</option>
@@ -7156,7 +7163,8 @@ const CanteraMesaModule = (() => {
             <option value="baja"${co.confianza === 'baja' ? ' selected' : ''}>Baja</option>
           </select>
         </label>
-        <label class="cant-flabel">Nota<span class="field-note">opcional — resumen útil de la empresa</span><textarea id="mesa-manual-nota" class="form-input" rows="2" placeholder="Por qué este Tier (o por qué se descarta)…" onblur="CanteraMesaModule.saveManualValidation(${companyId},${batchId})">${esc(co.nota_manual || '')}</textarea></label>
+        </div>
+        <label class="cant-flabel">Nota<span class="field-note">opcional — resumen útil de la empresa</span><textarea id="mesa-manual-nota" class="form-input" rows="4" placeholder="Por qué este Tier (o por qué se descarta)…" onblur="CanteraMesaModule.saveManualValidation(${companyId},${batchId})">${esc(co.nota_manual || '')}</textarea></label>
       </div>
       <div class="fin-pi-box__ft">
         <span>${['validacion_manual', 'descartado_manual'].includes(co.paso2_estado) ? `<button class="lm-bulk-ghost" onclick="CanteraMesaModule.quitarValidacionManual(${companyId},${batchId})">Quitar validación manual</button>` : ''}</span>

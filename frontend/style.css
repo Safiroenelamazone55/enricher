@@ -12866,7 +12866,11 @@ a.cp-strip__i:hover svg { color: var(--brand, #007AFF); }
 .lm-fchip button:hover { background: #C4342B; color: #fff; }
 .lm-fchip-clear { border: none; background: none; color: var(--text2, #45586A); font-size: .78rem; font-weight: 600; cursor: pointer; text-decoration: underline; padding: 4px; }
 .lm-flt-box { width: 560px; max-width: 94vw; }
-.flt-body { padding: 14px 18px 6px; }
+/* .flt-body vive entre header y footer dentro de .fin-pi-box (que tiene
+   max-height:90vh y overflow:hidden) — sin esto, el contenido que no cabe
+   simplemente se corta en vez de poder desplazarse (reportado 2026-09-07:
+   "el scroll para ver la nota no funciona"). */
+.flt-body { padding: 14px 18px 6px; overflow-y: auto; flex: 1 1 auto; min-height: 0; }
 .flt-rows { max-height: 42vh; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
 .flt-row { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1.3fr) 30px; gap: 8px; align-items: center; }
 .flt-row .form-input { padding: 8px 10px; font-size: .84rem; width: 100%; }
