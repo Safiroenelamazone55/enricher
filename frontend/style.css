@@ -12298,17 +12298,20 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
    columna congelada es la PRIMERA columna de datos, marcada con .dg-cell--frozen
    (no nth-child: su posición cambia según si el check está visible o no).*/
 .dg-dt-wrap { overflow-x: auto; }
-/* Encabezado fijo al hacer scroll — pedido explícito 2026-09-07: "sería más
-   fácil si al hacer scroll el encabezado se fija". overflow-x:auto por sí
-   solo hace que el navegador calcule overflow-y como auto también (regla del
-   spec CSS), pero sin una altura acotada ese "scroll interno" nunca se activa
-   de verdad (el contenedor crece con la tabla y es la PÁGINA la que se
-   desplaza) — el position:sticky del encabezado no tenía ningún contexto de
-   scroll real al cual pegarse. La solución es la inversa: acotar la altura y
-   asumir el scroll interno a propósito, el patrón clásico de tabla con
-   encabezado fijo. Escala solo a las tablas de Cantera (Resultados/Mesa de
-   trabajo) — no a todas las de dg-dt-wrap del sistema, que no lo pidieron. */
-.cant-tablewrap { max-height: calc(100vh - 260px); overflow-y: auto; }
+/* El scroll vertical es el de la PÁGINA (.app-main) — pedido explícito
+   2026-09-07: "no dentro de este cuadro pequeño". Se probó acotar la altura
+   de este wrapper con su propio scroll interno para lograr un encabezado
+   fijo, pero eso es justo la cajita que Jenny no quiere. Comprobado: mientras
+   este wrapper tenga overflow-x:auto (necesario para desplazar la tabla
+   ancha), CUALQUIER valor de overflow-y que no sea 'visible' (auto/hidden/
+   clip — clip incluso se normaliza a hidden por spec al mezclarse con auto en
+   el otro eje) lo convierte en su propio contenedor de scroll y rompe el
+   position:sticky del encabezado contra .app-main — probado en vivo. No hay
+   forma de tener scroll horizontal + encabezado fijo al scroll de página sin
+   restructurar la tabla (separar thead del scroll horizontal), así que se
+   prioriza lo pedido ahora: sin overflow-y aquí, el encabezado ya no se
+   pega, pero tampoco hay caja con scroll propio. */
+.cant-tablewrap { }
 .dg-table { table-layout: auto; }
 .dg-table thead th { background: #F1EFEB; padding: 6px 10px; position: sticky; top: 0; z-index: 3; }
 /* Filas más compactas (feedback de Jenny 2026-09-04: "el alto se reduzca") —

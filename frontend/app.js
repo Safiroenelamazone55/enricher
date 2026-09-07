@@ -6,6 +6,19 @@ console.log('[Enricher] app.js v2026-05-28-B loaded');
  * Vanilla JS · no framework
  */
 
+// Las tablas de Cantera (.cant-tablewrap) tienen scroll horizontal propio
+// (overflow-x:auto, necesario por el número de columnas). En Chrome eso
+// vuelve al wrapper "dueño" de la rueda del mouse y el scroll vertical NO
+// encadena al contenedor de la página (.app-main) aunque el wrapper no tenga
+// scroll propio en ese eje — probado en vivo 2026-09-07. Se reenvía a mano.
+document.addEventListener('wheel', function(e) {
+  const wrap = e.target.closest && e.target.closest('.cant-tablewrap');
+  if (!wrap) return;
+  const main = wrap.closest('.app-main');
+  if (!main) return;
+  main.scrollTop += e.deltaY;
+}, { passive: true });
+
 const API = 'https://api.novacentrax.com/api';
 const API_ORIGIN = API.replace(/\/api$/, '');   // para servir archivos estáticos (fotos de WhatsApp, etc.)
 
