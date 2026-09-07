@@ -12298,8 +12298,19 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
    columna congelada es la PRIMERA columna de datos, marcada con .dg-cell--frozen
    (no nth-child: su posición cambia según si el check está visible o no).*/
 .dg-dt-wrap { overflow-x: auto; }
+/* Encabezado fijo al hacer scroll — pedido explícito 2026-09-07: "sería más
+   fácil si al hacer scroll el encabezado se fija". overflow-x:auto por sí
+   solo hace que el navegador calcule overflow-y como auto también (regla del
+   spec CSS), pero sin una altura acotada ese "scroll interno" nunca se activa
+   de verdad (el contenedor crece con la tabla y es la PÁGINA la que se
+   desplaza) — el position:sticky del encabezado no tenía ningún contexto de
+   scroll real al cual pegarse. La solución es la inversa: acotar la altura y
+   asumir el scroll interno a propósito, el patrón clásico de tabla con
+   encabezado fijo. Escala solo a las tablas de Cantera (Resultados/Mesa de
+   trabajo) — no a todas las de dg-dt-wrap del sistema, que no lo pidieron. */
+.cant-tablewrap { max-height: calc(100vh - 260px); overflow-y: auto; }
 .dg-table { table-layout: auto; }
-.dg-table thead th { background: #F1EFEB; padding: 6px 10px; }
+.dg-table thead th { background: #F1EFEB; padding: 6px 10px; position: sticky; top: 0; z-index: 3; }
 /* Filas más compactas (feedback de Jenny 2026-09-04: "el alto se reduzca") —
    .clients-table td trae height:46px pensado para otras listas del sistema. */
 .dg-table td { height: 30px; padding: 0 10px; }
@@ -12314,7 +12325,7 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .dg-table th.lm-ck-col, .dg-table td.lm-ck-col { left: 0; }
 .dg-table th.dg-cell--frozen, .dg-table td.dg-cell--frozen { left: 0; }
 .dg-table.sel-on th.dg-cell--frozen, .dg-table.sel-on td.dg-cell--frozen { left: 34px; box-shadow: 2px 0 4px -2px rgba(11,30,58,.18); }
-.dg-table thead th.lm-ck-col, .dg-table thead th.dg-cell--frozen { background: #F1EFEB; z-index: 2; }
+.dg-table thead th.lm-ck-col, .dg-table thead th.dg-cell--frozen { background: #F1EFEB; z-index: 4; }
 .dg-table tbody tr.sel td.lm-ck-col, .dg-table tbody tr.sel td.dg-cell--frozen { background: var(--brand-ll, #F1EFEB); }
 .dg-table .dg-cell { cursor: text; }
 .dg-table .dg-cell:hover { background: var(--brand-ll, #F1EFEB); }

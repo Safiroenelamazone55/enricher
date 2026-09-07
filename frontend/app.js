@@ -5535,7 +5535,7 @@ const CanteraModule = (() => {
     if (_cantPageIdx < 0) _cantPageIdx = 0;
     const pageCompanies = filteredCompanies.slice(_cantPageIdx * cantPs, _cantPageIdx * cantPs + cantPs);
     const rows = pageCompanies.map(c => {
-      const main = `<tr>
+      const main = `<tr class="${_coSel.has(c.id) ? 'sel' : ''}">
         <td class="lm-ck-col" onclick="event.stopPropagation()"><input type="checkbox" class="lm-ck" ${_coSel.has(c.id) ? 'checked' : ''} onclick="CanteraModule.toggleCoSel(${c.id},this.checked)"></td>
         <td class="dg-cell--frozen" onclick="CanteraModule.toggleExpand(${c.id})" style="cursor:pointer">${esc(c.nombre)}</td>
         ${visCols.map(col => `<td class="dg-cell--ro"${col.key === 'contactos' ? ` onclick="CanteraModule.toggleExpand(${c.id})" style="cursor:pointer"` : ''}>${_colCellHtml(c, col.key)}</td>`).join('')}
@@ -5678,7 +5678,7 @@ const CanteraModule = (() => {
           </div>
         </div>` : ''}
         ${_jobRunning ? `<p class="cant-hint">Investigando ${_jobProgress.done} de ${_jobProgress.total}… puedes seguir en el sistema, esto sigue en segundo plano.</p>` : ''}
-        <div class="lm-dt-wrap dg-dt-wrap"><table class="clients-table dg-table sel-on cant-restbl" style="table-layout:auto">
+        <div class="lm-dt-wrap dg-dt-wrap cant-tablewrap"><table class="clients-table dg-table sel-on cant-restbl" style="table-layout:auto">
           <thead><tr><th class="lm-ck-col"><input type="checkbox" class="lm-ck" ${_companies.length && _companies.every(c => _coSel.has(c.id)) ? 'checked' : ''} onclick="CanteraModule.toggleCoSelAll(this.checked)"></th><th class="dg-cell--frozen" id="cant-th-nombre">Nombre<span class="cant-colresize" onmousedown="CanteraModule.startColResize(event)"></span></th>${visCols.map(col => `<th>${esc(col.label)}</th>`).join('')}<th>Contacto</th><th>Puesto</th><th>Prioridad</th></tr></thead>
           <tbody>${rows || `<tr><td colspan="${emptyColspan}" class="cp-empty2">Importa un archivo para empezar.</td></tr>`}</tbody>
         </table></div>
@@ -7129,7 +7129,7 @@ const CanteraMesaModule = (() => {
     const visCols = MESA_COLS.filter(c => _loadVisibleCols().has(c.key));
     const emptyColspan = 4 + visCols.length;
     const rows = _rows.map(c => {
-      const main = `<tr>
+      const main = `<tr class="${_coSel.has(c.id) ? 'sel' : ''}">
         <td class="lm-ck-col" onclick="event.stopPropagation()"><input type="checkbox" class="lm-ck" ${_coSel.has(c.id) ? 'checked' : ''} onclick="CanteraMesaModule.toggleCoSel(${c.id},this.checked)"></td>
         <td class="dg-cell--frozen" onclick="CanteraMesaModule.toggleExpand(${c.id},${c.batch_id})" style="cursor:pointer">${esc(c.nombre)}</td>
         <td class="dg-cell--ro">${esc(c.batch_nombre || '—')}</td>
@@ -7160,7 +7160,7 @@ const CanteraMesaModule = (() => {
         ${_filterSelect('secuencia', opts.secuencias, _filtro.secuencia)}
         ${_coSel.size ? `<span class="cant-count">${_coSel.size} seleccionada(s)</span>` : ''}
       </div>
-      <div class="lm-dt-wrap dg-dt-wrap"><table class="clients-table dg-table sel-on cant-restbl" style="table-layout:auto">
+      <div class="lm-dt-wrap dg-dt-wrap cant-tablewrap"><table class="clients-table dg-table sel-on cant-restbl" style="table-layout:auto">
         <thead><tr>
           <th class="lm-ck-col"><input type="checkbox" class="lm-ck" ${_rows.length && _rows.every(c => _coSel.has(c.id)) ? 'checked' : ''} onclick="CanteraMesaModule.toggleCoSelAll(this.checked)"></th>
           <th class="dg-cell--frozen">Nombre</th><th>Borrador</th>${visCols.map(col => `<th>${esc(col.label)}</th>`).join('')}<th>Contacto</th><th>Puesto</th><th>Prioridad</th>
