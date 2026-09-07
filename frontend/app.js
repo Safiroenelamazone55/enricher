@@ -14,10 +14,25 @@ console.log('[Enricher] app.js v2026-05-28-B loaded');
 document.addEventListener('wheel', function(e) {
   const wrap = e.target.closest && e.target.closest('.cant-tablewrap');
   if (!wrap) return;
+  // Gesto horizontal (trackpad deslizando la tabla a los lados) trae algo de
+  // deltaY "de ruido" — reenviarlo también hacía que la página bajara sola
+  // mientras se deslizaba de lado (reportado 2026-09-07). Solo reenviar
+  // cuando el gesto es predominantemente vertical.
+  if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
   const main = wrap.closest('.app-main');
   if (!main) return;
   main.scrollTop += e.deltaY;
 }, { passive: true });
+
+// Encabezado fijo de las tablas de Cantera — pedido explícito 2026-09-07.
+// Se probó un clon del thead en position:fixed sincronizado por scroll/
+// resize/interval, pero causó que el navegador se congelara al cambiar de
+// pestaña dentro de Cantera (probado en vivo dos veces, ambas se colgaron) —
+// revertido de inmediato el mismo día por seguridad. El position:sticky
+// nativo tampoco funciona (ver el listener de wheel abajo: el wrapper con
+// overflow-x:auto intercepta el contexto de scroll). Sin encabezado fijo por
+// ahora hasta encontrar una forma segura.
+function _cantScheduleStickySync() {}
 
 const API = 'https://api.novacentrax.com/api';
 const API_ORIGIN = API.replace(/\/api$/, '');   // para servir archivos estáticos (fotos de WhatsApp, etc.)
@@ -5367,9 +5382,11 @@ const CanteraModule = (() => {
     const wrapBefore = el.querySelector('.lm-dt-wrap');
     const scrollLeft = wrapBefore ? wrapBefore.scrollLeft : 0;
     const scrollTop = wrapBefore ? wrapBefore.scrollTop : 0;
+    if (wrapBefore && wrapBefore._stickyHead) { wrapBefore._stickyHead.remove(); wrapBefore._stickyHead = null; }
     el.innerHTML = _view === 'detail' && _current ? _detailHtml() : _listHtml();
     const wrapAfter = el.querySelector('.lm-dt-wrap');
     if (wrapAfter) { wrapAfter.scrollLeft = scrollLeft; wrapAfter.scrollTop = scrollTop; }
+    _cantScheduleStickySync();
   }
 
   // ── Lista de borradores — tabla de TODOS los borradores importados, con
@@ -6835,9 +6852,11 @@ const CanteraMesaModule = (() => {
     const wrapBefore = el.querySelector('.lm-dt-wrap');
     const scrollLeft = wrapBefore ? wrapBefore.scrollLeft : 0;
     const scrollTop = wrapBefore ? wrapBefore.scrollTop : 0;
+    if (wrapBefore && wrapBefore._stickyHead) { wrapBefore._stickyHead.remove(); wrapBefore._stickyHead = null; }
     el.innerHTML = _html();
     const wrapAfter = el.querySelector('.lm-dt-wrap');
     if (wrapAfter) { wrapAfter.scrollLeft = scrollLeft; wrapAfter.scrollTop = scrollTop; }
+    _cantScheduleStickySync();
   }
   async function _refresh() { await _search(); _paint(); }
   function setFiltro(kind, val) { _filtro[kind] = val; _page = 0; _refresh(); }

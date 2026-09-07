@@ -12306,11 +12306,10 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
    ancha), CUALQUIER valor de overflow-y que no sea 'visible' (auto/hidden/
    clip — clip incluso se normaliza a hidden por spec al mezclarse con auto en
    el otro eje) lo convierte en su propio contenedor de scroll y rompe el
-   position:sticky del encabezado contra .app-main — probado en vivo. No hay
-   forma de tener scroll horizontal + encabezado fijo al scroll de página sin
-   restructurar la tabla (separar thead del scroll horizontal), así que se
-   prioriza lo pedido ahora: sin overflow-y aquí, el encabezado ya no se
-   pega, pero tampoco hay caja con scroll propio. */
+   position:sticky nativo del encabezado contra .app-main — probado en vivo.
+   Se probó simularlo con un clon del thead en position:fixed (JS), pero
+   colgaba el navegador al cambiar de pestaña dentro de Cantera — revertido
+   el mismo día 2026-09-07. Sin encabezado fijo por ahora. */
 .cant-tablewrap { }
 .dg-table { table-layout: auto; }
 .dg-table thead th { background: #F1EFEB; padding: 6px 10px; position: sticky; top: 0; z-index: 3; }
