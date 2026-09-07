@@ -5018,6 +5018,24 @@ const CanteraModule = (() => {
   let _minContactos = 0;
   let _sinPrioridad = false;
   let _auditoriaFiltro = '';
+  // Más filtros avanzados — pedido explícito 2026-09-07: "hay muchos otros
+  // campos que podrían considerarse un criterio para filtrar, no lo veo".
+  // País/Industria/Tamaño salen de los valores que YA existen en las
+  // empresas de este borrador (no una lista fija) — multi-selección, igual
+  // que Tier. "Paso 2 = Descartado" es DISTINTO de "Ver solo descartadas"
+  // (que es Paso 1, el filtro básico) — aquí es lo que descartó la IA en la
+  // investigación profunda, o lo que tú descartaste a mano con el Tier.
+  let _paisFiltro = new Set();
+  let _industriaFiltro = new Set();
+  let _tamanoFiltro = new Set();
+  let _domFaltante = false;
+  let _paso2DescFiltro = new Set(); // 'descartado' (IA) | 'descartado_manual' (tú)
+  function _jsEsc(s) { return String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
+  function _distinctVals(field) {
+    const set = new Set();
+    _companies.forEach(c => { if (c[field]) set.add(c[field]); });
+    return [...set].sort((a, b) => a.localeCompare(b));
+  }
   // Paginación de la tabla de Resultados (pedido explícito 2026-09-06: "ver la
   // lista en bloques de 50, 100 o 200, opcional") — 1242 filas de golpe era
   // demasiado. Mismo patrón que la paginación de Contactos/Empresas del CRM.
@@ -5469,6 +5487,7 @@ const CanteraModule = (() => {
     _coSel = new Set(); _expanded = new Set(); _contactsByCompany = {}; _contactsLoaded = false; _step = 1;
     _cantPageIdx = 0; _tierFiltro = new Set(); _prioFiltro = new Set();
     _minContactos = 0; _sinPrioridad = false; _auditoriaFiltro = '';
+    _paisFiltro = new Set(); _industriaFiltro = new Set(); _tamanoFiltro = new Set(); _domFaltante = false; _paso2DescFiltro = new Set();
     // Totales de Filtros/Limpiar/Enriquecer/IA vienen del borrador (persistidos
     // en el servidor) — pedido explícito 2026-09-06: "ya limpiamos, no debería
     // ser 0" al recargar la página o volver a entrar.
@@ -5578,7 +5597,12 @@ const CanteraModule = (() => {
       .filter(c => !_prioFiltro.size || (_contactsByCompany[c.id] || []).some(k => _prioFiltro.has(k.prioridad)))
       .filter(c => !_minContactos || (_contactsByCompany[c.id] || []).length >= _minContactos)
       .filter(c => !_sinPrioridad || !(_contactsByCompany[c.id] || []).some(k => k.prioridad > 0))
-      .filter(c => !_auditoriaFiltro || (_auditoriaFiltro === 'sin_auditar' ? !c.auditoria_veredicto : c.auditoria_veredicto === _auditoriaFiltro));
+      .filter(c => !_auditoriaFiltro || (_auditoriaFiltro === 'sin_auditar' ? !c.auditoria_veredicto : c.auditoria_veredicto === _auditoriaFiltro))
+      .filter(c => !_paisFiltro.size || _paisFiltro.has(c.pais))
+      .filter(c => !_industriaFiltro.size || _industriaFiltro.has(c.industria))
+      .filter(c => !_tamanoFiltro.size || _tamanoFiltro.has(c.tamano))
+      .filter(c => !_domFaltante || !c.dominio)
+      .filter(c => !_paso2DescFiltro.size || _paso2DescFiltro.has(c.paso2_estado));
     const cantPs = _cantPageSize();
     const cantPages = Math.max(1, Math.ceil(filteredCompanies.length / cantPs));
     if (_cantPageIdx > cantPages - 1) _cantPageIdx = cantPages - 1;
@@ -5721,8 +5745,8 @@ const CanteraModule = (() => {
       </div>` : ''}
 
       ${_step === 4 ? `<div class="cant-section">
-        ${_coSel.size || _onlyFailed || _tierFiltro.size || _prioFiltro.size || _minContactos || _sinPrioridad || _auditoriaFiltro ? `<div class="cant-results-bar">
-          <span class="cant-count">${_coSel.size ? `${_coSel.size} seleccionada(s)` : ''}${_onlyFailed ? ' · viendo solo descartadas' : ''}${_tierFiltro.size ? ` · Tier: ${[..._tierFiltro].join(', ')}` : ''}${_prioFiltro.size ? ` · Prioridad: ${[..._prioFiltro].join(', ')}` : ''}${_minContactos ? ` · ${_minContactos}+ contactos` : ''}${_sinPrioridad ? ' · sin priorizar' : ''}${_auditoriaFiltro ? ` · auditoría: ${_auditoriaFiltro === 'sin_auditar' ? 'sin auditar' : _auditoriaFiltro === 'de_acuerdo' ? 'confirmadas' : 'en desacuerdo'}` : ''}</span>
+        ${_coSel.size || _onlyFailed || _tierFiltro.size || _prioFiltro.size || _minContactos || _sinPrioridad || _auditoriaFiltro || _paisFiltro.size || _industriaFiltro.size || _tamanoFiltro.size || _domFaltante || _paso2DescFiltro.size ? `<div class="cant-results-bar">
+          <span class="cant-count">${_coSel.size ? `${_coSel.size} seleccionada(s)` : ''}${_onlyFailed ? ' · viendo solo descartadas (Paso 1)' : ''}${_tierFiltro.size ? ` · Tier: ${[..._tierFiltro].join(', ')}` : ''}${_prioFiltro.size ? ` · Prioridad: ${[..._prioFiltro].join(', ')}` : ''}${_minContactos ? ` · ${_minContactos}+ contactos` : ''}${_sinPrioridad ? ' · sin priorizar' : ''}${_auditoriaFiltro ? ` · auditoría: ${_auditoriaFiltro === 'sin_auditar' ? 'sin auditar' : _auditoriaFiltro === 'de_acuerdo' ? 'confirmadas' : 'en desacuerdo'}` : ''}${_paisFiltro.size ? ` · País: ${[..._paisFiltro].join(', ')}` : ''}${_industriaFiltro.size ? ` · Industria: ${[..._industriaFiltro].join(', ')}` : ''}${_tamanoFiltro.size ? ` · Tamaño: ${[..._tamanoFiltro].join(', ')}` : ''}${_domFaltante ? ' · sin dominio' : ''}${_paso2DescFiltro.size ? ` · Paso 2 descartado: ${[..._paso2DescFiltro].map(v => v === 'descartado' ? 'IA' : 'manual').join(', ')}` : ''}</span>
         </div>` : ''}
         ${_jobRunning ? `<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
           <span class="cant-hint" style="margin:0;white-space:nowrap">Investigando ${_jobProgress.done} de ${_jobProgress.total}…</span>
@@ -5896,6 +5920,22 @@ const CanteraModule = (() => {
     const auditoriaPanel = [
       ['sin_auditar', 'Sin auditar'], ['de_acuerdo', 'Confirmadas (de acuerdo)'], ['en_desacuerdo', 'En desacuerdo'],
     ].map(([v, label]) => `<label class="cant-colchk"><input type="radio" name="cant-auditoria" ${_auditoriaFiltro === v ? 'checked' : ''} onchange="CanteraModule.setAuditoriaFiltro('${v}')"> ${label}</label>`).join('');
+    // Más filtros — pedido explícito 2026-09-07. País/Industria/Tamaño solo
+    // muestran los valores que YA existen en este borrador (no una lista
+    // fija). "Paso 2 = Descartado" es distinto de "Ver solo descartadas"
+    // (Paso 1, arriba): esto es lo que la IA descartó en la investigación
+    // profunda, o lo que descartaste a mano con el Tier.
+    const paisPanel = _distinctVals('pais').map(v =>
+      `<label class="cant-colchk"><input type="checkbox" ${_paisFiltro.has(v) ? 'checked' : ''} onchange="CanteraModule.togglePaisFiltro('${_jsEsc(v)}')"> ${esc(v)}</label>`
+    ).join('') || '<div class="cp-empty2" style="padding:10px 12px">Sin datos todavía</div>';
+    const industriaPanel = _distinctVals('industria').map(v =>
+      `<label class="cant-colchk"><input type="checkbox" ${_industriaFiltro.has(v) ? 'checked' : ''} onchange="CanteraModule.toggleIndustriaFiltro('${_jsEsc(v)}')"> ${esc(v)}</label>`
+    ).join('') || '<div class="cp-empty2" style="padding:10px 12px">Sin datos todavía</div>';
+    const tamanoPanel = _distinctVals('tamano').map(v =>
+      `<label class="cant-colchk"><input type="checkbox" ${_tamanoFiltro.has(v) ? 'checked' : ''} onchange="CanteraModule.toggleTamanoFiltro('${_jsEsc(v)}')"> ${esc(v)}</label>`
+    ).join('') || '<div class="cp-empty2" style="padding:10px 12px">Sin datos todavía</div>';
+    const paso2DescPanel = [['descartado', 'Descartado por la IA'], ['descartado_manual', 'Descartado manual (Tier)']]
+      .map(([v, label]) => `<label class="cant-colchk"><input type="checkbox" ${_paso2DescFiltro.has(v) ? 'checked' : ''} onchange="CanteraModule.togglePaso2DescFiltro('${v}')"> ${label}</label>`).join('');
     const html = `<div class="cp-mark-menu__list">${item(_lastFiltros ? `Validado (${_lastFiltros.total})` : 'Correr filtros básicos', 'CanteraModule.runFiltros()')}</div>
       <div class="cp-mark-menu__sep"></div>
       <div class="cp-mark-menu__list">${sub('Limpiar', cleanPanel)}${sub('Enriquecer', enrichPanel)}</div>
@@ -5903,10 +5943,11 @@ const CanteraModule = (() => {
       <div class="cp-mark-menu__list">
         ${item(_jobRunning ? 'Investigación profunda (IA)…' : (_lastIA ? `Investigación completa (${_lastIA.done})` : 'Investigación profunda (IA)'), 'CanteraModule.runValidacion()')}
         ${item('Auditar muestra (IA)', 'CanteraModule.openAudit()')}
-        ${item(`${_onlyFailed ? '✓ ' : ''}Ver solo descartadas`, 'CanteraModule.toggleFailed()')}
+        ${item(`${_onlyFailed ? '✓ ' : ''}Ver solo descartadas (Paso 1)`, 'CanteraModule.toggleFailed()')}
+        ${item(`${_domFaltante ? '✓ ' : ''}Ver solo sin dominio`, 'CanteraModule.toggleDomFaltante()')}
       </div>
       <div class="cp-mark-menu__sep"></div>
-      <div class="cp-mark-menu__list">${sub('Filtrar por Tier', tierPanel)}${sub('Filtrar por prioridad', prioPanel)}${sub('Filtrar por Nº de contactos', numContactosPanel)}${sub('Filtrar por Auditoría', auditoriaPanel)}</div>
+      <div class="cp-mark-menu__list">${sub('Filtrar por Tier', tierPanel)}${sub('Filtrar por prioridad', prioPanel)}${sub('Filtrar por Nº de contactos', numContactosPanel)}${sub('Filtrar por Auditoría', auditoriaPanel)}${sub('Filtrar por Paso 2 descartado', paso2DescPanel)}${sub('Filtrar por País', paisPanel, true)}${sub('Filtrar por Industria', industriaPanel, true)}${sub('Filtrar por Tamaño', tamanoPanel, true)}</div>
       <div class="cp-mark-menu__sep"></div>
       <div class="cp-mark-menu__list">${sub('Elegir columnas visibles', colsPanel, true)}</div>
       ${calificadas || _coSel.size ? `<div class="cp-mark-menu__sep"></div><div class="cp-mark-menu__list">
@@ -6234,6 +6275,11 @@ const CanteraModule = (() => {
     _cantPageIdx = 0;
     _paint();
   }
+  function togglePaisFiltro(v) { if (_paisFiltro.has(v)) _paisFiltro.delete(v); else _paisFiltro.add(v); _cantPageIdx = 0; _paint(); }
+  function toggleIndustriaFiltro(v) { if (_industriaFiltro.has(v)) _industriaFiltro.delete(v); else _industriaFiltro.add(v); _cantPageIdx = 0; _paint(); }
+  function toggleTamanoFiltro(v) { if (_tamanoFiltro.has(v)) _tamanoFiltro.delete(v); else _tamanoFiltro.add(v); _cantPageIdx = 0; _paint(); }
+  function toggleDomFaltante() { _domFaltante = !_domFaltante; _cantPageIdx = 0; _paint(); }
+  function togglePaso2DescFiltro(v) { if (_paso2DescFiltro.has(v)) _paso2DescFiltro.delete(v); else _paso2DescFiltro.add(v); _cantPageIdx = 0; _paint(); }
   let _expanded = new Set();
   let _contactsByCompany = {};
   // Bug encontrado 2026-09-05 al verificar el reordenamiento de columnas: el guard
@@ -6649,7 +6695,8 @@ const CanteraModule = (() => {
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
-  return { render, open, openCreate, backToList, saveFiltros, runFiltros, toggleFailed, toggleTierFiltro, togglePrioFiltro, setMinContactos, toggleSinPrioridad, setAuditoriaFiltro, moreMenu, remove, saveAsTemplate,
+  return { render, open, openCreate, backToList, saveFiltros, runFiltros, toggleFailed, toggleTierFiltro, togglePrioFiltro, setMinContactos, toggleSinPrioridad, setAuditoriaFiltro,
+    togglePaisFiltro, toggleIndustriaFiltro, toggleTamanoFiltro, toggleDomFaltante, togglePaso2DescFiltro, moreMenu, remove, saveAsTemplate,
     toggleExpand, addTier, removeTier, setTierField, addPuesto, removePuesto, setPuestoField, saveCriterio, setMotorIA, runValidacion,
     openPromote, closePromote, doPromote, openSendSeq, closeSendSeq, doSendSeq,
     openScope, closeScope, scopeMaybeCreate, saveScope, setStep,
