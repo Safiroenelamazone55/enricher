@@ -335,10 +335,14 @@ async function runBatchValidation(pool, uid, batchId, { onProgress, companyIds }
   // `companyIds`: selección explícita (con confirmación ya hecha en el
   // frontend) que FUERZA la reinvestigación sin importar paso2_estado actual
   // — pedido explícito 2026-09-06, para poder re-investigar con un Criterio
-  // de calificación nuevo sin tener que reabrir cada empresa a mano.
+  // de calificación nuevo sin tener que reabrir cada empresa a mano. Tampoco
+  // filtra por paso1_estado (pedido explícito 2026-09-07: "no importa si es
+  // descartado en el paso 1... si quiero omitirlas, las ocultaría con el
+  // filtro" antes de seleccionar) — una selección manual siempre se respeta
+  // tal cual. Ese filtro solo aplica al modo automático (sin selección).
   const { rows: companies } = await pool.query(
     Array.isArray(companyIds) && companyIds.length
-      ? `SELECT * FROM cantera_companies WHERE batch_id=$1 AND user_id=$2 AND paso1_estado <> 'descartado' AND id = ANY($3::int[]) ORDER BY id ASC`
+      ? `SELECT * FROM cantera_companies WHERE batch_id=$1 AND user_id=$2 AND id = ANY($3::int[]) ORDER BY id ASC`
       : `SELECT * FROM cantera_companies WHERE batch_id=$1 AND user_id=$2 AND paso1_estado <> 'descartado' AND paso2_estado='pendiente' ORDER BY id ASC`,
     Array.isArray(companyIds) && companyIds.length ? [batchId, uid, companyIds] : [batchId, uid]);
 

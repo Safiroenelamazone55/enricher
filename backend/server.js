@@ -7081,9 +7081,14 @@ app.post('/api/cantera/batches/:id/run-validacion', requireAuth, async (req, res
   const batchId = req.params.id;
   const companyIds = Array.isArray(req.body?.company_ids) ? req.body.company_ids.map(Number).filter(Boolean) : [];
   if (_canteraJobs.get(batchId)?.running) return res.status(409).json({ error: 'Ya hay una investigación en curso para este borrador' });
+  // Selección explícita (company_ids) procesa exactamente lo que se marcó,
+  // sin filtrar por paso1_estado — pedido explícito 2026-09-07: "no importa
+  // si es descartado en el paso 1... si quiero omitirlas, las ocultaría con
+  // el filtro [antes de seleccionar]". El filtro de paso1 solo se aplica al
+  // modo automático (sin selección, corre todo el borrador pendiente).
   const { rows: pend } = await pool.query(
     companyIds.length
-      ? `SELECT COUNT(*)::int AS n FROM cantera_companies WHERE batch_id=$1 AND user_id=$2 AND paso1_estado <> 'descartado' AND id = ANY($3::int[])`
+      ? `SELECT COUNT(*)::int AS n FROM cantera_companies WHERE batch_id=$1 AND user_id=$2 AND id = ANY($3::int[])`
       : `SELECT COUNT(*)::int AS n FROM cantera_companies WHERE batch_id=$1 AND user_id=$2 AND paso1_estado <> 'descartado' AND paso2_estado='pendiente'`,
     companyIds.length ? [batchId, uid, companyIds] : [batchId, uid]);
   const total = pend[0]?.n || 0;
