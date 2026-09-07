@@ -5745,9 +5745,14 @@ const CanteraModule = (() => {
       </div>` : ''}
 
       ${_step === 4 ? `<div class="cant-section">
-        ${_coSel.size || _onlyFailed || _tierFiltro.size || _prioFiltro.size || _minContactos || _sinPrioridad || _auditoriaFiltro || _paisFiltro.size || _industriaFiltro.size || _tamanoFiltro.size || _domFaltante || _paso2DescFiltro.size ? `<div class="cant-results-bar">
+        ${(() => {
+          const hasFiltros = _onlyFailed || _tierFiltro.size || _prioFiltro.size || _minContactos || _sinPrioridad || _auditoriaFiltro || _paisFiltro.size || _industriaFiltro.size || _tamanoFiltro.size || _domFaltante || _paso2DescFiltro.size;
+          if (!_coSel.size && !hasFiltros) return '';
+          return `<div class="cant-results-bar">
           <span class="cant-count">${_coSel.size ? `${_coSel.size} seleccionada(s)` : ''}${_onlyFailed ? ' · viendo solo descartadas (Paso 1)' : ''}${_tierFiltro.size ? ` · Tier: ${[..._tierFiltro].join(', ')}` : ''}${_prioFiltro.size ? ` · Prioridad: ${[..._prioFiltro].join(', ')}` : ''}${_minContactos ? ` · ${_minContactos}+ contactos` : ''}${_sinPrioridad ? ' · sin priorizar' : ''}${_auditoriaFiltro ? ` · auditoría: ${_auditoriaFiltro === 'sin_auditar' ? 'sin auditar' : _auditoriaFiltro === 'de_acuerdo' ? 'confirmadas' : 'en desacuerdo'}` : ''}${_paisFiltro.size ? ` · País: ${[..._paisFiltro].join(', ')}` : ''}${_industriaFiltro.size ? ` · Industria: ${[..._industriaFiltro].join(', ')}` : ''}${_tamanoFiltro.size ? ` · Tamaño: ${[..._tamanoFiltro].join(', ')}` : ''}${_domFaltante ? ' · sin dominio' : ''}${_paso2DescFiltro.size ? ` · Paso 2 descartado: ${[..._paso2DescFiltro].map(v => v === 'descartado' ? 'IA' : 'manual').join(', ')}` : ''}</span>
-        </div>` : ''}
+          ${hasFiltros ? `<button class="btn btn--ghost btn--sm" onclick="CanteraModule.resetFiltros()">Limpiar filtros</button>` : ''}
+        </div>`;
+        })()}
         ${_jobRunning ? `<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
           <span class="cant-hint" style="margin:0;white-space:nowrap">Investigando ${_jobProgress.done} de ${_jobProgress.total}…</span>
           <div class="cant-progress" style="flex:1;max-width:200px"><div class="cant-progress__bar" style="width:${_jobProgress.total ? Math.round((_jobProgress.done / _jobProgress.total) * 100) : 0}%"></div></div>
@@ -6280,6 +6285,16 @@ const CanteraModule = (() => {
   function toggleTamanoFiltro(v) { if (_tamanoFiltro.has(v)) _tamanoFiltro.delete(v); else _tamanoFiltro.add(v); _cantPageIdx = 0; _paint(); }
   function toggleDomFaltante() { _domFaltante = !_domFaltante; _cantPageIdx = 0; _paint(); }
   function togglePaso2DescFiltro(v) { if (_paso2DescFiltro.has(v)) _paso2DescFiltro.delete(v); else _paso2DescFiltro.add(v); _cantPageIdx = 0; _paint(); }
+  // Botón "Limpiar filtros" junto a los chips — pedido explícito 2026-09-07:
+  // "lo haría más práctico" en vez de tener que desmarcar cada uno a mano.
+  // NO toca la selección (_coSel): son dos cosas distintas.
+  function resetFiltros() {
+    _onlyFailed = false; _tierFiltro = new Set(); _prioFiltro = new Set();
+    _minContactos = 0; _sinPrioridad = false; _auditoriaFiltro = '';
+    _paisFiltro = new Set(); _industriaFiltro = new Set(); _tamanoFiltro = new Set();
+    _domFaltante = false; _paso2DescFiltro = new Set();
+    _cantPageIdx = 0; _paint();
+  }
   let _expanded = new Set();
   let _contactsByCompany = {};
   // Bug encontrado 2026-09-05 al verificar el reordenamiento de columnas: el guard
@@ -6696,7 +6711,7 @@ const CanteraModule = (() => {
   }
 
   return { render, open, openCreate, backToList, saveFiltros, runFiltros, toggleFailed, toggleTierFiltro, togglePrioFiltro, setMinContactos, toggleSinPrioridad, setAuditoriaFiltro,
-    togglePaisFiltro, toggleIndustriaFiltro, toggleTamanoFiltro, toggleDomFaltante, togglePaso2DescFiltro, moreMenu, remove, saveAsTemplate,
+    togglePaisFiltro, toggleIndustriaFiltro, toggleTamanoFiltro, toggleDomFaltante, togglePaso2DescFiltro, resetFiltros, moreMenu, remove, saveAsTemplate,
     toggleExpand, addTier, removeTier, setTierField, addPuesto, removePuesto, setPuestoField, saveCriterio, setMotorIA, runValidacion,
     openPromote, closePromote, doPromote, openSendSeq, closeSendSeq, doSendSeq,
     openScope, closeScope, scopeMaybeCreate, saveScope, setStep,
@@ -6950,6 +6965,13 @@ const CanteraMesaModule = (() => {
   function setMinContactos(n) { _minContactos = _minContactos === n ? 0 : n; _page = 0; _refresh(); }
   function toggleSinPrioridad() { _sinPrioridad = !_sinPrioridad; _page = 0; _refresh(); }
   function setAuditoriaFiltro(v) { _auditoriaFiltro = _auditoriaFiltro === v ? '' : v; _page = 0; _refresh(); }
+  // Botón "Limpiar filtros" — pedido explícito 2026-09-07, mismo patrón que
+  // Resultados. NO toca la selección (_coSel).
+  function resetFiltros() {
+    _onlyFailed = false; _tierFiltro = new Set(); _prioFiltro = new Set();
+    _minContactos = 0; _sinPrioridad = false; _auditoriaFiltro = '';
+    _page = 0; _refresh();
+  }
   function toggleCoSel(id, checked) { if (checked) _coSel.add(id); else _coSel.delete(id); _paint(); }
   function toggleCoSelAll(checked) { if (checked) _rows.forEach(c => _coSel.add(c.id)); else _rows.forEach(c => _coSel.delete(c.id)); _paint(); }
   function _groupByBatch(ids) {
@@ -7411,9 +7433,13 @@ const CanteraMesaModule = (() => {
         ${_filterSelect('campana', opts.campanas, _filtro.campana)}
         ${_filterSelect('secuencia', opts.secuencias, _filtro.secuencia)}
         ${_coSel.size ? `<span class="cant-count">${_coSel.size} seleccionada(s)</span>` : ''}
+        ${_onlyFailed ? `<span class="cant-count">· viendo solo descartadas (Paso 1)</span>` : ''}
+        ${_tierFiltro.size ? `<span class="cant-count">· Tier: ${[..._tierFiltro].join(', ')}</span>` : ''}
+        ${_prioFiltro.size ? `<span class="cant-count">· Prioridad: ${[..._prioFiltro].join(', ')}</span>` : ''}
         ${_minContactos ? `<span class="cant-count">· ${_minContactos}+ contactos</span>` : ''}
         ${_sinPrioridad ? `<span class="cant-count">· sin priorizar</span>` : ''}
         ${_auditoriaFiltro ? `<span class="cant-count">· auditoría: ${_auditoriaFiltro === 'sin_auditar' ? 'sin auditar' : _auditoriaFiltro === 'de_acuerdo' ? 'confirmadas' : 'en desacuerdo'}</span>` : ''}
+        ${_onlyFailed || _tierFiltro.size || _prioFiltro.size || _minContactos || _sinPrioridad || _auditoriaFiltro ? `<button class="btn btn--ghost btn--sm" onclick="CanteraMesaModule.resetFiltros()">Limpiar filtros</button>` : ''}
       </div>
       <div class="lm-dt-wrap dg-dt-wrap cant-tablewrap"><table class="clients-table dg-table sel-on cant-restbl" style="table-layout:auto">
         <thead><tr>
@@ -7425,7 +7451,7 @@ const CanteraMesaModule = (() => {
       ${_pagerHtml()}`;
   }
 
-  return { render, setFiltro, setPageSize, goPage, toggleFailed, toggleTierFiltro, togglePrioFiltro, setMinContactos, toggleSinPrioridad, setAuditoriaFiltro,
+  return { render, setFiltro, setPageSize, goPage, toggleFailed, toggleTierFiltro, togglePrioFiltro, setMinContactos, toggleSinPrioridad, setAuditoriaFiltro, resetFiltros,
     toggleCoSel, toggleCoSelAll, toggleExpand, setContactPrioridad, toggleCol, menu,
     runClean, runEnrich, runValidacion, _confirmRevalidar, openAudit,
     openPromote, doPromote, openSendSeq, doSendSeq, openManualValidation, saveManualValidation, copyManualData, copyManualInstruccion, quitarValidacionManual };
