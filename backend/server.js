@@ -7007,7 +7007,7 @@ app.get('/api/cantera/config-status', requireAuth, async (req, res) => {
     braveKeyConfigured: !!process.env.BRAVE_API_KEY,
     kimiModel: 'moonshotai/kimi-k3',
     geminiKeyConfigured: !!process.env.GEMINI_API_KEY,
-    geminiModel: 'gemini-3-pro-preview',
+    geminiModel: 'gemini-3.1-pro-preview',
   });
 });
 

@@ -29,7 +29,7 @@ const RATES = {
   'claude-sonnet-5': { in: 3, out: 15 },
   'claude-opus-5': { in: 5, out: 25 },
   'claude-haiku-4-5': { in: 1, out: 5 },
-  'gemini-3-pro-preview': { in: 2, out: 12 },
+  'gemini-3.1-pro-preview': { in: 2, out: 12 },
   'gemini-3.7-flash': { in: 0.75, out: 3.75 },
   'gemini-3.5-flash': { in: 1.5, out: 9 },
 };
@@ -292,7 +292,11 @@ async function _validateCompanyKimi(batch, company, contactos, apiKeyOverride) {
 // servidor) — no necesita nuestra búsqueda propia. Precio de referencia:
 // $2/$12 por millón de tokens (confirmado 2026-09), calculado aquí mismo
 // porque no viene en la respuesta de la API.
-const GEMINI_MODEL = 'gemini-3-pro-preview';
+// gemini-3-pro-preview fue retirado por Google (confirmado 2026-09-07 por el
+// propio error 404 de la API, que recomendó explícitamente este reemplazo) —
+// si vuelve a pasar con otro modelo, el error real de Google siempre queda
+// visible en motivo_descarte, nunca se traga en silencio.
+const GEMINI_MODEL = 'gemini-3.1-pro-preview';
 async function _validateCompanyGemini(batch, company, contactos, apiKeyOverride, modelOverride) {
   const apiKey = apiKeyOverride || process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('Falta GEMINI_API_KEY (global o por cliente en Configuración)');
