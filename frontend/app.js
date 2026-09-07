@@ -5952,7 +5952,7 @@ const CanteraModule = (() => {
         ${item(`${_domFaltante ? '✓ ' : ''}Ver solo sin dominio`, 'CanteraModule.toggleDomFaltante()')}
       </div>
       <div class="cp-mark-menu__sep"></div>
-      <div class="cp-mark-menu__list">${sub('Filtrar por Tier', tierPanel)}${sub('Filtrar por prioridad', prioPanel)}${sub('Filtrar por Nº de contactos', numContactosPanel)}${sub('Filtrar por Auditoría', auditoriaPanel)}${sub('Filtrar por Paso 2 descartado', paso2DescPanel)}${sub('Filtrar por País', paisPanel, true)}${sub('Filtrar por Industria', industriaPanel, true)}${sub('Filtrar por Tamaño', tamanoPanel, true)}</div>
+      <div class="cp-mark-menu__list">${sub('Filtrar', `<div class="cp-mark-menu__list">${sub('Tier', tierPanel)}${sub('Prioridad', prioPanel)}${sub('Nº de contactos', numContactosPanel)}${sub('Auditoría', auditoriaPanel)}${sub('Paso 2 descartado', paso2DescPanel)}${sub('País', paisPanel, true)}${sub('Industria', industriaPanel, true)}${sub('Tamaño', tamanoPanel, true)}</div>`)}</div>
       <div class="cp-mark-menu__sep"></div>
       <div class="cp-mark-menu__list">${sub('Elegir columnas visibles', colsPanel, true)}</div>
       ${calificadas || _coSel.size ? `<div class="cp-mark-menu__sep"></div><div class="cp-mark-menu__list">
@@ -7052,7 +7052,7 @@ const CanteraMesaModule = (() => {
       <div class="cp-mark-menu__sep"></div>
       <div class="cp-mark-menu__list">${item('Investigación profunda (IA)', 'CanteraMesaModule.runValidacion()')}${item('Auditar muestra (IA)', 'CanteraMesaModule.openAudit()')}${item(`${_onlyFailed ? '✓ ' : ''}Ver solo descartadas`, 'CanteraMesaModule.toggleFailed()')}</div>
       <div class="cp-mark-menu__sep"></div>
-      <div class="cp-mark-menu__list">${sub('Filtrar por Tier', tierPanel)}${sub('Filtrar por prioridad', prioPanel)}${sub('Filtrar por Nº de contactos', numContactosPanel)}${sub('Filtrar por Auditoría', auditoriaPanel)}</div>
+      <div class="cp-mark-menu__list">${sub('Filtrar', `<div class="cp-mark-menu__list">${sub('Tier', tierPanel)}${sub('Prioridad', prioPanel)}${sub('Nº de contactos', numContactosPanel)}${sub('Auditoría', auditoriaPanel)}</div>`)}</div>
       <div class="cp-mark-menu__sep"></div>
       <div class="cp-mark-menu__list">${sub('Elegir columnas visibles', colsPanel, true)}</div>
       ${calificadas ? `<div class="cp-mark-menu__sep"></div><div class="cp-mark-menu__list">${item(`Mover al CRM (${calificadas})`, 'CanteraMesaModule.openPromote()')}</div>` : ''}`;
