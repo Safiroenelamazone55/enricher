@@ -7418,7 +7418,7 @@ const CanteraConfigModule = (() => {
   // usa el modelo fijo de siempre para ese proveedor. Kimi solo tiene un
   // modelo hoy (kimi-k3), no se ofrece selector para ese caso.
   const MODELOS = {
-    claude: [['', 'Por defecto (Claude Sonnet 5)'], ['claude-sonnet-5', 'Claude Sonnet 5'], ['claude-opus-5', 'Claude Opus 5 (más caro, más capaz)']],
+    claude: [['', 'Por defecto (Claude Sonnet 5 — ya es el Sonnet más barato)'], ['claude-sonnet-5', 'Claude Sonnet 5'], ['claude-opus-5', 'Claude Opus 5 (más caro, más capaz)'], ['claude-haiku-4-5', 'Claude Haiku 4.5 (más barato, menos profundo)']],
     gemini: [['', 'Por defecto (Gemini 3.1 Pro)'], ['gemini-3.1-pro-preview', 'Gemini 3.1 Pro'], ['gemini-3.7-flash', 'Gemini 3.7 Flash (más barato y rápido)'], ['gemini-3.5-flash', 'Gemini 3.5 Flash']],
     kimi: [['', 'Por defecto (Kimi-K3)']],
   };

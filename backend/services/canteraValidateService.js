@@ -205,10 +205,15 @@ async function _validateCompanyClaude(batch, company, contactos, apiKeyOverride,
   const system = _buildSystemPrompt(batch);
   const user = _buildUserPrompt(company, contactos);
 
+  // Haiku no soporta "tool calling programático" — la versión nueva de
+  // web_search exige declarar allowed_callers:["direct"] en ese caso
+  // (confirmado 2026-09-07), si no la API la rechaza con un error de validación.
+  const webSearchTool = { type: 'web_search_20260209', name: 'web_search', max_uses: 20 };
+  if (model.includes('haiku')) webSearchTool.allowed_callers = ['direct'];
   const resp = await client.messages.create({
     model, max_tokens: 8000, system,
     thinking: { type: 'adaptive' },
-    tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: 20 }],
+    tools: [webSearchTool],
     messages: [{ role: 'user', content: user }],
   });
   const u = _sumUsage(resp.usage);
