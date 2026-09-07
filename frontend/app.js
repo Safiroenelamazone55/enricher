@@ -5677,7 +5677,10 @@ const CanteraModule = (() => {
             ${_coSel.size ? `<button class="btn btn--primary btn--sm" onclick="CanteraModule.openSendSeq()">Enviar a secuencia (${_coSel.size})</button>` : ''}
           </div>
         </div>` : ''}
-        ${_jobRunning ? `<p class="cant-hint">Investigando ${_jobProgress.done} de ${_jobProgress.total}… puedes seguir en el sistema, esto sigue en segundo plano.</p>` : ''}
+        ${_jobRunning ? `<div style="margin-bottom:10px">
+          <p class="cant-hint" style="margin:0 0 4px">Investigando ${_jobProgress.done} de ${_jobProgress.total}… puedes seguir en el sistema, esto sigue en segundo plano.</p>
+          <div class="cant-progress"><div class="cant-progress__bar" style="width:${_jobProgress.total ? Math.round((_jobProgress.done / _jobProgress.total) * 100) : 0}%"></div></div>
+        </div>` : ''}
         <div class="lm-dt-wrap dg-dt-wrap cant-tablewrap"><table class="clients-table dg-table sel-on cant-restbl" style="table-layout:auto">
           <thead><tr><th class="lm-ck-col"><input type="checkbox" class="lm-ck" ${_companies.length && _companies.every(c => _coSel.has(c.id)) ? 'checked' : ''} onclick="CanteraModule.toggleCoSelAll(this.checked)"></th><th class="dg-cell--frozen" id="cant-th-nombre">Nombre<span class="cant-colresize" onmousedown="CanteraModule.startColResize(event)"></span></th>${visCols.map(col => `<th>${esc(col.label)}</th>`).join('')}<th>Contacto</th><th>Puesto</th><th>Prioridad</th></tr></thead>
           <tbody>${rows || `<tr><td colspan="${emptyColspan}" class="cp-empty2">Importa un archivo para empezar.</td></tr>`}</tbody>
@@ -6855,6 +6858,21 @@ const CanteraMesaModule = (() => {
     setTimeout(() => { document.addEventListener('click', onDoc); window.addEventListener('scroll', onScroll, true); }, 0);
   }
 
+  // Barra de progreso junto al "⋮" — pedido explícito 2026-09-07: "así se
+  // como va avanzando" — visible mientras corre Limpiar/Enriquecer/
+  // Investigación IA, sin tener que esperar el aviso final. Cruza borradores
+  // (un grupo por borrador de origen de la selección), así que además del
+  // % de la corrida actual muestra en cuál borrador va.
+  let _bulkProgress = null; // { label, groupIdx, groupTotal, done, total }
+  function _bulkProgressHtml() {
+    if (!_bulkProgress) return '';
+    const { label, groupIdx, groupTotal, done, total } = _bulkProgress;
+    const pct = total ? Math.round((done / total) * 100) : 0;
+    return `<div style="display:flex;flex-direction:column;gap:3px;min-width:180px">
+      <span class="cant-hint" style="margin:0">${esc(label)}${groupTotal > 1 ? ` · borrador ${groupIdx}/${groupTotal}` : ''} (${done}/${total})</span>
+      <div class="cant-progress"><div class="cant-progress__bar" style="width:${pct}%"></div></div>
+    </div>`;
+  }
   // Limpiar/Enriquecer — simplificado: sin vista previa (aplica directo por
   // borrador), para no reconstruir esa UI multiplicada por cada borrador de
   // origen. Se agrupa la selección, se corre en cada borrador, y se suma.
@@ -6862,26 +6880,31 @@ const CanteraMesaModule = (() => {
     if (!_coSel.size) { showBanner('Marca al menos una empresa primero', 'info'); return; }
     const endpoint = kind === 'clean' ? 'bulk-clean' : 'bulk-enrich';
     const fields = field ? [field] : Object.keys(kind === 'clean' ? MESA_CLEAN_LABELS : MESA_ENRICH_LABELS);
-    const groups = _groupByBatch([..._coSel]);
+    const groups = Object.entries(_groupByBatch([..._coSel]));
     let totalApplied = 0, batchesTocados = 0;
+    const label = kind === 'clean' ? 'Limpiando' : 'Enriqueciendo';
     try {
-      for (const [batchId, ids] of Object.entries(groups)) {
+      let groupIdx = 0;
+      for (const [batchId, ids] of groups) {
+        groupIdx++;
         const res = await apiFetch(`${API}/cantera/batches/${batchId}/${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entity: 'companies', ids, fields, apply: true }) });
         const d = await res.json();
         if (!res.ok || !d.started) continue;
         // Job en segundo plano por borrador — se espera a que termine antes de seguir con el próximo.
-        let st;
+        let st = { running: true, done: 0, total: d.total || 0 };
         do {
+          _bulkProgress = { label, groupIdx, groupTotal: groups.length, done: st.done, total: st.total }; _paint();
           await new Promise(r => setTimeout(r, 1200));
           st = await (await apiFetch(`${API}/cantera/batches/${batchId}/bulk-status`)).json();
         } while (st.running);
         totalApplied += st.applied || 0;
         batchesTocados++;
       }
+      _bulkProgress = null;
       showBanner(`✓ ${totalApplied} campo(s) actualizado(s) en ${batchesTocados} borrador(es)`, 'success');
       _coSel = new Set();
       await _refresh();
-    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+    } catch (e) { _bulkProgress = null; showBanner('Error: ' + e.message, 'error'); _paint(); }
   }
   function runClean(field) { _runBulk('clean', field); }
   function runEnrich(field) { _runBulk('enrich', field); }
@@ -6914,24 +6937,28 @@ const CanteraMesaModule = (() => {
   function _confirmRevalidar() { _runValidacionExec(_pendingRevalIds); _pendingRevalIds = []; }
   function openAudit() { CanteraAuditModule.open({ ..._filtro }, _refresh); }
   async function _runValidacionExec(ids) {
-    const groups = _groupByBatch(ids);
+    const groups = Object.entries(_groupByBatch(ids));
     let totalOk = 0, totalErr = 0;
     try {
-      for (const [batchId, batchIds] of Object.entries(groups)) {
+      let groupIdx = 0;
+      for (const [batchId, batchIds] of groups) {
+        groupIdx++;
         const res = await apiFetch(`${API}/cantera/batches/${batchId}/run-validacion`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ company_ids: batchIds }) });
         const d = await res.json();
         if (!res.ok || !d.started) continue;
-        let st;
+        let st = { running: true, done: 0, total: d.total || 0 };
         do {
+          _bulkProgress = { label: 'Investigando', groupIdx, groupTotal: groups.length, done: st.done, total: st.total }; _paint();
           await new Promise(r => setTimeout(r, 3000));
           st = await (await apiFetch(`${API}/cantera/batches/${batchId}/validacion-status`)).json();
         } while (st.running);
         totalOk += (st.done || 0) - (st.errores || 0); totalErr += st.errores || 0;
       }
+      _bulkProgress = null;
       showBanner(`✓ Investigación terminada · ${totalOk} ok · ${totalErr} error(es)`, 'success');
       _coSel = new Set();
       await _refresh();
-    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+    } catch (e) { _bulkProgress = null; showBanner('Error: ' + e.message, 'error'); _paint(); }
   }
 
   // Mover al CRM / Enviar a secuencia — agrupado por borrador, mismo modal
@@ -7152,7 +7179,10 @@ const CanteraMesaModule = (() => {
       return main + (sub || `<tr class="cant-subrow"><td class="lm-ck-col"></td><td class="dg-cell--frozen"></td><td colspan="${emptyColspan}" class="cp-empty2">Sin contactos</td></tr>`);
     }).join('');
     return `<div class="lm-sec-head lm-sec-head--compact"><div><h2 class="lm-sec-title">Mesa de trabajo</h2></div>
-        <button class="dg-kebab" onclick="CanteraMesaModule.menu(event)" title="Acciones">⋮</button>
+        <div style="display:flex;align-items:center;gap:12px">
+          ${_bulkProgressHtml()}
+          <button class="dg-kebab" onclick="CanteraMesaModule.menu(event)" title="Acciones">⋮</button>
+        </div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px">
         ${_filterSelect('cliente', opts.clientes, _filtro.cliente)}
