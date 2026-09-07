@@ -312,7 +312,7 @@ async function _validateCompanyGemini(batch, company, contactos, apiKeyOverride,
       tools: [{ google_search: {} }],
     }),
   });
-  if (!resp.ok) throw new Error(`Gemini API error ${resp.status}: ${(await resp.text()).slice(0, 300)}`);
+  if (!resp.ok) throw new Error(`Gemini API error ${resp.status}: ${(await resp.text()).slice(0, 900)}`);
   const data = await resp.json();
   const texto = (data.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('\n').trim();
   if (!texto) throw new Error('Gemini no devolvió texto — posible bloqueo de contenido o error silencioso: ' + JSON.stringify(data).slice(0, 300));
@@ -380,7 +380,7 @@ async function runBatchValidation(pool, uid, batchId, { onProgress, companyIds }
       done++;
     } catch (e) {
       errores++;
-      await pool.query(`UPDATE cantera_companies SET paso2_estado='error', motivo_descarte=$1 WHERE id=$2`, [String(e.message).slice(0, 400), company.id]);
+      await pool.query(`UPDATE cantera_companies SET paso2_estado='error', motivo_descarte=$1 WHERE id=$2`, [String(e.message).slice(0, 1000), company.id]);
     }
     if (onProgress) onProgress({ done: done + errores, total: companies.length });
   }
