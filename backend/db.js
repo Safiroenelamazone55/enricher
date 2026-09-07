@@ -2037,6 +2037,32 @@ async function initDb() {
     // ambos — ver canteraValidateService.js.
     await pool.query(`ALTER TABLE cantera_batches ADD COLUMN IF NOT EXISTS motor_ia TEXT NOT NULL DEFAULT 'claude';`);
 
+    // Claves de IA por cliente outbound — pedido explícito 2026-09-06: "no
+    // quiero estarlo actualizando directamente aquí [en el código]... quiero
+    // crear varios en Gemini por proyecto, uno para cada cliente" (cada
+    // proyecto de Google tiene su propia cuota gratis mensual, separarlos por
+    // cliente evita que un cliente agote la cuota de otro). Una fila por
+    // combinación cliente+proveedor; si un borrador no tiene un cliente
+    // asignado o el cliente no tiene una clave configurada para el motor
+    // elegido, el motor usa la variable de entorno global como respaldo (no
+    // rompe lo que ya funcionaba antes de este sistema).
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS cantera_provider_keys (
+        id                 SERIAL        PRIMARY KEY,
+        user_id            INTEGER       NOT NULL,
+        outbound_client_id INTEGER       NOT NULL REFERENCES outbound_clients(id) ON DELETE CASCADE,
+        provider           TEXT          NOT NULL,              -- 'claude' | 'kimi' | 'gemini'
+        api_key            TEXT          NOT NULL DEFAULT '',
+        limite_usd         NUMERIC       NOT NULL DEFAULT 0,     -- 0 = sin límite
+        gasto_acumulado    NUMERIC       NOT NULL DEFAULT 0,
+        activo             BOOLEAN       NOT NULL DEFAULT true,
+        created_at         TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+        updated_at         TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+        UNIQUE (outbound_client_id, provider)
+      );
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS cantera_provider_keys_client_idx ON cantera_provider_keys (outbound_client_id);`);
+
     // Secuencia opcional del borrador — mismo criterio que Cliente/Campaña, que ya
     // existían: es solo una anotación en esta etapa (no enrola nada, no envía nada a
     // Outreach) hasta que las empresas se promuevan al CRM. Pedido explícito

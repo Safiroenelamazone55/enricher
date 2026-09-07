@@ -149,17 +149,45 @@ function _buildUserPrompt(company, contactos) {
 // en el código. El prompt fijo (_buildSystemPrompt) y el formato de salida
 // son EXACTAMENTE los mismos para cualquier motor — lo único que cambia es
 // quién razona y quién ejecuta la búsqueda real en internet.
+//
+// La CLAVE a usar es por cliente outbound (cantera_provider_keys, pedido
+// explícito 2026-09-06: "no quiero estarlo actualizando aquí... quiero crear
+// varios en Gemini por proyecto, uno para cada cliente"). Si el borrador no
+// tiene cliente asignado o el cliente no configuró una clave para ese motor,
+// se usa la variable de entorno global — el comportamiento de siempre sigue
+// intacto para quien no use este sistema nuevo.
+async function _resolveProviderKey(pool, uid, batch, motor) {
+  if (!batch.outbound_client_id) return null;
+  const { rows } = await pool.query(
+    `SELECT * FROM cantera_provider_keys WHERE user_id=$1 AND outbound_client_id=$2 AND provider=$3 AND activo=true`,
+    [uid, batch.outbound_client_id, motor]);
+  return rows[0] || null;
+}
+async function _registrarGasto(pool, keyRow, cost) {
+  if (!keyRow || !cost) return;
+  await pool.query(`UPDATE cantera_provider_keys SET gasto_acumulado = gasto_acumulado + $1 WHERE id=$2`, [cost, keyRow.id]);
+}
 async function validateCompany(pool, uid, batch, company, contactos) {
-  const motor = batch.motor_ia === 'kimi' ? 'kimi' : 'claude';
-  return motor === 'kimi' ? _validateCompanyKimi(batch, company, contactos) : _validateCompanyClaude(batch, company, contactos);
+  const motor = ['kimi', 'gemini'].includes(batch.motor_ia) ? batch.motor_ia : 'claude';
+  const keyRow = await _resolveProviderKey(pool, uid, batch, motor);
+  if (keyRow && keyRow.limite_usd > 0 && Number(keyRow.gasto_acumulado) >= Number(keyRow.limite_usd)) {
+    throw new Error(`Límite de $${keyRow.limite_usd} USD alcanzado para este cliente en ${motor} — sube el límite en Configuración o cambia de motor.`);
+  }
+  const apiKey = keyRow?.api_key || '';
+  const result = motor === 'kimi' ? await _validateCompanyKimi(batch, company, contactos, apiKey)
+    : motor === 'gemini' ? await _validateCompanyGemini(batch, company, contactos, apiKey)
+    : await _validateCompanyClaude(batch, company, contactos, apiKey);
+  await _registrarGasto(pool, keyRow, result.cost);
+  return result;
 }
 
-async function _validateCompanyClaude(batch, company, contactos) {
+async function _validateCompanyClaude(batch, company, contactos, apiKeyOverride) {
   let Anthropic;
   try { Anthropic = require('@anthropic-ai/sdk'); }
   catch { throw new Error('Falta @anthropic-ai/sdk (npm install en backend)'); }
-  if (!process.env.ANTHROPIC_API_KEY) throw new Error('Falta ANTHROPIC_API_KEY en el entorno');
-  const client = new Anthropic();
+  const apiKey = apiKeyOverride || process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error('Falta ANTHROPIC_API_KEY (global o por cliente en Configuración)');
+  const client = new Anthropic({ apiKey });
 
   const system = _buildSystemPrompt(batch);
   const user = _buildUserPrompt(company, contactos);
@@ -186,17 +214,18 @@ async function _validateCompanyClaude(batch, company, contactos) {
 // en un ciclo manual de ida-y-vuelta (formato estándar de function calling
 // tipo OpenAI: choices[0].message.tool_calls / role:"tool"). Mismo prompt
 // fijo, mismo límite de búsquedas (20) y mismo formato de salida que Claude.
-async function _nvidiaChat(messages, tools) {
-  if (!process.env.NVIDIA_API_KEY) throw new Error('Falta NVIDIA_API_KEY en el entorno');
+async function _nvidiaChat(messages, tools, apiKey) {
+  if (!apiKey) throw new Error('Falta NVIDIA_API_KEY (global o por cliente en Configuración)');
   const resp = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
     method: 'POST',
-    headers: { 'Authorization': `Bearer ${process.env.NVIDIA_API_KEY}`, 'Content-Type': 'application/json' },
+    headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ model: NVIDIA_MODEL, messages, tools, tool_choice: 'auto', max_tokens: 8000, temperature: 1, reasoning_effort: 'max' }),
   });
   if (!resp.ok) throw new Error(`NVIDIA API error ${resp.status}: ${(await resp.text()).slice(0, 300)}`);
   return resp.json();
 }
-async function _validateCompanyKimi(batch, company, contactos) {
+async function _validateCompanyKimi(batch, company, contactos, apiKeyOverride) {
+  const apiKey = apiKeyOverride || process.env.NVIDIA_API_KEY;
   const system = _buildSystemPrompt(batch);
   const user = _buildUserPrompt(company, contactos);
   const tools = [{
@@ -212,7 +241,7 @@ async function _validateCompanyKimi(batch, company, contactos) {
   const MAX_ROUNDS = 10, MAX_SEARCHES = 20;
   let finalText = '';
   for (let round = 0; round < MAX_ROUNDS; round++) {
-    const resp = await _nvidiaChat(messages, tools);
+    const resp = await _nvidiaChat(messages, tools, apiKey);
     const choice = resp.choices?.[0];
     if (!choice) throw new Error('Respuesta vacía de NVIDIA/Kimi-K3');
     totalIn += resp.usage?.prompt_tokens || 0;
@@ -243,6 +272,39 @@ async function _validateCompanyKimi(batch, company, contactos) {
   // Cuando se confirme el precio real, agregarlo a RATES y calcular aquí igual
   // que con Claude.
   return { parsed, cost: 0, model: NVIDIA_MODEL, inputTokens: totalIn, outputTokens: totalOut };
+}
+
+// Gemini 3 Pro — a diferencia de Kimi, SÍ trae búsqueda real integrada
+// (herramienta "google_search", la ejecuta Google mismo del lado del
+// servidor) — no necesita nuestra búsqueda propia. Precio de referencia:
+// $2/$12 por millón de tokens (confirmado 2026-09), calculado aquí mismo
+// porque no viene en la respuesta de la API.
+const GEMINI_MODEL = 'gemini-3-pro-preview';
+const GEMINI_RATE = { in: 2, out: 12 };
+async function _validateCompanyGemini(batch, company, contactos, apiKeyOverride) {
+  const apiKey = apiKeyOverride || process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error('Falta GEMINI_API_KEY (global o por cliente en Configuración)');
+  const system = _buildSystemPrompt(batch);
+  const user = _buildUserPrompt(company, contactos);
+  const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`, {
+    method: 'POST',
+    headers: { 'x-goog-api-key': apiKey, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: system }] },
+      contents: [{ parts: [{ text: user }] }],
+      tools: [{ google_search: {} }],
+    }),
+  });
+  if (!resp.ok) throw new Error(`Gemini API error ${resp.status}: ${(await resp.text()).slice(0, 300)}`);
+  const data = await resp.json();
+  const texto = (data.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('\n').trim();
+  if (!texto) throw new Error('Gemini no devolvió texto — posible bloqueo de contenido o error silencioso: ' + JSON.stringify(data).slice(0, 300));
+  let parsed;
+  try { parsed = JSON.parse(_extractJson(texto)); } catch (e) { throw new Error('El modelo no devolvió JSON válido: ' + e.message); }
+  const inTok = data.usageMetadata?.promptTokenCount || 0;
+  const outTok = data.usageMetadata?.candidatesTokenCount || 0;
+  const cost = (inTok * GEMINI_RATE.in + outTok * GEMINI_RATE.out) / 1e6;
+  return { parsed, cost, model: GEMINI_MODEL, inputTokens: inTok, outputTokens: outTok };
 }
 
 // Corre el paso 2 sobre las empresas del batch que siguen pendientes de

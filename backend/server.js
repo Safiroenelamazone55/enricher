@@ -6463,7 +6463,7 @@ app.get('/api/cantera/batches/:id', requireAuth, async (req, res) => {
 });
 app.put('/api/cantera/batches/:id', requireAuth, async (req, res) => {
   const b = req.body || {};
-  const motorIa = b.motor_ia === 'kimi' ? 'kimi' : 'claude';
+  const motorIa = ['kimi', 'gemini'].includes(b.motor_ia) ? b.motor_ia : 'claude';
   try {
     const { rows } = await pool.query(`
       UPDATE cantera_batches SET
@@ -7006,7 +7006,62 @@ app.get('/api/cantera/config-status', requireAuth, async (req, res) => {
     nvidiaKeyConfigured: !!process.env.NVIDIA_API_KEY,
     braveKeyConfigured: !!process.env.BRAVE_API_KEY,
     kimiModel: 'moonshotai/kimi-k3',
+    geminiKeyConfigured: !!process.env.GEMINI_API_KEY,
+    geminiModel: 'gemini-3-pro-preview',
   });
+});
+
+// Claves de IA por cliente outbound — pedido explícito 2026-09-06: para poder
+// crear una key de Gemini (o Claude/Kimi) distinta por cada cliente, con su
+// propio límite de gasto en USD, sin tocar código ni el .env del servidor
+// cada vez que cambia. Un borrador usa la clave del cliente que tiene
+// asignado; si no hay una configurada, cae de vuelta a la variable de
+// entorno global (comportamiento de antes de este sistema, intacto).
+const _lmMask = k => k ? `••••••${String(k).slice(-4)}` : '';
+app.get('/api/cantera/provider-keys', requireAuth, async (req, res) => {
+  try {
+    const clientId = req.query.outboundClientId ? parseInt(req.query.outboundClientId) : null;
+    const { rows } = await pool.query(
+      clientId
+        ? `SELECT k.*, oc.nombre AS cliente_nombre FROM cantera_provider_keys k JOIN outbound_clients oc ON oc.id=k.outbound_client_id WHERE k.user_id=$1 AND k.outbound_client_id=$2 ORDER BY oc.nombre, k.provider`
+        : `SELECT k.*, oc.nombre AS cliente_nombre FROM cantera_provider_keys k JOIN outbound_clients oc ON oc.id=k.outbound_client_id WHERE k.user_id=$1 ORDER BY oc.nombre, k.provider`,
+      clientId ? [req.workspaceOwnerId, clientId] : [req.workspaceOwnerId]);
+    res.json(rows.map(r => ({ ...r, api_key: _lmMask(r.api_key), api_key_configurada: !!r.api_key })));
+  } catch (err) { console.error('[cantera] GET provider-keys', err.message); res.status(500).json({ error: 'Error al cargar las claves' }); }
+});
+app.post('/api/cantera/provider-keys', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId;
+  const b = req.body || {};
+  const clientId = parseInt(b.outbound_client_id);
+  const provider = ['claude', 'kimi', 'gemini'].includes(b.provider) ? b.provider : '';
+  if (!clientId || !provider) return res.status(400).json({ error: 'Elige cliente y proveedor' });
+  const limiteUsd = Number.isFinite(parseFloat(b.limite_usd)) ? Math.max(0, parseFloat(b.limite_usd)) : 0;
+  const apiKey = _lmS(b.api_key); // vacío = "no cambiar la clave guardada" cuando ya existe una fila
+  try {
+    const { rows } = await pool.query(`
+      INSERT INTO cantera_provider_keys (user_id, outbound_client_id, provider, api_key, limite_usd)
+      VALUES ($1,$2,$3,$4,$5)
+      ON CONFLICT (outbound_client_id, provider) DO UPDATE SET
+        api_key = CASE WHEN $4 <> '' THEN $4 ELSE cantera_provider_keys.api_key END,
+        limite_usd = $5, updated_at = NOW()
+      RETURNING *`,
+      [uid, clientId, provider, apiKey, limiteUsd]);
+    res.json({ ...rows[0], api_key: _lmMask(rows[0].api_key) });
+  } catch (err) { console.error('[cantera] POST provider-keys', err.message); res.status(500).json({ error: 'Error al guardar la clave' }); }
+});
+app.patch('/api/cantera/provider-keys/:id/reset-gasto', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`UPDATE cantera_provider_keys SET gasto_acumulado=0 WHERE id=$1 AND user_id=$2 RETURNING *`, [req.params.id, req.workspaceOwnerId]);
+    if (!rows.length) return res.status(404).json({ error: 'No encontrada' });
+    res.json({ ...rows[0], api_key: _lmMask(rows[0].api_key) });
+  } catch (err) { console.error('[cantera] reset-gasto', err.message); res.status(500).json({ error: 'Error al reiniciar el gasto' }); }
+});
+app.delete('/api/cantera/provider-keys/:id', requireAuth, async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(`DELETE FROM cantera_provider_keys WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId]);
+    if (!rowCount) return res.status(404).json({ error: 'No encontrada' });
+    res.json({ ok: true });
+  } catch (err) { console.error('[cantera] DELETE provider-keys', err.message); res.status(500).json({ error: 'Error al eliminar' }); }
 });
 
 // Paso 2 — investigación profunda con IA: solo sobre lo que ya pasó el paso 1.

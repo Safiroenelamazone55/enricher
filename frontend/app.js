@@ -5610,6 +5610,7 @@ const CanteraModule = (() => {
         <label class="cant-flabel" style="display:block;margin-bottom:12px">Motor de investigación profunda (IA)
           <select id="cant-motor-ia" class="form-input" onchange="CanteraModule.setMotorIA(this.value)">
             <option value="claude"${(b.motor_ia || 'claude') === 'claude' ? ' selected' : ''}>Claude (con búsqueda propia de Anthropic)</option>
+            <option value="gemini"${b.motor_ia === 'gemini' ? ' selected' : ''}>Gemini 3 Pro (con búsqueda propia de Google)</option>
             <option value="kimi"${b.motor_ia === 'kimi' ? ' selected' : ''}>Kimi-K3 vía NVIDIA (con búsqueda propia vía Brave)</option>
           </select>
         </label>
@@ -6157,7 +6158,7 @@ const CanteraModule = (() => {
   function addPuesto(clave) { _current.puestos = _current.puestos || {}; _current.puestos[clave] = [...(_current.puestos[clave] || []), { titulo: '', tipo: 'decide', exclusion: '' }]; _paint(); }
   function removePuesto(clave, i) { _current.puestos[clave].splice(i, 1); _paint(); }
   function setPuestoField(clave, i, k, v) { _current.puestos[clave][i][k] = v; }
-  function setMotorIA(v) { _current.motor_ia = v === 'kimi' ? 'kimi' : 'claude'; }
+  function setMotorIA(v) { _current.motor_ia = ['kimi', 'gemini'].includes(v) ? v : 'claude'; }
   async function saveCriterio() {
     _current.icp = document.getElementById('cant-icp')?.value || '';
     try {
@@ -7377,27 +7378,120 @@ const CanteraCriteriosModule = (() => {
 // CANTERA · CONFIGURACIÓN — estado real del motor de IA (nada adivinado).
 // =================================================================
 const CanteraConfigModule = (() => {
+  let _clientes = [];
+  let _keys = [];
+  const PROVEEDORES = { claude: 'Claude', kimi: 'Kimi-K3 (NVIDIA)', gemini: 'Gemini 3 Pro' };
+
   async function render(containerId) {
     const el = document.getElementById(containerId); if (!el) return;
     el.innerHTML = `<div class="cp-empty2" style="padding:22px">Cargando…</div>`;
-    let st = { anthropicKeyConfigured: false, model: '—', nvidiaKeyConfigured: false, braveKeyConfigured: false, kimiModel: '—' };
+    let st = { anthropicKeyConfigured: false, model: '—', nvidiaKeyConfigured: false, braveKeyConfigured: false, kimiModel: '—', geminiKeyConfigured: false, geminiModel: '—' };
     try { st = await (await apiFetch(`${API}/cantera/config-status`)).json(); } catch {}
+    try { _clientes = await (await apiFetch(`${API}/outbound-clients`)).json(); } catch { _clientes = []; }
+    try { _keys = await (await apiFetch(`${API}/cantera/provider-keys`)).json(); } catch { _keys = []; }
+    _paint(st);
+  }
+  function _paint(st) {
+    const el = document.getElementById('cantera-config-body'); if (!el) return;
     const row = (ok, label, detalle) => `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
       <span class="cant-estado cant-estado--${ok ? 'aprobado' : 'descartado'}">${ok ? 'Configurada' : 'Falta configurar'}</span>
       <span style="font-size:.84rem;color:var(--text2,#6C6862)">${esc(label)}</span>
     </div><p class="cant-hint" style="margin:0 0 14px">${detalle}</p>`;
     el.innerHTML = `<div class="lm-sec-head lm-sec-head--compact"><div><h2 class="lm-sec-title">Configuración</h2></div></div>
       <div class="cant-section">
-        <div class="cant-section__hd"><h3 style="margin:0">Motores de investigación profunda (paso 2)</h3></div>
-        <p class="cant-hint">Cada borrador elige su motor en el paso "Criterio de calificación" — esto solo dice si el servidor tiene las claves listas para que ese motor funcione.</p>
+        <div class="cant-section__hd"><h3 style="margin:0">Motores de investigación profunda — respaldo global</h3></div>
+        <p class="cant-hint">Si un cliente no tiene su propia clave configurada abajo, el motor usa esta clave del servidor.</p>
         <div class="filter-field" style="max-width:460px">
           ${row(st.anthropicKeyConfigured, `Claude (${esc(st.model)}) — ANTHROPIC_API_KEY`, st.anthropicKeyConfigured ? 'Trae su propia búsqueda en internet, operada por Anthropic. Listo para usarse.' : 'Sin esta clave, el motor Claude falla en cada empresa con el motivo exacto — agrégala al .env del servidor y reinicia.')}
+          ${row(st.geminiKeyConfigured, `Gemini 3 Pro (${esc(st.geminiModel)}) — GEMINI_API_KEY`, st.geminiKeyConfigured ? 'Trae su propia búsqueda en internet, operada por Google. Listo para usarse.' : 'Sin esta clave, el motor Gemini falla en cada empresa — agrégala al .env del servidor y reinicia.')}
           ${row(st.nvidiaKeyConfigured, `Kimi-K3 vía NVIDIA (${esc(st.kimiModel)}) — NVIDIA_API_KEY`, st.nvidiaKeyConfigured ? 'Necesita además la búsqueda propia (fila de abajo) para poder investigar en internet.' : 'Sin esta clave, el motor Kimi-K3 falla en cada empresa — agrégala al .env del servidor y reinicia.')}
           ${row(st.braveKeyConfigured, 'Búsqueda en internet (Brave Search) — BRAVE_API_KEY', st.braveKeyConfigured ? 'Kimi-K3 puede buscar en internet de verdad usando esta clave.' : 'Sin esta clave, Kimi-K3 no puede abrir ninguna página real — solo respondería de memoria. Necesaria para usar el motor Kimi-K3.')}
         </div>
+      </div>
+      <div class="cant-section">
+        <div class="cant-section__hd" style="display:flex;align-items:center;justify-content:space-between">
+          <h3 style="margin:0">Claves de IA por cliente</h3>
+          <button class="btn btn--primary btn--sm" onclick="CanteraConfigModule.openKeyModal()">+ Agregar clave</button>
+        </div>
+        <p class="cant-hint">Cada cliente puede tener su propia clave por motor — útil para separar el gasto y la cuota gratis (ej. un proyecto de Gemini distinto por cliente). Un borrador usa la clave del cliente que tiene asignado; si no hay una aquí, cae al respaldo global de arriba.</p>
+        ${_keysTableHtml()}
       </div>`;
   }
-  return { render };
+  function _keysTableHtml() {
+    if (!_keys.length) return '<div class="cp-empty2" style="padding:14px 0">Sin claves configuradas todavía.</div>';
+    return `<div class="lm-dt-wrap dg-dt-wrap"><table class="clients-table dg-table" style="table-layout:auto">
+      <thead><tr><th>Cliente</th><th>Proveedor</th><th>Clave</th><th>Límite USD</th><th>Gasto acumulado</th><th></th></tr></thead>
+      <tbody>${_keys.map(k => `<tr>
+        <td>${esc(k.cliente_nombre)}</td>
+        <td>${esc(PROVEEDORES[k.provider] || k.provider)}</td>
+        <td>${k.api_key_configurada ? esc(k.api_key) : '<span class="cant-hint" style="margin:0">sin clave</span>'}</td>
+        <td>${Number(k.limite_usd) > 0 ? '$' + Number(k.limite_usd).toFixed(2) : 'Sin límite'}</td>
+        <td>$${Number(k.gasto_acumulado).toFixed(2)}${Number(k.limite_usd) > 0 && Number(k.gasto_acumulado) >= Number(k.limite_usd) ? ' <span class="cant-estado cant-estado--descartado">Límite alcanzado</span>' : ''}</td>
+        <td style="white-space:nowrap">
+          <button class="cant-x" title="Editar" onclick="CanteraConfigModule.openKeyModal(${k.id})">✎</button>
+          <button class="cant-x" title="Reiniciar gasto acumulado" onclick="CanteraConfigModule.resetGasto(${k.id})">↺</button>
+          <button class="cant-x" title="Eliminar" onclick="CanteraConfigModule.deleteKey(${k.id})">✕</button>
+        </td>
+      </tr>`).join('')}</tbody>
+    </table></div>`;
+  }
+  function openKeyModal(keyId) {
+    const k = keyId ? _keys.find(x => x.id === keyId) : null;
+    document.getElementById('cant-key-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'cant-key-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) m.remove(); };
+    m.innerHTML = `<div class="fin-pi-box lm-flt-box" style="max-width:440px">
+      <div class="fin-pi-box__hd"><h3>${k ? 'Editar clave' : 'Agregar clave'}</h3><button class="fin-pi-x" onclick="document.getElementById('cant-key-modal').remove()">✕</button></div>
+      <div class="flt-body" style="display:flex;flex-direction:column;gap:12px">
+        <label class="cant-flabel">Cliente<select id="cant-key-cliente" class="form-input" ${k ? 'disabled' : ''}>
+          ${_clientes.map(c => `<option value="${c.id}"${k && k.outbound_client_id === c.id ? ' selected' : ''}>${esc(c.nombre)}</option>`).join('')}
+        </select></label>
+        <label class="cant-flabel">Proveedor<select id="cant-key-provider" class="form-input" ${k ? 'disabled' : ''}>
+          ${Object.entries(PROVEEDORES).map(([v, label]) => `<option value="${v}"${k && k.provider === v ? ' selected' : ''}>${label}</option>`).join('')}
+        </select></label>
+        <label class="cant-flabel">Clave (API key)<span class="field-note">${k ? 'deja vacío para no cambiar la que ya tienes guardada' : ''}</span>
+          <input type="password" id="cant-key-value" class="form-input" placeholder="${k ? k.api_key : 'Pega la clave aquí'}">
+        </label>
+        <label class="cant-flabel">Límite en USD<span class="field-note">opcional — 0 o vacío es sin límite</span>
+          <input type="number" id="cant-key-limite" class="form-input" min="0" step="0.01" value="${k ? Number(k.limite_usd) || '' : ''}">
+        </label>
+      </div>
+      <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns">
+        <button class="btn btn--ghost btn--sm" onclick="document.getElementById('cant-key-modal').remove()">Cancelar</button>
+        <button class="btn btn--primary btn--sm" onclick="CanteraConfigModule.saveKey()">Guardar</button>
+      </div></div></div>`;
+    document.body.appendChild(m);
+  }
+  async function saveKey() {
+    const outbound_client_id = document.getElementById('cant-key-cliente')?.value;
+    const provider = document.getElementById('cant-key-provider')?.value;
+    const api_key = document.getElementById('cant-key-value')?.value || '';
+    const limite_usd = document.getElementById('cant-key-limite')?.value || 0;
+    if (!outbound_client_id) { showBanner('Elige un cliente', 'info'); return; }
+    try {
+      const res = await apiFetch(`${API}/cantera/provider-keys`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ outbound_client_id, provider, api_key, limite_usd }) });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Error');
+      document.getElementById('cant-key-modal')?.remove();
+      showBanner('✓ Guardado', 'success');
+      await render('cantera-config-body');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  async function resetGasto(id) {
+    try {
+      await apiFetch(`${API}/cantera/provider-keys/${id}/reset-gasto`, { method: 'PATCH' });
+      showBanner('✓ Gasto reiniciado', 'success');
+      await render('cantera-config-body');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  async function deleteKey(id) {
+    try {
+      await apiFetch(`${API}/cantera/provider-keys/${id}`, { method: 'DELETE' });
+      showBanner('✓ Eliminada', 'success');
+      await render('cantera-config-body');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  return { render, openKeyModal, saveKey, resetGasto, deleteKey };
 })();
 
 // =================================================================
