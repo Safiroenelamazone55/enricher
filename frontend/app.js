@@ -5520,7 +5520,7 @@ const CanteraModule = (() => {
       case 'website': return c.website ? `<a href="${/^https?:/i.test(c.website) ? esc(c.website) : 'https://' + esc(c.website)}" target="_blank" rel="noopener">${esc(c.website)}</a>` : '—';
       case 'linkedin': return c.linkedin ? `<a href="${esc(c.linkedin)}" target="_blank" rel="noopener">Ver perfil</a>` : '—';
       case 'paso1_estado': return `<span class="cant-estado cant-estado--${esc(c.paso1_estado)}">${_estadoLabel(c.paso1_estado)}</span>`;
-      case 'paso1_motivo': return `<span title="${esc(c.paso1_motivo)}">${esc(c.paso1_motivo || '—')}</span>`;
+      case 'paso1_motivo': return `<span class="cant-nota-cell" title="${esc(c.paso1_motivo)}">${esc(c.paso1_motivo || '—')}</span>`;
       case 'tier_clave': return esc(c.tier_clave || '—');
       case 'confianza': return esc(c.confianza || '—');
       case 'prioridad': return esc(c.prioridad || '—');
@@ -6779,7 +6779,7 @@ const CanteraMesaModule = (() => {
       case 'website': return c.website ? `<a href="${/^https?:/i.test(c.website) ? esc(c.website) : 'https://' + esc(c.website)}" target="_blank" rel="noopener">${esc(c.website)}</a>` : '—';
       case 'linkedin': return c.linkedin ? `<a href="${esc(c.linkedin)}" target="_blank" rel="noopener">Ver perfil</a>` : '—';
       case 'paso1_estado': return `<span class="cant-estado cant-estado--${esc(c.paso1_estado)}">${_estadoLabel(c.paso1_estado)}</span>`;
-      case 'paso1_motivo': return `<span title="${esc(c.paso1_motivo)}">${esc(c.paso1_motivo || '—')}</span>`;
+      case 'paso1_motivo': return `<span class="cant-nota-cell" title="${esc(c.paso1_motivo)}">${esc(c.paso1_motivo || '—')}</span>`;
       case 'tier_clave': return esc(c.tier_clave || '—');
       case 'confianza': return esc(c.confianza || '—');
       case 'prioridad': return esc(c.prioridad || '—');
