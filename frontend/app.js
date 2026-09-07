@@ -5350,9 +5350,10 @@ const CanteraModule = (() => {
     // que quedan a la derecha. Se guarda y se restaura en cada _paint().
     const wrapBefore = el.querySelector('.lm-dt-wrap');
     const scrollLeft = wrapBefore ? wrapBefore.scrollLeft : 0;
+    const scrollTop = wrapBefore ? wrapBefore.scrollTop : 0;
     el.innerHTML = _view === 'detail' && _current ? _detailHtml() : _listHtml();
     const wrapAfter = el.querySelector('.lm-dt-wrap');
-    if (wrapAfter) wrapAfter.scrollLeft = scrollLeft;
+    if (wrapAfter) { wrapAfter.scrollLeft = scrollLeft; wrapAfter.scrollTop = scrollTop; }
   }
 
   // ── Lista de borradores — tabla de TODOS los borradores importados, con
@@ -6753,9 +6754,10 @@ const CanteraMesaModule = (() => {
     const el = document.getElementById(_containerId); if (!el) return;
     const wrapBefore = el.querySelector('.lm-dt-wrap');
     const scrollLeft = wrapBefore ? wrapBefore.scrollLeft : 0;
+    const scrollTop = wrapBefore ? wrapBefore.scrollTop : 0;
     el.innerHTML = _html();
     const wrapAfter = el.querySelector('.lm-dt-wrap');
-    if (wrapAfter) wrapAfter.scrollLeft = scrollLeft;
+    if (wrapAfter) { wrapAfter.scrollLeft = scrollLeft; wrapAfter.scrollTop = scrollTop; }
   }
   async function _refresh() { await _search(); _paint(); }
   function setFiltro(kind, val) { _filtro[kind] = val; _page = 0; _refresh(); }
