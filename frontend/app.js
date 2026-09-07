@@ -6124,7 +6124,12 @@ const CanteraModule = (() => {
   // seguir escribiendo la nota después de elegir el Tier).
   async function saveManualValidation(companyId) {
     const tier = document.getElementById('cant-manual-tier')?.value;
-    if (!tier) return; // la Nota puede perder el foco antes de elegir Tier — nada que guardar aún
+    // Antes se quedaba en silencio si aún no se elegía Tier (para que la Nota
+    // no se guardara sola al perder el foco antes de decidir) — pero eso
+    // significaba que Confianza/Prioridad/Nota tampoco se guardaban aunque sí
+    // se hubieran tocado, sin ningún aviso ("lo quise guardar y no
+    // funcionaba", reportado 2026-09-07). Ahora sí avisa qué falta.
+    if (!tier) { showBanner('Elige un Tier (o Descartar) para guardar — Confianza, Prioridad y Nota se guardan junto con él', 'info'); return; }
     const nota = document.getElementById('cant-manual-nota')?.value || '';
     const confianza = document.getElementById('cant-manual-confianza')?.value || '';
     const prioridad = document.getElementById('cant-manual-prioridad')?.value || '';
@@ -7211,7 +7216,7 @@ const CanteraMesaModule = (() => {
   }
   async function saveManualValidation(companyId, batchId) {
     const tier = document.getElementById('mesa-manual-tier')?.value;
-    if (!tier) return;
+    if (!tier) { showBanner('Elige un Tier (o Descartar) para guardar — Confianza, Prioridad y Nota se guardan junto con él', 'info'); return; }
     const nota = document.getElementById('mesa-manual-nota')?.value || '';
     const confianza = document.getElementById('mesa-manual-confianza')?.value || '';
     const prioridad = document.getElementById('mesa-manual-prioridad')?.value || '';
