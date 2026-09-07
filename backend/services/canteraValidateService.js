@@ -21,7 +21,18 @@
  */
 
 const MODEL = 'claude-sonnet-5';
-const RATES = { 'claude-sonnet-5': { in: 3, out: 15 } };
+// Tarifas por modelo (USD por millón de tokens) — pedido explícito 2026-09-06:
+// "siempre tener un modelo asignado... por cliente", no uno fijo. Un modelo
+// sin tarifa confirmada aquí reporta costo 0 en vez de inventar un número
+// (mismo criterio ya usado para Kimi).
+const RATES = {
+  'claude-sonnet-5': { in: 3, out: 15 },
+  'claude-opus-5': { in: 5, out: 25 },
+  'claude-haiku-4-5': { in: 1, out: 5 },
+  'gemini-3-pro-preview': { in: 2, out: 12 },
+  'gemini-3.7-flash': { in: 0.75, out: 3.75 },
+  'gemini-3.5-flash': { in: 1.5, out: 9 },
+};
 const NVIDIA_MODEL = 'moonshotai/kimi-k3';
 const { webSearch } = require('./webSearchService');
 
@@ -174,26 +185,28 @@ async function validateCompany(pool, uid, batch, company, contactos) {
     throw new Error(`Límite de $${keyRow.limite_usd} USD alcanzado para este cliente en ${motor} — sube el límite en Configuración o cambia de motor.`);
   }
   const apiKey = keyRow?.api_key || '';
+  const modelo = keyRow?.modelo || '';
   const result = motor === 'kimi' ? await _validateCompanyKimi(batch, company, contactos, apiKey)
-    : motor === 'gemini' ? await _validateCompanyGemini(batch, company, contactos, apiKey)
-    : await _validateCompanyClaude(batch, company, contactos, apiKey);
+    : motor === 'gemini' ? await _validateCompanyGemini(batch, company, contactos, apiKey, modelo)
+    : await _validateCompanyClaude(batch, company, contactos, apiKey, modelo);
   await _registrarGasto(pool, keyRow, result.cost);
   return result;
 }
 
-async function _validateCompanyClaude(batch, company, contactos, apiKeyOverride) {
+async function _validateCompanyClaude(batch, company, contactos, apiKeyOverride, modelOverride) {
   let Anthropic;
   try { Anthropic = require('@anthropic-ai/sdk'); }
   catch { throw new Error('Falta @anthropic-ai/sdk (npm install en backend)'); }
   const apiKey = apiKeyOverride || process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error('Falta ANTHROPIC_API_KEY (global o por cliente en Configuración)');
   const client = new Anthropic({ apiKey });
+  const model = modelOverride || MODEL;
 
   const system = _buildSystemPrompt(batch);
   const user = _buildUserPrompt(company, contactos);
 
   const resp = await client.messages.create({
-    model: MODEL, max_tokens: 8000, system,
+    model, max_tokens: 8000, system,
     thinking: { type: 'adaptive' },
     tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: 20 }],
     messages: [{ role: 'user', content: user }],
@@ -280,13 +293,13 @@ async function _validateCompanyKimi(batch, company, contactos, apiKeyOverride) {
 // $2/$12 por millón de tokens (confirmado 2026-09), calculado aquí mismo
 // porque no viene en la respuesta de la API.
 const GEMINI_MODEL = 'gemini-3-pro-preview';
-const GEMINI_RATE = { in: 2, out: 12 };
-async function _validateCompanyGemini(batch, company, contactos, apiKeyOverride) {
+async function _validateCompanyGemini(batch, company, contactos, apiKeyOverride, modelOverride) {
   const apiKey = apiKeyOverride || process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('Falta GEMINI_API_KEY (global o por cliente en Configuración)');
+  const model = modelOverride || GEMINI_MODEL;
   const system = _buildSystemPrompt(batch);
   const user = _buildUserPrompt(company, contactos);
-  const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`, {
+  const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
     method: 'POST',
     headers: { 'x-goog-api-key': apiKey, 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -303,8 +316,9 @@ async function _validateCompanyGemini(batch, company, contactos, apiKeyOverride)
   try { parsed = JSON.parse(_extractJson(texto)); } catch (e) { throw new Error('El modelo no devolvió JSON válido: ' + e.message); }
   const inTok = data.usageMetadata?.promptTokenCount || 0;
   const outTok = data.usageMetadata?.candidatesTokenCount || 0;
-  const cost = (inTok * GEMINI_RATE.in + outTok * GEMINI_RATE.out) / 1e6;
-  return { parsed, cost, model: GEMINI_MODEL, inputTokens: inTok, outputTokens: outTok };
+  const rate = RATES[model] || RATES[GEMINI_MODEL];
+  const cost = (inTok * rate.in + outTok * rate.out) / 1e6;
+  return { parsed, cost, model, inputTokens: inTok, outputTokens: outTok };
 }
 
 // Corre el paso 2 sobre las empresas del batch que siguen pendientes de

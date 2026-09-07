@@ -7381,6 +7381,18 @@ const CanteraConfigModule = (() => {
   let _clientes = [];
   let _keys = [];
   const PROVEEDORES = { claude: 'Claude', kimi: 'Kimi-K3 (NVIDIA)', gemini: 'Gemini 3 Pro' };
+  // Modelos ofrecidos por proveedor — pedido explícito 2026-09-06: "siempre
+  // tener un modelo asignado... si quiero usar Opus". Vacío ("Por defecto")
+  // usa el modelo fijo de siempre para ese proveedor. Kimi solo tiene un
+  // modelo hoy (kimi-k3), no se ofrece selector para ese caso.
+  const MODELOS = {
+    claude: [['', 'Por defecto (Claude Sonnet 5)'], ['claude-sonnet-5', 'Claude Sonnet 5'], ['claude-opus-5', 'Claude Opus 5 (más caro, más capaz)']],
+    gemini: [['', 'Por defecto (Gemini 3 Pro)'], ['gemini-3-pro-preview', 'Gemini 3 Pro'], ['gemini-3.7-flash', 'Gemini 3.7 Flash (más barato y rápido)'], ['gemini-3.5-flash', 'Gemini 3.5 Flash']],
+    kimi: [['', 'Por defecto (Kimi-K3)']],
+  };
+  function _modelOptionsHtml(provider, current) {
+    return (MODELOS[provider] || MODELOS.claude).map(([v, label]) => `<option value="${v}"${current === v ? ' selected' : ''}>${esc(label)}</option>`).join('');
+  }
 
   async function render(containerId) {
     const el = document.getElementById(containerId); if (!el) return;
@@ -7420,10 +7432,11 @@ const CanteraConfigModule = (() => {
   function _keysTableHtml() {
     if (!_keys.length) return '<div class="cp-empty2" style="padding:14px 0">Sin claves configuradas todavía.</div>';
     return `<div class="lm-dt-wrap dg-dt-wrap"><table class="clients-table dg-table" style="table-layout:auto">
-      <thead><tr><th>Cliente</th><th>Proveedor</th><th>Clave</th><th>Límite USD</th><th>Gasto acumulado</th><th></th></tr></thead>
+      <thead><tr><th>Cliente</th><th>Proveedor</th><th>Modelo</th><th>Clave</th><th>Límite USD</th><th>Gasto acumulado</th><th></th></tr></thead>
       <tbody>${_keys.map(k => `<tr>
         <td>${esc(k.cliente_nombre)}</td>
         <td>${esc(PROVEEDORES[k.provider] || k.provider)}</td>
+        <td>${k.modelo ? esc(k.modelo) : '<span class="cant-hint" style="margin:0">por defecto</span>'}</td>
         <td>${k.api_key_configurada ? esc(k.api_key) : '<span class="cant-hint" style="margin:0">sin clave</span>'}</td>
         <td>${Number(k.limite_usd) > 0 ? '$' + Number(k.limite_usd).toFixed(2) : 'Sin límite'}</td>
         <td>$${Number(k.gasto_acumulado).toFixed(2)}${Number(k.limite_usd) > 0 && Number(k.gasto_acumulado) >= Number(k.limite_usd) ? ' <span class="cant-estado cant-estado--descartado">Límite alcanzado</span>' : ''}</td>
@@ -7446,9 +7459,12 @@ const CanteraConfigModule = (() => {
         <label class="cant-flabel">Cliente<select id="cant-key-cliente" class="form-input" ${k ? 'disabled' : ''}>
           ${_clientes.map(c => `<option value="${c.id}"${k && k.outbound_client_id === c.id ? ' selected' : ''}>${esc(c.nombre)}</option>`).join('')}
         </select></label>
-        <label class="cant-flabel">Proveedor<select id="cant-key-provider" class="form-input" ${k ? 'disabled' : ''}>
+        <label class="cant-flabel">Proveedor<select id="cant-key-provider" class="form-input" ${k ? 'disabled' : ''} onchange="CanteraConfigModule.onProviderChange(this.value)">
           ${Object.entries(PROVEEDORES).map(([v, label]) => `<option value="${v}"${k && k.provider === v ? ' selected' : ''}>${label}</option>`).join('')}
         </select></label>
+        <label class="cant-flabel">Modelo<span class="field-note">elige exactamente cuál usar — nunca cambia solo</span>
+          <select id="cant-key-modelo" class="form-input">${_modelOptionsHtml(k ? k.provider : 'claude', k ? k.modelo : '')}</select>
+        </label>
         <label class="cant-flabel">Clave (API key)<span class="field-note">${k ? 'deja vacío para no cambiar la que ya tienes guardada' : ''}</span>
           <input type="password" id="cant-key-value" class="form-input" placeholder="${k ? k.api_key : 'Pega la clave aquí'}">
         </label>
@@ -7462,14 +7478,19 @@ const CanteraConfigModule = (() => {
       </div></div></div>`;
     document.body.appendChild(m);
   }
+  function onProviderChange(provider) {
+    const sel = document.getElementById('cant-key-modelo');
+    if (sel) sel.innerHTML = _modelOptionsHtml(provider, '');
+  }
   async function saveKey() {
     const outbound_client_id = document.getElementById('cant-key-cliente')?.value;
     const provider = document.getElementById('cant-key-provider')?.value;
+    const modelo = document.getElementById('cant-key-modelo')?.value || '';
     const api_key = document.getElementById('cant-key-value')?.value || '';
     const limite_usd = document.getElementById('cant-key-limite')?.value || 0;
     if (!outbound_client_id) { showBanner('Elige un cliente', 'info'); return; }
     try {
-      const res = await apiFetch(`${API}/cantera/provider-keys`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ outbound_client_id, provider, api_key, limite_usd }) });
+      const res = await apiFetch(`${API}/cantera/provider-keys`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ outbound_client_id, provider, modelo, api_key, limite_usd }) });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || 'Error');
       document.getElementById('cant-key-modal')?.remove();
@@ -7491,7 +7512,7 @@ const CanteraConfigModule = (() => {
       await render('cantera-config-body');
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
-  return { render, openKeyModal, saveKey, resetGasto, deleteKey };
+  return { render, openKeyModal, onProviderChange, saveKey, resetGasto, deleteKey };
 })();
 
 // =================================================================

@@ -2062,6 +2062,11 @@ async function initDb() {
       );
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS cantera_provider_keys_client_idx ON cantera_provider_keys (outbound_client_id);`);
+    // Modelo específico dentro del proveedor — pedido explícito 2026-09-06:
+    // "si yo quiero utilizar Opus... siempre tener un modelo asignado... por
+    // cliente". Vacío = usa el modelo por defecto fijo de ese proveedor (el
+    // de siempre, no rompe nada de lo ya configurado).
+    await pool.query(`ALTER TABLE cantera_provider_keys ADD COLUMN IF NOT EXISTS modelo TEXT NOT NULL DEFAULT '';`);
 
     // Secuencia opcional del borrador — mismo criterio que Cliente/Campaña, que ya
     // existían: es solo una anotación en esta etapa (no enrola nada, no envía nada a

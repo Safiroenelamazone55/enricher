@@ -7037,15 +7037,16 @@ app.post('/api/cantera/provider-keys', requireAuth, async (req, res) => {
   if (!clientId || !provider) return res.status(400).json({ error: 'Elige cliente y proveedor' });
   const limiteUsd = Number.isFinite(parseFloat(b.limite_usd)) ? Math.max(0, parseFloat(b.limite_usd)) : 0;
   const apiKey = _lmS(b.api_key); // vacío = "no cambiar la clave guardada" cuando ya existe una fila
+  const modelo = _lmS(b.modelo); // vacío = usa el modelo por defecto de ese proveedor
   try {
     const { rows } = await pool.query(`
-      INSERT INTO cantera_provider_keys (user_id, outbound_client_id, provider, api_key, limite_usd)
-      VALUES ($1,$2,$3,$4,$5)
+      INSERT INTO cantera_provider_keys (user_id, outbound_client_id, provider, api_key, limite_usd, modelo)
+      VALUES ($1,$2,$3,$4,$5,$6)
       ON CONFLICT (outbound_client_id, provider) DO UPDATE SET
         api_key = CASE WHEN $4 <> '' THEN $4 ELSE cantera_provider_keys.api_key END,
-        limite_usd = $5, updated_at = NOW()
+        limite_usd = $5, modelo = $6, updated_at = NOW()
       RETURNING *`,
-      [uid, clientId, provider, apiKey, limiteUsd]);
+      [uid, clientId, provider, apiKey, limiteUsd, modelo]);
     res.json({ ...rows[0], api_key: _lmMask(rows[0].api_key) });
   } catch (err) { console.error('[cantera] POST provider-keys', err.message); res.status(500).json({ error: 'Error al guardar la clave' }); }
 });
