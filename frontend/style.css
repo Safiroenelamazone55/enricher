@@ -12389,6 +12389,16 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .cant-results-actions > * { flex-shrink: 0; }
 .cant-flabel { display: flex; flex-direction: column; gap: 4px; font-size: .74rem; font-weight: 600; color: var(--text2, #45586A); }
 .cant-flabel input { min-width: 160px; }
+/* Variante en fila (label + control al costado) — pedido explícito
+   2026-09-07: "prioridad al costado las opciones... ahorita es título y
+   abajo las opciones, y eso quita mucho espacio". */
+.cant-flabel--row { flex-direction: row; align-items: center; gap: 10px; }
+.cant-flabel--row > span.cant-flabel__lbl { min-width: 84px; flex-shrink: 0; }
+.cant-flabel--row select, .cant-flabel--row .form-input { flex: 1; }
+.cant-copy-row { display: flex; gap: 8px; align-items: stretch; }
+.cant-copy-row textarea { flex: 1; }
+.cant-copy-row__btn { flex-shrink: 0; width: 34px; border: 1px solid var(--border, #EAE7E2); background: #fff; border-radius: 0; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text2, #45586A); }
+.cant-copy-row__btn:hover { background: var(--brand-ll, #F1EFEB); }
 .cant-import-hint { color: var(--muted, #B4AFA8); font-size: .76rem; flex: 1 1 260px; }
 .cant-imp-done-box { display: flex; align-items: center; gap: 14px; background: var(--white, #fff); border: 1px solid var(--border, #EAE7E2); padding: 14px 16px; flex-wrap: wrap; }
 .cant-imp-done-box__ico { font-size: 1.6rem; flex-shrink: 0; }

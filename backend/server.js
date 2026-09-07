@@ -6461,6 +6461,21 @@ app.get('/api/cantera/batches/:id', requireAuth, async (req, res) => {
     res.json(rows[0]);
   } catch (err) { console.error('[cantera] GET batch', err.message); res.status(500).json({ error: 'Error al cargar el borrador' }); }
 });
+// La instrucción completa (protocolo + ICP + Tiers + Puestos + formato de
+// salida) que el motor de IA le manda al modelo — pedido explícito
+// 2026-09-07: "necesito copiar y pegar en cualquier inteligencia artificial
+// con una instrucción y los datos de la empresa" cuando el costo de la API
+// no compensa. Reusa _buildSystemPrompt tal cual (misma función que ya usan
+// las llamadas reales) para que esto NUNCA se desincronice del protocolo de
+// verdad — si se ajusta el prompt más adelante, esta copia se actualiza sola.
+app.get('/api/cantera/batches/:id/instruccion', requireAuth, async (req, res) => {
+  try {
+    const { rows: [batch] } = await pool.query(`SELECT * FROM cantera_batches WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId]);
+    if (!batch) return res.status(404).json({ error: 'Borrador no encontrado' });
+    const { _buildSystemPrompt } = require('./services/canteraValidateService');
+    res.json({ instruccion: _buildSystemPrompt(batch) });
+  } catch (err) { console.error('[cantera] GET instruccion', err.message); res.status(500).json({ error: 'Error al generar la instrucción' }); }
+});
 app.put('/api/cantera/batches/:id', requireAuth, async (req, res) => {
   const b = req.body || {};
   const motorIa = ['kimi', 'gemini'].includes(b.motor_ia) ? b.motor_ia : 'claude';

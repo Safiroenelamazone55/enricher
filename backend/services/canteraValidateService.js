@@ -392,4 +392,4 @@ async function runBatchValidation(pool, uid, batchId, { onProgress, companyIds }
   return { total: companies.length, done, errores, costoTotal };
 }
 
-module.exports = { runBatchValidation, validateCompany };
+module.exports = { runBatchValidation, validateCompany, _buildSystemPrompt, _buildUserPrompt };

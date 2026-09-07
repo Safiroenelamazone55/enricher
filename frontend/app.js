@@ -14,6 +14,9 @@ const $   = id => document.getElementById(id);
 const esc = s => String(s ?? '')
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   .replace(/"/g, '&quot;');
+// Ícono de copiar (línea, no emoji) — pedido explícito 2026-09-07: "al
+// costado un ícono de copiado, le doy clic, copio y ya está".
+const _copyIconSvg = () => `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
 
 // ── Presentacion de nombres y titulos ──────────────────────────────────────
 // Orden visual sin tocar los datos: se corrige al PINTAR, no al guardar, asi que
@@ -5439,6 +5442,13 @@ const CanteraModule = (() => {
     _lastIA = _current.validado_ia_total ? { done: _current.validado_ia_total } : null;
     if (!_filtroOpts) { try { _filtroOpts = await (await apiFetch(`${API}/cantera/opciones-filtro`)).json(); } catch { _filtroOpts = {}; } }
     await _loadCompanies();
+    // Retoma la barra de progreso si la investigación seguía corriendo en el
+    // servidor cuando se recargó la página o se reabrió el borrador.
+    try {
+      const st = await (await apiFetch(`${API}/cantera/batches/${id}/validacion-status`)).json();
+      if (st.running) { _jobRunning = true; _jobProgress = { done: st.done, total: st.total }; _startValidacionPolling([]); }
+      else _jobRunning = false;
+    } catch { _jobRunning = false; }
     _view = 'detail'; _paint();
   }
   function backToList() { _view = 'list'; _current = null; _paint(); }
@@ -6042,17 +6052,27 @@ const CanteraModule = (() => {
     document.getElementById('cant-manual-modal')?.remove();
     const m = document.createElement('div'); m.id = 'cant-manual-modal'; m.className = 'fin-pi-backdrop';
     m.onclick = e => { if (e.target === m) closeManualValidation(); };
-    m.innerHTML = `<div class="fin-pi-box lm-flt-box" style="max-width:520px">
+    m.innerHTML = `<div class="fin-pi-box lm-flt-box" style="max-width:560px">
       <div class="fin-pi-box__hd"><h3>Validación manual · ${esc(co.nombre)}</h3><button class="fin-pi-x" onclick="CanteraModule.closeManualValidation()">✕</button></div>
-      <div class="flt-body" style="display:flex;flex-direction:column;gap:12px">
-        <label class="cant-flabel">Datos de la empresa<textarea id="cant-manual-copy" class="form-input" rows="8" readonly onclick="this.select()">${esc(_manualCopyText(co))}</textarea></label>
-        <button class="btn btn--ghost btn--sm" onclick="CanteraModule.copyManualData()">Copiar todo</button>
-        <label class="cant-flabel">Tier<select id="cant-manual-tier" class="form-input" onchange="CanteraModule.saveManualValidation(${co.id})">
+      <div class="flt-body" style="display:flex;flex-direction:column;gap:10px">
+        <label class="cant-flabel">Datos de la empresa
+          <div class="cant-copy-row">
+            <textarea id="cant-manual-copy" class="form-input" rows="4" readonly onclick="this.select()">${esc(_manualCopyText(co))}</textarea>
+            <button class="cant-copy-row__btn" title="Copiar datos de la empresa" onclick="CanteraModule.copyManualData()">${_copyIconSvg()}</button>
+          </div>
+        </label>
+        <label class="cant-flabel">Instrucción completa<span class="field-note">para pegar en cualquier IA (ChatGPT, Claude.ai, Gemini…), junto con los datos de arriba</span>
+          <div class="cant-copy-row">
+            <textarea id="cant-manual-instruccion" class="form-input" rows="4" readonly onclick="this.select()">Cargando…</textarea>
+            <button class="cant-copy-row__btn" title="Copiar la instrucción completa" onclick="CanteraModule.copyManualInstruccion()">${_copyIconSvg()}</button>
+          </div>
+        </label>
+        <label class="cant-flabel cant-flabel--row"><span class="cant-flabel__lbl">Tier</span><select id="cant-manual-tier" class="form-input" onchange="CanteraModule.saveManualValidation(${co.id})">
           <option value="">— elegir —</option>
           ${tiers.map(t => `<option value="${esc(t.clave)}"${co.tier_clave === t.clave ? ' selected' : ''}>${esc(t.clave)}${t.nombre ? ' — ' + esc(t.nombre) : ''}</option>`).join('')}
           <option value="__descartar__"${co.paso2_estado === 'descartado_manual' ? ' selected' : ''}>✕ Descartar — no encaja en ningún Tier</option>
         </select></label>
-        <label class="cant-flabel">Prioridad
+        <label class="cant-flabel cant-flabel--row"><span class="cant-flabel__lbl">Prioridad</span>
           <select id="cant-manual-prioridad" class="form-input" onchange="CanteraModule.saveManualValidation(${co.id})">
             <option value="">— sin definir —</option>
             <option value="alta"${co.prioridad === 'alta' ? ' selected' : ''}>Alta</option>
@@ -6060,7 +6080,7 @@ const CanteraModule = (() => {
             <option value="baja"${co.prioridad === 'baja' ? ' selected' : ''}>Baja</option>
           </select>
         </label>
-        <label class="cant-flabel">Confianza
+        <label class="cant-flabel cant-flabel--row"><span class="cant-flabel__lbl">Confianza</span>
           <select id="cant-manual-confianza" class="form-input" onchange="CanteraModule.saveManualValidation(${co.id})">
             <option value="">— sin definir —</option>
             <option value="alta"${co.confianza === 'alta' ? ' selected' : ''}>Alta</option>
@@ -6077,8 +6097,18 @@ const CanteraModule = (() => {
         </div>
       </div></div>`;
     document.body.appendChild(m);
+    try {
+      const d = await (await apiFetch(`${API}/cantera/batches/${_current.id}/instruccion`)).json();
+      const ta = document.getElementById('cant-manual-instruccion');
+      if (ta) ta.value = d.instruccion || '(sin instrucción)';
+    } catch { const ta = document.getElementById('cant-manual-instruccion'); if (ta) ta.value = 'Error al cargar la instrucción.'; }
   }
   function closeManualValidation() { document.getElementById('cant-manual-modal')?.remove(); }
+  async function copyManualInstruccion() {
+    const ta = document.getElementById('cant-manual-instruccion'); if (!ta) return;
+    try { await navigator.clipboard.writeText(ta.value); showBanner('✓ Copiado', 'success'); }
+    catch { ta.select(); document.execCommand('copy'); showBanner('✓ Copiado', 'success'); }
+  }
   async function copyManualData() {
     const ta = document.getElementById('cant-manual-copy'); if (!ta) return;
     try { await navigator.clipboard.writeText(ta.value); showBanner('✓ Copiado', 'success'); }
@@ -6217,6 +6247,32 @@ const CanteraModule = (() => {
   }
   function _confirmRevalidar() { _runValidacionExec(_pendingRevalIds); _pendingRevalIds = []; }
   function openAudit() { CanteraAuditModule.open({ batchId: _current.id }, async () => { await _loadCompanies(); _paint(); }); }
+  // Ciclo de sondeo compartido — pedido explícito 2026-09-07: "hice refresh y
+  // la barra de investigando debería mantenerse ahí, si aún está corriendo".
+  // Antes _jobRunning solo vivía en memoria del navegador, así que un
+  // refresh la borraba aunque el trabajo siguiera corriendo en el servidor.
+  // Se separa del disparo inicial para poder RETOMAR el sondeo al abrir un
+  // borrador (ver open()) sin tener que volver a lanzar la investigación.
+  function _startValidacionPolling(companyIds) {
+    clearInterval(_jobTimer);
+    _jobTimer = setInterval(async () => {
+      const st = await (await apiFetch(`${API}/cantera/batches/${_current.id}/validacion-status`)).json();
+      _jobProgress = { done: st.done, total: st.total };
+      if (!st.running) {
+        clearInterval(_jobTimer); _jobRunning = false;
+        showBanner(`✓ Investigación terminada · ${st.done - st.errores} ok · ${st.errores} error(es) · $${(st.costoTotal || 0).toFixed(3)}`, 'success');
+        await _refreshContacts(); await _loadCompanies();
+        // "Validado (N)" es el TOTAL acumulado de empresas ya investigadas alguna
+        // vez (persistido, validado_at IS NOT NULL) — no solo lo que procesó esta
+        // corrida puntual, así una corrida posterior sobre empresas nuevas no
+        // "resetea" el número hacia abajo.
+        try { _current = await (await apiFetch(`${API}/cantera/batches/${_current.id}`)).json(); } catch { /* usa lo que ya había */ }
+        _lastIA = _current.validado_ia_total ? { done: _current.validado_ia_total } : null;
+        if (companyIds && companyIds.length) _coSel = new Set();
+        _paint();
+      } else _paint();
+    }, 4000);
+  }
   async function _runValidacionExec(companyIds) {
     try {
       const res = await apiFetch(`${API}/cantera/batches/${_current.id}/run-validacion`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ company_ids: companyIds }) });
@@ -6224,24 +6280,7 @@ const CanteraModule = (() => {
       if (!res.ok) throw new Error(d.error || 'Error');
       if (!d.started) { showBanner(d.mensaje || 'Nada que investigar', 'info'); return; }
       _jobRunning = true; _jobProgress = { done: 0, total: d.total }; _paint();
-      clearInterval(_jobTimer);
-      _jobTimer = setInterval(async () => {
-        const st = await (await apiFetch(`${API}/cantera/batches/${_current.id}/validacion-status`)).json();
-        _jobProgress = { done: st.done, total: st.total };
-        if (!st.running) {
-          clearInterval(_jobTimer); _jobRunning = false;
-          showBanner(`✓ Investigación terminada · ${st.done - st.errores} ok · ${st.errores} error(es) · $${(st.costoTotal || 0).toFixed(3)}`, 'success');
-          await _refreshContacts(); await _loadCompanies();
-          // "Validado (N)" es el TOTAL acumulado de empresas ya investigadas alguna
-          // vez (persistido, validado_at IS NOT NULL) — no solo lo que procesó esta
-          // corrida puntual, así una corrida posterior sobre empresas nuevas no
-          // "resetea" el número hacia abajo.
-          try { _current = await (await apiFetch(`${API}/cantera/batches/${_current.id}`)).json(); } catch { /* usa lo que ya había */ }
-          _lastIA = _current.validado_ia_total ? { done: _current.validado_ia_total } : null;
-          if (companyIds.length) _coSel = new Set();
-          _paint();
-        } else _paint();
-      }, 4000);
+      _startValidacionPolling(companyIds);
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
@@ -6545,7 +6584,7 @@ const CanteraModule = (() => {
     toggleCoSel, toggleCoSelAll, resultsMenu, runClean, runEnrich, closeCantOp, applyCantOp,
     toggleResultCol, startColResize,
     setContactPrioridad, cantGoPage, cantSetPageSize, bdSetFiltro, bdSetPageSize, bdGoPage, _confirmRevalidar,
-    openManualValidation, closeManualValidation, copyManualData, saveManualValidation, quitarValidacionManual, openAudit };
+    openManualValidation, closeManualValidation, copyManualData, copyManualInstruccion, saveManualValidation, quitarValidacionManual, openAudit };
 })();
 
 // =================================================================
@@ -7081,17 +7120,27 @@ const CanteraMesaModule = (() => {
     document.getElementById('mesa-manual-modal')?.remove();
     const m = document.createElement('div'); m.id = 'mesa-manual-modal'; m.className = 'fin-pi-backdrop';
     m.onclick = e => { if (e.target === m) m.remove(); };
-    m.innerHTML = `<div class="fin-pi-box lm-flt-box" style="max-width:520px">
+    m.innerHTML = `<div class="fin-pi-box lm-flt-box" style="max-width:560px">
       <div class="fin-pi-box__hd"><h3>Validación manual · ${esc(co.nombre)}</h3><button class="fin-pi-x" onclick="document.getElementById('mesa-manual-modal').remove()">✕</button></div>
-      <div class="flt-body" style="display:flex;flex-direction:column;gap:12px">
-        <label class="cant-flabel">Datos de la empresa<textarea id="mesa-manual-copy" class="form-input" rows="8" readonly onclick="this.select()">${esc(_manualCopyText(co))}</textarea></label>
-        <button class="btn btn--ghost btn--sm" onclick="CanteraMesaModule.copyManualData()">Copiar todo</button>
-        <label class="cant-flabel">Tier<select id="mesa-manual-tier" class="form-input" onchange="CanteraMesaModule.saveManualValidation(${companyId},${batchId})">
+      <div class="flt-body" style="display:flex;flex-direction:column;gap:10px">
+        <label class="cant-flabel">Datos de la empresa
+          <div class="cant-copy-row">
+            <textarea id="mesa-manual-copy" class="form-input" rows="4" readonly onclick="this.select()">${esc(_manualCopyText(co))}</textarea>
+            <button class="cant-copy-row__btn" title="Copiar datos de la empresa" onclick="CanteraMesaModule.copyManualData()">${_copyIconSvg()}</button>
+          </div>
+        </label>
+        <label class="cant-flabel">Instrucción completa<span class="field-note">para pegar en cualquier IA (ChatGPT, Claude.ai, Gemini…), junto con los datos de arriba</span>
+          <div class="cant-copy-row">
+            <textarea id="mesa-manual-instruccion" class="form-input" rows="4" readonly onclick="this.select()">Cargando…</textarea>
+            <button class="cant-copy-row__btn" title="Copiar la instrucción completa" onclick="CanteraMesaModule.copyManualInstruccion()">${_copyIconSvg()}</button>
+          </div>
+        </label>
+        <label class="cant-flabel cant-flabel--row"><span class="cant-flabel__lbl">Tier</span><select id="mesa-manual-tier" class="form-input" onchange="CanteraMesaModule.saveManualValidation(${companyId},${batchId})">
           <option value="">— elegir —</option>
           ${tiers.map(t => `<option value="${esc(t.clave)}"${co.tier_clave === t.clave ? ' selected' : ''}>${esc(t.clave)}${t.nombre ? ' — ' + esc(t.nombre) : ''}</option>`).join('')}
           <option value="__descartar__"${co.paso2_estado === 'descartado_manual' ? ' selected' : ''}>✕ Descartar — no encaja en ningún Tier</option>
         </select></label>
-        <label class="cant-flabel">Prioridad
+        <label class="cant-flabel cant-flabel--row"><span class="cant-flabel__lbl">Prioridad</span>
           <select id="mesa-manual-prioridad" class="form-input" onchange="CanteraMesaModule.saveManualValidation(${companyId},${batchId})">
             <option value="">— sin definir —</option>
             <option value="alta"${co.prioridad === 'alta' ? ' selected' : ''}>Alta</option>
@@ -7099,7 +7148,7 @@ const CanteraMesaModule = (() => {
             <option value="baja"${co.prioridad === 'baja' ? ' selected' : ''}>Baja</option>
           </select>
         </label>
-        <label class="cant-flabel">Confianza
+        <label class="cant-flabel cant-flabel--row"><span class="cant-flabel__lbl">Confianza</span>
           <select id="mesa-manual-confianza" class="form-input" onchange="CanteraMesaModule.saveManualValidation(${companyId},${batchId})">
             <option value="">— sin definir —</option>
             <option value="alta"${co.confianza === 'alta' ? ' selected' : ''}>Alta</option>
@@ -7114,9 +7163,19 @@ const CanteraMesaModule = (() => {
         <div class="fin-pi-ft-btns"><button class="btn btn--ghost btn--sm" onclick="document.getElementById('mesa-manual-modal').remove()">Cerrar</button></div>
       </div></div>`;
     document.body.appendChild(m);
+    try {
+      const d = await (await apiFetch(`${API}/cantera/batches/${batchId}/instruccion`)).json();
+      const ta = document.getElementById('mesa-manual-instruccion');
+      if (ta) ta.value = d.instruccion || '(sin instrucción)';
+    } catch { const ta = document.getElementById('mesa-manual-instruccion'); if (ta) ta.value = 'Error al cargar la instrucción.'; }
   }
   async function copyManualData() {
     const ta = document.getElementById('mesa-manual-copy'); if (!ta) return;
+    try { await navigator.clipboard.writeText(ta.value); showBanner('✓ Copiado', 'success'); }
+    catch { ta.select(); document.execCommand('copy'); showBanner('✓ Copiado', 'success'); }
+  }
+  async function copyManualInstruccion() {
+    const ta = document.getElementById('mesa-manual-instruccion'); if (!ta) return;
     try { await navigator.clipboard.writeText(ta.value); showBanner('✓ Copiado', 'success'); }
     catch { ta.select(); document.execCommand('copy'); showBanner('✓ Copiado', 'success'); }
   }
@@ -7217,7 +7276,7 @@ const CanteraMesaModule = (() => {
   return { render, setFiltro, setPageSize, goPage, toggleFailed, toggleTierFiltro, togglePrioFiltro,
     toggleCoSel, toggleCoSelAll, toggleExpand, setContactPrioridad, toggleCol, menu,
     runClean, runEnrich, runValidacion, _confirmRevalidar, openAudit,
-    openPromote, doPromote, openSendSeq, doSendSeq, openManualValidation, saveManualValidation, copyManualData, quitarValidacionManual };
+    openPromote, doPromote, openSendSeq, doSendSeq, openManualValidation, saveManualValidation, copyManualData, copyManualInstruccion, quitarValidacionManual };
 })();
 
 // =================================================================
