@@ -20971,6 +20971,12 @@ ${foot}
     return !((st.canal || 'email') === 'email' && _seqEmailEsAutomatico(seqId));
   }
   function _seqTasks(id) {
+    // Pausar la secuencia ENTERA (desde Configuración, no "Pausar todo") solo
+    // cambia el estado de la secuencia — no toca cada contacto, que sigue
+    // "activo" — así que sus tareas seguían contando como vencidas/pendientes
+    // aunque la secuencia dijera "Pausada" (reportado 2026-09-09, con captura).
+    const seq = (_sequences || []).find(x => x.id === id);
+    if (seq && seq.estado !== 'activa') return [];
     const steps = _seqSteps(id);
     const list = Array.isArray(_seqContacts) ? _seqContacts : [];
     const mask = _seqSendDays(id);
@@ -20986,6 +20992,12 @@ ${foot}
   // Cola de empresas: cada fila pendiente ES la tarea "Paso 1" (buscar y agregar al decisor)
   // — mismo shape {st, due} que _seqTasks para reusar canal-chips/orden/agrupado sin duplicar esa lógica.
   function _seqCoTasks(id) {
+    // Mismo fix que _seqTasks: las filas de la cola de empresas
+    // (lm_company_sequences) no tienen un estado "pausado" propio — solo
+    // pendiente/trabajada/descartada — así que si la secuencia ENTERA está
+    // pausada había que cortarlo acá, si no seguían contando como pendientes.
+    const seq = (_sequences || []).find(x => x.id === id);
+    if (seq && seq.estado !== 'activa') return [];
     const list = Array.isArray(_seqPendingCos) ? _seqPendingCos : [];
     const steps = _seqSteps(id);
     if (!steps.length || !list.length) return [];
@@ -21711,10 +21723,16 @@ ${foot}
   // Antes usaba steps[paso-1] + _dueForStep (lineal), lo que en secuencias con rama calculaba mal
   // la fecha (p. ej. el email de Ruta B caía "hoy" en vez de en su día).
   function _allSeqTasks() {
+    // Mismo fix que _seqTasks: si la secuencia ENTERA está pausada (desde
+    // Configuración, sin pasar por "Pausar todo"), sus contactos siguen
+    // "activo" a nivel individual — hay que descartarlos igual acá.
+    const _seqEstadoById = new Map((_sequences || []).map(s => [s.id, s.estado]));
     const out = [];
     (_contacts || []).forEach(c => {
       (Array.isArray(c.sequences) ? c.sequences : []).forEach(sq => {
         if (sq.estado && sq.estado !== 'activo') return;
+        const seqEstado = _seqEstadoById.get(sq.id);
+        if (seqEstado && seqEstado !== 'activa') return;
         const steps = _seqSteps(sq.id);
         const eff = _effIdx(steps, c.id, (sq.paso || 1) - 1);
         if (eff < 0) return;
