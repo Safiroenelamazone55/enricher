@@ -21630,7 +21630,12 @@ ${foot}
   }
   // state: 'done' (ya pasó, check verde) | 'current' (el próximo/en curso, círculo azul)
   // | 'future' (todavía no llega, círculo gris) — estilo tracker de envíos.
-  const _STEP_STATUS_LBL = { done: 'Completado', current: 'En curso', future: 'Pendiente' };
+  // OJO: 'done' es solo "la fecha del paso ya pasó" — NO significa que de verdad
+  // se aprobó/envió/hizo nada (esta tarjeta es la PLANTILLA de la secuencia, no
+  // el progreso real de un contacto). "Completado" confundía — reportado
+  // 2026-09-10: "el email paso 2 día 1 sale como completado... nunca aprobé ni
+  // envié nada". El estado real de aprobación vive en la pestaña "Aprobar".
+  const _STEP_STATUS_LBL = { done: 'Día pasado', current: 'En curso', future: 'Pendiente' };
   function _stepRow(st, state) {
     const t = _TOUCH[st.canal] || _TOUCH.email;
     const cal = _stepCalDate(st);
@@ -21643,7 +21648,7 @@ ${foot}
         <div class="lm-step__top"><span class="lm-step__t">${esc(_accionLabel(st.canal, st.accion) || t[0])}</span>${cb}</div>
       </div>
       <div class="lm-step__status">
-        <span class="lm-step__status__lbl">${_STEP_STATUS_LBL[state]}</span>
+        <span class="lm-step__status__lbl"${state === 'done' ? ' title="Solo indica que la fecha de este paso ya pasó — no que se haya aprobado o enviado. Revisa el progreso real en Contactos/Aprobar."' : ''}>${_STEP_STATUS_LBL[state]}</span>
         <span class="lm-step__status__at">${cal || '—'}</span>
       </div>
       <span class="lm-step__chev">›</span>
