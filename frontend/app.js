@@ -19308,7 +19308,8 @@ const LeadManagerModule = (() => {
     // el panel derecho es fijo: fila de KPIs seleccionable + el contenido de esa
     // sección — cambiar de sección ya NO oculta Pasos, eso solo lo hace «/›.
     const _states = steps.length ? _stepStates(steps) : [];
-    const pasosHtml = steps.length ? steps.map((st, i) => _stepRow(st, _states[i])).join('') : `<div class="lm-act-empty"><div class="lm-act-empty__i">🪜</div><p>Esta secuencia no tiene pasos</p><span>Agrega el primero (Día 1 · Email).</span></div>`;
+    const _progress = steps.length ? _stepRealProgress(steps) : [];
+    const pasosHtml = steps.length ? steps.map((st, i) => _stepRow(st, _states[i], _progress[i])).join('') : `<div class="lm-act-empty"><div class="lm-act-empty__i">🪜</div><p>Esta secuencia no tiene pasos</p><span>Agrega el primero (Día 1 · Email).</span></div>`;
     const pasosCard = _seqPasosOpen ? `<div class="seq-split__pasos">
         <div class="lm-seqhd">
           <div class="lm-seqhd__btns">
@@ -21713,16 +21714,41 @@ ${foot}
   // 2026-09-10: "el email paso 2 día 1 sale como completado... nunca aprobé ni
   // envié nada". El estado real de aprobación vive en la pestaña "Aprobar".
   const _STEP_STATUS_LBL = { done: 'Día pasado', current: 'En curso', future: 'Pendiente' };
-  function _stepRow(st, state) {
+  // Progreso REAL por paso — pedido explícito 2026-09-11: "una barrita de
+  // progreso por paso... que se pinte de acuerdo al avance". Cuenta cuántos de
+  // los contactos enrolados YA pasaron este paso (paso > i, o terminaron la
+  // secuencia) sobre el total — a diferencia de _stepStates (arriba), esto SÍ
+  // mide avance real, no solo si la fecha calendario ya pasó.
+  function _stepRealProgress(steps) {
+    const contacts = Array.isArray(_seqContacts) ? _seqContacts : null;
+    if (!contacts || !contacts.length) return steps.map(() => null);
+    const total = contacts.length;
+    return steps.map((st, i) => {
+      const done = contacts.filter(c => c.estado === 'terminado' || (c.paso || 1) - 1 > i).length;
+      return { done, total, pct: Math.round(done / total * 100) };
+    });
+  }
+  function _progColor(pct) {
+    if (pct >= 100) return 'var(--sq-green, #16A34A)';
+    if (pct >= 50) return 'var(--sq-blue, #2563EB)';
+    if (pct > 0) return 'var(--sq-amber, #B45309)';
+    return '#E2E8F0';
+  }
+  function _stepRow(st, state, prog) {
     const t = _TOUCH[st.canal] || _TOUCH.email;
     const cal = _stepCalDate(st);
     const cb = st.cond === 'replied' ? '<span class="lm-vb" style="background:#F1EFEB;color:#15803D" title="Solo para contactos que respondieron o aceptaron la conexión de LinkedIn">si respondió</span>'
              : st.cond === 'no_reply' ? '<span class="lm-vb" style="background:#FEF3C7;color:#B45309" title="Solo para contactos que NO respondieron">si no respondió</span>' : '';
+    const progHtml = prog ? `<div class="lm-step__prog" title="${prog.done} de ${prog.total} contactos ya pasaron este paso">
+        <div class="lm-step__prog__bar"><span style="width:${prog.pct}%;background:${_progColor(prog.pct)}"></span></div>
+        <span class="lm-step__prog__n">${prog.done}/${prog.total}</span>
+      </div>` : '';
     return `<div class="lm-step lm-step--${state}" onclick="LeadManagerModule.openStepDrawer(${st.sequence_id},${st.id})">
       <div class="lm-step__rail"><span class="lm-step__node">${st.dia}</span></div>
       <span class="lm-step__ico"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${_stepIcoPath(st)}</svg></span>
       <div class="lm-step__body">
         <div class="lm-step__top"><span class="lm-step__t">${esc(_accionLabel(st.canal, st.accion) || t[0])}</span>${cb}</div>
+        ${progHtml}
       </div>
       <div class="lm-step__status">
         <span class="lm-step__status__lbl"${state === 'done' ? ' title="Solo indica que la fecha de este paso ya pasó — no que se haya aprobado o enviado. Revisa el progreso real en Contactos/Aprobar."' : ''}>${_STEP_STATUS_LBL[state]}</span>
