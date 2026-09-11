@@ -20324,6 +20324,11 @@ ${foot}
     // o llamada sin número válido). Sin esto, la única salida era "Hecha", que es incorrecto:
     // no se contactó a nadie, solo se saltó el paso.
     const probItems = [];
+    // Pedido explícito 2026-09-11: registrar "ya aceptó la conexión / ya está
+    // en mis contactos" DESDE la tarea de LinkedIn, sin ir a la revisión
+    // masiva aparte. Reusa la disposición 'aceptado' ya existente (dispara el
+    // mismo re-enrutado a los pasos "si respondió" que ya usa esa revisión).
+    if (canal === 'linkedin') probItems.push(item('✓ Ya aceptó / ya es mi contacto', 'LeadManagerModule.seqDoAccepted()'));
     if (canal === 'linkedin') probItems.push(item('🚫 LinkedIn no válido', 'LeadManagerModule.seqDoNoLinkedIn()'));
     if (canal === 'email') probItems.push(item('↩ Email rebotó', 'LeadManagerModule.seqDoBounced()'));
     if (canal === 'whatsapp') probItems.push(item('📵 WhatsApp no válido', 'LeadManagerModule.seqDoNoWhatsapp()'));
@@ -20425,6 +20430,21 @@ ${foot}
     } catch (err) { showBanner('Error: ' + err.message, 'error'); if (btn) btn.disabled = false; }
   }
   // Desde la barra de tarea (paso LinkedIn): perfil falso/inactivo → sigue por email, no se saca.
+  // "Ya aceptó / ya es mi contacto" DESDE la tarea de LinkedIn — mismo
+  // mecanismo que la revisión masiva de "Pendientes de aceptación"
+  // (disposition='aceptado'), pero de un clic sin salir de la tarea.
+  async function seqDoAccepted() {
+    if (!_cpTaskCtx) return;
+    const seqId = _cpTaskCtx.seqId, cid = _contactView;
+    if (!confirm('¿Ya aceptó tu invitación de LinkedIn (o ya está en tus contactos)?\n\nAvanza directo al paso que depende de "si respondió/aceptó" en esta secuencia.')) return;
+    try {
+      const r = await _lmSetDispositionCore(cid, 'aceptado', seqId, '');
+      _seqContacts = null; await _seqLoadContacts(seqId); await _reloadContacts();
+      showBanner(`✓ Aceptación de LinkedIn registrada${r.rerouted ? ` · avanzó ${r.rerouted} paso(s)` : ''}`, 'success');
+      const next = _cpNextTask(seqId, cid);
+      if (next) openContactPage(next.e.contact_id, { seqId: seqId }); else seqDoExit();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
   async function seqDoNoLinkedIn() {
     if (!_cpTaskCtx) return;
     const seqId = _cpTaskCtx.seqId, cid = _contactView;
@@ -20858,7 +20878,10 @@ ${foot}
     document.querySelectorAll('.cp-mark-menu').forEach(m => m.remove());
     const close = "document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove())";
     const item = (label, onclick) => `<button class="cp-mark-menu__b" onclick="${close};${onclick}">${label}</button>`;
-    const html = `<div class="cp-mark-menu__list">${item('⤼ Saltar este paso', `LeadManagerModule.seqNoEmailSkip(${enrId})`)}</div>
+    const html = `<div class="cp-mark-menu__list">
+        ${item('✓ Ya aceptó LinkedIn / ya es mi contacto', `LeadManagerModule.seqNoEmailAccepted(${enrId},${contactId})`)}
+        ${item('⤼ Saltar este paso', `LeadManagerModule.seqNoEmailSkip(${enrId})`)}
+      </div>
       <div class="cp-mark-menu__sep"></div>
       <div class="cp-mark-menu__list">${item('⚠ Contacto no válido — descalificar (detiene todo)', `LeadManagerModule.seqNoEmailInvalid(${enrId},${contactId})`)}</div>
       <div class="cp-mark-menu__sep"></div>
@@ -20874,6 +20897,15 @@ ${foot}
   function _seqNoEmailDropRow(enrId) {
     _seqPendingNoEmail = (_seqPendingNoEmail || []).filter(r => r.enr_id !== enrId);
     const el = document.getElementById('seq-tabwrap'); if (el) el.innerHTML = _seqTabContent(_activeSeq);
+  }
+  async function seqNoEmailAccepted(enrId, contactId) {
+    if (!confirm('¿Ya aceptó tu invitación de LinkedIn (o ya está en tus contactos)?\n\nRegistra la aceptación y lo re-enruta al paso que corresponda — puede saltarse este email si ya no aplica.')) return;
+    try {
+      await _lmSetDispositionCore(contactId, 'aceptado', _activeSeq, '');
+      _seqContacts = null; await _seqLoadContacts(_activeSeq);
+      _seqNoEmailDropRow(enrId);
+      showBanner('✓ Aceptación de LinkedIn registrada', 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
   async function seqNoEmailSkip(enrId) {
     if (!confirm('¿Saltar este paso?\n\nNo se envía nada — el contacto sigue en la secuencia y pasa al siguiente paso.')) return;
@@ -29100,7 +29132,7 @@ ${foot}
     openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
     openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, confirmDeleteSequence, seqTab, seqPasosToggle, seqMoreMenu, seqAddContactOpen, _seqAddSearch, seqAddContactPick, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
     seqAppAction, seqAppNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, taskApprove, seqCompleteEmailApprove, seqNoEmailNav,
-    seqNoEmailMenu, seqNoEmailSkip, seqNoEmailInvalid, seqNoEmailRemove,
+    seqNoEmailMenu, seqNoEmailSkip, seqNoEmailInvalid, seqNoEmailRemove, seqNoEmailAccepted,
     seqTaskOpen, seqDoClose, seqDoCopy, seqDoDone, seqDoSkip, seqDoPrev, seqDoEditStep, seqDoExit, seqOpenLinkedIn,
     openStepDrawer, closeStepDrawer, saveStep, confirmDeleteStep, seqInsertVar, stepUseTpl, tzSearch, tzPick, tzBlur,
     stepSetMode, stepSetField, stepAddVariant, stepDelVariant, stepFocusTa, stepAccionChange,
@@ -29120,7 +29152,7 @@ ${foot}
     openViews, applyView, saveView, deleteView, clearAllViews,
     taskSetView, taskSetFilter, calPrev, calNext, calToday,
     lmSetDisposition, seqDoDisposition, cpSetStage,
-    seqDoNoLinkedIn, seqDoBounced, seqDoNoWhatsapp, seqDoNoPhone, lmToggleNoLinkedIn, lmToggleNoWhatsapp, lmToggleNoPhone, lmToggleBounced, lmToggleManualEmail, ctToggleBounced,
+    seqDoAccepted, seqDoNoLinkedIn, seqDoBounced, seqDoNoWhatsapp, seqDoNoPhone, lmToggleNoLinkedIn, lmToggleNoWhatsapp, lmToggleNoPhone, lmToggleBounced, lmToggleManualEmail, ctToggleBounced,
     seqDoDataIssue, seqDoDataIssuePick, ctToggleDataIssue, lmResumeDataIssue, seqOpenMark,
     lmSetPageSize, ctGoPage, coGoPage, seqCtSetEstado, seqTaskSetCanal,
     ldSetResult, ldSetCli, ldSetSeq, ldSetCamp, ldSetQ, ldAddNote, ldMeet, ldToDeal, ldEditNote, ldExport,
