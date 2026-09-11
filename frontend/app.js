@@ -19301,7 +19301,7 @@ const LeadManagerModule = (() => {
     const _seqTaskN = (Array.isArray(_seqContacts) || Array.isArray(_seqPendingCos))
       ? (Array.isArray(_seqContacts) ? _seqTasks(id).filter(t => t.due <= _today0).length : 0)
         + (Array.isArray(_seqPendingCos) ? _seqCoTasks(id).filter(t => t.due <= _today0).length : 0)
-        + (s.awaiting || 0)
+        + (s.awaiting || 0) + (s.no_email_pending || 0)
       : null;
     const backBtn = `<button class="lm-back" onclick="LeadManagerModule.go('sequences')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg> Secuencias</button>`;
     // Pasos vive SIEMPRE en su propia tarjeta a la izquierda (colapsable con «/›);
@@ -19360,7 +19360,8 @@ const LeadManagerModule = (() => {
       ['metricas', 'Métricas', null],
       ['envios', 'Envíos', null],
     ];
-    if (s.send_mode === 'preaprobado' || (s.awaiting || 0) > 0) tabs.push(['aprobar', 'Aprobar', (s.awaiting || 0) || null]);
+    const apN = (s.awaiting || 0) + (s.no_email_pending || 0);
+    if (s.send_mode === 'preaprobado' || apN > 0) tabs.push(['aprobar', 'Aprobar', apN || null]);
     return `<div class="seq-stat-tabs">${tabs.map(([key, label, n]) => `<button class="seq-stat-tab${_seqTab === key ? ' active' : ''}" onclick="LeadManagerModule.seqTab('${key}')">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICO[key] || ''}</svg>
         <span class="seq-stat-tab__lbl">${label}</span><span class="seq-stat-tab__n">${n != null ? n : '—'}</span>
@@ -21915,7 +21916,7 @@ ${foot}
     const nextLine = seqFuture.length ? `<div class="seq-next">${NI('calendar', 12)} Siguiente tarea de secuencia: <b>${_relDay(seqFuture[0].due)}</b>${seqFuture.length > 1 ? ` · +${seqFuture.length - 1} más próximas` : ''}</div>` : '';
     const anything = allRaw.length || acts.length || (Array.isArray(_apList) && _apList.length);
     const paCta = _acceptCtaHtml();
-    const totalAwaiting = (_sequences || []).reduce((t, s) => t + (s.awaiting || 0), 0);
+    const totalAwaiting = (_sequences || []).reduce((t, s) => t + (s.awaiting || 0) + (s.no_email_pending || 0), 0);
     // Stat strip (patrón referencia: número grande + label uppercase muted)
     const stat = (l, n, warn) => `<div class="lm-stat"><span class="lm-stat__l">${l}</span><span class="lm-stat__n${warn ? ' lm-stat__n--warn' : ''}">${n}</span></div>`;
     const statStrip = anything ? `<div class="lm-stat-strip">

@@ -7878,7 +7878,12 @@ app.get('/api/sequences', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(`
       SELECT s.*, s.starts_on::text AS starts_on,
-             (SELECT COUNT(*)::int FROM lm_messages m WHERE m.sequence_id = s.id AND m.estado='awaiting') AS awaiting
+             (SELECT COUNT(*)::int FROM lm_messages m WHERE m.sequence_id = s.id AND m.estado='awaiting') AS awaiting,
+             -- Contactos atascados en el paso de Email sin ese dato (pausados por el
+             -- motor con paused_reason='sin_email') — pedido explícito 2026-09-11: que
+             -- el número junto a "Aprobar" (y Tareas) los cuente, no solo lo ya redactado.
+             (SELECT COUNT(*)::int FROM lm_contact_sequences cs
+               WHERE cs.sequence_id = s.id AND cs.estado='pausado' AND cs.paused_reason='sin_email') AS no_email_pending
         FROM sequences s WHERE s.user_id=$1 ORDER BY s.created_at DESC`, [req.workspaceOwnerId]);
     res.json(rows);
   } catch (err) { console.error('[seq] GET error:', err.message); res.status(500).json({ error: 'Error al cargar secuencias' }); }
