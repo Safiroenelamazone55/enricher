@@ -20328,7 +20328,7 @@ ${foot}
     // en mis contactos" DESDE la tarea de LinkedIn, sin ir a la revisión
     // masiva aparte. Reusa la disposición 'aceptado' ya existente (dispara el
     // mismo re-enrutado a los pasos "si respondió" que ya usa esa revisión).
-    if (canal === 'linkedin') probItems.push(item('✓ Ya aceptó / ya es mi contacto', 'LeadManagerModule.seqDoAccepted()'));
+    if (canal === 'linkedin') probItems.push(item('🔗 Conexión de LinkedIn aceptada', 'LeadManagerModule.seqDoAccepted()'));
     if (canal === 'linkedin') probItems.push(item('🚫 LinkedIn no válido', 'LeadManagerModule.seqDoNoLinkedIn()'));
     if (canal === 'email') probItems.push(item('↩ Email rebotó', 'LeadManagerModule.seqDoBounced()'));
     if (canal === 'whatsapp') probItems.push(item('📵 WhatsApp no válido', 'LeadManagerModule.seqDoNoWhatsapp()'));
@@ -20429,22 +20429,24 @@ ${foot}
       if (nextCo) seqCoTaskOpen(seqId, nextCo.row.company_sequence_id); else seqDoExit();
     } catch (err) { showBanner('Error: ' + err.message, 'error'); if (btn) btn.disabled = false; }
   }
-  // Desde la barra de tarea (paso LinkedIn): perfil falso/inactivo → sigue por email, no se saca.
-  // "Ya aceptó / ya es mi contacto" DESDE la tarea de LinkedIn — mismo
-  // mecanismo que la revisión masiva de "Pendientes de aceptación"
-  // (disposition='aceptado'), pero de un clic sin salir de la tarea.
+  // "Conexión de LinkedIn aceptada" DESDE la tarea — mismo mecanismo que la
+  // revisión masiva de "Pendientes de aceptación" (disposition='aceptado'),
+  // pero de un clic sin salir de la tarea. OJO — corregido 2026-09-11: esto
+  // es un DATO adicional del contacto, no completa la tarea de hoy — NO
+  // avanza al siguiente contacto (a diferencia de "Hecha"/"Saltar"/los
+  // "Falta X"), se queda viendo la misma tarea.
   async function seqDoAccepted() {
     if (!_cpTaskCtx) return;
     const seqId = _cpTaskCtx.seqId, cid = _contactView;
-    if (!confirm('¿Ya aceptó tu invitación de LinkedIn (o ya está en tus contactos)?\n\nAvanza directo al paso que depende de "si respondió/aceptó" en esta secuencia.')) return;
+    if (!confirm('¿Registrar que aceptó la conexión de LinkedIn (o ya está en tus contactos)?\n\nEsto solo guarda el dato y reordena sus próximos pasos si corresponde — no marca esta tarea como hecha.')) return;
     try {
       const r = await _lmSetDispositionCore(cid, 'aceptado', seqId, '');
       _seqContacts = null; await _seqLoadContacts(seqId); await _reloadContacts();
-      showBanner(`✓ Aceptación de LinkedIn registrada${r.rerouted ? ` · avanzó ${r.rerouted} paso(s)` : ''}`, 'success');
-      const next = _cpNextTask(seqId, cid);
-      if (next) openContactPage(next.e.contact_id, { seqId: seqId }); else seqDoExit();
+      showBanner(`✓ Conexión de LinkedIn aceptada — registrada${r.rerouted ? ` · reordenó ${r.rerouted} paso(s)` : ''}`, 'success');
+      _renderBody();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
+  // Desde la barra de tarea (paso LinkedIn): perfil falso/inactivo → sigue por email, no se saca.
   async function seqDoNoLinkedIn() {
     if (!_cpTaskCtx) return;
     const seqId = _cpTaskCtx.seqId, cid = _contactView;
@@ -20879,7 +20881,7 @@ ${foot}
     const close = "document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove())";
     const item = (label, onclick) => `<button class="cp-mark-menu__b" onclick="${close};${onclick}">${label}</button>`;
     const html = `<div class="cp-mark-menu__list">
-        ${item('✓ Ya aceptó LinkedIn / ya es mi contacto', `LeadManagerModule.seqNoEmailAccepted(${enrId},${contactId})`)}
+        ${item('🔗 Conexión de LinkedIn aceptada', `LeadManagerModule.seqNoEmailAccepted(${enrId},${contactId})`)}
         ${item('⤼ Saltar este paso', `LeadManagerModule.seqNoEmailSkip(${enrId})`)}
       </div>
       <div class="cp-mark-menu__sep"></div>
@@ -20899,12 +20901,12 @@ ${foot}
     const el = document.getElementById('seq-tabwrap'); if (el) el.innerHTML = _seqTabContent(_activeSeq);
   }
   async function seqNoEmailAccepted(enrId, contactId) {
-    if (!confirm('¿Ya aceptó tu invitación de LinkedIn (o ya está en tus contactos)?\n\nRegistra la aceptación y lo re-enruta al paso que corresponda — puede saltarse este email si ya no aplica.')) return;
+    if (!confirm('¿Registrar que aceptó la conexión de LinkedIn (o ya está en tus contactos)?\n\nReordena sus próximos pasos según corresponda — puede saltarse este email si ya no aplica.')) return;
     try {
       await _lmSetDispositionCore(contactId, 'aceptado', _activeSeq, '');
       _seqContacts = null; await _seqLoadContacts(_activeSeq);
       _seqNoEmailDropRow(enrId);
-      showBanner('✓ Aceptación de LinkedIn registrada', 'success');
+      showBanner('✓ Conexión de LinkedIn aceptada — registrada', 'success');
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
   async function seqNoEmailSkip(enrId) {
