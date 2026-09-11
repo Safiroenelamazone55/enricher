@@ -4352,10 +4352,16 @@ app.post('/api/lm/contacts/:id/disposition', requireAuth, async (req, res) => {
       }
     }
     // ── EXIT dispositions (no_interesado, no_contactar, etc.): pausar ──────────
+    // OJO — corregido 2026-09-11: solo tocaba estado='activo'. Un contacto que
+    // YA estaba pausado por otro motivo (ej. 'sin_email', el motor no le
+    // encontró email) nunca se re-etiquetaba con "disposition_X" — seguía
+    // apareciendo en la cola de "Sin email" con el motivo viejo para siempre,
+    // aunque ya se hubiera descalificado. Descalificar debe ganarle a
+    // CUALQUIER pausa anterior (menos 'terminado', que ya no aplica).
     else if (LM_DISP_EXIT.includes(disp)) {
       const rp = seqId
-        ? await pool.query(`UPDATE lm_contact_sequences SET estado='pausado', paused_reason=$4 WHERE user_id=$1 AND contact_id=$2 AND sequence_id=$3 AND estado='activo'`, [uid, cid, seqId, 'disposition_' + disp])
-        : await pool.query(`UPDATE lm_contact_sequences SET estado='pausado', paused_reason=$3 WHERE user_id=$1 AND contact_id=$2 AND estado='activo'`, [uid, cid, 'disposition_' + disp]);
+        ? await pool.query(`UPDATE lm_contact_sequences SET estado='pausado', paused_reason=$4 WHERE user_id=$1 AND contact_id=$2 AND sequence_id=$3 AND estado IN ('activo','pausado')`, [uid, cid, seqId, 'disposition_' + disp])
+        : await pool.query(`UPDATE lm_contact_sequences SET estado='pausado', paused_reason=$3 WHERE user_id=$1 AND contact_id=$2 AND estado IN ('activo','pausado')`, [uid, cid, 'disposition_' + disp]);
       paused = rp.rowCount;
       // Al pasar a un estado terminal (no_interesado etc.), cerrar tarea pendiente
       // de revisión si existía (ya no requiere decisión — el humano decidió).
