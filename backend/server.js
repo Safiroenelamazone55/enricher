@@ -5890,6 +5890,11 @@ app.get('/api/lm/sequences/:id/pending-no-email', requireAuth, async (req, res) 
 app.post('/api/lm/contact-sequences/:id/complete-email-and-approve', requireAuth, async (req, res) => {
   const email = String((req.body || {}).email || '').trim();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Email inválido' });
+  // Teléfono/celular son opcionales — mientras estés en el perfil de LinkedIn con tus
+  // herramientas de prospección, de paso completas lo que encuentres (pedido explícito
+  // 2026-09-11). Solo el email hace falta para aprobar; estos dos se guardan si vienen.
+  const telefono = String((req.body || {}).telefono || '').trim();
+  const movil = String((req.body || {}).movil || '').trim();
   try {
     const { rows: [enr] } = await pool.query(
       `SELECT cs.*, s.send_mode, s.estado AS seq_estado FROM lm_contact_sequences cs
@@ -5909,7 +5914,12 @@ app.post('/api/lm/contact-sequences/:id/complete-email-and-approve', requireAuth
       `SELECT mb.id FROM lm_mailboxes mb JOIN sequences s ON s.outbound_client_id = mb.outbound_client_id AND s.user_id = mb.user_id
         WHERE s.id=$1 AND mb.user_id=$2 AND mb.estado IN ('conectado','solo_envio') LIMIT 1`, [enr.sequence_id, req.workspaceOwnerId]);
     if (!mbq) return res.status(400).json({ error: 'Sin buzón conectado para este cliente — conecta uno antes de aprobar' });
-    await pool.query(`UPDATE lm_contacts SET email=$1, email_status='' WHERE id=$2`, [email, enr.contact_id]);
+    await pool.query(
+      `UPDATE lm_contacts SET email=$1, email_status='',
+              telefono = CASE WHEN $2 <> '' THEN $2 ELSE telefono END,
+              movil    = CASE WHEN $3 <> '' THEN $3 ELSE movil END
+        WHERE id=$4`,
+      [email, telefono, movil, enr.contact_id]);
     // Reanuda la inscripción si el motor la había pausado por 'sin_email' — si no,
     // advancePastStep (tras enviar) exige cs.estado='activo' y se quedaría trabada
     // para siempre aunque el email sí salga.

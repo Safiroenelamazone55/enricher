@@ -20789,9 +20789,13 @@ ${foot}
         <span class="ibx-b ibx-b--ooo">Paso día ${row.paso_dia || '?'} · sin email</span>
       </div>
       ${row.linkedin ? `<a href="${esc(row.linkedin)}" target="_blank" rel="noopener" class="btn btn--ghost btn--sm" style="margin-bottom:6px;display:inline-flex;align-items:center;gap:6px;width:fit-content">${NI('linkedin', 13)} Ver perfil de LinkedIn ↗</a>` : ''}
-      <input class="form-input" id="noe-email-${row.enr_id}" type="email" placeholder="Completa el email del contacto…" style="margin-bottom:6px">
+      <input class="form-input" id="noe-email-${row.enr_id}" type="email" placeholder="Completa el email del contacto… (obligatorio)" style="margin-bottom:6px">
+      <div style="display:flex;gap:6px;margin-bottom:6px">
+        <input class="form-input" id="noe-tel-${row.enr_id}" type="tel" placeholder="Teléfono (opcional)" style="flex:1">
+        <input class="form-input" id="noe-mov-${row.enr_id}" type="tel" placeholder="Celular (opcional)" style="flex:1">
+      </div>
       <input class="form-input seq-app__subj" id="noe-subj-${row.enr_id}" value="${esc(row.asunto)}" placeholder="Asunto">
-      <textarea class="form-input seq-app__body" id="noe-body-${row.enr_id}" style="min-height:max(calc(100vh - 420px), 220px)">${esc(row.cuerpo)}</textarea>
+      <textarea class="form-input seq-app__body" id="noe-body-${row.enr_id}" style="min-height:max(calc(100vh - 460px), 200px)">${esc(row.cuerpo)}</textarea>
       <div class="seq-app__ft">
         <span class="sp"></span>
         <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.seqCompleteEmailApprove(${row.enr_id})">✓ Completar y aprobar</button>
@@ -20821,8 +20825,10 @@ ${foot}
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showBanner('Escribe un email válido', 'error'); return; }
     const asunto = document.getElementById(`noe-subj-${enrId}`)?.value;
     const cuerpo = document.getElementById(`noe-body-${enrId}`)?.value;
+    const telefono = document.getElementById(`noe-tel-${enrId}`)?.value.trim();
+    const movil = document.getElementById(`noe-mov-${enrId}`)?.value.trim();
     try {
-      const res = await apiFetch(`${API}/lm/contact-sequences/${enrId}/complete-email-and-approve`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, asunto, cuerpo }) });
+      const res = await apiFetch(`${API}/lm/contact-sequences/${enrId}/complete-email-and-approve`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, asunto, cuerpo, telefono, movil }) });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || 'Error');
       // Se quita de la cola en ese índice — el que ocupaba el siguiente lugar
