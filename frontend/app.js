@@ -20845,9 +20845,14 @@ ${foot}
   }
   // "⋮" junto a "Ver perfil de LinkedIn" — pedido explícito 2026-09-11: otras
   // salidas para cuando no vale la pena seguir insistiendo con el email de
-  // ESTE contacto puntual: saltar el paso, marcarlo "Por corregir" (mismo
-  // mecanismo ya usado en toda la app para falta_email/falta_linkedin/dato
-  // incorrecto) o quitarlo de la secuencia.
+  // ESTE contacto puntual. OJO — corregido 2026-09-11: "Falta email"/"Falta
+  // LinkedIn" se sacaron de acá — usan el mecanismo global "Por corregir"
+  // que PAUSA TODAS las secuencias del contacto, no solo este paso; en una
+  // secuencia multicanal (LinkedIn es el canal principal acá) eso desperdicia
+  // al contacto sin necesidad. "Saltar este paso" ya cubre ese caso bien
+  // (sigue en LinkedIn/WhatsApp, solo se salta el email). Solo queda el
+  // "Por corregir" que SÍ tiene sentido pausar todo: el contacto entero es
+  // inválido, no un dato puntual.
   function seqNoEmailMenu(ev, enrId, contactId) {
     if (ev && ev.stopPropagation) ev.stopPropagation();
     document.querySelectorAll('.cp-mark-menu').forEach(m => m.remove());
@@ -20855,11 +20860,7 @@ ${foot}
     const item = (label, onclick) => `<button class="cp-mark-menu__b" onclick="${close};${onclick}">${label}</button>`;
     const html = `<div class="cp-mark-menu__list">${item('⤼ Saltar este paso', `LeadManagerModule.seqNoEmailSkip(${enrId})`)}</div>
       <div class="cp-mark-menu__sep"></div>
-      <div class="cp-mark-menu__list">
-        ${item('✉ Falta email', `LeadManagerModule.seqNoEmailIssue(${enrId},${contactId},'falta_email')`)}
-        ${item('🔗 Falta LinkedIn', `LeadManagerModule.seqNoEmailIssue(${enrId},${contactId},'falta_linkedin')`)}
-        ${item('⚠ Contacto no válido / dato incorrecto', `LeadManagerModule.seqNoEmailIssue(${enrId},${contactId},'dato_incorrecto')`)}
-      </div>
+      <div class="cp-mark-menu__list">${item('⚠ Contacto no válido — pausar todas sus secuencias', `LeadManagerModule.seqNoEmailIssue(${enrId},${contactId},'dato_incorrecto')`)}</div>
       <div class="cp-mark-menu__sep"></div>
       <div class="cp-mark-menu__list">${item('✕ Quitar de la secuencia', `LeadManagerModule.seqNoEmailRemove(${enrId},${contactId})`)}</div>`;
     const menu = document.createElement('div'); menu.className = 'cp-mark-menu'; menu.style.minWidth = '250px'; menu.innerHTML = html;
