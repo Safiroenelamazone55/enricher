@@ -20788,7 +20788,10 @@ ${foot}
         <div class="seq-app__who">${meta}</div>
         <span class="ibx-b ibx-b--ooo">Paso día ${row.paso_dia || '?'} · sin email</span>
       </div>
-      ${row.linkedin ? `<a href="${esc(row.linkedin)}" target="_blank" rel="noopener" class="btn btn--ghost btn--sm" style="margin-bottom:6px;display:inline-flex;align-items:center;gap:6px;width:fit-content">${NI('linkedin', 13)} Ver perfil de LinkedIn ↗</a>` : ''}
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">
+        ${row.linkedin ? `<a href="${esc(row.linkedin)}" target="_blank" rel="noopener" class="btn btn--ghost btn--sm" style="display:inline-flex;align-items:center;gap:6px;width:fit-content">${NI('linkedin', 13)} Ver perfil de LinkedIn ↗</a>` : '<span></span>'}
+        <button class="dg-kebab" onclick="LeadManagerModule.seqNoEmailMenu(event,${row.enr_id},${row.contact_id})" title="Otras opciones — saltar paso, falta LinkedIn, contacto no válido, quitar de la secuencia">⋮</button>
+      </div>
       <input class="form-input" id="noe-email-${row.enr_id}" type="email" placeholder="Completa el email del contacto… (obligatorio)" style="margin-bottom:6px">
       <div style="display:flex;gap:6px;margin-bottom:6px">
         <input class="form-input" id="noe-tel-${row.enr_id}" type="tel" placeholder="Teléfono (opcional)" style="flex:1">
@@ -20838,6 +20841,67 @@ ${foot}
       if (Array.isArray(_seqApprovals)) _seqApprovals.push(d.message);
       const el = document.getElementById('seq-tabwrap'); if (el) el.innerHTML = _seqTabContent(_activeSeq);
       showBanner('✓ Email completado y aprobado — saldrá respetando el intervalo de la secuencia', 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  // "⋮" junto a "Ver perfil de LinkedIn" — pedido explícito 2026-09-11: otras
+  // salidas para cuando no vale la pena seguir insistiendo con el email de
+  // ESTE contacto puntual: saltar el paso, marcarlo "Por corregir" (mismo
+  // mecanismo ya usado en toda la app para falta_email/falta_linkedin/dato
+  // incorrecto) o quitarlo de la secuencia.
+  function seqNoEmailMenu(ev, enrId, contactId) {
+    if (ev && ev.stopPropagation) ev.stopPropagation();
+    document.querySelectorAll('.cp-mark-menu').forEach(m => m.remove());
+    const close = "document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove())";
+    const item = (label, onclick) => `<button class="cp-mark-menu__b" onclick="${close};${onclick}">${label}</button>`;
+    const html = `<div class="cp-mark-menu__list">${item('⤼ Saltar este paso', `LeadManagerModule.seqNoEmailSkip(${enrId})`)}</div>
+      <div class="cp-mark-menu__sep"></div>
+      <div class="cp-mark-menu__list">
+        ${item('✉ Falta email', `LeadManagerModule.seqNoEmailIssue(${enrId},${contactId},'falta_email')`)}
+        ${item('🔗 Falta LinkedIn', `LeadManagerModule.seqNoEmailIssue(${enrId},${contactId},'falta_linkedin')`)}
+        ${item('⚠ Contacto no válido / dato incorrecto', `LeadManagerModule.seqNoEmailIssue(${enrId},${contactId},'dato_incorrecto')`)}
+      </div>
+      <div class="cp-mark-menu__sep"></div>
+      <div class="cp-mark-menu__list">${item('✕ Quitar de la secuencia', `LeadManagerModule.seqNoEmailRemove(${enrId},${contactId})`)}</div>`;
+    const menu = document.createElement('div'); menu.className = 'cp-mark-menu'; menu.style.minWidth = '250px'; menu.innerHTML = html;
+    document.body.appendChild(menu);
+    const t = (ev && (ev.currentTarget || ev.target)) || document.body;
+    const r = t.getBoundingClientRect();
+    menu.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 260))}px`;
+    menu.style.top = `${r.bottom + 6}px`;
+    setTimeout(() => document.addEventListener('click', function onDoc(e) { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', onDoc); } }), 0);
+  }
+  function _seqNoEmailDropRow(enrId) {
+    _seqPendingNoEmail = (_seqPendingNoEmail || []).filter(r => r.enr_id !== enrId);
+    const el = document.getElementById('seq-tabwrap'); if (el) el.innerHTML = _seqTabContent(_activeSeq);
+  }
+  async function seqNoEmailSkip(enrId) {
+    if (!confirm('¿Saltar este paso?\n\nNo se envía nada — el contacto sigue en la secuencia y pasa al siguiente paso.')) return;
+    try {
+      const res = await apiFetch(`${API}/lm/contact-sequences/${enrId}/skip-step`, { method: 'POST' });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Error');
+      _seqNoEmailDropRow(enrId);
+      showBanner('✓ Paso saltado — el contacto avanza al siguiente', 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  async function seqNoEmailIssue(enrId, contactId, issue) {
+    const lbl = { falta_email: 'Falta email', falta_linkedin: 'Falta LinkedIn', dato_incorrecto: 'Dato incorrecto / contacto no válido' }[issue] || issue;
+    let note = '';
+    if (issue === 'dato_incorrecto') note = (prompt('¿Qué está mal con este contacto? (opcional)') || '').trim();
+    if (!confirm(`¿Marcar "${lbl}"?\n\nQueda en Contactos → "Por corregir" y sale de esta lista.`)) return;
+    try {
+      await _dataIssueCore(contactId, issue, note);
+      _seqNoEmailDropRow(enrId);
+      showBanner(`⚠ ${lbl} — queda en Contactos → Por corregir`, 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  async function seqNoEmailRemove(enrId, contactId) {
+    if (!confirm('¿Quitar este contacto de la secuencia?')) return;
+    try {
+      const res = await apiFetch(`${API}/lm/sequences/${_activeSeq}/contacts/${contactId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Error');
+      _seqContacts = (_seqContacts || []).filter(x => x.contact_id !== contactId);
+      _seqNoEmailDropRow(enrId);
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
   // Navega la cola de aprobación una tarjeta a la vez (‹ Anterior / Siguiente ›).
@@ -29033,6 +29097,7 @@ ${foot}
     openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
     openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, confirmDeleteSequence, seqTab, seqPasosToggle, seqMoreMenu, seqAddContactOpen, _seqAddSearch, seqAddContactPick, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
     seqAppAction, seqAppNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, taskApprove, seqCompleteEmailApprove, seqNoEmailNav,
+    seqNoEmailMenu, seqNoEmailSkip, seqNoEmailIssue, seqNoEmailRemove,
     seqTaskOpen, seqDoClose, seqDoCopy, seqDoDone, seqDoSkip, seqDoPrev, seqDoEditStep, seqDoExit, seqOpenLinkedIn,
     openStepDrawer, closeStepDrawer, saveStep, confirmDeleteStep, seqInsertVar, stepUseTpl, tzSearch, tzPick, tzBlur,
     stepSetMode, stepSetField, stepAddVariant, stepDelVariant, stepFocusTa, stepAccionChange,

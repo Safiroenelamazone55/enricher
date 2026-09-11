@@ -5915,7 +5915,7 @@ app.post('/api/lm/contact-sequences/:id/complete-email-and-approve', requireAuth
         WHERE s.id=$1 AND mb.user_id=$2 AND mb.estado IN ('conectado','solo_envio') LIMIT 1`, [enr.sequence_id, req.workspaceOwnerId]);
     if (!mbq) return res.status(400).json({ error: 'Sin buzón conectado para este cliente — conecta uno antes de aprobar' });
     await pool.query(
-      `UPDATE lm_contacts SET email=$1, email_status='',
+      `UPDATE lm_contacts SET email=$1, email_status='', data_issue='',
               telefono = CASE WHEN $2 <> '' THEN $2 ELSE telefono END,
               movil    = CASE WHEN $3 <> '' THEN $3 ELSE movil END
         WHERE id=$4`,
@@ -5932,6 +5932,26 @@ app.post('/api/lm/contact-sequences/:id/complete-email-and-approve', requireAuth
       [req.workspaceOwnerId, enr.contact_id, enr.sequence_id, row.step_id, asunto, cuerpo, email, token, mbq.id, enr.next_action_at || new Date().toISOString()]);
     res.json({ ok: true, message: msg });
   } catch (err) { console.error('[lm-ct-seq] complete-email-and-approve', err.message); res.status(500).json({ error: 'Error al completar y aprobar' }); }
+});
+// Salta el paso de Email actual sin enviar nada — pedido explícito 2026-09-11:
+// "3 puntitos... saltar paso" junto a las otras salidas (falta email/LinkedIn,
+// dato incorrecto, quitar de la secuencia) para cuando no vale la pena seguir
+// insistiendo con ESTE paso puntual pero el contacto sigue vivo en la secuencia.
+app.post('/api/lm/contact-sequences/:id/skip-step', requireAuth, async (req, res) => {
+  try {
+    const { rows: [enr] } = await pool.query(
+      `SELECT cs.* FROM lm_contact_sequences cs WHERE cs.id=$1 AND cs.user_id=$2`, [req.params.id, req.workspaceOwnerId]);
+    if (!enr) return res.status(404).json({ error: 'Inscripción no encontrada' });
+    const rows = await _pendingNoEmailRows(pool, req.workspaceOwnerId, enr.sequence_id);
+    const row = rows.find(r => r.enr_id === enr.id);
+    if (!row) return res.status(409).json({ error: 'Este paso ya no está pendiente — recarga la lista' });
+    // advancePastStep exige cs.estado='activo' — reactiva primero si el motor
+    // la había pausado por 'sin_email'.
+    await pool.query(`UPDATE lm_contact_sequences SET estado='activo', paused_reason='' WHERE id=$1`, [enr.id]);
+    const { advancePastStep } = require('./services/sendEngine');
+    await advancePastStep(pool, req.workspaceOwnerId, enr.contact_id, enr.sequence_id, row.step_id);
+    res.json({ ok: true });
+  } catch (err) { console.error('[lm-ct-seq] skip-step', err.message); res.status(500).json({ error: 'Error al saltar el paso' }); }
 });
 
 // Cancelar un envío programado (solo mientras siga 'scheduled').
