@@ -20860,7 +20860,7 @@ ${foot}
     const item = (label, onclick) => `<button class="cp-mark-menu__b" onclick="${close};${onclick}">${label}</button>`;
     const html = `<div class="cp-mark-menu__list">${item('⤼ Saltar este paso', `LeadManagerModule.seqNoEmailSkip(${enrId})`)}</div>
       <div class="cp-mark-menu__sep"></div>
-      <div class="cp-mark-menu__list">${item('⚠ Contacto no válido — pausar todas sus secuencias', `LeadManagerModule.seqNoEmailIssue(${enrId},${contactId},'dato_incorrecto')`)}</div>
+      <div class="cp-mark-menu__list">${item('⚠ Contacto no válido — descalificar (detiene todo)', `LeadManagerModule.seqNoEmailInvalid(${enrId},${contactId})`)}</div>
       <div class="cp-mark-menu__sep"></div>
       <div class="cp-mark-menu__list">${item('✕ Quitar de la secuencia', `LeadManagerModule.seqNoEmailRemove(${enrId},${contactId})`)}</div>`;
     const menu = document.createElement('div'); menu.className = 'cp-mark-menu'; menu.style.minWidth = '250px'; menu.innerHTML = html;
@@ -20885,15 +20885,17 @@ ${foot}
       showBanner('✓ Paso saltado — el contacto avanza al siguiente', 'success');
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
-  async function seqNoEmailIssue(enrId, contactId, issue) {
-    const lbl = { falta_email: 'Falta email', falta_linkedin: 'Falta LinkedIn', dato_incorrecto: 'Dato incorrecto / contacto no válido' }[issue] || issue;
-    let note = '';
-    if (issue === 'dato_incorrecto') note = (prompt('¿Qué está mal con este contacto? (opcional)') || '').trim();
-    if (!confirm(`¿Marcar "${lbl}"?\n\nQueda en Contactos → "Por corregir" y sale de esta lista.`)) return;
+  // OJO — corregido 2026-09-11: esto NO es "Por corregir" (data_issue). "Por
+  // corregir" implica un dato puntual arreglable que reanuda solo al llenarlo
+  // — mal encaje para "el contacto entero es inválido". La disposición
+  // "No califica" es el estado TERMINAL correcto (ya usado en toda la app):
+  // descalifica, pausa todo, sin ninguna expectativa de volver a revisarlo.
+  async function seqNoEmailInvalid(enrId, contactId) {
+    if (!confirm('¿Marcar este contacto como "No califica"?\n\nSe detienen todas sus secuencias — no vuelve a aparecer en ninguna cola de trabajo ni queda pendiente de corregir nada.')) return;
     try {
-      await _dataIssueCore(contactId, issue, note);
+      await _lmSetDispositionCore(contactId, 'no_califica', null, '');
       _seqNoEmailDropRow(enrId);
-      showBanner(`⚠ ${lbl} — queda en Contactos → Por corregir`, 'success');
+      showBanner('✓ "No califica" — se detuvieron todas sus secuencias', 'success');
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
   async function seqNoEmailRemove(enrId, contactId) {
@@ -29098,7 +29100,7 @@ ${foot}
     openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
     openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, confirmDeleteSequence, seqTab, seqPasosToggle, seqMoreMenu, seqAddContactOpen, _seqAddSearch, seqAddContactPick, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
     seqAppAction, seqAppNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, taskApprove, seqCompleteEmailApprove, seqNoEmailNav,
-    seqNoEmailMenu, seqNoEmailSkip, seqNoEmailIssue, seqNoEmailRemove,
+    seqNoEmailMenu, seqNoEmailSkip, seqNoEmailInvalid, seqNoEmailRemove,
     seqTaskOpen, seqDoClose, seqDoCopy, seqDoDone, seqDoSkip, seqDoPrev, seqDoEditStep, seqDoExit, seqOpenLinkedIn,
     openStepDrawer, closeStepDrawer, saveStep, confirmDeleteStep, seqInsertVar, stepUseTpl, tzSearch, tzPick, tzBlur,
     stepSetMode, stepSetField, stepAddVariant, stepDelVariant, stepFocusTa, stepAccionChange,
