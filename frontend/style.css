@@ -14505,6 +14505,10 @@ td.ldh-acts { padding-left: 6px; padding-right: 10px; }
 .seq-app__body { resize: vertical; min-height: 90px; font-size: .8rem; line-height: 1.5; }
 .seq-app__body--full { min-height: min(50vh, 420px); font-size: .85rem; }
 .seq-app__ft { display: flex; gap: 6px; align-items: center; margin-top: 8px; }
+/* "Sin email" en modo una-tarjeta-a-la-vez — pedido explícito 2026-09-11: que
+   quepa en pantalla sin scroll. Mismo look que .seq-app, un poco más ceñido. */
+.seq-app--compact { padding: 10px 12px; }
+.seq-app--compact .seq-app__hd { margin-bottom: 6px; }
 
 /* ── Drawer de paso: secciones + vista previa ── */
 .step-sec-h { display: flex; align-items: center; gap: 8px; font-size: .78rem; font-weight: 700; color: var(--text-primary); border-top: 1px solid var(--border); padding-top: 12px; margin-top: 4px; }

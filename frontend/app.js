@@ -20608,7 +20608,7 @@ ${foot}
   }
   function seqGoApprove(id) {
     openSequence(id);
-    _seqTab = 'aprobar'; _seqApprovals = null; _seqPendingNoEmail = null;
+    _seqTab = 'aprobar'; _seqApprovals = null; _seqPendingNoEmail = null; _seqNoEmailIdx = 0;
     _renderBody(); _seqLoadApprovals(id); _seqLoadPendingNoEmail(id);
   }
   // Tarjeta "Revisar aceptaciones de LinkedIn" (con sello de última revisión). Se reutiliza en Tareas comerciales y en la pestaña Tareas de la secuencia.
@@ -20728,7 +20728,7 @@ ${foot}
     try { const r = await apiFetch(`${API}/lm/sequences/${id}/metrics`); _seqMetrics = (r && r.ok) ? await r.json() : {}; } catch { _seqMetrics = {}; }
     if (_section === 'sequence' && _activeSeq === id && _seqTab === 'metricas') { const el = document.getElementById('seq-tabwrap'); if (el) el.innerHTML = _seqTabContent(id); }
   }
-  function seqTab(t) { _seqTab = t; _seqPasosOpen = false; if (t === 'aprobar') _seqAppIdx = 0; _renderBody(); if ((t === 'contactos' || t === 'tareas') && !Array.isArray(_seqContacts)) _seqLoadContacts(_activeSeq); if ((t === 'empresas' || t === 'tareas') && !Array.isArray(_seqPendingCos)) _seqLoadPendingCos(_activeSeq); if (t === 'metricas') { if (_seqMetrics === null) _seqLoadMetrics(_activeSeq); _seqAb = null; _seqLoadAb(_activeSeq); } if (t === 'envios') { _seqMsgs = null; _seqLoadMsgs(_activeSeq); } if (t === 'aprobar' || t === 'tareas') { _seqApprovals = null; _seqLoadApprovals(_activeSeq); _seqPendingNoEmail = null; _seqLoadPendingNoEmail(_activeSeq); } }
+  function seqTab(t) { _seqTab = t; _seqPasosOpen = false; if (t === 'aprobar') { _seqAppIdx = 0; _seqNoEmailIdx = 0; } _renderBody(); if ((t === 'contactos' || t === 'tareas') && !Array.isArray(_seqContacts)) _seqLoadContacts(_activeSeq); if ((t === 'empresas' || t === 'tareas') && !Array.isArray(_seqPendingCos)) _seqLoadPendingCos(_activeSeq); if (t === 'metricas') { if (_seqMetrics === null) _seqLoadMetrics(_activeSeq); _seqAb = null; _seqLoadAb(_activeSeq); } if (t === 'envios') { _seqMsgs = null; _seqLoadMsgs(_activeSeq); } if (t === 'aprobar' || t === 'tareas') { _seqApprovals = null; _seqLoadApprovals(_activeSeq); _seqPendingNoEmail = null; _seqLoadPendingNoEmail(_activeSeq); } }
   // Filas de aprobación DENTRO de la pestaña Tareas: el email automático se revisa,
   // edita y aprueba aquí mismo — no es una tarea de "marcar hecho".
   function _seqApRowsHtml(seqId) {
@@ -20766,6 +20766,7 @@ ${foot}
   // se ve el mensaje, el link a LinkedIn (para buscar el dato con tus propias
   // herramientas) y un campo para completar el email y aprobar de una vez.
   let _seqPendingNoEmail = null;
+  let _seqNoEmailIdx = 0; // una tarjeta a la vez — mismo patrón que seqAppNav/_seqAppIdx
   async function _seqLoadPendingNoEmail(id) {
     try { const r = await apiFetch(`${API}/lm/sequences/${id}/pending-no-email`); _seqPendingNoEmail = (r && r.ok) ? await r.json() : []; }
     catch { _seqPendingNoEmail = []; }
@@ -20773,29 +20774,46 @@ ${foot}
       const el = document.getElementById('seq-tabwrap'); if (el) el.innerHTML = _seqTabContent(id);
     }
   }
+  // Navega la cola "sin email" una tarjeta a la vez (‹ Anterior / Siguiente ›).
+  function seqNoEmailNav(delta) {
+    _seqNoEmailIdx = Math.max(0, _seqNoEmailIdx + delta);
+    const el = document.getElementById('seq-tabwrap'); if (el) el.innerHTML = _seqTabContent(_activeSeq);
+  }
   function _seqNoEmailCard(row) {
     const nm = [row.nombre, row.apellido].filter(Boolean).join(' ') || '(sin nombre)';
     const meta = [esc(nm), [row.cargo, row.empresa].filter(Boolean).map(esc).join(', ')].filter(Boolean).join(' · ');
-    return `<div class="seq-app seq-app--noemail">
+    return `<div class="seq-app seq-app--noemail seq-app--compact">
       <div class="seq-app__hd">
         <div class="seq-app__who">${meta}</div>
         <span class="ibx-b ibx-b--ooo">Paso día ${row.paso_dia || '?'} · sin email</span>
       </div>
-      ${row.linkedin ? `<a href="${esc(row.linkedin)}" target="_blank" rel="noopener" class="btn btn--ghost btn--sm" style="margin-bottom:8px;display:inline-flex;align-items:center;gap:6px;width:fit-content">${NI('linkedin', 13)} Ver perfil de LinkedIn ↗</a>` : ''}
-      <input class="form-input" id="noe-email-${row.enr_id}" type="email" placeholder="Completa el email del contacto…" style="margin-bottom:8px">
+      ${row.linkedin ? `<a href="${esc(row.linkedin)}" target="_blank" rel="noopener" class="btn btn--ghost btn--sm" style="margin-bottom:6px;display:inline-flex;align-items:center;gap:6px;width:fit-content">${NI('linkedin', 13)} Ver perfil de LinkedIn ↗</a>` : ''}
+      <input class="form-input" id="noe-email-${row.enr_id}" type="email" placeholder="Completa el email del contacto…" style="margin-bottom:6px">
       <input class="form-input seq-app__subj" id="noe-subj-${row.enr_id}" value="${esc(row.asunto)}" placeholder="Asunto">
-      <textarea class="form-input seq-app__body seq-app__body--full" id="noe-body-${row.enr_id}">${esc(row.cuerpo)}</textarea>
+      <textarea class="form-input seq-app__body" id="noe-body-${row.enr_id}" style="min-height:min(26vh,200px)">${esc(row.cuerpo)}</textarea>
       <div class="seq-app__ft">
         <span class="sp"></span>
         <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.seqCompleteEmailApprove(${row.enr_id})">✓ Completar y aprobar</button>
       </div>
     </div>`;
   }
+  // Una tarjeta a la vez con contador y flechas — pedido explícito 2026-09-11:
+  // "que quepa en toda la pantalla sin scroll... un contador 5 de 27... al
+  // aprobar avanza automático al siguiente... si retrocedo puedo editar".
   function _seqNoEmailRowsHtml() {
     const list = Array.isArray(_seqPendingNoEmail) ? _seqPendingNoEmail : [];
     if (!list.length) return '';
+    _seqNoEmailIdx = Math.max(0, Math.min(_seqNoEmailIdx, list.length - 1));
+    const row = list[_seqNoEmailIdx];
     return `<div class="lm-tsec-h" style="color:#A96D0C"><span class="lm-tsec-h__dot" style="background:#A96D0C"></span>Sin email — necesitan tu ayuda<span class="lm-tsec-h__n">${list.length}</span></div>
-      <div class="seq-tasks" style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px">${list.map(_seqNoEmailCard).join('')}</div>`;
+      <div class="seq-app-nav">
+        <div class="seq-app-nav__count"><b>${_seqNoEmailIdx + 1}</b> de ${list.length}</div>
+        <div class="seq-app-nav__arrows">
+          <button class="btn btn--ghost btn--sm" ${_seqNoEmailIdx <= 0 ? 'disabled' : ''} onclick="LeadManagerModule.seqNoEmailNav(-1)">‹ Anterior</button>
+          <button class="btn btn--ghost btn--sm" ${_seqNoEmailIdx >= list.length - 1 ? 'disabled' : ''} onclick="LeadManagerModule.seqNoEmailNav(1)">Siguiente ›</button>
+        </div>
+      </div>
+      <div style="margin-bottom:14px">${_seqNoEmailCard(row)}</div>`;
   }
   async function seqCompleteEmailApprove(enrId) {
     const email = document.getElementById(`noe-email-${enrId}`)?.value.trim();
@@ -20806,6 +20824,8 @@ ${foot}
       const res = await apiFetch(`${API}/lm/contact-sequences/${enrId}/complete-email-and-approve`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, asunto, cuerpo }) });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || 'Error');
+      // Se quita de la cola en ese índice — el que ocupaba el siguiente lugar
+      // pasa a mostrarse solo (avance automático, sin tocar _seqNoEmailIdx).
       _seqPendingNoEmail = (_seqPendingNoEmail || []).filter(r => r.enr_id !== enrId);
       const s = _sequences.find(x => x.id === _activeSeq); if (s) s.awaiting = (s.awaiting || 0) + 1;
       if (Array.isArray(_seqApprovals)) _seqApprovals.push(d.message);
@@ -28980,7 +29000,7 @@ ${foot}
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
     openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
     openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, confirmDeleteSequence, seqTab, seqPasosToggle, seqMoreMenu, seqAddContactOpen, _seqAddSearch, seqAddContactPick, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
-    seqAppAction, seqAppNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, taskApprove, seqCompleteEmailApprove,
+    seqAppAction, seqAppNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, taskApprove, seqCompleteEmailApprove, seqNoEmailNav,
     seqTaskOpen, seqDoClose, seqDoCopy, seqDoDone, seqDoSkip, seqDoPrev, seqDoEditStep, seqDoExit, seqOpenLinkedIn,
     openStepDrawer, closeStepDrawer, saveStep, confirmDeleteStep, seqInsertVar, stepUseTpl, tzSearch, tzPick, tzBlur,
     stepSetMode, stepSetField, stepAddVariant, stepDelVariant, stepFocusTa, stepAccionChange,
