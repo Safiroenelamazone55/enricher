@@ -805,4 +805,4 @@ function startSendEngine(pool, { apiBase, gmailCallback }) {
   console.log('[send-engine] started (tick 60s)');
 }
 
-module.exports = { startSendEngine, tick, renderTemplate, buildHtml, SENDABLE_STATUS, pickVariant, stepVariants, advancePastStep };
+module.exports = { startSendEngine, tick, renderTemplate, buildHtml, SENDABLE_STATUS, pickVariant, stepVariants, advancePastStep, condMatch: _condMatch, nextEffIdx: _nextEffIdx };

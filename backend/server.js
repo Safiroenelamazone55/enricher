@@ -5833,6 +5833,97 @@ app.put('/api/lm/approvals/:id', requireAuth, async (req, res) => {
   } catch (err) { console.error('[approvals] PUT', err.message); res.status(500).json({ error: 'Error al actualizar el borrador' }); }
 });
 
+// ── Contactos SIN email atascados en el paso de Email (modo pre-aprobado) ──
+// Pedido explícito 2026-09-11: "quiero que en la lista de por aprobar se
+// visualice aquellos que incluso no tienen un email asociado... se pueda
+// previsualizar el mensaje y el subject, completar el correo, ver el link
+// directo al perfil de LinkedIn... y lo apruebo". Antes _draftPreapproved
+// los saltaba en silencio (sin email no hay a dónde redactar) — quedaban
+// invisibles para siempre, sin ninguna señal de que faltaban.
+async function _pendingNoEmailRows(pool, userId, seqId) {
+  const { renderTemplate, pickVariant, condMatch, nextEffIdx } = require('./services/sendEngine');
+  const { rows: seqRows } = await pool.query(
+    `SELECT id, send_mode FROM sequences WHERE id=$1 AND user_id=$2 AND estado='activa'`, [seqId, userId]);
+  const seq = seqRows[0];
+  if (!seq || seq.send_mode !== 'preaprobado') return [];
+  const { rows: steps } = await pool.query(
+    `SELECT id, dia, canal, titulo, plantilla, variants, variant_mode, variant_field, asunto, cond
+       FROM sequence_steps WHERE sequence_id=$1 ORDER BY dia ASC, orden ASC, id ASC`, [seqId]);
+  if (!steps.length) return [];
+  const { rows: enrs } = await pool.query(`
+    SELECT cs.id AS enr_id, cs.contact_id, cs.paso, cs.next_action_at,
+           k.nombre, k.apellido, k.cargo, k.linkedin, co.linkedin_sales_nav AS company_linkedin_sales_nav, k.ciudad, k.pais,
+           k.disposition, k.li_aceptado_at, COALESCE(NULLIF(k.empresa_nombre,''), co.nombre, '') AS empresa_nombre
+      FROM lm_contact_sequences cs
+      JOIN lm_contacts k ON k.id = cs.contact_id
+      LEFT JOIN lm_companies co ON co.id = k.company_id
+     WHERE cs.user_id=$1 AND cs.sequence_id=$2
+       AND (cs.estado='activo' OR (cs.estado='pausado' AND cs.paused_reason='sin_email'))
+       AND (k.email IS NULL OR k.email='')
+     ORDER BY cs.next_action_at ASC NULLS FIRST`, [userId, seqId]);
+  const out = [];
+  for (const enr of enrs) {
+    const curIdx0 = (enr.paso || 1) - 1;
+    const effIdx = condMatch(steps[curIdx0], enr) ? curIdx0 : nextEffIdx(steps, enr, curIdx0);
+    if (effIdx < 0) continue;
+    const step = steps[effIdx];
+    if (!step || step.canal !== 'email') continue; // no está bloqueado por email — le toca otro canal
+    const variant = pickVariant(step, enr);
+    const asunto = renderTemplate((variant && variant.asunto) || step.asunto || 'Seguimiento — {{company}}', enr)
+      || `Seguimiento — ${enr.empresa_nombre || enr.nombre || ''}`;
+    const cuerpo = renderTemplate((variant && variant.cuerpo) || step.plantilla, enr);
+    out.push({
+      enr_id: enr.enr_id, contact_id: enr.contact_id, step_id: step.id,
+      nombre: enr.nombre, apellido: enr.apellido, cargo: enr.cargo, empresa: enr.empresa_nombre,
+      linkedin: enr.linkedin || enr.company_linkedin_sales_nav || '',
+      paso_dia: step.dia, next_action_at: enr.next_action_at, asunto, cuerpo,
+    });
+  }
+  return out;
+}
+app.get('/api/lm/sequences/:id/pending-no-email', requireAuth, async (req, res) => {
+  try { res.json(await _pendingNoEmailRows(pool, req.workspaceOwnerId, parseInt(req.params.id))); }
+  catch (err) { console.error('[lm-seq] pending-no-email', err.message); res.status(500).json({ error: 'Error al cargar pendientes sin email' }); }
+});
+// Completa el email del contacto y aprueba el mensaje de una sola vez — la
+// alternativa a esperar que el motor lo redacte solo (nunca pasa sin email).
+app.post('/api/lm/contact-sequences/:id/complete-email-and-approve', requireAuth, async (req, res) => {
+  const email = String((req.body || {}).email || '').trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Email inválido' });
+  try {
+    const { rows: [enr] } = await pool.query(
+      `SELECT cs.*, s.send_mode, s.estado AS seq_estado FROM lm_contact_sequences cs
+         JOIN sequences s ON s.id = cs.sequence_id
+        WHERE cs.id=$1 AND cs.user_id=$2`, [req.params.id, req.workspaceOwnerId]);
+    if (!enr) return res.status(404).json({ error: 'Inscripción no encontrada' });
+    if (enr.send_mode !== 'preaprobado') return res.status(400).json({ error: 'Esta secuencia no usa aprobación manual' });
+    const { rows: [existing] } = await pool.query(
+      `SELECT k.email FROM lm_contacts k WHERE k.id=$1 AND k.user_id=$2`, [enr.contact_id, req.workspaceOwnerId]);
+    if (existing && existing.email) return res.status(409).json({ error: 'Este contacto ya tiene email — recarga la lista' });
+    const rows = await _pendingNoEmailRows(pool, req.workspaceOwnerId, enr.sequence_id);
+    const row = rows.find(r => r.enr_id === enr.id);
+    if (!row) return res.status(409).json({ error: 'Este paso ya no está pendiente — recarga la lista' });
+    const asunto = String((req.body || {}).asunto || row.asunto);
+    const cuerpo = String((req.body || {}).cuerpo || row.cuerpo);
+    const { rows: [mbq] } = await pool.query(
+      `SELECT mb.id FROM lm_mailboxes mb JOIN sequences s ON s.outbound_client_id = mb.outbound_client_id AND s.user_id = mb.user_id
+        WHERE s.id=$1 AND mb.user_id=$2 AND mb.estado IN ('conectado','solo_envio') LIMIT 1`, [enr.sequence_id, req.workspaceOwnerId]);
+    if (!mbq) return res.status(400).json({ error: 'Sin buzón conectado para este cliente — conecta uno antes de aprobar' });
+    await pool.query(`UPDATE lm_contacts SET email=$1, email_status='' WHERE id=$2`, [email, enr.contact_id]);
+    // Reanuda la inscripción si el motor la había pausado por 'sin_email' — si no,
+    // advancePastStep (tras enviar) exige cs.estado='activo' y se quedaría trabada
+    // para siempre aunque el email sí salga.
+    await pool.query(`UPDATE lm_contact_sequences SET estado='activo', paused_reason='' WHERE id=$1 AND estado='pausado' AND paused_reason='sin_email'`, [enr.id]);
+    try { const { queueVerify } = require('./services/lmVerifyService'); queueVerify(pool, req.workspaceOwnerId, [enr.contact_id]); } catch (e) { console.warn('[lm-ct] re-verify:', e.message); }
+    const token = require('crypto').randomBytes(12).toString('hex');
+    const { rows: [msg] } = await pool.query(
+      `INSERT INTO lm_messages (user_id, contact_id, sequence_id, step_id, asunto, cuerpo, to_email, estado, track_token, mailbox_id, scheduled_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,'approved',$8,$9,$10) RETURNING *`,
+      [req.workspaceOwnerId, enr.contact_id, enr.sequence_id, row.step_id, asunto, cuerpo, email, token, mbq.id, enr.next_action_at || new Date().toISOString()]);
+    res.json({ ok: true, message: msg });
+  } catch (err) { console.error('[lm-ct-seq] complete-email-and-approve', err.message); res.status(500).json({ error: 'Error al completar y aprobar' }); }
+});
+
 // Cancelar un envío programado (solo mientras siga 'scheduled').
 app.delete('/api/lm/inbox/scheduled/:id', requireAuth, async (req, res) => {
   try {
