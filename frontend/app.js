@@ -20790,7 +20790,7 @@ ${foot}
       ${row.linkedin ? `<a href="${esc(row.linkedin)}" target="_blank" rel="noopener" class="btn btn--ghost btn--sm" style="margin-bottom:6px;display:inline-flex;align-items:center;gap:6px;width:fit-content">${NI('linkedin', 13)} Ver perfil de LinkedIn ↗</a>` : ''}
       <input class="form-input" id="noe-email-${row.enr_id}" type="email" placeholder="Completa el email del contacto…" style="margin-bottom:6px">
       <input class="form-input seq-app__subj" id="noe-subj-${row.enr_id}" value="${esc(row.asunto)}" placeholder="Asunto">
-      <textarea class="form-input seq-app__body" id="noe-body-${row.enr_id}" style="min-height:min(26vh,200px)">${esc(row.cuerpo)}</textarea>
+      <textarea class="form-input seq-app__body" id="noe-body-${row.enr_id}" style="min-height:max(calc(100vh - 420px), 220px)">${esc(row.cuerpo)}</textarea>
       <div class="seq-app__ft">
         <span class="sp"></span>
         <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.seqCompleteEmailApprove(${row.enr_id})">✓ Completar y aprobar</button>
