@@ -18563,6 +18563,9 @@ const _NI_LIB = {
   gear: '<circle cx="12" cy="12" r="3"/><path d="M12 1v3M12 20v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M1 12h3M20 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>',
   external: '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>',
   inbox: '<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
+  ban: '<circle cx="12" cy="12" r="9"/><line x1="5.6" y1="18.4" x2="18.4" y2="5.6"/>',
+  alert: '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
+  skip: '<polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/>',
 };
 function NI(name, size) {
   const p = _NI_LIB[name]; if (!p) return '';
@@ -20311,11 +20314,16 @@ ${foot}
   }
   // Barra de tarea: menú "⚠ Falta dato" con los 3 motivos.
   // Menú "Marcar resultado" — agrupa disposiciones + problema para una barra más limpia.
+  // Sin emojis — pedido explícito 2026-09-11: "pueden ser iconos pero no
+  // emojis", y un estilo más compacto/ordenado (una sola columna para la
+  // segunda lista en vez de la grilla de 2 columnas, que con etiquetas de
+  // largo distinto se veía desalineada).
   function seqOpenMark(ev, canal, accion) {
     if (ev && ev.stopPropagation) ev.stopPropagation();
     document.querySelectorAll('.cp-mark-menu, .lm-di-menu').forEach(m => m.remove());
     const close = "document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove())";
     const item = (label, onclick, dot) => `<button class="cp-mark-menu__b" onclick="${close};${onclick}">${dot ? `<span class="cp-mark-dot" style="background:${dot}"></span>` : ''}${label}</button>`;
+    const iitem = (icon, label, onclick) => `<button class="cp-mark-menu__b" onclick="${close};${onclick}"><span class="cp-mark-menu__ic">${NI(icon, 13)}</span>${label}</button>`;
     let html = `<div class="cp-mark-menu__h">Resultado del contacto</div>`;
     html += `<div class="cp-mark-menu__grid">` + _DISPOS.map(d => item(esc(d[1]), `LeadManagerModule.seqDoDisposition('${d[0]}')`, d[2])).join('') + `</div>`;
     html += `<div class="cp-mark-menu__sep"></div>`;
@@ -20328,19 +20336,19 @@ ${foot}
     // en mis contactos" DESDE la tarea de LinkedIn, sin ir a la revisión
     // masiva aparte. Reusa la disposición 'aceptado' ya existente (dispara el
     // mismo re-enrutado a los pasos "si respondió" que ya usa esa revisión).
-    if (canal === 'linkedin') probItems.push(item('🔗 Conexión de LinkedIn aceptada', 'LeadManagerModule.seqDoAccepted()'));
-    if (canal === 'linkedin') probItems.push(item('🚫 LinkedIn no válido', 'LeadManagerModule.seqDoNoLinkedIn()'));
-    if (canal === 'email') probItems.push(item('↩ Email rebotó', 'LeadManagerModule.seqDoBounced()'));
-    if (canal === 'whatsapp') probItems.push(item('📵 WhatsApp no válido', 'LeadManagerModule.seqDoNoWhatsapp()'));
-    if (canal === 'call') probItems.push(item('📵 Teléfono no válido', 'LeadManagerModule.seqDoNoPhone()'));
+    if (canal === 'linkedin') probItems.push(iitem('linkedin', 'Conexión de LinkedIn aceptada', 'LeadManagerModule.seqDoAccepted()'));
+    if (canal === 'linkedin') probItems.push(iitem('ban', 'LinkedIn no válido', 'LeadManagerModule.seqDoNoLinkedIn()'));
+    if (canal === 'email') probItems.push(iitem('reply', 'Email rebotó', 'LeadManagerModule.seqDoBounced()'));
+    if (canal === 'whatsapp') probItems.push(iitem('ban', 'WhatsApp no válido', 'LeadManagerModule.seqDoNoWhatsapp()'));
+    if (canal === 'call') probItems.push(iitem('ban', 'Teléfono no válido', 'LeadManagerModule.seqDoNoPhone()'));
     // El paso depende de que el prospecto haya publicado y hoy no hay nada: no es "hecha"
     // (no se comentó) ni un problema de dato (el perfil está bien). Se registra como paso
     // omitido y el contacto avanza — es como lo resuelven HubSpot, Apollo y Salesloft.
-    if (_isContentStep(canal, accion)) probItems.push(item('⤼ Sin actividad reciente', 'LeadManagerModule.seqDoNoActivity()'));
-    probItems.push(item('✉ Falta email', "LeadManagerModule.seqDoDataIssuePick('falta_email')"));
-    probItems.push(item('🔗 Falta LinkedIn', "LeadManagerModule.seqDoDataIssuePick('falta_linkedin')"));
-    probItems.push(item('⚠ Dato incorrecto', "LeadManagerModule.seqDoDataIssuePick('dato_incorrecto')"));
-    html += `<div class="cp-mark-menu__grid">` + probItems.join('') + `</div>`;
+    if (_isContentStep(canal, accion)) probItems.push(iitem('skip', 'Sin actividad reciente', 'LeadManagerModule.seqDoNoActivity()'));
+    probItems.push(iitem('mail', 'Falta email', "LeadManagerModule.seqDoDataIssuePick('falta_email')"));
+    probItems.push(iitem('linkedin', 'Falta LinkedIn', "LeadManagerModule.seqDoDataIssuePick('falta_linkedin')"));
+    probItems.push(iitem('alert', 'Dato incorrecto', "LeadManagerModule.seqDoDataIssuePick('dato_incorrecto')"));
+    html += `<div class="cp-mark-menu__list">` + probItems.join('') + `</div>`;
     const menu = document.createElement('div');
     menu.className = 'cp-mark-menu';
     menu.innerHTML = html;

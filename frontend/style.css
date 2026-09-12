@@ -12723,6 +12723,10 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .cp-mark-menu__b { display: flex; align-items: center; gap: 7px; width: 100%; text-align: left; background: none; border: none; font: inherit; font-size: .78rem; font-weight: 500; color: var(--text-primary); padding: 6px 8px; border-radius: 0; cursor: pointer; line-height: 1.2; }
 .cp-mark-menu__b:hover { background: var(--surface-hover); }
 .cp-mark-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+/* Icono en vez de emoji — pedido explícito 2026-09-11: "sin emojis, pueden
+   ser iconos". Mismo alto/alineación que .cp-mark-dot para que ambos tipos
+   de fila (con punto de color o con icono) se vean parejos. */
+.cp-mark-menu__ic { display: inline-flex; align-items: center; justify-content: center; width: 15px; flex-shrink: 0; color: var(--text-muted); }
 .cp-mark-menu__sep { height: 1px; background: var(--border, #EAE7E2); margin: 4px 6px; }
 /* "Resolver respuesta": submenu que se abre SOLO al pasar el cursor (no al
    clickear) — pegado al costado del ítem, como un menú de escritorio. El lado
