@@ -27004,6 +27004,27 @@ ${foot}
   function toggleCtAll(on) { if (on) _ctFilteredIds.forEach(id => _ctSel.add(id)); else _ctFilteredIds.forEach(id => _ctSel.delete(id)); _renderContacts(); }
   function clearCtSel() { _ctSel.clear(); _renderContacts(); }
   function toggleCtSelMode() { _ctSelMode = !_ctSelMode; if (!_ctSelMode) _ctSel.clear(); _renderContacts(); }
+  function _jsEsc(s) { return String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
+  // Filtro rápido de un solo click desde el "⋮" (Estado/Prioridad/País/Fuente…) —
+  // reusa el MISMO mecanismo que "Filtros avanzados" (arreglo {field,op:'in',val})
+  // en vez de inventar un segundo sistema de filtrado: togglear acá o desde el
+  // modal deja el mismo estado y los mismos chips debajo de la tabla.
+  function lmQuickToggle(entity, field, val) {
+    const arr = entity === 'contacts' ? _ctFilters : _coFilters;
+    let f = arr.find(x => x.field === field && x.op === 'in');
+    if (!f) { f = { field, op: 'in', val: [] }; arr.push(f); }
+    const i = f.val.indexOf(val);
+    if (i >= 0) f.val.splice(i, 1); else f.val.push(val);
+    if (!f.val.length) arr.splice(arr.indexOf(f), 1);
+    _renderBody();
+  }
+  function _lmFieldPanel(entity, field, item) {
+    const vals = _fltDistinct(entity, field);
+    if (!vals.length) return '<div class="cp-empty2" style="padding:10px 12px">Sin datos todavía</div>';
+    const arr = entity === 'contacts' ? _ctFilters : _coFilters;
+    const cur = (arr.find(x => x.field === field && x.op === 'in') || {}).val || [];
+    return vals.map(v => item(`${cur.includes(v) ? '✓ ' : ''}${esc(v)}`, `LeadManagerModule.lmQuickToggle('${entity}','${field}','${_jsEsc(v)}')`)).join('');
+  }
   // Submenu-por-hover de .cp-mark-menu__sub (mismo mecanismo que Cantera/Inbox —
   // ver CanteraModule.resultsMenu): sin esto el CSS por sí solo no revela el panel
   // (display:none por defecto). Un solo helper acá para no repetirlo en cada menú
@@ -27047,11 +27068,18 @@ ${foot}
       + _clients.map(cl => item(`${String(_ctClientFilter) === String(cl.id) ? '✓ ' : ''}${esc(cl.nombre)}`, `LeadManagerModule.ctSetClient('${cl.id}')`)).join('');
     const nBounced = (_contacts || []).filter(c => c.email_status === 'bounced').length;
     const nIssue = (_contacts || []).filter(c => c.data_issue).length;
-    const filtrosPanel = (_clients.length ? sub(`Cliente${curClient ? ': ' + esc(curClient.nombre) : ''}`, clientPanel) : '')
+    const qCount = f => { const x = _ctFilters.find(y => y.field === f && y.op === 'in'); return x ? x.val.length : 0; };
+    const qLbl = (label, field) => `${label}${qCount(field) ? ` · ${qCount(field)}` : ''}`;
+    const filtrosPanel = (_clients.length ? sub(`Cliente outbound${curClient ? ': ' + esc(curClient.nombre) : ''}`, clientPanel) : '')
+      + sub(qLbl('Estado', 'estado'), _lmFieldPanel('contacts', 'estado', item))
+      + sub(qLbl('Prioridad', 'contact_priority'), _lmFieldPanel('contacts', 'contact_priority', item))
+      + sub(qLbl('País', 'pais'), _lmFieldPanel('contacts', 'pais', item))
+      + sub(qLbl('Fuente', 'fuente'), _lmFieldPanel('contacts', 'fuente', item))
+      + `<div class="cp-mark-menu__sep"></div>`
       + ((nBounced || _ctBounced) ? item(`${_ctBounced ? '✓ ' : ''}Rebotados · ${nBounced}`, `LeadManagerModule.ctToggleBounced()`) : '')
       + ((nIssue || _ctDataIssue) ? item(`${_ctDataIssue ? '✓ ' : ''}Por corregir · ${nIssue}`, `LeadManagerModule.ctToggleDataIssue()`) : '')
       + `<div class="cp-mark-menu__sep"></div>`
-      + item(`Filtros avanzados${_ctFilters.length ? ` · ${_ctFilters.length}` : ''}`, `LeadManagerModule.openFilters('contacts')`);
+      + item(`Todos los filtros${_ctFilters.length ? ` · ${_ctFilters.length}` : ''}`, `LeadManagerModule.openFilters('contacts')`);
     const html = `<div class="cp-mark-menu__list">${sub(`${_FLT_ICON} Filtros`, filtrosPanel)}</div>
       <div class="cp-mark-menu__sep"></div>
       <div class="cp-mark-menu__list">${item(`${_VIEW_ICON} Vistas`, `LeadManagerModule.openViews('contacts')`)}${item(`${NI('sliders')} Columnas`, `LeadManagerModule.openColsPicker(this)`)}</div>
@@ -27686,7 +27714,13 @@ ${foot}
       <div class="cp-mark-menu__b cp-mark-menu__b--sub">${label} <span class="cp-mark-menu__arrow">▸</span></div>
       <div class="cp-mark-menu__subpanel"><div class="cp-mark-menu__list">${panelHtml}</div></div>
     </div>`;
-    const filtrosPanel = item(`Filtros avanzados${_coFilters.length ? ` · ${_coFilters.length}` : ''}`, `LeadManagerModule.openFilters('companies')`);
+    const qCount = f => { const x = _coFilters.find(y => y.field === f && y.op === 'in'); return x ? x.val.length : 0; };
+    const qLbl = (label, field) => `${label}${qCount(field) ? ` · ${qCount(field)}` : ''}`;
+    const filtrosPanel = sub(qLbl('País', 'pais'), _lmFieldPanel('companies', 'pais', item))
+      + sub(qLbl('Industria', 'industria'), _lmFieldPanel('companies', 'industria', item))
+      + sub(qLbl('Nº empleados', 'tamano'), _lmFieldPanel('companies', 'tamano', item))
+      + `<div class="cp-mark-menu__sep"></div>`
+      + item(`Todos los filtros${_coFilters.length ? ` · ${_coFilters.length}` : ''}`, `LeadManagerModule.openFilters('companies')`);
     const html = `<div class="cp-mark-menu__list">${sub(`${_FLT_ICON} Filtros`, filtrosPanel)}</div>
       <div class="cp-mark-menu__sep"></div>
       <div class="cp-mark-menu__list">${item(`${_VIEW_ICON} Vistas`, `LeadManagerModule.openViews('companies')`)}</div>
@@ -29218,7 +29252,7 @@ ${foot}
   return { load, filter, setFilter, setView, go, openClient, clientTab, _clientGoTab, clientQuickMenu,
     openImportPicker, closeImportPicker, openImport, closeImport, impFile, impToggleHeader, impToggleUpdateExisting, impSetObc, impNewClient, impRun, exportCsv,
     cbxOpen, cbxFilter, cbxPick, cbxBlur,
-    openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, ctMoreMenu, bulkDeleteContacts, bulkAddOpen, bulkAddDo, _bulkAddAfterCreate, bulkRemoveSeqOpen, bulkRemoveSeqDo, openContactPage, cpTab, cpSave, cpDelete, cpActOpen, cpActSave, cpActToggle, cpActDel,
+    openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, ctMoreMenu, lmQuickToggle, bulkDeleteContacts, bulkAddOpen, bulkAddDo, _bulkAddAfterCreate, bulkRemoveSeqOpen, bulkRemoveSeqDo, openContactPage, cpTab, cpSave, cpDelete, cpActOpen, cpActSave, cpActToggle, cpActDel,
     cpResumeSeq, cpFocusField, cpOpenRegisterReply, cpSaveRegisterReply,
     openCompany, closeCompany, saveCompany, deleteCompany, filterCompanies, toggleCo, toggleCoAll, clearCoSel, toggleCoSelMode, coMoreMenu, bulkDeleteCompanies, coEnrolOpen, coEnrolFilter, coEnrolPick,
     coQueueAddContact, coQueueDiscard, coQueueTogglePrimary, coQueueContinue,
