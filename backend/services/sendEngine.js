@@ -17,6 +17,8 @@ const crypto = require('crypto');
 
 let _timer = null;
 let _running = false;
+let _lastTickAt = 0; // heartbeat: para diagnosticar si el motor dejó de tiquear en silencio
+let _lastHeartbeatAt = 0;
 
 // Estados de verificación con los que SÍ se permite enviar.
 // 'manual' = email ingresado/confirmado a mano por la usuaria (se confía sin sonda SMTP).
@@ -804,6 +806,7 @@ async function tick(pool, apiBase, gmailCallback) {
   if (_running && Date.now() - _runningSince < 5 * 60 * 1000) return;
   if (_running) console.warn('[send-engine] tick anterior colgado >5min — watchdog lo libera');
   _running = true; _runningSince = Date.now();
+  _lastTickAt = Date.now();
   try {
     await _autoActivate(pool).catch(e => console.warn('[send-engine] auto-activar:', e.message));
     await _draftPreapproved(pool).catch(e => console.warn('[send-engine] draft-preaprobado:', e.message));
@@ -817,6 +820,16 @@ async function tick(pool, apiBase, gmailCallback) {
   } catch (e) {
     console.warn('[send-engine] tick:', e.message);
   } finally { _running = false; }
+  // Latido cada ~10 min: sin esto, un motor que deja de tiquear en silencio (sin
+  // crashear, sin activaciones/envíos que loguear) no dejaba rastro hasta que
+  // alguien notaba secuencias atascadas — como el caso de "inmail 12-14 sep"
+  // (2026-09-12): 164 contactos enrolados y activos, secuencia nunca pasó a
+  // 'activa' hasta reiniciar PM2. Con este latido, un hueco >10min en los logs
+  // es evidencia directa de que el motor se quedó colgado, no hay que adivinar.
+  if (Date.now() - _lastHeartbeatAt > 10 * 60 * 1000) {
+    _lastHeartbeatAt = Date.now();
+    console.log(`[send-engine] latido — motor activo (${new Date().toISOString()})`);
+  }
 }
 
 function startSendEngine(pool, { apiBase, gmailCallback }) {
@@ -826,4 +839,4 @@ function startSendEngine(pool, { apiBase, gmailCallback }) {
   console.log('[send-engine] started (tick 60s)');
 }
 
-module.exports = { startSendEngine, tick, renderTemplate, buildHtml, SENDABLE_STATUS, pickVariant, stepVariants, advancePastStep, condMatch: _condMatch, nextEffIdx: _nextEffIdx };
+module.exports = { startSendEngine, tick, renderTemplate, buildHtml, SENDABLE_STATUS, pickVariant, stepVariants, advancePastStep, condMatch: _condMatch, nextEffIdx: _nextEffIdx, lastTickAt: () => _lastTickAt };
