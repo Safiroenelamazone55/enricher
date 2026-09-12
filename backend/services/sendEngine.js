@@ -186,9 +186,11 @@ async function _advance(pool, enr, steps, curIdx) {
 // Procesa UN workspace: devuelve true si envió un email (para logging).
 async function _tickWorkspace(pool, cfg, apiBase, gmailCallback) {
   const uid = cfg.user_id;
-  const { hour, weekend, wdIdx } = _localNow(cfg.timezone);
-  if (hour < cfg.window_start || hour >= cfg.window_end) return false;
-  if (weekend && !cfg.send_weekends) return false;
+  // Nota: el día de la semana (wdIdx, usado más abajo contra send_days) se calcula en
+  // la hora del WORKSPACE — es solo para saber "qué día es hoy" a fin de agenda, no
+  // afecta la hora de envío. La ventana horaria real del email se evalúa más abajo,
+  // por secuencia, en la hora LOCAL DEL PROSPECTO (ver bug reportado por Jenny 2026-09-12).
+  const { wdIdx } = _localNow(cfg.timezone);
 
   // Límite diario (día local del workspace)
   const { rows: [cnt] } = await pool.query(
@@ -212,7 +214,7 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback) {
            k.nombre, k.apellido, k.email, k.cargo, k.empresa_nombre, k.ciudad, k.pais,
            k.seniority, k.departamento, k.buyer_role, k.region, k.contact_priority,
            k.email_status, k.disposition, k.li_aceptado_at, co.nombre AS company_nombre, s.nombre AS seq_nombre, s.send_days,
-           s.send_mode, s.send_interval_min
+           s.send_mode, s.send_interval_min, s.timezone AS seq_timezone
       FROM lm_contact_sequences cs
       JOIN sequences   s  ON s.id = cs.sequence_id AND s.estado = 'activa'
       JOIN lm_contacts k  ON k.id = cs.contact_id
@@ -300,6 +302,21 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback) {
     );
     await _advance(pool, enr, steps, curIdx);
     return false;
+  }
+
+  // ── Ventana horaria del envío automático: se evalúa en la hora LOCAL DEL
+  // PROSPECTO (timezone de la secuencia), no la del workspace de la usuaria —
+  // antes un email podía salir a las 17:00 hora de Perú aunque fueran las 23:00
+  // en España. Si cae fuera de horario o fin de semana, se pone en espera (no se
+  // envía) y se reintenta en 1h. Modo pre-aprobado no aplica acá: su envío real
+  // pasa por _flushApproved, que tiene su propia guarda con el mismo criterio.
+  if (enr.send_mode === 'auto') {
+    const tz = enr.seq_timezone || cfg.timezone;
+    const { hour, weekend } = _localNow(tz);
+    if (hour < cfg.window_start || hour >= cfg.window_end || (weekend && !cfg.send_weekends)) {
+      await pool.query(`UPDATE lm_contact_sequences SET next_action_at = NOW() + interval '1 hour' WHERE id=$1`, [enr.enr_id]);
+      return false;
+    }
   }
 
   // ── Paso email: guardas ──
@@ -563,7 +580,7 @@ async function _flushApproved(pool, apiBase) {
            mb.signature_html AS mb_signature, mb.from_name AS mb_from_name,
            cfg.from_name AS cfg_from_name, cfg.firma, cfg.track_opens, cfg.track_clicks,
            cfg.window_start, cfg.window_end, cfg.send_weekends, cfg.timezone,
-           s.send_days,
+           s.send_days, s.timezone AS seq_timezone,
            COALESCE(oc.cc_email,'') AS cc_email, COALESCE(st.cc_off, FALSE) AS cc_off,
            COALESCE(st.reply_to_prev, FALSE) AS reply_to_prev,
            k.disposition AS k_disposition
@@ -589,7 +606,11 @@ async function _flushApproved(pool, apiBase) {
       // Ventana horaria, fin de semana y DÍAS DE CADENCIA de la secuencia: aprobar un
       // sábado (o fuera de horario) NO dispara el envío — espera al próximo día hábil
       // permitido dentro de la ventana. El intervalo (5 min) se aplica igual.
-      const { hour, weekend, wdIdx } = _localNow(m.timezone);
+      // La hora se evalúa en la timezone de la SECUENCIA (la del prospecto) cuando está
+      // configurada; si no, cae a la del workspace de la usuaria. Antes usaba siempre la
+      // del workspace — causaba envíos a horas inapropiadas para el prospecto (reporte
+      // de Jenny 2026-09-12: email a las 17:00 hora de Perú, medianoche en España).
+      const { hour, weekend, wdIdx } = _localNow(m.seq_timezone || m.timezone);
       if (hour < (m.window_start ?? 9) || hour >= (m.window_end ?? 18)) continue;
       if (weekend && !m.send_weekends) continue;
       if (_sanSendDays(m.send_days)[wdIdx] !== '1') continue;
