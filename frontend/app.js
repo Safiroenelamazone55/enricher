@@ -27100,13 +27100,19 @@ ${foot}
     setTimeout(() => document.addEventListener('click', function onDoc(e) { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', onDoc); } }), 0);
   }
   function _syncSelAll() { const box = document.querySelector('#lm-ct-results .lm-dt thead .lm-ck'); if (!box) return; const total = _ctFilteredIds.length, sel = _ctFilteredIds.filter(id => _ctSel.has(id)).length; box.checked = total > 0 && sel === total; box.indeterminate = sel > 0 && sel < total; }
+  // La barra solo se muestra con AL MENOS un contacto marcado — antes aparecía
+  // vacía apenas se entraba a "Modo selección" (barra azul de ancho completo sin
+  // nada útil todavía), lo cual Jenny reportó como ruido visual. El checkbox en
+  // cada fila + el propio "⋮ → ✕ Salir de selección" ya bastan como affordance
+  // mientras no hay nada seleccionado. Pedido explícito 2026-09-12.
   function _renderBulkBar() {
     const bar = $('lm-ct-bulk'); if (!bar) return;
-    if (!_ctSelMode) { bar.classList.remove('show'); bar.innerHTML = ''; return; }
+    const n = _ctSel.size;
+    if (!_ctSelMode || !n) { bar.classList.remove('show'); bar.innerHTML = ''; return; }
     bar.classList.add('show');
-    const n = _ctSel.size, total = _ctFilteredIds.length;
+    const total = _ctFilteredIds.length;
     const selAll = n < total ? `<button class="lm-bulk-ghost" onclick="LeadManagerModule.toggleCtAll(true)">Seleccionar todos (${total})</button>` : '';
-    const acts = n > 0 ? `
+    const acts = `
         <button class="lm-bulk-ghost" onclick="LeadManagerModule.clearCtSel()">Ninguno</button>
         <button class="lm-bulk-act" onclick="LeadManagerModule.bulkAddOpen('sequence')">＋ Secuencia</button>
         <button class="lm-bulk-act" onclick="LeadManagerModule.bulkAddOpen('campaign')">＋ Campaña</button>
@@ -27114,8 +27120,8 @@ ${foot}
         <button class="lm-bulk-act lm-bulk-act--vf" title="Verifica emails con el pipeline propio (SMTP) — y busca el email si falta" onclick="LeadManagerModule.bulkVerifyEmails()">${NI('zap')} Verificar emails</button>
         <button class="lm-bulk-act lm-bulk-act--ai" title="Genera un borrador de email personalizado por IA (Fable 5 para cuentas de alto valor, Haiku para el resto)" onclick="LeadManagerModule.bulkPersonalize()">${NI('sparkles')} Personalizar (IA)</button>
         <button class="lm-bulk-del" onclick="LeadManagerModule.bulkDeleteContacts(false)">Eliminar</button>
-        <button class="lm-bulk-del" onclick="LeadManagerModule.bulkDeleteContacts(true)">Eliminar + empresas</button>` : '';
-    bar.innerHTML = `<span class="lm-bulk-n">${n ? `${n} seleccionado${n === 1 ? '' : 's'}` : 'Modo selección — elige contactos'}</span>
+        <button class="lm-bulk-del" onclick="LeadManagerModule.bulkDeleteContacts(true)">Eliminar + empresas</button>`;
+    bar.innerHTML = `<span class="lm-bulk-n">${n} seleccionado${n === 1 ? '' : 's'}</span>
       <div class="lm-bulk-actions">
         ${selAll}${acts}
         <button class="lm-bulk-ghost" onclick="LeadManagerModule.toggleCtSelMode()">Salir</button>
@@ -27742,18 +27748,21 @@ ${foot}
     setTimeout(() => document.addEventListener('click', function onDoc(e) { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', onDoc); } }), 0);
   }
   function _syncCoSelAll() { const box = document.querySelector('#lm-co-results .lm-dt thead .lm-ck'); if (!box) return; const total = _coFilteredIds.length, sel = _coFilteredIds.filter(id => _coSel.has(id)).length; box.checked = total > 0 && sel === total; box.indeterminate = sel > 0 && sel < total; }
+  // Mismo criterio que Contactos (_renderBulkBar): solo se muestra con al menos
+  // una empresa marcada, sin barra vacía al entrar a "Modo selección".
   function _renderCoBulkBar() {
     const bar = $('lm-co-bulk'); if (!bar) return;
-    if (!_coSelMode) { bar.classList.remove('show'); bar.innerHTML = ''; return; }
+    const n = _coSel.size;
+    if (!_coSelMode || !n) { bar.classList.remove('show'); bar.innerHTML = ''; return; }
     bar.classList.add('show');
-    const n = _coSel.size, total = _coFilteredIds.length;
+    const total = _coFilteredIds.length;
     const selAll = n < total ? `<button class="lm-bulk-ghost" onclick="LeadManagerModule.toggleCoAll(true)">Seleccionar todas (${total})</button>` : '';
-    const acts = n > 0 ? `
+    const acts = `
         <button class="lm-bulk-ghost" onclick="LeadManagerModule.clearCoSel()">Ninguna</button>
         <button class="lm-bulk-ghost" onclick="LeadManagerModule.coEnrolOpen()">＋ Enrolar en secuencia</button>
         <button class="lm-bulk-del" onclick="LeadManagerModule.bulkDeleteCompanies(false)">Eliminar empresas</button>
-        <button class="lm-bulk-del" onclick="LeadManagerModule.bulkDeleteCompanies(true)">Eliminar + sus contactos</button>` : '';
-    bar.innerHTML = `<span class="lm-bulk-n">${n ? `${n} seleccionada${n === 1 ? '' : 's'}` : 'Modo selección — elige empresas'}</span>
+        <button class="lm-bulk-del" onclick="LeadManagerModule.bulkDeleteCompanies(true)">Eliminar + sus contactos</button>`;
+    bar.innerHTML = `<span class="lm-bulk-n">${n} seleccionada${n === 1 ? '' : 's'}</span>
       <div class="lm-bulk-actions">
         ${selAll}${acts}
         <button class="lm-bulk-ghost" onclick="LeadManagerModule.toggleCoSelMode()">Salir</button>
