@@ -27059,9 +27059,14 @@ ${foot}
     // Mismo submenu-por-hover que Cantera (sub()) — Cliente/Rebotados/Por corregir/Filtros
     // avanzados viven dentro de "Filtros", no sueltos en la fila (pedido explícito 2026-09-12:
     // todo cabe en una sola fila, y pasar el mouse por "Filtros" despliega sus opciones).
-    const sub = (label, panelHtml) => `<div class="cp-mark-menu__sub">
+    // scrollable SOLO en los paneles hoja (listas de valores) — el panel "Filtros"
+    // que ENVUELVE a Cliente/Estado/País/etc. NO debe llevar overflow-y:auto: eso
+    // recorta cualquier submenu anidado que intente abrirse hacia el costado (mismo
+    // bug ya corregido antes en Cantera vía :has() — acá lo reintroduje sin querer
+    // al poner overflow en todos los sub() por igual). Bug reportado 2026-09-12.
+    const sub = (label, panelHtml, scrollable) => `<div class="cp-mark-menu__sub">
       <div class="cp-mark-menu__b cp-mark-menu__b--sub">${label} <span class="cp-mark-menu__arrow">▸</span></div>
-      <div class="cp-mark-menu__subpanel"><div class="cp-mark-menu__list" style="max-height:320px;overflow-y:auto">${panelHtml}</div></div>
+      <div class="cp-mark-menu__subpanel"><div class="cp-mark-menu__list"${scrollable ? ' style="max-height:320px;overflow-y:auto"' : ''}>${panelHtml}</div></div>
     </div>`;
     const curClient = _clients.find(cl => String(cl.id) === String(_ctClientFilter));
     const clientPanel = item(`${!_ctClientFilter ? '✓ ' : ''}Todos los clientes`, `LeadManagerModule.ctSetClient('')`)
@@ -27070,11 +27075,12 @@ ${foot}
     const nIssue = (_contacts || []).filter(c => c.data_issue).length;
     const qCount = f => { const x = _ctFilters.find(y => y.field === f && y.op === 'in'); return x ? x.val.length : 0; };
     const qLbl = (label, field) => `${label}${qCount(field) ? ` · ${qCount(field)}` : ''}`;
-    const filtrosPanel = (_clients.length ? sub(`Cliente outbound${curClient ? ': ' + esc(curClient.nombre) : ''}`, clientPanel) : '')
-      + sub(qLbl('Estado', 'estado'), _lmFieldPanel('contacts', 'estado', item))
-      + sub(qLbl('Prioridad', 'contact_priority'), _lmFieldPanel('contacts', 'contact_priority', item))
-      + sub(qLbl('País', 'pais'), _lmFieldPanel('contacts', 'pais', item))
-      + sub(qLbl('Fuente', 'fuente'), _lmFieldPanel('contacts', 'fuente', item))
+    const filtrosPanel = (_clients.length ? sub(`Cliente outbound${curClient ? ': ' + esc(curClient.nombre) : ''}`, clientPanel, true) : '')
+      + sub(qLbl('Estado', 'estado'), _lmFieldPanel('contacts', 'estado', item), true)
+      + sub(qLbl('Prioridad', 'contact_priority'), _lmFieldPanel('contacts', 'contact_priority', item), true)
+      + sub(qLbl('País', 'pais'), _lmFieldPanel('contacts', 'pais', item), true)
+      + sub(qLbl('Fuente', 'fuente'), _lmFieldPanel('contacts', 'fuente', item), true)
+      + sub(qLbl('Archivo de importación', 'import_batch'), _lmFieldPanel('contacts', 'import_batch', item), true)
       + `<div class="cp-mark-menu__sep"></div>`
       + ((nBounced || _ctBounced) ? item(`${_ctBounced ? '✓ ' : ''}Rebotados · ${nBounced}`, `LeadManagerModule.ctToggleBounced()`) : '')
       + ((nIssue || _ctDataIssue) ? item(`${_ctDataIssue ? '✓ ' : ''}Por corregir · ${nIssue}`, `LeadManagerModule.ctToggleDataIssue()`) : '')
@@ -27710,15 +27716,16 @@ ${foot}
     document.querySelectorAll('.cp-mark-menu').forEach(m => m.remove());
     const close = "document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove())";
     const item = (label, onclick) => `<button class="cp-mark-menu__b" onclick="${close};${onclick}">${label}</button>`;
-    const sub = (label, panelHtml) => `<div class="cp-mark-menu__sub">
+    const sub = (label, panelHtml, scrollable) => `<div class="cp-mark-menu__sub">
       <div class="cp-mark-menu__b cp-mark-menu__b--sub">${label} <span class="cp-mark-menu__arrow">▸</span></div>
-      <div class="cp-mark-menu__subpanel"><div class="cp-mark-menu__list">${panelHtml}</div></div>
+      <div class="cp-mark-menu__subpanel"><div class="cp-mark-menu__list"${scrollable ? ' style="max-height:320px;overflow-y:auto"' : ''}>${panelHtml}</div></div>
     </div>`;
     const qCount = f => { const x = _coFilters.find(y => y.field === f && y.op === 'in'); return x ? x.val.length : 0; };
     const qLbl = (label, field) => `${label}${qCount(field) ? ` · ${qCount(field)}` : ''}`;
-    const filtrosPanel = sub(qLbl('País', 'pais'), _lmFieldPanel('companies', 'pais', item))
-      + sub(qLbl('Industria', 'industria'), _lmFieldPanel('companies', 'industria', item))
-      + sub(qLbl('Nº empleados', 'tamano'), _lmFieldPanel('companies', 'tamano', item))
+    const filtrosPanel = sub(qLbl('País', 'pais'), _lmFieldPanel('companies', 'pais', item), true)
+      + sub(qLbl('Industria', 'industria'), _lmFieldPanel('companies', 'industria', item), true)
+      + sub(qLbl('Nº empleados', 'tamano'), _lmFieldPanel('companies', 'tamano', item), true)
+      + sub(qLbl('Archivo de importación', 'import_batch'), _lmFieldPanel('companies', 'import_batch', item), true)
       + `<div class="cp-mark-menu__sep"></div>`
       + item(`Todos los filtros${_coFilters.length ? ` · ${_coFilters.length}` : ''}`, `LeadManagerModule.openFilters('companies')`);
     const html = `<div class="cp-mark-menu__list">${sub(`${_FLT_ICON} Filtros`, filtrosPanel)}</div>
