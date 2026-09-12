@@ -27004,6 +27004,29 @@ ${foot}
   function toggleCtAll(on) { if (on) _ctFilteredIds.forEach(id => _ctSel.add(id)); else _ctFilteredIds.forEach(id => _ctSel.delete(id)); _renderContacts(); }
   function clearCtSel() { _ctSel.clear(); _renderContacts(); }
   function toggleCtSelMode() { _ctSelMode = !_ctSelMode; if (!_ctSelMode) _ctSel.clear(); _renderContacts(); }
+  // Submenu-por-hover de .cp-mark-menu__sub (mismo mecanismo que Cantera/Inbox —
+  // ver CanteraModule.resultsMenu): sin esto el CSS por sí solo no revela el panel
+  // (display:none por defecto). Un solo helper acá para no repetirlo en cada menú
+  // de este módulo (ctMoreMenu y coMoreMenu lo comparten).
+  function _wireSubHover(menu) {
+    menu.querySelectorAll('.cp-mark-menu__sub').forEach(subEl => {
+      const panel = subEl.querySelector('.cp-mark-menu__subpanel');
+      if (!panel) return;
+      let hideTimer = null;
+      subEl.addEventListener('mouseenter', () => {
+        clearTimeout(hideTimer);
+        const subRect = subEl.getBoundingClientRect();
+        const needed = 310;
+        if (window.innerWidth - subRect.right < needed && subRect.left >= needed) {
+          panel.style.left = 'auto'; panel.style.right = '100%'; panel.style.marginLeft = '0'; panel.style.marginRight = '0';
+        } else {
+          panel.style.left = '100%'; panel.style.right = 'auto'; panel.style.marginLeft = '0'; panel.style.marginRight = '0';
+        }
+        panel.style.display = 'block';
+      });
+      subEl.addEventListener('mouseleave', () => { hideTimer = setTimeout(() => { panel.style.display = 'none'; }, 200); });
+    });
+  }
   // "⋮" de la barra de Contactos — agrupa Vistas/Columnas/Seleccionar (no son filtros)
   // para que la fila de filtros quepa siempre en una sola línea. Mismo patrón que
   // dgMoreMenu (Gestión masiva) — pedido explícito 2026-09-12.
@@ -27036,6 +27059,7 @@ ${foot}
       <div class="cp-mark-menu__list">${item(_ctSelMode ? '✕ Salir de selección' : '☑ Seleccionar', `LeadManagerModule.toggleCtSelMode()`)}</div>`;
     const menu = document.createElement('div'); menu.className = 'cp-mark-menu'; menu.style.minWidth = '220px'; menu.innerHTML = html;
     document.body.appendChild(menu);
+    _wireSubHover(menu);
     const t = (ev && (ev.currentTarget || ev.target)) || document.body; const r = t.getBoundingClientRect();
     menu.style.left = `${Math.max(8, Math.min(r.right - 220, window.innerWidth - 230))}px`;
     menu.style.top = `${r.bottom + 6}px`;
@@ -27670,6 +27694,7 @@ ${foot}
       <div class="cp-mark-menu__list">${item(_coSelMode ? '✕ Salir de selección' : '☑ Seleccionar', `LeadManagerModule.toggleCoSelMode()`)}</div>`;
     const menu = document.createElement('div'); menu.className = 'cp-mark-menu'; menu.style.minWidth = '190px'; menu.innerHTML = html;
     document.body.appendChild(menu);
+    _wireSubHover(menu);
     const t = (ev && (ev.currentTarget || ev.target)) || document.body; const r = t.getBoundingClientRect();
     menu.style.left = `${Math.max(8, Math.min(r.right - 190, window.innerWidth - 200))}px`;
     menu.style.top = `${r.bottom + 6}px`;
