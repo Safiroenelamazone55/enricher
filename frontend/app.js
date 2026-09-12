@@ -20332,6 +20332,15 @@ ${foot}
     // o llamada sin número válido). Sin esto, la única salida era "Hecha", que es incorrecto:
     // no se contactó a nadie, solo se saltó el paso.
     const probItems = [];
+    // Pedido explícito 2026-09-11: "falta la opción cuando el lead no es
+    // válido" — al revisar el perfil (de LinkedIn, o incluso mientras
+    // se revisa para el email) te das cuenta de que no es el tipo de
+    // prospecto que buscabas. "No califica" ya existía arriba (grilla de
+    // disposiciones), pero mezclado con resultados de respuesta — acá, junto
+    // a "LinkedIn no válido"/"Dato incorrecto", es donde realmente se busca
+    // en el momento. Mismo disparador (seqDoDisposition ya lo maneja), sin
+    // importar el canal de la tarea actual.
+    probItems.push(iitem('ban', 'Lead no válido — descalifica', "LeadManagerModule.seqDoDisposition('no_califica')"));
     // Pedido explícito 2026-09-11: registrar "ya aceptó la conexión / ya está
     // en mis contactos" DESDE la tarea de LinkedIn, sin ir a la revisión
     // masiva aparte. Reusa la disposición 'aceptado' ya existente (dispara el
