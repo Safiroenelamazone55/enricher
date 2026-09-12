@@ -26835,11 +26835,7 @@ ${foot}
       <div class="lm-toolbar">
         <div class="lm-search lm-search--wide"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" id="lm-ct-search" placeholder="Buscar contacto, empresa, email…" value="${esc(_ctQuery)}" oninput="LeadManagerModule.filterContacts(this.value)"></div>
         <span class="lm-count" id="lm-ct-count"></span>
-        ${_clients.length ? `<select class="lm-tpl-tagsel" title="Filtrar por cliente outbound" onchange="LeadManagerModule.ctSetClient(this.value)"><option value="">◆ Todos los clientes</option>${_clients.map(cl => `<option value="${cl.id}"${String(_ctClientFilter) === String(cl.id) ? ' selected' : ''}>${esc(cl.nombre)}</option>`).join('')}</select>` : ''}
-        ${(() => { const n = (_contacts || []).filter(c => c.email_status === 'bounced').length; return (n || _ctBounced) ? `<button class="lm-filter-btn${_ctBounced ? ' on' : ''}" style="${_ctBounced ? '' : 'color:#C4342B'}" title="Emails que rebotaron — corrígelos y reanuda sus secuencias" onclick="LeadManagerModule.ctToggleBounced()">↩ Rebotados · ${n}</button>` : ''; })()}
-        ${(() => { const n = (_contacts || []).filter(c => c.data_issue).length; return (n || _ctDataIssue) ? `<button class="lm-filter-btn${_ctDataIssue ? ' on' : ''}" style="${_ctDataIssue ? '' : 'color:#B45309'}" title="Contactos pausados por falta o error de dato (falta email/LinkedIn o dato incorrecto). Arregla el dato en la ficha y su secuencia se reanuda." onclick="LeadManagerModule.ctToggleDataIssue()">⚠ Por corregir · ${n}</button>` : ''; })()}
-        <button class="lm-filter-btn${_ctFilters.length ? ' on' : ''}" onclick="LeadManagerModule.openFilters('contacts')">${_FLT_ICON} Filtros${_ctFilters.length ? ` · ${_ctFilters.length}` : ''}</button>
-        <button class="dg-kebab" onclick="LeadManagerModule.ctMoreMenu(event)" title="Vistas, columnas y selección">⋮</button>
+        <button class="dg-kebab${(_ctClientFilter || _ctBounced || _ctDataIssue || _ctFilters.length) ? ' on' : ''}" onclick="LeadManagerModule.ctMoreMenu(event)" title="Filtros, vistas, columnas y selección">⋮</button>
       </div>
       ${_fltChipsHtml('contacts')}
       <div class="lm-bulk-bar" id="lm-ct-bulk"></div>
@@ -27016,13 +27012,32 @@ ${foot}
     document.querySelectorAll('.cp-mark-menu').forEach(m => m.remove());
     const close = "document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove())";
     const item = (label, onclick) => `<button class="cp-mark-menu__b" onclick="${close};${onclick}">${label}</button>`;
-    const html = `<div class="cp-mark-menu__list">${item(`${_VIEW_ICON} Vistas`, `LeadManagerModule.openViews('contacts')`)}${item(`${NI('sliders')} Columnas`, `LeadManagerModule.openColsPicker(this)`)}</div>
+    // Mismo submenu-por-hover que Cantera (sub()) — Cliente/Rebotados/Por corregir/Filtros
+    // avanzados viven dentro de "Filtros", no sueltos en la fila (pedido explícito 2026-09-12:
+    // todo cabe en una sola fila, y pasar el mouse por "Filtros" despliega sus opciones).
+    const sub = (label, panelHtml) => `<div class="cp-mark-menu__sub">
+      <div class="cp-mark-menu__b cp-mark-menu__b--sub">${label} <span class="cp-mark-menu__arrow">▸</span></div>
+      <div class="cp-mark-menu__subpanel"><div class="cp-mark-menu__list" style="max-height:320px;overflow-y:auto">${panelHtml}</div></div>
+    </div>`;
+    const curClient = _clients.find(cl => String(cl.id) === String(_ctClientFilter));
+    const clientPanel = item(`${!_ctClientFilter ? '✓ ' : ''}Todos los clientes`, `LeadManagerModule.ctSetClient('')`)
+      + _clients.map(cl => item(`${String(_ctClientFilter) === String(cl.id) ? '✓ ' : ''}${esc(cl.nombre)}`, `LeadManagerModule.ctSetClient('${cl.id}')`)).join('');
+    const nBounced = (_contacts || []).filter(c => c.email_status === 'bounced').length;
+    const nIssue = (_contacts || []).filter(c => c.data_issue).length;
+    const filtrosPanel = (_clients.length ? sub(`Cliente${curClient ? ': ' + esc(curClient.nombre) : ''}`, clientPanel) : '')
+      + ((nBounced || _ctBounced) ? item(`${_ctBounced ? '✓ ' : ''}Rebotados · ${nBounced}`, `LeadManagerModule.ctToggleBounced()`) : '')
+      + ((nIssue || _ctDataIssue) ? item(`${_ctDataIssue ? '✓ ' : ''}Por corregir · ${nIssue}`, `LeadManagerModule.ctToggleDataIssue()`) : '')
+      + `<div class="cp-mark-menu__sep"></div>`
+      + item(`Filtros avanzados${_ctFilters.length ? ` · ${_ctFilters.length}` : ''}`, `LeadManagerModule.openFilters('contacts')`);
+    const html = `<div class="cp-mark-menu__list">${sub(`${_FLT_ICON} Filtros`, filtrosPanel)}</div>
+      <div class="cp-mark-menu__sep"></div>
+      <div class="cp-mark-menu__list">${item(`${_VIEW_ICON} Vistas`, `LeadManagerModule.openViews('contacts')`)}${item(`${NI('sliders')} Columnas`, `LeadManagerModule.openColsPicker(this)`)}</div>
       <div class="cp-mark-menu__sep"></div>
       <div class="cp-mark-menu__list">${item(_ctSelMode ? '✕ Salir de selección' : '☑ Seleccionar', `LeadManagerModule.toggleCtSelMode()`)}</div>`;
-    const menu = document.createElement('div'); menu.className = 'cp-mark-menu'; menu.style.minWidth = '190px'; menu.innerHTML = html;
+    const menu = document.createElement('div'); menu.className = 'cp-mark-menu'; menu.style.minWidth = '220px'; menu.innerHTML = html;
     document.body.appendChild(menu);
     const t = (ev && (ev.currentTarget || ev.target)) || document.body; const r = t.getBoundingClientRect();
-    menu.style.left = `${Math.max(8, Math.min(r.right - 190, window.innerWidth - 200))}px`;
+    menu.style.left = `${Math.max(8, Math.min(r.right - 220, window.innerWidth - 230))}px`;
     menu.style.top = `${r.bottom + 6}px`;
     setTimeout(() => document.addEventListener('click', function onDoc(e) { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', onDoc); } }), 0);
   }
@@ -27579,8 +27594,7 @@ ${foot}
       <div class="lm-toolbar">
         <div class="lm-search lm-search--wide"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" id="lm-co-search" placeholder="Buscar empresa o dominio…" value="${esc(_coQuery)}" oninput="LeadManagerModule.filterCompanies(this.value)"></div>
         <span class="lm-count" id="lm-co-count"></span>
-        <button class="lm-filter-btn${_coFilters.length ? ' on' : ''}" onclick="LeadManagerModule.openFilters('companies')">${_FLT_ICON} Filtros${_coFilters.length ? ` · ${_coFilters.length}` : ''}</button>
-        <button class="dg-kebab" onclick="LeadManagerModule.coMoreMenu(event)" title="Vistas y selección">⋮</button>
+        <button class="dg-kebab${_coFilters.length ? ' on' : ''}" onclick="LeadManagerModule.coMoreMenu(event)" title="Filtros, vistas y selección">⋮</button>
       </div>
       ${_fltChipsHtml('companies')}
       <div class="lm-bulk-bar" id="lm-co-bulk"></div>
@@ -27644,7 +27658,14 @@ ${foot}
     document.querySelectorAll('.cp-mark-menu').forEach(m => m.remove());
     const close = "document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove())";
     const item = (label, onclick) => `<button class="cp-mark-menu__b" onclick="${close};${onclick}">${label}</button>`;
-    const html = `<div class="cp-mark-menu__list">${item(`${_VIEW_ICON} Vistas`, `LeadManagerModule.openViews('companies')`)}</div>
+    const sub = (label, panelHtml) => `<div class="cp-mark-menu__sub">
+      <div class="cp-mark-menu__b cp-mark-menu__b--sub">${label} <span class="cp-mark-menu__arrow">▸</span></div>
+      <div class="cp-mark-menu__subpanel"><div class="cp-mark-menu__list">${panelHtml}</div></div>
+    </div>`;
+    const filtrosPanel = item(`Filtros avanzados${_coFilters.length ? ` · ${_coFilters.length}` : ''}`, `LeadManagerModule.openFilters('companies')`);
+    const html = `<div class="cp-mark-menu__list">${sub(`${_FLT_ICON} Filtros`, filtrosPanel)}</div>
+      <div class="cp-mark-menu__sep"></div>
+      <div class="cp-mark-menu__list">${item(`${_VIEW_ICON} Vistas`, `LeadManagerModule.openViews('companies')`)}</div>
       <div class="cp-mark-menu__sep"></div>
       <div class="cp-mark-menu__list">${item(_coSelMode ? '✕ Salir de selección' : '☑ Seleccionar', `LeadManagerModule.toggleCoSelMode()`)}</div>`;
     const menu = document.createElement('div'); menu.className = 'cp-mark-menu'; menu.style.minWidth = '190px'; menu.innerHTML = html;

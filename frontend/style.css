@@ -12289,6 +12289,7 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .dg-toolbar .dg-flt-q { flex: 1 1 auto; min-width: 140px; }
 .dg-kebab { flex: 0 0 auto; width: 34px; height: 34px; border: 1px solid var(--border, #EAE7E2); background: #fff; color: var(--text2, #45586A); font-size: 1.1rem; line-height: 1; cursor: pointer; }
 .dg-kebab:hover { background: var(--brand-ll, #F1EFEB); }
+.dg-kebab.on { background: var(--brand-ll, #F1EFEB); border-color: var(--brand-l, #B8D9FF); color: var(--brand-d, #0062CC); }
 @media (max-width: 900px) { .dg-toolbar { flex-wrap: wrap; } .dg-toolbar .dg-flt-sel { flex: 1 1 140px; } }
 .dg-bulkbar--slim { background: transparent; border: none; padding: 0 2px; }
 .dg-bulkbar--slim .lm-bulk-n { color: var(--muted, #B4AFA8); }
