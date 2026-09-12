@@ -1250,6 +1250,10 @@ async function initDb() {
     // Verificación de email del contacto (resultado del pipeline /api/enrich interno).
     // email_status: '' (sin verificar) | valid | invalid | catch-all | risky | blocked | unknown
     //             | bounced (rebotó al enviar — marcado a mano) | manual (ingresado/confirmado a mano, enviable)
+    // Nombre del archivo (Excel/CSV) del que se importó el contacto por primera vez —
+    // permite filtrar "quiénes vinieron de tal lista" sin depender solo de la fecha.
+    await pool.query(`ALTER TABLE lm_contacts ADD COLUMN IF NOT EXISTS import_batch TEXT NOT NULL DEFAULT '';`);
+    await pool.query(`ALTER TABLE lm_companies ADD COLUMN IF NOT EXISTS import_batch TEXT NOT NULL DEFAULT '';`);
     await pool.query(`ALTER TABLE lm_contacts ADD COLUMN IF NOT EXISTS email_status      TEXT NOT NULL DEFAULT '';`);
     await pool.query(`ALTER TABLE lm_contacts ADD COLUMN IF NOT EXISTS email_score       INTEGER;`);
     await pool.query(`ALTER TABLE lm_contacts ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMPTZ;`);

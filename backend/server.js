@@ -6437,11 +6437,11 @@ app.post('/api/lm/import', requireAuth, upload.single('file'), async (req, res) 
       return found.id;
     }
     const ins = await pool.query(`
-      INSERT INTO lm_companies (user_id,nombre,dominio,website,industria,tamano,ingresos,telefono,linkedin,ciudad,region,pais,fundada,direccion,codigo_postal,descripcion,tecnologias,funding,target_tier,segmento,analisis,outbound_client_id,notas)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23) RETURNING id
+      INSERT INTO lm_companies (user_id,nombre,dominio,website,industria,tamano,ingresos,telefono,linkedin,ciudad,region,pais,fundada,direccion,codigo_postal,descripcion,tecnologias,funding,target_tier,segmento,analisis,outbound_client_id,notas,import_batch)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24) RETURNING id
     `, [uid, nombre || dominio, dominio, _lmCleanUrlish(f.website), _lmS(f.industria), _lmS(f.tamano), _lmS(f.ingresos),
         _lmS(f.telefono), _lmCleanUrlish(f.linkedin), _lmS(f.ciudad), _lmS(f.region), _lmS(f.pais), _lmS(f.fundada),
-        _lmS(f.direccion), _lmS(f.codigo_postal), _lmS(f.descripcion), _lmS(f.tecnologias), _lmS(f.funding), _lmS(f.target_tier), _lmS(f.segmento), _lmS(f.analisis), obcId, _lmS(f.notas)]);
+        _lmS(f.direccion), _lmS(f.codigo_postal), _lmS(f.descripcion), _lmS(f.tecnologias), _lmS(f.funding), _lmS(f.target_tier), _lmS(f.segmento), _lmS(f.analisis), obcId, _lmS(f.notas), req.file.originalname || '']);
     keys.forEach(k => coCache.set(k, ins.rows[0].id)); summary.companiesCreated++; return ins.rows[0].id;
   }
 
@@ -6522,10 +6522,10 @@ app.post('/api/lm/import', requireAuth, upload.single('file'), async (req, res) 
           tecnologias: f.co_tecnologias, funding: f.co_funding, target_tier: f.co_target_tier, segmento: f.co_segmento,
         });
         await pool.query(`
-          INSERT INTO lm_contacts (user_id,company_id,nombre,apellido,email,email_personal,telefono,movil,cargo,seniority,departamento,linkedin,empresa_nombre,ciudad,region,pais,estado,fuente,contact_priority,buyer_role,analisis,outbound_client_id,notas,raw)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
+          INSERT INTO lm_contacts (user_id,company_id,nombre,apellido,email,email_personal,telefono,movil,cargo,seniority,departamento,linkedin,empresa_nombre,ciudad,region,pais,estado,fuente,contact_priority,buyer_role,analisis,outbound_client_id,notas,raw,import_batch)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)
         `, [uid, companyId, nombre, apellido, email, _lmS(f.email_personal), _lmS(f.telefono), _lmS(f.movil), _lmS(f.cargo), _lmS(f.seniority), _lmS(f.departamento),
-            _lmS(f.linkedin), _lmS(f.co_nombre), _lmS(f.ciudad), _lmS(f.region), _lmS(f.pais), _lmS(f.estado) || 'nuevo', _lmS(f.fuente) || 'import', _lmS(f.contact_priority), _lmS(f.buyer_role), _lmS(f.analisis), obcId, _lmS(f.notas), JSON.stringify(raw)]);
+            _lmS(f.linkedin), _lmS(f.co_nombre), _lmS(f.ciudad), _lmS(f.region), _lmS(f.pais), _lmS(f.estado) || 'nuevo', _lmS(f.fuente) || 'import', _lmS(f.contact_priority), _lmS(f.buyer_role), _lmS(f.analisis), obcId, _lmS(f.notas), JSON.stringify(raw), req.file.originalname || '']);
         summary.contactsCreated++;
       }
     } catch (e) {

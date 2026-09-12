@@ -26582,8 +26582,8 @@ ${foot}
   // ── Filtrado avanzado de Contactos / Empresas (por campo importado) ──
   const _FLT_ICON = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>';
   const _FLT_OPS = [['in', 'es uno de'], ['nin', 'no es ninguno de'], ['contains', 'contiene'], ['starts', 'empieza por'], ['between', 'está entre'], ['empty', 'está vacío'], ['nempty', 'tiene valor']];
-  const _CT_FILTER_FIELDS = [['nombre', 'Nombre'], ['apellido', 'Apellido'], ['email', 'Email'], ['email_personal', 'Email personal'], ['telefono', 'Teléfono'], ['movil', 'Móvil'], ['cargo', 'Cargo'], ['seniority', 'Seniority'], ['departamento', 'Departamento'], ['buyer_role', 'Buyer Role'], ['contact_priority', 'Contact Priority'], ['linkedin', 'LinkedIn'], ['company_nombre', 'Empresa'], ['company_segmento', 'Segmento / ICP (empresa)'], ['company_target_tier', 'Target Tier / Focus (empresa)'], ['company_industria', 'Industria (empresa)'], ['ciudad', 'Ciudad'], ['region', 'Región'], ['pais', 'País'], ['estado', 'Estado'], ['fuente', 'Fuente'], ['analisis', 'Análisis'], ['created_at', 'Fecha de importación']];
-  const _CO_FILTER_FIELDS = [['nombre', 'Nombre'], ['dominio', 'Dominio'], ['website', 'Website'], ['industria', 'Industria'], ['tamano', 'Nº empleados'], ['ingresos', 'Ingresos'], ['telefono', 'Teléfono'], ['linkedin', 'LinkedIn'], ['linkedin_sales_nav', 'LinkedIn (Sales Navigator)'], ['ciudad', 'Ciudad'], ['region', 'Región'], ['pais', 'País'], ['direccion', 'Dirección'], ['codigo_postal', 'Código postal'], ['fundada', 'Año fundación'], ['descripcion', 'Descripción'], ['tecnologias', 'Tecnologías'], ['funding', 'Funding'], ['target_tier', 'Target Tier / Focus'], ['segmento', 'Segmento / ICP'], ['analisis', 'Análisis'], ['created_at', 'Fecha de importación']];
+  const _CT_FILTER_FIELDS = [['nombre', 'Nombre'], ['apellido', 'Apellido'], ['email', 'Email'], ['email_personal', 'Email personal'], ['telefono', 'Teléfono'], ['movil', 'Móvil'], ['cargo', 'Cargo'], ['seniority', 'Seniority'], ['departamento', 'Departamento'], ['buyer_role', 'Buyer Role'], ['contact_priority', 'Contact Priority'], ['linkedin', 'LinkedIn'], ['company_nombre', 'Empresa'], ['company_segmento', 'Segmento / ICP (empresa)'], ['company_target_tier', 'Target Tier / Focus (empresa)'], ['company_industria', 'Industria (empresa)'], ['ciudad', 'Ciudad'], ['region', 'Región'], ['pais', 'País'], ['estado', 'Estado'], ['fuente', 'Fuente'], ['analisis', 'Análisis'], ['import_batch', 'Archivo de importación'], ['created_at', 'Fecha de importación']];
+  const _CO_FILTER_FIELDS = [['nombre', 'Nombre'], ['dominio', 'Dominio'], ['website', 'Website'], ['industria', 'Industria'], ['tamano', 'Nº empleados'], ['ingresos', 'Ingresos'], ['telefono', 'Teléfono'], ['linkedin', 'LinkedIn'], ['linkedin_sales_nav', 'LinkedIn (Sales Navigator)'], ['ciudad', 'Ciudad'], ['region', 'Región'], ['pais', 'País'], ['direccion', 'Dirección'], ['codigo_postal', 'Código postal'], ['fundada', 'Año fundación'], ['descripcion', 'Descripción'], ['tecnologias', 'Tecnologías'], ['funding', 'Funding'], ['target_tier', 'Target Tier / Focus'], ['segmento', 'Segmento / ICP'], ['analisis', 'Análisis'], ['import_batch', 'Archivo de importación'], ['created_at', 'Fecha de importación']];
   function _fltFields(entity) {
     const base = entity === 'contacts' ? _CT_FILTER_FIELDS : _CO_FILTER_FIELDS;
     const active = _lmActiveCustomFields(entity === 'contacts' ? 'contact' : 'company');
@@ -26839,9 +26839,7 @@ ${foot}
         ${(() => { const n = (_contacts || []).filter(c => c.email_status === 'bounced').length; return (n || _ctBounced) ? `<button class="lm-filter-btn${_ctBounced ? ' on' : ''}" style="${_ctBounced ? '' : 'color:#C4342B'}" title="Emails que rebotaron — corrígelos y reanuda sus secuencias" onclick="LeadManagerModule.ctToggleBounced()">↩ Rebotados · ${n}</button>` : ''; })()}
         ${(() => { const n = (_contacts || []).filter(c => c.data_issue).length; return (n || _ctDataIssue) ? `<button class="lm-filter-btn${_ctDataIssue ? ' on' : ''}" style="${_ctDataIssue ? '' : 'color:#B45309'}" title="Contactos pausados por falta o error de dato (falta email/LinkedIn o dato incorrecto). Arregla el dato en la ficha y su secuencia se reanuda." onclick="LeadManagerModule.ctToggleDataIssue()">⚠ Por corregir · ${n}</button>` : ''; })()}
         <button class="lm-filter-btn${_ctFilters.length ? ' on' : ''}" onclick="LeadManagerModule.openFilters('contacts')">${_FLT_ICON} Filtros${_ctFilters.length ? ` · ${_ctFilters.length}` : ''}</button>
-        <button class="lm-filter-btn" onclick="LeadManagerModule.openViews('contacts')">${_VIEW_ICON} Vistas</button>
-        <button class="lm-filter-btn" title="Elegir columnas visibles" onclick="LeadManagerModule.openColsPicker(this)">${NI('sliders')} Columnas</button>
-        <button class="lm-sel-btn" onclick="LeadManagerModule.toggleCtSelMode()">Seleccionar</button>
+        <button class="dg-kebab" onclick="LeadManagerModule.ctMoreMenu(event)" title="Vistas, columnas y selección">⋮</button>
       </div>
       ${_fltChipsHtml('contacts')}
       <div class="lm-bulk-bar" id="lm-ct-bulk"></div>
@@ -27010,6 +27008,24 @@ ${foot}
   function toggleCtAll(on) { if (on) _ctFilteredIds.forEach(id => _ctSel.add(id)); else _ctFilteredIds.forEach(id => _ctSel.delete(id)); _renderContacts(); }
   function clearCtSel() { _ctSel.clear(); _renderContacts(); }
   function toggleCtSelMode() { _ctSelMode = !_ctSelMode; if (!_ctSelMode) _ctSel.clear(); _renderContacts(); }
+  // "⋮" de la barra de Contactos — agrupa Vistas/Columnas/Seleccionar (no son filtros)
+  // para que la fila de filtros quepa siempre en una sola línea. Mismo patrón que
+  // dgMoreMenu (Gestión masiva) — pedido explícito 2026-09-12.
+  function ctMoreMenu(ev) {
+    if (ev && ev.stopPropagation) ev.stopPropagation();
+    document.querySelectorAll('.cp-mark-menu').forEach(m => m.remove());
+    const close = "document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove())";
+    const item = (label, onclick) => `<button class="cp-mark-menu__b" onclick="${close};${onclick}">${label}</button>`;
+    const html = `<div class="cp-mark-menu__list">${item(`${_VIEW_ICON} Vistas`, `LeadManagerModule.openViews('contacts')`)}${item(`${NI('sliders')} Columnas`, `LeadManagerModule.openColsPicker(this)`)}</div>
+      <div class="cp-mark-menu__sep"></div>
+      <div class="cp-mark-menu__list">${item(_ctSelMode ? '✕ Salir de selección' : '☑ Seleccionar', `LeadManagerModule.toggleCtSelMode()`)}</div>`;
+    const menu = document.createElement('div'); menu.className = 'cp-mark-menu'; menu.style.minWidth = '190px'; menu.innerHTML = html;
+    document.body.appendChild(menu);
+    const t = (ev && (ev.currentTarget || ev.target)) || document.body; const r = t.getBoundingClientRect();
+    menu.style.left = `${Math.max(8, Math.min(r.right - 190, window.innerWidth - 200))}px`;
+    menu.style.top = `${r.bottom + 6}px`;
+    setTimeout(() => document.addEventListener('click', function onDoc(e) { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', onDoc); } }), 0);
+  }
   function _syncSelAll() { const box = document.querySelector('#lm-ct-results .lm-dt thead .lm-ck'); if (!box) return; const total = _ctFilteredIds.length, sel = _ctFilteredIds.filter(id => _ctSel.has(id)).length; box.checked = total > 0 && sel === total; box.indeterminate = sel > 0 && sel < total; }
   function _renderBulkBar() {
     const bar = $('lm-ct-bulk'); if (!bar) return;
@@ -27564,8 +27580,7 @@ ${foot}
         <div class="lm-search lm-search--wide"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" id="lm-co-search" placeholder="Buscar empresa o dominio…" value="${esc(_coQuery)}" oninput="LeadManagerModule.filterCompanies(this.value)"></div>
         <span class="lm-count" id="lm-co-count"></span>
         <button class="lm-filter-btn${_coFilters.length ? ' on' : ''}" onclick="LeadManagerModule.openFilters('companies')">${_FLT_ICON} Filtros${_coFilters.length ? ` · ${_coFilters.length}` : ''}</button>
-        <button class="lm-filter-btn" onclick="LeadManagerModule.openViews('companies')">${_VIEW_ICON} Vistas</button>
-        <button class="lm-sel-btn" onclick="LeadManagerModule.toggleCoSelMode()">Seleccionar</button>
+        <button class="dg-kebab" onclick="LeadManagerModule.coMoreMenu(event)" title="Vistas y selección">⋮</button>
       </div>
       ${_fltChipsHtml('companies')}
       <div class="lm-bulk-bar" id="lm-co-bulk"></div>
@@ -27623,6 +27638,22 @@ ${foot}
   function toggleCoAll(on) { if (on) _coFilteredIds.forEach(id => _coSel.add(id)); else _coFilteredIds.forEach(id => _coSel.delete(id)); _renderCompanies(); }
   function clearCoSel() { _coSel.clear(); _renderCompanies(); }
   function toggleCoSelMode() { _coSelMode = !_coSelMode; if (!_coSelMode) _coSel.clear(); _renderCompanies(); }
+  // Mismo "⋮" que Contactos (ctMoreMenu) — Vistas/Seleccionar fuera de la fila de filtros.
+  function coMoreMenu(ev) {
+    if (ev && ev.stopPropagation) ev.stopPropagation();
+    document.querySelectorAll('.cp-mark-menu').forEach(m => m.remove());
+    const close = "document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove())";
+    const item = (label, onclick) => `<button class="cp-mark-menu__b" onclick="${close};${onclick}">${label}</button>`;
+    const html = `<div class="cp-mark-menu__list">${item(`${_VIEW_ICON} Vistas`, `LeadManagerModule.openViews('companies')`)}</div>
+      <div class="cp-mark-menu__sep"></div>
+      <div class="cp-mark-menu__list">${item(_coSelMode ? '✕ Salir de selección' : '☑ Seleccionar', `LeadManagerModule.toggleCoSelMode()`)}</div>`;
+    const menu = document.createElement('div'); menu.className = 'cp-mark-menu'; menu.style.minWidth = '190px'; menu.innerHTML = html;
+    document.body.appendChild(menu);
+    const t = (ev && (ev.currentTarget || ev.target)) || document.body; const r = t.getBoundingClientRect();
+    menu.style.left = `${Math.max(8, Math.min(r.right - 190, window.innerWidth - 200))}px`;
+    menu.style.top = `${r.bottom + 6}px`;
+    setTimeout(() => document.addEventListener('click', function onDoc(e) { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', onDoc); } }), 0);
+  }
   function _syncCoSelAll() { const box = document.querySelector('#lm-co-results .lm-dt thead .lm-ck'); if (!box) return; const total = _coFilteredIds.length, sel = _coFilteredIds.filter(id => _coSel.has(id)).length; box.checked = total > 0 && sel === total; box.indeterminate = sel > 0 && sel < total; }
   function _renderCoBulkBar() {
     const bar = $('lm-co-bulk'); if (!bar) return;
@@ -29141,9 +29172,9 @@ ${foot}
   return { load, filter, setFilter, setView, go, openClient, clientTab, _clientGoTab, clientQuickMenu,
     openImportPicker, closeImportPicker, openImport, closeImport, impFile, impToggleHeader, impToggleUpdateExisting, impSetObc, impNewClient, impRun, exportCsv,
     cbxOpen, cbxFilter, cbxPick, cbxBlur,
-    openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, bulkDeleteContacts, bulkAddOpen, bulkAddDo, _bulkAddAfterCreate, bulkRemoveSeqOpen, bulkRemoveSeqDo, openContactPage, cpTab, cpSave, cpDelete, cpActOpen, cpActSave, cpActToggle, cpActDel,
+    openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, ctMoreMenu, bulkDeleteContacts, bulkAddOpen, bulkAddDo, _bulkAddAfterCreate, bulkRemoveSeqOpen, bulkRemoveSeqDo, openContactPage, cpTab, cpSave, cpDelete, cpActOpen, cpActSave, cpActToggle, cpActDel,
     cpResumeSeq, cpFocusField, cpOpenRegisterReply, cpSaveRegisterReply,
-    openCompany, closeCompany, saveCompany, deleteCompany, filterCompanies, toggleCo, toggleCoAll, clearCoSel, toggleCoSelMode, bulkDeleteCompanies, coEnrolOpen, coEnrolFilter, coEnrolPick,
+    openCompany, closeCompany, saveCompany, deleteCompany, filterCompanies, toggleCo, toggleCoAll, clearCoSel, toggleCoSelMode, coMoreMenu, bulkDeleteCompanies, coEnrolOpen, coEnrolFilter, coEnrolPick,
     coQueueAddContact, coQueueDiscard, coQueueTogglePrimary, coQueueContinue,
     seqCoTaskOpen, seqCoDoClose, seqOpenCompanyLinkedIn, seqCoRowMenu, seqCoExpandToggle,
     openDrawer, closeDrawer, save, confirmDelete, convertToClient,
