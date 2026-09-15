@@ -2107,6 +2107,12 @@ async function initDb() {
     // importación solo se veía una vez, en la pantalla final del import; esto lo
     // hace persistente igual que limpieza_stats/enriquecimiento_stats.
     await pool.query(`ALTER TABLE cantera_batches ADD COLUMN IF NOT EXISTS import_stats JSONB NOT NULL DEFAULT '{}'::jsonb;`);
+    // Lista de CADA archivo importado a este borrador (no solo el último) — antes
+    // archivo_nombre se pisaba en cada importación, así que tras subir un segundo
+    // archivo la pantalla seguía mostrando solo el primero, como si el sistema no
+    // soportara más de uno (aunque los datos SÍ se acumulaban bien). Pedido
+    // explícito 2026-09-15: "que permita importar más de un archivo".
+    await pool.query(`ALTER TABLE cantera_batches ADD COLUMN IF NOT EXISTS import_files JSONB NOT NULL DEFAULT '[]'::jsonb;`);
 
     console.log('[db] tables ready (users, verifications, batch_jobs, clients, projects, tasks, payments, team_members, workspaces, workspace_invites, chat_messages, leads, meetings, fin_config, fin_member_config, pagos_internos, opportunities, opportunity_tasks, cantera_batches, cantera_companies, cantera_contacts, cantera_criterio_templates)');
   } catch (err) {

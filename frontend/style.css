@@ -12418,6 +12418,7 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .cant-imp-done-box__txt { display: flex; flex-direction: column; gap: 2px; flex: 1 1 220px; min-width: 0; }
 .cant-imp-done-box__txt b { font-size: .88rem; color: var(--text, #0A2540); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cant-imp-done-box__txt span { font-size: .78rem; color: var(--muted, #918C85); }
+.cant-imp-done-box__txt .cant-imp-filelist { max-height: 64px; overflow-y: auto; line-height: 1.5; white-space: normal; }
 .cant-imp-done-box__btns { display: flex; gap: 8px; flex-wrap: wrap; }
 .btn.cant-danger { color: #B3261E; border-color: #F6C9C4; }
 .btn.cant-danger:hover { background: #FCEEEE; }

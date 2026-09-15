@@ -6891,7 +6891,11 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
     stats.contactsCreated = (stats.contactsCreated || 0) + summary.contactsCreated;
     stats.contactsSkipped = (stats.contactsSkipped || 0) + summary.contactsSkipped;
     stats.companiesDeleted = (stats.companiesDeleted || 0) + (summary.companiesDeleted || 0);
-    await pool.query(`UPDATE cantera_batches SET archivo_nombre=$1, import_stats=$2::jsonb, updated_at=NOW() WHERE id=$3`, [req.file.originalname || '', JSON.stringify(stats), batchId]);
+    const fileEntry = { nombre: req.file.originalname || '', filas: summary.rows, empresas: summary.companiesCreated, contactos: summary.contactsCreated, fecha: new Date().toISOString() };
+    await pool.query(
+      `UPDATE cantera_batches SET archivo_nombre=$1, import_stats=$2::jsonb, import_files = COALESCE(import_files,'[]'::jsonb) || $3::jsonb, updated_at=NOW() WHERE id=$4`,
+      [req.file.originalname || '', JSON.stringify(stats), JSON.stringify([fileEntry]), batchId]
+    );
   } catch (e) { console.error('[cantera] import archivo_nombre', e.message); }
   // Si una empresa tiene UN solo contacto, no hay nada que decidir — se
   // asigna automático como prioridad 1 (pedido explícito 2026-09-07: "cuando
@@ -6922,7 +6926,7 @@ app.delete('/api/cantera/batches/:id/companies', requireAuth, async (req, res) =
     const chk = await pool.query(`SELECT id FROM cantera_batches WHERE id=$1 AND user_id=$2 AND estado='borrador'`, [req.params.id, uid]);
     if (!chk.rows.length) return res.status(404).json({ error: 'Borrador no encontrado (o ya fue movido al CRM)' });
     const del = await pool.query(`DELETE FROM cantera_companies WHERE batch_id=$1 AND user_id=$2`, [req.params.id, uid]);
-    await pool.query(`UPDATE cantera_batches SET archivo_nombre='' WHERE id=$1`, [req.params.id]);
+    await pool.query(`UPDATE cantera_batches SET archivo_nombre='', import_files='[]'::jsonb WHERE id=$1`, [req.params.id]);
     res.json({ ok: true, companiesDeleted: del.rowCount || 0 });
   } catch (err) { console.error('[cantera] DELETE companies', err.message); res.status(500).json({ error: 'Error al eliminar' }); }
 });

@@ -5731,8 +5731,19 @@ const CanteraModule = (() => {
         ${_companies.length ? `<div class="cant-imp-done-box">
           <div class="cant-imp-done-box__ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
           <div class="cant-imp-done-box__txt">
-            <b>${b.archivo_nombre ? esc(b.archivo_nombre) : 'Archivo importado'}</b>
-            <span>${_companies.length} empresa(s) ya cargadas en este borrador</span>
+            ${(() => {
+              // Lista de CADA archivo importado (no solo el último) — antes esto solo
+              // mostraba archivo_nombre (se pisaba en cada import) y parecía que el
+              // sistema no soportaba más de un archivo, aunque los datos sí se
+              // acumulaban bien. Pedido explícito 2026-09-15.
+              const files = Array.isArray(b.import_files) ? b.import_files : [];
+              if (files.length > 1) {
+                return `<b>${files.length} archivos importados</b>
+                  <span class="cant-imp-filelist">${files.map(f => `${esc(f.nombre || 'archivo')} · ${f.empresas || 0} empresa(s)`).join('<br>')}</span>`;
+              }
+              return `<b>${b.archivo_nombre ? esc(b.archivo_nombre) : 'Archivo importado'}</b>
+                <span>${_companies.length} empresa(s) ya cargadas en este borrador</span>`;
+            })()}
           </div>
           <div class="cant-imp-done-box__btns">
             <button class="btn btn--ghost btn--sm" onclick="CanteraModule.openImportModal()">Importar otro archivo…</button>
@@ -5740,7 +5751,7 @@ const CanteraModule = (() => {
           </div>
         </div>` : `<div class="cant-import-row">
           <button class="btn btn--primary btn--sm" onclick="CanteraModule.openImportModal()">Importar archivo…</button>
-          <span class="cant-import-hint">Previsualiza y ajusta el mapeo de columnas antes de guardar — igual que al importar en el CRM.</span>
+          <span class="cant-import-hint">Previsualiza y ajusta el mapeo de columnas antes de guardar — igual que al importar en el CRM. Puedes importar varios archivos al mismo borrador: se van sumando, sin duplicar lo que ya coincide por dominio/LinkedIn.</span>
         </div>`}
       </div>` : ''}
 
