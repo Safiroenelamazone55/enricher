@@ -5974,12 +5974,18 @@ const CanteraModule = (() => {
     // fija). "Paso 2 = Descartado" es distinto de "Ver solo descartadas"
     // (Paso 1, arriba): esto es lo que la IA descartó en la investigación
     // profunda, o lo que descartaste a mano con el Tier.
-    const paisPanel = _distinctVals('pais').map(v =>
+    // Caja de búsqueda arriba de una lista larga de checkboxes — filtra en el
+    // propio navegador (sin re-pintar el menú, así no se pierde el foco ni se
+    // cierra el submenu). Pedido explícito 2026-09-15: "un pequeño contenedor
+    // para escribir y ver resultados las coincidencias" (Industria tenía
+    // decenas de valores para bajar a mano uno por uno).
+    const _searchBox = ph => `<div class="cant-subsearch-box"><input type="text" class="form-input cant-subsearch" placeholder="${esc(ph)}" oninput="CanteraModule._filterSubPanel(this)" onclick="event.stopPropagation()"></div>`;
+    const paisPanel = _searchBox('Buscar país…') + (_distinctVals('pais').map(v =>
       `<label class="cant-colchk"><input type="checkbox" ${_paisFiltro.has(v) ? 'checked' : ''} onchange="CanteraModule.togglePaisFiltro('${_jsEsc(v)}')"> ${esc(v)}</label>`
-    ).join('') || '<div class="cp-empty2" style="padding:10px 12px">Sin datos todavía</div>';
-    const industriaPanel = _distinctVals('industria').map(v =>
+    ).join('') || '<div class="cp-empty2" style="padding:10px 12px">Sin datos todavía</div>');
+    const industriaPanel = _searchBox('Buscar industria…') + (_distinctVals('industria').map(v =>
       `<label class="cant-colchk"><input type="checkbox" ${_industriaFiltro.has(v) ? 'checked' : ''} onchange="CanteraModule.toggleIndustriaFiltro('${_jsEsc(v)}')"> ${esc(v)}</label>`
-    ).join('') || '<div class="cp-empty2" style="padding:10px 12px">Sin datos todavía</div>';
+    ).join('') || '<div class="cp-empty2" style="padding:10px 12px">Sin datos todavía</div>');
     const tamanoPanel = _distinctVals('tamano').map(v =>
       `<label class="cant-colchk"><input type="checkbox" ${_tamanoFiltro.has(v) ? 'checked' : ''} onchange="CanteraModule.toggleTamanoFiltro('${_jsEsc(v)}')"> ${esc(v)}</label>`
     ).join('') || '<div class="cp-empty2" style="padding:10px 12px">Sin datos todavía</div>';
@@ -6312,6 +6318,15 @@ const CanteraModule = (() => {
   // libre ("2 recent posts on Linkedin"), no true/false — cualquier valor que no
   // sea un "no hay señal" explícito cuenta como señal presente.
   function _cantSignalOn(v) { const s = String(v || '').trim(); return !!s && !/^(no|false|n\/a|none|0)$/i.test(s); }
+  // Filtra en vivo las opciones de un panel de checkboxes (País/Industria…) sin
+  // re-pintar el menú — solo esconde/muestra <label> por coincidencia de texto.
+  function _filterSubPanel(input) {
+    const list = input.closest('.cp-mark-menu__list'); if (!list) return;
+    const q = input.value.trim().toLowerCase();
+    list.querySelectorAll('.cant-colchk').forEach(lbl => {
+      lbl.style.display = !q || lbl.textContent.toLowerCase().includes(q) ? '' : 'none';
+    });
+  }
   function setPaso1Filtro(v) { _paso1Filtro = _paso1Filtro === v ? '' : v; _cantPageIdx = 0; _paint(); }
   function setDominioQ(v) { _dominioQ = v || ''; _cantPageIdx = 0; _paint(); }
   function toggleTierFiltro(clave) { if (_tierFiltro.has(clave)) _tierFiltro.delete(clave); else _tierFiltro.add(clave); _cantPageIdx = 0; _paint(); }
@@ -6768,7 +6783,7 @@ const CanteraModule = (() => {
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
-  return { render, open, openCreate, backToList, saveFiltros, runFiltros, setPaso1Filtro, setDominioQ, toggleTierFiltro, togglePrioFiltro, setMinContactos, toggleSinPrioridad, setAuditoriaFiltro,
+  return { render, open, openCreate, backToList, saveFiltros, runFiltros, setPaso1Filtro, setDominioQ, _filterSubPanel, toggleTierFiltro, togglePrioFiltro, setMinContactos, toggleSinPrioridad, setAuditoriaFiltro,
     togglePaisFiltro, toggleIndustriaFiltro, toggleTamanoFiltro, toggleDomFaltante, togglePaso2DescFiltro, resetFiltros, moreMenu, remove, saveAsTemplate,
     toggleExpand, addTier, removeTier, setTierField, addPuesto, removePuesto, setPuestoField, saveCriterio, setMotorIA, runValidacion,
     openPromote, closePromote, doPromote, openSendSeq, closeSendSeq, doSendSeq,

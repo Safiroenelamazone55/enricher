@@ -12474,6 +12474,8 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .cant-colresize { position: absolute; top: 0; right: 0; width: 6px; height: 100%; cursor: col-resize; }
 .cant-colresize:hover, .cant-colresize:active { background: var(--brand, #007AFF); opacity: .4; }
 .cant-colchk { display: flex; align-items: center; gap: 8px; padding: 3px 10px; font-size: .82rem; color: var(--text, #0A2540); cursor: pointer; }
+.cant-subsearch-box { padding: 2px 8px 7px; position: sticky; top: 0; background: var(--surface, #fff); z-index: 1; }
+.cant-subsearch { width: 100%; font-size: .82rem; padding: 5px 8px; }
 .cant-colchk:hover { background: var(--brand-ll, #F1EFEB); }
 .cant-save-row { margin-top: 10px; }
 
