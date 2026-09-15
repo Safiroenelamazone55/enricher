@@ -38280,7 +38280,31 @@ const TimerModule = (() => {
 // APP — wired after successful auth
 // =================================================================
 
+// Ocultar/mostrar el panel lateral de subsecciones (#sidebar) — pedido
+// explícito 2026-09-15: "agrega la función manual de ocultar y desplegar,
+// así si necesito la ocultaría" (para ganar ancho en tablas anchas como
+// Resultados de Cantera). El CSS de .sidebar--collapsed ya existía completo
+// (icon-rail con tooltips) — solo faltaba el botón y esto. Se recuerda por
+// navegador (localStorage), no por módulo — una sola preferencia global.
+function toggleModuleSidebar() {
+  const el = document.getElementById('sidebar'); if (!el) return;
+  const collapsed = el.classList.toggle('sidebar--collapsed');
+  try { localStorage.setItem('nova_sidebar_collapsed', collapsed ? '1' : '0'); } catch (_) {}
+  const btn = document.getElementById('sidebar-toggle');
+  if (btn) btn.title = collapsed ? 'Mostrar panel' : 'Ocultar panel';
+}
+function _restoreModuleSidebar() {
+  try {
+    if (localStorage.getItem('nova_sidebar_collapsed') === '1') {
+      document.getElementById('sidebar')?.classList.add('sidebar--collapsed');
+      const btn = document.getElementById('sidebar-toggle');
+      if (btn) btn.title = 'Mostrar panel';
+    }
+  } catch (_) {}
+}
+
 function initApp() {
+  _restoreModuleSidebar();
 
   // Columnas de la tabla de Tareas: aplica anchos/ocultas guardadas + resizers.
   try { TasksColumns.init(); } catch (_) {}
