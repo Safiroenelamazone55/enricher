@@ -12435,6 +12435,7 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .btn.cant-danger { color: #B3261E; border-color: #F6C9C4; }
 .btn.cant-danger:hover { background: #FCEEEE; }
 .cant-count { color: var(--text2, #45586A); font-size: .84rem; flex-shrink: 0; white-space: nowrap; }
+.cant-results-total { color: var(--brand-d, #0062CC); font-size: .84rem; font-weight: 700; flex-shrink: 0; white-space: nowrap; margin-left: auto; padding-left: 10px; }
 .cant-progress { width: 100%; height: 8px; border-radius: 4px; background: var(--brand-ll, #F1EFEB); overflow: hidden; }
 .cant-progress__bar { height: 100%; background: var(--brand, #00804C); border-radius: 4px; transition: width .25s ease; }
 .cant-info-block { background: var(--white, #fff); border: 1px solid var(--border, #EAE7E2); border-radius: 0; padding: 16px; margin-bottom: 16px; }

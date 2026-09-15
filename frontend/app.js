@@ -5406,13 +5406,53 @@ const CanteraModule = (() => {
       } catch { _bdOpts = { clientes: [], campanas: [], secuencias: [] }; }
     }
   }
+  // Recordar en qué borrador/pestaña/filtros se estaba parada, para que un
+  // refresh (F5) vuelva ahí en vez de mandar de regreso a la lista de
+  // borradores — pedido explícito 2026-09-15: "quiero hacer refresh y que se
+  // quede allí con los filtros y exactamente donde estoy". sessionStorage (no
+  // localStorage): solo dura esta pestaña del navegador, no queda pegado para
+  // siempre entre sesiones distintas.
+  const CANT_STATE_KEY = 'cantera_last_view';
+  function _saveViewState() {
+    try {
+      if (_view !== 'detail' || !_current) { sessionStorage.removeItem(CANT_STATE_KEY); return; }
+      sessionStorage.setItem(CANT_STATE_KEY, JSON.stringify({
+        batchId: _current.id, step: _step,
+        tierFiltro: [..._tierFiltro], prioFiltro: [..._prioFiltro],
+        minContactos: _minContactos, sinPrioridad: _sinPrioridad, auditoriaFiltro: _auditoriaFiltro,
+        paisFiltro: [..._paisFiltro], industriaFiltro: [..._industriaFiltro], tamanoFiltro: [..._tamanoFiltro],
+        domFaltante: _domFaltante, paso2DescFiltro: [..._paso2DescFiltro],
+        paso1Filtro: _paso1Filtro, dominioQ: _dominioQ,
+      }));
+    } catch (_) {}
+  }
+  async function _restoreViewState() {
+    let saved = null;
+    try { saved = JSON.parse(sessionStorage.getItem(CANT_STATE_KEY) || 'null'); } catch (_) {}
+    if (!saved || !saved.batchId) return false;
+    if (!(_batches || []).some(b => b.id === saved.batchId)) { sessionStorage.removeItem(CANT_STATE_KEY); return false; }
+    await open(saved.batchId);
+    if (!_current) return false;
+    _step = saved.step || 1;
+    _tierFiltro = new Set(saved.tierFiltro || []); _prioFiltro = new Set(saved.prioFiltro || []);
+    _minContactos = saved.minContactos || 0; _sinPrioridad = !!saved.sinPrioridad; _auditoriaFiltro = saved.auditoriaFiltro || '';
+    _paisFiltro = new Set(saved.paisFiltro || []); _industriaFiltro = new Set(saved.industriaFiltro || []); _tamanoFiltro = new Set(saved.tamanoFiltro || []);
+    _domFaltante = !!saved.domFaltante; _paso2DescFiltro = new Set(saved.paso2DescFiltro || []);
+    _paso1Filtro = saved.paso1Filtro || ''; _dominioQ = saved.dominioQ || '';
+    return true;
+  }
   function render(containerId) {
     _containerId = containerId || _containerId;
     const el = document.getElementById(_containerId); if (!el) return;
     el.innerHTML = `<div class="cp-empty2" style="padding:22px">Cargando…</div>`;
-    load().then(() => { _view = 'list'; _paint(); });
+    load().then(async () => {
+      const restored = await _restoreViewState().catch(() => false);
+      if (!restored) _view = 'list';
+      _paint();
+    });
   }
   function _paint() {
+    _saveViewState();
     const el = document.getElementById(_containerId); if (!el) return;
     // El scroll horizontal de la tabla se perdía en cada repintado (ej. al
     // guardar una validación manual) — pedido explícito 2026-09-06: "se movió
@@ -5794,6 +5834,7 @@ const CanteraModule = (() => {
           const paso1Lbl = { aprobado: 'aprobado', descartado: 'descartado', vacio: 'vacío' };
           return `<div class="cant-results-bar">
           <span class="cant-count">${_coSel.size ? `${_coSel.size} seleccionada(s)` : ''}${_paso1Filtro ? ` · Paso 1: ${paso1Lbl[_paso1Filtro]}` : ''}${_tierFiltro.size ? ` · Tier: ${[..._tierFiltro].join(', ')}` : ''}${_prioFiltro.size ? ` · Prioridad: ${[..._prioFiltro].join(', ')}` : ''}${_minContactos ? ` · ${_minContactos}+ contactos` : ''}${_sinPrioridad ? ' · sin priorizar' : ''}${_auditoriaFiltro ? ` · auditoría: ${_auditoriaFiltro === 'sin_auditar' ? 'sin auditar' : _auditoriaFiltro === 'de_acuerdo' ? 'confirmadas' : 'en desacuerdo'}` : ''}${_paisFiltro.size ? ` · País: ${[..._paisFiltro].join(', ')}` : ''}${_industriaFiltro.size ? ` · Industria: ${[..._industriaFiltro].join(', ')}` : ''}${_tamanoFiltro.size ? ` · Tamaño: ${[..._tamanoFiltro].join(', ')}` : ''}${_domFaltante ? ' · sin dominio' : ''}${_dominioQ ? ` · dominio contiene "${esc(_dominioQ)}"` : ''}${_paso2DescFiltro.size ? ` · Paso 2 descartado: ${[..._paso2DescFiltro].map(v => v === 'descartado' ? 'IA' : 'manual').join(', ')}` : ''}</span>
+          <span class="cant-results-total">${hasFiltros ? `${filteredCompanies.length} resultado${filteredCompanies.length === 1 ? '' : 's'}` : ''}</span>
           ${hasFiltros ? `<button class="btn btn--ghost btn--sm" onclick="CanteraModule.resetFiltros()">Limpiar filtros</button>` : ''}
         </div>`;
         })()}
