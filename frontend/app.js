@@ -6338,7 +6338,11 @@ const CanteraModule = (() => {
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || 'Error');
       showBanner('✓ Guardado', 'success');
-      await _loadCompanies();
+      // _loadCompanies() solo trae los datos frescos — sin el _paint() de acá la
+      // tabla se quedaba mostrando el estado viejo (Tier/Confianza/"Pendiente")
+      // hasta recargar la página entera a mano, aunque el guardado SÍ funcionaba.
+      // Reportado en vivo 2026-09-15: "sigue diciendo pendiente" tras editar.
+      await _loadCompanies(); _paint();
       const co = _companies.find(c => c.id === companyId);
       const btn = document.querySelector('#cant-manual-modal .fin-pi-box__ft span');
       if (btn && co) btn.innerHTML = `<button class="lm-bulk-ghost" onclick="CanteraModule.quitarValidacionManual(${co.id})">Quitar validación manual</button>`;
