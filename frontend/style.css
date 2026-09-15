@@ -12418,8 +12418,16 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .cant-imp-done-box__txt { display: flex; flex-direction: column; gap: 2px; flex: 1 1 220px; min-width: 0; }
 .cant-imp-done-box__txt b { font-size: .88rem; color: var(--text, #0A2540); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cant-imp-done-box__txt span { font-size: .78rem; color: var(--muted, #918C85); }
-.cant-imp-done-box__txt .cant-imp-filelist { max-height: 64px; overflow-y: auto; line-height: 1.5; white-space: normal; }
 .cant-imp-done-box__btns { display: flex; gap: 8px; flex-wrap: wrap; }
+/* Lista de archivos importados — una fila por archivo, cada una con su propio
+   botón de eliminar (pedido explícito 2026-09-15, ver deleteImportFile). */
+.cant-imp-file-list { display: flex; flex-direction: column; border: 1px solid var(--border, #EAE7E2); border-radius: 8px; overflow: hidden; }
+.cant-imp-file-row { display: flex; align-items: center; gap: 12px; background: var(--white, #fff); padding: 12px 14px; }
+.cant-imp-file-row + .cant-imp-file-row { border-top: 1px solid var(--border, #EAE7E2); }
+.cant-imp-file-row__ico { color: var(--muted, #918C85); flex-shrink: 0; display: flex; }
+.cant-imp-file-row__txt { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; }
+.cant-imp-file-row__txt b { font-size: .87rem; color: var(--text, #0A2540); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cant-imp-file-row__txt span { font-size: .78rem; color: var(--muted, #918C85); }
 .btn.cant-danger { color: #B3261E; border-color: #F6C9C4; }
 .btn.cant-danger:hover { background: #FCEEEE; }
 .cant-count { color: var(--text2, #45586A); font-size: .84rem; flex-shrink: 0; white-space: nowrap; }

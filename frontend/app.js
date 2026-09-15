@@ -5182,6 +5182,17 @@ const CanteraModule = (() => {
       openImportModal();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
+  async function deleteImportFile(importId, nombre) {
+    if (!confirm(`¿Eliminar solo lo que trajo "${nombre}"? Las empresas/contactos de los demás archivos de este borrador no se tocan. No se puede deshacer.`)) return;
+    try {
+      const res = await apiFetch(`${API}/cantera/batches/${_current.id}/import-files/${encodeURIComponent(importId)}`, { method: 'DELETE' });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Error');
+      _current = await (await apiFetch(`${API}/cantera/batches/${_current.id}`)).json();
+      await _loadCompanies(); _paint();
+      showBanner(`✓ ${d.companiesDeleted} empresa(s) eliminadas de "${nombre}"`, 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
   function _cImpInner(html) { const el = document.getElementById('cant-imp-inner'); if (el) el.innerHTML = html; }
   function _cImpHd(title) { return `<div class="fin-pi-box__hd"><h3>${esc(title)}</h3><button class="fin-pi-x" onclick="CanteraModule.closeImportModal()">✕</button></div>`; }
   function _cImpSteps(n) { const s = ['1 · Archivo', '2 · Mapear', '3 · Listo']; return `<div class="lm-imp-steps">${s.map((t, i) => `<span class="${i + 1 < n ? 'done' : i + 1 === n ? 'on' : ''}">${t}</span>`).join('')}</div>`; }
@@ -5728,28 +5739,33 @@ const CanteraModule = (() => {
       </div>` : ''}
 
       ${_step === 3 ? `<div class="cant-section">
-        ${_companies.length ? `<div class="cant-imp-done-box">
-          <div class="cant-imp-done-box__ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
-          <div class="cant-imp-done-box__txt">
-            ${(() => {
-              // Lista de CADA archivo importado (no solo el último) — antes esto solo
-              // mostraba archivo_nombre (se pisaba en cada import) y parecía que el
-              // sistema no soportaba más de un archivo, aunque los datos sí se
-              // acumulaban bien. Pedido explícito 2026-09-15.
-              const files = Array.isArray(b.import_files) ? b.import_files : [];
-              if (files.length > 1) {
-                return `<b>${files.length} archivos importados</b>
-                  <span class="cant-imp-filelist">${files.map(f => `${esc(f.nombre || 'archivo')} · ${f.empresas || 0} empresa(s)`).join('<br>')}</span>`;
-              }
-              return `<b>${b.archivo_nombre ? esc(b.archivo_nombre) : 'Archivo importado'}</b>
-                <span>${_companies.length} empresa(s) ya cargadas en este borrador</span>`;
-            })()}
-          </div>
-          <div class="cant-imp-done-box__btns">
-            <button class="btn btn--ghost btn--sm" onclick="CanteraModule.openImportModal()">Importar otro archivo…</button>
-            <button class="btn btn--ghost btn--sm cant-danger" onclick="CanteraModule.deleteAndReimport()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>Eliminar todo y volver a cargar</button>
-          </div>
-        </div>` : `<div class="cant-import-row">
+        ${_companies.length ? (() => {
+          // Cada archivo importado es su PROPIA fila, con su ícono y su propio botón
+          // de eliminar — antes era una sola caja con un nombre de archivo que se
+          // pisaba en cada import, y solo existía "borrar TODO". Pedido explícito
+          // 2026-09-15: "que pueda eliminar por separado... una nueva fila con
+          // [el] icono de importar archivo". Los archivos de antes de este cambio
+          // (sin id rastreable) se muestran igual pero sin botón de borrar puntual —
+          // no hay forma de separar retroactivamente qué trajo cada uno.
+          const fileIco = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>`;
+          const trashIco = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>`;
+          const files = Array.isArray(b.import_files) ? b.import_files : [];
+          const rows = files.length
+            ? files.map(f => `<div class="cant-imp-file-row">
+                <div class="cant-imp-file-row__ico">${fileIco}</div>
+                <div class="cant-imp-file-row__txt"><b>${esc(f.nombre || 'archivo')}</b><span>${f.empresas || 0} empresa(s) · ${f.contactos || 0} contacto(s)</span></div>
+                <button class="lm-mini-x" title="Eliminar solo lo que trajo este archivo" onclick="CanteraModule.deleteImportFile('${esc(f.id)}','${_jsEsc(f.nombre || 'este archivo')}')">${trashIco}</button>
+              </div>`).join('')
+            : `<div class="cant-imp-file-row">
+                <div class="cant-imp-file-row__ico">${fileIco}</div>
+                <div class="cant-imp-file-row__txt"><b>${b.archivo_nombre ? esc(b.archivo_nombre) : 'Archivo importado'}</b><span>${_companies.length} empresa(s) ya cargadas en este borrador</span></div>
+              </div>`;
+          return `<div class="cant-imp-file-list">${rows}</div>
+            <div class="cant-imp-done-box__btns" style="margin-top:10px">
+              <button class="btn btn--ghost btn--sm" onclick="CanteraModule.openImportModal()">Importar otro archivo…</button>
+              <button class="btn btn--ghost btn--sm cant-danger" onclick="CanteraModule.deleteAndReimport()">${trashIco} Eliminar todo y volver a cargar</button>
+            </div>`;
+        })() : `<div class="cant-import-row">
           <button class="btn btn--primary btn--sm" onclick="CanteraModule.openImportModal()">Importar archivo…</button>
           <span class="cant-import-hint">Previsualiza y ajusta el mapeo de columnas antes de guardar — igual que al importar en el CRM. Puedes importar varios archivos al mismo borrador: se van sumando, sin duplicar lo que ya coincide por dominio/LinkedIn.</span>
         </div>`}
@@ -6726,7 +6742,7 @@ const CanteraModule = (() => {
     toggleExpand, addTier, removeTier, setTierField, addPuesto, removePuesto, setPuestoField, saveCriterio, setMotorIA, runValidacion,
     openPromote, closePromote, doPromote, openSendSeq, closeSendSeq, doSendSeq,
     openScope, closeScope, scopeMaybeCreate, saveScope, setStep,
-    openImportModal, closeImportModal, impFile, impToggleHeader, impRun, impSetMode, deleteAndReimport, cbxOpen, cbxFilter, cbxPick, cbxBlur,
+    openImportModal, closeImportModal, impFile, impToggleHeader, impRun, impSetMode, deleteAndReimport, deleteImportFile, cbxOpen, cbxFilter, cbxPick, cbxBlur,
     taOpen, taFilter, taBlur, addFiltro, removeFiltro,
     toggleCoSel, toggleCoSelAll, resultsMenu, runClean, runEnrich, closeCantOp, applyCantOp,
     toggleResultCol, startColResize,

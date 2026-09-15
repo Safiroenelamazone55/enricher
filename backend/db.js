@@ -2113,6 +2113,12 @@ async function initDb() {
     // soportara más de uno (aunque los datos SÍ se acumulaban bien). Pedido
     // explícito 2026-09-15: "que permita importar más de un archivo".
     await pool.query(`ALTER TABLE cantera_batches ADD COLUMN IF NOT EXISTS import_files JSONB NOT NULL DEFAULT '[]'::jsonb;`);
+    // Marca cada empresa/contacto con el id del archivo (import_files.id) que lo
+    // creó — permite borrar SOLO lo que trajo un archivo puntual, sin tocar lo que
+    // vino de otros. Pedido explícito 2026-09-15: eliminar archivos importados por
+    // separado, no solo "borrar todo y volver a cargar".
+    await pool.query(`ALTER TABLE cantera_companies ADD COLUMN IF NOT EXISTS import_id TEXT NOT NULL DEFAULT '';`);
+    await pool.query(`ALTER TABLE cantera_contacts ADD COLUMN IF NOT EXISTS import_id TEXT NOT NULL DEFAULT '';`);
 
     console.log('[db] tables ready (users, verifications, batch_jobs, clients, projects, tasks, payments, team_members, workspaces, workspace_invites, chat_messages, leads, meetings, fin_config, fin_member_config, pagos_internos, opportunities, opportunity_tasks, cantera_batches, cantera_companies, cantera_contacts, cantera_criterio_templates)');
   } catch (err) {

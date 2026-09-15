@@ -6745,6 +6745,11 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
     });
   }
 
+  // Id corto de ESTA importación puntual — se estampa en cada empresa/contacto
+  // NUEVO creado ahora (no en los que solo se actualizan) para poder borrar
+  // después "solo lo que trajo este archivo" sin tocar el resto del borrador.
+  const importId = require('crypto').randomBytes(6).toString('hex');
+
   // A partir de aquí todo es lento (una fila a la vez, con consultas a la BD por
   // fila) — se responde YA con "empezó" y el resto corre en segundo plano; el
   // front hace polling a /import-status como ya hace con la investigación de IA.
@@ -6836,9 +6841,9 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
 
     const pais = _lmCleanUrlish(f.co_pais) || _lastLocSegment(f.co_ubicacion);
     const ins = await pool.query(`
-      INSERT INTO cantera_companies (batch_id,user_id,nombre,dominio,website,industria,tamano,pais,ciudad,linkedin,ubicacion)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id
-    `, [batchId, uid, nombre || dominio, dominio, _lmCleanUrlish(f.co_website), _lmCleanUrlish(f.co_industria), _lmCleanUrlish(f.co_tamano), pais, _lmCleanUrlish(f.co_ciudad), _lmCleanUrlish(f.co_linkedin), _lmS(f.co_ubicacion)]);
+      INSERT INTO cantera_companies (batch_id,user_id,nombre,dominio,website,industria,tamano,pais,ciudad,linkedin,ubicacion,import_id)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id
+    `, [batchId, uid, nombre || dominio, dominio, _lmCleanUrlish(f.co_website), _lmCleanUrlish(f.co_industria), _lmCleanUrlish(f.co_tamano), pais, _lmCleanUrlish(f.co_ciudad), _lmCleanUrlish(f.co_linkedin), _lmS(f.co_ubicacion), importId]);
     keys.forEach(k => coCache.set(k, ins.rows[0].id));
     summary.companiesCreated++; return ins.rows[0].id;
   }
@@ -6872,11 +6877,11 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
       }
       await pool.query(`
         INSERT INTO cantera_contacts (batch_id,company_id,user_id,nombre,apellido,cargo,email,linkedin,raw,
-          ubicacion,conexion_grado,premium,antiguedad_cargo,conexiones_mutuas,cambio_reciente,publico_reciente,sigue_empresa)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+          ubicacion,conexion_grado,premium,antiguedad_cargo,conexiones_mutuas,cambio_reciente,publico_reciente,sigue_empresa,import_id)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
       `, [batchId, companyId, uid, nombre, apellido, _lmCleanUrlish(f.cargo), _lmCleanUrlish(f.email).toLowerCase(), _lmCleanUrlish(f.linkedin), JSON.stringify(raw),
           _lmCleanUrlish(f.ubicacion), _lmS(f.conexion_grado), _lmS(f.premium), _lmCleanUrlish(f.antiguedad_cargo), _lmCleanUrlish(f.conexiones_mutuas),
-          _lmS(f.cambio_reciente), _lmS(f.publico_reciente), _lmS(f.sigue_empresa)]);
+          _lmS(f.cambio_reciente), _lmS(f.publico_reciente), _lmS(f.sigue_empresa), importId]);
       summary.contactsCreated++;
     } catch (e) { if (summary.errors.length < 10) summary.errors.push(`Fila ${summary.rows}: ${e.message}`); }
     job.done = summary.rows;
@@ -6891,7 +6896,7 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
     stats.contactsCreated = (stats.contactsCreated || 0) + summary.contactsCreated;
     stats.contactsSkipped = (stats.contactsSkipped || 0) + summary.contactsSkipped;
     stats.companiesDeleted = (stats.companiesDeleted || 0) + (summary.companiesDeleted || 0);
-    const fileEntry = { nombre: req.file.originalname || '', filas: summary.rows, empresas: summary.companiesCreated, contactos: summary.contactsCreated, fecha: new Date().toISOString() };
+    const fileEntry = { id: importId, nombre: req.file.originalname || '', filas: summary.rows, empresas: summary.companiesCreated, contactos: summary.contactsCreated, fecha: new Date().toISOString() };
     await pool.query(
       `UPDATE cantera_batches SET archivo_nombre=$1, import_stats=$2::jsonb, import_files = COALESCE(import_files,'[]'::jsonb) || $3::jsonb, updated_at=NOW() WHERE id=$4`,
       [req.file.originalname || '', JSON.stringify(stats), JSON.stringify([fileEntry]), batchId]
@@ -6929,6 +6934,38 @@ app.delete('/api/cantera/batches/:id/companies', requireAuth, async (req, res) =
     await pool.query(`UPDATE cantera_batches SET archivo_nombre='', import_files='[]'::jsonb WHERE id=$1`, [req.params.id]);
     res.json({ ok: true, companiesDeleted: del.rowCount || 0 });
   } catch (err) { console.error('[cantera] DELETE companies', err.message); res.status(500).json({ error: 'Error al eliminar' }); }
+});
+
+// Elimina SOLO lo que trajo un archivo puntual (por su import_id), sin tocar lo
+// que vino de otros archivos del mismo borrador — pedido explícito 2026-09-15:
+// "que pueda eliminar por separado". Nota: si una empresa de este archivo
+// después recibió un contacto nuevo desde OTRO archivo, ese contacto se pierde
+// igual (la empresa se borra entera) — mismo límite inherente a que "actualizar"
+// fusiona datos entre archivos; no hay forma de separar eso retroactivamente.
+app.delete('/api/cantera/batches/:id/import-files/:importId', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId;
+  const { id: batchId, importId } = req.params;
+  if (!importId) return res.status(400).json({ error: 'Falta el archivo a eliminar' });
+  try {
+    const chk = await pool.query(`SELECT id, import_files, import_stats FROM cantera_batches WHERE id=$1 AND user_id=$2 AND estado='borrador'`, [batchId, uid]);
+    if (!chk.rows.length) return res.status(404).json({ error: 'Borrador no encontrado (o ya fue movido al CRM)' });
+    const files = Array.isArray(chk.rows[0].import_files) ? chk.rows[0].import_files : [];
+    const entry = files.find(f => f.id === importId);
+    if (!entry) return res.status(404).json({ error: 'Ese archivo ya no está en el historial de este borrador' });
+    const delCt = await pool.query(`DELETE FROM cantera_contacts WHERE batch_id=$1 AND user_id=$2 AND import_id=$3`, [batchId, uid, importId]);
+    const delCo = await pool.query(`DELETE FROM cantera_companies WHERE batch_id=$1 AND user_id=$2 AND import_id=$3`, [batchId, uid, importId]);
+    const stats = chk.rows[0].import_stats || {};
+    stats.rows = Math.max(0, (stats.rows || 0) - (entry.filas || 0));
+    stats.companiesCreated = Math.max(0, (stats.companiesCreated || 0) - (entry.empresas || 0));
+    stats.contactsCreated = Math.max(0, (stats.contactsCreated || 0) - (entry.contactos || 0));
+    const remaining = files.filter(f => f.id !== importId);
+    const lastName = remaining.length ? remaining[remaining.length - 1].nombre : '';
+    await pool.query(
+      `UPDATE cantera_batches SET import_files=$1::jsonb, import_stats=$2::jsonb, archivo_nombre=$3, updated_at=NOW() WHERE id=$4`,
+      [JSON.stringify(remaining), JSON.stringify(stats), lastName, batchId]
+    );
+    res.json({ ok: true, companiesDeleted: delCo.rowCount || 0, contactsDeleted: delCt.rowCount || 0 });
+  } catch (err) { console.error('[cantera] DELETE import-file', err.message); res.status(500).json({ error: 'Error al eliminar el archivo' }); }
 });
 
 // Normalización de país: "España" y "Spain" deben calzar como el MISMO país
