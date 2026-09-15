@@ -12428,6 +12428,10 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .cant-imp-file-row__txt { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; }
 .cant-imp-file-row__txt b { font-size: .87rem; color: var(--text, #0A2540); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cant-imp-file-row__txt span { font-size: .78rem; color: var(--muted, #918C85); }
+/* .lm-mini-x nace opacity:0 (solo se revela en .clients-table__row:hover) — acá
+   no hay tabla, así que sin esto el botón de borrar quedaba invisible siempre. */
+.cant-imp-file-row .lm-mini-x { opacity: .55; }
+.cant-imp-file-row:hover .lm-mini-x { opacity: 1; }
 .btn.cant-danger { color: #B3261E; border-color: #F6C9C4; }
 .btn.cant-danger:hover { background: #FCEEEE; }
 .cant-count { color: var(--text2, #45586A); font-size: .84rem; flex-shrink: 0; white-space: nowrap; }
