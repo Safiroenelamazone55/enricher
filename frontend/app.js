@@ -18887,7 +18887,7 @@ const LeadManagerModule = (() => {
   function _vCampaigns() {
     return `
       <div class="lm-sec-head">
-        <div><h2 class="lm-sec-title">Campañas</h2><p class="lm-sec-sub">Campañas outbound por cliente — activas primero</p></div>
+        <div><h2 class="lm-sec-title">Campañas</h2></div>
         ${_clients.length ? `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openCampaignDrawer()">＋ Nueva campaña</button>` : ''}
       </div>
       <div class="ldh-toolbar">
@@ -18998,7 +18998,7 @@ const LeadManagerModule = (() => {
     const paN = _pendingAccept().length;
     return `
       <div class="lm-sec-head">
-        <div><h2 class="lm-sec-title">Secuencias</h2><p class="lm-sec-sub">Pasos de outbound (Email, LinkedIn, llamada…) — planificación y registro manual</p></div>
+        <div><h2 class="lm-sec-title">Secuencias</h2></div>
         <div style="display:flex;gap:8px;align-items:center">
           <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.pendingAcceptOpen()" title="Marca en lote quién aceptó tu conexión de LinkedIn → saltan a la Ruta A (mensaje)">Pendientes de aceptación${paN ? ` <b style="color:var(--brand,#007AFF)">(${paN})</b>` : ''}</button>
           ${_clients.length ? `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openSequenceDrawer()">＋ Nueva secuencia</button>` : ''}
@@ -21943,7 +21943,7 @@ ${foot}
     const list = [..._activities].sort((x, y) => new Date(y.fecha) - new Date(x.fecha));
     return `
       <div class="lm-sec-head">
-        <div><h2 class="lm-sec-title">Actividades</h2><p class="lm-sec-sub">Feed de touches: emails, LinkedIn, llamadas, respuestas, reuniones…</p></div>
+        <div><h2 class="lm-sec-title">Actividades</h2></div>
         ${_data.length ? `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openActivityDrawer()">＋ Registrar actividad</button>` : ''}
       </div>
       ${list.length ? `<div class="lm-feed">${list.map(a => _actRow(a, true)).join('')}</div>`
@@ -22106,7 +22106,7 @@ ${foot}
       ${anything ? '' : _empty('tasks', 'Sin tareas pendientes', 'Enrola contactos en secuencias o crea follow-ups; aparecerán aquí ordenados por fecha.', _data.length ? 'Nueva tarea' : '', _data.length ? 'LeadManagerModule.openActivityDrawer(null,null,1)' : '')}`;
     return `
       <div class="lm-sec-head">
-        <div><h2 class="lm-sec-title">Tareas comerciales</h2><p class="lm-sec-sub">Secuencias y follow-ups, ordenados por fecha</p></div>
+        <div><h2 class="lm-sec-title">Tareas comerciales</h2></div>
         <div class="lm-hd-actions"><div class="task-viewtoggle"><button class="tvt${_taskView === 'list' ? ' on' : ''}" onclick="LeadManagerModule.taskSetView('list')">Lista</button><button class="tvt${_taskView === 'calendar' ? ' on' : ''}" onclick="LeadManagerModule.taskSetView('calendar')">Calendario</button><button class="tvt${_taskView === 'priority' ? ' on' : ''}" onclick="LeadManagerModule.taskSetView('priority')" title="Centro de tareas por prioridad: respuestas, aprobaciones, fallos, vencidas, hoy, LinkedIn aceptado y datos faltantes">Prioridad</button></div>${_data.length ? `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openActivityDrawer(null,null,1)">＋ Nueva tarea</button>` : ''}</div>
       </div>
       ${_taskView === 'priority' ? _vTaskInboxPriority() : ''}
@@ -23447,7 +23447,7 @@ ${foot}
       .map(id => _clients.find(c => c.id === id)).filter(Boolean);
     return `
       <div class="lm-sec-head lm-sec-head--compact">
-        <div><h2 class="lm-sec-title">WhatsApp</h2><p class="lm-sec-sub">Contactos en secuencia con un chat de WhatsApp previo — todos los números juntos</p></div>
+        <div><h2 class="lm-sec-title">WhatsApp</h2></div>
         ${all.length ? `<select class="dle-i ibx-fcli" onchange="LeadManagerModule.waCli(this.value)"><option value="0">Todos los clientes</option>${cliOpts.map(c => `<option value="${c.id}"${_waCli === c.id ? ' selected' : ''}>${esc(c.nombre)}</option>`).join('')}</select>` : ''}
       </div>
       ${list.length
@@ -23585,7 +23585,7 @@ ${foot}
     const kpi = (l, v, s, t) => `<div class="lm-mc lm-mc--${t}"><span class="lm-mc__l">${l}</span><span class="lm-mc__v">${v}</span><span class="lm-mc__s">${s}</span></div>`;
     return `
       <div class="lm-sec-head">
-        <div><h2 class="lm-sec-title">Lead Manager</h2><p class="lm-sec-sub">Operación outbound por cliente, campaña y secuencia</p></div>
+        <div><h2 class="lm-sec-title">Lead Manager</h2></div>
         <div class="lm-sec-actions">
           <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openDrawer()">＋ Nuevo lead</button>
           <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openClientDrawer()">＋ Nuevo cliente outbound</button>
@@ -23634,7 +23634,7 @@ ${foot}
   function _vClients() {
     return `
       <div class="lm-sec-head">
-        <div><h2 class="lm-sec-title">Clientes outbound</h2><p class="lm-sec-sub">Cada cliente es un workspace con sus campañas, secuencias y leads</p></div>
+        <div><h2 class="lm-sec-title">Clientes outbound</h2></div>
         <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openClientDrawer()">＋ Nuevo cliente outbound</button>
       </div>
       ${_clients.length ? `<div class="lm-obc-grid">${_clients.map(_obcCard).join('')}</div>`
@@ -24491,7 +24491,7 @@ ${foot}
       return `<div class="rep-fn"><div class="rep-fn__top"><span class="rep-fn__lbl">${s[0]}</span>${conv}<span class="rep-fn__n">${s[1]}</span></div><div class="rep-fn__track"><div class="rep-fn__fill" style="width:${Math.max(4, Math.round(s[1] / base * 100))}%;background:${s[2]}"></div></div></div>`;
     }).join('');
     const chHtml = CH.map(([lbl, ch, color, icon]) => { const s = chStat(ch); return `<div class="rep-ch"><span class="rep-ch__i" style="background:${color}1a;color:${color}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${icon || ''}</svg></span><div class="rep-ch__b"><div class="rep-ch__n" data-count="${s.tot}">0</div><div class="rep-ch__l">${lbl}</div></div><span class="rep-ch__hoy">${s.hoy ? '+' + s.hoy + ' hoy' : '—'}</span></div>`; }).join('');
-    return `<div class="lm-sec-head"><div><h2 class="lm-sec-title">Reportes</h2><p class="lm-sec-sub">Rendimiento outbound — de tu actividad registrada</p></div></div>
+    return `<div class="lm-sec-head"><div><h2 class="lm-sec-title">Reportes</h2></div></div>
       <div class="rep-kpis">${_repKpi('contacts', _contacts.length, 'Contactos', '#007AFF')}${_repKpi('enrolled', activeEnr, 'Enrolados activos', '#1E5FA8')}${_repKpi('reply', replied, 'Respuestas', '#15803D')}${_repKpi('meeting', meetings, 'Reuniones', '#5B4BC4')}</div>
       <div class="rep-grid2">
         <div class="cp-card"><div class="cp-card__t">Embudo de conversión</div><div class="rep-funnel">${funnelHtml}</div><div class="rep-rates"><span><b>${pct(replied, contacted)}%</b> reply rate</span><span><b>${pct(meetings, enrolled)}%</b> meeting rate</span></div></div>
@@ -24505,7 +24505,7 @@ ${foot}
   }
   function _vSettings() {
     const views = _lmViewsGet();
-    return `<div class="lm-sec-head"><div><h2 class="lm-sec-title">Configuración</h2><p class="lm-sec-sub">Ajustes y datos del Lead Manager</p></div></div>
+    return `<div class="lm-sec-head"><div><h2 class="lm-sec-title">Configuración</h2></div></div>
       <div class="rep-kpis">${_repKpi('contacts', _clients.length, 'Clientes', '#007AFF')}${_repKpi('enrolled', _sequences.length, 'Secuencias', '#1E5FA8')}${_repKpi('reply', _campaigns.length, 'Campañas', '#5B4BC4')}${_repKpi('building', _lmTpls.length, 'Plantillas', '#B45309')}</div>
       <div class="cp-card"><div class="cp-card__t">Datos</div><div class="set-actions">
         <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.exportCsv('contacts')">${_ico('down')} Exportar contactos</button>
@@ -24561,7 +24561,7 @@ ${foot}
       settings:  ['Configuración', 'Ajustes del workspace de Lead Manager, canales e integraciones.', 'Fase 7'],
     };
     const p = P[k] || ['Sección', 'En preparación.', ''];
-    return `<div class="lm-sec-head"><div><h2 class="lm-sec-title">${p[0]}</h2><p class="lm-sec-sub">${p[1]}</p></div></div>
+    return `<div class="lm-sec-head"><div><h2 class="lm-sec-title">${p[0]}</h2></div></div>
       ${_empty(k, p[0] + ' — llega pronto', p[1], '', '', p[2])}`;
   }
 
@@ -24607,7 +24607,7 @@ ${foot}
       ? list.map(_tplCard).join('')
       : `<div class="cp-empty2" style="grid-column:1/-1;padding:26px;text-align:center">No hay plantillas${(_tplFilter !== 'all' || _tplTagFilter || _tplSeqFilter) ? ' con ese filtro' : ''} todavía. Crea la primera con “＋ Nueva plantilla”.</div>`;
     return `<div class="lm-sec-head">
-        <div><h2 class="lm-sec-title">Plantillas / Assets</h2><p class="lm-sec-sub">Plantillas de Email y LinkedIn con variables — reutilízalas en tus secuencias</p></div>
+        <div><h2 class="lm-sec-title">Plantillas / Assets</h2></div>
         <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openTemplate()">＋ Nueva plantilla</button>
       </div>
       <div class="lm-toolbar">${canalSel}${seqSel}${tagSel}<span class="lm-count">${list.length} ${list.length === 1 ? 'plantilla' : 'plantillas'}</span></div>
@@ -24825,7 +24825,7 @@ ${foot}
   function _vLeadsHub() {
     return `<div class="ld-hub">
       <div class="lm-sec-head">
-        <div><h2 class="lm-sec-title">Leads</h2><p class="lm-sec-sub">Quiénes respondieron y su siguiente paso — se llena al marcar el resultado en las tareas</p></div>
+        <div><h2 class="lm-sec-title">Leads</h2></div>
         <div class="lm-hd-actions"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openContact()">＋ Agregar prospecto</button></div>
       </div>
       <div class="ldh-toolbar">
@@ -25262,7 +25262,7 @@ ${foot}
   function _stColor(s) { const m = (STAGE_STYLES[s] || '').match(/color:([^;]+)/); return m ? m[1] : '#888'; }
   function _vDeals() {
     return `<div class="lm-sec-head">
-        <div><h2 class="lm-sec-title">Deals</h2><p class="lm-sec-sub">Pipeline comercial — valor, probabilidad y fecha de cierre por lead</p></div>
+        <div><h2 class="lm-sec-title">Deals</h2></div>
       </div>
       <div id="dl-kpis"></div>
       <div class="dl-toolbar"><select class="ldh-sel" id="dl-cli" onchange="LeadManagerModule.dlSetCli(this.value)"></select></div>
@@ -26825,7 +26825,7 @@ ${foot}
 
   function _vContacts() {
     return `<div class="lm-sec-head">
-        <div><h2 class="lm-sec-title">Contactos</h2><p class="lm-sec-sub">Personas ligadas a su empresa — importa desde Excel / CSV</p></div>
+        <div><h2 class="lm-sec-title">Contactos</h2></div>
         <div class="lm-hd-actions">
           <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.exportCsv('contacts')">${_ico('down')} Exportar</button>
           <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openContact()">＋ Agregar prospecto</button>
@@ -27648,7 +27648,7 @@ ${foot}
   // ── Vista: Empresas ──
   function _vCompanies() {
     return `<div class="lm-sec-head">
-        <div><h2 class="lm-sec-title">Empresas</h2><p class="lm-sec-sub">Cuentas objetivo con sus contactos — importa desde Excel / CSV</p></div>
+        <div><h2 class="lm-sec-title">Empresas</h2></div>
         <div class="lm-hd-actions">
           <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.exportCsv('companies')">${_ico('down')} Exportar</button>
           <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openCompany()">＋ Empresa</button>
