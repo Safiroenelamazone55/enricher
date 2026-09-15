@@ -6869,6 +6869,8 @@ const CanteraMesaModule = (() => {
   let _opts = null; // { clientes, campanas, secuencias }
   let _tierOpts = [];
   let _tierFiltro = new Set(); let _prioFiltro = new Set(); let _onlyFailed = false;
+  let _industriaFiltro = new Set(); let _industriaOpts = [];
+  let _archivoFiltro = new Set(); let _archivoOpts = [];
   // Filtros avanzados nuevos — pedido explícito 2026-09-07: encontrar rápido
   // las empresas con 2+/3+ contactos (necesitan elegir prioridad a mano),
   // las que aún no tienen NINGÚN contacto priorizado, y por estado de auditoría.
@@ -6949,8 +6951,19 @@ const CanteraMesaModule = (() => {
       } catch { _opts = { clientes: [], campanas: [], secuencias: [] }; }
     }
     try { _tierOpts = await (await apiFetch(`${API}/cantera/mesa/tiers`)).json(); } catch { _tierOpts = []; }
+    try { _industriaOpts = await (await apiFetch(`${API}/cantera/mesa/industrias`)).json(); } catch { _industriaOpts = []; }
+    await _loadArchivoOpts();
     await _search();
     _paint();
+  }
+  // Lista de archivos se recarga con los mismos filtros de cliente/campaña/secuencia
+  // (un archivo importado a un borrador de OTRO cliente no debería listarse acá).
+  async function _loadArchivoOpts() {
+    const p = new URLSearchParams();
+    if (_filtro.cliente) p.set('cliente', _filtro.cliente);
+    if (_filtro.campana) p.set('campana', _filtro.campana);
+    if (_filtro.secuencia) p.set('secuencia', _filtro.secuencia);
+    try { _archivoOpts = await (await apiFetch(`${API}/cantera/mesa/archivos?${p.toString()}`)).json(); } catch { _archivoOpts = []; }
   }
   async function _search() {
     const p = new URLSearchParams();
@@ -6963,6 +6976,8 @@ const CanteraMesaModule = (() => {
     if (_minContactos > 0) p.set('minContactos', _minContactos);
     if (_sinPrioridad) p.set('sinPrioridad', '1');
     if (_auditoriaFiltro) p.set('auditoria', _auditoriaFiltro);
+    if (_industriaFiltro.size) p.set('industria', [..._industriaFiltro].join(','));
+    if (_archivoFiltro.size) p.set('archivo', [..._archivoFiltro].join(','));
     p.set('page', _page); p.set('pageSize', _pageSize());
     try {
       const r = await apiFetch(`${API}/cantera/mesa/companies?${p.toString()}`);
@@ -6983,7 +6998,7 @@ const CanteraMesaModule = (() => {
     _cantScheduleStickySync();
   }
   async function _refresh() { await _search(); _paint(); }
-  function setFiltro(kind, val) { _filtro[kind] = val; _page = 0; _refresh(); }
+  function setFiltro(kind, val) { _filtro[kind] = val; _page = 0; _archivoFiltro = new Set(); _loadArchivoOpts().then(_refresh); }
   function setPageSize(n) { try { localStorage.setItem('cantera_mesa_page_size', String(parseInt(n) || 100)); } catch (_) {} _page = 0; _refresh(); }
   function goPage(d) { _page = Math.max(0, _page + d); _refresh(); }
   function toggleFailed() { _onlyFailed = !_onlyFailed; _page = 0; _refresh(); }
@@ -6992,11 +7007,15 @@ const CanteraMesaModule = (() => {
   function setMinContactos(n) { _minContactos = _minContactos === n ? 0 : n; _page = 0; _refresh(); }
   function toggleSinPrioridad() { _sinPrioridad = !_sinPrioridad; _page = 0; _refresh(); }
   function setAuditoriaFiltro(v) { _auditoriaFiltro = _auditoriaFiltro === v ? '' : v; _page = 0; _refresh(); }
+  function _jsEsc(s) { return String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
+  function toggleIndustriaFiltro(v) { if (_industriaFiltro.has(v)) _industriaFiltro.delete(v); else _industriaFiltro.add(v); _page = 0; _refresh(); }
+  function toggleArchivoFiltro(id) { if (_archivoFiltro.has(id)) _archivoFiltro.delete(id); else _archivoFiltro.add(id); _page = 0; _refresh(); }
   // Botón "Limpiar filtros" — pedido explícito 2026-09-07, mismo patrón que
   // Resultados. NO toca la selección (_coSel).
   function resetFiltros() {
     _onlyFailed = false; _tierFiltro = new Set(); _prioFiltro = new Set();
     _minContactos = 0; _sinPrioridad = false; _auditoriaFiltro = '';
+    _industriaFiltro = new Set(); _archivoFiltro = new Set();
     _page = 0; _refresh();
   }
   function toggleCoSel(id, checked) { if (checked) _coSel.add(id); else _coSel.delete(id); _paint(); }
@@ -7072,6 +7091,14 @@ const CanteraMesaModule = (() => {
     const auditoriaPanel = [
       ['sin_auditar', 'Sin auditar'], ['de_acuerdo', 'Confirmadas (de acuerdo)'], ['en_desacuerdo', 'En desacuerdo'],
     ].map(([v, label]) => `<label class="cant-colchk"><input type="radio" name="mesa-auditoria" ${_auditoriaFiltro === v ? 'checked' : ''} onchange="CanteraMesaModule.setAuditoriaFiltro('${v}')"> ${label}</label>`).join('');
+    // Industria y Archivo de importación — pedido explícito 2026-09-15: "así
+    // trabajo directamente en el archivo nuevo... marco y demarco lo que quiero".
+    const industriaPanel = _industriaOpts.map(v =>
+      `<label class="cant-colchk"><input type="checkbox" ${_industriaFiltro.has(v) ? 'checked' : ''} onchange="CanteraMesaModule.toggleIndustriaFiltro('${_jsEsc(v)}')"> ${esc(v)}</label>`
+    ).join('') || '<div class="cp-empty2" style="padding:10px 12px">Sin datos todavía</div>';
+    const archivoPanel = _archivoOpts.map(f =>
+      `<label class="cant-colchk"><input type="checkbox" ${_archivoFiltro.has(f.id) ? 'checked' : ''} onchange="CanteraMesaModule.toggleArchivoFiltro('${_jsEsc(f.id)}')"> ${esc(f.nombre || 'archivo')} <span class="cant-hint" style="margin:0">· ${esc(f.batch_nombre || '')}</span></label>`
+    ).join('') || '<div class="cp-empty2" style="padding:10px 12px">Ningún archivo importado todavía tiene historial rastreable</div>';
     const vis = _loadVisibleCols();
     const colsPanel = MESA_COLS.map(c => `<label class="cant-colchk"><input type="checkbox" ${vis.has(c.key) ? 'checked' : ''} onchange="CanteraMesaModule.toggleCol('${c.key}')"> ${esc(c.label)}</label>`).join('');
     const calificadas = _coSel.size ? [..._coSel].filter(id => { const r = _knownRows[id]; return r && (r.paso2_estado === 'aprobado' || r.paso2_estado === 'validacion_manual'); }).length : 0;
@@ -7079,7 +7106,7 @@ const CanteraMesaModule = (() => {
       <div class="cp-mark-menu__sep"></div>
       <div class="cp-mark-menu__list">${item('Investigación profunda (IA)', 'CanteraMesaModule.runValidacion()')}${item('Auditar muestra (IA)', 'CanteraMesaModule.openAudit()')}${item(`${_onlyFailed ? '✓ ' : ''}Ver solo descartadas`, 'CanteraMesaModule.toggleFailed()')}</div>
       <div class="cp-mark-menu__sep"></div>
-      <div class="cp-mark-menu__list">${sub('Filtrar', `<div class="cp-mark-menu__list">${sub('Tier', tierPanel)}${sub('Prioridad', prioPanel)}${sub('Nº de contactos', numContactosPanel)}${sub('Auditoría', auditoriaPanel)}</div>`)}</div>
+      <div class="cp-mark-menu__list">${sub('Filtrar', `<div class="cp-mark-menu__list">${sub('Tier', tierPanel)}${sub('Prioridad', prioPanel)}${sub('Nº de contactos', numContactosPanel)}${sub('Auditoría', auditoriaPanel)}${sub(`Industria${_industriaFiltro.size ? ` · ${_industriaFiltro.size}` : ''}`, industriaPanel, true)}${sub(`Archivo de importación${_archivoFiltro.size ? ` · ${_archivoFiltro.size}` : ''}`, archivoPanel, true)}</div>`)}</div>
       <div class="cp-mark-menu__sep"></div>
       <div class="cp-mark-menu__list">${sub('Elegir columnas visibles', colsPanel, true)}</div>
       ${calificadas ? `<div class="cp-mark-menu__sep"></div><div class="cp-mark-menu__list">${item(`Mover al CRM (${calificadas})`, 'CanteraMesaModule.openPromote()')}</div>` : ''}`;
@@ -7479,6 +7506,7 @@ const CanteraMesaModule = (() => {
   }
 
   return { render, setFiltro, setPageSize, goPage, toggleFailed, toggleTierFiltro, togglePrioFiltro, setMinContactos, toggleSinPrioridad, setAuditoriaFiltro, resetFiltros,
+    toggleIndustriaFiltro, toggleArchivoFiltro,
     toggleCoSel, toggleCoSelAll, toggleExpand, setContactPrioridad, toggleCol, menu,
     runClean, runEnrich, runValidacion, _confirmRevalidar, openAudit,
     openPromote, doPromote, openSendSeq, doSendSeq, openManualValidation, saveManualValidation, copyManualData, copyManualInstruccion, quitarValidacionManual };

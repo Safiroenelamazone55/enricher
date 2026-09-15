@@ -7370,6 +7370,14 @@ app.get('/api/cantera/mesa/companies', requireAuth, async (req, res) => {
     if (sinPrioridad) conds.push(`NOT EXISTS (SELECT 1 FROM cantera_contacts k4 WHERE k4.company_id=c.id AND k4.prioridad > 0)`);
     if (auditoria === 'sin_auditar') conds.push(`c.auditoria_veredicto = ''`);
     else if (auditoria) { params.push(auditoria); conds.push(`c.auditoria_veredicto = $${params.length}`); }
+    // Industria y archivo de importación — pedido explícito 2026-09-15: filtrar
+    // Mesa de trabajo por industria, y por el archivo puntual recién importado
+    // (para marcar/desmarcar solo lo que trajo ESE archivo, sin mezclarlo con
+    // el resto del borrador).
+    const industrias = String(req.query.industria || '').split(',').filter(Boolean);
+    if (industrias.length) { params.push(industrias); conds.push(`c.industria = ANY($${params.length}::text[])`); }
+    const archivos = String(req.query.archivo || '').split(',').filter(Boolean);
+    if (archivos.length) { params.push(archivos); conds.push(`c.import_id = ANY($${params.length}::text[])`); }
     const where = conds.join(' AND ');
     const { rows: totalRows } = await pool.query(
       `SELECT COUNT(*)::int AS n FROM cantera_companies c JOIN cantera_batches b ON b.id=c.batch_id WHERE ${where}`, params);
@@ -7392,6 +7400,37 @@ app.get('/api/cantera/mesa/tiers', requireAuth, async (req, res) => {
       `SELECT DISTINCT tier_clave FROM cantera_companies WHERE user_id=$1 AND tier_clave <> '' ORDER BY tier_clave`, [req.workspaceOwnerId]);
     res.json(rows.map(r => r.tier_clave));
   } catch (err) { console.error('[cantera] mesa tiers', err.message); res.status(500).json({ error: 'Error al cargar tiers' }); }
+});
+app.get('/api/cantera/mesa/industrias', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT DISTINCT industria FROM cantera_companies WHERE user_id=$1 AND industria <> '' ORDER BY industria`, [req.workspaceOwnerId]);
+    res.json(rows.map(r => r.industria));
+  } catch (err) { console.error('[cantera] mesa industrias', err.message); res.status(500).json({ error: 'Error al cargar industrias' }); }
+});
+// Lista de archivos importados (id+nombre) para poblar el filtro "Archivo de
+// importación" de Mesa de trabajo — pedido explícito 2026-09-15: "así trabajo
+// directamente en el archivo nuevo". Solo incluye archivos importados DESPUÉS
+// de que este historial empezó a guardarse (import_files); lo importado antes
+// no tiene id rastreable y no aparece acá — mismo límite ya conocido.
+app.get('/api/cantera/mesa/archivos', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId;
+  const cliente = req.query.cliente ? parseInt(req.query.cliente) : null;
+  const campana = req.query.campana ? parseInt(req.query.campana) : null;
+  const secuencia = req.query.secuencia ? parseInt(req.query.secuencia) : null;
+  try {
+    const conds = ['b.user_id=$1', `jsonb_array_length(b.import_files) > 0`];
+    const params = [uid];
+    if (cliente) { params.push(cliente); conds.push(`b.outbound_client_id=$${params.length}`); }
+    if (campana) { params.push(campana); conds.push(`b.campaign_id=$${params.length}`); }
+    if (secuencia) { params.push(secuencia); conds.push(`b.sequence_id=$${params.length}`); }
+    const { rows } = await pool.query(`
+      SELECT f->>'id' AS id, f->>'nombre' AS nombre, b.nombre AS batch_nombre, f->>'fecha' AS fecha
+        FROM cantera_batches b, jsonb_array_elements(b.import_files) f
+       WHERE ${conds.join(' AND ')}
+       ORDER BY f->>'fecha' DESC`, params);
+    res.json(rows);
+  } catch (err) { console.error('[cantera] mesa archivos', err.message); res.status(500).json({ error: 'Error al cargar archivos' }); }
 });
 
 // Auditoría por muestra de la investigación profunda (IA) — pedido explícito
