@@ -5750,16 +5750,24 @@ const CanteraModule = (() => {
           const fileIco = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>`;
           const trashIco = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>`;
           const files = Array.isArray(b.import_files) ? b.import_files : [];
-          const rows = files.length
-            ? files.map(f => `<div class="cant-imp-file-row">
+          // El primer archivo (importado ANTES de que existiera este historial)
+          // no tiene entrada en import_files — sin esto, en cuanto se importaba
+          // un segundo archivo rastreado, el primero desaparecía de la lista por
+          // completo (aunque sus empresas seguían ahí). Bug reportado 2026-09-15:
+          // "aunque hayan sido dos, el primero no tiene por qué desaparecer".
+          // Se calcula por diferencia: lo que no está explicado por los archivos
+          // rastreados es el remanente del/los import(s) sin id.
+          const trackedTotal = files.reduce((s, f) => s + (f.empresas || 0), 0);
+          const legacyCount = Math.max(0, _companies.length - trackedTotal);
+          const legacyRow = legacyCount > 0 ? `<div class="cant-imp-file-row">
+                <div class="cant-imp-file-row__ico">${fileIco}</div>
+                <div class="cant-imp-file-row__txt"><b>${b.archivo_nombre && !files.some(f => f.nombre === b.archivo_nombre) ? esc(b.archivo_nombre) : 'Importación anterior'}</b><span>${legacyCount} empresa(s) — sin historial individual, importado(s) antes de este cambio</span></div>
+              </div>` : '';
+          const rows = legacyRow + files.map(f => `<div class="cant-imp-file-row">
                 <div class="cant-imp-file-row__ico">${fileIco}</div>
                 <div class="cant-imp-file-row__txt"><b>${esc(f.nombre || 'archivo')}</b><span>${f.empresas || 0} empresa(s) · ${f.contactos || 0} contacto(s)</span></div>
                 <button class="lm-mini-x" title="Eliminar solo lo que trajo este archivo" onclick="CanteraModule.deleteImportFile('${esc(f.id)}','${_jsEsc(f.nombre || 'este archivo')}')">${trashIco}</button>
-              </div>`).join('')
-            : `<div class="cant-imp-file-row">
-                <div class="cant-imp-file-row__ico">${fileIco}</div>
-                <div class="cant-imp-file-row__txt"><b>${b.archivo_nombre ? esc(b.archivo_nombre) : 'Archivo importado'}</b><span>${_companies.length} empresa(s) ya cargadas en este borrador</span></div>
-              </div>`;
+              </div>`).join('');
           return `<div class="cant-imp-file-list">${rows}</div>
             <div class="cant-imp-done-box__btns" style="margin-top:10px">
               <button class="btn btn--ghost btn--sm" onclick="CanteraModule.openImportModal()">Importar otro archivo…</button>
