@@ -6025,7 +6025,12 @@ const CanteraModule = (() => {
     // El menú quedaba "flotando" en un punto fijo de la pantalla al hacer scroll
     // de la página, lejos del botón que lo abrió — se cierra en vez de eso
     // (reportado 2026-09-06: "seleccioné los 3 puntos pero scroleo, baja con todo").
-    const onScroll = () => closeMenu();
+    // OJO: scroll no burbujea, pero SÍ dispara la fase de captura en ancestros —
+    // sin el filtro de abajo, hacer scroll DENTRO de un submenu (ej. la lista de
+    // Industria) también contaba como "scroll de la página" y cerraba todo antes
+    // de poder leer la lista. Reportado urgente 2026-09-15: "no puedo hacer scroll
+    // porque automáticamente se cierra".
+    const onScroll = (e) => { if (menu.contains(e.target)) return; closeMenu(); };
     const onDoc = e => { if (!menu.contains(e.target)) closeMenu(); };
     function closeMenu() {
       menu.remove();
@@ -7134,7 +7139,9 @@ const CanteraMesaModule = (() => {
       });
       subEl.addEventListener('mouseleave', () => { hideTimer = setTimeout(() => { panel.style.display = 'none'; }, 200); });
     });
-    const onScroll = () => closeMenu();
+    // Mismo fix que Resultados: scroll DENTRO de un submenu (ej. Industria) no
+    // debe cerrar todo el menú — solo el scroll real de la página.
+    const onScroll = (e) => { if (m.contains(e.target)) return; closeMenu(); };
     const onDoc = e => { if (!m.contains(e.target)) closeMenu(); };
     function closeMenu() { m.remove(); document.removeEventListener('click', onDoc); window.removeEventListener('scroll', onScroll, true); }
     setTimeout(() => { document.addEventListener('click', onDoc); window.addEventListener('scroll', onScroll, true); }, 0);
