@@ -21784,46 +21784,44 @@ ${foot}
   // los links "wa.me" de toda la sección, que abrían el WhatsApp PERSONAL de quien
   // hace clic, no el número de negocio ya conectado. Resuelve la conexión acá (no en
   // QuickWaModule) porque ya tenemos _contacts/_clients cargados en este closure.
+  // Abre SIEMPRE con el WhatsApp ya asignado al cliente de este contacto — pedido
+  // explícito 2026-09-16: "siempre debe abrir con el asignado". Nada de elegir
+  // entre varios acá: la asignación (1 WhatsApp por cliente, o el mismo WhatsApp
+  // para varios clientes) ya se decide en Clientes outbound → WhatsApp; este
+  // botón solo respeta esa asignación. Si el cliente todavía no tiene ninguno
+  // conectado, en vez de fallar en silencio ofrece las MISMAS dos opciones que
+  // ya existen en esa pantalla (conectar uno nuevo / usar uno existente).
   async function openWaFor(cid, prefill) {
     const c = _contacts.find(x => x.id === cid);
     if (!c) return;
     const wa = _waDigits(c);
     if (!wa) { showBanner('Este contacto no tiene número de WhatsApp', 'info'); return; }
+    if (!c.outbound_client_id) { showBanner('Este contacto no tiene cliente outbound asignado — no se puede saber qué WhatsApp usar', 'info'); return; }
     const nombre = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || 'Contacto';
-    const args = { contactId: cid, nombre, telefono: wa, outboundClientId: c.outbound_client_id || null, prefill: prefill || '' };
-    // Elegir con cuál WhatsApp conectado abrir — pedido explícito 2026-09-16:
-    // "el punto es, elegir el wpp que quiero abrir". Antes se auto-elegía el
-    // primero conectado del cliente (o el primero conectado a secas) sin
-    // preguntar. Con un solo WhatsApp conectado no tiene sentido preguntar —
-    // se abre directo, igual que antes.
     let conns = [];
-    try {
-      const url = c.outbound_client_id ? `${API}/wa/connections?outboundClientId=${c.outbound_client_id}` : `${API}/wa/connections`;
-      conns = (await (await apiFetch(url)).json()).filter(x => x.estado === 'conectado');
-      if (!conns.length && c.outbound_client_id) conns = (await (await apiFetch(`${API}/wa/connections`)).json()).filter(x => x.estado === 'conectado');
-    } catch (_) {}
-    if (conns.length > 1) { _openWaPicker(conns, args); return; }
-    args.connectionId = conns[0] ? conns[0].id : null;
-    QuickWaModule.open(args);
+    try { conns = (await (await apiFetch(`${API}/wa/connections?outboundClientId=${c.outbound_client_id}`)).json()).filter(x => x.estado === 'conectado'); } catch (_) {}
+    if (!conns.length) { _openWaAssignPrompt(c.outbound_client_id); return; }
+    QuickWaModule.open({ contactId: cid, nombre, telefono: wa, outboundClientId: c.outbound_client_id, prefill: prefill || '', connectionId: conns[0].id });
   }
-  function _openWaPicker(conns, args) {
+  function _openWaAssignPrompt(clientId) {
     document.getElementById('lm-wapick-modal')?.remove();
     const m = document.createElement('div'); m.id = 'lm-wapick-modal'; m.className = 'fin-pi-backdrop';
     m.onclick = e => { if (e.target === m) m.remove(); };
-    m.innerHTML = `<div class="fin-pi-box lm-flt-box" style="max-width:360px">
-      <div class="fin-pi-box__hd"><h3>¿Con cuál WhatsApp?</h3><button class="fin-pi-x" onclick="document.getElementById('lm-wapick-modal').remove()">✕</button></div>
-      <div class="flt-body" style="display:flex;flex-direction:column;gap:6px">
-        ${conns.map(w => `<button class="btn btn--ghost btn--sm" style="justify-content:flex-start" onclick="document.getElementById('lm-wapick-modal').remove();LeadManagerModule._openWaWith(${w.id})">${esc(w.nombre || 'WhatsApp')} <span style="color:var(--muted,#B4AFA8);margin-left:6px">${esc(w.numero ? '+' + w.numero : '')}</span></button>`).join('')}
+    m.innerHTML = `<div class="fin-pi-box lm-flt-box" style="max-width:380px">
+      <div class="fin-pi-box__hd"><h3>Falta asignar WhatsApp</h3><button class="fin-pi-x" onclick="document.getElementById('lm-wapick-modal').remove()">✕</button></div>
+      <div class="flt-body" style="display:flex;flex-direction:column;gap:12px">
+        <p class="cant-hint" style="margin:0">Este cliente todavía no tiene un WhatsApp conectado. Puedes vincular un número nuevo, o asignarle uno que ya tengas conectado.</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn--primary btn--sm" onclick="document.getElementById('lm-wapick-modal').remove();LeadManagerModule._goClientWa(${clientId})">Ir a conectar / asignar ›</button>
+        </div>
       </div>
     </div>`;
     document.body.appendChild(m);
-    _waPickArgs = args;
   }
-  let _waPickArgs = null;
-  function _openWaWith(connId) {
-    if (!_waPickArgs) return;
-    QuickWaModule.open({ ..._waPickArgs, connectionId: connId });
-    _waPickArgs = null;
+  function _goClientWa(clientId) {
+    document.querySelectorAll('.fin-pi-backdrop').forEach(m => m.remove());
+    openClient(clientId);
+    setTimeout(() => _clientGoTab('WhatsApp'), 60);
   }
   function _gmailUrl(to, subject, body, cc) {
     return `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to || '')}${cc ? `&cc=${encodeURIComponent(cc)}` : ''}&su=${encodeURIComponent(subject || '')}&body=${encodeURIComponent(body || '')}`;
@@ -29727,7 +29725,7 @@ ${foot}
     bulkVerifyEmails, connectGmail, sendCfgToggle, saveSendCfg,
     personalizeOne, bulkPersonalize, openAiDrafts, closeAiDrafts, aiGenerate,
     aiDraftSave, aiDraftStatus, aiDraftDelete, aiCfgToggle, saveAiCfg,
-    seqDoCopySubject, lmCopy, openWaFor, _openWaWith,
+    seqDoCopySubject, lmCopy, openWaFor, _goClientWa,
     openColsPicker, toggleCtCol, resetCtCols };
 })();
 
