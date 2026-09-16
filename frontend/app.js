@@ -16724,6 +16724,8 @@ const ProjectsModule = (() => {
     // barra superior de Nova y el riel angosto de módulos se quedan (navegación global).
     const modSidebar = $('sidebar');
     if (modSidebar) modSidebar.style.display = 'none';
+    const modSidebarToggle = $('sidebar-toggle');
+    if (modSidebarToggle) modSidebarToggle.style.display = 'none';
     ['projects-loading', 'projects-empty', 'projects-cards', 'projects-table-wrap'].forEach(id2 => {
       const el = $(id2); if (el) el.style.display = 'none';
     });
@@ -16753,6 +16755,8 @@ const ProjectsModule = (() => {
     if (dv) { dv.style.display = 'none'; dv.innerHTML = ''; }
     const modSidebar = $('sidebar');
     if (modSidebar) modSidebar.style.display = '';
+    const modSidebarToggle = $('sidebar-toggle');
+    if (modSidebarToggle) modSidebarToggle.style.display = '';
     const topbar = document.querySelector('#pane-mgmt-projects .pv-topbar');
     if (topbar) topbar.style.display = '';
     render();
@@ -38283,20 +38287,23 @@ const TimerModule = (() => {
 // Ocultar/mostrar el panel lateral de subsecciones (#sidebar) — pedido
 // explícito 2026-09-15: "agrega la función manual de ocultar y desplegar,
 // así si necesito la ocultaría" (para ganar ancho en tablas anchas como
-// Resultados de Cantera). El CSS de .sidebar--collapsed ya existía completo
-// (icon-rail con tooltips) — solo faltaba el botón y esto. Se recuerda por
-// navegador (localStorage), no por módulo — una sola preferencia global.
+// Resultados de Cantera). OJO: NO reusa .sidebar--collapsed — ese CSS es de
+// un diseño viejo (icon-rail) que ya no calza con el markup actual de
+// .snav-item (se veía roto: iconos reemplazados por una sola letra suelta).
+// .sidebar--hidden es nuevo, simple y a prueba de ese desfase: ancho 0, sin
+// intentar mantener una versión "solo íconos". Se recuerda por navegador
+// (localStorage), no por módulo — una sola preferencia global.
 function toggleModuleSidebar() {
   const el = document.getElementById('sidebar'); if (!el) return;
-  const collapsed = el.classList.toggle('sidebar--collapsed');
-  try { localStorage.setItem('nova_sidebar_collapsed', collapsed ? '1' : '0'); } catch (_) {}
+  const hidden = el.classList.toggle('sidebar--hidden');
+  try { localStorage.setItem('nova_sidebar_hidden', hidden ? '1' : '0'); } catch (_) {}
   const btn = document.getElementById('sidebar-toggle');
-  if (btn) btn.title = collapsed ? 'Mostrar panel' : 'Ocultar panel';
+  if (btn) btn.title = hidden ? 'Mostrar panel' : 'Ocultar panel';
 }
 function _restoreModuleSidebar() {
   try {
-    if (localStorage.getItem('nova_sidebar_collapsed') === '1') {
-      document.getElementById('sidebar')?.classList.add('sidebar--collapsed');
+    if (localStorage.getItem('nova_sidebar_hidden') === '1') {
+      document.getElementById('sidebar')?.classList.add('sidebar--hidden');
       const btn = document.getElementById('sidebar-toggle');
       if (btn) btn.title = 'Mostrar panel';
     }

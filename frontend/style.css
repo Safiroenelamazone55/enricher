@@ -140,11 +140,33 @@ body {
 .sidebar:hover::-webkit-scrollbar { display: block; width: 3px; }
 .sidebar:hover::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 0; }
 
-/* Collapsed state */
+/* Collapsed state (LEGACY — .sidebar--collapsed ya no se usa: su CSS de
+   icon-rail data de un diseño anterior y no calza con el markup actual de
+   .snav-item, se veía roto. El ocultar/mostrar real usa .sidebar--hidden,
+   más abajo — pedido explícito 2026-09-15.) */
 .sidebar--collapsed {
   width:var(--sidebar-collapsed-w);
   min-width:var(--sidebar-collapsed-w);
 }
+
+/* Ocultar/mostrar manual del panel — simple y sin intentar mantener una
+   versión "solo íconos" (eso es lo que rompía .sidebar--collapsed). */
+.sidebar--hidden {
+  width: 0; min-width: 0; padding: 0; border-right: none; overflow: hidden;
+}
+/* Manija fija: vive FUERA de #sidebar (ver index.html) para no depender de
+   su overflow al colapsar — position:fixed se calcula contra el viewport,
+   así se ve igual oculto o visible. El selector de hermano (~) reacciona
+   solo con CSS al estado de #sidebar, sin tocar clases del botón en JS. */
+#sidebar-toggle {
+  position: fixed; top: 14px; left: calc(64px + var(--sidebar-w) - 15px); z-index: 55;
+  width: 26px; height: 26px; border: 1px solid var(--border); border-radius: 999px;
+  background: var(--white, #fff); color: var(--muted); display: grid; place-items: center;
+  cursor: pointer; box-shadow: 0 1px 4px rgba(16,24,20,.12);
+  transition: left var(--sidebar-transition), transform .15s, background .15s, color .15s;
+}
+#sidebar-toggle:hover { background: var(--bg2, #F1EFEB); color: var(--text); }
+#sidebar.sidebar--hidden ~ #sidebar-toggle { left: 64px; transform: rotate(180deg); }
 
 /* ── Sidebar top: brand + toggle ─────────────────────────── */
 .sidebar__top {
@@ -13850,6 +13872,7 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
 
 /* ── HOME: grid de módulos (default al hacer login) ────────────── */
 #appShell.home-mode #sidebar { display: none; }
+#appShell.home-mode #sidebar-toggle { display: none; }
 #appShell.home-mode #snav-rail .snav-mod { opacity: .6; }
 #appShell.home-mode .content-wrap { background: #FAF6EF; }
 #appShell.home-mode #pane-home { display: block; }
