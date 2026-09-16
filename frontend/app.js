@@ -20642,10 +20642,12 @@ ${foot}
     // "no respondió a la llamada" de "no respondió al mensaje" o "no aceptó
     // LinkedIn", cada uno con su propia señal (ver cond_step_id en el paso). Se
     // puede volver a marcar más tarde (ej. una llamada que devuelven después):
-    // es un UPSERT, no un registro de una sola vez. Solo se ofrece para canales
-    // sin señal automática propia (llamada/WhatsApp/tarea) — email y LinkedIn ya
-    // se detectan solos (respuesta de email / conexión aceptada).
-    if (stepId && cid && (canal === 'call' || canal === 'whatsapp' || canal === 'task')) {
+    // es un UPSERT, no un registro de una sola vez. Solo email tiene señal
+    // realmente automática (detección de respuesta al correo) — LinkedIn
+    // también es manual (confirmado 2026-09-16: "LinkedIn tampoco es
+    // automático, es manual"), así que se ofrece aquí igual que llamada/
+    // WhatsApp/tarea.
+    if (stepId && cid && (canal === 'call' || canal === 'whatsapp' || canal === 'task' || canal === 'linkedin')) {
       html += `<div class="cp-mark-menu__sep"></div><div class="cp-mark-menu__h">Este paso específico</div>`;
       html += `<div class="cp-mark-menu__list">`
         + item('Respondió a este paso', `LeadManagerModule.seqMarkStepOutcome(${stepId},${cid},'respondio')`, '#15803D')
