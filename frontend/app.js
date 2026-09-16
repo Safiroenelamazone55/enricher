@@ -21487,11 +21487,16 @@ ${foot}
   // de la secuencia: ambas son "hubo señal, sigue por la ruta de seguimiento".
   function _respondedC(cid) { const c = (_contacts || []).find(x => x.id === cid); return !!(c && (c.disposition === 'respondio' || c.li_aceptado_at)); }
   function _noLinkedInC(cid) { const c = (_contacts || []).find(x => x.id === cid); return !!(c && c.no_linkedin); }
-  // WhatsApp/Llamada se saltan solas si el contacto NO TIENE número (nada que marcar a mano
-  // para ese caso — es un hecho de los datos) o si Jenny lo marcó a mano como número incorrecto
-  // (mismo patrón que no_linkedin, para cuando el número SÍ existe pero está mal).
-  function _noWhatsappC(cid) { const c = (_contacts || []).find(x => x.id === cid); return !c || !_waDigits(c) || !!c.no_whatsapp; }
-  function _noPhoneC(cid) { const c = (_contacts || []).find(x => x.id === cid); return !c || !String(c.movil || c.celular || c.telefono || c.phone || '').trim() || !!c.no_phone; }
+  // WhatsApp/Llamada: MISMO criterio que LinkedIn — solo se saltan si Jenny los
+  // marcó a mano como número inválido (no_whatsapp/no_phone). Antes también se
+  // saltaban solos cuando el contacto no tenía número guardado, y la tarea
+  // desaparecía en silencio (reportado en vivo 2026-09-16, sequence 26: 35
+  // contactos sin teléfono — venían de Cantera — saltaban derecho al paso de
+  // LinkedIn sin ningún aviso). Pedido explícito: "el paso debe incluirse así
+  // no lo tengan porque yo lo puedo buscar en ese momento" — la tarea debe
+  // seguir apareciendo para que ella busque el número ahí mismo.
+  function _noWhatsappC(cid) { const c = (_contacts || []).find(x => x.id === cid); return !c || !!c.no_whatsapp; }
+  function _noPhoneC(cid) { const c = (_contacts || []).find(x => x.id === cid); return !c || !!c.no_phone; }
   function _stepCondMatch(st, cid) {
     // Canal LinkedIn no válido para este contacto (perfil falso/inactivo) → sus pasos de LinkedIn se saltan.
     if (st && st.canal === 'linkedin' && _noLinkedInC(cid)) return false;
