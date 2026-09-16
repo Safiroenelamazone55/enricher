@@ -16577,6 +16577,9 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .wa-msg__tick { vertical-align: -1px; margin-left: 3px; color: inherit; opacity: .75; }
 .pane--wa .wa-msg--out .wa-msg__tick--read { color: #7CD4FD; opacity: 1; }
 .wa-msg--in .wa-msg__tick { display: none; }
+/* Mismos ticks en el panel rápido de WhatsApp (QuickWaModule, abierto desde una
+   tarea) — antes solo se veían en el WhatsApp de Operaciones. */
+.qwa-panel .wa-msg--out .wa-msg__tick--read { color: #7CD4FD; opacity: 1; }
 
 .wa-chat-item__overdue { font-size: .62rem; font-weight: 700; padding: 1px 7px; border-radius: 0; background: #FEF3C7; color: #92400E; white-space: nowrap; }
 
