@@ -12327,6 +12327,12 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .dg-bulkbar .lm-bulk-n { color: var(--text2, #45586A); }
 .dg-bulkbar .lm-bulk-ghost { background: rgba(11,30,58,.08); color: var(--text, #0A2540); }
 .dg-bulkbar .lm-bulk-ghost:hover { background: rgba(11,30,58,.14); }
+/* "Quitar validación manual" en el pie del modal de validación manual —
+   .lm-bulk-ghost por defecto es texto blanco para una barra oscura; en este
+   modal el fondo es claro y quedaba casi ilegible. Reportado en vivo
+   2026-09-16: "hay una opción que aparece mal porque no se puede leer". */
+.fin-pi-box__ft .lm-bulk-ghost { background: rgba(11,30,58,.08); color: var(--text, #0A2540); }
+.fin-pi-box__ft .lm-bulk-ghost:hover { background: rgba(11,30,58,.14); }
 
 /* Grilla estilo Excel: líneas verticales entre columnas, cabecera más marcada,
    scroll horizontal con la columna de check + Nombre "congeladas" a la izquierda.
