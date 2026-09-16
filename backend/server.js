@@ -10485,12 +10485,13 @@ app.get('/api/wa/connections/:id/resolve-contact/:contactId', requireAuth, async
             )`,
         [req.params.id, primerNombre, contactId]);
       if (candidatos.length === 1) {
-        const jid = candidatos[0].chat_jid;
-        await pool.query(
-          `INSERT INTO wa_jid_links (connection_id, contact_id, chat_jid) VALUES ($1,$2,$3)
-           ON CONFLICT (connection_id, contact_id) DO UPDATE SET chat_jid=EXCLUDED.chat_jid, created_at=NOW()`,
-          [req.params.id, contactId, jid]);
-        return res.json({ jid, source: 'auto' });
+        // NO se persiste en wa_jid_links — antes una adivinanza equivocada (un
+        // homónimo real) quedaba "grabada para siempre" y se repetía en cada
+        // apertura sin forma de corregirse sola. Ahora es solo una sugerencia
+        // en esta consulta puntual (con el aviso visible en el frontend); si
+        // de verdad es la persona correcta, "Vincular otra" (o escribirle una
+        // vez con el número real) la deja guardada de forma explícita.
+        return res.json({ jid: candidatos[0].chat_jid, source: 'auto' });
       }
     }
     res.json({ jid: phoneJid, source: 'none' });
