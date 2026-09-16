@@ -5989,7 +5989,13 @@ const CanteraModule = (() => {
   function resultsMenu(ev) {
     if (ev && ev.stopPropagation) ev.stopPropagation();
     document.querySelectorAll('.cp-mark-menu').forEach(m => m.remove());
-    const calificadas = _companies.filter(c => c.paso2_estado === 'aprobado' || c.paso2_estado === 'validacion_manual').length;
+    // Con empresas marcadas con el check, "Mover al CRM" respeta ESA selección
+    // (solo las calificadas de entre las marcadas), igual que ya hace Mesa de
+    // trabajo — reportado en vivo 2026-09-16: "seleccioné 30... debería solo
+    // enviarse los seleccionados" (antes el conteo/envío ignoraba el check y
+    // siempre movía TODO el borrador calificado).
+    const calificadas = (_coSel.size ? _companies.filter(c => _coSel.has(c.id)) : _companies)
+      .filter(c => c.paso2_estado === 'aprobado' || c.paso2_estado === 'validacion_manual').length;
     const close = "document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove())";
     const item = (label, onclick) => `<button class="cp-mark-menu__b" onclick="${close};${onclick}">${label}</button>`;
     const sub = (label, panelHtml, scrollable) => `<div class="cp-mark-menu__sub">
@@ -6813,8 +6819,14 @@ const CanteraModule = (() => {
   }
 
   async function openPromote() {
-    const calificadas = _companies.filter(c => c.paso2_estado === 'aprobado' || c.paso2_estado === 'validacion_manual').length;
-    if (!calificadas) { showBanner('Todavía no hay empresas calificadas (paso 2) para mover', 'info'); return; }
+    // Si hay empresas marcadas con el check, "Mover al CRM" opera SOLO sobre
+    // esa selección (de entre las marcadas, las calificadas) — igual que ya
+    // hacía "Enviar a secuencia". Sin selección, sigue moviendo TODO el
+    // borrador calificado como siempre. Reportado en vivo 2026-09-16:
+    // "seleccioné 30... debería solo enviarse los seleccionados".
+    const _promoteScope = _coSel.size ? _companies.filter(c => _coSel.has(c.id)) : _companies;
+    const calificadas = _promoteScope.filter(c => c.paso2_estado === 'aprobado' || c.paso2_estado === 'validacion_manual').length;
+    if (!calificadas) { showBanner(_coSel.size ? 'Ninguna de las empresas marcadas está calificada (paso 2) todavía' : 'Todavía no hay empresas calificadas (paso 2) para mover', 'info'); return; }
     const [clientes, campanas] = await Promise.all([
       apiFetch(`${API}/outbound-clients`).then(r => r.ok ? r.json() : []),
       apiFetch(`${API}/campaigns`).then(r => r.ok ? r.json() : []),
@@ -6825,7 +6837,7 @@ const CanteraModule = (() => {
     m.innerHTML = `<div class="fin-pi-box lm-flt-box" style="max-width:420px">
       <div class="fin-pi-box__hd"><h3>Mover al CRM</h3><button class="fin-pi-x" onclick="CanteraModule.closePromote()">✕</button></div>
       <div class="flt-body" style="display:flex;flex-direction:column;gap:12px">
-        <p class="cant-hint" style="margin:0">${calificadas} empresa(s) calificada(s) se crearán como reales, con sus contactos "Decide"/"Respaldo". Esto no se puede deshacer.</p>
+        <p class="cant-hint" style="margin:0">${calificadas} empresa(s) calificada(s)${_coSel.size ? ' de tu selección' : ''} se crearán como reales, con sus contactos "Decide"/"Respaldo". Esto no se puede deshacer.</p>
         <label class="cant-flabel">Cliente<select id="cant-pr-client" class="form-input">
           <option value="">— elegir —</option>
           ${clientes.map(c => `<option value="${c.id}"${String(_current.outbound_client_id) === String(c.id) ? ' selected' : ''}>${esc(c.nombre)}</option>`).join('')}
@@ -6849,14 +6861,17 @@ const CanteraModule = (() => {
     const campId = document.getElementById('cant-pr-camp')?.value || null;
     const includeResp = !!document.getElementById('cant-pr-resp')?.checked;
     try {
+      const body = { outbound_client_id: clientId, campaign_id: campId, include_respaldo: includeResp };
+      if (_coSel.size) body.company_ids = [..._coSel];
       const res = await apiFetch(`${API}/cantera/batches/${_current.id}/promote`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ outbound_client_id: clientId, campaign_id: campId, include_respaldo: includeResp }),
+        body: JSON.stringify(body),
       });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || 'Error');
       closePromote();
       showBanner(`✓ ${d.companiesPromoted} empresa(s) y ${d.contactsPromoted} contacto(s) movidos al CRM`, 'success');
+      _coSel = new Set();
       backToList(); await load(); _paint();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
