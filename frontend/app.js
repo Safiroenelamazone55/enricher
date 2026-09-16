@@ -5632,6 +5632,25 @@ const CanteraModule = (() => {
       default: return '—';
     }
   }
+  // Misma cadena de filtros usada para pintar la tabla y para decidir el
+  // orden de "Siguiente" en la validación manual — pedido explícito
+  // 2026-09-15: el botón Siguiente debe respetar el filtro activo, no el
+  // orden crudo de _companies, si es que hay uno aplicado.
+  function _filteredCompaniesList() {
+    return _companies
+      .filter(c => !_paso1Filtro || (_paso1Filtro === 'vacio' ? !c.paso1_estado : c.paso1_estado === _paso1Filtro))
+      .filter(c => !_tierFiltro.size || _tierFiltro.has(c.tier_clave))
+      .filter(c => !_prioFiltro.size || (_contactsByCompany[c.id] || []).some(k => _prioFiltro.has(k.prioridad)))
+      .filter(c => !_minContactos || (_contactsByCompany[c.id] || []).length >= _minContactos)
+      .filter(c => !_sinPrioridad || !(_contactsByCompany[c.id] || []).some(k => k.prioridad > 0))
+      .filter(c => !_auditoriaFiltro || (_auditoriaFiltro === 'sin_auditar' ? !c.auditoria_veredicto : c.auditoria_veredicto === _auditoriaFiltro))
+      .filter(c => !_paisFiltro.size || _paisFiltro.has(c.pais))
+      .filter(c => !_industriaFiltro.size || _industriaFiltro.has(c.industria))
+      .filter(c => !_tamanoFiltro.size || _tamanoFiltro.has(c.tamano))
+      .filter(c => !_domFaltante || !c.dominio)
+      .filter(c => !_dominioQ || (c.dominio || '').toLowerCase().includes(_dominioQ.toLowerCase()))
+      .filter(c => !_paso2DescFiltro.size || _paso2DescFiltro.has(c.paso2_estado));
+  }
   // ── Detalle: criterio + import + resultados ──────────────────────
   function _detailHtml() {
     const b = _current;
@@ -5649,19 +5668,7 @@ const CanteraModule = (() => {
     // Contactos), no antes — pedido explícito 2026-09-05: son el detalle que se
     // abre AL EXPANDIR, no datos de la empresa en sí.
     const emptyColspan = 2 + visCols.length;
-    const filteredCompanies = _companies
-      .filter(c => !_paso1Filtro || (_paso1Filtro === 'vacio' ? !c.paso1_estado : c.paso1_estado === _paso1Filtro))
-      .filter(c => !_tierFiltro.size || _tierFiltro.has(c.tier_clave))
-      .filter(c => !_prioFiltro.size || (_contactsByCompany[c.id] || []).some(k => _prioFiltro.has(k.prioridad)))
-      .filter(c => !_minContactos || (_contactsByCompany[c.id] || []).length >= _minContactos)
-      .filter(c => !_sinPrioridad || !(_contactsByCompany[c.id] || []).some(k => k.prioridad > 0))
-      .filter(c => !_auditoriaFiltro || (_auditoriaFiltro === 'sin_auditar' ? !c.auditoria_veredicto : c.auditoria_veredicto === _auditoriaFiltro))
-      .filter(c => !_paisFiltro.size || _paisFiltro.has(c.pais))
-      .filter(c => !_industriaFiltro.size || _industriaFiltro.has(c.industria))
-      .filter(c => !_tamanoFiltro.size || _tamanoFiltro.has(c.tamano))
-      .filter(c => !_domFaltante || !c.dominio)
-      .filter(c => !_dominioQ || (c.dominio || '').toLowerCase().includes(_dominioQ.toLowerCase()))
-      .filter(c => !_paso2DescFiltro.size || _paso2DescFiltro.has(c.paso2_estado));
+    const filteredCompanies = _filteredCompaniesList();
     const cantPs = _cantPageSize();
     const cantPages = Math.max(1, Math.ceil(filteredCompanies.length / cantPs));
     if (_cantPageIdx > cantPages - 1) _cantPageIdx = cantPages - 1;
@@ -6296,6 +6303,7 @@ const CanteraModule = (() => {
         <span>${['validacion_manual', 'descartado_manual'].includes(co.paso2_estado) ? `<button class="lm-bulk-ghost" onclick="CanteraModule.quitarValidacionManual(${co.id})">Quitar validación manual</button>` : ''}</span>
         <div class="fin-pi-ft-btns">
           <button class="btn btn--ghost btn--sm" onclick="CanteraModule.closeManualValidation()">Cerrar</button>
+          <button class="btn btn--primary btn--sm" onclick="CanteraModule.nextManualValidation(${co.id})">Siguiente →</button>
         </div>
       </div></div>`;
     document.body.appendChild(m);
@@ -6347,6 +6355,17 @@ const CanteraModule = (() => {
       const btn = document.querySelector('#cant-manual-modal .fin-pi-box__ft span');
       if (btn && co) btn.innerHTML = `<button class="lm-bulk-ghost" onclick="CanteraModule.quitarValidacionManual(${co.id})">Quitar validación manual</button>`;
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  // "Siguiente" — pedido explícito 2026-09-15: pasa a la próxima empresa sin
+  // cerrar y reabrir a mano; respeta el orden FILTRADO (el mismo que ve en la
+  // tabla) si hay algún filtro activo, o el orden normal si no lo hay. Los
+  // campos ya se autoguardan solos (onchange/onblur de cada campo), así que
+  // aquí no hace falta guardar de nuevo — solo saltar de una vez al siguiente.
+  function nextManualValidation(companyId) {
+    const list = _filteredCompaniesList();
+    const idx = list.findIndex(c => c.id === companyId);
+    if (idx === -1 || idx === list.length - 1) { showBanner('No hay más resultados en este filtro', 'info'); return; }
+    openManualValidation(list[idx + 1].id);
   }
   async function quitarValidacionManual(companyId) {
     try {
@@ -6838,7 +6857,7 @@ const CanteraModule = (() => {
     toggleCoSel, toggleCoSelAll, resultsMenu, runClean, runEnrich, closeCantOp, applyCantOp,
     toggleResultCol, startColResize,
     setContactPrioridad, cantGoPage, cantSetPageSize, bdSetFiltro, bdSetPageSize, bdGoPage, _confirmRevalidar,
-    openManualValidation, closeManualValidation, copyManualData, copyManualInstruccion, saveManualValidation, quitarValidacionManual, openAudit };
+    openManualValidation, closeManualValidation, copyManualData, copyManualInstruccion, saveManualValidation, nextManualValidation, quitarValidacionManual, openAudit };
 })();
 
 // =================================================================
