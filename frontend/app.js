@@ -21784,13 +21784,46 @@ ${foot}
   // los links "wa.me" de toda la sección, que abrían el WhatsApp PERSONAL de quien
   // hace clic, no el número de negocio ya conectado. Resuelve la conexión acá (no en
   // QuickWaModule) porque ya tenemos _contacts/_clients cargados en este closure.
-  function openWaFor(cid, prefill) {
+  async function openWaFor(cid, prefill) {
     const c = _contacts.find(x => x.id === cid);
     if (!c) return;
     const wa = _waDigits(c);
     if (!wa) { showBanner('Este contacto no tiene número de WhatsApp', 'info'); return; }
     const nombre = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || 'Contacto';
-    QuickWaModule.open({ contactId: cid, nombre, telefono: wa, outboundClientId: c.outbound_client_id || null, prefill: prefill || '' });
+    const args = { contactId: cid, nombre, telefono: wa, outboundClientId: c.outbound_client_id || null, prefill: prefill || '' };
+    // Elegir con cuál WhatsApp conectado abrir — pedido explícito 2026-09-16:
+    // "el punto es, elegir el wpp que quiero abrir". Antes se auto-elegía el
+    // primero conectado del cliente (o el primero conectado a secas) sin
+    // preguntar. Con un solo WhatsApp conectado no tiene sentido preguntar —
+    // se abre directo, igual que antes.
+    let conns = [];
+    try {
+      const url = c.outbound_client_id ? `${API}/wa/connections?outboundClientId=${c.outbound_client_id}` : `${API}/wa/connections`;
+      conns = (await (await apiFetch(url)).json()).filter(x => x.estado === 'conectado');
+      if (!conns.length && c.outbound_client_id) conns = (await (await apiFetch(`${API}/wa/connections`)).json()).filter(x => x.estado === 'conectado');
+    } catch (_) {}
+    if (conns.length > 1) { _openWaPicker(conns, args); return; }
+    args.connectionId = conns[0] ? conns[0].id : null;
+    QuickWaModule.open(args);
+  }
+  function _openWaPicker(conns, args) {
+    document.getElementById('lm-wapick-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'lm-wapick-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) m.remove(); };
+    m.innerHTML = `<div class="fin-pi-box lm-flt-box" style="max-width:360px">
+      <div class="fin-pi-box__hd"><h3>¿Con cuál WhatsApp?</h3><button class="fin-pi-x" onclick="document.getElementById('lm-wapick-modal').remove()">✕</button></div>
+      <div class="flt-body" style="display:flex;flex-direction:column;gap:6px">
+        ${conns.map(w => `<button class="btn btn--ghost btn--sm" style="justify-content:flex-start" onclick="document.getElementById('lm-wapick-modal').remove();LeadManagerModule._openWaWith(${w.id})">${esc(w.nombre || 'WhatsApp')} <span style="color:var(--muted,#B4AFA8);margin-left:6px">${esc(w.numero ? '+' + w.numero : '')}</span></button>`).join('')}
+      </div>
+    </div>`;
+    document.body.appendChild(m);
+    _waPickArgs = args;
+  }
+  let _waPickArgs = null;
+  function _openWaWith(connId) {
+    if (!_waPickArgs) return;
+    QuickWaModule.open({ ..._waPickArgs, connectionId: connId });
+    _waPickArgs = null;
   }
   function _gmailUrl(to, subject, body, cc) {
     return `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to || '')}${cc ? `&cc=${encodeURIComponent(cc)}` : ''}&su=${encodeURIComponent(subject || '')}&body=${encodeURIComponent(body || '')}`;
@@ -21987,7 +22020,12 @@ ${foot}
     let chanPrimary = '';
     const waPrefillJs = rendered.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n');
     if (st.canal === 'email' && c.email) chanPrimary = `<a class="cp-ch cp-ch--primary" href="${esc(_gmailUrl(c.email, subject, rendered, ccMail))}" target="_blank" rel="noopener" title="Abre Gmail con destinatario${ccMail ? ', CC' : ''}, asunto y mensaje ya puestos">${NI('mail')}<span>Abrir Gmail</span></a>`;
-    else if (st.canal === 'whatsapp' && wa) chanPrimary = `<button class="cp-ch cp-ch--primary" onclick="LeadManagerModule.openWaFor(${cid},'${waPrefillJs}')" title="Abre el WhatsApp de Nova con el mensaje ya puesto">${NI('whatsapp')}<span>WhatsApp</span></button>`;
+    // Paso de WhatsApp: DOS íconos, no uno — pedido explícito 2026-09-16: "uno de
+    // llamada wpp y uno solo de wpp, porque yo quiero ambos". "Llamar" abre el
+    // WhatsApp real (wa.me, tu app/WhatsApp Web) para hacer una llamada de voz —
+    // el chat interno de Nova no hace llamadas. "WhatsApp" sigue abriendo el chat
+    // de Nova con el mensaje ya puesto, para escribir sin salir del sistema.
+    else if (st.canal === 'whatsapp' && wa) chanPrimary = `<a class="cp-ch cp-ch--primary" href="https://wa.me/${wa}" target="_blank" rel="noopener" title="Abre WhatsApp para llamar">${NI('phone')}<span>Llamar WhatsApp</span></a><button class="cp-ch cp-ch--primary" onclick="LeadManagerModule.openWaFor(${cid},'${waPrefillJs}')" title="Abre el WhatsApp de Nova con el mensaje ya puesto">${NI('whatsapp')}<span>WhatsApp</span></button>`;
     else if (st.canal === 'call' && _tel) chanPrimary = `<a class="cp-ch cp-ch--primary" href="tel:${esc(_tel.replace(/\s/g, ''))}" title="Llamar ${esc(_tel)}">${NI('phone')}<span>Llamar</span></a>`;
     const chanIcons = [];
     if (wa && st.canal !== 'whatsapp') chanIcons.push(`<button class="cp-ch cp-ch--ic" onclick="LeadManagerModule.openWaFor(${cid},'${waPrefillJs}')" title="WhatsApp — ${esc(_tel)}">${NI('whatsapp')}</button>`);
@@ -27994,6 +28032,12 @@ ${foot}
       if (!res.ok) throw new Error((await res.json()).error || 'Error');
       Object.assign(c, payload, { company_nombre: payload.empresa_nombre });
       showBanner('✓ Guardado', 'success');
+      // El objeto en _contacts quedaba actualizado, pero la tarjeta "Disponibilidad
+      // de canales" (y el botón de WhatsApp en la tarea, si estaba abierta) ya se
+      // había pintado con el dato viejo y nunca se repintaba — reportado en vivo
+      // 2026-09-16: "agregué el número y se guardó, debe aparecer el ícono de
+      // wpp". Sin este repintado, el ícono solo aparecía tras navegar y volver.
+      if (_section === 'contact-view' && _contactView === id) _renderBody();
     } catch (e) { showBanner('No se pudo guardar: ' + e.message, 'error'); }
   }
   async function cpDelete(id) {
@@ -29683,7 +29727,7 @@ ${foot}
     bulkVerifyEmails, connectGmail, sendCfgToggle, saveSendCfg,
     personalizeOne, bulkPersonalize, openAiDrafts, closeAiDrafts, aiGenerate,
     aiDraftSave, aiDraftStatus, aiDraftDelete, aiCfgToggle, saveAiCfg,
-    seqDoCopySubject, lmCopy, openWaFor,
+    seqDoCopySubject, lmCopy, openWaFor, _openWaWith,
     openColsPicker, toggleCtCol, resetCtCols };
 })();
 
@@ -32137,12 +32181,15 @@ const QuickWaModule = (() => {
   let _pendingImg = null, _pendingImgUrl = null;
   const $$ = id => document.getElementById(id);
 
-  async function open({ contactId, nombre, telefono, outboundClientId, prefill }) {
+  async function open({ contactId, nombre, telefono, outboundClientId, prefill, connectionId }) {
     close();
     _nombre = nombre || 'Contacto'; _contactId = contactId;
     _jid = `${telefono}@s.whatsapp.net`;
     _render(prefill || '');
-    _conn = await _resolverConexion(outboundClientId);
+    // connectionId: elegido a mano en el picker "¿Con cuál WhatsApp?" (pedido
+    // explícito 2026-09-16) — se respeta tal cual, sin volver a auto-elegir.
+    _conn = connectionId ? { id: connectionId } : await _resolverConexion(outboundClientId);
+    if (_conn && !_conn.numero) { try { const r = await apiFetch(`${API}/wa/connections/${_conn.id}`); if (r.ok) _conn = await r.json(); } catch (_) {} }
     if (!_conn) { _setSinConexion(); return; }
     // Reconocimiento automático (pedido 2026-09-02: "yo solo debería elegir el wpp, si
     // hubo conversación debería reconocerse en automático, no una tarea manual") —
