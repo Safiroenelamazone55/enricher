@@ -7755,7 +7755,24 @@ app.post('/api/cantera/batches/:id/promote', requireAuth, async (req, res) => {
         [co.id, uid, estados]);
       for (const k of contactos) {
         const email = (k.email || '').toLowerCase();
-        const dup = email ? (await cl.query(`SELECT id FROM lm_contacts WHERE user_id=$1 AND LOWER(email)=$2 LIMIT 1`, [uid, email])).rows[0] : null;
+        // Dedup en 3 niveles, en orden — la mayoría de los contactos de
+        // Cantera todavía NO tienen email (recién se está prospectando, sin
+        // verificar), así que dedupear solo por email dejaba pasar duplicados
+        // cada vez que se repetía "Mover al CRM"/"Enviar a secuencia" sobre
+        // la misma empresa (doble clic, o selección superpuesta): se creaba
+        // un lm_contacts nuevo cada vez. Confirmado en vivo 2026-09-16: 32
+        // contactos duplicados por un doble envío de 5 segundos de diferencia,
+        // 66 de 67 sin email.
+        // 1) ya se había promovido ESTE contacto exacto antes → reusar ese id.
+        let dup = k.promoted_contact_id
+          ? (await cl.query(`SELECT id FROM lm_contacts WHERE id=$1 AND user_id=$2`, [k.promoted_contact_id, uid])).rows[0]
+          : null;
+        // 2) si tiene email, por email (puede coincidir con un contacto de otra fuente).
+        if (!dup && email) dup = (await cl.query(`SELECT id FROM lm_contacts WHERE user_id=$1 AND LOWER(email)=$2 LIMIT 1`, [uid, email])).rows[0];
+        // 3) sin email: mismo nombre+apellido en la MISMA empresa ya creada.
+        if (!dup && !email) dup = (await cl.query(
+          `SELECT id FROM lm_contacts WHERE user_id=$1 AND company_id=$2 AND LOWER(nombre)=$3 AND LOWER(COALESCE(apellido,''))=$4 LIMIT 1`,
+          [uid, coId, (k.nombre || '').toLowerCase(), (k.apellido || '').toLowerCase()])).rows[0];
         let contactId;
         if (dup) {
           contactId = dup.id;
@@ -7861,7 +7878,15 @@ app.post('/api/cantera/batches/:id/send-to-sequence', requireAuth, async (req, r
         prioridades.length ? [co.id, uid, prioridades] : [co.id, uid]);
       for (const k of contactos) {
         const email = (k.email || '').toLowerCase();
-        const dup = email ? (await cl.query(`SELECT id FROM lm_contacts WHERE user_id=$1 AND LOWER(email)=$2 LIMIT 1`, [uid, email])).rows[0] : null;
+        // Mismo dedup en 3 niveles que /promote (ver comentario ahí) —
+        // evita duplicar el contacto cuando no tiene email todavía.
+        let dup = k.promoted_contact_id
+          ? (await cl.query(`SELECT id FROM lm_contacts WHERE id=$1 AND user_id=$2`, [k.promoted_contact_id, uid])).rows[0]
+          : null;
+        if (!dup && email) dup = (await cl.query(`SELECT id FROM lm_contacts WHERE user_id=$1 AND LOWER(email)=$2 LIMIT 1`, [uid, email])).rows[0];
+        if (!dup && !email) dup = (await cl.query(
+          `SELECT id FROM lm_contacts WHERE user_id=$1 AND company_id=$2 AND LOWER(nombre)=$3 AND LOWER(COALESCE(apellido,''))=$4 LIMIT 1`,
+          [uid, coId, (k.nombre || '').toLowerCase(), (k.apellido || '').toLowerCase()])).rows[0];
         let contactId;
         if (dup) {
           contactId = dup.id;

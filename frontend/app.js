@@ -6869,7 +6869,7 @@ const CanteraModule = (() => {
       </div>
       <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns">
         <button class="btn btn--ghost btn--sm" onclick="CanteraModule.closePromote()">Cancelar</button>
-        <button class="btn btn--primary btn--sm" onclick="CanteraModule.doPromote()">Mover al CRM</button>
+        <button class="btn btn--primary btn--sm" id="cant-pr-go" onclick="CanteraModule.doPromote()">Mover al CRM</button>
       </div></div></div>`;
     document.body.appendChild(m);
   }
@@ -6880,6 +6880,14 @@ const CanteraModule = (() => {
     const campId = document.getElementById('cant-pr-camp')?.value || null;
     const seqId = document.getElementById('cant-pr-seq')?.value || null;
     const includeResp = !!document.getElementById('cant-pr-resp')?.checked;
+    // Bloquea el botón mientras la request está en vuelo — un doble clic (o un
+    // clic repetido por lentitud de red) mandaba la promoción DOS veces y,
+    // como muchos contactos de Cantera todavía no tienen email, cada corrida
+    // creaba copias nuevas en vez de detectar el duplicado (ver dedup en el
+    // backend). Confirmado en vivo 2026-09-16: 32 contactos duplicados por
+    // esto exacto, con 5 segundos de diferencia entre los dos envíos.
+    const btn = document.getElementById('cant-pr-go');
+    if (btn) { if (btn.disabled) return; btn.disabled = true; btn.textContent = 'Moviendo…'; }
     try {
       const body = { outbound_client_id: clientId, campaign_id: campId, sequence_id: seqId, include_respaldo: includeResp };
       if (_coSel.size) body.company_ids = [..._coSel];
@@ -6893,7 +6901,7 @@ const CanteraModule = (() => {
       showBanner(`✓ ${d.companiesPromoted} empresa(s) y ${d.contactsPromoted} contacto(s) movidos al CRM${d.enrolled ? ` — ${d.enrolled} enrolado(s) en la secuencia` : ''}`, 'success');
       _coSel = new Set();
       backToList(); await load(); _paint();
-    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); if (btn) { btn.disabled = false; btn.textContent = 'Mover al CRM'; } }
   }
 
   // ── Enviar a secuencia: promoción SELECTIVA + enrolamiento en un solo paso —
@@ -6935,7 +6943,7 @@ const CanteraModule = (() => {
       </div>
       <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns">
         <button class="btn btn--ghost btn--sm" onclick="CanteraModule.closeSendSeq()">Cancelar</button>
-        <button class="btn btn--primary btn--sm" onclick="CanteraModule.doSendSeq()">Enviar</button>
+        <button class="btn btn--primary btn--sm" id="cant-sq-go" onclick="CanteraModule.doSendSeq()">Enviar</button>
       </div></div></div>`;
     document.body.appendChild(m);
   }
@@ -6947,6 +6955,9 @@ const CanteraModule = (() => {
     if (!sequenceId) { showBanner('Elige una secuencia', 'info'); return; }
     const campId = document.getElementById('cant-sq-camp')?.value || null;
     const prioridades = [...document.querySelectorAll('.cant-seq-prio:checked')].map(el => parseInt(el.value));
+    // Mismo bloqueo anti-doble-clic que "Mover al CRM" — ver comentario ahí.
+    const btn = document.getElementById('cant-sq-go');
+    if (btn) { if (btn.disabled) return; btn.disabled = true; btn.textContent = 'Enviando…'; }
     try {
       const res = await apiFetch(`${API}/cantera/batches/${_current.id}/send-to-sequence`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -6958,7 +6969,7 @@ const CanteraModule = (() => {
       _coSel = new Set();
       showBanner(`✓ ${d.companiesPromoted} empresa(s), ${d.contactsPromoted} contacto(s) movidos · ${d.enrolled} enrolado(s) en la secuencia`, 'success');
       await _loadCompanies(); _paint();
-    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); if (btn) { btn.disabled = false; btn.textContent = 'Enviar'; } }
   }
 
   return { render, open, openCreate, backToList, saveFiltros, runFiltros, setPaso1Filtro, setDominioQ, _filterSubPanel, toggleTierFiltro, togglePrioFiltro, setMinContactos, toggleSinPrioridad, setAuditoriaFiltro,
