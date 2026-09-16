@@ -18935,8 +18935,17 @@ const LeadManagerModule = (() => {
     // Se decide ANTES del primer render para no pintar el Dashboard un instante y luego
     // saltar a la sección guardada (eso se veía como un parpadeo al refrescar la página).
     let _sectionRestored = false;
+    // OJO: hay que leer el estado rico ANTES del primer _renderBody() de abajo —
+    // ese primer render (con la sección simple restaurada, ej. "wa") YA dispara
+    // _lmSaveViewState(), que al ver una sección sin contexto (no task/sequence/
+    // client) BORRA lo que había en sessionStorage. Si se leyera después, el
+    // restore de más abajo en load() nunca encontraba nada — se pisaba solo en
+    // el arranque. Bug real, no solo de la prueba automatizada (probado con
+    // location.reload() real, no solo con el navigate del tooling).
+    let _lmRawSavedView = null;
     if (!_lmBootRestored) {
       _lmBootRestored = true;
+      try { _lmRawSavedView = sessionStorage.getItem(LM_STATE_KEY); } catch (_) {}
       let saved = null;
       try { saved = localStorage.getItem('lm_last_section'); } catch (_) {}
       if (saved && saved !== _section && saved !== 'client' && saved !== 'sequence' && saved !== 'contact-view') { _section = saved; _sectionRestored = true; }
@@ -19008,7 +19017,7 @@ const LeadManagerModule = (() => {
     // ACÁ — recién ahora _contacts/_sequences/_steps ya están cargados. Solo una
     // vez por carga de página (igual que el restore de _section de arriba).
     let _richRestored = false;
-    if (!_lmRichBootRestored) { _lmRichBootRestored = true; _richRestored = await _lmRestoreViewState(); }
+    if (!_lmRichBootRestored) { _lmRichBootRestored = true; _richRestored = await _lmRestoreViewState(_lmRawSavedView); }
     if (!_richRestored) _renderBody();           // repinta con los datos ya cargados, misma sección — sin saltos
     _loadNavCounts();                          // insignias visibles desde el primer momento
     if (_section === 'dashboard') _loadToday(); // card Hoy del motor de envío
@@ -19139,9 +19148,9 @@ const LeadManagerModule = (() => {
       }
     } catch (_) {}
   }
-  async function _lmRestoreViewState() {
+  async function _lmRestoreViewState(rawSaved) {
     let saved = null;
-    try { saved = JSON.parse(sessionStorage.getItem(LM_STATE_KEY) || 'null'); } catch (_) {}
+    try { saved = JSON.parse(rawSaved || 'null'); } catch (_) {}
     if (!saved) return false;
     try {
       if (saved.kind === 'task' && saved.seqId && saved.contactId) { await seqTaskOpen(saved.seqId, saved.contactId); return _section === 'contact-view'; }
