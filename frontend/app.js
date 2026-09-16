@@ -5837,15 +5837,11 @@ const CanteraModule = (() => {
       ${_step === 4 ? `<div class="cant-section">
         ${(() => {
           const hasFiltros = _paso1Filtro || _tierFiltro.size || _prioFiltro.size || _minContactos || _sinPrioridad || _auditoriaFiltro || _paisFiltro.size || _industriaFiltro.size || _tamanoFiltro.size || _domFaltante || _dominioQ || _paso2DescFiltro.size;
-          const filtroGuardado = _loadFiltroGuardado();
-          if (!_coSel.size && !hasFiltros && !filtroGuardado) return '';
+          if (!_coSel.size && !hasFiltros) return '';
           const paso1Lbl = { aprobado: 'aprobado', descartado: 'descartado', vacio: 'vacío' };
           return `<div class="cant-results-bar">
           <span class="cant-count">${_coSel.size ? `${_coSel.size} seleccionada(s)` : ''}${_paso1Filtro ? ` · Paso 1: ${paso1Lbl[_paso1Filtro]}` : ''}${_tierFiltro.size ? ` · Tier: ${[..._tierFiltro].join(', ')}` : ''}${_prioFiltro.size ? ` · Prioridad: ${[..._prioFiltro].join(', ')}` : ''}${_minContactos ? ` · ${_minContactos}+ contactos` : ''}${_sinPrioridad ? ' · sin priorizar' : ''}${_auditoriaFiltro ? ` · auditoría: ${_auditoriaFiltro === 'sin_auditar' ? 'sin auditar' : _auditoriaFiltro === 'de_acuerdo' ? 'confirmadas' : 'en desacuerdo'}` : ''}${_paisFiltro.size ? ` · País: ${[..._paisFiltro].join(', ')}` : ''}${_industriaFiltro.size ? ` · Industria: ${[..._industriaFiltro].join(', ')}` : ''}${_tamanoFiltro.size ? ` · Tamaño: ${[..._tamanoFiltro].join(', ')}` : ''}${_domFaltante ? ' · sin dominio' : ''}${_dominioQ ? ` · dominio contiene "${esc(_dominioQ)}"` : ''}${_paso2DescFiltro.size ? ` · Paso 2 descartado: ${[..._paso2DescFiltro].map(v => v === 'descartado' ? 'IA' : 'manual').join(', ')}` : ''}</span>
           <span class="cant-results-total">${hasFiltros ? `${filteredCompanies.length} resultado${filteredCompanies.length === 1 ? '' : 's'}` : ''}</span>
-          ${hasFiltros ? `<button class="btn btn--ghost btn--sm" onclick="CanteraModule.guardarFiltroActual()" title="Guardar este filtro para este borrador">💾 Guardar filtro</button>` : ''}
-          ${filtroGuardado ? `<button class="btn btn--ghost btn--sm" onclick="CanteraModule.aplicarFiltroGuardado()" title="Volver a aplicar el filtro guardado de este borrador">Aplicar filtro guardado</button>
-          <button class="cant-x" title="Eliminar filtro guardado" onclick="CanteraModule.borrarFiltroGuardado()">✕</button>` : ''}
           ${hasFiltros ? `<button class="btn btn--ghost btn--sm" onclick="CanteraModule.resetFiltros()">Limpiar filtros</button>` : ''}
         </div>`;
         })()}
@@ -6053,6 +6049,14 @@ const CanteraModule = (() => {
         <input type="text" class="form-input" style="width:100%" placeholder="El dominio contiene…" value="${esc(_dominioQ)}" oninput="CanteraModule.setDominioQ(this.value)" onclick="event.stopPropagation()">
       </div>
       <label class="cant-colchk"><input type="checkbox" ${_domFaltante ? 'checked' : ''} onchange="CanteraModule.toggleDomFaltante()"> Sin dominio</label>`;
+    // Guardar/aplicar filtro por borrador — vive dentro de Filtrar › Guardados,
+    // no como botones sueltos en la barra — pedido explícito 2026-09-16:
+    // "debería estar dentro de opción de filtros, guardados".
+    const hasFiltrosActivos = !!(_paso1Filtro || _tierFiltro.size || _prioFiltro.size || _minContactos || _sinPrioridad || _auditoriaFiltro || _paisFiltro.size || _industriaFiltro.size || _tamanoFiltro.size || _domFaltante || _dominioQ || _paso2DescFiltro.size);
+    const filtroGuardado = _loadFiltroGuardado();
+    const guardadosPanel = `<div style="padding:6px 12px 8px"><span class="cant-hint" style="margin:0">${filtroGuardado ? 'Filtro guardado: ' + esc(_filtroResumenTexto(filtroGuardado)) : 'Sin filtro guardado en este borrador todavía'}</span></div>`
+      + (hasFiltrosActivos ? item('Guardar filtro actual', 'CanteraModule.guardarFiltroActual()') : '')
+      + (filtroGuardado ? item('Aplicar filtro guardado', 'CanteraModule.aplicarFiltroGuardado()') + item('Eliminar filtro guardado', 'CanteraModule.borrarFiltroGuardado()') : '');
     const html = `<div class="cp-mark-menu__list">${item(_lastFiltros ? `Validado (${_lastFiltros.total})` : 'Correr filtros básicos', 'CanteraModule.runFiltros()')}</div>
       <div class="cp-mark-menu__sep"></div>
       <div class="cp-mark-menu__list">${sub('Limpiar', cleanPanel)}${sub('Enriquecer', enrichPanel)}</div>
@@ -6062,7 +6066,7 @@ const CanteraModule = (() => {
         ${item('Auditar muestra (IA)', 'CanteraModule.openAudit()')}
       </div>
       <div class="cp-mark-menu__sep"></div>
-      <div class="cp-mark-menu__list">${sub('Filtrar', `<div class="cp-mark-menu__list">${sub(`Paso 1${_paso1Filtro ? ' · 1' : ''}`, paso1Panel)}${sub(`Dominio${(_domFaltante || _dominioQ) ? ' · 1' : ''}`, dominioPanel)}${sub('Tier', tierPanel)}${sub('Prioridad', prioPanel)}${sub('Nº de contactos', numContactosPanel)}${sub('Auditoría', auditoriaPanel)}${sub('Paso 2 descartado', paso2DescPanel)}${sub('País', paisPanel, true)}${sub('Industria', industriaPanel, true)}${sub('Tamaño', tamanoPanel, true)}</div>`)}</div>
+      <div class="cp-mark-menu__list">${sub('Filtrar', `<div class="cp-mark-menu__list">${sub(`Paso 1${_paso1Filtro ? ' · 1' : ''}`, paso1Panel)}${sub(`Dominio${(_domFaltante || _dominioQ) ? ' · 1' : ''}`, dominioPanel)}${sub('Tier', tierPanel)}${sub('Prioridad', prioPanel)}${sub('Nº de contactos', numContactosPanel)}${sub('Auditoría', auditoriaPanel)}${sub('Paso 2 descartado', paso2DescPanel)}${sub('País', paisPanel, true)}${sub('Industria', industriaPanel, true)}${sub('Tamaño', tamanoPanel, true)}${sub(`Guardados${filtroGuardado ? ' · 1' : ''}`, guardadosPanel)}</div>`)}</div>
       <div class="cp-mark-menu__sep"></div>
       <div class="cp-mark-menu__list">${sub('Elegir columnas visibles', colsPanel, true)}</div>
       ${calificadas || _coSel.size ? `<div class="cp-mark-menu__sep"></div><div class="cp-mark-menu__list">
@@ -6452,6 +6456,24 @@ const CanteraModule = (() => {
   function _filtroKey() { return `cantera_filtro_${_current.id}`; }
   function _loadFiltroGuardado() {
     try { return JSON.parse(localStorage.getItem(_filtroKey()) || 'null'); } catch (_) { return null; }
+  }
+  function _filtroResumenTexto(f) {
+    const paso1Lbl = { aprobado: 'aprobado', descartado: 'descartado', vacio: 'vacío' };
+    const partes = [
+      f.paso1Filtro ? `Paso 1: ${paso1Lbl[f.paso1Filtro]}` : '',
+      (f.tierFiltro || []).length ? `Tier: ${f.tierFiltro.join(', ')}` : '',
+      (f.prioFiltro || []).length ? `Prioridad: ${f.prioFiltro.join(', ')}` : '',
+      f.minContactos ? `${f.minContactos}+ contactos` : '',
+      f.sinPrioridad ? 'sin priorizar' : '',
+      f.auditoriaFiltro ? `auditoría: ${f.auditoriaFiltro}` : '',
+      (f.paisFiltro || []).length ? `País: ${f.paisFiltro.join(', ')}` : '',
+      (f.industriaFiltro || []).length ? `Industria: ${f.industriaFiltro.join(', ')}` : '',
+      (f.tamanoFiltro || []).length ? `Tamaño: ${f.tamanoFiltro.join(', ')}` : '',
+      f.domFaltante ? 'sin dominio' : '',
+      f.dominioQ ? `dominio contiene "${f.dominioQ}"` : '',
+      (f.paso2DescFiltro || []).length ? `Paso 2 descartado: ${f.paso2DescFiltro.join(', ')}` : '',
+    ].filter(Boolean);
+    return partes.join(' · ') || '(sin condiciones)';
   }
   function guardarFiltroActual() {
     try {
