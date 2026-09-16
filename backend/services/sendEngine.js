@@ -191,6 +191,33 @@ async function _pauseEnrollment(pool, enr, reason, taskNote) {
   }
 }
 
+// Rotación por empresa (ver rotacion_empresa/rotacion_empresa_paso en db.js y el
+// encolado al enrolar en server.js _lmAddMembership) — pedido explícito
+// 2026-09-16: "no de forma paralela... voy a empezar con el primero, si no
+// responde... en el tercer o cuarto paso ya esté intentando contactar al
+// siguiente". Activa al SIGUIENTE contacto en espera ('pausado'/
+// 'rotacion_empresa') de la MISMA empresa+secuencia — sin tocar al que sigue
+// activo, así el actual puede seguir respondiendo aunque ya se haya activado
+// el siguiente. "Respondió" = igual criterio que _stepResponded/_condMatch
+// (disposition='respondio' o aceptó LinkedIn) — si ya respondió, NO se activa
+// a nadie más (ya hay una conversación real en curso).
+async function _maybeActivateNextInRotation(pool, enr) {
+  if (!enr.company_id) return;
+  const responded = enr.disposition === 'respondio' || !!enr.li_aceptado_at;
+  if (responded) return;
+  const { rows: [nextInLine] } = await pool.query(
+    `SELECT cs.id FROM lm_contact_sequences cs JOIN lm_contacts k ON k.id = cs.contact_id
+      WHERE cs.user_id=$1 AND cs.sequence_id=$2 AND cs.estado='pausado' AND cs.paused_reason='rotacion_empresa'
+        AND k.company_id=$3
+      ORDER BY CASE k.contact_priority WHEN 'alta' THEN 3 WHEN 'media' THEN 2 WHEN 'baja' THEN 1 ELSE 0 END DESC, cs.id ASC
+      LIMIT 1`,
+    [enr.user_id, enr.sequence_id, enr.company_id]);
+  if (!nextInLine) return;
+  await pool.query(
+    `UPDATE lm_contact_sequences SET estado='activo', paused_reason='', next_action_at=NOW() WHERE id=$1`,
+    [nextInLine.id]);
+}
+
 async function _advance(pool, enr, steps, curIdx) {
   // Salta los pasos cuya condición ('replied'/'no_reply') no aplique al contacto —
   // ramificación automática, mismo criterio que _effIdx en el frontend.
@@ -202,6 +229,7 @@ async function _advance(pool, enr, steps, curIdx) {
       [enr.enr_id]
     );
     await _maybeAutoNurture(pool, enr.enr_id);
+    await _maybeActivateNextInRotation(pool, enr);
     return;
   }
   const days = _delayDays(steps[curIdx], next);
@@ -213,6 +241,12 @@ async function _advance(pool, enr, steps, curIdx) {
     `UPDATE lm_contact_sequences SET paso=$1, next_action_at=$2, paso_date=CURRENT_DATE WHERE id=$3`,
     [nextIdx + 1, target.toISOString(), enr.enr_id]
   );
+  // Umbral configurable (rotacion_empresa_paso): activar al siguiente en cuanto
+  // el actual llega a ESE paso sin haber respondido, sin esperar a que termine
+  // toda la secuencia. 0/NULL = desactivado (solo al terminar, arriba).
+  if (enr.rotacion_empresa_paso > 0 && (nextIdx + 1) >= enr.rotacion_empresa_paso) {
+    await _maybeActivateNextInRotation(pool, enr);
+  }
 }
 
 // Procesa UN workspace: devuelve true si envió un email (para logging).
@@ -244,9 +278,9 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback) {
   const { rows: [enr] } = await pool.query(`
     SELECT cs.id AS enr_id, cs.user_id, cs.contact_id, cs.sequence_id, cs.paso, cs.next_action_at,
            k.nombre, k.apellido, k.email, k.cargo, k.empresa_nombre, k.ciudad, k.pais,
-           k.seniority, k.departamento, k.buyer_role, k.region, k.contact_priority,
+           k.seniority, k.departamento, k.buyer_role, k.region, k.contact_priority, k.company_id,
            k.email_status, k.disposition, k.li_aceptado_at, co.nombre AS company_nombre, s.nombre AS seq_nombre, s.send_days,
-           s.send_mode, s.send_interval_min, s.timezone AS seq_timezone
+           s.send_mode, s.send_interval_min, s.timezone AS seq_timezone, s.rotacion_empresa_paso
       FROM lm_contact_sequences cs
       JOIN sequences   s  ON s.id = cs.sequence_id AND s.estado = 'activa'
       JOIN lm_contacts k  ON k.id = cs.contact_id
@@ -586,7 +620,7 @@ async function _flushScheduled(pool, apiBase) {
 // ── Avanza un enrolamiento saltando el paso indicado (aprobación enviada o descartada) ──
 async function advancePastStep(pool, userId, contactId, sequenceId, stepId) {
   const { rows: [enr] } = await pool.query(
-    `SELECT cs.id AS enr_id, cs.user_id, cs.contact_id, s.send_days, k.disposition, k.li_aceptado_at
+    `SELECT cs.id AS enr_id, cs.user_id, cs.contact_id, cs.sequence_id, s.send_days, k.disposition, k.li_aceptado_at, k.company_id, s.rotacion_empresa_paso
        FROM lm_contact_sequences cs JOIN sequences s ON s.id = cs.sequence_id
        JOIN lm_contacts k ON k.id = cs.contact_id
       WHERE cs.user_id=$1 AND cs.contact_id=$2 AND cs.sequence_id=$3 AND cs.estado='activo'`,
@@ -869,4 +903,4 @@ function startSendEngine(pool, { apiBase, gmailCallback }) {
   console.log('[send-engine] started (tick 60s)');
 }
 
-module.exports = { startSendEngine, tick, renderTemplate, buildHtml, SENDABLE_STATUS, pickVariant, stepVariants, advancePastStep, condMatch: _condMatch, nextEffIdx: _nextEffIdx, lastTickAt: () => _lastTickAt };
+module.exports = { startSendEngine, tick, renderTemplate, buildHtml, SENDABLE_STATUS, pickVariant, stepVariants, advancePastStep, condMatch: _condMatch, nextEffIdx: _nextEffIdx, maybeActivateNextInRotation: _maybeActivateNextInRotation, lastTickAt: () => _lastTickAt };

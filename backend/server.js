@@ -4012,7 +4012,7 @@ async function _lmAddMembership(req, res, kind) {
       return res.json({ added: r.rowCount, requested: ids.length });
     }
     // ── Secuencia: arranque escalonado (drip) + días de cadencia ──
-    const sq = (await pool.query(`SELECT drip_per_day, send_days, starts_on::text AS starts_on FROM sequences WHERE id=$1 AND user_id=$2`, [targetId, uid])).rows[0] || {};
+    const sq = (await pool.query(`SELECT drip_per_day, send_days, starts_on::text AS starts_on, rotacion_empresa FROM sequences WHERE id=$1 AND user_id=$2`, [targetId, uid])).rows[0] || {};
     const drip = Math.max(0, parseInt(sq.drip_per_day) || 0);
     const mask = _sanSendDays(sq.send_days);
     // Solo contactos que existen y que NO estén ya enrolados (para no gastar cupos ni reiniciar su reloj).
@@ -4027,25 +4027,36 @@ async function _lmAddMembership(req, res, kind) {
     // la vez", solo se pasaba con force:true) — con 60 prospectos en 15 empresas la
     // mayoría se omitía en silencio. Ahora se detecta y se informa (mismo_empresa),
     // pero YA NO bloquea salvo que se pida explícitamente con enforce_one_per_company.
+    // rotacion_empresa (2026-09-16, ver comentario en db.js) es la tercera opción:
+    // en vez de bloquear O dejar a todos en paralelo, ENCOLA a los que comparten
+    // empresa (quedan 'pausado'/rotacion_empresa) y activa solo al primero — el
+    // motor los va activando en cascada (ver _maybeActivateNextInRotation en
+    // sendEngine.js) cuando el activo termina sin responder o llega al paso
+    // configurado sin responder.
     const mismaEmpresa = [];
+    let queueIds = new Set();
     {
-      const info = (await pool.query(`SELECT id, company_id, nombre, apellido, empresa_nombre FROM lm_contacts WHERE user_id=$1 AND id = ANY($2::int[])`, [uid, toAdd])).rows;
+      const rankPrio = { alta: 3, media: 2, baja: 1, '': 0 };
+      const info = (await pool.query(`SELECT id, company_id, nombre, apellido, empresa_nombre, contact_priority FROM lm_contacts WHERE user_id=$1 AND id = ANY($2::int[])`, [uid, toAdd])).rows;
       const byId = new Map(info.map(c => [c.id, c]));
+      // Prioridad más alta primero, así "el primero por empresa" en el lote es
+      // siempre el de mayor prioridad, no un orden arbitrario de llegada.
+      if (sq.rotacion_empresa) toAdd = [...toAdd].sort((a, b) => (rankPrio[byId.get(b)?.contact_priority] || 0) - (rankPrio[byId.get(a)?.contact_priority] || 0));
       const compIds = [...new Set(info.map(c => c.company_id).filter(Boolean))];
       const busy = new Map(); // company_id → nombre de la persona ya activa
       if (compIds.length) {
         (await pool.query(`
           SELECT DISTINCT ON (k.company_id) k.company_id, k.nombre, k.apellido
             FROM lm_contact_sequences cs JOIN lm_contacts k ON k.id = cs.contact_id
-           WHERE cs.user_id=$1 AND cs.estado='activo' AND k.company_id = ANY($2::int[]) AND NOT (k.id = ANY($3::int[]))
+           WHERE cs.user_id=$1 AND cs.estado IN ('activo','pausado') AND k.company_id = ANY($2::int[]) AND NOT (k.id = ANY($3::int[]))
         `, [uid, compIds, toAdd])).rows.forEach(r => busy.set(r.company_id, [r.nombre, r.apellido].filter(Boolean).join(' ') || '(sin nombre)'));
       }
       const seenComp = new Set();
       for (const id of toAdd) {
         const c = byId.get(id); const co = c && c.company_id;
         const nm = c ? ([c.nombre, c.apellido].filter(Boolean).join(' ') || '(sin nombre)') : String(id);
-        if (co && busy.has(co)) mismaEmpresa.push({ id, nombre: nm, empresa: c.empresa_nombre || '', con: busy.get(co) });
-        else if (co && seenComp.has(co)) mismaEmpresa.push({ id, nombre: nm, empresa: c.empresa_nombre || '', con: 'otro contacto del mismo lote' });
+        if (co && busy.has(co)) { mismaEmpresa.push({ id, nombre: nm, empresa: c.empresa_nombre || '', con: busy.get(co) }); if (sq.rotacion_empresa) queueIds.add(id); }
+        else if (co && seenComp.has(co)) { mismaEmpresa.push({ id, nombre: nm, empresa: c.empresa_nombre || '', con: 'otro contacto del mismo lote' }); if (sq.rotacion_empresa) queueIds.add(id); }
         if (co) seenComp.add(co);
       }
       if (b.enforce_one_per_company === true) {
@@ -4054,6 +4065,15 @@ async function _lmAddMembership(req, res, kind) {
         if (!toAdd.length) return res.json({ added: 0, requested: ids.length, spread_days: 0, skipped_company: mismaEmpresa });
       }
     }
+    if (queueIds.size) {
+      const queueArr = toAdd.filter(id => queueIds.has(id));
+      toAdd = toAdd.filter(id => !queueIds.has(id));
+      if (queueArr.length) await pool.query(`
+        INSERT INTO ${table} (user_id, contact_id, ${col}, estado, paused_reason)
+        SELECT $1, cid, $2, 'pausado', 'rotacion_empresa' FROM unnest($3::int[]) AS cid
+        ON CONFLICT (contact_id, ${col}) DO NOTHING`, [uid, targetId, queueArr]);
+    }
+    if (!toAdd.length) return res.json({ added: queueIds.size, requested: ids.length, spread_days: 0, misma_empresa: mismaEmpresa, en_espera_rotacion: queueIds.size });
 
     // Cupos ya usados por fecha (para encadenar tandas sin pasar el límite/día permitido).
     const usedByDate = {};
@@ -4081,7 +4101,7 @@ async function _lmAddMembership(req, res, kind) {
       ON CONFLICT (contact_id, ${col}) DO NOTHING
     `, [uid, targetId, toAdd, dates]);
     const spreadDays = new Set(dates).size;
-    res.json({ added: r.rowCount, requested: ids.length, spread_days: spreadDays, per_day: drip, misma_empresa: mismaEmpresa });
+    res.json({ added: r.rowCount + queueIds.size, requested: ids.length, spread_days: spreadDays, per_day: drip, misma_empresa: mismaEmpresa, en_espera_rotacion: queueIds.size });
   } catch (err) { console.error('[lm-mem]', err.message); res.status(500).json({ error: 'Error al añadir' }); }
 }
 // Re-ancla start_date/next_action_at de los enrolamientos que AÚN NO empiezan (paso 1,
@@ -4814,6 +4834,27 @@ app.patch('/api/lm/sequences/:id/contacts/:cid', requireAuth, async (req, res) =
     // Completó al menos el paso 1 (avanza de paso o termina) → el contacto ya fue contactado.
     const stage = ((b.paso != null && (parseInt(b.paso) || 1) > 1) || b.estado === 'terminado')
       ? await _lmAdvanceStage(req.workspaceOwnerId, req.params.cid, 'contactado') : null;
+    // Rotación por empresa (pasos manuales: WhatsApp/LinkedIn/llamada/tarea, que se
+    // completan a mano acá — no pasan por advancePastStep). Ver rotacion_empresa
+    // en db.js y _maybeActivateNextInRotation en sendEngine.js.
+    try {
+      const { rows: [ctx] } = await pool.query(
+        `SELECT k.company_id, k.disposition, k.li_aceptado_at, s.rotacion_empresa_paso
+           FROM lm_contacts k, sequences s
+          WHERE k.id=$1 AND k.user_id=$2 AND s.id=$3 AND s.user_id=$2`,
+        [req.params.cid, req.workspaceOwnerId, req.params.id]);
+      if (ctx && ctx.company_id) {
+        const paso = rows[0].paso;
+        const terminado = b.estado === 'terminado';
+        if (terminado || (ctx.rotacion_empresa_paso > 0 && paso >= ctx.rotacion_empresa_paso)) {
+          const { maybeActivateNextInRotation } = require('./services/sendEngine');
+          await maybeActivateNextInRotation(pool, {
+            user_id: req.workspaceOwnerId, sequence_id: req.params.id, company_id: ctx.company_id,
+            disposition: ctx.disposition, li_aceptado_at: ctx.li_aceptado_at,
+          });
+        }
+      }
+    } catch (e) { console.warn('[lm-seq-ct] rotacion_empresa warn:', e.message); }
     res.json({ ...rows[0], stage });
   } catch (err) { console.error('[lm-seq-ct] PATCH', err.message); res.status(500).json({ error: 'Error al actualizar' }); }
 });
@@ -8079,9 +8120,9 @@ app.post('/api/sequences', requireAuth, async (req, res) => {
     const sendDays = _sanSendDays(b.send_days);
     const dLim = Math.max(0, parseInt(b.daily_limit) || 0);
     const { rows } = await pool.query(`
-      INSERT INTO sequences (user_id,outbound_client_id,campaign_id,nombre,objetivo,estado,timezone,drip_per_day,send_days,starts_on,daily_limit,mercado,icp,notas,send_mode,send_interval_min,auto_activar,preferred_channel,target_role_1,target_role_2,nurture_days,origen_cantera)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22) RETURNING *
-    `, [req.workspaceOwnerId, b.outbound_client_id || null, b.campaign_id || null, b.nombre.trim(), b.objetivo || '', estado, b.timezone || '', drip, sendDays, _sanDate(b.starts_on), dLim, b.mercado || '', b.icp || '', b.notas || '', _sanSendMode(b.send_mode), _sanInterval(b.send_interval_min), !!b.auto_activar, _sanPreferredChannel(b.preferred_channel), b.target_role_1 || '', b.target_role_2 || '', _sanNurtureDays(b.nurture_days), !!b.origen_cantera]);
+      INSERT INTO sequences (user_id,outbound_client_id,campaign_id,nombre,objetivo,estado,timezone,drip_per_day,send_days,starts_on,daily_limit,mercado,icp,notas,send_mode,send_interval_min,auto_activar,preferred_channel,target_role_1,target_role_2,nurture_days,origen_cantera,rotacion_empresa,rotacion_empresa_paso)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24) RETURNING *
+    `, [req.workspaceOwnerId, b.outbound_client_id || null, b.campaign_id || null, b.nombre.trim(), b.objetivo || '', estado, b.timezone || '', drip, sendDays, _sanDate(b.starts_on), dLim, b.mercado || '', b.icp || '', b.notas || '', _sanSendMode(b.send_mode), _sanInterval(b.send_interval_min), !!b.auto_activar, _sanPreferredChannel(b.preferred_channel), b.target_role_1 || '', b.target_role_2 || '', _sanNurtureDays(b.nurture_days), !!b.origen_cantera, !!b.rotacion_empresa, Math.max(0, parseInt(b.rotacion_empresa_paso) || 0)]);
     res.status(201).json(rows[0]);
   } catch (err) { console.error('[seq] POST error:', err.message); res.status(500).json({ error: 'Error al crear secuencia' }); }
 });
@@ -8098,9 +8139,9 @@ app.put('/api/sequences/:id', requireAuth, async (req, res) => {
       `SELECT send_days, starts_on::text AS starts_on, drip_per_day FROM sequences WHERE id=$1 AND user_id=$2`,
       [req.params.id, req.workspaceOwnerId]);
     const { rows } = await pool.query(`
-      UPDATE sequences SET outbound_client_id=$1,campaign_id=$2,nombre=$3,objetivo=$4,estado=$5,timezone=$6,drip_per_day=$7,send_days=$8,starts_on=$9,daily_limit=$10,mercado=$11,icp=$12,notas=$13,send_mode=$14,send_interval_min=$15,auto_activar=$16,preferred_channel=$17,target_role_1=$18,target_role_2=$19,nurture_days=$20,updated_at=NOW()
-      WHERE id=$21 AND user_id=$22 RETURNING *
-    `, [b.outbound_client_id || null, b.campaign_id || null, b.nombre.trim(), b.objetivo || '', estado, b.timezone || '', drip, sendDays, _sanDate(b.starts_on), dLim, b.mercado || '', b.icp || '', b.notas || '', _sanSendMode(b.send_mode), _sanInterval(b.send_interval_min), !!b.auto_activar, _sanPreferredChannel(b.preferred_channel), b.target_role_1 || '', b.target_role_2 || '', _sanNurtureDays(b.nurture_days), req.params.id, req.workspaceOwnerId]);
+      UPDATE sequences SET outbound_client_id=$1,campaign_id=$2,nombre=$3,objetivo=$4,estado=$5,timezone=$6,drip_per_day=$7,send_days=$8,starts_on=$9,daily_limit=$10,mercado=$11,icp=$12,notas=$13,send_mode=$14,send_interval_min=$15,auto_activar=$16,preferred_channel=$17,target_role_1=$18,target_role_2=$19,nurture_days=$20,rotacion_empresa=$21,rotacion_empresa_paso=$22,updated_at=NOW()
+      WHERE id=$23 AND user_id=$24 RETURNING *
+    `, [b.outbound_client_id || null, b.campaign_id || null, b.nombre.trim(), b.objetivo || '', estado, b.timezone || '', drip, sendDays, _sanDate(b.starts_on), dLim, b.mercado || '', b.icp || '', b.notas || '', _sanSendMode(b.send_mode), _sanInterval(b.send_interval_min), !!b.auto_activar, _sanPreferredChannel(b.preferred_channel), b.target_role_1 || '', b.target_role_2 || '', _sanNurtureDays(b.nurture_days), !!b.rotacion_empresa, Math.max(0, parseInt(b.rotacion_empresa_paso) || 0), req.params.id, req.workspaceOwnerId]);
     if (!rows.length) return res.status(404).json({ error: 'Secuencia no encontrada' });
     // Cambió la cadencia, la fecha de inicio o el drip → recalcular las fechas de los
     // que aún no empiezan (paso 1). Sin esto, activar S/D después de enrolar no movía nada.

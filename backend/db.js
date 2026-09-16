@@ -816,6 +816,18 @@ async function initDb() {
     await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS send_interval_min INTEGER NOT NULL DEFAULT 5;`);
     // Auto-activación: al llegar starts_on, el motor pasa la secuencia a 'activa' solo.
     await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS auto_activar      BOOLEAN NOT NULL DEFAULT FALSE;`);
+    // Rotación por empresa — pedido explícito 2026-09-16: "no quiere decir que se
+    // contacten a ambos de forma paralela... voy a empezar con el primero, si no
+    // responde... en el tercer o cuarto paso ya esté intentando contactar al
+    // siguiente". Con esto activado, de todos los contactos de UNA MISMA empresa
+    // enrolados en la secuencia, solo uno queda 'activo' a la vez (el de mayor
+    // prioridad, o el que ya estaba más avanzado); el resto queda 'pausado' con
+    // paused_reason='rotacion_empresa' hasta que el activo termine la secuencia
+    // sin responder, o llegue al paso rotacion_empresa_paso sin responder (0 =
+    // esperar a que termine toda la secuencia). Ver _maybeActivateNextInRotation
+    // en sendEngine.js.
+    await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS rotacion_empresa BOOLEAN NOT NULL DEFAULT FALSE;`);
+    await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS rotacion_empresa_paso INTEGER NOT NULL DEFAULT 0;`);
     // Canal principal de la secuencia: cuando el contacto acepta/responde, el
     // re-enrutado a la rama 'replied' PRIORIZA pasos de este canal (linkedin/email).
     // '' = auto (comportamiento clásico: primer paso replied sin importar canal).
