@@ -78,6 +78,7 @@ function _puestosBlock(puestos, tiers) {
 // a mano en otra IA, necesita algo legible de un vistazo, no JSON crudo.
 function _buildSystemPrompt(batch, human = false) {
   const formato = human ? `FORMATO DE SALIDA — responde en este formato exacto, corto y legible (esto lo va a leer una persona, NUNCA uses JSON):
+Empresa: [el nombre exacto de la empresa que investigaste]
 Tier: [la clave del Tier, ej. TIER_1A — o "Descartada" si no calza en ninguno]
 Prioridad: [alta | media | baja]
 Confianza: [alta | media | baja]
