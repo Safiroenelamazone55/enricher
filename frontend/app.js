@@ -20630,7 +20630,7 @@ ${foot}
   // emojis", y un estilo más compacto/ordenado (una sola columna para la
   // segunda lista en vez de la grilla de 2 columnas, que con etiquetas de
   // largo distinto se veía desalineada).
-  function seqOpenMark(ev, canal, accion) {
+  function seqOpenMark(ev, canal, accion, stepId, cid) {
     if (ev && ev.stopPropagation) ev.stopPropagation();
     document.querySelectorAll('.cp-mark-menu, .lm-di-menu').forEach(m => m.remove());
     const close = "document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove())";
@@ -20638,6 +20638,20 @@ ${foot}
     const iitem = (icon, label, onclick) => `<button class="cp-mark-menu__b" onclick="${close};${onclick}"><span class="cp-mark-menu__ic">${NI(icon, 13)}</span>${label}</button>`;
     let html = `<div class="cp-mark-menu__h">Resultado del contacto</div>`;
     html += `<div class="cp-mark-menu__grid">` + _DISPOS.map(d => item(esc(d[1]), `LeadManagerModule.seqDoDisposition('${d[0]}')`, d[2])).join('') + `</div>`;
+    // Resultado de ESTE PASO puntual — pedido explícito 2026-09-16: distinguir
+    // "no respondió a la llamada" de "no respondió al mensaje" o "no aceptó
+    // LinkedIn", cada uno con su propia señal (ver cond_step_id en el paso). Se
+    // puede volver a marcar más tarde (ej. una llamada que devuelven después):
+    // es un UPSERT, no un registro de una sola vez. Solo se ofrece para canales
+    // sin señal automática propia (llamada/WhatsApp/tarea) — email y LinkedIn ya
+    // se detectan solos (respuesta de email / conexión aceptada).
+    if (stepId && cid && (canal === 'call' || canal === 'whatsapp' || canal === 'task')) {
+      html += `<div class="cp-mark-menu__sep"></div><div class="cp-mark-menu__h">Este paso específico</div>`;
+      html += `<div class="cp-mark-menu__list">`
+        + item('Respondió a este paso', `LeadManagerModule.seqMarkStepOutcome(${stepId},${cid},'respondio')`, '#15803D')
+        + item('NO respondió a este paso', `LeadManagerModule.seqMarkStepOutcome(${stepId},${cid},'no_respondio')`, '#B45309')
+        + `</div>`;
+    }
     html += `<div class="cp-mark-menu__sep"></div>`;
     // El problema del canal ACTUAL de la tarea va primero — es la opción que Jenny busca
     // cuando el paso de hoy no se puede ejecutar (LinkedIn falso, email rebotado, WhatsApp
@@ -20711,6 +20725,17 @@ ${foot}
       showBanner(`⚠ ${lbl} — pausado; queda en Contactos → Por corregir`, 'success');
       const next = _cpNextTask(seqId, cid);
       if (next) openContactPage(next.e.contact_id, { seqId: seqId }); else seqDoExit();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  // Marca (o corrige) el resultado de ESTE paso puntual — reusable en cualquier
+  // momento, no solo al completar la tarea (ej. una llamada que devuelven más
+  // tarde: se vuelve a abrir el contacto y se actualiza acá). No mueve al
+  // contacto de paso por sí sola — el motor la toma en cuenta la próxima vez
+  // que evalúe la ramificación de un paso que apunte a ESTE (ver cond_step_id).
+  async function seqMarkStepOutcome(stepId, cid, resultado) {
+    try {
+      await apiFetch(`${API}/lm/step-outcome`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact_id: cid, step_id: stepId, resultado }) });
+      showBanner(resultado === 'respondio' ? '✓ Marcado: respondió a este paso' : '✓ Marcado: NO respondió a este paso', 'success');
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
   // ── "Sin actividad reciente" (paso de comentar / reaccionar a una publicación) ──
@@ -21994,7 +22019,7 @@ ${foot}
       <div class="cp-taskbar__foot">
         ${chanHtml}
         <span class="cp-taskbar__sp"></span>
-        <button class="cp-mark-btn" onclick="LeadManagerModule.seqOpenMark(event,'${st.canal}','${st.accion || ''}')" title="Marcar el resultado de esta tarea (respondió, no contactar, falta dato…)">Marcar resultado <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+        <button class="cp-mark-btn" onclick="LeadManagerModule.seqOpenMark(event,'${st.canal}','${st.accion || ''}',${st.id},${cid})" title="Marcar el resultado de esta tarea (respondió, no contactar, falta dato…)">Marcar resultado <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
         <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqDoPrev()"${_cpTaskHist.length ? '' : ' disabled'} title="Volver al contacto anterior (para revisar o deshacer)">‹ Anterior</button>
         <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqDoSkip()">Saltar ›</button>
         <button class="btn btn--primary btn--sm" id="seqdo-done" onclick="LeadManagerModule.seqDoDone()">✓ Hecha → siguiente</button>
@@ -26258,7 +26283,11 @@ ${foot}
         </label>
         <div class="fin-pi-full" id="step-accion-slot">${_stepAccionHtml(st?.canal || 'email', st?.accion || '')}</div>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Hora (opcional)</span><input class="form-input" type="time" id="step-hora" value="${st && st.hora ? esc(st.hora) : ''}"><span class="seq-drip-hint" id="step-hora-hint">${_stepHoraHint(seqId)}</span></label>
-        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">¿Para quién? (rama por respuesta)</span><select class="form-input" id="step-cond"><option value=""${!(st && st.cond) ? ' selected' : ''}>Todos</option><option value="replied"${st && st.cond === 'replied' ? ' selected' : ''}>Solo si respondió / aceptó</option><option value="no_reply"${st && st.cond === 'no_reply' ? ' selected' : ''}>Solo si NO respondió</option></select><span class="seq-drip-hint">Ramifica la secuencia: el sistema <b>salta</b> este paso para quien no cumpla la condición. Ej.: nota de conexión = <b>Todos</b>; mensaje de LinkedIn = <b>Solo si aceptó</b>; email de seguimiento = <b>Solo si no respondió</b>.</span></label>
+        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">¿Para quién? (rama por respuesta)</span><select class="form-input" id="step-cond" onchange="LeadManagerModule.stepCondChange()"><option value=""${!(st && st.cond) ? ' selected' : ''}>Todos</option><option value="replied"${st && st.cond === 'replied' ? ' selected' : ''}>Solo si respondió / aceptó</option><option value="no_reply"${st && st.cond === 'no_reply' ? ' selected' : ''}>Solo si NO respondió</option></select><span class="seq-drip-hint">Ramifica la secuencia: el sistema <b>salta</b> este paso para quien no cumpla la condición. Ej.: nota de conexión = <b>Todos</b>; mensaje de LinkedIn = <b>Solo si aceptó</b>; email de seguimiento = <b>Solo si no respondió</b>.</span></label>
+        <label class="fin-cfg-field fin-pi-full" id="step-cond-ref-wrap" style="display:${st && st.cond ? 'flex' : 'none'}"><span class="fin-cfg-lbl">¿Con respecto a qué paso?</span><select class="form-input" id="step-cond-ref">
+          <option value="">En general (cualquier respuesta de la secuencia)</option>
+          ${existing.filter(x => !st || x.id !== st.id).map(x => `<option value="${x.id}"${st && String(st.cond_step_id) === String(x.id) ? ' selected' : ''}>Día ${x.dia} · ${esc(_TOUCH[x.canal] ? _TOUCH[x.canal][0] : x.canal)}${_accionLabel(x.canal, x.accion) ? ' · ' + esc(_accionLabel(x.canal, x.accion)) : ''}${x.titulo ? ' — ' + esc(x.titulo) : ''}</option>`).join('')}
+        </select><span class="seq-drip-hint">Por defecto mira si respondió en <b>cualquier parte</b> de la secuencia. Elige un paso puntual (ej. "Día 2 · WhatsApp · Llamada") para que la condición mire <b>solo esa señal</b> — así "no respondió a la llamada" no se confunde con "no respondió al mensaje" o "no aceptó LinkedIn".</span></label>
         <div class="fin-pi-full step-sec-h"><span class="step-sec-n">2</span> El mensaje — qué se envía <span class="sp"></span><button type="button" class="seq-days-preset" id="step-prev-btn" onclick="LeadManagerModule.stepPreview(${seqId})">👁 Vista previa</button></div>
         <div id="step-preview" class="fin-pi-full" style="display:none"></div>
         ${(() => { const sq = (_sequences || []).find(x => x.id === seqId); const cli = (_clients || []).find(c => c.id === sq?.outbound_client_id); const cc = cli?.cc_email || ''; return cc ? `<label class="fin-cfg-field fin-pi-full" id="step-cc-wrap" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="step-cc" ${st?.cc_off ? '' : 'checked'} style="width:auto"><span class="fin-cfg-lbl" style="margin:0">Incluir CC del cliente (${esc(cc)})</span><span class="seq-drip-hint" style="margin:0">Desmárcalo para que ESTE paso salga sin copia.</span></label>` : ''; })()}
@@ -26363,6 +26392,7 @@ ${foot}
   // el perfil funcionan igual aunque no haya publicaciones.
   function _isContentStep(canal, accion) { return canal === 'linkedin' && (accion === 'comentario' || accion === 'like'); }
   function stepAccionChange() { _stepSyncDraft(); _stepRenderMsg(); }
+  function stepCondChange() { const wrap = $('step-cond-ref-wrap'); if (wrap) wrap.style.display = $('step-cond')?.value ? 'flex' : 'none'; }
   // Opciones de los pasos que dependen de una publicación. La ventana hace que
   // "sin actividad reciente" sea un criterio objetivo (lo mismo que hace HeyReach)
   // en vez de un juicio distinto en cada tarea.
@@ -26561,7 +26591,7 @@ ${foot}
     const asunto = ((d.variants[0] && d.variants[0].asunto) || '').trim();
     const ccBox = $('step-cc');
     const replyBox = $('step-reply');
-    const body = { sequence_id: seqId, dia, canal: $('step-canal')?.value || 'email', titulo: $('step-titulo')?.value.trim() || '', asunto, plantilla, variants, variant_mode: d.mode, variant_field: d.field, orden: dia, hora: $('step-hora')?.value || '', cond: $('step-cond')?.value || '', accion: $('step-accion')?.value || '',
+    const body = { sequence_id: seqId, dia, canal: $('step-canal')?.value || 'email', titulo: $('step-titulo')?.value.trim() || '', asunto, plantilla, variants, variant_mode: d.mode, variant_field: d.field, orden: dia, hora: $('step-hora')?.value || '', cond: $('step-cond')?.value || '', cond_step_id: $('step-cond')?.value ? ($('step-cond-ref')?.value || null) : null, accion: $('step-accion')?.value || '',
       post_dias: $('step-post-dias')?.value || '', reaccion: $('step-reaccion')?.value || '', cc_off: ccBox ? !ccBox.checked : false, reply_to_prev: !!(replyBox && replyBox.checked) };
     const btn = $('step-save'); if (btn) btn.disabled = true;
     try {
@@ -29593,7 +29623,7 @@ ${foot}
     seqNoEmailMenu, seqNoEmailSkip, seqNoEmailInvalid, seqNoEmailRemove, seqNoEmailAccepted,
     seqTaskOpen, seqDoClose, seqDoCopy, seqDoDone, seqDoSkip, seqDoPrev, seqDoEditStep, seqDoExit, seqOpenLinkedIn,
     openStepDrawer, closeStepDrawer, saveStep, confirmDeleteStep, seqInsertVar, stepUseTpl, tzSearch, tzPick, tzBlur,
-    stepSetMode, stepSetField, stepAddVariant, stepDelVariant, stepFocusTa, stepAccionChange,
+    stepSetMode, stepSetField, stepAddVariant, stepDelVariant, stepFocusTa, stepAccionChange, stepCondChange, seqMarkStepOutcome,
     cmtGenerate, cmtCopy, cmtCopyPrompt, seqDoNoActivity,
     stepTagInput, stepTagKey, stepTagPick, stepTagAddTyped, stepTagRemove, stepTagBlur,
     stepCanalChange, stepPickCanal, stepVarUseTpl, stepVarEdit, stepAutoLink,

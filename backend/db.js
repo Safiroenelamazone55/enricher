@@ -775,6 +775,13 @@ async function initDb() {
     // Acción del paso dentro del canal (LinkedIn: invitación con/sin nota, mensaje, follow…;
     // WhatsApp: mensaje/llamada; Llamada: llamada/voicemail). '' = acción por defecto del canal.
     await pool.query(`ALTER TABLE sequence_steps ADD COLUMN IF NOT EXISTS accion TEXT NOT NULL DEFAULT '';`);
+    // A qué PASO específico se refiere la condición ('replied'/'no_reply') — pedido
+    // explícito 2026-09-16: "no respondieron a la llamada de WhatsApp" es distinto
+    // de "no respondieron al mensaje de WhatsApp" o "no respondieron la invitación
+    // de LinkedIn". NULL = comportamiento de antes (condición GLOBAL: respondió en
+    // cualquier parte de la secuencia). Con valor: la condición mira la señal de
+    // ESE paso puntual — ver _stepResponded en sendEngine.js.
+    await pool.query(`ALTER TABLE sequence_steps ADD COLUMN IF NOT EXISTS cond_step_id INTEGER REFERENCES sequence_steps(id) ON DELETE SET NULL;`);
     // Zona horaria del prospecto por secuencia (IANA, p. ej. America/New_York) → ventana de envío sugerida.
     await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS timezone TEXT NOT NULL DEFAULT '';`);
     // Arranque escalonado (drip): nº de contactos nuevos a arrancar por día al enrolar. 0 = todos el mismo día.
@@ -1015,6 +1022,27 @@ async function initDb() {
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS lm_cseq_user_idx    ON lm_contact_sequences (user_id);`);
     await pool.query(`CREATE INDEX IF NOT EXISTS lm_cseq_contact_idx ON lm_contact_sequences (contact_id);`);
+    // Resultado manual de un paso puntual (contacto+paso) — para canales sin señal
+    // automática (llamada, o cuando se quiere corregir a mano). Pedido explícito
+    // 2026-09-16: "no hago llamadas automáticas... aunque no me responda de
+    // inmediato, puedo volver y actualizar el estatus de este prospecto" — por
+    // eso es un UPSERT editable en cualquier momento, no un registro de una sola
+    // vez. Email/LinkedIn tienen señal automática propia (lm_messages.replied_at /
+    // li_aceptado_at) y no necesitan pasar por aquí, pero un registro manual acá
+    // siempre gana sobre la señal automática — ver _stepResponded en sendEngine.js.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS lm_step_outcomes (
+        id          SERIAL        PRIMARY KEY,
+        user_id     INTEGER       REFERENCES users(id) ON DELETE SET NULL,
+        contact_id  INTEGER       NOT NULL REFERENCES lm_contacts(id) ON DELETE CASCADE,
+        step_id     INTEGER       NOT NULL REFERENCES sequence_steps(id) ON DELETE CASCADE,
+        resultado   TEXT          NOT NULL DEFAULT '' CHECK (resultado IN ('respondio','no_respondio')),
+        created_at  TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+        updated_at  TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+        UNIQUE (contact_id, step_id)
+      );
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS lm_stepout_contact_idx ON lm_step_outcomes (contact_id);`);
     await pool.query(`
       CREATE TABLE IF NOT EXISTS lm_contact_campaigns (
         id          SERIAL        PRIMARY KEY,

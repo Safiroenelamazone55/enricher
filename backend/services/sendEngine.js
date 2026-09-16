@@ -131,19 +131,49 @@ async function _maybeAutoNurture(pool, enrId) {
     [row.user_id, row.contact_id, `Estado: (sin estado) → Contactar más adelante — secuencia terminada sin respuesta, retomar el ${fecha} (automático)`]);
 }
 
+// Señal de "respondió" de UN paso puntual — pedido explícito 2026-09-16: "no
+// respondió a la llamada de WhatsApp" es distinto de "no respondió al mensaje
+// de WhatsApp" o "no respondió la invitación de LinkedIn", cada paso tiene su
+// propia señal, no una sola global.
+// Orden: 1) marca manual en lm_step_outcomes (siempre gana — Jenny puede
+// volver y actualizarla en cualquier momento, ej. una llamada que le
+// devolvieron más tarde); 2) si no hay marca manual, señal automática por
+// canal (email: replied_at del mensaje de ESE paso; LinkedIn: aceptó la
+// conexión — global porque normalmente hay un solo paso de invitación por
+// secuencia); 3) sin ninguna señal, "no respondió".
+async function _stepResponded(pool, contactId, stepId) {
+  const { rows: [manual] } = await pool.query(
+    `SELECT resultado FROM lm_step_outcomes WHERE contact_id=$1 AND step_id=$2`, [contactId, stepId]);
+  if (manual) return manual.resultado === 'respondio';
+  const { rows: [step] } = await pool.query(`SELECT canal FROM sequence_steps WHERE id=$1`, [stepId]);
+  if (step && step.canal === 'email') {
+    const { rows: [msg] } = await pool.query(
+      `SELECT 1 FROM lm_messages WHERE contact_id=$1 AND step_id=$2 AND replied_at IS NOT NULL LIMIT 1`, [contactId, stepId]);
+    return !!msg;
+  }
+  if (step && step.canal === 'linkedin') {
+    const { rows: [c] } = await pool.query(`SELECT li_aceptado_at FROM lm_contacts WHERE id=$1`, [contactId]);
+    return !!(c && c.li_aceptado_at);
+  }
+  return false;
+}
 // Ramificación por respuesta — MISMA regla que el frontend (_stepCondMatch en
 // app.js): '' = para todos; 'replied' = solo si respondió/aceptó LinkedIn;
-// 'no_reply' = solo si NO respondió. "Respondió" = disposition='respondio' O
-// aceptó la invitación de LinkedIn (li_aceptado_at) — igual que _respondedC.
-function _condMatch(step, enr) {
+// 'no_reply' = solo si NO respondió. Sin cond_step_id: "respondió" es GLOBAL
+// (disposition='respondio' O aceptó LinkedIn en cualquier parte — igual que
+// antes, se mantiene por compatibilidad con pasos ya creados). CON
+// cond_step_id: mira la señal de ESE paso puntual (_stepResponded arriba).
+async function _condMatch(pool, step, enr) {
   const cd = (step && step.cond) || '';
   if (!cd) return true;
-  const responded = enr.disposition === 'respondio' || !!enr.li_aceptado_at;
+  const responded = step.cond_step_id
+    ? await _stepResponded(pool, enr.contact_id, step.cond_step_id)
+    : (enr.disposition === 'respondio' || !!enr.li_aceptado_at);
   return cd === 'replied' ? responded : cd === 'no_reply' ? !responded : true;
 }
 // Primer índice desde fromIdx (inclusive) cuya condición aplica al contacto, o -1.
-function _nextEffIdx(steps, enr, fromIdx) {
-  for (let i = Math.max(0, fromIdx); i < steps.length; i++) if (_condMatch(steps[i], enr)) return i;
+async function _nextEffIdx(pool, steps, enr, fromIdx) {
+  for (let i = Math.max(0, fromIdx); i < steps.length; i++) if (await _condMatch(pool, steps[i], enr)) return i;
   return -1;
 }
 
@@ -164,7 +194,7 @@ async function _pauseEnrollment(pool, enr, reason, taskNote) {
 async function _advance(pool, enr, steps, curIdx) {
   // Salta los pasos cuya condición ('replied'/'no_reply') no aplique al contacto —
   // ramificación automática, mismo criterio que _effIdx en el frontend.
-  const nextIdx = _nextEffIdx(steps, enr, curIdx + 1);
+  const nextIdx = await _nextEffIdx(pool, steps, enr, curIdx + 1);
   const next = nextIdx >= 0 ? steps[nextIdx] : null;
   if (!next) {
     await pool.query(
@@ -271,7 +301,7 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback) {
   }
 
   const { rows: steps } = await pool.query(
-    `SELECT id, dia, canal, titulo, plantilla, espera_dias, variants, variant_mode, variant_field, asunto, cc_off, reply_to_prev, cond
+    `SELECT id, dia, canal, titulo, plantilla, espera_dias, variants, variant_mode, variant_field, asunto, cc_off, reply_to_prev, cond, cond_step_id
        FROM sequence_steps WHERE sequence_id=$1 ORDER BY dia ASC, orden ASC, id ASC`,
     [enr.sequence_id]
   );
@@ -286,8 +316,8 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback) {
   // (p. ej. "solo si no respondió" y justo respondió), el motor lo saltaba
   // igual y mandaba el correo de todas formas — acá se corrige el paso YA MISMO
   // (sin enviar nada en este tick) y se reintenta en el próximo (60s).
-  if (!_condMatch(step, enr)) {
-    const skipIdx = _nextEffIdx(steps, enr, curIdx);
+  if (!(await _condMatch(pool, step, enr))) {
+    const skipIdx = await _nextEffIdx(pool, steps, enr, curIdx);
     if (skipIdx < 0) await pool.query(`UPDATE lm_contact_sequences SET estado='terminado', next_action_at=NULL WHERE id=$1`, [enr.enr_id]);
     else await pool.query(`UPDATE lm_contact_sequences SET paso=$1, next_action_at=NOW() WHERE id=$2`, [skipIdx + 1, enr.enr_id]);
     return false;
@@ -563,7 +593,7 @@ async function advancePastStep(pool, userId, contactId, sequenceId, stepId) {
     [userId, contactId, sequenceId]);
   if (!enr) return false;
   const { rows: steps } = await pool.query(
-    `SELECT id, dia, canal, espera_dias, cond FROM sequence_steps WHERE sequence_id=$1 ORDER BY dia ASC, orden ASC, id ASC`,
+    `SELECT id, dia, canal, espera_dias, cond, cond_step_id FROM sequence_steps WHERE sequence_id=$1 ORDER BY dia ASC, orden ASC, id ASC`,
     [sequenceId]);
   const curIdx = steps.findIndex(x => x.id === stepId);
   if (curIdx < 0) return false;
@@ -703,15 +733,15 @@ async function _draftPreapproved(pool) {
       // Opt-out: a un contacto descartado no se le redacta ni el borrador.
       if (['no_interesado', 'no_contactar'].includes(enr.disposition)) continue;
       const { rows: steps } = await pool.query(
-        `SELECT id, dia, canal, titulo, plantilla, espera_dias, variants, variant_mode, variant_field, asunto, cc_off, cond
+        `SELECT id, dia, canal, titulo, plantilla, espera_dias, variants, variant_mode, variant_field, asunto, cc_off, cond, cond_step_id
            FROM sequence_steps WHERE sequence_id=$1 ORDER BY dia ASC, orden ASC, id ASC`, [enr.sequence_id]);
       const curIdx0 = (enr.paso || 1) - 1;
       let step = steps[curIdx0];
       // Mismo auto-salto que _tickWorkspace: si el paso donde está ya no aplica
       // (ramificación por respuesta), corrige el paso YA y no redacta un borrador
       // que no debería salir — la próxima pasada retoma desde el paso correcto.
-      if (step && !_condMatch(step, enr)) {
-        const skipIdx = _nextEffIdx(steps, enr, curIdx0);
+      if (step && !(await _condMatch(pool, step, enr))) {
+        const skipIdx = await _nextEffIdx(pool, steps, enr, curIdx0);
         if (skipIdx < 0) await pool.query(`UPDATE lm_contact_sequences SET estado='terminado', next_action_at=NULL WHERE id=$1`, [enr.enr_id]);
         else await pool.query(`UPDATE lm_contact_sequences SET paso=$1 WHERE id=$2`, [skipIdx + 1, enr.enr_id]);
         continue;
