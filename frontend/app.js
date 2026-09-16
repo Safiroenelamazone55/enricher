@@ -21528,7 +21528,15 @@ ${foot}
       if (!_pasoEsTareaManual(st, id)) return null;   // email automático → no es tarea manual
       const due = _dueForEff(steps, e.contact_id, eff, e.enrolled_at, e.paso_date, mask);
       return { e, st, due };
-    }).filter(Boolean).sort((a, b) => a.due - b.due || (a.st.hora || '99:99').localeCompare(b.st.hora || '99:99'));
+    }).filter(Boolean).sort((a, b) => a.due - b.due || (a.st.hora || '99:99').localeCompare(b.st.hora || '99:99')
+      // Desempate cuando dos tareas caen el MISMO día y ninguna tiene hora fija
+      // (due es solo fecha, sin hora) — antes quedaba en el orden en que llegó
+      // el contacto desde la API, sin relación con la secuencia. Reportado en
+      // vivo 2026-09-16: vio InMail antes que la llamada aunque la llamada
+      // fuera el paso anterior. Ahora desempata por la posición REAL del paso
+      // en la secuencia (día, orden, id) — así el orden de la lista siempre
+      // respeta el orden en que se diseñó la secuencia.
+      || (a.st.dia || 0) - (b.st.dia || 0) || (a.st.orden || 0) - (b.st.orden || 0) || (a.st.id || 0) - (b.st.id || 0));
   }
   // Cola de empresas: cada fila pendiente ES la tarea "Paso 1" (buscar y agregar al decisor)
   // — mismo shape {st, due} que _seqTasks para reusar canal-chips/orden/agrupado sin duplicar esa lógica.
