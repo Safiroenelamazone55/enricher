@@ -10470,10 +10470,20 @@ app.get('/api/wa/connections/:id/resolve-contact/:contactId', requireAuth, async
     // coincidencia sea ÚNICA entre los chats @lid de ESTA conexión (no de todo Nova).
     const primerNombre = (c?.nombre || '').trim();
     if (primerNombre.length >= 3) {
+      // Excluye chats @lid que YA están vinculados a OTRO contacto — sin esto,
+      // un homónimo real (mismo nombre, persona distinta, de otro cliente/
+      // campaña) podía robarle el chat a su dueño legítimo. Confirmado en vivo
+      // 2026-09-16: un "Jesus" de una campaña de meses atrás (otro cliente,
+      // "Active Water") se vinculó por error a un "Jesus Sierra" recién
+      // agregado, solo por coincidir el nombre en el saludo.
       const { rows: candidatos } = await pool.query(
-        `SELECT DISTINCT chat_jid FROM wa_messages
-          WHERE connection_id=$1 AND chat_jid LIKE '%@lid' AND texto ILIKE '%'||$2||'%'`,
-        [req.params.id, primerNombre]);
+        `SELECT DISTINCT m.chat_jid FROM wa_messages m
+          WHERE m.connection_id=$1 AND m.chat_jid LIKE '%@lid' AND m.texto ILIKE '%'||$2||'%'
+            AND NOT EXISTS (
+              SELECT 1 FROM wa_jid_links l
+               WHERE l.connection_id=m.connection_id AND l.chat_jid=m.chat_jid AND l.contact_id<>$3
+            )`,
+        [req.params.id, primerNombre, contactId]);
       if (candidatos.length === 1) {
         const jid = candidatos[0].chat_jid;
         await pool.query(

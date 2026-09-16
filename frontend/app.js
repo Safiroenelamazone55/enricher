@@ -32251,7 +32251,18 @@ const QuickWaModule = (() => {
     // header sigue como respaldo manual para ese caso ambiguo, no como el camino normal.
     try {
       const rl = await apiFetch(`${API}/wa/connections/${_conn.id}/resolve-contact/${_contactId}?telefono=${encodeURIComponent(telefono || '')}`);
-      if (rl.ok) { const d = await rl.json(); if (d.jid) _jid = d.jid; }
+      if (rl.ok) {
+        const d = await rl.json();
+        if (d.jid) _jid = d.jid;
+        // Aviso visible cuando el chat se adivinó por coincidencia de NOMBRE (no
+        // por el número real) — antes esto pasaba en silencio y solo se notaba
+        // si Jenny leía el historial con atención. Reportado en vivo 2026-09-16:
+        // vinculó por error el chat de OTRO "Jesus" (de un cliente distinto,
+        // meses atrás) a un Jesus Sierra recién agregado — mismo nombre,
+        // persona distinta.
+        const warn = $$('qwa-auto-warn');
+        if (warn) { warn.style.display = d.source === 'auto' ? 'flex' : 'none'; }
+      }
     } catch (_) {}
     const sub = $$('qwa-sub'); if (sub) sub.textContent = `+${_conn.numero || ''}`;
     await _cargarMensajes();
@@ -32318,6 +32329,7 @@ const QuickWaModule = (() => {
             <button class="fin-pi-x" onclick="QuickWaModule.close()">✕</button>
           </div>
         </div>
+        <div id="qwa-auto-warn" class="hidden" style="background:#FEF3C7;color:#92400E;font-size:.78rem;padding:7px 12px;display:none;align-items:center;gap:6px;border-bottom:1px solid #FDE68A">⚠ Chat adivinado por coincidencia de nombre, no por el número — puede ser otra persona con el mismo nombre. <button class="lm-bulk-ghost" style="margin-left:auto;padding:2px 8px;flex-shrink:0" onclick="QuickWaModule.vincularAbrir()">¿No es? Vincular otra</button></div>
         <div class="qwa-panel__msgs" id="qwa-messages"><div class="clients-loading"><div class="clients-spin"></div></div></div>
         <div id="qwa-quote" class="rchat-quote hidden"></div>
         <div id="qwa-img-preview" class="wa-img-prev hidden"></div>
