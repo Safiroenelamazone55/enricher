@@ -150,8 +150,11 @@ body {
 }
 
 /* Ocultar/mostrar manual del panel — simple y sin intentar mantener una
-   versión "solo íconos" (eso es lo que rompía .sidebar--collapsed). */
-.sidebar--hidden {
+   versión "solo íconos" (eso es lo que rompía .sidebar--collapsed).
+   Especificidad: #sidebar (más abajo en el archivo) fija width/min-width
+   con un selector de id — una clase sola no le gana en la cascada, así que
+   este selector también necesita el id para pisarlo de verdad. */
+#sidebar.sidebar--hidden {
   width: 0; min-width: 0; padding: 0; border-right: none; overflow: hidden;
 }
 /* Manija fija: vive FUERA de #sidebar (ver index.html) para no depender de
@@ -12431,7 +12434,12 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .cant-flabel--row > span.cant-flabel__lbl { min-width: 84px; flex-shrink: 0; }
 .cant-flabel--row select, .cant-flabel--row .form-input { flex: 1; }
 .cant-copy-row { display: flex; gap: 8px; align-items: stretch; }
-.cant-copy-row textarea { flex: 1; }
+/* Alto fijo e igual entre "Datos de la empresa" e "Instrucción completa" —
+   antes cada textarea tenía su propia manija de resize (resize: vertical
+   heredado de .form-input), así que una se podía quedar más alta que la
+   otra y desalinear el modal. Pedido explícito 2026-09-16: "no más grande,
+   causa desorden visual". */
+.cant-copy-row textarea { flex: 1; height: 96px; resize: none; }
 .cant-copy-row__btn { flex-shrink: 0; width: 34px; border: 1px solid var(--border, #EAE7E2); background: #fff; border-radius: 0; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text2, #45586A); }
 .cant-copy-row__btn:hover { background: var(--brand-ll, #F1EFEB); }
 .cant-import-hint { color: var(--muted, #B4AFA8); font-size: .76rem; flex: 1 1 260px; }
