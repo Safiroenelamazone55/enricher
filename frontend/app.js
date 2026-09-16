@@ -18900,6 +18900,7 @@ const LeadManagerModule = (() => {
   let _calRef = null;         // mes mostrado en el calendario (Date al día 1)
   let _section = 'dashboard'; // sección activa del workspace
   let _lmBootRestored = false; // solo restaura la última sección UNA vez por carga de página, no en cada clic a Outreach
+  let _lmRichBootRestored = false; // idem, para _lmRestoreViewState (necesita _contacts/_sequences ya cargados)
   let _activeClient = null;   // id del cliente outbound en detalle
   let _activeSeq = null;      // id de la secuencia en editor
   let _lastDone = null;       // { seqId, cid } último paso marcado hecho → para "Deshacer"
@@ -19003,7 +19004,12 @@ const LeadManagerModule = (() => {
       if (!Array.isArray(_lmTpls)) _lmTpls = [];
       if (!Array.isArray(_mailboxes)) _mailboxes = [];
     } catch (e) { console.warn('[lm] load error:', e.message); _data = []; _clients = []; _campaigns = []; _sequences = []; _steps = []; _activities = []; }
-    _renderBody();                              // repinta con los datos ya cargados, misma sección — sin saltos
+    // La tarea/secuencia/cliente exactos donde se estaba solo se pueden reconstruir
+    // ACÁ — recién ahora _contacts/_sequences/_steps ya están cargados. Solo una
+    // vez por carga de página (igual que el restore de _section de arriba).
+    let _richRestored = false;
+    if (!_lmRichBootRestored) { _lmRichBootRestored = true; _richRestored = await _lmRestoreViewState(); }
+    if (!_richRestored) _renderBody();           // repinta con los datos ya cargados, misma sección — sin saltos
     _loadNavCounts();                          // insignias visibles desde el primer momento
     if (_section === 'dashboard') _loadToday(); // card Hoy del motor de envío
   }
@@ -19108,8 +19114,46 @@ const LeadManagerModule = (() => {
   }
   function openClient(id) { _activeClient = id; _section = 'client'; _refreshNav(); _renderBody(); if (_mailboxes === null) _mbReload(); if (_waClientIds === null) _waStatusReload(); }
   function _refreshNav() { const n = $('lm2-nav-list'); if (n) n.innerHTML = _navHtml(); }
+  // Recordar en qué tarea/secuencia/cliente se estaba parada, para que un F5
+  // vuelva ahí en vez de mandar de regreso a la lista — mismo patrón que ya
+  // se usa en Cantera (_saveViewState/_restoreViewState). Pedido explícito
+  // 2026-09-16: "estaba haciendo la tarea, hice refresh... entra a la lista
+  // de secuencias... no debería perderse". sessionStorage: solo dura esta
+  // pestaña, no queda pegado entre sesiones distintas. El restore de verdad
+  // (_lmRestoreViewState) corre DESPUÉS de cargar _contacts/_sequences en
+  // load() — antes de eso ni seqTaskOpen ni openContactPage tienen con qué
+  // reconstruir la vista.
+  const LM_STATE_KEY = 'lm_last_view';
+  function _lmSaveViewState() {
+    try {
+      if (_section === 'contact-view' && _contactView) {
+        sessionStorage.setItem(LM_STATE_KEY, _cpTaskCtx
+          ? JSON.stringify({ kind: 'task', seqId: _cpTaskCtx.seqId, contactId: _contactView })
+          : JSON.stringify({ kind: 'contact', contactId: _contactView }));
+      } else if (_section === 'sequence' && _activeSeq) {
+        sessionStorage.setItem(LM_STATE_KEY, JSON.stringify({ kind: 'sequence', seqId: _activeSeq, tab: _seqTab }));
+      } else if (_section === 'client' && _activeClient) {
+        sessionStorage.setItem(LM_STATE_KEY, JSON.stringify({ kind: 'client', clientId: _activeClient }));
+      } else {
+        sessionStorage.removeItem(LM_STATE_KEY);
+      }
+    } catch (_) {}
+  }
+  async function _lmRestoreViewState() {
+    let saved = null;
+    try { saved = JSON.parse(sessionStorage.getItem(LM_STATE_KEY) || 'null'); } catch (_) {}
+    if (!saved) return false;
+    try {
+      if (saved.kind === 'task' && saved.seqId && saved.contactId) { await seqTaskOpen(saved.seqId, saved.contactId); return _section === 'contact-view'; }
+      if (saved.kind === 'contact' && saved.contactId) { openContactPage(saved.contactId); return true; }
+      if (saved.kind === 'sequence' && saved.seqId) { openSequence(saved.seqId); if (saved.tab) seqTab(saved.tab); return true; }
+      if (saved.kind === 'client' && saved.clientId) { openClient(saved.clientId); return true; }
+    } catch (_) {}
+    return false;
+  }
   function _renderBody() {
     const body = $('lm2-body'); if (!body) return;
+    _lmSaveViewState();
     if      (_section === 'dashboard') body.innerHTML = _vDashboard();
     else if (_section === 'clients')   body.innerHTML = _vClients();
     else if (_section === 'client')    body.innerHTML = _vClientDetail(_activeClient);
