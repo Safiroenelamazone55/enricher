@@ -10455,12 +10455,16 @@ app.get('/api/wa/connections/:id/resolve-contact/:contactId', requireAuth, async
       `SELECT chat_jid FROM wa_jid_links WHERE connection_id=$1 AND contact_id=$2`, [req.params.id, contactId]);
     if (linked) return res.json({ jid: linked.chat_jid, source: 'link' });
 
+    // Si YA tenemos el número real del contacto, ese es el JID correcto — punto.
+    // Antes, si todavía no había mensajes previos a ese número exacto (el caso
+    // normal de un número recién agregado), se caía igual al adivinador por
+    // nombre de más abajo — pensado solo para cuando NO se conoce el número
+    // real (WhatsApp entrega un "@lid" interno en vez del número). Reportado en
+    // vivo 2026-09-16: con el número recién puesto, seguía abriendo el chat de
+    // OTRA persona con el mismo nombre. El adivinador por nombre ahora solo
+    // corre si de verdad no hay ningún número que usar.
     const phoneJid = telefono ? `${telefono}@s.whatsapp.net` : null;
-    if (phoneJid) {
-      const { rows: [hay] } = await pool.query(
-        `SELECT 1 FROM wa_messages WHERE connection_id=$1 AND chat_jid=$2 LIMIT 1`, [req.params.id, phoneJid]);
-      if (hay) return res.json({ jid: phoneJid, source: 'telefono' });
-    }
+    if (phoneJid) return res.json({ jid: phoneJid, source: 'telefono' });
 
     const { rows: [c] } = await pool.query(
       `SELECT nombre, apellido FROM lm_contacts WHERE id=$1 AND user_id=$2`, [contactId, req.workspaceOwnerId]);
