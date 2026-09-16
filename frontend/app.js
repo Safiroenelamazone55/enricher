@@ -6330,15 +6330,22 @@ const CanteraModule = (() => {
   // seguir escribiendo la nota después de elegir el Tier).
   async function saveManualValidation(companyId) {
     const tier = document.getElementById('cant-manual-tier')?.value;
+    const nota = document.getElementById('cant-manual-nota')?.value || '';
+    const confianza = document.getElementById('cant-manual-confianza')?.value || '';
+    const prioridad = document.getElementById('cant-manual-prioridad')?.value || '';
     // Antes se quedaba en silencio si aún no se elegía Tier (para que la Nota
     // no se guardara sola al perder el foco antes de decidir) — pero eso
     // significaba que Confianza/Prioridad/Nota tampoco se guardaban aunque sí
     // se hubieran tocado, sin ningún aviso ("lo quise guardar y no
-    // funcionaba", reportado 2026-09-07). Ahora sí avisa qué falta.
-    if (!tier) { showBanner('Elige un Tier (o Descartar) para guardar — Confianza, Prioridad y Nota se guardan junto con él', 'info'); return; }
-    const nota = document.getElementById('cant-manual-nota')?.value || '';
-    const confianza = document.getElementById('cant-manual-confianza')?.value || '';
-    const prioridad = document.getElementById('cant-manual-prioridad')?.value || '';
+    // funcionaba", reportado 2026-09-07). Ahora sí avisa qué falta — pero solo
+    // si de verdad hay algo que guardar; si no, este onblur se disparaba
+    // igual al pasar el foco por la Nota vacía camino al botón "Siguiente",
+    // mostrando la advertencia sin que Jenny hubiera tocado nada (reportado
+    // en vivo 2026-09-16: "se ve apagado y no se puede continuar").
+    if (!tier) {
+      if (nota.trim() || confianza || prioridad) showBanner('Elige un Tier (o Descartar) para guardar — Confianza, Prioridad y Nota se guardan junto con él', 'info');
+      return;
+    }
     try {
       const res = await apiFetch(`${API}/cantera/batches/${_current.id}/companies/${companyId}/validar-manual`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tier_clave: tier, nota, confianza, prioridad }),
@@ -7518,10 +7525,13 @@ const CanteraMesaModule = (() => {
   }
   async function saveManualValidation(companyId, batchId) {
     const tier = document.getElementById('mesa-manual-tier')?.value;
-    if (!tier) { showBanner('Elige un Tier (o Descartar) para guardar — Confianza, Prioridad y Nota se guardan junto con él', 'info'); return; }
     const nota = document.getElementById('mesa-manual-nota')?.value || '';
     const confianza = document.getElementById('mesa-manual-confianza')?.value || '';
     const prioridad = document.getElementById('mesa-manual-prioridad')?.value || '';
+    if (!tier) {
+      if (nota.trim() || confianza || prioridad) showBanner('Elige un Tier (o Descartar) para guardar — Confianza, Prioridad y Nota se guardan junto con él', 'info');
+      return;
+    }
     try {
       const res = await apiFetch(`${API}/cantera/batches/${batchId}/companies/${companyId}/validar-manual`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tier_clave: tier, nota, confianza, prioridad }) });
       const d = await res.json();
