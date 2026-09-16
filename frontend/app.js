@@ -14,6 +14,16 @@ console.log('[Enricher] app.js v2026-05-28-B loaded');
 document.addEventListener('wheel', function(e) {
   const wrap = e.target.closest && e.target.closest('.cant-tablewrap');
   if (!wrap) return;
+  // Shift+rueda es scroll horizontal explícito: el navegador ya lo aplica
+  // como tal (mueve la tabla a los lados) pero el WheelEvent.deltaY que
+  // recibimos sigue trayendo la magnitud completa (deltaX suele quedar en 0
+  // con un mouse normal, no como en un trackpad) — sin este corte, el chequeo
+  // de abajo lo confundía con un gesto vertical y reenviaba ese deltaY a la
+  // página entera, bajándola a la vez que la tabla se movía a la derecha.
+  // Reportado en vivo 2026-09-16: "con shift... se mueve un poco hacia la
+  // derecha y también se baja, no hace bien la función de ir a la derecha
+  // únicamente".
+  if (e.shiftKey) return;
   // Gesto horizontal (trackpad deslizando la tabla a los lados) trae algo de
   // deltaY "de ruido" — reenviarlo también hacía que la página bajara sola
   // mientras se deslizaba de lado (reportado 2026-09-07). Solo reenviar
