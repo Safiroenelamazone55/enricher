@@ -5837,11 +5837,15 @@ const CanteraModule = (() => {
       ${_step === 4 ? `<div class="cant-section">
         ${(() => {
           const hasFiltros = _paso1Filtro || _tierFiltro.size || _prioFiltro.size || _minContactos || _sinPrioridad || _auditoriaFiltro || _paisFiltro.size || _industriaFiltro.size || _tamanoFiltro.size || _domFaltante || _dominioQ || _paso2DescFiltro.size;
-          if (!_coSel.size && !hasFiltros) return '';
+          const filtroGuardado = _loadFiltroGuardado();
+          if (!_coSel.size && !hasFiltros && !filtroGuardado) return '';
           const paso1Lbl = { aprobado: 'aprobado', descartado: 'descartado', vacio: 'vacío' };
           return `<div class="cant-results-bar">
           <span class="cant-count">${_coSel.size ? `${_coSel.size} seleccionada(s)` : ''}${_paso1Filtro ? ` · Paso 1: ${paso1Lbl[_paso1Filtro]}` : ''}${_tierFiltro.size ? ` · Tier: ${[..._tierFiltro].join(', ')}` : ''}${_prioFiltro.size ? ` · Prioridad: ${[..._prioFiltro].join(', ')}` : ''}${_minContactos ? ` · ${_minContactos}+ contactos` : ''}${_sinPrioridad ? ' · sin priorizar' : ''}${_auditoriaFiltro ? ` · auditoría: ${_auditoriaFiltro === 'sin_auditar' ? 'sin auditar' : _auditoriaFiltro === 'de_acuerdo' ? 'confirmadas' : 'en desacuerdo'}` : ''}${_paisFiltro.size ? ` · País: ${[..._paisFiltro].join(', ')}` : ''}${_industriaFiltro.size ? ` · Industria: ${[..._industriaFiltro].join(', ')}` : ''}${_tamanoFiltro.size ? ` · Tamaño: ${[..._tamanoFiltro].join(', ')}` : ''}${_domFaltante ? ' · sin dominio' : ''}${_dominioQ ? ` · dominio contiene "${esc(_dominioQ)}"` : ''}${_paso2DescFiltro.size ? ` · Paso 2 descartado: ${[..._paso2DescFiltro].map(v => v === 'descartado' ? 'IA' : 'manual').join(', ')}` : ''}</span>
           <span class="cant-results-total">${hasFiltros ? `${filteredCompanies.length} resultado${filteredCompanies.length === 1 ? '' : 's'}` : ''}</span>
+          ${hasFiltros ? `<button class="btn btn--ghost btn--sm" onclick="CanteraModule.guardarFiltroActual()" title="Guardar este filtro para este borrador">💾 Guardar filtro</button>` : ''}
+          ${filtroGuardado ? `<button class="btn btn--ghost btn--sm" onclick="CanteraModule.aplicarFiltroGuardado()" title="Volver a aplicar el filtro guardado de este borrador">Aplicar filtro guardado</button>
+          <button class="cant-x" title="Eliminar filtro guardado" onclick="CanteraModule.borrarFiltroGuardado()">✕</button>` : ''}
           ${hasFiltros ? `<button class="btn btn--ghost btn--sm" onclick="CanteraModule.resetFiltros()">Limpiar filtros</button>` : ''}
         </div>`;
         })()}
@@ -6439,6 +6443,42 @@ const CanteraModule = (() => {
     _domFaltante = false; _dominioQ = ''; _paso2DescFiltro = new Set();
     _cantPageIdx = 0; _paint();
   }
+  // Guardar/aplicar el filtro actual por borrador — pedido explícito
+  // 2026-09-16: "quiero guardar filtros aplicados, por draft de cantera así
+  // vuelvo y los aplico nuevamente cuando quiero". Distinto de _saveViewState
+  // (que es automático y por PESTAÑA, para sobrevivir un F5) — esto es manual,
+  // por localStorage (sobrevive entre sesiones) y un filtro guardado por
+  // borrador, no uno solo global.
+  function _filtroKey() { return `cantera_filtro_${_current.id}`; }
+  function _loadFiltroGuardado() {
+    try { return JSON.parse(localStorage.getItem(_filtroKey()) || 'null'); } catch (_) { return null; }
+  }
+  function guardarFiltroActual() {
+    try {
+      localStorage.setItem(_filtroKey(), JSON.stringify({
+        paso1Filtro: _paso1Filtro, tierFiltro: [..._tierFiltro], prioFiltro: [..._prioFiltro],
+        minContactos: _minContactos, sinPrioridad: _sinPrioridad, auditoriaFiltro: _auditoriaFiltro,
+        paisFiltro: [..._paisFiltro], industriaFiltro: [..._industriaFiltro], tamanoFiltro: [..._tamanoFiltro],
+        domFaltante: _domFaltante, dominioQ: _dominioQ, paso2DescFiltro: [..._paso2DescFiltro],
+      }));
+      showBanner('✓ Filtro guardado — "Aplicar filtro guardado" lo trae de vuelta cuando quieras', 'success');
+      _paint();
+    } catch (e) { showBanner('Error al guardar el filtro: ' + e.message, 'error'); }
+  }
+  function aplicarFiltroGuardado() {
+    const f = _loadFiltroGuardado();
+    if (!f) { showBanner('No hay ningún filtro guardado para este borrador', 'info'); return; }
+    _paso1Filtro = f.paso1Filtro || ''; _tierFiltro = new Set(f.tierFiltro || []); _prioFiltro = new Set(f.prioFiltro || []);
+    _minContactos = f.minContactos || 0; _sinPrioridad = !!f.sinPrioridad; _auditoriaFiltro = f.auditoriaFiltro || '';
+    _paisFiltro = new Set(f.paisFiltro || []); _industriaFiltro = new Set(f.industriaFiltro || []); _tamanoFiltro = new Set(f.tamanoFiltro || []);
+    _domFaltante = !!f.domFaltante; _dominioQ = f.dominioQ || ''; _paso2DescFiltro = new Set(f.paso2DescFiltro || []);
+    _cantPageIdx = 0; _paint();
+  }
+  function borrarFiltroGuardado() {
+    try { localStorage.removeItem(_filtroKey()); } catch (_) {}
+    showBanner('Filtro guardado eliminado', 'info');
+    _paint();
+  }
   let _expanded = new Set();
   let _contactsByCompany = {};
   // Bug encontrado 2026-09-05 al verificar el reordenamiento de columnas: el guard
@@ -6855,7 +6895,8 @@ const CanteraModule = (() => {
   }
 
   return { render, open, openCreate, backToList, saveFiltros, runFiltros, setPaso1Filtro, setDominioQ, _filterSubPanel, toggleTierFiltro, togglePrioFiltro, setMinContactos, toggleSinPrioridad, setAuditoriaFiltro,
-    togglePaisFiltro, toggleIndustriaFiltro, toggleTamanoFiltro, toggleDomFaltante, togglePaso2DescFiltro, resetFiltros, moreMenu, remove, saveAsTemplate,
+    togglePaisFiltro, toggleIndustriaFiltro, toggleTamanoFiltro, toggleDomFaltante, togglePaso2DescFiltro, resetFiltros,
+    guardarFiltroActual, aplicarFiltroGuardado, borrarFiltroGuardado, moreMenu, remove, saveAsTemplate,
     toggleExpand, addTier, removeTier, setTierField, addPuesto, removePuesto, setPuestoField, saveCriterio, setMotorIA, runValidacion,
     openPromote, closePromote, doPromote, openSendSeq, closeSendSeq, doSendSeq,
     openScope, closeScope, scopeMaybeCreate, saveScope, setStep,
