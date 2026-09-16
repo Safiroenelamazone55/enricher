@@ -7707,10 +7707,12 @@ app.post('/api/cantera/batches/:id/promote', requireAuth, async (req, res) => {
   const outboundClientId = parseInt(b.outbound_client_id);
   if (!outboundClientId) return res.status(400).json({ error: 'Elige a qué cliente pertenecen estas empresas' });
   const campaignId = b.campaign_id ? parseInt(b.campaign_id) : null;
+  const sequenceId = b.sequence_id ? parseInt(b.sequence_id) : null;
   const includeRespaldo = b.include_respaldo !== false;
   const companyIds = Array.isArray(b.company_ids) ? b.company_ids.map(Number).filter(Boolean) : [];
 
   const cl = await pool.connect();
+  let lmContactIds = [];
   try {
     await cl.query('BEGIN');
     const { rows: [batch] } = await cl.query(
@@ -7767,6 +7769,7 @@ app.post('/api/cantera/batches/:id/promote', requireAuth, async (req, res) => {
         }
         await cl.query(`UPDATE cantera_contacts SET promoted_contact_id=$1 WHERE id=$2`, [contactId, k.id]);
         if (campaignId) await cl.query(`INSERT INTO lm_contact_campaigns (user_id,contact_id,campaign_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`, [uid, contactId, campaignId]);
+        lmContactIds.push(contactId);
         contactsPromoted++;
       }
     }
@@ -7775,7 +7778,21 @@ app.post('/api/cantera/batches/:id/promote', requireAuth, async (req, res) => {
       await cl.query(`UPDATE cantera_batches SET estado='promovido', outbound_client_id=$1, campaign_id=$2, promoted_at=NOW() WHERE id=$3`, [outboundClientId, campaignId, batchId]);
     }
     await cl.query('COMMIT');
-    res.json({ companiesPromoted, contactsPromoted });
+
+    // Enrolar en la secuencia elegida (opcional, ej. la que ya se creó como
+    // borrador desde Cantera) — pedido explícito 2026-09-16: mover al CRM y
+    // enrolar en un solo paso, sin depender del botón aparte "Enviar a
+    // secuencia". Al enrolar de verdad, esa secuencia deja de ser un borrador
+    // de Cantera y pasa a verse normal en Outreach.
+    let enrolled = 0;
+    if (sequenceId && lmContactIds.length) {
+      try {
+        const r = await _lmAddMembershipCall(uid, 'sequence', lmContactIds, sequenceId);
+        enrolled = r.added || 0;
+        await pool.query(`UPDATE sequences SET origen_cantera=FALSE WHERE id=$1 AND user_id=$2`, [sequenceId, uid]);
+      } catch (e) { return res.json({ companiesPromoted, contactsPromoted, enrolled: 0, enrollError: e.message }); }
+    }
+    res.json({ companiesPromoted, contactsPromoted, enrolled });
   } catch (err) {
     await cl.query('ROLLBACK').catch(() => {});
     console.error('[cantera] promote', err.message);
@@ -7866,7 +7883,10 @@ app.post('/api/cantera/batches/:id/send-to-sequence', requireAuth, async (req, r
 
     let enroll = { added: 0 };
     if (lmContactIds.length) {
-      try { enroll = await _lmAddMembershipCall(uid, 'sequence', lmContactIds, sequenceId); }
+      try {
+        enroll = await _lmAddMembershipCall(uid, 'sequence', lmContactIds, sequenceId);
+        await pool.query(`UPDATE sequences SET origen_cantera=FALSE WHERE id=$1 AND user_id=$2`, [sequenceId, uid]);
+      }
       catch (e) { return res.json({ companiesPromoted, contactsPromoted, enrolled: 0, enrollError: e.message }); }
     }
     res.json({ companiesPromoted, contactsPromoted, enrolled: enroll.added || 0 });
@@ -8013,9 +8033,9 @@ app.post('/api/sequences', requireAuth, async (req, res) => {
     const sendDays = _sanSendDays(b.send_days);
     const dLim = Math.max(0, parseInt(b.daily_limit) || 0);
     const { rows } = await pool.query(`
-      INSERT INTO sequences (user_id,outbound_client_id,campaign_id,nombre,objetivo,estado,timezone,drip_per_day,send_days,starts_on,daily_limit,mercado,icp,notas,send_mode,send_interval_min,auto_activar,preferred_channel,target_role_1,target_role_2,nurture_days)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21) RETURNING *
-    `, [req.workspaceOwnerId, b.outbound_client_id || null, b.campaign_id || null, b.nombre.trim(), b.objetivo || '', estado, b.timezone || '', drip, sendDays, _sanDate(b.starts_on), dLim, b.mercado || '', b.icp || '', b.notas || '', _sanSendMode(b.send_mode), _sanInterval(b.send_interval_min), !!b.auto_activar, _sanPreferredChannel(b.preferred_channel), b.target_role_1 || '', b.target_role_2 || '', _sanNurtureDays(b.nurture_days)]);
+      INSERT INTO sequences (user_id,outbound_client_id,campaign_id,nombre,objetivo,estado,timezone,drip_per_day,send_days,starts_on,daily_limit,mercado,icp,notas,send_mode,send_interval_min,auto_activar,preferred_channel,target_role_1,target_role_2,nurture_days,origen_cantera)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22) RETURNING *
+    `, [req.workspaceOwnerId, b.outbound_client_id || null, b.campaign_id || null, b.nombre.trim(), b.objetivo || '', estado, b.timezone || '', drip, sendDays, _sanDate(b.starts_on), dLim, b.mercado || '', b.icp || '', b.notas || '', _sanSendMode(b.send_mode), _sanInterval(b.send_interval_min), !!b.auto_activar, _sanPreferredChannel(b.preferred_channel), b.target_role_1 || '', b.target_role_2 || '', _sanNurtureDays(b.nurture_days), !!b.origen_cantera]);
     res.status(201).json(rows[0]);
   } catch (err) { console.error('[seq] POST error:', err.message); res.status(500).json({ error: 'Error al crear secuencia' }); }
 });

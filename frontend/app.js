@@ -6796,7 +6796,12 @@ const CanteraModule = (() => {
     const nombre = prompt(`Nombre de la nueva ${_SCOPE_LBL[kind]} (se crea como borrador — no se envía nada a Outreach)`);
     if (!nombre || !nombre.trim()) { sel.value = ''; return; }
     try {
-      const res = await apiFetch(`${API}/${_SCOPE_EP[kind]}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre: nombre.trim() }) });
+      // La secuencia (no cliente/campaña) creada desde aquí queda marcada
+      // origen_cantera=true — Outreach la muestra "en gris"/bloqueada hasta
+      // que de verdad se le enrolen contactos vía "Mover al CRM"/"Enviar a
+      // secuencia" (ver POST /sequences y el UPDATE al enrolar).
+      const body = kind === 'sequence' ? { nombre: nombre.trim(), origen_cantera: true } : { nombre: nombre.trim() };
+      const res = await apiFetch(`${API}/${_SCOPE_EP[kind]}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || 'Error');
       const o = document.createElement('option'); o.value = d.id; o.textContent = d.nombre;
@@ -6831,13 +6836,19 @@ const CanteraModule = (() => {
     const _promoteScope = _coSel.size ? _companies.filter(c => _coSel.has(c.id)) : _companies;
     const calificadas = _promoteScope.filter(c => c.paso2_estado === 'aprobado' || c.paso2_estado === 'validacion_manual').length;
     if (!calificadas) { showBanner(_coSel.size ? 'Ninguna de las empresas marcadas está calificada (paso 2) todavía' : 'Todavía no hay empresas calificadas (paso 2) para mover', 'info'); return; }
-    const [clientes, campanas] = await Promise.all([
+    const [clientes, campanas, secuencias] = await Promise.all([
       apiFetch(`${API}/outbound-clients`).then(r => r.ok ? r.json() : []),
       apiFetch(`${API}/campaigns`).then(r => r.ok ? r.json() : []),
+      apiFetch(`${API}/sequences`).then(r => r.ok ? r.json() : []),
     ]);
     document.getElementById('cant-promote-modal')?.remove();
     const m = document.createElement('div'); m.id = 'cant-promote-modal'; m.className = 'fin-pi-backdrop';
     m.onclick = e => { if (e.target === m) closePromote(); };
+    // Secuencia — pedido explícito 2026-09-16: "necesito verlo aquí para
+    // poder importarlo" (la secuencia creada desde el propio borrador de
+    // Cantera no aparecía en ningún selector de "Mover al CRM"). Opcional:
+    // sin elegir nada, se mueve al CRM sin enrolar en ninguna secuencia,
+    // exactamente como antes.
     m.innerHTML = `<div class="fin-pi-box lm-flt-box" style="max-width:420px">
       <div class="fin-pi-box__hd"><h3>Mover al CRM</h3><button class="fin-pi-x" onclick="CanteraModule.closePromote()">✕</button></div>
       <div class="flt-body" style="display:flex;flex-direction:column;gap:12px">
@@ -6849,6 +6860,10 @@ const CanteraModule = (() => {
         <label class="cant-flabel">Campaña<span class="field-note">opcional</span><select id="cant-pr-camp" class="form-input">
           <option value="">Sin campaña</option>
           ${campanas.map(c => `<option value="${c.id}"${String(_current.campaign_id) === String(c.id) ? ' selected' : ''}>${esc(c.nombre)}</option>`).join('')}
+        </select></label>
+        <label class="cant-flabel">Secuencia<span class="field-note">opcional — enrola de una vez a los contactos movidos</span><select id="cant-pr-seq" class="form-input">
+          <option value="">Sin secuencia</option>
+          ${secuencias.map(s => `<option value="${s.id}"${String(_current.sequence_id) === String(s.id) ? ' selected' : ''}>${esc(s.nombre)}</option>`).join('')}
         </select></label>
         <label style="display:flex;align-items:center;gap:6px;font-size:.84rem"><input type="checkbox" id="cant-pr-resp" checked> Incluir también los contactos "Respaldo" (no solo "Decide")</label>
       </div>
@@ -6863,9 +6878,10 @@ const CanteraModule = (() => {
     const clientId = document.getElementById('cant-pr-client')?.value;
     if (!clientId) { showBanner('Elige a qué cliente pertenecen', 'info'); return; }
     const campId = document.getElementById('cant-pr-camp')?.value || null;
+    const seqId = document.getElementById('cant-pr-seq')?.value || null;
     const includeResp = !!document.getElementById('cant-pr-resp')?.checked;
     try {
-      const body = { outbound_client_id: clientId, campaign_id: campId, include_respaldo: includeResp };
+      const body = { outbound_client_id: clientId, campaign_id: campId, sequence_id: seqId, include_respaldo: includeResp };
       if (_coSel.size) body.company_ids = [..._coSel];
       const res = await apiFetch(`${API}/cantera/batches/${_current.id}/promote`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -6874,7 +6890,7 @@ const CanteraModule = (() => {
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || 'Error');
       closePromote();
-      showBanner(`✓ ${d.companiesPromoted} empresa(s) y ${d.contactsPromoted} contacto(s) movidos al CRM`, 'success');
+      showBanner(`✓ ${d.companiesPromoted} empresa(s) y ${d.contactsPromoted} contacto(s) movidos al CRM${d.enrolled ? ` — ${d.enrolled} enrolado(s) en la secuencia` : ''}`, 'success');
       _coSel = new Set();
       backToList(); await load(); _paint();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
@@ -19308,6 +19324,18 @@ const LeadManagerModule = (() => {
       steps.forEach(st => { const k = st.canal || 'email'; canalCounts[k] = (canalCounts[k] || 0) + 1; });
       const mainCanal = Object.keys(canalCounts).sort((a, b) => canalCounts[b] - canalCounts[a])[0];
       const mt = mainCanal ? (_TOUCH[mainCanal] || _TOUCH.email) : null;
+      // Secuencia creada desde Cantera y aún sin contactos enrolados de
+      // verdad — se ve "en gris" y no se abre a editar hasta que "Mover al
+      // CRM"/"Enviar a secuencia" la active. Pedido explícito 2026-09-16:
+      // "debería haber estado como en plomito... y no debería haber sido
+      // editable... porque todavía recién se está trabajando desde cantera".
+      if (s.origen_cantera) return `<tr class="ldh-row ldh-row--locked" onclick="event.stopPropagation();showBanner('Esta secuencia todavía se está armando desde Cantera — se activa sola cuando muevas sus contactos al CRM','info')" title="Borrador desde Cantera — se activa al mover sus contactos al CRM">
+        <td><div class="ldh-name">${esc(s.nombre)} <span class="tag" style="margin-left:4px">Borrador (Cantera)</span></div><div class="ldh-sub">${cmp ? esc(cmp) : '&nbsp;'}</div></td>
+        <td class="ldh-dim">${cli ? esc(cli) : '—'}</td>
+        <td class="sq-estado"><span class="ldh-none">Aún sin contactos</span></td>
+        <td><span class="ldh-none">—</span></td>
+        <td class="ldh-dim">${steps.length ? `${steps.length} paso${steps.length !== 1 ? 's' : ''}` : '—'}</td>
+      </tr>`;
       return `<tr class="ldh-row" onclick="LeadManagerModule.openSequence(${s.id})">
         <td><div class="ldh-name">${esc(s.nombre)}</div><div class="ldh-sub">${cmp ? esc(cmp) : '&nbsp;'}</div></td>
         <td class="ldh-dim">${cli ? esc(cli) : '—'}</td>

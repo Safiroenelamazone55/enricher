@@ -14298,6 +14298,11 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
 .ldh-table tr:last-child td { border-bottom: none; }
 .ldh-row { cursor: pointer; transition: background .1s; }
 .ldh-row:hover { background: var(--surface-hover); }
+/* Secuencia-borrador creada desde Cantera, todavía sin contactos reales —
+   "en gris", no invita a hacer clic para editar (ver _sqPaint). */
+.ldh-row--locked { opacity: .55; cursor: default; }
+.ldh-row--locked:hover { background: none; }
+.ldh-row--locked .ldh-name { color: var(--text-muted); }
 .ldh-name { font-weight: 600; font-size: .85rem; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ldh-sub { font-size: .74rem; color: var(--text-muted); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ldh-dim { color: var(--text-secondary); font-size: .8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

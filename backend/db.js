@@ -821,6 +821,16 @@ async function initDb() {
     // retroactivamente en secuencias existentes, cada una lo prende a propósito.
     await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS nurture_days INTEGER;`);
 
+    // Secuencia creada como anotación rápida desde Cantera (scopeMaybeCreate,
+    // "+ Crear secuencia nueva (borrador)…") mientras todavía se está armando
+    // el borrador de prospección — pedido explícito 2026-09-16: "si esta
+    // secuencia debería ser visible en el otro módulo [Outreach]... debería
+    // haber estado como en plomito... y no debería haber sido editable...
+    // porque todavía recién se está trabajando desde cantera". Se apaga solo
+    // (UPDATE en /promote y /send-to-sequence) en cuanto de verdad se le
+    // enrolan contactos — ahí sí "ya estoy enviando datos".
+    await pool.query(`ALTER TABLE sequences ADD COLUMN IF NOT EXISTS origen_cantera BOOLEAN NOT NULL DEFAULT FALSE;`);
+
     // Notificaciones descartadas a mano (pedido 2026-09-02: "Descartar" con doble clic
     // en el panel de Notificaciones) — kind+ref_id identifica la alerta puntual (ej.
     // 'tareas_vencidas'+task.id); se filtra en el próximo cálculo mientras el dato
