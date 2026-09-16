@@ -6267,7 +6267,7 @@ const CanteraModule = (() => {
               <button class="cant-copy-row__btn" title="Copiar datos de la empresa" onclick="CanteraModule.copyManualData()">${_copyIconSvg()}</button>
             </div>
           </label>
-          <label class="cant-flabel">Instrucción completa<span class="field-note">para pegar en cualquier IA, junto con los datos</span>
+          <label class="cant-flabel">Instrucción completa
             <div class="cant-copy-row">
               <textarea id="cant-manual-instruccion" class="form-input" rows="4" readonly onclick="this.select()">Cargando…</textarea>
               <button class="cant-copy-row__btn" title="Copiar la instrucción completa" onclick="CanteraModule.copyManualInstruccion()">${_copyIconSvg()}</button>
@@ -7463,7 +7463,7 @@ const CanteraMesaModule = (() => {
               <button class="cant-copy-row__btn" title="Copiar datos de la empresa" onclick="CanteraMesaModule.copyManualData()">${_copyIconSvg()}</button>
             </div>
           </label>
-          <label class="cant-flabel">Instrucción completa<span class="field-note">para pegar en cualquier IA, junto con los datos</span>
+          <label class="cant-flabel">Instrucción completa
             <div class="cant-copy-row">
               <textarea id="mesa-manual-instruccion" class="form-input" rows="4" readonly onclick="this.select()">Cargando…</textarea>
               <button class="cant-copy-row__btn" title="Copiar la instrucción completa" onclick="CanteraMesaModule.copyManualInstruccion()">${_copyIconSvg()}</button>
