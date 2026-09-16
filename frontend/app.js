@@ -5860,7 +5860,7 @@ const CanteraModule = (() => {
           <div class="cant-progress" style="flex:1;max-width:200px"><div class="cant-progress__bar" style="width:${_jobProgress.total ? Math.round((_jobProgress.done / _jobProgress.total) * 100) : 0}%"></div></div>
         </div>` : ''}
         <div class="lm-dt-wrap dg-dt-wrap cant-tablewrap"><table class="clients-table dg-table sel-on cant-restbl" style="table-layout:auto">
-          <thead><tr><th class="lm-ck-col"><input type="checkbox" class="lm-ck" ${_companies.length && _companies.every(c => _coSel.has(c.id)) ? 'checked' : ''} onclick="CanteraModule.toggleCoSelAll(this.checked)"></th><th class="dg-cell--frozen" id="cant-th-nombre">Nombre<span class="cant-colresize" onmousedown="CanteraModule.startColResize(event)"></span></th>${visCols.map(col => `<th>${esc(col.label)}</th>`).join('')}<th>Contacto</th><th>Puesto</th><th>Prioridad</th></tr></thead>
+          <thead><tr><th class="lm-ck-col"><input type="checkbox" class="lm-ck" ${filteredCompanies.length && filteredCompanies.every(c => _coSel.has(c.id)) ? 'checked' : ''} onclick="CanteraModule.toggleCoSelAll(this.checked)"></th><th class="dg-cell--frozen" id="cant-th-nombre">Nombre<span class="cant-colresize" onmousedown="CanteraModule.startColResize(event)"></span></th>${visCols.map(col => `<th>${esc(col.label)}</th>`).join('')}<th>Contacto</th><th>Puesto</th><th>Prioridad</th></tr></thead>
           <tbody>${rows || `<tr><td colspan="${emptyColspan}" class="cp-empty2">Importa un archivo para empezar.</td></tr>`}</tbody>
         </table></div>
         ${_cantPagerHtml(filteredCompanies.length)}
@@ -5949,7 +5949,11 @@ const CanteraModule = (() => {
   }
   function setStep(n) { _step = n; _paint(); }
   function toggleCoSel(id, checked) { if (checked) _coSel.add(id); else _coSel.delete(id); _paint(); }
-  function toggleCoSelAll(checked) { if (checked) _companies.forEach(c => _coSel.add(c.id)); else _coSel.clear(); _paint(); }
+  // El check del encabezado debe marcar solo lo que el filtro activo está
+  // mostrando, no TODO el borrador — reportado en vivo 2026-09-16: "si solo
+  // tengo 30 resultados, por qué dice que seleccioné más de 1000" (marcaba
+  // las 1397 empresas del borrador aunque el filtro dejara solo 30 visibles).
+  function toggleCoSelAll(checked) { const list = _filteredCompaniesList(); if (checked) list.forEach(c => _coSel.add(c.id)); else list.forEach(c => _coSel.delete(c.id)); _paint(); }
   // Columna Nombre redimensionable a mano (pedido explícito 2026-09-06) — arrastra
   // el tirador del encabezado; se guarda como variable CSS en la tabla, solo afecta
   // a la tabla de Resultados de Cantera (.cant-restbl), nunca a otras tablas del CRM.
