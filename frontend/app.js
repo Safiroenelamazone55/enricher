@@ -23172,11 +23172,19 @@ ${foot}
         </div>
       </div>`;
     }
+    // Sin ningún mensaje todavía = correo NUEVO (no una respuesta) — ej. desde
+    // "Email"/el chip del correo en la ficha, pedido explícito 2026-09-17: antes
+    // "mailto:" abría el cliente de correo del sistema, fuera de Nova, sin quedar
+    // asociado a nada. Sin hilo previo no hay "Re: " de dónde sacar el asunto, así
+    // que se pide a mano — ibSend() lo manda como asunto si este input existe.
+    const esNuevo = !(_ibThread?.messages || []).length;
+    const asuntoField = esNuevo ? `<input class="form-input" id="ibx-asunto" placeholder="Asunto…" style="margin-bottom:6px">` : '';
     return `<div class="ibx-replybox">
       ${canSend
         ? `${_ibDestHtml(c)}
            <div class="ibx-tawrap">
-             <textarea class="ibx-ta" id="ibx-ta" rows="3" placeholder="Responder como ${esc(c.buzon)}…"></textarea>
+             ${asuntoField}
+             <textarea class="ibx-ta" id="ibx-ta" rows="3" placeholder="${esNuevo ? `Escribe tu correo como ${esc(c.buzon)}…` : `Responder como ${esc(c.buzon)}…`}"></textarea>
              <div class="ibx-sendgrp">
                <button class="ibx-clock" title="Programar envío" onclick="LeadManagerModule.ibSchedToggle(event)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg></button>
                <button class="btn btn--primary btn--sm" id="ibx-send" onclick="LeadManagerModule.ibSend()">Enviar</button>
@@ -23794,11 +23802,15 @@ ${foot}
     if (_ibSending || !_ibActive) return;
     const ta = document.getElementById('ibx-ta'); const cuerpo = (ta?.value || '').trim();
     if (!cuerpo) { if (schedIso) showBanner('Escribe el mensaje antes de programarlo', 'info'); return; }
+    const asuntoEl0 = document.getElementById('ibx-asunto');
+    if (asuntoEl0 && !asuntoEl0.value.trim()) { showBanner('Escribe el asunto — es un correo nuevo, no una respuesta', 'info'); asuntoEl0.focus(); return; }
     _ibSending = true;
     const btn = document.getElementById('ibx-send'); if (btn) { btn.disabled = true; btn.textContent = schedIso ? 'Programando…' : 'Enviando…'; }
     try {
       const body = { contact_id: _ibActive, cuerpo };
       if (schedIso) body.scheduled_at = schedIso;
+      const asuntoEl = document.getElementById('ibx-asunto');
+      if (asuntoEl) body.asunto = asuntoEl.value.trim();
       const ccRaw = document.getElementById('ibx-cc')?.value || '';
       body.cc = ccRaw.split(/[,;]/).map(x => x.trim()).filter(x => x.includes('@'));
       const res = await apiFetch(`${API}/lm/inbox/reply`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -27738,7 +27750,7 @@ ${foot}
           <button class="cp-act" onclick="LeadManagerModule.cpActOpen('tarea')">＋ Crear tarea</button>
           ${c.linkedin ? `<a class="cp-act cp-act--in" href="${esc(c.linkedin)}" target="_blank" rel="noopener">LinkedIn ›</a>` : ''}
           ${_waDigits(c) ? `<button class="cp-act" onclick="LeadManagerModule.openWaFor(${id})">WhatsApp ›</button>` : ''}
-          ${c.email ? `<a class="cp-act" href="mailto:${esc(c.email)}">Email</a>` : ''}
+          ${c.email ? `<button class="cp-act" onclick="LeadManagerModule.go('inbox');LeadManagerModule.ibOpen(${id})">Email</button>` : ''}
           <button class="cp-act" onclick="LeadManagerModule.cpActOpen('')">＋ Registrar actividad</button>
           <button class="cp-act" onclick="LeadManagerModule.bulkAddOpen('sequence',[${id}])">＋ Secuencia</button>
           <button class="cp-act" onclick="LeadManagerModule.bulkAddOpen('campaign',[${id}])">＋ Campaña</button>
@@ -27817,13 +27829,20 @@ ${foot}
   };
   function _cpStrip(c) {
     const items = [];
-    if (c.email) items.push(['mail', c.email, `href="mailto:${esc(c.email)}"`]);
+    // Antes "mailto:" abría el cliente de correo del sistema operativo (fuera de
+    // Nova) — el envío no quedaba asociado al contacto/cliente/campaña/secuencia
+    // ni aparecía en Inbox/Respuestas como los demás. Pedido explícito
+    // 2026-09-17: "debería abrir la ventana de email... bajo la cuenta asociada
+    // al cliente... reflejarse en inbox respuestas". Mismo mecanismo que ya usa
+    // "Abrir conversación" en Disponibilidad de canales — abre el hilo de Nova
+    // (compone y envía desde el buzón conectado del cliente, queda registrado).
+    if (c.email) items.push(['mail', c.email, `href="javascript:void(0)" onclick="event.stopPropagation();LeadManagerModule.go('inbox');LeadManagerModule.ibOpen(${c.id})"`]);
     const tel = c.telefono || c.movil;
     if (tel) items.push(['phone', tel, `href="tel:${esc(String(tel).replace(/[^0-9+]/g, ''))}"`]);
     if (c.linkedin) items.push(['in', 'LinkedIn', `href="${esc(c.linkedin)}" target="_blank" rel="noopener"`]);
     if (c.fuente) items.push(['src', c.fuente, '']);
     if (!items.length) return '';
-    return `<div class="cp-strip">${items.map(([ic, val, attr]) => attr ? `<a class="cp-strip__i" ${attr} onclick="event.stopPropagation()">${_STRIP_ICO[ic]}<span>${esc(val)}</span></a>` : `<span class="cp-strip__i">${_STRIP_ICO[ic]}<span>${esc(val)}</span></span>`).join('')}</div>`;
+    return `<div class="cp-strip">${items.map(([ic, val, attr]) => attr ? `<a class="cp-strip__i" ${attr}${attr.includes('onclick=') ? '' : ' onclick="event.stopPropagation()"'}>${_STRIP_ICO[ic]}<span>${esc(val)}</span></a>` : `<span class="cp-strip__i">${_STRIP_ICO[ic]}<span>${esc(val)}</span></span>`).join('')}</div>`;
   }
   function _cpStepper(c, id) {
     const cur = c.estado || 'nuevo';
