@@ -16849,3 +16849,4 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .dash-scope .hoy-zero{color:#C7CFD8}
 .dash-scope .lm-link{color:#2F6FB3}
 .dash-scope .lm-today-rep:hover{background:#F8FAFB}
+.dash-scope .dash-kpi:nth-child(n) .dash-kpi__l{color:var(--ink2)}
