@@ -24036,6 +24036,33 @@ ${foot}
   let _dashData = null, _dashLoading = false, _dashCharts = [], _dashSeq = 0;
   try { const s = JSON.parse(sessionStorage.getItem('lm_dash') || 'null'); if (s) { _dashTab = s.tab || 'hoy'; _dashF = Object.assign(_dashF, s.f || {}); } } catch (e) {}
   function _dashSave() { try { sessionStorage.setItem('lm_dash', JSON.stringify({ tab: _dashTab, f: _dashF })); } catch (e) {} }
+  // ── Iconos (trazo, estilo lucide) ──
+  const _DASH_ICO = {
+    calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+    cal: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M9 16l2 2 4-4"/>',
+    building: '<rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4M8 6h.01M12 6h.01M16 6h.01M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01"/>',
+    tag: '<path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L2 12V2h10l8.6 8.6a2 2 0 0 1 0 2.8z"/><circle cx="7" cy="7" r="1.5"/>',
+    seq: '<circle cx="12" cy="5" r="2.5"/><circle cx="5" cy="19" r="2.5"/><circle cx="19" cy="19" r="2.5"/><path d="M12 7.5v4M12 11.5l-6 5M12 11.5l6 5"/>',
+    radio: '<circle cx="12" cy="12" r="2"/><path d="M16.2 7.8a6 6 0 0 1 0 8.4M7.8 16.2a6 6 0 0 1 0-8.4M19.1 4.9a10 10 0 0 1 0 14.2M4.9 19.1a10 10 0 0 1 0-14.2"/>',
+    globe: '<circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z"/>',
+    users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>',
+    user: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+    reply: '<path d="M9 17l-5-5 5-5"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/>',
+    mail: '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-10 6L2 7"/>',
+    mailopen: '<path d="M21.2 8.4c.5.4.8 1 .8 1.6v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-8c0-.6.3-1.2.8-1.6l8-6a2 2 0 0 1 2.4 0z"/><path d="M22 10l-10 6L2 10"/>',
+    send: '<path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/>',
+    phone: '<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/>',
+    chat: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+    dots: '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
+    userplus: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/>',
+  };
+  function _dashIco(k, sz) {
+    if (k === 'in') return '<b class="dash-in">in</b>';
+    return `<svg width="${sz || 18}" height="${sz || 18}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${_DASH_ICO[k] || ''}</svg>`;
+  }
+  const _DASH_CH = { email: ['Email', '#2563EB', 'mail'], linkedin: ['LinkedIn', '#7C5CE0', 'in'], call: ['Llamada', '#F59E0B', 'phone'], whatsapp: ['WhatsApp', '#22A06B', 'chat'], otros: ['Otros / tareas', '#B8C0CC', 'dots'] };
+  let _dashGran = 'auto';
+  function dashGran(v) { _dashGran = v; _dashPaintBody(); }
   function _dashRange() {
     const iso = d => d.toISOString().slice(0, 10), now = new Date(), r = _dashF.range;
     if (r === 'custom' && _dashF.from && _dashF.to) return [_dashF.from, _dashF.to];
@@ -24065,18 +24092,20 @@ ${foot}
   }
   function _dashFiltersHtml() {
     const f = _dashF;
-    const sel = (k, label, opts) => `<select class="dash-sel${f[k] ? ' is-on' : ''}" onchange="LeadManagerModule.dashSet('${k}',this.value)" title="${label}"><option value="">${label}</option>${opts.map(o => `<option value="${esc(String(o[0]))}"${String(f[k]) === String(o[0]) ? ' selected' : ''}>${esc(o[1])}</option>`).join('')}</select>`;
+    const sel = (k, label, ico, opts, cur) => `<label class="dash-f${(cur != null ? cur : f[k]) && (cur != null ? cur : f[k]) !== '' && k !== 'range' ? ' is-on' : ''}"><span class="dash-f__i">${_dashIco(ico, 16)}</span><select onchange="LeadManagerModule.dashSet('${k}',this.value)" title="${label}">${k === 'range' ? '' : `<option value="">${label}</option>`}${opts.map(o => `<option value="${esc(String(o[0]))}"${String(cur != null ? cur : f[k]) === String(o[0]) ? ' selected' : ''}>${esc(o[1])}</option>`).join('')}</select></label>`;
     const cl = parseInt(f.client) || 0, cp = parseInt(f.campaign) || 0;
     const camps = _campaigns.filter(c => !cl || c.outbound_client_id === cl);
     const seqs = _sequences.filter(s => (!cl || s.outbound_client_id === cl) && (!cp || s.campaign_id === cp));
-    const rg = [['7d', '7 días'], ['30d', '30 días'], ['mes', 'Este mes'], ['trim', 'Trimestre'], ['ytd', 'YTD'], ['custom', 'Personalizado']];
-    return `<div class="dash-seg">${rg.map(r => `<button class="dash-seg__b${f.range === r[0] ? ' on' : ''}" onclick="LeadManagerModule.dashSet('range','${r[0]}')">${r[1]}</button>`).join('')}</div>
-      ${f.range === 'custom' ? `<input type="date" class="dash-sel" value="${esc(f.from)}" onchange="LeadManagerModule.dashSet('from',this.value)"><input type="date" class="dash-sel" value="${esc(f.to)}" onchange="LeadManagerModule.dashSet('to',this.value)">` : ''}
-      ${sel('client', 'Cliente', _clients.map(c => [c.id, c.nombre]))}
-      ${sel('campaign', 'Campaña', camps.map(c => [c.id, c.nombre]))}
-      ${sel('sequence', 'Secuencia', seqs.map(s => [s.id, s.nombre]))}
-      ${sel('channel', 'Canal', [['email', 'Email'], ['linkedin', 'LinkedIn'], ['call', 'Llamada'], ['whatsapp', 'WhatsApp'], ['otros', 'Otros / tareas']])}
-      ${_dashData && _dashData.countries ? sel('country', 'País', _dashData.countries.filter(c => c.pais !== 'Sin país').map(c => [c.pais, c.pais])) : ''}
+    const rg = [['7d', 'Últimos 7 días'], ['30d', 'Últimos 30 días'], ['mes', 'Este mes'], ['trim', 'Este trimestre'], ['ytd', 'Este año (YTD)'], ['custom', 'Personalizado']];
+    const ctry = (_dashData && _dashData.countries ? _dashData.countries.filter(c => c.pais !== 'Sin país').map(c => [c.pais, c.pais]) : []);
+    if (f.country && !ctry.some(c => c[0] === f.country)) ctry.push([f.country, f.country]);
+    return `${sel('range', 'Periodo', 'calendar', rg, f.range)}
+      ${f.range === 'custom' ? `<input type="date" class="dash-date" value="${esc(f.from)}" onchange="LeadManagerModule.dashSet('from',this.value)"><input type="date" class="dash-date" value="${esc(f.to)}" onchange="LeadManagerModule.dashSet('to',this.value)">` : ''}
+      ${sel('client', 'Cliente', 'building', _clients.map(c => [c.id, c.nombre]))}
+      ${sel('campaign', 'Campaña', 'tag', camps.map(c => [c.id, c.nombre]))}
+      ${sel('sequence', 'Secuencia', 'seq', seqs.map(s => [s.id, s.nombre]))}
+      ${sel('channel', 'Canal', 'radio', [['email', 'Email'], ['linkedin', 'LinkedIn'], ['call', 'Llamada'], ['whatsapp', 'WhatsApp'], ['otros', 'Otros / tareas']])}
+      ${sel('country', 'País', 'globe', ctry)}
       ${(f.client || f.campaign || f.sequence || f.country || f.channel) ? `<button class="dash-clear" onclick="LeadManagerModule.dashClear()">Limpiar</button>` : ''}`;
   }
   function dashClear() { Object.assign(_dashF, { client: '', campaign: '', sequence: '', country: '', channel: '' }); _dashSave(); _dashLoad(); }
@@ -24118,47 +24147,66 @@ ${foot}
     const rr = _dashPct(c.replies, c.contacted), rrp = _dashPct(p.replies, p.contacted);
     const ar = _dashPct(c.accepts, c.invites), arp = _dashPct(p.accepts, p.invites);
     const or = _dashPct(c.opened, c.sent);
-    const kpi = (l, v, delta, sub, st) => `<div class="dash-kpi dash-kpi--${st || 'n'}"><div class="dash-kpi__l">${l}</div><div class="dash-kpi__v">${v}</div>${delta}${sub ? `<div class="dash-kpi__s">${sub}</div>` : ''}</div>`;
+    const KI = [['users', '#22A06B'], ['reply', '#F59E0B'], ['in', '#7C5CE0'], ['mail', '#2563EB'], ['mailopen', '#F59E0B'], ['cal', '#22A06B']]; let ki = 0;
+    const kpi = (l, v, delta, sub) => { const k = KI[ki++]; return `<div class="dash-kpi" style="--kc:${k[1]}"><div class="dash-kpi__top"><span class="dash-kpi__ic">${_dashIco(k[0], 18)}</span><span class="dash-kpi__l">${l}</span></div><div class="dash-kpi__v">${v}</div>${delta}${sub ? `<div class="dash-kpi__s">${sub}</div>` : ''}</div>`; };
     const tbl = (head, rows, empty) => `<div class="clients-table-wrap"><table class="clients-table"><thead><tr>${head.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows || `<tr><td colspan="${head.length}" class="rep-empty-td">${empty}</td></tr>`}</tbody></table></div>`;
     const seqRows = d.sequences.map(s => `<tr><td>${esc(s.nombre)}</td><td>${esc(s.cliente || '—')}</td><td>${s.enrolados}</td><td>${s.contactados}</td><td>${s.respuestas}</td><td><b>${_dashPct(s.respuestas, s.contactados)}%</b></td><td>${s.reuniones}</td></tr>`).join('');
     const cliRows = d.clients.map(s => `<tr><td>${esc(s.nombre)}</td><td>${s.contactos}</td><td>${s.contactados}</td><td>${s.respuestas}</td><td><b>${_dashPct(s.respuestas, s.contactados)}%</b></td><td>${s.reuniones}</td></tr>`).join('');
     const ctRows = d.countries.map(s => `<tr><td>${esc(s.pais)}</td><td>${s.contacted}</td><td>${s.replied}</td><td><b>${_dashPct(s.replied, s.contacted)}%</b></td></tr>`).join('');
     const recent = d.recent.map(r => `<button class="lm-today-rep" onclick="LeadManagerModule.openContactPage(${r.contact_id})"><span class="lm-today-rep__who">${esc([r.nombre, r.apellido].filter(Boolean).join(' '))}</span><span class="lm-today-rep__co">${esc(r.empresa || '')}</span><span class="lm-today-rep__sn">${new Date(r.fecha).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}</span></button>`).join('');
+    // embudo con nodos de icono
     const fn = d.funnel, base = fn.enrolados || 1;
-    const stages = [['Enrolados', fn.enrolados, '#B8C4D0'], ['Contactados', fn.contactados, '#F5B841'], ['Respondieron', fn.respondieron, '#43B581'], ['Reunión', fn.reuniones, '#2E8B63']];
-    const funnel = stages.map((s, i) => `<div class="rep-fn"><div class="rep-fn__top"><span class="rep-fn__lbl">${s[0]}</span>${i ? `<span class="rep-fn__conv">${_dashPct(s[1], stages[i - 1][1])}% ↳</span>` : '<span class="rep-fn__conv rep-fn__conv--base">base</span>'}<span class="rep-fn__n">${s[1]}</span></div><div class="rep-fn__track"><div class="rep-fn__fill" style="width:${Math.max(3, Math.round(s[1] / base * 100))}%;background:${s[2]}"></div></div></div>`).join('');
+    const stages = [['Enrolados', fn.enrolados, '#2563EB', 'users'], ['Contactados', fn.contactados, '#7C5CE0', 'send'], ['Respondieron', fn.respondieron, '#22A06B', 'reply'], ['Reunión', fn.reuniones, '#F59E0B', 'cal']];
+    const funnel = stages.map((s, i) => `<div class="dash-fn"><span class="dash-fn__ic" style="background:${s[2]}">${_dashIco(s[3], 16)}</span><div class="dash-fn__b"><div class="dash-fn__top"><span class="dash-fn__l">${s[0]}</span>${i ? `<span class="dash-fn__c">${_dashPct(s[1], stages[i - 1][1])}% ↓</span>` : ''}<span class="dash-fn__n">${s[1]}</span></div><div class="dash-fn__track"><div class="dash-fn__fill" style="width:${Math.max(2, Math.round(s[1] / base * 100))}%;background:${s[2]}"></div></div></div></div>`).join('');
+    // toques por canal: dona + leyenda
+    const chTot = d.channels.reduce((n, r) => n + r.touches, 0);
+    const chLeg = d.channels.map(r => { const m = _DASH_CH[r.ch] || _DASH_CH.otros; return `<tr><td><span class="dash-dot" style="background:${m[1]}"></span>${m[0]}</td><td>${_dashPct(r.touches, chTot)}%</td><td>${r.touches}</td></tr>`; }).join('');
+    const donut = d.channels.length ? `<div class="dash-donut"><div class="dash-donut__c"><canvas id="dash-ch"></canvas></div><table class="dash-leg"><tbody>${chLeg}<tr class="dash-leg__t"><td>Total</td><td></td><td>${chTot}</td></tr></tbody></table></div>` : '<div class="rep-empty">Sin actividad</div>';
+    // países: barras horizontales con %
+    const cTot = d.countries.reduce((n, r) => n + r.contacted, 0), cMax = Math.max(1, ...d.countries.map(r => r.contacted));
+    const ctry = d.countries.length ? `<div class="dash-bars">${d.countries.slice(0, 6).map(r => `<div class="dash-bar"><span class="dash-bar__l" title="${esc(r.pais)}">${esc(r.pais)}</span><div class="dash-bar__t"><div class="dash-bar__f" style="width:${Math.max(2, Math.round(r.contacted / cMax * 100))}%"></div></div><span class="dash-bar__v">${_dashPct(r.contacted, cTot)}%</span></div>`).join('')}</div>` : '<div class="rep-empty">Sin datos de país</div>';
+    // actividad: leyenda propia + selector de granularidad
+    const chsUsed = ['email', 'linkedin', 'call', 'whatsapp', 'otros'].filter(k => d.daily.some(r => r.ch === k));
+    const gran = _dashGran === 'auto' ? (d.range.days > 60 ? 'week' : 'day') : _dashGran;
+    const actLeg = chsUsed.map(k => `<span class="dash-lg"><span class="dash-dot" style="background:${_DASH_CH[k][1]}"></span>${_DASH_CH[k][0]}</span>`).join('');
     return `${_dashLoading ? '<div class="dash-loading">Actualizando…</div>' : ''}
       <div class="dash-kpis">
-        ${kpi('Contactos alcanzados', c.contacted, _dashDelta(c.contacted, p.contacted), `${c.touches} toques en total`, _dashSt('delta', c.contacted, p.contacted))}
-        ${kpi('Tasa de respuesta', rr + '%', _dashDelta(rr, rrp, true), `${c.replies} respondieron`, c.contacted ? _dashSt('rate', rr, 5, 2) : 'n')}
-        ${kpi('Aceptación LinkedIn', ar + '%', _dashDelta(ar, arp, true), `${c.accepts} de ${c.invites} invitaciones`, c.invites ? _dashSt('rate', ar, 30, 15) : 'n')}
-        ${kpi('Emails enviados', c.emails, _dashDelta(c.emails, p.emails), c.bounced ? `${c.bounced} rebotados (auto)` : 'sin rebotes', c.sent ? _dashSt('low', _dashPct(c.bounced, c.sent), 5, 2) : _dashSt('delta', c.emails, p.emails))}
-        ${kpi('Apertura email', c.sent ? or + '%' : '—', '<span class="dash-d dash-d--0">estimada</span>', `sobre ${c.sent} envíos con píxel`, c.sent >= 10 ? _dashSt('rate', or, 40, 20) : 'n')}
-        ${kpi('Reuniones / deals', d.deals.meetings, '<span class="dash-d dash-d--0">' + (d.deals.programadas ? d.deals.programadas + ' programada' + (d.deals.programadas > 1 ? 's' : '') + (d.deals.proximo ? ' · próx. ' + new Date(d.deals.proximo).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', timeZone: 'UTC' }) : '') : 'sin programar') + '</span>', d.deals.valor ? `$${Math.round(d.deals.valor).toLocaleString('es-ES')} · pond. $${Math.round(d.deals.ponderado).toLocaleString('es-ES')}` : 'sin valor cargado', d.deals.meetings ? 'g' : 'a')}
+        ${kpi('Contactos alcanzados', c.contacted, _dashDelta(c.contacted, p.contacted), `${c.touches} toques en total`)}
+        ${kpi('Tasa de respuesta', rr + '%', _dashDelta(rr, rrp, true), `${c.replies} respondieron`)}
+        ${kpi('Aceptación LinkedIn', ar + '%', _dashDelta(ar, arp, true), `${c.accepts} de ${c.invites} invitaciones`)}
+        ${kpi('Emails enviados', c.emails, _dashDelta(c.emails, p.emails), c.bounced ? `${c.bounced} rebotados (auto)` : 'sin rebotes')}
+        ${kpi('Apertura email', c.sent ? or + '%' : '—', '<span class="dash-d dash-d--0">estimada</span>', `sobre ${c.sent} envíos con píxel`)}
+        ${kpi('Reuniones / deals', d.deals.meetings, '<span class="dash-d dash-d--0">' + (d.deals.programadas ? d.deals.programadas + ' programada' + (d.deals.programadas > 1 ? 's' : '') + (d.deals.proximo ? ' · próx. ' + new Date(d.deals.proximo).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', timeZone: 'UTC' }) : '') : 'sin programar') + '</span>', d.deals.valor ? `$${Math.round(d.deals.valor).toLocaleString('es-ES')} · pond. $${Math.round(d.deals.ponderado).toLocaleString('es-ES')}` : 'sin valor cargado')}
       </div>
-      <div class="dash-grid">
-        <div class="cp-card dash-w2"><div class="cp-card__t">Actividad por canal${d.range.days > 60 ? ' · por semana' : ''}</div><div class="dash-chart"><canvas id="dash-daily"></canvas></div></div>
-        <div class="cp-card"><div class="cp-card__t">Embudo (histórico del filtro)</div><div class="rep-funnel">${funnel}</div></div>
-        <div class="cp-card"><div class="cp-card__t">Toques por canal</div><div class="dash-chart dash-chart--sm">${d.channels.length ? '<canvas id="dash-ch"></canvas>' : '<div class="rep-empty">Sin actividad</div>'}</div></div>
-        <div class="cp-card"><div class="cp-card__t">Países contactados</div><div class="dash-chart dash-chart--sm">${d.countries.length ? '<canvas id="dash-ctry"></canvas>' : '<div class="rep-empty">Sin datos de país</div>'}</div></div>
+      <div class="dash-row dash-row--a">
+        <div class="cp-card"><div class="dash-card-h"><div class="cp-card__t">Actividad por canal</div><label class="dash-f dash-f--sm"><select onchange="LeadManagerModule.dashGran(this.value)"><option value="day"${gran === 'day' ? ' selected' : ''}>Diario</option><option value="week"${gran === 'week' ? ' selected' : ''}>Semanal</option></select></label></div><div class="dash-legend">${actLeg}</div><div class="dash-chart"><canvas id="dash-daily"></canvas></div></div>
+        <div class="cp-card"><div class="cp-card__t">Embudo (histórico del filtro)</div><div class="dash-funnel">${funnel}</div></div>
+      </div>
+      <div class="dash-row dash-row--b">
+        <div class="cp-card"><div class="cp-card__t">Toques por canal</div>${donut}</div>
+        <div class="cp-card"><div class="cp-card__t">Países contactados</div>${ctry}</div>
         <div class="cp-card"><div class="cp-card__t">Respuesta por canal</div>${_dashRepCh(d)}</div>
+      </div>
+      <div class="dash-row dash-row--b">
         <div class="cp-card"><div class="cp-card__t">Cuándo responden · automático</div>${_dashHeat(d.heatAuto || [])}<div class="dash-kpi__s" style="margin-top:8px">Solo respuestas detectadas solas: email y WhatsApp conectado. LinkedIn y llamadas son manuales y no entran. Hora de Lima.</div></div>
+        <div class="cp-card"><div class="cp-card__t">Resultado de los contactos con estado</div>${_dashDispo(d.dispo)}</div>
+        <div class="cp-card"><div class="cp-card__t">Respuestas recientes</div>${recent ? `<div class="lm-today-reps">${recent}</div>` : '<div class="rep-empty">Sin respuestas en el período</div>'}</div>
       </div>
       <div id="dash-ab" style="margin-bottom:12px">${_dashAbShell()}</div>
-      <div class="dash-grid dash-grid--2">
+      <div class="dash-row dash-row--c">
         <div class="cp-card"><div class="cp-card__t">Rendimiento por secuencia</div>${tbl(['Secuencia', 'Cliente', 'Enrol.', 'Contact.', 'Resp.', 'Tasa', 'Reun.'], seqRows, 'Sin secuencias en este filtro')}</div>
         <div class="cp-card"><div class="cp-card__t">Rendimiento por cliente</div>${tbl(['Cliente', 'Contactos', 'Contact.', 'Resp.', 'Tasa', 'Reun.'], cliRows, 'Sin clientes en este filtro')}</div>
         <div class="cp-card"><div class="cp-card__t">Por país</div>${tbl(['País', 'Contact.', 'Resp.', 'Tasa'], ctRows, 'Sin datos')}</div>
-        <div class="cp-card"><div class="cp-card__t">Resultado de los contactos con estado</div>${_dashDispo(d.dispo)}</div>
-        <div class="cp-card"><div class="cp-card__t">Respuestas recientes</div>${recent ? `<div class="lm-today-reps">${recent}</div>` : '<div class="rep-empty">Sin respuestas en el período</div>'}</div>
       </div>`;
   }
   function _dashRepCh(d) {
-    const LBL = { email: 'Email', linkedin: 'LinkedIn', call: 'Llamada', whatsapp: 'WhatsApp', otros: 'Otros / tareas' };
     const rc = {}; (d.replyByCh || []).forEach(r => { rc[r.ch] = r.replies; });
-    const rows = d.channels.filter(r => r.contacted).map(r => `<tr><td>${LBL[r.ch]}</td><td>${r.contacted}</td><td>${rc[r.ch] || 0}</td><td><b>${_dashPct(rc[r.ch] || 0, r.contacted)}%</b></td></tr>`).join('');
+    const rows = d.channels.filter(r => r.contacted);
+    const tc = rows.reduce((n, r) => n + r.contacted, 0), tr = rows.reduce((n, r) => n + (rc[r.ch] || 0), 0);
+    const cls = v => v > 0 ? 'dash-good' : 'dash-zero';
+    const body = rows.map(r => { const m = _DASH_CH[r.ch] || _DASH_CH.otros, n = rc[r.ch] || 0, t = _dashPct(n, r.contacted); return `<tr><td><span class="dash-cic" style="background:${m[1]}">${_dashIco(m[2], 12)}</span>${m[0]}</td><td>${r.contacted}</td><td>${n}</td><td class="${cls(t)}">${t}%</td></tr>`; }).join('');
     const days = d.replyDays != null ? `<div class="dash-kpi__s" style="margin-top:8px">Tardan en promedio <b>${d.replyDays} días</b> en responder desde el primer toque. El canal es el último toque antes de la respuesta.</div>` : '';
-    return (rows ? `<div class="clients-table-wrap"><table class="clients-table"><thead><tr><th>Canal</th><th>Contact.</th><th>Resp.</th><th>Tasa</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<div class="rep-empty">Sin datos</div>') + days;
+    return (rows.length ? `<div class="clients-table-wrap"><table class="clients-table"><thead><tr><th>Canal</th><th>Contactados</th><th>Respondieron</th><th>Tasa</th></tr></thead><tbody>${body}<tr class="dash-tot"><td>Total</td><td>${tc}</td><td>${tr}</td><td class="${cls(tr)}">${_dashPct(tr, tc)}%</td></tr></tbody></table></div>` : '<div class="rep-empty">Sin datos</div>') + days;
   }
   function _dashDispo(rows) {
     if (!rows || !rows.length) return '<div class="rep-empty">Aún no hay contactos con estado (Interesado, No interesado…)</div>';
@@ -24183,31 +24231,29 @@ ${foot}
   }
   function _dashInitCharts() {
     if (typeof Chart === 'undefined' || !_dashData) return;
-    const d = _dashData, COL = { email: '#4A90D9', linkedin: '#F5B841', call: '#E8645A', whatsapp: '#43B581', otros: '#C7CFD8' }, LBL = { email: 'Email', linkedin: 'LinkedIn', call: 'Llamada', whatsapp: 'WhatsApp', otros: 'Otros / tareas' };
-    const tip = { backgroundColor: '#26323F', padding: 8, cornerRadius: 0 };
-    const leg = { position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, usePointStyle: true, font: { size: 11 } } };
-    const axis = { x: { grid: { display: false }, ticks: { maxTicksLimit: 8, color: '#8A948E', font: { size: 10 } } }, y: { beginAtZero: true, grid: { color: '#E9ECEF' }, ticks: { precision: 0, maxTicksLimit: 4, color: '#8A948E', font: { size: 10 } } } };
+    const d = _dashData;
+    const tip = { backgroundColor: '#0F172A', padding: 9, cornerRadius: 8, titleFont: { size: 11 }, bodyFont: { size: 11 } };
+    const axis = { x: { grid: { display: false }, border: { display: false }, ticks: { maxTicksLimit: 8, color: '#94A3B8', font: { size: 10 } } }, y: { beginAtZero: true, border: { display: false }, grid: { color: '#EEF1F5', drawTicks: false }, ticks: { precision: 0, maxTicksLimit: 5, color: '#94A3B8', font: { size: 10 }, padding: 8 } } };
     const days = []; { const a = new Date(d.range.from + 'T00:00:00Z'), b = new Date(d.range.to + 'T00:00:00Z'); for (let x = new Date(a); x <= b && days.length < 400; x.setUTCDate(x.getUTCDate() + 1)) days.push(x.toISOString().slice(0, 10)); }
-    // rangos largos (YTD…): agrupar por semana para que las barras no queden como líneas
-    const weekly = days.length > 60;
+    const weekly = (_dashGran === 'auto' ? days.length > 60 : _dashGran === 'week');
     const wk = x => { const t = new Date(x + 'T00:00:00Z'); t.setUTCDate(t.getUTCDate() - ((t.getUTCDay() + 6) % 7)); return t.toISOString().slice(0, 10); };
     const buckets = weekly ? [...new Set(days.map(wk))] : days;
     const bOf = weekly ? wk : (x => x);
+    const MES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    const lbl = x => parseInt(x.slice(8), 10) + ' ' + MES[parseInt(x.slice(5, 7), 10) - 1];
     const chs = ['email', 'linkedin', 'call', 'whatsapp', 'otros'].filter(k => d.daily.some(r => r.ch === k));
     const dc = document.getElementById('dash-daily');
-    if (dc) _dashCharts.push(new Chart(dc.getContext('2d'), { type: 'bar', data: { labels: buckets.map(x => x.slice(5)), datasets: chs.map(k => ({ label: LBL[k], backgroundColor: COL[k], borderRadius: 0, barPercentage: .8, data: buckets.map(b => d.daily.filter(r => r.ch === k && bOf(r.d) === b).reduce((n, r) => n + r.n, 0)) })) }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: leg, tooltip: tip }, scales: { x: Object.assign({}, axis.x, { stacked: true }), y: Object.assign({}, axis.y, { stacked: true }) } } }));
+    if (dc) _dashCharts.push(new Chart(dc.getContext('2d'), { type: 'bar', data: { labels: buckets.map(lbl), datasets: chs.map((k, i) => ({ label: _DASH_CH[k][0], backgroundColor: _DASH_CH[k][1], borderRadius: i === chs.length - 1 ? 3 : 0, borderSkipped: false, barPercentage: .7, data: buckets.map(b => d.daily.filter(r => r.ch === k && bOf(r.d) === b).reduce((n, r) => n + r.n, 0)) })) }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: tip }, scales: { x: Object.assign({}, axis.x, { stacked: true }), y: Object.assign({}, axis.y, { stacked: true }) } } }));
     const cc = document.getElementById('dash-ch');
-    if (cc) _dashCharts.push(new Chart(cc.getContext('2d'), { type: 'doughnut', data: { labels: d.channels.map(r => LBL[r.ch]), datasets: [{ data: d.channels.map(r => r.touches), backgroundColor: d.channels.map(r => COL[r.ch]), borderWidth: 2, borderColor: '#fff' }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '68%', plugins: { legend: Object.assign({}, leg, { position: 'right' }), tooltip: tip } } }));
-    const pc = document.getElementById('dash-ctry');
-    if (pc) { const t8 = d.countries.slice(0, 8); _dashCharts.push(new Chart(pc.getContext('2d'), { type: 'bar', data: { labels: t8.map(r => r.pais), datasets: [{ label: 'Contactados', backgroundColor: '#4A90D9', borderRadius: 0, data: t8.map(r => r.contacted) }, { label: 'Respondieron', backgroundColor: '#43B581', borderRadius: 0, data: t8.map(r => r.replied) }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: leg, tooltip: tip }, scales: { x: axis.y, y: { grid: { display: false }, ticks: { color: '#45586A', font: { size: 10 } } } } } })); }
+    if (cc) _dashCharts.push(new Chart(cc.getContext('2d'), { type: 'doughnut', data: { labels: d.channels.map(r => (_DASH_CH[r.ch] || _DASH_CH.otros)[0]), datasets: [{ data: d.channels.map(r => r.touches), backgroundColor: d.channels.map(r => (_DASH_CH[r.ch] || _DASH_CH.otros)[1]), borderWidth: 2, borderColor: '#fff' }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '62%', plugins: { legend: { display: false }, tooltip: tip } } }));
   }
   function _vDashboard() {
     const tabs = `<div class="dash-tabs"><button class="dash-tab${_dashTab === 'hoy' ? ' on' : ''}" onclick="LeadManagerModule.dashTab('hoy')">Hoy</button><button class="dash-tab${_dashTab === 'rend' ? ' on' : ''}" onclick="LeadManagerModule.dashTab('rend')">Rendimiento</button></div>`;
     const head = `<div class="lm-sec-head">
         <div style="display:flex;align-items:center;gap:18px"><h2 class="lm-sec-title">Dashboard</h2>${tabs}</div>
         <div class="lm-sec-actions">
-          <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openDrawer()">＋ Nuevo lead</button>
-          <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openClientDrawer()">＋ Nuevo cliente outbound</button>
+          <button class="dash-btn" onclick="LeadManagerModule.openDrawer()">${_dashIco('user', 16)} Nuevo lead</button>
+          <button class="dash-btn dash-btn--p" onclick="LeadManagerModule.openClientDrawer()">${_dashIco('userplus', 16)} Nuevo cliente outbound</button>
         </div>
       </div>`;
     if (_dashTab === 'rend') {
@@ -29984,7 +30030,7 @@ ${foot}
     dgEnrichMenu, dgEnrichOpen, dgEnrichClose, dgEnrichApply, dgToggleIssues, dgMoreMenu, dgToggleSelMode,
     dgDupOpen, dgDupClose, dgDupPickSurvivor, dgDupToggleDel, dgDupMergeGroup, dgDupDeleteGroup,
     fmsToggle, fmsFilter, fmsPick,
-    openViews, applyView, saveView, deleteView, clearAllViews, dashTab, dashSet, dashClear,
+    openViews, applyView, saveView, deleteView, clearAllViews, dashTab, dashSet, dashClear, dashGran,
     taskSetView, taskSetFilter, calPrev, calNext, calToday,
     lmSetDisposition, seqDoDisposition, cpSetStage,
     seqDoAccepted, seqDoNoLinkedIn, seqDoBounced, seqDoNoWhatsapp, seqDoNoPhone, lmToggleNoLinkedIn, lmToggleNoWhatsapp, lmToggleNoPhone, lmToggleBounced, lmToggleManualEmail, ctToggleBounced,
