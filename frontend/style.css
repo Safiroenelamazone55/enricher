@@ -16661,3 +16661,14 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .dash-heat__h,.dash-heat__d{font-size:10px;color:#8A948E}
 .dash-heat__c{height:20px;border-radius:4px}
 @media(max-width:1100px){.dash-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}.dash-grid,.dash-grid--2{grid-template-columns:1fr}.dash-w2{grid-column:auto}}
+.dash-kpis--4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.hoy-als{display:flex;flex-direction:column;gap:6px}
+.hoy-al{display:flex;align-items:center;gap:10px;border:1px solid #E4E8E5;background:#fff;border-radius:8px;padding:8px 12px;font:500 13px inherit;color:#14211B;cursor:pointer;text-align:left}
+.hoy-al:hover{background:#F7F8F6}
+.hoy-al__dot{width:8px;height:8px;border-radius:50%;flex:none}
+.hoy-al--bad .hoy-al__dot{background:#C4342B}.hoy-al--warn .hoy-al__dot{background:#D97706}
+.hoy-al__go{margin-left:auto;color:#8A948E}
+.hoy-ok{font-size:13px;color:#15803D;padding:4px 2px}
+.hoy-over{background:#FDECEA;color:#C4342B;border-radius:6px;padding:1px 7px;font-weight:700}
+.hoy-zero{color:#B4BBB7}
+@media(max-width:1100px){.dash-kpis--4{grid-template-columns:repeat(2,minmax(0,1fr))}}

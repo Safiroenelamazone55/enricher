@@ -24124,6 +24124,7 @@ ${foot}
         <div class="cp-card"><div class="cp-card__t">Embudo (histórico del filtro)</div><div class="rep-funnel">${funnel}</div></div>
         <div class="cp-card"><div class="cp-card__t">Toques por canal</div><div class="dash-chart dash-chart--sm">${d.channels.length ? '<canvas id="dash-ch"></canvas>' : '<div class="rep-empty">Sin actividad</div>'}</div></div>
         <div class="cp-card"><div class="cp-card__t">Países contactados</div><div class="dash-chart dash-chart--sm">${d.countries.length ? '<canvas id="dash-ctry"></canvas>' : '<div class="rep-empty">Sin datos de país</div>'}</div></div>
+        <div class="cp-card"><div class="cp-card__t">Respuesta por canal</div>${_dashRepCh(d)}</div>
         <div class="cp-card"><div class="cp-card__t">Cuándo responden (día × hora)</div>${_dashHeat(d.heat)}</div>
       </div>
       <div class="dash-grid dash-grid--2">
@@ -24132,6 +24133,13 @@ ${foot}
         <div class="cp-card"><div class="cp-card__t">Por país</div>${tbl(['País', 'Contact.', 'Resp.', 'Tasa'], ctRows, 'Sin datos')}</div>
         <div class="cp-card"><div class="cp-card__t">Respuestas recientes</div>${recent ? `<div class="lm-today-reps">${recent}</div>` : '<div class="rep-empty">Sin respuestas en el período</div>'}</div>
       </div>`;
+  }
+  function _dashRepCh(d) {
+    const LBL = { email: 'Email', linkedin: 'LinkedIn', call: 'Llamada', whatsapp: 'WhatsApp / otros' };
+    const rc = {}; (d.replyByCh || []).forEach(r => { rc[r.ch] = r.replies; });
+    const rows = d.channels.filter(r => r.contacted).map(r => `<tr><td>${LBL[r.ch]}</td><td>${r.contacted}</td><td>${rc[r.ch] || 0}</td><td><b>${_dashPct(rc[r.ch] || 0, r.contacted)}%</b></td></tr>`).join('');
+    const days = d.replyDays != null ? `<div class="dash-kpi__s" style="margin-top:8px">Tardan en promedio <b>${d.replyDays} días</b> en responder desde el primer toque. El canal es el último toque antes de la respuesta.</div>` : '';
+    return (rows ? `<div class="clients-table-wrap"><table class="clients-table"><thead><tr><th>Canal</th><th>Contact.</th><th>Resp.</th><th>Tasa</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<div class="rep-empty">Sin datos</div>') + days;
   }
   function _dashHeat(rows) {
     const g = {}; let max = 0;
@@ -24178,25 +24186,58 @@ ${foot}
     }
     return head + _vDashHoy();
   }
-  function _vDashHoy() {
-    const activos = _clients.filter(c => c.estado === 'activo').length;
-    const pipeline = _data.filter(l => !['ganado', 'perdido'].includes(l.stage));
-    const ganados = _data.filter(l => l.stage === 'ganado').length;
-    const sinClient = _data.filter(l => !l.outbound_client_id).length;
-    const kpi = (l, v, s, t) => `<div class="lm-mc lm-mc--${t}"><span class="lm-mc__l">${l}</span><span class="lm-mc__v">${v}</span><span class="lm-mc__s">${s}</span></div>`;
-    return `
-      <div class="lm-metrics">
-        ${kpi('Clientes outbound', _clients.length, `${activos} activo${activos !== 1 ? 's' : ''}`, 'a')}
-        ${kpi('Leads en pipeline', pipeline.length, _money(_sumv(pipeline)) + ' estimado', 'b')}
-        ${kpi('Ganados', ganados, 'leads cerrados', 'c')}
-        ${kpi('Sin cliente', sinClient, 'por asignar', 'd')}
-        ${kpi('Campañas activas', _campaigns.filter(c => c.estado === 'activa').length, `${_campaigns.length} en total`, 'b')}
-        ${kpi('Tareas pendientes', _pendingTaskCount(), 'toques manuales, follow-ups y aprobaciones', 'c')}
+  // ── Hoy: lo que hay que hacer y lo que está roto (no inventario) ──
+  function _hoyHtml() {
+    const today = _dayOf(new Date());
+    const CHL = { linkedin: 'LinkedIn', call: 'Llamada', whatsapp: 'WhatsApp', email: 'Email', task: 'Tarea' };
+    const CHS = ['linkedin', 'call', 'whatsapp', 'email', 'task'];
+    let all = []; try { all = _allSeqTasks().filter(t => t.due <= today); } catch (e) {}
+    const by = {};
+    all.forEach(t => {
+      const cid = t.c.outbound_client_id || 0;
+      const r = by[cid] = by[cid] || { cid, n: 0, over: 0, ch: {} };
+      const ch = CHS.includes(t.st.canal) ? t.st.canal : 'task';
+      r.n++; r.ch[ch] = (r.ch[ch] || 0) + 1; if (t.due < today) r.over++;
+    });
+    const nameOf = cid => (_clients.find(c => c.id === cid) || {}).nombre || 'Sin cliente';
+    const rows = Object.values(by).sort((a, b) => b.over - a.over || b.n - a.n);
+    const cell = n => n ? `<td><b>${n}</b></td>` : '<td class="hoy-zero">·</td>';
+    const taskTbl = rows.length ? `<div class="clients-table-wrap"><table class="clients-table"><thead><tr><th>Cliente</th>${CHS.map(k => `<th>${CHL[k]}</th>`).join('')}<th>Vencidas</th><th></th></tr></thead><tbody>${rows.map(r => `<tr><td>${esc(nameOf(r.cid))}</td>${CHS.map(k => cell(r.ch[k])).join('')}<td>${r.over ? `<span class="hoy-over">${r.over}</span>` : '<span class="hoy-zero">·</span>'}</td><td><button class="lm-link" onclick="LeadManagerModule.go('tasks')">Abrir cola →</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="rep-empty">Nada pendiente para hoy 🎉</div>';
+    const d = _todayData, h = (d && d.health) || {};
+    // respuestas: emails (motor) + registradas a mano, últimas 48 h, sin repetir contacto
+    const since = Date.now() - 48 * 36e5, seen = new Set(), reps = [];
+    (d && d.replies || []).forEach(r => { if (!seen.has(r.contact_id)) { seen.add(r.contact_id); reps.push({ id: r.contact_id, who: [r.nombre, r.apellido].filter(Boolean).join(' '), co: r.company_nombre || r.empresa_nombre || '', at: new Date(r.replied_at), via: 'Email' }); } });
+    (_activities || []).filter(a => a.tipo === 'respuesta' && a.contact_id && new Date(a.fecha).getTime() > since).forEach(a => {
+      if (seen.has(a.contact_id)) return; seen.add(a.contact_id);
+      const c = (_contacts || []).find(x => x.id === a.contact_id) || {};
+      reps.push({ id: a.contact_id, who: [c.nombre, c.apellido].filter(Boolean).join(' ') || 'Contacto', co: c.company_nombre || c.empresa_nombre || '', at: new Date(a.fecha), via: 'Manual' });
+    });
+    reps.sort((a, b) => b.at - a.at);
+    const repHtml = reps.length ? `<div class="lm-today-reps">${reps.slice(0, 8).map(r => `<button class="lm-today-rep" onclick="LeadManagerModule.openContactPage(${r.id})"><span class="lm-today-rep__who">${esc(r.who)}</span><span class="lm-today-rep__co">${esc(r.co)}</span><span class="lm-today-rep__sn">${r.via} · ${r.at.toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span></button>`).join('')}</div>` : '<div class="rep-empty">Sin respuestas nuevas en 48 h</div>';
+    // alertas de salud: solo lo que falla
+    const al = [];
+    (_clients || []).filter(c => c.estado === 'activo').forEach(c => { const mb = _mbFor(c.id); if (!mb) al.push(['warn', `${esc(c.nombre)}: sin buzón conectado`, `LeadManagerModule.openClient(${c.id})`]); else if (mb.estado !== 'conectado') al.push(['bad', `${esc(c.nombre)}: buzón ${esc(mb.estado || 'caído')}`, `LeadManagerModule.openClient(${c.id})`]); });
+    (h.wa || []).filter(w => w.estado !== 'conectado').forEach(w => al.push(['bad', `WhatsApp ${esc(w.nombre || '')} ${esc(w.numero || '')}: ${esc(w.estado)}`, `LeadManagerModule.go('clients')`]));
+    if (d && d.failed_48h) al.push(['bad', `${d.failed_48h} envío${d.failed_48h > 1 ? 's' : ''} fallido${d.failed_48h > 1 ? 's' : ''} (48 h)`, `LeadManagerModule.go('inbox')`]);
+    if (h.bounced_7d) al.push(['warn', `${h.bounced_7d} rebote${h.bounced_7d > 1 ? 's' : ''} en 7 días`, `LeadManagerModule.go('inbox')`]);
+    if (h.data_issues) al.push(['warn', `${h.data_issues} contacto${h.data_issues > 1 ? 's' : ''} pausado${h.data_issues > 1 ? 's' : ''} por dato faltante`, `LeadManagerModule.go('tasks')`]);
+    const alHtml = al.length ? al.map(a => `<button class="hoy-al hoy-al--${a[0]}" onclick="${a[2]}"><span class="hoy-al__dot"></span>${a[1]}<span class="hoy-al__go">›</span></button>`).join('') : '<div class="hoy-ok">✓ Todo en orden: buzones y WhatsApp conectados, sin fallos ni rebotes.</div>';
+    const stat = (v, l, sub) => `<div class="dash-kpi"><div class="dash-kpi__l">${l}</div><div class="dash-kpi__v">${v}</div>${sub ? `<div class="dash-kpi__s">${sub}</div>` : ''}</div>`;
+    const overdue = all.filter(t => t.due < today).length;
+    return `<div class="dash-kpis dash-kpis--4">
+        ${stat(all.length, 'Tareas para hoy', overdue ? `${overdue} vencidas` : 'al día')}
+        ${stat(reps.length, 'Respuestas nuevas', 'últimas 48 h')}
+        ${stat(d ? d.due_24h : '…', 'Programados 24 h', 'envíos automáticos en cola')}
+        ${stat(h.rotation_waiting != null ? h.rotation_waiting : '…', 'En rotación', 'empresas esperando turno')}
       </div>
-      <div id="lm-today-card">${_todayData ? _todayCardHtml(_todayData) : '<div class="cp-card lm-today"><div class="cp-card__t">Hoy — outreach automático</div><div class="cp-empty2" style="padding:12px">Cargando…</div></div>'}</div>
-      <div class="lm-dash-head"><h3 class="lm-dash-h3">Clientes outbound</h3>${_clients.length ? `<button class="lm-link" onclick="LeadManagerModule.go('clients')">Ver todos →</button>` : ''}</div>
-      ${_clients.length ? `<div class="lm-obc-grid">${_clients.slice(0, 6).map(_obcCard).join('')}</div>`
-        : _empty('clients', 'Aún no tienes clientes outbound', 'Crea tu primer cliente para organizar campañas, secuencias y leads como un workspace propio.', 'Nuevo cliente outbound', 'LeadManagerModule.openClientDrawer()')}`;
+      <div class="cp-card" style="margin-bottom:12px"><div class="cp-card__t">Salud del envío</div><div class="hoy-als">${d ? alHtml : '<div class="rep-empty">Cargando…</div>'}</div></div>
+      <div class="dash-grid dash-grid--2">
+        <div class="cp-card"><div class="cp-card__t">Respondieron</div>${repHtml}</div>
+        <div class="cp-card"><div class="cp-card__t">Tareas de hoy por cliente</div>${taskTbl}</div>
+      </div>`;
+  }
+  function _vDashHoy() {
+    return `<div id="lm-hoy">${_hoyHtml()}</div>`;
   }
   function _obcCard(c) {
     const leads = _clientLeads(c.id);
@@ -28967,8 +29008,8 @@ ${foot}
   // ── Card "Hoy" (dashboard) ──
   async function _loadToday() {
     try { const r = await apiFetch(`${API}/lm/today`); _todayData = (r && r.ok) ? await r.json() : null; } catch { _todayData = null; }
-    const el = document.getElementById('lm-today-card');
-    if (el && _todayData) el.innerHTML = _todayCardHtml(_todayData);
+    const el = document.getElementById('lm-hoy');
+    if (el && _todayData) el.innerHTML = _hoyHtml();
   }
   function _todayCardHtml(d) {
     const on = d.settings?.enabled;

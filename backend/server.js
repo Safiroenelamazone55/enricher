@@ -6218,7 +6218,13 @@ app.get('/api/lm/today', requireAuth, async (req, res) => {
     ]);
     const { gmailStatus } = require('./services/gmailService');
     const gmail = await gmailStatus(pool, uid);
+    const hx = await pool.query(`SELECT
+        (SELECT COUNT(*)::int FROM lm_contact_sequences WHERE user_id=$1 AND estado='pausado' AND (paused_reason LIKE 'sin\\_%' OR paused_reason LIKE 'dato\\_%' OR paused_reason LIKE 'falta\\_%')) AS data_issues,
+        (SELECT COUNT(*)::int FROM lm_contact_sequences WHERE user_id=$1 AND estado='pausado' AND paused_reason='rotacion_empresa') AS rotation_waiting,
+        (SELECT COUNT(*)::int FROM lm_messages WHERE user_id=$1 AND estado='bounced' AND created_at > NOW() - interval '7 days') AS bounced_7d`, [uid]);
+    const waQ = await pool.query(`SELECT id, nombre, numero, estado FROM wa_connections WHERE user_id=$1 ORDER BY id`, [uid]);
     res.json({
+      health: { ...hx.rows[0], wa: waQ.rows },
       settings:     cfg.rows[0] || { enabled: false },
       gmail,
       due_24h:      dueQ.rows[0].n,
@@ -6274,7 +6280,8 @@ app.get('/api/lm/dashboard', requireAuth, async (req, res) => {
        WHERE m.user_id=$1 AND ${kw}
          AND m.sent_at IS NOT NULL AND m.sent_at::date BETWEEN ${r[0]}::date AND ${r[1]}::date`;
     const cur = [iF, iT], prv = [iPF, iPT];
-    const [k1, k0, m1, m0, daily, countries, byCh, heat, seqs, clients, funnel, recent] = await Promise.all([
+    const REP1 = `(SELECT DISTINCT ON (contact_id) contact_id, fecha FROM activities WHERE user_id=$1 AND tipo='respuesta' ORDER BY contact_id, fecha)`;
+    const [k1, k0, m1, m0, daily, countries, byCh, heat, seqs, clients, funnel, recent, repCh, repDays] = await Promise.all([
       pool.query(kpiSql(cur), params), pool.query(kpiSql(prv), params),
       pool.query(msgSql(cur), params), pool.query(msgSql(prv), params),
       pool.query(`SELECT a.fecha::date AS d, ${CH} AS ch, COUNT(*)::int AS n ${base} AND ${OUT}${chw} AND ${inR(iF, iT)} GROUP BY 1,2 ORDER BY 1`, params),
@@ -6311,6 +6318,8 @@ app.get('/api/lm/dashboard', requireAuth, async (req, res) => {
                          COUNT(DISTINCT k.id) FILTER (WHERE EXISTS(SELECT 1 FROM activities z WHERE z.contact_id=k.id AND z.tipo='respuesta') OR k.disposition IN ('respondio','derivado'))::int AS respondieron,
                          COUNT(DISTINCT k.id) FILTER (WHERE EXISTS(SELECT 1 FROM activities z WHERE z.contact_id=k.id AND z.tipo='reunion'))::int AS reuniones
                     FROM lm_contacts k WHERE ${kw}`, params),
+      pool.query(`SELECT x.ch, COUNT(*)::int AS replies FROM (SELECT (SELECT ${CH} FROM activities a WHERE a.contact_id=r.contact_id AND ${OUT} AND a.fecha<=r.fecha ORDER BY a.fecha DESC LIMIT 1) AS ch FROM ${REP1} r JOIN lm_contacts k ON k.id=r.contact_id WHERE ${kw} AND r.fecha::date BETWEEN ${iF}::date AND ${iT}::date) x WHERE x.ch IS NOT NULL GROUP BY 1`, params),
+      pool.query(`SELECT ROUND(AVG(EXTRACT(EPOCH FROM (r.fecha - f.first))/86400)::numeric,1)::float AS days FROM ${REP1} r JOIN lm_contacts k ON k.id=r.contact_id JOIN LATERAL (SELECT MIN(a.fecha) AS first FROM activities a WHERE a.contact_id=r.contact_id AND ${OUT}) f ON f.first IS NOT NULL AND r.fecha>=f.first WHERE ${kw} AND r.fecha::date BETWEEN ${iF}::date AND ${iT}::date`, params),
       pool.query(`SELECT k.id AS contact_id, k.nombre, k.apellido, COALESCE(co.nombre,k.empresa_nombre) AS empresa, a.fecha, a.nota
                     FROM activities a JOIN lm_contacts k ON k.id=a.contact_id LEFT JOIN lm_companies co ON co.id=k.company_id
                    WHERE ${kw} AND a.tipo='respuesta' AND ${inR(iF, iT)} ORDER BY a.fecha DESC LIMIT 8`, params),
@@ -6325,7 +6334,7 @@ app.get('/api/lm/dashboard', requireAuth, async (req, res) => {
       daily: daily.rows.map(r => ({ d: r.d instanceof Date ? r.d.toISOString().slice(0, 10) : String(r.d).slice(0, 10), ch: r.ch, n: r.n })),
       countries: Object.values(cm).sort((a, b) => b.contacted - a.contacted).slice(0, 12),
       channels: byCh.rows, heat: heat.rows, sequences: seqs.rows, clients: clients.rows,
-      funnel: funnel.rows[0], recent: recent.rows,
+      funnel: funnel.rows[0], recent: recent.rows, replyByCh: repCh.rows, replyDays: repDays.rows[0] && repDays.rows[0].days,
     });
   } catch (err) { console.error('[lm-dashboard]', err.message); res.status(500).json({ error: 'Error al cargar dashboard' }); }
 });
