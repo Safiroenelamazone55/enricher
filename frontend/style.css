@@ -16805,3 +16805,15 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .dash-scope .cp-card{padding:18px 20px}
 .dash-donut__c{width:160px;height:160px}
 .dash-legend{margin-bottom:4px}
+.dash-row .cp-card{margin:0}
+.dash-bars::after{width:72%;height:100%;top:0;right:-6px}
+.dash-leg td{white-space:nowrap}
+.dash-donut{flex-wrap:wrap;gap:12px}
+.dash-donut__c{width:150px;height:150px}
+.dash-leg{min-width:170px}
+.dash-row--b .clients-table-wrap{overflow:visible}
+.dash-row--b .clients-table{table-layout:fixed;width:100%}
+.dash-row--b .clients-table th,.dash-row--b .clients-table td{padding:8px 6px;font-size:12px}
+.dash-row--b .clients-table th:first-child,.dash-row--b .clients-table td:first-child{width:38%;text-align:left}
+@media(max-width:1300px){.dash-row--b{grid-template-columns:repeat(2,minmax(0,1fr))}.dash-row--b .cp-card:nth-child(3){grid-column:1/-1}}
+@media(max-width:900px){.dash-row--b{grid-template-columns:1fr}}
