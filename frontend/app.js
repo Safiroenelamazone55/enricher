@@ -5485,7 +5485,7 @@ const CanteraModule = (() => {
   function _bdFilterSelect(kind, list, current) {
     const label = { cliente: 'Cliente', campana: 'Campaña', secuencia: 'Secuencia' }[kind];
     return `<select class="form-input" style="width:auto" onchange="CanteraModule.bdSetFiltro('${kind}',this.value)" title="Filtrar por ${label.toLowerCase()}">
-      <option value="">${label}: todos</option>
+      <option value="">${label}</option>
       ${list.map(x => `<option value="${x.id}"${String(current) === String(x.id) ? ' selected' : ''}>${esc(x.nombre)}</option>`).join('')}
     </select>`;
   }
@@ -7675,7 +7675,7 @@ const CanteraMesaModule = (() => {
   function _filterSelect(kind, list, current) {
     const label = { cliente: 'Cliente', campana: 'Campaña', secuencia: 'Secuencia' }[kind];
     return `<select class="form-input" style="width:auto" onchange="CanteraMesaModule.setFiltro('${kind}',this.value)" title="Filtrar por ${label.toLowerCase()}">
-      <option value="">${label}: todos</option>
+      <option value="">${label}</option>
       ${list.map(x => `<option value="${x.id}"${String(current) === String(x.id) ? ' selected' : ''}>${esc(x.nombre)}</option>`).join('')}
     </select>`;
   }
@@ -24065,7 +24065,7 @@ ${foot}
   }
   function _dashFiltersHtml() {
     const f = _dashF;
-    const sel = (k, label, opts) => `<select class="dash-sel${f[k] ? ' is-on' : ''}" onchange="LeadManagerModule.dashSet('${k}',this.value)" title="${label}"><option value="">${label}: todos</option>${opts.map(o => `<option value="${esc(String(o[0]))}"${String(f[k]) === String(o[0]) ? ' selected' : ''}>${esc(o[1])}</option>`).join('')}</select>`;
+    const sel = (k, label, opts) => `<select class="dash-sel${f[k] ? ' is-on' : ''}" onchange="LeadManagerModule.dashSet('${k}',this.value)" title="${label}"><option value="">${label}</option>${opts.map(o => `<option value="${esc(String(o[0]))}"${String(f[k]) === String(o[0]) ? ' selected' : ''}>${esc(o[1])}</option>`).join('')}</select>`;
     const cl = parseInt(f.client) || 0, cp = parseInt(f.campaign) || 0;
     const camps = _campaigns.filter(c => !cl || c.outbound_client_id === cl);
     const seqs = _sequences.filter(s => (!cl || s.outbound_client_id === cl) && (!cp || s.campaign_id === cp));
