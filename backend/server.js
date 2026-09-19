@@ -6285,7 +6285,7 @@ app.get('/api/lm/dashboard', requireAuth, async (req, res) => {
          AND m.sent_at IS NOT NULL AND m.sent_at::date BETWEEN ${r[0]}::date AND ${r[1]}::date`;
     const cur = [iF, iT], prv = [iPF, iPT];
     const REP1 = `(SELECT DISTINCT ON (contact_id) contact_id, fecha FROM activities WHERE user_id=$1 AND (tipo='respuesta' OR (tipo='disposition_change' AND nota ~ '→ (${RTYPES})[[:space:]]*$')) ORDER BY contact_id, fecha)`;
-    const [k1, k0, m1, m0, daily, countries, byCh, heat, seqs, clients, funnel, recent, repCh, repDays, heatAuto, deals, dispo] = await Promise.all([
+    const [k1, k0, m1, m0, daily, countries, byCh, heat, seqs, clients, funnel, repCh, repDays, recent, heatAuto, deals, dispo] = await Promise.all([
       pool.query(kpiSql(cur), params), pool.query(kpiSql(prv), params),
       pool.query(msgSql(cur), params), pool.query(msgSql(prv), params),
       pool.query(`SELECT a.fecha::date AS d, ${CH} AS ch, COUNT(*)::int AS n ${base} AND ${OUT}${chw} AND ${inR(iF, iT)} GROUP BY 1,2 ORDER BY 1`, params),
