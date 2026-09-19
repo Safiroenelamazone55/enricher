@@ -6255,7 +6255,7 @@ app.get('/api/lm/dashboard', requireAuth, async (req, res) => {
     const OUT = `a.estado='hecha' AND a.tipo NOT IN ('respuesta','aceptacion','reunion')`;
     const ch = ['email', 'linkedin', 'call', 'whatsapp'].includes(q.channel) ? q.channel : null;
     const chw = ch ? ` AND ${CH}='${ch}'` : '';
-    const iF = P(from), iT = P(to), iPF = P(prevFrom), iPT = P(prevTo);
+    const iF = `'${from}'`, iT = `'${to}'`, iPF = `'${prevFrom}'`, iPT = `'${prevTo}'`; // fechas ya validadas (ISO)
     const inR = (f, t) => `a.fecha::date BETWEEN ${f}::date AND ${t}::date`;
     const base = `FROM activities a JOIN lm_contacts k ON k.id=a.contact_id WHERE ${kw}`;
     const kpiSql = r => `
