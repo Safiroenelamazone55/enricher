@@ -6301,7 +6301,7 @@ app.get('/api/lm/dashboard', requireAuth, async (req, res) => {
       pool.query(`SELECT s.id, s.nombre, oc.nombre AS cliente,
                          COUNT(DISTINCT cs.contact_id)::int AS enrolados,
                          COUNT(DISTINCT cs.contact_id) FILTER (WHERE cs.estado='activo')::int AS activos,
-                         COUNT(DISTINCT a.contact_id) FILTER (WHERE ${OUT}${chw} AND ${inR(iF, iT)})::int AS contactados,
+                         COUNT(DISTINCT a.contact_id) FILTER (WHERE ((${OUT}${chw}) OR ${REPLY}) AND ${inR(iF, iT)})::int AS contactados,
                          COUNT(DISTINCT a.contact_id) FILTER (WHERE ${REPLY} AND ${inR(iF, iT)})::int AS respuestas,
                          COUNT(DISTINCT k.id) FILTER (WHERE k.disposition='reunion' OR k.deal_cierre IS NOT NULL OR k.deal_valor IS NOT NULL)::int AS reuniones
                     FROM sequences s JOIN lm_contact_sequences cs ON cs.sequence_id=s.id
@@ -6311,7 +6311,7 @@ app.get('/api/lm/dashboard', requireAuth, async (req, res) => {
                    WHERE ${kw} GROUP BY s.id, s.nombre, oc.nombre ORDER BY contactados DESC, enrolados DESC LIMIT 100`, params),
       pool.query(`SELECT oc.id, oc.nombre,
                          COUNT(DISTINCT k.id)::int AS contactos,
-                         COUNT(DISTINCT a.contact_id) FILTER (WHERE ${OUT}${chw} AND ${inR(iF, iT)})::int AS contactados,
+                         COUNT(DISTINCT a.contact_id) FILTER (WHERE ((${OUT}${chw}) OR ${REPLY}) AND ${inR(iF, iT)})::int AS contactados,
                          COUNT(DISTINCT a.contact_id) FILTER (WHERE ${REPLY} AND ${inR(iF, iT)})::int AS respuestas,
                          COUNT(DISTINCT k.id) FILTER (WHERE k.disposition='reunion' OR k.deal_cierre IS NOT NULL OR k.deal_valor IS NOT NULL)::int AS reuniones
                     FROM outbound_clients oc JOIN lm_contacts k ON k.outbound_client_id=oc.id
@@ -6324,9 +6324,9 @@ app.get('/api/lm/dashboard', requireAuth, async (req, res) => {
                     FROM lm_contacts k WHERE ${kw}`, params),
       pool.query(`SELECT x.ch, COUNT(*)::int AS replies FROM (SELECT (SELECT ${CH} FROM activities a WHERE a.contact_id=r.contact_id AND (${OUT} OR a.tipo='email') AND a.fecha<=r.fecha ORDER BY a.fecha DESC LIMIT 1) AS ch FROM ${REP1} r JOIN lm_contacts k ON k.id=r.contact_id WHERE ${kw} AND r.fecha::date BETWEEN ${iF}::date AND ${iT}::date) x WHERE x.ch IS NOT NULL GROUP BY 1`, params),
       pool.query(`SELECT ROUND(AVG(EXTRACT(EPOCH FROM (r.fecha - f.first))/86400)::numeric,1)::float AS days FROM ${REP1} r JOIN lm_contacts k ON k.id=r.contact_id JOIN LATERAL (SELECT MIN(a.fecha) AS first FROM activities a WHERE a.contact_id=r.contact_id AND ${OUT}) f ON f.first IS NOT NULL AND r.fecha>=f.first WHERE ${kw} AND r.fecha::date BETWEEN ${iF}::date AND ${iT}::date`, params),
-      pool.query(`SELECT k.id AS contact_id, k.nombre, k.apellido, COALESCE(co.nombre,k.empresa_nombre) AS empresa, a.fecha, a.nota
+      pool.query(`SELECT * FROM (SELECT DISTINCT ON (k.id) k.id AS contact_id, k.nombre, k.apellido, COALESCE(co.nombre,k.empresa_nombre) AS empresa, a.fecha, a.nota
                     FROM activities a JOIN lm_contacts k ON k.id=a.contact_id LEFT JOIN lm_companies co ON co.id=k.company_id
-                   WHERE ${kw} AND ${REPLY} AND ${inR(iF, iT)} ORDER BY a.fecha DESC LIMIT 8`, params),
+                   WHERE ${kw} AND ${REPLY} AND ${inR(iF, iT)} ORDER BY k.id, a.fecha DESC) t ORDER BY fecha DESC LIMIT 8`, params),
       pool.query(`SELECT dow, hr, COUNT(*)::int AS n FROM (
         SELECT k.id, 'email' AS src, EXTRACT(DOW FROM m.replied_at AT TIME ZONE 'America/Lima')::int AS dow, EXTRACT(HOUR FROM m.replied_at AT TIME ZONE 'America/Lima')::int AS hr, m.replied_at::date AS d
           FROM lm_messages m JOIN lm_contacts k ON k.id=m.contact_id
