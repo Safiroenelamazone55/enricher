@@ -24104,6 +24104,13 @@ ${foot}
     const cls = diff > 0 ? 'up' : diff < 0 ? 'down' : '0';
     return `<span class="dash-d dash-d--${cls}">${diff > 0 ? '▲' : diff < 0 ? '▼' : '•'} ${Math.abs(diff)}${pts ? ' pts' : '%'} vs. anterior</span>`;
   }
+  // semáforo: g = bien, a = atención, r = mal, n = sin dato
+  function _dashSt(kind, a, b, c2) {
+    if (kind === 'delta') return a > b ? 'g' : a < b ? 'r' : (a ? 'a' : 'n');
+    if (kind === 'rate') return a >= b ? 'g' : a >= c2 ? 'a' : 'r';
+    if (kind === 'low') return a >= b ? 'r' : a >= c2 ? 'a' : 'g';
+    return 'n';
+  }
   function _dashBodyHtml() {
     if (_dashLoading && !_dashData) return '<div class="cp-empty2" style="padding:40px">Cargando métricas…</div>';
     const d = _dashData; if (!d) return '<div class="cp-empty2" style="padding:40px">No se pudieron cargar las métricas.</div>';
@@ -24111,23 +24118,23 @@ ${foot}
     const rr = _dashPct(c.replies, c.contacted), rrp = _dashPct(p.replies, p.contacted);
     const ar = _dashPct(c.accepts, c.invites), arp = _dashPct(p.accepts, p.invites);
     const or = _dashPct(c.opened, c.sent);
-    const kpi = (l, v, delta, sub) => `<div class="dash-kpi"><div class="dash-kpi__l">${l}</div><div class="dash-kpi__v">${v}</div>${delta}${sub ? `<div class="dash-kpi__s">${sub}</div>` : ''}</div>`;
+    const kpi = (l, v, delta, sub, st) => `<div class="dash-kpi dash-kpi--${st || 'n'}"><div class="dash-kpi__l">${l}</div><div class="dash-kpi__v">${v}</div>${delta}${sub ? `<div class="dash-kpi__s">${sub}</div>` : ''}</div>`;
     const tbl = (head, rows, empty) => `<div class="clients-table-wrap"><table class="clients-table"><thead><tr>${head.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows || `<tr><td colspan="${head.length}" class="rep-empty-td">${empty}</td></tr>`}</tbody></table></div>`;
     const seqRows = d.sequences.map(s => `<tr><td>${esc(s.nombre)}</td><td>${esc(s.cliente || '—')}</td><td>${s.enrolados}</td><td>${s.contactados}</td><td>${s.respuestas}</td><td><b>${_dashPct(s.respuestas, s.contactados)}%</b></td><td>${s.reuniones}</td></tr>`).join('');
     const cliRows = d.clients.map(s => `<tr><td>${esc(s.nombre)}</td><td>${s.contactos}</td><td>${s.contactados}</td><td>${s.respuestas}</td><td><b>${_dashPct(s.respuestas, s.contactados)}%</b></td><td>${s.reuniones}</td></tr>`).join('');
     const ctRows = d.countries.map(s => `<tr><td>${esc(s.pais)}</td><td>${s.contacted}</td><td>${s.replied}</td><td><b>${_dashPct(s.replied, s.contacted)}%</b></td></tr>`).join('');
     const recent = d.recent.map(r => `<button class="lm-today-rep" onclick="LeadManagerModule.openContactPage(${r.contact_id})"><span class="lm-today-rep__who">${esc([r.nombre, r.apellido].filter(Boolean).join(' '))}</span><span class="lm-today-rep__co">${esc(r.empresa || '')}</span><span class="lm-today-rep__sn">${new Date(r.fecha).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}</span></button>`).join('');
     const fn = d.funnel, base = fn.enrolados || 1;
-    const stages = [['Enrolados', fn.enrolados, '#B9C7D6'], ['Contactados', fn.contactados, '#2F8F83'], ['Respondieron', fn.respondieron, '#C9A24B'], ['Reunión', fn.reuniones, '#7A5C8E']];
+    const stages = [['Enrolados', fn.enrolados, '#B8C4D0'], ['Contactados', fn.contactados, '#F5B841'], ['Respondieron', fn.respondieron, '#43B581'], ['Reunión', fn.reuniones, '#2E8B63']];
     const funnel = stages.map((s, i) => `<div class="rep-fn"><div class="rep-fn__top"><span class="rep-fn__lbl">${s[0]}</span>${i ? `<span class="rep-fn__conv">${_dashPct(s[1], stages[i - 1][1])}% ↳</span>` : '<span class="rep-fn__conv rep-fn__conv--base">base</span>'}<span class="rep-fn__n">${s[1]}</span></div><div class="rep-fn__track"><div class="rep-fn__fill" style="width:${Math.max(3, Math.round(s[1] / base * 100))}%;background:${s[2]}"></div></div></div>`).join('');
     return `${_dashLoading ? '<div class="dash-loading">Actualizando…</div>' : ''}
       <div class="dash-kpis">
-        ${kpi('Contactos alcanzados', c.contacted, _dashDelta(c.contacted, p.contacted), `${c.touches} toques en total`)}
-        ${kpi('Tasa de respuesta', rr + '%', _dashDelta(rr, rrp, true), `${c.replies} respondieron`)}
-        ${kpi('Aceptación LinkedIn', ar + '%', _dashDelta(ar, arp, true), `${c.accepts} de ${c.invites} invitaciones`)}
-        ${kpi('Emails enviados', c.emails, _dashDelta(c.emails, p.emails), c.bounced ? `${c.bounced} rebotados (auto)` : 'sin rebotes')}
-        ${kpi('Apertura email', c.sent ? or + '%' : '—', '<span class="dash-d dash-d--0">estimada</span>', `sobre ${c.sent} envíos con píxel`)}
-        ${kpi('Reuniones / deals', d.deals.meetings, '<span class="dash-d dash-d--0">' + (d.deals.programadas ? d.deals.programadas + ' programada' + (d.deals.programadas > 1 ? 's' : '') + (d.deals.proximo ? ' · próx. ' + new Date(d.deals.proximo).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', timeZone: 'UTC' }) : '') : 'sin programar') + '</span>', d.deals.valor ? `$${Math.round(d.deals.valor).toLocaleString('es-ES')} · pond. $${Math.round(d.deals.ponderado).toLocaleString('es-ES')}` : 'sin valor cargado')}
+        ${kpi('Contactos alcanzados', c.contacted, _dashDelta(c.contacted, p.contacted), `${c.touches} toques en total`, _dashSt('delta', c.contacted, p.contacted))}
+        ${kpi('Tasa de respuesta', rr + '%', _dashDelta(rr, rrp, true), `${c.replies} respondieron`, c.contacted ? _dashSt('rate', rr, 5, 2) : 'n')}
+        ${kpi('Aceptación LinkedIn', ar + '%', _dashDelta(ar, arp, true), `${c.accepts} de ${c.invites} invitaciones`, c.invites ? _dashSt('rate', ar, 30, 15) : 'n')}
+        ${kpi('Emails enviados', c.emails, _dashDelta(c.emails, p.emails), c.bounced ? `${c.bounced} rebotados (auto)` : 'sin rebotes', c.sent ? _dashSt('low', _dashPct(c.bounced, c.sent), 5, 2) : _dashSt('delta', c.emails, p.emails))}
+        ${kpi('Apertura email', c.sent ? or + '%' : '—', '<span class="dash-d dash-d--0">estimada</span>', `sobre ${c.sent} envíos con píxel`, c.sent >= 10 ? _dashSt('rate', or, 40, 20) : 'n')}
+        ${kpi('Reuniones / deals', d.deals.meetings, '<span class="dash-d dash-d--0">' + (d.deals.programadas ? d.deals.programadas + ' programada' + (d.deals.programadas > 1 ? 's' : '') + (d.deals.proximo ? ' · próx. ' + new Date(d.deals.proximo).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', timeZone: 'UTC' }) : '') : 'sin programar') + '</span>', d.deals.valor ? `$${Math.round(d.deals.valor).toLocaleString('es-ES')} · pond. $${Math.round(d.deals.ponderado).toLocaleString('es-ES')}` : 'sin valor cargado', d.deals.meetings ? 'g' : 'a')}
       </div>
       <div class="dash-grid">
         <div class="cp-card dash-w2"><div class="cp-card__t">Actividad por canal${d.range.days > 60 ? ' · por semana' : ''}</div><div class="dash-chart"><canvas id="dash-daily"></canvas></div></div>
@@ -24169,17 +24176,17 @@ ${foot}
     h += '</div>';
     order.forEach(dw => {
       h += `<div class="dash-heat"><span class="dash-heat__d">${dn[dw]}</span>`;
-      for (let hr = 6; hr <= 22; hr += 2) { const n = (g[dw + '_' + hr] || 0) + (g[dw + '_' + (hr + 1)] || 0); h += `<span class="dash-heat__c" title="${n}" style="background:rgba(36,64,94,${n ? (0.15 + 0.85 * n / max).toFixed(2) : 0.05})"></span>`; }
+      for (let hr = 6; hr <= 22; hr += 2) { const n = (g[dw + '_' + hr] || 0) + (g[dw + '_' + (hr + 1)] || 0); h += `<span class="dash-heat__c" title="${n}" style="background:rgba(67,181,129,${n ? (0.15 + 0.85 * n / max).toFixed(2) : 0.05})"></span>`; }
       h += '</div>';
     });
     return h;
   }
   function _dashInitCharts() {
     if (typeof Chart === 'undefined' || !_dashData) return;
-    const d = _dashData, COL = { email: '#24405E', linkedin: '#2F8F83', call: '#C9A24B', whatsapp: '#6FA287', otros: '#C9D1D8' }, LBL = { email: 'Email', linkedin: 'LinkedIn', call: 'Llamada', whatsapp: 'WhatsApp', otros: 'Otros / tareas' };
-    const tip = { backgroundColor: '#1B2F47', padding: 8, cornerRadius: 0 };
+    const d = _dashData, COL = { email: '#4A90D9', linkedin: '#F5B841', call: '#E8645A', whatsapp: '#43B581', otros: '#C7CFD8' }, LBL = { email: 'Email', linkedin: 'LinkedIn', call: 'Llamada', whatsapp: 'WhatsApp', otros: 'Otros / tareas' };
+    const tip = { backgroundColor: '#26323F', padding: 8, cornerRadius: 0 };
     const leg = { position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, usePointStyle: true, font: { size: 11 } } };
-    const axis = { x: { grid: { display: false }, ticks: { maxTicksLimit: 8, color: '#8A948E', font: { size: 10 } } }, y: { beginAtZero: true, grid: { color: '#E6EAEF' }, ticks: { precision: 0, maxTicksLimit: 4, color: '#8A948E', font: { size: 10 } } } };
+    const axis = { x: { grid: { display: false }, ticks: { maxTicksLimit: 8, color: '#8A948E', font: { size: 10 } } }, y: { beginAtZero: true, grid: { color: '#E9ECEF' }, ticks: { precision: 0, maxTicksLimit: 4, color: '#8A948E', font: { size: 10 } } } };
     const days = []; { const a = new Date(d.range.from + 'T00:00:00Z'), b = new Date(d.range.to + 'T00:00:00Z'); for (let x = new Date(a); x <= b && days.length < 400; x.setUTCDate(x.getUTCDate() + 1)) days.push(x.toISOString().slice(0, 10)); }
     // rangos largos (YTD…): agrupar por semana para que las barras no queden como líneas
     const weekly = days.length > 60;
@@ -24192,7 +24199,7 @@ ${foot}
     const cc = document.getElementById('dash-ch');
     if (cc) _dashCharts.push(new Chart(cc.getContext('2d'), { type: 'doughnut', data: { labels: d.channels.map(r => LBL[r.ch]), datasets: [{ data: d.channels.map(r => r.touches), backgroundColor: d.channels.map(r => COL[r.ch]), borderWidth: 2, borderColor: '#fff' }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '68%', plugins: { legend: Object.assign({}, leg, { position: 'right' }), tooltip: tip } } }));
     const pc = document.getElementById('dash-ctry');
-    if (pc) { const t8 = d.countries.slice(0, 8); _dashCharts.push(new Chart(pc.getContext('2d'), { type: 'bar', data: { labels: t8.map(r => r.pais), datasets: [{ label: 'Contactados', backgroundColor: '#24405E', borderRadius: 0, data: t8.map(r => r.contacted) }, { label: 'Respondieron', backgroundColor: '#C9A24B', borderRadius: 0, data: t8.map(r => r.replied) }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: leg, tooltip: tip }, scales: { x: axis.y, y: { grid: { display: false }, ticks: { color: '#45586A', font: { size: 10 } } } } } })); }
+    if (pc) { const t8 = d.countries.slice(0, 8); _dashCharts.push(new Chart(pc.getContext('2d'), { type: 'bar', data: { labels: t8.map(r => r.pais), datasets: [{ label: 'Contactados', backgroundColor: '#4A90D9', borderRadius: 0, data: t8.map(r => r.contacted) }, { label: 'Respondieron', backgroundColor: '#43B581', borderRadius: 0, data: t8.map(r => r.replied) }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: leg, tooltip: tip }, scales: { x: axis.y, y: { grid: { display: false }, ticks: { color: '#45586A', font: { size: 10 } } } } } })); }
   }
   function _vDashboard() {
     const tabs = `<div class="dash-tabs"><button class="dash-tab${_dashTab === 'hoy' ? ' on' : ''}" onclick="LeadManagerModule.dashTab('hoy')">Hoy</button><button class="dash-tab${_dashTab === 'rend' ? ' on' : ''}" onclick="LeadManagerModule.dashTab('rend')">Rendimiento</button></div>`;
