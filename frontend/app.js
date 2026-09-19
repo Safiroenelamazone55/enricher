@@ -24053,6 +24053,9 @@ ${foot}
     send: '<path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/>',
     phone: '<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/>',
     chat: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+    handshake: '<path d="m11 17 2 2a1 1 0 1 0 3-3"/><path d="m14 14 2.5 2.5a1 1 0 1 0 3-3l-3.88-3.88a3 3 0 0 0-4.24 0l-.88.88a1 1 0 1 1-3-3l2.81-2.81a5.79 5.79 0 0 1 7.06-.87l.47.28a2 2 0 0 0 1.42.25L21 4"/><path d="m21 3 1 11h-2"/><path d="M3 3 2 14l6.5 6.5a1 1 0 1 0 3-3"/><path d="M3 4h8"/>',
+    plus: '<path d="M12 5v14M5 12h14"/>',
+    info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>',
     dots: '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
     userplus: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/>',
   };
@@ -24132,7 +24135,7 @@ ${foot}
     if (prev == null || (!prev && !cur)) return '<span class="dash-d dash-d--0">— vs. período anterior</span>';
     const diff = pts ? Math.round((cur - prev) * 10) / 10 : (prev ? Math.round((cur - prev) / prev * 100) : 100);
     const cls = diff > 0 ? 'up' : diff < 0 ? 'down' : '0';
-    return `<span class="dash-d dash-d--${cls}">${diff > 0 ? '▲' : diff < 0 ? '▼' : '•'} ${Math.abs(diff)}${pts ? ' pts' : '%'} vs. anterior</span>`;
+    return `<span class="dash-d dash-d--${cls}">${diff > 0 ? '▲ +' : diff < 0 ? '▼ -' : '• '}${Math.abs(diff)}${pts ? ' pts' : '%'} vs. período anterior</span>`;
   }
   // semáforo: g = bien, a = atención, r = mal, n = sin dato
   function _dashSt(kind, a, b, c2) {
@@ -24148,7 +24151,7 @@ ${foot}
     const rr = _dashPct(c.replies, c.contacted), rrp = _dashPct(p.replies, p.contacted);
     const ar = _dashPct(c.accepts, c.invites), arp = _dashPct(p.accepts, p.invites);
     const or = _dashPct(c.opened, c.sent);
-    const KI = [['users', '#22A06B'], ['reply', '#F59E0B'], ['in', '#7C5CE0'], ['mail', '#2563EB'], ['mailopen', '#F59E0B'], ['cal', '#22A06B']]; let ki = 0;
+    const KI = [['users', '#22A06B'], ['reply', '#F59E0B'], ['in', '#7C5CE0'], ['mail', '#2563EB'], ['mailopen', '#F59E0B'], ['handshake', '#22A06B']]; let ki = 0;
     const kpi = (l, v, delta, sub) => { const k = KI[ki++]; return `<div class="dash-kpi" style="--kc:${k[1]}"><div class="dash-kpi__top"><span class="dash-kpi__ic">${_dashIco(k[0], 18)}</span><span class="dash-kpi__l">${l}</span></div><div class="dash-kpi__v">${v}</div>${delta}${sub ? `<div class="dash-kpi__s">${sub}</div>` : ''}</div>`; };
     const tbl = (head, rows, empty) => `<div class="clients-table-wrap"><table class="clients-table"><thead><tr>${head.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows || `<tr><td colspan="${head.length}" class="rep-empty-td">${empty}</td></tr>`}</tbody></table></div>`;
     const seqRows = d.sequences.map(s => `<tr><td>${esc(s.nombre)}</td><td>${esc(s.cliente || '—')}</td><td>${s.enrolados}</td><td>${s.contactados}</td><td>${s.respuestas}</td><td><b>${_dashPct(s.respuestas, s.contactados)}%</b></td><td>${s.reuniones}</td></tr>`).join('');
@@ -24180,7 +24183,7 @@ ${foot}
         ${kpi('Reuniones / deals', d.deals.meetings, '<span class="dash-d dash-d--0">' + (d.deals.programadas ? d.deals.programadas + ' programada' + (d.deals.programadas > 1 ? 's' : '') + (d.deals.proximo ? ' · próx. ' + new Date(d.deals.proximo).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', timeZone: 'UTC' }) : '') : 'sin programar') + '</span>', d.deals.valor ? `$${Math.round(d.deals.valor).toLocaleString('es-ES')} · pond. $${Math.round(d.deals.ponderado).toLocaleString('es-ES')}` : 'sin valor cargado')}
       </div>
       <div class="dash-row dash-row--a">
-        <div class="cp-card"><div class="dash-card-h"><div class="cp-card__t">Actividad por canal</div><label class="dash-f dash-f--sm"><select onchange="LeadManagerModule.dashGran(this.value)"><option value="day"${gran === 'day' ? ' selected' : ''}>Diario</option><option value="week"${gran === 'week' ? ' selected' : ''}>Semanal</option></select></label></div><div class="dash-legend">${actLeg}</div><div class="dash-chart"><canvas id="dash-daily"></canvas></div></div>
+        <div class="cp-card"><div class="dash-card-h"><div class="cp-card__t">Actividad por canal <span class="dash-info" title="Envíos y pasos hechos por canal (no incluye respuestas ni notas)">${_dashIco('info', 14)}</span></div><label class="dash-f dash-f--sm"><select onchange="LeadManagerModule.dashGran(this.value)"><option value="day"${gran === 'day' ? ' selected' : ''}>Diario</option><option value="week"${gran === 'week' ? ' selected' : ''}>Semanal</option></select></label></div><div class="dash-legend">${actLeg}</div><div class="dash-chart"><canvas id="dash-daily"></canvas></div></div>
         <div class="cp-card"><div class="cp-card__t">Embudo (histórico del filtro)</div><div class="dash-funnel">${funnel}</div></div>
       </div>
       <div class="dash-row dash-row--b">
@@ -24234,27 +24237,27 @@ ${foot}
     if (typeof Chart === 'undefined' || !_dashData) return;
     const d = _dashData;
     const tip = { backgroundColor: '#0F172A', padding: 9, cornerRadius: 8, titleFont: { size: 11 }, bodyFont: { size: 11 } };
-    const axis = { x: { grid: { display: false }, border: { display: false }, ticks: { maxTicksLimit: 8, color: '#94A3B8', font: { size: 10 } } }, y: { beginAtZero: true, border: { display: false }, grid: { color: '#EEF1F5', drawTicks: false }, ticks: { precision: 0, maxTicksLimit: 5, color: '#94A3B8', font: { size: 10 }, padding: 8 } } };
+    const axis = { x: { grid: { display: false }, border: { display: false }, ticks: { maxTicksLimit: 8, color: '#94A3B8', font: { size: 10 } } }, y: { beginAtZero: true, border: { display: false }, grid: { color: '#DDE3EA', borderDash: [3, 4], drawTicks: false }, ticks: { precision: 0, maxTicksLimit: 5, color: '#94A3B8', font: { size: 10 }, padding: 8 } } };
     const days = []; { const a = new Date(d.range.from + 'T00:00:00Z'), b = new Date(d.range.to + 'T00:00:00Z'); for (let x = new Date(a); x <= b && days.length < 400; x.setUTCDate(x.getUTCDate() + 1)) days.push(x.toISOString().slice(0, 10)); }
     const weekly = (_dashGran === 'auto' ? days.length > 60 : _dashGran === 'week');
     const wk = x => { const t = new Date(x + 'T00:00:00Z'); t.setUTCDate(t.getUTCDate() - ((t.getUTCDay() + 6) % 7)); return t.toISOString().slice(0, 10); };
     const buckets = weekly ? [...new Set(days.map(wk))] : days;
     const bOf = weekly ? wk : (x => x);
     const MES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
-    const lbl = x => parseInt(x.slice(8), 10) + ' ' + MES[parseInt(x.slice(5, 7), 10) - 1];
+    const lbl = x => x.slice(5);
     const chs = ['email', 'linkedin', 'call', 'whatsapp', 'otros'].filter(k => d.daily.some(r => r.ch === k));
     const dc = document.getElementById('dash-daily');
     if (dc) _dashCharts.push(new Chart(dc.getContext('2d'), { type: 'bar', data: { labels: buckets.map(lbl), datasets: chs.map((k, i) => ({ label: _DASH_CH[k][0], backgroundColor: _DASH_CH[k][1], borderRadius: i === chs.length - 1 ? 3 : 0, borderSkipped: false, barPercentage: .7, data: buckets.map(b => d.daily.filter(r => r.ch === k && bOf(r.d) === b).reduce((n, r) => n + r.n, 0)) })) }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: tip }, scales: { x: Object.assign({}, axis.x, { stacked: true }), y: Object.assign({}, axis.y, { stacked: true }) } } }));
     const cc = document.getElementById('dash-ch');
-    if (cc) _dashCharts.push(new Chart(cc.getContext('2d'), { type: 'doughnut', data: { labels: d.channels.map(r => (_DASH_CH[r.ch] || _DASH_CH.otros)[0]), datasets: [{ data: d.channels.map(r => r.touches), backgroundColor: d.channels.map(r => (_DASH_CH[r.ch] || _DASH_CH.otros)[1]), borderWidth: 2, borderColor: '#fff' }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '62%', plugins: { legend: { display: false }, tooltip: tip } } }));
+    if (cc) _dashCharts.push(new Chart(cc.getContext('2d'), { type: 'doughnut', data: { labels: d.channels.map(r => (_DASH_CH[r.ch] || _DASH_CH.otros)[0]), datasets: [{ data: d.channels.map(r => r.touches), backgroundColor: d.channels.map(r => (_DASH_CH[r.ch] || _DASH_CH.otros)[1]), borderWidth: 2, borderColor: '#fff' }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '55%', plugins: { legend: { display: false }, tooltip: tip } } }));
   }
   function _vDashboard() {
     const tabs = `<div class="dash-tabs"><button class="dash-tab${_dashTab === 'hoy' ? ' on' : ''}" onclick="LeadManagerModule.dashTab('hoy')">Hoy</button><button class="dash-tab${_dashTab === 'rend' ? ' on' : ''}" onclick="LeadManagerModule.dashTab('rend')">Rendimiento</button></div>`;
     const head = `<div class="lm-sec-head">
         <div style="display:flex;align-items:center;gap:18px"><h2 class="lm-sec-title">Dashboard</h2>${tabs}</div>
         <div class="lm-sec-actions">
-          <button class="dash-btn" onclick="LeadManagerModule.openDrawer()">${_dashIco('user', 16)} Nuevo lead</button>
-          <button class="dash-btn dash-btn--p" onclick="LeadManagerModule.openClientDrawer()">${_dashIco('userplus', 16)} Nuevo cliente outbound</button>
+          <button class="dash-btn" onclick="LeadManagerModule.openDrawer()">${_dashIco('plus', 15)} Nuevo lead</button>
+          <button class="dash-btn dash-btn--p" onclick="LeadManagerModule.openClientDrawer()">${_dashIco('users', 16)} Nuevo cliente outbound</button>
         </div>
       </div>`;
     if (_dashTab === 'rend') {

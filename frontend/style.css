@@ -16788,3 +16788,20 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 /* Bordes rectos en todo el dashboard (solo los puntitos de leyenda quedan redondos) */
 .dash-scope *,.dash-scope *::before,.dash-scope *::after{border-radius:0!important}
 .dash-scope .dash-dot{border-radius:50%!important}
+
+/* ── Detalles de la referencia: mapa, info, conectores, tablas con marco ── */
+.dash-bars{position:relative;padding:6px 0}
+.dash-bars::after{content:"";position:absolute;right:0;top:-4px;width:62%;height:118%;background:#D9E0E8;opacity:.75;-webkit-mask:url(world-map.svg) center/contain no-repeat;mask:url(world-map.svg) center/contain no-repeat;pointer-events:none;z-index:0}
+.dash-bar{position:relative;z-index:1}
+.dash-bar__t{background:transparent}
+.dash-info{display:inline-flex;vertical-align:middle;margin-left:6px;color:#94A3B8;cursor:help}
+.dash-scope .cp-card__t{display:flex;align-items:center}
+.dash-fn:not(:last-child)::after{display:block;content:"";position:absolute;left:29px;bottom:-9px;height:9px;top:auto;border-left:2px solid #CBD5E1}
+.dash-fn{margin:0}
+.dash-funnel{gap:9px}
+.dash-row--b .clients-table-wrap{border:1px solid #E7EBF0}
+.dash-row--b .clients-table th{background:#F1F4F8;border-bottom:1px solid #E7EBF0}
+.dash-tot td{background:#F1F4F8!important}
+.dash-scope .cp-card{padding:18px 20px}
+.dash-donut__c{width:160px;height:160px}
+.dash-legend{margin-bottom:4px}
