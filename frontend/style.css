@@ -16714,3 +16714,58 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .hoy-scroll .clients-table-wrap{overflow:visible!important}
 .hoy-scroll .clients-table{min-width:0!important;width:100%;table-layout:auto}
 .hoy-scroll .clients-table td:last-child,.hoy-scroll .clients-table th:last-child{text-align:right;white-space:nowrap;padding-right:6px}
+
+/* ── Dashboard: monocromo verde esmeralda (todos sus tonos) ── */
+.dash-scope{--t900:#0B3B2E;--t800:#0D4A3A;--t700:#0F5C47;--t600:#17755A;--t500:#249273;--t400:#3FA283;--t300:#8FCDB6;--t200:#CDE9DF;--t100:#E6F4EE;--t50:#F3FAF7}
+.dash-scope .lm-sec-title{color:var(--t900)}
+.dash-scope .dash-tabs{background:var(--t100)}
+.dash-scope .dash-tab{color:var(--t700);transition:background .18s,color .18s}
+.dash-scope .dash-tab.on{background:#fff;color:var(--t900);border:1px solid var(--t200)}
+.dash-scope .dash-seg{border-color:var(--t200)}
+.dash-scope .dash-seg__b{color:var(--t700);transition:background .18s,color .18s}
+.dash-scope .dash-seg__b:hover:not(.on){background:var(--t50)}
+.dash-scope .dash-seg__b+.dash-seg__b{border-left-color:var(--t200)}
+.dash-scope .dash-seg__b.on{background:var(--t700);color:#fff}
+.dash-scope .dash-sel{border-color:var(--t200);color:var(--t800);transition:border-color .18s}
+.dash-scope .dash-sel:hover{border-color:var(--t400)}
+.dash-scope .dash-sel.is-on{border-color:var(--t600);color:var(--t700);background:var(--t50)}
+.dash-scope .dash-clear{color:var(--t600)}
+.dash-scope .btn--primary{background:linear-gradient(135deg,var(--t700),var(--t500));border-color:var(--t700);box-shadow:none;color:#fff}
+.dash-scope .btn--primary:hover{background:linear-gradient(135deg,var(--t800),var(--t600))}
+.dash-scope .btn--ghost{border-color:var(--t200);color:var(--t700)}
+.dash-scope .cp-card{border-color:var(--t200);animation:dashIn .35s ease both}
+.dash-scope .cp-card__t{color:var(--t700);border-bottom:1px solid var(--t100);padding-bottom:6px}
+.dash-scope .dash-kpi{position:relative;border-color:var(--t200);overflow:hidden;transition:transform .18s,box-shadow .18s;animation:dashIn .35s ease both}
+.dash-scope .dash-kpi:hover{transform:translateY(-2px);box-shadow:0 6px 16px -8px rgba(15,92,71,.35)}
+.dash-scope .dash-kpi::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--t400)}
+.dash-scope .dash-kpi:nth-child(1)::before{background:var(--t300)}
+.dash-scope .dash-kpi:nth-child(2)::before{background:var(--t400)}
+.dash-scope .dash-kpi:nth-child(3)::before{background:var(--t500)}
+.dash-scope .dash-kpi:nth-child(4)::before{background:var(--t600)}
+.dash-scope .dash-kpi:nth-child(5)::before{background:var(--t700)}
+.dash-scope .dash-kpi:nth-child(6)::before{background:var(--t900)}
+.dash-scope .dash-kpi__l{color:var(--t600)}
+.dash-scope .dash-kpi__v{color:var(--t900)}
+.dash-scope .dash-kpi__s{color:#6F8A80}
+.dash-scope .dash-d--up{color:var(--t600)}.dash-scope .dash-d--down{color:#6B7C75}.dash-scope .dash-d--0{color:#88A198}
+.dash-scope .clients-table th{background:var(--t50);color:var(--t700);border-bottom:1px solid var(--t200)}
+.dash-scope .clients-table td{border-bottom:1px solid var(--t100)}
+.dash-scope .clients-table tbody tr{transition:background .15s}
+.dash-scope .clients-table tbody tr:hover{background:var(--t50)}
+.dash-scope .clients-table b{color:var(--t800)}
+.dash-scope .rep-fn__track{background:var(--t100)}
+.dash-scope .rep-fn__conv{color:var(--t600)}
+.dash-scope .rep-fn__conv--base{color:var(--t500)}
+.dash-scope .rep-fn__fill{transition:width .6s cubic-bezier(.2,.8,.2,1)}
+.dash-scope .hoy-al{border-color:var(--t200)}
+.dash-scope .hoy-al:hover{background:var(--t50)}
+.dash-scope .hoy-al--bad .hoy-al__dot,.dash-scope .hoy-al--warn .hoy-al__dot{background:var(--t600)}
+.dash-scope .hoy-al--bad{border-left:3px solid var(--t900)}.dash-scope .hoy-al--warn{border-left:3px solid var(--t400)}
+.dash-scope .hoy-ok{color:var(--t600)}
+.dash-scope .hoy-over{background:var(--t900);color:#fff}
+.dash-scope .hoy-zero{color:var(--t300)}
+.dash-scope .lm-link{color:var(--t600)}
+.dash-scope .lm-today-rep:hover{background:var(--t50)}
+.dash-scope .rep-empty{color:#88A198}
+@keyframes dashIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){.dash-scope *{animation:none!important;transition:none!important}}
