@@ -16711,3 +16711,6 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .hoy-scroll{flex:1;min-height:0;overflow:auto}
 .hoy-scroll .clients-table-wrap{overflow:visible}
 .dash-scope .hoy-scroll .clients-table td:first-child{white-space:nowrap}
+.hoy-scroll .clients-table-wrap{overflow:visible!important}
+.hoy-scroll .clients-table{min-width:0!important;width:100%;table-layout:auto}
+.hoy-scroll .clients-table td:last-child,.hoy-scroll .clients-table th:last-child{text-align:right;white-space:nowrap;padding-right:6px}
