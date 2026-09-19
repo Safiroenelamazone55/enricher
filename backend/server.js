@@ -6256,10 +6256,13 @@ app.get('/api/lm/dashboard', requireAuth, async (req, res) => {
     if (parseInt(q.client)) kw += ` AND k.outbound_client_id=${P(parseInt(q.client))}`;
     if (parseInt(q.sequence)) kw += ` AND EXISTS(SELECT 1 FROM lm_contact_sequences x WHERE x.contact_id=k.id AND x.sequence_id=${P(parseInt(q.sequence))})`;
     if (parseInt(q.campaign)) kw += ` AND EXISTS(SELECT 1 FROM lm_contact_sequences x JOIN sequences s2 ON s2.id=x.sequence_id WHERE x.contact_id=k.id AND s2.campaign_id=${P(parseInt(q.campaign))})`;
-    if (q.country) kw += ` AND k.pais ILIKE ${P('%' + String(q.country).slice(0, 60) + '%')}`;
-    const CH = `CASE WHEN a.tipo IN ('email_enviado','email') THEN 'email' WHEN a.tipo LIKE 'linkedin%' THEN 'linkedin' WHEN a.tipo='llamada' THEN 'call' ELSE 'whatsapp' END`;
-    const OUT = `a.estado='hecha' AND a.tipo NOT IN ('respuesta','aceptacion','reunion')`;
-    const ch = ['email', 'linkedin', 'call', 'whatsapp'].includes(q.channel) ? q.channel : null;
+    const KP = `COALESCE(NULLIF(TRIM(k.pais),''),(SELECT c.pais FROM lm_companies c WHERE c.id=k.company_id))`;
+    if (q.country) kw += ` AND ${KP} ILIKE ${P('%' + String(q.country).slice(0, 60) + '%')}`;
+    const CH = `CASE WHEN a.tipo IN ('email_enviado','email') THEN 'email' WHEN a.tipo LIKE 'linkedin%' THEN 'linkedin' WHEN a.tipo='llamada' THEN 'call' WHEN a.nota ~* 'whatsapp|wpp' THEN 'whatsapp' WHEN a.nota ~* 'llamada|call' THEN 'call' WHEN a.nota ~* 'linkedin|inmail|invitaci' THEN 'linkedin' ELSE 'otros' END`;
+    const RTYPES = `Interesado|Reunión|Más adelante|Derivó a otro|No es la persona|No interesado|No contactar`;
+    const REPLY = `(a.tipo='respuesta' OR (a.tipo='disposition_change' AND a.nota ~ '→ (${RTYPES})[[:space:]]*$'))`;
+    const OUT = `a.estado='hecha' AND (a.tipo IN ('email_enviado','linkedin_msg','linkedin_connect','linkedin_visita','llamada') OR a.tipo LIKE 'linkedin%' OR (a.tipo='email' AND a.nota NOT LIKE '[Inbox] Respuesta%' AND a.nota NOT LIKE 'Solicitud de admin%') OR (a.tipo='nota' AND a.nota ~ '^Paso [0-9]'))`;
+    const ch = ['email', 'linkedin', 'call', 'whatsapp', 'otros'].includes(q.channel) ? q.channel : null;
     const chw = ch ? ` AND ${CH}='${ch}'` : '';
     const iF = `'${from}'`, iT = `'${to}'`, iPF = `'${prevFrom}'`, iPT = `'${prevTo}'`; // fechas ya validadas (ISO)
     const inR = (f, t) => `a.fecha::date BETWEEN ${f}::date AND ${t}::date`;
@@ -6267,10 +6270,11 @@ app.get('/api/lm/dashboard', requireAuth, async (req, res) => {
     const kpiSql = r => `
       SELECT COUNT(*) FILTER (WHERE ${OUT}${chw})::int AS touches,
              COUNT(DISTINCT a.contact_id) FILTER (WHERE ${OUT}${chw})::int AS contacted,
-             COUNT(DISTINCT a.contact_id) FILTER (WHERE a.tipo='respuesta')::int AS replies,
+             COUNT(DISTINCT a.contact_id) FILTER (WHERE ${REPLY})::int AS replies,
              COUNT(DISTINCT a.contact_id) FILTER (WHERE a.tipo='aceptacion')::int AS accepts,
              COUNT(DISTINCT a.contact_id) FILTER (WHERE a.tipo='reunion')::int AS meetings,
-             COUNT(*) FILTER (WHERE ${OUT} AND a.tipo='linkedin_connect')::int AS invites
+             COUNT(*) FILTER (WHERE ${OUT} AND a.tipo='linkedin_connect')::int AS invites,
+             COUNT(*) FILTER (WHERE ${OUT} AND ${CH}='email')::int AS emails
         ${base} AND ${inR(r[0], r[1])}`;
     const msgSql = r => `
       SELECT COUNT(*) FILTER (WHERE m.estado IN ('sent','replied','bounced'))::int AS sent,
@@ -6280,14 +6284,14 @@ app.get('/api/lm/dashboard', requireAuth, async (req, res) => {
        WHERE m.user_id=$1 AND ${kw}
          AND m.sent_at IS NOT NULL AND m.sent_at::date BETWEEN ${r[0]}::date AND ${r[1]}::date`;
     const cur = [iF, iT], prv = [iPF, iPT];
-    const REP1 = `(SELECT DISTINCT ON (contact_id) contact_id, fecha FROM activities WHERE user_id=$1 AND tipo='respuesta' ORDER BY contact_id, fecha)`;
-    const [k1, k0, m1, m0, daily, countries, byCh, heat, seqs, clients, funnel, recent, repCh, repDays, heatAuto] = await Promise.all([
+    const REP1 = `(SELECT DISTINCT ON (contact_id) contact_id, fecha FROM activities WHERE user_id=$1 AND (tipo='respuesta' OR (tipo='disposition_change' AND nota ~ '→ (${RTYPES})[[:space:]]*$')) ORDER BY contact_id, fecha)`;
+    const [k1, k0, m1, m0, daily, countries, byCh, heat, seqs, clients, funnel, recent, repCh, repDays, heatAuto, deals, dispo] = await Promise.all([
       pool.query(kpiSql(cur), params), pool.query(kpiSql(prv), params),
       pool.query(msgSql(cur), params), pool.query(msgSql(prv), params),
       pool.query(`SELECT a.fecha::date AS d, ${CH} AS ch, COUNT(*)::int AS n ${base} AND ${OUT}${chw} AND ${inR(iF, iT)} GROUP BY 1,2 ORDER BY 1`, params),
-      pool.query(`SELECT COALESCE(NULLIF(TRIM(k.pais),''),'Sin país') AS pais,
+      pool.query(`SELECT COALESCE(NULLIF(TRIM(${KP}),''),'Sin país') AS pais,
                          COUNT(DISTINCT a.contact_id) FILTER (WHERE ${OUT}${chw})::int AS contacted,
-                         COUNT(DISTINCT a.contact_id) FILTER (WHERE a.tipo='respuesta')::int AS replied
+                         COUNT(DISTINCT a.contact_id) FILTER (WHERE ${REPLY})::int AS replied
                     ${base} AND ${inR(iF, iT)} GROUP BY 1`, params),
       pool.query(`SELECT ${CH} AS ch, COUNT(*) FILTER (WHERE ${OUT})::int AS touches,
                          COUNT(DISTINCT a.contact_id) FILTER (WHERE ${OUT})::int AS contacted
@@ -6298,8 +6302,8 @@ app.get('/api/lm/dashboard', requireAuth, async (req, res) => {
                          COUNT(DISTINCT cs.contact_id)::int AS enrolados,
                          COUNT(DISTINCT cs.contact_id) FILTER (WHERE cs.estado='activo')::int AS activos,
                          COUNT(DISTINCT a.contact_id) FILTER (WHERE ${OUT}${chw} AND ${inR(iF, iT)})::int AS contactados,
-                         COUNT(DISTINCT a.contact_id) FILTER (WHERE a.tipo='respuesta' AND ${inR(iF, iT)})::int AS respuestas,
-                         COUNT(DISTINCT a.contact_id) FILTER (WHERE a.tipo='reunion' AND ${inR(iF, iT)})::int AS reuniones
+                         COUNT(DISTINCT a.contact_id) FILTER (WHERE ${REPLY} AND ${inR(iF, iT)})::int AS respuestas,
+                         COUNT(DISTINCT k.id) FILTER (WHERE k.disposition='reunion' OR k.deal_cierre IS NOT NULL OR k.deal_valor IS NOT NULL)::int AS reuniones
                     FROM sequences s JOIN lm_contact_sequences cs ON cs.sequence_id=s.id
                     JOIN lm_contacts k ON k.id=cs.contact_id
                     LEFT JOIN outbound_clients oc ON oc.id=s.outbound_client_id
@@ -6308,21 +6312,21 @@ app.get('/api/lm/dashboard', requireAuth, async (req, res) => {
       pool.query(`SELECT oc.id, oc.nombre,
                          COUNT(DISTINCT k.id)::int AS contactos,
                          COUNT(DISTINCT a.contact_id) FILTER (WHERE ${OUT}${chw} AND ${inR(iF, iT)})::int AS contactados,
-                         COUNT(DISTINCT a.contact_id) FILTER (WHERE a.tipo='respuesta' AND ${inR(iF, iT)})::int AS respuestas,
-                         COUNT(DISTINCT a.contact_id) FILTER (WHERE a.tipo='reunion' AND ${inR(iF, iT)})::int AS reuniones
+                         COUNT(DISTINCT a.contact_id) FILTER (WHERE ${REPLY} AND ${inR(iF, iT)})::int AS respuestas,
+                         COUNT(DISTINCT k.id) FILTER (WHERE k.disposition='reunion' OR k.deal_cierre IS NOT NULL OR k.deal_valor IS NOT NULL)::int AS reuniones
                     FROM outbound_clients oc JOIN lm_contacts k ON k.outbound_client_id=oc.id
                     LEFT JOIN activities a ON a.contact_id=k.id
                    WHERE ${kw} GROUP BY oc.id, oc.nombre ORDER BY contactados DESC, contactos DESC`, params),
       pool.query(`SELECT COUNT(DISTINCT k.id) FILTER (WHERE EXISTS(SELECT 1 FROM lm_contact_sequences x WHERE x.contact_id=k.id))::int AS enrolados,
                          COUNT(DISTINCT k.id) FILTER (WHERE EXISTS(SELECT 1 FROM activities z WHERE z.contact_id=k.id AND z.estado='hecha' AND z.tipo NOT IN ('respuesta','aceptacion','reunion')))::int AS contactados,
-                         COUNT(DISTINCT k.id) FILTER (WHERE EXISTS(SELECT 1 FROM activities z WHERE z.contact_id=k.id AND z.tipo='respuesta') OR k.disposition IN ('respondio','derivado'))::int AS respondieron,
-                         COUNT(DISTINCT k.id) FILTER (WHERE EXISTS(SELECT 1 FROM activities z WHERE z.contact_id=k.id AND z.tipo='reunion'))::int AS reuniones
+                         COUNT(DISTINCT k.id) FILTER (WHERE EXISTS(SELECT 1 FROM activities z WHERE z.contact_id=k.id AND z.tipo='respuesta') OR k.disposition IN ('respondio','reunion','mas_adelante','derivado','no_es_persona','no_interesado','no_contactar'))::int AS respondieron,
+                         COUNT(DISTINCT k.id) FILTER (WHERE k.disposition='reunion' OR k.deal_cierre IS NOT NULL OR k.deal_valor IS NOT NULL OR EXISTS(SELECT 1 FROM activities z WHERE z.contact_id=k.id AND z.tipo='reunion'))::int AS reuniones
                     FROM lm_contacts k WHERE ${kw}`, params),
       pool.query(`SELECT x.ch, COUNT(*)::int AS replies FROM (SELECT (SELECT ${CH} FROM activities a WHERE a.contact_id=r.contact_id AND ${OUT} AND a.fecha<=r.fecha ORDER BY a.fecha DESC LIMIT 1) AS ch FROM ${REP1} r JOIN lm_contacts k ON k.id=r.contact_id WHERE ${kw} AND r.fecha::date BETWEEN ${iF}::date AND ${iT}::date) x WHERE x.ch IS NOT NULL GROUP BY 1`, params),
       pool.query(`SELECT ROUND(AVG(EXTRACT(EPOCH FROM (r.fecha - f.first))/86400)::numeric,1)::float AS days FROM ${REP1} r JOIN lm_contacts k ON k.id=r.contact_id JOIN LATERAL (SELECT MIN(a.fecha) AS first FROM activities a WHERE a.contact_id=r.contact_id AND ${OUT}) f ON f.first IS NOT NULL AND r.fecha>=f.first WHERE ${kw} AND r.fecha::date BETWEEN ${iF}::date AND ${iT}::date`, params),
       pool.query(`SELECT k.id AS contact_id, k.nombre, k.apellido, COALESCE(co.nombre,k.empresa_nombre) AS empresa, a.fecha, a.nota
                     FROM activities a JOIN lm_contacts k ON k.id=a.contact_id LEFT JOIN lm_companies co ON co.id=k.company_id
-                   WHERE ${kw} AND a.tipo='respuesta' AND ${inR(iF, iT)} ORDER BY a.fecha DESC LIMIT 8`, params),
+                   WHERE ${kw} AND ${REPLY} AND ${inR(iF, iT)} ORDER BY a.fecha DESC LIMIT 8`, params),
       pool.query(`SELECT dow, hr, COUNT(*)::int AS n FROM (
         SELECT k.id, 'email' AS src, EXTRACT(DOW FROM m.replied_at AT TIME ZONE 'America/Lima')::int AS dow, EXTRACT(HOUR FROM m.replied_at AT TIME ZONE 'America/Lima')::int AS hr, m.replied_at::date AS d
           FROM lm_messages m JOIN lm_contacts k ON k.id=m.contact_id
@@ -6333,6 +6337,9 @@ app.get('/api/lm/dashboard', requireAuth, async (req, res) => {
           JOIN lm_contacts k ON k.id=l.contact_id
          WHERE w.from_me=FALSE AND ${kw} AND w.ts::date BETWEEN ${iF}::date AND ${iT}::date
       ) t GROUP BY 1,2`, params),
+      pool.query(`SELECT COUNT(*)::int AS meetings, COUNT(*) FILTER (WHERE k.deal_cierre>=CURRENT_DATE)::int AS programadas, COALESCE(SUM(k.deal_valor),0)::float AS valor, COALESCE(SUM(k.deal_valor*COALESCE(k.deal_prob,0)/100.0),0)::float AS ponderado, MIN(k.deal_cierre) FILTER (WHERE k.deal_cierre>=CURRENT_DATE) AS proximo
+                    FROM lm_contacts k WHERE ${kw} AND (k.disposition='reunion' OR k.deal_cierre IS NOT NULL OR k.deal_valor IS NOT NULL OR EXISTS(SELECT 1 FROM activities z WHERE z.contact_id=k.id AND z.tipo='reunion'))`, params),
+      pool.query(`SELECT k.disposition AS d, COUNT(*)::int AS n FROM lm_contacts k WHERE ${kw} AND COALESCE(k.disposition,'')<>'' GROUP BY 1 ORDER BY 2 DESC`, params),
     ]);
     // normaliza países ("Spain Spain" → "Spain") y agrupa
     const norm = p => { const w = String(p || '').trim().split(/\s+/); const h = w.length / 2; if (w.length % 2 === 0 && w.slice(0, h).join(' ').toLowerCase() === w.slice(h).join(' ').toLowerCase()) return w.slice(0, h).join(' '); return String(p).trim(); };
@@ -6344,7 +6351,7 @@ app.get('/api/lm/dashboard', requireAuth, async (req, res) => {
       daily: daily.rows.map(r => ({ d: r.d instanceof Date ? r.d.toISOString().slice(0, 10) : String(r.d).slice(0, 10), ch: r.ch, n: r.n })),
       countries: Object.values(cm).sort((a, b) => b.contacted - a.contacted).slice(0, 12),
       channels: byCh.rows, heat: heat.rows, sequences: seqs.rows, clients: clients.rows,
-      funnel: funnel.rows[0], recent: recent.rows, heatAuto: heatAuto.rows, replyByCh: repCh.rows, replyDays: repDays.rows[0] && repDays.rows[0].days,
+      deals: deals.rows[0], dispo: dispo.rows, funnel: funnel.rows[0], recent: recent.rows, heatAuto: heatAuto.rows, replyByCh: repCh.rows, replyDays: repDays.rows[0] && repDays.rows[0].days,
     });
   } catch (err) { console.error('[lm-dashboard]', err.message); res.status(500).json({ error: 'Error al cargar dashboard' }); }
 });

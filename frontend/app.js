@@ -24075,7 +24075,7 @@ ${foot}
       ${sel('client', 'Cliente', _clients.map(c => [c.id, c.nombre]))}
       ${sel('campaign', 'Campaña', camps.map(c => [c.id, c.nombre]))}
       ${sel('sequence', 'Secuencia', seqs.map(s => [s.id, s.nombre]))}
-      ${sel('channel', 'Canal', [['email', 'Email'], ['linkedin', 'LinkedIn'], ['call', 'Llamada'], ['whatsapp', 'WhatsApp / otros']])}
+      ${sel('channel', 'Canal', [['email', 'Email'], ['linkedin', 'LinkedIn'], ['call', 'Llamada'], ['whatsapp', 'WhatsApp'], ['otros', 'Otros / tareas']])}
       ${_dashData && _dashData.countries ? sel('country', 'País', _dashData.countries.filter(c => c.pais !== 'Sin país').map(c => [c.pais, c.pais])) : ''}
       ${(f.client || f.campaign || f.sequence || f.country || f.channel) ? `<button class="dash-clear" onclick="LeadManagerModule.dashClear()">Limpiar</button>` : ''}`;
   }
@@ -24125,9 +24125,9 @@ ${foot}
         ${kpi('Contactos alcanzados', c.contacted, _dashDelta(c.contacted, p.contacted), `${c.touches} toques en total`)}
         ${kpi('Tasa de respuesta', rr + '%', _dashDelta(rr, rrp, true), `${c.replies} respondieron`)}
         ${kpi('Aceptación LinkedIn', ar + '%', _dashDelta(ar, arp, true), `${c.accepts} de ${c.invites} invitaciones`)}
-        ${kpi('Emails enviados', c.sent, _dashDelta(c.sent, p.sent), c.bounced ? `${c.bounced} rebotados` : 'sin rebotes')}
-        ${kpi('Apertura email', c.sent ? or + '%' : '—', '<span class="dash-d dash-d--0">estimada</span>', 'depende del píxel; suele subestimar')}
-        ${kpi('Reuniones', c.meetings, _dashDelta(c.meetings, p.meetings))}
+        ${kpi('Emails enviados', c.emails, _dashDelta(c.emails, p.emails), c.bounced ? `${c.bounced} rebotados (auto)` : 'sin rebotes')}
+        ${kpi('Apertura email', c.sent ? or + '%' : '—', '<span class="dash-d dash-d--0">estimada</span>', `sobre ${c.sent} envíos con píxel`)}
+        ${kpi('Reuniones / deals', d.deals.meetings, '<span class="dash-d dash-d--0">' + (d.deals.programadas ? d.deals.programadas + ' programada' + (d.deals.programadas > 1 ? 's' : '') + (d.deals.proximo ? ' · próx. ' + new Date(d.deals.proximo).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }) : '') : 'sin programar') + '</span>', d.deals.valor ? `$${Math.round(d.deals.valor).toLocaleString('es-ES')} · pond. $${Math.round(d.deals.ponderado).toLocaleString('es-ES')}` : 'sin valor cargado')}
       </div>
       <div class="dash-grid">
         <div class="cp-card dash-w2"><div class="cp-card__t">Actividad por canal</div><div class="dash-chart"><canvas id="dash-daily"></canvas></div></div>
@@ -24142,15 +24142,22 @@ ${foot}
         <div class="cp-card"><div class="cp-card__t">Rendimiento por secuencia</div>${tbl(['Secuencia', 'Cliente', 'Enrol.', 'Contact.', 'Resp.', 'Tasa', 'Reun.'], seqRows, 'Sin secuencias en este filtro')}</div>
         <div class="cp-card"><div class="cp-card__t">Rendimiento por cliente</div>${tbl(['Cliente', 'Contactos', 'Contact.', 'Resp.', 'Tasa', 'Reun.'], cliRows, 'Sin clientes en este filtro')}</div>
         <div class="cp-card"><div class="cp-card__t">Por país</div>${tbl(['País', 'Contact.', 'Resp.', 'Tasa'], ctRows, 'Sin datos')}</div>
+        <div class="cp-card"><div class="cp-card__t">Resultado de los contactos con estado</div>${_dashDispo(d.dispo)}</div>
         <div class="cp-card"><div class="cp-card__t">Respuestas recientes</div>${recent ? `<div class="lm-today-reps">${recent}</div>` : '<div class="rep-empty">Sin respuestas en el período</div>'}</div>
       </div>`;
   }
   function _dashRepCh(d) {
-    const LBL = { email: 'Email', linkedin: 'LinkedIn', call: 'Llamada', whatsapp: 'WhatsApp / otros' };
+    const LBL = { email: 'Email', linkedin: 'LinkedIn', call: 'Llamada', whatsapp: 'WhatsApp', otros: 'Otros / tareas' };
     const rc = {}; (d.replyByCh || []).forEach(r => { rc[r.ch] = r.replies; });
     const rows = d.channels.filter(r => r.contacted).map(r => `<tr><td>${LBL[r.ch]}</td><td>${r.contacted}</td><td>${rc[r.ch] || 0}</td><td><b>${_dashPct(rc[r.ch] || 0, r.contacted)}%</b></td></tr>`).join('');
     const days = d.replyDays != null ? `<div class="dash-kpi__s" style="margin-top:8px">Tardan en promedio <b>${d.replyDays} días</b> en responder desde el primer toque. El canal es el último toque antes de la respuesta.</div>` : '';
     return (rows ? `<div class="clients-table-wrap"><table class="clients-table"><thead><tr><th>Canal</th><th>Contact.</th><th>Resp.</th><th>Tasa</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<div class="rep-empty">Sin datos</div>') + days;
+  }
+  function _dashDispo(rows) {
+    if (!rows || !rows.length) return '<div class="rep-empty">Aún no hay contactos con estado (Interesado, No interesado…)</div>';
+    const tot = rows.reduce((n, r) => n + r.n, 0);
+    const body = rows.map(r => { const x = _DISPOS.find(y => y[0] === r.d); return `<tr><td>${esc(x ? x[1] : r.d)}</td><td>${r.n}</td><td><b>${_dashPct(r.n, tot)}%</b></td></tr>`; }).join('');
+    return `<div class="clients-table-wrap"><table class="clients-table"><thead><tr><th>Estado</th><th>Contactos</th><th>%</th></tr></thead><tbody>${body}</tbody></table></div>`;
   }
   function _dashHeat(rows) {
     const g = {}; let max = 0;
@@ -24169,12 +24176,12 @@ ${foot}
   }
   function _dashInitCharts() {
     if (typeof Chart === 'undefined' || !_dashData) return;
-    const d = _dashData, COL = { email: '#1F3A5F', linkedin: '#5A7896', call: '#93A5B6', whatsapp: '#C5CFD8' }, LBL = { email: 'Email', linkedin: 'LinkedIn', call: 'Llamada', whatsapp: 'WhatsApp / otros' };
+    const d = _dashData, COL = { email: '#1F3A5F', linkedin: '#5A7896', call: '#93A5B6', whatsapp: '#B7C4CF', otros: '#DDE3E8' }, LBL = { email: 'Email', linkedin: 'LinkedIn', call: 'Llamada', whatsapp: 'WhatsApp', otros: 'Otros / tareas' };
     const tip = { backgroundColor: '#1B2733', padding: 8, cornerRadius: 0 };
     const leg = { position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, usePointStyle: true, font: { size: 11 } } };
     const axis = { x: { grid: { display: false }, ticks: { maxTicksLimit: 8, color: '#8A948E', font: { size: 10 } } }, y: { beginAtZero: true, grid: { color: '#E6EAEE' }, ticks: { precision: 0, maxTicksLimit: 4, color: '#8A948E', font: { size: 10 } } } };
     const days = []; { const a = new Date(d.range.from + 'T00:00:00Z'), b = new Date(d.range.to + 'T00:00:00Z'); for (let x = new Date(a); x <= b && days.length < 400; x.setUTCDate(x.getUTCDate() + 1)) days.push(x.toISOString().slice(0, 10)); }
-    const chs = ['email', 'linkedin', 'call', 'whatsapp'].filter(k => d.daily.some(r => r.ch === k));
+    const chs = ['email', 'linkedin', 'call', 'whatsapp', 'otros'].filter(k => d.daily.some(r => r.ch === k));
     const dc = document.getElementById('dash-daily');
     if (dc) _dashCharts.push(new Chart(dc.getContext('2d'), { type: 'bar', data: { labels: days.map(x => x.slice(5)), datasets: chs.map(k => ({ label: LBL[k], backgroundColor: COL[k], borderRadius: 0, barPercentage: .8, data: days.map(x => (d.daily.find(r => r.d === x && r.ch === k) || {}).n || 0) })) }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: leg, tooltip: tip }, scales: { x: Object.assign({}, axis.x, { stacked: true }), y: Object.assign({}, axis.y, { stacked: true }) } } }));
     const cc = document.getElementById('dash-ch');
