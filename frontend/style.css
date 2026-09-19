@@ -16754,3 +16754,32 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .dash-row--c .cp-card:first-child{grid-column:1/-1}
 .dash-scope .clients-table-wrap{overflow-x:auto}
 @media(max-width:900px){.dash-row--c{grid-template-columns:1fr}}
+
+/* ── Ajuste a la referencia 2: filtros en una fila, KPIs compactos ── */
+.dash-filters{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;gap:8px;align-items:center}
+.dash-filters::-webkit-scrollbar{display:none}
+.dash-seg{display:inline-flex;flex:none;background:#fff;border:1px solid #E1E6EC;border-radius:10px;overflow:hidden}
+.dash-seg__b{border:0;background:transparent;padding:0 13px;height:36px;font:500 13px inherit;color:#475569;cursor:pointer;white-space:nowrap;transition:background .15s}
+.dash-seg__b+.dash-seg__b{border-left:1px solid #E7EBF0}
+.dash-seg__b:hover:not(.on){background:#F8FAFC}
+.dash-seg__b.on{background:#0B1220;color:#fff}
+.dash-f{flex:0 1 auto;min-width:118px;max-width:190px;height:36px}
+.dash-f select{font-size:13px}
+.dash-date{height:36px}
+.dash-btn--p{background:#0B1220;border-color:#0B1220;box-shadow:none}
+.dash-btn--p:hover{background:#1E293B;border-color:#1E293B}
+.dash-kpis{grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;margin-bottom:12px}
+.dash-kpis--4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.dash-kpi{border-left:1px solid #E7EBF0;border-bottom:3px solid var(--kc,#2563EB);padding:10px 12px 9px}
+.dash-kpi__top{gap:8px;margin-bottom:3px}
+.dash-kpi__ic{width:32px;height:32px}
+.dash-kpi__ic svg{width:16px;height:16px}
+.dash-kpi__l{font-size:12px;font-weight:600;letter-spacing:0;text-transform:none;color:#334155}
+.dash-kpi__v{font-size:26px;margin:0 0 2px}
+.dash-d{font-size:11px}
+.dash-kpi__s{font-size:11px;margin-top:1px}
+.dash-fn{background:#F5F7FA;border-radius:12px;padding:8px 12px}
+.dash-fn:not(:last-child)::after{display:none}
+.dash-funnel{gap:8px}
+.dash-fn__ic{width:34px;height:34px}
+@media(max-width:1000px){.dash-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}.dash-kpis--4{grid-template-columns:repeat(2,minmax(0,1fr))}}

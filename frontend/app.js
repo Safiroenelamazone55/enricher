@@ -24099,7 +24099,8 @@ ${foot}
     const rg = [['7d', 'Últimos 7 días'], ['30d', 'Últimos 30 días'], ['mes', 'Este mes'], ['trim', 'Este trimestre'], ['ytd', 'Este año (YTD)'], ['custom', 'Personalizado']];
     const ctry = (_dashData && _dashData.countries ? _dashData.countries.filter(c => c.pais !== 'Sin país').map(c => [c.pais, c.pais]) : []);
     if (f.country && !ctry.some(c => c[0] === f.country)) ctry.push([f.country, f.country]);
-    return `${sel('range', 'Periodo', 'calendar', rg, f.range)}
+    const seg = [['7d', '7 días'], ['30d', '30 días'], ['mes', 'Este mes'], ['trim', 'Trimestre'], ['ytd', 'YTD'], ['custom', 'Personalizado']];
+    return `<div class="dash-seg">${seg.map(r => `<button class="dash-seg__b${f.range === r[0] ? ' on' : ''}" onclick="LeadManagerModule.dashSet('range','${r[0]}')">${r[1]}</button>`).join('')}</div>
       ${f.range === 'custom' ? `<input type="date" class="dash-date" value="${esc(f.from)}" onchange="LeadManagerModule.dashSet('from',this.value)"><input type="date" class="dash-date" value="${esc(f.to)}" onchange="LeadManagerModule.dashSet('to',this.value)">` : ''}
       ${sel('client', 'Cliente', 'building', _clients.map(c => [c.id, c.nombre]))}
       ${sel('campaign', 'Campaña', 'tag', camps.map(c => [c.id, c.nombre]))}
@@ -24156,7 +24157,7 @@ ${foot}
     const recent = d.recent.map(r => `<button class="lm-today-rep" onclick="LeadManagerModule.openContactPage(${r.contact_id})"><span class="lm-today-rep__who">${esc([r.nombre, r.apellido].filter(Boolean).join(' '))}</span><span class="lm-today-rep__co">${esc(r.empresa || '')}</span><span class="lm-today-rep__sn">${new Date(r.fecha).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}</span></button>`).join('');
     // embudo con nodos de icono
     const fn = d.funnel, base = fn.enrolados || 1;
-    const stages = [['Enrolados', fn.enrolados, '#2563EB', 'users'], ['Contactados', fn.contactados, '#7C5CE0', 'send'], ['Respondieron', fn.respondieron, '#22A06B', 'reply'], ['Reunión', fn.reuniones, '#F59E0B', 'cal']];
+    const stages = [['Enrolados', fn.enrolados, '#0F172A', 'users'], ['Contactados', fn.contactados, '#2563EB', 'send'], ['Respondieron', fn.respondieron, '#22A06B', 'reply'], ['Reunión', fn.reuniones, '#F59E0B', 'cal']];
     const funnel = stages.map((s, i) => `<div class="dash-fn"><span class="dash-fn__ic" style="background:${s[2]}">${_dashIco(s[3], 16)}</span><div class="dash-fn__b"><div class="dash-fn__top"><span class="dash-fn__l">${s[0]}</span>${i ? `<span class="dash-fn__c">${_dashPct(s[1], stages[i - 1][1])}% ↓</span>` : ''}<span class="dash-fn__n">${s[1]}</span></div><div class="dash-fn__track"><div class="dash-fn__fill" style="width:${Math.max(2, Math.round(s[1] / base * 100))}%;background:${s[2]}"></div></div></div></div>`).join('');
     // toques por canal: dona + leyenda
     const chTot = d.channels.reduce((n, r) => n + r.touches, 0);
