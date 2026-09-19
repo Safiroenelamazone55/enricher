@@ -24118,7 +24118,7 @@ ${foot}
     const ctRows = d.countries.map(s => `<tr><td>${esc(s.pais)}</td><td>${s.contacted}</td><td>${s.replied}</td><td><b>${_dashPct(s.replied, s.contacted)}%</b></td></tr>`).join('');
     const recent = d.recent.map(r => `<button class="lm-today-rep" onclick="LeadManagerModule.openContactPage(${r.contact_id})"><span class="lm-today-rep__who">${esc([r.nombre, r.apellido].filter(Boolean).join(' '))}</span><span class="lm-today-rep__co">${esc(r.empresa || '')}</span><span class="lm-today-rep__sn">${new Date(r.fecha).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}</span></button>`).join('');
     const fn = d.funnel, base = fn.enrolados || 1;
-    const stages = [['Enrolados', fn.enrolados, '#007AFF'], ['Contactados', fn.contactados, '#1E5FA8'], ['Respondieron', fn.respondieron, '#15803D'], ['Reunión', fn.reuniones, '#5B4BC4']];
+    const stages = [['Enrolados', fn.enrolados, '#C5CFD8'], ['Contactados', fn.contactados, '#93A5B6'], ['Respondieron', fn.respondieron, '#4F6D8F'], ['Reunión', fn.reuniones, '#1F3A5F']];
     const funnel = stages.map((s, i) => `<div class="rep-fn"><div class="rep-fn__top"><span class="rep-fn__lbl">${s[0]}</span>${i ? `<span class="rep-fn__conv">${_dashPct(s[1], stages[i - 1][1])}% ↳</span>` : '<span class="rep-fn__conv rep-fn__conv--base">base</span>'}<span class="rep-fn__n">${s[1]}</span></div><div class="rep-fn__track"><div class="rep-fn__fill" style="width:${Math.max(3, Math.round(s[1] / base * 100))}%;background:${s[2]}"></div></div></div>`).join('');
     return `${_dashLoading ? '<div class="dash-loading">Actualizando…</div>' : ''}
       <div class="dash-kpis">
@@ -24162,25 +24162,25 @@ ${foot}
     h += '</div>';
     order.forEach(dw => {
       h += `<div class="dash-heat"><span class="dash-heat__d">${dn[dw]}</span>`;
-      for (let hr = 6; hr <= 22; hr += 2) { const n = (g[dw + '_' + hr] || 0) + (g[dw + '_' + (hr + 1)] || 0); h += `<span class="dash-heat__c" title="${n}" style="background:rgba(0,122,255,${n ? (0.15 + 0.85 * n / max).toFixed(2) : 0.05})"></span>`; }
+      for (let hr = 6; hr <= 22; hr += 2) { const n = (g[dw + '_' + hr] || 0) + (g[dw + '_' + (hr + 1)] || 0); h += `<span class="dash-heat__c" title="${n}" style="background:rgba(31,58,95,${n ? (0.15 + 0.85 * n / max).toFixed(2) : 0.05})"></span>`; }
       h += '</div>';
     });
     return h;
   }
   function _dashInitCharts() {
     if (typeof Chart === 'undefined' || !_dashData) return;
-    const d = _dashData, COL = { email: '#0062CC', linkedin: '#0A66C2', call: '#B45309', whatsapp: '#15803D' }, LBL = { email: 'Email', linkedin: 'LinkedIn', call: 'Llamada', whatsapp: 'WhatsApp / otros' };
-    const tip = { backgroundColor: '#14211B', padding: 9, cornerRadius: 8 };
+    const d = _dashData, COL = { email: '#1F3A5F', linkedin: '#5A7896', call: '#93A5B6', whatsapp: '#C5CFD8' }, LBL = { email: 'Email', linkedin: 'LinkedIn', call: 'Llamada', whatsapp: 'WhatsApp / otros' };
+    const tip = { backgroundColor: '#1B2733', padding: 8, cornerRadius: 0 };
     const leg = { position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, usePointStyle: true, font: { size: 11 } } };
-    const axis = { x: { grid: { display: false }, ticks: { maxTicksLimit: 8, color: '#8A948E', font: { size: 10 } } }, y: { beginAtZero: true, grid: { color: '#EEF0EE' }, ticks: { precision: 0, maxTicksLimit: 4, color: '#8A948E', font: { size: 10 } } } };
+    const axis = { x: { grid: { display: false }, ticks: { maxTicksLimit: 8, color: '#8A948E', font: { size: 10 } } }, y: { beginAtZero: true, grid: { color: '#E6EAEE' }, ticks: { precision: 0, maxTicksLimit: 4, color: '#8A948E', font: { size: 10 } } } };
     const days = []; { const a = new Date(d.range.from + 'T00:00:00Z'), b = new Date(d.range.to + 'T00:00:00Z'); for (let x = new Date(a); x <= b && days.length < 400; x.setUTCDate(x.getUTCDate() + 1)) days.push(x.toISOString().slice(0, 10)); }
     const chs = ['email', 'linkedin', 'call', 'whatsapp'].filter(k => d.daily.some(r => r.ch === k));
     const dc = document.getElementById('dash-daily');
-    if (dc) _dashCharts.push(new Chart(dc.getContext('2d'), { type: 'bar', data: { labels: days.map(x => x.slice(5)), datasets: chs.map(k => ({ label: LBL[k], backgroundColor: COL[k], borderRadius: 2, data: days.map(x => (d.daily.find(r => r.d === x && r.ch === k) || {}).n || 0) })) }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: leg, tooltip: tip }, scales: { x: Object.assign({}, axis.x, { stacked: true }), y: Object.assign({}, axis.y, { stacked: true }) } } }));
+    if (dc) _dashCharts.push(new Chart(dc.getContext('2d'), { type: 'bar', data: { labels: days.map(x => x.slice(5)), datasets: chs.map(k => ({ label: LBL[k], backgroundColor: COL[k], borderRadius: 0, barPercentage: .8, data: days.map(x => (d.daily.find(r => r.d === x && r.ch === k) || {}).n || 0) })) }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: leg, tooltip: tip }, scales: { x: Object.assign({}, axis.x, { stacked: true }), y: Object.assign({}, axis.y, { stacked: true }) } } }));
     const cc = document.getElementById('dash-ch');
-    if (cc) _dashCharts.push(new Chart(cc.getContext('2d'), { type: 'doughnut', data: { labels: d.channels.map(r => LBL[r.ch]), datasets: [{ data: d.channels.map(r => r.touches), backgroundColor: d.channels.map(r => COL[r.ch]), borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '62%', plugins: { legend: Object.assign({}, leg, { position: 'right' }), tooltip: tip } } }));
+    if (cc) _dashCharts.push(new Chart(cc.getContext('2d'), { type: 'doughnut', data: { labels: d.channels.map(r => LBL[r.ch]), datasets: [{ data: d.channels.map(r => r.touches), backgroundColor: d.channels.map(r => COL[r.ch]), borderWidth: 2, borderColor: '#fff' }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '68%', plugins: { legend: Object.assign({}, leg, { position: 'right' }), tooltip: tip } } }));
     const pc = document.getElementById('dash-ctry');
-    if (pc) { const t8 = d.countries.slice(0, 8); _dashCharts.push(new Chart(pc.getContext('2d'), { type: 'bar', data: { labels: t8.map(r => r.pais), datasets: [{ label: 'Contactados', backgroundColor: '#007AFF', borderRadius: 3, data: t8.map(r => r.contacted) }, { label: 'Respondieron', backgroundColor: '#15803D', borderRadius: 3, data: t8.map(r => r.replied) }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: leg, tooltip: tip }, scales: { x: axis.y, y: { grid: { display: false }, ticks: { color: '#45586A', font: { size: 10 } } } } } })); }
+    if (pc) { const t8 = d.countries.slice(0, 8); _dashCharts.push(new Chart(pc.getContext('2d'), { type: 'bar', data: { labels: t8.map(r => r.pais), datasets: [{ label: 'Contactados', backgroundColor: '#1F3A5F', borderRadius: 0, data: t8.map(r => r.contacted) }, { label: 'Respondieron', backgroundColor: '#93A5B6', borderRadius: 0, data: t8.map(r => r.replied) }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: leg, tooltip: tip }, scales: { x: axis.y, y: { grid: { display: false }, ticks: { color: '#45586A', font: { size: 10 } } } } } })); }
   }
   function _vDashboard() {
     const tabs = `<div class="dash-tabs"><button class="dash-tab${_dashTab === 'hoy' ? ' on' : ''}" onclick="LeadManagerModule.dashTab('hoy')">Hoy</button><button class="dash-tab${_dashTab === 'rend' ? ' on' : ''}" onclick="LeadManagerModule.dashTab('rend')">Rendimiento</button></div>`;
@@ -24193,9 +24193,9 @@ ${foot}
       </div>`;
     if (_dashTab === 'rend') {
       setTimeout(_dashLoad, 0);
-      return `${head}<div class="dash-filters" id="dash-filters">${_dashFiltersHtml()}</div><div id="dash-body">${_dashBodyHtml()}</div>`;
+      return `<div class="dash-scope">${head}<div class="dash-filters" id="dash-filters">${_dashFiltersHtml()}</div><div id="dash-body">${_dashBodyHtml()}</div></div>`;
     }
-    return head + _vDashHoy();
+    return `<div class="dash-scope">${head}${_vDashHoy()}</div>`;
   }
   // ── Hoy: lo que hay que hacer y lo que está roto (no inventario) ──
   function _hoyHtml() {
@@ -24235,17 +24235,17 @@ ${foot}
     const alHtml = al.length ? al.map(a => `<button class="hoy-al hoy-al--${a[0]}" onclick="${a[2]}"><span class="hoy-al__dot"></span>${a[1]}<span class="hoy-al__go">›</span></button>`).join('') : '<div class="hoy-ok">✓ Todo en orden: buzones y WhatsApp conectados, sin fallos ni rebotes.</div>';
     const stat = (v, l, sub) => `<div class="dash-kpi"><div class="dash-kpi__l">${l}</div><div class="dash-kpi__v">${v}</div>${sub ? `<div class="dash-kpi__s">${sub}</div>` : ''}</div>`;
     const overdue = all.filter(t => t.due < today).length;
-    return `<div class="dash-kpis dash-kpis--4">
+    return `<div class="hoy-fit"><div class="dash-kpis dash-kpis--4">
         ${stat(all.length, 'Tareas para hoy', overdue ? `${overdue} vencidas` : 'al día')}
         ${stat(reps.length, 'Respuestas nuevas', 'últimas 48 h')}
         ${stat(d ? d.due_24h : '…', 'Programados 24 h', 'envíos automáticos en cola')}
         ${stat(h.rotation_waiting != null ? h.rotation_waiting : '…', 'En rotación', 'empresas esperando turno')}
       </div>
-      <div class="cp-card" style="margin-bottom:12px"><div class="cp-card__t">Salud del envío</div><div class="hoy-als">${d ? alHtml : '<div class="rep-empty">Cargando…</div>'}</div></div>
-      <div class="dash-grid dash-grid--2">
-        <div class="cp-card"><div class="cp-card__t">Respondieron</div>${repHtml}</div>
-        <div class="cp-card"><div class="cp-card__t">Tareas de hoy por cliente</div>${taskTbl}</div>
-      </div>`;
+      <div class="cp-card hoy-health"><div class="cp-card__t">Salud del envío</div><div class="hoy-als">${d ? alHtml : '<div class="rep-empty">Cargando…</div>'}</div></div>
+      <div class="hoy-cols">
+        <div class="cp-card hoy-col"><div class="cp-card__t">Respondieron</div><div class="hoy-scroll">${repHtml}</div></div>
+        <div class="cp-card hoy-col"><div class="cp-card__t">Tareas de hoy por cliente</div><div class="hoy-scroll">${taskTbl}</div></div>
+      </div></div>`;
   }
   function _vDashHoy() {
     return `<div id="lm-hoy">${_hoyHtml()}</div>`;

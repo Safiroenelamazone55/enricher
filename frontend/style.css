@@ -16672,3 +16672,42 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .hoy-over{background:#FDECEA;color:#C4342B;border-radius:6px;padding:1px 7px;font-weight:700}
 .hoy-zero{color:#B4BBB7}
 @media(max-width:1100px){.dash-kpis--4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* ── Dashboard: estilo sobrio, bordes rectos, compacto ── */
+.dash-scope *{border-radius:0!important}
+.dash-scope .cp-card{box-shadow:none;border:1px solid #D9DEE3;background:#fff;padding:10px 14px}
+.dash-scope .cp-card__t{font-size:12px;font-weight:600;color:#45586A;margin-bottom:8px;letter-spacing:0}
+.dash-scope .dash-tabs{background:#E9ECEF}
+.dash-scope .dash-tab.on{box-shadow:none;border:1px solid #D9DEE3}
+.dash-scope .dash-seg,.dash-scope .dash-sel{border-color:#D0D6DC}
+.dash-scope .dash-seg__b.on{background:#1F3A5F}
+.dash-scope .dash-sel.is-on{border-color:#1F3A5F;color:#1F3A5F}
+.dash-scope .dash-clear{color:#1F3A5F}
+.dash-filters{overflow:hidden;scrollbar-width:none}
+.dash-filters::-webkit-scrollbar{display:none}
+.dash-filters .dash-sel{flex:1 1 0;min-width:96px;max-width:180px}
+.dash-scope .dash-kpis{gap:8px;margin-bottom:10px}
+.dash-scope .dash-kpi{border:1px solid #D9DEE3;padding:8px 12px;display:flex;flex-direction:column;gap:1px;min-width:0}
+.dash-scope .dash-kpi__l{font-size:11px;color:#5D6B78;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dash-scope .dash-kpi__v{font-size:21px;line-height:1.15;margin:0;color:#1B2733}
+.dash-scope .dash-d,.dash-scope .dash-kpi__s{font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin:0}
+.dash-scope .dash-d--up{color:#3D7A5A}.dash-scope .dash-d--down{color:#A0453F}
+.dash-scope .dash-grid{gap:8px;margin-bottom:8px}
+.dash-scope .dash-chart{height:180px}.dash-scope .dash-chart--sm{height:150px}
+.dash-scope .clients-table th{font-size:10.5px;font-weight:600;color:#5D6B78;text-transform:none;letter-spacing:0;padding:5px 10px;background:#F3F5F7;position:sticky;top:0;z-index:1}
+.dash-scope .clients-table td{padding:5px 10px;font-size:12.5px;height:auto}
+.dash-scope .rep-fn__track{height:6px;background:#EEF1F4}
+.dash-scope .rep-fn__fill{height:6px}
+.dash-scope .hoy-al{border-color:#D9DEE3;padding:5px 10px;font-size:12.5px}
+.dash-scope .hoy-al--bad .hoy-al__dot{background:#A0453F}.dash-scope .hoy-al--warn .hoy-al__dot{background:#B7862F}
+.dash-scope .hoy-over{background:#F6E9E8;color:#A0453F;padding:0 6px}
+.dash-scope .hoy-ok{color:#3D7A5A;font-size:12.5px}
+/* Hoy: todo cabe en la pantalla; el scroll es dentro de cada cuadro */
+.hoy-fit{display:flex;flex-direction:column;height:calc(100vh - 168px);min-height:340px}
+.hoy-fit .hoy-health{flex:none;margin-bottom:8px}
+.hoy-fit .hoy-als{max-height:96px;overflow:auto}
+.hoy-cols{flex:1;min-height:0;display:grid;grid-template-columns:5fr 7fr;gap:8px}
+.hoy-col{display:flex;flex-direction:column;min-height:0;margin:0}
+.hoy-scroll{flex:1;min-height:0;overflow:auto}
+.hoy-scroll .clients-table-wrap{overflow:visible}
+.dash-scope .hoy-scroll .clients-table td:first-child{white-space:nowrap}
