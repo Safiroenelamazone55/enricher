@@ -24130,7 +24130,7 @@ ${foot}
         ${kpi('Reuniones / deals', d.deals.meetings, '<span class="dash-d dash-d--0">' + (d.deals.programadas ? d.deals.programadas + ' programada' + (d.deals.programadas > 1 ? 's' : '') + (d.deals.proximo ? ' · próx. ' + new Date(d.deals.proximo).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', timeZone: 'UTC' }) : '') : 'sin programar') + '</span>', d.deals.valor ? `$${Math.round(d.deals.valor).toLocaleString('es-ES')} · pond. $${Math.round(d.deals.ponderado).toLocaleString('es-ES')}` : 'sin valor cargado')}
       </div>
       <div class="dash-grid">
-        <div class="cp-card dash-w2"><div class="cp-card__t">Actividad por canal</div><div class="dash-chart"><canvas id="dash-daily"></canvas></div></div>
+        <div class="cp-card dash-w2"><div class="cp-card__t">Actividad por canal${d.range.days > 60 ? ' · por semana' : ''}</div><div class="dash-chart"><canvas id="dash-daily"></canvas></div></div>
         <div class="cp-card"><div class="cp-card__t">Embudo (histórico del filtro)</div><div class="rep-funnel">${funnel}</div></div>
         <div class="cp-card"><div class="cp-card__t">Toques por canal</div><div class="dash-chart dash-chart--sm">${d.channels.length ? '<canvas id="dash-ch"></canvas>' : '<div class="rep-empty">Sin actividad</div>'}</div></div>
         <div class="cp-card"><div class="cp-card__t">Países contactados</div><div class="dash-chart dash-chart--sm">${d.countries.length ? '<canvas id="dash-ctry"></canvas>' : '<div class="rep-empty">Sin datos de país</div>'}</div></div>
@@ -24181,9 +24181,14 @@ ${foot}
     const leg = { position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, usePointStyle: true, font: { size: 11 } } };
     const axis = { x: { grid: { display: false }, ticks: { maxTicksLimit: 8, color: '#8A948E', font: { size: 10 } } }, y: { beginAtZero: true, grid: { color: '#E1EEE9' }, ticks: { precision: 0, maxTicksLimit: 4, color: '#8A948E', font: { size: 10 } } } };
     const days = []; { const a = new Date(d.range.from + 'T00:00:00Z'), b = new Date(d.range.to + 'T00:00:00Z'); for (let x = new Date(a); x <= b && days.length < 400; x.setUTCDate(x.getUTCDate() + 1)) days.push(x.toISOString().slice(0, 10)); }
+    // rangos largos (YTD…): agrupar por semana para que las barras no queden como líneas
+    const weekly = days.length > 60;
+    const wk = x => { const t = new Date(x + 'T00:00:00Z'); t.setUTCDate(t.getUTCDate() - ((t.getUTCDay() + 6) % 7)); return t.toISOString().slice(0, 10); };
+    const buckets = weekly ? [...new Set(days.map(wk))] : days;
+    const bOf = weekly ? wk : (x => x);
     const chs = ['email', 'linkedin', 'call', 'whatsapp', 'otros'].filter(k => d.daily.some(r => r.ch === k));
     const dc = document.getElementById('dash-daily');
-    if (dc) _dashCharts.push(new Chart(dc.getContext('2d'), { type: 'bar', data: { labels: days.map(x => x.slice(5)), datasets: chs.map(k => ({ label: LBL[k], backgroundColor: COL[k], borderRadius: 0, barPercentage: .8, data: days.map(x => (d.daily.find(r => r.d === x && r.ch === k) || {}).n || 0) })) }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: leg, tooltip: tip }, scales: { x: Object.assign({}, axis.x, { stacked: true }), y: Object.assign({}, axis.y, { stacked: true }) } } }));
+    if (dc) _dashCharts.push(new Chart(dc.getContext('2d'), { type: 'bar', data: { labels: buckets.map(x => x.slice(5)), datasets: chs.map(k => ({ label: LBL[k], backgroundColor: COL[k], borderRadius: 0, barPercentage: .8, data: buckets.map(b => d.daily.filter(r => r.ch === k && bOf(r.d) === b).reduce((n, r) => n + r.n, 0)) })) }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: leg, tooltip: tip }, scales: { x: Object.assign({}, axis.x, { stacked: true }), y: Object.assign({}, axis.y, { stacked: true }) } } }));
     const cc = document.getElementById('dash-ch');
     if (cc) _dashCharts.push(new Chart(cc.getContext('2d'), { type: 'doughnut', data: { labels: d.channels.map(r => LBL[r.ch]), datasets: [{ data: d.channels.map(r => r.touches), backgroundColor: d.channels.map(r => COL[r.ch]), borderWidth: 2, borderColor: '#fff' }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '68%', plugins: { legend: Object.assign({}, leg, { position: 'right' }), tooltip: tip } } }));
     const pc = document.getElementById('dash-ctry');
