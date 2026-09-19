@@ -24127,7 +24127,7 @@ ${foot}
         ${kpi('Aceptación LinkedIn', ar + '%', _dashDelta(ar, arp, true), `${c.accepts} de ${c.invites} invitaciones`)}
         ${kpi('Emails enviados', c.emails, _dashDelta(c.emails, p.emails), c.bounced ? `${c.bounced} rebotados (auto)` : 'sin rebotes')}
         ${kpi('Apertura email', c.sent ? or + '%' : '—', '<span class="dash-d dash-d--0">estimada</span>', `sobre ${c.sent} envíos con píxel`)}
-        ${kpi('Reuniones / deals', d.deals.meetings, '<span class="dash-d dash-d--0">' + (d.deals.programadas ? d.deals.programadas + ' programada' + (d.deals.programadas > 1 ? 's' : '') + (d.deals.proximo ? ' · próx. ' + new Date(d.deals.proximo).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }) : '') : 'sin programar') + '</span>', d.deals.valor ? `$${Math.round(d.deals.valor).toLocaleString('es-ES')} · pond. $${Math.round(d.deals.ponderado).toLocaleString('es-ES')}` : 'sin valor cargado')}
+        ${kpi('Reuniones / deals', d.deals.meetings, '<span class="dash-d dash-d--0">' + (d.deals.programadas ? d.deals.programadas + ' programada' + (d.deals.programadas > 1 ? 's' : '') + (d.deals.proximo ? ' · próx. ' + new Date(d.deals.proximo).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', timeZone: 'UTC' }) : '') : 'sin programar') + '</span>', d.deals.valor ? `$${Math.round(d.deals.valor).toLocaleString('es-ES')} · pond. $${Math.round(d.deals.ponderado).toLocaleString('es-ES')}` : 'sin valor cargado')}
       </div>
       <div class="dash-grid">
         <div class="cp-card dash-w2"><div class="cp-card__t">Actividad por canal</div><div class="dash-chart"><canvas id="dash-daily"></canvas></div></div>

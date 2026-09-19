@@ -6269,7 +6269,7 @@ app.get('/api/lm/dashboard', requireAuth, async (req, res) => {
     const base = `FROM activities a JOIN lm_contacts k ON k.id=a.contact_id WHERE ${kw}`;
     const kpiSql = r => `
       SELECT COUNT(*) FILTER (WHERE ${OUT}${chw})::int AS touches,
-             COUNT(DISTINCT a.contact_id) FILTER (WHERE ${OUT}${chw})::int AS contacted,
+             COUNT(DISTINCT a.contact_id) FILTER (WHERE (${OUT}${chw}) OR (${REPLY}${ch ? ' AND FALSE' : ''}))::int AS contacted,
              COUNT(DISTINCT a.contact_id) FILTER (WHERE ${REPLY})::int AS replies,
              COUNT(DISTINCT a.contact_id) FILTER (WHERE a.tipo='aceptacion')::int AS accepts,
              COUNT(DISTINCT a.contact_id) FILTER (WHERE a.tipo='reunion')::int AS meetings,
@@ -6322,7 +6322,7 @@ app.get('/api/lm/dashboard', requireAuth, async (req, res) => {
                          COUNT(DISTINCT k.id) FILTER (WHERE EXISTS(SELECT 1 FROM activities z WHERE z.contact_id=k.id AND z.tipo='respuesta') OR k.disposition IN ('respondio','reunion','mas_adelante','derivado','no_es_persona','no_interesado','no_contactar'))::int AS respondieron,
                          COUNT(DISTINCT k.id) FILTER (WHERE k.disposition='reunion' OR k.deal_cierre IS NOT NULL OR k.deal_valor IS NOT NULL OR EXISTS(SELECT 1 FROM activities z WHERE z.contact_id=k.id AND z.tipo='reunion'))::int AS reuniones
                     FROM lm_contacts k WHERE ${kw}`, params),
-      pool.query(`SELECT x.ch, COUNT(*)::int AS replies FROM (SELECT (SELECT ${CH} FROM activities a WHERE a.contact_id=r.contact_id AND ${OUT} AND a.fecha<=r.fecha ORDER BY a.fecha DESC LIMIT 1) AS ch FROM ${REP1} r JOIN lm_contacts k ON k.id=r.contact_id WHERE ${kw} AND r.fecha::date BETWEEN ${iF}::date AND ${iT}::date) x WHERE x.ch IS NOT NULL GROUP BY 1`, params),
+      pool.query(`SELECT x.ch, COUNT(*)::int AS replies FROM (SELECT (SELECT ${CH} FROM activities a WHERE a.contact_id=r.contact_id AND (${OUT} OR a.tipo='email') AND a.fecha<=r.fecha ORDER BY a.fecha DESC LIMIT 1) AS ch FROM ${REP1} r JOIN lm_contacts k ON k.id=r.contact_id WHERE ${kw} AND r.fecha::date BETWEEN ${iF}::date AND ${iT}::date) x WHERE x.ch IS NOT NULL GROUP BY 1`, params),
       pool.query(`SELECT ROUND(AVG(EXTRACT(EPOCH FROM (r.fecha - f.first))/86400)::numeric,1)::float AS days FROM ${REP1} r JOIN lm_contacts k ON k.id=r.contact_id JOIN LATERAL (SELECT MIN(a.fecha) AS first FROM activities a WHERE a.contact_id=r.contact_id AND ${OUT}) f ON f.first IS NOT NULL AND r.fecha>=f.first WHERE ${kw} AND r.fecha::date BETWEEN ${iF}::date AND ${iT}::date`, params),
       pool.query(`SELECT k.id AS contact_id, k.nombre, k.apellido, COALESCE(co.nombre,k.empresa_nombre) AS empresa, a.fecha, a.nota
                     FROM activities a JOIN lm_contacts k ON k.id=a.contact_id LEFT JOIN lm_companies co ON co.id=k.company_id
