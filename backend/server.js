@@ -6281,7 +6281,7 @@ app.get('/api/lm/dashboard', requireAuth, async (req, res) => {
          AND m.sent_at IS NOT NULL AND m.sent_at::date BETWEEN ${r[0]}::date AND ${r[1]}::date`;
     const cur = [iF, iT], prv = [iPF, iPT];
     const REP1 = `(SELECT DISTINCT ON (contact_id) contact_id, fecha FROM activities WHERE user_id=$1 AND tipo='respuesta' ORDER BY contact_id, fecha)`;
-    const [k1, k0, m1, m0, daily, countries, byCh, heat, seqs, clients, funnel, recent, repCh, repDays] = await Promise.all([
+    const [k1, k0, m1, m0, daily, countries, byCh, heat, seqs, clients, funnel, recent, repCh, repDays, heatAuto] = await Promise.all([
       pool.query(kpiSql(cur), params), pool.query(kpiSql(prv), params),
       pool.query(msgSql(cur), params), pool.query(msgSql(prv), params),
       pool.query(`SELECT a.fecha::date AS d, ${CH} AS ch, COUNT(*)::int AS n ${base} AND ${OUT}${chw} AND ${inR(iF, iT)} GROUP BY 1,2 ORDER BY 1`, params),
@@ -6323,6 +6323,16 @@ app.get('/api/lm/dashboard', requireAuth, async (req, res) => {
       pool.query(`SELECT k.id AS contact_id, k.nombre, k.apellido, COALESCE(co.nombre,k.empresa_nombre) AS empresa, a.fecha, a.nota
                     FROM activities a JOIN lm_contacts k ON k.id=a.contact_id LEFT JOIN lm_companies co ON co.id=k.company_id
                    WHERE ${kw} AND a.tipo='respuesta' AND ${inR(iF, iT)} ORDER BY a.fecha DESC LIMIT 8`, params),
+      pool.query(`SELECT dow, hr, COUNT(*)::int AS n FROM (
+        SELECT k.id, 'email' AS src, EXTRACT(DOW FROM m.replied_at AT TIME ZONE 'America/Lima')::int AS dow, EXTRACT(HOUR FROM m.replied_at AT TIME ZONE 'America/Lima')::int AS hr, m.replied_at::date AS d
+          FROM lm_messages m JOIN lm_contacts k ON k.id=m.contact_id
+         WHERE m.user_id=$1 AND ${kw} AND m.replied_at IS NOT NULL AND m.replied_at::date BETWEEN ${iF}::date AND ${iT}::date
+        UNION
+        SELECT DISTINCT k.id, 'wa', EXTRACT(DOW FROM w.ts AT TIME ZONE 'America/Lima')::int, EXTRACT(HOUR FROM w.ts AT TIME ZONE 'America/Lima')::int, w.ts::date
+          FROM wa_messages w JOIN wa_jid_links l ON l.connection_id=w.connection_id AND l.chat_jid=w.chat_jid
+          JOIN lm_contacts k ON k.id=l.contact_id
+         WHERE w.from_me=FALSE AND ${kw} AND w.ts::date BETWEEN ${iF}::date AND ${iT}::date
+      ) t GROUP BY 1,2`, params),
     ]);
     // normaliza países ("Spain Spain" → "Spain") y agrupa
     const norm = p => { const w = String(p || '').trim().split(/\s+/); const h = w.length / 2; if (w.length % 2 === 0 && w.slice(0, h).join(' ').toLowerCase() === w.slice(h).join(' ').toLowerCase()) return w.slice(0, h).join(' '); return String(p).trim(); };
@@ -6334,7 +6344,7 @@ app.get('/api/lm/dashboard', requireAuth, async (req, res) => {
       daily: daily.rows.map(r => ({ d: r.d instanceof Date ? r.d.toISOString().slice(0, 10) : String(r.d).slice(0, 10), ch: r.ch, n: r.n })),
       countries: Object.values(cm).sort((a, b) => b.contacted - a.contacted).slice(0, 12),
       channels: byCh.rows, heat: heat.rows, sequences: seqs.rows, clients: clients.rows,
-      funnel: funnel.rows[0], recent: recent.rows, replyByCh: repCh.rows, replyDays: repDays.rows[0] && repDays.rows[0].days,
+      funnel: funnel.rows[0], recent: recent.rows, heatAuto: heatAuto.rows, replyByCh: repCh.rows, replyDays: repDays.rows[0] && repDays.rows[0].days,
     });
   } catch (err) { console.error('[lm-dashboard]', err.message); res.status(500).json({ error: 'Error al cargar dashboard' }); }
 });

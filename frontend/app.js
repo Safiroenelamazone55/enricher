@@ -24054,7 +24054,7 @@ ${foot}
     _dashSave(); _dashLoad();
   }
   async function _dashLoad() {
-    const my = ++_dashSeq; _dashLoading = true; _dashPaintBody();
+    const my = ++_dashSeq; _dashLoading = true; _seqAb = null; _dashPaintBody();
     const [from, to] = _dashRange();
     const p = new URLSearchParams({ from, to });
     ['client', 'campaign', 'sequence', 'country', 'channel'].forEach(k => { if (_dashF[k]) p.set(k, _dashF[k]); });
@@ -24085,7 +24085,17 @@ ${foot}
     const el = document.getElementById('dash-body'); if (!el) return;
     _dashCharts.forEach(c => { try { c.destroy(); } catch (e) {} }); _dashCharts = [];
     el.innerHTML = _dashBodyHtml();
-    if (_dashData) _dashInitCharts();
+    if (_dashData) { _dashInitCharts(); _dashLoadAb(); }
+  }
+  function _dashAbShell() {
+    const sid = parseInt(_dashF.sequence) || 0;
+    if (!sid) return '<div class="cp-card"><div class="cp-card__t">Test A/B por variante</div><div class="rep-empty">Elige una <b>secuencia</b> en los filtros para ver qué variante de copy funciona mejor.</div></div>';
+    return _seqAbHtml(sid);
+  }
+  async function _dashLoadAb() {
+    const sid = parseInt(_dashF.sequence) || 0; if (!sid) return;
+    try { const r = await apiFetch(`${API}/lm/sequences/${sid}/ab-metrics`); _seqAb = (r && r.ok) ? await r.json() : { steps: [], auto: [], manual: [], manual_replies: [] }; } catch (e) { _seqAb = { steps: [], auto: [], manual: [], manual_replies: [] }; }
+    const el = document.getElementById('dash-ab'); if (el) el.innerHTML = _seqAbHtml(sid);
   }
   function _dashPct(a, b) { return b ? Math.round(a / b * 1000) / 10 : 0; }
   function _dashDelta(cur, prev, pts) {
@@ -24125,8 +24135,9 @@ ${foot}
         <div class="cp-card"><div class="cp-card__t">Toques por canal</div><div class="dash-chart dash-chart--sm">${d.channels.length ? '<canvas id="dash-ch"></canvas>' : '<div class="rep-empty">Sin actividad</div>'}</div></div>
         <div class="cp-card"><div class="cp-card__t">Países contactados</div><div class="dash-chart dash-chart--sm">${d.countries.length ? '<canvas id="dash-ctry"></canvas>' : '<div class="rep-empty">Sin datos de país</div>'}</div></div>
         <div class="cp-card"><div class="cp-card__t">Respuesta por canal</div>${_dashRepCh(d)}</div>
-        <div class="cp-card"><div class="cp-card__t">Cuándo responden (día × hora)</div>${_dashHeat(d.heat)}</div>
+        <div class="cp-card"><div class="cp-card__t">Cuándo responden · automático</div>${_dashHeat(d.heatAuto || [])}<div class="dash-kpi__s" style="margin-top:8px">Solo respuestas detectadas solas: email y WhatsApp conectado. LinkedIn y llamadas son manuales y no entran. Hora de Lima.</div></div>
       </div>
+      <div id="dash-ab" style="margin-bottom:12px">${_dashAbShell()}</div>
       <div class="dash-grid dash-grid--2">
         <div class="cp-card"><div class="cp-card__t">Rendimiento por secuencia</div>${tbl(['Secuencia', 'Cliente', 'Enrol.', 'Contact.', 'Resp.', 'Tasa', 'Reun.'], seqRows, 'Sin secuencias en este filtro')}</div>
         <div class="cp-card"><div class="cp-card__t">Rendimiento por cliente</div>${tbl(['Cliente', 'Contactos', 'Contact.', 'Resp.', 'Tasa', 'Reun.'], cliRows, 'Sin clientes en este filtro')}</div>
