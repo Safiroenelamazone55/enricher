@@ -24030,20 +24030,161 @@ ${foot}
   }
 
   // ── Dashboard global ──
+  // ── Dashboard: pestañas Hoy (operativo) / Rendimiento (métricas con filtros) ──
+  let _dashTab = 'hoy';
+  let _dashF = { range: '30d', from: '', to: '', client: '', campaign: '', sequence: '', country: '', channel: '' };
+  let _dashData = null, _dashLoading = false, _dashCharts = [], _dashSeq = 0;
+  try { const s = JSON.parse(sessionStorage.getItem('lm_dash') || 'null'); if (s) { _dashTab = s.tab || 'hoy'; _dashF = Object.assign(_dashF, s.f || {}); } } catch (e) {}
+  function _dashSave() { try { sessionStorage.setItem('lm_dash', JSON.stringify({ tab: _dashTab, f: _dashF })); } catch (e) {} }
+  function _dashRange() {
+    const iso = d => d.toISOString().slice(0, 10), now = new Date(), r = _dashF.range;
+    if (r === 'custom' && _dashF.from && _dashF.to) return [_dashF.from, _dashF.to];
+    const back = n => { const d = new Date(now); d.setDate(d.getDate() - n + 1); return iso(d); };
+    if (r === '7d') return [back(7), iso(now)];
+    if (r === 'mes') return [iso(new Date(now.getFullYear(), now.getMonth(), 1)), iso(now)];
+    if (r === 'trim') return [iso(new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1)), iso(now)];
+    if (r === 'ytd') return [now.getFullYear() + '-01-01', iso(now)];
+    return [back(30), iso(now)];
+  }
+  function dashTab(t) { _dashTab = t; _dashSave(); _renderBody(); }
+  function dashSet(k, v) {
+    _dashF[k] = v;
+    if (k === 'client') { _dashF.sequence = ''; _dashF.campaign = ''; }
+    if (k === 'campaign') _dashF.sequence = '';
+    _dashSave(); _dashLoad();
+  }
+  async function _dashLoad() {
+    const my = ++_dashSeq; _dashLoading = true; _dashPaintBody();
+    const [from, to] = _dashRange();
+    const p = new URLSearchParams({ from, to });
+    ['client', 'campaign', 'sequence', 'country', 'channel'].forEach(k => { if (_dashF[k]) p.set(k, _dashF[k]); });
+    let d = null;
+    try { const r = await apiFetch(`${API}/lm/dashboard?${p}`); d = (r && r.ok) ? await r.json() : null; } catch (e) {}
+    if (my !== _dashSeq) return;
+    _dashData = d; _dashLoading = false; _dashPaintBody();
+  }
+  function _dashFiltersHtml() {
+    const f = _dashF;
+    const sel = (k, label, opts) => `<select class="dash-sel${f[k] ? ' is-on' : ''}" onchange="LeadManagerModule.dashSet('${k}',this.value)" title="${label}"><option value="">${label}: todos</option>${opts.map(o => `<option value="${esc(String(o[0]))}"${String(f[k]) === String(o[0]) ? ' selected' : ''}>${esc(o[1])}</option>`).join('')}</select>`;
+    const cl = parseInt(f.client) || 0, cp = parseInt(f.campaign) || 0;
+    const camps = _campaigns.filter(c => !cl || c.outbound_client_id === cl);
+    const seqs = _sequences.filter(s => (!cl || s.outbound_client_id === cl) && (!cp || s.campaign_id === cp));
+    const rg = [['7d', '7 días'], ['30d', '30 días'], ['mes', 'Este mes'], ['trim', 'Trimestre'], ['ytd', 'YTD'], ['custom', 'Personalizado']];
+    return `<div class="dash-seg">${rg.map(r => `<button class="dash-seg__b${f.range === r[0] ? ' on' : ''}" onclick="LeadManagerModule.dashSet('range','${r[0]}')">${r[1]}</button>`).join('')}</div>
+      ${f.range === 'custom' ? `<input type="date" class="dash-sel" value="${esc(f.from)}" onchange="LeadManagerModule.dashSet('from',this.value)"><input type="date" class="dash-sel" value="${esc(f.to)}" onchange="LeadManagerModule.dashSet('to',this.value)">` : ''}
+      ${sel('client', 'Cliente', _clients.map(c => [c.id, c.nombre]))}
+      ${sel('campaign', 'Campaña', camps.map(c => [c.id, c.nombre]))}
+      ${sel('sequence', 'Secuencia', seqs.map(s => [s.id, s.nombre]))}
+      ${sel('channel', 'Canal', [['email', 'Email'], ['linkedin', 'LinkedIn'], ['call', 'Llamada'], ['whatsapp', 'WhatsApp / otros']])}
+      ${_dashData && _dashData.countries ? sel('country', 'País', _dashData.countries.filter(c => c.pais !== 'Sin país').map(c => [c.pais, c.pais])) : ''}
+      ${(f.client || f.campaign || f.sequence || f.country || f.channel) ? `<button class="dash-clear" onclick="LeadManagerModule.dashClear()">Limpiar</button>` : ''}`;
+  }
+  function dashClear() { Object.assign(_dashF, { client: '', campaign: '', sequence: '', country: '', channel: '' }); _dashSave(); _dashLoad(); }
+  function _dashPaintBody() {
+    const fe = document.getElementById('dash-filters'); if (fe) fe.innerHTML = _dashFiltersHtml();
+    const el = document.getElementById('dash-body'); if (!el) return;
+    _dashCharts.forEach(c => { try { c.destroy(); } catch (e) {} }); _dashCharts = [];
+    el.innerHTML = _dashBodyHtml();
+    if (_dashData) _dashInitCharts();
+  }
+  function _dashPct(a, b) { return b ? Math.round(a / b * 1000) / 10 : 0; }
+  function _dashDelta(cur, prev, pts) {
+    if (prev == null || (!prev && !cur)) return '<span class="dash-d dash-d--0">— vs. período anterior</span>';
+    const diff = pts ? Math.round((cur - prev) * 10) / 10 : (prev ? Math.round((cur - prev) / prev * 100) : 100);
+    const cls = diff > 0 ? 'up' : diff < 0 ? 'down' : '0';
+    return `<span class="dash-d dash-d--${cls}">${diff > 0 ? '▲' : diff < 0 ? '▼' : '•'} ${Math.abs(diff)}${pts ? ' pts' : '%'} vs. anterior</span>`;
+  }
+  function _dashBodyHtml() {
+    if (_dashLoading && !_dashData) return '<div class="cp-empty2" style="padding:40px">Cargando métricas…</div>';
+    const d = _dashData; if (!d) return '<div class="cp-empty2" style="padding:40px">No se pudieron cargar las métricas.</div>';
+    const c = d.kpi.cur, p = d.kpi.prev;
+    const rr = _dashPct(c.replies, c.contacted), rrp = _dashPct(p.replies, p.contacted);
+    const ar = _dashPct(c.accepts, c.invites), arp = _dashPct(p.accepts, p.invites);
+    const or = _dashPct(c.opened, c.sent);
+    const kpi = (l, v, delta, sub) => `<div class="dash-kpi"><div class="dash-kpi__l">${l}</div><div class="dash-kpi__v">${v}</div>${delta}${sub ? `<div class="dash-kpi__s">${sub}</div>` : ''}</div>`;
+    const tbl = (head, rows, empty) => `<div class="clients-table-wrap"><table class="clients-table"><thead><tr>${head.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows || `<tr><td colspan="${head.length}" class="rep-empty-td">${empty}</td></tr>`}</tbody></table></div>`;
+    const seqRows = d.sequences.map(s => `<tr><td>${esc(s.nombre)}</td><td>${esc(s.cliente || '—')}</td><td>${s.enrolados}</td><td>${s.contactados}</td><td>${s.respuestas}</td><td><b>${_dashPct(s.respuestas, s.contactados)}%</b></td><td>${s.reuniones}</td></tr>`).join('');
+    const cliRows = d.clients.map(s => `<tr><td>${esc(s.nombre)}</td><td>${s.contactos}</td><td>${s.contactados}</td><td>${s.respuestas}</td><td><b>${_dashPct(s.respuestas, s.contactados)}%</b></td><td>${s.reuniones}</td></tr>`).join('');
+    const ctRows = d.countries.map(s => `<tr><td>${esc(s.pais)}</td><td>${s.contacted}</td><td>${s.replied}</td><td><b>${_dashPct(s.replied, s.contacted)}%</b></td></tr>`).join('');
+    const recent = d.recent.map(r => `<button class="lm-today-rep" onclick="LeadManagerModule.openContactPage(${r.contact_id})"><span class="lm-today-rep__who">${esc([r.nombre, r.apellido].filter(Boolean).join(' '))}</span><span class="lm-today-rep__co">${esc(r.empresa || '')}</span><span class="lm-today-rep__sn">${new Date(r.fecha).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}</span></button>`).join('');
+    const fn = d.funnel, base = fn.enrolados || 1;
+    const stages = [['Enrolados', fn.enrolados, '#007AFF'], ['Contactados', fn.contactados, '#1E5FA8'], ['Respondieron', fn.respondieron, '#15803D'], ['Reunión', fn.reuniones, '#5B4BC4']];
+    const funnel = stages.map((s, i) => `<div class="rep-fn"><div class="rep-fn__top"><span class="rep-fn__lbl">${s[0]}</span>${i ? `<span class="rep-fn__conv">${_dashPct(s[1], stages[i - 1][1])}% ↳</span>` : '<span class="rep-fn__conv rep-fn__conv--base">base</span>'}<span class="rep-fn__n">${s[1]}</span></div><div class="rep-fn__track"><div class="rep-fn__fill" style="width:${Math.max(3, Math.round(s[1] / base * 100))}%;background:${s[2]}"></div></div></div>`).join('');
+    return `${_dashLoading ? '<div class="dash-loading">Actualizando…</div>' : ''}
+      <div class="dash-kpis">
+        ${kpi('Contactos alcanzados', c.contacted, _dashDelta(c.contacted, p.contacted), `${c.touches} toques en total`)}
+        ${kpi('Tasa de respuesta', rr + '%', _dashDelta(rr, rrp, true), `${c.replies} respondieron`)}
+        ${kpi('Aceptación LinkedIn', ar + '%', _dashDelta(ar, arp, true), `${c.accepts} de ${c.invites} invitaciones`)}
+        ${kpi('Emails enviados', c.sent, _dashDelta(c.sent, p.sent), c.bounced ? `${c.bounced} rebotados` : 'sin rebotes')}
+        ${kpi('Apertura email', c.sent ? or + '%' : '—', '<span class="dash-d dash-d--0">estimada</span>', 'depende del píxel; suele subestimar')}
+        ${kpi('Reuniones', c.meetings, _dashDelta(c.meetings, p.meetings))}
+      </div>
+      <div class="dash-grid">
+        <div class="cp-card dash-w2"><div class="cp-card__t">Actividad por canal</div><div class="dash-chart"><canvas id="dash-daily"></canvas></div></div>
+        <div class="cp-card"><div class="cp-card__t">Embudo (histórico del filtro)</div><div class="rep-funnel">${funnel}</div></div>
+        <div class="cp-card"><div class="cp-card__t">Toques por canal</div><div class="dash-chart dash-chart--sm">${d.channels.length ? '<canvas id="dash-ch"></canvas>' : '<div class="rep-empty">Sin actividad</div>'}</div></div>
+        <div class="cp-card"><div class="cp-card__t">Países contactados</div><div class="dash-chart dash-chart--sm">${d.countries.length ? '<canvas id="dash-ctry"></canvas>' : '<div class="rep-empty">Sin datos de país</div>'}</div></div>
+        <div class="cp-card"><div class="cp-card__t">Cuándo responden (día × hora)</div>${_dashHeat(d.heat)}</div>
+      </div>
+      <div class="dash-grid dash-grid--2">
+        <div class="cp-card"><div class="cp-card__t">Rendimiento por secuencia</div>${tbl(['Secuencia', 'Cliente', 'Enrol.', 'Contact.', 'Resp.', 'Tasa', 'Reun.'], seqRows, 'Sin secuencias en este filtro')}</div>
+        <div class="cp-card"><div class="cp-card__t">Rendimiento por cliente</div>${tbl(['Cliente', 'Contactos', 'Contact.', 'Resp.', 'Tasa', 'Reun.'], cliRows, 'Sin clientes en este filtro')}</div>
+        <div class="cp-card"><div class="cp-card__t">Por país</div>${tbl(['País', 'Contact.', 'Resp.', 'Tasa'], ctRows, 'Sin datos')}</div>
+        <div class="cp-card"><div class="cp-card__t">Respuestas recientes</div>${recent ? `<div class="lm-today-reps">${recent}</div>` : '<div class="rep-empty">Sin respuestas en el período</div>'}</div>
+      </div>`;
+  }
+  function _dashHeat(rows) {
+    const g = {}; let max = 0;
+    rows.forEach(r => { g[r.dow + '_' + r.hr] = r.n; if (r.n > max) max = r.n; });
+    if (!max) return '<div class="rep-empty">Aún sin respuestas en el período</div>';
+    const dn = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'], order = [1, 2, 3, 4, 5, 6, 0];
+    let h = '<div class="dash-heat"><span></span>';
+    for (let hr = 6; hr <= 22; hr += 2) h += `<span class="dash-heat__h">${hr}h</span>`;
+    h += '</div>';
+    order.forEach(dw => {
+      h += `<div class="dash-heat"><span class="dash-heat__d">${dn[dw]}</span>`;
+      for (let hr = 6; hr <= 22; hr += 2) { const n = (g[dw + '_' + hr] || 0) + (g[dw + '_' + (hr + 1)] || 0); h += `<span class="dash-heat__c" title="${n}" style="background:rgba(0,122,255,${n ? (0.15 + 0.85 * n / max).toFixed(2) : 0.05})"></span>`; }
+      h += '</div>';
+    });
+    return h;
+  }
+  function _dashInitCharts() {
+    if (typeof Chart === 'undefined' || !_dashData) return;
+    const d = _dashData, COL = { email: '#0062CC', linkedin: '#0A66C2', call: '#B45309', whatsapp: '#15803D' }, LBL = { email: 'Email', linkedin: 'LinkedIn', call: 'Llamada', whatsapp: 'WhatsApp / otros' };
+    const tip = { backgroundColor: '#14211B', padding: 9, cornerRadius: 8 };
+    const leg = { position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, usePointStyle: true, font: { size: 11 } } };
+    const axis = { x: { grid: { display: false }, ticks: { maxTicksLimit: 8, color: '#8A948E', font: { size: 10 } } }, y: { beginAtZero: true, grid: { color: '#EEF0EE' }, ticks: { precision: 0, maxTicksLimit: 4, color: '#8A948E', font: { size: 10 } } } };
+    const days = []; { const a = new Date(d.range.from + 'T00:00:00Z'), b = new Date(d.range.to + 'T00:00:00Z'); for (let x = new Date(a); x <= b && days.length < 400; x.setUTCDate(x.getUTCDate() + 1)) days.push(x.toISOString().slice(0, 10)); }
+    const chs = ['email', 'linkedin', 'call', 'whatsapp'].filter(k => d.daily.some(r => r.ch === k));
+    const dc = document.getElementById('dash-daily');
+    if (dc) _dashCharts.push(new Chart(dc.getContext('2d'), { type: 'bar', data: { labels: days.map(x => x.slice(5)), datasets: chs.map(k => ({ label: LBL[k], backgroundColor: COL[k], borderRadius: 2, data: days.map(x => (d.daily.find(r => r.d === x && r.ch === k) || {}).n || 0) })) }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: leg, tooltip: tip }, scales: { x: Object.assign({}, axis.x, { stacked: true }), y: Object.assign({}, axis.y, { stacked: true }) } } }));
+    const cc = document.getElementById('dash-ch');
+    if (cc) _dashCharts.push(new Chart(cc.getContext('2d'), { type: 'doughnut', data: { labels: d.channels.map(r => LBL[r.ch]), datasets: [{ data: d.channels.map(r => r.touches), backgroundColor: d.channels.map(r => COL[r.ch]), borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '62%', plugins: { legend: Object.assign({}, leg, { position: 'right' }), tooltip: tip } } }));
+    const pc = document.getElementById('dash-ctry');
+    if (pc) { const t8 = d.countries.slice(0, 8); _dashCharts.push(new Chart(pc.getContext('2d'), { type: 'bar', data: { labels: t8.map(r => r.pais), datasets: [{ label: 'Contactados', backgroundColor: '#007AFF', borderRadius: 3, data: t8.map(r => r.contacted) }, { label: 'Respondieron', backgroundColor: '#15803D', borderRadius: 3, data: t8.map(r => r.replied) }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: leg, tooltip: tip }, scales: { x: axis.y, y: { grid: { display: false }, ticks: { color: '#45586A', font: { size: 10 } } } } } })); }
+  }
   function _vDashboard() {
+    const tabs = `<div class="dash-tabs"><button class="dash-tab${_dashTab === 'hoy' ? ' on' : ''}" onclick="LeadManagerModule.dashTab('hoy')">Hoy</button><button class="dash-tab${_dashTab === 'rend' ? ' on' : ''}" onclick="LeadManagerModule.dashTab('rend')">Rendimiento</button></div>`;
+    const head = `<div class="lm-sec-head">
+        <div style="display:flex;align-items:center;gap:18px"><h2 class="lm-sec-title">Dashboard</h2>${tabs}</div>
+        <div class="lm-sec-actions">
+          <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openDrawer()">＋ Nuevo lead</button>
+          <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openClientDrawer()">＋ Nuevo cliente outbound</button>
+        </div>
+      </div>`;
+    if (_dashTab === 'rend') {
+      setTimeout(_dashLoad, 0);
+      return `${head}<div class="dash-filters" id="dash-filters">${_dashFiltersHtml()}</div><div id="dash-body">${_dashBodyHtml()}</div>`;
+    }
+    return head + _vDashHoy();
+  }
+  function _vDashHoy() {
     const activos = _clients.filter(c => c.estado === 'activo').length;
     const pipeline = _data.filter(l => !['ganado', 'perdido'].includes(l.stage));
     const ganados = _data.filter(l => l.stage === 'ganado').length;
     const sinClient = _data.filter(l => !l.outbound_client_id).length;
     const kpi = (l, v, s, t) => `<div class="lm-mc lm-mc--${t}"><span class="lm-mc__l">${l}</span><span class="lm-mc__v">${v}</span><span class="lm-mc__s">${s}</span></div>`;
     return `
-      <div class="lm-sec-head">
-        <div><h2 class="lm-sec-title">Lead Manager</h2></div>
-        <div class="lm-sec-actions">
-          <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openDrawer()">＋ Nuevo lead</button>
-          <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openClientDrawer()">＋ Nuevo cliente outbound</button>
-        </div>
-      </div>
       <div class="lm-metrics">
         ${kpi('Clientes outbound', _clients.length, `${activos} activo${activos !== 1 ? 's' : ''}`, 'a')}
         ${kpi('Leads en pipeline', pipeline.length, _money(_sumv(pipeline)) + ' estimado', 'b')}
@@ -29772,7 +29913,7 @@ ${foot}
     dgEnrichMenu, dgEnrichOpen, dgEnrichClose, dgEnrichApply, dgToggleIssues, dgMoreMenu, dgToggleSelMode,
     dgDupOpen, dgDupClose, dgDupPickSurvivor, dgDupToggleDel, dgDupMergeGroup, dgDupDeleteGroup,
     fmsToggle, fmsFilter, fmsPick,
-    openViews, applyView, saveView, deleteView, clearAllViews,
+    openViews, applyView, saveView, deleteView, clearAllViews, dashTab, dashSet, dashClear,
     taskSetView, taskSetFilter, calPrev, calNext, calToday,
     lmSetDisposition, seqDoDisposition, cpSetStage,
     seqDoAccepted, seqDoNoLinkedIn, seqDoBounced, seqDoNoWhatsapp, seqDoNoPhone, lmToggleNoLinkedIn, lmToggleNoWhatsapp, lmToggleNoPhone, lmToggleBounced, lmToggleManualEmail, ctToggleBounced,

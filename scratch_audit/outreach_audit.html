@@ -1,0 +1,386 @@
+<title>Auditoría Outreach</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+  :root{
+    --bg:#F7F8F6; --surface:#FFFFFF; --surface-2:#F0F2EF;
+    --ink:#14211B; --ink-soft:#4B564F; --ink-faint:#8B958F;
+    --border:#E1E5E0; --border-soft:#ECEFEA;
+    --accent:#00804C; --accent-soft:#E4F3EC; --accent-ink:#00281A;
+    --crit:#B4271F; --crit-bg:#FBEAE8;
+    --warn:#9A5B0A; --warn-bg:#FBF0DA;
+    --info:#1E5FA8; --info-bg:#EAF1FB;
+    --done:#15803D; --done-bg:#E7F5EC;
+    --font-display:'Archivo',system-ui,sans-serif;
+    --font-body:'IBM Plex Sans',system-ui,sans-serif;
+    --font-mono:'IBM Plex Mono',ui-monospace,monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#12241C; --surface:#173026; --surface-2:#1D3A2E;
+      --ink:#EAF3ED; --ink-soft:#B7C7BE; --ink-faint:#7C8F84;
+      --border:#294B3B; --border-soft:#223F32;
+      --accent:#3FCB8C; --accent-soft:#1E4636; --accent-ink:#D9F5E7;
+      --crit:#F2897F; --crit-bg:#3A1E1C;
+      --warn:#E8B36B; --warn-bg:#3A2C14;
+      --info:#8FBBEE; --info-bg:#1B2E44;
+      --done:#7BD79E; --done-bg:#1B3A29;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#12241C; --surface:#173026; --surface-2:#1D3A2E;
+    --ink:#EAF3ED; --ink-soft:#B7C7BE; --ink-faint:#7C8F84;
+    --border:#294B3B; --border-soft:#223F32;
+    --accent:#3FCB8C; --accent-soft:#1E4636; --accent-ink:#D9F5E7;
+    --crit:#F2897F; --crit-bg:#3A1E1C;
+    --warn:#E8B36B; --warn-bg:#3A2C14;
+    --info:#8FBBEE; --info-bg:#1B2E44;
+    --done:#7BD79E; --done-bg:#1B3A29;
+  }
+
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:var(--font-body); line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3{font-family:var(--font-display); text-wrap:balance; margin:0}
+  code,.mono{font-family:var(--font-mono)}
+  ::selection{background:var(--accent-soft); color:var(--accent-ink)}
+  a{color:var(--accent)}
+
+  .wrap{max-width:900px; margin:0 auto; padding:0 24px 120px}
+
+  /* ── Header ── */
+  .hero{padding:56px 24px 32px; max-width:900px; margin:0 auto}
+  .eyebrow{
+    font:600 12px/1 var(--font-mono); letter-spacing:.08em; text-transform:uppercase;
+    color:var(--accent); margin-bottom:14px; display:flex; gap:10px; align-items:center;
+  }
+  .eyebrow::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--accent);flex:0 0 auto}
+  .hero h1{font-size:2.3rem; font-weight:800; letter-spacing:-.01em; color:var(--ink)}
+  .hero p.lede{
+    font-size:1.05rem; color:var(--ink-soft); max-width:62ch; margin-top:14px;
+  }
+  .meta-row{display:flex; gap:22px; margin-top:26px; flex-wrap:wrap}
+  .meta-row div{font-size:.82rem; color:var(--ink-faint)}
+  .meta-row b{display:block; font-family:var(--font-mono); color:var(--ink); font-size:.95rem; margin-top:2px}
+
+  /* ── KPI strip ── */
+  .kpis{
+    display:grid; grid-template-columns:repeat(5,1fr); gap:1px;
+    background:var(--border); border:1px solid var(--border); border-radius:10px;
+    overflow:hidden; margin:28px 0 8px;
+  }
+  .kpi{background:var(--surface); padding:16px 14px; text-align:left}
+  .kpi b{display:block; font:700 1.6rem/1 var(--font-mono); color:var(--ink)}
+  .kpi span{font-size:.74rem; color:var(--ink-faint); text-transform:uppercase; letter-spacing:.04em}
+  .kpi.crit b{color:var(--crit)} .kpi.warn b{color:var(--warn)}
+  .kpi.done b{color:var(--done)} .kpi.info b{color:var(--info)}
+
+  /* ── Section nav ── */
+  .navbar{
+    position:sticky; top:0; z-index:5; background:color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter:blur(8px); border-bottom:1px solid var(--border-soft);
+    padding:10px 0; margin-top:8px;
+  }
+  .navbar-inner{
+    max-width:900px; margin:0 auto; padding:0 24px; display:flex; gap:6px;
+    overflow-x:auto; scrollbar-width:none;
+  }
+  .navbar-inner::-webkit-scrollbar{display:none}
+  .navpill{
+    flex:0 0 auto; font:500 .78rem var(--font-body); color:var(--ink-soft);
+    background:var(--surface-2); border:1px solid var(--border-soft); border-radius:999px;
+    padding:6px 12px; text-decoration:none; white-space:nowrap;
+  }
+  .navpill:hover{border-color:var(--accent); color:var(--accent)}
+
+  /* ── Module cards ── */
+  .module{
+    margin-top:44px; padding-top:6px; scroll-margin-top:64px;
+  }
+  .module-hd{display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; margin-bottom:6px}
+  .module-hd .n{font:600 .78rem var(--font-mono); color:var(--ink-faint)}
+  .module-hd h2{font-size:1.4rem; font-weight:700}
+  .verdict{
+    font:600 .72rem var(--font-body); letter-spacing:.02em; padding:3px 10px; border-radius:999px;
+    text-transform:uppercase;
+  }
+  .verdict.solido{background:var(--done-bg); color:var(--done)}
+  .verdict.parcial{background:var(--warn-bg); color:var(--warn)}
+  .verdict.hueco{background:var(--crit-bg); color:var(--crit)}
+  .verdict.fase{background:var(--info-bg); color:var(--info)}
+
+  .take{color:var(--ink-soft); max-width:66ch; margin:10px 0 18px; font-size:.96rem}
+
+  .finding{
+    display:flex; gap:14px; padding:14px 0; border-top:1px solid var(--border-soft);
+  }
+  .finding:first-of-type{border-top:1px solid var(--border)}
+  .tag{
+    flex:0 0 96px; font:600 .68rem var(--font-mono); text-transform:uppercase; letter-spacing:.03em;
+    padding:3px 8px; border-radius:5px; height:fit-content; text-align:center;
+  }
+  .tag.critico{background:var(--crit-bg); color:var(--crit)}
+  .tag.mejora{background:var(--warn-bg); color:var(--warn)}
+  .tag.fase{background:var(--info-bg); color:var(--info)}
+  .tag.ok{background:var(--done-bg); color:var(--done)}
+  .fbody b{display:block; font-size:.95rem; margin-bottom:3px; color:var(--ink)}
+  .fbody p{margin:0; font-size:.88rem; color:var(--ink-soft)}
+  .fbody .ref{font-size:.76rem; color:var(--ink-faint); margin-top:5px}
+
+  /* ── Cross-cutting ── */
+  .cross{
+    margin-top:56px; padding:26px; background:var(--surface); border:1px solid var(--border);
+    border-radius:12px;
+  }
+  .cross h2{font-size:1.25rem; margin-bottom:14px}
+  .cross ol{margin:0; padding-left:20px; display:flex; flex-direction:column; gap:12px}
+  .cross li b{color:var(--ink)}
+  .cross li{font-size:.92rem; color:var(--ink-soft)}
+
+  /* ── Priority punch list ── */
+  .punch{margin-top:44px}
+  .punch h2{font-size:1.25rem; margin-bottom:16px}
+  .punch-row{
+    display:grid; grid-template-columns:28px 1fr 90px; gap:14px; align-items:start;
+    padding:13px 0; border-top:1px solid var(--border-soft);
+  }
+  .punch-row:first-of-type{border-top:1px solid var(--border)}
+  .punch-row .num{font:700 1rem var(--font-mono); color:var(--accent)}
+  .punch-row .txt b{display:block; font-size:.93rem; color:var(--ink)}
+  .punch-row .txt span{font-size:.83rem; color:var(--ink-faint)}
+  .punch-row .eff{font:600 .72rem var(--font-mono); text-transform:uppercase; text-align:right; color:var(--ink-faint); padding-top:3px}
+
+  footer{max-width:900px; margin:60px auto 0; padding:24px; color:var(--ink-faint); font-size:.8rem; border-top:1px solid var(--border-soft)}
+
+  @media(max-width:640px){
+    .kpis{grid-template-columns:repeat(2,1fr)}
+    .hero h1{font-size:1.7rem}
+    .punch-row{grid-template-columns:22px 1fr; }
+    .punch-row .eff{grid-column:2; text-align:left; padding-top:0}
+  }
+</style>
+
+<div class="hero">
+  <div class="eyebrow">Auditoría interna · Nova Outreach</div>
+  <h1>Los 15 módulos de Outreach, uno por uno</h1>
+  <p class="lede">Revisión de fondo — no cosmética — de cada sección del sidebar: qué existe, si la lógica y la conexión entre módulos son correctas, si cada acción vive donde debería, si el copy dice lo que la acción realmente hace, y qué falta para que esto opere como la capa completa de un CRM profesional.</p>
+  <div class="meta-row">
+    <div>Alcance<b>15 módulos · sidebar completo</b></div>
+    <div>Método<b>Lectura directa de código — sin suposiciones</b></div>
+    <div>Fecha<b>2026-09-12</b></div>
+  </div>
+  <div class="kpis">
+    <div class="kpi crit"><b>3</b><span>Huecos reales</span></div>
+    <div class="kpi warn"><b>9</b><span>Mejoras concretas</span></div>
+    <div class="kpi info"><b>5</b><span>Fases ya declaradas</span></div>
+    <div class="kpi done"><b>6</b><span>Módulos sólidos</span></div>
+    <div class="kpi"><b>15</b><span>Módulos revisados</span></div>
+  </div>
+</div>
+
+<nav class="navbar"><div class="navbar-inner">
+  <a class="navpill" href="#m1">1 Dashboard</a>
+  <a class="navpill" href="#m2">2 Clientes</a>
+  <a class="navpill" href="#m3">3 Campañas</a>
+  <a class="navpill" href="#m4">4 Secuencias</a>
+  <a class="navpill" href="#m5">5 Empresas</a>
+  <a class="navpill" href="#m6">6 Contactos</a>
+  <a class="navpill" href="#m7">7 Leads</a>
+  <a class="navpill" href="#m8">8 Deals</a>
+  <a class="navpill" href="#m9">9 Actividades</a>
+  <a class="navpill" href="#m10">10 Inbox</a>
+  <a class="navpill" href="#m11">11 WhatsApp</a>
+  <a class="navpill" href="#m12">12 Tareas</a>
+  <a class="navpill" href="#m13">13 Reportes</a>
+  <a class="navpill" href="#m14">14 Plantillas</a>
+  <a class="navpill" href="#m15">15 Config</a>
+  <a class="navpill" href="#cross">Transversal</a>
+  <a class="navpill" href="#punch">Orden sugerido</a>
+</div></nav>
+
+<div class="wrap">
+
+  <div class="module" id="m1">
+    <div class="module-hd"><span class="n">01</span><h2>Dashboard</h2><span class="verdict solido">Sólido</span></div>
+    <p class="take">Panel de arranque correcto: KPIs reales (clientes activos, pipeline estimado, campañas activas, tareas pendientes) + accesos directos a crear lead/cliente. El problema no es la lógica, es un residuo de nombre.</p>
+    <div class="finding">
+      <span class="tag mejora">Copy</span>
+      <div class="fbody"><b>El título interno todavía dice "Lead Manager"</b><p>El módulo se renombró a "Outreach" en todo el sidebar, pero el `&lt;h2&gt;` de este panel y su subtítulo ("Operación outbound por cliente, campaña y secuencia") siguen con el nombre viejo. Es visible apenas se entra.</p><div class="ref">app.js:23588</div></div>
+    </div>
+    <div class="finding">
+      <span class="tag fase">Alcance</span>
+      <div class="fbody"><b>KPIs son una foto del momento, no una tendencia</b><p>Todo se calcula en vivo contra el estado actual — no hay "vs. semana pasada" ni sparkline de evolución. Razonable para el tamaño actual de la operación; lo marco para cuando el volumen lo justifique, no como bug.</p></div>
+    </div>
+  </div>
+
+  <div class="module" id="m2">
+    <div class="module-hd"><span class="n">02</span><h2>Clientes outbound</h2><span class="verdict parcial">Necesita una decisión</span></div>
+    <p class="take">Entidad bien modelada (workspace propio por cliente: mercado, ICP, canal, próxima acción, remitente/CC). El punto de fricción es de cardinalidad entre dos integraciones que deberían comportarse igual y no lo hacen.</p>
+    <div class="finding">
+      <span class="tag critico">Inconsistencia</span>
+      <div class="fbody"><b>Buzón = 1 por cliente, WhatsApp = varios por cliente</b><p>El buzón de correo tiene un índice único que fuerza un buzón por cliente outbound. La conexión de WhatsApp, en cambio, usa una tabla puente muchos-a-muchos — un mismo WhatsApp puede quedar ligado a varios clientes a la vez. Dos canales de la misma entidad, dos reglas distintas, sin que quede claro cuál es la intencional.</p><div class="ref">db.js:1326 (buzón, único) · db.js:1771 (WhatsApp, N:N)</div></div>
+    </div>
+  </div>
+
+  <div class="module" id="m3">
+    <div class="module-hd"><span class="n">03</span><h2>Campañas</h2><span class="verdict fase">Fase declarada</span></div>
+    <p class="take">Modelo correcto: campaña → una o más secuencias, contactos enlazados por tabla propia. El propio código ya la marca como "Fase 2" — es decir, esto no es un descubrimiento, es confirmar que sigue donde se dejó.</p>
+    <div class="finding">
+      <span class="tag fase">Estado</span>
+      <div class="fbody"><b>Sigue etiquetada como fase temprana en el propio comentario del código</b><p>"Campañas por cliente con mercado, ICP, canal y secuencia asociada. Métricas por campaña." — marcado Fase 2 desde que se construyó. Las métricas de campaña se recalculan en vivo, sin acumulado histórico propio.</p><div class="ref">app.js:24552</div></div>
+    </div>
+  </div>
+
+  <div class="module" id="m4">
+    <div class="module-hd"><span class="n">04</span><h2>Secuencias</h2><span class="verdict parcial">Sólido, con un hueco puntual</span></div>
+    <p class="take">Es el motor real del sistema — pasos, ramas por respuesta, ventana horaria del prospecto (corregida esta semana), modos manual/auto/pre-aprobado. La arquitectura de fondo está bien. El hueco es de superficie, ya identificado en esta misma conversación.</p>
+    <div class="finding">
+      <span class="tag critico">Falta</span>
+      <div class="fbody"><b>Sin selección múltiple en la pestaña "Contactos" de la secuencia</b><p>El endpoint de borrado masivo ya existe (`POST /sequences/:id/contacts/bulk-remove`) pero solo es alcanzable desde Contactos global. Parado dentro de la secuencia, la fila solo tiene un ✕ de a uno — para vaciar una secuencia mal enrolada hay que salir, ir a Contactos, filtrar y recién ahí actuar.</p><div class="ref">app.js:19897 (fila individual) · app.js:27224 (bulk, solo en Contactos)</div></div>
+    </div>
+    <div class="finding">
+      <span class="tag mejora">Copy</span>
+      <div class="fbody"><b>"Quitar de la secuencia" es en realidad un borrado permanente</b><p>El botón dice "Quitar" (suena reversible); por debajo hace `DELETE` real del enrolamiento — no hay vuelta atrás sin re-enrolar de cero. Debería decir "Eliminar de esta secuencia" y confirmarlo como lo que es.</p><div class="ref">app.js:21069–21077</div></div>
+    </div>
+  </div>
+
+  <div class="module" id="m5">
+    <div class="module-hd"><span class="n">05</span><h2>Empresas</h2><span class="verdict solido">Sólido</span></div>
+    <p class="take">Reestructurada en esta misma sesión: filtros rápidos reales (País, Industria, Nº empleados, archivo de importación) agrupados bajo un solo "⋮", toolbar en una fila, selección masiva sin barra vacía. Sin pendientes abiertos.</p>
+  </div>
+
+  <div class="module" id="m6">
+    <div class="module-hd"><span class="n">06</span><h2>Contactos</h2><span class="verdict solido">Sólido</span></div>
+    <p class="take">Mismo trabajo que Empresas: Cliente outbound, Estado, Prioridad, País, Fuente y archivo de importación como filtros de un clic, reusando el mismo motor que "Todos los filtros". Sin pendientes abiertos.</p>
+  </div>
+
+  <div class="module" id="m7">
+    <div class="module-hd"><span class="n">07</span><h2>Leads</h2><span class="verdict hueco">Deuda técnica real</span></div>
+    <p class="take">Funcionalmente la pantalla está bien pensada: agrupa por disposición (Interesado, Reunión, Más adelante, Derivado, Descartados) con las acciones correctas por grupo. El problema está un nivel más abajo, en qué tabla dice la verdad.</p>
+    <div class="finding">
+      <span class="tag critico">Riesgo técnico</span>
+      <div class="fbody"><b>Existen DOS modelos de "lead" al mismo tiempo</b><p>Hay una tabla `leads` completa, con su propio enum de etapas (nuevo/contactado/propuesta/negociación/ganado/perdido) — pero la pantalla que ves como "Leads" en realidad lee `lm_contacts` filtrado por `disposition`. La tabla `leads` quedó viva en el esquema sin que nada la use. No es un bug visible hoy, pero es exactamente el tipo de rastro que hace que una función nueva se conecte por error a la tabla equivocada.</p><div class="ref">db.js:656–672 (tabla muerta) · app.js:20202–20215 (modelo real)</div></div>
+    </div>
+    <div class="finding">
+      <span class="tag ok">Confirmado bien hecho</span>
+      <div class="fbody"><b>La selección masiva y las acciones por disposición sí están completas</b><p>Enrolar en secuencia/campaña, quitar de secuencia, verificar emails, personalizar con IA, eliminar (con o sin empresa) — todo disponible desde la lista de Contactos que alimenta esta vista.</p></div>
+    </div>
+  </div>
+
+  <div class="module" id="m8">
+    <div class="module-hd"><span class="n">08</span><h2>Deals</h2><span class="verdict parcial">Funcional, sin profundidad histórica</span></div>
+    <p class="take">Kanban de 4 etapas (Propuesta, Negociación, Ganado, Perdido) sobre el mismo registro de contacto — un lead se "convierte" en deal cambiando su propio estado, no creando una entidad nueva. Los KPIs (pipeline abierto, ponderado por probabilidad, ganado, tasa de cierre) están bien elegidos para un CRM de ventas real.</p>
+    <div class="finding">
+      <span class="tag mejora">Falta</span>
+      <div class="fbody"><b>Sin historial de cambios de etapa ni de "por qué se perdió"</b><p>Todo se calcula sobre el estado ACTUAL. Si un deal pasó por Negociación y volvió a Propuesta, o se perdió, no queda un rastro consultable de cuándo ni por qué — dato estándar en cualquier plan de CRM pago (razón de pérdida, tiempo en cada etapa).</p><div class="ref">app.js:25244, 25281</div></div>
+    </div>
+    <div class="finding">
+      <span class="tag mejora">Nombre en el código</span>
+      <div class="fbody"><b>Existe otra tabla "opportunities" — de un módulo totalmente distinto</b><p>No es un bug de usuaria (no se cruzan datos), pero si en el futuro alguien de tu equipo o yo mismo buscamos "oportunidades" para tocar Deals, hay una tabla con ese nombre que pertenece al pipeline de proyectos freelance, no a esto. Vale la pena que quede anotado para no perder tiempo ahí.</p><div class="ref">db.js:1183</div></div>
+    </div>
+  </div>
+
+  <div class="module" id="m9">
+    <div class="module-hd"><span class="n">09</span><h2>Actividades</h2><span class="verdict hueco">Rol confuso frente a Tareas comerciales</span></div>
+    <p class="take">Es un feed manual — registras a mano un email enviado, una llamada, una reunión — ordenado por fecha. La función en sí funciona. El problema es que, al lado de "Tareas comerciales" en el mismo menú, no queda claro para quién no construyó el sistema cuál es la diferencia.</p>
+    <div class="finding">
+      <span class="tag critico">Claridad</span>
+      <div class="fbody"><b>"Actividades" (bitácora manual) vs "Tareas comerciales" (cola automática) sin distinción visible</b><p>Son conceptos genuinamente distintos — uno es historial que tú escribes, el otro es lo que el sistema calcula que toca hacer hoy — pero los nombres no lo dejan ver, y ambos viven en el mismo grupo "Comercial" del menú, uno debajo del otro.</p><div class="ref">app.js:21942 (Actividades) · app.js:18735 (Tareas comerciales, mismo grupo de nav)</div></div>
+    </div>
+  </div>
+
+  <div class="module" id="m10">
+    <div class="module-hd"><span class="n">10</span><h2>Inbox / Respuestas</h2><span class="verdict parcial">Funciona, con un límite declarado</span></div>
+    <p class="take">Los borradores con IA (Fable 5 para cuentas de alto valor, Haiku para el resto) están completos: generar, editar, aprobar. La disposición se registra bien desde la conversación. El límite real está en cómo llegan las respuestas.</p>
+    <div class="finding">
+      <span class="tag fase">Ya declarado</span>
+      <div class="fbody"><b>La lectura automática de respuestas depende de una fase OAuth aún no enviada</b><p>El propio texto de la app lo dice: "conectado para ENVIAR — la lectura automática llega con la fase OAuth" — para ciertos proveedores, hoy no hay IMAP. Es honesto con la usuaria, pero conviene tenerlo explícito en esta auditoría como límite real, no como algo a "arreglar" por sorpresa.</p><div class="ref">app.js:24268, 24283</div></div>
+    </div>
+    <div class="finding">
+      <span class="tag mejora">Falta</span>
+      <div class="fbody"><b>Ninguna respuesta se clasifica sola</b><p>Toda disposición (Interesado / No interesado / Reunión…) se marca a mano leyendo el mensaje. Con el motor de IA ya integrado para redactar, clasificar el tono de la respuesta entrante es una extensión natural, no una función nueva desde cero.</p></div>
+    </div>
+  </div>
+
+  <div class="module" id="m11">
+    <div class="module-hd"><span class="n">11</span><h2>WhatsApp</h2><span class="verdict hueco">Dos superficies de WhatsApp en la misma app</span></div>
+    <p class="take">Este ítem del sidebar de Outreach es una lista ligera de chats relacionados a tus leads — no el chat completo. El WhatsApp completo (conectar número, enviar, programar, reaccionar) vive en Operaciones, como módulo aparte.</p>
+    <div class="finding">
+      <span class="tag critico">Ubicación</span>
+      <div class="fbody"><b>Un mismo nombre, dos lugares distintos con capacidades distintas</b><p>"WhatsApp" en Outreach y "WhatsApp" en Operaciones no son la misma pantalla ni permiten lo mismo. Para alguien nuevo en tu equipo, no hay forma de saber cuál usar sin que se lo expliques — un CRM real resolvería esto con una sola superficie de WhatsApp que simplemente filtra por contexto (lead vs. general), no con dos productos con el mismo nombre.</p><div class="ref">app.js:18734 (`wa`, Outreach) — módulo separado `WaChatModule` en Operaciones</div></div>
+    </div>
+  </div>
+
+  <div class="module" id="m12">
+    <div class="module-hd"><span class="n">12</span><h2>Tareas comerciales</h2><span class="verdict solido">Sólido</span></div>
+    <p class="take">La cola real de "qué toca hoy" — consciente de ramas (salta pasos que no aplican al contacto según cómo respondió), ancla bien la fecha incluso en secuencias con bifurcación. Es, técnicamente, la pieza mejor construida del módulo.</p>
+    <div class="finding">
+      <span class="tag mejora">Ver también</span>
+      <div class="fbody"><b>Comparte el hallazgo #9</b><p>Su solidez es justo lo que hace más notoria la falta de distinción frente a "Actividades" — no es un problema de esta pantalla, es de cómo se presentan las dos juntas.</p></div>
+    </div>
+  </div>
+
+  <div class="module" id="m13">
+    <div class="module-hd"><span class="n">13</span><h2>Reportes</h2><span class="verdict fase">Fase declarada</span></div>
+    <p class="take">Hay un embudo de conversión real (aceptación → respuesta → reunión) por cliente y por secuencia, con gráficos ya funcionando. Pero de nuevo, el propio código lo marca como "Fase 6" — parcial por diseño, no por descuido.</p>
+    <div class="finding">
+      <span class="tag fase">Falta</span>
+      <div class="fbody"><b>No hay un reporte ejecutivo cruzando todos los clientes a la vez</b><p>Las métricas de embudo viven dentro del detalle de cada cliente/secuencia — no hay una vista "todo Outreach este mes" para revisar de un vistazo antes de una reunión, y no hay export.</p><div class="ref">app.js:24441, 24497, 24559</div></div>
+    </div>
+  </div>
+
+  <div class="module" id="m14">
+    <div class="module-hd"><span class="n">14</span><h2>Plantillas</h2><span class="verdict parcial">Sólido, falta profundidad</span></div>
+    <p class="take">CRUD completo con filtro por canal, etiqueta y secuencia enlazada — bien pensado para reutilizar contenido entre secuencias. Dos ausencias notorias frente a lo que trae un plan de CRM pago.</p>
+    <div class="finding">
+      <span class="tag mejora">Falta</span>
+      <div class="fbody"><b>No hay "Duplicar plantilla"</b><p>Para partir de una plantilla existente y variarla hay que recrearla desde cero o editarla y perder la original.</p><div class="ref">app.js:24616–24628</div></div>
+    </div>
+    <div class="finding">
+      <span class="tag mejora">Falta</span>
+      <div class="fbody"><b>Sin métrica de rendimiento por plantilla</b><p>Existen variantes A/B a nivel de paso de secuencia, pero la biblioteca de plantillas en sí no muestra qué plantilla abre/responde mejor cuando se reutiliza en varias secuencias.</p></div>
+    </div>
+  </div>
+
+  <div class="module" id="m15">
+    <div class="module-hd"><span class="n">15</span><h2>Configuración</h2><span class="verdict parcial">Copy desactualizado</span></div>
+    <p class="take">Contenido real y útil: exportar datos, campos personalizados, ventana de envío automático, configuración de personalización con IA. El bloque que falla es justamente el que promete ser el resumen de todo lo conectado.</p>
+    <div class="finding">
+      <span class="tag critico">Copy incompleto</span>
+      <div class="fbody"><b>La tarjeta "Integraciones" solo menciona LinkedIn</b><p>Dice "Aceptación/respuesta se marcan manualmente" para LinkedIn y ahí termina — no aparecen los buzones de correo ni WhatsApp, que SÍ son integraciones reales y ya construidas dentro de este mismo módulo. Quien entra a Configuración buscando "¿qué tengo conectado?" no ve el cuadro completo.</p><div class="ref">app.js:24518–24520</div></div>
+    </div>
+    <div class="finding">
+      <span class="tag mejora">Copy</span>
+      <div class="fbody"><b>Mismo residuo de nombre que el Dashboard</b><p>El subtítulo dice "Ajustes y datos del Lead Manager" — otra vez el nombre pre-rename.</p><div class="ref">app.js:24508</div></div>
+    </div>
+  </div>
+
+  <div class="cross" id="cross">
+    <h2>Lo que se repite en varios módulos</h2>
+    <ol>
+      <li><b>"Lead Manager" como nombre fantasma.</b> Aparece en Dashboard y Configuración aunque el sidebar entero ya dice "Outreach" — confirma que el rename de hace unas semanas cambió los rótulos visibles pero no los textos internos de cada sección.</li>
+      <li><b>Verbo "Quitar" para acciones que en realidad son permanentes.</b> Visto en Secuencias; vale la pena revisar si el mismo patrón se repite en Empresas/Contactos al desvincular relaciones (empresa↔contacto, secuencia↔contacto) fuera de lo ya auditado hoy.</li>
+      <li><b>Selección masiva pareja en Contactos/Empresas, ausente en el resto.</b> El patrón que se construyó hoy (checkboxes + "⋮" + acciones en bloque) resolvió Contactos y Empresas; Secuencias (pestaña Contactos) y Plantillas se quedaron con acciones de una en una.</li>
+      <li><b>Las fases declaradas coinciden entre sí.</b> Campañas (Fase 2), partes de Inbox (Fase 4) y Reportes (Fase 6) fueron construidas sabiendo que quedarían parciales — no son descubrimientos de esta auditoría, son confirmación de que el plan original sigue donde se dejó.</li>
+      <li><b>Dos pares de pantallas con el mismo nombre o el mismo propósito aparente.</b> "WhatsApp" (Outreach) vs "WhatsApp" (Operaciones), y "Actividades" vs "Tareas comerciales" — ambos pares son técnicamente correctos por separado, pero leídos juntos en el mismo sidebar no se explican solos.</li>
+    </ol>
+  </div>
+
+  <div class="punch" id="punch">
+    <h2>Orden sugerido si arrancamos a implementar</h2>
+    <div class="punch-row"><span class="num">1</span><div class="txt"><b>Selección múltiple en la pestaña Contactos de Secuencias</b><span>El endpoint ya existe — es conectar UI, no construir backend nuevo.</span></div><span class="eff">Bajo</span></div>
+    <div class="punch-row"><span class="num">2</span><div class="txt"><b>Renombrar "Quitar de la secuencia" → "Eliminar de esta secuencia" + confirmación explícita</b><span>Cambio de copy puntual, cero riesgo.</span></div><span class="eff">Bajo</span></div>
+    <div class="punch-row"><span class="num">3</span><div class="txt"><b>Completar la tarjeta "Integraciones" en Configuración (Email + WhatsApp)</b><span>Los datos ya existen (buzones, conexiones WA) — es agregarlos a esa vista.</span></div><span class="eff">Bajo</span></div>
+    <div class="punch-row"><span class="num">4</span><div class="txt"><b>Quitar el residuo "Lead Manager" de Dashboard y Configuración</b><span>Dos strings de texto.</span></div><span class="eff">Bajo</span></div>
+    <div class="punch-row"><span class="num">5</span><div class="txt"><b>Decidir la cardinalidad de WhatsApp por cliente outbound (1:1 vs N:N)</b><span>Esto es una decisión tuya, no una implementación — una vez la tomes, lo ajusto.</span></div><span class="eff">Decisión</span></div>
+    <div class="punch-row"><span class="num">6</span><div class="txt"><b>Diferenciar "Actividades" de "Tareas comerciales" en el copy/subtítulo del menú</b><span>Puede resolverse solo con texto, o agregando un ícono/descripción distinta en el nav.</span></div><span class="eff">Bajo</span></div>
+    <div class="punch-row"><span class="num">7</span><div class="txt"><b>Eliminar (o documentar como legado) la tabla `leads` sin uso</b><span>Limpieza técnica — sin impacto visible para ti, reduce riesgo futuro.</span></div><span class="eff">Medio</span></div>
+    <div class="punch-row"><span class="num">8</span><div class="txt"><b>"Duplicar plantilla"</b><span>Función chica, alto uso esperado.</span></div><span class="eff">Bajo</span></div>
+  </div>
+
+</div>
+
+<footer>Auditoría basada en lectura directa de <code>frontend/app.js</code>, <code>backend/server.js</code> y <code>backend/db.js</code> — cada hallazgo cita archivo y línea. No incluye Cantera, Finanzas ni el resto de la plataforma Nova; alcance limitado al sidebar de Outreach.</footer>
