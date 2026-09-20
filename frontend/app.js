@@ -25206,8 +25206,8 @@ ${foot}
   let _cuUnread = {}, _cuTimer = null;
   const _cuTotal = () => Object.values(_cuUnread).reduce((n, v) => n + v, 0);
   const _cuBadge = id => (_cuUnread[id] ? `<span class="cu-badge" title="Mensajes nuevos del cliente en el portal">${_cuUnread[id]}</span>` : '');
-  async function _cuPoll() {
-    if (document.hidden) return;
+  async function _cuPoll(force) {
+    if (document.hidden && !force) return;
     try {
       const r = await apiFetch(`${API}/lm/portal/unread`); if (!r.ok) return;
       const rows = await r.json(), next = {}; (Array.isArray(rows) ? rows : []).forEach(x => { next[x.client_id] = x.n; });
@@ -25217,7 +25217,7 @@ ${foot}
       else if (_section === 'client') { const e = document.getElementById('cu-ws'); if (e) e.innerHTML = _cuBadge(_activeClient); }
     } catch (e) {}
   }
-  function _cuStart() { if (_cuTimer) return; _cuPoll(); _cuTimer = setInterval(_cuPoll, 20000); }
+  function _cuStart() { if (_cuTimer) return; _cuPoll(true); _cuTimer = setInterval(() => _cuPoll(), 20000); document.addEventListener('visibilitychange', () => { if (!document.hidden) _cuPoll(); }); }
   // ── Chat con el cliente: botón flotante dentro de la ficha del cliente (mismo estilo que el portal) ──
   const _PC = { cid: 0, open: false, msgs: [], last: 0, unread: 0, timer: null, pend: [], name: '' };
   const _pcSize = n => n > 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
