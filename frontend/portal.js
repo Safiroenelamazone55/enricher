@@ -245,9 +245,8 @@
     const t = S.tab, s = S.me.sections;
     try {
       if (t === 'inicio') {
-        const r = perRanges(), q = (a, b) => `/portal/dashboard?from=${isoL(a)}&to=${isoL(b)}`;
-        const [cur, prev, h, u, f, sq, stp, d] = await Promise.all([api(q(r.from, r.to)), api(q(r.pfrom, r.pto)), api('/portal/highlights'), api('/portal/updates'), s.feed ? api('/portal/feed') : null, s.secuencias && !S.seqs ? api('/portal/sequences') : null, s.secuencias ? api('/portal/steps') : null, S.detail ? api('/portal/dashboard?' + rangeQ()) : null]);
-        S.wk = { cur, prev, r }; S.hl = h; S.upd = u; S.feed = f; S.steps = stp; if (sq) S.seqs = sq; S.dash = d;
+        const [wk, h, u, f, sq, stp, d] = await Promise.all([wkFetch(S.per), api('/portal/highlights'), api('/portal/updates'), s.feed ? api('/portal/feed') : null, s.secuencias && !S.seqs ? api('/portal/sequences') : null, s.secuencias ? api('/portal/steps') : null, S.detail ? api('/portal/dashboard?' + rangeQ()) : null]);
+        S.wk = wk; setTimeout(() => wkFetch(S.per === 'month' ? 'week' : 'month').catch(() => {}), 400); S.hl = h; S.upd = u; S.feed = f; S.steps = stp; if (sq) S.seqs = sq; S.dash = d;
       } else if (t === 'reuniones') S.meet = await api('/portal/meetings');
       else if (t === 'empresas') S.cos = await api('/portal/companies?q=' + encodeURIComponent(S.q));
       else if (t === 'contactos') S.cts = await api(`/portal/contacts?q=${encodeURIComponent(S.q)}&company=${S.co || 0}`);
@@ -279,7 +278,13 @@
     range: r => { S.range = r; S.dash = null; paint(); load(false); },
     seq: v => { S.seq = v; S.dash = null; paint(); load(false); },
     gran: v => { S.gran = v; paint(); },
-    per: p => { S.per = p; try { localStorage.setItem('pt_per', p); } catch (e) {} S.wk = null; load(false); },
+    per: p => {
+      S.per = p; try { localStorage.setItem('pt_per', p); } catch (e) {}
+      const c = S.wkc[p], apply = w => { if (S.per === p) { S.wk = w; paint(); } };
+      S.wk = c || S.wk; paint();
+      if (!c) { const el = document.querySelector('.pt-week'); if (el) { el.style.opacity = '.5'; el.style.transition = 'opacity .15s'; } }
+      if (!c || Date.now() - c.t > 60000) wkFetch(p).then(apply).catch(() => {});
+    },
     detail: () => { S.detail = !S.detail; try { localStorage.setItem('pt_detail', S.detail ? '1' : '0'); } catch (e) {} if (S.detail && !S.dash) { paint(); load(false); } else paint(); },
     open: id => openContact(id), openCo: id => openCompany(id), close: () => closeDrawer(), drTab: (t, id) => drTab(t, id),
     cal: d => { if (d === 0) { const n = new Date(); S.cal = { y: n.getFullYear(), m: n.getMonth() }; } else { let m = S.cal.m + d, y = S.cal.y; if (m < 0) { m = 11; y--; } if (m > 11) { m = 0; y++; } S.cal = { y, m }; } paint(); },
@@ -310,9 +315,9 @@
   S.per = (function () { try { return localStorage.getItem('pt_per') === 'month' ? 'month' : 'week'; } catch (e) { return 'week'; } })();
   S.detail = (function () { try { return localStorage.getItem('pt_detail') === '1'; } catch (e) { return false; } })();
   const isoL = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-  function perRanges() {
+  function perRanges(p) {
     const now = new Date(); now.setHours(12, 0, 0, 0);
-    if (S.per === 'month') {
+    if ((p || S.per) === 'month') {
       const f = new Date(now.getFullYear(), now.getMonth(), 1, 12), pf = new Date(now.getFullYear(), now.getMonth() - 1, 1, 12);
       const pend = new Date(now.getFullYear(), now.getMonth(), 0, 12), pt = new Date(pf); pt.setDate(Math.min(now.getDate(), pend.getDate()));
       return { from: f, to: now, pfrom: pf, pto: pt };
@@ -320,6 +325,13 @@
     const dow = (now.getDay() + 6) % 7, f = new Date(now); f.setDate(now.getDate() - dow);
     const pf = new Date(f); pf.setDate(f.getDate() - 7); const pt = new Date(pf); pt.setDate(pf.getDate() + dow);
     return { from: f, to: now, pfrom: pf, pto: pt };
+  }
+  // Semana/Mes: se guarda cada periodo; al alternar aparece al instante y se refresca en segundo plano
+  S.wkc = {};
+  async function wkFetch(p) {
+    const r = perRanges(p), q = (a, b) => `/portal/dashboard?from=${isoL(a)}&to=${isoL(b)}`;
+    const [cur, prev] = await Promise.all([api(q(r.from, r.to)), api(q(r.pfrom, r.pto))]);
+    return (S.wkc[p] = { cur, prev, r, t: Date.now() });
   }
   const fshort = d => d.toLocaleDateString(PT_I18N.locale(), { day: 'numeric', month: 'short' });
   function dl(cur, prev) {
