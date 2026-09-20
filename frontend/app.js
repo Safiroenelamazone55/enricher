@@ -25462,6 +25462,86 @@ ${foot}
     m.innerHTML = `<div class="fin-pi-box"><div class="dle-hd"><div style="flex:1;min-width:0"><div class="dle-hd__t">Acceso al portal · ${esc(c.nombre)}</div></div><button class="fin-pi-x" onclick="LeadManagerModule.portalAccessClose()">✕</button></div><div id="portal-access-body"><div class="cp-empty2" style="padding:16px">Cargando…</div></div></div>`;
     document.body.appendChild(m); _paLoad(cid);
   }
+  // ── Informe semanal para el equipo del cliente (destinatarios + vista previa + envío desde el buzón del cliente) ──
+  const _RP = { cid: 0, recipients: [], lang: 'es', note: '', busy: false, t: null, seq: 0 };
+  const _rpMail = e => /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]{2,}$/.test(e);
+  function _rpEsc(s) { return esc(String(s == null ? '' : s)); }
+  async function reportOpen(cid) {
+    reportClose();
+    const c = _clients.find(x => x.id === cid); if (!c) return;
+    Object.assign(_RP, { cid, recipients: [], lang: 'es', note: '', busy: false, info: null });
+    const m = document.createElement('div'); m.id = 'report-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = ev => { if (ev.target === m) reportClose(); };
+    m.innerHTML = `<div class="fin-pi-box"><div class="dle-hd"><div style="flex:1;min-width:0"><div class="dle-hd__t">Informe semanal · ${esc(c.nombre)}</div></div><button class="fin-pi-x" onclick="LeadManagerModule.reportClose()">✕</button></div>
+      <div class="rp-body"><div class="rp-side" id="rp-side"><div class="cp-empty2" style="padding:16px">Cargando…</div></div><div class="rp-prev"><div class="rp-subj" id="rp-subj">Vista previa</div><iframe id="rp-frame" class="rp-frame" sandbox="" title="Vista previa del correo"></iframe></div></div></div>`;
+    document.body.appendChild(m);
+    try {
+      const r = await _portalApi(`/lm/reports/${cid}`);
+      Object.assign(_RP, { info: r, recipients: r.recipients || [], lang: r.lang || 'es' });
+      _rpSide(); reportPreview();
+    } catch (e) { const s = document.getElementById('rp-side'); if (s) s.innerHTML = `<div class="cp-empty2" style="padding:16px">No se pudo cargar: ${_rpEsc(e.message)}</div>`; }
+  }
+  function reportClose() { clearTimeout(_RP.t); document.getElementById('report-modal')?.remove(); }
+  function _rpLast(i) {
+    if (!i.last_sent_at) return 'Aún no se ha enviado ningún informe.';
+    const d = new Date(i.last_sent_at).toLocaleString('es-ES', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const n = (i.last_recipients || []).length;
+    return `<b>${d}</b>${i.last_by ? ' · ' + _rpEsc(i.last_by) : ''}<br><span style="color:#64748B">${n} destinatario${n === 1 ? '' : 's'}: ${_rpEsc((i.last_recipients || []).join(', '))}</span>`;
+  }
+  function _rpSide() {
+    const s = document.getElementById('rp-side'); if (!s) return; const i = _RP.info || {};
+    const chips = _RP.recipients.map((e, k) => `<span class="rp-chip">${_rpEsc(e)}<button title="Quitar" onclick="LeadManagerModule.reportRm(${k})">✕</button></span>`).join('');
+    const sug = (i.suggested || []).filter(a => !_RP.recipients.includes(String(a.email).toLowerCase())).map(a => `<button class="rp-sug" onclick="LeadManagerModule.reportAdd('${_rpEsc(a.email)}')">＋ ${_rpEsc(a.email)}</button>`).join('');
+    const mb = i.mailbox ? `<div class="rp-from">Se envía desde el buzón <b>${_rpEsc(i.mailbox.email)}</b> del cliente</div>` : `<div class="rp-from rp-from--bad">Este cliente no tiene un buzón conectado: no se puede enviar el informe.</div>`;
+    s.innerHTML = `${mb}
+      <div class="rp-l">Destinatarios (equipo del cliente)</div>
+      <div class="rp-chips">${chips || '<span style="color:#94A3B8">Aún no hay destinatarios</span>'}</div>
+      <div class="rp-add"><input class="lm-inp" id="rp-in" type="email" placeholder="correo@empresa.com" onkeydown="if(event.key===\'Enter\'||event.key===\',\'){event.preventDefault();LeadManagerModule.reportAddInput()}"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.reportAddInput()">Agregar</button></div>
+      ${sug ? `<div class="rp-sugs">${sug}</div>` : ''}
+      <div class="rp-l">Idioma del mensaje</div>
+      <select class="pa-sel" id="rp-lang" onchange="LeadManagerModule.reportLang(this.value)"><option value="es">Español</option><option value="en">English</option><option value="de">Deutsch</option><option value="pt">Português</option></select>
+      <div class="rp-l">Mensaje adicional (opcional)</div>
+      <textarea class="lm-inp" id="rp-note" rows="3" maxlength="1200" placeholder="Un comentario tuyo que aparece arriba del resumen…" oninput="LeadManagerModule.reportNote(this.value)">${_rpEsc(_RP.note)}</textarea>
+      <div class="rp-l">Último envío</div><div class="rp-last">${_rpLast(i)}</div>
+      <div class="rp-actions"><button class="btn btn--primary" id="rp-send" onclick="LeadManagerModule.reportSend()" ${i.mailbox && _RP.recipients.length ? '' : 'disabled'}>Enviar informe${_RP.recipients.length ? ` a ${_RP.recipients.length}` : ''}</button></div>
+      <div class="rp-hint">El resumen cubre los últimos 7 días, con los mismos datos que ve el cliente en su portal.</div>`;
+    const l = document.getElementById('rp-lang'); if (l) l.value = _RP.lang;
+  }
+  function _rpSave() { _portalApi(`/lm/reports/${_RP.cid}`, 'PUT', { recipients: _RP.recipients, lang: _RP.lang }).catch(() => {}); }
+  function reportAdd(e) {
+    e = String(e || '').trim().toLowerCase();
+    if (!_rpMail(e)) { showBanner('Correo no válido', 'error'); return; }
+    if (_RP.recipients.includes(e)) return;
+    if (_RP.recipients.length >= 12) { showBanner('Máximo 12 destinatarios', 'error'); return; }
+    _RP.recipients.push(e); _rpSave(); _rpSide();
+  }
+  function reportAddInput() { const i = document.getElementById('rp-in'); if (!i) return; const v = i.value.trim().replace(/[,;]+$/, ''); if (!v) return; reportAdd(v); }
+  function reportRm(k) { _RP.recipients.splice(k, 1); _rpSave(); _rpSide(); }
+  function reportLang(v) { _RP.lang = v; _rpSave(); reportPreview(); }
+  function reportNote(v) { _RP.note = v; clearTimeout(_RP.t); _RP.t = setTimeout(reportPreview, 600); }
+  async function reportPreview() {
+    const my = ++_RP.seq, f = document.getElementById('rp-frame'), sj = document.getElementById('rp-subj'); if (!f) return;
+    if (sj) sj.textContent = 'Generando vista previa…';
+    try {
+      const r = await _portalApi(`/lm/reports/${_RP.cid}/preview`, 'POST', { lang: _RP.lang, note: _RP.note });
+      if (my !== _RP.seq) return;
+      if (sj) sj.innerHTML = `<span style="color:#64748B">Asunto:</span> ${_rpEsc(r.subject)}`;
+      f.srcdoc = r.html;
+    } catch (e) { if (sj) sj.textContent = 'No se pudo generar la vista previa: ' + e.message; }
+  }
+  async function reportSend() {
+    if (_RP.busy || !_RP.recipients.length) return;
+    const mb = (_RP.info && _RP.info.mailbox && _RP.info.mailbox.email) || '';
+    const ok = await novaConfirm({ title: '¿Enviar el informe?', message: `Se enviará a ${_RP.recipients.length} destinatario${_RP.recipients.length === 1 ? '' : 's'} (${_RP.recipients.join(', ')}) desde ${mb}.`, ok: 'Enviar', cancel: 'Cancelar' });
+    if (!ok) return;
+    _RP.busy = true; const b = document.getElementById('rp-send'); if (b) { b.disabled = true; b.textContent = 'Enviando…'; }
+    try {
+      const r = await _portalApi(`/lm/reports/${_RP.cid}/send`, 'POST', { recipients: _RP.recipients, lang: _RP.lang, note: _RP.note });
+      _RP.info = Object.assign({}, _RP.info, { last_sent_at: r.last_sent_at, last_recipients: r.sent_to, last_by: 'tú' });
+      showBanner(`✓ Informe enviado a ${r.sent_to.length} destinatario(s) desde ${r.via || 'el buzón del cliente'}`, 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+    _RP.busy = false; _rpSide();
+  }
   function portalAccessClose() { document.getElementById('portal-access-modal')?.remove(); }
   function _paInviteMsg(inv) { return !inv ? '' : inv.sent ? (inv.via ? ` Invitación enviada desde ${inv.via}.` : ' Invitación enviada por correo.') : ` No se pudo enviar el correo (${inv.error || 'error'}): copia las credenciales y envíaselas tú.`; }
   let _portalBusy = false;
@@ -25537,6 +25617,7 @@ ${foot}
       + item(waYa ? 'Editar WhatsApp' : 'Conectar WhatsApp', `LeadManagerModule.wamOpen(${id})`)
       + item('Editar cliente', `LeadManagerModule.openClientDrawer(${id})`)
       + item('Acceso al portal', `LeadManagerModule.portalAccessOpen(${id})`)
+      + item('Informe semanal', `LeadManagerModule.reportOpen(${id})`)
       + item('Logo del portal', `LeadManagerModule.portalLogoOpen(${id})`)
       + item('Informe de campaña', `LeadManagerModule.clientCmpReport(${id})`)
       + item('Informe de secuencia', `LeadManagerModule.clientSeqReport(${id})`)
@@ -30521,7 +30602,7 @@ ${foot}
     dgEnrichMenu, dgEnrichOpen, dgEnrichClose, dgEnrichApply, dgToggleIssues, dgMoreMenu, dgToggleSelMode,
     dgDupOpen, dgDupClose, dgDupPickSurvivor, dgDupToggleDel, dgDupMergeGroup, dgDupDeleteGroup,
     fmsToggle, fmsFilter, fmsPick,
-    openViews, applyView, saveView, deleteView, clearAllViews, dashTab, dashSet, dashClear, dashGran, wsLogoUpload, wsLogoDelete, dlNotaShare, puPublish, puToggle, puDel, portalLogoOpen, portalLogoClose, lgTrimExisting, lgFrame, lgReset, lgBg, lgSelect, lgUpload, lgDelete, lgSave, pcToggle, pcSend, pcAttach, pcUnpend, portalCreate, portalReset, portalToggle, portalDel, portalSecs, portalAccessOpen, portalAccessClose, portalGen, portalEdit, portalEditSave, portalSec, portalNota, portalChatSend, portalCopy,
+    openViews, applyView, saveView, deleteView, clearAllViews, dashTab, dashSet, dashClear, dashGran, wsLogoUpload, wsLogoDelete, dlNotaShare, puPublish, puToggle, puDel, portalLogoOpen, portalLogoClose, lgTrimExisting, lgFrame, lgReset, lgBg, lgSelect, lgUpload, lgDelete, lgSave, pcToggle, pcSend, pcAttach, pcUnpend, portalCreate, portalReset, portalToggle, portalDel, portalSecs, portalAccessOpen, portalAccessClose, reportOpen, reportClose, reportAdd, reportAddInput, reportRm, reportLang, reportNote, reportPreview, reportSend, portalGen, portalEdit, portalEditSave, portalSec, portalNota, portalChatSend, portalCopy,
     taskSetView, taskSetFilter, calPrev, calNext, calToday,
     lmSetDisposition, seqDoDisposition, cpSetStage,
     seqDoAccepted, seqDoNoLinkedIn, seqDoBounced, seqDoNoWhatsapp, seqDoNoPhone, lmToggleNoLinkedIn, lmToggleNoWhatsapp, lmToggleNoPhone, lmToggleBounced, lmToggleManualEmail, ctToggleBounced,
