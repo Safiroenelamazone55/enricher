@@ -1075,6 +1075,9 @@ async function initDb() {
     `);
     await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS client_accounts_email_uq ON client_accounts (LOWER(email));`);
     await pool.query(`ALTER TABLE lm_contacts ADD COLUMN IF NOT EXISTS portal_nota TEXT NOT NULL DEFAULT ''`);
+    await pool.query(`ALTER TABLE lm_contacts ADD COLUMN IF NOT EXISTS reunion_agendada_at TIMESTAMPTZ`);
+    // Backfill único: para los que ya tienen reunión/deal, la fecha de agendado = su última respuesta (o su última actualización)
+    await pool.query(`UPDATE lm_contacts k SET reunion_agendada_at = COALESCE((SELECT MAX(a.fecha) FROM activities a WHERE a.contact_id=k.id AND a.tipo='respuesta'), k.updated_at) WHERE reunion_agendada_at IS NULL AND (k.deal_cierre IS NOT NULL OR k.deal_valor IS NOT NULL OR k.disposition='reunion')`);
     await pool.query(`ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS reset_code_hash TEXT`);
     await pool.query(`ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS reset_expires TIMESTAMPTZ`);
     await pool.query(`ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS reset_attempts INTEGER NOT NULL DEFAULT 0`);

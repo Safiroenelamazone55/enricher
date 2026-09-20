@@ -4709,7 +4709,8 @@ app.patch('/api/lm/contacts/:id/deal', requireAuth, async (req, res) => {
   if (valor != null && (!isFinite(valor) || valor < 0)) return res.status(400).json({ error: 'Valor inválido' });
   try {
     const { rows } = await pool.query(
-      `UPDATE lm_contacts SET deal_valor=$1, deal_moneda=$2, deal_prob=$3, deal_cierre=$4, updated_at=NOW()
+      `UPDATE lm_contacts SET deal_valor=$1, deal_moneda=$2, deal_prob=$3, deal_cierre=$4, updated_at=NOW(),
+         reunion_agendada_at=CASE WHEN $4::date IS NOT NULL AND reunion_agendada_at IS NULL THEN NOW() ELSE reunion_agendada_at END
        WHERE id=$5 AND user_id=$6 RETURNING id, deal_valor, deal_moneda, deal_prob, deal_cierre`,
       [valor, moneda, prob, cierre, req.params.id, req.workspaceOwnerId]);
     if (!rows.length) return res.status(404).json({ error: 'Contacto no encontrado' });
@@ -6303,7 +6304,7 @@ const _lmDashHandler = async (req, res) => {
                          COUNT(DISTINCT cs.contact_id) FILTER (WHERE cs.estado='activo')::int AS activos,
                          COUNT(DISTINCT a.contact_id) FILTER (WHERE ((${OUT}${chw}) OR ${REPLY}) AND ${inR(iF, iT)})::int AS contactados,
                          COUNT(DISTINCT a.contact_id) FILTER (WHERE ${REPLY} AND ${inR(iF, iT)})::int AS respuestas,
-                         COUNT(DISTINCT k.id) FILTER (WHERE k.disposition='reunion' OR k.deal_cierre IS NOT NULL OR k.deal_valor IS NOT NULL)::int AS reuniones
+                         COUNT(DISTINCT k.id) FILTER (WHERE (k.disposition='reunion' OR k.deal_cierre IS NOT NULL OR k.deal_valor IS NOT NULL) AND COALESCE(k.reunion_agendada_at,k.updated_at)::date BETWEEN ${iF}::date AND ${iT}::date)::int AS reuniones
                     FROM sequences s JOIN lm_contact_sequences cs ON cs.sequence_id=s.id
                     JOIN lm_contacts k ON k.id=cs.contact_id
                     LEFT JOIN outbound_clients oc ON oc.id=s.outbound_client_id
@@ -6313,7 +6314,7 @@ const _lmDashHandler = async (req, res) => {
                          COUNT(DISTINCT k.id)::int AS contactos,
                          COUNT(DISTINCT a.contact_id) FILTER (WHERE ((${OUT}${chw}) OR ${REPLY}) AND ${inR(iF, iT)})::int AS contactados,
                          COUNT(DISTINCT a.contact_id) FILTER (WHERE ${REPLY} AND ${inR(iF, iT)})::int AS respuestas,
-                         COUNT(DISTINCT k.id) FILTER (WHERE k.disposition='reunion' OR k.deal_cierre IS NOT NULL OR k.deal_valor IS NOT NULL)::int AS reuniones
+                         COUNT(DISTINCT k.id) FILTER (WHERE (k.disposition='reunion' OR k.deal_cierre IS NOT NULL OR k.deal_valor IS NOT NULL) AND COALESCE(k.reunion_agendada_at,k.updated_at)::date BETWEEN ${iF}::date AND ${iT}::date)::int AS reuniones
                     FROM outbound_clients oc JOIN lm_contacts k ON k.outbound_client_id=oc.id
                     LEFT JOIN activities a ON a.contact_id=k.id
                    WHERE ${kw} GROUP BY oc.id, oc.nombre ORDER BY contactados DESC, contactos DESC`, params),
@@ -6337,7 +6338,7 @@ const _lmDashHandler = async (req, res) => {
           JOIN lm_contacts k ON k.id=l.contact_id
          WHERE w.from_me=FALSE AND ${kw} AND w.ts::date BETWEEN ${iF}::date AND ${iT}::date
       ) t GROUP BY 1,2`, params),
-      pool.query(`SELECT COUNT(*)::int AS meetings, COUNT(*) FILTER (WHERE k.deal_cierre>=CURRENT_DATE)::int AS programadas, COALESCE(SUM(k.deal_valor),0)::float AS valor, COALESCE(SUM(k.deal_valor*COALESCE(k.deal_prob,0)/100.0),0)::float AS ponderado, MIN(k.deal_cierre) FILTER (WHERE k.deal_cierre>=CURRENT_DATE) AS proximo
+      pool.query(`SELECT COUNT(*)::int AS meetings, COUNT(*) FILTER (WHERE COALESCE(k.reunion_agendada_at,k.updated_at)::date BETWEEN ${iF}::date AND ${iT}::date)::int AS agendadas, COUNT(*) FILTER (WHERE COALESCE(k.reunion_agendada_at,k.updated_at)::date BETWEEN ${iPF}::date AND ${iPT}::date)::int AS agendadas_prev, COUNT(*) FILTER (WHERE k.deal_cierre>=CURRENT_DATE)::int AS programadas, COALESCE(SUM(k.deal_valor),0)::float AS valor, COALESCE(SUM(k.deal_valor*COALESCE(k.deal_prob,0)/100.0),0)::float AS ponderado, MIN(k.deal_cierre) FILTER (WHERE k.deal_cierre>=CURRENT_DATE) AS proximo
                     FROM lm_contacts k WHERE ${kw} AND (k.disposition='reunion' OR k.deal_cierre IS NOT NULL OR k.deal_valor IS NOT NULL OR EXISTS(SELECT 1 FROM activities z WHERE z.contact_id=k.id AND z.tipo='reunion'))`, params),
       pool.query(`SELECT k.disposition AS d, COUNT(*)::int AS n FROM lm_contacts k WHERE ${kw} AND COALESCE(k.disposition,'')<>'' GROUP BY 1 ORDER BY 2 DESC`, params),
     ]);

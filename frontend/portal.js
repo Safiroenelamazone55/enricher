@@ -194,7 +194,7 @@
     const dtag = d => { const x = new Date(d); return `<div class="pt-date"><b>${MES[x.getUTCMonth()].toUpperCase()}</b><span>${x.getUTCDate()}</span></div>`; };
     const money = (v, m) => v ? `${m === 'PEN' ? 'S/' : '$'}${Math.round(v).toLocaleString('es-ES')}` : '';
     const rep = h.last_replies.slice(0, 3).map(r => `<div class="pt-item"><div class="pt-item__t"><span>${person(r)}</span><span style="font-weight:500;color:#94A3B8;font-size:12px">${ago(r.fecha)}</span></div><div class="pt-item__s">${esc(r.empresa || '')}${r.pais ? ' · ' + esc(r.pais) : ''}</div>${r.snippet ? `<div class="pt-item__q">${esc(r.snippet)}</div>` : ''}${r.portal_nota ? `<div class="pt-item__n">${esc(r.portal_nota)}</div>` : ''}</div>`).join('');
-    const mt = h.next_meetings.slice(0, 4).map(r => `<div class="pt-item" style="display:flex;gap:10px"><div>${dtag(r.fecha)}</div><div style="min-width:0;flex:1"><div class="pt-item__t"><span>${esc(r.empresa || '')}</span><span style="color:#15803D">${money(r.valor, r.moneda)}</span></div><div class="pt-item__s">${person(r)}</div>${r.portal_nota ? `<div class="pt-item__n">${esc(r.portal_nota)}</div>` : ''}</div></div>`).join('');
+    const mt = h.next_meetings.slice(0, 4).map(r => `<div class="pt-item" style="display:flex;gap:10px"><div>${dtag(r.fecha)}</div><div style="min-width:0;flex:1"><div class="pt-item__t"><span>${esc(r.empresa || '')}</span><span style="color:#15803D">${money(r.valor, r.moneda)}</span></div><div class="pt-item__s">${person(r)}</div>${r.agendada ? `<div class="pt-item__s">Agendada el ${fdate(r.agendada)}</div>` : ''}${r.portal_nota ? `<div class="pt-item__n">${esc(r.portal_nota)}</div>` : ''}</div></div>`).join('');
     const ps = h.positive_pending.slice(0, 5).map(r => `<div class="pt-item"><div class="pt-item__t"><span>${person(r)}</span>${badge(r.estado)}</div><div class="pt-item__s">${esc(r.empresa || '')}${r.ultima ? ' · respondió ' + ago(r.ultima) : ''}</div>${r.portal_nota ? `<div class="pt-item__n">${esc(r.portal_nota)}</div>` : ''}</div>`).join('');
     const s = S.me.sections;
     return `<div class="pt-hl">
@@ -231,7 +231,7 @@
         ${kpi('Aceptación LinkedIn', ar + '%', delta(ar, arp, true), `${c.accepts} de ${c.invites} invitaciones`)}
         ${kpi('Emails enviados', c.emails, delta(c.emails, p.emails), c.bounced ? `${c.bounced} rebotados` : 'sin rebotes')}
         ${kpi('Apertura email', c.sent ? pct(c.opened, c.sent) + '%' : '—', '<span class="dash-d dash-d--0">estimada</span>', `sobre ${c.sent} envíos`)}
-        ${dl ? kpi('Reuniones / deals', dl.meetings, `<span class="dash-d dash-d--0">${dl.programadas ? dl.programadas + ' programada' + (dl.programadas > 1 ? 's' : '') + (dl.proximo ? ' · próx. ' + fdate(dl.proximo, { day: '2-digit', month: 'short', timeZone: 'UTC' }) : '') : 'sin programar'}</span>`, dl.valor ? `$${Math.round(dl.valor).toLocaleString('es-ES')} · pond. $${Math.round(dl.ponderado).toLocaleString('es-ES')}` : '') : ''}</div>`;
+        ${dl ? kpi('Reuniones agendadas', dl.agendadas, delta(dl.agendadas, dl.agendadas_prev), dl.programadas ? `${dl.programadas} próxima${dl.programadas > 1 ? 's' : ''}${dl.proximo ? ' · ' + fdate(dl.proximo, { day: '2-digit', month: 'short', timeZone: 'UTC' }) : ''}${dl.valor ? ' · $' + Math.round(dl.valor).toLocaleString('es-ES') : ''}` : 'ninguna programada') : ''}</div>`;
     }
     let row1 = '';
     if (d.daily && d.daily.length || d.funnel) {
@@ -254,7 +254,7 @@
     }
     if (d.countries && d.countries.length) {
       const tot = d.countries.reduce((n, r) => n + r.contacted, 0), mx = Math.max(1, ...d.countries.map(r => r.contacted));
-      cards.push(`<div class="cp-card"><div class="cp-card__t">Países contactados</div><div class="dash-bars">${d.countries.slice(0, 6).map(r => `<div class="dash-bar"><span class="dash-bar__l">${esc(r.pais)}</span><div class="dash-bar__t"><div class="dash-bar__f" style="width:${Math.max(2, Math.round(r.contacted / mx * 100))}%"></div></div><span class="dash-bar__v">${pct(r.contacted, tot)}%</span></div>`).join('')}</div></div>`);
+      cards.push(`<div class="cp-card"><div class="cp-card__t">Países contactados</div><div class="dash-bars">${d.countries.slice(0, 6).map(r => `<div class="dash-bar"><span class="dash-bar__l">${esc(r.pais === 'Sin país' ? 'Unknown' : r.pais)}</span><div class="dash-bar__t"><div class="dash-bar__f" style="width:${Math.max(2, Math.round(r.contacted / mx * 100))}%"></div></div><span class="dash-bar__v">${pct(r.contacted, tot)}%</span></div>`).join('')}</div></div>`);
     }
     if (d.channels && d.channels.length) {
       const rc = {}; (d.replyByCh || []).forEach(r => { rc[r.ch] = r.replies; });
@@ -290,7 +290,7 @@
   const search = ph => `<input class="pt-search" id="pt-search" placeholder="${ph}">`;
   function empresas() {
     const l = S.cos;
-    return `<div class="pt-h"><h2>Empresas ${l ? `<span style="color:#94A3B8;font-weight:500;font-size:15px">(${l.length})</span>` : ''}</h2>${search('Buscar empresa…')}</div><div class="pt-card" style="padding:0;overflow:auto">${!l ? '<div class="pt-empty">Cargando…</div>' : !l.length ? '<div class="pt-empty">Sin empresas</div>' : `<table class="pt-tbl"><thead><tr><th>Empresa</th><th>País</th><th>Sector</th><th>Contactos</th><th>Estado</th><th>Nota</th></tr></thead><tbody>${l.map(r => `<tr><td><button class="pt-link" onclick="PT.goCo(${r.id})">${esc(r.nombre)}</button>${r.website ? `<div style="font-size:11.5px"><a href="${esc(/^https?:/.test(r.website) ? r.website : 'https://' + r.website)}" target="_blank" rel="noopener noreferrer">${esc(r.website.replace(/^https?:\/\//, ''))}</a></div>` : ''}</td><td>${esc(r.pais || '—')}</td><td>${esc(r.industria || '—')}</td><td>${r.contactos}</td><td>${badge(r.estado)}</td><td style="max-width:280px;color:#1E3A8A">${esc(r.nota || '')}</td></tr>`).join('')}</tbody></table>`}</div>`;
+    return `<div class="pt-h"><h2>Empresas ${l ? `<span style="color:#94A3B8;font-weight:500;font-size:15px">(${l.length})</span>` : ''}</h2>${search('Buscar empresa…')}</div><div class="pt-card" style="padding:0;overflow:auto">${!l ? '<div class="pt-empty">Cargando…</div>' : !l.length ? '<div class="pt-empty">Sin empresas</div>' : `<table class="pt-tbl"><thead><tr><th>Empresa</th><th>Sector</th><th>Contactos</th><th>Estado</th><th>Nota</th></tr></thead><tbody>${l.map(r => `<tr><td><button class="pt-link" onclick="PT.goCo(${r.id})">${esc(r.nombre)}</button>${r.website ? `<div style="font-size:11.5px"><a href="${esc(/^https?:/.test(r.website) ? r.website : 'https://' + r.website)}" target="_blank" rel="noopener noreferrer">${esc(r.website.replace(/^https?:\/\//, ''))}</a></div>` : ''}</td><td>${esc(r.industria || '—')}</td><td>${r.contactos}</td><td>${badge(r.estado)}</td><td style="max-width:280px;color:#1E3A8A">${esc(r.nota || '')}</td></tr>`).join('')}</tbody></table>`}</div>`;
   }
   function contactos() {
     const l = S.cts;

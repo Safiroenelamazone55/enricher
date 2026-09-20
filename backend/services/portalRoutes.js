@@ -67,7 +67,7 @@ async function highlights(pool, clientId, { withNotes = true } = {}) {
                   FROM activities a JOIN lm_contacts k ON k.id=a.contact_id LEFT JOIN lm_companies co ON co.id=k.company_id
                  WHERE k.outbound_client_id=$1 AND a.estado='hecha' AND a.tipo='respuesta'
                  ORDER BY k.id, a.fecha DESC, a.id DESC) t ORDER BY fecha DESC LIMIT 6`, [clientId]),
-    pool.query(`SELECT ${cols}, k.deal_cierre AS fecha, k.deal_valor::float AS valor, k.deal_prob AS prob, k.deal_moneda AS moneda, k.disposition
+    pool.query(`SELECT ${cols}, k.deal_cierre AS fecha, COALESCE(k.reunion_agendada_at,k.updated_at) AS agendada, k.deal_valor::float AS valor, k.deal_prob AS prob, k.deal_moneda AS moneda, k.disposition
                   ${base} AND k.deal_cierre >= CURRENT_DATE ORDER BY k.deal_cierre ASC LIMIT 10`, [clientId]),
     pool.query(`SELECT ${cols}, k.disposition,
                        (SELECT MAX(a.fecha) FROM activities a WHERE a.contact_id=k.id AND a.tipo='respuesta') AS ultima
