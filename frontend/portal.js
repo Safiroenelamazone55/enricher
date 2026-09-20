@@ -149,7 +149,14 @@
   function renderApp() {
     S.redraw = renderApp;
     stopCharts();
-    root.innerHTML = `<div class="pt-top"><div class="pt-brand"><img src="logo-nova.svg" alt="">Nova</div><span class="pt-top__cl">${esc(S.me.cliente)}</span>
+    const br = S.me.branding || {}, hbg = br.header_bg || '#0B1220';
+    const lum = (hex => { const n = parseInt(hex.slice(1), 16); const c = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; })(/^#[0-9a-fA-F]{6}$/.test(hbg) ? hbg : '#0B1220');
+    const hfg = lum > 0.45 ? '#0F172A' : '#FFFFFF';
+    const fr = Object.assign({ s: 1, x: 0, y: 0 }, (br.frames || {})[br.logo_variant] || {});
+    const clientMark = br.has && br.has[br.logo_variant]
+      ? `<span class="pt-top__sep"></span><div class="pt-lgbox" title="${esc(S.me.cliente)}"><img src="${API}/portal/branding/logo?v=${br.v || 0}" alt="${esc(S.me.cliente)}" style="transform:translate(${fr.x}%,${fr.y}%) scale(${fr.s})"></div>`
+      : `<span class="pt-top__cl">${esc(S.me.cliente)}</span>`;
+    root.innerHTML = `<div class="pt-top" style="background:${hbg};color:${hfg}"><div class="pt-brand"><img src="logo-nova.svg" alt="">Nova</div>${clientMark}
       <span class="pt-live"><i></i><span id="pt-upd">En vivo</span></span>${langBtn()}
       <div class="pt-user"><button id="pt-um">${esc(S.me.nombre || S.me.email)} ▾</button><div class="pt-menu" id="pt-mn"><div class="em">${esc(S.me.email)}</div><button id="pt-cp">Cambiar contraseña</button><button id="pt-lo">Cerrar sesión</button></div></div></div>
       <div class="pt-nav">${tabs().map(t => `<button data-t="${t[0]}" class="${S.tab === t[0] ? 'on' : ''}">${t[1]}</button>`).join('')}</div>

@@ -25045,6 +25045,101 @@ ${foot}
         </section>
       </div>`;
   }
+  // ── Logo del portal del cliente: 3 versiones, color del encabezado y encuadre (zoom / posición) ──
+  const _LG = { cid: 0, b: null, sel: 'dark', bg: '#0B1220', frames: {}, dirty: false };
+  const _LG_VAR = [['light', 'Para fondo claro', 'Versión oscura del logo, para encabezados blancos o claros.'], ['dark', 'Para fondo oscuro', 'Logo blanco, para encabezados negros o de color oscuro.'], ['color', 'A colores', 'El logo original, con sus colores.']];
+  const _LG_SW = [['#0B1220', 'Nova oscuro'], ['#1B2F47', 'Azul marino'], ['#2563EB', 'Azul'], ['#FFFFFF', 'Blanco'], ['#F1F5F9', 'Gris claro']];
+  function _lgLum(hex) { const h = String(hex || '#000').replace('#', ''); const n = parseInt(h.length === 3 ? h.split('').map(c => c + c).join('') : h, 16); const c = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; }
+  const _lgFrame = v => Object.assign({ s: 1, x: 0, y: 0 }, _LG.frames[v] || {});
+  const _lgSrc = v => `${API}/lm/portal/branding/${_LG.cid}/file/${v}?v=${_LG.b ? _LG.b.v : 0}`;
+  async function portalLogoOpen(cid) {
+    portalLogoClose();
+    const c = _clients.find(x => x.id === cid); if (!c) return;
+    const m = document.createElement('div'); m.id = 'lg-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = ev => { if (ev.target === m) portalLogoClose(); };
+    m.innerHTML = `<div class="fin-pi-box" style="max-width:900px;width:96vw"><div class="dle-hd" style="padding:14px 18px"><div style="flex:1;min-width:0"><div class="dle-hd__t">Logo del portal · ${esc(c.nombre)}</div></div><button class="fin-pi-x" onclick="LeadManagerModule.portalLogoClose()">✕</button></div><div id="lg-body" style="padding:14px 18px 18px;max-height:80vh;overflow:auto"><div class="cp-empty2" style="padding:16px">Cargando…</div></div></div>`;
+    document.body.appendChild(m);
+    try {
+      const r = await apiFetch(`${API}/lm/portal/branding?client=${cid}`); const b = await r.json(); if (!r.ok) throw new Error(b.error || 'Error');
+      Object.assign(_LG, { cid, b, sel: b.logo_variant, bg: b.header_bg, frames: JSON.parse(JSON.stringify(b.frames || {})), dirty: false });
+      _lgRender();
+    } catch (e) { const bd = document.getElementById('lg-body'); if (bd) bd.innerHTML = `<div class="cp-empty2" style="padding:16px">No se pudo cargar: ${esc(e.message)}</div>`; }
+  }
+  function portalLogoClose() { document.getElementById('lg-modal')?.remove(); }
+  function _lgPreviewHtml() {
+    const has = _LG.b.has[_LG.sel], f = _lgFrame(_LG.sel), fg = _lgLum(_LG.bg) > 0.45 ? '#0F172A' : '#FFFFFF';
+    return `<div class="lg-bar" style="background:${_LG.bg};color:${fg}"><div class="lg-bar__l"><span class="lg-nova">◆ Nova</span><span class="lg-sep"></span>
+      <div class="lg-box" id="lg-box" title="Arrastra para mover · rueda para acercar o alejar">${has ? `<img id="lg-img" draggable="false" src="${_lgSrc(_LG.sel)}" style="transform:translate(${f.x}%,${f.y}%) scale(${f.s})">` : '<span class="lg-ph">Sin logo</span>'}</div></div>
+      <div class="lg-bar__r"><span class="lg-fake">🌐 ES ▾</span><span class="lg-fake">Usuario ▾</span></div></div>`;
+  }
+  function _lgRender() {
+    const b = _LG.b, body = document.getElementById('lg-body'); if (!body) return;
+    const lum = _lgLum(_LG.bg), dark = lum < 0.45;
+    const warn = (_LG.sel === 'light' && dark) ? 'El fondo es oscuro y este logo es para fondo claro: se verá poco. Prueba con «Para fondo oscuro».' : (_LG.sel === 'dark' && !dark) ? 'El fondo es claro y este logo es blanco: casi no se verá. Prueba con «Para fondo claro» o «A colores».' : '';
+    const card = ([v, t, hint]) => {
+      const has = b.has[v], bg = v === 'dark' ? '#0B1220' : v === 'light' ? '#FFFFFF' : 'repeating-conic-gradient(#E5E7EB 0% 25%, #fff 0% 50%) 50% / 16px 16px';
+      return `<div class="lg-card${_LG.sel === v ? ' on' : ''}"><div class="lg-card__t">${t}</div><div class="lg-card__h">${hint}</div>
+        <div class="lg-thumb" style="background:${bg}">${has ? `<img src="${_lgSrc(v)}" alt="">` : '<span>Sin imagen</span>'}</div>
+        <div class="lg-card__b"><label class="btn btn--ghost btn--sm" style="cursor:pointer">${has ? 'Cambiar' : 'Subir'}<input type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" hidden onchange="LeadManagerModule.lgUpload('${v}',this)"></label>${has ? `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.lgDelete('${v}')">Quitar</button>` : ''}</div>
+        <label class="lg-use${has ? '' : ' off'}"><input type="radio" name="lg-sel" ${_LG.sel === v ? 'checked' : ''} ${has ? '' : 'disabled'} onchange="LeadManagerModule.lgSelect('${v}')"> Mostrar en el encabezado</label></div>`;
+    };
+    const f = _lgFrame(_LG.sel);
+    body.innerHTML = `
+      <div style="font-size:12.5px;color:#64748B;margin-bottom:8px">Así se verá el encabezado del portal del cliente. Arrastra el logo para moverlo y usa la rueda del mouse (o el zoom) para acercarlo o alejarlo.</div>
+      <div id="lg-prev">${_lgPreviewHtml()}</div>
+      ${warn ? `<div class="lg-warn">⚠ ${warn}</div>` : ''}
+      <div class="lg-row"><div style="flex:1;min-width:260px"><div class="lg-lbl">Color del encabezado</div><div class="lg-sw">${_LG_SW.map(([c, n]) => `<button class="lg-sw__b${_LG.bg.toLowerCase() === c.toLowerCase() ? ' on' : ''}" title="${n}" style="background:${c}" onclick="LeadManagerModule.lgBg('${c}')"></button>`).join('')}
+        <input type="color" value="${_LG.bg}" oninput="LeadManagerModule.lgBg(this.value)" title="Otro color"><input class="lm-inp" id="lg-hex" value="${_LG.bg}" maxlength="7" style="width:92px;font-family:monospace" onchange="LeadManagerModule.lgBg(this.value)"></div></div>
+        <div style="flex:1;min-width:260px"><div class="lg-lbl">Encuadre del logo elegido</div>
+          <div class="lg-sl"><span>Zoom</span><input type="range" min="0.2" max="4" step="0.02" value="${f.s}" oninput="LeadManagerModule.lgFrame('s',this.value)"><b id="lg-sv">${Math.round(f.s * 100)}%</b></div>
+          <div class="lg-sl"><span>Horizontal</span><input type="range" min="-100" max="100" step="1" value="${f.x}" oninput="LeadManagerModule.lgFrame('x',this.value)"><b id="lg-xv">${Math.round(f.x)}</b></div>
+          <div class="lg-sl"><span>Vertical</span><input type="range" min="-100" max="100" step="1" value="${f.y}" oninput="LeadManagerModule.lgFrame('y',this.value)"><b id="lg-yv">${Math.round(f.y)}</b></div>
+          <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.lgReset()">Restablecer encuadre</button></div></div>
+      <div class="lg-lbl" style="margin-top:14px">Versiones del logo</div>
+      <div class="lg-cards">${_LG_VAR.map(card).join('')}</div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.portalLogoClose()">Cancelar</button><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.lgSave()">Guardar y aplicar</button></div>`;
+    _lgWire();
+  }
+  function _lgRefreshPrev() { const p = document.getElementById('lg-prev'); if (p) { p.innerHTML = _lgPreviewHtml(); _lgWire(); } }
+  function _lgSetVals(f) { const s = document.getElementById('lg-sv'), x = document.getElementById('lg-xv'), y = document.getElementById('lg-yv'); if (s) s.textContent = Math.round(f.s * 100) + '%'; if (x) x.textContent = Math.round(f.x); if (y) y.textContent = Math.round(f.y); }
+  function _lgApply() { const im = document.getElementById('lg-img'); const f = _lgFrame(_LG.sel); if (im) im.style.transform = `translate(${f.x}%,${f.y}%) scale(${f.s})`; _lgSetVals(f); _LG.dirty = true; }
+  function _lgWire() {
+    const box = document.getElementById('lg-box'); if (!box) return;
+    let drag = null;
+    box.onpointerdown = e => { if (!_LG.b.has[_LG.sel]) return; box.setPointerCapture(e.pointerId); const f = _lgFrame(_LG.sel); drag = { px: e.clientX, py: e.clientY, x: f.x, y: f.y }; box.style.cursor = 'grabbing'; };
+    box.onpointermove = e => { if (!drag) return; const r = box.getBoundingClientRect(); const f = _lgFrame(_LG.sel); _LG.frames[_LG.sel] = { s: f.s, x: Math.max(-150, Math.min(150, drag.x + (e.clientX - drag.px) / r.width * 100)), y: Math.max(-150, Math.min(150, drag.y + (e.clientY - drag.py) / r.height * 100)) }; _lgApply(); };
+    box.onpointerup = box.onpointercancel = () => { drag = null; box.style.cursor = 'grab'; _lgSyncSliders(); };
+    box.onwheel = e => { if (!_LG.b.has[_LG.sel]) return; e.preventDefault(); const f = _lgFrame(_LG.sel); _LG.frames[_LG.sel] = { s: Math.max(0.2, Math.min(4, f.s * (e.deltaY < 0 ? 1.06 : 0.94))), x: f.x, y: f.y }; _lgApply(); _lgSyncSliders(); };
+  }
+  function _lgSyncSliders() { const f = _lgFrame(_LG.sel), r = document.querySelectorAll('#lg-body input[type=range]'); if (r.length === 3) { r[0].value = f.s; r[1].value = f.x; r[2].value = f.y; } }
+  function lgFrame(k, v) { const f = _lgFrame(_LG.sel); f[k] = Number(v); _LG.frames[_LG.sel] = f; _lgApply(); }
+  function lgReset() { _LG.frames[_LG.sel] = { s: 1, x: 0, y: 0 }; _lgApply(); _lgSyncSliders(); }
+  function lgBg(c) { if (!/^#[0-9a-fA-F]{6}$/.test(c)) return; _LG.bg = c.toUpperCase(); _LG.dirty = true; _lgRender(); }
+  function lgSelect(v) { _LG.sel = v; _LG.dirty = true; _lgRender(); }
+  async function lgUpload(v, inp) {
+    const f = inp.files && inp.files[0]; if (!f) return;
+    if (f.size > 3 * 1048576) { showBanner('El logo supera 3 MB', 'error'); inp.value = ''; return; }
+    const fd = new FormData(); fd.append('file', f);
+    try {
+      const r = await apiFetch(`${API}/lm/portal/branding/${_LG.cid}/logo/${v}`, { method: 'POST', body: fd }); const j = await r.json(); if (!r.ok) throw new Error(j.error || 'Error');
+      _LG.b = j; if (!_LG.b.has[_LG.sel] || !Object.values(_LG.b.has).some(Boolean)) _LG.sel = v; else if (Object.values(_LG.b.has).filter(Boolean).length === 1) _LG.sel = v;
+      _LG.frames[v] = { s: 1, x: 0, y: 0 }; _LG.dirty = true; _lgRender(); showBanner('✓ Logo subido', 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  async function lgDelete(v) {
+    const ok = await novaConfirm({ title: '¿Quitar este logo?', message: 'Se elimina esta versión del logo.', ok: 'Quitar', cancel: 'Cancelar', tone: 'danger' }); if (!ok) return;
+    try {
+      const r = await apiFetch(`${API}/lm/portal/branding/${_LG.cid}/logo/${v}`, { method: 'DELETE' }); const j = await r.json(); if (!r.ok) throw new Error(j.error || 'Error');
+      _LG.b = j; delete _LG.frames[v]; if (_LG.sel === v) _LG.sel = j.logo_variant; _lgRender();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  async function lgSave() {
+    try {
+      const r = await apiFetch(`${API}/lm/portal/branding/${_LG.cid}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ header_bg: _LG.bg, logo_variant: _LG.sel, frames: _LG.frames }) });
+      const j = await r.json(); if (!r.ok) throw new Error(j.error || 'Error');
+      showBanner('✓ Logo y encabezado guardados. El cliente lo verá al recargar el portal.', 'success'); portalLogoClose();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
   // ── Chat con el cliente: botón flotante dentro de la ficha del cliente (mismo estilo que el portal) ──
   const _PC = { cid: 0, open: false, msgs: [], last: 0, unread: 0, timer: null, pend: [], name: '' };
   const _pcSize = n => n > 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
@@ -25299,6 +25394,7 @@ ${foot}
       + item(waYa ? 'Editar WhatsApp' : 'Conectar WhatsApp', `LeadManagerModule.wamOpen(${id})`)
       + item('Editar cliente', `LeadManagerModule.openClientDrawer(${id})`)
       + item('Acceso al portal', `LeadManagerModule.portalAccessOpen(${id})`)
+      + item('Logo del portal', `LeadManagerModule.portalLogoOpen(${id})`)
       + item('Informe de campaña', `LeadManagerModule.clientCmpReport(${id})`)
       + item('Informe de secuencia', `LeadManagerModule.clientSeqReport(${id})`)
       + `</div>`;
@@ -30263,7 +30359,7 @@ ${foot}
     dgEnrichMenu, dgEnrichOpen, dgEnrichClose, dgEnrichApply, dgToggleIssues, dgMoreMenu, dgToggleSelMode,
     dgDupOpen, dgDupClose, dgDupPickSurvivor, dgDupToggleDel, dgDupMergeGroup, dgDupDeleteGroup,
     fmsToggle, fmsFilter, fmsPick,
-    openViews, applyView, saveView, deleteView, clearAllViews, dashTab, dashSet, dashClear, dashGran, pcToggle, pcSend, pcAttach, pcUnpend, portalCreate, portalReset, portalToggle, portalDel, portalSecs, portalAccessOpen, portalAccessClose, portalGen, portalEdit, portalEditSave, portalSec, portalNota, portalChatSend, portalCopy,
+    openViews, applyView, saveView, deleteView, clearAllViews, dashTab, dashSet, dashClear, dashGran, portalLogoOpen, portalLogoClose, lgFrame, lgReset, lgBg, lgSelect, lgUpload, lgDelete, lgSave, pcToggle, pcSend, pcAttach, pcUnpend, portalCreate, portalReset, portalToggle, portalDel, portalSecs, portalAccessOpen, portalAccessClose, portalGen, portalEdit, portalEditSave, portalSec, portalNota, portalChatSend, portalCopy,
     taskSetView, taskSetFilter, calPrev, calNext, calToday,
     lmSetDisposition, seqDoDisposition, cpSetStage,
     seqDoAccepted, seqDoNoLinkedIn, seqDoBounced, seqDoNoWhatsapp, seqDoNoPhone, lmToggleNoLinkedIn, lmToggleNoWhatsapp, lmToggleNoPhone, lmToggleBounced, lmToggleManualEmail, ctToggleBounced,
