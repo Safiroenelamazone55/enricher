@@ -51,10 +51,18 @@
   document.addEventListener('click', () => document.querySelectorAll('.pt-lm.on').forEach(m => m.classList.remove('on')));
 
   // ── login ──
-  function renderLogin(msg) {
+  async function loginBrand() {
+    const u = parseUrl(); if (!u || !u.slug) return null;
+    if (S.lb === undefined || S.lbSlug !== u.slug) { S.lbSlug = u.slug; try { S.lb = await api('/portal/login-brand/' + encodeURIComponent(u.slug)); } catch (e) { S.lb = null; } }
+    return S.lb && S.lb.cliente ? S.lb : null;
+  }
+  async function renderLogin(msg) {
     S.redraw = () => renderLogin(msg);
-    root.innerHTML = `<div class="pt-login"><form class="pt-login__card" id="pt-lf">${langBtn('pt-lang--card')}
-      <div class="pt-brand"><img src="/logo-nova.svg" alt="">Nova</div>
+    const lb = await loginBrand(), u0 = parseUrl();
+    const fr = Object.assign({ s: 1, x: 0, y: 0 }, (lb && lb.frame) || {});
+    const mark = lb ? (lb.logo ? `<div class="pt-lgbox" style="height:46px;width:170px"><img src="${API}/portal/login-logo/${encodeURIComponent(u0.slug)}?v=${lb.v}" alt="${esc(lb.cliente)}" style="transform:translate(${fr.x}%,${fr.y}%) scale(${fr.s})"></div>` : `<div class="pt-brand">${esc(lb.cliente)}</div>`) : '<div class="pt-brand"><img src="/logo-nova.svg" alt="">Nova</div>';
+    root.innerHTML = `<div class="pt-login"${lb ? ` style="background:${esc(lb.header_bg)}"` : ''}><form class="pt-login__card" id="pt-lf">${langBtn('pt-lang--card')}
+      ${mark}
       <h1>Portal del cliente</h1><p class="sub">Ingresa con el correo y la contraseña que te asignamos.</p>
       ${msg ? `<div class="${/actualizada/.test(msg) ? 'pt-ok' : 'pt-err'}">${esc(msg)}</div>` : ''}
       <label class="pt-f"><span>Correo electrónico</span><input id="pt-em" type="email" autocomplete="username" required></label>
