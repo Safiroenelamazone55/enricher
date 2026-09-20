@@ -90,9 +90,9 @@ function build(kind, lang, d) {
     <p style="margin:0 0 20px;font-size:14.5px;line-height:1.6;color:#334155">${intro}</p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F6F8FB;border:1px solid #E1E6EC;margin:0 0 22px"><tr><td style="padding:16px 18px">
       <div style="font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#64748B;margin-bottom:3px">${L.kUser}</div>
-      <div style="font-size:15px;font-weight:700;margin-bottom:14px;word-break:break-all">${esc(d.to)}</div>
+      <div style="font-size:15px;font-weight:700;margin-bottom:14px;word-break:break-all;-webkit-user-select:all;user-select:all">${esc(d.to)}</div>
       <div style="font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#64748B;margin-bottom:3px">${L.kPass}</div>
-      <div style="font:700 19px 'Courier New',monospace;letter-spacing:1px">${esc(d.pw)}</div></td></tr></table>
+      <div style="font:700 19px 'Courier New',monospace;letter-spacing:1px;-webkit-user-select:all;user-select:all">${esc(d.pw)}</div></td></tr></table>
     ${btn(d.url, L.cta, brand.bg)}
     ${perks}
     <p style="margin:0 0 14px;font-size:13px;color:#64748B;line-height:1.55">${L.tip}</p>
