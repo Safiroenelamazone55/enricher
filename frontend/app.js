@@ -21066,13 +21066,32 @@ ${foot}
     const branch = {};
     (_sequences || []).forEach(s => { branch[s.id] = _seqSteps(s.id).some(st => (st.cond || '') === 'replied'); });
     const out = [];
+    // ¿ya se envió la invitación de LinkedIn? (paso = posición del siguiente paso; la invitación está antes)
+    const inviteDone = sq => _seqSteps(sq.id).some((st, i) => (st.accion === 'invite' || st.accion === 'invite_nota') && i + 1 < (sq.paso || 1));
     (_contacts || []).forEach(c => {
       if (c.disposition === 'respondio' || c.li_aceptado_at) return;
       if (c.no_linkedin) return; // LinkedIn no válido → ya no espera aceptación; va por email
-      const seqs = (c.sequences || []).filter(sq => branch[sq.id] && (sq.estado === 'activo' || sq.estado === 'pausado') && (sq.paso || 1) > 1);
+      const seqs = (c.sequences || []).filter(sq => (sq.estado === 'activo' || sq.estado === 'pausado') && ((branch[sq.id] && (sq.paso || 1) > 1) || inviteDone(sq)));
       if (seqs.length) out.push({ c, seqs });
     });
     return out;
+  }
+  // Búsqueda flexible: sin tildes ni mayúsculas, por palabras sueltas y tolerando pequeños errores de escritura
+  const _pnorm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  function _pedit(a, b) {
+    if (Math.abs(a.length - b.length) > 2) return 9;
+    let p = Array.from({ length: b.length + 1 }, (_, j) => j);
+    for (let i = 1; i <= a.length; i++) { const c = [i]; for (let j = 1; j <= b.length; j++) c[j] = Math.min(p[j] + 1, c[j - 1] + 1, p[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); p = c; }
+    return p[b.length];
+  }
+  function _pmatch(hay, q) {
+    const words = hay.split(/[^a-z0-9]+/).filter(Boolean);
+    return _pnorm(q).split(/[^a-z0-9]+/).filter(Boolean).every(t => hay.includes(t) || (t.length >= 4 && words.some(w => _pedit(t, w.slice(0, t.length)) <= (t.length >= 8 ? 2 : 1) || _pedit(t, w) <= (t.length >= 8 ? 2 : 1))));
+  }
+  function pendingAcceptUpdateSel() {
+    const n = document.querySelectorAll('#lm-pa-modal .pa-ck:checked').length, el = document.getElementById('pa-sel');
+    if (el) el.innerHTML = n ? `<b style="color:#0062CC">${n}</b> seleccionado${n === 1 ? '' : 's'}` : '';
+    const b = document.getElementById('pa-mark'); if (b) b.textContent = n ? `✓ Marcar ${n} como aceptado${n === 1 ? '' : 's'}` : '✓ Marcar como aceptados';
   }
   function pendingAcceptOpen(seqId) {
     const list = _pendingAccept();
@@ -21094,7 +21113,7 @@ ${foot}
     const rows = sorted.length ? sorted.map(({ c, seqs }) => {
       const full = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || '—';
       const inv = invOf(seqs); const invTxt = inv ? ` · invitado ${_relAgo(inv)}` : '';
-      const sData = esc((full + ' ' + (c.company_nombre || '')).toLowerCase());
+      const sData = esc(_pnorm(full + ' ' + (c.company_nombre || '')));
       const seqIds = seqs.map(s => s.id).join(' ');
       const campIds = [...new Set(seqs.map(s => seqCamp[s.id]).filter(Boolean))].join(' ');
       const li = c.linkedin ? `<a href="${esc(c.linkedin)}" target="_blank" rel="noopener" class="lm-link" style="font-size:.74rem;white-space:nowrap" onclick="event.stopPropagation()">LinkedIn ↗</a>` : '';
@@ -21113,11 +21132,12 @@ ${foot}
         ${list.length ? `<label style="${rowS};background:#FAF8F5"><input type="checkbox" id="pa-all" onchange="LeadManagerModule.pendingAcceptToggleAll(this.checked)"><span style="flex:1;font-size:.85rem"><b>Seleccionar todos</b> <span style="color:var(--muted);font-weight:400">(<span id="pa-count">${sorted.length}</span> visibles)</span></span></label>` : ''}
         <div style="max-height:min(50vh,400px);overflow:auto;display:flex;flex-direction:column;gap:3px">${rows}</div>
       </div>
-      <div class="fin-pi-box__ft"><span class="fin-cfg-hint" id="pa-hint"></span><div class="fin-pi-ft-btns">
+      <div class="fin-pi-box__ft"><span class="fin-cfg-hint" id="pa-sel" style="font-size:.85rem"></span><span class="fin-cfg-hint" id="pa-hint"></span><div class="fin-pi-ft-btns">
         <button class="btn btn--ghost btn--sm" onclick="document.getElementById('lm-pa-modal').remove()">Cerrar</button>
         ${list.length ? `<button class="btn btn--primary btn--sm" id="pa-mark" onclick="LeadManagerModule.pendingAcceptMark()">✓ Marcar como aceptados</button>` : ''}
       </div></div></div>`;
     document.body.appendChild(m);
+    m.addEventListener('change', e => { if (e.target.classList && e.target.classList.contains('pa-ck')) pendingAcceptUpdateSel(); });
     // Si se abrió desde una secuencia concreta, prefiltra la bandeja a esa secuencia
     if (seqId != null && seqId !== '') {
       const sel = m.querySelector('#pa-fseq'); if (sel) sel.value = String(seqId);
@@ -21129,7 +21149,7 @@ ${foot}
       const cnt = m.querySelector('#pa-count'); if (cnt) cnt.textContent = vis;
     }
   }
-  function pendingAcceptToggleAll(on) { document.querySelectorAll('#lm-pa-modal .pa-row').forEach(r => { if (r.style.display !== 'none') { const ck = r.querySelector('.pa-ck'); if (ck) ck.checked = on; } }); }
+  function pendingAcceptToggleAll(on) { document.querySelectorAll('#lm-pa-modal .pa-row').forEach(r => { if (r.style.display !== 'none') { const ck = r.querySelector('.pa-ck'); if (ck) ck.checked = on; } }); pendingAcceptUpdateSel(); }
   function pendingAcceptApplyFilters() {
     const modal = document.getElementById('lm-pa-modal'); if (!modal) return;
     const q = (modal.querySelector('#pa-search')?.value || '').toLowerCase().trim();
@@ -21137,7 +21157,7 @@ ${foot}
     const fcamp = modal.querySelector('#pa-fcamp')?.value || '';
     let vis = 0;
     modal.querySelectorAll('.pa-row').forEach(r => {
-      const okQ = !q || (r.getAttribute('data-s') || '').includes(q);
+      const okQ = !q || _pmatch(r.getAttribute('data-s') || '', q);
       const okSeq = !fseq || (' ' + (r.getAttribute('data-seq') || '') + ' ').includes(' ' + fseq + ' ');
       const okCamp = !fcamp || (' ' + (r.getAttribute('data-camp') || '') + ' ').includes(' ' + fcamp + ' ');
       const show = okQ && okSeq && okCamp;
@@ -30519,7 +30539,7 @@ ${foot}
     openWaFromList, waCli, waRowMenu, waSetPrioridad, _DISPOS,
     composeAbrir, composeCerrar, composeEnviar, _cmpClientChange, _cmpBuscar, _cmpElegir, _cmpClear, _cmpNuevo, _cmpNuevoCancel, _cmpSeqNueva,
     _cmpCoBuscar, _cmpCoElegir, _cmpCoNueva, _cmpCoClear, _cmpPreviewUpdate, cmpSchedToggle, cmpSchedPick,
-    pendingAcceptOpen, pendingAcceptToggleAll, pendingAcceptApplyFilters, pendingAcceptMark,
+    pendingAcceptOpen, pendingAcceptToggleAll, pendingAcceptUpdateSel, pendingAcceptApplyFilters, pendingAcceptMark,
     openActivityDrawer, closeActivityDrawer, saveActivity, confirmDeleteActivity, markActDone,
     setReplySentiment, setLeadStage,
     bulkVerifyEmails, connectGmail, sendCfgToggle, saveSendCfg,
