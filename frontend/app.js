@@ -25265,11 +25265,13 @@ ${foot}
     _portalStop();
     const box = _portalBox(); if (!box) return;
     try {
-      const [a, h, c] = await Promise.all([
+      const [a, h, c, u] = await Promise.all([
         apiFetch(`${API}/lm/portal/accounts?client=${cid}`).then(r => r.json()),
         apiFetch(`${API}/lm/portal/highlights?client=${cid}`).then(r => r.json()),
         apiFetch(`${API}/lm/portal/chat/${cid}`).then(r => r.json()),
+        apiFetch(`${API}/lm/portal/updates?client=${cid}`).then(r => r.json()),
       ]);
+      window.__portalUpd = Array.isArray(u) ? u : [];
       window.__portalState = { cid, a, h };
       _portalChat = c.messages || []; _portalChatLast = _portalChat.length ? _portalChat[_portalChat.length - 1].id : 0;
       box.innerHTML = _portalHtml(cid, a, h);
@@ -25296,6 +25298,7 @@ ${foot}
     const dt = d => d ? new Date(d).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', timeZone: 'UTC' }) : '';
     return `
       ${_portalAccessCard(cid, a)}
+      ${_portalUpdatesCard(cid)}
       <div class="cp-card" style="margin-bottom:12px"><div class="cp-card__t">Qué se destaca al cliente <span style="font-weight:400;font-size:12px;color:#64748B">— la nota que escribas aquí la ve el cliente junto a ese contacto y su empresa</span></div>
         <div style="font-weight:600;font-size:12.5px;margin:6px 0 2px">Próximas reuniones (${h.next_meetings.length})</div>${h.next_meetings.map(r => row(r, dt(r.fecha))).join('') || '<div class="cp-empty2" style="padding:8px">Ninguna. Se toman de "Deals" con fecha de cierre.</div>'}
         <div style="font-weight:600;font-size:12.5px;margin:12px 0 2px">Últimas respuestas</div>${h.last_replies.map(r => row(r, dt(r.fecha))).join('') || '<div class="cp-empty2" style="padding:8px">Sin respuestas registradas.</div>'}
@@ -25303,6 +25306,26 @@ ${foot}
       </div>
       <div class="cp-card"><div class="cp-card__t">Chat con el cliente</div><div class="cp-empty2" style="padding:10px">Usa el botón flotante <b>«Chat con cliente»</b> (abajo a la derecha) para ver y responder la conversación, con fotos y archivos.</div>
       </div>`;
+  }
+  // Resumen escrito: lo que publiques aparece arriba del Resumen en el portal del cliente
+  function _portalUpdatesCard(cid) {
+    const list = window.__portalUpd || [];
+    const rows = list.map(x => `<div style="border-top:1px solid #EEF1F4;padding:8px 0;display:flex;gap:10px;align-items:flex-start"><div style="flex:1;min-width:0"><div style="font-size:12px;color:#64748B">${x.published_at ? 'Publicado ' + new Date(x.published_at).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }) : '<b>Borrador</b> (no visible)'}${x.titulo ? ' · <b style="color:#0F172A">' + esc(x.titulo) + '</b>' : ''}</div><div style="font-size:13px;white-space:pre-wrap;margin-top:2px">${esc(String(x.cuerpo).slice(0, 220))}${String(x.cuerpo).length > 220 ? '…' : ''}</div></div>
+      <div style="white-space:nowrap"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.puToggle(${x.id},${!x.published_at})">${x.published_at ? 'Retirar' : 'Publicar'}</button> <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.puDel(${x.id})">Eliminar</button></div></div>`).join('');
+    return `<div class="cp-card" style="margin-bottom:12px"><div class="cp-card__t">Resumen escrito para el cliente <span style="font-weight:400;font-size:12px;color:#64748B">— lo ve arriba del Resumen en su portal (semanal, mensual o cuando tú quieras)</span></div>
+      <input class="lm-inp" id="pu-t" maxlength="160" placeholder="Título (opcional), ej. Semana del 15 al 20 de septiembre" style="width:100%;margin-bottom:6px">
+      <textarea class="lm-inp" id="pu-b" rows="4" maxlength="4000" placeholder="Qué hicimos esta semana, qué resultados hubo y qué viene…" style="width:100%;height:auto;padding:8px 10px;resize:vertical"></textarea>
+      <div style="text-align:right;margin:6px 0"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.puPublish(${cid})">Publicar en el portal</button></div>${rows}</div>`;
+  }
+  async function puPublish(cid) {
+    const t = document.getElementById('pu-t'), b = document.getElementById('pu-b');
+    try { await _portalApi('/lm/portal/updates', 'POST', { outbound_client_id: cid, titulo: t.value, cuerpo: b.value }); showBanner('✓ Resumen publicado en el portal', 'success'); await _portalLoad(cid); }
+    catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  async function puToggle(id, pub) { try { await _portalApi('/lm/portal/updates/' + id, 'PATCH', { publicado: pub }); await _portalLoad(window.__portalState.cid); } catch (e) { showBanner('Error: ' + e.message, 'error'); } }
+  async function puDel(id) {
+    const ok = await novaConfirm({ title: '¿Eliminar este resumen?', message: 'Deja de verse en el portal y se borra.', ok: 'Eliminar', cancel: 'Cancelar', tone: 'danger' }); if (!ok) return;
+    try { await _portalApi('/lm/portal/updates/' + id, 'DELETE'); await _portalLoad(window.__portalState.cid); } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
   function _portalDrawChat(scroll) {
     const el = document.getElementById('portal-chat'); if (!el) return;
@@ -30388,7 +30411,7 @@ ${foot}
     dgEnrichMenu, dgEnrichOpen, dgEnrichClose, dgEnrichApply, dgToggleIssues, dgMoreMenu, dgToggleSelMode,
     dgDupOpen, dgDupClose, dgDupPickSurvivor, dgDupToggleDel, dgDupMergeGroup, dgDupDeleteGroup,
     fmsToggle, fmsFilter, fmsPick,
-    openViews, applyView, saveView, deleteView, clearAllViews, dashTab, dashSet, dashClear, dashGran, portalLogoOpen, portalLogoClose, lgTrimExisting, lgFrame, lgReset, lgBg, lgSelect, lgUpload, lgDelete, lgSave, pcToggle, pcSend, pcAttach, pcUnpend, portalCreate, portalReset, portalToggle, portalDel, portalSecs, portalAccessOpen, portalAccessClose, portalGen, portalEdit, portalEditSave, portalSec, portalNota, portalChatSend, portalCopy,
+    openViews, applyView, saveView, deleteView, clearAllViews, dashTab, dashSet, dashClear, dashGran, puPublish, puToggle, puDel, portalLogoOpen, portalLogoClose, lgTrimExisting, lgFrame, lgReset, lgBg, lgSelect, lgUpload, lgDelete, lgSave, pcToggle, pcSend, pcAttach, pcUnpend, portalCreate, portalReset, portalToggle, portalDel, portalSecs, portalAccessOpen, portalAccessClose, portalGen, portalEdit, portalEditSave, portalSec, portalNota, portalChatSend, portalCopy,
     taskSetView, taskSetFilter, calPrev, calNext, calToday,
     lmSetDisposition, seqDoDisposition, cpSetStage,
     seqDoAccepted, seqDoNoLinkedIn, seqDoBounced, seqDoNoWhatsapp, seqDoNoPhone, lmToggleNoLinkedIn, lmToggleNoWhatsapp, lmToggleNoPhone, lmToggleBounced, lmToggleManualEmail, ctToggleBounced,

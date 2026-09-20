@@ -202,11 +202,12 @@
     const t = S.tab, s = S.me.sections;
     try {
       if (t === 'inicio') {
-        const [d, h, f, sq] = await Promise.all([api('/portal/dashboard?' + rangeQ()), api('/portal/highlights'), s.feed ? api('/portal/feed') : null, s.secuencias && !S.seqs ? api('/portal/sequences') : null]);
-        S.dash = d; S.hl = h; S.feed = f; if (sq) S.seqs = sq;
+        const r = perRanges(), q = (a, b) => `/portal/dashboard?from=${isoL(a)}&to=${isoL(b)}`;
+        const [cur, prev, h, u, f, sq, stp, d] = await Promise.all([api(q(r.from, r.to)), api(q(r.pfrom, r.pto)), api('/portal/highlights'), api('/portal/updates'), s.feed ? api('/portal/feed') : null, s.secuencias && !S.seqs ? api('/portal/sequences') : null, s.secuencias ? api('/portal/steps') : null, S.detail ? api('/portal/dashboard?' + rangeQ()) : null]);
+        S.wk = { cur, prev, r }; S.hl = h; S.upd = u; S.feed = f; S.steps = stp; if (sq) S.seqs = sq; S.dash = d;
       } else if (t === 'empresas') S.cos = await api('/portal/companies?q=' + encodeURIComponent(S.q));
       else if (t === 'contactos') S.cts = await api(`/portal/contacts?q=${encodeURIComponent(S.q)}&company=${S.co || 0}`);
-      else if (t === 'secuencias') S.seqs = await api('/portal/sequences');
+      else if (t === 'secuencias') { const [a, b] = await Promise.all([api('/portal/sequences'), api('/portal/steps')]); S.seqs = a; S.steps = b; }
       else if (t === 'actividad') S.feed = await api('/portal/feed');
       S.last = Date.now(); paint();
       const u = document.getElementById('pt-upd'); if (u) u.textContent = 'En vivo · actualizado ' + new Date().toLocaleTimeString(PT_I18N.locale(), { hour: '2-digit', minute: '2-digit' });
@@ -219,20 +220,23 @@
     const b = document.getElementById('pt-body'); if (!b) return;
     stopCharts();
     const t = S.tab;
-    if (t === 'inicio') b.innerHTML = S.dash ? inicio() : '<div class="pt-empty">Cargando…</div>';
+    if (t === 'inicio') b.innerHTML = S.hl ? inicio() : '<div class="pt-empty">Cargando…</div>';
     else if (t === 'empresas') b.innerHTML = empresas();
     else if (t === 'contactos') b.innerHTML = contactos();
     else if (t === 'secuencias') b.innerHTML = secuencias();
     else if (t === 'actividad') b.innerHTML = `<div class="pt-h"><h2>Actividad en vivo</h2></div><div class="pt-card">${feedHtml(S.feed, 100)}</div>`;
     const se = document.getElementById('pt-search');
     if (se) { se.value = S.q; se.oninput = debounce(() => { S.q = se.value; load(false); }, 350); }
-    if (t === 'inicio' && S.dash) initCharts();
+    if (t === 'inicio' && S.detail && S.dash) initCharts();
   }
   function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
   window.PT = {
     range: r => { S.range = r; S.dash = null; paint(); load(false); },
     seq: v => { S.seq = v; S.dash = null; paint(); load(false); },
     gran: v => { S.gran = v; paint(); },
+    per: p => { S.per = p; try { localStorage.setItem('pt_per', p); } catch (e) {} S.wk = null; load(false); },
+    detail: () => { S.detail = !S.detail; try { localStorage.setItem('pt_detail', S.detail ? '1' : '0'); } catch (e) {} if (S.detail && !S.dash) { paint(); load(false); } else paint(); },
+    goSeq: () => { S.tab = 'secuencias'; renderApp(); load(true); },
     goCo: id => { S.tab = 'contactos'; S.co = id; S.q = ''; renderApp(); load(true); },
   };
 
@@ -254,12 +258,63 @@
     </div>`;
   }
 
+  // ── Resumen: 1) mensaje del equipo 2) esta semana/mes 3) atención 4) cómo trabajamos 5) detalle (oculto por defecto) ──
+  S.per = (function () { try { return localStorage.getItem('pt_per') === 'month' ? 'month' : 'week'; } catch (e) { return 'week'; } })();
+  S.detail = (function () { try { return localStorage.getItem('pt_detail') === '1'; } catch (e) { return false; } })();
+  const isoL = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  function perRanges() {
+    const now = new Date(); now.setHours(12, 0, 0, 0);
+    if (S.per === 'month') {
+      const f = new Date(now.getFullYear(), now.getMonth(), 1, 12), pf = new Date(now.getFullYear(), now.getMonth() - 1, 1, 12);
+      const pend = new Date(now.getFullYear(), now.getMonth(), 0, 12), pt = new Date(pf); pt.setDate(Math.min(now.getDate(), pend.getDate()));
+      return { from: f, to: now, pfrom: pf, pto: pt };
+    }
+    const dow = (now.getDay() + 6) % 7, f = new Date(now); f.setDate(now.getDate() - dow);
+    const pf = new Date(f); pf.setDate(f.getDate() - 7); const pt = new Date(pf); pt.setDate(pf.getDate() + dow);
+    return { from: f, to: now, pfrom: pf, pto: pt };
+  }
+  const fshort = d => d.toLocaleDateString(PT_I18N.locale(), { day: 'numeric', month: 'short' });
+  function dl(cur, prev) {
+    if (!prev && !cur) return '<span class="dash-d dash-d--0">—</span>';
+    const diff = prev ? Math.round((cur - prev) / prev * 100) : 100, cls = diff > 0 ? 'up' : diff < 0 ? 'down' : '0';
+    return `<span class="dash-d dash-d--${cls}">${diff > 0 ? '▲ +' : diff < 0 ? '▼ -' : '• '}${Math.abs(diff)}%${S.per === 'month' ? ' vs. mes anterior' : ' vs. semana anterior'}</span>`;
+  }
+  function updatesHtml() {
+    const u = S.upd; if (!u || !u.length) return '';
+    const one = (x, first) => `<div class="pt-upd${first ? '' : ' pt-upd--old'}"><div class="pt-upd__h"><b>${x.titulo ? esc(x.titulo) : 'Mensaje de tu equipo'}</b><span>${fdate(x.published_at, { day: 'numeric', month: 'short', year: 'numeric' })}</span></div><div class="pt-upd__b">${esc(x.cuerpo)}</div></div>`;
+    return `<div class="pt-upd-wrap">${one(u[0], true)}${u.length > 1 ? `<details class="pt-upd-more"><summary>Ver mensajes anteriores</summary>${u.slice(1).map(x => one(x, false)).join('')}</details>` : ''}</div>`;
+  }
+  function weekHtml() {
+    const w = S.wk; if (!w || !w.cur.kpi) return '';
+    const c = w.cur.kpi.cur, p = w.prev.kpi ? w.prev.kpi.cur : { contacted: 0, replies: 0, touches: 0 };
+    const mc = w.cur.deals ? w.cur.deals.agendadas : null, mp = w.prev.deals ? w.prev.deals.agendadas : 0;
+    const tiles = [['Contactos alcanzados', c.contacted, p.contacted, 'users', '#22A06B'], ['Respuestas', c.replies, p.replies, 'reply', '#F59E0B'], mc == null ? null : ['Reuniones agendadas', mc, mp, 'handshake', '#7C5CE0'], ['Toques realizados', c.touches, p.touches, 'send', '#2563EB']].filter(Boolean);
+    const sent = `${c.contacted} contactos alcanzados · ${c.replies} respuestas${mc == null ? '' : ' · ' + mc + (mc === 1 ? ' reunión agendada' : ' reuniones agendadas')}`;
+    return `<div class="pt-week"><div class="pt-week__h"><div><h2>${S.per === 'month' ? 'Este mes' : 'Esta semana'}</h2><span class="pt-week__r">${fshort(w.r.from)} – ${fshort(w.r.to)}</span></div>
+      <div class="dash-seg"><button class="dash-seg__b${S.per === 'week' ? ' on' : ''}" onclick="PT.per('week')">Semana</button><button class="dash-seg__b${S.per === 'month' ? ' on' : ''}" onclick="PT.per('month')">Mes</button></div></div>
+      <div class="pt-week__k">${tiles.map(t => `<div class="pt-tile" style="--kc:${t[4]}"><span class="pt-tile__i">${ico(t[3], 18)}</span><div><div class="pt-tile__l">${t[0]}</div><div class="pt-tile__v">${t[1]}</div>${dl(t[1], t[2])}</div></div>`).join('')}</div>
+      <p class="pt-week__s">${sent}</p></div>`;
+  }
+  const STEP_ICO = { linkedin: ['in', '#7C5CE0'], email: ['mail', '#2563EB'], whatsapp: ['chat', '#22A06B'], call: ['phone', '#F59E0B'], task: ['dots', '#94A3B8'] };
+  function stepsHtml(q) {
+    const tot = q.total || 1;
+    return `<div class="pt-steps">${q.steps.map(s => { const m = STEP_ICO[s.canal] || STEP_ICO.task; return `<div class="pt-step"><span class="pt-step__i" style="background:${m[1]}">${ico(m[0], 14)}</span><div class="pt-step__b"><div class="pt-step__t"><b>${s.label}</b><span>Día ${s.dia}</span></div><div class="pt-step__bar"><i style="width:${Math.max(s.reached ? 3 : 0, Math.round(s.reached / tot * 100))}%;background:${m[1]}"></i></div><div class="pt-step__n">${s.reached} completados${s.current ? ' · ' + s.current + ' en este paso' : ''}</div></div></div>`; }).join('')}</div>`;
+  }
+  const seqBadge = e => e === 'activa' ? '<span class="pt-badge pt-b--g">Activa</span>' : '<span class="pt-badge pt-b--n">En pausa</span>';
+  function howHtml() {
+    const st = S.steps; if (!st || !st.length) return '';
+    const list = st.slice().sort((a, b) => (b.estado === 'activa') - (a.estado === 'activa') || b.total - a.total).slice(0, 2);
+    return `<div class="pt-how"><div class="pt-how__h"><h3>Cómo trabajamos</h3>${st.length > 2 ? '<button class="pt-link" onclick="PT.goSeq()">Ver todas las secuencias →</button>' : ''}</div>
+      <div class="pt-how__g">${list.map(q => `<div class="pt-card"><div class="pt-item__t"><span>${esc(q.nombre)}</span>${seqBadge(q.estado)}</div><div class="pt-item__s">${q.total} contactos</div>${stepsHtml(q)}</div>`).join('')}</div></div>`;
+  }
   function inicio() {
-    const d = S.dash, s = S.me.sections;
+    const s = S.me.sections;
     const seg = [['7d', '7 días'], ['30d', '30 días'], ['mes', 'Este mes'], ['trim', 'Trimestre'], ['ytd', 'YTD']];
     const seqSel = S.seqs && s.secuencias ? `<label class="dash-f${S.seq ? ' is-on' : ''}" style="flex:none;min-width:200px"><select onchange="PT.seq(this.value)"><option value="">Todas las secuencias</option>${S.seqs.map(x => `<option value="${x.id}"${String(S.seq) === String(x.id) ? ' selected' : ''}>${esc(x.nombre)}</option>`).join('')}</select></label>` : '';
     const filters = `<div class="dash-filters" style="display:flex;gap:8px;flex-wrap:wrap"><div class="dash-seg">${seg.map(r => `<button class="dash-seg__b${S.range === r[0] ? ' on' : ''}" onclick="PT.range('${r[0]}')">${r[1]}</button>`).join('')}</div>${seqSel}</div>`;
-    return `<div class="pt-dash">${highlightsHtml()}${filters}${dashBody(d)}${s.feed ? `<div class="pt-card" style="margin-top:14px"><h3>${ico('send', 16)} Actividad reciente</h3>${feedHtml(S.feed, 12)}</div>` : ''}</div>`;
+    const detail = S.detail ? (S.dash ? `${filters}${dashBody(S.dash)}${s.feed ? `<div class="pt-card" style="margin-top:14px"><h3>${ico('send', 16)} Actividad reciente</h3>${feedHtml(S.feed, 12)}</div>` : ''}` : '<div class="pt-empty">Cargando…</div>') : '';
+    return `<div class="pt-dash">${updatesHtml()}${weekHtml()}${highlightsHtml()}${s.secuencias ? howHtml() : ''}
+      <div class="pt-more"><button class="pt-morebtn" onclick="PT.detail()">${S.detail ? 'Ocultar detalle ▴' : 'Ver detalle ▾'}</button></div>${detail}</div>`;
   }
 
   function delta(cur, prev, pts) {
@@ -347,10 +402,13 @@
     return `<div class="pt-h"><h2>Contactos ${l ? `<span style="color:#94A3B8;font-weight:500;font-size:15px">(${l.length})</span>` : ''}${S.co ? ` <button class="pt-link" onclick="PT.goCo(0)">✕ quitar filtro de empresa</button>` : ''}</h2>${search('Buscar contacto o empresa…')}</div><div class="pt-card" style="padding:0;overflow:auto">${!l ? '<div class="pt-empty">Cargando…</div>' : !l.length ? '<div class="pt-empty">Sin contactos</div>' : `<table class="pt-tbl"><thead><tr><th>Contacto</th><th>Cargo</th><th>Empresa</th><th>País</th><th>Estado</th><th>Secuencia</th><th>Último contacto</th><th>Nota</th></tr></thead><tbody>${l.map(r => `<tr><td><b>${esc(r.nombre)}</b>${r.linkedin ? ` <a href="${esc(/^https?:/.test(r.linkedin) ? r.linkedin : 'https://' + r.linkedin)}" target="_blank" rel="noopener noreferrer" title="LinkedIn">in</a>` : ''}</td><td>${esc(r.cargo || '—')}</td><td>${esc(r.empresa || '—')}</td><td>${esc(r.pais || '—')}</td><td>${badge(r.estado)}</td><td style="max-width:200px">${esc(r.secuencia || '—')}${r.paso ? ` <span style="color:#94A3B8">· paso ${r.paso}</span>` : ''}</td><td>${r.ultimo ? ago(r.ultimo) : '—'}</td><td style="max-width:260px;color:#1E3A8A">${esc(r.nota)}</td></tr>`).join('')}</tbody></table>`}</div>`;
   }
   function secuencias() {
-    const l = S.seqs;
-    return `<div class="pt-h"><h2>Secuencias</h2></div><div class="pt-card" style="padding:0;overflow:auto">${!l ? '<div class="pt-empty">Cargando…</div>' : !l.length ? '<div class="pt-empty">Sin secuencias</div>' : `<table class="pt-tbl"><thead><tr><th>Secuencia</th><th>Estado</th><th>Contactos</th><th>En curso</th><th>Completadas</th><th>Respondieron</th></tr></thead><tbody>${l.map(r => `<tr><td><b>${esc(r.nombre)}</b></td><td>${badge(r.estado === 'activa' ? 'En seguimiento' : 'En pausa')}</td><td>${r.enrolados}</td><td>${r.activos}</td><td>${r.terminados}</td><td>${r.respondieron}</td></tr>`).join('')}</tbody></table>`}</div>`;
+    const l = S.seqs, st = S.steps || [];
+    if (!l) return '<div class="pt-h"><h2>Secuencias</h2></div><div class="pt-empty">Cargando…</div>';
+    if (!l.length) return '<div class="pt-h"><h2>Secuencias</h2></div><div class="pt-empty">Sin secuencias</div>';
+    const byId = new Map(st.map(q => [q.id, q]));
+    return `<div class="pt-h"><h2>Secuencias</h2></div><div class="pt-how__g pt-how__g--all">${l.map(r => { const q = byId.get(r.id); return `<div class="pt-card"><div class="pt-item__t"><span>${esc(r.nombre)}</span>${seqBadge(r.estado)}</div>
+      <div class="pt-seqstats"><span><b>${r.enrolados}</b> Contactos</span><span><b>${r.activos}</b> En curso</span><span><b>${r.terminados}</b> Completadas</span><span><b>${r.respondieron}</b> Respondieron</span></div>${q ? stepsHtml(q) : ''}</div>`; }).join('')}</div>`;
   }
-
   // ── chat ──
   function drawChat() {
     const w = document.getElementById('pt-cw'), b = document.getElementById('pt-cb'); if (!w) return;

@@ -244,3 +244,43 @@ button{cursor:pointer}
 .pt-top .pt-live{color:inherit;opacity:.8}
 .pt-top .pt-lg,.pt-top .pt-user>button{color:inherit;background:transparent;border-color:color-mix(in srgb,currentColor 35%,transparent)}
 @media(max-width:700px){.pt-lgbox{width:130px;height:26px}.pt-top .pt-brand{font-size:0}.pt-top .pt-brand img{width:24px;height:24px}}
+
+/* Resumen: mensaje del equipo, esta semana, cómo trabajamos */
+.pt-upd-wrap{margin-bottom:14px}
+.pt-upd{background:#fff;border:1px solid #E7EBF0;border-left:4px solid #2563EB;padding:14px 18px;margin-bottom:8px}
+.pt-upd--old{border-left-color:#CBD5E1;background:#FAFBFC}
+.pt-upd__h{display:flex;justify-content:space-between;gap:10px;font-size:13px;margin-bottom:6px}
+.pt-upd__h span{color:#94A3B8;font-size:12px}
+.pt-upd__b{white-space:pre-wrap;font-size:14px;line-height:1.55;color:#1E293B}
+.pt-upd-more summary{cursor:pointer;color:#2563EB;font-size:12.5px;font-weight:600;padding:4px 0 8px}
+.pt-week{background:#fff;border:1px solid #E7EBF0;padding:18px 20px;margin-bottom:14px}
+.pt-week__h{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.pt-week__h h2{font-size:20px;letter-spacing:-.01em;display:inline}
+.pt-week__r{color:#64748B;font-size:13px;margin-left:10px}
+.pt-week__k{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.pt-tile{display:flex;gap:12px;align-items:flex-start;border-left:3px solid var(--kc);background:#F8FAFC;padding:12px 14px}
+.pt-tile__i{display:grid;place-items:center;width:34px;height:34px;color:var(--kc);background:color-mix(in srgb,var(--kc) 14%,#fff);flex:none}
+.pt-tile__l{font-size:12px;font-weight:600;color:#475569}
+.pt-tile__v{font-size:30px;font-weight:700;letter-spacing:-.02em;line-height:1.15;margin:1px 0}
+.pt-week__s{margin-top:12px;font-size:13.5px;color:#334155}
+.pt-how{margin-bottom:14px}
+.pt-how__h{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.pt-how__h h3{font-size:16px}
+.pt-how__g{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.pt-how__g--all{grid-template-columns:repeat(2,minmax(0,1fr))}
+.pt-seqstats{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:#64748B;margin:6px 0 4px}
+.pt-seqstats b{color:#0F172A;font-size:15px;margin-right:4px}
+.pt-steps{margin-top:12px;position:relative}
+.pt-step{display:flex;gap:12px;padding-bottom:12px;position:relative}
+.pt-step:not(:last-child)::before{content:"";position:absolute;left:13px;top:28px;bottom:-2px;border-left:2px dotted #CBD5E1}
+.pt-step__i{flex:none;width:28px;height:28px;display:grid;place-items:center;color:#fff}
+.pt-step__b{flex:1;min-width:0}
+.pt-step__t{display:flex;justify-content:space-between;gap:8px;font-size:13px}
+.pt-step__t span{color:#94A3B8;font-size:12px;white-space:nowrap}
+.pt-step__bar{height:6px;background:#EEF1F5;margin:5px 0 3px;overflow:hidden}
+.pt-step__bar i{display:block;height:100%}
+.pt-step__n{font-size:11.5px;color:#64748B}
+.pt-more{text-align:center;margin:6px 0 16px}
+.pt-morebtn{background:#fff;border:1px solid #D9DEE3;padding:9px 18px;font-weight:600;font-size:13px;color:#334155}
+.pt-morebtn:hover{background:#F8FAFC}
+@media(max-width:1100px){.pt-week__k{grid-template-columns:repeat(2,minmax(0,1fr))}.pt-how__g,.pt-how__g--all{grid-template-columns:1fr}}
