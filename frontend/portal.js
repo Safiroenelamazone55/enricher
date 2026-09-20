@@ -147,6 +147,7 @@
     setUrl(tabUrl(S.tab) + (openId ? '/' + openId : ''), true);
     renderApp(); start();
     if (openId) { if (S.tab === 'empresas') openCompany(openId); else openContact(openId); }
+    try { if (S.me.lang && !localStorage.getItem('pt_lang') && S.me.lang !== PT_I18N.lang) PT_I18N.set(S.me.lang, () => S.redraw && S.redraw()); } catch (e) {}
     if (S.me.pw_prompt && !sessionStorage.getItem('pt_pw_skip')) showPwReminder();
   }
   function tabs() {

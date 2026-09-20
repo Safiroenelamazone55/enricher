@@ -236,6 +236,7 @@ async function sendFromMailbox(mb, pass, msg) {
     to: msg.to, cc: msg.cc || undefined,
     subject: msg.subject || '', text: msg.text || undefined, html: msg.html || undefined,
     inReplyTo: msg.inReplyTo || undefined, references: msg.references || undefined,
+    attachments: msg.attachments || undefined,
   };
   const raw = await new MailComposer(mail).compile().build();
   const rcpt = [msg.to].concat(msg.cc ? [msg.cc] : []).flat();

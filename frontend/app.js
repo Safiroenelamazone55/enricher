@@ -25442,11 +25442,11 @@ ${foot}
         <div style="font-size:12.5px;color:#64748B;margin-bottom:10px">Entra con correo y contraseña en <a class="lm-link" href="${url}" target="_blank" rel="noopener">${url}</a> <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.portalCopy('${url}')">Copiar enlace</button><br>Puede crear su propia contraseña cuando quiera (se lo recordamos a las 2 semanas), y recuperarla con un código que le llega al correo.</div>
         <div id="portal-cred"></div>
         ${rows ? `<table class="clients-table" style="width:100%"><thead><tr><th>Usuario</th><th>Estado</th><th>Último ingreso</th><th></th></tr></thead><tbody>${rows}</tbody></table>
-          <label style="display:flex;gap:6px;align-items:center;font-size:12.5px;margin-top:8px;color:#475569"><input type="checkbox" id="portal-rs-send"> Al generar una nueva clave, enviarla también por correo</label>` : '<div class="cp-empty2" style="padding:10px">Aún no hay usuarios para este cliente.</div>'}
+          <label style="display:flex;gap:6px;align-items:center;font-size:12.5px;margin-top:8px;color:#475569"><input type="checkbox" id="portal-rs-send"> Al generar una nueva clave, enviarla también por correo</label><label style="display:flex;gap:6px;align-items:center;font-size:12.5px;margin-top:6px;color:#475569">Idioma del correo <select id="portal-rs-lang" style="padding:3px 6px;font-size:12.5px;border:1px solid #D9DEE3;background:#fff;color:#334155"><option value="es">Español</option><option value="en">English</option><option value="de">Deutsch</option><option value="pt">Português</option></select></label>` : '<div class="cp-empty2" style="padding:10px">Aún no hay usuarios para este cliente.</div>'}
         <div style="border-top:1px solid #EEF1F4;margin-top:12px;padding-top:12px"><div style="font-weight:600;font-size:13px;margin-bottom:8px">Dar acceso a otra persona</div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input class="lm-inp" id="portal-em" type="email" placeholder="correo" style="width:240px"><input class="lm-inp" id="portal-nm" placeholder="nombre (opcional)" style="width:190px">
             <input class="lm-inp" id="portal-pw" type="text" value="${_paGen()}" style="width:170px;font-family:monospace" title="Contraseña temporal"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.portalGen()" title="Generar otra al azar">🎲 Generar</button></div>
-          <div style="display:flex;gap:14px;align-items:center;margin-top:8px;flex-wrap:wrap"><label style="display:flex;gap:6px;align-items:center;font-size:12.5px;color:#475569"><input type="checkbox" id="portal-inv" checked> Enviarle la invitación por correo</label><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.portalCreate(${cid})">＋ Dar acceso</button></div>
+          <div style="display:flex;gap:14px;align-items:center;margin-top:8px;flex-wrap:wrap"><label style="display:flex;gap:6px;align-items:center;font-size:12.5px;color:#475569"><input type="checkbox" id="portal-inv" checked> Enviarle la invitación por correo</label><label style="display:flex;gap:6px;align-items:center;font-size:12.5px;color:#475569">Idioma del correo <select id="portal-lang" style="padding:3px 6px;font-size:12.5px;border:1px solid #D9DEE3;background:#fff;color:#334155"><option value="es">Español</option><option value="en">English</option><option value="de">Deutsch</option><option value="pt">Português</option></select></label><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.portalCreate(${cid})">＋ Dar acceso</button></div>
         </div></div>`;
   }
   async function _portalRefresh(cid) { if (document.getElementById('portal-access-modal')) await _paLoad(cid); else await _portalLoad(cid); }
@@ -25472,7 +25472,7 @@ ${foot}
     if (btn) { btn.disabled = true; btn.innerHTML = 'Enviando…'; }
     const em = document.getElementById('portal-em'), nm = document.getElementById('portal-nm'), pw = document.getElementById('portal-pw'), inv = document.getElementById('portal-inv');
     try {
-      const r = await _portalApi('/lm/portal/accounts', 'POST', { outbound_client_id: cid, email: em.value, nombre: nm.value, password: pw.value.trim(), send_invite: !!(inv && inv.checked) });
+      const r = await _portalApi('/lm/portal/accounts', 'POST', { outbound_client_id: cid, email: em.value, nombre: nm.value, password: pw.value.trim(), send_invite: !!(inv && inv.checked), lang: (document.getElementById('portal-lang') || {}).value || 'es' });
       await _portalRefresh(cid); _portalShowCred(r.email, r.password, 'Acceso creado.' + _paInviteMsg(r.invite));
     } catch (e) { showBanner('Error: ' + e.message, 'error'); if (btn) { btn.disabled = false; btn.innerHTML = btnTx; } }
     finally { _portalBusy = false; }
@@ -25483,7 +25483,7 @@ ${foot}
     _portalBusy = true; showBanner('Generando la clave…', 'info');
     try {
       const st = window.__portalState, acc = (st.a.accounts || []).find(x => x.id === id), send = !!(document.getElementById('portal-rs-send') || {}).checked;
-      const r = await _portalApi(`/lm/portal/accounts/${id}/reset`, 'POST', { send }); await _portalRefresh(st.cid); _portalShowCred(acc ? acc.email : '', r.password, 'Nueva contraseña.' + _paInviteMsg(r.invite));
+      const r = await _portalApi(`/lm/portal/accounts/${id}/reset`, 'POST', { send, lang: (document.getElementById('portal-rs-lang') || {}).value || undefined }); await _portalRefresh(st.cid); _portalShowCred(acc ? acc.email : '', r.password, 'Nueva contraseña.' + _paInviteMsg(r.invite));
     } catch (e) { showBanner('Error: ' + e.message, 'error'); } finally { _portalBusy = false; }
   }
   async function portalToggle(id, activo) { try { await _portalApi(`/lm/portal/accounts/${id}`, 'PATCH', { activo }); await _portalRefresh(window.__portalState.cid); } catch (e) { showBanner('Error: ' + e.message, 'error'); } }
