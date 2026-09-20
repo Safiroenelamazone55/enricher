@@ -171,6 +171,7 @@
       <div class="pt-modal__b"><button class="pt-btn" id="pt-pw1" style="margin:0">Crear mi contraseña</button><button class="pt-btn" id="pt-pw2" style="margin:0;background:#fff;color:#0F172A;border:1px solid #D9DEE3">Recordármelo más tarde</button></div>
       <div style="text-align:center;margin-top:12px"><button class="pt-link" id="pt-pw3" style="color:#64748B;font-weight:500">Omitir y seguir</button></div></div>`;
     document.body.appendChild(m);
+    if (window.PT_I18N && PT_I18N.apply) PT_I18N.apply(m);
     const close = () => { m.remove(); };
     const skip = async () => { try { sessionStorage.setItem('pt_pw_skip', '1'); } catch (e) {} try { await api('/portal/password/snooze', { method: 'POST' }); S.me.pw_prompt = false; } catch (e) {} close(); };
     document.getElementById('pt-pwx').onclick = skip; document.getElementById('pt-pw3').onclick = skip;

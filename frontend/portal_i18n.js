@@ -218,18 +218,87 @@
     [/^Día (\d+)$/, 'Day $1', 'Tag $1', 'Dia $1'],
     [/(\d+) contactos?$/, '$1 contacts', '$1 Kontakte', '$1 contatos'],
   ];
+  // ── Ajustes de calidad (inglés, alemán, portugués) ──
+  // Redacción más natural (sobrescribe la traducción base)
+  [
+    ['Señales positivas por convertir', 'Warm leads to convert', 'Warme Kontakte zur Umsetzung', 'Contatos quentes a converter'],
+    ['Toques realizados', 'Outreach touchpoints', 'Durchgeführte Kontakte', 'Contatos realizados'],
+    ['Toques por canal', 'Touchpoints by channel', 'Kontakte nach Kanal', 'Contatos por canal'],
+    ['Aceptación LinkedIn', 'LinkedIn acceptance rate', 'LinkedIn-Annahmequote', 'Taxa de aceitação no LinkedIn'],
+    ['Más adelante', 'Follow up later', 'Später nachfassen', 'Retomar mais tarde'],
+    ['Enrolados', 'In sequence', 'In Sequenz', 'Em sequência'], ['Enrol.', 'In seq.', 'In Seq.', 'Em seq.'],
+    ['No califica', 'Not a fit', 'Passt nicht', 'Fora do perfil'],
+    ['Seguimiento realizado', 'Follow-up completed', 'Nachverfolgung abgeschlossen', 'Acompanhamento concluído'],
+    ['Cargo', 'Job title', 'Position', 'Cargo'],
+    ['País', 'Country', 'Land', 'País'],
+    ['Mensaje de LinkedIn', 'LinkedIn message', 'LinkedIn-Nachricht', 'Mensagem do LinkedIn'],
+    ['Historial desde el primer contacto', 'History since first contact', 'Verlauf seit dem Erstkontakt', 'Histórico desde o primeiro contato'],
+  ].forEach(r => { EX.en.set(r[0], r[1]); EX.de.set(r[0], r[2]); EX.pt.set(r[0], r[3]); });
+
+  // singular / plural y frases con fecha (van ANTES de los patrones generales)
+  R.unshift(
+    [/(\d+) toques en total/, '$1 touchpoints in total', '$1 Kontakte insgesamt', '$1 contatos no total'],
+    [/\b1 contactos?$/, '1 contact', '1 Kontakt', '1 contato'],
+    [/\b1 respuestas?\b/, '1 reply', '1 Antwort', '1 resposta'],
+    [/\b1 contactos? alcanzados?\b/, '1 contact reached', '1 erreichter Kontakt', '1 contato alcançado'],
+    [/\b1 respondió\b/, '1 replied', '1 hat geantwortet', '1 respondeu'],
+    [/\b1 completados?\b/, '1 completed', '1 abgeschlossen', '1 concluído'],
+    [/^Para el /, 'For ', 'Für den ', 'Para '],
+    [/hace (\d+) d[ií]as?/, '$1 d ago', 'vor $1 T.', 'há $1 d'],
+  );
+
+  // Limpieza de datos importados de LinkedIn: "Jefe de flota 3 yrs 5 mos" / "… N/A"
+  const cleanTenure = s => s.replace(/\s+(?:N\/A|\d+\s*(?:yrs?|años?)(?:\s+\d+\s*(?:mos?|mes(?:es)?))?|\d+\s*(?:mos?|mes(?:es)?))\s*$/i, '');
+
+  // Cargos y nombres de secuencias en inglés (los datos vienen en español)
+  const T_DOM = { 'operaciones': 'Operations', 'transporte': 'Transport', 'flota': 'Fleet', 'flotas': 'Fleet', 'logística': 'Logistics', 'logistica': 'Logistics', 'distribución': 'Distribution', 'distribucion': 'Distribution', 'compras': 'Purchasing', 'ventas': 'Sales', 'marketing': 'Marketing', 'mantenimiento': 'Maintenance', 'planificación': 'Planning', 'planificacion': 'Planning', 'tráfico': 'Traffic', 'trafico': 'Traffic', 'producción': 'Production', 'produccion': 'Production', 'calidad': 'Quality', 'planta': 'Plant', 'tienda': 'Store', 'finanzas': 'Finance', 'exportación': 'Export', 'almacén': 'Warehouse', 'almacen': 'Warehouse', 'tecnología': 'Technology', 'comercial': 'Commercial', 'recursos humanos': 'Human Resources', 'transporte internacional': 'International Transport', 'transporte nacional': 'National Transport', 'planificación de operaciones': 'Operations Planning', 'control de operaciones': 'Operations Control', 'sección': 'Section', 'seccion': 'Section', 'área distribución': 'Distribution Area', 'area distribucion': 'Distribution Area' };
+  const T_ROLE = { director: 'Director of %', directora: 'Director of %', jefe: 'Head of %', jefa: 'Head of %', responsable: '% Manager', gerente: '% Manager', gestor: '% Manager', gestora: '% Manager', técnico: '% Technician', tecnico: '% Technician', técnica: '% Technician' };
+  const T_PHRASE = [
+    [/\bDirector(?:a)? general\b/gi, 'General Manager'], [/\bGerente general\b/gi, 'General Manager'], [/\bConsejer[oa] delegad[oa]\b/gi, 'CEO'],
+    [/\bDirector(?:a)? comercial\b/gi, 'Commercial Director'], [/\bDirector(?:a)? t[eé]cnic[oa]\b/gi, 'Technical Director'],
+    [/\bGesti[oó]n de flotas?\b/gi, 'Fleet Management'], [/\bGesti[oó]n de transporte\b/gi, 'Transport Management'],
+    [/\bOperaciones de log[ií]stica\b/gi, 'Logistics Operations'], [/\bOperaciones de exportaci[oó]n\b/gi, 'Export Operations'],
+    [/\bPropietari[oa]\b/gi, 'Owner'], [/\bCofundador(?:a)?\b/gi, 'Co-founder'], [/\bFundador(?:a)?\b/gi, 'Founder'], [/\bPresidente\b/gi, 'President'],
+    [/\bDirector(?:a)? de flotas?\b/gi, 'Fleet Director'],
+  ];
+  const T_GEN = /\b(Director|Directora|Jefe|Jefa|Responsable|Gerente|Gestor|Gestora|Técnico|Tecnico|Técnica)\s+(?:de\s+(?:la\s+|los\s+|las\s+)?|del\s+)?([A-Za-zÁÉÍÓÚáéíóúñÑ]+(?:\s+(?:de\s+|y\s+)?[A-Za-zÁÉÍÓÚáéíóúñÑ]+)?)/gi;
+  const _titleFmt = (role, tpl, d) => (/^director/i.test(role) && /^(Plant|Fleet|Store|Section)$/.test(d)) ? d + ' Director' : tpl.replace('%', d);
+  function trTitleEn(s) {
+    const s0 = s;
+    let out = s;
+    T_PHRASE.forEach(p => { out = out.replace(p[0], p[1]); });
+    out = out.replace(T_GEN, (m, role, dom) => {
+      const tpl = T_ROLE[role.toLowerCase()]; if (!tpl) return m;
+      const low = dom.toLowerCase().replace(/\s+/g, ' ');
+      if (T_DOM[low]) return _titleFmt(role, tpl, T_DOM[low]);
+      const first = low.split(' ')[0];
+      if (T_DOM[first]) return _titleFmt(role, tpl, T_DOM[first]) + dom.slice(first.length);
+      return m;
+    });
+    // si quedan palabras en español sin traducir, mejor dejar el cargo original completo que mezclar idiomas
+    if (out !== s0 && /\b(de|del|la|los|las|y|delegaci[oó]n|veh[ií]culos|Mtto|nacional|internacional)\b/.test(out)) return s0;
+    return out;
+  }
+  function trNamesEn(s) {
+    return s.replace(/Seguimiento de lista/g, 'List follow-up').replace(/Contacto directo/g, 'Direct outreach')
+      .replace(/Comentario post-invitaci[oó]n/g, 'Post-invite comment').replace(/Alimentaci[oó]n y distribuci[oó]n/g, 'Food & distribution')
+      .replace(/\bsemana (\d+)/g, 'week $1').replace(/\bSeguimiento\b/g, 'Follow-up');
+  }
   let lang = 'es';
   try { lang = localStorage.getItem('pt_lang') || ''; } catch (e) {}
   // el enlace del correo trae ?lang=xx: el portal se abre ya en ese idioma (también en la pantalla de acceso)
   try { const m = location.pathname.match(/^\/(en|de|pt|es)\/portal(?:\/|$)/); const q = m ? m[1] : new URLSearchParams(location.search).get('lang'); if (q && LANGS[q]) { lang = q; localStorage.setItem('pt_lang', q); } } catch (e) {}
   if (!LANGS[lang]) { const n = (navigator.language || 'es').slice(0, 2).toLowerCase(); lang = n === 'es' ? 'es' : n === 'pt' ? 'pt' : (n === 'de' || n === 'fr' || n === 'it') ? 'de' : 'en'; }
   function tx(s) {
-    if (lang === 'es' || !s) return s;
-    const t = s.trim(); if (!t) return s;
+    if (!s) return s;
+    const c0 = cleanTenure(s);                 // datos importados: quita "3 yrs 5 mos" / "N/A" del cargo
+    if (lang === 'es') return c0;
+    const t = c0.trim(); if (!t) return c0;
     const hit = EX[lang].get(t);
-    if (hit) return s.replace(t, hit);
-    let out = s;
+    if (hit) return c0.replace(t, hit);
+    let out = c0;
     for (const r of R) { const to = r[IDX[lang]]; out = out.replace(r[0], to); }
+    if (lang === 'en') out = trNamesEn(trTitleEn(out));   // cargos y nombres de secuencias
     return out;
   }
   function walk(root) {
@@ -247,5 +316,5 @@
   }
   function set(l, cb) { if (!LANGS[l]) return; lang = l; try { localStorage.setItem('pt_lang', l); } catch (e) {} document.documentElement.lang = l; if (cb) cb(); }
   document.documentElement.lang = lang;
-  window.PT_I18N = { LANGS, get lang() { return lang; }, t: tx, set, observe, locale: () => LANGS[lang].locale };
+  window.PT_I18N = { LANGS, get lang() { return lang; }, t: tx, set, observe, apply: el => { try { walk(el); } catch (e) {} }, locale: () => LANGS[lang].locale };
 })();
