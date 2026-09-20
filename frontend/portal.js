@@ -69,7 +69,7 @@
       e.preventDefault();
       const a = document.getElementById('pt-p0').value, n = document.getElementById('pt-p1').value, n2 = document.getElementById('pt-p2').value;
       if (n !== n2) return renderChangePw(first, 'Las contraseñas nuevas no coinciden');
-      try { await api('/portal/password', { method: 'POST', body: JSON.stringify({ actual: a, nueva: n }) }); S.me.must_change = false; renderApp(); }
+      try { await api('/portal/password', { method: 'POST', body: JSON.stringify({ actual: a, nueva: n }) }); S.me.must_change = false; renderApp(); start(); }
       catch (er) { renderChangePw(first, er.message); }
     };
   }
@@ -104,7 +104,7 @@
     document.getElementById('pt-lo').onclick = async () => { try { await api('/portal/logout', { method: 'POST' }); } catch (e) {} S.me = null; stop(); renderLogin(); };
     document.getElementById('pt-cp').onclick = () => renderChangePw(false);
     if (S.me.sections.chat) {
-      document.getElementById('pt-cb').onclick = () => { S.chatOpen = true; drawChat(); };
+      document.getElementById('pt-cb').onclick = () => { S.chatOpen = true; S.seenChat = S.chatLast; S.unread = 0; drawChat(); };
       document.getElementById('pt-cc').onclick = () => { S.chatOpen = false; drawChat(); };
       document.getElementById('pt-cf').onsubmit = sendChat;
       drawChat();
