@@ -25240,17 +25240,18 @@ ${foot}
   }
   function _cuStart() { if (_cuTimer) return; _cuPoll(true); _cuTimer = setInterval(() => _cuPoll(), 20000); document.addEventListener('visibilitychange', () => { if (!document.hidden) _cuPoll(); }); }
   // ── Chat con el cliente: botón flotante dentro de la ficha del cliente (mismo estilo que el portal) ──
-  const _PC = { cid: 0, open: false, msgs: [], last: 0, unread: 0, timer: null, pend: [], name: '' };
+  const _PC = { cid: 0, open: false, msgs: [], last: 0, unread: 0, timer: null, pend: [], name: '', acc: 0, threads: [] };
   const _pcSize = n => n > 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
   function _pcUnmount() { if (_PC.timer) clearInterval(_PC.timer); _PC.timer = null; const r = document.getElementById('pc-root'); if (r) r.remove(); _PC.cid = 0; }
   function _pcMount(cid) {
     if (_PC.cid === cid && document.getElementById('pc-root')) return;
     _pcUnmount();
     const c = _clients.find(x => x.id === cid); if (!c) return;
-    Object.assign(_PC, { cid, open: false, msgs: [], last: 0, unread: 0, pend: [], name: c.nombre });
+    Object.assign(_PC, { cid, open: false, msgs: [], last: 0, unread: 0, pend: [], name: c.nombre, acc: 0, threads: [] });
     const r = document.createElement('div'); r.id = 'pc-root';
     r.innerHTML = `<button class="pc-btn" id="pc-btn" onclick="LeadManagerModule.pcToggle(true)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Chat con cliente <span class="pc-n" id="pc-n" style="display:none"></span></button>
       <div class="pc-panel" id="pc-panel"><div class="pc-h"><span>Chat · ${esc(c.nombre)}</span><button onclick="LeadManagerModule.pcToggle(false)">✕</button></div>
+        <div class="pc-th" id="pc-th"></div>
         <div class="pc-b" id="pc-b"></div><div class="pc-p" id="pc-p" style="display:none"></div>
         <form class="pc-f" onsubmit="LeadManagerModule.pcSend(event)"><button type="button" class="pc-a" title="Adjuntar foto o archivo" onclick="document.getElementById('pc-file').click()">📎</button><input id="pc-i" placeholder="Escribe al cliente…" maxlength="2000" autocomplete="off"><button>Enviar</button></form>
         <input type="file" id="pc-file" multiple hidden onchange="LeadManagerModule.pcAttach(this.files);this.value=''"></div>`;
@@ -25265,7 +25266,9 @@ ${foot}
     const cid = _PC.cid; if (!cid) return;
     try {
       if (_PC.open) {
-        const j = await (await apiFetch(`${API}/lm/portal/chat/${cid}?after=${_PC.last}`)).json();
+        await _pcThreads(false);
+        if (!_PC.acc) return;
+        const j = await (await apiFetch(`${API}/lm/portal/chat/${cid}?account=${_PC.acc}&after=${_PC.last}`)).json();
         if (cid !== _PC.cid) return;
         if (j.messages && j.messages.length) { _PC.msgs = _PC.msgs.concat(j.messages.filter(x => !_PC.msgs.some(y => y.id === x.id))); _PC.last = _PC.msgs[_PC.msgs.length - 1].id; _pcDraw(false); }
         _PC.unread = 0;
@@ -25276,6 +25279,39 @@ ${foot}
       }
       _pcBadge();
     } catch (e) {}
+  }
+  // ── conversaciones: una por persona con acceso al portal ──
+  const _pcWho = t => (t.nombre || String(t.email || '').split('@')[0] || '').trim();
+  async function _pcThreads(pickDefault) {
+    try {
+      const cid = _PC.cid, r = await apiFetch(`${API}/lm/portal/chat/${cid}/threads`); if (!r.ok || cid !== _PC.cid) return;
+      _PC.threads = await r.json();
+      if (pickDefault || !_PC.threads.some(t => t.id === _PC.acc)) {
+        const un = _PC.threads.filter(t => t.unread).sort((a, b) => new Date(b.last_at || 0) - new Date(a.last_at || 0))[0];
+        const act = _PC.threads.filter(t => t.last_at).sort((a, b) => new Date(b.last_at) - new Date(a.last_at))[0];
+        _PC.acc = (un || act || _PC.threads[0] || {}).id || 0;
+      }
+      _pcDrawThreads();
+    } catch (e) {}
+  }
+  function _pcDrawThreads() {
+    const el = document.getElementById('pc-th'); if (!el) return;
+    if (!_PC.threads.length) { el.innerHTML = '<div class="pc-th__e">Este cliente todavía no tiene personas con acceso al portal.</div>'; return; }
+    el.innerHTML = '<span class="pc-th__l">Conversación con</span>' + _PC.threads.map(t => `<button class="pc-t${t.id === _PC.acc ? ' on' : ''}" title="${esc(t.email)}" onclick="LeadManagerModule.pcPick(${t.id})"><b>${esc(_pcWho(t))}</b>${t.unread ? `<i>${t.unread}</i>` : ''}<small>${t.last_at ? esc((t.last_autor === 'equipo' ? 'Tú: ' : '') + String(t.last_texto || 'Archivo').slice(0, 26)) : 'Sin mensajes'}</small></button>`).join('');
+    const inp = document.getElementById('pc-i'), t = _PC.threads.find(x => x.id === _PC.acc);
+    if (inp) { inp.placeholder = t ? `Escribe a ${_pcWho(t)}…` : 'Sin destinatario'; inp.disabled = !t; }
+  }
+  async function _pcLoadMsgs() {
+    _PC.msgs = []; _PC.last = 0;
+    if (!_PC.acc) return;
+    try { const j = await (await apiFetch(`${API}/lm/portal/chat/${_PC.cid}?account=${_PC.acc}`)).json(); _PC.msgs = j.messages || []; _PC.last = _PC.msgs.length ? _PC.msgs[_PC.msgs.length - 1].id : 0; } catch (e) {}
+  }
+  async function pcPick(id) {
+    if (_PC.acc === id) return;
+    _PC.acc = id; _PC.pend = []; _pcPend(); _pcDrawThreads();
+    await _pcLoadMsgs(); _pcDraw(true);
+    const t = _PC.threads.find(x => x.id === id); if (t) t.unread = 0; _pcDrawThreads();
+    const i = document.getElementById('pc-i'); if (i) i.focus();
   }
   function _pcBadge() { const n = document.getElementById('pc-n'); if (n) { n.style.display = _PC.unread ? '' : 'none'; n.textContent = _PC.unread; } }
   function _pcAtt(x) {
@@ -25295,7 +25331,8 @@ ${foot}
     const p = document.getElementById('pc-panel'), b = document.getElementById('pc-btn'); if (!p) return;
     p.classList.toggle('on', _PC.open); b.style.display = _PC.open ? 'none' : 'flex';
     if (_PC.open) {
-      try { const j = await (await apiFetch(`${API}/lm/portal/chat/${_PC.cid}`)).json(); _PC.msgs = j.messages || []; _PC.last = _PC.msgs.length ? _PC.msgs[_PC.msgs.length - 1].id : 0; } catch (e) {}
+      await _pcThreads(true);
+      await _pcLoadMsgs();
       _PC.unread = 0; _pcBadge(); _pcDraw(true);
       if (_cuUnread[_PC.cid]) { delete _cuUnread[_PC.cid]; _refreshNav(); const e = document.getElementById('cu-ws'); if (e) e.innerHTML = ''; }
       const i = document.getElementById('pc-i'); if (i) i.focus();
@@ -25333,8 +25370,9 @@ ${foot}
     ev.preventDefault();
     const inp = document.getElementById('pc-i'), t = inp.value.trim(), files = _PC.pend.slice();
     if (!t && !files.length) return;
+    if (!_PC.acc) { showBanner('Elige a quién le escribes', 'error'); return; }
     inp.value = ''; _PC.pend = []; _pcPend();
-    const fd = new FormData(); fd.append('texto', t); files.forEach(f => fd.append('files', f, f.name || 'imagen.png'));
+    const fd = new FormData(); fd.append('texto', t); fd.append('account', String(_PC.acc)); files.forEach(f => fd.append('files', f, f.name || 'imagen.png'));
     try {
       const r = await apiFetch(`${API}/lm/portal/chat/${_PC.cid}`, { method: 'POST', body: fd });
       const m = await r.json(); if (!r.ok) throw new Error(m.error || 'Error');
@@ -30692,7 +30730,7 @@ ${foot}
     dgEnrichMenu, dgEnrichOpen, dgEnrichClose, dgEnrichApply, dgToggleIssues, dgMoreMenu, dgToggleSelMode,
     dgDupOpen, dgDupClose, dgDupPickSurvivor, dgDupToggleDel, dgDupMergeGroup, dgDupDeleteGroup,
     fmsToggle, fmsFilter, fmsPick,
-    openViews, applyView, saveView, deleteView, clearAllViews, dashTab, dashSet, dashClear, dashGran, wsLogoUpload, wsLogoDelete, dlNotaShare, puPublish, puToggle, puDel, portalLogoOpen, portalLogoClose, lgTrimExisting, lgFrame, lgReset, lgBg, lgSelect, lgUpload, lgDelete, lgSave, pcToggle, pcSend, pcAttach, pcUnpend, portalCreate, portalReset, portalToggle, portalDel, portalSecs, portalAccessOpen, portalAccessClose, reportOpen, reportClose, reportMode, reportActivate, reportSched, reportAdd, reportAddInput, reportRm, reportLang, reportNote, reportPreview, reportSend, portalGen, portalEdit, portalEditSave, portalSec, portalNota, portalChatSend, portalCopy,
+    openViews, applyView, saveView, deleteView, clearAllViews, dashTab, dashSet, dashClear, dashGran, wsLogoUpload, wsLogoDelete, dlNotaShare, puPublish, puToggle, puDel, portalLogoOpen, portalLogoClose, lgTrimExisting, lgFrame, lgReset, lgBg, lgSelect, lgUpload, lgDelete, lgSave, pcToggle, pcPick, pcSend, pcAttach, pcUnpend, portalCreate, portalReset, portalToggle, portalDel, portalSecs, portalAccessOpen, portalAccessClose, reportOpen, reportClose, reportMode, reportActivate, reportSched, reportAdd, reportAddInput, reportRm, reportLang, reportNote, reportPreview, reportSend, portalGen, portalEdit, portalEditSave, portalSec, portalNota, portalChatSend, portalCopy,
     taskSetView, taskSetFilter, calPrev, calNext, calToday,
     lmSetDisposition, seqDoDisposition, cpSetStage,
     seqDoAccepted, seqDoNoLinkedIn, seqDoBounced, seqDoNoWhatsapp, seqDoNoPhone, lmToggleNoLinkedIn, lmToggleNoWhatsapp, lmToggleNoPhone, lmToggleBounced, lmToggleManualEmail, ctToggleBounced,

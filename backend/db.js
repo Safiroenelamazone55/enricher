@@ -1118,6 +1118,10 @@ async function initDb() {
       );
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS portal_msgs_client_idx ON portal_messages (outbound_client_id, id);`);
+    await pool.query(`ALTER TABLE portal_messages ADD COLUMN IF NOT EXISTS account_id INTEGER REFERENCES client_accounts(id) ON DELETE CASCADE`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS portal_msgs_acc_idx ON portal_messages (account_id, id)`);
+    // el historial anterior (conversación compartida de pruebas) queda en la cuenta más antigua del cliente
+    await pool.query(`UPDATE portal_messages m SET account_id=(SELECT MIN(a.id) FROM client_accounts a WHERE a.outbound_client_id=m.outbound_client_id) WHERE m.account_id IS NULL AND EXISTS (SELECT 1 FROM client_accounts a WHERE a.outbound_client_id=m.outbound_client_id)`);
     await pool.query(`
       CREATE TABLE IF NOT EXISTS workspace_brand (
         user_id    INTEGER     PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
