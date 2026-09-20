@@ -12,7 +12,7 @@ const T = {
     link: 'Si el botón no funciona, copia este enlace en tu navegador:',
     codeTitle: 'Código de verificación', codeBody: c => `Usa este código para crear una nueva contraseña del portal de <b>${c}</b>. Vence en 15 minutos.`,
     codeText: 'Tu código de verificación es', codeExp: '(vence en 15 minutos)',
-    foot: 'Mensaje automático, no respondas a este correo.',
+    foot: 'Mensaje automático, no respondas a este correo.', by: 'Portal de seguimiento por',
   },
   en: {
     inviteSubj: c => `You now have access to your portal — ${c}`, resetSubj: c => `Your new portal password — ${c}`, codeSubj: c => `Your verification code — ${c}`,
@@ -24,7 +24,7 @@ const T = {
     link: "If the button doesn't work, copy this link into your browser:",
     codeTitle: 'Verification code', codeBody: c => `Use this code to set a new password for the <b>${c}</b> portal. It expires in 15 minutes.`,
     codeText: 'Your verification code is', codeExp: '(expires in 15 minutes)',
-    foot: 'Automated message, please do not reply.',
+    foot: 'Automated message, please do not reply.', by: 'Tracking portal by',
   },
   de: {
     inviteSubj: c => `Ihr Zugang zum Portal ist bereit — ${c}`, resetSubj: c => `Ihr neues Portal-Passwort — ${c}`, codeSubj: c => `Ihr Bestätigungscode — ${c}`,
@@ -36,7 +36,7 @@ const T = {
     link: 'Falls die Schaltfläche nicht funktioniert, kopieren Sie diesen Link in Ihren Browser:',
     codeTitle: 'Bestätigungscode', codeBody: c => `Mit diesem Code legen Sie ein neues Passwort für das Portal von <b>${c}</b> fest. Er ist 15 Minuten gültig.`,
     codeText: 'Ihr Bestätigungscode lautet', codeExp: '(15 Minuten gültig)',
-    foot: 'Automatische Nachricht, bitte nicht antworten.',
+    foot: 'Automatische Nachricht, bitte nicht antworten.', by: 'Tracking-Portal von',
   },
   pt: {
     inviteSubj: c => `Você já tem acesso ao seu portal — ${c}`, resetSubj: c => `Sua nova senha do portal — ${c}`, codeSubj: c => `Seu código de verificação — ${c}`,
@@ -48,7 +48,7 @@ const T = {
     link: 'Se o botão não funcionar, copie este link no seu navegador:',
     codeTitle: 'Código de verificação', codeBody: c => `Use este código para criar uma nova senha do portal de <b>${c}</b>. Ele expira em 15 minutos.`,
     codeText: 'Seu código de verificação é', codeExp: '(expira em 15 minutos)',
-    foot: 'Mensagem automática, não responda a este e-mail.',
+    foot: 'Mensagem automática, não responda a este e-mail.', by: 'Portal de acompanhamento por',
   },
 };
 const lum = hex => { const n = parseInt(String(hex || '#0B1220').slice(1), 16) || 0; const c = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
@@ -65,7 +65,8 @@ function shell(brand, inner, L, cliente) {
   <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="width:100%;max-width:560px;background:#ffffff;border:1px solid #E1E6EC;font-family:Arial,Helvetica,sans-serif;color:#0F172A">
   <tr><td style="background:${bg};padding:22px 28px">${head}</td></tr>
   <tr><td style="padding:30px 28px 8px">${inner}</td></tr>
-  <tr><td style="padding:18px 28px 26px;border-top:1px solid #EEF1F6;font-size:11.5px;color:#94A3B8;line-height:1.5">${esc(L.foot)}</td></tr>
+  <tr><td style="padding:14px 28px 4px;font-size:11.5px;color:#94A3B8;line-height:1.5">${esc(L.foot)}</td></tr>
+  <tr><td style="background:#0B1220;padding:12px 28px"><table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="font:11px Arial,sans-serif;color:#94A3B8;padding-right:9px;vertical-align:middle">${esc(L.by)}</td><td style="vertical-align:middle">${brand.hasWs ? '<img src="cid:novalogo" alt="Novacentrax" height="15" style="display:block;height:15px;border:0">' : '<span style="font:700 12px Arial,sans-serif;color:#FFFFFF">Novacentrax</span>'}</td></tr></table></td></tr>
   </table></td></tr></table></body></html>`;
 }
 const btn = (url, label, bg) => {
