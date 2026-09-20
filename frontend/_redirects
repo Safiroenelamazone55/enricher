@@ -1,2 +1,2 @@
-# Portal del cliente: /portal/<cliente>/<sección> sirve la misma página
-/portal/*  /portal.html  200
+# Portal del cliente: /portal/<cliente>/<seccion> sirve la misma pagina
+/portal/*  /portal  200

@@ -497,16 +497,14 @@
   function showDrawer() { closeDrawer(); const box = document.createElement('div'); box.id = 'pt-drawer'; root.appendChild(box); box.innerHTML = '<div class="pt-dr-bg" onclick="PT.close()"></div><aside class="pt-dr"><div class="pt-dr__b"><div class="pt-empty">Cargando…</div></div></aside>'; }
   // Abre desde un contacto: vista Empresa si tiene empresa, para ver todo el recorrido
   async function openContact(id) {
-    setUrl('/portal/' + S.me.slug + '/contactos/' + id);
-    showDrawer(); S.dr = { tab: 'contacto', contactId: id, hasContact: true };
+    showDrawer(); S.dr = { tab: 'contacto', contactId: id, hasContact: true }; setUrl('/portal/' + S.me.slug + '/contactos/' + id);
     await drLoadContact(id); if (!S.dr || S.dr.contactId !== id) return;
     if (S.dr.ct && S.dr.ct.contact.company_id) { S.dr.companyId = S.dr.ct.contact.company_id; S.dr.tab = 'empresa'; drPaint(); await drLoadCompany(S.dr.companyId); }
     if (!S.dr.ct && !S.dr.co) { const b = document.querySelector('#pt-drawer .pt-dr__b'); if (b) b.innerHTML = `<div class="pt-empty">${esc(S.dr.err || 'Error')}</div>`; return; }
     drPaint();
   }
   async function openCompany(id) {
-    setUrl('/portal/' + S.me.slug + '/empresas/' + id);
-    showDrawer(); S.dr = { tab: 'empresa', companyId: id, hasContact: false };
+    showDrawer(); S.dr = { tab: 'empresa', companyId: id, hasContact: false }; setUrl('/portal/' + S.me.slug + '/empresas/' + id);
     await drLoadCompany(id); if (!S.dr || S.dr.companyId !== id) return;
     if (!S.dr.co) { const b = document.querySelector('#pt-drawer .pt-dr__b'); if (b) b.innerHTML = `<div class="pt-empty">${esc(S.dr.err || 'Error')}</div>`; return; }
     drPaint();
