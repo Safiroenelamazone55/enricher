@@ -26273,7 +26273,7 @@ ${foot}
       const res = await apiFetch(`${API}/lm/contacts/${cid}/refer`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ disposition: disp, nombre: g('ref-nombre'), apellido: g('ref-apellido'), cargo: g('ref-cargo'),
-          email: g('ref-email'), telefono: g('ref-tel'), linkedin: g('ref-li'), nota: g('ref-nota') }),
+          email: g('ref-email'), telefono: g('ref-tel'), linkedin: g('ref-li'), nota: g('ref-nota'), auto_enroll: true }),
       });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || 'Error');
@@ -26284,7 +26284,7 @@ ${foot}
       const m = document.getElementById('lm-ref-modal');
       if (m) m.innerHTML = `<div class="fin-pi-box" style="max-width:400px">
         <div class="fin-pi-box__hd"><h3>Referido creado o vinculado</h3><button class="fin-pi-x" onclick="document.getElementById('lm-ref-modal').remove()">✕</button></div>
-        <div class="fin-pi-form"><div class="fin-pi-full seq-drip-hint">✓ <b>${esc(nom)}</b> queda en la misma empresa, en etapa <b>Nuevo</b>, sin enrolar — decide tú el siguiente paso.</div></div>
+        <div class="fin-pi-form"><div class="fin-pi-full seq-drip-hint">✓ <b>${esc(nom)}</b> queda en la misma empresa, en etapa <b>Nuevo</b>${d.enrolado > 0 ? ` y <b>entró a ${d.enrolado === 1 ? 'la secuencia' : d.enrolado + ' secuencias'} desde el paso 1</b> (igual que su compañero)` : ', <b>sin enrolar</b> — decide tú el siguiente paso'}.</div></div>
         <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns" style="flex-wrap:wrap;justify-content:flex-end">
           ${newId ? `<button class="btn btn--ghost btn--sm" onclick="document.getElementById('lm-ref-modal').remove();LeadManagerModule.openContactPage(${newId})">Ver prospecto</button>` : ''}
           ${newId ? `<button class="btn btn--ghost btn--sm" onclick="document.getElementById('lm-ref-modal').remove();LeadManagerModule.bulkAddOpen('campaign',[${newId}])">＋ Campaña</button>` : ''}

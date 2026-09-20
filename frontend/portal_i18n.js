@@ -84,6 +84,7 @@
     ['Historial del contacto', 'Contact history', 'Verlauf des Kontakts', 'Histórico do contato'],
     ['Se agregó a', 'Added', 'Hinzugefügt:', 'Adicionado:'],
     ['Reunión con', 'Meeting with', 'Meeting mit', 'Reunião com'],
+    ['Derivado por', 'Referred by', 'Empfohlen von', 'Indicado por'],
     ['Empresa', 'Company', 'Unternehmen', 'Empresa'], ['Contacto', 'Contact', 'Kontakt', 'Contato'],
     // aviso de contraseña
     ['Protege tu cuenta', 'Protect your account', 'Schützen Sie Ihr Konto', 'Proteja sua conta'],

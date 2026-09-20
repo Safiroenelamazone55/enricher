@@ -435,7 +435,7 @@
     const who = withWho && e.contact ? `<button class="pt-who" onclick="PT.drTab('contacto',${e.contact_id})">${esc(e.contact)}</button>` : '';
     let ic = ['dots', '#94A3B8'], body = '';
     if (e.kind === 'touch') { ic = EV_ICO[e.canal] || EV_ICO.task; body = `<b>${e.label}</b>${e.first ? ' <span class="pt-badge pt-b--p">Primer contacto</span>' : ''} ${who}`; }
-    else if (e.kind === 'added') { ic = ['users', '#0F172A']; body = `<b>Se agregó a</b> ${withWho ? `<button class="pt-who" onclick="PT.drTab('contacto',${e.contact_id})">${esc(e.contact)}</button>` : ''}${e.cargo ? ' <span class="pt-item__s" style="display:inline">· ' + esc(e.cargo) + '</span>' : ''}${e.seq ? `<div class="pt-item__s">${esc(e.seq)}</div>` : ''}`; }
+    else if (e.kind === 'added') { ic = ['users', '#0F172A']; body = `<b>Se agregó a</b> ${withWho ? `<button class="pt-who" onclick="PT.drTab('contacto',${e.contact_id})">${esc(e.contact)}</button>` : ''}${e.cargo ? ' <span class="pt-item__s" style="display:inline">· ' + esc(e.cargo) + '</span>' : ''}${e.por ? `<div class="pt-item__s">Derivado por <button class="pt-who" onclick="PT.drTab('contacto',${e.por_id})">${esc(e.por)}</button></div>` : ''}${e.seq ? `<div class="pt-item__s">${esc(e.seq)}</div>` : ''}`; }
     else if (e.kind === 'reply') { ic = ['reply', '#22A06B']; body = `<b>Respondió</b> ${who}${e.text ? `<div class="pt-item__q">${esc(e.text)}</div>` : ''}`; }
     else if (e.kind === 'status') { ic = ['check', '#2563EB']; body = `<b>Estado</b> <span class="pt-badge pt-b--b">${esc(e.label)}</span> ${who}`; }
     else if (e.kind === 'booked') { ic = ['cal', '#F59E0B']; body = `<b>Reunión agendada</b> <span>Para el ${dlong(e.date)}</span> ${who}`; }
