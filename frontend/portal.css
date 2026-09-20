@@ -211,3 +211,11 @@ button{cursor:pointer}
 @media(max-width:1300px){.dash-row--b{grid-template-columns:repeat(2,minmax(0,1fr))}.dash-row--b .cp-card:nth-child(3){grid-column:1/-1}}
 @media(max-width:1100px){.dash-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}.dash-row--a{grid-template-columns:1fr}}
 @media(max-width:900px){.dash-row--b{grid-template-columns:1fr}}
+
+.pt-chat__p{display:none;flex-wrap:wrap;gap:6px;padding:8px 10px;border-top:1px solid #E1E6EC;background:#fff}
+.pt-chip{background:#EEF2FF;color:#1E3A8A;font-size:12px;padding:3px 8px;display:inline-flex;gap:6px;align-items:center}
+.pt-chip button{border:0;background:none;color:#64748B}
+.pt-chat__a{background:#fff!important;color:#0F172A!important;font-size:17px;width:44px!important;border-right:1px solid #EEF1F4!important}
+.pt-att{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+.pt-att__img{max-width:100%;max-height:200px;display:block;border:1px solid rgba(0,0,0,.1)}
+.pt-att__f{color:inherit;text-decoration:underline;font-size:12.5px;word-break:break-all}

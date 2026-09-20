@@ -8,7 +8,8 @@
   const MES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 
   async function api(path, opt) {
-    const r = await fetch(API + path, Object.assign({ credentials: 'include', headers: { 'Content-Type': 'application/json' } }, opt || {}));
+    const o = opt || {};
+    const r = await fetch(API + path, Object.assign({ credentials: 'include', headers: o.form ? {} : { 'Content-Type': 'application/json' } }, o));
     let j = null; try { j = await r.json(); } catch (e) {}
     if (r.status === 401 && S.me) { S.me = null; stop(); renderLogin(); }
     if (!r.ok) throw Object.assign(new Error((j && j.error) || 'Error'), { status: r.status });
@@ -120,7 +121,7 @@
       <div class="pt-nav">${tabs().map(t => `<button data-t="${t[0]}" class="${S.tab === t[0] ? 'on' : ''}">${t[1]}</button>`).join('')}</div>
       <div class="pt-main" id="pt-body"></div>
       ${S.me.sections.chat ? `<button class="pt-chat-btn" id="pt-cb">${ico('chat', 18)} Chat rápido <span class="n" id="pt-cn" style="display:none"></span></button>
-      <div class="pt-chat" id="pt-cw"><div class="pt-chat__h"><span>Chat con tu equipo</span><button id="pt-cc">✕</button></div><div class="pt-chat__b" id="pt-cm"></div><form class="pt-chat__f" id="pt-cf"><input id="pt-ci" placeholder="Escribe un mensaje…" maxlength="2000" autocomplete="off"><button>Enviar</button></form></div>` : ''}`;
+      <div class="pt-chat" id="pt-cw"><div class="pt-chat__h"><span>Chat con tu equipo</span><button id="pt-cc">✕</button></div><div class="pt-chat__b" id="pt-cm"></div><div class="pt-chat__p" id="pt-cpend"></div><form class="pt-chat__f" id="pt-cf"><button type="button" class="pt-chat__a" id="pt-ca" title="Adjuntar foto o archivo">📎</button><input id="pt-ci" placeholder="Escribe un mensaje…" maxlength="2000" autocomplete="off"><button>Enviar</button></form><input type="file" id="pt-cfile" multiple hidden></div>` : ''}`;
     document.querySelectorAll('.pt-nav button').forEach(b => b.onclick = () => { S.tab = b.dataset.t; S.co = 0; S.q = ''; renderApp(); load(true); });
     const mn = document.getElementById('pt-mn');
     document.getElementById('pt-um').onclick = e => { e.stopPropagation(); mn.classList.toggle('on'); };
@@ -131,6 +132,13 @@
       document.getElementById('pt-cb').onclick = () => { S.chatOpen = true; S.seenChat = S.chatLast; S.unread = 0; drawChat(); };
       document.getElementById('pt-cc').onclick = () => { S.chatOpen = false; drawChat(); };
       document.getElementById('pt-cf').onsubmit = sendChat;
+      const fi = document.getElementById('pt-cfile');
+      document.getElementById('pt-ca').onclick = () => fi.click();
+      fi.onchange = () => { addFiles(fi.files); fi.value = ''; };
+      const cw = document.getElementById('pt-cw');
+      document.getElementById('pt-ci').addEventListener('paste', e => { const fs2 = [...(e.clipboardData ? e.clipboardData.files : [])]; if (fs2.length) { e.preventDefault(); addFiles(fs2); } });
+      cw.addEventListener('dragover', e => { e.preventDefault(); });
+      cw.addEventListener('drop', e => { e.preventDefault(); if (e.dataTransfer && e.dataTransfer.files.length) addFiles(e.dataTransfer.files); });
       drawChat();
     }
     paint();
@@ -307,7 +315,7 @@
     w.classList.toggle('on', S.chatOpen); b.style.display = S.chatOpen ? 'none' : 'flex';
     const n = document.getElementById('pt-cn'); if (n) { n.style.display = S.unread && !S.chatOpen ? '' : 'none'; n.textContent = S.unread; }
     const m = document.getElementById('pt-cm');
-    if (m) { const atEnd = m.scrollHeight - m.scrollTop - m.clientHeight < 60; m.innerHTML = S.chat.length ? S.chat.map(x => `<div class="pt-msg pt-msg--${x.autor === 'cliente' ? 'c' : 'e'}">${esc(x.texto)}<small>${x.autor === 'cliente' ? 'Tú' : esc(x.autor_nombre || 'Equipo')} · ${new Date(x.created_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</small></div>`).join('') : '<div class="pt-empty">Escríbenos aquí cualquier duda. Te respondemos lo antes posible.</div>'; if (atEnd || !S.chatDrawn) m.scrollTop = m.scrollHeight; S.chatDrawn = true; }
+    if (m) { const atEnd = m.scrollHeight - m.scrollTop - m.clientHeight < 60; m.innerHTML = S.chat.length ? S.chat.map(x => `<div class="pt-msg pt-msg--${x.autor === 'cliente' ? 'c' : 'e'}">${x.texto ? esc(x.texto) : ''}${attHtml(x)}<small>${x.autor === 'cliente' ? 'Tú' : esc(x.autor_nombre || 'Equipo')} · ${new Date(x.created_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</small></div>`).join('') : '<div class="pt-empty">Escríbenos aquí cualquier duda. Te respondemos lo antes posible.</div>'; if (atEnd || !S.chatDrawn) m.scrollTop = m.scrollHeight; S.chatDrawn = true; }
     if (S.chatOpen) { const i = document.getElementById('pt-ci'); if (i && document.activeElement !== i) i.focus(); }
   }
   async function pollChat() {
@@ -320,12 +328,37 @@
       drawChat();
     } catch (e) {}
   }
+  // ── adjuntos ──
+  S.pend = [];
+  const fmtSize = n => n > 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
+  function attHtml(x) {
+    if (!x.files || !x.files.length) return '';
+    return '<div class="pt-att">' + x.files.map(f => /^image\/(png|jpe?g|gif|webp)$/i.test(f.mime)
+      ? `<a href="${API}/portal/file/${f.id}" target="_blank" rel="noopener"><img class="pt-att__img" src="${API}/portal/file/${f.id}" alt="${esc(f.name)}" loading="lazy"></a>`
+      : `<a class="pt-att__f" href="${API}/portal/file/${f.id}?dl=1" target="_blank" rel="noopener">📎 ${esc(f.name)} <small>${fmtSize(f.size)}</small></a>`).join('') + '</div>';
+  }
+  function drawPending() {
+    const el = document.getElementById('pt-cpend'); if (!el) return;
+    el.style.display = S.pend.length ? 'flex' : 'none';
+    el.innerHTML = S.pend.map((f, i) => `<span class="pt-chip">${esc(f.name || 'imagen')} <small>${fmtSize(f.size)}</small> <button type="button" onclick="PT.unpend(${i})">✕</button></span>`).join('');
+  }
+  function addFiles(list) {
+    for (const f of list) {
+      if (S.pend.length >= 5) { alert('Máximo 5 archivos por mensaje'); break; }
+      if (f.size > 15 * 1048576) { alert((f.name || 'Archivo') + ' supera 15 MB'); continue; }
+      S.pend.push(f);
+    }
+    drawPending();
+  }
+  window.PT.unpend = i => { S.pend.splice(i, 1); drawPending(); };
   async function sendChat(e) {
     e.preventDefault();
-    const i = document.getElementById('pt-ci'), t = i.value.trim(); if (!t) return;
-    i.value = '';
-    try { const m = await api('/portal/chat', { method: 'POST', body: JSON.stringify({ texto: t }) }); S.chat.push(m); S.chatLast = m.id; S.seenChat = m.id; drawChat(); const b = document.getElementById('pt-cm'); if (b) b.scrollTop = b.scrollHeight; }
-    catch (er) { i.value = t; alert(er.message); }
+    const inp = document.getElementById('pt-ci'), t = inp.value.trim(), files = S.pend.slice();
+    if (!t && !files.length) return;
+    inp.value = ''; S.pend = []; drawPending();
+    const fd = new FormData(); fd.append('texto', t); files.forEach(f => fd.append('files', f, f.name || 'imagen.png'));
+    try { const m = await api('/portal/chat', { method: 'POST', body: fd, form: true }); S.chat.push(m); S.chatLast = m.id; S.seenChat = m.id; drawChat(); const b = document.getElementById('pt-cm'); if (b) b.scrollTop = b.scrollHeight; }
+    catch (er) { inp.value = t; S.pend = files; drawPending(); alert(er.message); }
   }
 
   boot();

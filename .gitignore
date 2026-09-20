@@ -27,3 +27,4 @@ _upload_only.py
 # (incidente 2026-08-24: __pycache__/deploy_backend.*.pyc quedó trackeado).
 __pycache__/
 *.pyc
+portal_media/
