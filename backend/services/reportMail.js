@@ -86,7 +86,8 @@ function buildReport(lang, d) {
   const accent = lum(bg) > 0.6 ? '#2563EB' : bg;
   const k = d.kpi || {};
   const sig = (d.positives || []).map(p => p.empresa || p.nombre).filter(Boolean).slice(0, 3);
-  const bold = t => String(t).split(d.rango).map(part => esc(part).replace(/(\d+)/g, '<b>$1</b>')).join(esc(d.rango));
+  // negrita en las cifras: se resalta antes de escapar, para no romper entidades como &#39;
+  const bold = t => String(t).split(d.rango).map(part => part.split(/(\d+)/).map((x, n) => n % 2 ? '<b>' + esc(x) + '</b>' : esc(x)).join('')).join(esc(d.rango));
   const P = t => t ? `<p style="margin:0 0 16px;${F}font-size:15.5px;line-height:1.7;color:#1E293B">${bold(t)}</p>` : '';
   const note = d.note ? `<p style="margin:0 0 14px;${F}font-size:15px;line-height:1.65;color:#1E293B;white-space:pre-line">${esc(d.note)}</p>` : '';
   const logo = brand.hasLogo ? `<img src="cid:brandlogo" alt="${esc(d.cliente)}" height="30" style="display:block;height:30px;max-width:180px;border:0;margin:0 0 22px">` : '';
