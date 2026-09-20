@@ -178,7 +178,7 @@
   function run(root) { if (busy) return; busy = true; try { walk(root); } finally { busy = false; } }
   function observe(root) {
     if (obs) obs.disconnect();
-    obs = new MutationObserver(() => { if (busy || pend) return; pend = requestAnimationFrame(() => { pend = 0; if (obs) obs.disconnect(); run(root); obs.observe(root, { childList: true, subtree: true }); }); });
+    obs = new MutationObserver(() => { if (busy || pend) return; pend = setTimeout(() => { pend = 0; if (obs) obs.disconnect(); run(root); obs.observe(root, { childList: true, subtree: true }); }, 0); });
     run(root); obs.observe(root, { childList: true, subtree: true });
   }
   function set(l, cb) { if (!LANGS[l]) return; lang = l; try { localStorage.setItem('pt_lang', l); } catch (e) {} document.documentElement.lang = l; if (cb) cb(); }
