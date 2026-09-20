@@ -292,7 +292,8 @@ button{cursor:pointer}
 .pt-click:hover{background:#F8FAFC}
 .pt-two--cal{grid-template-columns:2fr 1fr}
 .pt-cal__h{display:flex;align-items:center;gap:8px;margin-bottom:12px}
-.pt-cal__h b{flex:1;text-align:center;text-transform:capitalize;font-size:15px}
+.pt-cal__h b{flex:1;text-align:center;font-size:15px}
+.pt-cal__h b::first-letter{text-transform:uppercase}
 .pt-cal__w{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:4px}
 .pt-cal__w span{font-size:11px;font-weight:600;color:#94A3B8;text-align:center;text-transform:uppercase}
 .pt-cal__g{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
