@@ -16885,7 +16885,7 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .dl-share.on{background:#DCFCE7;border-color:#86EFAC;color:#15803D}
 
 /* ── Modal "Acceso al portal": compacto, todo visible sin desplazamiento ── */
-#portal-access-modal .fin-pi-box{width:min(1120px,96vw);max-width:none;overflow:hidden}
+#portal-access-modal .fin-pi-box{width:min(960px,96vw);max-width:none;overflow:hidden}
 #portal-access-modal *{box-sizing:border-box}
 #portal-access-modal .dle-hd{padding:8px 14px}
 #portal-access-modal .dle-hd__t{font-size:14px}
