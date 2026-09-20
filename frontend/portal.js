@@ -172,7 +172,7 @@
       <div style="text-align:center;margin-top:12px"><button class="pt-link" id="pt-pw3" style="color:#64748B;font-weight:500">Omitir y seguir</button></div></div>`;
     document.body.appendChild(m);
     const close = () => { m.remove(); };
-    const skip = () => { try { sessionStorage.setItem('pt_pw_skip', '1'); } catch (e) {} close(); };
+    const skip = async () => { try { sessionStorage.setItem('pt_pw_skip', '1'); } catch (e) {} try { await api('/portal/password/snooze', { method: 'POST' }); S.me.pw_prompt = false; } catch (e) {} close(); };
     document.getElementById('pt-pwx').onclick = skip; document.getElementById('pt-pw3').onclick = skip;
     document.getElementById('pt-pw1').onclick = () => { close(); renderChangePw(false); };
     document.getElementById('pt-pw2').onclick = async () => { try { await api('/portal/password/snooze', { method: 'POST' }); S.me.pw_prompt = false; } catch (e) {} close(); };
