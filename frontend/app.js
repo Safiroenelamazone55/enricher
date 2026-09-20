@@ -25369,8 +25369,9 @@ ${foot}
       }, 5000);
     } catch (e) { box.innerHTML = `<div class="cp-empty2" style="padding:20px">No se pudo cargar el portal: ${esc(e.message)}</div>`; }
   }
+  function _portalUrl(cid) { const c = _clients.find(x => x.id === cid); const sl = String((c && c.nombre) || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''); return 'https://app.novacentrax.com/portal' + (sl ? '/' + sl : ''); }
   function _portalHtml(cid, a, h) {
-    const url = 'https://app.novacentrax.com/portal.html';
+    const url = _portalUrl(cid);
     const accs = (a.accounts || []).map(x => `<tr>
         <td><b>${esc(x.email)}</b><div style="font-size:11.5px;color:#64748B">${esc(x.nombre || '')}</div></td>
         <td>${x.activo ? '<span class="lm-vb" style="background:#DCFCE7;color:#15803D">Activo</span>' : '<span class="lm-vb" style="background:#EEF1F5;color:#64748B">Desactivado</span>'}${x.must_change ? ' <span class="lm-vb" style="background:#FEF3C7;color:#A16207">Pendiente de cambiar clave</span>' : ''}</td>
@@ -25429,7 +25430,7 @@ ${foot}
   function _paGen() { const c = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789', b = new Uint32Array(12); crypto.getRandomValues(b); return Array.from(b).map(x => c[x % c.length]).join(''); }
   function portalGen() { const i = document.getElementById('portal-pw'); if (i) { i.value = _paGen(); i.type = 'text'; } }
   function _portalAccessCard(cid, a) {
-    const url = 'https://app.novacentrax.com/portal.html';
+    const url = _portalUrl(cid);
     const rows = (a.accounts || []).map(x => `<tr>
         <td><b>${esc(x.email)}</b><div style="font-size:11.5px;color:#64748B">${esc(x.nombre || '')}</div></td>
         <td>${x.activo ? '<span class="lm-vb" style="background:#DCFCE7;color:#15803D">Activo</span>' : '<span class="lm-vb" style="background:#EEF1F5;color:#64748B">Desactivado</span>'}${x.must_change ? ' <span class="lm-vb" style="background:#FEF3C7;color:#A16207" title="Aún no ha creado su propia contraseña">Clave temporal</span>' : ''}</td>
@@ -25438,7 +25439,7 @@ ${foot}
         <tr id="portal-ed-${x.id}" style="display:none"><td colspan="4" style="background:#F8FAFC"><div style="display:flex;gap:8px;flex-wrap:wrap;padding:6px 2px;align-items:center"><input class="lm-inp" id="portal-ed-em-${x.id}" type="email" value="${esc(x.email)}" style="width:250px"><input class="lm-inp" id="portal-ed-nm-${x.id}" value="${esc(x.nombre || '')}" placeholder="nombre" style="width:190px"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.portalEditSave(${x.id})">Guardar</button></div></td></tr>
         <tr id="portal-sec-${x.id}" style="display:none"><td colspan="4" style="background:#F8FAFC"><div style="display:flex;flex-wrap:wrap;gap:6px 18px;padding:6px 2px">${a.sections.map(k => `<label style="font-size:12.5px;display:flex;gap:6px;align-items:center"><input type="checkbox" data-k="${k}" ${x.sections[k] ? 'checked' : ''} onchange="LeadManagerModule.portalSec(${x.id},this)"> ${esc(_PORTAL_SEC[k] || k)}</label>`).join('')}</div></td></tr>`).join('');
     return `<div class="cp-card" style="margin-bottom:12px"><div class="cp-card__t">Acceso del cliente</div>
-        <div style="font-size:12.5px;color:#64748B;margin-bottom:10px">Entra con correo y contraseña en <a class="lm-link" href="${url}" target="_blank" rel="noopener">${url}</a> <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.portalCopy('${url}')">Copiar enlace</button><br>Al primer ingreso crea su propia contraseña, y puede recuperarla con un código que le llega al correo.</div>
+        <div style="font-size:12.5px;color:#64748B;margin-bottom:10px">Entra con correo y contraseña en <a class="lm-link" href="${url}" target="_blank" rel="noopener">${url}</a> <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.portalCopy('${url}')">Copiar enlace</button><br>Puede crear su propia contraseña cuando quiera (se lo recordamos a las 2 semanas), y recuperarla con un código que le llega al correo.</div>
         <div id="portal-cred"></div>
         ${rows ? `<table class="clients-table" style="width:100%"><thead><tr><th>Usuario</th><th>Estado</th><th>Último ingreso</th><th></th></tr></thead><tbody>${rows}</tbody></table>
           <label style="display:flex;gap:6px;align-items:center;font-size:12.5px;margin-top:8px;color:#475569"><input type="checkbox" id="portal-rs-send"> Al generar una nueva clave, enviarla también por correo</label>` : '<div class="cp-empty2" style="padding:10px">Aún no hay usuarios para este cliente.</div>'}
