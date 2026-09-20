@@ -56,7 +56,7 @@ async function highlights(pool, clientId, { withNotes = true } = {}) {
                   ${base}`, [clientId]),
   ]);
   const snip = raw => {
-    let t = String(raw || '').replace(/^Respondió a\s*"[^"]*"\s*[—-]\s*/i, '').replace(/\s+/g, ' ').trim();
+    let t = String(raw || '').replace(/^Respondió a\s*"[^"]*"\s*[—-]\s*/i, '').split(/_{3,}|-{3,}/)[0].replace(/\s+/g, ' ').trim();
     return t.length > 320 ? t.slice(0, 320) + '…' : t;
   };
   return {
