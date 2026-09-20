@@ -1,0 +1,2 @@
+# Portal del cliente: /portal/<cliente>/<sección> sirve la misma página
+/portal/*  /portal.html  200

@@ -54,7 +54,7 @@
   function renderLogin(msg) {
     S.redraw = () => renderLogin(msg);
     root.innerHTML = `<div class="pt-login"><form class="pt-login__card" id="pt-lf">${langBtn('pt-lang--card')}
-      <div class="pt-brand"><img src="logo-nova.svg" alt="">Nova</div>
+      <div class="pt-brand"><img src="/logo-nova.svg" alt="">Nova</div>
       <h1>Portal del cliente</h1><p class="sub">Ingresa con el correo y la contraseña que te asignamos.</p>
       ${msg ? `<div class="${/actualizada/.test(msg) ? 'pt-ok' : 'pt-err'}">${esc(msg)}</div>` : ''}
       <label class="pt-f"><span>Correo electrónico</span><input id="pt-em" type="email" autocomplete="username" required></label>
@@ -77,7 +77,7 @@
   function renderForgot(step, email, msg, ok) {
     S.redraw = () => renderForgot(step, email, msg, ok);
     root.innerHTML = `<div class="pt-login"><form class="pt-login__card" id="pt-ff">${langBtn('pt-lang--card')}
-      <div class="pt-brand"><img src="logo-nova.svg" alt="">Nova</div>
+      <div class="pt-brand"><img src="/logo-nova.svg" alt="">Nova</div>
       <h1>Recuperar contraseña</h1><p class="sub">${step === 1 ? 'Te enviaremos un código de verificación a tu correo.' : 'Escribe el código que te llegó y elige una nueva contraseña (mínimo 10 caracteres).'}</p>
       ${msg ? `<div class="${ok ? 'pt-ok' : 'pt-err'}">${esc(msg)}</div>` : ''}
       <label class="pt-f"><span>Correo electrónico</span><input id="pt-fe" type="email" value="${esc(email || '')}" ${step === 2 ? 'readonly' : ''} required></label>
@@ -100,7 +100,7 @@
   function renderChangePw(first, msg, ok) {
     S.redraw = () => renderChangePw(first, msg, ok);
     root.innerHTML = `<div class="pt-login"><form class="pt-login__card" id="pt-pf">${langBtn('pt-lang--card')}
-      <div class="pt-brand"><img src="logo-nova.svg" alt="">Nova</div>
+      <div class="pt-brand"><img src="/logo-nova.svg" alt="">Nova</div>
       <h1>${first ? 'Crea tu contraseña' : 'Cambiar contraseña'}</h1><p class="sub">${first ? 'Por seguridad, elige una contraseña propia antes de continuar.' : 'Mínimo 10 caracteres.'}</p>
       ${msg ? `<div class="${ok ? 'pt-ok' : 'pt-err'}">${esc(msg)}</div>` : ''}
       <label class="pt-f"><span>Contraseña actual</span><input id="pt-p0" type="password" autocomplete="current-password" required></label>
@@ -119,9 +119,26 @@
   }
 
   // ── app ──
+  // ── URLs por cliente y sección: /portal/<cliente>/<sección>[/<id>] ──
+  const SEC_URL = { inicio: 'resumen', reuniones: 'reuniones', empresas: 'empresas', contactos: 'contactos', secuencias: 'secuencias', actividad: 'actividad' };
+  const URL_SEC = Object.fromEntries(Object.entries(SEC_URL).map(([k, v]) => [v, k]));
+  function parseUrl() { const m = location.pathname.replace(/\/+$/, '').match(/^\/portal(?:\/([^/]+))?(?:\/([^/]+))?(?:\/([^/]+))?$/); return m ? { slug: m[1] || '', sec: m[2] || '', id: parseInt(m[3]) || 0 } : null; }
+  const tabUrl = tab => '/portal/' + S.me.slug + (tab === 'inicio' ? '' : '/' + SEC_URL[tab]);
+  function setUrl(path, replace) { if (!S.me || S.noPush || location.pathname === path) return; try { history[replace ? 'replaceState' : 'pushState'](null, '', path); } catch (e) {} }
+  window.addEventListener('popstate', () => {
+    if (!S.me) return; const u = parseUrl(); if (!u) return;
+    const t = u.sec ? URL_SEC[u.sec] : 'inicio'; if (!t || !tabs().some(x => x[0] === t)) return;
+    S.noPush = true;
+    try { if (t !== S.tab) { S.tab = t; S.co = 0; S.q = ''; renderApp(); load(true); } if (u.id && (t === 'empresas' || t === 'contactos')) { t === 'empresas' ? openCompany(u.id) : openContact(u.id); } else closeDrawer(); }
+    finally { S.noPush = false; }
+  });
   async function boot() {
     try { S.me = await api('/portal/me'); } catch (e) { return renderLogin(); }
+    const u = parseUrl(); let openId = 0;
+    if (u && u.sec && URL_SEC[u.sec] && tabs().some(x => x[0] === URL_SEC[u.sec])) { S.tab = URL_SEC[u.sec]; if (u.id && (S.tab === 'empresas' || S.tab === 'contactos')) openId = u.id; }
+    setUrl(tabUrl(S.tab) + (openId ? '/' + openId : ''), true);
     renderApp(); start();
+    if (openId) { if (S.tab === 'empresas') openCompany(openId); else openContact(openId); }
     if (S.me.pw_prompt && !sessionStorage.getItem('pt_pw_skip')) showPwReminder();
   }
   function tabs() {
@@ -149,6 +166,7 @@
   }
   function renderApp() {
     S.redraw = renderApp;
+    setUrl(tabUrl(S.tab));
     stopCharts();
     const br = S.me.branding || {}, hbg = br.header_bg || '#0B1220';
     const lum = (hex => { const n = parseInt(hex.slice(1), 16); const c = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; })(/^#[0-9a-fA-F]{6}$/.test(hbg) ? hbg : '#0B1220');
@@ -157,7 +175,7 @@
     const clientMark = br.has && br.has[br.logo_variant]
       ? `<span class="pt-top__sep"></span><div class="pt-lgbox" title="${esc(S.me.cliente)}"><img src="${API}/portal/branding/logo?v=${br.v || 0}" alt="${esc(S.me.cliente)}" style="transform:translate(${fr.x}%,${fr.y}%) scale(${fr.s})"></div>`
       : `<span class="pt-top__cl">${esc(S.me.cliente)}</span>`;
-    const brandMark = br.ws && br.ws.has ? `<div class="pt-brand pt-brand--logo"><img src="${API}/portal/branding/workspace-logo?v=${br.ws.v || 0}" alt="" style="filter:${lum > 0.45 ? 'brightness(0)' : 'none'}"></div>` : '<div class="pt-brand"><img src="logo-nova.svg" alt="">Nova</div>';
+    const brandMark = br.ws && br.ws.has ? `<div class="pt-brand pt-brand--logo"><img src="${API}/portal/branding/workspace-logo?v=${br.ws.v || 0}" alt="" style="filter:${lum > 0.45 ? 'brightness(0)' : 'none'}"></div>` : '<div class="pt-brand"><img src="/logo-nova.svg" alt="">Nova</div>';
     root.innerHTML = `<div class="pt-top" style="background:${hbg};color:${hfg}">${brandMark}${clientMark}
       <span class="pt-live"><i></i><span id="pt-upd">En vivo</span></span>${langBtn()}
       <div class="pt-user"><button id="pt-um">${esc(S.me.nombre || S.me.email)} ▾</button><div class="pt-menu" id="pt-mn"><div class="em">${esc(S.me.email)}</div><button id="pt-cp">Cambiar contraseña</button><button id="pt-lo">Cerrar sesión</button></div></div></div>
@@ -479,6 +497,7 @@
   function showDrawer() { closeDrawer(); const box = document.createElement('div'); box.id = 'pt-drawer'; root.appendChild(box); box.innerHTML = '<div class="pt-dr-bg" onclick="PT.close()"></div><aside class="pt-dr"><div class="pt-dr__b"><div class="pt-empty">Cargando…</div></div></aside>'; }
   // Abre desde un contacto: vista Empresa si tiene empresa, para ver todo el recorrido
   async function openContact(id) {
+    setUrl('/portal/' + S.me.slug + '/contactos/' + id);
     showDrawer(); S.dr = { tab: 'contacto', contactId: id, hasContact: true };
     await drLoadContact(id); if (!S.dr || S.dr.contactId !== id) return;
     if (S.dr.ct && S.dr.ct.contact.company_id) { S.dr.companyId = S.dr.ct.contact.company_id; S.dr.tab = 'empresa'; drPaint(); await drLoadCompany(S.dr.companyId); }
@@ -486,6 +505,7 @@
     drPaint();
   }
   async function openCompany(id) {
+    setUrl('/portal/' + S.me.slug + '/empresas/' + id);
     showDrawer(); S.dr = { tab: 'empresa', companyId: id, hasContact: false };
     await drLoadCompany(id); if (!S.dr || S.dr.companyId !== id) return;
     if (!S.dr.co) { const b = document.querySelector('#pt-drawer .pt-dr__b'); if (b) b.innerHTML = `<div class="pt-empty">${esc(S.dr.err || 'Error')}</div>`; return; }
@@ -497,7 +517,7 @@
     S.dr.tab = tab; if (tab === 'contacto') S.dr.hasContact = true; drPaint();
     const b = document.querySelector('#pt-drawer .pt-dr__b'); if (b) b.scrollTop = 0;
   }
-  function closeDrawer() { const b = document.getElementById('pt-drawer'); if (b) b.remove(); S.dr = null; }
+  function closeDrawer() { const b = document.getElementById('pt-drawer'); if (b) b.remove(); S.dr = null; if (S.me) setUrl(tabUrl(S.tab), true); }
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
 
 
