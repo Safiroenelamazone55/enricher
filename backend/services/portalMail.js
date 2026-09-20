@@ -100,4 +100,4 @@ function build(kind, lang, d) {
   return { subject: reset ? L.resetSubj(d.cliente) : L.inviteSubj(d.cliente), html: shell(brand, inner, L, d.cliente),
     text: `${d.cliente}\n${L.kUser}: ${d.to}\n${L.kPass}: ${d.pw}\n${d.url}\n${L.tip}` };
 }
-module.exports = { build, LANGS, lum };
+module.exports = { build, LANGS, lum, esc, shell, btn, T, okHex };
