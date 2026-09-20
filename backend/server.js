@@ -3325,6 +3325,13 @@ app.put('/api/outbound-clients/:id', requireAuth, async (req, res) => {
   if (!b.nombre?.trim()) return res.status(400).json({ error: 'El nombre es requerido' });
   const estado = OBC_ESTADOS.includes(b.estado) ? b.estado : 'preparacion';
   try {
+    // si cambia el nombre, el enlace anterior del portal (slug) se conserva como alias
+    const _slug = n => String(n || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    const prevRow = (await pool.query(`SELECT nombre, slug_alias FROM outbound_clients WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId])).rows[0];
+    if (prevRow && _slug(prevRow.nombre) && _slug(prevRow.nombre) !== _slug(b.nombre)) {
+      const set = new Set(String(prevRow.slug_alias || '').split(',').filter(Boolean)); set.add(_slug(prevRow.nombre)); set.delete(_slug(b.nombre));
+      await pool.query(`UPDATE outbound_clients SET slug_alias=$1 WHERE id=$2`, [[...set].join(','), req.params.id]);
+    }
     const { rows } = await pool.query(`
       UPDATE outbound_clients SET nombre=$1,estado=$2,responsable=$3,canal=$4,website=$5,
         mercado=$6,icp=$7,proxima_accion=$8,notas=$9,from_email=$10,cc_email=$11,

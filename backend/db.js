@@ -694,6 +694,8 @@ async function initDb() {
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS outbound_clients_user_idx ON outbound_clients (user_id);`);
     // Buzón de envío del cliente (ej. Zoho que él proporciona) y CC solicitado — informativos, se muestran en la tarea.
+    // slugs anteriores del portal (si se renombra el cliente, los enlaces viejos siguen funcionando)
+    await pool.query(`ALTER TABLE outbound_clients ADD COLUMN IF NOT EXISTS slug_alias TEXT NOT NULL DEFAULT ''`);
     await pool.query(`ALTER TABLE outbound_clients ADD COLUMN IF NOT EXISTS from_email TEXT NOT NULL DEFAULT '';`);
     await pool.query(`ALTER TABLE outbound_clients ADD COLUMN IF NOT EXISTS cc_email   TEXT NOT NULL DEFAULT '';`);
     // Identidad del perfil de LinkedIn desde el que se comenta e invita (cada cliente tiene
