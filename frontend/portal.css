@@ -346,3 +346,8 @@ button{cursor:pointer}
 .pt-in{flex:none;display:inline-grid;place-items:center;width:20px;height:20px;background:#0A66C2;color:#fff!important;font:800 11px/1 Georgia,serif;text-decoration:none!important;border-radius:3px}
 .pt-in:hover{background:#004182}
 .pt-tbl--ct td .pt-badge{max-width:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}
+
+/* logo de LinkedIn discreto: gris, sin fondo; se colorea al pasar el ratón */
+.pt-in{width:auto;height:auto;background:none;border-radius:0;color:#A3AEC2!important;display:inline-flex;align-items:center;transition:color .15s}
+.pt-in:hover{background:none;color:#0A66C2!important}
+.pt-nm{gap:6px}
