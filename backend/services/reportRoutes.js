@@ -50,6 +50,38 @@ function mount(app, { pool, requireAuth, dashHandler, highlights, sendViaClientM
     return { ...m, att, cliente: d.cliente };
   }
 
+  // ── Envío automático programado (una sola vez por día y cliente; hora de Lima) ──
+  async function runScheduled() {
+    try {
+      const { rows } = await pool.query(`
+        SELECT r.outbound_client_id AS cid, r.recipients, r.lang, c.user_id AS uid
+          FROM client_reports r JOIN outbound_clients c ON c.id=r.outbound_client_id
+         WHERE r.schedule_on AND jsonb_array_length(r.recipients) > 0
+           AND EXTRACT(DOW FROM (NOW() AT TIME ZONE 'America/Lima')) = r.schedule_dow
+           AND EXTRACT(HOUR FROM (NOW() AT TIME ZONE 'America/Lima')) >= r.schedule_hour
+           AND (r.last_auto_date IS NULL OR r.last_auto_date < (NOW() AT TIME ZONE 'America/Lima')::date)`);
+      for (const r of rows) {
+        // reclama el envío del día antes de enviar, para no duplicar ni reintentar en bucle
+        const claim = await pool.query(`UPDATE client_reports SET last_auto_date=(NOW() AT TIME ZONE 'America/Lima')::date
+                                         WHERE outbound_client_id=$1 AND (last_auto_date IS NULL OR last_auto_date < (NOW() AT TIME ZONE 'America/Lima')::date) RETURNING 1`, [r.cid]);
+        if (!claim.rows[0]) continue;
+        try {
+          const rec = cleanList(r.recipients).filter(okEmail);
+          const m = await render(r.uid, r.cid, LANGS.includes(r.lang) ? r.lang : 'es', '');
+          const out = await sendViaClientMailbox(r.cid, rec, m.subject, m.html, m.text, m.cliente, m.att);
+          if (!out.sent) throw new Error(out.error || 'No se pudo enviar');
+          await pool.query(`UPDATE client_reports SET last_sent_at=NOW(), last_recipients=$2, last_by='Envío automático', last_error='' WHERE outbound_client_id=$1`, [r.cid, JSON.stringify(rec)]);
+          console.log('[report] enviado automáticamente, cliente', r.cid, '->', rec.length, 'destinatarios');
+        } catch (e) {
+          console.error('[report] envío automático falló, cliente', r.cid, e.message);
+          await pool.query(`UPDATE client_reports SET last_error=$2 WHERE outbound_client_id=$1`, [r.cid, String(e.message).slice(0, 300)]).catch(() => {});
+        }
+      }
+    } catch (e) { console.error('[report] programador', e.message); }
+  }
+  setTimeout(runScheduled, 60 * 1000);
+  setInterval(runScheduled, 5 * 60 * 1000);
+
   const cleanList = arr => [...new Set((Array.isArray(arr) ? arr : []).map(e => String(e || '').trim().toLowerCase()).filter(Boolean))];
 
   app.get('/api/lm/reports/:cid', requireAuth, async (req, res) => {
@@ -57,13 +89,13 @@ function mount(app, { pool, requireAuth, dashHandler, highlights, sendViaClientM
       const cid = parseInt(req.params.cid);
       if (!cid || !(await ownsClient(req.workspaceOwnerId, cid))) return res.status(404).json({ error: 'Cliente no encontrado' });
       const [st, acc, mb, cl] = await Promise.all([
-        pool.query(`SELECT recipients, lang, last_sent_at, last_recipients, last_by FROM client_reports WHERE outbound_client_id=$1`, [cid]),
+        pool.query(`SELECT recipients, lang, last_sent_at, last_recipients, last_by, schedule_on, schedule_dow, schedule_hour, last_error FROM client_reports WHERE outbound_client_id=$1`, [cid]),
         pool.query(`SELECT email, nombre FROM client_accounts WHERE outbound_client_id=$1 AND activo ORDER BY id`, [cid]),
         pool.query(`SELECT email, estado FROM lm_mailboxes WHERE outbound_client_id=$1 AND estado NOT IN ('error') ORDER BY verified_at DESC NULLS LAST, id LIMIT 1`, [cid]),
         pool.query(`SELECT nombre FROM outbound_clients WHERE id=$1`, [cid]),
       ]);
       const s = st.rows[0] || {};
-      res.json({ cliente: (cl.rows[0] || {}).nombre || '', recipients: s.recipients || [], lang: s.lang || 'es', last_sent_at: s.last_sent_at || null, last_recipients: s.last_recipients || [], last_by: s.last_by || '', suggested: acc.rows, mailbox: mb.rows[0] || null });
+      res.json({ cliente: (cl.rows[0] || {}).nombre || '', recipients: s.recipients || [], lang: s.lang || 'es', last_sent_at: s.last_sent_at || null, last_recipients: s.last_recipients || [], last_by: s.last_by || '', schedule: { on: !!s.schedule_on, dow: s.schedule_dow == null ? 1 : s.schedule_dow, hour: s.schedule_hour == null ? 9 : s.schedule_hour, error: s.last_error || '' }, suggested: acc.rows, mailbox: mb.rows[0] || null });
     } catch (e) { console.error('[report] get', e.message); res.status(500).json({ error: 'Error' }); }
   });
 
@@ -73,8 +105,20 @@ function mount(app, { pool, requireAuth, dashHandler, highlights, sendViaClientM
       if (!cid || !(await ownsClient(req.workspaceOwnerId, cid))) return res.status(404).json({ error: 'Cliente no encontrado' });
       const rec = cleanList(req.body && req.body.recipients).filter(okEmail).slice(0, 12);
       const lang = LANGS.includes(req.body && req.body.lang) ? req.body.lang : 'es';
+      const sc = (req.body && req.body.schedule) || null;
+      let on = null, dow = null, hour = null;
+      if (sc) {
+        on = !!sc.on; dow = Math.min(6, Math.max(0, parseInt(sc.dow))); hour = Math.min(23, Math.max(0, parseInt(sc.hour)));
+        if (isNaN(dow)) dow = 1; if (isNaN(hour)) hour = 9;
+        if (on) {
+          if (!rec.length) return res.status(400).json({ error: 'Agrega al menos un destinatario para programar el envío' });
+          const mb = await pool.query(`SELECT 1 FROM lm_mailboxes WHERE outbound_client_id=$1 AND estado NOT IN ('error') LIMIT 1`, [cid]);
+          if (!mb.rows[0]) return res.status(400).json({ error: 'El cliente no tiene un buzón conectado para enviar' });
+        }
+      }
       await pool.query(`INSERT INTO client_reports (outbound_client_id, user_id, recipients, lang, updated_at) VALUES ($1,$2,$3,$4,NOW())
                         ON CONFLICT (outbound_client_id) DO UPDATE SET recipients=$3, lang=$4, updated_at=NOW()`, [cid, req.workspaceOwnerId, JSON.stringify(rec), lang]);
+      if (sc) await pool.query(`UPDATE client_reports SET schedule_on=$2, schedule_dow=$3, schedule_hour=$4, last_error='' WHERE outbound_client_id=$1`, [cid, on, dow, hour]);
       res.json({ ok: true, recipients: rec, lang });
     } catch (e) { console.error('[report] put', e.message); res.status(500).json({ error: 'Error al guardar' }); }
   });
