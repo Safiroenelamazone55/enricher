@@ -6259,7 +6259,8 @@ const _lmDashHandler = async (req, res) => {
     if (parseInt(q.client)) kw += ` AND k.outbound_client_id=${P(parseInt(q.client))}`;
     if (parseInt(q.sequence)) kw += ` AND EXISTS(SELECT 1 FROM lm_contact_sequences x WHERE x.contact_id=k.id AND x.sequence_id=${P(parseInt(q.sequence))})`;
     if (parseInt(q.campaign)) kw += ` AND EXISTS(SELECT 1 FROM lm_contact_sequences x JOIN sequences s2 ON s2.id=x.sequence_id WHERE x.contact_id=k.id AND s2.campaign_id=${P(parseInt(q.campaign))})`;
-    const KP = `COALESCE(NULLIF(TRIM(k.pais),''),(SELECT c.pais FROM lm_companies c WHERE c.id=k.company_id))`;
+    // el país es el de la EMPRESA; solo si no la tiene se usa el del contacto
+    const KP = `COALESCE(NULLIF(TRIM((SELECT c.pais FROM lm_companies c WHERE c.id=k.company_id)),''),NULLIF(TRIM(k.pais),''))`;
     if (q.country) kw += ` AND ${KP} ILIKE ${P('%' + String(q.country).slice(0, 60) + '%')}`;
     const CH = `CASE WHEN a.tipo IN ('email_enviado','email') THEN 'email' WHEN a.tipo LIKE 'linkedin%' THEN 'linkedin' WHEN a.tipo='llamada' THEN 'call' WHEN a.canal='whatsapp_llamada' THEN 'wa_call' WHEN a.canal='whatsapp_mensaje' THEN 'wa_msg' ELSE COALESCE((SELECT CASE st.canal WHEN 'whatsapp' THEN (CASE WHEN st.accion IN ('llamada','llamar') THEN 'wa_call' ELSE 'wa_msg' END) WHEN 'call' THEN 'call' WHEN 'linkedin' THEN 'linkedin' WHEN 'email' THEN 'email' END FROM lm_contact_sequences cs JOIN sequence_steps st ON st.sequence_id=cs.sequence_id WHERE cs.contact_id=a.contact_id AND a.nota ~ '^Paso [0-9]' ORDER BY cs.id DESC, st.dia, st.orden, st.id OFFSET (substring(a.nota from '^Paso ([0-9]+)')::int - 1) LIMIT 1), CASE WHEN a.nota ~* 'whatsapp|wpp' THEN (CASE WHEN a.nota ~* 'llamada|call' THEN 'wa_call' ELSE 'wa_msg' END) WHEN a.nota ~* 'llamada|call' THEN 'call' WHEN a.nota ~* 'linkedin|inmail|invitaci' THEN 'linkedin' ELSE 'otros' END) END`;
     const RTYPES = `Interesado|Reunión|Más adelante|Derivó a otro|No es la persona|No interesado|No contactar`;
@@ -6293,8 +6294,8 @@ const _lmDashHandler = async (req, res) => {
       pool.query(msgSql(cur), params), pool.query(msgSql(prv), params),
       pool.query(`SELECT a.fecha::date AS d, ${CH} AS ch, COUNT(*)::int AS n ${base} AND ${OUT}${chw} AND ${inR(iF, iT)} GROUP BY 1,2 ORDER BY 1`, params),
       pool.query(`SELECT COALESCE(NULLIF(TRIM(${KP}),''),'Sin país') AS pais,
-                         COUNT(DISTINCT a.contact_id) FILTER (WHERE ${OUT}${chw})::int AS contacted,
-                         COUNT(DISTINCT a.contact_id) FILTER (WHERE ${REPLY})::int AS replied
+                         COUNT(DISTINCT COALESCE(k.company_id, -a.contact_id)) FILTER (WHERE ${OUT}${chw})::int AS contacted,
+                         COUNT(DISTINCT COALESCE(k.company_id, -a.contact_id)) FILTER (WHERE ${REPLY})::int AS replied
                     ${base} AND ${inR(iF, iT)} GROUP BY 1`, params),
       pool.query(`SELECT ${CH} AS ch, COUNT(*) FILTER (WHERE ${OUT})::int AS touches,
                          COUNT(DISTINCT a.contact_id) FILTER (WHERE ${OUT})::int AS contacted
