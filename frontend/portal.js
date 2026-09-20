@@ -39,7 +39,7 @@
   // ── idioma ──
   function langBtn(cls) {
     const L = PT_I18N.LANGS;
-    return `<div class="pt-lang ${cls || ''}"><button type="button" class="pt-lg" title="Idioma">🌐 ${L[PT_I18N.lang].code} ▾</button><div class="pt-menu pt-lm">${Object.keys(L).map(k => `<button type="button" data-l="${k}" class="${k === PT_I18N.lang ? 'on' : ''}">${L[k].name}</button>`).join('')}</div></div>`;
+    return `<div class="pt-lang ${cls || ''}"><button type="button" class="pt-lg" title="Idioma">${L[PT_I18N.lang].code} ▾</button><div class="pt-menu pt-lm">${Object.keys(L).map(k => `<button type="button" data-l="${k}" class="${k === PT_I18N.lang ? 'on' : ''}">${L[k].name}</button>`).join('')}</div></div>`;
   }
   function wireLang() {
     document.querySelectorAll('.pt-lang').forEach(box => {
