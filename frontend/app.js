@@ -25474,7 +25474,7 @@ ${foot}
   async function reportOpen(cid) {
     reportClose();
     const c = _clients.find(x => x.id === cid); if (!c) return;
-    Object.assign(_RP, { cid, recipients: [], lang: 'es', note: '', busy: false, info: null, sched: { on: false, dow: 1, hour: 9, tz: 'America/Lima', draft: false } });
+    Object.assign(_RP, { cid, recipients: [], lang: 'es', note: '', busy: false, state: '', info: null, sched: { on: false, dow: 1, hour: 9, tz: 'America/Lima', draft: false } });
     const m = document.createElement('div'); m.id = 'report-modal'; m.className = 'fin-pi-backdrop';
     m.onclick = ev => { if (ev.target === m) reportClose(); };
     m.innerHTML = `<div class="fin-pi-box"><div class="dle-hd"><div style="flex:1;min-width:0"><div class="dle-hd__t">Informe semanal · ${esc(c.nombre)}</div></div><button class="fin-pi-x" onclick="LeadManagerModule.reportClose()">✕</button></div>
@@ -25492,6 +25492,16 @@ ${foot}
     const d = new Date(i.last_sent_at).toLocaleString('es-ES', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     const n = (i.last_recipients || []).length;
     return `<b>${d}</b>${i.last_by ? ' · ' + _rpEsc(i.last_by) : ''}<br><span style="color:#64748B">${n} destinatario${n === 1 ? '' : 's'}: ${_rpEsc((i.last_recipients || []).join(', '))}</span>`;
+  }
+  function _rpStatus() {
+    const st = _RP.state, i = _RP.info || {};
+    if (st === 'sending') return '<div class="rp-sending"><span class="rp-spin"></span><div><b>Enviando el informe…</b><span>Sale desde el buzón del cliente. No cierres esta ventana.</span></div></div>';
+    if (st === 'sent') {
+      const n = (_RP.sentTo || []).length, h = new Date(_RP.sentAt || Date.now()).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+      return `<div class="rp-ok"><span class="rp-ok__ck">✓</span><div><b>Informe enviado</b><span>a ${n} destinatario${n === 1 ? '' : 's'} · ${h}${_RP.sentVia ? ' · desde ' + _rpEsc(_RP.sentVia) : ''}</span></div></div>`;
+    }
+    if (st === 'error') return `<div class="rp-err"><b>No se pudo enviar</b><span>${_rpEsc(_RP.err || 'Error')}</span></div>`;
+    return '';
   }
   function _rpSide() {
     const s = document.getElementById('rp-side'); if (!s) return; const i = _RP.info || {};
@@ -25517,9 +25527,11 @@ ${foot}
         ${_RP.sched.draft ? `<div class="rp-hint">Revisa el día, la hora y el idioma. Aún no está activo.</div><div style="display:flex;gap:6px;margin-top:6px"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.reportActivate()">Activar envío automático</button><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.reportMode(false)">Cancelar</button></div>` : `<div class="rp-hint">Activo: se envía solo a los destinatarios guardados, desde el buzón del cliente. Vuelve a Manual cuando quieras.</div>`}
         ${i.schedule && i.schedule.error ? `<div class="rp-from rp-from--bad" style="margin-top:6px">El último envío automático falló: ${_rpEsc(i.schedule.error)}</div>` : ''}</div>` : ''}
       <div class="rp-l">Último envío</div><div class="rp-last">${_rpLast(i)}</div>
-      <div class="rp-actions"><button class="btn btn--primary" id="rp-send" onclick="LeadManagerModule.reportSend()" ${i.mailbox && _RP.recipients.length ? '' : 'disabled'}>${_RP.sched.on ? 'Enviar ahora' : 'Enviar informe'}${_RP.recipients.length ? ` a ${_RP.recipients.length}` : ''}</button></div>
+      <div class="rp-actions">${_rpStatus()}<button class="btn btn--primary" id="rp-send" onclick="LeadManagerModule.reportSend()" ${_RP.state === 'sending' || !(i.mailbox && _RP.recipients.length) ? 'disabled' : ''}>${_RP.state === 'sending' ? 'Enviando…' : (_RP.state === 'sent' ? 'Enviar de nuevo' : (_RP.sched.on ? 'Enviar ahora' : 'Enviar informe'))}${_RP.state !== 'sending' && _RP.recipients.length ? ` a ${_RP.recipients.length}` : ''}</button></div>
       <div class="rp-hint">El resumen cubre los últimos 7 días, con los mismos datos que ve el cliente en su portal.</div>`;
     const l = document.getElementById('rp-lang'); if (l) l.value = _RP.lang;
+    s.classList.toggle('rp-locked', _RP.state === 'sending');
+    const st = s.querySelector('.rp-ok, .rp-err, .rp-sending'); if (st) st.scrollIntoView({ block: 'nearest' });
   }
   async function _rpSave(withSched) {
     const body = { recipients: _RP.recipients, lang: _RP.lang };
@@ -25557,16 +25569,16 @@ ${foot}
     if (!_rpMail(e)) { showBanner('Correo no válido', 'error'); return; }
     if (_RP.recipients.includes(e)) return;
     if (_RP.recipients.length >= 12) { showBanner('Máximo 12 destinatarios', 'error'); return; }
-    _RP.recipients.push(e); _rpSave(); _rpSide();
+    _RP.state = ''; _RP.recipients.push(e); _rpSave(); _rpSide();
   }
   function reportAddInput() { const i = document.getElementById('rp-in'); if (!i) return; const v = i.value.trim().replace(/[,;]+$/, ''); if (!v) return; reportAdd(v); }
   function reportRm(k) {
-    _RP.recipients.splice(k, 1);
+    _RP.state = ''; _RP.recipients.splice(k, 1);
     if (!_RP.recipients.length && _RP.sched.on) { _RP.sched.on = false; showBanner('Sin destinatarios: el envío volvió a modo manual', 'info'); _rpSave(true); } else _rpSave();
     _rpSide();
   }
-  function reportLang(v) { _RP.lang = v; _rpSave(); reportPreview(); _rpSide(); }
-  function reportNote(v) { _RP.note = v; clearTimeout(_RP.t); _RP.t = setTimeout(reportPreview, 600); }
+  function reportLang(v) { _RP.state = ''; _RP.lang = v; _rpSave(); reportPreview(); _rpSide(); }
+  function reportNote(v) { _RP.state = ''; _RP.note = v; clearTimeout(_RP.t); _RP.t = setTimeout(reportPreview, 600); }
   async function reportPreview() {
     const my = ++_RP.seq, f = document.getElementById('rp-frame'), sj = document.getElementById('rp-subj'); if (!f) return;
     if (sj) sj.textContent = 'Generando vista previa…';
@@ -25579,15 +25591,16 @@ ${foot}
   }
   async function reportSend() {
     if (_RP.busy || !_RP.recipients.length) return;
+    _RP.busy = true;                       // candado inmediato: ningún segundo clic mientras se confirma o se envía
     const mb = (_RP.info && _RP.info.mailbox && _RP.info.mailbox.email) || '';
     const ok = await novaConfirm({ title: '¿Enviar el informe?', message: `Se enviará a ${_RP.recipients.length} destinatario${_RP.recipients.length === 1 ? '' : 's'} (${_RP.recipients.join(', ')}) desde ${mb}.`, ok: 'Enviar', cancel: 'Cancelar' });
-    if (!ok) return;
-    _RP.busy = true; const b = document.getElementById('rp-send'); if (b) { b.disabled = true; b.textContent = 'Enviando…'; }
+    if (!ok) { _RP.busy = false; return; }
+    _RP.state = 'sending'; _rpSide();
     try {
       const r = await _portalApi(`/lm/reports/${_RP.cid}/send`, 'POST', { recipients: _RP.recipients, lang: _RP.lang, note: _RP.note });
       _RP.info = Object.assign({}, _RP.info, { last_sent_at: r.last_sent_at, last_recipients: r.sent_to, last_by: 'tú' });
-      showBanner(`✓ Informe enviado a ${r.sent_to.length} destinatario(s) desde ${r.via || 'el buzón del cliente'}`, 'success');
-    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+      Object.assign(_RP, { state: 'sent', sentTo: r.sent_to, sentAt: r.last_sent_at, sentVia: r.via || mb });
+    } catch (e) { Object.assign(_RP, { state: 'error', err: e.message }); }
     _RP.busy = false; _rpSide();
   }
   function portalAccessClose() { document.getElementById('portal-access-modal')?.remove(); }

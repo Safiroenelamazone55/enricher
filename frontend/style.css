@@ -16952,3 +16952,18 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .rp-sr{display:flex;align-items:center;gap:8px;margin-bottom:5px;font-size:12px}
 .rp-sr>span{width:44px;color:#64748B}
 .rp-sr em{font-style:normal;color:#94A3B8;font-size:11px}
+/* Informe semanal: el botón y su estado quedan siempre visibles al pie del panel */
+.rp-side{position:relative}
+.rp-actions{position:sticky;bottom:0;background:#fff;padding:10px 0 4px;margin-top:10px;border-top:1px solid #EEF1F4}
+.rp-locked>*:not(.rp-actions){opacity:.55;pointer-events:none}
+@keyframes rpspin{to{transform:rotate(360deg)}}
+.rp-spin{display:inline-block;width:16px;height:16px;border:2.5px solid #C7D2FE;border-top-color:#2563EB;border-radius:50%;animation:rpspin .8s linear infinite;flex:none}
+.rp-sending,.rp-ok,.rp-err{display:flex;gap:10px;align-items:center;padding:10px 12px;margin-bottom:8px;font-size:12px;line-height:1.4}
+.rp-sending div,.rp-ok div,.rp-err{display:flex;flex-direction:column}
+.rp-sending b,.rp-ok b,.rp-err b{font-size:13px}
+.rp-sending span:not(.rp-spin),.rp-ok span:not(.rp-ok__ck),.rp-err span{color:#475569}
+.rp-sending{background:#EFF4FF;border:1px solid #C7D2FE;color:#1E3A8A}
+.rp-ok{background:#ECFDF3;border:1px solid #86EFAC;color:#166534}
+.rp-ok__ck{display:grid;place-items:center;width:28px;height:28px;border-radius:50%;background:#16A34A;color:#fff;font-size:17px;font-weight:700;flex:none}
+.rp-err{background:#FEF2F2;border:1px solid #FECACA;color:#B91C1C}
+#rp-send:disabled{cursor:not-allowed}
