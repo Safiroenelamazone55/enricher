@@ -30,10 +30,10 @@ const list = (arr, and) => arr.length <= 1 ? (arr[0] || '') : arr.slice(0, -1).j
 const COPY = {
   es: {
     hi: c => `Hola equipo de ${c},`,
-    lead: (d, k) => { const r = k.replies || 0, t = k.touches || 0, c = k.contacted || 0, a = k.agendadas || 0;
-      const hook = r > 0 ? `Buenas noticias: esta semana recibimos ${r} ${r === 1 ? 'respuesta' : 'respuestas'}.` : t > 0 ? 'Semana de siembra: seguimos sembrando contactos y aún no llegaron respuestas.' : 'Semana tranquila: no hubo actividad de envíos.';
-      return hook + (t > 0 ? ` En total hicimos ${t} toques a ${c} contactos (${d.rango})` + (a ? ` y ${a === 1 ? 'quedó agendada 1 reunión' : 'quedaron agendadas ' + a + ' reuniones'}.` : '.') : ''); },
-    subj: (d, k, n) => (k.replies || 0) > 0 || n ? `Tu semana en ${d.cliente}: ${k.replies || 0} ${(k.replies || 0) === 1 ? 'respuesta' : 'respuestas'}${n ? ' · ' + n + (n === 1 ? ' empresa con buenas señales' : ' empresas con buenas señales') : ''}` : `Resumen semanal de ${d.cliente} · ${d.rango}`,
+    lead: (d, k) => { const r = k.replies || 0, t = k.touches || 0, c = k.contacted || 0, a = k.agendadas || 0, g = (d.positives || []).length;
+      const hook = a > 0 ? `Buenas noticias: esta semana ${a === 1 ? 'se agendó 1 reunión' : 'se agendaron ' + a + ' reuniones'}.` : g > 0 ? 'Buenas noticias: hay empresas mostrando interés.' : r > 0 ? `Esta semana recibimos ${r} ${r === 1 ? 'respuesta' : 'respuestas'}, aunque todavía ninguna se convirtió en una oportunidad.` : t > 0 ? 'Semana de siembra: seguimos sembrando contactos y aún no llegaron respuestas.' : 'Semana tranquila: no hubo actividad de envíos.';
+      return hook + (t > 0 ? ` En total hicimos ${t} toques a ${c} contactos (${d.rango}).` : ''); },
+    subj: (d, k, n) => (k.agendadas || 0) > 0 || n ? `Tu semana en ${d.cliente}${(k.agendadas || 0) ? ': ' + k.agendadas + (k.agendadas === 1 ? ' reunión agendada' : ' reuniones agendadas') : ''}${n ? ((k.agendadas || 0) ? ' · ' : ': ') + n + (n === 1 ? ' empresa con buenas señales' : ' empresas con buenas señales') : ''}` : (k.replies || 0) > 0 ? `Tu semana en ${d.cliente}: ${k.replies} ${k.replies === 1 ? 'respuesta' : 'respuestas'}` : `Resumen semanal de ${d.cliente} · ${d.rango}`,
     sig: (n, names) => n ? `Hay ${n} ${n === 1 ? 'empresa con buenas señales' : 'empresas con buenas señales'}: ${list(names, 'y')}.` : '',
     meet: m => m ? `La próxima reunión es con ${m.empresa || m.nombre}, el ${m.fecha_txt} ${m.dia} de ${m.mes}.` : '',
     seq: n => n ? `Tenemos ${n} ${n === 1 ? 'secuencia activa' : 'secuencias activas'} en marcha.` : '',
@@ -42,10 +42,10 @@ const COPY = {
   },
   en: {
     hi: c => `Hi ${c} team,`,
-    lead: (d, k) => { const r = k.replies || 0, t = k.touches || 0, c = k.contacted || 0, a = k.agendadas || 0;
-      const hook = r > 0 ? `Good news: we received ${r} ${r === 1 ? 'reply' : 'replies'} this week.` : t > 0 ? "A seeding week: we keep reaching out and no replies have come in yet." : 'A quiet week: there was no outreach activity.';
-      return hook + (t > 0 ? ` In total we made ${t} touches to ${c} contacts (${d.rango})` + (a ? ` and ${a === 1 ? '1 meeting was booked' : a + ' meetings were booked'}.` : '.') : ''); },
-    subj: (d, k, n) => (k.replies || 0) > 0 || n ? `Your week at ${d.cliente}: ${k.replies || 0} ${(k.replies || 0) === 1 ? 'reply' : 'replies'}${n ? ' · ' + n + (n === 1 ? ' company showing good signals' : ' companies showing good signals') : ''}` : `Weekly summary for ${d.cliente} · ${d.rango}`,
+    lead: (d, k) => { const r = k.replies || 0, t = k.touches || 0, c = k.contacted || 0, a = k.agendadas || 0, g = (d.positives || []).length;
+      const hook = a > 0 ? `Good news: ${a === 1 ? '1 meeting was' : a + ' meetings were'} booked this week.` : g > 0 ? 'Good news: some companies are showing interest.' : r > 0 ? `This week we received ${r} ${r === 1 ? 'reply' : 'replies'}, though none has turned into an opportunity yet.` : t > 0 ? 'A seeding week: we keep reaching out and no replies have come in yet.' : 'A quiet week: there was no outreach activity.';
+      return hook + (t > 0 ? ` In total we made ${t} touches to ${c} contacts (${d.rango}).` : ''); },
+    subj: (d, k, n) => (k.agendadas || 0) > 0 || n ? `Your week at ${d.cliente}${(k.agendadas || 0) ? ': ' + k.agendadas + (k.agendadas === 1 ? ' meeting booked' : ' meetings booked') : ''}${n ? ((k.agendadas || 0) ? ' · ' : ': ') + n + (n === 1 ? ' company showing good signals' : ' companies showing good signals') : ''}` : (k.replies || 0) > 0 ? `Your week at ${d.cliente}: ${k.replies} ${k.replies === 1 ? 'reply' : 'replies'}` : `Weekly summary for ${d.cliente} · ${d.rango}`,
     sig: (n, names) => n ? `${n} ${n === 1 ? 'company is' : 'companies are'} showing good signals: ${list(names, 'and')}.` : '',
     meet: m => m ? `The next meeting is with ${m.empresa || m.nombre}, on ${m.fecha_txt}, ${m.mes} ${m.dia}.` : '',
     seq: n => n ? `We have ${n} active ${n === 1 ? 'sequence' : 'sequences'} running.` : '',
@@ -54,10 +54,10 @@ const COPY = {
   },
   de: {
     hi: c => `Hallo Team von ${c},`,
-    lead: (d, k) => { const r = k.replies || 0, t = k.touches || 0, c = k.contacted || 0, a = k.agendadas || 0;
-      const hook = r > 0 ? `Gute Nachrichten: Diese Woche erhielten wir ${r} ${r === 1 ? 'Antwort' : 'Antworten'}.` : t > 0 ? 'Eine Aussaat-Woche: Wir bleiben dran, Antworten gibt es noch keine.' : 'Eine ruhige Woche: Es gab keine Versandaktivität.';
-      return hook + (t > 0 ? ` Insgesamt hatten wir ${t} Kontaktpunkte bei ${c} Kontakten (${d.rango})` + (a ? ` und ${a === 1 ? 'ein Termin wurde' : a + ' Termine wurden'} vereinbart.` : '.') : ''); },
-    subj: (d, k, n) => (k.replies || 0) > 0 || n ? `Ihre Woche bei ${d.cliente}: ${k.replies || 0} ${(k.replies || 0) === 1 ? 'Antwort' : 'Antworten'}${n ? ' · ' + n + (n === 1 ? ' Unternehmen mit guten Signalen' : ' Unternehmen mit guten Signalen') : ''}` : `Wochenzusammenfassung für ${d.cliente} · ${d.rango}`,
+    lead: (d, k) => { const r = k.replies || 0, t = k.touches || 0, c = k.contacted || 0, a = k.agendadas || 0, g = (d.positives || []).length;
+      const hook = a > 0 ? `Gute Nachrichten: Diese Woche ${a === 1 ? 'wurde 1 Termin' : 'wurden ' + a + ' Termine'} vereinbart.` : g > 0 ? 'Gute Nachrichten: Einige Unternehmen zeigen Interesse.' : r > 0 ? `Diese Woche erhielten wir ${r} ${r === 1 ? 'Antwort' : 'Antworten'}, allerdings ist noch keine zu einer Chance geworden.` : t > 0 ? 'Eine Aussaat-Woche: Wir bleiben dran, Antworten gibt es noch keine.' : 'Eine ruhige Woche: Es gab keine Versandaktivität.';
+      return hook + (t > 0 ? ` Insgesamt hatten wir ${t} Kontaktpunkte bei ${c} Kontakten (${d.rango}).` : ''); },
+    subj: (d, k, n) => (k.agendadas || 0) > 0 || n ? `Ihre Woche bei ${d.cliente}${(k.agendadas || 0) ? ': ' + k.agendadas + (k.agendadas === 1 ? ' Termin vereinbart' : ' Termine vereinbart') : ''}${n ? ((k.agendadas || 0) ? ' · ' : ': ') + n + ' Unternehmen mit guten Signalen' : ''}` : (k.replies || 0) > 0 ? `Ihre Woche bei ${d.cliente}: ${k.replies} ${k.replies === 1 ? 'Antwort' : 'Antworten'}` : `Wochenzusammenfassung für ${d.cliente} · ${d.rango}`,
     sig: (n, names) => n ? `${n} ${n === 1 ? 'Unternehmen zeigt' : 'Unternehmen zeigen'} gute Signale: ${list(names, 'und')}.` : '',
     meet: m => m ? `Der nächste Termin ist mit ${m.empresa || m.nombre}, am ${m.fecha_txt}, ${m.dia}. ${m.mes}.` : '',
     seq: n => n ? `Aktuell laufen ${n} aktive ${n === 1 ? 'Sequenz' : 'Sequenzen'}.` : '',
@@ -66,10 +66,10 @@ const COPY = {
   },
   pt: {
     hi: c => `Olá equipe da ${c},`,
-    lead: (d, k) => { const r = k.replies || 0, t = k.touches || 0, c = k.contacted || 0, a = k.agendadas || 0;
-      const hook = r > 0 ? `Boas notícias: esta semana recebemos ${r} ${r === 1 ? 'resposta' : 'respostas'}.` : t > 0 ? 'Semana de plantio: seguimos plantando contatos e ainda não chegaram respostas.' : 'Semana tranquila: não houve atividade de envios.';
-      return hook + (t > 0 ? ` No total fizemos ${t} contatos com ${c} pessoas (${d.rango})` + (a ? ` e ${a === 1 ? '1 reunião foi agendada' : a + ' reuniões foram agendadas'}.` : '.') : ''); },
-    subj: (d, k, n) => (k.replies || 0) > 0 || n ? `Sua semana na ${d.cliente}: ${k.replies || 0} ${(k.replies || 0) === 1 ? 'resposta' : 'respostas'}${n ? ' · ' + n + (n === 1 ? ' empresa com bons sinais' : ' empresas com bons sinais') : ''}` : `Resumo semanal de ${d.cliente} · ${d.rango}`,
+    lead: (d, k) => { const r = k.replies || 0, t = k.touches || 0, c = k.contacted || 0, a = k.agendadas || 0, g = (d.positives || []).length;
+      const hook = a > 0 ? `Boas notícias: esta semana ${a === 1 ? 'foi agendada 1 reunião' : 'foram agendadas ' + a + ' reuniões'}.` : g > 0 ? 'Boas notícias: há empresas demonstrando interesse.' : r > 0 ? `Esta semana recebemos ${r} ${r === 1 ? 'resposta' : 'respostas'}, mas nenhuma virou oportunidade ainda.` : t > 0 ? 'Semana de plantio: seguimos plantando contatos e ainda não chegaram respostas.' : 'Semana tranquila: não houve atividade de envios.';
+      return hook + (t > 0 ? ` No total fizemos ${t} contatos com ${c} pessoas (${d.rango}).` : ''); },
+    subj: (d, k, n) => (k.agendadas || 0) > 0 || n ? `Sua semana na ${d.cliente}${(k.agendadas || 0) ? ': ' + k.agendadas + (k.agendadas === 1 ? ' reunião agendada' : ' reuniões agendadas') : ''}${n ? ((k.agendadas || 0) ? ' · ' : ': ') + n + (n === 1 ? ' empresa com bons sinais' : ' empresas com bons sinais') : ''}` : (k.replies || 0) > 0 ? `Sua semana na ${d.cliente}: ${k.replies} ${k.replies === 1 ? 'resposta' : 'respostas'}` : `Resumo semanal de ${d.cliente} · ${d.rango}`,
     sig: (n, names) => n ? `${n} ${n === 1 ? 'empresa está com bons sinais' : 'empresas estão com bons sinais'}: ${list(names, 'e')}.` : '',
     meet: m => m ? `A próxima reunião é com ${m.empresa || m.nombre}, em ${m.fecha_txt}, ${m.dia} de ${m.mes}.` : '',
     seq: n => n ? `Temos ${n} ${n === 1 ? 'sequência ativa' : 'sequências ativas'} em andamento.` : '',
