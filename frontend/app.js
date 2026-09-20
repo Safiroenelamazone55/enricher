@@ -25080,7 +25080,7 @@ ${foot}
       const has = b.has[v], bg = v === 'dark' ? '#0B1220' : v === 'light' ? '#FFFFFF' : 'repeating-conic-gradient(#E5E7EB 0% 25%, #fff 0% 50%) 50% / 16px 16px';
       return `<div class="lg-card${_LG.sel === v ? ' on' : ''}"><div class="lg-card__t">${t}</div><div class="lg-card__h">${hint}</div>
         <div class="lg-thumb" style="background:${bg}">${has ? `<img src="${_lgSrc(v)}" alt="">` : '<span>Sin imagen</span>'}</div>
-        <div class="lg-card__b"><label class="btn btn--ghost btn--sm" style="cursor:pointer">${has ? 'Cambiar' : 'Subir'}<input type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" hidden onchange="LeadManagerModule.lgUpload('${v}',this)"></label>${has ? `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.lgDelete('${v}')">Quitar</button>` : ''}</div>
+        <div class="lg-card__b"><label class="btn btn--ghost btn--sm" style="cursor:pointer">${has ? 'Cambiar' : 'Subir'}<input type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" hidden onchange="LeadManagerModule.lgUpload('${v}',this)"></label>${has ? `<button class="btn btn--ghost btn--sm" title="Elimina el espacio vacío alrededor del logo" onclick="LeadManagerModule.lgTrimExisting('${v}')">Recortar márgenes</button><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.lgDelete('${v}')">Quitar</button>` : ''}</div>
         <label class="lg-use${has ? '' : ' off'}"><input type="radio" name="lg-sel" ${_LG.sel === v ? 'checked' : ''} ${has ? '' : 'disabled'} onchange="LeadManagerModule.lgSelect('${v}')"> Mostrar en el encabezado</label></div>`;
     };
     const f = _lgFrame(_LG.sel);
@@ -25091,7 +25091,7 @@ ${foot}
       <div class="lg-row"><div style="flex:1;min-width:260px"><div class="lg-lbl">Color del encabezado</div><div class="lg-sw">${_LG_SW.map(([c, n]) => `<button class="lg-sw__b${_LG.bg.toLowerCase() === c.toLowerCase() ? ' on' : ''}" title="${n}" style="background:${c}" onclick="LeadManagerModule.lgBg('${c}')"></button>`).join('')}
         <input type="color" value="${_LG.bg}" oninput="LeadManagerModule.lgBg(this.value)" title="Otro color"><input class="lm-inp" id="lg-hex" value="${_LG.bg}" maxlength="7" style="width:92px;font-family:monospace" onchange="LeadManagerModule.lgBg(this.value)"></div></div>
         <div style="flex:1;min-width:260px"><div class="lg-lbl">Encuadre del logo elegido</div>
-          <div class="lg-sl"><span>Zoom</span><input type="range" min="0.2" max="4" step="0.02" value="${f.s}" oninput="LeadManagerModule.lgFrame('s',this.value)"><b id="lg-sv">${Math.round(f.s * 100)}%</b></div>
+          <div class="lg-sl"><span>Zoom</span><input type="range" min="0.2" max="8" step="0.02" value="${f.s}" oninput="LeadManagerModule.lgFrame('s',this.value)"><b id="lg-sv">${Math.round(f.s * 100)}%</b></div>
           <div class="lg-sl"><span>Horizontal</span><input type="range" min="-100" max="100" step="1" value="${f.x}" oninput="LeadManagerModule.lgFrame('x',this.value)"><b id="lg-xv">${Math.round(f.x)}</b></div>
           <div class="lg-sl"><span>Vertical</span><input type="range" min="-100" max="100" step="1" value="${f.y}" oninput="LeadManagerModule.lgFrame('y',this.value)"><b id="lg-yv">${Math.round(f.y)}</b></div>
           <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.lgReset()">Restablecer encuadre</button></div></div>
@@ -25109,21 +25109,50 @@ ${foot}
     box.onpointerdown = e => { if (!_LG.b.has[_LG.sel]) return; box.setPointerCapture(e.pointerId); const f = _lgFrame(_LG.sel); drag = { px: e.clientX, py: e.clientY, x: f.x, y: f.y }; box.style.cursor = 'grabbing'; };
     box.onpointermove = e => { if (!drag) return; const r = box.getBoundingClientRect(); const f = _lgFrame(_LG.sel); _LG.frames[_LG.sel] = { s: f.s, x: Math.max(-150, Math.min(150, drag.x + (e.clientX - drag.px) / r.width * 100)), y: Math.max(-150, Math.min(150, drag.y + (e.clientY - drag.py) / r.height * 100)) }; _lgApply(); };
     box.onpointerup = box.onpointercancel = () => { drag = null; box.style.cursor = 'grab'; _lgSyncSliders(); };
-    box.onwheel = e => { if (!_LG.b.has[_LG.sel]) return; e.preventDefault(); const f = _lgFrame(_LG.sel); _LG.frames[_LG.sel] = { s: Math.max(0.2, Math.min(4, f.s * (e.deltaY < 0 ? 1.06 : 0.94))), x: f.x, y: f.y }; _lgApply(); _lgSyncSliders(); };
+    box.onwheel = e => { if (!_LG.b.has[_LG.sel]) return; e.preventDefault(); const f = _lgFrame(_LG.sel); _LG.frames[_LG.sel] = { s: Math.max(0.2, Math.min(8, f.s * (e.deltaY < 0 ? 1.06 : 0.94))), x: f.x, y: f.y }; _lgApply(); _lgSyncSliders(); };
   }
   function _lgSyncSliders() { const f = _lgFrame(_LG.sel), r = document.querySelectorAll('#lg-body input[type=range]'); if (r.length === 3) { r[0].value = f.s; r[1].value = f.x; r[2].value = f.y; } }
   function lgFrame(k, v) { const f = _lgFrame(_LG.sel); f[k] = Number(v); _LG.frames[_LG.sel] = f; _lgApply(); }
   function lgReset() { _LG.frames[_LG.sel] = { s: 1, x: 0, y: 0 }; _lgApply(); _lgSyncSliders(); }
   function lgBg(c) { if (!/^#[0-9a-fA-F]{6}$/.test(c)) return; _LG.bg = c.toUpperCase(); _LG.dirty = true; _lgRender(); }
   function lgSelect(v) { _LG.sel = v; _LG.dirty = true; _lgRender(); }
+  // Recorta los márgenes transparentes (PNG/WebP/GIF) para que el logo llene el espacio del encabezado
+  async function _lgTrim(file) {
+    if (!/^image\/(png|webp|gif)$/i.test(file.type)) return null;
+    try {
+      const bmp = await createImageBitmap(file), k = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+      const cw = Math.max(1, Math.round(bmp.width * k)), ch = Math.max(1, Math.round(bmp.height * k));
+      const c = document.createElement('canvas'); c.width = cw; c.height = ch; const x = c.getContext('2d', { willReadFrequently: true }); x.drawImage(bmp, 0, 0, cw, ch);
+      const d = x.getImageData(0, 0, cw, ch).data; let x0 = cw, y0 = ch, x1 = -1, y1 = -1;
+      for (let y = 0; y < ch; y++) for (let xx = 0; xx < cw; xx++) if (d[(y * cw + xx) * 4 + 3] > 10) { if (xx < x0) x0 = xx; if (xx > x1) x1 = xx; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+      if (x1 < 0) return null;
+      const pad = Math.round(Math.max(cw, ch) * 0.01); x0 = Math.max(0, x0 - pad); y0 = Math.max(0, y0 - pad); x1 = Math.min(cw - 1, x1 + pad); y1 = Math.min(ch - 1, y1 + pad);
+      const nw = x1 - x0 + 1, nh = y1 - y0 + 1; if (nw * nh > cw * ch * 0.92) return null;
+      const o = document.createElement('canvas'); o.width = nw; o.height = nh; o.getContext('2d').drawImage(c, x0, y0, nw, nh, 0, 0, nw, nh);
+      const blob = await new Promise(r => o.toBlob(r, 'image/png')); if (!blob) return null;
+      return new File([blob], (file.name || 'logo').replace(/\.\w+$/, '') + '.png', { type: 'image/png' });
+    } catch (e) { return null; }
+  }
+  async function _lgSend(v, f, trimmed) {
+    const fd = new FormData(); fd.append('file', f);
+    const r = await apiFetch(`${API}/lm/portal/branding/${_LG.cid}/logo/${v}`, { method: 'POST', body: fd }); const j = await r.json(); if (!r.ok) throw new Error(j.error || 'Error');
+    _LG.b = j; if (!_LG.b.has[_LG.sel] || Object.values(_LG.b.has).filter(Boolean).length === 1) _LG.sel = v;
+    _LG.frames[v] = { s: 1, x: 0, y: 0 }; _LG.dirty = true; _lgRender(); showBanner('✓ Logo subido' + (trimmed ? ' — se recortaron los márgenes vacíos' : ''), 'success');
+  }
+  async function lgTrimExisting(v) {
+    try {
+      const r = await apiFetch(`${API}/lm/portal/branding/${_LG.cid}/file/${v}?v=${_LG.b.v}`); if (!r.ok) throw new Error('No se pudo leer el logo');
+      const bl = await r.blob(), f = new File([bl], 'logo', { type: bl.type }), t = await _lgTrim(f);
+      if (!t) { showBanner('Este logo no tiene márgenes vacíos que recortar (o es JPG/SVG).', 'info'); return; }
+      await _lgSend(v, t, true);
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
   async function lgUpload(v, inp) {
     const f = inp.files && inp.files[0]; if (!f) return;
     if (f.size > 3 * 1048576) { showBanner('El logo supera 3 MB', 'error'); inp.value = ''; return; }
     const fd = new FormData(); fd.append('file', f);
     try {
-      const r = await apiFetch(`${API}/lm/portal/branding/${_LG.cid}/logo/${v}`, { method: 'POST', body: fd }); const j = await r.json(); if (!r.ok) throw new Error(j.error || 'Error');
-      _LG.b = j; if (!_LG.b.has[_LG.sel] || !Object.values(_LG.b.has).some(Boolean)) _LG.sel = v; else if (Object.values(_LG.b.has).filter(Boolean).length === 1) _LG.sel = v;
-      _LG.frames[v] = { s: 1, x: 0, y: 0 }; _LG.dirty = true; _lgRender(); showBanner('✓ Logo subido', 'success');
+      const t = await _lgTrim(f); await _lgSend(v, t || f, !!t);
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
   async function lgDelete(v) {
@@ -30359,7 +30388,7 @@ ${foot}
     dgEnrichMenu, dgEnrichOpen, dgEnrichClose, dgEnrichApply, dgToggleIssues, dgMoreMenu, dgToggleSelMode,
     dgDupOpen, dgDupClose, dgDupPickSurvivor, dgDupToggleDel, dgDupMergeGroup, dgDupDeleteGroup,
     fmsToggle, fmsFilter, fmsPick,
-    openViews, applyView, saveView, deleteView, clearAllViews, dashTab, dashSet, dashClear, dashGran, portalLogoOpen, portalLogoClose, lgFrame, lgReset, lgBg, lgSelect, lgUpload, lgDelete, lgSave, pcToggle, pcSend, pcAttach, pcUnpend, portalCreate, portalReset, portalToggle, portalDel, portalSecs, portalAccessOpen, portalAccessClose, portalGen, portalEdit, portalEditSave, portalSec, portalNota, portalChatSend, portalCopy,
+    openViews, applyView, saveView, deleteView, clearAllViews, dashTab, dashSet, dashClear, dashGran, portalLogoOpen, portalLogoClose, lgTrimExisting, lgFrame, lgReset, lgBg, lgSelect, lgUpload, lgDelete, lgSave, pcToggle, pcSend, pcAttach, pcUnpend, portalCreate, portalReset, portalToggle, portalDel, portalSecs, portalAccessOpen, portalAccessClose, portalGen, portalEdit, portalEditSave, portalSec, portalNota, portalChatSend, portalCopy,
     taskSetView, taskSetFilter, calPrev, calNext, calToday,
     lmSetDisposition, seqDoDisposition, cpSetStage,
     seqDoAccepted, seqDoNoLinkedIn, seqDoBounced, seqDoNoWhatsapp, seqDoNoPhone, lmToggleNoLinkedIn, lmToggleNoWhatsapp, lmToggleNoPhone, lmToggleBounced, lmToggleManualEmail, ctToggleBounced,
