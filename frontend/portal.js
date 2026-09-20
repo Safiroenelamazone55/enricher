@@ -45,7 +45,7 @@
     document.querySelectorAll('.pt-lang').forEach(box => {
       const menu = box.querySelector('.pt-lm');
       box.querySelector('.pt-lg').onclick = e => { e.stopPropagation(); menu.classList.toggle('on'); };
-      menu.querySelectorAll('button').forEach(b => b.onclick = () => { PT_I18N.set(b.dataset.l, () => { if (S.redraw) S.redraw(); }); });
+      menu.querySelectorAll('button').forEach(b => b.onclick = () => { PT_I18N.set(b.dataset.l, () => { if (S.redraw) S.redraw(); }); if (S.me) api('/portal/profile', { method: 'PATCH', body: JSON.stringify({ lang: b.dataset.l }) }).catch(() => {}); });
     });
   }
   document.addEventListener('click', () => document.querySelectorAll('.pt-lm.on').forEach(m => m.classList.remove('on')));
@@ -59,8 +59,7 @@
   async function renderLogin(msg) {
     S.redraw = () => renderLogin(msg);
     const lb = await loginBrand(), u0 = parseUrl();
-    const fr = Object.assign({ s: 1, x: 0, y: 0 }, (lb && lb.frame) || {});
-    const mark = lb ? (lb.logo ? `<div class="pt-lgbox" style="height:46px;width:170px"><img src="${API}/portal/login-logo/${encodeURIComponent(u0.slug)}?v=${lb.v}" alt="${esc(lb.cliente)}" style="transform:translate(${fr.x}%,${fr.y}%) scale(${fr.s})"></div>` : `<div class="pt-brand">${esc(lb.cliente)}</div>`) : '<div class="pt-brand"><img src="/logo-nova.svg" alt="">Nova</div>';
+    const mark = lb ? (lb.logo ? `<div style="height:48px;display:flex;align-items:center"><img src="${API}/portal/login-logo/${encodeURIComponent(u0.slug)}?v=${lb.v}&k=${lb.k}" alt="${esc(lb.cliente)}" style="max-height:48px;max-width:230px;width:auto;display:block"></div>` : `<div class="pt-brand">${esc(lb.cliente)}</div>`) : '<div class="pt-brand"><img src="/logo-nova.svg" alt="">Nova</div>';
     root.innerHTML = `<div class="pt-login"${lb ? ` style="background:${esc(lb.header_bg)}"` : ''}><form class="pt-login__card" id="pt-lf">${langBtn('pt-lang--card')}
       ${mark}
       <h1>Portal del cliente</h1><p class="sub">Ingresa con el correo y la contraseña que te asignamos.</p>
@@ -147,7 +146,7 @@
     setUrl(tabUrl(S.tab) + (openId ? '/' + openId : ''), true);
     renderApp(); start();
     if (openId) { if (S.tab === 'empresas') openCompany(openId); else openContact(openId); }
-    try { if (S.me.lang && !localStorage.getItem('pt_lang') && S.me.lang !== PT_I18N.lang) PT_I18N.set(S.me.lang, () => S.redraw && S.redraw()); } catch (e) {}
+    try { if (S.me.lang && S.me.lang !== PT_I18N.lang) PT_I18N.set(S.me.lang, () => S.redraw && S.redraw()); } catch (e) {}
     if (S.me.pw_prompt && !sessionStorage.getItem('pt_pw_skip')) showPwReminder();
   }
   function tabs() {
