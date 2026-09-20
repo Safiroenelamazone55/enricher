@@ -25053,8 +25053,8 @@ ${foot}
           <div class="lm-ws-side__top"><div class="lm-ws-side__ava">${esc((c.nombre || '?').slice(0, 1).toUpperCase())}</div><div style="flex:1;min-width:0"><div class="lm-ws-side__nm">${esc(c.nombre)}<span id="cu-ws">${_cuBadge(c.id)}</span></div>${_obcBadge(c.estado)}</div><button class="seq-more-btn" onclick="LeadManagerModule.clientQuickMenu(event,${c.id})" title="Más acciones">⋮</button></div>
           <div class="lm-ws-side__acts">
             <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openClientDrawer(${c.id})">Editar cliente</button>
-            <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.clientCmpReport(${c.id})">Informe de campaña</button>
-            <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.clientSeqReport(${c.id})">Informe de secuencia</button>
+            <button class="btn btn--ghost btn--sm cp-off" disabled title="Desactivado por ahora: el portal del cliente ya muestra estos datos en vivo">Informe de campaña <span class="cp-off__tag">En pausa</span></button>
+            <button class="btn btn--ghost btn--sm cp-off" disabled title="Desactivado por ahora: el portal del cliente ya muestra estos datos en vivo">Informe de secuencia <span class="cp-off__tag">En pausa</span></button>
           </div>
           ${field('Responsable', esc(c.responsable))}
           ${field('Website', c.website ? `<a href="${esc(c.website)}" target="_blank" rel="noopener" class="lm-link">${esc(c.website)}</a>` : '—')}
@@ -25645,8 +25645,8 @@ ${foot}
       + item('Acceso al portal', `LeadManagerModule.portalAccessOpen(${id})`)
       + item('Informe semanal', `LeadManagerModule.reportOpen(${id})`)
       + item('Logo del portal', `LeadManagerModule.portalLogoOpen(${id})`)
-      + item('Informe de campaña', `LeadManagerModule.clientCmpReport(${id})`)
-      + item('Informe de secuencia', `LeadManagerModule.clientSeqReport(${id})`)
+      + `<button class="cp-mark-menu__b cp-off" disabled title="Desactivado por ahora: el portal del cliente ya muestra estos datos en vivo">Informe de campaña <span class="cp-off__tag">En pausa</span></button>`
+      + `<button class="cp-mark-menu__b cp-off" disabled title="Desactivado por ahora: el portal del cliente ya muestra estos datos en vivo">Informe de secuencia <span class="cp-off__tag">En pausa</span></button>`
       + `</div>`;
     const menu = document.createElement('div');
     menu.className = 'cp-mark-menu';
