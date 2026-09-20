@@ -76,7 +76,7 @@ const btn = (url, label, bg) => {
 
 // kind: 'invite' | 'reset' | 'code'; d: { nombre, cliente, to, pw, code, url, brand }
 function build(kind, lang, d) {
-  if (d.url && lang && lang !== 'es' && LANGS.includes(lang)) d = Object.assign({}, d, { url: d.url + '?lang=' + lang });
+  if (d.url && lang && lang !== 'es' && LANGS.includes(lang)) d = Object.assign({}, d, { url: d.url.replace('/portal/', '/' + lang + '/portal/') });
   const L = T[LANGS.includes(lang) ? lang : 'es'], c = esc(d.cliente), brand = d.brand || {};
   if (kind === 'code') {
     const inner = `<h1 style="margin:0 0 12px;font-size:22px">${L.codeTitle}</h1><p style="margin:0 0 20px;font-size:14.5px;line-height:1.6;color:#334155">${L.codeBody(c)}</p>

@@ -1,2 +1,12 @@
 # Portal del cliente: /portal/<cliente>/<seccion> sirve la misma pagina
 /portal/*  /portal  200
+
+# Versiones por idioma del portal: /en/portal/<cliente>, /de/..., /pt/...
+/en/portal/*  /portal  200
+/en/portal  /portal  200
+/de/portal/*  /portal  200
+/de/portal  /portal  200
+/pt/portal/*  /portal  200
+/pt/portal  /portal  200
+/es/portal/*  /portal  200
+/es/portal  /portal  200

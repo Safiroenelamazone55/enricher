@@ -45,7 +45,7 @@
     document.querySelectorAll('.pt-lang').forEach(box => {
       const menu = box.querySelector('.pt-lm');
       box.querySelector('.pt-lg').onclick = e => { e.stopPropagation(); menu.classList.toggle('on'); };
-      menu.querySelectorAll('button').forEach(b => b.onclick = () => { PT_I18N.set(b.dataset.l, () => { if (S.redraw) S.redraw(); }); if (S.me) api('/portal/profile', { method: 'PATCH', body: JSON.stringify({ lang: b.dataset.l }) }).catch(() => {}); });
+      menu.querySelectorAll('button').forEach(b => b.onclick = () => { PT_I18N.set(b.dataset.l, () => { try { const p = location.pathname.replace(/^\/(en|de|pt|es)(?=\/portal)/, ''); history.replaceState(null, '', (b.dataset.l === 'es' ? '' : '/' + b.dataset.l) + p + location.search); } catch (e) {} if (S.redraw) S.redraw(); }); if (S.me) api('/portal/profile', { method: 'PATCH', body: JSON.stringify({ lang: b.dataset.l }) }).catch(() => {}); });
     });
   }
   document.addEventListener('click', () => document.querySelectorAll('.pt-lm.on').forEach(m => m.classList.remove('on')));
@@ -129,8 +129,9 @@
   // ── URLs por cliente y sección: /portal/<cliente>/<sección>[/<id>] ──
   const SEC_URL = { inicio: 'resumen', reuniones: 'reuniones', empresas: 'empresas', contactos: 'contactos', secuencias: 'secuencias', actividad: 'actividad' };
   const URL_SEC = Object.fromEntries(Object.entries(SEC_URL).map(([k, v]) => [v, k]));
-  function parseUrl() { const m = location.pathname.replace(/\/+$/, '').match(/^\/portal(?:\/([^/]+))?(?:\/([^/]+))?(?:\/([^/]+))?$/); return m ? { slug: m[1] || '', sec: m[2] || '', id: parseInt(m[3]) || 0 } : null; }
-  const tabUrl = tab => '/portal/' + S.me.slug + (tab === 'inicio' ? '' : '/' + SEC_URL[tab]);
+  function parseUrl() { const m = location.pathname.replace(/\/+$/, '').match(/^(?:\/(?:en|de|pt|es))?\/portal(?:\/([^/]+))?(?:\/([^/]+))?(?:\/([^/]+))?$/); return m ? { slug: m[1] || '', sec: m[2] || '', id: parseInt(m[3]) || 0 } : null; }
+  const LP = () => PT_I18N.lang === 'es' ? '' : '/' + PT_I18N.lang;   // /en/portal/... = versión en inglés
+  const tabUrl = tab => LP() + '/portal/' + S.me.slug + (tab === 'inicio' ? '' : '/' + SEC_URL[tab]);
   function setUrl(path, replace) { if (!S.me || S.noPush || location.pathname === path) return; try { history[replace ? 'replaceState' : 'pushState'](null, '', path); } catch (e) {} }
   window.addEventListener('popstate', () => {
     if (!S.me) return; const u = parseUrl(); if (!u) return;
@@ -515,14 +516,14 @@
   function showDrawer() { closeDrawer(); const box = document.createElement('div'); box.id = 'pt-drawer'; root.appendChild(box); box.innerHTML = '<div class="pt-dr-bg" onclick="PT.close()"></div><aside class="pt-dr"><div class="pt-dr__b"><div class="pt-empty">Cargando…</div></div></aside>'; }
   // Abre desde un contacto: vista Empresa si tiene empresa, para ver todo el recorrido
   async function openContact(id) {
-    showDrawer(); S.dr = { tab: 'contacto', contactId: id, hasContact: true }; setUrl('/portal/' + S.me.slug + '/contactos/' + id);
+    showDrawer(); S.dr = { tab: 'contacto', contactId: id, hasContact: true }; setUrl(LP() + '/portal/' + S.me.slug + '/contactos/' + id);
     await drLoadContact(id); if (!S.dr || S.dr.contactId !== id) return;
     if (S.dr.ct && S.dr.ct.contact.company_id) { S.dr.companyId = S.dr.ct.contact.company_id; S.dr.tab = 'empresa'; drPaint(); await drLoadCompany(S.dr.companyId); }
     if (!S.dr.ct && !S.dr.co) { const b = document.querySelector('#pt-drawer .pt-dr__b'); if (b) b.innerHTML = `<div class="pt-empty">${esc(S.dr.err || 'Error')}</div>`; return; }
     drPaint();
   }
   async function openCompany(id) {
-    showDrawer(); S.dr = { tab: 'empresa', companyId: id, hasContact: false }; setUrl('/portal/' + S.me.slug + '/empresas/' + id);
+    showDrawer(); S.dr = { tab: 'empresa', companyId: id, hasContact: false }; setUrl(LP() + '/portal/' + S.me.slug + '/empresas/' + id);
     await drLoadCompany(id); if (!S.dr || S.dr.companyId !== id) return;
     if (!S.dr.co) { const b = document.querySelector('#pt-drawer .pt-dr__b'); if (b) b.innerHTML = `<div class="pt-empty">${esc(S.dr.err || 'Error')}</div>`; return; }
     drPaint();

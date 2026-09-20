@@ -221,7 +221,7 @@
   let lang = 'es';
   try { lang = localStorage.getItem('pt_lang') || ''; } catch (e) {}
   // el enlace del correo trae ?lang=xx: el portal se abre ya en ese idioma (también en la pantalla de acceso)
-  try { const q = new URLSearchParams(location.search).get('lang'); if (q && LANGS[q]) { lang = q; localStorage.setItem('pt_lang', q); } } catch (e) {}
+  try { const m = location.pathname.match(/^\/(en|de|pt|es)\/portal(?:\/|$)/); const q = m ? m[1] : new URLSearchParams(location.search).get('lang'); if (q && LANGS[q]) { lang = q; localStorage.setItem('pt_lang', q); } } catch (e) {}
   if (!LANGS[lang]) { const n = (navigator.language || 'es').slice(0, 2).toLowerCase(); lang = n === 'es' ? 'es' : n === 'pt' ? 'pt' : (n === 'de' || n === 'fr' || n === 'it') ? 'de' : 'en'; }
   function tx(s) {
     if (lang === 'es' || !s) return s;
