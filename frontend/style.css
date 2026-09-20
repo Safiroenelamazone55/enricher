@@ -16883,3 +16883,30 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .dl-share{border:1px solid #D9DEE3;background:#fff;color:#64748B;font:600 11px inherit;padding:2px 8px;cursor:pointer}
 .dl-share:hover{border-color:#2563EB;color:#2563EB}
 .dl-share.on{background:#DCFCE7;border-color:#86EFAC;color:#15803D}
+
+/* ── Modal "Acceso al portal": compacto, todo visible sin desplazamiento ── */
+#portal-access-modal .fin-pi-box{width:min(1120px,96vw);max-width:none;overflow:hidden}
+#portal-access-modal *{box-sizing:border-box}
+#portal-access-modal .dle-hd{padding:8px 14px}
+#portal-access-modal .dle-hd__t{font-size:14px}
+#portal-access-body{padding:8px 14px 12px;font-size:12px;overflow-x:hidden;max-height:94vh;overflow-y:auto}
+#portal-access-body .btn--sm{padding:2px 9px;font-size:11.5px;line-height:1.5;white-space:nowrap}
+.pa-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;color:#64748B}
+.pa-top .lm-link{font-size:12px}
+.pa-hint{font-size:11.5px}
+.pa-tbl{width:100%;table-layout:fixed;border-collapse:collapse}
+.pa-tbl th{font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:#8A94A6;text-align:left;font-weight:600;padding:4px 8px;background:#F5F4F1;border-bottom:1px solid #E7E4DE}
+.pa-tbl td{padding:3px 8px;border-bottom:1px solid #F1EFEB;vertical-align:middle;font-size:12px;height:30px}
+.pa-u{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pa-u b{font-size:12.5px}.pa-n{color:#64748B}
+.pa-act{display:flex;gap:4px;justify-content:flex-end;flex-wrap:nowrap}
+.pa-row{display:flex;gap:18px;align-items:center;margin:6px 0 0;color:#475569}
+.pa-row label,.pa-form label{display:flex;gap:5px;align-items:center;white-space:nowrap;font-size:12px;color:#475569}
+.pa-sel{font-size:12px;padding:1px 4px;border:1px solid #D9DEE3;background:#fff;color:#334155}
+.pa-new{margin-top:8px;padding-top:8px;border-top:1px solid #EEF1F4}
+.pa-new>b{display:block;font-size:12.5px;margin-bottom:5px}
+.pa-form{display:flex;gap:6px;align-items:center;flex-wrap:nowrap}
+.pa-form .lm-inp,#portal-access-body .lm-inp{padding:4px 8px;font-size:12px;min-width:0}
+.pa-form .lm-inp{flex:1 1 0}
+.pa-form #portal-em{flex:1.6 1 0}
+.pa-empty{padding:6px 2px;color:#64748B}
