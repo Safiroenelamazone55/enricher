@@ -25503,12 +25503,41 @@ ${foot}
     if (st === 'error') return `<div class="rp-err"><b>No se pudo enviar</b><span>${_rpEsc(_RP.err || 'Error')}</span></div>`;
     return '';
   }
+  // próximo envío automático (día y hora en la zona elegida)
+  function _rpNext(S, lastAuto) {
+    try {
+      const fmt = new Intl.DateTimeFormat('en-US', { timeZone: S.tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hour12: false, weekday: 'short' });
+      const W = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      for (let d = 0; d <= 8; d++) {
+        const p = Object.fromEntries(fmt.formatToParts(new Date(Date.now() + d * 864e5)).map(x => [x.type, x.value]));
+        if (W.indexOf(p.weekday) !== S.dow) continue;
+        const ymd = `${p.year}-${p.month}-${p.day}`;
+        if (lastAuto === ymd) continue;
+        if (d === 0 && (parseInt(p.hour) % 24) >= S.hour) continue;
+        const txt = new Date(ymd + 'T12:00:00Z').toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
+        return `${txt} · ${String(S.hour).padStart(2, '0')}:00`;
+      }
+    } catch (e) { /* sin zona válida */ }
+    return '';
+  }
+  async function _rpReload() { try { const r = await _portalApi(`/lm/reports/${_RP.cid}`); _RP.info = Object.assign({}, _RP.info, { schedule: r.schedule, last_sent_at: r.last_sent_at, last_recipients: r.last_recipients, last_by: r.last_by }); } catch (e) { /* se conserva lo mostrado */ } _rpSide(); }
+  function _rpAutoCard() {
+    const S = _RP.sched, i = _RP.info || {};
+    if (!S.on) return '';
+    const nxt = _rpNext(S, (i.schedule && i.schedule.last_auto) || '');
+    const last = i.last_sent_at ? new Date(i.last_sent_at).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'todavía ninguno';
+    return `<div class="rp-auto"><div class="rp-auto__h"><span class="rp-auto__dot"></span>Envío automático activo</div>
+      <div class="rp-auto__r"><span>Próximo envío</span><b>${_rpEsc(nxt || '—')}</b> <em>${_rpEsc(_rpTzName(S.tz))}</em></div>
+      <div class="rp-auto__r"><span>Se envía a</span><b>${_RP.recipients.map(_rpEsc).join(', ') || '—'}</b></div>
+      <div class="rp-auto__r"><span>Idioma</span><b>${_RP_LANGN[_RP.lang]}</b></div>
+      <div class="rp-auto__r"><span>Último envío</span><b>${_rpEsc(last)}</b>${i.last_by ? ' <em>· ' + _rpEsc(i.last_by) + '</em>' : ''}</div></div>`;
+  }
   function _rpSide() {
     const s = document.getElementById('rp-side'); if (!s) return; const i = _RP.info || {};
     const chips = _RP.recipients.map((e, k) => `<span class="rp-chip">${_rpEsc(e)}<button title="Quitar" onclick="LeadManagerModule.reportRm(${k})">✕</button></span>`).join('');
     const sug = (i.suggested || []).filter(a => !_RP.recipients.includes(String(a.email).toLowerCase())).map(a => `<button class="rp-sug" onclick="LeadManagerModule.reportAdd('${_rpEsc(a.email)}')"><span>＋</span> ${_rpEsc(a.email)}${a.nombre ? ` <em>${_rpEsc(a.nombre)}</em>` : ''}</button>`).join('');
     const mb = i.mailbox ? `<div class="rp-from">Se envía desde el buzón <b>${_rpEsc(i.mailbox.email)}</b> del cliente</div>` : `<div class="rp-from rp-from--bad">Este cliente no tiene un buzón conectado: no se puede enviar el informe.</div>`;
-    s.innerHTML = `${mb}
+    s.innerHTML = `${_rpAutoCard()}${mb}
       <div class="rp-l">Destinatarios (equipo del cliente)</div>
       <div class="rp-chips">${chips || '<span style="color:#94A3B8">Aún no hay destinatarios</span>'}</div>
       <div class="rp-add"><input class="lm-inp" id="rp-in" type="email" placeholder="correo@empresa.com" onkeydown="if(event.key===\'Enter\'||event.key===\',\'){event.preventDefault();LeadManagerModule.reportAddInput()}"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.reportAddInput()">Agregar</button></div>
@@ -25557,12 +25586,12 @@ ${foot}
     const ok = await novaConfirm({ title: '¿Activar el envío automático?', message: `Se enviará cada ${_RP_DAYS[S.dow].toLowerCase()} a las ${String(S.hour).padStart(2, '0')}:00 (${_rpTzName(S.tz)}), en ${_RP_LANGN[_RP.lang]}, a ${_RP.recipients.join(', ')}, desde el buzón del cliente.`, ok: 'Activar', cancel: 'Cancelar' });
     if (!ok) return;
     S.on = true; S.draft = false;
-    if (await _rpSave(true)) showBanner('✓ Envío automático activado', 'success'); else { S.on = false; S.draft = true; }
+    if (await _rpSave(true)) { showBanner('✓ Envío automático activado', 'success'); await _rpReload(); } else { S.on = false; S.draft = true; }
     _rpSide();
   }
   function reportSched(k, v) {
     _RP.sched[k] = k === 'tz' ? v : parseInt(v);
-    if (_RP.sched.on) _rpSave(true).then(ok => { if (ok) showBanner('✓ Programación guardada', 'success'); });
+    if (_RP.sched.on) _rpSave(true).then(async ok => { if (ok) { showBanner('✓ Programación guardada', 'success'); await _rpReload(); } else _rpSide(); }); else _rpSide();
   }
   function reportAdd(e) {
     e = String(e || '').trim().toLowerCase();

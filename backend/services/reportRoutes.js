@@ -90,13 +90,13 @@ function mount(app, { pool, requireAuth, dashHandler, highlights, sendViaClientM
       const cid = parseInt(req.params.cid);
       if (!cid || !(await ownsClient(req.workspaceOwnerId, cid))) return res.status(404).json({ error: 'Cliente no encontrado' });
       const [st, acc, mb, cl] = await Promise.all([
-        pool.query(`SELECT recipients, lang, last_sent_at, last_recipients, last_by, schedule_on, schedule_dow, schedule_hour, schedule_tz, last_error FROM client_reports WHERE outbound_client_id=$1`, [cid]),
+        pool.query(`SELECT recipients, lang, last_sent_at, last_recipients, last_by, schedule_on, schedule_dow, schedule_hour, schedule_tz, last_error, to_char(last_auto_date,'YYYY-MM-DD') AS last_auto FROM client_reports WHERE outbound_client_id=$1`, [cid]),
         pool.query(`SELECT email, nombre FROM client_accounts WHERE outbound_client_id=$1 AND activo ORDER BY id`, [cid]),
         pool.query(`SELECT email, estado FROM lm_mailboxes WHERE outbound_client_id=$1 AND estado NOT IN ('error') ORDER BY verified_at DESC NULLS LAST, id LIMIT 1`, [cid]),
         pool.query(`SELECT nombre FROM outbound_clients WHERE id=$1`, [cid]),
       ]);
       const s = st.rows[0] || {};
-      res.json({ cliente: (cl.rows[0] || {}).nombre || '', recipients: s.recipients || [], lang: s.lang || 'es', last_sent_at: s.last_sent_at || null, last_recipients: s.last_recipients || [], last_by: s.last_by || '', schedule: { on: !!s.schedule_on, dow: s.schedule_dow == null ? 1 : s.schedule_dow, hour: s.schedule_hour == null ? 9 : s.schedule_hour, tz: s.schedule_tz || 'America/Lima', error: s.last_error || '' }, suggested: acc.rows, mailbox: mb.rows[0] || null });
+      res.json({ cliente: (cl.rows[0] || {}).nombre || '', recipients: s.recipients || [], lang: s.lang || 'es', last_sent_at: s.last_sent_at || null, last_recipients: s.last_recipients || [], last_by: s.last_by || '', schedule: { on: !!s.schedule_on, dow: s.schedule_dow == null ? 1 : s.schedule_dow, hour: s.schedule_hour == null ? 9 : s.schedule_hour, tz: s.schedule_tz || 'America/Lima', last_auto: s.last_auto || '', error: s.last_error || '' }, suggested: acc.rows, mailbox: mb.rows[0] || null });
     } catch (e) { console.error('[report] get', e.message); res.status(500).json({ error: 'Error' }); }
   });
 
@@ -120,7 +120,11 @@ function mount(app, { pool, requireAuth, dashHandler, highlights, sendViaClientM
       }
       await pool.query(`INSERT INTO client_reports (outbound_client_id, user_id, recipients, lang, updated_at) VALUES ($1,$2,$3,$4,NOW())
                         ON CONFLICT (outbound_client_id) DO UPDATE SET recipients=$3, lang=$4, updated_at=NOW()`, [cid, req.workspaceOwnerId, JSON.stringify(rec), lang]);
-      if (sc) await pool.query(`UPDATE client_reports SET schedule_on=$2, schedule_dow=$3, schedule_hour=$4, schedule_tz=$5, last_error='' WHERE outbound_client_id=$1`, [cid, on, dow, hour, tz]);
+      if (sc) {
+        await pool.query(`UPDATE client_reports SET schedule_on=$2, schedule_dow=$3, schedule_hour=$4, schedule_tz=$5, last_error='' WHERE outbound_client_id=$1`, [cid, on, dow, hour, tz]);
+        // si se activa (o cambia) cuando la hora de hoy ya pasó, hoy no se envía: el primer envío es el próximo día programado
+        if (on) await pool.query(`UPDATE client_reports SET last_auto_date=(NOW() AT TIME ZONE schedule_tz)::date WHERE outbound_client_id=$1 AND EXTRACT(DOW FROM (NOW() AT TIME ZONE schedule_tz)) = schedule_dow AND EXTRACT(HOUR FROM (NOW() AT TIME ZONE schedule_tz)) >= schedule_hour`, [cid]);
+      }
       res.json({ ok: true, recipients: rec, lang });
     } catch (e) { console.error('[report] put', e.message); res.status(500).json({ error: 'Error al guardar' }); }
   });
