@@ -25491,13 +25491,13 @@ ${foot}
   function _rpSide() {
     const s = document.getElementById('rp-side'); if (!s) return; const i = _RP.info || {};
     const chips = _RP.recipients.map((e, k) => `<span class="rp-chip">${_rpEsc(e)}<button title="Quitar" onclick="LeadManagerModule.reportRm(${k})">✕</button></span>`).join('');
-    const sug = (i.suggested || []).filter(a => !_RP.recipients.includes(String(a.email).toLowerCase())).map(a => `<button class="rp-sug" onclick="LeadManagerModule.reportAdd('${_rpEsc(a.email)}')">＋ ${_rpEsc(a.email)}</button>`).join('');
+    const sug = (i.suggested || []).filter(a => !_RP.recipients.includes(String(a.email).toLowerCase())).map(a => `<button class="rp-sug" onclick="LeadManagerModule.reportAdd('${_rpEsc(a.email)}')"><span>＋</span> ${_rpEsc(a.email)}${a.nombre ? ` <em>${_rpEsc(a.nombre)}</em>` : ''}</button>`).join('');
     const mb = i.mailbox ? `<div class="rp-from">Se envía desde el buzón <b>${_rpEsc(i.mailbox.email)}</b> del cliente</div>` : `<div class="rp-from rp-from--bad">Este cliente no tiene un buzón conectado: no se puede enviar el informe.</div>`;
     s.innerHTML = `${mb}
       <div class="rp-l">Destinatarios (equipo del cliente)</div>
       <div class="rp-chips">${chips || '<span style="color:#94A3B8">Aún no hay destinatarios</span>'}</div>
       <div class="rp-add"><input class="lm-inp" id="rp-in" type="email" placeholder="correo@empresa.com" onkeydown="if(event.key===\'Enter\'||event.key===\',\'){event.preventDefault();LeadManagerModule.reportAddInput()}"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.reportAddInput()">Agregar</button></div>
-      ${sug ? `<div class="rp-sugs">${sug}</div>` : ''}
+      ${sug ? `<div class="rp-l" style="margin-top:12px">Sugeridos · ya tienen acceso al portal</div><div class="rp-sugs">${sug}</div>` : ''}
       <div class="rp-l">Idioma del mensaje</div>
       <select class="pa-sel" id="rp-lang" onchange="LeadManagerModule.reportLang(this.value)"><option value="es">Español</option><option value="en">English</option><option value="de">Deutsch</option><option value="pt">Português</option></select>
       <div class="rp-l">Mensaje adicional (opcional)</div>
