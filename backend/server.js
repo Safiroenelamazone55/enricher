@@ -4232,7 +4232,7 @@ const LM_DISP_LBL = {
 };
 // tipo 'aceptacion' es DISTINTO de 'respuesta' a propósito: así no se cuenta como
 // respuesta en /sequences/:id/metrics ni en la pestaña "Respuestas" del cliente.
-const LM_DISP_TIPO = { aceptado: 'aceptacion', respondio: 'respuesta', reunion: 'reunion', mas_adelante: 'respuesta', derivado: 'respuesta', no_es_persona: 'nota' };
+const LM_DISP_TIPO = { aceptado: 'aceptacion', respondio: 'respuesta', reunion: 'reunion', mas_adelante: 'respuesta', derivado: 'respuesta', no_es_persona: 'nota', no_interesado: 'respuesta', no_contactar: 'respuesta' };
 // Etapa del pipeline por disposición. null = no mover (derivados y aceptado: aceptar
 // una conexión no es todavía una señal comercial, así que no adelanta la etapa).
 const LM_STAGE_BY_DISP = {
@@ -4281,6 +4281,8 @@ app.post('/api/lm/contacts/:id/disposition', requireAuth, async (req, res) => {
   const disp = _lmS((req.body || {}).disposition);
   const nota = _lmS((req.body || {}).nota);
   const seqId = (req.body || {}).sequence_id ? (parseInt((req.body).sequence_id) || null) : null;
+  const canalRaw = String((req.body || {}).canal || '').toLowerCase();
+  const canal = ['email', 'linkedin', 'whatsapp', 'llamada', 'call'].includes(canalRaw) ? (canalRaw === 'llamada' ? 'call' : canalRaw) : '';
   try {
     const before = await pool.query(`SELECT disposition, outbound_client_id, li_aceptado_at FROM lm_contacts WHERE id=$1 AND user_id=$2`, [cid, uid]);
     if (!before.rowCount) return res.status(404).json({ error: 'Contacto no encontrado' });
@@ -4357,10 +4359,10 @@ app.post('/api/lm/contacts/:id/disposition', requireAuth, async (req, res) => {
     // Registrar el CAMBIO de disposition (solo cuando hay transición real).
     if (disp !== oldDisp) {
       await pool.query(
-        `INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, nota, fecha, estado)
-         VALUES ($1,$2,$3,'disposition_change',$4,NOW(),'hecha')`,
+        `INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, nota, fecha, estado, canal)
+         VALUES ($1,$2,$3,'disposition_change',$4,NOW(),'hecha',$5)`,
         [uid, cid, obcId,
-         `Estado: ${LM_DISP_LBL[oldDisp] || oldDisp || '(sin estado)'} → ${LM_DISP_LBL[disp] || disp || '(sin estado)'}`]
+         `Estado: ${LM_DISP_LBL[oldDisp] || oldDisp || '(sin estado)'} → ${LM_DISP_LBL[disp] || disp || '(sin estado)'}`, canal]
       ).catch(() => {});
     }
 
@@ -4422,10 +4424,10 @@ app.post('/api/lm/contacts/:id/disposition', requireAuth, async (req, res) => {
     // guarda se creaba una actividad extra cada vez que se re-guardaba el mismo estado.
     if (disp && disp !== oldDisp) {
       await pool.query(
-        `INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, nota, fecha, estado)
-         VALUES ($1,$2,$3,$4,$5,NOW(),'hecha')`,
+        `INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, nota, fecha, estado, canal)
+         VALUES ($1,$2,$3,$4,$5,NOW(),'hecha',$6)`,
         [uid, cid, obcId, LM_DISP_TIPO[disp] || 'nota',
-         `Disposición: ${LM_DISP_LBL[disp] || disp}${nota ? ' — ' + nota : ''}`]);
+         `Disposición: ${LM_DISP_LBL[disp] || disp}${nota ? ' — ' + nota : ''}`, canal]);
     }
     // La disposición alimenta el pipeline (solo hacia adelante).
     const stage = disp ? await _lmAdvanceStage(uid, cid, LM_STAGE_BY_DISP[disp]) : null;

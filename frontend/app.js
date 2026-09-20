@@ -20614,8 +20614,8 @@ ${foot}
       <span class="cp-deriv-banner__txt"><b>Derivado de ${esc(nom)}</b>${c.referred_note ? ` — ${esc(c.referred_note)}` : ''}</span>
     </div>`;
   }
-  async function _lmSetDispositionCore(cid, disp, seqId, nota) {
-    const res = await apiFetch(`${API}/lm/contacts/${cid}/disposition`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ disposition: disp, sequence_id: seqId || null, nota: nota || '' }) });
+  async function _lmSetDispositionCore(cid, disp, seqId, nota, canal) {
+    const res = await apiFetch(`${API}/lm/contacts/${cid}/disposition`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ disposition: disp, sequence_id: seqId || null, nota: nota || '', canal: canal || '' }) });
     if (!res.ok) throw new Error((await res.json()).error || 'Error');
     const out = await res.json();
     // Bloque A: centralizar aquí el refresh de _contacts + _activities SIEMPRE tras
@@ -28674,7 +28674,7 @@ ${foot}
     const btn = $('rr-save'); if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
     try {
       const chanLbl = { email: 'Email conectado', email_manual: 'Email no conectado', whatsapp: 'WhatsApp', linkedin: 'LinkedIn', llamada: 'Llamada', otro: 'Otro' }[canal] || canal;
-      const r = await _lmSetDispositionCore(cid, resultado, seqId || null, `[${chanLbl}]${nota ? ' ' + nota : ''}`);
+      const r = await _lmSetDispositionCore(cid, resultado, seqId || null, `[${chanLbl}]${nota ? ' ' + nota : ''}`, ({ email: 'email', email_manual: 'email', whatsapp: 'whatsapp', linkedin: 'linkedin', llamada: 'llamada' })[canal] || '');
       document.getElementById('lm-reply-modal')?.remove();
       if (_activeSeq && Array.isArray(_seqContacts)) { _seqContacts = null; await _seqLoadContacts(_activeSeq); }
       if (_section === 'contact-view') { _renderBody(); _cpReloadActs(cid); }
