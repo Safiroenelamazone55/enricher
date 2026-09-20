@@ -22598,6 +22598,7 @@ ${foot}
     ['fallos', 'Fallos y bloqueos'],
     ['vencidas', 'Tareas vencidas'],
     ['hoy', 'Acciones de hoy'],
+    ['proximas', 'Próximas tareas (7 días)'],
     ['linkedin_aceptado', 'LinkedIn aceptado — con siguiente acción'],
     ['datos_faltantes', 'Datos obligatorios faltantes'],
   ];

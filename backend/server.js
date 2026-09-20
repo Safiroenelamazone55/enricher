@@ -4556,8 +4556,8 @@ app.get('/api/lm/tasks/inbox', requireAuth, async (req, res) => {
       SELECT a.id, a.contact_id, a.outbound_client_id, a.canal, a.fecha AS due_at, a.nota AS reason,
              k.nombre, k.apellido, k.email
         FROM activities a JOIN lm_contacts k ON k.id=a.contact_id
-       WHERE a.user_id=$1 AND a.tipo IN ('tarea','followup') AND a.estado='pendiente'
-         AND a.fecha < NOW() - interval '1 day'
+       WHERE a.user_id=$1 AND a.tipo IN ('tarea','followup','reunion','llamada','email_enviado','linkedin_msg','linkedin_connect','linkedin_visita','nota') AND a.estado='pendiente'
+         AND (a.fecha AT TIME ZONE 'UTC')::date < (NOW() AT TIME ZONE 'America/Lima')::date
        ORDER BY a.fecha ASC`, [uid]);
 
     // 4. HOY (actividades pendientes con fecha de hoy y no vencidas aún).
@@ -4565,8 +4565,18 @@ app.get('/api/lm/tasks/inbox', requireAuth, async (req, res) => {
       SELECT a.id, a.contact_id, a.outbound_client_id, a.canal, a.fecha AS due_at, a.nota AS reason,
              k.nombre, k.apellido, k.email
         FROM activities a JOIN lm_contacts k ON k.id=a.contact_id
-       WHERE a.user_id=$1 AND a.tipo IN ('tarea','followup') AND a.estado='pendiente'
-         AND a.fecha >= NOW() - interval '1 day' AND a.fecha <= NOW() + interval '1 day'
+       WHERE a.user_id=$1 AND a.tipo IN ('tarea','followup','reunion','llamada','email_enviado','linkedin_msg','linkedin_connect','linkedin_visita','nota') AND a.estado='pendiente'
+         AND (a.fecha AT TIME ZONE 'UTC')::date = (NOW() AT TIME ZONE 'America/Lima')::date
+       ORDER BY a.fecha ASC`, [uid]);
+
+    // 4b. PRÓXIMAS (tareas pendientes de los próximos 7 días, con su fecha).
+    const { rows: upcoming } = await pool.query(`
+      SELECT a.id, a.contact_id, a.outbound_client_id, a.canal, a.fecha AS due_at, a.nota AS reason,
+             k.nombre, k.apellido, k.email
+        FROM activities a JOIN lm_contacts k ON k.id=a.contact_id
+       WHERE a.user_id=$1 AND a.tipo IN ('tarea','followup','reunion','llamada','email_enviado','linkedin_msg','linkedin_connect','linkedin_visita','nota') AND a.estado='pendiente'
+         AND (a.fecha AT TIME ZONE 'UTC')::date > (NOW() AT TIME ZONE 'America/Lima')::date
+         AND (a.fecha AT TIME ZONE 'UTC')::date <= (NOW() AT TIME ZONE 'America/Lima')::date + 7
        ORDER BY a.fecha ASC`, [uid]);
 
     // 5. FALLOS Y BLOQUEOS — mensajes que fallaron o rebotaron en los últimos 14 días.
@@ -4617,6 +4627,7 @@ app.get('/api/lm/tasks/inbox', requireAuth, async (req, res) => {
     for (const r of fails) if (!respContactIds.has(r.contact_id)) list.push({ ...mk(r, 'fallos', 'resolve_failure', 'send_failed'), message_id: r.id, activity_id: null });
     for (const r of over)  if (!respContactIds.has(r.contact_id)) list.push(mk(r, 'vencidas',      'manual_touch', 'overdue'));
     for (const r of today) if (!respContactIds.has(r.contact_id)) list.push(mk(r, 'hoy',           'manual_touch', 'due_today'));
+    for (const r of upcoming) if (!respContactIds.has(r.contact_id)) list.push(mk(r, 'proximas',    'manual_touch', 'upcoming'));
     // LinkedIn aceptado y Datos faltantes van al final — no compiten con lo urgente, solo se agregan si el contacto no salió ya en otra categoría.
     const seenSoFar = new Set(list.map(x => x.contact_id));
     for (const r of liAccepted) if (!seenSoFar.has(r.contact_id)) { list.push({ ...mk(r, 'linkedin_aceptado', 'next_step', 'li_accepted'), message_id: null, activity_id: null }); seenSoFar.add(r.contact_id); }
