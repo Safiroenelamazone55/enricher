@@ -90,7 +90,7 @@ function buildReport(lang, d) {
   const bold = t => String(t).split(d.rango).map(part => part.split(/(\d+)/).map((x, n) => n % 2 ? '<b>' + esc(x) + '</b>' : esc(x)).join('')).join(esc(d.rango));
   const P = t => t ? `<p style="margin:0 0 16px;${F}font-size:15.5px;line-height:1.7;color:#1E293B">${bold(t)}</p>` : '';
   const note = d.note ? `<p style="margin:0 0 14px;${F}font-size:15px;line-height:1.65;color:#1E293B;white-space:pre-line">${esc(d.note)}</p>` : '';
-  const logo = brand.hasLogo ? `<img src="cid:brandlogo" alt="${esc(d.cliente)}" height="30" style="display:block;height:30px;max-width:180px;border:0;margin:0 0 22px">` : '';
+  const logo = brand.hasLogo ? `<img src="cid:brandlogo" alt="${esc(d.cliente)}" height="40" style="display:block;height:40px;width:auto;max-width:260px;border:0;margin:0 0 22px">` : '';
   const img = `<a href="${esc(d.url)}" style="text-decoration:none"><img src="cid:reportpreview" alt="${esc(ALT[l])}" width="520" style="display:block;width:100%;max-width:520px;height:auto;border:1px solid #E1E6EC;margin:4px 0 20px"></a>`;
   const button = `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 22px"><tr><td style="background:${accent}"><a href="${esc(d.url)}" style="display:inline-block;padding:11px 24px;color:${lum(accent) > 0.45 ? '#0F172A' : '#FFFFFF'};${F}font-size:14px;font-weight:700;text-decoration:none">${esc(C.cta)}</a></td></tr></table>`;
   const body = `<div style="max-width:560px;margin:0 auto;padding:28px 20px">${logo}

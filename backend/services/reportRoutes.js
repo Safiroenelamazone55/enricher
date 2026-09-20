@@ -45,7 +45,7 @@ function mount(app, { pool, requireAuth, dashHandler, highlights, sendViaClientM
     const att = [];
     try { att.push({ filename: 'informe.png', content: await previewPng(lang, d, m.accent), cid: 'reportpreview', contentType: 'image/png' }); }
     catch (e) { console.warn('[report] no se pudo generar la imagen:', e.message); m.html = m.html.replace('cid:reportpreview', 'about:blank'); }
-    if (d.brand.hasLogo && d.brand.file && fs.existsSync(d.brand.file)) att.push({ filename: 'logo.png', content: await trimmedLogo(d.brand.file), cid: 'brandlogo', contentType: 'image/png' });
+    if (d.brand.hasLogo && d.brand.file && fs.existsSync(d.brand.file)) att.push({ filename: 'logo.png', content: await require('./logoUtil').logoPlate(d.brand.file, d.brand.tone, d.brand.bg), cid: 'brandlogo', contentType: 'image/png' });
     if (d.brand.hasWs && d.brand.wsFile && fs.existsSync(d.brand.wsFile)) att.push({ filename: 'nova.png', content: await trimmedLogo(d.brand.wsFile), cid: 'novalogo', contentType: 'image/png' });
     if (!att.some(a => a.cid === 'brandlogo')) m.html = m.html.replace('cid:brandlogo', 'about:blank');
     return { ...m, att, cliente: d.cliente };

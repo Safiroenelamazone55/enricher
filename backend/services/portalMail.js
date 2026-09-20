@@ -59,11 +59,11 @@ function shell(brand, inner, L, cliente) {
   const bg = okHex(brand.bg) ? brand.bg : '#0B1220';
   const fg = lum(bg) > 0.45 ? '#0F172A' : '#FFFFFF';
   const head = brand.hasLogo
-    ? `<img src="cid:brandlogo" alt="${esc(cliente)}" height="38" style="display:block;height:38px;max-width:220px;border:0">`
-    : `<span style="font:700 20px Arial,sans-serif;color:${fg}">${esc(cliente)}</span>`;
+    ? `<img src="cid:brandlogo" alt="${esc(cliente)}" height="42" style="display:block;height:42px;width:auto;max-width:280px;border:0">`
+    : `<span style="font:700 20px Arial,sans-serif;color:#0F172A">${esc(cliente)}</span>`;
   return `<!doctype html><html><body style="margin:0;padding:0;background:#EEF1F6"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#EEF1F6;padding:28px 12px"><tr><td align="center">
   <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="width:100%;max-width:560px;background:#ffffff;border:1px solid #E1E6EC;font-family:Arial,Helvetica,sans-serif;color:#0F172A">
-  <tr><td style="background:${bg};padding:22px 28px">${head}</td></tr>
+  <tr><td style="background:#ffffff;border-top:4px solid ${bg};padding:22px 28px 4px">${head}</td></tr>
   <tr><td style="padding:30px 28px 8px">${inner}</td></tr>
   <tr><td style="padding:14px 28px 4px;font-size:11.5px;color:#94A3B8;line-height:1.5">${esc(L.foot)}</td></tr>
   <tr><td style="background:#0B1220;padding:12px 28px"><table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="font:11px Arial,sans-serif;color:#94A3B8;padding-right:9px;vertical-align:middle">${esc(L.by)}</td><td style="vertical-align:middle">${brand.hasWs ? '<img src="cid:novalogo" alt="Novacentrax" height="15" style="display:block;height:15px;border:0">' : '<span style="font:700 12px Arial,sans-serif;color:#FFFFFF">Novacentrax</span>'}</td></tr></table></td></tr>
