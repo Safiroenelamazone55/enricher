@@ -1075,6 +1075,9 @@ async function initDb() {
     `);
     await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS client_accounts_email_uq ON client_accounts (LOWER(email));`);
     await pool.query(`ALTER TABLE lm_contacts ADD COLUMN IF NOT EXISTS portal_nota TEXT NOT NULL DEFAULT ''`);
+    await pool.query(`ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS reset_code_hash TEXT`);
+    await pool.query(`ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS reset_expires TIMESTAMPTZ`);
+    await pool.query(`ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS reset_attempts INTEGER NOT NULL DEFAULT 0`);
     await pool.query(`
       CREATE TABLE IF NOT EXISTS portal_messages (
         id                 SERIAL        PRIMARY KEY,

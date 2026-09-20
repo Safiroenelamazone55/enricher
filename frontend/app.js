@@ -25083,12 +25083,7 @@ ${foot}
         <input class="lm-inp" style="width:280px;flex:none" maxlength="600" placeholder="Nota visible para el cliente…" value="${esc(r.portal_nota || '')}" onchange="LeadManagerModule.portalNota(${r.contact_id},this)"></div>`;
     const dt = d => d ? new Date(d).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', timeZone: 'UTC' }) : '';
     return `
-      <div class="cp-card" style="margin-bottom:12px"><div class="cp-card__t">Acceso del cliente</div>
-        <div style="font-size:12.5px;color:#64748B;margin-bottom:10px">El cliente entra con correo y contraseña en <a class="lm-link" href="${url}" target="_blank" rel="noopener">${url}</a> <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.portalCopy('${url}')">Copiar enlace</button></div>
-        <div id="portal-cred"></div>
-        ${accs ? `<table class="clients-table" style="width:100%"><thead><tr><th>Usuario</th><th>Estado</th><th>Último ingreso</th><th></th></tr></thead><tbody>${accs}</tbody></table>` : '<div class="cp-empty2" style="padding:10px">Aún no hay usuarios para este cliente.</div>'}
-        <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><input class="lm-inp" id="portal-em" type="email" placeholder="correo del cliente" style="width:240px"><input class="lm-inp" id="portal-nm" placeholder="nombre (opcional)" style="width:200px"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.portalCreate(${cid})">＋ Crear usuario</button></div>
-      </div>
+      ${_portalAccessCard(cid, a)}
       <div class="cp-card" style="margin-bottom:12px"><div class="cp-card__t">Qué se destaca al cliente <span style="font-weight:400;font-size:12px;color:#64748B">— la nota que escribas aquí la ve el cliente junto a ese contacto y su empresa</span></div>
         <div style="font-weight:600;font-size:12.5px;margin:6px 0 2px">Próximas reuniones (${h.next_meetings.length})</div>${h.next_meetings.map(r => row(r, dt(r.fecha))).join('') || '<div class="cp-empty2" style="padding:8px">Ninguna. Se toman de "Deals" con fecha de cierre.</div>'}
         <div style="font-weight:600;font-size:12.5px;margin:12px 0 2px">Últimas respuestas</div>${h.last_replies.map(r => row(r, dt(r.fecha))).join('') || '<div class="cp-empty2" style="padding:8px">Sin respuestas registradas.</div>'}
@@ -25113,20 +25108,68 @@ ${foot}
     const el = document.getElementById('portal-cred'); if (!el) return;
     el.innerHTML = `<div style="background:#F0FDF4;border:1px solid #BBF7D0;padding:10px 12px;margin-bottom:10px;font-size:13px"><b>${esc(titulo)}</b> — cópialas ahora, la contraseña no se vuelve a mostrar.<div style="margin-top:6px;font-family:monospace;font-size:13px">Usuario: ${esc(email)}<br>Contraseña: <b>${esc(pw)}</b></div><div style="margin-top:8px"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.portalCopy('Portal: https://app.novacentrax.com/portal.html\\nUsuario: ${esc(email)}\\nContraseña: ${esc(pw)}')">Copiar todo</button></div></div>`;
   }
+  // Contraseña aleatoria legible (sin 0/O/1/l/I) para "Generar"
+  function _paGen() { const c = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789', b = new Uint32Array(12); crypto.getRandomValues(b); return Array.from(b).map(x => c[x % c.length]).join(''); }
+  function portalGen() { const i = document.getElementById('portal-pw'); if (i) { i.value = _paGen(); i.type = 'text'; } }
+  function _portalAccessCard(cid, a) {
+    const url = 'https://app.novacentrax.com/portal.html';
+    const rows = (a.accounts || []).map(x => `<tr>
+        <td><b>${esc(x.email)}</b><div style="font-size:11.5px;color:#64748B">${esc(x.nombre || '')}</div></td>
+        <td>${x.activo ? '<span class="lm-vb" style="background:#DCFCE7;color:#15803D">Activo</span>' : '<span class="lm-vb" style="background:#EEF1F5;color:#64748B">Desactivado</span>'}${x.must_change ? ' <span class="lm-vb" style="background:#FEF3C7;color:#A16207" title="Aún no ha creado su propia contraseña">Clave temporal</span>' : ''}</td>
+        <td>${x.last_login ? new Date(x.last_login).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'Nunca'}</td>
+        <td style="white-space:nowrap;text-align:right"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.portalEdit(${x.id})">Editar</button> <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.portalSecs(${x.id})">Qué ve</button> <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.portalReset(${x.id})">Nueva clave</button> <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.portalToggle(${x.id},${!x.activo})">${x.activo ? 'Desactivar' : 'Activar'}</button> <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.portalDel(${x.id})">Retirar</button></td></tr>
+        <tr id="portal-ed-${x.id}" style="display:none"><td colspan="4" style="background:#F8FAFC"><div style="display:flex;gap:8px;flex-wrap:wrap;padding:6px 2px;align-items:center"><input class="lm-inp" id="portal-ed-em-${x.id}" type="email" value="${esc(x.email)}" style="width:250px"><input class="lm-inp" id="portal-ed-nm-${x.id}" value="${esc(x.nombre || '')}" placeholder="nombre" style="width:190px"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.portalEditSave(${x.id})">Guardar</button></div></td></tr>
+        <tr id="portal-sec-${x.id}" style="display:none"><td colspan="4" style="background:#F8FAFC"><div style="display:flex;flex-wrap:wrap;gap:6px 18px;padding:6px 2px">${a.sections.map(k => `<label style="font-size:12.5px;display:flex;gap:6px;align-items:center"><input type="checkbox" data-k="${k}" ${x.sections[k] ? 'checked' : ''} onchange="LeadManagerModule.portalSec(${x.id},this)"> ${esc(_PORTAL_SEC[k] || k)}</label>`).join('')}</div></td></tr>`).join('');
+    return `<div class="cp-card" style="margin-bottom:12px"><div class="cp-card__t">Acceso del cliente</div>
+        <div style="font-size:12.5px;color:#64748B;margin-bottom:10px">Entra con correo y contraseña en <a class="lm-link" href="${url}" target="_blank" rel="noopener">${url}</a> <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.portalCopy('${url}')">Copiar enlace</button><br>Al primer ingreso crea su propia contraseña, y puede recuperarla con un código que le llega al correo.</div>
+        <div id="portal-cred"></div>
+        ${rows ? `<table class="clients-table" style="width:100%"><thead><tr><th>Usuario</th><th>Estado</th><th>Último ingreso</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+          <label style="display:flex;gap:6px;align-items:center;font-size:12.5px;margin-top:8px;color:#475569"><input type="checkbox" id="portal-rs-send"> Al generar una nueva clave, enviarla también por correo</label>` : '<div class="cp-empty2" style="padding:10px">Aún no hay usuarios para este cliente.</div>'}
+        <div style="border-top:1px solid #EEF1F4;margin-top:12px;padding-top:12px"><div style="font-weight:600;font-size:13px;margin-bottom:8px">Dar acceso a otra persona</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input class="lm-inp" id="portal-em" type="email" placeholder="correo" style="width:240px"><input class="lm-inp" id="portal-nm" placeholder="nombre (opcional)" style="width:190px">
+            <input class="lm-inp" id="portal-pw" type="text" value="${_paGen()}" style="width:170px;font-family:monospace" title="Contraseña temporal"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.portalGen()" title="Generar otra al azar">🎲 Generar</button></div>
+          <div style="display:flex;gap:14px;align-items:center;margin-top:8px;flex-wrap:wrap"><label style="display:flex;gap:6px;align-items:center;font-size:12.5px;color:#475569"><input type="checkbox" id="portal-inv" checked> Enviarle la invitación por correo</label><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.portalCreate(${cid})">＋ Dar acceso</button></div>
+        </div></div>`;
+  }
+  async function _portalRefresh(cid) { if (document.getElementById('portal-access-modal')) await _paLoad(cid); else await _portalLoad(cid); }
+  async function _paLoad(cid) {
+    const body = document.getElementById('portal-access-body'); if (!body) return;
+    try { const a = await _portalApi(`/lm/portal/accounts?client=${cid}`); window.__portalState = { cid, a }; body.innerHTML = _portalAccessCard(cid, a); }
+    catch (e) { body.innerHTML = `<div class="cp-empty2" style="padding:16px">No se pudo cargar: ${esc(e.message)}</div>`; }
+  }
+  function portalAccessOpen(cid) {
+    portalAccessClose();
+    const c = _clients.find(x => x.id === cid); if (!c) return;
+    const m = document.createElement('div'); m.id = 'portal-access-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = ev => { if (ev.target === m) portalAccessClose(); };
+    m.innerHTML = `<div class="fin-pi-box" style="max-width:820px;width:96vw"><div class="dle-hd"><div style="flex:1;min-width:0"><div class="dle-hd__t">Acceso al portal · ${esc(c.nombre)}</div></div><button class="fin-pi-x" onclick="LeadManagerModule.portalAccessClose()">✕</button></div><div id="portal-access-body" style="padding:14px 18px 18px;max-height:78vh;overflow:auto"><div class="cp-empty2" style="padding:16px">Cargando…</div></div></div>`;
+    document.body.appendChild(m); _paLoad(cid);
+  }
+  function portalAccessClose() { document.getElementById('portal-access-modal')?.remove(); }
+  function _paInviteMsg(inv) { return !inv ? '' : inv.sent ? ' Invitación enviada por correo.' : ` No se pudo enviar el correo (${inv.error || 'error'}): copia las credenciales y envíaselas tú.`; }
   async function portalCreate(cid) {
-    const em = document.getElementById('portal-em'), nm = document.getElementById('portal-nm');
-    try { const r = await _portalApi('/lm/portal/accounts', 'POST', { outbound_client_id: cid, email: em.value, nombre: nm.value }); await _portalLoad(cid); _portalShowCred(r.email, r.password, 'Usuario creado'); }
-    catch (e) { showBanner('Error: ' + e.message, 'error'); }
+    const em = document.getElementById('portal-em'), nm = document.getElementById('portal-nm'), pw = document.getElementById('portal-pw'), inv = document.getElementById('portal-inv');
+    try {
+      const r = await _portalApi('/lm/portal/accounts', 'POST', { outbound_client_id: cid, email: em.value, nombre: nm.value, password: pw.value.trim(), send_invite: !!(inv && inv.checked) });
+      await _portalRefresh(cid); _portalShowCred(r.email, r.password, 'Acceso creado.' + _paInviteMsg(r.invite));
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
   async function portalReset(id) {
-    const ok = await novaConfirm({ title: '¿Generar nueva contraseña?', message: 'La actual dejará de funcionar y el cliente deberá cambiarla al entrar.', ok: 'Generar', cancel: 'Cancelar' }); if (!ok) return;
-    try { const st = window.__portalState, acc = (st.a.accounts || []).find(x => x.id === id); const r = await _portalApi(`/lm/portal/accounts/${id}/reset`, 'POST'); await _portalLoad(st.cid); _portalShowCred(acc ? acc.email : '', r.password, 'Nueva contraseña'); }
-    catch (e) { showBanner('Error: ' + e.message, 'error'); }
+    const ok = await novaConfirm({ title: '¿Generar nueva contraseña?', message: 'La actual dejará de funcionar y la persona deberá crear la suya al entrar.', ok: 'Generar', cancel: 'Cancelar' }); if (!ok) return;
+    try {
+      const st = window.__portalState, acc = (st.a.accounts || []).find(x => x.id === id), send = !!(document.getElementById('portal-rs-send') || {}).checked;
+      const r = await _portalApi(`/lm/portal/accounts/${id}/reset`, 'POST', { send }); await _portalRefresh(st.cid); _portalShowCred(acc ? acc.email : '', r.password, 'Nueva contraseña.' + _paInviteMsg(r.invite));
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
-  async function portalToggle(id, activo) { try { await _portalApi(`/lm/portal/accounts/${id}`, 'PATCH', { activo }); await _portalLoad(window.__portalState.cid); } catch (e) { showBanner('Error: ' + e.message, 'error'); } }
+  async function portalToggle(id, activo) { try { await _portalApi(`/lm/portal/accounts/${id}`, 'PATCH', { activo }); await _portalRefresh(window.__portalState.cid); } catch (e) { showBanner('Error: ' + e.message, 'error'); } }
   async function portalDel(id) {
-    const ok = await novaConfirm({ title: '¿Eliminar este usuario?', message: 'Ya no podrá entrar al portal.', ok: 'Eliminar', cancel: 'Cancelar', tone: 'danger' }); if (!ok) return;
-    try { await _portalApi(`/lm/portal/accounts/${id}`, 'DELETE'); await _portalLoad(window.__portalState.cid); } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+    const ok = await novaConfirm({ title: '¿Retirar el acceso?', message: 'Esta persona ya no podrá entrar al portal.', ok: 'Retirar', cancel: 'Cancelar', tone: 'danger' }); if (!ok) return;
+    try { await _portalApi(`/lm/portal/accounts/${id}`, 'DELETE'); await _portalRefresh(window.__portalState.cid); } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  function portalEdit(id) { const r = document.getElementById('portal-ed-' + id); if (r) r.style.display = r.style.display === 'none' ? '' : 'none'; }
+  async function portalEditSave(id) {
+    try { await _portalApi(`/lm/portal/accounts/${id}`, 'PATCH', { email: document.getElementById('portal-ed-em-' + id).value, nombre: document.getElementById('portal-ed-nm-' + id).value }); showBanner('✓ Guardado', 'success'); await _portalRefresh(window.__portalState.cid); }
+    catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
   function portalSecs(id) { const r = document.getElementById('portal-sec-' + id); if (r) r.style.display = r.style.display === 'none' ? '' : 'none'; }
   async function portalSec(id, cb) {
@@ -25169,6 +25212,7 @@ ${foot}
       + item(mbYa ? 'Editar buzón' : 'Conectar buzón', `LeadManagerModule.mbManageOpen(${id})`)
       + item(waYa ? 'Editar WhatsApp' : 'Conectar WhatsApp', `LeadManagerModule.wamOpen(${id})`)
       + item('Editar cliente', `LeadManagerModule.openClientDrawer(${id})`)
+      + item('Acceso al portal', `LeadManagerModule.portalAccessOpen(${id})`)
       + item('Informe de campaña', `LeadManagerModule.clientCmpReport(${id})`)
       + item('Informe de secuencia', `LeadManagerModule.clientSeqReport(${id})`)
       + `</div>`;
@@ -30133,7 +30177,7 @@ ${foot}
     dgEnrichMenu, dgEnrichOpen, dgEnrichClose, dgEnrichApply, dgToggleIssues, dgMoreMenu, dgToggleSelMode,
     dgDupOpen, dgDupClose, dgDupPickSurvivor, dgDupToggleDel, dgDupMergeGroup, dgDupDeleteGroup,
     fmsToggle, fmsFilter, fmsPick,
-    openViews, applyView, saveView, deleteView, clearAllViews, dashTab, dashSet, dashClear, dashGran, portalCreate, portalReset, portalToggle, portalDel, portalSecs, portalSec, portalNota, portalChatSend, portalCopy,
+    openViews, applyView, saveView, deleteView, clearAllViews, dashTab, dashSet, dashClear, dashGran, portalCreate, portalReset, portalToggle, portalDel, portalSecs, portalAccessOpen, portalAccessClose, portalGen, portalEdit, portalEditSave, portalSec, portalNota, portalChatSend, portalCopy,
     taskSetView, taskSetFilter, calPrev, calNext, calToday,
     lmSetDisposition, seqDoDisposition, cpSetStage,
     seqDoAccepted, seqDoNoLinkedIn, seqDoBounced, seqDoNoWhatsapp, seqDoNoPhone, lmToggleNoLinkedIn, lmToggleNoWhatsapp, lmToggleNoPhone, lmToggleBounced, lmToggleManualEmail, ctToggleBounced,

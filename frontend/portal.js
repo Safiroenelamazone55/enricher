@@ -41,10 +41,12 @@
     root.innerHTML = `<div class="pt-login"><form class="pt-login__card" id="pt-lf">
       <div class="pt-brand"><img src="logo-nova.svg" alt="">Nova</div>
       <h1>Portal del cliente</h1><p class="sub">Ingresa con el correo y la contraseña que te asignamos.</p>
-      ${msg ? `<div class="pt-err">${esc(msg)}</div>` : ''}
+      ${msg ? `<div class="${/actualizada/.test(msg) ? 'pt-ok' : 'pt-err'}">${esc(msg)}</div>` : ''}
       <label class="pt-f"><span>Correo electrónico</span><input id="pt-em" type="email" autocomplete="username" required></label>
       <label class="pt-f"><span>Contraseña</span><input id="pt-pw" type="password" autocomplete="current-password" required></label>
-      <button class="pt-btn" id="pt-go" type="submit">Ingresar</button></form></div>`;
+      <button class="pt-btn" id="pt-go" type="submit">Ingresar</button>
+      <div style="text-align:center;margin-top:14px"><button type="button" class="pt-link" id="pt-fg">¿Olvidaste tu contraseña?</button></div></form></div>`;
+    document.getElementById('pt-fg').onclick = () => renderForgot(1, document.getElementById('pt-em').value);
     document.getElementById('pt-lf').onsubmit = async e => {
       e.preventDefault();
       const b = document.getElementById('pt-go'); b.disabled = true; b.textContent = 'Ingresando…';
@@ -52,6 +54,28 @@
         await api('/portal/login', { method: 'POST', body: JSON.stringify({ email: document.getElementById('pt-em').value, password: document.getElementById('pt-pw').value }) });
         boot();
       } catch (er) { renderLogin(er.message); }
+    };
+  }
+
+  // Recuperar contraseña: 1) correo → 2) código que llega al correo + nueva contraseña
+  function renderForgot(step, email, msg, ok) {
+    root.innerHTML = `<div class="pt-login"><form class="pt-login__card" id="pt-ff">
+      <div class="pt-brand"><img src="logo-nova.svg" alt="">Nova</div>
+      <h1>Recuperar contraseña</h1><p class="sub">${step === 1 ? 'Te enviaremos un código de verificación a tu correo.' : 'Escribe el código que te llegó y elige una nueva contraseña (mínimo 10 caracteres).'}</p>
+      ${msg ? `<div class="${ok ? 'pt-ok' : 'pt-err'}">${esc(msg)}</div>` : ''}
+      <label class="pt-f"><span>Correo electrónico</span><input id="pt-fe" type="email" value="${esc(email || '')}" ${step === 2 ? 'readonly' : ''} required></label>
+      ${step === 2 ? `<label class="pt-f"><span>Código de 6 dígitos</span><input id="pt-fc" inputmode="numeric" maxlength="6" autocomplete="one-time-code" required></label>
+      <label class="pt-f"><span>Nueva contraseña</span><input id="pt-fp" type="password" minlength="10" autocomplete="new-password" required></label>` : ''}
+      <button class="pt-btn" type="submit">${step === 1 ? 'Enviar código' : 'Cambiar contraseña'}</button>
+      <button class="pt-btn" type="button" id="pt-fb" style="background:#fff;color:#0F172A;border:1px solid #D9DEE3">Volver</button></form></div>`;
+    document.getElementById('pt-fb').onclick = () => renderLogin();
+    document.getElementById('pt-ff').onsubmit = async e => {
+      e.preventDefault();
+      const em = document.getElementById('pt-fe').value;
+      try {
+        if (step === 1) { await api('/portal/forgot', { method: 'POST', body: JSON.stringify({ email: em }) }); renderForgot(2, em, 'Si el correo tiene acceso, te enviamos un código. Revisa también spam.', true); }
+        else { await api('/portal/reset', { method: 'POST', body: JSON.stringify({ email: em, code: document.getElementById('pt-fc').value, nueva: document.getElementById('pt-fp').value }) }); renderLogin('Contraseña actualizada. Ya puedes ingresar.'); }
+      } catch (er) { renderForgot(step, em, er.message); }
     };
   }
 

@@ -32,6 +32,28 @@ function genPw() {
   return Array.from(crypto.randomBytes(12)).map(x => c[x % c.length]).join('');
 }
 function defaultSections() { const o = {}; SECTIONS.forEach(k => { o[k] = true; }); return o; }
+const PORTAL_URL = 'https://app.novacentrax.com/portal.html';
+const escH = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+// Envío best-effort por SES: nunca lanza; devuelve { sent, error }.
+async function sendMail(to, subject, html, text) {
+  try {
+    if (!process.env.SES_FROM_EMAIL || !process.env.AWS_ACCESS_KEY_ID) return { sent: false, error: 'El envío de correo no está configurado' };
+    const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
+    const ses = new SESClient({ region: process.env.AWS_REGION || 'us-east-1', credentials: { accessKeyId: process.env.AWS_ACCESS_KEY_ID, secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '' } });
+    await ses.send(new SendEmailCommand({ Source: process.env.SES_FROM_EMAIL, Destination: { ToAddresses: [to] },
+      Message: { Subject: { Data: subject }, Body: { Html: { Data: html }, Text: { Data: text } } } }));
+    return { sent: true };
+  } catch (e) { console.warn('[portal] correo no enviado:', e.message); return { sent: false, error: e.message }; }
+}
+const mailShell = (title, body) => `<div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#0F172A"><h2 style="margin:0 0 12px;font-size:18px">${title}</h2>${body}<p style="margin:22px 0 0;font-size:12px;color:#94A3B8">Nova · mensaje automático, no respondas a este correo.</p></div>`;
+async function sendInvite(to, nombre, cliente, pw, kind) {
+  const t = kind === 'reset' ? 'Tu nueva contraseña del portal' : 'Ya tienes acceso a tu portal';
+  const html = mailShell(t, `<p style="margin:0 0 12px">Hola${nombre ? ' ' + escH(nombre) : ''}, este es tu acceso al portal de <b>${escH(cliente)}</b>, donde puedes ver el avance en tiempo real y escribirnos por el chat.</p>
+    <div style="background:#F8FAFC;border:1px solid #E1E6EC;padding:12px 14px;margin:0 0 14px;font-size:14px">Usuario: <b>${escH(to)}</b><br>Contraseña temporal: <b style="font-family:monospace">${escH(pw)}</b></div>
+    <p style="margin:0 0 14px;font-size:13px;color:#475569">Al entrar por primera vez te pediremos crear tu propia contraseña.</p>
+    <a href="${PORTAL_URL}" style="display:inline-block;background:#0B1220;color:#fff;padding:10px 20px;text-decoration:none;font-weight:600">Entrar al portal</a>`);
+  return sendMail(to, t + ' — ' + cliente, html, `Acceso al portal de ${cliente}\nEnlace: ${PORTAL_URL}\nUsuario: ${to}\nContraseña temporal: ${pw}\nAl entrar te pediremos crear tu propia contraseña.`);
+}
 const cleanEmail = e => String(e || '').trim().toLowerCase();
 const okEmail = e => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e);
 
@@ -107,6 +129,39 @@ function mount(app, { pool, requireAuth, dashHandler }) {
     } catch (e) { console.error('[portal] login', e.message); res.status(500).json({ error: 'Error al iniciar sesión' }); }
   });
   app.post('/api/portal/logout', (req, res) => { if (req.session) delete req.session.portal; res.json({ ok: true }); });
+  // ── Olvidé mi contraseña: código de 6 dígitos por correo ──
+  const forgotLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 8, standardHeaders: true, legacyHeaders: false, message: { error: 'Demasiados intentos. Espera unos minutos.' } });
+  const hashCode = c => crypto.createHash('sha256').update(String(c)).digest('hex');
+  app.post('/api/portal/forgot', forgotLimiter, async (req, res) => {
+    try {
+      const email = cleanEmail(req.body && req.body.email);
+      const generic = () => res.json({ ok: true, message: 'Si el correo tiene acceso, te enviamos un código de verificación.' });
+      if (!okEmail(email)) return generic();
+      const { rows } = await pool.query(`SELECT a.id, a.nombre, c.nombre AS cliente FROM client_accounts a JOIN outbound_clients c ON c.id=a.outbound_client_id WHERE LOWER(a.email)=$1 AND a.activo`, [email]);
+      if (rows[0]) {
+        const code = String(crypto.randomInt(0, 1000000)).padStart(6, '0');
+        await pool.query(`UPDATE client_accounts SET reset_code_hash=$2, reset_expires=NOW()+interval '15 minutes', reset_attempts=0 WHERE id=$1`, [rows[0].id, hashCode(code)]);
+        await sendMail(email, 'Tu código de verificación — ' + rows[0].cliente,
+          mailShell('Código de verificación', `<p style="margin:0 0 12px">Usa este código para crear una nueva contraseña del portal de <b>${escH(rows[0].cliente)}</b>. Vence en 15 minutos.</p><div style="font-size:30px;font-weight:800;letter-spacing:6px;background:#F8FAFC;border:1px solid #E1E6EC;padding:14px;text-align:center">${code}</div><p style="margin:14px 0 0;font-size:13px;color:#64748B">Si no lo pediste, ignora este correo.</p>`),
+          'Tu código de verificación es ' + code + ' (vence en 15 minutos).');
+      }
+      generic();
+    } catch (e) { console.error('[portal] forgot', e.message); res.status(500).json({ error: 'Error' }); }
+  });
+  app.post('/api/portal/reset', forgotLimiter, async (req, res) => {
+    try {
+      const email = cleanEmail(req.body && req.body.email), code = String((req.body && req.body.code) || '').trim(), nueva = String((req.body && req.body.nueva) || '');
+      const bad = () => res.status(400).json({ error: 'Código incorrecto o vencido' });
+      if (!okEmail(email) || !/^\d{6}$/.test(code)) return bad();
+      if (nueva.length < 10) return res.status(400).json({ error: 'La nueva contraseña debe tener al menos 10 caracteres' });
+      const { rows } = await pool.query(`SELECT id, reset_code_hash, reset_expires, reset_attempts FROM client_accounts WHERE LOWER(email)=$1 AND activo`, [email]);
+      const a = rows[0];
+      if (!a || !a.reset_code_hash || !a.reset_expires || new Date(a.reset_expires) < new Date() || a.reset_attempts >= 5) return bad();
+      if (hashCode(code) !== a.reset_code_hash) { await pool.query(`UPDATE client_accounts SET reset_attempts=reset_attempts+1 WHERE id=$1`, [a.id]); return bad(); }
+      await pool.query(`UPDATE client_accounts SET password_hash=$2, must_change=FALSE, failed_attempts=0, locked_until=NULL, reset_code_hash=NULL, reset_expires=NULL, reset_attempts=0 WHERE id=$1`, [a.id, hashPw(nueva)]);
+      res.json({ ok: true });
+    } catch (e) { console.error('[portal] reset', e.message); res.status(500).json({ error: 'Error' }); }
+  });
   app.get('/api/portal/me', requirePortal, (req, res) => {
     const a = req.portal;
     res.json({ email: a.email, nombre: a.nombre, cliente: a.cliente, must_change: a.must_change, sections: req.portalSections });
@@ -272,11 +327,15 @@ function mount(app, { pool, requireAuth, dashHandler }) {
       const b = req.body || {}, cid = parseInt(b.outbound_client_id), email = cleanEmail(b.email);
       if (!cid || !(await ownsClient(req.workspaceOwnerId, cid))) return res.status(404).json({ error: 'Cliente no encontrado' });
       if (!okEmail(email)) return res.status(400).json({ error: 'Correo no válido' });
-      const pw = genPw();
+      const given = String(b.password || '');
+      if (given && given.length < 8) return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres' });
+      const pw = given || genPw();
       const { rows } = await pool.query(
         `INSERT INTO client_accounts (user_id, outbound_client_id, email, nombre, password_hash, sections) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, email, nombre`,
         [req.workspaceOwnerId, cid, email, String(b.nombre || '').slice(0, 120), hashPw(pw), JSON.stringify(defaultSections())]);
-      res.json({ ...rows[0], password: pw });               // la contraseña solo se muestra ahora
+      let invite = null;
+      if (b.send_invite) { const { rows: cl } = await pool.query(`SELECT nombre FROM outbound_clients WHERE id=$1`, [cid]); invite = await sendInvite(email, rows[0].nombre, (cl[0] || {}).nombre || 'tu empresa', pw, 'new'); }
+      res.json({ ...rows[0], password: pw, invite });         // la contraseña solo se muestra ahora
     } catch (e) {
       if (String(e.message).includes('client_accounts_email_uq')) return res.status(409).json({ error: 'Ya existe una cuenta con ese correo' });
       console.error('[portal] create', e.message); res.status(500).json({ error: 'Error al crear la cuenta' });
@@ -288,17 +347,22 @@ function mount(app, { pool, requireAuth, dashHandler }) {
       const { rows: cur } = await pool.query(`SELECT a.* FROM client_accounts a JOIN outbound_clients c ON c.id=a.outbound_client_id WHERE a.id=$1 AND c.user_id=$2`, [id, req.workspaceOwnerId]);
       if (!cur[0]) return res.status(404).json({ error: 'Cuenta no encontrada' });
       const sections = b.sections ? Object.fromEntries(SECTIONS.map(k => [k, !!b.sections[k]])) : cur[0].sections;
-      await pool.query(`UPDATE client_accounts SET activo=$2, nombre=$3, sections=$4 WHERE id=$1`,
-        [id, b.activo == null ? cur[0].activo : !!b.activo, b.nombre == null ? cur[0].nombre : String(b.nombre).slice(0, 120), JSON.stringify(sections)]);
+      let email = cur[0].email;
+      if (b.email != null) { email = cleanEmail(b.email); if (!okEmail(email)) return res.status(400).json({ error: 'Correo no válido' }); }
+      try {
+        await pool.query(`UPDATE client_accounts SET activo=$2, nombre=$3, sections=$4, email=$5 WHERE id=$1`,
+          [id, b.activo == null ? cur[0].activo : !!b.activo, b.nombre == null ? cur[0].nombre : String(b.nombre).slice(0, 120), JSON.stringify(sections), email]);
+      } catch (e) { if (String(e.message).includes('client_accounts_email_uq')) return res.status(409).json({ error: 'Ya existe una cuenta con ese correo' }); throw e; }
       res.json({ ok: true });
     } catch (e) { res.status(500).json({ error: 'Error' }); }
   });
   app.post('/api/lm/portal/accounts/:id/reset', requireAuth, async (req, res) => {
     try {
       const id = parseInt(req.params.id), pw = genPw();
-      const { rowCount } = await pool.query(`UPDATE client_accounts a SET password_hash=$3, must_change=TRUE, failed_attempts=0, locked_until=NULL FROM outbound_clients c WHERE a.id=$1 AND c.id=a.outbound_client_id AND c.user_id=$2`, [id, req.workspaceOwnerId, hashPw(pw)]);
-      if (!rowCount) return res.status(404).json({ error: 'Cuenta no encontrada' });
-      res.json({ password: pw });
+      const { rows } = await pool.query(`UPDATE client_accounts a SET password_hash=$3, must_change=TRUE, failed_attempts=0, locked_until=NULL FROM outbound_clients c WHERE a.id=$1 AND c.id=a.outbound_client_id AND c.user_id=$2 RETURNING a.email, a.nombre, c.nombre AS cliente`, [id, req.workspaceOwnerId, hashPw(pw)]);
+      if (!rows[0]) return res.status(404).json({ error: 'Cuenta no encontrada' });
+      const invite = req.body && req.body.send ? await sendInvite(rows[0].email, rows[0].nombre, rows[0].cliente, pw, 'reset') : null;
+      res.json({ password: pw, invite });
     } catch (e) { res.status(500).json({ error: 'Error' }); }
   });
   app.delete('/api/lm/portal/accounts/:id', requireAuth, async (req, res) => {
