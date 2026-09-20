@@ -29,6 +29,11 @@
     handshake: '<path d="m11 17 2 2a1 1 0 1 0 3-3"/><path d="m14 14 2.5 2.5a1 1 0 1 0 3-3l-3.88-3.88a3 3 0 0 0-4.24 0l-.88.88a1 1 0 1 1-3-3l2.81-2.81a5.79 5.79 0 0 1 7.06-.87l.47.28a2 2 0 0 0 1.42.25L21 4"/><path d="m21 3 1 11h-2"/><path d="M3 3 2 14l6.5 6.5a1 1 0 1 0 3-3"/><path d="M3 4h8"/>',
     info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>',
     check: '<path d="M20 6L9 17l-5-5"/>',
+    grid: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+    building: '<rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4M8 6h.01M12 6h.01M16 6h.01M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01"/>',
+    seq: '<circle cx="12" cy="5" r="2.5"/><circle cx="5" cy="19" r="2.5"/><circle cx="19" cy="19" r="2.5"/><path d="M12 7.5v4M12 11.5l-6 5M12 11.5l6 5"/>',
+    pulse: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
+    bell: '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>',
   };
   const ico = (k, sz) => k === 'in' ? '<b class="dash-in">in</b>' : `<svg width="${sz || 18}" height="${sz || 18}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICO[k] || ''}</svg>`;
   const CH = { email: ['Email', '#2563EB', 'mail'], linkedin: ['LinkedIn', '#7C5CE0', 'in'], call: ['Llamada', '#F59E0B', 'phone'], wa_msg: ['WhatsApp · mensajes', '#22A06B', 'chat'], wa_call: ['WhatsApp · llamadas', '#0EA5A4', 'phone'], whatsapp: ['WhatsApp', '#22A06B', 'chat'], otros: ['Otros / tareas', '#B8C0CC', 'dots'], reply: ['Respuesta', '#22A06B', 'reply'], meeting: ['Reunión', '#F59E0B', 'cal'], task: ['Seguimiento', '#94A3B8', 'dots'] };
@@ -158,14 +163,19 @@
       ? `<span class="pt-top__sep"></span><div class="pt-lgbox" title="${esc(S.me.cliente)}"><img src="${API}/portal/branding/logo?v=${br.v || 0}" alt="${esc(S.me.cliente)}" style="transform:translate(${fr.x}%,${fr.y}%) scale(${fr.s})"></div>`
       : `<span class="pt-top__cl">${esc(S.me.cliente)}</span>`;
     const brandMark = br.ws && br.ws.has ? `<div class="pt-brand pt-brand--logo"><img src="${API}/portal/branding/workspace-logo?v=${br.ws.v || 0}" alt="" style="filter:${lum > 0.45 ? 'brightness(0)' : 'none'}"></div>` : '<div class="pt-brand"><img src="logo-nova.svg" alt="">Nova</div>';
-    root.innerHTML = `<div class="pt-top" style="background:${hbg};color:${hfg}">${brandMark}${clientMark}
-      <span class="pt-live"><i></i><span id="pt-upd">En vivo</span></span>${langBtn()}
-      <div class="pt-user"><button id="pt-um">${esc(S.me.nombre || S.me.email)} ▾</button><div class="pt-menu" id="pt-mn"><div class="em">${esc(S.me.email)}</div><button id="pt-cp">Cambiar contraseña</button><button id="pt-lo">Cerrar sesión</button></div></div></div>
-      <div class="pt-nav">${tabs().map(t => `<button data-t="${t[0]}" class="${S.tab === t[0] ? 'on' : ''}">${t[1]}</button>`).join('')}</div>
-      <div class="pt-main" id="pt-body"></div>
+    const sideBrand = br.ws && br.ws.has ? `<img src="${API}/portal/branding/workspace-logo?v=${br.ws.v || 0}" alt="">` : '<div class="pt-brand"><img src="logo-nova.svg" alt="">Nova</div>';
+    const initial = String(S.me.nombre || S.me.email || '?').trim().charAt(0).toUpperCase();
+    root.innerHTML = `<div class="pt-shell"><aside class="pt-side"><div class="pt-side__brand">${sideBrand}</div>
+      <nav class="pt-side__nav">${tabs().map(t => `<button data-t="${t[0]}" class="pt-side__n${S.tab === t[0] ? ' on' : ''}">${ico(NAVI[t[0]] || 'dots', 18)}<span>${t[1]}</span></button>`).join('')}</nav></aside>
+      <div class="pt-wrap"><header class="pt-top" style="background:${hbg};color:${hfg}">${clientMark.replace('<span class="pt-top__sep"></span>', '')}
+        <span class="pt-live"><i></i><span id="pt-upd">En vivo</span></span><span class="pt-sp"></span>${langBtn()}
+        ${S.me.sections.chat ? `<button class="pt-bell" id="pt-bell" title="Chat">${ico('bell', 18)}<span class="pt-bell__n" id="pt-bn" style="display:none"></span></button>` : ''}
+        <div class="pt-user"><button id="pt-um"><span class="pt-av">${esc(initial)}</span><span class="pt-user__t"><b>${esc(S.me.nombre || S.me.email)}</b><small>${esc(S.me.cliente)}</small></span> ▾</button><div class="pt-menu" id="pt-mn"><div class="em">${esc(S.me.email)}</div><button id="pt-cp">Cambiar contraseña</button><button id="pt-lo">Cerrar sesión</button></div></div></header>
+      <main class="pt-main" id="pt-body"></main></div></div>
       ${S.me.sections.chat ? `<button class="pt-chat-btn" id="pt-cb">${ico('chat', 18)} Chat rápido <span class="n" id="pt-cn" style="display:none"></span></button>
       <div class="pt-chat" id="pt-cw"><div class="pt-chat__h"><span>Chat con tu equipo</span><button id="pt-cc">✕</button></div><div class="pt-chat__b" id="pt-cm"></div><div class="pt-chat__p" id="pt-cpend"></div><form class="pt-chat__f" id="pt-cf"><button type="button" class="pt-chat__a" id="pt-ca" title="Adjuntar foto o archivo">📎</button><input id="pt-ci" placeholder="Escribe un mensaje…" maxlength="2000" autocomplete="off"><button>Enviar</button></form><input type="file" id="pt-cfile" multiple hidden></div>` : ''}`;
-    document.querySelectorAll('.pt-nav button').forEach(b => b.onclick = () => { S.tab = b.dataset.t; S.co = 0; S.q = ''; renderApp(); load(true); });
+    const bell = document.getElementById('pt-bell'); if (bell) bell.onclick = () => { S.chatOpen = true; S.seenChat = S.chatLast; S.unread = 0; drawChat(); };
+    document.querySelectorAll('.pt-side__n').forEach(b => b.onclick = () => { S.tab = b.dataset.t; S.co = 0; S.q = ''; renderApp(); load(true); });
     wireLang();
     const mn = document.getElementById('pt-mn');
     document.getElementById('pt-um').onclick = e => { e.stopPropagation(); mn.classList.toggle('on'); };
@@ -205,8 +215,8 @@
     try {
       if (t === 'inicio') {
         const r = perRanges(), q = (a, b) => `/portal/dashboard?from=${isoL(a)}&to=${isoL(b)}`;
-        const [cur, prev, h, u, f, sq, stp, d] = await Promise.all([api(q(r.from, r.to)), api(q(r.pfrom, r.pto)), api('/portal/highlights'), api('/portal/updates'), s.feed ? api('/portal/feed') : null, s.secuencias && !S.seqs ? api('/portal/sequences') : null, s.secuencias ? api('/portal/steps') : null, S.detail ? api('/portal/dashboard?' + rangeQ()) : null]);
-        S.wk = { cur, prev, r }; S.hl = h; S.upd = u; S.feed = f; S.steps = stp; if (sq) S.seqs = sq; S.dash = d;
+        const [cur, prev, h, u, f, sq, stp, d, ser] = await Promise.all([api(q(r.from, r.to)), api(q(r.pfrom, r.pto)), api('/portal/highlights'), api('/portal/updates'), s.feed ? api('/portal/feed') : null, s.secuencias && !S.seqs ? api('/portal/sequences') : null, s.secuencias ? api('/portal/steps') : null, S.detail ? api('/portal/dashboard?' + rangeQ()) : null, s.kpis ? api(`/portal/series?from=${isoL(r.from)}&to=${isoL(r.to)}`) : null]);
+        S.wk = { cur, prev, r }; S.series = ser || []; S.hl = h; S.upd = u; S.feed = f; S.steps = stp; if (sq) S.seqs = sq; S.dash = d;
       } else if (t === 'reuniones') S.meet = await api('/portal/meetings');
       else if (t === 'empresas') S.cos = await api('/portal/companies?q=' + encodeURIComponent(S.q));
       else if (t === 'contactos') S.cts = await api(`/portal/contacts?q=${encodeURIComponent(S.q)}&company=${S.co || 0}`);
@@ -231,6 +241,7 @@
     else if (t === 'actividad') b.innerHTML = `<div class="pt-h"><h2>Actividad en vivo</h2></div><div class="pt-card">${feedHtml(S.feed, 100)}</div>`;
     const se = document.getElementById('pt-search');
     if (se) { se.value = S.q; se.oninput = debounce(() => { S.q = se.value; load(false); }, 350); }
+    if (t === 'inicio') initOverview();
     if (t === 'inicio' && S.detail && S.dash) initCharts();
   }
   function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
@@ -314,13 +325,55 @@
     return `<div class="pt-how"><div class="pt-how__h"><h3>Cómo trabajamos</h3>${st.length > 2 ? '<button class="pt-link" onclick="PT.goSeq()">Ver todas las secuencias →</button>' : ''}</div>
       <div class="pt-how__g">${list.map(q => `<div class="pt-card"><div class="pt-item__t"><span>${esc(q.nombre)}</span>${seqBadge(q.estado)}</div><div class="pt-item__s">${q.total} contactos</div>${stepsHtml(q)}</div>`).join('')}</div></div>`;
   }
+  // ══ Rediseño "v2": barra lateral + Resumen con KPIs con minigráfico, actividad, resumen y canales ══
+  const NAVI = { inicio: 'grid', reuniones: 'cal', empresas: 'building', contactos: 'users', secuencias: 'seq', actividad: 'pulse' };
+  function kpiCards() {
+    const w = S.wk; if (!w || !w.cur.kpi) return '';
+    const c = w.cur.kpi.cur, p = w.prev.kpi ? w.prev.kpi.cur : { contacted: 0, replies: 0, touches: 0 };
+    const mc = w.cur.deals ? w.cur.deals.agendadas : null, mp = w.prev.deals ? w.prev.deals.agendadas : 0;
+    const cards = [['Contactos alcanzados', c.contacted, p.contacted, 'users', '#22A06B', 'g'], ['Respuestas', c.replies, p.replies, 'reply', '#F59E0B', 'a'], mc == null ? null : ['Reuniones agendadas', mc, mp, 'handshake', '#7C5CE0', 'p'], ['Toques realizados', c.touches, p.touches, 'send', '#2563EB', 'b']].filter(Boolean);
+    S.sparks = cards.map((x, i) => ({ i, color: x[4], key: ['contacted', 'replies', 'meetings', 'touches'][['Contactos alcanzados', 'Respuestas', 'Reuniones agendadas', 'Toques realizados'].indexOf(x[0])] }));
+    return `<div class="pt-ov__k">${cards.map((t, i) => `<div class="pt-kc pt-kc--${t[5]}" style="--kc:${t[4]}"><div class="pt-kc__top"><span class="pt-kc__i">${ico(t[3], 22)}</span><div><div class="pt-kc__l">${t[0]}</div><div class="pt-kc__v">${t[1]}</div>${dl(t[1], t[2])}</div></div><div class="pt-kc__sp"><canvas id="pt-sp-${i}"></canvas></div></div>`).join('')}</div>`;
+  }
+  function summaryCard() {
+    const w = S.wk; if (!w || !w.cur.kpi) return '';
+    const c = w.cur.kpi.cur, rate = pct(c.replies, c.contacted);
+    return `<div class="pt-gc"><div class="pt-gc__t">${ico('info', 16)} Resumen del periodo</div><div class="pt-sum"><div class="pt-sum__d"><canvas id="pt-sum-d"></canvas><span>${rate}%</span></div>
+      <div><div class="pt-sum__l">Tasa de respuesta</div><div class="pt-sum__s">${c.replies} respuestas de ${c.contacted} contactos</div><div class="pt-sum__s" style="margin-top:6px">${c.touches} toques realizados</div></div></div></div>`;
+  }
+  function channelsCard() {
+    const w = S.wk; if (!w || !w.cur.channels || !w.cur.channels.length) return '';
+    const tot = w.cur.channels.reduce((n, r) => n + r.touches, 0) || 1;
+    const rows = w.cur.channels.slice().sort((a, b) => b.touches - a.touches).slice(0, 4).map(r => { const m = CH[r.ch] || CH.otros, p = Math.round(r.touches / tot * 100); return `<div class="pt-ch"><span class="pt-ch__i" style="background:${m[1]}">${ico(m[2], 16)}</span><div class="pt-ch__b"><div class="pt-ch__t"><span>${m[0]}</span><b>${p}%</b></div><div class="pt-ch__bar"><i style="width:${Math.max(3, p)}%;background:${m[1]}"></i></div></div></div>`; }).join('');
+    return `<div class="pt-gc"><div class="pt-gc__t">${ico('send', 16)} Canales principales</div>${rows}</div>`;
+  }
+  function initOverview() {
+    if (typeof Chart === 'undefined' || !S.series || !S.series.length) return;
+    const ser = S.series, fmt = d => new Date(d + 'T12:00:00').toLocaleDateString(PT_I18N.locale(), { day: 'numeric', month: 'short' });
+    (S.sparks || []).forEach(sp => {
+      const cv = document.getElementById('pt-sp-' + sp.i); if (!cv) return;
+      const ctx = cv.getContext('2d'), g = ctx.createLinearGradient(0, 0, 0, 70); g.addColorStop(0, sp.color + '55'); g.addColorStop(1, sp.color + '00');
+      S.charts.push(new Chart(ctx, { type: 'line', data: { labels: ser.map(r => r.day), datasets: [{ data: ser.map(r => r[sp.key]), borderColor: sp.color, backgroundColor: g, fill: true, tension: .4, borderWidth: 2, pointRadius: 0 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { enabled: false } }, scales: { x: { display: false }, y: { display: false, beginAtZero: true } }, events: [] } }));
+    });
+    const ma = document.getElementById('pt-ov-act');
+    if (ma) {
+      const ctx = ma.getContext('2d'), mk = (label, key, color) => { const g = ctx.createLinearGradient(0, 0, 0, 260); g.addColorStop(0, color + '33'); g.addColorStop(1, color + '00'); return { label, data: ser.map(r => r[key]), borderColor: color, backgroundColor: g, fill: key === 'touches' || key === 'contacted', tension: .4, borderWidth: 2.2, pointRadius: 0, pointHoverRadius: 4 }; };
+      S.charts.push(new Chart(ctx, { type: 'line', data: { labels: ser.map(r => fmt(r.day)), datasets: [mk(PT_I18N.t('Contactos'), 'contacted', '#22A06B'), mk(PT_I18N.t('Toques realizados'), 'touches', '#2563EB'), mk(PT_I18N.t('Respuestas'), 'replies', '#F59E0B'), mk(PT_I18N.t('Reuniones agendadas'), 'meetings', '#7C5CE0')] },
+        options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false }, tooltip: { backgroundColor: '#0F172A', padding: 10, cornerRadius: 10 } }, scales: { x: { grid: { display: false }, border: { display: false }, ticks: { maxTicksLimit: 8, color: '#94A3B8', font: { size: 11 } } }, y: { beginAtZero: true, border: { display: false }, grid: { color: '#E8EDF5' }, ticks: { precision: 0, maxTicksLimit: 5, color: '#94A3B8', font: { size: 11 } } } } } }));
+    }
+    const dn = document.getElementById('pt-sum-d');
+    if (dn && S.wk && S.wk.cur.kpi) { const c = S.wk.cur.kpi.cur, r = Math.min(100, pct(c.replies, c.contacted)); S.charts.push(new Chart(dn.getContext('2d'), { type: 'doughnut', data: { datasets: [{ data: [r, 100 - r], backgroundColor: ['#2563EB', '#E6ECF7'], borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '74%', plugins: { legend: { display: false }, tooltip: { enabled: false } }, events: [] } })); }
+  }
   function inicio() {
     const s = S.me.sections;
     const seg = [['7d', '7 días'], ['30d', '30 días'], ['mes', 'Este mes'], ['trim', 'Trimestre'], ['ytd', 'YTD']];
     const seqSel = S.seqs && s.secuencias ? `<label class="dash-f${S.seq ? ' is-on' : ''}" style="flex:none;min-width:200px"><select onchange="PT.seq(this.value)"><option value="">Todas las secuencias</option>${S.seqs.map(x => `<option value="${x.id}"${String(S.seq) === String(x.id) ? ' selected' : ''}>${esc(x.nombre)}</option>`).join('')}</select></label>` : '';
     const filters = `<div class="dash-filters" style="display:flex;gap:8px;flex-wrap:wrap"><div class="dash-seg">${seg.map(r => `<button class="dash-seg__b${S.range === r[0] ? ' on' : ''}" onclick="PT.range('${r[0]}')">${r[1]}</button>`).join('')}</div>${seqSel}</div>`;
     const detail = S.detail ? (S.dash ? `${filters}${dashBody(S.dash)}${s.feed ? `<div class="pt-card" style="margin-top:14px"><h3>${ico('send', 16)} Actividad reciente</h3>${feedHtml(S.feed, 12)}</div>` : ''}` : '<div class="pt-empty">Cargando…</div>') : '';
-    return `<div class="pt-dash">${updatesHtml()}${weekHtml()}${highlightsHtml()}${s.secuencias ? howHtml() : ''}
+    const w = S.wk, hasK = w && w.cur.kpi;
+    const head = `<div class="pt-ov__h"><div><h1>Resumen</h1><p>Sigue tu outreach, reuniones y resultados en un solo lugar</p></div>${hasK ? `<div class="pt-ov__r"><span class="pt-range">${ico('cal', 16)} ${fshort(w.r.from)} – ${fshort(w.r.to)}</span><div class="dash-seg"><button class="dash-seg__b${S.per === 'week' ? ' on' : ''}" onclick="PT.per('week')">Semana</button><button class="dash-seg__b${S.per === 'month' ? ' on' : ''}" onclick="PT.per('month')">Mes</button></div></div>` : ''}</div>`;
+    const mid = hasK ? `<div class="pt-ov__row"><div class="pt-gc pt-gc--chart"><div class="pt-gc__h"><div class="pt-gc__t">${ico('pulse', 16)} Actividad de outreach</div><div class="pt-lgd"><span><i style="background:#22A06B"></i>Contactos</span><span><i style="background:#2563EB"></i>Toques realizados</span><span><i style="background:#F59E0B"></i>Respuestas</span><span><i style="background:#7C5CE0"></i>Reuniones agendadas</span></div></div><div class="pt-ov__chart"><canvas id="pt-ov-act"></canvas></div></div><div class="pt-ov__col">${summaryCard()}${channelsCard()}</div></div>` : '';
+    return `<div class="pt-dash">${updatesHtml()}${head}${kpiCards()}${mid}${highlightsHtml()}${s.secuencias ? howHtml() : ''}
       <div class="pt-more"><button class="pt-morebtn" onclick="PT.detail()">${S.detail ? 'Ocultar detalle ▴' : 'Ver detalle ▾'}</button></div>${detail}</div>`;
   }
 
@@ -523,6 +576,7 @@
     const w = document.getElementById('pt-cw'), b = document.getElementById('pt-cb'); if (!w) return;
     w.classList.toggle('on', S.chatOpen); b.style.display = S.chatOpen ? 'none' : 'flex';
     const n = document.getElementById('pt-cn'); if (n) { n.style.display = S.unread && !S.chatOpen ? '' : 'none'; n.textContent = S.unread; }
+    const bn = document.getElementById('pt-bn'); if (bn) { bn.style.display = S.unread && !S.chatOpen ? '' : 'none'; bn.textContent = S.unread; }
     const m = document.getElementById('pt-cm');
     if (m) { const atEnd = m.scrollHeight - m.scrollTop - m.clientHeight < 60; m.innerHTML = S.chat.length ? S.chat.map(x => `<div class="pt-msg pt-msg--${x.autor === 'cliente' ? 'c' : 'e'}">${x.texto ? esc(x.texto) : ''}${attHtml(x)}<small>${x.autor === 'cliente' ? 'Tú' : esc(x.autor_nombre || 'Equipo')} · ${new Date(x.created_at).toLocaleTimeString(PT_I18N.locale(), { hour: '2-digit', minute: '2-digit' })}</small></div>`).join('') : '<div class="pt-empty">Escríbenos aquí cualquier duda. Te respondemos lo antes posible.</div>'; if (atEnd || !S.chatDrawn) m.scrollTop = m.scrollHeight; S.chatDrawn = true; }
     if (S.chatOpen) { const i = document.getElementById('pt-ci'); if (i && document.activeElement !== i) i.focus(); }
