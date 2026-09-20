@@ -461,7 +461,7 @@
     }
     const d = D.ct; if (!d) return '<div class="pt-empty">Cargando…</div>';
     const c = d.contact, seqTxt = c.secuencia ? `${esc(c.secuencia)}${c.paso ? ' · paso ' + c.paso : ''}` : '';
-    return `<div class="pt-dr__badges">${c.estado ? badge(c.estado) : ''}${c.etapa && c.etapa !== 'Nuevo' ? `<span class="pt-badge pt-b--n">${esc(c.etapa)}</span>` : ''}${c.linkedin ? `<a class="pt-badge pt-b--p" href="${esc(/^https?:/.test(c.linkedin) ? c.linkedin : 'https://' + c.linkedin)}" target="_blank" rel="noopener noreferrer">LinkedIn ↗</a>` : ''}</div>
+    return `<div class="pt-dr__badges">${c.estado ? badge(c.estado) : ''}${c.etapa && c.etapa !== 'Nuevo' && c.etapa !== c.estado ? `<span class="pt-badge pt-b--n">${esc(c.etapa)}</span>` : ''}${c.linkedin ? `<a class="pt-badge pt-b--p" href="${esc(/^https?:/.test(c.linkedin) ? c.linkedin : 'https://' + c.linkedin)}" target="_blank" rel="noopener noreferrer">LinkedIn ↗</a>` : ''}</div>
       ${dealBox(d.deal)}${c.nota ? `<div class="pt-item__n" style="margin-bottom:10px">${esc(c.nota)}</div>` : ''}${notesBox(d.notes, false)}
       <div class="pt-dr__info">${c.pais ? `<span>${esc(c.pais)}</span>` : ''}${seqTxt ? `<span>${seqTxt}</span>` : ''}</div>
       <h3 class="pt-dr__s">Historial del contacto</h3>${d.timeline.map(e => evHtml(e, false)).join('') || '<div class="pt-empty">Sin historial todavía</div>'}`;
