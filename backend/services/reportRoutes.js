@@ -5,6 +5,7 @@ const { previewPng } = require('./reportImage');
 
 const LANGS = ['es', 'en', 'de', 'pt'];
 const LOCALE = { es: 'es-ES', en: 'en-GB', de: 'de-DE', pt: 'pt-BR' };
+const TZS = ['America/Lima', 'America/Bogota', 'America/Mexico_City', 'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'America/Sao_Paulo', 'America/Argentina/Buenos_Aires', 'America/Santiago', 'Europe/London', 'Europe/Madrid', 'Europe/Berlin', 'UTC'];
 const okEmail = e => /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]{2,}$/.test(e) && e.length <= 160;
 
 function mount(app, { pool, requireAuth, dashHandler, highlights, sendViaClientMailbox, brandFor, trimmedLogo, slugOf, ownsClient }) {
@@ -54,16 +55,16 @@ function mount(app, { pool, requireAuth, dashHandler, highlights, sendViaClientM
   async function runScheduled() {
     try {
       const { rows } = await pool.query(`
-        SELECT r.outbound_client_id AS cid, r.recipients, r.lang, c.user_id AS uid
+        SELECT r.outbound_client_id AS cid, r.recipients, r.lang, c.user_id AS uid, r.schedule_tz
           FROM client_reports r JOIN outbound_clients c ON c.id=r.outbound_client_id
          WHERE r.schedule_on AND jsonb_array_length(r.recipients) > 0
-           AND EXTRACT(DOW FROM (NOW() AT TIME ZONE 'America/Lima')) = r.schedule_dow
-           AND EXTRACT(HOUR FROM (NOW() AT TIME ZONE 'America/Lima')) >= r.schedule_hour
-           AND (r.last_auto_date IS NULL OR r.last_auto_date < (NOW() AT TIME ZONE 'America/Lima')::date)`);
+           AND EXTRACT(DOW FROM (NOW() AT TIME ZONE r.schedule_tz)) = r.schedule_dow
+           AND EXTRACT(HOUR FROM (NOW() AT TIME ZONE r.schedule_tz)) >= r.schedule_hour
+           AND (r.last_auto_date IS NULL OR r.last_auto_date < (NOW() AT TIME ZONE r.schedule_tz)::date)`);
       for (const r of rows) {
         // reclama el envío del día antes de enviar, para no duplicar ni reintentar en bucle
-        const claim = await pool.query(`UPDATE client_reports SET last_auto_date=(NOW() AT TIME ZONE 'America/Lima')::date
-                                         WHERE outbound_client_id=$1 AND (last_auto_date IS NULL OR last_auto_date < (NOW() AT TIME ZONE 'America/Lima')::date) RETURNING 1`, [r.cid]);
+        const claim = await pool.query(`UPDATE client_reports SET last_auto_date=(NOW() AT TIME ZONE $2)::date
+                                         WHERE outbound_client_id=$1 AND (last_auto_date IS NULL OR last_auto_date < (NOW() AT TIME ZONE $2)::date) RETURNING 1`, [r.cid, r.schedule_tz]);
         if (!claim.rows[0]) continue;
         try {
           const rec = cleanList(r.recipients).filter(okEmail);
@@ -89,13 +90,13 @@ function mount(app, { pool, requireAuth, dashHandler, highlights, sendViaClientM
       const cid = parseInt(req.params.cid);
       if (!cid || !(await ownsClient(req.workspaceOwnerId, cid))) return res.status(404).json({ error: 'Cliente no encontrado' });
       const [st, acc, mb, cl] = await Promise.all([
-        pool.query(`SELECT recipients, lang, last_sent_at, last_recipients, last_by, schedule_on, schedule_dow, schedule_hour, last_error FROM client_reports WHERE outbound_client_id=$1`, [cid]),
+        pool.query(`SELECT recipients, lang, last_sent_at, last_recipients, last_by, schedule_on, schedule_dow, schedule_hour, schedule_tz, last_error FROM client_reports WHERE outbound_client_id=$1`, [cid]),
         pool.query(`SELECT email, nombre FROM client_accounts WHERE outbound_client_id=$1 AND activo ORDER BY id`, [cid]),
         pool.query(`SELECT email, estado FROM lm_mailboxes WHERE outbound_client_id=$1 AND estado NOT IN ('error') ORDER BY verified_at DESC NULLS LAST, id LIMIT 1`, [cid]),
         pool.query(`SELECT nombre FROM outbound_clients WHERE id=$1`, [cid]),
       ]);
       const s = st.rows[0] || {};
-      res.json({ cliente: (cl.rows[0] || {}).nombre || '', recipients: s.recipients || [], lang: s.lang || 'es', last_sent_at: s.last_sent_at || null, last_recipients: s.last_recipients || [], last_by: s.last_by || '', schedule: { on: !!s.schedule_on, dow: s.schedule_dow == null ? 1 : s.schedule_dow, hour: s.schedule_hour == null ? 9 : s.schedule_hour, error: s.last_error || '' }, suggested: acc.rows, mailbox: mb.rows[0] || null });
+      res.json({ cliente: (cl.rows[0] || {}).nombre || '', recipients: s.recipients || [], lang: s.lang || 'es', last_sent_at: s.last_sent_at || null, last_recipients: s.last_recipients || [], last_by: s.last_by || '', schedule: { on: !!s.schedule_on, dow: s.schedule_dow == null ? 1 : s.schedule_dow, hour: s.schedule_hour == null ? 9 : s.schedule_hour, tz: s.schedule_tz || 'America/Lima', error: s.last_error || '' }, suggested: acc.rows, mailbox: mb.rows[0] || null });
     } catch (e) { console.error('[report] get', e.message); res.status(500).json({ error: 'Error' }); }
   });
 
@@ -106,8 +107,9 @@ function mount(app, { pool, requireAuth, dashHandler, highlights, sendViaClientM
       const rec = cleanList(req.body && req.body.recipients).filter(okEmail).slice(0, 12);
       const lang = LANGS.includes(req.body && req.body.lang) ? req.body.lang : 'es';
       const sc = (req.body && req.body.schedule) || null;
-      let on = null, dow = null, hour = null;
+      let on = null, dow = null, hour = null, tz = 'America/Lima';
       if (sc) {
+        tz = TZS.includes(sc.tz) ? sc.tz : 'America/Lima';
         on = !!sc.on; dow = Math.min(6, Math.max(0, parseInt(sc.dow))); hour = Math.min(23, Math.max(0, parseInt(sc.hour)));
         if (isNaN(dow)) dow = 1; if (isNaN(hour)) hour = 9;
         if (on) {
@@ -118,7 +120,7 @@ function mount(app, { pool, requireAuth, dashHandler, highlights, sendViaClientM
       }
       await pool.query(`INSERT INTO client_reports (outbound_client_id, user_id, recipients, lang, updated_at) VALUES ($1,$2,$3,$4,NOW())
                         ON CONFLICT (outbound_client_id) DO UPDATE SET recipients=$3, lang=$4, updated_at=NOW()`, [cid, req.workspaceOwnerId, JSON.stringify(rec), lang]);
-      if (sc) await pool.query(`UPDATE client_reports SET schedule_on=$2, schedule_dow=$3, schedule_hour=$4, last_error='' WHERE outbound_client_id=$1`, [cid, on, dow, hour]);
+      if (sc) await pool.query(`UPDATE client_reports SET schedule_on=$2, schedule_dow=$3, schedule_hour=$4, schedule_tz=$5, last_error='' WHERE outbound_client_id=$1`, [cid, on, dow, hour, tz]);
       res.json({ ok: true, recipients: rec, lang });
     } catch (e) { console.error('[report] put', e.message); res.status(500).json({ error: 'Error al guardar' }); }
   });

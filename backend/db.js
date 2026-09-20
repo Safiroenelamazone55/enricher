@@ -1094,6 +1094,7 @@ async function initDb() {
     await pool.query(`ALTER TABLE client_reports ADD COLUMN IF NOT EXISTS schedule_hour INTEGER NOT NULL DEFAULT 9`);
     await pool.query(`ALTER TABLE client_reports ADD COLUMN IF NOT EXISTS last_auto_date DATE`);
     await pool.query(`ALTER TABLE client_reports ADD COLUMN IF NOT EXISTS last_error TEXT NOT NULL DEFAULT ''`);
+    await pool.query(`ALTER TABLE client_reports ADD COLUMN IF NOT EXISTS schedule_tz TEXT NOT NULL DEFAULT 'America/Lima'`);
     await pool.query(`ALTER TABLE lm_contacts ADD COLUMN IF NOT EXISTS reunion_agendada_at TIMESTAMPTZ`);
     // Backfill único: para los que ya tienen reunión/deal, la fecha de agendado = su última respuesta (o su última actualización)
     await pool.query(`UPDATE lm_contacts k SET reunion_agendada_at = COALESCE((SELECT MAX(a.fecha) FROM activities a WHERE a.contact_id=k.id AND a.tipo='respuesta'), k.updated_at) WHERE reunion_agendada_at IS NULL AND (k.deal_cierre IS NOT NULL OR k.deal_valor IS NOT NULL OR k.disposition='reunion')`);

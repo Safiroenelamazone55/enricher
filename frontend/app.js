@@ -25464,14 +25464,17 @@ ${foot}
     document.body.appendChild(m); _paLoad(cid);
   }
   // ── Informe semanal para el equipo del cliente (destinatarios + vista previa + envío desde el buzón del cliente) ──
-  const _RP = { cid: 0, recipients: [], lang: 'es', note: '', busy: false, t: null, seq: 0, sched: { on: false, dow: 1, hour: 9 } };
+  const _RP = { cid: 0, recipients: [], lang: 'es', note: '', busy: false, t: null, seq: 0, sched: { on: false, dow: 1, hour: 9, tz: 'America/Lima', draft: false } };
+  const _RP_TZ = [['America/Lima', 'Lima (UTC−5)'], ['America/Bogota', 'Bogotá (UTC−5)'], ['America/Mexico_City', 'Ciudad de México'], ['America/New_York', 'Nueva York (Este)'], ['America/Chicago', 'Chicago (Centro)'], ['America/Denver', 'Denver (Montaña)'], ['America/Los_Angeles', 'Los Ángeles (Pacífico)'], ['America/Sao_Paulo', 'São Paulo'], ['America/Argentina/Buenos_Aires', 'Buenos Aires'], ['America/Santiago', 'Santiago'], ['Europe/London', 'Londres'], ['Europe/Madrid', 'Madrid'], ['Europe/Berlin', 'Berlín'], ['UTC', 'UTC']];
+  const _rpTzName = z => (_RP_TZ.find(x => x[0] === z) || [0, z])[1];
+  const _RP_LANGN = { es: 'Español', en: 'English', de: 'Deutsch', pt: 'Português' };
   const _RP_DAYS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
   const _rpMail = e => /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]{2,}$/.test(e);
   function _rpEsc(s) { return esc(String(s == null ? '' : s)); }
   async function reportOpen(cid) {
     reportClose();
     const c = _clients.find(x => x.id === cid); if (!c) return;
-    Object.assign(_RP, { cid, recipients: [], lang: 'es', note: '', busy: false, info: null, sched: { on: false, dow: 1, hour: 9 } });
+    Object.assign(_RP, { cid, recipients: [], lang: 'es', note: '', busy: false, info: null, sched: { on: false, dow: 1, hour: 9, tz: 'America/Lima', draft: false } });
     const m = document.createElement('div'); m.id = 'report-modal'; m.className = 'fin-pi-backdrop';
     m.onclick = ev => { if (ev.target === m) reportClose(); };
     m.innerHTML = `<div class="fin-pi-box"><div class="dle-hd"><div style="flex:1;min-width:0"><div class="dle-hd__t">Informe semanal · ${esc(c.nombre)}</div></div><button class="fin-pi-x" onclick="LeadManagerModule.reportClose()">✕</button></div>
@@ -25479,7 +25482,7 @@ ${foot}
     document.body.appendChild(m);
     try {
       const r = await _portalApi(`/lm/reports/${cid}`);
-      Object.assign(_RP, { info: r, recipients: r.recipients || [], lang: r.lang || 'es', sched: { on: !!(r.schedule && r.schedule.on), dow: r.schedule ? r.schedule.dow : 1, hour: r.schedule ? r.schedule.hour : 9 } });
+      Object.assign(_RP, { info: r, recipients: r.recipients || [], lang: r.lang || 'es', sched: { on: !!(r.schedule && r.schedule.on), dow: r.schedule ? r.schedule.dow : 1, hour: r.schedule ? r.schedule.hour : 9, tz: (r.schedule && r.schedule.tz) || 'America/Lima', draft: false } });
       _rpSide(); reportPreview();
     } catch (e) { const s = document.getElementById('rp-side'); if (s) s.innerHTML = `<div class="cp-empty2" style="padding:16px">No se pudo cargar: ${_rpEsc(e.message)}</div>`; }
   }
@@ -25505,8 +25508,14 @@ ${foot}
       <div class="rp-l">Mensaje adicional (opcional)</div>
       <textarea class="lm-inp" id="rp-note" rows="3" maxlength="1200" placeholder="Un comentario tuyo que aparece arriba del resumen…" oninput="LeadManagerModule.reportNote(this.value)">${_rpEsc(_RP.note)}</textarea>
       <div class="rp-l">Modo de envío</div>
-      <div class="rp-seg"><button class="${_RP.sched.on ? '' : 'on'}" onclick="LeadManagerModule.reportMode(false)">Manual</button><button class="${_RP.sched.on ? 'on' : ''}" onclick="LeadManagerModule.reportMode(true)">Automático</button></div>
-      ${_RP.sched.on ? `<div class="rp-sched">Cada <select class="pa-sel" onchange="LeadManagerModule.reportSched('dow',this.value)">${_RP_DAYS.map((d, k) => `<option value="${k}"${k === _RP.sched.dow ? ' selected' : ''}>${d.toLowerCase()}</option>`).join('')}</select> a las <select class="pa-sel" onchange="LeadManagerModule.reportSched('hour',this.value)">${Array.from({ length: 17 }, (_, k) => k + 6).map(h => `<option value="${h}"${h === _RP.sched.hour ? ' selected' : ''}>${String(h).padStart(2, '0')}:00</option>`).join('')}</select> <span style="color:#94A3B8">(hora de Lima)</span><div class="rp-hint" style="margin-top:4px">Se envía solo a los destinatarios guardados, desde el buzón del cliente. Puedes volver a Manual cuando quieras.</div>${i.schedule && i.schedule.error ? `<div class="rp-from rp-from--bad" style="margin-top:6px">El último envío automático falló: ${_rpEsc(i.schedule.error)}</div>` : ''}</div>` : ''}
+      <div class="rp-seg"><button class="${_RP.sched.on || _RP.sched.draft ? '' : 'on'}" onclick="LeadManagerModule.reportMode(false)">Manual</button><button class="${_RP.sched.on || _RP.sched.draft ? 'on' : ''}" onclick="LeadManagerModule.reportMode(true)">Automático</button></div>
+      ${_RP.sched.on || _RP.sched.draft ? `<div class="rp-sched">
+        <div class="rp-sr"><span>Día</span><select class="pa-sel" onchange="LeadManagerModule.reportSched('dow',this.value)">${_RP_DAYS.map((d, k) => `<option value="${k}"${k === _RP.sched.dow ? ' selected' : ''}>${d}</option>`).join('')}</select></div>
+        <div class="rp-sr"><span>Hora</span><select class="pa-sel" onchange="LeadManagerModule.reportSched('hour',this.value)">${Array.from({ length: 17 }, (_, k) => k + 6).map(h => `<option value="${h}"${h === _RP.sched.hour ? ' selected' : ''}>${String(h).padStart(2, '0')}:00</option>`).join('')}</select></div>
+        <div class="rp-sr"><span>Zona</span><select class="pa-sel" onchange="LeadManagerModule.reportSched('tz',this.value)">${_RP_TZ.map(z => `<option value="${z[0]}"${z[0] === _RP.sched.tz ? ' selected' : ''}>${z[1]}</option>`).join('')}</select></div>
+        <div class="rp-sr"><span>Idioma</span><select class="pa-sel" onchange="LeadManagerModule.reportLang(this.value)">${Object.keys(_RP_LANGN).map(k => `<option value="${k}"${k === _RP.lang ? ' selected' : ''}>${_RP_LANGN[k]}</option>`).join('')}</select></div>
+        ${_RP.sched.draft ? `<div class="rp-hint">Revisa el día, la hora y el idioma. Aún no está activo.</div><div style="display:flex;gap:6px;margin-top:6px"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.reportActivate()">Activar envío automático</button><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.reportMode(false)">Cancelar</button></div>` : `<div class="rp-hint">Activo: se envía solo a los destinatarios guardados, desde el buzón del cliente. Vuelve a Manual cuando quieras.</div>`}
+        ${i.schedule && i.schedule.error ? `<div class="rp-from rp-from--bad" style="margin-top:6px">El último envío automático falló: ${_rpEsc(i.schedule.error)}</div>` : ''}</div>` : ''}
       <div class="rp-l">Último envío</div><div class="rp-last">${_rpLast(i)}</div>
       <div class="rp-actions"><button class="btn btn--primary" id="rp-send" onclick="LeadManagerModule.reportSend()" ${i.mailbox && _RP.recipients.length ? '' : 'disabled'}>${_RP.sched.on ? 'Enviar ahora' : 'Enviar informe'}${_RP.recipients.length ? ` a ${_RP.recipients.length}` : ''}</button></div>
       <div class="rp-hint">El resumen cubre los últimos 7 días, con los mismos datos que ve el cliente en su portal.</div>`;
@@ -25514,22 +25523,35 @@ ${foot}
   }
   async function _rpSave(withSched) {
     const body = { recipients: _RP.recipients, lang: _RP.lang };
-    if (withSched || _RP.sched.on) body.schedule = _RP.sched;
+    if (withSched || _RP.sched.on) body.schedule = { on: _RP.sched.on, dow: _RP.sched.dow, hour: _RP.sched.hour, tz: _RP.sched.tz };
     try { await _portalApi(`/lm/reports/${_RP.cid}`, 'PUT', body); return true; }
     catch (e) { if (withSched) showBanner(e.message, 'error'); return false; }
   }
   async function reportMode(on) {
-    if (_RP.sched.on === on) return;
-    const prev = _RP.sched.on; _RP.sched.on = on;
+    const S = _RP.sched;
     if (on) {
-      const ok = await novaConfirm({ title: '¿Activar el envío automático?', message: `El informe se enviará solo cada ${_RP_DAYS[_RP.sched.dow].toLowerCase()} a las ${String(_RP.sched.hour).padStart(2, '0')}:00 (hora de Lima) a ${_RP.recipients.length} destinatario${_RP.recipients.length === 1 ? '' : 's'}, desde el buzón del cliente.`, ok: 'Activar', cancel: 'Cancelar' });
-      if (!ok) { _RP.sched.on = prev; _rpSide(); return; }
+      if (S.on || S.draft) return;
+      if (!_RP.recipients.length) { showBanner('Agrega al menos un destinatario para programar el envío', 'error'); return; }
+      S.draft = true; _rpSide(); return;
     }
-    if (!(await _rpSave(true))) { _RP.sched.on = prev; }
-    else showBanner(on ? '✓ Envío automático activado' : '✓ Envío manual', 'success');
+    if (S.draft) { S.draft = false; _rpSide(); return; }
+    if (!S.on) return;
+    S.on = false;
+    if (await _rpSave(true)) showBanner('✓ Envío manual', 'success'); else S.on = true;
     _rpSide();
   }
-  function reportSched(k, v) { _RP.sched[k] = parseInt(v); _rpSave(true).then(ok => { if (ok) showBanner('✓ Programación guardada', 'success'); }); }
+  async function reportActivate() {
+    const S = _RP.sched;
+    const ok = await novaConfirm({ title: '¿Activar el envío automático?', message: `Se enviará cada ${_RP_DAYS[S.dow].toLowerCase()} a las ${String(S.hour).padStart(2, '0')}:00 (${_rpTzName(S.tz)}), en ${_RP_LANGN[_RP.lang]}, a ${_RP.recipients.join(', ')}, desde el buzón del cliente.`, ok: 'Activar', cancel: 'Cancelar' });
+    if (!ok) return;
+    S.on = true; S.draft = false;
+    if (await _rpSave(true)) showBanner('✓ Envío automático activado', 'success'); else { S.on = false; S.draft = true; }
+    _rpSide();
+  }
+  function reportSched(k, v) {
+    _RP.sched[k] = k === 'tz' ? v : parseInt(v);
+    if (_RP.sched.on) _rpSave(true).then(ok => { if (ok) showBanner('✓ Programación guardada', 'success'); });
+  }
   function reportAdd(e) {
     e = String(e || '').trim().toLowerCase();
     if (!_rpMail(e)) { showBanner('Correo no válido', 'error'); return; }
@@ -25543,7 +25565,7 @@ ${foot}
     if (!_RP.recipients.length && _RP.sched.on) { _RP.sched.on = false; showBanner('Sin destinatarios: el envío volvió a modo manual', 'info'); _rpSave(true); } else _rpSave();
     _rpSide();
   }
-  function reportLang(v) { _RP.lang = v; _rpSave(); reportPreview(); }
+  function reportLang(v) { _RP.lang = v; _rpSave(); reportPreview(); _rpSide(); }
   function reportNote(v) { _RP.note = v; clearTimeout(_RP.t); _RP.t = setTimeout(reportPreview, 600); }
   async function reportPreview() {
     const my = ++_RP.seq, f = document.getElementById('rp-frame'), sj = document.getElementById('rp-subj'); if (!f) return;
@@ -30628,7 +30650,7 @@ ${foot}
     dgEnrichMenu, dgEnrichOpen, dgEnrichClose, dgEnrichApply, dgToggleIssues, dgMoreMenu, dgToggleSelMode,
     dgDupOpen, dgDupClose, dgDupPickSurvivor, dgDupToggleDel, dgDupMergeGroup, dgDupDeleteGroup,
     fmsToggle, fmsFilter, fmsPick,
-    openViews, applyView, saveView, deleteView, clearAllViews, dashTab, dashSet, dashClear, dashGran, wsLogoUpload, wsLogoDelete, dlNotaShare, puPublish, puToggle, puDel, portalLogoOpen, portalLogoClose, lgTrimExisting, lgFrame, lgReset, lgBg, lgSelect, lgUpload, lgDelete, lgSave, pcToggle, pcSend, pcAttach, pcUnpend, portalCreate, portalReset, portalToggle, portalDel, portalSecs, portalAccessOpen, portalAccessClose, reportOpen, reportClose, reportMode, reportSched, reportAdd, reportAddInput, reportRm, reportLang, reportNote, reportPreview, reportSend, portalGen, portalEdit, portalEditSave, portalSec, portalNota, portalChatSend, portalCopy,
+    openViews, applyView, saveView, deleteView, clearAllViews, dashTab, dashSet, dashClear, dashGran, wsLogoUpload, wsLogoDelete, dlNotaShare, puPublish, puToggle, puDel, portalLogoOpen, portalLogoClose, lgTrimExisting, lgFrame, lgReset, lgBg, lgSelect, lgUpload, lgDelete, lgSave, pcToggle, pcSend, pcAttach, pcUnpend, portalCreate, portalReset, portalToggle, portalDel, portalSecs, portalAccessOpen, portalAccessClose, reportOpen, reportClose, reportMode, reportActivate, reportSched, reportAdd, reportAddInput, reportRm, reportLang, reportNote, reportPreview, reportSend, portalGen, portalEdit, portalEditSave, portalSec, portalNota, portalChatSend, portalCopy,
     taskSetView, taskSetFilter, calPrev, calNext, calToday,
     lmSetDisposition, seqDoDisposition, cpSetStage,
     seqDoAccepted, seqDoNoLinkedIn, seqDoBounced, seqDoNoWhatsapp, seqDoNoPhone, lmToggleNoLinkedIn, lmToggleNoWhatsapp, lmToggleNoPhone, lmToggleBounced, lmToggleManualEmail, ctToggleBounced,

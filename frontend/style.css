@@ -16948,3 +16948,7 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .cp-off{opacity:.55;cursor:not-allowed!important;filter:grayscale(1)}
 .cp-off:hover{background:none!important}
 .cp-off__tag{display:inline-block;margin-left:6px;padding:0 6px;font-size:10px;letter-spacing:.03em;background:#E7E4DE;color:#8A8578;vertical-align:middle}
+.rp-sched{display:block!important;margin-top:8px;padding:8px 10px;background:#F6F8FB;border:1px solid #E1E6EC}
+.rp-sr{display:flex;align-items:center;gap:8px;margin-bottom:5px;font-size:12px}
+.rp-sr>span{width:44px;color:#64748B}
+.rp-sr em{font-style:normal;color:#94A3B8;font-size:11px}
