@@ -16877,7 +16877,7 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 @media(max-width:800px){.lg-cards{grid-template-columns:1fr}.lg-box{width:200px;height:40px}}
 
 /* contador de mensajes nuevos del cliente (portal) */
-.cu-badge{display:inline-block;margin-left:8px;min-width:20px;padding:1px 7px;background:#E5484D;color:#fff;font:700 11px/1.5 inherit;text-align:center;vertical-align:middle}
+.cu-badge{display:inline-flex;align-items:center;justify-content:center;margin-left:8px;min-width:18px;height:18px;padding:0 5px;background:#DC2626;color:#fff;font-size:11px;font-weight:700;line-height:1;letter-spacing:0;text-transform:none;border-radius:0;vertical-align:middle;box-sizing:border-box}
 
 /* Deals: etiqueta de nota compartida con el cliente */
 .dl-share{border:1px solid #D9DEE3;background:#fff;color:#64748B;font:600 11px inherit;padding:2px 8px;cursor:pointer}
