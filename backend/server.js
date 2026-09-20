@@ -6240,7 +6240,7 @@ app.get('/api/lm/today', requireAuth, async (req, res) => {
 // ── LM · Dashboard de rendimiento (agregados con filtros) ──
 // Filtros: from, to (YYYY-MM-DD), client, campaign, sequence, country, channel.
 // Toques = activities 'hecha' de outreach; respuestas/aceptaciones/reuniones = activities por tipo.
-app.get('/api/lm/dashboard', requireAuth, async (req, res) => {
+const _lmDashHandler = async (req, res) => {
   const uid = req.workspaceOwnerId;
   try {
     const q = req.query;
@@ -6354,7 +6354,9 @@ app.get('/api/lm/dashboard', requireAuth, async (req, res) => {
       deals: deals.rows[0], dispo: dispo.rows, funnel: funnel.rows[0], recent: recent.rows, heatAuto: heatAuto.rows, replyByCh: repCh.rows, replyDays: repDays.rows[0] && repDays.rows[0].days,
     });
   } catch (err) { console.error('[lm-dashboard]', err.message); res.status(500).json({ error: 'Error al cargar dashboard' }); }
-});
+};
+app.get('/api/lm/dashboard', requireAuth, _lmDashHandler);
+require('./services/portalRoutes').mount(app, { pool, requireAuth, dashHandler: _lmDashHandler });
 
 // ── LM · A/B (Fase B3): métricas por variante de cada paso email ──
 // Combina: envíos AUTOMÁTICOS (lm_messages: funnel completo con opens/clics/replies)

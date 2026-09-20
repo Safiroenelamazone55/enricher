@@ -16817,3 +16817,5 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .dash-row--b .clients-table th:first-child,.dash-row--b .clients-table td:first-child{width:38%;text-align:left}
 @media(max-width:1300px){.dash-row--b{grid-template-columns:repeat(2,minmax(0,1fr))}.dash-row--b .cp-card:nth-child(3){grid-column:1/-1}}
 @media(max-width:900px){.dash-row--b{grid-template-columns:1fr}}
+.lm-inp{height:34px;border:1px solid #D9DEE3;padding:0 10px;font-size:13px;background:#fff;color:#0F172A;outline:0;font-family:inherit}
+.lm-inp:focus{border-color:#2563EB;box-shadow:0 0 0 3px rgba(37,99,235,.10)}

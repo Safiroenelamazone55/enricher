@@ -1055,6 +1055,39 @@ async function initDb() {
       );
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS lm_stepout_contact_idx ON lm_step_outcomes (contact_id);`);
+    // ── Portal del cliente: cuentas con correo + contraseña (separadas de users/Google) ──
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS client_accounts (
+        id                 SERIAL        PRIMARY KEY,
+        user_id            INTEGER       REFERENCES users(id) ON DELETE CASCADE,
+        outbound_client_id INTEGER       NOT NULL REFERENCES outbound_clients(id) ON DELETE CASCADE,
+        email              TEXT          NOT NULL,
+        nombre             TEXT          NOT NULL DEFAULT '',
+        password_hash      TEXT          NOT NULL,
+        activo             BOOLEAN       NOT NULL DEFAULT TRUE,
+        must_change        BOOLEAN       NOT NULL DEFAULT TRUE,
+        sections           JSONB         NOT NULL DEFAULT '{}',
+        failed_attempts    INTEGER       NOT NULL DEFAULT 0,
+        locked_until       TIMESTAMPTZ,
+        last_login         TIMESTAMPTZ,
+        created_at         TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+      );
+    `);
+    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS client_accounts_email_uq ON client_accounts (LOWER(email));`);
+    await pool.query(`ALTER TABLE lm_contacts ADD COLUMN IF NOT EXISTS portal_nota TEXT NOT NULL DEFAULT ''`);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS portal_messages (
+        id                 SERIAL        PRIMARY KEY,
+        outbound_client_id INTEGER       NOT NULL REFERENCES outbound_clients(id) ON DELETE CASCADE,
+        autor              TEXT          NOT NULL CHECK (autor IN ('cliente','equipo')),
+        autor_nombre       TEXT          NOT NULL DEFAULT '',
+        texto              TEXT          NOT NULL,
+        leido_equipo       BOOLEAN       NOT NULL DEFAULT FALSE,
+        leido_cliente      BOOLEAN       NOT NULL DEFAULT FALSE,
+        created_at         TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+      );
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS portal_msgs_client_idx ON portal_messages (outbound_client_id, id);`);
     await pool.query(`
       CREATE TABLE IF NOT EXISTS lm_contact_campaigns (
         id          SERIAL        PRIMARY KEY,

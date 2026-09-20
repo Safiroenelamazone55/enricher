@@ -25018,7 +25018,7 @@ ${foot}
     const leads = _clientLeads(id);
     const byStage = {}; _ORDER.forEach(s => byStage[s] = leads.filter(l => _dealStage(l) === s).length);
     const pipe = leads.filter(l => !['ganado', 'perdido'].includes(_dealStage(l)));
-    const tabs = ['Overview', 'Leads', 'Campañas', 'Secuencias', 'Actividades', 'WhatsApp', 'Respuestas', 'Reportes', 'Notas'];
+    const tabs = ['Overview', 'Leads', 'Campañas', 'Secuencias', 'Actividades', 'WhatsApp', 'Respuestas', 'Reportes', 'Portal', 'Notas'];
     const tabBtns = tabs.map((t, i) => `<button class="lm-ws-tab${i === 0 ? ' active' : ''}" onclick="LeadManagerModule.clientTab(this,'${t}')">${t}</button>`).join('');
     const pipeBar = _ORDER.map(s => `<div class="lm-pipe__seg lm-pipe__seg--${s}"><span class="lm-pipe__n">${byStage[s]}</span><span class="lm-pipe__l">${STAGE_LABELS[s]}</span></div>`).join('');
     const field = (l, v) => `<div class="lm-ws-field"><span class="lm-ws-field__l">${l}</span><span class="lm-ws-field__v">${v || '—'}</span></div>`;
@@ -25044,12 +25044,110 @@ ${foot}
         </section>
       </div>`;
   }
+  // ── Portal del cliente (lado equipo): accesos, notas para el cliente y chat ──
+  let _portalTimer = null, _portalChatLast = 0, _portalChat = [];
+  const _PORTAL_SEC = { kpis: 'KPIs', actividad: 'Gráfico de actividad', embudo: 'Embudo', canales: 'Canales', paises: 'Países', respuestas: 'Respuestas y señales', reuniones: 'Reuniones y deals', secuencias: 'Secuencias', empresas: 'Empresas', contactos: 'Contactos', feed: 'Actividad en vivo', chat: 'Chat' };
+  function _portalStop() { if (_portalTimer) { clearInterval(_portalTimer); _portalTimer = null; } }
+  function _portalBox() { return document.getElementById('lm-portal-box'); }
+  async function _portalLoad(cid) {
+    _portalStop();
+    const box = _portalBox(); if (!box) return;
+    try {
+      const [a, h, c] = await Promise.all([
+        apiFetch(`${API}/lm/portal/accounts?client=${cid}`).then(r => r.json()),
+        apiFetch(`${API}/lm/portal/highlights?client=${cid}`).then(r => r.json()),
+        apiFetch(`${API}/lm/portal/chat/${cid}`).then(r => r.json()),
+      ]);
+      window.__portalState = { cid, a, h };
+      _portalChat = c.messages || []; _portalChatLast = _portalChat.length ? _portalChat[_portalChat.length - 1].id : 0;
+      box.innerHTML = _portalHtml(cid, a, h);
+      _portalDrawChat(true);
+      _portalTimer = setInterval(async () => {
+        if (!_portalBox() || document.hidden) { if (!_portalBox()) _portalStop(); return; }
+        try {
+          const r = await apiFetch(`${API}/lm/portal/chat/${cid}?after=${_portalChatLast}`); const j = await r.json();
+          if (j.messages && j.messages.length) { _portalChat = _portalChat.concat(j.messages); _portalChatLast = _portalChat[_portalChat.length - 1].id; _portalDrawChat(false); }
+        } catch (e) {}
+      }, 5000);
+    } catch (e) { box.innerHTML = `<div class="cp-empty2" style="padding:20px">No se pudo cargar el portal: ${esc(e.message)}</div>`; }
+  }
+  function _portalHtml(cid, a, h) {
+    const url = 'https://app.novacentrax.com/portal.html';
+    const accs = (a.accounts || []).map(x => `<tr>
+        <td><b>${esc(x.email)}</b><div style="font-size:11.5px;color:#64748B">${esc(x.nombre || '')}</div></td>
+        <td>${x.activo ? '<span class="lm-vb" style="background:#DCFCE7;color:#15803D">Activo</span>' : '<span class="lm-vb" style="background:#EEF1F5;color:#64748B">Desactivado</span>'}${x.must_change ? ' <span class="lm-vb" style="background:#FEF3C7;color:#A16207">Pendiente de cambiar clave</span>' : ''}</td>
+        <td>${x.last_login ? new Date(x.last_login).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'Nunca'}</td>
+        <td style="white-space:nowrap"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.portalSecs(${x.id})">Qué ve</button> <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.portalReset(${x.id})">Nueva clave</button> <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.portalToggle(${x.id},${!x.activo})">${x.activo ? 'Desactivar' : 'Activar'}</button> <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.portalDel(${x.id})">Eliminar</button></td></tr>
+        <tr id="portal-sec-${x.id}" style="display:none"><td colspan="4" style="background:#F8FAFC"><div style="display:flex;flex-wrap:wrap;gap:6px 18px;padding:6px 2px">${a.sections.map(k => `<label style="font-size:12.5px;display:flex;gap:6px;align-items:center"><input type="checkbox" data-k="${k}" ${x.sections[k] ? 'checked' : ''} onchange="LeadManagerModule.portalSec(${x.id},this)"> ${esc(_PORTAL_SEC[k] || k)}</label>`).join('')}</div></td></tr>`).join('');
+    const row = (r, extra) => `<div style="border-bottom:1px solid #EEF1F4;padding:9px 0;display:flex;gap:12px;align-items:flex-start"><div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13px">${esc([r.nombre, r.apellido].filter(Boolean).join(' '))}${r.cargo ? ` <span style="color:#64748B;font-weight:400">· ${esc(r.cargo)}</span>` : ''}</div><div style="font-size:12px;color:#64748B">${esc(r.empresa || '')}${extra ? ' · ' + extra : ''}</div>${r.snippet ? `<div style="font-size:12px;background:#F8FAFC;border-left:3px solid #2563EB;padding:5px 8px;margin-top:4px">${esc(r.snippet)}</div>` : ''}</div>
+        <input class="lm-inp" style="width:280px;flex:none" maxlength="600" placeholder="Nota visible para el cliente…" value="${esc(r.portal_nota || '')}" onchange="LeadManagerModule.portalNota(${r.contact_id},this)"></div>`;
+    const dt = d => d ? new Date(d).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', timeZone: 'UTC' }) : '';
+    return `
+      <div class="cp-card" style="margin-bottom:12px"><div class="cp-card__t">Acceso del cliente</div>
+        <div style="font-size:12.5px;color:#64748B;margin-bottom:10px">El cliente entra con correo y contraseña en <a class="lm-link" href="${url}" target="_blank" rel="noopener">${url}</a> <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.portalCopy('${url}')">Copiar enlace</button></div>
+        <div id="portal-cred"></div>
+        ${accs ? `<table class="clients-table" style="width:100%"><thead><tr><th>Usuario</th><th>Estado</th><th>Último ingreso</th><th></th></tr></thead><tbody>${accs}</tbody></table>` : '<div class="cp-empty2" style="padding:10px">Aún no hay usuarios para este cliente.</div>'}
+        <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><input class="lm-inp" id="portal-em" type="email" placeholder="correo del cliente" style="width:240px"><input class="lm-inp" id="portal-nm" placeholder="nombre (opcional)" style="width:200px"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.portalCreate(${cid})">＋ Crear usuario</button></div>
+      </div>
+      <div class="cp-card" style="margin-bottom:12px"><div class="cp-card__t">Qué se destaca al cliente <span style="font-weight:400;font-size:12px;color:#64748B">— la nota que escribas aquí la ve el cliente junto a ese contacto y su empresa</span></div>
+        <div style="font-weight:600;font-size:12.5px;margin:6px 0 2px">Próximas reuniones (${h.next_meetings.length})</div>${h.next_meetings.map(r => row(r, dt(r.fecha))).join('') || '<div class="cp-empty2" style="padding:8px">Ninguna. Se toman de "Deals" con fecha de cierre.</div>'}
+        <div style="font-weight:600;font-size:12.5px;margin:12px 0 2px">Últimas respuestas</div>${h.last_replies.map(r => row(r, dt(r.fecha))).join('') || '<div class="cp-empty2" style="padding:8px">Sin respuestas registradas.</div>'}
+        <div style="font-weight:600;font-size:12.5px;margin:12px 0 2px">Señales positivas por convertir (${h.positive_pending.length})</div>${h.positive_pending.map(r => row(r, esc(r.estado))).join('') || '<div class="cp-empty2" style="padding:8px">Ninguna.</div>'}
+      </div>
+      <div class="cp-card"><div class="cp-card__t">Chat con el cliente</div>
+        <div id="portal-chat" style="height:260px;overflow:auto;background:#F5F6F8;padding:10px;display:flex;flex-direction:column;gap:6px;border:1px solid #E7EBF0"></div>
+        <form style="display:flex;gap:8px;margin-top:8px" onsubmit="LeadManagerModule.portalChatSend(event,${cid})"><input class="lm-inp" id="portal-ci" placeholder="Responder al cliente…" maxlength="2000" style="flex:1" autocomplete="off"><button class="btn btn--primary btn--sm">Enviar</button></form>
+      </div>`;
+  }
+  function _portalDrawChat(scroll) {
+    const el = document.getElementById('portal-chat'); if (!el) return;
+    const atEnd = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+    el.innerHTML = _portalChat.length ? _portalChat.map(x => `<div style="max-width:78%;padding:7px 10px;font-size:13px;white-space:pre-wrap;word-break:break-word;${x.autor === 'equipo' ? 'align-self:flex-end;background:#0B1220;color:#fff' : 'align-self:flex-start;background:#fff;border:1px solid #E1E6EC'}">${esc(x.texto)}<div style="font-size:10.5px;opacity:.6;margin-top:2px">${esc(x.autor === 'equipo' ? (x.autor_nombre || 'Equipo') : (x.autor_nombre || 'Cliente'))} · ${new Date(x.created_at).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</div></div>`).join('') : '<div class="cp-empty2" style="padding:10px">Sin mensajes todavía.</div>';
+    if (scroll || atEnd) el.scrollTop = el.scrollHeight;
+  }
+  async function _portalApi(path, method, body) {
+    const r = await apiFetch(`${API}${path}`, { method: method || 'GET', headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+    const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'Error'); return j;
+  }
+  function _portalShowCred(email, pw, titulo) {
+    const el = document.getElementById('portal-cred'); if (!el) return;
+    el.innerHTML = `<div style="background:#F0FDF4;border:1px solid #BBF7D0;padding:10px 12px;margin-bottom:10px;font-size:13px"><b>${esc(titulo)}</b> — cópialas ahora, la contraseña no se vuelve a mostrar.<div style="margin-top:6px;font-family:monospace;font-size:13px">Usuario: ${esc(email)}<br>Contraseña: <b>${esc(pw)}</b></div><div style="margin-top:8px"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.portalCopy('Portal: https://app.novacentrax.com/portal.html\\nUsuario: ${esc(email)}\\nContraseña: ${esc(pw)}')">Copiar todo</button></div></div>`;
+  }
+  async function portalCreate(cid) {
+    const em = document.getElementById('portal-em'), nm = document.getElementById('portal-nm');
+    try { const r = await _portalApi('/lm/portal/accounts', 'POST', { outbound_client_id: cid, email: em.value, nombre: nm.value }); await _portalLoad(cid); _portalShowCred(r.email, r.password, 'Usuario creado'); }
+    catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  async function portalReset(id) {
+    const ok = await novaConfirm({ title: '¿Generar nueva contraseña?', message: 'La actual dejará de funcionar y el cliente deberá cambiarla al entrar.', ok: 'Generar', cancel: 'Cancelar' }); if (!ok) return;
+    try { const st = window.__portalState, acc = (st.a.accounts || []).find(x => x.id === id); const r = await _portalApi(`/lm/portal/accounts/${id}/reset`, 'POST'); await _portalLoad(st.cid); _portalShowCred(acc ? acc.email : '', r.password, 'Nueva contraseña'); }
+    catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  async function portalToggle(id, activo) { try { await _portalApi(`/lm/portal/accounts/${id}`, 'PATCH', { activo }); await _portalLoad(window.__portalState.cid); } catch (e) { showBanner('Error: ' + e.message, 'error'); } }
+  async function portalDel(id) {
+    const ok = await novaConfirm({ title: '¿Eliminar este usuario?', message: 'Ya no podrá entrar al portal.', ok: 'Eliminar', cancel: 'Cancelar', tone: 'danger' }); if (!ok) return;
+    try { await _portalApi(`/lm/portal/accounts/${id}`, 'DELETE'); await _portalLoad(window.__portalState.cid); } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  function portalSecs(id) { const r = document.getElementById('portal-sec-' + id); if (r) r.style.display = r.style.display === 'none' ? '' : 'none'; }
+  async function portalSec(id, cb) {
+    const st = window.__portalState, acc = st.a.accounts.find(x => x.id === id); if (!acc) return;
+    acc.sections[cb.dataset.k] = cb.checked;
+    try { await _portalApi(`/lm/portal/accounts/${id}`, 'PATCH', { sections: acc.sections }); showBanner('✓ Guardado', 'success'); } catch (e) { cb.checked = !cb.checked; acc.sections[cb.dataset.k] = cb.checked; showBanner('Error: ' + e.message, 'error'); }
+  }
+  async function portalNota(contactId, inp) { try { await _portalApi('/lm/portal/nota', 'PATCH', { contact_id: contactId, nota: inp.value }); showBanner('✓ Nota guardada', 'success'); } catch (e) { showBanner('Error: ' + e.message, 'error'); } }
+  async function portalChatSend(ev, cid) {
+    ev.preventDefault(); const i = document.getElementById('portal-ci'), t = i.value.trim(); if (!t) return; i.value = '';
+    try { const m = await _portalApi(`/lm/portal/chat/${cid}`, 'POST', { texto: t }); _portalChat.push(m); _portalChatLast = m.id; _portalDrawChat(true); } catch (e) { i.value = t; showBanner('Error: ' + e.message, 'error'); }
+  }
+  function portalCopy(t) { try { navigator.clipboard.writeText(t); showBanner('✓ Copiado', 'success'); } catch (e) { showBanner('No se pudo copiar', 'error'); } }
   function clientTab(btn, tab) {
     document.querySelectorAll('.lm-ws-tab').forEach(b => b.classList.toggle('active', b === btn));
+    _portalStop();
     ObcWaModule.detener(); // corta los sondeos del WhatsApp del cliente si se estaba viendo esa pestaña
     const c = _clients.find(x => x.id === _activeClient); const body = $('lm-ws-tabbody');
     if (c && body) body.innerHTML = _clientTabBody(tab, c, _clientLeads(c.id));
     if (tab === 'WhatsApp' && c) ObcWaModule.load(c.id);
+    if (tab === 'Portal' && c) _portalLoad(c.id);
   }
   function _clientGoTab(tabName) {
     const btn = [...document.querySelectorAll('.lm-ws-tab')].find(b => b.textContent.trim() === tabName);
@@ -25097,6 +25195,7 @@ ${foot}
     </tr>`;
   }
   function _clientTabBody(tab, c, leads) {
+    if (tab === 'Portal') return '<div id="lm-portal-box"><div class="cp-empty2" style="padding:20px">Cargando…</div></div>';
     if (tab === 'Leads') {
       if (!leads.length) return _empty('leads', 'Sin leads para este cliente', 'Se asocian por "Cliente outbound" desde Contactos, o al enrolarlos en una secuencia de este cliente.', '', '');
       return `<div class="ldh-table-wrap"><table class="ldh-table ldh-lead-table">
@@ -30034,7 +30133,7 @@ ${foot}
     dgEnrichMenu, dgEnrichOpen, dgEnrichClose, dgEnrichApply, dgToggleIssues, dgMoreMenu, dgToggleSelMode,
     dgDupOpen, dgDupClose, dgDupPickSurvivor, dgDupToggleDel, dgDupMergeGroup, dgDupDeleteGroup,
     fmsToggle, fmsFilter, fmsPick,
-    openViews, applyView, saveView, deleteView, clearAllViews, dashTab, dashSet, dashClear, dashGran,
+    openViews, applyView, saveView, deleteView, clearAllViews, dashTab, dashSet, dashClear, dashGran, portalCreate, portalReset, portalToggle, portalDel, portalSecs, portalSec, portalNota, portalChatSend, portalCopy,
     taskSetView, taskSetFilter, calPrev, calNext, calToday,
     lmSetDisposition, seqDoDisposition, cpSetStage,
     seqDoAccepted, seqDoNoLinkedIn, seqDoBounced, seqDoNoWhatsapp, seqDoNoPhone, lmToggleNoLinkedIn, lmToggleNoWhatsapp, lmToggleNoPhone, lmToggleBounced, lmToggleManualEmail, ctToggleBounced,

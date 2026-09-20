@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260920h"/>
+  <link rel="stylesheet" href="style.css?v=20260920i"/>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -3147,12 +3147,20 @@
         window.location.href = 'https://api.novacentrax.com/api/auth/google';
         return;
       }
-      status.classList.add('is-visible');
+      var em = document.getElementById('acc-email'), pw = document.getElementById('acc-pass'), btn = document.getElementById('acc-submit');
+      btn.disabled = true;
+      fetch('https://api.novacentrax.com/api/portal/login', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: em.value, password: pw.value }) })
+        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+        .then(function (x) {
+          if (x.ok) { window.location.href = 'portal.html'; return; }
+          status.textContent = x.j.error || 'No se pudo iniciar sesión'; status.classList.add('is-visible'); btn.disabled = false;
+        })
+        .catch(function () { status.textContent = 'No se pudo conectar. Inténtalo de nuevo.'; status.classList.add('is-visible'); btn.disabled = false; });
     });
   })();
 </script>
 
-<script src="app.js?v=2026091547"></script>
+<script src="app.js?v=2026091548"></script>
 <div id="task-quick-edit" style="display:none;position:fixed;z-index:9999"></div>
 </body>
 </html>
