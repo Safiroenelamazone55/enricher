@@ -147,7 +147,11 @@
     setUrl(tabUrl(S.tab) + (openId ? '/' + openId : ''), true);
     renderApp(); start();
     if (openId) { if (S.tab === 'empresas') openCompany(openId); else openContact(openId); }
-    try { if (S.me.lang && S.me.lang !== PT_I18N.lang) PT_I18N.set(S.me.lang, () => S.redraw && S.redraw()); } catch (e) {}
+    try {
+      const um = location.pathname.match(/^\/(en|de|pt|es)\/portal(?:\/|$)/);
+      if (um) { if (S.me.lang !== um[1]) api('/portal/profile', { method: 'PATCH', body: JSON.stringify({ lang: um[1] }) }).catch(() => {}); }   // la dirección con idioma manda
+      else if (S.me.lang && S.me.lang !== PT_I18N.lang) PT_I18N.set(S.me.lang, () => S.redraw && S.redraw());                                   // sin idioma en la dirección: el de la cuenta
+    } catch (e) {}
     if (S.me.pw_prompt && !sessionStorage.getItem('pt_pw_skip')) showPwReminder();
   }
   function tabs() {
