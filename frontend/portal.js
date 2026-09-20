@@ -186,7 +186,7 @@
     const brandMark = br.ws && br.ws.has ? `<div class="pt-brand pt-brand--logo"><img src="${API}/portal/branding/workspace-logo?v=${br.ws.v || 0}" alt="" style="filter:${lum > 0.45 ? 'brightness(0)' : 'none'}"></div>` : '<div class="pt-brand"><img src="/logo-nova.svg" alt="">Nova</div>';
     root.innerHTML = `<div class="pt-top" style="background:${hbg};color:${hfg}">${brandMark}${clientMark}
       <span class="pt-live"><i></i><span id="pt-upd">En vivo</span></span>${langBtn()}
-      <div class="pt-user"><button id="pt-um">${esc(S.me.nombre || S.me.email)} ▾</button><div class="pt-menu" id="pt-mn"><div class="em">${esc(S.me.email)}</div><button id="pt-cp">Cambiar contraseña</button><button id="pt-lo">Cerrar sesión</button></div></div></div>
+      <div class="pt-user"><button id="pt-um">${esc(S.me.nombre || S.me.email)} ▾</button><div class="pt-menu" id="pt-mn"><div class="em">${esc(S.me.email)}</div><button id="pt-pf">Perfil</button><button id="pt-cp">Cambiar contraseña</button><button id="pt-lo">Cerrar sesión</button></div></div></div>
       <div class="pt-nav">${tabs().map(t => `<button data-t="${t[0]}" class="${S.tab === t[0] ? 'on' : ''}">${t[1]}</button>`).join('')}</div>
       <div class="pt-main" id="pt-body"></div>
       ${S.me.sections.chat ? `<button class="pt-chat-btn" id="pt-cb">${ico('chat', 18)} Chat rápido <span class="n" id="pt-cn" style="display:none"></span></button>
@@ -198,6 +198,16 @@
     document.addEventListener('click', () => mn && mn.classList.remove('on'));
     document.getElementById('pt-lo').onclick = async () => { try { await api('/portal/logout', { method: 'POST' }); } catch (e) {} S.me = null; stop(); renderLogin(); };
     document.getElementById('pt-cp').onclick = () => renderChangePw(false);
+    document.getElementById('pt-pf').onclick = () => {
+      const m = document.createElement('div'); m.className = 'pt-modal'; m.onclick = ev => { if (ev.target === m) m.remove(); };
+      m.innerHTML = `<form class="pt-modal__box"><h3>Perfil</h3><label class="pt-f"><span>Nombre</span><input id="pt-pfn" maxlength="120" value="${esc(S.me.nombre || '')}" required></label><label class="pt-f"><span>Correo electrónico</span><input value="${esc(S.me.email)}" disabled></label><div id="pt-pfe" class="pt-err" style="display:none"></div><div class="pt-modal__b"><button class="pt-btn" type="submit">Guardar</button><button type="button" class="pt-link" id="pt-pfx">Cancelar</button></div></form>`;
+      root.appendChild(m); m.querySelector('#pt-pfx').onclick = () => m.remove(); m.querySelector('#pt-pfn').focus();
+      m.querySelector('form').onsubmit = async ev => {
+        ev.preventDefault();
+        try { const r = await api('/portal/profile', { method: 'PATCH', body: JSON.stringify({ nombre: m.querySelector('#pt-pfn').value }) }); S.me.nombre = r.nombre; m.remove(); renderApp(); }
+        catch (er) { const e = m.querySelector('#pt-pfe'); e.textContent = er.message; e.style.display = ''; }
+      };
+    };
     if (S.me.sections.chat) {
       document.getElementById('pt-cb').onclick = () => { S.chatOpen = true; S.seenChat = S.chatLast; S.unread = 0; drawChat(); };
       document.getElementById('pt-cc').onclick = () => { S.chatOpen = false; drawChat(); };
