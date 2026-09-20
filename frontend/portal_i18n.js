@@ -2,7 +2,7 @@
    El portal se escribe en español; aquí se traduce el DOM por frases exactas y patrones. */
 (function () {
   'use strict';
-  const LANGS = { es: { code: 'ES', name: 'Español', locale: 'es-ES' }, en: { code: 'EN', name: 'English (US)', locale: 'en-US' }, de: { code: 'DE', name: 'Deutsch (Schweiz)', locale: 'de-CH' }, pt: { code: 'PT', name: 'Português', locale: 'pt-BR' } };
+  const LANGS = { es: { code: 'ES', name: 'Español', locale: 'es-ES' }, en: { code: 'EN', name: 'English', locale: 'en-US' }, de: { code: 'DE', name: 'Deutsch', locale: 'de-CH' }, pt: { code: 'PT', name: 'Português', locale: 'pt-BR' } };
   // [es, en, de, pt]
   const X = [
     ['Portal del cliente', 'Client portal', 'Kundenportal', 'Portal do cliente'],
