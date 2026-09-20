@@ -21655,7 +21655,7 @@ ${foot}
     const tipoMap = { email: 'email_enviado', linkedin: 'linkedin_msg', call: 'llamada', whatsapp: 'nota', task: 'nota' };
     const _v = st ? _stepVariant(st, c) : null;
     const _vn = (_v && st && _stepVariants(st).length > 1) ? ` · Variante ${_v.nombre || '?'}` : '';
-    if (st) await apiFetch(`${API}/activities`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact_id: cid, outbound_client_id: (c && c.outbound_client_id) || null, tipo: tipoMap[st.canal] || 'nota', nota: `Paso ${e.paso}${st.titulo ? ': ' + st.titulo : ''}${_vn}`, fecha: new Date().toISOString().slice(0, 10), estado: 'hecha', variant: (_v && _stepVariants(st).length > 1) ? String(_v.nombre || 'A') : '' }) });
+    if (st) await apiFetch(`${API}/activities`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact_id: cid, outbound_client_id: (c && c.outbound_client_id) || null, tipo: tipoMap[st.canal] || 'nota', canal: st.canal === 'whatsapp' ? (st.accion === 'llamada' ? 'whatsapp_llamada' : 'whatsapp_mensaje') : (st.canal || ''), nota: `Paso ${e.paso}${st.titulo ? ': ' + st.titulo : ''}${_vn}`, fecha: new Date().toISOString().slice(0, 10), estado: 'hecha', variant: (_v && _stepVariants(st).length > 1) ? String(_v.nombre || 'A') : '' }) });
     const nextEff = eff >= 0 ? _effIdx(steps, cid, eff + 1) : -1;   // siguiente paso que aplica al contacto
     const body = nextEff < 0 ? { estado: 'terminado' } : { paso: nextEff + 1 };
     await apiFetch(`${API}/lm/sequences/${seqId}/contacts/${cid}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -24063,7 +24063,7 @@ ${foot}
     if (k === 'in') return '<b class="dash-in">in</b>';
     return `<svg width="${sz || 18}" height="${sz || 18}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${_DASH_ICO[k] || ''}</svg>`;
   }
-  const _DASH_CH = { email: ['Email', '#2563EB', 'mail'], linkedin: ['LinkedIn', '#7C5CE0', 'in'], call: ['Llamada', '#F59E0B', 'phone'], whatsapp: ['WhatsApp', '#22A06B', 'chat'], otros: ['Otros / tareas', '#B8C0CC', 'dots'] };
+  const _DASH_CH = { email: ['Email', '#2563EB', 'mail'], linkedin: ['LinkedIn', '#7C5CE0', 'in'], call: ['Llamada', '#F59E0B', 'phone'], wa_msg: ['WhatsApp · mensajes', '#22A06B', 'chat'], wa_call: ['WhatsApp · llamadas', '#0EA5A4', 'phone'], otros: ['Otros / tareas', '#B8C0CC', 'dots'] };
   let _dashGran = 'auto';
   function dashGran(v) { _dashGran = v; _dashPaintBody(); }
   function _dashRange() {
@@ -24108,7 +24108,7 @@ ${foot}
       ${sel('client', 'Cliente', 'building', _clients.map(c => [c.id, c.nombre]))}
       ${sel('campaign', 'Campaña', 'tag', camps.map(c => [c.id, c.nombre]))}
       ${sel('sequence', 'Secuencia', 'seq', seqs.map(s => [s.id, s.nombre]))}
-      ${sel('channel', 'Canal', 'radio', [['email', 'Email'], ['linkedin', 'LinkedIn'], ['call', 'Llamada'], ['whatsapp', 'WhatsApp'], ['otros', 'Otros / tareas']])}
+      ${sel('channel', 'Canal', 'radio', [['email', 'Email'], ['linkedin', 'LinkedIn'], ['call', 'Llamada'], ['wa_msg', 'WhatsApp · mensajes'], ['wa_call', 'WhatsApp · llamadas'], ['otros', 'Otros / tareas']])}
       ${sel('country', 'País', 'globe', ctry)}
       ${(f.client || f.campaign || f.sequence || f.country || f.channel) ? `<button class="dash-clear" onclick="LeadManagerModule.dashClear()">Limpiar</button>` : ''}`;
   }
@@ -24170,7 +24170,7 @@ ${foot}
     const cTot = d.countries.reduce((n, r) => n + r.contacted, 0), cMax = Math.max(1, ...d.countries.map(r => r.contacted));
     const ctry = d.countries.length ? `<div class="dash-bars">${d.countries.slice(0, 6).map(r => `<div class="dash-bar"><span class="dash-bar__l" title="${esc(r.pais)}">${esc(r.pais)}</span><div class="dash-bar__t"><div class="dash-bar__f" style="width:${Math.max(2, Math.round(r.contacted / cMax * 100))}%"></div></div><span class="dash-bar__v">${_dashPct(r.contacted, cTot)}%</span></div>`).join('')}</div>` : '<div class="rep-empty">Sin datos de país</div>';
     // actividad: leyenda propia + selector de granularidad
-    const chsUsed = ['email', 'linkedin', 'call', 'whatsapp', 'otros'].filter(k => d.daily.some(r => r.ch === k));
+    const chsUsed = ['email', 'linkedin', 'call', 'wa_msg', 'wa_call', 'otros'].filter(k => d.daily.some(r => r.ch === k));
     const gran = _dashGran === 'auto' ? (d.range.days > 60 ? 'week' : 'day') : _dashGran;
     const actLeg = chsUsed.map(k => `<span class="dash-lg"><span class="dash-dot" style="background:${_DASH_CH[k][1]}"></span>${_DASH_CH[k][0]}</span>`).join('');
     return `${_dashLoading ? '<div class="dash-loading">Actualizando…</div>' : ''}
@@ -24245,7 +24245,7 @@ ${foot}
     const bOf = weekly ? wk : (x => x);
     const MES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
     const lbl = x => x.slice(5);
-    const chs = ['email', 'linkedin', 'call', 'whatsapp', 'otros'].filter(k => d.daily.some(r => r.ch === k));
+    const chs = ['email', 'linkedin', 'call', 'wa_msg', 'wa_call', 'otros'].filter(k => d.daily.some(r => r.ch === k));
     const dc = document.getElementById('dash-daily');
     if (dc) _dashCharts.push(new Chart(dc.getContext('2d'), { type: 'bar', data: { labels: buckets.map(lbl), datasets: chs.map((k, i) => ({ label: _DASH_CH[k][0], backgroundColor: _DASH_CH[k][1], borderRadius: i === chs.length - 1 ? 3 : 0, borderSkipped: false, barPercentage: .7, data: buckets.map(b => d.daily.filter(r => r.ch === k && bOf(r.d) === b).reduce((n, r) => n + r.n, 0)) })) }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: tip }, scales: { x: Object.assign({}, axis.x, { stacked: true }), y: Object.assign({}, axis.y, { stacked: true }) } } }));
     const cc = document.getElementById('dash-ch');

@@ -31,7 +31,7 @@
     check: '<path d="M20 6L9 17l-5-5"/>',
   };
   const ico = (k, sz) => k === 'in' ? '<b class="dash-in">in</b>' : `<svg width="${sz || 18}" height="${sz || 18}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICO[k] || ''}</svg>`;
-  const CH = { email: ['Email', '#2563EB', 'mail'], linkedin: ['LinkedIn', '#7C5CE0', 'in'], call: ['Llamada', '#F59E0B', 'phone'], whatsapp: ['WhatsApp', '#22A06B', 'chat'], otros: ['Otros / tareas', '#B8C0CC', 'dots'], reply: ['Respuesta', '#22A06B', 'reply'], meeting: ['Reunión', '#F59E0B', 'cal'], task: ['Seguimiento', '#94A3B8', 'dots'] };
+  const CH = { email: ['Email', '#2563EB', 'mail'], linkedin: ['LinkedIn', '#7C5CE0', 'in'], call: ['Llamada', '#F59E0B', 'phone'], wa_msg: ['WhatsApp · mensajes', '#22A06B', 'chat'], wa_call: ['WhatsApp · llamadas', '#0EA5A4', 'phone'], whatsapp: ['WhatsApp', '#22A06B', 'chat'], otros: ['Otros / tareas', '#B8C0CC', 'dots'], reply: ['Respuesta', '#22A06B', 'reply'], meeting: ['Reunión', '#F59E0B', 'cal'], task: ['Seguimiento', '#94A3B8', 'dots'] };
   const pct = (a, b) => b ? Math.round(a / b * 1000) / 10 : 0;
   const fdate = (d, o) => { try { return new Date(d).toLocaleDateString('es-ES', o || { day: '2-digit', month: 'short' }); } catch (e) { return ''; } };
   const ago = d => { const m = Math.round((Date.now() - new Date(d)) / 60000); if (m < 1) return 'ahora'; if (m < 60) return `hace ${m} min`; const h = Math.round(m / 60); if (h < 24) return `hace ${h} h`; return fdate(d); };
@@ -235,7 +235,7 @@
     }
     let row1 = '';
     if (d.daily && d.daily.length || d.funnel) {
-      const used = ['email', 'linkedin', 'call', 'whatsapp', 'otros'].filter(k => (d.daily || []).some(r => r.ch === k));
+      const used = ['email', 'linkedin', 'call', 'wa_msg', 'wa_call', 'otros'].filter(k => (d.daily || []).some(r => r.ch === k));
       const gran = S.gran === 'auto' ? (d.range.days > 60 ? 'week' : 'day') : S.gran;
       const actCard = d.daily && d.daily.length ? `<div class="cp-card"><div class="dash-card-h"><div class="cp-card__t">Actividad por canal</div><label class="dash-f dash-f--sm"><select onchange="PT.gran(this.value)"><option value="day"${gran === 'day' ? ' selected' : ''}>Diario</option><option value="week"${gran === 'week' ? ' selected' : ''}>Semanal</option></select></label></div><div class="dash-legend">${used.map(k => `<span class="dash-lg"><span class="dash-dot" style="background:${CH[k][1]}"></span>${CH[k][0]}</span>`).join('')}</div><div class="dash-chart"><canvas id="pt-daily"></canvas></div></div>` : '';
       let fun = '';
@@ -275,7 +275,7 @@
     const weekly = S.gran === 'auto' ? days.length > 60 : S.gran === 'week';
     const wk = x => { const t = new Date(x + 'T00:00:00Z'); t.setUTCDate(t.getUTCDate() - ((t.getUTCDay() + 6) % 7)); return t.toISOString().slice(0, 10); };
     const bk = weekly ? [...new Set(days.map(wk))] : days, bo = weekly ? wk : x => x;
-    const chs = ['email', 'linkedin', 'call', 'whatsapp', 'otros'].filter(k => (d.daily || []).some(r => r.ch === k));
+    const chs = ['email', 'linkedin', 'call', 'wa_msg', 'wa_call', 'otros'].filter(k => (d.daily || []).some(r => r.ch === k));
     const ax = { x: { stacked: true, grid: { display: false }, border: { display: false }, ticks: { maxTicksLimit: 8, color: '#94A3B8', font: { size: 10 } } }, y: { stacked: true, beginAtZero: true, border: { display: false }, grid: { color: '#DDE3EA', borderDash: [3, 4], drawTicks: false }, ticks: { precision: 0, maxTicksLimit: 5, color: '#94A3B8', font: { size: 10 }, padding: 8 } } };
     const dc = document.getElementById('pt-daily');
     if (dc) S.charts.push(new Chart(dc.getContext('2d'), { type: 'bar', data: { labels: bk.map(x => x.slice(5)), datasets: chs.map(k => ({ label: CH[k][0], backgroundColor: CH[k][1], borderSkipped: false, barPercentage: .7, data: bk.map(b => d.daily.filter(r => r.ch === k && bo(r.d) === b).reduce((n, r) => n + r.n, 0)) })) }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: tip }, scales: ax } }));
