@@ -215,7 +215,7 @@
     [/(\d+) completados/, '$1 completed', '$1 abgeschlossen', '$1 concluídos'],
     [/(\d+) en este paso/, '$1 in this step', '$1 in diesem Schritt', '$1 nesta etapa'],
     [/^Día (\d+)$/, 'Day $1', 'Tag $1', 'Dia $1'],
-    [/(\d+) contactos$/, '$1 contacts', '$1 Kontakte', '$1 contatos'],
+    [/(\d+) contactos?$/, '$1 contacts', '$1 Kontakte', '$1 contatos'],
   ];
   let lang = 'es';
   try { lang = localStorage.getItem('pt_lang') || ''; } catch (e) {}

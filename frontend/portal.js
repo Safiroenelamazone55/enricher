@@ -468,7 +468,7 @@
   }
   function drawerHtml() {
     const D = S.dr, hasCo = D.companyId, title = D.tab === 'empresa' ? (D.co ? D.co.company.nombre : '') : (D.ct ? D.ct.contact.nombre : '');
-    const sub = D.tab === 'empresa' ? (D.co ? D.co.contacts.length + ' contactos' : '') : (D.ct ? [D.ct.contact.cargo, D.ct.contact.empresa].filter(Boolean).join(' · ') : '');
+    const sub = D.tab === 'empresa' ? (D.co ? D.co.contacts.length + (D.co.contacts.length === 1 ? ' contacto' : ' contactos') : '') : (D.ct ? [D.ct.contact.cargo, D.ct.contact.empresa].filter(Boolean).join(' · ') : '');
     return `<div class="pt-dr-bg" onclick="PT.close()"></div><aside class="pt-dr"><div class="pt-dr__h"><div style="min-width:0"><h2>${esc(title)}</h2><div class="pt-item__s">${esc(sub)}</div></div><button class="pt-modal__x" style="position:static" onclick="PT.close()" title="Cerrar">✕</button></div>
       ${hasCo && D.hasContact ? `<div class="pt-dr__tabs"><button class="${D.tab === 'empresa' ? 'on' : ''}" onclick="PT.drTab('empresa')">Empresa</button><button class="${D.tab === 'contacto' ? 'on' : ''}" onclick="PT.drTab('contacto')">Contacto</button></div>` : ''}
       <div class="pt-dr__b">${drBody()}</div></aside>`;
