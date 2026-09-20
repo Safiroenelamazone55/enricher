@@ -25464,7 +25464,7 @@ ${foot}
     document.body.appendChild(m); _paLoad(cid);
   }
   function portalAccessClose() { document.getElementById('portal-access-modal')?.remove(); }
-  function _paInviteMsg(inv) { return !inv ? '' : inv.sent ? ' Invitación enviada por correo.' : ` No se pudo enviar el correo (${inv.error || 'error'}): copia las credenciales y envíaselas tú.`; }
+  function _paInviteMsg(inv) { return !inv ? '' : inv.sent ? (inv.via ? ` Invitación enviada desde ${inv.via}.` : ' Invitación enviada por correo.') : ` No se pudo enviar el correo (${inv.error || 'error'}): copia las credenciales y envíaselas tú.`; }
   async function portalCreate(cid) {
     const em = document.getElementById('portal-em'), nm = document.getElementById('portal-nm'), pw = document.getElementById('portal-pw'), inv = document.getElementById('portal-inv');
     try {
