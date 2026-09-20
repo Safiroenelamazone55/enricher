@@ -331,3 +331,9 @@ button{cursor:pointer}
 .pt-dr__tabs button.on{color:#2563EB;border-bottom-color:#2563EB}
 .pt-who{background:#EEF2FF;color:#1E3A8A;border:0;font-size:11.5px;font-weight:600;padding:1px 8px;margin-left:4px}
 .pt-who:hover{background:#DBE4FF}
+
+/* columnas con ancho repartido (sin hueco enorme entre Empresa y Sector) */
+.pt-tbl--co,.pt-tbl--ct{table-layout:fixed}
+.pt-tbl--co th:nth-child(1){width:30%}.pt-tbl--co th:nth-child(2){width:27%}.pt-tbl--co th:nth-child(3){width:11%}.pt-tbl--co th:nth-child(4){width:16%}.pt-tbl--co th:nth-child(5){width:16%}
+.pt-tbl--ct th:nth-child(1){width:17%}.pt-tbl--ct th:nth-child(2){width:15%}.pt-tbl--ct th:nth-child(3){width:15%}.pt-tbl--ct th:nth-child(4){width:8%}.pt-tbl--ct th:nth-child(5){width:12%}.pt-tbl--ct th:nth-child(6){width:15%}.pt-tbl--ct th:nth-child(7){width:9%}.pt-tbl--ct th:nth-child(8){width:9%}
+.pt-tbl--co td,.pt-tbl--ct td{word-wrap:break-word;overflow-wrap:anywhere}
