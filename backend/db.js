@@ -1079,6 +1079,8 @@ async function initDb() {
     // Backfill único: para los que ya tienen reunión/deal, la fecha de agendado = su última respuesta (o su última actualización)
     await pool.query(`UPDATE lm_contacts k SET reunion_agendada_at = COALESCE((SELECT MAX(a.fecha) FROM activities a WHERE a.contact_id=k.id AND a.tipo='respuesta'), k.updated_at) WHERE reunion_agendada_at IS NULL AND (k.deal_cierre IS NOT NULL OR k.deal_valor IS NOT NULL OR k.disposition='reunion')`);
     await pool.query(`ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS reset_code_hash TEXT`);
+    await pool.query(`ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS pw_remind_at TIMESTAMPTZ`);
+    await pool.query(`ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS pw_remind_count INTEGER NOT NULL DEFAULT 0`);
     await pool.query(`ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS reset_expires TIMESTAMPTZ`);
     await pool.query(`ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS reset_attempts INTEGER NOT NULL DEFAULT 0`);
     await pool.query(`

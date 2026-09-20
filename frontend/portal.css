@@ -219,3 +219,19 @@ button{cursor:pointer}
 .pt-att{display:flex;flex-direction:column;gap:6px;margin-top:6px}
 .pt-att__img{max-width:100%;max-height:200px;display:block;border:1px solid rgba(0,0,0,.1)}
 .pt-att__f{color:inherit;text-decoration:underline;font-size:12.5px;word-break:break-all}
+
+.pt-lang{position:relative}
+.pt-lg{background:transparent;border:1px solid #334155;color:#E2E8F0;height:34px;padding:0 10px;font-size:13px;white-space:nowrap}
+.pt-lm.pt-menu{right:0;min-width:170px}
+.pt-lm button.on{font-weight:700;color:#2563EB}
+.pt-top .pt-live{margin-left:auto}
+.pt-top .pt-lang{margin-left:4px}
+.pt-lang--card{position:absolute;top:14px;right:14px}
+.pt-lang--card .pt-lg{background:#fff;border:1px solid #D9DEE3;color:#0F172A;height:30px;font-size:12px}
+.pt-login__card{position:relative}
+.pt-modal{position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:100;display:grid;place-items:center;padding:20px}
+.pt-modal__box{position:relative;background:#fff;max-width:420px;width:100%;padding:26px 26px 20px;box-shadow:0 24px 60px -20px rgba(0,0,0,.5)}
+.pt-modal__box h3{font-size:18px;margin:0 0 8px}
+.pt-modal__box p{font-size:13.5px;color:#475569;line-height:1.5;margin-bottom:16px}
+.pt-modal__b{display:flex;flex-direction:column;gap:8px}
+.pt-modal__x{position:absolute;top:10px;right:12px;border:0;background:none;font-size:18px;color:#64748B}

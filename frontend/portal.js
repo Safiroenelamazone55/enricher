@@ -5,7 +5,6 @@
   const root = document.getElementById('pt-root');
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const S = { me: null, tab: 'inicio', range: '30d', seq: '', dash: null, hl: null, feed: null, seqs: null, cos: null, cts: null, q: '', co: 0, last: 0, timer: null, chatOpen: false, chat: [], chatLast: 0, unread: 0, charts: [], gran: 'auto' };
-  const MES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 
   async function api(path, opt) {
     const o = opt || {};
@@ -34,12 +33,27 @@
   const ico = (k, sz) => k === 'in' ? '<b class="dash-in">in</b>' : `<svg width="${sz || 18}" height="${sz || 18}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICO[k] || ''}</svg>`;
   const CH = { email: ['Email', '#2563EB', 'mail'], linkedin: ['LinkedIn', '#7C5CE0', 'in'], call: ['Llamada', '#F59E0B', 'phone'], wa_msg: ['WhatsApp · mensajes', '#22A06B', 'chat'], wa_call: ['WhatsApp · llamadas', '#0EA5A4', 'phone'], whatsapp: ['WhatsApp', '#22A06B', 'chat'], otros: ['Otros / tareas', '#B8C0CC', 'dots'], reply: ['Respuesta', '#22A06B', 'reply'], meeting: ['Reunión', '#F59E0B', 'cal'], task: ['Seguimiento', '#94A3B8', 'dots'] };
   const pct = (a, b) => b ? Math.round(a / b * 1000) / 10 : 0;
-  const fdate = (d, o) => { try { return new Date(d).toLocaleDateString('es-ES', o || { day: '2-digit', month: 'short' }); } catch (e) { return ''; } };
+  const fdate = (d, o) => { try { return new Date(d).toLocaleDateString(PT_I18N.locale(), o || { day: '2-digit', month: 'short' }); } catch (e) { return ''; } };
   const ago = d => { const m = Math.round((Date.now() - new Date(d)) / 60000); if (m < 1) return 'ahora'; if (m < 60) return `hace ${m} min`; const h = Math.round(m / 60); if (h < 24) return `hace ${h} h`; return fdate(d); };
+
+  // ── idioma ──
+  function langBtn(cls) {
+    const L = PT_I18N.LANGS;
+    return `<div class="pt-lang ${cls || ''}"><button type="button" class="pt-lg" title="Idioma">🌐 ${L[PT_I18N.lang].code} ▾</button><div class="pt-menu pt-lm">${Object.keys(L).map(k => `<button type="button" data-l="${k}" class="${k === PT_I18N.lang ? 'on' : ''}">${L[k].name}</button>`).join('')}</div></div>`;
+  }
+  function wireLang() {
+    document.querySelectorAll('.pt-lang').forEach(box => {
+      const menu = box.querySelector('.pt-lm');
+      box.querySelector('.pt-lg').onclick = e => { e.stopPropagation(); menu.classList.toggle('on'); };
+      menu.querySelectorAll('button').forEach(b => b.onclick = () => { PT_I18N.set(b.dataset.l, () => { if (S.redraw) S.redraw(); }); });
+    });
+  }
+  document.addEventListener('click', () => document.querySelectorAll('.pt-lm.on').forEach(m => m.classList.remove('on')));
 
   // ── login ──
   function renderLogin(msg) {
-    root.innerHTML = `<div class="pt-login"><form class="pt-login__card" id="pt-lf">
+    S.redraw = () => renderLogin(msg);
+    root.innerHTML = `<div class="pt-login"><form class="pt-login__card" id="pt-lf">${langBtn('pt-lang--card')}
       <div class="pt-brand"><img src="logo-nova.svg" alt="">Nova</div>
       <h1>Portal del cliente</h1><p class="sub">Ingresa con el correo y la contraseña que te asignamos.</p>
       ${msg ? `<div class="${/actualizada/.test(msg) ? 'pt-ok' : 'pt-err'}">${esc(msg)}</div>` : ''}
@@ -48,6 +62,7 @@
       <button class="pt-btn" id="pt-go" type="submit">Ingresar</button>
       <div style="text-align:center;margin-top:14px"><button type="button" class="pt-link" id="pt-fg">¿Olvidaste tu contraseña?</button></div></form></div>`;
     document.getElementById('pt-fg').onclick = () => renderForgot(1, document.getElementById('pt-em').value);
+    wireLang();
     document.getElementById('pt-lf').onsubmit = async e => {
       e.preventDefault();
       const b = document.getElementById('pt-go'); b.disabled = true; b.textContent = 'Ingresando…';
@@ -60,7 +75,8 @@
 
   // Recuperar contraseña: 1) correo → 2) código que llega al correo + nueva contraseña
   function renderForgot(step, email, msg, ok) {
-    root.innerHTML = `<div class="pt-login"><form class="pt-login__card" id="pt-ff">
+    S.redraw = () => renderForgot(step, email, msg, ok);
+    root.innerHTML = `<div class="pt-login"><form class="pt-login__card" id="pt-ff">${langBtn('pt-lang--card')}
       <div class="pt-brand"><img src="logo-nova.svg" alt="">Nova</div>
       <h1>Recuperar contraseña</h1><p class="sub">${step === 1 ? 'Te enviaremos un código de verificación a tu correo.' : 'Escribe el código que te llegó y elige una nueva contraseña (mínimo 10 caracteres).'}</p>
       ${msg ? `<div class="${ok ? 'pt-ok' : 'pt-err'}">${esc(msg)}</div>` : ''}
@@ -70,6 +86,7 @@
       <button class="pt-btn" type="submit">${step === 1 ? 'Enviar código' : 'Cambiar contraseña'}</button>
       <button class="pt-btn" type="button" id="pt-fb" style="background:#fff;color:#0F172A;border:1px solid #D9DEE3">Volver</button></form></div>`;
     document.getElementById('pt-fb').onclick = () => renderLogin();
+    wireLang();
     document.getElementById('pt-ff').onsubmit = async e => {
       e.preventDefault();
       const em = document.getElementById('pt-fe').value;
@@ -81,7 +98,8 @@
   }
 
   function renderChangePw(first, msg, ok) {
-    root.innerHTML = `<div class="pt-login"><form class="pt-login__card" id="pt-pf">
+    S.redraw = () => renderChangePw(first, msg, ok);
+    root.innerHTML = `<div class="pt-login"><form class="pt-login__card" id="pt-pf">${langBtn('pt-lang--card')}
       <div class="pt-brand"><img src="logo-nova.svg" alt="">Nova</div>
       <h1>${first ? 'Crea tu contraseña' : 'Cambiar contraseña'}</h1><p class="sub">${first ? 'Por seguridad, elige una contraseña propia antes de continuar.' : 'Mínimo 10 caracteres.'}</p>
       ${msg ? `<div class="${ok ? 'pt-ok' : 'pt-err'}">${esc(msg)}</div>` : ''}
@@ -89,12 +107,13 @@
       <label class="pt-f"><span>Nueva contraseña</span><input id="pt-p1" type="password" autocomplete="new-password" minlength="10" required></label>
       <label class="pt-f"><span>Repite la nueva contraseña</span><input id="pt-p2" type="password" autocomplete="new-password" minlength="10" required></label>
       <button class="pt-btn" type="submit">Guardar</button>${first ? '' : '<button class="pt-btn" type="button" id="pt-cx" style="background:#fff;color:#0F172A;border:1px solid #D9DEE3">Volver</button>'}</form></div>`;
+    wireLang();
     const cx = document.getElementById('pt-cx'); if (cx) cx.onclick = () => renderApp();
     document.getElementById('pt-pf').onsubmit = async e => {
       e.preventDefault();
       const a = document.getElementById('pt-p0').value, n = document.getElementById('pt-p1').value, n2 = document.getElementById('pt-p2').value;
       if (n !== n2) return renderChangePw(first, 'Las contraseñas nuevas no coinciden');
-      try { await api('/portal/password', { method: 'POST', body: JSON.stringify({ actual: a, nueva: n }) }); S.me.must_change = false; renderApp(); start(); }
+      try { await api('/portal/password', { method: 'POST', body: JSON.stringify({ actual: a, nueva: n }) }); S.me.must_change = false; S.me.pw_prompt = false; renderApp(); start(); }
       catch (er) { renderChangePw(first, er.message); }
     };
   }
@@ -102,8 +121,8 @@
   // ── app ──
   async function boot() {
     try { S.me = await api('/portal/me'); } catch (e) { return renderLogin(); }
-    if (S.me.must_change) return renderChangePw(true);
     renderApp(); start();
+    if (S.me.pw_prompt && !sessionStorage.getItem('pt_pw_skip')) showPwReminder();
   }
   function tabs() {
     const s = S.me.sections, t = [['inicio', 'Resumen']];
@@ -113,16 +132,32 @@
     if (s.feed) t.push(['actividad', 'Actividad']);
     return t;
   }
+  // Aviso NO obligatorio para crear contraseña propia: más tarde (2 semanas, luego cada mes) u omitir
+  function showPwReminder() {
+    if (document.getElementById('pt-pwm')) return;
+    const m = document.createElement('div'); m.id = 'pt-pwm'; m.className = 'pt-modal';
+    m.innerHTML = `<div class="pt-modal__box"><button class="pt-modal__x" id="pt-pwx" title="Cerrar">✕</button><h3>Protege tu cuenta</h3><p>Entraste con una contraseña temporal. Te recomendamos crear la tuya propia cuando puedas.</p>
+      <div class="pt-modal__b"><button class="pt-btn" id="pt-pw1" style="margin:0">Crear mi contraseña</button><button class="pt-btn" id="pt-pw2" style="margin:0;background:#fff;color:#0F172A;border:1px solid #D9DEE3">Recordármelo más tarde</button></div>
+      <div style="text-align:center;margin-top:12px"><button class="pt-link" id="pt-pw3" style="color:#64748B;font-weight:500">Omitir y seguir</button></div></div>`;
+    document.body.appendChild(m);
+    const close = () => { m.remove(); };
+    const skip = () => { try { sessionStorage.setItem('pt_pw_skip', '1'); } catch (e) {} close(); };
+    document.getElementById('pt-pwx').onclick = skip; document.getElementById('pt-pw3').onclick = skip;
+    document.getElementById('pt-pw1').onclick = () => { close(); renderChangePw(false); };
+    document.getElementById('pt-pw2').onclick = async () => { try { await api('/portal/password/snooze', { method: 'POST' }); S.me.pw_prompt = false; } catch (e) {} close(); };
+  }
   function renderApp() {
+    S.redraw = renderApp;
     stopCharts();
     root.innerHTML = `<div class="pt-top"><div class="pt-brand"><img src="logo-nova.svg" alt="">Nova</div><span class="pt-top__cl">${esc(S.me.cliente)}</span>
-      <span class="pt-live"><i></i><span id="pt-upd">En vivo</span></span>
+      <span class="pt-live"><i></i><span id="pt-upd">En vivo</span></span>${langBtn()}
       <div class="pt-user"><button id="pt-um">${esc(S.me.nombre || S.me.email)} ▾</button><div class="pt-menu" id="pt-mn"><div class="em">${esc(S.me.email)}</div><button id="pt-cp">Cambiar contraseña</button><button id="pt-lo">Cerrar sesión</button></div></div></div>
       <div class="pt-nav">${tabs().map(t => `<button data-t="${t[0]}" class="${S.tab === t[0] ? 'on' : ''}">${t[1]}</button>`).join('')}</div>
       <div class="pt-main" id="pt-body"></div>
       ${S.me.sections.chat ? `<button class="pt-chat-btn" id="pt-cb">${ico('chat', 18)} Chat rápido <span class="n" id="pt-cn" style="display:none"></span></button>
       <div class="pt-chat" id="pt-cw"><div class="pt-chat__h"><span>Chat con tu equipo</span><button id="pt-cc">✕</button></div><div class="pt-chat__b" id="pt-cm"></div><div class="pt-chat__p" id="pt-cpend"></div><form class="pt-chat__f" id="pt-cf"><button type="button" class="pt-chat__a" id="pt-ca" title="Adjuntar foto o archivo">📎</button><input id="pt-ci" placeholder="Escribe un mensaje…" maxlength="2000" autocomplete="off"><button>Enviar</button></form><input type="file" id="pt-cfile" multiple hidden></div>` : ''}`;
     document.querySelectorAll('.pt-nav button').forEach(b => b.onclick = () => { S.tab = b.dataset.t; S.co = 0; S.q = ''; renderApp(); load(true); });
+    wireLang();
     const mn = document.getElementById('pt-mn');
     document.getElementById('pt-um').onclick = e => { e.stopPropagation(); mn.classList.toggle('on'); };
     document.addEventListener('click', () => mn && mn.classList.remove('on'));
@@ -167,7 +202,7 @@
       else if (t === 'secuencias') S.seqs = await api('/portal/sequences');
       else if (t === 'actividad') S.feed = await api('/portal/feed');
       S.last = Date.now(); paint();
-      const u = document.getElementById('pt-upd'); if (u) u.textContent = 'En vivo · actualizado ' + new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+      const u = document.getElementById('pt-upd'); if (u) u.textContent = 'En vivo · actualizado ' + new Date().toLocaleTimeString(PT_I18N.locale(), { hour: '2-digit', minute: '2-digit' });
       if (S.me.sections.chat && force) pollChat();
     } catch (e) { const b = document.getElementById('pt-body'); if (b && !S.dash && !S.cos && !S.cts) b.innerHTML = `<div class="pt-empty">${esc(e.message)}</div>`; }
   }
@@ -199,8 +234,8 @@
 
   function highlightsHtml() {
     const h = S.hl; if (!h) return '';
-    const dtag = d => { const x = new Date(d); return `<div class="pt-date"><b>${MES[x.getUTCMonth()].toUpperCase()}</b><span>${x.getUTCDate()}</span></div>`; };
-    const money = (v, m) => v ? `${m === 'PEN' ? 'S/' : '$'}${Math.round(v).toLocaleString('es-ES')}` : '';
+    const dtag = d => { const x = new Date(d); return `<div class="pt-date"><b>${x.toLocaleDateString(PT_I18N.locale(), { month: 'short', timeZone: 'UTC' }).replace('.', '').toUpperCase()}</b><span>${x.getUTCDate()}</span></div>`; };
+    const money = (v, m) => v ? `${m === 'PEN' ? 'S/' : '$'}${Math.round(v).toLocaleString(PT_I18N.locale())}` : '';
     const rep = h.last_replies.slice(0, 3).map(r => `<div class="pt-item"><div class="pt-item__t"><span>${person(r)}</span><span style="font-weight:500;color:#94A3B8;font-size:12px">${ago(r.fecha)}</span></div><div class="pt-item__s">${esc(r.empresa || '')}${r.pais ? ' · ' + esc(r.pais) : ''}</div>${r.snippet ? `<div class="pt-item__q">${esc(r.snippet)}</div>` : ''}${r.portal_nota ? `<div class="pt-item__n">${esc(r.portal_nota)}</div>` : ''}</div>`).join('');
     const mt = h.next_meetings.slice(0, 4).map(r => `<div class="pt-item" style="display:flex;gap:10px"><div>${dtag(r.fecha)}</div><div style="min-width:0;flex:1"><div class="pt-item__t"><span>${esc(r.empresa || '')}</span><span style="color:#15803D">${money(r.valor, r.moneda)}</span></div><div class="pt-item__s">${person(r)}</div>${r.agendada ? `<div class="pt-item__s">Agendada el ${fdate(r.agendada)}</div>` : ''}${r.portal_nota ? `<div class="pt-item__n">${esc(r.portal_nota)}</div>` : ''}</div></div>`).join('');
     const ps = h.positive_pending.slice(0, 5).map(r => `<div class="pt-item"><div class="pt-item__t"><span>${person(r)}</span>${badge(r.estado)}</div><div class="pt-item__s">${esc(r.empresa || '')}${r.ultima ? ' · respondió ' + ago(r.ultima) : ''}</div>${r.portal_nota ? `<div class="pt-item__n">${esc(r.portal_nota)}</div>` : ''}</div>`).join('');
@@ -239,7 +274,7 @@
         ${kpi('Aceptación LinkedIn', ar + '%', delta(ar, arp, true), `${c.accepts} de ${c.invites} invitaciones`)}
         ${kpi('Emails enviados', c.emails, delta(c.emails, p.emails), c.bounced ? `${c.bounced} rebotados` : 'sin rebotes')}
         ${kpi('Apertura email', c.sent ? pct(c.opened, c.sent) + '%' : '—', '<span class="dash-d dash-d--0">estimada</span>', `sobre ${c.sent} envíos`)}
-        ${dl ? kpi('Reuniones agendadas', dl.agendadas, delta(dl.agendadas, dl.agendadas_prev), dl.programadas ? `${dl.programadas} próxima${dl.programadas > 1 ? 's' : ''}${dl.proximo ? ' · ' + fdate(dl.proximo, { day: '2-digit', month: 'short', timeZone: 'UTC' }) : ''}${dl.valor ? ' · $' + Math.round(dl.valor).toLocaleString('es-ES') : ''}` : 'ninguna programada') : ''}</div>`;
+        ${dl ? kpi('Reuniones agendadas', dl.agendadas, delta(dl.agendadas, dl.agendadas_prev), dl.programadas ? `${dl.programadas} próxima${dl.programadas > 1 ? 's' : ''}${dl.proximo ? ' · ' + fdate(dl.proximo, { day: '2-digit', month: 'short', timeZone: 'UTC' }) : ''}${dl.valor ? ' · $' + Math.round(dl.valor).toLocaleString(PT_I18N.locale()) : ''}` : 'ninguna programada') : ''}</div>`;
     }
     let row1 = '';
     if (d.daily && d.daily.length || d.funnel) {
@@ -286,9 +321,9 @@
     const chs = ['email', 'linkedin', 'call', 'wa_msg', 'wa_call', 'otros'].filter(k => (d.daily || []).some(r => r.ch === k));
     const ax = { x: { stacked: true, grid: { display: false }, border: { display: false }, ticks: { maxTicksLimit: 8, color: '#94A3B8', font: { size: 10 } } }, y: { stacked: true, beginAtZero: true, border: { display: false }, grid: { color: '#DDE3EA', borderDash: [3, 4], drawTicks: false }, ticks: { precision: 0, maxTicksLimit: 5, color: '#94A3B8', font: { size: 10 }, padding: 8 } } };
     const dc = document.getElementById('pt-daily');
-    if (dc) S.charts.push(new Chart(dc.getContext('2d'), { type: 'bar', data: { labels: bk.map(x => x.slice(5)), datasets: chs.map(k => ({ label: CH[k][0], backgroundColor: CH[k][1], borderSkipped: false, barPercentage: .7, data: bk.map(b => d.daily.filter(r => r.ch === k && bo(r.d) === b).reduce((n, r) => n + r.n, 0)) })) }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: tip }, scales: ax } }));
+    if (dc) S.charts.push(new Chart(dc.getContext('2d'), { type: 'bar', data: { labels: bk.map(x => x.slice(5)), datasets: chs.map(k => ({ label: PT_I18N.t(CH[k][0]), backgroundColor: CH[k][1], borderSkipped: false, barPercentage: .7, data: bk.map(b => d.daily.filter(r => r.ch === k && bo(r.d) === b).reduce((n, r) => n + r.n, 0)) })) }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: tip }, scales: ax } }));
     const cc = document.getElementById('pt-ch');
-    if (cc && d.channels) S.charts.push(new Chart(cc.getContext('2d'), { type: 'doughnut', data: { labels: d.channels.map(r => (CH[r.ch] || CH.otros)[0]), datasets: [{ data: d.channels.map(r => r.touches), backgroundColor: d.channels.map(r => (CH[r.ch] || CH.otros)[1]), borderWidth: 2, borderColor: '#fff' }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '55%', plugins: { legend: { display: false }, tooltip: tip } } }));
+    if (cc && d.channels) S.charts.push(new Chart(cc.getContext('2d'), { type: 'doughnut', data: { labels: d.channels.map(r => PT_I18N.t((CH[r.ch] || CH.otros)[0])), datasets: [{ data: d.channels.map(r => r.touches), backgroundColor: d.channels.map(r => (CH[r.ch] || CH.otros)[1]), borderWidth: 2, borderColor: '#fff' }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '55%', plugins: { legend: { display: false }, tooltip: tip } } }));
   }
 
   function feedHtml(list, n) {
@@ -315,7 +350,7 @@
     w.classList.toggle('on', S.chatOpen); b.style.display = S.chatOpen ? 'none' : 'flex';
     const n = document.getElementById('pt-cn'); if (n) { n.style.display = S.unread && !S.chatOpen ? '' : 'none'; n.textContent = S.unread; }
     const m = document.getElementById('pt-cm');
-    if (m) { const atEnd = m.scrollHeight - m.scrollTop - m.clientHeight < 60; m.innerHTML = S.chat.length ? S.chat.map(x => `<div class="pt-msg pt-msg--${x.autor === 'cliente' ? 'c' : 'e'}">${x.texto ? esc(x.texto) : ''}${attHtml(x)}<small>${x.autor === 'cliente' ? 'Tú' : esc(x.autor_nombre || 'Equipo')} · ${new Date(x.created_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</small></div>`).join('') : '<div class="pt-empty">Escríbenos aquí cualquier duda. Te respondemos lo antes posible.</div>'; if (atEnd || !S.chatDrawn) m.scrollTop = m.scrollHeight; S.chatDrawn = true; }
+    if (m) { const atEnd = m.scrollHeight - m.scrollTop - m.clientHeight < 60; m.innerHTML = S.chat.length ? S.chat.map(x => `<div class="pt-msg pt-msg--${x.autor === 'cliente' ? 'c' : 'e'}">${x.texto ? esc(x.texto) : ''}${attHtml(x)}<small>${x.autor === 'cliente' ? 'Tú' : esc(x.autor_nombre || 'Equipo')} · ${new Date(x.created_at).toLocaleTimeString(PT_I18N.locale(), { hour: '2-digit', minute: '2-digit' })}</small></div>`).join('') : '<div class="pt-empty">Escríbenos aquí cualquier duda. Te respondemos lo antes posible.</div>'; if (atEnd || !S.chatDrawn) m.scrollTop = m.scrollHeight; S.chatDrawn = true; }
     if (S.chatOpen) { const i = document.getElementById('pt-ci'); if (i && document.activeElement !== i) i.focus(); }
   }
   async function pollChat() {
@@ -344,7 +379,7 @@
   }
   function addFiles(list) {
     for (const f of list) {
-      if (S.pend.length >= 5) { alert('Máximo 5 archivos por mensaje'); break; }
+      if (S.pend.length >= 5) { alert(PT_I18N.t('Máximo 5 archivos por mensaje')); break; }
       if (f.size > 15 * 1048576) { alert((f.name || 'Archivo') + ' supera 15 MB'); continue; }
       S.pend.push(f);
     }
@@ -361,5 +396,6 @@
     catch (er) { inp.value = t; S.pend = files; drawPending(); alert(er.message); }
   }
 
+  PT_I18N.observe(root);
   boot();
 })();
