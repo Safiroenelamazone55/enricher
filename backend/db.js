@@ -1097,6 +1097,13 @@ async function initDb() {
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS portal_msgs_client_idx ON portal_messages (outbound_client_id, id);`);
     await pool.query(`
+      CREATE TABLE IF NOT EXISTS workspace_brand (
+        user_id    INTEGER     PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        logo       JSONB       NOT NULL DEFAULT '{}',
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS portal_updates (
         id                 SERIAL      PRIMARY KEY,
         outbound_client_id INTEGER     NOT NULL REFERENCES outbound_clients(id) ON DELETE CASCADE,

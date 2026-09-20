@@ -19080,6 +19080,7 @@ const LeadManagerModule = (() => {
       const cnt = n.k === 'tasks'  ? (_pendingTaskCount() || nc.tasks || 0)
                 : n.k === 'leads'  ? ((_contacts.length ? _contacts.filter(c => c.disposition === 'respondio' || c.disposition === 'reunion').length : 0) || nc.leads || 0)
                 : n.k === 'inbox'  ? (Array.isArray(_ibThreads) ? _ibUnreadTotal() : (nc.inbox || 0))
+                : n.k === 'clients' ? _cuTotal()
                 : n.k === 'wa'     ? (Array.isArray(_waList) ? _waList.reduce((s, x) => s + (x.no_leidos || 0), 0) : (nc.wa || 0))
                 : 0;
       html += `<button class="lm2-nav__item${active ? ' active' : ''}" onclick="LeadManagerModule.go('${n.k}')">
@@ -19090,6 +19091,7 @@ const LeadManagerModule = (() => {
   }
   function _renderShell() {
     const pane = $('pane-lead-manager'); if (!pane) return;
+    _cuStart();
     pane.innerHTML = `<div class="lm2">
       <aside class="lm2-nav">
         <div class="snav-panel__hd"><button class="snav-back" title="Volver al inicio" aria-label="Volver al inicio" onclick="goHome()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg><span>Módulos</span></button></div>
@@ -24340,7 +24342,7 @@ ${foot}
       </div>`;
     }
     return `<button class="lm-obc" onclick="LeadManagerModule.openClient(${c.id})">
-      <div class="lm-obc__top"><div class="lm-obc__ava">${esc((c.nombre || '?').slice(0, 1).toUpperCase())}</div><div class="lm-obc__id"><span class="lm-obc__nm">${esc(c.nombre)}</span>${_obcBadge(c.estado)}</div></div>
+      <div class="lm-obc__top"><div class="lm-obc__ava">${esc((c.nombre || '?').slice(0, 1).toUpperCase())}</div><div class="lm-obc__id"><span class="lm-obc__nm">${esc(c.nombre)}${_cuBadge(c.id)}</span>${_obcBadge(c.estado)}</div></div>
       <div class="lm-obc__stats"><span><b>${leads.length}</b> leads</span><span><b>${_money(_sumv(leads))}</b> pipeline</span><span><b>—</b> replies</span></div>
       ${mbAlert}
       ${c.proxima_accion ? `<div class="lm-obc__next"><span class="lm-obc__next-l">Próxima acción</span> ${esc(c.proxima_accion)}</div>` : ''}
@@ -25027,7 +25029,7 @@ ${foot}
       <button class="lm-back" onclick="LeadManagerModule.go('clients')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg> Clientes outbound</button>
       <div class="lm-ws">
         <aside class="lm-ws-side">
-          <div class="lm-ws-side__top"><div class="lm-ws-side__ava">${esc((c.nombre || '?').slice(0, 1).toUpperCase())}</div><div style="flex:1;min-width:0"><div class="lm-ws-side__nm">${esc(c.nombre)}</div>${_obcBadge(c.estado)}</div><button class="seq-more-btn" onclick="LeadManagerModule.clientQuickMenu(event,${c.id})" title="Más acciones">⋮</button></div>
+          <div class="lm-ws-side__top"><div class="lm-ws-side__ava">${esc((c.nombre || '?').slice(0, 1).toUpperCase())}</div><div style="flex:1;min-width:0"><div class="lm-ws-side__nm">${esc(c.nombre)}<span id="cu-ws">${_cuBadge(c.id)}</span></div>${_obcBadge(c.estado)}</div><button class="seq-more-btn" onclick="LeadManagerModule.clientQuickMenu(event,${c.id})" title="Más acciones">⋮</button></div>
           <div class="lm-ws-side__acts">
             <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openClientDrawer(${c.id})">Editar cliente</button>
             <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.clientCmpReport(${c.id})">Informe de campaña</button>
@@ -25169,6 +25171,53 @@ ${foot}
       showBanner('✓ Logo y encabezado guardados. El cliente lo verá al recargar el portal.', 'success'); portalLogoClose();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
+  // ── Logo de tu marca (blanco) para el encabezado del portal de clientes ──
+  let _wsLogo = null;
+  function _wsLogoBody() {
+    const w = _wsLogo;
+    if (!w) return '<div class="cp-empty2" style="padding:12px">Cargando…</div>';
+    return `<div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+      <div style="background:#0B1220;padding:14px 22px;min-width:220px;min-height:64px;display:grid;place-items:center;border:1px solid #1E293B">${w.has ? `<img src="${API}/lm/portal/workspace-logo/file?v=${w.v}" alt="Logo" style="height:34px;width:auto;max-width:220px;object-fit:contain">` : '<span style="color:#64748B;font-size:12.5px">Sin logo (se muestra «Nova»)</span>'}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><label class="btn btn--primary btn--sm" style="cursor:pointer">${w.has ? 'Cambiar logo' : 'Subir logo blanco'}<input type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" hidden onchange="LeadManagerModule.wsLogoUpload(this)"></label>${w.has ? '<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.wsLogoDelete()">Quitar</button>' : ''}</div></div>`;
+  }
+  function _wsLogoCard() {
+    setTimeout(async () => {
+      try { const r = await apiFetch(`${API}/lm/portal/workspace-logo`); _wsLogo = r.ok ? await r.json() : { has: false, v: 0 }; } catch (e) { _wsLogo = { has: false, v: 0 }; }
+      const b = document.getElementById('ws-logo-box'); if (b) b.innerHTML = _wsLogoBody();
+    }, 0);
+    return `<div class="cp-card"><div class="cp-card__t">Portal de clientes · logo de tu marca</div>
+      <div style="font-size:12.5px;color:#64748B;margin-bottom:10px">Sube tu logo en <b>blanco</b> (PNG con fondo transparente, ideal). Aparece en el encabezado de todos los portales de clientes, junto al logo de cada cliente. Si el cliente usa un encabezado claro, se muestra en negro automáticamente.</div>
+      <div id="ws-logo-box">${_wsLogoBody()}</div></div>`;
+  }
+  async function wsLogoUpload(inp) {
+    let f = inp.files && inp.files[0]; if (!f) return;
+    if (f.size > 3 * 1048576) { showBanner('El logo supera 3 MB', 'error'); inp.value = ''; return; }
+    try {
+      const t = await _lgTrim(f); if (t) f = t;
+      const fd = new FormData(); fd.append('file', f);
+      const r = await apiFetch(`${API}/lm/portal/workspace-logo`, { method: 'POST', body: fd }); const j = await r.json(); if (!r.ok) throw new Error(j.error || 'Error');
+      _wsLogo = j; const b = document.getElementById('ws-logo-box'); if (b) b.innerHTML = _wsLogoBody(); showBanner('✓ Logo guardado: ya aparece en el encabezado de los portales de clientes', 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  async function wsLogoDelete() {
+    try { const r = await apiFetch(`${API}/lm/portal/workspace-logo`, { method: 'DELETE' }); _wsLogo = await r.json(); const b = document.getElementById('ws-logo-box'); if (b) b.innerHTML = _wsLogoBody(); } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  // ── Contador de mensajes nuevos de clientes (barra lateral, tarjetas y ficha) ──
+  let _cuUnread = {}, _cuTimer = null;
+  const _cuTotal = () => Object.values(_cuUnread).reduce((n, v) => n + v, 0);
+  const _cuBadge = id => (_cuUnread[id] ? `<span class="cu-badge" title="Mensajes nuevos del cliente en el portal">${_cuUnread[id]}</span>` : '');
+  async function _cuPoll() {
+    if (document.hidden) return;
+    try {
+      const r = await apiFetch(`${API}/lm/portal/unread`); if (!r.ok) return;
+      const rows = await r.json(), next = {}; (Array.isArray(rows) ? rows : []).forEach(x => { next[x.client_id] = x.n; });
+      if (JSON.stringify(next) === JSON.stringify(_cuUnread)) return;
+      _cuUnread = next; _refreshNav();
+      if (_section === 'clients') _renderBody();
+      else if (_section === 'client') { const e = document.getElementById('cu-ws'); if (e) e.innerHTML = _cuBadge(_activeClient); }
+    } catch (e) {}
+  }
+  function _cuStart() { if (_cuTimer) return; _cuPoll(); _cuTimer = setInterval(_cuPoll, 20000); }
   // ── Chat con el cliente: botón flotante dentro de la ficha del cliente (mismo estilo que el portal) ──
   const _PC = { cid: 0, open: false, msgs: [], last: 0, unread: 0, timer: null, pend: [], name: '' };
   const _pcSize = n => n > 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
@@ -25227,6 +25276,7 @@ ${foot}
     if (_PC.open) {
       try { const j = await (await apiFetch(`${API}/lm/portal/chat/${_PC.cid}`)).json(); _PC.msgs = j.messages || []; _PC.last = _PC.msgs.length ? _PC.msgs[_PC.msgs.length - 1].id : 0; } catch (e) {}
       _PC.unread = 0; _pcBadge(); _pcDraw(true);
+      if (_cuUnread[_PC.cid]) { delete _cuUnread[_PC.cid]; _refreshNav(); const e = document.getElementById('cu-ws'); if (e) e.innerHTML = ''; }
       const i = document.getElementById('pc-i'); if (i) i.focus();
     }
   }
@@ -25235,8 +25285,22 @@ ${foot}
     el.style.display = _PC.pend.length ? 'flex' : 'none';
     el.innerHTML = _PC.pend.map((f, i) => `<span class="pc-chip">${esc(f.name || 'imagen')} <small>${_pcSize(f.size)}</small> <button type="button" onclick="LeadManagerModule.pcUnpend(${i})">✕</button></span>`).join('');
   }
-  function pcAttach(list) {
-    for (const f of list) {
+
+  // Reduce fotos grandes (celular: 5–10 MB) antes de subirlas: máx. 2000 px, JPEG
+  async function _shrinkImg(f) {
+    if (!/^image\/(jpeg|png|webp)$/i.test(f.type) || f.size < 1.5 * 1048576) return f;
+    try {
+      const bmp = await createImageBitmap(f), k = Math.min(1, 2000 / Math.max(bmp.width, bmp.height));
+      const c = document.createElement('canvas'); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+      const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(bmp, 0, 0, c.width, c.height);
+      const b = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.85));
+      if (!b || b.size >= f.size) return f;
+      return new File([b], (f.name || 'foto').replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' });
+    } catch (e) { return f; }
+  }
+  async function pcAttach(list) {
+    for (let f of list) {
+      f = await _shrinkImg(f);
       if (_PC.pend.length >= 5) { showBanner('Máximo 5 archivos por mensaje', 'error'); break; }
       if (f.size > 15 * 1048576) { showBanner((f.name || 'Archivo') + ' supera 15 MB', 'error'); continue; }
       _PC.pend.push(f);
@@ -25605,6 +25669,7 @@ ${foot}
         <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.clearAllViews()">Limpiar vistas guardadas (${views.length})</button>
       </div></div>
       ${_cfFieldsCard()}
+      ${_wsLogoCard()}
       <div class="cp-card"><div class="cp-card__t">${NI('zap')} Envío automático (Gmail)</div><div id="lm-send-cfg">${_sendCfg ? _sendCfgHtml() : '<div class="cp-empty2" style="padding:14px">Cargando configuración…</div>'}</div></div>
       <div class="cp-card"><div class="cp-card__t">${NI('sparkles')} Personalización con IA (Fable 5 · Haiku)</div><div id="lm-ai-cfg">${_aiCfg ? _aiCfgHtml() : '<div class="cp-empty2" style="padding:14px">Cargando…</div>'}</div></div>
       <div class="cp-card"><div class="cp-card__t">Integraciones</div><div class="set-integr">
@@ -30411,7 +30476,7 @@ ${foot}
     dgEnrichMenu, dgEnrichOpen, dgEnrichClose, dgEnrichApply, dgToggleIssues, dgMoreMenu, dgToggleSelMode,
     dgDupOpen, dgDupClose, dgDupPickSurvivor, dgDupToggleDel, dgDupMergeGroup, dgDupDeleteGroup,
     fmsToggle, fmsFilter, fmsPick,
-    openViews, applyView, saveView, deleteView, clearAllViews, dashTab, dashSet, dashClear, dashGran, puPublish, puToggle, puDel, portalLogoOpen, portalLogoClose, lgTrimExisting, lgFrame, lgReset, lgBg, lgSelect, lgUpload, lgDelete, lgSave, pcToggle, pcSend, pcAttach, pcUnpend, portalCreate, portalReset, portalToggle, portalDel, portalSecs, portalAccessOpen, portalAccessClose, portalGen, portalEdit, portalEditSave, portalSec, portalNota, portalChatSend, portalCopy,
+    openViews, applyView, saveView, deleteView, clearAllViews, dashTab, dashSet, dashClear, dashGran, wsLogoUpload, wsLogoDelete, puPublish, puToggle, puDel, portalLogoOpen, portalLogoClose, lgTrimExisting, lgFrame, lgReset, lgBg, lgSelect, lgUpload, lgDelete, lgSave, pcToggle, pcSend, pcAttach, pcUnpend, portalCreate, portalReset, portalToggle, portalDel, portalSecs, portalAccessOpen, portalAccessClose, portalGen, portalEdit, portalEditSave, portalSec, portalNota, portalChatSend, portalCopy,
     taskSetView, taskSetFilter, calPrev, calNext, calToday,
     lmSetDisposition, seqDoDisposition, cpSetStage,
     seqDoAccepted, seqDoNoLinkedIn, seqDoBounced, seqDoNoWhatsapp, seqDoNoPhone, lmToggleNoLinkedIn, lmToggleNoWhatsapp, lmToggleNoPhone, lmToggleBounced, lmToggleManualEmail, ctToggleBounced,

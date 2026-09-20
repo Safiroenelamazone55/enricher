@@ -156,7 +156,8 @@
     const clientMark = br.has && br.has[br.logo_variant]
       ? `<span class="pt-top__sep"></span><div class="pt-lgbox" title="${esc(S.me.cliente)}"><img src="${API}/portal/branding/logo?v=${br.v || 0}" alt="${esc(S.me.cliente)}" style="transform:translate(${fr.x}%,${fr.y}%) scale(${fr.s})"></div>`
       : `<span class="pt-top__cl">${esc(S.me.cliente)}</span>`;
-    root.innerHTML = `<div class="pt-top" style="background:${hbg};color:${hfg}"><div class="pt-brand"><img src="logo-nova.svg" alt="">Nova</div>${clientMark}
+    const brandMark = br.ws && br.ws.has ? `<div class="pt-brand pt-brand--logo"><img src="${API}/portal/branding/workspace-logo?v=${br.ws.v || 0}" alt="" style="filter:${lum > 0.45 ? 'brightness(0)' : 'none'}"></div>` : '<div class="pt-brand"><img src="logo-nova.svg" alt="">Nova</div>';
+    root.innerHTML = `<div class="pt-top" style="background:${hbg};color:${hfg}">${brandMark}${clientMark}
       <span class="pt-live"><i></i><span id="pt-upd">En vivo</span></span>${langBtn()}
       <div class="pt-user"><button id="pt-um">${esc(S.me.nombre || S.me.email)} ▾</button><div class="pt-menu" id="pt-mn"><div class="em">${esc(S.me.email)}</div><button id="pt-cp">Cambiar contraseña</button><button id="pt-lo">Cerrar sesión</button></div></div></div>
       <div class="pt-nav">${tabs().map(t => `<button data-t="${t[0]}" class="${S.tab === t[0] ? 'on' : ''}">${t[1]}</button>`).join('')}</div>
@@ -442,8 +443,22 @@
     el.style.display = S.pend.length ? 'flex' : 'none';
     el.innerHTML = S.pend.map((f, i) => `<span class="pt-chip">${esc(f.name || 'imagen')} <small>${fmtSize(f.size)}</small> <button type="button" onclick="PT.unpend(${i})">✕</button></span>`).join('');
   }
-  function addFiles(list) {
-    for (const f of list) {
+
+  // Reduce fotos grandes (celular: 5–10 MB) antes de subirlas: máx. 2000 px, JPEG
+  async function _shrinkImg(f) {
+    if (!/^image\/(jpeg|png|webp)$/i.test(f.type) || f.size < 1.5 * 1048576) return f;
+    try {
+      const bmp = await createImageBitmap(f), k = Math.min(1, 2000 / Math.max(bmp.width, bmp.height));
+      const c = document.createElement('canvas'); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+      const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(bmp, 0, 0, c.width, c.height);
+      const b = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.85));
+      if (!b || b.size >= f.size) return f;
+      return new File([b], (f.name || 'foto').replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' });
+    } catch (e) { return f; }
+  }
+  async function addFiles(list) {
+    for (let f of list) {
+      f = await _shrinkImg(f);
       if (S.pend.length >= 5) { alert(PT_I18N.t('Máximo 5 archivos por mensaje')); break; }
       if (f.size > 15 * 1048576) { alert((f.name || 'Archivo') + ' supera 15 MB'); continue; }
       S.pend.push(f);
