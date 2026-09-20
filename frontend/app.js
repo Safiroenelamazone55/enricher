@@ -26475,11 +26475,11 @@ ${foot}
   }
   function dlSetCli(v) { _dlCli = v; _dlPaint(); }
   function dlClose() { document.getElementById('dl-modal')?.remove(); }
-  function dlOpen(cid) {
+  function dlOpen(cid, stage) {
     const c = _contacts.find(x => x.id === cid); if (!c) return;
     dlClose();
     const full = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || '—';
-    const est = _DL_STAGES.includes(c.estado) ? c.estado : 'propuesta';
+    const est = stage || (_DL_STAGES.includes(c.estado) ? c.estado : 'propuesta');
     const probOpts = ['', 10, 20, 30, 40, 50, 60, 70, 80, 90].map(p => `<option value="${p}"${String(c.deal_prob == null ? '' : c.deal_prob) === String(p) ? ' selected' : ''}>${p === '' ? 'Sin definir' : p + ' %'}</option>`).join('');
     const estOpts = _ORDER.map(s => `<option value="${s}"${est === s ? ' selected' : ''}>${STAGE_LABELS[s]}</option>`).join('');
     const monOpts = ['USD', 'PEN', 'EUR'].map(x => `<option value="${x}"${(c.deal_moneda || 'USD') === x ? ' selected' : ''}>${x}</option>`).join('');
@@ -26572,9 +26572,9 @@ ${foot}
       if (!res.ok) throw new Error((await res.json()).error || 'Error');
       const d = await res.json();
       c.deal_valor = d.deal_valor; c.deal_moneda = d.deal_moneda; c.deal_prob = d.deal_prob; c.deal_cierre = d.deal_cierre;
-      if (estado && estado !== c.estado) await cpSetStage(cid, estado);
+      if (estado && estado !== c.estado) await cpSetStage(cid, estado, true);
       dlClose();
-      if (_section === 'deals') _dlPaint(); else if (_section === 'leads') _ldPaint();
+      if (_section === 'deals') _dlPaint(); else if (_section === 'leads') _ldPaint(); else if (_section === 'contact-view') _renderBody();
       showBanner('✓ Deal guardado', 'success');
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
@@ -28462,6 +28462,7 @@ ${foot}
         <div class="cp-actions">
           <button class="cp-cta" onclick="LeadManagerModule.cpOpenRegisterReply(${id})">＋ Registrar respuesta</button>
           <button class="cp-act" onclick="LeadManagerModule.ldRefer(${id},'derivado')">＋ Crear referido</button>
+          <button class="cp-act" onclick="LeadManagerModule.dlOpen(${id})" title="Valor, probabilidad, fecha de la reunión y notas para el cliente">${(c.deal_valor || c.deal_cierre || ['propuesta', 'negociacion', 'ganado', 'perdido'].includes(c.estado)) ? '$ Ver deal' : '＋ Deal'}</button>
           <button class="cp-act" onclick="LeadManagerModule.cpActOpen('tarea')">＋ Crear tarea</button>
           ${c.linkedin ? `<a class="cp-act cp-act--in" href="${esc(c.linkedin)}" target="_blank" rel="noopener">LinkedIn ›</a>` : ''}
           ${_waDigits(c) ? `<button class="cp-act" onclick="LeadManagerModule.openWaFor(${id})">WhatsApp ›</button>` : ''}
@@ -28685,8 +28686,14 @@ ${foot}
       if (btn) { btn.disabled = false; btn.textContent = 'Guardar'; }
     }
   }
-  async function cpSetStage(id, estado) {
+  async function cpSetStage(id, estado, force) {
     const c = _contacts.find(x => x.id === id); if (!c || c.estado === estado) return;
+    // RESPONDIÓ = lo mismo que marcar "Interesado": pasa por la disposición para que se pause la
+    // secuencia, se cree la tarea de revisión y quede registrada la respuesta (embudo, portal…).
+    // Antes la barra cambiaba solo la etapa y dejaba la disposición vacía → dos caminos distintos.
+    if (!force && estado === 'respondio' && !['respondio', 'reunion', 'mas_adelante'].includes(c.disposition || '')) return lmSetDisposition(id, 'respondio');
+    // PROPUESTA / NEGOCIACIÓN = es un DEAL: se abre el deal (valor, probabilidad, fecha de reunión) con esa etapa.
+    if (!force && (estado === 'propuesta' || estado === 'negociacion') && !c.deal_valor && !c.deal_cierre) return dlOpen(id, estado);
     try {
       const res = await apiFetch(`${API}/lm/contacts/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...c, estado }) });
       if (!res.ok) throw new Error((await res.json()).error || 'Error');
