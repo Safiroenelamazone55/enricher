@@ -16878,3 +16878,8 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 
 /* contador de mensajes nuevos del cliente (portal) */
 .cu-badge{display:inline-block;margin-left:8px;min-width:20px;padding:1px 7px;background:#E5484D;color:#fff;font:700 11px/1.5 inherit;text-align:center;vertical-align:middle}
+
+/* Deals: etiqueta de nota compartida con el cliente */
+.dl-share{border:1px solid #D9DEE3;background:#fff;color:#64748B;font:600 11px inherit;padding:2px 8px;cursor:pointer}
+.dl-share:hover{border-color:#2563EB;color:#2563EB}
+.dl-share.on{background:#DCFCE7;border-color:#86EFAC;color:#15803D}

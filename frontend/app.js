@@ -26514,7 +26514,7 @@ ${foot}
   // agregando — reusa el mismo log de actividades tipo='nota' que ya tiene el contacto
   // en su ficha, así no hay dos historiales de notas separados para lo mismo).
   function _dlNotasHtml(cid) {
-    const notas = (_activities || []).filter(a => a.contact_id === cid && a.tipo === 'nota').sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+    const notas = (_activities || []).filter(a => a.contact_id === cid && a.tipo === 'nota' && !/^Paso \d/.test(a.nota || '')).sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
     // Fecha+hora y autor SIEMPRE se guardan, pero como dato discreto al pie de la nota
     // (no como título arriba) — pedido explícito 2026-09-02.
     const fmt = f => { try { return new Date(f).toLocaleString('es-PE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }); } catch (_) { return ''; } };
@@ -26522,12 +26522,14 @@ ${foot}
       ? notas.map(n => `<div class="dl-nota" style="padding:6px 0;border-bottom:1px solid var(--border,#EAE7E2);font-size:.82rem">
           <div style="display:flex;justify-content:space-between;gap:6px"><div style="white-space:pre-wrap">${esc(n.nota || '')}</div><button class="fin-pi-x" style="flex-shrink:0;width:16px;height:16px;font-size:.7rem" title="Eliminar" onclick="LeadManagerModule.dlNotaDel(${cid},${n.id})">✕</button></div>
           <div style="color:var(--text-muted,#918C85);font-size:.7rem;margin-top:3px">${[n.autor, fmt(n.fecha)].filter(Boolean).join(' · ')}</div>
+          <div style="margin-top:5px"><button class="dl-share${n.portal_visible ? ' on' : ''}" onclick="LeadManagerModule.dlNotaShare(${cid},${n.id},${!n.portal_visible})" title="${n.portal_visible ? 'Clic para dejar de compartirla' : 'Clic para mostrarla al cliente en su portal'}">${n.portal_visible ? '👁 Visible para el cliente en el portal' : 'Compartir con el cliente'}</button></div>
         </div>`).join('')
       : `<div class="dle-hint" style="color:var(--text-muted,#918C85);font-size:.8rem;padding:4px 0">Sin notas todavía.</div>`}</div>
       <div style="display:flex;gap:6px">
         <input class="dle-i" id="dl-nota-nueva" placeholder="Escribe una nota o comentario…" style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();LeadManagerModule.dlNotaAdd(${cid})}">
         <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.dlNotaAdd(${cid})">Agregar</button>
-      </div>`;
+      </div>
+      <label style="display:flex;gap:6px;align-items:center;font-size:.76rem;margin-top:6px;color:#475569;cursor:pointer"><input type="checkbox" id="dl-nota-share"> 👁 Compartir esta nota con el cliente en su portal</label>`;
   }
   async function dlNotaAdd(cid) {
     const inp = $('dl-nota-nueva');
@@ -26536,12 +26538,21 @@ ${foot}
     const c = _contacts.find(x => x.id === cid); if (!c) return;
     const autor = window._authUser?.memberNombre || window._authUser?.name || '';
     try {
-      const res = await apiFetch(`${API}/activities`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact_id: cid, outbound_client_id: c.outbound_client_id || null, tipo: 'nota', nota, fecha: new Date().toISOString(), estado: 'hecha', autor }) });
+      const res = await apiFetch(`${API}/activities`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact_id: cid, outbound_client_id: c.outbound_client_id || null, tipo: 'nota', nota, fecha: new Date().toISOString(), estado: 'hecha', autor, portal_visible: !!(document.getElementById('dl-nota-share') || {}).checked }) });
       if (!res.ok) throw new Error((await res.json()).error || 'Error');
       const nueva = await res.json();
       _activities = _activities || []; _activities.push(nueva);
       if (inp) inp.value = '';
       const wrap = $('dl-notas-wrap'); if (wrap) wrap.innerHTML = _dlNotasHtml(cid);
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  async function dlNotaShare(cid, actId, vis) {
+    try {
+      const r = await apiFetch(`${API}/lm/portal/nota-visibility`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ activity_id: actId, visible: vis }) });
+      if (!r.ok) throw new Error((await r.json()).error || 'Error');
+      const a = (_activities || []).find(x => x.id === actId); if (a) a.portal_visible = vis;
+      const wrap = $('dl-notas-wrap'); if (wrap) wrap.innerHTML = _dlNotasHtml(cid);
+      showBanner(vis ? '✓ El cliente verá esta nota en su portal' : 'Nota solo interna', 'success');
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
   async function dlNotaDel(cid, actId) {
@@ -30476,7 +30487,7 @@ ${foot}
     dgEnrichMenu, dgEnrichOpen, dgEnrichClose, dgEnrichApply, dgToggleIssues, dgMoreMenu, dgToggleSelMode,
     dgDupOpen, dgDupClose, dgDupPickSurvivor, dgDupToggleDel, dgDupMergeGroup, dgDupDeleteGroup,
     fmsToggle, fmsFilter, fmsPick,
-    openViews, applyView, saveView, deleteView, clearAllViews, dashTab, dashSet, dashClear, dashGran, wsLogoUpload, wsLogoDelete, puPublish, puToggle, puDel, portalLogoOpen, portalLogoClose, lgTrimExisting, lgFrame, lgReset, lgBg, lgSelect, lgUpload, lgDelete, lgSave, pcToggle, pcSend, pcAttach, pcUnpend, portalCreate, portalReset, portalToggle, portalDel, portalSecs, portalAccessOpen, portalAccessClose, portalGen, portalEdit, portalEditSave, portalSec, portalNota, portalChatSend, portalCopy,
+    openViews, applyView, saveView, deleteView, clearAllViews, dashTab, dashSet, dashClear, dashGran, wsLogoUpload, wsLogoDelete, dlNotaShare, puPublish, puToggle, puDel, portalLogoOpen, portalLogoClose, lgTrimExisting, lgFrame, lgReset, lgBg, lgSelect, lgUpload, lgDelete, lgSave, pcToggle, pcSend, pcAttach, pcUnpend, portalCreate, portalReset, portalToggle, portalDel, portalSecs, portalAccessOpen, portalAccessClose, portalGen, portalEdit, portalEditSave, portalSec, portalNota, portalChatSend, portalCopy,
     taskSetView, taskSetFilter, calPrev, calNext, calToday,
     lmSetDisposition, seqDoDisposition, cpSetStage,
     seqDoAccepted, seqDoNoLinkedIn, seqDoBounced, seqDoNoWhatsapp, seqDoNoPhone, lmToggleNoLinkedIn, lmToggleNoWhatsapp, lmToggleNoPhone, lmToggleBounced, lmToggleManualEmail, ctToggleBounced,

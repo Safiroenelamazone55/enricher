@@ -8430,11 +8430,11 @@ app.post('/api/activities', requireAuth, async (req, res) => {
   const estado = b.estado === 'pendiente' ? 'pendiente' : 'hecha';
   try {
     const { rows } = await pool.query(`
-      INSERT INTO activities (user_id,lead_id,contact_id,outbound_client_id,campaign_id,tipo,canal,nota,fecha,estado,sentimiento,variant,autor)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *
+      INSERT INTO activities (user_id,lead_id,contact_id,outbound_client_id,campaign_id,tipo,canal,nota,fecha,estado,sentimiento,variant,autor,portal_visible)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *
     `, [req.workspaceOwnerId, b.lead_id || null, b.contact_id || null, b.outbound_client_id || null, b.campaign_id || null,
         String(b.tipo).slice(0, 40), b.canal || '', b.nota || '', b.fecha || new Date().toISOString(), estado, b.sentimiento || '',
-        String(b.variant || '').slice(0, 60), String(b.autor || '').slice(0, 120)]);
+        String(b.variant || '').slice(0, 60), String(b.autor || '').slice(0, 120), !!b.portal_visible]);
     res.status(201).json(rows[0]);
   } catch (err) { console.error('[act] POST error:', err.message); res.status(500).json({ error: 'Error al crear actividad' }); }
 });
