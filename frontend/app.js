@@ -25388,7 +25388,7 @@ ${foot}
       <div class="cp-card" style="margin-bottom:12px"><div class="cp-card__t">Qué se destaca al cliente <span style="font-weight:400;font-size:12px;color:#64748B">— la nota que escribas aquí la ve el cliente junto a ese contacto y su empresa</span></div>
         <div style="font-weight:600;font-size:12.5px;margin:6px 0 2px">Próximas reuniones (${h.next_meetings.length})</div>${h.next_meetings.map(r => row(r, dt(r.fecha))).join('') || '<div class="cp-empty2" style="padding:8px">Ninguna. Se toman de "Deals" con fecha de cierre.</div>'}
         <div style="font-weight:600;font-size:12.5px;margin:12px 0 2px">Últimas respuestas</div>${h.last_replies.map(r => row(r, dt(r.fecha))).join('') || '<div class="cp-empty2" style="padding:8px">Sin respuestas registradas.</div>'}
-        <div style="font-weight:600;font-size:12.5px;margin:12px 0 2px">Señales positivas por convertir (${h.positive_pending.length})</div>${h.positive_pending.map(r => row(r, esc(r.estado))).join('') || '<div class="cp-empty2" style="padding:8px">Ninguna.</div>'}
+        <div style="font-weight:600;font-size:12.5px;margin:12px 0 2px">Señales positivas por convertir (${h.positive_pending.filter(r => !r.neutral).length})</div>${h.positive_pending.map(r => row(r, esc(r.estado))).join('') || '<div class="cp-empty2" style="padding:8px">Ninguna.</div>'}
       </div>
       <div class="cp-card"><div class="cp-card__t">Chat con el cliente</div><div class="cp-empty2" style="padding:10px">Usa el botón flotante <b>«Chat con cliente»</b> (abajo a la derecha) para ver y responder la conversación, con fotos y archivos.</div>
       </div>`;

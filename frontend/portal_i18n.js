@@ -150,7 +150,7 @@
     ['Buscar contacto o empresa…', 'Search contact or company…', 'Kontakt oder Unternehmen suchen…', 'Buscar contato ou empresa…'],
     ['✕ quitar filtro de empresa', '✕ clear company filter', '✕ Unternehmensfilter entfernen', '✕ remover filtro de empresa'],
     // estados
-    ['Respondió', 'Replied', 'Hat geantwortet', 'Respondeu'], ['Interesado', 'Interested', 'Interessiert', 'Interessado'],
+    ['Respondió', 'Replied', 'Hat geantwortet', 'Respondeu'], ['En revisión', 'Under review', 'In Prüfung', 'Em revisão'], ['Interesado', 'Interested', 'Interessiert', 'Interessado'],
     ['Más adelante', 'Later', 'Später', 'Mais tarde'], ['Derivó a otro', 'Referred to someone else', 'An andere Person verwiesen', 'Encaminhou a outra pessoa'],
     ['No es la persona', 'Not the right person', 'Nicht die richtige Person', 'Não é a pessoa certa'], ['No interesado', 'Not interested', 'Nicht interessiert', 'Sem interesse'],
     ['No califica', "Doesn't qualify", 'Nicht qualifiziert', 'Não qualifica'], ['No contactar', 'Do not contact', 'Nicht kontaktieren', 'Não contatar'],

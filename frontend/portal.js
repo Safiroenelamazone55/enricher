@@ -307,7 +307,7 @@
     return `<div class="pt-hl">
       ${s.respuestas ? `<div class="pt-card"><h3>${ico('reply', 16)} Últimas respuestas</h3>${rep || '<div class="pt-empty">Aún sin respuestas</div>'}</div>` : ''}
       ${s.reuniones ? `<div class="pt-card"><h3 style="justify-content:space-between"><span style="display:flex;gap:8px;align-items:center">${ico('cal', 16)} Próximas reuniones <span class="pt-badge pt-b--g">${h.counts.reuniones_prog}</span></span><button class="pt-link" onclick="PT.goMeet()">Ver calendario →</button></h3>${mt || '<div class="pt-empty">Ninguna reunión programada todavía</div>'}</div>` : ''}
-      ${s.respuestas ? `<div class="pt-card"><h3>${ico('handshake', 16)} Señales positivas por convertir <span class="pt-badge pt-b--b">${h.positive_pending.length}</span></h3>${ps || '<div class="pt-empty">Sin señales pendientes</div>'}</div>` : ''}
+      ${s.respuestas ? `<div class="pt-card"><h3>${ico('handshake', 16)} Señales positivas por convertir <span class="pt-badge pt-b--b">${h.positive_pending.filter(r => !r.neutral).length}</span></h3>${ps || '<div class="pt-empty">Sin señales pendientes</div>'}</div>` : ''}
     </div>`;
   }
 

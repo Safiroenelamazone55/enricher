@@ -32,7 +32,7 @@ function mount(app, { pool, requireAuth, dashHandler, highlights, sendViaClientM
       kpi: { touches: cur.touches, contacted: cur.contacted, replies: cur.replies, agendadas: dl.agendadas },
       prev: { touches: prev.touches, contacted: prev.contacted, replies: prev.replies, agendadas: dl.agendadas_prev },
       seqs: sq.map(s => s.nombre),
-      positives: (hl.positive_pending || []).map(p => ({ empresa: p.empresa, nombre: [p.nombre, p.apellido].filter(Boolean).join(' '), estado: p.estado })),
+      positives: (hl.positive_pending || []).filter(p => !p.neutral).map(p => ({ empresa: p.empresa, nombre: [p.nombre, p.apellido].filter(Boolean).join(' '), estado: p.estado })),
       meetings: (hl.next_meetings || []).map(m => ({ empresa: m.empresa, nombre: [m.nombre, m.apellido].filter(Boolean).join(' '), dia: fmt(m.fecha, { day: 'numeric' }), mes: fmt(m.fecha, { month: 'short' }).replace('.', ''), fecha_txt: fmt(m.fecha, { weekday: 'long' }) })),
       url: 'https://app.novacentrax.com' + (lang === 'es' ? '' : '/' + lang) + '/portal/' + slugOf(cliente),
     };
