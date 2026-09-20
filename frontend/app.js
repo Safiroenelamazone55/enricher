@@ -25465,19 +25465,26 @@ ${foot}
   }
   function portalAccessClose() { document.getElementById('portal-access-modal')?.remove(); }
   function _paInviteMsg(inv) { return !inv ? '' : inv.sent ? (inv.via ? ` Invitación enviada desde ${inv.via}.` : ' Invitación enviada por correo.') : ` No se pudo enviar el correo (${inv.error || 'error'}): copia las credenciales y envíaselas tú.`; }
+  let _portalBusy = false;
   async function portalCreate(cid) {
+    if (_portalBusy) return; _portalBusy = true;
+    const btn = document.querySelector('#portal-access-modal [onclick^="LeadManagerModule.portalCreate"]'), btnTx = btn ? btn.innerHTML : '';
+    if (btn) { btn.disabled = true; btn.innerHTML = 'Enviando…'; }
     const em = document.getElementById('portal-em'), nm = document.getElementById('portal-nm'), pw = document.getElementById('portal-pw'), inv = document.getElementById('portal-inv');
     try {
       const r = await _portalApi('/lm/portal/accounts', 'POST', { outbound_client_id: cid, email: em.value, nombre: nm.value, password: pw.value.trim(), send_invite: !!(inv && inv.checked) });
       await _portalRefresh(cid); _portalShowCred(r.email, r.password, 'Acceso creado.' + _paInviteMsg(r.invite));
-    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); if (btn) { btn.disabled = false; btn.innerHTML = btnTx; } }
+    finally { _portalBusy = false; }
   }
   async function portalReset(id) {
+    if (_portalBusy) return;
     const ok = await novaConfirm({ title: '¿Generar nueva contraseña?', message: 'La actual dejará de funcionar y la persona deberá crear la suya al entrar.', ok: 'Generar', cancel: 'Cancelar' }); if (!ok) return;
+    _portalBusy = true; showBanner('Generando la clave…', 'info');
     try {
       const st = window.__portalState, acc = (st.a.accounts || []).find(x => x.id === id), send = !!(document.getElementById('portal-rs-send') || {}).checked;
       const r = await _portalApi(`/lm/portal/accounts/${id}/reset`, 'POST', { send }); await _portalRefresh(st.cid); _portalShowCred(acc ? acc.email : '', r.password, 'Nueva contraseña.' + _paInviteMsg(r.invite));
-    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); } finally { _portalBusy = false; }
   }
   async function portalToggle(id, activo) { try { await _portalApi(`/lm/portal/accounts/${id}`, 'PATCH', { activo }); await _portalRefresh(window.__portalState.cid); } catch (e) { showBanner('Error: ' + e.message, 'error'); } }
   async function portalDel(id) {
