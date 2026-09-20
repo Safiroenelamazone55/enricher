@@ -6296,7 +6296,7 @@ const _lmDashHandler = async (req, res) => {
                     ${base} AND ${inR(iF, iT)} GROUP BY 1`, params),
       pool.query(`SELECT ${CH} AS ch, COUNT(*) FILTER (WHERE ${OUT})::int AS touches,
                          COUNT(DISTINCT a.contact_id) FILTER (WHERE ${OUT})::int AS contacted
-                    ${base} AND ${inR(iF, iT)} GROUP BY 1`, params),
+                    ${base} AND ${inR(iF, iT)} GROUP BY 1 HAVING COUNT(*) FILTER (WHERE ${OUT})>0`, params),
       pool.query(`SELECT EXTRACT(DOW FROM a.fecha AT TIME ZONE 'America/Lima')::int AS dow, EXTRACT(HOUR FROM a.fecha AT TIME ZONE 'America/Lima')::int AS hr, COUNT(*)::int AS n
                     ${base} AND a.tipo='respuesta' AND ${inR(iF, iT)} GROUP BY 1,2`, params),
       pool.query(`SELECT s.id, s.nombre, oc.nombre AS cliente,
