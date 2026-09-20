@@ -240,7 +240,7 @@
     gran: v => { S.gran = v; paint(); },
     per: p => { S.per = p; try { localStorage.setItem('pt_per', p); } catch (e) {} S.wk = null; load(false); },
     detail: () => { S.detail = !S.detail; try { localStorage.setItem('pt_detail', S.detail ? '1' : '0'); } catch (e) {} if (S.detail && !S.dash) { paint(); load(false); } else paint(); },
-    open: id => openContact(id), close: () => closeDrawer(),
+    open: id => openContact(id), openCo: id => openCompany(id), close: () => closeDrawer(), drTab: (t, id) => drTab(t, id),
     cal: d => { if (d === 0) { const n = new Date(); S.cal = { y: n.getFullYear(), m: n.getMonth() }; } else { let m = S.cal.m + d, y = S.cal.y; if (m < 0) { m = 11; y--; } if (m > 11) { m = 0; y++; } S.cal = { y, m }; } paint(); },
     goMeet: () => { S.tab = 'reuniones'; renderApp(); load(true); },
     goSeq: () => { S.tab = 'secuencias'; renderApp(); load(true); },
@@ -428,41 +428,83 @@
         <div class="pt-card"><h3>Próximas</h3>${up.length ? up.map(row).join('') : '<div class="pt-empty">Sin reuniones todavía</div>'}${past.length ? `<h3 style="margin-top:16px">Anteriores</h3>${past.slice(0, 20).map(row).join('')}` : ''}</div></div>`;
   }
   const EV_ICO = { linkedin: ['in', '#7C5CE0'], email: ['mail', '#2563EB'], whatsapp: ['chat', '#22A06B'], whatsapp_call: ['phone', '#0EA5A4'], call: ['phone', '#F59E0B'], task: ['dots', '#94A3B8'] };
-  function drawerHtml(d) {
-    const c = d.contact, dl = d.deal;
-    const ev = d.timeline.map(e => {
-      const when = new Date(e.fecha).toLocaleDateString(PT_I18N.locale(), { day: 'numeric', month: 'short', year: 'numeric' });
-      let ic = ['dots', '#94A3B8'], body = '';
-      if (e.kind === 'touch') { ic = EV_ICO[e.canal] || EV_ICO.task; body = `<b>${e.label}</b>${e.first ? ' <span class="pt-badge pt-b--p">Primer contacto</span>' : ''}`; }
-      else if (e.kind === 'reply') { ic = ['reply', '#22A06B']; body = `<b>Respondió</b>${e.text ? `<div class="pt-item__q">${esc(e.text)}</div>` : ''}`; }
-      else if (e.kind === 'status') { ic = ['check', '#2563EB']; body = `<b>Estado</b> <span class="pt-badge pt-b--b">${esc(e.label)}</span>`; }
-      else if (e.kind === 'booked') { ic = ['cal', '#F59E0B']; body = `<b>Reunión agendada</b> <span>Para el ${dlong(e.date)}</span>`; }
-      else if (e.kind === 'meeting') { ic = ['cal', '#F59E0B']; body = '<b>Reunión</b>'; }
-      else if (e.kind === 'note') { ic = ['chat', '#2563EB']; body = `<b>Nota de tu equipo</b><div class="pt-item__n">${esc(e.text)}</div>`; }
-      return `<div class="pt-tl"><span class="pt-tl__i" style="background:${ic[1]}">${ico(ic[0], 14)}</span><div class="pt-tl__b"><div class="pt-tl__t">${body}</div><div class="pt-tl__d">${when}</div></div></div>`;
-    }).join('');
-    const seqTxt = c.secuencia ? `${esc(c.secuencia)}${c.paso ? ' · paso ' + c.paso : ''}` : '';
-    return `<div class="pt-dr-bg" onclick="PT.close()"></div><aside class="pt-dr"><div class="pt-dr__h"><div style="min-width:0"><h2>${esc(c.nombre)}</h2><div class="pt-item__s">${esc([c.cargo, c.empresa].filter(Boolean).join(' · '))}</div></div><button class="pt-modal__x" style="position:static" onclick="PT.close()" title="Cerrar">✕</button></div>
-      <div class="pt-dr__b"><div class="pt-dr__badges">${c.estado ? badge(c.estado) : ''}${c.etapa && c.etapa !== 'Nuevo' ? `<span class="pt-badge pt-b--n">${esc(c.etapa)}</span>` : ''}${c.linkedin ? `<a class="pt-badge pt-b--p" href="${esc(/^https?:/.test(c.linkedin) ? c.linkedin : 'https://' + c.linkedin)}" target="_blank" rel="noopener noreferrer">LinkedIn ↗</a>` : ''}</div>
-      ${dl ? `<div class="pt-dr__deal"><div><span>Fecha de la reunión</span><b>${dlong(dl.fecha)}</b></div><div><span>Agendada el</span><b>${dlong(dl.agendada)}</b></div>${dl.valor ? `<div><span>Valor</span><b>${money2(dl.valor, dl.moneda)}</b></div>` : ''}${dl.prob != null ? `<div><span>Probabilidad</span><b>${dl.prob}%</b></div>` : ''}</div>` : ''}
-      ${c.nota ? `<div class="pt-item__n" style="margin-bottom:10px">${esc(c.nota)}</div>` : ''}
-      ${d.notes.length ? `<h3 class="pt-dr__s">Notas de tu equipo</h3>${d.notes.map(n => `<div class="pt-item__n" style="margin-bottom:6px">${esc(n.texto)}<div class="pt-tl__d">${new Date(n.fecha).toLocaleDateString(PT_I18N.locale(), { day: 'numeric', month: 'short' })}</div></div>`).join('')}` : ''}
-      <div class="pt-dr__info">${c.website ? `<span>${esc(c.website.replace(/^https?:\/\//, ''))}</span>` : ''}${c.industria ? `<span>${esc(c.industria)}</span>` : ''}${c.pais ? `<span>${esc(c.pais)}</span>` : ''}${seqTxt ? `<span>${seqTxt}</span>` : ''}</div>
-      <h3 class="pt-dr__s">Historial desde el primer contacto</h3>${ev || '<div class="pt-empty">Sin historial todavía</div>'}</div></aside>`;
+  // Ficha con dos vistas conectadas: EMPRESA (historial único de todos sus contactos) y CONTACTO
+  S.dr = null;
+  function evHtml(e, withWho) {
+    const when = new Date(e.fecha).toLocaleDateString(PT_I18N.locale(), { day: 'numeric', month: 'short', year: 'numeric' });
+    const who = withWho && e.contact ? `<button class="pt-who" onclick="PT.drTab('contacto',${e.contact_id})">${esc(e.contact)}</button>` : '';
+    let ic = ['dots', '#94A3B8'], body = '';
+    if (e.kind === 'touch') { ic = EV_ICO[e.canal] || EV_ICO.task; body = `<b>${e.label}</b>${e.first ? ' <span class="pt-badge pt-b--p">Primer contacto</span>' : ''} ${who}`; }
+    else if (e.kind === 'added') { ic = ['users', '#0F172A']; body = `<b>Se agregó a</b> ${withWho ? `<button class="pt-who" onclick="PT.drTab('contacto',${e.contact_id})">${esc(e.contact)}</button>` : ''}${e.cargo ? ' <span class="pt-item__s" style="display:inline">· ' + esc(e.cargo) + '</span>' : ''}${e.seq ? `<div class="pt-item__s">${esc(e.seq)}</div>` : ''}`; }
+    else if (e.kind === 'reply') { ic = ['reply', '#22A06B']; body = `<b>Respondió</b> ${who}${e.text ? `<div class="pt-item__q">${esc(e.text)}</div>` : ''}`; }
+    else if (e.kind === 'status') { ic = ['check', '#2563EB']; body = `<b>Estado</b> <span class="pt-badge pt-b--b">${esc(e.label)}</span> ${who}`; }
+    else if (e.kind === 'booked') { ic = ['cal', '#F59E0B']; body = `<b>Reunión agendada</b> <span>Para el ${dlong(e.date)}</span> ${who}`; }
+    else if (e.kind === 'meeting') { ic = ['cal', '#F59E0B']; body = `<b>Reunión</b> ${who}`; }
+    else if (e.kind === 'note') { ic = ['chat', '#2563EB']; body = `<b>Nota de tu equipo</b> ${who}<div class="pt-item__n">${esc(e.text)}</div>`; }
+    return `<div class="pt-tl"><span class="pt-tl__i" style="background:${ic[1]}">${ico(ic[0], 14)}</span><div class="pt-tl__b"><div class="pt-tl__t">${body}</div><div class="pt-tl__d">${when}</div></div></div>`;
   }
+  function dealBox(dl) {
+    return dl ? `<div class="pt-dr__deal"><div><span>Fecha de la reunión</span><b>${dlong(dl.fecha)}</b></div><div><span>Agendada el</span><b>${dlong(dl.agendada)}</b></div>${dl.valor ? `<div><span>Valor</span><b>${money2(dl.valor, dl.moneda)}</b></div>` : ''}${dl.prob != null ? `<div><span>Probabilidad</span><b>${dl.prob}%</b></div>` : ''}</div>` : '';
+  }
+  function notesBox(notes, withWho) { return notes.length ? `<h3 class="pt-dr__s">Notas y comentarios del deal</h3>${notes.map(n => `<div class="pt-item__n" style="margin-bottom:6px">${esc(n.texto)}<div class="pt-tl__d">${withWho && n.contact ? esc(n.contact) + ' · ' : ''}${new Date(n.fecha).toLocaleDateString(PT_I18N.locale(), { day: 'numeric', month: 'short' })}</div></div>`).join('')}` : ''; }
+  function drBody() {
+    const D = S.dr;
+    if (D.tab === 'empresa') {
+      const d = D.co; if (!d) return '<div class="pt-empty">Cargando…</div>';
+      const c = d.company;
+      const rows = d.contacts.map(k => `<div class="pt-mrow" onclick="PT.drTab('contacto',${k.id})"><div style="min-width:0;flex:1"><div class="pt-item__t"><span>${esc(k.nombre)}</span><span>${k.estado ? badge(k.estado) : (k.reunion ? badge('Reunión agendada') : '')}</span></div><div class="pt-item__s">${esc(k.cargo || '')}</div><div class="pt-item__s">Agregado el ${fdate(k.agregado, { day: 'numeric', month: 'short', year: 'numeric' })}${k.secuencia ? ' · ' + esc(k.secuencia) : ''}</div></div></div>`).join('');
+      return `<div class="pt-dr__info">${c.website ? `<span>${esc(c.website.replace(/^https?:\/\//, ''))}</span>` : ''}${c.industria ? `<span>${esc(c.industria)}</span>` : ''}${c.ciudad ? `<span>${esc(c.ciudad)}</span>` : ''}${c.pais ? `<span>${esc(c.pais)}</span>` : ''}</div>
+        ${dealBox(d.deal)}${d.deal && d.deal.contact ? `<div class="pt-item__s" style="margin:-6px 0 10px">Reunión con <button class="pt-who" onclick="PT.drTab('contacto',${d.deal.contact_id})">${esc(d.deal.contact)}</button></div>` : ''}
+        ${notesBox(d.notes, true)}
+        <h3 class="pt-dr__s">Contactos en la empresa (${d.contacts.length})</h3>${rows}
+        <h3 class="pt-dr__s">Historial de la empresa</h3>${d.timeline.map(e => evHtml(e, true)).join('') || '<div class="pt-empty">Sin historial todavía</div>'}`;
+    }
+    const d = D.ct; if (!d) return '<div class="pt-empty">Cargando…</div>';
+    const c = d.contact, seqTxt = c.secuencia ? `${esc(c.secuencia)}${c.paso ? ' · paso ' + c.paso : ''}` : '';
+    return `<div class="pt-dr__badges">${c.estado ? badge(c.estado) : ''}${c.etapa && c.etapa !== 'Nuevo' ? `<span class="pt-badge pt-b--n">${esc(c.etapa)}</span>` : ''}${c.linkedin ? `<a class="pt-badge pt-b--p" href="${esc(/^https?:/.test(c.linkedin) ? c.linkedin : 'https://' + c.linkedin)}" target="_blank" rel="noopener noreferrer">LinkedIn ↗</a>` : ''}</div>
+      ${dealBox(d.deal)}${c.nota ? `<div class="pt-item__n" style="margin-bottom:10px">${esc(c.nota)}</div>` : ''}${notesBox(d.notes, false)}
+      <div class="pt-dr__info">${c.pais ? `<span>${esc(c.pais)}</span>` : ''}${seqTxt ? `<span>${seqTxt}</span>` : ''}</div>
+      <h3 class="pt-dr__s">Historial del contacto</h3>${d.timeline.map(e => evHtml(e, false)).join('') || '<div class="pt-empty">Sin historial todavía</div>'}`;
+  }
+  function drawerHtml() {
+    const D = S.dr, hasCo = D.companyId, title = D.tab === 'empresa' ? (D.co ? D.co.company.nombre : '') : (D.ct ? D.ct.contact.nombre : '');
+    const sub = D.tab === 'empresa' ? (D.co ? D.co.contacts.length + ' contactos' : '') : (D.ct ? [D.ct.contact.cargo, D.ct.contact.empresa].filter(Boolean).join(' · ') : '');
+    return `<div class="pt-dr-bg" onclick="PT.close()"></div><aside class="pt-dr"><div class="pt-dr__h"><div style="min-width:0"><h2>${esc(title)}</h2><div class="pt-item__s">${esc(sub)}</div></div><button class="pt-modal__x" style="position:static" onclick="PT.close()" title="Cerrar">✕</button></div>
+      ${hasCo && D.hasContact ? `<div class="pt-dr__tabs"><button class="${D.tab === 'empresa' ? 'on' : ''}" onclick="PT.drTab('empresa')">Empresa</button><button class="${D.tab === 'contacto' ? 'on' : ''}" onclick="PT.drTab('contacto')">Contacto</button></div>` : ''}
+      <div class="pt-dr__b">${drBody()}</div></aside>`;
+  }
+  function drPaint() { const b = document.getElementById('pt-drawer'); if (b && S.dr) b.innerHTML = drawerHtml(); }
+  async function drLoadCompany(id) { try { S.dr.co = await api('/portal/company/' + id); } catch (e) { S.dr.co = null; S.dr.err = e.message; } }
+  async function drLoadContact(id) { try { S.dr.ct = await api('/portal/contact/' + id); S.dr.contactId = id; } catch (e) { S.dr.ct = null; S.dr.err = e.message; } }
+  function showDrawer() { closeDrawer(); const box = document.createElement('div'); box.id = 'pt-drawer'; root.appendChild(box); box.innerHTML = '<div class="pt-dr-bg" onclick="PT.close()"></div><aside class="pt-dr"><div class="pt-dr__b"><div class="pt-empty">Cargando…</div></div></aside>'; }
+  // Abre desde un contacto: vista Empresa si tiene empresa, para ver todo el recorrido
   async function openContact(id) {
-    closeDrawer();
-    const box = document.createElement('div'); box.id = 'pt-drawer'; box.innerHTML = '<div class="pt-dr-bg" onclick="PT.close()"></div><aside class="pt-dr"><div class="pt-dr__b"><div class="pt-empty">Cargando…</div></div></aside>'; root.appendChild(box);
-    try { const d = await api('/portal/contact/' + id); if (document.getElementById('pt-drawer') === box) box.innerHTML = drawerHtml(d); }
-    catch (e) { if (document.getElementById('pt-drawer') === box) box.innerHTML = `<div class="pt-dr-bg" onclick="PT.close()"></div><aside class="pt-dr"><div class="pt-dr__b"><div class="pt-empty">${esc(e.message)}</div></div></aside>`; }
+    showDrawer(); S.dr = { tab: 'contacto', contactId: id, hasContact: true };
+    await drLoadContact(id); if (!S.dr || S.dr.contactId !== id) return;
+    if (S.dr.ct && S.dr.ct.contact.company_id) { S.dr.companyId = S.dr.ct.contact.company_id; S.dr.tab = 'empresa'; drPaint(); await drLoadCompany(S.dr.companyId); }
+    if (!S.dr.ct && !S.dr.co) { const b = document.querySelector('#pt-drawer .pt-dr__b'); if (b) b.innerHTML = `<div class="pt-empty">${esc(S.dr.err || 'Error')}</div>`; return; }
+    drPaint();
   }
-  function closeDrawer() { const b = document.getElementById('pt-drawer'); if (b) b.remove(); }
+  async function openCompany(id) {
+    showDrawer(); S.dr = { tab: 'empresa', companyId: id, hasContact: false };
+    await drLoadCompany(id); if (!S.dr || S.dr.companyId !== id) return;
+    if (!S.dr.co) { const b = document.querySelector('#pt-drawer .pt-dr__b'); if (b) b.innerHTML = `<div class="pt-empty">${esc(S.dr.err || 'Error')}</div>`; return; }
+    drPaint();
+  }
+  async function drTab(tab, contactId) {
+    if (!S.dr) return;
+    if (tab === 'contacto' && contactId && contactId !== S.dr.contactId) { S.dr.hasContact = true; S.dr.tab = 'contacto'; S.dr.ct = null; S.dr.contactId = contactId; drPaint(); await drLoadContact(contactId); }
+    S.dr.tab = tab; if (tab === 'contacto') S.dr.hasContact = true; drPaint();
+    const b = document.querySelector('#pt-drawer .pt-dr__b'); if (b) b.scrollTop = 0;
+  }
+  function closeDrawer() { const b = document.getElementById('pt-drawer'); if (b) b.remove(); S.dr = null; }
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
+
 
   const search = ph => `<input class="pt-search" id="pt-search" placeholder="${ph}">`;
   function empresas() {
     const l = S.cos;
-    return `<div class="pt-h"><h2>Empresas ${l ? `<span style="color:#94A3B8;font-weight:500;font-size:15px">(${l.length})</span>` : ''}</h2>${search('Buscar empresa…')}</div><div class="pt-card" style="padding:0;overflow:auto">${!l ? '<div class="pt-empty">Cargando…</div>' : !l.length ? '<div class="pt-empty">Sin empresas</div>' : `<table class="pt-tbl"><thead><tr><th>Empresa</th><th>Sector</th><th>Contactos</th><th>Estado</th><th>Nota</th></tr></thead><tbody>${l.map(r => `<tr><td><button class="pt-link" onclick="PT.goCo(${r.id})">${esc(r.nombre)}</button>${r.website ? `<div style="font-size:11.5px"><a href="${esc(/^https?:/.test(r.website) ? r.website : 'https://' + r.website)}" target="_blank" rel="noopener noreferrer">${esc(r.website.replace(/^https?:\/\//, ''))}</a></div>` : ''}</td><td>${esc(r.industria || '—')}</td><td>${r.contactos}</td><td>${badge(r.estado)}</td><td style="max-width:280px;color:#1E3A8A">${esc(r.nota || '')}</td></tr>`).join('')}</tbody></table>`}</div>`;
+    return `<div class="pt-h"><h2>Empresas ${l ? `<span style="color:#94A3B8;font-weight:500;font-size:15px">(${l.length})</span>` : ''}</h2>${search('Buscar empresa…')}</div><div class="pt-card" style="padding:0;overflow:auto">${!l ? '<div class="pt-empty">Cargando…</div>' : !l.length ? '<div class="pt-empty">Sin empresas</div>' : `<table class="pt-tbl"><thead><tr><th>Empresa</th><th>Sector</th><th>Contactos</th><th>Estado</th><th>Nota</th></tr></thead><tbody>${l.map(r => `<tr><td><button class="pt-link" onclick="PT.openCo(${r.id})">${esc(r.nombre)}</button>${r.website ? `<div style="font-size:11.5px"><a href="${esc(/^https?:/.test(r.website) ? r.website : 'https://' + r.website)}" target="_blank" rel="noopener noreferrer">${esc(r.website.replace(/^https?:\/\//, ''))}</a></div>` : ''}</td><td>${esc(r.industria || '—')}</td><td>${r.contactos}</td><td>${badge(r.estado)}</td><td style="max-width:280px;color:#1E3A8A">${esc(r.nota || '')}</td></tr>`).join('')}</tbody></table>`}</div>`;
   }
   function contactos() {
     const l = S.cts;

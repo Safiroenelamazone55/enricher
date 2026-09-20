@@ -325,3 +325,9 @@ button{cursor:pointer}
 .pt-tl__t{font-size:13px}
 .pt-tl__d{font-size:11.5px;color:#94A3B8;margin-top:2px}
 @media(max-width:1100px){.pt-two--cal{grid-template-columns:1fr}}
+
+.pt-dr__tabs{display:flex;gap:4px;padding:0 20px;border-bottom:1px solid #E7EBF0}
+.pt-dr__tabs button{background:none;border:0;border-bottom:2px solid transparent;padding:10px 14px;font-weight:600;font-size:13px;color:#64748B}
+.pt-dr__tabs button.on{color:#2563EB;border-bottom-color:#2563EB}
+.pt-who{background:#EEF2FF;color:#1E3A8A;border:0;font-size:11.5px;font-weight:600;padding:1px 8px;margin-left:4px}
+.pt-who:hover{background:#DBE4FF}
