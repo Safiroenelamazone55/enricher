@@ -1,6 +1,7 @@
 // Informe semanal para el equipo del cliente: destinatarios, vista previa y envío desde el buzón conectado del cliente.
 const fs = require('fs');
 const { buildReport } = require('./reportMail');
+const { previewPng } = require('./reportImage');
 
 const LANGS = ['es', 'en', 'de', 'pt'];
 const LOCALE = { es: 'es-ES', en: 'en-GB', de: 'de-DE', pt: 'pt-BR' };
@@ -41,6 +42,8 @@ function mount(app, { pool, requireAuth, dashHandler, highlights, sendViaClientM
     d.note = String(note || '').slice(0, 1200);
     const m = buildReport(lang, d);
     const att = [];
+    try { att.push({ filename: 'informe.png', content: await previewPng(lang, d, m.accent), cid: 'reportpreview', contentType: 'image/png' }); }
+    catch (e) { console.warn('[report] no se pudo generar la imagen:', e.message); m.html = m.html.replace('cid:reportpreview', 'about:blank'); }
     if (d.brand.hasLogo && d.brand.file && fs.existsSync(d.brand.file)) att.push({ filename: 'logo.png', content: await trimmedLogo(d.brand.file), cid: 'brandlogo', contentType: 'image/png' });
     if (d.brand.hasWs && d.brand.wsFile && fs.existsSync(d.brand.wsFile)) att.push({ filename: 'nova.png', content: await trimmedLogo(d.brand.wsFile), cid: 'novalogo', contentType: 'image/png' });
     if (!att.some(a => a.cid === 'brandlogo')) m.html = m.html.replace('cid:brandlogo', 'about:blank');
