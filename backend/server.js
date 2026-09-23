@@ -4828,12 +4828,27 @@ app.post('/api/lm/contacts/:id/data-issue', requireAuth, async (req, res) => {
 // ── Contactos enrolados en una secuencia (progreso) ──
 app.get('/api/lm/sequences/:id/contacts', requireAuth, async (req, res) => {
   try {
+    // "derivado"/"no_es_persona" son un traspaso, no una respuesta real: si el original quedó ahí,
+    // se sigue la cadena (derivado_a) hasta 4 saltos buscando un resultado de verdad (Interesado,
+    // Reunión, Más adelante, No interesado, No califica, No contactar). Sin eso, real_disposition
+    // queda null y la empresa sigue contando como "sin respuesta real" aunque el original tenga
+    // disposition='derivado' — así no se pierde de la lista de seguimiento de la semana.
+    const TERMINAL = "('respondio','reunion','mas_adelante','no_interesado','no_califica','no_contactar')";
     const { rows } = await pool.query(`
       SELECT cs.contact_id, cs.paso, cs.estado, COALESCE((cs.start_date + TIME '12:00')::timestamptz, cs.created_at) AS enrolled_at, cs.paso_date::text AS paso_date,
-        k.nombre, k.apellido, k.email, k.cargo, k.company_id, k.region, k.pais, k.disposition, co.nombre AS company_nombre
+        k.nombre, k.apellido, k.email, k.cargo, k.company_id, k.region, k.pais, k.disposition, co.nombre AS company_nombre,
+        CASE WHEN k.disposition IN ${TERMINAL} THEN k.disposition
+             WHEN c1.disposition IN ${TERMINAL} THEN c1.disposition
+             WHEN c2.disposition IN ${TERMINAL} THEN c2.disposition
+             WHEN c3.disposition IN ${TERMINAL} THEN c3.disposition
+             ELSE NULL END AS real_disposition,
+        (c1.id IS NOT NULL) AS derivado
       FROM lm_contact_sequences cs
       JOIN lm_contacts k ON k.id = cs.contact_id
       LEFT JOIN lm_companies co ON co.id = k.company_id
+      LEFT JOIN lm_contacts c1 ON c1.id = k.derivado_a
+      LEFT JOIN lm_contacts c2 ON c2.id = c1.derivado_a
+      LEFT JOIN lm_contacts c3 ON c3.id = c2.derivado_a
       WHERE cs.user_id=$1 AND cs.sequence_id=$2
       ORDER BY cs.created_at DESC
     `, [req.workspaceOwnerId, req.params.id]);

@@ -20139,15 +20139,17 @@ ${foot}
       const order = ['activo', 'pausado', 'respondido', 'terminado', 'bounce', ...Object.keys(counts).filter(k => !LBL[k])];
       const chips = [`<button class="lm-filter-btn${!_seqCtEstado ? ' on' : ''}" onclick="LeadManagerModule.seqCtSetEstado('')">Todos · ${list.length}</button>`]
         .concat(order.filter(k => counts[k]).map(k => `<button class="lm-filter-btn${_seqCtEstado === k ? ' on' : ''}" onclick="LeadManagerModule.seqCtSetEstado('${k}')">${LBL[k] || k} · ${counts[k]}</button>`)).join('');
-      // Filtro por resultado/disposición (Interesado, No interesado, No contactar… o "Sin respuesta" = nunca respondió)
+      // Filtro por resultado real (Interesado, No interesado, No contactar… o "Sin respuesta real" = nadie en la
+      // cadena de derivados respondió de verdad). "Derivó a otro" NO cuenta como resultado final: es un traspaso,
+      // así que se sigue la cadena hasta el resultado real (real_disposition, calculado en el servidor).
       const dCounts = {}; let dNone = 0;
-      list.forEach(e => { if (e.disposition) dCounts[e.disposition] = (dCounts[e.disposition] || 0) + 1; else dNone++; });
+      list.forEach(e => { if (e.real_disposition) dCounts[e.real_disposition] = (dCounts[e.real_disposition] || 0) + 1; else dNone++; });
       const dChips = [`<button class="lm-filter-btn${!_seqCtDisp ? ' on' : ''}" onclick="LeadManagerModule.seqCtSetDisp('')">Cualquier resultado</button>`]
-        .concat(dNone ? [`<button class="lm-filter-btn${_seqCtDisp === '_none' ? ' on' : ''}" onclick="LeadManagerModule.seqCtSetDisp('_none')">Sin respuesta · ${dNone}</button>`] : [])
+        .concat(dNone ? [`<button class="lm-filter-btn${_seqCtDisp === '_none' ? ' on' : ''}" onclick="LeadManagerModule.seqCtSetDisp('_none')" title="Nadie en la cadena de derivados respondió de verdad">Sin respuesta real · ${dNone}</button>`] : [])
         .concat(_DISPOS.filter(x => dCounts[x[0]]).map(x => `<button class="lm-filter-btn${_seqCtDisp === x[0] ? ' on' : ''}" onclick="LeadManagerModule.seqCtSetDisp('${x[0]}')">${x[1]} · ${dCounts[x[0]]}</button>`)).join('');
       let fl = _seqCtEstado ? list.filter(e => (e.estado || 'activo') === _seqCtEstado) : list;
-      if (_seqCtDisp === '_none') fl = fl.filter(e => !e.disposition);
-      else if (_seqCtDisp) fl = fl.filter(e => e.disposition === _seqCtDisp);
+      if (_seqCtDisp === '_none') fl = fl.filter(e => !e.real_disposition);
+      else if (_seqCtDisp) fl = fl.filter(e => e.real_disposition === _seqCtDisp);
       const flIds = fl.map(e => e.contact_id);
       [..._seqCtSel].forEach(cid => { if (!flIds.includes(cid)) _seqCtSel.delete(cid); }); // no arrastrar selección de contactos ya filtrados fuera
       const nSel = _seqCtSel.size;
@@ -20263,7 +20265,7 @@ ${foot}
       <td><div class="client-cell-name"><img class="client-avatar" src="${_av(full)}" style="object-fit:cover" alt=""/><div><div class="client-nombre">${esc(full)}</div>${(e.cargo || e.company_nombre) ? `<div class="client-empresa">${esc([e.cargo, e.company_nombre].filter(Boolean).join(' · '))}</div>` : ''}</div></div></td>
       <td class="client-meta"><div class="seq-prog"><div class="seq-prog__bar"><span style="width:${pct}%"></span></div><span class="seq-prog__t">${done ? 'Completada' : `Paso ${paso}/${N || '—'} · ${esc(stTitle)}`}</span></div></td>
       <td><span class="client-badge" style="background:${em[1]};color:${em[2]}">${em[0]}</span></td>
-      <td>${e.disposition ? _dispoBadge(e.disposition) : '<span style="color:var(--muted)">—</span>'}</td>
+      <td>${e.real_disposition ? _dispoBadge(e.real_disposition) + (e.real_disposition !== e.disposition ? ` <span style="color:var(--muted);font-size:11px" title="El resultado real vino de un contacto derivado, no de este">(vía referido)</span>` : '') : (e.derivado ? '<span style="color:var(--muted)" title="Se derivó a otro contacto que tampoco tiene un resultado final todavía">Derivado, sin resultado</span>' : '<span style="color:var(--muted)">—</span>')}</td>
       <td class="lm-dt-act" onclick="event.stopPropagation()">
         <button class="lm-mini-b" title="Escribir con IA (✨ Fable investiga en línea)" onclick="LeadManagerModule.openAiDrafts(${e.contact_id},${seqId})">${NI('sparkles')}</button>
         ${(paso > 1 || done) ? `<button class="lm-mini-b" title="Deshacer último paso — lo marqué hecho por error" onclick="LeadManagerModule.seqCtRollback(${seqId},${e.contact_id})">↩</button>` : ''}
@@ -21514,7 +21516,7 @@ ${foot}
   function seqCtSelAll(on, seqId) {
     const list = Array.isArray(_seqContacts) ? _seqContacts : [];
     let fl = _seqCtEstado ? list.filter(e => (e.estado || 'activo') === _seqCtEstado) : list;
-    if (_seqCtDisp === '_none') fl = fl.filter(e => !e.disposition); else if (_seqCtDisp) fl = fl.filter(e => e.disposition === _seqCtDisp);
+    if (_seqCtDisp === '_none') fl = fl.filter(e => !e.real_disposition); else if (_seqCtDisp) fl = fl.filter(e => e.real_disposition === _seqCtDisp);
     fl.forEach(e => { if (on) _seqCtSel.add(e.contact_id); else _seqCtSel.delete(e.contact_id); });
     _seqCtRepaint();
   }
