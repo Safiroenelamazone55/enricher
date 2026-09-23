@@ -20150,6 +20150,10 @@ ${foot}
       let fl = _seqCtEstado ? list.filter(e => (e.estado || 'activo') === _seqCtEstado) : list;
       if (_seqCtDisp === '_none') fl = fl.filter(e => !e.real_disposition);
       else if (_seqCtDisp) fl = fl.filter(e => e.real_disposition === _seqCtDisp);
+      // Si filtras por resultado y un contacto derivó a otro que TAMBIÉN está en esta secuencia, no se
+      // muestran los dos (se vería como si fueran dos empresas): solo el del final de la cadena, que es
+      // a quien de verdad hay que seguirle — y a quien se enrolaría si lo mandas a otra secuencia.
+      if (_seqCtDisp) { const ids = new Set(list.map(e => e.contact_id)); fl = fl.filter(e => e.contact_id === e.chain_end_id || !ids.has(e.chain_end_id)); }
       const flIds = fl.map(e => e.contact_id);
       [..._seqCtSel].forEach(cid => { if (!flIds.includes(cid)) _seqCtSel.delete(cid); }); // no arrastrar selección de contactos ya filtrados fuera
       const nSel = _seqCtSel.size;
@@ -21517,6 +21521,7 @@ ${foot}
     const list = Array.isArray(_seqContacts) ? _seqContacts : [];
     let fl = _seqCtEstado ? list.filter(e => (e.estado || 'activo') === _seqCtEstado) : list;
     if (_seqCtDisp === '_none') fl = fl.filter(e => !e.real_disposition); else if (_seqCtDisp) fl = fl.filter(e => e.real_disposition === _seqCtDisp);
+    if (_seqCtDisp) { const ids = new Set(list.map(e => e.contact_id)); fl = fl.filter(e => e.contact_id === e.chain_end_id || !ids.has(e.chain_end_id)); }
     fl.forEach(e => { if (on) _seqCtSel.add(e.contact_id); else _seqCtSel.delete(e.contact_id); });
     _seqCtRepaint();
   }

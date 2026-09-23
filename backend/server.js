@@ -4842,7 +4842,8 @@ app.get('/api/lm/sequences/:id/contacts', requireAuth, async (req, res) => {
              WHEN c2.disposition IN ${TERMINAL} THEN c2.disposition
              WHEN c3.disposition IN ${TERMINAL} THEN c3.disposition
              ELSE NULL END AS real_disposition,
-        (c1.id IS NOT NULL) AS derivado
+        (c1.id IS NOT NULL) AS derivado,
+        COALESCE(c3.id, c2.id, c1.id, k.id) AS chain_end_id
       FROM lm_contact_sequences cs
       JOIN lm_contacts k ON k.id = cs.contact_id
       LEFT JOIN lm_companies co ON co.id = k.company_id
