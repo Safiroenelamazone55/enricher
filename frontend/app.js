@@ -25485,6 +25485,7 @@ ${foot}
           <div class="pa-row"><label><input type="checkbox" id="portal-rs-send" checked> Al generar una nueva clave, enviarla por correo</label><label>Idioma ${LANG_SEL('portal-rs-lang')}</label></div>` : '<div class="pa-empty">Aún no hay usuarios para este cliente.</div>'}
         <div class="pa-new"><b>Dar acceso a otra persona</b>
           <div class="pa-form"><input class="lm-inp" id="portal-em" type="email" placeholder="correo"><input class="lm-inp" id="portal-nm" placeholder="nombre (opcional)"><input class="lm-inp" id="portal-pw" type="text" value="${_paGen()}" style="font-family:monospace" title="Contraseña temporal"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.portalGen()" title="Generar otra al azar">Generar</button><label><input type="checkbox" id="portal-inv" checked> Enviar invitación</label><label>Idioma ${LANG_SEL('portal-lang')}</label><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.portalCreate(${cid})">＋ Dar acceso</button></div>
+          <div class="pa-views"><span>Qué verá</span><label><input type="checkbox" id="portal-view-live" checked> Seguimiento en tiempo real</label><label><input type="checkbox" id="portal-view-setup"> Avance de lanzamiento (Fase 0)</label></div>
         </div></div>`;
   }
   async function _portalRefresh(cid) { if (document.getElementById('portal-access-modal')) await _paLoad(cid); else await _portalLoad(cid); }
@@ -25748,7 +25749,7 @@ ${foot}
     if (btn) { btn.disabled = true; btn.innerHTML = 'Enviando…'; }
     const em = document.getElementById('portal-em'), nm = document.getElementById('portal-nm'), pw = document.getElementById('portal-pw'), inv = document.getElementById('portal-inv');
     try {
-      const r = await _portalApi('/lm/portal/accounts', 'POST', { outbound_client_id: cid, email: em.value, nombre: nm.value, password: pw.value.trim(), send_invite: !!(inv && inv.checked), lang: (document.getElementById('portal-lang') || {}).value || 'es' });
+      const r = await _portalApi('/lm/portal/accounts', 'POST', { outbound_client_id: cid, email: em.value, nombre: nm.value, password: pw.value.trim(), send_invite: !!(inv && inv.checked), lang: (document.getElementById('portal-lang') || {}).value || 'es', view_live: !!(document.getElementById('portal-view-live') || { checked: true }).checked, view_setup: !!(document.getElementById('portal-view-setup') || {}).checked });
       await _portalRefresh(cid); _portalShowCred(r.email, r.password, 'Acceso creado.' + _paInviteMsg(r.invite));
     } catch (e) { showBanner('Error: ' + e.message, 'error'); if (btn) { btn.disabled = false; btn.innerHTML = btnTx; } }
     finally { _portalBusy = false; }
