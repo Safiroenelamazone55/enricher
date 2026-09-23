@@ -19421,7 +19421,7 @@ const LeadManagerModule = (() => {
   function sqSetQ(v) { _sqQ = v; _sqPaint(); }
   async function openSequence(id) {
     _activeSeq = id; _section = 'sequence'; _seqTab = 'empresas'; _seqPasosOpen = true; _seqCoExpanded = false;
-    _seqContacts = null; _seqPendingCos = null; _seqCoStats = null; _seqMetrics = null; _seqDo = null; _seqCtEstado = ''; _seqTaskCanal = ''; _seqTaskDue = '';
+    _seqContacts = null; _seqPendingCos = null; _seqCoStats = null; _seqMetrics = null; _seqDo = null; _seqCtEstado = ''; _seqCtDisp = ''; _seqCtSel.clear(); _seqTaskCanal = ''; _seqTaskDue = '';
     _refreshNav(); _renderBody();
     // Ambos en paralelo, pero un último _renderBody() DESPUÉS de que los dos terminen —
     // si cada uno pinta apenas resuelve, el que llega primero puede pintar con el otro
@@ -20139,11 +20139,27 @@ ${foot}
       const order = ['activo', 'pausado', 'respondido', 'terminado', 'bounce', ...Object.keys(counts).filter(k => !LBL[k])];
       const chips = [`<button class="lm-filter-btn${!_seqCtEstado ? ' on' : ''}" onclick="LeadManagerModule.seqCtSetEstado('')">Todos · ${list.length}</button>`]
         .concat(order.filter(k => counts[k]).map(k => `<button class="lm-filter-btn${_seqCtEstado === k ? ' on' : ''}" onclick="LeadManagerModule.seqCtSetEstado('${k}')">${LBL[k] || k} · ${counts[k]}</button>`)).join('');
-      const fl = _seqCtEstado ? list.filter(e => (e.estado || 'activo') === _seqCtEstado) : list;
-      return `<div style="display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px">${chips}</div>` +
+      // Filtro por resultado/disposición (Interesado, No interesado, No contactar… o "Sin respuesta" = nunca respondió)
+      const dCounts = {}; let dNone = 0;
+      list.forEach(e => { if (e.disposition) dCounts[e.disposition] = (dCounts[e.disposition] || 0) + 1; else dNone++; });
+      const dChips = [`<button class="lm-filter-btn${!_seqCtDisp ? ' on' : ''}" onclick="LeadManagerModule.seqCtSetDisp('')">Cualquier resultado</button>`]
+        .concat(dNone ? [`<button class="lm-filter-btn${_seqCtDisp === '_none' ? ' on' : ''}" onclick="LeadManagerModule.seqCtSetDisp('_none')">Sin respuesta · ${dNone}</button>`] : [])
+        .concat(_DISPOS.filter(x => dCounts[x[0]]).map(x => `<button class="lm-filter-btn${_seqCtDisp === x[0] ? ' on' : ''}" onclick="LeadManagerModule.seqCtSetDisp('${x[0]}')">${x[1]} · ${dCounts[x[0]]}</button>`)).join('');
+      let fl = _seqCtEstado ? list.filter(e => (e.estado || 'activo') === _seqCtEstado) : list;
+      if (_seqCtDisp === '_none') fl = fl.filter(e => !e.disposition);
+      else if (_seqCtDisp) fl = fl.filter(e => e.disposition === _seqCtDisp);
+      const flIds = fl.map(e => e.contact_id);
+      [..._seqCtSel].forEach(cid => { if (!flIds.includes(cid)) _seqCtSel.delete(cid); }); // no arrastrar selección de contactos ya filtrados fuera
+      const nSel = _seqCtSel.size;
+      const bar = nSel ? `<div class="lm-bulk-bar show" style="position:static;margin:0 0 10px"><b>${nSel} seleccionado${nSel === 1 ? '' : 's'}</b>
+          <button class="lm-bulk-ghost" onclick="LeadManagerModule.seqCtSelClear()">Ninguno</button>
+          <button class="lm-bulk-act" onclick="LeadManagerModule.seqCtSelAddToSeq(${id})">＋ Agregar a otra secuencia</button>
+        </div>` : '';
+      return `<div style="display:flex;gap:6px;flex-wrap:wrap;margin:0 0 8px">${chips}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px">${dChips}</div>${bar}` +
         (fl.length
-          ? `<div class="clients-table-wrap"><table class="clients-table lm-dt"><thead><tr><th>Contacto</th><th>Progreso</th><th>Estado</th><th></th></tr></thead><tbody>${fl.map(e => _seqCtRow(e, steps, id)).join('')}</tbody></table></div>`
-          : `<div class="cp-empty2" style="padding:16px">Nadie con este estado.</div>`);
+          ? `<div class="clients-table-wrap"><table class="clients-table lm-dt"><thead><tr><th style="width:34px"><input type="checkbox" class="lm-ck" ${flIds.length && flIds.every(i => _seqCtSel.has(i)) ? 'checked' : ''} onchange="LeadManagerModule.seqCtSelAll(this.checked,${id})"></th><th>Contacto</th><th>Progreso</th><th>Estado</th><th>Resultado</th><th></th></tr></thead><tbody>${fl.map(e => _seqCtRow(e, steps, id)).join('')}</tbody></table></div>`
+          : `<div class="cp-empty2" style="padding:16px">Nadie con este filtro.</div>`);
     }
     if (_seqTab === 'tareas') {
       const list = Array.isArray(_seqContacts) ? _seqContacts : null;
@@ -20243,9 +20259,11 @@ ${foot}
     const EST = { activo: ['Activo', '#F1EFEB', '#1E5FA8'], pausado: ['Pausado', '#F1EFEB', '#92400E'], terminado: ['Terminado', '#F1EFEB', '#15803D'], respondio: ['Respondió', '#F1EFEB', '#15803D'] };
     const em = EST[e.estado] || EST.activo;
     return `<tr class="clients-table__row" onclick="LeadManagerModule.openContactPage(${e.contact_id})" style="cursor:pointer">
+      <td onclick="event.stopPropagation()"><input type="checkbox" class="lm-ck" ${_seqCtSel.has(e.contact_id) ? 'checked' : ''} onchange="LeadManagerModule.seqCtSelToggle(${e.contact_id},this.checked,${seqId})"></td>
       <td><div class="client-cell-name"><img class="client-avatar" src="${_av(full)}" style="object-fit:cover" alt=""/><div><div class="client-nombre">${esc(full)}</div>${(e.cargo || e.company_nombre) ? `<div class="client-empresa">${esc([e.cargo, e.company_nombre].filter(Boolean).join(' · '))}</div>` : ''}</div></div></td>
       <td class="client-meta"><div class="seq-prog"><div class="seq-prog__bar"><span style="width:${pct}%"></span></div><span class="seq-prog__t">${done ? 'Completada' : `Paso ${paso}/${N || '—'} · ${esc(stTitle)}`}</span></div></td>
       <td><span class="client-badge" style="background:${em[1]};color:${em[2]}">${em[0]}</span></td>
+      <td>${e.disposition ? _dispoBadge(e.disposition) : '<span style="color:var(--muted)">—</span>'}</td>
       <td class="lm-dt-act" onclick="event.stopPropagation()">
         <button class="lm-mini-b" title="Escribir con IA (✨ Fable investiga en línea)" onclick="LeadManagerModule.openAiDrafts(${e.contact_id},${seqId})">${NI('sparkles')}</button>
         ${(paso > 1 || done) ? `<button class="lm-mini-b" title="Deshacer último paso — lo marqué hecho por error" onclick="LeadManagerModule.seqCtRollback(${seqId},${e.contact_id})">↩</button>` : ''}
@@ -21490,6 +21508,18 @@ ${foot}
     return `<span class="client-badge" style="background:${m[1]};color:${m[2]};font-size:.62rem;vertical-align:3px">${m[0]}</span>`;
   }
   function seqCtSetEstado(v) { _seqCtEstado = v || ''; const el = document.getElementById('seq-tabwrap'); if (el && _activeSeq) el.innerHTML = _seqTabContent(_activeSeq); else _renderBody(); }
+  function _seqCtRepaint() { const el = document.getElementById('seq-tabwrap'); if (el && _activeSeq) el.innerHTML = _seqTabContent(_activeSeq); else _renderBody(); }
+  function seqCtSetDisp(v) { _seqCtDisp = v || ''; _seqCtRepaint(); }
+  function seqCtSelToggle(cid, on, seqId) { if (on) _seqCtSel.add(cid); else _seqCtSel.delete(cid); _seqCtRepaint(); }
+  function seqCtSelAll(on, seqId) {
+    const list = Array.isArray(_seqContacts) ? _seqContacts : [];
+    let fl = _seqCtEstado ? list.filter(e => (e.estado || 'activo') === _seqCtEstado) : list;
+    if (_seqCtDisp === '_none') fl = fl.filter(e => !e.disposition); else if (_seqCtDisp) fl = fl.filter(e => e.disposition === _seqCtDisp);
+    fl.forEach(e => { if (on) _seqCtSel.add(e.contact_id); else _seqCtSel.delete(e.contact_id); });
+    _seqCtRepaint();
+  }
+  function seqCtSelClear() { _seqCtSel.clear(); _seqCtRepaint(); }
+  function seqCtSelAddToSeq(seqId) { if (_seqCtSel.size) bulkAddOpen('sequence', [..._seqCtSel]); }
   function seqTaskSetCanal(v) { _seqTaskCanal = v || ''; const el = document.getElementById('seq-tabwrap'); if (el && _activeSeq) el.innerHTML = _seqTabContent(_activeSeq); else _renderBody(); }
   function seqTaskSetDue(v) { _seqTaskDue = v || ''; const el = document.getElementById('seq-tabwrap'); if (el && _activeSeq) el.innerHTML = _seqTabContent(_activeSeq); else _renderBody(); }
   async function _seqPatch(seqId, cid, body) {
@@ -27960,6 +27990,8 @@ ${foot}
   let _seqPasosOpen = true; // tarjeta de Pasos visible (split) vs colapsada (« / › manual)
   let _seqCoExpanded = false; // lista de Empresas en cola: mostrar todas (true) o solo las primeras 5 (false)
   let _seqCtEstado = ''; // filtro de estado en la pestaña Contactos de la secuencia
+  let _seqCtDisp = '';   // filtro de resultado/disposición ('' = cualquiera, '_none' = nunca respondió)
+  let _seqCtSel = new Set(); // contact_id seleccionados, para agregarlos en bloque a otra secuencia
   let _seqTaskCanal = ''; // filtro por canal en la pestaña Tareas de la secuencia
   let _seqTaskDue = '';   // filtro por estatus de tarea: '' todas | 'over' vencidas | 'today' hoy
   let _seqContacts = null;
@@ -28758,6 +28790,7 @@ ${foot}
       // Si este enrolamiento vino de "Para retomar" (nutrición), cierra el aviso — ya
       // se decidió qué hacer con él, no debe seguir apareciendo como pendiente.
       if (_nurtureAvisoPendiente && added) { await _nurtureCerrarAviso(_nurtureAvisoPendiente); _nurtureAvisoPendiente = null; if (_taskView === 'priority') _tiReload(); }
+      if (added && _seqCtSel.size) { _seqCtSel.clear(); if (_activeSeq) _seqLoadContacts(_activeSeq); }
     } catch (e) { alert('Error: ' + e.message); }
   }
 
@@ -30863,7 +30896,7 @@ ${foot}
     lmSetDisposition, seqDoDisposition, cpSetStage,
     seqDoAccepted, seqDoNoLinkedIn, seqDoBounced, seqDoNoWhatsapp, seqDoNoPhone, lmToggleNoLinkedIn, lmToggleNoWhatsapp, lmToggleNoPhone, lmToggleBounced, lmToggleManualEmail, ctToggleBounced,
     seqDoDataIssue, seqDoDataIssuePick, ctToggleDataIssue, lmResumeDataIssue, seqOpenMark,
-    lmSetPageSize, ctGoPage, coGoPage, seqCtSetEstado, seqTaskSetCanal,
+    lmSetPageSize, ctGoPage, coGoPage, seqCtSetEstado, seqCtSetDisp, seqCtSelToggle, seqCtSelAll, seqCtSelClear, seqCtSelAddToSeq, seqTaskSetCanal,
     ldSetResult, ldSetCli, ldSetSeq, ldSetCamp, ldSetQ, ldAddNote, ldMeet, ldToDeal, ldEditNote, ldExport,
     ldRefer, ldReferSave, ldNurture, ldNurtureSave, ldOpenDispoMenu,
     nurtureRetomarMenu, nurtureReinscribir, nurtureOtraSecuencia, nurtureSoloManual,

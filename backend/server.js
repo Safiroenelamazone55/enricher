@@ -4830,7 +4830,7 @@ app.get('/api/lm/sequences/:id/contacts', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(`
       SELECT cs.contact_id, cs.paso, cs.estado, COALESCE((cs.start_date + TIME '12:00')::timestamptz, cs.created_at) AS enrolled_at, cs.paso_date::text AS paso_date,
-        k.nombre, k.apellido, k.email, k.cargo, k.company_id, k.region, k.pais, co.nombre AS company_nombre
+        k.nombre, k.apellido, k.email, k.cargo, k.company_id, k.region, k.pais, k.disposition, co.nombre AS company_nombre
       FROM lm_contact_sequences cs
       JOIN lm_contacts k ON k.id = cs.contact_id
       LEFT JOIN lm_companies co ON co.id = k.company_id
