@@ -21208,7 +21208,7 @@ ${foot}
   function _seqMetHtml(id) {
     const d = _seqMetrics;
     const rangeSeg = [['7d', '7 días'], ['30d', '30 días'], ['mes', 'Este mes'], ['trim', 'Trimestre'], ['ytd', 'YTD']];
-    const rangeHtml = `<div class="dash-seg" style="margin-bottom:12px">${rangeSeg.map(r => `<button class="dash-seg__b${_seqMetRange === r[0] ? ' on' : ''}" onclick="LeadManagerModule.seqMetRange('${r[0]}')">${r[1]}</button>`).join('')}</div>`;
+    const rangeHtml = `<div style="display:flex;justify-content:center;margin-bottom:12px"><div class="dash-seg">${rangeSeg.map(r => `<button class="dash-seg__b${_seqMetRange === r[0] ? ' on' : ''}" onclick="LeadManagerModule.seqMetRange('${r[0]}')">${r[1]}</button>`).join('')}</div></div>`;
     if (d === null) return rangeHtml + `<div class="cp-empty2" style="padding:22px">Cargando…</div>`;
     if (!d || !d.kpi) return rangeHtml + `<div class="cp-empty2" style="padding:22px">No se pudieron cargar las métricas.</div>`;
     const c = d.kpi.cur, p = d.kpi.prev;
@@ -21223,7 +21223,7 @@ ${foot}
     const donut = d.channels.length ? `<div class="dash-donut"><div class="dash-donut__c"><canvas id="seqm-ch"></canvas></div><table class="dash-leg"><tbody>${chLeg}<tr class="dash-leg__t"><td>Total</td><td></td><td>${chTot}</td></tr></tbody></table></div>` : '<div class="rep-empty">Sin toques en el período</div>';
     const chsUsed = ['email', 'linkedin', 'call', 'wa_msg', 'wa_call', 'otros'].filter(k => d.daily.some(r => r.ch === k));
     const actLeg = chsUsed.map(k => `<span class="dash-lg"><span class="dash-dot" style="background:${_DASH_CH[k][1]}"></span>${_DASH_CH[k][0]}</span>`).join('');
-    return rangeHtml + `<div class="dash-kpis">
+    return rangeHtml + `<div class="dash-kpis dash-kpis--4">
         ${kpi('Contactos alcanzados', c.contacted, _dashDelta(c.contacted, p.contacted), `${c.touches} toques en total`)}
         ${kpi('Tasa de respuesta', rr + '%', _dashDelta(rr, rrp, true), `${c.replies} respondieron`)}
         ${kpi('Aceptación LinkedIn', ar + '%', _dashDelta(ar, arp, true), `${c.accepts} de ${c.invites} invitaciones`)}
