@@ -20227,18 +20227,7 @@ ${foot}
         </div>
         ${_seqAppCard(a)}`;
     }
-    if (_seqTab === 'metricas') {
-      const mt = _seqMetrics;
-      if (mt === null) return `<div class="cp-empty2" style="padding:22px">Cargando…</div>`;
-      const en = mt.enrolados || 0;
-      const pct = (a, b) => b ? Math.round((a || 0) / b * 100) : 0;
-      const mc = (n, l) => `<div class="seq-mc"><div class="seq-mc__v">${n != null ? n : 0}</div><div class="seq-mc__l">${l}</div></div>`;
-      const bar = (n, label, color) => `<div class="seq-fn-row"><div class="seq-fn-lbl">${label}</div><div class="seq-fn-track"><div class="seq-fn-fill" style="width:${en ? Math.max(3, Math.round((n || 0) / en * 100)) : 0}%;background:${color}"></div></div><div class="seq-fn-n">${n || 0}</div></div>`;
-      return `<div class="seq-mc-row">${mc(mt.enrolados, 'Enrolados')}${mc(mt.contactados, 'Contactados')}${mc(mt.aceptaciones, 'Aceptaron LinkedIn')}${mc(mt.respuestas, 'Respuestas')}${mc(mt.reuniones, 'Reuniones')}</div>
-        <div class="cp-card"><div class="cp-card__t">Embudo</div>${bar(mt.enrolados, 'Enrolados', 'var(--brand, #007AFF)')}${bar(mt.contactados, 'Contactados', '#1E5FA8')}${bar(mt.aceptaciones, 'Aceptaron LinkedIn', '#0062CC')}${bar(mt.respuestas, 'Respuestas', '#15803D')}${bar(mt.reuniones, 'Reuniones', '#5B4BC4')}</div>
-        <div class="seq-mc-row">${mc(pct(mt.aceptaciones, mt.contactados) + '%', 'Acceptance rate')}${mc(pct(mt.respuestas, mt.contactados) + '%', 'Reply rate')}${mc(pct(mt.reuniones, en) + '%', 'Meeting rate')}${mc(mt.activos, 'Activos')}${mc(mt.terminados, 'Terminados')}</div>
-        <div id="seq-ab-wrap">${_seqAbHtml(id)}</div>`;
-    }
+    if (_seqTab === 'metricas') return _seqMetHtml(id);
     // 'pasos' no llega aquí — _vSequenceDetail lo resuelve directo (ver ahí el
     // split de una sola tarjeta con la info de la secuencia + los pasos).
     return '';
@@ -21179,11 +21168,79 @@ ${foot}
     showBanner(`✓ ${ok} marcado(s) como aceptado(s)${rr ? ` · ${rr} → Ruta A (LinkedIn)` : ''}`, 'success');
     _renderBody();
   }
-  async function _seqLoadMetrics(id) {
-    try { const r = await apiFetch(`${API}/lm/sequences/${id}/metrics`); _seqMetrics = (r && r.ok) ? await r.json() : {}; } catch { _seqMetrics = {}; }
-    if (_section === 'sequence' && _activeSeq === id && _seqTab === 'metricas') { const el = document.getElementById('seq-tabwrap'); if (el) el.innerHTML = _seqTabContent(id); }
+  // ── Métricas de la secuencia: mismo formato del dashboard de Rendimiento, filtrado a esta secuencia ──
+  let _seqMetRange = '30d', _seqMetGran = 'auto', _seqMetCharts = [];
+  function _seqMetRangeDates() {
+    const iso = d => d.toISOString().slice(0, 10), now = new Date(), back = n => { const d = new Date(now); d.setDate(d.getDate() - n + 1); return iso(d); };
+    if (_seqMetRange === '7d') return [back(7), iso(now)];
+    if (_seqMetRange === 'mes') return [iso(new Date(now.getFullYear(), now.getMonth(), 1)), iso(now)];
+    if (_seqMetRange === 'trim') return [iso(new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1)), iso(now)];
+    if (_seqMetRange === 'ytd') return [now.getFullYear() + '-01-01', iso(now)];
+    return [back(30), iso(now)];
   }
-  function seqTab(t) { _seqTab = t; _seqPasosOpen = false; if (t === 'aprobar') { _seqAppIdx = 0; _seqNoEmailIdx = 0; } _renderBody(); if ((t === 'contactos' || t === 'tareas') && !Array.isArray(_seqContacts)) _seqLoadContacts(_activeSeq); if ((t === 'empresas' || t === 'tareas') && !Array.isArray(_seqPendingCos)) _seqLoadPendingCos(_activeSeq); if (t === 'metricas') { if (_seqMetrics === null) _seqLoadMetrics(_activeSeq); _seqAb = null; _seqLoadAb(_activeSeq); } if (t === 'envios') { _seqMsgs = null; _seqLoadMsgs(_activeSeq); } if (t === 'aprobar' || t === 'tareas') { _seqApprovals = null; _seqLoadApprovals(_activeSeq); _seqPendingNoEmail = null; _seqLoadPendingNoEmail(_activeSeq); } }
+  async function _seqLoadMetrics(id) {
+    const [from, to] = _seqMetRangeDates();
+    try { const r = await apiFetch(`${API}/lm/dashboard?from=${from}&to=${to}&sequence=${id}`); _seqMetrics = (r && r.ok) ? await r.json() : {}; } catch { _seqMetrics = {}; }
+    if (_section === 'sequence' && _activeSeq === id && _seqTab === 'metricas') {
+      const el = document.getElementById('seq-tabwrap'); if (el) el.innerHTML = _seqTabContent(id);
+      _seqMetInitCharts();
+    }
+  }
+  function seqMetRange(v) { _seqMetRange = v; _seqMetrics = null; _renderBody(); _seqLoadMetrics(_activeSeq); }
+  function _seqMetInitCharts() {
+    _seqMetCharts.forEach(c => { try { c.destroy(); } catch (e) {} }); _seqMetCharts = [];
+    if (typeof Chart === 'undefined' || !_seqMetrics || !_seqMetrics.kpi) return;
+    const d = _seqMetrics;
+    const tip = { backgroundColor: '#0F172A', padding: 9, cornerRadius: 8, titleFont: { size: 11 }, bodyFont: { size: 11 } };
+    const axis = { x: { grid: { display: false }, border: { display: false }, ticks: { maxTicksLimit: 8, color: '#94A3B8', font: { size: 10 } } }, y: { beginAtZero: true, border: { display: false }, grid: { color: '#DDE3EA', borderDash: [3, 4], drawTicks: false }, ticks: { color: '#94A3B8', font: { size: 10 }, precision: 0 } } };
+    const days = []; { const a = new Date(d.range.from + 'T00:00:00Z'), b = new Date(d.range.to + 'T00:00:00Z'); for (let x = new Date(a); x <= b && days.length < 400; x.setUTCDate(x.getUTCDate() + 1)) days.push(x.toISOString().slice(0, 10)); }
+    const weekly = (_seqMetGran === 'auto' ? days.length > 60 : _seqMetGran === 'week');
+    const wk = x => { const t = new Date(x + 'T00:00:00Z'); t.setUTCDate(t.getUTCDate() - ((t.getUTCDay() + 6) % 7)); return t.toISOString().slice(0, 10); };
+    const buckets = weekly ? [...new Set(days.map(wk))] : days;
+    const bOf = weekly ? wk : (x => x);
+    const lbl = x => x.slice(5);
+    const chs = ['email', 'linkedin', 'call', 'wa_msg', 'wa_call', 'otros'].filter(k => d.daily.some(r => r.ch === k));
+    const dc = document.getElementById('seqm-daily');
+    if (dc) _seqMetCharts.push(new Chart(dc.getContext('2d'), { type: 'bar', data: { labels: buckets.map(lbl), datasets: chs.map((k, i) => ({ label: _DASH_CH[k][0], backgroundColor: _DASH_CH[k][1], borderRadius: i === chs.length - 1 ? 3 : 0, borderSkipped: false, data: buckets.map(b => d.daily.filter(r => r.ch === k && bOf(r.d) === b).reduce((n, r) => n + r.n, 0)) })) }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: tip }, scales: axis, animation: { duration: 250 } } }));
+    const cc = document.getElementById('seqm-ch');
+    if (cc && d.channels.length) _seqMetCharts.push(new Chart(cc.getContext('2d'), { type: 'doughnut', data: { labels: d.channels.map(r => (_DASH_CH[r.ch] || _DASH_CH.otros)[0]), datasets: [{ data: d.channels.map(r => r.touches), backgroundColor: d.channels.map(r => (_DASH_CH[r.ch] || _DASH_CH.otros)[1]), borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '68%', plugins: { legend: { display: false }, tooltip: tip }, animation: { duration: 250 } } }));
+  }
+  function _seqMetHtml(id) {
+    const d = _seqMetrics;
+    const rangeSeg = [['7d', '7 días'], ['30d', '30 días'], ['mes', 'Este mes'], ['trim', 'Trimestre'], ['ytd', 'YTD']];
+    const rangeHtml = `<div class="dash-seg" style="margin-bottom:12px">${rangeSeg.map(r => `<button class="dash-seg__b${_seqMetRange === r[0] ? ' on' : ''}" onclick="LeadManagerModule.seqMetRange('${r[0]}')">${r[1]}</button>`).join('')}</div>`;
+    if (d === null) return rangeHtml + `<div class="cp-empty2" style="padding:22px">Cargando…</div>`;
+    if (!d || !d.kpi) return rangeHtml + `<div class="cp-empty2" style="padding:22px">No se pudieron cargar las métricas.</div>`;
+    const c = d.kpi.cur, p = d.kpi.prev;
+    const rr = _dashPct(c.replies, c.contacted), rrp = _dashPct(p.replies, p.contacted);
+    const ar = _dashPct(c.accepts, c.invites), arp = _dashPct(p.accepts, p.invites);
+    const KI = [['users', '#22A06B'], ['reply', '#F59E0B'], ['in', '#7C5CE0'], ['handshake', '#22A06B']]; let ki = 0;
+    const kpi = (l, v, delta, sub) => { const k = KI[ki++]; return `<div class="dash-kpi" style="--kc:${k[1]}"><div class="dash-kpi__top"><span class="dash-kpi__ic">${_dashIco(k[0], 18)}</span><span class="dash-kpi__l">${l}</span></div><div class="dash-kpi__v">${v}</div>${delta}${sub ? `<div class="dash-kpi__s">${sub}</div>` : ''}</div>`; };
+    const fn = d.funnel, stages = [['Enrolados', fn.enrolados, '#0F172A', 'users'], ['Contactados', fn.contactados, '#2563EB', 'send'], ['Respondieron', fn.respondieron, '#22A06B', 'reply'], ['Reunión', fn.reuniones, '#F59E0B', 'cal']];
+    const funnel = stages.map((s, i) => `<div class="dash-fn"><span class="dash-fn__ic" style="background:${s[2]}">${_dashIco(s[3], 16)}</span><div class="dash-fn__b"><div class="dash-fn__top"><span class="dash-fn__l">${s[0]}</span>${i ? `<span class="dash-fn__pct">${_dashPct(s[1], fn.enrolados || 1)}%</span>` : ''}</div><div class="dash-fn__v">${s[1] || 0}</div></div></div>`).join('');
+    const chTot = d.channels.reduce((n, r) => n + r.touches, 0);
+    const chLeg = d.channels.map(r => { const m = _DASH_CH[r.ch] || _DASH_CH.otros; return `<tr><td><span class="dash-dot" style="background:${m[1]}"></span>${m[0]}</td><td>${_dashPct(r.touches, chTot)}%</td><td>${r.touches}</td></tr>`; }).join('');
+    const donut = d.channels.length ? `<div class="dash-donut"><div class="dash-donut__c"><canvas id="seqm-ch"></canvas></div><table class="dash-leg"><tbody>${chLeg}<tr class="dash-leg__t"><td>Total</td><td></td><td>${chTot}</td></tr></tbody></table></div>` : '<div class="rep-empty">Sin toques en el período</div>';
+    const chsUsed = ['email', 'linkedin', 'call', 'wa_msg', 'wa_call', 'otros'].filter(k => d.daily.some(r => r.ch === k));
+    const actLeg = chsUsed.map(k => `<span class="dash-lg"><span class="dash-dot" style="background:${_DASH_CH[k][1]}"></span>${_DASH_CH[k][0]}</span>`).join('');
+    return rangeHtml + `<div class="dash-kpis">
+        ${kpi('Contactos alcanzados', c.contacted, _dashDelta(c.contacted, p.contacted), `${c.touches} toques en total`)}
+        ${kpi('Tasa de respuesta', rr + '%', _dashDelta(rr, rrp, true), `${c.replies} respondieron`)}
+        ${kpi('Aceptación LinkedIn', ar + '%', _dashDelta(ar, arp, true), `${c.accepts} de ${c.invites} invitaciones`)}
+        ${kpi('Reuniones agendadas', d.deals.agendadas, _dashDelta(d.deals.agendadas, d.deals.agendadas_prev), (d.deals.programadas ? d.deals.programadas + ' próxima' + (d.deals.programadas > 1 ? 's' : '') : 'sin próximas'))}
+      </div>
+      <div class="dash-row dash-row--a">
+        <div class="cp-card"><div class="dash-card-h"><div class="cp-card__t">Actividad por canal</div></div><div class="dash-legend">${actLeg}</div><div class="dash-chart"><canvas id="seqm-daily"></canvas></div></div>
+        <div class="cp-card"><div class="cp-card__t">Embudo</div><div class="dash-funnel">${funnel}</div></div>
+      </div>
+      <div class="dash-row dash-row--b">
+        <div class="cp-card"><div class="cp-card__t">Toques por canal</div>${donut}</div>
+        <div class="cp-card"><div class="cp-card__t">Cuándo responden · automático</div>${_dashHeat(d.heatAuto || [])}</div>
+        <div class="cp-card"><div class="cp-card__t">Resultado de los contactos con estado</div>${_dashDispo(d.dispo)}</div>
+      </div>
+      <div id="seq-ab-wrap">${_seqAbHtml(id)}</div>`;
+  }
+  function seqTab(t) { _seqTab = t; _seqPasosOpen = false; if (t === 'aprobar') { _seqAppIdx = 0; _seqNoEmailIdx = 0; } _renderBody(); if ((t === 'contactos' || t === 'tareas') && !Array.isArray(_seqContacts)) _seqLoadContacts(_activeSeq); if ((t === 'empresas' || t === 'tareas') && !Array.isArray(_seqPendingCos)) _seqLoadPendingCos(_activeSeq); if (t === 'metricas') { if (_seqMetrics === null) _seqLoadMetrics(_activeSeq); else setTimeout(_seqMetInitCharts, 0); _seqAb = null; _seqLoadAb(_activeSeq); } if (t === 'envios') { _seqMsgs = null; _seqLoadMsgs(_activeSeq); } if (t === 'aprobar' || t === 'tareas') { _seqApprovals = null; _seqLoadApprovals(_activeSeq); _seqPendingNoEmail = null; _seqLoadPendingNoEmail(_activeSeq); } }
   // Filas de aprobación DENTRO de la pestaña Tareas: el email automático se revisa,
   // edita y aprueba aquí mismo — no es una tarea de "marcar hecho".
   function _seqApRowsHtml(seqId) {
@@ -30801,7 +30858,7 @@ ${foot}
     dgEnrichMenu, dgEnrichOpen, dgEnrichClose, dgEnrichApply, dgToggleIssues, dgMoreMenu, dgToggleSelMode,
     dgDupOpen, dgDupClose, dgDupPickSurvivor, dgDupToggleDel, dgDupMergeGroup, dgDupDeleteGroup,
     fmsToggle, fmsFilter, fmsPick,
-    openViews, applyView, saveView, deleteView, clearAllViews, dashTab, dashSet, dashClear, dashGran, wsLogoUpload, wsLogoDelete, dlNotaShare, puPublish, puToggle, puDel, portalLogoOpen, portalLogoClose, lgTrimExisting, lgFrame, lgReset, lgBg, lgSelect, lgUpload, lgDelete, lgSave, pcToggle, pcPick, pcSend, pcAttach, pcUnpend, portalCreate, portalReset, portalToggle, portalDel, portalSecs, portalAccessOpen, portalAccessClose, reportOpen, reportClose, reportMode, reportActivate, reportSched, suOpen, suClose, suEdit, suToggleItem, suAddItem, suRmItem, suAddPhase, suRmPhase, suSave, reportAdd, reportAddInput, reportRm, reportLang, reportNote, reportPreview, reportSend, portalGen, portalEdit, portalEditSave, portalSec, portalNota, portalChatSend, portalCopy,
+    openViews, applyView, saveView, deleteView, clearAllViews, dashTab, dashSet, dashClear, dashGran, seqMetRange, wsLogoUpload, wsLogoDelete, dlNotaShare, puPublish, puToggle, puDel, portalLogoOpen, portalLogoClose, lgTrimExisting, lgFrame, lgReset, lgBg, lgSelect, lgUpload, lgDelete, lgSave, pcToggle, pcPick, pcSend, pcAttach, pcUnpend, portalCreate, portalReset, portalToggle, portalDel, portalSecs, portalAccessOpen, portalAccessClose, reportOpen, reportClose, reportMode, reportActivate, reportSched, suOpen, suClose, suEdit, suToggleItem, suAddItem, suRmItem, suAddPhase, suRmPhase, suSave, reportAdd, reportAddInput, reportRm, reportLang, reportNote, reportPreview, reportSend, portalGen, portalEdit, portalEditSave, portalSec, portalNota, portalChatSend, portalCopy,
     taskSetView, taskSetFilter, calPrev, calNext, calToday,
     lmSetDisposition, seqDoDisposition, cpSetStage,
     seqDoAccepted, seqDoNoLinkedIn, seqDoBounced, seqDoNoWhatsapp, seqDoNoPhone, lmToggleNoLinkedIn, lmToggleNoWhatsapp, lmToggleNoPhone, lmToggleBounced, lmToggleManualEmail, ctToggleBounced,
