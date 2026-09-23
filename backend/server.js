@@ -8267,11 +8267,16 @@ app.get('/api/sequences', requireAuth, async (req, res) => {
     const { rows } = await pool.query(`
       SELECT s.*, s.starts_on::text AS starts_on,
              (SELECT COUNT(*)::int FROM lm_messages m WHERE m.sequence_id = s.id AND m.estado='awaiting') AS awaiting,
-             -- Contactos atascados en el paso de Email sin ese dato (pausados por el
-             -- motor con paused_reason='sin_email') — pedido explícito 2026-09-11: que
-             -- el número junto a "Aprobar" (y Tareas) los cuente, no solo lo ya redactado.
-             (SELECT COUNT(*)::int FROM lm_contact_sequences cs
-               WHERE cs.sequence_id = s.id AND cs.estado='pausado' AND cs.paused_reason='sin_email') AS no_email_pending
+             -- Contactos sin email que bloquean el paso de Email — antes solo contaba a
+             -- los que el motor YA había pausado (paused_reason='sin_email'), y se quedaba
+             -- corto frente a la lista real de "Sin email" (que también incluye a los que
+             -- siguen 'activo' esperando su turno). Reportado 2026-09-23: el número junto a
+             -- "Aprobar" decía 15 pero la lista mostraba 22. Mismo criterio que
+             -- /pending-no-email (sin el filtro fino de "cuál paso le toca hoy", que es caro
+             -- de calcular aquí para todas las secuencias a la vez).
+             (SELECT COUNT(*)::int FROM lm_contact_sequences cs JOIN lm_contacts k ON k.id=cs.contact_id
+               WHERE cs.sequence_id = s.id AND (k.email IS NULL OR k.email='')
+                 AND (cs.estado='activo' OR (cs.estado='pausado' AND cs.paused_reason='sin_email'))) AS no_email_pending
         FROM sequences s WHERE s.user_id=$1 ORDER BY s.created_at DESC`, [req.workspaceOwnerId]);
     res.json(rows);
   } catch (err) { console.error('[seq] GET error:', err.message); res.status(500).json({ error: 'Error al cargar secuencias' }); }
