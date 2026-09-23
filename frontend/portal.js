@@ -127,7 +127,7 @@
 
   // ── app ──
   // ── URLs por cliente y sección: /portal/<cliente>/<sección>[/<id>] ──
-  const SEC_URL = { inicio: 'resumen', setup: 'avance', reuniones: 'reuniones', empresas: 'empresas', contactos: 'contactos', secuencias: 'secuencias', actividad: 'actividad' };
+  const SEC_URL = { inicio: 'resumen', setup: 'arranque', reuniones: 'reuniones', empresas: 'empresas', contactos: 'contactos', secuencias: 'secuencias', actividad: 'actividad' };
   const URL_SEC = Object.fromEntries(Object.entries(SEC_URL).map(([k, v]) => [v, k]));
   function parseUrl() { const m = location.pathname.replace(/\/+$/, '').match(/^(?:\/(?:en|de|pt|es))?\/portal(?:\/([^/]+))?(?:\/([^/]+))?(?:\/([^/]+))?$/); return m ? { slug: m[1] || '', sec: m[2] || '', id: parseInt(m[3]) || 0 } : null; }
   const LP = () => PT_I18N.lang === 'es' ? '' : '/' + PT_I18N.lang;   // /en/portal/... = versión en inglés
@@ -156,7 +156,7 @@
   }
   function tabs() {
     const s = S.me.sections, t = [['inicio', 'Resumen']];
-    if (s.setup) t.unshift(['setup', 'Avance']);
+    if (s.setup) t.unshift(['setup', 'Arranque']);
     if (s.reuniones) t.push(['reuniones', 'Reuniones']);
     if (s.empresas) t.push(['empresas', 'Empresas']);
     if (s.contactos) t.push(['contactos', 'Contactos']);
@@ -281,7 +281,7 @@
         ${p.highlight ? `<div class="pt-su__find">${esc(p.highlight)}</div>` : ''}
       </div>`;
     }).join('');
-    return `<div class="pt-h"><h2>Avance de lanzamiento</h2></div>
+    return `<div class="pt-h"><h2>Puesta en marcha</h2></div>
       <div class="pt-su">
         ${d.headline ? `<div class="pt-su__hl">${esc(d.headline)}</div>` : ''}
         <div class="pt-su__ov"><div class="pt-su__ovh"><span>Progreso general</span><b>${overall}%</b></div><div class="pt-su__ovbar"><div style="width:${overall}%"></div></div>${next ? `<div class="pt-su__next">Etapa actual: <b>${esc(next.title)}</b></div>` : d.phases.length ? '<div class="pt-su__next">Todas las fases completadas.</div>' : ''}</div>

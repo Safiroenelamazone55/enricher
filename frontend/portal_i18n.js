@@ -95,8 +95,8 @@
     ['Cerrar', 'Close', 'Schließen', 'Fechar'],
     // nav / secciones
     ['Resumen', 'Overview', 'Übersicht', 'Resumo'],
-    ['Avance', 'Setup', 'Setup', 'Progresso'],
-    ['Avance de lanzamiento', 'Launch setup', 'Launch-Setup', 'Progresso do lançamento'],
+    ['Arranque', 'Kickoff', 'Start', 'Início'],
+    ['Puesta en marcha', 'Launch Kickoff', 'Projektstart', 'Início do lançamento'],
     ['Progreso general', 'Overall progress', 'Gesamtfortschritt', 'Progresso geral'],
     ['Etapa actual:', 'Current stage:', 'Aktuelle Phase:', 'Etapa atual:'],
     ['Todas las fases completadas.', 'All phases completed.', 'Alle Phasen abgeschlossen.', 'Todas as fases concluídas.'],

@@ -25381,7 +25381,7 @@ ${foot}
   }
   // ── Portal del cliente (lado equipo): accesos, notas para el cliente y chat ──
   let _portalTimer = null, _portalChatLast = 0, _portalChat = [];
-  const _PORTAL_SEC = { setup: 'Avance de lanzamiento', kpis: 'KPIs', actividad: 'Gráfico de actividad', embudo: 'Embudo', canales: 'Canales', paises: 'Países', respuestas: 'Respuestas y señales', reuniones: 'Reuniones y deals', secuencias: 'Secuencias', empresas: 'Empresas', contactos: 'Contactos', feed: 'Actividad en vivo', chat: 'Chat' };
+  const _PORTAL_SEC = { setup: 'Puesta en marcha', kpis: 'KPIs', actividad: 'Gráfico de actividad', embudo: 'Embudo', canales: 'Canales', paises: 'Países', respuestas: 'Respuestas y señales', reuniones: 'Reuniones y deals', secuencias: 'Secuencias', empresas: 'Empresas', contactos: 'Contactos', feed: 'Actividad en vivo', chat: 'Chat' };
   function _portalStop() { if (_portalTimer) { clearInterval(_portalTimer); _portalTimer = null; } }
   function _portalBox() { return document.getElementById('lm-portal-box'); }
   async function _portalLoad(cid) {
@@ -25485,7 +25485,7 @@ ${foot}
           <div class="pa-row"><label><input type="checkbox" id="portal-rs-send" checked> Al generar una nueva clave, enviarla por correo</label><label>Idioma ${LANG_SEL('portal-rs-lang')}</label></div>` : '<div class="pa-empty">Aún no hay usuarios para este cliente.</div>'}
         <div class="pa-new"><b>Dar acceso a otra persona</b>
           <div class="pa-form"><input class="lm-inp" id="portal-em" type="email" placeholder="correo"><input class="lm-inp" id="portal-nm" placeholder="nombre (opcional)"><input class="lm-inp" id="portal-pw" type="text" value="${_paGen()}" style="font-family:monospace" title="Contraseña temporal"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.portalGen()" title="Generar otra al azar">Generar</button><label><input type="checkbox" id="portal-inv" checked> Enviar invitación</label><label>Idioma ${LANG_SEL('portal-lang')}</label><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.portalCreate(${cid})">＋ Dar acceso</button></div>
-          <div class="pa-views"><span>Qué verá</span><label><input type="checkbox" id="portal-view-live" checked> Seguimiento en tiempo real</label><label><input type="checkbox" id="portal-view-setup"> Avance de lanzamiento (Fase 0)</label></div>
+          <div class="pa-views"><span>Qué verá</span><label><input type="checkbox" id="portal-view-live" checked> Seguimiento en tiempo real</label><label><input type="checkbox" id="portal-view-setup"> Puesta en marcha (Fase 0)</label></div>
         </div></div>`;
   }
   async function _portalRefresh(cid) { if (document.getElementById('portal-access-modal')) await _paLoad(cid); else await _portalLoad(cid); }
@@ -25510,7 +25510,7 @@ ${foot}
   const _RP_DAYS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
   const _rpMail = e => /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]{2,}$/.test(e);
   function _rpEsc(s) { return esc(String(s == null ? '' : s)); }
-  // ── "Avance de lanzamiento" (Fase 0): editor del equipo — fases, checklist, hallazgo y % global ──
+  // ── "Puesta en marcha" (Fase 0): editor del equipo — fases, checklist, hallazgo y % global ──
   const _SU = { cid: 0, data: null, busy: false };
   function suOpen(cid) {
     suClose();
@@ -25518,7 +25518,7 @@ ${foot}
     _SU.cid = cid; _SU.data = null;
     const m = document.createElement('div'); m.id = 'su-modal'; m.className = 'fin-pi-backdrop';
     m.onclick = ev => { if (ev.target === m) suClose(); };
-    m.innerHTML = `<div class="fin-pi-box" style="max-width:900px;width:96vw"><div class="dle-hd"><div style="flex:1;min-width:0"><div class="dle-hd__t">Avance de lanzamiento · ${esc(c.nombre)}</div></div><button class="fin-pi-x" onclick="LeadManagerModule.suClose()">✕</button></div><div id="su-body" class="su-body"><div class="cp-empty2" style="padding:16px">Cargando…</div></div></div>`;
+    m.innerHTML = `<div class="fin-pi-box" style="max-width:900px;width:96vw"><div class="dle-hd"><div style="flex:1;min-width:0"><div class="dle-hd__t">Puesta en marcha · ${esc(c.nombre)}</div></div><button class="fin-pi-x" onclick="LeadManagerModule.suClose()">✕</button></div><div id="su-body" class="su-body"><div class="cp-empty2" style="padding:16px">Cargando…</div></div></div>`;
     document.body.appendChild(m);
     _portalApi(`/lm/portal/setup/${cid}`).then(d => { _SU.data = d; suPaint(); }).catch(e => { const b = document.getElementById('su-body'); if (b) b.innerHTML = `<div class="cp-empty2" style="padding:16px">No se pudo cargar: ${esc(e.message)}</div>`; });
   }
@@ -25555,7 +25555,7 @@ ${foot}
       </div>
       <div class="su-list">${phasesHtml || '<div class="cp-empty2">Sin fases todavía.</div>'}</div>
       <div class="su-add"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.suAddPhase()">＋ Añadir fase</button></div>
-      <div class="su-ft"><span class="su-hint">Se activa por persona en "Acceso al portal → Qué ve → Avance de lanzamiento".</span><button class="btn btn--primary" id="su-save" onclick="LeadManagerModule.suSave()">Guardar</button></div>`;
+      <div class="su-ft"><span class="su-hint">Se activa por persona en "Acceso al portal → Qué ve → Puesta en marcha".</span><button class="btn btn--primary" id="su-save" onclick="LeadManagerModule.suSave()">Guardar</button></div>`;
   }
   function suEdit(pi, field, value, ii) {
     const d = _SU.data; if (!d) return;
@@ -25815,7 +25815,7 @@ ${foot}
       + item(waYa ? 'Editar WhatsApp' : 'Conectar WhatsApp', `LeadManagerModule.wamOpen(${id})`)
       + item('Editar cliente', `LeadManagerModule.openClientDrawer(${id})`)
       + item('Acceso al portal', `LeadManagerModule.portalAccessOpen(${id})`)
-      + item('Avance de lanzamiento', `LeadManagerModule.suOpen(${id})`)
+      + item('Puesta en marcha', `LeadManagerModule.suOpen(${id})`)
       + item('Informe semanal', `LeadManagerModule.reportOpen(${id})`)
       + item('Logo del portal', `LeadManagerModule.portalLogoOpen(${id})`)
       + `<button class="cp-mark-menu__b cp-off" disabled title="Desactivado por ahora: el portal del cliente ya muestra estos datos en vivo">Informe de campaña <span class="cp-off__tag">En pausa</span></button>`
