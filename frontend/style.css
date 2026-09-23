@@ -17010,29 +17010,6 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .su-ft{display:flex;justify-content:space-between;align-items:center;margin-top:14px;padding-top:12px;border-top:1px solid #EEF1F4}
 .su-hint{font-size:11.5px;color:#94A3B8}
 .su-add{margin-top:10px}
-/* Avance de lanzamiento: vista del cliente */
-.pt-su{display:flex;flex-direction:column;gap:18px}
-.pt-su__hl{font-size:14px;color:#334155;line-height:1.55}
-.pt-su__ov{border:1px solid #E1E6EC;background:#F6F8FB;padding:14px 16px}
-.pt-su__ovh{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
-.pt-su__ovh b{font-size:26px;color:#0F172A}
-.pt-su__ovbar{height:8px;background:#E1E6EC;overflow:hidden}
-.pt-su__ovbar>div{height:100%;background:#2563EB}
-.pt-su__next{margin-top:8px;font-size:12.5px;color:#64748B}
-.pt-su__ph{border:1px solid #E1E6EC;background:#fff;padding:14px 16px}
-.pt-su__ph--done{opacity:.72}
-.pt-su__phh{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px}
-.pt-su__pht{font-weight:700;font-size:14.5px;color:#0F172A;display:flex;align-items:center;gap:8px}
-.pt-su__pct{font-size:12.5px;font-weight:700;color:#2563EB}
-.pt-su__bar{height:6px;background:#EEF1F6;margin-bottom:10px;overflow:hidden}
-.pt-su__bar>div{height:100%;background:#2563EB}
-.pt-su__items{display:flex;flex-direction:column;gap:5px;margin-bottom:8px}
-.pt-su__it{display:flex;align-items:center;gap:8px;font-size:13px;color:#334155}
-.pt-su__it--done{color:#94A3B8;text-decoration:line-through}
-.pt-su__ic{flex:none;width:16px;height:16px;border-radius:50%;display:grid;place-items:center;font-size:10px}
-.pt-su__ic--y{background:#DCFCE7;color:#15803D}
-.pt-su__ic--n{background:#EEF1F6;color:#B8C0CC}
-.pt-su__find{margin-top:8px;padding:10px 12px;background:#F6F8FB;border-left:3px solid #2563EB;font-size:12.5px;color:#334155;line-height:1.5}
 .pa-views{display:flex;align-items:center;gap:14px;margin-top:6px;font-size:12px;color:#475569;flex-wrap:wrap}
 .pa-views>span{font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:#8A94A6;font-weight:600}
 .pa-views label{display:flex;align-items:center;gap:5px;white-space:nowrap}
