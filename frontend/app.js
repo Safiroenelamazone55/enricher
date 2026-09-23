@@ -25381,7 +25381,7 @@ ${foot}
   }
   // ── Portal del cliente (lado equipo): accesos, notas para el cliente y chat ──
   let _portalTimer = null, _portalChatLast = 0, _portalChat = [];
-  const _PORTAL_SEC = { kpis: 'KPIs', actividad: 'Gráfico de actividad', embudo: 'Embudo', canales: 'Canales', paises: 'Países', respuestas: 'Respuestas y señales', reuniones: 'Reuniones y deals', secuencias: 'Secuencias', empresas: 'Empresas', contactos: 'Contactos', feed: 'Actividad en vivo', chat: 'Chat' };
+  const _PORTAL_SEC = { setup: 'Avance de lanzamiento', kpis: 'KPIs', actividad: 'Gráfico de actividad', embudo: 'Embudo', canales: 'Canales', paises: 'Países', respuestas: 'Respuestas y señales', reuniones: 'Reuniones y deals', secuencias: 'Secuencias', empresas: 'Empresas', contactos: 'Contactos', feed: 'Actividad en vivo', chat: 'Chat' };
   function _portalStop() { if (_portalTimer) { clearInterval(_portalTimer); _portalTimer = null; } }
   function _portalBox() { return document.getElementById('lm-portal-box'); }
   async function _portalLoad(cid) {
@@ -25509,6 +25509,75 @@ ${foot}
   const _RP_DAYS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
   const _rpMail = e => /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]{2,}$/.test(e);
   function _rpEsc(s) { return esc(String(s == null ? '' : s)); }
+  // ── "Avance de lanzamiento" (Fase 0): editor del equipo — fases, checklist, hallazgo y % global ──
+  const _SU = { cid: 0, data: null, busy: false };
+  function suOpen(cid) {
+    suClose();
+    const c = _clients.find(x => x.id === cid); if (!c) return;
+    _SU.cid = cid; _SU.data = null;
+    const m = document.createElement('div'); m.id = 'su-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = ev => { if (ev.target === m) suClose(); };
+    m.innerHTML = `<div class="fin-pi-box" style="max-width:900px;width:96vw"><div class="dle-hd"><div style="flex:1;min-width:0"><div class="dle-hd__t">Avance de lanzamiento · ${esc(c.nombre)}</div></div><button class="fin-pi-x" onclick="LeadManagerModule.suClose()">✕</button></div><div id="su-body" class="su-body"><div class="cp-empty2" style="padding:16px">Cargando…</div></div></div>`;
+    document.body.appendChild(m);
+    _portalApi(`/lm/portal/setup/${cid}`).then(d => { _SU.data = d; suPaint(); }).catch(e => { const b = document.getElementById('su-body'); if (b) b.innerHTML = `<div class="cp-empty2" style="padding:16px">No se pudo cargar: ${esc(e.message)}</div>`; });
+  }
+  function suClose() { document.getElementById('su-modal')?.remove(); _SU.cid = 0; _SU.data = null; }
+  function _suProgress(p) {
+    if (p.progress != null) return p.progress;
+    if (!p.items || !p.items.length) return 0;
+    return Math.round(p.items.filter(i => i.done).length / p.items.length * 100);
+  }
+  function _suOverall() {
+    const d = _SU.data; if (!d) return 0;
+    if (d.overall != null) return d.overall;
+    if (!d.phases.length) return 0;
+    return Math.round(d.phases.reduce((a, p) => a + _suProgress(p), 0) / d.phases.length);
+  }
+  function suPaint() {
+    const b = document.getElementById('su-body'); if (!b || !_SU.data) return;
+    const d = _SU.data;
+    const phasesHtml = d.phases.map((p, pi) => `<div class="su-ph">
+      <div class="su-ph__hd">
+        <input class="su-ph__t" value="${esc(p.title)}" placeholder="Nombre de la fase" oninput="LeadManagerModule.suEdit(${pi},'title',this.value)">
+        <span class="su-ph__pct">${_suProgress(p)}%</span>
+        <button class="su-x" title="Quitar fase" onclick="LeadManagerModule.suRmPhase(${pi})">✕</button>
+      </div>
+      <div class="su-bar"><div class="su-bar__f" style="width:${_suProgress(p)}%"></div></div>
+      <div class="su-items">${(p.items || []).map((it, ii) => `<div class="su-it"><input type="checkbox" ${it.done ? 'checked' : ''} onchange="LeadManagerModule.suToggleItem(${pi},${ii},this.checked)"><input class="su-it__l" value="${esc(it.label)}" placeholder="Elemento…" oninput="LeadManagerModule.suEdit(${pi},'item',this.value,${ii})"><button class="su-x su-x--sm" onclick="LeadManagerModule.suRmItem(${pi},${ii})">✕</button></div>`).join('')}
+        <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.suAddItem(${pi})">＋ Elemento</button></div>
+      <label class="su-hl"><span>Hallazgo destacado (opcional)</span><textarea rows="2" placeholder="Ej. Las empresas de 50–200 empleados muestran la mayor concentración de flota propia." oninput="LeadManagerModule.suEdit(${pi},'highlight',this.value)">${esc(p.highlight || '')}</textarea></label>
+      <label class="su-ov"><span>% manual (opcional, si no quieres que salga solo del checklist)</span><input type="number" min="0" max="100" value="${p.progress == null ? '' : p.progress}" placeholder="auto" oninput="LeadManagerModule.suEdit(${pi},'progress',this.value)"></label>
+    </div>`).join('');
+    b.innerHTML = `<div class="su-top">
+        <label class="su-headline"><span>Mensaje para el cliente (arriba de todo, opcional)</span><input value="${esc(d.headline || '')}" placeholder="Ej. Estamos construyendo toda la maquinaria antes de lanzar la campaña." oninput="LeadManagerModule.suEdit(null,'headline',this.value)"></label>
+        <label class="su-ov su-ov--top"><span>% global manual (opcional)</span><input type="number" min="0" max="100" value="${d.overall == null ? '' : d.overall}" placeholder="auto (${_suOverall()}%)" oninput="LeadManagerModule.suEdit(null,'overall',this.value)"></label>
+      </div>
+      <div class="su-list">${phasesHtml || '<div class="cp-empty2">Sin fases todavía.</div>'}</div>
+      <div class="su-add"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.suAddPhase()">＋ Añadir fase</button></div>
+      <div class="su-ft"><span class="su-hint">Se activa por persona en "Acceso al portal → Qué ve → Avance de lanzamiento".</span><button class="btn btn--primary" id="su-save" onclick="LeadManagerModule.suSave()">Guardar</button></div>`;
+  }
+  function suEdit(pi, field, value, ii) {
+    const d = _SU.data; if (!d) return;
+    if (pi == null) { if (field === 'headline') d.headline = value; else d.overall = value === '' ? null : Math.max(0, Math.min(100, parseInt(value) || 0)); return; }
+    const p = d.phases[pi]; if (!p) return;
+    if (field === 'title') p.title = value;
+    else if (field === 'highlight') p.highlight = value;
+    else if (field === 'progress') p.progress = value === '' ? null : Math.max(0, Math.min(100, parseInt(value) || 0));
+    else if (field === 'item') { p.items[ii].label = value; }
+    if (field !== 'title' && field !== 'highlight') { const el = document.getElementById('su-body'); if (el) suPaint(); } // refresca % visibles
+  }
+  function suToggleItem(pi, ii, val) { _SU.data.phases[pi].items[ii].done = val; suPaint(); }
+  function suAddItem(pi) { _SU.data.phases[pi].items.push({ label: '', done: false }); suPaint(); }
+  function suRmItem(pi, ii) { _SU.data.phases[pi].items.splice(ii, 1); suPaint(); }
+  function suAddPhase() { _SU.data.phases.push({ key: 'fase-' + Date.now(), title: '', items: [] }); suPaint(); }
+  function suRmPhase(pi) { _SU.data.phases.splice(pi, 1); suPaint(); }
+  async function suSave() {
+    if (_SU.busy || !_SU.data) return; _SU.busy = true;
+    const btn = document.getElementById('su-save'); if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+    try { await _portalApi(`/lm/portal/setup/${_SU.cid}`, 'PUT', _SU.data); showBanner('✓ Guardado', 'success'); }
+    catch (e) { showBanner('Error: ' + e.message, 'error'); }
+    _SU.busy = false; if (btn) { btn.disabled = false; btn.textContent = 'Guardar'; }
+  }
   async function reportOpen(cid) {
     reportClose();
     const c = _clients.find(x => x.id === cid); if (!c) return;
@@ -25745,6 +25814,7 @@ ${foot}
       + item(waYa ? 'Editar WhatsApp' : 'Conectar WhatsApp', `LeadManagerModule.wamOpen(${id})`)
       + item('Editar cliente', `LeadManagerModule.openClientDrawer(${id})`)
       + item('Acceso al portal', `LeadManagerModule.portalAccessOpen(${id})`)
+      + item('Avance de lanzamiento', `LeadManagerModule.suOpen(${id})`)
       + item('Informe semanal', `LeadManagerModule.reportOpen(${id})`)
       + item('Logo del portal', `LeadManagerModule.portalLogoOpen(${id})`)
       + `<button class="cp-mark-menu__b cp-off" disabled title="Desactivado por ahora: el portal del cliente ya muestra estos datos en vivo">Informe de campaña <span class="cp-off__tag">En pausa</span></button>`
@@ -30730,7 +30800,7 @@ ${foot}
     dgEnrichMenu, dgEnrichOpen, dgEnrichClose, dgEnrichApply, dgToggleIssues, dgMoreMenu, dgToggleSelMode,
     dgDupOpen, dgDupClose, dgDupPickSurvivor, dgDupToggleDel, dgDupMergeGroup, dgDupDeleteGroup,
     fmsToggle, fmsFilter, fmsPick,
-    openViews, applyView, saveView, deleteView, clearAllViews, dashTab, dashSet, dashClear, dashGran, wsLogoUpload, wsLogoDelete, dlNotaShare, puPublish, puToggle, puDel, portalLogoOpen, portalLogoClose, lgTrimExisting, lgFrame, lgReset, lgBg, lgSelect, lgUpload, lgDelete, lgSave, pcToggle, pcPick, pcSend, pcAttach, pcUnpend, portalCreate, portalReset, portalToggle, portalDel, portalSecs, portalAccessOpen, portalAccessClose, reportOpen, reportClose, reportMode, reportActivate, reportSched, reportAdd, reportAddInput, reportRm, reportLang, reportNote, reportPreview, reportSend, portalGen, portalEdit, portalEditSave, portalSec, portalNota, portalChatSend, portalCopy,
+    openViews, applyView, saveView, deleteView, clearAllViews, dashTab, dashSet, dashClear, dashGran, wsLogoUpload, wsLogoDelete, dlNotaShare, puPublish, puToggle, puDel, portalLogoOpen, portalLogoClose, lgTrimExisting, lgFrame, lgReset, lgBg, lgSelect, lgUpload, lgDelete, lgSave, pcToggle, pcPick, pcSend, pcAttach, pcUnpend, portalCreate, portalReset, portalToggle, portalDel, portalSecs, portalAccessOpen, portalAccessClose, reportOpen, reportClose, reportMode, reportActivate, reportSched, suOpen, suClose, suEdit, suToggleItem, suAddItem, suRmItem, suAddPhase, suRmPhase, suSave, reportAdd, reportAddInput, reportRm, reportLang, reportNote, reportPreview, reportSend, portalGen, portalEdit, portalEditSave, portalSec, portalNota, portalChatSend, portalCopy,
     taskSetView, taskSetFilter, calPrev, calNext, calToday,
     lmSetDisposition, seqDoDisposition, cpSetStage,
     seqDoAccepted, seqDoNoLinkedIn, seqDoBounced, seqDoNoWhatsapp, seqDoNoPhone, lmToggleNoLinkedIn, lmToggleNoWhatsapp, lmToggleNoPhone, lmToggleBounced, lmToggleManualEmail, ctToggleBounced,

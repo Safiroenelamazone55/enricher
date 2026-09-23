@@ -248,7 +248,8 @@
       if (t === 'inicio') {
         const [wk, h, u, f, sq, stp, d] = await Promise.all([wkFetch(S.per), api('/portal/highlights'), api('/portal/updates'), s.feed ? api('/portal/feed') : null, s.secuencias && !S.seqs ? api('/portal/sequences') : null, s.secuencias ? api('/portal/steps') : null, S.detail ? api('/portal/dashboard?' + rangeQ()) : null]);
         S.wk = wk; setTimeout(() => wkFetch(S.per === 'month' ? 'week' : 'month').catch(() => {}), 400); S.hl = h; S.upd = u; S.feed = f; S.steps = stp; if (sq) S.seqs = sq; S.dash = d;
-      } else if (t === 'reuniones') S.meet = await api('/portal/meetings');
+      } else if (t === 'setup') S.setup = await api('/portal/setup');
+      else if (t === 'reuniones') S.meet = await api('/portal/meetings');
       else if (t === 'empresas') S.cos = await api('/portal/companies?q=' + encodeURIComponent(S.q));
       else if (t === 'contactos') S.cts = await api(`/portal/contacts?q=${encodeURIComponent(S.q)}&company=${S.co || 0}`);
       else if (t === 'secuencias') { const [a, b] = await Promise.all([api('/portal/sequences'), api('/portal/steps')]); S.seqs = a; S.steps = b; }
@@ -260,11 +261,38 @@
   }
 
   // ── pintar ──
+  function _ptProgress(p) {
+    if (p.progress != null) return p.progress;
+    if (!p.items || !p.items.length) return 0;
+    return Math.round(p.items.filter(i => i.done).length / p.items.length * 100);
+  }
+  function setupHtml() {
+    const d = S.setup;
+    if (!d) return '<div class="pt-empty">Cargando…</div>';
+    const overall = d.overall != null ? d.overall : (d.phases.length ? Math.round(d.phases.reduce((a, p) => a + _ptProgress(p), 0) / d.phases.length) : 0);
+    const next = d.phases.find(p => _ptProgress(p) < 100);
+    const ph = d.phases.map(p => {
+      const pct = _ptProgress(p), done = pct >= 100;
+      return `<div class="pt-su__ph${done ? ' pt-su__ph--done' : ''}">
+        <div class="pt-su__phh"><div class="pt-su__pht">${done ? '✓' : ''} ${esc(p.title)}</div><span class="pt-su__pct">${pct}%</span></div>
+        <div class="pt-su__bar"><div style="width:${pct}%"></div></div>
+        <div class="pt-su__items">${(p.items || []).map(it => `<div class="pt-su__it${it.done ? ' pt-su__it--done' : ''}"><span class="pt-su__ic ${it.done ? 'pt-su__ic--y' : 'pt-su__ic--n'}">${it.done ? '✓' : '·'}</span>${esc(it.label)}</div>`).join('')}</div>
+        ${p.highlight ? `<div class="pt-su__find">${esc(p.highlight)}</div>` : ''}
+      </div>`;
+    }).join('');
+    return `<div class="pt-h"><h2>Avance de lanzamiento</h2></div>
+      <div class="pt-su">
+        ${d.headline ? `<div class="pt-su__hl">${esc(d.headline)}</div>` : ''}
+        <div class="pt-su__ov"><div class="pt-su__ovh"><span>Progreso general</span><b>${overall}%</b></div><div class="pt-su__ovbar"><div style="width:${overall}%"></div></div>${next ? `<div class="pt-su__next">Etapa actual: <b>${esc(next.title)}</b></div>` : d.phases.length ? '<div class="pt-su__next">Todas las fases completadas.</div>' : ''}</div>
+        ${ph || '<div class="pt-empty">Aún no hay fases cargadas.</div>'}
+      </div>`;
+  }
   function paint() {
     const b = document.getElementById('pt-body'); if (!b) return;
     stopCharts();
     const t = S.tab;
     if (t === 'inicio') b.innerHTML = S.hl ? inicio() : '<div class="pt-empty">Cargando…</div>';
+    else if (t === 'setup') b.innerHTML = setupHtml();
     else if (t === 'reuniones') b.innerHTML = reuniones();
     else if (t === 'empresas') b.innerHTML = empresas();
     else if (t === 'contactos') b.innerHTML = contactos();

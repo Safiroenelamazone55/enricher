@@ -696,6 +696,14 @@ async function initDb() {
     // Buzón de envío del cliente (ej. Zoho que él proporciona) y CC solicitado — informativos, se muestran en la tarea.
     // slugs anteriores del portal (si se renombra el cliente, los enlaces viejos siguen funcionando)
     await pool.query(`ALTER TABLE outbound_clients ADD COLUMN IF NOT EXISTS slug_alias TEXT NOT NULL DEFAULT ''`);
+    // "Avance de lanzamiento" (Fase 0): fases/checklist previos al arranque operativo, visibles en el portal si el cliente activa la sección
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS client_setup (
+        outbound_client_id INTEGER PRIMARY KEY REFERENCES outbound_clients(id) ON DELETE CASCADE,
+        data       JSONB       NOT NULL DEFAULT '{}',
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
     await pool.query(`ALTER TABLE outbound_clients ADD COLUMN IF NOT EXISTS from_email TEXT NOT NULL DEFAULT '';`);
     await pool.query(`ALTER TABLE outbound_clients ADD COLUMN IF NOT EXISTS cc_email   TEXT NOT NULL DEFAULT '';`);
     // Identidad del perfil de LinkedIn desde el que se comenta e invita (cada cliente tiene

@@ -95,6 +95,12 @@
     ['Cerrar', 'Close', 'Schließen', 'Fechar'],
     // nav / secciones
     ['Resumen', 'Overview', 'Übersicht', 'Resumo'],
+    ['Avance', 'Setup', 'Setup', 'Progresso'],
+    ['Avance de lanzamiento', 'Launch setup', 'Launch-Setup', 'Progresso do lançamento'],
+    ['Progreso general', 'Overall progress', 'Gesamtfortschritt', 'Progresso geral'],
+    ['Etapa actual:', 'Current stage:', 'Aktuelle Phase:', 'Etapa atual:'],
+    ['Todas las fases completadas.', 'All phases completed.', 'Alle Phasen abgeschlossen.', 'Todas as fases concluídas.'],
+    ['Aún no hay fases cargadas.', 'No phases loaded yet.', 'Noch keine Phasen angelegt.', 'Ainda não há fases carregadas.'],
     ['Empresas', 'Companies', 'Unternehmen', 'Empresas'],
     ['Contactos', 'Contacts', 'Kontakte', 'Contatos'],
     ['Secuencias', 'Sequences', 'Sequenzen', 'Sequências'],
