@@ -22395,7 +22395,7 @@ ${foot}
   // el progreso real de un contacto). "Completado" confundía — reportado
   // 2026-09-10: "el email paso 2 día 1 sale como completado... nunca aprobé ni
   // envié nada". El estado real de aprobación vive en la pestaña "Aprobar".
-  const _STEP_STATUS_LBL = { done: 'Día pasado', current: 'En curso', future: 'Pendiente' };
+  const _STEP_STATUS_LBL = { done: 'Completado', current: 'En curso', atrasado: 'Atrasado', future: 'Pendiente' };
   // Progreso REAL por paso — pedido explícito 2026-09-11: "una barrita de
   // progreso por paso... que se pinte de acuerdo al avance". Cuenta cuántos de
   // los contactos enrolados YA pasaron este paso (paso > i, o terminaron la
@@ -22407,7 +22407,10 @@ ${foot}
     const total = contacts.length;
     return steps.map((st, i) => {
       const done = contacts.filter(c => c.estado === 'terminado' || (c.paso || 1) - 1 > i).length;
-      return { done, total, pct: Math.round(done / total * 100) };
+      // "here" = contactos que YA llegaron a este paso y están en él ahora mismo (ni antes ni después) —
+      // sirve para saber si el paso está realmente en curso, no solo si su fecha de calendario tocó hoy.
+      const here = contacts.filter(c => c.estado !== 'terminado' && (c.paso || 1) - 1 === i).length;
+      return { done, here, total, pct: Math.round(done / total * 100) };
     });
   }
   function _progColor(pct) {
@@ -22433,22 +22436,37 @@ ${foot}
         ${progHtml}
       </div>
       <div class="lm-step__status">
-        <span class="lm-step__status__lbl"${state === 'done' ? ' title="Solo indica que la fecha de este paso ya pasó — no que se haya aprobado o enviado. Revisa el progreso real en Contactos/Aprobar."' : ''}>${_STEP_STATUS_LBL[state]}</span>
+        <span class="lm-step__status__lbl"${state === 'atrasado' ? ' title="Ya tocaba su fecha, pero nadie llegó todavía — revisa si el paso anterior está trabado."' : ''}>${_STEP_STATUS_LBL[state]}</span>
         <span class="lm-step__status__at">${cal || '—'}</span>
       </div>
       <span class="lm-step__chev">›</span>
       <button class="lm-step__del" onclick="event.stopPropagation();LeadManagerModule.confirmDeleteStep(${st.id})" title="Eliminar"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>
     </div>`;
   }
-  // Clasifica cada paso en done/current/future comparando su fecha real con hoy
-  // — si la secuencia aún no tiene fecha de inicio, el paso 1 se marca "current".
+  // Clasifica cada paso en done/current/atrasado/future usando el AVANCE REAL de los
+  // contactos (quién ya pasó cada paso, quién está en él ahora), no solo el calendario.
+  // Pedido explícito 2026-09-23: un paso no puede verse "en curso" solo porque le tocó
+  // la fecha — si el paso anterior tiene 0 hechos, nadie pudo llegar a este todavía.
+  // Sin contactos enrolados (secuencia recién armada) se usa el calendario como vista
+  // previa de la plantilla, que es lo único que hay para mostrar.
   function _stepStates(steps) {
     const today0 = new Date(new Date().toDateString());
     const dates = steps.map(st => _stepDateObj(st));
-    const hasDates = dates.some(Boolean);
-    let currentIdx = hasDates ? dates.findIndex(d => d && d >= today0) : 0;
-    if (currentIdx === -1) currentIdx = steps.length;
-    return steps.map((st, i) => i < currentIdx ? 'done' : i === currentIdx ? 'current' : 'future');
+    const progress = steps.length ? _stepRealProgress(steps) : [];
+    if (!progress.some(Boolean)) {
+      const hasDates = dates.some(Boolean);
+      let currentIdx = hasDates ? dates.findIndex(d => d && d >= today0) : 0;
+      if (currentIdx === -1) currentIdx = steps.length;
+      return steps.map((st, i) => i < currentIdx ? 'done' : i === currentIdx ? 'current' : 'future');
+    }
+    return steps.map((st, i) => {
+      const p = progress[i];
+      if (p.total > 0 && p.done >= p.total) return 'done';
+      if (p.here > 0) return 'current';
+      const d = dates[i];
+      if (d && d < today0) return 'atrasado';
+      return 'future';
+    });
   }
 
   // ── Helpers de actividad (Fase 4) ──

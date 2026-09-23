@@ -5156,15 +5156,18 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 .lm-step__rail { position: relative; display: flex; align-self: stretch; align-items: center; justify-content: center; flex-shrink: 0; }
 .lm-step__rail::before { content: ''; position: absolute; left: 50%; top: -7px; bottom: -7px; width: 2px; background: var(--sq-line, #E2E8F0); transform: translateX(-50%); }
 .lm-step--done .lm-step__rail::before, .lm-step--current .lm-step__rail::before { background: var(--sq-blue, #2563EB); }
+.lm-step--atrasado .lm-step__rail::before { background: var(--sq-amber, #B45309); }
 .lm-step:first-child .lm-step__rail::before { top: 50%; }
 .lm-step:last-child .lm-step__rail::before { bottom: 50%; }
 /* Tracker de envíos: círculo azul con número (ya pasó / paso actual) / círculo gris (todavía no) */
 .lm-step__node { position: relative; z-index: 1; width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: .6rem; font-weight: 700; font-variant-numeric: tabular-nums; flex-shrink: 0; }
 .lm-step--done .lm-step__node, .lm-step--current .lm-step__node { background: var(--sq-blue, #2563EB); color: #fff; }
+.lm-step--atrasado .lm-step__node { background: var(--sq-amber, #B45309); color: #fff; }
 .lm-step--future .lm-step__node { background: #fff; border: 1.5px solid var(--sq-line, #E2E8F0); color: var(--sq-faint, #94A3B8); }
 .lm-step__ico { flex-shrink: 0; width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
 .lm-step__ico svg { width: 9px; height: 9px; }
 .lm-step--done .lm-step__ico, .lm-step--current .lm-step__ico { background: var(--sq-blue-soft, #EFF6FF); color: var(--sq-blue, #2563EB); }
+.lm-step--atrasado .lm-step__ico { background: #FEF3C7; color: var(--sq-amber, #B45309); }
 .lm-step--future .lm-step__ico { background: #F1F5F9; color: var(--sq-faint, #94A3B8); }
 .lm-step__body { flex: 1; min-width: 0; }
 .lm-step__top { display: flex; align-items: center; gap: 4px 6px; flex-wrap: wrap; min-width: 0; }
@@ -5178,14 +5181,16 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 .lm-step__prog__bar span { display: block; height: 100%; border-radius: 999px; transition: width .2s; }
 .lm-step__prog__n { font-size: .62rem; color: var(--sq-faint, #94A3B8); white-space: nowrap; flex-shrink: 0; }
 .lm-step--current .lm-step__t { color: var(--sq-blue, #2563EB); font-weight: 700; }
+.lm-step--atrasado .lm-step__t { color: var(--sq-amber, #B45309); font-weight: 700; }
 .lm-step--future .lm-step__t { color: var(--sq-faint, #94A3B8); font-weight: 500; }
 .lm-step__status { flex-shrink: 0; text-align: right; display: flex; flex-direction: column; gap: 0; }
 .lm-step__status__lbl { font-size: .68rem; font-weight: 600; white-space: nowrap; }
-/* Ámbar, no verde — "Día pasado" NO significa que se aprobó/envió/hizo algo
-   (ver comentario en _STEP_STATUS_LBL, app.js), verde ahí confundía como si
-   fuera un éxito real. Reportado 2026-09-11, con captura. */
-.lm-step--done .lm-step__status__lbl { color: var(--sq-amber, #B45309); }
+/* "done" ahora es avance REAL (100% de los contactos ya pasaron el paso), no solo que
+   pasó la fecha — por eso sí es verde. Lo "ámbar sin ser real" pasó a ser "atrasado".
+   Ver _stepStates en app.js (reescrito 2026-09-23). */
+.lm-step--done .lm-step__status__lbl { color: var(--sq-green, #16A34A); }
 .lm-step--current .lm-step__status__lbl { color: var(--sq-blue, #2563EB); }
+.lm-step--atrasado .lm-step__status__lbl { color: var(--sq-amber, #B45309); }
 .lm-step--future .lm-step__status__lbl { color: var(--sq-faint, #94A3B8); font-weight: 500; }
 .lm-step__status__at { font-size: .62rem; color: var(--sq-faint, #94A3B8); white-space: nowrap; }
 .lm-step__chev { flex-shrink: 0; color: #CBD5E1; font-size: .7rem; align-self: center; }
