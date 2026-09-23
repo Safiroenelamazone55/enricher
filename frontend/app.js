@@ -21394,6 +21394,7 @@ ${foot}
     const close = "document.querySelectorAll('.cp-mark-menu').forEach(m=>m.remove())";
     const item = (label, onclick) => `<button class="cp-mark-menu__b" onclick="${close};${onclick}">${label}</button>`;
     const html = `<div class="cp-mark-menu__list">
+        ${item('👤 Ver contacto', `LeadManagerModule.openContactPage(${contactId})`)}
         ${item('🔗 Conexión de LinkedIn aceptada', `LeadManagerModule.seqNoEmailAccepted(${enrId},${contactId})`)}
         ${item('⤼ Saltar este paso', `LeadManagerModule.seqNoEmailSkip(${enrId})`)}
       </div>
