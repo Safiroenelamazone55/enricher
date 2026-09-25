@@ -28018,7 +28018,7 @@ ${foot}
   // regresa AHÍ en vez de ir siempre a Contactos (bug reportado 2026-09-01: abrir un
   // contacto desde Leads y volver te mandaba a Contactos, no a Leads).
   let _cpFrom = 'contacts';
-  const _CP_FROM_LABEL = { contacts: 'Contactos', leads: 'Leads', deals: 'Deals', client: 'Cliente', companies: 'Empresas', 'contact-view': 'Contacto' };
+  const _CP_FROM_LABEL = { contacts: 'Contactos', leads: 'Leads', deals: 'Deals', client: 'Cliente', companies: 'Empresas', 'contact-view': 'Contacto', 'company-view': 'Empresa' };
   let _cpSkipped = [];        // contactos SALTADOS en la corrida → van al FINAL de la cola (no reaparecen enseguida)
   let _cpDone = 0;            // tareas COMPLETADAS en la corrida → para el progreso "X de Y" (Y = hechas + restantes)
   let _seqTab = 'empresas'; // qué sección se ve en el panel derecho (Pasos ya no es un "tab" — vive siempre en la tarjeta izquierda)
