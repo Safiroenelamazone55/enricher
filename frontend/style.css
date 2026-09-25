@@ -12552,6 +12552,12 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .cant-global-colsbtn { display: inline-flex; align-items: center; gap: 6px; font-family: inherit; font-size: .82rem; font-weight: 500; color: var(--text-secondary); background: var(--surface, #fff); border: 1px solid var(--border, #EAE7E2); padding: 6px 12px; cursor: pointer; }
 .cant-global-colsbtn:hover { background: var(--surface-hover); color: var(--text-primary); }
 .cant-global-colsmenu { position: absolute; top: 100%; right: 0; margin-top: 4px; z-index: 20; background: #fff; border: 1px solid var(--border, #EAE7E2); min-width: 200px; max-height: 320px; overflow-y: auto; box-shadow: 0 6px 16px rgba(0,0,0,.1); padding: 4px 0; }
+/* Siempre visible (no opacity:0-en-hover como .lm-mini-x) — pedido explícito
+   2026-09-25: "a simple vista no puedo darle clic y editar". La tabla de
+   Base Global es muy ancha y con scroll horizontal; depender del :hover de
+   la fila para revelar el lápiz lo hacía casi invisible en la práctica. */
+.cant-global-editpen { border: none; background: none; color: var(--brand, #007AFF); cursor: pointer; font-size: 13px; line-height: 1; padding: 2px 4px; opacity: .75; }
+.cant-global-editpen:hover { opacity: 1; background: var(--brand-ll, #F1EFEB); }
 /* Ancho del rail de criterios: pedido explícito 2026-09-25, con captura de
    Sales Navigator — "esto ocupa más pantalla y eso hace que no tenga que
    escrolear tanto". De 260px (una columna angosta, todo apilado) a 480px

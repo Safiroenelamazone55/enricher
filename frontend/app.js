@@ -7969,7 +7969,7 @@ const CanteraGlobalModule = (() => {
     if (key === 'paso2_estado') {
       const txt = r.paso2_estado ? esc(_PASO2_LBL[r.paso2_estado] || r.paso2_estado) : '—';
       if (r.company_id && r.batch_id) {
-        return `${txt} <button class="lm-mini-x" title="Editar validación profunda" onclick="event.stopPropagation();CanteraGlobalModule.editValidacion(${r.company_id},${r.batch_id})">✎</button>`;
+        return `${txt} <button class="cant-global-editpen" title="Editar validación profunda" onclick="event.stopPropagation();CanteraGlobalModule.editValidacion(${r.company_id},${r.batch_id})">✎</button>`;
       }
       return txt;
     }
@@ -8041,7 +8041,20 @@ const CanteraGlobalModule = (() => {
         </div>
       </div>`;
   }
-  function _repaint() { const el = document.getElementById('cantera-global-body'); if (el) el.innerHTML = _html(); }
+  // Se perdía el scroll horizontal de la tabla en cada repintado (ej. al
+  // cerrar la modal de Validación manual) — pedido explícito 2026-09-25:
+  // "cuando cierro, se mueve a la izquierda nuevamente". Mismo fix que ya
+  // existe en Cantera/Mesa: guarda y restaura scrollLeft/scrollTop del
+  // wrap de la tabla alrededor del repintado.
+  function _repaint() {
+    const el = document.getElementById('cantera-global-body'); if (!el) return;
+    const wrapBefore = el.querySelector('.lm-dt-wrap');
+    const scrollLeft = wrapBefore ? wrapBefore.scrollLeft : 0;
+    const scrollTop = wrapBefore ? wrapBefore.scrollTop : 0;
+    el.innerHTML = _html();
+    const wrapAfter = el.querySelector('.lm-dt-wrap');
+    if (wrapAfter) { wrapAfter.scrollLeft = scrollLeft; wrapAfter.scrollTop = scrollTop; }
+  }
   function toggleCollapse() { _collapsed = !_collapsed; _repaint(); }
   let _t = null;
   function setQ(v) { _q = v; _page = 0; clearTimeout(_t); _t = setTimeout(async () => { await _search(); _repaint(); }, 300); }
