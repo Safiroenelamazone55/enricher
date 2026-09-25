@@ -7623,8 +7623,15 @@ const CanteraMesaModule = (() => {
     return [`Empresa: ${co.nombre || '—'}`, `País: ${co.pais || '—'}`, `Ciudad: ${co.ciudad || '—'}`, `Industria: ${co.industria || '—'}`,
       `Tamaño: ${co.tamano || '—'}`, `Dominio: ${co.dominio || '—'}`, `Website: ${co.website || '—'}`, `LinkedIn: ${co.linkedin || '—'}`].join('\n');
   }
-  async function openManualValidation(companyId, batchId) {
+  let _pendingNext = null;
+  function _triggerNext() { const fn = _pendingNext; _pendingNext = null; document.getElementById('mesa-manual-modal')?.remove(); if (fn) fn(); }
+  // nextFn opcional (pedido explícito 2026-09-25, desde Base Global: "aquí
+  // también debería estar la opción siguiente") — cuando se da, aparece un
+  // botón "Siguiente →" que cierra esta modal y abre la del próximo registro,
+  // sin tener que volver a la tabla y buscar la fila de nuevo.
+  async function openManualValidation(companyId, batchId, nextFn) {
     const co = _knownRows[companyId]; if (!co) return;
+    _pendingNext = nextFn || null;
     let tiers = [];
     try { tiers = ((await (await apiFetch(`${API}/cantera/batches/${batchId}`)).json()).tiers || []).filter(t => t.clave); } catch { /* sin tiers */ }
     document.getElementById('mesa-manual-modal')?.remove();
@@ -7674,7 +7681,10 @@ const CanteraMesaModule = (() => {
       </div>
       <div class="fin-pi-box__ft">
         <span>${['validacion_manual', 'descartado_manual'].includes(co.paso2_estado) ? `<button class="lm-bulk-ghost" onclick="CanteraMesaModule.quitarValidacionManual(${companyId},${batchId})">Quitar validación manual</button>` : ''}</span>
-        <div class="fin-pi-ft-btns"><button class="btn btn--ghost btn--sm" onclick="document.getElementById('mesa-manual-modal').remove()">Cerrar</button></div>
+        <div class="fin-pi-ft-btns">
+          <button class="btn btn--ghost btn--sm" onclick="document.getElementById('mesa-manual-modal').remove()">Cerrar</button>
+          ${nextFn ? `<button class="btn btn--primary btn--sm" onclick="CanteraMesaModule._triggerNext()">Siguiente →</button>` : ''}
+        </div>
       </div></div>`;
     document.body.appendChild(m);
     try {
@@ -7801,7 +7811,7 @@ const CanteraMesaModule = (() => {
     toggleIndustriaFiltro, toggleArchivoFiltro,
     toggleCoSel, toggleCoSelAll, toggleExpand, setContactPrioridad, toggleCol, menu,
     runClean, runEnrich, runValidacion, _confirmRevalidar, openAudit,
-    openPromote, doPromote, openSendSeq, doSendSeq, openManualValidation, saveManualValidation, copyManualData, copyManualInstruccion, quitarValidacionManual, primeKnownRow };
+    openPromote, doPromote, openSendSeq, doSendSeq, openManualValidation, saveManualValidation, copyManualData, copyManualInstruccion, quitarValidacionManual, primeKnownRow, _triggerNext };
 })();
 
 // =================================================================
@@ -8113,11 +8123,22 @@ const CanteraGlobalModule = (() => {
   // (Base Global no comparte ese estado) y, al cerrarse la modal, refrescar
   // esta vista (Mesa refresca la suya propia, que acá ni siquiera existe en
   // el DOM — de ahí el MutationObserver en vez de enganchar su _refresh()).
+  // Siguiente editable después de companyId en el orden actual de _rows —
+  // pedido explícito 2026-09-25: "aquí también debería estar la opción
+  // siguiente" (mismo botón que ya existía en el modal de un borrador).
+  function _nextEditableAfter(companyId) {
+    const idx = _rows.findIndex(r => r.company_id === companyId);
+    if (idx < 0) return null;
+    for (let i = idx + 1; i < _rows.length; i++) { if (_rows[i].company_id && _rows[i].batch_id) return _rows[i]; }
+    return null;
+  }
   async function editValidacion(companyId, batchId) {
     try {
       const row = await (await apiFetch(`${API}/cantera/companies/${companyId}`)).json();
       CanteraMesaModule.primeKnownRow(row);
-      await CanteraMesaModule.openManualValidation(companyId, batchId);
+      const next = _nextEditableAfter(companyId);
+      const nextFn = next ? () => editValidacion(next.company_id, next.batch_id) : null;
+      await CanteraMesaModule.openManualValidation(companyId, batchId, nextFn);
       const modal = document.getElementById('mesa-manual-modal');
       if (modal) {
         const obs = new MutationObserver(() => {
