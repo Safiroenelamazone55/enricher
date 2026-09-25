@@ -12165,6 +12165,8 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 .cp-deriv-banner__txt b { font-weight: 800; }
 .cp-head { display: flex; align-items: flex-start; gap: 14px; padding-bottom: 16px; border-bottom: 1px solid var(--border); margin-bottom: 14px; flex-wrap: wrap; }
 .cp-ava { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; flex-shrink: 0; border: 1px solid var(--border); }
+.cp-ava--sm { width: 28px; height: 28px; }
+.cp-ava--co { display: flex; align-items: center; justify-content: center; border-radius: 6px; background: var(--surface-hover); color: var(--text-secondary); }
 .cp-id { flex: 1; min-width: 200px; }
 .cp-name { margin: 0; font-size: 1.32rem; font-weight: 650; letter-spacing: -.015em; color: var(--text-primary); }
 .cp-sub { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; font-size: .86rem; color: var(--text-secondary); margin-top: 2px; }

@@ -19181,6 +19181,7 @@ const LeadManagerModule = (() => {
     else if (_section === 'companies') { body.innerHTML = _vCompanies(); _renderCompanies(); }
     else if (_section === 'contacts')  { body.innerHTML = _vContacts();  _renderContacts(); }
     else if (_section === 'contact-view') { body.innerHTML = _vContactPage(_contactView); _cpLoadMap(_contacts.find(x => x.id === _contactView)); }
+    else if (_section === 'company-view') { body.innerHTML = _vCompanyPage(_companyView); }
     else if (_section === 'templates') body.innerHTML = _vTemplates();
     else if (_section === 'reports') { body.innerHTML = _vReports(); _repInitCharts(); }
     else if (_section === 'settings') { body.innerHTML = _vSettings(); _countUp(); }
@@ -28005,6 +28006,8 @@ ${foot}
   let _coSelMode = false;
   let _contactView = null;
   let _cpTab = 'resumen';
+  let _companyView = null;
+  let _coFrom = 'companies';
   let _addIds = [];
   let _bulkAddKind = 'sequence'; // 'sequence'|'campaign' — con qué se creó el picker que abrió "Crear nueva…"
   function _bulkAddAfterCreate(saved) { bulkAddDo(_bulkAddKind, saved.id); }
@@ -28015,7 +28018,7 @@ ${foot}
   // regresa AHÍ en vez de ir siempre a Contactos (bug reportado 2026-09-01: abrir un
   // contacto desde Leads y volver te mandaba a Contactos, no a Leads).
   let _cpFrom = 'contacts';
-  const _CP_FROM_LABEL = { contacts: 'Contactos', leads: 'Leads', deals: 'Deals', client: 'Cliente' };
+  const _CP_FROM_LABEL = { contacts: 'Contactos', leads: 'Leads', deals: 'Deals', client: 'Cliente', companies: 'Empresas', 'contact-view': 'Contacto' };
   let _cpSkipped = [];        // contactos SALTADOS en la corrida → van al FINAL de la cola (no reaparecen enseguida)
   let _cpDone = 0;            // tareas COMPLETADAS en la corrida → para el progreso "X de Y" (Y = hechas + restantes)
   let _seqTab = 'empresas'; // qué sección se ve en el panel derecho (Pasos ya no es un "tab" — vive siempre en la tarjeta izquierda)
@@ -28919,7 +28922,7 @@ ${foot}
           </div><div class="cp-map" id="cp-map"></div></div>
           <div class="cp-card"><div class="cp-card__t">Empresa</div><div class="cp-fields">
             <label class="cp-f cp-f--full"><span class="cp-f__l">Empresa</span><select class="cp-f__i" data-f="company_id" onchange="LeadManagerModule.cpSave(${id})">${coOpts}</select></label>
-            ${c.company_id ? `<div class="cp-f cp-f--full"><button class="cp-golink" onclick="LeadManagerModule.openCompany(${c.company_id})">Ver ficha de la empresa ›</button></div>` : ''}
+            ${c.company_id ? `<div class="cp-f cp-f--full"><button class="cp-golink" onclick="LeadManagerModule.openCompanyPage(${c.company_id})">Ver ficha de la empresa ›</button></div>` : ''}
             ${F('fuente', 'Fuente', c.fuente)}
           </div></div>
           ${_seqEnrollCard(c, id)}
@@ -29320,22 +29323,54 @@ ${foot}
     const pageList = list.slice(_coPage * ps, (_coPage + 1) * ps);
     el.innerHTML = `<div class="clients-table-wrap" style="max-height:none"><table class="clients-table lm-dt${_coSelMode ? ' sel-on' : ''}"><thead><tr>
         <th class="lm-ck-col"><input type="checkbox" class="lm-ck" ${allSel ? 'checked' : ''} onclick="LeadManagerModule.toggleCoAll(this.checked)"></th>
-        <th>Empresa</th><th>Industria</th><th>Nº empleados</th><th>País</th><th>Contactos</th><th></th>
+        <th>Empresa</th><th>Secuencia</th><th>Estado</th><th>Nº contactos</th><th>Industria</th><th>País</th><th></th>
       </tr></thead><tbody>${pageList.map(_coRow).join('')}</tbody></table></div>${_pagerHtml(list.length, _coPage, 'coGoPage')}`;
     _renderCoBulkBar();
     _syncCoSelAll();
+  }
+  // Estado + secuencias reales de una empresa: se derivan de sus contactos (c.sequences, ya
+  // embebido por /api/lm/contacts) — nada de esto se guarda aparte, es siempre en vivo.
+  function _coSeqAgg(companyId) {
+    const cts = (_contacts || []).filter(c => c.company_id === companyId);
+    const bySeq = new Map();
+    cts.forEach(c => (Array.isArray(c.sequences) ? c.sequences : []).forEach(sq => {
+      if (!bySeq.has(sq.id)) bySeq.set(sq.id, { id: sq.id, activos: 0, pausados: 0, total: 0 });
+      const g = bySeq.get(sq.id);
+      g.total++;
+      if (sq.estado === 'activo') g.activos++; else if (sq.estado === 'pausado') g.pausados++;
+    }));
+    return [...bySeq.values()];
+  }
+  function _coEstadoReal(companyId) {
+    const agg = _coSeqAgg(companyId);
+    if (!agg.length) return ['Sin contactar', '#F1EFEB', '#6C6862'];
+    if (agg.some(g => g.activos > 0)) return ['Contactando', '#E0F2FE', '#0369A1'];
+    if (agg.every(g => g.pausados > 0 && g.activos === 0)) return ['En pausa', '#FEF3C7', '#B45309'];
+    return ['Contactado', '#F1EFEB', '#15803D'];
+  }
+  function _coSeqNames(companyId) {
+    const agg = _coSeqAgg(companyId);
+    return agg.map(g => (_sequences || []).find(s => s.id === g.id)).filter(Boolean);
+  }
+  function _coSeqChips(companyId) {
+    const seqs = _coSeqNames(companyId);
+    if (!seqs.length) return '<span class="ldh-none">—</span>';
+    const shown = seqs.slice(0, 2).map(s => `<span class="lm-emp-chip" title="${esc(s.nombre)}">${esc(s.nombre)}</span>`).join(' ');
+    return shown + (seqs.length > 2 ? ` <span class="lm-emp-chip">+${seqs.length - 2}</span>` : '');
   }
   function _coRow(c) {
     const dom = c.dominio || '';
     const name = c.nombre || dom || '—';
     const li = _liSalesNavUrl(c.linkedin_sales_nav, c.linkedin);
-    return `<tr class="clients-table__row${_coSel.has(c.id) ? ' sel' : ''}" onclick="LeadManagerModule.openCompany(${c.id})" style="cursor:pointer">
+    const est = _coEstadoReal(c.id);
+    return `<tr class="clients-table__row${_coSel.has(c.id) ? ' sel' : ''}" onclick="LeadManagerModule.openCompanyPage(${c.id})" style="cursor:pointer">
       <td class="lm-ck-col" onclick="event.stopPropagation()"><input type="checkbox" class="lm-ck" ${_coSel.has(c.id) ? 'checked' : ''} onclick="LeadManagerModule.toggleCo(event,${c.id})"></td>
       <td><div class="client-cell-name"><div class="lm-co-logo"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4M10 10h4M10 14h4M10 18h4"/></svg></div><div><div class="client-nombre">${esc(name)}${li ? `<a class="lm-co-li" href="${esc(li)}" target="_blank" rel="noopener" title="Abrir LinkedIn" onclick="event.stopPropagation()">in</a>` : ''}</div>${dom ? `<div class="client-empresa">${esc(dom)}</div>` : ''}</div></div></td>
-      <td class="client-meta">${c.industria ? esc(c.industria) : '—'}</td>
-      <td class="client-meta">${c.tamano ? esc(c.tamano) : '—'}</td>
-      <td class="client-meta">${c.pais ? esc(c.pais) : '—'}</td>
+      <td class="client-meta">${_coSeqChips(c.id)}</td>
+      <td class="client-meta"><span class="client-badge" style="background:${est[1]};color:${est[2]}">${est[0]}</span></td>
       <td class="client-meta"><span class="lm-cnt-chip">${c.contact_count || 0}</span></td>
+      <td class="client-meta">${c.industria ? esc(c.industria) : '—'}</td>
+      <td class="client-meta">${c.pais ? esc(c.pais) : '—'}</td>
       <td class="lm-dt-act"><button class="lm-mini-x" title="Eliminar" onclick="event.stopPropagation();LeadManagerModule.deleteCompany(${c.id})">✕</button></td>
     </tr>`;
   }
@@ -29926,8 +29961,94 @@ ${foot}
   }
   async function deleteCompany(id, fromDrawer) {
     if (!confirm('¿Eliminar esta empresa? Sus contactos quedarán sin empresa asignada.')) return;
-    try { const res = await _apiDelete(`${API}/lm/companies/${id}`); if (!res.ok) throw new Error(res.status === 429 ? 'Demasiadas peticiones, reintenta en un momento' : 'Error'); if (fromDrawer) closeCompany(); await load(); }
+    try { const res = await _apiDelete(`${API}/lm/companies/${id}`); if (!res.ok) throw new Error(res.status === 429 ? 'Demasiadas peticiones, reintenta en un momento' : 'Error'); if (fromDrawer) { closeCompany(); go('companies'); } await load(); }
     catch (e) { alert('Error: ' + e.message); }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // Ficha de empresa — página completa (antes solo existía la modal de
+  // edición). Pedido en vivo 2026-09-25: misma idea que la ficha de
+  // contacto — no un formulario suelto, sino una vista reusable con
+  // secuencias + contactos conectados de verdad, en vez de reabrir la
+  // lista de Contactos y filtrar a mano.
+  // ═══════════════════════════════════════════════════════════════
+  function openCompanyPage(id) {
+    if (_section !== 'company-view') _coFrom = _CP_FROM_LABEL[_section] ? _section : 'companies';
+    _companyView = id; _section = 'company-view'; _renderBody(); const b = $('lm2-body'); if (b) b.scrollTop = 0;
+  }
+  function _coInfoRow(label, val, href) {
+    if (!val) return '';
+    return `<div class="cp-f"><span class="cp-f__l">${label}</span><div class="cp-f__i" style="border:none;padding:0;background:transparent">${href ? `<a href="${esc(val)}" target="_blank" rel="noopener">${esc(val)}</a>` : esc(val)}</div></div>`;
+  }
+  function _vCompanyPage(id) {
+    const c = (_companies || []).find(x => x.id === id);
+    if (!c) return `<div class="lm-sec-head"><div><button class="lm-back" onclick="LeadManagerModule.go('${_coFrom}')">‹ ${_CP_FROM_LABEL[_coFrom] || 'Empresas'}</button><h2 class="lm-sec-title">Empresa no encontrada</h2></div></div>`;
+    const name = c.nombre || c.dominio || 'Empresa';
+    const loc = [c.ciudad, c.pais].filter(Boolean).join(', ');
+    const est = _coEstadoReal(id);
+    const cts = (_contacts || []).filter(x => x.company_id === id)
+      .sort((a, b) => (a.estado === 'nuevo' ? 0 : 1) - (b.estado === 'nuevo' ? 0 : 1));
+    const seqs = _coSeqAgg(id).map(g => {
+      const s = (_sequences || []).find(x => x.id === g.id);
+      if (!s) return '';
+      const lbl = g.activos > 0 ? ['Contactando', '#E0F2FE', '#0369A1'] : g.pausados > 0 ? ['En pausa', '#FEF3C7', '#B45309'] : ['Contactado', '#F1EFEB', '#15803D'];
+      return `<div class="cp-f cp-f--full" style="display:flex;align-items:center;gap:10px;justify-content:space-between">
+        <button class="cp-golink" onclick="LeadManagerModule.openSequence(${s.id})">${esc(s.nombre)} ›</button>
+        <span style="display:flex;align-items:center;gap:8px"><span class="client-badge" style="background:${lbl[1]};color:${lbl[2]}">${lbl[0]}</span><span class="ldh-dim">${g.total} contacto${g.total !== 1 ? 's' : ''}</span></span>
+      </div>`;
+    }).join('');
+    const contactRows = cts.map(k => {
+      const kname = [k.nombre, k.apellido].filter(Boolean).join(' ') || (k.email || 'Sin nombre');
+      const kStyle = STAGE_STYLES[k.estado] || 'background:#F1EFEB;color:#475569';
+      return `<tr class="clients-table__row" onclick="LeadManagerModule.openContactPage(${k.id})" style="cursor:pointer">
+        <td><div class="client-cell-name"><img class="cp-ava cp-ava--sm" src="${_av(kname)}" alt=""><div><div class="client-nombre">${esc(kname)}</div>${k.cargo ? `<div class="client-empresa">${esc(k.cargo)}</div>` : ''}</div></div></td>
+        <td class="client-meta"><span class="client-badge" style="${kStyle}">${esc(k.estado || 'nuevo')}</span></td>
+        <td class="client-meta">${_dispoBadge(k.disposition) || '—'}</td>
+        <td class="client-meta">${k.email ? esc(k.email) : '—'}</td>
+      </tr>`;
+    }).join('');
+    return `<div class="cp" id="lm-co-page">
+      <button class="lm-back" onclick="LeadManagerModule.go('${_coFrom}')">‹ ${_CP_FROM_LABEL[_coFrom] || 'Empresas'}</button>
+      <div class="cp-head">
+        <div class="cp-ava cp-ava--co"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4M10 10h4M10 14h4M10 18h4"/></svg></div>
+        <div class="cp-id">
+          <h2 class="cp-name">${esc(name)}</h2>
+          <div class="cp-sub">${c.dominio ? esc(c.dominio) : ''}${c.industria ? `${c.dominio ? ' · ' : ''}${esc(c.industria)}` : ''}</div>
+          <div class="cp-badges"><span class="client-badge" style="background:${est[1]};color:${est[2]}">${est[0]}</span><span class="lm-cnt-chip">${cts.length} contacto${cts.length !== 1 ? 's' : ''}</span>${loc ? `<span class="cp-loc">${esc(loc)}</span>` : ''}</div>
+        </div>
+        <div class="cp-actions">
+          <button class="cp-act" onclick="LeadManagerModule.openCompany(${id})">✎ Editar</button>
+          <button class="cp-act" onclick="LeadManagerModule.openContact(null,${id})">＋ Prospecto</button>
+          ${c.linkedin ? `<a class="cp-act cp-act--in" href="${esc(c.linkedin)}" target="_blank" rel="noopener">LinkedIn ›</a>` : ''}
+          ${c.website ? `<a class="cp-act" href="${esc(c.website)}" target="_blank" rel="noopener">Sitio web ›</a>` : ''}
+          <button class="cp-act cp-act--danger" onclick="LeadManagerModule.deleteCompany(${id},1)">Eliminar</button>
+        </div>
+      </div>
+      <div class="cp-grid">
+        <div class="cp-left">
+          <div class="cp-card"><div class="cp-card__t">Empresa</div><div class="cp-fields">
+            ${_coInfoRow('Industria', c.industria)}${_coInfoRow('Nº empleados', c.tamano)}${_coInfoRow('Ingresos anuales', c.ingresos)}
+            ${_coInfoRow('Ciudad', c.ciudad)}${_coInfoRow('Región', c.region)}${_coInfoRow('País', c.pais)}
+            ${_coInfoRow('Teléfono', c.telefono)}${_coInfoRow('Año fundación', c.fundada)}${_coInfoRow('Funding', c.funding)}
+            ${_coInfoRow('Target Tier / Focus', c.target_tier)}${_coInfoRow('Segmento / ICP', c.segmento)}
+          </div></div>
+          ${(c.descripcion || c.analisis || c.notas) ? `<div class="cp-card"><div class="cp-card__t">Notas</div><div class="cp-fields">
+            ${c.descripcion ? `<div class="cp-f cp-f--full"><span class="cp-f__l">Descripción</span><div>${esc(c.descripcion)}</div></div>` : ''}
+            ${c.analisis ? `<div class="cp-f cp-f--full"><span class="cp-f__l">Análisis · por qué calificó</span><div>${esc(c.analisis)}</div></div>` : ''}
+            ${c.notas ? `<div class="cp-f cp-f--full"><span class="cp-f__l">Notas</span><div>${esc(c.notas)}</div></div>` : ''}
+          </div></div>` : ''}
+        </div>
+        <div class="cp-right">
+          <div class="cp-card"><div class="cp-card__t">Secuencias</div><div class="cp-fields">
+            ${seqs || '<div class="ldh-none" style="padding:4px 2px">Ningún contacto de esta empresa está en una secuencia todavía.</div>'}
+          </div></div>
+          <div class="cp-card"><div class="cp-card__t">Contactos (${cts.length})</div>
+            ${cts.length ? `<div class="clients-table-wrap" style="max-height:none"><table class="clients-table lm-dt"><tbody>${contactRows}</tbody></table></div>`
+              : '<div class="ldh-none" style="padding:4px 2px 10px">Sin contactos aún.</div>'}
+          </div>
+        </div>
+      </div>
+    </div>`;
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -30898,7 +31019,7 @@ ${foot}
     cbxOpen, cbxFilter, cbxPick, cbxBlur,
     openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, ctMoreMenu, lmQuickToggle, bulkDeleteContacts, bulkAddOpen, bulkAddDo, _bulkAddAfterCreate, bulkRemoveSeqOpen, bulkRemoveSeqDo, openContactPage, cpTab, cpSave, cpDelete, cpActOpen, cpActSave, cpActToggle, cpActDel,
     cpResumeSeq, cpFocusField, cpOpenRegisterReply, cpSaveRegisterReply,
-    openCompany, closeCompany, saveCompany, deleteCompany, filterCompanies, toggleCo, toggleCoAll, clearCoSel, toggleCoSelMode, coMoreMenu, bulkDeleteCompanies, coEnrolOpen, coEnrolFilter, coEnrolPick,
+    openCompany, closeCompany, saveCompany, deleteCompany, filterCompanies, toggleCo, toggleCoAll, clearCoSel, toggleCoSelMode, coMoreMenu, bulkDeleteCompanies, coEnrolOpen, coEnrolFilter, coEnrolPick, openCompanyPage,
     coQueueAddContact, coQueueDiscard, coQueueTogglePrimary, coQueueContinue,
     seqCoTaskOpen, seqCoDoClose, seqOpenCompanyLinkedIn, seqCoRowMenu, seqCoExpandToggle,
     openDrawer, closeDrawer, save, confirmDelete, convertToClient,
