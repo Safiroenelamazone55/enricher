@@ -7476,13 +7476,13 @@ app.get('/api/cantera/global', requireAuth, async (req, res) => {
              (SELECT nombre FROM outbound_clients oc WHERE oc.id = lco.outbound_client_id) AS referencia,
              lco.updated_at, '' AS estado, 'empresa' AS tipo,
              (SELECT string_agg(DISTINCT s.nombre, ', ') FROM lm_contacts k JOIN lm_contact_sequences csq ON csq.contact_id = k.id JOIN sequences s ON s.id = csq.sequence_id WHERE k.company_id = lco.id) AS secuencias,
-             '' AS seniority, '' AS departamento, lco.ciudad AS ciudad, lco.target_tier AS tier
+             '' AS seniority, '' AS departamento, lco.ciudad AS ciudad, lco.target_tier AS tier, '' AS paso1_estado, '' AS paso2_estado
         FROM lm_companies lco
        WHERE lco.user_id=$1 AND ($2 = '%%' OR lco.nombre ILIKE $2 OR lco.dominio ILIKE $2)
       UNION ALL
       SELECT '', '', '', '', cco.nombre AS empresa, cco.dominio, cco.pais, cco.industria, cco.tamano,
              'borrador_' || cb.estado AS origen, cb.nombre AS referencia, cco.created_at AS updated_at,
-             '' AS estado, 'empresa' AS tipo, '' AS secuencias, '' AS seniority, '' AS departamento, '' AS ciudad, cco.tier_clave AS tier
+             '' AS estado, 'empresa' AS tipo, '' AS secuencias, '' AS seniority, '' AS departamento, '' AS ciudad, cco.tier_clave AS tier, cco.paso1_estado AS paso1_estado, cco.paso2_estado AS paso2_estado
         FROM cantera_companies cco JOIN cantera_batches cb ON cb.id = cco.batch_id
        WHERE cco.user_id=$1 AND ($2 = '%%' OR cco.nombre ILIKE $2 OR cco.dominio ILIKE $2)
        ORDER BY updated_at DESC LIMIT 20000
@@ -7493,14 +7493,14 @@ app.get('/api/cantera/global', requireAuth, async (req, res) => {
              (SELECT nombre FROM outbound_clients oc WHERE oc.id = co.outbound_client_id) AS referencia,
              lc.updated_at, lc.estado AS estado, 'contacto' AS tipo,
              (SELECT string_agg(DISTINCT s.nombre, ', ') FROM lm_contact_sequences csq JOIN sequences s ON s.id = csq.sequence_id WHERE csq.contact_id = lc.id) AS secuencias,
-             lc.seniority AS seniority, lc.departamento AS departamento, lc.ciudad AS ciudad, co.target_tier AS tier
+             lc.seniority AS seniority, lc.departamento AS departamento, lc.ciudad AS ciudad, co.target_tier AS tier, '' AS paso1_estado, '' AS paso2_estado
         FROM lm_contacts lc LEFT JOIN lm_companies co ON co.id = lc.company_id
        WHERE lc.user_id=$1 AND ($2 = '%%' OR lc.nombre ILIKE $2 OR lc.apellido ILIKE $2 OR lc.email ILIKE $2 OR lc.cargo ILIKE $2 OR COALESCE(co.nombre, lc.empresa_nombre) ILIKE $2)
       UNION ALL
       SELECT cc.nombre, cc.apellido, cc.cargo, cc.email,
              cco.nombre AS empresa, cco.dominio, cco.pais, cco.industria, cco.tamano,
              'borrador_' || cb.estado AS origen, cb.nombre AS referencia, cc.created_at AS updated_at,
-             '' AS estado, 'contacto' AS tipo, '' AS secuencias, '' AS seniority, '' AS departamento, '' AS ciudad, cco.tier_clave AS tier
+             '' AS estado, 'contacto' AS tipo, '' AS secuencias, '' AS seniority, '' AS departamento, '' AS ciudad, cco.tier_clave AS tier, cco.paso1_estado AS paso1_estado, cco.paso2_estado AS paso2_estado
         FROM cantera_contacts cc
         JOIN cantera_companies cco ON cco.id = cc.company_id
         JOIN cantera_batches cb ON cb.id = cc.batch_id
@@ -7508,14 +7508,14 @@ app.get('/api/cantera/global', requireAuth, async (req, res) => {
       UNION ALL
       SELECT '', '', '', '', lco.nombre AS empresa, lco.dominio, lco.pais, lco.industria, lco.tamano, 'crm' AS origen,
              (SELECT nombre FROM outbound_clients oc WHERE oc.id = lco.outbound_client_id) AS referencia, lco.updated_at,
-             '' AS estado, 'empresa' AS tipo, '' AS secuencias, '' AS seniority, '' AS departamento, lco.ciudad AS ciudad, lco.target_tier AS tier
+             '' AS estado, 'empresa' AS tipo, '' AS secuencias, '' AS seniority, '' AS departamento, lco.ciudad AS ciudad, lco.target_tier AS tier, '' AS paso1_estado, '' AS paso2_estado
         FROM lm_companies lco
        WHERE lco.user_id=$1 AND NOT EXISTS (SELECT 1 FROM lm_contacts x WHERE x.company_id = lco.id)
          AND ($2 = '%%' OR lco.nombre ILIKE $2 OR lco.dominio ILIKE $2)
       UNION ALL
       SELECT '', '', '', '', cco2.nombre AS empresa, cco2.dominio, cco2.pais, cco2.industria, cco2.tamano,
              'borrador_' || cb2.estado AS origen, cb2.nombre AS referencia, cco2.created_at AS updated_at,
-             '' AS estado, 'empresa' AS tipo, '' AS secuencias, '' AS seniority, '' AS departamento, '' AS ciudad, cco2.tier_clave AS tier
+             '' AS estado, 'empresa' AS tipo, '' AS secuencias, '' AS seniority, '' AS departamento, '' AS ciudad, cco2.tier_clave AS tier, cco2.paso1_estado AS paso1_estado, cco2.paso2_estado AS paso2_estado
         FROM cantera_companies cco2 JOIN cantera_batches cb2 ON cb2.id = cco2.batch_id
        WHERE cco2.user_id=$1 AND NOT EXISTS (SELECT 1 FROM cantera_contacts y WHERE y.company_id = cco2.id)
          AND ($2 = '%%' OR cco2.nombre ILIKE $2 OR cco2.dominio ILIKE $2)

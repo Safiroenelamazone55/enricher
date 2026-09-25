@@ -5619,12 +5619,12 @@ const CanteraModule = (() => {
     { key: 'ubicacion', label: 'Ubicación', def: false },
     { key: 'website', label: 'Website', def: false },
     { key: 'linkedin', label: 'LinkedIn', def: false },
-    { key: 'paso1_estado', label: 'Paso 1', def: true },
+    { key: 'paso1_estado', label: 'Filtro básico', def: true },
     { key: 'paso1_motivo', label: 'Motivo paso 1', def: true },
     { key: 'tier_clave', label: 'Tier', def: true },
     { key: 'confianza', label: 'Confianza', def: true },
     { key: 'prioridad', label: 'Prioridad (empresa)', def: true },
-    { key: 'paso2_estado', label: 'Paso 2', def: true },
+    { key: 'paso2_estado', label: 'Calificación IA', def: true },
     { key: 'motivo_descarte', label: 'Nota', def: true },
     { key: 'contactos', label: 'Contactos', def: true },
     { key: 'auditoria', label: 'Auditoría', def: true },
@@ -5881,7 +5881,7 @@ const CanteraModule = (() => {
           if (!_coSel.size && !hasFiltros) return '';
           const paso1Lbl = { aprobado: 'aprobado', descartado: 'descartado', vacio: 'vacío' };
           return `<div class="cant-results-bar">
-          <span class="cant-count">${_coSel.size ? `${_coSel.size} seleccionada(s)` : ''}${_paso1Filtro ? ` · Paso 1: ${paso1Lbl[_paso1Filtro]}` : ''}${_tierFiltro.size ? ` · Tier: ${[..._tierFiltro].join(', ')}` : ''}${_prioFiltro.size ? ` · Prioridad: ${[..._prioFiltro].join(', ')}` : ''}${_minContactos ? ` · ${_minContactos}+ contactos` : ''}${_sinPrioridad ? ' · sin priorizar' : ''}${_auditoriaFiltro ? ` · auditoría: ${_auditoriaFiltro === 'sin_auditar' ? 'sin auditar' : _auditoriaFiltro === 'de_acuerdo' ? 'confirmadas' : 'en desacuerdo'}` : ''}${_paisFiltro.size ? ` · País: ${[..._paisFiltro].join(', ')}` : ''}${_paisExclFiltro.size ? ` · País ≠ ${[..._paisExclFiltro].join(', ')}` : ''}${_industriaFiltro.size ? ` · Industria: ${[..._industriaFiltro].join(', ')}` : ''}${_industriaExclFiltro.size ? ` · Industria ≠ ${[..._industriaExclFiltro].join(', ')}` : ''}${_tamanoFiltro.size ? ` · Tamaño: ${[..._tamanoFiltro].join(', ')}` : ''}${_tamanoExclFiltro.size ? ` · Tamaño ≠ ${[..._tamanoExclFiltro].join(', ')}` : ''}${_tierExclFiltro.size ? ` · Tier ≠ ${[..._tierExclFiltro].join(', ')}` : ''}${_domFaltante ? ' · sin dominio' : ''}${_dominioQ ? ` · dominio contiene "${esc(_dominioQ)}"` : ''}${_paso2DescFiltro.size ? ` · Paso 2 descartado: ${[..._paso2DescFiltro].map(v => v === 'descartado' ? 'IA' : 'manual').join(', ')}` : ''}</span>
+          <span class="cant-count">${_coSel.size ? `${_coSel.size} seleccionada(s)` : ''}${_paso1Filtro ? ` · Filtro básico: ${paso1Lbl[_paso1Filtro]}` : ''}${_tierFiltro.size ? ` · Tier: ${[..._tierFiltro].join(', ')}` : ''}${_prioFiltro.size ? ` · Prioridad: ${[..._prioFiltro].join(', ')}` : ''}${_minContactos ? ` · ${_minContactos}+ contactos` : ''}${_sinPrioridad ? ' · sin priorizar' : ''}${_auditoriaFiltro ? ` · auditoría: ${_auditoriaFiltro === 'sin_auditar' ? 'sin auditar' : _auditoriaFiltro === 'de_acuerdo' ? 'confirmadas' : 'en desacuerdo'}` : ''}${_paisFiltro.size ? ` · País: ${[..._paisFiltro].join(', ')}` : ''}${_paisExclFiltro.size ? ` · País ≠ ${[..._paisExclFiltro].join(', ')}` : ''}${_industriaFiltro.size ? ` · Industria: ${[..._industriaFiltro].join(', ')}` : ''}${_industriaExclFiltro.size ? ` · Industria ≠ ${[..._industriaExclFiltro].join(', ')}` : ''}${_tamanoFiltro.size ? ` · Tamaño: ${[..._tamanoFiltro].join(', ')}` : ''}${_tamanoExclFiltro.size ? ` · Tamaño ≠ ${[..._tamanoExclFiltro].join(', ')}` : ''}${_tierExclFiltro.size ? ` · Tier ≠ ${[..._tierExclFiltro].join(', ')}` : ''}${_domFaltante ? ' · sin dominio' : ''}${_dominioQ ? ` · dominio contiene "${esc(_dominioQ)}"` : ''}${_paso2DescFiltro.size ? ` · Calificación IA descartada: ${[..._paso2DescFiltro].map(v => v === 'descartado' ? 'IA' : 'manual').join(', ')}` : ''}</span>
           <span class="cant-results-total">${hasFiltros ? `${filteredCompanies.length} resultado${filteredCompanies.length === 1 ? '' : 's'}` : ''}</span>
           ${hasFiltros ? `<button class="btn btn--ghost btn--sm" onclick="CanteraModule.resetFiltros()">Limpiar filtros</button>` : ''}
         </div>`;
@@ -6095,7 +6095,7 @@ const CanteraModule = (() => {
     // toggles sueltos en la raíz — ahora son categorías reales dentro de
     // "Filtrar", con sus opciones (Paso 1: Aprobado/Descartado/Vacío; Dominio:
     // buscar texto o marcar "Sin dominio"). Pedido explícito 2026-09-15.
-    const paso1Panel = [['aprobado', 'Aprobado'], ['descartado', 'Descartado'], ['vacio', 'Vacío (Paso 1 no corrido todavía)']]
+    const paso1Panel = [['aprobado', 'Aprobado'], ['descartado', 'Descartado'], ['vacio', 'Vacío (Filtro básico no corrido todavía)']]
       .map(([v, label]) => `<label class="cant-colchk"><input type="radio" name="cant-paso1" ${_paso1Filtro === v ? 'checked' : ''} onchange="CanteraModule.setPaso1Filtro('${v}')"> ${label}</label>`).join('');
     const dominioPanel = `<div style="padding:4px 10px 8px">
         <input type="text" class="form-input" style="width:100%" placeholder="El dominio contiene…" value="${esc(_dominioQ)}" oninput="CanteraModule.setDominioQ(this.value)" onclick="event.stopPropagation()">
@@ -6118,7 +6118,7 @@ const CanteraModule = (() => {
         ${item('Auditar muestra (IA)', 'CanteraModule.openAudit()')}
       </div>
       <div class="cp-mark-menu__sep"></div>
-      <div class="cp-mark-menu__list">${sub('Filtrar', `<div class="cp-mark-menu__list">${sub(`Paso 1${_paso1Filtro ? ' · 1' : ''}`, paso1Panel)}${sub(`Dominio${(_domFaltante || _dominioQ) ? ' · 1' : ''}`, dominioPanel)}${sub('Tier', tierPanel)}${sub('Prioridad', prioPanel)}${sub('Nº de contactos', numContactosPanel)}${sub('Auditoría', auditoriaPanel)}${sub('Paso 2 descartado', paso2DescPanel)}${sub('País', paisPanel, true)}${sub('Industria', industriaPanel, true)}${sub('Tamaño', tamanoPanel, true)}${sub(`Guardados${filtroGuardado ? ' · 1' : ''}`, guardadosPanel)}</div>`)}</div>
+      <div class="cp-mark-menu__list">${sub('Filtrar', `<div class="cp-mark-menu__list">${sub(`Filtro básico${_paso1Filtro ? ' · 1' : ''}`, paso1Panel)}${sub(`Dominio${(_domFaltante || _dominioQ) ? ' · 1' : ''}`, dominioPanel)}${sub('Tier', tierPanel)}${sub('Prioridad', prioPanel)}${sub('Nº de contactos', numContactosPanel)}${sub('Auditoría', auditoriaPanel)}${sub('Calificación IA descartada', paso2DescPanel)}${sub('País', paisPanel, true)}${sub('Industria', industriaPanel, true)}${sub('Tamaño', tamanoPanel, true)}${sub(`Guardados${filtroGuardado ? ' · 1' : ''}`, guardadosPanel)}</div>`)}</div>
       <div class="cp-mark-menu__sep"></div>
       <div class="cp-mark-menu__list">${sub('Elegir columnas visibles', colsPanel, true)}</div>
       ${calificadas || _coSel.size ? `<div class="cp-mark-menu__sep"></div><div class="cp-mark-menu__list">
@@ -6516,7 +6516,7 @@ const CanteraModule = (() => {
   function _filtroResumenTexto(f) {
     const paso1Lbl = { aprobado: 'aprobado', descartado: 'descartado', vacio: 'vacío' };
     const partes = [
-      f.paso1Filtro ? `Paso 1: ${paso1Lbl[f.paso1Filtro]}` : '',
+      f.paso1Filtro ? `Filtro básico: ${paso1Lbl[f.paso1Filtro]}` : '',
       (f.tierFiltro || []).length ? `Tier: ${f.tierFiltro.join(', ')}` : '',
       (f.prioFiltro || []).length ? `Prioridad: ${f.prioFiltro.join(', ')}` : '',
       f.minContactos ? `${f.minContactos}+ contactos` : '',
@@ -6527,7 +6527,7 @@ const CanteraModule = (() => {
       (f.tamanoFiltro || []).length ? `Tamaño: ${f.tamanoFiltro.join(', ')}` : '',
       f.domFaltante ? 'sin dominio' : '',
       f.dominioQ ? `dominio contiene "${f.dominioQ}"` : '',
-      (f.paso2DescFiltro || []).length ? `Paso 2 descartado: ${f.paso2DescFiltro.join(', ')}` : '',
+      (f.paso2DescFiltro || []).length ? `Calificación IA descartada: ${f.paso2DescFiltro.join(', ')}` : '',
     ].filter(Boolean);
     return partes.join(' · ') || '(sin condiciones)';
   }
@@ -7167,12 +7167,12 @@ const CanteraMesaModule = (() => {
     { key: 'ubicacion', label: 'Ubicación', def: false },
     { key: 'website', label: 'Website', def: false },
     { key: 'linkedin', label: 'LinkedIn', def: false },
-    { key: 'paso1_estado', label: 'Paso 1', def: true },
+    { key: 'paso1_estado', label: 'Filtro básico', def: true },
     { key: 'paso1_motivo', label: 'Motivo paso 1', def: false },
     { key: 'tier_clave', label: 'Tier', def: true },
     { key: 'confianza', label: 'Confianza', def: true },
     { key: 'prioridad', label: 'Prioridad (empresa)', def: true },
-    { key: 'paso2_estado', label: 'Paso 2', def: true },
+    { key: 'paso2_estado', label: 'Calificación IA', def: true },
     { key: 'motivo_descarte', label: 'Nota', def: true },
     { key: 'contactos', label: 'Contactos', def: true },
     { key: 'auditoria', label: 'Auditoría', def: true },
@@ -7774,7 +7774,7 @@ const CanteraMesaModule = (() => {
         ${_filterSelect('campana', opts.campanas, _filtro.campana)}
         ${_filterSelect('secuencia', opts.secuencias, _filtro.secuencia)}
         ${_coSel.size ? `<span class="cant-count">${_coSel.size} seleccionada(s)</span>` : ''}
-        ${_onlyFailed ? `<span class="cant-count">· viendo solo descartadas (Paso 1)</span>` : ''}
+        ${_onlyFailed ? `<span class="cant-count">· viendo solo descartadas (Filtro básico)</span>` : ''}
         ${_tierFiltro.size ? `<span class="cant-count">· Tier: ${[..._tierFiltro].join(', ')}</span>` : ''}
         ${_prioFiltro.size ? `<span class="cant-count">· Prioridad: ${[..._prioFiltro].join(', ')}</span>` : ''}
         ${_minContactos ? `<span class="cant-count">· ${_minContactos}+ contactos</span>` : ''}
@@ -7822,6 +7822,42 @@ const CanteraGlobalModule = (() => {
   let _filtrosExcl = { pais: [], industria: [], tamano: [], tier: [], estado: [], cliente: [], secuencia: [], seniority: [], departamento: [], ciudad: [] };
   let _opts = null;
   let _page = 0;
+  // Columnas visibles/ocultas (pedido explícito 2026-09-25: "puedo hacerlo
+  // visible directamente en global, ocultar y hacer visibles columnas
+  // disponibles") — mismo patrón que CANT_RESULT_COLS/MESA_COLS de Cantera,
+  // persistido por localStorage y separado por vista (Contactos vs Empresas
+  // tienen columnas base distintas). "Tier (CRM)" es el target_tier de
+  // lm_companies — Jenny confirmó que NO hace falta migrarlo/normalizarlo,
+  // solo mostrarlo como columna aparte del Tier de Cantera (A/B/C).
+  const GLOBAL_COLS_CONTACTO = [
+    { key: 'nombre', label: 'Nombre', def: true }, { key: 'apellido', label: 'Apellido', def: true },
+    { key: 'cargo', label: 'Cargo', def: true }, { key: 'empresa', label: 'Empresa', def: true },
+    { key: 'dominio', label: 'Dominio', def: true }, { key: 'pais', label: 'País', def: true },
+    { key: 'industria', label: 'Industria', def: true }, { key: 'estado', label: 'Estado', def: true },
+    { key: 'secuencias', label: 'Secuencias', def: true },
+    { key: 'tier', label: 'Tier (CRM)', def: false },
+    { key: 'paso1_estado', label: 'Filtro básico', def: false },
+    { key: 'paso2_estado', label: 'Calificación IA', def: false },
+    { key: 'origen', label: 'Dónde está', def: true }, { key: 'referencia', label: 'Referencia', def: true },
+  ];
+  const GLOBAL_COLS_EMPRESA = [
+    { key: 'empresa', label: 'Empresa', def: true }, { key: 'dominio', label: 'Dominio', def: true },
+    { key: 'pais', label: 'País', def: true }, { key: 'industria', label: 'Industria', def: true },
+    { key: 'tamano', label: 'Tamaño', def: false },
+    { key: 'tier', label: 'Tier (CRM)', def: false },
+    { key: 'paso1_estado', label: 'Filtro básico', def: false },
+    { key: 'paso2_estado', label: 'Calificación IA', def: false },
+    { key: 'origen', label: 'Dónde está', def: true }, { key: 'referencia', label: 'Referencia', def: true },
+  ];
+  function _globalCols() { return _vista === 'empresa' ? GLOBAL_COLS_EMPRESA : GLOBAL_COLS_CONTACTO; }
+  function _colsKey() { return `cantera_global_cols_${_vista || 'todos'}`; }
+  function _loadVisibleCols() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(_colsKey()) || 'null');
+      if (Array.isArray(saved)) return new Set(saved);
+    } catch (_) {}
+    return new Set(_globalCols().filter(c => c.def).map(c => c.key));
+  }
   function _pageSize() { try { return parseInt(localStorage.getItem('cantera_global_page_size')) || 50; } catch (_) { return 50; } }
   async function render(containerId) {
     const el = document.getElementById(containerId); if (!el) return;
@@ -7917,36 +7953,21 @@ const CanteraGlobalModule = (() => {
         ${fields}
       </div>`;
   }
-  function _resultsHtml() {
-    if (!_rows.length) return `<tr><td colspan="11" class="cp-empty2">Sin resultados${_q ? ' para "' + esc(_q) + '"' : ' — ajusta los filtros de la izquierda'}</td></tr>`;
-    return _rows.map(r => `
-      <tr>
-        <td>${esc(r.nombre || '—')}</td>
-        <td class="dg-cell--ro">${esc(r.apellido || '—')}</td>
-        <td class="dg-cell--ro">${esc(r.cargo || '—')}</td>
-        <td class="dg-cell--ro">${esc(r.empresa || '—')}</td>
-        <td class="dg-cell--ro">${esc(r.dominio || '—')}</td>
-        <td class="dg-cell--ro">${esc(r.pais || '—')}</td>
-        <td class="dg-cell--ro">${esc(r.industria || '—')}</td>
-        <td class="dg-cell--ro">${r.estado ? esc(r.estado) : '—'}</td>
-        <td class="dg-cell--ro">${r.secuencias ? esc(r.secuencias) : '—'}</td>
-        <td class="dg-cell--ro"><span class="cant-estado cant-estado--${r.origen === 'crm' ? 'aprobado' : 'pendiente'}">${_origenLabel(r.origen)}</span></td>
-        <td class="dg-cell--ro">${esc(r.referencia || '—')}</td>
-      </tr>`).join('');
+  const _PASO1_LBL = { aprobado: 'Aprobado', descartado: 'Descartado' };
+  const _PASO2_LBL = { aprobado: 'Aprobado', validacion_manual: 'Hecho manual', descartado: 'Descartado', pendiente: 'Pendiente' };
+  function _colCell(r, key) {
+    if (key === 'origen') return `<span class="cant-estado cant-estado--${r.origen === 'crm' ? 'aprobado' : 'pendiente'}">${_origenLabel(r.origen)}</span>`;
+    if (key === 'paso1_estado') return r.paso1_estado ? esc(_PASO1_LBL[r.paso1_estado] || r.paso1_estado) : '—';
+    if (key === 'paso2_estado') return r.paso2_estado ? esc(_PASO2_LBL[r.paso2_estado] || r.paso2_estado) : '—';
+    return r[key] ? esc(r[key]) : '—';
   }
-  // Vista "Empresas" — sin columnas de contacto (Nombre/Cargo/Estado/Secuencias
-  // no aplican a una fila de empresa).
-  function _resultsHtmlEmpresa() {
-    if (!_rows.length) return `<tr><td colspan="6" class="cp-empty2">Sin resultados${_q ? ' para "' + esc(_q) + '"' : ' — ajusta los filtros de la izquierda'}</td></tr>`;
-    return _rows.map(r => `
-      <tr>
-        <td>${esc(r.empresa || '—')}</td>
-        <td class="dg-cell--ro">${esc(r.dominio || '—')}</td>
-        <td class="dg-cell--ro">${esc(r.pais || '—')}</td>
-        <td class="dg-cell--ro">${esc(r.industria || '—')}</td>
-        <td class="dg-cell--ro"><span class="cant-estado cant-estado--${r.origen === 'crm' ? 'aprobado' : 'pendiente'}">${_origenLabel(r.origen)}</span></td>
-        <td class="dg-cell--ro">${esc(r.referencia || '—')}</td>
-      </tr>`).join('');
+  // Tabla data-driven por columnas (pedido explícito 2026-09-25: mostrar/
+  // ocultar columnas) — un solo renderer para Contactos/Todos/Empresas en
+  // vez de dos funciones separadas con columnas fijas.
+  function _resultsHtmlCols() {
+    const cols = _globalCols().filter(c => _loadVisibleCols().has(c.key));
+    if (!_rows.length) return `<tr><td colspan="${cols.length || 1}" class="cp-empty2">Sin resultados${_q ? ' para "' + esc(_q) + '"' : ' — ajusta los filtros de la izquierda'}</td></tr>`;
+    return _rows.map(r => `<tr>${cols.map((c, i) => `<td${i === 0 ? '' : ' class="dg-cell--ro"'}>${_colCell(r, c.key)}</td>`).join('')}</tr>`).join('');
   }
   function _pagerHtml() {
     const ps = _pageSize();
@@ -7967,18 +7988,40 @@ const CanteraGlobalModule = (() => {
     const tab = (v, label) => `<button class="cant-global-tab${_vista === v ? ' active' : ''}" onclick="CanteraGlobalModule.setVista('${v}')">${label}</button>`;
     return `<div class="cant-global-tabs">${tab('', 'Todos')}${tab('contacto', 'Contactos')}${tab('empresa', 'Empresas')}</div>`;
   }
+  // _colsMenuOpen se recuerda entre repintados (mismo bug que ya se corrigió
+  // en LeadManagerModule/CanteraModule: si el menú se cerrara en cada
+  // _repaint(), marcar UNA columna cerraría todo y habría que reabrir por
+  // cada checkbox).
+  let _colsMenuOpen = false;
+  function _colsMenuHtml() {
+    const vis = _loadVisibleCols();
+    const items = _globalCols().map(c => `<label class="cant-colchk" onclick="event.stopPropagation()"><input type="checkbox" ${vis.has(c.key) ? 'checked' : ''} onchange="CanteraGlobalModule.toggleCol('${c.key}')"> ${esc(c.label)}</label>`).join('');
+    return `<button class="cant-global-colsbtn" onclick="CanteraGlobalModule.colsMenu(event)" title="Elegir columnas visibles">${NI('sliders')} Columnas</button>
+      <div class="cant-global-colsmenu"${_colsMenuOpen ? '' : ' hidden'} onclick="event.stopPropagation()">${items}</div>`;
+  }
+  function colsMenu(ev) {
+    if (ev && ev.stopPropagation) ev.stopPropagation();
+    _colsMenuOpen = !_colsMenuOpen;
+    _repaint();
+    if (_colsMenuOpen) setTimeout(() => document.addEventListener('click', function onDoc() { _colsMenuOpen = false; _repaint(); document.removeEventListener('click', onDoc); }, { once: true }), 0);
+  }
+  function toggleCol(key) {
+    const set = _loadVisibleCols();
+    if (set.has(key)) set.delete(key); else set.add(key);
+    try { localStorage.setItem(_colsKey(), JSON.stringify([...set])); } catch (_) {}
+    _repaint();
+  }
   function _html() {
-    const cols = _vista === 'empresa'
-      ? '<th>Empresa</th><th>Dominio</th><th>País</th><th>Industria</th><th>Dónde está</th><th>Referencia</th>'
-      : '<th>Nombre</th><th>Apellido</th><th>Cargo</th><th>Empresa</th><th>Dominio</th><th>País</th><th>Industria</th><th>Estado</th><th>Secuencias</th><th>Dónde está</th><th>Referencia</th>';
+    const cols = _globalCols().filter(c => _loadVisibleCols().has(c.key));
     return `<div class="lm-sec-head lm-sec-head--compact"><div><h2 class="lm-sec-title">Base global</h2></div></div>
       ${_vistaTabsHtml()}
       <div class="cant-global-layout${_collapsed ? ' collapsed' : ''}">
         <div class="cant-global-panel">${_collapsed ? `<button class="cant-x" onclick="CanteraGlobalModule.toggleCollapse()" title="Mostrar criterios">›</button>` : _panelHtml()}</div>
         <div class="cant-global-results">
+          <div class="cant-global-toolbar" style="position:relative">${_colsMenuHtml()}</div>
           <div class="lm-dt-wrap dg-dt-wrap"><table class="clients-table dg-table sel-on" style="table-layout:auto">
-            <thead><tr>${cols}</tr></thead>
-            <tbody>${_vista === 'empresa' ? _resultsHtmlEmpresa() : _resultsHtml()}</tbody>
+            <thead><tr>${cols.map(c => `<th>${esc(c.label)}</th>`).join('')}</tr></thead>
+            <tbody>${_resultsHtmlCols()}</tbody>
           </table></div>
           ${_pagerHtml()}
         </div>
@@ -8037,7 +8080,7 @@ const CanteraGlobalModule = (() => {
   async function removeFiltro(field, idx) { _filtros[field].splice(idx, 1); _page = 0; await _search(); _repaint(); }
   async function addFiltroExcl(field, value) { _filtrosExcl[field] = [...(_filtrosExcl[field] || []), value]; _page = 0; await _search(); _repaint(); }
   async function removeFiltroExcl(field, idx) { _filtrosExcl[field].splice(idx, 1); _page = 0; await _search(); _repaint(); }
-  return { render, setQ, setOrigen, setVista, setPageSize, goPage, toggleCollapse, taOpen, taFilter, taBlur, addFiltro, removeFiltro, addFiltroExcl, removeFiltroExcl };
+  return { render, setQ, setOrigen, setVista, setPageSize, goPage, toggleCollapse, taOpen, taFilter, taBlur, addFiltro, removeFiltro, addFiltroExcl, removeFiltroExcl, toggleCol, colsMenu };
 })();
 
 // =================================================================

@@ -12548,6 +12548,10 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .cant-global-tab.active { color: var(--brand, #007AFF); border-bottom-color: var(--brand, #007AFF); }
 .cant-global-layout { display: flex; align-items: flex-start; gap: 18px; }
 .cant-global-results { flex: 1 1 auto; min-width: 0; }
+.cant-global-toolbar { display: flex; justify-content: flex-end; margin-bottom: 8px; }
+.cant-global-colsbtn { display: inline-flex; align-items: center; gap: 6px; font-family: inherit; font-size: .82rem; font-weight: 500; color: var(--text-secondary); background: var(--surface, #fff); border: 1px solid var(--border, #EAE7E2); padding: 6px 12px; cursor: pointer; }
+.cant-global-colsbtn:hover { background: var(--surface-hover); color: var(--text-primary); }
+.cant-global-colsmenu { position: absolute; top: 100%; right: 0; margin-top: 4px; z-index: 20; background: #fff; border: 1px solid var(--border, #EAE7E2); min-width: 200px; max-height: 320px; overflow-y: auto; box-shadow: 0 6px 16px rgba(0,0,0,.1); padding: 4px 0; }
 /* Ancho del rail de criterios: pedido explícito 2026-09-25, con captura de
    Sales Navigator — "esto ocupa más pantalla y eso hace que no tenga que
    escrolear tanto". De 260px (una columna angosta, todo apilado) a 480px
