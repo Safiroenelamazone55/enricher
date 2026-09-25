@@ -7816,10 +7816,10 @@ const CanteraGlobalModule = (() => {
   // Tabs "Contactos | Empresas | Todos" — mismo espíritu que "Lead/Account"
   // de Sales Navigator (pedido explícito 2026-09-25, con captura).
   let _vista = '';
-  let _filtros = { pais: [], industria: [], tamano: [], estado: [], cliente: [], secuencia: [], seniority: [], departamento: [], ciudad: [] };
+  let _filtros = { pais: [], industria: [], tamano: [], tier: [], estado: [], cliente: [], secuencia: [], seniority: [], departamento: [], ciudad: [] };
   // Excluir por valor (pedido explícito 2026-09-25, muestra de referencia
   // Sales Navigator: "Include | Exclude" junto a cada opción del desplegable).
-  let _filtrosExcl = { pais: [], industria: [], tamano: [], estado: [], cliente: [], secuencia: [], seniority: [], departamento: [], ciudad: [] };
+  let _filtrosExcl = { pais: [], industria: [], tamano: [], tier: [], estado: [], cliente: [], secuencia: [], seniority: [], departamento: [], ciudad: [] };
   let _opts = null;
   let _page = 0;
   function _pageSize() { try { return parseInt(localStorage.getItem('cantera_global_page_size')) || 50; } catch (_) { return 50; } }
@@ -7839,6 +7839,8 @@ const CanteraGlobalModule = (() => {
     if (_filtrosExcl.pais.length) p.set('paisExcl', _filtrosExcl.pais.join(','));
     if (_filtrosExcl.industria.length) p.set('industriaExcl', _filtrosExcl.industria.join(','));
     if (_filtrosExcl.tamano.length) p.set('tamanoExcl', _filtrosExcl.tamano.join(','));
+    if (_filtros.tier.length) p.set('tier', _filtros.tier.join(','));
+    if (_filtrosExcl.tier.length) p.set('tierExcl', _filtrosExcl.tier.join(','));
     if (_filtros.estado.length) p.set('estado', _filtros.estado.join(','));
     if (_filtrosExcl.estado.length) p.set('estadoExcl', _filtrosExcl.estado.join(','));
     if (_filtros.cliente.length) p.set('cliente', _filtros.cliente.join(','));
@@ -7892,7 +7894,7 @@ const CanteraGlobalModule = (() => {
     // campos van de a dos por fila, igual que el rail de LinkedIn.
     const fields = [
       _taFieldG('pais', 'País'), _taFieldG('industria', 'Industria'),
-      _taFieldG('tamano', 'Tamaño de empresa'), _taFieldG('cliente', 'Cliente outbound'),
+      _taFieldG('tamano', 'Tamaño de empresa'), _taFieldG('tier', 'Tier'), _taFieldG('cliente', 'Cliente outbound'),
       _taFieldG('secuencia', 'Secuencia'),
       _vista !== 'empresa' ? _taFieldG('estado', 'Estado') : '',
       _vista !== 'empresa' ? _taFieldG('seniority', 'Seniority') : '',

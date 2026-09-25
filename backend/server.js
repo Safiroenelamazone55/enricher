@@ -7229,6 +7229,15 @@ function _cantNormPais(raw) {
   const n = _cantNormText(raw); if (!n) return '';
   return _CANTERA_PAIS_ALIAS[n] || n;
 }
+// Tier normalizado — pedido explícito 2026-09-25: "los filtros por tier hay
+// que normalizarlos así como 1 2 3, en lugar de 1a 1b". El Tier es texto
+// libre que cada quien nombra a su gusto por borrador ("1A"/"1B", "Tier 1
+// Initial", etc.) — para el FILTRO se agrupa por el primer número que
+// aparece, así "1A" y "1B" caen ambos bajo "1" sin tocar el valor guardado.
+function _cantNormTier(raw) {
+  const m = String(raw || '').match(/\d+/);
+  return m ? m[0] : '';
+}
 
 // Paso 1 — filtros básicos: SIN IA, solo compara los datos ya importados
 // contra los criterios (país/industria/tamaño/seniority/departamento). Lo
@@ -7330,7 +7339,15 @@ app.get('/api/cantera/opciones-filtro', requireAuth, async (req, res) => {
     // Ciudad — pedido explícito 2026-09-25 ("agregar más formas de filtrar"),
     // solo existe a nivel contacto CRM (cantera_contacts no la guarda todavía).
     const { rows: ciudadRows } = await pool.query(`SELECT DISTINCT ciudad FROM lm_contacts WHERE user_id=$1 AND ciudad <> '' ORDER BY ciudad`, [uid]);
+    // Tier — pedido explícito 2026-09-25: filtro nuevo, normalizado (1/2/3…
+    // en vez de 1A/1B) — junta cantera_companies.tier_clave (borradores) y
+    // lm_companies.target_tier (CRM), agrupados por el primer número.
+    const { rows: tierRowsA } = await pool.query(`SELECT DISTINCT tier_clave AS t FROM cantera_companies WHERE user_id=$1 AND tier_clave <> ''`, [uid]);
+    const { rows: tierRowsB } = await pool.query(`SELECT DISTINCT target_tier AS t FROM lm_companies WHERE user_id=$1 AND target_tier <> ''`, [uid]);
+    const tierSet = new Set();
+    [...tierRowsA, ...tierRowsB].forEach(r => { const n = _cantNormTier(r.t); if (n) tierSet.add(n); });
     res.json({
+      tier: [...tierSet].sort((a, b) => Number(a) - Number(b)),
       secuencia: seqRows.map(r => r.nombre).filter(Boolean),
       pais: Object.keys(CANTERA_PAISES).map(k => k.replace(/\b\w/g, c => c.toUpperCase())),
       industria: [...industriaSet].sort((a, b) => a.localeCompare(b)),
@@ -7404,6 +7421,8 @@ app.get('/api/cantera/global', requireAuth, async (req, res) => {
   const paisesExcl = String(req.query.paisExcl || '').split(',').map(_cantNormPais).filter(Boolean);
   const industriasExcl = String(req.query.industriaExcl || '').split(',').map(s => _cantNormText(s)).filter(Boolean);
   const tamanosExcl = String(req.query.tamanoExcl || '').split(',').filter(Boolean);
+  const tiers = String(req.query.tier || '').split(',').filter(Boolean);
+  const tiersExcl = String(req.query.tierExcl || '').split(',').filter(Boolean);
   const origen = req.query.origen === 'crm' || req.query.origen === 'borrador' ? req.query.origen : '';
   // Más criterios (pedido explícito 2026-09-25, con captura de Sales Navigator:
   // "hay tantos criterios que podrías considerar", "estatus, secuencias,
@@ -7444,13 +7463,13 @@ app.get('/api/cantera/global', requireAuth, async (req, res) => {
              (SELECT nombre FROM outbound_clients oc WHERE oc.id = lco.outbound_client_id) AS referencia,
              lco.updated_at, '' AS estado, 'empresa' AS tipo,
              (SELECT string_agg(DISTINCT s.nombre, ', ') FROM lm_contacts k JOIN lm_contact_sequences csq ON csq.contact_id = k.id JOIN sequences s ON s.id = csq.sequence_id WHERE k.company_id = lco.id) AS secuencias,
-             '' AS seniority, '' AS departamento, lco.ciudad AS ciudad
+             '' AS seniority, '' AS departamento, lco.ciudad AS ciudad, lco.target_tier AS tier
         FROM lm_companies lco
        WHERE lco.user_id=$1 AND ($2 = '%%' OR lco.nombre ILIKE $2 OR lco.dominio ILIKE $2)
       UNION ALL
       SELECT '', '', '', '', cco.nombre AS empresa, cco.dominio, cco.pais, cco.industria, cco.tamano,
              'borrador_' || cb.estado AS origen, cb.nombre AS referencia, cco.created_at AS updated_at,
-             '' AS estado, 'empresa' AS tipo, '' AS secuencias, '' AS seniority, '' AS departamento, '' AS ciudad
+             '' AS estado, 'empresa' AS tipo, '' AS secuencias, '' AS seniority, '' AS departamento, '' AS ciudad, cco.tier_clave AS tier
         FROM cantera_companies cco JOIN cantera_batches cb ON cb.id = cco.batch_id
        WHERE cco.user_id=$1 AND ($2 = '%%' OR cco.nombre ILIKE $2 OR cco.dominio ILIKE $2)
        ORDER BY updated_at DESC LIMIT 20000
@@ -7461,14 +7480,14 @@ app.get('/api/cantera/global', requireAuth, async (req, res) => {
              (SELECT nombre FROM outbound_clients oc WHERE oc.id = co.outbound_client_id) AS referencia,
              lc.updated_at, lc.estado AS estado, 'contacto' AS tipo,
              (SELECT string_agg(DISTINCT s.nombre, ', ') FROM lm_contact_sequences csq JOIN sequences s ON s.id = csq.sequence_id WHERE csq.contact_id = lc.id) AS secuencias,
-             lc.seniority AS seniority, lc.departamento AS departamento, lc.ciudad AS ciudad
+             lc.seniority AS seniority, lc.departamento AS departamento, lc.ciudad AS ciudad, co.target_tier AS tier
         FROM lm_contacts lc LEFT JOIN lm_companies co ON co.id = lc.company_id
        WHERE lc.user_id=$1 AND ($2 = '%%' OR lc.nombre ILIKE $2 OR lc.apellido ILIKE $2 OR lc.email ILIKE $2 OR lc.cargo ILIKE $2 OR COALESCE(co.nombre, lc.empresa_nombre) ILIKE $2)
       UNION ALL
       SELECT cc.nombre, cc.apellido, cc.cargo, cc.email,
              cco.nombre AS empresa, cco.dominio, cco.pais, cco.industria, cco.tamano,
              'borrador_' || cb.estado AS origen, cb.nombre AS referencia, cc.created_at AS updated_at,
-             '' AS estado, 'contacto' AS tipo, '' AS secuencias, '' AS seniority, '' AS departamento, '' AS ciudad
+             '' AS estado, 'contacto' AS tipo, '' AS secuencias, '' AS seniority, '' AS departamento, '' AS ciudad, cco.tier_clave AS tier
         FROM cantera_contacts cc
         JOIN cantera_companies cco ON cco.id = cc.company_id
         JOIN cantera_batches cb ON cb.id = cc.batch_id
@@ -7476,14 +7495,14 @@ app.get('/api/cantera/global', requireAuth, async (req, res) => {
       UNION ALL
       SELECT '', '', '', '', lco.nombre AS empresa, lco.dominio, lco.pais, lco.industria, lco.tamano, 'crm' AS origen,
              (SELECT nombre FROM outbound_clients oc WHERE oc.id = lco.outbound_client_id) AS referencia, lco.updated_at,
-             '' AS estado, 'empresa' AS tipo, '' AS secuencias, '' AS seniority, '' AS departamento, lco.ciudad AS ciudad
+             '' AS estado, 'empresa' AS tipo, '' AS secuencias, '' AS seniority, '' AS departamento, lco.ciudad AS ciudad, lco.target_tier AS tier
         FROM lm_companies lco
        WHERE lco.user_id=$1 AND NOT EXISTS (SELECT 1 FROM lm_contacts x WHERE x.company_id = lco.id)
          AND ($2 = '%%' OR lco.nombre ILIKE $2 OR lco.dominio ILIKE $2)
       UNION ALL
       SELECT '', '', '', '', cco2.nombre AS empresa, cco2.dominio, cco2.pais, cco2.industria, cco2.tamano,
              'borrador_' || cb2.estado AS origen, cb2.nombre AS referencia, cco2.created_at AS updated_at,
-             '' AS estado, 'empresa' AS tipo, '' AS secuencias, '' AS seniority, '' AS departamento, '' AS ciudad
+             '' AS estado, 'empresa' AS tipo, '' AS secuencias, '' AS seniority, '' AS departamento, '' AS ciudad, cco2.tier_clave AS tier
         FROM cantera_companies cco2 JOIN cantera_batches cb2 ON cb2.id = cco2.batch_id
        WHERE cco2.user_id=$1 AND NOT EXISTS (SELECT 1 FROM cantera_contacts y WHERE y.company_id = cco2.id)
          AND ($2 = '%%' OR cco2.nombre ILIKE $2 OR cco2.dominio ILIKE $2)
@@ -7498,6 +7517,8 @@ app.get('/api/cantera/global', requireAuth, async (req, res) => {
       if (paisesExcl.length && paisesExcl.includes(_cantNormPais(r.pais))) return false;
       if (industriasExcl.length && industriasExcl.some(i => _cantNormText(r.industria).includes(i))) return false;
       if (tamanosExcl.length && tamanosExcl.includes(r.tamano)) return false;
+      if (tiers.length && !tiers.includes(_cantNormTier(r.tier))) return false;
+      if (tiersExcl.length && tiersExcl.includes(_cantNormTier(r.tier))) return false;
       if (tipo && r.tipo !== tipo) return false;
       if (estados.length && !estados.includes(r.estado)) return false;
       if (estadosExcl.length && estadosExcl.includes(r.estado)) return false;
