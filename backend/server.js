@@ -2778,6 +2778,28 @@ async function _weeklyBillingTick() {
 setInterval(_weeklyBillingTick, 60 * 60 * 1000);
 setTimeout(_weeklyBillingTick, 20 * 1000); // al arrancar (con margen para la migración)
 
+// Archiva solas las tareas semanales auto-creadas cuya semana YA PASÓ — pedido
+// explícito 2026-09-25: "si la semana acaba también debe archivarse". Son
+// tareas raíz con semana_week/billing_week seteado (=las que crea
+// _ensureWeeklyTaskCore arriba) cuyo deadline (domingo de esa semana) quedó
+// atrás. Las horas trackeadas en ellas NO se tocan (time_entries no se borra
+// ni se toca) — Finanzas sigue leyendo directo de /api/mgmt/tasks, que no
+// filtra archivada; solo la vista de Tareas pendientes las esconde
+// (TasksModule._getFilteredTasks, frontend). Independiente de estado:
+// archiva tanto si quedó "completado" como si quedó "pendiente" sin marcar.
+async function _archiveOldWeeklyTasksTick() {
+  try {
+    const r = await pool.query(
+      `UPDATE tasks SET archivada=TRUE
+        WHERE archivada=FALSE AND (semana_week IS NOT NULL OR billing_week IS NOT NULL)
+          AND deadline IS NOT NULL AND deadline < CURRENT_DATE
+        RETURNING id, titulo`);
+    if (r.rowCount) console.log(`[archivar-semanal] ${r.rowCount} tarea(s) semanal(es) archivada(s): ${r.rows.map(x => x.titulo).join(', ')}`);
+  } catch (e) { console.error('[archivar-semanal]', e.message); }
+}
+setInterval(_archiveOldWeeklyTasksTick, 60 * 60 * 1000);
+setTimeout(_archiveOldWeeklyTasksTick, 25 * 1000);
+
 // ── PATCH /api/mgmt/projects/:id/billing-cfg ──────────────────────
 // Config de cobro del proyecto (endpoint dedicado: el PUT full-row NO toca estos campos).
 // reparto: [{nombre, pct}] — proyecto compartido con % exacto (ej. 30-70); [] o null = 100% del responsable.

@@ -9424,7 +9424,7 @@ const DashboardModule = (() => {
     const tomorrowStr = _d1.toISOString().split('T')[0];
     const _me = (window._authUser?.memberNombre || window._authUser?.name || '').toLowerCase();
     const active = (allTasks || []).filter(t =>
-      t.estado !== 'completado' && t.estado !== 'cancelado' &&
+      t.estado !== 'completado' && t.estado !== 'cancelado' && !t.archivada &&
       _me &&
       ((t.responsables || []).some(r => r.toLowerCase() === _me) ||
        (t.responsable  || '').toLowerCase() === _me)
@@ -10191,7 +10191,7 @@ const MyWorkModule = (() => {
       (t.responsables || []).some(r => (r || '').toLowerCase() === _me) ||
       (t.responsable  || '').toLowerCase() === _me
     ) : [];
-    const active = mine.filter(t => t.estado !== 'completado' && t.estado !== 'cancelado');
+    const active = mine.filter(t => t.estado !== 'completado' && t.estado !== 'cancelado' && !t.archivada);
     // Un padre con subtareas es un contenedor: el trabajo real está en sus
     // subtareas, no cuenta como tarea propia (mismo criterio que Dashboard).
     const parentIds = new Set(_tasks.filter(t => t.parent_task_id).map(t => t.parent_task_id));
@@ -11222,7 +11222,10 @@ const TasksModule = (() => {
     const q = ($('tasks-search')?.value || '').toLowerCase();
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const endOfWeek = new Date(today); endOfWeek.setDate(today.getDate() + (6 - today.getDay()));
-    let list = _tasks;
+    // Las tareas semanales auto-creadas se archivan solas al pasar la semana
+    // (pedido explícito 2026-09-25) — no deben verse en Tareas pendientes,
+    // aunque sus horas sigan contando en Finanzas (esa vista no pasa por acá).
+    let list = _tasks.filter(t => !t.archivada);
     if (_filterProjectId) list = list.filter(t => t.project_id === _filterProjectId);
     if (_filterPrioSet.size) list = list.filter(t => _filterPrioSet.has(t.prioridad));
     if (_filterMember === '__none__') {
@@ -11892,7 +11895,7 @@ const TasksModule = (() => {
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const endOfWeek = new Date(today); endOfWeek.setDate(today.getDate() + (6 - today.getDay()));
 
-    let list = _tasks;
+    let list = _tasks.filter(t => !t.archivada);
     if (_filterEstadoSet.size) list = list.filter(t => _filterEstadoSet.has(t.estado));
     if (_filterPrioSet.size)   list = list.filter(t => _filterPrioSet.has(t.prioridad));
     if (_filterMember === '__none__') {
