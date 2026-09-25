@@ -12542,6 +12542,10 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 /* Base global — rail de filtros a la IZQUIERDA, contraído por defecto
    (pedido explícito 2026-09-06, corregido de derecha a izquierda). Panel
    primero (izquierda), resultados después — orden natural del flex row. */
+.cant-global-tabs { display: flex; gap: 4px; margin: 0 0 12px; border-bottom: 1px solid var(--border); }
+.cant-global-tab { font-family: inherit; font-size: .84rem; font-weight: 600; color: var(--text-secondary); background: none; border: none; border-bottom: 2px solid transparent; padding: 8px 4px; margin-right: 14px; cursor: pointer; }
+.cant-global-tab:hover { color: var(--text-primary); }
+.cant-global-tab.active { color: var(--brand, #007AFF); border-bottom-color: var(--brand, #007AFF); }
 .cant-global-layout { display: flex; align-items: flex-start; gap: 18px; }
 .cant-global-results { flex: 1 1 auto; min-width: 0; }
 .cant-global-panel { flex: 0 0 260px; background: var(--white, #fff); border: 1px solid var(--border, #EAE7E2); border-radius: 0; padding: 14px; }

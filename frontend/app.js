@@ -7813,10 +7813,14 @@ const CanteraGlobalModule = (() => {
   // pedido explícito: "que tenga el estilo de filtro que tenía antes, pero
   // que se oculte/contraiga en automático a la derecha".
   let _rows = []; let _total = 0; let _q = ''; let _origen = ''; let _collapsed = true;
-  let _filtros = { pais: [], industria: [], tamano: [] };
+  // Tabs "Contactos | Empresas | Todos" — mismo espíritu que "Lead/Account"
+  // de Sales Navigator (pedido explícito 2026-09-25, con captura).
+  let _vista = '';
+  let _secuenciaQ = '';
+  let _filtros = { pais: [], industria: [], tamano: [], estado: [], cliente: [] };
   // Excluir por valor (pedido explícito 2026-09-25, muestra de referencia
   // Sales Navigator: "Include | Exclude" junto a cada opción del desplegable).
-  let _filtrosExcl = { pais: [], industria: [], tamano: [] };
+  let _filtrosExcl = { pais: [], industria: [], tamano: [], estado: [], cliente: [] };
   let _opts = null;
   let _page = 0;
   function _pageSize() { try { return parseInt(localStorage.getItem('cantera_global_page_size')) || 50; } catch (_) { return 50; } }
@@ -7836,6 +7840,12 @@ const CanteraGlobalModule = (() => {
     if (_filtrosExcl.pais.length) p.set('paisExcl', _filtrosExcl.pais.join(','));
     if (_filtrosExcl.industria.length) p.set('industriaExcl', _filtrosExcl.industria.join(','));
     if (_filtrosExcl.tamano.length) p.set('tamanoExcl', _filtrosExcl.tamano.join(','));
+    if (_filtros.estado.length) p.set('estado', _filtros.estado.join(','));
+    if (_filtrosExcl.estado.length) p.set('estadoExcl', _filtrosExcl.estado.join(','));
+    if (_filtros.cliente.length) p.set('cliente', _filtros.cliente.join(','));
+    if (_filtrosExcl.cliente.length) p.set('clienteExcl', _filtrosExcl.cliente.join(','));
+    if (_secuenciaQ) p.set('secuencia', _secuenciaQ);
+    if (_vista) p.set('tipo', _vista);
     p.set('page', _page); p.set('pageSize', _pageSize());
     try {
       const r = await apiFetch(`${API}/cantera/global?${p.toString()}`);
@@ -7883,16 +7893,38 @@ const CanteraGlobalModule = (() => {
       </select>
       ${_taFieldG('pais', 'País')}
       ${_taFieldG('industria', 'Industria')}
-      ${_taFieldG('tamano', 'Tamaño de empresa')}`;
+      ${_taFieldG('tamano', 'Tamaño de empresa')}
+      ${_vista !== 'empresa' ? _taFieldG('estado', 'Estado') : ''}
+      ${_taFieldG('cliente', 'Cliente outbound')}
+      ${_vista !== 'empresa' ? `<div class="filter-field">
+        <label class="field-label">Secuencia</label>
+        <input type="text" class="form-input" placeholder="Nombre de la secuencia…" value="${esc(_secuenciaQ)}" oninput="CanteraGlobalModule.setSecuenciaQ(this.value)">
+      </div>` : ''}`;
   }
   function _resultsHtml() {
-    if (!_rows.length) return `<tr><td colspan="9" class="cp-empty2">Sin resultados${_q ? ' para "' + esc(_q) + '"' : ' — ajusta los filtros de la izquierda'}</td></tr>`;
+    if (!_rows.length) return `<tr><td colspan="11" class="cp-empty2">Sin resultados${_q ? ' para "' + esc(_q) + '"' : ' — ajusta los filtros de la izquierda'}</td></tr>`;
     return _rows.map(r => `
       <tr>
         <td>${esc(r.nombre || '—')}</td>
         <td class="dg-cell--ro">${esc(r.apellido || '—')}</td>
         <td class="dg-cell--ro">${esc(r.cargo || '—')}</td>
         <td class="dg-cell--ro">${esc(r.empresa || '—')}</td>
+        <td class="dg-cell--ro">${esc(r.dominio || '—')}</td>
+        <td class="dg-cell--ro">${esc(r.pais || '—')}</td>
+        <td class="dg-cell--ro">${esc(r.industria || '—')}</td>
+        <td class="dg-cell--ro">${r.estado ? esc(r.estado) : '—'}</td>
+        <td class="dg-cell--ro">${r.secuencias ? esc(r.secuencias) : '—'}</td>
+        <td class="dg-cell--ro"><span class="cant-estado cant-estado--${r.origen === 'crm' ? 'aprobado' : 'pendiente'}">${_origenLabel(r.origen)}</span></td>
+        <td class="dg-cell--ro">${esc(r.referencia || '—')}</td>
+      </tr>`).join('');
+  }
+  // Vista "Empresas" — sin columnas de contacto (Nombre/Cargo/Estado/Secuencias
+  // no aplican a una fila de empresa).
+  function _resultsHtmlEmpresa() {
+    if (!_rows.length) return `<tr><td colspan="6" class="cp-empty2">Sin resultados${_q ? ' para "' + esc(_q) + '"' : ' — ajusta los filtros de la izquierda'}</td></tr>`;
+    return _rows.map(r => `
+      <tr>
+        <td>${esc(r.empresa || '—')}</td>
         <td class="dg-cell--ro">${esc(r.dominio || '—')}</td>
         <td class="dg-cell--ro">${esc(r.pais || '—')}</td>
         <td class="dg-cell--ro">${esc(r.industria || '—')}</td>
@@ -7915,14 +7947,22 @@ const CanteraGlobalModule = (() => {
       ${nav(1, _page >= pages - 1, '›')}
     </div>`;
   }
+  function _vistaTabsHtml() {
+    const tab = (v, label) => `<button class="cant-global-tab${_vista === v ? ' active' : ''}" onclick="CanteraGlobalModule.setVista('${v}')">${label}</button>`;
+    return `<div class="cant-global-tabs">${tab('', 'Todos')}${tab('contacto', 'Contactos')}${tab('empresa', 'Empresas')}</div>`;
+  }
   function _html() {
+    const cols = _vista === 'empresa'
+      ? '<th>Empresa</th><th>Dominio</th><th>País</th><th>Industria</th><th>Dónde está</th><th>Referencia</th>'
+      : '<th>Nombre</th><th>Apellido</th><th>Cargo</th><th>Empresa</th><th>Dominio</th><th>País</th><th>Industria</th><th>Estado</th><th>Secuencias</th><th>Dónde está</th><th>Referencia</th>';
     return `<div class="lm-sec-head lm-sec-head--compact"><div><h2 class="lm-sec-title">Base global</h2></div></div>
+      ${_vistaTabsHtml()}
       <div class="cant-global-layout${_collapsed ? ' collapsed' : ''}">
         <div class="cant-global-panel">${_collapsed ? `<button class="cant-x" onclick="CanteraGlobalModule.toggleCollapse()" title="Mostrar criterios">›</button>` : _panelHtml()}</div>
         <div class="cant-global-results">
           <div class="lm-dt-wrap dg-dt-wrap"><table class="clients-table dg-table sel-on" style="table-layout:auto">
-            <thead><tr><th>Nombre</th><th>Apellido</th><th>Cargo</th><th>Empresa</th><th>Dominio</th><th>País</th><th>Industria</th><th>Dónde está</th><th>Referencia</th></tr></thead>
-            <tbody>${_resultsHtml()}</tbody>
+            <thead><tr>${cols}</tr></thead>
+            <tbody>${_vista === 'empresa' ? _resultsHtmlEmpresa() : _resultsHtml()}</tbody>
           </table></div>
           ${_pagerHtml()}
         </div>
@@ -7933,6 +7973,9 @@ const CanteraGlobalModule = (() => {
   let _t = null;
   function setQ(v) { _q = v; _page = 0; clearTimeout(_t); _t = setTimeout(async () => { await _search(); _repaint(); }, 300); }
   async function setOrigen(v) { _origen = v; _page = 0; await _search(); _repaint(); }
+  async function setVista(v) { _vista = v; _page = 0; await _search(); _repaint(); }
+  let _tSeq = null;
+  function setSecuenciaQ(v) { _secuenciaQ = v; _page = 0; clearTimeout(_tSeq); _tSeq = setTimeout(async () => { await _search(); _repaint(); }, 300); }
   function setPageSize(n) { try { localStorage.setItem('cantera_global_page_size', String(parseInt(n) || 50)); } catch (_) {} _page = 0; _search().then(_repaint); }
   function goPage(d) { _page = Math.max(0, _page + d); _search().then(_repaint); }
   function _gOptions(field) {
@@ -7972,7 +8015,7 @@ const CanteraGlobalModule = (() => {
   async function removeFiltro(field, idx) { _filtros[field].splice(idx, 1); _page = 0; await _search(); _repaint(); }
   async function addFiltroExcl(field, value) { _filtrosExcl[field] = [...(_filtrosExcl[field] || []), value]; _page = 0; await _search(); _repaint(); }
   async function removeFiltroExcl(field, idx) { _filtrosExcl[field].splice(idx, 1); _page = 0; await _search(); _repaint(); }
-  return { render, setQ, setOrigen, setPageSize, goPage, toggleCollapse, taOpen, taFilter, taBlur, addFiltro, removeFiltro, addFiltroExcl, removeFiltroExcl };
+  return { render, setQ, setOrigen, setVista, setSecuenciaQ, setPageSize, goPage, toggleCollapse, taOpen, taFilter, taBlur, addFiltro, removeFiltro, addFiltroExcl, removeFiltroExcl };
 })();
 
 // =================================================================

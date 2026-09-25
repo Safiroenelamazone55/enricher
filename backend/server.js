@@ -7320,12 +7320,17 @@ app.get('/api/cantera/opciones-filtro', requireAuth, async (req, res) => {
       `SELECT DISTINCT industria FROM cantera_companies WHERE user_id=$1 AND industria <> '' AND industria <> 'N/A'`, [uid]);
     const industriaSet = new Set(CANTERA_INDUSTRIAS_BASE);
     rows.forEach(r => industriaSet.add(r.industria));
+    // clientes/estado — sumados 2026-09-25 para el filtro de Base Global
+    // ("estatus, secuencias, clientes", pedido explícito en vivo).
+    const { rows: clienteRows } = await pool.query(`SELECT nombre FROM outbound_clients WHERE user_id=$1 ORDER BY nombre`, [uid]);
     res.json({
       pais: Object.keys(CANTERA_PAISES).map(k => k.replace(/\b\w/g, c => c.toUpperCase())),
       industria: [...industriaSet].sort((a, b) => a.localeCompare(b)),
       tamano: ['1-10', '11-50', '51-200', '201-500', '501-1000', '1001-5000', '5001-10000', '10001+'],
       seniority: ['founder', 'c-level', 'vp', 'director', 'manager', 'senior', 'junior'],
       departamento: ['ventas', 'marketing', 'operaciones', 'finanzas', 'rrhh', 'ti', 'legal', 'compras', 'servicio al cliente'],
+      estado: ['nuevo', 'contactado', 'respondio', 'propuesta', 'negociacion', 'ganado', 'perdido'],
+      cliente: clienteRows.map(r => r.nombre).filter(Boolean),
     });
   } catch (err) {
     console.error('[cantera] opciones-filtro', err.message);
@@ -7391,37 +7396,71 @@ app.get('/api/cantera/global', requireAuth, async (req, res) => {
   const industriasExcl = String(req.query.industriaExcl || '').split(',').map(s => _cantNormText(s)).filter(Boolean);
   const tamanosExcl = String(req.query.tamanoExcl || '').split(',').filter(Boolean);
   const origen = req.query.origen === 'crm' || req.query.origen === 'borrador' ? req.query.origen : '';
+  // Más criterios (pedido explícito 2026-09-25, con captura de Sales Navigator:
+  // "hay tantos criterios que podrías considerar", "estatus, secuencias,
+  // clientes"). Estado y Secuencias solo existen para contactos del CRM (un
+  // borrador de Cantera no tiene ni disposición ni enrolamiento todavía).
+  const estados = String(req.query.estado || '').split(',').filter(Boolean);
+  const estadosExcl = String(req.query.estadoExcl || '').split(',').filter(Boolean);
+  const secuenciaQ = (req.query.secuencia || '').trim();
+  const clientes = String(req.query.cliente || '').split(',').filter(Boolean);
+  const clientesExcl = String(req.query.clienteExcl || '').split(',').filter(Boolean);
+  const tipo = req.query.tipo === 'contacto' || req.query.tipo === 'empresa' ? req.query.tipo : '';
   const page = Math.max(0, parseInt(req.query.page) || 0);
   const pageSize = [50, 100, 200].includes(parseInt(req.query.pageSize)) ? parseInt(req.query.pageSize) : 50;
   try {
     // Sin tope de 500 — pedido explícito 2026-09-05: "digamos que tengo 5000 en
     // 5 borradores... todo se encuentra allí", con vista de 50/100/200 y
     // paginación real en vez de cortar los resultados de golpe.
-    const { rows: all } = await pool.query(`
+    // Vista "Empresas" (pedido explícito 2026-09-25, como el tab "Account" de
+    // Sales Navigator): TODAS las empresas, tengan o no contactos — el union
+    // de abajo (pensado para filas por CONTACTO) solo listaba las empresas
+    // SIN contactos como fallback, así que una empresa con 5 contactos jamás
+    // aparecía como fila propia. Acá es una query de empresa aparte, sin
+    // relación con contactos.
+    const { rows: all } = tipo === 'empresa' ? await pool.query(`
+      SELECT '' AS nombre, '' AS apellido, '' AS cargo, '' AS email,
+             lco.nombre AS empresa, lco.dominio, lco.pais, lco.industria, lco.tamano, 'crm' AS origen,
+             (SELECT nombre FROM outbound_clients oc WHERE oc.id = lco.outbound_client_id) AS referencia,
+             lco.updated_at, '' AS estado, 'empresa' AS tipo, '' AS secuencias
+        FROM lm_companies lco
+       WHERE lco.user_id=$1 AND ($2 = '%%' OR lco.nombre ILIKE $2 OR lco.dominio ILIKE $2)
+      UNION ALL
+      SELECT '', '', '', '', cco.nombre AS empresa, cco.dominio, cco.pais, cco.industria, cco.tamano,
+             'borrador_' || cb.estado AS origen, cb.nombre AS referencia, cco.created_at AS updated_at,
+             '' AS estado, 'empresa' AS tipo, '' AS secuencias
+        FROM cantera_companies cco JOIN cantera_batches cb ON cb.id = cco.batch_id
+       WHERE cco.user_id=$1 AND ($2 = '%%' OR cco.nombre ILIKE $2 OR cco.dominio ILIKE $2)
+       ORDER BY updated_at DESC LIMIT 20000
+    `, [uid, q]) : await pool.query(`
       SELECT lc.nombre, lc.apellido, lc.cargo, lc.email,
              COALESCE(co.nombre, lc.empresa_nombre) AS empresa, co.dominio,
              COALESCE(co.pais, lc.pais) AS pais, co.industria, co.tamano, 'crm' AS origen,
              (SELECT nombre FROM outbound_clients oc WHERE oc.id = co.outbound_client_id) AS referencia,
-             lc.updated_at
+             lc.updated_at, lc.estado AS estado, 'contacto' AS tipo,
+             (SELECT string_agg(DISTINCT s.nombre, ', ') FROM lm_contact_sequences csq JOIN sequences s ON s.id = csq.sequence_id WHERE csq.contact_id = lc.id) AS secuencias
         FROM lm_contacts lc LEFT JOIN lm_companies co ON co.id = lc.company_id
        WHERE lc.user_id=$1 AND ($2 = '%%' OR lc.nombre ILIKE $2 OR lc.apellido ILIKE $2 OR lc.email ILIKE $2 OR lc.cargo ILIKE $2 OR COALESCE(co.nombre, lc.empresa_nombre) ILIKE $2)
       UNION ALL
       SELECT cc.nombre, cc.apellido, cc.cargo, cc.email,
              cco.nombre AS empresa, cco.dominio, cco.pais, cco.industria, cco.tamano,
-             'borrador_' || cb.estado AS origen, cb.nombre AS referencia, cc.created_at AS updated_at
+             'borrador_' || cb.estado AS origen, cb.nombre AS referencia, cc.created_at AS updated_at,
+             '' AS estado, 'contacto' AS tipo, '' AS secuencias
         FROM cantera_contacts cc
         JOIN cantera_companies cco ON cco.id = cc.company_id
         JOIN cantera_batches cb ON cb.id = cc.batch_id
        WHERE cc.user_id=$1 AND ($2 = '%%' OR cc.nombre ILIKE $2 OR cc.apellido ILIKE $2 OR cc.email ILIKE $2 OR cc.cargo ILIKE $2 OR cco.nombre ILIKE $2)
       UNION ALL
       SELECT '', '', '', '', lco.nombre AS empresa, lco.dominio, lco.pais, lco.industria, lco.tamano, 'crm' AS origen,
-             (SELECT nombre FROM outbound_clients oc WHERE oc.id = lco.outbound_client_id) AS referencia, lco.updated_at
+             (SELECT nombre FROM outbound_clients oc WHERE oc.id = lco.outbound_client_id) AS referencia, lco.updated_at,
+             '' AS estado, 'empresa' AS tipo, '' AS secuencias
         FROM lm_companies lco
        WHERE lco.user_id=$1 AND NOT EXISTS (SELECT 1 FROM lm_contacts x WHERE x.company_id = lco.id)
          AND ($2 = '%%' OR lco.nombre ILIKE $2 OR lco.dominio ILIKE $2)
       UNION ALL
       SELECT '', '', '', '', cco2.nombre AS empresa, cco2.dominio, cco2.pais, cco2.industria, cco2.tamano,
-             'borrador_' || cb2.estado AS origen, cb2.nombre AS referencia, cco2.created_at AS updated_at
+             'borrador_' || cb2.estado AS origen, cb2.nombre AS referencia, cco2.created_at AS updated_at,
+             '' AS estado, 'empresa' AS tipo, '' AS secuencias
         FROM cantera_companies cco2 JOIN cantera_batches cb2 ON cb2.id = cco2.batch_id
        WHERE cco2.user_id=$1 AND NOT EXISTS (SELECT 1 FROM cantera_contacts y WHERE y.company_id = cco2.id)
          AND ($2 = '%%' OR cco2.nombre ILIKE $2 OR cco2.dominio ILIKE $2)
@@ -7436,6 +7475,12 @@ app.get('/api/cantera/global', requireAuth, async (req, res) => {
       if (paisesExcl.length && paisesExcl.includes(_cantNormPais(r.pais))) return false;
       if (industriasExcl.length && industriasExcl.some(i => _cantNormText(r.industria).includes(i))) return false;
       if (tamanosExcl.length && tamanosExcl.includes(r.tamano)) return false;
+      if (tipo && r.tipo !== tipo) return false;
+      if (estados.length && !estados.includes(r.estado)) return false;
+      if (estadosExcl.length && estadosExcl.includes(r.estado)) return false;
+      if (secuenciaQ && !(r.secuencias || '').toLowerCase().includes(secuenciaQ.toLowerCase())) return false;
+      if (clientes.length && !clientes.includes(r.referencia || '')) return false;
+      if (clientesExcl.length && clientesExcl.includes(r.referencia || '')) return false;
       return true;
     });
     const rows = filtered.slice(page * pageSize, page * pageSize + pageSize);
