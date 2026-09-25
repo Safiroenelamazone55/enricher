@@ -7335,7 +7335,13 @@ app.get('/api/cantera/opciones-filtro', requireAuth, async (req, res) => {
     // Todas las secuencias (activas, pausadas, cualquier estado) — pedido
     // explícito 2026-09-25: "deberían estar las secuencias activas pausadas
     // todas", no solo las que aparecen enrolando gente ahora mismo.
-    const { rows: seqRows } = await pool.query(`SELECT nombre FROM sequences WHERE user_id=$1 ORDER BY nombre`, [uid]);
+    // Se manda también el cliente dueño de cada secuencia (pedido explícito
+    // 2026-09-25: "si ya apliqué el filtro de cliente debería aparecer solo
+    // las secuencias vinculadas a ese cliente") — el frontend filtra la
+    // lista en vivo según el/los cliente(s) ya marcados, sin ida y vuelta
+    // al servidor cada vez que cambia ese filtro.
+    const { rows: seqRows } = await pool.query(
+      `SELECT s.nombre, oc.nombre AS cliente FROM sequences s LEFT JOIN outbound_clients oc ON oc.id = s.outbound_client_id WHERE s.user_id=$1 ORDER BY s.nombre`, [uid]);
     // Ciudad — pedido explícito 2026-09-25 ("agregar más formas de filtrar"),
     // solo existe a nivel contacto CRM (cantera_contacts no la guarda todavía).
     const { rows: ciudadRows } = await pool.query(`SELECT DISTINCT ciudad FROM lm_contacts WHERE user_id=$1 AND ciudad <> '' ORDER BY ciudad`, [uid]);
@@ -7349,6 +7355,7 @@ app.get('/api/cantera/opciones-filtro', requireAuth, async (req, res) => {
     res.json({
       tier: [...tierSet].sort((a, b) => Number(a) - Number(b)),
       secuencia: seqRows.map(r => r.nombre).filter(Boolean),
+      secuenciaPorCliente: seqRows.filter(r => r.nombre).map(r => ({ nombre: r.nombre, cliente: r.cliente || '' })),
       pais: Object.keys(CANTERA_PAISES).map(k => k.replace(/\b\w/g, c => c.toUpperCase())),
       industria: [...industriaSet].sort((a, b) => a.localeCompare(b)),
       tamano: ['1-10', '11-50', '51-200', '201-500', '501-1000', '1001-5000', '5001-10000', '10001+'],

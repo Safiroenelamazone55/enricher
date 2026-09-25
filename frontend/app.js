@@ -7993,7 +7993,15 @@ const CanteraGlobalModule = (() => {
   function setPageSize(n) { try { localStorage.setItem('cantera_global_page_size', String(parseInt(n) || 50)); } catch (_) {} _page = 0; _search().then(_repaint); }
   function goPage(d) { _page = Math.max(0, _page + d); _search().then(_repaint); }
   function _gOptions(field) {
-    const all = (_opts && _opts[field]) || [];
+    let all = (_opts && _opts[field]) || [];
+    // Secuencia se acota al/los cliente(s) ya marcados en "Cliente outbound"
+    // (pedido explícito 2026-09-25: "si ya apliqué los filtros del cliente
+    // debería aparecer solo las secuencias vinculadas a ese cliente") — no
+    // tiene sentido ofrecer secuencias de otro cliente si ya filtraste por uno.
+    if (field === 'secuencia' && _filtros.cliente.length && _opts.secuenciaPorCliente) {
+      const set = new Set(_filtros.cliente.map(c => c.toLowerCase()));
+      all = _opts.secuenciaPorCliente.filter(r => set.has((r.cliente || '').toLowerCase())).map(r => r.nombre);
+    }
     const chosen = new Set([...(_filtros[field] || []), ...(_filtrosExcl[field] || [])].map(v => v.toLowerCase()));
     return all.filter(o => !chosen.has(o.toLowerCase()));
   }
