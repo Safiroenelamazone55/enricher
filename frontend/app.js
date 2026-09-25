@@ -5619,12 +5619,12 @@ const CanteraModule = (() => {
     { key: 'ubicacion', label: 'Ubicación', def: false },
     { key: 'website', label: 'Website', def: false },
     { key: 'linkedin', label: 'LinkedIn', def: false },
-    { key: 'paso1_estado', label: 'Filtro básico', def: true },
+    { key: 'paso1_estado', label: 'Validación básica', def: true },
     { key: 'paso1_motivo', label: 'Motivo paso 1', def: true },
     { key: 'tier_clave', label: 'Tier', def: true },
     { key: 'confianza', label: 'Confianza', def: true },
     { key: 'prioridad', label: 'Prioridad (empresa)', def: true },
-    { key: 'paso2_estado', label: 'Calificación IA', def: true },
+    { key: 'paso2_estado', label: 'Validación profunda', def: true },
     { key: 'motivo_descarte', label: 'Nota', def: true },
     { key: 'contactos', label: 'Contactos', def: true },
     { key: 'auditoria', label: 'Auditoría', def: true },
@@ -5881,7 +5881,7 @@ const CanteraModule = (() => {
           if (!_coSel.size && !hasFiltros) return '';
           const paso1Lbl = { aprobado: 'aprobado', descartado: 'descartado', vacio: 'vacío' };
           return `<div class="cant-results-bar">
-          <span class="cant-count">${_coSel.size ? `${_coSel.size} seleccionada(s)` : ''}${_paso1Filtro ? ` · Filtro básico: ${paso1Lbl[_paso1Filtro]}` : ''}${_tierFiltro.size ? ` · Tier: ${[..._tierFiltro].join(', ')}` : ''}${_prioFiltro.size ? ` · Prioridad: ${[..._prioFiltro].join(', ')}` : ''}${_minContactos ? ` · ${_minContactos}+ contactos` : ''}${_sinPrioridad ? ' · sin priorizar' : ''}${_auditoriaFiltro ? ` · auditoría: ${_auditoriaFiltro === 'sin_auditar' ? 'sin auditar' : _auditoriaFiltro === 'de_acuerdo' ? 'confirmadas' : 'en desacuerdo'}` : ''}${_paisFiltro.size ? ` · País: ${[..._paisFiltro].join(', ')}` : ''}${_paisExclFiltro.size ? ` · País ≠ ${[..._paisExclFiltro].join(', ')}` : ''}${_industriaFiltro.size ? ` · Industria: ${[..._industriaFiltro].join(', ')}` : ''}${_industriaExclFiltro.size ? ` · Industria ≠ ${[..._industriaExclFiltro].join(', ')}` : ''}${_tamanoFiltro.size ? ` · Tamaño: ${[..._tamanoFiltro].join(', ')}` : ''}${_tamanoExclFiltro.size ? ` · Tamaño ≠ ${[..._tamanoExclFiltro].join(', ')}` : ''}${_tierExclFiltro.size ? ` · Tier ≠ ${[..._tierExclFiltro].join(', ')}` : ''}${_domFaltante ? ' · sin dominio' : ''}${_dominioQ ? ` · dominio contiene "${esc(_dominioQ)}"` : ''}${_paso2DescFiltro.size ? ` · Calificación IA descartada: ${[..._paso2DescFiltro].map(v => v === 'descartado' ? 'IA' : 'manual').join(', ')}` : ''}</span>
+          <span class="cant-count">${_coSel.size ? `${_coSel.size} seleccionada(s)` : ''}${_paso1Filtro ? ` · Validación básica: ${paso1Lbl[_paso1Filtro]}` : ''}${_tierFiltro.size ? ` · Tier: ${[..._tierFiltro].join(', ')}` : ''}${_prioFiltro.size ? ` · Prioridad: ${[..._prioFiltro].join(', ')}` : ''}${_minContactos ? ` · ${_minContactos}+ contactos` : ''}${_sinPrioridad ? ' · sin priorizar' : ''}${_auditoriaFiltro ? ` · auditoría: ${_auditoriaFiltro === 'sin_auditar' ? 'sin auditar' : _auditoriaFiltro === 'de_acuerdo' ? 'confirmadas' : 'en desacuerdo'}` : ''}${_paisFiltro.size ? ` · País: ${[..._paisFiltro].join(', ')}` : ''}${_paisExclFiltro.size ? ` · País ≠ ${[..._paisExclFiltro].join(', ')}` : ''}${_industriaFiltro.size ? ` · Industria: ${[..._industriaFiltro].join(', ')}` : ''}${_industriaExclFiltro.size ? ` · Industria ≠ ${[..._industriaExclFiltro].join(', ')}` : ''}${_tamanoFiltro.size ? ` · Tamaño: ${[..._tamanoFiltro].join(', ')}` : ''}${_tamanoExclFiltro.size ? ` · Tamaño ≠ ${[..._tamanoExclFiltro].join(', ')}` : ''}${_tierExclFiltro.size ? ` · Tier ≠ ${[..._tierExclFiltro].join(', ')}` : ''}${_domFaltante ? ' · sin dominio' : ''}${_dominioQ ? ` · dominio contiene "${esc(_dominioQ)}"` : ''}${_paso2DescFiltro.size ? ` · Validación profunda descartada: ${[..._paso2DescFiltro].map(v => v === 'descartado' ? 'IA' : 'manual').join(', ')}` : ''}</span>
           <span class="cant-results-total">${hasFiltros ? `${filteredCompanies.length} resultado${filteredCompanies.length === 1 ? '' : 's'}` : ''}</span>
           ${hasFiltros ? `<button class="btn btn--ghost btn--sm" onclick="CanteraModule.resetFiltros()">Limpiar filtros</button>` : ''}
         </div>`;
@@ -5923,7 +5923,7 @@ const CanteraModule = (() => {
         </div>
       </div>
       <div class="cant-info-block">
-        <h3 class="cant-info-block__h">Filtro básico y validación (pasos 1 y 2)</h3>
+        <h3 class="cant-info-block__h">Validación básica y validación profunda (pasos 1 y 2)</h3>
         <div class="lm-imp-done__stats" style="flex-wrap:wrap">
           ${stat(aprobadas, 'aprobadas en el filtro básico')}
           ${stat(descartadas1, 'descartadas en el filtro básico')}
@@ -6095,7 +6095,7 @@ const CanteraModule = (() => {
     // toggles sueltos en la raíz — ahora son categorías reales dentro de
     // "Filtrar", con sus opciones (Paso 1: Aprobado/Descartado/Vacío; Dominio:
     // buscar texto o marcar "Sin dominio"). Pedido explícito 2026-09-15.
-    const paso1Panel = [['aprobado', 'Aprobado'], ['descartado', 'Descartado'], ['vacio', 'Vacío (Filtro básico no corrido todavía)']]
+    const paso1Panel = [['aprobado', 'Aprobado'], ['descartado', 'Descartado'], ['vacio', 'Vacío (Validación básica no corrida todavía)']]
       .map(([v, label]) => `<label class="cant-colchk"><input type="radio" name="cant-paso1" ${_paso1Filtro === v ? 'checked' : ''} onchange="CanteraModule.setPaso1Filtro('${v}')"> ${label}</label>`).join('');
     const dominioPanel = `<div style="padding:4px 10px 8px">
         <input type="text" class="form-input" style="width:100%" placeholder="El dominio contiene…" value="${esc(_dominioQ)}" oninput="CanteraModule.setDominioQ(this.value)" onclick="event.stopPropagation()">
@@ -6118,7 +6118,7 @@ const CanteraModule = (() => {
         ${item('Auditar muestra (IA)', 'CanteraModule.openAudit()')}
       </div>
       <div class="cp-mark-menu__sep"></div>
-      <div class="cp-mark-menu__list">${sub('Filtrar', `<div class="cp-mark-menu__list">${sub(`Filtro básico${_paso1Filtro ? ' · 1' : ''}`, paso1Panel)}${sub(`Dominio${(_domFaltante || _dominioQ) ? ' · 1' : ''}`, dominioPanel)}${sub('Tier', tierPanel)}${sub('Prioridad', prioPanel)}${sub('Nº de contactos', numContactosPanel)}${sub('Auditoría', auditoriaPanel)}${sub('Calificación IA descartada', paso2DescPanel)}${sub('País', paisPanel, true)}${sub('Industria', industriaPanel, true)}${sub('Tamaño', tamanoPanel, true)}${sub(`Guardados${filtroGuardado ? ' · 1' : ''}`, guardadosPanel)}</div>`)}</div>
+      <div class="cp-mark-menu__list">${sub('Filtrar', `<div class="cp-mark-menu__list">${sub(`Validación básica${_paso1Filtro ? ' · 1' : ''}`, paso1Panel)}${sub(`Dominio${(_domFaltante || _dominioQ) ? ' · 1' : ''}`, dominioPanel)}${sub('Tier', tierPanel)}${sub('Prioridad', prioPanel)}${sub('Nº de contactos', numContactosPanel)}${sub('Auditoría', auditoriaPanel)}${sub('Validación profunda descartada', paso2DescPanel)}${sub('País', paisPanel, true)}${sub('Industria', industriaPanel, true)}${sub('Tamaño', tamanoPanel, true)}${sub(`Guardados${filtroGuardado ? ' · 1' : ''}`, guardadosPanel)}</div>`)}</div>
       <div class="cp-mark-menu__sep"></div>
       <div class="cp-mark-menu__list">${sub('Elegir columnas visibles', colsPanel, true)}</div>
       ${calificadas || _coSel.size ? `<div class="cp-mark-menu__sep"></div><div class="cp-mark-menu__list">
@@ -6516,7 +6516,7 @@ const CanteraModule = (() => {
   function _filtroResumenTexto(f) {
     const paso1Lbl = { aprobado: 'aprobado', descartado: 'descartado', vacio: 'vacío' };
     const partes = [
-      f.paso1Filtro ? `Filtro básico: ${paso1Lbl[f.paso1Filtro]}` : '',
+      f.paso1Filtro ? `Validación básica: ${paso1Lbl[f.paso1Filtro]}` : '',
       (f.tierFiltro || []).length ? `Tier: ${f.tierFiltro.join(', ')}` : '',
       (f.prioFiltro || []).length ? `Prioridad: ${f.prioFiltro.join(', ')}` : '',
       f.minContactos ? `${f.minContactos}+ contactos` : '',
@@ -6527,7 +6527,7 @@ const CanteraModule = (() => {
       (f.tamanoFiltro || []).length ? `Tamaño: ${f.tamanoFiltro.join(', ')}` : '',
       f.domFaltante ? 'sin dominio' : '',
       f.dominioQ ? `dominio contiene "${f.dominioQ}"` : '',
-      (f.paso2DescFiltro || []).length ? `Calificación IA descartada: ${f.paso2DescFiltro.join(', ')}` : '',
+      (f.paso2DescFiltro || []).length ? `Validación profunda descartada: ${f.paso2DescFiltro.join(', ')}` : '',
     ].filter(Boolean);
     return partes.join(' · ') || '(sin condiciones)';
   }
@@ -7167,12 +7167,12 @@ const CanteraMesaModule = (() => {
     { key: 'ubicacion', label: 'Ubicación', def: false },
     { key: 'website', label: 'Website', def: false },
     { key: 'linkedin', label: 'LinkedIn', def: false },
-    { key: 'paso1_estado', label: 'Filtro básico', def: true },
+    { key: 'paso1_estado', label: 'Validación básica', def: true },
     { key: 'paso1_motivo', label: 'Motivo paso 1', def: false },
     { key: 'tier_clave', label: 'Tier', def: true },
     { key: 'confianza', label: 'Confianza', def: true },
     { key: 'prioridad', label: 'Prioridad (empresa)', def: true },
-    { key: 'paso2_estado', label: 'Calificación IA', def: true },
+    { key: 'paso2_estado', label: 'Validación profunda', def: true },
     { key: 'motivo_descarte', label: 'Nota', def: true },
     { key: 'contactos', label: 'Contactos', def: true },
     { key: 'auditoria', label: 'Auditoría', def: true },
@@ -7612,6 +7612,11 @@ const CanteraMesaModule = (() => {
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
+  // Deja disponible una fila para que openManualValidation la use, sin haber
+  // pasado por _search() de Mesa — pedido explícito 2026-09-25: editar la
+  // Validación profunda directo desde Base Global (CanteraGlobalModule.
+  // editValidacion la llama antes de abrir este mismo modal).
+  function primeKnownRow(row) { if (row && row.id != null) _knownRows[row.id] = row; }
   // Validación manual — igual a la de dentro de un borrador, pero recibe el
   // batch_id de la fila en vez de asumir _current.
   function _manualCopyText(co) {
@@ -7774,7 +7779,7 @@ const CanteraMesaModule = (() => {
         ${_filterSelect('campana', opts.campanas, _filtro.campana)}
         ${_filterSelect('secuencia', opts.secuencias, _filtro.secuencia)}
         ${_coSel.size ? `<span class="cant-count">${_coSel.size} seleccionada(s)</span>` : ''}
-        ${_onlyFailed ? `<span class="cant-count">· viendo solo descartadas (Filtro básico)</span>` : ''}
+        ${_onlyFailed ? `<span class="cant-count">· viendo solo descartadas (Validación básica)</span>` : ''}
         ${_tierFiltro.size ? `<span class="cant-count">· Tier: ${[..._tierFiltro].join(', ')}</span>` : ''}
         ${_prioFiltro.size ? `<span class="cant-count">· Prioridad: ${[..._prioFiltro].join(', ')}</span>` : ''}
         ${_minContactos ? `<span class="cant-count">· ${_minContactos}+ contactos</span>` : ''}
@@ -7796,7 +7801,7 @@ const CanteraMesaModule = (() => {
     toggleIndustriaFiltro, toggleArchivoFiltro,
     toggleCoSel, toggleCoSelAll, toggleExpand, setContactPrioridad, toggleCol, menu,
     runClean, runEnrich, runValidacion, _confirmRevalidar, openAudit,
-    openPromote, doPromote, openSendSeq, doSendSeq, openManualValidation, saveManualValidation, copyManualData, copyManualInstruccion, quitarValidacionManual };
+    openPromote, doPromote, openSendSeq, doSendSeq, openManualValidation, saveManualValidation, copyManualData, copyManualInstruccion, quitarValidacionManual, primeKnownRow };
 })();
 
 // =================================================================
@@ -7836,8 +7841,8 @@ const CanteraGlobalModule = (() => {
     { key: 'industria', label: 'Industria', def: true }, { key: 'estado', label: 'Estado', def: true },
     { key: 'secuencias', label: 'Secuencias', def: true },
     { key: 'tier', label: 'Tier (CRM)', def: false },
-    { key: 'paso1_estado', label: 'Filtro básico', def: false },
-    { key: 'paso2_estado', label: 'Calificación IA', def: false },
+    { key: 'paso1_estado', label: 'Validación básica', def: false },
+    { key: 'paso2_estado', label: 'Validación profunda', def: false },
     { key: 'origen', label: 'Dónde está', def: true }, { key: 'referencia', label: 'Referencia', def: true },
   ];
   const GLOBAL_COLS_EMPRESA = [
@@ -7845,8 +7850,8 @@ const CanteraGlobalModule = (() => {
     { key: 'pais', label: 'País', def: true }, { key: 'industria', label: 'Industria', def: true },
     { key: 'tamano', label: 'Tamaño', def: false },
     { key: 'tier', label: 'Tier (CRM)', def: false },
-    { key: 'paso1_estado', label: 'Filtro básico', def: false },
-    { key: 'paso2_estado', label: 'Calificación IA', def: false },
+    { key: 'paso1_estado', label: 'Validación básica', def: false },
+    { key: 'paso2_estado', label: 'Validación profunda', def: false },
     { key: 'origen', label: 'Dónde está', def: true }, { key: 'referencia', label: 'Referencia', def: true },
   ];
   function _globalCols() { return _vista === 'empresa' ? GLOBAL_COLS_EMPRESA : GLOBAL_COLS_CONTACTO; }
@@ -7958,7 +7963,16 @@ const CanteraGlobalModule = (() => {
   function _colCell(r, key) {
     if (key === 'origen') return `<span class="cant-estado cant-estado--${r.origen === 'crm' ? 'aprobado' : 'pendiente'}">${_origenLabel(r.origen)}</span>`;
     if (key === 'paso1_estado') return r.paso1_estado ? esc(_PASO1_LBL[r.paso1_estado] || r.paso1_estado) : '—';
-    if (key === 'paso2_estado') return r.paso2_estado ? esc(_PASO2_LBL[r.paso2_estado] || r.paso2_estado) : '—';
+    // Editable (pedido explícito 2026-09-25: "debo poder darle clic y
+    // abrirse como la foto") — solo empresas de un borrador tienen paso2_estado
+    // que editar (company_id/batch_id vienen null para filas del CRM).
+    if (key === 'paso2_estado') {
+      const txt = r.paso2_estado ? esc(_PASO2_LBL[r.paso2_estado] || r.paso2_estado) : '—';
+      if (r.company_id && r.batch_id) {
+        return `${txt} <button class="lm-mini-x" title="Editar validación profunda" onclick="event.stopPropagation();CanteraGlobalModule.editValidacion(${r.company_id},${r.batch_id})">✎</button>`;
+      }
+      return txt;
+    }
     return r[key] ? esc(r[key]) : '—';
   }
   // Tabla data-driven por columnas (pedido explícito 2026-09-25: mostrar/
@@ -8080,7 +8094,27 @@ const CanteraGlobalModule = (() => {
   async function removeFiltro(field, idx) { _filtros[field].splice(idx, 1); _page = 0; await _search(); _repaint(); }
   async function addFiltroExcl(field, value) { _filtrosExcl[field] = [...(_filtrosExcl[field] || []), value]; _page = 0; await _search(); _repaint(); }
   async function removeFiltroExcl(field, idx) { _filtrosExcl[field].splice(idx, 1); _page = 0; await _search(); _repaint(); }
-  return { render, setQ, setOrigen, setVista, setPageSize, goPage, toggleCollapse, taOpen, taFilter, taBlur, addFiltro, removeFiltro, addFiltroExcl, removeFiltroExcl, toggleCol, colsMenu };
+  // Abre la MISMA modal "Validación manual" que ya existe en Mesa de trabajo
+  // (mismos endpoints, mismo Tier/Prioridad/Confianza/Nota) — se reusa en vez
+  // de duplicarla. Solo hace falta "primar" la fila en el _knownRows de Mesa
+  // (Base Global no comparte ese estado) y, al cerrarse la modal, refrescar
+  // esta vista (Mesa refresca la suya propia, que acá ni siquiera existe en
+  // el DOM — de ahí el MutationObserver en vez de enganchar su _refresh()).
+  async function editValidacion(companyId, batchId) {
+    try {
+      const row = await (await apiFetch(`${API}/cantera/companies/${companyId}`)).json();
+      CanteraMesaModule.primeKnownRow(row);
+      await CanteraMesaModule.openManualValidation(companyId, batchId);
+      const modal = document.getElementById('mesa-manual-modal');
+      if (modal) {
+        const obs = new MutationObserver(() => {
+          if (!document.getElementById('mesa-manual-modal')) { obs.disconnect(); _search().then(_repaint); }
+        });
+        obs.observe(document.body, { childList: true });
+      }
+    } catch (e) { showBanner('Error al abrir la validación: ' + e.message, 'error'); }
+  }
+  return { render, setQ, setOrigen, setVista, setPageSize, goPage, toggleCollapse, taOpen, taFilter, taBlur, addFiltro, removeFiltro, addFiltroExcl, removeFiltroExcl, toggleCol, colsMenu, editValidacion };
 })();
 
 // =================================================================
