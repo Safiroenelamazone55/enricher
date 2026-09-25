@@ -7323,7 +7323,15 @@ app.get('/api/cantera/opciones-filtro', requireAuth, async (req, res) => {
     // clientes/estado — sumados 2026-09-25 para el filtro de Base Global
     // ("estatus, secuencias, clientes", pedido explícito en vivo).
     const { rows: clienteRows } = await pool.query(`SELECT nombre FROM outbound_clients WHERE user_id=$1 ORDER BY nombre`, [uid]);
+    // Todas las secuencias (activas, pausadas, cualquier estado) — pedido
+    // explícito 2026-09-25: "deberían estar las secuencias activas pausadas
+    // todas", no solo las que aparecen enrolando gente ahora mismo.
+    const { rows: seqRows } = await pool.query(`SELECT nombre FROM sequences WHERE user_id=$1 ORDER BY nombre`, [uid]);
+    // Ciudad — pedido explícito 2026-09-25 ("agregar más formas de filtrar"),
+    // solo existe a nivel contacto CRM (cantera_contacts no la guarda todavía).
+    const { rows: ciudadRows } = await pool.query(`SELECT DISTINCT ciudad FROM lm_contacts WHERE user_id=$1 AND ciudad <> '' ORDER BY ciudad`, [uid]);
     res.json({
+      secuencia: seqRows.map(r => r.nombre).filter(Boolean),
       pais: Object.keys(CANTERA_PAISES).map(k => k.replace(/\b\w/g, c => c.toUpperCase())),
       industria: [...industriaSet].sort((a, b) => a.localeCompare(b)),
       tamano: ['1-10', '11-50', '51-200', '201-500', '501-1000', '1001-5000', '5001-10000', '10001+'],
@@ -7331,6 +7339,7 @@ app.get('/api/cantera/opciones-filtro', requireAuth, async (req, res) => {
       departamento: ['ventas', 'marketing', 'operaciones', 'finanzas', 'rrhh', 'ti', 'legal', 'compras', 'servicio al cliente'],
       estado: ['nuevo', 'contactado', 'respondio', 'propuesta', 'negociacion', 'ganado', 'perdido'],
       cliente: clienteRows.map(r => r.nombre).filter(Boolean),
+      ciudad: ciudadRows.map(r => r.ciudad).filter(Boolean),
     });
   } catch (err) {
     console.error('[cantera] opciones-filtro', err.message);
@@ -7402,9 +7411,20 @@ app.get('/api/cantera/global', requireAuth, async (req, res) => {
   // borrador de Cantera no tiene ni disposición ni enrolamiento todavía).
   const estados = String(req.query.estado || '').split(',').filter(Boolean);
   const estadosExcl = String(req.query.estadoExcl || '').split(',').filter(Boolean);
-  const secuenciaQ = (req.query.secuencia || '').trim();
+  // Secuencia pasa de texto libre a lista exacta (pedido explícito 2026-09-25:
+  // "deberían estar las secuencias activas pausadas todas y yo poder incluir
+  // o excluir, para contactos y para empresas") — igual que el resto de
+  // filtros tipo lista, con Incluir/Excluir por valor.
+  const secuencias = String(req.query.secuencia || '').split(',').filter(Boolean);
+  const secuenciasExcl = String(req.query.secuenciaExcl || '').split(',').filter(Boolean);
   const clientes = String(req.query.cliente || '').split(',').filter(Boolean);
   const clientesExcl = String(req.query.clienteExcl || '').split(',').filter(Boolean);
+  const seniorities = String(req.query.seniority || '').split(',').filter(Boolean);
+  const senioritiesExcl = String(req.query.seniorityExcl || '').split(',').filter(Boolean);
+  const departamentos = String(req.query.departamento || '').split(',').filter(Boolean);
+  const departamentosExcl = String(req.query.departamentoExcl || '').split(',').filter(Boolean);
+  const ciudades = String(req.query.ciudad || '').split(',').filter(Boolean);
+  const ciudadesExcl = String(req.query.ciudadExcl || '').split(',').filter(Boolean);
   const tipo = req.query.tipo === 'contacto' || req.query.tipo === 'empresa' ? req.query.tipo : '';
   const page = Math.max(0, parseInt(req.query.page) || 0);
   const pageSize = [50, 100, 200].includes(parseInt(req.query.pageSize)) ? parseInt(req.query.pageSize) : 50;
@@ -7422,13 +7442,15 @@ app.get('/api/cantera/global', requireAuth, async (req, res) => {
       SELECT '' AS nombre, '' AS apellido, '' AS cargo, '' AS email,
              lco.nombre AS empresa, lco.dominio, lco.pais, lco.industria, lco.tamano, 'crm' AS origen,
              (SELECT nombre FROM outbound_clients oc WHERE oc.id = lco.outbound_client_id) AS referencia,
-             lco.updated_at, '' AS estado, 'empresa' AS tipo, '' AS secuencias
+             lco.updated_at, '' AS estado, 'empresa' AS tipo,
+             (SELECT string_agg(DISTINCT s.nombre, ', ') FROM lm_contacts k JOIN lm_contact_sequences csq ON csq.contact_id = k.id JOIN sequences s ON s.id = csq.sequence_id WHERE k.company_id = lco.id) AS secuencias,
+             '' AS seniority, '' AS departamento, lco.ciudad AS ciudad
         FROM lm_companies lco
        WHERE lco.user_id=$1 AND ($2 = '%%' OR lco.nombre ILIKE $2 OR lco.dominio ILIKE $2)
       UNION ALL
       SELECT '', '', '', '', cco.nombre AS empresa, cco.dominio, cco.pais, cco.industria, cco.tamano,
              'borrador_' || cb.estado AS origen, cb.nombre AS referencia, cco.created_at AS updated_at,
-             '' AS estado, 'empresa' AS tipo, '' AS secuencias
+             '' AS estado, 'empresa' AS tipo, '' AS secuencias, '' AS seniority, '' AS departamento, '' AS ciudad
         FROM cantera_companies cco JOIN cantera_batches cb ON cb.id = cco.batch_id
        WHERE cco.user_id=$1 AND ($2 = '%%' OR cco.nombre ILIKE $2 OR cco.dominio ILIKE $2)
        ORDER BY updated_at DESC LIMIT 20000
@@ -7438,14 +7460,15 @@ app.get('/api/cantera/global', requireAuth, async (req, res) => {
              COALESCE(co.pais, lc.pais) AS pais, co.industria, co.tamano, 'crm' AS origen,
              (SELECT nombre FROM outbound_clients oc WHERE oc.id = co.outbound_client_id) AS referencia,
              lc.updated_at, lc.estado AS estado, 'contacto' AS tipo,
-             (SELECT string_agg(DISTINCT s.nombre, ', ') FROM lm_contact_sequences csq JOIN sequences s ON s.id = csq.sequence_id WHERE csq.contact_id = lc.id) AS secuencias
+             (SELECT string_agg(DISTINCT s.nombre, ', ') FROM lm_contact_sequences csq JOIN sequences s ON s.id = csq.sequence_id WHERE csq.contact_id = lc.id) AS secuencias,
+             lc.seniority AS seniority, lc.departamento AS departamento, lc.ciudad AS ciudad
         FROM lm_contacts lc LEFT JOIN lm_companies co ON co.id = lc.company_id
        WHERE lc.user_id=$1 AND ($2 = '%%' OR lc.nombre ILIKE $2 OR lc.apellido ILIKE $2 OR lc.email ILIKE $2 OR lc.cargo ILIKE $2 OR COALESCE(co.nombre, lc.empresa_nombre) ILIKE $2)
       UNION ALL
       SELECT cc.nombre, cc.apellido, cc.cargo, cc.email,
              cco.nombre AS empresa, cco.dominio, cco.pais, cco.industria, cco.tamano,
              'borrador_' || cb.estado AS origen, cb.nombre AS referencia, cc.created_at AS updated_at,
-             '' AS estado, 'contacto' AS tipo, '' AS secuencias
+             '' AS estado, 'contacto' AS tipo, '' AS secuencias, '' AS seniority, '' AS departamento, '' AS ciudad
         FROM cantera_contacts cc
         JOIN cantera_companies cco ON cco.id = cc.company_id
         JOIN cantera_batches cb ON cb.id = cc.batch_id
@@ -7453,14 +7476,14 @@ app.get('/api/cantera/global', requireAuth, async (req, res) => {
       UNION ALL
       SELECT '', '', '', '', lco.nombre AS empresa, lco.dominio, lco.pais, lco.industria, lco.tamano, 'crm' AS origen,
              (SELECT nombre FROM outbound_clients oc WHERE oc.id = lco.outbound_client_id) AS referencia, lco.updated_at,
-             '' AS estado, 'empresa' AS tipo, '' AS secuencias
+             '' AS estado, 'empresa' AS tipo, '' AS secuencias, '' AS seniority, '' AS departamento, lco.ciudad AS ciudad
         FROM lm_companies lco
        WHERE lco.user_id=$1 AND NOT EXISTS (SELECT 1 FROM lm_contacts x WHERE x.company_id = lco.id)
          AND ($2 = '%%' OR lco.nombre ILIKE $2 OR lco.dominio ILIKE $2)
       UNION ALL
       SELECT '', '', '', '', cco2.nombre AS empresa, cco2.dominio, cco2.pais, cco2.industria, cco2.tamano,
              'borrador_' || cb2.estado AS origen, cb2.nombre AS referencia, cco2.created_at AS updated_at,
-             '' AS estado, 'empresa' AS tipo, '' AS secuencias
+             '' AS estado, 'empresa' AS tipo, '' AS secuencias, '' AS seniority, '' AS departamento, '' AS ciudad
         FROM cantera_companies cco2 JOIN cantera_batches cb2 ON cb2.id = cco2.batch_id
        WHERE cco2.user_id=$1 AND NOT EXISTS (SELECT 1 FROM cantera_contacts y WHERE y.company_id = cco2.id)
          AND ($2 = '%%' OR cco2.nombre ILIKE $2 OR cco2.dominio ILIKE $2)
@@ -7478,9 +7501,17 @@ app.get('/api/cantera/global', requireAuth, async (req, res) => {
       if (tipo && r.tipo !== tipo) return false;
       if (estados.length && !estados.includes(r.estado)) return false;
       if (estadosExcl.length && estadosExcl.includes(r.estado)) return false;
-      if (secuenciaQ && !(r.secuencias || '').toLowerCase().includes(secuenciaQ.toLowerCase())) return false;
+      const rSeqs = (r.secuencias || '').split(',').map(s => s.trim()).filter(Boolean);
+      if (secuencias.length && !secuencias.some(s => rSeqs.includes(s))) return false;
+      if (secuenciasExcl.length && secuenciasExcl.some(s => rSeqs.includes(s))) return false;
       if (clientes.length && !clientes.includes(r.referencia || '')) return false;
       if (clientesExcl.length && clientesExcl.includes(r.referencia || '')) return false;
+      if (seniorities.length && !seniorities.includes(r.seniority || '')) return false;
+      if (senioritiesExcl.length && senioritiesExcl.includes(r.seniority || '')) return false;
+      if (departamentos.length && !departamentos.includes(r.departamento || '')) return false;
+      if (departamentosExcl.length && departamentosExcl.includes(r.departamento || '')) return false;
+      if (ciudades.length && !ciudades.includes(r.ciudad || '')) return false;
+      if (ciudadesExcl.length && ciudadesExcl.includes(r.ciudad || '')) return false;
       return true;
     });
     const rows = filtered.slice(page * pageSize, page * pageSize + pageSize);

@@ -7816,11 +7816,10 @@ const CanteraGlobalModule = (() => {
   // Tabs "Contactos | Empresas | Todos" — mismo espíritu que "Lead/Account"
   // de Sales Navigator (pedido explícito 2026-09-25, con captura).
   let _vista = '';
-  let _secuenciaQ = '';
-  let _filtros = { pais: [], industria: [], tamano: [], estado: [], cliente: [] };
+  let _filtros = { pais: [], industria: [], tamano: [], estado: [], cliente: [], secuencia: [], seniority: [], departamento: [], ciudad: [] };
   // Excluir por valor (pedido explícito 2026-09-25, muestra de referencia
   // Sales Navigator: "Include | Exclude" junto a cada opción del desplegable).
-  let _filtrosExcl = { pais: [], industria: [], tamano: [], estado: [], cliente: [] };
+  let _filtrosExcl = { pais: [], industria: [], tamano: [], estado: [], cliente: [], secuencia: [], seniority: [], departamento: [], ciudad: [] };
   let _opts = null;
   let _page = 0;
   function _pageSize() { try { return parseInt(localStorage.getItem('cantera_global_page_size')) || 50; } catch (_) { return 50; } }
@@ -7844,7 +7843,14 @@ const CanteraGlobalModule = (() => {
     if (_filtrosExcl.estado.length) p.set('estadoExcl', _filtrosExcl.estado.join(','));
     if (_filtros.cliente.length) p.set('cliente', _filtros.cliente.join(','));
     if (_filtrosExcl.cliente.length) p.set('clienteExcl', _filtrosExcl.cliente.join(','));
-    if (_secuenciaQ) p.set('secuencia', _secuenciaQ);
+    if (_filtros.secuencia.length) p.set('secuencia', _filtros.secuencia.join(','));
+    if (_filtrosExcl.secuencia.length) p.set('secuenciaExcl', _filtrosExcl.secuencia.join(','));
+    if (_filtros.seniority.length) p.set('seniority', _filtros.seniority.join(','));
+    if (_filtrosExcl.seniority.length) p.set('seniorityExcl', _filtrosExcl.seniority.join(','));
+    if (_filtros.departamento.length) p.set('departamento', _filtros.departamento.join(','));
+    if (_filtrosExcl.departamento.length) p.set('departamentoExcl', _filtrosExcl.departamento.join(','));
+    if (_filtros.ciudad.length) p.set('ciudad', _filtros.ciudad.join(','));
+    if (_filtrosExcl.ciudad.length) p.set('ciudadExcl', _filtrosExcl.ciudad.join(','));
     if (_vista) p.set('tipo', _vista);
     p.set('page', _page); p.set('pageSize', _pageSize());
     try {
@@ -7894,12 +7900,12 @@ const CanteraGlobalModule = (() => {
       ${_taFieldG('pais', 'País')}
       ${_taFieldG('industria', 'Industria')}
       ${_taFieldG('tamano', 'Tamaño de empresa')}
-      ${_vista !== 'empresa' ? _taFieldG('estado', 'Estado') : ''}
       ${_taFieldG('cliente', 'Cliente outbound')}
-      ${_vista !== 'empresa' ? `<div class="filter-field">
-        <label class="field-label">Secuencia</label>
-        <input type="text" class="form-input" placeholder="Nombre de la secuencia…" value="${esc(_secuenciaQ)}" oninput="CanteraGlobalModule.setSecuenciaQ(this.value)">
-      </div>` : ''}`;
+      ${_taFieldG('secuencia', 'Secuencia')}
+      ${_vista !== 'empresa' ? _taFieldG('estado', 'Estado') : ''}
+      ${_vista !== 'empresa' ? _taFieldG('seniority', 'Seniority') : ''}
+      ${_vista !== 'empresa' ? _taFieldG('departamento', 'Departamento') : ''}
+      ${_vista !== 'empresa' ? _taFieldG('ciudad', 'Ciudad') : ''}`;
   }
   function _resultsHtml() {
     if (!_rows.length) return `<tr><td colspan="11" class="cp-empty2">Sin resultados${_q ? ' para "' + esc(_q) + '"' : ' — ajusta los filtros de la izquierda'}</td></tr>`;
@@ -7974,8 +7980,6 @@ const CanteraGlobalModule = (() => {
   function setQ(v) { _q = v; _page = 0; clearTimeout(_t); _t = setTimeout(async () => { await _search(); _repaint(); }, 300); }
   async function setOrigen(v) { _origen = v; _page = 0; await _search(); _repaint(); }
   async function setVista(v) { _vista = v; _page = 0; await _search(); _repaint(); }
-  let _tSeq = null;
-  function setSecuenciaQ(v) { _secuenciaQ = v; _page = 0; clearTimeout(_tSeq); _tSeq = setTimeout(async () => { await _search(); _repaint(); }, 300); }
   function setPageSize(n) { try { localStorage.setItem('cantera_global_page_size', String(parseInt(n) || 50)); } catch (_) {} _page = 0; _search().then(_repaint); }
   function goPage(d) { _page = Math.max(0, _page + d); _search().then(_repaint); }
   function _gOptions(field) {
@@ -8015,7 +8019,7 @@ const CanteraGlobalModule = (() => {
   async function removeFiltro(field, idx) { _filtros[field].splice(idx, 1); _page = 0; await _search(); _repaint(); }
   async function addFiltroExcl(field, value) { _filtrosExcl[field] = [...(_filtrosExcl[field] || []), value]; _page = 0; await _search(); _repaint(); }
   async function removeFiltroExcl(field, idx) { _filtrosExcl[field].splice(idx, 1); _page = 0; await _search(); _repaint(); }
-  return { render, setQ, setOrigen, setVista, setSecuenciaQ, setPageSize, goPage, toggleCollapse, taOpen, taFilter, taBlur, addFiltro, removeFiltro, addFiltroExcl, removeFiltroExcl };
+  return { render, setQ, setOrigen, setVista, setPageSize, goPage, toggleCollapse, taOpen, taFilter, taBlur, addFiltro, removeFiltro, addFiltroExcl, removeFiltroExcl };
 })();
 
 // =================================================================
