@@ -12548,10 +12548,17 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .cant-global-tab.active { color: var(--brand, #007AFF); border-bottom-color: var(--brand, #007AFF); }
 .cant-global-layout { display: flex; align-items: flex-start; gap: 18px; }
 .cant-global-results { flex: 1 1 auto; min-width: 0; }
-.cant-global-panel { flex: 0 0 260px; background: var(--white, #fff); border: 1px solid var(--border, #EAE7E2); border-radius: 0; padding: 14px; }
+/* Ancho del rail de criterios: pedido explícito 2026-09-25, con captura de
+   Sales Navigator — "esto ocupa más pantalla y eso hace que no tenga que
+   escrolear tanto". De 260px (una columna angosta, todo apilado) a 480px
+   con los campos en grilla de 2 columnas (ver .cant-global-fields-grid). */
+.cant-global-panel { flex: 0 0 480px; background: var(--white, #fff); border: 1px solid var(--border, #EAE7E2); border-radius: 0; padding: 14px; }
 .cant-global-layout.collapsed .cant-global-panel { flex: 0 0 auto; padding: 6px; }
 .cant-global-panel-hd { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-@media (max-width: 860px) { .cant-global-layout { flex-direction: column; } .cant-global-panel { flex: 1 1 auto; width: 100%; } }
+.cant-global-fields-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; align-items: start; }
+.cant-global-fields-grid .filter-field { border: none; padding: 0; background: transparent; }
+@media (max-width: 1100px) { .cant-global-layout { flex-direction: column; } .cant-global-panel { flex: 1 1 auto; width: 100%; } }
+@media (max-width: 560px) { .cant-global-fields-grid { grid-template-columns: 1fr; } }
 
 /* Selector con autocompletado (Filtros básicos) — nunca texto libre. */
 /* 5 campos fijos (país/industria/tamaño/seniority/departamento) — antes con

@@ -7885,27 +7885,35 @@ const CanteraGlobalModule = (() => {
   // izquierda". Colapsado muestra solo el tirador "›"; expandido, el panel
   // completo con "‹" para volver a ocultarlo.
   function _panelHtml() {
+    // Grilla horizontal de 2 columnas — pedido explícito 2026-09-25, con
+    // captura de Sales Navigator: "esto ocupa más pantalla y eso hace que no
+    // tenga que escrolear tanto". Antes era una sola columna angosta (260px)
+    // con un campo debajo de otro; ahora el panel ocupa el ancho real y los
+    // campos van de a dos por fila, igual que el rail de LinkedIn.
+    const fields = [
+      _taFieldG('pais', 'País'), _taFieldG('industria', 'Industria'),
+      _taFieldG('tamano', 'Tamaño de empresa'), _taFieldG('cliente', 'Cliente outbound'),
+      _taFieldG('secuencia', 'Secuencia'),
+      _vista !== 'empresa' ? _taFieldG('estado', 'Estado') : '',
+      _vista !== 'empresa' ? _taFieldG('seniority', 'Seniority') : '',
+      _vista !== 'empresa' ? _taFieldG('departamento', 'Departamento') : '',
+      _vista !== 'empresa' ? _taFieldG('ciudad', 'Ciudad') : '',
+    ].filter(Boolean).join('');
     return `<div class="cant-global-panel-hd">
         <h3 style="margin:0;font-size:.92rem">Criterios</h3>
         <button class="cant-x" onclick="CanteraGlobalModule.toggleCollapse()" title="Ocultar panel">‹</button>
       </div>
-      <label class="field-label">Buscar</label>
-      <input type="text" class="form-input" style="margin-bottom:12px" placeholder="Nombre, apellido, empresa, email…" value="${esc(_q)}" oninput="CanteraGlobalModule.setQ(this.value)">
-      <label class="field-label">Dónde está</label>
-      <select class="form-input" style="margin-bottom:12px" onchange="CanteraGlobalModule.setOrigen(this.value)">
-        <option value="">Todos</option>
-        <option value="crm"${_origen === 'crm' ? ' selected' : ''}>Solo en CRM</option>
-        <option value="borrador"${_origen === 'borrador' ? ' selected' : ''}>Solo en borradores</option>
-      </select>
-      ${_taFieldG('pais', 'País')}
-      ${_taFieldG('industria', 'Industria')}
-      ${_taFieldG('tamano', 'Tamaño de empresa')}
-      ${_taFieldG('cliente', 'Cliente outbound')}
-      ${_taFieldG('secuencia', 'Secuencia')}
-      ${_vista !== 'empresa' ? _taFieldG('estado', 'Estado') : ''}
-      ${_vista !== 'empresa' ? _taFieldG('seniority', 'Seniority') : ''}
-      ${_vista !== 'empresa' ? _taFieldG('departamento', 'Departamento') : ''}
-      ${_vista !== 'empresa' ? _taFieldG('ciudad', 'Ciudad') : ''}`;
+      <div class="cant-global-fields-grid">
+        <div class="filter-field"><label class="field-label">Buscar</label>
+          <input type="text" class="form-input" placeholder="Nombre, apellido, empresa, email…" value="${esc(_q)}" oninput="CanteraGlobalModule.setQ(this.value)"></div>
+        <div class="filter-field"><label class="field-label">Dónde está</label>
+          <select class="form-input" onchange="CanteraGlobalModule.setOrigen(this.value)">
+            <option value="">Todos</option>
+            <option value="crm"${_origen === 'crm' ? ' selected' : ''}>Solo en CRM</option>
+            <option value="borrador"${_origen === 'borrador' ? ' selected' : ''}>Solo en borradores</option>
+          </select></div>
+        ${fields}
+      </div>`;
   }
   function _resultsHtml() {
     if (!_rows.length) return `<tr><td colspan="11" class="cp-empty2">Sin resultados${_q ? ' para "' + esc(_q) + '"' : ' — ajusta los filtros de la izquierda'}</td></tr>`;
