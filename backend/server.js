@@ -7592,6 +7592,11 @@ app.get('/api/cantera/mesa/companies', requireAuth, async (req, res) => {
     if (secuencia) { params.push(secuencia); conds.push(`b.sequence_id=$${params.length}`); }
     if (onlyFailed) conds.push(`c.paso1_estado='descartado'`);
     if (tiers.length) { params.push(tiers); conds.push(`c.tier_clave = ANY($${params.length}::text[])`); }
+    // Excluir (pedido explícito 2026-09-25, estilo Sales Navigator: Incluir/Excluir
+    // por valor) — condición aparte de la de arriba, así un valor puede estar
+    // incluido o excluido pero no las dos cosas (el frontend ya se encarga de eso).
+    const tiersExcl = String(req.query.tierExcl || '').split(',').filter(Boolean);
+    if (tiersExcl.length) { params.push(tiersExcl); conds.push(`(c.tier_clave IS NULL OR NOT (c.tier_clave = ANY($${params.length}::text[])))`); }
     if (prioridades.length) { params.push(prioridades); conds.push(`EXISTS (SELECT 1 FROM cantera_contacts k2 WHERE k2.company_id=c.id AND k2.prioridad = ANY($${params.length}::int[]))`); }
     if (minContactos > 0) { params.push(minContactos); conds.push(`(SELECT COUNT(*) FROM cantera_contacts k3 WHERE k3.company_id=c.id) >= $${params.length}`); }
     if (sinPrioridad) conds.push(`NOT EXISTS (SELECT 1 FROM cantera_contacts k4 WHERE k4.company_id=c.id AND k4.prioridad > 0)`);
@@ -7603,8 +7608,12 @@ app.get('/api/cantera/mesa/companies', requireAuth, async (req, res) => {
     // el resto del borrador).
     const industrias = String(req.query.industria || '').split(',').filter(Boolean);
     if (industrias.length) { params.push(industrias); conds.push(`c.industria = ANY($${params.length}::text[])`); }
+    const industriasExcl = String(req.query.industriaExcl || '').split(',').filter(Boolean);
+    if (industriasExcl.length) { params.push(industriasExcl); conds.push(`(c.industria IS NULL OR NOT (c.industria = ANY($${params.length}::text[])))`); }
     const archivos = String(req.query.archivo || '').split(',').filter(Boolean);
     if (archivos.length) { params.push(archivos); conds.push(`c.import_id = ANY($${params.length}::text[])`); }
+    const archivosExcl = String(req.query.archivoExcl || '').split(',').filter(Boolean);
+    if (archivosExcl.length) { params.push(archivosExcl); conds.push(`(c.import_id IS NULL OR NOT (c.import_id = ANY($${params.length}::text[])))`); }
     const where = conds.join(' AND ');
     const { rows: totalRows } = await pool.query(
       `SELECT COUNT(*)::int AS n FROM cantera_companies c JOIN cantera_batches b ON b.id=c.batch_id WHERE ${where}`, params);

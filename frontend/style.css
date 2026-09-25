@@ -12522,11 +12522,22 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .cant-subsearch { width: 100%; font-size: .82rem; padding: 5px 8px; }
 .cant-colchk:hover { background: var(--brand-ll, #F1EFEB); }
 .cant-save-row { margin-top: 10px; }
-.cant-inex { display: flex; gap: 0; margin: 2px 10px 8px; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
-.cant-inex__b { flex: 1; font-family: inherit; font-size: .76rem; font-weight: 600; padding: 5px 0; border: none; background: var(--surface); color: var(--text-secondary); cursor: pointer; }
-.cant-inex__b + .cant-inex__b { border-left: 1px solid var(--border); }
-.cant-inex__b.on { background: var(--brand-ll, #F1EFEB); color: var(--text-primary); }
-.cant-inex__b:hover:not(.on) { background: var(--surface-hover); }
+/* Incluir/Excluir por valor — mismo patrón que LinkedIn Sales Navigator
+   (referencia dada en vivo 2026-09-25): cada fila de un filtro tipo lista
+   (Industria, País, Tier…) trae sus propios links "Incluir | Excluir" a
+   la derecha, en vez de un único modo para todo el campo. */
+.cant-inrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 3px 10px; font-size: .82rem; color: var(--text-primary); }
+.cant-inrow:hover { background: var(--brand-ll, #F1EFEB); }
+.cant-inrow__v { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cant-inrow--inc .cant-inrow__v { color: #15803D; font-weight: 600; }
+.cant-inrow--exc .cant-inrow__v { color: #C4342B; text-decoration: line-through; }
+.cant-inrow__ops { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.cant-inrow__op { font-family: inherit; font-size: .74rem; font-weight: 500; border: none; background: none; color: var(--text-muted); cursor: pointer; padding: 2px 3px; opacity: 0; transition: opacity .1s; }
+.cant-inrow:hover .cant-inrow__op, .cant-inrow__op.on { opacity: 1; }
+.cant-inrow__op:hover { text-decoration: underline; }
+.cant-inrow__op.on { color: #15803D; font-weight: 700; }
+.cant-inrow__op--exc.on { color: #C4342B; }
+.cant-inrow__sep { color: var(--border-strong); font-size: .74rem; }
 
 /* Base global — rail de filtros a la IZQUIERDA, contraído por defecto
    (pedido explícito 2026-09-06, corregido de derecha a izquierda). Panel
