@@ -28615,25 +28615,72 @@ ${foot}
   function clearCtSel() { _ctSel.clear(); _renderContacts(); }
   function toggleCtSelMode() { _ctSelMode = !_ctSelMode; if (!_ctSelMode) _ctSel.clear(); _renderContacts(); }
   function _jsEsc(s) { return String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
-  // Filtro rápido de un solo click desde el "⋮" (Estado/Prioridad/País/Fuente…) —
-  // reusa el MISMO mecanismo que "Filtros avanzados" (arreglo {field,op:'in',val})
-  // en vez de inventar un segundo sistema de filtrado: togglear acá o desde el
-  // modal deja el mismo estado y los mismos chips debajo de la tabla.
-  function lmQuickToggle(entity, field, val) {
+  // Filtro rápido desde el "⋮" (Estado/Prioridad/País/Fuente…) — reusa el MISMO
+  // mecanismo que "Filtros avanzados" (arreglo {field,op:'in'|'nin',val}) en vez
+  // de inventar un segundo sistema de filtrado.
+  // OJO (reportado en vivo 2026-09-25): esto ANTES se pintaba con el mismo
+  // <button onclick="cerrar_menu();togglear()"> que las acciones de un solo
+  // disparo (item()) — así que marcar UNA industria cerraba el menú entero y
+  // había que reabrirlo para cada valor. Ahora son checkboxes reales
+  // (onchange, sin cerrar) + un selector Incluir/Excluir por campo, y el
+  // repintado es quirúrgico (solo ese submenu) para no perder el menú abierto.
+  function _lmFieldOp(entity, field) {
     const arr = entity === 'contacts' ? _ctFilters : _coFilters;
-    let f = arr.find(x => x.field === field && x.op === 'in');
-    if (!f) { f = { field, op: 'in', val: [] }; arr.push(f); }
+    return arr.some(x => x.field === field && x.op === 'nin' && x.val && x.val.length) ? 'nin' : 'in';
+  }
+  function _lmFieldCount(entity, field) {
+    const arr = entity === 'contacts' ? _ctFilters : _coFilters;
+    const f = arr.find(x => x.field === field && (x.op === 'in' || x.op === 'nin'));
+    return f ? f.val.length : 0;
+  }
+  function lmQuickToggle(entity, field, val) {
+    const op = _lmFieldOp(entity, field);
+    const arr = entity === 'contacts' ? _ctFilters : _coFilters;
+    let f = arr.find(x => x.field === field && x.op === op);
+    if (!f) { f = { field, op, val: [] }; arr.push(f); }
     const i = f.val.indexOf(val);
     if (i >= 0) f.val.splice(i, 1); else f.val.push(val);
     if (!f.val.length) arr.splice(arr.indexOf(f), 1);
     _renderBody();
+    _lmRepaintFieldPanel(entity, field);
   }
-  function _lmFieldPanel(entity, field, item) {
-    const vals = _fltDistinct(entity, field);
-    if (!vals.length) return '<div class="cp-empty2" style="padding:10px 12px">Sin datos todavía</div>';
+  // Cambia el campo entero de modo Incluir↔Excluir, migrando los valores ya
+  // marcados al nuevo modo (no los pierde, no hay que re-marcarlos).
+  function lmSetFieldOp(entity, field, op) {
     const arr = entity === 'contacts' ? _ctFilters : _coFilters;
-    const cur = (arr.find(x => x.field === field && x.op === 'in') || {}).val || [];
-    return vals.map(v => item(`${cur.includes(v) ? '✓ ' : ''}${esc(v)}`, `LeadManagerModule.lmQuickToggle('${entity}','${field}','${_jsEsc(v)}')`)).join('');
+    const otherOp = op === 'in' ? 'nin' : 'in';
+    const oi = arr.findIndex(x => x.field === field && x.op === otherOp);
+    if (oi >= 0) { const f = arr[oi]; arr.splice(oi, 1); if (f.val.length) arr.push({ field, op, val: f.val }); }
+    _renderBody();
+    _lmRepaintFieldPanel(entity, field);
+  }
+  function _lmRepaintFieldPanel(entity, field) {
+    const panel = document.querySelector(`[data-flt-panel="${entity}:${field}"]`);
+    if (panel) panel.innerHTML = _lmFieldPanelHtml(entity, field);
+    const lbl = document.querySelector(`[data-flt-lbl="${entity}:${field}"]`);
+    if (lbl) { const n = _lmFieldCount(entity, field); lbl.textContent = `${lbl.dataset.base}${n ? ' · ' + n : ''}`; }
+  }
+  function _lmFieldPanelHtml(entity, field) {
+    const vals = _fltDistinct(entity, field);
+    const op = _lmFieldOp(entity, field);
+    const arr = entity === 'contacts' ? _ctFilters : _coFilters;
+    const cur = (arr.find(x => x.field === field && x.op === op) || {}).val || [];
+    const seg = `<div class="cant-inex" onclick="event.stopPropagation()">
+        <button type="button" class="cant-inex__b${op === 'in' ? ' on' : ''}" onclick="LeadManagerModule.lmSetFieldOp('${entity}','${field}','in')">Incluir</button>
+        <button type="button" class="cant-inex__b${op === 'nin' ? ' on' : ''}" onclick="LeadManagerModule.lmSetFieldOp('${entity}','${field}','nin')">Excluir</button>
+      </div>`;
+    if (!vals.length) return seg + '<div class="cp-empty2" style="padding:10px 12px">Sin datos todavía</div>';
+    return seg + vals.map(v => `<label class="cant-colchk" onclick="event.stopPropagation()"><input type="checkbox" ${cur.includes(v) ? 'checked' : ''} onchange="LeadManagerModule.lmQuickToggle('${entity}','${field}','${_jsEsc(v)}')"> ${esc(v)}</label>`).join('');
+  }
+  // Reemplaza al viejo sub(qLbl(...), _lmFieldPanel(...)) — arma el <div class="cp-mark-menu__sub">
+  // completo con los data-attrs que _lmRepaintFieldPanel necesita para actualizar
+  // in-place sin tocar (ni cerrar) el resto del menú.
+  function _subFlt(entity, field, label, scrollable) {
+    const n = _lmFieldCount(entity, field);
+    return `<div class="cp-mark-menu__sub">
+      <div class="cp-mark-menu__b cp-mark-menu__b--sub"><span data-flt-lbl="${entity}:${field}" data-base="${esc(label)}">${esc(label)}${n ? ` · ${n}` : ''}</span> <span class="cp-mark-menu__arrow">▸</span></div>
+      <div class="cp-mark-menu__subpanel"><div class="cp-mark-menu__list" data-flt-panel="${entity}:${field}"${scrollable ? ' style="max-height:320px;overflow-y:auto"' : ''}>${_lmFieldPanelHtml(entity, field)}</div></div>
+    </div>`;
   }
   // Submenu-por-hover de .cp-mark-menu__sub (mismo mecanismo que Cantera/Inbox —
   // ver CanteraModule.resultsMenu): sin esto el CSS por sí solo no revela el panel
@@ -28683,14 +28730,12 @@ ${foot}
       + _clients.map(cl => item(`${String(_ctClientFilter) === String(cl.id) ? '✓ ' : ''}${esc(cl.nombre)}`, `LeadManagerModule.ctSetClient('${cl.id}')`)).join('');
     const nBounced = (_contacts || []).filter(c => c.email_status === 'bounced').length;
     const nIssue = (_contacts || []).filter(c => c.data_issue).length;
-    const qCount = f => { const x = _ctFilters.find(y => y.field === f && y.op === 'in'); return x ? x.val.length : 0; };
-    const qLbl = (label, field) => `${label}${qCount(field) ? ` · ${qCount(field)}` : ''}`;
     const filtrosPanel = (_clients.length ? sub(`Cliente outbound${curClient ? ': ' + esc(curClient.nombre) : ''}`, clientPanel, true) : '')
-      + sub(qLbl('Estado', 'estado'), _lmFieldPanel('contacts', 'estado', item), true)
-      + sub(qLbl('Prioridad', 'contact_priority'), _lmFieldPanel('contacts', 'contact_priority', item), true)
-      + sub(qLbl('País', 'pais'), _lmFieldPanel('contacts', 'pais', item), true)
-      + sub(qLbl('Fuente', 'fuente'), _lmFieldPanel('contacts', 'fuente', item), true)
-      + sub(qLbl('Archivo de importación', 'import_batch'), _lmFieldPanel('contacts', 'import_batch', item), true)
+      + _subFlt('contacts', 'estado', 'Estado', true)
+      + _subFlt('contacts', 'contact_priority', 'Prioridad', true)
+      + _subFlt('contacts', 'pais', 'País', true)
+      + _subFlt('contacts', 'fuente', 'Fuente', true)
+      + _subFlt('contacts', 'import_batch', 'Archivo de importación', true)
       + `<div class="cp-mark-menu__sep"></div>`
       + ((nBounced || _ctBounced) ? item(`${_ctBounced ? '✓ ' : ''}Rebotados · ${nBounced}`, `LeadManagerModule.ctToggleBounced()`) : '')
       + ((nIssue || _ctDataIssue) ? item(`${_ctDataIssue ? '✓ ' : ''}Por corregir · ${nIssue}`, `LeadManagerModule.ctToggleDataIssue()`) : '')
@@ -29389,12 +29434,10 @@ ${foot}
       <div class="cp-mark-menu__b cp-mark-menu__b--sub">${label} <span class="cp-mark-menu__arrow">▸</span></div>
       <div class="cp-mark-menu__subpanel"><div class="cp-mark-menu__list"${scrollable ? ' style="max-height:320px;overflow-y:auto"' : ''}>${panelHtml}</div></div>
     </div>`;
-    const qCount = f => { const x = _coFilters.find(y => y.field === f && y.op === 'in'); return x ? x.val.length : 0; };
-    const qLbl = (label, field) => `${label}${qCount(field) ? ` · ${qCount(field)}` : ''}`;
-    const filtrosPanel = sub(qLbl('País', 'pais'), _lmFieldPanel('companies', 'pais', item), true)
-      + sub(qLbl('Industria', 'industria'), _lmFieldPanel('companies', 'industria', item), true)
-      + sub(qLbl('Nº empleados', 'tamano'), _lmFieldPanel('companies', 'tamano', item), true)
-      + sub(qLbl('Archivo de importación', 'import_batch'), _lmFieldPanel('companies', 'import_batch', item), true)
+    const filtrosPanel = _subFlt('companies', 'pais', 'País', true)
+      + _subFlt('companies', 'industria', 'Industria', true)
+      + _subFlt('companies', 'tamano', 'Nº empleados', true)
+      + _subFlt('companies', 'import_batch', 'Archivo de importación', true)
       + `<div class="cp-mark-menu__sep"></div>`
       + item(`Todos los filtros${_coFilters.length ? ` · ${_coFilters.length}` : ''}`, `LeadManagerModule.openFilters('companies')`);
     const html = `<div class="cp-mark-menu__list">${sub(`${_FLT_ICON} Filtros`, filtrosPanel)}</div>

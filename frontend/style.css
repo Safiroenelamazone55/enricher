@@ -12522,6 +12522,11 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .cant-subsearch { width: 100%; font-size: .82rem; padding: 5px 8px; }
 .cant-colchk:hover { background: var(--brand-ll, #F1EFEB); }
 .cant-save-row { margin-top: 10px; }
+.cant-inex { display: flex; gap: 0; margin: 2px 10px 8px; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.cant-inex__b { flex: 1; font-family: inherit; font-size: .76rem; font-weight: 600; padding: 5px 0; border: none; background: var(--surface); color: var(--text-secondary); cursor: pointer; }
+.cant-inex__b + .cant-inex__b { border-left: 1px solid var(--border); }
+.cant-inex__b.on { background: var(--brand-ll, #F1EFEB); color: var(--text-primary); }
+.cant-inex__b:hover:not(.on) { background: var(--surface-hover); }
 
 /* Base global — rail de filtros a la IZQUIERDA, contraído por defecto
    (pedido explícito 2026-09-06, corregido de derecha a izquierda). Panel
