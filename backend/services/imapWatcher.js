@@ -303,6 +303,23 @@ async function _checkMailbox(pool, mb) {
 
         if (tipo === 'reply' && contact) await _onReply(pool, mb, contact, parsed, snippet);
         // OOO: se guarda para el Inbox pero NO pausa (el contacto no respondió de verdad).
+        // 'equipo' (alguien más escribe sobre/con el contacto en copia — no el prospecto)
+        // antes solo quedaba en lm_inbox_messages, invisible en la ficha del contacto y en
+        // el portal. Pedido explícito 2026-09-25: "que el sistema... internamente dentro
+        // del software reconozca lo que está haciendo" — un correo de un tercero que
+        // menciona/copia a un contacto ya guardado debe verse en su actividad, sin tocar
+        // su disposición (no es que el prospecto respondió).
+        if (tipo === 'equipo' && contact) {
+          const toList = _dirs(parsed.to), ccList = _dirs(parsed.cc);
+          const nota = `Correo detectado en tu buzón relacionado con este contacto (no es una respuesta suya) — `
+            + `de: ${fromName ? fromName + ' ' : ''}<${fromAddr}>` + (toList ? ` · para: ${toList}` : '') + (ccList ? ` · cc: ${ccList}` : '')
+            + (parsed.subject ? ` · asunto: "${String(parsed.subject).slice(0, 200)}"` : '');
+          await pool.query(
+            `INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, canal, nota, fecha, estado)
+             VALUES ($1,$2,$3,'nota','email',$4,NOW(),'hecha')`,
+            [mb.user_id, contact.id, mb.outbound_client_id, nota]
+          ).catch(() => {});
+        }
       } catch (e) {
         console.warn(`[imap-watcher] ${mb.email} uid ${msg.uid}:`, e.message);
       }
