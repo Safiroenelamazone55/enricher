@@ -7385,6 +7385,11 @@ app.get('/api/cantera/global', requireAuth, async (req, res) => {
   const paises = String(req.query.pais || '').split(',').map(_cantNormPais).filter(Boolean);
   const industrias = String(req.query.industria || '').split(',').map(s => _cantNormText(s)).filter(Boolean);
   const tamanos = String(req.query.tamano || '').split(',').filter(Boolean);
+  // Excluir por valor (pedido explícito 2026-09-25, estilo Sales Navigator:
+  // "Incluir | Excluir" por cada opción del filtro, no solo un modo global).
+  const paisesExcl = String(req.query.paisExcl || '').split(',').map(_cantNormPais).filter(Boolean);
+  const industriasExcl = String(req.query.industriaExcl || '').split(',').map(s => _cantNormText(s)).filter(Boolean);
+  const tamanosExcl = String(req.query.tamanoExcl || '').split(',').filter(Boolean);
   const origen = req.query.origen === 'crm' || req.query.origen === 'borrador' ? req.query.origen : '';
   const page = Math.max(0, parseInt(req.query.page) || 0);
   const pageSize = [50, 100, 200].includes(parseInt(req.query.pageSize)) ? parseInt(req.query.pageSize) : 50;
@@ -7428,6 +7433,9 @@ app.get('/api/cantera/global', requireAuth, async (req, res) => {
       if (paises.length && !paises.includes(_cantNormPais(r.pais))) return false;
       if (industrias.length && !industrias.some(i => _cantNormText(r.industria).includes(i))) return false;
       if (tamanos.length && r.tamano && !tamanos.includes(r.tamano)) return false;
+      if (paisesExcl.length && paisesExcl.includes(_cantNormPais(r.pais))) return false;
+      if (industriasExcl.length && industriasExcl.some(i => _cantNormText(r.industria).includes(i))) return false;
+      if (tamanosExcl.length && tamanosExcl.includes(r.tamano)) return false;
       return true;
     });
     const rows = filtered.slice(page * pageSize, page * pageSize + pageSize);

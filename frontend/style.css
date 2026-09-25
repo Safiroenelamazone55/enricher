@@ -12573,6 +12573,16 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .ta-opt { padding: 7px 10px; font-size: .82rem; cursor: pointer; }
 .ta-opt:hover { background: var(--brand-ll, #F1EFEB); }
 .ta-none { padding: 7px 10px; font-size: .8rem; color: var(--muted, #918C85); }
+/* Incluir/Excluir por opción — muestra de referencia Sales Navigator (2026-09-25) */
+.ta-opt--row { display: flex; align-items: center; justify-content: space-between; gap: 8px; cursor: default; }
+.ta-opt__v { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ta-opt__ops { display: flex; align-items: center; gap: 4px; flex-shrink: 0; font-size: .74rem; }
+.ta-opt__op { color: var(--text-secondary, #6C6862); cursor: pointer; padding: 2px 3px; }
+.ta-opt__op:hover { color: #15803D; text-decoration: underline; }
+.ta-opt__op--exc:hover { color: #C4342B; }
+.ta-opt__sep { color: var(--border-strong, #D9D4CC); font-size: .74rem; }
+.tag--inc { background: #D1FAE5; color: #065F46; }
+.tag--exc { background: #FEE2E2; color: #B91C1C; }
 
 /* Tiers */
 .cant-tiers { display: flex; flex-direction: column; gap: 10px; margin-bottom: 8px; }

@@ -7814,6 +7814,9 @@ const CanteraGlobalModule = (() => {
   // que se oculte/contraiga en automático a la derecha".
   let _rows = []; let _total = 0; let _q = ''; let _origen = ''; let _collapsed = true;
   let _filtros = { pais: [], industria: [], tamano: [] };
+  // Excluir por valor (pedido explícito 2026-09-25, muestra de referencia
+  // Sales Navigator: "Include | Exclude" junto a cada opción del desplegable).
+  let _filtrosExcl = { pais: [], industria: [], tamano: [] };
   let _opts = null;
   let _page = 0;
   function _pageSize() { try { return parseInt(localStorage.getItem('cantera_global_page_size')) || 50; } catch (_) { return 50; } }
@@ -7830,6 +7833,9 @@ const CanteraGlobalModule = (() => {
     if (_filtros.pais.length) p.set('pais', _filtros.pais.join(','));
     if (_filtros.industria.length) p.set('industria', _filtros.industria.join(','));
     if (_filtros.tamano.length) p.set('tamano', _filtros.tamano.join(','));
+    if (_filtrosExcl.pais.length) p.set('paisExcl', _filtrosExcl.pais.join(','));
+    if (_filtrosExcl.industria.length) p.set('industriaExcl', _filtrosExcl.industria.join(','));
+    if (_filtrosExcl.tamano.length) p.set('tamanoExcl', _filtrosExcl.tamano.join(','));
     p.set('page', _page); p.set('pageSize', _pageSize());
     try {
       const r = await apiFetch(`${API}/cantera/global?${p.toString()}`);
@@ -7846,10 +7852,11 @@ const CanteraGlobalModule = (() => {
   // Panel de filtros vertical, colapsable — mismo espíritu que el rail de
   // filtros de LinkedIn Sales Nav (pedido explícito 2026-09-05).
   function _taFieldG(field, label) {
-    const chips = (_filtros[field] || []).map((v, i) => `<span class="tag">${esc(v)} <span class="x" onclick="CanteraGlobalModule.removeFiltro('${field}',${i})">✕</span></span>`).join('');
+    const incChips = (_filtros[field] || []).map((v, i) => `<span class="tag tag--inc">${esc(v)} <span class="x" onclick="CanteraGlobalModule.removeFiltro('${field}',${i})">✕</span></span>`).join('');
+    const excChips = (_filtrosExcl[field] || []).map((v, i) => `<span class="tag tag--exc">≠ ${esc(v)} <span class="x" onclick="CanteraGlobalModule.removeFiltroExcl('${field}',${i})">✕</span></span>`).join('');
     return `<div class="filter-field" data-ta="${field}">
       <label class="field-label">${esc(label)}</label>
-      <div class="tag-list">${chips}</div>
+      <div class="tag-list">${incChips}${excChips}</div>
       <div class="ta-wrap">
         <input type="text" class="ta-input" placeholder="Escribe para buscar…" autocomplete="off"
           onfocus="CanteraGlobalModule.taOpen('${field}')" oninput="CanteraGlobalModule.taFilter('${field}')" onblur="CanteraGlobalModule.taBlur('${field}')">
@@ -7930,12 +7937,26 @@ const CanteraGlobalModule = (() => {
   function goPage(d) { _page = Math.max(0, _page + d); _search().then(_repaint); }
   function _gOptions(field) {
     const all = (_opts && _opts[field]) || [];
-    const chosen = new Set((_filtros[field] || []).map(v => v.toLowerCase()));
+    const chosen = new Set([...(_filtros[field] || []), ...(_filtrosExcl[field] || [])].map(v => v.toLowerCase()));
     return all.filter(o => !chosen.has(o.toLowerCase()));
+  }
+  // Cada opción del desplegable trae "Incluir | Excluir" al costado — mismo
+  // patrón que Sales Navigator (muestra dada en vivo 2026-09-25), en vez de
+  // un único click que solo podía incluir.
+  function _taOptRow(field, o) {
+    const jv = esc(o).replace(/'/g, "\\'");
+    return `<div class="ta-opt ta-opt--row">
+      <span class="ta-opt__v">${esc(o)}</span>
+      <span class="ta-opt__ops">
+        <span class="ta-opt__op" onmousedown="event.preventDefault();CanteraGlobalModule.addFiltro('${field}','${jv}')">Incluir</span>
+        <span class="ta-opt__sep">|</span>
+        <span class="ta-opt__op ta-opt__op--exc" onmousedown="event.preventDefault();CanteraGlobalModule.addFiltroExcl('${field}','${jv}')">Excluir</span>
+      </span>
+    </div>`;
   }
   function taOpen(field) {
     const menu = document.getElementById('tag-menu-' + field); if (!menu) return;
-    menu.innerHTML = _gOptions(field).map(o => `<div class="ta-opt" onmousedown="event.preventDefault();CanteraGlobalModule.addFiltro('${field}','${esc(o).replace(/'/g, "\\'")}')">${esc(o)}</div>`).join('') || `<div class="ta-none">Sin opciones</div>`;
+    menu.innerHTML = _gOptions(field).map(o => _taOptRow(field, o)).join('') || `<div class="ta-none">Sin opciones</div>`;
     menu.hidden = false;
   }
   function taFilter(field) {
@@ -7943,13 +7964,15 @@ const CanteraGlobalModule = (() => {
     if (!inp || !menu) return;
     const f = inp.value.toLowerCase().trim();
     const opts = _gOptions(field).filter(o => o.toLowerCase().includes(f));
-    menu.innerHTML = opts.map(o => `<div class="ta-opt" onmousedown="event.preventDefault();CanteraGlobalModule.addFiltro('${field}','${esc(o).replace(/'/g, "\\'")}')">${esc(o)}</div>`).join('') || `<div class="ta-none">Sin coincidencias</div>`;
+    menu.innerHTML = opts.map(o => _taOptRow(field, o)).join('') || `<div class="ta-none">Sin coincidencias</div>`;
     menu.hidden = false;
   }
   function taBlur(field) { setTimeout(() => { const m = document.getElementById('tag-menu-' + field); if (m) m.hidden = true; }, 160); }
   async function addFiltro(field, value) { _filtros[field] = [...(_filtros[field] || []), value]; _page = 0; await _search(); _repaint(); }
   async function removeFiltro(field, idx) { _filtros[field].splice(idx, 1); _page = 0; await _search(); _repaint(); }
-  return { render, setQ, setOrigen, setPageSize, goPage, toggleCollapse, taOpen, taFilter, taBlur, addFiltro, removeFiltro };
+  async function addFiltroExcl(field, value) { _filtrosExcl[field] = [...(_filtrosExcl[field] || []), value]; _page = 0; await _search(); _repaint(); }
+  async function removeFiltroExcl(field, idx) { _filtrosExcl[field].splice(idx, 1); _page = 0; await _search(); _repaint(); }
+  return { render, setQ, setOrigen, setPageSize, goPage, toggleCollapse, taOpen, taFilter, taBlur, addFiltro, removeFiltro, addFiltroExcl, removeFiltroExcl };
 })();
 
 // =================================================================
