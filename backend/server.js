@@ -7229,14 +7229,18 @@ function _cantNormPais(raw) {
   const n = _cantNormText(raw); if (!n) return '';
   return _CANTERA_PAIS_ALIAS[n] || n;
 }
-// Tier normalizado — pedido explícito 2026-09-25: "los filtros por tier hay
-// que normalizarlos así como 1 2 3, en lugar de 1a 1b". El Tier es texto
-// libre que cada quien nombra a su gusto por borrador ("1A"/"1B", "Tier 1
-// Initial", etc.) — para el FILTRO se agrupa por el primer número que
-// aparece, así "1A" y "1B" caen ambos bajo "1" sin tocar el valor guardado.
+// Tier normalizado — pedido explícito 2026-09-25, corregido: quería A/B/C/D
+// (no 1/2/3) porque sus Tiers reales son "Tier 1A"/"Tier 1B"/"Tier 1C" — la
+// letra es lo que distingue, el número siempre es 1. Los datos YA guardados
+// se migraron directo a la letra sola (cantera_companies.tier_clave y las
+// definiciones del borrador, 2026-09-25: 288 empresas — ver notas del
+// commit). Esta función queda como red de seguridad para cualquier valor
+// viejo/nuevo que todavía traiga el prefijo "Tier N" pegado.
 function _cantNormTier(raw) {
-  const m = String(raw || '').match(/\d+/);
-  return m ? m[0] : '';
+  const s = String(raw || '').trim();
+  if (!s) return '';
+  const m = s.match(/([A-Za-z]+)\s*$/);
+  return m ? m[1].toUpperCase() : s.toUpperCase();
 }
 
 // Paso 1 — filtros básicos: SIN IA, solo compara los datos ya importados
@@ -7345,15 +7349,17 @@ app.get('/api/cantera/opciones-filtro', requireAuth, async (req, res) => {
     // Ciudad — pedido explícito 2026-09-25 ("agregar más formas de filtrar"),
     // solo existe a nivel contacto CRM (cantera_contacts no la guarda todavía).
     const { rows: ciudadRows } = await pool.query(`SELECT DISTINCT ciudad FROM lm_contacts WHERE user_id=$1 AND ciudad <> '' ORDER BY ciudad`, [uid]);
-    // Tier — pedido explícito 2026-09-25: filtro nuevo, normalizado (1/2/3…
-    // en vez de 1A/1B) — junta cantera_companies.tier_clave (borradores) y
-    // lm_companies.target_tier (CRM), agrupados por el primer número.
+    // Tier — pedido explícito 2026-09-25, corregido: normalizado por LETRA
+    // (A/B/C/D), no por número — "Tier 1A/1B/1C" son las variantes reales,
+    // el "1" no distingue nada. Ya migrado en cantera_companies.tier_clave a
+    // la letra sola. Solo Cantera trae este esquema con letras: el
+    // target_tier del CRM (lm_companies) es otra taxonomía (Tier 1/2/3/4,
+    // "Tier 1 Initial"…) que no encaja en A/B/C/D, así que no se mezcla acá.
     const { rows: tierRowsA } = await pool.query(`SELECT DISTINCT tier_clave AS t FROM cantera_companies WHERE user_id=$1 AND tier_clave <> ''`, [uid]);
-    const { rows: tierRowsB } = await pool.query(`SELECT DISTINCT target_tier AS t FROM lm_companies WHERE user_id=$1 AND target_tier <> ''`, [uid]);
     const tierSet = new Set();
-    [...tierRowsA, ...tierRowsB].forEach(r => { const n = _cantNormTier(r.t); if (n) tierSet.add(n); });
+    tierRowsA.forEach(r => { const n = _cantNormTier(r.t); if (n) tierSet.add(n); });
     res.json({
-      tier: [...tierSet].sort((a, b) => Number(a) - Number(b)),
+      tier: [...tierSet].sort((a, b) => a.localeCompare(b)),
       secuencia: seqRows.map(r => r.nombre).filter(Boolean),
       secuenciaPorCliente: seqRows.filter(r => r.nombre).map(r => ({ nombre: r.nombre, cliente: r.cliente || '' })),
       pais: Object.keys(CANTERA_PAISES).map(k => k.replace(/\b\w/g, c => c.toUpperCase())),
