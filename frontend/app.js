@@ -26697,6 +26697,12 @@ ${foot}
       });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || 'Error');
+      // load() por sí solo NO refresca _contacts (Tareas usa _allSeqTasks → _contacts)
+      // ni _seqContacts (vista de una secuencia abierta) — sin esto el original recién
+      // pausado seguía cacheado y reaparecía en la lista de tareas hasta un refresh manual.
+      // Reportado en vivo 2026-09-25 (había que darle "Saltar" varias veces al mismo contacto).
+      await _reloadContacts();
+      if (_activeSeq && Array.isArray(_seqContacts)) { _seqContacts = null; await _seqLoadContacts(_activeSeq); }
       await load();
       if (_section === 'inbox' && _ibActive === cid) await ibOpen(cid);
       const nom = [d.contacto?.nombre, d.contacto?.apellido].filter(Boolean).join(' ') || d.contacto?.email || 'el contacto';
