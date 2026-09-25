@@ -12580,13 +12580,17 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .ta-wrap { position: relative; }
 .ta-input { width: 100%; border: 1px solid var(--border, #EAE7E2); background: var(--bg, #FAF9F7); font: inherit; font-size: .82rem; padding: 6px 8px; color: var(--text, #1F1D1B); }
 .ta-input:focus { outline: none; border-color: var(--brand, #007AFF); background: #fff; }
-.ta-menu { position: absolute; top: 100%; left: 0; right: 0; z-index: 20; background: #fff; border: 1px solid var(--border, #EAE7E2); border-top: none; max-height: 200px; overflow-y: auto; box-shadow: 0 6px 16px rgba(0,0,0,.08); }
+/* El dropdown se sale del ancho de su columna (pedido explícito 2026-09-25,
+   con captura: "no veo completo el nombre" — la grilla de 2 columnas de
+   Base Global le dejaba solo ~340px, cortando industrias largas). Se planta
+   ancho fijo propio en vez de heredar el 100% del input angosto. */
+.ta-menu { position: absolute; top: 100%; left: 0; min-width: 320px; width: max-content; max-width: min(420px, 90vw); z-index: 20; background: #fff; border: 1px solid var(--border, #EAE7E2); border-top: none; max-height: 220px; overflow-y: auto; box-shadow: 0 6px 16px rgba(0,0,0,.1); }
 .ta-opt { padding: 7px 10px; font-size: .82rem; cursor: pointer; }
 .ta-opt:hover { background: var(--brand-ll, #F1EFEB); }
 .ta-none { padding: 7px 10px; font-size: .8rem; color: var(--muted, #918C85); }
 /* Incluir/Excluir por opción — muestra de referencia Sales Navigator (2026-09-25) */
 .ta-opt--row { display: flex; align-items: center; justify-content: space-between; gap: 8px; cursor: default; }
-.ta-opt__v { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ta-opt__v { min-width: 0; }
 .ta-opt__ops { display: flex; align-items: center; gap: 4px; flex-shrink: 0; font-size: .74rem; }
 .ta-opt__op { color: var(--text-secondary, #6C6862); cursor: pointer; padding: 2px 3px; }
 .ta-opt__op:hover { color: #15803D; text-decoration: underline; }
