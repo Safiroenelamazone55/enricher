@@ -56,6 +56,16 @@
   --success:#16A064; --success-soft:#F1EFEB;
 }
 
+/* height:100% en html/body (en vez de que #appShell dependa solo de 100vh) —
+   pedido explícito 2026-09-25, investigado en vivo: en Chrome/WebView de
+   Android, 100vh puede calcularse contra el viewport MÁS GRANDE (barra de
+   direcciones oculta) mientras el área realmente visible es más chica (barra
+   visible) — la diferencia entre portrait/landscape en cuánto espacio ocupa
+   esa barra hace que el contenido centrado con flex quede fuera del área
+   visible en una orientación y no en la otra, sin ningún error de JS. Un
+   alto por PORCENTAJE (ligado al layout real del documento) es más robusto
+   en navegadores viejos que 100vh/100dvh. */
+html, body { height: 100%; }
 html { scroll-behavior:smooth; overflow-x:hidden }
 body {
   font-family:var(--font);
@@ -101,7 +111,7 @@ body {
 @keyframes nova-toast-in { from { opacity: 0; transform: translate(-50%, -8px); } to { opacity: 1; transform: translate(-50%, 0); } }
 
 /* ── App layout ──────────────────────────────────────────── */
-#appShell { display:flex; flex-direction:column; height:100vh; }
+#appShell { display:flex; flex-direction:column; height:100%; min-height:100vh; }
 .app-layout {
   display:flex;
   flex:1;
