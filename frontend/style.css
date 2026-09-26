@@ -14009,6 +14009,33 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
 .global-topbar__menu-item:hover { background: #F1EFEB; }
 .global-topbar__menu-item--danger { color: #D94B4B; }
 
+/* Header táctil en tablet/móvil — pedido explícito 2026-09-25: "debería ser
+   más grueso, los íconos mayor solidez porque es un dispositivo pequeño, no
+   hay un mouse, y es muy delgado actualmente". 29px + iconos de 15-23px están
+   pensados para precisión de mouse; en touch (sin hover, dedo grueso) hace
+   falta más alto y objetivos táctiles más grandes (mínimo ~40px, guía Apple/
+   Google). --topbar-h es una variable CSS que ya alimenta varios cálculos de
+   posición (.lm2-nav, paneles de chat) — al subirla acá esos cuadran solos. */
+@media (max-width: 1024px) {
+  :root { --topbar-h: 52px; }
+  .global-topbar { gap: 10px; padding: 0 12px; }
+  .global-topbar__logo { width: 26px; height: 26px; }
+  .global-topbar__name { font-size: 14px; }
+  .global-topbar__tabs { gap: 4px; }
+  .global-topbar__tab { font-size: 14px; padding: 0 12px; }
+  .global-topbar__right { gap: 6px; }
+  .global-topbar__ws { font-size: 12px; }
+  .global-topbar .rchat__strip { gap: 2px; }
+  .global-topbar .rchat__strip-btn { width: 40px; height: 40px; }
+  .global-topbar .rchat__strip-btn svg { width: 21px; height: 21px; }
+  .global-topbar .rchat__strip-sep { height: 20px; margin: 0 4px; }
+  .global-topbar .rchat__strip-badge { transform: scale(1); top: -2px; right: -2px; }
+  .global-topbar__av { width: 32px; height: 32px; }
+  .global-topbar__menu { width: 250px; padding: 8px; }
+  .global-topbar__menu-item { padding: 13px 12px; font-size: 15px; }
+  .global-topbar__menu-who { padding: 10px 12px 11px; font-size: 13.5px; }
+}
+
 .home-page {
   height: 100%; box-sizing: border-box; padding: 18px 40px 20px;
   display: flex; flex-direction: column;
