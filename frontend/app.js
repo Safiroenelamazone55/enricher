@@ -17,6 +17,25 @@ window.addEventListener('error', function (ev) {
   } catch (_) {}
 });
 
+// Segundo diagnóstico temporal (2026-09-25): en cierta tablet la cuadrícula
+// de Aplicaciones se ve en horizontal pero no en vertical, sin ningún error
+// — para descartar de una vez si es un tema de ancho/alto de viewport
+// (Chrome/Android calcula distinto vh según la orientación), esto muestra
+// el tamaño real que el navegador reporta, todo el tiempo, en una esquina.
+// Quitar junto con el banner de errores de arriba una vez resuelto el caso.
+window.addEventListener('DOMContentLoaded', function () {
+  try {
+    const d = document.createElement('div');
+    d.id = 'nova-diag-size';
+    d.style.cssText = 'position:fixed;bottom:4px;right:4px;z-index:999999;background:#000;color:#0F0;font-family:monospace;font-size:11px;padding:3px 6px;opacity:.85;pointer-events:none';
+    const upd = () => { d.textContent = window.innerWidth + 'x' + window.innerHeight + ' dpr' + (window.devicePixelRatio || 1); };
+    upd();
+    window.addEventListener('resize', upd);
+    window.addEventListener('orientationchange', () => setTimeout(upd, 300));
+    document.body.appendChild(d);
+  } catch (_) {}
+});
+
 /**
  * app.js — B2B Email Enricher Frontend
  * Vanilla JS · no framework
