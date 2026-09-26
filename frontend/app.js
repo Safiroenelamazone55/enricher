@@ -1,6 +1,22 @@
 'use strict';
 console.log('[Enricher] app.js v2026-05-28-B loaded');
 
+// Diagnóstico temporal en vivo (2026-09-25) — un dispositivo puntual (tablet
+// vieja) se queda con la pantalla de Aplicaciones en blanco sin ningún error
+// visible y sin acceso a su consola. Cualquier excepción no capturada en
+// cualquier parte del arranque se muestra como una franja roja arriba de la
+// página, en vez de quedar invisible. Quitar cuando ese caso quede resuelto.
+window.addEventListener('error', function (ev) {
+  try {
+    if (document.getElementById('nova-diag-banner')) return; // solo el primer error
+    const b = document.createElement('div');
+    b.id = 'nova-diag-banner';
+    b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:999999;background:#7F1D1D;color:#fff;font-family:monospace;font-size:12px;padding:8px 10px;white-space:pre-wrap;max-height:40vh;overflow:auto';
+    b.textContent = 'Error JS: ' + (ev.message || '') + '\n' + (ev.filename || '') + ':' + (ev.lineno || '') + ':' + (ev.colno || '') + '\n' + ((ev.error && ev.error.stack) || '');
+    document.body.appendChild(b);
+  } catch (_) {}
+});
+
 /**
  * app.js — B2B Email Enricher Frontend
  * Vanilla JS · no framework
@@ -640,7 +656,24 @@ const HOME_MODULES = [
 
 function renderHome() {
   const grid = document.getElementById('home-grid');
-  if (!grid) return;
+  if (!grid) {
+    // Si ni siquiera existe #home-grid (no debería pasar — está fijo en el
+    // HTML), igual se avisa en vez de quedar en blanco sin pista alguna.
+    const pane = document.getElementById('pane-home');
+    if (pane) pane.insertAdjacentHTML('afterbegin', `<div style="padding:24px;background:#FEF3C7;border:1px solid #F59E0B;color:#78350F;font-family:monospace;font-size:13px">No se encontró #home-grid en la página.</div>`);
+    return;
+  }
+  // Diagnóstico en vivo (2026-09-25): en cierta tablet la pantalla de
+  // Aplicaciones queda en blanco sin ningún error visible — sin acceso a la
+  // consola del dispositivo, un try/catch que MUESTRA el error en pantalla
+  // (en vez de dejarlo en blanco) es la única forma de saber qué falla ahí.
+  try {
+    _renderHomeInner(grid);
+  } catch (e) {
+    grid.innerHTML = `<div style="grid-column:1/-1;padding:24px;background:#FEF3C7;border:1px solid #F59E0B;color:#78350F;font-family:monospace;font-size:13px;white-space:pre-wrap;max-width:600px;margin:0 auto">Error al dibujar Aplicaciones:\n\n${(e && e.message) || e}\n\n${(e && e.stack) || ''}</div>`;
+  }
+}
+function _renderHomeInner(grid) {
   const cards = HOME_MODULES.map(m => {
     const act = m.action || `selectModule('${m.id}')`;
     return `
