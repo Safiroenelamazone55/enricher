@@ -14103,13 +14103,22 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
 }
 .home-card__kebab:hover { background: #F1EFEB; color: #6C6862; }
 
-@media (max-width: 640px) {
+/* Tablet: 3 columnas no caben cómodas — pedido explícito 2026-09-25: "si no
+   caben 3 por fila no lo fuerces, pon dos". De paso, mismo tratamiento de
+   alto automático (en vez de la cadena height:100%→100vh centrada) que ya
+   tenía el tramo <640px — un layout de alto fijo centrado es justo el tipo
+   de cosa que se rompe sin avisar en navegadores/WebViews viejos (reportado
+   en vivo: pantalla en blanco en una tablet Nexus 9, Android/Chrome antiguo). */
+@media (max-width: 1024px) {
   #appShell.home-mode .app-main { overflow-y: auto; }
   #appShell.home-mode .content-wrap { height: auto; }
   #pane-home { height: auto; }
-  .home-page { height: auto; padding: 24px 20px 40px; }
-  .home-grid { flex: none; grid-template-columns: 1fr; grid-template-rows: none; max-width: none; }
+  .home-page { height: auto; padding: 24px 24px 40px; }
+  .home-grid { flex: none; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: none; max-width: 640px; }
   .home-card { height: auto; min-height: 110px; }
+}
+@media (max-width: 640px) {
+  .home-grid { grid-template-columns: 1fr; max-width: none; }
 }
 
 /* ── "Usuarios" como pantalla independiente: reutiliza #pane-mgmt-team (misma
