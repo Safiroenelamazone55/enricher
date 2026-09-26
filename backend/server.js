@@ -2779,19 +2779,28 @@ setInterval(_weeklyBillingTick, 60 * 60 * 1000);
 setTimeout(_weeklyBillingTick, 20 * 1000); // al arrancar (con margen para la migración)
 
 // Archiva solas las tareas semanales auto-creadas cuya semana YA PASÓ — pedido
-// explícito 2026-09-25: "si la semana acaba también debe archivarse". Son
-// tareas raíz con semana_week/billing_week seteado (=las que crea
-// _ensureWeeklyTaskCore arriba) cuyo deadline (domingo de esa semana) quedó
-// atrás. Las horas trackeadas en ellas NO se tocan (time_entries no se borra
-// ni se toca) — Finanzas sigue leyendo directo de /api/mgmt/tasks, que no
-// filtra archivada; solo la vista de Tareas pendientes las esconde
-// (TasksModule._getFilteredTasks, frontend). Independiente de estado:
-// archiva tanto si quedó "completado" como si quedó "pendiente" sin marcar.
+// explícito 2026-09-25: "si la semana acaba también debe archivarse". Dos
+// mecanismos de auto-creación, dos criterios:
+//   1. Tareas RAÍZ (contenedor) con semana_week/billing_week seteado — las
+//      que crea _ensureWeeklyTaskCore arriba.
+//   2. Subtareas recurrentes (checklist semanal DENTRO de un proyecto, ej.
+//      "Ajustar ICP y mensajes") con recur_template_id seteado — las que
+//      crea _ensureRecurSubtasksCore; heredan el deadline del contenedor
+//      pero NO tienen semana_week/billing_week propio, así que el criterio
+//      de arriba las dejaba fuera (reportado en vivo 2026-09-26 con captura:
+//      "Ajustar ICP y mensajes... 31 ago-6 sep" seguían en Mis tareas).
+// En ambos casos: deadline (domingo de esa semana) ya quedó atrás. Las horas
+// trackeadas NO se tocan (time_entries no se borra ni se toca) — Finanzas
+// sigue leyendo directo de /api/mgmt/tasks, que no filtra archivada; solo la
+// vista de Tareas pendientes las esconde (TasksModule._getFilteredTasks,
+// frontend). Independiente de estado: archiva tanto si quedó "completado"
+// como si quedó "pendiente" sin marcar.
 async function _archiveOldWeeklyTasksTick() {
   try {
     const r = await pool.query(
       `UPDATE tasks SET archivada=TRUE
-        WHERE archivada=FALSE AND (semana_week IS NOT NULL OR billing_week IS NOT NULL)
+        WHERE archivada=FALSE
+          AND (semana_week IS NOT NULL OR billing_week IS NOT NULL OR recur_template_id IS NOT NULL)
           AND deadline IS NOT NULL AND deadline < CURRENT_DATE
         RETURNING id, titulo`);
     if (r.rowCount) console.log(`[archivar-semanal] ${r.rowCount} tarea(s) semanal(es) archivada(s): ${r.rows.map(x => x.titulo).join(', ')}`);

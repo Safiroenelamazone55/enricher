@@ -14132,9 +14132,17 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
    tenía el tramo <640px — un layout de alto fijo centrado es justo el tipo
    de cosa que se rompe sin avisar en navegadores/WebViews viejos (reportado
    en vivo: pantalla en blanco en una tablet Nexus 9, Android/Chrome antiguo). */
-/* El alto automático (contra la cadena height:100%→100vh) aplica ancho pero
-   angosto (tablets chicas y grandes por igual) — es solo una salvaguarda de
-   layout, no depende del ancho real. Las COLUMNAS sí necesitan su propio
+/* pedido explícito 2026-09-25, con datos reales de un HONOR Pad X9: en
+   horizontal (1143×566, ANCHO > 1024) la cadena height:100% funciona bien; en
+   vertical (686×1023, ancho ≤1024, MÁS ALTO que ancho) entraba a este tramo
+   que forzaba height:auto en toda la cadena (pane→content-wrap→app-main) —
+   y resulta que ES ESE el que rompe: .home-grid queda con flex:1;min-height:0
+   dentro de un ancestro auto-height de una sola columna flex, un caso límite
+   de flexbox (altura intrínseca circular) que este navegador resuelve mal y
+   colapsa a 0 en vez de al alto del contenido. Ya NO se fuerza auto aquí —
+   se mantiene la MISMA cadena de 100% que ya probó funcionar en horizontal,
+   sin importar el ancho; overflow-y:auto en .app-main sigue permitiendo
+   scroll si el contenido no entra. Las COLUMNAS sí necesitan su propio
    corte, más angosto: un iPad de 1024px de ancho tiene espacio de sobra para
    3 columnas completas — pedido explícito 2026-09-25: "en el iPad 13 sigue
    siendo... muy pequeño para la pantalla que realmente amerita" (el corte
@@ -14143,10 +14151,6 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
    820px real (tablets angostas tipo Nexus 9/iPad mini en portrait) y solo
    ahí bajan a 2. */
 @media (max-width: 1024px) {
-  #appShell.home-mode .app-main { overflow-y: auto; }
-  #appShell.home-mode .content-wrap { height: auto; }
-  #pane-home { height: auto; }
-  .home-page { height: auto; padding: 24px 24px 40px; }
   /* Tarjetas más grandes en pantalla táctil — mismo pedido del header: "es un
      dispositivo pequeño, no hay mouse", todo necesita más presencia que en
      desktop con mouse de precisión. */
