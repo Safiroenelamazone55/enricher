@@ -24613,12 +24613,12 @@ ${foot}
     const actLeg = chsUsed.map(k => `<span class="dash-lg"><span class="dash-dot" style="background:${_DASH_CH[k][1]}"></span>${_DASH_CH[k][0]}</span>`).join('');
     return `${_dashLoading ? '<div class="dash-loading">Actualizando…</div>' : ''}
       <div class="dash-kpis">
-        ${kpi('Contactos alcanzados', c.contacted, _dashDelta(c.contacted, p.contacted), `${c.touches} toques en total`)}
-        ${kpi('Tasa de respuesta', rr + '%', _dashDelta(rr, rrp, true), `${c.replies} respondieron`)}
-        ${kpi('Aceptación LinkedIn', ar + '%', _dashDelta(ar, arp, true), `${c.accepts} de ${c.invites} invitaciones`)}
-        ${kpi('Emails enviados', c.emails, _dashDelta(c.emails, p.emails), c.bounced ? `${c.bounced} rebotados (auto)` : 'sin rebotes')}
-        ${kpi('Apertura email', c.sent ? or + '%' : '—', '<span class="dash-d dash-d--0">estimada</span>', `sobre ${c.sent} envíos con píxel`)}
-        ${kpi('Reuniones agendadas', d.deals.agendadas, _dashDelta(d.deals.agendadas, d.deals.agendadas_prev), (d.deals.programadas ? d.deals.programadas + ' próxima' + (d.deals.programadas > 1 ? 's' : '') + (d.deals.proximo ? ' · ' + new Date(d.deals.proximo).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', timeZone: 'UTC' }) : '') : 'ninguna programada') + (d.deals.valor ? ' · $' + Math.round(d.deals.valor).toLocaleString('es-ES') : ''))}
+        ${kpi('Contactos alcanzados', c.contacted, _dashDelta(c.contacted, p.contacted))}
+        ${kpi('Tasa de respuesta', rr + '%', _dashDelta(rr, rrp, true))}
+        ${kpi('Aceptación LinkedIn', ar + '%', _dashDelta(ar, arp, true))}
+        ${kpi('Emails enviados', c.emails, _dashDelta(c.emails, p.emails))}
+        ${kpi('Apertura email', c.sent ? or + '%' : '—', '<span class="dash-d dash-d--0">estimada</span>')}
+        ${kpi('Reuniones agendadas', d.deals.agendadas, _dashDelta(d.deals.agendadas, d.deals.agendadas_prev))}
       </div>
       <div class="dash-row dash-row--a">
         <div class="cp-card"><div class="dash-card-h"><div class="cp-card__t">Actividad por canal <span class="dash-info" title="Envíos y pasos hechos por canal (no incluye respuestas ni notas)">${_dashIco('info', 14)}</span></div><label class="dash-f dash-f--sm"><select onchange="LeadManagerModule.dashGran(this.value)"><option value="day"${gran === 'day' ? ' selected' : ''}>Diario</option><option value="week"${gran === 'week' ? ' selected' : ''}>Semanal</option></select></label></div><div class="dash-legend">${actLeg}</div><div class="dash-chart"><canvas id="dash-daily"></canvas></div></div>
