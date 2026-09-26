@@ -14016,7 +14016,13 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
    falta más alto y objetivos táctiles más grandes (mínimo ~40px, guía Apple/
    Google). --topbar-h es una variable CSS que ya alimenta varios cálculos de
    posición (.lm2-nav, paneles de chat) — al subirla acá esos cuadran solos. */
-@media (max-width: 1024px) {
+/* Se agrega "(pointer: coarse)" (pedido explícito 2026-09-25: "en horizontal
+   el header debe ser más grueso, está muy delgado") — el corte por ancho
+   solo (max-width:1024px) dejaba FUERA el landscape de una tablet real (esa
+   orientación puede medir un poco más de 1024px de ancho lógico); pointer:
+   coarse detecta "esto se toca con el dedo, no hay mouse de precisión" sin
+   importar el ancho ni la orientación. */
+@media (max-width: 1024px), (pointer: coarse) {
   :root { --topbar-h: 52px; }
   .global-topbar { gap: 10px; padding: 0 12px; }
   .global-topbar__logo { width: 26px; height: 26px; }
