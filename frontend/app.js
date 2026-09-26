@@ -24541,8 +24541,8 @@ ${foot}
     const ctry = (_dashData && _dashData.countries ? _dashData.countries.filter(c => c.pais !== 'Sin país').map(c => [c.pais, c.pais]) : []);
     if (f.country && !ctry.some(c => c[0] === f.country)) ctry.push([f.country, f.country]);
     const seg = [['7d', '7 días'], ['30d', '30 días'], ['mes', 'Este mes'], ['trim', 'Trimestre'], ['ytd', 'YTD'], ['custom', 'Personalizado']];
-    return `<div class="dash-seg">${seg.map(r => `<button class="dash-seg__b${f.range === r[0] ? ' on' : ''}" onclick="LeadManagerModule.dashSet('range','${r[0]}')">${r[1]}</button>`).join('')}</div>
-      ${f.range === 'custom' ? `<input type="date" class="dash-date" value="${esc(f.from)}" onchange="LeadManagerModule.dashSet('from',this.value)"><input type="date" class="dash-date" value="${esc(f.to)}" onchange="LeadManagerModule.dashSet('to',this.value)">` : ''}
+    return sel('range', 'Rango', 'cal', seg, f.range || '7d')
+      + `${f.range === 'custom' ? `<input type="date" class="dash-date" value="${esc(f.from)}" onchange="LeadManagerModule.dashSet('from',this.value)"><input type="date" class="dash-date" value="${esc(f.to)}" onchange="LeadManagerModule.dashSet('to',this.value)">` : ''}
       ${sel('client', 'Cliente', 'building', _clients.map(c => [c.id, c.nombre]))}
       ${sel('campaign', 'Campaña', 'tag', camps.map(c => [c.id, c.nombre]))}
       ${sel('sequence', 'Secuencia', 'seq', seqs.map(s => [s.id, s.nombre]))}
