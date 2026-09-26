@@ -16908,7 +16908,7 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .dash-seg__b+.dash-seg__b{border-left:1px solid #E7EBF0}
 .dash-seg__b:hover:not(.on){background:#F8FAFC}
 .dash-seg__b.on{background:#0B1220;color:#fff}
-.dash-f{flex:1 1 0;min-width:190px;max-width:320px;height:46px;padding:0 18px;gap:10px;border:0;border-right:1px solid #E1E6EC;border-radius:0;background:transparent}
+.dash-f{flex:0 0 230px;min-width:230px;max-width:none;height:46px;padding:0 18px;gap:10px;border:0;border-right:1px solid #E1E6EC;border-radius:0;background:transparent}
 .dash-f.is-on{box-shadow:none;background:#F0F5FF}
 .dash-f select{font-size:14.5px;min-width:0}
 .dash-date{height:46px;padding:0 18px;border:0;border-right:1px solid #E1E6EC;border-radius:0;background:transparent}
