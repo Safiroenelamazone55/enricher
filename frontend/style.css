@@ -16907,10 +16907,10 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .dash-seg__b+.dash-seg__b{border-left:1px solid #E7EBF0}
 .dash-seg__b:hover:not(.on){background:#F8FAFC}
 .dash-seg__b.on{background:#0B1220;color:#fff}
-.dash-f{flex:0 1 auto;min-width:118px;max-width:190px;height:36px;border:0;border-right:1px solid #E1E6EC;border-radius:0;background:transparent}
+.dash-f{flex:0 1 auto;min-width:140px;max-width:210px;height:46px;padding:0 16px;gap:10px;border:0;border-right:1px solid #E1E6EC;border-radius:0;background:transparent}
 .dash-f.is-on{box-shadow:none;background:#F0F5FF}
-.dash-f select{font-size:13px}
-.dash-date{height:36px;border:0;border-right:1px solid #E1E6EC;border-radius:0;background:transparent}
+.dash-f select{font-size:13.5px}
+.dash-date{height:46px;padding:0 16px;border:0;border-right:1px solid #E1E6EC;border-radius:0;background:transparent}
 .dash-filters>:last-child{border-right:0}
 .dash-btn--p{background:#0B1220;border-color:#0B1220;box-shadow:none}
 .dash-btn--p:hover{background:#1E293B;border-color:#1E293B}
