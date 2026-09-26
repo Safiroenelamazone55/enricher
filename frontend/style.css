@@ -16916,7 +16916,7 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .dash-btn--p:hover{background:#1E293B;border-color:#1E293B}
 .dash-kpis{grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;margin-bottom:12px}
 .dash-kpis--4{grid-template-columns:repeat(4,minmax(0,1fr))}
-.dash-kpi{border-left:1px solid #E7EBF0;border-bottom:3px solid var(--kc,#2563EB);padding:10px 12px 9px}
+.dash-kpi{border-left:1px solid #E7EBF0;border-bottom:1px solid #E7EBF0;padding:10px 12px 9px}
 .dash-kpi__top{gap:8px;margin-bottom:3px}
 .dash-kpi__ic{width:32px;height:32px}
 .dash-kpi__ic svg{width:16px;height:16px}
