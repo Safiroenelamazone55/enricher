@@ -28294,6 +28294,8 @@ ${foot}
   let _ctClientFilter = '';   // filtro por cliente outbound asignado
   let _ctFilters = [];        // filtros avanzados de contactos: [{field, op, val}]
   let _coFilters = [];        // filtros avanzados de empresas
+  let _coQF = { tier: '', seq: '', cliente: '', estado: '' }; // filtros rápidos de la barra (Empresas)
+  let _ctQF = { cliente: '', seq: '', campana: '', estado: '', pais: '' }; // filtros rápidos de la barra (Contactos)
   let _fltEntity = null;      // entidad del modal de filtros abierto
   let _fltDraft = [];         // borrador editable dentro del modal
   let _fmsRow = null;         // fila con el multi-select de valores abierto
@@ -28747,6 +28749,7 @@ ${foot}
         <span class="lm-count" id="lm-ct-count"></span>
         <button class="dg-kebab${(_ctClientFilter || _ctBounced || _ctDataIssue || _ctFilters.length) ? ' on' : ''}" onclick="LeadManagerModule.ctMoreMenu(event)" title="Filtros, vistas, columnas y selección">⋮</button>
       </div>
+      <div id="lm-ct-qf-wrap">${_ctQFBarHtml()}</div>
       ${_fltChipsHtml('contacts')}
       <div class="lm-bulk-bar" id="lm-ct-bulk"></div>
       <div id="lm-ct-results"></div>`;
@@ -28855,9 +28858,51 @@ ${foot}
     if (_ctBounced) list = list.filter(c => c.email_status === 'bounced');
     if (_ctDataIssue) list = list.filter(c => c.data_issue);
     if (_ctFilters.length) list = list.filter(c => _lmMatch(c, _ctFilters));
+    if (_ctQF.cliente) list = list.filter(c => String(c.outbound_client_id || '') === _ctQF.cliente);
+    if (_ctQF.seq) list = list.filter(c => (Array.isArray(c.sequences) ? c.sequences : []).some(sq => String(sq.id) === _ctQF.seq));
+    if (_ctQF.campana) {
+      const seqIds = new Set((_sequences || []).filter(s => String(s.campaign_id) === _ctQF.campana).map(s => s.id));
+      list = list.filter(c => (Array.isArray(c.sequences) ? c.sequences : []).some(sq => seqIds.has(sq.id)));
+    }
+    if (_ctQF.estado) list = list.filter(c => c.estado === _ctQF.estado);
+    if (_ctQF.pais) list = list.filter(c => (c.pais || '') === _ctQF.pais);
     return list;
   }
   function _ctHasFilters() { return !!(_ctQuery || _ctFilters.length || _ctClientFilter || _ctBounced || _ctDataIssue); }
+  // Opciones vivas para la barra de filtros rápidos de Contactos
+  function _ctQFOptions() {
+    const clientes = [...new Set(_contacts.map(c => c.outbound_client_id).filter(Boolean))]
+      .map(id => (_clients || []).find(c => c.id === id)).filter(Boolean).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+    const seqIds = new Set();
+    _contacts.forEach(c => (Array.isArray(c.sequences) ? c.sequences : []).forEach(sq => seqIds.add(sq.id)));
+    const seqs = [...seqIds].map(id => (_sequences || []).find(s => s.id === id)).filter(Boolean).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+    const campIds = new Set(seqs.map(s => s.campaign_id).filter(Boolean));
+    const campanas = [...campIds].map(id => (_campaigns || []).find(c => c.id === id)).filter(Boolean).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+    const estados = [...new Set(_contacts.map(c => c.estado).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'));
+    const paises = [...new Set(_contacts.map(c => c.pais).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'));
+    return { clientes, seqs, campanas, estados, paises };
+  }
+  function ctQFSet(k, v) { _ctQF[k] = v || ''; _ctPage = 0; _vRenderCtFiltersBar(); _renderContacts(); }
+  function ctQFClear() { _ctQF = { cliente: '', seq: '', campana: '', estado: '', pais: '' }; _ctPage = 0; _vRenderCtFiltersBar(); _renderContacts(); }
+  function _ctQFBarHtml() {
+    const opt = (k, label, items, cur) => `<label class="dash-f${cur ? ' is-on' : ''}"><select onchange="LeadManagerModule.ctQFSet('${k}',this.value)" title="${label}"><option value="">${label}</option>${items}</select></label>`;
+    const o = _ctQFOptions();
+    const cliOpts = o.clientes.map(c => `<option value="${c.id}"${_ctQF.cliente === String(c.id) ? ' selected' : ''}>${esc(c.nombre)}</option>`).join('');
+    const seqOpts = o.seqs.map(s => `<option value="${s.id}"${_ctQF.seq === String(s.id) ? ' selected' : ''}>${esc(s.nombre)}</option>`).join('');
+    const campOpts = o.campanas.map(c => `<option value="${c.id}"${_ctQF.campana === String(c.id) ? ' selected' : ''}>${esc(c.nombre)}</option>`).join('');
+    const estOpts = o.estados.map(e => `<option value="${esc(e)}"${_ctQF.estado === e ? ' selected' : ''}>${esc(e)}</option>`).join('');
+    const paisOpts = o.paises.map(p => `<option value="${esc(p)}"${_ctQF.pais === p ? ' selected' : ''}>${esc(p)}</option>`).join('');
+    const anyOn = _ctQF.cliente || _ctQF.seq || _ctQF.campana || _ctQF.estado || _ctQF.pais;
+    return `<div class="dash-filters" id="lm-ct-qf">
+      ${opt('cliente', 'Cliente', cliOpts, _ctQF.cliente)}
+      ${opt('seq', 'Secuencia', seqOpts, _ctQF.seq)}
+      ${opt('campana', 'Campaña', campOpts, _ctQF.campana)}
+      ${opt('estado', 'Estado', estOpts, _ctQF.estado)}
+      ${opt('pais', 'País', paisOpts, _ctQF.pais)}
+      ${anyOn ? `<button class="dash-clear" onclick="LeadManagerModule.ctQFClear()">Limpiar</button>` : ''}
+    </div>`;
+  }
+  function _vRenderCtFiltersBar() { const el = $('lm-ct-qf-wrap'); if (el) el.innerHTML = _ctQFBarHtml(); }
   function _renderContacts() {
     const el = $('lm-ct-results'); if (!el) return;
     const q = _ctQuery;
@@ -29637,6 +29682,7 @@ ${foot}
         <span class="lm-count" id="lm-co-count"></span>
         <button class="dg-kebab${_coFilters.length ? ' on' : ''}" onclick="LeadManagerModule.coMoreMenu(event)" title="Filtros, vistas y selección">⋮</button>
       </div>
+      <div id="lm-co-qf-wrap">${_coQFBarHtml()}</div>
       ${_fltChipsHtml('companies')}
       <div class="lm-bulk-bar" id="lm-co-bulk"></div>
       <div id="lm-co-results"></div>`;
@@ -29647,8 +29693,43 @@ ${foot}
     let list = _companies;
     if (q) list = list.filter(c => (`${c.nombre || ''} ${c.dominio || ''} ${c.industria || ''} ${c.pais || ''}`).toLowerCase().includes(q));
     if (_coFilters.length) list = list.filter(c => _lmMatch(c, _coFilters));
+    if (_coQF.tier) list = list.filter(c => (c.target_tier || '').trim() === _coQF.tier);
+    if (_coQF.seq) list = list.filter(c => _coSeqAgg(c.id).some(g => String(g.id) === _coQF.seq));
+    if (_coQF.cliente) list = list.filter(c => String(_coClienteId(c.id) || '') === _coQF.cliente);
+    if (_coQF.estado) list = list.filter(c => _coEstadoReal(c.id)[0] === _coQF.estado);
     return list;
   }
+  // Opciones vivas para la barra de filtros rápidos de Empresas (Tier/Secuencia/Cliente)
+  function _coQFOptions() {
+    const tiers = [...new Set(_companies.map(c => (c.target_tier || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'));
+    const seqIds = new Set();
+    _companies.forEach(c => _coSeqAgg(c.id).forEach(g => seqIds.add(g.id)));
+    const seqs = [...seqIds].map(id => (_sequences || []).find(s => s.id === id)).filter(Boolean).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+    const cliIds = new Set();
+    _companies.forEach(c => { const cid = _coClienteId(c.id); if (cid) cliIds.add(cid); });
+    const clientes = [...cliIds].map(id => (_clients || []).find(c => c.id === id)).filter(Boolean).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+    return { tiers, seqs, clientes };
+  }
+  function coQFSet(k, v) { _coQF[k] = v || ''; _coPage = 0; _vRenderCoFiltersBar(); _renderCompanies(); }
+  function coQFClear() { _coQF = { tier: '', seq: '', cliente: '', estado: '' }; _coPage = 0; _vRenderCoFiltersBar(); _renderCompanies(); }
+  function _coQFBarHtml() {
+    const opt = (k, label, items, cur) => `<label class="dash-f${cur ? ' is-on' : ''}"><select onchange="LeadManagerModule.coQFSet('${k}',this.value)" title="${label}"><option value="">${label}</option>${items}</select></label>`;
+    const o = _coQFOptions();
+    const tierOpts = o.tiers.map(t => `<option value="${esc(t)}"${_coQF.tier === t ? ' selected' : ''}>${esc(t)}</option>`).join('');
+    const seqOpts = o.seqs.map(s => `<option value="${s.id}"${_coQF.seq === String(s.id) ? ' selected' : ''}>${esc(s.nombre)}</option>`).join('');
+    const cliOpts = o.clientes.map(c => `<option value="${c.id}"${_coQF.cliente === String(c.id) ? ' selected' : ''}>${esc(c.nombre)}</option>`).join('');
+    const estados = ['Sin contactar', 'Contactando', 'En pausa', 'Contactado'];
+    const estOpts = estados.map(e => `<option value="${esc(e)}"${_coQF.estado === e ? ' selected' : ''}>${esc(e)}</option>`).join('');
+    const anyOn = _coQF.tier || _coQF.seq || _coQF.cliente || _coQF.estado;
+    return `<div class="dash-filters" id="lm-co-qf">
+      ${opt('tier', 'Tier', tierOpts, _coQF.tier)}
+      ${opt('seq', 'Secuencia', seqOpts, _coQF.seq)}
+      ${opt('cliente', 'Cliente', cliOpts, _coQF.cliente)}
+      ${opt('estado', 'Estado', estOpts, _coQF.estado)}
+      ${anyOn ? `<button class="dash-clear" onclick="LeadManagerModule.coQFClear()">Limpiar</button>` : ''}
+    </div>`;
+  }
+  function _vRenderCoFiltersBar() { const el = $('lm-co-qf-wrap'); if (el) el.innerHTML = _coQFBarHtml(); }
   function _renderCompanies() {
     const el = $('lm-co-results'); if (!el) return;
     const q = _coQuery;
@@ -29693,6 +29774,13 @@ ${foot}
     if (agg.some(g => g.activos > 0)) return ['Contactando', '#E0F2FE', '#0369A1'];
     if (agg.every(g => g.pausados > 0 && g.activos === 0)) return ['En pausa', '#FEF3C7', '#B45309'];
     return ['Contactado', '#F1EFEB', '#15803D'];
+  }
+  // Cliente outbound dueño de la empresa: se deduce de sus contactos (una empresa
+  // puede tener contactos de más de un cliente en teoría, pero en la práctica es
+  // siempre uno solo — se toma el del primer contacto con cliente asignado).
+  function _coClienteId(companyId) {
+    const c = (_contacts || []).find(x => x.company_id === companyId && x.outbound_client_id);
+    return c ? c.outbound_client_id : null;
   }
   function _coSeqNames(companyId) {
     const agg = _coSeqAgg(companyId);
@@ -31361,9 +31449,9 @@ ${foot}
   return { load, filter, setFilter, setView, go, openClient, clientTab, _clientGoTab, clientQuickMenu,
     openImportPicker, closeImportPicker, openImport, closeImport, impFile, impToggleHeader, impToggleUpdateExisting, impSetObc, impNewClient, impRun, exportCsv,
     cbxOpen, cbxFilter, cbxPick, cbxBlur,
-    openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, ctMoreMenu, lmSetValueOp, bulkDeleteContacts, bulkAddOpen, bulkAddDo, _bulkAddAfterCreate, bulkRemoveSeqOpen, bulkRemoveSeqDo, openContactPage, cpTab, cpSave, cpDelete, cpActOpen, cpActSave, cpActToggle, cpActDel,
+    openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, ctMoreMenu, lmSetValueOp, bulkDeleteContacts, bulkAddOpen, bulkAddDo, _bulkAddAfterCreate, bulkRemoveSeqOpen, bulkRemoveSeqDo, openContactPage, cpTab, cpSave, cpDelete, cpActOpen, cpActSave, cpActToggle, cpActDel, ctQFSet, ctQFClear,
     cpResumeSeq, cpFocusField, cpOpenRegisterReply, cpSaveRegisterReply,
-    openCompany, closeCompany, saveCompany, deleteCompany, filterCompanies, toggleCo, toggleCoAll, clearCoSel, toggleCoSelMode, coMoreMenu, bulkDeleteCompanies, coEnrolOpen, coEnrolFilter, coEnrolPick, openCompanyPage,
+    openCompany, closeCompany, saveCompany, deleteCompany, filterCompanies, toggleCo, toggleCoAll, clearCoSel, toggleCoSelMode, coMoreMenu, bulkDeleteCompanies, coEnrolOpen, coEnrolFilter, coEnrolPick, openCompanyPage, coQFSet, coQFClear,
     coQueueAddContact, coQueueDiscard, coQueueTogglePrimary, coQueueContinue,
     seqCoTaskOpen, seqCoDoClose, seqOpenCompanyLinkedIn, seqCoRowMenu, seqCoExpandToggle,
     openDrawer, closeDrawer, save, confirmDelete, convertToClient,
