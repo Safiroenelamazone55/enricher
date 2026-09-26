@@ -14061,7 +14061,7 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
 }
 .home-card {
   display: flex; flex-direction: column; gap: 12px; position: relative;
-  flex: 1 1 calc(33.333% - 10px); max-width: calc(33.333% - 10px); box-sizing: border-box;
+  flex: 1 1 calc(33.333% - 10px); max-width: calc(33.333% - 10px); min-width: 0; box-sizing: border-box;
   padding: 16px 16px 14px; background: #fff; border: 1px solid #E8E4DE;
   border-radius: 0; cursor: pointer; text-align: left; font-family: inherit;
   transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
@@ -14116,13 +14116,36 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
    tenía el tramo <640px — un layout de alto fijo centrado es justo el tipo
    de cosa que se rompe sin avisar en navegadores/WebViews viejos (reportado
    en vivo: pantalla en blanco en una tablet Nexus 9, Android/Chrome antiguo). */
+/* El alto automático (contra la cadena height:100%→100vh) aplica ancho pero
+   angosto (tablets chicas y grandes por igual) — es solo una salvaguarda de
+   layout, no depende del ancho real. Las COLUMNAS sí necesitan su propio
+   corte, más angosto: un iPad de 1024px de ancho tiene espacio de sobra para
+   3 columnas completas — pedido explícito 2026-09-25: "en el iPad 13 sigue
+   siendo... muy pequeño para la pantalla que realmente amerita" (el corte
+   anterior, a 1024px, encogía la grilla a 640px de ancho máximo incluso en
+   pantallas que sobraban de espacio). Ahora 3 columnas se mantienen hasta
+   820px real (tablets angostas tipo Nexus 9/iPad mini en portrait) y solo
+   ahí bajan a 2. */
 @media (max-width: 1024px) {
   #appShell.home-mode .app-main { overflow-y: auto; }
   #appShell.home-mode .content-wrap { height: auto; }
   #pane-home { height: auto; }
   .home-page { height: auto; padding: 24px 24px 40px; }
-  .home-grid { flex-grow: 0; max-width: 640px; }
-  .home-card { flex: 1 1 calc(50% - 7px); max-width: calc(50% - 7px); height: auto; min-height: 110px; }
+  /* Tarjetas más grandes en pantalla táctil — mismo pedido del header: "es un
+     dispositivo pequeño, no hay mouse", todo necesita más presencia que en
+     desktop con mouse de precisión. */
+  .home-grid { gap: 18px; max-width: 1100px; }
+  .home-card { flex-basis: calc(33.333% - 12px); max-width: calc(33.333% - 12px); padding: 20px 20px 18px; gap: 14px; }
+  .home-card__title { font-size: 17px; }
+  .home-card__desc { font-size: 14px; }
+  .home-card__icon { width: 40px; height: 40px; }
+  .home-card__icon svg { width: 20px; height: 20px; }
+  .home-card__chip { font-size: 12.5px; padding: 4px 11px 4px 9px; }
+  .home-card__kebab { width: 30px; height: 30px; font-size: 18px; }
+}
+@media (max-width: 820px) {
+  .home-grid { flex-grow: 0; }
+  .home-card { flex: 1 1 calc(50% - 9px); max-width: calc(50% - 9px); height: auto; min-height: 110px; }
 }
 @media (max-width: 640px) {
   .home-card { flex: 1 1 100%; max-width: 100%; }
