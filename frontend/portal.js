@@ -427,15 +427,20 @@
   // la lista real de esos 9 contactos, no solo el número (pedido explícito 2026-09-28).
   async function openWeekModal(kind, label) {
     const w = S.wk; if (!w) return;
+    const bodyEl = document.getElementById('pt-body'); if (!bodyEl) return;
     document.getElementById('pt-wkfull')?.remove();
+    // Dentro de #pt-body (no en `root`) para no taparle el header/nav del
+    // portal — se esconden los hermanos (el Resumen) mientras se muestra esto,
+    // y "← Volver" simplemente repinta la vista actual en vez de restaurarla a mano.
+    Array.from(bodyEl.children).forEach(c => { c.style.display = 'none'; });
     const m = document.createElement('div'); m.id = 'pt-wkfull'; m.className = 'pt-wkfull';
-    m.innerHTML = `<div class="pt-wkfull__hd"><div><h2>${esc(label)}</h2><div class="pt-item__s">${fshort(w.r.from)} – ${fshort(w.r.to)}</div></div><button class="pt-modal__x" id="pt-wkfx" title="Cerrar">✕</button></div>
+    m.innerHTML = `<div class="pt-wkfull__hd"><button class="pt-wkfull__back" id="pt-wkfb">← Volver</button><div><h2>${esc(label)}</h2><div class="pt-item__s">${fshort(w.r.from)} – ${fshort(w.r.to)}</div></div></div>
       <div class="pt-wkfull__body">
         <div class="pt-wkfull__list" id="pt-wkfull-list"><div class="pt-empty">Cargando…</div></div>
         <div class="pt-wkfull__det" id="pt-wkfull-det"><div class="pt-empty">Elige un contacto de la lista para ver su historial.</div></div>
       </div>`;
-    root.appendChild(m);
-    document.getElementById('pt-wkfx').onclick = () => { m.remove(); S._wkSelect = null; };
+    bodyEl.appendChild(m);
+    document.getElementById('pt-wkfb').onclick = () => { S._wkSelect = null; paint(); };
     const listEl = document.getElementById('pt-wkfull-list'), detEl = document.getElementById('pt-wkfull-det');
     let rows = [];
     try { rows = await api(`/portal/week-items?kind=${kind}&from=${isoL(w.r.from)}&to=${isoL(w.r.to)}`); }

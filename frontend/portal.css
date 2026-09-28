@@ -235,10 +235,14 @@ button{cursor:pointer}
 .pt-modal__box p{font-size:13.5px;color:#475569;line-height:1.5;margin-bottom:16px}
 .pt-modal__b{display:flex;flex-direction:column;gap:8px}
 .pt-modal__x{position:absolute;top:10px;right:12px;border:0;background:none;font-size:18px;color:#64748B}
-.pt-wkfull{position:fixed;inset:0;background:#fff;z-index:90;display:flex;flex-direction:column}
-.pt-wkfull__hd{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:18px 24px;border-bottom:1px solid #E7EBF0}
-.pt-wkfull__hd h2{font-size:20px;letter-spacing:-.01em;margin:0}
-.pt-wkfull__hd .pt-modal__x{position:static}
+/* Vive DENTRO de #pt-body (no fixed a toda la pantalla) para no taparle el
+   header/nav del portal — pedido explícito 2026-09-28: "no tiene por qué
+   perder el header". Ocupa todo el alto visible disponible bajo el header. */
+.pt-wkfull{background:#fff;border:1px solid #E7EBF0;display:flex;flex-direction:column;min-height:calc(100vh - 160px)}
+.pt-wkfull__hd{display:flex;align-items:center;gap:14px;padding:16px 20px;border-bottom:1px solid #E7EBF0}
+.pt-wkfull__back{border:1px solid #D9DEE3;background:#fff;border-radius:8px;padding:7px 12px;font-size:13px;font-weight:600;color:#334155;flex:none;display:flex;align-items:center;gap:6px;cursor:pointer}
+.pt-wkfull__back:hover{background:#F8FAFC}
+.pt-wkfull__hd h2{font-size:19px;letter-spacing:-.01em;margin:0}
 .pt-wkfull__body{flex:1;display:flex;min-height:0}
 .pt-wkfull__list{width:360px;flex:none;border-right:1px solid #E7EBF0;overflow:auto;padding:8px 16px}
 .pt-wkfull__det{flex:1;overflow:auto;padding:22px 28px;min-width:0}
