@@ -5996,6 +5996,7 @@ async function _pendingNoEmailRows(pool, userId, seqId) {
      WHERE cs.user_id=$1 AND cs.sequence_id=$2
        AND (cs.estado='activo' OR (cs.estado='pausado' AND cs.paused_reason='sin_email'))
        AND (k.email IS NULL OR k.email='')
+       AND COALESCE(k.disposition,'') NOT IN ('derivado','no_es_persona','no_interesado','no_califica','no_contactar')
      ORDER BY cs.next_action_at ASC NULLS FIRST`, [userId, seqId]);
   const out = [];
   for (const enr of enrs) {
@@ -8456,7 +8457,8 @@ app.get('/api/sequences', requireAuth, async (req, res) => {
              -- de calcular aquí para todas las secuencias a la vez).
              (SELECT COUNT(*)::int FROM lm_contact_sequences cs JOIN lm_contacts k ON k.id=cs.contact_id
                WHERE cs.sequence_id = s.id AND (k.email IS NULL OR k.email='')
-                 AND (cs.estado='activo' OR (cs.estado='pausado' AND cs.paused_reason='sin_email'))) AS no_email_pending
+                 AND (cs.estado='activo' OR (cs.estado='pausado' AND cs.paused_reason='sin_email'))
+                 AND COALESCE(k.disposition,'') NOT IN ('derivado','no_es_persona','no_interesado','no_califica','no_contactar')) AS no_email_pending
         FROM sequences s WHERE s.user_id=$1 ORDER BY s.created_at DESC`, [req.workspaceOwnerId]);
     res.json(rows);
   } catch (err) { console.error('[seq] GET error:', err.message); res.status(500).json({ error: 'Error al cargar secuencias' }); }
