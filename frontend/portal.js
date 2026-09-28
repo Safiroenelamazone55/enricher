@@ -249,7 +249,7 @@
     try {
       if (t === 'inicio') {
         const [wk, h, u, f, sq, stp, d] = await Promise.all([wkFetch(S.per), api('/portal/highlights'), api('/portal/updates'), s.feed ? api('/portal/feed') : null, s.secuencias && !S.seqs ? api('/portal/sequences') : null, s.secuencias ? api('/portal/steps') : null, S.detail ? api('/portal/dashboard?' + rangeQ()) : null]);
-        S.wk = wk; setTimeout(() => wkFetch(S.per === 'month' ? 'week' : 'month').catch(() => {}), 400); S.hl = h; S.upd = u; S.feed = f; S.steps = stp; if (sq) S.seqs = sq; S.dash = d;
+        S.wk = wk; if (S.per !== 'custom') setTimeout(() => wkFetch(S.per === 'month' ? 'week' : 'month').catch(() => {}), 400); S.hl = h; S.upd = u; S.feed = f; S.steps = stp; if (sq) S.seqs = sq; S.dash = d;
       } else if (t === 'setup') S.setup = await api('/portal/setup');
       else if (t === 'reuniones') S.meet = await api('/portal/meetings');
       else if (t === 'empresas') S.cos = await api('/portal/companies?q=' + encodeURIComponent(S.q));
@@ -312,11 +312,28 @@
     seq: v => { S.seq = v; S.dash = null; paint(); load(false); },
     gran: v => { S.gran = v; paint(); },
     per: p => {
-      S.per = p; try { localStorage.setItem('pt_per', p); } catch (e) {}
+      S.per = p; if (p !== 'custom') { try { localStorage.setItem('pt_per', p); } catch (e) {} }
+      if (p === 'custom') {
+        if (!S.customFrom || !S.customTo) { const t = new Date(), f = new Date(t); f.setDate(f.getDate() - 6); S.customFrom = isoL(f); S.customTo = isoL(t); }
+        paint();
+        const c = S.wkc.custom;
+        if (c) { S.wk = c; paint(); }
+        if (!c || Date.now() - c.t > 60000) wkFetch('custom').then(w => { if (S.per === 'custom') { S.wk = w; paint(); } }).catch(() => {});
+        return;
+      }
       const c = S.wkc[p], apply = w => { if (S.per === p) { S.wk = w; paint(); } };
       S.wk = c || S.wk; paint();
       if (!c) { const el = document.querySelector('.pt-week'); if (el) { el.style.opacity = '.5'; el.style.transition = 'opacity .15s'; } }
       if (!c || Date.now() - c.t > 60000) wkFetch(p).then(apply).catch(() => {});
+    },
+    // Pedido explícito del cliente (Tent Softlab, 2026-09-28): "a date selection
+    // option in your app" — rango de fechas personalizado para el resumen del
+    // portal, además de Semana/Mes.
+    customRange: (from, to) => {
+      if (!from || !to || from > to) return;
+      S.customFrom = from; S.customTo = to; S.wkc.custom = null;
+      paint();
+      wkFetch('custom').then(w => { if (S.per === 'custom') { S.wk = w; paint(); } }).catch(() => {});
     },
     detail: () => { S.detail = !S.detail; try { localStorage.setItem('pt_detail', S.detail ? '1' : '0'); } catch (e) {} if (S.detail && !S.dash) { paint(); load(false); } else paint(); },
     open: id => openContact(id), openCo: id => openCompany(id), close: () => closeDrawer(), drTab: (t, id) => drTab(t, id),
@@ -351,7 +368,15 @@
   const isoL = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   function perRanges(p) {
     const now = new Date(); now.setHours(12, 0, 0, 0);
-    if ((p || S.per) === 'month') {
+    const per = p || S.per;
+    if (per === 'custom' && S.customFrom && S.customTo) {
+      const f = new Date(S.customFrom + 'T12:00:00'), t = new Date(S.customTo + 'T12:00:00');
+      const days = Math.max(1, Math.round((t - f) / 864e5) + 1);
+      const pt = new Date(f); pt.setDate(pt.getDate() - 1);
+      const pf = new Date(pt); pf.setDate(pf.getDate() - days + 1);
+      return { from: f, to: t, pfrom: pf, pto: pt };
+    }
+    if (per === 'month') {
       const f = new Date(now.getFullYear(), now.getMonth(), 1, 12), pf = new Date(now.getFullYear(), now.getMonth() - 1, 1, 12);
       const pend = new Date(now.getFullYear(), now.getMonth(), 0, 12), pt = new Date(pf); pt.setDate(Math.min(now.getDate(), pend.getDate()));
       return { from: f, to: now, pfrom: pf, pto: pt };
@@ -371,7 +396,7 @@
   function dl(cur, prev) {
     if (!prev && !cur) return '<span class="dash-d dash-d--0">—</span>';
     const diff = prev ? Math.round((cur - prev) / prev * 100) : 100, cls = diff > 0 ? 'up' : diff < 0 ? 'down' : '0';
-    return `<span class="dash-d dash-d--${cls}">${diff > 0 ? '▲ +' : diff < 0 ? '▼ -' : '• '}${Math.abs(diff)}%${S.per === 'month' ? ' vs. mes anterior' : ' vs. semana anterior'}</span>`;
+    return `<span class="dash-d dash-d--${cls}">${diff > 0 ? '▲ +' : diff < 0 ? '▼ -' : '• '}${Math.abs(diff)}%${S.per === 'month' ? ' vs. mes anterior' : S.per === 'custom' ? ' vs. período anterior' : ' vs. semana anterior'}</span>`;
   }
   function updatesHtml() {
     const u = S.upd; if (!u || !u.length) return '';
@@ -384,8 +409,16 @@
     const mc = w.cur.deals ? w.cur.deals.agendadas : null, mp = w.prev.deals ? w.prev.deals.agendadas : 0;
     const tiles = [['Contactos alcanzados', c.contacted, p.contacted, 'users', '#22A06B', 'contacted'], ['Respuestas', c.replies, p.replies, 'reply', '#F59E0B', 'replies'], mc == null ? null : ['Reuniones agendadas', mc, mp, 'handshake', '#7C5CE0', 'meetings'], ['Toques realizados', c.touches, p.touches, 'send', '#2563EB', 'touches']].filter(Boolean);
     const sent = `${c.contacted} contactos alcanzados · ${c.replies} respuestas${mc == null ? '' : ' · ' + mc + (mc === 1 ? ' reunión agendada' : ' reuniones agendadas')}`;
-    return `<div class="pt-week"><div class="pt-week__h"><div><h2>${S.per === 'month' ? 'Este mes' : 'Esta semana'}</h2><span class="pt-week__r">${fshort(w.r.from)} – ${fshort(w.r.to)}</span></div>
-      <div class="dash-seg"><button class="dash-seg__b${S.per === 'week' ? ' on' : ''}" onclick="PT.per('week')">Semana</button><button class="dash-seg__b${S.per === 'month' ? ' on' : ''}" onclick="PT.per('month')">Mes</button></div></div>
+    const title = S.per === 'month' ? 'Este mes' : S.per === 'custom' ? 'Rango elegido' : 'Esta semana';
+    const customRow = S.per === 'custom' ? `<div style="display:flex;gap:8px;align-items:center;margin:10px 0 2px;flex-wrap:wrap">
+      <input type="date" id="pt-cf1" value="${esc(S.customFrom || '')}" style="border:1px solid #E1E6EC;border-radius:8px;padding:6px 9px;font-size:13px;font-family:inherit">
+      <span style="color:#64748B">–</span>
+      <input type="date" id="pt-cf2" value="${esc(S.customTo || '')}" style="border:1px solid #E1E6EC;border-radius:8px;padding:6px 9px;font-size:13px;font-family:inherit">
+      <button class="pt-btn" style="margin:0;padding:7px 16px" onclick="PT.customRange(document.getElementById('pt-cf1').value,document.getElementById('pt-cf2').value)">Aplicar</button>
+    </div>` : '';
+    return `<div class="pt-week"><div class="pt-week__h"><div><h2>${title}</h2><span class="pt-week__r">${fshort(w.r.from)} – ${fshort(w.r.to)}</span></div>
+      <div class="dash-seg"><button class="dash-seg__b${S.per === 'week' ? ' on' : ''}" onclick="PT.per('week')">Semana</button><button class="dash-seg__b${S.per === 'month' ? ' on' : ''}" onclick="PT.per('month')">Mes</button><button class="dash-seg__b${S.per === 'custom' ? ' on' : ''}" onclick="PT.per('custom')">Personalizado</button></div></div>
+      ${customRow}
       <div class="pt-week__k">${tiles.map(t => `<div class="pt-tile pt-click" style="--kc:${t[4]}" onclick="PT.weekTile('${t[5]}','${esc(t[0])}')"><span class="pt-tile__i">${ico(t[3], 18)}</span><div><div class="pt-tile__l">${t[0]}</div><div class="pt-tile__v">${t[1]}</div>${dl(t[1], t[2])}</div></div>`).join('')}</div>
       <p class="pt-week__s">${sent}</p></div>`;
   }
@@ -638,6 +671,10 @@
     const kpi = (l, v, sub) => `<div class="dash-kpi" style="--kc:#7C5CE0"><div class="dash-kpi__l">${l}</div><div class="dash-kpi__v">${v}</div>${sub ? `<div class="dash-kpi__s">${sub}</div>` : ''}</div>`;
     const tiers = d.tiers.length ? `<div class="pt-card"><h3>Empresas calificadas por Tier</h3><div style="display:flex;gap:10px;flex-wrap:wrap">${d.tiers.map(t => `<span class="pt-badge" style="background:${TIER_COLOR[t.tier] || '#E0F2FE'}22;color:${TIER_COLOR[t.tier] || '#0369A1'};font-weight:700">Tier ${esc(t.tier)} · ${t.n}</span>`).join('')}</div></div>` : '';
     const batches = d.batches.length ? `<div class="pt-card"><h3>Lotes de prospección</h3>${d.batches.map(b => `<div class="pt-item"><div class="pt-item__t"><span>${esc(b.nombre)}</span><span style="color:#64748B;font-weight:500;font-size:12px">${fdate(b.created_at, { day: 'numeric', month: 'short' })}</span></div><div class="pt-item__s">${b.total} empresas · ${b.califican} califican</div></div>`).join('')}</div>` : '';
+    // Por secuencia — deliberadamente opcional: no toda empresa de Cantera ya se
+    // promovió a una secuencia real. Si no hay ninguna asociada todavía, esta
+    // tarjeta simplemente no aparece (pedido explícito: "si no, no pasa nada").
+    const seqs = (d.secuencias || []).length ? `<div class="pt-card"><h3>Empresas calificadas ya en secuencia</h3><div style="display:flex;flex-direction:column;gap:8px">${d.secuencias.map(s => `<div class="pt-item__t"><span>${esc(s.secuencia)}</span><span style="color:#64748B;font-weight:500">${s.empresas} ${s.empresas === 1 ? 'empresa' : 'empresas'}</span></div>`).join('')}</div></div>` : '';
     return `<div class="pt-h"><h2>Cantera</h2></div>
       <div class="dash-kpis" style="grid-template-columns:repeat(4,minmax(0,1fr))">
         ${kpi('En borrador', d.borrador)}
@@ -645,7 +682,7 @@
         ${kpi('Califican', d.califican, d.califican_semana ? `${d.califican_semana} esta semana` : '')}
         ${kpi('Procesadas esta semana', d.procesadas_semana)}
       </div>
-      ${tiers}${batches}`;
+      ${tiers}${seqs}${batches}`;
   }
   // ── chat ──
   function drawChat() {
