@@ -344,6 +344,7 @@
     goCo: id => { S.tab = 'contactos'; S.co = id; S.q = ''; renderApp(); load(true); },
     weekTile: (kind, label) => openWeekModal(kind, label),
     weekSelect: id => { if (S._wkSelect) S._wkSelect(id); },
+    canteraFilter: () => canteraFilter(),
   };
 
   const badge = (t) => { const c = /Reunión/.test(t) ? 'g' : /Interesado|Respondió|Más adelante/.test(t) ? 'b' : /No interesado|No califica|No contactar/.test(t) ? 'r' : /seguimiento|En pausa/i.test(t) ? 'a' : 'n'; return `<span class="pt-badge pt-b--${c}">${esc(t)}</span>`; };
@@ -729,6 +730,7 @@
   // Cantera: solo indicadores prácticos (nunca texto largo) — pedido explícito
   // 2026-09-28. Sección opcional, activada por cuenta desde "Acceso al portal".
   const TIER_COLOR = { A: '#15803D', B: '#0369A1', C: '#B45309', D: '#94A3B8' };
+  const CANT_PASO_LBL = { pendiente: 'Pendiente', aprobado: 'Aprobada', validacion_manual: 'Validación manual', descartado: 'Descartada', descartado_manual: 'Descartada' };
   function canteraHtml() {
     const d = S.cantera;
     if (!d) return '<div class="pt-h"><h2>Cantera</h2></div><div class="pt-empty">Cargando…</div>';
@@ -736,18 +738,42 @@
     const kpi = (l, v, sub) => `<div class="dash-kpi" style="--kc:#7C5CE0"><div class="dash-kpi__l">${l}</div><div class="dash-kpi__v">${v}</div>${sub ? `<div class="dash-kpi__s">${sub}</div>` : ''}</div>`;
     const tiers = d.tiers.length ? `<div class="pt-card"><h3>Empresas calificadas por Tier</h3><div style="display:flex;gap:10px;flex-wrap:wrap">${d.tiers.map(t => `<span class="pt-badge" style="background:${TIER_COLOR[t.tier] || '#E0F2FE'}22;color:${TIER_COLOR[t.tier] || '#0369A1'};font-weight:700">Tier ${esc(t.tier)} · ${t.n}</span>`).join('')}</div></div>` : '';
     const batches = d.batches.length ? `<div class="pt-card"><h3>Lotes de prospección</h3>${d.batches.map(b => `<div class="pt-item"><div class="pt-item__t"><span>${esc(b.nombre)}</span><span style="color:#64748B;font-weight:500;font-size:12px">${fdate(b.created_at, { day: 'numeric', month: 'short' })}</span></div><div class="pt-item__s">${b.total} empresas · ${b.califican} califican</div></div>`).join('')}</div>` : '';
-    // Por secuencia — deliberadamente opcional: no toda empresa de Cantera ya se
-    // promovió a una secuencia real. Si no hay ninguna asociada todavía, esta
-    // tarjeta simplemente no aparece (pedido explícito: "si no, no pasa nada").
-    const seqs = (d.secuencias || []).length ? `<div class="pt-card"><h3>Empresas calificadas ya en secuencia</h3><div style="display:flex;flex-direction:column;gap:8px">${d.secuencias.map(s => `<div class="pt-item__t"><span>${esc(s.secuencia)}</span><span style="color:#64748B;font-weight:500">${s.empresas} ${s.empresas === 1 ? 'empresa' : 'empresas'}</span></div>`).join('')}</div></div>` : '';
+    // Tier POR secuencia — pedido explícito: "qué tiers estamos manejando por
+    // secuencia o campaña". Deliberadamente opcional: si ninguna empresa
+    // calificada está en una secuencia todavía, esta tarjeta no aparece.
+    const seqs = (d.secuencias || []).length ? `<div class="pt-card"><h3>Tier por secuencia</h3><div style="display:flex;flex-direction:column;gap:12px">${d.secuencias.map(s => `<div><div class="pt-item__t" style="margin-bottom:4px"><span>${esc(s.secuencia)}</span><span style="color:#64748B;font-weight:500">${s.total} ${s.total === 1 ? 'empresa' : 'empresas'}</span></div><div style="display:flex;gap:8px;flex-wrap:wrap">${s.tiers.sort((a, b) => a.tier.localeCompare(b.tier)).map(t => `<span class="pt-badge" style="background:${(TIER_COLOR[t.tier] || '#94A3B8')}22;color:${TIER_COLOR[t.tier] || '#64748B'};font-weight:700">${t.tier === '—' ? 'Sin tier' : 'Tier ' + esc(t.tier)} · ${t.n}</span>`).join('')}</div></div>`).join('')}</div></div>` : '';
+    // Lista filtrable de empresas en validación — pedido explícito: "que el
+    // cliente vea qué empresas se están validando", mismo estilo que "Últimas
+    // respuestas". Filtro por texto + Tier, 100% client-side sobre lo ya traído.
+    const tierOpts = [...new Set((d.companies || []).map(c => c.tier).filter(Boolean))].sort();
+    const filterBar = `<div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+        <input class="pt-search" id="pt-cant-q" placeholder="Buscar empresa…" style="flex:1;min-width:160px" oninput="PT.canteraFilter()">
+        <select id="pt-cant-tier" style="border:1px solid #D9DEE3;border-radius:8px;padding:0 10px;font-size:13px;font-family:inherit" onchange="PT.canteraFilter()">
+          <option value="">Todos los tiers</option>${tierOpts.map(t => `<option value="${esc(t)}">Tier ${esc(t)}</option>`).join('')}
+        </select>
+      </div>`;
+    const companiesCard = (d.companies || []).length ? `<div class="pt-card"><h3>Empresas en validación</h3>${filterBar}<div id="pt-cant-list">${canteraListHtml(d.companies)}</div></div>` : '';
     return `<div class="pt-h"><h2>Cantera</h2></div>
       <div class="dash-kpis" style="grid-template-columns:repeat(4,minmax(0,1fr))">
-        ${kpi('En borrador', d.borrador)}
+        ${kpi('Por validar', d.por_validar)}
         ${kpi('Validadas', d.validadas)}
         ${kpi('Califican', d.califican, d.califican_semana ? `${d.califican_semana} esta semana` : '')}
         ${kpi('Procesadas esta semana', d.procesadas_semana)}
       </div>
-      ${tiers}${seqs}${batches}`;
+      ${tiers}${seqs}${companiesCard}${batches}`;
+  }
+  function canteraListHtml(rows) {
+    if (!rows.length) return '<div class="pt-empty">Sin resultados</div>';
+    return rows.slice(0, 60).map(c => `<div class="pt-item"><div class="pt-item__t"><span>${esc(c.nombre || c.dominio || 'Sin nombre')}</span>${c.tier ? `<span class="pt-badge" style="background:${(TIER_COLOR[c.tier] || '#94A3B8')}22;color:${TIER_COLOR[c.tier] || '#64748B'};font-weight:700">Tier ${esc(c.tier)}</span>` : ''}</div><div class="pt-item__s">${esc(c.batch || '')}${c.dominio ? ' · ' + esc(c.dominio) : ''} · ${esc(CANT_PASO_LBL[c.paso2_estado] || CANT_PASO_LBL[c.paso1_estado] || 'Pendiente')} · ${ago(c.fecha)}</div></div>`).join('');
+  }
+  function canteraFilter() {
+    const d = S.cantera; if (!d) return;
+    const q = (document.getElementById('pt-cant-q')?.value || '').toLowerCase().trim();
+    const tier = document.getElementById('pt-cant-tier')?.value || '';
+    const rows = (d.companies || []).filter(c =>
+      (!q || (c.nombre || '').toLowerCase().includes(q) || (c.dominio || '').toLowerCase().includes(q)) &&
+      (!tier || c.tier === tier));
+    const el = document.getElementById('pt-cant-list'); if (el) el.innerHTML = canteraListHtml(rows);
   }
   // ── chat ──
   function drawChat() {
