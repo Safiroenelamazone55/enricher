@@ -34,7 +34,18 @@ const COPY = {
       const hook = a > 0 ? `Buenas noticias: esta semana ${a === 1 ? 'se agendó 1 reunión' : 'se agendaron ' + a + ' reuniones'}.` : g > 0 ? 'Buenas noticias: hay empresas mostrando interés.' : r > 0 ? `Esta semana recibimos ${r} ${r === 1 ? 'respuesta' : 'respuestas'}, aunque todavía ninguna se convirtió en una oportunidad.` : t > 0 ? 'Semana de siembra: seguimos sembrando contactos y aún no llegaron respuestas.' : 'Semana tranquila: no hubo actividad de envíos.';
       return hook + (t > 0 ? ` En total hicimos ${t} toques a ${c} contactos (${d.rango}).` : ''); },
     subj: (d, k, n) => (k.agendadas || 0) > 0 || n ? `Tu semana en ${d.cliente}${(k.agendadas || 0) ? ': ' + k.agendadas + (k.agendadas === 1 ? ' reunión agendada' : ' reuniones agendadas') : ''}${n ? ((k.agendadas || 0) ? ' · ' : ': ') + n + (n === 1 ? ' empresa con buenas señales' : ' empresas con buenas señales') : ''}` : (k.replies || 0) > 0 ? `Tu semana en ${d.cliente}: ${k.replies} ${k.replies === 1 ? 'respuesta' : 'respuestas'}` : `Resumen semanal de ${d.cliente} · ${d.rango}`,
-    sig: (n, names) => n ? `Hay ${n} ${n === 1 ? 'empresa con buenas señales' : 'empresas con buenas señales'}: ${list(names, 'y')}.` : '',
+    // 'derivado' con derivado_nombre = avance concreto (te conectaron con alguien
+    // puntual) — se destaca aparte en vez de meterlo en la misma frase genérica que
+    // "sigue en seguimiento" (pedido explícito 2026-09-28, caso Zukán: Alejandro
+    // derivó a Jaime Bellot — eso es una historia, no solo "buena señal").
+    sig: (positives) => {
+      if (!positives.length) return '';
+      const der = positives.filter(p => p.disposition === 'derivado' && p.derivado_nombre);
+      const rest = positives.filter(p => !der.includes(p));
+      const parts = der.map(p => `En ${p.empresa || 'la empresa'}, ${p.nombre} te conectó con ${p.derivado_nombre}.`);
+      if (rest.length) { const names = rest.map(p => p.empresa || p.nombre).filter(Boolean).slice(0, 3); parts.push(der.length ? `${rest.length === 1 ? 'También sigue en seguimiento' : 'También siguen en seguimiento'} ${list(names, 'y')}.` : `Hay ${rest.length} ${rest.length === 1 ? 'empresa con buenas señales' : 'empresas con buenas señales'}: ${list(names, 'y')}.`); }
+      return parts.join(' ');
+    },
     meet: m => m ? `La próxima reunión es con ${m.empresa || m.nombre}, el ${m.fecha_txt} ${m.dia} de ${m.mes}.` : '',
     seq: n => n ? `Tenemos ${n} ${n === 1 ? 'secuencia activa' : 'secuencias activas'} en marcha.` : '',
     below: 'Abajo te dejo una vista previa. En tu portal encuentras el detalle completo: las acciones, las secuencias activas, las empresas y los contactos.',
@@ -46,7 +57,14 @@ const COPY = {
       const hook = a > 0 ? `Good news: ${a === 1 ? '1 meeting was' : a + ' meetings were'} booked this week.` : g > 0 ? 'Good news: some companies are showing interest.' : r > 0 ? `This week we received ${r} ${r === 1 ? 'reply' : 'replies'}, though none has turned into an opportunity yet.` : t > 0 ? 'A seeding week: we keep reaching out and no replies have come in yet.' : 'A quiet week: there was no outreach activity.';
       return hook + (t > 0 ? ` In total we made ${t} touches to ${c} contacts (${d.rango}).` : ''); },
     subj: (d, k, n) => (k.agendadas || 0) > 0 || n ? `Your week at ${d.cliente}${(k.agendadas || 0) ? ': ' + k.agendadas + (k.agendadas === 1 ? ' meeting booked' : ' meetings booked') : ''}${n ? ((k.agendadas || 0) ? ' · ' : ': ') + n + (n === 1 ? ' company showing good signals' : ' companies showing good signals') : ''}` : (k.replies || 0) > 0 ? `Your week at ${d.cliente}: ${k.replies} ${k.replies === 1 ? 'reply' : 'replies'}` : `Weekly summary for ${d.cliente} · ${d.rango}`,
-    sig: (n, names) => n ? `${n} ${n === 1 ? 'company is' : 'companies are'} showing good signals: ${list(names, 'and')}.` : '',
+    sig: (positives) => {
+      if (!positives.length) return '';
+      const der = positives.filter(p => p.disposition === 'derivado' && p.derivado_nombre);
+      const rest = positives.filter(p => !der.includes(p));
+      const parts = der.map(p => `At ${p.empresa || 'the company'}, ${p.nombre} connected you with ${p.derivado_nombre}.`);
+      if (rest.length) { const names = rest.map(p => p.empresa || p.nombre).filter(Boolean).slice(0, 3); parts.push(der.length ? `Also still in follow-up: ${list(names, 'and')}.` : `${rest.length} ${rest.length === 1 ? 'company is' : 'companies are'} showing good signals: ${list(names, 'and')}.`); }
+      return parts.join(' ');
+    },
     meet: m => m ? `The next meeting is with ${m.empresa || m.nombre}, on ${m.fecha_txt}, ${m.mes} ${m.dia}.` : '',
     seq: n => n ? `We have ${n} active ${n === 1 ? 'sequence' : 'sequences'} running.` : '',
     below: "Below is a quick preview. In your portal you'll find the full detail: actions, active sequences, companies and contacts.",
@@ -58,7 +76,14 @@ const COPY = {
       const hook = a > 0 ? `Gute Nachrichten: Diese Woche ${a === 1 ? 'wurde 1 Termin' : 'wurden ' + a + ' Termine'} vereinbart.` : g > 0 ? 'Gute Nachrichten: Einige Unternehmen zeigen Interesse.' : r > 0 ? `Diese Woche erhielten wir ${r} ${r === 1 ? 'Antwort' : 'Antworten'}, allerdings ist noch keine zu einer Chance geworden.` : t > 0 ? 'Eine Aussaat-Woche: Wir bleiben dran, Antworten gibt es noch keine.' : 'Eine ruhige Woche: Es gab keine Versandaktivität.';
       return hook + (t > 0 ? ` Insgesamt hatten wir ${t} Kontaktpunkte bei ${c} Kontakten (${d.rango}).` : ''); },
     subj: (d, k, n) => (k.agendadas || 0) > 0 || n ? `Ihre Woche bei ${d.cliente}${(k.agendadas || 0) ? ': ' + k.agendadas + (k.agendadas === 1 ? ' Termin vereinbart' : ' Termine vereinbart') : ''}${n ? ((k.agendadas || 0) ? ' · ' : ': ') + n + ' Unternehmen mit guten Signalen' : ''}` : (k.replies || 0) > 0 ? `Ihre Woche bei ${d.cliente}: ${k.replies} ${k.replies === 1 ? 'Antwort' : 'Antworten'}` : `Wochenzusammenfassung für ${d.cliente} · ${d.rango}`,
-    sig: (n, names) => n ? `${n} ${n === 1 ? 'Unternehmen zeigt' : 'Unternehmen zeigen'} gute Signale: ${list(names, 'und')}.` : '',
+    sig: (positives) => {
+      if (!positives.length) return '';
+      const der = positives.filter(p => p.disposition === 'derivado' && p.derivado_nombre);
+      const rest = positives.filter(p => !der.includes(p));
+      const parts = der.map(p => `Bei ${p.empresa || 'dem Unternehmen'} hat ${p.nombre} Sie mit ${p.derivado_nombre} verbunden.`);
+      if (rest.length) { const names = rest.map(p => p.empresa || p.nombre).filter(Boolean).slice(0, 3); parts.push(der.length ? `Weiterhin in Nachverfolgung: ${list(names, 'und')}.` : `${rest.length} ${rest.length === 1 ? 'Unternehmen zeigt' : 'Unternehmen zeigen'} gute Signale: ${list(names, 'und')}.`); }
+      return parts.join(' ');
+    },
     meet: m => m ? `Der nächste Termin ist mit ${m.empresa || m.nombre}, am ${m.fecha_txt}, ${m.dia}. ${m.mes}.` : '',
     seq: n => n ? `Aktuell laufen ${n} aktive ${n === 1 ? 'Sequenz' : 'Sequenzen'}.` : '',
     below: 'Unten sehen Sie eine kurze Vorschau. In Ihrem Portal finden Sie alle Details: Aktionen, aktive Sequenzen, Unternehmen und Kontakte.',
@@ -70,7 +95,14 @@ const COPY = {
       const hook = a > 0 ? `Boas notícias: esta semana ${a === 1 ? 'foi agendada 1 reunião' : 'foram agendadas ' + a + ' reuniões'}.` : g > 0 ? 'Boas notícias: há empresas demonstrando interesse.' : r > 0 ? `Esta semana recebemos ${r} ${r === 1 ? 'resposta' : 'respostas'}, mas nenhuma virou oportunidade ainda.` : t > 0 ? 'Semana de plantio: seguimos plantando contatos e ainda não chegaram respostas.' : 'Semana tranquila: não houve atividade de envios.';
       return hook + (t > 0 ? ` No total fizemos ${t} contatos com ${c} pessoas (${d.rango}).` : ''); },
     subj: (d, k, n) => (k.agendadas || 0) > 0 || n ? `Sua semana na ${d.cliente}${(k.agendadas || 0) ? ': ' + k.agendadas + (k.agendadas === 1 ? ' reunião agendada' : ' reuniões agendadas') : ''}${n ? ((k.agendadas || 0) ? ' · ' : ': ') + n + (n === 1 ? ' empresa com bons sinais' : ' empresas com bons sinais') : ''}` : (k.replies || 0) > 0 ? `Sua semana na ${d.cliente}: ${k.replies} ${k.replies === 1 ? 'resposta' : 'respostas'}` : `Resumo semanal de ${d.cliente} · ${d.rango}`,
-    sig: (n, names) => n ? `${n} ${n === 1 ? 'empresa está com bons sinais' : 'empresas estão com bons sinais'}: ${list(names, 'e')}.` : '',
+    sig: (positives) => {
+      if (!positives.length) return '';
+      const der = positives.filter(p => p.disposition === 'derivado' && p.derivado_nombre);
+      const rest = positives.filter(p => !der.includes(p));
+      const parts = der.map(p => `Na ${p.empresa || 'empresa'}, ${p.nombre} te conectou com ${p.derivado_nombre}.`);
+      if (rest.length) { const names = rest.map(p => p.empresa || p.nombre).filter(Boolean).slice(0, 3); parts.push(der.length ? `Também seguem em acompanhamento: ${list(names, 'e')}.` : `${rest.length} ${rest.length === 1 ? 'empresa está com bons sinais' : 'empresas estão com bons sinais'}: ${list(names, 'e')}.`); }
+      return parts.join(' ');
+    },
     meet: m => m ? `A próxima reunião é com ${m.empresa || m.nombre}, em ${m.fecha_txt}, ${m.dia} de ${m.mes}.` : '',
     seq: n => n ? `Temos ${n} ${n === 1 ? 'sequência ativa' : 'sequências ativas'} em andamento.` : '',
     below: 'Abaixo vai uma prévia. No seu portal você encontra o detalhe completo: as ações, as sequências ativas, as empresas e os contatos.',
@@ -85,7 +117,6 @@ function buildReport(lang, d) {
   const bg = okHex(brand.bg) ? brand.bg : '#0B1220';
   const accent = lum(bg) > 0.6 ? '#2563EB' : bg;
   const k = d.kpi || {};
-  const sig = (d.positives || []).map(p => p.empresa || p.nombre).filter(Boolean).slice(0, 3);
   // negrita en las cifras: se resalta antes de escapar, para no romper entidades como &#39;
   const bold = t => String(t).split(d.rango).map(part => part.split(/(\d+)/).map((x, n) => n % 2 ? '<b>' + esc(x) + '</b>' : esc(x)).join('')).join(esc(d.rango));
   const P = t => t ? `<p style="margin:0 0 16px;${F}font-size:15.5px;line-height:1.7;color:#1E293B">${bold(t)}</p>` : '';
@@ -95,7 +126,7 @@ function buildReport(lang, d) {
   const button = `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 22px"><tr><td style="background:${accent}"><a href="${esc(d.url)}" style="display:inline-block;padding:11px 24px;color:${lum(accent) > 0.45 ? '#0F172A' : '#FFFFFF'};${F}font-size:14px;font-weight:700;text-decoration:none">${esc(C.cta)}</a></td></tr></table>`;
   const body = `<div style="max-width:560px;margin:0 auto;padding:28px 20px">${logo}
     <p style="margin:0 0 14px;${F}font-size:15px;line-height:1.65;color:#1E293B">${esc(C.hi(d.cliente))}</p>
-    ${note}${P(C.lead(d, k))}${P([C.sig(sig.length ? (d.positives || []).length : 0, sig), C.meet((d.meetings || [])[0])].filter(Boolean).join(' '))}${P([C.seq((d.seqs || []).length), C.below].filter(Boolean).join(' '))}
+    ${note}${P(C.lead(d, k))}${P([C.sig(d.positives || []), C.meet((d.meetings || [])[0])].filter(Boolean).join(' '))}${P([C.seq((d.seqs || []).length), C.below].filter(Boolean).join(' '))}
     ${img}${button}
     <p style="margin:0 0 18px;${F}font-size:15px;line-height:1.65;color:#1E293B">${esc(C.close)}</p>
     <p style="margin:0;${F}font-size:15px;line-height:1.5;color:#1E293B">${esc(C.bye)}<br><b>${esc(C.team)}</b></p>
