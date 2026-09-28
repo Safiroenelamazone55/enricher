@@ -435,15 +435,14 @@
   // de los KPIs de "Esta semana/mes" — pedido explícito 2026-09-28: métricas
   // relevantes que antes solo se veían agregadas (o escondidas en "Ver detalle").
   S.wkLine = null; S.wkLineKey = ''; S.wkLineChart = null; S.wkLineHidden = S.wkLineHidden || new Set();
-  // Solo métricas de ENGAGEMENT, no de volumen — pedido explícito 2026-09-28:
-  // "elimina toques realizados del gráfico" + "no me gusta como se ve". El
-  // problema real era de escala: Contactos alcanzados/Toques son volumen bruto
-  // (decenas/cientos) y aplastaban a Respuestas/Reuniones/Aperturas (0-5) en el
-  // mismo eje — la línea dominante tapaba a las demás. Contactos alcanzados y
-  // Toques realizados ya se ven como número crudo en las tiles de arriba; este
-  // gráfico se queda solo con las 3 métricas de resultado, todas en una escala
-  // parecida, para que ninguna tape a las otras.
-  const WKLINE_M = [['replies', 'Respuestas', '#F59E0B'], ['meetings', 'Reuniones agendadas', '#7C3AED'], ['opens', 'Aperturas', '#059669']];
+  // TASAS (%), no conteos crudos — pedido explícito 2026-09-28: "4 aperturas es
+  // muy bajo... es mejor verlo en % que en números enteros, sino dirá que no
+  // trabajé nada". Con poco volumen un conteo entero se ve débil; una tasa
+  // cuenta la historia real (¿el mensaje funciona?) sin depender de cuánto se
+  // envió ese día. num/den por punto: si el denominador es 0 ese día no se
+  // grafica (null → Chart.js salta el punto en vez de mostrar una caída a 0
+  // engañosa). El tooltip igual muestra el conteo real detrás del %.
+  const WKLINE_M = [['aper', 'Tasa de apertura', '#F59E0B', 'opens', 'sent'], ['resp', 'Tasa de respuesta', '#7C3AED', 'replies', 'contacted']];
   async function loadWeekLine() {
     const w = S.wk; if (!w) return;
     const from = isoL(w.r.from), to = isoL(w.r.to), key = from + '|' + to;
@@ -466,12 +465,13 @@
     if (typeof Chart === 'undefined' || !S.wkLine || !S.wkLine.length) return;
     const rows = S.wkLine;
     const ctx = cv.getContext('2d');
+    const rate = (r, m) => { const den = r[m[4]] || 0, num = r[m[3]] || 0; return den > 0 ? Math.round(num / den * 1000) / 10 : null; };
     const chart = new Chart(ctx, {
       type: 'line',
       data: {
         labels: rows.map(r => r.day.slice(5)),
         datasets: WKLINE_M.map((m, i) => ({
-          label: m[1], data: rows.map(r => r[m[0]] || 0), borderColor: m[2], backgroundColor: 'transparent', fill: false, tension: .3, borderWidth: 2.25,
+          label: m[1], data: rows.map(r => rate(r, m)), spanGaps: true, borderColor: m[2], backgroundColor: 'transparent', fill: false, tension: .3, borderWidth: 2.25,
           pointRadius: 0, pointHoverRadius: 5, pointHoverBorderWidth: 2, pointHitRadius: 10, pointBackgroundColor: '#fff', pointBorderColor: m[2], pointHoverBackgroundColor: '#fff', pointHoverBorderColor: m[2],
           hidden: S.wkLineHidden.has(i),
         })),
@@ -484,12 +484,15 @@
             backgroundColor: 'rgba(15,23,42,.96)', titleColor: '#F8FAFC', bodyColor: '#F1F5F9', borderWidth: 0,
             padding: 12, cornerRadius: 6, displayColors: true, usePointStyle: true, boxWidth: 7, boxHeight: 7, boxPadding: 4,
             titleFont: { size: 12, weight: '600' }, bodyFont: { size: 12 }, bodySpacing: 6,
-            callbacks: { title: items => { const r = rows[items[0]?.dataIndex]; return r ? new Date(r.day + 'T12:00:00Z').toLocaleDateString(PT_I18N.locale(), { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' }) : ''; } },
+            callbacks: {
+              title: items => { const r = rows[items[0]?.dataIndex]; return r ? new Date(r.day + 'T12:00:00Z').toLocaleDateString(PT_I18N.locale(), { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' }) : ''; },
+              label: item => { const m = WKLINE_M[item.datasetIndex], r = rows[item.dataIndex], v = item.parsed.y; return v == null ? `${m[1]}: sin datos` : `${m[1]}: ${v}% · ${r[m[3]] || 0} de ${r[m[4]] || 0}`; },
+            },
           },
         },
         scales: {
           x: { grid: { display: false }, border: { display: false }, ticks: { maxTicksLimit: 8, color: '#94A3B8', font: { size: 10.5 } } },
-          y: { beginAtZero: true, border: { display: false }, grid: { color: '#EEF1F5', drawTicks: false }, ticks: { precision: 0, maxTicksLimit: 5, color: '#94A3B8', font: { size: 10.5 }, padding: 8 } },
+          y: { beginAtZero: true, suggestedMax: 40, border: { display: false }, grid: { color: '#EEF1F5', drawTicks: false }, ticks: { precision: 0, maxTicksLimit: 5, color: '#94A3B8', font: { size: 10.5 }, padding: 8, callback: v => v + '%' } },
         },
       },
     });
