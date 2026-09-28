@@ -26053,7 +26053,22 @@ ${foot}
     if (st === 'error') return `<div class="rp-err"><b>No se pudo enviar</b><span>${_rpEsc(_RP.err || 'Error')}</span></div>`;
     return '';
   }
-  // próximo envío automático (día y hora en la zona elegida)
+  // Minutos que `tz` está adelantada respecto a UTC en el instante `date` (positivo
+  // = al este de UTC). Se usa para pasar "hora S.hour en la zona del cliente" a un
+  // instante UTC real y de ahí a la hora local de quien está mirando la pantalla.
+  function _tzOffsetMin(tz, date) {
+    const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: tz, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(date).map(x => [x.type, x.value]));
+    const asUtc = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second);
+    return (asUtc - date.getTime()) / 60000;
+  }
+  function _zonedToUtc(ymd, hour, tz) {
+    const guess = new Date(`${ymd}T${String(hour).padStart(2, '0')}:00:00Z`);
+    return new Date(guess.getTime() - _tzOffsetMin(tz, guess) * 60000);
+  }
+  // próximo envío automático (día y hora en la zona elegida) — pedido explícito
+  // 2026-09-28: además de la hora del cliente, mostrar a qué hora le cae A ELLA
+  // (zona horaria del navegador/computador desde el que entró, como miembro del
+  // equipo de Nova), para no tener que convertir mentalmente.
   function _rpNext(S, lastAuto) {
     try {
       const fmt = new Intl.DateTimeFormat('en-US', { timeZone: S.tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hour12: false, weekday: 'short' });
@@ -26065,10 +26080,15 @@ ${foot}
         if (lastAuto === ymd) continue;
         if (d === 0 && (parseInt(p.hour) % 24) >= S.hour) continue;
         const txt = new Date(ymd + 'T12:00:00Z').toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
-        return `${txt} · ${String(S.hour).padStart(2, '0')}:00`;
+        let local = '';
+        try {
+          const utc = _zonedToUtc(ymd, S.hour, S.tz);
+          local = utc.toLocaleString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+        } catch (e) { /* sin zona local válida */ }
+        return { txt: `${txt} · ${String(S.hour).padStart(2, '0')}:00`, local };
       }
     } catch (e) { /* sin zona válida */ }
-    return '';
+    return { txt: '', local: '' };
   }
   async function _rpReload() { try { const r = await _portalApi(`/lm/reports/${_RP.cid}`); _RP.info = Object.assign({}, _RP.info, { schedule: r.schedule, last_sent_at: r.last_sent_at, last_recipients: r.last_recipients, last_by: r.last_by }); } catch (e) { /* se conserva lo mostrado */ } _rpSide(); }
   function _rpAutoCard() {
@@ -26077,7 +26097,8 @@ ${foot}
     const nxt = _rpNext(S, (i.schedule && i.schedule.last_auto) || '');
     const last = i.last_sent_at ? new Date(i.last_sent_at).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'todavía ninguno';
     return `<div class="rp-auto"><div class="rp-auto__h"><span class="rp-auto__dot"></span>Envío automático activo</div>
-      <div class="rp-auto__r"><span>Próximo envío</span><b>${_rpEsc(nxt || '—')}</b> <em>${_rpEsc(_rpTzName(S.tz))}</em></div>
+      <div class="rp-auto__r"><span>Próximo envío</span><b>${_rpEsc(nxt.txt || '—')}</b> <em>${_rpEsc(_rpTzName(S.tz))}</em></div>
+      ${nxt.local ? `<div class="rp-auto__r"><span>Tu hora</span><b>${_rpEsc(nxt.local)}</b></div>` : ''}
       <div class="rp-auto__r"><span>Se envía a</span><b>${_RP.recipients.map(_rpEsc).join(', ') || '—'}</b></div>
       <div class="rp-auto__r"><span>Idioma</span><b>${_RP_LANGN[_RP.lang]}</b></div>
       <div class="rp-auto__r"><span>Último envío</span><b>${_rpEsc(last)}</b>${i.last_by ? ' <em>· ' + _rpEsc(i.last_by) + '</em>' : ''}</div></div>`;
