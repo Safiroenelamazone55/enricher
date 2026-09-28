@@ -127,7 +127,7 @@
 
   // ── app ──
   // ── URLs por cliente y sección: /portal/<cliente>/<sección>[/<id>] ──
-  const SEC_URL = { inicio: 'resumen', setup: 'arranque', reuniones: 'reuniones', empresas: 'empresas', contactos: 'contactos', secuencias: 'secuencias', actividad: 'actividad' };
+  const SEC_URL = { inicio: 'resumen', setup: 'arranque', reuniones: 'reuniones', empresas: 'empresas', contactos: 'contactos', secuencias: 'secuencias', actividad: 'actividad', cantera: 'cantera' };
   const URL_SEC = Object.fromEntries(Object.entries(SEC_URL).map(([k, v]) => [v, k]));
   function parseUrl() { const m = location.pathname.replace(/\/+$/, '').match(/^(?:\/(?:en|de|pt|es))?\/portal(?:\/([^/]+))?(?:\/([^/]+))?(?:\/([^/]+))?$/); return m ? { slug: m[1] || '', sec: m[2] || '', id: parseInt(m[3]) || 0 } : null; }
   const LP = () => PT_I18N.lang === 'es' ? '' : '/' + PT_I18N.lang;   // /en/portal/... = versión en inglés
@@ -162,6 +162,7 @@
     if (s.contactos) t.push(['contactos', 'Contactos']);
     if (s.secuencias) t.push(['secuencias', 'Secuencias']);
     if (s.feed) t.push(['actividad', 'Actividad']);
+    if (s.cantera) t.push(['cantera', 'Cantera']);
     return t;
   }
   // Aviso NO obligatorio para crear contraseña propia: más tarde (2 semanas, luego cada mes) u omitir
@@ -255,6 +256,7 @@
       else if (t === 'contactos') S.cts = await api(`/portal/contacts?q=${encodeURIComponent(S.q)}&company=${S.co || 0}`);
       else if (t === 'secuencias') { const [a, b] = await Promise.all([api('/portal/sequences'), api('/portal/steps')]); S.seqs = a; S.steps = b; }
       else if (t === 'actividad') S.feed = await api('/portal/feed');
+      else if (t === 'cantera') S.cantera = await api('/portal/cantera');
       S.last = Date.now(); paint();
       const u = document.getElementById('pt-upd'); if (u) u.textContent = 'En vivo · actualizado ' + new Date().toLocaleTimeString(PT_I18N.locale(), { hour: '2-digit', minute: '2-digit' });
       if (S.me.sections.chat && force) pollChat();
@@ -299,6 +301,7 @@
     else if (t === 'contactos') b.innerHTML = contactos();
     else if (t === 'secuencias') b.innerHTML = secuencias();
     else if (t === 'actividad') b.innerHTML = `<div class="pt-h"><h2>Actividad en vivo</h2></div><div class="pt-card">${feedHtml(S.feed, 100)}</div>`;
+    else if (t === 'cantera') b.innerHTML = canteraHtml();
     const se = document.getElementById('pt-search');
     if (se) { se.value = S.q; se.oninput = debounce(() => { S.q = se.value; load(false); }, 350); }
     if (t === 'inicio' && S.detail && S.dash) initCharts();
@@ -624,6 +627,25 @@
     const byId = new Map(st.map(q => [q.id, q]));
     return `<div class="pt-h"><h2>Secuencias</h2></div><div class="pt-how__g pt-how__g--all">${l.map(r => { const q = byId.get(r.id); return `<div class="pt-card"><div class="pt-item__t"><span>${esc(r.nombre)}</span>${seqBadge(r.estado)}</div>
       <div class="pt-seqstats"><span><b>${r.enrolados}</b> Contactos</span><span><b>${r.activos}</b> En curso</span><span><b>${r.terminados}</b> Completadas</span><span><b>${r.respondieron}</b> Respondieron</span></div>${q ? stepsHtml(q) : ''}</div>`; }).join('')}</div>`;
+  }
+  // Cantera: solo indicadores prácticos (nunca texto largo) — pedido explícito
+  // 2026-09-28. Sección opcional, activada por cuenta desde "Acceso al portal".
+  const TIER_COLOR = { A: '#15803D', B: '#0369A1', C: '#B45309', D: '#94A3B8' };
+  function canteraHtml() {
+    const d = S.cantera;
+    if (!d) return '<div class="pt-h"><h2>Cantera</h2></div><div class="pt-empty">Cargando…</div>';
+    if (!d.total) return '<div class="pt-h"><h2>Cantera</h2></div><div class="pt-empty">Todavía no hay empresas en prospección para tu cuenta.</div>';
+    const kpi = (l, v, sub) => `<div class="dash-kpi" style="--kc:#7C5CE0"><div class="dash-kpi__l">${l}</div><div class="dash-kpi__v">${v}</div>${sub ? `<div class="dash-kpi__s">${sub}</div>` : ''}</div>`;
+    const tiers = d.tiers.length ? `<div class="pt-card"><h3>Empresas calificadas por Tier</h3><div style="display:flex;gap:10px;flex-wrap:wrap">${d.tiers.map(t => `<span class="pt-badge" style="background:${TIER_COLOR[t.tier] || '#E0F2FE'}22;color:${TIER_COLOR[t.tier] || '#0369A1'};font-weight:700">Tier ${esc(t.tier)} · ${t.n}</span>`).join('')}</div></div>` : '';
+    const batches = d.batches.length ? `<div class="pt-card"><h3>Lotes de prospección</h3>${d.batches.map(b => `<div class="pt-item"><div class="pt-item__t"><span>${esc(b.nombre)}</span><span style="color:#64748B;font-weight:500;font-size:12px">${fdate(b.created_at, { day: 'numeric', month: 'short' })}</span></div><div class="pt-item__s">${b.total} empresas · ${b.califican} califican</div></div>`).join('')}</div>` : '';
+    return `<div class="pt-h"><h2>Cantera</h2></div>
+      <div class="dash-kpis" style="grid-template-columns:repeat(4,minmax(0,1fr))">
+        ${kpi('En borrador', d.borrador)}
+        ${kpi('Validadas', d.validadas)}
+        ${kpi('Califican', d.califican, d.califican_semana ? `${d.califican_semana} esta semana` : '')}
+        ${kpi('Procesadas esta semana', d.procesadas_semana)}
+      </div>
+      ${tiers}${batches}`;
   }
   // ── chat ──
   function drawChat() {

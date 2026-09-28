@@ -25823,7 +25823,7 @@ ${foot}
   }
   // ── Portal del cliente (lado equipo): accesos, notas para el cliente y chat ──
   let _portalTimer = null, _portalChatLast = 0, _portalChat = [];
-  const _PORTAL_SEC = { setup: 'Puesta en marcha', kpis: 'KPIs', actividad: 'Gráfico de actividad', embudo: 'Embudo', canales: 'Canales', paises: 'Países', respuestas: 'Respuestas y señales', reuniones: 'Reuniones y deals', secuencias: 'Secuencias', empresas: 'Empresas', contactos: 'Contactos', feed: 'Actividad en vivo', chat: 'Chat' };
+  const _PORTAL_SEC = { setup: 'Puesta en marcha', kpis: 'KPIs', actividad: 'Gráfico de actividad', embudo: 'Embudo', canales: 'Canales', paises: 'Países', respuestas: 'Respuestas y señales', reuniones: 'Reuniones y deals', secuencias: 'Secuencias', empresas: 'Empresas', contactos: 'Contactos', feed: 'Actividad en vivo', chat: 'Chat', cantera: 'Cantera / Prospección' };
   function _portalStop() { if (_portalTimer) { clearInterval(_portalTimer); _portalTimer = null; } }
   function _portalBox() { return document.getElementById('lm-portal-box'); }
   async function _portalLoad(cid) {
