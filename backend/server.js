@@ -4735,8 +4735,15 @@ app.post('/api/lm/contacts/:id/refer', requireAuth, async (req, res) => {
     await client.query(`UPDATE lm_contacts SET disposition=$1, derivado_a=$4, updated_at=NOW() WHERE id=$2 AND user_id=$3`, [disp, cid, uid, nuevo.id]);
     await client.query(`UPDATE lm_contact_sequences SET estado='pausado', paused_reason=$3 WHERE user_id=$1 AND contact_id=$2 AND estado='activo'`,
       [uid, cid, 'disposition_' + disp]);
-    await client.query(`INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, nota, fecha, estado) VALUES ($1,$2,$3,'respuesta',$4,NOW(),'hecha')`,
-      [uid, cid, orig.outbound_client_id, `Disposición: ${LM_DISP_LBL[disp]} → ${nomNuevo}${_lmS(b.nota) ? ' — ' + _lmS(b.nota) : ''}`]);
+    // 'derivado' = el propio lead respondió pasándote a otro contacto (sí es una
+    // respuesta real). 'no_es_persona' = decisión interna tuya, el lead nunca
+    // respondió — antes se guardaba igual como tipo='respuesta' sin importar cuál
+    // era, y el portal del cliente la seguía contando como respuesta entrante para
+    // siempre (ni recategorizar la disposición del contacto lo arreglaba, porque el
+    // conteo mira esta actividad, no la disposición actual). Reportado en vivo
+    // 2026-09-28 con los 7 casos de Catalina/Marbella/Vintia/etc.
+    await client.query(`INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, nota, fecha, estado) VALUES ($1,$2,$3,$5,$4,NOW(),'hecha')`,
+      [uid, cid, orig.outbound_client_id, `Disposición: ${LM_DISP_LBL[disp]} → ${nomNuevo}${_lmS(b.nota) ? ' — ' + _lmS(b.nota) : ''}`, disp === 'no_es_persona' ? 'nota' : 'respuesta']);
     await client.query(`INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, nota, fecha, estado) VALUES ($1,$2,$3,'nota',$4,NOW(),'hecha')`,
       [uid, nuevo.id, orig.outbound_client_id, `Referido por ${nomOrig} (misma empresa)`]);
     await client.query('COMMIT');
