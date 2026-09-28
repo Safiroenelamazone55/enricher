@@ -12895,6 +12895,7 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .lm-track-tl__ico { flex-shrink: 0; display: inline-flex; color: var(--text-muted); }
 .lm-track-tl__lbl { flex: 1; min-width: 0; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lm-track-tl__at { flex-shrink: 0; font-size: .66rem; color: var(--text-muted); }
+.lm-track-tl__ip { font-size: .7rem; color: var(--text-muted); font-weight: 400; }
 .cp-dispo-badge { display: inline-block; font-size: .68rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; margin-left: 6px; vertical-align: middle; }
 /* Stepper de estado en la ficha (estilo pipeline) */
 .cp-stepper { display: flex; gap: 4px; margin: 2px 0 14px; overflow-x: auto; padding: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: 0; scrollbar-width: none; }
@@ -16797,6 +16798,9 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .dash-f.is-on .dash-f__i{color:#2563EB}
 .dash-f select{appearance:none;-webkit-appearance:none;flex:1;min-width:0;border:0;background:transparent;font:500 13.5px inherit;color:inherit;outline:0;cursor:pointer;padding-right:16px;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748B' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right center;text-overflow:ellipsis;color-scheme:light}
 .dash-f select option{background:#fff;color:#0F172A}
+.dash-f input[type="text"]{appearance:none;flex:1;min-width:0;border:0;background:transparent;font:500 13.5px inherit;color:inherit;outline:0}
+.dash-f input[type="text"]::placeholder{color:#94A3B8}
+.dash-f--search{flex:1 1 260px}
 .dash-f--sm{flex:none;height:32px;padding:0 10px;border-radius:8px}
 .dash-f--sm select{font-size:12.5px;padding-right:18px}
 .dash-date{height:40px;border:1px solid #E1E6EC;border-radius:10px;padding:0 10px;font:500 13px inherit;color:#475569;background:#fff}
@@ -16913,6 +16917,11 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .dash-f select{font-size:14.5px;min-width:0}
 .dash-date{height:46px;padding:0 18px;border:0;border-right:1px solid #E1E6EC;border-radius:0;background:transparent}
 .dash-filters>:last-child{border-right:0}
+.dash-filters .dash-f--search{flex:1 1 260px;min-width:220px;max-width:420px}
+.dash-filters .lm-count.dash-f--count{flex:none;display:flex;align-items:center;padding:0 16px;height:46px;color:#64748B;font-size:13px;white-space:nowrap;border-right:1px solid #E1E6EC}
+.dash-filters .dg-kebab{flex:none;height:46px;width:46px;border:0;border-radius:0;background:transparent;margin:0}
+.dash-filters .dg-kebab:hover{background:#F8FAFC}
+.dash-filters .dg-kebab.on{background:#F0F5FF;color:#1D4ED8}
 .dash-btn--p{background:#0B1220;border-color:#0B1220;box-shadow:none}
 .dash-btn--p:hover{background:#1E293B;border-color:#1E293B}
 .dash-kpis{grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;margin-bottom:12px}

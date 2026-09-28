@@ -23433,6 +23433,29 @@ ${foot}
     }
     setTimeout(() => document.addEventListener('click', function onDoc(e) { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', onDoc); } }), 0);
   }
+  // Ubicación aproximada de cada IP que abrió el correo — pedido explícito de
+  // Jenny 2026-09-27: cuando hay CC, el ojito se pinta verde sin decir SI FUE
+  // el cliente o el CC quien abrió (misma copia del email, mismo píxel para
+  // ambos). No hay forma de saber con certeza cuál de los dos fue, pero la
+  // IP + país/ciudad da una pista fuerte (ej. IP de España = probablemente
+  // el cliente en Zukán; IP de Perú = probablemente el equipo en copia).
+  const _geoCache = new Map(); // ip -> "Ciudad, País" (o null si falló)
+  async function _ibResolveGeoBadges(targets) {
+    const uniq = [...new Set(targets.map(t => t.ip).filter(Boolean))];
+    await Promise.all(uniq.map(async ip => {
+      if (_geoCache.has(ip)) return;
+      try {
+        const r = await fetch(`https://ipapi.co/${encodeURIComponent(ip)}/json/`);
+        const d = await r.json();
+        _geoCache.set(ip, d && !d.error ? [d.city, d.country_name].filter(Boolean).join(', ') : null);
+      } catch (e) { _geoCache.set(ip, null); }
+    }));
+    targets.forEach(t => {
+      const el = document.getElementById(t.elId); if (!el || !t.ip) return;
+      const geo = _geoCache.get(t.ip);
+      el.textContent = geo ? `· ${t.ip} (${geo})` : `· ${t.ip}`;
+    });
+  }
   // "Acciones del lead": línea de tiempo real de apertura/clics por cada correo
   // enviado — no solo el conteo agregado. El trackeo (píxel de apertura + redirect
   // de clics con la URL) ya existía hace rato en lm_message_events; esto solo lo
@@ -23473,6 +23496,7 @@ ${foot}
       const EYE_SVG = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
       const CLICK_SVG = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/><path d="M13 13l6 6"/></svg>';
       let html = '', lastDay = null;
+      const geoTargets = []; // [{elId, ip}] — resueltos a país/ciudad después de pintar
       rows.forEach((r, i) => {
         const dk = dayKey(r.at);
         if (dk !== lastDay) { html += `<div class="lm-track-date">${fmtDate(r.at)}</div>`; lastDay = dk; }
@@ -23496,7 +23520,7 @@ ${foot}
         if (opens.length) badges.push(`<span class="lm-track-badge">${EYE_SVG}${opens.length}</span>`);
         if (clicks.length) badges.push(`<span class="lm-track-badge">${CLICK_SVG}${clicks.length}</span>`);
         const items = [{ label: 'Enviado', at: r.d.sent_at },
-          ...opens.map((o, oi) => ({ ico: EYE_SVG, label: opens.length > 1 ? `Abrió (${oi + 1}ª vez)` : 'Abrió el correo', at: o.created_at })),
+          ...opens.map((o, oi) => ({ ico: EYE_SVG, label: opens.length > 1 ? `Abrió (${oi + 1}ª vez)` : 'Abrió el correo', at: o.created_at, ip: (o.ip || '').split(',')[0].trim() })),
           ...clicks.map(c => ({ ico: CLICK_SVG, label: `Clic: ${(c.url || '').length > 46 ? c.url.slice(0, 43) + '…' : c.url}`, at: c.created_at }))];
         const sentCc = ccOf(r.d, [r.d.mailbox_email, r.d.to_email]);
         const sentSub = r.d.mailbox_email + (sentCc.length ? ` · CC: ${sentCc.join(', ')}` : '');
@@ -23509,9 +23533,13 @@ ${foot}
           <span class="lm-track-row__badges${badges.length ? '' : ' lm-track-row__nobadge'}">${badges.length ? badges.join('') : 'Sin abrir'}</span>
           <span class="lm-track-row__chev">›</span>
         </div>
-        <div class="lm-track-det hidden" id="${detId}">${items.map(it => `<div class="lm-track-tl__row">${it.ico ? `<span class="lm-track-tl__ico">${it.ico}</span>` : ''}<span class="lm-track-tl__lbl">${esc(it.label)}</span><span class="lm-track-tl__at">${fmtTime(it.at)}</span></div>`).join('')}</div>`;
+        <div class="lm-track-det hidden" id="${detId}">${items.map((it, ii) => {
+          if (it.ip) geoTargets.push({ elId: `${detId}-ip-${ii}`, ip: it.ip });
+          return `<div class="lm-track-tl__row">${it.ico ? `<span class="lm-track-tl__ico">${it.ico}</span>` : ''}<span class="lm-track-tl__lbl">${esc(it.label)}${it.ip ? ` <span class="lm-track-tl__ip" id="${detId}-ip-${ii}" title="${esc(it.ip)}">· ${esc(it.ip)}</span>` : ''}</span><span class="lm-track-tl__at">${fmtTime(it.at)}</span></div>`;
+        }).join('')}</div>`;
       });
       body.innerHTML = html;
+      _ibResolveGeoBadges(geoTargets);
     } catch (e) {
       if (body) body.innerHTML = `<div class="fin-cfg-hint fin-cfg-hint--err">Error: ${esc(e.message)}</div>`;
     }
@@ -28744,11 +28772,6 @@ ${foot}
           <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openImportPicker()">${_ico('up')} Importar</button>
         </div>
       </div>
-      <div class="lm-toolbar">
-        <div class="lm-search lm-search--wide"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" id="lm-ct-search" placeholder="Buscar contacto, empresa, email…" value="${esc(_ctQuery)}" oninput="LeadManagerModule.filterContacts(this.value)"></div>
-        <span class="lm-count" id="lm-ct-count"></span>
-        <button class="dg-kebab${(_ctClientFilter || _ctBounced || _ctDataIssue || _ctFilters.length) ? ' on' : ''}" onclick="LeadManagerModule.ctMoreMenu(event)" title="Filtros, vistas, columnas y selección">⋮</button>
-      </div>
       <div id="lm-ct-qf-wrap">${_ctQFBarHtml()}</div>
       ${_fltChipsHtml('contacts')}
       <div class="lm-bulk-bar" id="lm-ct-bulk"></div>
@@ -28894,12 +28917,15 @@ ${foot}
     const paisOpts = o.paises.map(p => `<option value="${esc(p)}"${_ctQF.pais === p ? ' selected' : ''}>${esc(p)}</option>`).join('');
     const anyOn = _ctQF.cliente || _ctQF.seq || _ctQF.campana || _ctQF.estado || _ctQF.pais;
     return `<div class="dash-filters" id="lm-ct-qf">
+      <label class="dash-f dash-f--search"><span class="dash-f__i"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span><input type="text" id="lm-ct-search" placeholder="Buscar contacto, empresa, email…" value="${esc(_ctQuery)}" oninput="LeadManagerModule.filterContacts(this.value)"></label>
       ${opt('cliente', 'Cliente', cliOpts, _ctQF.cliente)}
       ${opt('seq', 'Secuencia', seqOpts, _ctQF.seq)}
       ${opt('campana', 'Campaña', campOpts, _ctQF.campana)}
       ${opt('estado', 'Estado', estOpts, _ctQF.estado)}
       ${opt('pais', 'País', paisOpts, _ctQF.pais)}
       ${anyOn ? `<button class="dash-clear" onclick="LeadManagerModule.ctQFClear()">Limpiar</button>` : ''}
+      <span class="lm-count dash-f--count" id="lm-ct-count"></span>
+      <button class="dg-kebab${(_ctClientFilter || _ctBounced || _ctDataIssue || _ctFilters.length) ? ' on' : ''}" onclick="LeadManagerModule.ctMoreMenu(event)" title="Filtros, vistas, columnas y selección">⋮</button>
     </div>`;
   }
   function _vRenderCtFiltersBar() { const el = $('lm-ct-qf-wrap'); if (el) el.innerHTML = _ctQFBarHtml(); }
@@ -29677,11 +29703,6 @@ ${foot}
           <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openImportPicker()">${_ico('up')} Importar</button>
         </div>
       </div>
-      <div class="lm-toolbar">
-        <div class="lm-search lm-search--wide"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" id="lm-co-search" placeholder="Buscar empresa o dominio…" value="${esc(_coQuery)}" oninput="LeadManagerModule.filterCompanies(this.value)"></div>
-        <span class="lm-count" id="lm-co-count"></span>
-        <button class="dg-kebab${_coFilters.length ? ' on' : ''}" onclick="LeadManagerModule.coMoreMenu(event)" title="Filtros, vistas y selección">⋮</button>
-      </div>
       <div id="lm-co-qf-wrap">${_coQFBarHtml()}</div>
       ${_fltChipsHtml('companies')}
       <div class="lm-bulk-bar" id="lm-co-bulk"></div>
@@ -29722,11 +29743,14 @@ ${foot}
     const estOpts = estados.map(e => `<option value="${esc(e)}"${_coQF.estado === e ? ' selected' : ''}>${esc(e)}</option>`).join('');
     const anyOn = _coQF.tier || _coQF.seq || _coQF.cliente || _coQF.estado;
     return `<div class="dash-filters" id="lm-co-qf">
+      <label class="dash-f dash-f--search"><span class="dash-f__i"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span><input type="text" id="lm-co-search" placeholder="Buscar empresa o dominio…" value="${esc(_coQuery)}" oninput="LeadManagerModule.filterCompanies(this.value)"></label>
       ${opt('tier', 'Tier', tierOpts, _coQF.tier)}
       ${opt('seq', 'Secuencia', seqOpts, _coQF.seq)}
       ${opt('cliente', 'Cliente', cliOpts, _coQF.cliente)}
       ${opt('estado', 'Estado', estOpts, _coQF.estado)}
       ${anyOn ? `<button class="dash-clear" onclick="LeadManagerModule.coQFClear()">Limpiar</button>` : ''}
+      <span class="lm-count dash-f--count" id="lm-co-count"></span>
+      <button class="dg-kebab${_coFilters.length ? ' on' : ''}" onclick="LeadManagerModule.coMoreMenu(event)" title="Filtros, vistas y selección">⋮</button>
     </div>`;
   }
   function _vRenderCoFiltersBar() { const el = $('lm-co-qf-wrap'); if (el) el.innerHTML = _coQFBarHtml(); }

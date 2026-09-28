@@ -6224,7 +6224,7 @@ app.get('/api/lm/contacts/:id/track-events', requireAuth, async (req, res) => {
     let events = [];
     if (ids.length) {
       const { rows } = await pool.query(
-        `SELECT message_id, tipo, url, created_at FROM lm_message_events
+        `SELECT message_id, tipo, url, created_at, ip, user_agent FROM lm_message_events
           WHERE message_id = ANY($1) ORDER BY created_at ASC`, [ids]);
       events = rows;
     }
