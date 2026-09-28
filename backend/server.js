@@ -217,6 +217,12 @@ function _isAllowedOrigin(origin) {
     o.endsWith('.kiwoc.com')         ||
     o === 'https://novacentrax.com'  ||
     o.endsWith('.novacentrax.com')   ||
+    // Worker de staging del portal (enricher-staging.osorio2045.workers.dev) —
+    // pedido explícito 2026-09-28: probar el portal ahí antes de producción,
+    // usando login/datos reales contra este mismo backend. Sin esto el login
+    // fallaba en silencio por CORS (la cookie de sesión nunca se aceptaba) y
+    // pedía acceso de nuevo en cada carga.
+    o === 'https://enricher-staging.osorio2045.workers.dev' ||
     _extraOrigins.includes('*')      ||
     _extraOrigins.includes(o)
   );
