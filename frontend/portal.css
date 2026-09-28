@@ -133,6 +133,8 @@ button{cursor:pointer}
 .dash-lg{display:inline-flex;align-items:center;gap:6px}
 .dash-dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:8px;flex:none}
 .dash-lg .dash-dot{margin-right:0}
+.dash-lg.pt-click{cursor:pointer;user-select:none;transition:opacity .15s}
+.dash-lg--off{opacity:.35;text-decoration:line-through}
 .dash-chart{position:relative;height:240px}
 /* embudo */
 .dash-funnel{display:flex;flex-direction:column;gap:14px;position:relative;padding-top:4px}

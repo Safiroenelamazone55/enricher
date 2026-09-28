@@ -345,6 +345,7 @@
     weekTile: (kind, label) => openWeekModal(kind, label),
     weekSelect: id => { if (S._wkSelect) S._wkSelect(id); },
     canteraFilter: () => canteraFilter(),
+    wkLineToggle: i => wkLineToggle(i),
   };
 
   const badge = (t) => { const c = /Reunión/.test(t) ? 'g' : /Interesado|Respondió|Más adelante/.test(t) ? 'b' : /No interesado|No califica|No contactar/.test(t) ? 'r' : /seguimiento|En pausa/i.test(t) ? 'a' : 'n'; return `<span class="pt-badge pt-b--${c}">${esc(t)}</span>`; };
@@ -430,8 +431,13 @@
   // Línea de tendencia (Respuestas/Aperturas/Aceptación LinkedIn) justo debajo
   // de los KPIs de "Esta semana/mes" — pedido explícito 2026-09-28: métricas
   // relevantes que antes solo se veían agregadas (o escondidas en "Ver detalle").
-  S.wkLine = null; S.wkLineKey = '';
-  const WKLINE_M = [['replies', 'Respuestas', '#22A06B'], ['opens', 'Aperturas', '#2563EB'], ['li_accepted', 'Aceptación LinkedIn', '#7C5CE0']];
+  S.wkLine = null; S.wkLineKey = ''; S.wkLineChart = null; S.wkLineHidden = S.wkLineHidden || new Set();
+  // Mismas 4 métricas de las tiles de arriba + Aperturas — pedido explícito
+  // 2026-09-28: "los KPIs también quiero verlos ahí en el gráfico". LinkedIn
+  // se sacó (mismo pedido). Leyenda propia (no la de Chart.js) para mantener
+  // el mismo lenguaje visual que el resto del portal, pero clicable para
+  // activar/desactivar cada línea — "poder activar y desactivar algunas".
+  const WKLINE_M = [['contacted', 'Contactos alcanzados', '#22A06B'], ['replies', 'Respuestas', '#F59E0B'], ['meetings', 'Reuniones agendadas', '#7C5CE0'], ['touches', 'Toques realizados', '#2563EB'], ['opens', 'Aperturas', '#0EA5A4']];
   async function loadWeekLine() {
     const w = S.wk; if (!w) return;
     const from = isoL(w.r.from), to = isoL(w.r.to), key = from + '|' + to;
@@ -440,17 +446,24 @@
     catch (e) { S.wkLine = null; }
     if (S.tab === 'inicio') paintWeekLine();
   }
+  function wkLineToggle(i) {
+    const ch = S.wkLineChart; if (!ch) return;
+    if (S.wkLineHidden.has(i)) S.wkLineHidden.delete(i); else S.wkLineHidden.add(i);
+    ch.data.datasets[i].hidden = S.wkLineHidden.has(i);
+    ch.update();
+    const leg = document.getElementById('pt-wkline-leg'); if (leg) leg.querySelectorAll('.dash-lg')[i]?.classList.toggle('dash-lg--off', S.wkLineHidden.has(i));
+  }
   function paintWeekLine() {
     const leg = document.getElementById('pt-wkline-leg'), cv = document.getElementById('pt-wkline');
     if (!leg || !cv) return;
-    leg.innerHTML = WKLINE_M.map(m => `<span class="dash-lg"><span class="dash-dot" style="background:${m[2]}"></span>${m[1]}</span>`).join('');
+    leg.innerHTML = WKLINE_M.map((m, i) => `<span class="dash-lg pt-click${S.wkLineHidden.has(i) ? ' dash-lg--off' : ''}" onclick="PT.wkLineToggle(${i})"><span class="dash-dot" style="background:${m[2]}"></span>${m[1]}</span>`).join('');
     if (typeof Chart === 'undefined' || !S.wkLine || !S.wkLine.length) return;
     const rows = S.wkLine, tip = { backgroundColor: '#0F172A', padding: 9, cornerRadius: 0 };
-    S.charts.push(new Chart(cv.getContext('2d'), {
+    const chart = new Chart(cv.getContext('2d'), {
       type: 'line',
       data: {
         labels: rows.map(r => r.day.slice(5)),
-        datasets: WKLINE_M.map(m => ({ label: m[1], data: rows.map(r => r[m[0]] || 0), borderColor: m[2], backgroundColor: m[2] + '22', tension: .3, pointRadius: 2, borderWidth: 2 })),
+        datasets: WKLINE_M.map((m, i) => ({ label: m[1], data: rows.map(r => r[m[0]] || 0), borderColor: m[2], backgroundColor: m[2] + '22', tension: .3, pointRadius: 2, borderWidth: 2, hidden: S.wkLineHidden.has(i) })),
       },
       options: {
         responsive: true, maintainAspectRatio: false,
@@ -460,7 +473,8 @@
           y: { beginAtZero: true, border: { display: false }, grid: { color: '#DDE3EA', borderDash: [3, 4], drawTicks: false }, ticks: { precision: 0, maxTicksLimit: 5, color: '#94A3B8', font: { size: 10 }, padding: 8 } },
         },
       },
-    }));
+    });
+    S.charts.push(chart); S.wkLineChart = chart;
   }
   // Detalle detrás de cada tile de "Esta semana/mes" — clic en "Respuestas: 9" abre
   // la lista real de esos 9 contactos, no solo el número (pedido explícito 2026-09-28).
