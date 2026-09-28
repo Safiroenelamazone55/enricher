@@ -1,0 +1,8 @@
+{
+  "name": "enricher-staging",
+  "compatibility_date": "2026-05-28",
+  "workers_dev": true,
+  "assets": {
+    "directory": "./frontend"
+  }
+}

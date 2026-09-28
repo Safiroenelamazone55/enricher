@@ -132,7 +132,7 @@ function buildReport(lang, d) {
     <p style="margin:0;${F}font-size:15px;line-height:1.5;color:#1E293B">${esc(C.bye)}<br><b>${esc(C.team)}</b></p>
     <p style="margin:26px 0 0;padding-top:14px;border-top:1px solid #EEF1F6;${F}font-size:11.5px;color:#94A3B8">${esc(C.by)}</p></div>`;
   const html = `<!doctype html><html><body style="margin:0;padding:0;background:#FFFFFF">${body}</body></html>`;
-  const text = [C.hi(d.cliente), '', C.lead(d, k), C.sig(sig.length ? (d.positives || []).length : 0, sig), C.meet((d.meetings || [])[0]), C.seq((d.seqs || []).length), '', `${C.cta}: ${d.url}`, '', C.bye, C.team].filter((x, j, a) => x !== '' || a[j - 1] !== '').join('\n');
+  const text = [C.hi(d.cliente), '', C.lead(d, k), C.sig(d.positives || []), C.meet((d.meetings || [])[0]), C.seq((d.seqs || []).length), '', `${C.cta}: ${d.url}`, '', C.bye, C.team].filter((x, j, a) => x !== '' || a[j - 1] !== '').join('\n');
   return { subject: C.subj(d, k, (d.positives || []).length), html, text, accent };
 }
 module.exports = { buildReport };
