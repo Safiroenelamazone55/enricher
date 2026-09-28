@@ -342,6 +342,7 @@
     goSeq: () => { S.tab = 'secuencias'; renderApp(); load(true); },
     goCo: id => { S.tab = 'contactos'; S.co = id; S.q = ''; renderApp(); load(true); },
     weekTile: (kind, label) => openWeekModal(kind, label),
+    weekSelect: id => { if (S._wkSelect) S._wkSelect(id); },
   };
 
   const badge = (t) => { const c = /Reunión/.test(t) ? 'g' : /Interesado|Respondió|Más adelante/.test(t) ? 'b' : /No interesado|No califica|No contactar/.test(t) ? 'r' : /seguimiento|En pausa/i.test(t) ? 'a' : 'n'; return `<span class="pt-badge pt-b--${c}">${esc(t)}</span>`; };
@@ -426,24 +427,45 @@
   // la lista real de esos 9 contactos, no solo el número (pedido explícito 2026-09-28).
   async function openWeekModal(kind, label) {
     const w = S.wk; if (!w) return;
-    const m = document.createElement('div'); m.className = 'pt-modal'; m.onclick = ev => { if (ev.target === m) m.remove(); };
-    m.innerHTML = `<div class="pt-modal__box" style="max-width:480px"><button class="pt-modal__x" id="pt-wkx" title="Cerrar">✕</button><h3>${esc(label)}</h3><div class="pt-item__s" style="margin:-4px 0 10px">${fshort(w.r.from)} – ${fshort(w.r.to)}</div><div id="pt-wk-body"><div class="pt-empty">Cargando…</div></div></div>`;
-    root.appendChild(m); m.querySelector('#pt-wkx').onclick = () => m.remove();
-    const body = m.querySelector('#pt-wk-body');
-    try {
-      const rows = await api(`/portal/week-items?kind=${kind}&from=${isoL(w.r.from)}&to=${isoL(w.r.to)}`);
-      if (!m.isConnected) return;
-      if (!rows.length) { body.innerHTML = '<div class="pt-empty">Sin registros en este período</div>'; return; }
-      body.innerHTML = rows.map(r => {
-        const right = kind === 'meetings'
-          ? (r.valor ? `<span style="color:#15803D">${money2(r.valor, r.moneda)}</span>` : '')
-          : `<span style="font-weight:500;color:#94A3B8;font-size:12px">${r.n} ${kind === 'replies' ? (r.n === 1 ? 'respuesta' : 'respuestas') : (r.n === 1 ? 'toque' : 'toques')}</span>`;
-        const sub = kind === 'meetings'
-          ? `${esc(r.empresa || '')}${r.fecha ? ' · reunión ' + fdate(r.fecha, { day: 'numeric', month: 'short', timeZone: 'UTC' }) : ''}`
-          : `${esc(r.empresa || '')}${r.ultima ? ' · ' + ago(r.ultima) : ''}`;
-        return `<div class="pt-item pt-click" onclick="PT.open(${r.contact_id})"><div class="pt-item__t"><span>${person(r)}</span>${right}</div><div class="pt-item__s">${sub}</div></div>`;
-      }).join('');
-    } catch (e) { if (body) body.innerHTML = '<div class="pt-empty">Error al cargar</div>'; }
+    document.getElementById('pt-wkfull')?.remove();
+    const m = document.createElement('div'); m.id = 'pt-wkfull'; m.className = 'pt-wkfull';
+    m.innerHTML = `<div class="pt-wkfull__hd"><div><h2>${esc(label)}</h2><div class="pt-item__s">${fshort(w.r.from)} – ${fshort(w.r.to)}</div></div><button class="pt-modal__x" id="pt-wkfx" title="Cerrar">✕</button></div>
+      <div class="pt-wkfull__body">
+        <div class="pt-wkfull__list" id="pt-wkfull-list"><div class="pt-empty">Cargando…</div></div>
+        <div class="pt-wkfull__det" id="pt-wkfull-det"><div class="pt-empty">Elige un contacto de la lista para ver su historial.</div></div>
+      </div>`;
+    root.appendChild(m);
+    document.getElementById('pt-wkfx').onclick = () => { m.remove(); S._wkSelect = null; };
+    const listEl = document.getElementById('pt-wkfull-list'), detEl = document.getElementById('pt-wkfull-det');
+    let rows = [];
+    try { rows = await api(`/portal/week-items?kind=${kind}&from=${isoL(w.r.from)}&to=${isoL(w.r.to)}`); }
+    catch (e) { listEl.innerHTML = '<div class="pt-empty">Error al cargar</div>'; return; }
+    if (!m.isConnected) return;
+    if (!rows.length) { listEl.innerHTML = '<div class="pt-empty">Sin registros en este período</div>'; return; }
+    const renderList = selId => { listEl.innerHTML = rows.map(r => {
+      const right = kind === 'meetings'
+        ? (r.valor ? `<span style="color:#15803D">${money2(r.valor, r.moneda)}</span>` : '')
+        : `<span style="font-weight:500;color:#94A3B8;font-size:12px">${r.n} ${kind === 'replies' ? (r.n === 1 ? 'respuesta' : 'respuestas') : (r.n === 1 ? 'toque' : 'toques')}</span>`;
+      const sub = kind === 'meetings'
+        ? `${esc(r.empresa || '')}${r.fecha ? ' · reunión ' + fdate(r.fecha, { day: 'numeric', month: 'short', timeZone: 'UTC' }) : ''}`
+        : `${esc(r.empresa || '')}${r.ultima ? ' · ' + ago(r.ultima) : ''}`;
+      return `<div class="pt-item pt-click${r.contact_id === selId ? ' pt-wkfull__sel' : ''}" onclick="PT.weekSelect(${r.contact_id})"><div class="pt-item__t"><span>${person(r)}</span>${right}</div><div class="pt-item__s">${sub}</div></div>`;
+    }).join(''); };
+    renderList(0);
+    S._wkSelect = async id => {
+      renderList(id);
+      detEl.innerHTML = '<div class="pt-empty">Cargando…</div>';
+      try {
+        const d = await api('/portal/contact/' + id);
+        if (!document.getElementById('pt-wkfull-det')) return;
+        const c = d.contact, seqTxt = c.secuencia ? `${esc(c.secuencia)}${c.paso ? ' · paso ' + c.paso : ''}` : '';
+        detEl.innerHTML = `<h2 style="font-size:19px;margin-bottom:2px">${esc(c.nombre)}</h2><div class="pt-item__s" style="margin-bottom:14px">${esc([c.cargo, c.empresa].filter(Boolean).join(' · '))}</div>
+          <div class="pt-dr__badges">${c.estado ? badge(c.estado) : ''}${c.linkedin ? `<a class="pt-badge pt-b--p" href="${esc(/^https?:/.test(c.linkedin) ? c.linkedin : 'https://' + c.linkedin)}" target="_blank" rel="noopener noreferrer">LinkedIn ↗</a>` : ''}</div>
+          ${dealBox(d.deal)}${c.nota ? `<div class="pt-item__n" style="margin-bottom:10px">${esc(c.nota)}</div>` : ''}${notesBox(d.notes, false)}
+          <div class="pt-dr__info">${c.pais ? `<span>${esc(c.pais)}</span>` : ''}${seqTxt ? `<span>${seqTxt}</span>` : ''}</div>
+          <h3 class="pt-dr__s">Historial del contacto</h3>${d.timeline.map(e => evHtml(e, false)).join('') || '<div class="pt-empty">Sin historial todavía</div>'}`;
+      } catch (e) { detEl.innerHTML = `<div class="pt-empty">${esc(e.message)}</div>`; }
+    };
   }
   const STEP_ICO = { linkedin: ['in', '#7C5CE0'], email: ['mail', '#2563EB'], whatsapp: ['chat', '#22A06B'], call: ['phone', '#F59E0B'], task: ['dots', '#94A3B8'] };
   function stepsHtml(q) {

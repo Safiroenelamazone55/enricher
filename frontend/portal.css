@@ -235,6 +235,15 @@ button{cursor:pointer}
 .pt-modal__box p{font-size:13.5px;color:#475569;line-height:1.5;margin-bottom:16px}
 .pt-modal__b{display:flex;flex-direction:column;gap:8px}
 .pt-modal__x{position:absolute;top:10px;right:12px;border:0;background:none;font-size:18px;color:#64748B}
+.pt-wkfull{position:fixed;inset:0;background:#fff;z-index:90;display:flex;flex-direction:column}
+.pt-wkfull__hd{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:18px 24px;border-bottom:1px solid #E7EBF0}
+.pt-wkfull__hd h2{font-size:20px;letter-spacing:-.01em;margin:0}
+.pt-wkfull__hd .pt-modal__x{position:static}
+.pt-wkfull__body{flex:1;display:flex;min-height:0}
+.pt-wkfull__list{width:360px;flex:none;border-right:1px solid #E7EBF0;overflow:auto;padding:8px 16px}
+.pt-wkfull__det{flex:1;overflow:auto;padding:22px 28px;min-width:0}
+.pt-wkfull__sel{background:#F0F5FF;margin:0 -16px;padding-left:16px;padding-right:16px}
+@media(max-width:820px){.pt-wkfull__body{flex-direction:column}.pt-wkfull__list{width:100%;max-height:40vh;border-right:0;border-bottom:1px solid #E7EBF0}}
 
 /* encabezado con logo del cliente + tonos según el color elegido */
 .pt-top__sep{width:1px;height:26px;background:currentColor;opacity:.25;flex:none}
