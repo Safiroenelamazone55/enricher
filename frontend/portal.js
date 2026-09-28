@@ -435,16 +435,15 @@
   // de los KPIs de "Esta semana/mes" — pedido explícito 2026-09-28: métricas
   // relevantes que antes solo se veían agregadas (o escondidas en "Ver detalle").
   S.wkLine = null; S.wkLineKey = ''; S.wkLineChart = null; S.wkLineHidden = S.wkLineHidden || new Set();
-  // Mismas 4 métricas de las tiles de arriba + Aperturas — pedido explícito
-  // 2026-09-28: "los KPIs también quiero verlos ahí en el gráfico". LinkedIn
-  // se sacó (mismo pedido). Leyenda propia (no la de Chart.js) para mantener
-  // el mismo lenguaje visual que el resto del portal, pero clicable para
-  // activar/desactivar cada línea — "poder activar y desactivar algunas".
-  // "Toques realizados" es volumen bruto (mucho más grande que el resto) — va
-  // de barra en un eje secundario detrás de las líneas, así no aplasta a las
-  // demás métricas. Pedido explícito 2026-09-28: "mezclar gráfico barra con
-  // líneas, donde consideres".
-  const WKLINE_M = [['contacted', 'Contactos alcanzados', '#22A06B', 'line'], ['replies', 'Respuestas', '#F59E0B', 'line'], ['meetings', 'Reuniones agendadas', '#7C5CE0', 'line'], ['touches', 'Toques realizados', '#2563EB', 'bar'], ['opens', 'Aperturas', '#0EA5A4', 'line']];
+  // Solo métricas de ENGAGEMENT, no de volumen — pedido explícito 2026-09-28:
+  // "elimina toques realizados del gráfico" + "no me gusta como se ve". El
+  // problema real era de escala: Contactos alcanzados/Toques son volumen bruto
+  // (decenas/cientos) y aplastaban a Respuestas/Reuniones/Aperturas (0-5) en el
+  // mismo eje — la línea dominante tapaba a las demás. Contactos alcanzados y
+  // Toques realizados ya se ven como número crudo en las tiles de arriba; este
+  // gráfico se queda solo con las 3 métricas de resultado, todas en una escala
+  // parecida, para que ninguna tape a las otras.
+  const WKLINE_M = [['replies', 'Respuestas', '#F59E0B'], ['meetings', 'Reuniones agendadas', '#7C3AED'], ['opens', 'Aperturas', '#059669']];
   async function loadWeekLine() {
     const w = S.wk; if (!w) return;
     const from = isoL(w.r.from), to = isoL(w.r.to), key = from + '|' + to;
@@ -467,26 +466,22 @@
     if (typeof Chart === 'undefined' || !S.wkLine || !S.wkLine.length) return;
     const rows = S.wkLine;
     const ctx = cv.getContext('2d');
-    // Relleno en degradé bajo cada línea — mismo truco que usan los dashboards
-    // "premium" (Linear/Vercel): color sólido arriba que se disuelve a
-    // transparente, en vez del relleno plano de antes.
-    const fillFor = hex => { const g = ctx.createLinearGradient(0, 0, 0, 240); g.addColorStop(0, hex + '35'); g.addColorStop(1, hex + '00'); return g; };
     const chart = new Chart(ctx, {
       type: 'line',
       data: {
         labels: rows.map(r => r.day.slice(5)),
-        datasets: WKLINE_M.map((m, i) => m[3] === 'bar'
-          ? { type: 'bar', label: m[1], data: rows.map(r => r[m[0]] || 0), backgroundColor: m[2] + '1c', hoverBackgroundColor: m[2] + '30', borderRadius: 3, borderSkipped: false, maxBarThickness: 22, order: 2, yAxisID: 'y1', hidden: S.wkLineHidden.has(i) }
-          : { type: 'line', label: m[1], data: rows.map(r => r[m[0]] || 0), borderColor: m[2], backgroundColor: fillFor(m[2]), fill: true, tension: .35, borderWidth: 2, order: 1, yAxisID: 'y',
-              pointRadius: 0, pointHoverRadius: 5, pointHoverBorderWidth: 2, pointHitRadius: 10, pointBackgroundColor: '#fff', pointBorderColor: m[2], pointHoverBackgroundColor: '#fff', pointHoverBorderColor: m[2],
-              hidden: S.wkLineHidden.has(i) }),
+        datasets: WKLINE_M.map((m, i) => ({
+          label: m[1], data: rows.map(r => r[m[0]] || 0), borderColor: m[2], backgroundColor: 'transparent', fill: false, tension: .3, borderWidth: 2.25,
+          pointRadius: 0, pointHoverRadius: 5, pointHoverBorderWidth: 2, pointHitRadius: 10, pointBackgroundColor: '#fff', pointBorderColor: m[2], pointHoverBackgroundColor: '#fff', pointHoverBorderColor: m[2],
+          hidden: S.wkLineHidden.has(i),
+        })),
       },
       options: {
         responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
         plugins: {
           legend: { display: false },
           tooltip: {
-            backgroundColor: '#0F172A', titleColor: '#F8FAFC', bodyColor: '#E2E8F0', borderColor: 'rgba(255,255,255,.08)', borderWidth: 1,
+            backgroundColor: 'rgba(15,23,42,.96)', titleColor: '#F8FAFC', bodyColor: '#F1F5F9', borderWidth: 0,
             padding: 12, cornerRadius: 6, displayColors: true, usePointStyle: true, boxWidth: 7, boxHeight: 7, boxPadding: 4,
             titleFont: { size: 12, weight: '600' }, bodyFont: { size: 12 }, bodySpacing: 6,
             callbacks: { title: items => { const r = rows[items[0]?.dataIndex]; return r ? new Date(r.day + 'T12:00:00Z').toLocaleDateString(PT_I18N.locale(), { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' }) : ''; } },
@@ -494,8 +489,7 @@
         },
         scales: {
           x: { grid: { display: false }, border: { display: false }, ticks: { maxTicksLimit: 8, color: '#94A3B8', font: { size: 10.5 } } },
-          y: { position: 'left', beginAtZero: true, border: { display: false }, grid: { color: '#EEF1F5', drawTicks: false }, ticks: { precision: 0, maxTicksLimit: 5, color: '#94A3B8', font: { size: 10.5 }, padding: 8 } },
-          y1: { position: 'right', beginAtZero: true, border: { display: false }, grid: { display: false }, ticks: { precision: 0, maxTicksLimit: 5, color: '#CBD5E1', font: { size: 10 }, padding: 8 } },
+          y: { beginAtZero: true, border: { display: false }, grid: { color: '#EEF1F5', drawTicks: false }, ticks: { precision: 0, maxTicksLimit: 5, color: '#94A3B8', font: { size: 10.5 }, padding: 8 } },
         },
       },
     });
