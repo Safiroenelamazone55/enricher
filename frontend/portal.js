@@ -305,6 +305,7 @@
     const se = document.getElementById('pt-search');
     if (se) { se.value = S.q; se.oninput = debounce(() => { S.q = se.value; load(false); }, 350); }
     if (t === 'inicio' && S.detail && S.dash) initCharts();
+    if (t === 'inicio' && S.hl) loadWeekLine();
   }
   function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
   window.PT = {
@@ -421,7 +422,44 @@
       <div class="dash-seg"><button class="dash-seg__b${S.per === 'week' ? ' on' : ''}" onclick="PT.per('week')">Semana</button><button class="dash-seg__b${S.per === 'month' ? ' on' : ''}" onclick="PT.per('month')">Mes</button><button class="dash-seg__b${S.per === 'custom' ? ' on' : ''}" onclick="PT.per('custom')">Personalizado</button></div></div>
       ${customRow}
       <div class="pt-week__k">${tiles.map(t => `<div class="pt-tile pt-click" style="--kc:${t[4]}" onclick="PT.weekTile('${t[5]}','${esc(t[0])}')"><span class="pt-tile__i">${ico(t[3], 18)}</span><div><div class="pt-tile__l">${t[0]}</div><div class="pt-tile__v">${t[1]}</div>${dl(t[1], t[2])}</div></div>`).join('')}</div>
-      <p class="pt-week__s">${sent}</p></div>`;
+      <p class="pt-week__s">${sent}</p>
+      <div class="pt-card" style="margin-top:14px"><div class="cp-card__t">Tendencia</div><div class="dash-legend" id="pt-wkline-leg"></div><div class="dash-chart" style="height:220px"><canvas id="pt-wkline"></canvas></div></div>
+      </div>`;
+  }
+  // Línea de tendencia (Respuestas/Aperturas/Aceptación LinkedIn) justo debajo
+  // de los KPIs de "Esta semana/mes" — pedido explícito 2026-09-28: métricas
+  // relevantes que antes solo se veían agregadas (o escondidas en "Ver detalle").
+  S.wkLine = null; S.wkLineKey = '';
+  const WKLINE_M = [['replies', 'Respuestas', '#22A06B'], ['opens', 'Aperturas', '#2563EB'], ['li_accepted', 'Aceptación LinkedIn', '#7C5CE0']];
+  async function loadWeekLine() {
+    const w = S.wk; if (!w) return;
+    const from = isoL(w.r.from), to = isoL(w.r.to), key = from + '|' + to;
+    if (key === S.wkLineKey && S.wkLine) { paintWeekLine(); return; }
+    try { S.wkLine = await api(`/portal/series?from=${from}&to=${to}`); S.wkLineKey = key; }
+    catch (e) { S.wkLine = null; }
+    if (S.tab === 'inicio') paintWeekLine();
+  }
+  function paintWeekLine() {
+    const leg = document.getElementById('pt-wkline-leg'), cv = document.getElementById('pt-wkline');
+    if (!leg || !cv) return;
+    leg.innerHTML = WKLINE_M.map(m => `<span class="dash-lg"><span class="dash-dot" style="background:${m[2]}"></span>${m[1]}</span>`).join('');
+    if (typeof Chart === 'undefined' || !S.wkLine || !S.wkLine.length) return;
+    const rows = S.wkLine, tip = { backgroundColor: '#0F172A', padding: 9, cornerRadius: 0 };
+    S.charts.push(new Chart(cv.getContext('2d'), {
+      type: 'line',
+      data: {
+        labels: rows.map(r => r.day.slice(5)),
+        datasets: WKLINE_M.map(m => ({ label: m[1], data: rows.map(r => r[m[0]] || 0), borderColor: m[2], backgroundColor: m[2] + '22', tension: .3, pointRadius: 2, borderWidth: 2 })),
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: tip },
+        scales: {
+          x: { grid: { display: false }, border: { display: false }, ticks: { maxTicksLimit: 8, color: '#94A3B8', font: { size: 10 } } },
+          y: { beginAtZero: true, border: { display: false }, grid: { color: '#DDE3EA', borderDash: [3, 4], drawTicks: false }, ticks: { precision: 0, maxTicksLimit: 5, color: '#94A3B8', font: { size: 10 }, padding: 8 } },
+        },
+      },
+    }));
   }
   // Detalle detrás de cada tile de "Esta semana/mes" — clic en "Respuestas: 9" abre
   // la lista real de esos 9 contactos, no solo el número (pedido explícito 2026-09-28).
