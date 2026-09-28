@@ -425,7 +425,10 @@
       ${customRow}
       <div class="pt-week__k">${tiles.map(t => `<div class="pt-tile pt-click" style="--kc:${t[4]}" onclick="PT.weekTile('${t[5]}','${esc(t[0])}')"><span class="pt-tile__i">${ico(t[3], 18)}</span><div><div class="pt-tile__l">${t[0]}</div><div class="pt-tile__v">${t[1]}</div>${dl(t[1], t[2])}</div></div>`).join('')}</div>
       <p class="pt-week__s">${sent}</p>
-      <div class="pt-card" style="margin-top:14px"><div class="cp-card__t">Tendencia</div><div class="dash-legend" id="pt-wkline-leg"></div><div class="dash-chart" style="height:220px"><canvas id="pt-wkline"></canvas></div></div>
+      <div class="pt-trend">
+        <div class="pt-trend__h"><div><h3>Tendencia</h3><span>Evolución diaria del período seleccionado</span></div><div class="dash-legend" id="pt-wkline-leg"></div></div>
+        <div class="pt-trend__chart"><canvas id="pt-wkline"></canvas></div>
+      </div>
       </div>`;
   }
   // Línea de tendencia (Respuestas/Aperturas/Aceptación LinkedIn) justo debajo
@@ -437,7 +440,11 @@
   // se sacó (mismo pedido). Leyenda propia (no la de Chart.js) para mantener
   // el mismo lenguaje visual que el resto del portal, pero clicable para
   // activar/desactivar cada línea — "poder activar y desactivar algunas".
-  const WKLINE_M = [['contacted', 'Contactos alcanzados', '#22A06B'], ['replies', 'Respuestas', '#F59E0B'], ['meetings', 'Reuniones agendadas', '#7C5CE0'], ['touches', 'Toques realizados', '#2563EB'], ['opens', 'Aperturas', '#0EA5A4']];
+  // "Toques realizados" es volumen bruto (mucho más grande que el resto) — va
+  // de barra en un eje secundario detrás de las líneas, así no aplasta a las
+  // demás métricas. Pedido explícito 2026-09-28: "mezclar gráfico barra con
+  // líneas, donde consideres".
+  const WKLINE_M = [['contacted', 'Contactos alcanzados', '#22A06B', 'line'], ['replies', 'Respuestas', '#F59E0B', 'line'], ['meetings', 'Reuniones agendadas', '#7C5CE0', 'line'], ['touches', 'Toques realizados', '#2563EB', 'bar'], ['opens', 'Aperturas', '#0EA5A4', 'line']];
   async function loadWeekLine() {
     const w = S.wk; if (!w) return;
     const from = isoL(w.r.from), to = isoL(w.r.to), key = from + '|' + to;
@@ -458,19 +465,37 @@
     if (!leg || !cv) return;
     leg.innerHTML = WKLINE_M.map((m, i) => `<span class="dash-lg pt-click${S.wkLineHidden.has(i) ? ' dash-lg--off' : ''}" onclick="PT.wkLineToggle(${i})"><span class="dash-dot" style="background:${m[2]}"></span>${m[1]}</span>`).join('');
     if (typeof Chart === 'undefined' || !S.wkLine || !S.wkLine.length) return;
-    const rows = S.wkLine, tip = { backgroundColor: '#0F172A', padding: 9, cornerRadius: 0 };
-    const chart = new Chart(cv.getContext('2d'), {
+    const rows = S.wkLine;
+    const ctx = cv.getContext('2d');
+    // Relleno en degradé bajo cada línea — mismo truco que usan los dashboards
+    // "premium" (Linear/Vercel): color sólido arriba que se disuelve a
+    // transparente, en vez del relleno plano de antes.
+    const fillFor = hex => { const g = ctx.createLinearGradient(0, 0, 0, 240); g.addColorStop(0, hex + '35'); g.addColorStop(1, hex + '00'); return g; };
+    const chart = new Chart(ctx, {
       type: 'line',
       data: {
         labels: rows.map(r => r.day.slice(5)),
-        datasets: WKLINE_M.map((m, i) => ({ label: m[1], data: rows.map(r => r[m[0]] || 0), borderColor: m[2], backgroundColor: m[2] + '22', tension: .3, pointRadius: 2, borderWidth: 2, hidden: S.wkLineHidden.has(i) })),
+        datasets: WKLINE_M.map((m, i) => m[3] === 'bar'
+          ? { type: 'bar', label: m[1], data: rows.map(r => r[m[0]] || 0), backgroundColor: m[2] + '1c', hoverBackgroundColor: m[2] + '30', borderRadius: 3, borderSkipped: false, maxBarThickness: 22, order: 2, yAxisID: 'y1', hidden: S.wkLineHidden.has(i) }
+          : { type: 'line', label: m[1], data: rows.map(r => r[m[0]] || 0), borderColor: m[2], backgroundColor: fillFor(m[2]), fill: true, tension: .35, borderWidth: 2, order: 1, yAxisID: 'y',
+              pointRadius: 0, pointHoverRadius: 5, pointHoverBorderWidth: 2, pointHitRadius: 10, pointBackgroundColor: '#fff', pointBorderColor: m[2], pointHoverBackgroundColor: '#fff', pointHoverBorderColor: m[2],
+              hidden: S.wkLineHidden.has(i) }),
       },
       options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false }, tooltip: tip },
+        responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#0F172A', titleColor: '#F8FAFC', bodyColor: '#E2E8F0', borderColor: 'rgba(255,255,255,.08)', borderWidth: 1,
+            padding: 12, cornerRadius: 6, displayColors: true, usePointStyle: true, boxWidth: 7, boxHeight: 7, boxPadding: 4,
+            titleFont: { size: 12, weight: '600' }, bodyFont: { size: 12 }, bodySpacing: 6,
+            callbacks: { title: items => { const r = rows[items[0]?.dataIndex]; return r ? new Date(r.day + 'T12:00:00Z').toLocaleDateString(PT_I18N.locale(), { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' }) : ''; } },
+          },
+        },
         scales: {
-          x: { grid: { display: false }, border: { display: false }, ticks: { maxTicksLimit: 8, color: '#94A3B8', font: { size: 10 } } },
-          y: { beginAtZero: true, border: { display: false }, grid: { color: '#DDE3EA', borderDash: [3, 4], drawTicks: false }, ticks: { precision: 0, maxTicksLimit: 5, color: '#94A3B8', font: { size: 10 }, padding: 8 } },
+          x: { grid: { display: false }, border: { display: false }, ticks: { maxTicksLimit: 8, color: '#94A3B8', font: { size: 10.5 } } },
+          y: { position: 'left', beginAtZero: true, border: { display: false }, grid: { color: '#EEF1F5', drawTicks: false }, ticks: { precision: 0, maxTicksLimit: 5, color: '#94A3B8', font: { size: 10.5 }, padding: 8 } },
+          y1: { position: 'right', beginAtZero: true, border: { display: false }, grid: { display: false }, ticks: { precision: 0, maxTicksLimit: 5, color: '#CBD5E1', font: { size: 10 }, padding: 8 } },
         },
       },
     });

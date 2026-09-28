@@ -133,9 +133,23 @@ button{cursor:pointer}
 .dash-lg{display:inline-flex;align-items:center;gap:6px}
 .dash-dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:8px;flex:none}
 .dash-lg .dash-dot{margin-right:0}
-.dash-lg.pt-click{cursor:pointer;user-select:none;transition:opacity .15s}
-.dash-lg--off{opacity:.35;text-decoration:line-through}
+.dash-lg.pt-click{cursor:pointer;user-select:none;transition:opacity .15s,color .15s}
+.dash-lg.pt-click:hover{color:#0F172A}
+.dash-lg--off{opacity:.38}
+.dash-lg--off .dash-dot{filter:grayscale(1)}
 .dash-chart{position:relative;height:240px}
+/* Tarjeta "Tendencia" del resumen — tratamiento propio (no el .pt-card
+   genérico): más aire, jerarquía tipográfica clara, leyenda alineada con el
+   título en vez de amontonada debajo. Pedido explícito 2026-09-28: "quiero
+   minimalista pero bien trabajado". */
+.pt-trend{background:#fff;border:1px solid #E7EBF0;box-shadow:0 1px 2px rgba(15,23,42,.04);padding:22px 24px 18px;margin-top:16px}
+.pt-trend__h{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:18px}
+.pt-trend__h h3{font-size:15px;font-weight:600;color:#0F172A;letter-spacing:-.005em;margin-bottom:3px}
+.pt-trend__h span{font-size:12.5px;color:#94A3B8}
+.pt-trend .dash-legend{margin:2px 0 0;gap:18px}
+.pt-trend .dash-lg{font-size:12.5px;color:#64748B;font-weight:500}
+.pt-trend__chart{position:relative;height:260px}
+@media(max-width:640px){.pt-trend{padding:18px 16px 14px}.pt-trend__chart{height:220px}}
 /* embudo */
 .dash-funnel{display:flex;flex-direction:column;gap:14px;position:relative;padding-top:4px}
 .dash-fn{display:flex;align-items:center;gap:12px;position:relative}
