@@ -321,6 +321,7 @@
     goMeet: () => { S.tab = 'reuniones'; renderApp(); load(true); },
     goSeq: () => { S.tab = 'secuencias'; renderApp(); load(true); },
     goCo: id => { S.tab = 'contactos'; S.co = id; S.q = ''; renderApp(); load(true); },
+    weekTile: (kind, label) => openWeekModal(kind, label),
   };
 
   const badge = (t) => { const c = /Reunión/.test(t) ? 'g' : /Interesado|Respondió|Más adelante/.test(t) ? 'b' : /No interesado|No califica|No contactar/.test(t) ? 'r' : /seguimiento|En pausa/i.test(t) ? 'a' : 'n'; return `<span class="pt-badge pt-b--${c}">${esc(t)}</span>`; };
@@ -378,12 +379,35 @@
     const w = S.wk; if (!w || !w.cur.kpi) return '';
     const c = w.cur.kpi.cur, p = w.prev.kpi ? w.prev.kpi.cur : { contacted: 0, replies: 0, touches: 0 };
     const mc = w.cur.deals ? w.cur.deals.agendadas : null, mp = w.prev.deals ? w.prev.deals.agendadas : 0;
-    const tiles = [['Contactos alcanzados', c.contacted, p.contacted, 'users', '#22A06B'], ['Respuestas', c.replies, p.replies, 'reply', '#F59E0B'], mc == null ? null : ['Reuniones agendadas', mc, mp, 'handshake', '#7C5CE0'], ['Toques realizados', c.touches, p.touches, 'send', '#2563EB']].filter(Boolean);
+    const tiles = [['Contactos alcanzados', c.contacted, p.contacted, 'users', '#22A06B', 'contacted'], ['Respuestas', c.replies, p.replies, 'reply', '#F59E0B', 'replies'], mc == null ? null : ['Reuniones agendadas', mc, mp, 'handshake', '#7C5CE0', 'meetings'], ['Toques realizados', c.touches, p.touches, 'send', '#2563EB', 'touches']].filter(Boolean);
     const sent = `${c.contacted} contactos alcanzados · ${c.replies} respuestas${mc == null ? '' : ' · ' + mc + (mc === 1 ? ' reunión agendada' : ' reuniones agendadas')}`;
     return `<div class="pt-week"><div class="pt-week__h"><div><h2>${S.per === 'month' ? 'Este mes' : 'Esta semana'}</h2><span class="pt-week__r">${fshort(w.r.from)} – ${fshort(w.r.to)}</span></div>
       <div class="dash-seg"><button class="dash-seg__b${S.per === 'week' ? ' on' : ''}" onclick="PT.per('week')">Semana</button><button class="dash-seg__b${S.per === 'month' ? ' on' : ''}" onclick="PT.per('month')">Mes</button></div></div>
-      <div class="pt-week__k">${tiles.map(t => `<div class="pt-tile" style="--kc:${t[4]}"><span class="pt-tile__i">${ico(t[3], 18)}</span><div><div class="pt-tile__l">${t[0]}</div><div class="pt-tile__v">${t[1]}</div>${dl(t[1], t[2])}</div></div>`).join('')}</div>
+      <div class="pt-week__k">${tiles.map(t => `<div class="pt-tile pt-click" style="--kc:${t[4]}" onclick="PT.weekTile('${t[5]}','${esc(t[0])}')"><span class="pt-tile__i">${ico(t[3], 18)}</span><div><div class="pt-tile__l">${t[0]}</div><div class="pt-tile__v">${t[1]}</div>${dl(t[1], t[2])}</div></div>`).join('')}</div>
       <p class="pt-week__s">${sent}</p></div>`;
+  }
+  // Detalle detrás de cada tile de "Esta semana/mes" — clic en "Respuestas: 9" abre
+  // la lista real de esos 9 contactos, no solo el número (pedido explícito 2026-09-28).
+  async function openWeekModal(kind, label) {
+    const w = S.wk; if (!w) return;
+    const m = document.createElement('div'); m.className = 'pt-modal'; m.onclick = ev => { if (ev.target === m) m.remove(); };
+    m.innerHTML = `<div class="pt-modal__box" style="max-width:480px"><button class="pt-modal__x" id="pt-wkx" title="Cerrar">✕</button><h3>${esc(label)}</h3><div class="pt-item__s" style="margin:-4px 0 10px">${fshort(w.r.from)} – ${fshort(w.r.to)}</div><div id="pt-wk-body"><div class="pt-empty">Cargando…</div></div></div>`;
+    root.appendChild(m); m.querySelector('#pt-wkx').onclick = () => m.remove();
+    const body = m.querySelector('#pt-wk-body');
+    try {
+      const rows = await api(`/portal/week-items?kind=${kind}&from=${isoL(w.r.from)}&to=${isoL(w.r.to)}`);
+      if (!m.isConnected) return;
+      if (!rows.length) { body.innerHTML = '<div class="pt-empty">Sin registros en este período</div>'; return; }
+      body.innerHTML = rows.map(r => {
+        const right = kind === 'meetings'
+          ? (r.valor ? `<span style="color:#15803D">${money2(r.valor, r.moneda)}</span>` : '')
+          : `<span style="font-weight:500;color:#94A3B8;font-size:12px">${r.n} ${kind === 'replies' ? (r.n === 1 ? 'respuesta' : 'respuestas') : (r.n === 1 ? 'toque' : 'toques')}</span>`;
+        const sub = kind === 'meetings'
+          ? `${esc(r.empresa || '')}${r.fecha ? ' · reunión ' + fdate(r.fecha, { day: 'numeric', month: 'short', timeZone: 'UTC' }) : ''}`
+          : `${esc(r.empresa || '')}${r.ultima ? ' · ' + ago(r.ultima) : ''}`;
+        return `<div class="pt-item pt-click" onclick="PT.open(${r.contact_id})"><div class="pt-item__t"><span>${person(r)}</span>${right}</div><div class="pt-item__s">${sub}</div></div>`;
+      }).join('');
+    } catch (e) { if (body) body.innerHTML = '<div class="pt-empty">Error al cargar</div>'; }
   }
   const STEP_ICO = { linkedin: ['in', '#7C5CE0'], email: ['mail', '#2563EB'], whatsapp: ['chat', '#22A06B'], call: ['phone', '#F59E0B'], task: ['dots', '#94A3B8'] };
   function stepsHtml(q) {
