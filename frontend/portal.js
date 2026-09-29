@@ -419,7 +419,7 @@
     const mc = w.cur.deals ? w.cur.deals.agendadas : null, mp = w.prev.deals ? w.prev.deals.agendadas : 0;
     const tiles = [['Contactos alcanzados', c.contacted, p.contacted, 'users', '#22A06B', 'contacted'], ['Respuestas', c.replies, p.replies, 'reply', '#F59E0B', 'replies'], mc == null ? null : ['Reuniones agendadas', mc, mp, 'handshake', '#7C5CE0', 'meetings'], ['Toques realizados', c.touches, p.touches, 'send', '#2563EB', 'touches']].filter(Boolean);
     const extraTiles = [
-      { ic: 'in', l: 'Aceptación LinkedIn', v: pct(c.accepts, c.invites) + '%', dl: dl(pct(c.accepts, c.invites), pct(p.accepts, p.invites)), sub: '' },
+      { ic: 'in', l: 'Aceptación LinkedIn', v: c.invites ? pct(c.accepts, c.invites) + '%' : c.accepts, dl: c.invites ? dl(pct(c.accepts, c.invites), pct(p.accepts, p.invites)) : dl(c.accepts, p.accepts), sub: '' },
       { ic: 'mailopen', l: 'Apertura email', v: c.sent ? pct(c.opened, c.sent) + '%' : '—', dl: '<span class="dash-d dash-d--0">estimada</span>', sub: '' },
     ];
     const sent = `${c.contacted} contactos alcanzados · ${c.replies} respuestas${mc == null ? '' : ' · ' + mc + (mc === 1 ? ' reunión agendada' : ' reuniones agendadas')}`;
