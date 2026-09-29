@@ -17233,3 +17233,36 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .pa-views{display:flex;align-items:center;gap:14px;margin-top:6px;font-size:12px;color:#475569;flex-wrap:wrap}
 .pa-views>span{font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:#8A94A6;font-weight:600}
 .pa-views label{display:flex;align-items:center;gap:5px;white-space:nowrap}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   PARIDAD FINAL: panel principal (.snav-item, #sidebar) == barra de Outreach
+   (.lm2-nav__item) — pedido explícito repetido: "no puedo tener diferentes
+   estilos... todo pertenece al mismo sistema... quiero que se quede como
+   está en el modo de outreach... mismo espaciado alineado, todo".
+   Se habían acumulado reglas contradictorias para .lm2-nav__item en al
+   menos 6 puntos distintos del archivo (padding 7px10px / 0 10px / 0 12px,
+   border-radius 0 / 999px). Este bloque va al FINAL del archivo a propósito:
+   gana por orden de cascada sin depender de adivinar especificidad, y es el
+   único lugar que hay que tocar de ahora en más para estos dos componentes.
+   ══════════════════════════════════════════════════════════════════════════ */
+.snav-item, .lm2-nav__item {
+  display: flex; align-items: center; gap: 11px; width: 100%;
+  height: 36px; min-height: 36px; padding: 0 12px;
+  border: none; border-radius: 0; background: transparent;
+  font-family: var(--font); font-size: 14px; font-weight: 500; letter-spacing: -.01em;
+  color: var(--text2, #6C6862); cursor: pointer; text-align: left;
+  transition: background .15s, color .15s; box-sizing: border-box;
+}
+.snav-item svg, .lm2-nav__item svg { width: 17px; height: 17px; stroke-width: 1.75; flex-shrink: 0; }
+.snav-item:hover:not(.active), .lm2-nav__item:hover:not(.active) { background: #F1EFEB; }
+.snav-item.active, .lm2-nav__item.active {
+  height: 36px; min-height: 36px; border-radius: 0;
+  background: var(--brand-ll, #EAF2FF); color: var(--brand-d, #0062CC); font-weight: 650;
+}
+.snav-item.active svg, .lm2-nav__item.active svg { color: var(--brand-d, #0062CC); }
+.snav-item.active .snav-item__label, .lm2-nav__item.active .lm2-nav__lbl { font-weight: 650; color: var(--brand-d, #0062CC); }
+.snav-cat, .lm2-nav__grp {
+  font-size: 10px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase;
+  color: var(--muted, #B4AFA8); padding: 8px 14px 3px; white-space: nowrap;
+}
+.sidebar__nav, .lm2-nav__list { gap: 1px; padding: 8px 10px; }
