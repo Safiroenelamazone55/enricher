@@ -419,9 +419,9 @@
     const mc = w.cur.deals ? w.cur.deals.agendadas : null, mp = w.prev.deals ? w.prev.deals.agendadas : 0;
     const tiles = [['Contactos alcanzados', c.contacted, p.contacted, 'users', '#22A06B', 'contacted'], ['Respuestas', c.replies, p.replies, 'reply', '#F59E0B', 'replies'], mc == null ? null : ['Reuniones agendadas', mc, mp, 'handshake', '#7C5CE0', 'meetings'], ['Toques realizados', c.touches, p.touches, 'send', '#2563EB', 'touches']].filter(Boolean);
     const extraTiles = [
-      { ic: 'in', l: 'Aceptación LinkedIn', v: pct(c.accepts, c.invites) + '%', dl: dl(pct(c.accepts, c.invites), pct(p.accepts, p.invites)), sub: `${c.accepts} de ${c.invites} invitaciones` },
+      { ic: 'in', l: 'Aceptación LinkedIn', v: pct(c.accepts, c.invites) + '%', dl: dl(pct(c.accepts, c.invites), pct(p.accepts, p.invites)), sub: '' },
       { ic: 'mail', l: 'Emails enviados', v: c.emails, dl: dl(c.emails, p.emails), sub: c.bounced ? `${c.bounced} rebotados` : 'sin rebotes' },
-      { ic: 'mailopen', l: 'Apertura email', v: c.sent ? pct(c.opened, c.sent) + '%' : '—', dl: '<span class="dash-d dash-d--0">estimada</span>', sub: `sobre ${c.sent} envíos` },
+      { ic: 'mailopen', l: 'Apertura email', v: c.sent ? pct(c.opened, c.sent) + '%' : '—', dl: '<span class="dash-d dash-d--0">estimada</span>', sub: '' },
     ];
     const sent = `${c.contacted} contactos alcanzados · ${c.replies} respuestas${mc == null ? '' : ' · ' + mc + (mc === 1 ? ' reunión agendada' : ' reuniones agendadas')}`;
     const title = S.per === 'month' ? 'Este mes' : S.per === 'trim' ? 'Este trimestre' : S.per === 'custom' ? 'Rango elegido' : 'Esta semana';
@@ -434,8 +434,7 @@
     return `<div class="pt-week"><div class="pt-week__h"><div><h2>${title}</h2><span class="pt-week__r">${fshort(w.r.from)} – ${fshort(w.r.to)}</span></div>
       <div class="dash-seg"><button class="dash-seg__b${S.per === 'week' ? ' on' : ''}" onclick="PT.per('week')">Semana</button><button class="dash-seg__b${S.per === 'month' ? ' on' : ''}" onclick="PT.per('month')">Mes</button><button class="dash-seg__b${S.per === 'trim' ? ' on' : ''}" onclick="PT.per('trim')">Trimestre</button><button class="dash-seg__b${S.per === 'custom' ? ' on' : ''}" onclick="PT.per('custom')">Personalizado</button></div></div>
       ${customRow}
-      <div class="pt-week__k">${tiles.map(t => `<div class="pt-tile pt-click" style="--kc:${t[4]}" onclick="PT.weekTile('${t[5]}','${esc(t[0])}')"><span class="pt-tile__i">${ico(t[3], 18)}</span><div><div class="pt-tile__l">${t[0]}</div><div class="pt-tile__v">${t[1]}</div>${dl(t[1], t[2])}</div></div>`).join('')}</div>
-      <div class="pt-week__k" style="margin-top:12px">${extraTiles.map(t => `<div class="pt-tile"><span class="pt-tile__i">${ico(t.ic, 18)}</span><div><div class="pt-tile__l">${t.l}</div><div class="pt-tile__v">${t.v}</div>${t.dl}<div class="pt-week__s" style="margin-top:2px">${t.sub}</div></div></div>`).join('')}</div>
+      <div class="pt-week__k pt-week__k--7">${tiles.map(t => `<div class="pt-tile pt-click" style="--kc:${t[4]}" onclick="PT.weekTile('${t[5]}','${esc(t[0])}')"><span class="pt-tile__i">${ico(t[3], 18)}</span><div><div class="pt-tile__l">${t[0]}</div><div class="pt-tile__v">${t[1]}</div>${dl(t[1], t[2])}</div></div>`).join('')}${extraTiles.map(t => `<div class="pt-tile"><span class="pt-tile__i">${ico(t.ic, 18)}</span><div><div class="pt-tile__l">${t.l}</div><div class="pt-tile__v">${t.v}</div>${t.dl}${t.sub ? `<div class="pt-week__s" style="margin-top:2px">${t.sub}</div>` : ''}</div></div>`).join('')}</div>
       <p class="pt-week__s">${sent}</p>
       <div class="pt-trend">
         <div class="pt-trend__h"><div><h3>Tendencia</h3><span>Evolución diaria del período seleccionado</span></div><div class="dash-legend" id="pt-wkline-leg"></div></div>

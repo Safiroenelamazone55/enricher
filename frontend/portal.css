@@ -287,6 +287,9 @@ button{cursor:pointer}
 .pt-week__h h2{font-size:20px;letter-spacing:-.01em;display:inline}
 .pt-week__r{color:#64748B;font-size:13px;margin-left:10px}
 .pt-week__k{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.pt-week__k--7{grid-template-columns:repeat(7,minmax(0,1fr))}
+@media(max-width:1280px){.pt-week__k--7{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:640px){.pt-week__k--7{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .pt-tile{display:flex;gap:12px;align-items:flex-start;border:1px solid #E7EBF0;background:#fff;padding:14px 16px;transition:border-color .15s,box-shadow .15s}
 .pt-tile.pt-click:hover{border-color:#D9DEE3;box-shadow:0 1px 3px rgba(15,23,42,.05)}
 .pt-tile__i{display:grid;place-items:center;width:30px;height:30px;color:#334155;flex:none}
