@@ -7967,7 +7967,7 @@ const CanteraGlobalModule = (() => {
     if (!_opts) { try { _opts = await (await apiFetch(`${API}/cantera/opciones-filtro`)).json(); } catch { _opts = {}; } }
     await _search(); el.innerHTML = _html();
   }
-  async function _search() {
+  function _buildFilterParams() {
     const p = new URLSearchParams();
     if (_q) p.set('q', _q);
     if (_origen) p.set('origen', _origen);
@@ -7992,12 +7992,38 @@ const CanteraGlobalModule = (() => {
     if (_filtros.ciudad.length) p.set('ciudad', _filtros.ciudad.join(','));
     if (_filtrosExcl.ciudad.length) p.set('ciudadExcl', _filtrosExcl.ciudad.join(','));
     if (_vista) p.set('tipo', _vista);
+    return p;
+  }
+  async function _search() {
+    const p = _buildFilterParams();
     p.set('page', _page); p.set('pageSize', _pageSize());
     try {
       const r = await apiFetch(`${API}/cantera/global?${p.toString()}`);
       const d = r.ok ? await r.json() : { rows: [], total: 0 };
       _rows = d.rows || []; _total = d.total || 0;
     } catch { _rows = []; _total = 0; }
+  }
+  // Conteos "cuántos quedarían" por opción de cada desplegable (pedido
+  // explícito: "números pequeños plomo sutil... la cantidad que quedaría por
+  // secuencia, industria o algún otro filtro"). Se piden al abrir/filtrar
+  // cada desplegable, con el resto de filtros activos como contexto (el
+  // backend ignora el filtro del propio campo al calcular esto).
+  let _facetTok = 0;
+  const _facetCache = {};
+  async function _loadFacets(field, opts) {
+    if (!opts.length) return;
+    const tok = ++_facetTok;
+    const p = _buildFilterParams();
+    p.set('field', field); p.set('values', opts.join('|||'));
+    try {
+      const r = await apiFetch(`${API}/cantera/global/facets?${p.toString()}`);
+      const d = r.ok ? await r.json() : [];
+      if (tok !== _facetTok) return; // el usuario ya cambió de campo/filtro
+      _facetCache[field] = _facetCache[field] || {};
+      d.forEach(x => { _facetCache[field][x.value] = x.n; });
+      const menu = document.getElementById('tag-menu-' + field);
+      if (menu && !menu.hidden) menu.innerHTML = opts.map(o => _taOptRow(field, o)).join('') || `<div class="ta-none">Sin opciones</div>`;
+    } catch (_) {}
   }
   function _origenLabel(o) {
     if (o === 'crm') return 'En CRM';
@@ -8173,9 +8199,9 @@ const CanteraGlobalModule = (() => {
   }
   function toggleCollapse() { _collapsed = !_collapsed; _repaint(); }
   let _t = null;
-  function setQ(v) { _q = v; _page = 0; clearTimeout(_t); _t = setTimeout(async () => { await _search(); _repaint(); }, 300); }
-  async function setOrigen(v) { _origen = v; _page = 0; await _search(); _repaint(); }
-  async function setVista(v) { _vista = v; _page = 0; await _search(); _repaint(); }
+  function setQ(v) { _q = v; _page = 0; _clearFacets(); clearTimeout(_t); _t = setTimeout(async () => { await _search(); _repaint(); }, 300); }
+  async function setOrigen(v) { _origen = v; _page = 0; _clearFacets(); await _search(); _repaint(); }
+  async function setVista(v) { _vista = v; _page = 0; _clearFacets(); await _search(); _repaint(); }
   function setPageSize(n) { try { localStorage.setItem('cantera_global_page_size', String(parseInt(n) || 50)); } catch (_) {} _page = 0; _search().then(_repaint); }
   function goPage(d) { _page = Math.max(0, _page + d); _search().then(_repaint); }
   function _gOptions(field) {
@@ -8196,8 +8222,11 @@ const CanteraGlobalModule = (() => {
   // un único click que solo podía incluir.
   function _taOptRow(field, o) {
     const jv = esc(o).replace(/'/g, "\\'");
+    const n = _facetCache[field] && _facetCache[field][o];
+    const count = n != null ? `<span class="ta-opt__n">${n}</span>` : '';
     return `<div class="ta-opt ta-opt--row">
       <span class="ta-opt__v">${esc(o)}</span>
+      ${count}
       <span class="ta-opt__ops">
         <span class="ta-opt__op" onmousedown="event.preventDefault();CanteraGlobalModule.addFiltro('${field}','${jv}')">Incluir</span>
         <span class="ta-opt__sep">|</span>
@@ -8207,8 +8236,10 @@ const CanteraGlobalModule = (() => {
   }
   function taOpen(field) {
     const menu = document.getElementById('tag-menu-' + field); if (!menu) return;
-    menu.innerHTML = _gOptions(field).map(o => _taOptRow(field, o)).join('') || `<div class="ta-none">Sin opciones</div>`;
+    const opts = _gOptions(field);
+    menu.innerHTML = opts.map(o => _taOptRow(field, o)).join('') || `<div class="ta-none">Sin opciones</div>`;
     menu.hidden = false;
+    _loadFacets(field, opts);
   }
   function taFilter(field) {
     const wrap = document.querySelector(`.filter-field[data-ta="${field}"]`); const inp = wrap?.querySelector('.ta-input'); const menu = document.getElementById('tag-menu-' + field);
@@ -8217,12 +8248,14 @@ const CanteraGlobalModule = (() => {
     const opts = _gOptions(field).filter(o => o.toLowerCase().includes(f));
     menu.innerHTML = opts.map(o => _taOptRow(field, o)).join('') || `<div class="ta-none">Sin coincidencias</div>`;
     menu.hidden = false;
+    _loadFacets(field, opts);
   }
   function taBlur(field) { setTimeout(() => { const m = document.getElementById('tag-menu-' + field); if (m) m.hidden = true; }, 160); }
-  async function addFiltro(field, value) { _filtros[field] = [...(_filtros[field] || []), value]; _page = 0; await _search(); _repaint(); }
-  async function removeFiltro(field, idx) { _filtros[field].splice(idx, 1); _page = 0; await _search(); _repaint(); }
-  async function addFiltroExcl(field, value) { _filtrosExcl[field] = [...(_filtrosExcl[field] || []), value]; _page = 0; await _search(); _repaint(); }
-  async function removeFiltroExcl(field, idx) { _filtrosExcl[field].splice(idx, 1); _page = 0; await _search(); _repaint(); }
+  function _clearFacets() { for (const k in _facetCache) delete _facetCache[k]; }
+  async function addFiltro(field, value) { _filtros[field] = [...(_filtros[field] || []), value]; _page = 0; _clearFacets(); await _search(); _repaint(); }
+  async function removeFiltro(field, idx) { _filtros[field].splice(idx, 1); _page = 0; _clearFacets(); await _search(); _repaint(); }
+  async function addFiltroExcl(field, value) { _filtrosExcl[field] = [...(_filtrosExcl[field] || []), value]; _page = 0; _clearFacets(); await _search(); _repaint(); }
+  async function removeFiltroExcl(field, idx) { _filtrosExcl[field].splice(idx, 1); _page = 0; _clearFacets(); await _search(); _repaint(); }
   // Abre la MISMA modal "Validación manual" que ya existe en Mesa de trabajo
   // (mismos endpoints, mismo Tier/Prioridad/Confianza/Nota) — se reusa en vez
   // de duplicarla. Solo hace falta "primar" la fila en el _knownRows de Mesa

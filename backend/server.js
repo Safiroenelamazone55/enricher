@@ -7482,6 +7482,175 @@ app.get('/api/cantera/companies/:id', requireAuth, async (req, res) => {
     res.json(rows[0]);
   } catch (err) { console.error('[cantera] GET company', err.message); res.status(500).json({ error: 'Error al cargar la empresa' }); }
 });
+// ── Base Global: fetch crudo compartido entre /global y /global/facets ──────
+async function _cGlobalFetchAll(uid, q, tipo) {
+  const { rows: all } = tipo === 'empresa' ? await pool.query(`
+    SELECT '' AS nombre, '' AS apellido, '' AS cargo, '' AS email,
+           lco.nombre AS empresa, lco.dominio, lco.pais, lco.industria, lco.tamano, 'crm' AS origen,
+           (SELECT nombre FROM outbound_clients oc WHERE oc.id = lco.outbound_client_id) AS referencia,
+           lco.updated_at, '' AS estado, 'empresa' AS tipo,
+           (SELECT string_agg(DISTINCT s.nombre, ', ') FROM lm_contacts k JOIN lm_contact_sequences csq ON csq.contact_id = k.id JOIN sequences s ON s.id = csq.sequence_id WHERE k.company_id = lco.id) AS secuencias,
+           '' AS seniority, '' AS departamento, lco.ciudad AS ciudad, lco.target_tier AS tier,
+           cx.paso1_estado AS paso1_estado, cx.paso2_estado AS paso2_estado, cx.id AS company_id, cx.batch_id AS batch_id
+      FROM lm_companies lco
+      LEFT JOIN LATERAL (SELECT c2.id, c2.batch_id, c2.paso1_estado, c2.paso2_estado FROM cantera_companies c2
+        WHERE c2.user_id = lco.user_id AND lco.dominio <> '' AND lower(c2.dominio) = lower(lco.dominio) ORDER BY c2.id DESC LIMIT 1) cx ON true
+     WHERE lco.user_id=$1 AND ($2 = '%%' OR lco.nombre ILIKE $2 OR lco.dominio ILIKE $2)
+    UNION ALL
+    SELECT '', '', '', '', cco.nombre AS empresa, cco.dominio, cco.pais, cco.industria, cco.tamano,
+           'borrador_' || cb.estado AS origen, cb.nombre AS referencia, cco.created_at AS updated_at,
+           '' AS estado, 'empresa' AS tipo, '' AS secuencias, '' AS seniority, '' AS departamento, '' AS ciudad, cco.tier_clave AS tier, cco.paso1_estado AS paso1_estado, cco.paso2_estado AS paso2_estado, cco.id AS company_id, cco.batch_id AS batch_id
+      FROM cantera_companies cco JOIN cantera_batches cb ON cb.id = cco.batch_id
+     WHERE cco.user_id=$1 AND ($2 = '%%' OR cco.nombre ILIKE $2 OR cco.dominio ILIKE $2)
+     ORDER BY updated_at DESC LIMIT 20000
+  `, [uid, q]) : await pool.query(`
+    SELECT lc.nombre, lc.apellido, lc.cargo, lc.email,
+           COALESCE(co.nombre, lc.empresa_nombre) AS empresa, co.dominio,
+           COALESCE(co.pais, lc.pais) AS pais, co.industria, co.tamano, 'crm' AS origen,
+           (SELECT nombre FROM outbound_clients oc WHERE oc.id = co.outbound_client_id) AS referencia,
+           lc.updated_at, lc.estado AS estado, 'contacto' AS tipo,
+           (SELECT string_agg(DISTINCT s.nombre, ', ') FROM lm_contact_sequences csq JOIN sequences s ON s.id = csq.sequence_id WHERE csq.contact_id = lc.id) AS secuencias,
+           lc.seniority AS seniority, lc.departamento AS departamento, lc.ciudad AS ciudad, co.target_tier AS tier,
+           cx.paso1_estado AS paso1_estado, cx.paso2_estado AS paso2_estado, cx.id AS company_id, cx.batch_id AS batch_id
+      FROM lm_contacts lc LEFT JOIN lm_companies co ON co.id = lc.company_id
+      LEFT JOIN LATERAL (SELECT c2.id, c2.batch_id, c2.paso1_estado, c2.paso2_estado FROM cantera_companies c2
+        WHERE c2.user_id = lc.user_id AND co.dominio IS NOT NULL AND co.dominio <> '' AND lower(c2.dominio) = lower(co.dominio) ORDER BY c2.id DESC LIMIT 1) cx ON true
+     WHERE lc.user_id=$1 AND ($2 = '%%' OR lc.nombre ILIKE $2 OR lc.apellido ILIKE $2 OR lc.email ILIKE $2 OR lc.cargo ILIKE $2 OR COALESCE(co.nombre, lc.empresa_nombre) ILIKE $2)
+    UNION ALL
+    SELECT cc.nombre, cc.apellido, cc.cargo, cc.email,
+           cco.nombre AS empresa, cco.dominio, cco.pais, cco.industria, cco.tamano,
+           'borrador_' || cb.estado AS origen, cb.nombre AS referencia, cc.created_at AS updated_at,
+           '' AS estado, 'contacto' AS tipo, '' AS secuencias, '' AS seniority, '' AS departamento, '' AS ciudad, cco.tier_clave AS tier, cco.paso1_estado AS paso1_estado, cco.paso2_estado AS paso2_estado, cco.id AS company_id, cco.batch_id AS batch_id
+      FROM cantera_contacts cc
+      JOIN cantera_companies cco ON cco.id = cc.company_id
+      JOIN cantera_batches cb ON cb.id = cc.batch_id
+     WHERE cc.user_id=$1 AND ($2 = '%%' OR cc.nombre ILIKE $2 OR cc.apellido ILIKE $2 OR cc.email ILIKE $2 OR cc.cargo ILIKE $2 OR cco.nombre ILIKE $2)
+    UNION ALL
+    SELECT '', '', '', '', lco.nombre AS empresa, lco.dominio, lco.pais, lco.industria, lco.tamano, 'crm' AS origen,
+           (SELECT nombre FROM outbound_clients oc WHERE oc.id = lco.outbound_client_id) AS referencia, lco.updated_at,
+           '' AS estado, 'empresa' AS tipo, '' AS secuencias, '' AS seniority, '' AS departamento, lco.ciudad AS ciudad, lco.target_tier AS tier,
+           cx.paso1_estado AS paso1_estado, cx.paso2_estado AS paso2_estado, cx.id AS company_id, cx.batch_id AS batch_id
+      FROM lm_companies lco
+      LEFT JOIN LATERAL (SELECT c2.id, c2.batch_id, c2.paso1_estado, c2.paso2_estado FROM cantera_companies c2
+        WHERE c2.user_id = lco.user_id AND lco.dominio <> '' AND lower(c2.dominio) = lower(lco.dominio) ORDER BY c2.id DESC LIMIT 1) cx ON true
+     WHERE lco.user_id=$1 AND NOT EXISTS (SELECT 1 FROM lm_contacts x WHERE x.company_id = lco.id)
+       AND ($2 = '%%' OR lco.nombre ILIKE $2 OR lco.dominio ILIKE $2)
+    UNION ALL
+    SELECT '', '', '', '', cco2.nombre AS empresa, cco2.dominio, cco2.pais, cco2.industria, cco2.tamano,
+           'borrador_' || cb2.estado AS origen, cb2.nombre AS referencia, cco2.created_at AS updated_at,
+           '' AS estado, 'empresa' AS tipo, '' AS secuencias, '' AS seniority, '' AS departamento, '' AS ciudad, cco2.tier_clave AS tier, cco2.paso1_estado AS paso1_estado, cco2.paso2_estado AS paso2_estado, cco2.id AS company_id, cco2.batch_id AS batch_id
+      FROM cantera_companies cco2 JOIN cantera_batches cb2 ON cb2.id = cco2.batch_id
+     WHERE cco2.user_id=$1 AND NOT EXISTS (SELECT 1 FROM cantera_contacts y WHERE y.company_id = cco2.id)
+       AND ($2 = '%%' OR cco2.nombre ILIKE $2 OR cco2.dominio ILIKE $2)
+     ORDER BY updated_at DESC LIMIT 20000
+  `, [uid, q]);
+  return all;
+}
+function _cGlobalParseFilters(req) {
+  const F = {};
+  F.q = `%${(req.query.q || '').trim()}%`;
+  F.paises = String(req.query.pais || '').split(',').map(_cantNormPais).filter(Boolean);
+  F.industrias = String(req.query.industria || '').split(',').map(s => _cantNormText(s)).filter(Boolean);
+  F.tamanos = String(req.query.tamano || '').split(',').filter(Boolean);
+  F.paisesExcl = String(req.query.paisExcl || '').split(',').map(_cantNormPais).filter(Boolean);
+  F.industriasExcl = String(req.query.industriaExcl || '').split(',').map(s => _cantNormText(s)).filter(Boolean);
+  F.tamanosExcl = String(req.query.tamanoExcl || '').split(',').filter(Boolean);
+  F.tiers = String(req.query.tier || '').split(',').filter(Boolean);
+  F.tiersExcl = String(req.query.tierExcl || '').split(',').filter(Boolean);
+  F.origen = req.query.origen === 'crm' || req.query.origen === 'borrador' ? req.query.origen : '';
+  F.estados = String(req.query.estado || '').split(',').filter(Boolean);
+  F.estadosExcl = String(req.query.estadoExcl || '').split(',').filter(Boolean);
+  F.secuencias = String(req.query.secuencia || '').split(',').filter(Boolean);
+  F.secuenciasExcl = String(req.query.secuenciaExcl || '').split(',').filter(Boolean);
+  F.clientes = String(req.query.cliente || '').split(',').filter(Boolean);
+  F.clientesExcl = String(req.query.clienteExcl || '').split(',').filter(Boolean);
+  F.seniorities = String(req.query.seniority || '').split(',').filter(Boolean);
+  F.senioritiesExcl = String(req.query.seniorityExcl || '').split(',').filter(Boolean);
+  F.departamentos = String(req.query.departamento || '').split(',').filter(Boolean);
+  F.departamentosExcl = String(req.query.departamentoExcl || '').split(',').filter(Boolean);
+  F.ciudades = String(req.query.ciudad || '').split(',').filter(Boolean);
+  F.ciudadesExcl = String(req.query.ciudadExcl || '').split(',').filter(Boolean);
+  F.tipo = req.query.tipo === 'contacto' || req.query.tipo === 'empresa' ? req.query.tipo : '';
+  return F;
+}
+// skip: nombre de campo a ignorar (para calcular cuántos quedarían si se
+// tocara justo ESE filtro) — pedido explícito: "ver en números pequeños...
+// la cantidad que quedaría por secuencia, industria o algún otro filtro".
+function _cGlobalMatch(r, F, skip) {
+  if (F.origen === 'crm' && r.origen !== 'crm') return false;
+  if (F.origen === 'borrador' && r.origen === 'crm') return false;
+  if (skip !== 'pais') {
+    if (F.paises.length && !F.paises.includes(_cantNormPais(r.pais))) return false;
+    if (F.paisesExcl.length && F.paisesExcl.includes(_cantNormPais(r.pais))) return false;
+  }
+  if (skip !== 'industria') {
+    if (F.industrias.length && !F.industrias.some(i => _cantNormText(r.industria).includes(i))) return false;
+    if (F.industriasExcl.length && F.industriasExcl.some(i => _cantNormText(r.industria).includes(i))) return false;
+  }
+  if (skip !== 'tamano') {
+    if (F.tamanos.length && r.tamano && !F.tamanos.includes(r.tamano)) return false;
+    if (F.tamanosExcl.length && F.tamanosExcl.includes(r.tamano)) return false;
+  }
+  if (skip !== 'tier') {
+    if (F.tiers.length && !F.tiers.includes(_cantNormTier(r.tier))) return false;
+    if (F.tiersExcl.length && F.tiersExcl.includes(_cantNormTier(r.tier))) return false;
+  }
+  if (F.tipo && r.tipo !== F.tipo) return false;
+  if (skip !== 'estado') {
+    if (F.estados.length && !F.estados.includes(r.estado)) return false;
+    if (F.estadosExcl.length && F.estadosExcl.includes(r.estado)) return false;
+  }
+  const rSeqs = (r.secuencias || '').split(',').map(s => s.trim()).filter(Boolean);
+  if (skip !== 'secuencia') {
+    if (F.secuencias.length && !F.secuencias.some(s => rSeqs.includes(s))) return false;
+    if (F.secuenciasExcl.length && F.secuenciasExcl.some(s => rSeqs.includes(s))) return false;
+  }
+  if (skip !== 'cliente') {
+    if (F.clientes.length && !F.clientes.includes(r.referencia || '')) return false;
+    if (F.clientesExcl.length && F.clientesExcl.includes(r.referencia || '')) return false;
+  }
+  if (skip !== 'seniority') {
+    if (F.seniorities.length && !F.seniorities.includes(r.seniority || '')) return false;
+    if (F.senioritiesExcl.length && F.senioritiesExcl.includes(r.seniority || '')) return false;
+  }
+  if (skip !== 'departamento') {
+    if (F.departamentos.length && !F.departamentos.includes(r.departamento || '')) return false;
+    if (F.departamentosExcl.length && F.departamentosExcl.includes(r.departamento || '')) return false;
+  }
+  if (skip !== 'ciudad') {
+    if (F.ciudades.length && !F.ciudades.includes(r.ciudad || '')) return false;
+    if (F.ciudadesExcl.length && F.ciudadesExcl.includes(r.ciudad || '')) return false;
+  }
+  return true;
+}
+// ¿esta fila cuenta para ESTE candidato puntual de ESTE campo? — mismo
+// criterio (normalizado/substring) que usa el filtro real, para que el
+// número mostrado sea exactamente "cuántos quedarían si eligieras esto".
+function _cGlobalFieldMatch(r, field, value) {
+  if (field === 'pais') return _cantNormPais(r.pais) === _cantNormPais(value);
+  if (field === 'industria') return _cantNormText(r.industria).includes(_cantNormText(value));
+  if (field === 'tier') return _cantNormTier(r.tier) === _cantNormTier(value);
+  if (field === 'tamano') return r.tamano === value;
+  if (field === 'estado') return r.estado === value;
+  if (field === 'cliente') return (r.referencia || '') === value;
+  if (field === 'seniority') return (r.seniority || '') === value;
+  if (field === 'departamento') return (r.departamento || '') === value;
+  if (field === 'ciudad') return (r.ciudad || '') === value;
+  if (field === 'secuencia') return (r.secuencias || '').split(',').map(s => s.trim()).filter(Boolean).includes(value);
+  return false;
+}
+app.get('/api/cantera/global/facets', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId;
+  const field = String(req.query.field || '');
+  const values = String(req.query.values || '').split('|||').map(s => s.trim()).filter(Boolean);
+  if (!field || !values.length) return res.json([]);
+  try {
+    const F = _cGlobalParseFilters(req);
+    const all = await _cGlobalFetchAll(uid, F.q, F.tipo);
+    const base = all.filter(r => _cGlobalMatch(r, F, field));
+    res.json(values.map(value => ({ value, n: base.filter(r => _cGlobalFieldMatch(r, field, value)).length })));
+  } catch (err) { console.error('[cantera] GET global/facets', err.message); res.status(500).json({ error: 'Error al calcular conteos' }); }
+});
 app.get('/api/cantera/global', requireAuth, async (req, res) => {
   const uid = req.workspaceOwnerId;
   const q = `%${(req.query.q || '').trim()}%`;
