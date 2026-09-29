@@ -4,7 +4,7 @@
   const API = /^(localhost|127\.)/.test(location.hostname) ? 'http://localhost:3000/api' : 'https://api.novacentrax.com/api';
   const root = document.getElementById('pt-root');
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const S = { me: null, tab: 'inicio', range: '30d', seq: '', dash: null, hl: null, feed: null, seqs: null, cos: null, cts: null, q: '', co: 0, last: 0, timer: null, chatOpen: false, chat: [], chatLast: 0, unread: 0, charts: [], gran: 'auto' };
+  const S = { me: null, tab: 'inicio', range: '30d', seq: '', dash: null, hl: null, feed: null, seqs: null, cos: null, cts: null, q: '', co: 0, last: 0, timer: null, chatOpen: false, chat: [], chatLast: 0, unread: 0, charts: [], gran: 'auto', seenChat: (function () { try { return parseInt(localStorage.getItem('pt_chat_seen')) || 0; } catch (e) { return 0; } })() };
 
   async function api(path, opt) {
     const o = opt || {};
@@ -217,7 +217,7 @@
       };
     };
     if (S.me.sections.chat) {
-      document.getElementById('pt-cb').onclick = () => { S.chatOpen = true; S.seenChat = S.chatLast; S.unread = 0; drawChat(); };
+      document.getElementById('pt-cb').onclick = () => { S.chatOpen = true; S.seenChat = S.chatLast; try { localStorage.setItem('pt_chat_seen', S.seenChat); } catch (e) {} S.unread = 0; drawChat(); };
       document.getElementById('pt-cc').onclick = () => { S.chatOpen = false; drawChat(); };
       document.getElementById('pt-cf').onsubmit = sendChat;
       const fi = document.getElementById('pt-cfile');
@@ -832,7 +832,7 @@
       if (r.messages.length) { S.chat = S.chat.concat(r.messages.filter(x => !S.chat.some(y => y.id === x.id))); S.chatLast = S.chat[S.chat.length - 1].id; }
       const unreadNow = S.chat.filter(x => x.autor === 'equipo' && x.id > (S.seenChat || 0)).length;
       S.unread = S.chatOpen ? 0 : unreadNow;
-      if (S.chatOpen && S.chat.length) S.seenChat = S.chatLast;
+      if (S.chatOpen && S.chat.length) { S.seenChat = S.chatLast; try { localStorage.setItem('pt_chat_seen', S.seenChat); } catch (e) {} }
       drawChat();
     } catch (e) {}
   }
