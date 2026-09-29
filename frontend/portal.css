@@ -154,7 +154,8 @@ button{cursor:pointer}
 .dash-funnel{display:flex;flex-direction:column;gap:14px;position:relative;padding-top:4px}
 .dash-fn{display:flex;align-items:center;gap:12px;position:relative}
 .dash-fn:not(:last-child)::after{content:"";position:absolute;left:17px;top:38px;height:18px;border-left:2px dotted #CBD5E1}
-.dash-fn__ic{display:grid;place-items:center;width:36px;height:36px;border-radius:50%;color:#fff;flex:none}
+.dash-fn__ic{display:grid;place-items:center;width:26px;height:26px;color:#334155;flex:none}
+.dash-fn__ic svg{width:24px;height:24px;stroke-width:1.5}
 .dash-fn__b{flex:1;min-width:0}
 .dash-fn__top{display:flex;align-items:baseline;gap:8px;margin-bottom:5px}
 .dash-fn__l{font-size:14px;font-weight:600;color:#0F172A}
@@ -184,7 +185,8 @@ button{cursor:pointer}
 .pt-dash .clients-table tbody tr:hover{background:#F8FAFC}
 .pt-dash .clients-table b{color:#0F172A}
 .pt-dash .clients-table th:not(:first-child),.pt-dash .clients-table td:not(:first-child){text-align:center}
-.dash-cic{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;color:#fff;margin-right:8px;vertical-align:middle;font-size:9px}
+.dash-cic{display:inline-grid;place-items:center;width:18px;height:18px;color:#334155;margin-right:8px;vertical-align:middle}
+.dash-cic svg{width:17px;height:17px;stroke-width:1.5}
 .dash-cic .dash-in{font-size:10px}
 .dash-good{color:#16A34A!important;font-weight:700}.dash-zero{color:#94A3B8!important}
 .dash-tot td{font-weight:700;color:#0F172A!important;background:#F8FAFC;border-top:1px solid #E7EBF0}

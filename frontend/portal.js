@@ -603,7 +603,7 @@
       if (d.funnel) {
         const fn = d.funnel, base = fn.enrolados || 1;
         const st = [['Enrolados', fn.enrolados, '#0F172A', 'users'], ['Contactados', fn.contactados, '#2563EB', 'send'], ['Respondieron', fn.respondieron, '#22A06B', 'reply'], ['Reunión', fn.reuniones, '#F59E0B', 'cal']];
-        fun = `<div class="cp-card"><div class="cp-card__t">Embudo</div><div class="dash-funnel">${st.map((x, i) => `<div class="dash-fn"><span class="dash-fn__ic" style="background:${x[2]}">${ico(x[3], 16)}</span><div class="dash-fn__b"><div class="dash-fn__top"><span class="dash-fn__l">${x[0]}</span>${i ? `<span class="dash-fn__c">${pct(x[1], st[i - 1][1])}% ↓</span>` : ''}<span class="dash-fn__n">${x[1]}</span></div><div class="dash-fn__track"><div class="dash-fn__fill" style="width:${Math.max(2, Math.round(x[1] / base * 100))}%;background:${x[2]}"></div></div></div></div>`).join('')}</div></div>`;
+        fun = `<div class="cp-card"><div class="cp-card__t">Embudo</div><div class="dash-funnel">${st.map((x, i) => `<div class="dash-fn"><span class="dash-fn__ic">${ico(x[3], 18)}</span><div class="dash-fn__b"><div class="dash-fn__top"><span class="dash-fn__l">${x[0]}</span>${i ? `<span class="dash-fn__c">${pct(x[1], st[i - 1][1])}% ↓</span>` : ''}<span class="dash-fn__n">${x[1]}</span></div><div class="dash-fn__track"><div class="dash-fn__fill" style="width:${Math.max(2, Math.round(x[1] / base * 100))}%;background:${x[2]}"></div></div></div></div>`).join('')}</div></div>`;
       }
       row1 = `<div class="dash-row dash-row--a">${actCard}${fun}</div>`;
     }
@@ -620,7 +620,7 @@
     if (d.channels && d.channels.length) {
       const rc = {}; (d.replyByCh || []).forEach(r => { rc[r.ch] = r.replies; });
       const rows = d.channels.filter(r => r.contacted), tc = rows.reduce((n, r) => n + r.contacted, 0), tr = rows.reduce((n, r) => n + (rc[r.ch] || 0), 0);
-      cards.push(`<div class="cp-card"><div class="cp-card__t">Respuesta por canal</div><div class="clients-table-wrap"><table class="clients-table"><thead><tr><th>Canal</th><th>Contactados</th><th>Respondieron</th><th>Tasa</th></tr></thead><tbody>${rows.map(r => { const m = CH[r.ch] || CH.otros, n = rc[r.ch] || 0, t = pct(n, r.contacted); return `<tr><td><span class="dash-cic" style="background:${m[1]}">${ico(m[2], 12)}</span>${m[0]}</td><td>${r.contacted}</td><td>${n}</td><td class="${t > 0 ? 'dash-good' : 'dash-zero'}">${t}%</td></tr>`; }).join('')}<tr class="dash-tot"><td>Total</td><td>${tc}</td><td>${tr}</td><td class="${tr ? 'dash-good' : 'dash-zero'}">${pct(tr, tc)}%</td></tr></tbody></table></div></div>`);
+      cards.push(`<div class="cp-card"><div class="cp-card__t">Respuesta por canal</div><div class="clients-table-wrap"><table class="clients-table"><thead><tr><th>Canal</th><th>Contactados</th><th>Respondieron</th><th>Tasa</th></tr></thead><tbody>${rows.map(r => { const m = CH[r.ch] || CH.otros, n = rc[r.ch] || 0, t = pct(n, r.contacted); return `<tr><td><span class="dash-cic">${ico(m[2], 15)}</span>${m[0]}</td><td>${r.contacted}</td><td>${n}</td><td class="${t > 0 ? 'dash-good' : 'dash-zero'}">${t}%</td></tr>`; }).join('')}<tr class="dash-tot"><td>Total</td><td>${tc}</td><td>${tr}</td><td class="${tr ? 'dash-good' : 'dash-zero'}">${pct(tr, tc)}%</td></tr></tbody></table></div></div>`);
     }
     if (cards.length) row2 = `<div class="dash-row dash-row--b">${cards.join('')}</div>`;
     let seqT = '';
