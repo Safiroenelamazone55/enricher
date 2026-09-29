@@ -368,7 +368,7 @@
 
   // ── Resumen: 1) mensaje del equipo 2) esta semana/mes 3) atención 4) cómo trabajamos 5) detalle (oculto por defecto) ──
   S.per = (function () { try { return localStorage.getItem('pt_per') === 'month' ? 'month' : 'week'; } catch (e) { return 'week'; } })();
-  S.detail = (function () { try { return localStorage.getItem('pt_detail') === '1'; } catch (e) { return false; } })();
+  S.detail = true;
   const isoL = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   function perRanges(p) {
     const now = new Date(); now.setHours(12, 0, 0, 0);
@@ -568,9 +568,8 @@
     const seg = [['7d', '7 días'], ['30d', '30 días'], ['mes', 'Este mes'], ['trim', 'Trimestre'], ['ytd', 'YTD']];
     const seqSel = S.seqs && s.secuencias ? `<label class="dash-f${S.seq ? ' is-on' : ''}" style="flex:none;min-width:200px"><select onchange="PT.seq(this.value)"><option value="">Todas las secuencias</option>${S.seqs.map(x => `<option value="${x.id}"${String(S.seq) === String(x.id) ? ' selected' : ''}>${esc(x.nombre)}</option>`).join('')}</select></label>` : '';
     const filters = `<div class="dash-filters" style="display:flex;gap:8px;flex-wrap:wrap"><div class="dash-seg">${seg.map(r => `<button class="dash-seg__b${S.range === r[0] ? ' on' : ''}" onclick="PT.range('${r[0]}')">${r[1]}</button>`).join('')}</div>${seqSel}</div>`;
-    const detail = S.detail ? (S.dash ? `${filters}${dashBody(S.dash)}${s.feed ? `<div class="pt-card" style="margin-top:14px"><h3>${ico('send', 16)} Actividad reciente</h3>${feedHtml(S.feed, 12)}</div>` : ''}` : '<div class="pt-empty">Cargando…</div>') : '';
-    return `<div class="pt-dash">${updatesHtml()}${weekHtml()}${highlightsHtml()}${s.secuencias ? howHtml() : ''}
-      <div class="pt-more"><button class="pt-morebtn" onclick="PT.detail()">${S.detail ? 'Ocultar detalle ▴' : 'Ver detalle ▾'}</button></div>${detail}</div>`;
+    const detail = S.dash ? `${filters}${dashBody(S.dash)}${s.feed ? `<div class="pt-card" style="margin-top:14px"><h3>${ico('send', 16)} Actividad reciente</h3>${feedHtml(S.feed, 12)}</div>` : ''}` : '<div class="pt-empty">Cargando…</div>';
+    return `<div class="pt-dash">${updatesHtml()}${weekHtml()}${highlightsHtml()}${s.secuencias ? howHtml() : ''}${detail}</div>`;
   }
 
   function delta(cur, prev, pts) {
@@ -584,15 +583,10 @@
     let out = '';
     if (d.kpi) {
       const c = d.kpi.cur, p = d.kpi.prev, rr = pct(c.replies, c.contacted), rrp = pct(p.replies, p.contacted), ar = pct(c.accepts, c.invites), arp = pct(p.accepts, p.invites);
-      const KI = [['users', '#22A06B'], ['reply', '#F59E0B'], ['in', '#7C5CE0'], ['mail', '#2563EB'], ['mailopen', '#F59E0B'], ['handshake', '#22A06B']]; let ki = 0;
-      const kpi = (l, v, dl, sub) => { const k = KI[ki++]; return `<div class="dash-kpi" style="--kc:${k[1]}"><div class="dash-kpi__top"><span class="dash-kpi__ic">${ico(k[0], 16)}</span><span class="dash-kpi__l">${l}</span></div><div class="dash-kpi__v">${v}</div>${dl}${sub ? `<div class="dash-kpi__s">${sub}</div>` : ''}</div>`; };
-      const dl = d.deals;
-      out += `<div class="dash-kpis">${kpi('Contactos alcanzados', c.contacted, delta(c.contacted, p.contacted), `${c.touches} toques en total`)}
-        ${kpi('Tasa de respuesta', rr + '%', delta(rr, rrp, true), `${c.replies} respondieron`)}
-        ${kpi('Aceptación LinkedIn', ar + '%', delta(ar, arp, true), `${c.accepts} de ${c.invites} invitaciones`)}
-        ${kpi('Emails enviados', c.emails, delta(c.emails, p.emails), c.bounced ? `${c.bounced} rebotados` : 'sin rebotes')}
-        ${kpi('Apertura email', c.sent ? pct(c.opened, c.sent) + '%' : '—', '<span class="dash-d dash-d--0">estimada</span>', `sobre ${c.sent} envíos`)}
-        ${dl ? kpi('Reuniones agendadas', dl.agendadas, delta(dl.agendadas, dl.agendadas_prev), dl.programadas ? `${dl.programadas} próxima${dl.programadas > 1 ? 's' : ''}${dl.proximo ? ' · ' + fdate(dl.proximo, { day: '2-digit', month: 'short', timeZone: 'UTC' }) : ''}${dl.valor ? ' · $' + Math.round(dl.valor).toLocaleString(PT_I18N.locale()) : ''}` : 'ninguna programada') : ''}</div>`;
+      const kpi = (ic, l, v, dl, sub) => `<div class="pt-tile"><span class="pt-tile__i">${ico(ic, 18)}</span><div><div class="pt-tile__l">${l}</div><div class="pt-tile__v">${v}</div>${dl}${sub ? `<div class="pt-week__s" style="margin-top:2px">${sub}</div>` : ''}</div></div>`;
+      out += `<div class="pt-week__k">${kpi('in', 'Aceptación LinkedIn', ar + '%', delta(ar, arp, true), `${c.accepts} de ${c.invites} invitaciones`)}
+        ${kpi('mail', 'Emails enviados', c.emails, delta(c.emails, p.emails), c.bounced ? `${c.bounced} rebotados` : 'sin rebotes')}
+        ${kpi('mailopen', 'Apertura email', c.sent ? pct(c.opened, c.sent) + '%' : '—', '<span class="dash-d dash-d--0">estimada</span>', `sobre ${c.sent} envíos`)}</div>`;
     }
     let row1 = '';
     if (d.daily && d.daily.length || d.funnel) {
