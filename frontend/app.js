@@ -8256,11 +8256,8 @@ const CanteraGlobalModule = (() => {
   // un único click que solo podía incluir.
   function _taOptRow(field, o) {
     const jv = esc(o).replace(/'/g, "\\'");
-    const n = _facetCache[field] && _facetCache[field][o];
-    const count = n != null ? `<span class="ta-opt__n">${n}</span>` : '';
     return `<div class="ta-opt ta-opt--row">
       <span class="ta-opt__v">${esc(o)}</span>
-      ${count}
       <span class="ta-opt__ops">
         <span class="ta-opt__op" onmousedown="event.preventDefault();CanteraGlobalModule.addFiltro('${field}','${jv}')">Incluir</span>
         <span class="ta-opt__sep">|</span>
@@ -8270,10 +8267,8 @@ const CanteraGlobalModule = (() => {
   }
   function taOpen(field) {
     const menu = document.getElementById('tag-menu-' + field); if (!menu) return;
-    const opts = _gOptions(field);
-    menu.innerHTML = opts.map(o => _taOptRow(field, o)).join('') || `<div class="ta-none">Sin opciones</div>`;
+    menu.innerHTML = _gOptions(field).map(o => _taOptRow(field, o)).join('') || `<div class="ta-none">Sin opciones</div>`;
     menu.hidden = false;
-    _loadFacets(field, opts);
   }
   function taFilter(field) {
     const wrap = document.querySelector(`.filter-field[data-ta="${field}"]`); const inp = wrap?.querySelector('.ta-input'); const menu = document.getElementById('tag-menu-' + field);
@@ -8282,7 +8277,6 @@ const CanteraGlobalModule = (() => {
     const opts = _gOptions(field).filter(o => o.toLowerCase().includes(f));
     menu.innerHTML = opts.map(o => _taOptRow(field, o)).join('') || `<div class="ta-none">Sin coincidencias</div>`;
     menu.hidden = false;
-    _loadFacets(field, opts);
   }
   function taBlur(field) { setTimeout(() => { const m = document.getElementById('tag-menu-' + field); if (m) m.hidden = true; }, 160); }
   function _clearFacets() { for (const k in _facetCache) delete _facetCache[k]; }
