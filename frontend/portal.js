@@ -780,7 +780,15 @@
     const d = S.cantera;
     if (!d) return '<div class="pt-h"><h2>Cantera</h2></div><div class="pt-empty">Cargando…</div>';
     if (!d.total) return '<div class="pt-h"><h2>Cantera</h2></div><div class="pt-empty">Todavía no hay empresas en prospección para tu cuenta.</div>';
-    const kpi = (l, v, sub) => `<div class="dash-kpi" style="--kc:#7C5CE0"><div class="dash-kpi__l">${l}</div><div class="dash-kpi__v">${v}</div>${sub ? `<div class="dash-kpi__s">${sub}</div>` : ''}</div>`;
+    const avance = pct(d.total - d.por_validar, d.total);
+    const pctV = pct(d.validadas, d.total), pctC = pct(d.califican, d.total);
+    const tierA = (d.tiers || []).find(t => t.tier === 'A');
+    const pctA = tierA ? pct(tierA.n, d.total) : 0;
+    const hero = `<div class="pt-cant-hero">
+        <div class="pt-cant-hero__top"><div><div class="pt-cant-hero__v">${d.por_validar.toLocaleString(PT_I18N.locale())}</div><div class="pt-cant-hero__l">empresas por validar de ${d.total.toLocaleString(PT_I18N.locale())}</div></div><div class="pt-cant-hero__pct">${avance}% <span>avance</span></div></div>
+        <div class="pt-cant-hero__bar"><i style="width:${Math.max(2, avance)}%"></i></div>
+        <div class="pt-cant-hero__stats"><span><b>${pctV}%</b> validadas</span><span><b>${pctC}%</b> califican</span><span><b>${pctA}%</b> Tier A</span></div>
+      </div>`;
     const tiers = d.tiers.length ? `<div class="pt-card"><h3>Empresas calificadas por Tier</h3><div style="display:flex;gap:10px;flex-wrap:wrap">${d.tiers.map(t => `<span class="pt-badge" style="background:${TIER_COLOR[t.tier] || '#E0F2FE'}22;color:${TIER_COLOR[t.tier] || '#0369A1'};font-weight:700">Tier ${esc(t.tier)} · ${t.n}</span>`).join('')}</div></div>` : '';
     const batches = d.batches.length ? `<div class="pt-card"><h3>Lotes de prospección</h3>${d.batches.map(b => `<div class="pt-item"><div class="pt-item__t"><span>${esc(b.nombre)}</span><span style="color:#64748B;font-weight:500;font-size:12px">${fdate(b.created_at, { day: 'numeric', month: 'short' })}</span></div><div class="pt-item__s">${b.total} empresas · ${b.califican} califican</div></div>`).join('')}</div>` : '';
     // Tier POR secuencia — pedido explícito: "qué tiers estamos manejando por
@@ -797,15 +805,9 @@
           <option value="">Todos los tiers</option>${tierOpts.map(t => `<option value="${esc(t)}">Tier ${esc(t)}</option>`).join('')}
         </select>
       </div>`;
-    const companiesCard = (d.companies || []).length ? `<div class="pt-card"><h3>Empresas en validación</h3>${filterBar}<div id="pt-cant-list">${canteraListHtml(d.companies)}</div></div>` : '';
+    const companiesCard = (d.companies || []).length ? `<div class="pt-card"><h3>Actividad reciente</h3>${filterBar}<div id="pt-cant-list">${canteraListHtml(d.companies)}</div></div>` : '';
     return `<div class="pt-h"><h2>Cantera</h2></div>
-      <div class="dash-kpis" style="grid-template-columns:repeat(4,minmax(0,1fr))">
-        ${kpi('Por validar', d.por_validar)}
-        ${kpi('Validadas', d.validadas)}
-        ${kpi('Califican', d.califican, d.califican_semana ? `${d.califican_semana} esta semana` : '')}
-        ${kpi('Procesadas esta semana', d.procesadas_semana)}
-      </div>
-      ${tiers}${seqs}${companiesCard}${batches}`;
+      ${hero}${companiesCard}${tiers}${seqs}${batches}`;
   }
   function canteraListHtml(rows) {
     if (!rows.length) return '<div class="pt-empty">Sin resultados</div>';

@@ -52,6 +52,16 @@ button{cursor:pointer}
 .pt-h h2{font-size:20px;letter-spacing:-.01em}
 .pt-search{height:36px;border:1px solid #D9DEE3;padding:0 12px;min-width:240px;font-size:13px;outline:0}
 .pt-search:focus{border-color:#2563EB}
+.pt-cant-hero{background:#fff;border:1px solid #E7EBF0;box-shadow:0 1px 2px rgba(15,23,42,.04);padding:20px 22px;margin-bottom:14px}
+.pt-cant-hero__top{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;flex-wrap:wrap;margin-bottom:14px}
+.pt-cant-hero__v{font-size:34px;font-weight:700;letter-spacing:-.02em;line-height:1.1;color:#0F172A}
+.pt-cant-hero__l{font-size:13px;color:#64748B;margin-top:2px}
+.pt-cant-hero__pct{font-size:22px;font-weight:700;color:#7C5CE0}
+.pt-cant-hero__pct span{font-size:12px;font-weight:600;color:#94A3B8;display:block;text-align:right}
+.pt-cant-hero__bar{height:8px;background:#F1F5F9;overflow:hidden}
+.pt-cant-hero__bar i{display:block;height:100%;background:linear-gradient(90deg,#7C5CE0,#9B7EEA)}
+.pt-cant-hero__stats{display:flex;gap:22px;margin-top:12px;font-size:13px;color:#64748B;flex-wrap:wrap}
+.pt-cant-hero__stats b{color:#0F172A;font-weight:700}
 .pt-card{background:#fff;border:1px solid #E7EBF0;box-shadow:0 1px 2px rgba(15,23,42,.04);padding:16px 18px}
 .pt-card h3{font-size:14.5px;font-weight:600;margin-bottom:10px;display:flex;align-items:center;gap:8px}
 .pt-badge{display:inline-block;padding:2px 9px;font-size:11.5px;font-weight:700;white-space:nowrap}
