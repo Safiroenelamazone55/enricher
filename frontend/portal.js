@@ -789,7 +789,7 @@
         <div class="pt-cant-hero__bar"><i style="width:${Math.max(2, avance)}%"></i></div>
         <div class="pt-cant-hero__stats"><span><b>${pctV}%</b> validadas</span><span><b>${pctC}%</b> califican</span><span><b>${pctA}%</b> Tier A</span></div>
       </div>`;
-    const batches = d.batches.length ? `<div class="pt-card"><h3>Lotes de prospección</h3>${d.batches.map(b => `<div class="pt-item"><div class="pt-item__t"><span>${esc(b.nombre)}</span><span style="color:#64748B;font-weight:500;font-size:12px">${fdate(b.created_at, { day: 'numeric', month: 'short' })}</span></div><div class="pt-item__s">${b.total} empresas · ${pct(b.procesadas, b.total)}% procesado</div></div>`).join('')}</div>` : '';
+    const batches = d.batches.length ? `<div class="pt-card"><h3>Lotes de prospección</h3>${d.batches.map(b => `<div class="pt-item"><div class="pt-item__t"><span>${esc(b.nombre)}</span><span style="color:#64748B;font-weight:500;font-size:12px">${fdate(b.created_at, { day: 'numeric', month: 'short' })}</span></div><div class="pt-item__s">${b.total} empresas · ${Math.round(pct(b.procesadas, b.total))}% procesado</div></div>`).join('')}</div>` : '';
     // Lista filtrable de empresas en validación — pedido explícito: "que el
     // cliente vea qué empresas se están validando", mismo estilo que "Últimas
     // respuestas". Filtro por texto + Tier, 100% client-side sobre lo ya traído.
