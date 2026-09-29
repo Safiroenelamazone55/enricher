@@ -610,14 +610,6 @@ function _setNavCollapsed(on) {
 function toggleNavPanel() { _setNavCollapsed(!_navCollapsed()); }
 function selectModule(mod) {
   if (_navCollapsed()) _setNavCollapsed(false);
-  // El boton de colapsar ahora vive DENTRO de #sidebar (junto a "‹ Módulos"),
-  // no flotando afuera -- asi que si el panel esta oculto y se hace click de
-  // nuevo en el modulo ya activo (unico caso sin otro control visible para
-  // reabrirlo), lo reabre.
-  if (mod === _activeModule) {
-    const sb = document.getElementById('sidebar');
-    if (sb?.classList.contains('sidebar--hidden')) toggleModuleSidebar();
-  }
   _applyHomeMode(false);
   document.getElementById('appShell')?.classList.remove('standalone-users');
   document.querySelectorAll('.global-topbar__tab').forEach(t => t.classList.remove('active'));
@@ -40539,15 +40531,14 @@ const TimerModule = (() => {
 // Ocultar/mostrar el panel lateral de subsecciones (#sidebar) — pedido
 // explícito 2026-09-15: "agrega la función manual de ocultar y desplegar,
 // así si necesito la ocultaría" (para ganar ancho en tablas anchas como
-// Resultados de Cantera). OJO: NO reusa .sidebar--collapsed — ese CSS es de
-// un diseño viejo (icon-rail) que ya no calza con el markup actual de
-// .snav-item (se veía roto: iconos reemplazados por una sola letra suelta).
-// .sidebar--hidden es nuevo, simple y a prueba de ese desfase: ancho 0, sin
-// intentar mantener una versión "solo íconos". Se recuerda por navegador
-// (localStorage), no por módulo — una sola preferencia global.
+// Resultados de Cantera). Pedido explícito posterior: "el módulo de outreach
+// es el único que contrayendo muestra íconos" — se unifica: #sidebar ahora
+// colapsa a riel de solo íconos (64px, .sidebar--collapsed), igual que la
+// barra interna de Outreach (.lm2-nav--collapsed), en vez de desaparecer del
+// todo. Se recuerda por navegador (localStorage), no por módulo.
 function toggleModuleSidebar() {
   const el = document.getElementById('sidebar'); if (!el) return;
-  const hidden = el.classList.toggle('sidebar--hidden');
+  const hidden = el.classList.toggle('sidebar--collapsed');
   try { localStorage.setItem('nova_sidebar_hidden', hidden ? '1' : '0'); } catch (_) {}
   const btn = document.getElementById('sidebar-toggle');
   if (btn) btn.title = hidden ? 'Mostrar panel' : 'Ocultar panel';
@@ -40555,7 +40546,7 @@ function toggleModuleSidebar() {
 function _restoreModuleSidebar() {
   try {
     if (localStorage.getItem('nova_sidebar_hidden') === '1') {
-      document.getElementById('sidebar')?.classList.add('sidebar--hidden');
+      document.getElementById('sidebar')?.classList.add('sidebar--collapsed');
       const btn = document.getElementById('sidebar-toggle');
       if (btn) btn.title = 'Mostrar panel';
     }

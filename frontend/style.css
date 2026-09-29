@@ -150,23 +150,20 @@ body {
 .sidebar:hover::-webkit-scrollbar { display: block; width: 3px; }
 .sidebar:hover::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 0; }
 
-/* Collapsed state (LEGACY — .sidebar--collapsed ya no se usa: su CSS de
-   icon-rail data de un diseño anterior y no calza con el markup actual de
-   .snav-item, se veía roto. El ocultar/mostrar real usa .sidebar--hidden,
-   más abajo — pedido explícito 2026-09-15.) */
-.sidebar--collapsed {
-  width:var(--sidebar-collapsed-w);
-  min-width:var(--sidebar-collapsed-w);
-}
-
-/* Ocultar/mostrar manual del panel — simple y sin intentar mantener una
-   versión "solo íconos" (eso es lo que rompía .sidebar--collapsed).
-   Especificidad: #sidebar (más abajo en el archivo) fija width/min-width
-   con un selector de id — una clase sola no le gana en la cascada, así que
-   este selector también necesita el id para pisarlo de verdad. */
-#sidebar.sidebar--hidden {
-  width: 0; min-width: 0; padding: 0; border-right: none; overflow: hidden;
-}
+/* Colapsar #sidebar a riel de solo iconos (64px) -- pedido explicito: "el
+   modulo de outreach es el unico que contrayendo muestra iconos", asi que
+   el panel principal pasa a comportarse igual (consistencia), en vez de
+   desaparecer del todo (width:0). Reusa .sidebar--collapsed en vez de
+   .sidebar--hidden. Especificidad: #sidebar (mas abajo) fija width con un
+   selector de id -- este selector tambien necesita el id para pisarlo. */
+#sidebar.sidebar--collapsed { width: 64px; min-width: 64px; padding: 16px 6px; }
+#sidebar.sidebar--collapsed .snav-item__label,
+#sidebar.sidebar--collapsed .snav-cat,
+#sidebar.sidebar--collapsed .snav-back span { display: none; }
+#sidebar.sidebar--collapsed .snav-item { justify-content: center; padding: 7px; }
+#sidebar.sidebar--collapsed .snav-panel__hd { flex-direction: column; height: auto; padding: 0 4px 10px; gap: 6px; }
+#sidebar.sidebar--collapsed .snav-back { padding: 0; width: 30px; height: 30px; justify-content: center; }
+#sidebar.sidebar--collapsed #sidebar-toggle { transform: rotate(180deg); }
 /* Boton vive DENTRO de .snav-panel__hd (junto a "‹ Módulos"), nunca
    flotando afuera -- pedido explicito repetido: "no puede estar como
    flotando... deberia estar dentro del vertical a la izquierda". Mismo
@@ -178,16 +175,6 @@ body {
 }
 #sidebar-toggle svg { width: 13px; height: 13px; }
 #sidebar-toggle:hover { background: var(--bg2, #F1EFEB); color: var(--text); }
-.sidebar-reopen {
-  display: none; position: fixed; top: calc(var(--topbar-h, 29px) + 7px); left: 64px; z-index: 55;
-  width: 18px; height: 42px; border: 1px solid var(--border); border-left: none; border-radius: 0 8px 8px 0;
-  background: var(--white, #fff); color: var(--muted); place-items: center;
-  cursor: pointer; box-shadow: none; transition: background .15s, color .15s, box-shadow .15s;
-}
-.sidebar-reopen svg { width: 11px; height: 11px; }
-.sidebar-reopen:hover { background: var(--bg2, #F1EFEB); color: var(--text); box-shadow: 1px 0 4px rgba(16,24,20,.1); }
-#sidebar.sidebar--hidden ~ .sidebar-reopen { display: grid; }
-#appShell.lm-active .sidebar-reopen, #appShell.nav-collapsed .sidebar-reopen { display: none !important; }
 
 /* ── Sidebar top: brand + toggle ─────────────────────────── */
 .sidebar__top {
@@ -332,8 +319,8 @@ body {
 .snav-item.active {
   height:40px;
   min-height:40px;
-  background:rgba(255,132,23,.11);
-  color:#FF8417;
+  background:var(--brand-ll, #EAF2FF);
+  color:var(--brand-d, #0062CC);
 }
 
 .snav-item__icon {
@@ -352,7 +339,7 @@ body {
   stroke-width: 1.75;
 }
 .snav-item.active .snav-item__icon {
-  color:#FF8417;
+  color:var(--brand-d, #0062CC);
 }
 
 .snav-item__label {
@@ -5040,7 +5027,7 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 /* ═══ LEAD MANAGER — workspace outbound multi-cliente (Fase 1) ═══ */
 #pane-lead-manager { max-width: none; padding: 0; }
 .lm2 { display: flex; align-items: flex-start; min-height: calc(100vh - 96px); }
-.lm2-nav { width: 216px; flex-shrink: 0; position: sticky; top: 0; align-self: flex-start; border-right: 1px solid var(--border, #EAE7E2); background: #FAF8F5; padding: 18px 12px; display: flex; flex-direction: column; gap: 2px; max-height: 100vh; overflow-y: auto; }
+.lm2-nav { width: var(--sidebar-w, 232px); flex-shrink: 0; position: sticky; top: 0; align-self: flex-start; border-right: 1px solid var(--border, #EAE7E2); background: #FAF8F5; padding: 18px 12px; display: flex; flex-direction: column; gap: 2px; max-height: 100vh; overflow-y: auto; }
 .lm2-nav__brand { display: flex; align-items: center; gap: 9px; padding: 2px 8px 16px; }
 .lm2-nav__logo { width: 30px; height: 30px; border-radius: 0; background: linear-gradient(135deg, #4DA3FF, #007AFF); color: #fff; font-weight: 800; display: flex; align-items: center; justify-content: center; }
 .lm2-nav__name { font-size: .9rem; font-weight: 750; color: #1F1D1B; letter-spacing: -.01em; }
@@ -13176,8 +13163,12 @@ a.cp-strip__i:hover svg { color: var(--brand, #007AFF); }
 .lm2-nav .snav-panel__hd .sidebar__toggle { position: static; margin: 0; width: 30px; height: 30px; background: transparent; border: none; color: var(--muted); border-radius: 0; display: grid; place-items: center; cursor: pointer; }
 .lm2-nav .snav-panel__hd .sidebar__toggle:hover { background: var(--bg2); color: var(--text); }
 .lm2-nav__list { padding: 8px 10px; }
-.lm2-nav__grp { padding: 9px 10px 3px; }
-.lm2-nav__item { padding: 5px 10px; }
+.lm2-nav__grp { padding: 9px 10px 3px; font-size: 10px; }
+/* Normaliza altura/tipografia de fila con .snav-item (panel principal) --
+   pedido explicito: "normalizar el estilo altura etc de la barra lateral
+   para todos los modulos", minimalista/corporativo. */
+.lm2-nav__item { height: 36px; padding: 0 10px; font-size: 14px; letter-spacing: -.01em; }
+.lm2-nav__item.active { border-radius: 0; }
 /* Colapso propio de la barra interna de Outreach -- boton vive dentro del
    panel (snav-panel__hd), nunca flotando afuera. El boton de colapsar
    siempre queda visible/clickeable (no depende de hover). */
