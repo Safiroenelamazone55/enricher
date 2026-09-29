@@ -8200,10 +8200,13 @@ const CanteraGlobalModule = (() => {
     return `<div class="lm-sec-head lm-sec-head--compact"><div><h2 class="lm-sec-title">Base global</h2></div></div>
       ${_vistaTabsHtml()}
       <div class="cant-global-layout${_collapsed ? ' collapsed' : ''}">
-        <div class="cant-global-panel">${_collapsed ? `<button class="cant-x" onclick="CanteraGlobalModule.toggleCollapse()" title="Mostrar criterios">›</button>` : _panelHtml()}</div>
+        ${_collapsed ? '' : `<div class="cant-global-panel">${_panelHtml()}</div>`}
         <div class="cant-global-results">
           <div class="cant-global-toolbar" style="position:relative">
-            <span class="cant-global-count"><b>${_total.toLocaleString('es-ES')}</b> resultado${_total === 1 ? '' : 's'}</span>
+            <div style="display:flex;align-items:center;gap:12px">
+              ${_collapsed ? `<button class="cant-global-showcrit" onclick="CanteraGlobalModule.toggleCollapse()" title="Mostrar criterios">‹ Criterios</button>` : ''}
+              <span class="cant-global-count"><b>${_total.toLocaleString('es-ES')}</b> resultado${_total === 1 ? '' : 's'}</span>
+            </div>
             ${_colsMenuHtml()}
           </div>
           <div class="lm-dt-wrap dg-dt-wrap"><table class="clients-table dg-table sel-on" style="table-layout:auto">
