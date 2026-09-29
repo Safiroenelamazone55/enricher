@@ -570,7 +570,7 @@
   const STEP_ICO = { linkedin: ['in', '#7C5CE0'], email: ['mail', '#2563EB'], whatsapp: ['chat', '#22A06B'], call: ['phone', '#F59E0B'], task: ['dots', '#94A3B8'] };
   function stepsHtml(q) {
     const tot = q.total || 1;
-    return `<div class="pt-steps">${q.steps.map(s => { const m = STEP_ICO[s.canal] || STEP_ICO.task; return `<div class="pt-step"><span class="pt-step__i" style="background:${m[1]}">${ico(m[0], 14)}</span><div class="pt-step__b"><div class="pt-step__t"><b>${s.label}</b><span>Día ${s.dia}</span></div><div class="pt-step__bar"><i style="width:${Math.max(s.reached ? 3 : 0, Math.round(s.reached / tot * 100))}%;background:${m[1]}"></i></div><div class="pt-step__n">${s.reached} completados${s.current ? ' · ' + s.current + ' en este paso' : ''}</div></div></div>`; }).join('')}</div>`;
+    return `<div class="pt-steps">${q.steps.map(s => { const m = STEP_ICO[s.canal] || STEP_ICO.task; return `<div class="pt-step"><span class="pt-step__i">${ico(m[0], 16)}</span><div class="pt-step__b"><div class="pt-step__t"><b>${s.label}</b><span>Día ${s.dia}</span></div><div class="pt-step__bar"><i style="width:${Math.max(s.reached ? 3 : 0, Math.round(s.reached / tot * 100))}%"></i></div><div class="pt-step__n">${s.reached} completados${s.current ? ' · ' + s.current + ' en este paso' : ''}</div></div></div>`; }).join('')}</div>`;
   }
   const seqBadge = e => e === 'activa' ? '<span class="pt-badge pt-b--g">Activa</span>' : '<span class="pt-badge pt-b--n">En pausa</span>';
   function howHtml() {
