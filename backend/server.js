@@ -6345,6 +6345,7 @@ const _lmDashHandler = async (req, res) => {
     const RTYPES = `Interesado|Reunión|Más adelante|Derivó a otro|No es la persona|No interesado|No contactar`;
     const REPLY = `(a.tipo='respuesta' OR (a.tipo='disposition_change' AND a.nota ~ '→ (${RTYPES})[[:space:]]*$'))`;
     const OUT = `a.estado='hecha' AND (a.tipo IN ('email_enviado','linkedin_msg','linkedin_connect','linkedin_visita','llamada') OR a.tipo LIKE 'linkedin%' OR (a.tipo='email' AND a.nota NOT LIKE '[Inbox] Respuesta%' AND a.nota NOT LIKE 'Solicitud de admin%') OR (a.tipo='nota' AND a.nota ~ '^Paso [0-9]'))`;
+    const IS_INVITE = `(a.tipo='linkedin_connect' OR (a.tipo='nota' AND a.nota ~ '^Paso [0-9]' AND (SELECT st.accion FROM lm_contact_sequences cs JOIN sequence_steps st ON st.sequence_id=cs.sequence_id WHERE cs.contact_id=a.contact_id ORDER BY cs.id DESC, st.dia, st.orden, st.id OFFSET (substring(a.nota from '^Paso ([0-9]+)')::int - 1) LIMIT 1) IN ('invite','invite_nota')))`;
     const ch = ['email', 'linkedin', 'call', 'wa_msg', 'wa_call', 'otros'].includes(q.channel) ? q.channel : null;
     const chw = ch ? ` AND ${CH}='${ch}'` : '';
     const iF = `'${from}'`, iT = `'${to}'`, iPF = `'${prevFrom}'`, iPT = `'${prevTo}'`; // fechas ya validadas (ISO)
@@ -6356,7 +6357,7 @@ const _lmDashHandler = async (req, res) => {
              COUNT(DISTINCT a.contact_id) FILTER (WHERE ${REPLY})::int AS replies,
              COUNT(DISTINCT k.id) FILTER (WHERE k.li_aceptado_at::date BETWEEN ${r[0]}::date AND ${r[1]}::date)::int AS accepts,
              COUNT(DISTINCT a.contact_id) FILTER (WHERE a.tipo='reunion')::int AS meetings,
-             COUNT(DISTINCT a.contact_id) FILTER (WHERE ${OUT} AND ${CH}='linkedin')::int AS invites,
+             COUNT(DISTINCT a.contact_id) FILTER (WHERE ${OUT} AND ${IS_INVITE})::int AS invites,
              COUNT(*) FILTER (WHERE ${OUT} AND ${CH}='email')::int AS emails
         ${base} AND ${inR(r[0], r[1])}`;
     const msgSql = r => `
