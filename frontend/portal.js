@@ -237,11 +237,12 @@
   function stop() { clearInterval(S.timer); clearInterval(S.ctimer); }
   function stopCharts() { S.charts.forEach(c => { try { c.destroy(); } catch (e) {} }); S.charts = []; }
   function rangeQ() {
-    const iso = d => d.toISOString().slice(0, 10), now = new Date(), r = S.range;
-    const back = n => { const d = new Date(now); d.setDate(d.getDate() - n + 1); return iso(d); };
-    let f = back(30);
-    if (r === '7d') f = back(7); else if (r === 'mes') f = iso(new Date(now.getFullYear(), now.getMonth(), 1)); else if (r === 'trim') f = iso(new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1)); else if (r === 'ytd') f = now.getFullYear() + '-01-01';
-    return `from=${f}&to=${iso(now)}` + (S.seq ? `&sequence=${encodeURIComponent(S.seq)}` : '');
+    const r = perRanges(S.per);
+    return `from=${isoL(r.from)}&to=${isoL(r.to)}` + (S.seq ? `&sequence=${encodeURIComponent(S.seq)}` : '');
+  }
+  function reloadDash() {
+    if (!S.detail) return;
+    api('/portal/dashboard?' + rangeQ()).then(d => { S.dash = d; if (S.tab === 'inicio') paint(); }).catch(() => {});
   }
   async function load(force) {
     if (!S.me) return;
@@ -320,12 +321,14 @@
         const c = S.wkc.custom;
         if (c) { S.wk = c; paint(); }
         if (!c || Date.now() - c.t > 60000) wkFetch('custom').then(w => { if (S.per === 'custom') { S.wk = w; paint(); } }).catch(() => {});
+        reloadDash();
         return;
       }
       const c = S.wkc[p], apply = w => { if (S.per === p) { S.wk = w; paint(); } };
       S.wk = c || S.wk; paint();
       if (!c) { const el = document.querySelector('.pt-week'); if (el) { el.style.opacity = '.5'; el.style.transition = 'opacity .15s'; } }
       if (!c || Date.now() - c.t > 60000) wkFetch(p).then(apply).catch(() => {});
+      reloadDash();
     },
     // Pedido explícito del cliente (Tent Softlab, 2026-09-28): "a date selection
     // option in your app" — rango de fechas personalizado para el resumen del
@@ -335,6 +338,7 @@
       S.customFrom = from; S.customTo = to; S.wkc.custom = null;
       paint();
       wkFetch('custom').then(w => { if (S.per === 'custom') { S.wk = w; paint(); } }).catch(() => {});
+      reloadDash();
     },
     detail: () => { S.detail = !S.detail; try { localStorage.setItem('pt_detail', S.detail ? '1' : '0'); } catch (e) {} if (S.detail && !S.dash) { paint(); load(false); } else paint(); },
     open: id => openContact(id), openCo: id => openCompany(id), close: () => closeDrawer(), drTab: (t, id) => drTab(t, id),
@@ -575,9 +579,8 @@
   }
   function inicio() {
     const s = S.me.sections;
-    const seg = [['7d', '7 días'], ['30d', '30 días'], ['mes', 'Este mes'], ['trim', 'Trimestre'], ['ytd', 'YTD']];
     const seqSel = S.seqs && s.secuencias ? `<label class="dash-f${S.seq ? ' is-on' : ''}" style="flex:none;min-width:200px"><select onchange="PT.seq(this.value)"><option value="">Todas las secuencias</option>${S.seqs.map(x => `<option value="${x.id}"${String(S.seq) === String(x.id) ? ' selected' : ''}>${esc(x.nombre)}</option>`).join('')}</select></label>` : '';
-    const filters = `<div class="dash-filters" style="display:flex;gap:8px;flex-wrap:wrap"><div class="dash-seg">${seg.map(r => `<button class="dash-seg__b${S.range === r[0] ? ' on' : ''}" onclick="PT.range('${r[0]}')">${r[1]}</button>`).join('')}</div>${seqSel}</div>`;
+    const filters = seqSel ? `<div class="dash-filters" style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">${seqSel}</div>` : '';
     const detail = S.dash ? `${filters}${dashBody(S.dash)}${s.feed ? `<div class="pt-card" style="margin-top:14px"><h3>${ico('send', 16)} Actividad reciente</h3>${feedHtml(S.feed, 12)}</div>` : ''}` : '<div class="pt-empty">Cargando…</div>';
     return `<div class="pt-dash">${updatesHtml()}${weekHtml()}${highlightsHtml()}${detail}</div>`;
   }
