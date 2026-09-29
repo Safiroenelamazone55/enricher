@@ -6354,7 +6354,7 @@ const _lmDashHandler = async (req, res) => {
       SELECT COUNT(*) FILTER (WHERE ${OUT}${chw})::int AS touches,
              COUNT(DISTINCT a.contact_id) FILTER (WHERE (${OUT}${chw}) OR (${REPLY}${ch ? ' AND FALSE' : ''}))::int AS contacted,
              COUNT(DISTINCT a.contact_id) FILTER (WHERE ${REPLY})::int AS replies,
-             COUNT(DISTINCT a.contact_id) FILTER (WHERE a.tipo='aceptacion')::int AS accepts,
+             COUNT(DISTINCT k.id) FILTER (WHERE k.li_aceptado_at::date BETWEEN ${r[0]}::date AND ${r[1]}::date)::int AS accepts,
              COUNT(DISTINCT a.contact_id) FILTER (WHERE a.tipo='reunion')::int AS meetings,
              COUNT(*) FILTER (WHERE ${OUT} AND a.tipo='linkedin_connect')::int AS invites,
              COUNT(*) FILTER (WHERE ${OUT} AND ${CH}='email')::int AS emails
