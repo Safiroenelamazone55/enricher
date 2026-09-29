@@ -178,6 +178,16 @@ body {
 }
 #sidebar-toggle svg { width: 13px; height: 13px; }
 #sidebar-toggle:hover { background: var(--bg2, #F1EFEB); color: var(--text); }
+.sidebar-reopen {
+  display: none; position: fixed; top: calc(var(--topbar-h, 29px) + 7px); left: 64px; z-index: 55;
+  width: 18px; height: 42px; border: 1px solid var(--border); border-left: none; border-radius: 0 8px 8px 0;
+  background: var(--white, #fff); color: var(--muted); place-items: center;
+  cursor: pointer; box-shadow: none; transition: background .15s, color .15s, box-shadow .15s;
+}
+.sidebar-reopen svg { width: 11px; height: 11px; }
+.sidebar-reopen:hover { background: var(--bg2, #F1EFEB); color: var(--text); box-shadow: 1px 0 4px rgba(16,24,20,.1); }
+#sidebar.sidebar--hidden ~ .sidebar-reopen { display: grid; }
+#appShell.lm-active .sidebar-reopen, #appShell.nav-collapsed .sidebar-reopen { display: none !important; }
 
 /* ── Sidebar top: brand + toggle ─────────────────────────── */
 .sidebar__top {
