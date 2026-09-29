@@ -167,25 +167,17 @@ body {
 #sidebar.sidebar--hidden {
   width: 0; min-width: 0; padding: 0; border-right: none; overflow: hidden;
 }
-/* Manija fija: vive FUERA de #sidebar (ver index.html) para no depender de
-   su overflow al colapsar — position:fixed se calcula contra el viewport,
-   así se ve igual oculto o visible. El selector de hermano (~) reacciona
-   solo con CSS al estado de #sidebar, sin tocar clases del botón en JS. */
+/* Boton vive DENTRO de .snav-panel__hd (junto a "‹ Módulos"), nunca
+   flotando afuera -- pedido explicito repetido: "no puede estar como
+   flotando... deberia estar dentro del vertical a la izquierda". Mismo
+   tratamiento que ya se uso en la barra interna de Outreach (.lm2-nav). */
 #sidebar-toggle {
-  /* Estilo "grip" pegado al borde (patron VS Code/Notion) en vez de un
-     circulo suelto con sombra flotando en el aire -- pedido explicito:
-     "no puede estar como flotando... un formato mas profesional que
-     utilice ya alguien mas". Franja delgada del alto de la fila de
-     cabecera, fundida con el borde del panel; sombra solo al hover. */
-  position: fixed; top: calc(var(--topbar-h, 29px) + 22px); left: calc(64px + var(--sidebar-w) - 9px); z-index: 55;
-  width: 18px; height: 42px; border: 1px solid var(--border); border-left: none; border-radius: 0 8px 8px 0;
-  background: var(--white, #fff); color: var(--muted); display: grid; place-items: center;
-  cursor: pointer; box-shadow: none;
-  transition: left var(--sidebar-transition), transform .15s, background .15s, color .15s, box-shadow .15s;
+  position: static; margin: 0; width: 26px; height: 26px; border: none; border-radius: 0;
+  background: transparent; color: var(--muted); display: grid; place-items: center;
+  cursor: pointer; transition: background .15s, color .15s;
 }
-#sidebar-toggle svg { width: 11px; height: 11px; }
-#sidebar-toggle:hover { background: var(--bg2, #F1EFEB); color: var(--text); box-shadow: 1px 0 4px rgba(16,24,20,.1); }
-#sidebar.sidebar--hidden ~ #sidebar-toggle { left: 64px; transform: rotate(180deg); }
+#sidebar-toggle svg { width: 13px; height: 13px; }
+#sidebar-toggle:hover { background: var(--bg2, #F1EFEB); color: var(--text); }
 
 /* ── Sidebar top: brand + toggle ─────────────────────────── */
 .sidebar__top {

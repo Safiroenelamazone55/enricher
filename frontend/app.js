@@ -610,6 +610,14 @@ function _setNavCollapsed(on) {
 function toggleNavPanel() { _setNavCollapsed(!_navCollapsed()); }
 function selectModule(mod) {
   if (_navCollapsed()) _setNavCollapsed(false);
+  // El boton de colapsar ahora vive DENTRO de #sidebar (junto a "‹ Módulos"),
+  // no flotando afuera -- asi que si el panel esta oculto y se hace click de
+  // nuevo en el modulo ya activo (unico caso sin otro control visible para
+  // reabrirlo), lo reabre.
+  if (mod === _activeModule) {
+    const sb = document.getElementById('sidebar');
+    if (sb?.classList.contains('sidebar--hidden')) toggleModuleSidebar();
+  }
   _applyHomeMode(false);
   document.getElementById('appShell')?.classList.remove('standalone-users');
   document.querySelectorAll('.global-topbar__tab').forEach(t => t.classList.remove('active'));
