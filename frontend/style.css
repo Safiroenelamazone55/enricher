@@ -330,9 +330,11 @@ body {
   box-sizing:border-box;
 }
 .snav-item:hover:not(.active) { background:#F1EFEB; }
+/* Mismo alto en reposo y activo (36px) -- pedido explicito: "quiero que se
+   quede como esta en el modo de outreach... mismo espaciado alineado, todo".
+   Antes .snav-item.active crecia a 40px, algo que .lm2-nav__item.active
+   (Outreach) no hace -- eso movia el resto de filas al activar una. */
 .snav-item.active {
-  height:40px;
-  min-height:40px;
   background:var(--brand-ll, #EAF2FF);
   color:var(--brand-d, #0062CC);
 }
