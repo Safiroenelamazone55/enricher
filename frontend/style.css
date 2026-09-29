@@ -172,7 +172,12 @@ body {
    así se ve igual oculto o visible. El selector de hermano (~) reacciona
    solo con CSS al estado de #sidebar, sin tocar clases del botón en JS. */
 #sidebar-toggle {
-  position: fixed; top: 14px; left: calc(64px + var(--sidebar-w) - 15px); z-index: 55;
+  /* top: 14px fijo no sumaba var(--topbar-h) (la barra azul superior), asi
+     que quedaba flotando en el hueco antes de la barra en vez de alinearse
+     con la fila "‹ Módulos" del panel -- pedido explicito: "esta muy a la
+     derecha [desalineado]... en todos los modulos". Ahora se alinea con el
+     centro de esa fila (56px de alto, boton de 26px -> +15px). */
+  position: fixed; top: calc(var(--topbar-h, 29px) + 15px); left: calc(64px + var(--sidebar-w) - 15px); z-index: 55;
   width: 26px; height: 26px; border: 1px solid var(--border); border-radius: 999px;
   background: var(--white, #fff); color: var(--muted); display: grid; place-items: center;
   cursor: pointer; box-shadow: 0 1px 4px rgba(16,24,20,.12);
