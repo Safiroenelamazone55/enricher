@@ -6356,7 +6356,7 @@ const _lmDashHandler = async (req, res) => {
              COUNT(DISTINCT a.contact_id) FILTER (WHERE ${REPLY})::int AS replies,
              COUNT(DISTINCT k.id) FILTER (WHERE k.li_aceptado_at::date BETWEEN ${r[0]}::date AND ${r[1]}::date)::int AS accepts,
              COUNT(DISTINCT a.contact_id) FILTER (WHERE a.tipo='reunion')::int AS meetings,
-             COUNT(*) FILTER (WHERE ${OUT} AND a.tipo='linkedin_connect')::int AS invites,
+             COUNT(DISTINCT a.contact_id) FILTER (WHERE ${OUT} AND ${CH}='linkedin')::int AS invites,
              COUNT(*) FILTER (WHERE ${OUT} AND ${CH}='email')::int AS emails
         ${base} AND ${inR(r[0], r[1])}`;
     const msgSql = r => `
