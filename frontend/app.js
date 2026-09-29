@@ -8065,10 +8065,13 @@ const CanteraGlobalModule = (() => {
       _vista !== 'empresa' ? _taFieldG('departamento', 'Departamento') : '',
       _vista !== 'empresa' ? _taFieldG('ciudad', 'Ciudad') : '',
     ].filter(Boolean).join('');
-    const savedList = _loadSaved();
-    const savedHtml = savedList.length ? `<div class="cant-global-saved">
+    // Un filtro guardado en la pestaña Empresas solo tiene sentido ahí -- pedido
+    // explícito: "si es filtro de empresa solo debería aparecer en empresa".
+    const savedListAll = _loadSaved();
+    const savedShown = savedListAll.map((f, i) => ({ f, i })).filter(x => (x.f.vista || '') === _vista);
+    const savedHtml = savedShown.length ? `<div class="cant-global-saved">
         <label class="field-label">Filtros guardados</label>
-        <div class="cant-global-saved-list">${savedList.map((f, i) => `
+        <div class="cant-global-saved-list">${savedShown.map(({ f, i }) => `
           <div class="cant-global-saved-item">
             <button class="cant-global-saved-apply" onclick="CanteraGlobalModule.aplicarFiltroGuardado(${i})" title="Aplicar este filtro">
               <span class="cant-global-saved-n">${esc(f.nombre)}</span>
