@@ -2390,6 +2390,12 @@ body {
   color: var(--text);
   white-space: nowrap;
 }
+/* Columna principal (dato que identifica la fila) en semibold -- mismo
+   tratamiento que .ldh-name en la tabla de Campañas (Outreach), pedido
+   explicito: "me gusta el de Outreach... todo tiene que responder a un
+   mismo manual". Unifica .clients-table (Base global, Cantera, etc.)
+   con .ldh-table en vez de que cada tabla defina su propia jerarquia. */
+.clients-table td:first-child { font-weight: 600; }
 .clients-table td .muted { color: var(--muted); }
 
 .cell-clip { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
