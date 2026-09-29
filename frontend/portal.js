@@ -199,7 +199,7 @@
       <div class="pt-main" id="pt-body"></div>
       ${S.me.sections.chat ? `<button class="pt-chat-btn" id="pt-cb">${ico('chat', 18)} Chat rápido <span class="n" id="pt-cn" style="display:none"></span></button>
       <div class="pt-chat" id="pt-cw"><div class="pt-chat__h"><span>Chat con tu equipo</span><button id="pt-cc">✕</button></div><div class="pt-chat__b" id="pt-cm"></div><div class="pt-chat__p" id="pt-cpend"></div><form class="pt-chat__f" id="pt-cf"><button type="button" class="pt-chat__a" id="pt-ca" title="Adjuntar foto o archivo">📎</button><input id="pt-ci" placeholder="Escribe un mensaje…" maxlength="2000" autocomplete="off"><button>Enviar</button></form><input type="file" id="pt-cfile" multiple hidden></div>` : ''}`;
-    document.querySelectorAll('.pt-nav button').forEach(b => b.onclick = () => { S.tab = b.dataset.t; S.co = 0; S.q = ''; renderApp(); load(true); });
+    document.querySelectorAll('.pt-nav button').forEach(b => b.onclick = () => { S.tab = b.dataset.t; S.co = 0; S.q = ''; S.actN = 15; renderApp(); load(true); });
     wireLang();
     const mn = document.getElementById('pt-mn');
     document.getElementById('pt-um').onclick = e => { e.stopPropagation(); mn.classList.toggle('on'); };
@@ -301,7 +301,7 @@
     else if (t === 'empresas') b.innerHTML = empresas();
     else if (t === 'contactos') b.innerHTML = contactos();
     else if (t === 'secuencias') b.innerHTML = secuencias();
-    else if (t === 'actividad') b.innerHTML = `<div class="pt-h"><h2>Actividad en vivo</h2></div><div class="pt-card">${feedHtml(S.feed, 100)}</div>`;
+    else if (t === 'actividad') b.innerHTML = `<div class="pt-h"><h2>Actividad en vivo</h2></div><div class="pt-card">${feedHtml(S.feed, S.actN || 15, true)}</div>`;
     else if (t === 'cantera') b.innerHTML = canteraHtml();
     const se = document.getElementById('pt-search');
     if (se) { se.value = S.q; se.oninput = debounce(() => { S.q = se.value; load(false); }, 350); }
@@ -346,6 +346,7 @@
     cal: d => { if (d === 0) { const n = new Date(); S.cal = { y: n.getFullYear(), m: n.getMonth() }; } else { let m = S.cal.m + d, y = S.cal.y; if (m < 0) { m = 11; y--; } if (m > 11) { m = 0; y++; } S.cal = { y, m }; } paint(); },
     goMeet: () => { S.tab = 'reuniones'; renderApp(); load(true); },
     goSeq: () => { S.tab = 'secuencias'; renderApp(); load(true); },
+    feedMore: () => { S.actN = (S.actN || 15) + 15; paint(); },
     goCo: id => { S.tab = 'contactos'; S.co = id; S.q = ''; renderApp(); load(true); },
     weekTile: (kind, label) => openWeekModal(kind, label),
     weekSelect: id => { if (S._wkSelect) S._wkSelect(id); },
@@ -646,9 +647,11 @@
     if (cc && d.channels) S.charts.push(new Chart(cc.getContext('2d'), { type: 'doughnut', data: { labels: d.channels.map(r => PT_I18N.t((CH[r.ch] || CH.otros)[0])), datasets: [{ data: d.channels.map(r => r.touches), backgroundColor: d.channels.map(r => (CH[r.ch] || CH.otros)[1]), borderWidth: 2, borderColor: '#fff' }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '55%', plugins: { legend: { display: false }, tooltip: tip } } }));
   }
 
-  function feedHtml(list, n) {
+  function feedHtml(list, n, more) {
     if (!list || !list.length) return '<div class="pt-empty">Sin actividad todavía</div>';
-    return `<div class="pt-feed">${list.slice(0, n).map(e => { const m = CH[e.canal] || CH.task; return `<div class="pt-ev"><span class="pt-ev__i" style="background:${m[1]}">${ico(m[2], 15)}</span><div><div class="pt-ev__t">${esc(e.texto)}</div><div class="pt-ev__s">${esc(e.nombre)}${e.cargo ? ' · ' + esc(e.cargo) : ''}${e.empresa ? ' — ' + esc(e.empresa) : ''}</div></div><span class="pt-ev__d">${ago(e.fecha)}</span></div>`; }).join('')}</div>`;
+    const shown = list.slice(0, n);
+    const btn = more && list.length > shown.length ? `<button class="pt-feed__more" onclick="PT.feedMore()">Ver más (${list.length - shown.length})</button>` : '';
+    return `<div class="pt-feed">${shown.map(e => { const m = CH[e.canal] || CH.task; return `<div class="pt-ev"><span class="pt-ev__i">${ico(m[2], 18)}</span><div><div class="pt-ev__t">${esc(e.texto)}</div><div class="pt-ev__s">${esc(e.nombre)}${e.cargo ? ' · ' + esc(e.cargo) : ''}${e.empresa ? ' — ' + esc(e.empresa) : ''}</div></div><span class="pt-ev__d">${ago(e.fecha)}</span></div>`; }).join('')}</div>${btn}`;
   }
   // ── Reuniones: calendario + lista, y ficha del contacto con su historial desde el momento 0 ──
   S.cal = (function () { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() }; })();
