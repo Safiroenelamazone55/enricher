@@ -333,6 +333,7 @@
     // Pedido explícito del cliente (Tent Softlab, 2026-09-28): "a date selection
     // option in your app" — rango de fechas personalizado para el resumen del
     // portal, además de Semana/Mes.
+    rangeDirty: () => { const b = document.getElementById('pt-range-go'); if (b) b.classList.add('pt-range__go--on'); },
     customRange: (from, to) => {
       if (!from || !to || from > to) return;
       S.customFrom = from; S.customTo = to; S.wkc.custom = null;
@@ -428,11 +429,12 @@
     ];
     const sent = `${c.contacted} contactos alcanzados · ${c.replies} respuestas${mc == null ? '' : ' · ' + mc + (mc === 1 ? ' reunión agendada' : ' reuniones agendadas')}`;
     const title = S.per === 'month' ? 'Este mes' : S.per === 'trim' ? 'Este trimestre' : S.per === 'custom' ? 'Rango elegido' : 'Esta semana';
-    const customRow = S.per === 'custom' ? `<div style="display:flex;gap:8px;align-items:center;margin:10px 0 2px;flex-wrap:wrap">
-      <input type="date" id="pt-cf1" value="${esc(S.customFrom || '')}" style="border:1px solid #E1E6EC;border-radius:8px;padding:6px 9px;font-size:13px;font-family:inherit">
-      <span style="color:#64748B">–</span>
-      <input type="date" id="pt-cf2" value="${esc(S.customTo || '')}" style="border:1px solid #E1E6EC;border-radius:8px;padding:6px 9px;font-size:13px;font-family:inherit">
-      <button class="pt-btn" style="margin:0;padding:7px 16px" onclick="PT.customRange(document.getElementById('pt-cf1').value,document.getElementById('pt-cf2').value)">Aplicar</button>
+    const customRow = S.per === 'custom' ? `<div class="pt-range" style="margin:10px 0 2px">
+      <span class="pt-range__ic">${ico('cal', 16)}</span>
+      <input type="date" id="pt-cf1" class="pt-range__in" value="${esc(S.customFrom || '')}" onchange="PT.rangeDirty()">
+      <span class="pt-range__sep">–</span>
+      <input type="date" id="pt-cf2" class="pt-range__in" value="${esc(S.customTo || '')}" onchange="PT.rangeDirty()">
+      <button id="pt-range-go" class="pt-range__go" onclick="PT.customRange(document.getElementById('pt-cf1').value,document.getElementById('pt-cf2').value)">Aplicar</button>
     </div>` : '';
     return `<div class="pt-week"><div class="pt-week__h"><div><h2>${title}</h2><span class="pt-week__r">${fshort(w.r.from)} – ${fshort(w.r.to)}</span></div>
       <div class="dash-seg"><button class="dash-seg__b${S.per === 'week' ? ' on' : ''}" onclick="PT.per('week')">Semana</button><button class="dash-seg__b${S.per === 'month' ? ' on' : ''}" onclick="PT.per('month')">Mes</button><button class="dash-seg__b${S.per === 'trim' ? ' on' : ''}" onclick="PT.per('trim')">Trimestre</button><button class="dash-seg__b${S.per === 'custom' ? ' on' : ''}" onclick="PT.per('custom')">Personalizado</button></div></div>
