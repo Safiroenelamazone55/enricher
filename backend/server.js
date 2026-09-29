@@ -7651,6 +7651,42 @@ app.get('/api/cantera/global/facets', requireAuth, async (req, res) => {
     res.json(values.map(value => ({ value, n: base.filter(r => _cGlobalFieldMatch(r, field, value)).length })));
   } catch (err) { console.error('[cantera] GET global/facets', err.message); res.status(500).json({ error: 'Error al calcular conteos' }); }
 });
+// Validación profunda desde una empresa que SOLO existe en el CRM (nunca pasó
+// por un lote de Cantera) — pedido explícito: "esos son los que más me
+// interesa validar, así que todo debe tener [el lápiz]". Crea el registro de
+// cantera_companies bajo demanda, en un lote reservado "Validación directa
+// (CRM)" que se crea una sola vez por usuario, y de ahí en adelante se ve
+// igual (y actualizado) tanto en Base Global como en cualquier otra vista que
+// una por dominio con cantera_companies.
+async function _cCanteraDirectBatchId(client, uid) {
+  const { rows } = await client.query(`SELECT id FROM cantera_batches WHERE user_id=$1 AND nombre='Validación directa (CRM)' LIMIT 1`, [uid]);
+  if (rows.length) return rows[0].id;
+  const ins = await client.query(`INSERT INTO cantera_batches (user_id,nombre,estado) VALUES ($1,'Validación directa (CRM)','activo') RETURNING id`, [uid]);
+  return ins.rows[0].id;
+}
+app.post('/api/cantera/global/ensure-company', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId;
+  const lmCompanyId = parseInt((req.body || {}).lm_company_id);
+  if (!lmCompanyId) return res.status(400).json({ error: 'lm_company_id es requerido' });
+  const client = await pool.connect();
+  try {
+    const { rows: coRows } = await client.query(`SELECT id, nombre, dominio, industria, tamano, pais, ciudad FROM lm_companies WHERE id=$1 AND user_id=$2`, [lmCompanyId, uid]);
+    if (!coRows.length) return res.status(404).json({ error: 'Empresa no encontrada' });
+    const co = coRows[0];
+    const dominio = (co.dominio || '').trim();
+    if (dominio) {
+      const { rows: existing } = await client.query(`SELECT id, batch_id FROM cantera_companies WHERE user_id=$1 AND lower(dominio)=lower($2) ORDER BY id DESC LIMIT 1`, [uid, dominio]);
+      if (existing.length) return res.json({ company_id: existing[0].id, batch_id: existing[0].batch_id });
+    }
+    const batchId = await _cCanteraDirectBatchId(client, uid);
+    const ins = await client.query(`
+      INSERT INTO cantera_companies (batch_id,user_id,nombre,dominio,industria,tamano,pais,ciudad)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id
+    `, [batchId, uid, co.nombre || dominio || 'Sin nombre', dominio, co.industria || '', co.tamano || '', co.pais || '', co.ciudad || '']);
+    res.json({ company_id: ins.rows[0].id, batch_id: batchId });
+  } catch (err) { console.error('[cantera] POST ensure-company', err.message); res.status(500).json({ error: 'Error al preparar la validación' }); }
+  finally { client.release(); }
+});
 app.get('/api/cantera/global', requireAuth, async (req, res) => {
   const uid = req.workspaceOwnerId;
   const q = `%${(req.query.q || '').trim()}%`;
@@ -7705,7 +7741,7 @@ app.get('/api/cantera/global', requireAuth, async (req, res) => {
              lco.updated_at, '' AS estado, 'empresa' AS tipo,
              (SELECT string_agg(DISTINCT s.nombre, ', ') FROM lm_contacts k JOIN lm_contact_sequences csq ON csq.contact_id = k.id JOIN sequences s ON s.id = csq.sequence_id WHERE k.company_id = lco.id) AS secuencias,
              '' AS seniority, '' AS departamento, lco.ciudad AS ciudad, lco.target_tier AS tier,
-             cx.paso1_estado AS paso1_estado, cx.paso2_estado AS paso2_estado, cx.id AS company_id, cx.batch_id AS batch_id
+             cx.paso1_estado AS paso1_estado, cx.paso2_estado AS paso2_estado, cx.id AS company_id, cx.batch_id AS batch_id, lco.id AS lm_company_id
         FROM lm_companies lco
         LEFT JOIN LATERAL (SELECT c2.id, c2.batch_id, c2.paso1_estado, c2.paso2_estado FROM cantera_companies c2
           WHERE c2.user_id = lco.user_id AND lco.dominio <> '' AND lower(c2.dominio) = lower(lco.dominio) ORDER BY c2.id DESC LIMIT 1) cx ON true
@@ -7713,7 +7749,7 @@ app.get('/api/cantera/global', requireAuth, async (req, res) => {
       UNION ALL
       SELECT '', '', '', '', cco.nombre AS empresa, cco.dominio, cco.pais, cco.industria, cco.tamano,
              'borrador_' || cb.estado AS origen, cb.nombre AS referencia, cco.created_at AS updated_at,
-             '' AS estado, 'empresa' AS tipo, '' AS secuencias, '' AS seniority, '' AS departamento, '' AS ciudad, cco.tier_clave AS tier, cco.paso1_estado AS paso1_estado, cco.paso2_estado AS paso2_estado, cco.id AS company_id, cco.batch_id AS batch_id
+             '' AS estado, 'empresa' AS tipo, '' AS secuencias, '' AS seniority, '' AS departamento, '' AS ciudad, cco.tier_clave AS tier, cco.paso1_estado AS paso1_estado, cco.paso2_estado AS paso2_estado, cco.id AS company_id, cco.batch_id AS batch_id, NULL::int AS lm_company_id
         FROM cantera_companies cco JOIN cantera_batches cb ON cb.id = cco.batch_id
        WHERE cco.user_id=$1 AND ($2 = '%%' OR cco.nombre ILIKE $2 OR cco.dominio ILIKE $2)
        ORDER BY updated_at DESC LIMIT 20000
@@ -7725,7 +7761,7 @@ app.get('/api/cantera/global', requireAuth, async (req, res) => {
              lc.updated_at, lc.estado AS estado, 'contacto' AS tipo,
              (SELECT string_agg(DISTINCT s.nombre, ', ') FROM lm_contact_sequences csq JOIN sequences s ON s.id = csq.sequence_id WHERE csq.contact_id = lc.id) AS secuencias,
              lc.seniority AS seniority, lc.departamento AS departamento, lc.ciudad AS ciudad, co.target_tier AS tier,
-             cx.paso1_estado AS paso1_estado, cx.paso2_estado AS paso2_estado, cx.id AS company_id, cx.batch_id AS batch_id
+             cx.paso1_estado AS paso1_estado, cx.paso2_estado AS paso2_estado, cx.id AS company_id, cx.batch_id AS batch_id, co.id AS lm_company_id
         FROM lm_contacts lc LEFT JOIN lm_companies co ON co.id = lc.company_id
         LEFT JOIN LATERAL (SELECT c2.id, c2.batch_id, c2.paso1_estado, c2.paso2_estado FROM cantera_companies c2
           WHERE c2.user_id = lc.user_id AND co.dominio IS NOT NULL AND co.dominio <> '' AND lower(c2.dominio) = lower(co.dominio) ORDER BY c2.id DESC LIMIT 1) cx ON true
@@ -7734,7 +7770,7 @@ app.get('/api/cantera/global', requireAuth, async (req, res) => {
       SELECT cc.nombre, cc.apellido, cc.cargo, cc.email,
              cco.nombre AS empresa, cco.dominio, cco.pais, cco.industria, cco.tamano,
              'borrador_' || cb.estado AS origen, cb.nombre AS referencia, cc.created_at AS updated_at,
-             '' AS estado, 'contacto' AS tipo, '' AS secuencias, '' AS seniority, '' AS departamento, '' AS ciudad, cco.tier_clave AS tier, cco.paso1_estado AS paso1_estado, cco.paso2_estado AS paso2_estado, cco.id AS company_id, cco.batch_id AS batch_id
+             '' AS estado, 'contacto' AS tipo, '' AS secuencias, '' AS seniority, '' AS departamento, '' AS ciudad, cco.tier_clave AS tier, cco.paso1_estado AS paso1_estado, cco.paso2_estado AS paso2_estado, cco.id AS company_id, cco.batch_id AS batch_id, NULL::int AS lm_company_id
         FROM cantera_contacts cc
         JOIN cantera_companies cco ON cco.id = cc.company_id
         JOIN cantera_batches cb ON cb.id = cc.batch_id
@@ -7743,7 +7779,7 @@ app.get('/api/cantera/global', requireAuth, async (req, res) => {
       SELECT '', '', '', '', lco.nombre AS empresa, lco.dominio, lco.pais, lco.industria, lco.tamano, 'crm' AS origen,
              (SELECT nombre FROM outbound_clients oc WHERE oc.id = lco.outbound_client_id) AS referencia, lco.updated_at,
              '' AS estado, 'empresa' AS tipo, '' AS secuencias, '' AS seniority, '' AS departamento, lco.ciudad AS ciudad, lco.target_tier AS tier,
-             cx.paso1_estado AS paso1_estado, cx.paso2_estado AS paso2_estado, cx.id AS company_id, cx.batch_id AS batch_id
+             cx.paso1_estado AS paso1_estado, cx.paso2_estado AS paso2_estado, cx.id AS company_id, cx.batch_id AS batch_id, lco.id AS lm_company_id
         FROM lm_companies lco
         LEFT JOIN LATERAL (SELECT c2.id, c2.batch_id, c2.paso1_estado, c2.paso2_estado FROM cantera_companies c2
           WHERE c2.user_id = lco.user_id AND lco.dominio <> '' AND lower(c2.dominio) = lower(lco.dominio) ORDER BY c2.id DESC LIMIT 1) cx ON true
@@ -7752,7 +7788,7 @@ app.get('/api/cantera/global', requireAuth, async (req, res) => {
       UNION ALL
       SELECT '', '', '', '', cco2.nombre AS empresa, cco2.dominio, cco2.pais, cco2.industria, cco2.tamano,
              'borrador_' || cb2.estado AS origen, cb2.nombre AS referencia, cco2.created_at AS updated_at,
-             '' AS estado, 'empresa' AS tipo, '' AS secuencias, '' AS seniority, '' AS departamento, '' AS ciudad, cco2.tier_clave AS tier, cco2.paso1_estado AS paso1_estado, cco2.paso2_estado AS paso2_estado, cco2.id AS company_id, cco2.batch_id AS batch_id
+             '' AS estado, 'empresa' AS tipo, '' AS secuencias, '' AS seniority, '' AS departamento, '' AS ciudad, cco2.tier_clave AS tier, cco2.paso1_estado AS paso1_estado, cco2.paso2_estado AS paso2_estado, cco2.id AS company_id, cco2.batch_id AS batch_id, NULL::int AS lm_company_id
         FROM cantera_companies cco2 JOIN cantera_batches cb2 ON cb2.id = cco2.batch_id
        WHERE cco2.user_id=$1 AND NOT EXISTS (SELECT 1 FROM cantera_contacts y WHERE y.company_id = cco2.id)
          AND ($2 = '%%' OR cco2.nombre ILIKE $2 OR cco2.dominio ILIKE $2)

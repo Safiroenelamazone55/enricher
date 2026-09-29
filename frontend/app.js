@@ -7961,9 +7961,29 @@ const CanteraGlobalModule = (() => {
     return new Set(_globalCols().filter(c => c.def).map(c => c.key));
   }
   function _pageSize() { try { return parseInt(localStorage.getItem('cantera_global_page_size')) || 50; } catch (_) { return 50; } }
+  // El estado (busqueda/filtros/vista) se guarda en localStorage y se
+  // restaura al abrir la seccion -- pedido explicito: "cuando le doy click en
+  // recargar, base global se queda sin datos y debo volver a aplicar". Sin
+  // esto, un F5 (o volver a esta pestana) perdia todo porque vivia solo en
+  // variables de memoria del modulo.
+  const _STATE_KEY = 'cantera_global_state';
+  let _restored = false;
+  function _saveState() {
+    try { localStorage.setItem(_STATE_KEY, JSON.stringify({ q: _q, origen: _origen, vista: _vista, filtros: _filtros, filtrosExcl: _filtrosExcl })); } catch (_) {}
+  }
+  function _restoreState() {
+    if (_restored) return; _restored = true;
+    try {
+      const s = JSON.parse(localStorage.getItem(_STATE_KEY) || 'null'); if (!s) return;
+      _q = s.q || ''; _origen = s.origen || ''; _vista = s.vista || '';
+      _filtros = { pais: [], industria: [], tamano: [], tier: [], estado: [], cliente: [], secuencia: [], seniority: [], departamento: [], ciudad: [], ...(s.filtros || {}) };
+      _filtrosExcl = { pais: [], industria: [], tamano: [], tier: [], estado: [], cliente: [], secuencia: [], seniority: [], departamento: [], ciudad: [], ...(s.filtrosExcl || {}) };
+    } catch (_) {}
+  }
   async function render(containerId) {
     const el = document.getElementById(containerId); if (!el) return;
     el.innerHTML = `<div class="cp-empty2" style="padding:22px">Cargando…</div>`;
+    _restoreState();
     if (!_opts) { try { _opts = await (await apiFetch(`${API}/cantera/opciones-filtro`)).json(); } catch { _opts = {}; } }
     await _search(); el.innerHTML = _html();
   }
@@ -7995,6 +8015,7 @@ const CanteraGlobalModule = (() => {
     return p;
   }
   async function _search() {
+    _saveState();
     const p = _buildFilterParams();
     p.set('page', _page); p.set('pageSize', _pageSize());
     try {
@@ -8106,12 +8127,19 @@ const CanteraGlobalModule = (() => {
     if (key === 'origen') return `<span class="cant-estado cant-estado--${r.origen === 'crm' ? 'aprobado' : 'pendiente'}">${_origenLabel(r.origen)}</span>`;
     if (key === 'paso1_estado') return r.paso1_estado ? esc(_PASO1_LBL[r.paso1_estado] || r.paso1_estado) : '—';
     // Editable (pedido explícito 2026-09-25: "debo poder darle clic y
-    // abrirse como la foto") — solo empresas de un borrador tienen paso2_estado
-    // que editar (company_id/batch_id vienen null para filas del CRM).
+    // abrirse como la foto"). Ampliado 2026-09-29: "justamente esos son los
+    // que más me interesa validar, así que todo debe tener [el lápiz]" — las
+    // empresas que solo existen en el CRM (sin paso por Cantera todavía)
+    // también son editables: al hacer clic se crea el registro al vuelo
+    // (editValidacionCRM) y de ahí en más se ve igual, ya actualizado, tanto
+    // acá como en cualquier otra vista que una por dominio con cantera_companies.
     if (key === 'paso2_estado') {
       const txt = r.paso2_estado ? esc(_PASO2_LBL[r.paso2_estado] || r.paso2_estado) : '—';
       if (r.company_id && r.batch_id) {
         return `${txt} <button class="cant-global-editpen" title="Editar validación profunda" onclick="event.stopPropagation();CanteraGlobalModule.editValidacion(${r.company_id},${r.batch_id})">✎</button>`;
+      }
+      if (r.lm_company_id) {
+        return `${txt} <button class="cant-global-editpen" title="Validar esta empresa" onclick="event.stopPropagation();CanteraGlobalModule.editValidacionCRM(${r.lm_company_id})">✎</button>`;
       }
       return txt;
     }
@@ -8290,7 +8318,18 @@ const CanteraGlobalModule = (() => {
       }
     } catch (e) { showBanner('Error al abrir la validación: ' + e.message, 'error'); }
   }
-  return { render, setQ, setOrigen, setVista, setPageSize, goPage, toggleCollapse, taOpen, taFilter, taBlur, addFiltro, removeFiltro, addFiltroExcl, removeFiltroExcl, toggleCol, colsMenu, editValidacion, guardarFiltroActual, aplicarFiltroGuardado, borrarFiltroGuardado };
+  // Empresa que solo existe en el CRM, sin paso por Cantera todavía — crea el
+  // registro de validación al vuelo (lote reservado "Validación directa (CRM)")
+  // y abre la misma modal de siempre.
+  async function editValidacionCRM(lmCompanyId) {
+    try {
+      const r = await apiFetch(`${API}/cantera/global/ensure-company`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lm_company_id: lmCompanyId }) });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Error');
+      await editValidacion(d.company_id, d.batch_id);
+    } catch (e) { showBanner('Error al preparar la validación: ' + e.message, 'error'); }
+  }
+  return { render, setQ, setOrigen, setVista, setPageSize, goPage, toggleCollapse, taOpen, taFilter, taBlur, addFiltro, removeFiltro, addFiltroExcl, removeFiltroExcl, toggleCol, colsMenu, editValidacion, editValidacionCRM, guardarFiltroActual, aplicarFiltroGuardado, borrarFiltroGuardado };
 })();
 
 // =================================================================
