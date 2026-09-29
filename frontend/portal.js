@@ -802,7 +802,7 @@
       </div>`;
     const companiesCard = (d.companies || []).length ? `<div class="pt-card"><h3>Actividad reciente</h3>${filterBar}<div id="pt-cant-list">${canteraListHtml(d.companies)}</div></div>` : '';
     return `<div class="pt-h"><h2>Cantera</h2></div>
-      ${hero}${companiesCard}${batches}`;
+      ${hero}${batches}${companiesCard}`;
   }
   function canteraListHtml(rows) {
     if (!rows.length) return '<div class="pt-empty">Sin resultados</div>';
