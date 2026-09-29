@@ -789,12 +789,7 @@
         <div class="pt-cant-hero__bar"><i style="width:${Math.max(2, avance)}%"></i></div>
         <div class="pt-cant-hero__stats"><span><b>${pctV}%</b> validadas</span><span><b>${pctC}%</b> califican</span><span><b>${pctA}%</b> Tier A</span></div>
       </div>`;
-    const tiers = d.tiers.length ? `<div class="pt-card"><h3>Empresas calificadas por Tier</h3><div style="display:flex;gap:10px;flex-wrap:wrap">${d.tiers.map(t => `<span class="pt-badge" style="background:${TIER_COLOR[t.tier] || '#E0F2FE'}22;color:${TIER_COLOR[t.tier] || '#0369A1'};font-weight:700">Tier ${esc(t.tier)} · ${t.n}</span>`).join('')}</div></div>` : '';
     const batches = d.batches.length ? `<div class="pt-card"><h3>Lotes de prospección</h3>${d.batches.map(b => `<div class="pt-item"><div class="pt-item__t"><span>${esc(b.nombre)}</span><span style="color:#64748B;font-weight:500;font-size:12px">${fdate(b.created_at, { day: 'numeric', month: 'short' })}</span></div><div class="pt-item__s">${b.total} empresas · ${b.califican} califican</div></div>`).join('')}</div>` : '';
-    // Tier POR secuencia — pedido explícito: "qué tiers estamos manejando por
-    // secuencia o campaña". Deliberadamente opcional: si ninguna empresa
-    // calificada está en una secuencia todavía, esta tarjeta no aparece.
-    const seqs = (d.secuencias || []).length ? `<div class="pt-card"><h3>Tier por secuencia</h3><div style="display:flex;flex-direction:column;gap:12px">${d.secuencias.map(s => `<div><div class="pt-item__t" style="margin-bottom:4px"><span>${esc(s.secuencia)}</span><span style="color:#64748B;font-weight:500">${s.total} ${s.total === 1 ? 'empresa' : 'empresas'}</span></div><div style="display:flex;gap:8px;flex-wrap:wrap">${s.tiers.sort((a, b) => a.tier.localeCompare(b.tier)).map(t => `<span class="pt-badge" style="background:${(TIER_COLOR[t.tier] || '#94A3B8')}22;color:${TIER_COLOR[t.tier] || '#64748B'};font-weight:700">${t.tier === '—' ? 'Sin tier' : 'Tier ' + esc(t.tier)} · ${t.n}</span>`).join('')}</div></div>`).join('')}</div></div>` : '';
     // Lista filtrable de empresas en validación — pedido explícito: "que el
     // cliente vea qué empresas se están validando", mismo estilo que "Últimas
     // respuestas". Filtro por texto + Tier, 100% client-side sobre lo ya traído.
@@ -807,7 +802,7 @@
       </div>`;
     const companiesCard = (d.companies || []).length ? `<div class="pt-card"><h3>Actividad reciente</h3>${filterBar}<div id="pt-cant-list">${canteraListHtml(d.companies)}</div></div>` : '';
     return `<div class="pt-h"><h2>Cantera</h2></div>
-      ${hero}${companiesCard}${tiers}${seqs}${batches}`;
+      ${hero}${companiesCard}${batches}`;
   }
   function canteraListHtml(rows) {
     if (!rows.length) return '<div class="pt-empty">Sin resultados</div>';
