@@ -13176,6 +13176,17 @@ a.cp-strip__i:hover svg { color: var(--brand, #007AFF); }
 .lm2-nav__list { padding: 8px 10px; }
 .lm2-nav__grp { padding: 9px 10px 3px; }
 .lm2-nav__item { padding: 5px 10px; }
+/* Colapso propio de la barra interna de Outreach -- boton vive dentro del
+   panel (snav-panel__hd), nunca flotando afuera. El boton de colapsar
+   siempre queda visible/clickeable (no depende de hover). */
+.lm2-nav--collapsed { width: 64px; }
+.lm2-nav--collapsed .snav-panel__hd { padding: 8px; height: auto; flex-direction: column; gap: 6px; }
+.lm2-nav--collapsed .snav-back span, .lm2-nav--collapsed .lm2-nav__lbl,
+.lm2-nav--collapsed .lm2-nav__grp, .lm2-nav--collapsed .lm2-nav__cnt,
+.lm2-nav--collapsed .lm2-nav__soon { display: none; }
+.lm2-nav--collapsed .snav-back { padding: 0; width: 30px; height: 30px; justify-content: center; }
+.lm2-nav--collapsed #lm2-nav-toggle { transform: rotate(180deg); }
+.lm2-nav--collapsed .lm2-nav__item { justify-content: center; padding: 7px; }
 @media (max-width: 720px) {
   .snav-rail { flex-direction: row; width: 100%; min-width: 0; height: auto; padding: 6px 8px; gap: 8px; }
   .snav-rail__spacer, .snav-rail__sep { display: none; }

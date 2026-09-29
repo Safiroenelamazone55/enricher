@@ -19515,12 +19515,26 @@ const LeadManagerModule = (() => {
     });
     return html;
   }
+  // Colapso propio de la barra interna de Outreach -- pedido explicito: "en
+  // el modulo de outreach... tampoco se ve el boton" (la CSS de
+  // .lm2-nav .snav-panel__hd .sidebar__toggle ya existia, pero nunca se
+  // agrego el boton correspondiente al markup). Vive DENTRO del panel,
+  // nunca flotando afuera.
+  function _lm2NavCollapsed() { try { return localStorage.getItem('lm2_nav_collapsed') === '1'; } catch (_) { return false; } }
+  function toggleNav() {
+    const nav = document.querySelector('.lm2-nav'); if (!nav) return;
+    const on = !nav.classList.contains('lm2-nav--collapsed');
+    nav.classList.toggle('lm2-nav--collapsed', on);
+    try { localStorage.setItem('lm2_nav_collapsed', on ? '1' : '0'); } catch (_) {}
+    const btn = document.getElementById('lm2-nav-toggle'); if (btn) btn.title = on ? 'Mostrar panel' : 'Ocultar panel';
+  }
   function _renderShell() {
     const pane = $('pane-lead-manager'); if (!pane) return;
     _cuStart();
+    const collapsed = _lm2NavCollapsed();
     pane.innerHTML = `<div class="lm2">
-      <aside class="lm2-nav">
-        <div class="snav-panel__hd"><button class="snav-back" title="Volver al inicio" aria-label="Volver al inicio" onclick="goHome()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg><span>Módulos</span></button></div>
+      <aside class="lm2-nav${collapsed ? ' lm2-nav--collapsed' : ''}">
+        <div class="snav-panel__hd"><button class="snav-back" title="Volver al inicio" aria-label="Volver al inicio" onclick="goHome()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg><span>Módulos</span></button><button class="sidebar__toggle" id="lm2-nav-toggle" title="${collapsed ? 'Mostrar panel' : 'Ocultar panel'}" aria-label="Ocultar/mostrar panel" onclick="LeadManagerModule.toggleNav()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button></div>
         <nav class="lm2-nav__list" id="lm2-nav-list">${_navHtml()}</nav>
         <div class="snav-foot">
           <button class="snav-foot__btn" onclick="WorkspaceModule.openNameModal()">
@@ -31641,6 +31655,7 @@ ${foot}
     openTemplate, closeTemplate, saveTemplate, deleteTemplate, tplInsertVar, tplInsertVarAsunto, tplSetFilter, tplSetTag, tplSetSeq, tplCanalChange,
     tplTagInput, tplTagKey, tplTagPick, tplTagAddTyped, tplTagRemove, tplTagBlur,
     tplSeqInput, tplSeqKey, tplSeqPick, tplSeqRemove, tplSeqBlur,
+    toggleNav,
     openFilters, closeFilters, fltSet, fltAddRow, fltDelRow, fltApply, clearFilters, removeFilter, fltOpenDate, cfSaveLabel,
     renderDataGrid, dgSetEntity, dgSetCliente, dgSetSeq, dgSetCamp, dgSetQ, dgToggleSel, dgToggleAll, dgClearSel,
     dgEditCell, dgEditKey, dgSaveCell, dgCleanMenu, dgCleanOpen, dgCleanClose, dgCleanApply,
