@@ -13143,6 +13143,11 @@ a.cp-strip__i:hover svg { color: var(--brand, #007AFF); }
 #appShell.nav-collapsed #sidebar { display: none; }
 /* Lead Management: sin panel redundante — su propia barra interna hace de 2ª barra */
 #appShell.lm-active #sidebar { display: none; }
+/* El toggle de #sidebar quedaba flotando sobre la barra interna de Lead
+   Manager (.lm2-nav) cuando #sidebar estaba oculto por lm-active, no por
+   sidebar--hidden -- la regla de "oculto" no lo detectaba. Bug real
+   detectado en vivo: "en el modulo de outreach falla". */
+#appShell.lm-active #sidebar-toggle, #appShell.nav-collapsed #sidebar-toggle { display: none; }
 
 /* Panel (2ª barra) en BLANCO — mismo estilo claro que la barra del Lead Manager */
 #sidebar { background: #fff; border-right: 1px solid var(--border); }
