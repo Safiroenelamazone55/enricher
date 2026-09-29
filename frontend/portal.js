@@ -367,7 +367,7 @@
   }
 
   // ── Resumen: 1) mensaje del equipo 2) esta semana/mes 3) atención 4) cómo trabajamos 5) detalle (oculto por defecto) ──
-  S.per = (function () { try { return localStorage.getItem('pt_per') === 'month' ? 'month' : 'week'; } catch (e) { return 'week'; } })();
+  S.per = (function () { try { const v = localStorage.getItem('pt_per'); return v === 'month' || v === 'trim' ? v : 'week'; } catch (e) { return 'week'; } })();
   S.detail = true;
   const isoL = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   function perRanges(p) {
@@ -385,6 +385,12 @@
       const pend = new Date(now.getFullYear(), now.getMonth(), 0, 12), pt = new Date(pf); pt.setDate(Math.min(now.getDate(), pend.getDate()));
       return { from: f, to: now, pfrom: pf, pto: pt };
     }
+    if (per === 'trim') {
+      const qStart = Math.floor(now.getMonth() / 3) * 3;
+      const f = new Date(now.getFullYear(), qStart, 1, 12), pf = new Date(now.getFullYear(), qStart - 3, 1, 12);
+      const pend = new Date(now.getFullYear(), qStart, 0, 12), pt = new Date(pf); pt.setDate(Math.min(now.getDate(), pend.getDate()));
+      return { from: f, to: now, pfrom: pf, pto: pt };
+    }
     const dow = (now.getDay() + 6) % 7, f = new Date(now); f.setDate(now.getDate() - dow);
     const pf = new Date(f); pf.setDate(f.getDate() - 7); const pt = new Date(pf); pt.setDate(pf.getDate() + dow);
     return { from: f, to: now, pfrom: pf, pto: pt };
@@ -400,7 +406,7 @@
   function dl(cur, prev) {
     if (!prev && !cur) return '<span class="dash-d dash-d--0">—</span>';
     const diff = prev ? Math.round((cur - prev) / prev * 100) : 100, cls = diff > 0 ? 'up' : diff < 0 ? 'down' : '0';
-    return `<span class="dash-d dash-d--${cls}">${diff > 0 ? '▲ +' : diff < 0 ? '▼ -' : '• '}${Math.abs(diff)}%${S.per === 'month' ? ' vs. mes anterior' : S.per === 'custom' ? ' vs. período anterior' : ' vs. semana anterior'}</span>`;
+    return `<span class="dash-d dash-d--${cls}">${diff > 0 ? '▲ +' : diff < 0 ? '▼ -' : '• '}${Math.abs(diff)}%${S.per === 'month' ? ' vs. mes anterior' : S.per === 'trim' ? ' vs. trimestre anterior' : S.per === 'custom' ? ' vs. período anterior' : ' vs. semana anterior'}</span>`;
   }
   function updatesHtml() {
     const u = S.upd; if (!u || !u.length) return '';
@@ -418,7 +424,7 @@
       { ic: 'mailopen', l: 'Apertura email', v: c.sent ? pct(c.opened, c.sent) + '%' : '—', dl: '<span class="dash-d dash-d--0">estimada</span>', sub: `sobre ${c.sent} envíos` },
     ];
     const sent = `${c.contacted} contactos alcanzados · ${c.replies} respuestas${mc == null ? '' : ' · ' + mc + (mc === 1 ? ' reunión agendada' : ' reuniones agendadas')}`;
-    const title = S.per === 'month' ? 'Este mes' : S.per === 'custom' ? 'Rango elegido' : 'Esta semana';
+    const title = S.per === 'month' ? 'Este mes' : S.per === 'trim' ? 'Este trimestre' : S.per === 'custom' ? 'Rango elegido' : 'Esta semana';
     const customRow = S.per === 'custom' ? `<div style="display:flex;gap:8px;align-items:center;margin:10px 0 2px;flex-wrap:wrap">
       <input type="date" id="pt-cf1" value="${esc(S.customFrom || '')}" style="border:1px solid #E1E6EC;border-radius:8px;padding:6px 9px;font-size:13px;font-family:inherit">
       <span style="color:#64748B">–</span>
@@ -426,7 +432,7 @@
       <button class="pt-btn" style="margin:0;padding:7px 16px" onclick="PT.customRange(document.getElementById('pt-cf1').value,document.getElementById('pt-cf2').value)">Aplicar</button>
     </div>` : '';
     return `<div class="pt-week"><div class="pt-week__h"><div><h2>${title}</h2><span class="pt-week__r">${fshort(w.r.from)} – ${fshort(w.r.to)}</span></div>
-      <div class="dash-seg"><button class="dash-seg__b${S.per === 'week' ? ' on' : ''}" onclick="PT.per('week')">Semana</button><button class="dash-seg__b${S.per === 'month' ? ' on' : ''}" onclick="PT.per('month')">Mes</button><button class="dash-seg__b${S.per === 'custom' ? ' on' : ''}" onclick="PT.per('custom')">Personalizado</button></div></div>
+      <div class="dash-seg"><button class="dash-seg__b${S.per === 'week' ? ' on' : ''}" onclick="PT.per('week')">Semana</button><button class="dash-seg__b${S.per === 'month' ? ' on' : ''}" onclick="PT.per('month')">Mes</button><button class="dash-seg__b${S.per === 'trim' ? ' on' : ''}" onclick="PT.per('trim')">Trimestre</button><button class="dash-seg__b${S.per === 'custom' ? ' on' : ''}" onclick="PT.per('custom')">Personalizado</button></div></div>
       ${customRow}
       <div class="pt-week__k">${tiles.map(t => `<div class="pt-tile pt-click" style="--kc:${t[4]}" onclick="PT.weekTile('${t[5]}','${esc(t[0])}')"><span class="pt-tile__i">${ico(t[3], 18)}</span><div><div class="pt-tile__l">${t[0]}</div><div class="pt-tile__v">${t[1]}</div>${dl(t[1], t[2])}</div></div>`).join('')}</div>
       <div class="pt-week__k" style="margin-top:12px">${extraTiles.map(t => `<div class="pt-tile"><span class="pt-tile__i">${ico(t.ic, 18)}</span><div><div class="pt-tile__l">${t.l}</div><div class="pt-tile__v">${t.v}</div>${t.dl}<div class="pt-week__s" style="margin-top:2px">${t.sub}</div></div></div>`).join('')}</div>
