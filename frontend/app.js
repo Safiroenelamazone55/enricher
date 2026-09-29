@@ -7889,6 +7889,41 @@ const CanteraGlobalModule = (() => {
   let _filtrosExcl = { pais: [], industria: [], tamano: [], tier: [], estado: [], cliente: [], secuencia: [], seniority: [], departamento: [], ciudad: [] };
   let _opts = null;
   let _page = 0;
+  // Filtros guardados (pedido explícito: "quiero poder guardar los filtros
+  // para volver fácilmente") — con nombre y fecha, varios a la vez, en
+  // localStorage (mismo espíritu que el filtro guardado de Mesa de trabajo,
+  // pero con nombre+fecha y en lista en vez de un único slot).
+  const _SAVED_KEY = 'cantera_global_filtros_guardados';
+  function _loadSaved() { try { return JSON.parse(localStorage.getItem(_SAVED_KEY) || '[]'); } catch (_) { return []; } }
+  function _saveSaved(list) { try { localStorage.setItem(_SAVED_KEY, JSON.stringify(list)); } catch (_) {} }
+  function guardarFiltroActual() {
+    const nombre = (prompt('Nombre para este filtro:') || '').trim();
+    if (!nombre) return;
+    const list = _loadSaved();
+    list.unshift({
+      nombre, fecha: new Date().toISOString(),
+      q: _q, origen: _origen, vista: _vista,
+      filtros: JSON.parse(JSON.stringify(_filtros)), filtrosExcl: JSON.parse(JSON.stringify(_filtrosExcl)),
+    });
+    _saveSaved(list);
+    showBanner('✓ Filtro guardado', 'success');
+    _repaint();
+  }
+  function aplicarFiltroGuardado(idx) {
+    const list = _loadSaved();
+    const f = list[idx]; if (!f) return;
+    _q = f.q || ''; _origen = f.origen || ''; _vista = f.vista || '';
+    _filtros = { pais: [], industria: [], tamano: [], tier: [], estado: [], cliente: [], secuencia: [], seniority: [], departamento: [], ciudad: [], ...(f.filtros || {}) };
+    _filtrosExcl = { pais: [], industria: [], tamano: [], tier: [], estado: [], cliente: [], secuencia: [], seniority: [], departamento: [], ciudad: [], ...(f.filtrosExcl || {}) };
+    _page = 0;
+    _search().then(_repaint);
+  }
+  function borrarFiltroGuardado(idx) {
+    const list = _loadSaved();
+    list.splice(idx, 1);
+    _saveSaved(list);
+    _repaint();
+  }
   // Columnas visibles/ocultas (pedido explícito 2026-09-25: "puedo hacerlo
   // visible directamente en global, ocultar y hacer visibles columnas
   // disponibles") — mismo patrón que CANT_RESULT_COLS/MESA_COLS de Cantera,
@@ -8004,10 +8039,26 @@ const CanteraGlobalModule = (() => {
       _vista !== 'empresa' ? _taFieldG('departamento', 'Departamento') : '',
       _vista !== 'empresa' ? _taFieldG('ciudad', 'Ciudad') : '',
     ].filter(Boolean).join('');
+    const savedList = _loadSaved();
+    const savedHtml = savedList.length ? `<div class="cant-global-saved">
+        <label class="field-label">Filtros guardados</label>
+        <div class="cant-global-saved-list">${savedList.map((f, i) => `
+          <div class="cant-global-saved-item">
+            <button class="cant-global-saved-apply" onclick="CanteraGlobalModule.aplicarFiltroGuardado(${i})" title="Aplicar este filtro">
+              <span class="cant-global-saved-n">${esc(f.nombre)}</span>
+              <span class="cant-global-saved-d">${new Date(f.fecha).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+            </button>
+            <button class="cant-x" onclick="event.stopPropagation();CanteraGlobalModule.borrarFiltroGuardado(${i})" title="Eliminar">✕</button>
+          </div>`).join('')}</div>
+      </div>` : '';
     return `<div class="cant-global-panel-hd">
         <h3 style="margin:0;font-size:.92rem">Criterios</h3>
-        <button class="cant-x" onclick="CanteraGlobalModule.toggleCollapse()" title="Ocultar panel">‹</button>
+        <div style="display:flex;align-items:center;gap:8px">
+          <button class="btn btn--ghost btn--sm" onclick="CanteraGlobalModule.guardarFiltroActual()" title="Guardar los filtros actuales con nombre">💾 Guardar filtro</button>
+          <button class="cant-x" onclick="CanteraGlobalModule.toggleCollapse()" title="Ocultar panel">‹</button>
+        </div>
       </div>
+      ${savedHtml}
       <div class="cant-global-fields-grid">
         <div class="filter-field"><label class="field-label">Buscar</label>
           <input type="text" class="form-input" placeholder="Nombre, apellido, empresa, email…" value="${esc(_q)}" oninput="CanteraGlobalModule.setQ(this.value)"></div>
@@ -8200,7 +8251,7 @@ const CanteraGlobalModule = (() => {
       }
     } catch (e) { showBanner('Error al abrir la validación: ' + e.message, 'error'); }
   }
-  return { render, setQ, setOrigen, setVista, setPageSize, goPage, toggleCollapse, taOpen, taFilter, taBlur, addFiltro, removeFiltro, addFiltroExcl, removeFiltroExcl, toggleCol, colsMenu, editValidacion };
+  return { render, setQ, setOrigen, setVista, setPageSize, goPage, toggleCollapse, taOpen, taFilter, taBlur, addFiltro, removeFiltro, addFiltroExcl, removeFiltroExcl, toggleCol, colsMenu, editValidacion, guardarFiltroActual, aplicarFiltroGuardado, borrarFiltroGuardado };
 })();
 
 // =================================================================
