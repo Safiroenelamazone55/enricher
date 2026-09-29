@@ -289,7 +289,7 @@ button{cursor:pointer}
 .pt-week__k{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
 .pt-tile{display:flex;gap:12px;align-items:flex-start;border-left:3px solid var(--kc);background:#F8FAFC;padding:12px 14px}
 .pt-tile.pt-click:hover{background:#EEF2F6}
-.pt-tile__i{display:grid;place-items:center;width:34px;height:34px;color:var(--kc);background:color-mix(in srgb,var(--kc) 14%,#fff);flex:none}
+.pt-tile__i{display:grid;place-items:center;width:24px;height:24px;color:#334155;flex:none}
 .pt-tile__l{font-size:12px;font-weight:600;color:#475569}
 .pt-tile__v{font-size:30px;font-weight:700;letter-spacing:-.02em;line-height:1.15;margin:1px 0}
 .pt-week__s{margin-top:12px;font-size:13.5px;color:#334155}
