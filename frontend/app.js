@@ -8080,7 +8080,7 @@ const CanteraGlobalModule = (() => {
     return `<div class="cant-global-panel-hd">
         <h3 style="margin:0;font-size:.92rem">Criterios</h3>
         <div style="display:flex;align-items:center;gap:8px">
-          <button class="btn btn--ghost btn--sm" onclick="CanteraGlobalModule.guardarFiltroActual()" title="Guardar los filtros actuales con nombre">💾 Guardar filtro</button>
+          <button class="btn btn--ghost btn--sm" onclick="CanteraGlobalModule.guardarFiltroActual()" title="Guardar los filtros actuales con nombre" style="display:inline-flex;align-items:center;gap:6px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg> Guardar filtro</button>
           <button class="cant-x" onclick="CanteraGlobalModule.toggleCollapse()" title="Ocultar panel">‹</button>
         </div>
       </div>
