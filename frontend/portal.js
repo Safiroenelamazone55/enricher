@@ -162,7 +162,7 @@
     if (s.contactos) t.push(['contactos', 'Contactos']);
     if (s.secuencias) t.push(['secuencias', 'Secuencias']);
     if (s.feed) t.push(['actividad', 'Actividad']);
-    if (s.cantera) t.push(['cantera', 'Cantera']);
+    if (s.cantera) t.push(['cantera', 'Prospección']);
     return t;
   }
   // Aviso NO obligatorio para crear contraseña propia: más tarde (2 semanas, luego cada mes) u omitir
@@ -778,8 +778,8 @@
   const CANT_PASO_LBL = { pendiente: 'Pendiente', aprobado: 'Aprobada', validacion_manual: 'Validación manual', descartado: 'Descartada', descartado_manual: 'Descartada' };
   function canteraHtml() {
     const d = S.cantera;
-    if (!d) return '<div class="pt-h"><h2>Cantera</h2></div><div class="pt-empty">Cargando…</div>';
-    if (!d.total) return '<div class="pt-h"><h2>Cantera</h2></div><div class="pt-empty">Todavía no hay empresas en prospección para tu cuenta.</div>';
+    if (!d) return '<div class="pt-h"><h2>Prospección</h2></div><div class="pt-empty">Cargando…</div>';
+    if (!d.total) return '<div class="pt-h"><h2>Prospección</h2></div><div class="pt-empty">Todavía no hay empresas en prospección para tu cuenta.</div>';
     const avance = pct(d.total - d.por_validar, d.total);
     const pctV = pct(d.validadas, d.total), pctC = pct(d.califican, d.total);
     const tierA = (d.tiers || []).find(t => t.tier === 'A');
@@ -789,7 +789,7 @@
         <div class="pt-cant-hero__bar"><i style="width:${Math.max(2, avance)}%"></i></div>
         <div class="pt-cant-hero__stats"><span><b>${pctV}%</b> validadas</span><span><b>${pctC}%</b> califican</span><span><b>${pctA}%</b> Tier A</span></div>
       </div>`;
-    const batches = d.batches.length ? `<div class="pt-card"><h3>Lotes de prospección</h3>${d.batches.map(b => `<div class="pt-item"><div class="pt-item__t"><span>${esc(b.nombre)}</span><span style="color:#64748B;font-weight:500;font-size:12px">${fdate(b.created_at, { day: 'numeric', month: 'short' })}</span></div><div class="pt-item__s">${b.total} empresas · ${b.califican} califican</div></div>`).join('')}</div>` : '';
+    const batches = d.batches.length ? `<div class="pt-card"><h3>Lotes de prospección</h3>${d.batches.map(b => `<div class="pt-item"><div class="pt-item__t"><span>${esc(b.nombre)}</span><span style="color:#64748B;font-weight:500;font-size:12px">${fdate(b.created_at, { day: 'numeric', month: 'short' })}</span></div><div class="pt-item__s">${b.total} empresas · ${pct(b.procesadas, b.total)}% procesado</div></div>`).join('')}</div>` : '';
     // Lista filtrable de empresas en validación — pedido explícito: "que el
     // cliente vea qué empresas se están validando", mismo estilo que "Últimas
     // respuestas". Filtro por texto + Tier, 100% client-side sobre lo ya traído.
@@ -801,7 +801,7 @@
         </select>
       </div>`;
     const companiesCard = (d.companies || []).length ? `<div class="pt-card"><h3>Actividad reciente</h3>${filterBar}<div id="pt-cant-list">${canteraListHtml(d.companies)}</div></div>` : '';
-    return `<div class="pt-h"><h2>Cantera</h2></div>
+    return `<div class="pt-h"><h2>Prospección</h2></div>
       ${hero}${batches}${companiesCard}`;
   }
   function canteraListHtml(rows) {
