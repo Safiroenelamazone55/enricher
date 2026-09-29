@@ -581,7 +581,7 @@
     const s = S.me.sections;
     const seqSel = S.seqs && s.secuencias ? `<label class="dash-f${S.seq ? ' is-on' : ''}" style="flex:none;min-width:200px"><select onchange="PT.seq(this.value)"><option value="">Todas las secuencias</option>${S.seqs.map(x => `<option value="${x.id}"${String(S.seq) === String(x.id) ? ' selected' : ''}>${esc(x.nombre)}</option>`).join('')}</select></label>` : '';
     const filters = seqSel ? `<div class="dash-filters" style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">${seqSel}</div>` : '';
-    const detail = S.dash ? `${filters}${dashBody(S.dash)}${s.feed ? `<div class="pt-card" style="margin-top:14px"><h3>${ico('send', 16)} Actividad reciente</h3>${feedHtml(S.feed, 12)}</div>` : ''}` : '<div class="pt-empty">Cargando…</div>';
+    const detail = S.dash ? `${filters}${dashBody(S.dash)}` : '<div class="pt-empty">Cargando…</div>';
     return `<div class="pt-dash">${updatesHtml()}${weekHtml()}${highlightsHtml()}${detail}</div>`;
   }
 
