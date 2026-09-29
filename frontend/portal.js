@@ -412,6 +412,11 @@
     const c = w.cur.kpi.cur, p = w.prev.kpi ? w.prev.kpi.cur : { contacted: 0, replies: 0, touches: 0 };
     const mc = w.cur.deals ? w.cur.deals.agendadas : null, mp = w.prev.deals ? w.prev.deals.agendadas : 0;
     const tiles = [['Contactos alcanzados', c.contacted, p.contacted, 'users', '#22A06B', 'contacted'], ['Respuestas', c.replies, p.replies, 'reply', '#F59E0B', 'replies'], mc == null ? null : ['Reuniones agendadas', mc, mp, 'handshake', '#7C5CE0', 'meetings'], ['Toques realizados', c.touches, p.touches, 'send', '#2563EB', 'touches']].filter(Boolean);
+    const extraTiles = [
+      { ic: 'in', l: 'Aceptación LinkedIn', v: pct(c.accepts, c.invites) + '%', dl: dl(pct(c.accepts, c.invites), pct(p.accepts, p.invites)), sub: `${c.accepts} de ${c.invites} invitaciones` },
+      { ic: 'mail', l: 'Emails enviados', v: c.emails, dl: dl(c.emails, p.emails), sub: c.bounced ? `${c.bounced} rebotados` : 'sin rebotes' },
+      { ic: 'mailopen', l: 'Apertura email', v: c.sent ? pct(c.opened, c.sent) + '%' : '—', dl: '<span class="dash-d dash-d--0">estimada</span>', sub: `sobre ${c.sent} envíos` },
+    ];
     const sent = `${c.contacted} contactos alcanzados · ${c.replies} respuestas${mc == null ? '' : ' · ' + mc + (mc === 1 ? ' reunión agendada' : ' reuniones agendadas')}`;
     const title = S.per === 'month' ? 'Este mes' : S.per === 'custom' ? 'Rango elegido' : 'Esta semana';
     const customRow = S.per === 'custom' ? `<div style="display:flex;gap:8px;align-items:center;margin:10px 0 2px;flex-wrap:wrap">
@@ -424,6 +429,7 @@
       <div class="dash-seg"><button class="dash-seg__b${S.per === 'week' ? ' on' : ''}" onclick="PT.per('week')">Semana</button><button class="dash-seg__b${S.per === 'month' ? ' on' : ''}" onclick="PT.per('month')">Mes</button><button class="dash-seg__b${S.per === 'custom' ? ' on' : ''}" onclick="PT.per('custom')">Personalizado</button></div></div>
       ${customRow}
       <div class="pt-week__k">${tiles.map(t => `<div class="pt-tile pt-click" style="--kc:${t[4]}" onclick="PT.weekTile('${t[5]}','${esc(t[0])}')"><span class="pt-tile__i">${ico(t[3], 18)}</span><div><div class="pt-tile__l">${t[0]}</div><div class="pt-tile__v">${t[1]}</div>${dl(t[1], t[2])}</div></div>`).join('')}</div>
+      <div class="pt-week__k" style="margin-top:12px">${extraTiles.map(t => `<div class="pt-tile"><span class="pt-tile__i">${ico(t.ic, 18)}</span><div><div class="pt-tile__l">${t.l}</div><div class="pt-tile__v">${t.v}</div>${t.dl}<div class="pt-week__s" style="margin-top:2px">${t.sub}</div></div></div>`).join('')}</div>
       <p class="pt-week__s">${sent}</p>
       <div class="pt-trend">
         <div class="pt-trend__h"><div><h3>Tendencia</h3><span>Evolución diaria del período seleccionado</span></div><div class="dash-legend" id="pt-wkline-leg"></div></div>
@@ -581,13 +587,6 @@
   function dashBody(d) {
     if (!d) return '';
     let out = '';
-    if (d.kpi) {
-      const c = d.kpi.cur, p = d.kpi.prev, rr = pct(c.replies, c.contacted), rrp = pct(p.replies, p.contacted), ar = pct(c.accepts, c.invites), arp = pct(p.accepts, p.invites);
-      const kpi = (ic, l, v, dl, sub) => `<div class="pt-tile"><span class="pt-tile__i">${ico(ic, 18)}</span><div><div class="pt-tile__l">${l}</div><div class="pt-tile__v">${v}</div>${dl}${sub ? `<div class="pt-week__s" style="margin-top:2px">${sub}</div>` : ''}</div></div>`;
-      out += `<div class="pt-week__k">${kpi('in', 'Aceptación LinkedIn', ar + '%', delta(ar, arp, true), `${c.accepts} de ${c.invites} invitaciones`)}
-        ${kpi('mail', 'Emails enviados', c.emails, delta(c.emails, p.emails), c.bounced ? `${c.bounced} rebotados` : 'sin rebotes')}
-        ${kpi('mailopen', 'Apertura email', c.sent ? pct(c.opened, c.sent) + '%' : '—', '<span class="dash-d dash-d--0">estimada</span>', `sobre ${c.sent} envíos`)}</div>`;
-    }
     let row1 = '';
     if (d.daily && d.daily.length || d.funnel) {
       const used = ['email', 'linkedin', 'call', 'wa_msg', 'wa_call', 'otros'].filter(k => (d.daily || []).some(r => r.ch === k));
