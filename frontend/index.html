@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20260929q"/>
+  <link rel="stylesheet" href="style.css?v=20260930p"/>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -202,27 +202,47 @@
 
   <!-- ── BARRA SUPERIOR GLOBAL: visible en Home y dentro de cada módulo ── -->
   <div class="global-topbar" id="global-topbar">
-    <div class="global-topbar__brand">
+    <!-- Dentro de un modulo, el logo se reemplaza por el icono+nombre del
+         modulo activo (referencia adjunta: Odoo -- "CRM" con su icono en vez
+         del logo de la empresa) -- pedido explicito. En Home se ve el logo
+         normal. -->
+    <div class="global-topbar__brand" id="gtb-brand">
       <img class="global-topbar__logo" src="/logo-white.png?v=1" alt="Novacentrax" width="16" height="16">
       <span class="global-topbar__name">Nova</span>
     </div>
-    <div class="global-topbar__tabs">
-      <button class="global-topbar__tab active" type="button" id="gtb-tab-apps" onclick="goHome()">Aplicaciones</button>
-    </div>
+    <!-- Clicable -> home; en hover se oculta el icono y aparece una flecha
+         "‹" en su lugar + tooltip "Menú de inicio" -- referencia Odoo
+         adjuntada. Pedido explicito: quitar "Aplicaciones" suelto, el nombre
+         del modulo mismo ya lleva a home. -->
+    <button class="global-topbar__brand global-topbar__brand--mod hidden" id="gtb-mod-brand" onclick="goHome()" title="Menú de inicio">
+      <span class="global-topbar__mod-icon" id="gtb-mod-icon"></span>
+      <span class="global-topbar__mod-back">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      </span>
+      <span class="global-topbar__name" id="gtb-mod-name"></span>
+    </button>
     <div class="global-topbar__right">
       <div class="rchat__strip">
-        <button class="rchat__strip-btn" onclick="RChatPanel.openFullChat()" title="Chat del equipo">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-            <circle cx="8.5" cy="10" r="1.2" fill="currentColor" stroke="none"/>
-            <circle cx="12"   cy="10" r="1.2" fill="currentColor" stroke="none"/>
-            <circle cx="15.5" cy="10" r="1.2" fill="currentColor" stroke="none"/>
+        <!-- Misma forma monocromatica (currentColor) que en el sidebar --
+             pedido explicito: "arriba en el header actualiza los iconos de
+             wpp y slack" (mismo estilo, no colores de marca). -->
+        <button class="rchat__strip-btn" onclick="RChatPanel.openFullChat()" title="Slack">
+          <svg width="18" height="18" viewBox="0 0 122.8 122.8" fill="currentColor">
+            <path d="M25.8 77.6c0 7.1-5.8 12.9-12.9 12.9S0 84.7 0 77.6s5.8-12.9 12.9-12.9h12.9v12.9z"/>
+            <path d="M32.3 77.6c0-7.1 5.8-12.9 12.9-12.9s12.9 5.8 12.9 12.9v32.3c0 7.1-5.8 12.9-12.9 12.9s-12.9-5.8-12.9-12.9V77.6z"/>
+            <path d="M45.2 25.8c-7.1 0-12.9-5.8-12.9-12.9S38.1 0 45.2 0s12.9 5.8 12.9 12.9v12.9H45.2z"/>
+            <path d="M45.2 32.3c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9H12.9C5.8 58.1 0 52.3 0 45.2s5.8-12.9 12.9-12.9h32.3z"/>
+            <path d="M97 45.2c0-7.1 5.8-12.9 12.9-12.9s12.9 5.8 12.9 12.9-5.8 12.9-12.9 12.9H97V45.2z"/>
+            <path d="M90.5 45.2c0 7.1-5.8 12.9-12.9 12.9s-12.9-5.8-12.9-12.9V12.9C64.7 5.8 70.5 0 77.6 0s12.9 5.8 12.9 12.9v32.3z"/>
+            <path d="M77.6 97c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9-12.9-5.8-12.9-12.9V97h12.9z"/>
+            <path d="M77.6 90.5c-7.1 0-12.9-5.8-12.9-12.9s5.8-12.9 12.9-12.9h32.3c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9H77.6z"/>
           </svg>
           <span class="rchat__strip-badge hidden" id="rchat-badge"></span>
         </button>
         <button class="rchat__strip-btn" onclick="RChatPanel.openFullWa()" title="WhatsApp de Operaciones">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.554 4.116 1.523 5.845L0 24l6.335-1.652A11.94 11.94 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 2c5.523 0 10 4.477 10 10s-4.477 10-10 10a9.94 9.94 0 0 1-5.05-1.365l-.362-.213-3.752.979.99-3.653-.238-.375A9.94 9.94 0 0 1 2 12C2 6.477 6.477 2 12 2z"/>
+            <path d="M17.5 14.4c-.3-.2-1.8-.9-2.1-1-.3-.1-.5-.2-.7.2-.2.3-.8 1-.9 1.2-.2.2-.3.2-.6.1-.3-.2-1.2-.5-2.3-1.5-.8-.8-1.4-1.7-1.6-2-.2-.3 0-.5.1-.6.1-.1.3-.3.4-.5.1-.2.2-.3.3-.5.1-.2 0-.4 0-.5 0-.2-.7-1.7-.9-2.3-.2-.6-.5-.5-.7-.5h-.6c-.2 0-.5.1-.8.4-.3.3-1 1-1 2.4s1.1 2.8 1.2 3c.1.2 2.1 3.2 5.1 4.5.7.3 1.3.5 1.7.6.7.2 1.4.2 1.9.1.6-.1 1.8-.7 2-1.4.2-.7.2-1.3.2-1.4-.1-.1-.3-.2-.6-.4z"/>
           </svg>
           <span class="rchat__strip-badge hidden" id="rwa-badge"></span>
         </button>
@@ -244,7 +264,7 @@
         <div class="rchat__strip-sep"></div>
         <button class="rchat__strip-btn rtt" id="rtt-btn" onclick="TimerModule.railToggle()" title="Iniciar seguimiento de tiempo">
           <span class="rtt__pulse"></span>
-          <svg class="rtt__ico rtt__ico--play" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M8 5.5v13l11-6.5z"/></svg>
+          <svg class="rtt__ico rtt__ico--play" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/></svg>
           <svg class="rtt__ico rtt__ico--stop" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="6" width="12" height="12" rx="2.5"/></svg>
         </button>
         <span class="rtt__time" id="rtt-time"></span>
@@ -292,7 +312,11 @@
       </button>
     </div>
     <div class="snav-rail__spacer"></div>
-    <button class="snav-rail__btn" onclick="WorkspaceModule.openNameModal()" data-tip="Configuración" aria-label="Configuración general">
+    <!-- Modulo propio (no un boton que abre algo encima) -- pedido explicito:
+         "eso debe estar como en la barra lateral... esto es parte de un
+         nuevo modulo, no debe haber dos [barras]". Mismo patron que Finanzas:
+         .snav-mod + su propio .snav-group con id snav-body-config. -->
+    <button class="snav-mod" data-module="config" onclick="selectModule('config')" data-tip="Configuración" aria-label="Configuración">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
     </button>
     <div id="authBar" class="snav-rail__user"><div class="auth-bar__skeleton"></div></div>
@@ -310,7 +334,7 @@
         <span>Módulos</span>
       </button>
       <button class="sidebar__toggle" id="sidebar-toggle" title="Ocultar panel" aria-label="Ocultar/mostrar panel" onclick="toggleModuleSidebar()">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
       </button>
     </div>
 
@@ -429,23 +453,31 @@
       </button>
 
       <div class="snav-cat">Comunicación</div>
-      <button class="snav-item" data-tab="mgmt-chat" data-tooltip="Chat del equipo">
+      <!-- Forma reconocible de Slack/WhatsApp pero MONOCROMATICA (currentColor)
+           -- pedido explicito: "queria los iconos pero no a colores, sino
+           manteniendo el estilo ya definido" (mismo negro/azul del resto del
+           sidebar en reposo/hover/activo, no el color de marca fijo). -->
+      <button class="snav-item" data-tab="mgmt-chat" data-tooltip="Slack">
         <span class="snav-item__icon">
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-            <circle cx="8" cy="10.5" r="1.25" fill="currentColor" stroke="none"/>
-            <circle cx="12" cy="10.5" r="1.25" fill="currentColor" stroke="none"/>
-            <circle cx="16" cy="10.5" r="1.25" fill="currentColor" stroke="none"/>
+          <svg width="17" height="17" viewBox="0 0 122.8 122.8" fill="currentColor">
+            <path d="M25.8 77.6c0 7.1-5.8 12.9-12.9 12.9S0 84.7 0 77.6s5.8-12.9 12.9-12.9h12.9v12.9z"/>
+            <path d="M32.3 77.6c0-7.1 5.8-12.9 12.9-12.9s12.9 5.8 12.9 12.9v32.3c0 7.1-5.8 12.9-12.9 12.9s-12.9-5.8-12.9-12.9V77.6z"/>
+            <path d="M45.2 25.8c-7.1 0-12.9-5.8-12.9-12.9S38.1 0 45.2 0s12.9 5.8 12.9 12.9v12.9H45.2z"/>
+            <path d="M45.2 32.3c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9H12.9C5.8 58.1 0 52.3 0 45.2s5.8-12.9 12.9-12.9h32.3z"/>
+            <path d="M97 45.2c0-7.1 5.8-12.9 12.9-12.9s12.9 5.8 12.9 12.9-5.8 12.9-12.9 12.9H97V45.2z"/>
+            <path d="M90.5 45.2c0 7.1-5.8 12.9-12.9 12.9s-12.9-5.8-12.9-12.9V12.9C64.7 5.8 70.5 0 77.6 0s12.9 5.8 12.9 12.9v32.3z"/>
+            <path d="M77.6 97c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9-12.9-5.8-12.9-12.9V97h12.9z"/>
+            <path d="M77.6 90.5c-7.1 0-12.9-5.8-12.9-12.9s5.8-12.9 12.9-12.9h32.3c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9H77.6z"/>
           </svg>
         </span>
-        <span class="snav-item__label">Chat <span class="snav-soon-badge hidden" id="chat-badge">0</span></span>
+        <span class="snav-item__label">Slack <span class="wa-nav-badge hidden" id="chat-badge">0</span></span>
       </button>
 
-      <button class="snav-item" data-tab="mgmt-wa" data-tooltip="WhatsApp de trabajo">
+      <button class="snav-item" data-tab="mgmt-wa" data-tooltip="WhatsApp">
         <span class="snav-item__icon">
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M3 21l1.65-4.95A8.5 8.5 0 1 1 8.5 19.5L3 21z"/>
-            <path d="M8.5 12.5c0 2.5 2 4.5 4.5 4.5" stroke-linecap="round"/>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.554 4.116 1.523 5.845L0 24l6.335-1.652A11.94 11.94 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 2c5.523 0 10 4.477 10 10s-4.477 10-10 10a9.94 9.94 0 0 1-5.05-1.365l-.362-.213-3.752.979.99-3.653-.238-.375A9.94 9.94 0 0 1 2 12C2 6.477 6.477 2 12 2z"/>
+            <path d="M17.5 14.4c-.3-.2-1.8-.9-2.1-1-.3-.1-.5-.2-.7.2-.2.3-.8 1-.9 1.2-.2.2-.3.2-.6.1-.3-.2-1.2-.5-2.3-1.5-.8-.8-1.4-1.7-1.6-2-.2-.3 0-.5.1-.6.1-.1.3-.3.4-.5.1-.2.2-.3.3-.5.1-.2 0-.4 0-.5 0-.2-.7-1.7-.9-2.3-.2-.6-.5-.5-.7-.5h-.6c-.2 0-.5.1-.8.4-.3.3-1 1-1 2.4s1.1 2.8 1.2 3c.1.2 2.1 3.2 5.1 4.5.7.3 1.3.5 1.7.6.7.2 1.4.2 1.9.1.6-.1 1.8-.7 2-1.4.2-.7.2-1.3.2-1.4-.1-.1-.3-.2-.6-.4z"/>
           </svg>
         </span>
         <span class="snav-item__label">WhatsApp <span class="wa-nav-badge hidden" id="wa-badge">0</span></span>
@@ -670,6 +702,38 @@
           <span class="snav-item__label">Configuración</span>
         </button>
 
+      </div>
+
+      <!-- Modulo Configuracion: reemplaza la barra de Operaciones cuando esta
+           activo (como cualquier otro modulo), en vez de vivir dentro de una
+           pagina de Operaciones -- pedido explicito 2026-09-30. Mismo patron
+           que Finanzas: el primer item lleva data-tab (pane real), el resto
+           solo cambia de seccion con WorkspaceModule.setSection(). -->
+      <div class="snav-group" data-module="config" id="snav-body-config">
+        <button class="snav-item active" data-tab="mgmt-empresa" data-sec="apariencia" data-tooltip="Apariencia" onclick="WorkspaceModule.setSection('apariencia')">
+          <span class="snav-item__icon">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r="2.5"/><circle cx="19" cy="13" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="10" cy="20" r="2.5"/><path d="M12 2a10 10 0 1 0 0 20c1 0 1.5-.5 1.5-1.2 0-1.3-1.5-1.3-1.5-2.8a2 2 0 0 1 2-2H16a4 4 0 0 0 4-4 8 8 0 0 0-8-8Z"/></svg>
+          </span>
+          <span class="snav-item__label">Apariencia</span>
+        </button>
+        <button class="snav-item" data-sec="integraciones" data-tooltip="Integraciones" onclick="WorkspaceModule.setSection('integraciones')">
+          <span class="snav-item__icon">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>
+          </span>
+          <span class="snav-item__label">Integraciones</span>
+        </button>
+        <button class="snav-item" data-sec="usuarios" data-tooltip="Usuarios" onclick="WorkspaceModule.setSection('usuarios')">
+          <span class="snav-item__icon">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          </span>
+          <span class="snav-item__label">Usuarios</span>
+        </button>
+        <button class="snav-item" data-sec="uso" data-tooltip="Uso" onclick="WorkspaceModule.setSection('uso')">
+          <span class="snav-item__icon">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+          </span>
+          <span class="snav-item__label">Uso</span>
+        </button>
       </div>
 
     </nav>
@@ -1999,6 +2063,141 @@
         </div>
       </div>
     </div>
+
+<!-- ── EMPRESA (pagina completa, como el resto de modulos) ──────────────
+     pedido explicito: "este modulo debe cambiar de modal a pagina completa
+     con secciones como los otros" -- antes vivia en un modal (#wsname-modal);
+     se convirtio a un .pane normal (data-tab="mgmt-empresa") reusando el
+     mismo cfg__nav/cfg__panel de siempre. ── -->
+<div class="pane" id="pane-mgmt-empresa">
+  <div class="pane-header">
+    <h1 class="pane-title">Configuración</h1>
+    <p class="pane-sub">Marca, integraciones, usuarios y uso del workspace</p>
+  </div>
+  <div class="cfg__panel">
+      <section class="cfg__sec" data-sec="apariencia">
+
+    <!-- Logo upload -->
+    <div class="form-row">
+      <label class="form-label">Logo de la empresa</label>
+      <div class="brand-logo-row">
+        <div class="brand-logo-preview" id="brand-logo-preview">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+        </div>
+        <div style="flex:1">
+          <input type="file" id="brand-logo-file" accept="image/*" style="display:none" onchange="WorkspaceModule.onLogoFile(this)">
+          <button class="btn btn--ghost btn--sm" onclick="$('brand-logo-file').click()">Subir imagen</button>
+          <div style="margin-top:6px">
+            <input type="text" id="brand-logo-url" class="form-input" placeholder="…o pega una URL" style="font-size:.8rem" oninput="WorkspaceModule.onLogoUrl(this.value)">
+          </div>
+          <button class="brand-logo-clear" id="brand-logo-clear" style="display:none" onclick="WorkspaceModule.clearLogo()">✕ Quitar logo</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <label class="form-label">Nombre de la empresa <span class="form-required">*</span></label>
+      <input type="text" id="brand-company-input" class="form-input" placeholder="Ej: Mi Agencia">
+    </div>
+
+    <div class="form-row">
+      <label class="form-label">Nombre interno del workspace</label>
+      <input type="text" id="wsname-input" class="form-input" placeholder="Ej: Producción">
+      <span style="font-size:.72rem;color:var(--muted);margin-top:4px;display:block">Se muestra debajo del logo en el sidebar</span>
+    </div>
+
+    <!-- Preview -->
+    <div class="brand-preview-box">
+      <span style="font-size:.7rem;color:var(--muted);margin-bottom:6px;display:block">Vista previa en sidebar</span>
+      <div class="brand-preview-inner">
+        <div class="brand-preview-icon" id="brand-prev-icon">
+          <svg width="14" height="14" viewBox="0 0 100 100" fill="none"><path d="M50 3 L63 38 L97 50 L63 62 L50 97 L37 62 L3 50 L37 38 Z" fill="#7C3AED"/></svg>
+        </div>
+        <div>
+          <div class="brand-preview-name" id="brand-prev-name">Empresa</div>
+          <div class="brand-preview-tag" id="brand-prev-tag">workspace</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="drawer__footer" style="margin-top:16px;padding:0">
+      <button class="btn btn--primary" onclick="WorkspaceModule.saveName()">Guardar branding</button>
+    </div>
+
+      </section>
+
+      <section class="cfg__sec" data-sec="integraciones" hidden>    <!-- Slack: un workspace por cliente. El token se guarda cifrado, nunca en claro. -->
+    <div class="slk-block">
+      <div class="slk-block__hd">
+        <h3 class="slk-block__t">Slack conectado</h3>
+        <span class="slk-block__sub">Un espacio por cliente, todos en el mismo sitio</span>
+      </div>
+      <div id="slk-list" class="slk-list"><div class="slk-empty">Cargando…</div></div>
+      <div class="slk-add">
+        <input class="form-input slk-add__tok" id="slk-token" type="password" autocomplete="off"
+               placeholder="xoxp-… (User OAuth Token)">
+        <input class="form-input slk-add__lbl" id="slk-etiqueta" placeholder="Nombre del cliente (opcional)">
+        <button class="btn btn--primary btn--sm" id="slk-add-btn" onclick="SlackModule.conectar()">Conectar</button>
+      </div>
+      <p class="slk-hint">
+        En <b>api.slack.com/apps</b> → tu app → <b>OAuth &amp; Permissions</b> → copia el
+        <b>User OAuth Token</b>. Se guarda cifrado y se comprueba contra Slack antes de aceptarlo.
+      </p>
+    </div>
+
+    <div class="slk-block">
+      <div class="slk-block__hd">
+        <h3 class="slk-block__t">WhatsApp conectado</h3>
+        <span class="slk-block__sub">El de Operaciones; conéctalo desde la sección WhatsApp</span>
+      </div>
+      <div id="wa-int-list" class="slk-list"><div class="slk-empty">Cargando…</div></div>
+    </div>
+      </section>
+      <!-- Usuarios: el propio #pane-mgmt-team se muda para acá al entrar a esta
+           pestaña (y se devuelve a su lugar al salir) — mismo truco ya usado con el
+           chat de Slack en media pantalla, para no duplicar la tabla de equipo. -->
+      <section class="cfg__sec" data-sec="usuarios" hidden>
+        <div id="cfg-usuarios-mount"></div>
+      </section>
+
+      <!-- Uso: pedido explicito con referencia a Clay Settings -- "Usage: ver
+           lo que voy usando para asi saber cuando comprar mas plan". Cuenta
+           real desde /api/workspace/usage, no inventada. -->
+      <section class="cfg__sec" data-sec="uso" hidden>
+        <p style="font-size:.82rem;color:var(--text2);margin:0 0 16px">Resumen de actividad del workspace este mes, para saber cuándo hace falta más capacidad.</p>
+        <div id="usage-grid" class="usage-grid">
+          <div class="usage-card"><div class="usage-card__v" id="usage-contactos">—</div><div class="usage-card__l">Contactos en Base Global</div></div>
+          <div class="usage-card"><div class="usage-card__v" id="usage-empresas">—</div><div class="usage-card__l">Empresas</div></div>
+          <div class="usage-card"><div class="usage-card__v" id="usage-miembros">—</div><div class="usage-card__l">Miembros del equipo</div></div>
+          <div class="usage-card"><div class="usage-card__v" id="usage-secuencias">—</div><div class="usage-card__l">Secuencias activas</div></div>
+          <div class="usage-card"><div class="usage-card__v" id="usage-emails">—</div><div class="usage-card__l">Emails enviados este mes</div></div>
+          <div class="usage-card"><div class="usage-card__v" id="usage-linkedin">—</div><div class="usage-card__l">Toques de LinkedIn este mes</div></div>
+          <div class="usage-card"><div class="usage-card__v" id="usage-verificaciones">—</div><div class="usage-card__l">Verificaciones este mes</div></div>
+        </div>
+
+        <!-- Servidor: uso REAL de la VPS (RAM/disco), no conteos de la app --
+             pedido explicito: "pago 5 dolares al mes... quiero visualizar el
+             uso de RAM, de espacio... para saber si tengo que aumentar el
+             plan". Desde /api/workspace/server-usage (os.totalmem/freemem +
+             df del disco, en el propio servidor). -->
+        <h3 style="font-size:.9rem;font-weight:700;color:var(--text,#1F1D1B);margin:24px 0 4px">Servidor</h3>
+        <p style="font-size:.82rem;color:var(--text2);margin:0 0 16px">Uso real de la VPS donde corre Nova, para saber cuándo hace falta más plan.</p>
+        <div id="server-usage-grid" class="usage-grid">
+          <div class="usage-card">
+            <div class="usage-card__v" id="usage-ram">—</div>
+            <div class="usage-card__l">RAM usada</div>
+            <div class="usage-bar"><div class="usage-bar__fill" id="usage-ram-bar"></div></div>
+          </div>
+          <div class="usage-card">
+            <div class="usage-card__v" id="usage-disco">—</div>
+            <div class="usage-card__l">Disco usado</div>
+            <div class="usage-bar"><div class="usage-bar__fill" id="usage-disco-bar"></div></div>
+          </div>
+          <div class="usage-card"><div class="usage-card__v" id="usage-db">—</div><div class="usage-card__l">Tamaño de la base de datos</div></div>
+        </div>
+      </section>
+    </div>
+</div>
   </main>
 
   <!-- ── RIGHT PANEL (chat + alertas) ─────────────────────────── -->
@@ -2687,122 +2886,6 @@
   </div>
 </div>
 
-<!-- ── BRANDING MODAL ─────────────────────────────────── -->
-<div class="modal-overlay hidden" id="wsname-overlay" onclick="WorkspaceModule.closeNameModal()"></div>
-<div class="modal hidden" id="wsname-modal" style="max-width:1040px;width:calc(100vw - 64px)">
-  <div class="modal__header">
-    <h2 class="modal__title">Empresa</h2>
-    <button class="drawer__close" onclick="WorkspaceModule.closeNameModal()">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-    </button>
-  </div>
-  <div class="modal__body cfg">
-    <!-- Barra de secciones, como en Ajustes del sistema: apariencia e integraciones
-         son cosas distintas y no deben compartir pantalla. -->
-    <aside class="cfg__nav">
-      <button class="cfg__navb on" data-sec="apariencia" onclick="WorkspaceModule.setSection('apariencia')">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r="2.5"/><circle cx="19" cy="13" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="10" cy="20" r="2.5"/><path d="M12 2a10 10 0 1 0 0 20c1 0 1.5-.5 1.5-1.2 0-1.3-1.5-1.3-1.5-2.8a2 2 0 0 1 2-2H16a4 4 0 0 0 4-4 8 8 0 0 0-8-8Z"/></svg>
-        Apariencia
-      </button>
-      <button class="cfg__navb" data-sec="integraciones" onclick="WorkspaceModule.setSection('integraciones')">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>
-        Integraciones
-      </button>
-      <button class="cfg__navb" data-sec="usuarios" onclick="WorkspaceModule.setSection('usuarios')">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-        Usuarios
-      </button>
-    </aside>
-
-    <div class="cfg__panel">
-      <section class="cfg__sec" data-sec="apariencia">
-
-    <!-- Logo upload -->
-    <div class="form-row">
-      <label class="form-label">Logo de la empresa</label>
-      <div class="brand-logo-row">
-        <div class="brand-logo-preview" id="brand-logo-preview">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-        </div>
-        <div style="flex:1">
-          <input type="file" id="brand-logo-file" accept="image/*" style="display:none" onchange="WorkspaceModule.onLogoFile(this)">
-          <button class="btn btn--ghost btn--sm" onclick="$('brand-logo-file').click()">Subir imagen</button>
-          <div style="margin-top:6px">
-            <input type="text" id="brand-logo-url" class="form-input" placeholder="…o pega una URL" style="font-size:.8rem" oninput="WorkspaceModule.onLogoUrl(this.value)">
-          </div>
-          <button class="brand-logo-clear" id="brand-logo-clear" style="display:none" onclick="WorkspaceModule.clearLogo()">✕ Quitar logo</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="form-row">
-      <label class="form-label">Nombre de la empresa <span class="form-required">*</span></label>
-      <input type="text" id="brand-company-input" class="form-input" placeholder="Ej: Mi Agencia">
-    </div>
-
-    <div class="form-row">
-      <label class="form-label">Nombre interno del workspace</label>
-      <input type="text" id="wsname-input" class="form-input" placeholder="Ej: Producción">
-      <span style="font-size:.72rem;color:var(--muted);margin-top:4px;display:block">Se muestra debajo del logo en el sidebar</span>
-    </div>
-
-    <!-- Preview -->
-    <div class="brand-preview-box">
-      <span style="font-size:.7rem;color:var(--muted);margin-bottom:6px;display:block">Vista previa en sidebar</span>
-      <div class="brand-preview-inner">
-        <div class="brand-preview-icon" id="brand-prev-icon">
-          <svg width="14" height="14" viewBox="0 0 100 100" fill="none"><path d="M50 3 L63 38 L97 50 L63 62 L50 97 L37 62 L3 50 L37 38 Z" fill="#7C3AED"/></svg>
-        </div>
-        <div>
-          <div class="brand-preview-name" id="brand-prev-name">Empresa</div>
-          <div class="brand-preview-tag" id="brand-prev-tag">workspace</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="drawer__footer" style="margin-top:16px;padding:0">
-      <button class="btn btn--ghost" onclick="WorkspaceModule.closeNameModal()">Cancelar</button>
-      <button class="btn btn--primary" onclick="WorkspaceModule.saveName()">Guardar branding</button>
-    </div>
-
-      </section>
-
-      <section class="cfg__sec" data-sec="integraciones" hidden>    <!-- Slack: un workspace por cliente. El token se guarda cifrado, nunca en claro. -->
-    <div class="slk-block">
-      <div class="slk-block__hd">
-        <h3 class="slk-block__t">Slack conectado</h3>
-        <span class="slk-block__sub">Un espacio por cliente, todos en el mismo sitio</span>
-      </div>
-      <div id="slk-list" class="slk-list"><div class="slk-empty">Cargando…</div></div>
-      <div class="slk-add">
-        <input class="form-input slk-add__tok" id="slk-token" type="password" autocomplete="off"
-               placeholder="xoxp-… (User OAuth Token)">
-        <input class="form-input slk-add__lbl" id="slk-etiqueta" placeholder="Nombre del cliente (opcional)">
-        <button class="btn btn--primary btn--sm" id="slk-add-btn" onclick="SlackModule.conectar()">Conectar</button>
-      </div>
-      <p class="slk-hint">
-        En <b>api.slack.com/apps</b> → tu app → <b>OAuth &amp; Permissions</b> → copia el
-        <b>User OAuth Token</b>. Se guarda cifrado y se comprueba contra Slack antes de aceptarlo.
-      </p>
-    </div>
-
-    <div class="slk-block">
-      <div class="slk-block__hd">
-        <h3 class="slk-block__t">WhatsApp conectado</h3>
-        <span class="slk-block__sub">El de Operaciones; conéctalo desde la sección WhatsApp</span>
-      </div>
-      <div id="wa-int-list" class="slk-list"><div class="slk-empty">Cargando…</div></div>
-    </div>
-      </section>
-      <!-- Usuarios: el propio #pane-mgmt-team se muda para acá al entrar a esta
-           pestaña (y se devuelve a su lugar al salir) — mismo truco ya usado con el
-           chat de Slack en media pantalla, para no duplicar la tabla de equipo. -->
-      <section class="cfg__sec" data-sec="usuarios" hidden>
-        <div id="cfg-usuarios-mount"></div>
-      </section>
-    </div>
-  </div>
-</div>
 
 <div class="modal-overlay hidden" id="fx-overlay" onclick="FxRatesModule.close()"></div>
 <div class="modal hidden" id="fx-modal" style="max-width:400px">
@@ -3156,7 +3239,7 @@
   })();
 </script>
 
-<script src="app.js?v=2026092912"></script>
+<script src="app.js?v=2026093013"></script>
 <div id="task-quick-edit" style="display:none;position:fixed;z-index:9999"></div>
 </body>
 </html>

@@ -590,7 +590,7 @@ function selectWorkspaceArea(area) {
 
 // ── Doble sidebar: rail de módulos + panel de secciones ──
 let _activeModule = 'management';
-const _MOD_TITLES = { management: 'Operaciones', enricher: 'Enriquecimiento', leadmanagement: 'Outreach', finance: 'Finanzas', cantera: 'Cantera' };
+const _MOD_TITLES = { management: 'Operaciones', enricher: 'Enriquecimiento', leadmanagement: 'Outreach', finance: 'Finanzas', cantera: 'Cantera', config: 'Configuración' };
 function _moduleOf(tab) {
   return document.querySelector(`.snav-item[data-tab="${tab}"]`)?.closest('.snav-group')?.dataset.module || 'management';
 }
@@ -601,6 +601,14 @@ function _setActiveModule(mod) {
   const t = document.getElementById('snav-panel-title'); if (t) t.textContent = _MOD_TITLES[mod] || '';
   // Lead Management usa su barra interna → oculta el panel redundante del rail
   document.getElementById('appShell')?.classList.toggle('lm-active', mod === 'leadmanagement');
+  // Header: icono+nombre del modulo activo en vez del logo -- pedido
+  // explicito con referencia a Odoo ("CRM" con su icono arriba a la
+  // izquierda). Se muestra/oculta junto con el logo en _applyHomeMode.
+  const modIcon = document.getElementById('gtb-mod-icon');
+  const modName = document.getElementById('gtb-mod-name');
+  const railIcon = document.querySelector(`.snav-mod[data-module="${mod}"] svg`);
+  if (modIcon) modIcon.innerHTML = railIcon ? railIcon.outerHTML : '';
+  if (modName) modName.textContent = _MOD_TITLES[mod] || '';
 }
 function _navCollapsed() { return !!document.getElementById('appShell')?.classList.contains('nav-collapsed'); }
 function _setNavCollapsed(on) {
@@ -669,7 +677,7 @@ const HOME_MODULES = [
   // "Empresa" no es un módulo con su propio sidebar/panes — abre el mismo panel de
   // Empresa (antes "Configuración") que ya existía, con Usuarios y Configuración
   // adentro como pestañas, en vez de sueltas en la barra superior (pedido 2026-09-02).
-  { id: 'empresa', action: "WorkspaceModule.openNameModal()", name: 'Empresa', desc: 'Datos de la empresa, usuarios y configuración', color: 'purple',
+  { id: 'empresa', action: "WorkspaceModule.openNameModal()", name: 'Configuración', desc: 'Marca, integraciones, usuarios y uso del workspace', color: 'purple',
     icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16"/><line x1="9" y1="7" x2="9.01" y2="7"/><line x1="15" y1="7" x2="15.01" y2="7"/><line x1="9" y1="11" x2="9.01" y2="11"/><line x1="15" y1="11" x2="15.01" y2="11"/><line x1="9" y1="15" x2="9.01" y2="15"/><line x1="15" y1="15" x2="15.01" y2="15"/></svg>' },
 ];
 
@@ -765,6 +773,10 @@ function _applyHomeMode(on) {
   const shell = document.getElementById('appShell');
   if (shell) shell.classList.toggle('home-mode', !!on);
   document.querySelectorAll('.snav-mod').forEach(b => b.classList.remove('active'));
+  // Header: logo de Nova en Home, icono+nombre del modulo dentro de un
+  // modulo -- pedido explicito (referencia Odoo).
+  document.getElementById('gtb-brand')?.classList.toggle('hidden', !on);
+  document.getElementById('gtb-mod-brand')?.classList.toggle('hidden', !!on);
 }
 
 // "Ventana" de un proyecto puntual — pedido explícito 2026-09-02: entrar a un
@@ -5120,6 +5132,10 @@ const CanteraModule = (() => {
   let _tamanoExclFiltro = new Set();
   let _domFaltante = false;
   let _paso2DescFiltro = new Set(); // 'descartado' (IA) | 'descartado_manual' (tú)
+  // "En CRM" -- pedido explicito: "asigna una etiqueta o filtro de ya
+  // importado en el crm... asi no ingreso doble". 'si'/'no', igual patron
+  // que _paso2DescFiltro (Set de valores marcados).
+  let _enCrmFiltro = new Set();
   function _jsEsc(s) { return String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
   function _distinctVals(field) {
     const set = new Set();
@@ -5632,7 +5648,7 @@ const CanteraModule = (() => {
     _coSel = new Set(); _expanded = new Set(); _contactsByCompany = {}; _contactsLoaded = false; _step = 1;
     _cantPageIdx = 0; _tierFiltro = new Set(); _tierExclFiltro = new Set(); _prioFiltro = new Set();
     _minContactos = 0; _sinPrioridad = false; _auditoriaFiltro = '';
-    _paisFiltro = new Set(); _paisExclFiltro = new Set(); _industriaFiltro = new Set(); _industriaExclFiltro = new Set(); _tamanoFiltro = new Set(); _tamanoExclFiltro = new Set(); _domFaltante = false; _paso2DescFiltro = new Set();
+    _paisFiltro = new Set(); _paisExclFiltro = new Set(); _industriaFiltro = new Set(); _industriaExclFiltro = new Set(); _tamanoFiltro = new Set(); _tamanoExclFiltro = new Set(); _domFaltante = false; _paso2DescFiltro = new Set(); _enCrmFiltro = new Set();
     _paso1Filtro = ''; _dominioQ = '';
     // Totales de Filtros/Limpiar/Enriquecer/IA vienen del borrador (persistidos
     // en el servidor) — pedido explícito 2026-09-06: "ya limpiamos, no debería
@@ -5680,13 +5696,24 @@ const CanteraModule = (() => {
     { key: 'motivo_descarte', label: 'Nota', def: true },
     { key: 'contactos', label: 'Contactos', def: true },
     { key: 'auditoria', label: 'Auditoría', def: true },
+    { key: 'en_crm', label: 'En CRM', def: true },
   ];
   let _visibleCols = null;
   function _loadVisibleCols() {
     if (_visibleCols) return _visibleCols;
     try {
       const saved = JSON.parse(localStorage.getItem('cantera_result_cols') || 'null');
-      if (Array.isArray(saved)) { _visibleCols = new Set(saved); return _visibleCols; }
+      if (Array.isArray(saved)) {
+        // Columnas nuevas agregadas despues de que ya existia una preferencia
+        // guardada (ej. "En CRM") se prenden solas si son def:true, en vez de
+        // quedar invisibles para siempre -- sino cualquier columna nueva que
+        // se agregue a futuro nunca se ve para quien ya tenia un guardado.
+        const seen = new Set(JSON.parse(localStorage.getItem('cantera_result_cols_seen') || '[]'));
+        const s = new Set(saved);
+        CANT_RESULT_COLS.forEach(c => { if (c.def && !seen.has(c.key)) s.add(c.key); });
+        try { localStorage.setItem('cantera_result_cols_seen', JSON.stringify(CANT_RESULT_COLS.map(c => c.key))); } catch (_) {}
+        _visibleCols = s; return _visibleCols;
+      }
     } catch (_) {}
     _visibleCols = new Set(CANT_RESULT_COLS.filter(c => c.def).map(c => c.key));
     return _visibleCols;
@@ -5718,6 +5745,9 @@ const CanteraModule = (() => {
       case 'auditoria': return c.auditoria_veredicto === 'de_acuerdo' ? `<span class="cant-estado cant-estado--aprobado" title="${esc(c.auditoria_nota)}">✓ Confirmado</span>`
         : c.auditoria_veredicto === 'en_desacuerdo' ? `<span class="cant-estado cant-estado--descartado" title="${esc(c.auditoria_nota)}">✕ En desacuerdo</span>`
         : '<span class="cant-hint" style="margin:0">Sin auditar</span>';
+      case 'en_crm': return c.promoted_company_id
+        ? `<span class="cant-estado cant-estado--aprobado" title="Ya se movio al CRM -- no repetir investigacion">✓ En CRM</span>`
+        : '<span class="cant-hint" style="margin:0">—</span>';
       default: return '—';
     }
   }
@@ -5742,7 +5772,8 @@ const CanteraModule = (() => {
       .filter(c => !_tamanoExclFiltro.has(c.tamano))
       .filter(c => !_domFaltante || !c.dominio)
       .filter(c => !_dominioQ || (c.dominio || '').toLowerCase().includes(_dominioQ.toLowerCase()))
-      .filter(c => !_paso2DescFiltro.size || _paso2DescFiltro.has(c.paso2_estado));
+      .filter(c => !_paso2DescFiltro.size || _paso2DescFiltro.has(c.paso2_estado))
+      .filter(c => !_enCrmFiltro.size || _enCrmFiltro.has(c.promoted_company_id ? 'si' : 'no'));
   }
   // ── Detalle: criterio + import + resultados ──────────────────────
   function _detailHtml() {
@@ -6143,6 +6174,10 @@ const CanteraModule = (() => {
     ).join('') || '<div class="cp-empty2" style="padding:10px 12px">Sin datos todavía</div>';
     const paso2DescPanel = [['descartado', 'Descartado por la IA'], ['descartado_manual', 'Descartado manual (Tier)']]
       .map(([v, label]) => `<label class="cant-colchk"><input type="checkbox" ${_paso2DescFiltro.has(v) ? 'checked' : ''} onchange="CanteraModule.togglePaso2DescFiltro('${v}')"> ${label}</label>`).join('');
+    // "En CRM" -- pedido explicito: filtrar lo que ya se movio al CRM, para
+    // no repetir investigacion profunda sobre lo mismo.
+    const enCrmPanel = [['no', 'Todavía no está en el CRM'], ['si', 'Ya está en el CRM']]
+      .map(([v, label]) => `<label class="cant-colchk"><input type="checkbox" ${_enCrmFiltro.has(v) ? 'checked' : ''} onchange="CanteraModule.toggleEnCrmFiltro('${v}')"> ${label}</label>`).join('');
     // "Ver solo descartadas (Paso 1)" y "Ver solo sin dominio" dejaron de ser
     // toggles sueltos en la raíz — ahora son categorías reales dentro de
     // "Filtrar", con sus opciones (Paso 1: Aprobado/Descartado/Vacío; Dominio:
@@ -6156,7 +6191,7 @@ const CanteraModule = (() => {
     // Guardar/aplicar filtro por borrador — vive dentro de Filtrar › Guardados,
     // no como botones sueltos en la barra — pedido explícito 2026-09-16:
     // "debería estar dentro de opción de filtros, guardados".
-    const hasFiltrosActivos = !!(_paso1Filtro || _tierFiltro.size || _prioFiltro.size || _minContactos || _sinPrioridad || _auditoriaFiltro || _paisFiltro.size || _paisExclFiltro.size || _industriaFiltro.size || _industriaExclFiltro.size || _tamanoFiltro.size || _tamanoExclFiltro.size || _tierExclFiltro.size || _domFaltante || _dominioQ || _paso2DescFiltro.size);
+    const hasFiltrosActivos = !!(_paso1Filtro || _tierFiltro.size || _prioFiltro.size || _minContactos || _sinPrioridad || _auditoriaFiltro || _paisFiltro.size || _paisExclFiltro.size || _industriaFiltro.size || _industriaExclFiltro.size || _tamanoFiltro.size || _tamanoExclFiltro.size || _tierExclFiltro.size || _domFaltante || _dominioQ || _paso2DescFiltro.size || _enCrmFiltro.size);
     const filtroGuardado = _loadFiltroGuardado();
     const guardadosPanel = `<div style="padding:6px 12px 8px"><span class="cant-hint" style="margin:0">${filtroGuardado ? 'Filtro guardado: ' + esc(_filtroResumenTexto(filtroGuardado)) : 'Sin filtro guardado en este borrador todavía'}</span></div>`
       + (hasFiltrosActivos ? item('Guardar filtro actual', 'CanteraModule.guardarFiltroActual()') : '')
@@ -6170,7 +6205,7 @@ const CanteraModule = (() => {
         ${item('Auditar muestra (IA)', 'CanteraModule.openAudit()')}
       </div>
       <div class="cp-mark-menu__sep"></div>
-      <div class="cp-mark-menu__list">${sub('Filtrar', `<div class="cp-mark-menu__list">${sub(`Validación básica${_paso1Filtro ? ' · 1' : ''}`, paso1Panel)}${sub(`Dominio${(_domFaltante || _dominioQ) ? ' · 1' : ''}`, dominioPanel)}${sub('Tier', tierPanel)}${sub('Prioridad', prioPanel)}${sub('Nº de contactos', numContactosPanel)}${sub('Auditoría', auditoriaPanel)}${sub('Validación profunda descartada', paso2DescPanel)}${sub('País', paisPanel, true)}${sub('Industria', industriaPanel, true)}${sub('Tamaño', tamanoPanel, true)}${sub(`Guardados${filtroGuardado ? ' · 1' : ''}`, guardadosPanel)}</div>`)}</div>
+      <div class="cp-mark-menu__list">${sub('Filtrar', `<div class="cp-mark-menu__list">${sub(`Validación básica${_paso1Filtro ? ' · 1' : ''}`, paso1Panel)}${sub(`Dominio${(_domFaltante || _dominioQ) ? ' · 1' : ''}`, dominioPanel)}${sub('Tier', tierPanel)}${sub('Prioridad', prioPanel)}${sub('Nº de contactos', numContactosPanel)}${sub('Auditoría', auditoriaPanel)}${sub('Validación profunda descartada', paso2DescPanel)}${sub(`En CRM${_enCrmFiltro.size ? ' · ' + _enCrmFiltro.size : ''}`, enCrmPanel)}${sub('País', paisPanel, true)}${sub('Industria', industriaPanel, true)}${sub('Tamaño', tamanoPanel, true)}${sub(`Guardados${filtroGuardado ? ' · 1' : ''}`, guardadosPanel)}</div>`)}</div>
       <div class="cp-mark-menu__sep"></div>
       <div class="cp-mark-menu__list">${sub('Elegir columnas visibles', colsPanel, true)}</div>
       ${calificadas || _coSel.size ? `<div class="cp-mark-menu__sep"></div><div class="cp-mark-menu__list">
@@ -6545,6 +6580,7 @@ const CanteraModule = (() => {
   function toggleTierExclFiltro(v) { if (_tierExclFiltro.has(v)) _tierExclFiltro.delete(v); else { _tierExclFiltro.add(v); _tierFiltro.delete(v); } _cantPageIdx = 0; _paint(); }
   function toggleDomFaltante() { _domFaltante = !_domFaltante; _cantPageIdx = 0; _paint(); }
   function togglePaso2DescFiltro(v) { if (_paso2DescFiltro.has(v)) _paso2DescFiltro.delete(v); else _paso2DescFiltro.add(v); _cantPageIdx = 0; _paint(); }
+  function toggleEnCrmFiltro(v) { if (_enCrmFiltro.has(v)) _enCrmFiltro.delete(v); else _enCrmFiltro.add(v); _cantPageIdx = 0; _paint(); }
   // Botón "Limpiar filtros" junto a los chips — pedido explícito 2026-09-07:
   // "lo haría más práctico" en vez de tener que desmarcar cada uno a mano.
   // NO toca la selección (_coSel): son dos cosas distintas.
@@ -6552,7 +6588,7 @@ const CanteraModule = (() => {
     _paso1Filtro = ''; _tierFiltro = new Set(); _tierExclFiltro = new Set(); _prioFiltro = new Set();
     _minContactos = 0; _sinPrioridad = false; _auditoriaFiltro = '';
     _paisFiltro = new Set(); _paisExclFiltro = new Set(); _industriaFiltro = new Set(); _industriaExclFiltro = new Set(); _tamanoFiltro = new Set(); _tamanoExclFiltro = new Set();
-    _domFaltante = false; _dominioQ = ''; _paso2DescFiltro = new Set();
+    _domFaltante = false; _dominioQ = ''; _paso2DescFiltro = new Set(); _enCrmFiltro = new Set();
     _cantPageIdx = 0; _paint();
   }
   // Guardar/aplicar el filtro actual por borrador — pedido explícito
@@ -7065,7 +7101,7 @@ const CanteraModule = (() => {
   }
 
   return { render, open, openCreate, backToList, saveFiltros, runFiltros, setPaso1Filtro, setDominioQ, _filterSubPanel, toggleTierFiltro, togglePrioFiltro, setMinContactos, toggleSinPrioridad, setAuditoriaFiltro,
-    togglePaisFiltro, toggleIndustriaFiltro, toggleTamanoFiltro, toggleDomFaltante, togglePaso2DescFiltro, resetFiltros,
+    togglePaisFiltro, toggleIndustriaFiltro, toggleTamanoFiltro, toggleDomFaltante, togglePaso2DescFiltro, toggleEnCrmFiltro, resetFiltros,
     guardarFiltroActual, aplicarFiltroGuardado, borrarFiltroGuardado, moreMenu, remove, saveAsTemplate,
     toggleExpand, addTier, removeTier, setTierField, addPuesto, removePuesto, setPuestoField, saveCriterio, setMotorIA, runValidacion,
     openPromote, closePromote, doPromote, openSendSeq, closeSendSeq, doSendSeq,
@@ -7228,11 +7264,23 @@ const CanteraMesaModule = (() => {
     { key: 'motivo_descarte', label: 'Nota', def: true },
     { key: 'contactos', label: 'Contactos', def: true },
     { key: 'auditoria', label: 'Auditoría', def: true },
+    { key: 'en_crm', label: 'En CRM', def: true },
   ];
   let _visibleCols = null;
   function _loadVisibleCols() {
     if (_visibleCols) return _visibleCols;
-    try { const saved = JSON.parse(localStorage.getItem('cantera_mesa_cols') || 'null'); if (Array.isArray(saved)) { _visibleCols = new Set(saved); return _visibleCols; } } catch (_) {}
+    try {
+      const saved = JSON.parse(localStorage.getItem('cantera_mesa_cols') || 'null');
+      if (Array.isArray(saved)) {
+        // Mismo fix que CanteraModule: columnas nuevas (def:true) agregadas
+        // despues de guardar una preferencia se prenden solas.
+        const seen = new Set(JSON.parse(localStorage.getItem('cantera_mesa_cols_seen') || '[]'));
+        const s = new Set(saved);
+        MESA_COLS.forEach(c => { if (c.def && !seen.has(c.key)) s.add(c.key); });
+        try { localStorage.setItem('cantera_mesa_cols_seen', JSON.stringify(MESA_COLS.map(c => c.key))); } catch (_) {}
+        _visibleCols = s; return _visibleCols;
+      }
+    } catch (_) {}
     _visibleCols = new Set(MESA_COLS.filter(c => c.def).map(c => c.key));
     return _visibleCols;
   }
@@ -7260,6 +7308,9 @@ const CanteraMesaModule = (() => {
       case 'auditoria': return c.auditoria_veredicto === 'de_acuerdo' ? `<span class="cant-estado cant-estado--aprobado" title="${esc(c.auditoria_nota)}">✓ Confirmado</span>`
         : c.auditoria_veredicto === 'en_desacuerdo' ? `<span class="cant-estado cant-estado--descartado" title="${esc(c.auditoria_nota)}">✕ En desacuerdo</span>`
         : '<span class="cant-hint" style="margin:0">Sin auditar</span>';
+      case 'en_crm': return c.promoted_company_id
+        ? `<span class="cant-estado cant-estado--aprobado" title="Ya se movio al CRM -- no repetir investigacion">✓ En CRM</span>`
+        : '<span class="cant-hint" style="margin:0">—</span>';
       default: return '—';
     }
   }
@@ -19509,7 +19560,7 @@ const LeadManagerModule = (() => {
                 : n.k === 'clients' ? _cuTotal()
                 : n.k === 'wa'     ? (Array.isArray(_waList) ? _waList.reduce((s, x) => s + (x.no_leidos || 0), 0) : (nc.wa || 0))
                 : 0;
-      html += `<button class="lm2-nav__item${active ? ' active' : ''}" onclick="LeadManagerModule.go('${n.k}')">
+      html += `<button class="lm2-nav__item${active ? ' active' : ''}" data-tooltip="${n.l}" onclick="LeadManagerModule.go('${n.k}')">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${_NAV_ICON[n.k] || ''}</svg>
         <span class="lm2-nav__lbl">${n.l}</span>${cnt ? `<span class="lm2-nav__cnt">${cnt}</span>` : ''}${n.soon ? '<span class="lm2-nav__soon">Pronto</span>' : ''}</button>`;
     });
@@ -19520,21 +19571,16 @@ const LeadManagerModule = (() => {
   // .lm2-nav .snav-panel__hd .sidebar__toggle ya existia, pero nunca se
   // agrego el boton correspondiente al markup). Vive DENTRO del panel,
   // nunca flotando afuera.
-  function _lm2NavCollapsed() { try { return localStorage.getItem('lm2_nav_collapsed') === '1'; } catch (_) { return false; } }
-  function toggleNav() {
-    const nav = document.querySelector('.lm2-nav'); if (!nav) return;
-    const on = !nav.classList.contains('lm2-nav--collapsed');
-    nav.classList.toggle('lm2-nav--collapsed', on);
-    try { localStorage.setItem('lm2_nav_collapsed', on ? '1' : '0'); } catch (_) {}
-    const btn = document.getElementById('lm2-nav-toggle'); if (btn) btn.title = on ? 'Mostrar panel' : 'Ocultar panel';
-  }
+  // Colapso GLOBAL compartido con #sidebar (nova_nav_collapsed) -- pedido
+  // explicito: "si esta contraido en un modulo se contrae en todos".
+  function toggleNav() { _setNavCollapsedGlobal(!_navCollapsedGlobal()); }
   function _renderShell() {
     const pane = $('pane-lead-manager'); if (!pane) return;
     _cuStart();
-    const collapsed = _lm2NavCollapsed();
+    const collapsed = _navCollapsedGlobal();
     pane.innerHTML = `<div class="lm2">
       <aside class="lm2-nav${collapsed ? ' lm2-nav--collapsed' : ''}">
-        <div class="snav-panel__hd"><button class="snav-back" title="Volver al inicio" aria-label="Volver al inicio" onclick="goHome()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg><span>Módulos</span></button><button class="sidebar__toggle" id="lm2-nav-toggle" title="${collapsed ? 'Mostrar panel' : 'Ocultar panel'}" aria-label="Ocultar/mostrar panel" onclick="LeadManagerModule.toggleNav()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button></div>
+        <div class="snav-panel__hd"><button class="snav-back" title="Volver al inicio" aria-label="Volver al inicio" onclick="goHome()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg><span>Módulos</span></button><button class="sidebar__toggle" id="lm2-nav-toggle" title="${collapsed ? 'Mostrar panel' : 'Ocultar panel'}" aria-label="Ocultar/mostrar panel" onclick="LeadManagerModule.toggleNav()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg></button></div>
         <nav class="lm2-nav__list" id="lm2-nav-list">${_navHtml()}</nav>
         <div class="snav-foot">
           <button class="snav-foot__btn" onclick="WorkspaceModule.openNameModal()">
@@ -31781,9 +31827,25 @@ const WorkspaceModule = (() => {
     }
   }
 
-  let _logoData = ''; // base64 or URL currently staged in the modal
+  let _logoData = ''; // base64 or URL currently staged en la pagina
 
-  function openNameModal() {
+  // Empresa dejo de ser un modal -- pedido explicito: "este modulo debe
+  // cambiar de modal a pagina completa con secciones como los otros". Ahora
+  // es #pane-mgmt-empresa (data-tab="mgmt-empresa") como cualquier otra
+  // seccion; openNameModal() se mantiene con el mismo nombre y firma (la
+  // usan varios sitios: avatar, pie de barra, launcher, atajos de Slack) pero
+  // ahora navega a la pagina en vez de destapar un overlay.
+  function openNameModal(section) {
+    // Configuracion es su PROPIO modulo (icono aparte en el riel, su propio
+    // grupo en el sidebar #snav-body-config) -- pedido explicito: "esto es
+    // parte de un nuevo modulo, no debe haber dos [barras]". Se entra con el
+    // mismo selectModule() que cualquier otro modulo (maneja home-mode,
+    // nav-collapse, etc. igual que Dashboard/Outreach/Finanzas).
+    if (typeof selectModule === 'function') selectModule('config');
+    setSection(section || 'apariencia');
+  }
+
+  function load() {
     const ws = window._authUser || {};
     $('wsname-input').value        = $('ws-name-tag')?.textContent || '';
     $('brand-company-input').value = ws.companyName || '';
@@ -31791,25 +31853,26 @@ const WorkspaceModule = (() => {
     _applyLogoPreview(_logoData);
     $('brand-logo-url').value = _logoData.startsWith('data:') ? '' : _logoData;
     _updateLivePreview();
-    $('wsname-overlay').classList.remove('hidden');
-    $('wsname-modal').classList.remove('hidden');
-    setSection('apariencia');
-    setTimeout(() => $('brand-company-input').focus(), 80);
+    setTimeout(() => $('brand-company-input')?.focus(), 80);
 
     // Live preview updates on typing
     $('brand-company-input').oninput = _updateLivePreview;
     $('wsname-input').oninput        = _updateLivePreview;
   }
 
-  // Cambia de seccion en Empresa (antes "Configuración"). Se cargan los datos de
-  // integraciones/usuarios solo al entrar, no al abrir el modal.
+  // Cambia de seccion en Empresa. Se cargan los datos de integraciones/usuarios
+  // solo al entrar, no al abrir la pagina.
   let _teamParent = null, _teamNext = null;
   function setSection(sec) {
-    document.querySelectorAll('#wsname-modal .cfg__navb')
-      .forEach(b => b.classList.toggle('on', b.dataset.sec === sec));
-    document.querySelectorAll('#wsname-modal .cfg__sec')
+    // El nav ya no vive dentro de la pagina (.cfg__navb) -- es el propio
+    // sidebar del modulo Configuracion (#snav-body-config .snav-item), como
+    // cualquier otro modulo. Pedido explicito: "no debe haber dos [barras]".
+    document.querySelectorAll('#snav-body-config .snav-item')
+      .forEach(b => b.classList.toggle('active', b.dataset.sec === sec));
+    document.querySelectorAll('#pane-mgmt-empresa .cfg__sec')
       .forEach(s2 => { s2.hidden = s2.dataset.sec !== sec; });
     if (sec === 'integraciones') { SlackModule.cargar(); IntegracionesModule.cargarWa(); }
+    if (sec === 'uso') _loadUsage();
     // "Usuarios" pasó de ser una pestaña propia del header a vivir acá dentro —
     // en vez de duplicar la tabla, se muda el propio #pane-mgmt-team (mismo truco que
     // el chat de Slack en media pantalla: mover el nodo, no clonar el módulo).
@@ -31835,11 +31898,52 @@ const WorkspaceModule = (() => {
     }
   }
 
-  function closeNameModal() {
-    $('wsname-overlay').classList.add('hidden');
-    $('wsname-modal').classList.add('hidden');
-    _volverPaneEquipo();
+  let _usageLoaded = false;
+  async function _loadUsage() {
+    if (_usageLoaded) return; // cuenta real, no cambia dentro de la misma visita
+    _usageLoaded = true;
+    try {
+      const res = await apiFetch(`${API}/workspace/usage`);
+      if (!res.ok) throw new Error();
+      const d = await res.json();
+      const set = (id, v) => { const el = $(id); if (el) el.textContent = (v ?? 0).toLocaleString('es'); };
+      set('usage-contactos', d.contactos);
+      set('usage-empresas', d.empresas);
+      set('usage-miembros', d.miembros);
+      set('usage-secuencias', d.secuenciasActivas);
+      set('usage-emails', d.emailsMes);
+      set('usage-linkedin', d.linkedinMes);
+      set('usage-verificaciones', d.verificacionesMes);
+    } catch (_) {
+      _usageLoaded = false; // permite reintentar si fallo de red
+    }
+    _loadServerUsage();
   }
+
+  const _fmtGB = bytes => (bytes / (1024 ** 3)).toFixed(1) + ' GB';
+  function _barClass(pct) { return pct >= 90 ? 'danger' : pct >= 70 ? 'warn' : ''; }
+  async function _loadServerUsage() {
+    try {
+      const res = await apiFetch(`${API}/workspace/server-usage`);
+      if (!res.ok) throw new Error();
+      const d = await res.json();
+      const ramEl = $('usage-ram'), ramBar = $('usage-ram-bar');
+      if (ramEl) ramEl.textContent = `${_fmtGB(d.ram.usedBytes)} / ${_fmtGB(d.ram.totalBytes)} (${d.ram.usedPercent}%)`;
+      if (ramBar) { ramBar.style.width = d.ram.usedPercent + '%'; ramBar.className = 'usage-bar__fill ' + _barClass(d.ram.usedPercent); }
+      const discoEl = $('usage-disco'), discoBar = $('usage-disco-bar');
+      if (d.disk) {
+        if (discoEl) discoEl.textContent = `${_fmtGB(d.disk.usedBytes)} / ${_fmtGB(d.disk.totalBytes)} (${d.disk.usedPercent}%)`;
+        if (discoBar) { discoBar.style.width = d.disk.usedPercent + '%'; discoBar.className = 'usage-bar__fill ' + _barClass(d.disk.usedPercent); }
+      } else if (discoEl) discoEl.textContent = 'No disponible';
+      const dbEl = $('usage-db');
+      if (dbEl) dbEl.textContent = d.dbSizeBytes != null ? _fmtGB(d.dbSizeBytes) : '—';
+    } catch (_) { /* silencioso -- las metricas de la app ya cargaron */ }
+  }
+
+  // Ya no "cierra" nada (no hay modal) -- solo devuelve el pane de Equipo a
+  // su lugar si estaba montado en la seccion Usuarios. Se llama al guardar y
+  // al salir de la pagina Empresa (ver _switchTab).
+  function closeNameModal() { _volverPaneEquipo(); }
 
   function onLogoFile(input) {
     const file = input.files[0];
@@ -31921,7 +32025,7 @@ const WorkspaceModule = (() => {
     }
   }
 
-  return { openInvite, closeInvite, resetInvite, generateInvite, copyInvite, openNameModal, closeNameModal, setSection, saveName, onLogoFile, onLogoUrl, clearLogo };
+  return { openInvite, closeInvite, resetInvite, generateInvite, copyInvite, openNameModal, closeNameModal, load, setSection, saveName, onLogoFile, onLogoUrl, clearLogo };
 })();
 
 // =================================================================
@@ -38549,6 +38653,12 @@ const RChatPanel = (() => {
   let _fcParent = null, _fcNext = null, _fcOpen = false;
   function openFullChat() {
     if (_fcOpen) { closeFullChat(); return; }
+    // Slack y WhatsApp de Operaciones son dos overlays independientes, cada
+    // uno con su propio estado -- pedido explicito: "debo poder cambiar
+    // entre slack y wpp desde accesos rapidos y ahora no es posible, no abre
+    // el otro si ya esta abierto". Sin este cierre cruzado, abrir el segundo
+    // mientras el primero seguia abierto los dejaba superpuestos.
+    if (_fwOpen) closeFullWa();
     const shell = $('chat-shell'); const box = $('rchat-fc-box'); const backdrop = $('rchat-fc-backdrop');
     if (!shell || !box || !backdrop) return;
     _fcParent = shell.parentElement; _fcNext = shell.nextSibling;
@@ -38578,6 +38688,7 @@ const RChatPanel = (() => {
   let _fwParent = null, _fwNext = null, _fwOpen = false;
   function openFullWa() {
     if (_fwOpen) { closeFullWa(); return; }
+    if (_fcOpen) closeFullChat();
     const inner = $('wa-fc-inner'); const box = $('rwa-fc-box'); const backdrop = $('rwa-fc-backdrop');
     if (!inner || !box || !backdrop) return;
     _fwParent = inner.parentElement; _fwNext = inner.nextSibling;
@@ -39409,7 +39520,12 @@ const TimerModule = (() => {
     _updateRailBtn();
   }
 
-  // Botón del rail derecho: rojo = detenido · verde con pulso = corriendo (ámbar si idle).
+  // Botón del rail derecho: mismo estilo neutro/translúcido que el resto de
+  // íconos del header (pedido explícito: "debe mantener el mismo estilo ya
+  // definido para el header" -- antes era un semáforo rojo/ámbar/azul que se
+  // veía como un bloque de color solido, distinto a Slack/WhatsApp/etc al
+  // lado). Solo "corriendo" se destaca en azul, igual que cualquier otro
+  // ícono activo del header.
   // Visible en TODOS los módulos, así se prende/apaga sin ir a Time Tracking.
   function _updateRailBtn() {
     const b = document.getElementById('rtt-btn');
@@ -39418,15 +39534,19 @@ const TimerModule = (() => {
     const on = !!_entryId;
     b.classList.toggle('on', on);
     b.classList.toggle('idle', on && _isIdle);
-    // El color se pinta en el span .rtt__pulse (fondo) y en el fill de los SVG, NO en el
-    // <button>: hay navegadores/extensiones que fuerzan el background de los botones e
-    // ignoran incluso inline + !important (verificado en producción).
-    const paleta = !on ? ['#F1EFEB', '#C4342B']          // detenido → rojo
-                 : _isIdle ? ['#F1EFEB', '#A96D0C']      // corriendo pero inactivo → ámbar
-                 : ['#007AFF', '#FFFFFF'];               // corriendo → verde
+    // El color se pinta en el span .rtt__pulse (fondo) y en el stroke/fill de los SVG, NO
+    // en el <button>: hay navegadores/extensiones que fuerzan el background de los botones
+    // e ignoran incluso inline + !important (verificado en producción). Header claro ahora
+    // (pedido explícito) -> paleta neutra en gris oscuro, no blanco.
+    const paleta = !on ? ['#EAE7E2', '#6C6862']         // detenido → neutro, igual a los demas iconos
+                 : _isIdle ? ['#EAE7E2', '#B7791F']      // corriendo pero inactivo → ambar (unico aviso que queda)
+                 : ['#007AFF', '#FFFFFF'];               // corriendo → azul, igual al resto de "activo" en la app
     const pulse = b.querySelector('.rtt__pulse');
     if (pulse) pulse.style.setProperty('background', paleta[0], 'important');
-    b.querySelectorAll('.rtt__ico').forEach(s => s.style.setProperty('fill', paleta[1], 'important'));
+    b.querySelectorAll('.rtt__ico').forEach(s => {
+      s.style.setProperty('fill', s.classList.contains('rtt__ico--stop') ? paleta[1] : 'none', 'important');
+      s.style.setProperty('stroke', paleta[1], 'important');
+    });
     b.title = on
       ? `Detener seguimiento — ${_taskTitle || 'sin tarea'}${_isIdle ? ' (inactivo)' : ''}`
       : 'Iniciar seguimiento de tiempo';
@@ -40536,22 +40656,60 @@ const TimerModule = (() => {
 // colapsa a riel de solo íconos (64px, .sidebar--collapsed), igual que la
 // barra interna de Outreach (.lm2-nav--collapsed), en vez de desaparecer del
 // todo. Se recuerda por navegador (localStorage), no por módulo.
-function toggleModuleSidebar() {
-  const el = document.getElementById('sidebar'); if (!el) return;
-  const hidden = el.classList.toggle('sidebar--collapsed');
-  try { localStorage.setItem('nova_sidebar_hidden', hidden ? '1' : '0'); } catch (_) {}
-  const btn = document.getElementById('sidebar-toggle');
-  if (btn) btn.title = hidden ? 'Mostrar panel' : 'Ocultar panel';
+// Estado de colapso GLOBAL para toda la app -- pedido explicito: "si esta
+// contraido en un modulo se contrae en todos y si esta expandido en todos lo
+// esta". Antes #sidebar (nova_sidebar_hidden) y .lm2-nav de Outreach
+// (lm2_nav_collapsed) recordaban su colapso por separado; ahora comparten
+// una sola llave y un solo setter que sincroniza ambos DOM a la vez,
+// aunque solo uno este visible en el momento del toggle.
+function _navCollapsedGlobal() { try { return localStorage.getItem('nova_nav_collapsed') === '1'; } catch (_) { return false; } }
+function _setNavCollapsedGlobal(on) {
+  try { localStorage.setItem('nova_nav_collapsed', on ? '1' : '0'); } catch (_) {}
+  const sb = document.getElementById('sidebar');
+  if (sb) {
+    sb.classList.toggle('sidebar--collapsed', on);
+    const btn = document.getElementById('sidebar-toggle');
+    if (btn) btn.title = on ? 'Mostrar panel' : 'Ocultar panel';
+  }
+  const lm = document.querySelector('.lm2-nav');
+  if (lm) {
+    lm.classList.toggle('lm2-nav--collapsed', on);
+    const btn2 = document.getElementById('lm2-nav-toggle');
+    if (btn2) btn2.title = on ? 'Mostrar panel' : 'Ocultar panel';
+  }
 }
-function _restoreModuleSidebar() {
-  try {
-    if (localStorage.getItem('nova_sidebar_hidden') === '1') {
-      document.getElementById('sidebar')?.classList.add('sidebar--collapsed');
-      const btn = document.getElementById('sidebar-toggle');
-      if (btn) btn.title = 'Mostrar panel';
-    }
-  } catch (_) {}
-}
+function toggleModuleSidebar() { _setNavCollapsedGlobal(!_navCollapsedGlobal()); }
+function _restoreModuleSidebar() { if (_navCollapsedGlobal()) _setNavCollapsedGlobal(true); }
+
+// Tooltip flotante para el riel colapsado -- pedido explicito: "al poner el
+// mouse encima debia salir el nombre de la seccion". Antes era un ::after
+// del propio item, pero #sidebar/.lm2-nav tienen overflow:hidden (lo
+// necesitan para el scroll interno) y lo recortaban invisible -- solo se
+// veia el cuadro de hover. Un elemento fixed aparte no lo recorta nada.
+(function () {
+  let tip = null;
+  function show(item) {
+    const collapsed = item.closest('.sidebar--collapsed, .lm2-nav--collapsed');
+    const text = item.getAttribute('data-tooltip');
+    if (!collapsed || !text) return;
+    if (!tip) { tip = document.createElement('div'); tip.id = 'nav-tooltip'; document.body.appendChild(tip); }
+    tip.textContent = text;
+    const r = item.getBoundingClientRect();
+    tip.style.left = (r.right + 10) + 'px';
+    tip.style.top = (r.top + r.height / 2) + 'px';
+    tip.style.transform = 'translateY(-50%)';
+    tip.classList.add('show');
+  }
+  function hide() { if (tip) tip.classList.remove('show'); }
+  document.addEventListener('mouseover', (e) => {
+    const item = e.target.closest && e.target.closest('.snav-item[data-tooltip], .lm2-nav__item[data-tooltip]');
+    if (item) show(item);
+  });
+  document.addEventListener('mouseout', (e) => {
+    const item = e.target.closest && e.target.closest('.snav-item[data-tooltip], .lm2-nav__item[data-tooltip]');
+    if (item) hide();
+  });
+})();
 
 function initApp() {
   _restoreModuleSidebar();
@@ -40569,6 +40727,11 @@ function initApp() {
   // que el usuario acaba de pegar).
   function _switchTab(tabName, opts = {}) {
     try { localStorage.setItem('kw_activeTab', tabName); } catch (_) {}   // recuerda la sección para restaurarla al recargar
+    // Si el pane de Equipo seguia montado dentro de Empresa > Usuarios,
+    // devolverlo a su lugar ANTES de decidir que pane queda activo (abajo) --
+    // asi, si el destino es justo "Equipo", el add('active') de mas abajo lo
+    // deja bien; si no, el remove('active') de mas abajo tambien lo cubre.
+    if (tabName !== 'mgmt-empresa') WorkspaceModule.closeNameModal();
     document.querySelectorAll('.tab,.snav-item').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.pane').forEach(p => p.classList.remove('active'));
     document.querySelectorAll(`[data-tab="${tabName}"]`).forEach(t => t.classList.add('active'));
@@ -40603,6 +40766,7 @@ function initApp() {
     else                                  WaChatModule.detener();
     if (tabName === 'lead-manager')       LeadManagerModule.load();
     if (tabName === 'mgmt-timetracking')  TimerModule.loadReport();
+    if (tabName === 'mgmt-empresa')       WorkspaceModule.load();
   }
 
   document.querySelectorAll('.tab, .snav-item').forEach(btn => {

@@ -37,7 +37,7 @@
   /* Alto de la barra superior global — los paneles sticky dentro de .app-main
      deben restarlo de 100vh; si no, sobresalen justo esa cantidad y hacen
      scrollear toda la página aunque su contenido quepa. */
-  --topbar-h:29px; /* +10% (pedido 2026-09-02), antes 26px */
+  --topbar-h:42px; /* pedido explicito 2026-09-30: "la referencia tiene mas alto el header" (ref: Odoo) -- antes 29px */
   /* Radius */
   --r:12px; --rs:9px; --rpill:99px;
   /* Shadow — muy sutil (DS v2) */
@@ -329,13 +329,21 @@ body {
   white-space:nowrap;
   box-sizing:border-box;
 }
+/* Gris neutro en hover, azul SOLO en el activo -- pedido explicito con
+   captura de referencia de Clay: hover=gris, click/activo=azul (no el mismo
+   color entre ambos). */
 .snav-item:hover:not(.active) { background:#F1EFEB; }
 /* Mismo alto en reposo y activo (36px) -- pedido explicito: "quiero que se
    quede como esta en el modo de outreach... mismo espaciado alineado, todo".
    Antes .snav-item.active crecia a 40px, algo que .lm2-nav__item.active
    (Outreach) no hace -- eso movia el resto de filas al activar una. */
 .snav-item.active {
-  background:var(--brand-ll, #EAF2FF);
+  /* OJO: --brand-ll ESTA definida (#F1EFEB, beige) para otros usos del
+     sistema -- var(--brand-ll, #EAF2FF) por eso NUNCA caia en el fallback
+     azul, salia beige. Bug real detectado por captura: el activo del panel
+     principal se veia beige y el de Outreach celeste. Valor literal, igual
+     al que ya usa .lm2-nav__item.active (#EAF2FF). */
+  background:#EAF2FF;
   color:var(--brand-d, #0062CC);
 }
 
@@ -371,14 +379,14 @@ body {
 }
 .snav-item.active .snav-item__label { font-weight:600; }
 .sidebar--collapsed .snav-item__label { opacity:0; max-width:0 }
-.sidebar--collapsed .snav-item {
-  width:40px; height:40px;
-  margin:1px auto;
-  padding:0;
-  gap:0;
-  justify-content:center;
-}
-.sidebar--collapsed .snav-item__icon { width:40px; height:40px; border-radius:0; }
+/* El ancho/centrado del item lo maneja SOLO #sidebar.sidebar--collapsed
+   .snav-item (mas abajo, con id -- gana por especificidad): item 100% +
+   justify-content:center, igual que .lm2-nav--collapsed .lm2-nav__item de
+   Outreach. Esta regla vieja forzaba ademas un ancho fijo (40px) con
+   margin:auto en el propio item, cuyo calculo de centrado no coincidia con
+   el de Outreach y desalineaba el icono en el riel colapsado -- real, medido
+   en vivo (Clay como referencia: icono centrado en un boton de 32px). */
+.sidebar--collapsed .snav-item__icon { width:32px; height:32px; border-radius:0; }
 
 /* Encabezado de sección de la barra lateral (estilo Clay: agrupa la nav) */
 .snav-cat {
@@ -399,13 +407,14 @@ body {
   margin: 7px 12px; border-top: 1px solid var(--border, #EAE7E2);
 }
 
-/* Tooltip on collapsed hover */
-.sidebar--collapsed .snav-item::after {
-  content: attr(data-tooltip);
-  position:absolute;
-  left:calc(100% + 10px);
-  top:50%;
-  transform:translateY(-50%);
+/* Tooltip al colapsar: NO puede ser un ::after posicionado dentro del item
+   -- #sidebar y .lm2-nav tienen overflow:hidden (lo necesitan para el
+   scroll interno) y eso lo recortaba invisible; por eso antes solo se veia
+   el cuadro de hover pero nunca aparecia el nombre. Ahora es un elemento
+   flotante (#nav-tooltip, fixed) manejado por JS -- ver initApp/_navTooltip
+   en app.js -- que no puede ser recortado por ningun overflow. */
+#nav-tooltip {
+  position: fixed;
   background:#1F1D1B;
   color:#fff;
   font-size:.74rem;
@@ -415,11 +424,11 @@ body {
   white-space:nowrap;
   pointer-events:none;
   opacity:0;
-  transition:opacity .15s;
-  z-index:200;
+  transition:opacity .12s;
+  z-index:9999;
   box-shadow:0 4px 14px rgba(0,0,0,.18);
 }
-.sidebar--collapsed .snav-item:hover::after { opacity:1 }
+#nav-tooltip.show { opacity:1; }
 
 /* ── Workspace launcher (Google-Workspace-style app picker) ─ */
 .ws-launcher {
@@ -5847,9 +5856,11 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
    FULL CHAT — Shell · Sidebar · Main · Composer · Messages
    ═══════════════════════════════════════════════════════════ */
 .pane--chat { padding: 0 !important; overflow: hidden; height: 100%; }
-/* Tipografía estilo Zulip, acotada al chat de Slack (pestaña completa + panel
-   flotante) — el resto de Nova sigue con su fuente de siempre. */
-#pane-mgmt-chat, #rchat { font-family: 'Source Sans 3', var(--font); }
+/* Antes tipografia estilo Zulip (Source Sans 3) acotada solo al chat de
+   Slack -- pedido explicito nuevo, tras revisar visualmente: "no se ve
+   igual, tampoco la misma jerarquia" comparado con WhatsApp. Misma fuente
+   que el resto de Nova (var(--font), Inter). */
+#pane-mgmt-chat, #rchat { font-family: var(--font); }
 .chat-shell { display: flex; height: 100%; overflow: hidden; position: relative; }
 
 /* ── Sidebar ── */
@@ -5916,15 +5927,20 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
   min-height: 28px; user-select: none; position: relative;
 }
 .chat-ch:hover { background: #EAE7E2; color: #1F1D1B; }
-.chat-ch--active { background: rgba(0,122,255,.12); color: #C45A0A; font-weight: 700; }
+/* Azul consistente con el resto de la app (mismo esquema que ya usa
+   WhatsApp: var(--primary)) -- pedido explicito: "cambio de colores en
+   Slack siguiendo el estilo que ya se usa en el WhatsApp". Antes el activo
+   tenia fondo azul pero texto NARANJA (#C45A0A), un resto de un esquema
+   viejo que nunca se actualizo. */
+.chat-ch--active { background: var(--primary-soft, rgba(0,122,255,.12)); color: var(--primary, #007AFF); font-weight: 700; }
 .chat-ch--unread { font-weight: 700; color: #1F1D1B; }
 .chat-ch__icon { flex-shrink: 0; width: 18px; text-align: center; font-size: .84rem; color: #CFCAC3; font-weight: 700; line-height: 1; }
-.chat-ch--active .chat-ch__icon { color: #C45A0A; }
+.chat-ch--active .chat-ch__icon { color: var(--primary, #007AFF); }
 .chat-ch--unread .chat-ch__icon { color: #1F1D1B; }
 .chat-ch__body { flex: 1; min-width: 0; display: flex; align-items: center; gap: 5px; overflow: hidden; }
 .chat-ch__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 1; min-width: 0; }
 .chat-ch__sub { font-size: .60rem; color: #CFCAC3; font-weight: 500; white-space: nowrap; flex-shrink: 0; background: rgba(0,0,0,.04); border-radius: 0; padding: 1px 5px; }
-.chat-ch--active .chat-ch__sub { background: rgba(0,122,255,.12); color: #C45A0A; }
+.chat-ch--active .chat-ch__sub { background: var(--primary-soft, rgba(0,122,255,.12)); color: var(--primary, #007AFF); }
 /* DM avatar + online dot */
 .chat-ch__avatar-wrap { position: relative; flex-shrink: 0; }
 .chat-ch__avatar-sm {
@@ -5971,7 +5987,10 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 .chat-main__left { display: flex; align-items: center; gap: 7px; flex: 1; min-width: 0; overflow: hidden; }
 .chat-main__ch-badge { font-size: 1.1rem; color: #B4AFA8; font-weight: 400; flex-shrink: 0; }
 .chat-main__ch-info { min-width: 0; }
-.chat-main__ch-name { font-size: .94rem; font-weight: 800; color: #1F1D1B; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+/* Mismo tamaño/peso que el nombre de contacto de WhatsApp (.wa-main__ch-name)
+   -- pedido explicito: "no se ve igual, tampoco la misma jerarquia en
+   cuanto a tamaños". */
+.chat-main__ch-name { font-size: .88rem; font-weight: 700; color: #1F1D1B; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
 .chat-main__ch-topic { font-size: .73rem; color: #B4AFA8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; margin-top: 1px; }
 .chat-main__header-actions { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
 /* Header buttons */
@@ -6175,7 +6194,7 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 }
 .chat-pin-badge {
   display: inline-flex; align-items: center; gap: 4px;
-  font-size: .63rem; color: #C45A0A; font-weight: 600;
+  font-size: .63rem; color: var(--brand, #007AFF); font-weight: 600;
   background: rgba(0,122,255,.1); border-radius: 0;
   padding: 1px 5px; margin-bottom: 2px;
 }
@@ -6574,7 +6593,7 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
   line-height: 1.4;
 }
 .chat-reaction:hover { border-color: var(--brand); background: rgba(0,122,255,.08); }
-.chat-reaction--mine { border-color: var(--brand); background: rgba(0,122,255,.1); color: #C45A0A; }
+.chat-reaction--mine { border-color: var(--brand); background: rgba(0,122,255,.1); color: var(--brand); }
 .chat-reaction__count { font-size: .72rem; font-weight: 700; }
 
 /* Full chat pane message area */
@@ -13166,14 +13185,17 @@ a.cp-strip__i:hover svg { color: var(--brand, #007AFF); }
 #sidebar .snav-panel__title { color: var(--text); }
 #sidebar .snav-panel__hd .sidebar__toggle { color: var(--muted); background: transparent; }
 #sidebar .snav-panel__hd .sidebar__toggle:hover { background: var(--bg2); color: var(--text); }
-/* Ítems: alto uniforme y reducido (sin salto en el activo), texto oscuro, activo verde */
-#sidebar .snav-item { color: var(--text2); height: 23.4px; min-height: 23.4px; gap: 9px; }
-#sidebar .snav-item__label { font-size: 12.8px; }
-#sidebar .snav-item__icon { width: 22px; height: 22px; }
-#sidebar .snav-item__icon svg { width: 16px; height: 16px; }
-#sidebar .snav-item__icon { color: var(--muted); }
-#sidebar .snav-item:hover:not(.active) { background: var(--bg); color: var(--text); }
-#sidebar .snav-item.active { height: 23.4px; min-height: 23.4px; box-shadow: none; }
+/* Ítems: texto oscuro, activo verde -- el alto/tipografía/ícono los fija el
+   bloque de paridad final con Outreach (.snav-item, .lm2-nav__item), NO acá:
+   este selector con #sidebar (mas especifico) los pisaba con un tamaño viejo
+   y reducido (23.4px/12.8px/16px) que nunca se quito al unificar -- esa era
+   la causa real de la barra principal viendose "comprimida" vs Outreach. */
+/* Color de texto/icono (negro, igual a Clay) lo fija el bloque de paridad
+   final (.snav-item, .lm2-nav__item) -- este #sidebar (con id) lo pisaba
+   con el gris viejo (var(--text2)), pedido explicito: "letra tambien, no
+   solo iconos". */
+#sidebar .snav-item:hover:not(.active) { background: #F1EFEB; }
+#sidebar .snav-item.active { box-shadow: none; }
 
 /* Barra del Lead Manager: cabecera estilo Management (título + contraer), blanca, sin scroll, ítems bajos */
 #appShell.lm-active .app-main { padding-top: 0; }
@@ -14017,45 +14039,65 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
 #appShell.home-mode:not(.standalone-users) .content-wrap { max-width: none; padding: 0; height: 100%; }
 #appShell.home-mode:not(.standalone-users) #pane-home { height: 100%; }
 
-/* ── Barra superior GLOBAL (Home y dentro de cada módulo), paleta de Nova ── */
+/* ── Barra superior GLOBAL (Home y dentro de cada módulo) ──
+   Pedido explícito con referencia (Odoo): "header claro, y los iconos
+   existentes vuelvelos oscuros... igual a la letra y los iconos de los
+   modulos la barra lateral izquierda" -- antes navy oscuro con texto/iconos
+   blancos; ahora blanco con texto/iconos gris oscuro, mismo tono que el
+   sidebar (var(--text)/var(--text2)). */
 .global-topbar {
   display: flex; align-items: center; gap: 14px; height: var(--topbar-h, 26px); padding: 0 14px;
-  background: var(--navy); color: #fff; font-family: var(--font); flex-shrink: 0;
+  background: #fff; color: var(--text2, #6C6862); font-family: var(--font); flex-shrink: 0;
+  border-bottom: 1px solid var(--border, #EAE7E2);
 }
 .global-topbar__brand { display: flex; align-items: center; gap: 6px; color: var(--brand-accent); flex-shrink: 0; }
-.global-topbar__logo { display: block; width: 18px; height: 18px; object-fit: contain; flex-shrink: 0; }
-.global-topbar__name { font-weight: 700; font-size: 12.5px; color: #fff; letter-spacing: -.01em; }
-.global-topbar__tabs { display: flex; align-items: center; gap: 2px; height: 100%; }
+.global-topbar__logo { display: block; width: 18px; height: 18px; object-fit: contain; flex-shrink: 0; filter: invert(1); }
+.global-topbar__name { font-weight: 700; font-size: 12.5px; color: var(--text, #1F1D1B); letter-spacing: -.01em; }
+/* Icono+nombre del modulo activo, en vez del logo -- referencia Odoo. Es un
+   <button> clicable (lleva a Home) -- pedido explicito: "eso lleve al panel
+   principal", quitando el tab suelto "Aplicaciones". En hover se oculta el
+   icono y aparece una flecha "‹" en su lugar, como la referencia. */
+.global-topbar__brand--mod {
+  background: none; border: none; padding: 0; font: inherit; font-family: var(--font);
+  cursor: pointer; border-radius: 0; transition: opacity .12s;
+}
+/* Sin opacity en hover -- pedido explicito: "el unico fallo es que el color
+   es plomo y no negro" (la opacity aclaraba el negro a gris). */
+.global-topbar__mod-icon { display: flex; align-items: center; justify-content: center; width: 18px; height: 18px; flex-shrink: 0; color: var(--text, #1F1D1B); }
+.global-topbar__mod-icon svg { width: 16px; height: 16px; }
+.global-topbar__mod-back { display: none; align-items: center; justify-content: center; width: 18px; height: 18px; flex-shrink: 0; color: var(--text, #1F1D1B); }
+.global-topbar__brand--mod:hover .global-topbar__mod-icon { display: none; }
+.global-topbar__brand--mod:hover .global-topbar__mod-back { display: flex; }
 .global-topbar__tab {
   background: none; border: none; font: inherit; font-family: var(--font);
-  color: rgba(255,255,255,.62); font-size: 12px; font-weight: 600; cursor: pointer;
+  color: var(--text2, #6C6862); font-size: 12px; font-weight: 600; cursor: pointer;
   height: 100%; padding: 0 9px; border-bottom: 2px solid transparent; transition: color .14s ease, border-color .14s ease;
 }
-.global-topbar__tab:hover { color: #fff; }
-.global-topbar__tab.active { color: #fff; border-bottom-color: var(--brand-accent); }
+.global-topbar__tab:hover { color: var(--text, #1F1D1B); }
+.global-topbar__tab.active { color: var(--text, #1F1D1B); border-bottom-color: var(--brand, #007AFF); }
 .global-topbar__right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
-.global-topbar__ws { font-size: 10.5px; color: rgba(255,255,255,.6); cursor: pointer; transition: color .12s; }
-.global-topbar__ws:hover { color: rgba(255,255,255,.9); }
+.global-topbar__ws { font-size: 10.5px; color: var(--text2, #6C6862); cursor: pointer; transition: color .12s; }
+.global-topbar__ws:hover { color: var(--text, #1F1D1B); }
 
 /* Iconos de acceso rápido (chat/alertas/notas/timer), reubicados desde el
    panel lateral derecho: mismas clases rchat__strip y rtt, re-skineadas
-   en horizontal y en chico para caber en esta barra oscura y compacta. */
+   en horizontal y en chico para caber en esta barra clara y compacta. */
 .global-topbar .rchat__strip {
   display: flex; flex-direction: row; align-items: center; gap: 7px;
   padding-top: 0; width: auto; flex-shrink: 0;
 }
-.global-topbar .rchat__strip-btn { width: 23px; height: 23px; border-radius: 0; color: rgba(255,255,255,.62); }
+.global-topbar .rchat__strip-btn { width: 23px; height: 23px; border-radius: 0; color: var(--text2, #6C6862); }
 .global-topbar .rchat__strip-btn svg { width: 15px; height: 15px; }
-.global-topbar .rchat__strip-btn:hover { background: rgba(255,255,255,.14); color: #fff; }
-.global-topbar .rchat__strip-btn.active { background: rgba(255,255,255,.2); color: #fff; }
-.global-topbar .rchat__strip-sep { width: 1px; height: 13px; background: rgba(255,255,255,.2); margin: 0 2px; }
-.global-topbar .rchat__strip-badge { top: -3px; right: -3px; border-color: var(--navy); transform: scale(.82); }
-.global-topbar .rtt__pulse { background: rgba(255,255,255,.14); }
-.global-topbar .rtt__time { margin-top: 0; margin-left: 2px; color: rgba(255,255,255,.85); }
+.global-topbar .rchat__strip-btn:hover { background: #EAE7E2; color: var(--text, #1F1D1B); }
+.global-topbar .rchat__strip-btn.active { background: #EAF2FF; color: var(--brand, #007AFF); }
+.global-topbar .rchat__strip-sep { width: 1px; height: 13px; background: var(--border, #EAE7E2); margin: 0 2px; }
+.global-topbar .rchat__strip-badge { top: -3px; right: -3px; border-color: #fff; transform: scale(.82); }
+.global-topbar .rtt__pulse { background: #EAE7E2; }
+.global-topbar .rtt__time { margin-top: 0; margin-left: 2px; color: var(--text2, #6C6862); }
 .global-topbar__avwrap { position: relative; }
 .global-topbar__avbtn { background: none; border: none; padding: 0; cursor: pointer; border-radius: 50%; line-height: 0; }
-.global-topbar__av { width: 20px; height: 20px; border-radius: 50%; object-fit: cover; background: rgba(255,255,255,.15); display: block; }
-.global-topbar__avbtn:hover .global-topbar__av { box-shadow: 0 0 0 2px rgba(255,255,255,.35); }
+.global-topbar__av { width: 20px; height: 20px; border-radius: 50%; object-fit: cover; background: #EAE7E2; display: block; }
+.global-topbar__avbtn:hover .global-topbar__av { box-shadow: 0 0 0 2px var(--border, #EAE7E2); }
 .global-topbar__menu {
   position: absolute; top: calc(100% + 8px); right: 0; width: 220px; z-index: 400;
   background: #fff; border-radius: 0; box-shadow: 0 12px 32px rgba(16,24,40,.18); padding: 6px;
@@ -14148,17 +14190,21 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
   font-size: 12.5px; color: #6C6862; line-height: 1.4;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
+/* Pedido explícito: "diseña los íconos de los módulos, esto fue un diseño
+   borrador bastante feo" -- antes bloque de color solido + icono blanco;
+   ahora fondo pastel + icono en el color saturado (mismo patron "soft chip"
+   que ya usa el resto de la app, ej. badges de estado). */
 .home-card__icon {
-  width: 32px; height: 32px; border-radius: 0; flex-shrink: 0;
-  display: flex; align-items: center; justify-content: center; color: #fff;
+  width: 36px; height: 36px; border-radius: 0; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
 }
-.home-card__icon svg { width: 16px; height: 16px; stroke: #fff; }
-.home-card__icon--orange { background: #EA580C; }
-.home-card__icon--green  { background: #15803D; }
-.home-card__icon--red    { background: #DC2626; }
-.home-card__icon--blue   { background: #2563EB; }
-.home-card__icon--purple { background: #7C3AED; }
-.home-card__icon--stone  { background: #8A6D3B; }
+.home-card__icon svg { width: 18px; height: 18px; stroke: currentColor; }
+.home-card__icon--orange { background: #FBEAE0; color: #C2410C; }
+.home-card__icon--green  { background: #E1F3E8; color: #15803D; }
+.home-card__icon--red    { background: #FBE5E5; color: #B91C1C; }
+.home-card__icon--blue   { background: #E2EDFD; color: #1D4ED8; }
+.home-card__icon--purple { background: #ECE4FB; color: #6D28D9; }
+.home-card__icon--stone  { background: #F1EAD9; color: #78591F; }
 
 .home-card__foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .home-card__chip {
@@ -14288,11 +14334,13 @@ button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
    cabe; el encabezado (workspace) queda fijo arriba y el pie abajo.
    ══════════════════════════════════════════════════════════════ */
 #sidebar { overflow: hidden; }
-#sidebar .sidebar__nav { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+#sidebar .sidebar__nav { flex: 1 1 auto; min-height: 0; overflow-y: auto; scrollbar-width: none; }
+#sidebar .sidebar__nav::-webkit-scrollbar { display: none; }
 /* El nav es sticky DENTRO de .app-main, que arranca debajo de la barra global:
    con 100vh sobresalía --topbar-h y hacía scrollear la página entera. */
 .lm2-nav { height: calc(100vh - var(--topbar-h, 26px)); max-height: calc(100vh - var(--topbar-h, 26px)); overflow: hidden; }
-.lm2-nav__list { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.lm2-nav__list { flex: 1 1 auto; min-height: 0; overflow-y: auto; scrollbar-width: none; }
+.lm2-nav__list::-webkit-scrollbar { display: none; }
 
 .snav-foot {
   flex-shrink: 0;
@@ -15737,8 +15785,8 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 /* Hover de fila: un velo, no un color. */
 #pane-mgmt-tasks .clients-table tbody tr:hover { background: rgba(0,0,0,.022); }
 
-/* Barra lateral: el azul solo en el ítem activo; el hover es neutro. */
-.snav-item:hover, .lm2-nav__item:hover { background: rgba(0,0,0,.04); color: #1F1D1B; }
+/* Gris neutro en hover (Clay: hover=gris, activo=azul, no el mismo color). */
+.snav-item:hover, .lm2-nav__item:hover { background: #F1EFEB; color: #000; }
 .snav-item--active, .lm2-nav__item.active { background: #EBF4FF; color: #0062CC; }
 .snav-item--active svg, .lm2-nav__item.active svg { color: #0062CC; }
 
@@ -15749,21 +15797,21 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
   color: #1F1D1B !important; font-weight: 500;
 }
 
-/* Barra lateral: en Finder o Mail el elemento seleccionado es un relleno gris
-   neutro, no un azul. El azul en una barra que esta SIEMPRE a la vista satura
-   la pantalla entera. El icono acompana al texto, tampoco se colorea. */
+/* Antes gris neutro tipo Finder a proposito (ver comentario historico abajo);
+   pedido explicito nuevo: "usa el mismo color de los iconos y de letra de
+   clay" -- Clay SI usa azul+celeste en el activo, se actualiza a eso. */
 .snav-item--active,
 .snav-item.active,
 .lm2-nav__item.active {
-  background: #EAE7E2 !important;
-  color: #1F1D1B !important;
+  background: #D7EBFE !important;
+  color: #0667D9 !important;
   font-weight: 600;
 }
 .snav-item--active svg,
 .snav-item.active svg,
-.lm2-nav__item.active svg { color: #6C6862 !important; }
-.snav-item:hover, .lm2-nav__item:hover { background: rgba(0,0,0,.035) !important; color: #1F1D1B; }
-.snav-item--active:hover, .lm2-nav__item.active:hover { background: #E4E0DA !important; }
+.lm2-nav__item.active svg { color: #0667D9 !important; }
+.snav-item:hover, .lm2-nav__item:hover { background: #F1EFEB !important; color: #000 !important; }
+.snav-item--active:hover, .lm2-nav__item.active:hover { background: #C3E1FC !important; }
 
 /* ── Ficha del cliente: panel de media pantalla a la derecha ───────────────── */
 .clp__velo { position: fixed; inset: 0; background: rgba(0,0,0,.14); z-index: 10040; }
@@ -15854,12 +15902,18 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .slk-hint { margin: 8px 0 0; font-size: 11.5px; color: #918C85; line-height: 1.5; }
 .slk-hint b { color: #6C6862; font-weight: 600; }
 
-/* ── Configuracion por secciones (Apariencia · Integraciones) ────────────────
+/* ── Configuracion por secciones (Apariencia · Integraciones · Usuarios) ──────
    Antes era un solo formulario largo con Slack colgado detras del pie de
-   branding. Son cosas distintas y no deben compartir pantalla. */
-#wsname-modal .modal__body.cfg { display: flex; gap: 0; padding: 0; min-height: 380px; }
+   branding. Son cosas distintas y no deben compartir pantalla. Vivia en un
+   modal (#wsname-modal); ahora es la pagina #pane-mgmt-empresa, pedido
+   explicito: "este modulo debe cambiar de modal a pagina completa con
+   secciones como los otros". */
+.cfg--page {
+  display: flex; gap: 0; padding: 0; min-height: 380px;
+  border: 1px solid #E7E3DD; background: #fff;
+}
 .cfg__nav {
-  width: 168px; flex-shrink: 0; border-right: 1px solid #E7E3DD; background: #FAF8F5;
+  width: 190px; flex-shrink: 0; border-right: 1px solid #E7E3DD; background: #FAF8F5;
   padding: 12px 8px; display: flex; flex-direction: column; gap: 2px;
 }
 .cfg__navb {
@@ -15872,21 +15926,26 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .cfg__navb:hover { background: rgba(0,0,0,.035); color: #1F1D1B; }
 .cfg__navb.on { background: #EAE7E2; color: #1F1D1B; font-weight: 600; }
 .cfg__navb.on svg { opacity: 1; }
-.cfg__panel { flex: 1; min-width: 0; padding: 18px 20px 20px; max-height: 72vh; overflow-y: auto; }
+.cfg__panel { flex: 1; min-width: 0; padding: 20px 26px 24px; }
 .cfg__sec[hidden] { display: none; }
 .cfg__panel .slk-block { margin-top: 0; padding-top: 0; border-top: none; }
-
-/* Configuracion mas ancha: el panel iba tan estrecho que hasta el subtitulo se
-   partia en dos lineas, y el token es una cadena larga que hay que poder leer. */
-#wsname-modal .cfg__panel { padding: 20px 26px 24px; }
-#wsname-modal .slk-add__tok { flex: 3 1 380px; }
-#wsname-modal .slk-hint { max-width: 62ch; }
-#wsname-modal .cfg__sec .form-row { max-width: 640px; }
+.cfg__panel .slk-add__tok { flex: 3 1 380px; }
+.cfg__panel .slk-hint { max-width: 62ch; }
+.cfg__sec .form-row { max-width: 640px; }
 @media (max-width: 900px) {
-  #wsname-modal { max-width: calc(100vw - 24px) !important; }
-  #wsname-modal .modal__body.cfg { flex-direction: column; }
+  .cfg--page { flex-direction: column; }
   .cfg__nav { width: auto; flex-direction: row; border-right: none; border-bottom: 1px solid #E7E3DD; }
 }
+
+/* ── Empresa > Uso ── */
+.usage-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
+.usage-card { border: 1px solid #E7E3DD; padding: 14px 16px; background: #FAF8F5; }
+.usage-card__v { font-size: 24px; font-weight: 700; color: #1F1D1B; font-variant-numeric: tabular-nums; }
+.usage-card__l { font-size: 12px; color: #6C6862; margin-top: 4px; }
+.usage-bar { height: 5px; background: #E7E3DD; margin-top: 10px; overflow: hidden; }
+.usage-bar__fill { height: 100%; background: #0667D9; width: 0%; transition: width .3s; }
+.usage-bar__fill.warn { background: #F59E0B; }
+.usage-bar__fill.danger { background: #DC2626; }
 
 /* ── Mensajeria: riel de espacios de Slack ─────────────────────────────────── */
 .chat-shell { display: flex; }
@@ -16103,9 +16162,15 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 /* Fuente de emoji: en Mac/iPhone caen en los de Apple; en Windows, en Segoe UI Emoji
    (Windows no trae la fuente de Apple). 'inherit' dentro de la lista invalidaba la
    regla entera, por eso salian con la fuente de la interfaz. */
-.slk-emoji, .slk-reac, .slk-mm-reac, .slk-emoji-pop button,
-#chat-messages .chat-msg__txt {
+.slk-emoji, .slk-reac, .slk-mm-reac, .slk-emoji-pop button {
   font-family: 'Source Sans 3', 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif;
+}
+/* El texto del mensaje ya NO fuerza Source Sans 3 (pedido explicito: mismo
+   estilo/tipografia que WhatsApp) -- pero sigue necesitando el fallback de
+   fuente de emoji al final de la cadena, si no el emoji cae en el glifo
+   generico feo en vez del a color del sistema. */
+#chat-messages .chat-msg__txt {
+  font-family: var(--font), 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif;
 }
 
 /* ── Menu contextual del mensaje (clic derecho) — compacto y prolijo,
@@ -16145,75 +16210,93 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
    / .chat-thread — el panel mini del header (#rchat-*) usa OTROS ids y sigue
    con el estilo cálido de siempre, a propósito: no se pidió tocar ese. ── */
 
-/* Riel de espacios (team bar) — más oscuro que el sidebar, casi negro-azulado.
-   Pedido explícito 2026-09-04: el azul quedó "claro", lo quiere oscuro como la
-   referencia que vio (screenshot de Slack real con sidebar navy oscuro). */
-.chat-shell .chat-rail { background: #0d1526; border-right: none; }
-.chat-shell .chat-rail__ico { background: rgba(255,255,255,.1); border: none; color: #fff; font-weight: 700; }
-.chat-shell .chat-rail__b:hover .chat-rail__ico { background: rgba(255,255,255,.2); color: #fff; }
-.chat-shell .chat-rail__b.on .chat-rail__ico { background: #1264a3; border-color: #1264a3; color: #fff; }
-.chat-shell .chat-rail__b.on::before { background: #fff; }
-.chat-shell .chat-rail__add { border-color: rgba(255,255,255,.3); color: rgba(255,255,255,.65); }
-.chat-shell .chat-rail__add:hover { border-color: #fff; color: #fff; }
-.chat-shell .chat-rail__sep { background: rgba(255,255,255,.16); }
-.chat-shell .chat-rail__sec { color: rgba(255,255,255,.7); }
-.chat-shell .chat-rail__sec:hover { background: rgba(255,255,255,.1); color: #fff; }
-.chat-shell .chat-rail__sec.on { background: #1264a3; color: #fff; }
-.chat-shell .chat-rail__n { background: #ff8800; border-color: #0d1526; }
-.chat-shell .chat-rail__dot { border-color: #0d1526; }
-.chat-shell .chat-rail__sec.on .chat-rail__dot { border-color: #1264a3; }
+/* Mismo mecanismo que .pane--wa (WhatsApp, ~linea 16800): redefine las
+   variables de color DENTRO de .chat-shell para que var(--brand)/
+   var(--primary)/var(--primary-soft) usadas en todo este bloque den el
+   mismo azul, no el beige de --brand-ll a nivel raiz (bug ya conocido) --
+   pedido explicito: "sigue teniendo estos colores oscuros, yo quiero como
+   wpp esos colores". */
+.chat-shell {
+  --brand: #0090FF; --brand-d: #0074D9; --brand-l: #B3E0FF; --brand-ll: #E6F4FF;
+  --primary: #0090FF; --primary-hover: #0074D9; --primary-soft: #E6F4FF; --primary-border: #B3E0FF;
+}
 
-/* Sidebar — navy oscuro (no el azul medio de antes), texto blanco */
-.chat-shell .chat-sidebar { background: #1a2332; border-right: none; }
-.chat-shell .chat-sidebar__ws-hdr { background: #141b28; border-bottom-color: rgba(255,255,255,.08); }
-.chat-shell .chat-ws-name { color: #fff; }
-.chat-shell .chat-ws-online { background: #06d6a0; box-shadow: 0 0 0 2px #141b28; }
-.chat-shell .chat-ws-compose-btn { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.14); color: #fff; }
-.chat-shell .chat-ws-compose-btn:hover { background: rgba(255,255,255,.16); color: #fff; }
-.chat-shell .chat-sidebar__search-inner { background: rgba(255,255,255,.08); border-color: transparent; }
-.chat-shell .chat-sidebar__search-inner:focus-within { background: rgba(255,255,255,.14); border-color: #fff; }
-.chat-shell .chat-sidebar__search-inner svg { color: rgba(255,255,255,.55); }
-.chat-shell .chat-sidebar__search { color: #fff; }
-.chat-shell .chat-sidebar__search::placeholder { color: rgba(255,255,255,.5); }
-.chat-shell .chat-sidebar__list::-webkit-scrollbar-thumb { background: rgba(255,255,255,.2); }
-.chat-shell #chat-channels .chat-ch-slabel, .chat-shell .chat-sec-title { color: rgba(255,255,255,.55); }
-.chat-shell #chat-channels .chat-ch { color: rgba(255,255,255,.78); }
-.chat-shell #chat-channels .chat-ch:hover { background: #2b3a52 !important; color: #fff; }
-.chat-shell #chat-channels .chat-ch.active { background: #2b3a52 !important; color: #fff; box-shadow: none !important; border-left: 3px solid #1264a3; padding-left: 6px; }
-.chat-shell #chat-channels .chat-ch.unread .chat-ch__name { color: #fff; }
-.chat-shell #chat-channels .chat-ch__hash { color: rgba(255,255,255,.45); }
-.chat-shell #chat-channels .chat-ch__n { background: #ff8800; color: #fff; }
-.chat-shell .chat-ch-empty { color: rgba(255,255,255,.55); }
-.chat-shell .chat-saved .chat-ch__name b { color: #fff; }
-.chat-shell .slk-remind-chip { background: rgba(255,255,255,.14); color: #fff; }
-.chat-shell .chat-saved__clock { color: rgba(255,255,255,.55); }
-.chat-shell .chat-saved__clock:hover { color: #fff; }
+/* Riel de espacios (team bar) — pedido explicito nuevo (revierte el navy
+   oscuro de 2026-09-04): "sigue teniendo estos colores oscuros, yo quiero
+   como wpp esos colores" -- mismo claro/neutro que usa WhatsApp
+   (var(--surface-secondary), var(--border)), no el navy que imitaba a Slack
+   real. */
+.chat-shell .chat-rail { background: var(--surface-secondary, #FAF8F5); border-right: 1px solid var(--border, #EAE7E2); }
+.chat-shell .chat-rail__ico { background: transparent; border: none; color: var(--text2, #6C6862); font-weight: 700; }
+.chat-shell .chat-rail__b:hover .chat-rail__ico { background: #EAE7E2; color: var(--text, #1F1D1B); }
+.chat-shell .chat-rail__b.on .chat-rail__ico { background: var(--brand, #007AFF); border-color: var(--brand, #007AFF); color: #fff; }
+.chat-shell .chat-rail__b.on::before { background: var(--brand, #007AFF); }
+.chat-shell .chat-rail__add { border-color: var(--border, #EAE7E2); color: var(--text2, #6C6862); }
+.chat-shell .chat-rail__add:hover { border-color: var(--brand, #007AFF); color: var(--brand, #007AFF); }
+.chat-shell .chat-rail__sep { background: var(--border, #EAE7E2); }
+.chat-shell .chat-rail__sec { color: var(--text2, #6C6862); }
+.chat-shell .chat-rail__sec:hover { background: #EAE7E2; color: var(--text, #1F1D1B); }
+.chat-shell .chat-rail__sec.on { background: var(--brand, #007AFF); color: #fff; }
+/* Rojo, igual al badge de no-leidos de WhatsApp (#E8311A) -- pedido
+   explicito: "cambio de colores en Slack siguiendo el estilo que ya se usa
+   en el WhatsApp", el naranja (#ff8800) no calzaba con el resto de la app. */
+.chat-shell .chat-rail__n { background: #E8311A; border-color: var(--surface-secondary, #FAF8F5); }
+.chat-shell .chat-rail__dot { border-color: var(--surface-secondary, #FAF8F5); }
+.chat-shell .chat-rail__sec.on .chat-rail__dot { border-color: var(--brand, #007AFF); }
+
+/* Sidebar — pedido explicito nuevo: "sigue teniendo estos colores oscuros,
+   yo quiero como wpp esos colores" -- revierte el navy/azul "Mattermost"
+   (2026-09-03/04) al mismo claro/neutro que usa la lista de chats de
+   WhatsApp (.wa-sidebar: var(--surface-secondary), var(--border)). */
+.chat-shell .chat-sidebar { background: var(--surface-secondary, #FAF8F5); border-right: 1px solid var(--border, #EAE7E2); }
+.chat-shell .chat-sidebar__ws-hdr { background: var(--surface, #fff); border-bottom-color: var(--border, #EAE7E2); }
+.chat-shell .chat-ws-name { color: var(--text, #1F1D1B); }
+.chat-shell .chat-ws-online { background: #22C55E; box-shadow: 0 0 0 2px var(--surface, #fff); }
+.chat-shell .chat-ws-compose-btn { background: var(--surface, #fff); border-color: var(--border, #EAE7E2); color: var(--text2, #6C6862); }
+.chat-shell .chat-ws-compose-btn:hover { background: #EAE7E2; color: var(--text, #1F1D1B); }
+.chat-shell .chat-sidebar__search-inner { background: var(--surface, #fff); border-color: var(--border, #EAE7E2); }
+.chat-shell .chat-sidebar__search-inner:focus-within { background: var(--surface, #fff); border-color: var(--brand, #007AFF); }
+.chat-shell .chat-sidebar__search-inner svg { color: var(--text2, #6C6862); }
+.chat-shell .chat-sidebar__search { color: var(--text, #1F1D1B); }
+.chat-shell .chat-sidebar__search::placeholder { color: var(--muted, #918C85); }
+.chat-shell .chat-sidebar__list::-webkit-scrollbar-thumb { background: var(--border, #EAE7E2); }
+.chat-shell #chat-channels .chat-ch-slabel, .chat-shell .chat-sec-title { color: var(--text2, #6C6862); }
+.chat-shell #chat-channels .chat-ch { color: var(--text2, #6C6862); }
+.chat-shell #chat-channels .chat-ch:hover { background: #EAE7E2 !important; color: var(--text, #1F1D1B); }
+.chat-shell #chat-channels .chat-ch.active { background: var(--primary-soft, rgba(0,122,255,.12)) !important; color: var(--brand, #007AFF); box-shadow: none !important; border-left: 3px solid var(--brand, #007AFF); padding-left: 6px; }
+.chat-shell #chat-channels .chat-ch.unread .chat-ch__name { color: var(--text, #1F1D1B); }
+.chat-shell #chat-channels .chat-ch__hash { color: var(--muted, #918C85); }
+.chat-shell #chat-channels .chat-ch__n { background: #E8311A; color: #fff; }
+.chat-shell .chat-ch-empty { color: var(--text2, #6C6862); }
+.chat-shell .chat-saved .chat-ch__name b { color: var(--text, #1F1D1B); }
+.chat-shell .slk-remind-chip { background: #EAE7E2; color: var(--text, #1F1D1B); }
+.chat-shell .chat-saved__clock { color: var(--text2, #6C6862); }
+.chat-shell .chat-saved__clock:hover { color: var(--text, #1F1D1B); }
 .chat-shell .chat-ch--muted { opacity: .55; }
 
-/* Área principal — ya era blanca (coincide con centerChannelBg de Mattermost);
-   se ajustan enlaces/acentos al azul de botón real de Mattermost (#166de0). */
+/* Área principal — ya era blanca; acentos al mismo azul del resto de la app
+   (var(--brand)), no al azul "Mattermost" (#166de0) de antes. */
 #chat-messages .chat-msg__txt { color: #3d3c40; }
-.chat-shell .slk-men { color: #166de0; background: #e8f1fd; }
-.chat-shell .slk-thread, .chat-shell .slk-volver { color: #166de0; }
-.chat-shell .slk-file:hover { color: #166de0; }
-.chat-shell .slk-doc--ready:hover { border-color: #166de0; }
-.chat-shell .slk-doc--ready .slk-doc__body::after { color: #166de0; }
-.chat-shell .chat-composer__send { color: #166de0; }
-.chat-shell .chat-tool-btn:hover { color: #166de0; }
-/* "N mensajes nuevos" — en Mattermost es la línea naranja, no roja */
-.chat-shell .slk-unread-sep::before, .chat-shell .slk-unread-sep::after { background: #ff8800; }
-.chat-shell .slk-unread-sep span { color: #ff8800; }
-.chat-shell .slk-reac.mine { background: #e8f1fd; border-color: #9dc3f5; color: #166de0; }
+.chat-shell .slk-men { color: var(--brand, #007AFF); background: var(--primary-soft, rgba(0,122,255,.1)); }
+.chat-shell .slk-thread, .chat-shell .slk-volver { color: var(--brand, #007AFF); }
+.chat-shell .slk-file:hover { color: var(--brand, #007AFF); }
+.chat-shell .slk-doc--ready:hover { border-color: var(--brand, #007AFF); }
+.chat-shell .slk-doc--ready .slk-doc__body::after { color: var(--brand, #007AFF); }
+.chat-shell .chat-composer__send { color: var(--brand, #007AFF); }
+.chat-shell .chat-tool-btn:hover { color: var(--brand, #007AFF); }
+/* "N mensajes nuevos" — rojo, igual al resto de indicadores de no-leido */
+.chat-shell .slk-unread-sep::before, .chat-shell .slk-unread-sep::after { background: #E8311A; }
+.chat-shell .slk-unread-sep span { color: #E8311A; }
+.chat-shell .slk-reac.mine { background: var(--primary-soft, rgba(0,122,255,.1)); border-color: #A9D2FF; color: var(--brand, #007AFF); }
 
-/* Panel de hilo — mismo blanco, acento azul de Mattermost en vez del genérico */
+/* Panel de hilo — mismo blanco, acento azul de la app */
 .chat-thread__title { color: #3d3c40; }
 .chat-thread__hdr { border-bottom-color: #d6d9dc; }
 
 /* Botón de quick switcher / recordatorios ya son overlays fuera de .chat-shell
-   (van sobre document.body) — se dejan con el acento de Mattermost también,
-   para que no se sientan de otro sistema al abrirlos desde acá. */
-.slk-sw-item.on, .slk-sw-item:hover { background: #e8f1fd; }
-.slk-sw-item__n { background: #166de0; }
+   (van sobre document.body) — mismo azul de la app. */
+.slk-sw-item.on, .slk-sw-item:hover { background: #E6F4FF; }
+.slk-sw-item__n { background: #0090FF; }
 @media (max-width: 1100px) { .chat-thread { background: #fff; } }
 
 /* Cabecera y bloque de proyecto en el menu contextual del canal */
@@ -16420,7 +16503,7 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 /* Chat de Slack completo en media pantalla, misma dimensión que .qwa-panel (WhatsApp). */
 .rchat-fc-backdrop { position: fixed; top: var(--topbar-h, 26px); right: 0; bottom: 0; left: 0; z-index: 500; display: flex; justify-content: flex-end; background: rgba(28,25,23,.35); }
 .rchat-fc-backdrop.hidden { display: none; }
-.rchat-fc-box { position: relative; width: 60%; min-width: 380px; max-width: 760px; height: 100%; background: var(--surface); box-shadow: -8px 0 32px rgba(0,0,0,.18); display: flex; flex-direction: column; overflow: hidden; }
+.rchat-fc-box { position: relative; width: 70%; min-width: 380px; max-width: 836px; height: 100%; background: var(--surface); box-shadow: -8px 0 32px rgba(0,0,0,.18); display: flex; flex-direction: column; overflow: hidden; }
 .rchat-fc-box #chat-shell { height: 100%; }
 .rchat-fc-box #wa-fc-inner { height: 100%; display: flex; flex-direction: column; overflow: hidden; }
 @media (max-width: 760px) { .rchat-fc-box { width: 100%; max-width: none; min-width: 0; } }
@@ -16827,14 +16910,13 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .lm2-nav__item.active .lm2-nav__lbl { font-weight: 600; }
 
 /* Resto de un tema oscuro viejo (.sidebar{background:navy}, ~línea 11531) seguía
-   ganando el color del texto/ícono activo por especificidad de selector aun con
-   el fondo ya neutro — se fija acá, al final, para que gane siempre. Mismo
-   gris/oscuro "Finder" en Operaciones Y Outreach, sin importar cuál CSS viejo
-   quede debajo. */
+   ganando el color del texto/ícono activo por especificidad de selector --
+   ahora al azul de Clay (#0667D9), no al gris/oscuro "Finder" de antes,
+   para que #sidebar (con id, mas especifico) no pise el color nuevo. */
 #sidebar .snav-item.active .snav-item__label,
-.lm2-nav__item.active .lm2-nav__lbl { color: #1F1D1B; }
+.lm2-nav__item.active .lm2-nav__lbl { color: #0667D9; }
 #sidebar .snav-item.active .snav-item__icon,
-.lm2-nav__item.active svg { color: #6C6862; }
+.lm2-nav__item.active svg { color: #0667D9; }
 
 /* Quitar contacto de una secuencia — el "✕" ya existía pero solo aparecía al
    pasar el mouse por la fila (mismo patrón que el resto de la app); pedido
@@ -17245,22 +17327,26 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
    gana por orden de cascada sin depender de adivinar especificidad, y es el
    único lugar que hay que tocar de ahora en más para estos dos componentes.
    ══════════════════════════════════════════════════════════════════════════ */
+/* Colores tomados directo de Clay (referencia adjunta, medidos en vivo con
+   getComputedStyle sobre app.clay.com): inactivo negro puro, activo azul
+   #0667D9 sobre fondo celeste #D7EBFE -- pedido explicito: "usa el mismo
+   color de los iconos y de letra de clay". */
 .snav-item, .lm2-nav__item {
   display: flex; align-items: center; gap: 11px; width: 100%;
-  height: 36px; min-height: 36px; padding: 0 12px;
+  height: 33px; min-height: 33px; padding: 0 12px;
   border: none; border-radius: 0; background: transparent;
   font-family: var(--font); font-size: 14px; font-weight: 500; letter-spacing: -.01em;
-  color: var(--text2, #6C6862); cursor: pointer; text-align: left;
+  color: #000; cursor: pointer; text-align: left;
   transition: background .15s, color .15s; box-sizing: border-box;
 }
-.snav-item svg, .lm2-nav__item svg { width: 17px; height: 17px; stroke-width: 1.75; flex-shrink: 0; }
+.snav-item svg, .lm2-nav__item svg { width: 17px; height: 17px; stroke-width: 1.75; flex-shrink: 0; color: #000; }
 .snav-item:hover:not(.active), .lm2-nav__item:hover:not(.active) { background: #F1EFEB; }
 .snav-item.active, .lm2-nav__item.active {
-  height: 36px; min-height: 36px; border-radius: 0;
-  background: var(--brand-ll, #EAF2FF); color: var(--brand-d, #0062CC); font-weight: 650;
+  height: 33px; min-height: 33px; border-radius: 0;
+  background: #D7EBFE; color: #0667D9; font-weight: 650;
 }
-.snav-item.active svg, .lm2-nav__item.active svg { color: var(--brand-d, #0062CC); }
-.snav-item.active .snav-item__label, .lm2-nav__item.active .lm2-nav__lbl { font-weight: 650; color: var(--brand-d, #0062CC); }
+.snav-item.active svg, .lm2-nav__item.active svg { color: #0667D9; }
+.snav-item.active .snav-item__label, .lm2-nav__item.active .lm2-nav__lbl { font-weight: 650; color: #0667D9; }
 .snav-cat, .lm2-nav__grp {
   font-size: 10px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase;
   color: var(--muted, #B4AFA8); padding: 8px 14px 3px; white-space: nowrap;

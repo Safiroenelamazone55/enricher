@@ -15,6 +15,8 @@ const https     = require('https');
 const http      = require('http');
 const path      = require('path');
 const fs        = require('fs');
+const os        = require('os');
+const { execSync } = require('child_process');
 const { Server: SocketIOServer } = require('socket.io');
 
 // ── Database (PostgreSQL) — imported early so initDb() runs at startup ──
@@ -7557,6 +7559,8 @@ function _cGlobalParseFilters(req) {
   F.tamanosExcl = String(req.query.tamanoExcl || '').split(',').filter(Boolean);
   F.tiers = String(req.query.tier || '').split(',').filter(Boolean);
   F.tiersExcl = String(req.query.tierExcl || '').split(',').filter(Boolean);
+  F.paso2s = String(req.query.paso2 || '').split(',').filter(Boolean);
+  F.paso2sExcl = String(req.query.paso2Excl || '').split(',').filter(Boolean);
   F.origen = req.query.origen === 'crm' || req.query.origen === 'borrador' ? req.query.origen : '';
   F.estados = String(req.query.estado || '').split(',').filter(Boolean);
   F.estadosExcl = String(req.query.estadoExcl || '').split(',').filter(Boolean);
@@ -7595,6 +7599,11 @@ function _cGlobalMatch(r, F, skip) {
     if (F.tiers.length && !F.tiers.includes(_cantNormTier(r.tier))) return false;
     if (F.tiersExcl.length && F.tiersExcl.includes(_cantNormTier(r.tier))) return false;
   }
+  if (skip !== 'paso2') {
+    const p2 = r.paso2_estado || 'pendiente';
+    if (F.paso2s.length && !F.paso2s.includes(p2)) return false;
+    if (F.paso2sExcl.length && F.paso2sExcl.includes(p2)) return false;
+  }
   if (F.tipo && r.tipo !== F.tipo) return false;
   if (skip !== 'estado') {
     if (F.estados.length && !F.estados.includes(r.estado)) return false;
@@ -7630,6 +7639,7 @@ function _cGlobalFieldMatch(r, field, value) {
   if (field === 'pais') return _cantNormPais(r.pais) === _cantNormPais(value);
   if (field === 'industria') return _cantNormText(r.industria).includes(_cantNormText(value));
   if (field === 'tier') return _cantNormTier(r.tier) === _cantNormTier(value);
+  if (field === 'paso2') return (r.paso2_estado || 'pendiente') === value;
   if (field === 'tamano') return r.tamano === value;
   if (field === 'estado') return r.estado === value;
   if (field === 'cliente') return (r.referencia || '') === value;
@@ -7700,6 +7710,12 @@ app.get('/api/cantera/global', requireAuth, async (req, res) => {
   const tamanosExcl = String(req.query.tamanoExcl || '').split(',').filter(Boolean);
   const tiers = String(req.query.tier || '').split(',').filter(Boolean);
   const tiersExcl = String(req.query.tierExcl || '').split(',').filter(Boolean);
+  // Validación profunda (paso2_estado) -- pedido explícito: "que en borrador
+  // en cantera y en base global exista la opcion de filtro de validacion
+  // profunda". El dato ya venia en cada fila (join lateral contra
+  // cantera_companies por dominio) pero no era filtrable todavia.
+  const paso2s = String(req.query.paso2 || '').split(',').filter(Boolean);
+  const paso2sExcl = String(req.query.paso2Excl || '').split(',').filter(Boolean);
   const origen = req.query.origen === 'crm' || req.query.origen === 'borrador' ? req.query.origen : '';
   // Más criterios (pedido explícito 2026-09-25, con captura de Sales Navigator:
   // "hay tantos criterios que podrías considerar", "estatus, secuencias,
@@ -7805,6 +7821,11 @@ app.get('/api/cantera/global', requireAuth, async (req, res) => {
       if (tamanosExcl.length && tamanosExcl.includes(r.tamano)) return false;
       if (tiers.length && !tiers.includes(_cantNormTier(r.tier))) return false;
       if (tiersExcl.length && tiersExcl.includes(_cantNormTier(r.tier))) return false;
+      // 'pendiente' cubre tanto NULL (fila del CRM que nunca paso por Cantera)
+      // como '' (SI paso por Cantera pero paso 2 aun no corrio).
+      const p2 = r.paso2_estado || 'pendiente';
+      if (paso2s.length && !paso2s.includes(p2)) return false;
+      if (paso2sExcl.length && paso2sExcl.includes(p2)) return false;
       if (tipo && r.tipo !== tipo) return false;
       if (estados.length && !estados.includes(r.estado)) return false;
       if (estadosExcl.length && estadosExcl.includes(r.estado)) return false;
@@ -9994,6 +10015,76 @@ app.get('/api/workspace/members', requireAuth, async (req, res) => {
       [req.workspaceOwnerId]
     );
     res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/workspace/usage ──────────────────────────────────────
+// Resumen de uso del workspace -- pedido explicito: "Usage: ver lo que voy
+// usando para asi saber cuando comprar mas plan" (referencia: Clay Settings).
+app.get('/api/workspace/usage', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId;
+  try {
+    const q = (sql, params) => pool.query(sql, params).then(r => r.rows[0].n);
+    const [
+      contactos, empresas, miembros, secuenciasActivas,
+      emailsMes, linkedinMes, verificacionesMes,
+    ] = await Promise.all([
+      q(`SELECT COUNT(*)::int AS n FROM lm_contacts WHERE user_id=$1`, [uid]),
+      q(`SELECT COUNT(*)::int AS n FROM lm_companies WHERE user_id=$1`, [uid]),
+      q(`SELECT COUNT(*)::int AS n FROM users WHERE id=$1 OR workspace_id=$1`, [uid]),
+      q(`SELECT COUNT(*)::int AS n FROM sequences WHERE user_id=$1 AND estado='activa'`, [uid]),
+      q(`SELECT COUNT(*)::int AS n FROM activities WHERE user_id=$1 AND tipo='email_enviado' AND fecha >= date_trunc('month', now())`, [uid]),
+      q(`SELECT COUNT(*)::int AS n FROM activities WHERE user_id=$1 AND tipo LIKE 'linkedin%' AND fecha >= date_trunc('month', now())`, [uid]),
+      q(`SELECT COUNT(*)::int AS n FROM lm_contacts WHERE user_id=$1 AND email_status IS NOT NULL AND email_status <> '' AND updated_at >= date_trunc('month', now())`, [uid]).catch(() => 0),
+    ]);
+    res.json({ contactos, empresas, miembros, secuenciasActivas, emailsMes, linkedinMes, verificacionesMes });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/workspace/server-usage ───────────────────────────────
+// Uso REAL del servidor (RAM/disco de la VPS donde vive el backend) --
+// pedido explicito: "yo pago 5 dolares al mes... quiero visualizar el uso
+// de RAM, de espacio, para estar preparada, saber si estoy llegando al
+// limite y si en algun momento tengo que aumentar el plan". Esto es
+// infraestructura real (os.totalmem/freemem + `df` del disco), no conteos
+// de la app -- son cosas distintas y ambas importan.
+app.get('/api/workspace/server-usage', requireAuth, async (req, res) => {
+  try {
+    const ramTotalBytes = os.totalmem();
+    const ramFreeBytes  = os.freemem();
+    const ramUsedBytes  = ramTotalBytes - ramFreeBytes;
+
+    let disk = null;
+    try {
+      // df -B1: tamanos en bytes exactos, sin redondeo a GB/MB del propio df.
+      const out = execSync('df -B1 --output=size,used,avail,pcent /', { encoding: 'utf8', timeout: 3000 });
+      const line = out.trim().split('\n')[1].trim().split(/\s+/);
+      disk = {
+        totalBytes: parseInt(line[0], 10),
+        usedBytes: parseInt(line[1], 10),
+        freeBytes: parseInt(line[2], 10),
+        usedPercent: parseInt(line[3], 10), // ya viene como "NN%"
+      };
+    } catch (_) { /* no-Linux o sin permiso -- se omite, el frontend lo maneja */ }
+
+    let dbSizeBytes = null;
+    try {
+      const r = await pool.query(`SELECT pg_database_size(current_database()) AS n`);
+      dbSizeBytes = parseInt(r.rows[0].n, 10);
+    } catch (_) {}
+
+    res.json({
+      ram: { totalBytes: ramTotalBytes, usedBytes: ramUsedBytes, freeBytes: ramFreeBytes, usedPercent: Math.round(ramUsedBytes / ramTotalBytes * 100) },
+      disk,
+      dbSizeBytes,
+      uptimeSeconds: os.uptime(),
+      loadAvg: os.loadavg(), // [1min, 5min, 15min] -- referencia de CPU, no exacta en todos los kernels
+      cpuCount: os.cpus().length,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
