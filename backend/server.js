@@ -6369,7 +6369,7 @@ const _lmDashHandler = async (req, res) => {
          AND m.sent_at IS NOT NULL AND m.sent_at::date BETWEEN ${r[0]}::date AND ${r[1]}::date`;
     const cur = [iF, iT], prv = [iPF, iPT];
     const REP1 = `(SELECT DISTINCT ON (contact_id) contact_id, fecha FROM activities WHERE user_id=$1 AND (tipo='respuesta' OR (tipo='disposition_change' AND nota ~ '→ (${RTYPES})[[:space:]]*$')) ORDER BY contact_id, fecha)`;
-    const [k1, k0, m1, m0, daily, countries, byCh, heat, seqs, clients, funnel, repCh, repDays, recent, heatAuto, deals, dispo] = await Promise.all([
+    const [k1, k0, m1, m0, daily, countries, byCh, heat, seqs, clients, funnel, repCh, repDays, recent, heatAuto, deals, dispo, serA, serB, serC] = await Promise.all([
       pool.query(kpiSql(cur), params), pool.query(kpiSql(prv), params),
       pool.query(msgSql(cur), params), pool.query(msgSql(prv), params),
       pool.query(`SELECT a.fecha::date AS d, ${CH} AS ch, COUNT(*)::int AS n ${base} AND ${OUT}${chw} AND ${inR(iF, iT)} GROUP BY 1,2 ORDER BY 1`, params),
@@ -6424,12 +6424,28 @@ const _lmDashHandler = async (req, res) => {
       pool.query(`SELECT COUNT(*)::int AS meetings, COUNT(*) FILTER (WHERE COALESCE(k.reunion_agendada_at,k.updated_at)::date BETWEEN ${iF}::date AND ${iT}::date)::int AS agendadas, COUNT(*) FILTER (WHERE COALESCE(k.reunion_agendada_at,k.updated_at)::date BETWEEN ${iPF}::date AND ${iPT}::date)::int AS agendadas_prev, COUNT(*) FILTER (WHERE k.deal_cierre>=CURRENT_DATE)::int AS programadas, COALESCE(SUM(k.deal_valor),0)::float AS valor, COALESCE(SUM(k.deal_valor*COALESCE(k.deal_prob,0)/100.0),0)::float AS ponderado, MIN(k.deal_cierre) FILTER (WHERE k.deal_cierre>=CURRENT_DATE) AS proximo
                     FROM lm_contacts k WHERE ${kw} AND (k.disposition='reunion' OR k.deal_cierre IS NOT NULL OR k.deal_valor IS NOT NULL OR EXISTS(SELECT 1 FROM activities z WHERE z.contact_id=k.id AND z.tipo='reunion'))`, params),
       pool.query(`SELECT k.disposition AS d, COUNT(*)::int AS n FROM lm_contacts k WHERE ${kw} AND COALESCE(k.disposition,'')<>'' GROUP BY 1 ORDER BY 2 DESC`, params),
+      pool.query(`SELECT a.fecha::date AS d, COUNT(*) FILTER (WHERE ${OUT}${chw})::int AS touches,
+                         COUNT(DISTINCT a.contact_id) FILTER (WHERE ${OUT}${chw})::int AS contacted,
+                         COUNT(DISTINCT a.contact_id) FILTER (WHERE ${REPLY})::int AS replies,
+                         COUNT(DISTINCT a.contact_id) FILTER (WHERE a.tipo='reunion')::int AS meetings,
+                         COUNT(*) FILTER (WHERE ${OUT} AND ${CH}='email')::int AS emails
+                    ${base} AND ${inR(iF, iT)} GROUP BY 1 ORDER BY 1`, params),
+      pool.query(`SELECT k.li_aceptado_at::date AS d, COUNT(DISTINCT k.id)::int AS accepts FROM lm_contacts k WHERE ${kw} AND k.li_aceptado_at::date BETWEEN ${iF}::date AND ${iT}::date GROUP BY 1`, params),
+      pool.query(`SELECT m.sent_at::date AS d, COUNT(*)::int AS sent,
+                         COUNT(*) FILTER (WHERE EXISTS(SELECT 1 FROM lm_message_events e WHERE e.message_id=m.id AND e.tipo='open'))::int AS opened
+                    FROM lm_messages m JOIN lm_contacts k ON k.id=m.contact_id
+                   WHERE m.user_id=$1 AND ${kw} AND m.sent_at IS NOT NULL AND m.sent_at::date BETWEEN ${iF}::date AND ${iT}::date AND m.estado IN ('sent','replied','bounced') GROUP BY 1`, params),
     ]);
     // normaliza países ("Spain Spain" → "Spain") y agrupa
     const norm = p => { const w = String(p || '').trim().split(/\s+/); const h = w.length / 2; if (w.length % 2 === 0 && w.slice(0, h).join(' ').toLowerCase() === w.slice(h).join(' ').toLowerCase()) return w.slice(0, h).join(' '); return String(p).trim(); };
     const cm = {};
     countries.rows.forEach(r => { const n = norm(r.pais); (cm[n] = cm[n] || { pais: n, contacted: 0, replied: 0 }); cm[n].contacted += r.contacted; cm[n].replied += r.replied; });
+    const dk = v => v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10);
+    const serM = {};
+    const serAdd = (rows, keys) => rows.forEach(x => { const k = dk(x.d); const o = serM[k] = serM[k] || { d: k, touches: 0, contacted: 0, replies: 0, meetings: 0, emails: 0, accepts: 0, sent: 0, opened: 0 }; keys.forEach(f => { o[f] = x[f]; }); });
+    serAdd(serA.rows, ['touches', 'contacted', 'replies', 'meetings', 'emails']); serAdd(serB.rows, ['accepts']); serAdd(serC.rows, ['sent', 'opened']);
     res.json({
+      series: Object.values(serM).sort((a, b) => a.d.localeCompare(b.d)),
       range: { from, to, prevFrom, prevTo, days },
       kpi: { cur: { ...k1.rows[0], ...m1.rows[0] }, prev: { ...k0.rows[0], ...m0.rows[0] } },
       daily: daily.rows.map(r => ({ d: r.d instanceof Date ? r.d.toISOString().slice(0, 10) : String(r.d).slice(0, 10), ch: r.ch, n: r.n })),

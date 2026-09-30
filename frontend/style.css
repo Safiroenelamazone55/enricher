@@ -17006,7 +17006,7 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .dash-f.dash-f--sm{min-width:0;max-width:none;height:30px;flex:none}
 
 /* Bordes rectos en todo el dashboard (solo los puntitos de leyenda quedan redondos) */
-.dash-scope *,.dash-scope *::before,.dash-scope *::after{border-radius:0!important}
+.dash-scope:not(.dash-v2) *,.dash-scope:not(.dash-v2) *::before,.dash-scope:not(.dash-v2) *::after{border-radius:0!important}
 .dash-scope .dash-dot{border-radius:50%!important}
 
 /* ── Detalles de la referencia: mapa, info, conectores, tablas con marco ── */
@@ -17266,3 +17266,23 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
   color: var(--muted, #B4AFA8); padding: 8px 14px 3px; white-space: nowrap;
 }
 .sidebar__nav, .lm2-nav__list { gap: 1px; padding: 8px 10px; }
+
+/* ══ Rendimiento v2 (mismo lenguaje visual que el portal del cliente): KPIs con degradado + minigráfico, tarjetas de vidrio ══ */
+.dash-v2 .dash-kpis{gap:16px;margin-bottom:18px}
+.dash-v2 .dash-kpi{border:1px solid rgba(255,255,255,.9);border-left:1px solid rgba(255,255,255,.9);border-bottom:1px solid rgba(255,255,255,.9);border-radius:20px;padding:16px 16px 6px;box-shadow:0 14px 34px -22px rgba(30,64,175,.5);overflow:hidden}
+.dash-v2 .dash-kpi:hover{transform:translateY(-3px);box-shadow:0 20px 40px -22px rgba(30,64,175,.6)}
+.dash-v2 .dash-kpi--g{background:linear-gradient(165deg,#E6F7EE,#fff 72%)}.dash-v2 .dash-kpi--a{background:linear-gradient(165deg,#FFF1DE,#fff 72%)}.dash-v2 .dash-kpi--p{background:linear-gradient(165deg,#EFE8FF,#fff 72%)}.dash-v2 .dash-kpi--b{background:linear-gradient(165deg,#E5EFFF,#fff 72%)}
+.dash-v2 .dash-kpi__top{display:flex;align-items:flex-start;gap:12px;margin-bottom:0}
+.dash-v2 .dash-kpi__tx{min-width:0}
+.dash-v2 .dash-kpi__ic{width:48px;height:48px;border-radius:15px;background:color-mix(in srgb,var(--kc) 16%,#fff)}
+.dash-v2 .dash-kpi__l{font-size:12.5px;font-weight:600;letter-spacing:0;text-transform:none;color:#334155;line-height:1.25}
+.dash-v2 .dash-kpi__v{font-size:32px;font-weight:800;letter-spacing:-.03em;line-height:1.1;margin:2px 0 2px}
+.dash-v2 .dash-kpi__sp{height:56px;margin:4px -6px 0}
+.dash-v2 .cp-card{background:rgba(255,255,255,.85);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.95);border-radius:20px;box-shadow:0 14px 34px -22px rgba(30,64,175,.4);padding:18px 20px}
+.dash-v2 .dash-f,.dash-v2 .dash-date,.dash-v2 .dash-seg,.dash-v2 .dash-btn{border-radius:12px;box-shadow:0 4px 12px -8px rgba(30,64,175,.4)}
+.dash-v2 .dash-filters{gap:10px}
+.dash-v2 .dash-fn__ic,.dash-v2 .dash-cic{border-radius:12px}
+.dash-v2 .dash-fn__bar,.dash-v2 .dash-fn__bar i,.dash-v2 .dash-bar__t,.dash-v2 .dash-bar__f{border-radius:99px}
+.dash-v2 .clients-table-wrap{border-radius:14px;overflow:hidden}
+.dash-v2 .dash-dot{border-radius:50%}
+.dash-tabs .dash-tab{border-radius:8px}.dash-tabs{border-radius:12px}

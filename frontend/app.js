@@ -21698,7 +21698,7 @@ ${foot}
     const rr = _dashPct(c.replies, c.contacted), rrp = _dashPct(p.replies, p.contacted);
     const ar = _dashPct(c.accepts, c.invites), arp = _dashPct(p.accepts, p.invites);
     const KI = [['users', '#22A06B'], ['reply', '#F59E0B'], ['in', '#7C5CE0'], ['handshake', '#22A06B']]; let ki = 0;
-    const kpi = (l, v, delta, sub) => { const k = KI[ki++]; return `<div class="dash-kpi" style="--kc:${k[1]}"><div class="dash-kpi__top"><span class="dash-kpi__ic">${_dashIco(k[0], 18)}</span><span class="dash-kpi__l">${l}</span></div><div class="dash-kpi__v">${v}</div>${delta}${sub ? `<div class="dash-kpi__s">${sub}</div>` : ''}</div>`; };
+    const kpi = (l, v, delta, sub) => { const i = ki, k = KI[ki++]; return `<div class="dash-kpi dash-kpi--${k[2]}" style="--kc:${k[1]}"><div class="dash-kpi__top"><span class="dash-kpi__ic">${_dashIco(k[0], 22)}</span><div class="dash-kpi__tx"><div class="dash-kpi__l">${l}</div><div class="dash-kpi__v">${v}</div>${delta}${sub ? `<div class="dash-kpi__s">${sub}</div>` : ''}</div></div><div class="dash-kpi__sp"><canvas id="dash-sp-${i}"></canvas></div></div>`; };
     const fn = d.funnel, stages = [['Enrolados', fn.enrolados, '#0F172A', 'users'], ['Contactados', fn.contactados, '#2563EB', 'send'], ['Respondieron', fn.respondieron, '#22A06B', 'reply'], ['Reunión', fn.reuniones, '#F59E0B', 'cal']];
     const funnel = stages.map((s, i) => `<div class="dash-fn"><span class="dash-fn__ic" style="background:${s[2]}">${_dashIco(s[3], 16)}</span><div class="dash-fn__b"><div class="dash-fn__top"><span class="dash-fn__l">${s[0]}</span>${i ? `<span class="dash-fn__pct">${_dashPct(s[1], fn.enrolados || 1)}%</span>` : ''}</div><div class="dash-fn__v">${s[1] || 0}</div></div></div>`).join('');
     const chTot = d.channels.reduce((n, r) => n + r.touches, 0);
@@ -24775,7 +24775,7 @@ ${foot}
     const rr = _dashPct(c.replies, c.contacted), rrp = _dashPct(p.replies, p.contacted);
     const ar = _dashPct(c.accepts, c.invites), arp = _dashPct(p.accepts, p.invites);
     const or = _dashPct(c.opened, c.sent);
-    const KI = [['users', '#22A06B'], ['reply', '#F59E0B'], ['in', '#7C5CE0'], ['mail', '#2563EB'], ['mailopen', '#F59E0B'], ['handshake', '#22A06B']]; let ki = 0;
+    const KI = [['users', '#22A06B', 'g', 'contacted'], ['reply', '#F59E0B', 'a', 'replies'], ['in', '#7C5CE0', 'p', 'accepts'], ['mail', '#2563EB', 'b', 'emails'], ['mailopen', '#F59E0B', 'a', 'opened'], ['handshake', '#22A06B', 'g', 'meetings']]; let ki = 0;
     const kpi = (l, v, delta, sub) => { const k = KI[ki++]; return `<div class="dash-kpi" style="--kc:${k[1]}"><div class="dash-kpi__top"><span class="dash-kpi__ic">${_dashIco(k[0], 18)}</span><span class="dash-kpi__l">${l}</span></div><div class="dash-kpi__v">${v}</div>${delta}${sub ? `<div class="dash-kpi__s">${sub}</div>` : ''}</div>`; };
     const tbl = (head, rows, empty) => `<div class="clients-table-wrap"><table class="clients-table"><thead><tr>${head.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows || `<tr><td colspan="${head.length}" class="rep-empty-td">${empty}</td></tr>`}</tbody></table></div>`;
     const seqRows = d.sequences.map(s => `<tr><td>${esc(s.nombre)}</td><td>${esc(s.cliente || '—')}</td><td>${s.enrolados}</td><td>${s.contactados}</td><td>${s.respuestas}</td><td><b>${_dashPct(s.respuestas, s.contactados)}%</b></td><td>${s.reuniones}</td></tr>`).join('');
@@ -24872,6 +24872,13 @@ ${foot}
     const chs = ['email', 'linkedin', 'call', 'wa_msg', 'wa_call', 'otros'].filter(k => d.daily.some(r => r.ch === k));
     const dc = document.getElementById('dash-daily');
     if (dc) _dashCharts.push(new Chart(dc.getContext('2d'), { type: 'bar', data: { labels: buckets.map(lbl), datasets: chs.map((k, i) => ({ label: _DASH_CH[k][0], backgroundColor: _DASH_CH[k][1], borderRadius: i === chs.length - 1 ? 3 : 0, borderSkipped: false, barPercentage: .7, data: buckets.map(b => d.daily.filter(r => r.ch === k && bOf(r.d) === b).reduce((n, r) => n + r.n, 0)) })) }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: tip }, scales: { x: Object.assign({}, axis.x, { stacked: true }), y: Object.assign({}, axis.y, { stacked: true }) } } }));
+    const SP = [['contacted', '#22A06B'], ['replies', '#F59E0B'], ['accepts', '#7C5CE0'], ['emails', '#2563EB'], ['opened', '#F59E0B'], ['meetings', '#22A06B']];
+    const ser = {}; (d.series || []).forEach(r => { ser[r.d] = r; });
+    SP.forEach(([key, col], i) => {
+      const cv = document.getElementById('dash-sp-' + i); if (!cv) return;
+      const ctx = cv.getContext('2d'), g = ctx.createLinearGradient(0, 0, 0, 64); g.addColorStop(0, col + '55'); g.addColorStop(1, col + '00');
+      _dashCharts.push(new Chart(ctx, { type: 'line', data: { labels: days, datasets: [{ data: days.map(x => (ser[x] ? ser[x][key] : 0) || 0), borderColor: col, backgroundColor: g, fill: true, tension: .4, borderWidth: 2, pointRadius: 0 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { enabled: false } }, scales: { x: { display: false }, y: { display: false, beginAtZero: true } }, events: [] } }));
+    });
     const cc = document.getElementById('dash-ch');
     if (cc) _dashCharts.push(new Chart(cc.getContext('2d'), { type: 'doughnut', data: { labels: d.channels.map(r => (_DASH_CH[r.ch] || _DASH_CH.otros)[0]), datasets: [{ data: d.channels.map(r => r.touches), backgroundColor: d.channels.map(r => (_DASH_CH[r.ch] || _DASH_CH.otros)[1]), borderWidth: 2, borderColor: '#fff' }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '55%', plugins: { legend: { display: false }, tooltip: tip } } }));
   }
@@ -24886,7 +24893,7 @@ ${foot}
       </div>`;
     if (_dashTab === 'rend') {
       setTimeout(_dashLoad, 0);
-      return `<div class="dash-scope">${head}<div class="dash-filters" id="dash-filters">${_dashFiltersHtml()}</div><div id="dash-body">${_dashBodyHtml()}</div></div>`;
+      return `<div class="dash-scope dash-v2">${head}<div class="dash-filters" id="dash-filters">${_dashFiltersHtml()}</div><div id="dash-body">${_dashBodyHtml()}</div></div>`;
     }
     return `<div class="dash-scope">${head}${_vDashHoy()}</div>`;
   }
