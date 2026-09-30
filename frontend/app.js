@@ -5119,7 +5119,8 @@ const CanteraModule = (() => {
   let _tamanoFiltro = new Set();
   let _tamanoExclFiltro = new Set();
   let _domFaltante = false;
-  let _paso2DescFiltro = new Set(); // 'descartado' (IA) | 'descartado_manual' (tú)
+  let _paso2DescFiltro = new Set(); // Validación profunda: pendiente | aprobado | validacion_manual | descartado (IA) | descartado_manual (tú)
+  let _crmFiltro = ''; // '' | 'importado' | 'no_importado' (según promoted_company_id)
   function _jsEsc(s) { return String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
   function _distinctVals(field) {
     const set = new Set();
@@ -5508,7 +5509,7 @@ const CanteraModule = (() => {
         paisFiltro: [..._paisFiltro], paisExclFiltro: [..._paisExclFiltro],
         industriaFiltro: [..._industriaFiltro], industriaExclFiltro: [..._industriaExclFiltro],
         tamanoFiltro: [..._tamanoFiltro], tamanoExclFiltro: [..._tamanoExclFiltro],
-        domFaltante: _domFaltante, paso2DescFiltro: [..._paso2DescFiltro],
+        domFaltante: _domFaltante, paso2DescFiltro: [..._paso2DescFiltro], crmFiltro: _crmFiltro,
         paso1Filtro: _paso1Filtro, dominioQ: _dominioQ,
       }));
     } catch (_) {}
@@ -5526,7 +5527,7 @@ const CanteraModule = (() => {
     _paisFiltro = new Set(saved.paisFiltro || []); _paisExclFiltro = new Set(saved.paisExclFiltro || []);
     _industriaFiltro = new Set(saved.industriaFiltro || []); _industriaExclFiltro = new Set(saved.industriaExclFiltro || []);
     _tamanoFiltro = new Set(saved.tamanoFiltro || []); _tamanoExclFiltro = new Set(saved.tamanoExclFiltro || []);
-    _domFaltante = !!saved.domFaltante; _paso2DescFiltro = new Set(saved.paso2DescFiltro || []);
+    _domFaltante = !!saved.domFaltante; _paso2DescFiltro = new Set(saved.paso2DescFiltro || []); _crmFiltro = saved.crmFiltro || '';
     _paso1Filtro = saved.paso1Filtro || ''; _dominioQ = saved.dominioQ || '';
     return true;
   }
@@ -5632,7 +5633,7 @@ const CanteraModule = (() => {
     _coSel = new Set(); _expanded = new Set(); _contactsByCompany = {}; _contactsLoaded = false; _step = 1;
     _cantPageIdx = 0; _tierFiltro = new Set(); _tierExclFiltro = new Set(); _prioFiltro = new Set();
     _minContactos = 0; _sinPrioridad = false; _auditoriaFiltro = '';
-    _paisFiltro = new Set(); _paisExclFiltro = new Set(); _industriaFiltro = new Set(); _industriaExclFiltro = new Set(); _tamanoFiltro = new Set(); _tamanoExclFiltro = new Set(); _domFaltante = false; _paso2DescFiltro = new Set();
+    _paisFiltro = new Set(); _paisExclFiltro = new Set(); _industriaFiltro = new Set(); _industriaExclFiltro = new Set(); _tamanoFiltro = new Set(); _tamanoExclFiltro = new Set(); _domFaltante = false; _paso2DescFiltro = new Set(); _crmFiltro = '';
     _paso1Filtro = ''; _dominioQ = '';
     // Totales de Filtros/Limpiar/Enriquecer/IA vienen del borrador (persistidos
     // en el servidor) — pedido explícito 2026-09-06: "ya limpiamos, no debería
@@ -5742,7 +5743,8 @@ const CanteraModule = (() => {
       .filter(c => !_tamanoExclFiltro.has(c.tamano))
       .filter(c => !_domFaltante || !c.dominio)
       .filter(c => !_dominioQ || (c.dominio || '').toLowerCase().includes(_dominioQ.toLowerCase()))
-      .filter(c => !_paso2DescFiltro.size || _paso2DescFiltro.has(c.paso2_estado));
+      .filter(c => !_paso2DescFiltro.size || _paso2DescFiltro.has(c.paso2_estado))
+      .filter(c => !_crmFiltro || (_crmFiltro === 'importado' ? !!c.promoted_company_id : !c.promoted_company_id));
   }
   // ── Detalle: criterio + import + resultados ──────────────────────
   function _detailHtml() {
@@ -5933,7 +5935,7 @@ const CanteraModule = (() => {
           if (!_coSel.size && !hasFiltros) return '';
           const paso1Lbl = { aprobado: 'aprobado', descartado: 'descartado', vacio: 'vacío' };
           return `<div class="cant-results-bar">
-          <span class="cant-count">${_coSel.size ? `${_coSel.size} seleccionada(s)` : ''}${_paso1Filtro ? ` · Validación básica: ${paso1Lbl[_paso1Filtro]}` : ''}${_tierFiltro.size ? ` · Tier: ${[..._tierFiltro].join(', ')}` : ''}${_prioFiltro.size ? ` · Prioridad: ${[..._prioFiltro].join(', ')}` : ''}${_minContactos ? ` · ${_minContactos}+ contactos` : ''}${_sinPrioridad ? ' · sin priorizar' : ''}${_auditoriaFiltro ? ` · auditoría: ${_auditoriaFiltro === 'sin_auditar' ? 'sin auditar' : _auditoriaFiltro === 'de_acuerdo' ? 'confirmadas' : 'en desacuerdo'}` : ''}${_paisFiltro.size ? ` · País: ${[..._paisFiltro].join(', ')}` : ''}${_paisExclFiltro.size ? ` · País ≠ ${[..._paisExclFiltro].join(', ')}` : ''}${_industriaFiltro.size ? ` · Industria: ${[..._industriaFiltro].join(', ')}` : ''}${_industriaExclFiltro.size ? ` · Industria ≠ ${[..._industriaExclFiltro].join(', ')}` : ''}${_tamanoFiltro.size ? ` · Tamaño: ${[..._tamanoFiltro].join(', ')}` : ''}${_tamanoExclFiltro.size ? ` · Tamaño ≠ ${[..._tamanoExclFiltro].join(', ')}` : ''}${_tierExclFiltro.size ? ` · Tier ≠ ${[..._tierExclFiltro].join(', ')}` : ''}${_domFaltante ? ' · sin dominio' : ''}${_dominioQ ? ` · dominio contiene "${esc(_dominioQ)}"` : ''}${_paso2DescFiltro.size ? ` · Validación profunda descartada: ${[..._paso2DescFiltro].map(v => v === 'descartado' ? 'IA' : 'manual').join(', ')}` : ''}</span>
+          <span class="cant-count">${_coSel.size ? `${_coSel.size} seleccionada(s)` : ''}${_paso1Filtro ? ` · Validación básica: ${paso1Lbl[_paso1Filtro]}` : ''}${_tierFiltro.size ? ` · Tier: ${[..._tierFiltro].join(', ')}` : ''}${_prioFiltro.size ? ` · Prioridad: ${[..._prioFiltro].join(', ')}` : ''}${_minContactos ? ` · ${_minContactos}+ contactos` : ''}${_sinPrioridad ? ' · sin priorizar' : ''}${_auditoriaFiltro ? ` · auditoría: ${_auditoriaFiltro === 'sin_auditar' ? 'sin auditar' : _auditoriaFiltro === 'de_acuerdo' ? 'confirmadas' : 'en desacuerdo'}` : ''}${_paisFiltro.size ? ` · País: ${[..._paisFiltro].join(', ')}` : ''}${_paisExclFiltro.size ? ` · País ≠ ${[..._paisExclFiltro].join(', ')}` : ''}${_industriaFiltro.size ? ` · Industria: ${[..._industriaFiltro].join(', ')}` : ''}${_industriaExclFiltro.size ? ` · Industria ≠ ${[..._industriaExclFiltro].join(', ')}` : ''}${_tamanoFiltro.size ? ` · Tamaño: ${[..._tamanoFiltro].join(', ')}` : ''}${_tamanoExclFiltro.size ? ` · Tamaño ≠ ${[..._tamanoExclFiltro].join(', ')}` : ''}${_tierExclFiltro.size ? ` · Tier ≠ ${[..._tierExclFiltro].join(', ')}` : ''}${_domFaltante ? ' · sin dominio' : ''}${_dominioQ ? ` · dominio contiene "${esc(_dominioQ)}"` : ''}${_paso2DescFiltro.size ? ` · Validación profunda: ${[..._paso2DescFiltro].map(v => ({ aprobado: 'aprobado', validacion_manual: 'hecho manual', pendiente: 'pendiente', descartado: 'descartado IA', descartado_manual: 'descartado manual' }[v] || v)).join(', ')}` : ''}${_crmFiltro ? ` · ${_crmFiltro === 'importado' ? 'ya importadas al CRM' : 'aún no importadas'}` : ''}</span>
           <span class="cant-results-total">${hasFiltros ? `${filteredCompanies.length} resultado${filteredCompanies.length === 1 ? '' : 's'}` : ''}</span>
           ${hasFiltros ? `<button class="btn btn--ghost btn--sm" onclick="CanteraModule.resetFiltros()">Limpiar filtros</button>` : ''}
         </div>`;
@@ -6141,7 +6143,9 @@ const CanteraModule = (() => {
     const tamanoPanel = _distinctVals('tamano').map(v =>
       _incExcRow(esc(v), _tamanoFiltro.has(v), _tamanoExclFiltro.has(v), `CanteraModule.toggleTamanoFiltro('${_jsEsc(v)}')`, `CanteraModule.toggleTamanoExclFiltro('${_jsEsc(v)}')`)
     ).join('') || '<div class="cp-empty2" style="padding:10px 12px">Sin datos todavía</div>';
-    const paso2DescPanel = [['descartado', 'Descartado por la IA'], ['descartado_manual', 'Descartado manual (Tier)']]
+    const crmPanel = [['importado', 'Ya importadas al CRM'], ['no_importado', 'Aún no importadas']]
+      .map(([v, label]) => `<label class="cant-colchk"><input type="radio" name="cant-crm" ${_crmFiltro === v ? 'checked' : ''} onclick="CanteraModule.setCrmFiltro('${v}')"> ${label}</label>`).join('');
+    const paso2DescPanel = [['aprobado', 'Aprobado'], ['validacion_manual', 'Hecho manual'], ['pendiente', 'Pendiente'], ['descartado', 'Descartado por la IA'], ['descartado_manual', 'Descartado manual (Tier)']]
       .map(([v, label]) => `<label class="cant-colchk"><input type="checkbox" ${_paso2DescFiltro.has(v) ? 'checked' : ''} onchange="CanteraModule.togglePaso2DescFiltro('${v}')"> ${label}</label>`).join('');
     // "Ver solo descartadas (Paso 1)" y "Ver solo sin dominio" dejaron de ser
     // toggles sueltos en la raíz — ahora son categorías reales dentro de
@@ -6156,7 +6160,7 @@ const CanteraModule = (() => {
     // Guardar/aplicar filtro por borrador — vive dentro de Filtrar › Guardados,
     // no como botones sueltos en la barra — pedido explícito 2026-09-16:
     // "debería estar dentro de opción de filtros, guardados".
-    const hasFiltrosActivos = !!(_paso1Filtro || _tierFiltro.size || _prioFiltro.size || _minContactos || _sinPrioridad || _auditoriaFiltro || _paisFiltro.size || _paisExclFiltro.size || _industriaFiltro.size || _industriaExclFiltro.size || _tamanoFiltro.size || _tamanoExclFiltro.size || _tierExclFiltro.size || _domFaltante || _dominioQ || _paso2DescFiltro.size);
+    const hasFiltrosActivos = !!(_paso1Filtro || _tierFiltro.size || _prioFiltro.size || _minContactos || _sinPrioridad || _auditoriaFiltro || _paisFiltro.size || _paisExclFiltro.size || _industriaFiltro.size || _industriaExclFiltro.size || _tamanoFiltro.size || _tamanoExclFiltro.size || _tierExclFiltro.size || _domFaltante || _dominioQ || _paso2DescFiltro.size || _crmFiltro);
     const filtroGuardado = _loadFiltroGuardado();
     const guardadosPanel = `<div style="padding:6px 12px 8px"><span class="cant-hint" style="margin:0">${filtroGuardado ? 'Filtro guardado: ' + esc(_filtroResumenTexto(filtroGuardado)) : 'Sin filtro guardado en este borrador todavía'}</span></div>`
       + (hasFiltrosActivos ? item('Guardar filtro actual', 'CanteraModule.guardarFiltroActual()') : '')
@@ -6170,7 +6174,7 @@ const CanteraModule = (() => {
         ${item('Auditar muestra (IA)', 'CanteraModule.openAudit()')}
       </div>
       <div class="cp-mark-menu__sep"></div>
-      <div class="cp-mark-menu__list">${sub('Filtrar', `<div class="cp-mark-menu__list">${sub(`Validación básica${_paso1Filtro ? ' · 1' : ''}`, paso1Panel)}${sub(`Dominio${(_domFaltante || _dominioQ) ? ' · 1' : ''}`, dominioPanel)}${sub('Tier', tierPanel)}${sub('Prioridad', prioPanel)}${sub('Nº de contactos', numContactosPanel)}${sub('Auditoría', auditoriaPanel)}${sub('Validación profunda descartada', paso2DescPanel)}${sub('País', paisPanel, true)}${sub('Industria', industriaPanel, true)}${sub('Tamaño', tamanoPanel, true)}${sub(`Guardados${filtroGuardado ? ' · 1' : ''}`, guardadosPanel)}</div>`)}</div>
+      <div class="cp-mark-menu__list">${sub('Filtrar', `<div class="cp-mark-menu__list">${sub(`Validación básica${_paso1Filtro ? ' · 1' : ''}`, paso1Panel)}${sub(`Dominio${(_domFaltante || _dominioQ) ? ' · 1' : ''}`, dominioPanel)}${sub('Tier', tierPanel)}${sub('Prioridad', prioPanel)}${sub('Nº de contactos', numContactosPanel)}${sub('Auditoría', auditoriaPanel)}${sub(`Validación profunda${_paso2DescFiltro.size ? ' · ' + _paso2DescFiltro.size : ''}`, paso2DescPanel)}${sub(`En el CRM${_crmFiltro ? ' · 1' : ''}`, crmPanel)}${sub('País', paisPanel, true)}${sub('Industria', industriaPanel, true)}${sub('Tamaño', tamanoPanel, true)}${sub(`Guardados${filtroGuardado ? ' · 1' : ''}`, guardadosPanel)}</div>`)}</div>
       <div class="cp-mark-menu__sep"></div>
       <div class="cp-mark-menu__list">${sub('Elegir columnas visibles', colsPanel, true)}</div>
       ${calificadas || _coSel.size ? `<div class="cp-mark-menu__sep"></div><div class="cp-mark-menu__list">
@@ -6544,6 +6548,7 @@ const CanteraModule = (() => {
   function toggleTamanoExclFiltro(v) { if (_tamanoExclFiltro.has(v)) _tamanoExclFiltro.delete(v); else { _tamanoExclFiltro.add(v); _tamanoFiltro.delete(v); } _cantPageIdx = 0; _paint(); }
   function toggleTierExclFiltro(v) { if (_tierExclFiltro.has(v)) _tierExclFiltro.delete(v); else { _tierExclFiltro.add(v); _tierFiltro.delete(v); } _cantPageIdx = 0; _paint(); }
   function toggleDomFaltante() { _domFaltante = !_domFaltante; _cantPageIdx = 0; _paint(); }
+  function setCrmFiltro(v) { _crmFiltro = _crmFiltro === v ? '' : v; _cantPageIdx = 0; _paint(); }
   function togglePaso2DescFiltro(v) { if (_paso2DescFiltro.has(v)) _paso2DescFiltro.delete(v); else _paso2DescFiltro.add(v); _cantPageIdx = 0; _paint(); }
   // Botón "Limpiar filtros" junto a los chips — pedido explícito 2026-09-07:
   // "lo haría más práctico" en vez de tener que desmarcar cada uno a mano.
@@ -6552,7 +6557,7 @@ const CanteraModule = (() => {
     _paso1Filtro = ''; _tierFiltro = new Set(); _tierExclFiltro = new Set(); _prioFiltro = new Set();
     _minContactos = 0; _sinPrioridad = false; _auditoriaFiltro = '';
     _paisFiltro = new Set(); _paisExclFiltro = new Set(); _industriaFiltro = new Set(); _industriaExclFiltro = new Set(); _tamanoFiltro = new Set(); _tamanoExclFiltro = new Set();
-    _domFaltante = false; _dominioQ = ''; _paso2DescFiltro = new Set();
+    _domFaltante = false; _dominioQ = ''; _paso2DescFiltro = new Set(); _crmFiltro = '';
     _cantPageIdx = 0; _paint();
   }
   // Guardar/aplicar el filtro actual por borrador — pedido explícito
@@ -6591,7 +6596,7 @@ const CanteraModule = (() => {
         paisFiltro: [..._paisFiltro], paisExclFiltro: [..._paisExclFiltro],
         industriaFiltro: [..._industriaFiltro], industriaExclFiltro: [..._industriaExclFiltro],
         tamanoFiltro: [..._tamanoFiltro], tamanoExclFiltro: [..._tamanoExclFiltro], tierExclFiltro: [..._tierExclFiltro],
-        domFaltante: _domFaltante, dominioQ: _dominioQ, paso2DescFiltro: [..._paso2DescFiltro],
+        domFaltante: _domFaltante, dominioQ: _dominioQ, paso2DescFiltro: [..._paso2DescFiltro], crmFiltro: _crmFiltro,
       }));
       showBanner('✓ Filtro guardado — "Aplicar filtro guardado" lo trae de vuelta cuando quieras', 'success');
       _paint();
@@ -6605,7 +6610,7 @@ const CanteraModule = (() => {
     _paisFiltro = new Set(f.paisFiltro || []); _paisExclFiltro = new Set(f.paisExclFiltro || []);
     _industriaFiltro = new Set(f.industriaFiltro || []); _industriaExclFiltro = new Set(f.industriaExclFiltro || []);
     _tamanoFiltro = new Set(f.tamanoFiltro || []); _tamanoExclFiltro = new Set(f.tamanoExclFiltro || []);
-    _domFaltante = !!f.domFaltante; _dominioQ = f.dominioQ || ''; _paso2DescFiltro = new Set(f.paso2DescFiltro || []);
+    _domFaltante = !!f.domFaltante; _dominioQ = f.dominioQ || ''; _paso2DescFiltro = new Set(f.paso2DescFiltro || []); _crmFiltro = f.crmFiltro || '';
     _cantPageIdx = 0; _paint();
   }
   function borrarFiltroGuardado() {
@@ -7065,7 +7070,7 @@ const CanteraModule = (() => {
   }
 
   return { render, open, openCreate, backToList, saveFiltros, runFiltros, setPaso1Filtro, setDominioQ, _filterSubPanel, toggleTierFiltro, togglePrioFiltro, setMinContactos, toggleSinPrioridad, setAuditoriaFiltro,
-    togglePaisFiltro, toggleIndustriaFiltro, toggleTamanoFiltro, toggleDomFaltante, togglePaso2DescFiltro, resetFiltros,
+    togglePaisFiltro, toggleIndustriaFiltro, toggleTamanoFiltro, toggleDomFaltante, togglePaso2DescFiltro, setCrmFiltro, resetFiltros,
     guardarFiltroActual, aplicarFiltroGuardado, borrarFiltroGuardado, moreMenu, remove, saveAsTemplate,
     toggleExpand, addTier, removeTier, setTierField, addPuesto, removePuesto, setPuestoField, saveCriterio, setMotorIA, runValidacion,
     openPromote, closePromote, doPromote, openSendSeq, closeSendSeq, doSendSeq,
@@ -7879,7 +7884,7 @@ const CanteraGlobalModule = (() => {
   // vertical tipo Sales Nav), pero a la DERECHA y contraído por defecto —
   // pedido explícito: "que tenga el estilo de filtro que tenía antes, pero
   // que se oculte/contraiga en automático a la derecha".
-  let _rows = []; let _total = 0; let _q = ''; let _origen = ''; let _collapsed = true;
+  let _rows = []; let _total = 0; let _q = ''; let _origen = ''; let _paso2 = ''; let _importado = ''; let _collapsed = true;
   // Tabs "Contactos | Empresas | Todos" — mismo espíritu que "Lead/Account"
   // de Sales Navigator (pedido explícito 2026-09-25, con captura).
   let _vista = '';
@@ -7902,7 +7907,7 @@ const CanteraGlobalModule = (() => {
     const list = _loadSaved();
     list.unshift({
       nombre, fecha: new Date().toISOString(),
-      q: _q, origen: _origen, vista: _vista,
+      q: _q, origen: _origen, paso2: _paso2, importado: _importado, vista: _vista,
       filtros: JSON.parse(JSON.stringify(_filtros)), filtrosExcl: JSON.parse(JSON.stringify(_filtrosExcl)),
     });
     _saveSaved(list);
@@ -7912,7 +7917,7 @@ const CanteraGlobalModule = (() => {
   function aplicarFiltroGuardado(idx) {
     const list = _loadSaved();
     const f = list[idx]; if (!f) return;
-    _q = f.q || ''; _origen = f.origen || ''; _vista = f.vista || '';
+    _q = f.q || ''; _origen = f.origen || ''; _paso2 = f.paso2 || ''; _importado = f.importado || ''; _vista = f.vista || '';
     _filtros = { pais: [], industria: [], tamano: [], tier: [], estado: [], cliente: [], secuencia: [], seniority: [], departamento: [], ciudad: [], ...(f.filtros || {}) };
     _filtrosExcl = { pais: [], industria: [], tamano: [], tier: [], estado: [], cliente: [], secuencia: [], seniority: [], departamento: [], ciudad: [], ...(f.filtrosExcl || {}) };
     _page = 0;
@@ -7969,13 +7974,13 @@ const CanteraGlobalModule = (() => {
   const _STATE_KEY = 'cantera_global_state';
   let _restored = false;
   function _saveState() {
-    try { localStorage.setItem(_STATE_KEY, JSON.stringify({ q: _q, origen: _origen, vista: _vista, filtros: _filtros, filtrosExcl: _filtrosExcl })); } catch (_) {}
+    try { localStorage.setItem(_STATE_KEY, JSON.stringify({ q: _q, origen: _origen, paso2: _paso2, importado: _importado, vista: _vista, filtros: _filtros, filtrosExcl: _filtrosExcl })); } catch (_) {}
   }
   function _restoreState() {
     if (_restored) return; _restored = true;
     try {
       const s = JSON.parse(localStorage.getItem(_STATE_KEY) || 'null'); if (!s) return;
-      _q = s.q || ''; _origen = s.origen || ''; _vista = s.vista || '';
+      _q = s.q || ''; _origen = s.origen || ''; _paso2 = s.paso2 || ''; _importado = s.importado || ''; _vista = s.vista || '';
       _filtros = { pais: [], industria: [], tamano: [], tier: [], estado: [], cliente: [], secuencia: [], seniority: [], departamento: [], ciudad: [], ...(s.filtros || {}) };
       _filtrosExcl = { pais: [], industria: [], tamano: [], tier: [], estado: [], cliente: [], secuencia: [], seniority: [], departamento: [], ciudad: [], ...(s.filtrosExcl || {}) };
     } catch (_) {}
@@ -7991,6 +7996,8 @@ const CanteraGlobalModule = (() => {
     const p = new URLSearchParams();
     if (_q) p.set('q', _q);
     if (_origen) p.set('origen', _origen);
+    if (_paso2) p.set('paso2', _paso2);
+    if (_importado) p.set('importado', _importado);
     if (_filtros.pais.length) p.set('pais', _filtros.pais.join(','));
     if (_filtros.industria.length) p.set('industria', _filtros.industria.join(','));
     if (_filtros.tamano.length) p.set('tamano', _filtros.tamano.join(','));
@@ -8118,6 +8125,17 @@ const CanteraGlobalModule = (() => {
             <option value="crm"${_origen === 'crm' ? ' selected' : ''}>Solo en CRM</option>
             <option value="borrador"${_origen === 'borrador' ? ' selected' : ''}>Solo en borradores</option>
           </select></div>
+        <div class="filter-field"><label class="field-label">Validación profunda</label>
+          <select class="form-input" onchange="CanteraGlobalModule.setPaso2(this.value)">
+            <option value="">Todas</option>
+            ${[['aprobado', 'Aprobado'], ['validacion_manual', 'Hecho manual'], ['pendiente', 'Pendiente'], ['descartado', 'Descartado (IA)'], ['descartado_manual', 'Descartado (manual)']].map(([v, l]) => `<option value="${v}"${_paso2 === v ? ' selected' : ''}>${l}</option>`).join('')}
+          </select></div>
+        <div class="filter-field"><label class="field-label">Importado al CRM</label>
+          <select class="form-input" onchange="CanteraGlobalModule.setImportado(this.value)">
+            <option value="">Todos</option>
+            <option value="si"${_importado === 'si' ? ' selected' : ''}>Ya importados</option>
+            <option value="no"${_importado === 'no' ? ' selected' : ''}>Aún no importados</option>
+          </select></div>
         ${fields}
       </div>`;
   }
@@ -8234,6 +8252,8 @@ const CanteraGlobalModule = (() => {
   function toggleCollapse() { _collapsed = !_collapsed; _repaint(); }
   let _t = null;
   function setQ(v) { _q = v; _page = 0; _clearFacets(); clearTimeout(_t); _t = setTimeout(async () => { await _search(); _repaint(); }, 300); }
+  async function setPaso2(v) { _paso2 = v; _page = 0; _clearFacets(); await _search(); _repaint(); }
+  async function setImportado(v) { _importado = v; _page = 0; _clearFacets(); await _search(); _repaint(); }
   async function setOrigen(v) { _origen = v; _page = 0; _clearFacets(); await _search(); _repaint(); }
   async function setVista(v) { _vista = v; _page = 0; _clearFacets(); await _search(); _repaint(); }
   function setPageSize(n) { try { localStorage.setItem('cantera_global_page_size', String(parseInt(n) || 50)); } catch (_) {} _page = 0; _search().then(_repaint); }
@@ -8326,7 +8346,7 @@ const CanteraGlobalModule = (() => {
       await editValidacion(d.company_id, d.batch_id);
     } catch (e) { showBanner('Error al preparar la validación: ' + e.message, 'error'); }
   }
-  return { render, setQ, setOrigen, setVista, setPageSize, goPage, toggleCollapse, taOpen, taFilter, taBlur, addFiltro, removeFiltro, addFiltroExcl, removeFiltroExcl, toggleCol, colsMenu, editValidacion, editValidacionCRM, guardarFiltroActual, aplicarFiltroGuardado, borrarFiltroGuardado };
+  return { render, setQ, setOrigen, setPaso2, setImportado, setVista, setPageSize, goPage, toggleCollapse, taOpen, taFilter, taBlur, addFiltro, removeFiltro, addFiltroExcl, removeFiltroExcl, toggleCol, colsMenu, editValidacion, editValidacionCRM, guardarFiltroActual, aplicarFiltroGuardado, borrarFiltroGuardado };
 })();
 
 // =================================================================
