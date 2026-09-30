@@ -17269,12 +17269,11 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 
 /* ══ Rendimiento v2 (mismo lenguaje visual que el portal del cliente): KPIs con degradado + minigráfico, tarjetas de vidrio ══ */
 .dash-v2 .dash-kpis{gap:16px;margin-bottom:18px}
-.dash-v2 .dash-kpi{border:1px solid rgba(255,255,255,.9);border-left:1px solid rgba(255,255,255,.9);border-bottom:1px solid rgba(255,255,255,.9);border-radius:20px;padding:16px 16px 6px;box-shadow:0 14px 34px -22px rgba(30,64,175,.5);overflow:hidden}
+.dash-v2 .dash-kpi{background:#fff;border:1px solid #E7EBF0;border-left:1px solid #E7EBF0;border-bottom:1px solid #E7EBF0;border-radius:16px;padding:16px 16px 6px;box-shadow:0 14px 34px -22px rgba(30,64,175,.5);overflow:hidden}
 .dash-v2 .dash-kpi:hover{transform:translateY(-3px);box-shadow:0 20px 40px -22px rgba(30,64,175,.6)}
-.dash-v2 .dash-kpi--g{background:linear-gradient(165deg,#E6F7EE,#fff 72%)}.dash-v2 .dash-kpi--a{background:linear-gradient(165deg,#FFF1DE,#fff 72%)}.dash-v2 .dash-kpi--p{background:linear-gradient(165deg,#EFE8FF,#fff 72%)}.dash-v2 .dash-kpi--b{background:linear-gradient(165deg,#E5EFFF,#fff 72%)}
 .dash-v2 .dash-kpi__top{display:flex;align-items:flex-start;gap:12px;margin-bottom:0}
 .dash-v2 .dash-kpi__tx{min-width:0}
-.dash-v2 .dash-kpi__ic{width:48px;height:48px;border-radius:15px;background:color-mix(in srgb,var(--kc) 16%,#fff)}
+.dash-v2 .dash-kpi__ic{width:44px;height:44px;border-radius:12px;color:#334155;background:#F1F4F8}
 .dash-v2 .dash-kpi__l{font-size:12.5px;font-weight:600;letter-spacing:0;text-transform:none;color:#334155;line-height:1.25}
 .dash-v2 .dash-kpi__v{font-size:32px;font-weight:800;letter-spacing:-.03em;line-height:1.1;margin:2px 0 2px}
 .dash-v2 .dash-kpi__sp{height:56px;margin:4px -6px 0}
@@ -17324,3 +17323,5 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .sn-pill--clr { color: #64748B; }
 .sn-link { border: 0; background: transparent; font: 600 .82rem inherit; color: #0F172A; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
 @media (max-width: 900px) { .sn-body { grid-template-columns: 1fr; } .cant-global-panel { flex: 1 1 auto; } }
+
+.dash-v2 .dash-kpi{--kc:#64748B!important}

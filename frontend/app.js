@@ -24888,7 +24888,7 @@ ${foot}
     const chs = ['email', 'linkedin', 'call', 'wa_msg', 'wa_call', 'otros'].filter(k => d.daily.some(r => r.ch === k));
     const dc = document.getElementById('dash-daily');
     if (dc) _dashCharts.push(new Chart(dc.getContext('2d'), { type: 'bar', data: { labels: buckets.map(lbl), datasets: chs.map((k, i) => ({ label: _DASH_CH[k][0], backgroundColor: _DASH_CH[k][1], borderRadius: i === chs.length - 1 ? 3 : 0, borderSkipped: false, barPercentage: .7, data: buckets.map(b => d.daily.filter(r => r.ch === k && bOf(r.d) === b).reduce((n, r) => n + r.n, 0)) })) }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: tip }, scales: { x: Object.assign({}, axis.x, { stacked: true }), y: Object.assign({}, axis.y, { stacked: true }) } } }));
-    const SP = [['contacted', '#22A06B'], ['replies', '#F59E0B'], ['accepts', '#7C5CE0'], ['emails', '#2563EB'], ['opened', '#F59E0B'], ['meetings', '#22A06B']];
+    const SP = [['contacted', '#64748B'], ['replies', '#64748B'], ['accepts', '#64748B'], ['emails', '#64748B'], ['opened', '#64748B'], ['meetings', '#64748B']];
     const ser = {}; (d.series || []).forEach(r => { ser[r.d] = r; });
     SP.forEach(([key, col], i) => {
       const cv = document.getElementById('dash-sp-' + i); if (!cv) return;
