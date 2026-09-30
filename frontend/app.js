@@ -8081,23 +8081,32 @@ const CanteraGlobalModule = (() => {
   // explícito 2026-09-06, corregido: "lo pusiste a la derecha, debe ser
   // izquierda". Colapsado muestra solo el tirador "›"; expandido, el panel
   // completo con "‹" para volver a ocultarlo.
+  // ── Panel estilo Sales Navigator: secciones con filas "+" que se expanden, pin, toggles, Collapse y pie con Guardar/Pin/Clear all ──
+  const _PIN_KEY = 'cantera_global_pins';
+  let _pins = (() => { try { return new Set(JSON.parse(localStorage.getItem(_PIN_KEY) || '[]')); } catch (_) { return new Set(); } })();
+  let _openRows = new Set();
+  function _savePins() { try { localStorage.setItem(_PIN_KEY, JSON.stringify([..._pins])); } catch (_) {} }
+  const _PIN_SVG = '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M16 9V4h1a1 1 0 0 0 0-2H7a1 1 0 0 0 0 2h1v5a3 3 0 0 1-3 3v2h5.2v6a.8.8 0 0 0 1.6 0v-6H19v-2a3 3 0 0 1-3-3z"/></svg>';
+  function _nActive(field) { return (_filtros[field] || []).length + (_filtrosExcl[field] || []).length; }
+  function _snRow(field, label) {
+    const n = _nActive(field), pinned = _pins.has(field), open = pinned || n > 0 || _openRows.has(field);
+    const incChips = (_filtros[field] || []).map((v, i) => `<span class="tag tag--inc">${esc(v)} <span class="x" onclick="CanteraGlobalModule.removeFiltro('${field}',${i})">✕</span></span>`).join('');
+    const excChips = (_filtrosExcl[field] || []).map((v, i) => `<span class="tag tag--exc">≠ ${esc(v)} <span class="x" onclick="CanteraGlobalModule.removeFiltroExcl('${field}',${i})">✕</span></span>`).join('');
+    return `<div class="sn-row${open ? ' is-open' : ''}${n ? ' has-val' : ''}" data-ta="${field}">
+      <div class="sn-row__h" onclick="CanteraGlobalModule.toggleRow('${field}')"><span class="sn-row__l">${esc(label)}${n ? ` <b class="sn-row__n">${n}</b>` : ''}</span>
+        <span class="sn-row__pin${pinned ? ' on' : ''}" title="${pinned ? 'Quitar pin' : 'Fijar este filtro abierto'}" onclick="event.stopPropagation();CanteraGlobalModule.togglePin('${field}')">${_PIN_SVG}</span>
+        <span class="sn-row__pm">${open && !pinned && !n ? '−' : '+'}</span></div>
+      ${open ? `<div class="sn-row__b"><div class="tag-list">${incChips}${excChips}</div><div class="ta-wrap">
+        <input type="text" class="ta-input" placeholder="Escribe para buscar…" autocomplete="off" onfocus="CanteraGlobalModule.taOpen('${field}')" oninput="CanteraGlobalModule.taFilter('${field}')" onblur="CanteraGlobalModule.taBlur('${field}')">
+        <div class="ta-menu" id="tag-menu-${field}" hidden></div></div></div>` : ''}
+    </div>`;
+  }
+  function _snToggle(label, on, action, help) {
+    return `<label class="sn-tg"><span class="sn-tg__l">${esc(label)}${help ? ` <span class="sn-tg__h" title="${esc(help)}">?</span>` : ''}</span><input type="checkbox" ${on ? 'checked' : ''} onchange="${action}"><i></i></label>`;
+  }
+  function _snSec(title, rows) { const r = rows.filter(Boolean).join(''); return r ? `<div class="sn-sec"><div class="sn-sec__t">${esc(title)}</div><div class="sn-sec__b">${r}</div></div>` : ''; }
   function _panelHtml() {
-    // Grilla horizontal de 2 columnas — pedido explícito 2026-09-25, con
-    // captura de Sales Navigator: "esto ocupa más pantalla y eso hace que no
-    // tenga que escrolear tanto". Antes era una sola columna angosta (260px)
-    // con un campo debajo de otro; ahora el panel ocupa el ancho real y los
-    // campos van de a dos por fila, igual que el rail de LinkedIn.
-    const fields = [
-      _taFieldG('pais', 'País'), _taFieldG('industria', 'Industria'),
-      _taFieldG('tamano', 'Tamaño de empresa'), _taFieldG('tier', 'Validación profunda (Tier A, B, C, D…)'), _taFieldG('cliente', 'Cliente outbound'),
-      _taFieldG('secuencia', 'Secuencia'),
-      _vista !== 'empresa' ? _taFieldG('estado', 'Estado') : '',
-      _vista !== 'empresa' ? _taFieldG('seniority', 'Seniority') : '',
-      _vista !== 'empresa' ? _taFieldG('departamento', 'Departamento') : '',
-      _vista !== 'empresa' ? _taFieldG('ciudad', 'Ciudad') : '',
-    ].filter(Boolean).join('');
-    // Un filtro guardado en la pestaña Empresas solo tiene sentido ahí -- pedido
-    // explícito: "si es filtro de empresa solo debería aparecer en empresa".
+    const lead = _vista !== 'empresa';
     const savedListAll = _loadSaved();
     const savedShown = savedListAll.map((f, i) => ({ f, i })).filter(x => (x.f.vista || '') === _vista);
     const savedHtml = savedShown.length ? `<div class="cant-global-saved">
@@ -8111,30 +8120,29 @@ const CanteraGlobalModule = (() => {
             <button class="cant-x" onclick="event.stopPropagation();CanteraGlobalModule.borrarFiltroGuardado(${i})" title="Eliminar">✕</button>
           </div>`).join('')}</div>
       </div>` : '';
-    return `<div class="cant-global-panel-hd">
-        <h3 style="margin:0;font-size:.92rem">Criterios</h3>
-        <div style="display:flex;align-items:center;gap:8px">
-          <button class="btn btn--ghost btn--sm" onclick="CanteraGlobalModule.guardarFiltroActual()" title="Guardar los filtros actuales con nombre" style="display:inline-flex;align-items:center;gap:6px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg> Guardar filtro</button>
-          <button class="cant-x" onclick="CanteraGlobalModule.toggleCollapse()" title="Ocultar panel">‹</button>
-        </div>
-      </div>
+    const colL = [
+      _snSec('Empresa', [_snRow('industria', 'Industria'), _snRow('tamano', 'Tamaño de empresa'), _snRow('pais', 'País'), lead ? _snRow('ciudad', 'Ciudad') : '']),
+      lead ? _snSec('Rol', [_snRow('seniority', 'Seniority'), _snRow('departamento', 'Departamento')]) : '',
+      _snSec('Validación (Cantera)', [_snRow('tier', 'Validación profunda (Tier A, B, C, D…)')]),
+    ].join('');
+    const colR = [
+      _snSec('Outreach', [_snRow('cliente', 'Cliente outbound'), _snRow('secuencia', 'Secuencia'), lead ? _snRow('estado', 'Estado') : '']),
+      _snSec('Dónde está', [
+        _snToggle('Ya importados al CRM', _importado === 'si', "CanteraGlobalModule.setImportado(this.checked?'si':'')", 'Empresas/contactos que ya están en el CRM (incluye borradores ya movidos)'),
+        _snToggle('Aún no importados', _importado === 'no', "CanteraGlobalModule.setImportado(this.checked?'no':'')"),
+        _snToggle('Solo en CRM', _origen === 'crm', "CanteraGlobalModule.setOrigen(this.checked?'crm':'')"),
+        _snToggle('Solo en borradores', _origen === 'borrador', "CanteraGlobalModule.setOrigen(this.checked?'borrador':'')"),
+      ]),
+    ].join('');
+    return `<div class="sn-hd"><h3>Criterios</h3><button class="sn-collapse" onclick="CanteraGlobalModule.toggleCollapse()" title="Ocultar panel">‹ Ocultar</button></div>
+      <label class="sn-search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><input type="text" placeholder="Buscar nombre, apellido, empresa, email…" value="${esc(_q)}" oninput="CanteraGlobalModule.setQ(this.value)"></label>
       ${savedHtml}
-      <div class="cant-global-fields-grid">
-        <div class="filter-field"><label class="field-label">Buscar</label>
-          <input type="text" class="form-input" placeholder="Nombre, apellido, empresa, email…" value="${esc(_q)}" oninput="CanteraGlobalModule.setQ(this.value)"></div>
-        <div class="filter-field"><label class="field-label">Dónde está</label>
-          <select class="form-input" onchange="CanteraGlobalModule.setOrigen(this.value)">
-            <option value="">Todos</option>
-            <option value="crm"${_origen === 'crm' ? ' selected' : ''}>Solo en CRM</option>
-            <option value="borrador"${_origen === 'borrador' ? ' selected' : ''}>Solo en borradores</option>
-          </select></div>
-        <div class="filter-field"><label class="field-label">Importado al CRM</label>
-          <select class="form-input" onchange="CanteraGlobalModule.setImportado(this.value)">
-            <option value="">Todos</option>
-            <option value="si"${_importado === 'si' ? ' selected' : ''}>Ya importados</option>
-            <option value="no"${_importado === 'no' ? ' selected' : ''}>Aún no importados</option>
-          </select></div>
-        ${fields}
+      <div class="sn-body"><div class="sn-col">${colL}</div><div class="sn-col">${colR}</div></div>
+      <div class="sn-foot">
+        <button class="sn-pill" onclick="CanteraGlobalModule.guardarFiltroActual()" title="Guardar los filtros actuales con nombre">↗ Guardar búsqueda</button>
+        <button class="sn-link" onclick="CanteraGlobalModule.pinActive()" title="Fija abiertos los filtros que ya tienen valor">${_PIN_SVG} Fijar filtros</button>
+        <span style="flex:1"></span>
+        <button class="sn-pill sn-pill--clr" onclick="CanteraGlobalModule.clearAll()">Limpiar todo</button>
       </div>`;
   }
   const _PASO1_LBL = { aprobado: 'Aprobado', descartado: 'Descartado' };
@@ -8248,6 +8256,14 @@ const CanteraGlobalModule = (() => {
     if (wrapAfter) { wrapAfter.scrollLeft = scrollLeft; wrapAfter.scrollTop = scrollTop; }
   }
   function toggleCollapse() { _collapsed = !_collapsed; _repaint(); }
+  function toggleRow(field) { if (_openRows.has(field)) _openRows.delete(field); else _openRows.add(field); _repaint(); }
+  function togglePin(field) { if (_pins.has(field)) _pins.delete(field); else _pins.add(field); _savePins(); _repaint(); }
+  function pinActive() { Object.keys(_filtros).forEach(k => { if (_nActive(k)) _pins.add(k); }); _savePins(); _repaint(); }
+  async function clearAll() {
+    _q = ''; _origen = ''; _importado = '';
+    Object.keys(_filtros).forEach(k => { _filtros[k] = []; }); Object.keys(_filtrosExcl).forEach(k => { _filtrosExcl[k] = []; });
+    _page = 0; _clearFacets(); await _search(); _repaint();
+  }
   let _t = null;
   function setQ(v) { _q = v; _page = 0; _clearFacets(); clearTimeout(_t); _t = setTimeout(async () => { await _search(); _repaint(); }, 300); }
   async function setImportado(v) { _importado = v; _page = 0; _clearFacets(); await _search(); _repaint(); }
@@ -8344,7 +8360,7 @@ const CanteraGlobalModule = (() => {
       await editValidacion(d.company_id, d.batch_id);
     } catch (e) { showBanner('Error al preparar la validación: ' + e.message, 'error'); }
   }
-  return { render, setQ, setOrigen, setImportado, setVista, setPageSize, goPage, toggleCollapse, taOpen, taFilter, taBlur, addFiltro, removeFiltro, addFiltroExcl, removeFiltroExcl, toggleCol, colsMenu, editValidacion, editValidacionCRM, guardarFiltroActual, aplicarFiltroGuardado, borrarFiltroGuardado };
+  return { render, setQ, setOrigen, setImportado, toggleRow, togglePin, pinActive, clearAll, setVista, setPageSize, goPage, toggleCollapse, taOpen, taFilter, taBlur, addFiltro, removeFiltro, addFiltroExcl, removeFiltroExcl, toggleCol, colsMenu, editValidacion, editValidacionCRM, guardarFiltroActual, aplicarFiltroGuardado, borrarFiltroGuardado };
 })();
 
 // =================================================================
