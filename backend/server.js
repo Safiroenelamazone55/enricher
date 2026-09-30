@@ -7482,7 +7482,7 @@ app.get('/api/cantera/companies/:id', requireAuth, async (req, res) => {
     res.json(rows[0]);
   } catch (err) { console.error('[cantera] GET company', err.message); res.status(500).json({ error: 'Error al cargar la empresa' }); }
 });
-function _cGlobalPaso2(r) { return r.paso2_estado || 'pendiente'; }
+function _cGlobalTier(r) { return (r.paso2_estado === 'descartado' || r.paso2_estado === 'descartado_manual') ? 'Descartado' : _cantNormTier(r.tier); }
 function _cGlobalCliente(r) { return (r.origen === 'crm' ? r.referencia : r.cliente_b) || ''; }
 // ── Base Global: fetch crudo compartido entre /global y /global/facets ──────
 async function _cGlobalFetchAll(uid, q, tipo) {
@@ -7572,7 +7572,6 @@ function _cGlobalParseFilters(req) {
   F.departamentosExcl = String(req.query.departamentoExcl || '').split(',').filter(Boolean);
   F.ciudades = String(req.query.ciudad || '').split(',').filter(Boolean);
   F.ciudadesExcl = String(req.query.ciudadExcl || '').split(',').filter(Boolean);
-  F.paso2 = String(req.query.paso2 || '').split(',').filter(Boolean);
   F.importado = req.query.importado === 'si' || req.query.importado === 'no' ? req.query.importado : '';
   F.tipo = req.query.tipo === 'contacto' || req.query.tipo === 'empresa' ? req.query.tipo : '';
   return F;
@@ -7583,7 +7582,6 @@ function _cGlobalParseFilters(req) {
 function _cGlobalMatch(r, F, skip) {
   if (F.origen === 'crm' && r.origen !== 'crm') return false;
   if (F.origen === 'borrador' && r.origen === 'crm') return false;
-  if (F.paso2.length && !F.paso2.includes(_cGlobalPaso2(r))) return false;
   if (F.importado && (F.importado === 'si') !== !!r.importado) return false;
   if (skip !== 'pais') {
     if (F.paises.length && !F.paises.includes(_cantNormPais(r.pais))) return false;
@@ -7598,8 +7596,8 @@ function _cGlobalMatch(r, F, skip) {
     if (F.tamanosExcl.length && F.tamanosExcl.includes(r.tamano)) return false;
   }
   if (skip !== 'tier') {
-    if (F.tiers.length && !F.tiers.includes(_cantNormTier(r.tier))) return false;
-    if (F.tiersExcl.length && F.tiersExcl.includes(_cantNormTier(r.tier))) return false;
+    if (F.tiers.length && !F.tiers.includes(_cGlobalTier(r))) return false;
+    if (F.tiersExcl.length && F.tiersExcl.includes(_cGlobalTier(r))) return false;
   }
   if (F.tipo && r.tipo !== F.tipo) return false;
   if (skip !== 'estado') {
@@ -7635,7 +7633,7 @@ function _cGlobalMatch(r, F, skip) {
 function _cGlobalFieldMatch(r, field, value) {
   if (field === 'pais') return _cantNormPais(r.pais) === _cantNormPais(value);
   if (field === 'industria') return _cantNormText(r.industria).includes(_cantNormText(value));
-  if (field === 'tier') return _cantNormTier(r.tier) === _cantNormTier(value);
+  if (field === 'tier') return _cGlobalTier(r) === (value === 'Descartado' ? value : _cantNormTier(value));
   if (field === 'tamano') return r.tamano === value;
   if (field === 'estado') return r.estado === value;
   if (field === 'cliente') return (_cGlobalCliente(r)) === value;
@@ -7707,7 +7705,6 @@ app.get('/api/cantera/global', requireAuth, async (req, res) => {
   const tiers = String(req.query.tier || '').split(',').filter(Boolean);
   const tiersExcl = String(req.query.tierExcl || '').split(',').filter(Boolean);
   const origen = req.query.origen === 'crm' || req.query.origen === 'borrador' ? req.query.origen : '';
-  const paso2 = String(req.query.paso2 || '').split(',').filter(Boolean);
   const importado = req.query.importado === 'si' || req.query.importado === 'no' ? req.query.importado : '';
   // Más criterios (pedido explícito 2026-09-25, con captura de Sales Navigator:
   // "hay tantos criterios que podrías considerar", "estatus, secuencias,
@@ -7805,7 +7802,6 @@ app.get('/api/cantera/global', requireAuth, async (req, res) => {
     const filtered = all.filter(r => {
       if (origen === 'crm' && r.origen !== 'crm') return false;
       if (origen === 'borrador' && r.origen === 'crm') return false;
-      if (paso2.length && !paso2.includes(_cGlobalPaso2(r))) return false;
       if (importado && (importado === 'si') !== !!r.importado) return false;
       if (paises.length && !paises.includes(_cantNormPais(r.pais))) return false;
       if (industrias.length && !industrias.some(i => _cantNormText(r.industria).includes(i))) return false;
@@ -7813,8 +7809,8 @@ app.get('/api/cantera/global', requireAuth, async (req, res) => {
       if (paisesExcl.length && paisesExcl.includes(_cantNormPais(r.pais))) return false;
       if (industriasExcl.length && industriasExcl.some(i => _cantNormText(r.industria).includes(i))) return false;
       if (tamanosExcl.length && tamanosExcl.includes(r.tamano)) return false;
-      if (tiers.length && !tiers.includes(_cantNormTier(r.tier))) return false;
-      if (tiersExcl.length && tiersExcl.includes(_cantNormTier(r.tier))) return false;
+      if (tiers.length && !tiers.includes(_cGlobalTier(r))) return false;
+      if (tiersExcl.length && tiersExcl.includes(_cGlobalTier(r))) return false;
       if (tipo && r.tipo !== tipo) return false;
       if (estados.length && !estados.includes(r.estado)) return false;
       if (estadosExcl.length && estadosExcl.includes(r.estado)) return false;
