@@ -4272,17 +4272,17 @@ async function _lmAddMembershipCall(uid, kind, ids, targetId) {
 // marcaba con 'respondio' (mismo valor que "Interesado"), así que aceptar una conexión
 // inflaba las respuestas/leads sin que la persona hubiera contestado nada todavía.
 const LM_DISP_LBL = {
-  aceptado: 'Aceptó en LinkedIn', respondio: 'Interesado', reunion: 'Reunión agendada', mas_adelante: 'Contactar más adelante',
+  aceptado: 'Aceptó en LinkedIn', respondio: 'Respondió (sin calificar)', interesado: 'Interesado', reunion: 'Reunión agendada', mas_adelante: 'Contactar más adelante',
   derivado: 'Derivó a otro contacto', no_es_persona: 'No es la persona — se agregó a otro',
   no_interesado: 'No interesado', no_califica: 'No califica (fuera de ICP)', no_contactar: 'No contactar (opt-out)',
 };
 // tipo 'aceptacion' es DISTINTO de 'respuesta' a propósito: así no se cuenta como
 // respuesta en /sequences/:id/metrics ni en la pestaña "Respuestas" del cliente.
-const LM_DISP_TIPO = { aceptado: 'aceptacion', respondio: 'respuesta', reunion: 'reunion', mas_adelante: 'respuesta', derivado: 'respuesta', no_es_persona: 'nota', no_interesado: 'respuesta', no_contactar: 'respuesta' };
+const LM_DISP_TIPO = { aceptado: 'aceptacion', respondio: 'respuesta', interesado: 'respuesta', reunion: 'reunion', mas_adelante: 'respuesta', derivado: 'respuesta', no_es_persona: 'nota', no_interesado: 'respuesta', no_contactar: 'respuesta' };
 // Etapa del pipeline por disposición. null = no mover (derivados y aceptado: aceptar
 // una conexión no es todavía una señal comercial, así que no adelanta la etapa).
 const LM_STAGE_BY_DISP = {
-  aceptado: null, respondio: 'respondio', reunion: 'respondio', mas_adelante: 'respondio',
+  aceptado: null, respondio: 'respondio', interesado: 'respondio', reunion: 'respondio', mas_adelante: 'respondio',
   derivado: null, no_es_persona: null,
   no_interesado: 'perdido', no_califica: 'perdido', no_contactar: 'perdido',
 };
@@ -4321,6 +4321,50 @@ app.post('/api/lm/step-outcome', requireAuth, async (req, res) => {
     `, [uid, contactId, stepId, resultado]);
     res.json(rows[0]);
   } catch (err) { console.error('[step-outcome] POST error:', err.message); res.status(500).json({ error: 'Error al guardar el resultado' }); }
+});
+// Conversación registrada a mano (llamada, reunión presencial, otro canal que el sistema no ve):
+// reinicia el seguimiento automático del Interesado (interesadoWatcher.js) y cierra su tarea pendiente.
+// Tipo 'conversacion' (no 'respuesta') para NO inflar las métricas de respuestas por email/LinkedIn.
+app.post('/api/lm/contacts/:id/touch', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId, cid = parseInt(req.params.id);
+  const canal = _lmS((req.body || {}).canal).slice(0, 30);
+  const nota = _lmS((req.body || {}).nota).slice(0, 500);
+  try {
+    const { rows: [k] } = await pool.query(`SELECT id, outbound_client_id FROM lm_contacts WHERE id=$1 AND user_id=$2`, [cid, uid]);
+    if (!k) return res.status(404).json({ error: 'Contacto no encontrado' });
+    await pool.query(
+      `INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, canal, nota, fecha, estado)
+       VALUES ($1,$2,$3,'conversacion',$4,$5,NOW(),'hecha')`,
+      [uid, cid, k.outbound_client_id, canal, nota || ('Conversación registrada manualmente' + (canal ? ' (' + canal + ')' : ''))]);
+    await pool.query(`UPDATE lm_contacts SET interesado_followups=0, interesado_last_followup_at=NULL, updated_at=NOW() WHERE id=$1`, [cid]);
+    await pool.query(`UPDATE activities SET estado='hecha' WHERE user_id=$1 AND contact_id=$2 AND tipo='seguimiento_inactivo' AND estado='pendiente'`, [uid, cid]);
+    res.json({ ok: true });
+  } catch (err) { console.error('[lm-touch]', err.message); res.status(500).json({ error: 'No se pudo registrar' }); }
+});
+// Lista "Por calificar": lo último que escribió cada contacto en 'Respondió' (sin calificar) + cuántas veces respondió.
+app.get('/api/lm/por-calificar', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT k.id AS contact_id, m.cuerpo AS email_body, m.received_at, m.n,
+             a.nota AS act_nota, a.fecha AS act_fecha, a.canal AS act_canal
+        FROM lm_contacts k
+        LEFT JOIN LATERAL (SELECT cuerpo, received_at, COUNT(*) OVER () AS n FROM lm_inbox_messages
+                            WHERE contact_id=k.id AND tipo='reply' ORDER BY received_at DESC NULLS LAST LIMIT 1) m ON true
+        LEFT JOIN LATERAL (SELECT nota, fecha, canal FROM activities
+                            WHERE contact_id=k.id AND tipo='respuesta' ORDER BY fecha DESC LIMIT 1) a ON true
+       WHERE k.user_id=$1 AND k.disposition='respondio'
+         AND k.deal_valor IS NULL AND k.deal_cierre IS NULL AND COALESCE(k.estado,'') NOT IN ('propuesta','negociacion','ganado','perdido')`, [req.workspaceOwnerId]);
+    const clean = t => String(t || '').split(/\r?\n/).filter(l => !/^\s*>/.test(l)).join(' ')
+      .split(/\s(?:El .{5,60} escribi|On .{5,60} wrote)/)[0].replace(/\s+/g, ' ').trim().slice(0, 240);
+    const out = {};
+    for (const r of rows) {
+      out[r.contact_id] = {
+        snippet: clean(r.email_body) || clean(r.act_nota), canal: r.email_body ? 'email' : (r.act_canal || ''),
+        fecha: r.received_at || r.act_fecha || null, n: r.n ? parseInt(r.n) : (r.act_fecha ? 1 : 0),
+      };
+    }
+    res.json(out);
+  } catch (err) { console.error('[lm-por-calificar]', err.message); res.status(500).json({ error: 'Error al cargar' }); }
 });
 app.post('/api/lm/contacts/:id/disposition', requireAuth, async (req, res) => {
   const uid = req.workspaceOwnerId, cid = req.params.id;
@@ -4413,7 +4457,7 @@ app.post('/api/lm/contacts/:id/disposition', requireAuth, async (req, res) => {
     }
 
     // ── RESPONDIO (real o marcado a mano): pausar siempre + crear tarea de revisión ──
-    if (disp === 'respondio') {
+    if (disp === 'respondio' || disp === 'interesado') {
       // 1. Pausar TODOS los enrolamientos activos con paused_reason claro.
       const rp = seqId
         ? await pool.query(`UPDATE lm_contact_sequences SET estado='pausado', paused_reason='reply_received' WHERE user_id=$1 AND contact_id=$2 AND sequence_id=$3 AND estado='activo'`, [uid, cid, seqId])
@@ -4426,11 +4470,16 @@ app.post('/api/lm/contacts/:id/disposition', requireAuth, async (req, res) => {
           [uid, cid, obcId, `Secuencia pausada (${paused}) — motivo: respuesta recibida. Requiere decisión humana para reanudar.`]
         ).catch(() => {});
       }
-      // 2. Crear UNA tarea de revisión (idempotente).
-      const { rows: existing } = await pool.query(
+      // 2. Crear UNA tarea de revisión (idempotente). Si ya lo calificaste a mano como Interesado,
+      //    no hay nada que revisar: se cierra la pendiente y no se crea otra.
+      const { rows: existing } = disp === 'interesado' ? { rows: [] } : await pool.query(
         `SELECT id FROM activities WHERE user_id=$1 AND contact_id=$2 AND tipo='revisar_respuesta' AND estado='pendiente' LIMIT 1`,
         [uid, cid]);
-      if (existing.length) {
+      if (disp === 'interesado') {
+        await pool.query(
+          `UPDATE activities SET estado='hecha' WHERE user_id=$1 AND contact_id=$2 AND tipo='revisar_respuesta' AND estado='pendiente'`,
+          [uid, cid]).catch(() => {});
+      } else if (existing.length) {
         review_task_id = existing[0].id;
       } else {
         const ins = await pool.query(
@@ -4459,10 +4508,19 @@ app.post('/api/lm/contacts/:id/disposition', requireAuth, async (req, res) => {
         [uid, cid]).catch(() => {});
     }
 
+    // Una reunión agendada ya es intención comercial clara: se sella la fecha para que entre a Deals (columna "Reunión").
+    if (disp === 'reunion') {
+      await pool.query(`UPDATE lm_contacts SET reunion_agendada_at=COALESCE(reunion_agendada_at, NOW()) WHERE id=$1 AND user_id=$2`, [cid, uid]);
+    }
+    // Entrar a 'interesado' reinicia el seguimiento automático (interesadoWatcher.js).
+    if (disp === 'interesado') {
+      await pool.query(`UPDATE lm_contacts SET interesado_followups=0, interesado_last_followup_at=NULL WHERE id=$1 AND user_id=$2`, [cid, uid]);
+    }
+
     // "Más adelante": guarda cuándo hay que retomarlo (nurturing).
     if (disp === 'mas_adelante') {
-      await pool.query(`UPDATE lm_contacts SET nurture_at=$1 WHERE id=$2 AND user_id=$3`,
-        [_sanDate((req.body || {}).nurture_at), cid, uid]);
+      await pool.query(`UPDATE lm_contacts SET nurture_at=$1, nurture_motivo=$4 WHERE id=$2 AND user_id=$3`,
+        [_sanDate((req.body || {}).nurture_at), cid, uid, _lmS((req.body || {}).nurture_motivo).slice(0, 60)]);
     }
 
     // Actividad tipada por disposition (respuesta/reunion/aceptacion/nota) — SOLO
@@ -4592,7 +4650,7 @@ app.get('/api/lm/tasks/inbox', requireAuth, async (req, res) => {
         FROM lm_messages m
         JOIN lm_contacts k ON k.id=m.contact_id
         JOIN sequences s ON s.id=m.sequence_id
-       WHERE m.user_id=$1 AND m.estado='awaiting'
+       WHERE m.user_id=$1 AND m.estado='awaiting' AND s.estado='activa'
          AND (m.scheduled_at IS NULL OR m.scheduled_at <= NOW() + interval '3 days')
        ORDER BY m.scheduled_at ASC NULLS FIRST`, [uid]);
 
@@ -4772,14 +4830,30 @@ app.patch('/api/lm/contacts/:id/deal', requireAuth, async (req, res) => {
   const prob = Number.isFinite(probN) ? Math.max(0, Math.min(100, probN)) : null;
   const moneda = ['USD', 'PEN', 'EUR'].includes(b.moneda) ? b.moneda : 'USD';
   const cierre = b.cierre ? String(b.cierre).slice(0, 10) : null;
+  const motivoPerdida = b.motivo_perdida == null ? null : _lmS(b.motivo_perdida).slice(0, 60);
   if (valor != null && (!isFinite(valor) || valor < 0)) return res.status(400).json({ error: 'Valor inválido' });
   try {
     const { rows } = await pool.query(
       `UPDATE lm_contacts SET deal_valor=$1, deal_moneda=$2, deal_prob=$3, deal_cierre=$4, updated_at=NOW(),
+         deal_motivo_perdida=COALESCE($7, deal_motivo_perdida),
          reunion_agendada_at=CASE WHEN $4::date IS NOT NULL AND reunion_agendada_at IS NULL THEN NOW() ELSE reunion_agendada_at END
-       WHERE id=$5 AND user_id=$6 RETURNING id, deal_valor, deal_moneda, deal_prob, deal_cierre`,
-      [valor, moneda, prob, cierre, req.params.id, req.workspaceOwnerId]);
+       WHERE id=$5 AND user_id=$6 RETURNING id, deal_valor, deal_moneda, deal_prob, deal_cierre, deal_motivo_perdida`,
+      [valor, moneda, prob, cierre, req.params.id, req.workspaceOwnerId, motivoPerdida]);
     if (!rows.length) return res.status(404).json({ error: 'Contacto no encontrado' });
+    // Un deal implica conversación real: si seguía en "Respondió" (o sin estado) pasa a "Interesado",
+    // así no queda en la lista "Por calificar" mientras ya está en Deals (reportado 2026-10-03).
+    if (valor != null || cierre) {
+      const up = await pool.query(
+        `UPDATE lm_contacts SET disposition='interesado', updated_at=NOW()
+          WHERE id=$1 AND user_id=$2 AND COALESCE(disposition,'') IN ('','respondio') RETURNING outbound_client_id`,
+        [req.params.id, req.workspaceOwnerId]);
+      if (up.rowCount) {
+        await pool.query(
+          `INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, nota, fecha, estado)
+           VALUES ($1,$2,$3,'respuesta','Disposición: Interesado — pasó a Deals',NOW(),'hecha')`,
+          [req.workspaceOwnerId, req.params.id, up.rows[0].outbound_client_id || null]);
+      }
+    }
     res.json(rows[0]);
   } catch (err) { console.error('[lm-deal]', err.message); res.status(500).json({ error: 'Error al guardar el deal' }); }
 });
@@ -4879,7 +4953,7 @@ app.get('/api/lm/sequences/:id/contacts', requireAuth, async (req, res) => {
     // Reunión, Más adelante, No interesado, No califica, No contactar). Sin eso, real_disposition
     // queda null y la empresa sigue contando como "sin respuesta real" aunque el original tenga
     // disposition='derivado' — así no se pierde de la lista de seguimiento de la semana.
-    const TERMINAL = "('respondio','reunion','mas_adelante','no_interesado','no_califica','no_contactar')";
+    const TERMINAL = "('respondio','interesado','reunion','mas_adelante','no_interesado','no_califica','no_contactar')";
     const { rows } = await pool.query(`
       SELECT cs.contact_id, cs.paso, cs.estado, COALESCE((cs.start_date + TIME '12:00')::timestamptz, cs.created_at) AS enrolled_at, cs.paso_date::text AS paso_date,
         k.nombre, k.apellido, k.email, k.cargo, k.company_id, k.region, k.pais, k.disposition, co.nombre AS company_nombre,
@@ -4889,13 +4963,15 @@ app.get('/api/lm/sequences/:id/contacts', requireAuth, async (req, res) => {
              WHEN c3.disposition IN ${TERMINAL} THEN c3.disposition
              ELSE NULL END AS real_disposition,
         (c1.id IS NOT NULL) AS derivado,
-        COALESCE(c3.id, c2.id, c1.id, k.id) AS chain_end_id
+        COALESCE(c3.id, c2.id, c1.id, k.id) AS chain_end_id,
+        ce.nombre AS end_nombre, ce.apellido AS end_apellido, ce.cargo AS end_cargo, ce.email AS end_email, ce.disposition AS end_disposition
       FROM lm_contact_sequences cs
       JOIN lm_contacts k ON k.id = cs.contact_id
       LEFT JOIN lm_companies co ON co.id = k.company_id
       LEFT JOIN lm_contacts c1 ON c1.id = k.derivado_a
       LEFT JOIN lm_contacts c2 ON c2.id = c1.derivado_a
       LEFT JOIN lm_contacts c3 ON c3.id = c2.derivado_a
+      LEFT JOIN lm_contacts ce ON ce.id = COALESCE(c3.id, c2.id, c1.id, k.id)
       WHERE cs.user_id=$1 AND cs.sequence_id=$2
       ORDER BY cs.created_at DESC
     `, [req.workspaceOwnerId, req.params.id]);
@@ -5583,10 +5659,10 @@ app.get('/api/lm/nav-counts', requireAuth, async (req, res) => {
                    WHERE user_id=$1 AND NOT leido AND tipo='reply'`, [uid]),
       pool.query(`SELECT COUNT(*)::int n FROM activities
                    WHERE user_id=$1 AND estado='pendiente' AND fecha::date <= CURRENT_DATE`, [uid]),
-      pool.query(`SELECT COUNT(*)::int n FROM lm_messages
-                   WHERE user_id=$1 AND estado='awaiting'`, [uid]),
+      pool.query(`SELECT COUNT(*)::int n FROM lm_messages m JOIN sequences sq ON sq.id=m.sequence_id
+                   WHERE m.user_id=$1 AND m.estado='awaiting' AND sq.estado='activa'`, [uid]),
       pool.query(`SELECT COUNT(*)::int n FROM lm_contacts
-                   WHERE user_id=$1 AND disposition IN ('respondio','reunion')`, [uid]),
+                   WHERE user_id=$1 AND disposition IN ('respondio','interesado','reunion')`, [uid]),
       // El total de "sin leer" del WhatsApp de Outreach — antes la insignia del nav
       // solo se llenaba DESPUÉS de haber abierto esa pestaña una vez (dependía de
       // _waList cargado en el cliente); ahora viene del servidor como las demás
@@ -5951,7 +6027,7 @@ app.get('/api/lm/approvals', requireAuth, async (req, res) => {
         JOIN sequences s ON s.id = m.sequence_id
         JOIN lm_contacts k ON k.id = m.contact_id
         LEFT JOIN lm_companies co ON co.id = k.company_id
-       WHERE m.user_id=$1 AND m.estado='awaiting'
+       WHERE m.user_id=$1 AND m.estado='awaiting' AND s.estado='activa'
        ORDER BY m.scheduled_at ASC NULLS FIRST, m.created_at ASC
        LIMIT 100
     `, [req.workspaceOwnerId]);
@@ -6599,6 +6675,20 @@ app.post('/api/lm/ai/comment', requireAuth, async (req, res) => {
     res.status(400).json({ error: err.message || 'No se pudo generar el comentario' });
   }
 });
+// Enriquecimiento de empresa por IA: dado un nombre o URL, busca en internet
+// (web_search) y devuelve industria/tamaño/ubicación/etc. para autocompletar
+// el formulario de "Nueva empresa" — no guarda nada, solo sugiere.
+app.post('/api/lm/ai/enrich-company', requireAuth, async (req, res) => {
+  const q = String((req.body || {}).query || '').trim();
+  if (!q) return res.status(400).json({ error: 'Falta nombre o URL de la empresa' });
+  try {
+    const { enrichCompany } = require('./services/aiPersonalizeService');
+    res.json(await enrichCompany(q));
+  } catch (err) {
+    console.error('[lm-ai-enrich-company]', err.message);
+    res.status(400).json({ error: err.message || 'No se pudo buscar la empresa' });
+  }
+});
 // Registrar en el historial del contacto el comentario que Jenny copió.
 // Idempotente por contacto+día: regenerar y volver a copiar actualiza la misma fila.
 app.post('/api/lm/ai/comment/log', requireAuth, async (req, res) => {
@@ -6900,11 +6990,12 @@ app.put('/api/cantera/batches/:id', requireAuth, async (req, res) => {
     const { rows } = await pool.query(`
       UPDATE cantera_batches SET
         nombre=$1, outbound_client_id=$2, campaign_id=$3, sequence_id=$10,
-        filtros=$4::jsonb, icp=$5, tiers=$6::jsonb, puestos=$7::jsonb, motor_ia=$11, updated_at=NOW()
+        filtros=$4::jsonb, icp=$5, tiers=$6::jsonb, puestos=$7::jsonb, motor_ia=$11,
+        tiers_calificantes=$12::jsonb, updated_at=NOW()
       WHERE id=$8 AND user_id=$9 AND estado='borrador' RETURNING *
     `, [_lmS(b.nombre), b.outbound_client_id || null, b.campaign_id || null,
         JSON.stringify(b.filtros || {}), _lmS(b.icp), JSON.stringify(b.tiers || []), JSON.stringify(b.puestos || {}),
-        req.params.id, req.workspaceOwnerId, b.sequence_id || null, motorIa]);
+        req.params.id, req.workspaceOwnerId, b.sequence_id || null, motorIa, JSON.stringify(b.tiers_calificantes || [])]);
     if (!rows.length) return res.status(404).json({ error: 'Borrador no encontrado (o ya fue movido al CRM)' });
     res.json(rows[0]);
   } catch (err) { console.error('[cantera] PUT batch', err.message); res.status(500).json({ error: 'Error al guardar el criterio' }); }
@@ -6933,7 +7024,7 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
   const batchId = req.params.id;
   if (!req.file) return res.status(400).json({ error: 'No se subió ningún archivo.' });
   if (_canteraImportJobs.get(batchId)?.running) return res.status(409).json({ error: 'Ya hay una importación en curso para este borrador' });
-  const chk = await pool.query(`SELECT id FROM cantera_batches WHERE id=$1 AND user_id=$2 AND estado='borrador'`, [batchId, uid]);
+  const chk = await pool.query(`SELECT id, icp, tiers FROM cantera_batches WHERE id=$1 AND user_id=$2 AND estado='borrador'`, [batchId, uid]);
   if (!chk.rows.length) return res.status(404).json({ error: 'Borrador no encontrado (o ya fue movido al CRM)' });
   const hasHeader = req.body?.hasHeader !== '0' && req.body?.hasHeader !== 'false';
   let mapping = {};
@@ -7034,7 +7125,7 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
 
   const summary = { rows: 0, companiesCreated: 0, companiesMatched: 0, contactsCreated: 0, contactsSkipped: 0, companiesDeleted, mode: importMode, errors: [] };
   const coCache = new Map();
-  const contactCachePreloaded = new Set();
+  const contactCachePreloaded = new Map();
   if (importMode === 'actualizar') {
     // Precarga la identidad de lo que YA existe en este borrador, para que la misma
     // lógica de cruce (dominio/LinkedIn/nombre para empresas, LinkedIn/email para
@@ -7049,13 +7140,51 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
       if (e.linkedin) coCache.set('l:' + e.linkedin.toLowerCase(), e.id);
       if (e.nombre) coCache.set('n:' + e.nombre.toLowerCase(), e.id);
     }
-    const { rows: existingCts } = await pool.query(`SELECT linkedin, email FROM cantera_contacts WHERE batch_id=$1 AND user_id=$2`, [batchId, uid]);
+    const { rows: existingCts } = await pool.query(`SELECT id, linkedin, email FROM cantera_contacts WHERE batch_id=$1 AND user_id=$2`, [batchId, uid]);
     for (const e of existingCts) {
       const k = (e.linkedin || '').toLowerCase() || (e.email || '').toLowerCase();
-      if (k) contactCachePreloaded.add(k);
+      if (k) contactCachePreloaded.set(k, e.id);
     }
     } catch (e) { console.error('[cantera] import preload', e.message); }
   }
+  // Heredar clasificación (Tier/paso1/paso2) de OTROS borradores del mismo
+  // usuario, para no re-investigar una empresa ya calificada antes -- pedido
+  // explícito 2026-09-30: "quiero que el sistema reconozca la clasificación
+  // de la empresa si ya existe... para evitar investigar empresas
+  // nuevamente". Aclarado por Jenny: NO alcanza con que sea el mismo cliente
+  // — el borrador origen debe tener el MISMO ICP y los MISMOS Tiers (criterio
+  // de calificación idéntico), porque un "Tier A" significa algo distinto si
+  // el ICP cambia. Se compara por igualdad exacta de icp + claves/nombres de
+  // tiers (mismo criterio = mismo texto, típicamente ambos vienen de la misma
+  // "plantilla" guardada en Criterios guardados).
+  const inheritCache = new Map();
+  summary.companiesInherited = 0;
+  try {
+    const current = chk.rows[0];
+    const canon = (icp, tiers) => `${String(icp || '').trim()}|${(tiers || []).map(t => `${t.clave}:${t.nombre || ''}`).sort().join(',')}`;
+    const currentKey = canon(current.icp, current.tiers);
+    if (currentKey !== '|') { // sin ICP ni Tiers definidos en este borrador, no hay nada que comparar
+      const { rows: otherBatches } = await pool.query(
+        `SELECT id, icp, tiers FROM cantera_batches WHERE user_id=$1 AND id<>$2`, [uid, batchId]);
+      const compatibleIds = otherBatches.filter(b => canon(b.icp, b.tiers) === currentKey).map(b => b.id);
+      if (compatibleIds.length) {
+        // Más reciente gana: ASC + Map.set sobrescribe, así que la última fila
+        // procesada (la más nueva) queda como clasificación vigente por clave.
+        const { rows: classified } = await pool.query(`
+          SELECT dominio, linkedin, nombre, tier_clave, paso1_estado, paso1_motivo, paso2_estado, confianza, evidencia, motivo_descarte
+            FROM cantera_companies
+           WHERE user_id=$1 AND batch_id = ANY($2::int[])
+             AND (tier_clave <> '' OR paso1_estado <> 'pendiente' OR paso2_estado <> 'pendiente')
+           ORDER BY id ASC`, [uid, compatibleIds]);
+        for (const c of classified) {
+          const val = { tier_clave: c.tier_clave, paso1_estado: c.paso1_estado, paso1_motivo: c.paso1_motivo, paso2_estado: c.paso2_estado, confianza: c.confianza, evidencia: c.evidencia, motivo_descarte: c.motivo_descarte };
+          if (c.dominio) inheritCache.set('d:' + c.dominio, val);
+          if (c.linkedin) inheritCache.set('l:' + c.linkedin.toLowerCase(), val);
+          if (c.nombre) inheritCache.set('n:' + c.nombre.toLowerCase(), val);
+        }
+      }
+    }
+  } catch (e) { console.error('[cantera] import inherit preload', e.message); }
   // "Company Location" del export de Sales Nav viene como "Ciudad, Región, País" en
   // un solo texto — si no hay co_pais explícito, se infiere del último segmento sin
   // reescribir el campo crudo (co_ubicacion se guarda tal cual, para no perder nada).
@@ -7115,19 +7244,29 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
     }
 
     const pais = _lmCleanUrlish(f.co_pais) || _lastLocSegment(f.co_ubicacion);
+    // Empresa nueva en ESTE borrador -- si ya fue clasificada antes en otro
+    // borrador con el MISMO ICP+Tiers (ver inheritCache arriba), hereda esa
+    // clasificación en vez de arrancar en Pendiente, para no reinvestigarla.
+    let inh = null;
+    for (const k of keys) { if (inheritCache.has(k)) { inh = inheritCache.get(k); break; } }
     const ins = await pool.query(`
-      INSERT INTO cantera_companies (batch_id,user_id,nombre,dominio,website,industria,tamano,pais,ciudad,linkedin,ubicacion,import_id)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id
-    `, [batchId, uid, nombre || dominio, dominio, _lmCleanUrlish(f.co_website), _lmCleanUrlish(f.co_industria), _lmCleanUrlish(f.co_tamano), pais, _lmCleanUrlish(f.co_ciudad), _lmCleanUrlish(f.co_linkedin), _lmS(f.co_ubicacion), importId]);
+      INSERT INTO cantera_companies (batch_id,user_id,nombre,dominio,website,industria,tamano,pais,ciudad,linkedin,ubicacion,import_id,
+        tier_clave,paso1_estado,paso1_motivo,paso2_estado,confianza,evidencia,motivo_descarte)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING id
+    `, [batchId, uid, nombre || dominio, dominio, _lmCleanUrlish(f.co_website), _lmCleanUrlish(f.co_industria), _lmCleanUrlish(f.co_tamano), pais, _lmCleanUrlish(f.co_ciudad), _lmCleanUrlish(f.co_linkedin), _lmS(f.co_ubicacion), importId,
+        inh ? inh.tier_clave : '', inh ? inh.paso1_estado : 'pendiente', inh ? (inh.paso1_motivo || '') : '', inh ? inh.paso2_estado : 'pendiente', inh ? inh.confianza : '', JSON.stringify(inh ? (inh.evidencia || []) : []), inh ? (inh.motivo_descarte || '') : '']);
     keys.forEach(k => coCache.set(k, ins.rows[0].id));
-    summary.companiesCreated++; return ins.rows[0].id;
+    summary.companiesCreated++;
+    if (inh) summary.companiesInherited++;
+    return ins.rows[0].id;
   }
 
   // Exports reales suelen traer al mismo lead repetido varias veces (mismo nombre,
   // cargo y empresa, fila por fila idéntica) — sin esto cada repetición se importaba
   // como un contacto nuevo, inflando el conteo de contactos por empresa. Se identifica
   // a la persona por su LinkedIn (o email si no hay LinkedIn) y solo se crea una vez.
-  const contactCache = new Set(contactCachePreloaded);
+  const contactCache = new Map(contactCachePreloaded);
+  summary.contactsUpdated = 0;
   for (const row of dataRows) {
     if (!Array.isArray(row) || row.every(c => !_lmS(c))) continue;
     summary.rows++;
@@ -7139,24 +7278,43 @@ app.post('/api/cantera/batches/:id/import', requireAuth, upload.single('file'), 
       else if (!ignored.has(idx) && val) { raw[headerRow[idx] || `Columna ${idx + 1}`] = val; }
     }
     try {
-      const contactKey = _lmCleanUrlish(f.linkedin).toLowerCase() || _lmCleanUrlish(f.email).toLowerCase();
-      if (contactKey) {
-        if (contactCache.has(contactKey)) { summary.contactsSkipped++; continue; }
-        contactCache.add(contactKey);
-      }
+      // Empresa primero, SIEMPRE (aunque el contacto resulte duplicado) -- pedido
+      // explícito 2026-09-30: "si el contacto y la empresa ya existe, solo se
+      // actualizan los datos que tenga de más". Antes, un contacto duplicado
+      // se saltaba ANTES de tocar la empresa, perdiendo la chance de completar
+      // campos vacíos de la empresa con esta fila.
       const companyId = await _co(f);
+      const contactKey = _lmCleanUrlish(f.linkedin).toLowerCase() || _lmCleanUrlish(f.email).toLowerCase();
       let nombre = _lmS(f.nombre), apellido = _lmS(f.apellido);
       if (!nombre && !apellido && _lmS(f.nombre_completo)) {
         const parts = _lmS(f.nombre_completo).split(/\s+/);
         nombre = parts.shift() || ''; apellido = parts.join(' ');
       }
-      await pool.query(`
+      if (contactKey && contactCache.has(contactKey)) {
+        // Contacto ya existente (mismo LinkedIn/email) -- se completan solo los
+        // campos que estén vacíos, igual que ya hace la empresa, en vez de
+        // ignorar la fila entera.
+        const existingId = contactCache.get(contactKey);
+        await pool.query(`
+          UPDATE cantera_contacts SET
+            nombre = CASE WHEN nombre='' THEN $1 ELSE nombre END,
+            apellido = CASE WHEN apellido='' THEN $2 ELSE apellido END,
+            cargo = CASE WHEN cargo='' THEN $3 ELSE cargo END,
+            email = CASE WHEN email='' THEN $4 ELSE email END,
+            linkedin = CASE WHEN linkedin='' THEN $5 ELSE linkedin END,
+            ubicacion = CASE WHEN ubicacion='' THEN $6 ELSE ubicacion END
+          WHERE id=$7`, [nombre, apellido, _lmCleanUrlish(f.cargo), _lmCleanUrlish(f.email).toLowerCase(), _lmCleanUrlish(f.linkedin), _lmCleanUrlish(f.ubicacion), existingId]);
+        summary.contactsUpdated++;
+        continue;
+      }
+      const ctIns = await pool.query(`
         INSERT INTO cantera_contacts (batch_id,company_id,user_id,nombre,apellido,cargo,email,linkedin,raw,
           ubicacion,conexion_grado,premium,antiguedad_cargo,conexiones_mutuas,cambio_reciente,publico_reciente,sigue_empresa,import_id)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING id
       `, [batchId, companyId, uid, nombre, apellido, _lmCleanUrlish(f.cargo), _lmCleanUrlish(f.email).toLowerCase(), _lmCleanUrlish(f.linkedin), JSON.stringify(raw),
           _lmCleanUrlish(f.ubicacion), _lmS(f.conexion_grado), _lmS(f.premium), _lmCleanUrlish(f.antiguedad_cargo), _lmCleanUrlish(f.conexiones_mutuas),
           _lmS(f.cambio_reciente), _lmS(f.publico_reciente), _lmS(f.sigue_empresa), importId]);
+      if (contactKey) contactCache.set(contactKey, ctIns.rows[0].id);
       summary.contactsCreated++;
     } catch (e) { if (summary.errors.length < 10) summary.errors.push(`Fila ${summary.rows}: ${e.message}`); }
     job.done = summary.rows;
@@ -7418,6 +7576,11 @@ app.get('/api/cantera/opciones-filtro', requireAuth, async (req, res) => {
       estado: ['nuevo', 'contactado', 'respondio', 'propuesta', 'negociacion', 'ganado', 'perdido'],
       cliente: clienteRows.map(r => r.nombre).filter(Boolean),
       ciudad: ciudadRows.map(r => r.ciudad).filter(Boolean),
+      // Validación profunda -- pedido explícito: "que en borrador en cantera
+      // y en base global exista la opcion de filtro de validacion profunda".
+      // Mismos codigos que paso2_estado (igual que 'estado' arriba, sin
+      // traducir -- convención ya usada en este mismo endpoint).
+      paso2: ['aprobado', 'validacion_manual', 'pendiente', 'descartado', 'descartado_manual', 'error'],
     });
   } catch (err) {
     console.error('[cantera] opciones-filtro', err.message);
@@ -7485,7 +7648,7 @@ app.get('/api/cantera/companies/:id', requireAuth, async (req, res) => {
   } catch (err) { console.error('[cantera] GET company', err.message); res.status(500).json({ error: 'Error al cargar la empresa' }); }
 });
 // ── Base Global: fetch crudo compartido entre /global y /global/facets ──────
-async function _cGlobalFetchAll(uid, q, tipo) {
+async function _cGlobalFetchAllRaw(uid, q, tipo) {
   const { rows: all } = tipo === 'empresa' ? await pool.query(`
     SELECT '' AS nombre, '' AS apellido, '' AS cargo, '' AS email,
            lco.nombre AS empresa, lco.dominio, lco.pais, lco.industria, lco.tamano, 'crm' AS origen,
@@ -7493,15 +7656,15 @@ async function _cGlobalFetchAll(uid, q, tipo) {
            lco.updated_at, '' AS estado, 'empresa' AS tipo,
            (SELECT string_agg(DISTINCT s.nombre, ', ') FROM lm_contacts k JOIN lm_contact_sequences csq ON csq.contact_id = k.id JOIN sequences s ON s.id = csq.sequence_id WHERE k.company_id = lco.id) AS secuencias,
            '' AS seniority, '' AS departamento, lco.ciudad AS ciudad, lco.target_tier AS tier,
-           cx.paso1_estado AS paso1_estado, cx.paso2_estado AS paso2_estado, cx.id AS company_id, cx.batch_id AS batch_id
+           cx.paso1_estado AS paso1_estado, cx.paso2_estado AS paso2_estado, cx.id AS company_id, cx.batch_id AS batch_id, lco.id AS lm_company_id
       FROM lm_companies lco
       LEFT JOIN LATERAL (SELECT c2.id, c2.batch_id, c2.paso1_estado, c2.paso2_estado FROM cantera_companies c2
         WHERE c2.user_id = lco.user_id AND lco.dominio <> '' AND lower(c2.dominio) = lower(lco.dominio) ORDER BY c2.id DESC LIMIT 1) cx ON true
      WHERE lco.user_id=$1 AND ($2 = '%%' OR lco.nombre ILIKE $2 OR lco.dominio ILIKE $2)
     UNION ALL
     SELECT '', '', '', '', cco.nombre AS empresa, cco.dominio, cco.pais, cco.industria, cco.tamano,
-           'borrador_' || cb.estado AS origen, cb.nombre AS referencia, cco.created_at AS updated_at,
-           '' AS estado, 'empresa' AS tipo, '' AS secuencias, '' AS seniority, '' AS departamento, '' AS ciudad, cco.tier_clave AS tier, cco.paso1_estado AS paso1_estado, cco.paso2_estado AS paso2_estado, cco.id AS company_id, cco.batch_id AS batch_id
+           'borrador_' || cb.estado AS origen, (SELECT oc3.nombre FROM outbound_clients oc3 WHERE oc3.id = cb.outbound_client_id) AS referencia, cco.created_at AS updated_at,
+           '' AS estado, 'empresa' AS tipo, '' AS secuencias, '' AS seniority, '' AS departamento, '' AS ciudad, cco.tier_clave AS tier, cco.paso1_estado AS paso1_estado, cco.paso2_estado AS paso2_estado, cco.id AS company_id, cco.batch_id AS batch_id, NULL::int AS lm_company_id
       FROM cantera_companies cco JOIN cantera_batches cb ON cb.id = cco.batch_id
      WHERE cco.user_id=$1 AND ($2 = '%%' OR cco.nombre ILIKE $2 OR cco.dominio ILIKE $2)
      ORDER BY updated_at DESC LIMIT 20000
@@ -7513,7 +7676,7 @@ async function _cGlobalFetchAll(uid, q, tipo) {
            lc.updated_at, lc.estado AS estado, 'contacto' AS tipo,
            (SELECT string_agg(DISTINCT s.nombre, ', ') FROM lm_contact_sequences csq JOIN sequences s ON s.id = csq.sequence_id WHERE csq.contact_id = lc.id) AS secuencias,
            lc.seniority AS seniority, lc.departamento AS departamento, lc.ciudad AS ciudad, co.target_tier AS tier,
-           cx.paso1_estado AS paso1_estado, cx.paso2_estado AS paso2_estado, cx.id AS company_id, cx.batch_id AS batch_id
+           cx.paso1_estado AS paso1_estado, cx.paso2_estado AS paso2_estado, cx.id AS company_id, cx.batch_id AS batch_id, co.id AS lm_company_id
       FROM lm_contacts lc LEFT JOIN lm_companies co ON co.id = lc.company_id
       LEFT JOIN LATERAL (SELECT c2.id, c2.batch_id, c2.paso1_estado, c2.paso2_estado FROM cantera_companies c2
         WHERE c2.user_id = lc.user_id AND co.dominio IS NOT NULL AND co.dominio <> '' AND lower(c2.dominio) = lower(co.dominio) ORDER BY c2.id DESC LIMIT 1) cx ON true
@@ -7521,8 +7684,8 @@ async function _cGlobalFetchAll(uid, q, tipo) {
     UNION ALL
     SELECT cc.nombre, cc.apellido, cc.cargo, cc.email,
            cco.nombre AS empresa, cco.dominio, cco.pais, cco.industria, cco.tamano,
-           'borrador_' || cb.estado AS origen, cb.nombre AS referencia, cc.created_at AS updated_at,
-           '' AS estado, 'contacto' AS tipo, '' AS secuencias, '' AS seniority, '' AS departamento, '' AS ciudad, cco.tier_clave AS tier, cco.paso1_estado AS paso1_estado, cco.paso2_estado AS paso2_estado, cco.id AS company_id, cco.batch_id AS batch_id
+           'borrador_' || cb.estado AS origen, (SELECT oc3.nombre FROM outbound_clients oc3 WHERE oc3.id = cb.outbound_client_id) AS referencia, cc.created_at AS updated_at,
+           '' AS estado, 'contacto' AS tipo, '' AS secuencias, '' AS seniority, '' AS departamento, '' AS ciudad, cco.tier_clave AS tier, cco.paso1_estado AS paso1_estado, cco.paso2_estado AS paso2_estado, cco.id AS company_id, cco.batch_id AS batch_id, NULL::int AS lm_company_id
       FROM cantera_contacts cc
       JOIN cantera_companies cco ON cco.id = cc.company_id
       JOIN cantera_batches cb ON cb.id = cc.batch_id
@@ -7531,7 +7694,7 @@ async function _cGlobalFetchAll(uid, q, tipo) {
     SELECT '', '', '', '', lco.nombre AS empresa, lco.dominio, lco.pais, lco.industria, lco.tamano, 'crm' AS origen,
            (SELECT nombre FROM outbound_clients oc WHERE oc.id = lco.outbound_client_id) AS referencia, lco.updated_at,
            '' AS estado, 'empresa' AS tipo, '' AS secuencias, '' AS seniority, '' AS departamento, lco.ciudad AS ciudad, lco.target_tier AS tier,
-           cx.paso1_estado AS paso1_estado, cx.paso2_estado AS paso2_estado, cx.id AS company_id, cx.batch_id AS batch_id
+           cx.paso1_estado AS paso1_estado, cx.paso2_estado AS paso2_estado, cx.id AS company_id, cx.batch_id AS batch_id, lco.id AS lm_company_id
       FROM lm_companies lco
       LEFT JOIN LATERAL (SELECT c2.id, c2.batch_id, c2.paso1_estado, c2.paso2_estado FROM cantera_companies c2
         WHERE c2.user_id = lco.user_id AND lco.dominio <> '' AND lower(c2.dominio) = lower(lco.dominio) ORDER BY c2.id DESC LIMIT 1) cx ON true
@@ -7539,14 +7702,35 @@ async function _cGlobalFetchAll(uid, q, tipo) {
        AND ($2 = '%%' OR lco.nombre ILIKE $2 OR lco.dominio ILIKE $2)
     UNION ALL
     SELECT '', '', '', '', cco2.nombre AS empresa, cco2.dominio, cco2.pais, cco2.industria, cco2.tamano,
-           'borrador_' || cb2.estado AS origen, cb2.nombre AS referencia, cco2.created_at AS updated_at,
-           '' AS estado, 'empresa' AS tipo, '' AS secuencias, '' AS seniority, '' AS departamento, '' AS ciudad, cco2.tier_clave AS tier, cco2.paso1_estado AS paso1_estado, cco2.paso2_estado AS paso2_estado, cco2.id AS company_id, cco2.batch_id AS batch_id
+           'borrador_' || cb2.estado AS origen, (SELECT oc3.nombre FROM outbound_clients oc3 WHERE oc3.id = cb2.outbound_client_id) AS referencia, cco2.created_at AS updated_at,
+           '' AS estado, 'empresa' AS tipo, '' AS secuencias, '' AS seniority, '' AS departamento, '' AS ciudad, cco2.tier_clave AS tier, cco2.paso1_estado AS paso1_estado, cco2.paso2_estado AS paso2_estado, cco2.id AS company_id, cco2.batch_id AS batch_id, NULL::int AS lm_company_id
       FROM cantera_companies cco2 JOIN cantera_batches cb2 ON cb2.id = cco2.batch_id
      WHERE cco2.user_id=$1 AND NOT EXISTS (SELECT 1 FROM cantera_contacts y WHERE y.company_id = cco2.id)
        AND ($2 = '%%' OR cco2.nombre ILIKE $2 OR cco2.dominio ILIKE $2)
      ORDER BY updated_at DESC LIMIT 20000
   `, [uid, q]);
   return all;
+}
+// Esta consulta (4-5 UNION ALL con subqueries correlacionadas) es pesada, y
+// antes se repetía SIN CACHE en cada click de filtro/apertura de desplegable
+// (búsqueda principal + conteos por campo) -- pedido explícito: "aplicarlos o
+// eliminarlos 1 a 1 se demora demasiado". Un cache corto en memoria (10s) hace
+// que una sesión de filtrado (varios clicks seguidos con el mismo texto de
+// búsqueda) reutilice el mismo fetch en vez de golpear Postgres cada vez.
+const _cGlobalCache = new Map();
+const _CGLOBAL_CACHE_MS = 30000;
+async function _cGlobalFetchAll(uid, q, tipo) {
+  const key = uid + '|' + q + '|' + tipo;
+  const hit = _cGlobalCache.get(key);
+  if (hit && (Date.now() - hit.at) < _CGLOBAL_CACHE_MS) return hit.data;
+  const data = await _cGlobalFetchAllRaw(uid, q, tipo);
+  _cGlobalCache.set(key, { at: Date.now(), data });
+  // Poda simple para que el Map no crezca sin límite en un servidor de larga vida.
+  if (_cGlobalCache.size > 200) {
+    const cutoff = Date.now() - _CGLOBAL_CACHE_MS;
+    for (const [k, v] of _cGlobalCache) if (v.at < cutoff) _cGlobalCache.delete(k);
+  }
+  return data;
 }
 function _cGlobalParseFilters(req) {
   const F = {};
@@ -7750,66 +7934,11 @@ app.get('/api/cantera/global', requireAuth, async (req, res) => {
     // SIN contactos como fallback, así que una empresa con 5 contactos jamás
     // aparecía como fila propia. Acá es una query de empresa aparte, sin
     // relación con contactos.
-    const { rows: all } = tipo === 'empresa' ? await pool.query(`
-      SELECT '' AS nombre, '' AS apellido, '' AS cargo, '' AS email,
-             lco.nombre AS empresa, lco.dominio, lco.pais, lco.industria, lco.tamano, 'crm' AS origen,
-             (SELECT nombre FROM outbound_clients oc WHERE oc.id = lco.outbound_client_id) AS referencia,
-             lco.updated_at, '' AS estado, 'empresa' AS tipo,
-             (SELECT string_agg(DISTINCT s.nombre, ', ') FROM lm_contacts k JOIN lm_contact_sequences csq ON csq.contact_id = k.id JOIN sequences s ON s.id = csq.sequence_id WHERE k.company_id = lco.id) AS secuencias,
-             '' AS seniority, '' AS departamento, lco.ciudad AS ciudad, lco.target_tier AS tier,
-             cx.paso1_estado AS paso1_estado, cx.paso2_estado AS paso2_estado, cx.id AS company_id, cx.batch_id AS batch_id, lco.id AS lm_company_id
-        FROM lm_companies lco
-        LEFT JOIN LATERAL (SELECT c2.id, c2.batch_id, c2.paso1_estado, c2.paso2_estado FROM cantera_companies c2
-          WHERE c2.user_id = lco.user_id AND lco.dominio <> '' AND lower(c2.dominio) = lower(lco.dominio) ORDER BY c2.id DESC LIMIT 1) cx ON true
-       WHERE lco.user_id=$1 AND ($2 = '%%' OR lco.nombre ILIKE $2 OR lco.dominio ILIKE $2)
-      UNION ALL
-      SELECT '', '', '', '', cco.nombre AS empresa, cco.dominio, cco.pais, cco.industria, cco.tamano,
-             'borrador_' || cb.estado AS origen, cb.nombre AS referencia, cco.created_at AS updated_at,
-             '' AS estado, 'empresa' AS tipo, '' AS secuencias, '' AS seniority, '' AS departamento, '' AS ciudad, cco.tier_clave AS tier, cco.paso1_estado AS paso1_estado, cco.paso2_estado AS paso2_estado, cco.id AS company_id, cco.batch_id AS batch_id, NULL::int AS lm_company_id
-        FROM cantera_companies cco JOIN cantera_batches cb ON cb.id = cco.batch_id
-       WHERE cco.user_id=$1 AND ($2 = '%%' OR cco.nombre ILIKE $2 OR cco.dominio ILIKE $2)
-       ORDER BY updated_at DESC LIMIT 20000
-    `, [uid, q]) : await pool.query(`
-      SELECT lc.nombre, lc.apellido, lc.cargo, lc.email,
-             COALESCE(co.nombre, lc.empresa_nombre) AS empresa, co.dominio,
-             COALESCE(co.pais, lc.pais) AS pais, co.industria, co.tamano, 'crm' AS origen,
-             (SELECT nombre FROM outbound_clients oc WHERE oc.id = co.outbound_client_id) AS referencia,
-             lc.updated_at, lc.estado AS estado, 'contacto' AS tipo,
-             (SELECT string_agg(DISTINCT s.nombre, ', ') FROM lm_contact_sequences csq JOIN sequences s ON s.id = csq.sequence_id WHERE csq.contact_id = lc.id) AS secuencias,
-             lc.seniority AS seniority, lc.departamento AS departamento, lc.ciudad AS ciudad, co.target_tier AS tier,
-             cx.paso1_estado AS paso1_estado, cx.paso2_estado AS paso2_estado, cx.id AS company_id, cx.batch_id AS batch_id, co.id AS lm_company_id
-        FROM lm_contacts lc LEFT JOIN lm_companies co ON co.id = lc.company_id
-        LEFT JOIN LATERAL (SELECT c2.id, c2.batch_id, c2.paso1_estado, c2.paso2_estado FROM cantera_companies c2
-          WHERE c2.user_id = lc.user_id AND co.dominio IS NOT NULL AND co.dominio <> '' AND lower(c2.dominio) = lower(co.dominio) ORDER BY c2.id DESC LIMIT 1) cx ON true
-       WHERE lc.user_id=$1 AND ($2 = '%%' OR lc.nombre ILIKE $2 OR lc.apellido ILIKE $2 OR lc.email ILIKE $2 OR lc.cargo ILIKE $2 OR COALESCE(co.nombre, lc.empresa_nombre) ILIKE $2)
-      UNION ALL
-      SELECT cc.nombre, cc.apellido, cc.cargo, cc.email,
-             cco.nombre AS empresa, cco.dominio, cco.pais, cco.industria, cco.tamano,
-             'borrador_' || cb.estado AS origen, cb.nombre AS referencia, cc.created_at AS updated_at,
-             '' AS estado, 'contacto' AS tipo, '' AS secuencias, '' AS seniority, '' AS departamento, '' AS ciudad, cco.tier_clave AS tier, cco.paso1_estado AS paso1_estado, cco.paso2_estado AS paso2_estado, cco.id AS company_id, cco.batch_id AS batch_id, NULL::int AS lm_company_id
-        FROM cantera_contacts cc
-        JOIN cantera_companies cco ON cco.id = cc.company_id
-        JOIN cantera_batches cb ON cb.id = cc.batch_id
-       WHERE cc.user_id=$1 AND ($2 = '%%' OR cc.nombre ILIKE $2 OR cc.apellido ILIKE $2 OR cc.email ILIKE $2 OR cc.cargo ILIKE $2 OR cco.nombre ILIKE $2)
-      UNION ALL
-      SELECT '', '', '', '', lco.nombre AS empresa, lco.dominio, lco.pais, lco.industria, lco.tamano, 'crm' AS origen,
-             (SELECT nombre FROM outbound_clients oc WHERE oc.id = lco.outbound_client_id) AS referencia, lco.updated_at,
-             '' AS estado, 'empresa' AS tipo, '' AS secuencias, '' AS seniority, '' AS departamento, lco.ciudad AS ciudad, lco.target_tier AS tier,
-             cx.paso1_estado AS paso1_estado, cx.paso2_estado AS paso2_estado, cx.id AS company_id, cx.batch_id AS batch_id, lco.id AS lm_company_id
-        FROM lm_companies lco
-        LEFT JOIN LATERAL (SELECT c2.id, c2.batch_id, c2.paso1_estado, c2.paso2_estado FROM cantera_companies c2
-          WHERE c2.user_id = lco.user_id AND lco.dominio <> '' AND lower(c2.dominio) = lower(lco.dominio) ORDER BY c2.id DESC LIMIT 1) cx ON true
-       WHERE lco.user_id=$1 AND NOT EXISTS (SELECT 1 FROM lm_contacts x WHERE x.company_id = lco.id)
-         AND ($2 = '%%' OR lco.nombre ILIKE $2 OR lco.dominio ILIKE $2)
-      UNION ALL
-      SELECT '', '', '', '', cco2.nombre AS empresa, cco2.dominio, cco2.pais, cco2.industria, cco2.tamano,
-             'borrador_' || cb2.estado AS origen, cb2.nombre AS referencia, cco2.created_at AS updated_at,
-             '' AS estado, 'empresa' AS tipo, '' AS secuencias, '' AS seniority, '' AS departamento, '' AS ciudad, cco2.tier_clave AS tier, cco2.paso1_estado AS paso1_estado, cco2.paso2_estado AS paso2_estado, cco2.id AS company_id, cco2.batch_id AS batch_id, NULL::int AS lm_company_id
-        FROM cantera_companies cco2 JOIN cantera_batches cb2 ON cb2.id = cco2.batch_id
-       WHERE cco2.user_id=$1 AND NOT EXISTS (SELECT 1 FROM cantera_contacts y WHERE y.company_id = cco2.id)
-         AND ($2 = '%%' OR cco2.nombre ILIKE $2 OR cco2.dominio ILIKE $2)
-       ORDER BY updated_at DESC LIMIT 20000
-    `, [uid, q]);
+    // La query pesada (4-5 UNION ALL) vive una sola vez en _cGlobalFetchAll,
+    // con cache corto de 10s -- antes estaba DUPLICADA acá inline y se
+    // volvía a golpear Postgres en cada click de filtro sin cache alguno
+    // (pedido explícito: "aplicarlos o eliminarlos 1 a 1 se demora demasiado").
+    const all = await _cGlobalFetchAll(uid, q, tipo);
     const filtered = all.filter(r => {
       if (origen === 'crm' && r.origen !== 'crm') return false;
       if (origen === 'borrador' && r.origen === 'crm') return false;
@@ -8687,7 +8816,7 @@ app.get('/api/sequences', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(`
       SELECT s.*, s.starts_on::text AS starts_on,
-             (SELECT COUNT(*)::int FROM lm_messages m WHERE m.sequence_id = s.id AND m.estado='awaiting') AS awaiting,
+             CASE WHEN s.estado='activa' THEN (SELECT COUNT(*)::int FROM lm_messages m WHERE m.sequence_id = s.id AND m.estado='awaiting') ELSE 0 END AS awaiting,
              -- Contactos sin email que bloquean el paso de Email — antes solo contaba a
              -- los que el motor YA había pausado (paused_reason='sin_email'), y se quedaba
              -- corto frente a la lista real de "Sin email" (que también incluye a los que
@@ -8696,7 +8825,7 @@ app.get('/api/sequences', requireAuth, async (req, res) => {
              -- /pending-no-email (sin el filtro fino de "cuál paso le toca hoy", que es caro
              -- de calcular aquí para todas las secuencias a la vez).
              (SELECT COUNT(*)::int FROM lm_contact_sequences cs JOIN lm_contacts k ON k.id=cs.contact_id
-               WHERE cs.sequence_id = s.id AND (k.email IS NULL OR k.email='')
+               WHERE s.estado='activa' AND cs.sequence_id = s.id AND (k.email IS NULL OR k.email='')
                  AND (cs.estado='activo' OR (cs.estado='pausado' AND cs.paused_reason='sin_email'))
                  AND COALESCE(k.disposition,'') NOT IN ('derivado','no_es_persona','no_interesado','no_califica','no_contactar')) AS no_email_pending
         FROM sequences s WHERE s.user_id=$1 ORDER BY s.created_at DESC`, [req.workspaceOwnerId]);
@@ -11793,8 +11922,8 @@ app.patch('/api/wa/connections/:id/chats/:jid/nombre', requireAuth, async (req, 
     if (!conn) return;
     const nombre = String(req.body?.nombre || '').trim().slice(0, 100);
     await pool.query(
-      `INSERT INTO wa_contacts (connection_id, jid, nombre) VALUES ($1,$2,$3)
-       ON CONFLICT (connection_id, jid) DO UPDATE SET nombre=EXCLUDED.nombre, updated_at=NOW()`,
+      `INSERT INTO wa_contacts (connection_id, jid, nombre, nombre_agenda) VALUES ($1,$2,$3,$3)
+       ON CONFLICT (connection_id, jid) DO UPDATE SET nombre=EXCLUDED.nombre, nombre_agenda=EXCLUDED.nombre_agenda, updated_at=NOW()`,
       [conn.id, req.params.jid, nombre]);
     res.json({ ok: true });
   } catch (err) { console.error('[wa] nombre', err.message); res.status(500).json({ error: 'No se pudo guardar el nombre' }); }
@@ -12958,6 +13087,7 @@ async function start() {
     require('./services/sendEngine').startSendEngine(pool, { apiBase, gmailCallback: GMAIL_CALLBACK });
     require('./services/replyWatcher').startReplyWatcher(pool, { gmailCallback: GMAIL_CALLBACK });
     require('./services/nurtureWatcher').startNurtureWatcher(pool);
+    require('./services/interesadoWatcher').startInteresadoWatcher(pool);
     require('./services/backupContactWatcher').startBackupContactWatcher(pool);
     require('./services/followupWatcher').startFollowupWatcher(pool);
     require('./services/imapWatcher').startImapWatcher(pool);

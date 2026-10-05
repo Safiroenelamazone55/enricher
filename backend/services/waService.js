@@ -59,15 +59,28 @@ async function _resolverJid(sock, jid) {
 // Directorio de nombres — separado de wa_messages para poder listar "con quién
 // puedo escribir" (el "Nuevo chat") sin depender de que ya exista una conversación.
 // No pisa un nombre real con uno vacío (p.ej. un mensaje de alguien sin pushName).
-async function _guardarContacto(pool, sock, connId, jid, nombre) {
+// agenda=true → nombre de la agenda del teléfono (prioridad máxima, queda fijo);
+// agenda=false → pushName/notify (el nombre que la persona se puso a sí misma): solo
+// se usa si no hay nombre de agenda.
+async function _guardarContacto(pool, sock, connId, jid, nombre, agenda = false) {
   jid = await _resolverJid(sock, jid);
   if (!_esChatValido(jid) || !nombre) return;
   try {
-    await pool.query(`
-      INSERT INTO wa_contacts (connection_id, jid, nombre, updated_at)
-      VALUES ($1,$2,$3,NOW())
-      ON CONFLICT (connection_id, jid) DO UPDATE SET nombre=EXCLUDED.nombre, updated_at=NOW()`,
-      [connId, jid, nombre]);
+    if (agenda) {
+      await pool.query(`
+        INSERT INTO wa_contacts (connection_id, jid, nombre, nombre_agenda, updated_at)
+        VALUES ($1,$2,$3,$3,NOW())
+        ON CONFLICT (connection_id, jid) DO UPDATE SET nombre=EXCLUDED.nombre, nombre_agenda=EXCLUDED.nombre_agenda, updated_at=NOW()`,
+        [connId, jid, nombre]);
+    } else {
+      await pool.query(`
+        INSERT INTO wa_contacts (connection_id, jid, nombre, updated_at)
+        VALUES ($1,$2,$3,NOW())
+        ON CONFLICT (connection_id, jid) DO UPDATE SET
+          nombre = CASE WHEN wa_contacts.nombre_agenda <> '' THEN wa_contacts.nombre ELSE EXCLUDED.nombre END,
+          updated_at=NOW()`,
+        [connId, jid, nombre]);
+    }
   } catch (e) { console.warn('[wa] guardar contacto:', e.message); }
 }
 
@@ -401,6 +414,21 @@ async function _connect(pool, id) {
     }
   });
 
+  // c.name = nombre de la AGENDA del teléfono (gana siempre); c.notify/verifiedName = el
+  // que la persona eligió para sí. Un @lid solo se acepta si trae el número real
+  // (phoneNumber/jid); sin eso puede venir un nombre cruzado de otra identidad (ver abajo).
+  const _guardarContactoEv = async (c) => {
+    let cjid = String(c?.id || '');
+    if (!cjid) return;
+    if (cjid.endsWith('@lid')) {
+      const real = [c.phoneNumber, c.jid].find(x => String(x || '').endsWith('@s.whatsapp.net'));
+      if (!real) return;
+      cjid = real;
+    }
+    if (c.name) await _guardarContacto(pool, sock, id, cjid, c.name, true);
+    else await _guardarContacto(pool, sock, id, cjid, c.notify || c.verifiedName || '', false);
+  };
+
   // Se dispara una vez tras conectar (puede repetirse en tandas: progress/isLatest)
   // con lo que el teléfono ya trae: contactos guardados y mensajes recientes de cada
   // chat. Es lo que llena "chats previos" sin que Jenny tenga que escribir primero.
@@ -413,11 +441,7 @@ async function _connect(pool, id) {
       // cliente real, Juan, quedó guardado como "NovaCentraX", el nombre del workspace,
       // vía este mismo loop). Para @lid confiamos SOLO en el pushName de sus mensajes
       // reales (_guardarMensaje) — nunca en el contacts[] del volcado de historial.
-      for (const c of (contacts || [])) {
-        if (String(c.id || '').endsWith('@lid')) continue;
-        const nombre = c.name || c.notify || c.verifiedName || '';
-        await _guardarContacto(pool, sock, id, c.id, nombre);
-      }
+      for (const c of (contacts || [])) await _guardarContactoEv(c);
       // El nombre de un grupo (el asunto) viene por acá, no por 'contacts' — un grupo
       // no es un contacto individual. Restringido a @g.us: para jids @lid (identificador
       // de WhatsApp scoped al grupo, NO el número real) c.name puede traer el nombre DEL
@@ -432,11 +456,7 @@ async function _connect(pool, id) {
   });
 
   const _sincronizarContactos = async (contactos) => {
-    for (const c of (contactos || [])) {
-      if (!c.id || String(c.id).endsWith('@lid')) continue; // ver comentario en messaging-history.set
-      const nombre = c.name || c.notify || c.verifiedName || '';
-      await _guardarContacto(pool, sock, id, c.id, nombre);
-    }
+    for (const c of (contactos || [])) await _guardarContactoEv(c);
   };
   sock.ev.on('contacts.upsert', _sincronizarContactos);
   sock.ev.on('contacts.update', _sincronizarContactos);

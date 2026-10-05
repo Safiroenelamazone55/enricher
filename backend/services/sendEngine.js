@@ -168,7 +168,7 @@ async function _condMatch(pool, step, enr) {
   if (!cd) return true;
   const responded = step.cond_step_id
     ? await _stepResponded(pool, enr.contact_id, step.cond_step_id)
-    : (enr.disposition === 'respondio' || !!enr.li_aceptado_at);
+    : (['respondio','interesado'].includes(enr.disposition) || !!enr.li_aceptado_at);
   return cd === 'replied' ? responded : cd === 'no_reply' ? !responded : true;
 }
 // Primer índice desde fromIdx (inclusive) cuya condición aplica al contacto, o -1.
@@ -203,7 +203,7 @@ async function _pauseEnrollment(pool, enr, reason, taskNote) {
 // a nadie más (ya hay una conversación real en curso).
 async function _maybeActivateNextInRotation(pool, enr) {
   if (!enr.company_id) return;
-  const responded = enr.disposition === 'respondio' || !!enr.li_aceptado_at;
+  const responded = ['respondio','interesado'].includes(enr.disposition) || !!enr.li_aceptado_at;
   if (responded) return;
   const { rows: [nextInLine] } = await pool.query(
     `SELECT cs.id FROM lm_contact_sequences cs JOIN lm_contacts k ON k.id = cs.contact_id

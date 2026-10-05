@@ -404,4 +404,50 @@ async function _callComment(model, cfg, contact, yo, prompt, post, identidadIncl
   };
 }
 
-module.exports = { queuePersonalize, queueSize, getSettings, generateComment, RATES };
+// ─────────────────────────────────────────────────────────────────────
+// Enriquecimiento de empresa — dado un nombre o URL, busca en internet
+// (web_search) e intenta completar industria, tamaño, ubicación, etc.
+// Sin cola ni presupuesto: es una consulta puntual y barata (Haiku).
+// ─────────────────────────────────────────────────────────────────────
+async function enrichCompany(query) {
+  const q = String(query || '').trim();
+  if (!q) throw new Error('Falta nombre o URL de la empresa');
+  let Anthropic;
+  try { Anthropic = require('@anthropic-ai/sdk'); }
+  catch { throw new Error('Falta @anthropic-ai/sdk (npm install en backend)'); }
+  if (!process.env.ANTHROPIC_API_KEY) throw new Error('Falta ANTHROPIC_API_KEY en el entorno');
+  const client = new Anthropic();
+
+  const system =
+    `Investigas empresas en internet (web_search) para llenar una ficha CRM. Te dan un nombre o una URL de empresa. ` +
+    `Busca su sitio web oficial y fuentes públicas (LinkedIn, Crunchbase, su propia web) y extrae SOLO datos que encuentres verificables — nunca inventes. ` +
+    `Devuelve ÚNICAMENTE un objeto JSON válido, sin texto ni fences alrededor, con esta forma exacta (usa "" en lo que no encuentres, nunca null): ` +
+    `{"nombre":"","dominio":"","website":"","industria":"","tamano":"","pais":"","ciudad":"","linkedin":"","descripcion":"","fundada":""} ` +
+    `"tamano" = rango de empleados si lo encuentras (ej. "11-50", "201-500"). "dominio" sin protocolo (ej. empresa.com). "descripcion" = una frase de a qué se dedica.`;
+
+  const req = {
+    model: MODEL_VOLUME, max_tokens: 1200, system,
+    tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: 3 }],
+    messages: [{ role: 'user', content: `Empresa a investigar: ${q}` }],
+  };
+
+  let messages = req.messages, resp;
+  for (let i = 0; i < 4; i++) {
+    resp = await client.messages.create({ ...req, messages });
+    if (resp.stop_reason === 'refusal') throw new Error('El modelo rechazó la búsqueda');
+    if (resp.stop_reason === 'pause_turn') { messages = [...messages, { role: 'assistant', content: resp.content }]; continue; }
+    break;
+  }
+
+  const texto = (resp.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
+  let p = {};
+  try { p = JSON.parse(_extractJson(texto)) || {}; } catch { p = {}; }
+  const s = v => String(v || '').trim().slice(0, 300);
+  return {
+    nombre: s(p.nombre), dominio: s(p.dominio).replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/$/, ''),
+    website: s(p.website), industria: s(p.industria), tamano: s(p.tamano), pais: s(p.pais), ciudad: s(p.ciudad),
+    linkedin: s(p.linkedin), descripcion: s(p.descripcion).slice(0, 500), fundada: s(p.fundada),
+  };
+}
+
+module.exports = { queuePersonalize, queueSize, getSettings, generateComment, enrichCompany, RATES };

@@ -987,6 +987,17 @@ async function initDb() {
     await pool.query(`ALTER TABLE lm_contacts  ADD COLUMN IF NOT EXISTS referred_note    TEXT NOT NULL DEFAULT '';`);
     // Nurturing: fecha en la que hay que retomar a un contacto marcado "Más adelante".
     await pool.query(`ALTER TABLE lm_contacts  ADD COLUMN IF NOT EXISTS nurture_at       DATE;`);
+    // 2026-10-03: motivo del 'Más adelante' + seguimiento automático del Interesado que se enfría (interesadoWatcher.js).
+    await pool.query(`ALTER TABLE lm_contacts ADD COLUMN IF NOT EXISTS nurture_motivo TEXT NOT NULL DEFAULT '';`);
+    await pool.query(`ALTER TABLE lm_contacts ADD COLUMN IF NOT EXISTS interesado_followups INTEGER NOT NULL DEFAULT 0;`);
+    await pool.query(`ALTER TABLE lm_contacts ADD COLUMN IF NOT EXISTS interesado_last_followup_at TIMESTAMPTZ;`);
+    // Motivo cuando un DEAL real se cae (Perdido): precio, timing, se fue con otro… (Deals, 2026-10-03).
+    await pool.query(`ALTER TABLE lm_contacts ADD COLUMN IF NOT EXISTS deal_motivo_perdida TEXT NOT NULL DEFAULT '';`);
+    // Los que ya están en Deals tenían "Interesado" (que antes era el único valor de respuesta): pasan a 'interesado'
+    // para no mezclarse con "Por calificar". Idempotente: solo toca los que siguen en 'respondio'.
+    await pool.query(`UPDATE lm_contacts SET disposition='interesado'
+                        WHERE disposition='respondio'
+                          AND (deal_valor IS NOT NULL OR deal_cierre IS NOT NULL OR estado IN ('propuesta','negociacion','ganado'))`);
     // "Aceptó en LinkedIn" deja de ocupar disposition (2026-09-03, a pedido de Jenny):
     // es un evento de UN canal, no un estado del contacto — antes tapaba una respuesta
     // real (compartía el mismo campo que "Interesado") y confundía el pipeline. Pasa a
@@ -1871,6 +1882,8 @@ async function initDb() {
       );
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS wa_contacts_conn_idx ON wa_contacts (connection_id);`);
+    // Nombre guardado en la agenda del teléfono (o renombrado a mano): NUNCA lo pisa un pushName.
+    await pool.query(`ALTER TABLE wa_contacts ADD COLUMN IF NOT EXISTS nombre_agenda TEXT NOT NULL DEFAULT ''`);
     // Reacciones (👍❤️😂...) — un cupo para "la mía" y uno para "la del otro" por
     // mensaje, que es como WhatsApp las maneja en 1:1 (una persona, una reacción
     // vigente; mandar otra reemplaza la anterior, vacío la quita).
@@ -2204,6 +2217,14 @@ async function initDb() {
     // webSearchService/Brave). Mismo prompt y mismo formato de salida para
     // ambos — ver canteraValidateService.js.
     await pool.query(`ALTER TABLE cantera_batches ADD COLUMN IF NOT EXISTS motor_ia TEXT NOT NULL DEFAULT 'claude';`);
+
+    // Tiers que "califican" para la campaña (pedido explícito 2026-09-30: "si
+    // pertenece a la campaña hereda la calificación del tier en la empresa" —
+    // ej. solo Tier A y C cuentan como calificadas para ESTE borrador/campaña,
+    // aunque B también esté "aprobado"). Vacío ('[]') = compatibilidad hacia
+    // atrás: cualquier Tier con paso2_estado aprobado/validacion_manual
+    // cuenta, igual que antes de este campo existir.
+    await pool.query(`ALTER TABLE cantera_batches ADD COLUMN IF NOT EXISTS tiers_calificantes JSONB NOT NULL DEFAULT '[]';`);
 
     // Claves de IA por cliente outbound — pedido explícito 2026-09-06: "no
     // quiero estarlo actualizando directamente aquí [en el código]... quiero
