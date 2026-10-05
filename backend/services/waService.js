@@ -47,8 +47,14 @@ function _esChatValido(jid) {
 // se vieran "números" que no coincidían con el teléfono. sock.signalRepository.lidMapping
 // sabe traducir un @lid al @s.whatsapp.net real cuando WhatsApp ya mandó esa relación;
 // si todavía no la mandó, se deja el @lid tal cual (se resuelve solo más adelante).
-async function _resolverJid(sock, jid) {
+async function _resolverJid(sock, jid, alt) {
   if (!jid || !jid.endsWith('@lid')) return jid;
+  // WhatsApp ya manda el número real junto al @lid en la propia llave del mensaje
+  // (remoteJidAlt): úsalo al instante, sin esperar el mapeo — así nunca se crea el chat duplicado.
+  if (alt && String(alt).endsWith('@s.whatsapp.net')) {
+    try { await sock?.signalRepository?.lidMapping?.storeLIDPNMappings?.([{ lid: jid, pn: alt }]); } catch (_) {}
+    return alt;
+  }
   try {
     const pn = await sock?.signalRepository?.lidMapping?.getPNForLID(jid);
     if (pn) return pn.includes('@') ? pn : `${pn}@s.whatsapp.net`;
@@ -117,7 +123,7 @@ async function _marcarEliminado(pool, connId, msgId) {
 async function _guardarMensaje(pool, sock, connId, m, esHistorial) {
   let jid = m.key?.remoteJid || '';
   if (!_esChatValido(jid)) return;
-  jid = await _resolverJid(sock, jid);
+  jid = await _resolverJid(sock, jid, m.key?.remoteJidAlt);
 
   const revoke = m.message?.protocolMessage;
   if (revoke && revoke.type === 0) { await _marcarEliminado(pool, connId, revoke.key?.id); return; }
@@ -335,6 +341,16 @@ async function _connect(pool, id) {
 
   sock.ev.on('creds.update', saveCreds);
 
+  // Cuando WhatsApp entrega la relación @lid ↔ número, se unifica al instante (con un
+  // pequeño debounce) en vez de esperar al watchdog: la conversación nunca queda partida.
+  let _lidTimer = null;
+  const _unificarLidPronto = () => {
+    clearTimeout(_lidTimer);
+    _lidTimer = setTimeout(() => _normalizarLid(pool, sock, id).catch(() => {}), 2000);
+  };
+  sock.ev.on('lid-mapping.update', _unificarLidPronto);
+  sock.ev.on('chats.phoneNumberShare', _unificarLidPronto);
+
   sock.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect, qr } = update;
     try {
@@ -393,7 +409,7 @@ async function _connect(pool, id) {
   sock.ev.on('messages.reaction', async (reacciones) => {
     for (const r of (reacciones || [])) {
       try {
-        const jid = await _resolverJid(sock, r.key?.remoteJid || '');
+        const jid = await _resolverJid(sock, r.key?.remoteJid || '', r.key?.remoteJidAlt);
         const msgId = r.key?.id;
         const emoji = r.reaction?.text || '';
         const deMi = !!r.reaction?.key?.fromMe;
@@ -672,7 +688,7 @@ async function reanudarTodas(pool) {
     }
   } catch (e) { console.warn('[wa] reanudarTodas:', e.message); }
   if (!_tickerProgramados) _tickerProgramados = setInterval(() => flushProgramados(pool), 30000);
-  if (!_tickerWatchdog) _tickerWatchdog = setInterval(() => _watchdogTick(pool), 3 * 60 * 1000);
+  if (!_tickerWatchdog) _tickerWatchdog = setInterval(() => _watchdogTick(pool), 60 * 1000);
 }
 
 module.exports = { iniciar, enviar, enviarImagen, reaccionar, desconectar, reanudarTodas, resincronizarChat };
