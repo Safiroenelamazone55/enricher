@@ -4127,7 +4127,9 @@ async function _lmAddMembership(req, res, kind) {
           SELECT DISTINCT ON (k.company_id) k.company_id, k.nombre, k.apellido
             FROM lm_contact_sequences cs JOIN lm_contacts k ON k.id = cs.contact_id
            WHERE cs.user_id=$1 AND cs.estado IN ('activo','pausado') AND k.company_id = ANY($2::int[]) AND NOT (k.id = ANY($3::int[]))
-        `, [uid, compIds, toAdd])).rows.forEach(r => busy.set(r.company_id, [r.nombre, r.apellido].filter(Boolean).join(' ') || '(sin nombre)'));
+             -- solo cuenta lo que ya está en ESTA secuencia: un contacto de la misma empresa en otra secuencia/cliente/campaña no bloquea
+             ${kind === 'sequence' ? 'AND cs.sequence_id = $4' : 'AND FALSE'}
+        `, kind === 'sequence' ? [uid, compIds, toAdd, targetId] : [uid, compIds, toAdd])).rows.forEach(r => busy.set(r.company_id, [r.nombre, r.apellido].filter(Boolean).join(' ') || '(sin nombre)'));
       }
       const seenComp = new Set();
       for (const id of toAdd) {
