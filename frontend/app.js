@@ -11672,12 +11672,21 @@ const TasksModule = (() => {
     if (_currentView === 'calendar') _renderCalendar($('tasks-cal-inner'));
   }
 
+  let _projMembers = null; // Set de nombres asociados al proyecto abierto (null = sin proyecto)
   function _populateMemberFilter() {
     const sel = $('tasks-member-filter');
     if (!sel) return;
-    const prev = sel.value;
+    // Dentro de un proyecto solo se ofrecen los miembros asociados a ESE proyecto
+    const _enProyecto = !!(_filterProjectId && _projMembers);
+    let _opts = (_teamMembers || []);
+    if (_enProyecto) {
+      _opts = _opts.filter(m => _projMembers.has(m.nombre));
+      // el filtro por defecto (mi nombre) no debe esconder las tareas si no estoy en este proyecto
+      if (_filterMember && _filterMember !== '__none__' && !_projMembers.has(_filterMember)) { _filterMember = ''; sel.classList.remove('filter-select--active'); }
+    }
+    const prev = _enProyecto ? (_filterMember || '') : sel.value;
     sel.innerHTML = '<option value="">Miembro</option><option value="__none__">Sin asignar</option>';
-    (_teamMembers || []).forEach(m => {
+    _opts.forEach(m => {
       const opt = document.createElement('option');
       opt.value = m.nombre;
       opt.textContent = m.nombre;
@@ -11686,7 +11695,7 @@ const TasksModule = (() => {
     });
     if (prev) {
       sel.value = prev;
-    } else if (!_filterMemberSet) {
+    } else if (!_filterMemberSet && !_enProyecto) {
       const myName = window._authUser?.memberNombre || window._authUser?.name || '';
       if (myName) {
         _filterMember    = myName;
@@ -11800,6 +11809,7 @@ const TasksModule = (() => {
   function _projectHeaderHide() {
     const el = $('tasks-project-header');
     if (el) { el.classList.add('hidden'); el.innerHTML = ''; }
+    if (_projMembers) { _projMembers = null; setTimeout(_populateMemberFilter, 0); }
     document.getElementById('tpj-back')?.remove();
     const _sr0 = $('tasks-search'); if (_sr0) _sr0.placeholder = 'Buscar tarea, proyecto o miembro…';
     const t = document.querySelector('#pane-mgmt-tasks .pane-title');
@@ -11855,6 +11865,13 @@ const TasksModule = (() => {
       p = await r.json();
     } catch (_) { return; }
 
+    const _mt = _tasks.filter(t => t.project_id === pid);
+    _projMembers = new Set([
+      ...((Array.isArray(p.responsables) && p.responsables.length) ? p.responsables : (p.responsable ? [p.responsable] : [])),
+      ..._mt.flatMap(t => (t.responsables && t.responsables.length) ? t.responsables : (t.responsable ? [t.responsable] : [])),
+    ].filter(Boolean));
+    _populateMemberFilter();
+    if (_currentView === 'kanban') _renderKanban(); else if (_currentView === 'list') render();
     const mine = _tasks.filter(t => t.project_id === pid && !t.parent_task_id);
     const total = mine.length;
     const done  = mine.filter(t => t.estado === 'completado').length;
