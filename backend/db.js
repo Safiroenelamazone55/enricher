@@ -1516,6 +1516,16 @@ async function initDb() {
     await pool.query(`ALTER TABLE lm_mailboxes ADD COLUMN IF NOT EXISTS ramp_step       INTEGER NOT NULL DEFAULT 10;`);
     await pool.query(`ALTER TABLE lm_mailboxes ADD COLUMN IF NOT EXISTS ramp_target     INTEGER NOT NULL DEFAULT 50;`);
     await pool.query(`ALTER TABLE lm_mailboxes ADD COLUMN IF NOT EXISTS ramp_started_on DATE;`);
+    // Por defecto TODO buzón nuevo arranca con el calentamiento gradual encendido (empieza hoy).
+    await pool.query(`ALTER TABLE lm_mailboxes ALTER COLUMN ramp_on SET DEFAULT TRUE;`);
+    await pool.query(`ALTER TABLE lm_mailboxes ALTER COLUMN ramp_started_on SET DEFAULT CURRENT_DATE;`);
+    // Buzones que ya existían y nunca configuraron la rampa: se encienden contando desde su primer envío
+    // (o desde que se conectaron), así los que ya llevan semanas enviando no quedan frenados en 10/día.
+    await pool.query(`
+      UPDATE lm_mailboxes mb SET ramp_on = TRUE,
+        ramp_started_on = COALESCE((SELECT MIN(mm.sent_at)::date FROM lm_messages mm JOIN sequences ss ON ss.id = mm.sequence_id
+                                     WHERE ss.outbound_client_id = mb.outbound_client_id AND mm.sent_at IS NOT NULL), mb.created_at::date)
+       WHERE mb.ramp_started_on IS NULL`);
     // OAuth (F4): para Microsoft 365 donde el tenant bloquea autenticación básica IMAP.
     // auth_method='basic' (default, usa pass_enc) o 'oauth' (usa oauth_* y hace XOAUTH2).
     // Los tokens se cifran con el mismo AES-256-GCM que pass_enc (encPass/decPass).

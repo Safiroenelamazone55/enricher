@@ -17757,3 +17757,18 @@ tr.tk-flash > td { background-color: #FEF9C3; animation: none; }
 .seq-start-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
 .seq-start-row .form-input { flex: 0 1 220px; min-width: 150px; }
 .seq-autoact { display: inline-flex; align-items: center; gap: 8px; font-size: .86rem; font-weight: 600; color: var(--text-secondary); cursor: pointer; white-space: nowrap; }
+
+/* Nueva secuencia: disponibilidad real de envío de hoy */
+.seq-cap { margin-top: 10px; padding: 12px 14px; border: 1px solid var(--border); background: var(--surface-secondary); display: flex; flex-direction: column; gap: 8px; }
+.seq-cap__load { font-size: .8rem; color: var(--text-muted); }
+.seq-cap__head { font-size: .9rem; color: var(--text-primary); display: flex; flex-direction: column; gap: 1px; }
+.seq-cap__head b { font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+.seq-cap__head small { font-size: .74rem; color: var(--text-muted); font-weight: 500; }
+.seq-cap__bar { display: flex; height: 12px; background: var(--border); overflow: hidden; }
+.seq-cap__bar span { height: 100%; transition: width .2s; }
+.seq-cap__e { background: var(--primary); } .seq-cap__o { background: #94A3B8; } .seq-cap__l { background: var(--surface); }
+.seq-cap__leg { display: flex; gap: 14px; flex-wrap: wrap; font-size: .74rem; color: var(--text-secondary); }
+.seq-cap__leg i { display: inline-block; width: 9px; height: 9px; margin-right: 5px; vertical-align: -1px; border: 1px solid var(--border); }
+.seq-cap__leg i.seq-cap__e { background: var(--primary); border-color: var(--primary); } .seq-cap__leg i.seq-cap__o { background: #94A3B8; border-color: #94A3B8; }
+.seq-cap__ls { margin: 0; padding-left: 16px; font-size: .75rem; color: var(--text-muted); display: flex; flex-direction: column; gap: 2px; }
+.seq-cap__ls b { color: var(--text-secondary); }

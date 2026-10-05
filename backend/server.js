@@ -5202,6 +5202,49 @@ async function _rampStatus(mbId, uid, tz) {
   r.curva = [0, 1, 2, 3, 4, 5].map(w => ({ semana: w + 1, tope: Math.min(r.ramp_target, r.ramp_start + r.ramp_step * w) }));
   return r;
 }
+// Disponibilidad de envío de HOY para una secuencia: cupo del buzón (calentamiento), límite global del workspace y límite propio
+app.get('/api/lm/mailbox-capacity', requireAuth, async (req, res) => {
+  try {
+    const uid = req.workspaceOwnerId, tz = await _tzOfUser(req.user && req.user.id);
+    const cid = parseInt(req.query.client_id) || 0, sid = parseInt(req.query.sequence_id) || 0;
+    if (!cid) return res.json({ sinCliente: true });
+    const { rows: [mb] } = await pool.query('SELECT id, email, ramp_on, ramp_start, ramp_step, ramp_target, ramp_started_on FROM lm_mailboxes WHERE user_id=$1 AND outbound_client_id=$2', [uid, cid]);
+    const { rows: [cfg] } = await pool.query('SELECT enabled, daily_limit FROM lm_send_settings WHERE user_id=$1', [uid]);
+    const day = "(mm.sent_at AT TIME ZONE $3)::date = (NOW() AT TIME ZONE $3)::date";
+    const { rows: porSeq } = await pool.query(`
+      SELECT ss.id, ss.nombre, COALESCE(ss.daily_limit,0)::int AS limite, ss.estado, ss.send_mode,
+             COUNT(mm.id) FILTER (WHERE mm.estado IN ('sent','replied','bounced') AND ${day})::int AS hoy
+        FROM sequences ss LEFT JOIN lm_messages mm ON mm.sequence_id = ss.id
+       WHERE ss.user_id=$1 AND ss.outbound_client_id=$2 GROUP BY ss.id ORDER BY ss.nombre`, [uid, cid, tz]);
+    const { rows: [ws] } = await pool.query(`SELECT COUNT(*)::int AS n FROM lm_messages mm WHERE mm.user_id=$1 AND mm.estado IN ('sent','replied','bounced') AND ${day.split('$3').join('$2')}`, [uid, tz]);
+    // tope del buzón por calentamiento (misma fórmula que el motor)
+    let capBuzon = null, semana = 0;
+    if (mb && mb.ramp_on && mb.ramp_started_on) {
+      const { rows: [sw] } = await pool.query("SELECT FLOOR(GREATEST(((NOW() AT TIME ZONE $2)::date - ramp_started_on), 0)::numeric / 7)::int AS semana FROM lm_mailboxes WHERE id=$1", [mb.id, tz]);
+      semana = sw ? sw.semana : 0;
+      capBuzon = Math.min(mb.ramp_target, mb.ramp_start + mb.ramp_step * semana);
+    }
+    const esta = porSeq.find(x => x.id === sid) || { hoy: 0, limite: 0 };
+    const otras = porSeq.filter(x => x.id !== sid && x.hoy > 0);
+    const hoyCliente = porSeq.reduce((a, x) => a + x.hoy, 0), hoyOtras = hoyCliente - esta.hoy;
+    const limites = [];
+    if (capBuzon !== null) limites.push({ clave: 'buzon', texto: 'el calentamiento del buzón', resta: Math.max(0, capBuzon - hoyCliente) });
+    if (cfg && cfg.enabled) limites.push({ clave: 'workspace', texto: 'el límite global del workspace', resta: Math.max(0, cfg.daily_limit - ws.n) });
+    const limSeq = parseInt(req.query.limit);
+    const limiteSeq = isNaN(limSeq) ? esta.limite : limSeq;
+    if (limiteSeq > 0) limites.push({ clave: 'secuencia', texto: 'el límite de esta secuencia', resta: Math.max(0, limiteSeq - esta.hoy) });
+    const mas = limites.length ? limites.reduce((a, b) => (b.resta < a.resta ? b : a)) : null;
+    res.json({
+      buzon: mb ? { email: mb.email, ramp_on: !!mb.ramp_on, cap_hoy: capBuzon, semana: semana + 1 } : null,
+      workspace: { activo: !!(cfg && cfg.enabled), limite: cfg ? cfg.daily_limit : null, enviados_hoy: ws.n },
+      esta: { enviados_hoy: esta.hoy, limite: limiteSeq },
+      otras: otras.map(x => ({ nombre: x.nombre, hoy: x.hoy })),
+      otras_activas: porSeq.filter(x => x.id !== sid && x.estado === 'activa' && ['auto', 'preaprobado'].includes(x.send_mode)).length,
+      enviados_cliente_hoy: hoyCliente, enviados_otras_hoy: hoyOtras,
+      puedes_hoy: mas ? mas.resta : null, limita: mas ? mas.clave : null, limita_texto: mas ? mas.texto : null,
+    });
+  } catch (err) { console.error('[capacity]', err.message); res.status(500).json({ error: 'No se pudo calcular' }); }
+});
 app.get('/api/lm/mailboxes/:id/ramp', requireAuth, async (req, res) => {
   try {
     const r = await _rampStatus(req.params.id, req.workspaceOwnerId, await _tzOfUser(req.user && req.user.id));
