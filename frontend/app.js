@@ -15962,10 +15962,10 @@ const ProjectsModule = (() => {
   }
 
   /* ── filtered list ─────────────────────────── */
-  function _filtered() {
+  function _filtered(skipEstado) {
     const q = ($('projects-search')?.value || '').toLowerCase();
     let list = _projects;
-    if (_filterEstado) list = list.filter(p => p.estado === _filterEstado);
+    if (_filterEstado && !skipEstado) list = list.filter(p => p.estado === _filterEstado);
     if (_filterMember === '__none__') {
       list = list.filter(p => !p.responsable && !p.responsable_id && (!p.responsables || !p.responsables.length));
     } else if (_filterMember) {
@@ -16002,7 +16002,16 @@ const ProjectsModule = (() => {
 
     const list = _filtered();
 
+    if (_view === 'kanban' && _projects.length) {
+      const kEl = $('projects-kanban'), cEl = $('projects-calendar');
+      if (cEl) cEl.style.display = 'none';
+      const pl = document.querySelector('#pane-mgmt-projects .clients-filters'); if (pl) pl.style.display = 'none';
+      cards.style.display = 'none'; tableWrap.style.display = 'none'; empty.style.display = 'none';
+      kEl.style.display = ''; _renderKanban(_filtered(true));
+      return;
+    }
     if (!list.length) {
+      const kEl0 = $('projects-kanban'), cEl0 = $('projects-calendar'); if (kEl0) kEl0.style.display = 'none'; if (cEl0) cEl0.style.display = 'none';
       cards.style.display     = 'none';
       tableWrap.style.display = 'none';
       const msg = empty.querySelector('p');
@@ -16019,6 +16028,16 @@ const ProjectsModule = (() => {
     if (btn0) btn0.style.display = '';
     empty.style.display = 'none';
 
+    const kanEl = $('projects-kanban'), calEl = $('projects-calendar');
+    if (kanEl) kanEl.style.display = 'none';
+    if (calEl) calEl.style.display = 'none';
+    const _pills = document.querySelector('#pane-mgmt-projects .clients-filters');
+    if (_pills) _pills.style.display = '';
+    if (_view === 'calendario') {
+      cards.style.display = 'none'; tableWrap.style.display = 'none';
+      calEl.style.display = ''; _renderCalendar(list);
+      return;
+    }
     if (_view === 'timeline') {
       tableWrap.style.display = 'none';
       cards.style.display     = '';
@@ -17650,7 +17669,7 @@ const ProjectsModule = (() => {
     if (modSidebar) modSidebar.style.display = 'none';
     const modSidebarToggle = $('sidebar-toggle');
     if (modSidebarToggle) modSidebarToggle.style.display = 'none';
-    ['projects-loading', 'projects-empty', 'projects-cards', 'projects-table-wrap'].forEach(id2 => {
+    ['projects-loading', 'projects-empty', 'projects-cards', 'projects-table-wrap', 'projects-kanban', 'projects-calendar'].forEach(id2 => {
       const el = $(id2); if (el) el.style.display = 'none';
     });
     // _cardHtml(p) reutiliza ids como pjcard-${id}/pjcontent-${id} — si la tarjeta de
@@ -17913,8 +17932,90 @@ const ProjectsModule = (() => {
     _view = v;
     $('pv-tab-timeline')?.classList.toggle('pv-view--active', v === 'timeline');
     $('pv-tab-lista')?.classList.toggle('pv-view--active', v === 'lista');
+    $('pv-tab-kanban')?.classList.toggle('pv-view--active', v === 'kanban');
+    $('pv-tab-calendario')?.classList.toggle('pv-view--active', v === 'calendario');
     render();
   }
+
+  /* ── Kanban: columnas por estado; se arrastra una tarjeta para cambiar el estado ── */
+  const _KAN_COLS = [['activo', 'Activos', '#059669'], ['pausado', 'Pausados', '#D97706'], ['completado', 'Completados', '#0369A1'], ['cancelado', 'Cancelados', '#9F1239']];
+  let _kanDragId = null;
+  function _d0(d) { return d ? new Date(String(d).split('T')[0] + 'T00:00:00') : null; }
+  function _renderKanban(list) {
+    const el = $('projects-kanban'); if (!el) return;
+    el.innerHTML = _KAN_COLS.map(([est, label, col]) => {
+      const items = list.filter(p => (p.estado || 'activo') === est);
+      return `<div class="pk-col" ondragover="event.preventDefault();this.classList.add('pk-col--over')" ondragleave="this.classList.remove('pk-col--over')" ondrop="ProjectsModule.kDrop(event,'${est}')">
+        <div class="pk-col__hd"><span class="pk-dot" style="background:${col}"></span>${label}<span class="pk-n">${items.length}</span></div>
+        <div class="pk-col__body">${items.length ? items.map(_kanCard).join('') : '<div class="pk-empty">Sin proyectos</div>'}</div>
+      </div>`;
+    }).join('');
+  }
+  function _kanCard(p) {
+    const fin = _d0(p.fecha_fin), today = new Date(); today.setHours(0, 0, 0, 0);
+    const late = fin && fin < today && p.estado === 'activo';
+    const fmt = fin ? fin.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }) : '';
+    const team = (p.responsables && p.responsables.length ? p.responsables : (p.responsable ? [p.responsable] : [])).slice(0, 3)
+      .map(n => `<span class="pk-av" title="${esc(n)}">${esc(String(n).trim().charAt(0).toUpperCase())}</span>`).join('');
+    const pr = { alta: '#C4342B', media: '#D97706', baja: '#9CA3AF' }[p.prioridad] || '#9CA3AF';
+    return `<div class="pk-card" draggable="true" ondragstart="ProjectsModule.kDragStart(event,${p.id})" ondragend="ProjectsModule.kDragEnd()" onclick="ProjectsModule.openDetail(${p.id})">
+      <div class="pk-card__t"><span class="pk-pri" style="background:${pr}" title="Prioridad ${esc(p.prioridad || 'media')}"></span>${esc(p.nombre)}</div>
+      <div class="pk-card__c">${esc(p.client_nombre || '')}${p.client_empresa ? ' · ' + esc(p.client_empresa) : ''}</div>
+      <div class="pk-card__f"><span class="pk-date${late ? ' pk-date--late' : ''}">${fmt ? (late ? 'Vencido ' : 'Fin ') + fmt : 'Sin fecha fin'}</span><span class="pk-team">${team}</span></div>
+    </div>`;
+  }
+  function kDragStart(e, id) { _kanDragId = id; try { e.dataTransfer.setData('text/plain', String(id)); e.dataTransfer.effectAllowed = 'move'; } catch (_) {} e.currentTarget.classList.add('pk-card--drag'); }
+  function kDragEnd() { _kanDragId = null; document.querySelectorAll('.pk-card--drag').forEach(x => x.classList.remove('pk-card--drag')); document.querySelectorAll('.pk-col--over').forEach(x => x.classList.remove('pk-col--over')); }
+  async function kDrop(e, estado) {
+    e.preventDefault();
+    const id = _kanDragId || parseInt(e.dataTransfer && e.dataTransfer.getData('text/plain'), 10);
+    kDragEnd();
+    const p = _projects.find(x => x.id === id);
+    if (!p || p.estado === estado) { render(); return; }
+    const prev = p.estado;
+    p.estado = estado; render();
+    try {
+      const res = await apiFetch(`${API}/mgmt/projects/${id}/estado`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ estado }) });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Error');
+      const d = await res.json().catch(() => ({}));
+      showBanner(`✓ ${p.nombre}: ${estado}${d.client_inactivated ? ` · ${d.client_nombre} pasó a cliente inactivo` : ''}`, 'success');
+    } catch (err) { p.estado = prev; render(); showBanner('No se pudo cambiar el estado: ' + err.message, 'error'); }
+  }
+
+  /* ── Calendario mensual: una barra por proyecto, de fecha_inicio a fecha_fin ── */
+  let _calAnchor = new Date();
+  function calNav(delta) { _calAnchor = delta === 0 ? new Date() : new Date(_calAnchor.getFullYear(), _calAnchor.getMonth() + delta, 1); render(); }
+  function _renderCalendar(list) {
+    const el = $('projects-calendar'); if (!el) return;
+    const y = _calAnchor.getFullYear(), m = _calAnchor.getMonth();
+    const first = new Date(y, m, 1), startOff = (first.getDay() + 6) % 7;
+    const gridStart = new Date(y, m, 1 - startOff);
+    const weeks = Math.ceil((startOff + new Date(y, m + 1, 0).getDate()) / 7);
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const col = { activo: ['#D1FAE5', '#065F46'], pausado: ['#FEF3C7', '#92400E'], completado: ['#DBEAFE', '#1E40AF'], cancelado: ['#F3F4F6', '#6B7280'] };
+    const dated = list.map(p => { const i = _d0(p.fecha_inicio), f = _d0(p.fecha_fin); return { p, s: i || f, e: f || i }; }).filter(x => x.s);
+    const nodate = list.length - dated.length;
+    let html = `<div class="pc-head"><button class="pc-nav" onclick="ProjectsModule.calNav(-1)" title="Mes anterior">‹</button><button class="pc-nav" onclick="ProjectsModule.calNav(1)" title="Mes siguiente">›</button><span class="pc-title">${first.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}</span><button class="pc-today" onclick="ProjectsModule.calNav(0)">Hoy</button>${nodate ? `<span class="pc-nodate">${nodate} sin fechas</span>` : ''}</div>
+      <div class="pc-dow">${['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map(d => `<div>${d}</div>`).join('')}</div>`;
+    for (let w = 0; w < weeks; w++) {
+      const ws = new Date(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate() + w * 7);
+      const we = new Date(ws.getFullYear(), ws.getMonth(), ws.getDate() + 6);
+      const days = [...Array(7)].map((_, i) => new Date(ws.getFullYear(), ws.getMonth(), ws.getDate() + i));
+      const segs = dated.filter(x => x.s <= we && x.e >= ws).sort((a, b) => a.s - b.s || a.e - b.e).map(x => {
+        const s0 = x.s < ws ? ws : x.s, e0 = x.e > we ? we : x.e;
+        return { p: x.p, c0: Math.round((s0 - ws) / 86400000), c1: Math.round((e0 - ws) / 86400000), cl: x.s < ws, cr: x.e > we };
+      });
+      const lanes = [];
+      segs.forEach(sg => { let l = lanes.findIndex(end => end < sg.c0); if (l < 0) { l = lanes.length; lanes.push(-1); } lanes[l] = sg.c1; sg.lane = l; });
+      html += `<div class="pc-week"><div class="pc-days">${days.map(d => `<div class="pc-day${d.getMonth() !== m ? ' pc-day--out' : ''}${d.getTime() === today.getTime() ? ' pc-day--today' : ''}"><span>${d.getDate()}</span></div>`).join('')}</div>
+        <div class="pc-bars" style="grid-template-rows:repeat(${Math.max(lanes.length, 1)}, 24px)">${segs.map(sg => {
+          const k = col[sg.p.estado] || col.activo;
+          return `<div class="pc-bar${sg.cl ? ' pc-bar--cl' : ''}${sg.cr ? ' pc-bar--cr' : ''}" style="grid-column:${sg.c0 + 1} / ${sg.c1 + 2};grid-row:${sg.lane + 1};background:${k[0]};color:${k[1]}" title="${esc(sg.p.nombre)}${sg.p.client_nombre ? ' · ' + esc(sg.p.client_nombre) : ''}" onclick="ProjectsModule.openDetail(${sg.p.id})">${esc(sg.p.nombre)}</div>`;
+        }).join('')}</div></div>`;
+    }
+    el.innerHTML = html;
+  }
+
 
   async function _fetchAndPopulateClients(selectedId) {
     const sel = $('projects-client-select');
@@ -18409,7 +18510,7 @@ const ProjectsModule = (() => {
     }
   }
 
-  return { load, filter, setFilter, setMemberFilter, render, onTipoChange, openDrawer, closeDrawer, save, confirmDelete, setView, switchTab, toggleVerTodo, toggleTaskCobrado, updateTaskMonto, updateDescripcion, addLink, removeLink, _setLinkField, saveLinks, refreshCard, closeQuickClientModal, saveQuickClient, closeFirstTaskPrompt, goCreateFirstTask, toggleTaskExpand, toggleProjectExpand, openTaskMenu, _onTaskMenuEdit, _onTaskMenuAddSub, _onTaskMenuDelete, openQuickEditPopover, tqpNav, tqpPick, tqpToggleRange, tqpClear, openInlineDate, startInlineSubtask, cancelInlineSubtask, saveInlineSubtask, startEditTask, cancelEditTask, saveEditTask, deleteTaskInline, toggleSubrowExpand, distributeTaskMontos, openLinkForm, cancelLinkForm, saveLinkForm, startLinkEdit, cancelLinkEdit, saveLinkEdit, enterInfoEdit, cancelInfoEdit, saveInfoEdit, toggleInfoExpand,
+  return { load, filter, setFilter, setMemberFilter, render, kDragStart, kDragEnd, kDrop, calNav, onTipoChange, openDrawer, closeDrawer, save, confirmDelete, setView, switchTab, toggleVerTodo, toggleTaskCobrado, updateTaskMonto, updateDescripcion, addLink, removeLink, _setLinkField, saveLinks, refreshCard, closeQuickClientModal, saveQuickClient, closeFirstTaskPrompt, goCreateFirstTask, toggleTaskExpand, toggleProjectExpand, openTaskMenu, _onTaskMenuEdit, _onTaskMenuAddSub, _onTaskMenuDelete, openQuickEditPopover, tqpNav, tqpPick, tqpToggleRange, tqpClear, openInlineDate, startInlineSubtask, cancelInlineSubtask, saveInlineSubtask, startEditTask, cancelEditTask, saveEditTask, deleteTaskInline, toggleSubrowExpand, distributeTaskMontos, openLinkForm, cancelLinkForm, saveLinkForm, startLinkEdit, cancelLinkEdit, saveLinkEdit, enterInfoEdit, cancelInfoEdit, saveInfoEdit, toggleInfoExpand,
     onRespChange, onRepartoToggle, repartoIgual, repartoHint: _repartoHint, onCobroSemanalToggle, onSemanaAutoToggle,
     togglePlanDia, planHint, onRecurFreqChange,
     onHorasFijasToggle, openProjFechas,
