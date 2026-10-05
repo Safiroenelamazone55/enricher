@@ -30328,9 +30328,56 @@ ${foot}
       el.innerHTML = `<iframe class="cp-map-frame" title="Mapa de ${esc(q)}" loading="lazy" src="https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${it.lat},${it.lon}"></iframe><a class="cp-map-link" href="https://www.openstreetmap.org/?mlat=${it.lat}&mlon=${it.lon}#map=11/${it.lat}/${it.lon}" target="_blank" rel="noopener">${esc(q)} · ver mapa grande ›</a>`;
     } catch (e) { el.innerHTML = `<div class="cp-map-empty">${esc(q)}</div>`; }
   }
+  // ── Deshacer / rehacer (Ctrl+Z / Ctrl+Y) de los campos de la ficha, que se guardan solos ──
+  const _CP_KEYS = ['nombre','apellido','email','email_personal','telefono','movil','cargo','seniority','departamento','linkedin','ciudad','region','pais','company_id','fuente','notas'];
+  let _cpUndo = [], _cpRedo = [];
+  async function _cpApply(id, kv) {
+    const c = _contacts.find(x => x.id === id); if (!c) return false;
+    const payload = {};
+    _CP_KEYS.forEach(k => { payload[k] = c[k] == null ? '' : c[k]; });
+    Object.assign(payload, kv);
+    const coId = payload.company_id ? Number(payload.company_id) : null;
+    const co = coId ? _companies.find(x => x.id === coId) : null;
+    payload.company_id = coId;
+    payload.empresa_nombre = co ? (co.nombre || co.dominio || '') : '';
+    payload.estado = c.estado || 'nuevo';
+    payload.fuente = payload.fuente || 'manual';
+    payload.outbound_client_id = c.outbound_client_id || null;
+    try {
+      const res = await apiFetch(`${API}/lm/contacts/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      if (!res.ok) throw new Error((await res.json()).error || 'Error');
+      Object.assign(c, payload, { company_nombre: payload.empresa_nombre });
+      if (_section === 'contact-view' && _contactView === id) _renderBody();
+      return true;
+    } catch (e) { showBanner('No se pudo deshacer: ' + e.message, 'error'); return false; }
+  }
+  async function cpUndo(redo) {
+    const from = redo ? _cpRedo : _cpUndo, to = redo ? _cpUndo : _cpRedo;
+    const op = from.pop();
+    if (!op) { showBanner(redo ? 'Nada que rehacer' : 'Nada que deshacer', 'info'); return; }
+    const kv = {}; op.ch.forEach(([k, o, n]) => { kv[k] = redo ? n : o; });
+    if (await _cpApply(op.id, kv)) { to.push(op); showBanner(redo ? '↷ Rehecho' : '↶ Deshecho', 'success'); }
+  }
+  if (!window.__cpUndoBound) {
+    window.__cpUndoBound = true;
+    document.addEventListener('keydown', e => {
+      if (!(e.ctrlKey || e.metaKey) || _section !== 'contact-view') return;
+      const k = e.key.toLowerCase();
+      const redo = k === 'y' || (k === 'z' && e.shiftKey);
+      if (k !== 'z' && k !== 'y') return;
+      const t = e.target, c = _contacts.find(x => x.id === _contactView);
+      // Si estás escribiendo en un campo con cambios sin guardar, manda el deshacer nativo del navegador.
+      if (t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) && t.dataset && t.dataset.f && c && String(t.value) !== String(c[t.dataset.f] == null ? '' : c[t.dataset.f])) return;
+      if (t && t.isContentEditable) return;
+      if (t && /^(INPUT|TEXTAREA)$/.test(t.tagName) && !(t.dataset && t.dataset.f)) return;
+      e.preventDefault();
+      cpUndo(redo);
+    });
+  }
   async function cpSave(id) {
     const page = document.getElementById('lm-cp'); if (!page) return;
     const c = _contacts.find(x => x.id === id); if (!c) return;
+    const _before = {}; _CP_KEYS.forEach(k => { _before[k] = c[k] == null ? '' : c[k]; });
     const payload = {};
     ['nombre','apellido','email','email_personal','telefono','movil','cargo','seniority','departamento','linkedin','ciudad','region','pais','company_id','fuente','notas'].forEach(k => { payload[k] = c[k] == null ? '' : c[k]; });
     page.querySelectorAll('[data-f]').forEach(el => { payload[el.dataset.f] = el.value; });
@@ -30346,7 +30393,9 @@ ${foot}
       const res = await apiFetch(`${API}/lm/contacts/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       if (!res.ok) throw new Error((await res.json()).error || 'Error');
       Object.assign(c, payload, { company_nombre: payload.empresa_nombre });
-      showBanner('✓ Guardado', 'success');
+      const _ch = _CP_KEYS.filter(k => String(_before[k] == null ? '' : _before[k]) !== String(payload[k] == null ? '' : payload[k])).map(k => [k, _before[k], payload[k]]);
+      if (_ch.length) { _cpUndo.push({ id, ch: _ch }); if (_cpUndo.length > 50) _cpUndo.shift(); _cpRedo = []; }
+      showBanner(_ch.length ? '✓ Guardado · Ctrl+Z para deshacer' : '✓ Guardado', 'success');
       // El objeto en _contacts quedaba actualizado, pero la tarjeta "Disponibilidad
       // de canales" (y el botón de WhatsApp en la tarea, si estaba abierta) ya se
       // había pintado con el dato viejo y nunca se repintaba — reportado en vivo
@@ -32161,7 +32210,7 @@ ${foot}
   return { load, filter, setFilter, setView, go, openClient, clientTab, _clientGoTab, clientQuickMenu,
     openImportPicker, closeImportPicker, openImport, closeImport, impFile, impToggleHeader, impToggleUpdateExisting, impSetObc, impNewClient, impRun, exportCsv,
     cbxOpen, cbxFilter, cbxPick, cbxBlur,
-    openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, ctMoreMenu, lmSetValueOp, bulkDeleteContacts, bulkAddOpen, bulkAddDo, _bulkAddAfterCreate, bulkRemoveSeqOpen, bulkRemoveSeqDo, openContactPage, cpTab, cpSave, cpDelete, cpActOpen, cpTouchOpen, cpTouchSave, cpActSave, cpActToggle, cpActDel, ctQFSet, ctQFClear,
+    openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, ctMoreMenu, lmSetValueOp, bulkDeleteContacts, bulkAddOpen, bulkAddDo, _bulkAddAfterCreate, bulkRemoveSeqOpen, bulkRemoveSeqDo, openContactPage, cpTab, cpSave, cpUndo, cpDelete, cpActOpen, cpTouchOpen, cpTouchSave, cpActSave, cpActToggle, cpActDel, ctQFSet, ctQFClear,
     cpResumeSeq, cpFocusField, cpOpenRegisterReply, cpSaveRegisterReply,
     openCompany, closeCompany, saveCompany, deleteCompany, enrichCompanyLookup, filterCompanies, toggleCo, toggleCoAll, clearCoSel, toggleCoSelMode, coMoreMenu, bulkDeleteCompanies, coEnrolOpen, coEnrolFilter, coEnrolPick, openCompanyPage, coQFSet, coQFClear,
     coQueueAddContact, coQueueDiscard, coQueueTogglePrimary, coQueueContinue,
