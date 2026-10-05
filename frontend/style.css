@@ -17860,3 +17860,6 @@ textarea.mt-i{height:auto;padding:9px 10px;resize:vertical;line-height:1.45}
 .mt-chips__l{font-size:.72rem;color:#94A3B8}
 .mt-chip{border:1px solid #D6D3CD;background:#fff;padding:3px 8px;font:inherit;font-size:.74rem;color:#334155;cursor:pointer}
 .mt-chip:hover{border-color:#00804C;color:#00804C}
+
+/* Deals: menu de la tarjeta con bordes rectos */
+.dl-pop,.dl-pop *,.dl-card__mt{border-radius:0 !important}
