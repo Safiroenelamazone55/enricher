@@ -311,6 +311,8 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback) {
        AND NOT EXISTS (
             SELECT 1 FROM lm_mailboxes mb
              WHERE mb.outbound_client_id = s.outbound_client_id AND mb.ramp_on AND mb.ramp_started_on IS NOT NULL
+               -- el límite propio de la secuencia lo decide la persona: si lo puso, prevalece sobre el calentamiento (que es el valor por defecto)
+               AND COALESCE(s.daily_limit, 0) <= 0
                AND (SELECT COUNT(*) FROM lm_messages mm JOIN sequences ss ON ss.id = mm.sequence_id
                      WHERE ss.outbound_client_id = mb.outbound_client_id AND mm.estado IN ('sent','replied','bounced')
                        AND (mm.sent_at AT TIME ZONE $2)::date = (NOW() AT TIME ZONE $2)::date)

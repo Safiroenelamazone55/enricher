@@ -17781,3 +17781,8 @@ tr.tk-flash > td { background-color: #FEF9C3; animation: none; }
 .seq-cap__l { background: #F1F5F9; }
 .seq-cap__leg i.seq-cap__l { background: #F1F5F9; border-color: #CBD5E1; }
 .seq-cap__warn { padding: 8px 10px; background: #FEF3C7; color: #78350F; font-size: .78rem; line-height: 1.45; border-left: 3px solid #D97706; }
+
+/* Campo con unidad (días) */
+.seq-unit { position: relative; display: flex; align-items: center; }
+.seq-unit .form-input { width: 100%; padding-right: 54px; }
+.seq-unit__u { position: absolute; right: 14px; font-size: .84rem; font-weight: 600; color: var(--text-muted); pointer-events: none; }

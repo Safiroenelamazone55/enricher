@@ -5228,10 +5228,11 @@ app.get('/api/lm/mailbox-capacity', requireAuth, async (req, res) => {
     const otras = porSeq.filter(x => x.id !== sid && x.hoy > 0);
     const hoyCliente = porSeq.reduce((a, x) => a + x.hoy, 0), hoyOtras = hoyCliente - esta.hoy;
     const limites = [];
-    if (capBuzon !== null) limites.push({ clave: 'buzon', texto: 'el calentamiento del buzón', resta: Math.max(0, capBuzon - hoyCliente) });
-    if (cfg && cfg.enabled) limites.push({ clave: 'workspace', texto: 'el límite global del workspace', resta: Math.max(0, cfg.daily_limit - ws.n) });
     const limSeq = parseInt(req.query.limit);
     const limiteSeq = isNaN(limSeq) ? esta.limite : limSeq;
+    // el calentamiento del buzón solo cuenta cuando la secuencia NO tiene límite propio (tu número, si lo pones, manda)
+    if (capBuzon !== null && !(limiteSeq > 0)) limites.push({ clave: 'buzon', texto: 'el calentamiento del buzón', resta: Math.max(0, capBuzon - hoyCliente) });
+    if (cfg && cfg.enabled) limites.push({ clave: 'workspace', texto: 'el límite global del workspace', resta: Math.max(0, cfg.daily_limit - ws.n) });
     if (limiteSeq > 0) limites.push({ clave: 'secuencia', texto: 'el límite de esta secuencia', resta: Math.max(0, limiteSeq - esta.hoy) });
     const mas = limites.length ? limites.reduce((a, b) => (b.resta < a.resta ? b : a)) : null;
     res.json({
@@ -5242,6 +5243,7 @@ app.get('/api/lm/mailbox-capacity', requireAuth, async (req, res) => {
       otras_activas: porSeq.filter(x => x.id !== sid && x.estado === 'activa' && ['auto', 'preaprobado'].includes(x.send_mode)).length,
       enviados_cliente_hoy: hoyCliente, enviados_otras_hoy: hoyOtras,
       puedes_hoy: mas ? mas.resta : null, limita: mas ? mas.clave : null, limita_texto: mas ? mas.texto : null,
+      sobre_calentamiento: limiteSeq > 0 && capBuzon !== null && limiteSeq > capBuzon,
     });
   } catch (err) { console.error('[capacity]', err.message); res.status(500).json({ error: 'No se pudo calcular' }); }
 });

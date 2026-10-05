@@ -28747,7 +28747,7 @@ ${foot}
           ${[2, 3, 4, 5].map(n => `<option value="${n}"${s?.rotacion_empresa_paso === n ? ' selected' : ''}>Llegue al paso ${n} sin responder</option>`).join('')}
         </select><span class="seq-drip-hint">El primero sigue su curso igual — esto solo decide cuándo se suma el siguiente, no lo detiene.</span></label>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Límite diario de envíos (esta secuencia)</span><input class="form-input" type="number" id="seq-dlim" min="0" step="1" value="${s?.daily_limit ? s.daily_limit : ''}" placeholder="0 = usa el límite global del workspace"><span class="seq-drip-hint">Tope de emails automáticos por día de ESTA secuencia. Al llegar al tope, el motor sigue con las demás y esta continúa mañana.</span><div id="seq-cap" class="seq-cap"><div class="seq-cap__load">Calculando cuánto puedes enviar hoy…</div></div></label>
-        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Nutrición automática</span><input class="form-input" type="number" id="seq-nurture" min="0" step="1" value="${s?.nurture_days ? s.nurture_days : ''}" placeholder="Vacío = apagado, nunca se activa sola"><span class="seq-drip-hint">Si un contacto termina TODOS los pasos sin responder (ni ningún otro estado), pasa solo a "Contactar más adelante" con esta cantidad de días de espera — nunca se reinscribe en ninguna secuencia sola, solo crea un aviso en Tareas comerciales ("Para retomar") para que decidas qué hacer.</span></label>
+        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Nutrición automática (días)</span><div class="seq-unit"><input class="form-input" type="number" id="seq-nurture" min="0" step="1" value="${s?.nurture_days ? s.nurture_days : ''}" placeholder="Ej. 90 · vacío = apagada"><span class="seq-unit__u">días</span></div><span class="seq-drip-hint">Si un contacto termina TODOS los pasos sin responder (ni ningún otro estado), pasa solo a "Contactar más adelante" con esta cantidad de días de espera — nunca se reinscribe en ninguna secuencia sola, solo crea un aviso en Tareas comerciales ("Para retomar") para que decidas qué hacer.</span></label>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Canal principal (para re-enrutar al aceptar/responder)</span><select class="form-input" id="seq-pref-channel">
           <option value=""${!(s?.preferred_channel) ? ' selected' : ''}>Auto — primer paso de rama replied (sin importar canal)</option>
           <option value="linkedin"${s?.preferred_channel === 'linkedin' ? ' selected' : ''}>LinkedIn preferido — si acepta la conexión, saltar al primer paso LinkedIn de la rama replied</option>
@@ -28785,7 +28785,7 @@ ${foot}
       const r = await apiFetch(`${API}/lm/mailbox-capacity?client_id=${cid}&sequence_id=${seqId || 0}${lim !== '' && lim != null ? '&limit=' + encodeURIComponent(lim) : ''}`);
       const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Error');
       if (!d.buzon) { box.innerHTML = '<div class="seq-cap__load">Este cliente aún no tiene buzón conectado.</div>'; return; }
-      const cap = d.buzon.cap_hoy != null ? d.buzon.cap_hoy : (d.workspace.activo ? d.workspace.limite : null);
+      const cap = d.esta.limite > 0 ? d.esta.limite : (d.buzon.cap_hoy != null ? d.buzon.cap_hoy : (d.workspace.activo ? d.workspace.limite : null));
       const esta = d.esta.enviados_hoy, otras = d.enviados_otras_hoy;
       let barra = '';
       if (cap) {
@@ -28795,15 +28795,14 @@ ${foot}
       }
       const puede = d.puedes_hoy;
       const lineas = [];
-      if (d.buzon.cap_hoy != null) lineas.push(`Buzón <b>${esc(d.buzon.email)}</b>: hasta <b>${d.buzon.cap_hoy}</b> por día (calentamiento, semana ${d.buzon.semana}); entre todas las secuencias de este cliente.`);
+      if (d.buzon.cap_hoy != null) lineas.push(d.esta.limite > 0 ? `Buzón <b>${esc(d.buzon.email)}</b>: el calentamiento recomienda <b>${d.buzon.cap_hoy}</b> por día (semana ${d.buzon.semana}); tu límite de esta secuencia <b>manda</b>.` : `Buzón <b>${esc(d.buzon.email)}</b>: hasta <b>${d.buzon.cap_hoy}</b> por día (calentamiento, semana ${d.buzon.semana}); entre todas las secuencias de este cliente.`);
       else lineas.push(`Buzón <b>${esc(d.buzon.email)}</b>: sin calentamiento, sin tope propio.`);
       if (d.workspace.activo) lineas.push(`Todo tu workspace: límite global de <b>${d.workspace.limite}</b> por día, ya van <b>${d.workspace.enviados_hoy}</b> entre todos los clientes.`);
       else lineas.push('El envío automático global está <b>apagado</b>: las secuencias automáticas no enviarán hasta activarlo.');
       if (d.esta.limite > 0) lineas.push(`Esta secuencia: máximo <b>${d.esta.limite}</b> por día.`);
       if (d.otras.length) lineas.push('Otras secuencias que enviaron hoy: ' + d.otras.map(x => esc(x.nombre) + ' (' + x.hoy + ')').join(', ') + '.');
       // Si el límite que escribió la persona es mayor que lo que hoy permite otro tope, no se va a alcanzar: se avisa.
-      const exceso = d.esta.limite > 0 && puede != null && d.limita && d.limita !== 'secuencia' && d.esta.limite > (puede + d.esta.enviados_hoy);
-      const aviso = exceso ? `<div class="seq-cap__warn">Pusiste <b>${d.esta.limite}</b>, pero hoy ${esc(d.limita_texto)} solo permite <b>${puede + d.esta.enviados_hoy}</b>. Manda siempre el límite más bajo; tu número se alcanzará cuando ese tope suba.</div>` : '';
+      const aviso = d.sobre_calentamiento ? `<div class="seq-cap__warn">Estás por encima de lo recomendado: el calentamiento sugiere <b>${d.buzon.cap_hoy}</b> por día para este buzón (semana ${d.buzon.semana}). <b>Se respetará tu límite de ${d.esta.limite}</b>, pero enviar tanto con un buzón nuevo aumenta el riesgo de caer en spam.</div>` : '';
       box.innerHTML = `<div class="seq-cap__head">${puede == null ? 'Sin tope configurado hoy' : `Hoy puedes enviar con esta secuencia: <b>${puede}</b> emails`}${d.limita_texto && puede != null ? `<small>Lo limita ${esc(d.limita_texto)}</small>` : ''}</div>${aviso}${barra}<ul class="seq-cap__ls">${lineas.map(x => '<li>' + x + '</li>').join('')}</ul>`;
     } catch (e) { box.innerHTML = '<div class="seq-cap__load">No se pudo calcular: ' + esc(e.message) + '</div>'; }
   }
