@@ -2805,13 +2805,23 @@ setTimeout(_weeklyBillingTick, 20 * 1000); // al arrancar (con margen para la mi
 // como si quedó "pendiente" sin marcar.
 async function _archiveOldWeeklyTasksTick() {
   try {
+    // 2 pasadas: la 1.ª archiva las tareas semanales; la 2.ª sus subtareas (que dependen de que el padre ya esté archivado)
+    for (let pass = 0; pass < 2; pass++) {
     const r = await pool.query(
       `UPDATE tasks SET archivada=TRUE
         WHERE archivada=FALSE
-          AND (semana_week IS NOT NULL OR billing_week IS NOT NULL OR recur_template_id IS NOT NULL)
-          AND deadline IS NOT NULL AND deadline < CURRENT_DATE
+          AND (
+                semana_week IS NOT NULL OR billing_week IS NOT NULL OR recur_template_id IS NOT NULL
+                -- subtareas de una tarea semanal ya archivada (ej. "Campaña nueva" dentro de "SAL REP COC · 28 sep – 4 oct"):
+                -- no llevan marca propia y quedaban sueltas en Mis tareas como vencidas
+                OR parent_task_id IN (SELECT id FROM tasks p WHERE p.archivada=TRUE AND (p.semana_week IS NOT NULL OR p.billing_week IS NOT NULL OR p.recur_template_id IS NOT NULL))
+          )
+          -- "hoy" en hora de Lima (la usuaria), no en UTC: antes archivaba a las 7 p. m. del domingo
+          AND deadline IS NOT NULL AND deadline < (NOW() AT TIME ZONE 'America/Lima')::date
         RETURNING id, titulo`);
     if (r.rowCount) console.log(`[archivar-semanal] ${r.rowCount} tarea(s) semanal(es) archivada(s): ${r.rows.map(x => x.titulo).join(', ')}`);
+    if (!r.rowCount) break;
+    }
   } catch (e) { console.error('[archivar-semanal]', e.message); }
 }
 setInterval(_archiveOldWeeklyTasksTick, 60 * 60 * 1000);
