@@ -28748,11 +28748,11 @@ ${foot}
         </select><span class="seq-drip-hint">El primero sigue su curso igual — esto solo decide cuándo se suma el siguiente, no lo detiene.</span></label>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Límite diario de envíos (esta secuencia)</span><input class="form-input" type="number" id="seq-dlim" min="0" step="1" value="${s?.daily_limit ? s.daily_limit : ''}" placeholder="0 = usa el límite global del workspace"><span class="seq-drip-hint">Tope de emails automáticos por día de ESTA secuencia. Al llegar al tope, el motor sigue con las demás y esta continúa mañana.</span><div id="seq-cap" class="seq-cap"><div class="seq-cap__load">Calculando cuánto puedes enviar hoy…</div></div></label>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Nutrición automática (días)</span><div class="seq-unit"><input class="form-input" type="number" id="seq-nurture" min="0" step="1" value="${s?.nurture_days ? s.nurture_days : ''}" placeholder="Ej. 90 · vacío = apagada"><span class="seq-unit__u">días</span></div><span class="seq-drip-hint">Si un contacto termina TODOS los pasos sin responder (ni ningún otro estado), pasa solo a "Contactar más adelante" con esta cantidad de días de espera — nunca se reinscribe en ninguna secuencia sola, solo crea un aviso en Tareas comerciales ("Para retomar") para que decidas qué hacer.</span></label>
-        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Canal principal (para re-enrutar al aceptar/responder)</span><select class="form-input" id="seq-pref-channel">
-          <option value=""${!(s?.preferred_channel) ? ' selected' : ''}>Auto — primer paso de rama replied (sin importar canal)</option>
-          <option value="linkedin"${s?.preferred_channel === 'linkedin' ? ' selected' : ''}>LinkedIn preferido — si acepta la conexión, saltar al primer paso LinkedIn de la rama replied</option>
-          <option value="email"${s?.preferred_channel === 'email' ? ' selected' : ''}>Email preferido — si responde un email, saltar al primer paso Email de la rama replied</option>
-        </select><span class="seq-drip-hint">Cuando el prospecto acepta la conexión o responde, el sistema salta a la rama "solo si respondió". Con canal principal, prioriza los pasos de ESE canal para el salto (útil si empiezas por LinkedIn y quieres que el seguimiento post-aceptación siga por ahí, aunque ya estés en pasos de email).</span></label>
+        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Canal principal</span><select class="form-input" id="seq-pref-channel" onchange="LeadManagerModule._seqPrefHint()">
+          <option value=""${!(s?.preferred_channel) ? ' selected' : ''}>Automático</option>
+          <option value="linkedin"${s?.preferred_channel === 'linkedin' ? ' selected' : ''}>LinkedIn</option>
+          <option value="email"${s?.preferred_channel === 'email' ? ' selected' : ''}>Email</option>
+        </select><span class="seq-drip-hint" id="seq-pref-hint"></span></label>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Objetivo</span><textarea class="form-input lm-ta-grow" id="seq-objetivo" rows="2" placeholder="Ej. Agendar demo">${s ? esc(s.objetivo) : ''}</textarea></label>
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Mercado (de esta secuencia)</span><textarea class="form-input lm-ta-grow" id="seq-mercado" rows="2" placeholder="Ej. EE. UU. · Field services">${s ? esc(s.mercado || '') : ''}</textarea></label>
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">ICP (de esta secuencia)</span><textarea class="form-input lm-ta-grow" id="seq-icp" rows="2" placeholder="Ej. Owners 5–50 empleados">${s ? esc(s.icp || '') : ''}</textarea></label>
@@ -28771,9 +28771,17 @@ ${foot}
     setTimeout(() => $('seq-nombre')?.focus(), 60);
     if (_mailboxes === null) _mbReload().then(() => seqModeHint()); else seqModeHint();
     const cl = $('seq-client'); if (cl) cl.addEventListener('change', seqModeHint);
+    _seqPrefHint();
     _seqCapLoad(s ? s.id : 0);
     if (cl) cl.addEventListener('change', () => _seqCapLoad(s ? s.id : 0));
     const dl = $('seq-dlim'); if (dl) dl.addEventListener('input', () => { clearTimeout(window.__seqCapT); window.__seqCapT = setTimeout(() => _seqCapLoad(s ? s.id : 0), 350); });
+  }
+  // Explica en una línea qué hace el canal principal elegido (los pasos con condición "si respondió" saltan según esto)
+  function _seqPrefHint() {
+    const v = $('seq-pref-channel')?.value || '', h = $('seq-pref-hint'); if (!h) return;
+    h.textContent = v === 'linkedin' ? 'Si el prospecto acepta la conexión o responde, salta al primer paso de LinkedIn de la rama “si respondió”. Útil si empiezas por LinkedIn.'
+      : v === 'email' ? 'Si el prospecto responde un email, salta al primer paso de Email de la rama “si respondió”.'
+      : 'Si el prospecto acepta o responde, salta al primer paso de la rama “si respondió”, sea del canal que sea.';
   }
   // Disponibilidad real de envío de hoy (buzón + workspace + esta secuencia), con barra simple
   async function _seqCapLoad(seqId) {
@@ -32726,7 +32734,7 @@ ${foot}
   return { load, filter, setFilter, setView, go, openClient, clientTab, _clientGoTab, clientQuickMenu,
     openImportPicker, closeImportPicker, openImport, closeImport, impFile, impToggleHeader, impToggleUpdateExisting, impSetObc, impNewClient, impRun, exportCsv,
     cbxOpen, cbxFilter, cbxPick, cbxBlur,
-    mbHealthOpen, mbHealthClose, mbHealthRun, mbhCopy, mbhCopyAdmin, mbRampSave, _cpBack, _cpDelRun, openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, ctMoreMenu, lmSetValueOp, bulkDeleteContacts, bulkAddOpen, bulkAddDo, _bulkAddAfterCreate, bulkRemoveSeqOpen, bulkRemoveSeqDo, openContactPage, cpTab, cpSave, cpUndo, cpDelete, cpActOpen, cpTouchOpen, cpTouchSave, cpActSave, cpActToggle, cpActDel, ctQFSet, ctQFClear,
+    _seqPrefHint, mbHealthOpen, mbHealthClose, mbHealthRun, mbhCopy, mbhCopyAdmin, mbRampSave, _cpBack, _cpDelRun, openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, ctMoreMenu, lmSetValueOp, bulkDeleteContacts, bulkAddOpen, bulkAddDo, _bulkAddAfterCreate, bulkRemoveSeqOpen, bulkRemoveSeqDo, openContactPage, cpTab, cpSave, cpUndo, cpDelete, cpActOpen, cpTouchOpen, cpTouchSave, cpActSave, cpActToggle, cpActDel, ctQFSet, ctQFClear,
     cpResumeSeq, cpFocusField, cpOpenRegisterReply, cpSaveRegisterReply,
     openCompany, closeCompany, saveCompany, deleteCompany, enrichCompanyLookup, filterCompanies, toggleCo, toggleCoAll, clearCoSel, toggleCoSelMode, coMoreMenu, bulkDeleteCompanies, coEnrolOpen, coEnrolFilter, coEnrolPick, openCompanyPage, coQFSet, coQFClear,
     coQueueAddContact, coQueueDiscard, coQueueTogglePrimary, coQueueContinue,
