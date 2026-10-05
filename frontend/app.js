@@ -21218,8 +21218,8 @@ ${foot}
           <button class="lm-bulk-ghost" onclick="LeadManagerModule.seqCtSelClear()">Ninguno</button>
           <button class="lm-bulk-act" onclick="LeadManagerModule.seqCtSelAddToSeq(${id})">＋ Agregar a otra secuencia</button>
         </div>` : '';
-      return `<div style="display:flex;gap:6px;flex-wrap:wrap;margin:0 0 8px">${chips}</div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px">${dChips}</div>${bar}` +
+      return `<div class="seq-chiprow">${chips}</div>
+        <div class="seq-chiprow seq-chiprow--2">${dChips}</div>${bar}` +
         (fl.length
           ? `<div class="clients-table-wrap"><table class="clients-table lm-dt"><thead><tr><th style="width:34px"><input type="checkbox" class="lm-ck" ${flIds.length && flIds.every(i => _seqCtSel.has(i)) ? 'checked' : ''} onchange="LeadManagerModule.seqCtSelAll(this.checked,${id})"></th><th>Contacto</th><th>Progreso</th><th>Estado</th><th>Resultado</th><th></th></tr></thead><tbody>${fl.map(e => _seqCtRow(e, steps, id)).join('')}</tbody></table></div>`
           : `<div class="cp-empty2" style="padding:16px">Nadie con este filtro.</div>`);

@@ -17655,3 +17655,9 @@ tr.tk-flash > td { background-color: #FEF9C3; animation: none; }
 /* Secuencia › Contactos: chip 'Por resolver' destacado */
 .lm-filter-btn--pend { border-color: #FCD34D; background: #FFFBEB; color: #92400E; }
 .lm-filter-btn--pend.on { background: #FEF3C7; border-color: #F59E0B; color: #78350F; }
+
+/* Secuencia › Contactos: cada fila de chips cabe en UNA línea (compactos; si no cabe, se desplaza sin barra) */
+.seq-chiprow { display: flex; gap: 6px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 0 8px; }
+.seq-chiprow::-webkit-scrollbar { display: none; }
+.seq-chiprow--2 { margin-bottom: 12px; }
+.seq-chiprow .lm-filter-btn { flex: 0 0 auto; padding: 5px 11px; font-size: .78rem; white-space: nowrap; }
