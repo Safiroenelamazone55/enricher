@@ -26835,52 +26835,55 @@ ${foot}
     return { txt: '', local: '' };
   }
   async function _rpReload() { try { const r = await _portalApi(`/lm/reports/${_RP.cid}`); _RP.info = Object.assign({}, _RP.info, { schedule: r.schedule, last_sent_at: r.last_sent_at, last_recipients: r.last_recipients, last_by: r.last_by }); } catch (e) { /* se conserva lo mostrado */ } _rpSide(); }
-  function _rpAutoCard() {
-    const S = _RP.sched, i = _RP.info || {};
-    if (!S.on) return '';
-    const sch = i.schedule || {};
-    const nxt = _rpNext(S, sch.last_auto || '', sch.skip_date || '');
-    const skipped = sch.skip_date ? _rpNext(S, sch.last_auto || '', '') : null;   // la fecha que se omite
-    const last = i.last_sent_at ? new Date(i.last_sent_at).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'todavía ninguno';
-    const paused = !!sch.paused;
-    const head = paused ? 'Envío automático en pausa' : 'Envío automático activo';
-    return `<div class="rp-auto${paused ? ' rp-auto--paused' : ''}"><div class="rp-auto__h"><span class="rp-auto__dot"></span>${head}</div>
-      ${paused ? '<div class="rp-auto__note">No se enviará nada hasta que lo reanudes. Se conservan el día, la hora y los destinatarios.</div>' : `
-      <div class="rp-auto__r"><span>Próximo envío</span><b>${_rpEsc(nxt.txt || '—')}</b> <em>${_rpEsc(_rpTzName(S.tz))}</em></div>
-      ${nxt.local ? `<div class="rp-auto__r"><span>Tu hora</span><b>${_rpEsc(nxt.local)}</b></div>` : ''}
-      ${skipped && skipped.txt ? `<div class="rp-auto__note">Se omite el envío de <b>${_rpEsc(skipped.txt)}</b>.</div>` : ''}`}
-      <div class="rp-auto__r"><span>Se envía a</span><b>${_RP.recipients.map(_rpEsc).join(', ') || '—'}</b></div>
-      <div class="rp-auto__r"><span>Idioma</span><b>${_RP_LANGN[_RP.lang]}</b></div>
-      <div class="rp-auto__r"><span>Último envío</span><b>${_rpEsc(last)}</b>${i.last_by ? ' <em>· ' + _rpEsc(i.last_by) + '</em>' : ''}</div>
-      <div class="rp-auto__btns">
-        <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.reportPause(${paused ? 'false' : 'true'})">${paused ? '▶ Reanudar' : '⏸ Pausar'}</button>
-        ${paused ? '' : (sch.skip_date ? '<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.reportSkip(false)">Cancelar salto</button>' : '<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.reportSkip(true)" title="No se envía la próxima vez; las siguientes semanas siguen igual">Saltar esta semana</button>')}
-      </div></div>`;
+  // Panel izquierdo del informe semanal. Jerarquía: 1) estado + interruptor, 2) próximo envío y acciones,
+  // 3) destinatarios, 4) mensaje, 5) último envío + botón de enviar. Nada de la información se quitó.
+  function _rpHero() {
+    const S = _RP.sched, i = _RP.info || {}, sch = i.schedule || {};
+    const on = !!S.on, draft = !!S.draft, paused = on && !!sch.paused;
+    const state = draft ? 'draft' : (on ? (paused ? 'paused' : 'on') : 'off');
+    const sub = { on: 'Activo', paused: 'En pausa', draft: 'Configurando…', off: 'Apagado · envío manual' }[state];
+    let body = '';
+    if (state === 'on') {
+      const nxt = _rpNext(S, sch.last_auto || '', sch.skip_date || '');
+      const skipped = sch.skip_date ? _rpNext(S, sch.last_auto || '', '') : null;
+      body += `<div class="rp-hero__next"><div class="rp-hero__nl">Próximo envío</div><div class="rp-hero__nv">${_rpEsc(nxt.txt || '—')}</div>
+        <div class="rp-hero__nz">${_rpEsc(_rpTzName(S.tz))}${nxt.local ? ' · tu hora: <b>' + _rpEsc(nxt.local) + '</b>' : ''}</div></div>`;
+      if (skipped && skipped.txt) body += `<div class="rp-hero__skip">Se omite el envío de <b>${_rpEsc(skipped.txt)}</b></div>`;
+    } else if (state === 'paused') {
+      body += '<div class="rp-hero__skip">No se enviará nada hasta que lo reanudes. Se conservan día, hora y destinatarios.</div>';
+    }
+    if (on) {
+      body += `<div class="rp-hero__btns"><button class="rp-lnk" onclick="LeadManagerModule.reportPause(${paused ? 'false' : 'true'})">${paused ? '▶ Reanudar' : '⏸ Pausar'}</button>${paused ? '' : (sch.skip_date ? '<button class="rp-lnk" onclick="LeadManagerModule.reportSkip(false)">Cancelar salto</button>' : '<button class="rp-lnk" onclick="LeadManagerModule.reportSkip(true)" title="No se envía la próxima vez; las siguientes semanas siguen igual">Saltar esta semana</button>')}</div>`;
+    }
+    if (on || draft) {
+      body += `<div class="rp-hero__cfg"><span>Cada</span>
+        <select class="pa-sel" onchange="LeadManagerModule.reportSched('dow',this.value)">${_RP_DAYS.map((d, k) => `<option value="${k}"${k === S.dow ? ' selected' : ''}>${d}</option>`).join('')}</select>
+        <span>a las</span>
+        <select class="pa-sel" onchange="LeadManagerModule.reportSched('hour',this.value)">${Array.from({ length: 17 }, (_, k) => k + 6).map(hh => `<option value="${hh}"${hh === S.hour ? ' selected' : ''}>${String(hh).padStart(2, '0')}:00</option>`).join('')}</select>
+        <select class="pa-sel rp-hero__tz" onchange="LeadManagerModule.reportSched('tz',this.value)">${_RP_TZ.map(z => `<option value="${z[0]}"${z[0] === S.tz ? ' selected' : ''}>${z[1]}</option>`).join('')}</select></div>`;
+    }
+    if (draft) body += `<div class="rp-hero__btns"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.reportActivate()">Activar envío automático</button><button class="rp-lnk" onclick="LeadManagerModule.reportMode(false)">Cancelar</button></div>`;
+    if (i.schedule && i.schedule.error) body += `<div class="rp-from rp-from--bad" style="margin-top:8px">El último envío automático falló: ${_rpEsc(i.schedule.error)}</div>`;
+    return `<div class="rp-hero rp-hero--${state}">
+      <div class="rp-hero__top"><div><div class="rp-hero__k">Envío automático</div><div class="rp-hero__s"><i></i>${sub}</div></div>
+        <label class="rp-sw" title="${on || draft ? 'Apagar el envío automático (pasa a manual)' : 'Activar el envío automático'}"><input type="checkbox" ${on || draft ? 'checked' : ''} onchange="LeadManagerModule.reportMode(this.checked)"><span></span></label></div>
+      ${body}</div>`;
   }
   function _rpSide() {
     const s = document.getElementById('rp-side'); if (!s) return; const i = _RP.info || {};
     const chips = _RP.recipients.map((e, k) => `<span class="rp-chip">${_rpEsc(e)}<button title="Quitar" onclick="LeadManagerModule.reportRm(${k})">✕</button></span>`).join('');
     const sug = (i.suggested || []).filter(a => !_RP.recipients.includes(String(a.email).toLowerCase())).map(a => `<button class="rp-sug" onclick="LeadManagerModule.reportAdd('${_rpEsc(a.email)}')"><span>＋</span> ${_rpEsc(a.email)}${a.nombre ? ` <em>${_rpEsc(a.nombre)}</em>` : ''}</button>`).join('');
-    const mb = i.mailbox ? `<div class="rp-from">Se envía desde el buzón <b>${_rpEsc(i.mailbox.email)}</b> del cliente</div>` : `<div class="rp-from rp-from--bad">Este cliente no tiene un buzón conectado: no se puede enviar el informe.</div>`;
-    s.innerHTML = `${_rpAutoCard()}${mb}
-      <div class="rp-l">Destinatarios (equipo del cliente)</div>
-      <div class="rp-chips">${chips || '<span style="color:#94A3B8">Aún no hay destinatarios</span>'}</div>
-      <div class="rp-add"><input class="lm-inp" id="rp-in" type="email" placeholder="correo@empresa.com" onkeydown="if(event.key===\'Enter\'||event.key===\',\'){event.preventDefault();LeadManagerModule.reportAddInput()}"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.reportAddInput()">Agregar</button></div>
-      ${sug ? `<div class="rp-l" style="margin-top:12px">Sugeridos · ya tienen acceso al portal</div><div class="rp-sugs">${sug}</div>` : ''}
-      <div class="rp-l">Idioma del mensaje</div>
-      <select class="pa-sel" id="rp-lang" onchange="LeadManagerModule.reportLang(this.value)"><option value="es">Español</option><option value="en">English</option><option value="de">Deutsch</option><option value="pt">Português</option></select>
-      <div class="rp-l">Mensaje adicional (opcional)</div>
-      <textarea class="lm-inp" id="rp-note" rows="3" maxlength="1200" placeholder="Un comentario tuyo que aparece arriba del resumen…" oninput="LeadManagerModule.reportNote(this.value)">${_rpEsc(_RP.note)}</textarea>
-      <div class="rp-l">Modo de envío</div>
-      <div class="rp-seg"><button class="${_RP.sched.on || _RP.sched.draft ? '' : 'on'}" onclick="LeadManagerModule.reportMode(false)">Manual</button><button class="${_RP.sched.on || _RP.sched.draft ? 'on' : ''}" onclick="LeadManagerModule.reportMode(true)">Automático</button></div>
-      ${_RP.sched.on || _RP.sched.draft ? `<div class="rp-sched">
-        <div class="rp-sr"><span>Día</span><select class="pa-sel" onchange="LeadManagerModule.reportSched('dow',this.value)">${_RP_DAYS.map((d, k) => `<option value="${k}"${k === _RP.sched.dow ? ' selected' : ''}>${d}</option>`).join('')}</select></div>
-        <div class="rp-sr"><span>Hora</span><select class="pa-sel" onchange="LeadManagerModule.reportSched('hour',this.value)">${Array.from({ length: 17 }, (_, k) => k + 6).map(h => `<option value="${h}"${h === _RP.sched.hour ? ' selected' : ''}>${String(h).padStart(2, '0')}:00</option>`).join('')}</select></div>
-        <div class="rp-sr"><span>Zona</span><select class="pa-sel" onchange="LeadManagerModule.reportSched('tz',this.value)">${_RP_TZ.map(z => `<option value="${z[0]}"${z[0] === _RP.sched.tz ? ' selected' : ''}>${z[1]}</option>`).join('')}</select></div>
-        <div class="rp-sr"><span>Idioma</span><select class="pa-sel" onchange="LeadManagerModule.reportLang(this.value)">${Object.keys(_RP_LANGN).map(k => `<option value="${k}"${k === _RP.lang ? ' selected' : ''}>${_RP_LANGN[k]}</option>`).join('')}</select></div>
-        ${_RP.sched.draft ? `<div class="rp-hint">Revisa el día, la hora y el idioma. Aún no está activo.</div><div style="display:flex;gap:6px;margin-top:6px"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.reportActivate()">Activar envío automático</button><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.reportMode(false)">Cancelar</button></div>` : `<div class="rp-hint">Activo: se envía solo a los destinatarios guardados, desde el buzón del cliente. Vuelve a Manual cuando quieras.</div>`}
-        ${i.schedule && i.schedule.error ? `<div class="rp-from rp-from--bad" style="margin-top:6px">El último envío automático falló: ${_rpEsc(i.schedule.error)}</div>` : ''}</div>` : ''}
-      <div class="rp-l">Último envío</div><div class="rp-last">${_rpLast(i)}</div>
+    const mb = i.mailbox ? `<div class="rp-from">Se envía desde <b>${_rpEsc(i.mailbox.email)}</b> (buzón del cliente)</div>` : `<div class="rp-from rp-from--bad">Este cliente no tiene un buzón conectado: no se puede enviar el informe.</div>`;
+    s.innerHTML = `${_rpHero()}
+      <div class="rp-sec"><div class="rp-sec__h">Destinatarios <em>equipo del cliente</em></div>
+        <div class="rp-chips">${chips || '<span style="color:#94A3B8">Aún no hay destinatarios</span>'}</div>
+        <div class="rp-add"><input class="lm-inp" id="rp-in" type="email" placeholder="correo@empresa.com" onkeydown="if(event.key===\'Enter\'||event.key===\',\'){event.preventDefault();LeadManagerModule.reportAddInput()}"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.reportAddInput()">Agregar</button></div>
+        ${sug ? `<div class="rp-sugs">${sug}</div>` : ''}
+        ${mb}</div>
+      <div class="rp-sec"><div class="rp-sec__h">Mensaje</div>
+        <div class="rp-msgrow"><select class="pa-sel" id="rp-lang" onchange="LeadManagerModule.reportLang(this.value)"><option value="es">Español</option><option value="en">English</option><option value="de">Deutsch</option><option value="pt">Português</option></select></div>
+        <textarea class="lm-inp" id="rp-note" rows="2" maxlength="1200" placeholder="Comentario opcional que aparece arriba del resumen…" oninput="LeadManagerModule.reportNote(this.value)">${_rpEsc(_RP.note)}</textarea></div>
+      <div class="rp-foot"><span>Último envío</span><div class="rp-last">${_rpLast(i)}</div></div>
       <div class="rp-actions">${_rpStatus()}<button class="btn btn--primary" id="rp-send" onclick="LeadManagerModule.reportSend()" ${_RP.state === 'sending' || !(i.mailbox && _RP.recipients.length) ? 'disabled' : ''}>${_RP.state === 'sending' ? 'Enviando…' : (_RP.state === 'sent' ? 'Enviar de nuevo' : (_RP.sched.on ? 'Enviar ahora' : 'Enviar informe'))}${_RP.state !== 'sending' && _RP.recipients.length ? ` a ${_RP.recipients.length}` : ''}</button></div>
       <div class="rp-hint">El resumen cubre los últimos 7 días, con los mismos datos que ve el cliente en su portal.</div>`;
     const l = document.getElementById('rp-lang'); if (l) l.value = _RP.lang;
@@ -26897,7 +26900,7 @@ ${foot}
     const S = _RP.sched;
     if (on) {
       if (S.on || S.draft) return;
-      if (!_RP.recipients.length) { showBanner('Agrega al menos un destinatario para programar el envío', 'error'); return; }
+      if (!_RP.recipients.length) { showBanner('Agrega al menos un destinatario para programar el envío', 'error'); _rpSide(); return; }
       S.draft = true; _rpSide(); return;
     }
     if (S.draft) { S.draft = false; _rpSide(); return; }
