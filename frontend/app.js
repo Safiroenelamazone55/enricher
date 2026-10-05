@@ -29952,7 +29952,16 @@ ${foot}
             <label class="cp-f cp-f--full"><span class="cp-f__l">Empresa</span><select class="cp-f__i" data-f="company_id" onchange="LeadManagerModule.cpSave(${id})">${coOpts}</select></label>
             ${c.company_id ? `<div class="cp-f cp-f--full"><button class="cp-golink" onclick="LeadManagerModule.openCompanyPage(${c.company_id})">Ver ficha de la empresa ›</button></div>` : ''}
             ${F('fuente', 'Fuente', c.fuente)}
-            ${(() => { const co = c.company_id ? _companies.find(x => String(x.id) === String(c.company_id)) : null; if (!co) return ''; const R = (l, v) => `<div class="cp-f"><span class="cp-f__l">${l}</span><span class="cp-f__ro">${v ? esc(v) : '—'}</span></div>`; return R('Ciudad', co.ciudad) + R('Región', co.region) + R('País', co.pais); })()}
+            ${(() => {
+              const co = c.company_id ? _companies.find(x => String(x.id) === String(c.company_id)) : null; if (!co) return '';
+              const R = (l, v) => `<div class="cp-f"><span class="cp-f__l">${esc(l)}</span><span class="cp-f__ro">${esc(v)}</span></div>`;
+              const known = [['Industria', co.industria], ['Tamaño', co.tamano], ['Ingresos', co.ingresos], ['Sitio web', co.website || co.dominio], ['Teléfono', co.telefono], ['LinkedIn', co.linkedin], ['Fundada', co.fundada], ['Ciudad', co.ciudad], ['Región', co.region], ['País', co.pais]].filter(x => x[1]);
+              const shown = new Set(known.map(x => String(x[1]).trim().toLowerCase()));
+              const rw = (co.raw && typeof co.raw === 'object') ? co.raw : {};
+              // Datos de la importación con el nombre de columna original (sin repetir lo ya mostrado)
+              const extra = Object.keys(rw).filter(k => rw[k] != null && String(rw[k]).trim() && !shown.has(String(rw[k]).trim().toLowerCase())).slice(0, 12).map(k => [k, String(rw[k])]);
+              return known.concat(extra).map(([l, v]) => R(l, v)).join('');
+            })()}
           </div><div class="cp-map cp-map--wide" id="cp-map-co"></div></div>
 `;
     return `<div class="cp-info">${blocks}</div>${rawKeys.length ? `<div class="cp-card"><div class="cp-card__t">Datos importados (sin mapear)</div><div class="cp-fields">${rawKeys.map(k => `<div class="cp-f"><span class="cp-f__l">${esc(k)}</span><span class="cp-f__ro">${esc(raw[k])}</span></div>`).join('')}</div></div>` : ''}`;
