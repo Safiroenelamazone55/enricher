@@ -17851,3 +17851,12 @@ textarea.mt-i{height:auto;padding:9px 10px;resize:vertical;line-height:1.45}
 .mt-when{font-size:.74rem;color:#64748B}
 .mt-lnk{margin-left:auto;font-size:.72rem;color:#94A3B8;text-decoration:underline;cursor:pointer}
 .mt-lnk:hover{color:#B91C1C}
+
+/* Reunión: bordes rectos */
+.mt-box,.mt-box *{border-radius:0 !important}
+.mt-to{padding:8px 10px;background:#F7F8F6;border:1px solid #E2E0DB;font-size:.86rem;color:#14211B}
+.mt-to--warn{color:#B91C1C;background:#FEF2F2;border-color:#FECACA}
+.mt-chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px}
+.mt-chips__l{font-size:.72rem;color:#94A3B8}
+.mt-chip{border:1px solid #D6D3CD;background:#fff;padding:3px 8px;font:inherit;font-size:.74rem;color:#334155;cursor:pointer}
+.mt-chip:hover{border-color:#00804C;color:#00804C}

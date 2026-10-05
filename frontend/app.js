@@ -28530,6 +28530,29 @@ ${foot}
       } catch (_) {}
     }, 350);
   }
+
+  // Sugeridos para CC: la gente asociada al cliente outbound de este lead (CC fijo del cliente + su responsable del equipo).
+  let _mtTeam = null;
+  async function mtChips() {
+    const box = document.getElementById('mt-chips'); if (!box) return;
+    const c = _contacts.find(x => x.id === _mt.cid), cli = c && _clients.find(x => x.id === c.outbound_client_id);
+    if (!cli) { box.innerHTML = ''; return; }
+    if (_mtTeam === null) { try { const r = await apiFetch(API + '/mgmt/team'); _mtTeam = r.ok ? await r.json() : []; } catch (_) { _mtTeam = []; } }
+    const sug = [];
+    if (cli.cc_email) sug.push([cli.cc_email, 'CC del cliente']);
+    const resp = cli.responsable && (_mtTeam || []).find(x => x.nombre === cli.responsable);
+    if (resp && resp.email) sug.push([resp.email, 'Responsable: ' + resp.nombre]);
+    const cur = ((document.getElementById('mt-cc') || {}).value || '').toLowerCase();
+    const box2 = document.getElementById('mt-chips'); if (!box2) return;
+    const left = sug.filter(([e]) => !cur.includes(String(e).toLowerCase()));
+    box2.innerHTML = left.length ? '<span class="mt-chips__l">Sugeridos:</span>' + left.map(([e, l]) => '<button type="button" class="mt-chip" title="' + esc(l) + '" onclick="LeadManagerModule.mtAddCc(\'' + esc(e).replace(/'/g, '') + '\')">+ ' + esc(e) + '</button>').join('') : '';
+  }
+  function mtAddCc(email) {
+    const i = document.getElementById('mt-cc'); if (!i) return;
+    const list = i.value.split(/[,;]/).map(x => x.trim()).filter(Boolean);
+    if (!list.some(x => x.toLowerCase() === email.toLowerCase())) list.push(email);
+    i.value = list.join(', '); mtChips();
+  }
   function mtSeg(id, v) {
     const el = document.getElementById(id); if (!el) return;
     el.dataset.v = v; if (id === 'mt-idioma') mtPreview(); el.querySelectorAll('button').forEach(x => x.classList.toggle('on', x.dataset.v === v));
@@ -28565,6 +28588,7 @@ ${foot}
     const box = document.createElement('div'); box.id = 'mt-modal'; box.className = 'fin-pi-backdrop';
     box.onclick = ev => { if (ev.target === box) mtClose(); };
     setTimeout(mtTimes, 0);
+    setTimeout(mtChips, 0);
     setTimeout(() => { ['mt-local', 'mt-tz', 'mt-tipo', 'mt-enlace', 'mt-host', 'mt-r1'].forEach(i => { const e = document.getElementById(i); if (e) { e.addEventListener('input', mtPreview); e.addEventListener('change', mtPreview); } }); mtPreview(); }, 0);
     box.innerHTML = '<div class="mt-box">' +
       '<div class="mt-hd"><div><div class="mt-t">Reunión · ' + esc(full) + '</div><div class="mt-s">Recordatorios al prospecto, en su hora: el día anterior y 30 minutos antes.</div></div><button class="fin-pi-x" onclick="LeadManagerModule.mtClose()">✕</button></div>' +
@@ -28577,8 +28601,8 @@ ${foot}
           fld('Enlace (opcional)', '<input class="mt-i" id="mt-enlace" placeholder="Pega el URL, o déjalo vacío si lo maneja el cliente" value="' + esc(m ? m.enlace : '') + '">', 'g2') + '</div>' +
           '<div class="mt-row">' +
           fld('Quién toma la reunión', '<input class="mt-i" id="mt-host" placeholder="Nombre (opcional)" value="' + esc(m ? m.anfitrion : '') + '">') +
-          fld('Con copia (CC)', '<input class="mt-i" id="mt-cc" placeholder="correo@…, correo@…" value="' + esc(m ? m.cc : '') + '">', 'g2') + '</div></div>' +
-        '<div class="mt-sec"><div class="mt-sec__t">Envío</div><div class="mt-row">' +
+          fld('Con copia (CC)', '<input class="mt-i" id="mt-cc" placeholder="correo@…, correo@…" value="' + esc(m ? m.cc : '') + '" oninput="LeadManagerModule.mtChips()"><div class="mt-chips" id="mt-chips"></div>', 'g2') + '</div></div>' +
+        '<div class="mt-sec"><div class="mt-sec__t">Envío</div><div class="mt-row">' + fld('Para (el lead)', c.email ? '<div class="mt-to">' + esc(c.email) + '</div>' : '<div class="mt-to mt-to--warn">Este lead no tiene email — agrégalo en su ficha (o envía por WhatsApp)</div>') + '</div><div class="mt-row">' +
           fld('Idioma', seg('mt-idioma', [['es', 'Español'], ['en', 'English']], idiomaDef)) +
           fld('Enviar por', seg('mt-canal', [['email', 'Email'], ['whatsapp', 'WhatsApp']], m ? m.canal : 'email')) +
           fld('Modo', seg('mt-modo', [['revision', 'Con revisión'], ['auto', 'Automático']], m ? m.modo : 'revision')) + '</div>' +
@@ -33102,7 +33126,7 @@ ${foot}
     ldRefer, ldReferSave, ldNurture, ldNurtureSave, ldOpenDispoMenu,
     nurtureRetomarMenu, nurtureReinscribir, nurtureOtraSecuencia, nurtureSoloManual,
     waitingContactMenu, activarSiguienteContacto, waitingCerrarAviso,
-    dlSetCli, dlSetView, dlCardMenu, dlPopClose, dlCalNav, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel, mtOpen, mtClose, mtSeg, mtTimes, mtSave, mtSend, mtCancel,
+    dlSetCli, dlSetView, dlCardMenu, dlPopClose, dlCalNav, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel, mtOpen, mtClose, mtSeg, mtTimes, mtChips, mtAddCc, mtSave, mtSend, mtCancel,
     sqSetCli, sqSetEst, sqSetQ, cmSetCli, cmSetEst, cmSetQ,
     seqRunSetCanal, seqTaskSetDue,
     mbOpen, mbClose, mbSave, mbTest, mbDelete, mbProv, mbOAuthStart, mbManageOpen, mbManageClose,
