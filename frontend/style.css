@@ -17448,3 +17448,5 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .cp-f--go .cp-f__i, .cp-f--go .cp-f__ro { padding-right: 34px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cp-go { position: absolute; right: 4px; bottom: 4px; width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; color: var(--text-muted); background: var(--surface-secondary); text-decoration: none; transition: background .12s, color .12s; }
 .cp-go:hover { background: var(--surface-hover); color: #0A66C2; }
+.cp-f--go { min-width: 0; }
+.cp-f--go .cp-f__ro { display: block; max-width: 100%; }
