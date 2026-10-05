@@ -11974,7 +11974,7 @@ const TasksModule = (() => {
     const mine = _tasks.filter(t => t.project_id === pid && !t.parent_task_id);
     const total = mine.length;
     const done  = mine.filter(t => t.estado === 'completado').length;
-    const horas = mine.reduce((s, t) => s + (+t.horas_track || 0), 0);
+    const horas = Math.round(mine.reduce((s, t) => s + (+t.horas_track || 0), 0) * 100) / 100;
 
     const mon = p.moneda || 'USD';
     const money = v => { try { return new Intl.NumberFormat('es-MX', { style: 'currency', currency: mon, maximumFractionDigits: 0 }).format(v); } catch { return `${mon} ${v}`; } };
@@ -20773,10 +20773,12 @@ const LeadManagerModule = (() => {
     // Total REAL de empresas de la secuencia (pendientes + trabajadas + descartadas),
     // no solo la cola pendiente — antes este badge mostraba lo mismo que "Tareas" y
     // parecía que el número no bajaba aunque ya se hubieran trabajado varias.
-    const empresasN = _seqCoStats ? _seqCoStats.total
-      : Array.isArray(_seqPendingCos) && _seqPendingCos.length ? _seqPendingCos.length
-      : Array.isArray(_seqContacts) ? new Set(_seqContacts.map(c => c.company_id != null ? `id:${c.company_id}` : `n:${(c.company_nombre || '').toLowerCase()}`)).size
-      : (Array.isArray(_seqPendingCos) ? 0 : null);
+    // Empresas asociadas a la secuencia = las de la cola (si hay) o, en modo "contacto primero", las empresas
+    // distintas de los contactos enrolados (mismo conteo que la lista "Empresas (N)"). Antes mostraba 0 con 40 contactos.
+    const _coDeContactos = Array.isArray(_seqContacts) ? new Set(_seqContacts.map(c => c.company_id != null ? `id:${c.company_id}` : `n:${(c.company_nombre || '').toLowerCase()}`)).size : null;
+    const empresasN = (_seqCoStats && _seqCoStats.total) ? _seqCoStats.total
+      : (Array.isArray(_seqPendingCos) && _seqPendingCos.length) ? _seqPendingCos.length
+      : (_coDeContactos != null ? _coDeContactos : (Array.isArray(_seqPendingCos) || _seqCoStats ? 0 : null));
     const tabs = [
       ['empresas', 'Empresas', empresasN],
       ['contactos', 'Contactos', Array.isArray(_seqContacts) ? _seqContacts.length : null],
