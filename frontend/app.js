@@ -29957,7 +29957,7 @@ ${foot}
           </div><div class="cp-map" id="cp-map"></div></div>
           <div class="cp-card"><div class="cp-card__t">Ubicación de la empresa</div><div class="cp-fields">
             ${(() => { const co = c.company_id ? _companies.find(x => String(x.id) === String(c.company_id)) : null; if (!co) return '<div class="cp-f cp-f--full"><span class="cp-f__ro">Sin empresa asignada</span></div>'; const R = (l, v) => `<div class="cp-f"><span class="cp-f__l">${l}</span><span class="cp-f__ro">${v ? esc(v) : '—'}</span></div>`; return R('Ciudad', co.ciudad) + R('Región', co.region) + R('País', co.pais) + `<div class="cp-f cp-f--full"><button class="cp-golink" onclick="LeadManagerModule.openCompanyPage(${co.id})">Editar en la ficha de la empresa ›</button></div>`; })()}
-          </div></div>
+          </div><div class="cp-map" id="cp-map-co"></div></div>
 `;
     return `<div class="cp-info">${blocks}</div>${rawKeys.length ? `<div class="cp-card"><div class="cp-card__t">Datos importados (sin mapear)</div><div class="cp-fields">${rawKeys.map(k => `<div class="cp-f"><span class="cp-f__l">${esc(k)}</span><span class="cp-f__ro">${esc(raw[k])}</span></div>`).join('')}</div></div>` : ''}`;
   }
@@ -30299,10 +30299,16 @@ ${foot}
       const el = document.getElementById('cp-tabwrap'); if (el) el.innerHTML = _cpTabContent(_contacts.find(x => x.id === _contactView));
     } catch (e) { alert('Error: ' + e.message); }
   }
-  async function _cpLoadMap(c) {
-    const el = document.getElementById('cp-map'); if (!el || !c) return;
+  function _cpLoadMap(c) {
+    if (!c) return;
+    _cpLoadMapIn('cp-map', c);
+    const co = c.company_id ? _companies.find(x => String(x.id) === String(c.company_id)) : null;
+    _cpLoadMapIn('cp-map-co', co || {});
+  }
+  async function _cpLoadMapIn(elId, c) {
+    const el = document.getElementById(elId); if (!el) return;
     const q = [c.ciudad, c.region, c.pais].filter(Boolean).join(', ');
-    if (!q) { el.innerHTML = `<div class="cp-map-empty">Sin ubicación — añade una ciudad</div>`; return; }
+    if (!q) { el.innerHTML = `<div class="cp-map-empty">Sin ubicación — añade ciudad o país</div>`; return; }
     el.innerHTML = `<div class="cp-map-empty">Cargando mapa…</div>`;
     try {
       const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`, { headers: { 'Accept': 'application/json' } });
