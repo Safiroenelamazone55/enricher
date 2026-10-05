@@ -17538,3 +17538,17 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 
 /* Filtros de Tareas: bordes rectos */
 .tf-btn, .tf-btn:hover, .tl-colbtn { border-radius: 0 !important; }
+
+/* Tareas: sugerencias del buscador + resaltado al saltar */
+.clients-search-wrap { position: relative; }
+.tk-suggest { position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 60; background: var(--surface); border: 1px solid var(--border-strong, var(--border)); box-shadow: 0 8px 24px rgba(20,33,27,.14); max-height: 340px; overflow-y: auto; }
+.tk-suggest__it { display: flex; align-items: center; gap: 10px; padding: 9px 12px; cursor: pointer; font-size: .85rem; color: var(--text-primary); }
+.tk-suggest__it.on { background: var(--surface-hover); }
+.tk-suggest__ic { color: var(--text-muted); display: inline-flex; flex-shrink: 0; }
+.tk-suggest__t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tk-suggest__t mark { background: #FEF08A; color: inherit; padding: 0; }
+.tk-suggest__m { font-size: .72rem; color: var(--text-muted); white-space: nowrap; max-width: 45%; overflow: hidden; text-overflow: ellipsis; text-transform: capitalize; }
+.tk-suggest__empty { padding: 12px; font-size: .82rem; color: var(--text-muted); }
+@keyframes tkFlash { 0% { box-shadow: 0 0 0 3px #FACC15; background-color: #FEF9C3; } 70% { box-shadow: 0 0 0 3px #FACC15; background-color: #FEF9C3; } 100% { box-shadow: 0 0 0 0 rgba(250,204,21,0); background-color: transparent; } }
+.tk-flash { animation: tkFlash 2.4s ease-out; position: relative; z-index: 2; }
+tr.tk-flash > td { background-color: #FEF9C3; animation: none; }

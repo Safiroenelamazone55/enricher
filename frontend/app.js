@@ -11767,6 +11767,77 @@ const TasksModule = (() => {
     else render();
   }
 
+  // ── Sugerencias del buscador: tareas y subtareas disponibles; al elegir una, salta a ella y la resalta ──
+  let _sgItems = [], _sgIdx = -1;
+  function _sgScope() {
+    let list = _tasks.filter(t => !t.archivada);
+    if (_filterProjectId) list = list.filter(t => t.project_id === _filterProjectId);
+    return list;
+  }
+  function _sgClose() { document.getElementById('tasks-suggest')?.remove(); _sgItems = []; _sgIdx = -1; }
+  function _sgRender() {
+    const inp = $('tasks-search'); if (!inp) return;
+    const q = inp.value.trim().toLowerCase();
+    if (!q) { _sgClose(); return; }
+    const byId = new Map(_tasks.map(t => [t.id, t]));
+    _sgItems = _sgScope().filter(t => String(t.titulo || '').toLowerCase().includes(q))
+      .sort((a, b) => (String(a.titulo).toLowerCase().startsWith(q) ? 0 : 1) - (String(b.titulo).toLowerCase().startsWith(q) ? 0 : 1) || (a.parent_task_id ? 1 : 0) - (b.parent_task_id ? 1 : 0))
+      .slice(0, 8);
+    let box = document.getElementById('tasks-suggest');
+    if (!_sgItems.length) {
+      if (!box) { box = document.createElement('div'); box.id = 'tasks-suggest'; box.className = 'tk-suggest'; inp.closest('.clients-search-wrap').appendChild(box); }
+      box.innerHTML = '<div class="tk-suggest__empty">Sin coincidencias</div>'; return;
+    }
+    if (!box) { box = document.createElement('div'); box.id = 'tasks-suggest'; box.className = 'tk-suggest'; inp.closest('.clients-search-wrap').appendChild(box); }
+    _sgIdx = 0;
+    const ico = sub => sub
+      ? '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 10 4 15 9 20"/><path d="M20 4v7a4 4 0 0 1-4 4H4"/></svg>'
+      : '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><polyline points="8 12 11 15 16 9"/></svg>';
+    box.innerHTML = _sgItems.map((t, i) => {
+      const par = t.parent_task_id ? byId.get(t.parent_task_id) : null;
+      const hl = esc(t.titulo).replace(new RegExp('(' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'ig'), '<mark>$1</mark>');
+      return '<div class="tk-suggest__it' + (i === 0 ? ' on' : '') + '" data-i="' + i + '" onmousedown="event.preventDefault();TasksModule.jumpToTask(' + t.id + ')" onmouseenter="TasksModule._sgHover(' + i + ')">' +
+        '<span class="tk-suggest__ic">' + ico(!!par) + '</span><span class="tk-suggest__t">' + hl + '</span>' +
+        '<span class="tk-suggest__m">' + (par ? 'Subtarea de ' + esc(par.titulo) : esc((t.estado || '').replace('_', ' '))) + '</span></div>';
+    }).join('');
+  }
+  function _sgHover(i) { _sgIdx = i; document.querySelectorAll('#tasks-suggest .tk-suggest__it').forEach((el, k) => el.classList.toggle('on', k === i)); }
+  function jumpToTask(id) {
+    const t = _tasks.find(x => x.id === id); if (!t) return;
+    _sgClose();
+    const inp = $('tasks-search'); if (inp) inp.value = '';
+    const mainId = t.parent_task_id || t.id;
+    // si los filtros activos la esconden, se sueltan para poder llegar
+    const _enLista = list => list.some(x => x.id === mainId);
+    if (!_enLista(_getFilteredTasks())) { _filterMember = ''; const ms = $('tasks-member-filter'); if (ms) { ms.value = ''; ms.classList.remove('filter-select--active'); } }
+    if (!_enLista(_getFilteredTasks())) { try { _filterPrioSet.clear(); } catch (_) {} _filterFecha = ''; }
+    if (_currentView === 'calendar') setView('list');
+    if (t.parent_task_id && _currentView === 'list') { _tlExpanded.add(t.parent_task_id); }
+    _rerender();
+    const flash = el => {
+      if (!el) { showBanner('No se pudo ubicar la tarea en esta vista', 'error'); return; }
+      el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      el.classList.remove('tk-flash'); void el.offsetWidth; el.classList.add('tk-flash');
+      setTimeout(() => el.classList.remove('tk-flash'), 2600);
+    };
+    setTimeout(() => {
+      let el = document.querySelector('[data-task-id="' + id + '"]');
+      // en Kanban las subtareas viven dentro de la tarjeta de su tarea: se resalta esa tarjeta
+      if (!el || el.offsetParent === null) el = document.querySelector('[data-task-id="' + mainId + '"]');
+      flash(el);
+    }, 60);
+  }
+  document.addEventListener('input', e => { if (e.target && e.target.id === 'tasks-search') _sgRender(); });
+  document.addEventListener('focusin', e => { if (e.target && e.target.id === 'tasks-search') _sgRender(); });
+  document.addEventListener('click', e => { if (!e.target.closest || !e.target.closest('.clients-search-wrap')) _sgClose(); });
+  document.addEventListener('keydown', e => {
+    if (!e.target || e.target.id !== 'tasks-search' || !_sgItems.length) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); _sgHover((_sgIdx + 1) % _sgItems.length); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); _sgHover((_sgIdx - 1 + _sgItems.length) % _sgItems.length); }
+    else if (e.key === 'Enter') { e.preventDefault(); jumpToTask(_sgItems[Math.max(_sgIdx, 0)].id); }
+    else if (e.key === 'Escape') { _sgClose(); }
+  });
+
   function _getFilteredTasks() {
     const q = ($('tasks-search')?.value || '').toLowerCase();
     const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -14163,7 +14234,7 @@ const TasksModule = (() => {
   return {
     copiarSemanaAnterior,
     load, filter, setFilterMember, setFilterFecha, render,
-    setProjectFilter, clearProjectFilter, refreshProjectHeader,
+    setProjectFilter, clearProjectFilter, refreshProjectHeader, jumpToTask, _sgHover,
     openTaskPage, openTaskPageNewTab, closeTaskPage, _renderTaskDetail, _tdSaveField, _tdSendComment,
     openFilterMenu, toggleFilterOpt, clearFilter,
     setView, calPrev, calNext, setCalView, loadForCalPane,

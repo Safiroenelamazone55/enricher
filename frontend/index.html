@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=202610053"/>
+  <link rel="stylesheet" href="style.css?v=202610054"/>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -935,7 +935,7 @@
         <div class="clients-toolbar" id="tasks-list-toolbar">
           <div class="clients-search-wrap">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            <input type="text" id="tasks-search" placeholder="Buscar tarea, proyecto o miembro…" oninput="TasksModule.filter()">
+            <input type="text" id="tasks-search" placeholder="Buscar tarea, proyecto o miembro…" autocomplete="off" oninput="TasksModule.filter()">
           </div>
           <!-- Filtros compactos: Estado · Prioridad · Fecha · Miembro -->
           <button type="button" class="tf-btn" id="tasks-estado-btn" onclick="TasksModule.openFilterMenu(event,'estado')">
@@ -3244,7 +3244,7 @@
   })();
 </script>
 
-<script src="app.js?v=2026100428"></script>
+<script src="app.js?v=2026100429"></script>
 <div id="task-quick-edit" style="display:none;position:fixed;z-index:9999"></div>
 </body>
 </html>
