@@ -777,8 +777,15 @@ async function _draftPreapproved(pool) {
       LEFT JOIN lm_companies co ON co.id = k.company_id
      WHERE cs.estado='activo'
        AND (cs.next_action_at IS NULL OR cs.next_action_at <= NOW() + interval '3 days')
+       -- Solo quien REALMENTE puede tener borrador: antes los ~400 enrolados viejos que nunca podían redactarse
+       -- (paso no-email, sin buzón, sin email…) ocupaban los 25 cupos de cada pasada y dejaban sin borrador a las secuencias nuevas.
+       AND k.email IS NOT NULL AND k.email <> '' AND COALESCE(k.email_status,'') <> 'invalid'
+       AND COALESCE(k.disposition,'') NOT IN ('no_interesado','no_contactar')
+       AND (SELECT st3.canal FROM sequence_steps st3 WHERE st3.sequence_id = cs.sequence_id ORDER BY st3.dia ASC, st3.orden ASC, st3.id ASC OFFSET GREATEST(COALESCE(cs.paso,1),1) - 1 LIMIT 1) = 'email'
+       AND EXISTS (SELECT 1 FROM lm_mailboxes mb2 WHERE mb2.user_id = s.user_id AND mb2.outbound_client_id = s.outbound_client_id AND mb2.estado IN ('conectado','solo_envio'))
+       AND NOT EXISTS (SELECT 1 FROM lm_messages w WHERE w.user_id = cs.user_id AND w.contact_id = cs.contact_id AND w.sequence_id = cs.sequence_id AND w.estado IN ('awaiting','approved'))
      ORDER BY cs.next_action_at ASC NULLS FIRST
-     LIMIT 25
+     LIMIT 100
   `);
   for (const enr of enrs) {
     try {
