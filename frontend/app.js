@@ -29913,11 +29913,10 @@ ${foot}
           <button class="cp-cta" onclick="LeadManagerModule.cpOpenRegisterReply(${id})">＋ Registrar respuesta</button>
           <button class="cp-act" onclick="LeadManagerModule.ldRefer(${id},'derivado')">＋ Crear referido</button>
           <button class="cp-act" onclick="LeadManagerModule.dlOpen(${id})" title="Valor, probabilidad, fecha de la reunión y notas para el cliente">${(c.deal_valor || c.deal_cierre || ['propuesta', 'negociacion', 'ganado', 'perdido'].includes(c.estado)) ? '$ Ver deal' : '＋ Deal'}</button>
-          <button class="cp-act" onclick="LeadManagerModule.cpActOpen('tarea')">＋ Crear tarea</button>
+          <button class="cp-act" onclick="LeadManagerModule.cpActOpen('tarea')" title="Un pendiente con fecha (sale en Hoy), o una nota/reunión para el historial">＋ Tarea / nota</button>
           ${c.linkedin ? `<a class="cp-act cp-act--in" href="${esc(c.linkedin)}" target="_blank" rel="noopener">LinkedIn ›</a>` : ''}
           ${_waDigits(c) ? `<button class="cp-act" onclick="LeadManagerModule.openWaFor(${id})">WhatsApp ›</button>` : ''}
           ${c.email ? `<button class="cp-act" onclick="LeadManagerModule.go('inbox');LeadManagerModule.ibOpen(${id})">Email</button>` : ''}
-          <button class="cp-act" onclick="LeadManagerModule.cpActOpen('')">＋ Registrar actividad</button>
           <button class="cp-act cp-act--danger" onclick="LeadManagerModule.cpDelete(${id})">Eliminar</button>
         </div>
       </div>
