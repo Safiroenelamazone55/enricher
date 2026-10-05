@@ -29932,6 +29932,8 @@ ${foot}
     </div>`;
   }
   // ── Pestañas de la ficha (rediseño 2026-10-04): Información / Seguimiento / Canales ──
+  const _GO_ICO = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>';
+  const _goUrl = u => { u = String(u || '').trim(); return !u ? '' : (/^https?:[/][/]/i.test(u) ? u : 'https://' + u); };
   function _cpInfoHtml(c) {
     const id = c.id;
     const F = (f, label, val) => `<label class="cp-f"><span class="cp-f__l">${label}</span><input class="cp-f__i" data-f="${f}" value="${esc(val || '')}" placeholder="＋ Añadir" onchange="LeadManagerModule.cpSave(${id})"></label>`;
@@ -29945,7 +29947,7 @@ ${foot}
             ${F('telefono', 'Teléfono', c.telefono)}
             ${F('movil', 'Móvil', c.movil)}${F('cargo', 'Cargo', c.cargo)}
             ${F('seniority', 'Seniority', c.seniority)}${F('departamento', 'Departamento', c.departamento)}
-            ${F('linkedin', 'LinkedIn', c.linkedin)}${F('ciudad', 'Ciudad', c.ciudad)}
+            <label class="cp-f cp-f--go"><span class="cp-f__l">LinkedIn</span><input class="cp-f__i" data-f="linkedin" value="${esc(c.linkedin || '')}" placeholder="＋ Añadir" onchange="LeadManagerModule.cpSave(${id})">${c.linkedin ? `<a class="cp-go" href="${esc(_goUrl(c.linkedin))}" target="_blank" rel="noopener" title="Abrir perfil de LinkedIn" onclick="event.stopPropagation()">${_GO_ICO}</a>` : ''}</label>${F('ciudad', 'Ciudad', c.ciudad)}
             ${F('region', 'Región', c.region)}${F('pais', 'País', c.pais)}
           </div></div>
           <div class="cp-card cp-card--co"><div class="cp-card__t">Empresa</div><div class="cp-fields">
@@ -29954,7 +29956,7 @@ ${foot}
             ${F('fuente', 'Fuente', c.fuente)}
             ${(() => {
               const co = c.company_id ? _companies.find(x => String(x.id) === String(c.company_id)) : null; if (!co) return '';
-              const R = (l, v) => `<div class="cp-f"><span class="cp-f__l">${esc(l)}</span><span class="cp-f__ro">${esc(v)}</span></div>`;
+              const R = (l, v) => `<div class="cp-f cp-f--go"><span class="cp-f__l">${esc(l)}</span><span class="cp-f__ro">${esc(v)}</span>${l === 'LinkedIn' ? `<a class="cp-go" href="${esc(_goUrl(v))}" target="_blank" rel="noopener" title="Abrir LinkedIn de la empresa">${_GO_ICO}</a>` : ''}</div>`;
               const known = [['Industria', co.industria], ['Empleados', co.tamano], ['Ingresos', co.ingresos], ['Sitio web', co.website || co.dominio], ['Teléfono', co.telefono], ['LinkedIn', co.linkedin], ['Fundada', co.fundada], ['Ciudad', co.ciudad], ['Región', co.region], ['País', co.pais]].filter(x => x[1]);
               const shown = new Set(known.map(x => String(x[1]).trim().toLowerCase()));
               const rw = (co.raw && typeof co.raw === 'object') ? co.raw : {};

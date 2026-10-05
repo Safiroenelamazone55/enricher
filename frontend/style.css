@@ -17444,3 +17444,7 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .cp-map--wide { flex: 1; min-height: 170px; margin-top: 14px; display: flex; flex-direction: column; }
 .cp-map--wide .cp-map-frame { width: 100%; flex: 1; min-height: 150px; display: block; border: 0; }
 .cp-map--wide .cp-map-empty { flex: 1; display: flex; align-items: center; justify-content: center; }
+.cp-f--go { position: relative; }
+.cp-f--go .cp-f__i, .cp-f--go .cp-f__ro { padding-right: 34px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cp-go { position: absolute; right: 4px; bottom: 4px; width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; color: var(--text-muted); background: var(--surface-secondary); text-decoration: none; transition: background .12s, color .12s; }
+.cp-go:hover { background: var(--surface-hover); color: #0A66C2; }
