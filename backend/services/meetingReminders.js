@@ -151,4 +151,21 @@ function startMeetingReminders(pool) {
   console.log('[meeting-reminders] started (tick 60s)');
 }
 
-module.exports = { startMeetingReminders, tick, sendReminder, defaultMessage, defaultSubject, computeReminderTimes, zonedToUtc };
+// Hora recomendada para cada aviso, según cuánto falte. Aviso 1: día anterior 10:00 del prospecto; si eso ya pasó,
+// la mañana del mismo día (08:00) si da tiempo; si tampoco, ahora mismo (si faltan >3 h); si no, se omite.
+// nota1: '' | 'manana' | 'ahora' | 'omitido' (para explicarlo en pantalla).
+function recommendTimes(startsAt, tz, now = Date.now()) {
+  const start = new Date(startsAt);
+  const base = computeReminderTimes(start, tz);
+  let rem1_at = base.rem1_at, nota1 = '';
+  if (!(rem1_at && rem1_at.getTime() > now + 10 * 60000)) {
+    const p = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(start);
+    const manana = zonedToUtc(p + 'T08:00', tz);
+    if (manana && manana.getTime() > now + 10 * 60000 && start.getTime() - manana.getTime() >= 90 * 60000) { rem1_at = manana; nota1 = 'manana'; }
+    else if (start.getTime() - now > 3 * 3600000) { rem1_at = new Date(now + 10 * 60000); nota1 = 'ahora'; }
+    else { rem1_at = null; nota1 = 'omitido'; }
+  }
+  return { rem1_at, rem2_at: base.rem2_at, nota1 };
+}
+
+module.exports = { startMeetingReminders, tick, sendReminder, defaultMessage, defaultSubject, computeReminderTimes, recommendTimes, zonedToUtc };

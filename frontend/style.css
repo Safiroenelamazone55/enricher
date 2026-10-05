@@ -17844,3 +17844,6 @@ textarea.mt-i{height:auto;padding:9px 10px;resize:vertical;line-height:1.45}
 .dl-pop{position:fixed;z-index:10000;background:#fff;border:1px solid #E2E0DB;border-radius:10px;box-shadow:0 10px 30px rgba(15,23,42,.16);padding:4px;min-width:190px}
 .dl-pop button{display:block;width:100%;text-align:left;border:0;background:none;padding:8px 10px;border-radius:7px;font:inherit;font-size:.84rem;color:#14211B;cursor:pointer}
 .dl-pop button:hover{background:#F3F5F2}
+
+.mt-mine{margin-top:6px;padding:6px 10px;border-radius:8px;background:#EEF4FF;color:#1D4ED8;font-size:.78rem;font-weight:500}
+.mt-rec{margin-top:5px;font-size:.74rem;color:#B45309}

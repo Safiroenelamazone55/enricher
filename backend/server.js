@@ -4939,7 +4939,16 @@ async function _mtView(pool, uid, cid) {
   return { ...m, default1: _mtSvc.defaultMessage(m, k && k.nombre, 1), default2: _mtSvc.defaultMessage(m, k && k.nombre, 2) };
 }
 app.get('/api/lm/contacts/:id/meeting', requireAuth, async (req, res) => {
-  try { res.json({ meeting: await _mtView(pool, req.workspaceOwnerId, +req.params.id) }); }
+  try {
+    const uid = req.workspaceOwnerId, cid = +req.params.id;
+    // Lo que hereda de la secuencia del contacto (zona horaria; el idioma se deduce de la zona): editable en pantalla.
+    const { rows: [sq] } = await pool.query(
+      `SELECT s.timezone, s.nombre FROM lm_contact_sequences cs JOIN sequences s ON s.id=cs.sequence_id
+        WHERE cs.contact_id=$1 AND cs.user_id=$2 AND COALESCE(s.timezone,'')<>'' ORDER BY cs.id DESC LIMIT 1`, [cid, uid]);
+    const tz = sq ? sq.timezone : '';
+    const inherit = { tz, seq: sq ? sq.nombre : '', idioma: /^(America\/(New_York|Chicago|Denver|Los_Angeles|Phoenix|Anchorage|Toronto|Vancouver|Halifax)|Europe\/London|Australia\/|Pacific\/(Honolulu|Auckland))/.test(tz) ? 'en' : (tz ? 'es' : '') };
+    res.json({ meeting: await _mtView(pool, uid, cid), inherit });
+  }
   catch (e) { res.status(500).json({ error: 'No se pudo leer la reunión' }); }
 });
 app.put('/api/lm/contacts/:id/meeting', requireAuth, async (req, res) => {
@@ -4953,7 +4962,8 @@ app.put('/api/lm/contacts/:id/meeting', requireAuth, async (req, res) => {
     if (!k) return res.status(404).json({ error: 'Contacto no encontrado' });
     const tipo = ['meet', 'zoom', 'teams', 'telefono', 'presencial', 'otro'].includes(b.tipo) ? b.tipo : 'otro';
     const idioma = b.idioma === 'en' ? 'en' : 'es', canal = b.canal === 'whatsapp' ? 'whatsapp' : 'email', modo = b.modo === 'auto' ? 'auto' : 'revision';
-    const t = _mtSvc.computeReminderTimes(start, tz);
+    const t = _mtSvc.recommendTimes(start, tz);
+    for (const n of [1, 2]) { if (b['rem' + n + '_local']) { const o = _mtSvc.zonedToUtc(b['rem' + n + '_local'], tz); if (o && !isNaN(o)) t['rem' + n + '_at'] = o; } }
     const now = Date.now();
     const r1 = t.rem1_at && t.rem1_at.getTime() > now ? 'pendiente' : 'omitido';
     const r2 = t.rem2_at.getTime() > now ? 'pendiente' : 'omitido';

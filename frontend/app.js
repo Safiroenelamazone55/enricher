@@ -28492,8 +28492,27 @@ ${foot}
   async function mtOpen(cid) {
     const c = _contacts.find(x => x.id === cid); if (!c) return;
     mtClose(); _mt = { cid, m: null };
-    try { const r = await apiFetch(API + '/lm/contacts/' + cid + '/meeting'); if (r.ok) _mt.m = (await r.json()).meeting; } catch (_) {}
+    try { const r = await apiFetch(API + '/lm/contacts/' + cid + '/meeting'); if (r.ok) { const d = await r.json(); _mt.m = d.meeting; _mt.inherit = d.inherit || {}; } } catch (_) {}
     _mtPaint(c);
+  }
+
+  // 'YYYY-MM-DDTHH:mm' en la zona tz → Date UTC (misma lógica que el backend)
+  function _mtZoned(local, tz) {
+    const m = String(local || '').match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/); if (!m) return null;
+    const off = ts => { const p = {}; new Intl.DateTimeFormat('en-US', { timeZone: tz, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(new Date(ts)).forEach(x => p[x.type] = x.value); return Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second) - ts; };
+    const base = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]); let g = base; for (let i = 0; i < 2; i++) g = base - off(g); return new Date(g);
+  }
+  // Muestra, bajo cada hora de aviso, la hora equivalente en la zona de la persona que usa Nova (fondo de otro color).
+  function mtTimes() {
+    const tzEl = document.getElementById('mt-tz'); if (!tzEl) return;
+    const mine = _userTZ(), city = String(mine).split('/').pop().replace(/_/g, ' ');
+    [1, 2].forEach(n => {
+      const inp = document.getElementById('mt-r' + n), box = document.getElementById('mt-mine' + n); if (!inp || !box) return;
+      const d = _mtZoned(inp.value, tzEl.value);
+      if (!d || tzEl.value === mine) { box.style.display = d ? 'none' : 'none'; if (d && tzEl.value === mine) { box.style.display = 'none'; } return; }
+      box.style.display = '';
+      box.textContent = 'Tu hora (' + city + '): ' + new Intl.DateTimeFormat('es-PE', { timeZone: mine, weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false }).format(d);
+    });
   }
   function mtSeg(id, v) {
     const el = document.getElementById(id); if (!el) return;
@@ -28502,24 +28521,39 @@ ${foot}
   function _mtPaint(c) {
     mtClose();
     const m = _mt.m, full = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || '—';
-    const tzGuess = (m && m.tz) || (typeof _contactTz === 'function' && _contactTz(c)) || _userTZ();
+    const tzGuess = (m && m.tz) || (_mt.inherit && _mt.inherit.tz) || (typeof _contactTz === 'function' && _contactTz(c)) || _userTZ();
     const tzOpts = (() => { const l = _TZ.filter(x => x[0]); if (!l.some(x => x[0] === tzGuess)) l.unshift([tzGuess, tzGuess]); return l.map(x => '<option value="' + x[0] + '"' + (x[0] === tzGuess ? ' selected' : '') + '>' + esc(x[1]) + '</option>').join(''); })();
     const sel = (id, opts, v) => '<select class="mt-i" id="' + id + '">' + opts.map(o => '<option value="' + o[0] + '"' + (String(v) === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select>';
     const seg = (id, opts, v) => '<div class="mt-seg" id="' + id + '" data-v="' + v + '">' + opts.map(o => '<button type="button" data-v="' + o[0] + '" class="' + (o[0] === v ? 'on' : '') + '" onclick="LeadManagerModule.mtSeg(\'' + id + '\',\'' + o[0] + '\')">' + o[1] + '</button>').join('') + '</div>';
     const fld = (l, inner, cls) => '<label class="mt-f' + (cls ? ' ' + cls : '') + '"><span class="mt-l">' + l + '</span>' + inner + '</label>';
-    const idiomaDef = m ? m.idioma : ((String(c.pais || '').trim().toLowerCase().match(/^(us|usa|united states|estados unidos|ee\.?uu\.?|uk|reino unido|canada|australia)/)) ? 'en' : 'es');
+    const idiomaDef = m ? m.idioma : (_mt.inherit && _mt.inherit.idioma) ? _mt.inherit.idioma : ((String(c.pais || '').trim().toLowerCase().match(/^(us|usa|united states|estados unidos|ee\.?uu\.?|uk|reino unido|canada|australia)/)) ? 'en' : 'es');
     const est = n => m ? '<span class="mt-est mt-est--' + m['rem' + n + '_estado'] + '">' + (_MT_EST[m['rem' + n + '_estado']] || '') + '</span>' : '';
     const rem = n => '<div class="mt-msg"><div class="mt-msg__hd"><span>' + (n === 1 ? 'Día anterior · 10:00 del prospecto' : '30 minutos antes') + '</span>' + est(n) + '</div>' +
       '<textarea class="mt-i" id="mt-msg' + n + '" rows="6" oninput="this.dataset.d=1">' + esc(m['msg' + n] || m['default' + n]) + '</textarea>' +
       '<div class="mt-msg__ft"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.mtSend(' + n + ')">Enviar ahora por ' + (m.canal === 'whatsapp' ? 'WhatsApp' : 'email') + '</button>' + (m['rem' + n + '_estado'] === 'error' && m.error ? '<span class="mt-err">' + esc(m.error) + '</span>' : '') + '</div></div>';
+    const inh = _mt.inherit || {};
+    const _loc = d => { if (!d) return ''; try { return new Intl.DateTimeFormat('sv-SE', { timeZone: m.tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(d)).replace(' ', 'T'); } catch (_) { return ''; } };
+    const _recNote = n => {
+      if (!m) return '';
+      if (n === 2) return 'Por defecto: 30 minutos antes de la reunión.';
+      if (!m.rem1_at) return 'Se omite: ya no hay tiempo para un aviso previo.';
+      const dReun = _loc(m.starts_at).slice(0, 10), dRem = _loc(m.rem1_at).slice(0, 10);
+      if (dRem === dReun) return 'Recomendado: el aviso del día anterior ya pasó, así que mejor la mañana de la reunión.';
+      if (Math.abs(new Date(m.rem1_at) - new Date(m.updated_at)) < 30 * 60000) return 'Recomendado: enviarlo ahora (la reunión es pronto).';
+      return 'Por defecto: el día anterior a las 10:00 del prospecto.';
+    };
+    const tcell = n => '<div class="mt-f"><span class="mt-l">' + (n === 1 ? 'Primer aviso' : 'Segundo aviso') + ' · hora del prospecto</span><input class="mt-i" type="datetime-local" id="mt-r' + n + '" value="' + _loc(m && m['rem' + n + '_at']) + '" oninput="LeadManagerModule.mtTimes()"><div class="mt-mine" id="mt-mine' + n + '"></div><div class="mt-rec">' + esc(_recNote(n)) + '</div></div>';
+    const timing = m ? '<div class="mt-sec"><div class="mt-sec__t">Cuándo se envían <span class="mt-hint" style="margin:0 0 0 6px">puedes cambiar la hora</span></div><div class="mt-row mt-row--top">' + tcell(1) + tcell(2) + '</div></div>' : '';
+    const inhNote = inh.tz && !m ? '<div class="mt-hint" style="margin:0 0 10px">Zona horaria e idioma heredados de la secuencia' + (inh.seq ? ' «' + esc(inh.seq) + '»' : '') + ' — puedes cambiarlos.</div>' : '';
     const box = document.createElement('div'); box.id = 'mt-modal'; box.className = 'fin-pi-backdrop';
     box.onclick = ev => { if (ev.target === box) mtClose(); };
+    setTimeout(mtTimes, 0);
     box.innerHTML = '<div class="mt-box">' +
       '<div class="mt-hd"><div><div class="mt-t">Reunión · ' + esc(full) + '</div><div class="mt-s">Recordatorios al prospecto, en su hora: el día anterior y 30 minutos antes.</div></div><button class="fin-pi-x" onclick="LeadManagerModule.mtClose()">✕</button></div>' +
       '<div class="mt-body">' +
-        '<div class="mt-sec"><div class="mt-sec__t">Cuándo</div><div class="mt-row">' +
-          fld('Fecha y hora', '<input class="mt-i" id="mt-local" type="datetime-local" value="' + _mtLocalVal(m) + '">', 'g2') +
-          fld('Zona horaria del prospecto', '<select class="mt-i" id="mt-tz">' + tzOpts + '</select>', 'g2') + '</div></div>' +
+        '<div class="mt-sec"><div class="mt-sec__t">Cuándo</div>' + inhNote + '<div class="mt-row">' +
+          fld('Fecha y hora', '<input class="mt-i" id="mt-local" type="datetime-local" value="' + (_mtLocalVal(m) || (c.deal_cierre ? String(c.deal_cierre).slice(0, 10) + 'T10:00' : '')) + '" oninput="LeadManagerModule.mtTimes()">', 'g2') +
+          fld('Zona horaria del prospecto', '<select class="mt-i" id="mt-tz" onchange="LeadManagerModule.mtTimes()">' + tzOpts + '</select>', 'g2') + '</div></div>' +
         '<div class="mt-sec"><div class="mt-sec__t">Dónde y quién</div><div class="mt-row">' +
           fld('Lugar', sel('mt-tipo', _MT_TIPOS, m ? (m.tipo === 'otro' && !m.enlace ? '' : m.tipo) : '')) +
           fld('Enlace (opcional)', '<input class="mt-i" id="mt-enlace" placeholder="Pega el URL, o déjalo vacío si lo maneja el cliente" value="' + esc(m ? m.enlace : '') + '">', 'g2') + '</div>' +
@@ -28531,7 +28565,7 @@ ${foot}
           fld('Enviar por', seg('mt-canal', [['email', 'Email'], ['whatsapp', 'WhatsApp']], m ? m.canal : 'email')) +
           fld('Modo', seg('mt-modo', [['revision', 'Con revisión'], ['auto', 'Automático']], m ? m.modo : 'revision')) + '</div>' +
           '<div class="mt-hint">Con revisión te deja una tarea en Hoy con el mensaje listo; automático lo envía solo. Sale desde el buzón del cliente (email) o su WhatsApp conectado.</div></div>' +
-        (m ? '<div class="mt-sec"><div class="mt-sec__t">Mensajes <span class="mt-hint" style="margin:0 0 0 6px">editables</span></div><div class="mt-row mt-row--top">' + rem(1) + rem(2) + '</div></div>'
+        timing + (m ? '<div class="mt-sec"><div class="mt-sec__t">Mensajes <span class="mt-hint" style="margin:0 0 0 6px">editables</span></div><div class="mt-row mt-row--top">' + rem(1) + rem(2) + '</div></div>'
            : '<div class="mt-hint">Guarda la reunión y aquí aparecerán los dos mensajes listos para editar.</div>') +
       '</div>' +
       '<div class="mt-ft">' + (m ? '<button class="btn btn--ghost btn--sm" style="color:#B91C1C" onclick="LeadManagerModule.mtCancel()">Cancelar reunión</button>' : '') + '<span style="flex:1"></span><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.mtClose()">Cerrar</button><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.mtSave()">' + (m ? 'Guardar cambios' : 'Guardar reunión') + '</button></div>' +
@@ -28543,6 +28577,7 @@ ${foot}
     const b = { local: g('mt-local').value, tz: g('mt-tz').value, tipo: g('mt-tipo').value || 'otro', enlace: g('mt-enlace').value.trim(), anfitrion: g('mt-host').value.trim(),
       cc: g('mt-cc').value.trim(), idioma: g('mt-idioma').dataset.v, canal: g('mt-canal').dataset.v, modo: g('mt-modo').dataset.v };
     // mensajes: solo se guardan los que la persona editó; si no, se regeneran solos con los datos vigentes
+    if (_mt.m && _mtLocalVal(_mt.m) === b.local && _mt.m.tz === b.tz) { b.rem1_local = (g('mt-r1') || {}).value || ''; b.rem2_local = (g('mt-r2') || {}).value || ''; }
     b.msg1 = g('mt-msg1') && g('mt-msg1').dataset.d ? g('mt-msg1').value : (_mt.m && _mt.m.msg1 || '');
     b.msg2 = g('mt-msg2') && g('mt-msg2').dataset.d ? g('mt-msg2').value : (_mt.m && _mt.m.msg2 || '');
     return b;
@@ -33050,7 +33085,7 @@ ${foot}
     ldRefer, ldReferSave, ldNurture, ldNurtureSave, ldOpenDispoMenu,
     nurtureRetomarMenu, nurtureReinscribir, nurtureOtraSecuencia, nurtureSoloManual,
     waitingContactMenu, activarSiguienteContacto, waitingCerrarAviso,
-    dlSetCli, dlSetView, dlCardMenu, dlPopClose, dlCalNav, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel, mtOpen, mtClose, mtSeg, mtSave, mtSend, mtCancel,
+    dlSetCli, dlSetView, dlCardMenu, dlPopClose, dlCalNav, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel, mtOpen, mtClose, mtSeg, mtTimes, mtSave, mtSend, mtCancel,
     sqSetCli, sqSetEst, sqSetQ, cmSetCli, cmSetEst, cmSetQ,
     seqRunSetCanal, seqTaskSetDue,
     mbOpen, mbClose, mbSave, mbTest, mbDelete, mbProv, mbOAuthStart, mbManageOpen, mbManageClose,
