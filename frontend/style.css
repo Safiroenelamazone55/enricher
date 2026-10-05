@@ -17746,3 +17746,9 @@ tr.tk-flash > td { background-color: #FEF9C3; animation: none; }
 .mbm__del:hover { background: var(--danger-soft, #FDEBEA); }
 
 .mbh-why { margin: 0 0 12px; padding: 10px 12px; background: #EAF2FF; color: #1E3A5F; font-size: .8rem; line-height: 1.5; border-left: 3px solid #3B82F6; }
+
+/* Salud del dominio: el dominio es del cliente → acción principal = enviarle las instrucciones */
+.mbh-send { margin: 0 0 14px; padding: 12px 14px; background: #EAF2FF; border-left: 3px solid #3B82F6; color: #1E3A5F; display: flex; flex-direction: column; gap: 8px; }
+.mbh-send__t { font-size: .84rem; line-height: 1.45; }
+.mbh-send__b { display: flex; gap: 8px; flex-wrap: wrap; }
+.mbh-send__s { font-size: .74rem; color: #3C5A85; line-height: 1.45; }

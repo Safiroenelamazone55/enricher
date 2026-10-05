@@ -25927,14 +25927,19 @@ ${foot}
     const ok = () => { const t = btn.textContent; btn.textContent = '✓ Copiado'; setTimeout(() => { btn.textContent = t; }, 1400); };
     try { navigator.clipboard.writeText(v).then(ok, () => lmCopy(v, 'Copiado')); } catch (_) { lmCopy(v, 'Copiado'); }
   }
-  function mbhCopyAdmin() {
+  function mbhCopyAdmin(lang) {
     const d = _mbhData; if (!d) return;
+    const en = lang === 'en';
     const mb = (_mailboxes || []).find(x => x.id === _mbhId);
-    const items = d.checks.filter(x => x.estado !== 'ok' && x.registro && x.registro.valor !== undefined).map((x, i) =>
-      `${i + 1}) ${x.label} — Tipo: ${x.registro.tipo} · Nombre: ${x.registro.nombre} · Valor: ${x.registro.valor}${x.registro.actual ? '\n   (reemplaza el actual: ' + x.registro.actual + ')' : ''}`);
+    const items = d.checks.filter(x => x.estado !== 'ok' && x.registro && x.registro.valor !== undefined && !/^Te lo muestra/.test(x.registro.valor)).map((x, i) =>
+      en ? `${i + 1}) ${x.label} — Type: ${x.registro.tipo} · Name: ${x.registro.nombre} · Value: ${x.registro.valor}${x.registro.actual ? '\n   (replace the current one: ' + x.registro.actual + ')' : ''}`
+         : `${i + 1}) ${x.label} — Tipo: ${x.registro.tipo} · Nombre: ${x.registro.nombre} · Valor: ${x.registro.valor}${x.registro.actual ? '\n   (reemplaza el actual: ' + x.registro.actual + ')' : ''}`);
     const dkim = d.checks.find(x => x.key === 'dkim' && x.estado !== 'ok');
-    const msg = `Hola,\n\nNecesito ajustar la configuración de correo del dominio ${d.domain} para que nuestros correos lleguen a la bandeja de entrada y no a spam (buzón: ${mb ? mb.email : ''}).\n\nPor favor publica o ajusta estos registros DNS:\n\n${items.join('\n\n') || '(sin registros que publicar)'}\n\n${dkim ? 'Además, activa DKIM en ' + (d.proveedorNombre || 'tu proveedor de correo') + ' y publica los registros que te muestre.\n\n' : ''}Cuando esté hecho, avísame y lo reviso. ¡Gracias!`;
-    try { navigator.clipboard.writeText(msg).then(() => showBanner('✓ Mensaje copiado', 'success'), () => lmCopy(msg, 'Mensaje copiado')); } catch (_) { lmCopy(msg, 'Mensaje copiado'); }
+    const prov = d.proveedorNombre || (en ? 'your email provider' : 'tu proveedor de correo');
+    const msg = en
+      ? `Hi,\n\nTo make sure our emails reach the inbox and not spam, we need a small change to the DNS settings of ${d.domain} (mailbox: ${mb ? mb.email : ''}). It takes about 5 minutes for whoever manages your domain.\n\nPlease add or update these DNS records:\n\n${items.join('\n\n') || '(no records to publish)'}\n\n${dkim ? 'Also, please enable DKIM in ' + prov + ' and publish the records it shows you (in ' + prov + ': generate the DKIM keys for the domain, copy the records, and add them to the DNS).\n\n' : ''}These records only prove that emails sent from your domain are legitimate; they do not change how your email works today. Let me know once it is done and I will verify it.\n\nThank you!`
+      : `Hola,\n\nPara que nuestros correos lleguen a la bandeja de entrada y no a spam, necesitamos un pequeño ajuste en el DNS de ${d.domain} (buzón: ${mb ? mb.email : ''}). A quien administre el dominio le toma unos 5 minutos.\n\nPor favor agrega o actualiza estos registros DNS:\n\n${items.join('\n\n') || '(sin registros que publicar)'}\n\n${dkim ? 'Además, activa DKIM en ' + prov + ' y publica los registros que te muestre (en ' + prov + ': genera las claves DKIM del dominio, copia los registros y agrégalos al DNS).\n\n' : ''}Estos registros solo comprueban que los correos enviados desde el dominio son legítimos; no cambian cómo funciona tu correo hoy. Avísame cuando esté hecho y lo verifico.\n\n¡Gracias!`;
+    try { navigator.clipboard.writeText(msg).then(() => showBanner(en ? '✓ Message copied' : '✓ Mensaje copiado', 'success'), () => lmCopy(msg, 'Mensaje copiado')); } catch (_) { lmCopy(msg, 'Mensaje copiado'); }
   }
   async function mbHealthRun() {
     const box = document.getElementById('mbh-health'); if (!box || !_mbhId) return;
@@ -25956,15 +25961,13 @@ ${foot}
           <ol>${(x.pasos || []).map(p => `<li>${esc(p)}</li>`).join('')}</ol>
           ${rec(x.registro)}
           ${x.nota ? `<div class="mbh-note">${esc(x.nota)}</div>` : ''}
-          ${x.panel && x.panel.url ? `<a class="btn btn--primary btn--sm" href="${esc(x.panel.url)}" target="_blank" rel="noopener">Abrir ${esc(x.panel.nombre)} ↗</a>` : ''}
+          ${x.panel && x.panel.url ? `<a class="btn btn--ghost btn--sm" href="${esc(x.panel.url)}" target="_blank" rel="noopener" title="Solo sirve si tú o tu cliente te dieron acceso a esa cuenta">Abrir ${esc(x.panel.nombre)} ↗ <small style="opacity:.7">(solo si tienes acceso)</small></a>` : ''}
         </div>`;
       const pend = d.checks.filter(x => x.estado !== 'ok').length;
       box.innerHTML = `<div class="mbh-sum mbh-sum--${d.resumen.estado}"><span class="mbh-ic">${ic[d.resumen.estado]}</span>${esc(d.resumen.texto)} <em>· ${esc(d.domain)}</em></div>
-        ${pend ? `<div class="mbh-why"><b>¿Por qué me lleva a ${esc(d.dnsHost || 'otro sitio')}?</b> Tu buzón está en <b>${esc(d.proveedorNombre || 'tu proveedor de correo')}</b>, pero los registros de seguridad (SPF, DKIM, DMARC) no se guardan en el correo: se publican en el <b>DNS del dominio</b>${d.dnsHost ? ', que está en <b>' + esc(d.dnsHost) + '</b>' : ''}. Son dos sitios distintos. Necesitas entrar al DNS con la cuenta que administra el dominio; si no la tienes tú, usa el botón <i>Copiar mensaje para el administrador</i>.</div>` : ''}
+        ${pend ? `<div class="mbh-send"><div class="mbh-send__t"><b>Este dominio es de tu cliente</b>, así que los cambios los publica quien administra su DNS${d.dnsHost ? ' (' + esc(d.dnsHost) + ')' : ''}. Envíale las instrucciones listas:</div><div class="mbh-send__b"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.mbhCopyAdmin('es')">Copiar mensaje en español</button><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.mbhCopyAdmin('en')">Copy message in English</button></div><div class="mbh-send__s">El buzón está en ${esc(d.proveedorNombre || 'su proveedor de correo')}, pero SPF, DKIM y DMARC no se guardan en el correo: se publican en el DNS del dominio. Son dos sitios distintos.</div></div>` : ''}
         <div class="mbh-list">${d.checks.map(x => `<div class="mbh-row"><span class="mbh-ic mbh-ic--${x.estado}">${ic[x.estado]}</span><div class="mbh-rowbody"><b>${esc(x.label)}</b><div class="mbh-d">${esc(x.detalle)}</div>${fixBlock(x)}</div></div>`).join('')}</div>
-        ${pend ? `<div class="mbh-admin"><div><b>¿No administras tú el dominio?</b><div class="mbh-d">Copia un mensaje listo para enviarle a quien lo administre.</div></div><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.mbhCopyAdmin()">Copiar mensaje para el administrador</button></div>
-        <div class="mbh-p">Después de publicar los cambios, pulsa <b>Volver a revisar</b>. Pueden tardar de unos minutos a unas horas en verse.</div>` : ''}`;
-    } catch (e) { box.innerHTML = '<div class="mbh-load" style="color:var(--danger)">No se pudo revisar: ' + esc(e.message) + '</div>'; }
+        ${pend ? `<div class="mbh-p">Cuando tu cliente publique los cambios, pulsa <b>Volver a revisar</b>. Pueden tardar de unos minutos a unas horas en verse.</div>` : ''}`;    } catch (e) { box.innerHTML = '<div class="mbh-load" style="color:var(--danger)">No se pudo revisar: ' + esc(e.message) + '</div>'; }
   }
   async function _mbhRampLoad() {
     const box = document.getElementById('mbh-ramp'); if (!box || !_mbhId) return;
