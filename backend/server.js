@@ -4021,7 +4021,8 @@ app.post('/api/lm/contacts/bulk-delete', requireAuth, async (req, res) => {
 function _sanSendDays(v) { const s = String(v || ''); return (/^[01]{7}$/.test(s) && s.includes('1')) ? s : '1111100'; }
 function _sanHora(v) { const s = String(v || '').trim(); const m = s.match(/^(\d{1,2}):(\d{2})$/); if (!m) return ''; const h = +m[1], mi = +m[2]; return (h >= 0 && h < 24 && mi >= 0 && mi < 60) ? String(h).padStart(2, '0') + ':' + m[2] : ''; }
 // Condición de rama de un paso: '' (todos) | 'replied' (respondió/aceptó) | 'no_reply' (no respondió).
-function _sanCond(v) { return ['replied', 'no_reply'].includes(v) ? v : ''; }
+// + señales de email de un paso concreto: abrió / no abrió / hizo clic / no hizo clic (requieren cond_step_id de un paso de email enviado por Nova)
+function _sanCond(v) { return ['replied', 'no_reply', 'opened', 'not_opened', 'clicked', 'not_clicked'].includes(v) ? v : ''; }
 // Acción del paso dentro del canal (invitación con/sin nota, mensaje, follow, comentario…)
 function _sanAccion(v) { return ['invite_nota', 'invite', 'mensaje', 'inmail', 'follow', 'comentario', 'like', 'visita', 'llamada', 'voicemail'].includes(v) ? v : ''; }
 // Antigüedad máxima aceptable de la publicación, en días (0 = sin límite).
@@ -4264,6 +4265,43 @@ app.post('/api/lm/sequences/:id/redistribute', requireAuth, async (req, res) => 
 });
 // Deshacer el último "Hecha": retrocede un paso (o reactiva si estaba terminado), re-ancla la fecha
 // y borra la actividad de completado falsa. Para cuando marcas por error sin haber hecho la tarea.
+// Señales por contacto y por paso: respondió/aceptó, abrió, hizo clic. Misma regla que el motor (_stepResponded).
+app.get('/api/lm/sequences/:id/signals', requireAuth, async (req, res) => {
+  try {
+    const uid = req.workspaceOwnerId, sid = parseInt(req.params.id);
+    const { rows: steps } = await pool.query('SELECT id, canal FROM sequence_steps WHERE sequence_id=$1 AND user_id=$2', [sid, uid]);
+    if (!steps.length) return res.json({});
+    const stepIds = steps.map(s => s.id), canalDe = new Map(steps.map(s => [s.id, s.canal]));
+    const { rows: enr } = await pool.query('SELECT contact_id FROM lm_contact_sequences WHERE sequence_id=$1 AND user_id=$2', [sid, uid]);
+    const cids = enr.map(e => e.contact_id);
+    if (!cids.length) return res.json({});
+    const [manual, msgs, lis] = await Promise.all([
+      pool.query('SELECT contact_id, step_id, resultado FROM lm_step_outcomes WHERE step_id = ANY($1::int[]) AND contact_id = ANY($2::int[])', [stepIds, cids]),
+      pool.query(`SELECT m.contact_id, m.step_id, BOOL_OR(m.replied_at IS NOT NULL) AS r,
+                         COALESCE(BOOL_OR(ev.o), false) AS o, COALESCE(BOOL_OR(ev.c), false) AS c
+                    FROM lm_messages m
+                    LEFT JOIN LATERAL (SELECT BOOL_OR(e.tipo='open') AS o, BOOL_OR(e.tipo='click') AS c FROM lm_message_events e WHERE e.message_id = m.id) ev ON true
+                   WHERE m.sequence_id=$1 AND m.step_id IS NOT NULL GROUP BY m.contact_id, m.step_id`, [sid]),
+      pool.query('SELECT id, (li_aceptado_at IS NOT NULL) AS acepto FROM lm_contacts WHERE id = ANY($1::int[])', [cids]),
+    ]);
+    const man = new Map(manual.rows.map(r => [r.contact_id + ':' + r.step_id, r.resultado === 'respondio']));
+    const msg = new Map(msgs.rows.map(r => [r.contact_id + ':' + r.step_id, r]));
+    const acepto = new Map(lis.rows.map(r => [r.id, r.acepto]));
+    const out = {};
+    for (const cid of cids) {
+      out[cid] = {};
+      for (const sId of stepIds) {
+        const k = cid + ':' + sId, m = msg.get(k), canal = canalDe.get(sId);
+        let r = false;
+        if (man.has(k)) r = man.get(k);
+        else if (canal === 'email') r = !!(m && m.r);
+        else if (canal === 'linkedin') r = !!acepto.get(cid);
+        out[cid][sId] = { r, o: !!(m && m.o), c: !!(m && m.c) };
+      }
+    }
+    res.json(out);
+  } catch (err) { console.error('[signals]', err.message); res.status(500).json({ error: 'Error al calcular señales' }); }
+});
 app.post('/api/lm/sequences/:id/contacts/:cid/rollback', requireAuth, async (req, res) => {
   const uid = req.workspaceOwnerId, sid = parseInt(req.params.id), cid = parseInt(req.params.cid);
   try {

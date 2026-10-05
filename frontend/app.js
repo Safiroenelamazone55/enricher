@@ -21360,6 +21360,7 @@ ${foot}
   async function _seqLoadContacts(id) {
     try { const r = await apiFetch(`${API}/lm/sequences/${id}/contacts`); _seqContacts = (r && r.ok) ? await r.json() : []; } catch { _seqContacts = []; }
     if (!Array.isArray(_seqContacts)) _seqContacts = [];
+    try { const r2 = await apiFetch(`${API}/lm/sequences/${id}/signals`); _seqSignals = (r2 && r2.ok) ? await r2.json() : {}; } catch { _seqSignals = {}; }
     if (_section === 'sequence' && _activeSeq === id) _renderBody();
   }
 
@@ -22761,7 +22762,42 @@ ${foot}
     if (st && st.canal === 'linkedin' && _noLinkedInC(cid)) return false;
     if (st && st.canal === 'whatsapp' && _noWhatsappC(cid)) return false;
     if (st && st.canal === 'call' && _noPhoneC(cid)) return false;
-    const cd = (st && st.cond) || ''; if (!cd) return true; const r = _respondedC(cid); return cd === 'replied' ? r : cd === 'no_reply' ? !r : true;
+    const cd = (st && st.cond) || ''; if (!cd) return true;
+    const sig = st.cond_step_id ? ((_seqSignals || {})[cid] || {})[st.cond_step_id] : null;
+    if (['opened', 'not_opened', 'clicked', 'not_clicked'].includes(cd)) {
+      const o = !!(sig && sig.o), cl = !!(sig && sig.c);
+      return cd === 'opened' ? o : cd === 'not_opened' ? !o : cd === 'clicked' ? cl : !cl;
+    }
+    const r = sig ? !!sig.r : _respondedC(cid);
+    return cd === 'replied' ? r : cd === 'no_reply' ? !r : true;
+  }
+  // ── Condición del paso: etiquetas y opciones según el canal del paso de referencia ──
+  const _COND_POS = ['replied', 'opened', 'clicked'];
+  function _stepCondText(cd, refCanal) {
+    const li = refCanal === 'linkedin';
+    return { replied: li ? 'si aceptó la conexión' : 'si respondió', no_reply: li ? 'si NO aceptó la conexión' : 'si NO respondió',
+             opened: 'si abrió el email', not_opened: 'si NO abrió el email', clicked: 'si hizo clic', not_clicked: 'si NO hizo clic' }[cd] || '';
+  }
+  function _stepCondBadge(st) {
+    if (!st || !st.cond) return '';
+    const ref = (_seqSteps(_activeSeq) || []).find(x => x.id === st.cond_step_id);
+    const txt = _stepCondText(st.cond, ref && ref.canal);
+    const pos = _COND_POS.includes(st.cond);
+    return `<span class="lm-vb" style="background:${pos ? '#E7F6EC' : '#FEF3C7'};color:${pos ? '#15803D' : '#B45309'}" title="Este paso solo se hace ${esc(txt)}${ref ? ' (según el paso del día ' + ref.dia + ')' : ''}">${esc(txt)}</span>`;
+  }
+  function _stepCondOptsHtml(refCanal, selected) {
+    const L = c => 'Solo ' + _stepCondText(c, refCanal);
+    let ops = [['', 'Siempre (a todos los que siguen sin responder)']];
+    if (refCanal === 'email') ops = ops.concat([['no_reply', L('no_reply')], ['not_opened', L('not_opened')], ['opened', L('opened')], ['not_clicked', L('not_clicked')], ['clicked', L('clicked')], ['replied', L('replied')]]);
+    else ops = ops.concat([['no_reply', L('no_reply')], ['replied', L('replied')]]);
+    if (selected && !ops.some(o => o[0] === selected)) ops.push([selected, L(selected)]);
+    return ops.map(o => `<option value="${o[0]}"${o[0] === (selected || '') ? ' selected' : ''}>${esc(o[1])}</option>`).join('');
+  }
+  function _stepCondHint(cd, ref) {
+    const nombre = ref ? 'el paso del día ' + ref.dia + ' (' + ((_TOUCH[ref.canal] || [ref.canal])[0]) + ')' : 'cualquier parte de la secuencia';
+    if (!cd) return 'Le toca a todos los contactos que siguen en la secuencia. Recuerda: cuando alguien responde, su secuencia se detiene sola.';
+    if (['opened', 'not_opened', 'clicked', 'not_clicked'].includes(cd)) return 'Mira ' + nombre + '. Solo funciona con emails enviados por Nova (automático o con aprobación). Las aperturas pueden inflarse por la protección de privacidad de Apple Mail; los clics son más fiables.';
+    return (cd === 'no_reply' ? 'Este paso se hace solo si el contacto NO respondió' : 'Este paso se hace solo si el contacto SÍ respondió') + ' en ' + nombre + '. Si ese paso es de LinkedIn, "responder" significa haber aceptado la conexión.';
   }
   // Índice del paso EFECTIVO: el primero desde fromIdx cuya condición aplica al contacto, o -1 si ninguno.
   function _effIdx(steps, cid, fromIdx) { for (let i = Math.max(0, fromIdx || 0); i < steps.length; i++) { if (_stepCondMatch(steps[i], cid)) return i; } return -1; }
@@ -23511,8 +23547,7 @@ ${foot}
   function _stepRow(st, state, prog) {
     const t = _TOUCH[st.canal] || _TOUCH.email;
     const cal = _stepCalDate(st);
-    const cb = st.cond === 'replied' ? '<span class="lm-vb" style="background:#F1EFEB;color:#15803D" title="Solo para contactos que respondieron o aceptaron la conexión de LinkedIn">si respondió</span>'
-             : st.cond === 'no_reply' ? '<span class="lm-vb" style="background:#FEF3C7;color:#B45309" title="Solo para contactos que NO respondieron">si no respondió</span>' : '';
+    const cb = _stepCondBadge(st);
     const progHtml = prog ? `<div class="lm-step__prog" title="${prog.done} de ${prog.total} contactos ya pasaron este paso">
         <div class="lm-step__prog__bar"><span style="width:${prog.pct}%;background:${_progColor(prog.pct)}"></span></div>
         <span class="lm-step__prog__n">${prog.done}/${prog.total}</span>
@@ -28888,6 +28923,7 @@ ${foot}
       variants: (st && Array.isArray(st.variants) && st.variants.length) ? st.variants.map(v => { const r = _varResolve(v, st); return { nombre: v.nombre || '', asunto: r.asunto, cuerpo: r.cuerpo, targets: Array.isArray(v.targets) ? v.targets.slice() : [], tplId: r.tplId }; }) : [{ nombre: 'A', asunto: (st && st.asunto) || '', cuerpo: (st && st.plantilla) || '', targets: [], tplId: '' }],
     };
     const existing = _seqSteps(seqId);
+    _stepFormSteps = existing;
     const nextDia = st ? st.dia : ((existing.slice(-1)[0]?.dia || 0) + (existing.length ? 2 : 1));
     document.getElementById('lm-step-modal')?.remove();
     const m = document.createElement('div'); m.id = 'lm-step-modal'; m.className = 'fin-pi-backdrop';
@@ -28906,11 +28942,11 @@ ${foot}
         </label>
         <div class="fin-pi-full" id="step-accion-slot">${_stepAccionHtml(st?.canal || 'email', st?.accion || '')}</div>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Hora (opcional)</span><input class="form-input" type="time" id="step-hora" value="${st && st.hora ? esc(st.hora) : ''}"><span class="seq-drip-hint" id="step-hora-hint">${_stepHoraHint(seqId)}</span></label>
-        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">¿Para quién? (rama por respuesta)</span><select class="form-input" id="step-cond" onchange="LeadManagerModule.stepCondChange()"><option value=""${!(st && st.cond) ? ' selected' : ''}>Todos</option><option value="replied"${st && st.cond === 'replied' ? ' selected' : ''}>Solo si respondió / aceptó</option><option value="no_reply"${st && st.cond === 'no_reply' ? ' selected' : ''}>Solo si NO respondió</option></select><span class="seq-drip-hint">Ramifica la secuencia: el sistema <b>salta</b> este paso para quien no cumpla la condición. Ej.: nota de conexión = <b>Todos</b>; mensaje de LinkedIn = <b>Solo si aceptó</b>; email de seguimiento = <b>Solo si no respondió</b>.</span></label>
-        <label class="fin-cfg-field fin-pi-full" id="step-cond-ref-wrap" style="display:${st && st.cond ? 'flex' : 'none'}"><span class="fin-cfg-lbl">¿Con respecto a qué paso?</span><select class="form-input" id="step-cond-ref">
-          <option value="">En general (cualquier respuesta de la secuencia)</option>
-          ${existing.filter(x => !st || x.id !== st.id).map(x => `<option value="${x.id}"${st && String(st.cond_step_id) === String(x.id) ? ' selected' : ''}>Día ${x.dia} · ${esc(_TOUCH[x.canal] ? _TOUCH[x.canal][0] : x.canal)}${_accionLabel(x.canal, x.accion) ? ' · ' + esc(_accionLabel(x.canal, x.accion)) : ''}${x.titulo ? ' — ' + esc(x.titulo) : ''}</option>`).join('')}
-        </select><span class="seq-drip-hint">Por defecto mira si respondió en <b>cualquier parte</b> de la secuencia. Elige un paso puntual (ej. "Día 2 · WhatsApp · Llamada") para que la condición mire <b>solo esa señal</b> — así "no respondió a la llamada" no se confunde con "no respondió al mensaje" o "no aceptó LinkedIn".</span></label>
+        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Este paso se hace</span><select class="form-input" id="step-cond" onchange="LeadManagerModule.stepCondChange()">${_stepCondOptsHtml((existing.find(x => st ? String(x.id) === String(st.cond_step_id) : x === existing[existing.length - 1]) || {}).canal || '', st?.cond || '')}</select><span class="seq-drip-hint" id="step-cond-hint"></span></label>
+        <label class="fin-cfg-field fin-pi-full" id="step-cond-ref-wrap" style="display:${st && st.cond ? 'flex' : 'none'}"><span class="fin-cfg-lbl">Según qué paso</span><select class="form-input" id="step-cond-ref" onchange="LeadManagerModule.stepCondChange()">
+          ${st && st.cond && !st.cond_step_id ? '<option value="" selected>En general (cualquier respuesta de la secuencia)</option>' : ''}
+          ${existing.filter(x => !st || x.id !== st.id).map((x, i, arr) => `<option value="${x.id}"${st && st.cond_step_id ? (String(st.cond_step_id) === String(x.id) ? ' selected' : '') : (!st && i === arr.length - 1 ? ' selected' : '')}>Día ${x.dia} · ${esc(_TOUCH[x.canal] ? _TOUCH[x.canal][0] : x.canal)}${_accionLabel(x.canal, x.accion) ? ' · ' + esc(_accionLabel(x.canal, x.accion)) : ''}${x.titulo ? ' — ' + esc(x.titulo) : ''}</option>`).join('')}
+        </select></label>
         <div class="fin-pi-full step-sec-h"><span class="step-sec-n">2</span> El mensaje — qué se envía <span class="sp"></span><button type="button" class="seq-days-preset" id="step-prev-btn" onclick="LeadManagerModule.stepPreview(${seqId})">👁 Vista previa</button></div>
         <div id="step-preview" class="fin-pi-full" style="display:none"></div>
         ${(() => { const sq = (_sequences || []).find(x => x.id === seqId); const cli = (_clients || []).find(c => c.id === sq?.outbound_client_id); const cc = cli?.cc_email || ''; return cc ? `<label class="fin-cfg-field fin-pi-full" id="step-cc-wrap" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="step-cc" ${st?.cc_off ? '' : 'checked'} style="width:auto"><span class="fin-cfg-lbl" style="margin:0">Incluir CC del cliente (${esc(cc)})</span><span class="seq-drip-hint" style="margin:0">Desmárcalo para que ESTE paso salga sin copia.</span></label>` : ''; })()}
@@ -28926,6 +28962,7 @@ ${foot}
     _stepRenderMsg();
     stepDiaCal(seqId);
     setTimeout(() => $('step-titulo')?.focus(), 60);
+    stepCondChange();   // deja la ayuda y las opciones de la condición según el paso de referencia
   }
   // Fecha calendario en vivo junto al "Día (relativo)" del editor de paso.
   function stepDiaCal(seqId) {
@@ -29015,7 +29052,14 @@ ${foot}
   // el perfil funcionan igual aunque no haya publicaciones.
   function _isContentStep(canal, accion) { return canal === 'linkedin' && (accion === 'comentario' || accion === 'like'); }
   function stepAccionChange() { _stepSyncDraft(); _stepRenderMsg(); }
-  function stepCondChange() { const wrap = $('step-cond-ref-wrap'); if (wrap) wrap.style.display = $('step-cond')?.value ? 'flex' : 'none'; }
+  function stepCondChange() {
+    const sel = $('step-cond'), ref = $('step-cond-ref'), wrap = $('step-cond-ref-wrap'), hint = $('step-cond-hint'); if (!sel) return;
+    const refStep = (_stepFormSteps || []).find(x => String(x.id) === String(ref ? ref.value : ''));
+    const cur = sel.value;
+    sel.innerHTML = _stepCondOptsHtml(refStep ? refStep.canal : '', cur);   // las opciones cambian según el canal del paso elegido
+    if (wrap) wrap.style.display = sel.value ? 'flex' : 'none';
+    if (hint) hint.textContent = _stepCondHint(sel.value, refStep);
+  }
   // Opciones de los pasos que dependen de una publicación. La ventana hace que
   // "sin actividad reciente" sea un criterio objetivo (lo mismo que hace HeyReach)
   // en vez de un juicio distinto en cada tarea.
@@ -29393,6 +29437,8 @@ ${foot}
   // clasificados: no interesado / no contactar / no califica (descartados), más adelante (el sistema recuerda) ni interesado / reunión.
   const _seqPend = e => !e.real_disposition || e.real_disposition === 'respondio' || e.real_disposition === 'aceptado';
   let _seqCtPage = 0, _seqCoPage = 0;   // páginas de Contactos / Empresas dentro de una secuencia
+  let _seqSignals = {};   // {contacto: {paso: {r, o, c}}} de la secuencia abierta (respondió/aceptó, abrió, hizo clic)
+  let _stepFormSteps = [];
   let _seqCtDisp = '';   // filtro de resultado/disposición ('' = cualquiera, '_none' = nunca respondió)
   let _seqCtSel = new Set(); // contact_id seleccionados, para agregarlos en bloque a otra secuencia
   let _seqTaskCanal = ''; // filtro por canal en la pestaña Tareas de la secuencia

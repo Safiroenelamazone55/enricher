@@ -166,6 +166,16 @@ async function _stepResponded(pool, contactId, stepId) {
 async function _condMatch(pool, step, enr) {
   const cd = (step && step.cond) || '';
   if (!cd) return true;
+  // Señales de aperturas/clics del email de OTRO paso (solo emails enviados por Nova llevan seguimiento).
+  if (['opened', 'not_opened', 'clicked', 'not_clicked'].includes(cd)) {
+    if (!step.cond_step_id) return true;
+    const { rows: [ev] } = await pool.query(
+      `SELECT COALESCE(BOOL_OR(e.tipo='open'), false) AS o, COALESCE(BOOL_OR(e.tipo='click'), false) AS c
+         FROM lm_messages m JOIN lm_message_events e ON e.message_id = m.id
+        WHERE m.contact_id=$1 AND m.step_id=$2`, [enr.contact_id, step.cond_step_id]);
+    const o = !!(ev && ev.o), c = !!(ev && ev.c);
+    return cd === 'opened' ? o : cd === 'not_opened' ? !o : cd === 'clicked' ? c : !c;
+  }
   const responded = step.cond_step_id
     ? await _stepResponded(pool, enr.contact_id, step.cond_step_id)
     : (['respondio','interesado'].includes(enr.disposition) || !!enr.li_aceptado_at);

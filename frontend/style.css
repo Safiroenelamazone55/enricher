@@ -17786,3 +17786,6 @@ tr.tk-flash > td { background-color: #FEF9C3; animation: none; }
 .seq-unit { position: relative; display: flex; align-items: center; }
 .seq-unit .form-input { width: 100%; padding-right: 54px; }
 .seq-unit__u { position: absolute; right: 14px; font-size: .84rem; font-weight: 600; color: var(--text-muted); pointer-events: none; }
+
+/* Condición del paso */
+.lm-vb[title] { cursor: help; }
