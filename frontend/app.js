@@ -28545,9 +28545,9 @@ ${foot}
     const idiomaDef = m ? m.idioma : (_mt.inherit && _mt.inherit.idioma) ? _mt.inherit.idioma : ((String(c.pais || '').trim().toLowerCase().match(/^(us|usa|united states|estados unidos|ee\.?uu\.?|uk|reino unido|canada|australia)/)) ? 'en' : 'es');
     const est = n => m ? '<span class="mt-est mt-est--' + m['rem' + n + '_estado'] + '">' + (_MT_EST[m['rem' + n + '_estado']] || '') + '</span>' : '';
     const mm = m || {};
-    const rem = n => '<div class="mt-msg"><div class="mt-msg__hd"><span>' + (n === 1 ? 'Día anterior · 10:00 del prospecto' : '30 minutos antes') + '</span>' + est(n) + '</div>' +
+    const rem = n => '<div class="mt-msg"><div class="mt-msg__hd"><span>' + (n === 1 ? 'Primer aviso' : 'Segundo aviso') + '</span>' + est(n) + '</div>' +
       '<textarea class="mt-i" id="mt-msg' + n + '" rows="6" oninput="this.dataset.d=1">' + esc(mm['msg' + n] || mm['default' + n] || '') + '</textarea>' +
-      '<div class="mt-msg__ft">' + (m ? '<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.mtSend(' + n + ')">Enviar ahora por ' + (m.canal === 'whatsapp' ? 'WhatsApp' : 'email') + '</button>' + (m['rem' + n + '_estado'] === 'error' && m.error ? '<span class="mt-err">' + esc(m.error) + '</span>' : '') : '') + '</div></div>';
+      '<div class="mt-msg__ft">' + (m ? '<span class="mt-when">' + (m.modo === 'auto' ? 'Se enviará solo a la hora indicada arriba.' : 'A esa hora te aparece como tarea en Hoy para aprobarlo.') + '</span><a href="#" class="mt-lnk" title="Envía este mensaje ya, sin esperar a la hora programada" onclick="event.preventDefault();LeadManagerModule.mtSend(' + n + ')">Enviar ahora</a>' + (m['rem' + n + '_estado'] === 'error' && m.error ? '<span class="mt-err">' + esc(m.error) + '</span>' : '') : '') + '</div></div>';
     const inh = _mt.inherit || {};
     const _loc = d => { if (!d) return ''; try { return new Intl.DateTimeFormat('sv-SE', { timeZone: m.tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(d)).replace(' ', 'T'); } catch (_) { return ''; } };
     const _recNote = n => {
@@ -28583,8 +28583,7 @@ ${foot}
           fld('Enviar por', seg('mt-canal', [['email', 'Email'], ['whatsapp', 'WhatsApp']], m ? m.canal : 'email')) +
           fld('Modo', seg('mt-modo', [['revision', 'Con revisión'], ['auto', 'Automático']], m ? m.modo : 'revision')) + '</div>' +
           '<div class="mt-hint">Con revisión te deja una tarea en Hoy con el mensaje listo; automático lo envía solo. Sale desde el buzón del cliente (email) o su WhatsApp conectado.</div></div>' +
-        timing + ('<div class="mt-sec"><div class="mt-sec__t">Mensajes <span class="mt-hint" style="margin:0 0 0 6px">se completan solos con el enlace y el nombre; puedes editarlos</span></div><div class="mt-row mt-row--top">' + rem(1) + rem(2) + '</div></div>'
-           : '<div class="mt-hint">Guarda la reunión y aquí aparecerán los dos mensajes listos para editar.</div>') +
+        timing + ('<div class="mt-sec"><div class="mt-sec__t">Mensajes <span class="mt-hint" style="margin:0 0 0 6px">se completan solos con el enlace y el nombre; puedes editarlos</span></div><div class="mt-row mt-row--top">' + rem(1) + rem(2) + '</div></div>') +
       '</div>' +
       '<div class="mt-ft">' + (m ? '<button class="btn btn--ghost btn--sm" style="color:#B91C1C" onclick="LeadManagerModule.mtCancel()">Cancelar reunión</button>' : '') + '<span style="flex:1"></span><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.mtClose()">Cerrar</button><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.mtSave()">' + (m ? 'Guardar cambios' : 'Guardar reunión') + '</button></div>' +
     '</div>';

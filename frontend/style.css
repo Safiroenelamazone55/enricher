@@ -17847,3 +17847,7 @@ textarea.mt-i{height:auto;padding:9px 10px;resize:vertical;line-height:1.45}
 
 .mt-mine{margin-top:6px;padding:6px 10px;border-radius:8px;background:#EEF4FF;color:#1D4ED8;font-size:.78rem;font-weight:500}
 .mt-rec{margin-top:5px;font-size:.74rem;color:#B45309}
+
+.mt-when{font-size:.74rem;color:#64748B}
+.mt-lnk{margin-left:auto;font-size:.72rem;color:#94A3B8;text-decoration:underline;cursor:pointer}
+.mt-lnk:hover{color:#B91C1C}
