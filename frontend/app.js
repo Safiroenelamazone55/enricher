@@ -20562,7 +20562,8 @@ const LeadManagerModule = (() => {
   };
   const _LOC_DB = Object.entries(_TZ_DB_RAW).flatMap(([tz, names]) => names.map(n => ({ name: n, tz: tz })));
   function _tzLabelFor(tz) { if (!tz) return ''; const m = _LOC_DB.find(x => x.tz === tz); return (m ? m.name : _tzShort(tz)) + ' · ' + _tzShort(tz); }
-  function _herTz() { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Madrid'; } catch (e) { return 'Europe/Madrid'; } }
+  // "Tu hora" = la zona horaria que elegiste en Configuración (no la del navegador); cada secuencia conserva la suya.
+  function _herTz() { try { return _userTZ() || Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Madrid'; } catch (e) { return 'Europe/Madrid'; } }
   function _tzOffsetMin(tz, at) {
     try {
       const p = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(at).reduce((o, x) => { o[x.type] = x.value; return o; }, {});
