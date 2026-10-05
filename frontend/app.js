@@ -25979,10 +25979,10 @@ ${foot}
         <div class="mbh-fields">${fld('mbh-start', 'Empieza en', d.ramp_start, 'envíos por día')}${fld('mbh-step', 'Sube cada semana', d.ramp_step, 'envíos más por día')}${fld('mbh-target', 'Meta', d.ramp_target, 'envíos por día')}</div>
         ${d.ramp_on ? `<div class="mbh-status"><b>Semana ${d.semana + 1}</b>: tope de hoy <b>${d.cap_today}</b> envíos · enviados hoy <b>${d.sent_today}</b></div>
           <div class="mbh-curve">${d.curva.map(x => `<span${x.semana === d.semana + 1 ? ' class="on"' : ''}>Sem ${x.semana}<b>${x.tope}</b></span>`).join('')}</div>` : '<div class="mbh-p">Al encenderlo, empieza hoy. El tope aplica a todos los envíos automáticos de las secuencias de este cliente.</div>'}
-        <div class="mbh-save"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.mbRampSave()">Guardar</button><span id="mbh-msg" class="mbh-msg"></span></div>`;
+        <div class="mbh-save"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.mbRampSave(true)">Guardar</button><span id="mbh-msg" class="mbh-msg"></span></div>`;
     } catch (e) { box.innerHTML = '<div class="mbh-load" style="color:var(--danger)">No se pudo cargar: ' + esc(e.message) + '</div>'; }
   }
-  async function mbRampSave() {
+  async function mbRampSave(cerrar) {
     if (!_mbhId) return;
     const v = id => parseInt(document.getElementById(id)?.value);
     const body = { on: !!document.getElementById('mbh-on')?.checked, start: v('mbh-start'), step: v('mbh-step'), target: v('mbh-target') };
@@ -25991,9 +25991,10 @@ ${foot}
       const r = await apiFetch(`${API}/lm/mailboxes/${_mbhId}/ramp`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Error');
       const mb = (_mailboxes || []).find(x => x.id === _mbhId); if (mb) { mb.ramp_on = d.ramp_on; mb.ramp_start = d.ramp_start; mb.ramp_step = d.ramp_step; mb.ramp_target = d.ramp_target; }
+      if (_mbManageClientId) { const bd = document.getElementById('mbx-manage-body'); const cl = _clients.find(x => x.id === _mbManageClientId); if (bd && cl) bd.innerHTML = _mbBodyHtml(cl); }
+      if (cerrar) { mbHealthClose(); showBanner(d.ramp_on ? '✓ Calentamiento guardado y activo' : '✓ Calentamiento guardado (apagado)', 'success'); return; }
       await _mbhRampLoad();
       const m2 = document.getElementById('mbh-msg'); if (m2) m2.textContent = '✓ Guardado';
-      if (_mbManageClientId) { const bd = document.getElementById('mbx-manage-body'); const cl = _clients.find(x => x.id === _mbManageClientId); if (bd && cl) bd.innerHTML = _mbBodyHtml(cl); }
     } catch (e) { if (msg) { msg.textContent = 'No se pudo guardar: ' + e.message; msg.style.color = 'var(--danger)'; } }
   }
   async function mbSignatureOpen(mbId) {
