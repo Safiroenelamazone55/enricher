@@ -28801,7 +28801,10 @@ ${foot}
       else lineas.push('El envío automático global está <b>apagado</b>: las secuencias automáticas no enviarán hasta activarlo.');
       if (d.esta.limite > 0) lineas.push(`Esta secuencia: máximo <b>${d.esta.limite}</b> por día.`);
       if (d.otras.length) lineas.push('Otras secuencias que enviaron hoy: ' + d.otras.map(x => esc(x.nombre) + ' (' + x.hoy + ')').join(', ') + '.');
-      box.innerHTML = `<div class="seq-cap__head">${puede == null ? 'Sin tope configurado hoy' : `Hoy puedes enviar con esta secuencia: <b>${puede}</b> emails`}${d.limita_texto && puede != null ? `<small>Lo limita ${esc(d.limita_texto)}</small>` : ''}</div>${barra}<ul class="seq-cap__ls">${lineas.map(x => '<li>' + x + '</li>').join('')}</ul>`;
+      // Si el límite que escribió la persona es mayor que lo que hoy permite otro tope, no se va a alcanzar: se avisa.
+      const exceso = d.esta.limite > 0 && puede != null && d.limita && d.limita !== 'secuencia' && d.esta.limite > (puede + d.esta.enviados_hoy);
+      const aviso = exceso ? `<div class="seq-cap__warn">Pusiste <b>${d.esta.limite}</b>, pero hoy ${esc(d.limita_texto)} solo permite <b>${puede + d.esta.enviados_hoy}</b>. Manda siempre el límite más bajo; tu número se alcanzará cuando ese tope suba.</div>` : '';
+      box.innerHTML = `<div class="seq-cap__head">${puede == null ? 'Sin tope configurado hoy' : `Hoy puedes enviar con esta secuencia: <b>${puede}</b> emails`}${d.limita_texto && puede != null ? `<small>Lo limita ${esc(d.limita_texto)}</small>` : ''}</div>${aviso}${barra}<ul class="seq-cap__ls">${lineas.map(x => '<li>' + x + '</li>').join('')}</ul>`;
     } catch (e) { box.innerHTML = '<div class="seq-cap__load">No se pudo calcular: ' + esc(e.message) + '</div>'; }
   }
   // Hint del modo de envío según el buzón del cliente elegido.

@@ -17772,3 +17772,12 @@ tr.tk-flash > td { background-color: #FEF9C3; animation: none; }
 .seq-cap__leg i.seq-cap__e { background: var(--primary); border-color: var(--primary); } .seq-cap__leg i.seq-cap__o { background: #94A3B8; border-color: #94A3B8; }
 .seq-cap__ls { margin: 0; padding-left: 16px; font-size: .75rem; color: var(--text-muted); display: flex; flex-direction: column; gap: 2px; }
 .seq-cap__ls b { color: var(--text-secondary); }
+
+/* Disponibilidad: titular en una línea, tramo libre visible, aviso de límite no alcanzable */
+.seq-cap__head { display: block !important; line-height: 1.5; }
+.seq-cap__head b { display: inline !important; margin: 0 2px; }
+.seq-cap__head small { display: block; }
+.seq-cap__bar { background: #CBD5E1; border: 1px solid var(--border); }
+.seq-cap__l { background: #F1F5F9; }
+.seq-cap__leg i.seq-cap__l { background: #F1F5F9; border-color: #CBD5E1; }
+.seq-cap__warn { padding: 8px 10px; background: #FEF3C7; color: #78350F; font-size: .78rem; line-height: 1.45; border-left: 3px solid #D97706; }
