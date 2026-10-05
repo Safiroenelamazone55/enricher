@@ -40,6 +40,9 @@ function defaultMessage(m, contactName, n) {
   const enlace = String(m.enlace || '').trim();
   const lugar = lang === 'en' && m.tipo === 'telefono' ? 'Phone' : lang === 'en' && m.tipo === 'presencial' ? 'In person' : (_LUGAR[m.tipo] || '');
   const host = String(m.anfitrion || '').trim();
+  // Firma: "Equipo <nombre del cliente outbound>" (la reunión es con la empresa a la que representa el partner).
+  const firma = String(m.firma || '').trim();
+  const sigLines = firma ? ['', lang === 'en' ? 'Best regards,' : 'Saludos,', lang === 'en' ? `The ${firma} Team` : `Equipo ${firma}`] : [];
   // ¿El aviso 1 sale el MISMO día de la reunión (en la zona del prospecto)? Entonces dice "hoy", no "mañana".
   const _ymd = d => new Intl.DateTimeFormat('en-CA', { timeZone: m.tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(d));
   const hoy = n === 1 && m.rem1_at && _ymd(m.rem1_at) === _ymd(m.starts_at);
@@ -50,7 +53,7 @@ function defaultMessage(m, contactName, n) {
     if (host) lines.push(`${host} will be joining you.`);
     if (enlace) lines.push(`${lugar ? lugar + ': ' : 'Link: '}${enlace}`); else if (lugar) lines.push(`Where: ${lugar}`);
     lines.push('', n === 1 ? (hoy ? 'See you later!' : 'See you tomorrow!') : 'See you soon!');
-    return lines.filter((l, i, a) => !(l === '' && a[i - 1] === '')).join('\n').trim();
+    return lines.concat(sigLines).filter((l, i, a) => !(l === '' && a[i - 1] === '')).join('\n').trim();
   }
   const lines = n === 1
     ? [`Hola ${nom},`, '', `Te recuerdo nuestra reunión de ${hoy ? 'hoy' : 'mañana'}, ${f.dia} a las ${f.hora} (${f.zona}).`]
@@ -58,7 +61,7 @@ function defaultMessage(m, contactName, n) {
   if (host) lines.push(`Te atenderá ${host}.`);
   if (enlace) lines.push(`${lugar ? lugar + ': ' : 'Enlace: '}${enlace}`); else if (lugar) lines.push(`Lugar: ${lugar}`);
   lines.push('', n === 1 ? (hoy ? '¡Nos vemos más tarde!' : '¡Nos vemos mañana!') : '¡Nos vemos en un momento!');
-  return lines.filter((l, i, a) => !(l === '' && a[i - 1] === '')).join('\n').trim();
+  return lines.concat(sigLines).filter((l, i, a) => !(l === '' && a[i - 1] === '')).join('\n').trim();
 }
 function defaultSubject(m, n) {
   return m.idioma === 'en'
@@ -75,6 +78,12 @@ function computeReminderTimes(startsAt, tz) {
   return { rem1_at: zonedToUtc(`${prevStr}T10:00`, tz), rem2_at: new Date(start.getTime() - 30 * 60000) };
 }
 
+// Nombre del cliente outbound del contacto (para la firma).
+async function clientNameOf(pool, contactId) {
+  const { rows: [r] } = await pool.query('SELECT oc.nombre FROM lm_contacts k JOIN outbound_clients oc ON oc.id=k.outbound_client_id WHERE k.id=$1', [contactId]);
+  return r ? r.nombre : '';
+}
+
 async function _contactCtx(pool, m) {
   const { rows: [k] } = await pool.query(`SELECT id, nombre, apellido, email, outbound_client_id FROM lm_contacts WHERE id=$1 AND user_id=$2`, [m.contact_id, m.user_id]);
   return k;
@@ -84,7 +93,7 @@ async function _contactCtx(pool, m) {
 async function sendReminder(pool, m, n) {
   const k = await _contactCtx(pool, m);
   if (!k) throw new Error('Contacto no encontrado');
-  const texto = (n === 1 ? m.msg1 : m.msg2) || defaultMessage(m, k.nombre, n);
+  const texto = (n === 1 ? m.msg1 : m.msg2) || defaultMessage({ ...m, firma: await clientNameOf(pool, k.id) }, k.nombre, n);
   const asunto = defaultSubject(m, n);
   if (m.canal === 'whatsapp') {
     const { rows: [lk] } = await pool.query(
@@ -171,4 +180,4 @@ function recommendTimes(startsAt, tz, now = Date.now()) {
   return { rem1_at, rem2_at: base.rem2_at, nota1 };
 }
 
-module.exports = { startMeetingReminders, tick, sendReminder, defaultMessage, defaultSubject, computeReminderTimes, recommendTimes, zonedToUtc };
+module.exports = { clientNameOf, startMeetingReminders, tick, sendReminder, defaultMessage, defaultSubject, computeReminderTimes, recommendTimes, zonedToUtc };
