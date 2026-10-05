@@ -28921,7 +28921,7 @@ ${foot}
   let _ctSelMode = false;
   let _coSelMode = false;
   let _contactView = null;
-  let _cpTab = 'resumen';
+  let _cpTab = 'informacion';
   let _companyView = null;
   let _coFrom = 'companies';
   let _addIds = [];
@@ -29883,9 +29883,9 @@ ${foot}
     // dentro de una tarea, o un link "Ver a" desde Leads) no se pisa _cpFrom — conserva
     // la sección original desde la que arrancó todo este recorrido.
     if (!taskCtx && _section !== 'contact-view') _cpFrom = _CP_FROM_LABEL[_section] ? _section : 'contacts';
-    _contactView = id; _cpTab = 'resumen'; _cpActs = null; _cpTaskCtx = taskCtx || null; _section = 'contact-view'; _renderBody(); const b = $('lm2-body'); if (b) b.scrollTop = 0; _cpReloadActs(id);
+    _contactView = id; _cpTab = 'informacion'; _cpActs = null; _cpTaskCtx = taskCtx || null; _section = 'contact-view'; _renderBody(); const b = $('lm2-body'); if (b) b.scrollTop = 0; _cpReloadActs(id);
   }
-  function cpTab(t) { _cpTab = t; const el = document.getElementById('cp-tabwrap'); if (el) el.innerHTML = _cpTabContent(_contacts.find(x => x.id === _contactView)); document.querySelectorAll('.cp-tab').forEach(b => b.classList.toggle('active', b.dataset.t === t)); }
+  function cpTab(t) { _cpTab = t; const el = document.getElementById('cp-tabwrap'); if (el) el.innerHTML = _cpTabContent(_contacts.find(x => x.id === _contactView)); document.querySelectorAll('.cp-tab').forEach(b => b.classList.toggle('active', b.dataset.t === t)); if (t === 'informacion') _cpLoadMap(_contacts.find(x => x.id === _contactView)); }
   function _vContactPage(id) {
     const c = _contacts.find(x => x.id === id);
     if (!c) return `<div class="lm-sec-head"><div><button class="lm-back" onclick="LeadManagerModule.go('${_cpFrom}')">‹ ${_CP_FROM_LABEL[_cpFrom] || 'Contactos'}</button><h2 class="lm-sec-title">Contacto no encontrado</h2></div></div>`;
@@ -29919,8 +29919,27 @@ ${foot}
       </div>
       <div class="cp-f__l" style="margin:2px 0 4px 2px">Etapa comercial</div>
       ${_cpStepper(c, id)}
-      <div class="cp-grid">
-        <div class="cp-left">
+      <div class="cp-tabs">
+            <button class="cp-tab${_cpTab === 'informacion' ? ' active' : ''}" data-t="informacion" onclick="LeadManagerModule.cpTab('informacion')">Información</button>
+            <button class="cp-tab${_cpTab === 'seguimiento' ? ' active' : ''}" data-t="seguimiento" onclick="LeadManagerModule.cpTab('seguimiento')">Seguimiento</button>
+            <button class="cp-tab${_cpTab === 'canales' ? ' active' : ''}" data-t="canales" onclick="LeadManagerModule.cpTab('canales')">Canales</button>
+            <button class="cp-tab${_cpTab === 'actividad' ? ' active' : ''}" data-t="actividad" onclick="LeadManagerModule.cpTab('actividad')">Actividad</button>
+            <button class="cp-tab${_cpTab === 'reuniones' ? ' active' : ''}" data-t="reuniones" onclick="LeadManagerModule.cpTab('reuniones')">Reuniones</button>
+            <button class="cp-tab${_cpTab === 'tareas' ? ' active' : ''}" data-t="tareas" onclick="LeadManagerModule.cpTab('tareas')">Tareas</button>
+            <button class="cp-tab${_cpTab === 'notas' ? ' active' : ''}" data-t="notas" onclick="LeadManagerModule.cpTab('notas')">Notas</button>
+            <button class="cp-tab${_cpTab === 'facturas' ? ' active' : ''}" data-t="facturas" onclick="LeadManagerModule.cpTab('facturas')">Facturas</button>
+      </div>
+      <div id="cp-tabwrap">${_cpTabContent(c)}</div>
+    </div>`;
+  }
+  // ── Pestañas de la ficha (rediseño 2026-10-04): Información / Seguimiento / Canales ──
+  function _cpInfoHtml(c) {
+    const id = c.id;
+    const F = (f, label, val) => `<label class="cp-f"><span class="cp-f__l">${label}</span><input class="cp-f__i" data-f="${f}" value="${esc(val || '')}" placeholder="＋ Añadir" onchange="LeadManagerModule.cpSave(${id})"></label>`;
+    const coOpts = `<option value="">— Sin empresa —</option>` + _companies.map(co => `<option value="${co.id}"${String(c.company_id) === String(co.id) ? ' selected' : ''}>${esc(co.nombre || co.dominio)}</option>`).join('');
+    const raw = (c.raw && typeof c.raw === 'object') ? c.raw : {};
+    const rawKeys = Object.keys(raw).filter(k => raw[k]);
+    const blocks = `
           <div class="cp-card"><div class="cp-card__t">Contacto</div><div class="cp-fields">
             ${F('nombre', 'Nombre', c.nombre)}${F('apellido', 'Apellido', c.apellido)}
             ${F('email', 'Email', c.email)}${F('email_personal', 'Email personal', c.email_personal)}
@@ -29937,6 +29956,12 @@ ${foot}
             ${c.company_id ? `<div class="cp-f cp-f--full"><button class="cp-golink" onclick="LeadManagerModule.openCompanyPage(${c.company_id})">Ver ficha de la empresa ›</button></div>` : ''}
             ${F('fuente', 'Fuente', c.fuente)}
           </div></div>
+`;
+    return `<div class="cp-info">${blocks}</div>${rawKeys.length ? `<div class="cp-card"><div class="cp-card__t">Datos importados (sin mapear)</div><div class="cp-fields">${rawKeys.map(k => `<div class="cp-f"><span class="cp-f__l">${esc(k)}</span><span class="cp-f__ro">${esc(raw[k])}</span></div>`).join('')}</div></div>` : ''}`;
+  }
+  function _cpSeguimientoHtml(c) {
+    const id = c.id;
+    return `<div class="cp-info cp-info--one">
           ${_seqEnrollCard(c, id)}
           <div class="cp-card"><div class="cp-card__t">Resultado de la interacción</div><div class="cp-fields">
             <div class="cp-f cp-f--full"><div class="cp-dispo">${_DISPOS.map(d => `<button class="cp-dispo-b${c.disposition === d[0] ? ' on' : ''}" style="${c.disposition === d[0] ? `background:${d[3]};color:${d[2]};border-color:${d[2]}` : ''}" onclick="LeadManagerModule.ibResolveDisp(${id},'${c.disposition === d[0] ? '' : d[0]}')">${d[1]}</button>`).join('')}</div>${c.disposition === 'interesado' ? `<div style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><button class="cp-dispo-b cp-dispo-b--xs" onclick="LeadManagerModule.cpTouchOpen(${id})">Registrar conversación (llamada u otro canal)</button><span class="seq-drip-hint" style="margin:0">Reinicia el seguimiento automático de este Interesado.</span></div>` : ''}</div>
@@ -29944,6 +29969,11 @@ ${foot}
             ${_derivLinkHtml(c) ? `<div class="cp-f cp-f--full" style="gap:5px">${_derivLinkHtml(c)}</div>` : ''}
             ${c.data_issue ? `<div class="cp-f cp-f--full"><span class="cp-f__l">Por corregir</span><div class="cp-dispo" style="align-items:center;gap:8px"><span class="client-badge" style="background:#FEF3C7;color:#B45309">⚠ ${_DATA_ISSUE_LBL[c.data_issue] || c.data_issue}</span><button class="cp-dispo-b" title="Marca el dato como corregido y reanuda sus secuencias pausadas" onclick="LeadManagerModule.lmResumeDataIssue(${id})">✓ Corregido — reanudar</button></div></div>` : ''}
           </div></div>
+</div>`;
+  }
+  function _cpCanalesHtml(c) {
+    const id = c.id;
+    return `<div class="cp-info cp-info--one">
           <div class="cp-card"><div class="cp-card__t">Disponibilidad de canales</div><div class="cp-fields">
             ${_cpChannelRow('LinkedIn', c.linkedin ? (c.no_linkedin ? ['URL no válida', '#B45309', '#FEF3C7'] : ['Disponible', '#065F46', '#D1FAE5']) : ['Sin URL', '#6C6862', '#F1EFEB'],
               [c.linkedin ? `<a class="cp-dispo-b cp-dispo-b--xs" href="${esc(c.linkedin)}" target="_blank" rel="noopener">Abrir</a>` : '',
@@ -29965,21 +29995,7 @@ ${foot}
                (c.telefono || c.movil) ? `<button class="cp-dispo-b cp-dispo-b--xs" onclick="LeadManagerModule.cpActOpen('llamada')">Registrar llamada</button>` : '',
                (c.telefono || c.movil) ? `<button class="cp-dispo-b cp-dispo-b--xs${c.no_phone ? ' on' : ''}" onclick="LeadManagerModule.lmToggleNoPhone(${id})">${c.no_phone ? 'Marcar válido' : 'Marcar no válido'}</button>` : ''].filter(Boolean))}
           </div></div>
-          ${rawKeys.length ? `<div class="cp-card"><div class="cp-card__t">Datos importados (sin mapear)</div><div class="cp-fields">${rawKeys.map(k => `<div class="cp-f"><span class="cp-f__l">${esc(k)}</span><span class="cp-f__ro">${esc(raw[k])}</span></div>`).join('')}</div></div>` : ''}
-        </div>
-        <div class="cp-right">
-          <div class="cp-tabs">
-            <button class="cp-tab${_cpTab === 'resumen' ? ' active' : ''}" data-t="resumen" onclick="LeadManagerModule.cpTab('resumen')">Resumen</button>
-            <button class="cp-tab${_cpTab === 'actividad' ? ' active' : ''}" data-t="actividad" onclick="LeadManagerModule.cpTab('actividad')">Actividad</button>
-            <button class="cp-tab${_cpTab === 'reuniones' ? ' active' : ''}" data-t="reuniones" onclick="LeadManagerModule.cpTab('reuniones')">Reuniones</button>
-            <button class="cp-tab${_cpTab === 'tareas' ? ' active' : ''}" data-t="tareas" onclick="LeadManagerModule.cpTab('tareas')">Tareas</button>
-            <button class="cp-tab${_cpTab === 'notas' ? ' active' : ''}" data-t="notas" onclick="LeadManagerModule.cpTab('notas')">Notas</button>
-            <button class="cp-tab${_cpTab === 'facturas' ? ' active' : ''}" data-t="facturas" onclick="LeadManagerModule.cpTab('facturas')">Facturas</button>
-          </div>
-          <div id="cp-tabwrap">${_cpTabContent(c)}</div>
-        </div>
-      </div>
-    </div>`;
+</div>`;
   }
   const _STRIP_ICO = {
     mail: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 5L2 7"/></svg>',
@@ -30160,13 +30176,9 @@ ${foot}
   }
   function _cpTabContent(c) {
     if (!c) return '';
-    if (_cpTab === 'resumen') {
-      const seqs = Array.isArray(c.sequences) ? c.sequences : [];
-      const camps = Array.isArray(c.campaigns) ? c.campaigns : [];
-      const rows = (arr, k, empty) => arr.length ? arr.map(x => `<div class="cp-mem"><span class="cp-mem__dot cp-mem__dot--${k}"></span>${esc(x.nombre)}</div>`).join('') : `<div class="cp-empty2">${empty}</div>`;
-      return `<div class="cp-card"><div class="cp-card__t">Secuencias <button class="cp-mini" onclick="LeadManagerModule.bulkAddOpen('sequence',[${c.id}])">＋</button></div>${rows(seqs, 'seq', 'Sin secuencias')}</div>
-        <div class="cp-card"><div class="cp-card__t">Campañas <button class="cp-mini" onclick="LeadManagerModule.bulkAddOpen('campaign',[${c.id}])">＋</button></div>${rows(camps, 'cmp', 'Sin campañas')}</div>`;
-    }
+    if (_cpTab === 'seguimiento') return _cpSeguimientoHtml(c);
+    if (_cpTab === 'canales') return _cpCanalesHtml(c);
+    if (_cpTab === 'informacion' || _cpTab === 'resumen') return _cpInfoHtml(c);
     if (_cpTab === 'notas') {
       return `<div class="cp-card"><div class="cp-card__t">Notas</div><textarea class="cp-notes" data-f="notas" placeholder="Escribe notas sobre este contacto…  Se guardan al salir del campo." onchange="LeadManagerModule.cpSave(${c.id})">${esc(c.notas || '')}</textarea></div>`;
     }
@@ -30304,6 +30316,7 @@ ${foot}
     const page = document.getElementById('lm-cp'); if (!page) return;
     const c = _contacts.find(x => x.id === id); if (!c) return;
     const payload = {};
+    ['nombre','apellido','email','email_personal','telefono','movil','cargo','seniority','departamento','linkedin','ciudad','region','pais','company_id','fuente','notas'].forEach(k => { payload[k] = c[k] == null ? '' : c[k]; });
     page.querySelectorAll('[data-f]').forEach(el => { payload[el.dataset.f] = el.value; });
     const coId = payload.company_id ? Number(payload.company_id) : null;
     const co = coId ? _companies.find(x => x.id === coId) : null;

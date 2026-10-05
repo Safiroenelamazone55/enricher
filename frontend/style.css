@@ -17433,3 +17433,8 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
   color: var(--muted, #B4AFA8); padding: 8px 14px 3px; white-space: nowrap;
 }
 .sidebar__nav, .lm2-nav__list { gap: 1px; padding: 8px 10px; }
+
+/* Ficha de contacto en pestañas (2026-10-04) */
+.cp-info { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 14px; align-items: start; }
+.cp-info--one { grid-template-columns: minmax(0, 760px); }
+@media (max-width: 900px) { .cp-info { grid-template-columns: minmax(0, 1fr); } }
