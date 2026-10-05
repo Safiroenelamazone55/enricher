@@ -11860,23 +11860,42 @@ const TasksModule = (() => {
       ? `<div class="tpjh__avs">${resps.slice(0, 5).map(n => `<span class="tpjh__av" title="${esc(n)}">${esc(inic(n))}</span>`).join('')}${resps.length > 5 ? `<span class="tpjh__av tpjh__av--more">+${resps.length - 5}</span>` : ''}</div>`
       : '<span class="muted">Sin asignar</span>';
 
+    const ESTADO = { activo: ['Activo', '#D1FAE5', '#065F46'], completado: ['Completado', '#DBEAFE', '#1E40AF'], pausado: ['Pausado', '#FEF3C7', '#92400E'], cancelado: ['Cancelado', '#F3F4F6', '#6B7280'] };
+    const est = ESTADO[p.estado] || ESTADO.activo;
+    const PRIO = { alta: ['Alta', '#C4342B'], media: ['Media', '#D97706'], baja: ['Baja', '#9CA3AF'] };
+    const pr = PRIO[p.prioridad] || PRIO.media;
+    const pct = total ? Math.round(done / total * 100) : 0;
+    let plazo = '';
+    if (p.fecha_fin && p.estado === 'activo') {
+      const t0 = new Date(); t0.setHours(0, 0, 0, 0);
+      const dd = Math.round((new Date(String(p.fecha_fin).split('T')[0] + 'T00:00:00') - t0) / 86400000);
+      plazo = dd < 0 ? `<span class="tpjh__due tpjh__due--late">Vencido hace ${-dd} d</span>` : dd === 0 ? '<span class="tpjh__due tpjh__due--soon">Vence hoy</span>' : `<span class="tpjh__due${dd <= 7 ? ' tpjh__due--soon' : ''}">Faltan ${dd} d</span>`;
+    }
+    const asignNombres = resps.length ? resps.slice(0, 3).map(esc).join(', ') + (resps.length > 3 ? ' +' + (resps.length - 3) : '') : '';
+    const desc = String(p.descripcion || '').trim();
     el.innerHTML = `
       <div class="tpjh__top">
         <div class="tpjh__id">
-          <span class="tpjh__name">${esc(p.nombre)}</span>
-          ${p.client_nombre ? `<span class="tpjh__client">${esc(p.client_nombre)}</span>` : ''}
+          <button class="tpjh__back" onclick="TasksModule.clearProjectFilter();document.querySelector('.snav-item[data-tab=&quot;mgmt-projects&quot;]')?.click()" title="Volver a Proyectos">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>Proyectos
+          </button>
+          <div class="tpjh__title">
+            <span class="tpjh__name">${esc(p.nombre)}</span>
+            <span class="tpjh__badge" style="background:${est[1]};color:${est[2]}">${est[0]}</span>
+            <span class="tpjh__prio" title="Prioridad ${pr[0]}"><i style="background:${pr[1]}"></i>${pr[0]}</span>
+          </div>
+          ${p.client_nombre ? `<span class="tpjh__client">${esc(p.client_nombre)}${p.client_empresa ? ' · ' + esc(p.client_empresa) : ''}</span>` : ''}
+          ${desc ? `<p class="tpjh__desc">${esc(desc.length > 220 ? desc.slice(0, 220) + '…' : desc)}</p>` : ''}
         </div>
         <div class="tpjh__acts">
           <button class="btn btn--ghost btn--sm" onclick="ProjectsModule.openDrawer(${p.id})">Editar</button>
-          <button class="tpjh__close" onclick="TasksModule.clearProjectFilter()" title="Quitar filtro de proyecto">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
         </div>
       </div>
+      <div class="tpjh__prog" title="${done} de ${total} tareas completadas"><div class="tpjh__prog-bar"><div class="tpjh__prog-fill" style="width:${pct}%"></div></div><span class="tpjh__prog-n">${pct}%</span></div>
       <div class="tpjh__stats">
-        <div class="tpjh__stat"><span class="tpjh__stat-lbl">Fechas</span><span class="tpjh__stat-val">${fechas}</span></div>
+        <div class="tpjh__stat"><span class="tpjh__stat-lbl">Fechas</span><span class="tpjh__stat-val">${fechas} ${plazo}</span></div>
         <div class="tpjh__stat"><span class="tpjh__stat-lbl">Presupuesto</span><span class="tpjh__stat-val">${presupuesto}</span></div>
-        <div class="tpjh__stat"><span class="tpjh__stat-lbl">Asignados</span><span class="tpjh__stat-val">${asignados}</span></div>
+        <div class="tpjh__stat"><span class="tpjh__stat-lbl">Asignados</span><span class="tpjh__stat-val">${asignados}${asignNombres ? `<span class="tpjh__names">${asignNombres}</span>` : ''}</span></div>
         <div class="tpjh__stat"><span class="tpjh__stat-lbl">Horas trabajadas</span><span class="tpjh__stat-val">${horas ? horas + 'h' : '<span class="muted">0h</span>'}</span></div>
         <div class="tpjh__stat"><span class="tpjh__stat-lbl">Tareas</span><span class="tpjh__stat-val">${done}/${total} completadas</span></div>
       </div>`;
@@ -11884,8 +11903,8 @@ const TasksModule = (() => {
 
     const t = document.querySelector('#pane-mgmt-tasks .pane-title');
     const s = document.querySelector('#pane-mgmt-tasks .pane-sub');
-    if (t) t.textContent = `Tareas de ${p.nombre}`;
-    if (s) s.textContent = p.client_nombre ? `Proyecto de ${p.client_nombre}` : 'Kanban del proyecto';
+    if (t) t.textContent = 'Tareas del proyecto';
+    if (s) s.textContent = 'Arrastra las tareas entre columnas o cambia de vista';
   }
 
   // ── Pagina de detalle de UNA tarea (pestaña nueva) ──────────────────
@@ -17958,7 +17977,7 @@ const ProjectsModule = (() => {
     const team = (p.responsables && p.responsables.length ? p.responsables : (p.responsable ? [p.responsable] : [])).slice(0, 3)
       .map(n => `<span class="pk-av" title="${esc(n)}">${esc(String(n).trim().charAt(0).toUpperCase())}</span>`).join('');
     const pr = { alta: '#C4342B', media: '#D97706', baja: '#9CA3AF' }[p.prioridad] || '#9CA3AF';
-    return `<div class="pk-card" draggable="true" ondragstart="ProjectsModule.kDragStart(event,${p.id})" ondragend="ProjectsModule.kDragEnd()" onclick="ProjectsModule.openDetail(${p.id})">
+    return `<div class="pk-card" draggable="true" ondragstart="ProjectsModule.kDragStart(event,${p.id})" ondragend="ProjectsModule.kDragEnd()" onclick="abrirVentanaProyecto(${p.id})">
       <div class="pk-card__t"><span class="pk-pri" style="background:${pr}" title="Prioridad ${esc(p.prioridad || 'media')}"></span>${esc(p.nombre)}</div>
       <div class="pk-card__c">${esc(p.client_nombre || '')}${p.client_empresa ? ' · ' + esc(p.client_empresa) : ''}</div>
       <div class="pk-card__f"><span class="pk-date${late ? ' pk-date--late' : ''}">${fmt ? (late ? 'Vencido ' : 'Fin ') + fmt : 'Sin fecha fin'}</span><span class="pk-team">${team}</span></div>
@@ -18010,7 +18029,7 @@ const ProjectsModule = (() => {
       html += `<div class="pc-week"><div class="pc-days">${days.map(d => `<div class="pc-day${d.getMonth() !== m ? ' pc-day--out' : ''}${d.getTime() === today.getTime() ? ' pc-day--today' : ''}"><span>${d.getDate()}</span></div>`).join('')}</div>
         <div class="pc-bars" style="grid-template-rows:repeat(${Math.max(lanes.length, 1)}, 24px)">${segs.map(sg => {
           const k = col[sg.p.estado] || col.activo;
-          return `<div class="pc-bar${sg.cl ? ' pc-bar--cl' : ''}${sg.cr ? ' pc-bar--cr' : ''}" style="grid-column:${sg.c0 + 1} / ${sg.c1 + 2};grid-row:${sg.lane + 1};background:${k[0]};color:${k[1]}" title="${esc(sg.p.nombre)}${sg.p.client_nombre ? ' · ' + esc(sg.p.client_nombre) : ''}" onclick="ProjectsModule.openDetail(${sg.p.id})">${esc(sg.p.nombre)}</div>`;
+          return `<div class="pc-bar${sg.cl ? ' pc-bar--cl' : ''}${sg.cr ? ' pc-bar--cr' : ''}" style="grid-column:${sg.c0 + 1} / ${sg.c1 + 2};grid-row:${sg.lane + 1};background:${k[0]};color:${k[1]}" title="${esc(sg.p.nombre)}${sg.p.client_nombre ? ' · ' + esc(sg.p.client_nombre) : ''}" onclick="abrirVentanaProyecto(${sg.p.id})">${esc(sg.p.nombre)}</div>`;
         }).join('')}</div></div>`;
     }
     el.innerHTML = html;

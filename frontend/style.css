@@ -17507,3 +17507,22 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .pv-toolbar .filter-select { flex: 0 1 190px; min-width: 0; max-width: 190px; text-overflow: ellipsis; }
 .pv-toolbar .pv-views { flex-shrink: 0; }
 @media (max-width: 1100px) { .pv-toolbar { flex-wrap: wrap; } }
+
+/* Página del proyecto: cabecera rediseñada */
+.tpjh__back { display: inline-flex; align-items: center; gap: 4px; background: none; border: none; padding: 0; margin-bottom: 8px; font-family: inherit; font-size: .76rem; font-weight: 600; color: var(--text-muted); cursor: pointer; }
+.tpjh__back:hover { color: var(--primary-hover); }
+.tpjh__title { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.tpjh__name { font-size: 1.25rem !important; }
+.tpjh__badge { font-size: .72rem; font-weight: 700; padding: 3px 10px; border-radius: 999px; }
+.tpjh__prio { display: inline-flex; align-items: center; gap: 6px; font-size: .76rem; color: var(--text-secondary); }
+.tpjh__prio i { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+.tpjh__desc { margin: 8px 0 0; font-size: .82rem; color: var(--text-secondary); max-width: 780px; line-height: 1.45; }
+.tpjh__prog { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
+.tpjh__prog-bar { flex: 1; height: 6px; background: var(--surface-secondary); overflow: hidden; }
+.tpjh__prog-fill { height: 100%; background: var(--primary); transition: width .25s; }
+.tpjh__prog-n { font-size: .74rem; font-weight: 700; color: var(--text-secondary); min-width: 32px; text-align: right; }
+.tpjh__due { display: inline-block; margin-left: 8px; font-size: .7rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--surface-secondary); color: var(--text-secondary); }
+.tpjh__due--soon { background: #FEF3C7; color: #92400E; }
+.tpjh__due--late { background: #FDE2E0; color: #C4342B; }
+.tpjh__names { display: block; font-size: .72rem; font-weight: 500; color: var(--text-muted); margin-top: 3px; }
+.tpjh__stats { gap: 34px !important; }
