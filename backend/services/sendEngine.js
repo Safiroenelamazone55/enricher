@@ -765,7 +765,7 @@ async function _flushApproved(pool, apiBase) {
 // ── Borradores ANTICIPADOS (modo pre-aprobado): el email aparece en "Aprobar"
 // hasta 3 días antes de su fecha de envío (cubre el fin de semana: el viernes ya
 // ves lo del lunes). Aprobarlo antes no lo adelanta — scheduled_at manda. ──
-async function _draftPreapproved(pool) {
+async function _draftPreapprovedBatch(pool, seen) {
   const { rows: enrs } = await pool.query(`
     SELECT cs.id AS enr_id, cs.user_id, cs.contact_id, cs.sequence_id, cs.paso, cs.next_action_at,
            k.nombre, k.apellido, k.email, k.cargo, k.empresa_nombre, k.ciudad, k.pais,
@@ -777,6 +777,7 @@ async function _draftPreapproved(pool) {
       LEFT JOIN lm_companies co ON co.id = k.company_id
      WHERE cs.estado='activo'
        AND (cs.next_action_at IS NULL OR cs.next_action_at <= NOW() + interval '3 days')
+       AND NOT (cs.id = ANY($1::int[]))
        -- Solo quien REALMENTE puede tener borrador: antes los ~400 enrolados viejos que nunca podían redactarse
        -- (paso no-email, sin buzón, sin email…) ocupaban los 25 cupos de cada pasada y dejaban sin borrador a las secuencias nuevas.
        AND k.email IS NOT NULL AND k.email <> '' AND COALESCE(k.email_status,'') <> 'invalid'
@@ -785,8 +786,9 @@ async function _draftPreapproved(pool) {
        AND EXISTS (SELECT 1 FROM lm_mailboxes mb2 WHERE mb2.user_id = s.user_id AND mb2.outbound_client_id = s.outbound_client_id AND mb2.estado IN ('conectado','solo_envio'))
        AND NOT EXISTS (SELECT 1 FROM lm_messages w WHERE w.user_id = cs.user_id AND w.contact_id = cs.contact_id AND w.sequence_id = cs.sequence_id AND w.estado IN ('awaiting','approved'))
      ORDER BY cs.next_action_at ASC NULLS FIRST
-     LIMIT 100
-  `);
+     LIMIT 500
+  `, [seen]);
+  enrs.forEach(e => seen.push(e.enr_id));   // lo ya visto en esta pasada no vuelve a entrar al lote
   for (const enr of enrs) {
     try {
       // Solo se salta sin email o con email que ya rebotó (invalid). "Sin verificar" SÍ
@@ -843,6 +845,18 @@ async function _draftPreapproved(pool) {
         [enr.user_id, enr.contact_id, enr.sequence_id, step.id, asunto, cuerpoTxt, enr.email, token, variantName, mbq ? mbq.id : null, enr.next_action_at || new Date().toISOString()]);
       console.log(`[send-engine] borrador anticipado → ${enr.email} (${enr.seq_nombre} paso ${enr.paso}, envío ${enr.next_action_at ? new Date(enr.next_action_at).toISOString().slice(0, 10) : 'hoy'})`);
     } catch (e) { console.warn('[send-engine] draft-preaprobado:', e.message); }
+  }
+}
+
+// Sin tope: procesa en tandas de 500 hasta agotar a TODOS los contactos pendientes (con 20 buzones y miles de
+// enrolados un cupo fijo dejaría secuencias sin borrador). Cada contacto visto sale del lote siguiente, así que
+// termina sola; solo la frena un presupuesto de 45 s por pasada (lo que falte sigue en la próxima, 60 s después).
+async function _draftPreapproved(pool) {
+  const seen = [0], t0 = Date.now();
+  for (let i = 0; i < 200 && Date.now() - t0 < 45000; i++) {
+    const before = seen.length;
+    await _draftPreapprovedBatch(pool, seen);
+    if (seen.length === before) break;
   }
 }
 
