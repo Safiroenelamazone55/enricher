@@ -1510,6 +1510,12 @@ async function initDb() {
     await pool.query(`ALTER TABLE lm_mailboxes ADD COLUMN IF NOT EXISTS imap_last_uid    BIGINT NOT NULL DEFAULT 0;`);
     await pool.query(`ALTER TABLE lm_mailboxes ADD COLUMN IF NOT EXISTS last_checked_at  TIMESTAMPTZ;`);
     await pool.query(`ALTER TABLE lm_mailboxes ADD COLUMN IF NOT EXISTS sent_folder      TEXT NOT NULL DEFAULT '';`);
+    // Calentamiento gradual: tope diario que sube solo cada semana (start + step × semanas, hasta target).
+    await pool.query(`ALTER TABLE lm_mailboxes ADD COLUMN IF NOT EXISTS ramp_on         BOOLEAN NOT NULL DEFAULT FALSE;`);
+    await pool.query(`ALTER TABLE lm_mailboxes ADD COLUMN IF NOT EXISTS ramp_start      INTEGER NOT NULL DEFAULT 10;`);
+    await pool.query(`ALTER TABLE lm_mailboxes ADD COLUMN IF NOT EXISTS ramp_step       INTEGER NOT NULL DEFAULT 10;`);
+    await pool.query(`ALTER TABLE lm_mailboxes ADD COLUMN IF NOT EXISTS ramp_target     INTEGER NOT NULL DEFAULT 50;`);
+    await pool.query(`ALTER TABLE lm_mailboxes ADD COLUMN IF NOT EXISTS ramp_started_on DATE;`);
     // OAuth (F4): para Microsoft 365 donde el tenant bloquea autenticación básica IMAP.
     // auth_method='basic' (default, usa pass_enc) o 'oauth' (usa oauth_* y hace XOAUTH2).
     // Los tokens se cifran con el mismo AES-256-GCM que pass_enc (encPass/decPass).

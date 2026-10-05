@@ -307,6 +307,15 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback) {
              WHERE mi.sequence_id = s.id AND mi.sent_at IS NOT NULL
                AND mi.sent_at > NOW() - make_interval(mins => GREATEST(COALESCE(s.send_interval_min,5),1))
            )
+       -- Calentamiento gradual del BUZÓN del cliente: si hoy ya se llegó al tope de la rampa, se salta y el motor sigue con otros.
+       AND NOT EXISTS (
+            SELECT 1 FROM lm_mailboxes mb
+             WHERE mb.outbound_client_id = s.outbound_client_id AND mb.ramp_on AND mb.ramp_started_on IS NOT NULL
+               AND (SELECT COUNT(*) FROM lm_messages mm JOIN sequences ss ON ss.id = mm.sequence_id
+                     WHERE ss.outbound_client_id = mb.outbound_client_id AND mm.estado IN ('sent','replied','bounced')
+                       AND (mm.sent_at AT TIME ZONE $2)::date = (NOW() AT TIME ZONE $2)::date)
+                   >= LEAST(mb.ramp_target, mb.ramp_start + mb.ramp_step * FLOOR(GREATEST(((NOW() AT TIME ZONE $2)::date - mb.ramp_started_on), 0)::numeric / 7)::int)
+           )
        -- Límite diario POR SECUENCIA (buzón del cliente): si esta secuencia ya llegó a su tope hoy,
        -- se salta y el motor sigue con las demás. 0 = sin límite propio (aplica solo el global).
        AND (COALESCE(s.daily_limit, 0) <= 0 OR (

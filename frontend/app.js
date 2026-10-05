@@ -25691,6 +25691,7 @@ ${foot}
            ${consentBtn}
            <div class="mbx-acts">
              ${!needsConsent ? `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.mbTest(${mb.id})">Probar envío</button>` : ''}
+             ${!needsConsent && mb.email ? `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.mbHealthOpen(${mb.id})" title="Revisa SPF/DKIM/DMARC del dominio y el calentamiento gradual">Salud y calentamiento${mb.ramp_on ? ' <span class="mbh-dot" title="Calentamiento activo"></span>' : ''}</button>` : ''}
              <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.mbOpen(${c.id})">Cambiar</button>
              <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.mbSignatureOpen(${mb.id})" title="Editar el nombre de remitente y la firma HTML de este buzón">✎ Remitente/Firma${(mb.signature_html || mb.from_name) ? ' <span style=\"color:#15803D\">●</span>' : ''}</button>
              ${mb.provider === 'microsoft' && !needsConsent ? `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.mbAdminConsentQuick(${c.id})" title="Si Microsoft pidió aprobación del admin del tenant">📧 Pedir consent al admin</button>` : ''}
@@ -25892,6 +25893,65 @@ ${foot}
   }
 
   // ── Firma HTML por buzón — editor con vista previa en vivo + insertar imagen ──
+  // ── Salud del dominio + calentamiento gradual del buzón ──
+  let _mbhId = null;
+  function mbHealthClose() { document.getElementById('mbh-modal')?.remove(); _mbhId = null; }
+  async function mbHealthOpen(mbId) {
+    mbHealthClose(); _mbhId = mbId;
+    const mb = (_mailboxes || []).find(x => x.id === mbId); if (!mb) return;
+    const m = document.createElement('div'); m.id = 'mbh-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) mbHealthClose(); };
+    m.innerHTML = `<div class="fin-pi-box" style="max-width:600px">
+      <div class="fin-pi-box__hd"><h3>Salud y calentamiento · ${esc(mb.email)}</h3><button class="fin-pi-x" onclick="LeadManagerModule.mbHealthClose()">✕</button></div>
+      <div class="mbh-body">
+        <section class="mbh-sec"><div class="mbh-h"><b>Salud del dominio</b><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.mbHealthRun()">Volver a revisar</button></div>
+          <p class="mbh-p">SPF, DKIM y DMARC le dicen a Gmail y Outlook que tus correos son legítimos. Sin ellos, los emails en frío caen en spam.</p>
+          <div id="mbh-health"><div class="mbh-load">Revisando el dominio…</div></div></section>
+        <section class="mbh-sec"><div class="mbh-h"><b>Calentamiento gradual</b></div>
+          <p class="mbh-p">Un buzón nuevo no debe enviar mucho de golpe. Con esto el tope diario sube solo cada semana.</p>
+          <div id="mbh-ramp"><div class="mbh-load">Cargando…</div></div></section>
+      </div></div>`;
+    document.body.appendChild(m);
+    mbHealthRun(); _mbhRampLoad();
+  }
+  async function mbHealthRun() {
+    const box = document.getElementById('mbh-health'); if (!box || !_mbhId) return;
+    box.innerHTML = '<div class="mbh-load">Revisando el dominio…</div>';
+    try {
+      const r = await apiFetch(`${API}/lm/mailboxes/${_mbhId}/health`); const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Error');
+      const ic = { ok: '✓', warn: '!', fail: '✕' };
+      box.innerHTML = `<div class="mbh-sum mbh-sum--${d.resumen.estado}"><span class="mbh-ic">${ic[d.resumen.estado]}</span>${esc(d.resumen.texto)} <em>· ${esc(d.domain)}</em></div>
+        <div class="mbh-list">${d.checks.map(x => `<div class="mbh-row"><span class="mbh-ic mbh-ic--${x.estado}">${ic[x.estado]}</span><div><b>${esc(x.label)}</b><div class="mbh-d">${esc(x.detalle)}</div>${x.consejo ? `<div class="mbh-fix">${esc(x.consejo)}</div>` : ''}</div></div>`).join('')}</div>`;
+    } catch (e) { box.innerHTML = '<div class="mbh-load" style="color:var(--danger)">No se pudo revisar: ' + esc(e.message) + '</div>'; }
+  }
+  async function _mbhRampLoad() {
+    const box = document.getElementById('mbh-ramp'); if (!box || !_mbhId) return;
+    try {
+      const r = await apiFetch(`${API}/lm/mailboxes/${_mbhId}/ramp`); const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Error');
+      const fld = (id, lbl, v, hint) => `<label class="mbh-f"><span>${lbl}</span><input id="${id}" type="number" min="1" value="${v}"><small>${hint}</small></label>`;
+      box.innerHTML = `<div class="mbh-sw"><label class="rp-sw"><input type="checkbox" id="mbh-on" ${d.ramp_on ? 'checked' : ''} onchange="LeadManagerModule.mbRampSave()"><span></span></label><b>${d.ramp_on ? 'Calentamiento activo' : 'Calentamiento apagado'}</b></div>
+        <div class="mbh-fields">${fld('mbh-start', 'Empieza en', d.ramp_start, 'envíos por día')}${fld('mbh-step', 'Sube cada semana', d.ramp_step, 'envíos más por día')}${fld('mbh-target', 'Meta', d.ramp_target, 'envíos por día')}</div>
+        ${d.ramp_on ? `<div class="mbh-status"><b>Semana ${d.semana + 1}</b>: tope de hoy <b>${d.cap_today}</b> envíos · enviados hoy <b>${d.sent_today}</b></div>
+          <div class="mbh-curve">${d.curva.map(x => `<span${x.semana === d.semana + 1 ? ' class="on"' : ''}>Sem ${x.semana}<b>${x.tope}</b></span>`).join('')}</div>` : '<div class="mbh-p">Al encenderlo, empieza hoy. El tope aplica a todos los envíos automáticos de las secuencias de este cliente.</div>'}
+        <div class="mbh-save"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.mbRampSave()">Guardar</button><span id="mbh-msg" class="mbh-msg"></span></div>`;
+    } catch (e) { box.innerHTML = '<div class="mbh-load" style="color:var(--danger)">No se pudo cargar: ' + esc(e.message) + '</div>'; }
+  }
+  async function mbRampSave() {
+    if (!_mbhId) return;
+    const v = id => parseInt(document.getElementById(id)?.value);
+    const body = { on: !!document.getElementById('mbh-on')?.checked, start: v('mbh-start'), step: v('mbh-step'), target: v('mbh-target') };
+    const msg = document.getElementById('mbh-msg');
+    try {
+      const r = await apiFetch(`${API}/lm/mailboxes/${_mbhId}/ramp`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Error');
+      const mb = (_mailboxes || []).find(x => x.id === _mbhId); if (mb) { mb.ramp_on = d.ramp_on; mb.ramp_start = d.ramp_start; mb.ramp_step = d.ramp_step; mb.ramp_target = d.ramp_target; }
+      await _mbhRampLoad();
+      const m2 = document.getElementById('mbh-msg'); if (m2) m2.textContent = '✓ Guardado';
+      if (_mbManageClientId) { const bd = document.getElementById('mbx-manage-body'); const cl = _clients.find(x => x.id === _mbManageClientId); if (bd && cl) bd.innerHTML = _mbBodyHtml(cl); }
+    } catch (e) { if (msg) { msg.textContent = 'No se pudo guardar: ' + e.message; msg.style.color = 'var(--danger)'; } }
+  }
   async function mbSignatureOpen(mbId) {
     const mb = (_mailboxes || []).find(x => x.id === mbId);
     if (!mb) return;
@@ -32586,7 +32646,7 @@ ${foot}
   return { load, filter, setFilter, setView, go, openClient, clientTab, _clientGoTab, clientQuickMenu,
     openImportPicker, closeImportPicker, openImport, closeImport, impFile, impToggleHeader, impToggleUpdateExisting, impSetObc, impNewClient, impRun, exportCsv,
     cbxOpen, cbxFilter, cbxPick, cbxBlur,
-    _cpBack, _cpDelRun, openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, ctMoreMenu, lmSetValueOp, bulkDeleteContacts, bulkAddOpen, bulkAddDo, _bulkAddAfterCreate, bulkRemoveSeqOpen, bulkRemoveSeqDo, openContactPage, cpTab, cpSave, cpUndo, cpDelete, cpActOpen, cpTouchOpen, cpTouchSave, cpActSave, cpActToggle, cpActDel, ctQFSet, ctQFClear,
+    mbHealthOpen, mbHealthClose, mbHealthRun, mbRampSave, _cpBack, _cpDelRun, openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, ctMoreMenu, lmSetValueOp, bulkDeleteContacts, bulkAddOpen, bulkAddDo, _bulkAddAfterCreate, bulkRemoveSeqOpen, bulkRemoveSeqDo, openContactPage, cpTab, cpSave, cpUndo, cpDelete, cpActOpen, cpTouchOpen, cpTouchSave, cpActSave, cpActToggle, cpActDel, ctQFSet, ctQFClear,
     cpResumeSeq, cpFocusField, cpOpenRegisterReply, cpSaveRegisterReply,
     openCompany, closeCompany, saveCompany, deleteCompany, enrichCompanyLookup, filterCompanies, toggleCo, toggleCoAll, clearCoSel, toggleCoSelMode, coMoreMenu, bulkDeleteCompanies, coEnrolOpen, coEnrolFilter, coEnrolPick, openCompanyPage, coQFSet, coQFClear,
     coQueueAddContact, coQueueDiscard, coQueueTogglePrimary, coQueueContinue,

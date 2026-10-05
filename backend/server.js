@@ -5101,7 +5101,7 @@ app.get('/api/lm/sequences/:id/metrics', requireAuth, async (req, res) => {
 const mailboxSvc = require('./services/mailboxService');
 app.get('/api/lm/mailboxes', requireAuth, async (req, res) => {
   try {
-    const { rows } = await pool.query(`SELECT id, outbound_client_id, email, provider, smtp_host, smtp_port, imap_host, imap_port, estado, last_error, verified_at, signature_html, from_name FROM lm_mailboxes WHERE user_id=$1 ORDER BY id`, [req.workspaceOwnerId]);
+    const { rows } = await pool.query(`SELECT id, outbound_client_id, email, provider, smtp_host, smtp_port, imap_host, imap_port, estado, last_error, verified_at, signature_html, from_name, ramp_on, ramp_start, ramp_step, ramp_target FROM lm_mailboxes WHERE user_id=$1 ORDER BY id`, [req.workspaceOwnerId]);
     res.json(rows);
   } catch (err) { console.error('[mailbox] GET', err.message); res.status(500).json({ error: 'Error al cargar buzones' }); }
 });
@@ -5175,6 +5175,53 @@ app.put('/api/lm/mailboxes/:id/signature', requireAuth, async (req, res) => {
     if (!rowCount) return res.status(404).json({ error: 'Buzón no encontrado' });
     res.json({ ok: true, length: html.length, from_name: fromName });
   } catch (err) { console.error('[mailbox] signature PUT', err.message); res.status(500).json({ error: 'Error al guardar la firma' }); }
+});
+
+// Salud del dominio (SPF / DKIM / DMARC / MX) del buzón
+app.get('/api/lm/mailboxes/:id/health', requireAuth, async (req, res) => {
+  try {
+    const { rows: [mb] } = await pool.query('SELECT email, provider FROM lm_mailboxes WHERE id=$1 AND user_id=$2', [req.params.id, req.workspaceOwnerId]);
+    if (!mb || !mb.email) return res.status(404).json({ error: 'Buzón no encontrado' });
+    res.json(await require('./services/domainHealth').checkDomain(String(mb.email).split('@')[1], mb.provider));
+  } catch (err) { console.error('[mailbox] health', err.message); res.status(500).json({ error: err.message || 'No se pudo revisar el dominio' }); }
+});
+// Calentamiento gradual: estado actual (tope de hoy, enviados hoy, semana)
+async function _rampStatus(mbId, uid, tz) {
+  const { rows: [r] } = await pool.query(`
+    SELECT mb.id, mb.ramp_on, mb.ramp_start, mb.ramp_step, mb.ramp_target, to_char(mb.ramp_started_on,'YYYY-MM-DD') AS started_on,
+           (SELECT COUNT(*)::int FROM lm_messages mm JOIN sequences ss ON ss.id = mm.sequence_id
+             WHERE ss.outbound_client_id = mb.outbound_client_id AND mm.estado IN ('sent','replied','bounced')
+               AND (mm.sent_at AT TIME ZONE $3)::date = (NOW() AT TIME ZONE $3)::date) AS sent_today,
+           CASE WHEN mb.ramp_started_on IS NULL THEN 0 ELSE FLOOR(GREATEST(((NOW() AT TIME ZONE $3)::date - mb.ramp_started_on), 0)::numeric / 7)::int END AS semana
+      FROM lm_mailboxes mb WHERE mb.id=$1 AND mb.user_id=$2`, [mbId, uid, tz]);
+  if (!r) return null;
+  r.cap_today = Math.min(r.ramp_target, r.ramp_start + r.ramp_step * r.semana);
+  // próximos escalones para mostrar la curva
+  r.curva = [0, 1, 2, 3, 4, 5].map(w => ({ semana: w + 1, tope: Math.min(r.ramp_target, r.ramp_start + r.ramp_step * w) }));
+  return r;
+}
+app.get('/api/lm/mailboxes/:id/ramp', requireAuth, async (req, res) => {
+  try {
+    const r = await _rampStatus(req.params.id, req.workspaceOwnerId, await _tzOfUser(req.user && req.user.id));
+    if (!r) return res.status(404).json({ error: 'Buzón no encontrado' });
+    res.json(r);
+  } catch (err) { console.error('[mailbox] ramp GET', err.message); res.status(500).json({ error: 'Error' }); }
+});
+app.put('/api/lm/mailboxes/:id/ramp', requireAuth, async (req, res) => {
+  try {
+    const b = req.body || {};
+    const clamp = (v, lo, hi, def) => { const n = parseInt(v); return isNaN(n) ? def : Math.min(hi, Math.max(lo, n)); };
+    const on = !!b.on, start = clamp(b.start, 1, 200, 10), step = clamp(b.step, 1, 200, 10), target = clamp(b.target, start, 1000, 50);
+    const tz = await _tzOfUser(req.user && req.user.id);
+    const { rows: [cur] } = await pool.query('SELECT ramp_on, ramp_started_on FROM lm_mailboxes WHERE id=$1 AND user_id=$2', [req.params.id, req.workspaceOwnerId]);
+    if (!cur) return res.status(404).json({ error: 'Buzón no encontrado' });
+    // al encender (o si nunca tuvo fecha) la rampa arranca hoy; apagar y volver a encender la reinicia
+    const restart = on && (!cur.ramp_on || !cur.ramp_started_on);
+    await pool.query(`UPDATE lm_mailboxes SET ramp_on=$3, ramp_start=$4, ramp_step=$5, ramp_target=$6,
+        ramp_started_on = CASE WHEN $7 THEN (NOW() AT TIME ZONE $8)::date ELSE ramp_started_on END WHERE id=$1 AND user_id=$2`,
+      [req.params.id, req.workspaceOwnerId, on, start, step, target, restart, tz]);
+    res.json(await _rampStatus(req.params.id, req.workspaceOwnerId, tz));
+  } catch (err) { console.error('[mailbox] ramp PUT', err.message); res.status(500).json({ error: 'No se pudo guardar' }); }
 });
 
 app.delete('/api/lm/mailboxes/:id', requireAuth, async (req, res) => {
