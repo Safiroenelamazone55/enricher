@@ -21199,7 +21199,7 @@ ${foot}
       const dCounts = {}; let dNone = 0;
       _seqCtEffective(list).forEach(e => { if (e.real_disposition) dCounts[e.real_disposition] = (dCounts[e.real_disposition] || 0) + 1; else dNone++; });
       const dPend = _seqCtEffective(list).filter(_seqPend).length;
-      const dChips = [`<button class="lm-filter-btn${!_seqCtDisp ? ' on' : ''}" onclick="LeadManagerModule.seqCtSetDisp('')">Cualquier resultado</button>`]
+      const dChips = []   // sin chip "Cualquier resultado": volver a ver todos = pulsar de nuevo el chip activo
         .concat(dPend ? [`<button class="lm-filter-btn lm-filter-btn--pend${_seqCtDisp === '_pend' ? ' on' : ''}" onclick="LeadManagerModule.seqCtSetDisp('_pend')" title="Sin respuesta, o que respondieron y la conversación quedó sin definir: decide si pasa a Deal o se descarta. No incluye descartados (no interesado / no contactar / no califica) ni Más adelante.">Por resolver · ${dPend}</button>`] : [])
         .concat(dNone ? [`<button class="lm-filter-btn${_seqCtDisp === '_none' ? ' on' : ''}" onclick="LeadManagerModule.seqCtSetDisp('_none')" title="Nadie en la cadena de derivados respondió de verdad">Sin respuesta real · ${dNone}</button>`] : [])
         .concat(_DISPOS.filter(x => dCounts[x[0]]).map(x => `<button class="lm-filter-btn${_seqCtDisp === x[0] ? ' on' : ''}" onclick="LeadManagerModule.seqCtSetDisp('${x[0]}')">${x[1]} · ${dCounts[x[0]]}</button>`)).join('');
@@ -22597,7 +22597,7 @@ ${foot}
   }
   function seqCtSetEstado(v) { _seqCtEstado = v || ''; const el = document.getElementById('seq-tabwrap'); if (el && _activeSeq) el.innerHTML = _seqTabContent(_activeSeq); else _renderBody(); }
   function _seqCtRepaint() { const el = document.getElementById('seq-tabwrap'); if (el && _activeSeq) el.innerHTML = _seqTabContent(_activeSeq); else _renderBody(); }
-  function seqCtSetDisp(v) { _seqCtDisp = v || ''; _seqCtRepaint(); }
+  function seqCtSetDisp(v) { _seqCtDisp = (v && _seqCtDisp === v) ? '' : (v || ''); _seqCtRepaint(); }   // pulsar el chip activo lo quita
   function seqCtSelToggle(cid, on, seqId) { if (on) _seqCtSel.add(cid); else _seqCtSel.delete(cid); _seqCtRepaint(); }
   function seqCtSelAll(on, seqId) {
     const list = Array.isArray(_seqContacts) ? _seqContacts : [];
