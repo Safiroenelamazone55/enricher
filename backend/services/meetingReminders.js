@@ -127,7 +127,7 @@ async function tick(pool) {
             await pool.query(
               `INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, nota, fecha, estado) VALUES ($1,$2,$3,'tarea',$4,NOW(),'pendiente')`,
               [m.user_id, m.contact_id, k?.outbound_client_id || null,
-               `[Reunión #${m.id}·${n}] 📅 Enviar recordatorio de reunión (${n === 1 ? 'día anterior' : '30 min antes'}) — abre la ficha → Reunión`]);
+               `[Reunión #${m.id}·${n}] Enviar recordatorio de reunión (${n === 1 ? 'día anterior' : '30 min antes'})`]);
             await pool.query(`UPDATE lm_meetings SET rem${n}_estado='tarea', updated_at=NOW() WHERE id=$1`, [m.id]);
           }
         } catch (e) {

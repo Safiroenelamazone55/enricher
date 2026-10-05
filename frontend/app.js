@@ -23869,7 +23869,9 @@ ${foot}
     const due = it.due_at ? new Date(it.due_at) : null;
     const dueTxt = due && !isNaN(due) ? due.toLocaleDateString('es', { day: 'numeric', month: 'short' }) : '';
     const meta = [it.contact_name, cli ? cli.nombre : '', seq ? seq.nombre : '', it.channel, dueTxt ? 'Vence: ' + dueTxt : ''].filter(Boolean);
-    const mainBtn = _TI_ACTION_LBL[it.task_type] || 'Ver';
+    const _isMt = /^\[Reunión #/.test(it.reason || '');
+    const _reasonTxt = (it.reason || '').replace(/^\[Reunión #[^\]]*\]\s*/, '');
+    const mainBtn = _isMt ? 'Reunión' : (_TI_ACTION_LBL[it.task_type] || 'Ver');
     let mainAction = `LeadManagerModule.openContactPage(${it.contact_id})`;
     if (it.task_type === 'review_reply') mainAction = `LeadManagerModule.openContactPage(${it.contact_id})`;
     else if (it.task_type === 'approve_email') mainAction = `LeadManagerModule.go('tasks');LeadManagerModule.taskSetView('list')`;
@@ -23877,9 +23879,10 @@ ${foot}
     else if (it.task_type === 'next_step') mainAction = `LeadManagerModule.openContactPage(${it.contact_id})`;
     else if (it.task_type === 'retomar_nurture') mainAction = `LeadManagerModule.nurtureRetomarMenu(event,${it.contact_id},${it.activity_id},${it.sequence_id || 'null'})`;
     else if (it.task_type === 'activar_siguiente') mainAction = `LeadManagerModule.waitingContactMenu(event,${it.activity_id})`;
+    if (_isMt) mainAction = `LeadManagerModule.mtOpen(${it.contact_id})`;
     return `<div class="cp-card" style="margin-bottom:8px;padding:10px 12px">
       <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap">
-        <div><b>${esc(it.contact_name || '')}</b><div class="cp-f__ro">${esc(meta.join(' · '))}</div>${it.reason ? `<div class="cp-f__ro" style="margin-top:2px">${esc(it.reason)}</div>` : ''}</div>
+        <div><b>${esc(it.contact_name || '')}</b><div class="cp-f__ro">${esc(meta.join(' · '))}</div>${_reasonTxt ? `<div class="cp-f__ro" style="margin-top:2px">${esc(_reasonTxt)}</div>` : ''}</div>
         <div style="display:flex;gap:6px;align-items:flex-start;flex-wrap:wrap">
           <button class="cp-dispo-b" onclick="${mainAction}">${mainBtn}</button>
           <button class="cp-dispo-b" onclick="LeadManagerModule.openContactPage(${it.contact_id})">Ver ficha</button>
@@ -28257,7 +28260,7 @@ ${foot}
         const cierre = c.deal_cierre ? String(c.deal_cierre).slice(0, 10) : '';
         const late = cierre && cierre < today && (st === 'propuesta' || st === 'negociacion');
         return `<div class="dl-card" onclick="LeadManagerModule.dlOpen(${c.id})">
-          <div class="dl-card__n">${esc(full)}</div>
+          <div class="dl-card__n dl-card__nr"><span>${esc(full)}</span><button class="dl-card__mt" title="Reunión y recordatorios" onclick="event.stopPropagation();LeadManagerModule.mtOpen(${c.id})"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></button></div>
           <div class="dl-card__s">${esc([c.company_nombre, cli && cli.nombre].filter(Boolean).join(' · ')) || '&nbsp;'}</div>
           <div class="dl-card__row">
             <span class="dl-card__val${c.deal_valor == null ? ' dl-card__val--none' : ''}">${c.deal_valor == null ? 'Sin valor' : _dlMoney(c.deal_valor, c.deal_moneda)}</span>
@@ -30588,7 +30591,7 @@ ${foot}
           <button class="cp-cta" onclick="LeadManagerModule.cpOpenRegisterReply(${id})">＋ Registrar respuesta</button>
           <button class="cp-act" onclick="LeadManagerModule.ldRefer(${id},'derivado')">＋ Crear referido</button>
           <button class="cp-act" onclick="LeadManagerModule.dlOpen(${id})" title="Valor, probabilidad, fecha de la reunión y notas para el cliente">${(c.deal_valor || c.deal_cierre || ['propuesta', 'negociacion', 'ganado', 'perdido'].includes(c.estado)) ? '$ Ver deal' : '＋ Deal'}</button>
-          <button class="cp-act" onclick="LeadManagerModule.mtOpen(${id})" title="Fecha, enlace y recordatorios de la reunión (día anterior y 30 min antes)">📅 Reunión</button>
+          <button class="cp-act" onclick="LeadManagerModule.mtOpen(${id})" title="Fecha, enlace y recordatorios de la reunión (día anterior y 30 min antes)">Reunión</button>
           <button class="cp-act" onclick="LeadManagerModule.cpActOpen('tarea')" title="Un pendiente con fecha (sale en Hoy), o una nota/reunión para el historial">＋ Tarea / nota</button>
           <button class="cp-act cp-act--danger" onclick="LeadManagerModule.cpDelete(${id})">Eliminar</button>
         </div>

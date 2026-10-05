@@ -17836,3 +17836,7 @@ textarea.mt-i{height:auto;padding:9px 10px;resize:vertical;line-height:1.45}
 .mt-err{font-size:.72rem;color:#B91C1C}
 .mt-ft{display:flex;align-items:center;gap:8px;padding:12px 22px;border-top:1px solid #F1EFEB}
 @media(max-width:640px){.mt-row{flex-direction:column}}
+
+.dl-card__nr{display:flex;align-items:center;justify-content:space-between;gap:6px}
+.dl-card__mt{flex-shrink:0;width:22px;height:22px;border:0;border-radius:6px;background:none;color:#94A3B8;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:background .12s,color .12s}
+.dl-card__mt:hover{background:#EEF2EF;color:#00804C}
