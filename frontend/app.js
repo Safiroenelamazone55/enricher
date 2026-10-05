@@ -11804,6 +11804,11 @@ const TasksModule = (() => {
     if (s) s.textContent = 'Acciones ejecutables dentro de cada proyecto — ordenadas por urgencia';
   }
 
+  // Tras editar el proyecto desde el drawer: repinta la cabecera (estado, responsables, fechas…) sin recargar la página
+  function refreshProjectHeader(pid) {
+    if (_filterProjectId && (!pid || pid === _filterProjectId)) _renderProjectHeader(_filterProjectId);
+  }
+
   function clearProjectFilter() {
     _filterProjectId = null;
     _projectHeaderHide();
@@ -14132,7 +14137,7 @@ const TasksModule = (() => {
   return {
     copiarSemanaAnterior,
     load, filter, setFilterMember, setFilterFecha, render,
-    setProjectFilter, clearProjectFilter,
+    setProjectFilter, clearProjectFilter, refreshProjectHeader,
     openTaskPage, openTaskPageNewTab, closeTaskPage, _renderTaskDetail, _tdSaveField, _tdSendComment,
     openFilterMenu, toggleFilterOpt, clearFilter,
     setView, calPrev, calNext, setCalView, loadForCalPane,
@@ -18462,6 +18467,7 @@ const ProjectsModule = (() => {
       }
       closeDrawer();
       await load();
+      try { TasksModule.refreshProjectHeader(pid); } catch (_) {}
       // Para que el proyecto no quede vacío: ofrecer crear la primera tarea
       // justo al terminar de crearlo (no al editar uno existente).
       if (wasNew && saved && saved.id) _openFirstTaskPrompt(saved.id, data.nombre);
