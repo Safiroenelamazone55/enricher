@@ -29908,13 +29908,13 @@ ${foot}
           <div class="cp-sub">${c.cargo ? esc(c.cargo) : ''}${emp ? `${c.cargo ? ' · ' : ''}<span class="lm-emp-chip">${esc(emp)}</span>` : ''}</div>
           <div class="cp-badges"><span class="client-badge" style="${eStyle}">${esc(c.estado || 'nuevo')}</span>${_dispoBadge(c.disposition)}${c.no_linkedin ? '<span class="client-badge" style="background:#FEF3C7;color:#B45309" title="Perfil falso/inactivo: sigue solo por email">🚫 Sin LinkedIn</span>' : ''}${c.data_issue ? `<span class="client-badge" style="background:#FEF3C7;color:#B45309" title="Pausado por falta o error de dato — corrige el dato y sus secuencias se reanudan">⚠ ${_DATA_ISSUE_LBL[c.data_issue] || 'Por corregir'}</span>` : ''}${_emailBadge(c)}${loc ? `<span class="cp-loc">${esc(loc)}</span>` : ''}</div>
           ${_cpStrip(c)}
-        </div>
-        <div class="cp-actions">
+        <div class="cp-actions" style="margin-top:12px">
           <button class="cp-cta" onclick="LeadManagerModule.cpOpenRegisterReply(${id})">＋ Registrar respuesta</button>
           <button class="cp-act" onclick="LeadManagerModule.ldRefer(${id},'derivado')">＋ Crear referido</button>
           <button class="cp-act" onclick="LeadManagerModule.dlOpen(${id})" title="Valor, probabilidad, fecha de la reunión y notas para el cliente">${(c.deal_valor || c.deal_cierre || ['propuesta', 'negociacion', 'ganado', 'perdido'].includes(c.estado)) ? '$ Ver deal' : '＋ Deal'}</button>
           <button class="cp-act" onclick="LeadManagerModule.cpActOpen('tarea')" title="Un pendiente con fecha (sale en Hoy), o una nota/reunión para el historial">＋ Tarea / nota</button>
           <button class="cp-act cp-act--danger" onclick="LeadManagerModule.cpDelete(${id})">Eliminar</button>
+        </div>
         </div>
       </div>
       <div class="cp-f__l" style="margin:2px 0 4px 2px">Etapa comercial</div>
