@@ -11798,6 +11798,7 @@ const TasksModule = (() => {
   function _projectHeaderHide() {
     const el = $('tasks-project-header');
     if (el) { el.classList.add('hidden'); el.innerHTML = ''; }
+    document.getElementById('tpj-back')?.remove();
     const t = document.querySelector('#pane-mgmt-tasks .pane-title');
     const s = document.querySelector('#pane-mgmt-tasks .pane-sub');
     if (t) t.textContent = 'Tareas';
@@ -11891,9 +11892,6 @@ const TasksModule = (() => {
     el.innerHTML = `
       <div class="tpjh__top">
         <div class="tpjh__id">
-          <button class="tpjh__back" onclick="TasksModule.clearProjectFilter();document.querySelector('.snav-item[data-tab=&quot;mgmt-projects&quot;]')?.click()" title="Volver a Proyectos">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>Proyectos
-          </button>
           <div class="tpjh__title">
             <span class="tpjh__name">${esc(p.nombre)}</span>
             <span class="tpjh__badge" style="background:${est[1]};color:${est[2]}">${est[0]}</span>
@@ -11918,6 +11916,13 @@ const TasksModule = (() => {
 
     const t = document.querySelector('#pane-mgmt-tasks .pane-title');
     const s = document.querySelector('#pane-mgmt-tasks .pane-sub');
+    if (t && !document.getElementById('tpj-back')) {
+      const bk = document.createElement('button');
+      bk.id = 'tpj-back'; bk.className = 'tpjh__back'; bk.title = 'Volver a Proyectos';
+      bk.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>Proyectos';
+      bk.onclick = () => { TasksModule.clearProjectFilter(); document.querySelector('.snav-item[data-tab="mgmt-projects"]')?.click(); };
+      t.parentNode.insertBefore(bk, t);
+    }
     if (t) t.textContent = 'Tareas del proyecto';
     if (s) s.textContent = 'Arrastra las tareas entre columnas o cambia de vista';
   }
