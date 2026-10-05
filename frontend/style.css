@@ -17651,3 +17651,7 @@ tr.tk-flash > td { background-color: #FEF9C3; animation: none; }
 .cpd__opt--danger { border-color: #F0C9C9; }
 .cpd__opt--danger b { color: var(--danger, #C4342B); }
 .cpd__opt--danger:hover { background: var(--danger-soft, #FDEBEA); }
+
+/* Secuencia › Contactos: chip 'Por resolver' destacado */
+.lm-filter-btn--pend { border-color: #FCD34D; background: #FFFBEB; color: #92400E; }
+.lm-filter-btn--pend.on { background: #FEF3C7; border-color: #F59E0B; color: #78350F; }

@@ -21198,12 +21198,15 @@ ${foot}
       // así que se sigue la cadena hasta el resultado real (real_disposition, calculado en el servidor).
       const dCounts = {}; let dNone = 0;
       _seqCtEffective(list).forEach(e => { if (e.real_disposition) dCounts[e.real_disposition] = (dCounts[e.real_disposition] || 0) + 1; else dNone++; });
+      const dPend = _seqCtEffective(list).filter(_seqPend).length;
       const dChips = [`<button class="lm-filter-btn${!_seqCtDisp ? ' on' : ''}" onclick="LeadManagerModule.seqCtSetDisp('')">Cualquier resultado</button>`]
+        .concat(dPend ? [`<button class="lm-filter-btn lm-filter-btn--pend${_seqCtDisp === '_pend' ? ' on' : ''}" onclick="LeadManagerModule.seqCtSetDisp('_pend')" title="Sin respuesta, o que respondieron y la conversación quedó sin definir: decide si pasa a Deal o se descarta. No incluye descartados (no interesado / no contactar / no califica) ni Más adelante.">Por resolver · ${dPend}</button>`] : [])
         .concat(dNone ? [`<button class="lm-filter-btn${_seqCtDisp === '_none' ? ' on' : ''}" onclick="LeadManagerModule.seqCtSetDisp('_none')" title="Nadie en la cadena de derivados respondió de verdad">Sin respuesta real · ${dNone}</button>`] : [])
         .concat(_DISPOS.filter(x => dCounts[x[0]]).map(x => `<button class="lm-filter-btn${_seqCtDisp === x[0] ? ' on' : ''}" onclick="LeadManagerModule.seqCtSetDisp('${x[0]}')">${x[1]} · ${dCounts[x[0]]}</button>`)).join('');
       let fl = _seqCtEstado ? list.filter(e => (e.estado || 'activo') === _seqCtEstado) : list;
       if (_seqCtDisp) fl = _seqCtEffective(fl);   // el referido reemplaza al contacto original
       if (_seqCtDisp === '_none') fl = fl.filter(e => !e.real_disposition);
+      else if (_seqCtDisp === '_pend') { fl = fl.filter(_seqPend); fl = fl.slice().sort((x, y) => ((y.real_disposition === 'respondio') - (x.real_disposition === 'respondio'))); }   // primero los que respondieron y esperan decisión
       else if (_seqCtDisp) fl = fl.filter(e => e.real_disposition === _seqCtDisp);
       // Si filtras por resultado y un contacto derivó a otro que TAMBIÉN está en esta secuencia, no se
       // muestran los dos (se vería como si fueran dos empresas): solo el del final de la cadena, que es
@@ -22600,7 +22603,7 @@ ${foot}
     const list = Array.isArray(_seqContacts) ? _seqContacts : [];
     let fl = _seqCtEstado ? list.filter(e => (e.estado || 'activo') === _seqCtEstado) : list;
     if (_seqCtDisp) fl = _seqCtEffective(fl);
-    if (_seqCtDisp === '_none') fl = fl.filter(e => !e.real_disposition); else if (_seqCtDisp) fl = fl.filter(e => e.real_disposition === _seqCtDisp);
+    if (_seqCtDisp === '_none') fl = fl.filter(e => !e.real_disposition); else if (_seqCtDisp === '_pend') fl = fl.filter(_seqPend); else if (_seqCtDisp) fl = fl.filter(e => e.real_disposition === _seqCtDisp);
     fl.forEach(e => { if (on) _seqCtSel.add(e.contact_id); else _seqCtSel.delete(e.contact_id); });
     _seqCtRepaint();
   }
@@ -29229,6 +29232,9 @@ ${foot}
   let _seqPasosOpen = true; // tarjeta de Pasos visible (split) vs colapsada (« / › manual)
   let _seqCoExpanded = false; // lista de Empresas en cola: mostrar todas (true) o solo las primeras 5 (false)
   let _seqCtEstado = ''; // filtro de estado en la pestaña Contactos de la secuencia
+  // "Por resolver": nunca respondieron (o solo aceptaron LinkedIn) o respondieron y quedó sin definir. NO incluye a los ya
+  // clasificados: no interesado / no contactar / no califica (descartados), más adelante (el sistema recuerda) ni interesado / reunión.
+  const _seqPend = e => !e.real_disposition || e.real_disposition === 'respondio' || e.real_disposition === 'aceptado';
   let _seqCtDisp = '';   // filtro de resultado/disposición ('' = cualquiera, '_none' = nunca respondió)
   let _seqCtSel = new Set(); // contact_id seleccionados, para agregarlos en bloque a otra secuencia
   let _seqTaskCanal = ''; // filtro por canal en la pestaña Tareas de la secuencia
