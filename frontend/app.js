@@ -20725,7 +20725,7 @@ const LeadManagerModule = (() => {
     const _seqTaskN = (Array.isArray(_seqContacts) || Array.isArray(_seqPendingCos))
       ? (Array.isArray(_seqContacts) ? _seqTasks(id).filter(t => t.due <= _today0).length : 0)
         + (Array.isArray(_seqPendingCos) ? _seqCoTasks(id).filter(t => t.due <= _today0).length : 0)
-        + (s.estado === 'activa' ? (s.awaiting || 0) + (s.no_email_pending || 0) : 0)
+        + (s.estado === 'activa' && steps.length ? (s.awaiting || 0) + (s.no_email_pending || 0) : 0)
       : null;
     const backBtn = `<button class="lm-back" onclick="LeadManagerModule.go('sequences')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg> Secuencias</button>`;
     // Pasos vive SIEMPRE en su propia tarjeta a la izquierda (colapsable con «/›);
@@ -20787,7 +20787,7 @@ const LeadManagerModule = (() => {
       ['metricas', 'Métricas', null],
       ['envios', 'Envíos', null],
     ];
-    const apN = s.estado === 'activa' ? (s.awaiting || 0) + (s.no_email_pending || 0) : 0;
+    const apN = s.estado === 'activa' && _seqSteps(id).length ? (s.awaiting || 0) + (s.no_email_pending || 0) : 0;
     if (s.send_mode === 'preaprobado' || apN > 0) tabs.push(['aprobar', 'Aprobar', apN || null]);
     return `<div class="seq-stat-tabs">${tabs.map(([key, label, n]) => `<button class="seq-stat-tab${_seqTab === key ? ' active' : ''}" onclick="LeadManagerModule.seqTab('${key}')">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICO[key] || ''}</svg>
