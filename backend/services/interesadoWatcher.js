@@ -15,6 +15,7 @@
 const DIAS_ENTRE_INTENTOS = 7;
 const MAX_INTENTOS = 3;
 const MESES_NURTURE = 3;
+const DIAS_SIN_CLASIFICAR = 3; // aviso si un 'Respondió' lleva N días sin clasificar (y se repite cada N días)
 
 let _timer = null;
 let _running = false;
@@ -76,6 +77,30 @@ async function tick(pool) {
           `UPDATE lm_contacts SET interesado_followups=$2, interesado_last_followup_at=NOW() WHERE id=$1`, [c.id, n]);
         tareas++;
       }
+    }
+    // ── "Respondió" sin clasificar: aviso a los 3 días, se repite cada 3 hasta que lo clasifiques ──
+    // Al clasificarlo (deja de ser 'respondio') el aviso pendiente se cierra solo.
+    await pool.query(`
+      UPDATE activities a SET estado='hecha'
+       WHERE a.tipo='seguimiento_inactivo' AND a.estado='pendiente' AND a.nota LIKE 'Sin clasificar%'
+         AND NOT EXISTS (SELECT 1 FROM lm_contacts k WHERE k.id=a.contact_id AND k.disposition='respondio')`);
+    const { rows: sinC } = await pool.query(`
+      SELECT k.id, k.user_id, k.outbound_client_id, lr.last_reply
+        FROM lm_contacts k
+        JOIN LATERAL (SELECT MAX(a.fecha) AS last_reply FROM activities a WHERE a.contact_id=k.id AND a.tipo='respuesta') lr ON true
+       WHERE k.disposition='respondio' AND lr.last_reply IS NOT NULL
+         AND lr.last_reply <= NOW() - ($1 || ' days')::interval
+         AND NOT EXISTS (
+           SELECT 1 FROM activities a WHERE a.contact_id=k.id AND a.tipo='seguimiento_inactivo' AND a.nota LIKE 'Sin clasificar%'
+              AND (a.estado='pendiente' OR a.fecha > NOW() - ($1 || ' days')::interval))
+       LIMIT 200`, [String(DIAS_SIN_CLASIFICAR)]);
+    for (const c of sinC) {
+      const dias = Math.floor((Date.now() - new Date(c.last_reply).getTime()) / 86400000);
+      await pool.query(
+        `INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, nota, fecha, estado)
+         VALUES ($1,$2,$3,'seguimiento_inactivo',$4,NOW(),'pendiente')`,
+        [c.user_id, c.id, c.outbound_client_id, `Sin clasificar: respondió hace ${dias} días y aún no lo marcas (Interesado, Más adelante, No interesado…)`]);
+      tareas++;
     }
     if (tareas || movidos) console.log(`[interesado-watcher] ${tareas} seguimiento(s) creado(s), ${movidos} pasado(s) a Más adelante`);
   } catch (e) {
