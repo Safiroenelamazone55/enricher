@@ -17640,3 +17640,14 @@ tr.tk-flash > td { background-color: #FEF9C3; animation: none; }
 .ttsp__lbl { font-size: .74rem; font-weight: 700; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: .04em; }
 .ttsp__row { display: flex; gap: 8px; }
 .ttsp__row input { flex: 1; }
+
+/* Ficha: elegir de dónde quitar al contacto */
+.cpd__list { padding: 4px 18px 10px; display: flex; flex-direction: column; gap: 8px; }
+.cpd__opt { display: flex; flex-direction: column; gap: 3px; text-align: left; padding: 11px 14px; border: 1px solid var(--border); background: var(--surface); font-family: inherit; cursor: pointer; }
+.cpd__opt:hover { background: var(--surface-hover); border-color: var(--border-strong); }
+.cpd__opt b { font-size: .88rem; font-weight: 600; color: var(--text-primary); }
+.cpd__opt b em { font-style: normal; font-weight: 500; color: var(--text-muted); }
+.cpd__opt span { font-size: .76rem; color: var(--text-muted); }
+.cpd__opt--danger { border-color: #F0C9C9; }
+.cpd__opt--danger b { color: var(--danger, #C4342B); }
+.cpd__opt--danger:hover { background: var(--danger-soft, #FDEBEA); }

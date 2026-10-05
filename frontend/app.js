@@ -30718,13 +30718,53 @@ ${foot}
     }
     go(_cpFrom || 'contacts');
   }
-  async function cpDelete(id) {
-    if (!confirm('¿Eliminar este contacto?')) return;
-    try { const res = await _apiDelete(`${API}/lm/contacts/${id}`); if (!res.ok) throw new Error(res.status === 429 ? 'Demasiadas peticiones, reintenta en un momento' : 'Error'); } catch (e) { alert('Error: ' + e.message); return; }
-    _contactView = null;
-    // se vuelve a donde se estaba (p. ej. la lista de contactos de la secuencia), no a la lista general
-    if (_cpFromSeq || _cpTaskCtx) { try { await load(); } catch (_) {} _cpBack(); }
-    else { _section = _CP_FROM_LABEL[_cpFrom] && _cpFrom !== 'contact-view' && _cpFrom !== 'company-view' ? _cpFrom : 'contacts'; await load(); }
+  // "Eliminar" en la ficha: primero se elige DE DÓNDE (secuencia, campaña o toda la base de datos)
+  function cpDelete(id) {
+    const c = _contacts.find(x => x.id === id); if (!c) return;
+    const seqs = Array.isArray(c.sequences) ? c.sequences.slice() : [];
+    const camps = Array.isArray(c.campaigns) ? c.campaigns : [];
+    const originSeq = (_cpFromSeq && _cpFromSeq.seqId) || (_cpTaskCtx && _cpTaskCtx.seqId) || null;
+    seqs.sort((a, b) => (b.id === originSeq) - (a.id === originSeq));
+    const full = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || 'este contacto';
+    document.getElementById('cp-del-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'cp-del-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) m.remove(); };
+    const opt = (cls, title, sub, onclick) => `<button class="cpd__opt ${cls}" onclick="${onclick}"><b>${title}</b><span>${sub}</span></button>`;
+    const opts = [
+      ...seqs.map(x => opt('', 'Quitar de la secuencia ' + esc(x.nombre) + (x.id === originSeq ? ' <em>(esta)</em>' : ''), 'Sigue en tu base de datos y en sus demás secuencias y campañas.', `LeadManagerModule._cpDelRun(${id},'seq',${x.id})`)),
+      ...camps.map(x => opt('', 'Quitar de la campaña ' + esc(x.nombre), 'Sigue en tu base de datos y en sus secuencias.', `LeadManagerModule._cpDelRun(${id},'camp',${x.id})`)),
+      opt('cpd__opt--danger', 'Eliminar de toda la base de datos', 'Se borra de Contactos y de todas sus secuencias y campañas. No se puede deshacer.', `LeadManagerModule._cpDelRun(${id},'all',0)`),
+    ];
+    m.innerHTML = `<div class="fin-pi-box" style="max-width:470px">
+      <div class="fin-pi-box__hd"><h3>¿De dónde quieres quitar a ${esc(full)}?</h3><button class="fin-pi-x" onclick="document.getElementById('cp-del-modal').remove()">✕</button></div>
+      <div class="cpd__list">${opts.join('')}</div>
+      <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns"><button class="btn btn--ghost btn--sm" onclick="document.getElementById('cp-del-modal').remove()">Cancelar</button></div></div>
+    </div>`;
+    document.body.appendChild(m);
+  }
+  async function _cpDelRun(id, kind, targetId) {
+    document.getElementById('cp-del-modal')?.remove();
+    const c = _contacts.find(x => x.id === id);
+    try {
+      if (kind === 'all') {
+        const res = await _apiDelete(`${API}/lm/contacts/${id}`);
+        if (!res.ok) throw new Error(res.status === 429 ? 'Demasiadas peticiones, reintenta en un momento' : 'Error');
+        _contactView = null;
+        showBanner('✓ Contacto eliminado de la base de datos', 'success');
+        // se vuelve a donde se estaba (p. ej. la lista de contactos de la secuencia), no a la lista general
+        if (_cpFromSeq || _cpTaskCtx) { try { await load(); } catch (_) {} _cpBack(); }
+        else { _section = _CP_FROM_LABEL[_cpFrom] && _cpFrom !== 'contact-view' && _cpFrom !== 'company-view' ? _cpFrom : 'contacts'; await load(); }
+        return;
+      }
+      const url = kind === 'seq' ? `${API}/lm/sequences/${targetId}/contacts/${id}` : `${API}/lm/campaigns/${targetId}/contacts/${id}`;
+      const res = await _apiDelete(url);
+      if (!res.ok) throw new Error(res.status === 429 ? 'Demasiadas peticiones, reintenta en un momento' : ((await res.json().catch(() => ({}))).error || 'Error'));
+      showBanner(kind === 'seq' ? '✓ Quitado de la secuencia' : '✓ Quitado de la campaña', 'success');
+      const wasOrigin = kind === 'seq' && ((_cpFromSeq && _cpFromSeq.seqId === targetId) || (_cpTaskCtx && _cpTaskCtx.seqId === targetId));
+      try { await load(); } catch (_) {}
+      if (wasOrigin) { _cpBack(); return; }
+      if (_section === 'contact-view') { _contactView = id; _renderBody(); }
+    } catch (e) { alert('Error: ' + e.message); }
   }
 
   // ── Vista: Empresas ──
@@ -32530,7 +32570,7 @@ ${foot}
   return { load, filter, setFilter, setView, go, openClient, clientTab, _clientGoTab, clientQuickMenu,
     openImportPicker, closeImportPicker, openImport, closeImport, impFile, impToggleHeader, impToggleUpdateExisting, impSetObc, impNewClient, impRun, exportCsv,
     cbxOpen, cbxFilter, cbxPick, cbxBlur,
-    _cpBack, openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, ctMoreMenu, lmSetValueOp, bulkDeleteContacts, bulkAddOpen, bulkAddDo, _bulkAddAfterCreate, bulkRemoveSeqOpen, bulkRemoveSeqDo, openContactPage, cpTab, cpSave, cpUndo, cpDelete, cpActOpen, cpTouchOpen, cpTouchSave, cpActSave, cpActToggle, cpActDel, ctQFSet, ctQFClear,
+    _cpBack, _cpDelRun, openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, ctMoreMenu, lmSetValueOp, bulkDeleteContacts, bulkAddOpen, bulkAddDo, _bulkAddAfterCreate, bulkRemoveSeqOpen, bulkRemoveSeqDo, openContactPage, cpTab, cpSave, cpUndo, cpDelete, cpActOpen, cpTouchOpen, cpTouchSave, cpActSave, cpActToggle, cpActDel, ctQFSet, ctQFClear,
     cpResumeSeq, cpFocusField, cpOpenRegisterReply, cpSaveRegisterReply,
     openCompany, closeCompany, saveCompany, deleteCompany, enrichCompanyLookup, filterCompanies, toggleCo, toggleCoAll, clearCoSel, toggleCoSelMode, coMoreMenu, bulkDeleteCompanies, coEnrolOpen, coEnrolFilter, coEnrolPick, openCompanyPage, coQFSet, coQFClear,
     coQueueAddContact, coQueueDiscard, coQueueTogglePrimary, coQueueContinue,

@@ -5063,6 +5063,13 @@ app.post('/api/lm/sequences/:id/contacts/bulk-remove', requireAuth, async (req, 
     res.json({ removed: rowCount, requested: ids.length });
   } catch (err) { console.error('[lm-seq-ct] bulk-remove', err.message); res.status(500).json({ error: 'Error al quitar' }); }
 });
+app.delete('/api/lm/campaigns/:id/contacts/:cid', requireAuth, async (req, res) => {
+  try {
+    const { rowCount } = await pool.query('DELETE FROM lm_contact_campaigns WHERE user_id=$1 AND campaign_id=$2 AND contact_id=$3', [req.workspaceOwnerId, req.params.id, req.params.cid]);
+    if (!rowCount) return res.status(404).json({ error: 'El contacto no está en esa campaña' });
+    res.json({ ok: true });
+  } catch (err) { console.error('[lm-cmp-ct] DEL', err.message); res.status(500).json({ error: 'Error al quitar' }); }
+});
 app.delete('/api/lm/sequences/:id/contacts/:cid', requireAuth, async (req, res) => {
   try {
     const { rowCount } = await pool.query(`DELETE FROM lm_contact_sequences WHERE user_id=$1 AND sequence_id=$2 AND contact_id=$3`, [req.workspaceOwnerId, req.params.id, req.params.cid]);
