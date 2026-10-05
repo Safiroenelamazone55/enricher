@@ -28627,8 +28627,8 @@ ${foot}
         '<div class="mt-sec"><div class="mt-sec__t">Envío</div><div class="mt-row">' + fld('Para', c.email ? '<div class="mt-to">' + esc(c.email) + '</div>' : '<div class="mt-to mt-to--warn">Este lead no tiene email — agrégalo en su ficha (o envía por WhatsApp)</div>') + '</div><div class="mt-row">' +
           fld('Idioma', seg('mt-idioma', [['es', 'Español'], ['en', 'English']], idiomaDef)) +
           fld('Enviar por', seg('mt-canal', [['email', 'Email'], ['whatsapp', 'WhatsApp']], m ? m.canal : 'email')) +
-          fld('Modo', seg('mt-modo', [['revision', 'Con revisión'], ['auto', 'Automático']], m ? m.modo : 'revision')) + '</div>' +
-          '<div class="mt-hint">Con revisión te deja una tarea en Hoy con el mensaje listo; automático lo envía solo. Sale desde el buzón del cliente (email) o su WhatsApp conectado.</div></div>' +
+          '</div>' +
+          '<div class="mt-hint">Sale desde el buzón del cliente (email) o su WhatsApp conectado. Pulsa «Programar envío» en cada mensaje para que salga solo a su hora; si no, te aparece como tarea en Hoy.</div></div>' +
         timing + ('<div class="mt-sec"><div class="mt-sec__t">Mensajes <span class="mt-hint" style="margin:0 0 0 6px">se completan solos con el enlace y el nombre; puedes editarlos</span></div><div class="mt-row mt-row--top">' + rem(1) + rem(2) + '</div></div>') +
       '</div>' +
       '<div class="mt-ft">' + (m ? '<button class="btn btn--ghost btn--sm" style="color:#B91C1C" onclick="LeadManagerModule.mtCancel()">Cancelar reunión</button>' : '') + '<span style="flex:1"></span><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.mtClose()">Cerrar</button><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.mtSave()">' + (m ? 'Guardar cambios' : 'Guardar reunión') + '</button></div>' +
@@ -28638,7 +28638,7 @@ ${foot}
   function _mtBody() {
     const g = id => document.getElementById(id);
     const b = { local: g('mt-local').value, tz: g('mt-tz').value, tipo: g('mt-tipo').value || 'otro', enlace: g('mt-enlace').value.trim(), anfitrion: g('mt-host').value.trim(),
-      cc: g('mt-cc').value.trim(), idioma: g('mt-idioma').dataset.v, canal: g('mt-canal').dataset.v, modo: g('mt-modo').dataset.v };
+      cc: g('mt-cc').value.trim(), idioma: g('mt-idioma').dataset.v, canal: g('mt-canal').dataset.v, modo: (_mt.m && _mt.m.modo) || 'revision' };
     // mensajes: solo se guardan los que la persona editó; si no, se regeneran solos con los datos vigentes
     if (_mt.m && _mtLocalVal(_mt.m) === b.local && _mt.m.tz === b.tz) { b.rem1_local = (g('mt-r1') || {}).value || ''; b.rem2_local = (g('mt-r2') || {}).value || ''; }
     b.msg1 = g('mt-msg1') && g('mt-msg1').dataset.d ? g('mt-msg1').value : (_mt.m && _mt.m.msg1 || '');
