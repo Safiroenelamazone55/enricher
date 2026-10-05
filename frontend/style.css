@@ -17619,3 +17619,8 @@ tr.tk-flash > td { background-color: #FEF9C3; animation: none; }
 .wa-ppl__tx small { font-size: .72rem; color: var(--text-muted); }
 .wa-ppl__adm { font-size: .68rem; font-weight: 700; color: #166534; background: #DCFCE7; padding: 2px 8px; border-radius: 999px; }
 .wa-ppl__empty { padding: 18px; text-align: center; font-size: .8rem; color: var(--text-muted); }
+
+/* WhatsApp: carpeta de archivados */
+.wa-arch-row { display: flex; align-items: center; gap: 10px; width: 100%; padding: 11px 16px; border: none; border-bottom: 1px solid var(--border); background: var(--surface-secondary); font-family: inherit; font-size: .84rem; font-weight: 600; color: var(--text-secondary); cursor: pointer; text-align: left; }
+.wa-arch-row:hover { background: var(--surface-hover); color: var(--text-primary); }
+.wa-arch-row em { font-style: normal; margin-left: auto; font-weight: 700; color: var(--text-muted); font-size: .78rem; }

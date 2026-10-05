@@ -47,6 +47,16 @@ function _esChatValido(jid) {
 // se vieran "números" que no coincidían con el teléfono. sock.signalRepository.lidMapping
 // sabe traducir un @lid al @s.whatsapp.net real cuando WhatsApp ya mandó esa relación;
 // si todavía no la mandó, se deja el @lid tal cual (se resuelve solo más adelante).
+// Estado "archivado" del chat en el WhatsApp del teléfono: se refleja igual en Nova.
+async function _setArchivado(pool, sock, connId, jid, val) {
+  try {
+    jid = await _resolverJid(sock, jid);
+    if (!_esChatValido(jid)) return;
+    await pool.query(`INSERT INTO wa_chat_meta (connection_id, chat_jid, archivado, updated_at) VALUES ($1,$2,$3,NOW())
+      ON CONFLICT (connection_id, chat_jid) DO UPDATE SET archivado=EXCLUDED.archivado, updated_at=NOW()`, [connId, jid, !!val]);
+  } catch (e) { console.warn('[wa] archivado:', e.message); }
+}
+
 // Mapa @lid → número real, aprendido de lo que WhatsApp manda (contactos con lid+jid,
 // senderPn en mensajes, chats.phoneNumberShare). Baileys 6.x NO trae lidMapping propio.
 const _diagLid = new Map();
@@ -375,6 +385,7 @@ async function _connect(pool, id) {
       const lidX = cid.endsWith('@lid') ? cid : (c?.lidJid || '');
       const pnX = [c?.pnJid, cid].find(x => String(x || '').endsWith('@s.whatsapp.net')) || '';
       if (lidX && pnX && await _aprenderLid(pool, id, lidX, pnX)) n++;
+      if (c && typeof c.archived === 'boolean') await _setArchivado(pool, sock, id, cid, c.archived);
     }
     if (n) _unificarLidPronto();
   };
@@ -521,6 +532,7 @@ async function _connect(pool, id) {
         const lidX = cid.endsWith('@lid') ? cid : (c.lidJid || '');
         const pnX = [c.pnJid, cid].find(x => String(x || '').endsWith('@s.whatsapp.net')) || '';
         if (lidX && pnX && await _aprenderLid(pool, id, lidX, pnX)) _pares++;
+        if (typeof c.archived === 'boolean') await _setArchivado(pool, sock, id, cid, c.archived);
         if (cid.endsWith('@lid') && pnX && c.name && !/^[+ds-]+$/.test(String(c.name))) await _guardarContacto(pool, sock, id, pnX, c.name, false);
       }
       console.log(`[wa] conexión ${id}: ${_pares} par(es) @lid↔número aprendidos del historial (mapa total ${[..._lidMap.keys()].filter(k => k.startsWith(id + ':')).length})`);

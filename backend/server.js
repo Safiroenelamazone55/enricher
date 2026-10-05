@@ -11446,7 +11446,7 @@ app.get('/api/wa/connections/:id/chats', requireAuth, async (req, res) => {
                CASE WHEN m.chat_jid LIKE '%@g.us' THEN NULL ELSE NULLIF(m.nombre,'') END, '') AS nombre,
              (m.chat_jid LIKE '%@g.us') AS es_grupo,
              m.texto AS ultimo_texto, m.ts AS ultimo_ts, m.from_me, m.estado AS ultimo_estado, m.eliminado AS ultimo_eliminado,
-             COALESCE(cm.pinned, FALSE) AS pinned, cm.snooze_until,
+             COALESCE(cm.pinned, FALSE) AS pinned, COALESCE(cm.archivado, FALSE) AS archivado, cm.snooze_until,
              COALESCE(NULLIF(cm.asignado_a,''), NULL) AS asignado_a,
              COALESCE(cm.estado_conv, 'abierto') AS estado_conv,
              COALESCE(cm.prioridad, '') AS prioridad,
@@ -11996,6 +11996,17 @@ app.post('/api/wa/connections/:id/chats/:jid/resync', requireAuth, async (req, r
     await waSvc.resincronizarChat(pool, +req.params.id, req.params.jid);
     res.json({ ok: true });
   } catch (err) { console.error('[wa] resync', err.message); res.status(500).json({ error: err.message || 'No se pudo pedir el historial' }); }
+});
+
+app.patch('/api/wa/connections/:id/chats/:jid/archivar', requireAuth, async (req, res) => {
+  try {
+    const conn = await _cargarConexionAutorizada(req, res, req.params.id);
+    if (!conn) return;
+    const val = !!(req.body && req.body.archivado);
+    await pool.query(`INSERT INTO wa_chat_meta (connection_id, chat_jid, archivado, updated_at) VALUES ($1,$2,$3,NOW())
+      ON CONFLICT (connection_id, chat_jid) DO UPDATE SET archivado=EXCLUDED.archivado, updated_at=NOW()`, [conn.id, req.params.jid, val]);
+    res.json({ ok: true, archivado: val });
+  } catch (err) { console.error('[wa] archivar', err.message); res.status(500).json({ error: 'No se pudo archivar' }); }
 });
 
 app.get('/api/wa/connections/:id/chats/:jid/participantes', requireAuth, async (req, res) => {

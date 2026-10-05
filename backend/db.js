@@ -2022,6 +2022,8 @@ async function initDb() {
     // Asignado (nombre del miembro, mismo criterio que tasks.responsable — texto, no FK)
     // y estado de la conversación (abierto/pendiente/resuelto, estilo Chatwoot).
     await pool.query(`ALTER TABLE wa_chat_meta ADD COLUMN IF NOT EXISTS asignado_a TEXT NOT NULL DEFAULT '';`);
+    // Chat archivado (se sincroniza con el archivo del WhatsApp del teléfono)
+    await pool.query(`ALTER TABLE wa_chat_meta ADD COLUMN IF NOT EXISTS archivado BOOLEAN NOT NULL DEFAULT FALSE;`);
     await pool.query(`ALTER TABLE wa_chat_meta ADD COLUMN IF NOT EXISTS estado_conv TEXT NOT NULL DEFAULT 'abierto';`);
     // Prioridad del chat ('' | baja | media | alta) — pedido explícito 2026-09-02,
     // mismo patrón que estado_conv. Visible con color en la lista de chats (Operaciones

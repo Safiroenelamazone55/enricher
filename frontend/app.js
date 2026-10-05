@@ -36259,9 +36259,12 @@ const WaChatModule = (() => {
     _estadoFiltroPopClose = () => { menu.remove(); document.removeEventListener('click', _estadoFiltroPopClose); _estadoFiltroPopClose = null; };
     setTimeout(() => document.addEventListener('click', _estadoFiltroPopClose), 0);
   }
+  const _ICO_ARCH = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>';
+  let _verArchivados = false;
   function _chatsFiltrados() {
     const _me = (window._authUser?.memberNombre || window._authUser?.name || '').toLowerCase();
     return _chats.filter(c => {
+      if (!!c.archivado !== _verArchivados) return false;   // archivados (como en el teléfono) solo se ven en su carpeta
       const asignado = (c.asignado_a || '').toLowerCase();
       if (_filtroAsignado === 'mias' && asignado !== _me) return false;
       if (_filtroAsignado === 'sin_asignar' && asignado) return false;
@@ -36272,7 +36275,28 @@ const WaChatModule = (() => {
     });
   }
 
+  // Fila "Archivados" arriba de la lista (como en WhatsApp): abre/cierra la carpeta de archivados
   function _pintaChats() {
+    _pintaChatsBase();
+    const box = $$('wa-chats'); if (!box) return;
+    const nArch = _chats.filter(c => c.archivado).length;
+    if (!nArch && !_verArchivados) return;
+    const ico = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>';
+    box.insertAdjacentHTML('afterbegin', `<button class="wa-arch-row" onclick="WaChatModule.toggleArchivados()">${_verArchivados ? '<span>‹</span> Volver a los chats' : ico + ' Archivados <em>' + nArch + '</em>'}</button>`);
+  }
+  function toggleArchivados() { _verArchivados = !_verArchivados; _pintaChats(); }
+  async function _toggleArchivado() {
+    const jid = _chatMenuJid, c = _chats.find(x => x.chat_jid === jid); _closeChatMenu();
+    if (!c || !_conn) return;
+    const val = !c.archivado;
+    try {
+      const r = await apiFetch(`${API}/wa/connections/${_conn.id}/chats/${encodeURIComponent(jid)}/archivar`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ archivado: val }) });
+      if (!r.ok) throw new Error();
+      c.archivado = val; _pintaChats();
+      showBanner(val ? 'Chat archivado' : 'Chat desarchivado', 'success');
+    } catch (_) { showBanner('No se pudo cambiar el archivo del chat', 'error'); }
+  }
+  function _pintaChatsBase() {
     const box = $$('wa-chats');
     _actualizarBadgeNav();
     _pintaFiltroEstadoBtn();
@@ -36760,6 +36784,7 @@ const WaChatModule = (() => {
     return `
       <button class="chat-ctx-item" onclick="WaChatModule._editarNombreContacto()">${_ICO_PENCIL}Editar nombre del contacto</button>
       <div class="chat-ctx-sep"></div>
+      <button class="chat-ctx-item" onclick="WaChatModule._toggleArchivado()">${_ICO_ARCH}${c.archivado ? 'Desarchivar chat' : 'Archivar chat'}</button>
       <button class="chat-ctx-item" onclick="WaChatModule._toggleFijado()">${_ICO_PIN}${pinned ? 'Desfijar chat' : 'Fijar chat'}</button>
       <button class="chat-ctx-item" onclick="WaChatModule._chatMenuGoto('tags')">${_ICO_TAG}Etiquetas${nTags ? ` (${nTags})` : ''}</button>
       <button class="chat-ctx-item" onclick="WaChatModule._chatMenuGoto('snooze')">${_ICO_CLOCK}${snoozed ? 'Cambiar recordatorio' : 'Recordar seguimiento'}</button>
@@ -37273,7 +37298,7 @@ const WaChatModule = (() => {
     // Total = lo que se ve ahora mismo de ESTA conexión + lo último que refreshBadge()
     // supo de las demás — así el nav no "baja" el número solo porque se abrió un chat
     // de la conexión activa mientras otra conexión sigue con mensajes sin leer.
-    const total = _chats.reduce((a, c) => a + (+c.no_leidos || 0), 0) + _otherConnsUnread;
+    const total = _chats.reduce((a, c) => a + (c.archivado ? 0 : (+c.no_leidos || 0)), 0) + _otherConnsUnread;
     [document.getElementById('wa-badge'), document.getElementById('rwa-badge')].forEach(badge => {
       if (!badge) return;
       badge.textContent = total > 99 ? '99+' : (total || '');
@@ -37872,7 +37897,7 @@ const WaChatModule = (() => {
            visPop, abrirVisPop, _toggleVisSub, guardarVisibilidad, _pintaBotonVis, _cargarTeam,
            nuevoChatAbrir, nuevoChatCerrar, _nuevoChatBuscar, nuevoChatElegir, nuevoChatUsarNumero,
            abrirCuentasPop, _pickConn, agregarCuenta, _eliminarConn,
-           abrirChatMenu, abrirMenuCabecera, abrirPersonas, _filtrarPersonas, _editarNombreContacto, _chatMenuGoto, _toggleFijado, _toggleTag, _crearTag, _editarTag, _borrarTag,
+           abrirChatMenu, toggleArchivados, _toggleArchivado, abrirMenuCabecera, abrirPersonas, _filtrarPersonas, _editarNombreContacto, _chatMenuGoto, _toggleFijado, _toggleTag, _crearTag, _editarTag, _borrarTag,
            _snoozePreset, _snoozeCustom, _quitarSnooze, _abrirContacto, _cerrarContacto, _guardarNombreContacto,
            _asignarMiembro, _cambiarEstadoConv, _cambiarPrioridad, _agregarNota, _borrarNota,
            _fusionarFiltrar, _fusionarConfirmar,
@@ -38195,7 +38220,7 @@ const ObcWaModule = (() => {
       box.innerHTML = `<div class="chat-ch-empty">Todavía no hay conversaciones.<br>Escríbele a alguien desde este número para verlo aquí.</div>`;
       return;
     }
-    box.innerHTML = _chats.map(c => {
+    box.innerHTML = _chats.filter(c => !c.archivado).map(c => {
       const noLeidos = +c.no_leidos || 0;
       const unreadCls = noLeidos ? ' unread' : '';
       const badge = noLeidos ? `<span class="wa-chat-item__badge">${noLeidos > 99 ? '99+' : noLeidos}</span>` : '';
