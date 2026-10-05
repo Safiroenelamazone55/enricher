@@ -29948,7 +29948,7 @@ ${foot}
             ${F('linkedin', 'LinkedIn', c.linkedin)}${F('ciudad', 'Ciudad', c.ciudad)}
             ${F('region', 'Región', c.region)}${F('pais', 'País', c.pais)}
           </div></div>
-          <div class="cp-card"><div class="cp-card__t">Empresa</div><div class="cp-fields">
+          <div class="cp-card cp-card--co"><div class="cp-card__t">Empresa</div><div class="cp-fields">
             <label class="cp-f cp-f--full"><span class="cp-f__l">Empresa</span><select class="cp-f__i" data-f="company_id" onchange="LeadManagerModule.cpSave(${id})">${coOpts}</select></label>
             ${c.company_id ? `<div class="cp-f cp-f--full"><button class="cp-golink" onclick="LeadManagerModule.openCompanyPage(${c.company_id})">Ver ficha de la empresa ›</button></div>` : ''}
             ${F('fuente', 'Fuente', c.fuente)}
@@ -30175,7 +30175,7 @@ ${foot}
   function _cpTabContent(c) {
     if (!c) return '';
     if (_cpTab === 'seguimiento') return _cpSeguimientoHtml(c);
-    if (_cpTab === 'informacion' || _cpTab === 'resumen') return _cpInfoHtml(c);
+    if (_cpTab === 'informacion' || _cpTab === 'resumen') { setTimeout(() => _cpLoadMap(c), 0); return _cpInfoHtml(c); }
     if (_cpTab === 'notas') {
       return `<div class="cp-card"><div class="cp-card__t">Notas</div><textarea class="cp-notes" data-f="notas" placeholder="Escribe notas sobre este contacto…  Se guardan al salir del campo." onchange="LeadManagerModule.cpSave(${c.id})">${esc(c.notas || '')}</textarea></div>`;
     }
