@@ -17840,3 +17840,7 @@ textarea.mt-i{height:auto;padding:9px 10px;resize:vertical;line-height:1.45}
 .dl-card__nr{display:flex;align-items:center;justify-content:space-between;gap:6px}
 .dl-card__mt{flex-shrink:0;width:22px;height:22px;border:0;border-radius:6px;background:none;color:#94A3B8;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:background .12s,color .12s}
 .dl-card__mt:hover{background:#EEF2EF;color:#00804C}
+
+.dl-pop{position:fixed;z-index:10000;background:#fff;border:1px solid #E2E0DB;border-radius:10px;box-shadow:0 10px 30px rgba(15,23,42,.16);padding:4px;min-width:190px}
+.dl-pop button{display:block;width:100%;text-align:left;border:0;background:none;padding:8px 10px;border-radius:7px;font:inherit;font-size:.84rem;color:#14211B;cursor:pointer}
+.dl-pop button:hover{background:#F3F5F2}

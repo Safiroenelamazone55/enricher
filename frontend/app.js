@@ -28260,7 +28260,7 @@ ${foot}
         const cierre = c.deal_cierre ? String(c.deal_cierre).slice(0, 10) : '';
         const late = cierre && cierre < today && (st === 'propuesta' || st === 'negociacion');
         return `<div class="dl-card" onclick="LeadManagerModule.dlOpen(${c.id})">
-          <div class="dl-card__n dl-card__nr"><span>${esc(full)}</span><button class="dl-card__mt" title="Reunión y recordatorios" onclick="event.stopPropagation();LeadManagerModule.mtOpen(${c.id})"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></button></div>
+          <div class="dl-card__n dl-card__nr"><span>${esc(full)}</span><button class="dl-card__mt" title="Opciones" onclick="event.stopPropagation();LeadManagerModule.dlCardMenu(event,${c.id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg></button></div>
           <div class="dl-card__s">${esc([c.company_nombre, cli && cli.nombre].filter(Boolean).join(' · ')) || '&nbsp;'}</div>
           <div class="dl-card__row">
             <span class="dl-card__val${c.deal_valor == null ? ' dl-card__val--none' : ''}">${c.deal_valor == null ? 'Sin valor' : _dlMoney(c.deal_valor, c.deal_moneda)}</span>
@@ -28318,6 +28318,20 @@ ${foot}
     return '<div class="dl-cal"><div class="dl-cal-hd"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.dlCalNav(-1)">‹</button><b style="text-transform:capitalize;min-width:150px;text-align:center">' + mes + '</b><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.dlCalNav(1)">›</button><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.dlCalNav(0)">Hoy</button></div>' +
       '<div class="dl-cal-g">' + ['L', 'M', 'X', 'J', 'V', 'S', 'D'].map(x => '<div class="dl-cal-w">' + x + '</div>').join('') + cells + '</div>' +
       (sinFecha.length ? '<div class="dl-cal-sf"><div class="dl-cal-sf__t">Sin fecha de cierre (' + sinFecha.length + ')</div>' + sinFecha.map(chip).join('') + '</div>' : '') + '</div>';
+  }
+
+  function dlPopClose() { document.getElementById('dl-pop')?.remove(); document.removeEventListener('click', dlPopClose, true); }
+  function dlCardMenu(ev, cid) {
+    dlPopClose();
+    const r = ev.currentTarget.getBoundingClientRect();
+    const p = document.createElement('div'); p.id = 'dl-pop'; p.className = 'dl-pop';
+    const opt = (lbl, js) => '<button onclick="LeadManagerModule.dlPopClose();' + js + '">' + lbl + '</button>';
+    p.innerHTML = opt('Reunión y recordatorios', 'LeadManagerModule.mtOpen(' + cid + ')') + opt('Editar deal', 'LeadManagerModule.dlOpen(' + cid + ')') + opt('Ver ficha', 'LeadManagerModule.openContactPage(' + cid + ')');
+    document.body.appendChild(p);
+    const w = p.offsetWidth;
+    p.style.top = Math.min(r.bottom + 4, window.innerHeight - p.offsetHeight - 8) + 'px';
+    p.style.left = Math.max(8, Math.min(r.right - w, window.innerWidth - w - 8)) + 'px';
+    setTimeout(() => document.addEventListener('click', dlPopClose, true), 0);
   }
   function dlSetCli(v) { _dlCli = v; _dlPaint(); }
   function dlClose() { document.getElementById('dl-modal')?.remove(); }
@@ -33000,7 +33014,7 @@ ${foot}
     ldRefer, ldReferSave, ldNurture, ldNurtureSave, ldOpenDispoMenu,
     nurtureRetomarMenu, nurtureReinscribir, nurtureOtraSecuencia, nurtureSoloManual,
     waitingContactMenu, activarSiguienteContacto, waitingCerrarAviso,
-    dlSetCli, dlSetView, dlCalNav, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel, mtOpen, mtClose, mtSeg, mtSave, mtSend, mtCancel,
+    dlSetCli, dlSetView, dlCardMenu, dlPopClose, dlCalNav, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel, mtOpen, mtClose, mtSeg, mtSave, mtSend, mtCancel,
     sqSetCli, sqSetEst, sqSetQ, cmSetCli, cmSetEst, cmSetQ,
     seqRunSetCanal, seqTaskSetDue,
     mbOpen, mbClose, mbSave, mbTest, mbDelete, mbProv, mbOAuthStart, mbManageOpen, mbManageClose,
