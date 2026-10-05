@@ -414,8 +414,9 @@ async function _connect(pool, id) {
         _reintentos.delete(id); // ya conectó bien — se olvida cualquier corte anterior
         const numero = (sock.user && sock.user.id) ? sock.user.id.split(':')[0] : '';
         await pool.query(
-          `UPDATE wa_connections SET estado='conectado', numero=$1, qr_actual='', connected_at=NOW(), updated_at=NOW() WHERE id=$2`,
+          `UPDATE wa_connections SET estado='conectado', numero=$1, numero_linea=$1, qr_actual='', connected_at=NOW(), updated_at=NOW() WHERE id=$2`,
           [numero, id]);
+        _adoptarLineaAnterior(pool, id, numero).catch(() => {});   // si ya existió esta línea, recupera su historial
         console.log(`[wa] conexión ${id} vinculada (${numero})`);
         _normalizarLid(pool, sock, id).catch(e => console.warn('[wa] normalizarLid:', e.message));
         // Re-descarga la agenda del teléfono (app-state) para recibir cada contacto con su
@@ -691,6 +692,50 @@ async function participantesGrupo(pool, id, jid) {
   }
   out.sort((a, b) => (b.admin - a.admin) || (a.yo ? -1 : 0) - (b.yo ? -1 : 0) || String(a.nombre || a.numero || 'zzz').localeCompare(String(b.nombre || b.numero || 'zzz')));
   return { subject: meta.subject || '', total: out.length, participantes: out };
+}
+
+// Pasa todo lo que cuelga de una conexión vieja (mensajes, nombres, asignaciones, etiquetas, notas, vínculos con contactos
+// del CRM, clientes) a la conexión nueva de la MISMA línea (mismo número), sin pisar lo que ya haya en la nueva.
+async function _fusionarConexion(pool, oldId, newId) {
+  const cx = await pool.connect();
+  try {
+    await cx.query('BEGIN');
+    const mover = (tabla, claveNoDup) => cx.query(`UPDATE ${tabla} t SET connection_id=$2 WHERE t.connection_id=$1 AND NOT EXISTS (SELECT 1 FROM ${tabla} n WHERE n.connection_id=$2 AND ${claveNoDup})`, [oldId, newId]);
+    // nombres de la agenda: el viejo aporta lo que el nuevo no tenga
+    await cx.query(`UPDATE wa_contacts n SET nombre_agenda=o.nombre_agenda, nombre=o.nombre FROM wa_contacts o
+                    WHERE o.connection_id=$1 AND n.connection_id=$2 AND n.jid=o.jid AND o.nombre_agenda<>'' AND n.nombre_agenda=''`, [oldId, newId]);
+    await mover('wa_contacts', 'n.jid = t.jid');
+    // asignación, estado, prioridad y fijado de cada chat: lo que la persona decidió gana sobre el valor por defecto
+    await cx.query(`UPDATE wa_chat_meta n SET asignado_a = COALESCE(NULLIF(n.asignado_a,''), o.asignado_a),
+                      estado_conv = CASE WHEN n.estado_conv='abierto' THEN o.estado_conv ELSE n.estado_conv END,
+                      prioridad = COALESCE(NULLIF(n.prioridad,''), o.prioridad), pinned = n.pinned OR o.pinned,
+                      snooze_until = COALESCE(n.snooze_until, o.snooze_until)
+                    FROM wa_chat_meta o WHERE o.connection_id=$1 AND n.connection_id=$2 AND n.chat_jid=o.chat_jid`, [oldId, newId]);
+    await mover('wa_chat_meta', 'n.chat_jid = t.chat_jid');
+    await mover('wa_chat_tags', 'n.chat_jid = t.chat_jid AND n.tag_id = t.tag_id');
+    await mover('wa_chat_watchers', 'n.chat_jid = t.chat_jid AND n.nombre = t.nombre');
+    await mover('wa_jid_links', 'n.contact_id = t.contact_id');
+    await mover('wa_lid_map', 'n.lid = t.lid');
+    await mover('wa_connection_clients', 'n.outbound_client_id = t.outbound_client_id');
+    await mover('wa_reactions', 'n.msg_id = t.msg_id AND n.from_me = t.from_me');
+    await mover('wa_messages', 'n.msg_id = t.msg_id');
+    await cx.query('UPDATE wa_chat_notes SET connection_id=$2 WHERE connection_id=$1', [oldId, newId]);
+    // la conexión vieja ya no tiene nada propio (solo copias repetidas): se retira
+    await cx.query('DELETE FROM wa_connections WHERE id=$1', [oldId]);
+    await cx.query('COMMIT');
+    return true;
+  } catch (e) { await cx.query('ROLLBACK').catch(() => {}); console.warn('[wa] fusionar conexión', oldId, '→', newId, e.message); return false; }
+  finally { cx.release(); }
+}
+async function _adoptarLineaAnterior(pool, id, numero) {
+  try {
+    if (!numero) return;
+    const { rows: [me] } = await pool.query('SELECT user_id FROM wa_connections WHERE id=$1', [id]);
+    if (!me) return;
+    const { rows: viejas } = await pool.query(
+      `SELECT id FROM wa_connections WHERE user_id=$1 AND id<>$2 AND (numero_linea=$3 OR numero=$3) AND estado <> 'conectado' ORDER BY id`, [me.user_id, id, numero]);
+    for (const v of viejas) { if (await _fusionarConexion(pool, v.id, id)) console.log(`[wa] línea ${numero}: historial de la conexión ${v.id} recuperado en la ${id}`); }
+  } catch (e) { console.warn('[wa] adoptar línea anterior:', e.message); }
 }
 
 async function desconectar(pool, id) {

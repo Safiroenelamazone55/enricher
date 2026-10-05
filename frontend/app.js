@@ -36375,7 +36375,9 @@ const WaChatModule = (() => {
   async function _eliminarConn(id) {
     const c = _conns.find(x => x.id === id);
     if (!c) return;
-    if (!confirm(`¿Eliminar "${c.numero ? '+' + c.numero : (c.nombre || 'esta conexión')}"? Se borra su historial de chats guardado en Nova (no en tu teléfono).`)) return;
+    if (!confirm(`¿Quitar "${c.numero ? '+' + c.numero : (c.nombre || 'esta conexión')}" de la lista?
+
+Tu historial NO se borra: queda guardado en Nova. Si más adelante vuelves a vincular este mismo número, recuperas tus chats, asignaciones, etiquetas y vínculos con contactos.`)) return;
     try {
       const r = await apiFetch(`${API}/wa/connections/${id}`, { method: 'DELETE' });
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'No se pudo eliminar');

@@ -11246,12 +11246,12 @@ app.get('/api/wa/connections', requireAuth, async (req, res) => {
                   c.connected_by, c.visibilidad, c.visibilidad_niveles, c.visibilidad_miembros
              FROM wa_connections c
              JOIN wa_connection_clients wcc ON wcc.connection_id = c.id AND wcc.outbound_client_id = $2
-            WHERE c.user_id=$1
+            WHERE c.user_id=$1 AND c.archivada_at IS NULL
             ORDER BY c.id`
         : `SELECT id, nombre, numero, estado, qr_actual, connected_at, created_at,
                   connected_by, visibilidad, visibilidad_niveles, visibilidad_miembros
              FROM wa_connections
-            WHERE user_id=$1
+            WHERE user_id=$1 AND archivada_at IS NULL
             ORDER BY id`,
       ocid ? [req.workspaceOwnerId, ocid] : [req.workspaceOwnerId]);
     const visibles = [];
@@ -11542,6 +11542,12 @@ app.delete('/api/wa/connections/:id', requireAuth, async (req, res) => {
     if (!conn) return;
     if (conn.estado !== 'desconectado') {
       return res.status(400).json({ error: 'Desconéctala primero para poder eliminarla' });
+    }
+    const { rows: [cnt] } = await pool.query('SELECT COUNT(*)::int AS n FROM wa_messages WHERE connection_id=$1', [conn.id]);
+    if (cnt.n > 0 && req.query.definitivo !== '1') {
+      // Tiene historial: se archiva (desaparece de la lista) pero NO se borra. Al volver a vincular el mismo número, se recupera todo.
+      await pool.query('UPDATE wa_connections SET archivada_at=NOW(), numero_linea = CASE WHEN numero_linea=\'\' THEN numero ELSE numero_linea END WHERE id=$1 AND user_id=$2', [conn.id, req.workspaceOwnerId]);
+      return res.json({ ok: true, archivada: true, mensajes: cnt.n });
     }
     await pool.query(`DELETE FROM wa_connections WHERE id=$1 AND user_id=$2`, [conn.id, req.workspaceOwnerId]);
     res.json({ ok: true });

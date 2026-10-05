@@ -1868,6 +1868,10 @@ async function initDb() {
       );
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS wa_connections_user_idx ON wa_connections (user_id);`);
+    // El NÚMERO de la línea se recuerda aunque la sesión se cierre: así, al volver a vincular el mismo número, se recupera todo.
+    await pool.query(`ALTER TABLE wa_connections ADD COLUMN IF NOT EXISTS numero_linea TEXT NOT NULL DEFAULT ''`);
+    await pool.query(`ALTER TABLE wa_connections ADD COLUMN IF NOT EXISTS archivada_at TIMESTAMPTZ`);
+    await pool.query(`UPDATE wa_connections SET numero_linea = numero WHERE numero_linea = '' AND numero <> ''`);
     // msg_id es el Baileys key.id — la clave real de deduplicación: el mismo mensaje
     // puede llegar dos veces (reconexión, eco del propio envío) y sin este UNIQUE se
     // duplicaría en el historial cada vez.
