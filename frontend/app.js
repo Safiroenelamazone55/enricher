@@ -28379,6 +28379,93 @@ ${foot}
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
+
+  // ── Reunión agendada + recordatorios (backend: services/meetingReminders.js) ──
+  const _MT_TIPOS = [['', 'Sin enlace / lo maneja el cliente'], ['meet', 'Google Meet'], ['zoom', 'Zoom'], ['teams', 'Microsoft Teams'], ['telefono', 'Teléfono'], ['presencial', 'Presencial'], ['otro', 'Otro']];
+  const _MT_EST = { pendiente: 'Pendiente', enviado: '✓ Enviado', tarea: 'En tus tareas de Hoy', omitido: 'Omitido (ya pasó)', error: '⚠ Error' };
+  let _mt = { cid: 0, m: null };
+  function mtClose() { document.getElementById('mt-modal')?.remove(); }
+  function _mtLocalVal(m) {
+    if (!m) return '';
+    try { return new Intl.DateTimeFormat('sv-SE', { timeZone: m.tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(m.starts_at)).replace(' ', 'T'); } catch (_) { return ''; }
+  }
+  async function mtOpen(cid) {
+    const c = _contacts.find(x => x.id === cid); if (!c) return;
+    mtClose(); _mt = { cid, m: null };
+    try { const r = await apiFetch(API + '/lm/contacts/' + cid + '/meeting'); if (r.ok) _mt.m = (await r.json()).meeting; } catch (_) {}
+    _mtPaint(c);
+  }
+  function _mtPaint(c) {
+    mtClose();
+    const m = _mt.m, full = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || '—';
+    const tzGuess = (m && m.tz) || (typeof _contactTz === 'function' && _contactTz(c)) || _userTZ();
+    const tzOpts = (() => { const l = _TZ.filter(x => x[0]); if (!l.some(x => x[0] === tzGuess)) l.unshift([tzGuess, tzGuess]); return l.map(x => '<option value="' + x[0] + '"' + (x[0] === tzGuess ? ' selected' : '') + '>' + esc(x[1]) + '</option>').join(''); })();
+    const sel = (id, opts, v) => '<select class="dle-i" id="' + id + '">' + opts.map(o => '<option value="' + o[0] + '"' + (String(v) === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') + '</select>';
+    const idiomaDef = m ? m.idioma : ((String(c.pais || '').trim().toLowerCase().match(/^(us|usa|united states|estados unidos|ee\.?uu\.?|uk|reino unido|canada|australia)/)) ? 'en' : 'es');
+    const est = n => m ? '<span style="font-size:.72rem;color:' + (m['rem' + n + '_estado'] === 'enviado' ? '#15803D' : m['rem' + n + '_estado'] === 'error' ? '#B91C1C' : '#64748B') + '">' + (_MT_EST[m['rem' + n + '_estado']] || '') + '</span>' : '';
+    const rem = n => !m ? '' : '<div class="dle-f dle-f--full" style="margin-top:4px">' +
+      '<div style="display:flex;align-items:center;gap:8px"><span class="dle-l" style="margin:0">' + (n === 1 ? 'Recordatorio del día anterior (10:00 del prospecto)' : 'Recordatorio 30 min antes') + '</span><span style="flex:1"></span>' + est(n) + '</div>' +
+      '<textarea class="dle-i" id="mt-msg' + n + '" rows="5" style="resize:vertical;font-family:inherit" oninput="this.dataset.d=1">' + esc(m['msg' + n] || m['default' + n]) + '</textarea>' +
+      '<div style="display:flex;gap:6px;margin-top:4px"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.mtSend(' + n + ')"' + (m['rem' + n + '_estado'] === 'enviado' ? ' title="Ya enviado — se enviará otra vez"' : '') + '>Enviar ahora por ' + (m.canal === 'whatsapp' ? 'WhatsApp' : 'email') + '</button>' + (m['rem' + n + '_estado'] === 'error' && m.error ? '<span style="font-size:.72rem;color:#B91C1C;align-self:center">' + esc(m.error) + '</span>' : '') + '</div></div>';
+    const box = document.createElement('div'); box.id = 'mt-modal'; box.className = 'fin-pi-backdrop';
+    box.onclick = ev => { if (ev.target === box) mtClose(); };
+    box.innerHTML = '<div class="fin-pi-box dle-box" style="max-width:640px;max-height:88vh;overflow:auto">' +
+      '<div class="dle-hd"><div style="flex:1;min-width:0"><div class="dle-hd__t">📅 Reunión · ' + esc(full) + '</div><div class="dle-hd__s">Recordatorios al prospecto: día anterior y 30 min antes, en su hora</div></div><button class="fin-pi-x" onclick="LeadManagerModule.mtClose()">✕</button></div>' +
+      '<div class="dle-grid">' +
+        '<label class="dle-f"><span class="dle-l">Fecha y hora (hora del prospecto)</span><input class="dle-i" id="mt-local" type="datetime-local" value="' + _mtLocalVal(m) + '"></label>' +
+        '<label class="dle-f"><span class="dle-l">Zona horaria del prospecto</span><select class="dle-i" id="mt-tz">' + tzOpts + '</select></label>' +
+        '<label class="dle-f"><span class="dle-l">Dónde</span>' + sel('mt-tipo', _MT_TIPOS, m ? (m.tipo === 'otro' && !m.enlace ? '' : m.tipo) : '') + '</label>' +
+        '<label class="dle-f"><span class="dle-l">Enlace o lugar (opcional)</span><input class="dle-i" id="mt-enlace" placeholder="Pega el URL — vacío si lo maneja el cliente" value="' + esc(m ? m.enlace : '') + '"></label>' +
+        '<label class="dle-f"><span class="dle-l">Quién toma la reunión</span><input class="dle-i" id="mt-host" placeholder="Nombre (opcional)" value="' + esc(m ? m.anfitrion : '') + '"></label>' +
+        '<label class="dle-f"><span class="dle-l">CC (quien toma la reunión / cliente)</span><input class="dle-i" id="mt-cc" placeholder="correo1@…, correo2@…" value="' + esc(m ? m.cc : '') + '"></label>' +
+        '<label class="dle-f"><span class="dle-l">Idioma del mensaje</span>' + sel('mt-idioma', [['es', 'Español'], ['en', 'English']], idiomaDef) + '</label>' +
+        '<label class="dle-f"><span class="dle-l">Enviar por</span>' + sel('mt-canal', [['email', 'Email (buzón del cliente)'], ['whatsapp', 'WhatsApp']], m ? m.canal : 'email') + '</label>' +
+        '<label class="dle-f dle-f--full"><span class="dle-l">Modo</span>' + sel('mt-modo', [['revision', 'Con revisión — me deja una tarea en Hoy con el mensaje listo'], ['auto', 'Automático — se envía solo a su hora']], m ? m.modo : 'revision') + '</label>' +
+        (m ? '' : '<div class="dle-f dle-f--full" style="font-size:.78rem;color:#64748B">Guarda la reunión y aquí aparecerán los dos mensajes listos para editar.</div>') +
+        rem(1) + rem(2) +
+      '</div>' +
+      '<div class="dle-foot">' + (m ? '<button class="btn btn--ghost btn--sm" style="color:#B91C1C" onclick="LeadManagerModule.mtCancel()">Cancelar reunión</button>' : '') + '<span class="sp"></span><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.mtClose()">Cerrar</button><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.mtSave()">' + (m ? 'Guardar cambios' : 'Guardar reunión') + '</button></div>' +
+    '</div>';
+    document.body.appendChild(box);
+  }
+  function _mtBody() {
+    const g = id => document.getElementById(id);
+    const b = { local: g('mt-local').value, tz: g('mt-tz').value, tipo: g('mt-tipo').value || 'otro', enlace: g('mt-enlace').value.trim(), anfitrion: g('mt-host').value.trim(),
+      cc: g('mt-cc').value.trim(), idioma: g('mt-idioma').value, canal: g('mt-canal').value, modo: g('mt-modo').value };
+    // mensajes: solo se guardan los que la persona editó; si no, se regeneran solos con los datos vigentes
+    b.msg1 = g('mt-msg1') && g('mt-msg1').dataset.d ? g('mt-msg1').value : (_mt.m && _mt.m.msg1 || '');
+    b.msg2 = g('mt-msg2') && g('mt-msg2').dataset.d ? g('mt-msg2').value : (_mt.m && _mt.m.msg2 || '');
+    return b;
+  }
+  async function mtSave() {
+    const c = _contacts.find(x => x.id === _mt.cid); if (!c) return;
+    const b = _mtBody();
+    if (!b.local) return showBanner('Pon la fecha y hora de la reunión', 'error');
+    try {
+      const r = await apiFetch(API + '/lm/contacts/' + _mt.cid + '/meeting', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) });
+      const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Error');
+      _mt.m = d.meeting; c.reunion_agendada_at = c.reunion_agendada_at || new Date().toISOString();
+      _mtPaint(c); showBanner('✓ Reunión guardada — recordatorios programados', 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  async function mtSend(n) {
+    const c = _contacts.find(x => x.id === _mt.cid); if (!c) return;
+    const b = _mtBody();
+    try {
+      // guarda primero (por si se editó el mensaje o el canal) y envía
+      const r0 = await apiFetch(API + '/lm/contacts/' + _mt.cid + '/meeting', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) });
+      const d0 = await r0.json(); if (!r0.ok) throw new Error(d0.error || 'Error');
+      const r = await apiFetch(API + '/lm/contacts/' + _mt.cid + '/meeting/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ n }) });
+      const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Error');
+      _mt.m = d.meeting; _mtPaint(c); showBanner('✓ Recordatorio enviado', 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  async function mtCancel() {
+    if (!confirm('¿Cancelar la reunión y sus recordatorios?')) return;
+    try { await apiFetch(API + '/lm/contacts/' + _mt.cid + '/meeting', { method: 'DELETE' }); _mt.m = null; mtClose(); showBanner('Reunión cancelada', 'success'); }
+    catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+
   function _vLeadsShell() {
     return `<div class="lm-sec-head">
         <div><h2 class="lm-sec-title">Leads</h2><p class="lm-sec-sub">Todos tus prospectos — asócialos a un cliente outbound</p></div>
@@ -30444,6 +30531,7 @@ ${foot}
           <button class="cp-cta" onclick="LeadManagerModule.cpOpenRegisterReply(${id})">＋ Registrar respuesta</button>
           <button class="cp-act" onclick="LeadManagerModule.ldRefer(${id},'derivado')">＋ Crear referido</button>
           <button class="cp-act" onclick="LeadManagerModule.dlOpen(${id})" title="Valor, probabilidad, fecha de la reunión y notas para el cliente">${(c.deal_valor || c.deal_cierre || ['propuesta', 'negociacion', 'ganado', 'perdido'].includes(c.estado)) ? '$ Ver deal' : '＋ Deal'}</button>
+          <button class="cp-act" onclick="LeadManagerModule.mtOpen(${id})" title="Fecha, enlace y recordatorios de la reunión (día anterior y 30 min antes)">📅 Reunión</button>
           <button class="cp-act" onclick="LeadManagerModule.cpActOpen('tarea')" title="Un pendiente con fecha (sale en Hoy), o una nota/reunión para el historial">＋ Tarea / nota</button>
           <button class="cp-act cp-act--danger" onclick="LeadManagerModule.cpDelete(${id})">Eliminar</button>
         </div>
@@ -32852,7 +32940,7 @@ ${foot}
     ldRefer, ldReferSave, ldNurture, ldNurtureSave, ldOpenDispoMenu,
     nurtureRetomarMenu, nurtureReinscribir, nurtureOtraSecuencia, nurtureSoloManual,
     waitingContactMenu, activarSiguienteContacto, waitingCerrarAviso,
-    dlSetCli, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel,
+    dlSetCli, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel, mtOpen, mtClose, mtSave, mtSend, mtCancel,
     sqSetCli, sqSetEst, sqSetQ, cmSetCli, cmSetEst, cmSetQ,
     seqRunSetCanal, seqTaskSetDue,
     mbOpen, mbClose, mbSave, mbTest, mbDelete, mbProv, mbOAuthStart, mbManageOpen, mbManageClose,

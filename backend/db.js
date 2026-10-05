@@ -1124,6 +1124,32 @@ async function initDb() {
     await pool.query(`ALTER TABLE lm_contacts ADD COLUMN IF NOT EXISTS reunion_agendada_at TIMESTAMPTZ`);
     // Backfill único: para los que ya tienen reunión/deal, la fecha de agendado = su última respuesta (o su última actualización)
     await pool.query(`UPDATE lm_contacts k SET reunion_agendada_at = COALESCE((SELECT MAX(a.fecha) FROM activities a WHERE a.contact_id=k.id AND a.tipo='respuesta'), k.updated_at) WHERE reunion_agendada_at IS NULL AND (k.deal_cierre IS NOT NULL OR k.deal_valor IS NOT NULL OR k.disposition='reunion')`);
+    // Reuniones agendadas con recordatorios (meetingReminders.js). 1 por contacto; reprogramar la actualiza.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS lm_meetings (
+        id          SERIAL PRIMARY KEY,
+        user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        contact_id  INTEGER NOT NULL UNIQUE REFERENCES lm_contacts(id) ON DELETE CASCADE,
+        starts_at   TIMESTAMPTZ NOT NULL,
+        tz          TEXT NOT NULL DEFAULT 'America/Lima',
+        tipo        TEXT NOT NULL DEFAULT 'otro',
+        enlace      TEXT NOT NULL DEFAULT '',
+        anfitrion   TEXT NOT NULL DEFAULT '',
+        idioma      TEXT NOT NULL DEFAULT 'es',
+        canal       TEXT NOT NULL DEFAULT 'email',
+        modo        TEXT NOT NULL DEFAULT 'revision',
+        cc          TEXT NOT NULL DEFAULT '',
+        msg1        TEXT NOT NULL DEFAULT '',
+        msg2        TEXT NOT NULL DEFAULT '',
+        rem1_at     TIMESTAMPTZ, rem2_at TIMESTAMPTZ,
+        rem1_estado TEXT NOT NULL DEFAULT 'pendiente', rem2_estado TEXT NOT NULL DEFAULT 'pendiente',
+        rem1_sent_at TIMESTAMPTZ, rem2_sent_at TIMESTAMPTZ,
+        estado      TEXT NOT NULL DEFAULT 'programada',
+        error       TEXT NOT NULL DEFAULT '',
+        created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS lm_meetings_due_idx ON lm_meetings (estado, starts_at)`);
     await pool.query(`ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS reset_code_hash TEXT`);
     await pool.query(`ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS pw_remind_at TIMESTAMPTZ`);
     await pool.query(`ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS pw_remind_count INTEGER NOT NULL DEFAULT 0`);

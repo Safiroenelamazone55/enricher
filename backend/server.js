@@ -4930,6 +4930,63 @@ app.patch('/api/lm/contacts/:id/deal', requireAuth, async (req, res) => {
     res.json(rows[0]);
   } catch (err) { console.error('[lm-deal]', err.message); res.status(500).json({ error: 'Error al guardar el deal' }); }
 });
+// ── Reunión agendada + recordatorios (services/meetingReminders.js) ──
+const _mtSvc = require('./services/meetingReminders');
+async function _mtView(pool, uid, cid) {
+  const { rows: [m] } = await pool.query('SELECT * FROM lm_meetings WHERE contact_id=$1 AND user_id=$2', [cid, uid]);
+  if (!m) return null;
+  const { rows: [k] } = await pool.query('SELECT nombre FROM lm_contacts WHERE id=$1', [cid]);
+  return { ...m, default1: _mtSvc.defaultMessage(m, k && k.nombre, 1), default2: _mtSvc.defaultMessage(m, k && k.nombre, 2) };
+}
+app.get('/api/lm/contacts/:id/meeting', requireAuth, async (req, res) => {
+  try { res.json({ meeting: await _mtView(pool, req.workspaceOwnerId, +req.params.id) }); }
+  catch (e) { res.status(500).json({ error: 'No se pudo leer la reunión' }); }
+});
+app.put('/api/lm/contacts/:id/meeting', requireAuth, async (req, res) => {
+  const b = req.body || {}, uid = req.workspaceOwnerId, cid = +req.params.id;
+  try {
+    const tz = String(b.tz || 'America/Lima');
+    try { new Intl.DateTimeFormat('en', { timeZone: tz }); } catch (_) { return res.status(400).json({ error: 'Zona horaria inválida' }); }
+    const start = _mtSvc.zonedToUtc(b.local, tz);
+    if (!start || isNaN(start)) return res.status(400).json({ error: 'Falta la fecha y hora de la reunión' });
+    const { rows: [k] } = await pool.query('SELECT id FROM lm_contacts WHERE id=$1 AND user_id=$2', [cid, uid]);
+    if (!k) return res.status(404).json({ error: 'Contacto no encontrado' });
+    const tipo = ['meet', 'zoom', 'teams', 'telefono', 'presencial', 'otro'].includes(b.tipo) ? b.tipo : 'otro';
+    const idioma = b.idioma === 'en' ? 'en' : 'es', canal = b.canal === 'whatsapp' ? 'whatsapp' : 'email', modo = b.modo === 'auto' ? 'auto' : 'revision';
+    const t = _mtSvc.computeReminderTimes(start, tz);
+    const now = Date.now();
+    const r1 = t.rem1_at && t.rem1_at.getTime() > now ? 'pendiente' : 'omitido';
+    const r2 = t.rem2_at.getTime() > now ? 'pendiente' : 'omitido';
+    const f = x => String(x == null ? '' : x).trim();
+    await pool.query(
+      `INSERT INTO lm_meetings (user_id, contact_id, starts_at, tz, tipo, enlace, anfitrion, idioma, canal, modo, cc, msg1, msg2, rem1_at, rem2_at, rem1_estado, rem2_estado)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+       ON CONFLICT (contact_id) DO UPDATE SET starts_at=$3, tz=$4, tipo=$5, enlace=$6, anfitrion=$7, idioma=$8, canal=$9, modo=$10, cc=$11, msg1=$12, msg2=$13,
+         rem1_at=$14, rem2_at=$15, estado='programada', error='', updated_at=NOW(),
+         rem1_estado = CASE WHEN lm_meetings.starts_at IS DISTINCT FROM $3 THEN $16 WHEN lm_meetings.rem1_estado IN ('enviado') THEN 'enviado' ELSE $16 END,
+         rem2_estado = CASE WHEN lm_meetings.starts_at IS DISTINCT FROM $3 THEN $17 WHEN lm_meetings.rem2_estado IN ('enviado') THEN 'enviado' ELSE $17 END`,
+      [uid, cid, start.toISOString(), tz, tipo, f(b.enlace).slice(0, 500), f(b.anfitrion).slice(0, 120), idioma, canal, modo, f(b.cc).slice(0, 300),
+       f(b.msg1).slice(0, 3000), f(b.msg2).slice(0, 3000), t.rem1_at ? t.rem1_at.toISOString() : null, t.rem2_at.toISOString(), r1, r2]);
+    await pool.query(`UPDATE lm_contacts SET reunion_agendada_at=COALESCE(reunion_agendada_at, NOW()), updated_at=NOW() WHERE id=$1`, [cid]);
+    res.json({ ok: true, meeting: await _mtView(pool, uid, cid) });
+  } catch (e) { console.error('[meeting]', e.message); res.status(500).json({ error: 'No se pudo guardar la reunión' }); }
+});
+app.post('/api/lm/contacts/:id/meeting/send', requireAuth, async (req, res) => {
+  const n = (req.body || {}).n === 2 ? 2 : 1;
+  try {
+    const { rows: [m] } = await pool.query('SELECT * FROM lm_meetings WHERE contact_id=$1 AND user_id=$2', [+req.params.id, req.workspaceOwnerId]);
+    if (!m) return res.status(404).json({ error: 'No hay reunión' });
+    await _mtSvc.sendReminder(pool, m, n);
+    res.json({ ok: true, meeting: await _mtView(pool, req.workspaceOwnerId, +req.params.id) });
+  } catch (e) { res.status(400).json({ error: e.message || 'No se pudo enviar' }); }
+});
+app.delete('/api/lm/contacts/:id/meeting', requireAuth, async (req, res) => {
+  try {
+    await pool.query(`UPDATE activities SET estado='hecha' WHERE contact_id=$1 AND user_id=$2 AND tipo='tarea' AND estado='pendiente' AND nota LIKE '[Reunión #%'`, [+req.params.id, req.workspaceOwnerId]);
+    await pool.query('DELETE FROM lm_meetings WHERE contact_id=$1 AND user_id=$2', [+req.params.id, req.workspaceOwnerId]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'No se pudo cancelar' }); }
+});
 // Canal LinkedIn no válido (perfil falso/inactivo): NO saca al contacto de la secuencia —
 // el motor de tareas salta sus pasos de LinkedIn y sigue por la ruta de email. value=false revierte.
 app.post('/api/lm/contacts/:id/no-linkedin', requireAuth, async (req, res) => {
@@ -13284,6 +13341,7 @@ async function start() {
     require('./services/replyWatcher').startReplyWatcher(pool, { gmailCallback: GMAIL_CALLBACK });
     require('./services/nurtureWatcher').startNurtureWatcher(pool);
     require('./services/interesadoWatcher').startInteresadoWatcher(pool);
+    require('./services/meetingReminders').startMeetingReminders(pool);
     require('./services/backupContactWatcher').startBackupContactWatcher(pool);
     require('./services/followupWatcher').startFollowupWatcher(pool);
     require('./services/imapWatcher').startImapWatcher(pool);
