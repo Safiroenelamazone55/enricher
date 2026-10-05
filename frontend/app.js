@@ -13973,6 +13973,8 @@ const TasksModule = (() => {
     // el kanban de UN proyecto es otro caso: hay que reaplicar el filtro después,
     // o el guardado te saca al kanban global (bug reportado 2026-09-02).
     const _reaplicarFiltro = _filterProjectId;
+    // Si se guardó desde la PÁGINA de una tarea (p. ej. "Agregar subtarea"), load() la cierra: hay que volver a abrirla.
+    const _taskPageKeep = _tdCurrentId;
     const form    = e.target;
     const saveBtn = $('tasks-save-btn');
     const responsable = $('task-responsable-select')?.value || '';
@@ -14027,6 +14029,7 @@ const TasksModule = (() => {
       closeDrawer();
       await load();
       if (_reaplicarFiltro) await setProjectFilter(_reaplicarFiltro);
+      if (_taskPageKeep != null && _tasks.some(t => t.id === _taskPageKeep)) await _renderTaskDetail(_taskPageKeep);
       if (data.project_id) ProjectsModule.refreshCard(data.project_id);
     } catch (err) {
       alert('Error: ' + err.message);
