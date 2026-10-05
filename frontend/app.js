@@ -28333,6 +28333,29 @@ ${foot}
     p.style.left = Math.max(8, Math.min(r.right - w, window.innerWidth - w - 8)) + 'px';
     setTimeout(() => document.addEventListener('click', dlPopClose, true), 0);
   }
+
+  let _dlMeet = null;
+  function _dlTzOpts(c, cur) {
+    const tz = cur || (typeof _contactTz === 'function' && _contactTz(c)) || _userTZ();
+    const l = _TZ.filter(x => x[0]); if (!l.some(x => x[0] === tz)) l.unshift([tz, tz]);
+    return l.map(x => '<option value="' + x[0] + '"' + (x[0] === tz ? ' selected' : '') + '>' + esc(x[1]) + '</option>').join('');
+  }
+  // Programa (o reprograma) los recordatorios con la fecha/hora del deal y abre la vista previa para revisar/editar los mensajes.
+  async function _dlSaveMeeting(c, local, tz) {
+    const old = _dlMeet;
+    const same = old && _mtLocalVal(old) === local && old.tz === tz;
+    if (same) return;
+    const en = /^(us|usa|united states|estados unidos|ee\.?uu\.?|uk|reino unido|canada|australia)/.test(String(c.pais || '').trim().toLowerCase());
+    const b = { local, tz, tipo: old ? old.tipo : 'otro', enlace: old ? old.enlace : '', anfitrion: old ? old.anfitrion : '', cc: old ? old.cc : '',
+      idioma: old ? old.idioma : (en ? 'en' : 'es'), canal: old ? old.canal : 'email', modo: old ? old.modo : 'revision', msg1: old ? old.msg1 : '', msg2: old ? old.msg2 : '' };
+    try {
+      const r = await apiFetch(API + '/lm/contacts/' + c.id + '/meeting', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) });
+      const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Error');
+      c.reunion_agendada_at = c.reunion_agendada_at || new Date().toISOString();
+      showBanner('✓ Recordatorios programados — revisa los mensajes', 'success');
+      mtOpen(c.id);
+    } catch (e) { showBanner('No se pudo programar la reunión: ' + e.message, 'error'); }
+  }
   function dlSetCli(v) { _dlCli = v; _dlPaint(); }
   function dlClose() { document.getElementById('dl-modal')?.remove(); }
   function dlOpen(cid, stage) {
@@ -28356,6 +28379,9 @@ ${foot}
           <label class="dle-f"><span class="dle-l">Moneda</span><select class="dle-i" id="dle-moneda">${monOpts}</select></label>
           <label class="dle-f"><span class="dle-l">Probabilidad de cierre</span><select class="dle-i" id="dle-prob">${probOpts}</select></label>
           <label class="dle-f"><span class="dle-l">Fecha estimada de cierre</span><input class="dle-i" id="dle-cierre" type="date" value="${c.deal_cierre ? String(c.deal_cierre).slice(0, 10) : ''}"></label>
+          <div class="dle-f dle-f--full" style="border-top:1px solid #F1EFEB;padding-top:10px;margin-top:2px"><span class="dle-l">Reunión agendada — con esto se programan los recordatorios al prospecto (día anterior y 30 min antes)</span>
+            <div style="display:flex;gap:8px;margin-top:4px"><input class="dle-i" id="dle-mt-local" type="datetime-local" style="flex:1.2"><select class="dle-i" id="dle-mt-tz" style="flex:1">${_dlTzOpts(c, '')}</select></div>
+            <div class="dle-hint" id="dle-mt-hint" style="color:#94A3B8;font-size:.74rem;margin-top:4px">Fecha y hora en la zona horaria del prospecto. Al guardar podrás ver y editar los mensajes.</div></div>
         </div>
         <div class="dle-notas-col">
           <span class="dle-l">Notas y comentarios</span>
@@ -28371,6 +28397,14 @@ ${foot}
     </div>`;
     document.body.appendChild(m);
     setTimeout(() => document.getElementById('dle-valor')?.focus(), 40);
+    _dlMeet = null;
+    apiFetch(API + '/lm/contacts/' + cid + '/meeting').then(r => r.ok ? r.json() : null).then(d => {
+      const mm = d && d.meeting; if (!mm) return; _dlMeet = mm;
+      const l = document.getElementById('dle-mt-local'), z = document.getElementById('dle-mt-tz');
+      if (l) l.value = _mtLocalVal(mm);
+      if (z) { if (![...z.options].some(o => o.value === mm.tz)) z.insertAdjacentHTML('afterbegin', '<option value="' + mm.tz + '">' + mm.tz + '</option>'); z.value = mm.tz; }
+      const hint = document.getElementById('dle-mt-hint'); if (hint) hint.innerHTML = 'Recordatorios programados · <a href="#" onclick="event.preventDefault();LeadManagerModule.dlClose();LeadManagerModule.mtOpen(' + cid + ')">ver y editar mensajes</a>';
+    }).catch(() => {});
   }
   // Notas y comentarios del deal (pedido 2026-09-02: quedan con fecha y se pueden ir
   // agregando — reusa el mismo log de actividades tipo='nota' que ya tiene el contacto
@@ -28429,6 +28463,7 @@ ${foot}
     const c = _contacts.find(x => x.id === cid); if (!c) return;
     const g = id => document.getElementById(id);
     const valor = g('dle-valor').value.trim(), moneda = g('dle-moneda').value, prob = g('dle-prob').value, cierre = g('dle-cierre').value, estado = g('dle-estado').value;
+    const mtLocal = (g('dle-mt-local') || {}).value || '', mtTz = (g('dle-mt-tz') || {}).value || '';
     try {
       const res = await apiFetch(`${API}/lm/contacts/${cid}/deal`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ valor, moneda, prob, cierre, motivo_perdida: estado === 'perdido' ? (g('dle-motivo')?.value || '') : '' }) });
       if (!res.ok) throw new Error((await res.json()).error || 'Error');
@@ -28440,6 +28475,7 @@ ${foot}
       dlClose();
       if (_section === 'deals') _dlPaint(); else if (_section === 'leads') _ldPaint(); else if (_section === 'contact-view') _renderBody();
       showBanner('✓ Deal guardado', 'success');
+      if (mtLocal) await _dlSaveMeeting(c, mtLocal, mtTz);
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
