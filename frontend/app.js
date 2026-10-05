@@ -29945,19 +29945,15 @@ ${foot}
             ${F('telefono', 'Teléfono', c.telefono)}
             ${F('movil', 'Móvil', c.movil)}${F('cargo', 'Cargo', c.cargo)}
             ${F('seniority', 'Seniority', c.seniority)}${F('departamento', 'Departamento', c.departamento)}
-            ${F('linkedin', 'LinkedIn', c.linkedin)}
+            ${F('linkedin', 'LinkedIn', c.linkedin)}${F('ciudad', 'Ciudad', c.ciudad)}
+            ${F('region', 'Región', c.region)}${F('pais', 'País', c.pais)}
           </div></div>
           <div class="cp-card"><div class="cp-card__t">Empresa</div><div class="cp-fields">
             <label class="cp-f cp-f--full"><span class="cp-f__l">Empresa</span><select class="cp-f__i" data-f="company_id" onchange="LeadManagerModule.cpSave(${id})">${coOpts}</select></label>
             ${c.company_id ? `<div class="cp-f cp-f--full"><button class="cp-golink" onclick="LeadManagerModule.openCompanyPage(${c.company_id})">Ver ficha de la empresa ›</button></div>` : ''}
             ${F('fuente', 'Fuente', c.fuente)}
-          </div></div>
-          <div class="cp-card"><div class="cp-card__t">Ubicación del contacto</div><div class="cp-fields">
-            ${F('ciudad', 'Ciudad', c.ciudad)}${F('region', 'Región', c.region)}${F('pais', 'País', c.pais)}
-          </div><div class="cp-map" id="cp-map"></div></div>
-          <div class="cp-card"><div class="cp-card__t">Ubicación de la empresa</div><div class="cp-fields">
-            ${(() => { const co = c.company_id ? _companies.find(x => String(x.id) === String(c.company_id)) : null; if (!co) return '<div class="cp-f cp-f--full"><span class="cp-f__ro">Sin empresa asignada</span></div>'; const R = (l, v) => `<div class="cp-f"><span class="cp-f__l">${l}</span><span class="cp-f__ro">${v ? esc(v) : '—'}</span></div>`; return R('Ciudad', co.ciudad) + R('Región', co.region) + R('País', co.pais) + `<div class="cp-f cp-f--full"><button class="cp-golink" onclick="LeadManagerModule.openCompanyPage(${co.id})">Editar en la ficha de la empresa ›</button></div>`; })()}
-          </div><div class="cp-map" id="cp-map-co"></div></div>
+            ${(() => { const co = c.company_id ? _companies.find(x => String(x.id) === String(c.company_id)) : null; if (!co) return ''; const R = (l, v) => `<div class="cp-f"><span class="cp-f__l">${l}</span><span class="cp-f__ro">${v ? esc(v) : '—'}</span></div>`; return R('Ciudad', co.ciudad) + R('Región', co.region) + R('País', co.pais); })()}
+          </div><div class="cp-map cp-map--wide" id="cp-map-co"></div></div>
 `;
     return `<div class="cp-info">${blocks}</div>${rawKeys.length ? `<div class="cp-card"><div class="cp-card__t">Datos importados (sin mapear)</div><div class="cp-fields">${rawKeys.map(k => `<div class="cp-f"><span class="cp-f__l">${esc(k)}</span><span class="cp-f__ro">${esc(raw[k])}</span></div>`).join('')}</div></div>` : ''}`;
   }
@@ -30301,9 +30297,8 @@ ${foot}
   }
   function _cpLoadMap(c) {
     if (!c) return;
-    _cpLoadMapIn('cp-map', c);
     const co = c.company_id ? _companies.find(x => String(x.id) === String(c.company_id)) : null;
-    _cpLoadMapIn('cp-map-co', co || {});
+    _cpLoadMapIn('cp-map-co', (co && (co.ciudad || co.region || co.pais)) ? co : c);
   }
   async function _cpLoadMapIn(elId, c) {
     const el = document.getElementById(elId); if (!el) return;
