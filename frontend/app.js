@@ -20472,7 +20472,7 @@ const LeadManagerModule = (() => {
   function sqSetQ(v) { _sqQ = v; _sqPaint(); }
   async function openSequence(id) {
     _activeSeq = id; _section = 'sequence'; _seqTab = 'empresas'; _seqPasosOpen = true; _seqCoExpanded = false;
-    _seqContacts = null; _seqPendingCos = null; _seqCoStats = null; _seqMetrics = null; _seqDo = null; _seqCtEstado = ''; _seqCtDisp = ''; _seqCtSel.clear(); _seqTaskCanal = ''; _seqTaskDue = '';
+    _seqContacts = null; _seqPendingCos = null; _seqCoStats = null; _seqMetrics = null; _seqDo = null; _seqCtEstado = ''; _seqCtDisp = ''; _seqCtPage = 0; _seqCoPage = 0; _seqCtSel.clear(); _seqTaskCanal = ''; _seqTaskDue = '';
     _refreshNav(); _renderBody();
     // Ambos en paralelo, pero un último _renderBody() DESPUÉS de que los dos terminen —
     // si cada uno pinta apenas resuelve, el que llega primero puede pintar con el otro
@@ -21221,7 +21221,7 @@ ${foot}
       return `<div class="seq-chiprow">${chips}</div>
         <div class="seq-chiprow seq-chiprow--2">${dChips}</div>${bar}` +
         (fl.length
-          ? `<div class="clients-table-wrap"><table class="clients-table lm-dt"><thead><tr><th style="width:34px"><input type="checkbox" class="lm-ck" ${flIds.length && flIds.every(i => _seqCtSel.has(i)) ? 'checked' : ''} onchange="LeadManagerModule.seqCtSelAll(this.checked,${id})"></th><th>Contacto</th><th>Progreso</th><th>Estado</th><th>Resultado</th><th></th></tr></thead><tbody>${fl.map(e => _seqCtRow(e, steps, id)).join('')}</tbody></table></div>`
+          ? `<div class="clients-table-wrap seq-ct-wrap"><table class="clients-table lm-dt"><thead><tr><th style="width:34px"><input type="checkbox" class="lm-ck" ${flIds.length && flIds.every(i => _seqCtSel.has(i)) ? 'checked' : ''} onchange="LeadManagerModule.seqCtSelAll(this.checked,${id})"></th><th>Contacto</th><th>Progreso</th><th>Estado</th><th>Resultado</th><th></th></tr></thead><tbody>${_seqPageSlice(fl, _seqCtPage, p => { _seqCtPage = p; }).map(e => _seqCtRow(e, steps, id)).join('')}</tbody></table></div>${_pagerHtml(fl.length, _seqCtPage, 'seqCtGoPage')}`
           : `<div class="cp-empty2" style="padding:16px">Nadie con este filtro.</div>`);
     }
     if (_seqTab === 'tareas') {
@@ -21401,11 +21401,11 @@ ${foot}
     });
     const cos = [...byCo.values()].sort((a, b) => b.n - a.n);
     return `<div class="seq-list-hd"><h3>Empresas (${cos.length})</h3><a href="javascript:void(0)" class="seq-list-hd__all" onclick="LeadManagerModule.go('companies')">Ver todas</a></div>
-      <div class="seq-co-list">${cos.map(c => `<div class="seq-co-card seq-co-card--plain">
+      <div class="seq-co-list">${_seqPageSlice(cos, _seqCoPage, p => { _seqCoPage = p; }).map(c => `<div class="seq-co-card seq-co-card--plain">
         <div class="lm-co-logo"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4M10 10h4M10 14h4M10 18h4"/></svg></div>
         <div class="seq-co-card__main"><div class="seq-co-card__name">${esc(c.nombre)}</div></div>
         <div class="seq-co-card__right"><div class="seq-co-card__paso">${c.n} contacto${c.n !== 1 ? 's' : ''}</div></div>
-      </div>`).join('')}</div>`;
+      </div>`).join('')}</div>${_pagerHtml(cos.length, _seqCoPage, 'seqCoGoPage')}`;
   }
   function _seqCoCard(row, seqId, steps) {
     const N = steps.length;
@@ -22595,9 +22595,15 @@ ${foot}
     const m = M[s?.send_mode]; if (!m) return '';
     return `<span class="client-badge" style="background:${m[1]};color:${m[2]};font-size:.62rem;vertical-align:3px">${m[0]}</span>`;
   }
-  function seqCtSetEstado(v) { _seqCtEstado = v || ''; const el = document.getElementById('seq-tabwrap'); if (el && _activeSeq) el.innerHTML = _seqTabContent(_activeSeq); else _renderBody(); }
+  // Porción de la lista para la página actual (corrige la página si el filtro dejó menos filas)
+  function _seqPageSlice(list, page, setPage) {
+    const ps = _pageSize(), pages = Math.max(1, Math.ceil(list.length / ps));
+    if (page > pages - 1) { page = pages - 1; setPage(page); }
+    return list.slice(page * ps, (page + 1) * ps);
+  }
+  function seqCtSetEstado(v) { _seqCtEstado = v || ''; _seqCtPage = 0; const el = document.getElementById('seq-tabwrap'); if (el && _activeSeq) el.innerHTML = _seqTabContent(_activeSeq); else _renderBody(); }
   function _seqCtRepaint() { const el = document.getElementById('seq-tabwrap'); if (el && _activeSeq) el.innerHTML = _seqTabContent(_activeSeq); else _renderBody(); }
-  function seqCtSetDisp(v) { _seqCtDisp = (v && _seqCtDisp === v) ? '' : (v || ''); _seqCtRepaint(); }   // pulsar el chip activo lo quita
+  function seqCtSetDisp(v) { _seqCtPage = 0; _seqCtDisp = (v && _seqCtDisp === v) ? '' : (v || ''); _seqCtRepaint(); }   // pulsar el chip activo lo quita
   function seqCtSelToggle(cid, on, seqId) { if (on) _seqCtSel.add(cid); else _seqCtSel.delete(cid); _seqCtRepaint(); }
   function seqCtSelAll(on, seqId) {
     const list = Array.isArray(_seqContacts) ? _seqContacts : [];
@@ -29179,7 +29185,9 @@ ${foot}
   // ── Paginación de tablas (Contactos / Empresas): sin scroll interno, 50/100 por página ──
   let _ctPage = 0, _coPage = 0;
   function _pageSize() { try { return parseInt(localStorage.getItem('lm_page_size')) || 50; } catch (_) { return 50; } }
-  function lmSetPageSize(n) { try { localStorage.setItem('lm_page_size', String(parseInt(n) || 50)); } catch (_) {} _ctPage = 0; _coPage = 0; _renderBody(); }
+  function lmSetPageSize(n) { try { localStorage.setItem('lm_page_size', String(parseInt(n) || 50)); } catch (_) {} _ctPage = 0; _coPage = 0; _seqCtPage = 0; _seqCoPage = 0; _renderBody(); }
+  function seqCtGoPage(d) { _seqCtPage = Math.max(0, _seqCtPage + d); _seqCtRepaint(); const el = document.getElementById('seq-tabwrap'); if (el) el.scrollTop = 0; }
+  function seqCoGoPage(d) { _seqCoPage = Math.max(0, _seqCoPage + d); const el = document.getElementById('seq-tabwrap'); if (el && _activeSeq) { el.innerHTML = _seqTabContent(_activeSeq); el.scrollTop = 0; } }
   function ctGoPage(d) { _ctPage = Math.max(0, _ctPage + d); _renderContacts(); const b = $('lm2-body'); if (b) b.scrollTop = 0; }
   function coGoPage(d) { _coPage = Math.max(0, _coPage + d); _renderCompanies(); const b = $('lm2-body'); if (b) b.scrollTop = 0; }
   function _pagerHtml(total, page, fn) {
@@ -29235,6 +29243,7 @@ ${foot}
   // "Por resolver": nunca respondieron (o solo aceptaron LinkedIn) o respondieron y quedó sin definir. NO incluye a los ya
   // clasificados: no interesado / no contactar / no califica (descartados), más adelante (el sistema recuerda) ni interesado / reunión.
   const _seqPend = e => !e.real_disposition || e.real_disposition === 'respondio' || e.real_disposition === 'aceptado';
+  let _seqCtPage = 0, _seqCoPage = 0;   // páginas de Contactos / Empresas dentro de una secuencia
   let _seqCtDisp = '';   // filtro de resultado/disposición ('' = cualquiera, '_none' = nunca respondió)
   let _seqCtSel = new Set(); // contact_id seleccionados, para agregarlos en bloque a otra secuencia
   let _seqTaskCanal = ''; // filtro por canal en la pestaña Tareas de la secuencia
@@ -32609,7 +32618,7 @@ ${foot}
     lmSetDisposition, seqDoDisposition, cpSetStage,
     seqDoAccepted, seqDoNoLinkedIn, seqDoBounced, seqDoNoWhatsapp, seqDoNoPhone, lmToggleNoLinkedIn, lmToggleNoWhatsapp, lmToggleNoPhone, lmToggleBounced, lmToggleManualEmail, ctToggleBounced,
     seqDoDataIssue, seqDoDataIssuePick, ctToggleDataIssue, lmResumeDataIssue, seqOpenMark,
-    lmSetPageSize, ctGoPage, coGoPage, seqCtSetEstado, seqCtSetDisp, seqCtSelToggle, seqCtSelAll, seqCtSelClear, seqCtSelAddToSeq, seqTaskSetCanal,
+    lmSetPageSize, ctGoPage, coGoPage, seqCtGoPage, seqCoGoPage, seqCtSetEstado, seqCtSetDisp, seqCtSelToggle, seqCtSelAll, seqCtSelClear, seqCtSelAddToSeq, seqTaskSetCanal,
     ldSetResult, ldTogglePorCalificar, ldSetCli, ldSetSeq, ldSetCamp, ldSetQ, ldAddNote, ldMeet, ldToDeal, ldEditNote, ldExport,
     ldRefer, ldReferSave, ldNurture, ldNurtureSave, ldOpenDispoMenu,
     nurtureRetomarMenu, nurtureReinscribir, nurtureOtraSecuencia, nurtureSoloManual,

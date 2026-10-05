@@ -17661,3 +17661,13 @@ tr.tk-flash > td { background-color: #FEF9C3; animation: none; }
 .seq-chiprow::-webkit-scrollbar { display: none; }
 .seq-chiprow--2 { margin-bottom: 12px; }
 .seq-chiprow .lm-filter-btn { flex: 0 0 auto; padding: 5px 11px; font-size: .78rem; white-space: nowrap; }
+
+/* Secuencia: sin barra de scroll visible (se sigue desplazando con rueda/trackpad); la tabla se mueve a los lados */
+.seq-split__content { scrollbar-width: none; }
+.seq-split__content::-webkit-scrollbar { display: none; width: 0; }
+.seq-split__content .clients-table-wrap { overflow-x: auto; scrollbar-width: none; max-width: 100%; }
+.seq-split__content .clients-table-wrap::-webkit-scrollbar { display: none; height: 0; }
+.seq-split__content .lm-dt { min-width: 860px; }
+.seq-split__content .lm-dt td:nth-child(3), .seq-split__content .lm-dt th:nth-child(3) { max-width: 250px; }
+.seq-split__content .lm-dt td:nth-child(3) * { overflow: hidden; text-overflow: ellipsis; }
+.seq-split__content .lm-pager { padding: 12px 8px 14px; }
