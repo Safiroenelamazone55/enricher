@@ -47,12 +47,34 @@ function _esChatValido(jid) {
 // se vieran "números" que no coincidían con el teléfono. sock.signalRepository.lidMapping
 // sabe traducir un @lid al @s.whatsapp.net real cuando WhatsApp ya mandó esa relación;
 // si todavía no la mandó, se deja el @lid tal cual (se resuelve solo más adelante).
+// Mapa @lid → número real, aprendido de lo que WhatsApp manda (contactos con lid+jid,
+// senderPn en mensajes, chats.phoneNumberShare). Baileys 6.x NO trae lidMapping propio.
+const _lidMap = new Map(); // `${connId}:${lid}` → jid
+async function _aprenderLid(pool, connId, lid, pn) {
+  if (!lid || !String(lid).endsWith('@lid') || !pn || !String(pn).endsWith('@s.whatsapp.net')) return false;
+  const k = `${connId}:${lid}`;
+  if (_lidMap.get(k) === pn) return false;
+  _lidMap.set(k, pn);
+  try {
+    await pool.query(`INSERT INTO wa_lid_map (connection_id, lid, jid) VALUES ($1,$2,$3)
+      ON CONFLICT (connection_id, lid) DO UPDATE SET jid=EXCLUDED.jid`, [connId, lid, pn]);
+  } catch (e) { console.warn('[wa] aprender lid:', e.message); }
+  return true;
+}
+async function _cargarLidMap(pool, connId) {
+  try {
+    const { rows } = await pool.query(`SELECT lid, jid FROM wa_lid_map WHERE connection_id=$1`, [connId]);
+    rows.forEach(r => _lidMap.set(`${connId}:${r.lid}`, r.jid));
+  } catch (e) { console.warn('[wa] cargar lid map:', e.message); }
+}
 async function _resolverJid(sock, jid, alt) {
   if (!jid || !jid.endsWith('@lid')) return jid;
+  const mapped = _lidMap.get(`${sock?.__connId}:${jid}`);
+  if (mapped) return mapped;
   // WhatsApp ya manda el número real junto al @lid en la propia llave del mensaje
   // (remoteJidAlt): úsalo al instante, sin esperar el mapeo — así nunca se crea el chat duplicado.
   if (alt && String(alt).endsWith('@s.whatsapp.net')) {
-    try { await sock?.signalRepository?.lidMapping?.storeLIDPNMappings?.([{ lid: jid, pn: alt }]); } catch (_) {}
+    if (sock?.__pool) _aprenderLid(sock.__pool, sock.__connId, jid, alt).catch(() => {});
     return alt;
   }
   try {
@@ -123,7 +145,7 @@ async function _marcarEliminado(pool, connId, msgId) {
 async function _guardarMensaje(pool, sock, connId, m, esHistorial) {
   let jid = m.key?.remoteJid || '';
   if (!_esChatValido(jid)) return;
-  jid = await _resolverJid(sock, jid, m.key?.remoteJidAlt);
+  jid = await _resolverJid(sock, jid, m.key?.senderPn || m.key?.remoteJidAlt);
 
   const revoke = m.message?.protocolMessage;
   if (revoke && revoke.type === 0) { await _marcarEliminado(pool, connId, revoke.key?.id); return; }
@@ -338,6 +360,8 @@ async function _connect(pool, id) {
   // más pesado (HistorySyncType.FULL) por default.
   const sock = makeWASocket({ auth: state, syncFullHistory: true, keepAliveIntervalMs: 25000 });
   _socks.set(id, sock);
+  sock.__connId = id; sock.__pool = pool;
+  await _cargarLidMap(pool, id);
 
   sock.ev.on('creds.update', saveCreds);
 
@@ -349,7 +373,7 @@ async function _connect(pool, id) {
     _lidTimer = setTimeout(() => _normalizarLid(pool, sock, id).catch(() => {}), 2000);
   };
   sock.ev.on('lid-mapping.update', _unificarLidPronto);
-  sock.ev.on('chats.phoneNumberShare', _unificarLidPronto);
+  sock.ev.on('chats.phoneNumberShare', async (ev) => { if (ev && await _aprenderLid(pool, id, ev.lid, ev.jid)) _unificarLidPronto(); });
 
   sock.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect, qr } = update;
@@ -409,7 +433,7 @@ async function _connect(pool, id) {
   sock.ev.on('messages.reaction', async (reacciones) => {
     for (const r of (reacciones || [])) {
       try {
-        const jid = await _resolverJid(sock, r.key?.remoteJid || '', r.key?.remoteJidAlt);
+        const jid = await _resolverJid(sock, r.key?.remoteJid || '', r.key?.senderPn || r.key?.remoteJidAlt);
         const msgId = r.key?.id;
         const emoji = r.reaction?.text || '';
         const deMi = !!r.reaction?.key?.fromMe;
@@ -433,10 +457,12 @@ async function _connect(pool, id) {
   const _guardarContactoEv = async (c) => {
     let cjid = String(c?.id || '');
     if (!cjid) return;
+    const lidC = cjid.endsWith('@lid') ? cjid : (c.lid && String(c.lid).endsWith('@lid') ? c.lid : '');
+    const pnC = [c.phoneNumber, c.jid, cjid].find(x => String(x || '').endsWith('@s.whatsapp.net')) || '';
+    if (lidC && pnC && await _aprenderLid(pool, id, lidC, pnC)) _unificarLidPronto();
     if (cjid.endsWith('@lid')) {
-      const real = [c.phoneNumber, c.jid].find(x => String(x || '').endsWith('@s.whatsapp.net'));
-      if (!real) return;
-      cjid = real;
+      if (!pnC) return;
+      cjid = pnC;
     }
     if (c.name) await _guardarContacto(pool, sock, id, cjid, c.name, true);
     else await _guardarContacto(pool, sock, id, cjid, c.notify || c.verifiedName || '', false);

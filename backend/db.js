@@ -1882,6 +1882,7 @@ async function initDb() {
       );
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS wa_contacts_conn_idx ON wa_contacts (connection_id);`);
+    await pool.query(`CREATE TABLE IF NOT EXISTS wa_lid_map (connection_id INTEGER NOT NULL REFERENCES wa_connections(id) ON DELETE CASCADE, lid TEXT NOT NULL, jid TEXT NOT NULL, PRIMARY KEY (connection_id, lid))`);
     // Nombre guardado en la agenda del teléfono (o renombrado a mano): NUNCA lo pisa un pushName.
     await pool.query(`ALTER TABLE wa_contacts ADD COLUMN IF NOT EXISTS nombre_agenda TEXT NOT NULL DEFAULT ''`);
     // Reacciones (👍❤️😂...) — un cupo para "la mía" y uno para "la del otro" por
