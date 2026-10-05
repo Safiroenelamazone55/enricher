@@ -25653,9 +25653,9 @@ ${foot}
     _mbManageClientId = clientId;
     const m = document.createElement('div'); m.id = 'mbx-manage-modal'; m.className = 'fin-pi-backdrop';
     m.onclick = ev => { if (ev.target === m) mbManageClose(); };
-    m.innerHTML = `<div class="fin-pi-box" style="max-width:420px">
-      <div class="dle-hd"><div style="flex:1;min-width:0"><div class="dle-hd__t">Buzón de ${esc(c.nombre)}</div></div><button class="fin-pi-x" onclick="LeadManagerModule.mbManageClose()">✕</button></div>
-      <div id="mbx-manage-body" style="padding:16px 20px 20px">${_mailboxes === null ? '<div class="mbx-sub">Cargando…</div>' : _mbBodyHtml(c)}</div>
+    m.innerHTML = `<div class="fin-pi-box" style="max-width:460px">
+      <div class="fin-pi-box__hd"><h3>Buzón de ${esc(c.nombre)}</h3><button class="fin-pi-x" onclick="LeadManagerModule.mbManageClose()">✕</button></div>
+      <div id="mbx-manage-body" style="padding:4px 22px 22px">${_mailboxes === null ? '<div class="mbx-sub">Cargando…</div>' : _mbBodyHtml(c)}</div>
     </div>`;
     document.body.appendChild(m);
     if (_mailboxes === null) await _mbReload();
@@ -25684,22 +25684,30 @@ ${foot}
     const inner = _mailboxes === null
       ? `<div class="mbx-sub">Cargando…</div>`
       : mb
-        ? `<div class="mbx-row"><span class="${chipCls}">${chipTxt}</span></div>
-           <div class="mbx-mail" title="${esc(mb.email)}">${esc(mb.email || '(pendiente de aprobación)')}</div>
-           <div class="mbx-sub">${esc(provLbl)}${mb.last_error && !needsConsent ? ` · ${esc(mb.last_error)}` : ''}</div>
-           ${consentInfo}
-           ${consentBtn}
-           <div class="mbx-acts">
-             ${!needsConsent ? `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.mbTest(${mb.id})">Probar envío</button>` : ''}
-             ${!needsConsent && mb.email ? `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.mbHealthOpen(${mb.id})" title="Revisa SPF/DKIM/DMARC del dominio y el calentamiento gradual">Salud y calentamiento${mb.ramp_on ? ' <span class="mbh-dot" title="Calentamiento activo"></span>' : ''}</button>` : ''}
-             <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.mbOpen(${c.id})">Cambiar</button>
-             <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.mbSignatureOpen(${mb.id})" title="Editar el nombre de remitente y la firma HTML de este buzón">✎ Remitente/Firma${(mb.signature_html || mb.from_name) ? ' <span style=\"color:#15803D\">●</span>' : ''}</button>
-             ${mb.provider === 'microsoft' && !needsConsent ? `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.mbAdminConsentQuick(${c.id})" title="Si Microsoft pidió aprobación del admin del tenant">📧 Pedir consent al admin</button>` : ''}
-             <button class="btn btn--ghost btn--sm" style="color:var(--danger)" onclick="LeadManagerModule.mbDelete(${mb.id})">Quitar</button>
+        ? `<div class="mbm">
+             <div class="mbm__id">
+               <span class="mbm__av"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 5L2 7"/></svg></span>
+               <div class="mbm__txt"><div class="mbm__mail" title="${esc(mb.email)}">${esc(mb.email || '(pendiente de aprobación)')}</div>
+                 <div class="mbm__prov">${esc(provLbl)}${mb.last_error && !needsConsent ? ` · ${esc(mb.last_error)}` : ''}</div></div>
+               <span class="${chipCls}">${chipTxt}</span>
+             </div>
+             ${consentInfo}
+             ${consentBtn}
+             ${!needsConsent && mb.email ? `<button class="mbm__main" onclick="LeadManagerModule.mbHealthOpen(${mb.id})">
+               <span class="mbm__mic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg></span>
+               <span class="mbm__mt"><b>Salud y calentamiento${mb.ramp_on ? ' <i class="mbm__on">Activo</i>' : ''}</b><small>Revisa SPF, DKIM y DMARC, y controla cuánto envía el buzón cada día</small></span>
+               <span class="mbm__chev"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span></button>` : ''}
+             <div class="mbm__list">
+               ${!needsConsent ? `<button class="mbm__row" onclick="LeadManagerModule.mbTest(${mb.id})"><span class="mbm__ri"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/></svg></span>Probar envío</button>` : ''}
+               <button class="mbm__row" onclick="LeadManagerModule.mbSignatureOpen(${mb.id})" title="Nombre del remitente y firma HTML de este buzón"><span class="mbm__ri"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></span>Remitente y firma${(mb.signature_html || mb.from_name) ? '<i class="mbm__ok">Configurada</i>' : ''}</button>
+               <button class="mbm__row" onclick="LeadManagerModule.mbOpen(${c.id})"><span class="mbm__ri"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg></span>Cambiar de buzón</button>
+               ${mb.provider === 'microsoft' && !needsConsent ? `<button class="mbm__row" onclick="LeadManagerModule.mbAdminConsentQuick(${c.id})" title="Si Microsoft pidió aprobación del administrador"><span class="mbm__ri"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg></span>Pedir aprobación al administrador</button>` : ''}
+             </div>
+             <button class="mbm__del" onclick="LeadManagerModule.mbDelete(${mb.id})"><span class="mbm__ri"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></span>Quitar este buzón</button>
            </div>`
         : `<div class="mbx-sub">Conecta el buzón real de este cliente (jenny@sudominio…) para enviar, leer respuestas y rebotes desde Nova.</div>
            <button class="btn btn--primary btn--sm" style="margin-top:8px" onclick="LeadManagerModule.mbOpen(${c.id})">Conectar buzón</button>`;
-    return `<div class="mbx">${inner}</div>`;
+    return `<div class="mbx mbx--flat">${inner}</div>`;
   }
   // ── WhatsApp del cliente outbound: mismo patrón que el buzón — un modal desde el
   // "⋮" en vez de vivir suelto, y el ítem del menú dice "Conectar"/"Editar" según si
