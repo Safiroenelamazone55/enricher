@@ -516,6 +516,27 @@ app.get('/api/auth/google/callback', (req, res, next) => {
 
 // ── GET /api/auth/me ──────────────────────────────────────────────
 // Returns the authenticated user with workspace info.
+// ── Zona horaria por persona ─────────────────────────────────────────
+const _TZ_DEFAULT = 'America/Lima';
+function _validTz(tz) { try { new Intl.DateTimeFormat('en-CA', { timeZone: String(tz) }); return true; } catch (_) { return false; } }
+async function _tzOfUser(userId) {
+  try {
+    if (!userId) return _TZ_DEFAULT;
+    const { rows } = await pool.query('SELECT timezone FROM users WHERE id=$1', [userId]);
+    const tz = rows[0] && rows[0].timezone;
+    return (tz && _validTz(tz)) ? tz : _TZ_DEFAULT;
+  } catch (_) { return _TZ_DEFAULT; }
+}
+app.put('/api/me/timezone', async (req, res) => {
+  if (!(req.isAuthenticated && req.isAuthenticated() && req.user)) return res.status(401).json({ error: 'No autenticado' });
+  const tz = String((req.body && req.body.timezone) || '').trim();
+  if (!tz || !_validTz(tz)) return res.status(400).json({ error: 'Zona horaria no válida' });
+  try {
+    await pool.query('UPDATE users SET timezone=$1 WHERE id=$2', [tz, req.user.id]);
+    res.json({ ok: true, timezone: tz });
+  } catch (e) { res.status(500).json({ error: 'No se pudo guardar' }); }
+});
+
 app.get('/api/auth/me', async (req, res) => {
   if (req.isAuthenticated && req.isAuthenticated() && req.user) {
     const { id, email, name, avatar, workspace_id } = req.user;
@@ -549,7 +570,8 @@ app.get('/api/auth/me', async (req, res) => {
         memberId     = tm[0].id;
       }
     } catch (_) {}
-    return res.json({ loggedIn: true, id, email, name, avatar, workspace_id, workspaceName, companyName, companyLogo, isOwner, memberNombre, memberRol, memberId });
+    const timezone = await _tzOfUser(id);
+    return res.json({ loggedIn: true, id, email, name, avatar, workspace_id, workspaceName, companyName, companyLogo, isOwner, memberNombre, memberRol, memberId, timezone });
   }
   res.json({ loggedIn: false });
 });
@@ -2817,7 +2839,7 @@ async function _archiveOldWeeklyTasksTick() {
                 OR parent_task_id IN (SELECT id FROM tasks p WHERE p.archivada=TRUE AND (p.semana_week IS NOT NULL OR p.billing_week IS NOT NULL OR p.recur_template_id IS NOT NULL))
           )
           -- "hoy" en hora de Lima (la usuaria), no en UTC: antes archivaba a las 7 p. m. del domingo
-          AND deadline IS NOT NULL AND deadline < (NOW() AT TIME ZONE 'America/Lima')::date
+          AND deadline IS NOT NULL AND deadline < (NOW() AT TIME ZONE COALESCE((SELECT u.timezone FROM users u WHERE u.id = tasks.user_id), 'America/Lima'))::date
         RETURNING id, titulo`);
     if (r.rowCount) console.log(`[archivar-semanal] ${r.rowCount} tarea(s) semanal(es) archivada(s): ${r.rows.map(x => x.titulo).join(', ')}`);
     if (!r.rowCount) break;
@@ -4664,6 +4686,7 @@ app.get('/api/lm/tasks/inbox', requireAuth, async (req, res) => {
          AND (m.scheduled_at IS NULL OR m.scheduled_at <= NOW() + interval '3 days')
        ORDER BY m.scheduled_at ASC NULLS FIRST`, [uid]);
 
+    const _tz = await _tzOfUser(req.user && req.user.id);
     // 3. VENCIDAS (actividades pendientes con fecha pasada) — excluir contactos con
     //    respuesta pendiente (aparecen prioritariamente ahí, no se duplican).
     const { rows: over } = await pool.query(`
@@ -4671,8 +4694,8 @@ app.get('/api/lm/tasks/inbox', requireAuth, async (req, res) => {
              k.nombre, k.apellido, k.email
         FROM activities a JOIN lm_contacts k ON k.id=a.contact_id
        WHERE a.user_id=$1 AND a.tipo IN ('tarea','followup','reunion','llamada','email_enviado','linkedin_msg','linkedin_connect','linkedin_visita','nota') AND a.estado='pendiente'
-         AND (a.fecha AT TIME ZONE 'UTC')::date < (NOW() AT TIME ZONE 'America/Lima')::date
-       ORDER BY a.fecha ASC`, [uid]);
+         AND (a.fecha AT TIME ZONE 'UTC')::date < (NOW() AT TIME ZONE $2::text)::date
+       ORDER BY a.fecha ASC`, [uid, _tz]);
 
     // 4. HOY (actividades pendientes con fecha de hoy y no vencidas aún).
     const { rows: today } = await pool.query(`
@@ -4680,8 +4703,8 @@ app.get('/api/lm/tasks/inbox', requireAuth, async (req, res) => {
              k.nombre, k.apellido, k.email
         FROM activities a JOIN lm_contacts k ON k.id=a.contact_id
        WHERE a.user_id=$1 AND a.tipo IN ('tarea','followup','reunion','llamada','email_enviado','linkedin_msg','linkedin_connect','linkedin_visita','nota') AND a.estado='pendiente'
-         AND (a.fecha AT TIME ZONE 'UTC')::date = (NOW() AT TIME ZONE 'America/Lima')::date
-       ORDER BY a.fecha ASC`, [uid]);
+         AND (a.fecha AT TIME ZONE 'UTC')::date = (NOW() AT TIME ZONE $2::text)::date
+       ORDER BY a.fecha ASC`, [uid, _tz]);
 
     // 4b. PRÓXIMAS (tareas pendientes de los próximos 7 días, con su fecha).
     const { rows: upcoming } = await pool.query(`
@@ -4689,9 +4712,9 @@ app.get('/api/lm/tasks/inbox', requireAuth, async (req, res) => {
              k.nombre, k.apellido, k.email
         FROM activities a JOIN lm_contacts k ON k.id=a.contact_id
        WHERE a.user_id=$1 AND a.tipo IN ('tarea','followup','reunion','llamada','email_enviado','linkedin_msg','linkedin_connect','linkedin_visita','nota') AND a.estado='pendiente'
-         AND (a.fecha AT TIME ZONE 'UTC')::date > (NOW() AT TIME ZONE 'America/Lima')::date
-         AND (a.fecha AT TIME ZONE 'UTC')::date <= (NOW() AT TIME ZONE 'America/Lima')::date + 7
-       ORDER BY a.fecha ASC`, [uid]);
+         AND (a.fecha AT TIME ZONE 'UTC')::date > (NOW() AT TIME ZONE $2::text)::date
+         AND (a.fecha AT TIME ZONE 'UTC')::date <= (NOW() AT TIME ZONE $2::text)::date + 7
+       ORDER BY a.fecha ASC`, [uid, _tz]);
 
     // 5. FALLOS Y BLOQUEOS — mensajes que fallaron o rebotaron en los últimos 14 días.
     const { rows: fails } = await pool.query(`

@@ -1,5 +1,6 @@
 // Fecha de hoy en hora LOCAL (YYYY-MM-DD). new Date().toISOString() es UTC: desde las 19:00 en Lima ya marcaba el día siguiente.
-function _localISO(d) { d = d || new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function _userTZ() { return (window._authUser && window._authUser.timezone) || 'America/Lima'; }
+function _localISO(d) { try { return (d || new Date()).toLocaleDateString('en-CA', { timeZone: _userTZ() }); } catch (_) { d = d || new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); } }
 'use strict';
 console.log('[Enricher] app.js v2026-05-28-B loaded');
 
@@ -9949,10 +9950,8 @@ const DashboardModule = (() => {
     _allTasksCache = allTasks || [];
     _expandedTaskId = null;
     const allTasksById = new Map((allTasks || []).map(t => [t.id, t]));
-    const _d0 = new Date();
-    const todayStr    = _d0.toISOString().split('T')[0];
-    const _d1 = new Date(_d0); _d1.setDate(_d1.getDate() + 1);
-    const tomorrowStr = _d1.toISOString().split('T')[0];
+    const todayStr    = _localISO();
+    const tomorrowStr = _localISO(new Date(Date.now() + 86400000));
     const _me = (window._authUser?.memberNombre || window._authUser?.name || '').toLowerCase();
     const active = (allTasks || []).filter(t =>
       t.estado !== 'completado' && t.estado !== 'cancelado' && !t.archivada &&
@@ -32647,7 +32646,34 @@ const WorkspaceModule = (() => {
   // Cambia de seccion en Empresa. Se cargan los datos de integraciones/usuarios
   // solo al entrar, no al abrir la pagina.
   let _teamParent = null, _teamNext = null;
+  // ── Zona horaria personal ──
+  function _paintTz() {
+    const sel = $('cfg-tz'); if (!sel) return;
+    const tz = _userTZ();
+    if (![...sel.options].some(o => o.value === tz)) { const o = document.createElement('option'); o.value = tz; o.textContent = tz; sel.appendChild(o); }
+    sel.value = tz;
+  }
+  async function saveTimezone(tz) {
+    const hint = $('cfg-tz-hint');
+    try {
+      const res = await apiFetch(`${API.replace(/\/api$/, '')}/api/me/timezone`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ timezone: tz }) });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Error');
+      if (window._authUser) window._authUser.timezone = tz;
+      if (hint) { hint.textContent = '✓ Guardada — recargando…'; hint.className = 'fin-cfg-hint'; }
+      setTimeout(() => location.reload(), 700);   // todos los módulos recalculan su "hoy" con la nueva zona
+    } catch (e) { if (hint) { hint.textContent = 'No se pudo guardar: ' + e.message; hint.className = 'fin-cfg-hint fin-cfg-hint--err'; } }
+  }
+  function detectTimezone() {
+    let tz = ''; try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch (_) {}
+    if (!tz) { const hint = $('cfg-tz-hint'); if (hint) hint.textContent = 'No se pudo detectar'; return; }
+    const sel = $('cfg-tz');
+    if (sel && ![...sel.options].some(o => o.value === tz)) { const o = document.createElement('option'); o.value = tz; o.textContent = tz; sel.appendChild(o); }
+    if (sel) sel.value = tz;
+    saveTimezone(tz);
+  }
+
   function setSection(sec) {
+    if (sec === 'apariencia') _paintTz();
     // El nav ya no vive dentro de la pagina (.cfg__navb) -- es el propio
     // sidebar del modulo Configuracion (#snav-body-config .snav-item), como
     // cualquier otro modulo. Pedido explicito: "no debe haber dos [barras]".
@@ -32809,7 +32835,7 @@ const WorkspaceModule = (() => {
     }
   }
 
-  return { openInvite, closeInvite, resetInvite, generateInvite, copyInvite, openNameModal, closeNameModal, load, setSection, saveName, onLogoFile, onLogoUrl, clearLogo };
+  return { openInvite, closeInvite, resetInvite, generateInvite, copyInvite, openNameModal, closeNameModal, load, setSection, saveTimezone, detectTimezone, saveName, onLogoFile, onLogoUrl, clearLogo };
 })();
 
 // =================================================================

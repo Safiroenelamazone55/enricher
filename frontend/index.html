@@ -2082,6 +2082,39 @@
   <div class="cfg__panel">
       <section class="cfg__sec" data-sec="apariencia">
 
+    <!-- Zona horaria de esta persona: define su "hoy" en todos los módulos -->
+    <div class="form-row">
+      <label class="form-label">Mi zona horaria</label>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <select id="cfg-tz" class="form-input" style="max-width:340px" onchange="WorkspaceModule.saveTimezone(this.value)">
+            <option value="America/Lima">Lima, Bogotá, Quito (UTC−5)</option>
+            <option value="America/Mexico_City">Ciudad de México (UTC−6)</option>
+            <option value="America/Bogota">Bogotá (UTC−5)</option>
+            <option value="America/Caracas">Caracas (UTC−4)</option>
+            <option value="America/La_Paz">La Paz (UTC−4)</option>
+            <option value="America/Santiago">Santiago de Chile</option>
+            <option value="America/Asuncion">Asunción</option>
+            <option value="America/Argentina/Buenos_Aires">Buenos Aires (UTC−3)</option>
+            <option value="America/Sao_Paulo">São Paulo (UTC−3)</option>
+            <option value="America/Montevideo">Montevideo</option>
+            <option value="America/New_York">Nueva York / Miami (Este de EE. UU.)</option>
+            <option value="America/Chicago">Chicago (Centro de EE. UU.)</option>
+            <option value="America/Denver">Denver (Montaña de EE. UU.)</option>
+            <option value="America/Los_Angeles">Los Ángeles (Pacífico de EE. UU.)</option>
+            <option value="America/Panama">Panamá</option>
+            <option value="America/Guatemala">Guatemala / Centroamérica</option>
+            <option value="Europe/Madrid">Madrid (Europa central)</option>
+            <option value="Europe/London">Londres</option>
+            <option value="Europe/Lisbon">Lisboa</option>
+            <option value="Asia/Kolkata">India (UTC+5:30)</option>
+            <option value="UTC">UTC</option>
+        </select>
+        <button class="btn btn--ghost btn--sm" type="button" onclick="WorkspaceModule.detectTimezone()">Usar la de este equipo</button>
+        <span class="fin-cfg-hint" id="cfg-tz-hint"></span>
+      </div>
+      <div class="fin-cfg-hint" style="margin-top:6px">Define qué día es "hoy" para ti: tareas vencidas, de hoy y próximas, y el archivado de tareas semanales. Cada miembro elige la suya.</div>
+    </div>
+
     <!-- Logo upload -->
     <div class="form-row">
       <label class="form-label">Logo de la empresa</label>
@@ -3244,7 +3277,7 @@
   })();
 </script>
 
-<script src="app.js?v=2026100430"></script>
+<script src="app.js?v=2026100431"></script>
 <div id="task-quick-edit" style="display:none;position:fixed;z-index:9999"></div>
 </body>
 </html>

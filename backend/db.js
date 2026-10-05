@@ -133,6 +133,9 @@ async function initDb() {
       CREATE INDEX IF NOT EXISTS users_google_id_idx ON users (google_id);
     `);
 
+    // Zona horaria de cada persona (la elige en Configuración); define su "hoy" en todo el sistema.
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS timezone TEXT`);
+
     // ── verifications table ──────────────────────────────────
     await pool.query(`
       CREATE TABLE IF NOT EXISTS verifications (
