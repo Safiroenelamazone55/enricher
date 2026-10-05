@@ -17450,3 +17450,6 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .cp-go:hover { background: var(--surface-hover); color: #0A66C2; }
 .cp-f--go { min-width: 0; }
 .cp-f--go .cp-f__ro { display: block; max-width: 100%; }
+.cp-f__row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.cp-f__row .cp-f__i, .cp-f__row .cp-f__ro { flex: 1; min-width: 0; padding-right: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+.cp-f__row .cp-go { position: static; flex-shrink: 0; border: none; cursor: pointer; font-family: inherit; }
