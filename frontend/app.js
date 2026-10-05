@@ -11779,6 +11779,22 @@ const TasksModule = (() => {
     else render();
   }
 
+  // Subtareas activas de una tarea (el tiempo se mide en ellas, no en la tarea madre)
+  function getSubtasks(id) { return _tasks.filter(t => t.parent_task_id === id && !t.archivada && t.estado !== 'cancelado'); }
+  function getTask(id) { return _tasks.find(t => t.id === id) || null; }
+  async function createSubtask(parentId, titulo) {
+    const p = _tasks.find(t => t.id === parentId); if (!p) throw new Error('Tarea no encontrada');
+    const d = v => v ? String(v).split('T')[0] : null;
+    const body = { titulo, project_id: p.project_id, parent_task_id: parentId, estado: 'pendiente', prioridad: p.prioridad || 'media',
+                   responsable: p.responsable || '', responsables: p.responsables || [], deadline: d(p.deadline), fecha_inicio: d(p.fecha_inicio) };
+    const res = await apiFetch(`${API}/mgmt/tasks`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'No se pudo crear la subtarea');
+    const t = await res.json();
+    if (t && t.id) _tasks.push(Object.assign({ project_nombre: p.project_nombre, client_nombre: p.client_nombre }, t));
+    if (_tdCurrentId === parentId) _renderTaskDetail(parentId); else _rerender();
+    return t;
+  }
+
   // ── Sugerencias del buscador: tareas y subtareas disponibles; al elegir una, salta a ella y la resalta ──
   let _sgItems = [], _sgIdx = -1;
   function _sgScope() {
@@ -12130,6 +12146,7 @@ const TasksModule = (() => {
                         : '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6.3" stroke="#CFCAC3" stroke-width="1.4"/></svg>'}
                     </span>
                     <span class="tskd__sub-txt" onclick="TasksModule._renderTaskDetail(${s.id})">${esc(s.titulo)}</span>
+                    <span class="tskd__sub-timer"><span class="task-elapsed" data-timer-display="${s.id}" hidden></span>${_timerBtn(s.id)}</span>
                   </div>`).join('')}
               </div>
               <button class="tskd__add-sub" onclick="TasksModule.openDrawer(null,${t.project_id || 'null'},${id})">
@@ -14249,7 +14266,7 @@ const TasksModule = (() => {
   return {
     copiarSemanaAnterior,
     load, filter, setFilterMember, setFilterFecha, render,
-    setProjectFilter, clearProjectFilter, refreshProjectHeader, jumpToTask, _sgHover,
+    setProjectFilter, clearProjectFilter, refreshProjectHeader, jumpToTask, getSubtasks, getTask, createSubtask, _sgHover,
     openTaskPage, openTaskPageNewTab, closeTaskPage, _renderTaskDetail, _tdSaveField, _tdSendComment,
     openFilterMenu, toggleFilterOpt, clearFilter,
     setView, calPrev, calNext, setCalView, loadForCalPane,
@@ -40618,7 +40635,44 @@ const TimerModule = (() => {
     CalendarModule.tickRunning();
   }
 
+  // La tarea con subtareas no mide tiempo por sí misma: se elige una subtarea (o se crea una nueva)
+  function _openSubtaskPicker(parentId, subs) {
+    document.getElementById('tt-sub-picker')?.remove();
+    const parent = TasksModule.getTask(parentId) || {};
+    const m = document.createElement('div'); m.id = 'tt-sub-picker'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) m.remove(); };
+    const dot = e => ({ completado: '#22C55E', en_progreso: '#3B82F6', bloqueado: '#EF4444' }[e] || '#CFCAC3');
+    m.innerHTML = `<div class="fin-pi-box" style="max-width:420px">
+      <div class="fin-pi-box__hd"><h3>¿En qué subtarea vas a trabajar?</h3><button class="fin-pi-x" onclick="document.getElementById('tt-sub-picker').remove()">✕</button></div>
+      <div class="ttsp__parent">${esc(parent.titulo || '')}</div>
+      <div class="ttsp__list">${subs.map(t => `<button class="ttsp__it" onclick="TimerModule._pickSub(${t.id})"><span class="ttsp__dot" style="background:${dot(t.estado)}"></span><span class="ttsp__t">${esc(t.titulo)}</span><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg></button>`).join('')}</div>
+      <div class="ttsp__new"><div class="ttsp__lbl">O crea una subtarea nueva</div>
+        <div class="ttsp__row"><input id="ttsp-new" class="form-input" placeholder="Nombre de la subtarea…" autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();TimerModule._createSubAndStart(${parentId})}"><button class="btn btn--primary btn--sm" onclick="TimerModule._createSubAndStart(${parentId})">Crear e iniciar</button></div></div>
+    </div>`;
+    document.body.appendChild(m);
+    setTimeout(() => document.getElementById('ttsp-new')?.focus(), 60);
+  }
+  function _pickSub(subId) {
+    document.getElementById('tt-sub-picker')?.remove();
+    const t = TasksModule.getTask(subId);
+    start(subId, t ? { titulo: t.titulo, ctxLabel: t.project_nombre || '', cliente: t.client_nombre || '' } : undefined);
+  }
+  async function _createSubAndStart(parentId) {
+    const inp = document.getElementById('ttsp-new'); const titulo = (inp && inp.value || '').trim();
+    if (!titulo) { inp && inp.focus(); return; }
+    try {
+      const t = await TasksModule.createSubtask(parentId, titulo);
+      document.getElementById('tt-sub-picker')?.remove();
+      if (t && t.id) start(t.id, { titulo, ctxLabel: (TasksModule.getTask(parentId) || {}).project_nombre || '', cliente: (TasksModule.getTask(parentId) || {}).client_nombre || '' });
+    } catch (e) { showBanner(e.message || 'No se pudo crear la subtarea', 'error'); }
+  }
+
   function toggleTask(taskId) {
+    // Tarea con subtareas: el tiempo va en una subtarea (si ya está corriendo en la madre, se puede detener)
+    if (!(_entryId && _taskId === taskId)) {
+      let subs = []; try { subs = TasksModule.getSubtasks(taskId); } catch (_) {}
+      if (subs.length) { _openSubtaskPicker(taskId, subs); return; }
+    }
     // Feedback instantáneo en el botón clicado: antes esperaba el round-trip
     // al servidor (start/stop) para recién ahí cambiar el ícono, y se sentía
     // lento. _updateWidget() (tras la respuesta real) corrige cualquier caso
@@ -41562,7 +41616,7 @@ const TimerModule = (() => {
     document.body.appendChild(back);
   }
 
-  return { init, start, stop, startFromTask, toggleTask, toggleOppTask, loadReport, deleteEntry, connectExtension, setPeriod, navPeriod, setCustom, setTtMember, setTtClient, setTtProject, clearTtFilters, printReport, syncButtons: _updatePlayButtons, railToggle,
+  return { init, start, stop, startFromTask, toggleTask, _pickSub, _createSubAndStart, toggleOppTask, loadReport, deleteEntry, connectExtension, setPeriod, navPeriod, setCustom, setTtMember, setTtClient, setTtProject, clearTtFilters, printReport, syncButtons: _updatePlayButtons, railToggle,
     openEntryEdit, closeEntryEdit, saveEntryEdit, approveEntry, approveAll, unapproveAll };
 })();
 
