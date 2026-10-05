@@ -255,8 +255,12 @@ function catchAllWarn() {
  * Fetch wrapper that always sends cookies.
  * Use instead of bare fetch() for all API calls.
  */
+let _netInflight = 0, _netBarT = null;
+function _netStart() { _netInflight++; if (_netInflight === 1) _netBarT = setTimeout(() => document.getElementById('nova-topbar')?.classList.add('on'), 500); }
+function _netEnd() { _netInflight = Math.max(0, _netInflight - 1); if (!_netInflight) { clearTimeout(_netBarT); _netBarT = null; document.getElementById('nova-topbar')?.classList.remove('on'); } }
 function apiFetch(url, opts = {}) {
-  return fetch(url, { credentials: 'include', ...opts });
+  _netStart();
+  return fetch(url, { credentials: 'include', ...opts }).finally(_netEnd);
 }
 
 function applyBranding({ companyLogo, workspaceName } = {}) {
@@ -458,6 +462,7 @@ async function initAuth() {
       } else if (taskParam) {
         await TasksModule.openTaskPage(+taskParam);
       }
+      if (window.__novaBootDone) window.__novaBootDone();   // la sección ya está activa: se quita la pantalla de carga
       await FxRatesModule.load();
       ChatModule.init();
       TimerModule.init();
@@ -494,9 +499,11 @@ async function initAuth() {
 
       authWall.classList.remove('hidden');
       appShell.classList.add('hidden');
+      if (window.__novaBootDone) window.__novaBootDone();
     }
 
   } catch (err) {
+    if (window.__novaBootDone) window.__novaBootDone();
     authBar.innerHTML = `<span style="font-size:.78rem;color:var(--err)">⚠ Can't reach server</span>`;
     authWall.classList.remove('hidden');
     appShell.classList.add('hidden');
