@@ -17526,3 +17526,12 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .tpjh__due--late { background: #FDE2E0; color: #C4342B; }
 .tpjh__names { display: block; font-size: .72rem; font-weight: 500; color: var(--text-muted); margin-top: 3px; }
 .tpjh__stats { gap: 34px !important; }
+
+/* Tareas: iconos de vista en la fila de filtros, a la derecha */
+.tv-row { display: flex; align-items: flex-start; gap: 12px; }
+.tv-row > .clients-toolbar { flex: 1; min-width: 0; }
+.tv-row > .view-tabs { margin: 10px 0 0 auto; padding: 3px; border: none; gap: 2px; display: flex; align-items: center; background: var(--surface-secondary); flex-shrink: 0; }
+.tv-row .view-tab { padding: 6px 9px; border: none; border-bottom: none; margin: 0; background: transparent; color: var(--text-muted); display: inline-flex; align-items: center; }
+.tv-row .view-tab:hover { color: var(--text-primary); }
+.tv-row .view-tab.active { background: var(--surface); color: var(--primary-hover); box-shadow: 0 1px 2px rgba(20,33,27,.1); }
+.tv-row .view-tab svg { opacity: 1; }

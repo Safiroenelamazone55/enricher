@@ -803,6 +803,7 @@ function _applyHomeMode(on) {
 // vuelva al mismo proyecto) — global porque se llama desde onclick de varios
 // módulos (Dashboard, Mi trabajo, Proyectos).
 function abrirVentanaProyecto(pid) {
+  window.__projLock = { pid, until: Date.now() + 8000 }; // un load() de Tareas en curso no debe quitar el filtro
   document.querySelector('.snav-item[data-tab="mgmt-tasks"]')?.click();
   setTimeout(() => TasksModule.setProjectFilter(pid), 250);
 }
@@ -11700,8 +11701,9 @@ const TasksModule = (() => {
     // Un load() "normal" (click en Tareas desde el menu) siempre vuelve a la
     // vista sin filtrar — setProjectFilter() se llama DESPUES de load() para
     // volver a aplicar el filtro de proyecto cuando corresponde.
-    _filterProjectId = null;
-    _projectHeaderHide();
+    const _lock = (window.__projLock && window.__projLock.until > Date.now()) ? window.__projLock.pid : null;
+    _filterProjectId = _lock;
+    if (!_lock) _projectHeaderHide();
     // Idem para la pagina de detalle de tarea: un load() normal siempre
     // vuelve al Kanban/Lista, nunca se queda una tarjeta vieja tapando todo.
     if (_tdCurrentId != null) closeTaskPage();
@@ -11717,7 +11719,15 @@ const TasksModule = (() => {
       _tasks       = await tasksRes.json();
       _teamMembers = teamRes.ok ? await teamRes.json() : [];
       _populateMemberFilter();
-      _applyView();
+      if (_lock) {
+        // vino de abrirVentanaProyecto: re-aplica el filtro y la cabecera del proyecto tras cargar
+        _filterProjectId = _lock; _currentView = 'kanban';
+        document.querySelectorAll('#tasks-view-tabs .view-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.view === 'kanban'));
+        _applyView();
+        _renderProjectHeader(_lock);
+      } else {
+        _applyView();
+      }
     } catch (e) {
       console.error('[tasks] load error:', e);
       loading.innerHTML = '<span style="color:var(--err)">Error al cargar tareas.</span>';
