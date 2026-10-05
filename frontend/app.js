@@ -29948,14 +29948,14 @@ ${foot}
             ${F('seniority', 'Seniority', c.seniority)}${F('departamento', 'Departamento', c.departamento)}
             ${F('linkedin', 'LinkedIn', c.linkedin)}
           </div></div>
-          <div class="cp-card"><div class="cp-card__t">Ubicación</div><div class="cp-fields">
-            ${F('ciudad', 'Ciudad', c.ciudad)}${F('region', 'Región', c.region)}${F('pais', 'País', c.pais)}
-          </div><div class="cp-map" id="cp-map"></div></div>
           <div class="cp-card"><div class="cp-card__t">Empresa</div><div class="cp-fields">
             <label class="cp-f cp-f--full"><span class="cp-f__l">Empresa</span><select class="cp-f__i" data-f="company_id" onchange="LeadManagerModule.cpSave(${id})">${coOpts}</select></label>
             ${c.company_id ? `<div class="cp-f cp-f--full"><button class="cp-golink" onclick="LeadManagerModule.openCompanyPage(${c.company_id})">Ver ficha de la empresa ›</button></div>` : ''}
             ${F('fuente', 'Fuente', c.fuente)}
           </div></div>
+          <div class="cp-card cp-card--wide"><div class="cp-card__t">Ubicación</div><div class="cp-fields">
+            ${F('ciudad', 'Ciudad', c.ciudad)}${F('region', 'Región', c.region)}${F('pais', 'País', c.pais)}
+          </div><div class="cp-map" id="cp-map"></div></div>
 `;
     return `<div class="cp-info">${blocks}</div>${rawKeys.length ? `<div class="cp-card"><div class="cp-card__t">Datos importados (sin mapear)</div><div class="cp-fields">${rawKeys.map(k => `<div class="cp-f"><span class="cp-f__l">${esc(k)}</span><span class="cp-f__ro">${esc(raw[k])}</span></div>`).join('')}</div></div>` : ''}`;
   }
