@@ -25960,7 +25960,7 @@ ${foot}
         </div>`;
       const pend = d.checks.filter(x => x.estado !== 'ok').length;
       box.innerHTML = `<div class="mbh-sum mbh-sum--${d.resumen.estado}"><span class="mbh-ic">${ic[d.resumen.estado]}</span>${esc(d.resumen.texto)} <em>· ${esc(d.domain)}</em></div>
-        ${d.dnsHost ? `<div class="mbh-p" style="margin-top:-2px">Los DNS de este dominio los administra <b>${esc(d.dnsHost)}</b>: ahí se publican los registros.</div>` : ''}
+        ${pend ? `<div class="mbh-why"><b>¿Por qué me lleva a ${esc(d.dnsHost || 'otro sitio')}?</b> Tu buzón está en <b>${esc(d.proveedorNombre || 'tu proveedor de correo')}</b>, pero los registros de seguridad (SPF, DKIM, DMARC) no se guardan en el correo: se publican en el <b>DNS del dominio</b>${d.dnsHost ? ', que está en <b>' + esc(d.dnsHost) + '</b>' : ''}. Son dos sitios distintos. Necesitas entrar al DNS con la cuenta que administra el dominio; si no la tienes tú, usa el botón <i>Copiar mensaje para el administrador</i>.</div>` : ''}
         <div class="mbh-list">${d.checks.map(x => `<div class="mbh-row"><span class="mbh-ic mbh-ic--${x.estado}">${ic[x.estado]}</span><div class="mbh-rowbody"><b>${esc(x.label)}</b><div class="mbh-d">${esc(x.detalle)}</div>${fixBlock(x)}</div></div>`).join('')}</div>
         ${pend ? `<div class="mbh-admin"><div><b>¿No administras tú el dominio?</b><div class="mbh-d">Copia un mensaje listo para enviarle a quien lo administre.</div></div><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.mbhCopyAdmin()">Copiar mensaje para el administrador</button></div>
         <div class="mbh-p">Después de publicar los cambios, pulsa <b>Volver a revisar</b>. Pueden tardar de unos minutos a unas horas en verse.</div>` : ''}`;

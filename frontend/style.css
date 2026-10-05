@@ -17744,3 +17744,5 @@ tr.tk-flash > td { background-color: #FEF9C3; animation: none; }
 .mbm__del { border: 1px solid var(--border); color: var(--danger); }
 .mbm__del .mbm__ri { color: var(--danger); }
 .mbm__del:hover { background: var(--danger-soft, #FDEBEA); }
+
+.mbh-why { margin: 0 0 12px; padding: 10px 12px; background: #EAF2FF; color: #1E3A5F; font-size: .8rem; line-height: 1.5; border-left: 3px solid #3B82F6; }
