@@ -29894,7 +29894,6 @@ ${foot}
     const eStyle = STAGE_STYLES[c.estado] || 'background:#F1EFEB;color:#475569';
     const loc = [c.ciudad, c.pais].filter(Boolean).join(', ');
     const F = (f, label, val) => `<label class="cp-f"><span class="cp-f__l">${label}</span><input class="cp-f__i" data-f="${f}" value="${esc(val || '')}" placeholder="＋ Añadir" onchange="LeadManagerModule.cpSave(${id})"></label>`;
-    const FB = (f, label, val, btns) => `<label class="cp-f"><span class="cp-f__l">${label}</span><span class="cp-f__row"><input class="cp-f__i" data-f="${f}" value="${esc(val || '')}" placeholder="＋ Añadir" onchange="LeadManagerModule.cpSave(${id})">${val ? btns : ''}</span></label>`;
     const coOpts = `<option value="">— Sin empresa —</option>` + _companies.map(co => `<option value="${co.id}"${String(c.company_id) === String(co.id) ? ' selected' : ''}>${esc(co.nombre || co.dominio)}</option>`).join('');
     const raw = (c.raw && typeof c.raw === 'object') ? c.raw : {};
     const rawKeys = Object.keys(raw).filter(k => raw[k]);
@@ -29940,6 +29939,7 @@ ${foot}
   function _cpInfoHtml(c) {
     const id = c.id;
     const F = (f, label, val) => `<label class="cp-f"><span class="cp-f__l">${label}</span><input class="cp-f__i" data-f="${f}" value="${esc(val || '')}" placeholder="＋ Añadir" onchange="LeadManagerModule.cpSave(${id})"></label>`;
+    const FB = (f, label, val, btns) => `<label class="cp-f"><span class="cp-f__l">${label}</span><span class="cp-f__row"><input class="cp-f__i" data-f="${f}" value="${esc(val || '')}" placeholder="＋ Añadir" onchange="LeadManagerModule.cpSave(${id})">${val ? btns : ''}</span></label>`;
     const coOpts = `<option value="">— Sin empresa —</option>` + _companies.map(co => `<option value="${co.id}"${String(c.company_id) === String(co.id) ? ' selected' : ''}>${esc(co.nombre || co.dominio)}</option>`).join('');
     const raw = (c.raw && typeof c.raw === 'object') ? c.raw : {};
     const rawKeys = Object.keys(raw).filter(k => raw[k]);
