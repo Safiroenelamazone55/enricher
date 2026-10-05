@@ -438,7 +438,8 @@ async function initAuth() {
       let _initTab = 'home';
       try { const saved = localStorage.getItem('kw_activeTab'); if (saved && saved !== 'home' && document.querySelector(`.snav-item[data-tab="${saved}"]`)) _initTab = saved; } catch (_) {}
       if (tabParam && document.querySelector(`.snav-item[data-tab="${tabParam}"]`)) _initTab = tabParam;
-      if (projectParam || taskParam) _initTab = 'mgmt-tasks';
+      // Un ?project=/?task= viejo no debe pisar una sección explícita distinta de Tareas
+      if ((projectParam || taskParam) && (!tabParam || tabParam === 'mgmt-tasks')) _initTab = 'mgmt-tasks';
       // Refleja dónde se aterrizó de verdad y limpia project/task (deep-links de
       // un solo uso — un F5 no debe repetir la acción de abrir ese proyecto/tarea).
       history.replaceState(null, '', window.location.pathname + (_initTab !== 'home' ? `?tab=${_initTab}` : ''));
@@ -658,6 +659,9 @@ function _tabUrlHref(tabName) {
   const url = new URL(window.location.href);
   if (tabName && tabName !== 'home') url.searchParams.set('tab', tabName);
   else url.searchParams.delete('tab');
+  // ?project= / ?task= solo valen para la página que los puso: al cambiar de sección se quitan,
+  // si no, un F5 en WhatsApp (u otra sección) volvía a abrir ese proyecto.
+  url.searchParams.delete('project'); url.searchParams.delete('task');
   return url.pathname + url.search + url.hash;
 }
 window.addEventListener('popstate', () => {
