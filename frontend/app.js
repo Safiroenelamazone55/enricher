@@ -29922,7 +29922,6 @@ ${foot}
       <div class="cp-tabs">
             <button class="cp-tab${_cpTab === 'informacion' ? ' active' : ''}" data-t="informacion" onclick="LeadManagerModule.cpTab('informacion')">Información</button>
             <button class="cp-tab${_cpTab === 'seguimiento' ? ' active' : ''}" data-t="seguimiento" onclick="LeadManagerModule.cpTab('seguimiento')">Seguimiento</button>
-            <button class="cp-tab${_cpTab === 'canales' ? ' active' : ''}" data-t="canales" onclick="LeadManagerModule.cpTab('canales')">Canales</button>
             <button class="cp-tab${_cpTab === 'actividad' ? ' active' : ''}" data-t="actividad" onclick="LeadManagerModule.cpTab('actividad')">Actividad</button>
             <button class="cp-tab${_cpTab === 'reuniones' ? ' active' : ''}" data-t="reuniones" onclick="LeadManagerModule.cpTab('reuniones')">Reuniones</button>
             <button class="cp-tab${_cpTab === 'tareas' ? ' active' : ''}" data-t="tareas" onclick="LeadManagerModule.cpTab('tareas')">Tareas</button>
@@ -30177,7 +30176,6 @@ ${foot}
   function _cpTabContent(c) {
     if (!c) return '';
     if (_cpTab === 'seguimiento') return _cpSeguimientoHtml(c);
-    if (_cpTab === 'canales') return _cpCanalesHtml(c);
     if (_cpTab === 'informacion' || _cpTab === 'resumen') return _cpInfoHtml(c);
     if (_cpTab === 'notas') {
       return `<div class="cp-card"><div class="cp-card__t">Notas</div><textarea class="cp-notes" data-f="notas" placeholder="Escribe notas sobre este contacto…  Se guardan al salir del campo." onchange="LeadManagerModule.cpSave(${c.id})">${esc(c.notas || '')}</textarea></div>`;
