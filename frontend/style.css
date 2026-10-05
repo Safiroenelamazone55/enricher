@@ -17752,3 +17752,8 @@ tr.tk-flash > td { background-color: #FEF9C3; animation: none; }
 .mbh-send__t { font-size: .84rem; line-height: 1.45; }
 .mbh-send__b { display: flex; gap: 8px; flex-wrap: wrap; }
 .mbh-send__s { font-size: .74rem; color: #3C5A85; line-height: 1.45; }
+
+/* Nueva secuencia: fecha de inicio y 'Activar sola' en la misma fila */
+.seq-start-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.seq-start-row .form-input { flex: 0 1 220px; min-width: 150px; }
+.seq-autoact { display: inline-flex; align-items: center; gap: 8px; font-size: .86rem; font-weight: 600; color: var(--text-secondary); cursor: pointer; white-space: nowrap; }
