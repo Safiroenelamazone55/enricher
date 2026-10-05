@@ -1,3 +1,5 @@
+// Fecha de hoy en hora LOCAL (YYYY-MM-DD). new Date().toISOString() es UTC: desde las 19:00 en Lima ya marcaba el día siguiente.
+function _localISO(d) { d = d || new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
 'use strict';
 console.log('[Enricher] app.js v2026-05-28-B loaded');
 
@@ -2684,7 +2686,7 @@ const FinanceModule = (() => {
     const origenOpts = GX_ORIGEN.map(s => `<option value="${s[0]}"${sel(m ? m.origen === s[0] : s[0] === 'ajuste')}>${s[1]}</option>`).join('');
     const monedas = ['USD','PEN','EUR','MXN','COP','ARS','CLP','BRL'];
     const monedaOpts = monedas.map(c => `<option value="${c}"${sel(m ? m.moneda === c : c === 'USD')}>${c}</option>`).join('');
-    const today = new Date().toISOString().split('T')[0];
+    const today = _localISO();
 
     const gastoFields = `
       <label class="fin-cfg-field"><span class="fin-cfg-lbl">Concepto</span><input class="form-input" id="mov-concepto" value="${m?esc(m.concepto):''}" placeholder="Ej. Suscripción Claude"></label>
@@ -4141,7 +4143,7 @@ const FinanceModule = (() => {
     if (!t) return;
     const pr = _cnProjects.find(x => x.id === t.project_id);
     const moneda = pr?.moneda || 'USD';
-    const today = new Date().toISOString().split('T')[0];
+    const today = _localISO();
     const canalOpts  = '<option value="">— Sin especificar —</option>' + FIN_CANALES.map(c => `<option value="${c}">${c}</option>`).join('');
     const monedaOpts = FIN_CURRENCIES.map(c => `<option value="${c}"${c === moneda ? ' selected' : ''}>${c}</option>`).join('');
 
@@ -4272,7 +4274,7 @@ const FinanceModule = (() => {
       canal: $('co-canal')?.value || '',
       moneda,
       tipo_cambio: moneda !== 'USD' ? fx : null,
-      fecha_pagada: $('co-fecha')?.value || new Date().toISOString().split('T')[0],
+      fecha_pagada: $('co-fecha')?.value || _localISO(),
       estado: 'cobrado',
       notas: [nota, ref ? 'Ref: ' + ref : ''].filter(Boolean).join(' · '),
     };
@@ -4530,7 +4532,7 @@ const FinanceModule = (() => {
       tipo: 'socio',
       monto: pendiente > 0 ? Math.round(pendiente * 100) / 100 : '',
       estado: 'pagado',
-      fecha_pago: new Date().toISOString().split('T')[0],
+      fecha_pago: _localISO(),
     });
   }
 
@@ -10240,7 +10242,7 @@ const DashboardModule = (() => {
     row.classList.add('d3-task-row--expanded');
     _expandedTaskId = id;
 
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = _localISO();
     const deadlineStr = t.deadline ? String(t.deadline).split('T')[0] : null;
     const isOverdue   = deadlineStr && deadlineStr < todayStr;
     const dl = deadlineStr
@@ -10417,7 +10419,7 @@ const DashboardModule = (() => {
     const y = _expCalY, m = _expCalM;
     const startDow = (new Date(y, m, 1).getDay() + 6) % 7;
     const gs = new Date(y, m, 1 - startDow);
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = _localISO();
     let days = '';
     for (let i = 0; i < 42; i++) {
       const d = new Date(gs.getFullYear(), gs.getMonth(), gs.getDate() + i);
@@ -10733,7 +10735,7 @@ const MyWorkModule = (() => {
       return;
     }
 
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = _localISO();
     const win = t => { const end = t.deadline ? String(t.deadline).split('T')[0] : null; const start = t.fecha_inicio ? String(t.fecha_inicio).split('T')[0] : end; return { start, end }; };
     const overdue  = items.filter(t => { const w = win(t); return w.end && w.end < todayStr; });
     const today    = items.filter(t => { const w = win(t); return w.start && w.start <= todayStr && (!w.end || w.end >= todayStr); });
@@ -12687,7 +12689,7 @@ const TasksModule = (() => {
   function _kcCard(t) {
     const allKids  = _tasks.filter(x => x.parent_task_id === t.id);
     const doneKids = allKids.filter(x => x.estado === 'completado').length;
-    const today    = new Date().toISOString().split('T')[0];
+    const today    = _localISO();
     const dl       = t.deadline ? String(t.deadline).split('T')[0] : null;
     const isOverdue = dl && dl < today && t.estado !== 'completado';
     const dlFmt = dl ? (() => {
@@ -13843,7 +13845,7 @@ const TasksModule = (() => {
       // hoy cae fuera del rango válido (padre ya vencido, o proyecto que
       // todavía no empieza / ya terminó), se ajusta al límite más cercano
       // para no bloquear el guardado con la validación de rango.
-      let _defDate = new Date().toISOString().split('T')[0];
+      let _defDate = _localISO();
       if (presetParentTaskId) {
         const _pt   = (_tasks || []).find(t => t.id === presetParentTaskId);
         const _ptDl = _pt?.deadline ? String(_pt.deadline).split('T')[0] : null;
@@ -14081,7 +14083,7 @@ const TasksModule = (() => {
     let qeDateMin, qeDateMax;
     if (qeParent) {
       // Subtask: constrained by parent task (existing logic)
-      qeDateMin = new Date().toISOString().split('T')[0];
+      qeDateMin = _localISO();
       qeDateMax = qeParent.deadline ? String(qeParent.deadline).split('T')[0] : '';
     } else {
       // Main task: constrained by project dates
@@ -16400,7 +16402,7 @@ const ProjectsModule = (() => {
   }
 
   function _subtaskDeadlineRange(parentTask) {
-    const today = new Date().toISOString().split('T')[0];
+    const today = _localISO();
     const max   = parentTask?.deadline ? String(parentTask.deadline).split('T')[0] : '';
     return { min: today, max };
   }
@@ -16449,7 +16451,7 @@ const ProjectsModule = (() => {
     // por defecto que guardarla sin fecha por descuido. Si la tarea padre ya
     // venció, HOY quedaría fuera de su rango y bloquearía el guardado sin
     // querer — en ese caso arranca en el límite del padre en vez de hoy.
-    const _today = new Date().toISOString().split('T')[0];
+    const _today = _localISO();
     const _parentDl = _findTaskById(parentTaskId)?.deadline;
     const _defDate = (_parentDl && _today > String(_parentDl).split('T')[0]) ? String(_parentDl).split('T')[0] : _today;
     _inlineCreateDate = { mode: 'single', start: _defDate, end: null };
@@ -21878,7 +21880,7 @@ ${foot}
           contact_id: cid, outbound_client_id: (c && c.outbound_client_id) || null,
           tipo: 'paso_omitido', canal: st ? st.canal : 'linkedin',
           nota: `Paso ${e.paso}${st && st.titulo ? ': ' + st.titulo : ''} omitido — sin actividad reciente (el prospecto no tiene publicaciones con las que interactuar)`,
-          fecha: new Date().toISOString().slice(0, 10), estado: 'hecha',
+          fecha: _localISO(), estado: 'hecha',
         }),
       });
       const body = nextEff < 0 ? { estado: 'terminado' } : { paso: nextEff + 1 };
@@ -22816,7 +22818,7 @@ ${foot}
     const tipoMap = { email: 'email_enviado', linkedin: 'linkedin_msg', call: 'llamada', whatsapp: 'nota', task: 'nota' };
     const _v = st ? _stepVariant(st, c) : null;
     const _vn = (_v && st && _stepVariants(st).length > 1) ? ` · Variante ${_v.nombre || '?'}` : '';
-    if (st) await apiFetch(`${API}/activities`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact_id: cid, outbound_client_id: (c && c.outbound_client_id) || null, tipo: tipoMap[st.canal] || 'nota', canal: st.canal === 'whatsapp' ? (st.accion === 'llamada' ? 'whatsapp_llamada' : 'whatsapp_mensaje') : (st.canal || ''), nota: `Paso ${e.paso}${st.titulo ? ': ' + st.titulo : ''}${_vn}`, fecha: new Date().toISOString().slice(0, 10), estado: 'hecha', variant: (_v && _stepVariants(st).length > 1) ? String(_v.nombre || 'A') : '' }) });
+    if (st) await apiFetch(`${API}/activities`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact_id: cid, outbound_client_id: (c && c.outbound_client_id) || null, tipo: tipoMap[st.canal] || 'nota', canal: st.canal === 'whatsapp' ? (st.accion === 'llamada' ? 'whatsapp_llamada' : 'whatsapp_mensaje') : (st.canal || ''), nota: `Paso ${e.paso}${st.titulo ? ': ' + st.titulo : ''}${_vn}`, fecha: _localISO(), estado: 'hecha', variant: (_v && _stepVariants(st).length > 1) ? String(_v.nombre || 'A') : '' }) });
     const nextEff = eff >= 0 ? _effIdx(steps, cid, eff + 1) : -1;   // siguiente paso que aplica al contacto
     const body = nextEff < 0 ? { estado: 'terminado' } : { paso: nextEff + 1 };
     await apiFetch(`${API}/lm/sequences/${seqId}/contacts/${cid}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -27614,7 +27616,7 @@ ${foot}
         const res = await apiFetch(`${API}/activities/${act.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...act, nota }) });
         if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Error');
       } else {
-        const res = await apiFetch(`${API}/activities`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact_id: cid, outbound_client_id: c.outbound_client_id || null, tipo: 'nota', nota, fecha: new Date().toISOString().slice(0, 10), estado: 'hecha' }) });
+        const res = await apiFetch(`${API}/activities`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact_id: cid, outbound_client_id: c.outbound_client_id || null, tipo: 'nota', nota, fecha: _localISO(), estado: 'hecha' }) });
         if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Error');
       }
       await _reloadActivities(); _ldPaint();
@@ -27931,7 +27933,7 @@ ${foot}
       + list.map(r => cols.map(c => cell(c[1](r))).join(',')).join('\n');
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-    a.download = `leads_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `leads_${_localISO()}.csv`;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     showBanner(`✓ ${list.length} lead(s) exportados — ábrelo con Excel`, 'success');
@@ -27945,7 +27947,7 @@ ${foot}
     const nota = await novaNote({ title: 'Nota del lead', message: `Sobre <b>${esc([c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || 'el contacto')}</b> — quedará en su actividad.`, ok: 'Guardar nota', skip: 'Cancelar' });
     if (!nota) return;
     try {
-      const res = await apiFetch(`${API}/activities`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact_id: cid, outbound_client_id: c.outbound_client_id || null, tipo: 'nota', nota, fecha: new Date().toISOString().slice(0, 10), estado: 'hecha' }) });
+      const res = await apiFetch(`${API}/activities`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact_id: cid, outbound_client_id: c.outbound_client_id || null, tipo: 'nota', nota, fecha: _localISO(), estado: 'hecha' }) });
       if (!res.ok) throw new Error((await res.json()).error || 'Error');
       showBanner('✓ Nota guardada', 'success');
       await _reloadActivities();
@@ -28020,7 +28022,7 @@ ${foot}
       </div>`;
       return;
     }
-    const today = new Date().toISOString().slice(0, 10);
+    const today = _localISO();
     const col = st => {
       const items = list.filter(c => _dlCol(c) === st);
       const cards = items.map(c => {
@@ -29068,7 +29070,7 @@ ${foot}
     const leadPool = clientId ? _data.filter(l => l.outbound_client_id === clientId) : _data;
     const leadOpts = '<option value="">— Selecciona lead —</option>' + leadPool.map(l => `<option value="${l.id}"${String(l.id) === String(leadId ?? '') ? ' selected' : ''}>${esc(l.nombre)}${l.empresa ? ' · ' + esc(l.empresa) : ''}</option>`).join('');
     const tipoOpts = _ACT_OPTS.map(t => `<option value="${t}"${t === presetTipo ? ' selected' : ''}>${_ACT[t][0]}</option>`).join('');
-    const today = new Date().toISOString().split('T')[0];
+    const today = _localISO();
     m.innerHTML = `<div class="fin-pi-box">
       <div class="fin-pi-box__hd"><h3>${isTask ? 'Nueva tarea comercial' : 'Registrar actividad'}</h3><button class="fin-pi-x" onclick="LeadManagerModule.closeActivityDrawer()">✕</button></div>
       <div class="fin-pi-form">
@@ -30495,7 +30497,7 @@ ${foot}
     m.onclick = e => { if (e.target === m) m.remove(); };
     const tipos = [['reunion', 'Reunión'], ['llamada', 'Llamada'], ['email_enviado', 'Email'], ['linkedin_msg', 'LinkedIn'], ['followup', 'Follow-up'], ['nota', 'Nota']];
     const defTipo = preset === 'tarea' ? 'followup' : (preset || 'nota');
-    const today = new Date().toISOString().slice(0, 10);
+    const today = _localISO();
     m.innerHTML = `<div class="fin-pi-box" style="max-width:440px">
       <div class="fin-pi-box__hd"><h3>${preset === 'reunion' ? 'Registrar reunión' : preset === 'tarea' ? 'Nueva tarea' : 'Registrar actividad'}</h3><button class="fin-pi-x" onclick="document.getElementById('lm-act-modal').remove()">✕</button></div>
       <div class="fin-pi-form">
@@ -30512,7 +30514,7 @@ ${foot}
   async function cpActSave(id) {
     const c = _contacts.find(x => x.id === id); if (!c) return;
     const tipo = $('act-tipo')?.value || 'nota';
-    const fecha = $('act-fecha')?.value || new Date().toISOString().slice(0, 10);
+    const fecha = $('act-fecha')?.value || _localISO();
     const nota = ($('act-nota')?.value || '').trim();
     const estado = $('act-pend')?.checked ? 'pendiente' : 'hecha';
     document.getElementById('lm-act-modal')?.remove();
@@ -30926,7 +30928,7 @@ ${foot}
     const csv = '﻿' + cols.map(c => c[1]).join(',') + '\n' + rows.map(r => cols.map(c => cell(r[c[0]] != null ? r[c[0]] : r[c[0] === 'company_nombre' ? 'empresa_nombre' : c[0]])).join(',')).join('\n');
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-    a.download = `${isCo ? 'empresas' : 'contactos'}${filtered ? '_filtrados' : ''}_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `${isCo ? 'empresas' : 'contactos'}${filtered ? '_filtrados' : ''}_${_localISO()}.csv`;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     showBanner(`✓ Exportados ${rows.length} ${isCo ? 'empresas' : 'contactos'}${filtered ? ' (con los filtros aplicados)' : ''}`, 'success');
@@ -39549,7 +39551,7 @@ const NotesModule = (() => {
       list.innerHTML = `<div class="rnotes__empty">Sin notas aún.<br>Escribe una idea arriba y presiona Enter.</div>`;
       return;
     }
-    const todayStr     = new Date().toISOString().split('T')[0];
+    const todayStr     = _localISO();
     const yesterdayStr = new Date(Date.now() - 86400000).toISOString().split('T')[0];
     const groups = {};
     for (const n of _notes) {
@@ -39946,7 +39948,7 @@ const RNotifPanel = (() => {
     const lbl = pop.querySelector('.rnotif-date-pop__label');
     if (lbl) lbl.textContent = label || 'Fecha límite';
     const inp = $('rnotif-date-inp');
-    if (inp) inp.value = new Date().toISOString().split('T')[0];
+    if (inp) inp.value = _localISO();
     const rect = e.currentTarget.getBoundingClientRect();
     pop.style.display = 'block';
     // Medir DESPUÉS de mostrarlo: con títulos largos ("Nueva fecha fin del proyecto")
