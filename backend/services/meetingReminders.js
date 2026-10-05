@@ -101,6 +101,9 @@ async function sendReminder(pool, m, n) {
     const auth = await mailboxSvc.getMailboxAuth(pool, mb);
     const cc = String(m.cc || '').split(/[,;]/).map(x => x.trim().toLowerCase()).filter(x => x.includes('@'));
     if (mb.cc_email && !cc.includes(String(mb.cc_email).toLowerCase())) cc.push(String(mb.cc_email).toLowerCase());
+    // CC fijo del cliente outbound ("CC en emails"): siempre va, igual que en el resto de envíos.
+    const { rows: [oc] } = await pool.query('SELECT cc_email FROM outbound_clients WHERE id=$1', [k.outbound_client_id]);
+    if (oc && oc.cc_email && !cc.includes(String(oc.cc_email).toLowerCase())) cc.push(String(oc.cc_email).toLowerCase());
     const sent = await mailboxSvc.sendFromMailbox(mb, auth, { to: k.email, cc: cc.length ? cc.join(', ') : undefined, subject: asunto, text: texto, fromName: mb.from_name || undefined });
     await pool.query(
       `INSERT INTO lm_messages (user_id, contact_id, asunto, cuerpo, to_email, estado, sent_at, mailbox_id, smtp_message_id, cc_emails, track_token)
