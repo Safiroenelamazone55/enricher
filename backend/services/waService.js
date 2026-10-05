@@ -330,7 +330,7 @@ async function _connect(pool, id) {
   // — sin esto la conexión queda "en blanco" aunque el teléfono sí tenga historial.
   // No trae TODO el historial desde siempre: Baileys igual filtra el tipo de sync
   // más pesado (HistorySyncType.FULL) por default.
-  const sock = makeWASocket({ auth: state, syncFullHistory: true });
+  const sock = makeWASocket({ auth: state, syncFullHistory: true, keepAliveIntervalMs: 25000 });
   _socks.set(id, sock);
 
   sock.ev.on('creds.update', saveCreds);
@@ -359,25 +359,22 @@ async function _connect(pool, id) {
         const code = lastDisconnect?.error?.output?.statusCode;
         const loggedOut = code === DisconnectReason.loggedOut;
         const intentos = (_reintentos.get(id) || 0) + 1;
-        if (loggedOut || intentos > MAX_REINTENTOS) {
-          // Vinculación revocada desde el teléfono (o "cerrar sesión" nuestro), o una
-          // sesión que nunca prendió tras varios intentos — hay que escanear un QR
-          // nuevo. Se limpia la sesión en disco para no arrastrar credenciales muertas.
+        if (loggedOut) {
+          // SOLO si el teléfono revocó la vinculación (o "cerrar sesión" nuestro) hace
+          // falta un QR nuevo. Cualquier otro corte NUNCA borra la sesión: antes, 5 cortes
+          // seguidos (red, reinicio) la borraban y obligaban a re-vincular.
           _reintentos.delete(id);
           await pool.query(
             `UPDATE wa_connections SET estado='desconectado', qr_actual='', numero='', updated_at=NOW() WHERE id=$1`,
             [id]);
           fs.rmSync(dir, { recursive: true, force: true });
-          console.log(loggedOut
-            ? `[wa] conexión ${id} cerró sesión — hace falta un QR nuevo`
-            : `[wa] conexión ${id} no logró conectar tras ${MAX_REINTENTOS} intentos — se deja desconectada`);
+          console.log(`[wa] conexión ${id} cerró sesión — hace falta un QR nuevo`);
         } else {
-          // Cualquier otro corte (red, reinicio del servidor, etc.) se reintenta solo.
-          // Se loguea el código/motivo real (antes solo decía "se cortó" sin más detalle)
-          // — necesario para diagnosticar cortes frecuentes como el de 2026-08-26.
+          // Corte de red/servidor: reintenta para siempre con espera creciente (3s → 60s máx).
           _reintentos.set(id, intentos);
-          console.log(`[wa] conexión ${id} se cortó, reintentando… (${intentos}/${MAX_REINTENTOS}) — código ${code || '?'}: ${lastDisconnect?.error?.message || 'sin detalle'}`);
-          setTimeout(() => _connect(pool, id).catch(e => console.warn('[wa] reconectar:', e.message)), 3000);
+          const espera = Math.min(3000 * Math.pow(2, Math.min(intentos - 1, 5)), 60000);
+          console.log(`[wa] conexión ${id} se cortó, reintentando en ${espera / 1000}s (#${intentos}) — código ${code || '?'}: ${lastDisconnect?.error?.message || 'sin detalle'}`);
+          setTimeout(() => _connect(pool, id).catch(e => console.warn('[wa] reconectar:', e.message)), espera);
         }
       }
     } catch (e) { console.warn('[wa] connection.update:', e.message); }
