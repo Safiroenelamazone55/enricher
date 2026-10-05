@@ -4989,6 +4989,8 @@ app.post('/api/lm/contacts/:id/meeting/preview', requireAuth, async (req, res) =
     const { rows: [k] } = await pool.query('SELECT nombre FROM lm_contacts WHERE id=$1 AND user_id=$2', [+req.params.id, req.workspaceOwnerId]);
     const m = { starts_at: start, tz, tipo: ['meet', 'zoom', 'teams', 'telefono', 'presencial', 'otro'].includes(b.tipo) ? b.tipo : 'otro',
       enlace: String(b.enlace || '').trim(), anfitrion: String(b.anfitrion || '').trim(), idioma: b.idioma === 'en' ? 'en' : 'es' };
+    const _r1 = b.rem1_local ? _mtSvc.zonedToUtc(b.rem1_local, tz) : _mtSvc.recommendTimes(start, tz).rem1_at;
+    if (_r1 && !isNaN(_r1)) m.rem1_at = _r1;
     res.json({ default1: _mtSvc.defaultMessage(m, k && k.nombre, 1), default2: _mtSvc.defaultMessage(m, k && k.nombre, 2) });
   } catch (e) { res.status(500).json({ error: 'No se pudo generar la vista previa' }); }
 });

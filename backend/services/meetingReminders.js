@@ -40,21 +40,24 @@ function defaultMessage(m, contactName, n) {
   const enlace = String(m.enlace || '').trim();
   const lugar = lang === 'en' && m.tipo === 'telefono' ? 'Phone' : lang === 'en' && m.tipo === 'presencial' ? 'In person' : (_LUGAR[m.tipo] || '');
   const host = String(m.anfitrion || '').trim();
+  // ¿El aviso 1 sale el MISMO día de la reunión (en la zona del prospecto)? Entonces dice "hoy", no "mañana".
+  const _ymd = d => new Intl.DateTimeFormat('en-CA', { timeZone: m.tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(d));
+  const hoy = n === 1 && m.rem1_at && _ymd(m.rem1_at) === _ymd(m.starts_at);
   if (lang === 'en') {
     const lines = n === 1
-      ? [`Hi ${nom},`, '', `Just a quick reminder of our meeting tomorrow, ${f.dia} at ${f.hora} (${f.zona}).`]
+      ? [`Hi ${nom},`, '', `Just a quick reminder of our meeting ${hoy ? 'today' : 'tomorrow'}, ${f.dia} at ${f.hora} (${f.zona}).`]
       : [`Hi ${nom},`, '', `Our meeting starts in 30 minutes (${f.hora} ${f.zona}).`];
     if (host) lines.push(`${host} will be joining you.`);
     if (enlace) lines.push(`${lugar ? lugar + ': ' : 'Link: '}${enlace}`); else if (lugar) lines.push(`Where: ${lugar}`);
-    lines.push('', n === 1 ? 'See you tomorrow!' : 'See you soon!');
+    lines.push('', n === 1 ? (hoy ? 'See you later!' : 'See you tomorrow!') : 'See you soon!');
     return lines.filter((l, i, a) => !(l === '' && a[i - 1] === '')).join('\n').trim();
   }
   const lines = n === 1
-    ? [`Hola ${nom},`, '', `Te recuerdo nuestra reunión de mañana, ${f.dia} a las ${f.hora} (${f.zona}).`]
+    ? [`Hola ${nom},`, '', `Te recuerdo nuestra reunión de ${hoy ? 'hoy' : 'mañana'}, ${f.dia} a las ${f.hora} (${f.zona}).`]
     : [`Hola ${nom},`, '', `Nuestra reunión empieza en 30 minutos (${f.hora} ${f.zona}).`];
   if (host) lines.push(`Te atenderá ${host}.`);
   if (enlace) lines.push(`${lugar ? lugar + ': ' : 'Enlace: '}${enlace}`); else if (lugar) lines.push(`Lugar: ${lugar}`);
-  lines.push('', n === 1 ? '¡Nos vemos mañana!' : '¡Nos vemos en un momento!');
+  lines.push('', n === 1 ? (hoy ? '¡Nos vemos más tarde!' : '¡Nos vemos mañana!') : '¡Nos vemos en un momento!');
   return lines.filter((l, i, a) => !(l === '' && a[i - 1] === '')).join('\n').trim();
 }
 function defaultSubject(m, n) {

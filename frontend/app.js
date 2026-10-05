@@ -28522,7 +28522,7 @@ ${foot}
     clearTimeout(_mtPrevT);
     _mtPrevT = setTimeout(async () => {
       const g = id => document.getElementById(id); if (!g('mt-tz')) return;
-      const body = { local: g('mt-local').value, tz: g('mt-tz').value, tipo: g('mt-tipo').value || 'otro', enlace: g('mt-enlace').value.trim(), anfitrion: g('mt-host').value.trim(), idioma: g('mt-idioma').dataset.v };
+      const body = { local: g('mt-local').value, tz: g('mt-tz').value, tipo: g('mt-tipo').value || 'otro', enlace: g('mt-enlace').value.trim(), anfitrion: g('mt-host').value.trim(), idioma: g('mt-idioma').dataset.v, rem1_local: (g('mt-r1') || {}).value || '' };
       try {
         const r = await apiFetch(API + '/lm/contacts/' + _mt.cid + '/meeting/preview', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
         if (!r.ok) return; const d = await r.json();
@@ -28565,7 +28565,7 @@ ${foot}
     const box = document.createElement('div'); box.id = 'mt-modal'; box.className = 'fin-pi-backdrop';
     box.onclick = ev => { if (ev.target === box) mtClose(); };
     setTimeout(mtTimes, 0);
-    setTimeout(() => { ['mt-local', 'mt-tz', 'mt-tipo', 'mt-enlace', 'mt-host'].forEach(i => { const e = document.getElementById(i); if (e) { e.addEventListener('input', mtPreview); e.addEventListener('change', mtPreview); } }); mtPreview(); }, 0);
+    setTimeout(() => { ['mt-local', 'mt-tz', 'mt-tipo', 'mt-enlace', 'mt-host', 'mt-r1'].forEach(i => { const e = document.getElementById(i); if (e) { e.addEventListener('input', mtPreview); e.addEventListener('change', mtPreview); } }); mtPreview(); }, 0);
     box.innerHTML = '<div class="mt-box">' +
       '<div class="mt-hd"><div><div class="mt-t">Reunión · ' + esc(full) + '</div><div class="mt-s">Recordatorios al prospecto, en su hora: el día anterior y 30 minutos antes.</div></div><button class="fin-pi-x" onclick="LeadManagerModule.mtClose()">✕</button></div>' +
       '<div class="mt-body">' +
