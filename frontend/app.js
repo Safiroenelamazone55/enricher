@@ -36622,6 +36622,16 @@ const WaChatModule = (() => {
     _chatMenuJid = null;
   }
 
+  // ⋮ de la cabecera del chat abierto: mismo menú que el de la lista
+  function abrirMenuCabecera(ev) {
+    ev.stopPropagation();
+    if (!_chatAct) { return; }
+    return abrirChatMenu(ev, _chatAct);
+  }
+  async function _editarNombreContacto() {
+    await _abrirContacto();
+    setTimeout(() => { const i = document.getElementById('wa-contact-nombre'); if (i) { i.focus(); i.select(); } }, 120);
+  }
   async function abrirChatMenu(ev, jid) {
     ev.stopPropagation();
     if (_chatMenuEl) { _closeChatMenu(); return; }
@@ -36700,6 +36710,8 @@ const WaChatModule = (() => {
     const estado  = _WA_ESTADOS[c.estado_conv] || _WA_ESTADOS.abierto;
     const prioridad = _WA_PRIORIDADES[c.prioridad || ''] || _WA_PRIORIDADES[''];
     return `
+      <button class="chat-ctx-item" onclick="WaChatModule._editarNombreContacto()">${_ICO_PENCIL}Editar nombre del contacto</button>
+      <div class="chat-ctx-sep"></div>
       <button class="chat-ctx-item" onclick="WaChatModule._toggleFijado()">${_ICO_PIN}${pinned ? 'Desfijar chat' : 'Fijar chat'}</button>
       <button class="chat-ctx-item" onclick="WaChatModule._chatMenuGoto('tags')">${_ICO_TAG}Etiquetas${nTags ? ` (${nTags})` : ''}</button>
       <button class="chat-ctx-item" onclick="WaChatModule._chatMenuGoto('snooze')">${_ICO_CLOCK}${snoozed ? 'Cambiar recordatorio' : 'Recordar seguimiento'}</button>
@@ -37810,7 +37822,7 @@ const WaChatModule = (() => {
            visPop, abrirVisPop, _toggleVisSub, guardarVisibilidad, _pintaBotonVis, _cargarTeam,
            nuevoChatAbrir, nuevoChatCerrar, _nuevoChatBuscar, nuevoChatElegir, nuevoChatUsarNumero,
            abrirCuentasPop, _pickConn, agregarCuenta, _eliminarConn,
-           abrirChatMenu, _chatMenuGoto, _toggleFijado, _toggleTag, _crearTag, _editarTag, _borrarTag,
+           abrirChatMenu, abrirMenuCabecera, _editarNombreContacto, _chatMenuGoto, _toggleFijado, _toggleTag, _crearTag, _editarTag, _borrarTag,
            _snoozePreset, _snoozeCustom, _quitarSnooze, _abrirContacto, _cerrarContacto, _guardarNombreContacto,
            _asignarMiembro, _cambiarEstadoConv, _cambiarPrioridad, _agregarNota, _borrarNota,
            _fusionarFiltrar, _fusionarConfirmar,
