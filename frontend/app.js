@@ -36622,6 +36622,43 @@ const WaChatModule = (() => {
     _chatMenuJid = null;
   }
 
+  // ── Personas del grupo (icono antes de la lupa; solo en grupos) ──
+  let _pplEl = null, _pplData = null;
+  function _cerrarPersonas() { if (_pplEl) { _pplEl.remove(); _pplEl = null; } document.removeEventListener('click', _cerrarPersonas); }
+  async function abrirPersonas(ev) {
+    ev.stopPropagation();
+    if (_pplEl) { _cerrarPersonas(); return; }
+    if (!_chatAct || !_conn) return;
+    const jid = _chatAct, btn = ev.currentTarget;
+    const el = document.createElement('div'); el.className = 'wa-ppl'; el.onclick = e => e.stopPropagation();
+    el.innerHTML = '<div class="wa-ppl__hd">Personas del grupo</div><div class="wa-ppl__body"><div class="clients-loading"><div class="clients-spin"></div></div></div>';
+    document.body.appendChild(el); _pplEl = el;
+    const r0 = btn.getBoundingClientRect();
+    el.style.top = (r0.bottom + 6) + 'px'; el.style.left = Math.max(8, Math.min(window.innerWidth - 336, r0.right - 328)) + 'px';
+    setTimeout(() => document.addEventListener('click', _cerrarPersonas), 0);
+    try {
+      const r = await apiFetch(`${API}/wa/connections/${_conn.id}/chats/${encodeURIComponent(jid)}/participantes`);
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'No se pudo cargar');
+      _pplData = d;
+      el.innerHTML = `<div class="wa-ppl__hd">Personas del grupo <em>${d.total}</em></div>
+        <input class="wa-ppl__q" placeholder="Buscar persona…" autocomplete="off" oninput="WaChatModule._filtrarPersonas(this.value)">
+        <div class="wa-ppl__body" id="wa-ppl-list">${_personasHtml('')}</div>`;
+    } catch (e) { el.querySelector('.wa-ppl__body').innerHTML = '<div class="wa-ppl__empty">' + esc(e.message) + '</div>'; }
+  }
+  function _personasHtml(q) {
+    q = String(q || '').toLowerCase().trim();
+    const list = (_pplData ? _pplData.participantes : []).filter(p => !q || (p.nombre || '').toLowerCase().includes(q) || (p.numero || '').includes(q));
+    if (!list.length) return '<div class="wa-ppl__empty">Sin coincidencias</div>';
+    return list.map(p => {
+      const nm = p.nombre || (p.numero ? '+' + p.numero : 'Contacto sin número');
+      return `<div class="wa-ppl__it"><span class="wa-ppl__av">${esc((p.nombre || p.numero || '?').trim().charAt(0).toUpperCase())}</span>
+        <span class="wa-ppl__tx"><b>${esc(nm)}${p.yo ? ' <i>(tú)</i>' : ''}</b>${p.nombre && p.numero ? '<small>+' + esc(p.numero) + '</small>' : ''}</span>
+        ${p.admin ? '<span class="wa-ppl__adm">Admin</span>' : ''}</div>`;
+    }).join('');
+  }
+  function _filtrarPersonas(q) { const l = document.getElementById('wa-ppl-list'); if (l) l.innerHTML = _personasHtml(q); }
+
   // ⋮ de la cabecera del chat abierto: mismo menú que el de la lista
   function abrirMenuCabecera(ev) {
     ev.stopPropagation();
@@ -37277,6 +37314,8 @@ const WaChatModule = (() => {
     _pintaChats();
     const nameEl = $$('wa-main-name');
     _chatActGrupo = row ? !!row.es_grupo : jid.endsWith('@g.us');
+    const _pb = $$('wa-hdr-people'); if (_pb) _pb.style.display = _chatActGrupo ? '' : 'none';
+    _cerrarPersonas();
     if (nameEl) nameEl.textContent = row ? _nombreChat(row) : (nombre || _nombreChat({ chat_jid: jid }));
     const box = $$('wa-messages');
     if (box) box.innerHTML = `<div class="clients-loading"><div class="clients-spin"></div></div>`;
@@ -37822,7 +37861,7 @@ const WaChatModule = (() => {
            visPop, abrirVisPop, _toggleVisSub, guardarVisibilidad, _pintaBotonVis, _cargarTeam,
            nuevoChatAbrir, nuevoChatCerrar, _nuevoChatBuscar, nuevoChatElegir, nuevoChatUsarNumero,
            abrirCuentasPop, _pickConn, agregarCuenta, _eliminarConn,
-           abrirChatMenu, abrirMenuCabecera, _editarNombreContacto, _chatMenuGoto, _toggleFijado, _toggleTag, _crearTag, _editarTag, _borrarTag,
+           abrirChatMenu, abrirMenuCabecera, abrirPersonas, _filtrarPersonas, _editarNombreContacto, _chatMenuGoto, _toggleFijado, _toggleTag, _crearTag, _editarTag, _borrarTag,
            _snoozePreset, _snoozeCustom, _quitarSnooze, _abrirContacto, _cerrarContacto, _guardarNombreContacto,
            _asignarMiembro, _cambiarEstadoConv, _cambiarPrioridad, _agregarNota, _borrarNota,
            _fusionarFiltrar, _fusionarConfirmar,

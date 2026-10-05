@@ -653,6 +653,34 @@ async function resincronizarChat(pool, id, jid) {
   await sock.fetchMessageHistory(80, key, new Date(oldest.ts).getTime()); // oldestMsgTimestampMs, en MILISEGUNDOS
 }
 
+// Personas de un grupo, con el nombre de tu agenda cuando se conoce. Aprende de paso los pares @lid ↔ número.
+async function participantesGrupo(pool, id, jid) {
+  const sock = _socks.get(id);
+  if (!sock) throw new Error('Este WhatsApp no está conectado ahora mismo');
+  if (!String(jid).endsWith('@g.us')) throw new Error('Este chat no es un grupo');
+  const meta = await sock.groupMetadata(jid);
+  const miNum = String((sock.user && sock.user.id) || '').split(':')[0].split('@')[0];
+  const out = [];
+  for (const p of (meta.participants || [])) {
+    const raw = String(p.id || '');
+    let pn = [p.jid, p.phoneNumber, raw].find(x => String(x || '').endsWith('@s.whatsapp.net')) || '';
+    const lid = raw.endsWith('@lid') ? raw : (p.lid || '');
+    if (lid && pn) await _aprenderLid(pool, id, lid, pn).catch(() => {});
+    if (!pn && lid) pn = _lidMap.get(id + ':' + lid) || '';
+    const keys = [pn, raw, lid].filter(Boolean);
+    let nombre = '';
+    if (keys.length) {
+      const { rows } = await pool.query('SELECT nombre, nombre_agenda FROM wa_contacts WHERE connection_id=$1 AND jid = ANY($2)', [id, keys]);
+      const best = rows.find(r => r.nombre_agenda) || rows.find(r => r.nombre);
+      nombre = best ? (best.nombre_agenda || best.nombre) : '';
+    }
+    const numero = pn ? pn.split('@')[0] : '';
+    out.push({ jid: raw, nombre, numero, admin: p.admin === 'admin' || p.admin === 'superadmin', yo: !!numero && numero === miNum });
+  }
+  out.sort((a, b) => (b.admin - a.admin) || (a.yo ? -1 : 0) - (b.yo ? -1 : 0) || String(a.nombre || a.numero || 'zzz').localeCompare(String(b.nombre || b.numero || 'zzz')));
+  return { subject: meta.subject || '', total: out.length, participantes: out };
+}
+
 async function desconectar(pool, id) {
   const sock = _socks.get(id);
   if (sock) { try { await sock.logout(); } catch (_) { /* logout dispara connection.update igual */ } }
@@ -755,4 +783,4 @@ async function reanudarTodas(pool) {
   if (!_tickerWatchdog) _tickerWatchdog = setInterval(() => _watchdogTick(pool), 60 * 1000);
 }
 
-module.exports = { iniciar, enviar, enviarImagen, reaccionar, desconectar, reanudarTodas, resincronizarChat };
+module.exports = { participantesGrupo, iniciar, enviar, enviarImagen, reaccionar, desconectar, reanudarTodas, resincronizarChat };

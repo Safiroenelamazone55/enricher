@@ -11998,6 +11998,13 @@ app.post('/api/wa/connections/:id/chats/:jid/resync', requireAuth, async (req, r
   } catch (err) { console.error('[wa] resync', err.message); res.status(500).json({ error: err.message || 'No se pudo pedir el historial' }); }
 });
 
+app.get('/api/wa/connections/:id/chats/:jid/participantes', requireAuth, async (req, res) => {
+  try {
+    if (!(await _cargarConexionAutorizada(req, res, req.params.id))) return;
+    res.json(await waSvc.participantesGrupo(pool, +req.params.id, req.params.jid));
+  } catch (err) { console.error('[wa] participantes', err.message); res.status(500).json({ error: err.message || 'No se pudo cargar los participantes' }); }
+});
+
 app.get('/api/wa/connections/:id/chats/:jid/mensajes', requireAuth, async (req, res) => {
   try {
     if (!(await _cargarConexionAutorizada(req, res, req.params.id))) return;
