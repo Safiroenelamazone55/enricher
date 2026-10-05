@@ -20591,7 +20591,8 @@ const LeadManagerModule = (() => {
     'Asia/Shanghai': ['China', 'Pekín', 'Beijing', 'Shanghái', 'Shanghai', 'Hong Kong', 'Shenzhen'], 'Asia/Tokyo': ['Japón', 'Tokio', 'Tokyo', 'Osaka', 'Corea', 'Seúl', 'Seoul'],
     'Australia/Sydney': ['Australia', 'Sídney', 'Sydney', 'Melbourne', 'Canberra', 'Brisbane'], 'Pacific/Auckland': ['Nueva Zelanda', 'Auckland', 'Wellington'],
   };
-  const _LOC_DB = Object.entries(_TZ_DB_RAW).flatMap(([tz, names]) => names.map(n => ({ name: n, tz: tz })));
+  // Sin duplicados: "Perú" y "Peru" (con/sin tilde) son la misma entrada para la misma zona
+  const _LOC_DB = (() => { const seen = new Set(); return Object.entries(_TZ_DB_RAW).flatMap(([tz, names]) => names.map(n => ({ name: n, tz: tz }))).filter(x => { const k = String(x.name).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase() + '|' + x.tz; if (seen.has(k)) return false; seen.add(k); return true; }); })();
   function _tzLabelFor(tz) { if (!tz) return ''; const m = _LOC_DB.find(x => x.tz === tz); return (m ? m.name : _tzShort(tz)) + ' · ' + _tzShort(tz); }
   // "Tu hora" = la zona horaria que elegiste en Configuración (no la del navegador); cada secuencia conserva la suya.
   function _herTz() { try { return _userTZ() || Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Madrid'; } catch (e) { return 'Europe/Madrid'; } }
