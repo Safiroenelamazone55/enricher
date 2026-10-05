@@ -25894,7 +25894,7 @@ ${foot}
 
   // ── Firma HTML por buzón — editor con vista previa en vivo + insertar imagen ──
   // ── Salud del dominio + calentamiento gradual del buzón ──
-  let _mbhId = null;
+  let _mbhId = null, _mbhData = null;
   function mbHealthClose() { document.getElementById('mbh-modal')?.remove(); _mbhId = null; }
   async function mbHealthOpen(mbId) {
     mbHealthClose(); _mbhId = mbId;
@@ -25914,15 +25914,48 @@ ${foot}
     document.body.appendChild(m);
     mbHealthRun(); _mbhRampLoad();
   }
+  function mbhCopy(btn) {
+    const v = decodeURIComponent(btn.dataset.v || '');
+    const ok = () => { const t = btn.textContent; btn.textContent = '✓ Copiado'; setTimeout(() => { btn.textContent = t; }, 1400); };
+    try { navigator.clipboard.writeText(v).then(ok, () => lmCopy(v, 'Copiado')); } catch (_) { lmCopy(v, 'Copiado'); }
+  }
+  function mbhCopyAdmin() {
+    const d = _mbhData; if (!d) return;
+    const mb = (_mailboxes || []).find(x => x.id === _mbhId);
+    const items = d.checks.filter(x => x.estado !== 'ok' && x.registro && x.registro.valor !== undefined).map((x, i) =>
+      `${i + 1}) ${x.label} — Tipo: ${x.registro.tipo} · Nombre: ${x.registro.nombre} · Valor: ${x.registro.valor}${x.registro.actual ? '\n   (reemplaza el actual: ' + x.registro.actual + ')' : ''}`);
+    const dkim = d.checks.find(x => x.key === 'dkim' && x.estado !== 'ok');
+    const msg = `Hola,\n\nNecesito ajustar la configuración de correo del dominio ${d.domain} para que nuestros correos lleguen a la bandeja de entrada y no a spam (buzón: ${mb ? mb.email : ''}).\n\nPor favor publica o ajusta estos registros DNS:\n\n${items.join('\n\n') || '(sin registros que publicar)'}\n\n${dkim ? 'Además, activa DKIM en ' + (d.proveedorNombre || 'tu proveedor de correo') + ' y publica los registros que te muestre.\n\n' : ''}Cuando esté hecho, avísame y lo reviso. ¡Gracias!`;
+    try { navigator.clipboard.writeText(msg).then(() => showBanner('✓ Mensaje copiado', 'success'), () => lmCopy(msg, 'Mensaje copiado')); } catch (_) { lmCopy(msg, 'Mensaje copiado'); }
+  }
   async function mbHealthRun() {
     const box = document.getElementById('mbh-health'); if (!box || !_mbhId) return;
     box.innerHTML = '<div class="mbh-load">Revisando el dominio…</div>';
     try {
       const r = await apiFetch(`${API}/lm/mailboxes/${_mbhId}/health`); const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'Error');
+      _mbhData = d;
       const ic = { ok: '✓', warn: '!', fail: '✕' };
+      const cp = (v, lbl) => `<button class="mbh-cp" data-v="${encodeURIComponent(v)}" onclick="LeadManagerModule.mbhCopy(this)" title="Copiar ${esc(lbl)}">Copiar</button>`;
+      const rec = r => (r && r.valor !== undefined && (r.tipo || r.nombre)) ? `<div class="mbh-rec">
+          <div class="mbh-rec__r"><span>Tipo</span><code>${esc(r.tipo || '')}</code></div>
+          <div class="mbh-rec__r"><span>Nombre</span><code>${esc(r.nombre || '')}</code>${r.nombre && /^[\w._-]+$/.test(r.nombre) ? cp(r.nombre, 'el nombre') : ''}</div>
+          ${r.actual ? `<div class="mbh-rec__r"><span>Registro actual</span><code class="mbh-old">${esc(r.actual)}</code></div>` : ''}
+          <div class="mbh-rec__r"><span>${r.actual ? 'Registro nuevo' : 'Valor'}</span><code class="mbh-new">${esc(r.valor)}</code>${r.valor && !/^Te lo muestra/.test(r.valor) ? cp(r.valor, 'el valor') : ''}</div>
+        </div>` : '';
+      const fixBlock = x => x.estado === 'ok' ? '' : `<div class="mbh-fixbox">
+          <div class="mbh-fixbox__t">Qué hacer</div>
+          <ol>${(x.pasos || []).map(p => `<li>${esc(p)}</li>`).join('')}</ol>
+          ${rec(x.registro)}
+          ${x.nota ? `<div class="mbh-note">${esc(x.nota)}</div>` : ''}
+          ${x.panel && x.panel.url ? `<a class="btn btn--primary btn--sm" href="${esc(x.panel.url)}" target="_blank" rel="noopener">Abrir ${esc(x.panel.nombre)} ↗</a>` : ''}
+        </div>`;
+      const pend = d.checks.filter(x => x.estado !== 'ok').length;
       box.innerHTML = `<div class="mbh-sum mbh-sum--${d.resumen.estado}"><span class="mbh-ic">${ic[d.resumen.estado]}</span>${esc(d.resumen.texto)} <em>· ${esc(d.domain)}</em></div>
-        <div class="mbh-list">${d.checks.map(x => `<div class="mbh-row"><span class="mbh-ic mbh-ic--${x.estado}">${ic[x.estado]}</span><div><b>${esc(x.label)}</b><div class="mbh-d">${esc(x.detalle)}</div>${x.consejo ? `<div class="mbh-fix">${esc(x.consejo)}</div>` : ''}</div></div>`).join('')}</div>`;
+        ${d.dnsHost ? `<div class="mbh-p" style="margin-top:-2px">Los DNS de este dominio los administra <b>${esc(d.dnsHost)}</b>: ahí se publican los registros.</div>` : ''}
+        <div class="mbh-list">${d.checks.map(x => `<div class="mbh-row"><span class="mbh-ic mbh-ic--${x.estado}">${ic[x.estado]}</span><div class="mbh-rowbody"><b>${esc(x.label)}</b><div class="mbh-d">${esc(x.detalle)}</div>${fixBlock(x)}</div></div>`).join('')}</div>
+        ${pend ? `<div class="mbh-admin"><div><b>¿No administras tú el dominio?</b><div class="mbh-d">Copia un mensaje listo para enviarle a quien lo administre.</div></div><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.mbhCopyAdmin()">Copiar mensaje para el administrador</button></div>
+        <div class="mbh-p">Después de publicar los cambios, pulsa <b>Volver a revisar</b>. Pueden tardar de unos minutos a unas horas en verse.</div>` : ''}`;
     } catch (e) { box.innerHTML = '<div class="mbh-load" style="color:var(--danger)">No se pudo revisar: ' + esc(e.message) + '</div>'; }
   }
   async function _mbhRampLoad() {
@@ -32646,7 +32679,7 @@ ${foot}
   return { load, filter, setFilter, setView, go, openClient, clientTab, _clientGoTab, clientQuickMenu,
     openImportPicker, closeImportPicker, openImport, closeImport, impFile, impToggleHeader, impToggleUpdateExisting, impSetObc, impNewClient, impRun, exportCsv,
     cbxOpen, cbxFilter, cbxPick, cbxBlur,
-    mbHealthOpen, mbHealthClose, mbHealthRun, mbRampSave, _cpBack, _cpDelRun, openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, ctMoreMenu, lmSetValueOp, bulkDeleteContacts, bulkAddOpen, bulkAddDo, _bulkAddAfterCreate, bulkRemoveSeqOpen, bulkRemoveSeqDo, openContactPage, cpTab, cpSave, cpUndo, cpDelete, cpActOpen, cpTouchOpen, cpTouchSave, cpActSave, cpActToggle, cpActDel, ctQFSet, ctQFClear,
+    mbHealthOpen, mbHealthClose, mbHealthRun, mbhCopy, mbhCopyAdmin, mbRampSave, _cpBack, _cpDelRun, openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, ctMoreMenu, lmSetValueOp, bulkDeleteContacts, bulkAddOpen, bulkAddDo, _bulkAddAfterCreate, bulkRemoveSeqOpen, bulkRemoveSeqDo, openContactPage, cpTab, cpSave, cpUndo, cpDelete, cpActOpen, cpTouchOpen, cpTouchSave, cpActSave, cpActToggle, cpActDel, ctQFSet, ctQFClear,
     cpResumeSeq, cpFocusField, cpOpenRegisterReply, cpSaveRegisterReply,
     openCompany, closeCompany, saveCompany, deleteCompany, enrichCompanyLookup, filterCompanies, toggleCo, toggleCoAll, clearCoSel, toggleCoSelMode, coMoreMenu, bulkDeleteCompanies, coEnrolOpen, coEnrolFilter, coEnrolPick, openCompanyPage, coQFSet, coQFClear,
     coQueueAddContact, coQueueDiscard, coQueueTogglePrimary, coQueueContinue,
