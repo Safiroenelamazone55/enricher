@@ -28653,7 +28653,7 @@ ${foot}
       const r = await apiFetch(API + '/lm/contacts/' + _mt.cid + '/meeting', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) });
       const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Error');
       _mt.m = d.meeting; c.reunion_agendada_at = c.reunion_agendada_at || new Date().toISOString();
-      _mtPaint(c); showBanner('✓ Reunión guardada — recordatorios programados', 'success');
+      mtClose(); showBanner('✓ Reunión guardada', 'success');
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
   async function mtSend(n) {
