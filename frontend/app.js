@@ -35906,6 +35906,7 @@ const WaChatModule = (() => {
   function _nombreChat(row) {
     if (row.nombre) return row.nombre;
     const esGrupo = row.es_grupo || String(row.chat_jid || '').endsWith('@g.us');
+    if (String(row.chat_jid || '').endsWith('@lid')) return 'Contacto sin número (…' + String(row.chat_jid).split('@')[0].slice(-4) + ')';
     return esGrupo ? 'Grupo sin nombre' : ('+' + String(row.chat_jid || '').split('@')[0]);
   }
 
@@ -37831,6 +37832,7 @@ const ObcWaModule = (() => {
   function _nombreChat(row) {
     if (row.nombre) return row.nombre;
     const esGrupo = row.es_grupo || String(row.chat_jid || '').endsWith('@g.us');
+    if (String(row.chat_jid || '').endsWith('@lid')) return 'Contacto sin número (…' + String(row.chat_jid).split('@')[0].slice(-4) + ')';
     return esGrupo ? 'Grupo sin nombre' : ('+' + String(row.chat_jid || '').split('@')[0]);
   }
 
