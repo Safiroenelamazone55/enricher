@@ -11663,6 +11663,8 @@ const TasksModule = (() => {
     const showBar   = _currentView === 'list' || _currentView === 'kanban';
     if (toolbar)   toolbar.style.display   = showBar ? '' : 'none';
     if (estadoBtn) estadoBtn.style.display = _currentView === 'list' ? '' : 'none';
+    // 'Columnas' solo aplica a la tabla (Lista); en Kanban no hace nada y confundía
+    const colBtn = $('tasks-colbtn'); if (colBtn) colBtn.style.display = _currentView === 'list' ? '' : 'none';
     const viewEl = $('tasks-view-' + _currentView);
     if (viewEl) viewEl.style.display = '';
     if (_currentView === 'list')     render();
