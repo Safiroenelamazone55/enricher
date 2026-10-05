@@ -4981,6 +4981,39 @@ app.put('/api/lm/contacts/:id/meeting', requireAuth, async (req, res) => {
     res.json({ ok: true, meeting: await _mtView(pool, uid, cid) });
   } catch (e) { console.error('[meeting]', e.message); res.status(500).json({ error: 'No se pudo guardar la reunión' }); }
 });
+app.post('/api/lm/contacts/:id/meeting/preview', requireAuth, async (req, res) => {
+  const b = req.body || {};
+  try {
+    const tz = String(b.tz || 'America/Lima');
+    const start = _mtSvc.zonedToUtc(b.local, tz) || new Date(Date.now() + 86400000);
+    const { rows: [k] } = await pool.query('SELECT nombre FROM lm_contacts WHERE id=$1 AND user_id=$2', [+req.params.id, req.workspaceOwnerId]);
+    const m = { starts_at: start, tz, tipo: ['meet', 'zoom', 'teams', 'telefono', 'presencial', 'otro'].includes(b.tipo) ? b.tipo : 'otro',
+      enlace: String(b.enlace || '').trim(), anfitrion: String(b.anfitrion || '').trim(), idioma: b.idioma === 'en' ? 'en' : 'es' };
+    res.json({ default1: _mtSvc.defaultMessage(m, k && k.nombre, 1), default2: _mtSvc.defaultMessage(m, k && k.nombre, 2) });
+  } catch (e) { res.status(500).json({ error: 'No se pudo generar la vista previa' }); }
+});
+app.post('/api/lm/contacts/:id/meeting/preview', requireAuth, async (req, res) => {
+  const b = req.body || {};
+  try {
+    const tz = String(b.tz || 'America/Lima');
+    const start = _mtSvc.zonedToUtc(b.local, tz) || new Date(Date.now() + 86400000);
+    const { rows: [k] } = await pool.query('SELECT nombre FROM lm_contacts WHERE id=$1 AND user_id=$2', [+req.params.id, req.workspaceOwnerId]);
+    const m = { starts_at: start, tz, tipo: ['meet', 'zoom', 'teams', 'telefono', 'presencial', 'otro'].includes(b.tipo) ? b.tipo : 'otro',
+      enlace: String(b.enlace || '').trim(), anfitrion: String(b.anfitrion || '').trim(), idioma: b.idioma === 'en' ? 'en' : 'es' };
+    res.json({ default1: _mtSvc.defaultMessage(m, k && k.nombre, 1), default2: _mtSvc.defaultMessage(m, k && k.nombre, 2) });
+  } catch (e) { res.status(500).json({ error: 'No se pudo generar la vista previa' }); }
+});
+app.post('/api/lm/contacts/:id/meeting/preview', requireAuth, async (req, res) => {
+  const b = req.body || {};
+  try {
+    const tz = String(b.tz || 'America/Lima');
+    const start = _mtSvc.zonedToUtc(b.local, tz) || new Date(Date.now() + 86400000);
+    const { rows: [k] } = await pool.query('SELECT nombre FROM lm_contacts WHERE id=$1 AND user_id=$2', [+req.params.id, req.workspaceOwnerId]);
+    const m = { starts_at: start, tz, tipo: ['meet', 'zoom', 'teams', 'telefono', 'presencial', 'otro'].includes(b.tipo) ? b.tipo : 'otro',
+      enlace: String(b.enlace || '').trim(), anfitrion: String(b.anfitrion || '').trim(), idioma: b.idioma === 'en' ? 'en' : 'es' };
+    res.json({ default1: _mtSvc.defaultMessage(m, k && k.nombre, 1), default2: _mtSvc.defaultMessage(m, k && k.nombre, 2) });
+  } catch (e) { res.status(500).json({ error: 'No se pudo generar la vista previa' }); }
+});
 app.post('/api/lm/contacts/:id/meeting/send', requireAuth, async (req, res) => {
   const n = (req.body || {}).n === 2 ? 2 : 1;
   try {

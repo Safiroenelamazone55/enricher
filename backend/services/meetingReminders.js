@@ -44,7 +44,7 @@ function defaultMessage(m, contactName, n) {
     const lines = n === 1
       ? [`Hi ${nom},`, '', `Just a quick reminder of our meeting tomorrow, ${f.dia} at ${f.hora} (${f.zona}).`]
       : [`Hi ${nom},`, '', `Our meeting starts in 30 minutes (${f.hora} ${f.zona}).`];
-    if (host) lines.push(n === 1 ? `${host} will be joining you.` : '');
+    if (host) lines.push(`${host} will be joining you.`);
     if (enlace) lines.push(`${lugar ? lugar + ': ' : 'Link: '}${enlace}`); else if (lugar) lines.push(`Where: ${lugar}`);
     lines.push('', n === 1 ? 'See you tomorrow!' : 'See you soon!');
     return lines.filter((l, i, a) => !(l === '' && a[i - 1] === '')).join('\n').trim();
@@ -52,7 +52,7 @@ function defaultMessage(m, contactName, n) {
   const lines = n === 1
     ? [`Hola ${nom},`, '', `Te recuerdo nuestra reunión de mañana, ${f.dia} a las ${f.hora} (${f.zona}).`]
     : [`Hola ${nom},`, '', `Nuestra reunión empieza en 30 minutos (${f.hora} ${f.zona}).`];
-  if (host) lines.push(n === 1 ? `Te atenderá ${host}.` : '');
+  if (host) lines.push(`Te atenderá ${host}.`);
   if (enlace) lines.push(`${lugar ? lugar + ': ' : 'Enlace: '}${enlace}`); else if (lugar) lines.push(`Lugar: ${lugar}`);
   lines.push('', n === 1 ? '¡Nos vemos mañana!' : '¡Nos vemos en un momento!');
   return lines.filter((l, i, a) => !(l === '' && a[i - 1] === '')).join('\n').trim();

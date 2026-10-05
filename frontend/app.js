@@ -28514,9 +28514,25 @@ ${foot}
       box.textContent = 'Tu hora (' + city + '): ' + new Intl.DateTimeFormat('es-PE', { timeZone: mine, weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false }).format(d);
     });
   }
+
+  // Vista previa en vivo: al pegar el enlace, cambiar el nombre, el lugar o el idioma, los mensajes se rehacen solos
+  // (solo los que la persona NO ha editado a mano).
+  let _mtPrevT = null;
+  function mtPreview() {
+    clearTimeout(_mtPrevT);
+    _mtPrevT = setTimeout(async () => {
+      const g = id => document.getElementById(id); if (!g('mt-tz')) return;
+      const body = { local: g('mt-local').value, tz: g('mt-tz').value, tipo: g('mt-tipo').value || 'otro', enlace: g('mt-enlace').value.trim(), anfitrion: g('mt-host').value.trim(), idioma: g('mt-idioma').dataset.v };
+      try {
+        const r = await apiFetch(API + '/lm/contacts/' + _mt.cid + '/meeting/preview', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        if (!r.ok) return; const d = await r.json();
+        [1, 2].forEach(n => { const t = g('mt-msg' + n); if (t && !t.dataset.d && !(_mt.m && _mt.m['msg' + n])) t.value = d['default' + n]; });
+      } catch (_) {}
+    }, 350);
+  }
   function mtSeg(id, v) {
     const el = document.getElementById(id); if (!el) return;
-    el.dataset.v = v; el.querySelectorAll('button').forEach(x => x.classList.toggle('on', x.dataset.v === v));
+    el.dataset.v = v; if (id === 'mt-idioma') mtPreview(); el.querySelectorAll('button').forEach(x => x.classList.toggle('on', x.dataset.v === v));
   }
   function _mtPaint(c) {
     mtClose();
@@ -28528,9 +28544,10 @@ ${foot}
     const fld = (l, inner, cls) => '<label class="mt-f' + (cls ? ' ' + cls : '') + '"><span class="mt-l">' + l + '</span>' + inner + '</label>';
     const idiomaDef = m ? m.idioma : (_mt.inherit && _mt.inherit.idioma) ? _mt.inherit.idioma : ((String(c.pais || '').trim().toLowerCase().match(/^(us|usa|united states|estados unidos|ee\.?uu\.?|uk|reino unido|canada|australia)/)) ? 'en' : 'es');
     const est = n => m ? '<span class="mt-est mt-est--' + m['rem' + n + '_estado'] + '">' + (_MT_EST[m['rem' + n + '_estado']] || '') + '</span>' : '';
+    const mm = m || {};
     const rem = n => '<div class="mt-msg"><div class="mt-msg__hd"><span>' + (n === 1 ? 'Día anterior · 10:00 del prospecto' : '30 minutos antes') + '</span>' + est(n) + '</div>' +
-      '<textarea class="mt-i" id="mt-msg' + n + '" rows="6" oninput="this.dataset.d=1">' + esc(m['msg' + n] || m['default' + n]) + '</textarea>' +
-      '<div class="mt-msg__ft"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.mtSend(' + n + ')">Enviar ahora por ' + (m.canal === 'whatsapp' ? 'WhatsApp' : 'email') + '</button>' + (m['rem' + n + '_estado'] === 'error' && m.error ? '<span class="mt-err">' + esc(m.error) + '</span>' : '') + '</div></div>';
+      '<textarea class="mt-i" id="mt-msg' + n + '" rows="6" oninput="this.dataset.d=1">' + esc(mm['msg' + n] || mm['default' + n] || '') + '</textarea>' +
+      '<div class="mt-msg__ft">' + (m ? '<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.mtSend(' + n + ')">Enviar ahora por ' + (m.canal === 'whatsapp' ? 'WhatsApp' : 'email') + '</button>' + (m['rem' + n + '_estado'] === 'error' && m.error ? '<span class="mt-err">' + esc(m.error) + '</span>' : '') : '') + '</div></div>';
     const inh = _mt.inherit || {};
     const _loc = d => { if (!d) return ''; try { return new Intl.DateTimeFormat('sv-SE', { timeZone: m.tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(d)).replace(' ', 'T'); } catch (_) { return ''; } };
     const _recNote = n => {
@@ -28548,6 +28565,7 @@ ${foot}
     const box = document.createElement('div'); box.id = 'mt-modal'; box.className = 'fin-pi-backdrop';
     box.onclick = ev => { if (ev.target === box) mtClose(); };
     setTimeout(mtTimes, 0);
+    setTimeout(() => { ['mt-local', 'mt-tz', 'mt-tipo', 'mt-enlace', 'mt-host'].forEach(i => { const e = document.getElementById(i); if (e) { e.addEventListener('input', mtPreview); e.addEventListener('change', mtPreview); } }); mtPreview(); }, 0);
     box.innerHTML = '<div class="mt-box">' +
       '<div class="mt-hd"><div><div class="mt-t">Reunión · ' + esc(full) + '</div><div class="mt-s">Recordatorios al prospecto, en su hora: el día anterior y 30 minutos antes.</div></div><button class="fin-pi-x" onclick="LeadManagerModule.mtClose()">✕</button></div>' +
       '<div class="mt-body">' +
@@ -28565,7 +28583,7 @@ ${foot}
           fld('Enviar por', seg('mt-canal', [['email', 'Email'], ['whatsapp', 'WhatsApp']], m ? m.canal : 'email')) +
           fld('Modo', seg('mt-modo', [['revision', 'Con revisión'], ['auto', 'Automático']], m ? m.modo : 'revision')) + '</div>' +
           '<div class="mt-hint">Con revisión te deja una tarea en Hoy con el mensaje listo; automático lo envía solo. Sale desde el buzón del cliente (email) o su WhatsApp conectado.</div></div>' +
-        timing + (m ? '<div class="mt-sec"><div class="mt-sec__t">Mensajes <span class="mt-hint" style="margin:0 0 0 6px">editables</span></div><div class="mt-row mt-row--top">' + rem(1) + rem(2) + '</div></div>'
+        timing + ('<div class="mt-sec"><div class="mt-sec__t">Mensajes <span class="mt-hint" style="margin:0 0 0 6px">se completan solos con el enlace y el nombre; puedes editarlos</span></div><div class="mt-row mt-row--top">' + rem(1) + rem(2) + '</div></div>'
            : '<div class="mt-hint">Guarda la reunión y aquí aparecerán los dos mensajes listos para editar.</div>') +
       '</div>' +
       '<div class="mt-ft">' + (m ? '<button class="btn btn--ghost btn--sm" style="color:#B91C1C" onclick="LeadManagerModule.mtCancel()">Cancelar reunión</button>' : '') + '<span style="flex:1"></span><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.mtClose()">Cerrar</button><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.mtSave()">' + (m ? 'Guardar cambios' : 'Guardar reunión') + '</button></div>' +
