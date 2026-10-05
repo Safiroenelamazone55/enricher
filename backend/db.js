@@ -1519,6 +1519,14 @@ async function initDb() {
     // Por defecto TODO buzón nuevo arranca con el calentamiento gradual encendido (empieza hoy).
     await pool.query(`ALTER TABLE lm_mailboxes ALTER COLUMN ramp_on SET DEFAULT TRUE;`);
     await pool.query(`ALTER TABLE lm_mailboxes ALTER COLUMN ramp_started_on SET DEFAULT CURRENT_DATE;`);
+    // Valores realistas por defecto: 5 envíos/día la primera semana, +5 cada semana, meta 30/día (personalizables por buzón).
+    await pool.query(`ALTER TABLE lm_mailboxes ALTER COLUMN ramp_start SET DEFAULT 5;`);
+    await pool.query(`ALTER TABLE lm_mailboxes ALTER COLUMN ramp_step SET DEFAULT 5;`);
+    await pool.query(`ALTER TABLE lm_mailboxes ALTER COLUMN ramp_target SET DEFAULT 30;`);
+    // Una sola vez: los buzones que siguen con los primeros valores automáticos (10/10/50) pasan a los realistas y la rampa
+    // cuenta desde HOY (no se les reconocen semanas anteriores). Quien ya personalizó su rampa no se toca.
+    await pool.query(`UPDATE lm_mailboxes SET ramp_start=5, ramp_step=5, ramp_target=30, ramp_on=TRUE, ramp_started_on=CURRENT_DATE
+                        WHERE ramp_start=10 AND ramp_step=10 AND ramp_target=50`);
     // Buzones que ya existían y nunca configuraron la rampa: se encienden contando desde su primer envío
     // (o desde que se conectaron), así los que ya llevan semanas enviando no quedan frenados en 10/día.
     await pool.query(`

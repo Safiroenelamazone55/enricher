@@ -5256,7 +5256,7 @@ app.put('/api/lm/mailboxes/:id/ramp', requireAuth, async (req, res) => {
   try {
     const b = req.body || {};
     const clamp = (v, lo, hi, def) => { const n = parseInt(v); return isNaN(n) ? def : Math.min(hi, Math.max(lo, n)); };
-    const on = !!b.on, start = clamp(b.start, 1, 200, 10), step = clamp(b.step, 1, 200, 10), target = clamp(b.target, start, 1000, 50);
+    const on = !!b.on, start = clamp(b.start, 1, 200, 5), step = clamp(b.step, 1, 200, 5), target = clamp(b.target, start, 1000, 30);
     const tz = await _tzOfUser(req.user && req.user.id);
     const { rows: [cur] } = await pool.query('SELECT ramp_on, ramp_started_on FROM lm_mailboxes WHERE id=$1 AND user_id=$2', [req.params.id, req.workspaceOwnerId]);
     if (!cur) return res.status(404).json({ error: 'Buzón no encontrado' });
