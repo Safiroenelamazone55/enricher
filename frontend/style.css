@@ -17794,3 +17794,21 @@ tr.tk-flash > td { background-color: #FEF9C3; animation: none; }
 .stp-need { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 10px; margin: 4px 0 6px; background: #FEF3C7; color: #78350F; font-size: .78rem; line-height: 1.4; border-left: 3px solid #D97706; }
 .stp-need > span { flex: 1; min-width: 200px; }
 .stp-hint2 { display: block; }
+
+/* Deals: vistas Lista y Calendario */
+.dl-tbl-wrap{overflow:auto;border:1px solid var(--border,#EAE7E2);border-radius:10px;background:#fff}
+.dl-tbl{width:100%;border-collapse:collapse;font-size:.84rem}
+.dl-tbl th{text-align:left;font-weight:600;font-size:.72rem;color:#64748B;padding:9px 12px;border-bottom:1px solid var(--border,#EAE7E2);background:#FAFAF8;white-space:nowrap}
+.dl-tbl td{padding:9px 12px;border-bottom:1px solid #F1EFEB;white-space:nowrap;max-width:240px;overflow:hidden;text-overflow:ellipsis}
+.dl-tbl tr{cursor:pointer}.dl-tbl tbody tr:hover{background:#F7F8F6}
+.dl-tbl .r{text-align:right}.dl-tbl .b{font-weight:600}.dl-tbl .mut{color:#94A3B8}.dl-tbl .late{color:#B91C1C;font-weight:600}
+.dl-st{display:inline-flex;align-items:center;gap:6px}.dl-st i{width:8px;height:8px;border-radius:50%;display:inline-block}
+.dl-cal-hd{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.dl-cal-g{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));border:1px solid var(--border,#EAE7E2);border-radius:10px;overflow:hidden;background:#fff}
+.dl-cal-w{padding:6px;text-align:center;font-size:.7rem;font-weight:600;color:#64748B;background:#FAFAF8;border-bottom:1px solid var(--border,#EAE7E2)}
+.dl-cal-c{min-height:92px;padding:4px;border-right:1px solid #F1EFEB;border-bottom:1px solid #F1EFEB;overflow:hidden}
+.dl-cal-c--off{background:#FAFAF8}.dl-cal-c--today{background:#F0FDF4}
+.dl-cal-d{font-size:.72rem;color:#64748B;margin-bottom:3px}
+.dl-cal-chip{font-size:.72rem;padding:2px 5px;margin-bottom:2px;border-left:3px solid #888;background:#F3F4F2;border-radius:3px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dl-cal-chip:hover{background:#E8EAE6}.dl-cal-more{font-size:.68rem;color:#64748B;padding-left:4px}
+.dl-cal-sf{margin-top:12px;padding:10px;border:1px dashed #D6D3CD;border-radius:10px}.dl-cal-sf__t{font-size:.75rem;font-weight:600;color:#64748B;margin-bottom:6px}

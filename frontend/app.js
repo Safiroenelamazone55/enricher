@@ -28182,6 +28182,8 @@ ${foot}
 
   // ── Deals: capa financiera del pipeline (valor · probabilidad · fecha de cierre) ──
   let _dlCli = '';
+  let _dlView = (() => { try { return localStorage.getItem('dl_view') || 'kanban'; } catch (_) { return 'kanban'; } })();
+  const _dlNow = new Date(); let _dlCalY = _dlNow.getFullYear(), _dlCalM = _dlNow.getMonth();
   const _DL_STAGES = ['propuesta', 'negociacion', 'ganado', 'perdido'];
   // Columnas del tablero: "Reunión" es derivada (no es una etapa guardada): reunión agendada o deal con valor/cierre
   // que aún no pasó a Propuesta. Pedido 2026-10-03: Deals = intención comercial clara (reunión, propuesta…), el valor es opcional.
@@ -28218,7 +28220,7 @@ ${foot}
         <div><h2 class="lm-sec-title">Deals</h2></div>
       </div>
       <div id="dl-kpis"></div>
-      <div class="dl-toolbar"><select class="ldh-sel" id="dl-cli" onchange="LeadManagerModule.dlSetCli(this.value)"></select></div>
+      <div class="dl-toolbar" style="display:flex;align-items:center;gap:8px"><select class="ldh-sel" id="dl-cli" onchange="LeadManagerModule.dlSetCli(this.value)"></select><span style="flex:1"></span><div class="view-tabs" id="dl-views"></div></div>
       <div id="dl-board"></div>`;
   }
   function _dlPaint() {
@@ -28267,7 +28269,52 @@ ${foot}
         <div class="dl-col__hd"><span class="cp-mark-dot" style="background:${_stColor(st)}"></span><span class="dl-col__t">${_DL_COL_LBL[st]}</span><span class="dl-col__n">${items.length}</span><span class="dl-col__sum">${_dlSums(items)}</span></div>
         ${cards || '<div class="dl-empty-col">— vacío —</div>'}</div>`;
     };
-    bEl.innerHTML = `<div class="dl-board">${_DL_COLS.map(col).join('')}</div>`;
+    const vEl = $('dl-views'); if (vEl) vEl.innerHTML = _dlViewTabs();
+    bEl.innerHTML = _dlView === 'lista' ? _dlTable(list) : _dlView === 'calendario' ? _dlCalendar(list) : `<div class="dl-board">${_DL_COLS.map(col).join('')}</div>`;
+  }
+
+  // ── Vistas de Deals (mismas que Tareas/Proyectos): Kanban · Lista · Calendario ──
+  const _DL_VIEWS = [
+    ['kanban', 'Kanban', '<rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="12" rx="1"/><rect x="17" y="3" width="5" height="7" rx="1"/>'],
+    ['lista', 'Lista', '<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>'],
+    ['calendario', 'Calendario (fecha de cierre)', '<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>'],
+  ];
+  function _dlViewTabs() {
+    return _DL_VIEWS.map(([k, t, p]) => '<button class="view-tab' + (_dlView === k ? ' active' : '') + '" title="' + t + '" aria-label="' + t + '" onclick="LeadManagerModule.dlSetView(\'' + k + '\')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + p + '</svg></button>').join('');
+  }
+  function dlSetView(v) { _dlView = v; try { localStorage.setItem('dl_view', v); } catch (_) {} _dlPaint(); }
+  function _dlName(c) { return [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || '—'; }
+  function _dlTable(list) {
+    const rows = list.slice().sort((a, b) => String(a.deal_cierre || '9999').localeCompare(String(b.deal_cierre || '9999')) || _DL_COLS.indexOf(_dlCol(a)) - _DL_COLS.indexOf(_dlCol(b)));
+    const today = _localISO();
+    return '<div class="dl-tbl-wrap"><table class="dl-tbl"><thead><tr><th>Contacto</th><th>Empresa</th><th>Cliente</th><th>Etapa</th><th class="r">Valor</th><th class="r">Prob.</th><th>Cierre</th></tr></thead><tbody>' +
+      rows.map(c => {
+        const st = _dlCol(c), cli = _clients.find(x => x.id === c.outbound_client_id), cierre = c.deal_cierre ? String(c.deal_cierre).slice(0, 10) : '';
+        const late = cierre && cierre < today && (st === 'propuesta' || st === 'negociacion');
+        return '<tr onclick="LeadManagerModule.dlOpen(' + c.id + ')"><td class="b">' + esc(_dlName(c)) + '</td><td>' + esc(c.company_nombre || '—') + '</td><td>' + esc((cli && cli.nombre) || '—') + '</td>' +
+          '<td><span class="dl-st"><i style="background:' + _stColor(st) + '"></i>' + _DL_COL_LBL[st] + '</span></td>' +
+          '<td class="r">' + (c.deal_valor == null ? '<span class="mut">Sin valor</span>' : _dlMoney(c.deal_valor, c.deal_moneda)) + '</td>' +
+          '<td class="r">' + (c.deal_prob != null ? c.deal_prob + '%' : '—') + '</td>' +
+          '<td' + (late ? ' class="late"' : '') + '>' + (cierre ? _ldFmtDate(cierre + 'T12:00:00') : '<span class="mut">—</span>') + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+  function dlCalNav(d) { if (d === 0) { const n = new Date(); _dlCalY = n.getFullYear(); _dlCalM = n.getMonth(); } else { _dlCalM += d; if (_dlCalM < 0) { _dlCalM = 11; _dlCalY--; } if (_dlCalM > 11) { _dlCalM = 0; _dlCalY++; } } _dlPaint(); }
+  function _dlCalendar(list) {
+    const pad = n => String(n).padStart(2, '0'), today = _localISO();
+    const first = new Date(_dlCalY, _dlCalM, 1), total = new Date(_dlCalY, _dlCalM + 1, 0).getDate(), dow = (first.getDay() + 6) % 7;
+    const by = {}, sinFecha = [];
+    list.forEach(c => { const k = c.deal_cierre ? String(c.deal_cierre).slice(0, 10) : ''; if (!k) sinFecha.push(c); else (by[k] = by[k] || []).push(c); });
+    const chip = c => '<div class="dl-cal-chip" style="border-left-color:' + _stColor(_dlCol(c)) + '" title="' + esc(_dlName(c) + (c.company_nombre ? ' · ' + c.company_nombre : '')) + '" onclick="LeadManagerModule.dlOpen(' + c.id + ')">' + esc(_dlName(c)) + (c.deal_valor != null ? ' · ' + _dlMoney(c.deal_valor, c.deal_moneda) : '') + '</div>';
+    let cells = '';
+    for (let i = 0; i < dow; i++) cells += '<div class="dl-cal-c dl-cal-c--off"></div>';
+    for (let d = 1; d <= total; d++) {
+      const k = _dlCalY + '-' + pad(_dlCalM + 1) + '-' + pad(d), items = by[k] || [];
+      cells += '<div class="dl-cal-c' + (k === today ? ' dl-cal-c--today' : '') + '"><div class="dl-cal-d">' + d + '</div>' + items.slice(0, 3).map(chip).join('') + (items.length > 3 ? '<div class="dl-cal-more">+' + (items.length - 3) + ' más</div>' : '') + '</div>';
+    }
+    const mes = new Date(_dlCalY, _dlCalM, 1).toLocaleDateString('es-PE', { month: 'long', year: 'numeric' });
+    return '<div class="dl-cal"><div class="dl-cal-hd"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.dlCalNav(-1)">‹</button><b style="text-transform:capitalize;min-width:150px;text-align:center">' + mes + '</b><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.dlCalNav(1)">›</button><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.dlCalNav(0)">Hoy</button></div>' +
+      '<div class="dl-cal-g">' + ['L', 'M', 'X', 'J', 'V', 'S', 'D'].map(x => '<div class="dl-cal-w">' + x + '</div>').join('') + cells + '</div>' +
+      (sinFecha.length ? '<div class="dl-cal-sf"><div class="dl-cal-sf__t">Sin fecha de cierre (' + sinFecha.length + ')</div>' + sinFecha.map(chip).join('') + '</div>' : '') + '</div>';
   }
   function dlSetCli(v) { _dlCli = v; _dlPaint(); }
   function dlClose() { document.getElementById('dl-modal')?.remove(); }
@@ -32940,7 +32987,7 @@ ${foot}
     ldRefer, ldReferSave, ldNurture, ldNurtureSave, ldOpenDispoMenu,
     nurtureRetomarMenu, nurtureReinscribir, nurtureOtraSecuencia, nurtureSoloManual,
     waitingContactMenu, activarSiguienteContacto, waitingCerrarAviso,
-    dlSetCli, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel, mtOpen, mtClose, mtSave, mtSend, mtCancel,
+    dlSetCli, dlSetView, dlCalNav, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel, mtOpen, mtClose, mtSave, mtSend, mtCancel,
     sqSetCli, sqSetEst, sqSetQ, cmSetCli, cmSetEst, cmSetQ,
     seqRunSetCanal, seqTaskSetDue,
     mbOpen, mbClose, mbSave, mbTest, mbDelete, mbProv, mbOAuthStart, mbManageOpen, mbManageClose,
