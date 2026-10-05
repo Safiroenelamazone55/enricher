@@ -659,8 +659,8 @@ body {
 .btn--primary:hover:not(:disabled) { background:var(--brand-d) }
 .btn--outline { background:transparent; color:var(--brand); border:1.5px solid var(--brand-l) }
 .btn--outline:hover:not(:disabled) { background:var(--brand-ll) }
-.btn--ghost { background:var(--bg); color:var(--text2); border:1.5px solid var(--border) }
-.btn--ghost:hover:not(:disabled) { background:var(--bg2); border-color:var(--border2) }
+.btn--ghost { background:var(--bg); color:var(--text2); border:none }
+.btn--ghost:hover:not(:disabled) { background:var(--bg2) }
 .btn--green { background:var(--ok); color:#fff }
 .btn--green:hover:not(:disabled) { background:#047857 }
 .btn--danger { background:var(--err); color:#fff }
@@ -4391,6 +4391,9 @@ a.contact-card__meta:hover { color: var(--accent); text-decoration: underline; }
 .fin-pi-x:hover { background: var(--bg2, #F1EFEB); color: var(--text); }
 .fin-pi-form { padding: 18px 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; overflow-y: auto; flex: 1 1 auto; min-height: 0; }
 .fin-pi-full { grid-column: 1 / -1; }
+.co-enrich-row{background:#FAF8F5;border:1px solid var(--border);padding:10px 12px;margin-bottom:2px}
+.co-enrich-row__in{display:flex;gap:8px;margin-top:4px}
+.co-enrich-row__in .form-input{flex:1}
 .fin-pi-form textarea.form-input { resize: vertical; min-height: 48px; font-family: inherit; }
 .fin-pi-box__ft { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 20px; border-top: 1px solid var(--border); background: #FAF8F5; }
 .fin-pi-ft-btns { display: flex; gap: 8px; }
@@ -12482,6 +12485,13 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
    espacio"). Si no caben todos los botones, la franja de acciones scrollea
    horizontal en vez de bajar a una segunda fila. */
 .cant-results-bar { display: flex; align-items: center; gap: 10px; flex-wrap: nowrap; min-width: 0; }
+/* El resumen de filtros podía crecer sin límite y empujar "Limpiar filtros"
+   fuera de la pantalla sin forma de alcanzarlo (reportado en vivo 2026-09-30,
+   con captura, varias industrias seleccionadas). Se trunca con "…" y el
+   conteo + botón quedan siempre visibles a la derecha. */
+.cant-results-bar .cant-count { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.cant-results-bar .cant-results-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.cant-results-bar .cant-results-actions .cant-results-total { margin-left: 0; padding-left: 0; }
 .cant-results-actions { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; margin-left: auto; overflow-x: auto; overflow-y: hidden; padding-bottom: 2px; scrollbar-width: thin; }
 .cant-results-actions > * { flex-shrink: 0; }
 .cant-flabel { display: flex; flex-direction: column; gap: 4px; font-size: .74rem; font-weight: 600; color: var(--text2, #45586A); }
@@ -12501,6 +12511,14 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .cant-copy-row textarea { flex: 1; height: 96px; resize: none; }
 .cant-copy-row__btn { flex-shrink: 0; width: 34px; border: 1px solid var(--border, #EAE7E2); background: #fff; border-radius: 0; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text2, #45586A); }
 .cant-copy-row__btn:hover { background: var(--brand-ll, #F1EFEB); }
+.cant-copy-row__btn--ok { color: #1F7A45; border-color: #1F7A45; background: #DDF3E4; }
+/* Progreso minimalista del modal de Validación manual -- pedido explícito
+   2026-09-30: "barra minimalista de progreso, 10 de 100... con los filtros
+   actuales". */
+.cant-manual-progress { display: flex; align-items: center; gap: 8px; flex: 1; max-width: 220px; margin: 0 16px; }
+.cant-manual-progress__bar { flex: 1; height: 4px; background: var(--border, #EAE7E2); border-radius: 999px; overflow: hidden; }
+.cant-manual-progress__fill { height: 100%; background: var(--brand, #007AFF); border-radius: 999px; }
+.cant-manual-progress__txt { font-size: .72rem; font-weight: 600; color: var(--text2, #6C6862); white-space: nowrap; flex: none; }
 .cant-import-hint { color: var(--muted, #B4AFA8); font-size: .76rem; flex: 1 1 260px; }
 .cant-imp-done-box { display: flex; align-items: center; gap: 14px; background: var(--white, #fff); border: 1px solid var(--border, #EAE7E2); padding: 14px 16px; flex-wrap: wrap; }
 .cant-imp-done-box__ico { font-size: 1.6rem; flex-shrink: 0; }
@@ -12575,15 +12593,24 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .cant-inrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 3px 10px; font-size: .82rem; color: var(--text-primary); }
 .cant-inrow:hover { background: var(--brand-ll, #F1EFEB); }
 .cant-inrow__v { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cant-inrow--inc .cant-inrow__v { color: #15803D; font-weight: 600; }
-.cant-inrow--exc .cant-inrow__v { color: #C4342B; text-decoration: line-through; }
+/* Píldora pastel al aplicar Incluir/Excluir -- mismo tono que Base Global
+   (.tag--inc/.tag--exc), pedido explícito 2026-09-30: "que en borrador
+   cantera los filtros, al aplicar también sugiera esos tonos pasteles". */
+.cant-inrow--inc .cant-inrow__v { color: #1F7A45; font-weight: 600; background: #DDF3E4; border-radius: 999px; padding: 2px 8px; margin: -2px 0; }
+.cant-inrow--exc .cant-inrow__v { color: #B23B3B; font-weight: 600; background: #FBE1E1; border-radius: 999px; padding: 2px 8px; margin: -2px 0; }
 .cant-inrow__ops { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
-.cant-inrow__op { font-family: inherit; font-size: .74rem; font-weight: 500; border: none; background: none; color: var(--text-muted); cursor: pointer; padding: 2px 3px; opacity: 0; transition: opacity .1s; }
+/* Incluir/Excluir siempre visibles -- pedido explicito: "no entiendo por que
+   si le pongo el mouse encima recien me aparece... en global ya aparece con
+   normalidad" (antes opacity:0 hasta hover, distinto de Base Global). */
+.cant-inrow__op { font-family: inherit; font-size: .74rem; font-weight: 500; border: none; background: none; color: var(--text-muted); cursor: pointer; padding: 2px 3px; opacity: .7; transition: opacity .1s; }
 .cant-inrow:hover .cant-inrow__op, .cant-inrow__op.on { opacity: 1; }
 .cant-inrow__op:hover { text-decoration: underline; }
 .cant-inrow__op.on { color: #15803D; font-weight: 700; }
 .cant-inrow__op--exc.on { color: #C4342B; }
 .cant-inrow__sep { color: var(--border-strong); font-size: .74rem; }
+/* Conteo por opcion -- pedido explicito: "falta añadir que se contabilice...
+   cuantos existen [con los filtros ya aplicados]". */
+.cant-inrow__n { color: var(--text-muted); font-weight: 400; font-size: .76rem; margin-left: 4px; }
 
 /* Base global — rail de filtros a la IZQUIERDA, contraído por defecto
    (pedido explícito 2026-09-06, corregido de derecha a izquierda). Panel
@@ -12617,7 +12644,9 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .cant-global-panel-hd { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .cant-global-fields-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; align-items: start; }
 .cant-global-fields-grid .filter-field { border: none; padding: 0; background: transparent; }
-.cant-global-saved { margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid var(--border, #EAE7E2); }
+.cant-global-saved { margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border, #EAE7E2); }
+.cant-global-saved--open { padding-bottom: 12px; }
+.cant-global-saved__hd { padding-left: 0; padding-right: 0; }
 .cant-global-saved-list { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; max-height: 160px; overflow: auto; }
 .cant-global-saved-item { display: flex; align-items: center; gap: 4px; }
 .cant-global-saved-apply { flex: 1; display: flex; align-items: center; justify-content: space-between; gap: 10px; border: 1px solid var(--border, #EAE7E2); background: #fff; padding: 6px 10px; border-radius: 8px; cursor: pointer; text-align: left; transition: background .15s, border-color .15s; }
@@ -12664,13 +12693,54 @@ textarea.cp-f__ta { resize: vertical; min-height: 44px; line-height: 1.4; }
 .ta-opt__op:hover { color: #15803D; text-decoration: underline; }
 .ta-opt__op--exc:hover { color: #C4342B; }
 .ta-opt__sep { color: var(--border-strong, #D9D4CC); font-size: .74rem; }
-.tag--inc { background: #D1FAE5; color: #065F46; }
-.tag--exc { background: #FEE2E2; color: #B91C1C; }
+/* Píldoras pastel para Incluir/Excluir -- muestra de referencia Sales
+   Navigator (pedido explícito 2026-09-30): "pero con tonos más pasteles". */
+.tag--inc { background: #DDF3E4; color: #1F7A45; border-radius: 999px; padding: 4px 6px 4px 11px; }
+.tag--exc { background: #FBE1E1; color: #B23B3B; border-radius: 999px; padding: 4px 6px 4px 11px; }
+
+/* Acordeón de criterios de Base Global — muestra de referencia Sales
+   Navigator (rediseño visual 2026-09-30, pedido explícito: "quiero ese
+   estilo, esas funciones, esas opciones, exactamente igual"). Cada campo es
+   una fila colapsada (como "Company"/"Role" del rail de LI); al click se
+   expande in-place mostrando chips + buscador, sin caja ni borde propio. */
+.ta-groups { margin-top: 4px; }
+.ta-group + .ta-group { margin-top: 14px; }
+.ta-group__hd { font-size: .68rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--text3, #8C9AA8); padding: 0 2px 6px; }
+.ta-row { border-bottom: 1px solid var(--border, #EAE7E2); }
+.ta-row:last-child { border-bottom: none; }
+.ta-row__hd { width: 100%; display: flex; align-items: center; gap: 8px; background: none; border: none; cursor: pointer; padding: 9px 2px; font: inherit; text-align: left; color: var(--text, #1F1D1B); }
+.ta-row__hd:hover { color: var(--brand, #007AFF); }
+.ta-row__hd:hover .ta-row__chev { color: var(--brand, #007AFF); }
+.ta-row__l { flex: 1; font-size: .84rem; font-weight: 600; }
+.ta-row__badge { flex: none; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--brand, #007AFF); color: #fff; font-size: .7rem; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
+.ta-row__chev { flex: none; width: 16px; text-align: center; font-size: .95rem; font-weight: 700; color: var(--text3, #8C9AA8); line-height: 1; }
+.ta-row--open > .ta-row__hd { color: var(--text, #1F1D1B); }
+.ta-row__body { padding: 0 2px 12px; }
+.ta-row__body .tag-list { margin-top: 2px; }
+
+/* Vista "Detallada" -- segunda vista del panel de criterios, igual que "See
+   all filters" de Sales Navigator: mismo acordeón, pero el panel se ensancha
+   y las secciones se acomodan en columnas lado a lado (columnas CSS, tipo
+   masonry) para que quepa mucho más sin tener que hacer scroll vertical.
+   Pedido explícito 2026-09-30: "tiene que tener ambas... una más clásica y
+   la otra con más detalle... 1 ocupa más espacio y la otra no". */
+.cant-global-vista-tog { background: none; border: 1px solid var(--border, #EAE7E2); color: var(--text2, #6C6862); font-size: .76rem; font-weight: 600; padding: 5px 10px; cursor: pointer; border-radius: 0; }
+.cant-global-vista-tog:hover { border-color: var(--brand, #007AFF); color: var(--brand, #007AFF); }
+.cant-global-panel--detail { flex-basis: 860px; }
+.ta-groups--detail { column-count: 2; column-gap: 28px; }
+.ta-groups--detail .ta-group { break-inside: avoid; }
+@media (max-width: 1300px) { .cant-global-panel--detail { flex-basis: 640px; } }
+@media (max-width: 900px) { .ta-groups--detail { column-count: 1; } }
+.cant-global-clearall-row { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border, #EAE7E2); }
+.cant-global-clearall { background: none; border: none; color: var(--brand, #007AFF); font-size: .8rem; font-weight: 600; cursor: pointer; padding: 2px; }
+.cant-global-clearall:hover:not(:disabled) { text-decoration: underline; }
+.cant-global-clearall:disabled { color: var(--text3, #8C9AA8); cursor: default; }
 
 /* Tiers */
 .cant-tiers { display: flex; flex-direction: column; gap: 10px; margin-bottom: 8px; }
 .cant-tier-card { border: 1px solid var(--border, #EAE7E2); border-radius: 0; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
 .cant-tier-row { display: flex; gap: 8px; align-items: center; }
+.cant-tier-califica { display: flex; align-items: center; gap: 6px; font-size: .78rem; color: var(--text2, #6C6862); cursor: pointer; }
 .cant-tier-row input.cant-tier-clave { max-width: 130px; font-weight: 700; font-family: inherit; }
 .cant-x { font-size: .8rem; color: var(--muted, #918C85); background: none; border: none; padding: 4px 6px; cursor: pointer; flex-shrink: 0; }
 .cant-x:hover { color: #B3261E; }
@@ -13665,11 +13735,11 @@ a.cp-strip__i:hover svg { color: var(--brand, #007AFF); }
 .ni { vertical-align: -2.5px; margin-right: 3px; flex-shrink: 0; }
 button .ni:only-child, .lm-mini-b .ni, .cp-mini .ni { margin-right: 0; }
 
-/* Botones → píldoras con peso (Pinterest) */
-.btn, .lm-filter-btn, .lm-sel-btn, .lm-bulk-act, .lm-bulk-ghost, .lm-bulk-del,
-.seqdo-copy, .cp-dispo-b, .seq-tasks-start, .cp-taskbar__exit {
-  border-radius: 999px !important;
-}
+/* Botones rectos, sin borde -- pedido explícito 2026-09-30: "recuerda, botones
+   deben ser sin borde, rectos". Antes había una regla vieja de la era
+   "píldoras estilo Pinterest" que forzaba border-radius:999px !important
+   sobre .btn y .lm-bulk-ghost, contradiciendo el sistema de diseño plano/recto
+   actual (.btn base ya define border-radius:0 más abajo). */
 .btn { font-weight: 700; letter-spacing: .01em; transition: transform .13s ease, box-shadow .13s ease, background .15s ease, filter .15s ease; }
 .btn:hover { transform: translateY(-1px); }
 .btn:active { transform: scale(.97); }
@@ -14597,7 +14667,7 @@ td.ldh-acts { padding-left: 6px; padding-right: 10px; }
 .dl-kpi__l { font-size: .74rem; font-weight: 500; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dl-kpi__v { font-size: 1.22rem; font-weight: 650; color: var(--text-primary); margin-top: 3px; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dl-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
-.dl-board { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; align-items: start; }
+.dl-board { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; align-items: start; }
 .dl-col { background: var(--surface-secondary); border-radius: 0; padding: 8px; }
 .dl-col__hd { display: flex; align-items: center; gap: 7px; padding: 6px 8px 8px; }
 .dl-col__t { font-size: .8rem; font-weight: 600; color: var(--text-primary); }
@@ -16954,12 +17024,19 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .dash-loading{font-size:11.5px;color:#94A3B8;margin-bottom:6px}
 /* KPIs */
 .dash-kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;margin-bottom:14px}
-.dash-kpi{position:relative;background:#fff;border:1px solid #E7EBF0;border-left:3px solid var(--kc,#2563EB);border-radius:0;padding:12px 14px;box-shadow:0 1px 2px rgba(15,23,42,.04);transition:transform .18s,box-shadow .18s;animation:dashIn .35s ease both;min-width:0}
+/* Mismo estilo refinado que ya quedó en el portal del cliente (.pt-tile) --
+   pedido explícito: "se habían optimizado los KPI... menos colores, más
+   profesional, iconos más estilizados... quiero reusar ese formato acá, sin
+   borrar métricas". Antes: circulo de color por metrica + borde izquierdo de
+   color (arcoiris). Ahora: icono plano gris neutro, sin fondo de color, sin
+   borde de acento -- igual que .pt-tile/.pt-tile__i en portal.css. */
+.dash-kpi{position:relative;background:#fff;border:1px solid #E7EBF0;border-radius:0;padding:12px 14px;box-shadow:0 1px 2px rgba(15,23,42,.04);transition:transform .18s,box-shadow .18s;animation:dashIn .35s ease both;min-width:0}
 .dash-kpi:hover{transform:translateY(-2px);box-shadow:0 10px 24px -14px rgba(15,23,42,.35)}
 .dash-kpi__top{display:flex;align-items:center;gap:10px;margin-bottom:6px}
-.dash-kpi__ic{display:grid;place-items:center;width:36px;height:36px;border-radius:50%;flex:none;color:var(--kc);background:color-mix(in srgb,var(--kc) 14%,#fff)}
+.dash-kpi__ic{display:grid;place-items:center;width:30px;height:30px;flex:none;color:#334155}
+.dash-kpi__ic svg{width:26px;height:26px;stroke-width:1.5}
 .dash-in{font:800 14px/1 Georgia,serif;letter-spacing:-.5px}
-.dash-kpi__l{font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#475569;line-height:1.25}
+.dash-kpi__l{font-size:12px;font-weight:600;color:#475569;line-height:1.25}
 .dash-kpi__v{font-size:30px;font-weight:700;line-height:1.15;letter-spacing:-.02em;color:#0F172A;margin:2px 0 4px}
 .dash-d{display:block;font-size:11.5px;font-weight:600;line-height:1.35}
 .dash-d--up{color:#16A34A}.dash-d--down{color:#E5484D}.dash-d--0{color:#94A3B8;font-weight:500}
@@ -16981,7 +17058,11 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .dash-funnel{display:flex;flex-direction:column;gap:14px;position:relative;padding-top:4px}
 .dash-fn{display:flex;align-items:center;gap:12px;position:relative}
 .dash-fn:not(:last-child)::after{content:"";position:absolute;left:17px;top:38px;height:18px;border-left:2px dotted #CBD5E1}
-.dash-fn__ic{display:grid;place-items:center;width:36px;height:36px;border-radius:50%;color:#fff;flex:none}
+/* Plano, gris neutro -- mismo ajuste que ya se hizo en los KPI (igual al
+   portal: .pt-tile__i/.dash-fn__ic en portal.css), pedido explícito: "en el
+   embudo histórico aún se siguen utilizando iconos viejos". */
+.dash-fn__ic{display:grid;place-items:center;width:26px;height:26px;color:#334155;flex:none}
+.dash-fn__ic svg{width:24px;height:24px;stroke-width:1.5}
 .dash-fn__b{flex:1;min-width:0}
 .dash-fn__top{display:flex;align-items:baseline;gap:8px;margin-bottom:5px}
 .dash-fn__l{font-size:14px;font-weight:600;color:#0F172A}
@@ -17011,7 +17092,7 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .dash-scope .clients-table tbody tr:hover{background:#F8FAFC}
 .dash-scope .clients-table b{color:#0F172A}
 .dash-scope .clients-table th:not(:first-child),.dash-scope .clients-table td:not(:first-child){text-align:center}
-.dash-cic{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;color:#fff;margin-right:8px;vertical-align:middle;font-size:9px}
+.dash-cic{display:inline-grid;place-items:center;width:22px;height:22px;color:#334155;margin-right:8px;vertical-align:middle;font-size:9px}
 .dash-cic .dash-in{font-size:10px}
 .dash-good{color:#16A34A!important;font-weight:700}.dash-zero{color:#94A3B8!important}
 .dash-tot td{font-weight:700;color:#0F172A!important;background:#F8FAFC;border-top:1px solid #E7EBF0}

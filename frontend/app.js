@@ -90,6 +90,22 @@ const esc = s => String(s ?? '')
 // Ícono de copiar (línea, no emoji) — pedido explícito 2026-09-07: "al
 // costado un ícono de copiado, le doy clic, copio y ya está".
 const _copyIconSvg = () => `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
+const _checkIconSvg = () => `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+// Feedback visual en el propio ícono al copiar -- pedido explícito 2026-09-30:
+// "debe de el icono convertirse en eso pero con check... sino no veo si ya lo
+// copié" (el banner "✓ Copiado" quedaba fuera de foco/atención). Cambia el
+// ícono a un check por 1.3s y luego lo vuelve a dejar como estaba.
+function _copyBtnFeedback(btn) {
+  if (!btn || btn._copyFeedbackT) return;
+  const original = btn.innerHTML;
+  btn.innerHTML = _checkIconSvg();
+  btn.classList.add('cant-copy-row__btn--ok');
+  btn._copyFeedbackT = setTimeout(() => {
+    btn.innerHTML = original;
+    btn.classList.remove('cant-copy-row__btn--ok');
+    btn._copyFeedbackT = null;
+  }, 1300);
+}
 
 // ── Presentacion de nombres y titulos ──────────────────────────────────────
 // Orden visual sin tocar los datos: se corrige al PINTAR, no al guardar, asi que
@@ -5052,9 +5068,9 @@ const TasksColumns = (() => {
 // cada fila de un filtro tipo lista trae sus propios links "Incluir | Excluir"
 // a la derecha, en vez de un checkbox único. Vive fuera de los módulos porque
 // tanto CanteraModule como CanteraMesaModule la usan.
-function _incExcRow(label, isInc, isExc, incAction, excAction) {
+function _incExcRow(label, isInc, isExc, incAction, excAction, count) {
   return `<div class="cant-inrow${isInc ? ' cant-inrow--inc' : ''}${isExc ? ' cant-inrow--exc' : ''}" onclick="event.stopPropagation()">
-    <span class="cant-inrow__v">${label}</span>
+    <span class="cant-inrow__v">${label}${count != null ? `<span class="cant-inrow__n">(${count})</span>` : ''}</span>
     <span class="cant-inrow__ops">
       <button type="button" class="cant-inrow__op${isInc ? ' on' : ''}" onclick="${incAction}">Incluir</button>
       <span class="cant-inrow__sep">|</span>
@@ -5474,7 +5490,8 @@ const CanteraModule = (() => {
                 <div class="lm-stat"><b>${sm.rows || 0}</b><span>filas leídas</span></div>
                 <div class="lm-stat"><b>${sm.companiesCreated || 0}</b><span>empresas nuevas</span></div>
                 <div class="lm-stat"><b>${sm.contactsCreated || 0}</b><span>contactos nuevos</span></div>
-                ${sm.contactsSkipped ? `<div class="lm-stat"><b>${sm.contactsSkipped}</b><span>duplicados (misma persona, se ignoró)</span></div>` : ''}
+                ${sm.contactsUpdated ? `<div class="lm-stat"><b>${sm.contactsUpdated}</b><span>contactos ya existentes (se completaron datos vacíos)</span></div>` : ''}
+                ${sm.companiesInherited ? `<div class="lm-stat"><b>${sm.companiesInherited}</b><span>heredaron Tier de otro borrador (mismo ICP+Tiers)</span></div>` : ''}
               </div></div>
               ${(sm.errors || []).length ? `<div class="lm-imp-err">${sm.errors.map(e => esc(e)).join('<br>')}</div>` : ''}
             </div>
@@ -5755,25 +5772,43 @@ const CanteraModule = (() => {
   // orden de "Siguiente" en la validación manual — pedido explícito
   // 2026-09-15: el botón Siguiente debe respetar el filtro activo, no el
   // orden crudo de _companies, si es que hay uno aplicado.
-  function _filteredCompaniesList() {
+  // skip: nombre de filtro a ignorar -- se usa para contar "cuantos quedarian
+  // si eligiera esta opcion" respetando el resto de filtros ya aplicados,
+  // pero no el propio campo que se esta por elegir (mismo criterio que ya
+  // usa Base Global en el backend). Pedido explicito: "ya tengo un filtro
+  // aplicado y quiero aplicar otro... que vaya contabilizando lo que queda,
+  // con los filtros aplicados".
+  // "Descartado" vive DENTRO del filtro de Tier como una opción más -- pedido
+  // explícito: "falta el filtro de descartados directamente desde tier". Una
+  // empresa descartada (IA o manual) no tiene tier_clave, así que antes no
+  // aparecía bajo ningún Tier; ahora cuenta también como la clave especial
+  // TIER_DESCARTADO para Incluir/Excluir junto a A/B/C/D.
+  const TIER_DESCARTADO = '__descartado__';
+  function _tierKeysFor(c) {
+    const keys = [];
+    if (c.tier_clave) keys.push(c.tier_clave);
+    if (c.paso2_estado === 'descartado' || c.paso2_estado === 'descartado_manual') keys.push(TIER_DESCARTADO);
+    return keys;
+  }
+  function _filteredCompaniesList(skip) {
     return _companies
       .filter(c => !_paso1Filtro || (_paso1Filtro === 'vacio' ? !c.paso1_estado : c.paso1_estado === _paso1Filtro))
-      .filter(c => !_tierFiltro.size || _tierFiltro.has(c.tier_clave))
-      .filter(c => !_tierExclFiltro.has(c.tier_clave))
+      .filter(c => skip === 'tier' || !_tierFiltro.size || _tierKeysFor(c).some(k => _tierFiltro.has(k)))
+      .filter(c => skip === 'tier' || _tierKeysFor(c).every(k => !_tierExclFiltro.has(k)))
       .filter(c => !_prioFiltro.size || (_contactsByCompany[c.id] || []).some(k => _prioFiltro.has(k.prioridad)))
       .filter(c => !_minContactos || (_contactsByCompany[c.id] || []).length >= _minContactos)
       .filter(c => !_sinPrioridad || !(_contactsByCompany[c.id] || []).some(k => k.prioridad > 0))
       .filter(c => !_auditoriaFiltro || (_auditoriaFiltro === 'sin_auditar' ? !c.auditoria_veredicto : c.auditoria_veredicto === _auditoriaFiltro))
-      .filter(c => !_paisFiltro.size || _paisFiltro.has(c.pais))
-      .filter(c => !_paisExclFiltro.has(c.pais))
-      .filter(c => !_industriaFiltro.size || _industriaFiltro.has(c.industria))
-      .filter(c => !_industriaExclFiltro.has(c.industria))
-      .filter(c => !_tamanoFiltro.size || _tamanoFiltro.has(c.tamano))
-      .filter(c => !_tamanoExclFiltro.has(c.tamano))
+      .filter(c => skip === 'pais' || !_paisFiltro.size || _paisFiltro.has(c.pais))
+      .filter(c => skip === 'pais' || !_paisExclFiltro.has(c.pais))
+      .filter(c => skip === 'industria' || !_industriaFiltro.size || _industriaFiltro.has(c.industria))
+      .filter(c => skip === 'industria' || !_industriaExclFiltro.has(c.industria))
+      .filter(c => skip === 'tamano' || !_tamanoFiltro.size || _tamanoFiltro.has(c.tamano))
+      .filter(c => skip === 'tamano' || !_tamanoExclFiltro.has(c.tamano))
       .filter(c => !_domFaltante || !c.dominio)
       .filter(c => !_dominioQ || (c.dominio || '').toLowerCase().includes(_dominioQ.toLowerCase()))
-      .filter(c => !_paso2DescFiltro.size || _paso2DescFiltro.has(c.paso2_estado))
-      .filter(c => !_enCrmFiltro.size || _enCrmFiltro.has(c.promoted_company_id ? 'si' : 'no'));
+      .filter(c => skip === 'paso2Desc' || !_paso2DescFiltro.size || _paso2DescFiltro.has(c.paso2_estado))
+      .filter(c => skip === 'enCrm' || !_enCrmFiltro.size || _enCrmFiltro.has(c.promoted_company_id ? 'si' : 'no'));
   }
   // ── Detalle: criterio + import + resultados ──────────────────────
   function _detailHtml() {
@@ -5889,8 +5924,10 @@ const CanteraModule = (() => {
             </div>
             <textarea class="form-input" rows="2" placeholder="Criterio de entrada…" oninput="CanteraModule.setTierField(${i},'criterio',this.value)">${esc(t.criterio || '')}</textarea>
             <textarea class="form-input" rows="1" placeholder="Esto NO califica si… (opcional)" oninput="CanteraModule.setTierField(${i},'descarte',this.value)">${esc(t.descarte || '')}</textarea>
+            ${t.clave ? `<label class="cant-tier-califica"><input type="checkbox" ${(b.tiers_calificantes || []).includes(t.clave) ? 'checked' : ''} onchange="CanteraModule.toggleTierCalifica('${_jsEsc(t.clave)}')"> Cuenta como "califica" en el portal del cliente para esta campaña</label>` : ''}
           </div>`).join('')}
         </div>
+        <span class="cant-hint" style="display:block;margin:-6px 0 10px">${(b.tiers_calificantes || []).length ? '' : 'Sin ningún Tier marcado: por defecto, en el portal "califica" cualquier empresa aprobada o validada manualmente, sea cual sea su Tier.'}</span>
         <button class="add-tier" onclick="CanteraModule.addTier()">+ Agregar Tier</button>
 
         <div class="cant-puestos" style="margin-top:16px">${tiers.filter(t => t.clave).map(t => `
@@ -5964,9 +6001,11 @@ const CanteraModule = (() => {
           if (!_coSel.size && !hasFiltros) return '';
           const paso1Lbl = { aprobado: 'aprobado', descartado: 'descartado', vacio: 'vacío' };
           return `<div class="cant-results-bar">
-          <span class="cant-count">${_coSel.size ? `${_coSel.size} seleccionada(s)` : ''}${_paso1Filtro ? ` · Validación básica: ${paso1Lbl[_paso1Filtro]}` : ''}${_tierFiltro.size ? ` · Tier: ${[..._tierFiltro].join(', ')}` : ''}${_prioFiltro.size ? ` · Prioridad: ${[..._prioFiltro].join(', ')}` : ''}${_minContactos ? ` · ${_minContactos}+ contactos` : ''}${_sinPrioridad ? ' · sin priorizar' : ''}${_auditoriaFiltro ? ` · auditoría: ${_auditoriaFiltro === 'sin_auditar' ? 'sin auditar' : _auditoriaFiltro === 'de_acuerdo' ? 'confirmadas' : 'en desacuerdo'}` : ''}${_paisFiltro.size ? ` · País: ${[..._paisFiltro].join(', ')}` : ''}${_paisExclFiltro.size ? ` · País ≠ ${[..._paisExclFiltro].join(', ')}` : ''}${_industriaFiltro.size ? ` · Industria: ${[..._industriaFiltro].join(', ')}` : ''}${_industriaExclFiltro.size ? ` · Industria ≠ ${[..._industriaExclFiltro].join(', ')}` : ''}${_tamanoFiltro.size ? ` · Tamaño: ${[..._tamanoFiltro].join(', ')}` : ''}${_tamanoExclFiltro.size ? ` · Tamaño ≠ ${[..._tamanoExclFiltro].join(', ')}` : ''}${_tierExclFiltro.size ? ` · Tier ≠ ${[..._tierExclFiltro].join(', ')}` : ''}${_domFaltante ? ' · sin dominio' : ''}${_dominioQ ? ` · dominio contiene "${esc(_dominioQ)}"` : ''}${_paso2DescFiltro.size ? ` · Validación profunda descartada: ${[..._paso2DescFiltro].map(v => v === 'descartado' ? 'IA' : 'manual').join(', ')}` : ''}</span>
-          <span class="cant-results-total">${hasFiltros ? `${filteredCompanies.length} resultado${filteredCompanies.length === 1 ? '' : 's'}` : ''}</span>
-          ${hasFiltros ? `<button class="btn btn--ghost btn--sm" onclick="CanteraModule.resetFiltros()">Limpiar filtros</button>` : ''}
+          <span class="cant-count">${_coSel.size ? `${_coSel.size} seleccionada(s)` : ''}${_paso1Filtro ? ` · Validación básica: ${paso1Lbl[_paso1Filtro]}` : ''}${_tierFiltro.size ? ` · Tier: ${[..._tierFiltro].map(v => v === TIER_DESCARTADO ? 'Descartado' : v).join(', ')}` : ''}${_prioFiltro.size ? ` · Prioridad: ${[..._prioFiltro].join(', ')}` : ''}${_minContactos ? ` · ${_minContactos}+ contactos` : ''}${_sinPrioridad ? ' · sin priorizar' : ''}${_auditoriaFiltro ? ` · auditoría: ${_auditoriaFiltro === 'sin_auditar' ? 'sin auditar' : _auditoriaFiltro === 'de_acuerdo' ? 'confirmadas' : 'en desacuerdo'}` : ''}${_paisFiltro.size ? ` · País: ${[..._paisFiltro].join(', ')}` : ''}${_paisExclFiltro.size ? ` · País ≠ ${[..._paisExclFiltro].join(', ')}` : ''}${_industriaFiltro.size ? ` · Industria: ${[..._industriaFiltro].join(', ')}` : ''}${_industriaExclFiltro.size ? ` · Industria ≠ ${[..._industriaExclFiltro].join(', ')}` : ''}${_tamanoFiltro.size ? ` · Tamaño: ${[..._tamanoFiltro].join(', ')}` : ''}${_tamanoExclFiltro.size ? ` · Tamaño ≠ ${[..._tamanoExclFiltro].join(', ')}` : ''}${_tierExclFiltro.size ? ` · Tier ≠ ${[..._tierExclFiltro].map(v => v === TIER_DESCARTADO ? 'Descartado' : v).join(', ')}` : ''}${_domFaltante ? ' · sin dominio' : ''}${_dominioQ ? ` · dominio contiene "${esc(_dominioQ)}"` : ''}${_paso2DescFiltro.size ? ` · Validación profunda descartada: ${[..._paso2DescFiltro].map(v => v === 'descartado' ? 'IA' : 'manual').join(', ')}` : ''}</span>
+          <div class="cant-results-actions">
+            <span class="cant-results-total">${hasFiltros ? `${filteredCompanies.length} resultado${filteredCompanies.length === 1 ? '' : 's'}` : ''}</span>
+            ${hasFiltros ? `<button class="btn btn--ghost btn--sm" onclick="CanteraModule.resetFiltros()">Limpiar filtros</button>` : ''}
+          </div>
         </div>`;
         })()}
         ${_jobRunning ? `<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
@@ -6022,8 +6061,9 @@ const CanteraModule = (() => {
           ${stat(imp.rows || 0, 'filas leídas en total')}
           ${stat(imp.companiesCreated || 0, 'empresas nuevas creadas')}
           ${stat(imp.companiesMatched || 0, 'empresas repetidas en el archivo (mismo dominio/LinkedIn/nombre — no se duplicaron)')}
+          ${imp.companiesInherited ? stat(imp.companiesInherited, 'empresas nuevas con Tier/clasificación heredada de otro borrador con el mismo ICP y Tiers') : ''}
           ${stat(imp.contactsCreated || 0, 'contactos agregados en total')}
-          ${stat(imp.contactsSkipped || 0, 'duplicados omitidos al importar (misma persona)')}
+          ${stat(imp.contactsUpdated || 0, 'contactos ya existentes (se completaron datos vacíos)')}
           ${imp.companiesDeleted ? stat(imp.companiesDeleted, 'empresas eliminadas al reimportar') : ''}
         </div>
         ${!imp.imports ? '<p class="cant-hint" style="margin:10px 0 0">Todavía no se ha importado ningún archivo.</p>' : ''}
@@ -6097,6 +6137,67 @@ const CanteraModule = (() => {
   // ya probado en Datos (pedido explícito 2026-09-05).
   const CANT_CLEAN_LABELS = { nombre: 'Nombre', tamano: 'Nº empleados', dominio: 'Dominio', website: 'Website' };
   const CANT_ENRICH_LABELS = { dominio: 'Dominio', website: 'Website' };
+  // Subpaneles de Incluir/Excluir (Tier/País/Industria/Tamaño) dentro del
+  // menú "Filtrar" se construían como HTML estático una sola vez al abrir el
+  // menú; como el menú vive fuera del árbol que _paint() vuelve a dibujar,
+  // clickear Incluir/Excluir SÍ cambiaba el filtro (la tabla y el breadcrumb
+  // se actualizaban), pero el propio menú abierto se quedaba mostrando el
+  // estado viejo hasta cerrarlo y volver a abrirlo — pedido explícito
+  // 2026-09-30: "no se marca... no sé en qué momento se cambia". Ahora cada
+  // fila vive dentro de un <div id="cp-subpanel-X"> que se refresca en el
+  // sitio (sin tocar el contenedor padre, así el hover-flyout no se cierra).
+  function _tierPanelRows() {
+    return (_current.tiers || []).filter(t => t.clave).map(t =>
+      _incExcRow(esc(t.clave), _tierFiltro.has(t.clave), _tierExclFiltro.has(t.clave),
+        `CanteraModule.toggleTierFiltro('${_jsEsc(t.clave)}')`, `CanteraModule.toggleTierExclFiltro('${_jsEsc(t.clave)}')`,
+        _filteredCompaniesList('tier').filter(c => c.tier_clave === t.clave).length)
+    ).join('')
+      + _incExcRow('Descartado', _tierFiltro.has(TIER_DESCARTADO), _tierExclFiltro.has(TIER_DESCARTADO),
+        `CanteraModule.toggleTierFiltro('${TIER_DESCARTADO}')`, `CanteraModule.toggleTierExclFiltro('${TIER_DESCARTADO}')`,
+        _filteredCompaniesList('tier').filter(c => _tierKeysFor(c).includes(TIER_DESCARTADO)).length)
+      || '<div class="cp-empty2" style="padding:10px 12px">Sin Tiers definidos todavía</div>';
+  }
+  function _paisPanelRows() {
+    const base = _filteredCompaniesList('pais');
+    return _distinctVals('pais').map(v =>
+      _incExcRow(esc(v), _paisFiltro.has(v), _paisExclFiltro.has(v), `CanteraModule.togglePaisFiltro('${_jsEsc(v)}')`, `CanteraModule.togglePaisExclFiltro('${_jsEsc(v)}')`, base.filter(c => c.pais === v).length)
+    ).join('') || '<div class="cp-empty2" style="padding:10px 12px">Sin datos todavía</div>';
+  }
+  function _industriaPanelRows() {
+    const base = _filteredCompaniesList('industria');
+    return _distinctVals('industria').map(v =>
+      _incExcRow(esc(v), _industriaFiltro.has(v), _industriaExclFiltro.has(v), `CanteraModule.toggleIndustriaFiltro('${_jsEsc(v)}')`, `CanteraModule.toggleIndustriaExclFiltro('${_jsEsc(v)}')`, base.filter(c => c.industria === v).length)
+    ).join('') || '<div class="cp-empty2" style="padding:10px 12px">Sin datos todavía</div>';
+  }
+  function _tamanoPanelRows() {
+    const base = _filteredCompaniesList('tamano');
+    return _distinctVals('tamano').map(v =>
+      _incExcRow(esc(v), _tamanoFiltro.has(v), _tamanoExclFiltro.has(v), `CanteraModule.toggleTamanoFiltro('${_jsEsc(v)}')`, `CanteraModule.toggleTamanoExclFiltro('${_jsEsc(v)}')`, base.filter(c => c.tamano === v).length)
+    ).join('') || '<div class="cp-empty2" style="padding:10px 12px">Sin datos todavía</div>';
+  }
+  function _refreshSubpanel(field) {
+    // querySelectorAll (no getElementById) porque "guardados" aparece DOS veces
+    // en el menú (el atajo de arriba y el anidado en Filtrar › Guardados) --
+    // renombrar/eliminar debe refrescar ambas copias a la vez, no solo la
+    // primera que encuentre. Pedido explícito 2026-10-01: "ya edité y guardé
+    // el nombre... debería actualizarse incluso sin hacer refresh".
+    const els = document.querySelectorAll('.cp-subpanel-' + field); if (!els.length) return;
+    const fns = { tier: _tierPanelRows, pais: _paisPanelRows, industria: _industriaPanelRows, tamano: _tamanoPanelRows, guardados: _guardadosPanelRows };
+    if (fns[field]) els.forEach(el => { el.innerHTML = fns[field](); });
+  }
+  function _guardadosPanelRows() {
+    const list = _loadFiltrosGuardados();
+    return list.length ? list.map((f, i) => `
+        <div class="cant-global-saved-item">
+          <button class="cant-global-saved-apply" onclick="CanteraModule.aplicarFiltroGuardado(${i})" title="${esc(_filtroResumenTexto(f))}">
+            <span class="cant-global-saved-n">${esc(f.nombre)}</span>
+            <span class="cant-global-saved-d">${new Date(f.fecha).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+          </button>
+          <button class="cant-x" onclick="event.stopPropagation();CanteraModule.renombrarFiltroGuardado(${i})" title="Renombrar">✎</button>
+          <button class="cant-x" onclick="event.stopPropagation();CanteraModule.borrarFiltroGuardado(${i})" title="Eliminar">✕</button>
+        </div>`).join('')
+      : '<div class="cp-empty2" style="padding:10px 12px">Sin filtros guardados en este borrador todavía</div>';
+  }
   // Menú único de acciones de Resultados — pedido explícito 2026-09-06:
   // "Correr filtros básicos / Limpiar / Enriquecer / Investigación profunda
   // (IA) / Ver solo descartadas / Elegir columnas" viven todas dentro de un
@@ -6136,10 +6237,13 @@ const CanteraModule = (() => {
     // Filtro por Tier + prioridad de contacto — pedido explícito 2026-09-06:
     // "filtrar por empresas con tier 1 y contactos 1 o 2, y podré enviarlos a
     // una secuencia". Necesario para saber cuáles marcar y mandar de una vez.
-    const tierPanel = (_current.tiers || []).filter(t => t.clave).map(t =>
-      _incExcRow(esc(t.clave) + (t.nombre ? ' — ' + esc(t.nombre) : ''), _tierFiltro.has(t.clave), _tierExclFiltro.has(t.clave),
-        `CanteraModule.toggleTierFiltro('${_jsEsc(t.clave)}')`, `CanteraModule.toggleTierExclFiltro('${_jsEsc(t.clave)}')`)
-    ).join('') || '<div class="cp-empty2" style="padding:10px 12px">Sin Tiers definidos todavía</div>';
+    // Solo la letra (A/B/C/D), sin la descripcion propia de este borrador --
+    // pedido explicito: "esto no solamente va a ser para este cliente... en
+    // lugar de ponerle A guion elabora y distribuye, simplemente podrias
+    // utilizar A, B, C, D si es que hubiese" (normalizar, no la etiqueta
+    // custom del Tier de este borrador puntual). Con conteo respetando el
+    // resto de filtros ya aplicados.
+    const tierPanel = `<div class="cp-subpanel-tier">${_tierPanelRows()}</div>`;
     const prioPanel = [1, 2, 3, 4, 5].map(n =>
       `<label class="cant-colchk"><input type="checkbox" ${_prioFiltro.has(n) ? 'checked' : ''} onchange="CanteraModule.togglePrioFiltro(${n})"> Prioridad ${n}</label>`
     ).join('');
@@ -6163,15 +6267,9 @@ const CanteraModule = (() => {
     // para escribir y ver resultados las coincidencias" (Industria tenía
     // decenas de valores para bajar a mano uno por uno).
     const _searchBox = ph => `<div class="cant-subsearch-box"><input type="text" class="form-input cant-subsearch" placeholder="${esc(ph)}" oninput="CanteraModule._filterSubPanel(this)" onclick="event.stopPropagation()"></div>`;
-    const paisPanel = _searchBox('Buscar país…') + (_distinctVals('pais').map(v =>
-      _incExcRow(esc(v), _paisFiltro.has(v), _paisExclFiltro.has(v), `CanteraModule.togglePaisFiltro('${_jsEsc(v)}')`, `CanteraModule.togglePaisExclFiltro('${_jsEsc(v)}')`)
-    ).join('') || '<div class="cp-empty2" style="padding:10px 12px">Sin datos todavía</div>');
-    const industriaPanel = _searchBox('Buscar industria…') + (_distinctVals('industria').map(v =>
-      _incExcRow(esc(v), _industriaFiltro.has(v), _industriaExclFiltro.has(v), `CanteraModule.toggleIndustriaFiltro('${_jsEsc(v)}')`, `CanteraModule.toggleIndustriaExclFiltro('${_jsEsc(v)}')`)
-    ).join('') || '<div class="cp-empty2" style="padding:10px 12px">Sin datos todavía</div>');
-    const tamanoPanel = _distinctVals('tamano').map(v =>
-      _incExcRow(esc(v), _tamanoFiltro.has(v), _tamanoExclFiltro.has(v), `CanteraModule.toggleTamanoFiltro('${_jsEsc(v)}')`, `CanteraModule.toggleTamanoExclFiltro('${_jsEsc(v)}')`)
-    ).join('') || '<div class="cp-empty2" style="padding:10px 12px">Sin datos todavía</div>';
+    const paisPanel = _searchBox('Buscar país…') + `<div class="cp-subpanel-pais">${_paisPanelRows()}</div>`;
+    const industriaPanel = _searchBox('Buscar industria…') + `<div class="cp-subpanel-industria">${_industriaPanelRows()}</div>`;
+    const tamanoPanel = `<div class="cp-subpanel-tamano">${_tamanoPanelRows()}</div>`;
     const paso2DescPanel = [['descartado', 'Descartado por la IA'], ['descartado_manual', 'Descartado manual (Tier)']]
       .map(([v, label]) => `<label class="cant-colchk"><input type="checkbox" ${_paso2DescFiltro.has(v) ? 'checked' : ''} onchange="CanteraModule.togglePaso2DescFiltro('${v}')"> ${label}</label>`).join('');
     // "En CRM" -- pedido explicito: filtrar lo que ya se movio al CRM, para
@@ -6188,14 +6286,14 @@ const CanteraModule = (() => {
         <input type="text" class="form-input" style="width:100%" placeholder="El dominio contiene…" value="${esc(_dominioQ)}" oninput="CanteraModule.setDominioQ(this.value)" onclick="event.stopPropagation()">
       </div>
       <label class="cant-colchk"><input type="checkbox" ${_domFaltante ? 'checked' : ''} onchange="CanteraModule.toggleDomFaltante()"> Sin dominio</label>`;
-    // Guardar/aplicar filtro por borrador — vive dentro de Filtrar › Guardados,
-    // no como botones sueltos en la barra — pedido explícito 2026-09-16:
-    // "debería estar dentro de opción de filtros, guardados".
+    // Guardar/aplicar filtro por borrador. Antes era un único slot que se
+    // pisaba cada vez; ahora es una LISTA con nombre+fecha (mismo espíritu
+    // que Base Global) — pedido explícito 2026-10-01, con captura: "debería
+    // abrir a la derecha los filtros guardados que tengo... yo podría elegir
+    // cuál" (esperaba un hover-flyout con varios, no un solo click directo).
     const hasFiltrosActivos = !!(_paso1Filtro || _tierFiltro.size || _prioFiltro.size || _minContactos || _sinPrioridad || _auditoriaFiltro || _paisFiltro.size || _paisExclFiltro.size || _industriaFiltro.size || _industriaExclFiltro.size || _tamanoFiltro.size || _tamanoExclFiltro.size || _tierExclFiltro.size || _domFaltante || _dominioQ || _paso2DescFiltro.size || _enCrmFiltro.size);
-    const filtroGuardado = _loadFiltroGuardado();
-    const guardadosPanel = `<div style="padding:6px 12px 8px"><span class="cant-hint" style="margin:0">${filtroGuardado ? 'Filtro guardado: ' + esc(_filtroResumenTexto(filtroGuardado)) : 'Sin filtro guardado en este borrador todavía'}</span></div>`
-      + (hasFiltrosActivos ? item('Guardar filtro actual', 'CanteraModule.guardarFiltroActual()') : '')
-      + (filtroGuardado ? item('Aplicar filtro guardado', 'CanteraModule.aplicarFiltroGuardado()') + item('Eliminar filtro guardado', 'CanteraModule.borrarFiltroGuardado()') : '');
+    const filtrosGuardadosList = _loadFiltrosGuardados();
+    const guardadosPanel = `<div class="cp-subpanel-guardados">${_guardadosPanelRows()}</div>`;
     const html = `<div class="cp-mark-menu__list">${item(_lastFiltros ? `Validado (${_lastFiltros.total})` : 'Correr filtros básicos', 'CanteraModule.runFiltros()')}</div>
       <div class="cp-mark-menu__sep"></div>
       <div class="cp-mark-menu__list">${sub('Limpiar', cleanPanel)}${sub('Enriquecer', enrichPanel)}</div>
@@ -6205,7 +6303,10 @@ const CanteraModule = (() => {
         ${item('Auditar muestra (IA)', 'CanteraModule.openAudit()')}
       </div>
       <div class="cp-mark-menu__sep"></div>
-      <div class="cp-mark-menu__list">${sub('Filtrar', `<div class="cp-mark-menu__list">${sub(`Validación básica${_paso1Filtro ? ' · 1' : ''}`, paso1Panel)}${sub(`Dominio${(_domFaltante || _dominioQ) ? ' · 1' : ''}`, dominioPanel)}${sub('Tier', tierPanel)}${sub('Prioridad', prioPanel)}${sub('Nº de contactos', numContactosPanel)}${sub('Auditoría', auditoriaPanel)}${sub('Validación profunda descartada', paso2DescPanel)}${sub(`En CRM${_enCrmFiltro.size ? ' · ' + _enCrmFiltro.size : ''}`, enCrmPanel)}${sub('País', paisPanel, true)}${sub('Industria', industriaPanel, true)}${sub('Tamaño', tamanoPanel, true)}${sub(`Guardados${filtroGuardado ? ' · 1' : ''}`, guardadosPanel)}</div>`)}</div>
+      <div class="cp-mark-menu__list">${sub('Filtrar', `<div class="cp-mark-menu__list">${sub(`Validación básica${_paso1Filtro ? ' · 1' : ''}`, paso1Panel)}${sub(`Dominio${(_domFaltante || _dominioQ) ? ' · 1' : ''}`, dominioPanel)}${sub('Tier', tierPanel)}${sub('Prioridad', prioPanel)}${sub('Nº de contactos', numContactosPanel)}${sub('Auditoría', auditoriaPanel)}${sub('Validación profunda descartada', paso2DescPanel)}${sub(`En CRM${_enCrmFiltro.size ? ' · ' + _enCrmFiltro.size : ''}`, enCrmPanel)}${sub('País', paisPanel, true)}${sub('Industria', industriaPanel, true)}${sub('Tamaño', tamanoPanel, true)}</div>`)}
+        ${hasFiltrosActivos ? item('Guardar filtro actual', 'CanteraModule.guardarFiltroActual()') : ''}
+        ${filtrosGuardadosList.length ? sub(`Aplicar filtro guardado${filtrosGuardadosList.length > 1 ? ' · ' + filtrosGuardadosList.length : ''}`, guardadosPanel) : ''}
+      </div>
       <div class="cp-mark-menu__sep"></div>
       <div class="cp-mark-menu__list">${sub('Elegir columnas visibles', colsPanel, true)}</div>
       ${calificadas || _coSel.size ? `<div class="cp-mark-menu__sep"></div><div class="cp-mark-menu__list">
@@ -6215,7 +6316,21 @@ const CanteraModule = (() => {
     const menu = document.createElement('div'); menu.className = 'cp-mark-menu'; menu.style.minWidth = '240px'; menu.innerHTML = html;
     document.body.appendChild(menu);
     const t = (ev && (ev.currentTarget || ev.target)) || document.body; const r = t.getBoundingClientRect();
-    menu.style.left = `${Math.max(8, Math.min(r.right - 240, window.innerWidth - 250))}px`; menu.style.top = `${r.bottom + 6}px`;
+    menu.style.left = `${Math.max(8, Math.min(r.right - 240, window.innerWidth - 250))}px`;
+    // Si no hay espacio abajo (ventana comprimida/dividida, reportado en vivo
+    // 2026-09-30: "si la pantalla está comprimida... debería subir más arriba,
+    // no lo puedo ver bien"), el menú se abre HACIA ARRIBA en vez de recortarse
+    // contra el borde inferior. max-height + overflow-y como red de seguridad
+    // por si ni arriba ni abajo alcanza el alto completo.
+    const menuH = menu.offsetHeight;
+    const fitsBelow = r.bottom + 6 + menuH <= window.innerHeight - 8;
+    if (fitsBelow) { menu.style.top = `${r.bottom + 6}px`; }
+    else {
+      const top = Math.max(8, r.top - menuH - 6);
+      menu.style.top = `${top}px`;
+      menu.style.maxHeight = `${window.innerHeight - top - 8}px`;
+      menu.style.overflowY = 'auto';
+    }
     // Mismo submenu-por-hover que "Resolver respuesta" del Inbox — mide el
     // espacio real a cada lado para no salirse de la pantalla.
     // Se cerraba solo al mover el mouse hacia la ventanita (reportado
@@ -6236,7 +6351,22 @@ const CanteraModule = (() => {
         } else {
           panel.style.left = '100%'; panel.style.right = 'auto'; panel.style.marginLeft = '0'; panel.style.marginRight = '0';
         }
+        // El CSS por defecto centra el panel verticalmente contra SU FILA
+        // (top:50%/translateY(-50%)), no contra la pantalla -- si la fila está
+        // cerca del borde de una ventana comprimida, el panel se sigue
+        // saliendo igual. Reportado en vivo 2026-09-30 con captura: "mismo
+        // problema sin resolver" (el menú de arriba ya se había arreglado,
+        // pero no estos subpaneles anidados como Industria/País/Tamaño).
+        // Se centra primero y, ya con el alto real, se corrige con un empujón
+        // extra si se sale por arriba o por abajo.
+        panel.style.top = '50%'; panel.style.transform = 'translateY(-50%)';
         panel.style.display = 'block';
+        // Lectura síncrona (sin rAF): el navegador ya recalculó el layout al
+        // tocar display/top/transform arriba, así que getBoundingClientRect
+        // ya da el tamaño real sin esperar un frame.
+        const pr = panel.getBoundingClientRect();
+        if (pr.top < 8) panel.style.transform = `translateY(calc(-50% + ${8 - pr.top}px))`;
+        else if (pr.bottom > window.innerHeight - 8) panel.style.transform = `translateY(calc(-50% - ${pr.bottom - (window.innerHeight - 8)}px))`;
       });
       subEl.addEventListener('mouseleave', () => { hideTimer = setTimeout(() => { panel.style.display = 'none'; }, 200); });
     });
@@ -6402,29 +6532,40 @@ const CanteraModule = (() => {
     const co = _companies.find(c => c.id === companyId); if (!co) return;
     const tiers = (_current.tiers || []).filter(t => t.clave);
     document.getElementById('cant-manual-modal')?.remove();
+    // Progreso minimalista "N de M" -- pedido explícito 2026-09-30: "quiero
+    // una barra minimalista de progreso... ojo, no es el universo total, sino
+    // con los filtros actuales". Mismo universo que usa "Siguiente →"
+    // (_filteredCompaniesList, respeta Tier/País/Industria/etc. activos), no
+    // el total de 1397 del borrador.
+    const _progList = _filteredCompaniesList();
+    const _progIdx = _progList.findIndex(c => c.id === companyId);
+    const progressHtml = _progIdx !== -1 ? `<div class="cant-manual-progress" title="${_progIdx + 1} de ${_progList.length} con los filtros actuales">
+      <div class="cant-manual-progress__bar"><div class="cant-manual-progress__fill" style="width:${Math.round((_progIdx + 1) / _progList.length * 100)}%"></div></div>
+      <span class="cant-manual-progress__txt">${_progIdx + 1} de ${_progList.length}</span>
+    </div>` : '';
     const m = document.createElement('div'); m.id = 'cant-manual-modal'; m.className = 'fin-pi-backdrop';
     m.onclick = e => { if (e.target === m) closeManualValidation(); };
     m.innerHTML = `<div class="fin-pi-box lm-flt-box" style="width:820px;max-width:94vw">
-      <div class="fin-pi-box__hd"><h3>Validación manual · ${esc(co.nombre)}</h3><button class="fin-pi-x" onclick="CanteraModule.closeManualValidation()">✕</button></div>
+      <div class="fin-pi-box__hd"><h3>Validación manual · ${esc(co.nombre)}</h3>${progressHtml}<button class="fin-pi-x" onclick="CanteraModule.closeManualValidation()">✕</button></div>
       <div class="flt-body" style="display:flex;flex-direction:column;gap:10px">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
           <label class="cant-flabel">Datos de la empresa
             <div class="cant-copy-row">
               <textarea id="cant-manual-copy" class="form-input" rows="4" readonly onclick="this.select()">${esc(_manualCopyText(co))}</textarea>
-              <button class="cant-copy-row__btn" title="Copiar datos de la empresa" onclick="CanteraModule.copyManualData()">${_copyIconSvg()}</button>
+              <button class="cant-copy-row__btn" title="Copiar datos de la empresa" onclick="CanteraModule.copyManualData(this)">${_copyIconSvg()}</button>
             </div>
           </label>
           <label class="cant-flabel">Instrucción completa
             <div class="cant-copy-row">
               <textarea id="cant-manual-instruccion" class="form-input" rows="4" readonly onclick="this.select()">Cargando…</textarea>
-              <button class="cant-copy-row__btn" title="Copiar la instrucción completa" onclick="CanteraModule.copyManualInstruccion()">${_copyIconSvg()}</button>
+              <button class="cant-copy-row__btn" title="Copiar la instrucción completa" onclick="CanteraModule.copyManualInstruccion(this)">${_copyIconSvg()}</button>
             </div>
           </label>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
         <label class="cant-flabel">Tier<select id="cant-manual-tier" class="form-input" onchange="CanteraModule.saveManualValidation(${co.id})">
           <option value="">— elegir —</option>
-          ${tiers.map(t => `<option value="${esc(t.clave)}"${co.tier_clave === t.clave ? ' selected' : ''}>${esc(t.clave)}${t.nombre ? ' — ' + esc(t.nombre) : ''}</option>`).join('')}
+          ${tiers.map(t => `<option value="${esc(t.clave)}"${co.tier_clave === t.clave ? ' selected' : ''}>${esc(t.clave)}</option>`).join('')}
           <option value="__descartar__"${co.paso2_estado === 'descartado_manual' ? ' selected' : ''}>✕ Descartar — no encaja en ningún Tier</option>
         </select></label>
         <label class="cant-flabel">Prioridad
@@ -6461,15 +6602,17 @@ const CanteraModule = (() => {
     } catch { const ta = document.getElementById('cant-manual-instruccion'); if (ta) ta.value = 'Error al cargar la instrucción.'; }
   }
   function closeManualValidation() { document.getElementById('cant-manual-modal')?.remove(); }
-  async function copyManualInstruccion() {
+  async function copyManualInstruccion(btn) {
     const ta = document.getElementById('cant-manual-instruccion'); if (!ta) return;
-    try { await navigator.clipboard.writeText(ta.value); showBanner('✓ Copiado', 'success'); }
-    catch { ta.select(); document.execCommand('copy'); showBanner('✓ Copiado', 'success'); }
+    try { await navigator.clipboard.writeText(ta.value); }
+    catch { ta.select(); document.execCommand('copy'); }
+    _copyBtnFeedback(btn);
   }
-  async function copyManualData() {
+  async function copyManualData(btn) {
     const ta = document.getElementById('cant-manual-copy'); if (!ta) return;
-    try { await navigator.clipboard.writeText(ta.value); showBanner('✓ Copiado', 'success'); }
-    catch { ta.select(); document.execCommand('copy'); showBanner('✓ Copiado', 'success'); }
+    try { await navigator.clipboard.writeText(ta.value); }
+    catch { ta.select(); document.execCommand('copy'); }
+    _copyBtnFeedback(btn);
   }
   // Autoguarda al elegir el Tier o al salir de la Nota — pedido explícito
   // 2026-09-06: "quiero que al seleccionar, el tier se guarde en automático,
@@ -6518,7 +6661,18 @@ const CanteraModule = (() => {
   function nextManualValidation(companyId) {
     const list = _filteredCompaniesList();
     const idx = list.findIndex(c => c.id === companyId);
-    if (idx === -1 || idx === list.length - 1) { showBanner('No hay más resultados en este filtro', 'info'); return; }
+    // La empresa que se acaba de validar puede haber SALIDO del filtro activo
+    // (ej. "Tier ≠ A,B,C,Descartado" ya no la incluye porque recién le pusiste
+    // Tier B) -- eso NO significa que no queden más, solo que ella ya no
+    // califica. Reportado en vivo 2026-09-30: "error de no hay más resultados,
+    // pero claramente vemos más de 1000 resultados". Si no se encuentra a sí
+    // misma, se toma la primera de la lista (la próxima pendiente real).
+    if (idx === -1) {
+      if (!list.length) { showBanner('No hay más resultados en este filtro', 'info'); return; }
+      openManualValidation(list[0].id);
+      return;
+    }
+    if (idx === list.length - 1) { showBanner('No hay más resultados en este filtro', 'info'); return; }
     openManualValidation(list[idx + 1].id);
   }
   async function quitarValidacionManual(companyId) {
@@ -6541,13 +6695,17 @@ const CanteraModule = (() => {
   function _filterSubPanel(input) {
     const list = input.closest('.cp-mark-menu__list'); if (!list) return;
     const q = input.value.trim().toLowerCase();
-    list.querySelectorAll('.cant-colchk').forEach(lbl => {
+    // País/Industria/Tamaño usan filas .cant-inrow (Incluir/Excluir), no los
+    // checkboxes .cant-colchk de otros paneles -- la búsqueda solo escondía
+    // estos últimos, así que en Industria/País nunca filtraba nada ("no
+    // reconoce coincidencias", reportado en vivo 2026-09-30).
+    list.querySelectorAll('.cant-colchk, .cant-inrow').forEach(lbl => {
       lbl.style.display = !q || lbl.textContent.toLowerCase().includes(q) ? '' : 'none';
     });
   }
   function setPaso1Filtro(v) { _paso1Filtro = _paso1Filtro === v ? '' : v; _cantPageIdx = 0; _paint(); }
   function setDominioQ(v) { _dominioQ = v || ''; _cantPageIdx = 0; _paint(); }
-  function toggleTierFiltro(clave) { if (_tierFiltro.has(clave)) _tierFiltro.delete(clave); else { _tierFiltro.add(clave); _tierExclFiltro.delete(clave); } _cantPageIdx = 0; _paint(); }
+  function toggleTierFiltro(clave) { if (_tierFiltro.has(clave)) _tierFiltro.delete(clave); else { _tierFiltro.add(clave); _tierExclFiltro.delete(clave); } _cantPageIdx = 0; _paint(); _refreshSubpanel('tier'); }
   async function togglePrioFiltro(n) {
     if (_prioFiltro.has(n)) _prioFiltro.delete(n); else _prioFiltro.add(n);
     _cantPageIdx = 0;
@@ -6571,13 +6729,13 @@ const CanteraModule = (() => {
     _cantPageIdx = 0;
     _paint();
   }
-  function togglePaisFiltro(v) { if (_paisFiltro.has(v)) _paisFiltro.delete(v); else { _paisFiltro.add(v); _paisExclFiltro.delete(v); } _cantPageIdx = 0; _paint(); }
-  function toggleIndustriaFiltro(v) { if (_industriaFiltro.has(v)) _industriaFiltro.delete(v); else { _industriaFiltro.add(v); _industriaExclFiltro.delete(v); } _cantPageIdx = 0; _paint(); }
-  function toggleTamanoFiltro(v) { if (_tamanoFiltro.has(v)) _tamanoFiltro.delete(v); else { _tamanoFiltro.add(v); _tamanoExclFiltro.delete(v); } _cantPageIdx = 0; _paint(); }
-  function togglePaisExclFiltro(v) { if (_paisExclFiltro.has(v)) _paisExclFiltro.delete(v); else { _paisExclFiltro.add(v); _paisFiltro.delete(v); } _cantPageIdx = 0; _paint(); }
-  function toggleIndustriaExclFiltro(v) { if (_industriaExclFiltro.has(v)) _industriaExclFiltro.delete(v); else { _industriaExclFiltro.add(v); _industriaFiltro.delete(v); } _cantPageIdx = 0; _paint(); }
-  function toggleTamanoExclFiltro(v) { if (_tamanoExclFiltro.has(v)) _tamanoExclFiltro.delete(v); else { _tamanoExclFiltro.add(v); _tamanoFiltro.delete(v); } _cantPageIdx = 0; _paint(); }
-  function toggleTierExclFiltro(v) { if (_tierExclFiltro.has(v)) _tierExclFiltro.delete(v); else { _tierExclFiltro.add(v); _tierFiltro.delete(v); } _cantPageIdx = 0; _paint(); }
+  function togglePaisFiltro(v) { if (_paisFiltro.has(v)) _paisFiltro.delete(v); else { _paisFiltro.add(v); _paisExclFiltro.delete(v); } _cantPageIdx = 0; _paint(); _refreshSubpanel('pais'); }
+  function toggleIndustriaFiltro(v) { if (_industriaFiltro.has(v)) _industriaFiltro.delete(v); else { _industriaFiltro.add(v); _industriaExclFiltro.delete(v); } _cantPageIdx = 0; _paint(); _refreshSubpanel('industria'); }
+  function toggleTamanoFiltro(v) { if (_tamanoFiltro.has(v)) _tamanoFiltro.delete(v); else { _tamanoFiltro.add(v); _tamanoExclFiltro.delete(v); } _cantPageIdx = 0; _paint(); _refreshSubpanel('tamano'); }
+  function togglePaisExclFiltro(v) { if (_paisExclFiltro.has(v)) _paisExclFiltro.delete(v); else { _paisExclFiltro.add(v); _paisFiltro.delete(v); } _cantPageIdx = 0; _paint(); _refreshSubpanel('pais'); }
+  function toggleIndustriaExclFiltro(v) { if (_industriaExclFiltro.has(v)) _industriaExclFiltro.delete(v); else { _industriaExclFiltro.add(v); _industriaFiltro.delete(v); } _cantPageIdx = 0; _paint(); _refreshSubpanel('industria'); }
+  function toggleTamanoExclFiltro(v) { if (_tamanoExclFiltro.has(v)) _tamanoExclFiltro.delete(v); else { _tamanoExclFiltro.add(v); _tamanoFiltro.delete(v); } _cantPageIdx = 0; _paint(); _refreshSubpanel('tamano'); }
+  function toggleTierExclFiltro(v) { if (_tierExclFiltro.has(v)) _tierExclFiltro.delete(v); else { _tierExclFiltro.add(v); _tierFiltro.delete(v); } _cantPageIdx = 0; _paint(); _refreshSubpanel('tier'); }
   function toggleDomFaltante() { _domFaltante = !_domFaltante; _cantPageIdx = 0; _paint(); }
   function togglePaso2DescFiltro(v) { if (_paso2DescFiltro.has(v)) _paso2DescFiltro.delete(v); else _paso2DescFiltro.add(v); _cantPageIdx = 0; _paint(); }
   function toggleEnCrmFiltro(v) { if (_enCrmFiltro.has(v)) _enCrmFiltro.delete(v); else _enCrmFiltro.add(v); _cantPageIdx = 0; _paint(); }
@@ -6598,14 +6756,32 @@ const CanteraModule = (() => {
   // por localStorage (sobrevive entre sesiones) y un filtro guardado por
   // borrador, no uno solo global.
   function _filtroKey() { return `cantera_filtro_${_current.id}`; }
-  function _loadFiltroGuardado() {
-    try { return JSON.parse(localStorage.getItem(_filtroKey()) || 'null'); } catch (_) { return null; }
+  function _filtrosGuardadosKey() { return `cantera_filtros_${_current.id}`; }
+  // Lista con nombre+fecha (antes era un único slot que se pisaba cada vez) --
+  // si existe un filtro del formato viejo, se migra una sola vez a la lista
+  // nueva en vez de perderlo.
+  function _loadFiltrosGuardados() {
+    try {
+      const list = JSON.parse(localStorage.getItem(_filtrosGuardadosKey()) || 'null');
+      if (list) return list;
+    } catch (_) {}
+    try {
+      const old = JSON.parse(localStorage.getItem(_filtroKey()) || 'null');
+      if (old) {
+        const migrated = [{ ...old, nombre: 'Guardado', fecha: new Date().toISOString() }];
+        _saveFiltrosGuardados(migrated);
+        localStorage.removeItem(_filtroKey());
+        return migrated;
+      }
+    } catch (_) {}
+    return [];
   }
+  function _saveFiltrosGuardados(list) { try { localStorage.setItem(_filtrosGuardadosKey(), JSON.stringify(list)); } catch (_) {} }
   function _filtroResumenTexto(f) {
     const paso1Lbl = { aprobado: 'aprobado', descartado: 'descartado', vacio: 'vacío' };
     const partes = [
       f.paso1Filtro ? `Validación básica: ${paso1Lbl[f.paso1Filtro]}` : '',
-      (f.tierFiltro || []).length ? `Tier: ${f.tierFiltro.join(', ')}` : '',
+      (f.tierFiltro || []).length ? `Tier: ${f.tierFiltro.map(v => v === TIER_DESCARTADO ? 'Descartado' : v).join(', ')}` : '',
       (f.prioFiltro || []).length ? `Prioridad: ${f.prioFiltro.join(', ')}` : '',
       f.minContactos ? `${f.minContactos}+ contactos` : '',
       f.sinPrioridad ? 'sin priorizar' : '',
@@ -6620,22 +6796,27 @@ const CanteraModule = (() => {
     return partes.join(' · ') || '(sin condiciones)';
   }
   function guardarFiltroActual() {
+    const nombre = (prompt('Nombre para este filtro:') || '').trim();
+    if (!nombre) return;
     try {
-      localStorage.setItem(_filtroKey(), JSON.stringify({
+      const list = _loadFiltrosGuardados();
+      list.unshift({
+        nombre, fecha: new Date().toISOString(),
         paso1Filtro: _paso1Filtro, tierFiltro: [..._tierFiltro], prioFiltro: [..._prioFiltro],
         minContactos: _minContactos, sinPrioridad: _sinPrioridad, auditoriaFiltro: _auditoriaFiltro,
         paisFiltro: [..._paisFiltro], paisExclFiltro: [..._paisExclFiltro],
         industriaFiltro: [..._industriaFiltro], industriaExclFiltro: [..._industriaExclFiltro],
         tamanoFiltro: [..._tamanoFiltro], tamanoExclFiltro: [..._tamanoExclFiltro], tierExclFiltro: [..._tierExclFiltro],
         domFaltante: _domFaltante, dominioQ: _dominioQ, paso2DescFiltro: [..._paso2DescFiltro],
-      }));
-      showBanner('✓ Filtro guardado — "Aplicar filtro guardado" lo trae de vuelta cuando quieras', 'success');
+      });
+      _saveFiltrosGuardados(list);
+      showBanner('✓ Filtro guardado', 'success');
       _paint();
     } catch (e) { showBanner('Error al guardar el filtro: ' + e.message, 'error'); }
   }
-  function aplicarFiltroGuardado() {
-    const f = _loadFiltroGuardado();
-    if (!f) { showBanner('No hay ningún filtro guardado para este borrador', 'info'); return; }
+  function aplicarFiltroGuardado(idx) {
+    const list = _loadFiltrosGuardados();
+    const f = list[idx]; if (!f) return;
     _paso1Filtro = f.paso1Filtro || ''; _tierFiltro = new Set(f.tierFiltro || []); _tierExclFiltro = new Set(f.tierExclFiltro || []); _prioFiltro = new Set(f.prioFiltro || []);
     _minContactos = f.minContactos || 0; _sinPrioridad = !!f.sinPrioridad; _auditoriaFiltro = f.auditoriaFiltro || '';
     _paisFiltro = new Set(f.paisFiltro || []); _paisExclFiltro = new Set(f.paisExclFiltro || []);
@@ -6644,10 +6825,29 @@ const CanteraModule = (() => {
     _domFaltante = !!f.domFaltante; _dominioQ = f.dominioQ || ''; _paso2DescFiltro = new Set(f.paso2DescFiltro || []);
     _cantPageIdx = 0; _paint();
   }
-  function borrarFiltroGuardado() {
-    try { localStorage.removeItem(_filtroKey()); } catch (_) {}
+  // Pedido explícito 2026-10-01: "cuando guardo un filtro debo poder asignarle
+  // un nombre... ese nombre es el que debería aparecer ahí" — el filtro
+  // migrado del slot viejo (sin nombre propio) quedaba como "Guardado"
+  // genérico; esto deja renombrar cualquiera, no solo el migrado.
+  function renombrarFiltroGuardado(idx) {
+    const list = _loadFiltrosGuardados();
+    const f = list[idx]; if (!f) return;
+    const nombre = (prompt('Nuevo nombre para este filtro:', f.nombre) || '').trim();
+    if (!nombre) return;
+    f.nombre = nombre;
+    _saveFiltrosGuardados(list);
+    _paint();
+    _refreshSubpanel('guardados');
+  }
+  function borrarFiltroGuardado(idx) {
+    const list = _loadFiltrosGuardados();
+    const f = list[idx]; if (!f) return;
+    if (!confirm(`¿Eliminar el filtro guardado "${f.nombre}"? Esto no se puede deshacer.`)) return;
+    list.splice(idx, 1);
+    _saveFiltrosGuardados(list);
     showBanner('Filtro guardado eliminado', 'info');
     _paint();
+    _refreshSubpanel('guardados');
   }
   let _expanded = new Set();
   let _contactsByCompany = {};
@@ -6693,6 +6893,22 @@ const CanteraModule = (() => {
       _current = await res.json();
       showBanner('✓ Motor de IA guardado', 'success');
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  // "Califica para la campaña" por Tier -- pedido explícito 2026-09-30: "si
+  // pertenece a la campaña hereda la calificación del tier en la empresa",
+  // ej. solo Tier A y C cuentan como calificadas en el portal del cliente,
+  // aunque B también esté aprobado. Guarda al toque, mismo patrón que el
+  // motor de IA (no espera al botón "Guardar criterio").
+  async function toggleTierCalifica(clave) {
+    const cur = new Set(_current.tiers_calificantes || []);
+    if (cur.has(clave)) cur.delete(clave); else cur.add(clave);
+    _current.tiers_calificantes = [...cur];
+    try {
+      const res = await apiFetch(`${API}/cantera/batches/${_current.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_current) });
+      _current = await res.json();
+      showBanner('✓ Guardado', 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+    _paint();
   }
   async function saveCriterio() {
     _current.icp = document.getElementById('cant-icp')?.value || '';
@@ -7102,8 +7318,9 @@ const CanteraModule = (() => {
 
   return { render, open, openCreate, backToList, saveFiltros, runFiltros, setPaso1Filtro, setDominioQ, _filterSubPanel, toggleTierFiltro, togglePrioFiltro, setMinContactos, toggleSinPrioridad, setAuditoriaFiltro,
     togglePaisFiltro, toggleIndustriaFiltro, toggleTamanoFiltro, toggleDomFaltante, togglePaso2DescFiltro, toggleEnCrmFiltro, resetFiltros,
-    guardarFiltroActual, aplicarFiltroGuardado, borrarFiltroGuardado, moreMenu, remove, saveAsTemplate,
-    toggleExpand, addTier, removeTier, setTierField, addPuesto, removePuesto, setPuestoField, saveCriterio, setMotorIA, runValidacion,
+    toggleTierExclFiltro, togglePaisExclFiltro, toggleIndustriaExclFiltro, toggleTamanoExclFiltro,
+    guardarFiltroActual, aplicarFiltroGuardado, borrarFiltroGuardado, renombrarFiltroGuardado, moreMenu, remove, saveAsTemplate,
+    toggleExpand, addTier, removeTier, setTierField, toggleTierCalifica, addPuesto, removePuesto, setPuestoField, saveCriterio, setMotorIA, runValidacion,
     openPromote, closePromote, doPromote, openSendSeq, closeSendSeq, doSendSeq,
     openScope, closeScope, scopeMaybeCreate, saveScope, setStep,
     openImportModal, closeImportModal, impFile, impToggleHeader, impRun, impSetMode, deleteAndReimport, deleteImportFile, cbxOpen, cbxFilter, cbxPick, cbxBlur,
@@ -7747,20 +7964,20 @@ const CanteraMesaModule = (() => {
           <label class="cant-flabel">Datos de la empresa
             <div class="cant-copy-row">
               <textarea id="mesa-manual-copy" class="form-input" rows="4" readonly onclick="this.select()">${esc(_manualCopyText(co))}</textarea>
-              <button class="cant-copy-row__btn" title="Copiar datos de la empresa" onclick="CanteraMesaModule.copyManualData()">${_copyIconSvg()}</button>
+              <button class="cant-copy-row__btn" title="Copiar datos de la empresa" onclick="CanteraMesaModule.copyManualData(this)">${_copyIconSvg()}</button>
             </div>
           </label>
           <label class="cant-flabel">Instrucción completa
             <div class="cant-copy-row">
               <textarea id="mesa-manual-instruccion" class="form-input" rows="4" readonly onclick="this.select()">Cargando…</textarea>
-              <button class="cant-copy-row__btn" title="Copiar la instrucción completa" onclick="CanteraMesaModule.copyManualInstruccion()">${_copyIconSvg()}</button>
+              <button class="cant-copy-row__btn" title="Copiar la instrucción completa" onclick="CanteraMesaModule.copyManualInstruccion(this)">${_copyIconSvg()}</button>
             </div>
           </label>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
         <label class="cant-flabel">Tier<select id="mesa-manual-tier" class="form-input" onchange="CanteraMesaModule.saveManualValidation(${companyId},${batchId})">
           <option value="">— elegir —</option>
-          ${tiers.map(t => `<option value="${esc(t.clave)}"${co.tier_clave === t.clave ? ' selected' : ''}>${esc(t.clave)}${t.nombre ? ' — ' + esc(t.nombre) : ''}</option>`).join('')}
+          ${tiers.map(t => `<option value="${esc(t.clave)}"${co.tier_clave === t.clave ? ' selected' : ''}>${esc(t.clave)}</option>`).join('')}
           <option value="__descartar__"${co.paso2_estado === 'descartado_manual' ? ' selected' : ''}>✕ Descartar — no encaja en ningún Tier</option>
         </select></label>
         <label class="cant-flabel">Prioridad
@@ -7796,15 +8013,17 @@ const CanteraMesaModule = (() => {
       if (ta) ta.value = d.instruccion || '(sin instrucción)';
     } catch { const ta = document.getElementById('mesa-manual-instruccion'); if (ta) ta.value = 'Error al cargar la instrucción.'; }
   }
-  async function copyManualData() {
+  async function copyManualData(btn) {
     const ta = document.getElementById('mesa-manual-copy'); if (!ta) return;
-    try { await navigator.clipboard.writeText(ta.value); showBanner('✓ Copiado', 'success'); }
-    catch { ta.select(); document.execCommand('copy'); showBanner('✓ Copiado', 'success'); }
+    try { await navigator.clipboard.writeText(ta.value); }
+    catch { ta.select(); document.execCommand('copy'); }
+    _copyBtnFeedback(btn);
   }
-  async function copyManualInstruccion() {
+  async function copyManualInstruccion(btn) {
     const ta = document.getElementById('mesa-manual-instruccion'); if (!ta) return;
-    try { await navigator.clipboard.writeText(ta.value); showBanner('✓ Copiado', 'success'); }
-    catch { ta.select(); document.execCommand('copy'); showBanner('✓ Copiado', 'success'); }
+    try { await navigator.clipboard.writeText(ta.value); }
+    catch { ta.select(); document.execCommand('copy'); }
+    _copyBtnFeedback(btn);
   }
   async function saveManualValidation(companyId, batchId) {
     const tier = document.getElementById('mesa-manual-tier')?.value;
@@ -7911,7 +8130,7 @@ const CanteraMesaModule = (() => {
   }
 
   return { render, setFiltro, setPageSize, goPage, toggleFailed, toggleTierFiltro, togglePrioFiltro, setMinContactos, toggleSinPrioridad, setAuditoriaFiltro, resetFiltros,
-    toggleIndustriaFiltro, toggleArchivoFiltro,
+    toggleIndustriaFiltro, toggleArchivoFiltro, toggleTierExclFiltro, toggleIndustriaExclFiltro,
     toggleCoSel, toggleCoSelAll, toggleExpand, setContactPrioridad, toggleCol, menu,
     runClean, runEnrich, runValidacion, _confirmRevalidar, openAudit,
     openPromote, doPromote, openSendSeq, doSendSeq, openManualValidation, saveManualValidation, copyManualData, copyManualInstruccion, quitarValidacionManual, primeKnownRow, _triggerNext };
@@ -7935,6 +8154,23 @@ const CanteraGlobalModule = (() => {
   // de Sales Navigator (pedido explícito 2026-09-25, con captura).
   let _vista = '';
   let _filtros = { pais: [], industria: [], tamano: [], tier: [], estado: [], cliente: [], secuencia: [], seniority: [], departamento: [], ciudad: [] };
+  // Filtros en acordeón, colapsados por defecto -- muestra de referencia
+  // Sales Navigator (rediseño visual 2026-09-30): campos vacíos empiezan
+  // cerrados (solo la etiqueta), y se abren al click o automáticamente si
+  // ya tienen valores activos (igual que LI mantiene expandido lo que usaste).
+  let _taOpenSet = new Set();
+  // Dos vistas del panel de criterios, igual que Sales Navigator: "Lo que tienen
+  // es una vista clásica (angosta, una columna, más scroll) y otra con más
+  // detalle (ancha, las mismas secciones lado a lado, menos scroll)". Se
+  // alterna con "Ver todo ›" / "‹ Vista compacta", persistida por el usuario.
+  let _vistaFiltros = (() => { try { return localStorage.getItem('cantera_global_vista_filtros') || 'compacta'; } catch (_) { return 'compacta'; } })();
+  function setVistaFiltros(v) { _vistaFiltros = v; try { localStorage.setItem('cantera_global_vista_filtros', v); } catch (_) {} _repaint(); }
+  // "Filtros guardados" no necesita estar siempre expuesto -- pedido explícito
+  // 2026-09-30: "no es necesario que estén expuestos, sino algo... como verlos
+  // y recién se despliega y los puedo ocultar". Empieza colapsado (solo el
+  // encabezado con el conteo); se abre/cierra al click, igual que los campos.
+  let _savedOpen = false;
+  function toggleSavedOpen() { _savedOpen = !_savedOpen; _repaint(); }
   // Excluir por valor (pedido explícito 2026-09-25, muestra de referencia
   // Sales Navigator: "Include | Exclude" junto a cada opción del desplegable).
   let _filtrosExcl = { pais: [], industria: [], tamano: [], tier: [], estado: [], cliente: [], secuencia: [], seniority: [], departamento: [], ciudad: [] };
@@ -7971,6 +8207,13 @@ const CanteraGlobalModule = (() => {
   }
   function borrarFiltroGuardado(idx) {
     const list = _loadSaved();
+    const f = list[idx]; if (!f) return;
+    // Pedido explícito 2026-09-30: "pensé que era solamente borrar los
+    // filtros de los resultados, no que literalmente se borraba el filtro
+    // guardado" — el ✕ antes borraba el PRESET guardado sin avisar; ahora
+    // confirma primero (el mismo ✕ ya NO se usa para deseleccionar/limpiar
+    // resultados, eso lo hace "Borrar todos" en la cabecera del panel).
+    if (!confirm(`¿Eliminar el filtro guardado "${f.nombre}"? Esto no se puede deshacer.`)) return;
     list.splice(idx, 1);
     _saveSaved(list);
     _repaint();
@@ -8105,17 +8348,31 @@ const CanteraGlobalModule = (() => {
   }
   // Panel de filtros vertical, colapsable — mismo espíritu que el rail de
   // filtros de LinkedIn Sales Nav (pedido explícito 2026-09-05).
+  function toggleTaField(field) {
+    if (_taOpenSet.has(field)) _taOpenSet.delete(field); else _taOpenSet.add(field);
+    _repaint();
+    if (_taOpenSet.has(field)) setTimeout(() => document.querySelector(`.ta-row[data-ta="${field}"] .ta-input`)?.focus(), 30);
+  }
   function _taFieldG(field, label) {
-    const incChips = (_filtros[field] || []).map((v, i) => `<span class="tag tag--inc">${esc(v)} <span class="x" onclick="CanteraGlobalModule.removeFiltro('${field}',${i})">✕</span></span>`).join('');
-    const excChips = (_filtrosExcl[field] || []).map((v, i) => `<span class="tag tag--exc">≠ ${esc(v)} <span class="x" onclick="CanteraGlobalModule.removeFiltroExcl('${field}',${i})">✕</span></span>`).join('');
-    return `<div class="filter-field" data-ta="${field}">
-      <label class="field-label">${esc(label)}</label>
-      <div class="tag-list">${incChips}${excChips}</div>
-      <div class="ta-wrap">
-        <input type="text" class="ta-input" placeholder="Escribe para buscar…" autocomplete="off"
-          onfocus="CanteraGlobalModule.taOpen('${field}')" oninput="CanteraGlobalModule.taFilter('${field}')" onblur="CanteraGlobalModule.taBlur('${field}')">
-        <div class="ta-menu" id="tag-menu-${field}" hidden></div>
-      </div>
+    const incVals = _filtros[field] || [], excVals = _filtrosExcl[field] || [];
+    const total = incVals.length + excVals.length;
+    const open = _taOpenSet.has(field) || total > 0;
+    const incChips = incVals.map((v, i) => `<span class="tag tag--inc">${esc(v)} <span class="x" onclick="CanteraGlobalModule.removeFiltro('${field}',${i})">✕</span></span>`).join('');
+    const excChips = excVals.map((v, i) => `<span class="tag tag--exc">≠ ${esc(v)} <span class="x" onclick="CanteraGlobalModule.removeFiltroExcl('${field}',${i})">✕</span></span>`).join('');
+    return `<div class="ta-row${open ? ' ta-row--open' : ''}" data-ta="${field}">
+      <button type="button" class="ta-row__hd" onclick="CanteraGlobalModule.toggleTaField('${field}')">
+        <span class="ta-row__l">${esc(label)}</span>
+        ${total ? `<span class="ta-row__badge">${total}</span>` : ''}
+        <span class="ta-row__chev">${open ? '−' : '+'}</span>
+      </button>
+      ${open ? `<div class="ta-row__body">
+        <div class="tag-list">${incChips}${excChips}</div>
+        <div class="ta-wrap">
+          <input type="text" class="ta-input" placeholder="Escribe para buscar…" autocomplete="off"
+            onfocus="CanteraGlobalModule.taOpen('${field}')" oninput="CanteraGlobalModule.taFilter('${field}')" onblur="CanteraGlobalModule.taBlur('${field}')">
+          <div class="ta-menu" id="tag-menu-${field}" hidden></div>
+        </div>
+      </div>` : ''}
     </div>`;
   }
   // Panel de filtros vertical a la IZQUIERDA, contraído por defecto — pedido
@@ -8128,39 +8385,57 @@ const CanteraGlobalModule = (() => {
     // tenga que escrolear tanto". Antes era una sola columna angosta (260px)
     // con un campo debajo de otro; ahora el panel ocupa el ancho real y los
     // campos van de a dos por fila, igual que el rail de LinkedIn.
+    // Acordeón agrupado por secciones — muestra de referencia Sales Navigator
+    // (rediseño visual 2026-09-30, pedido explícito: "lo que tengo se ve
+    // igual, quiero eso visualmente"): antes era una grilla plana de cajas
+    // siempre abiertas; ahora cada campo es una fila colapsada (como
+    // "Company"/"Role" de LI) que se expande al click, agrupada bajo un
+    // título de sección en mayúsculas.
+    const group = (title, list) => {
+      const html = list.filter(Boolean).join('');
+      return html ? `<div class="ta-group"><div class="ta-group__hd">${esc(title)}</div>${html}</div>` : '';
+    };
     const fields = [
-      _taFieldG('pais', 'País'), _taFieldG('industria', 'Industria'),
-      _taFieldG('tamano', 'Tamaño de empresa'), _taFieldG('tier', 'Tier'), _taFieldG('cliente', 'Cliente outbound'),
-      _taFieldG('secuencia', 'Secuencia'),
-      _vista !== 'empresa' ? _taFieldG('estado', 'Estado') : '',
-      _vista !== 'empresa' ? _taFieldG('seniority', 'Seniority') : '',
-      _vista !== 'empresa' ? _taFieldG('departamento', 'Departamento') : '',
-      _vista !== 'empresa' ? _taFieldG('ciudad', 'Ciudad') : '',
+      group('Empresa', [_taFieldG('pais', 'País'), _taFieldG('industria', 'Industria'), _taFieldG('tamano', 'Tamaño de empresa')]),
+      group('Cantera', [_taFieldG('tier', 'Tier'), _taFieldG('paso2', 'Validación profunda')]),
+      group('Outbound', [_taFieldG('cliente', 'Cliente outbound'), _taFieldG('secuencia', 'Secuencia')]),
+      _vista !== 'empresa' ? group('Contacto', [
+        _taFieldG('estado', 'Estado'), _taFieldG('seniority', 'Seniority'),
+        _taFieldG('departamento', 'Departamento'), _taFieldG('ciudad', 'Ciudad'),
+      ]) : '',
     ].filter(Boolean).join('');
     // Un filtro guardado en la pestaña Empresas solo tiene sentido ahí -- pedido
     // explícito: "si es filtro de empresa solo debería aparecer en empresa".
     const savedListAll = _loadSaved();
     const savedShown = savedListAll.map((f, i) => ({ f, i })).filter(x => (x.f.vista || '') === _vista);
-    const savedHtml = savedShown.length ? `<div class="cant-global-saved">
-        <label class="field-label">Filtros guardados</label>
-        <div class="cant-global-saved-list">${savedShown.map(({ f, i }) => `
+    const savedHtml = savedShown.length ? `<div class="cant-global-saved${_savedOpen ? ' cant-global-saved--open' : ''}">
+        <button type="button" class="ta-row__hd cant-global-saved__hd" onclick="CanteraGlobalModule.toggleSavedOpen()">
+          <span class="ta-row__l">Filtros guardados</span>
+          <span class="ta-row__badge">${savedShown.length}</span>
+          <span class="ta-row__chev">${_savedOpen ? '−' : '+'}</span>
+        </button>
+        ${_savedOpen ? `<div class="cant-global-saved-list">${savedShown.map(({ f, i }) => `
           <div class="cant-global-saved-item">
             <button class="cant-global-saved-apply" onclick="CanteraGlobalModule.aplicarFiltroGuardado(${i})" title="Aplicar este filtro">
               <span class="cant-global-saved-n">${esc(f.nombre)}</span>
               <span class="cant-global-saved-d">${new Date(f.fecha).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
             </button>
             <button class="cant-x" onclick="event.stopPropagation();CanteraGlobalModule.borrarFiltroGuardado(${i})" title="Eliminar">✕</button>
-          </div>`).join('')}</div>
+          </div>`).join('')}</div>` : ''}
       </div>` : '';
+    const vistaToggle = _vistaFiltros === 'detallada'
+      ? `<button class="cant-global-vista-tog" onclick="CanteraGlobalModule.setVistaFiltros('compacta')" title="Volver a la vista compacta, una columna">‹ Vista compacta</button>`
+      : `<button class="cant-global-vista-tog" onclick="CanteraGlobalModule.setVistaFiltros('detallada')" title="Ver todas las secciones lado a lado, con menos scroll">Ver todo ›</button>`;
     return `<div class="cant-global-panel-hd">
         <h3 style="margin:0;font-size:.92rem">Criterios</h3>
         <div style="display:flex;align-items:center;gap:8px">
+          ${vistaToggle}
           <button class="btn btn--ghost btn--sm" onclick="CanteraGlobalModule.guardarFiltroActual()" title="Guardar los filtros actuales con nombre" style="display:inline-flex;align-items:center;gap:6px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg> Guardar filtro</button>
           <button class="cant-x" onclick="CanteraGlobalModule.toggleCollapse()" title="Ocultar panel">‹</button>
         </div>
       </div>
       ${savedHtml}
-      <div class="cant-global-fields-grid">
+      <div class="cant-global-fields-grid cant-global-fields-grid--top">
         <div class="filter-field"><label class="field-label">Buscar</label>
           <input type="text" class="form-input" placeholder="Nombre, apellido, empresa, email…" value="${esc(_q)}" oninput="CanteraGlobalModule.setQ(this.value)"></div>
         <div class="filter-field"><label class="field-label">Dónde está</label>
@@ -8169,8 +8444,27 @@ const CanteraGlobalModule = (() => {
             <option value="crm"${_origen === 'crm' ? ' selected' : ''}>Solo en CRM</option>
             <option value="borrador"${_origen === 'borrador' ? ' selected' : ''}>Solo en borradores</option>
           </select></div>
-        ${fields}
+      </div>
+      <div class="ta-groups${_vistaFiltros === 'detallada' ? ' ta-groups--detail' : ''}">${fields}</div>
+      <div class="cant-global-clearall-row">
+        <button class="cant-global-clearall" ${_hasActiveFiltros() ? '' : 'disabled'} onclick="CanteraGlobalModule.clearAll()">Borrar todos los filtros</button>
       </div>`;
+  }
+  // Pedido explícito 2026-09-30: "LinkedIn tiene un botón de borrar todos los
+  // filtros... abajo" — limpia buscador, origen y todos los campos (no borra
+  // los filtros GUARDADOS, solo lo que está aplicado en los resultados).
+  function _hasActiveFiltros() {
+    if (_q || _origen) return true;
+    for (const k in _filtros) if ((_filtros[k] || []).length) return true;
+    for (const k in _filtrosExcl) if ((_filtrosExcl[k] || []).length) return true;
+    return false;
+  }
+  async function clearAll() {
+    _q = ''; _origen = '';
+    for (const k in _filtros) _filtros[k] = [];
+    for (const k in _filtrosExcl) _filtrosExcl[k] = [];
+    _page = 0; _clearFacets();
+    await _search(); _repaint();
   }
   const _PASO1_LBL = { aprobado: 'Aprobado', descartado: 'Descartado' };
   const _PASO2_LBL = { aprobado: 'Aprobado', validacion_manual: 'Hecho manual', descartado: 'Descartado', pendiente: 'Pendiente' };
@@ -8251,7 +8545,7 @@ const CanteraGlobalModule = (() => {
     return `<div class="lm-sec-head lm-sec-head--compact"><div><h2 class="lm-sec-title">Base global</h2></div></div>
       ${_vistaTabsHtml()}
       <div class="cant-global-layout${_collapsed ? ' collapsed' : ''}">
-        ${_collapsed ? '' : `<div class="cant-global-panel">${_panelHtml()}</div>`}
+        ${_collapsed ? '' : `<div class="cant-global-panel${_vistaFiltros === 'detallada' ? ' cant-global-panel--detail' : ''}">${_panelHtml()}</div>`}
         <div class="cant-global-results">
           <div class="cant-global-toolbar" style="position:relative">
             <div style="display:flex;align-items:center;gap:12px">
@@ -8307,8 +8601,10 @@ const CanteraGlobalModule = (() => {
   // un único click que solo podía incluir.
   function _taOptRow(field, o) {
     const jv = esc(o).replace(/'/g, "\\'");
+    const n = _facetCache[field] && _facetCache[field][o];
+    const nHtml = (n === undefined) ? '' : ` <span class="ta-opt__n">(${n})</span>`;
     return `<div class="ta-opt ta-opt--row">
-      <span class="ta-opt__v">${esc(o)}</span>
+      <span class="ta-opt__v">${esc(o)}${nHtml}</span>
       <span class="ta-opt__ops">
         <span class="ta-opt__op" onmousedown="event.preventDefault();CanteraGlobalModule.addFiltro('${field}','${jv}')">Incluir</span>
         <span class="ta-opt__sep">|</span>
@@ -8318,23 +8614,26 @@ const CanteraGlobalModule = (() => {
   }
   function taOpen(field) {
     const menu = document.getElementById('tag-menu-' + field); if (!menu) return;
-    menu.innerHTML = _gOptions(field).map(o => _taOptRow(field, o)).join('') || `<div class="ta-none">Sin opciones</div>`;
+    const opts = _gOptions(field);
+    menu.innerHTML = opts.map(o => _taOptRow(field, o)).join('') || `<div class="ta-none">Sin opciones</div>`;
     menu.hidden = false;
+    _loadFacets(field, opts);
   }
   function taFilter(field) {
-    const wrap = document.querySelector(`.filter-field[data-ta="${field}"]`); const inp = wrap?.querySelector('.ta-input'); const menu = document.getElementById('tag-menu-' + field);
+    const wrap = document.querySelector(`.ta-row[data-ta="${field}"]`); const inp = wrap?.querySelector('.ta-input'); const menu = document.getElementById('tag-menu-' + field);
     if (!inp || !menu) return;
     const f = inp.value.toLowerCase().trim();
     const opts = _gOptions(field).filter(o => o.toLowerCase().includes(f));
     menu.innerHTML = opts.map(o => _taOptRow(field, o)).join('') || `<div class="ta-none">Sin coincidencias</div>`;
     menu.hidden = false;
+    _loadFacets(field, opts);
   }
   function taBlur(field) { setTimeout(() => { const m = document.getElementById('tag-menu-' + field); if (m) m.hidden = true; }, 160); }
   function _clearFacets() { for (const k in _facetCache) delete _facetCache[k]; }
-  async function addFiltro(field, value) { _filtros[field] = [...(_filtros[field] || []), value]; _page = 0; _clearFacets(); await _search(); _repaint(); }
-  async function removeFiltro(field, idx) { _filtros[field].splice(idx, 1); _page = 0; _clearFacets(); await _search(); _repaint(); }
-  async function addFiltroExcl(field, value) { _filtrosExcl[field] = [...(_filtrosExcl[field] || []), value]; _page = 0; _clearFacets(); await _search(); _repaint(); }
-  async function removeFiltroExcl(field, idx) { _filtrosExcl[field].splice(idx, 1); _page = 0; _clearFacets(); await _search(); _repaint(); }
+  async function addFiltro(field, value) { _filtros[field] = [...(_filtros[field] || []), value]; _taOpenSet.add(field); _page = 0; _clearFacets(); await _search(); _repaint(); }
+  async function removeFiltro(field, idx) { _filtros[field].splice(idx, 1); _taOpenSet.add(field); _page = 0; _clearFacets(); await _search(); _repaint(); }
+  async function addFiltroExcl(field, value) { _filtrosExcl[field] = [...(_filtrosExcl[field] || []), value]; _taOpenSet.add(field); _page = 0; _clearFacets(); await _search(); _repaint(); }
+  async function removeFiltroExcl(field, idx) { _filtrosExcl[field].splice(idx, 1); _taOpenSet.add(field); _page = 0; _clearFacets(); await _search(); _repaint(); }
   // Abre la MISMA modal "Validación manual" que ya existe en Mesa de trabajo
   // (mismos endpoints, mismo Tier/Prioridad/Confianza/Nota) — se reusa en vez
   // de duplicarla. Solo hace falta "primar" la fila en el _knownRows de Mesa
@@ -8377,7 +8676,7 @@ const CanteraGlobalModule = (() => {
       await editValidacion(d.company_id, d.batch_id);
     } catch (e) { showBanner('Error al preparar la validación: ' + e.message, 'error'); }
   }
-  return { render, setQ, setOrigen, setVista, setPageSize, goPage, toggleCollapse, taOpen, taFilter, taBlur, addFiltro, removeFiltro, addFiltroExcl, removeFiltroExcl, toggleCol, colsMenu, editValidacion, editValidacionCRM, guardarFiltroActual, aplicarFiltroGuardado, borrarFiltroGuardado };
+  return { render, setQ, setOrigen, setVista, setVistaFiltros, clearAll, setPageSize, goPage, toggleCollapse, toggleTaField, toggleSavedOpen, taOpen, taFilter, taBlur, addFiltro, removeFiltro, addFiltroExcl, removeFiltroExcl, toggleCol, colsMenu, editValidacion, editValidacionCRM, guardarFiltroActual, aplicarFiltroGuardado, borrarFiltroGuardado };
 })();
 
 // =================================================================
@@ -19555,7 +19854,7 @@ const LeadManagerModule = (() => {
       // el contador del servidor.
       const nc = _navCounts || {};
       const cnt = n.k === 'tasks'  ? (_pendingTaskCount() || nc.tasks || 0)
-                : n.k === 'leads'  ? ((_contacts.length ? _contacts.filter(c => c.disposition === 'respondio' || c.disposition === 'reunion').length : 0) || nc.leads || 0)
+                : n.k === 'leads'  ? ((_contacts.length ? _contacts.filter(c => ['respondio', 'interesado', 'reunion'].includes(c.disposition)).length : 0) || nc.leads || 0)
                 : n.k === 'inbox'  ? (Array.isArray(_ibThreads) ? _ibUnreadTotal() : (nc.inbox || 0))
                 : n.k === 'clients' ? _cuTotal()
                 : n.k === 'wa'     ? (Array.isArray(_waList) ? _waList.reduce((s, x) => s + (x.no_leidos || 0), 0) : (nc.wa || 0))
@@ -19766,7 +20065,7 @@ const LeadManagerModule = (() => {
         seqs: seqIds.length,
         leads: m.leads + cts.length,
         contactados: m.contactados + cts.filter(x => (x.estado || 'nuevo') !== 'nuevo').length,
-        replies: m.replies + cts.filter(x => x.disposition === 'respondio' || x.disposition === 'reunion').length,
+        replies: m.replies + cts.filter(x => ['respondio', 'interesado', 'reunion'].includes(x.disposition)).length,
         ganados: m.ganados + cts.filter(x => x.estado === 'ganado').length,
       };
     };
@@ -20159,7 +20458,7 @@ const LeadManagerModule = (() => {
     const _seqTaskN = (Array.isArray(_seqContacts) || Array.isArray(_seqPendingCos))
       ? (Array.isArray(_seqContacts) ? _seqTasks(id).filter(t => t.due <= _today0).length : 0)
         + (Array.isArray(_seqPendingCos) ? _seqCoTasks(id).filter(t => t.due <= _today0).length : 0)
-        + (s.awaiting || 0) + (s.no_email_pending || 0)
+        + (s.estado === 'activa' ? (s.awaiting || 0) + (s.no_email_pending || 0) : 0)
       : null;
     const backBtn = `<button class="lm-back" onclick="LeadManagerModule.go('sequences')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg> Secuencias</button>`;
     // Pasos vive SIEMPRE en su propia tarjeta a la izquierda (colapsable con «/›);
@@ -20219,7 +20518,7 @@ const LeadManagerModule = (() => {
       ['metricas', 'Métricas', null],
       ['envios', 'Envíos', null],
     ];
-    const apN = (s.awaiting || 0) + (s.no_email_pending || 0);
+    const apN = s.estado === 'activa' ? (s.awaiting || 0) + (s.no_email_pending || 0) : 0;
     if (s.send_mode === 'preaprobado' || apN > 0) tabs.push(['aprobar', 'Aprobar', apN || null]);
     return `<div class="seq-stat-tabs">${tabs.map(([key, label, n]) => `<button class="seq-stat-tab${_seqTab === key ? ' active' : ''}" onclick="LeadManagerModule.seqTab('${key}')">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICO[key] || ''}</svg>
@@ -20630,17 +20929,17 @@ ${foot}
       // cadena de derivados respondió de verdad). "Derivó a otro" NO cuenta como resultado final: es un traspaso,
       // así que se sigue la cadena hasta el resultado real (real_disposition, calculado en el servidor).
       const dCounts = {}; let dNone = 0;
-      list.forEach(e => { if (e.real_disposition) dCounts[e.real_disposition] = (dCounts[e.real_disposition] || 0) + 1; else dNone++; });
+      _seqCtEffective(list).forEach(e => { if (e.real_disposition) dCounts[e.real_disposition] = (dCounts[e.real_disposition] || 0) + 1; else dNone++; });
       const dChips = [`<button class="lm-filter-btn${!_seqCtDisp ? ' on' : ''}" onclick="LeadManagerModule.seqCtSetDisp('')">Cualquier resultado</button>`]
         .concat(dNone ? [`<button class="lm-filter-btn${_seqCtDisp === '_none' ? ' on' : ''}" onclick="LeadManagerModule.seqCtSetDisp('_none')" title="Nadie en la cadena de derivados respondió de verdad">Sin respuesta real · ${dNone}</button>`] : [])
         .concat(_DISPOS.filter(x => dCounts[x[0]]).map(x => `<button class="lm-filter-btn${_seqCtDisp === x[0] ? ' on' : ''}" onclick="LeadManagerModule.seqCtSetDisp('${x[0]}')">${x[1]} · ${dCounts[x[0]]}</button>`)).join('');
       let fl = _seqCtEstado ? list.filter(e => (e.estado || 'activo') === _seqCtEstado) : list;
+      if (_seqCtDisp) fl = _seqCtEffective(fl);   // el referido reemplaza al contacto original
       if (_seqCtDisp === '_none') fl = fl.filter(e => !e.real_disposition);
       else if (_seqCtDisp) fl = fl.filter(e => e.real_disposition === _seqCtDisp);
       // Si filtras por resultado y un contacto derivó a otro que TAMBIÉN está en esta secuencia, no se
       // muestran los dos (se vería como si fueran dos empresas): solo el del final de la cadena, que es
       // a quien de verdad hay que seguirle — y a quien se enrolaría si lo mandas a otra secuencia.
-      if (_seqCtDisp) { const ids = new Set(list.map(e => e.contact_id)); fl = fl.filter(e => e.contact_id === e.chain_end_id || !ids.has(e.chain_end_id)); }
       const flIds = fl.map(e => e.contact_id);
       [..._seqCtSel].forEach(cid => { if (!flIds.includes(cid)) _seqCtSel.delete(cid); }); // no arrastrar selección de contactos ya filtrados fuera
       const nSel = _seqCtSel.size;
@@ -20741,6 +21040,24 @@ ${foot}
     // split de una sola tarjeta con la info de la secuencia + los pasos).
     return '';
   }
+  // Contacto EFECTIVO por cadena de derivados: si te redirigieron a otro, ese reemplaza al anterior
+  // (pedido 2026-10-02: "el prospecto con el que establece finalmente la conversación... con él nutro,
+  // ya no con la anterior"). Una fila por final de cadena; si ese final YA está enrolado en esta
+  // secuencia manda su propia fila, si no se sintetiza desde los datos que trae el servidor (end_*).
+  function _seqCtEffective(list) {
+    const enrolled = new Map(list.map(e => [e.contact_id, e]));
+    const out = new Map();
+    list.forEach(e => {
+      const endId = e.chain_end_id != null ? e.chain_end_id : e.contact_id;
+      const from = [e.nombre, e.apellido].filter(Boolean).join(' ');
+      if (endId === e.contact_id) { out.set(endId, e); return; }
+      if (enrolled.has(endId)) { if (!out.has(endId)) out.set(endId, enrolled.get(endId)); return; }
+      if (out.has(endId)) { const o = out.get(endId); if (o._synth && from && !o._from.includes(from)) o._from.push(from); return; }
+      out.set(endId, { ...e, contact_id: endId, nombre: e.end_nombre, apellido: e.end_apellido, cargo: e.end_cargo, email: e.end_email,
+        disposition: e.end_disposition, derivado: false, _synth: true, _from: from ? [from] : [] });
+    });
+    return [...out.values()];
+  }
   function _seqCtRow(e, steps, seqId) {
     const full = [e.nombre, e.apellido].filter(Boolean).join(' ') || (e.email || '—');
     const N = steps.length;
@@ -20754,15 +21071,17 @@ ${foot}
     return `<tr class="clients-table__row" onclick="LeadManagerModule.openContactPage(${e.contact_id})" style="cursor:pointer">
       <td onclick="event.stopPropagation()"><input type="checkbox" class="lm-ck" ${_seqCtSel.has(e.contact_id) ? 'checked' : ''} onchange="LeadManagerModule.seqCtSelToggle(${e.contact_id},this.checked,${seqId})"></td>
       <td><div class="client-cell-name"><img class="client-avatar" src="${_av(full)}" style="object-fit:cover" alt=""/><div><div class="client-nombre">${esc(full)}</div>${(e.cargo || e.company_nombre) ? `<div class="client-empresa">${esc([e.cargo, e.company_nombre].filter(Boolean).join(' · '))}</div>` : ''}</div></div></td>
-      <td class="client-meta"><div class="seq-prog"><div class="seq-prog__bar"><span style="width:${pct}%"></span></div><span class="seq-prog__t">${done ? 'Completada' : `Paso ${paso}/${N || '—'} · ${esc(stTitle)}`}</span></div></td>
-      <td><span class="client-badge" style="background:${em[1]};color:${em[2]}">${em[0]}</span></td>
+      ${e._synth
+        ? `<td class="client-meta" colspan="2"><span style="color:var(--muted);font-size:12px" title="No está enrolado en esta secuencia: es a quien te derivaron">↪ Referido por ${esc(e._from.join(', '))} — nuevo prospecto, sin enrolar aquí</span></td>`
+        : `<td class="client-meta"><div class="seq-prog"><div class="seq-prog__bar"><span style="width:${pct}%"></span></div><span class="seq-prog__t">${done ? 'Completada' : `Paso ${paso}/${N || '—'} · ${esc(stTitle)}`}</span></div></td>
+      <td><span class="client-badge" style="background:${em[1]};color:${em[2]}">${em[0]}</span></td>`}
       <td>${e.real_disposition ? _dispoBadge(e.real_disposition) + (e.real_disposition !== e.disposition ? ` <span style="color:var(--muted);font-size:11px" title="El resultado real vino de un contacto derivado, no de este">(vía referido)</span>` : '') : (e.derivado ? '<span style="color:var(--muted)" title="Se derivó a otro contacto que tampoco tiene un resultado final todavía">Derivado, sin resultado</span>' : '<span style="color:var(--muted)">—</span>')}</td>
       <td class="lm-dt-act" onclick="event.stopPropagation()">
         <button class="lm-mini-b" title="Escribir con IA (✨ Fable investiga en línea)" onclick="LeadManagerModule.openAiDrafts(${e.contact_id},${seqId})">${NI('sparkles')}</button>
-        ${(paso > 1 || done) ? `<button class="lm-mini-b" title="Deshacer último paso — lo marqué hecho por error" onclick="LeadManagerModule.seqCtRollback(${seqId},${e.contact_id})">↩</button>` : ''}
+        ${e._synth ? '' : `${(paso > 1 || done) ? `<button class="lm-mini-b" title="Deshacer último paso — lo marqué hecho por error" onclick="LeadManagerModule.seqCtRollback(${seqId},${e.contact_id})">↩</button>` : ''}
         ${done ? '' : `<button class="lm-mini-b" title="Avanzar de paso" onclick="LeadManagerModule.seqCtAdvance(${seqId},${e.contact_id})">→</button>`}
         <button class="lm-mini-b" title="${e.estado === 'pausado' ? 'Reanudar' : 'Pausar'}" onclick="LeadManagerModule.seqCtPause(${seqId},${e.contact_id})">${e.estado === 'pausado' ? '►' : 'II'}</button>
-        <button class="lm-mini-x" title="Quitar de la secuencia" onclick="LeadManagerModule.seqCtRemove(${seqId},${e.contact_id})">✕</button>
+        <button class="lm-mini-x" title="Quitar de la secuencia" onclick="LeadManagerModule.seqCtRemove(${seqId},${e.contact_id})">✕</button>`}
       </td>
     </tr>`;
   }
@@ -21068,7 +21387,8 @@ ${foot}
   //   pos  = hay señal comercial · der = la persona no sirve pero la CUENTA sí · desc = cerrado
   // [valor, etiqueta, color texto, color fondo, grupo]
   const _DISPOS = [
-    ['respondio',     'Interesado',      '#15803D', '#F1EFEB', 'pos'],
+    ['respondio',     'Respondió',       '#0E7490', '#F1EFEB', 'pos'],
+    ['interesado',    'Interesado',      '#15803D', '#DDF3E4', 'pos'],
     ['reunion',       'Reunión',         '#5B4BC4', '#EAE7E2', 'pos'],
     ['mas_adelante',  'Más adelante',    '#0E7490', '#E0F2FE', 'pos'],
     ['derivado',      'Derivó a otro',   '#7C3AED', '#F1EFEB', 'der'],
@@ -21569,7 +21889,7 @@ ${foot}
     // ¿ya se envió la invitación de LinkedIn? (paso = posición del siguiente paso; la invitación está antes)
     const inviteDone = sq => _seqSteps(sq.id).some((st, i) => (st.accion === 'invite' || st.accion === 'invite_nota') && i + 1 < (sq.paso || 1));
     (_contacts || []).forEach(c => {
-      if (c.disposition === 'respondio' || c.li_aceptado_at) return;
+      if (['respondio', 'interesado'].includes(c.disposition) || c.li_aceptado_at) return;
       if (c.no_linkedin) return; // LinkedIn no válido → ya no espera aceptación; va por email
       const seqs = (c.sequences || []).filter(sq => (sq.estado === 'activo' || sq.estado === 'pausado') && ((branch[sq.id] && (sq.paso || 1) > 1) || inviteDone(sq)));
       if (seqs.length) out.push({ c, seqs });
@@ -21728,7 +22048,7 @@ ${foot}
     const KI = [['users', '#22A06B'], ['reply', '#F59E0B'], ['in', '#7C5CE0'], ['handshake', '#22A06B']]; let ki = 0;
     const kpi = (l, v, delta, sub) => { const k = KI[ki++]; return `<div class="dash-kpi" style="--kc:${k[1]}"><div class="dash-kpi__top"><span class="dash-kpi__ic">${_dashIco(k[0], 18)}</span><span class="dash-kpi__l">${l}</span></div><div class="dash-kpi__v">${v}</div>${delta}${sub ? `<div class="dash-kpi__s">${sub}</div>` : ''}</div>`; };
     const fn = d.funnel, stages = [['Enrolados', fn.enrolados, '#0F172A', 'users'], ['Contactados', fn.contactados, '#2563EB', 'send'], ['Respondieron', fn.respondieron, '#22A06B', 'reply'], ['Reunión', fn.reuniones, '#F59E0B', 'cal']];
-    const funnel = stages.map((s, i) => `<div class="dash-fn"><span class="dash-fn__ic" style="background:${s[2]}">${_dashIco(s[3], 16)}</span><div class="dash-fn__b"><div class="dash-fn__top"><span class="dash-fn__l">${s[0]}</span>${i ? `<span class="dash-fn__pct">${_dashPct(s[1], fn.enrolados || 1)}%</span>` : ''}</div><div class="dash-fn__v">${s[1] || 0}</div></div></div>`).join('');
+    const funnel = stages.map((s, i) => `<div class="dash-fn"><span class="dash-fn__ic">${_dashIco(s[3], 16)}</span><div class="dash-fn__b"><div class="dash-fn__top"><span class="dash-fn__l">${s[0]}</span>${i ? `<span class="dash-fn__pct">${_dashPct(s[1], fn.enrolados || 1)}%</span>` : ''}</div><div class="dash-fn__v">${s[1] || 0}</div></div></div>`).join('');
     const chTot = d.channels.reduce((n, r) => n + r.touches, 0);
     const chLeg = d.channels.map(r => { const m = _DASH_CH[r.ch] || _DASH_CH.otros; return `<tr><td><span class="dash-dot" style="background:${m[1]}"></span>${m[0]}</td><td>${_dashPct(r.touches, chTot)}%</td><td>${r.touches}</td></tr>`; }).join('');
     const donut = d.channels.length ? `<div class="dash-donut"><div class="dash-donut__c"><canvas id="seqm-ch"></canvas></div><table class="dash-leg"><tbody>${chLeg}<tr class="dash-leg__t"><td>Total</td><td></td><td>${chTot}</td></tr></tbody></table></div>` : '<div class="rep-empty">Sin toques en el período</div>';
@@ -21755,6 +22075,8 @@ ${foot}
   // Filas de aprobación DENTRO de la pestaña Tareas: el email automático se revisa,
   // edita y aprueba aquí mismo — no es una tarea de "marcar hecho".
   function _seqApRowsHtml(seqId) {
+    // Secuencia pausada/draft/archivada: sus aprobaciones no son trabajo del día (reportado 2026-10-02: pausó la secuencia y seguían saliendo tareas).
+    const _sq = (_sequences || []).find(x => x.id === seqId); if (_sq && _sq.estado !== 'activa') return '';
     const list = (Array.isArray(_seqApprovals) ? _seqApprovals : []).filter(a => a.estado === 'awaiting');
     if (!list.length) return '';
     const rows = list.map(a => {
@@ -21831,6 +22153,7 @@ ${foot}
   // "que quepa en toda la pantalla sin scroll... un contador 5 de 27... al
   // aprobar avanza automático al siguiente... si retrocedo puedo editar".
   function _seqNoEmailRowsHtml() {
+    const _sq = (_sequences || []).find(x => x.id === _activeSeq); if (_sq && _sq.estado !== 'activa') return '';
     const list = Array.isArray(_seqPendingNoEmail) ? _seqPendingNoEmail : [];
     if (!list.length) return '';
     _seqNoEmailIdx = Math.max(0, Math.min(_seqNoEmailIdx, list.length - 1));
@@ -22008,8 +22331,8 @@ ${foot}
   function seqCtSelAll(on, seqId) {
     const list = Array.isArray(_seqContacts) ? _seqContacts : [];
     let fl = _seqCtEstado ? list.filter(e => (e.estado || 'activo') === _seqCtEstado) : list;
+    if (_seqCtDisp) fl = _seqCtEffective(fl);
     if (_seqCtDisp === '_none') fl = fl.filter(e => !e.real_disposition); else if (_seqCtDisp) fl = fl.filter(e => e.real_disposition === _seqCtDisp);
-    if (_seqCtDisp) { const ids = new Set(list.map(e => e.contact_id)); fl = fl.filter(e => e.contact_id === e.chain_end_id || !ids.has(e.chain_end_id)); }
     fl.forEach(e => { if (on) _seqCtSel.add(e.contact_id); else _seqCtSel.delete(e.contact_id); });
     _seqCtRepaint();
   }
@@ -22143,7 +22466,7 @@ ${foot}
   // con cond='' en todos los pasos, _effIdx devuelve el mismo paso que hoy.
   // Aceptar la conexión de LinkedIn cuenta igual que responder para efectos de la rama
   // de la secuencia: ambas son "hubo señal, sigue por la ruta de seguimiento".
-  function _respondedC(cid) { const c = (_contacts || []).find(x => x.id === cid); return !!(c && (c.disposition === 'respondio' || c.li_aceptado_at)); }
+  function _respondedC(cid) { const c = (_contacts || []).find(x => x.id === cid); return !!(c && (['respondio', 'interesado'].includes(c.disposition) || c.li_aceptado_at)); }
   function _noLinkedInC(cid) { const c = (_contacts || []).find(x => x.id === cid); return !!(c && c.no_linkedin); }
   // WhatsApp/Llamada: MISMO criterio que LinkedIn — solo se saltan si Jenny los
   // marcó a mano como número inválido (no_whatsapp/no_phone). Antes también se
@@ -24813,7 +25136,7 @@ ${foot}
     // embudo con nodos de icono
     const fn = d.funnel, base = fn.enrolados || 1;
     const stages = [['Enrolados', fn.enrolados, '#0F172A', 'users'], ['Contactados', fn.contactados, '#2563EB', 'send'], ['Respondieron', fn.respondieron, '#22A06B', 'reply'], ['Reunión', fn.reuniones, '#F59E0B', 'cal']];
-    const funnel = stages.map((s, i) => `<div class="dash-fn"><span class="dash-fn__ic" style="background:${s[2]}">${_dashIco(s[3], 16)}</span><div class="dash-fn__b"><div class="dash-fn__top"><span class="dash-fn__l">${s[0]}</span>${i ? `<span class="dash-fn__c">${_dashPct(s[1], stages[i - 1][1])}% ↓</span>` : ''}<span class="dash-fn__n">${s[1]}</span></div><div class="dash-fn__track"><div class="dash-fn__fill" style="width:${Math.max(2, Math.round(s[1] / base * 100))}%;background:${s[2]}"></div></div></div></div>`).join('');
+    const funnel = stages.map((s, i) => `<div class="dash-fn"><span class="dash-fn__ic">${_dashIco(s[3], 16)}</span><div class="dash-fn__b"><div class="dash-fn__top"><span class="dash-fn__l">${s[0]}</span>${i ? `<span class="dash-fn__c">${_dashPct(s[1], stages[i - 1][1])}% ↓</span>` : ''}<span class="dash-fn__n">${s[1]}</span></div><div class="dash-fn__track"><div class="dash-fn__fill" style="width:${Math.max(2, Math.round(s[1] / base * 100))}%;background:${s[2]}"></div></div></div></div>`).join('');
     // toques por canal: dona + leyenda
     const chTot = d.channels.reduce((n, r) => n + r.touches, 0);
     const chLeg = d.channels.map(r => { const m = _DASH_CH[r.ch] || _DASH_CH.otros; return `<tr><td><span class="dash-dot" style="background:${m[1]}"></span>${m[0]}</td><td>${_dashPct(r.touches, chTot)}%</td><td>${r.touches}</td></tr>`; }).join('');
@@ -24860,7 +25183,7 @@ ${foot}
     const rows = d.channels.filter(r => r.contacted);
     const tc = rows.reduce((n, r) => n + r.contacted, 0), tr = rows.reduce((n, r) => n + (rc[r.ch] || 0), 0);
     const cls = v => v > 0 ? 'dash-good' : 'dash-zero';
-    const body = rows.map(r => { const m = _DASH_CH[r.ch] || _DASH_CH.otros, n = rc[r.ch] || 0, t = _dashPct(n, r.contacted); return `<tr><td><span class="dash-cic" style="background:${m[1]}">${_dashIco(m[2], 12)}</span>${m[0]}</td><td>${r.contacted}</td><td>${n}</td><td class="${cls(t)}">${t}%</td></tr>`; }).join('');
+    const body = rows.map(r => { const m = _DASH_CH[r.ch] || _DASH_CH.otros, n = rc[r.ch] || 0, t = _dashPct(n, r.contacted); return `<tr><td><span class="dash-cic">${_dashIco(m[2], 12)}</span>${m[0]}</td><td>${r.contacted}</td><td>${n}</td><td class="${cls(t)}">${t}%</td></tr>`; }).join('');
     const days = d.replyDays != null ? `<div class="dash-kpi__s" style="margin-top:8px">Tardan en promedio <b>${d.replyDays} días</b> en responder desde el primer toque. El canal es el último toque antes de la respuesta.</div>` : '';
     return (rows.length ? `<div class="clients-table-wrap"><table class="clients-table"><thead><tr><th>Canal</th><th>Contactados</th><th>Respondieron</th><th>Tasa</th></tr></thead><tbody>${body}<tr class="dash-tot"><td>Total</td><td>${tc}</td><td>${tr}</td><td class="${cls(tr)}">${_dashPct(tr, tc)}%</td></tr></tbody></table></div>` : '<div class="rep-empty">Sin datos</div>') + days;
   }
@@ -26893,8 +27216,18 @@ ${foot}
   // estados individuales. Cada lead cae en un solo grupo y en un solo estado → los
   // números siempre cuadran, aunque se combinen varios chips.
   let _ldSel = '', _ldCli = '', _ldSeq = '', _ldCamp = '', _ldQ = '';
+  // "Por calificar" = Respondió sin calificar. Último mensaje de cada uno (email/WhatsApp/registro manual) para decidir sin abrir la ficha.
+  let _ldSnips = {};
+  async function _ldLoadSnips() {
+    try { const r = await apiFetch(`${API}/lm/por-calificar`); if (r && r.ok) _ldSnips = await r.json(); } catch (_) {}
+    _ldPaint();
+  }
+  function ldTogglePorCalificar() { ldSetResult(_ldSel === 'respondio' ? '' : 'respondio'); }
+  // Ya está en Deals (valor/cierre cargado o etapa de pipeline): no debe aparecer como "Por calificar".
+  function _ldInDeal(c) { return c.deal_valor != null || c.deal_cierre != null || ['propuesta', 'negociacion', 'ganado', 'perdido'].includes(c.estado); }
   function _ldMatchPill(c, pill) {
     const d = c.disposition || '';
+    if (pill === 'respondio') return d === 'respondio' && !_ldInDeal(c);
     if (['pos', 'der', 'desc'].includes(pill)) return _dispGrupo(d) === pill;
     return d === pill;
   }
@@ -26942,6 +27275,7 @@ ${foot}
         <div class="lm-hd-actions"><button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.openContact()">＋ Agregar prospecto</button></div>
       </div>
       <div class="ldh-toolbar">
+        <button class="lm-filter-btn" id="ldh-pc" onclick="LeadManagerModule.ldTogglePorCalificar()" title="Contactos que respondieron y aún no has calificado (Interesado, Más adelante, No interesado…)"></button>
         <select class="ldh-sel" id="ldh-res" onchange="LeadManagerModule.ldSetResult(this.value)"></select>
         <select class="ldh-sel" id="ldh-cli" onchange="LeadManagerModule.ldSetCli(this.value)"></select>
         <select class="ldh-sel" id="ldh-seq" onchange="LeadManagerModule.ldSetSeq(this.value)"></select>
@@ -26961,6 +27295,8 @@ ${foot}
     // Un solo desplegable: Todos, luego los 3 grupos (suman el total) y, aparte,
     // los estados individuales — reemplaza las 2 filas de chips que antes se
     // repetían (el grupo y su único estado mostraban el mismo número dos veces).
+    const _pcBtn = $('ldh-pc');
+    if (_pcBtn) { _pcBtn.textContent = 'Por calificar · ' + base.filter(c => _ldMatchPill(c, 'respondio')).length; _pcBtn.classList.toggle('on', _ldSel === 'respondio'); }
     const grupos = _DISP_GRUPOS.map(([k, l]) => `<option value="${k}"${_ldSel === k ? ' selected' : ''}>${l} (${cnt(k)})</option>`).join('');
     const estados = _DISPOS.filter(d => cnt(d[0]) > 0 || _ldSel === d[0])
       .map(d => `<option value="${d[0]}"${_ldSel === d[0] ? ' selected' : ''}>${d[1]} (${cnt(d[0])})</option>`).join('');
@@ -27013,7 +27349,7 @@ ${foot}
           ${_derivLinkHtml(c)}
         </td>
         <td class="ldh-date">${fecha}</td>
-        <td class="ldh-note ldh-note--full" onclick="event.stopPropagation();LeadManagerModule.ldEditNote(${c.id},${i.notaId || 'null'})" title="Clic para editar la nota"><div class="ldh-note__in">${i.nota ? esc(i.nota) : '<span class="ldh-none">＋ Añadir nota</span>'}</div></td>
+        <td class="ldh-note ldh-note--full" onclick="event.stopPropagation();LeadManagerModule.ldEditNote(${c.id},${i.notaId || 'null'})" title="Clic para editar la nota"><div class="ldh-note__in">${(_ldSel === 'respondio' && _ldSnips[c.id] && _ldSnips[c.id].snippet) ? `<div class="ldh-sub" style="white-space:normal;color:var(--text)" title="Lo último que escribió">Escribió: “${esc(_ldSnips[c.id].snippet)}”${_ldSnips[c.id].n > 1 ? ` · ${_ldSnips[c.id].n} respuestas` : ''}</div>` : ''}${i.nota ? esc(i.nota) : '<span class="ldh-none">＋ Añadir nota</span>'}</div></td>
         <td class="ldh-acts" onclick="event.stopPropagation()">
           <button class="ldh-act" title="Añadir nota" onclick="LeadManagerModule.ldAddNote(${c.id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
           <button class="ldh-act" title="Registrar reunión" onclick="LeadManagerModule.ldMeet(${c.id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></button>
@@ -27027,7 +27363,7 @@ ${foot}
       <thead><tr><th>Lead</th><th>Contacto</th><th>Cliente</th><th>Secuencia · paso</th><th>Resultado</th><th>Fecha</th><th>Nota (clic para editar)</th><th></th></tr></thead>
       <tbody>${rows}</tbody></table></div>`;
   }
-  function ldSetResult(k) { _ldSel = k || ''; _ldPaint(); }
+  function ldSetResult(k) { _ldSel = k || ''; if (_ldSel === 'respondio') _ldLoadSnips(); else _ldPaint(); }
   // Editar la última nota del lead (o crear una si no hay), con el texto precargado.
   async function ldEditNote(cid, actId) {
     const c = _contacts.find(x => x.id === cid); if (!c) return;
@@ -27058,6 +27394,29 @@ ${foot}
   // → ldNurture), así que el cambio queda registrado igual que desde cualquier otro
   // lado: actividad "Disposición: …" (historial del cliente) + avance de etapa +
   // nota opcional (novaNote, se puede omitir con Esc) — todo ya vive en esas funciones.
+  // Abre/cierra los submenús (.cp-mark-menu__sub) al pasar el mouse: se muestra a la derecha o a la
+  // izquierda según el espacio, se ajusta en vertical para no salirse de la pantalla y tolera un
+  // instante fuera (200ms). El CSS solo los deja ocultos — sin esto "Descartado ▸" no abría nada
+  // (reportado 2026-10-03: "intenté descartar y no funciona").
+  function _wireMarkSubs(menu) {
+    menu.querySelectorAll('.cp-mark-menu__sub').forEach(subEl => {
+      const panel = subEl.querySelector('.cp-mark-menu__subpanel'); if (!panel) return;
+      let hideTimer = null;
+      subEl.addEventListener('mouseenter', () => {
+        clearTimeout(hideTimer);
+        const subRect = subEl.getBoundingClientRect();
+        if (window.innerWidth - subRect.right < 310 && subRect.left >= 310) { panel.style.left = 'auto'; panel.style.right = '100%'; }
+        else { panel.style.left = '100%'; panel.style.right = 'auto'; }
+        panel.style.marginLeft = '0'; panel.style.marginRight = '0';
+        panel.style.top = '50%'; panel.style.transform = 'translateY(-50%)';
+        panel.style.display = 'block';
+        const pr = panel.getBoundingClientRect();
+        if (pr.top < 8) panel.style.transform = `translateY(calc(-50% + ${8 - pr.top}px))`;
+        else if (pr.bottom > window.innerHeight - 8) panel.style.transform = `translateY(calc(-50% - ${pr.bottom - (window.innerHeight - 8)}px))`;
+      });
+      subEl.addEventListener('mouseleave', () => { hideTimer = setTimeout(() => { panel.style.display = 'none'; }, 200); });
+    });
+  }
   function ldOpenDispoMenu(ev, cid) {
     if (ev && ev.stopPropagation) ev.stopPropagation();
     document.querySelectorAll('.cp-mark-menu').forEach(m => m.remove());
@@ -27084,6 +27443,7 @@ ${foot}
     menu.className = 'cp-mark-menu';
     menu.innerHTML = html;
     document.body.appendChild(menu);
+    _wireMarkSubs(menu);
     const t = (ev && (ev.currentTarget || ev.target)) || document.body;
     const r = t.getBoundingClientRect();
     const estH = 260;
@@ -27276,8 +27636,10 @@ ${foot}
           <button type="button" class="seq-days-preset" onclick="document.getElementById('nur-fecha').value='${enMeses(1)}'">En 1 mes</button>
           <button type="button" class="seq-days-preset" onclick="document.getElementById('nur-fecha').value='${enMeses(3)}'">En 3 meses</button>
           <button type="button" class="seq-days-preset" onclick="document.getElementById('nur-fecha').value='${enMeses(6)}'">En 6 meses</button>
+          <button type="button" class="seq-days-preset" onclick="document.getElementById('nur-fecha').value='${enMeses(12)}'">En 12 meses</button>
         </div>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Retomar el</span><input class="form-input" type="date" id="nur-fecha" value="${enMeses(3)}"></label>
+        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Motivo</span><select class="form-input" id="nur-motivo"><option value="">— sin definir —</option><option>Presupuesto</option><option>Timing</option><option>Ya tiene proveedor</option><option>Otro proyecto</option><option>Dejó de responder</option><option>Otro</option></select></label>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Nota (opcional)</span><input class="form-input" id="nur-nota" placeholder="Ej. cierran presupuesto en Q4"></label>
       </div>
       <div class="fin-pi-box__ft"><span class="fin-cfg-hint" id="nur-hint"></span><div class="fin-pi-ft-btns">
@@ -27289,11 +27651,12 @@ ${foot}
   async function ldNurtureSave(cid) {
     const fecha = $('nur-fecha')?.value || '';
     const nota = ($('nur-nota')?.value || '').trim();
+    const motivo = $('nur-motivo')?.value || '';
     const btn = $('nur-save'); if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
     try {
       const res = await apiFetch(`${API}/lm/contacts/${cid}/disposition`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ disposition: 'mas_adelante', nurture_at: fecha, nota: nota || (fecha ? `Retomar el ${fecha}` : '') }),
+        body: JSON.stringify({ disposition: 'mas_adelante', nurture_at: fecha, nurture_motivo: motivo, nota: nota || (fecha ? `Retomar el ${fecha}` : '') }),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Error');
       document.getElementById('lm-nur-modal')?.remove();
@@ -27361,8 +27724,20 @@ ${foot}
   // ── Deals: capa financiera del pipeline (valor · probabilidad · fecha de cierre) ──
   let _dlCli = '';
   const _DL_STAGES = ['propuesta', 'negociacion', 'ganado', 'perdido'];
+  // Columnas del tablero: "Reunión" es derivada (no es una etapa guardada): reunión agendada o deal con valor/cierre
+  // que aún no pasó a Propuesta. Pedido 2026-10-03: Deals = intención comercial clara (reunión, propuesta…), el valor es opcional.
+  const _DL_COLS = ['reunion', 'propuesta', 'negociacion', 'ganado', 'perdido'];
+  const _DL_COL_LBL = { reunion: 'Reunión', propuesta: 'Propuesta', negociacion: 'Negociación', ganado: 'Ganado', perdido: 'Perdido' };
+  const _DL_MOTIVOS = ['Precio', 'Timing', 'Se fue con otro proveedor', 'Cambió el proyecto', 'Sin respuesta', 'Otro'];
+  function _dlIsDeal(c) {
+    return c.deal_valor != null || c.deal_cierre != null || !!c.reunion_agendada_at || c.disposition === 'reunion'
+      || ['propuesta', 'negociacion', 'ganado'].includes(c.estado)
+      || (_activities || []).some(a => a.contact_id === c.id && a.tipo === 'reunion');
+  }
+  function _dlCol(c) { return _DL_STAGES.includes(c.estado) ? c.estado : 'reunion'; }
   function _dlList() {
-    let list = _contacts.filter(c => _DL_STAGES.includes(c.estado) || c.deal_valor != null);
+    // Un "no me interesa" directo mueve la etapa a Perdido pero NUNCA fue un deal: no entra al tablero.
+    let list = _contacts.filter(c => _dlIsDeal(c));
     if (_dlCli) list = list.filter(c => String(c.outbound_client_id || '') === _dlCli);
     return list;
   }
@@ -27378,7 +27753,7 @@ ${foot}
     const parts = Object.entries(by).map(([m, v]) => _dlMoney(v, m));
     return parts.length ? parts.join(' · ') : '—';
   }
-  function _stColor(s) { const m = (STAGE_STYLES[s] || '').match(/color:([^;]+)/); return m ? m[1] : '#888'; }
+  function _stColor(s) { if (s === 'reunion') return '#5B4BC4'; const m = (STAGE_STYLES[s] || '').match(/color:([^;]+)/); return m ? m[1] : '#888'; }
   function _vDeals() {
     return `<div class="lm-sec-head">
         <div><h2 class="lm-sec-title">Deals</h2></div>
@@ -27414,7 +27789,7 @@ ${foot}
     }
     const today = new Date().toISOString().slice(0, 10);
     const col = st => {
-      const items = list.filter(c => c.estado === st);
+      const items = list.filter(c => _dlCol(c) === st);
       const cards = items.map(c => {
         const full = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || '—';
         const cli = _clients.find(x => x.id === c.outbound_client_id);
@@ -27427,13 +27802,13 @@ ${foot}
             <span class="dl-card__val${c.deal_valor == null ? ' dl-card__val--none' : ''}">${c.deal_valor == null ? 'Sin valor' : _dlMoney(c.deal_valor, c.deal_moneda)}</span>
             ${c.deal_prob != null ? `<span class="dl-card__prob">${c.deal_prob}%</span>` : ''}
             ${cierre ? `<span class="dl-card__date${late ? ' dl-card__date--late' : ''}">${_ldFmtDate(cierre + 'T12:00:00')}</span>` : ''}
-          </div></div>`;
+          </div>${(st === 'perdido' && c.deal_motivo_perdida) ? `<div class="dl-card__s" style="margin-top:4px">Motivo: ${esc(c.deal_motivo_perdida)}</div>` : ''}</div>`;
       }).join('');
       return `<div class="dl-col dl-col--${st}">
-        <div class="dl-col__hd"><span class="cp-mark-dot" style="background:${_stColor(st)}"></span><span class="dl-col__t">${STAGE_LABELS[st]}</span><span class="dl-col__n">${items.length}</span><span class="dl-col__sum">${_dlSums(items)}</span></div>
+        <div class="dl-col__hd"><span class="cp-mark-dot" style="background:${_stColor(st)}"></span><span class="dl-col__t">${_DL_COL_LBL[st]}</span><span class="dl-col__n">${items.length}</span><span class="dl-col__sum">${_dlSums(items)}</span></div>
         ${cards || '<div class="dl-empty-col">— vacío —</div>'}</div>`;
     };
-    bEl.innerHTML = `<div class="dl-board">${_DL_STAGES.map(col).join('')}</div>`;
+    bEl.innerHTML = `<div class="dl-board">${_DL_COLS.map(col).join('')}</div>`;
   }
   function dlSetCli(v) { _dlCli = v; _dlPaint(); }
   function dlClose() { document.getElementById('dl-modal')?.remove(); }
@@ -27441,9 +27816,10 @@ ${foot}
     const c = _contacts.find(x => x.id === cid); if (!c) return;
     dlClose();
     const full = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || '—';
-    const est = stage || (_DL_STAGES.includes(c.estado) ? c.estado : 'propuesta');
+    const est = stage || _dlCol(c);
     const probOpts = ['', 10, 20, 30, 40, 50, 60, 70, 80, 90].map(p => `<option value="${p}"${String(c.deal_prob == null ? '' : c.deal_prob) === String(p) ? ' selected' : ''}>${p === '' ? 'Sin definir' : p + ' %'}</option>`).join('');
-    const estOpts = _ORDER.map(s => `<option value="${s}"${est === s ? ' selected' : ''}>${STAGE_LABELS[s]}</option>`).join('');
+    const estOpts = _DL_COLS.map(s => `<option value="${s}"${est === s ? ' selected' : ''}>${_DL_COL_LBL[s]}</option>`).join('');
+    const motOpts = ['<option value="">— sin definir —</option>'].concat(_DL_MOTIVOS.map(x => `<option${c.deal_motivo_perdida === x ? ' selected' : ''}>${x}</option>`)).join('');
     const monOpts = ['USD', 'PEN', 'EUR'].map(x => `<option value="${x}"${(c.deal_moneda || 'USD') === x ? ' selected' : ''}>${x}</option>`).join('');
     const m = document.createElement('div'); m.id = 'dl-modal'; m.className = 'fin-pi-backdrop';
     m.onclick = ev => { if (ev.target === m) dlClose(); };
@@ -27451,8 +27827,9 @@ ${foot}
       <div class="dle-hd"><div style="flex:1;min-width:0"><div class="dle-hd__t">${esc(full)}</div><div class="dle-hd__s">${esc([c.cargo, c.company_nombre].filter(Boolean).join(' · ')) || 'Deal'}</div></div><button class="fin-pi-x" onclick="LeadManagerModule.dlClose()">✕</button></div>
       <div class="dle-cols">
         <div class="dle-grid">
-          <label class="dle-f dle-f--full"><span class="dle-l">Etapa del pipeline</span><select class="dle-i" id="dle-estado">${estOpts}</select></label>
-          <label class="dle-f"><span class="dle-l">Valor estimado</span><input class="dle-i" id="dle-valor" type="number" min="0" step="0.01" placeholder="0" value="${c.deal_valor == null ? '' : c.deal_valor}"></label>
+          <label class="dle-f dle-f--full"><span class="dle-l">Etapa del pipeline</span><select class="dle-i" id="dle-estado" onchange="document.getElementById('dle-motivo-wrap').style.display = this.value === 'perdido' ? '' : 'none'">${estOpts}</select></label>
+          <label class="dle-f dle-f--full" id="dle-motivo-wrap" style="${est === 'perdido' ? '' : 'display:none'}"><span class="dle-l">Motivo de pérdida</span><select class="dle-i" id="dle-motivo">${motOpts}</select></label>
+          <label class="dle-f"><span class="dle-l">Valor estimado (opcional)</span><input class="dle-i" id="dle-valor" type="number" min="0" step="0.01" placeholder="0" value="${c.deal_valor == null ? '' : c.deal_valor}"></label>
           <label class="dle-f"><span class="dle-l">Moneda</span><select class="dle-i" id="dle-moneda">${monOpts}</select></label>
           <label class="dle-f"><span class="dle-l">Probabilidad de cierre</span><select class="dle-i" id="dle-prob">${probOpts}</select></label>
           <label class="dle-f"><span class="dle-l">Fecha estimada de cierre</span><input class="dle-i" id="dle-cierre" type="date" value="${c.deal_cierre ? String(c.deal_cierre).slice(0, 10) : ''}"></label>
@@ -27530,11 +27907,13 @@ ${foot}
     const g = id => document.getElementById(id);
     const valor = g('dle-valor').value.trim(), moneda = g('dle-moneda').value, prob = g('dle-prob').value, cierre = g('dle-cierre').value, estado = g('dle-estado').value;
     try {
-      const res = await apiFetch(`${API}/lm/contacts/${cid}/deal`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ valor, moneda, prob, cierre }) });
+      const res = await apiFetch(`${API}/lm/contacts/${cid}/deal`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ valor, moneda, prob, cierre, motivo_perdida: estado === 'perdido' ? (g('dle-motivo')?.value || '') : '' }) });
       if (!res.ok) throw new Error((await res.json()).error || 'Error');
       const d = await res.json();
-      c.deal_valor = d.deal_valor; c.deal_moneda = d.deal_moneda; c.deal_prob = d.deal_prob; c.deal_cierre = d.deal_cierre;
-      if (estado && estado !== c.estado) await cpSetStage(cid, estado, true);
+      c.deal_valor = d.deal_valor; c.deal_moneda = d.deal_moneda; c.deal_prob = d.deal_prob; c.deal_cierre = d.deal_cierre; c.deal_motivo_perdida = d.deal_motivo_perdida;
+      // "Reunión" no es una etapa guardada: si venía de Propuesta/Negociación vuelve a "Respondió"; si no, se queda como está.
+      if (estado === 'reunion') { if (_DL_STAGES.includes(c.estado)) await cpSetStage(cid, 'respondio', true); }
+      else if (estado && estado !== c.estado) await cpSetStage(cid, estado, true);
       dlClose();
       if (_section === 'deals') _dlPaint(); else if (_section === 'leads') _ldPaint(); else if (_section === 'contact-view') _renderBody();
       showBanner('✓ Deal guardado', 'success');
@@ -29279,7 +29658,22 @@ ${foot}
         } else {
           panel.style.left = '100%'; panel.style.right = 'auto'; panel.style.marginLeft = '0'; panel.style.marginRight = '0';
         }
+        // El CSS por defecto centra el panel verticalmente contra SU FILA
+        // (top:50%/translateY(-50%)), no contra la pantalla -- si la fila está
+        // cerca del borde de una ventana comprimida, el panel se sigue
+        // saliendo igual. Reportado en vivo 2026-09-30 con captura: "mismo
+        // problema sin resolver" (el menú de arriba ya se había arreglado,
+        // pero no estos subpaneles anidados como Industria/País/Tamaño).
+        // Se centra primero y, ya con el alto real, se corrige con un empujón
+        // extra si se sale por arriba o por abajo.
+        panel.style.top = '50%'; panel.style.transform = 'translateY(-50%)';
         panel.style.display = 'block';
+        // Lectura síncrona (sin rAF): el navegador ya recalculó el layout al
+        // tocar display/top/transform arriba, así que getBoundingClientRect
+        // ya da el tamaño real sin esperar un frame.
+        const pr = panel.getBoundingClientRect();
+        if (pr.top < 8) panel.style.transform = `translateY(calc(-50% + ${8 - pr.top}px))`;
+        else if (pr.bottom > window.innerHeight - 8) panel.style.transform = `translateY(calc(-50% - ${pr.bottom - (window.innerHeight - 8)}px))`;
       });
       subEl.addEventListener('mouseleave', () => { hideTimer = setTimeout(() => { panel.style.display = 'none'; }, 200); });
     });
@@ -29524,8 +29918,6 @@ ${foot}
           ${_waDigits(c) ? `<button class="cp-act" onclick="LeadManagerModule.openWaFor(${id})">WhatsApp ›</button>` : ''}
           ${c.email ? `<button class="cp-act" onclick="LeadManagerModule.go('inbox');LeadManagerModule.ibOpen(${id})">Email</button>` : ''}
           <button class="cp-act" onclick="LeadManagerModule.cpActOpen('')">＋ Registrar actividad</button>
-          <button class="cp-act" onclick="LeadManagerModule.bulkAddOpen('sequence',[${id}])">＋ Secuencia</button>
-          <button class="cp-act" onclick="LeadManagerModule.bulkAddOpen('campaign',[${id}])">＋ Campaña</button>
           <button class="cp-act cp-act--danger" onclick="LeadManagerModule.cpDelete(${id})">Eliminar</button>
         </div>
       </div>
@@ -29551,7 +29943,7 @@ ${foot}
           </div></div>
           ${_seqEnrollCard(c, id)}
           <div class="cp-card"><div class="cp-card__t">Resultado de la interacción</div><div class="cp-fields">
-            <div class="cp-f cp-f--full"><div class="cp-dispo">${_DISPOS.map(d => `<button class="cp-dispo-b${c.disposition === d[0] ? ' on' : ''}" style="${c.disposition === d[0] ? `background:${d[3]};color:${d[2]};border-color:${d[2]}` : ''}" onclick="LeadManagerModule.ibResolveDisp(${id},'${c.disposition === d[0] ? '' : d[0]}')">${d[1]}</button>`).join('')}</div></div>
+            <div class="cp-f cp-f--full"><div class="cp-dispo">${_DISPOS.map(d => `<button class="cp-dispo-b${c.disposition === d[0] ? ' on' : ''}" style="${c.disposition === d[0] ? `background:${d[3]};color:${d[2]};border-color:${d[2]}` : ''}" onclick="LeadManagerModule.ibResolveDisp(${id},'${c.disposition === d[0] ? '' : d[0]}')">${d[1]}</button>`).join('')}</div>${c.disposition === 'interesado' ? `<div style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><button class="cp-dispo-b cp-dispo-b--xs" onclick="LeadManagerModule.cpTouchOpen(${id})">Registrar conversación (llamada u otro canal)</button><span class="seq-drip-hint" style="margin:0">Reinicia el seguimiento automático de este Interesado.</span></div>` : ''}</div>
             ${_cpLastResultInfo(c)}
             ${_derivLinkHtml(c) ? `<div class="cp-f cp-f--full" style="gap:5px">${_derivLinkHtml(c)}</div>` : ''}
             ${c.data_issue ? `<div class="cp-f cp-f--full"><span class="cp-f__l">Por corregir</span><div class="cp-dispo" style="align-items:center;gap:8px"><span class="client-badge" style="background:#FEF3C7;color:#B45309">⚠ ${_DATA_ISSUE_LBL[c.data_issue] || c.data_issue}</span><button class="cp-dispo-b" title="Marca el dato como corregido y reanuda sus secuencias pausadas" onclick="LeadManagerModule.lmResumeDataIssue(${id})">✓ Corregido — reanudar</button></div></div>` : ''}
@@ -29637,7 +30029,17 @@ ${foot}
   function _cpFmtDate(d) { if (!d) return ''; const x = new Date(d); return isNaN(x) ? '' : x.toLocaleDateString('es', { day: 'numeric', month: 'short' }); }
   function _seqEnrollCard(c, id) {
     const seqs = Array.isArray(c.sequences) ? c.sequences : [];
-    if (!seqs.length) return '';
+    const camps = Array.isArray(c.campaigns) ? c.campaigns : [];
+    if (!seqs.length) {
+      // Sin secuencia: se muestra la campaña (si hay) y, solo en este caso, la forma de inscribirlo.
+      return `<div class="cp-card"><div class="cp-card__t">Campaña y secuencia</div><div class="cp-fields">
+        <div class="cp-f cp-f--full"><span class="cp-f__l">Campaña</span><span class="cp-f__ro">${camps.length ? camps.map(x => esc(x.nombre)).join(', ') : 'Sin campaña'}</span></div>
+        <div class="cp-f cp-f--full"><span class="cp-f__l">Secuencia</span><span class="cp-f__ro">Sin secuencia</span></div>
+        <div class="cp-f cp-f--full" style="flex-direction:row;gap:6px">
+          <button class="cp-dispo-b cp-dispo-b--xs" onclick="LeadManagerModule.bulkAddOpen('sequence',[${id}])">Inscribir en secuencia</button>
+          ${camps.length ? '' : `<button class="cp-dispo-b cp-dispo-b--xs" onclick="LeadManagerModule.bulkAddOpen('campaign',[${id}])">Añadir a campaña</button>`}
+        </div></div></div>`;
+    }
     const row = s => {
       const est = s.estado || '—';
       const badgeSt = est === 'activo' ? 'background:#D1FAE5;color:#065F46' : est === 'pausado' ? 'background:#FEF3C7;color:#B45309' : est === 'respondido' ? 'background:#E0F2FE;color:#0369A1' : 'background:#F1EFEB;color:#6C6862';
@@ -29652,7 +30054,8 @@ ${foot}
         ${meta.length ? `<div class="cp-f__ro" style="margin-top:4px">${meta.join(' · ')}</div>` : ''}
       </div>`;
     };
-    return `<div class="cp-card"><div class="cp-card__t">Estado de la secuencia</div><div class="cp-fields">${seqs.map(row).join('')}</div></div>`;
+    const campRow = camps.length ? `<div class="cp-f cp-f--full" style="border-bottom:1px solid #EAE7E2;padding-bottom:8px;margin-bottom:8px"><span class="cp-f__l">Campaña</span><span class="cp-f__ro">${camps.map(x => esc(x.nombre)).join(', ')}</span></div>` : '';
+    return `<div class="cp-card"><div class="cp-card__t">Campaña y secuencia</div><div class="cp-fields">${campRow}${seqs.map(row).join('')}</div></div>`;
   }
   async function cpResumeSeq(cid, seqId) {
     try {
@@ -29699,7 +30102,7 @@ ${foot}
       <div class="fin-pi-box__hd"><h3>Registrar respuesta</h3><button class="fin-pi-x" onclick="document.getElementById('lm-reply-modal').remove()">✕</button></div>
       <div class="fin-pi-form">
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Canal</span><select class="form-input" id="rr-canal">${chanOpts.map(([v, l]) => `<option value="${v}"${v === (presetChannel || 'email') ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
-        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Resultado</span><select class="form-input" id="rr-result"><option value="respondio" selected>Interesado (respuesta genérica)</option>${resultOpts.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select></label>
+        <label class="fin-cfg-field"><span class="fin-cfg-lbl">Resultado</span><select class="form-input" id="rr-result"><option value="respondio" selected>Respondió (sin calificar)</option><option value="interesado">Interesado (conversación real)</option>${resultOpts.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select></label>
         <div class="fin-pi-full">${seqOpts}</div>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Nota</span><textarea class="form-input" id="rr-nota" rows="3" placeholder="Qué respondió…"></textarea></label>
       </div>
@@ -29744,10 +30147,10 @@ ${foot}
   }
   async function cpSetStage(id, estado, force) {
     const c = _contacts.find(x => x.id === id); if (!c || c.estado === estado) return;
-    // RESPONDIÓ = lo mismo que marcar "Interesado": pasa por la disposición para que se pause la
+    // RESPONDIÓ (sin calificar, ya no "Interesado"): pasa por la disposición para que se pause la
     // secuencia, se cree la tarea de revisión y quede registrada la respuesta (embudo, portal…).
     // Antes la barra cambiaba solo la etapa y dejaba la disposición vacía → dos caminos distintos.
-    if (!force && estado === 'respondio' && !['respondio', 'reunion', 'mas_adelante'].includes(c.disposition || '')) return lmSetDisposition(id, 'respondio');
+    if (!force && estado === 'respondio' && !['respondio', 'interesado', 'reunion', 'mas_adelante'].includes(c.disposition || '')) return lmSetDisposition(id, 'respondio');
     // PROPUESTA / NEGOCIACIÓN = es un DEAL: se abre el deal (valor, probabilidad, fecha de reunión) con esa etapa.
     if (!force && (estado === 'propuesta' || estado === 'negociacion') && !c.deal_valor && !c.deal_cierre) return dlOpen(id, estado);
     try {
@@ -29799,6 +30202,38 @@ ${foot}
     try { const r = await apiFetch(`${API}/lm/contacts/${id}/activities`); _cpActs = (r && r.ok) ? await r.json() : []; } catch { _cpActs = []; }
     if (!Array.isArray(_cpActs)) _cpActs = [];
     if (_section === 'contact-view' && _contactView === id) { const el = document.getElementById('cp-tabwrap'); if (el) el.innerHTML = _cpTabContent(_contacts.find(x => x.id === id)); }
+  }
+  // Conversación fuera del sistema (llamada, presencial, otro canal): reinicia el seguimiento automático del Interesado.
+  function cpTouchOpen(id) {
+    document.getElementById('lm-touch-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'lm-touch-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) m.remove(); };
+    m.innerHTML = `<div class="fin-pi-box" style="max-width:420px">
+      <div class="fin-pi-box__hd"><h3>Registrar conversación</h3><button class="fin-pi-x" onclick="document.getElementById('lm-touch-modal').remove()">✕</button></div>
+      <div class="fin-pi-form">
+        <div class="fin-pi-full seq-drip-hint" style="margin:0">Para cuando hablaste con esta persona por un canal que el sistema no ve. Reinicia el conteo de seguimiento y cierra la tarea pendiente.</div>
+        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Canal</span><select class="form-input" id="touch-canal"><option>Llamada</option><option>WhatsApp</option><option>Videollamada</option><option>Presencial</option><option>Otro</option></select></label>
+        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Nota (opcional)</span><input class="form-input" id="touch-nota" placeholder="Ej. quedó en confirmarme el jueves"></label>
+      </div>
+      <div class="fin-pi-box__ft"><span class="fin-cfg-hint" id="touch-hint"></span><div class="fin-pi-ft-btns">
+        <button class="btn btn--ghost btn--sm" onclick="document.getElementById('lm-touch-modal').remove()">Cancelar</button>
+        <button class="btn btn--primary btn--sm" id="touch-save" onclick="LeadManagerModule.cpTouchSave(${id})">Guardar</button>
+      </div></div></div>`;
+    document.body.appendChild(m);
+  }
+  async function cpTouchSave(id) {
+    const btn = $('touch-save'); if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+    try {
+      const res = await apiFetch(`${API}/lm/contacts/${id}/touch`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ canal: $('touch-canal')?.value || '', nota: ($('touch-nota')?.value || '').trim() }) });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Error');
+      document.getElementById('lm-touch-modal')?.remove();
+      await _cpReloadActs(id);
+      showBanner('✓ Conversación registrada — seguimiento reiniciado', 'success');
+    } catch (e) {
+      const h = $('touch-hint'); if (h) { h.textContent = e.message; h.className = 'fin-cfg-hint fin-cfg-hint--err'; }
+      if (btn) { btn.disabled = false; btn.textContent = 'Guardar'; }
+    }
   }
   function cpActOpen(preset) {
     const id = _contactView; if (!id) return;
@@ -30570,6 +31005,7 @@ ${foot}
     m.innerHTML = `<div class="fin-pi-box lm-drawer-box">
       ${_impHd(c ? 'Editar empresa' : 'Nueva empresa').replace('closeImport', 'closeCompany')}
       <div class="fin-pi-form">
+        ${c ? '' : `<div class="fin-pi-full co-enrich-row"><span class="fin-cfg-lbl">Buscar en internet</span><div class="co-enrich-row__in"><input class="form-input" id="co-enrich-q" placeholder="Nombre de la empresa o URL"><button type="button" class="btn btn--ghost btn--sm" id="co-enrich-btn" onclick="LeadManagerModule.enrichCompanyLookup()">🔎 Buscar</button></div><span class="fin-cfg-hint" id="co-enrich-hint"></span></div>`}
         ${_lmFld('co-nombre', 'Nombre', c?.nombre, '', true)}
         ${_lmFld('co-dominio', 'Dominio', c?.dominio, 'empresa.com')}
         ${_lmFld('co-website', 'Website', c?.website, 'https://')}
@@ -30604,6 +31040,25 @@ ${foot}
     setTimeout(() => $('co-nombre')?.focus(), 60);
   }
   function closeCompany() { document.getElementById('lm-co-modal')?.remove(); }
+  async function enrichCompanyLookup() {
+    const q = ($('co-enrich-q')?.value || '').trim();
+    const hint = $('co-enrich-hint'), btn = $('co-enrich-btn');
+    if (!q) { if (hint) { hint.textContent = 'Escribe un nombre o URL primero'; hint.className = 'fin-cfg-hint fin-cfg-hint--err'; } return; }
+    if (btn) btn.disabled = true;
+    if (hint) { hint.textContent = 'Buscando…'; hint.className = 'fin-cfg-hint'; }
+    try {
+      const res = await apiFetch(`${API}/lm/ai/enrich-company`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: q }) });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Error');
+      const set = (fid, v) => { const el = $(fid); if (el && v && !el.value.trim()) el.value = v; };
+      set('co-nombre', d.nombre); set('co-dominio', d.dominio); set('co-website', d.website);
+      set('co-industria', d.industria); set('co-tamano', d.tamano); set('co-pais', d.pais);
+      set('co-ciudad', d.ciudad); set('co-linkedin', d.linkedin); set('co-descripcion', d.descripcion);
+      set('co-fundada', d.fundada);
+      if (hint) { hint.textContent = 'Listo — revisa y corrige lo que haga falta.'; hint.className = 'fin-cfg-hint'; }
+    } catch (e) { if (hint) { hint.textContent = 'Error: ' + e.message; hint.className = 'fin-cfg-hint fin-cfg-hint--err'; } }
+    if (btn) btn.disabled = false;
+  }
   async function saveCompany(id) {
     const g = fid => ($(fid)?.value || '').trim();
     const payload = {
@@ -31680,9 +32135,9 @@ ${foot}
   return { load, filter, setFilter, setView, go, openClient, clientTab, _clientGoTab, clientQuickMenu,
     openImportPicker, closeImportPicker, openImport, closeImport, impFile, impToggleHeader, impToggleUpdateExisting, impSetObc, impNewClient, impRun, exportCsv,
     cbxOpen, cbxFilter, cbxPick, cbxBlur,
-    openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, ctMoreMenu, lmSetValueOp, bulkDeleteContacts, bulkAddOpen, bulkAddDo, _bulkAddAfterCreate, bulkRemoveSeqOpen, bulkRemoveSeqDo, openContactPage, cpTab, cpSave, cpDelete, cpActOpen, cpActSave, cpActToggle, cpActDel, ctQFSet, ctQFClear,
+    openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, ctMoreMenu, lmSetValueOp, bulkDeleteContacts, bulkAddOpen, bulkAddDo, _bulkAddAfterCreate, bulkRemoveSeqOpen, bulkRemoveSeqDo, openContactPage, cpTab, cpSave, cpDelete, cpActOpen, cpTouchOpen, cpTouchSave, cpActSave, cpActToggle, cpActDel, ctQFSet, ctQFClear,
     cpResumeSeq, cpFocusField, cpOpenRegisterReply, cpSaveRegisterReply,
-    openCompany, closeCompany, saveCompany, deleteCompany, filterCompanies, toggleCo, toggleCoAll, clearCoSel, toggleCoSelMode, coMoreMenu, bulkDeleteCompanies, coEnrolOpen, coEnrolFilter, coEnrolPick, openCompanyPage, coQFSet, coQFClear,
+    openCompany, closeCompany, saveCompany, deleteCompany, enrichCompanyLookup, filterCompanies, toggleCo, toggleCoAll, clearCoSel, toggleCoSelMode, coMoreMenu, bulkDeleteCompanies, coEnrolOpen, coEnrolFilter, coEnrolPick, openCompanyPage, coQFSet, coQFClear,
     coQueueAddContact, coQueueDiscard, coQueueTogglePrimary, coQueueContinue,
     seqCoTaskOpen, seqCoDoClose, seqOpenCompanyLinkedIn, seqCoRowMenu, seqCoExpandToggle,
     openDrawer, closeDrawer, save, confirmDelete, convertToClient,
@@ -31714,7 +32169,7 @@ ${foot}
     seqDoAccepted, seqDoNoLinkedIn, seqDoBounced, seqDoNoWhatsapp, seqDoNoPhone, lmToggleNoLinkedIn, lmToggleNoWhatsapp, lmToggleNoPhone, lmToggleBounced, lmToggleManualEmail, ctToggleBounced,
     seqDoDataIssue, seqDoDataIssuePick, ctToggleDataIssue, lmResumeDataIssue, seqOpenMark,
     lmSetPageSize, ctGoPage, coGoPage, seqCtSetEstado, seqCtSetDisp, seqCtSelToggle, seqCtSelAll, seqCtSelClear, seqCtSelAddToSeq, seqTaskSetCanal,
-    ldSetResult, ldSetCli, ldSetSeq, ldSetCamp, ldSetQ, ldAddNote, ldMeet, ldToDeal, ldEditNote, ldExport,
+    ldSetResult, ldTogglePorCalificar, ldSetCli, ldSetSeq, ldSetCamp, ldSetQ, ldAddNote, ldMeet, ldToDeal, ldEditNote, ldExport,
     ldRefer, ldReferSave, ldNurture, ldNurtureSave, ldOpenDispoMenu,
     nurtureRetomarMenu, nurtureReinscribir, nurtureOtraSecuencia, nurtureSoloManual,
     waitingContactMenu, activarSiguienteContacto, waitingCerrarAviso,
