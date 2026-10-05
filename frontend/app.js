@@ -29914,9 +29914,6 @@ ${foot}
           <button class="cp-act" onclick="LeadManagerModule.ldRefer(${id},'derivado')">＋ Crear referido</button>
           <button class="cp-act" onclick="LeadManagerModule.dlOpen(${id})" title="Valor, probabilidad, fecha de la reunión y notas para el cliente">${(c.deal_valor || c.deal_cierre || ['propuesta', 'negociacion', 'ganado', 'perdido'].includes(c.estado)) ? '$ Ver deal' : '＋ Deal'}</button>
           <button class="cp-act" onclick="LeadManagerModule.cpActOpen('tarea')" title="Un pendiente con fecha (sale en Hoy), o una nota/reunión para el historial">＋ Tarea / nota</button>
-          ${c.linkedin ? `<a class="cp-act cp-act--in" href="${esc(c.linkedin)}" target="_blank" rel="noopener">LinkedIn ›</a>` : ''}
-          ${_waDigits(c) ? `<button class="cp-act" onclick="LeadManagerModule.openWaFor(${id})">WhatsApp ›</button>` : ''}
-          ${c.email ? `<button class="cp-act" onclick="LeadManagerModule.go('inbox');LeadManagerModule.ibOpen(${id})">Email</button>` : ''}
           <button class="cp-act cp-act--danger" onclick="LeadManagerModule.cpDelete(${id})">Eliminar</button>
         </div>
       </div>
@@ -29999,13 +29996,14 @@ ${foot}
     // al cliente... reflejarse en inbox respuestas". Mismo mecanismo que ya usa
     // "Abrir conversación" en Disponibilidad de canales — abre el hilo de Nova
     // (compone y envía desde el buzón conectado del cliente, queda registrado).
-    if (c.email) items.push(['mail', c.email, `href="javascript:void(0)" onclick="event.stopPropagation();LeadManagerModule.go('inbox');LeadManagerModule.ibOpen(${c.id})"`]);
+    if (c.email) items.push(['mail', 'Email', `href="javascript:void(0)" onclick="event.stopPropagation();LeadManagerModule.go('inbox');LeadManagerModule.ibOpen(${c.id})"`]);
     const tel = c.telefono || c.movil;
-    if (tel) items.push(['phone', tel, `href="tel:${esc(String(tel).replace(/[^0-9+]/g, ''))}"`]);
+    if (tel) items.push(['phone', 'Teléfono', `href="tel:${esc(String(tel).replace(/[^0-9+]/g, ''))}"`, esc(String(tel))]);
+    if (_waDigits(c)) items.push(['phone', 'WhatsApp', `href="javascript:void(0)" onclick="event.stopPropagation();LeadManagerModule.openWaFor(${c.id})"`, esc(String(c.movil || c.telefono || ''))]);
     if (c.linkedin) items.push(['in', 'LinkedIn', `href="${esc(c.linkedin)}" target="_blank" rel="noopener"`]);
     if (c.fuente) items.push(['src', c.fuente, '']);
     if (!items.length) return '';
-    return `<div class="cp-strip">${items.map(([ic, val, attr]) => attr ? `<a class="cp-strip__i" ${attr}${attr.includes('onclick=') ? '' : ' onclick="event.stopPropagation()"'}>${_STRIP_ICO[ic]}<span>${esc(val)}</span></a>` : `<span class="cp-strip__i">${_STRIP_ICO[ic]}<span>${esc(val)}</span></span>`).join('')}</div>`;
+    return `<div class="cp-strip">${items.map(([ic, val, attr, tip]) => attr ? `<a class="cp-strip__i" title="${tip || esc(c[ic === 'mail' ? 'email' : ic === 'in' ? 'linkedin' : 'x'] || '')}" ${attr}${attr.includes('onclick=') ? '' : ' onclick="event.stopPropagation()"'}>${_STRIP_ICO[ic]}<span>${esc(val)}</span></a>` : `<span class="cp-strip__i">${_STRIP_ICO[ic]}<span>${esc(val)}</span></span>`).join('')}</div>`;
   }
   function _cpStepper(c, id) {
     const cur = c.estado || 'nuevo';
