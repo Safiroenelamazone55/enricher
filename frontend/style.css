@@ -17535,3 +17535,6 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .tv-row .view-tab:hover { color: var(--text-primary); }
 .tv-row .view-tab.active { background: var(--surface); color: var(--primary-hover); box-shadow: 0 1px 2px rgba(20,33,27,.1); }
 .tv-row .view-tab svg { opacity: 1; }
+
+/* Filtros de Tareas: bordes rectos */
+.tf-btn, .tf-btn:hover, .tl-colbtn { border-radius: 0 !important; }

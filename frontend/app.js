@@ -11801,6 +11801,7 @@ const TasksModule = (() => {
     const el = $('tasks-project-header');
     if (el) { el.classList.add('hidden'); el.innerHTML = ''; }
     document.getElementById('tpj-back')?.remove();
+    const _sr0 = $('tasks-search'); if (_sr0) _sr0.placeholder = 'Buscar tarea, proyecto o miembro…';
     const t = document.querySelector('#pane-mgmt-tasks .pane-title');
     const s = document.querySelector('#pane-mgmt-tasks .pane-sub');
     if (t) t.textContent = 'Tareas';
@@ -11918,6 +11919,7 @@ const TasksModule = (() => {
 
     const t = document.querySelector('#pane-mgmt-tasks .pane-title');
     const s = document.querySelector('#pane-mgmt-tasks .pane-sub');
+    const _sr1 = $('tasks-search'); if (_sr1) _sr1.placeholder = 'Buscar tarea…'; // dentro de un proyecto solo se buscan sus tareas
     if (t && !document.getElementById('tpj-back')) {
       const bk = document.createElement('button');
       bk.id = 'tpj-back'; bk.className = 'tpjh__back'; bk.title = 'Volver a Proyectos';
