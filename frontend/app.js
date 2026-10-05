@@ -30351,6 +30351,19 @@ ${foot}
       return true;
     } catch (e) { showBanner('No se pudo deshacer: ' + e.message, 'error'); return false; }
   }
+  // Deshacer/rehacer de la edición de EMPRESA (ventana de editar → Guardar)
+  let _coUndo = [], _coRedo = [];
+  async function _coPut(id, payload) {
+    const res = await apiFetch(`${API}/lm/companies/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    if (!res.ok) throw new Error((await res.json()).error || 'Error');
+  }
+  async function coUndo(redo) {
+    const from = redo ? _coRedo : _coUndo, to = redo ? _coUndo : _coRedo;
+    const op = from.pop();
+    if (!op) { showBanner(redo ? 'Nada que rehacer' : 'Nada que deshacer', 'info'); return; }
+    try { await _coPut(op.id, redo ? op.after : op.before); to.push(op); await load(); showBanner(redo ? '↷ Rehecho' : '↶ Deshecho (empresa)', 'success'); }
+    catch (e) { from.push(op); showBanner('No se pudo deshacer: ' + e.message, 'error'); }
+  }
   async function cpUndo(redo) {
     const from = redo ? _cpRedo : _cpUndo, to = redo ? _cpUndo : _cpRedo;
     const op = from.pop();
@@ -30361,11 +30374,14 @@ ${foot}
   if (!window.__cpUndoBound) {
     window.__cpUndoBound = true;
     document.addEventListener('keydown', e => {
-      if (!(e.ctrlKey || e.metaKey) || _section !== 'contact-view') return;
+      const _inCo = _section === 'company-view' || _section === 'companies';
+      if (!(e.ctrlKey || e.metaKey) || (_section !== 'contact-view' && !_inCo)) return;
+      if (document.getElementById('lm-co-modal') || document.querySelector('.fin-pi-backdrop')) return; // con una ventana abierta manda el navegador
       const k = e.key.toLowerCase();
       const redo = k === 'y' || (k === 'z' && e.shiftKey);
       if (k !== 'z' && k !== 'y') return;
       const t = e.target, c = _contacts.find(x => x.id === _contactView);
+      if (_inCo) { if (t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) return; e.preventDefault(); coUndo(redo); return; }
       // Si estás escribiendo en un campo con cambios sin guardar, manda el deshacer nativo del navegador.
       if (t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) && t.dataset && t.dataset.f && c && String(t.value) !== String(c[t.dataset.f] == null ? '' : c[t.dataset.f])) return;
       if (t && t.isContentEditable) return;
@@ -31147,8 +31163,11 @@ ${foot}
     if (!payload.nombre && !payload.dominio) { if (hint) { hint.textContent = 'Nombre o dominio requerido'; hint.style.color = '#C4342B'; } return; }
     const btn = $('co-save'); if (btn) btn.disabled = true;
     try {
+      const _co0 = id ? _companies.find(x => x.id === id) : null;
+      const _before = {}; if (_co0) Object.keys(payload).forEach(k => { _before[k] = _co0[k] == null ? '' : _co0[k]; });
       const res = await apiFetch(`${API}/lm/companies${id ? `/${id}` : ''}`, { method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       if (!res.ok) throw new Error((await res.json()).error || 'Error');
+      if (_co0 && Object.keys(payload).some(k => String(_before[k]) !== String(payload[k]))) { _coUndo.push({ id, before: _before, after: payload }); if (_coUndo.length > 30) _coUndo.shift(); _coRedo = []; showBanner('✓ Guardado · Ctrl+Z para deshacer', 'success'); }
       closeCompany(); await load();
     } catch (e) { if (hint) { hint.textContent = 'Error: ' + e.message; hint.style.color = '#C4342B'; } if (btn) btn.disabled = false; }
   }
