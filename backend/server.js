@@ -5016,6 +5016,14 @@ app.post('/api/lm/contacts/:id/meeting/preview', requireAuth, async (req, res) =
     res.json({ default1: _mtSvc.defaultMessage(m, k && k.nombre, 1), default2: _mtSvc.defaultMessage(m, k && k.nombre, 2) });
   } catch (e) { res.status(500).json({ error: 'No se pudo generar la vista previa' }); }
 });
+app.post('/api/lm/contacts/:id/meeting/schedule', requireAuth, async (req, res) => {
+  const n = (req.body || {}).n === 2 ? 2 : 1, on = (req.body || {}).on !== false;
+  try {
+    const { rows } = await pool.query(`UPDATE lm_meetings SET rem${n}_prog=$3, updated_at=NOW() WHERE contact_id=$1 AND user_id=$2 RETURNING id`, [+req.params.id, req.workspaceOwnerId, on]);
+    if (!rows.length) return res.status(404).json({ error: 'No hay reunión' });
+    res.json({ ok: true, meeting: await _mtView(pool, req.workspaceOwnerId, +req.params.id) });
+  } catch (e) { res.status(500).json({ error: 'No se pudo programar' }); }
+});
 app.post('/api/lm/contacts/:id/meeting/send', requireAuth, async (req, res) => {
   const n = (req.body || {}).n === 2 ? 2 : 1;
   try {

@@ -124,7 +124,7 @@ async function tick(pool) {
           AND rem${n}_at > NOW() - INTERVAL '3 hours' LIMIT 50`);
       for (const m of rows) {
         try {
-          if (m.modo === 'auto') await sendReminder(pool, m, n);
+          if (m.modo === 'auto' || m['rem' + n + '_prog']) await sendReminder(pool, m, n);
           else {
             const k = await _contactCtx(pool, m);
             await pool.query(

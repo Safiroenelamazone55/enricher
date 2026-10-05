@@ -28553,6 +28553,21 @@ ${foot}
     if (!list.some(x => x.toLowerCase() === email.toLowerCase())) list.push(email);
     i.value = list.join(', '); mtChips();
   }
+
+  // Deja el mensaje programado: se guarda la reunión (con la hora y el texto actuales) y el aviso sale solo a su hora.
+  async function mtProg(n, on) {
+    const c = _contacts.find(x => x.id === _mt.cid); if (!c) return;
+    const b = _mtBody();
+    if (!b.local) return showBanner('Pon la fecha y hora de la reunión', 'error');
+    try {
+      const r0 = await apiFetch(API + '/lm/contacts/' + _mt.cid + '/meeting', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) });
+      const d0 = await r0.json(); if (!r0.ok) throw new Error(d0.error || 'Error');
+      const r = await apiFetch(API + '/lm/contacts/' + _mt.cid + '/meeting/schedule', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ n, on }) });
+      const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Error');
+      _mt.m = d.meeting; _mtPaint(c);
+      showBanner(on ? '✓ Mensaje programado' : 'Programación cancelada', 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
   function mtSeg(id, v) {
     const el = document.getElementById(id); if (!el) return;
     el.dataset.v = v; if (id === 'mt-idioma') mtPreview(); el.querySelectorAll('button').forEach(x => x.classList.toggle('on', x.dataset.v === v));
@@ -28570,7 +28585,14 @@ ${foot}
     const mm = m || {};
     const rem = n => '<div class="mt-msg"><div class="mt-msg__hd"><span>' + (n === 1 ? 'Primer aviso' : 'Segundo aviso') + '</span>' + est(n) + '</div>' +
       '<textarea class="mt-i" id="mt-msg' + n + '" rows="6" oninput="this.dataset.d=1">' + esc(mm['msg' + n] || mm['default' + n] || '') + '</textarea>' +
-      '<div class="mt-msg__ft">' + (m ? '<span class="mt-when">' + (m.modo === 'auto' ? 'Se enviará solo a la hora indicada arriba.' : 'A esa hora te aparece como tarea en Hoy para aprobarlo.') + '</span><a href="#" class="mt-lnk" title="Envía este mensaje ya, sin esperar a la hora programada" onclick="event.preventDefault();LeadManagerModule.mtSend(' + n + ')">Enviar ahora</a>' + (m['rem' + n + '_estado'] === 'error' && m.error ? '<span class="mt-err">' + esc(m.error) + '</span>' : '') : '') + '</div></div>';
+      '<div class="mt-msg__ft">' + (() => {
+        const est = m && m['rem' + n + '_estado'], prog = m && (m['rem' + n + '_prog'] || m.modo === 'auto');
+        let left;
+        if (est === 'enviado') left = '<span class="mt-when mt-ok">✓ Enviado</span>';
+        else if (prog) left = '<span class="mt-when mt-ok">✓ Programado: se enviará solo a la hora indicada arriba.</span>' + (m.modo === 'auto' ? '' : '<a href="#" class="mt-lnk2" onclick="event.preventDefault();LeadManagerModule.mtProg(' + n + ',false)">Cancelar</a>');
+        else left = '<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.mtProg(' + n + ',true)">Programar envío</button><span class="mt-when">o te aparece como tarea en Hoy a esa hora</span>';
+        return left + (m && est !== 'enviado' ? '<a href="#" class="mt-lnk" title="Envía este mensaje ya, sin esperar a la hora programada" onclick="event.preventDefault();LeadManagerModule.mtSend(' + n + ')">Enviar ahora</a>' : '') + (est === 'error' && m.error ? '<span class="mt-err">' + esc(m.error) + '</span>' : '');
+      })() + '</div></div>';
     const inh = _mt.inherit || {};
     const _loc = d => { if (!d) return ''; try { return new Intl.DateTimeFormat('sv-SE', { timeZone: m.tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(d)).replace(' ', 'T'); } catch (_) { return ''; } };
     const _recNote = n => {
@@ -33126,7 +33148,7 @@ ${foot}
     ldRefer, ldReferSave, ldNurture, ldNurtureSave, ldOpenDispoMenu,
     nurtureRetomarMenu, nurtureReinscribir, nurtureOtraSecuencia, nurtureSoloManual,
     waitingContactMenu, activarSiguienteContacto, waitingCerrarAviso,
-    dlSetCli, dlSetView, dlCardMenu, dlPopClose, dlCalNav, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel, mtOpen, mtClose, mtSeg, mtTimes, mtChips, mtAddCc, mtSave, mtSend, mtCancel,
+    dlSetCli, dlSetView, dlCardMenu, dlPopClose, dlCalNav, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel, mtOpen, mtClose, mtSeg, mtTimes, mtProg, mtChips, mtAddCc, mtSave, mtSend, mtCancel,
     sqSetCli, sqSetEst, sqSetQ, cmSetCli, cmSetEst, cmSetQ,
     seqRunSetCanal, seqTaskSetDue,
     mbOpen, mbClose, mbSave, mbTest, mbDelete, mbProv, mbOAuthStart, mbManageOpen, mbManageClose,

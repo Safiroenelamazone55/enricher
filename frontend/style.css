@@ -17863,3 +17863,7 @@ textarea.mt-i{height:auto;padding:9px 10px;resize:vertical;line-height:1.45}
 
 /* Deals: menu de la tarjeta con bordes rectos */
 .dl-pop,.dl-pop *,.dl-card__mt{border-radius:0 !important}
+
+.mt-ok{color:#15803D;font-weight:500}
+.mt-lnk2{font-size:.72rem;color:#64748B;text-decoration:underline;cursor:pointer;margin-left:6px}
+.mt-msg__ft{flex-wrap:wrap}

@@ -1150,6 +1150,8 @@ async function initDb() {
         updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )`);
     await pool.query(`CREATE INDEX IF NOT EXISTS lm_meetings_due_idx ON lm_meetings (estado, starts_at)`);
+    await pool.query(`ALTER TABLE lm_meetings ADD COLUMN IF NOT EXISTS rem1_prog BOOLEAN NOT NULL DEFAULT FALSE`);
+    await pool.query(`ALTER TABLE lm_meetings ADD COLUMN IF NOT EXISTS rem2_prog BOOLEAN NOT NULL DEFAULT FALSE`);
     await pool.query(`ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS reset_code_hash TEXT`);
     await pool.query(`ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS pw_remind_at TIMESTAMPTZ`);
     await pool.query(`ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS pw_remind_count INTEGER NOT NULL DEFAULT 0`);
