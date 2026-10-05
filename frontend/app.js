@@ -29221,6 +29221,7 @@ ${foot}
   // regresa AHÍ en vez de ir siempre a Contactos (bug reportado 2026-09-01: abrir un
   // contacto desde Leads y volver te mandaba a Contactos, no a Leads).
   let _cpFrom = 'contacts';
+  let _cpFromSeq = null;   // {seqId, tab} si la ficha se abrió desde dentro de una secuencia
   const _CP_FROM_LABEL = { contacts: 'Contactos', leads: 'Leads', deals: 'Deals', client: 'Cliente', companies: 'Empresas', 'contact-view': 'Contacto', 'company-view': 'Empresa' };
   let _cpSkipped = [];        // contactos SALTADOS en la corrida → van al FINAL de la cola (no reaparecen enseguida)
   let _cpDone = 0;            // tareas COMPLETADAS en la corrida → para el progreso "X de Y" (Y = hechas + restantes)
@@ -30169,7 +30170,7 @@ ${foot}
     // Si ya se estaba en otra ficha (navegando entre contactos vía "Anterior/Siguiente"
     // dentro de una tarea, o un link "Ver a" desde Leads) no se pisa _cpFrom — conserva
     // la sección original desde la que arrancó todo este recorrido.
-    if (!taskCtx && _section !== 'contact-view') _cpFrom = _CP_FROM_LABEL[_section] ? _section : 'contacts';
+    if (!taskCtx && _section !== 'contact-view') { _cpFrom = _CP_FROM_LABEL[_section] ? _section : 'contacts'; _cpFromSeq = (_section === 'sequence' && _activeSeq) ? { seqId: _activeSeq, tab: _seqTab } : null; }
     _contactView = id; _cpTab = 'informacion'; _cpActs = null; _cpTaskCtx = taskCtx || null; _section = 'contact-view'; _renderBody(); const b = $('lm2-body'); if (b) b.scrollTop = 0; _cpReloadActs(id);
   }
   function cpTab(t) { _cpTab = t; const el = document.getElementById('cp-tabwrap'); if (el) el.innerHTML = _cpTabContent(_contacts.find(x => x.id === _contactView)); document.querySelectorAll('.cp-tab').forEach(b => b.classList.toggle('active', b.dataset.t === t)); if (t === 'informacion') _cpLoadMap(_contacts.find(x => x.id === _contactView)); }
@@ -30185,7 +30186,7 @@ ${foot}
     const raw = (c.raw && typeof c.raw === 'object') ? c.raw : {};
     const rawKeys = Object.keys(raw).filter(k => raw[k]);
     return `<div class="cp" id="lm-cp">
-      <button class="lm-back" onclick="${_cpTaskCtx ? 'LeadManagerModule.seqDoExit()' : `LeadManagerModule.go('${_cpFrom}')`}">‹ ${_cpTaskCtx ? 'Tareas' : (_CP_FROM_LABEL[_cpFrom] || 'Contactos')}</button>
+      <button class="lm-back" onclick="LeadManagerModule._cpBack()">‹ ${_cpTaskCtx ? 'Tareas' : (_cpFromSeq ? 'Secuencia' : _CP_FROM_LABEL[_cpFrom]) || 'Contactos')}</button>
       ${_derivBanner(c)}
       ${_cpTaskBar(id)}
       <div class="cp-head">
@@ -30707,10 +30708,23 @@ ${foot}
       if (_section === 'contact-view' && _contactView === id) _renderBody();
     } catch (e) { showBanner('No se pudo guardar: ' + e.message, 'error'); }
   }
+  // Vuelve al lugar de donde se abrió la ficha (tarea de secuencia, la propia secuencia o la sección de origen)
+  function _cpBack() {
+    if (_cpTaskCtx) { seqDoExit(); return; }
+    if (_cpFromSeq) {
+      const f = _cpFromSeq; _contactView = null;
+      _activeSeq = f.seqId; _section = 'sequence'; _seqTab = f.tab || 'contactos';
+      _seqContacts = null; _renderBody(); _seqLoadContacts(f.seqId); return;
+    }
+    go(_cpFrom || 'contacts');
+  }
   async function cpDelete(id) {
     if (!confirm('¿Eliminar este contacto?')) return;
     try { const res = await _apiDelete(`${API}/lm/contacts/${id}`); if (!res.ok) throw new Error(res.status === 429 ? 'Demasiadas peticiones, reintenta en un momento' : 'Error'); } catch (e) { alert('Error: ' + e.message); return; }
-    _section = 'contacts'; _contactView = null; await load();
+    _contactView = null;
+    // se vuelve a donde se estaba (p. ej. la lista de contactos de la secuencia), no a la lista general
+    if (_cpFromSeq || _cpTaskCtx) { try { await load(); } catch (_) {} _cpBack(); }
+    else { _section = _CP_FROM_LABEL[_cpFrom] && _cpFrom !== 'contact-view' && _cpFrom !== 'company-view' ? _cpFrom : 'contacts'; await load(); }
   }
 
   // ── Vista: Empresas ──
@@ -32516,7 +32530,7 @@ ${foot}
   return { load, filter, setFilter, setView, go, openClient, clientTab, _clientGoTab, clientQuickMenu,
     openImportPicker, closeImportPicker, openImport, closeImport, impFile, impToggleHeader, impToggleUpdateExisting, impSetObc, impNewClient, impRun, exportCsv,
     cbxOpen, cbxFilter, cbxPick, cbxBlur,
-    openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, ctMoreMenu, lmSetValueOp, bulkDeleteContacts, bulkAddOpen, bulkAddDo, _bulkAddAfterCreate, bulkRemoveSeqOpen, bulkRemoveSeqDo, openContactPage, cpTab, cpSave, cpUndo, cpDelete, cpActOpen, cpTouchOpen, cpTouchSave, cpActSave, cpActToggle, cpActDel, ctQFSet, ctQFClear,
+    _cpBack, openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, ctMoreMenu, lmSetValueOp, bulkDeleteContacts, bulkAddOpen, bulkAddDo, _bulkAddAfterCreate, bulkRemoveSeqOpen, bulkRemoveSeqDo, openContactPage, cpTab, cpSave, cpUndo, cpDelete, cpActOpen, cpTouchOpen, cpTouchSave, cpActSave, cpActToggle, cpActDel, ctQFSet, ctQFClear,
     cpResumeSeq, cpFocusField, cpOpenRegisterReply, cpSaveRegisterReply,
     openCompany, closeCompany, saveCompany, deleteCompany, enrichCompanyLookup, filterCompanies, toggleCo, toggleCoAll, clearCoSel, toggleCoSelMode, coMoreMenu, bulkDeleteCompanies, coEnrolOpen, coEnrolFilter, coEnrolPick, openCompanyPage, coQFSet, coQFClear,
     coQueueAddContact, coQueueDiscard, coQueueTogglePrimary, coQueueContinue,
