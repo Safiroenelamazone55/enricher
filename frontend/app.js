@@ -22592,7 +22592,7 @@ ${foot}
   }
   // Chip del modo de envío en el título de la secuencia.
   function _seqModeChip(s) {
-    const M = { auto: ['Envío automático', 'var(--primary-soft)', 'var(--primary)'], preaprobado: ['Pre-aprobado', '#F1EFEB', '#A96D0C'] };
+    const M = { auto: ['Envío automático', 'var(--primary-soft)', 'var(--primary)'], preaprobado: ['Con tu aprobación', '#F1EFEB', '#A96D0C'] };
     const m = M[s?.send_mode]; if (!m) return '';
     return `<span class="client-badge" style="background:${m[1]};color:${m[2]};font-size:.62rem;vertical-align:3px">${m[0]}</span>`;
   }
@@ -28626,9 +28626,9 @@ ${foot}
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Fecha de inicio (opcional)</span><input class="form-input" type="date" id="seq-starts" value="${esc((s?.starts_on || '').slice(0, 10))}"><span class="seq-drip-hint">La secuencia arranca (día 1 de los contactos que enroles) en esta fecha. Vacío = arranca al momento de enrolar. Si cae en un día no permitido, se mueve al siguiente de cadencia.</span></label>
         <label class="fin-cfg-field fin-pi-full" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="seq-autoact" ${s?.auto_activar ? 'checked' : ''} style="width:auto"><span class="fin-cfg-lbl" style="margin:0">Activar sola en la fecha de inicio</span><span class="seq-drip-hint" style="margin:0">Al llegar la fecha de arriba, la secuencia pasa a “activa” automáticamente (aunque esté en borrador o pausada).</span></label>
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Modo de envío de los emails</span><select class="form-input" id="seq-mode" onchange="LeadManagerModule.seqModeHint()">
-          <option value="manual"${(s?.send_mode || 'manual') === 'manual' ? ' selected' : ''}>Manual — se maneja fuera de Nova</option>
-          <option value="auto"${s?.send_mode === 'auto' ? ' selected' : ''}>Automático — el motor envía solo</option>
-          <option value="preaprobado"${s?.send_mode === 'preaprobado' ? ' selected' : ''}>Automático con aprobación previa</option>
+          <option value="manual"${(s?.send_mode || 'manual') === 'manual' ? ' selected' : ''}>Yo envío cada email (aparece como tarea)</option>
+          <option value="auto"${s?.send_mode === 'auto' ? ' selected' : ''}>Nova los envía sola (automático)</option>
+          <option value="preaprobado"${s?.send_mode === 'preaprobado' ? ' selected' : ''}>Nova los prepara y yo los apruebo antes</option>
         </select><span class="seq-drip-hint" id="seq-mode-hint"></span></label>
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Intervalo entre envíos automáticos</span><select class="form-input" id="seq-interval">
           ${[[2, 'Cada 2 min'], [5, 'Cada 5 min (recomendado)'], [10, 'Cada 10 min'], [15, 'Cada 15 min'], [30, 'Cada 30 min'], [60, 'Cada 1 hora']].map(([v, l]) => `<option value="${v}"${(s?.send_interval_min || 5) === v ? ' selected' : ''}>${l}</option>`).join('')}
@@ -28681,7 +28681,7 @@ ${foot}
     hint.style.color = '';
     hint.textContent = mode === 'auto'
       ? `Los emails salen solos desde ${mb.email} respetando ventana, límites e intervalo.`
-      : `El motor redacta cada email y lo deja en la pestaña “Aprobar” — tras tu OK, sale solo desde ${mb.email}.`;
+      : `Nova prepara cada email y lo deja en la pestaña “Aprobar”; cuando tú lo apruebas, sale solo desde ${mb.email}.`;
   }
   async function seqRedistribute(id) {
     if (!confirm('¿Repartir de nuevo los contactos/empresas que AÚN NO empiezan según “X por día”?\n\nLos que ya avanzaron no se tocan. Guarda la secuencia antes si acabas de cambiar el número.')) return;
