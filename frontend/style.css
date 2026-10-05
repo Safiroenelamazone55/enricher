@@ -17559,3 +17559,10 @@ tr.tk-flash > td { background-color: #FEF9C3; animation: none; }
 }
 .d3-row2 { grid-template-columns: 1fr; gap: 12px; }
 .d3-sidebar-col { gap: 12px; }
+
+/* Informe semanal: pausa / salto del envío automático */
+.rp-auto--paused { background: #FFFBEB; border-color: #FCD34D; }
+.rp-auto--paused .rp-auto__h { color: #92400E; }
+.rp-auto--paused .rp-auto__dot { background: #D97706; box-shadow: 0 0 0 3px #FDE68A; }
+.rp-auto__note { margin: 4px 0 2px; color: #475569; font-size: 12px; }
+.rp-auto__btns { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }

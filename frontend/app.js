@@ -26813,7 +26813,7 @@ ${foot}
   // 2026-09-28: además de la hora del cliente, mostrar a qué hora le cae A ELLA
   // (zona horaria del navegador/computador desde el que entró, como miembro del
   // equipo de Nova), para no tener que convertir mentalmente.
-  function _rpNext(S, lastAuto) {
+  function _rpNext(S, lastAuto, skip) {
     try {
       const fmt = new Intl.DateTimeFormat('en-US', { timeZone: S.tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hour12: false, weekday: 'short' });
       const W = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -26821,13 +26821,13 @@ ${foot}
         const p = Object.fromEntries(fmt.formatToParts(new Date(Date.now() + d * 864e5)).map(x => [x.type, x.value]));
         if (W.indexOf(p.weekday) !== S.dow) continue;
         const ymd = `${p.year}-${p.month}-${p.day}`;
-        if (lastAuto === ymd) continue;
+        if (lastAuto === ymd || (skip && skip === ymd)) continue;
         if (d === 0 && (parseInt(p.hour) % 24) >= S.hour) continue;
         const txt = new Date(ymd + 'T12:00:00Z').toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
         let local = '';
         try {
           const utc = _zonedToUtc(ymd, S.hour, S.tz);
-          local = utc.toLocaleString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+          local = utc.toLocaleString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', timeZone: _userTZ() });
         } catch (e) { /* sin zona local válida */ }
         return { txt: `${txt} · ${String(S.hour).padStart(2, '0')}:00`, local };
       }
@@ -26838,14 +26838,24 @@ ${foot}
   function _rpAutoCard() {
     const S = _RP.sched, i = _RP.info || {};
     if (!S.on) return '';
-    const nxt = _rpNext(S, (i.schedule && i.schedule.last_auto) || '');
+    const sch = i.schedule || {};
+    const nxt = _rpNext(S, sch.last_auto || '', sch.skip_date || '');
+    const skipped = sch.skip_date ? _rpNext(S, sch.last_auto || '', '') : null;   // la fecha que se omite
     const last = i.last_sent_at ? new Date(i.last_sent_at).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'todavía ninguno';
-    return `<div class="rp-auto"><div class="rp-auto__h"><span class="rp-auto__dot"></span>Envío automático activo</div>
+    const paused = !!sch.paused;
+    const head = paused ? 'Envío automático en pausa' : 'Envío automático activo';
+    return `<div class="rp-auto${paused ? ' rp-auto--paused' : ''}"><div class="rp-auto__h"><span class="rp-auto__dot"></span>${head}</div>
+      ${paused ? '<div class="rp-auto__note">No se enviará nada hasta que lo reanudes. Se conservan el día, la hora y los destinatarios.</div>' : `
       <div class="rp-auto__r"><span>Próximo envío</span><b>${_rpEsc(nxt.txt || '—')}</b> <em>${_rpEsc(_rpTzName(S.tz))}</em></div>
       ${nxt.local ? `<div class="rp-auto__r"><span>Tu hora</span><b>${_rpEsc(nxt.local)}</b></div>` : ''}
+      ${skipped && skipped.txt ? `<div class="rp-auto__note">Se omite el envío de <b>${_rpEsc(skipped.txt)}</b>.</div>` : ''}`}
       <div class="rp-auto__r"><span>Se envía a</span><b>${_RP.recipients.map(_rpEsc).join(', ') || '—'}</b></div>
       <div class="rp-auto__r"><span>Idioma</span><b>${_RP_LANGN[_RP.lang]}</b></div>
-      <div class="rp-auto__r"><span>Último envío</span><b>${_rpEsc(last)}</b>${i.last_by ? ' <em>· ' + _rpEsc(i.last_by) + '</em>' : ''}</div></div>`;
+      <div class="rp-auto__r"><span>Último envío</span><b>${_rpEsc(last)}</b>${i.last_by ? ' <em>· ' + _rpEsc(i.last_by) + '</em>' : ''}</div>
+      <div class="rp-auto__btns">
+        <button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.reportPause(${paused ? 'false' : 'true'})">${paused ? '▶ Reanudar' : '⏸ Pausar'}</button>
+        ${paused ? '' : (sch.skip_date ? '<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.reportSkip(false)">Cancelar salto</button>' : '<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.reportSkip(true)" title="No se envía la próxima vez; las siguientes semanas siguen igual">Saltar esta semana</button>')}
+      </div></div>`;
   }
   function _rpSide() {
     const s = document.getElementById('rp-side'); if (!s) return; const i = _RP.info || {};
@@ -26896,6 +26906,12 @@ ${foot}
     if (await _rpSave(true)) showBanner('✓ Envío manual', 'success'); else S.on = true;
     _rpSide();
   }
+  async function _rpPatchSched(body, okMsg) {
+    try { await _portalApi(`/lm/reports/${_RP.cid}/schedule`, 'PATCH', body); await _rpReload(); showBanner(okMsg, 'success'); }
+    catch (e) { showBanner(e.message || 'No se pudo cambiar', 'error'); }
+  }
+  function reportPause(p) { return _rpPatchSched({ paused: !!p }, p ? '⏸ Envío automático en pausa' : '▶ Envío automático reanudado'); }
+  function reportSkip(sk) { return _rpPatchSched({ skip_next: !!sk }, sk ? '✓ Se omite el próximo envío' : '✓ Salto cancelado'); }
   async function reportActivate() {
     const S = _RP.sched;
     const ok = await novaConfirm({ title: '¿Activar el envío automático?', message: `Se enviará cada ${_RP_DAYS[S.dow].toLowerCase()} a las ${String(S.hour).padStart(2, '0')}:00 (${_rpTzName(S.tz)}), en ${_RP_LANGN[_RP.lang]}, a ${_RP.recipients.join(', ')}, desde el buzón del cliente.`, ok: 'Activar', cancel: 'Cancelar' });
@@ -32492,7 +32508,7 @@ ${foot}
     dgEnrichMenu, dgEnrichOpen, dgEnrichClose, dgEnrichApply, dgToggleIssues, dgMoreMenu, dgToggleSelMode,
     dgDupOpen, dgDupClose, dgDupPickSurvivor, dgDupToggleDel, dgDupMergeGroup, dgDupDeleteGroup,
     fmsToggle, fmsFilter, fmsPick,
-    openViews, applyView, saveView, deleteView, clearAllViews, dashTab, dashSet, dashClear, dashGran, seqMetRange, wsLogoUpload, wsLogoDelete, dlNotaShare, puPublish, puToggle, puDel, portalLogoOpen, portalLogoClose, lgTrimExisting, lgFrame, lgReset, lgBg, lgSelect, lgUpload, lgDelete, lgSave, pcToggle, pcPick, pcSend, pcAttach, pcUnpend, portalCreate, portalReset, portalToggle, portalDel, portalSecs, portalAccessOpen, portalAccessClose, reportOpen, reportClose, reportMode, reportActivate, reportSched, suOpen, suClose, suEdit, suToggleItem, suAddItem, suRmItem, suAddPhase, suRmPhase, suSave, reportAdd, reportAddInput, reportRm, reportLang, reportNote, reportPreview, reportSend, portalGen, portalEdit, portalEditSave, portalSec, portalNota, portalChatSend, portalCopy,
+    reportPause, reportSkip, openViews, applyView, saveView, deleteView, clearAllViews, dashTab, dashSet, dashClear, dashGran, seqMetRange, wsLogoUpload, wsLogoDelete, dlNotaShare, puPublish, puToggle, puDel, portalLogoOpen, portalLogoClose, lgTrimExisting, lgFrame, lgReset, lgBg, lgSelect, lgUpload, lgDelete, lgSave, pcToggle, pcPick, pcSend, pcAttach, pcUnpend, portalCreate, portalReset, portalToggle, portalDel, portalSecs, portalAccessOpen, portalAccessClose, reportOpen, reportClose, reportMode, reportActivate, reportSched, suOpen, suClose, suEdit, suToggleItem, suAddItem, suRmItem, suAddPhase, suRmPhase, suSave, reportAdd, reportAddInput, reportRm, reportLang, reportNote, reportPreview, reportSend, portalGen, portalEdit, portalEditSave, portalSec, portalNota, portalChatSend, portalCopy,
     taskSetView, taskSetFilter, calPrev, calNext, calToday,
     lmSetDisposition, seqDoDisposition, cpSetStage,
     seqDoAccepted, seqDoNoLinkedIn, seqDoBounced, seqDoNoWhatsapp, seqDoNoPhone, lmToggleNoLinkedIn, lmToggleNoWhatsapp, lmToggleNoPhone, lmToggleBounced, lmToggleManualEmail, ctToggleBounced,

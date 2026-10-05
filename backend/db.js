@@ -1114,6 +1114,8 @@ async function initDb() {
       );
     `);
     await pool.query(`ALTER TABLE client_reports ADD COLUMN IF NOT EXISTS schedule_on BOOLEAN NOT NULL DEFAULT FALSE`);
+    await pool.query(`ALTER TABLE client_reports ADD COLUMN IF NOT EXISTS schedule_paused BOOLEAN NOT NULL DEFAULT FALSE`);
+    await pool.query(`ALTER TABLE client_reports ADD COLUMN IF NOT EXISTS schedule_skip_date DATE`);
     await pool.query(`ALTER TABLE client_reports ADD COLUMN IF NOT EXISTS schedule_dow INTEGER NOT NULL DEFAULT 1`);
     await pool.query(`ALTER TABLE client_reports ADD COLUMN IF NOT EXISTS schedule_hour INTEGER NOT NULL DEFAULT 9`);
     await pool.query(`ALTER TABLE client_reports ADD COLUMN IF NOT EXISTS last_auto_date DATE`);

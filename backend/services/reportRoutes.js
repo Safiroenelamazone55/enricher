@@ -61,7 +61,8 @@ function mount(app, { pool, requireAuth, dashHandler, highlights, sendViaClientM
       const { rows } = await pool.query(`
         SELECT r.outbound_client_id AS cid, r.recipients, r.lang, c.user_id AS uid, r.schedule_tz
           FROM client_reports r JOIN outbound_clients c ON c.id=r.outbound_client_id
-         WHERE r.schedule_on AND jsonb_array_length(r.recipients) > 0
+         WHERE r.schedule_on AND NOT r.schedule_paused AND jsonb_array_length(r.recipients) > 0
+           AND (r.schedule_skip_date IS NULL OR r.schedule_skip_date <> (NOW() AT TIME ZONE r.schedule_tz)::date)
            AND EXTRACT(DOW FROM (NOW() AT TIME ZONE r.schedule_tz)) = r.schedule_dow
            AND EXTRACT(HOUR FROM (NOW() AT TIME ZONE r.schedule_tz)) >= r.schedule_hour
            AND (r.last_auto_date IS NULL OR r.last_auto_date < (NOW() AT TIME ZONE r.schedule_tz)::date)`);
@@ -94,13 +95,13 @@ function mount(app, { pool, requireAuth, dashHandler, highlights, sendViaClientM
       const cid = parseInt(req.params.cid);
       if (!cid || !(await ownsClient(req.workspaceOwnerId, cid))) return res.status(404).json({ error: 'Cliente no encontrado' });
       const [st, acc, mb, cl] = await Promise.all([
-        pool.query(`SELECT recipients, lang, last_sent_at, last_recipients, last_by, schedule_on, schedule_dow, schedule_hour, schedule_tz, last_error, to_char(last_auto_date,'YYYY-MM-DD') AS last_auto FROM client_reports WHERE outbound_client_id=$1`, [cid]),
+        pool.query(`SELECT recipients, lang, last_sent_at, last_recipients, last_by, schedule_on, schedule_paused, to_char(schedule_skip_date,'YYYY-MM-DD') AS skip_date, schedule_dow, schedule_hour, schedule_tz, last_error, to_char(last_auto_date,'YYYY-MM-DD') AS last_auto FROM client_reports WHERE outbound_client_id=$1`, [cid]),
         pool.query(`SELECT email, nombre FROM client_accounts WHERE outbound_client_id=$1 AND activo ORDER BY id`, [cid]),
         pool.query(`SELECT email, estado FROM lm_mailboxes WHERE outbound_client_id=$1 AND estado NOT IN ('error') ORDER BY verified_at DESC NULLS LAST, id LIMIT 1`, [cid]),
         pool.query(`SELECT nombre FROM outbound_clients WHERE id=$1`, [cid]),
       ]);
       const s = st.rows[0] || {};
-      res.json({ cliente: (cl.rows[0] || {}).nombre || '', recipients: s.recipients || [], lang: s.lang || 'es', last_sent_at: s.last_sent_at || null, last_recipients: s.last_recipients || [], last_by: s.last_by || '', schedule: { on: !!s.schedule_on, dow: s.schedule_dow == null ? 1 : s.schedule_dow, hour: s.schedule_hour == null ? 9 : s.schedule_hour, tz: s.schedule_tz || 'America/Lima', last_auto: s.last_auto || '', error: s.last_error || '' }, suggested: acc.rows, mailbox: mb.rows[0] || null });
+      res.json({ cliente: (cl.rows[0] || {}).nombre || '', recipients: s.recipients || [], lang: s.lang || 'es', last_sent_at: s.last_sent_at || null, last_recipients: s.last_recipients || [], last_by: s.last_by || '', schedule: { on: !!s.schedule_on, paused: !!s.schedule_paused, skip_date: s.skip_date || '', dow: s.schedule_dow == null ? 1 : s.schedule_dow, hour: s.schedule_hour == null ? 9 : s.schedule_hour, tz: s.schedule_tz || 'America/Lima', last_auto: s.last_auto || '', error: s.last_error || '' }, suggested: acc.rows, mailbox: mb.rows[0] || null });
     } catch (e) { console.error('[report] get', e.message); res.status(500).json({ error: 'Error' }); }
   });
 
@@ -131,6 +132,38 @@ function mount(app, { pool, requireAuth, dashHandler, highlights, sendViaClientM
       }
       res.json({ ok: true, recipients: rec, lang });
     } catch (e) { console.error('[report] put', e.message); res.status(500).json({ error: 'Error al guardar' }); }
+  });
+
+  // Pausar / reanudar el envío automático, o saltarse solo la próxima fecha (conserva día, hora y zona)
+  app.patch('/api/lm/reports/:cid/schedule', requireAuth, async (req, res) => {
+    try {
+      const cid = parseInt(req.params.cid);
+      if (!cid || !(await ownsClient(req.workspaceOwnerId, cid))) return res.status(404).json({ error: 'Cliente no encontrado' });
+      const b = req.body || {};
+      const { rows: [rep] } = await pool.query(`SELECT schedule_on, schedule_dow, schedule_hour, schedule_tz, to_char(last_auto_date,'YYYY-MM-DD') AS last_auto FROM client_reports WHERE outbound_client_id=$1`, [cid]);
+      if (!rep || !rep.schedule_on) return res.status(400).json({ error: 'El envío automático no está activo' });
+      if (typeof b.paused === 'boolean') await pool.query('UPDATE client_reports SET schedule_paused=$2 WHERE outbound_client_id=$1', [cid, b.paused]);
+      if (typeof b.skip_next === 'boolean') {
+        if (!b.skip_next) await pool.query('UPDATE client_reports SET schedule_skip_date=NULL WHERE outbound_client_id=$1', [cid]);
+        else {
+          // próxima fecha programada (en la zona del informe) que aún no ocurrió ni se envió
+          const fmt = new Intl.DateTimeFormat('en-US', { timeZone: rep.schedule_tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hour12: false, weekday: 'short' });
+          const W = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+          let target = null;
+          for (let i = 0; i <= 8 && !target; i++) {
+            const p = Object.fromEntries(fmt.formatToParts(new Date(Date.now() + i * 864e5)).map(x => [x.type, x.value]));
+            if (W.indexOf(p.weekday) !== rep.schedule_dow) continue;
+            const ymd = p.year + '-' + p.month + '-' + p.day;
+            if (rep.last_auto === ymd) continue;
+            if (i === 0 && (parseInt(p.hour) % 24) >= rep.schedule_hour) continue;
+            target = ymd;
+          }
+          if (!target) return res.status(400).json({ error: 'No se pudo calcular la próxima fecha' });
+          await pool.query('UPDATE client_reports SET schedule_skip_date=$2 WHERE outbound_client_id=$1', [cid, target]);
+        }
+      }
+      res.json({ ok: true });
+    } catch (e) { console.error('[report] schedule patch', e.message); res.status(500).json({ error: 'Error' }); }
   });
 
   // Vista previa: el mismo HTML que se envía (los logos adjuntos se incrustan como imagen)
