@@ -28378,10 +28378,10 @@ ${foot}
           <label class="dle-f"><span class="dle-l">Valor estimado (opcional)</span><input class="dle-i" id="dle-valor" type="number" min="0" step="0.01" placeholder="0" value="${c.deal_valor == null ? '' : c.deal_valor}"></label>
           <label class="dle-f"><span class="dle-l">Moneda</span><select class="dle-i" id="dle-moneda">${monOpts}</select></label>
           <label class="dle-f"><span class="dle-l">Probabilidad de cierre</span><select class="dle-i" id="dle-prob">${probOpts}</select></label>
-          <label class="dle-f"><span class="dle-l">Fecha estimada de cierre</span><input class="dle-i" id="dle-cierre" type="date" value="${c.deal_cierre ? String(c.deal_cierre).slice(0, 10) : ''}"></label>
+          <label class="dle-f"><span class="dle-l">Fecha de la reunión / cierre estimado</span><input class="dle-i" id="dle-cierre" type="date" value="${c.deal_cierre ? String(c.deal_cierre).slice(0, 10) : ''}"></label>
           <div class="dle-f dle-f--full" style="border-top:1px solid #F1EFEB;padding-top:10px;margin-top:2px"><span class="dle-l">Reunión agendada — con esto se programan los recordatorios al prospecto (día anterior y 30 min antes)</span>
-            <div style="display:flex;gap:8px;margin-top:4px"><input class="dle-i" id="dle-mt-local" type="datetime-local" style="flex:1.2"><select class="dle-i" id="dle-mt-tz" style="flex:1">${_dlTzOpts(c, '')}</select></div>
-            <div class="dle-hint" id="dle-mt-hint" style="color:#94A3B8;font-size:.74rem;margin-top:4px">Fecha y hora en la zona horaria del prospecto. Al guardar podrás ver y editar los mensajes.</div></div>
+            <div style="display:flex;gap:8px;margin-top:4px"><input class="dle-i" id="dle-mt-hora" type="time" style="flex:1" title="Hora de la reunión"><select class="dle-i" id="dle-mt-tz" style="flex:1">${_dlTzOpts(c, '')}</select></div>
+            <div class="dle-hint" id="dle-mt-hint" style="color:#94A3B8;font-size:.74rem;margin-top:4px">Hora de la reunión en la zona horaria del prospecto (la fecha es la de arriba). Al guardar podrás ver y editar los mensajes.</div></div>
         </div>
         <div class="dle-notas-col">
           <span class="dle-l">Notas y comentarios</span>
@@ -28400,8 +28400,8 @@ ${foot}
     _dlMeet = null;
     apiFetch(API + '/lm/contacts/' + cid + '/meeting').then(r => r.ok ? r.json() : null).then(d => {
       const mm = d && d.meeting; if (!mm) return; _dlMeet = mm;
-      const l = document.getElementById('dle-mt-local'), z = document.getElementById('dle-mt-tz');
-      if (l) l.value = _mtLocalVal(mm);
+      const l = document.getElementById('dle-mt-hora'), z = document.getElementById('dle-mt-tz');
+      if (l) l.value = _mtLocalVal(mm).slice(11, 16);
       if (z) { if (![...z.options].some(o => o.value === mm.tz)) z.insertAdjacentHTML('afterbegin', '<option value="' + mm.tz + '">' + mm.tz + '</option>'); z.value = mm.tz; }
       const hint = document.getElementById('dle-mt-hint'); if (hint) hint.innerHTML = 'Recordatorios programados · <a href="#" onclick="event.preventDefault();LeadManagerModule.dlClose();LeadManagerModule.mtOpen(' + cid + ')">ver y editar mensajes</a>';
     }).catch(() => {});
@@ -28463,7 +28463,7 @@ ${foot}
     const c = _contacts.find(x => x.id === cid); if (!c) return;
     const g = id => document.getElementById(id);
     const valor = g('dle-valor').value.trim(), moneda = g('dle-moneda').value, prob = g('dle-prob').value, cierre = g('dle-cierre').value, estado = g('dle-estado').value;
-    const mtLocal = (g('dle-mt-local') || {}).value || '', mtTz = (g('dle-mt-tz') || {}).value || '';
+    const mtHora = (g('dle-mt-hora') || {}).value || '', mtLocal = (cierre && mtHora) ? cierre + 'T' + mtHora : '', mtTz = (g('dle-mt-tz') || {}).value || '';
     try {
       const res = await apiFetch(`${API}/lm/contacts/${cid}/deal`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ valor, moneda, prob, cierre, motivo_perdida: estado === 'perdido' ? (g('dle-motivo')?.value || '') : '' }) });
       if (!res.ok) throw new Error((await res.json()).error || 'Error');
