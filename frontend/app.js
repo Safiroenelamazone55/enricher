@@ -29955,7 +29955,7 @@ ${foot}
             ${(() => {
               const co = c.company_id ? _companies.find(x => String(x.id) === String(c.company_id)) : null; if (!co) return '';
               const R = (l, v) => `<div class="cp-f"><span class="cp-f__l">${esc(l)}</span><span class="cp-f__ro">${esc(v)}</span></div>`;
-              const known = [['Industria', co.industria], ['Tamaño', co.tamano], ['Ingresos', co.ingresos], ['Sitio web', co.website || co.dominio], ['Teléfono', co.telefono], ['LinkedIn', co.linkedin], ['Fundada', co.fundada], ['Ciudad', co.ciudad], ['Región', co.region], ['País', co.pais]].filter(x => x[1]);
+              const known = [['Industria', co.industria], ['Empleados', co.tamano], ['Ingresos', co.ingresos], ['Sitio web', co.website || co.dominio], ['Teléfono', co.telefono], ['LinkedIn', co.linkedin], ['Fundada', co.fundada], ['Ciudad', co.ciudad], ['Región', co.region], ['País', co.pais]].filter(x => x[1]);
               const shown = new Set(known.map(x => String(x[1]).trim().toLowerCase()));
               const rw = (co.raw && typeof co.raw === 'object') ? co.raw : {};
               // Datos de la importación con el nombre de columna original (sin repetir lo ya mostrado)
