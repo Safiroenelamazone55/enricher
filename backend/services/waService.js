@@ -49,6 +49,8 @@ function _esChatValido(jid) {
 // si todavía no la mandó, se deja el @lid tal cual (se resuelve solo más adelante).
 // Mapa @lid → número real, aprendido de lo que WhatsApp manda (contactos con lid+jid,
 // senderPn en mensajes, chats.phoneNumberShare). Baileys 6.x NO trae lidMapping propio.
+const _diagLid = new Map();
+const _resyncHecho = new Set();
 const _lidMap = new Map(); // `${connId}:${lid}` → jid
 async function _aprenderLid(pool, connId, lid, pn) {
   if (!lid || !String(lid).endsWith('@lid') || !pn || !String(pn).endsWith('@s.whatsapp.net')) return false;
@@ -145,6 +147,7 @@ async function _marcarEliminado(pool, connId, msgId) {
 async function _guardarMensaje(pool, sock, connId, m, esHistorial) {
   let jid = m.key?.remoteJid || '';
   if (!_esChatValido(jid)) return;
+  if (jid.endsWith('@lid') && (_diagLid.get(connId) || 0) < 3) { _diagLid.set(connId, (_diagLid.get(connId) || 0) + 1); console.log('[wa] diag key @lid:', JSON.stringify({ k: m.key, pn: m.pushName ? 'sí' : 'no' })); }
   jid = await _resolverJid(sock, jid, m.key?.senderPn || m.key?.remoteJidAlt);
 
   const revoke = m.message?.protocolMessage;
@@ -365,6 +368,18 @@ async function _connect(pool, id) {
 
   sock.ev.on('creds.update', saveCreds);
 
+  const _chatsPares = async (arr) => {
+    let n = 0;
+    for (const c of (arr || [])) {
+      const cid = String(c?.id || '');
+      const lidX = cid.endsWith('@lid') ? cid : (c?.lidJid || '');
+      const pnX = [c?.pnJid, cid].find(x => String(x || '').endsWith('@s.whatsapp.net')) || '';
+      if (lidX && pnX && await _aprenderLid(pool, id, lidX, pnX)) n++;
+    }
+    if (n) _unificarLidPronto();
+  };
+  sock.ev.on('chats.upsert', _chatsPares);
+  sock.ev.on('chats.update', _chatsPares);
   // Cuando WhatsApp entrega la relación @lid ↔ número, se unifica al instante (con un
   // pequeño debounce) en vez de esperar al watchdog: la conversación nunca queda partida.
   let _lidTimer = null;
@@ -392,6 +407,18 @@ async function _connect(pool, id) {
           [numero, id]);
         console.log(`[wa] conexión ${id} vinculada (${numero})`);
         _normalizarLid(pool, sock, id).catch(e => console.warn('[wa] normalizarLid:', e.message));
+        // Re-descarga la agenda del teléfono (app-state) para recibir cada contacto con su
+        // nombre guardado y su par @lid↔número. Una vez por arranque y conexión.
+        if (!_resyncHecho.has(id)) {
+          _resyncHecho.add(id);
+          setTimeout(async () => {
+            try {
+              await sock.resyncAppState(['critical_block', 'critical_unblock_low', 'regular_high', 'regular_low', 'regular'], true);
+              console.log(`[wa] conexión ${id}: agenda re-sincronizada (mapa ${[..._lidMap.keys()].filter(k => k.startsWith(id + ':')).length} pares)`);
+              _unificarLidPronto();
+            } catch (e) { console.warn('[wa] resync agenda:', e.message); }
+          }, 8000);
+        }
         _backfillNombresGrupo(pool, sock, id).catch(e => console.warn('[wa] backfillNombresGrupo:', e.message));
       }
       if (connection === 'close') {
@@ -487,6 +514,17 @@ async function _connect(pool, id) {
       // GRUPO en vez del contacto — confirmado en producción (2026-08-26: dos chats 1:1
       // quedaron mostrando "Novacentrax", nombre de un grupo real, prestado por este
       // fallback). El nombre real de un 1:1 sale de 'contacts'/pushName, nunca de acá.
+      // Conversation trae lidJid/pnJid: es la fuente más directa del par @lid ↔ número real.
+      let _pares = 0;
+      for (const c of (chats || [])) {
+        const cid = String(c.id || '');
+        const lidX = cid.endsWith('@lid') ? cid : (c.lidJid || '');
+        const pnX = [c.pnJid, cid].find(x => String(x || '').endsWith('@s.whatsapp.net')) || '';
+        if (lidX && pnX && await _aprenderLid(pool, id, lidX, pnX)) _pares++;
+        if (cid.endsWith('@lid') && pnX && c.name && !/^[+ds-]+$/.test(String(c.name))) await _guardarContacto(pool, sock, id, pnX, c.name, false);
+      }
+      console.log(`[wa] conexión ${id}: ${_pares} par(es) @lid↔número aprendidos del historial (mapa total ${[..._lidMap.keys()].filter(k => k.startsWith(id + ':')).length})`);
+      if (_pares) _unificarLidPronto();
       for (const c of (chats || [])) {
         if (c.name && String(c.id || '').endsWith('@g.us')) await _guardarContacto(pool, sock, id, c.id, c.name);
       }
