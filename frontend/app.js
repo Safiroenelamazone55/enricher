@@ -30186,7 +30186,7 @@ ${foot}
     const raw = (c.raw && typeof c.raw === 'object') ? c.raw : {};
     const rawKeys = Object.keys(raw).filter(k => raw[k]);
     return `<div class="cp" id="lm-cp">
-      <button class="lm-back" onclick="LeadManagerModule._cpBack()">‹ ${_cpTaskCtx ? 'Tareas' : (_cpFromSeq ? 'Secuencia' : _CP_FROM_LABEL[_cpFrom]) || 'Contactos')}</button>
+      <button class="lm-back" onclick="LeadManagerModule._cpBack()">‹ ${_cpTaskCtx ? 'Tareas' : (_cpFromSeq ? 'Secuencia' : (_CP_FROM_LABEL[_cpFrom] || 'Contactos'))}</button>
       ${_derivBanner(c)}
       ${_cpTaskBar(id)}
       <div class="cp-head">
