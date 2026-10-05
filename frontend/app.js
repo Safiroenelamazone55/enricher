@@ -22785,13 +22785,33 @@ ${foot}
     const pos = _COND_POS.includes(st.cond);
     return `<span class="lm-vb" style="background:${pos ? '#E7F6EC' : '#FEF3C7'};color:${pos ? '#15803D' : '#B45309'}" title="Este paso solo se hace ${esc(txt)}${ref ? ' (según el paso del día ' + ref.dia + ')' : ''}">${esc(txt)}</span>`;
   }
+  // ¿Se puede medir esa señal? Las respuestas por email necesitan el buzón conectado con lectura; las aperturas y clics,
+  // además, que el email lo envíe Nova; las respuestas de WhatsApp, el WhatsApp del cliente conectado.
+  // LinkedIn y llamada no necesitan conexión: se marcan a mano.
+  function _stepCondAvail(refCanal) {
+    const sq = (_sequences || []).find(x => x.id === _stepFormSeqId), cid = sq && sq.outbound_client_id;
+    const cli = (_clients || []).find(x => x.id === cid);
+    const av = { replies: true, track: true, need: null, cid, cli: cli ? cli.nombre : 'este cliente' };
+    if (refCanal === 'email' && _mailboxes !== null && cid) {
+      const mb = _mbFor(cid);
+      if (!mb) { av.replies = false; av.track = false; av.need = 'buzon'; }
+      else if (mb.estado !== 'conectado') { av.replies = false; av.need = 'lectura'; }
+      if (sq && av.track && !['auto', 'preaprobado'].includes(sq.send_mode)) { av.track = false; if (!av.need) av.need = 'modo'; }
+    } else if (refCanal === 'whatsapp' && _waClientIds !== null && cid && !_waClientIds.has(cid)) { av.replies = false; av.need = 'wa'; }
+    return av;
+  }
   function _stepCondOptsHtml(refCanal, selected) {
     const L = c => 'Solo ' + _stepCondText(c, refCanal);
     let ops = [['', 'Siempre (a todos los que siguen sin responder)']];
     if (refCanal === 'email') ops = ops.concat([['no_reply', L('no_reply')], ['not_opened', L('not_opened')], ['opened', L('opened')], ['not_clicked', L('not_clicked')], ['clicked', L('clicked')], ['replied', L('replied')]]);
     else ops = ops.concat([['no_reply', L('no_reply')], ['replied', L('replied')]]);
     if (selected && !ops.some(o => o[0] === selected)) ops.push([selected, L(selected)]);
-    return ops.map(o => `<option value="${o[0]}"${o[0] === (selected || '') ? ' selected' : ''}>${esc(o[1])}</option>`).join('');
+    const av = _stepCondAvail(refCanal);
+    return ops.map(o => {
+      const track = ['opened', 'not_opened', 'clicked', 'not_clicked'].includes(o[0]), resp = ['replied', 'no_reply'].includes(o[0]);
+      const off = (track && !av.track) || (resp && !av.replies);
+      return `<option value="${o[0]}"${o[0] === (selected || '') ? ' selected' : ''}${off ? ' disabled style="color:#B4AFA8"' : ''}>${esc(o[1])}${off ? ' — no disponible' : ''}</option>`;
+    }).join('');
   }
   function _stepCondHint(cd, ref) {
     const nombre = ref ? 'el paso del día ' + ref.dia + ' (' + ((_TOUCH[ref.canal] || [ref.canal])[0]) + ')' : 'cualquier parte de la secuencia';
@@ -25672,6 +25692,7 @@ ${foot}
   async function _mbReload() {
     try { const r = await apiFetch(`${API}/lm/mailboxes`); _mailboxes = (r && r.ok) ? await r.json() : []; } catch { _mailboxes = []; }
     if (_section === 'client') _renderBody();
+    try { if ($('step-cond')) stepCondChange(); } catch (_) {}
     // El buzón ya no vive suelto en la barra lateral (2026-09-03) — si el modal de
     // "Editar/Conectar buzón" está abierto, se refresca su contenido acá también.
     if (_mbManageClientId) {
@@ -25752,6 +25773,7 @@ ${foot}
   async function _waStatusReload() {
     try { const r = await apiFetch(`${API}/lm/wa-status`); _waClientIds = new Set(r.ok ? await r.json() : []); }
     catch { _waClientIds = new Set(); }
+    try { if ($('step-cond')) stepCondChange(); } catch (_) {}
   }
   let _wamClientId = null;
   async function wamOpen(clientId) {
@@ -28923,7 +28945,8 @@ ${foot}
       variants: (st && Array.isArray(st.variants) && st.variants.length) ? st.variants.map(v => { const r = _varResolve(v, st); return { nombre: v.nombre || '', asunto: r.asunto, cuerpo: r.cuerpo, targets: Array.isArray(v.targets) ? v.targets.slice() : [], tplId: r.tplId }; }) : [{ nombre: 'A', asunto: (st && st.asunto) || '', cuerpo: (st && st.plantilla) || '', targets: [], tplId: '' }],
     };
     const existing = _seqSteps(seqId);
-    _stepFormSteps = existing;
+    _stepFormSteps = existing; _stepFormSeqId = seqId;
+    if (_mailboxes === null) _mbReload(); if (_waClientIds === null) _waStatusReload();
     const nextDia = st ? st.dia : ((existing.slice(-1)[0]?.dia || 0) + (existing.length ? 2 : 1));
     document.getElementById('lm-step-modal')?.remove();
     const m = document.createElement('div'); m.id = 'lm-step-modal'; m.className = 'fin-pi-backdrop';
@@ -29058,7 +29081,17 @@ ${foot}
     const cur = sel.value;
     sel.innerHTML = _stepCondOptsHtml(refStep ? refStep.canal : '', cur);   // las opciones cambian según el canal del paso elegido
     if (wrap) wrap.style.display = sel.value ? 'flex' : 'none';
-    if (hint) hint.textContent = _stepCondHint(sel.value, refStep);
+    if (hint) {
+      const av = _stepCondAvail(refStep ? refStep.canal : (_stepFormSteps[_stepFormSteps.length - 1] || {}).canal || '');
+      const cli = esc(av.cli);
+      const aviso = av.need === 'buzon' ? { t: `Para medir respuestas, aperturas y clics necesitas el buzón de <b>${cli}</b> conectado.`, b: 'Conectar buzón', f: `LeadManagerModule.mbOpen(${av.cid})` }
+        : av.need === 'lectura' ? { t: `El buzón de <b>${cli}</b> envía, pero aún no lee respuestas, así que no puede saber si respondieron.`, b: 'Revisar buzón', f: `LeadManagerModule.mbManageOpen(${av.cid})` }
+        : av.need === 'modo' ? { t: 'Las aperturas y clics solo se miden con emails que envía Nova. Cambia el modo de envío de la secuencia a automático o con aprobación.', b: '', f: '' }
+        : av.need === 'wa' ? { t: `Para detectar respuestas de WhatsApp necesitas el WhatsApp de <b>${cli}</b> conectado.`, b: 'Conectar WhatsApp', f: `LeadManagerModule.wamOpen(${av.cid})` } : null;
+      hint.innerHTML = aviso
+        ? `<span class="stp-need"><span>${aviso.t}</span>${aviso.b ? `<button type="button" class="btn btn--primary btn--sm" onclick="${aviso.f}">${aviso.b}</button>` : ''}</span><span class="stp-hint2">${esc(_stepCondHint(sel.value, refStep))}</span>`
+        : esc(_stepCondHint(sel.value, refStep));
+    }
   }
   // Opciones de los pasos que dependen de una publicación. La ventana hace que
   // "sin actividad reciente" sea un criterio objetivo (lo mismo que hace HeyReach)
@@ -29439,6 +29472,7 @@ ${foot}
   let _seqCtPage = 0, _seqCoPage = 0;   // páginas de Contactos / Empresas dentro de una secuencia
   let _seqSignals = {};   // {contacto: {paso: {r, o, c}}} de la secuencia abierta (respondió/aceptó, abrió, hizo clic)
   let _stepFormSteps = [];
+  let _stepFormSeqId = null;
   let _seqCtDisp = '';   // filtro de resultado/disposición ('' = cualquiera, '_none' = nunca respondió)
   let _seqCtSel = new Set(); // contact_id seleccionados, para agregarlos en bloque a otra secuencia
   let _seqTaskCanal = ''; // filtro por canal en la pestaña Tareas de la secuencia

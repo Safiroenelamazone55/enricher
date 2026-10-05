@@ -17789,3 +17789,8 @@ tr.tk-flash > td { background-color: #FEF9C3; animation: none; }
 
 /* Condición del paso */
 .lm-vb[title] { cursor: help; }
+
+/* Condición del paso: aviso cuando falta conectar algo */
+.stp-need { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 10px; margin: 4px 0 6px; background: #FEF3C7; color: #78350F; font-size: .78rem; line-height: 1.4; border-left: 3px solid #D97706; }
+.stp-need > span { flex: 1; min-width: 200px; }
+.stp-hint2 { display: block; }
