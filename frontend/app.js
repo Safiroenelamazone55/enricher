@@ -22416,7 +22416,7 @@ ${foot}
       </div>
       <input class="form-input seq-app__subj" id="noe-subj-${row.enr_id}" value="${esc(row.asunto)}" placeholder="Asunto">
       <textarea class="form-input seq-app__body" id="noe-body-${row.enr_id}" oninput="LeadManagerModule.seqPrevUpdate(this.id)" style="min-height:max(calc(100vh - 460px), 200px)">${esc(row.cuerpo)}</textarea>
-      ${_seqSigHtml('noe-body-' + row.enr_id, row.cuerpo)}
+      ${_seqMailHtml('noe-body-' + row.enr_id, row.cuerpo, false)}
       <div class="seq-app__ft">
         <span class="sp"></span>
         <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.seqCompleteEmailApprove(${row.enr_id})">✓ Completar y aprobar</button>
@@ -22574,18 +22574,21 @@ ${foot}
     const mb = cli ? _mbFor(cli.id) : null;
     return (mb && mb.signature_html) || ((typeof _sendCfg !== 'undefined' && _sendCfg && _sendCfg.firma) || '');
   }
-  // Mismo armado que el envío real (sendEngine.buildHtml): cuerpo + dos saltos de línea + firma.
-  function _seqFullPreviewHtml(text, sig) {
-    let h = esc(text || '').replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" style="color:#00804C">$1</a>').replace(/\n/g, '<br>');
-    if (sig) h += '<br><br>' + (sig.includes('<') ? sig : esc(sig).replace(/\n/g, '<br>'));
-    return h;
+  // El correo tal como lo verá el prospecto: mensaje (editable) + firma del buzón (fija), en Verdana, con el mismo
+  // espacio del envío real (sendEngine.buildHtml: cuerpo + dos saltos + firma). El textarea original queda oculto
+  // como almacén del texto: el resto del flujo (guardar/aprobar) lo sigue leyendo de ahí.
+  function _seqMailHtml(bodyId, text, locked) {
+    const sig = _seqSigFor();
+    const sigHtml = sig ? (sig.includes('<') ? sig : esc(sig).replace(/\n/g, '<br>')) : '';
+    return '<div class="seq-app__sigl">Así lo verá el prospecto' + (locked ? '' : ' · puedes editar el mensaje; la firma se añade sola') + '</div>' +
+      '<div class="seq-app__mail">' +
+        '<div class="seq-app__mail-body" id="mail-' + bodyId + '" contenteditable="' + (locked ? 'false' : 'plaintext-only') + '" spellcheck="true" oninput="LeadManagerModule.seqMailSync(\'' + bodyId + '\')">' + esc(text || '') + '</div>' +
+        (sigHtml ? '<div class="seq-app__mail-sig" contenteditable="false">' + sigHtml + '</div>' : '') +
+      '</div>';
   }
-  function _seqSigHtml(bodyId, text) {
-    return '<div class="seq-app__sigl">Vista completa del correo · así lo verá el destinatario, con la firma</div><div class="seq-app__full" id="prev-' + bodyId + '">' + _seqFullPreviewHtml(text, _seqSigFor()) + '</div>';
-  }
-  function seqPrevUpdate(id) {
-    const el = document.getElementById('prev-' + id), ta = document.getElementById(id);
-    if (el && ta) el.innerHTML = _seqFullPreviewHtml(ta.value, _seqSigFor());
+  function seqMailSync(bodyId) {
+    const el = document.getElementById('mail-' + bodyId), ta = document.getElementById(bodyId);
+    if (el && ta) ta.value = el.innerText.replace(/\u00a0/g, ' ').replace(/\n$/, '');
   }
   function _seqAppCard(a) {
     const nm = [a.nombre, a.apellido].filter(Boolean).join(' ') || a.to_email;
@@ -22605,7 +22608,7 @@ ${foot}
       </div>
       <input class="form-input seq-app__subj" id="app-subj-${a.id}" value="${esc(a.asunto)}" ${approved ? 'disabled' : ''} placeholder="Asunto">
       <textarea class="form-input seq-app__body seq-app__body--full" id="app-body-${a.id}" oninput="LeadManagerModule.seqPrevUpdate(this.id)" ${approved ? 'disabled' : ''}>${esc(a.cuerpo)}</textarea>
-      ${_seqSigHtml('app-body-' + a.id, a.cuerpo)}
+      ${_seqMailHtml('app-body-' + a.id, a.cuerpo, approved)}
       <div class="seq-app__ft">
         ${approved ? '' : `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqAppAction(${a.id},'save')">Guardar cambios</button>`}
         <span class="sp"></span>
@@ -33170,7 +33173,7 @@ ${foot}
     ldRefer, ldReferSave, ldNurture, ldNurtureSave, ldOpenDispoMenu,
     nurtureRetomarMenu, nurtureReinscribir, nurtureOtraSecuencia, nurtureSoloManual,
     waitingContactMenu, activarSiguienteContacto, waitingCerrarAviso,
-    dlSetCli, dlSetView, dlCardMenu, dlPopClose, dlCalNav, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel, seqPrevUpdate, mtOpen, mtClose, mtSeg, mtTimes, mtProg, mtChips, mtAddCc, mtSave, mtSend, mtCancel,
+    dlSetCli, dlSetView, dlCardMenu, dlPopClose, dlCalNav, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel, seqMailSync, mtOpen, mtClose, mtSeg, mtTimes, mtProg, mtChips, mtAddCc, mtSave, mtSend, mtCancel,
     sqSetCli, sqSetEst, sqSetQ, cmSetCli, cmSetEst, cmSetQ,
     seqRunSetCanal, seqTaskSetDue,
     mbOpen, mbClose, mbSave, mbTest, mbDelete, mbProv, mbOAuthStart, mbManageOpen, mbManageClose,

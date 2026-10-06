@@ -17886,3 +17886,13 @@ textarea.mt-i{height:auto;padding:9px 10px;resize:vertical;line-height:1.45}
 .seq-app__full{margin-top:4px;padding:14px 16px;border:1px solid #E2E0DB;background:#fff;font-family:Verdana,Geneva,sans-serif;font-size:14px;line-height:1.55;color:#1a1a2e;max-height:360px;overflow:auto}
 .seq-app__full img{max-width:100%;height:auto}
 .seq-app__body{font-family:Verdana,Geneva,sans-serif}
+
+/* Aprobación: el correo como lo verá el prospecto (mensaje editable + firma fija) */
+textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important; }
+.seq-app__mail{margin-top:4px;padding:18px 20px;border:1px solid #E2E0DB;background:#fff;font-family:Verdana,Geneva,sans-serif;font-size:14px;line-height:1.55;color:#1a1a2e;transition:border-color .12s,box-shadow .12s}
+.seq-app__mail:focus-within{border-color:#00804C;box-shadow:0 0 0 3px rgba(0,128,76,.12)}
+.seq-app__mail-body{white-space:pre-wrap;outline:none;min-height:140px;word-break:break-word}
+.seq-app__mail-body[contenteditable="false"]{color:#475569}
+.seq-app__mail-sig{margin-top:3.1em;font-family:Verdana,Geneva,sans-serif;user-select:text}
+.seq-app__mail-sig *{font-family:Verdana,Geneva,sans-serif !important}
+.seq-app__mail-sig img{max-width:100%;height:auto}
