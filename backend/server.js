@@ -5962,7 +5962,8 @@ app.get('/api/lm/nav-counts', requireAuth, async (req, res) => {
       pool.query(`SELECT COUNT(*)::int n FROM activities
                    WHERE user_id=$1 AND estado='pendiente' AND fecha::date <= CURRENT_DATE AND NOT EXISTS (SELECT 1 FROM sequences sx WHERE sx.user_id=activities.user_id AND sx.estado<>'activa' AND left(activities.nota, length(sx.nombre) + 2) = '[' || sx.nombre || ']')
                      AND activities.tipo NOT IN ('seguimiento_inactivo','revisar_respuesta','contacto_esperando')
-                     AND NOT (activities.tipo='tarea' AND activities.nota LIKE '[%' AND activities.nota NOT LIKE '[Reunión #%')`, [uid]),
+                     AND NOT (activities.tipo='tarea' AND activities.nota LIKE '[%' AND activities.nota NOT LIKE '[Reunión #%')
+                     AND NOT (activities.tipo='tarea' AND activities.nota LIKE 'Rebote:%')`, [uid]),
       pool.query(`SELECT COUNT(*)::int n FROM lm_messages m JOIN sequences sq ON sq.id=m.sequence_id
                    WHERE m.user_id=$1 AND m.estado='awaiting' AND sq.estado='activa'`, [uid]),
       pool.query(`SELECT COUNT(*)::int n FROM lm_contacts

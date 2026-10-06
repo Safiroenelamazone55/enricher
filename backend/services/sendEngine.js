@@ -902,6 +902,9 @@ async function _draftPreapproved(pool) {
     await pool.query(`UPDATE activities a SET estado='hecha' FROM sequences s
         WHERE a.estado='pendiente' AND a.tipo='tarea' AND s.user_id=a.user_id AND s.estado<>'activa'
           AND left(a.nota, length(s.nombre) + 2) = '[' || s.nombre || ']'`).catch(x => console.warn('[send-engine] barrido-tareas:', x.message));
+    await pool.query(`UPDATE activities a SET estado='hecha' WHERE a.estado='pendiente' AND a.tipo='tarea' AND a.nota LIKE 'Rebote:%'
+        AND NOT EXISTS (SELECT 1 FROM lm_contact_sequences cs JOIN sequences s ON s.id=cs.sequence_id
+                         WHERE cs.contact_id=a.contact_id AND s.estado='activa' AND cs.estado IN ('activo','pausado'))`).catch(x => console.warn('[send-engine] barrido-rebotes:', x.message));
   }
   // Alinea la fecha de envío de los borradores pendientes con la fecha REAL de su contacto (puede haber cambiado al editar la
   // fecha de inicio, la cadencia o el goteo después de redactarlos; sin esto salían un día antes de lo previsto).

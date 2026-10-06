@@ -23888,7 +23888,7 @@ ${foot}
     const _inactiveNames = (_sequences || []).filter(x => x.estado !== 'activa').map(x => x.nombre);
     const _ofInactiveSeq = a => a.tipo === 'tarea' && _inactiveNames.some(nm => String(a.nota || '').startsWith('[' + nm + ']'));
     // Esta lista es SOLO de lo que tú creas (follow-ups, llamadas, reuniones…). Los avisos automáticos del sistema (sin email, sin respuesta, sin clasificar, revisar respuesta, contacto esperando) ya viven en su propia sección: la secuencia, Leads, Inbox o Prioridad.
-    const _isSysNote = a => ['seguimiento_inactivo', 'revisar_respuesta', 'contacto_esperando'].includes(a.tipo) || (a.tipo === 'tarea' && String(a.nota || '').startsWith('[') && !String(a.nota || '').startsWith('[Reunión #'));
+    const _isSysNote = a => ['seguimiento_inactivo', 'revisar_respuesta', 'contacto_esperando'].includes(a.tipo) || (a.tipo === 'tarea' && ((String(a.nota || '').startsWith('[') && !String(a.nota || '').startsWith('[Reunión #')) || String(a.nota || '').startsWith('Rebote:')));
     const acts = _activities.filter(a => a.estado === 'pendiente' && !_ofInactiveSeq(a) && !_isSysNote(a)).sort((x, y) => new Date(x.fecha) - new Date(y.fecha));
     const actToday = acts.filter(a => _dayOf(a.fecha) <= today);
     const nextLine = seqFuture.length ? `<div class="seq-next">${NI('calendar', 12)} Siguiente tarea de secuencia: <b>${_relDay(seqFuture[0].due)}</b>${seqFuture.length > 1 ? ` · +${seqFuture.length - 1} más próximas` : ''}</div>` : '';
