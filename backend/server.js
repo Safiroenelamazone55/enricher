@@ -5964,7 +5964,8 @@ app.get('/api/lm/nav-counts', requireAuth, async (req, res) => {
       pool.query(`SELECT COUNT(*)::int n FROM lm_messages m JOIN sequences sq ON sq.id=m.sequence_id
                    WHERE m.user_id=$1 AND m.estado='awaiting' AND sq.estado='activa'`, [uid]),
       pool.query(`SELECT COUNT(*)::int n FROM lm_contacts
-                   WHERE user_id=$1 AND disposition IN ('respondio','interesado','reunion')`, [uid]),
+                   WHERE user_id=$1 AND disposition='respondio' AND deal_valor IS NULL AND deal_cierre IS NULL
+                     AND COALESCE(estado,'') NOT IN ('propuesta','negociacion','ganado','perdido')`, [uid]),
       // El total de "sin leer" del WhatsApp de Outreach — antes la insignia del nav
       // solo se llenaba DESPUÉS de haber abierto esa pestaña una vez (dependía de
       // _waList cargado en el cliente); ahora viene del servidor como las demás

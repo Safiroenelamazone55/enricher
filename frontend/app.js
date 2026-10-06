@@ -20119,7 +20119,7 @@ const LeadManagerModule = (() => {
       // el contador del servidor.
       const nc = _navCounts || {};
       const cnt = n.k === 'tasks'  ? (_pendingTaskCount() || nc.tasks || 0)
-                : n.k === 'leads'  ? ((_contacts.length ? _contacts.filter(c => ['respondio', 'interesado', 'reunion'].includes(c.disposition)).length : 0) || nc.leads || 0)
+                : n.k === 'leads'  ? (_contacts.length ? _contacts.filter(c => _ldMatchPill(c, 'respondio')).length : (nc.leads || 0))   // = "Por calificar": lo que espera tu decisión (no los ya trabajados ni los que ya están en Deals)
                 : n.k === 'inbox'  ? (Array.isArray(_ibThreads) ? _ibUnreadTotal() : (nc.inbox || 0))
                 : n.k === 'clients' ? _cuTotal()
                 : n.k === 'wa'     ? (Array.isArray(_waList) ? _waList.reduce((s, x) => s + (x.no_leidos || 0), 0) : (nc.wa || 0))
