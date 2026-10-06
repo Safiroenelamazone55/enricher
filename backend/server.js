@@ -6698,7 +6698,8 @@ const _lmDashHandler = async (req, res) => {
     const P = v => { params.push(v); return '$' + params.length; };
     let kw = 'k.user_id=$1';
     if (parseInt(q.client)) kw += ` AND k.outbound_client_id=${P(parseInt(q.client))}`;
-    if (parseInt(q.sequence)) kw += ` AND EXISTS(SELECT 1 FROM lm_contact_sequences x WHERE x.contact_id=k.id AND x.sequence_id=${P(parseInt(q.sequence))})`;
+    let seqP = null;
+    if (parseInt(q.sequence)) { seqP = P(parseInt(q.sequence)); kw += ` AND EXISTS(SELECT 1 FROM lm_contact_sequences x WHERE x.contact_id=k.id AND x.sequence_id=${seqP})`; }
     if (parseInt(q.campaign)) kw += ` AND EXISTS(SELECT 1 FROM lm_contact_sequences x JOIN sequences s2 ON s2.id=x.sequence_id WHERE x.contact_id=k.id AND s2.campaign_id=${P(parseInt(q.campaign))})`;
     // el país es el de la EMPRESA; solo si no la tiene se usa el del contacto
     const KP = `COALESCE(NULLIF(TRIM((SELECT c.pais FROM lm_companies c WHERE c.id=k.company_id)),''),NULLIF(TRIM(k.pais),''))`;
@@ -6712,7 +6713,10 @@ const _lmDashHandler = async (req, res) => {
     const chw = ch ? ` AND ${CH}='${ch}'` : '';
     const iF = `'${from}'`, iT = `'${to}'`, iPF = `'${prevFrom}'`, iPT = `'${prevTo}'`; // fechas ya validadas (ISO)
     const inR = (f, t) => `a.fecha::date BETWEEN ${f}::date AND ${t}::date`;
-    const base = `FROM activities a JOIN lm_contacts k ON k.id=a.contact_id WHERE ${kw}`;
+    // Vista de UNA secuencia: solo la actividad desde que el contacto se enroló en ella. Sin esto, contactos que ya habían sido
+    // trabajados en otras secuencias hacían aparecer "actividad" y variaciones en una secuencia recién creada.
+    const seqAct = seqP ? ` AND a.fecha >= (SELECT COALESCE((x2.start_date + TIME '12:00')::timestamptz, x2.created_at) FROM lm_contact_sequences x2 WHERE x2.contact_id=k.id AND x2.sequence_id=${seqP} LIMIT 1)` : '';
+    const base = `FROM activities a JOIN lm_contacts k ON k.id=a.contact_id WHERE ${kw}${seqAct}`;
     const kpiSql = r => `
       SELECT COUNT(*) FILTER (WHERE ${OUT}${chw})::int AS touches,
              COUNT(DISTINCT a.contact_id) FILTER (WHERE (${OUT}${chw}) OR (${REPLY}${ch ? ' AND FALSE' : ''}))::int AS contacted,
@@ -6727,7 +6731,7 @@ const _lmDashHandler = async (req, res) => {
              COUNT(*) FILTER (WHERE m.estado='bounced')::int AS bounced,
              COUNT(*) FILTER (WHERE EXISTS(SELECT 1 FROM lm_message_events e WHERE e.message_id=m.id AND e.tipo='open'))::int AS opened
         FROM lm_messages m JOIN lm_contacts k ON k.id=m.contact_id
-       WHERE m.user_id=$1 AND ${kw}
+       WHERE m.user_id=$1 AND ${kw}${seqP ? ` AND m.sequence_id=${seqP}` : ''}
          AND m.sent_at IS NOT NULL AND m.sent_at::date BETWEEN ${r[0]}::date AND ${r[1]}::date`;
     const cur = [iF, iT], prv = [iPF, iPT];
     const REP1 = `(SELECT DISTINCT ON (contact_id) contact_id, fecha FROM activities WHERE user_id=$1 AND (tipo='respuesta' OR (tipo='disposition_change' AND nota ~ '→ (${RTYPES})[[:space:]]*$')) ORDER BY contact_id, fecha)`;
@@ -6753,7 +6757,7 @@ const _lmDashHandler = async (req, res) => {
                     FROM sequences s JOIN lm_contact_sequences cs ON cs.sequence_id=s.id
                     JOIN lm_contacts k ON k.id=cs.contact_id
                     LEFT JOIN outbound_clients oc ON oc.id=s.outbound_client_id
-                    LEFT JOIN activities a ON a.contact_id=k.id
+                    LEFT JOIN activities a ON a.contact_id=k.id AND a.fecha >= COALESCE((cs.start_date + TIME '12:00')::timestamptz, cs.created_at)
                    WHERE ${kw} GROUP BY s.id, s.nombre, oc.nombre ORDER BY contactados DESC, enrolados DESC LIMIT 100`, params),
       pool.query(`SELECT oc.id, oc.nombre,
                          COUNT(DISTINCT k.id)::int AS contactos,
@@ -6776,7 +6780,7 @@ const _lmDashHandler = async (req, res) => {
       pool.query(`SELECT dow, hr, COUNT(*)::int AS n FROM (
         SELECT k.id, 'email' AS src, EXTRACT(DOW FROM m.replied_at AT TIME ZONE 'America/Lima')::int AS dow, EXTRACT(HOUR FROM m.replied_at AT TIME ZONE 'America/Lima')::int AS hr, m.replied_at::date AS d
           FROM lm_messages m JOIN lm_contacts k ON k.id=m.contact_id
-         WHERE m.user_id=$1 AND ${kw} AND m.replied_at IS NOT NULL AND m.replied_at::date BETWEEN ${iF}::date AND ${iT}::date
+         WHERE m.user_id=$1 AND ${kw}${seqP ? ` AND m.sequence_id=${seqP}` : ''} AND m.replied_at IS NOT NULL AND m.replied_at::date BETWEEN ${iF}::date AND ${iT}::date
         UNION
         SELECT DISTINCT k.id, 'wa', EXTRACT(DOW FROM w.ts AT TIME ZONE 'America/Lima')::int, EXTRACT(HOUR FROM w.ts AT TIME ZONE 'America/Lima')::int, w.ts::date
           FROM wa_messages w JOIN wa_jid_links l ON l.connection_id=w.connection_id AND l.chat_jid=w.chat_jid
