@@ -29242,12 +29242,15 @@ ${foot}
       if (d.buzon.cap_hoy != null) lineas.push(d.esta.limite > 0 ? `Buzón <b>${esc(d.buzon.email)}</b>: el calentamiento recomienda <b>${d.buzon.cap_hoy}</b> por día (semana ${d.buzon.semana}); tu límite de esta secuencia <b>manda</b>.` : `Buzón <b>${esc(d.buzon.email)}</b>: hasta <b>${d.buzon.cap_hoy}</b> por día (calentamiento, semana ${d.buzon.semana}); entre todas las secuencias de este cliente.`);
       else lineas.push(`Buzón <b>${esc(d.buzon.email)}</b>: sin calentamiento, sin tope propio.`);
       if (d.workspace.activo) lineas.push(`Todo tu workspace: límite global de <b>${d.workspace.limite}</b> por día, ya van <b>${d.workspace.enviados_hoy}</b> entre todos los clientes.`);
-      else lineas.push('El envío automático global está <b>apagado</b>: las secuencias automáticas no enviarán hasta activarlo.');
+      else if (d.workspace.envio_global === false) lineas.push('El envío automático global está <b>apagado</b>: las secuencias automáticas no enviarán hasta activarlo.');
       if (d.esta.limite > 0) lineas.push(`Esta secuencia: máximo <b>${d.esta.limite}</b> por día.`);
+      const cb = d.combinado;
+      if (cb && cb.otras.length) lineas.push('Otras secuencias activas de este buzón: ' + cb.otras.map(x => esc(x.nombre) + ' (' + (x.tope != null ? x.tope + (x.propio ? ' · límite propio' : ' · calentamiento') : 'sin tope') + ')').join(', ') + '. <b>Entre todas, este buzón podría enviar hasta ' + cb.total + ' por día.</b>');
       if (d.otras.length) lineas.push('Otras secuencias que enviaron hoy: ' + d.otras.map(x => esc(x.nombre) + ' (' + x.hoy + ')').join(', ') + '.');
       // Si el límite que escribió la persona es mayor que lo que hoy permite otro tope, no se va a alcanzar: se avisa.
       const aviso = d.sobre_calentamiento ? `<div class="seq-cap__warn">Estás por encima de lo recomendado: el calentamiento sugiere <b>${d.buzon.cap_hoy}</b> por día para este buzón (semana ${d.buzon.semana}). <b>Se respetará tu límite de ${d.esta.limite}</b>, pero enviar tanto con un buzón nuevo aumenta el riesgo de caer en spam.</div>` : '';
-      box.innerHTML = `<div class="seq-cap__head">${puede == null ? 'Sin tope configurado hoy' : `Hoy puedes enviar con esta secuencia: <b>${puede}</b> emails`}${d.limita_texto && puede != null ? `<small>Lo limita ${esc(d.limita_texto)}</small>` : ''}</div>${aviso}${barra}<ul class="seq-cap__ls">${lineas.map(x => '<li>' + x + '</li>').join('')}</ul>`;
+      const avisoComb = (cb && cb.otras.length && d.buzon.cap_hoy != null && cb.total > d.buzon.cap_hoy && !d.sobre_calentamiento) ? `<div class="seq-cap__warn">Sumando las otras secuencias activas de este buzón, podrían salir hasta <b>${cb.total}</b> por día, y el calentamiento recomienda <b>${d.buzon.cap_hoy}</b> en total (semana ${d.buzon.semana}). Se respetan tus límites, pero un buzón nuevo con ese volumen aumenta el riesgo de spam.</div>` : '';
+      box.innerHTML = `<div class="seq-cap__head">${puede == null ? 'Sin tope configurado hoy' : `Hoy puedes enviar con esta secuencia: <b>${puede}</b> emails`}${d.limita_texto && puede != null ? `<small>Lo limita ${esc(d.limita_texto)}</small>` : ''}</div>${aviso}${avisoComb}${barra}<ul class="seq-cap__ls">${lineas.map(x => '<li>' + x + '</li>').join('')}</ul>`;
     } catch (e) { box.innerHTML = '<div class="seq-cap__load">No se pudo calcular: ' + esc(e.message) + '</div>'; }
   }
   // Hint del modo de envío según el buzón del cliente elegido.

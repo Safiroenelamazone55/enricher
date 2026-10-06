@@ -5387,13 +5387,22 @@ app.get('/api/lm/mailbox-capacity', requireAuth, async (req, res) => {
     const mas = limites.length ? limites.reduce((a, b) => (b.resta < a.resta ? b : a)) : null;
     res.json({
       buzon: mb ? { email: mb.email, ramp_on: !!mb.ramp_on, cap_hoy: capBuzon, semana: semana + 1 } : null,
-      workspace: { activo: false, limite: null, enviados_hoy: ws.n },
+      workspace: { activo: false, limite: null, enviados_hoy: ws.n, envio_global: !!(cfg && cfg.enabled) },
       esta: { enviados_hoy: esta.hoy, limite: limiteSeq },
       otras: otras.map(x => ({ nombre: x.nombre, hoy: x.hoy })),
       otras_activas: porSeq.filter(x => x.id !== sid && x.estado === 'activa' && ['auto', 'preaprobado'].includes(x.send_mode)).length,
       enviados_cliente_hoy: hoyCliente, enviados_otras_hoy: hoyOtras,
       puedes_hoy: mas ? mas.resta : null, limita: mas ? mas.clave : null, limita_texto: mas ? mas.texto : null,
       sobre_calentamiento: limiteSeq > 0 && capBuzon !== null && limiteSeq > capBuzon,
+      // Lo que ESTE buzón podría enviar por día sumando todas sus secuencias activas (cada una con su límite propio o, si no tiene, el calentamiento).
+      // Dos secuencias con 10 cada una = hasta 20 desde el mismo buzón: se muestra para que sea evidente.
+      combinado: (() => {
+        const efEsta = limiteSeq > 0 ? limiteSeq : (capBuzon !== null ? capBuzon : null);
+        const otrasAct = porSeq.filter(x => x.id !== sid && x.estado === 'activa' && ['auto', 'preaprobado'].includes(x.send_mode))
+          .map(x => ({ nombre: x.nombre, propio: x.limite > 0, tope: x.limite > 0 ? x.limite : capBuzon }));
+        const sumaOtras = otrasAct.reduce((a, x) => a + (x.tope || 0), 0);
+        return { otras: otrasAct, esta: efEsta, total: (efEsta || 0) + sumaOtras, hay_sin_tope: otrasAct.some(x => x.tope == null) || efEsta == null };
+      })(),
     });
   } catch (err) { console.error('[capacity]', err.message); res.status(500).json({ error: 'No se pudo calcular' }); }
 });
