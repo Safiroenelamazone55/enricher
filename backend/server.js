@@ -5382,12 +5382,12 @@ app.get('/api/lm/mailbox-capacity', requireAuth, async (req, res) => {
     const limiteSeq = isNaN(limSeq) ? esta.limite : limSeq;
     // el calentamiento del buzón solo cuenta cuando la secuencia NO tiene límite propio (tu número, si lo pones, manda)
     if (capBuzon !== null && !(limiteSeq > 0)) limites.push({ clave: 'buzon', texto: 'el calentamiento del buzón', resta: Math.max(0, capBuzon - hoyCliente) });
-    if (cfg && cfg.enabled) limites.push({ clave: 'workspace', texto: 'el límite global del workspace', resta: Math.max(0, cfg.daily_limit - ws.n) });
+    // (ya no hay tope global del workspace: los límites son por buzón y, si la persona lo pone, por secuencia)
     if (limiteSeq > 0) limites.push({ clave: 'secuencia', texto: 'el límite de esta secuencia', resta: Math.max(0, limiteSeq - esta.hoy) });
     const mas = limites.length ? limites.reduce((a, b) => (b.resta < a.resta ? b : a)) : null;
     res.json({
       buzon: mb ? { email: mb.email, ramp_on: !!mb.ramp_on, cap_hoy: capBuzon, semana: semana + 1 } : null,
-      workspace: { activo: !!(cfg && cfg.enabled), limite: cfg ? cfg.daily_limit : null, enviados_hoy: ws.n },
+      workspace: { activo: false, limite: null, enviados_hoy: ws.n },
       esta: { enviados_hoy: esta.hoy, limite: limiteSeq },
       otras: otras.map(x => ({ nombre: x.nombre, hoy: x.hoy })),
       otras_activas: porSeq.filter(x => x.id !== sid && x.estado === 'activa' && ['auto', 'preaprobado'].includes(x.send_mode)).length,
