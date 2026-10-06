@@ -22577,9 +22577,19 @@ ${foot}
   // El correo tal como lo verá el prospecto: mensaje (editable) + firma del buzón (fija), en Verdana, con el mismo
   // espacio del envío real (sendEngine.buildHtml: cuerpo + dos saltos + firma). El textarea original queda oculto
   // como almacén del texto: el resto del flujo (guardar/aprobar) lo sigue leyendo de ahí.
+  // Igual que el envío: direcciones web sueltas (www.x.com / https://…) se ven como enlace.
+  function _linkifySig(html) {
+    return String(html || '').replace(/(<a\b[\s\S]*?<\/a>|<[^>]+>)|([^<]+)/gi, (m, tag, text) => {
+      if (tag) return tag;
+      return text.replace(/\b(https?:\/\/[^\s<>"']+|www\.[^\s<>"']+)/gi, u => {
+        const tail = (u.match(/[.,;:!?)\]]+$/) || [''])[0], clean = tail ? u.slice(0, -tail.length) : u;
+        return '<a href="' + (/^https?:\/\//i.test(clean) ? clean : 'https://' + clean) + '" target="_blank" rel="noopener">' + clean + '</a>' + tail;
+      });
+    });
+  }
   function _seqMailHtml(bodyId, text, locked) {
     const sig = _seqSigFor();
-    const sigHtml = sig ? (sig.includes('<') ? sig : esc(sig).replace(/\n/g, '<br>')) : '';
+    const sigHtml = sig ? _linkifySig(sig.includes('<') ? sig : esc(sig).replace(/\n/g, '<br>')) : '';
     return '<div class="seq-app__sigl">Así lo verá el prospecto' + (locked ? '' : ' · puedes editar el mensaje; la firma se añade sola') + '</div>' +
       '<div class="seq-app__mail">' +
         '<div class="seq-app__mail-body" id="mail-' + bodyId + '" contenteditable="' + (locked ? 'false' : 'plaintext-only') + '" spellcheck="true" oninput="LeadManagerModule.seqMailSync(\'' + bodyId + '\')">' + esc(text || '') + '</div>' +

@@ -231,8 +231,21 @@ async function testMailbox(mb, pass) {
 // Tipografía ÚNICA de todos los correos (cuerpo + firma), para todos los buzones: Verdana.
 // Se aplica aquí porque TODO envío pasa por sendFromMailbox (secuencias, aprobados, programados, Inbox, recordatorios).
 const _VERDANA = 'font-family:Verdana,Geneva,sans-serif';
+// Convierte en enlace clicable cualquier URL/dominio "www." que aparezca como TEXTO suelto (p. ej. en la firma),
+// sin tocar lo que ya sea un <a> ni el interior de las etiquetas.
+function _linkifyHtml(html) {
+  return String(html || '').replace(/(<a\b[\s\S]*?<\/a>|<[^>]+>)|([^<]+)/gi, (m, tag, text) => {
+    if (tag) return tag;
+    return text.replace(/\b(https?:\/\/[^\s<>"']+|www\.[^\s<>"']+)/gi, (u) => {
+      const tail = (u.match(/[.,;:!?)\]]+$/) || [''])[0];
+      const clean = tail ? u.slice(0, -tail.length) : u;
+      const href = /^https?:\/\//i.test(clean) ? clean : 'https://' + clean;
+      return '<a href="' + href + '">' + clean + '</a>' + tail;
+    });
+  });
+}
 function _forceVerdana(html) {
-  let h = String(html || '');
+  let h = _linkifyHtml(html);
   h = h.replace(/(style\s*=\s*")([^"]*)(")/gi, (m, a, s, c) => a + s.replace(/font-family\s*:[^;]*/gi, _VERDANA) + c)
        .replace(/(style\s*=\s*')([^']*)(')/gi, (m, a, s, c) => a + s.replace(/font-family\s*:[^;]*/gi, _VERDANA.replace(/"/g, "'")) + c)
        .replace(/(<style[^>]*>)([\s\S]*?)(<\/style>)/gi, (m, a, s, c) => a + s.replace(/font-family\s*:[^;}]*/gi, _VERDANA) + c)
