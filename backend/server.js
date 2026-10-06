@@ -5080,6 +5080,30 @@ app.post('/api/lm/contacts/:id/no-phone', requireAuth, async (req, res) => {
 });
 // Estado manual del email: 'bounced' (rebotó — pausa sus secuencias para corregirlo),
 // 'manual' (ingresado/confirmado a mano → enviable) o '' (volver a "sin verificar").
+// Corregir el email de un contacto sin salir de Tareas: lo guarda como "sin verificar", reanuda las secuencias que se pausaron por email
+// (sin email / inválido / rebotado) y cierra sus avisos pendientes.
+app.post('/api/lm/contacts/:id/fix-email', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId, cid = parseInt(req.params.id);
+  const email = String((req.body || {}).email || '').trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Escribe un email válido' });
+  try {
+    const r = await pool.query(
+      `UPDATE lm_contacts SET email=$1, email_status='', email_score=NULL, email_verified_at=NULL,
+              data_issue = CASE WHEN data_issue IN ('falta_email','dato_incorrecto') THEN '' ELSE data_issue END, updated_at=NOW()
+        WHERE id=$2 AND user_id=$3 RETURNING outbound_client_id`, [email, cid, uid]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Contacto no encontrado' });
+    const p = await pool.query(
+      `UPDATE lm_contact_sequences SET estado='activo', paused_reason='', next_action_at=COALESCE(next_action_at, NOW())
+        WHERE user_id=$1 AND contact_id=$2 AND estado='pausado' AND paused_reason IN ('sin_email','email_invalido','email_rebotado','dato_falta_email','dato_dato_incorrecto')`, [uid, cid]);
+    await pool.query(
+      `UPDATE activities SET estado='hecha' WHERE user_id=$1 AND contact_id=$2 AND estado='pendiente' AND tipo='tarea'
+          AND (nota LIKE 'Rebote:%' OR nota LIKE '%Contacto sin email%' OR nota LIKE '%rebotó antes%')`, [uid, cid]);
+    await pool.query(
+      `INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, nota, fecha, estado) VALUES ($1,$2,$3,'nota',$4,NOW(),'hecha')`,
+      [uid, cid, r.rows[0].outbound_client_id || null, 'Email corregido: ' + email + (p.rowCount ? ' — ' + p.rowCount + ' secuencia(s) reanudada(s)' : '')]);
+    res.json({ ok: true, email, resumed: p.rowCount });
+  } catch (err) { console.error('[fix-email]', err.message); res.status(500).json({ error: 'No se pudo guardar el email' }); }
+});
 app.post('/api/lm/contacts/:id/email-status', requireAuth, async (req, res) => {
   const uid = req.workspaceOwnerId, cid = req.params.id;
   const status = String((req.body || {}).status || '');

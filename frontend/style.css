@@ -17958,3 +17958,20 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 .lm-stat--priority .lm-stat__n{color:#5B21B6}
 .lm-stat--priority:hover{background:#EDE9FE}
 .lm-prio-link{margin:0 0 10px}.lm-prio-link a{font-size:.82rem;color:#64748B;text-decoration:none}.lm-prio-link a:hover{color:#00804C}
+
+/* Tareas: contactos por corregir (sin email / email que rebotó) */
+.lm-stat--fix{background:#FFFBEB}
+.lm-stat--fix .lm-stat__l{color:#B45309}
+.lm-stat--fix .lm-stat__n{color:#92400E}
+.lm-stat--fix:hover{background:#FEF3C7}
+.lm-fix-row{display:flex;align-items:center;gap:12px;padding:10px 14px;background:#fff;border:1px solid #EEECE8;border-left:3px solid #B45309;margin-bottom:6px}
+.lm-fix-row__i{width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;background:#FEF3C7;color:#B45309;font-size:.9rem;flex-shrink:0}
+.lm-fix-row__t{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;font-size:.9rem}
+.lm-fix-row__t small{color:#64748B;font-size:.76rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.lm-fix-row__f{display:inline-flex;align-items:center;gap:6px;flex-shrink:0}
+.lm-fix-row__in{width:200px;height:32px;padding:0 10px;border:1px solid #E2E0DB;background:#fff;font:inherit;font-size:.84rem;outline:none}
+.lm-fix-row__in:focus{border-color:#00804C;box-shadow:0 0 0 3px rgba(0,128,76,.12)}
+.lm-fix-row__a{font-size:.76rem;color:#94A3B8;text-decoration:underline}.lm-fix-row__a:hover{color:#00804C}
+.lm-fix-more{display:block;width:100%;padding:8px;border:1px dashed #D6D3CD;background:none;color:#64748B;font:inherit;font-size:.82rem;cursor:pointer}
+.lm-fix-more:hover{border-color:#B45309;color:#B45309}

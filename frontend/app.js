@@ -22165,6 +22165,51 @@ ${foot}
       <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.taskApprove(${a.id})">✓ Aprobar</button>
     </div>`;
   }
+  let _fixAll = false;   // "Por corregir": false = solo las primeras 5 (jerarquía, sin saturar)
+  function fixShowAll() { _fixAll = true; _renderBody(); }
+  // Corrige el email de un contacto sin salir de Tareas: lo guarda, reanuda lo que estaba pausado por eso y cierra su aviso.
+  async function fixEmailSave(cid) {
+    const inp = $('fix-em-' + cid), email = ((inp && inp.value) || '').trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showBanner('Escribe un email válido', 'error'); if (inp) inp.focus(); return; }
+    try {
+      const r = await apiFetch(API + '/lm/contacts/' + cid + '/fix-email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
+      const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Error');
+      const c = _contacts.find(x => x.id === cid);
+      if (c) { c.email = d.email; c.email_status = ''; (c.sequences || []).forEach(sq => { if (sq.estado === 'pausado') sq.estado = 'activo'; }); }
+      _activities = (_activities || []).map(a => (a.contact_id === cid && a.estado === 'pendiente' && a.tipo === 'tarea' && String(a.nota || '').startsWith('Rebote:')) ? { ...a, estado: 'hecha' } : a);
+      _renderBody();
+      showBanner('✓ Email corregido' + (d.resumed ? ' — ' + d.resumed + ' secuencia(s) reanudada(s)' : ''), 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  // Contactos que el sistema YA sabe que no se les podrá escribir (sin email, o con un email que rebotó) y a quienes todavía les falta un
+  // paso de EMAIL en una secuencia ACTIVA. En una secuencia solo de LinkedIn no tener email no es un problema, por eso no cuentan.
+  function _fixList() {
+    const act = new Set((_sequences || []).filter(s => s.estado === 'activa').map(s => s.id));
+    const out = [];
+    (_contacts || []).forEach(c => {
+      if (['derivado', 'no_es_persona', 'no_interesado', 'no_califica', 'no_contactar'].includes(c.disposition)) return;
+      const bad = !c.email ? 'sin' : (c.email_status === 'invalid' ? 'rebote' : '');
+      if (!bad) return;
+      const seqs = (c.sequences || []).filter(sq => act.has(sq.id) && ['activo', 'pausado'].includes(sq.estado)
+        && _seqSteps(sq.id).slice(Math.max(0, (sq.paso || 1) - 1)).some(st => (st.canal || 'email') === 'email'));
+      if (seqs.length) out.push({ c, bad, seqs });
+    });
+    return out;
+  }
+  function _fixSectionHtml() {
+    const list = _fixList(); if (!list.length) return '';
+    const shown = (_taskStat === 'fix' || _fixAll) ? list : list.slice(0, 5);
+    const rows = shown.map(({ c, bad, seqs }) => {
+      const nm = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || '—';
+      const why = bad === 'rebote' ? 'El email rebotó — corrígelo para reanudar' : 'Sin email — agrégalo para reanudar';
+      const sq = seqs.map(s => ((_sequences || []).find(x => x.id === s.id) || {}).nombre).filter(Boolean).join(', ');
+      return '<div class="lm-fix-row"><span class="lm-fix-row__i lm-fix-row__i--' + bad + '">' + (bad === 'rebote' ? '↩' : '✉') + '</span>' +
+        '<div class="lm-fix-row__t"><b>' + esc(nm) + '</b>' + (c.company_nombre ? ' · ' + esc(c.company_nombre) : '') +
+        '<small>' + why + (bad === 'rebote' && c.email ? ' (' + esc(c.email) + ')' : '') + (sq ? ' · ' + esc(sq) : '') + '</small></div>' +
+        '<span class="lm-fix-row__f"><input class="lm-fix-row__in" id="fix-em-' + c.id + '" type="email" placeholder="nuevo@email.com" onkeydown="if(event.key===\'Enter\'){LeadManagerModule.fixEmailSave(' + c.id + ')}"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.fixEmailSave(' + c.id + ')">Guardar</button><a href="#" class="lm-fix-row__a" title="Abrir la ficha del contacto" onclick="event.preventDefault();LeadManagerModule.openContactPage(' + c.id + ')">Ficha</a></span></div>';
+    }).join('');
+    return '<div class="lm-tsec-h" style="color:#B45309"><span class="lm-tsec-h__dot" style="background:#B45309"></span>Por corregir<span class="lm-tsec-h__n">' + list.length + '</span></div><div class="seq-tasks">' + rows + ((list.length > shown.length) ? '<button class="lm-fix-more" onclick="LeadManagerModule.fixShowAll()">Ver las ' + (list.length - shown.length) + ' restantes</button>' : '') + '</div>';
+  }
   function _apSectionHtml() {
     if (!Array.isArray(_apList) || !_apList.length) return '';
     return `<div class="lm-tsec-h" style="color:#A96D0C"><span class="lm-tsec-h__dot" style="background:#A96D0C"></span>Emails por aprobar<span class="lm-tsec-h__n">${_apList.length}</span></div>
@@ -23892,9 +23937,9 @@ ${foot}
     const acts = _activities.filter(a => a.estado === 'pendiente' && !_ofInactiveSeq(a) && !_isSysNote(a)).sort((x, y) => new Date(x.fecha) - new Date(y.fecha));
     const actToday = acts.filter(a => _dayOf(a.fecha) <= today);
     const nextLine = seqFuture.length ? `<div class="seq-next">${NI('calendar', 12)} Siguiente tarea de secuencia: <b>${_relDay(seqFuture[0].due)}</b>${seqFuture.length > 1 ? ` · +${seqFuture.length - 1} más próximas` : ''}</div>` : '';
-    const anything = allRaw.length || acts.length || (Array.isArray(_apList) && _apList.length);
+    const anything = allRaw.length || acts.length || (Array.isArray(_apList) && _apList.length) || _fixList().length;
     const paCta = _acceptCtaHtml();
-    const totalAwaiting = (_sequences || []).reduce((t, s) => t + (s.awaiting || 0) + (s.no_email_pending || 0), 0);
+    const totalAwaiting = (_sequences || []).reduce((t, s) => t + (s.awaiting || 0), 0);
     // Stat strip (patrón referencia: número grande + label uppercase muted)
     const stat = (k, l, n, warn) => '<button type="button" class="lm-stat lm-stat--btn lm-stat--' + k + (_taskStat === k ? ' on' : '') + '" onclick="LeadManagerModule.taskStat(\'' + k + '\')" title="' + (k === 'accept' ? 'Abrir la lista para marcar quién aceptó tu conexión' : k === 'priority' ? 'Centro de prioridad: respuestas, aprobaciones, fallos y más' : 'Clic para filtrar la lista; otro clic para quitar el filtro') + '"><span class="lm-stat__l">' + l + '</span><span class="lm-stat__n' + (warn ? ' lm-stat__n--warn' : '') + '">' + n + '</span></button>';
     const statStrip = anything ? `<div class="lm-stat-strip">
@@ -23904,6 +23949,7 @@ ${foot}
       ${stat('next', 'Próximas', seqFuture.length, false)}
       ${stat('follow', 'Follow-ups', acts.length, false)}
       ${stat('accept', 'Por aceptar', _pendingAccept().length, false)}
+      ${_fixList().length ? stat('fix', 'Por corregir', _fixList().length, true) : ''}
       ${totalAwaiting ? stat('approve', 'Por aprobar', totalAwaiting, true) : ''}
     </div>` : '';
     const sel = _taskStat;
@@ -23912,6 +23958,7 @@ ${foot}
     const hdr = (cls, txt, n) => '<div class="lm-tsec-h' + cls + '"><span class="lm-tsec-h__dot"></span>' + txt + '<span class="lm-tsec-h__n">' + n + '</span></div>';
     const blocks = [];
     if (showApr) blocks.push(_apSectionHtml());
+    if (!sel || sel === 'fix') blocks.push(_fixSectionHtml());
     if (showOver && seqOver.length) blocks.push(hdr(' lm-tsec-h--over', 'Vencidas', seqOver.length) + '<div class="seq-tasks">' + seqOver.map(x => _allTaskRow(x, today)).join('') + '</div>');
     if (showHoy && seqHoy.length) blocks.push(hdr(' lm-tsec-h--today', 'Hoy', seqHoy.length) + '<div class="seq-tasks">' + seqHoy.map(x => _allTaskRow(x, today)).join('') + '</div>');
     if (sel === 'next' && seqFuture.length) blocks.push(hdr('', 'Próximas', seqFuture.length) + '<div class="seq-tasks">' + seqFuture.map(x => _allTaskRow(x, today)).join('') + '</div>');
@@ -33320,7 +33367,7 @@ ${foot}
     ldRefer, ldReferSave, ldNurture, ldNurtureSave, ldOpenDispoMenu,
     nurtureRetomarMenu, nurtureReinscribir, nurtureOtraSecuencia, nurtureSoloManual,
     waitingContactMenu, activarSiguienteContacto, waitingCerrarAviso,
-    dlSetCli, dlDragStart, dlDragEnd, dlDragOver, dlDragLeave, dlDrop, dlSetView, dlCardMenu, dlPopClose, dlCalNav, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel, taskStat, seqMailSync, stepReplyTo, mtOpen, mtClose, mtSeg, mtTimes, mtProg, mtChips, mtAddCc, mtSave, mtSend, mtCancel,
+    dlSetCli, dlDragStart, dlDragEnd, dlDragOver, dlDragLeave, dlDrop, dlSetView, dlCardMenu, dlPopClose, dlCalNav, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel, taskStat, fixEmailSave, fixShowAll, seqMailSync, stepReplyTo, mtOpen, mtClose, mtSeg, mtTimes, mtProg, mtChips, mtAddCc, mtSave, mtSend, mtCancel,
     sqSetCli, sqSetEst, sqSetQ, cmSetCli, cmSetEst, cmSetQ,
     seqRunSetCanal, seqTaskSetDue,
     mbOpen, mbClose, mbSave, mbTest, mbDelete, mbProv, mbOAuthStart, mbManageOpen, mbManageClose,
