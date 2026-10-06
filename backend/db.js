@@ -1546,6 +1546,8 @@ async function initDb() {
     await pool.query(`ALTER TABLE lm_mailboxes ADD COLUMN IF NOT EXISTS ramp_step       INTEGER NOT NULL DEFAULT 10;`);
     await pool.query(`ALTER TABLE lm_mailboxes ADD COLUMN IF NOT EXISTS ramp_target     INTEGER NOT NULL DEFAULT 50;`);
     await pool.query(`ALTER TABLE lm_mailboxes ADD COLUMN IF NOT EXISTS ramp_started_on DATE;`);
+    // Límite diario que la persona fija para el BUZÓN (techo entre TODAS sus secuencias). NULL/0 = lo decide el calentamiento.
+    await pool.query(`ALTER TABLE lm_mailboxes ADD COLUMN IF NOT EXISTS daily_limit INTEGER;`);
     // Por defecto TODO buzón nuevo arranca con el calentamiento gradual encendido (empieza hoy).
     await pool.query(`ALTER TABLE lm_mailboxes ALTER COLUMN ramp_on SET DEFAULT TRUE;`);
     await pool.query(`ALTER TABLE lm_mailboxes ALTER COLUMN ramp_started_on SET DEFAULT CURRENT_DATE;`);

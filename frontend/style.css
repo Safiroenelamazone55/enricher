@@ -17936,3 +17936,5 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 #lm-step-modal .fin-pi-box{width:min(980px,96vw);max-height:94vh}
 #lm-step-modal .step-var-ta{min-height:340px;height:340px;resize:vertical;line-height:1.55;font-size:.92rem}
 #lm-step-modal .step-var-box{padding-bottom:12px}
+
+.mbh-lim{margin-bottom:12px}

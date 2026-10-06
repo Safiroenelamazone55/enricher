@@ -5253,7 +5253,7 @@ app.get('/api/lm/sequences/:id/metrics', requireAuth, async (req, res) => {
 const mailboxSvc = require('./services/mailboxService');
 app.get('/api/lm/mailboxes', requireAuth, async (req, res) => {
   try {
-    const { rows } = await pool.query(`SELECT id, outbound_client_id, email, provider, smtp_host, smtp_port, imap_host, imap_port, estado, last_error, verified_at, signature_html, from_name, ramp_on, ramp_start, ramp_step, ramp_target FROM lm_mailboxes WHERE user_id=$1 ORDER BY id`, [req.workspaceOwnerId]);
+    const { rows } = await pool.query(`SELECT id, outbound_client_id, email, provider, smtp_host, smtp_port, imap_host, imap_port, estado, last_error, verified_at, signature_html, from_name, ramp_on, ramp_start, ramp_step, ramp_target, daily_limit FROM lm_mailboxes WHERE user_id=$1 ORDER BY id`, [req.workspaceOwnerId]);
     res.json(rows);
   } catch (err) { console.error('[mailbox] GET', err.message); res.status(500).json({ error: 'Error al cargar buzones' }); }
 });
@@ -5340,14 +5340,15 @@ app.get('/api/lm/mailboxes/:id/health', requireAuth, async (req, res) => {
 // Calentamiento gradual: estado actual (tope de hoy, enviados hoy, semana)
 async function _rampStatus(mbId, uid, tz) {
   const { rows: [r] } = await pool.query(`
-    SELECT mb.id, mb.ramp_on, mb.ramp_start, mb.ramp_step, mb.ramp_target, to_char(mb.ramp_started_on,'YYYY-MM-DD') AS started_on,
+    SELECT mb.id, mb.daily_limit, mb.ramp_on, mb.ramp_start, mb.ramp_step, mb.ramp_target, to_char(mb.ramp_started_on,'YYYY-MM-DD') AS started_on,
            (SELECT COUNT(*)::int FROM lm_messages mm JOIN sequences ss ON ss.id = mm.sequence_id
              WHERE ss.outbound_client_id = mb.outbound_client_id AND mm.estado IN ('sent','replied','bounced')
                AND (mm.sent_at AT TIME ZONE $3)::date = (NOW() AT TIME ZONE $3)::date) AS sent_today,
            CASE WHEN mb.ramp_started_on IS NULL THEN 0 ELSE FLOOR(GREATEST(((NOW() AT TIME ZONE $3)::date - mb.ramp_started_on), 0)::numeric / 7)::int END AS semana
       FROM lm_mailboxes mb WHERE mb.id=$1 AND mb.user_id=$2`, [mbId, uid, tz]);
   if (!r) return null;
-  r.cap_today = Math.min(r.ramp_target, r.ramp_start + r.ramp_step * r.semana);
+  r.ramp_cap = Math.min(r.ramp_target, r.ramp_start + r.ramp_step * r.semana);
+  r.cap_today = r.daily_limit > 0 ? r.daily_limit : r.ramp_cap;   // el número que la persona fija en el buzón manda sobre el calentamiento
   // próximos escalones para mostrar la curva
   r.curva = [0, 1, 2, 3, 4, 5].map(w => ({ semana: w + 1, tope: Math.min(r.ramp_target, r.ramp_start + r.ramp_step * w) }));
   return r;
@@ -5358,7 +5359,7 @@ app.get('/api/lm/mailbox-capacity', requireAuth, async (req, res) => {
     const uid = req.workspaceOwnerId, tz = await _tzOfUser(req.user && req.user.id);
     const cid = parseInt(req.query.client_id) || 0, sid = parseInt(req.query.sequence_id) || 0;
     if (!cid) return res.json({ sinCliente: true });
-    const { rows: [mb] } = await pool.query('SELECT id, email, ramp_on, ramp_start, ramp_step, ramp_target, ramp_started_on FROM lm_mailboxes WHERE user_id=$1 AND outbound_client_id=$2', [uid, cid]);
+    const { rows: [mb] } = await pool.query('SELECT id, email, daily_limit, ramp_on, ramp_start, ramp_step, ramp_target, ramp_started_on FROM lm_mailboxes WHERE user_id=$1 AND outbound_client_id=$2', [uid, cid]);
     const { rows: [cfg] } = await pool.query('SELECT enabled, daily_limit FROM lm_send_settings WHERE user_id=$1', [uid]);
     const day = "(mm.sent_at AT TIME ZONE $3)::date = (NOW() AT TIME ZONE $3)::date";
     const { rows: porSeq } = await pool.query(`
@@ -5374,6 +5375,10 @@ app.get('/api/lm/mailbox-capacity', requireAuth, async (req, res) => {
       semana = sw ? sw.semana : 0;
       capBuzon = Math.min(mb.ramp_target, mb.ramp_start + mb.ramp_step * semana);
     }
+    const rampCap = capBuzon;
+    if (mb && mb.daily_limit > 0) {   // el número que la persona fijó en el buzón manda
+      capBuzon = mb.daily_limit;
+    }
     const esta = porSeq.find(x => x.id === sid) || { hoy: 0, limite: 0 };
     const otras = porSeq.filter(x => x.id !== sid && x.hoy > 0);
     const hoyCliente = porSeq.reduce((a, x) => a + x.hoy, 0), hoyOtras = hoyCliente - esta.hoy;
@@ -5381,12 +5386,13 @@ app.get('/api/lm/mailbox-capacity', requireAuth, async (req, res) => {
     const limSeq = parseInt(req.query.limit);
     const limiteSeq = isNaN(limSeq) ? esta.limite : limSeq;
     // el calentamiento del buzón solo cuenta cuando la secuencia NO tiene límite propio (tu número, si lo pones, manda)
-    if (capBuzon !== null && !(limiteSeq > 0)) limites.push({ clave: 'buzon', texto: 'el calentamiento del buzón', resta: Math.max(0, capBuzon - hoyCliente) });
+    // El tope del BUZÓN siempre aplica (es compartido por todas sus secuencias); el límite de la secuencia es un sublímite dentro de él.
+    if (capBuzon !== null) limites.push({ clave: 'buzon', texto: (mb && mb.daily_limit > 0) ? 'el límite diario del buzón' : 'el calentamiento del buzón', resta: Math.max(0, capBuzon - hoyCliente) });
     // (ya no hay tope global del workspace: los límites son por buzón y, si la persona lo pone, por secuencia)
     if (limiteSeq > 0) limites.push({ clave: 'secuencia', texto: 'el límite de esta secuencia', resta: Math.max(0, limiteSeq - esta.hoy) });
     const mas = limites.length ? limites.reduce((a, b) => (b.resta < a.resta ? b : a)) : null;
     res.json({
-      buzon: mb ? { email: mb.email, ramp_on: !!mb.ramp_on, cap_hoy: capBuzon, semana: semana + 1 } : null,
+      buzon: mb ? { email: mb.email, ramp_on: !!mb.ramp_on, cap_hoy: capBuzon, semana: semana + 1, limite_propio: (mb.daily_limit > 0) ? mb.daily_limit : null, cap_calentamiento: rampCap } : null,
       workspace: { activo: false, limite: null, enviados_hoy: ws.n, envio_global: !!(cfg && cfg.enabled) },
       esta: { enviados_hoy: esta.hoy, limite: limiteSeq },
       otras: otras.map(x => ({ nombre: x.nombre, hoy: x.hoy })),
@@ -5426,6 +5432,9 @@ app.put('/api/lm/mailboxes/:id/ramp', requireAuth, async (req, res) => {
     await pool.query(`UPDATE lm_mailboxes SET ramp_on=$3, ramp_start=$4, ramp_step=$5, ramp_target=$6,
         ramp_started_on = CASE WHEN $7 THEN (NOW() AT TIME ZONE $8)::date ELSE ramp_started_on END WHERE id=$1 AND user_id=$2`,
       [req.params.id, req.workspaceOwnerId, on, start, step, target, restart, tz]);
+    // límite propio del buzón (vacío = usa el calentamiento)
+    const lim = (b.limit === '' || b.limit == null) ? null : clamp(b.limit, 1, 5000, null);
+    await pool.query('UPDATE lm_mailboxes SET daily_limit=$3 WHERE id=$1 AND user_id=$2', [req.params.id, req.workspaceOwnerId, lim]);
     res.json(await _rampStatus(req.params.id, req.workspaceOwnerId, tz));
   } catch (err) { console.error('[mailbox] ramp PUT', err.message); res.status(500).json({ error: 'No se pudo guardar' }); }
 });

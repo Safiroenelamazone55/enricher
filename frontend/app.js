@@ -26120,6 +26120,7 @@ ${foot}
       if (!r.ok) throw new Error(d.error || 'Error');
       const fld = (id, lbl, v, hint) => `<label class="mbh-f"><span>${lbl}</span><input id="${id}" type="number" min="1" value="${v}"><small>${hint}</small></label>`;
       box.innerHTML = `<div class="mbh-sw"><label class="rp-sw"><input type="checkbox" id="mbh-on" ${d.ramp_on ? 'checked' : ''} onchange="LeadManagerModule.mbRampSave()"><span></span></label><b>${d.ramp_on ? 'Calentamiento activo' : 'Calentamiento apagado'}</b></div>
+        <div class="mbh-lim"><label class="mbh-f"><span>Límite diario de este buzón</span><input id="mbh-limit" type="number" min="1" value="${d.daily_limit || ''}" placeholder="Auto (${d.ramp_cap})"><small>Es el máximo que este buzón envía por día, sumando <b>todas</b> sus secuencias. Vacío = lo decide el calentamiento. Lo que no entre hoy sale mañana, por orden de programación.</small></label></div>
         <div class="mbh-fields">${fld('mbh-start', 'Empieza en', d.ramp_start, 'envíos por día')}${fld('mbh-step', 'Sube cada semana', d.ramp_step, 'envíos más por día')}${fld('mbh-target', 'Meta', d.ramp_target, 'envíos por día')}</div>
         ${d.ramp_on ? `<div class="mbh-status"><b>Semana ${d.semana + 1}</b>: tope de hoy <b>${d.cap_today}</b> envíos · enviados hoy <b>${d.sent_today}</b></div>
           <div class="mbh-curve">${d.curva.map(x => `<span${x.semana === d.semana + 1 ? ' class="on"' : ''}>Sem ${x.semana}<b>${x.tope}</b></span>`).join('')}</div>` : '<div class="mbh-p">Al encenderlo, empieza hoy. El tope aplica a todos los envíos automáticos de las secuencias de este cliente.</div>'}
@@ -26129,12 +26130,12 @@ ${foot}
   async function mbRampSave(cerrar) {
     if (!_mbhId) return;
     const v = id => parseInt(document.getElementById(id)?.value);
-    const body = { on: !!document.getElementById('mbh-on')?.checked, start: v('mbh-start'), step: v('mbh-step'), target: v('mbh-target') };
+    const body = { on: !!document.getElementById('mbh-on')?.checked, start: v('mbh-start'), step: v('mbh-step'), target: v('mbh-target'), limit: (document.getElementById('mbh-limit') || {}).value || '' };
     const msg = document.getElementById('mbh-msg');
     try {
       const r = await apiFetch(`${API}/lm/mailboxes/${_mbhId}/ramp`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Error');
-      const mb = (_mailboxes || []).find(x => x.id === _mbhId); if (mb) { mb.ramp_on = d.ramp_on; mb.ramp_start = d.ramp_start; mb.ramp_step = d.ramp_step; mb.ramp_target = d.ramp_target; }
+      const mb = (_mailboxes || []).find(x => x.id === _mbhId); if (mb) { mb.ramp_on = d.ramp_on; mb.ramp_start = d.ramp_start; mb.ramp_step = d.ramp_step; mb.ramp_target = d.ramp_target; mb.daily_limit = d.daily_limit; }
       if (_mbManageClientId) { const bd = document.getElementById('mbx-manage-body'); const cl = _clients.find(x => x.id === _mbManageClientId); if (bd && cl) bd.innerHTML = _mbBodyHtml(cl); }
       if (cerrar) { mbHealthClose(); showBanner(d.ramp_on ? '✓ Calentamiento guardado y activo' : '✓ Calentamiento guardado (apagado)', 'success'); return; }
       await _mbhRampLoad();
@@ -29239,17 +29240,17 @@ ${foot}
       }
       const puede = d.puedes_hoy;
       const lineas = [];
-      if (d.buzon.cap_hoy != null) lineas.push(d.esta.limite > 0 ? `Buzón <b>${esc(d.buzon.email)}</b>: el calentamiento recomienda <b>${d.buzon.cap_hoy}</b> por día (semana ${d.buzon.semana}); tu límite de esta secuencia <b>manda</b>.` : `Buzón <b>${esc(d.buzon.email)}</b>: hasta <b>${d.buzon.cap_hoy}</b> por día (calentamiento, semana ${d.buzon.semana}); entre todas las secuencias de este cliente.`);
+      if (d.buzon.cap_hoy != null) lineas.push(d.buzon.limite_propio ? `Buzón <b>${esc(d.buzon.email)}</b>: límite diario fijado por ti, <b>${d.buzon.cap_hoy}</b> por día, entre todas sus secuencias.` : `Buzón <b>${esc(d.buzon.email)}</b>: hasta <b>${d.buzon.cap_hoy}</b> por día (calentamiento, semana ${d.buzon.semana}), entre todas las secuencias de este cliente.`);
       else lineas.push(`Buzón <b>${esc(d.buzon.email)}</b>: sin calentamiento, sin tope propio.`);
       if (d.workspace.activo) lineas.push(`Todo tu workspace: límite global de <b>${d.workspace.limite}</b> por día, ya van <b>${d.workspace.enviados_hoy}</b> entre todos los clientes.`);
       else if (d.workspace.envio_global === false) lineas.push('El envío automático global está <b>apagado</b>: las secuencias automáticas no enviarán hasta activarlo.');
       if (d.esta.limite > 0) lineas.push(`Esta secuencia: máximo <b>${d.esta.limite}</b> por día.`);
       const cb = d.combinado;
-      if (cb && cb.otras.length) lineas.push('Otras secuencias activas de este buzón: ' + cb.otras.map(x => esc(x.nombre) + ' (' + (x.tope != null ? x.tope + (x.propio ? ' · límite propio' : ' · calentamiento') : 'sin tope') + ')').join(', ') + '. <b>Entre todas, este buzón podría enviar hasta ' + cb.total + ' por día.</b>');
+      if (cb && cb.otras.length) lineas.push('Otras secuencias activas de este buzón: ' + cb.otras.map(x => esc(x.nombre) + ' (' + (x.tope != null ? x.tope + (x.propio ? ' · límite propio' : ' · calentamiento') : 'sin tope') + ')').join(', ') + '. <b>Entre todas piden ' + cb.total + ' por día; el buzón es el que pone el tope.</b>');
       if (d.otras.length) lineas.push('Otras secuencias que enviaron hoy: ' + d.otras.map(x => esc(x.nombre) + ' (' + x.hoy + ')').join(', ') + '.');
       // Si el límite que escribió la persona es mayor que lo que hoy permite otro tope, no se va a alcanzar: se avisa.
-      const aviso = d.sobre_calentamiento ? `<div class="seq-cap__warn">Estás por encima de lo recomendado: el calentamiento sugiere <b>${d.buzon.cap_hoy}</b> por día para este buzón (semana ${d.buzon.semana}). <b>Se respetará tu límite de ${d.esta.limite}</b>, pero enviar tanto con un buzón nuevo aumenta el riesgo de caer en spam.</div>` : '';
-      const avisoComb = (cb && cb.otras.length && d.buzon.cap_hoy != null && cb.total > d.buzon.cap_hoy && !d.sobre_calentamiento) ? `<div class="seq-cap__warn">Sumando las otras secuencias activas de este buzón, podrían salir hasta <b>${cb.total}</b> por día, y el calentamiento recomienda <b>${d.buzon.cap_hoy}</b> en total (semana ${d.buzon.semana}). Se respetan tus límites, pero un buzón nuevo con ese volumen aumenta el riesgo de spam.</div>` : '';
+      const aviso = d.sobre_calentamiento ? `<div class="seq-cap__warn">El límite de esta secuencia (<b>${d.esta.limite}</b>) es mayor que el del buzón (<b>${d.buzon.cap_hoy}</b> por día). <b>Manda el del buzón</b>: hoy saldrán como máximo ${d.buzon.cap_hoy} entre todas sus secuencias, y el resto sigue mañana. Puedes subir el límite del buzón en su configuración.</div>` : '';
+      const avisoComb = (cb && cb.otras.length && d.buzon.cap_hoy != null && cb.total > d.buzon.cap_hoy && !d.sobre_calentamiento) ? `<div class="seq-cap__warn">Hoy las secuencias de este buzón piden en total <b>${cb.total}</b> por día, pero el buzón permite <b>${d.buzon.cap_hoy}</b>. Saldrán ${d.buzon.cap_hoy} por día en <b>orden de programación</b> y lo que no entre hoy continúa mañana.</div>` : '';
       box.innerHTML = `<div class="seq-cap__head">${puede == null ? 'Sin tope configurado hoy' : `Hoy puedes enviar con esta secuencia: <b>${puede}</b> emails`}${d.limita_texto && puede != null ? `<small>Lo limita ${esc(d.limita_texto)}</small>` : ''}</div>${aviso}${avisoComb}${barra}<ul class="seq-cap__ls">${lineas.map(x => '<li>' + x + '</li>').join('')}</ul>`;
     } catch (e) { box.innerHTML = '<div class="seq-cap__load">No se pudo calcular: ' + esc(e.message) + '</div>'; }
   }

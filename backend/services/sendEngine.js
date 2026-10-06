@@ -321,13 +321,13 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback, served = [0]) {
        -- Calentamiento gradual del BUZÓN del cliente: si hoy ya se llegó al tope de la rampa, se salta y el motor sigue con otros.
        AND NOT EXISTS (
             SELECT 1 FROM lm_mailboxes mb
-             WHERE mb.outbound_client_id = s.outbound_client_id AND mb.ramp_on AND mb.ramp_started_on IS NOT NULL
+             WHERE mb.outbound_client_id = s.outbound_client_id AND (mb.daily_limit > 0 OR (mb.ramp_on AND mb.ramp_started_on IS NOT NULL))
                -- el límite propio de la secuencia lo decide la persona: si lo puso, prevalece sobre el calentamiento (que es el valor por defecto)
-               AND COALESCE(s.daily_limit, 0) <= 0
+               -- (el tope del buzón aplica siempre; el límite de la secuencia es un sublímite aparte, más abajo)
                AND (SELECT COUNT(*) FROM lm_messages mm JOIN sequences ss ON ss.id = mm.sequence_id
                      WHERE ss.outbound_client_id = mb.outbound_client_id AND mm.estado IN ('sent','replied','bounced')
                        AND (mm.sent_at AT TIME ZONE $2)::date = (NOW() AT TIME ZONE $2)::date)
-                   >= LEAST(mb.ramp_target, mb.ramp_start + mb.ramp_step * FLOOR(GREATEST(((NOW() AT TIME ZONE $2)::date - mb.ramp_started_on), 0)::numeric / 7)::int)
+                   >= CASE WHEN mb.daily_limit > 0 THEN mb.daily_limit ELSE LEAST(mb.ramp_target, mb.ramp_start + mb.ramp_step * FLOOR(GREATEST(((NOW() AT TIME ZONE $2)::date - mb.ramp_started_on), 0)::numeric / 7)::int) END
            )
        -- Límite diario POR SECUENCIA (buzón del cliente): si esta secuencia ya llegó a su tope hoy,
        -- se salta y el motor sigue con las demás. 0 = sin límite propio (aplica solo el global).
@@ -671,9 +671,24 @@ async function advancePastStep(pool, userId, contactId, sequenceId, stepId) {
 }
 
 // ── Envíos pre-aprobados: despacha los 'approved' respetando el intervalo por secuencia ──
+// ¿El buzón de este cliente ya llegó hoy a su tope? (límite propio del buzón; si no tiene, el calentamiento). Cuenta TODAS sus secuencias.
+async function _mailboxFull(pool, clientId, tz) {
+  if (!clientId) return false;
+  const { rows: [r] } = await pool.query(
+    `SELECT mb.daily_limit, mb.ramp_on, mb.ramp_started_on, mb.ramp_start, mb.ramp_step, mb.ramp_target,
+            (SELECT COUNT(*)::int FROM lm_messages mm JOIN sequences ss ON ss.id = mm.sequence_id
+              WHERE ss.outbound_client_id = mb.outbound_client_id AND mm.estado IN ('sent','replied','bounced')
+                AND (mm.sent_at AT TIME ZONE $2)::date = (NOW() AT TIME ZONE $2)::date) AS n,
+            CASE WHEN mb.ramp_started_on IS NULL THEN 0 ELSE FLOOR(GREATEST(((NOW() AT TIME ZONE $2)::date - mb.ramp_started_on), 0)::numeric / 7)::int END AS semana
+       FROM lm_mailboxes mb WHERE mb.outbound_client_id = $1 LIMIT 1`, [clientId, tz]);
+  if (!r) return false;
+  const cap = r.daily_limit > 0 ? r.daily_limit : ((r.ramp_on && r.ramp_started_on) ? Math.min(r.ramp_target, r.ramp_start + r.ramp_step * r.semana) : null);
+  return cap !== null && r.n >= cap;
+}
+
 async function _flushApproved(pool, apiBase) {
   const { rows: due } = await pool.query(`
-    SELECT DISTINCT ON (m.sequence_id)
+    SELECT DISTINCT ON (m.sequence_id) s.outbound_client_id AS ocid, m.scheduled_at,
            m.id, m.user_id, m.contact_id, m.sequence_id, m.step_id, m.asunto, m.cuerpo, m.to_email, m.track_token,
            mb.id AS mb_ok, mb.email AS mb_email, mb.pass_enc, mb.smtp_host, mb.smtp_port, mb.smtp_secure,
            mb.imap_host, mb.imap_port, mb.provider, mb.sent_folder, mb.estado AS mb_estado,
@@ -704,15 +719,17 @@ async function _flushApproved(pool, apiBase) {
        -- Lo que no cabe hoy espera a mañana por SU propio tope, nunca por lo que hagan otras secuencias o clientes.
        AND (COALESCE(s.daily_limit,0) <= 0 OR (SELECT COUNT(*) FROM lm_messages x WHERE x.sequence_id = s.id AND x.estado IN ('sent','replied','bounced')
             AND (x.sent_at AT TIME ZONE COALESCE(cfg.timezone,'America/Lima'))::date = (NOW() AT TIME ZONE COALESCE(cfg.timezone,'America/Lima'))::date) < s.daily_limit)
-       AND NOT EXISTS (SELECT 1 FROM lm_mailboxes mb3 WHERE mb3.outbound_client_id = s.outbound_client_id AND mb3.ramp_on AND mb3.ramp_started_on IS NOT NULL
-            AND COALESCE(s.daily_limit,0) <= 0
+       AND NOT EXISTS (SELECT 1 FROM lm_mailboxes mb3 WHERE mb3.outbound_client_id = s.outbound_client_id AND (mb3.daily_limit > 0 OR (mb3.ramp_on AND mb3.ramp_started_on IS NOT NULL))
+            -- (el tope del buzón aplica siempre)
             AND (SELECT COUNT(*) FROM lm_messages mm JOIN sequences ss ON ss.id = mm.sequence_id WHERE ss.outbound_client_id = mb3.outbound_client_id AND mm.estado IN ('sent','replied','bounced')
                   AND (mm.sent_at AT TIME ZONE COALESCE(cfg.timezone,'America/Lima'))::date = (NOW() AT TIME ZONE COALESCE(cfg.timezone,'America/Lima'))::date)
-                >= LEAST(mb3.ramp_target, mb3.ramp_start + mb3.ramp_step * FLOOR(GREATEST(((NOW() AT TIME ZONE COALESCE(cfg.timezone,'America/Lima'))::date - mb3.ramp_started_on), 0)::numeric / 7)::int))
+                >= CASE WHEN mb3.daily_limit > 0 THEN mb3.daily_limit ELSE LEAST(mb3.ramp_target, mb3.ramp_start + mb3.ramp_step * FLOOR(GREATEST(((NOW() AT TIME ZONE COALESCE(cfg.timezone,'America/Lima'))::date - mb3.ramp_started_on), 0)::numeric / 7)::int) END)
      ORDER BY m.sequence_id, m.created_at ASC
   `);
-  for (const m of due) {
+  for (const m of due.slice().sort((a, b) => new Date(a.scheduled_at || 0) - new Date(b.scheduled_at || 0))) {   // orden de programación: sale primero lo que lleva más tiempo esperando
     try {
+      // El buzón es compartido: si ya está lleno hoy (por esta o por otra secuencia), este queda para mañana, en su orden.
+      if (await _mailboxFull(pool, m.ocid, m.timezone || 'America/Lima')) continue;
       // Ventana horaria, fin de semana y DÍAS DE CADENCIA de la secuencia: aprobar un
       // sábado (o fuera de horario) NO dispara el envío — espera al próximo día hábil
       // permitido dentro de la ventana. El intervalo (5 min) se aplica igual.
