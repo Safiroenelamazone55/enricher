@@ -22416,6 +22416,7 @@ ${foot}
       </div>
       <input class="form-input seq-app__subj" id="noe-subj-${row.enr_id}" value="${esc(row.asunto)}" placeholder="Asunto">
       <textarea class="form-input seq-app__body" id="noe-body-${row.enr_id}" style="min-height:max(calc(100vh - 460px), 200px)">${esc(row.cuerpo)}</textarea>
+      ${_seqSigHtml()}
       <div class="seq-app__ft">
         <span class="sp"></span>
         <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.seqCompleteEmailApprove(${row.enr_id})">✓ Completar y aprobar</button>
@@ -22565,6 +22566,15 @@ ${foot}
                : '✓ Borrador guardado', 'success');
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
+
+  // Firma que se añadirá al enviar: la del buzón del cliente de esta secuencia; si no tiene, la global de Configuración.
+  function _seqSigHtml() {
+    const s = (_sequences || []).find(x => x.id === _activeSeq);
+    const cli = s && s.outbound_client_id ? (_clients || []).find(c => c.id === s.outbound_client_id) : null;
+    const mb = cli ? _mbFor(cli.id) : null;
+    const sig = (mb && mb.signature_html) || ((typeof _sendCfg !== 'undefined' && _sendCfg && _sendCfg.firma) || '');
+    return sig ? '<div class="seq-app__sigl">Firma · se añade al enviar</div><div class="seq-app__sig">' + sig + '</div>' : '';
+  }
   function _seqAppCard(a) {
     const nm = [a.nombre, a.apellido].filter(Boolean).join(' ') || a.to_email;
     const approved = a.estado === 'approved';
@@ -22583,6 +22593,7 @@ ${foot}
       </div>
       <input class="form-input seq-app__subj" id="app-subj-${a.id}" value="${esc(a.asunto)}" ${approved ? 'disabled' : ''} placeholder="Asunto">
       <textarea class="form-input seq-app__body seq-app__body--full" id="app-body-${a.id}" ${approved ? 'disabled' : ''}>${esc(a.cuerpo)}</textarea>
+      ${_seqSigHtml()}
       <div class="seq-app__ft">
         ${approved ? '' : `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqAppAction(${a.id},'save')">Guardar cambios</button>`}
         <span class="sp"></span>
