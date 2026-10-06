@@ -17929,3 +17929,5 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 .dup-body{padding:6px 24px 16px;display:flex;flex-direction:column;gap:14px}
 .dup-f{display:flex;flex-direction:column;gap:5px}.dup-f>span{font-size:.78rem;color:#64748B}
 .dup-note{padding:12px 14px;background:#F7F8F6;border:1px solid #E8E6E1;font-size:.8rem;line-height:1.5;color:#475569}
+
+.dup-f em{font-style:normal;color:#94A3B8}

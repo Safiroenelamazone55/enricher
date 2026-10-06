@@ -9155,7 +9155,16 @@ app.post('/api/sequences/:id/duplicate', requireAuth, async (req, res) => {
       }
       cli = want;
     }
-    const campaign = (cli === src.outbound_client_id) ? src.campaign_id : null;   // la campaña pertenece a un cliente
+    // Campaña (opcional): si la envían, debe ser del mismo cliente; si no, se conserva la original solo cuando el cliente no cambia.
+    let campaign = (cli === src.outbound_client_id) ? src.campaign_id : null;
+    if (b.campaign_id !== undefined) {
+      const wantC = b.campaign_id === '' || b.campaign_id === null ? null : (parseInt(b.campaign_id) || null);
+      if (wantC) {
+        const { rows: [okc] } = await cx.query('SELECT id, outbound_client_id FROM campaigns WHERE id=$1 AND user_id=$2', [wantC, uid]);
+        if (!okc || okc.outbound_client_id !== cli) return res.status(400).json({ error: 'Esa campaña no pertenece al cliente elegido' });
+      }
+      campaign = wantC;
+    }
     const nombre = String(b.nombre || '').trim().slice(0, 200) || (src.nombre + ' (copia)');
     await cx.query('BEGIN');
     const { rows: [ns] } = await cx.query(

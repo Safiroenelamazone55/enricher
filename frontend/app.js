@@ -20529,7 +20529,8 @@ const LeadManagerModule = (() => {
       '<div class="fin-pi-box__hd"><h3>Duplicar secuencia</h3><button class="fin-pi-x" onclick="document.getElementById(\'lm-dup-modal\').remove()">✕</button></div>' +
       '<div class="dup-body">' +
         '<label class="dup-f"><span>Nombre de la copia</span><input class="form-input" id="dup-nombre" value="' + esc(s.nombre + ' (copia)') + '"></label>' +
-        '<label class="dup-f"><span>Cliente</span><select class="form-input" id="dup-cli">' + cliOpts + '</select></label>' +
+        '<label class="dup-f"><span>Cliente</span><select class="form-input" id="dup-cli" onchange="LeadManagerModule.seqDupCli()">' + cliOpts + '</select></label>' +
+        '<label class="dup-f"><span>Campaña <em>(opcional)</em></span><select class="form-input" id="dup-camp">' + _dupCampOpts(s.outbound_client_id, s.campaign_id) + '</select></label>' +
         '<div class="dup-note"><b>Se copia:</b> los ' + nsteps + ' paso' + (nsteps === 1 ? '' : 's') + ' con sus mensajes, asuntos, variantes A/B, condiciones y el hilo de respuesta; y los ajustes de envío (horario, cadencia, límite, modo).<br><b>No se copia:</b> los contactos, los envíos ni las métricas. La copia queda como <b>borrador</b>, sin fecha de inicio: revísala y lánzala cuando quieras.</div>' +
       '</div>' +
       '<div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns"><button class="btn btn--ghost btn--sm" onclick="document.getElementById(\'lm-dup-modal\').remove()">Cancelar</button><button class="btn btn--primary btn--sm" id="dup-go" onclick="LeadManagerModule.seqDuplicateDo(' + seqId + ')">Duplicar</button></div></div>' +
@@ -20537,11 +20538,20 @@ const LeadManagerModule = (() => {
     document.body.appendChild(m);
     setTimeout(() => { const i = $('dup-nombre'); if (i) { i.focus(); i.select(); } }, 40);
   }
+  // Campañas del cliente elegido (la campaña pertenece a un cliente): la original queda marcada si el cliente no cambia.
+  function _dupCampOpts(cid, cur) {
+    const list = cid ? _campaignsByClient(Number(cid)) : [];
+    return '<option value="">Sin campaña</option>' + list.map(c => '<option value="' + c.id + '"' + (cur && c.id === cur ? ' selected' : '') + '>' + esc(c.nombre) + '</option>').join('');
+  }
+  function seqDupCli() {
+    const sel = $('dup-camp'), cli = $('dup-cli'); if (!sel || !cli) return;
+    sel.innerHTML = _dupCampOpts(cli.value, null);
+  }
   async function seqDuplicateDo(seqId) {
     const nombre = ($('dup-nombre')?.value || '').trim(), cli = $('dup-cli')?.value || '';
     const btn = $('dup-go'); if (btn) { btn.disabled = true; btn.textContent = 'Duplicando…'; }
     try {
-      const r = await apiFetch(API + '/sequences/' + seqId + '/duplicate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre, outbound_client_id: cli }) });
+      const r = await apiFetch(API + '/sequences/' + seqId + '/duplicate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre, outbound_client_id: cli, campaign_id: ($('dup-camp') || {}).value || '' }) });
       const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Error');
       document.getElementById('lm-dup-modal')?.remove();
       await load();
@@ -33229,7 +33239,7 @@ ${foot}
     openDrawer, closeDrawer, save, confirmDelete, convertToClient,
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
     openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
-    openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, seqRotEmpresaToggle, confirmDeleteSequence, seqDuplicateOpen, seqDuplicateDo, seqTab, seqPasosToggle, seqMoreMenu, seqAddContactOpen, _seqAddSearch, seqAddContactPick, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
+    openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, seqRotEmpresaToggle, confirmDeleteSequence, seqDuplicateOpen, seqDupCli, seqDuplicateDo, seqTab, seqPasosToggle, seqMoreMenu, seqAddContactOpen, _seqAddSearch, seqAddContactPick, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
     seqAppAction, seqAppNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, taskApprove, seqCompleteEmailApprove, seqNoEmailNav,
     seqNoEmailMenu, seqNoEmailSkip, seqNoEmailInvalid, seqNoEmailRemove, seqNoEmailAccepted,
     seqTaskOpen, seqDoClose, seqDoCopy, seqDoDone, seqDoSkip, seqDoPrev, seqDoEditStep, seqDoExit, seqOpenLinkedIn,
