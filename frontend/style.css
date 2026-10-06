@@ -17946,3 +17946,15 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 .dl-card[draggable="true"]{cursor:grab}
 .dl-card.dragging{opacity:.45;cursor:grabbing}
 .dl-col--over{outline:2px dashed #00804C;outline-offset:-2px;background:#EEF6F1}
+
+/* Tareas comerciales: contadores a todo el ancho, centrados, filtran; Prioridad con color propio */
+.lm-stat-strip{display:grid !important;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));width:100%}
+.lm-stat--btn{border:0;background:#fff;cursor:pointer;font:inherit;display:flex !important;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:14px 8px;text-align:center;border-right:1px solid #EEECE8;transition:background .12s}
+.lm-stat--btn:last-child{border-right:0}
+.lm-stat--btn:hover{background:#F7F8F6}
+.lm-stat--btn.on{background:#EEF6F1;box-shadow:inset 0 -3px 0 #00804C}
+.lm-stat--priority{background:#F5F3FF}
+.lm-stat--priority .lm-stat__l{color:#6D28D9}
+.lm-stat--priority .lm-stat__n{color:#5B21B6}
+.lm-stat--priority:hover{background:#EDE9FE}
+.lm-prio-link{margin:0 0 10px}.lm-prio-link a{font-size:.82rem;color:#64748B;text-decoration:none}.lm-prio-link a:hover{color:#00804C}

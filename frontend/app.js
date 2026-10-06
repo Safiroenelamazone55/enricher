@@ -23896,33 +23896,49 @@ ${foot}
     const paCta = _acceptCtaHtml();
     const totalAwaiting = (_sequences || []).reduce((t, s) => t + (s.awaiting || 0) + (s.no_email_pending || 0), 0);
     // Stat strip (patrón referencia: número grande + label uppercase muted)
-    const stat = (l, n, warn) => `<div class="lm-stat"><span class="lm-stat__l">${l}</span><span class="lm-stat__n${warn ? ' lm-stat__n--warn' : ''}">${n}</span></div>`;
+    const stat = (k, l, n, warn) => '<button type="button" class="lm-stat lm-stat--btn lm-stat--' + k + (_taskStat === k ? ' on' : '') + '" onclick="LeadManagerModule.taskStat(\'' + k + '\')" title="' + (k === 'accept' ? 'Abrir la lista para marcar quién aceptó tu conexión' : k === 'priority' ? 'Centro de prioridad: respuestas, aprobaciones, fallos y más' : 'Clic para filtrar la lista; otro clic para quitar el filtro') + '"><span class="lm-stat__l">' + l + '</span><span class="lm-stat__n' + (warn ? ' lm-stat__n--warn' : '') + '">' + n + '</span></button>';
     const statStrip = anything ? `<div class="lm-stat-strip">
-      ${stat('Vencidas', seqOver.length, seqOver.length > 0)}
-      ${stat('Para hoy', seqHoy.length + actToday.length, false)}
-      ${stat('Próximas', seqFuture.length, false)}
-      ${stat('Follow-ups', acts.length, false)}
-      ${stat('Por aceptar', _pendingAccept().length, false)}
-      ${totalAwaiting ? stat('Por aprobar', totalAwaiting, true) : ''}
+      ${stat('over', 'Vencidas', seqOver.length, seqOver.length > 0)}
+      ${stat('today', 'Para hoy', seqHoy.length + actToday.length, false)}
+      ${stat('priority', 'Prioridad', (_tiData && Array.isArray(_tiData.items)) ? _tiData.items.length : '—', false)}
+      ${stat('next', 'Próximas', seqFuture.length, false)}
+      ${stat('follow', 'Follow-ups', acts.length, false)}
+      ${stat('accept', 'Por aceptar', _pendingAccept().length, false)}
+      ${totalAwaiting ? stat('approve', 'Por aprobar', totalAwaiting, true) : ''}
     </div>` : '';
-    const listHtml = `${_apSectionHtml()}${seqOver.length ? `<div class="lm-tsec-h lm-tsec-h--over"><span class="lm-tsec-h__dot"></span>Vencidas<span class="lm-tsec-h__n">${seqOver.length}</span></div><div class="seq-tasks">${seqOver.map(t => _allTaskRow(t, today)).join('')}</div>` : ''}
-      ${seqHoy.length ? `<div class="lm-tsec-h lm-tsec-h--today"><span class="lm-tsec-h__dot"></span>Hoy<span class="lm-tsec-h__n">${seqHoy.length}</span></div><div class="seq-tasks">${seqHoy.map(t => _allTaskRow(t, today)).join('')}</div>` : ''}
-      ${(!seqToday.length && all.length) ? `<div class="lm-task-empty"><span class="lm-task-empty__i">${NI('check', 13)}</span>Al día — sin tareas de secuencia para hoy. La siguiente aparece abajo.</div>` : ''}
-      ${(hasFilter && !all.length) ? `<div class="lm-task-empty"><span class="lm-task-empty__i">${NI('check', 13)}</span>Sin tareas de secuencia para este filtro.</div>` : ''}
-      ${nextLine}
-      ${acts.length ? `<div class="lm-tsec-h"><span class="lm-tsec-h__dot"></span>Follow-ups y tareas sueltas<span class="lm-tsec-h__n">${acts.length}</span></div><div class="lm-feed">${acts.map(a => _actRow(a, true)).join('')}</div>` : ''}
-      ${anything ? '' : _empty('tasks', 'Sin tareas pendientes', 'Enrola contactos en secuencias o crea follow-ups; aparecerán aquí ordenados por fecha.', _data.length ? 'Nueva tarea' : '', _data.length ? 'LeadManagerModule.openActivityDrawer(null,null,1)' : '')}`;
+    const sel = _taskStat;
+    const showApr = !sel || sel === 'approve', showOver = !sel || sel === 'over', showHoy = !sel || sel === 'today';
+    const actsShown = sel === 'today' ? actToday : (!sel || sel === 'follow') ? acts : [];
+    const hdr = (cls, txt, n) => '<div class="lm-tsec-h' + cls + '"><span class="lm-tsec-h__dot"></span>' + txt + '<span class="lm-tsec-h__n">' + n + '</span></div>';
+    const blocks = [];
+    if (showApr) blocks.push(_apSectionHtml());
+    if (showOver && seqOver.length) blocks.push(hdr(' lm-tsec-h--over', 'Vencidas', seqOver.length) + '<div class="seq-tasks">' + seqOver.map(x => _allTaskRow(x, today)).join('') + '</div>');
+    if (showHoy && seqHoy.length) blocks.push(hdr(' lm-tsec-h--today', 'Hoy', seqHoy.length) + '<div class="seq-tasks">' + seqHoy.map(x => _allTaskRow(x, today)).join('') + '</div>');
+    if (sel === 'next' && seqFuture.length) blocks.push(hdr('', 'Próximas', seqFuture.length) + '<div class="seq-tasks">' + seqFuture.map(x => _allTaskRow(x, today)).join('') + '</div>');
+    if (!sel && !seqToday.length && all.length) blocks.push('<div class="lm-task-empty"><span class="lm-task-empty__i">' + NI('check', 13) + '</span>Al día — sin tareas de secuencia para hoy. La siguiente aparece abajo.</div>');
+    if (!sel && hasFilter && !all.length) blocks.push('<div class="lm-task-empty"><span class="lm-task-empty__i">' + NI('check', 13) + '</span>Sin tareas de secuencia para este filtro.</div>');
+    if (!sel) blocks.push(nextLine);
+    if (actsShown.length) blocks.push(hdr('', 'Follow-ups y tareas sueltas', actsShown.length) + '<div class="lm-feed">' + actsShown.map(a => _actRow(a, true)).join('') + '</div>');
+    if (sel && !blocks.some(b => b && String(b).trim())) blocks.push('<div class="lm-task-empty"><span class="lm-task-empty__i">' + NI('check', 13) + '</span>Nada pendiente en esta vista. <a href="#" onclick="event.preventDefault();LeadManagerModule.taskStat(\'' + sel + '\')">Quitar filtro</a></div>');
+    const listHtml = blocks.join('') + (anything ? '' : _empty('tasks', 'Sin tareas pendientes', 'Enrola contactos en secuencias o crea follow-ups; aparecerán aquí ordenados por fecha.', _data.length ? 'Nueva tarea' : '', _data.length ? 'LeadManagerModule.openActivityDrawer(null,null,1)' : ''));
     return `
       <div class="lm-sec-head">
         <div><h2 class="lm-sec-title">Tareas comerciales</h2></div>
-        <div class="lm-hd-actions"><div class="task-viewtoggle"><button class="tvt${_taskView === 'list' ? ' on' : ''}" onclick="LeadManagerModule.taskSetView('list')">Lista</button><button class="tvt${_taskView === 'calendar' ? ' on' : ''}" onclick="LeadManagerModule.taskSetView('calendar')">Calendario</button><button class="tvt${_taskView === 'priority' ? ' on' : ''}" onclick="LeadManagerModule.taskSetView('priority')" title="Centro de tareas por prioridad: respuestas, aprobaciones, fallos, vencidas, hoy, LinkedIn aceptado y datos faltantes">Prioridad</button></div>${_data.length ? `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openActivityDrawer(null,null,1)">＋ Nueva tarea</button>` : ''}</div>
+        <div class="lm-hd-actions"><div class="view-tabs"><button class="view-tab${_taskView === 'list' ? ' active' : ''}" title="Lista" aria-label="Lista" onclick="LeadManagerModule.taskSetView('list')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></button><button class="view-tab${_taskView === 'calendar' ? ' active' : ''}" title="Calendario" aria-label="Calendario" onclick="LeadManagerModule.taskSetView('calendar')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></button></div>${_data.length ? `<button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openActivityDrawer(null,null,1)">＋ Nueva tarea</button>` : ''}</div>
       </div>
-      ${_taskView === 'priority' ? _vTaskInboxPriority() : ''}
+      ${_taskView === 'priority' ? '<div class="lm-prio-link"><a href="#" onclick="event.preventDefault();LeadManagerModule.taskSetView(\'list\')">‹ Volver a la lista</a></div>' + _vTaskInboxPriority() : ''}
       ${_taskView === 'calendar' ? _vTaskCalendar() : ''}
       ${_taskView === 'list' ? `${statStrip}${paCta}${filterRow}${listHtml}` : ''}`;
   }
   function _monthStart(d) { return new Date(d.getFullYear(), d.getMonth(), 1); }
   function _dayKey(d) { const x = _dayOf(d); return x.getFullYear() + '-' + (x.getMonth() + 1) + '-' + x.getDate(); }
+  let _taskStat = '';   // contador elegido en Tareas comerciales ('' = todo)
+  function taskStat(k) {
+    if (k === 'accept') { pendingAcceptOpen(); return; }
+    if (k === 'priority') { taskSetView('priority'); return; }
+    _taskStat = (_taskStat === k) ? '' : k;
+    _renderBody();
+  }
   function taskSetView(v) { _taskView = v; if (v === 'priority' && _tiData === null) _tiReload(); _renderBody(); }
   // ── Bloque 8: Centro de tareas por prioridad (GET /api/lm/tasks/inbox) ──
   async function _tiReload() {
@@ -33304,7 +33320,7 @@ ${foot}
     ldRefer, ldReferSave, ldNurture, ldNurtureSave, ldOpenDispoMenu,
     nurtureRetomarMenu, nurtureReinscribir, nurtureOtraSecuencia, nurtureSoloManual,
     waitingContactMenu, activarSiguienteContacto, waitingCerrarAviso,
-    dlSetCli, dlDragStart, dlDragEnd, dlDragOver, dlDragLeave, dlDrop, dlSetView, dlCardMenu, dlPopClose, dlCalNav, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel, seqMailSync, stepReplyTo, mtOpen, mtClose, mtSeg, mtTimes, mtProg, mtChips, mtAddCc, mtSave, mtSend, mtCancel,
+    dlSetCli, dlDragStart, dlDragEnd, dlDragOver, dlDragLeave, dlDrop, dlSetView, dlCardMenu, dlPopClose, dlCalNav, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel, taskStat, seqMailSync, stepReplyTo, mtOpen, mtClose, mtSeg, mtTimes, mtProg, mtChips, mtAddCc, mtSave, mtSend, mtCancel,
     sqSetCli, sqSetEst, sqSetQ, cmSetCli, cmSetEst, cmSetQ,
     seqRunSetCanal, seqTaskSetDue,
     mbOpen, mbClose, mbSave, mbTest, mbDelete, mbProv, mbOAuthStart, mbManageOpen, mbManageClose,
