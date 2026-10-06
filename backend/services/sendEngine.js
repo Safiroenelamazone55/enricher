@@ -260,7 +260,7 @@ async function _advance(pool, enr, steps, curIdx) {
 }
 
 // Procesa UN workspace: devuelve true si envió un email (para logging).
-async function _tickWorkspace(pool, cfg, apiBase, gmailCallback) {
+async function _tickWorkspace(pool, cfg, apiBase, gmailCallback, served = [0]) {
   const uid = cfg.user_id;
   // Nota: el día de la semana (wdIdx, usado más abajo contra send_days) se calcula en
   // la hora del WORKSPACE — es solo para saber "qué día es hoy" a fin de agenda, no
@@ -275,13 +275,14 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback) {
         AND (sent_at AT TIME ZONE $2)::date = (NOW() AT TIME ZONE $2)::date`,
     [uid, cfg.timezone || 'America/Lima']
   );
-  if (cnt.n >= cfg.daily_limit) return false;
+  // El tope diario del WORKSPACE se eliminó: los límites son por BUZÓN (calentamiento) y, si la persona lo define, por secuencia.
+  // Con muchos buzones un tope global haría que unos esperen a otros. (cnt queda por si se quiere mostrar.)
 
   // Throttle: espacio mínimo entre envíos
   const { rows: [last] } = await pool.query(
     `SELECT MAX(sent_at) AS at FROM lm_messages WHERE user_id=$1 AND sent_at IS NOT NULL`, [uid]
   );
-  if (last?.at && (Date.now() - new Date(last.at).getTime()) < cfg.throttle_seconds * 1000) return false;
+  // (el espaciado mínimo ahora es por CLIENTE/buzón, no global: ver más abajo)
 
   // Enrolamiento más atrasado que ya toca (NULL = recién enrolado, también toca).
   // Solo secuencias ACTIVAS: pausar la secuencia detiene todos sus envíos.
@@ -290,7 +291,7 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback) {
            k.nombre, k.apellido, k.email, k.cargo, k.empresa_nombre, k.ciudad, k.pais,
            k.seniority, k.departamento, k.buyer_role, k.region, k.contact_priority, k.company_id,
            k.email_status, k.disposition, k.li_aceptado_at, co.nombre AS company_nombre, s.nombre AS seq_nombre, s.send_days,
-           s.send_mode, s.send_interval_min, s.timezone AS seq_timezone, s.rotacion_empresa_paso
+           s.send_mode, s.send_interval_min, s.timezone AS seq_timezone, s.rotacion_empresa_paso, s.outbound_client_id
       FROM lm_contact_sequences cs
       JOIN sequences   s  ON s.id = cs.sequence_id AND s.estado = 'activa'
       JOIN lm_contacts k  ON k.id = cs.contact_id
@@ -335,10 +336,20 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback) {
              WHERE m.sequence_id = s.id AND m.estado IN ('sent','replied','bounced')
                AND (m.sent_at AT TIME ZONE $2)::date = (NOW() AT TIME ZONE $2)::date
            ) < s.daily_limit)
+       -- Reparto justo: cada vuelta atiende UNA vez a cada secuencia (la de más atraso primero), no siempre a la misma.
+       AND cs.sequence_id <> ALL($3::int[])
      ORDER BY cs.next_action_at ASC NULLS FIRST
      LIMIT 1
-  `, [uid, cfg.timezone || 'America/Lima']);
+  `, [uid, cfg.timezone || 'America/Lima', served]);
   if (!enr) return false;
+  cfg._lastSeq = enr.sequence_id;
+
+  // Espaciado mínimo entre envíos del MISMO cliente/buzón (antes era global y una sola secuencia lo acaparaba).
+  if (cfg.throttle_seconds > 0 && enr.outbound_client_id) {
+    const { rows: [lc] } = await pool.query(
+      `SELECT MAX(m.sent_at) AS at FROM lm_messages m JOIN sequences ss ON ss.id = m.sequence_id WHERE ss.outbound_client_id = $1 AND m.sent_at IS NOT NULL`, [enr.outbound_client_id]);
+    if (lc?.at && (Date.now() - new Date(lc.at).getTime()) < cfg.throttle_seconds * 1000) return false;
+  }
 
   // Días de cadencia de la secuencia: si hoy no es día permitido, reprograma al próximo día permitido.
   const seqMask = _sanSendDays(enr.send_days);
@@ -598,7 +609,7 @@ async function _flushScheduled(pool, apiBase) {
       LEFT JOIN lm_send_settings cfg ON cfg.user_id = m.user_id
      WHERE m.estado='scheduled' AND m.scheduled_at <= NOW()
      ORDER BY m.scheduled_at ASC
-     LIMIT 10
+     LIMIT 200
   `);
   for (const m of due) {
     try {
@@ -686,6 +697,15 @@ async function _flushApproved(pool, apiBase) {
              WHERE mi.sequence_id = m.sequence_id AND mi.sent_at IS NOT NULL
                AND mi.sent_at > NOW() - make_interval(mins => GREATEST(COALESCE(s.send_interval_min,5),1))
            )
+       -- Mismos topes que el envío automático: el límite PROPIO de la secuencia manda; si no tiene, el calentamiento del buzón.
+       -- Lo que no cabe hoy espera a mañana por SU propio tope, nunca por lo que hagan otras secuencias o clientes.
+       AND (COALESCE(s.daily_limit,0) <= 0 OR (SELECT COUNT(*) FROM lm_messages x WHERE x.sequence_id = s.id AND x.estado IN ('sent','replied','bounced')
+            AND (x.sent_at AT TIME ZONE COALESCE(cfg.timezone,'America/Lima'))::date = (NOW() AT TIME ZONE COALESCE(cfg.timezone,'America/Lima'))::date) < s.daily_limit)
+       AND NOT EXISTS (SELECT 1 FROM lm_mailboxes mb3 WHERE mb3.outbound_client_id = s.outbound_client_id AND mb3.ramp_on AND mb3.ramp_started_on IS NOT NULL
+            AND COALESCE(s.daily_limit,0) <= 0
+            AND (SELECT COUNT(*) FROM lm_messages mm JOIN sequences ss ON ss.id = mm.sequence_id WHERE ss.outbound_client_id = mb3.outbound_client_id AND mm.estado IN ('sent','replied','bounced')
+                  AND (mm.sent_at AT TIME ZONE COALESCE(cfg.timezone,'America/Lima'))::date = (NOW() AT TIME ZONE COALESCE(cfg.timezone,'America/Lima'))::date)
+                >= LEAST(mb3.ramp_target, mb3.ramp_start + mb3.ramp_step * FLOOR(GREATEST(((NOW() AT TIME ZONE COALESCE(cfg.timezone,'America/Lima'))::date - mb3.ramp_started_on), 0)::numeric / 7)::int))
      ORDER BY m.sequence_id, m.created_at ASC
   `);
   for (const m of due) {
@@ -920,7 +940,15 @@ async function tick(pool, apiBase, gmailCallback) {
     await _flushApproved(pool, apiBase).catch(e => console.warn('[send-engine] approved:', e.message));
     const { rows: configs } = await pool.query(`SELECT * FROM lm_send_settings WHERE enabled = TRUE`);
     for (const cfg of configs) {
-      try { await _tickWorkspace(pool, cfg, apiBase, gmailCallback); }
+      try {
+        const served = [0];
+        for (let i = 0; i < 100; i++) {
+          cfg._lastSeq = null;
+          await _tickWorkspace(pool, cfg, apiBase, gmailCallback, served);
+          if (!cfg._lastSeq) break;
+          served.push(cfg._lastSeq);
+        }
+      }
       catch (e) { console.warn(`[send-engine] workspace ${cfg.user_id}:`, e.message); }
     }
   } catch (e) {
