@@ -5960,7 +5960,7 @@ app.get('/api/lm/nav-counts', requireAuth, async (req, res) => {
       pool.query(`SELECT COUNT(*)::int n FROM lm_inbox_messages
                    WHERE user_id=$1 AND NOT leido AND tipo='reply'`, [uid]),
       pool.query(`SELECT COUNT(*)::int n FROM activities
-                   WHERE user_id=$1 AND estado='pendiente' AND fecha::date <= CURRENT_DATE`, [uid]),
+                   WHERE user_id=$1 AND estado='pendiente' AND fecha::date <= CURRENT_DATE AND NOT EXISTS (SELECT 1 FROM sequences sx WHERE sx.user_id=activities.user_id AND sx.estado<>'activa' AND left(activities.nota, length(sx.nombre) + 2) = '[' || sx.nombre || ']')`, [uid]),
       pool.query(`SELECT COUNT(*)::int n FROM lm_messages m JOIN sequences sq ON sq.id=m.sequence_id
                    WHERE m.user_id=$1 AND m.estado='awaiting' AND sq.estado='activa'`, [uid]),
       pool.query(`SELECT COUNT(*)::int n FROM lm_contacts
@@ -9240,11 +9240,22 @@ app.put('/api/sequences/:id', requireAuth, async (req, res) => {
       reanchored = await _reanchorPendingEnrollments(req.workspaceOwnerId, rows[0].id).catch(e => { console.warn('[seq] reanchor:', e.message); return 0; });
       if (reanchored) console.log(`[seq] "${rows[0].nombre}": ${reanchored} enrolamiento(s) re-anclados por cambio de cadencia/fecha`);
     }
+    if (estado !== 'activa') await _archiveSeqTasks(req.workspaceOwnerId, rows[0].nombre).catch(() => {});
     res.json({ ...rows[0], reanchored });
   } catch (err) { console.error('[seq] PUT error:', err.message); res.status(500).json({ error: 'Error al actualizar secuencia' }); }
 });
+// Una secuencia que se pausa, termina, archiva o elimina NO deja tareas abiertas: se cierran las tareas pendientes que el sistema abrió para ella
+// (llevan "[nombre de la secuencia]" al inicio). Las de revisión de respuestas y los follow-ups manuales no se tocan.
+async function _archiveSeqTasks(uid, nombre) {
+  if (!nombre) return 0;
+  const { rowCount } = await pool.query(
+    `UPDATE activities SET estado='hecha' WHERE user_id=$1 AND estado='pendiente' AND tipo='tarea' AND left(nota, length($2) + 2) = '[' || $2 || ']'`, [uid, nombre]);
+  return rowCount;
+}
 app.delete('/api/sequences/:id', requireAuth, async (req, res) => {
   try {
+    const { rows: [_sq] } = await pool.query('SELECT nombre FROM sequences WHERE id=$1 AND user_id=$2', [req.params.id, req.workspaceOwnerId]);
+    if (_sq) await _archiveSeqTasks(req.workspaceOwnerId, _sq.nombre).catch(() => {});
     const { rowCount } = await pool.query(`DELETE FROM sequences WHERE id=$1 AND user_id=$2`, [req.params.id, req.workspaceOwnerId]);
     if (!rowCount) return res.status(404).json({ error: 'Secuencia no encontrada' });
     res.json({ ok: true });
@@ -9262,13 +9273,14 @@ app.post('/api/sequences/:id/pause-all', requireAuth, async (req, res) => {
   const uid = req.workspaceOwnerId;
   try {
     const { rows: sRows } = await pool.query(
-      `UPDATE sequences SET estado='pausada', updated_at=NOW() WHERE id=$1 AND user_id=$2 RETURNING id`,
+      `UPDATE sequences SET estado='pausada', updated_at=NOW() WHERE id=$1 AND user_id=$2 RETURNING id, nombre`,
       [req.params.id, uid]);
     if (!sRows.length) return res.status(404).json({ error: 'Secuencia no encontrada' });
     const { rowCount } = await pool.query(
       `UPDATE lm_contact_sequences SET estado='pausado', paused_reason='pausada_manual'
         WHERE user_id=$1 AND sequence_id=$2 AND estado='activo'`,
       [uid, req.params.id]);
+    await _archiveSeqTasks(uid, sRows[0].nombre).catch(() => {});
     res.json({ ok: true, paused: rowCount });
   } catch (err) { console.error('[seq] pause-all error:', err.message); res.status(500).json({ error: 'Error al pausar todo' }); }
 });

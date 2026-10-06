@@ -22212,7 +22212,7 @@ ${foot}
     (_contacts || []).forEach(c => {
       if (['respondio', 'interesado'].includes(c.disposition) || c.li_aceptado_at) return;
       if (c.no_linkedin) return; // LinkedIn no válido → ya no espera aceptación; va por email
-      const seqs = (c.sequences || []).filter(sq => (sq.estado === 'activo' || sq.estado === 'pausado') && ((branch[sq.id] && (sq.paso || 1) > 1) || inviteDone(sq)));
+      const seqs = (c.sequences || []).filter(sq => (sq.estado === 'activo' || sq.estado === 'pausado') && (((_sequences || []).find(x => x.id === sq.id) || {}).estado === 'activa') && ((branch[sq.id] && (sq.paso || 1) > 1) || inviteDone(sq)));
       if (seqs.length) out.push({ c, seqs });
     });
     return out;
@@ -23885,7 +23885,9 @@ ${foot}
     </div>` : '';
     const seqOver = seqToday.filter(t => t.due < today).sort((a, b) => a.due - b.due || (a.st.hora || '99:99').localeCompare(b.st.hora || '99:99'));
     const seqHoy = seqToday.filter(t => t.due.getTime() === today.getTime()).sort((a, b) => (a.st.hora || '99:99').localeCompare(b.st.hora || '99:99'));
-    const acts = _activities.filter(a => a.estado === 'pendiente').sort((x, y) => new Date(x.fecha) - new Date(y.fecha));
+    const _inactiveNames = (_sequences || []).filter(x => x.estado !== 'activa').map(x => x.nombre);
+    const _ofInactiveSeq = a => a.tipo === 'tarea' && _inactiveNames.some(nm => String(a.nota || '').startsWith('[' + nm + ']'));
+    const acts = _activities.filter(a => a.estado === 'pendiente' && !_ofInactiveSeq(a)).sort((x, y) => new Date(x.fecha) - new Date(y.fecha));
     const actToday = acts.filter(a => _dayOf(a.fecha) <= today);
     const nextLine = seqFuture.length ? `<div class="seq-next">${NI('calendar', 12)} Siguiente tarea de secuencia: <b>${_relDay(seqFuture[0].due)}</b>${seqFuture.length > 1 ? ` · +${seqFuture.length - 1} más próximas` : ''}</div>` : '';
     const anything = allRaw.length || acts.length || (Array.isArray(_apList) && _apList.length);

@@ -894,7 +894,15 @@ async function _draftPreapprovedBatch(pool, seen) {
 // Sin tope: procesa en tandas de 500 hasta agotar a TODOS los contactos pendientes (con 20 buzones y miles de
 // enrolados un cupo fijo dejaría secuencias sin borrador). Cada contacto visto sale del lote siguiente, así que
 // termina sola; solo la frena un presupuesto de 45 s por pasada (lo que falte sigue en la próxima, 60 s después).
+let _lastTaskSweep = 0;
 async function _draftPreapproved(pool) {
+  // Barrido (cada ~10 min): las tareas que el sistema abrió para una secuencia que ya NO está activa (pausada, cerrada, archivada) se cierran.
+  if (Date.now() - _lastTaskSweep > 10 * 60 * 1000) {
+    _lastTaskSweep = Date.now();
+    await pool.query(`UPDATE activities a SET estado='hecha' FROM sequences s
+        WHERE a.estado='pendiente' AND a.tipo='tarea' AND s.user_id=a.user_id AND s.estado<>'activa'
+          AND left(a.nota, length(s.nombre) + 2) = '[' || s.nombre || ']'`).catch(x => console.warn('[send-engine] barrido-tareas:', x.message));
+  }
   // Alinea la fecha de envío de los borradores pendientes con la fecha REAL de su contacto (puede haber cambiado al editar la
   // fecha de inicio, la cadencia o el goteo después de redactarlos; sin esto salían un día antes de lo previsto).
   await pool.query(`UPDATE lm_messages m SET scheduled_at = cs.next_action_at
