@@ -28344,7 +28344,7 @@ ${foot}
         const cli = _clients.find(x => x.id === c.outbound_client_id);
         const cierre = c.deal_cierre ? String(c.deal_cierre).slice(0, 10) : '';
         const late = cierre && cierre < today && (st === 'propuesta' || st === 'negociacion');
-        return `<div class="dl-card" onclick="LeadManagerModule.dlOpen(${c.id})">
+        return `<div class="dl-card" draggable="true" ondragstart="LeadManagerModule.dlDragStart(event,${c.id})" ondragend="LeadManagerModule.dlDragEnd(event)" onclick="LeadManagerModule.dlOpen(${c.id})">
           <div class="dl-card__n dl-card__nr"><span>${esc(full)}</span><button class="dl-card__mt" title="Opciones" onclick="event.stopPropagation();LeadManagerModule.dlCardMenu(event,${c.id})"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg></button></div>
           <div class="dl-card__s">${esc([c.company_nombre, cli && cli.nombre].filter(Boolean).join(' · ')) || '&nbsp;'}</div>
           <div class="dl-card__row">
@@ -28353,7 +28353,7 @@ ${foot}
             ${cierre ? `<span class="dl-card__date${late ? ' dl-card__date--late' : ''}">${_ldFmtDate(cierre + 'T12:00:00')}</span>` : ''}
           </div>${(st === 'perdido' && c.deal_motivo_perdida) ? `<div class="dl-card__s" style="margin-top:4px">Motivo: ${esc(c.deal_motivo_perdida)}</div>` : ''}</div>`;
       }).join('');
-      return `<div class="dl-col dl-col--${st}">
+      return `<div class="dl-col dl-col--${st}" ondragover="LeadManagerModule.dlDragOver(event)" ondragleave="LeadManagerModule.dlDragLeave(event)" ondrop="LeadManagerModule.dlDrop(event,'${st}')">
         <div class="dl-col__hd"><span class="cp-mark-dot" style="background:${_stColor(st)}"></span><span class="dl-col__t">${_DL_COL_LBL[st]}</span><span class="dl-col__n">${items.length}</span><span class="dl-col__sum">${_dlSums(items)}</span></div>
         ${cards || '<div class="dl-empty-col">— vacío —</div>'}</div>`;
     };
@@ -28440,6 +28440,33 @@ ${foot}
       showBanner('✓ Recordatorios programados — revisa los mensajes', 'success');
       mtOpen(c.id);
     } catch (e) { showBanner('No se pudo programar la reunión: ' + e.message, 'error'); }
+  }
+  // ── Arrastrar un deal a otra columna para cambiarle la etapa ──
+  function dlDragStart(ev, cid) {
+    try { ev.dataTransfer.setData('text/plain', String(cid)); ev.dataTransfer.effectAllowed = 'move'; } catch (_) {}
+    ev.currentTarget.classList.add('dragging');
+  }
+  function dlDragEnd(ev) {
+    ev.currentTarget.classList.remove('dragging');
+    document.querySelectorAll('.dl-col--over').forEach(x => x.classList.remove('dl-col--over'));
+  }
+  function dlDragOver(ev) { ev.preventDefault(); try { ev.dataTransfer.dropEffect = 'move'; } catch (_) {} ev.currentTarget.classList.add('dl-col--over'); }
+  function dlDragLeave(ev) { if (!ev.currentTarget.contains(ev.relatedTarget)) ev.currentTarget.classList.remove('dl-col--over'); }
+  async function dlDrop(ev, st) {
+    ev.preventDefault();
+    document.querySelectorAll('.dl-col--over').forEach(x => x.classList.remove('dl-col--over'));
+    const cid = parseInt(ev.dataTransfer.getData('text/plain'), 10);
+    const c = _contacts.find(x => x.id === cid); if (!c) return;
+    if (_dlCol(c) === st) return;
+    // Perdido pide el motivo: se abre el deal ya en esa etapa y se confirma al guardar.
+    if (st === 'perdido') { dlOpen(cid, 'perdido'); return; }
+    if (st === 'reunion') {
+      // "Reunión" no es una etapa guardada: volver ahí = quitar la etapa de deal (vuelve a "Respondió").
+      if (_DL_STAGES.includes(c.estado)) await cpSetStage(cid, 'respondio', true);
+    } else {
+      await cpSetStage(cid, st, true);
+    }
+    if (_section === 'deals') _dlPaint();
   }
   function dlSetCli(v) { _dlCli = v; _dlPaint(); }
   function dlClose() { document.getElementById('dl-modal')?.remove(); }
@@ -33273,7 +33300,7 @@ ${foot}
     ldRefer, ldReferSave, ldNurture, ldNurtureSave, ldOpenDispoMenu,
     nurtureRetomarMenu, nurtureReinscribir, nurtureOtraSecuencia, nurtureSoloManual,
     waitingContactMenu, activarSiguienteContacto, waitingCerrarAviso,
-    dlSetCli, dlSetView, dlCardMenu, dlPopClose, dlCalNav, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel, seqMailSync, stepReplyTo, mtOpen, mtClose, mtSeg, mtTimes, mtProg, mtChips, mtAddCc, mtSave, mtSend, mtCancel,
+    dlSetCli, dlDragStart, dlDragEnd, dlDragOver, dlDragLeave, dlDrop, dlSetView, dlCardMenu, dlPopClose, dlCalNav, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel, seqMailSync, stepReplyTo, mtOpen, mtClose, mtSeg, mtTimes, mtProg, mtChips, mtAddCc, mtSave, mtSend, mtCancel,
     sqSetCli, sqSetEst, sqSetQ, cmSetCli, cmSetEst, cmSetQ,
     seqRunSetCanal, seqTaskSetDue,
     mbOpen, mbClose, mbSave, mbTest, mbDelete, mbProv, mbOAuthStart, mbManageOpen, mbManageClose,

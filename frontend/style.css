@@ -17938,3 +17938,11 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 #lm-step-modal .step-var-box{padding-bottom:12px}
 
 .mbh-lim{margin-bottom:12px}
+
+/* Deals: los totales no se salen de la columna + arrastrar y soltar */
+.dl-col{min-width:0;overflow:hidden}
+.dl-col__hd{flex-wrap:wrap;row-gap:2px}
+.dl-col__sum{margin-left:auto;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.dl-card[draggable="true"]{cursor:grab}
+.dl-card.dragging{opacity:.45;cursor:grabbing}
+.dl-col--over{outline:2px dashed #00804C;outline-offset:-2px;background:#EEF6F1}
