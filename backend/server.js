@@ -4024,7 +4024,7 @@ function _sanHora(v) { const s = String(v || '').trim(); const m = s.match(/^(\d
 // + señales de email de un paso concreto: abrió / no abrió / hizo clic / no hizo clic (requieren cond_step_id de un paso de email enviado por Nova)
 function _sanCond(v) { return ['replied', 'no_reply', 'opened', 'not_opened', 'clicked', 'not_clicked'].includes(v) ? v : ''; }
 // Acción del paso dentro del canal (invitación con/sin nota, mensaje, follow, comentario…)
-function _sanAccion(v) { return ['invite_nota', 'invite', 'mensaje', 'inmail', 'follow', 'comentario', 'like', 'visita', 'llamada', 'voicemail'].includes(v) ? v : ''; }
+function _sanAccion(v) { return ['invite_nota', 'invite', 'mensaje', 'inmail', 'follow', 'comentario', 'like', 'visita', 'llamada', 'voicemail', 'inicial', 'seguimiento', 'valor', 'cierre'].includes(v) ? v : ''; }
 // Antigüedad máxima aceptable de la publicación, en días (0 = sin límite).
 function _sanPostDias(v) { const n = parseInt(v); return (n > 0 && n <= 365) ? n : 0; }
 const STEP_REACCIONES = ['recomendar', 'celebrar', 'apoyar', 'me_encanta', 'interesante'];
