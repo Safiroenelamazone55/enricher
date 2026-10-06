@@ -29264,9 +29264,11 @@ ${foot}
   }
 
   // ── Paso de secuencia: drawer ──
-  let _stepOpenSeq = null, _stepOpenId = null;
+  let _stepOpenSeq = null, _stepOpenId = null, _stepReplyTo = null;
   function openStepDrawer(seqId, stepId) {
     _stepOpenSeq = seqId; _stepOpenId = stepId || null;
+    _stepReplyTo = stepId ? ((_steps.find(x => x.id === stepId) || {}).reply_to_step_id || null) : null;
+    setTimeout(() => _stepReplyPickRender(), 0);
     const st = stepId ? _steps.find(x => x.id === stepId) : null;
     _stepFocusTa = 'step-var-0';
     _stepDraft = {
@@ -29307,6 +29309,7 @@ ${foot}
         <div id="step-preview" class="fin-pi-full" style="display:none"></div>
         ${(() => { const sq = (_sequences || []).find(x => x.id === seqId); const cli = (_clients || []).find(c => c.id === sq?.outbound_client_id); const cc = cli?.cc_email || ''; return cc ? `<label class="step-opt fin-pi-full" id="step-cc-wrap" title="Desmárcalo para que este paso salga sin copia"><input type="checkbox" id="step-cc" ${st?.cc_off ? '' : 'checked'} style="width:auto"><span class="step-opt__t">CC del cliente</span><span class="step-opt__m">${esc(cc)}</span></label>` : ''; })()}
         <label class="step-opt fin-pi-full" id="step-reply-wrap" title="Encadena este correo como respuesta al último email enviado al contacto en esta secuencia (antepone Re: al asunto). Si aún no hay email previo, sale como conversación nueva." style="display:${(st?.canal || 'email') === 'email' ? 'flex' : 'none'}"><input type="checkbox" id="step-reply" ${st?.reply_to_prev ? 'checked' : ''} style="width:auto" onchange="LeadManagerModule.stepAccionChange()"><span class="step-opt__t">Responder en el mismo hilo (Re:)</span></label>
+        <div class="fin-pi-full" id="step-reply-pick"></div>
         ${_lmTpls.length ? `<label class="fin-cfg-field fin-pi-full" id="step-tpl-top"><span class="fin-cfg-lbl">Usar plantilla guardada</span><select class="form-input" onchange="LeadManagerModule.stepUseTpl(this.value)"><option value="">— Elegir de la biblioteca —</option>${_lmTpls.map(tp => `<option value="${tp.id}">${esc(tp.nombre)} · ${esc(_tplCanalLabel(tp.canal))}</option>`).join('')}</select></label>` : ''}
         <div id="step-msg" class="fin-pi-full step-msg"></div>
       </div>
@@ -29407,7 +29410,7 @@ ${foot}
   // "sin actividad reciente" es un resultado válido: invitar, escribir, seguir o visitar
   // el perfil funcionan igual aunque no haya publicaciones.
   function _isContentStep(canal, accion) { return canal === 'linkedin' && (accion === 'comentario' || accion === 'like'); }
-  function stepAccionChange() { _stepSyncDraft(); _stepRenderMsg(); }
+  function stepAccionChange() { _stepSyncDraft(); _stepRenderMsg(); _stepReplyPickRender(); }
   function stepCondChange() {
     const sel = $('step-cond'), ref = $('step-cond-ref'), wrap = $('step-cond-ref-wrap'), hint = $('step-cond-hint'); if (!sel) return;
     const refStep = (_stepFormSteps || []).find(x => String(x.id) === String(ref ? ref.value : ''));
@@ -29626,7 +29629,7 @@ ${foot}
     const ccBox = $('step-cc');
     const replyBox = $('step-reply');
     const body = { sequence_id: seqId, dia, canal: $('step-canal')?.value || 'email', titulo: $('step-titulo')?.value.trim() || '', asunto, plantilla, variants, variant_mode: d.mode, variant_field: d.field, orden: dia, hora: $('step-hora')?.value || '', cond: $('step-cond')?.value || '', cond_step_id: $('step-cond')?.value ? ($('step-cond-ref')?.value || null) : null, accion: $('step-accion')?.value || '',
-      post_dias: $('step-post-dias')?.value || '', reaccion: $('step-reaccion')?.value || '', cc_off: ccBox ? !ccBox.checked : false, reply_to_prev: !!(replyBox && replyBox.checked) };
+      post_dias: $('step-post-dias')?.value || '', reaccion: $('step-reaccion')?.value || '', cc_off: ccBox ? !ccBox.checked : false, reply_to_prev: !!(replyBox && replyBox.checked), reply_to_step_id: (replyBox && replyBox.checked) ? (($('step-reply-to') || {}).value || null) : null };
     const btn = $('step-save'); if (btn) btn.disabled = true;
     try {
       const res = await apiFetch(`${API}/sequence-steps${stepId ? '/' + stepId : ''}`, { method: stepId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -29639,18 +29642,38 @@ ${foot}
     const map = { first_name: ctx.nombre, last_name: ctx.apellido, full_name: [ctx.nombre, ctx.apellido].filter(Boolean).join(' '), email: ctx.email, title: ctx.cargo, company: ctx.empresa, city: ctx.ciudad, country: ctx.pais, nombre: ctx.nombre, apellido: ctx.apellido, cargo: ctx.cargo, empresa: ctx.empresa, ciudad: ctx.ciudad, pais: ctx.pais };
     return String(str || '').replace(/\{\{\s*(\w+)\s*\}\}/g, (m, k) => { const v = map[k.toLowerCase()]; return (v == null || v === '') ? `<span class="step-prev-miss">${m}</span>` : `<b class="step-prev-var">${esc(String(v))}</b>`; });
   }
-  // Asunto del email ANTERIOR de la secuencia (el último paso de email antes del que se edita). null = no hay (el paso sale como conversación nueva).
-  function _stepPrevSubject() {
-    const seqId = _stepOpenSeq; if (seqId == null) return null;
+  // Emails de la secuencia que vienen ANTES del paso que se edita (candidatos a "hilo" al que responder), en orden.
+  function _stepEmailsBefore() {
+    const seqId = _stepOpenSeq; if (seqId == null) return [];
     const mine = _stepOpenId ? _steps.find(x => x.id === _stepOpenId) : null;
     const key = x => (Number(x.dia) || 0) * 1e6 + (Number(x.orden) || 0) * 1e3 + (Number(x.id) || 0);
-    const emails = _steps.filter(x => x.sequence_id === seqId && (x.canal || 'email') === 'email' && x.id !== _stepOpenId && (!mine || key(x) < key(mine)))
+    return _steps.filter(x => x.sequence_id === seqId && (x.canal || 'email') === 'email' && x.id !== _stepOpenId && (!mine || key(x) < key(mine)))
       .sort((a, b) => key(a) - key(b));
-    const p = emails[emails.length - 1]; if (!p) return null;
-    let vs = p.variants; if (typeof vs === 'string') { try { vs = JSON.parse(vs); } catch (_) { vs = []; } }
-    const s = (Array.isArray(vs) && vs[0] && vs[0].asunto) || p.asunto || '';
-    return String(s).replace(/^((re|rv)\s*:\s*)+/i, '');
   }
+  function _stepSubjectOf(p) {
+    let vs = p.variants; if (typeof vs === 'string') { try { vs = JSON.parse(vs); } catch (_) { vs = []; } }
+    return String((Array.isArray(vs) && vs[0] && vs[0].asunto) || p.asunto || '').replace(/^((re|rv)\s*:\s*)+/i, '');
+  }
+  // Asunto del email al que responderá este paso: el elegido, o por defecto el anterior. null = no hay ninguno (sale como conversación nueva).
+  function _stepPrevSubject() {
+    const list = _stepEmailsBefore(); if (!list.length) return null;
+    const chosen = _stepReplyTo ? list.find(x => x.id === Number(_stepReplyTo)) : null;
+    return _stepSubjectOf(chosen || list[list.length - 1]);
+  }
+  // Selector "¿A qué email responde?": cada email anterior con su día y su asunto, para elegir el hilo.
+  function _stepReplyPickRender() {
+    const box = document.getElementById('step-reply-pick'); if (!box) return;
+    const on = $('step-reply')?.checked && (($('step-canal')?.value || 'email') === 'email');
+    const list = on ? _stepEmailsBefore() : [];
+    if (!on || !list.length) { box.innerHTML = on ? '<div class="step-reply-pick__n">Aún no hay un email anterior en esta secuencia: este paso saldrá como conversación nueva.</div>' : ''; return; }
+    const cur = Number(_stepReplyTo) || 0;
+    const opts = ['<option value="">El email anterior (por defecto)</option>'].concat(list.map(x => {
+      const nm = x.titulo || _stepSubjectOf(x) || _accionLabel('email', x.accion) || 'Email';
+      return '<option value="' + x.id + '"' + (cur === x.id ? ' selected' : '') + '>Día ' + esc(String(x.dia)) + ' · ' + esc(nm) + '</option>';
+    }));
+    box.innerHTML = '<label class="step-reply-pick"><span>Responder al hilo de</span><select class="form-input" id="step-reply-to" onchange="LeadManagerModule.stepReplyTo(this.value)">' + opts.join('') + '</select></label>';
+  }
+  function stepReplyTo(v) { _stepReplyTo = v ? Number(v) : null; _stepSyncDraft(); _stepRenderMsg(); }
   function stepPreview(seqId) {
     const panel = $('step-preview'); if (!panel) return;
     if (panel.style.display !== 'none') { panel.style.display = 'none'; return; }
@@ -33198,7 +33221,7 @@ ${foot}
     ldRefer, ldReferSave, ldNurture, ldNurtureSave, ldOpenDispoMenu,
     nurtureRetomarMenu, nurtureReinscribir, nurtureOtraSecuencia, nurtureSoloManual,
     waitingContactMenu, activarSiguienteContacto, waitingCerrarAviso,
-    dlSetCli, dlSetView, dlCardMenu, dlPopClose, dlCalNav, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel, seqMailSync, mtOpen, mtClose, mtSeg, mtTimes, mtProg, mtChips, mtAddCc, mtSave, mtSend, mtCancel,
+    dlSetCli, dlSetView, dlCardMenu, dlPopClose, dlCalNav, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel, seqMailSync, stepReplyTo, mtOpen, mtClose, mtSeg, mtTimes, mtProg, mtChips, mtAddCc, mtSave, mtSend, mtCancel,
     sqSetCli, sqSetEst, sqSetQ, cmSetCli, cmSetEst, cmSetQ,
     seqRunSetCanal, seqTaskSetDue,
     mbOpen, mbClose, mbSave, mbTest, mbDelete, mbProv, mbOAuthStart, mbManageOpen, mbManageClose,

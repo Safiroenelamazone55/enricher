@@ -367,7 +367,7 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback, served = [0]) {
   }
 
   const { rows: steps } = await pool.query(
-    `SELECT id, dia, canal, titulo, plantilla, espera_dias, variants, variant_mode, variant_field, asunto, cc_off, reply_to_prev, cond, cond_step_id
+    `SELECT id, dia, canal, titulo, plantilla, espera_dias, variants, variant_mode, variant_field, asunto, cc_off, reply_to_prev, reply_to_step_id, cond, cond_step_id
        FROM sequence_steps WHERE sequence_id=$1 ORDER BY dia ASC, orden ASC, id ASC`,
     [enr.sequence_id]
   );
@@ -520,8 +520,9 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback, served = [0]) {
       `SELECT smtp_message_id, asunto FROM lm_messages
         WHERE user_id=$1 AND contact_id=$2 AND sequence_id=$3
           AND smtp_message_id <> '' AND estado IN ('sent','replied','bounced')
-        ORDER BY sent_at DESC NULLS LAST, id DESC LIMIT 1`,
-      [uid, enr.contact_id, enr.sequence_id]);
+        -- si el paso eligió un email concreto (reply_to_step_id), ese hilo va primero; si aún no existe, cae al último enviado
+        ORDER BY (CASE WHEN $4::int IS NOT NULL AND step_id = $4::int THEN 0 ELSE 1 END), sent_at DESC NULLS LAST, id DESC LIMIT 1`,
+      [uid, enr.contact_id, enr.sequence_id, step.reply_to_step_id || null]);
     if (prev && prev.smtp_message_id) {
       inReplyTo = prev.smtp_message_id;
       // Mismo asunto que el email anterior (con un solo "Re:"): así el hilo se agrupa en el cliente de correo del prospecto.
@@ -682,7 +683,7 @@ async function _flushApproved(pool, apiBase) {
            cfg.window_start, cfg.window_end, cfg.send_weekends, cfg.timezone,
            s.send_days, s.timezone AS seq_timezone,
            COALESCE(oc.cc_email,'') AS cc_email, COALESCE(st.cc_off, FALSE) AS cc_off,
-           COALESCE(st.reply_to_prev, FALSE) AS reply_to_prev,
+           COALESCE(st.reply_to_prev, FALSE) AS reply_to_prev, st.reply_to_step_id AS reply_to_step_id,
            k.disposition AS k_disposition
       FROM lm_messages m
       JOIN sequences s ON s.id = m.sequence_id
@@ -753,8 +754,8 @@ async function _flushApproved(pool, apiBase) {
             WHERE user_id=$1 AND contact_id=$2 AND sequence_id=$3
               AND smtp_message_id <> '' AND estado IN ('sent','replied','bounced')
               AND id <> $4
-            ORDER BY sent_at DESC NULLS LAST, id DESC LIMIT 1`,
-          [m.user_id, m.contact_id, m.sequence_id, m.id]);
+            ORDER BY (CASE WHEN $5::int IS NOT NULL AND step_id = $5::int THEN 0 ELSE 1 END), sent_at DESC NULLS LAST, id DESC LIMIT 1`,
+          [m.user_id, m.contact_id, m.sequence_id, m.id, m.reply_to_step_id || null]);
         if (prev && prev.smtp_message_id) {
           inReplyTo = prev.smtp_message_id;
           if (prev.asunto) subject = 'Re: ' + String(prev.asunto).replace(/^((re|rv)\s*:\s*)+/i, '').trim();

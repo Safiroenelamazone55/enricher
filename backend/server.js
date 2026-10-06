@@ -9220,9 +9220,9 @@ app.post('/api/sequence-steps', requireAuth, async (req, res) => {
       `SELECT id FROM sequence_steps WHERE sequence_id=$1 ORDER BY dia ASC, orden ASC, id ASC`, [b.sequence_id]);
     const oldCount = before.length;
     const { rows } = await pool.query(`
-      INSERT INTO sequence_steps (user_id,sequence_id,dia,canal,titulo,plantilla,variants,variant_mode,variant_field,orden,hora,cond,cond_step_id,accion,asunto,cc_off,reply_to_prev,post_dias,reaccion)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING *
-    `, [req.workspaceOwnerId, b.sequence_id, parseInt(b.dia) || 1, canal, b.titulo || '', b.plantilla || '', JSON.stringify(Array.isArray(b.variants) ? b.variants : []), b.variant_mode || 'off', b.variant_field || '', parseInt(b.orden) || 0, _sanHora(b.hora), _sanCond(b.cond), b.cond_step_id ? parseInt(b.cond_step_id) : null, _sanAccion(b.accion), String(b.asunto || '').slice(0, 500), !!b.cc_off, !!b.reply_to_prev, _sanPostDias(b.post_dias), _sanReaccion(b.reaccion)]);
+      INSERT INTO sequence_steps (user_id,sequence_id,dia,canal,titulo,plantilla,variants,variant_mode,variant_field,orden,hora,cond,cond_step_id,accion,asunto,cc_off,reply_to_prev,post_dias,reaccion,reply_to_step_id)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20) RETURNING *
+    `, [req.workspaceOwnerId, b.sequence_id, parseInt(b.dia) || 1, canal, b.titulo || '', b.plantilla || '', JSON.stringify(Array.isArray(b.variants) ? b.variants : []), b.variant_mode || 'off', b.variant_field || '', parseInt(b.orden) || 0, _sanHora(b.hora), _sanCond(b.cond), b.cond_step_id ? parseInt(b.cond_step_id) : null, _sanAccion(b.accion), String(b.asunto || '').slice(0, 500), !!b.cc_off, !!b.reply_to_prev, _sanPostDias(b.post_dias), _sanReaccion(b.reaccion), (b.reply_to_prev && b.reply_to_step_id) ? (parseInt(b.reply_to_step_id) || null) : null]);
 
     // Si el paso nuevo quedó AL FINAL de la secuencia, los contactos que ya estaban
     // "terminado" (no había más pasos cuando acabaron el suyo) se quedarían atascados
@@ -9249,8 +9249,8 @@ app.put('/api/sequence-steps/:id', requireAuth, async (req, res) => {
   const canal = STEP_CANALES.includes(b.canal) ? b.canal : 'email';
   try {
     const { rows } = await pool.query(`
-      UPDATE sequence_steps SET dia=$1,canal=$2,titulo=$3,plantilla=$4,variants=$5,variant_mode=$6,variant_field=$7,orden=$8,hora=$9,cond=$10,cond_step_id=$11,accion=$12,asunto=$13,cc_off=$14,reply_to_prev=$15,post_dias=$16,reaccion=$17 WHERE id=$18 AND user_id=$19 RETURNING *
-    `, [parseInt(b.dia) || 1, canal, b.titulo || '', b.plantilla || '', JSON.stringify(Array.isArray(b.variants) ? b.variants : []), b.variant_mode || 'off', b.variant_field || '', parseInt(b.orden) || 0, _sanHora(b.hora), _sanCond(b.cond), b.cond_step_id ? parseInt(b.cond_step_id) : null, _sanAccion(b.accion), String(b.asunto || '').slice(0, 500), !!b.cc_off, !!b.reply_to_prev, _sanPostDias(b.post_dias), _sanReaccion(b.reaccion), req.params.id, req.workspaceOwnerId]);
+      UPDATE sequence_steps SET dia=$1,canal=$2,titulo=$3,plantilla=$4,variants=$5,variant_mode=$6,variant_field=$7,orden=$8,hora=$9,cond=$10,cond_step_id=$11,accion=$12,asunto=$13,cc_off=$14,reply_to_prev=$15,post_dias=$16,reaccion=$17,reply_to_step_id=$20 WHERE id=$18 AND user_id=$19 RETURNING *
+    `, [parseInt(b.dia) || 1, canal, b.titulo || '', b.plantilla || '', JSON.stringify(Array.isArray(b.variants) ? b.variants : []), b.variant_mode || 'off', b.variant_field || '', parseInt(b.orden) || 0, _sanHora(b.hora), _sanCond(b.cond), b.cond_step_id ? parseInt(b.cond_step_id) : null, _sanAccion(b.accion), String(b.asunto || '').slice(0, 500), !!b.cc_off, !!b.reply_to_prev, _sanPostDias(b.post_dias), _sanReaccion(b.reaccion), req.params.id, req.workspaceOwnerId, (b.reply_to_prev && b.reply_to_step_id) ? (parseInt(b.reply_to_step_id) || null) : null]);
     if (!rows.length) return res.status(404).json({ error: 'Paso no encontrado' });
 
     // Re-generar los borradores 'awaiting' de este step con la nueva plantilla/asunto.

@@ -1505,6 +1505,8 @@ async function initDb() {
     // del smtp_message_id anterior + prefijo "Re: " al asunto si falta). Permite
     // encadenar el segundo/tercer email en el mismo hilo, como hace Apollo/Instantly.
     await pool.query(`ALTER TABLE sequence_steps ADD COLUMN IF NOT EXISTS reply_to_prev BOOLEAN NOT NULL DEFAULT FALSE;`);
+    // A qué email de la secuencia responde este paso (NULL = al anterior). Permite que el 7.º email cuelgue del hilo del 1.º, etc.
+    await pool.query(`ALTER TABLE sequence_steps ADD COLUMN IF NOT EXISTS reply_to_step_id INTEGER;`);
     // Pasos que dependen de una publicación (comentar / reaccionar): ventana de antigüedad
     // aceptable del post (0 = sin límite) y reacción sugerida. La ventana convierte
     // "sin actividad reciente" en un criterio objetivo en vez de un juicio del momento.
