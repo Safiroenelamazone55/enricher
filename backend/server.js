@@ -4937,7 +4937,7 @@ async function _mtView(pool, uid, cid) {
   if (!m) return null;
   const { rows: [k] } = await pool.query('SELECT nombre FROM lm_contacts WHERE id=$1', [cid]);
   const _m = { ...m, firma: await _mtSvc.clientNameOf(pool, cid) };
-  return { ...m, default1: _mtSvc.defaultMessage(_m, k && k.nombre, 1), default2: _mtSvc.defaultMessage(_m, k && k.nombre, 2) };
+  return { ...m, default1: _mtSvc.defaultMessage(_m, k && k.nombre, 1), default2: _mtSvc.defaultMessage(_m, k && k.nombre, 2), default_subj1: _mtSvc.defaultSubject(_m, 1), default_subj2: _mtSvc.defaultSubject(_m, 2) };
 }
 app.get('/api/lm/contacts/:id/meeting', requireAuth, async (req, res) => {
   try {
@@ -4978,6 +4978,7 @@ app.put('/api/lm/contacts/:id/meeting', requireAuth, async (req, res) => {
          rem2_estado = CASE WHEN lm_meetings.starts_at IS DISTINCT FROM $3 THEN $17 WHEN lm_meetings.rem2_estado IN ('enviado') THEN 'enviado' ELSE $17 END`,
       [uid, cid, start.toISOString(), tz, tipo, f(b.enlace).slice(0, 500), f(b.anfitrion).slice(0, 120), idioma, canal, modo, f(b.cc).slice(0, 300),
        f(b.msg1).slice(0, 3000), f(b.msg2).slice(0, 3000), t.rem1_at ? t.rem1_at.toISOString() : null, t.rem2_at.toISOString(), r1, r2]);
+    await pool.query('UPDATE lm_meetings SET subj1=$3, subj2=$4 WHERE contact_id=$1 AND user_id=$2', [cid, uid, f(b.subj1).slice(0, 200), f(b.subj2).slice(0, 200)]);
     await pool.query(`UPDATE lm_contacts SET reunion_agendada_at=COALESCE(reunion_agendada_at, NOW()), updated_at=NOW() WHERE id=$1`, [cid]);
     res.json({ ok: true, meeting: await _mtView(pool, uid, cid) });
   } catch (e) { console.error('[meeting]', e.message); res.status(500).json({ error: 'No se pudo guardar la reunión' }); }
@@ -4993,29 +4994,7 @@ app.post('/api/lm/contacts/:id/meeting/preview', requireAuth, async (req, res) =
     m.firma = await _mtSvc.clientNameOf(pool, +req.params.id);
     const _r1 = b.rem1_local ? _mtSvc.zonedToUtc(b.rem1_local, tz) : _mtSvc.recommendTimes(start, tz).rem1_at;
     if (_r1 && !isNaN(_r1)) m.rem1_at = _r1;
-    res.json({ default1: _mtSvc.defaultMessage(m, k && k.nombre, 1), default2: _mtSvc.defaultMessage(m, k && k.nombre, 2) });
-  } catch (e) { res.status(500).json({ error: 'No se pudo generar la vista previa' }); }
-});
-app.post('/api/lm/contacts/:id/meeting/preview', requireAuth, async (req, res) => {
-  const b = req.body || {};
-  try {
-    const tz = String(b.tz || 'America/Lima');
-    const start = _mtSvc.zonedToUtc(b.local, tz) || new Date(Date.now() + 86400000);
-    const { rows: [k] } = await pool.query('SELECT nombre FROM lm_contacts WHERE id=$1 AND user_id=$2', [+req.params.id, req.workspaceOwnerId]);
-    const m = { starts_at: start, tz, tipo: ['meet', 'zoom', 'teams', 'telefono', 'presencial', 'otro'].includes(b.tipo) ? b.tipo : 'otro',
-      enlace: String(b.enlace || '').trim(), anfitrion: String(b.anfitrion || '').trim(), idioma: b.idioma === 'en' ? 'en' : 'es' };
-    res.json({ default1: _mtSvc.defaultMessage(m, k && k.nombre, 1), default2: _mtSvc.defaultMessage(m, k && k.nombre, 2) });
-  } catch (e) { res.status(500).json({ error: 'No se pudo generar la vista previa' }); }
-});
-app.post('/api/lm/contacts/:id/meeting/preview', requireAuth, async (req, res) => {
-  const b = req.body || {};
-  try {
-    const tz = String(b.tz || 'America/Lima');
-    const start = _mtSvc.zonedToUtc(b.local, tz) || new Date(Date.now() + 86400000);
-    const { rows: [k] } = await pool.query('SELECT nombre FROM lm_contacts WHERE id=$1 AND user_id=$2', [+req.params.id, req.workspaceOwnerId]);
-    const m = { starts_at: start, tz, tipo: ['meet', 'zoom', 'teams', 'telefono', 'presencial', 'otro'].includes(b.tipo) ? b.tipo : 'otro',
-      enlace: String(b.enlace || '').trim(), anfitrion: String(b.anfitrion || '').trim(), idioma: b.idioma === 'en' ? 'en' : 'es' };
-    res.json({ default1: _mtSvc.defaultMessage(m, k && k.nombre, 1), default2: _mtSvc.defaultMessage(m, k && k.nombre, 2) });
+    res.json({ default1: _mtSvc.defaultMessage(m, k && k.nombre, 1), default2: _mtSvc.defaultMessage(m, k && k.nombre, 2), subj1: _mtSvc.defaultSubject(m, 1), subj2: _mtSvc.defaultSubject(m, 2) });
   } catch (e) { res.status(500).json({ error: 'No se pudo generar la vista previa' }); }
 });
 app.post('/api/lm/contacts/:id/meeting/schedule', requireAuth, async (req, res) => {

@@ -28722,7 +28722,7 @@ ${foot}
       try {
         const r = await apiFetch(API + '/lm/contacts/' + _mt.cid + '/meeting/preview', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
         if (!r.ok) return; const d = await r.json();
-        [1, 2].forEach(n => { const t = g('mt-msg' + n); if (t && !t.dataset.d && !(_mt.m && _mt.m['msg' + n])) t.value = d['default' + n]; });
+        [1, 2].forEach(n => { const t = g('mt-msg' + n); if (t && !t.dataset.d && !(_mt.m && _mt.m['msg' + n])) t.value = d['default' + n]; const s = g('mt-subj' + n); if (s && !s.dataset.d && !(_mt.m && _mt.m['subj' + n])) s.value = d['subj' + n] || ''; });
       } catch (_) {}
     }, 350);
   }
@@ -28780,6 +28780,7 @@ ${foot}
     const est = n => m ? '<span class="mt-est mt-est--' + m['rem' + n + '_estado'] + '">' + (_MT_EST[m['rem' + n + '_estado']] || '') + '</span>' : '';
     const mm = m || {};
     const rem = n => '<div class="mt-msg"><div class="mt-msg__hd"><span>' + (n === 1 ? 'Primer aviso' : 'Segundo aviso') + '</span>' + est(n) + '</div>' +
+      '<input class="mt-i" id="mt-subj' + n + '" placeholder="Asunto" value="' + esc(mm['subj' + n] || mm['default_subj' + n] || '') + '" oninput="this.dataset.d=1" style="margin-bottom:6px;font-weight:600">' +
       '<textarea class="mt-i" id="mt-msg' + n + '" rows="6" oninput="this.dataset.d=1">' + esc(mm['msg' + n] || mm['default' + n] || '') + '</textarea>' +
       '<div class="mt-msg__ft">' + (() => {
         const est = m && m['rem' + n + '_estado'], prog = m && (m['rem' + n + '_prog'] || m.modo === 'auto');
@@ -28837,6 +28838,8 @@ ${foot}
       cc: g('mt-cc').value.trim(), idioma: g('mt-idioma').dataset.v, canal: g('mt-canal').dataset.v, modo: (_mt.m && _mt.m.modo) || 'revision' };
     // mensajes: solo se guardan los que la persona editó; si no, se regeneran solos con los datos vigentes
     if (_mt.m && _mtLocalVal(_mt.m) === b.local && _mt.m.tz === b.tz) { b.rem1_local = (g('mt-r1') || {}).value || ''; b.rem2_local = (g('mt-r2') || {}).value || ''; }
+    b.subj1 = (g('mt-subj1') && g('mt-subj1').dataset.d) ? g('mt-subj1').value : ((_mt.m && _mt.m.subj1) || '');
+    b.subj2 = (g('mt-subj2') && g('mt-subj2').dataset.d) ? g('mt-subj2').value : ((_mt.m && _mt.m.subj2) || '');
     b.msg1 = g('mt-msg1') && g('mt-msg1').dataset.d ? g('mt-msg1').value : (_mt.m && _mt.m.msg1 || '');
     b.msg2 = g('mt-msg2') && g('mt-msg2').dataset.d ? g('mt-msg2').value : (_mt.m && _mt.m.msg2 || '');
     return b;

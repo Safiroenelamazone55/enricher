@@ -1152,6 +1152,9 @@ async function initDb() {
     await pool.query(`CREATE INDEX IF NOT EXISTS lm_meetings_due_idx ON lm_meetings (estado, starts_at)`);
     await pool.query(`ALTER TABLE lm_meetings ADD COLUMN IF NOT EXISTS rem1_prog BOOLEAN NOT NULL DEFAULT FALSE`);
     await pool.query(`ALTER TABLE lm_meetings ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`);
+    // Asunto editable de cada aviso ('' = usar el asunto por defecto)
+    await pool.query(`ALTER TABLE lm_meetings ADD COLUMN IF NOT EXISTS subj1 TEXT NOT NULL DEFAULT ''`);
+    await pool.query(`ALTER TABLE lm_meetings ADD COLUMN IF NOT EXISTS subj2 TEXT NOT NULL DEFAULT ''`);
     await pool.query(`ALTER TABLE lm_meetings ADD COLUMN IF NOT EXISTS rem2_prog BOOLEAN NOT NULL DEFAULT FALSE`);
     await pool.query(`ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS reset_code_hash TEXT`);
     await pool.query(`ALTER TABLE client_accounts ADD COLUMN IF NOT EXISTS pw_remind_at TIMESTAMPTZ`);

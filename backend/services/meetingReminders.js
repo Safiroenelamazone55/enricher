@@ -100,7 +100,7 @@ async function sendReminder(pool, m, n) {
   const k = await _contactCtx(pool, m);
   if (!k) throw new Error('Contacto no encontrado');
   const texto = (n === 1 ? m.msg1 : m.msg2) || defaultMessage({ ...m, firma: await clientNameOf(pool, k.id) }, k.nombre, n);
-  const asunto = defaultSubject(m, n);
+  const asunto = ((n === 1 ? m.subj1 : m.subj2) || '').trim() || defaultSubject(m, n);
   if (m.canal === 'whatsapp') {
     const { rows: [lk] } = await pool.query(
       `SELECT l.connection_id, l.chat_jid FROM wa_jid_links l JOIN wa_connections c ON c.id=l.connection_id AND c.estado='conectado'
