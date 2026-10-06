@@ -20453,6 +20453,7 @@ const LeadManagerModule = (() => {
         <td class="sq-estado"><span class="ldh-none">Aún sin contactos</span></td>
         <td><span class="ldh-none">—</span></td>
         <td class="ldh-dim">${steps.length ? `${steps.length} paso${steps.length !== 1 ? 's' : ''}` : '—'}</td>
+        <td></td>
       </tr>`;
       return `<tr class="ldh-row" onclick="LeadManagerModule.openSequence(${s.id})">
         <td><div class="ldh-name">${esc(s.nombre)}</div><div class="ldh-sub">${cmp ? esc(cmp) : '&nbsp;'}</div></td>
@@ -20460,11 +20461,12 @@ const LeadManagerModule = (() => {
         <td class="sq-estado">${_seqBadge(s.estado)}${(s.awaiting || 0) > 0 ? ` <span class="seq-app-n" title="Emails esperando tu aprobación">${s.awaiting} por aprobar</span>` : ''}</td>
         <td>${mt ? `<span style="color:${mt[1]};font-weight:600">${mt[0]}</span>` : '<span class="ldh-none">Sin pasos</span>'}</td>
         <td class="ldh-dim">${steps.length ? `${steps.length} paso${steps.length !== 1 ? 's' : ''} · ${steps[steps.length - 1].dia} días` : '—'}</td>
+        <td class="sq-more"><button class="dg-kebab" onclick="LeadManagerModule.seqMoreMenu(event,${s.id})" title="Opciones: duplicar, pausar, eliminar…">⋮</button></td>
       </tr>`;
     }).join('');
     wrap.innerHTML = `<div class="ldh-table-wrap"><table class="ldh-table ldh-table--seq">
-      <colgroup><col style="width:34%"><col style="width:17%"><col style="width:12%"><col style="width:19%"><col style="width:18%"></colgroup>
-      <thead><tr><th>Secuencia</th><th>Cliente</th><th>Estado</th><th>Canales</th><th>Pasos</th></tr></thead>
+      <colgroup><col style="width:32%"><col style="width:17%"><col style="width:12%"><col style="width:19%"><col style="width:16%"><col style="width:4%"></colgroup>
+      <thead><tr><th>Secuencia</th><th>Cliente</th><th>Estado</th><th>Canales</th><th>Pasos</th><th></th></tr></thead>
       <tbody>${rows}</tbody></table></div>`;
   }
   function sqSetCli(v) { _sqCli = v; _sqPaint(); }
@@ -20496,6 +20498,9 @@ const LeadManagerModule = (() => {
       + item('Editar secuencia', `LeadManagerModule.openSequenceDrawer(${seqId})`)
       + item(s && s.estado === 'pausada' ? '► Reactivar todo' : 'II Pausar todo', s && s.estado === 'pausada' ? `LeadManagerModule.seqResumeAll(${seqId})` : `LeadManagerModule.seqPauseAll(${seqId})`)
       + item('Informe PDF', `LeadManagerModule.seqReportOpen(${seqId})`)
+      + '<div class="cp-mark-menu__sep"></div>'
+      + item('Duplicar…', `LeadManagerModule.seqDuplicateOpen(${seqId})`)
+      + item('<span style="color:#B91C1C">Eliminar</span>', `LeadManagerModule.confirmDeleteSequence(${seqId})`)
       + `</div>`;
     const menu = document.createElement('div');
     menu.className = 'cp-mark-menu';
@@ -20510,6 +20515,39 @@ const LeadManagerModule = (() => {
     // menús de este estilo lo tienen) — se quedaba flotando en pantalla hasta que se
     // hacía clic en una de sus propias opciones, incluso cambiando de sección.
     setTimeout(() => document.addEventListener('click', function onDoc(e) { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', onDoc); } }), 0);
+  }
+
+  // ── Duplicar secuencia (pasos + ajustes, sin contactos) ──
+  function seqDuplicateOpen(seqId) {
+    const s = _sequences.find(x => x.id === seqId); if (!s) return;
+    document.getElementById('lm-dup-modal')?.remove();
+    const nsteps = _seqSteps(seqId).length;
+    const cliOpts = (_clients || []).map(c => '<option value="' + c.id + '"' + (c.id === s.outbound_client_id ? ' selected' : '') + '>' + esc(c.nombre) + '</option>').join('');
+    const m = document.createElement('div'); m.id = 'lm-dup-modal'; m.className = 'fin-pi-backdrop';
+    m.onclick = e => { if (e.target === m) m.remove(); };
+    m.innerHTML = '<div class="fin-pi-box dup-box">' +
+      '<div class="fin-pi-box__hd"><h3>Duplicar secuencia</h3><button class="fin-pi-x" onclick="document.getElementById(\'lm-dup-modal\').remove()">✕</button></div>' +
+      '<div class="dup-body">' +
+        '<label class="dup-f"><span>Nombre de la copia</span><input class="form-input" id="dup-nombre" value="' + esc(s.nombre + ' (copia)') + '"></label>' +
+        '<label class="dup-f"><span>Cliente</span><select class="form-input" id="dup-cli">' + cliOpts + '</select></label>' +
+        '<div class="dup-note"><b>Se copia:</b> los ' + nsteps + ' paso' + (nsteps === 1 ? '' : 's') + ' con sus mensajes, asuntos, variantes A/B, condiciones y el hilo de respuesta; y los ajustes de envío (horario, cadencia, límite, modo).<br><b>No se copia:</b> los contactos, los envíos ni las métricas. La copia queda como <b>borrador</b>, sin fecha de inicio: revísala y lánzala cuando quieras.</div>' +
+      '</div>' +
+      '<div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns"><button class="btn btn--ghost btn--sm" onclick="document.getElementById(\'lm-dup-modal\').remove()">Cancelar</button><button class="btn btn--primary btn--sm" id="dup-go" onclick="LeadManagerModule.seqDuplicateDo(' + seqId + ')">Duplicar</button></div></div>' +
+    '</div>';
+    document.body.appendChild(m);
+    setTimeout(() => { const i = $('dup-nombre'); if (i) { i.focus(); i.select(); } }, 40);
+  }
+  async function seqDuplicateDo(seqId) {
+    const nombre = ($('dup-nombre')?.value || '').trim(), cli = $('dup-cli')?.value || '';
+    const btn = $('dup-go'); if (btn) { btn.disabled = true; btn.textContent = 'Duplicando…'; }
+    try {
+      const r = await apiFetch(API + '/sequences/' + seqId + '/duplicate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre, outbound_client_id: cli }) });
+      const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Error');
+      document.getElementById('lm-dup-modal')?.remove();
+      await load();
+      showBanner('✓ Secuencia duplicada: «' + d.sequence.nombre + '» (' + d.steps_copied + ' paso' + (d.steps_copied === 1 ? '' : 's') + ', borrador)', 'success');
+      openSequence(d.sequence.id);
+    } catch (e) { showBanner('No se pudo duplicar: ' + e.message, 'error'); if (btn) { btn.disabled = false; btn.textContent = 'Duplicar'; } }
   }
 
   // "＋ Agregar contacto" desde el "⋮" de la secuencia — busca entre TODOS los
@@ -33191,7 +33229,7 @@ ${foot}
     openDrawer, closeDrawer, save, confirmDelete, convertToClient,
     openClientDrawer, closeClientDrawer, saveClient, confirmDeleteClient,
     openCampaignDrawer, closeCampaignDrawer, saveCampaign, confirmDeleteCampaign, onLeadClientChange,
-    openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, seqRotEmpresaToggle, confirmDeleteSequence, seqTab, seqPasosToggle, seqMoreMenu, seqAddContactOpen, _seqAddSearch, seqAddContactPick, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
+    openSequence, openSequenceDrawer, closeSequenceDrawer, saveSequence, seqRotEmpresaToggle, confirmDeleteSequence, seqDuplicateOpen, seqDuplicateDo, seqTab, seqPasosToggle, seqMoreMenu, seqAddContactOpen, _seqAddSearch, seqAddContactPick, seqCtAdvance, seqCtPause, seqPauseAll, seqResumeAll, seqCtRemove, seqCtRollback, seqUndoLast, seqEnrolOpen, seqEnrolFilter, seqEnrol, seqTaskDone,
     seqAppAction, seqAppNav, seqModeHint, stepPreview, stepDiaCal, seqGoApprove, taskApprove, seqCompleteEmailApprove, seqNoEmailNav,
     seqNoEmailMenu, seqNoEmailSkip, seqNoEmailInvalid, seqNoEmailRemove, seqNoEmailAccepted,
     seqTaskOpen, seqDoClose, seqDoCopy, seqDoDone, seqDoSkip, seqDoPrev, seqDoEditStep, seqDoExit, seqOpenLinkedIn,

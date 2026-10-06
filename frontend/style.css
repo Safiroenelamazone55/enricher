@@ -17921,3 +17921,11 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 .wpick-ok i{width:7px;height:7px;border-radius:50%;background:#22C55E;display:inline-block}
 .wpick-go{color:#94A3B8;display:inline-flex}
 .wpick-item:hover .wpick-go{color:#00804C}
+
+/* Secuencias: columna de opciones y modal de duplicar */
+.sq-more{text-align:right;padding-right:10px !important;white-space:nowrap}
+.cp-mark-menu__sep{height:1px;background:#EEECE8;margin:4px 0}
+#lm-dup-modal .fin-pi-box{width:min(520px,94vw);border-radius:0}
+.dup-body{padding:6px 24px 16px;display:flex;flex-direction:column;gap:14px}
+.dup-f{display:flex;flex-direction:column;gap:5px}.dup-f>span{font-size:.78rem;color:#64748B}
+.dup-note{padding:12px 14px;background:#F7F8F6;border:1px solid #E8E6E1;font-size:.8rem;line-height:1.5;color:#475569}

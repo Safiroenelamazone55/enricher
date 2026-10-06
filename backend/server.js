@@ -9137,6 +9137,55 @@ app.post('/api/sequences', requireAuth, async (req, res) => {
     res.status(201).json(rows[0]);
   } catch (err) { console.error('[seq] POST error:', err.message); res.status(500).json({ error: 'Error al crear secuencia' }); }
 });
+// Duplicar una secuencia: copia su configuración y TODOS sus pasos (plantillas, variantes A/B, condiciones, hilo "responder a…"),
+// pero NO los contactos ni nada de su actividad. Nace como borrador, sin fecha de inicio y sin auto-activarse, para revisarla antes de lanzarla.
+// Opcional: pasarla a otro cliente (útil para reutilizar un guion con otro buzón).
+app.post('/api/sequences/:id/duplicate', requireAuth, async (req, res) => {
+  const uid = req.workspaceOwnerId, b = req.body || {};
+  const cx = await pool.connect();
+  try {
+    const { rows: [src] } = await cx.query('SELECT * FROM sequences WHERE id=$1 AND user_id=$2', [req.params.id, uid]);
+    if (!src) return res.status(404).json({ error: 'Secuencia no encontrada' });
+    let cli = src.outbound_client_id;
+    if (b.outbound_client_id !== undefined && b.outbound_client_id !== '' && b.outbound_client_id !== null) {
+      const want = parseInt(b.outbound_client_id) || null;
+      if (want) {
+        const { rows: [ok] } = await cx.query('SELECT id FROM outbound_clients WHERE id=$1 AND user_id=$2', [want, uid]);
+        if (!ok) return res.status(400).json({ error: 'Cliente no válido' });
+      }
+      cli = want;
+    }
+    const campaign = (cli === src.outbound_client_id) ? src.campaign_id : null;   // la campaña pertenece a un cliente
+    const nombre = String(b.nombre || '').trim().slice(0, 200) || (src.nombre + ' (copia)');
+    await cx.query('BEGIN');
+    const { rows: [ns] } = await cx.query(
+      'INSERT INTO sequences (user_id,outbound_client_id,campaign_id,nombre,objetivo,estado,timezone,drip_per_day,send_days,starts_on,daily_limit,mercado,icp,notas,send_mode,send_interval_min,auto_activar,preferred_channel,target_role_1,target_role_2,nurture_days,origen_cantera,rotacion_empresa,rotacion_empresa_paso) ' +
+      "VALUES ($1,$2,$3,$4,$5,'draft',$6,$7,$8,NULL,$9,$10,$11,$12,$13,$14,FALSE,$15,$16,$17,$18,FALSE,$19,$20) RETURNING *",
+      [uid, cli, campaign, nombre, src.objetivo || '', src.timezone || '', src.drip_per_day || 0, src.send_days, src.daily_limit || 0, src.mercado || '', src.icp || '', src.notas || '',
+       src.send_mode, src.send_interval_min, src.preferred_channel, src.target_role_1 || '', src.target_role_2 || '', src.nurture_days, !!src.rotacion_empresa, src.rotacion_empresa_paso || 0]);
+    const { rows: steps } = await cx.query('SELECT * FROM sequence_steps WHERE sequence_id=$1 ORDER BY dia ASC, orden ASC, id ASC', [src.id]);
+    const map = new Map();
+    for (const st of steps) {
+      const { rows: [n] } = await cx.query(
+        'INSERT INTO sequence_steps (user_id,sequence_id,dia,canal,titulo,plantilla,orden,variants,variant_mode,variant_field,espera_dias,hora,cond,accion,asunto,cc_off,reply_to_prev,post_dias,reaccion) ' +
+        'VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING id',
+        [uid, ns.id, st.dia, st.canal, st.titulo || '', st.plantilla || '', st.orden || 0, JSON.stringify(st.variants || []), st.variant_mode || 'off', st.variant_field || '', st.espera_dias || 0,
+         st.hora || '', st.cond || '', st.accion || '', st.asunto || '', !!st.cc_off, !!st.reply_to_prev, st.post_dias || 0, st.reaccion || '']);
+      map.set(st.id, n.id);
+    }
+    // las referencias entre pasos (condición y "responder al hilo de…") deben apuntar a las COPIAS, no a los pasos originales
+    for (const st of steps) {
+      const c = st.cond_step_id ? map.get(st.cond_step_id) : null, r = st.reply_to_step_id ? map.get(st.reply_to_step_id) : null;
+      if (c || r) await cx.query('UPDATE sequence_steps SET cond_step_id=$1, reply_to_step_id=$2 WHERE id=$3', [c || null, r || null, map.get(st.id)]);
+    }
+    await cx.query('COMMIT');
+    res.status(201).json({ sequence: ns, steps_copied: steps.length });
+  } catch (err) {
+    await cx.query('ROLLBACK').catch(() => {});
+    console.error('[seq] duplicate:', err.message);
+    res.status(500).json({ error: 'No se pudo duplicar la secuencia' });
+  } finally { cx.release(); }
+});
 app.put('/api/sequences/:id', requireAuth, async (req, res) => {
   const b = req.body || {};
   if (!b.nombre?.trim()) return res.status(400).json({ error: 'El nombre es requerido' });
