@@ -724,6 +724,8 @@ async function _flushApproved(pool, apiBase) {
             AND (SELECT COUNT(*) FROM lm_messages mm JOIN sequences ss ON ss.id = mm.sequence_id WHERE ss.outbound_client_id = mb3.outbound_client_id AND mm.estado IN ('sent','replied','bounced')
                   AND (mm.sent_at AT TIME ZONE COALESCE(cfg.timezone,'America/Lima'))::date = (NOW() AT TIME ZONE COALESCE(cfg.timezone,'America/Lima'))::date)
                 >= CASE WHEN mb3.daily_limit > 0 THEN mb3.daily_limit ELSE LEAST(mb3.ramp_target, mb3.ramp_start + mb3.ramp_step * FLOOR(GREATEST(((NOW() AT TIME ZONE COALESCE(cfg.timezone,'America/Lima'))::date - mb3.ramp_started_on), 0)::numeric / 7)::int) END)
+       -- El goteo escalonado manda: aunque lo aprobaras antes, no sale hasta el día que le toca a SU contacto.
+       AND NOT EXISTS (SELECT 1 FROM lm_contact_sequences e WHERE e.sequence_id = m.sequence_id AND e.contact_id = m.contact_id AND e.next_action_at > NOW())
      ORDER BY m.sequence_id, m.created_at ASC
   `);
   for (const m of due.slice().sort((a, b) => new Date(a.scheduled_at || 0) - new Date(b.scheduled_at || 0))) {   // orden de programación: sale primero lo que lleva más tiempo esperando
@@ -893,6 +895,12 @@ async function _draftPreapprovedBatch(pool, seen) {
 // enrolados un cupo fijo dejaría secuencias sin borrador). Cada contacto visto sale del lote siguiente, así que
 // termina sola; solo la frena un presupuesto de 45 s por pasada (lo que falte sigue en la próxima, 60 s después).
 async function _draftPreapproved(pool) {
+  // Alinea la fecha de envío de los borradores pendientes con la fecha REAL de su contacto (puede haber cambiado al editar la
+  // fecha de inicio, la cadencia o el goteo después de redactarlos; sin esto salían un día antes de lo previsto).
+  await pool.query(`UPDATE lm_messages m SET scheduled_at = cs.next_action_at
+      FROM lm_contact_sequences cs
+     WHERE m.estado IN ('awaiting','approved') AND cs.contact_id = m.contact_id AND cs.sequence_id = m.sequence_id
+       AND cs.estado = 'activo' AND cs.next_action_at IS NOT NULL AND m.scheduled_at IS DISTINCT FROM cs.next_action_at`).catch(e => console.warn('[send-engine] sync-borradores:', e.message));
   const seen = [0], t0 = Date.now();
   for (let i = 0; i < 200 && Date.now() - t0 < 45000; i++) {
     const before = seen.length;
