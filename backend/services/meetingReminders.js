@@ -63,10 +63,16 @@ function defaultMessage(m, contactName, n) {
   lines.push('', n === 1 ? (hoy ? '¡Nos vemos más tarde!' : '¡Nos vemos mañana!') : '¡Nos vemos en un momento!');
   return lines.concat(sigLines).filter((l, i, a) => !(l === '' && a[i - 1] === '')).join('\n').trim();
 }
+// ¿El primer aviso sale el MISMO día de la reunión (en la zona del prospecto)? Entonces el asunto dice "hoy", no "mañana".
+function _sameDay(m) {
+  if (!m.rem1_at) return false;
+  const ymd = d => new Intl.DateTimeFormat('en-CA', { timeZone: m.tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(d));
+  return ymd(m.rem1_at) === ymd(m.starts_at);
+}
 function defaultSubject(m, n) {
   return m.idioma === 'en'
-    ? (n === 1 ? 'Reminder: our meeting tomorrow' : 'Our meeting starts in 30 minutes')
-    : (n === 1 ? 'Recordatorio: nuestra reunión de mañana' : 'Nuestra reunión empieza en 30 minutos');
+    ? (n === 1 ? ('Reminder: our meeting ' + (_sameDay(m) ? 'today' : 'tomorrow')) : 'Our meeting starts in 30 minutes')
+    : (n === 1 ? ('Recordatorio: nuestra reunión de ' + (_sameDay(m) ? 'hoy' : 'mañana')) : 'Nuestra reunión empieza en 30 minutos');
 }
 
 // Horas de los dos avisos a partir de la reunión. Aviso 1: día anterior 10:00 (hora del prospecto).
