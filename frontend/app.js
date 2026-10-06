@@ -38797,6 +38797,7 @@ const ObcWaModule = (() => {
     m.onclick = e => { if (e.target === m) m.remove(); };
     m.innerHTML = `<div class="fin-pi-box lm-pick-box">
       <div class="fin-pi-box__hd"><h3>Usar un WhatsApp existente</h3><button class="fin-pi-x" onclick="document.getElementById('ocwa-pick-modal').remove()">✕</button></div>
+      <div class="wpick-sub">Elige el número que atenderá a este cliente. Un mismo WhatsApp puede usarse en varios clientes a la vez.</div>
       <div id="ocwa-pick-list" class="fin-pi-form" style="padding-bottom:14px">
         <div class="clients-loading"><div class="clients-spin"></div></div>
       </div></div>`;
@@ -38807,8 +38808,8 @@ const ObcWaModule = (() => {
       const list = $$('ocwa-pick-list'); if (!list) return;
       const conectadas = rows.filter(c => c.estado === 'conectado');
       if (!conectadas.length) { list.innerHTML = `<div class="lm-pick-empty">No tienes ningún WhatsApp conectado todavía. Conecta uno nuevo primero.</div>`; return; }
-      list.innerHTML = `<div class="lm-pick-list">${conectadas.map(c => `
-        <button class="lm-pick-item" onclick="ObcWaModule.usarExistentePick(${c.id})"><span>${esc(c.nombre || 'WhatsApp')}</span><span class="lm-pick-est">${c.numero ? '+' + esc(c.numero) : 'Sin número'}</span></button>`).join('')}</div>`;
+      list.innerHTML = `<div class="wpick-list">${conectadas.map(c => `
+        <button class="wpick-item" onclick="ObcWaModule.usarExistentePick(${c.id})"><span class="wpick-ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-12.4 7.4L3 20.5l1.7-5.4A8.4 8.4 0 1 1 21 11.5z"/></svg></span><span class="wpick-txt"><span class="wpick-name">${esc(c.nombre || 'WhatsApp')}</span><span class="wpick-num">${c.numero ? '+' + esc(c.numero) : 'Sin número'}</span></span><span class="wpick-ok"><i></i>Conectado</span><span class="wpick-go"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span></button>`).join('')}</div>`;
     } catch (e) {
       const list = $$('ocwa-pick-list'); if (list) list.innerHTML = `<p style="color:var(--danger)">Error: ${esc(e.message)}</p>`;
     }

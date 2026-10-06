@@ -17906,3 +17906,18 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 .step-reply-pick>span{font-size:.8rem;color:#64748B;white-space:nowrap}
 .step-reply-pick select{flex:1;min-width:0}
 .step-reply-pick__n{padding:4px 0 10px 28px;font-size:.78rem;color:#B45309}
+
+/* Elegir un WhatsApp existente */
+#ocwa-pick-modal .fin-pi-box{width:min(520px,94vw);border-radius:0}
+.wpick-sub{padding:12px 24px 0;font-size:.82rem;color:#64748B;line-height:1.4}
+.wpick-list{display:flex;flex-direction:column;gap:8px;padding:6px 0 4px}
+.wpick-item{display:flex;align-items:center;gap:14px;width:100%;padding:14px 16px;border:1px solid #E2E0DB;background:#fff;text-align:left;cursor:pointer;font:inherit;transition:border-color .12s,background .12s}
+.wpick-item:hover{border-color:#00804C;background:#F7FBF9}
+.wpick-ico{flex-shrink:0;width:38px;height:38px;display:inline-flex;align-items:center;justify-content:center;background:#E8F5EE;color:#00804C}
+.wpick-txt{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
+.wpick-name{font-size:.92rem;font-weight:600;color:#14211B;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wpick-num{font-size:.8rem;color:#64748B;letter-spacing:.01em}
+.wpick-ok{display:inline-flex;align-items:center;gap:6px;font-size:.72rem;color:#15803D;white-space:nowrap}
+.wpick-ok i{width:7px;height:7px;border-radius:50%;background:#22C55E;display:inline-block}
+.wpick-go{color:#94A3B8;display:inline-flex}
+.wpick-item:hover .wpick-go{color:#00804C}
