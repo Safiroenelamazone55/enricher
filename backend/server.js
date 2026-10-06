@@ -4973,7 +4973,7 @@ app.put('/api/lm/contacts/:id/meeting', requireAuth, async (req, res) => {
       `INSERT INTO lm_meetings (user_id, contact_id, starts_at, tz, tipo, enlace, anfitrion, idioma, canal, modo, cc, msg1, msg2, rem1_at, rem2_at, rem1_estado, rem2_estado)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
        ON CONFLICT (contact_id) DO UPDATE SET starts_at=$3, tz=$4, tipo=$5, enlace=$6, anfitrion=$7, idioma=$8, canal=$9, modo=$10, cc=$11, msg1=$12, msg2=$13,
-         rem1_at=$14, rem2_at=$15, estado='programada', error='', updated_at=NOW(),
+         rem1_at=$14, rem2_at=$15, estado='programada', error='', updated_at=NOW(), reviewed_at=NOW(),
          rem1_estado = CASE WHEN lm_meetings.starts_at IS DISTINCT FROM $3 THEN $16 WHEN lm_meetings.rem1_estado IN ('enviado') THEN 'enviado' ELSE $16 END,
          rem2_estado = CASE WHEN lm_meetings.starts_at IS DISTINCT FROM $3 THEN $17 WHEN lm_meetings.rem2_estado IN ('enviado') THEN 'enviado' ELSE $17 END`,
       [uid, cid, start.toISOString(), tz, tipo, f(b.enlace).slice(0, 500), f(b.anfitrion).slice(0, 120), idioma, canal, modo, f(b.cc).slice(0, 300),

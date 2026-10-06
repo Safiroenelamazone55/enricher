@@ -123,6 +123,20 @@ async function sendReminder(pool, m, n) {
     [m.user_id, k.id, k.outbound_client_id || null, m.canal === 'whatsapp' ? 'whatsapp' : 'email', `Recordatorio de reunión enviado (${n === 1 ? 'día anterior' : '30 min antes'}) por ${m.canal === 'whatsapp' ? 'WhatsApp' : 'email'}`]);
 }
 
+// ¿El prospecto respondió (email, WhatsApp o respuesta registrada) DESPUÉS de que se agendó/revisó la reunión? Puede estar pidiendo reprogramar:
+// en ese caso el recordatorio NO sale solo, se frena y se avisa. Revisar y guardar la reunión, o "Enviar ahora", lo desbloquea.
+async function _repliedSince(pool, m) {
+  const since = m.reviewed_at || m.created_at;
+  const { rows: [r] } = await pool.query(
+    `SELECT (
+        EXISTS (SELECT 1 FROM lm_inbox_messages WHERE user_id=$1 AND contact_id=$2 AND tipo='reply' AND received_at > $3)
+        OR EXISTS (SELECT 1 FROM activities WHERE user_id=$1 AND contact_id=$2 AND tipo='respuesta' AND fecha > $3)
+        OR EXISTS (SELECT 1 FROM wa_messages w JOIN wa_jid_links l ON l.connection_id=w.connection_id AND l.chat_jid=w.chat_jid
+                    WHERE l.contact_id=$2 AND NOT w.from_me AND w.ts > $3)
+      ) AS replied`, [m.user_id, m.contact_id, since]);
+  return !!(r && r.replied);
+}
+
 async function tick(pool) {
   if (_running) return;
   _running = true;
@@ -133,6 +147,15 @@ async function tick(pool) {
           AND rem${n}_at > NOW() - INTERVAL '3 hours' LIMIT 50`);
       for (const m of rows) {
         try {
+          if (await _repliedSince(pool, m)) {
+            await pool.query(`UPDATE lm_meetings SET rem${n}_estado='revisar', updated_at=NOW() WHERE id=$1`, [m.id]);
+            const k0 = await _contactCtx(pool, m);
+            await pool.query(
+              `INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, nota, fecha, estado) VALUES ($1,$2,$3,'tarea',$4,NOW(),'pendiente')`,
+              [m.user_id, m.contact_id, (k0 && k0.outbound_client_id) || null,
+               `[Reunión #${m.id}·${n}] El prospecto respondió después de agendar: revisa si pide reprogramar. El recordatorio quedó detenido.`]);
+            continue;
+          }
           if (m.modo === 'auto' || m['rem' + n + '_prog']) await sendReminder(pool, m, n);
           else {
             const k = await _contactCtx(pool, m);

@@ -28678,7 +28678,7 @@ ${foot}
 
   // ── Reunión agendada + recordatorios (backend: services/meetingReminders.js) ──
   const _MT_TIPOS = [['', 'Sin enlace / lo maneja el cliente'], ['meet', 'Google Meet'], ['zoom', 'Zoom'], ['teams', 'Microsoft Teams'], ['telefono', 'Teléfono'], ['presencial', 'Presencial'], ['otro', 'Otro']];
-  const _MT_EST = { pendiente: 'Pendiente', enviado: '✓ Enviado', tarea: 'En tus tareas de Hoy', omitido: 'Omitido (ya pasó)', error: '⚠ Error' };
+  const _MT_EST = { pendiente: 'Pendiente', enviado: '✓ Enviado', tarea: 'En tus tareas de Hoy', omitido: 'Omitido (ya pasó)', revisar: '⚠ Detenido: el prospecto respondió — revísalo', error: '⚠ Error' };
   let _mt = { cid: 0, m: null };
   function mtClose() { document.getElementById('mt-modal')?.remove(); }
   function _mtLocalVal(m) {
