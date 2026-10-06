@@ -935,10 +935,11 @@ async function _draftPreapproved(pool) {
 //
 // En ambos casos se propaga a la campaña padre: no tiene sentido que la secuencia
 // esté corriendo y la campaña siga en borrador.
+// OJO (corregido 2026-10-06): el disparador por fecha ya NO toca las 'pausada'. Antes las reactivaba cada minuto mientras 'activar sola' siguiera marcado.
 async function _autoActivate(pool) {
   const { rows: porFecha } = await pool.query(`
     UPDATE sequences SET estado='activa', updated_at=NOW()
-     WHERE auto_activar AND estado IN ('draft','pausada')
+     WHERE auto_activar AND estado = 'draft'
        AND starts_on IS NOT NULL AND starts_on <= CURRENT_DATE
      RETURNING id, nombre, campaign_id`);
   for (const s of porFecha) console.log(`[send-engine] auto-activada: "${s.nombre}" (llegó su fecha de inicio)`);
