@@ -17878,3 +17878,11 @@ textarea.mt-i{height:auto;padding:9px 10px;resize:vertical;line-height:1.45}
 .seq-app__sigl{margin-top:8px;font-size:.68rem;color:#94A3B8}
 .seq-app__sig{margin-top:4px;padding:10px 12px;border-top:1px dashed #D6D3CD;background:#FAFAF8;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#333;max-height:170px;overflow:auto}
 .seq-app__sig img{max-width:100%;height:auto}
+
+.seq-app__sig{font-family:Verdana,Geneva,sans-serif !important}
+.seq-app__sig *{font-family:Verdana,Geneva,sans-serif !important}
+
+/* Aprobación: vista completa del correo (cuerpo + firma) en Verdana, como se envía */
+.seq-app__full{margin-top:4px;padding:14px 16px;border:1px solid #E2E0DB;background:#fff;font-family:Verdana,Geneva,sans-serif;font-size:14px;line-height:1.55;color:#1a1a2e;max-height:360px;overflow:auto}
+.seq-app__full img{max-width:100%;height:auto}
+.seq-app__body{font-family:Verdana,Geneva,sans-serif}

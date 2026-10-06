@@ -228,13 +228,30 @@ async function testMailbox(mb, pass) {
   return out;
 }
 
+// Tipografía ÚNICA de todos los correos (cuerpo + firma), para todos los buzones: Verdana.
+// Se aplica aquí porque TODO envío pasa por sendFromMailbox (secuencias, aprobados, programados, Inbox, recordatorios).
+const _VERDANA = 'font-family:Verdana,Geneva,sans-serif';
+function _forceVerdana(html) {
+  let h = String(html || '');
+  h = h.replace(/(style\s*=\s*")([^"]*)(")/gi, (m, a, s, c) => a + s.replace(/font-family\s*:[^;]*/gi, _VERDANA) + c)
+       .replace(/(style\s*=\s*')([^']*)(')/gi, (m, a, s, c) => a + s.replace(/font-family\s*:[^;]*/gi, _VERDANA.replace(/"/g, "'")) + c)
+       .replace(/(<style[^>]*>)([\s\S]*?)(<\/style>)/gi, (m, a, s, c) => a + s.replace(/font-family\s*:[^;}]*/gi, _VERDANA) + c)
+       .replace(/<font\b[^>]*>/gi, tag => /\sface\s*=/i.test(tag) ? tag.replace(/\sface\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/i, ' face="Verdana"') : tag.replace(/<font\b/i, '<font face="Verdana"'));
+  return '<div style="' + _VERDANA + ';font-size:13px">' + h + '</div>';
+}
+function _textToHtml(text) {
+  const esc = String(text || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return esc.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1">$1</a>').replace(/\r?\n/g, '<br>');
+}
+
 // Envía desde el buzón y garantiza la copia en "Enviados" del proveedor
 // (append por IMAP cuando el proveedor no la guarda solo, p. ej. Microsoft/Zoho).
 async function sendFromMailbox(mb, pass, msg) {
   const mail = {
     from: msg.fromName ? `"${msg.fromName.replace(/"/g, '')}" <${mb.email}>` : mb.email,
     to: msg.to, cc: msg.cc || undefined,
-    subject: msg.subject || '', text: msg.text || undefined, html: msg.html || undefined,
+    subject: msg.subject || '', text: msg.text || undefined,
+    html: (msg.html || msg.text) ? _forceVerdana(msg.html || _textToHtml(msg.text)) : undefined,
     inReplyTo: msg.inReplyTo || undefined, references: msg.references || undefined,
     attachments: msg.attachments || undefined,
   };

@@ -22415,8 +22415,8 @@ ${foot}
         <input class="form-input" id="noe-mov-${row.enr_id}" type="tel" placeholder="Celular (opcional)" style="flex:1">
       </div>
       <input class="form-input seq-app__subj" id="noe-subj-${row.enr_id}" value="${esc(row.asunto)}" placeholder="Asunto">
-      <textarea class="form-input seq-app__body" id="noe-body-${row.enr_id}" style="min-height:max(calc(100vh - 460px), 200px)">${esc(row.cuerpo)}</textarea>
-      ${_seqSigHtml()}
+      <textarea class="form-input seq-app__body" id="noe-body-${row.enr_id}" oninput="LeadManagerModule.seqPrevUpdate(this.id)" style="min-height:max(calc(100vh - 460px), 200px)">${esc(row.cuerpo)}</textarea>
+      ${_seqSigHtml('noe-body-' + row.enr_id, row.cuerpo)}
       <div class="seq-app__ft">
         <span class="sp"></span>
         <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.seqCompleteEmailApprove(${row.enr_id})">✓ Completar y aprobar</button>
@@ -22568,12 +22568,24 @@ ${foot}
   }
 
   // Firma que se añadirá al enviar: la del buzón del cliente de esta secuencia; si no tiene, la global de Configuración.
-  function _seqSigHtml() {
+  function _seqSigFor() {
     const s = (_sequences || []).find(x => x.id === _activeSeq);
     const cli = s && s.outbound_client_id ? (_clients || []).find(c => c.id === s.outbound_client_id) : null;
     const mb = cli ? _mbFor(cli.id) : null;
-    const sig = (mb && mb.signature_html) || ((typeof _sendCfg !== 'undefined' && _sendCfg && _sendCfg.firma) || '');
-    return sig ? '<div class="seq-app__sigl">Firma · se añade al enviar</div><div class="seq-app__sig">' + sig + '</div>' : '';
+    return (mb && mb.signature_html) || ((typeof _sendCfg !== 'undefined' && _sendCfg && _sendCfg.firma) || '');
+  }
+  // Mismo armado que el envío real (sendEngine.buildHtml): cuerpo + dos saltos de línea + firma.
+  function _seqFullPreviewHtml(text, sig) {
+    let h = esc(text || '').replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" style="color:#00804C">$1</a>').replace(/\n/g, '<br>');
+    if (sig) h += '<br><br>' + (sig.includes('<') ? sig : esc(sig).replace(/\n/g, '<br>'));
+    return h;
+  }
+  function _seqSigHtml(bodyId, text) {
+    return '<div class="seq-app__sigl">Vista completa del correo · así lo verá el destinatario, con la firma</div><div class="seq-app__full" id="prev-' + bodyId + '">' + _seqFullPreviewHtml(text, _seqSigFor()) + '</div>';
+  }
+  function seqPrevUpdate(id) {
+    const el = document.getElementById('prev-' + id), ta = document.getElementById(id);
+    if (el && ta) el.innerHTML = _seqFullPreviewHtml(ta.value, _seqSigFor());
   }
   function _seqAppCard(a) {
     const nm = [a.nombre, a.apellido].filter(Boolean).join(' ') || a.to_email;
@@ -22592,8 +22604,8 @@ ${foot}
         ${approved ? `<span class="ibx-b" style="background:var(--primary-soft);color:var(--primary)">Aprobado · sale ${esc(_apFmtDate(a.scheduled_at, _activeSeq))}</span>` : `<span class="ibx-b ibx-b--ooo">Paso día ${a.paso_dia || '?'} · envío ${esc(_apFmtDate(a.scheduled_at, _activeSeq))}</span>`}
       </div>
       <input class="form-input seq-app__subj" id="app-subj-${a.id}" value="${esc(a.asunto)}" ${approved ? 'disabled' : ''} placeholder="Asunto">
-      <textarea class="form-input seq-app__body seq-app__body--full" id="app-body-${a.id}" ${approved ? 'disabled' : ''}>${esc(a.cuerpo)}</textarea>
-      ${_seqSigHtml()}
+      <textarea class="form-input seq-app__body seq-app__body--full" id="app-body-${a.id}" oninput="LeadManagerModule.seqPrevUpdate(this.id)" ${approved ? 'disabled' : ''}>${esc(a.cuerpo)}</textarea>
+      ${_seqSigHtml('app-body-' + a.id, a.cuerpo)}
       <div class="seq-app__ft">
         ${approved ? '' : `<button class="btn btn--ghost btn--sm" onclick="LeadManagerModule.seqAppAction(${a.id},'save')">Guardar cambios</button>`}
         <span class="sp"></span>
@@ -26102,7 +26114,7 @@ ${foot}
           </div>
           <div class="dle-f dle-f--full">
             <span class="dle-l">Vista previa (así lo verá el destinatario, después del cuerpo del correo)</span>
-            <div id="mbx-sig-prev" style="background:#fff;border:1px solid #E5E4E1;border-radius:8px;padding:16px 18px;min-height:100px;max-height:280px;overflow-y:auto;font-family:Arial,Helvetica,sans-serif">${mb.signature_html || '<div style="color:#B4AFA8;font-style:italic">— sin firma —</div>'}</div>
+            <div id="mbx-sig-prev" style="background:#fff;border:1px solid #E5E4E1;border-radius:8px;padding:16px 18px;min-height:100px;max-height:280px;overflow-y:auto;font-family:Verdana,Geneva,sans-serif">${mb.signature_html || '<div style="color:#B4AFA8;font-style:italic">— sin firma —</div>'}</div>
           </div>
           <div class="dle-f dle-f--full" id="mbx-sig-err" style="display:none;color:var(--danger);font-size:.82rem"></div>
         </div>
@@ -33158,7 +33170,7 @@ ${foot}
     ldRefer, ldReferSave, ldNurture, ldNurtureSave, ldOpenDispoMenu,
     nurtureRetomarMenu, nurtureReinscribir, nurtureOtraSecuencia, nurtureSoloManual,
     waitingContactMenu, activarSiguienteContacto, waitingCerrarAviso,
-    dlSetCli, dlSetView, dlCardMenu, dlPopClose, dlCalNav, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel, mtOpen, mtClose, mtSeg, mtTimes, mtProg, mtChips, mtAddCc, mtSave, mtSend, mtCancel,
+    dlSetCli, dlSetView, dlCardMenu, dlPopClose, dlCalNav, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel, seqPrevUpdate, mtOpen, mtClose, mtSeg, mtTimes, mtProg, mtChips, mtAddCc, mtSave, mtSend, mtCancel,
     sqSetCli, sqSetEst, sqSetQ, cmSetCli, cmSetEst, cmSetQ,
     seqRunSetCanal, seqTaskSetDue,
     mbOpen, mbClose, mbSave, mbTest, mbDelete, mbProv, mbOAuthStart, mbManageOpen, mbManageClose,
