@@ -22201,11 +22201,25 @@ ${foot}
     const shown = (_taskStat === 'fix' || _fixAll) ? list : list.slice(0, 5);
     const rows = shown.map(({ c, bad, seqs }) => {
       const nm = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || '—';
-      const why = bad === 'rebote' ? 'El email rebotó — corrígelo para reanudar' : 'Sin email — agrégalo para reanudar';
+      const co = (_companies || []).find(x => String(x.id) === String(c.company_id));
+      const empresa = c.company_nombre || (co && co.nombre) || '';
       const sq = seqs.map(s => ((_sequences || []).find(x => x.id === s.id) || {}).nombre).filter(Boolean).join(', ');
-      return '<div class="lm-fix-row"><span class="lm-fix-row__i lm-fix-row__i--' + bad + '">' + (bad === 'rebote' ? '↩' : '✉') + '</span>' +
-        '<div class="lm-fix-row__t"><b>' + esc(nm) + '</b>' + (c.company_nombre ? ' · ' + esc(c.company_nombre) : '') +
-        '<small>' + why + (bad === 'rebote' && c.email ? ' (' + esc(c.email) + ')' : '') + (sq ? ' · ' + esc(sq) : '') + '</small></div>' +
+      // Atajos para ir a buscar el dato que falta: LinkedIn, WhatsApp, teléfono, sitio de la empresa, o una búsqueda lista.
+      const ic = (title, inner, attrs) => '<a class="lm-fix-ic" title="' + esc(title) + '" ' + attrs + ' onclick="event.stopPropagation()">' + inner + '</a>';
+      const q = encodeURIComponent('"' + nm + '" ' + empresa);
+      const site = co && co.website ? String(co.website).replace(/^(?!https?:\/\/)/i, 'https://') : '';
+      const tel = String(c.telefono || c.movil || '').replace(/[^\d+]/g, '');
+      const icons = [
+        c.linkedin ? ic('Abrir su LinkedIn', NI('linkedin', 13), 'href="' + esc(c.linkedin) + '" target="_blank" rel="noopener"') : ic('Buscar a ' + nm + ' en LinkedIn', NI('linkedin', 13), 'href="https://www.linkedin.com/search/results/people/?keywords=' + q + '" target="_blank" rel="noopener" style="opacity:.45"'),
+        _waDigits(c) ? ic('Abrir WhatsApp', NI('whatsapp', 13), 'href="javascript:void(0)" onclick="event.stopPropagation();LeadManagerModule.openWaFor(' + c.id + ')"') : '',
+        tel ? ic('Llamar: ' + tel, NI('phone', 13), 'href="tel:' + esc(tel) + '"') : '',
+        site ? ic('Sitio de la empresa', NI('external', 13), 'href="' + esc(site) + '" target="_blank" rel="noopener"') : '',
+        ic('Buscar su email en Google', NI('search', 13), 'href="https://www.google.com/search?q=' + q + '%20email" target="_blank" rel="noopener"'),
+      ].join('');
+      const tag = bad === 'rebote'
+        ? '<span class="lm-fix-tag lm-fix-tag--rebote" title="' + esc((c.email || '') + (sq ? ' · ' + sq : '')) + '">Email rebotó</span>'
+        : '<span class="lm-fix-tag" title="' + esc(sq) + '">Sin email</span>';
+      return '<div class="lm-fix-row"><div class="lm-fix-row__t"><b>' + esc(nm) + '</b>' + (empresa ? '<span class="lm-fix-row__co"> · ' + esc(empresa) + '</span>' : '') + '<span class="lm-fix-ics">' + icons + '</span></div>' + tag +
         '<span class="lm-fix-row__f"><input class="lm-fix-row__in" id="fix-em-' + c.id + '" type="email" placeholder="nuevo@email.com" onkeydown="if(event.key===\'Enter\'){LeadManagerModule.fixEmailSave(' + c.id + ')}"><button class="btn btn--primary btn--sm" onclick="LeadManagerModule.fixEmailSave(' + c.id + ')">Guardar</button><a href="#" class="lm-fix-row__a" title="Abrir la ficha del contacto" onclick="event.preventDefault();LeadManagerModule.openContactPage(' + c.id + ')">Ficha</a></span></div>';
     }).join('');
     return '<div class="lm-tsec-h" style="color:#B45309"><span class="lm-tsec-h__dot" style="background:#B45309"></span>Por corregir<span class="lm-tsec-h__n">' + list.length + '</span></div><div class="seq-tasks">' + rows + ((list.length > shown.length) ? '<button class="lm-fix-more" onclick="LeadManagerModule.fixShowAll()">Ver las ' + (list.length - shown.length) + ' restantes</button>' : '') + '</div>';
@@ -23908,6 +23922,8 @@ ${foot}
     _renderBody();
   }
   function _vTasks() {
+    if (_tiData === null) setTimeout(() => { if (_tiData === null) _tiReload(); }, 0);   // para que el recuadro Prioridad ya traiga su número
+
     const allRaw = _allSeqTasks();
     const hasFilter = !!(_taskFCamp || _taskFSeq);
     const all = hasFilter ? allRaw.filter(_taskFilterPass) : allRaw;
@@ -23957,6 +23973,7 @@ ${foot}
     const actsShown = sel === 'today' ? actToday : (!sel || sel === 'follow') ? acts : [];
     const hdr = (cls, txt, n) => '<div class="lm-tsec-h' + cls + '"><span class="lm-tsec-h__dot"></span>' + txt + '<span class="lm-tsec-h__n">' + n + '</span></div>';
     const blocks = [];
+    if (sel === 'priority') blocks.push(_vTaskInboxPriority());
     if (showApr) blocks.push(_apSectionHtml());
     if (!sel || sel === 'fix') blocks.push(_fixSectionHtml());
     if (showOver && seqOver.length) blocks.push(hdr(' lm-tsec-h--over', 'Vencidas', seqOver.length) + '<div class="seq-tasks">' + seqOver.map(x => _allTaskRow(x, today)).join('') + '</div>');
@@ -23982,7 +23999,7 @@ ${foot}
   let _taskStat = '';   // contador elegido en Tareas comerciales ('' = todo)
   function taskStat(k) {
     if (k === 'accept') { pendingAcceptOpen(); return; }
-    if (k === 'priority') { taskSetView('priority'); return; }
+    if (k === 'priority' && _tiData === null) _tiReload();
     _taskStat = (_taskStat === k) ? '' : k;
     _renderBody();
   }
@@ -23994,7 +24011,7 @@ ${foot}
       const r = await apiFetch(`${API}/lm/tasks/inbox`);
       _tiData = (r && r.ok) ? await r.json() : { ok: false, items: [] };
     } catch { _tiData = { ok: false, items: [] }; }
-    if (_section === 'tasks' && _taskView === 'priority') _renderBody();
+    if (_section === 'tasks' && (_taskView === 'priority' || _taskView === 'list')) _renderBody();
   }
   const _TI_CATS = [
     ['respuestas', 'Respuestas pendientes de revisar'],
