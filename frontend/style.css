@@ -17931,3 +17931,8 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 .dup-note{padding:12px 14px;background:#F7F8F6;border:1px solid #E8E6E1;font-size:.8rem;line-height:1.5;color:#475569}
 
 .dup-f em{font-style:normal;color:#94A3B8}
+
+/* Editor de paso: el mensaje necesita espacio para verse y escribirse */
+#lm-step-modal .fin-pi-box{width:min(980px,96vw);max-height:94vh}
+#lm-step-modal .step-var-ta{min-height:340px;height:340px;resize:vertical;line-height:1.55;font-size:.92rem}
+#lm-step-modal .step-var-box{padding-bottom:12px}
