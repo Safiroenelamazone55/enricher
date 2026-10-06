@@ -29264,7 +29264,9 @@ ${foot}
   }
 
   // ── Paso de secuencia: drawer ──
+  let _stepOpenSeq = null, _stepOpenId = null;
   function openStepDrawer(seqId, stepId) {
+    _stepOpenSeq = seqId; _stepOpenId = stepId || null;
     const st = stepId ? _steps.find(x => x.id === stepId) : null;
     _stepFocusTa = 'step-var-0';
     _stepDraft = {
@@ -29304,7 +29306,7 @@ ${foot}
         <div class="fin-pi-full step-sec-h"><span class="step-sec-n">2</span> El mensaje — qué se envía <span class="sp"></span><button type="button" class="seq-days-preset" id="step-prev-btn" onclick="LeadManagerModule.stepPreview(${seqId})">👁 Vista previa</button></div>
         <div id="step-preview" class="fin-pi-full" style="display:none"></div>
         ${(() => { const sq = (_sequences || []).find(x => x.id === seqId); const cli = (_clients || []).find(c => c.id === sq?.outbound_client_id); const cc = cli?.cc_email || ''; return cc ? `<label class="step-opt fin-pi-full" id="step-cc-wrap" title="Desmárcalo para que este paso salga sin copia"><input type="checkbox" id="step-cc" ${st?.cc_off ? '' : 'checked'} style="width:auto"><span class="step-opt__t">CC del cliente</span><span class="step-opt__m">${esc(cc)}</span></label>` : ''; })()}
-        <label class="step-opt fin-pi-full" id="step-reply-wrap" title="Encadena este correo como respuesta al último email enviado al contacto en esta secuencia (antepone Re: al asunto). Si aún no hay email previo, sale como conversación nueva." style="display:${(st?.canal || 'email') === 'email' ? 'flex' : 'none'}"><input type="checkbox" id="step-reply" ${st?.reply_to_prev ? 'checked' : ''} style="width:auto"><span class="step-opt__t">Responder en el mismo hilo (Re:)</span></label>
+        <label class="step-opt fin-pi-full" id="step-reply-wrap" title="Encadena este correo como respuesta al último email enviado al contacto en esta secuencia (antepone Re: al asunto). Si aún no hay email previo, sale como conversación nueva." style="display:${(st?.canal || 'email') === 'email' ? 'flex' : 'none'}"><input type="checkbox" id="step-reply" ${st?.reply_to_prev ? 'checked' : ''} style="width:auto" onchange="LeadManagerModule.stepAccionChange()"><span class="step-opt__t">Responder en el mismo hilo (Re:)</span></label>
         ${_lmTpls.length ? `<label class="fin-cfg-field fin-pi-full" id="step-tpl-top"><span class="fin-cfg-lbl">Usar plantilla guardada</span><select class="form-input" onchange="LeadManagerModule.stepUseTpl(this.value)"><option value="">— Elegir de la biblioteca —</option>${_lmTpls.map(tp => `<option value="${tp.id}">${esc(tp.nombre)} · ${esc(_tplCanalLabel(tp.canal))}</option>`).join('')}</select></label>` : ''}
         <div id="step-msg" class="fin-pi-full step-msg"></div>
       </div>
@@ -29460,7 +29462,8 @@ ${foot}
     const vars = single ? d.variants.slice(0, 1) : d.variants;
     const varsHtml = vars.map((v, i) => {
       const head = single ? '' : `<div class="step-var-hd"><input class="step-var-nm" value="${esc(v.nombre || String.fromCharCode(65 + i))}" data-i="${i}" placeholder="Nombre"><span class="step-var-sp"></span>${tplOpts ? tplOpts.replace('IDX', i) : ''}${d.variants.length > 1 ? `<button type="button" class="flt-del" onclick="LeadManagerModule.stepDelVariant(${i})" title="Quitar variante">✕</button>` : ''}</div>`;
-      const asunto = usesSubject ? `<label class="step-var-subjwrap"><span class="step-var-subjlbl">Asunto <span style="color:#918C85;font-weight:400;font-size:.72rem">— acepta variables</span></span><input class="form-input step-var-asunto" id="step-var-asu-${i}" data-i="${i}" placeholder="Ej. Consulta sobre {{company}}" value="${esc(v.asunto || '')}" oninput="LeadManagerModule.stepVarEdit(${i})" onfocus="LeadManagerModule.stepFocusTa('step-var-asu-${i}')"></label>` : '';
+      const _prevS = $('step-reply')?.checked ? _stepPrevSubject() : null;
+      const asunto = (usesSubject && _prevS !== null) ? `<input type="hidden" id="step-var-asu-${i}" data-i="${i}" value="${esc(v.asunto || '')}"><div class="step-var-subjwrap step-reply-subj"><span class="step-var-subjlbl">Asunto</span><div class="step-reply-subj__v">↩ Re: ${esc(_prevS) || '(asunto del email anterior)'}<span>automático · responde en el mismo hilo</span></div></div>` : usesSubject ? `<label class="step-var-subjwrap"><span class="step-var-subjlbl">Asunto <span style="color:#918C85;font-weight:400;font-size:.72rem">— acepta variables</span></span><input class="form-input step-var-asunto" id="step-var-asu-${i}" data-i="${i}" placeholder="Ej. Consulta sobre {{company}}" value="${esc(v.asunto || '')}" oninput="LeadManagerModule.stepVarEdit(${i})" onfocus="LeadManagerModule.stepFocusTa('step-var-asu-${i}')"></label>` : '';
       const targets = (!single && d.mode === 'segment') ? _stepTargetsHtml(i) : '';
       const link = v.tplId ? `<span class="step-var-link" id="step-var-link-${i}" title="Vinculada a la plantilla — se actualiza sola. Editar el texto la desvincula.">🔗 ${esc(_tplName(v.tplId))} · en vivo</span>` : '';
       // Aquí va el CONTEXTO (por qué comentas), no el tema: el largo, el tono y el
@@ -29636,6 +29639,18 @@ ${foot}
     const map = { first_name: ctx.nombre, last_name: ctx.apellido, full_name: [ctx.nombre, ctx.apellido].filter(Boolean).join(' '), email: ctx.email, title: ctx.cargo, company: ctx.empresa, city: ctx.ciudad, country: ctx.pais, nombre: ctx.nombre, apellido: ctx.apellido, cargo: ctx.cargo, empresa: ctx.empresa, ciudad: ctx.ciudad, pais: ctx.pais };
     return String(str || '').replace(/\{\{\s*(\w+)\s*\}\}/g, (m, k) => { const v = map[k.toLowerCase()]; return (v == null || v === '') ? `<span class="step-prev-miss">${m}</span>` : `<b class="step-prev-var">${esc(String(v))}</b>`; });
   }
+  // Asunto del email ANTERIOR de la secuencia (el último paso de email antes del que se edita). null = no hay (el paso sale como conversación nueva).
+  function _stepPrevSubject() {
+    const seqId = _stepOpenSeq; if (seqId == null) return null;
+    const mine = _stepOpenId ? _steps.find(x => x.id === _stepOpenId) : null;
+    const key = x => (Number(x.dia) || 0) * 1e6 + (Number(x.orden) || 0) * 1e3 + (Number(x.id) || 0);
+    const emails = _steps.filter(x => x.sequence_id === seqId && (x.canal || 'email') === 'email' && x.id !== _stepOpenId && (!mine || key(x) < key(mine)))
+      .sort((a, b) => key(a) - key(b));
+    const p = emails[emails.length - 1]; if (!p) return null;
+    let vs = p.variants; if (typeof vs === 'string') { try { vs = JSON.parse(vs); } catch (_) { vs = []; } }
+    const s = (Array.isArray(vs) && vs[0] && vs[0].asunto) || p.asunto || '';
+    return String(s).replace(/^((re|rv)\s*:\s*)+/i, '');
+  }
   function stepPreview(seqId) {
     const panel = $('step-preview'); if (!panel) return;
     if (panel.style.display !== 'none') { panel.style.display = 'none'; return; }
@@ -29663,7 +29678,7 @@ ${foot}
         <div><span>De</span>${de ? esc(de) : '<i class="step-prev-warn">sin buzón conectado — conéctalo en la ficha del cliente</i>'}</div>
         <div><span>Para</span>${esc(ctx.email)}</div>
         <div><span>CC</span>${cc ? esc(cc) : (ccBox && !ccBox.checked) ? '<i>— desactivado en este paso</i>' : '<i>— nadie (defínelo en la ficha del cliente como "CC")</i>'}</div>
-        <div><span>Asunto</span>${v.asunto ? _rvPrev(esc(v.asunto), ctx) : '<i class="step-prev-warn">⚠ sin asunto — escríbelo abajo</i>'}</div>
+        <div><span>Asunto</span>${(($('step-reply')?.checked) && _stepPrevSubject() !== null) ? '↩ Re: ' + (esc(_stepPrevSubject()) || '(asunto del email anterior)') : v.asunto ? _rvPrev(esc(v.asunto), ctx) : '<i class="step-prev-warn">⚠ sin asunto — escríbelo abajo</i>'}</div>
       </div>
       <div class="step-prev-body">${v.cuerpo ? _rvPrev(esc(v.cuerpo), ctx).replace(/\n/g, '<br>') : '<i class="step-prev-warn">⚠ sin cuerpo — escríbelo abajo</i>'}</div>
     </div>`;

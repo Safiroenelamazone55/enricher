@@ -17896,3 +17896,7 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 .seq-app__mail-sig{margin-top:3.1em;font-family:Verdana,Geneva,sans-serif;user-select:text}
 .seq-app__mail-sig *{font-family:Verdana,Geneva,sans-serif !important}
 .seq-app__mail-sig img{max-width:100%;height:auto}
+
+/* Asunto automático cuando el paso responde en el mismo hilo */
+.step-reply-subj__v{padding:9px 12px;background:#F3F5F2;border:1px solid #E2E0DB;font-size:.86rem;color:#14211B;display:flex;flex-direction:column;gap:2px}
+.step-reply-subj__v span{font-size:.72rem;color:#94A3B8}

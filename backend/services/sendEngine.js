@@ -517,14 +517,16 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback, served = [0]) {
   let inReplyTo = null;
   if (step.reply_to_prev) {
     const { rows: [prev] } = await pool.query(
-      `SELECT smtp_message_id FROM lm_messages
+      `SELECT smtp_message_id, asunto FROM lm_messages
         WHERE user_id=$1 AND contact_id=$2 AND sequence_id=$3
           AND smtp_message_id <> '' AND estado IN ('sent','replied','bounced')
         ORDER BY sent_at DESC NULLS LAST, id DESC LIMIT 1`,
       [uid, enr.contact_id, enr.sequence_id]);
     if (prev && prev.smtp_message_id) {
       inReplyTo = prev.smtp_message_id;
-      if (!/^re:\s/i.test(asunto)) asunto = 'Re: ' + asunto;
+      // Mismo asunto que el email anterior (con un solo "Re:"): así el hilo se agrupa en el cliente de correo del prospecto.
+      if (prev.asunto) asunto = 'Re: ' + String(prev.asunto).replace(/^((re|rv)\s*:\s*)+/i, '').trim();
+      else if (!/^re:\s/i.test(asunto)) asunto = 'Re: ' + asunto;
     }
     // Si no hay email previo (es el primer paso o los anteriores fueron manuales),
     // se envía como conversación nueva sin fallar — reply_to_prev queda inerte.
@@ -747,7 +749,7 @@ async function _flushApproved(pool, apiBase) {
       let subject = m.asunto, inReplyTo = null;
       if (m.reply_to_prev) {
         const { rows: [prev] } = await pool.query(
-          `SELECT smtp_message_id FROM lm_messages
+          `SELECT smtp_message_id, asunto FROM lm_messages
             WHERE user_id=$1 AND contact_id=$2 AND sequence_id=$3
               AND smtp_message_id <> '' AND estado IN ('sent','replied','bounced')
               AND id <> $4
@@ -755,7 +757,8 @@ async function _flushApproved(pool, apiBase) {
           [m.user_id, m.contact_id, m.sequence_id, m.id]);
         if (prev && prev.smtp_message_id) {
           inReplyTo = prev.smtp_message_id;
-          if (!/^re:\s/i.test(subject)) subject = 'Re: ' + subject;
+          if (prev.asunto) subject = 'Re: ' + String(prev.asunto).replace(/^((re|rv)\s*:\s*)+/i, '').trim();
+          else if (!/^re:\s/i.test(subject)) subject = 'Re: ' + subject;
         }
       }
       const sent = await sendFromMailbox(mb, auth, {
