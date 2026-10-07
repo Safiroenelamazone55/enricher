@@ -28184,18 +28184,36 @@ ${foot}
 
   // ── Derivación: registrar al contacto correcto de la MISMA empresa ──
   // disp='derivado' (te lo dio el lead) | 'no_es_persona' (no dio datos, lo agregas tú).
+  // Selectores "Entra a" de Referido / No es la persona: campañas y secuencias del cliente del contacto.
+  function _refCampOpts(cli, sel) {
+    const list = cli ? _campaignsByClient(Number(cli)) : [];
+    return '<option value="">— Ninguna —</option>' + list.map(c => '<option value="' + c.id + '"' + (sel && c.id === sel ? ' selected' : '') + '>' + esc(c.nombre) + '</option>').join('');
+  }
+  function _refSeqOpts(cli, camp, sel) {
+    const list = (_sequences || []).filter(x => x.outbound_client_id === cli && (!camp || x.campaign_id === Number(camp)));
+    return '<option value="">— Ninguna: lo decido después —</option>' + list.map(x => '<option value="' + x.id + '"' + (sel && x.id === sel ? ' selected' : '') + '>' + esc(x.nombre) + (x.estado !== 'activa' ? ' (' + (x.estado === 'pausada' ? 'pausada' : x.estado === 'draft' ? 'borrador' : x.estado) + ')' : '') + '</option>').join('');
+  }
+  function refCampChange(cid) {
+    const c = _contacts.find(x => x.id === cid); if (!c) return;
+    const sel = $('ref-seq'), camp = $('ref-camp'); if (!sel || !camp) return;
+    sel.innerHTML = _refSeqOpts(c.outbound_client_id, camp.value, null);
+  }
   function ldRefer(cid, disp) {
     const c = _contacts.find(x => x.id === cid); if (!c) return;
     const emp = c.company_nombre || c.empresa_nombre || 'la misma empresa';
     const nomOrig = [c.nombre, c.apellido].filter(Boolean).join(' ') || c.email || 'este contacto';
     const esDer = disp !== 'no_es_persona';
+    // Por defecto: la secuencia (y su campaña) donde ya está esta persona; se puede quitar o cambiar.
+    const _osq = (c.sequences || []).map(sq => (_sequences || []).find(x => x.id === sq.id)).filter(Boolean);
+    const _defSeq = _osq.find(x => x.estado === 'activa') || _osq[0] || null;
+    const _defCamp = _defSeq ? _defSeq.campaign_id : null;
     document.getElementById('lm-ref-modal')?.remove();
     const m = document.createElement('div'); m.id = 'lm-ref-modal'; m.className = 'fin-pi-backdrop';
     m.onclick = e => { if (e.target === m) m.remove(); };
     m.innerHTML = `<div class="fin-pi-box">
       <div class="fin-pi-box__hd"><h3>${esDer ? 'Derivó a otro contacto' : 'No es la persona — agregar a otro'}</h3><button class="fin-pi-x" onclick="document.getElementById('lm-ref-modal').remove()">✕</button></div>
       <div class="fin-pi-form">
-        <div class="fin-pi-full seq-drip-hint" style="margin:0 0 4px">${esc(nomOrig)} sale de la cola, pero <b>${esc(emp)}</b> sigue activa: el contacto nuevo se crea en esa misma empresa y entra a la secuencia desde el paso 1.</div>
+        <div class="fin-pi-full seq-drip-hint" style="margin:0 0 4px">${esc(nomOrig)} sale de la cola, pero <b>${esc(emp)}</b> sigue activa: el contacto nuevo se crea en esa misma empresa y entra a la campaña y secuencia que elijas abajo, desde el paso 1.</div>
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Nombre *</span><input class="form-input" id="ref-nombre" placeholder="Ej. Ana"></label>
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Apellido</span><input class="form-input" id="ref-apellido" placeholder="Ej. Pérez"></label>
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Cargo</span><input class="form-input" id="ref-cargo" placeholder="Ej. Gerente de Compras"></label>
@@ -28203,6 +28221,9 @@ ${foot}
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Teléfono</span><input class="form-input" id="ref-tel" placeholder="+51 …"></label>
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">LinkedIn</span><input class="form-input" id="ref-li" placeholder="linkedin.com/in/…"></label>
         <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Nota (opcional)</span><input class="form-input" id="ref-nota" placeholder="${esDer ? 'Ej. me pasó su correo directo' : 'Ej. lo ubiqué por LinkedIn'}"></label>
+        <div class="fin-pi-full ref-enter"><div class="ref-enter__t">Entra a <small>por defecto, donde ya está ${esc(nomOrig)} — puedes quitarlo o cambiarlo</small></div>
+          <div class="ref-enter__r"><label><span>Campaña</span><select class="form-input" id="ref-camp" onchange="LeadManagerModule.refCampChange(${cid})">${_refCampOpts(c.outbound_client_id, _defCamp)}</select></label>
+          <label><span>Secuencia</span><select class="form-input" id="ref-seq">${_refSeqOpts(c.outbound_client_id, _defCamp, _defSeq ? _defSeq.id : null)}</select></label></div></div>
       </div>
       <div class="fin-pi-box__ft"><span class="fin-cfg-hint" id="ref-hint"></span><div class="fin-pi-ft-btns">
         <button class="btn btn--ghost btn--sm" onclick="document.getElementById('lm-ref-modal').remove()">Cancelar</button>
@@ -28213,6 +28234,7 @@ ${foot}
   }
   async function ldReferSave(cid, disp) {
     const g = id => ($(id)?.value || '').trim();
+    const _refSeqName = ($('ref-seq') && $('ref-seq').value) ? $('ref-seq').selectedOptions[0].text : '';
     const hint = $('ref-hint');
     if (!g('ref-nombre') && !g('ref-email')) { if (hint) { hint.textContent = 'Indica al menos el nombre o el email.'; hint.className = 'fin-cfg-hint fin-cfg-hint--err'; } return; }
     const btn = $('ref-save'); if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
@@ -28220,7 +28242,7 @@ ${foot}
       const res = await apiFetch(`${API}/lm/contacts/${cid}/refer`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ disposition: disp, nombre: g('ref-nombre'), apellido: g('ref-apellido'), cargo: g('ref-cargo'),
-          email: g('ref-email'), telefono: g('ref-tel'), linkedin: g('ref-li'), nota: g('ref-nota'), auto_enroll: true }),
+          email: g('ref-email'), telefono: g('ref-tel'), linkedin: g('ref-li'), nota: g('ref-nota'), sequence_id: $('ref-seq')?.value || '', campaign_id: $('ref-camp')?.value || '' }),
       });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || 'Error');
@@ -28237,7 +28259,7 @@ ${foot}
       const m = document.getElementById('lm-ref-modal');
       if (m) m.innerHTML = `<div class="fin-pi-box" style="max-width:400px">
         <div class="fin-pi-box__hd"><h3>Referido creado o vinculado</h3><button class="fin-pi-x" onclick="document.getElementById('lm-ref-modal').remove()">✕</button></div>
-        <div class="fin-pi-form"><div class="fin-pi-full seq-drip-hint">✓ <b>${esc(nom)}</b> queda en la misma empresa, en etapa <b>Nuevo</b>${d.enrolado > 0 ? ` y <b>entró a ${d.enrolado === 1 ? 'la secuencia' : d.enrolado + ' secuencias'} desde el paso 1</b> (igual que su compañero)` : ', <b>sin enrolar</b> — decide tú el siguiente paso'}.</div></div>
+        <div class="fin-pi-form"><div class="fin-pi-full seq-drip-hint">✓ <b>${esc(nom)}</b> queda en la misma empresa, en etapa <b>Nuevo</b>${d.enrolado > 0 ? ` y <b>entró a «${esc(_refSeqName || 'la secuencia')}» desde el paso 1</b>${d.aviso ? ' · ' + esc(d.aviso) : ''}` : ', <b>sin enrolar</b> — decide tú el siguiente paso'}.</div></div>
         <div class="fin-pi-box__ft"><span></span><div class="fin-pi-ft-btns" style="flex-wrap:wrap;justify-content:flex-end">
           ${newId ? `<button class="btn btn--ghost btn--sm" onclick="document.getElementById('lm-ref-modal').remove();LeadManagerModule.openContactPage(${newId})">Ver prospecto</button>` : ''}
           ${newId ? `<button class="btn btn--ghost btn--sm" onclick="document.getElementById('lm-ref-modal').remove();LeadManagerModule.bulkAddOpen('campaign',[${newId}])">＋ Campaña</button>` : ''}
@@ -33384,7 +33406,7 @@ ${foot}
     seqDoDataIssue, seqDoDataIssuePick, ctToggleDataIssue, lmResumeDataIssue, seqOpenMark,
     lmSetPageSize, ctGoPage, coGoPage, seqCtGoPage, seqCoGoPage, seqCtSetEstado, seqCtSetDisp, seqCtSelToggle, seqCtSelAll, seqCtSelClear, seqCtSelAddToSeq, seqTaskSetCanal,
     ldSetResult, ldTogglePorCalificar, ldSetCli, ldSetSeq, ldSetCamp, ldSetQ, ldAddNote, ldMeet, ldToDeal, ldEditNote, ldExport,
-    ldRefer, ldReferSave, ldNurture, ldNurtureSave, ldOpenDispoMenu,
+    ldRefer, refCampChange, ldReferSave, ldNurture, ldNurtureSave, ldOpenDispoMenu,
     nurtureRetomarMenu, nurtureReinscribir, nurtureOtraSecuencia, nurtureSoloManual,
     waitingContactMenu, activarSiguienteContacto, waitingCerrarAviso,
     dlSetCli, dlDragStart, dlDragEnd, dlDragOver, dlDragLeave, dlDrop, dlSetView, dlCardMenu, dlPopClose, dlCalNav, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel, taskStat, fixEmailSave, fixShowAll, seqMailSync, stepReplyTo, mtOpen, mtClose, mtSeg, mtTimes, mtProg, mtChips, mtAddCc, mtSave, mtSend, mtCancel,

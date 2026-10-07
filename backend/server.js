@@ -4856,7 +4856,7 @@ app.post('/api/lm/contacts/:id/refer', requireAuth, async (req, res) => {
     let enrolado = 0;
     const { rows: origSeqs } = await client.query(
       `SELECT DISTINCT sequence_id FROM lm_contact_sequences WHERE user_id=$1 AND contact_id=$2`, [uid, cid]);
-    if (b.auto_enroll === true) {
+    if (b.auto_enroll === true && b.sequence_id === undefined) {   // (modo antiguo: solo si el cliente no manda una elección explícita)
       for (const s of origSeqs) {
         const r = await client.query(
           `INSERT INTO lm_contact_sequences (user_id, contact_id, sequence_id, paso, estado, start_date, next_action_at)
@@ -4886,7 +4886,15 @@ app.post('/api/lm/contacts/:id/refer', requireAuth, async (req, res) => {
     await client.query(`INSERT INTO activities (user_id, contact_id, outbound_client_id, tipo, nota, fecha, estado) VALUES ($1,$2,$3,'nota',$4,NOW(),'hecha')`,
       [uid, nuevo.id, orig.outbound_client_id, `Referido por ${nomOrig} (misma empresa)`]);
     await client.query('COMMIT');
-    res.status(201).json({ ok: true, contacto: nuevo, enrolado, disposition: disp, suggested_sequence_ids: origSeqs.map(s => s.sequence_id) });
+    // Entrada EXPLÍCITA elegida en el formulario (secuencia y/o campaña): se enrola con la lógica normal (goteo, cadencia, misma empresa).
+    let aviso = '';
+    if (b.sequence_id !== undefined) {
+      const sid = parseInt(b.sequence_id) || 0;
+      if (sid) { try { const r = await _lmAddMembershipCall(uid, 'sequence', [nuevo.id], sid); enrolado = (r && r.added) || 0; if (!enrolado) aviso = 'Ya estaba en esa secuencia.'; } catch (e) { aviso = e.message; } }
+      const cmp = parseInt(b.campaign_id) || 0;
+      if (cmp) { try { await _lmAddMembershipCall(uid, 'campaign', [nuevo.id], cmp); } catch (e) { aviso = aviso || e.message; } }
+    }
+    res.status(201).json({ ok: true, contacto: nuevo, enrolado, aviso, disposition: disp, suggested_sequence_ids: origSeqs.map(s => s.sequence_id) });
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
     console.error('[lm-refer]', err.message);

@@ -17988,3 +17988,10 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 .lm-fix-tag--rebote{background:#FEE2E2;color:#B91C1C}
 .lm-fix-row__in{width:190px;height:28px;font-size:.82rem}
 .lm-fix-row .btn{height:28px;padding:0 12px}
+
+/* Referido / No es la persona: a qué campaña y secuencia entra */
+.ref-enter{margin-top:6px;padding:12px 14px;background:#F7F8F6;border:1px solid #E8E6E1}
+.ref-enter__t{font-size:.82rem;font-weight:600;color:#14211B;margin-bottom:8px}
+.ref-enter__t small{font-weight:400;color:#64748B;margin-left:6px}
+.ref-enter__r{display:flex;gap:10px}.ref-enter__r label{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.ref-enter__r label span{font-size:.72rem;color:#64748B}
