@@ -18040,3 +18040,7 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 .ibx-tbl tr:first-child td{background:#F1EFEA;font-weight:600}
 
 .kdr__d{font-size:.72rem;color:#64748B;line-height:1.35;margin-top:2px}
+/* Aprobar/Bloqueos: recuadro del correo más compacto para que el texto se lea a tamaño normal */
+.seq-app .seq-app__mail{padding:12px 16px;line-height:1.45}
+.seq-app .seq-app__mail-body{min-height:90px}
+.seq-app .seq-app__mail-sig{margin-top:1.4em}

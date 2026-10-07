@@ -22707,7 +22707,7 @@ ${foot}
       '</div>';
   }
   // El correo por aprobar / corregir debe verse COMPLETO en pantalla, sin hacer scroll: si la tarjeta no cabe en el alto de la ventana,
-  // se reduce el zoom SOLO del recuadro del correo (mínimo 55%) hasta que cabe. Se recalcula al escribir, al cambiar de tarjeta y al redimensionar.
+  // se reduce el zoom SOLO del recuadro del correo (mínimo 85%) hasta que cabe. Se recalcula al escribir, al cambiar de tarjeta y al redimensionar.
   function _seqFitMail() {
     const m = document.querySelector('.seq-app__mail'); if (!m) return;
     m.style.zoom = '';
@@ -22722,7 +22722,7 @@ ${foot}
     const over = bottomAbs - (viewH - 14);
     if (over <= 0) return;
     const h = m.getBoundingClientRect().height; if (!h) return;
-    m.style.zoom = Math.max(0.55, (h - over) / h).toFixed(3);
+    m.style.zoom = Math.max(0.85, (h - over) / h).toFixed(3);
   }
   let _seqFitT = null;
   const _seqFitSoon = () => { clearTimeout(_seqFitT); _seqFitT = setTimeout(() => requestAnimationFrame(_seqFitMail), 60); };
