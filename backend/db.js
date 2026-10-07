@@ -1156,6 +1156,34 @@ async function initDb() {
     await pool.query(`ALTER TABLE outbound_clients ADD COLUMN IF NOT EXISTS portal_kpis TEXT NOT NULL DEFAULT ''`);
     // KPIs que la agencia muestra en las métricas de las secuencias de este cliente: son el DEFECTO del portal (ver services/kpiDefaults.js)
     await pool.query(`ALTER TABLE outbound_clients ADD COLUMN IF NOT EXISTS seq_kpis TEXT NOT NULL DEFAULT ''`);
+    // Si cambia el nombre de una empresa (p. ej. al limpiar "Pedregal S.A." → "Pedregal"), los correos AÚN NO ENVIADOS que lo mencionan se actualizan solos.
+    // Antes los borradores ya redactados conservaban el nombre viejo ("...cocopeat en Pedregal S.a.?") aunque la empresa ya estuviera limpia.
+    await pool.query(`
+      CREATE OR REPLACE FUNCTION lm_ci_replace(txt TEXT, old_s TEXT, new_s TEXT) RETURNS TEXT AS $fn$
+      DECLARE pos INT; out_s TEXT := COALESCE(txt, ''); from_at INT := 1; guard INT := 0;
+      BEGIN
+        IF COALESCE(old_s,'') = '' THEN RETURN txt; END IF;
+        LOOP
+          pos := position(lower(old_s) IN lower(substr(out_s, from_at)));
+          EXIT WHEN pos = 0 OR guard > 50;
+          pos := pos + from_at - 1;
+          out_s := overlay(out_s PLACING new_s FROM pos FOR length(old_s));
+          from_at := pos + length(new_s); guard := guard + 1;
+        END LOOP;
+        RETURN out_s;
+      END; $fn$ LANGUAGE plpgsql IMMUTABLE;`);
+    await pool.query(`
+      CREATE OR REPLACE FUNCTION lm_company_rename_drafts() RETURNS trigger AS $fn$
+      BEGIN
+        IF NEW.nombre IS DISTINCT FROM OLD.nombre AND COALESCE(OLD.nombre,'') <> '' AND COALESCE(NEW.nombre,'') <> '' THEN
+          UPDATE lm_messages m SET asunto = lm_ci_replace(m.asunto, OLD.nombre, NEW.nombre), cuerpo = lm_ci_replace(m.cuerpo, OLD.nombre, NEW.nombre)
+           WHERE m.estado IN ('awaiting','draft','approved','scheduled') AND m.sent_at IS NULL
+             AND m.contact_id IN (SELECT id FROM lm_contacts WHERE company_id = NEW.id);
+        END IF;
+        RETURN NEW;
+      END; $fn$ LANGUAGE plpgsql;`);
+    await pool.query('DROP TRIGGER IF EXISTS trg_lm_company_rename ON lm_companies');
+    await pool.query('CREATE TRIGGER trg_lm_company_rename AFTER UPDATE OF nombre ON lm_companies FOR EACH ROW EXECUTE FUNCTION lm_company_rename_drafts()');
     // Asunto editable de cada aviso ('' = usar el asunto por defecto)
     await pool.query(`ALTER TABLE lm_meetings ADD COLUMN IF NOT EXISTS subj1 TEXT NOT NULL DEFAULT ''`);
     await pool.query(`ALTER TABLE lm_meetings ADD COLUMN IF NOT EXISTS subj2 TEXT NOT NULL DEFAULT ''`);

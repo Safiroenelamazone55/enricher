@@ -283,7 +283,7 @@ function applyBranding({ companyLogo, workspaceName } = {}) {
 const WS_LAUNCHER_ITEMS = [
   { tab: 'mgmt-dashboard', area: 'management', name: 'Operaciones', desc: 'Proyectos, tareas, clientes y finanzas',
     icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="11" height="9" rx="2"/><rect x="16" y="3" width="5" height="9" rx="2"/><rect x="3" y="14" width="5" height="7" rx="2"/><rect x="10" y="14" width="11" height="7" rx="2"/></svg>' },
-  { tab: 'single', area: 'enricher', name: 'Calidad de datos', desc: 'Preparación, verificación y scoring de leads',
+  { tab: 'single', area: 'enricher', name: 'Datos', desc: 'Preparación, verificación y scoring de leads',
     icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21"/><path d="M6.2 6.2l1.8 1.8M16 16l1.8 1.8M6.2 17.8l1.8-1.8M16 8l1.8-1.8"/></svg>' },
   { tab: 'lead-manager', area: 'leadmanagement', name: 'Outreach', desc: 'CRM, campañas, actividades y seguimiento',
     icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 3H2l8 9.5v7.5l4 2v-9.5L22 3z"/></svg>' },
@@ -617,7 +617,7 @@ function selectWorkspaceArea(area) {
 
 // ── Doble sidebar: rail de módulos + panel de secciones ──
 let _activeModule = 'management';
-const _MOD_TITLES = { management: 'Operaciones', enricher: 'Calidad de datos', leadmanagement: 'Outreach', finance: 'Finanzas', cantera: 'Cantera', config: 'Configuración' };
+const _MOD_TITLES = { management: 'Operaciones', enricher: 'Datos', leadmanagement: 'Outreach', finance: 'Finanzas', cantera: 'Cantera', config: 'Configuración' };
 function _moduleOf(tab) {
   return document.querySelector(`.snav-item[data-tab="${tab}"]`)?.closest('.snav-group')?.dataset.module || 'management';
 }
@@ -688,7 +688,7 @@ window.addEventListener('popstate', () => {
 const HOME_MODULES = [
   { id: 'management',    tab: 'mgmt-dashboard', name: 'Operaciones',    desc: 'Proyectos, tareas, clientes y finanzas',      color: 'orange',
     icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg>' },
-  { id: 'enricher',      tab: 'single',         name: 'Calidad de datos', desc: 'Preparación, verificación y scoring de leads', color: 'green',
+  { id: 'enricher',      tab: 'single',         name: 'Datos', desc: 'Preparación, verificación y scoring de leads', color: 'green',
     icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 4.9 4.9 1.8-4.9 1.8L12 16.4l-1.8-4.9L5.3 9.5l4.9-1.8z"/><path d="M18.6 14.6l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/></svg>' },
   { id: 'leadmanagement', tab: 'lead-manager',   name: 'Outreach',       desc: 'CRM, campañas, secuencias y leads',            color: 'red',
     icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>' },
