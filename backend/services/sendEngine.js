@@ -316,7 +316,7 @@ async function _tickWorkspace(pool, cfg, apiBase, gmailCallback, served = [0]) {
        AND NOT EXISTS (
             SELECT 1 FROM lm_messages mi
              WHERE mi.sequence_id = s.id AND mi.sent_at IS NOT NULL
-               AND mi.sent_at > NOW() - make_interval(mins => GREATEST(COALESCE(s.send_interval_min,5),1))
+               AND mi.sent_at > NOW() - (GREATEST(COALESCE(s.send_interval_min,5),1) * (0.6 + random() * 0.9) * interval '1 minute')
            )
        -- Calentamiento gradual del BUZÓN del cliente: si hoy ya se llegó al tope de la rampa, se salta y el motor sigue con otros.
        AND NOT EXISTS (
@@ -713,7 +713,7 @@ async function _flushApproved(pool, apiBase) {
        AND NOT EXISTS (
             SELECT 1 FROM lm_messages mi
              WHERE mi.sequence_id = m.sequence_id AND mi.sent_at IS NOT NULL
-               AND mi.sent_at > NOW() - make_interval(mins => GREATEST(COALESCE(s.send_interval_min,5),1))
+               AND mi.sent_at > NOW() - (GREATEST(COALESCE(s.send_interval_min,5),1) * (0.6 + random() * 0.9) * interval '1 minute')
            )
        -- Mismos topes que el envío automático: el límite PROPIO de la secuencia manda; si no tiene, el calentamiento del buzón.
        -- Lo que no cabe hoy espera a mañana por SU propio tope, nunca por lo que hagan otras secuencias o clientes.
@@ -752,6 +752,8 @@ async function _flushApproved(pool, apiBase) {
         continue;
       }
       if (!m.mb_ok || !['conectado', 'solo_envio'].includes(m.mb_estado)) throw new Error('El buzón ya no está conectado');
+      // Anti-patrón: el motor despierta cada 60 s, así que sin esto todos los envíos caen en el segundo :00. Se añaden 0–20 s al azar.
+      await new Promise(r => setTimeout(r, Math.floor(Math.random() * 20000)));
       const { sendFromMailbox, getMailboxAuth } = require('./mailboxService');
       // Firma: la del buzón pisa a la del user (misma regla que el auto-sender).
       const firmaEfectiva = m.mb_signature || m.firma;
