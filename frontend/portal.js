@@ -399,9 +399,8 @@
       return { from: f, to: now, pfrom: pf, pto: pt };
     }
     if (per === 'trim') {
-      const qStart = Math.floor(now.getMonth() / 3) * 3;
-      const f = new Date(now.getFullYear(), qStart, 1, 12), pf = new Date(now.getFullYear(), qStart - 3, 1, 12);
-      const pend = new Date(now.getFullYear(), qStart, 0, 12), pt = new Date(pf); pt.setDate(Math.min(now.getDate(), pend.getDate()));
+      const f = new Date(now.getFullYear(), now.getMonth() - 3, 1, 12), pt = new Date(f); pt.setDate(pt.getDate() - 1);
+      const days = Math.round((now - f) / 864e5) + 1, pf = new Date(pt); pf.setDate(pf.getDate() - days + 1);
       return { from: f, to: now, pfrom: pf, pto: pt };
     }
     const dow = (now.getDay() + 6) % 7, f = new Date(now); f.setDate(now.getDate() - dow);
@@ -419,7 +418,7 @@
   function dl(cur, prev) {
     if (!prev && !cur) return '<span class="dash-d dash-d--0">—</span>';
     const diff = prev ? Math.round((cur - prev) / prev * 100) : 100, cls = diff > 0 ? 'up' : diff < 0 ? 'down' : '0';
-    return `<span class="dash-d dash-d--${cls}" title="${S.per === 'month' ? 'vs. mes anterior' : S.per === 'trim' ? 'vs. trimestre anterior' : S.per === 'custom' ? 'vs. período anterior' : 'vs. semana anterior'}">${diff > 0 ? '▲ +' : diff < 0 ? '▼ -' : '• '}${Math.abs(diff)}%</span>`;
+    return `<span class="dash-d dash-d--${cls}" title="${S.per === 'month' ? 'vs. mes anterior' : S.per === 'trim' ? 'vs. período anterior' : S.per === 'custom' ? 'vs. período anterior' : 'vs. semana anterior'}">${diff > 0 ? '▲ +' : diff < 0 ? '▼ -' : '• '}${Math.abs(diff)}%</span>`;
   }
   function updatesHtml() {
     const u = S.upd; if (!u || !u.length) return '';
@@ -438,7 +437,7 @@
       { id: 'clicks', ic: 'send', l: 'Clics', v: c.sent ? pct(c.clicked, c.sent) + '%' : '—', dl: '<span class="dash-d dash-d--0">estimado</span>', sub: '' },
     ];
     const sent = `${c.contacted} contactos alcanzados · ${c.replies} respuestas${mc == null ? '' : ' · ' + mc + (mc === 1 ? ' oportunidad' : ' oportunidades')}`;
-    const title = S.per === 'month' ? 'Este mes' : S.per === 'trim' ? 'Este trimestre' : S.per === 'custom' ? 'Rango elegido' : 'Esta semana';
+    const title = S.per === 'month' ? 'Este mes' : S.per === 'trim' ? 'Últimos 3 meses' : S.per === 'custom' ? 'Rango elegido' : 'Esta semana';
     const customRow = S.per === 'custom' ? `<div class="pt-range" style="margin:10px 0 2px">
       <span class="pt-range__ic">${ico('cal', 16)}</span>
       <input type="date" id="pt-cf1" class="pt-range__in" value="${esc(S.customFrom || '')}" onchange="PT.rangeDirty()">
@@ -447,7 +446,7 @@
       <button id="pt-range-go" class="pt-range__go" onclick="PT.customRange(document.getElementById('pt-cf1').value,document.getElementById('pt-cf2').value)">Aplicar</button>
     </div>` : '';
     return `<div class="pt-week"><div class="pt-week__h"><div><h2>${title}</h2><span class="pt-week__r">${fshort(w.r.from)} – ${fshort(w.r.to)}</span></div>
-      <div class="dash-seg"><button class="dash-seg__b${S.per === 'week' ? ' on' : ''}" onclick="PT.per('week')">Semana</button><button class="dash-seg__b${S.per === 'month' ? ' on' : ''}" onclick="PT.per('month')">Mes</button><button class="dash-seg__b${S.per === 'trim' ? ' on' : ''}" onclick="PT.per('trim')">Trimestre</button><button class="dash-seg__b${S.per === 'custom' ? ' on' : ''}" onclick="PT.per('custom')">Personalizado</button></div></div>
+      <div class="dash-seg"><button class="dash-seg__b${S.per === 'week' ? ' on' : ''}" onclick="PT.per('week')">Semana</button><button class="dash-seg__b${S.per === 'month' ? ' on' : ''}" onclick="PT.per('month')">Mes</button><button class="dash-seg__b${S.per === 'trim' ? ' on' : ''}" onclick="PT.per('trim')">3 meses</button><button class="dash-seg__b${S.per === 'custom' ? ' on' : ''}" onclick="PT.per('custom')">Personalizado</button></div></div>
       ${customRow}
       <div class="pt-week__k pt-week__k--7">${tiles.filter(t => keepK(t[5])).map(t => `<div class="pt-tile pt-click" style="--kc:${t[4]}" onclick="PT.weekTile('${t[5]}','${esc(t[0])}')"><span class="pt-tile__i">${ico(t[3], 18)}</span><div><div class="pt-tile__l">${t[0]}</div><div class="pt-tile__v">${t[1]}</div>${dl(t[1], t[2])}</div></div>`).join('')}${extraTiles.filter(t => keepK(t.id)).map(t => `<div class="pt-tile"><span class="pt-tile__i">${ico(t.ic, 18)}</span><div><div class="pt-tile__l">${t.l}</div><div class="pt-tile__v">${t.v}</div>${t.dl}${t.sub ? `<div class="pt-week__s" style="margin-top:2px">${t.sub}</div>` : ''}</div></div>`).join('')}</div>
       <p class="pt-week__s">${sent}</p>
