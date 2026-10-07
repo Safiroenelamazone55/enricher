@@ -21350,7 +21350,7 @@ ${foot}
       const a = queue[_seqAppIdx];
       const doneCount = _seqApprovals.length - pend.length;
       return `${noEmailHtml}<div class="seq-app-nav">
-          <div class="seq-app-nav__count"><b>${_seqAppIdx + 1}</b> de ${queue.length} · ${pend.length} por aprobar${doneCount ? ` · ${doneCount} en cola` : ''}</div>
+          <div class="seq-app-nav__count"><b>${pend.length ? doneCount + _seqAppIdx + 1 : _seqAppIdx + 1}</b> de ${pend.length ? pend.length + doneCount : queue.length} · ${pend.length} por aprobar${doneCount ? ` · ${doneCount} en cola` : ''}</div>
           <div class="seq-app-nav__arrows">
             <button class="btn btn--ghost btn--sm" ${_seqAppIdx <= 0 ? 'disabled' : ''} onclick="LeadManagerModule.seqAppNav(-1)">‹ Anterior</button>
             <button class="btn btn--ghost btn--sm" ${_seqAppIdx >= queue.length - 1 ? 'disabled' : ''} onclick="LeadManagerModule.seqAppNav(1)">Siguiente ›</button>
