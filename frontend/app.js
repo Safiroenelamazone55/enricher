@@ -25648,10 +25648,31 @@ ${foot}
     const vals = _kpiValues(c, p, d), sel = _kpiSel(scope);
     const cards = sel.map(id => {
       const def = _KPI_DEFS.find(x => x[0] === id), x = vals[id];
-      return '<div class="dash-kpi" style="--kc:' + def[3] + '"><div class="dash-kpi__top"><span class="dash-kpi__ic">' + _dashIco(def[2], 18) + '</span><span class="dash-kpi__l" title="' + def[1] + '">' + def[1] + '</span></div><div class="dash-kpi__v">' + x.v + '</div>' + x.dl + (x.s ? '<div class="dash-kpi__s">' + x.s + '</div>' : '') + '</div>';
+      return '<div class="dash-kpi dash-kpi--click" title="Clic para ver quiénes son" onclick="LeadManagerModule.kpiDrill(\'' + scope + '\',\'' + id + '\')" style="--kc:' + def[3] + '"><div class="dash-kpi__top"><span class="dash-kpi__ic">' + _dashIco(def[2], 18) + '</span><span class="dash-kpi__l" title="' + def[1] + '">' + def[1] + '</span></div><div class="dash-kpi__v">' + x.v + '</div>' + x.dl + (x.s ? '<div class="dash-kpi__s">' + x.s + '</div>' : '') + '</div>';
     }).join('');
     return '<div class="kpi-cfg-bar"><button type="button" class="kpi-cfg" onclick="LeadManagerModule.kpiCfgOpen(\'' + scope + '\',event)" title="Elegir qué KPIs mostrar">⚙ KPIs</button></div>' +
       '<div class="dash-kpis dash-kpis--row" style="grid-template-columns:repeat(' + Math.max(1, sel.length) + ',minmax(150px,1fr))">' + cards + '</div>';
+  }
+  // Clic en un KPI → lista de los contactos (empresa, cargo) que hay detrás del número.
+  async function kpiDrill(scope, id) {
+    const def = _KPI_DEFS.find(x => x[0] === id); if (!def) return;
+    let from, to; const p = new URLSearchParams({ kpi: id });
+    if (scope === 'seq') { [from, to] = _seqMetRangeDates(); p.set('sequence', _activeSeq); }
+    else { [from, to] = _dashRange(); ['client', 'campaign', 'sequence', 'country'].forEach(k => { if (_dashF[k]) p.set(k, _dashF[k]); }); }
+    p.set('from', from); p.set('to', to);
+    document.getElementById('kdr')?.remove();
+    const ov = document.createElement('div'); ov.id = 'kdr'; ov.className = 'kdr';
+    ov.onclick = e => { if (e.target === ov) ov.remove(); };
+    ov.innerHTML = '<div class="kdr__box"><div class="kdr__h"><b>' + esc(def[1]) + '</b><span class="kdr__sub">' + from + ' → ' + to + '</span><button class="kdr__x" onclick="document.getElementById(\'kdr\').remove()">×</button></div><div class="kdr__b" id="kdr-b">Cargando…</div></div>';
+    document.body.appendChild(ov);
+    let rows = [];
+    try { const r = await apiFetch(API + '/lm/dashboard/drill?' + p); const j = await r.json(); if (!r.ok) throw new Error(j.error || 'Error'); rows = j.rows || []; }
+    catch (e) { const b = document.getElementById('kdr-b'); if (b) b.textContent = 'No se pudo cargar: ' + e.message; return; }
+    const b = document.getElementById('kdr-b'); if (!b) return;
+    if (!rows.length) { b.innerHTML = '<div class="kdr__e">Nadie en este período.</div>'; return; }
+    const fd = d => d ? new Date(d).toLocaleDateString('es', { day: '2-digit', month: 'short' }) : '';
+    b.innerHTML = '<div class="kdr__c">' + rows.length + (rows.length >= 500 ? '+' : '') + ' contacto' + (rows.length === 1 ? '' : 's') + '</div><table class="kdr__t"><thead><tr><th>Contacto</th><th>Cargo</th><th>Empresa</th><th>Veces</th><th>Último</th></tr></thead><tbody>'
+      + rows.map(r => '<tr onclick="document.getElementById(\'kdr\').remove();LeadManagerModule.openContactPage(' + r.id + ')"><td>' + esc(r.nombre || r.email || '—') + '</td><td>' + esc(r.cargo || '—') + '</td><td>' + esc(r.empresa || '—') + '</td><td>' + (r.n || 1) + '</td><td>' + fd(r.ultimo) + '</td></tr>').join('') + '</tbody></table>';
   }
   function kpiCfgOpen(scope, ev) {
     if (ev && ev.stopPropagation) ev.stopPropagation();
@@ -33505,7 +33526,7 @@ ${foot}
     ldRefer, refCampChange, ldReferSave, ldNurture, ldNurtureSave, ldOpenDispoMenu,
     nurtureRetomarMenu, nurtureReinscribir, nurtureOtraSecuencia, nurtureSoloManual,
     waitingContactMenu, activarSiguienteContacto, waitingCerrarAviso,
-    dlSetCli, dlDragStart, dlDragEnd, dlDragOver, dlDragLeave, dlDrop, dlSetView, dlCardMenu, dlPopClose, dlCalNav, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel, portalKpiToggle, portalKpiReset, kpiCfgOpen, kpiCfgToggle, kpiCfgReset, taskStat, fixEmailSave, fixShowAll, seqMailSync, stepReplyTo, mtOpen, mtClose, mtSeg, mtTimes, mtProg, mtChips, mtAddCc, mtSave, mtSend, mtCancel,
+    dlSetCli, dlDragStart, dlDragEnd, dlDragOver, dlDragLeave, dlDrop, dlSetView, dlCardMenu, dlPopClose, dlCalNav, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel, portalKpiToggle, portalKpiReset, kpiDrill, kpiCfgOpen, kpiCfgToggle, kpiCfgReset, taskStat, fixEmailSave, fixShowAll, seqMailSync, stepReplyTo, mtOpen, mtClose, mtSeg, mtTimes, mtProg, mtChips, mtAddCc, mtSave, mtSend, mtCancel,
     sqSetCli, sqSetEst, sqSetQ, cmSetCli, cmSetEst, cmSetQ,
     seqRunSetCanal, seqTaskSetDue,
     mbOpen, mbClose, mbSave, mbTest, mbDelete, mbProv, mbOAuthStart, mbManageOpen, mbManageClose,

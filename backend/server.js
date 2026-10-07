@@ -6879,6 +6879,50 @@ const _lmDashHandler = async (req, res) => {
     });
   } catch (err) { console.error('[lm-dashboard]', err.message); res.status(500).json({ error: 'Error al cargar dashboard' }); }
 };
+// Detalle de un KPI: QUIÉNES son (contactos / empresas / cargos) detrás del número.
+app.get('/api/lm/dashboard/drill', requireAuth, async (req, res) => {
+  try {
+    const uid = req.workspaceOwnerId, q = req.query, today = new Date();
+    const to = /^\d{4}-\d{2}-\d{2}$/.test(q.to || '') ? q.to : today.toISOString().slice(0, 10);
+    const from = /^\d{4}-\d{2}-\d{2}$/.test(q.from || '') ? q.from : new Date(today.getTime() - 29 * 864e5).toISOString().slice(0, 10);
+    const params = [uid, from, to];
+    const P = v => { params.push(v); return '$' + params.length; };
+    let kw = 'k.user_id=$1';
+    if (parseInt(q.client)) kw += ' AND k.outbound_client_id=' + P(parseInt(q.client));
+    let seqP = null, campP = null;
+    if (parseInt(q.sequence)) { seqP = P(parseInt(q.sequence)); kw += ' AND EXISTS(SELECT 1 FROM lm_contact_sequences x WHERE x.contact_id=k.id AND x.sequence_id=' + seqP + ')'; }
+    if (parseInt(q.campaign)) { campP = P(parseInt(q.campaign)); kw += ' AND EXISTS(SELECT 1 FROM lm_contact_sequences x JOIN sequences s2 ON s2.id=x.sequence_id WHERE x.contact_id=k.id AND s2.campaign_id=' + campP + ')'; }
+    const KP = "COALESCE(NULLIF(TRIM((SELECT c.pais FROM lm_companies c WHERE c.id=k.company_id)),''),NULLIF(TRIM(k.pais),''))";
+    if (q.country) kw += ' AND ' + KP + ' ILIKE ' + P('%' + String(q.country).slice(0, 60) + '%');
+    const kpi = String(q.kpi || '');
+    const MSG = { enviados: "m.estado IN ('sent','replied','bounced')", aperturas: "EXISTS(SELECT 1 FROM lm_message_events e WHERE e.message_id=m.id AND e.tipo='open')", clics: "EXISTS(SELECT 1 FROM lm_message_events e WHERE e.message_id=m.id AND e.tipo='click')", rebotes: "m.estado='bounced'" };
+    const COLS = "k.id, TRIM(k.nombre||' '||k.apellido) AS nombre, k.cargo, COALESCE(NULLIF((SELECT c.nombre FROM lm_companies c WHERE c.id=k.company_id),''),k.empresa_nombre) AS empresa, k.email";
+    let sql;
+    if (MSG[kpi]) {
+      sql = 'SELECT ' + COLS + ', COUNT(*)::int AS n, MAX(m.sent_at) AS ultimo FROM lm_messages m JOIN lm_contacts k ON k.id=m.contact_id WHERE m.user_id=$1 AND ' + kw
+        + (seqP ? ' AND m.sequence_id=' + seqP : '') + (campP && !seqP ? ' AND m.sequence_id IN (SELECT id FROM sequences WHERE campaign_id=' + campP + ')' : '')
+        + " AND m.sent_at IS NOT NULL AND m.sent_at::date BETWEEN $2::date AND $3::date AND " + MSG[kpi] + ' GROUP BY k.id ORDER BY MAX(m.sent_at) DESC LIMIT 500';
+    } else {
+      const RT = 'Interesado|Reunión|Más adelante|Derivó a otro|No es la persona|No interesado|No contactar';
+      const W = {
+        respuestas: "(a.tipo='respuesta' OR (a.tipo='disposition_change' AND a.nota ~ '→ (" + RT + ")[[:space:]]*$'))",
+        reuniones: "a.tipo='reunion'",
+        invitaciones: "a.estado='hecha' AND a.tipo='linkedin_connect'",
+        contactados: "a.estado='hecha' AND (a.tipo IN ('email_enviado','linkedin_msg','linkedin_connect','linkedin_visita','llamada') OR a.tipo LIKE 'linkedin%' OR (a.tipo='email' AND a.nota NOT LIKE '[Inbox] Respuesta%' AND a.nota NOT LIKE 'Solicitud de admin%') OR (a.tipo='nota' AND a.nota ~ '^Paso [0-9]'))",
+      };
+      W.respuesta = W.respuestas;
+      const seqAct = seqP ? ' AND a.fecha >= (SELECT COALESCE((x2.start_date + TIME \'12:00\')::timestamptz, x2.created_at) FROM lm_contact_sequences x2 WHERE x2.contact_id=k.id AND x2.sequence_id=' + seqP + ' LIMIT 1)' : '';
+      if (kpi === 'linkedin') {
+        sql = 'SELECT ' + COLS + ', 1 AS n, k.li_aceptado_at AS ultimo FROM lm_contacts k WHERE ' + kw + ' AND k.li_aceptado_at::date BETWEEN $2::date AND $3::date ORDER BY k.li_aceptado_at DESC LIMIT 500';
+      } else if (W[kpi]) {
+        sql = 'SELECT ' + COLS + ', COUNT(*)::int AS n, MAX(a.fecha) AS ultimo FROM activities a JOIN lm_contacts k ON k.id=a.contact_id WHERE ' + kw + seqAct
+          + ' AND a.fecha::date BETWEEN $2::date AND $3::date AND ' + W[kpi] + ' GROUP BY k.id ORDER BY MAX(a.fecha) DESC LIMIT 500';
+      } else return res.status(400).json({ error: 'KPI desconocido' });
+    }
+    const { rows } = await pool.query(sql, params);
+    res.json({ kpi, rows });
+  } catch (e) { console.error('[dash drill]', e.message); res.status(500).json({ error: 'No se pudo cargar el detalle' }); }
+});
 app.get('/api/lm/dashboard', requireAuth, _lmDashHandler);
 require('./services/portalRoutes').mount(app, { pool, requireAuth, dashHandler: _lmDashHandler });
 
