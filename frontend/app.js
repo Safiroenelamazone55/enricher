@@ -21402,7 +21402,7 @@ ${foot}
         ? `<td class="client-meta" colspan="2"><span style="color:var(--muted);font-size:12px" title="No está enrolado en esta secuencia: es a quien te derivaron">↪ Referido por ${esc(e._from.join(', '))} — nuevo prospecto, sin enrolar aquí</span></td>`
         : `<td class="client-meta"><div class="seq-prog"><div class="seq-prog__bar"><span style="width:${pct}%"></span></div><span class="seq-prog__t">${done ? 'Completada' : `Paso ${paso}/${N || '—'} · ${esc(stTitle)}`}</span></div></td>
       <td><span class="client-badge" style="background:${em[1]};color:${em[2]}">${em[0]}</span></td>`}
-      <td>${e.real_disposition ? _dispoBadge(e.real_disposition) + (e.real_disposition !== e.disposition ? ` <span style="color:var(--muted);font-size:11px" title="El resultado real vino de un contacto derivado, no de este">(vía referido)</span>` : '') : (e.derivado ? '<span style="color:var(--muted)" title="Se derivó a otro contacto que tampoco tiene un resultado final todavía">Derivado, sin resultado</span>' : '<span style="color:var(--muted)">—</span>')}</td>
+      <td>${e.real_disposition ? _dispoBadge(e.real_disposition) + (e.real_disposition !== e.disposition ? ` <span style="color:var(--muted);font-size:11px" title="El resultado real vino de un contacto derivado, no de este">(vía referido)</span>` : '') : (e.derivado ? '<span style="color:var(--muted)" title="Se derivó a otro contacto que tampoco tiene un resultado final todavía">Derivado, sin resultado</span>' : (e.prev_disposition ? '<span style="color:var(--muted);font-size:11px" title="Se clasificó en otra secuencia; aquí todavía no tiene resultado">Antes: ' + esc(_dispoLabel(e.prev_disposition)) + '</span>' : '<span style="color:var(--muted)">—</span>'))}</td>
       <td class="lm-dt-act" onclick="event.stopPropagation()">
         <button class="lm-mini-b" title="Escribir con IA (✨ Fable investiga en línea)" onclick="LeadManagerModule.openAiDrafts(${e.contact_id},${seqId})">${NI('sparkles')}</button>
         ${e._synth ? '' : `${(paso > 1 || done) ? `<button class="lm-mini-b" title="Deshacer último paso — lo marqué hecho por error" onclick="LeadManagerModule.seqCtRollback(${seqId},${e.contact_id})">↩</button>` : ''}
@@ -31106,11 +31106,12 @@ ${foot}
       await load();
       const added = d.added || 0;
       const mismaEmpresa = (kind === 'sequence' && d.misma_empresa) ? d.misma_empresa.length : 0;
-      const dup = (d.requested || ids.length) - added;
+      const omit = d.omitidos_respondieron || 0;
+      const dup = (d.requested || ids.length) - added - omit;
       const spread = (kind === 'sequence' && d.spread_days > 1) ? ` · repartidos en ${d.spread_days} días (${d.per_day}/día)` : '';
       // Ya NO bloquea por "misma empresa" (pedido explícito 2026-09-04) — solo informa,
       // de forma que quede claro que el sistema sí lo detectó aunque los haya enrolado igual.
-      showBanner(`✓ ${added} contacto(s) añadido(s)${dup > 0 ? ` · ${dup} ya pertenecían` : ''}${mismaEmpresa > 0 ? ` · ${mismaEmpresa} comparten empresa con otro contacto ya activo` : ''}${spread}`, added ? 'success' : 'info');
+      showBanner(`✓ ${added} contacto(s) añadido(s)${dup > 0 ? ` · ${dup} ya pertenecían` : ''}${mismaEmpresa > 0 ? ` · ${mismaEmpresa} comparten empresa con otro contacto ya activo` : ''}${omit > 0 ? ` · ${omit} omitido(s): ya respondieron y tienen su propio seguimiento (${(d.omitidos_nombres || []).join(', ')})` : ''}${spread}`, (added || !omit) ? (added ? 'success' : 'info') : 'info');
       // Si este enrolamiento vino de "Para retomar" (nutrición), cierra el aviso — ya
       // se decidió qué hacer con él, no debe seguir apareciendo como pendiente.
       if (_nurtureAvisoPendiente && added) { await _nurtureCerrarAviso(_nurtureAvisoPendiente); _nurtureAvisoPendiente = null; if (_taskView === 'priority') _tiReload(); }

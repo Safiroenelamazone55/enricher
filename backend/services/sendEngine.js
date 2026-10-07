@@ -745,6 +745,11 @@ async function _flushApproved(pool, apiBase) {
       if (_sanSendDays(m.send_days)[wdIdx] !== '1') continue;
       // Guarda de opt-out: si el contacto quedó "no interesado"/"no contactar" DESPUÉS de
       // aprobar el borrador (o de crearlo), el email aprobado NO sale jamás.
+      if (['respondio', 'interesado', 'mas_adelante', 'reunion', 'derivado'].includes(m.k_disposition)) {
+        await pool.query(`UPDATE lm_messages SET estado='failed', error=$1 WHERE id=$2`, ['No enviado: el contacto ya respondió antes (' + m.k_disposition + ') y tiene su propio seguimiento', m.id]);
+        console.log(`[send-engine] approved SKIP → ${m.to_email} (ya respondió: ${m.k_disposition})`);
+        continue;
+      }
       if (['no_interesado', 'no_contactar'].includes(m.k_disposition)) {
         await pool.query(`UPDATE lm_messages SET estado='failed', error=$1 WHERE id=$2`,
           ['No enviado: el contacto está marcado como ' + m.k_disposition.replace('_', ' '), m.id]);

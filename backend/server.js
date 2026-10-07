@@ -4098,6 +4098,15 @@ async function _lmAddMembership(req, res, kind) {
     const already = new Set((await pool.query(`SELECT contact_id FROM lm_contact_sequences WHERE user_id=$1 AND sequence_id=$2 AND contact_id = ANY($3::int[])`, [uid, targetId, ids])).rows.map(r => r.contact_id));
     const exist = new Set((await pool.query(`SELECT id FROM lm_contacts WHERE user_id=$1 AND id = ANY($2::int[])`, [uid, ids])).rows.map(r => r.id));
     let toAdd = ids.filter(id => exist.has(id) && !already.has(id));
+    // Los contactos con conversación abierta (Respondió / Interesado / Más adelante / Reunión / Derivó) NO se enrolan en una secuencia fría:
+    // ya tienen su propio seguimiento (tareas de seguimiento, Leads, Deals). Se informan como omitidos; se pueden forzar con incluir_respondieron:true.
+    let _omit = [];
+    if (b.incluir_respondieron !== true && toAdd.length) {
+      _omit = (await pool.query(`SELECT id, TRIM(nombre||' '||apellido) AS nombre, disposition FROM lm_contacts WHERE user_id=$1 AND id = ANY($2::int[]) AND disposition = ANY($3::text[])`, [uid, toAdd, ['respondio', 'interesado', 'mas_adelante', 'reunion', 'derivado']])).rows;
+      if (_omit.length) { const om = new Set(_omit.map(r => r.id)); toAdd = toAdd.filter(id => !om.has(id)); }
+    }
+    { const _rj = res.json.bind(res); res.json = o => _rj(o && typeof o === 'object' && !Array.isArray(o) ? { ...o, omitidos_respondieron: _omit.length, omitidos_nombres: _omit.slice(0, 8).map(r => r.nombre) } : o); }
+
     if (!toAdd.length) return res.json({ added: 0, requested: ids.length, spread_days: 0 });
 
     // ── Varios contactos de una misma empresa: pedido explícito 2026-09-04 —
@@ -5190,8 +5199,9 @@ app.get('/api/lm/sequences/:id/contacts', requireAuth, async (req, res) => {
     const TERMINAL = "('respondio','interesado','reunion','mas_adelante','no_interesado','no_califica','no_contactar')";
     const { rows } = await pool.query(`
       SELECT cs.contact_id, cs.paso, cs.estado, COALESCE((cs.start_date + TIME '12:00')::timestamptz, cs.created_at) AS enrolled_at, cs.paso_date::text AS paso_date,
-        k.nombre, k.apellido, k.email, k.cargo, k.company_id, k.region, k.pais, k.disposition, co.nombre AS company_nombre,
-        CASE WHEN k.disposition IN ${TERMINAL} THEN k.disposition
+        k.nombre, k.apellido, k.email, k.cargo, k.company_id, k.region, k.pais, f.kd AS disposition, co.nombre AS company_nombre,
+        CASE WHEN COALESCE(k.disposition,'')<>'' AND f.kd IS NULL THEN k.disposition END AS prev_disposition,
+        CASE WHEN f.kd IN ${TERMINAL} THEN f.kd
              WHEN c1.disposition IN ${TERMINAL} THEN c1.disposition
              WHEN c2.disposition IN ${TERMINAL} THEN c2.disposition
              WHEN c3.disposition IN ${TERMINAL} THEN c3.disposition
@@ -5201,6 +5211,9 @@ app.get('/api/lm/sequences/:id/contacts', requireAuth, async (req, res) => {
         ce.nombre AS end_nombre, ce.apellido AS end_apellido, ce.cargo AS end_cargo, ce.email AS end_email, ce.disposition AS end_disposition
       FROM lm_contact_sequences cs
       JOIN lm_contacts k ON k.id = cs.contact_id
+      LEFT JOIN LATERAL (SELECT CASE WHEN k.disposition IN ('no_interesado','no_califica','no_contactar','no_es_persona','derivado') THEN k.disposition
+        WHEN EXISTS(SELECT 1 FROM activities a2 WHERE a2.contact_id=k.id AND (a2.tipo IN ('respuesta','disposition_change') OR a2.nota LIKE 'Disposición:%') AND a2.fecha >= COALESCE((cs.start_date + TIME '12:00')::timestamptz, cs.created_at)) THEN k.disposition
+        ELSE NULL END AS kd) f ON TRUE
       LEFT JOIN lm_companies co ON co.id = k.company_id
       LEFT JOIN lm_contacts c1 ON c1.id = k.derivado_a
       LEFT JOIN lm_contacts c2 ON c2.id = c1.derivado_a
