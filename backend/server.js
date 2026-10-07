@@ -6764,7 +6764,8 @@ const _lmDashHandler = async (req, res) => {
     const msgSql = r => `
       SELECT COUNT(*) FILTER (WHERE m.estado IN ('sent','replied','bounced'))::int AS sent,
              COUNT(*) FILTER (WHERE m.estado='bounced')::int AS bounced,
-             COUNT(*) FILTER (WHERE EXISTS(SELECT 1 FROM lm_message_events e WHERE e.message_id=m.id AND e.tipo='open'))::int AS opened
+             COUNT(*) FILTER (WHERE EXISTS(SELECT 1 FROM lm_message_events e WHERE e.message_id=m.id AND e.tipo='open'))::int AS opened,
+             COUNT(*) FILTER (WHERE EXISTS(SELECT 1 FROM lm_message_events e WHERE e.message_id=m.id AND e.tipo='click'))::int AS clicked
         FROM lm_messages m JOIN lm_contacts k ON k.id=m.contact_id
        WHERE m.user_id=$1 AND ${kw}${seqP ? ` AND m.sequence_id=${seqP}` : ''}${(campP && !seqP) ? ` AND m.sequence_id IN (SELECT id FROM sequences WHERE campaign_id=${campP})` : ''}
          AND m.sent_at IS NOT NULL AND m.sent_at::date BETWEEN ${r[0]}::date AND ${r[1]}::date`;

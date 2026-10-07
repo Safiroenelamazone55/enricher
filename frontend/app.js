@@ -22425,7 +22425,8 @@ ${foot}
     const c = d.kpi.cur, p = d.kpi.prev;
     const rr = _dashPct(c.replies, c.contacted), rrp = _dashPct(p.replies, p.contacted);
     const ar = _dashPct(c.accepts, c.invites), arp = _dashPct(p.accepts, p.invites);
-    const KI = [['users', '#22A06B'], ['reply', '#F59E0B'], ['in', '#7C5CE0'], ['handshake', '#22A06B']]; let ki = 0;
+    const KI = [['users', '#22A06B'], ['mailopen', '#2563EB'], ['click', '#7C5CE0'], ['reply', '#F59E0B'], ['in', '#7C5CE0'], ['handshake', '#22A06B']]; let ki = 0;
+    const op = _dashPct(c.opened, c.sent), opp = _dashPct(p.opened, p.sent), cl = _dashPct(c.clicked, c.sent), clp = _dashPct(p.clicked, p.sent);
     const kpi = (l, v, delta, sub) => { const k = KI[ki++]; return `<div class="dash-kpi" style="--kc:${k[1]}"><div class="dash-kpi__top"><span class="dash-kpi__ic">${_dashIco(k[0], 18)}</span><span class="dash-kpi__l">${l}</span></div><div class="dash-kpi__v">${v}</div>${delta}${sub ? `<div class="dash-kpi__s">${sub}</div>` : ''}</div>`; };
     const fn = d.funnel, stages = [['Enrolados', fn.enrolados, '#0F172A', 'users'], ['Contactados', fn.contactados, '#2563EB', 'send'], ['Respondieron', fn.respondieron, '#22A06B', 'reply'], ['Reunión', fn.reuniones, '#F59E0B', 'cal']];
     const funnel = stages.map((s, i) => `<div class="dash-fn"><span class="dash-fn__ic">${_dashIco(s[3], 16)}</span><div class="dash-fn__b"><div class="dash-fn__top"><span class="dash-fn__l">${s[0]}</span>${i ? `<span class="dash-fn__pct">${_dashPct(s[1], fn.enrolados || 1)}%</span>` : ''}</div><div class="dash-fn__v">${s[1] || 0}</div></div></div>`).join('');
@@ -22434,8 +22435,10 @@ ${foot}
     const donut = d.channels.length ? `<div class="dash-donut"><div class="dash-donut__c"><canvas id="seqm-ch"></canvas></div><table class="dash-leg"><tbody>${chLeg}<tr class="dash-leg__t"><td>Total</td><td></td><td>${chTot}</td></tr></tbody></table></div>` : '<div class="rep-empty">Sin toques en el período</div>';
     const chsUsed = ['email', 'linkedin', 'call', 'wa_msg', 'wa_call', 'otros'].filter(k => d.daily.some(r => r.ch === k));
     const actLeg = chsUsed.map(k => `<span class="dash-lg"><span class="dash-dot" style="background:${_DASH_CH[k][1]}"></span>${_DASH_CH[k][0]}</span>`).join('');
-    return rangeHtml + `<div class="dash-kpis dash-kpis--4">
+    return rangeHtml + `<div class="dash-kpis dash-kpis--6">
         ${kpi('Contactos alcanzados', c.contacted, _dashDelta(c.contacted, p.contacted), `${c.touches} toques en total`)}
+        ${kpi('Aperturas', op + '%', _dashDelta(op, opp, true), `${c.opened || 0} de ${c.sent || 0} correos`)}
+        ${kpi('Clics', cl + '%', _dashDelta(cl, clp, true), `${c.clicked || 0} de ${c.sent || 0} correos`)}
         ${kpi('Tasa de respuesta', rr + '%', _dashDelta(rr, rrp, true), `${c.replies} respondieron`)}
         ${kpi('Aceptación LinkedIn', ar + '%', _dashDelta(ar, arp, true), `${c.accepts} de ${c.invites} invitaciones`)}
         ${kpi('Reuniones agendadas', d.deals.agendadas, _dashDelta(d.deals.agendadas, d.deals.agendadas_prev), (d.deals.programadas ? d.deals.programadas + ' próxima' + (d.deals.programadas > 1 ? 's' : '') : 'sin próximas'))}
@@ -25538,6 +25541,7 @@ ${foot}
     dots: '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
     userplus: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/>',
   };
+  _DASH_ICO.click = '<path d="m9 9 5 12 1.8-5.2L21 14Z"/><path d="M7.2 2.2 8 5.1M5.1 8l-2.9-.8M14 4.1 12 6M6 12l-1.9 2"/>';
   function _dashIco(k, sz) {
     if (k === 'in') return '<b class="dash-in">in</b>';
     return `<svg width="${sz || 18}" height="${sz || 18}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${_DASH_ICO[k] || ''}</svg>`;

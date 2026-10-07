@@ -17995,3 +17995,5 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 .ref-enter__t small{font-weight:400;color:#64748B;margin-left:6px}
 .ref-enter__r{display:flex;gap:10px}.ref-enter__r label{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
 .ref-enter__r label span{font-size:.72rem;color:#64748B}
+
+.dash-kpis--6{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
