@@ -20062,8 +20062,48 @@ const LeadManagerModule = (() => {
     if (!_lmRichBootRestored) { _lmRichBootRestored = true; _richRestored = await _lmRestoreViewState(_lmRawSavedView); }
     if (!_richRestored) _renderBody();           // repinta con los datos ya cargados, misma sección — sin saltos
     _loadNavCounts();                          // insignias visibles desde el primer momento
+    _pulseStart();                             // sistema en vivo: pone al día esta pantalla cuando algo cambia
     if (_section === 'dashboard') _loadToday(); // card Hoy del motor de envío
   }
+
+  // ── Sistema en vivo: si algo cambia en cualquier módulo (o por otra persona/el motor), esta pantalla se pone al día sola, sin recargar ──
+  let _pulseSig = null, _pulseTimer = null, _pulsePending = false, _pulseBusyRun = false;
+  function _liveBusy() {
+    const a = document.activeElement;
+    if (a && (/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) || a.isContentEditable)) return true;     // escribiendo
+    if (document.querySelector('.nvc-back, .kdr, [id$="-modal"], .cp-mark-menu, .kpi-pop, .modal-overlay.open, .lm-modal-back')) return true;   // modal / menú abierto
+    return false;
+  }
+  async function _pulsePoll() {
+    if (document.hidden || _pulseBusyRun) return;
+    try {
+      const r = await apiFetch(API + '/lm/pulse'); if (!r || !r.ok) return;
+      const j = await r.json();
+      if (_pulseSig === null) { _pulseSig = j.sig; return; }
+      if (j.sig !== _pulseSig) _pulsePending = true;
+      if (!_pulsePending || _liveBusy()) return;           // si estás escribiendo, espera a que termines
+      _pulseBusyRun = true;
+      try { await _liveRefresh(); _pulseSig = j.sig; _pulsePending = false; } finally { _pulseBusyRun = false; }
+    } catch (_) {}
+  }
+  async function _liveRefresh() {
+    const get = async (p) => { try { const r = await apiFetch(API + p); if (r && r.ok) { const j = await r.json(); return Array.isArray(j) ? j : null; } } catch (_) {} return null; };
+    const [cl, cm, sq, st, co, ct, ac] = await Promise.all([get('/outbound-clients'), get('/campaigns'), get('/sequences'), get('/sequence-steps'), get('/lm/companies'), get('/lm/contacts'), get('/activities')]);
+    if (cl) _clients = cl; if (cm) _campaigns = cm; if (sq) _sequences = sq; if (st) _steps = st; if (co) _companies = co; if (ct) _contacts = ct; if (ac) _activities = ac;
+    // Listas propias de la secuencia abierta (traen nombres de empresa/contacto copiados del servidor)
+    if (_section === 'sequence' && _activeSeq) {
+      if (Array.isArray(_seqContacts)) _seqLoadContacts(_activeSeq);
+      if (Array.isArray(_seqPendingCos)) _seqLoadPendingCos(_activeSeq);
+      if (_seqTab === 'metricas') _seqLoadMetrics(_activeSeq);
+    }
+    // Repintado: solo en pantallas sin edición en curso (no se repinta el borrador que se está revisando ni la ficha/tarea abierta)
+    const SAFE = ['dashboard', 'clients', 'campaigns', 'sequences', 'companies', 'contacts', 'leads', 'deals', 'activities'];
+    const seqSafe = _section === 'sequence' && !['aprobar', 'bloqueos'].includes(_seqTab);
+    if (SAFE.includes(_section) || seqSafe) { const sc = document.scrollingElement ? document.scrollingElement.scrollTop : 0; _renderBody(); if (document.scrollingElement) document.scrollingElement.scrollTop = sc; }
+    if (_dgContainerId && document.getElementById('dg-tbody')) _dgRenderRows();                 // grid de Datos
+    _loadNavCounts();
+  }
+  function _pulseStart() { if (_pulseTimer) return; _pulseTimer = setInterval(_pulsePoll, 15000); document.addEventListener('visibilitychange', () => { if (!document.hidden) _pulsePoll(); }); _pulsePoll(); }
 
   // Las insignias se calculaban con listas que solo existen tras entrar en cada
   // seccion, asi que al abrir el modulo salian vacias. Este contador viene del

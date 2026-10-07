@@ -6897,6 +6897,13 @@ const _lmDashHandler = async (req, res) => {
   } catch (err) { console.error('[lm-dashboard]', err.message); res.status(500).json({ error: 'Error al cargar dashboard' }); }
 };
 // Detalle de un KPI: QUIÉNES son (contactos / empresas / cargos) detrás del número.
+app.get('/api/lm/pulse', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query("SELECT relname, (n_tup_ins + n_tup_upd + n_tup_del)::bigint AS n FROM pg_stat_user_tables WHERE relname = ANY($1::text[]) ORDER BY relname",
+      [['lm_companies', 'lm_contacts', 'lm_contact_sequences', 'sequences', 'sequence_steps', 'campaigns', 'outbound_clients', 'lm_messages', 'activities']]);
+    res.json({ sig: rows.map(r => r.relname + ':' + r.n).join('|') });
+  } catch (e) { res.status(500).json({ error: 'pulse' }); }
+});
 app.get('/api/lm/inbox/history/:cid', requireAuth, async (req, res) => {
   try {
     const cid = parseInt(req.params.cid) || 0;
