@@ -903,7 +903,7 @@ const _NOVA_TOAST_ICO = {
   info:    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><line x1="12" y1="7.5" x2="12.01" y2="7.5"/></svg>',
 };
 function showBanner(msg, type) {
-  msg = String(msg == null ? '' : msg).replace(/^[s✓✔✅⚠️❌ℹ️•·]+/u, '');
+  msg = String(msg == null ? '' : msg).replace(/^[\s✓✔✅⚠️❌ℹ️•·]+/u, '');
   const el = document.createElement('div');
   el.className = `nova-toast nova-toast--${type || 'info'}`;
   el.innerHTML = `<span class="nova-toast__ico">${_NOVA_TOAST_ICO[type] || _NOVA_TOAST_ICO.info}</span><span class="nova-toast__msg">${msg}</span><button class="nova-toast__x" onclick="this.parentElement.remove()" aria-label="Cerrar">✕</button>`;
