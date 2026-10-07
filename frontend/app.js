@@ -20818,6 +20818,7 @@ const LeadManagerModule = (() => {
       metricas: '<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>',
       envios: '<path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/>',
       aprobar: '<polyline points="20 6 9 17 4 12"/>',
+      bloqueos: '<circle cx="12" cy="12" r="9"/><line x1="5.6" y1="5.6" x2="18.4" y2="18.4"/>',
     };
     // Total REAL de empresas de la secuencia (pendientes + trabajadas + descartadas),
     // no solo la cola pendiente — antes este badge mostraba lo mismo que "Tareas" y
@@ -20835,8 +20836,10 @@ const LeadManagerModule = (() => {
       ['metricas', 'Métricas', null],
       ['envios', 'Envíos', null],
     ];
-    const apN = s.estado === 'activa' && _seqSteps(id).length ? (s.awaiting || 0) + (s.no_email_pending || 0) : 0;
+    const apN = s.estado === 'activa' && _seqSteps(id).length ? (s.awaiting || 0) : 0;
+    const blN = s.estado === 'activa' && _seqSteps(id).length ? (s.no_email_pending || 0) : 0;
     if (s.send_mode === 'preaprobado' || apN > 0) tabs.push(['aprobar', 'Aprobar', apN || null]);
+    if (blN > 0 || _seqTab === 'bloqueos') tabs.push(['bloqueos', 'Bloqueos', blN]);
     return `<div class="seq-stat-tabs">${tabs.map(([key, label, n]) => `<button class="seq-stat-tab${_seqTab === key ? ' active' : ''}" onclick="LeadManagerModule.seqTab('${key}')">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICO[key] || ''}</svg>
         <span class="seq-stat-tab__lbl">${label}</span><span class="seq-stat-tab__n">${n != null ? n : '—'}</span>
@@ -21335,7 +21338,7 @@ ${foot}
     }
     if (_seqTab === 'aprobar') {
       if (_seqApprovals === null || _seqPendingNoEmail === null) return `<div class="cp-empty2" style="padding:22px">Cargando borradores…</div>`;
-      const noEmailHtml = _seqNoEmailRowsHtml();
+      const noEmailHtml = ''; // los contactos sin email viven ahora en la pestaña Bloqueos
       if (!_seqApprovals.length) {
         return `${noEmailHtml}<div class="cp-empty2" style="padding:22px">No hay emails esperando aprobación.<br><span style="color:var(--muted);font-size:12px">En modo pre-aprobado, el motor redacta cada email cuando toca su paso y lo deja aquí para tu OK. Revísalo, edítalo si quieres y apruébalo — sale solo respetando el intervalo.</span></div>`;
       }
@@ -21354,6 +21357,10 @@ ${foot}
           </div>
         </div>
         ${_seqAppCard(a)}`;
+    }
+    if (_seqTab === 'bloqueos') {
+      if (_seqPendingNoEmail === null) return `<div class="cp-empty2" style="padding:22px">Cargando…</div>`;
+      return _seqNoEmailRowsHtml() || `<div class="cp-empty2" style="padding:22px">Sin bloqueos: todos los contactos de esta secuencia pueden avanzar.<br><span style="color:var(--muted);font-size:12px">Aquí aparecen los contactos que no pueden continuar (por ejemplo, sin email) para que los completes.</span></div>`;
     }
     if (_seqTab === 'metricas') return _seqMetHtml(id);
     // 'pasos' no llega aquí — _vSequenceDetail lo resuelve directo (ver ahí el
@@ -22447,7 +22454,7 @@ ${foot}
       </div>
       <div id="seq-ab-wrap">${_seqAbHtml(id)}</div>`;
   }
-  function seqTab(t) { _seqTab = t; _seqPasosOpen = false; if (t === 'aprobar') { _seqAppIdx = 0; _seqNoEmailIdx = 0; } _renderBody(); if ((t === 'contactos' || t === 'tareas') && !Array.isArray(_seqContacts)) _seqLoadContacts(_activeSeq); if ((t === 'empresas' || t === 'tareas') && !Array.isArray(_seqPendingCos)) _seqLoadPendingCos(_activeSeq); if (t === 'metricas') { if (_seqMetrics === null) _seqLoadMetrics(_activeSeq); else setTimeout(_seqMetInitCharts, 0); _seqAb = null; _seqLoadAb(_activeSeq); } if (t === 'envios') { _seqMsgs = null; _seqLoadMsgs(_activeSeq); } if (t === 'aprobar' || t === 'tareas') { _seqApprovals = null; _seqLoadApprovals(_activeSeq); _seqPendingNoEmail = null; _seqLoadPendingNoEmail(_activeSeq); } }
+  function seqTab(t) { _seqTab = t; _seqPasosOpen = false; if (t === 'aprobar' || t === 'bloqueos') { _seqAppIdx = 0; _seqNoEmailIdx = 0; } _renderBody(); if ((t === 'contactos' || t === 'tareas') && !Array.isArray(_seqContacts)) _seqLoadContacts(_activeSeq); if ((t === 'empresas' || t === 'tareas') && !Array.isArray(_seqPendingCos)) _seqLoadPendingCos(_activeSeq); if (t === 'metricas') { if (_seqMetrics === null) _seqLoadMetrics(_activeSeq); else setTimeout(_seqMetInitCharts, 0); _seqAb = null; _seqLoadAb(_activeSeq); } if (t === 'envios') { _seqMsgs = null; _seqLoadMsgs(_activeSeq); } if (t === 'aprobar' || t === 'tareas' || t === 'bloqueos') { _seqApprovals = null; _seqLoadApprovals(_activeSeq); _seqPendingNoEmail = null; _seqLoadPendingNoEmail(_activeSeq); } }
   // Filas de aprobación DENTRO de la pestaña Tareas: el email automático se revisa,
   // edita y aprueba aquí mismo — no es una tarea de "marcar hecho".
   function _seqApRowsHtml(seqId) {
@@ -22491,7 +22498,7 @@ ${foot}
   async function _seqLoadPendingNoEmail(id) {
     try { const r = await apiFetch(`${API}/lm/sequences/${id}/pending-no-email`); _seqPendingNoEmail = (r && r.ok) ? await r.json() : []; }
     catch { _seqPendingNoEmail = []; }
-    if (_section === 'sequence' && _activeSeq === id && (_seqTab === 'aprobar' || _seqTab === 'tareas')) {
+    if (_section === 'sequence' && _activeSeq === id && (_seqTab === 'aprobar' || _seqTab === 'tareas' || _seqTab === 'bloqueos')) {
       const el = document.getElementById('seq-tabwrap'); if (el) el.innerHTML = _seqTabContent(id);
     }
   }
