@@ -6790,7 +6790,7 @@ const _lmDashHandler = async (req, res) => {
     const KP = `COALESCE(NULLIF(TRIM((SELECT c.pais FROM lm_companies c WHERE c.id=k.company_id)),''),NULLIF(TRIM(k.pais),''))`;
     if (q.country) kw += ` AND ${KP} ILIKE ${P('%' + String(q.country).slice(0, 60) + '%')}`;
     const CH = `CASE WHEN a.tipo IN ('email_enviado','email') THEN 'email' WHEN a.tipo LIKE 'linkedin%' THEN 'linkedin' WHEN a.tipo='llamada' THEN 'call' WHEN a.canal='whatsapp_llamada' THEN 'wa_call' WHEN a.canal='whatsapp_mensaje' THEN 'wa_msg' ELSE COALESCE((SELECT CASE st.canal WHEN 'whatsapp' THEN (CASE WHEN st.accion IN ('llamada','llamar') THEN 'wa_call' ELSE 'wa_msg' END) WHEN 'call' THEN 'call' WHEN 'linkedin' THEN 'linkedin' WHEN 'email' THEN 'email' END FROM lm_contact_sequences cs JOIN sequence_steps st ON st.sequence_id=cs.sequence_id WHERE cs.contact_id=a.contact_id AND a.nota ~ '^Paso [0-9]' ORDER BY cs.id DESC, st.dia, st.orden, st.id OFFSET (substring(a.nota from '^Paso ([0-9]+)')::int - 1) LIMIT 1), CASE WHEN a.nota ~* 'whatsapp|wpp' THEN (CASE WHEN a.nota ~* 'llamada|call' THEN 'wa_call' ELSE 'wa_msg' END) WHEN a.nota ~* 'llamada|call' THEN 'call' WHEN a.nota ~* 'linkedin|inmail|invitaci' THEN 'linkedin' ELSE 'otros' END) END`;
-    const RTYPES = `Interesado|Reunión|Más adelante|Derivó a otro|No es la persona|No interesado|No contactar`;
+    const RTYPES = `Interesado|Reunión|Más adelante|Derivó a otro|No interesado|No contactar`;
     const REPLY = `(a.tipo='respuesta' OR (a.tipo='disposition_change' AND a.nota ~ '→ (${RTYPES})[[:space:]]*$'))`;
     const OUT = `a.estado='hecha' AND (a.tipo IN ('email_enviado','linkedin_msg','linkedin_connect','linkedin_visita','llamada') OR a.tipo LIKE 'linkedin%' OR (a.tipo='email' AND a.nota NOT LIKE '[Inbox] Respuesta%' AND a.nota NOT LIKE 'Solicitud de admin%') OR (a.tipo='nota' AND a.nota ~ '^Paso [0-9]'))`;
     const IS_INVITE = `(a.tipo='linkedin_connect' OR (a.tipo='nota' AND a.nota ~ '^Paso [0-9]' AND (SELECT st.accion FROM lm_contact_sequences cs JOIN sequence_steps st ON st.sequence_id=cs.sequence_id WHERE cs.contact_id=a.contact_id ORDER BY cs.id DESC, st.dia, st.orden, st.id OFFSET (substring(a.nota from '^Paso ([0-9]+)')::int - 1) LIMIT 1) IN ('invite','invite_nota')))`;
@@ -6879,7 +6879,7 @@ const _lmDashHandler = async (req, res) => {
          WHERE w.from_me=FALSE AND ${kw} AND w.ts::date BETWEEN ${iF}::date AND ${iT}::date
       ) t GROUP BY 1,2`, params),
       pool.query(`SELECT COUNT(*)::int AS meetings, COUNT(*) FILTER (WHERE COALESCE(k.reunion_agendada_at,k.updated_at)::date BETWEEN ${iF}::date AND ${iT}::date)::int AS agendadas, COUNT(*) FILTER (WHERE COALESCE(k.reunion_agendada_at,k.updated_at)::date BETWEEN ${iPF}::date AND ${iPT}::date)::int AS agendadas_prev, COUNT(*) FILTER (WHERE k.deal_cierre>=CURRENT_DATE)::int AS programadas, COALESCE(SUM(k.deal_valor),0)::float AS valor, COALESCE(SUM(k.deal_valor*COALESCE(k.deal_prob,0)/100.0),0)::float AS ponderado, MIN(k.deal_cierre) FILTER (WHERE k.deal_cierre>=CURRENT_DATE) AS proximo
-                    FROM lm_contacts k WHERE ${kw} AND (k.disposition='reunion' OR k.deal_cierre IS NOT NULL OR k.deal_valor IS NOT NULL OR EXISTS(SELECT 1 FROM activities z WHERE z.contact_id=k.id AND z.tipo='reunion'))`, params),
+                    FROM lm_contacts k WHERE ${kw} AND (k.disposition='reunion' OR k.deal_cierre IS NOT NULL OR k.deal_valor IS NOT NULL OR k.estado IN ('propuesta','negociacion','ganado') OR EXISTS(SELECT 1 FROM activities z WHERE z.contact_id=k.id AND z.tipo='reunion'))`, params),
       pool.query(`SELECT k.disposition AS d, COUNT(*)::int AS n FROM lm_contacts k WHERE ${kw} AND COALESCE(k.disposition,'')<>''${dispScope} GROUP BY 1 ORDER BY 2 DESC`, params),
     ]);
     // normaliza países ("Spain Spain" → "Spain") y agrupa
@@ -6943,7 +6943,7 @@ app.get('/api/lm/dashboard/drill', requireAuth, async (req, res) => {
         + (seqP ? ' AND m.sequence_id=' + seqP : '') + (campP && !seqP ? ' AND m.sequence_id IN (SELECT id FROM sequences WHERE campaign_id=' + campP + ')' : '')
         + " AND m.sent_at IS NOT NULL AND m.sent_at::date BETWEEN $2::date AND $3::date AND " + MSG[kpi] + ' GROUP BY k.id ORDER BY MAX(m.sent_at) DESC LIMIT 500';
     } else {
-      const RT = 'Interesado|Reunión|Más adelante|Derivó a otro|No es la persona|No interesado|No contactar';
+      const RT = 'Interesado|Reunión|Más adelante|Derivó a otro|No interesado|No contactar';
       const W = {
         respuestas: "(a.tipo='respuesta' OR (a.tipo='disposition_change' AND a.nota ~ '→ (" + RT + ")[[:space:]]*$'))",
         reuniones: "a.tipo='reunion'",
