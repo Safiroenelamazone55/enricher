@@ -1184,6 +1184,26 @@ async function initDb() {
       END; $fn$ LANGUAGE plpgsql;`);
     await pool.query('DROP TRIGGER IF EXISTS trg_lm_company_rename ON lm_companies');
     await pool.query('CREATE TRIGGER trg_lm_company_rename AFTER UPDATE OF nombre ON lm_companies FOR EACH ROW EXECUTE FUNCTION lm_company_rename_drafts()');
+    // Una sola fuente de verdad: el nombre de empresa que copia cada contacto (empresa_nombre) sigue siempre al de la empresa.
+    await pool.query(`
+      CREATE OR REPLACE FUNCTION lm_company_sync_contacts() RETURNS trigger AS $fn$
+      BEGIN
+        IF NEW.nombre IS DISTINCT FROM OLD.nombre THEN UPDATE lm_contacts SET empresa_nombre = NEW.nombre WHERE company_id = NEW.id AND empresa_nombre IS DISTINCT FROM NEW.nombre; END IF;
+        RETURN NEW;
+      END; $fn$ LANGUAGE plpgsql;`);
+    await pool.query('DROP TRIGGER IF EXISTS trg_lm_company_sync_contacts ON lm_companies');
+    await pool.query('CREATE TRIGGER trg_lm_company_sync_contacts AFTER UPDATE OF nombre ON lm_companies FOR EACH ROW EXECUTE FUNCTION lm_company_sync_contacts()');
+    await pool.query(`
+      CREATE OR REPLACE FUNCTION lm_contact_fill_company() RETURNS trigger AS $fn$
+      BEGIN
+        IF NEW.company_id IS NOT NULL AND (TG_OP = 'INSERT' OR NEW.company_id IS DISTINCT FROM OLD.company_id OR COALESCE(NEW.empresa_nombre,'') = '') THEN
+          SELECT nombre INTO NEW.empresa_nombre FROM lm_companies WHERE id = NEW.company_id;
+        END IF;
+        RETURN NEW;
+      END; $fn$ LANGUAGE plpgsql;`);
+    await pool.query('DROP TRIGGER IF EXISTS trg_lm_contact_fill_company ON lm_contacts');
+    await pool.query('CREATE TRIGGER trg_lm_contact_fill_company BEFORE INSERT OR UPDATE OF company_id, empresa_nombre ON lm_contacts FOR EACH ROW EXECUTE FUNCTION lm_contact_fill_company()');
+    await pool.query("UPDATE lm_contacts k SET empresa_nombre = c.nombre FROM lm_companies c WHERE c.id = k.company_id AND k.empresa_nombre IS DISTINCT FROM c.nombre");
     // Asunto editable de cada aviso ('' = usar el asunto por defecto)
     await pool.query(`ALTER TABLE lm_meetings ADD COLUMN IF NOT EXISTS subj1 TEXT NOT NULL DEFAULT ''`);
     await pool.query(`ALTER TABLE lm_meetings ADD COLUMN IF NOT EXISTS subj2 TEXT NOT NULL DEFAULT ''`);
