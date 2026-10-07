@@ -25618,7 +25618,7 @@ ${foot}
     ['rebotes', 'Rebotes', 'send', '#EF4444'],
     ['linkedin', 'Aceptación LinkedIn', 'in', '#7C5CE0'],
     ['invitaciones', 'Invitaciones LinkedIn', 'in', '#7C5CE0'],
-    ['reuniones', 'Reuniones agendadas', 'handshake', '#22A06B'],
+    ['reuniones', 'Oportunidades', 'handshake', '#22A06B'],
   ];
   const _KPI_DEFAULTS = {
     seq: ['contactados', 'aperturas', 'clics', 'respuesta', 'linkedin', 'reuniones'],
@@ -27063,7 +27063,7 @@ ${foot}
       </div>`;
   }
   // Qué KPIs ve cada cliente en su portal ("Esta semana"): se elige aquí, por cliente.
-  const _PORTAL_KPI_OPTS = [['contacted', 'Contactos alcanzados'], ['replies', 'Respuestas'], ['meetings', 'Reuniones agendadas'], ['touches', 'Toques realizados'], ['accept', 'Aceptación LinkedIn'], ['opens', 'Apertura de emails'], ['clicks', 'Clics']];
+  const _PORTAL_KPI_OPTS = [['contacted', 'Contactos alcanzados'], ['replies', 'Respuestas'], ['meetings', 'Oportunidades'], ['touches', 'Toques realizados'], ['accept', 'Aceptación LinkedIn'], ['opens', 'Apertura de emails'], ['clicks', 'Clics']];
   function _portalKpisCard(cid) {
     const sel = window.__portalKpis;
     const rows = _PORTAL_KPI_OPTS.map(o => '<label class="pk-r"><input type="checkbox" ' + ((!sel || sel.includes(o[0])) ? 'checked' : '') + ' onchange="LeadManagerModule.portalKpiToggle(' + cid + ',\'' + o[0] + '\',this.checked)"><span>' + o[1] + '</span></label>').join('');

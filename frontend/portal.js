@@ -423,7 +423,7 @@
     const w = S.wk; if (!w || !w.cur.kpi) return '';
     const c = w.cur.kpi.cur, p = w.prev.kpi ? w.prev.kpi.cur : { contacted: 0, replies: 0, touches: 0 };
     const mc = w.cur.deals ? w.cur.deals.agendadas : null, mp = w.prev.deals ? w.prev.deals.agendadas : 0;
-    const tiles = [['Contactos alcanzados', c.contacted, p.contacted, 'users', '#22A06B', 'contacted'], ['Respuestas', c.replies, p.replies, 'reply', '#F59E0B', 'replies'], mc == null ? null : ['Reuniones agendadas', mc, mp, 'handshake', '#7C5CE0', 'meetings'], ['Toques realizados', c.touches, p.touches, 'send', '#2563EB', 'touches']].filter(Boolean);
+    const tiles = [['Contactos alcanzados', c.contacted, p.contacted, 'users', '#22A06B', 'contacted'], ['Respuestas', c.replies, p.replies, 'reply', '#F59E0B', 'replies'], mc == null ? null : ['Oportunidades', mc, mp, 'handshake', '#7C5CE0', 'meetings'], ['Toques realizados', c.touches, p.touches, 'send', '#2563EB', 'touches']].filter(Boolean);
     const keepK = id => !(S.me && S.me.kpis) || S.me.kpis.includes(id);
     const extraTiles = [
       { id: 'accept', ic: 'in', l: 'Aceptación LinkedIn', v: c.invites ? pct(c.accepts, c.invites) + '%' : c.accepts, dl: c.invites ? dl(pct(c.accepts, c.invites), pct(p.accepts, p.invites)) : dl(c.accepts, p.accepts), sub: '' },
