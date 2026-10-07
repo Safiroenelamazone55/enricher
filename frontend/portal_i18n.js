@@ -75,6 +75,7 @@
     ['Sin historial todavía', 'No history yet', 'Noch kein Verlauf', 'Sem histórico ainda'],
     ['Oportunidad creada', 'Opportunity created', 'Chance erstellt', 'Oportunidade criada'],
     ['Oportunidad', 'Opportunity', 'Chance', 'Oportunidade'],
+    ['Sin fecha de cierre', 'No close date yet', 'Noch kein Abschlussdatum', 'Sem data de fechamento'],
     ['Llamada por WhatsApp', 'WhatsApp call', 'WhatsApp-Anruf', 'Ligação por WhatsApp'],
     ['Mensaje de LinkedIn enviado', 'LinkedIn message sent', 'LinkedIn-Nachricht gesendet', 'Mensagem do LinkedIn enviada'],
     ['Ganado', 'Won', 'Gewonnen', 'Ganho'], ['Perdido', 'Lost', 'Verloren', 'Perdido'],

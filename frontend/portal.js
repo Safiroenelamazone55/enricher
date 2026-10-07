@@ -672,7 +672,8 @@
     const list = S.meet;
     if (!list) return '<div class="pt-h"><h2>Oportunidades</h2></div><div class="pt-empty">Cargando…</div>';
     const { y, m } = S.cal, first = new Date(Date.UTC(y, m, 1)), lead = (first.getUTCDay() + 6) % 7, days = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
-    const by = {}; list.forEach(r => { (by[dkey(r.fecha)] = by[dkey(r.fecha)] || []).push(r); });
+    const dated = list.filter(r => r.fecha), undated = list.filter(r => !r.fecha);
+    const by = {}; dated.forEach(r => { (by[dkey(r.fecha)] = by[dkey(r.fecha)] || []).push(r); });
     const today = dkey(new Date()), monday = new Date(Date.UTC(2024, 0, 1));
     const wd = Array.from({ length: 7 }, (_, i) => new Date(monday.getTime() + i * 864e5).toLocaleDateString(PT_I18N.locale(), { weekday: 'short', timeZone: 'UTC' }));
     let cells = ''; const total = Math.ceil((lead + days) / 7) * 7;
@@ -682,13 +683,13 @@
       cells += `<div class="pt-cal__c${inM ? '' : ' out'}${k === today ? ' today' : ''}"><span class="pt-cal__n">${inM ? dn : ''}</span>${ms.slice(0, 3).map(r => `<button class="pt-cal__e pt-cal__e--${meetCls(r.etapa)}" onclick="PT.open(${r.contact_id})" title="${esc(r.empresa || r.nombre)}">${esc(r.empresa || r.nombre)}</button>`).join('')}${ms.length > 3 ? `<span class="pt-cal__m">+${ms.length - 3}</span>` : ''}</div>`;
     }
     const label = first.toLocaleDateString(PT_I18N.locale(), { month: 'long', year: 'numeric', timeZone: 'UTC' });
-    const now = dkey(new Date()), up = list.filter(r => dkey(r.fecha) >= now), past = list.filter(r => dkey(r.fecha) < now).reverse();
-    const row = r => `<div class="pt-mrow" onclick="PT.open(${r.contact_id})"><div class="pt-date"><b>${new Date(r.fecha).toLocaleDateString(PT_I18N.locale(), { month: 'short', timeZone: 'UTC' }).replace('.', '').toUpperCase()}</b><span>${new Date(r.fecha).getUTCDate()}</span></div>
+    const now = dkey(new Date()), up = dated.filter(r => dkey(r.fecha) >= now), past = dated.filter(r => dkey(r.fecha) < now).reverse();
+    const row = r => `<div class="pt-mrow" onclick="PT.open(${r.contact_id})">${r.fecha ? `<div class="pt-date"><b>${new Date(r.fecha).toLocaleDateString(PT_I18N.locale(), { month: 'short', timeZone: 'UTC' }).replace('.', '').toUpperCase()}</b><span>${new Date(r.fecha).getUTCDate()}</span></div>` : '<div class="pt-date"><b>—</b><span>·</span></div>'}
       <div style="min-width:0;flex:1"><div class="pt-item__t"><span>${esc(r.empresa || '')}</span><span class="pt-badge pt-b--${r.etapa === 'ganado' ? 'g' : r.etapa === 'perdido' ? 'r' : 'b'}">${esc(r.etapa_label || '')}</span></div><div class="pt-item__s">${esc(r.nombre)}${r.cargo ? ' · ' + esc(r.cargo) : ''}</div>${r.valor ? `<div class="pt-item__s">${money2(r.valor, r.moneda)}${r.prob != null ? ' · ' + r.prob + '%' : ''}</div>` : ''}</div></div>`;
     return `<div class="pt-h"><h2>Oportunidades</h2></div>
       <div class="pt-two pt-two--cal"><div class="pt-card"><div class="pt-cal__h"><button class="pt-morebtn" onclick="PT.cal(-1)">‹</button><b>${esc(label)}</b><button class="pt-morebtn" onclick="PT.cal(1)">›</button><button class="pt-morebtn" onclick="PT.cal(0)">Hoy</button></div>
         <div class="pt-cal"><div class="pt-cal__w">${wd.map(x => `<span>${esc(x)}</span>`).join('')}</div><div class="pt-cal__g">${cells}</div></div></div>
-        <div class="pt-card"><h3>Próximas</h3>${up.length ? up.map(row).join('') : '<div class="pt-empty">Sin oportunidades todavía</div>'}${past.length ? `<h3 style="margin-top:16px">Anteriores</h3>${past.slice(0, 20).map(row).join('')}` : ''}</div></div>`;
+        <div class="pt-card"><h3>Próximas</h3>${up.length ? up.map(row).join('') : (undated.length ? '' : '<div class="pt-empty">Sin oportunidades todavía</div>')}${undated.length ? `<h3 style="margin-top:16px">Sin fecha de cierre</h3>${undated.map(row).join('')}` : ''}${past.length ? `<h3 style="margin-top:16px">Anteriores</h3>${past.slice(0, 20).map(row).join('')}` : ''}</div></div>`;
   }
   const EV_ICO = { linkedin: ['in', '#7C5CE0'], email: ['mail', '#2563EB'], whatsapp: ['chat', '#22A06B'], whatsapp_call: ['phone', '#0EA5A4'], call: ['phone', '#F59E0B'], task: ['dots', '#94A3B8'] };
   // Ficha con dos vistas conectadas: EMPRESA (historial único de todos sus contactos) y CONTACTO
