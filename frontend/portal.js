@@ -585,13 +585,13 @@
   const seqBadge = e => e === 'activa' ? '<span class="pt-badge pt-b--g">Activa</span>' : '<span class="pt-badge pt-b--n">En pausa</span>';
   function howHtml() {
     const st = S.steps; if (!st || !st.length) return '';
-    const list = st.slice().sort((a, b) => (b.estado === 'activa') - (a.estado === 'activa') || b.total - a.total).slice(0, 2);
-    return `<div class="pt-how"><div class="pt-how__h"><h3>Cómo trabajamos</h3>${st.length > 2 ? '<button class="pt-link" onclick="PT.goSeq()">Ver todas las secuencias →</button>' : ''}</div>
+    const list = st.slice().sort((a, b) => (b.estado === 'activa') - (a.estado === 'activa') || b.total - a.total);
+    return `<div class="pt-how"><div class="pt-how__h"><h3>Cómo trabajamos</h3><button class="pt-link" onclick="PT.goSeq()">Ver detalle de las secuencias →</button></div>
       <div class="pt-how__g">${list.map(q => `<div class="pt-card"><div class="pt-item__t"><span>${esc(q.nombre)}</span>${seqBadge(q.estado)}</div><div class="pt-item__s">${q.total} contactos</div>${stepsHtml(q)}</div>`).join('')}</div></div>`;
   }
   function inicio() {
     const s = S.me.sections;
-    const seqSel = S.seqs && s.secuencias ? `<label class="dash-f${S.seq ? ' is-on' : ''}" style="flex:none;min-width:200px"><select onchange="PT.seq(this.value)"><option value="">Todas las secuencias</option>${S.seqs.map(x => `<option value="${x.id}"${String(S.seq) === String(x.id) ? ' selected' : ''}>${esc(x.nombre)}</option>`).join('')}</select></label>` : '';
+    const seqSel = S.seqs && s.secuencias ? `<label class="dash-f${S.seq ? ' is-on' : ''}" style="flex:none;min-width:200px"><select onchange="PT.seq(this.value)"><option value="">Todas las secuencias</option>${S.seqs.map(x => `<option value="${x.id}"${String(S.seq) === String(x.id) ? ' selected' : ''}>${esc(x.nombre)}${x.estado === 'activa' ? '' : ' (en pausa)'}</option>`).join('')}</select></label>` : '';
     const filters = seqSel ? `<div class="dash-filters" style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">${seqSel}</div>` : '';
     const detail = S.dash ? `${filters}${dashBody(S.dash)}` : '<div class="pt-empty">Cargando…</div>';
     return `<div class="pt-dash">${updatesHtml()}${weekHtml()}${highlightsHtml()}${detail}</div>`;
