@@ -22706,6 +22706,31 @@ ${foot}
         (sigHtml ? '<div class="seq-app__mail-sig" contenteditable="false">' + sigHtml + '</div>' : '') +
       '</div>';
   }
+  // El correo por aprobar / corregir debe verse COMPLETO en pantalla, sin hacer scroll: si la tarjeta no cabe en el alto de la ventana,
+  // se reduce el zoom SOLO del recuadro del correo (mínimo 55%) hasta que cabe. Se recalcula al escribir, al cambiar de tarjeta y al redimensionar.
+  function _seqFitMail() {
+    const m = document.querySelector('.seq-app__mail'); if (!m) return;
+    m.style.zoom = '';
+    const card = m.closest('.seq-app'); if (!card) return;
+    let sp = card.parentElement;
+    while (sp && sp !== document.body && !(/(auto|scroll)/.test(getComputedStyle(sp).overflowY) && sp.scrollHeight > sp.clientHeight)) sp = sp.parentElement;
+    const scroller = (sp && sp !== document.body) ? sp : (document.scrollingElement || document.documentElement);
+    const viewTop = (sp && sp !== document.body) ? sp.getBoundingClientRect().top : 0;
+    const viewH = (sp && sp !== document.body) ? sp.clientHeight : window.innerHeight;
+    const r = card.getBoundingClientRect();
+    const bottomAbs = r.bottom - viewTop + scroller.scrollTop;   // borde inferior de la tarjeta medido desde el inicio del área con scroll
+    const over = bottomAbs - (viewH - 14);
+    if (over <= 0) return;
+    const h = m.getBoundingClientRect().height; if (!h) return;
+    m.style.zoom = Math.max(0.55, (h - over) / h).toFixed(3);
+  }
+  let _seqFitT = null;
+  const _seqFitSoon = () => { clearTimeout(_seqFitT); _seqFitT = setTimeout(() => requestAnimationFrame(_seqFitMail), 60); };
+  try {
+    new MutationObserver(_seqFitSoon).observe(document.body, { childList: true, subtree: true, characterData: true });
+    window.addEventListener('resize', _seqFitSoon);
+    document.addEventListener('load', e => { if (e.target && e.target.tagName === 'IMG' && e.target.closest && e.target.closest('.seq-app__mail')) _seqFitSoon(); }, true);
+  } catch (_) {}
   function seqMailSync(bodyId) {
     const el = document.getElementById('mail-' + bodyId), ta = document.getElementById(bodyId);
     if (el && ta) ta.value = el.innerText.replace(/\u00a0/g, ' ').replace(/\n$/, '');
