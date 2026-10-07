@@ -903,6 +903,7 @@ const _NOVA_TOAST_ICO = {
   info:    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><line x1="12" y1="7.5" x2="12.01" y2="7.5"/></svg>',
 };
 function showBanner(msg, type) {
+  msg = String(msg == null ? '' : msg).replace(/^[s✓✔✅⚠️❌ℹ️•·]+/u, '');
   const el = document.createElement('div');
   el.className = `nova-toast nova-toast--${type || 'info'}`;
   el.innerHTML = `<span class="nova-toast__ico">${_NOVA_TOAST_ICO[type] || _NOVA_TOAST_ICO.info}</span><span class="nova-toast__msg">${msg}</span><button class="nova-toast__x" onclick="this.parentElement.remove()" aria-label="Cerrar">✕</button>`;
@@ -22671,9 +22672,9 @@ ${foot}
       // Aprobar o descartar SIEMPRE achica la cola de "por aprobar" en ese índice — se queda
       // mostrando el que ahora ocupa ese lugar (no hace falta avanzar el índice a mano).
       const el = document.getElementById('seq-tabwrap'); if (el) el.innerHTML = _seqTabContent(_activeSeq);
-      showBanner(action === 'approve' ? '✓ Aprobado — saldrá solo respetando el intervalo de la secuencia'
-               : action === 'discard' ? '✓ Descartado — el contacto avanza al siguiente paso'
-               : '✓ Borrador guardado', 'success');
+      showBanner(action === 'approve' ? 'Aprobado. Saldrá respetando el intervalo.'
+               : action === 'discard' ? 'Descartado. El contacto avanza al siguiente paso.'
+               : 'Borrador guardado.', 'success');
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 

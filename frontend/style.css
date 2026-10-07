@@ -18044,3 +18044,10 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 .seq-app .seq-app__mail{padding:12px 16px;line-height:1.45}
 .seq-app .seq-app__mail-body{min-height:90px}
 .seq-app .seq-app__mail-sig{margin-top:1.4em}
+/* Avisos minimalistas: sin icono, solo un filete de color a la izquierda */
+.nova-toast{padding:9px 12px 9px 14px;border-left:3px solid var(--text-muted,#94A3B8);gap:10px}
+.nova-toast .nova-toast__ico{display:none}
+.nova-toast--success{border-left-color:#16A064}
+.nova-toast--error{border-left-color:#D94B4B}
+.nova-toast--info{border-left-color:#64748B}
+.nova-toast__msg{font-size:.84rem}
