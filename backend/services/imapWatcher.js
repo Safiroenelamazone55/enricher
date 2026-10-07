@@ -403,4 +403,34 @@ function startImapWatcher(pool) {
   console.log('[imap-watcher] started (tick 3min)');
 }
 
-module.exports = { startImapWatcher, tick, classify, cleanBody, bounceRecipients };
+
+// Re-lee de IMAP los correos YA guardados (últimos N días) y, si traían tablas HTML, vuelve a guardar el cuerpo con las tablas conservadas.
+async function backfillTables(pool, days) {
+  const { rows: mbs } = await pool.query('SELECT * FROM lm_mailboxes');
+  let fixed = 0, scanned = 0;
+  for (const mb of mbs) {
+    const { rows } = await pool.query("SELECT id, imap_uid FROM lm_inbox_messages WHERE mailbox_id=$1 AND received_at > NOW() - ($2 || ' days')::interval AND imap_uid > 0 ORDER BY imap_uid", [mb.id, String(days || 90)]);
+    if (!rows.length) continue;
+    const byUid = new Map(rows.map(r => [Number(r.imap_uid), r.id]));
+    let client;
+    try {
+      const authBlock = await getMailboxAuth(pool, mb);
+      const auth = authBlock.accessToken ? { user: authBlock.user, accessToken: authBlock.accessToken } : { user: authBlock.user, pass: authBlock.pass };
+      client = new ImapFlow({ host: mb.imap_host, port: mb.imap_port, secure: true, auth, logger: false, emitLogs: false });
+      await client.connect();
+      await client.mailboxOpen('INBOX');
+      for await (const msg of client.fetch([...byUid.keys()].join(','), { uid: true, source: { maxLength: MAX_SOURCE } }, { uid: true })) {
+        scanned++;
+        const id = byUid.get(Number(msg.uid)); if (!id) continue;
+        const parsed = await simpleParser(msg.source);
+        if (!parsed.html || !/<table/i.test(parsed.html)) continue;
+        await pool.query('UPDATE lm_inbox_messages SET cuerpo=$1 WHERE id=$2', [cleanBody(parsed), id]);
+        fixed++;
+      }
+    } catch (e) { console.log('[backfillTables] buzón ' + mb.id + ': ' + e.message); }
+    finally { try { if (client) await client.logout(); } catch (_) {} }
+  }
+  return { scanned, fixed };
+}
+
+module.exports = { startImapWatcher, tick, classify, cleanBody, bounceRecipients, backfillTables };
