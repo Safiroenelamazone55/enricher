@@ -5069,6 +5069,26 @@ app.post('/api/lm/contacts/:id/no-phone', requireAuth, async (req, res) => {
 // 'manual' (ingresado/confirmado a mano → enviable) o '' (volver a "sin verificar").
 // Corregir el email de un contacto sin salir de Tareas: lo guarda como "sin verificar", reanuda las secuencias que se pausaron por email
 // (sin email / inválido / rebotado) y cierra sus avisos pendientes.
+const _PORTAL_KPI_IDS = ['contacted', 'replies', 'meetings', 'touches', 'accept', 'opens', 'clicks'];
+app.get('/api/lm/portal/kpis', requireAuth, async (req, res) => {
+  try {
+    const { rows: [r] } = await pool.query('SELECT portal_kpis FROM outbound_clients WHERE id=$1 AND user_id=$2', [parseInt(req.query.client) || 0, req.workspaceOwnerId]);
+    if (!r) return res.status(404).json({ error: 'Cliente no encontrado' });
+    const l = String(r.portal_kpis || '').split(',').filter(x => _PORTAL_KPI_IDS.includes(x));
+    res.json({ kpis: l.length ? l : null });
+  } catch (e) { res.status(500).json({ error: 'No se pudo leer' }); }
+});
+app.put('/api/lm/portal/kpis', requireAuth, async (req, res) => {
+  try {
+    const b = req.body || {}, cid = parseInt(b.client) || 0;
+    const l = (Array.isArray(b.kpis) ? b.kpis : []).filter(x => _PORTAL_KPI_IDS.includes(x));
+    if (!l.length) return res.status(400).json({ error: 'Deja al menos un KPI visible' });
+    const all = l.length === _PORTAL_KPI_IDS.length;
+    const r = await pool.query('UPDATE outbound_clients SET portal_kpis=$3 WHERE id=$1 AND user_id=$2', [cid, req.workspaceOwnerId, all ? '' : l.join(',')]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Cliente no encontrado' });
+    res.json({ ok: true, kpis: all ? null : l });
+  } catch (e) { res.status(500).json({ error: 'No se pudo guardar' }); }
+});
 app.post('/api/lm/contacts/:id/fix-email', requireAuth, async (req, res) => {
   const uid = req.workspaceOwnerId, cid = parseInt(req.params.id);
   const email = String((req.body || {}).email || '').trim().toLowerCase();

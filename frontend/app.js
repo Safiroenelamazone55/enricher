@@ -27017,6 +27017,7 @@ ${foot}
         apiFetch(`${API}/lm/portal/updates?client=${cid}`).then(r => r.json()),
       ]);
       window.__portalUpd = Array.isArray(u) ? u : [];
+      try { window.__portalKpis = (await (await apiFetch(API + '/lm/portal/kpis?client=' + cid)).json()).kpis || null; } catch (_) { window.__portalKpis = null; }
       window.__portalState = { cid, a, h };
       _portalChat = c.messages || []; _portalChatLast = _portalChat.length ? _portalChat[_portalChat.length - 1].id : 0;
       box.innerHTML = _portalHtml(cid, a, h);
@@ -27045,6 +27046,7 @@ ${foot}
     return `
       ${_portalAccessCard(cid, a)}
       ${_portalUpdatesCard(cid)}
+      ${_portalKpisCard(cid)}
       <div class="cp-card" style="margin-bottom:12px"><div class="cp-card__t">Qué se destaca al cliente <span style="font-weight:400;font-size:12px;color:#64748B">— la nota que escribas aquí la ve el cliente junto a ese contacto y su empresa</span></div>
         <div style="font-weight:600;font-size:12.5px;margin:6px 0 2px">Próximas reuniones (${h.next_meetings.length})</div>${h.next_meetings.map(r => row(r, dt(r.fecha))).join('') || '<div class="cp-empty2" style="padding:8px">Ninguna. Se toman de "Deals" con fecha de cierre.</div>'}
         <div style="font-weight:600;font-size:12.5px;margin:12px 0 2px">Últimas respuestas</div>${h.last_replies.map(r => row(r, dt(r.fecha))).join('') || '<div class="cp-empty2" style="padding:8px">Sin respuestas registradas.</div>'}
@@ -27052,6 +27054,24 @@ ${foot}
       </div>
       <div class="cp-card"><div class="cp-card__t">Chat con el cliente</div><div class="cp-empty2" style="padding:10px">Usa el botón flotante <b>«Chat con cliente»</b> (abajo a la derecha) para ver y responder la conversación, con fotos y archivos.</div>
       </div>`;
+  }
+  // Qué KPIs ve cada cliente en su portal ("Esta semana"): se elige aquí, por cliente.
+  const _PORTAL_KPI_OPTS = [['contacted', 'Contactos alcanzados'], ['replies', 'Respuestas'], ['meetings', 'Reuniones agendadas'], ['touches', 'Toques realizados'], ['accept', 'Aceptación LinkedIn'], ['opens', 'Apertura de emails'], ['clicks', 'Clics']];
+  function _portalKpisCard(cid) {
+    const sel = window.__portalKpis;
+    const rows = _PORTAL_KPI_OPTS.map(o => '<label class="pk-r"><input type="checkbox" ' + ((!sel || sel.includes(o[0])) ? 'checked' : '') + ' onchange="LeadManagerModule.portalKpiToggle(' + cid + ',\'' + o[0] + '\',this.checked)"><span>' + o[1] + '</span></label>').join('');
+    return '<div class="cp-card" style="margin-bottom:12px"><div class="cp-card__t">KPIs visibles en el portal <span style="font-weight:400;font-size:12px;color:#64748B">— lo que el cliente ve en «Esta semana»; se guarda al marcar</span></div><div class="pk-grid">' + rows + '</div></div>';
+  }
+  async function portalKpiToggle(cid, id, on) {
+    const all = _PORTAL_KPI_OPTS.map(o => o[0]);
+    const cur = window.__portalKpis || all;
+    const sel = on ? all.filter(k => cur.includes(k) || k === id) : cur.filter(k => k !== id);
+    if (!sel.length) { showBanner('Deja al menos un KPI visible', 'info'); const box = _portalBox(); if (box) box.innerHTML = _portalHtml(cid, window.__portalState.a, window.__portalState.h); return; }
+    try {
+      await _portalApi('/lm/portal/kpis', 'PUT', { client: cid, kpis: sel });
+      window.__portalKpis = sel.length === all.length ? null : sel;
+      showBanner('✓ KPIs del portal guardados', 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
   // Resumen escrito: lo que publiques aparece arriba del Resumen en el portal del cliente
   function _portalUpdatesCard(cid) {
@@ -33468,7 +33488,7 @@ ${foot}
     ldRefer, refCampChange, ldReferSave, ldNurture, ldNurtureSave, ldOpenDispoMenu,
     nurtureRetomarMenu, nurtureReinscribir, nurtureOtraSecuencia, nurtureSoloManual,
     waitingContactMenu, activarSiguienteContacto, waitingCerrarAviso,
-    dlSetCli, dlDragStart, dlDragEnd, dlDragOver, dlDragLeave, dlDrop, dlSetView, dlCardMenu, dlPopClose, dlCalNav, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel, kpiCfgOpen, kpiCfgToggle, kpiCfgReset, taskStat, fixEmailSave, fixShowAll, seqMailSync, stepReplyTo, mtOpen, mtClose, mtSeg, mtTimes, mtProg, mtChips, mtAddCc, mtSave, mtSend, mtCancel,
+    dlSetCli, dlDragStart, dlDragEnd, dlDragOver, dlDragLeave, dlDrop, dlSetView, dlCardMenu, dlPopClose, dlCalNav, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel, portalKpiToggle, kpiCfgOpen, kpiCfgToggle, kpiCfgReset, taskStat, fixEmailSave, fixShowAll, seqMailSync, stepReplyTo, mtOpen, mtClose, mtSeg, mtTimes, mtProg, mtChips, mtAddCc, mtSave, mtSend, mtCancel,
     sqSetCli, sqSetEst, sqSetQ, cmSetCli, cmSetEst, cmSetQ,
     seqRunSetCanal, seqTaskSetDue,
     mbOpen, mbClose, mbSave, mbTest, mbDelete, mbProv, mbOAuthStart, mbManageOpen, mbManageClose,

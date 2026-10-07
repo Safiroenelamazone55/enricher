@@ -18010,3 +18010,6 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 .kpi-pop__t{font-size:.78rem;font-weight:700;color:#64748B;margin-bottom:6px}
 .kpi-pop__r{display:flex;align-items:center;gap:8px;padding:5px 2px;font-size:.86rem;cursor:pointer;color:#14211B}
 .kpi-pop__reset{margin-top:8px;width:100%;border:0;background:none;color:#94A3B8;font:inherit;font-size:.76rem;text-decoration:underline;cursor:pointer}
+
+.pk-grid{display:flex;flex-wrap:wrap;gap:8px 22px;padding:6px 0 2px}
+.pk-r{display:inline-flex;align-items:center;gap:7px;font-size:.86rem;cursor:pointer;color:#14211B}

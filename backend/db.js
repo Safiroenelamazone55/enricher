@@ -1152,6 +1152,8 @@ async function initDb() {
     await pool.query(`CREATE INDEX IF NOT EXISTS lm_meetings_due_idx ON lm_meetings (estado, starts_at)`);
     await pool.query(`ALTER TABLE lm_meetings ADD COLUMN IF NOT EXISTS rem1_prog BOOLEAN NOT NULL DEFAULT FALSE`);
     await pool.query(`ALTER TABLE lm_meetings ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`);
+    // KPIs visibles en el portal de cada cliente outbound (ids separados por coma; '' = todos)
+    await pool.query(`ALTER TABLE outbound_clients ADD COLUMN IF NOT EXISTS portal_kpis TEXT NOT NULL DEFAULT ''`);
     // Asunto editable de cada aviso ('' = usar el asunto por defecto)
     await pool.query(`ALTER TABLE lm_meetings ADD COLUMN IF NOT EXISTS subj1 TEXT NOT NULL DEFAULT ''`);
     await pool.query(`ALTER TABLE lm_meetings ADD COLUMN IF NOT EXISTS subj2 TEXT NOT NULL DEFAULT ''`);
