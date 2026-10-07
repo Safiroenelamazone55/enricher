@@ -22435,14 +22435,7 @@ ${foot}
     const donut = d.channels.length ? `<div class="dash-donut"><div class="dash-donut__c"><canvas id="seqm-ch"></canvas></div><table class="dash-leg"><tbody>${chLeg}<tr class="dash-leg__t"><td>Total</td><td></td><td>${chTot}</td></tr></tbody></table></div>` : '<div class="rep-empty">Sin toques en el período</div>';
     const chsUsed = ['email', 'linkedin', 'call', 'wa_msg', 'wa_call', 'otros'].filter(k => d.daily.some(r => r.ch === k));
     const actLeg = chsUsed.map(k => `<span class="dash-lg"><span class="dash-dot" style="background:${_DASH_CH[k][1]}"></span>${_DASH_CH[k][0]}</span>`).join('');
-    return rangeHtml + `<div class="dash-kpis dash-kpis--6">
-        ${kpi('Contactos alcanzados', c.contacted, _dashDelta(c.contacted, p.contacted), `${c.touches} toques en total`)}
-        ${kpi('Aperturas', op + '%', _dashDelta(op, opp, true), `${c.opened || 0} de ${c.sent || 0} correos`)}
-        ${kpi('Clics', cl + '%', _dashDelta(cl, clp, true), `${c.clicked || 0} de ${c.sent || 0} correos`)}
-        ${kpi('Tasa de respuesta', rr + '%', _dashDelta(rr, rrp, true), `${c.replies} respondieron`)}
-        ${kpi('Aceptación LinkedIn', ar + '%', _dashDelta(ar, arp, true), `${c.accepts} de ${c.invites} invitaciones`)}
-        ${kpi('Reuniones agendadas', d.deals.agendadas, _dashDelta(d.deals.agendadas, d.deals.agendadas_prev), (d.deals.programadas ? d.deals.programadas + ' próxima' + (d.deals.programadas > 1 ? 's' : '') : 'sin próximas'))}
-      </div>
+    return rangeHtml + _kpiRowHtml('seq', c, p, d) + `
       <div class="dash-row dash-row--a">
         <div class="cp-card"><div class="dash-card-h"><div class="cp-card__t">Actividad por canal</div></div><div class="dash-legend">${actLeg}</div><div class="dash-chart"><canvas id="seqm-daily"></canvas></div></div>
         <div class="cp-card"><div class="cp-card__t">Embudo</div><div class="dash-funnel">${funnel}</div></div>
@@ -25614,11 +25607,80 @@ ${foot}
     const el = document.getElementById('dash-ab'); if (el) el.innerHTML = _seqAbHtml(sid);
   }
   function _dashPct(a, b) { return b ? Math.round(a / b * 1000) / 10 : 0; }
+  // ── KPIs elegibles (secuencias y dashboard/campañas): se muestran en UNA fila y cada quien elige cuáles ver ──
+  const _KPI_DEFS = [
+    ['contactados', 'Contactos alcanzados', 'users', '#22A06B'],
+    ['enviados', 'Emails enviados', 'mail', '#2563EB'],
+    ['aperturas', 'Aperturas', 'mailopen', '#2563EB'],
+    ['clics', 'Clics', 'click', '#7C5CE0'],
+    ['respuesta', 'Tasa de respuesta', 'reply', '#F59E0B'],
+    ['respuestas', 'Respuestas', 'reply', '#F59E0B'],
+    ['rebotes', 'Rebotes', 'send', '#EF4444'],
+    ['linkedin', 'Aceptación LinkedIn', 'in', '#7C5CE0'],
+    ['invitaciones', 'Invitaciones LinkedIn', 'in', '#7C5CE0'],
+    ['reuniones', 'Reuniones agendadas', 'handshake', '#22A06B'],
+  ];
+  const _KPI_DEFAULTS = {
+    seq: ['contactados', 'aperturas', 'clics', 'respuesta', 'linkedin', 'reuniones'],
+    dash: ['contactados', 'respuesta', 'linkedin', 'enviados', 'aperturas', 'reuniones'],
+  };
+  function _kpiSel(scope) {
+    try { const a = JSON.parse(localStorage.getItem('nova_kpi_' + scope) || 'null'); if (Array.isArray(a)) { const ok = a.filter(id => _KPI_DEFS.some(d => d[0] === id)); if (ok.length) return ok; } } catch (_) {}
+    return _KPI_DEFAULTS[scope].slice();
+  }
+  function _kpiValues(c, p, d) {
+    const pc = (a, b) => _dashPct(a, b);
+    const dl = d && d.deals ? d.deals : {};
+    return {
+      contactados: { v: c.contacted, dl: _dashDelta(c.contacted, p.contacted), s: (c.touches || 0) + ' toques' },
+      enviados: { v: c.emails, dl: _dashDelta(c.emails, p.emails), s: '' },
+      aperturas: { v: pc(c.opened, c.sent) + '%', dl: _dashDelta(pc(c.opened, c.sent), pc(p.opened, p.sent), true), s: (c.opened || 0) + ' de ' + (c.sent || 0) + ' correos' },
+      clics: { v: pc(c.clicked, c.sent) + '%', dl: _dashDelta(pc(c.clicked, c.sent), pc(p.clicked, p.sent), true), s: (c.clicked || 0) + ' de ' + (c.sent || 0) + ' correos' },
+      respuesta: { v: pc(c.replies, c.contacted) + '%', dl: _dashDelta(pc(c.replies, c.contacted), pc(p.replies, p.contacted), true), s: (c.replies || 0) + ' respondieron' },
+      respuestas: { v: c.replies || 0, dl: _dashDelta(c.replies, p.replies), s: '' },
+      rebotes: { v: pc(c.bounced, c.sent) + '%', dl: _dashDelta(pc(c.bounced, c.sent), pc(p.bounced, p.sent), true), s: (c.bounced || 0) + ' de ' + (c.sent || 0) + ' correos' },
+      linkedin: { v: pc(c.accepts, c.invites) + '%', dl: _dashDelta(pc(c.accepts, c.invites), pc(p.accepts, p.invites), true), s: (c.accepts || 0) + ' de ' + (c.invites || 0) + ' invitaciones' },
+      invitaciones: { v: c.invites || 0, dl: _dashDelta(c.invites, p.invites), s: '' },
+      reuniones: { v: dl.agendadas || 0, dl: _dashDelta(dl.agendadas, dl.agendadas_prev), s: dl.programadas ? dl.programadas + ' próxima' + (dl.programadas > 1 ? 's' : '') : 'sin próximas' },
+    };
+  }
+  function _kpiRowHtml(scope, c, p, d) {
+    const vals = _kpiValues(c, p, d), sel = _kpiSel(scope);
+    const cards = sel.map(id => {
+      const def = _KPI_DEFS.find(x => x[0] === id), x = vals[id];
+      return '<div class="dash-kpi" style="--kc:' + def[3] + '"><div class="dash-kpi__top"><span class="dash-kpi__ic">' + _dashIco(def[2], 18) + '</span><span class="dash-kpi__l" title="' + def[1] + '">' + def[1] + '</span></div><div class="dash-kpi__v">' + x.v + '</div>' + x.dl + (x.s ? '<div class="dash-kpi__s">' + x.s + '</div>' : '') + '</div>';
+    }).join('');
+    return '<div class="kpi-cfg-bar"><button type="button" class="kpi-cfg" onclick="LeadManagerModule.kpiCfgOpen(\'' + scope + '\',event)" title="Elegir qué KPIs mostrar">⚙ KPIs</button></div>' +
+      '<div class="dash-kpis dash-kpis--row" style="grid-template-columns:repeat(' + Math.max(1, sel.length) + ',minmax(130px,1fr))">' + cards + '</div>';
+  }
+  function kpiCfgOpen(scope, ev) {
+    if (ev && ev.stopPropagation) ev.stopPropagation();
+    document.getElementById('kpi-cfg-pop')?.remove();
+    const sel = _kpiSel(scope);
+    const pop = document.createElement('div'); pop.id = 'kpi-cfg-pop'; pop.className = 'kpi-pop';
+    pop.innerHTML = '<div class="kpi-pop__t">KPIs a mostrar</div>' +
+      _KPI_DEFS.map(d => '<label class="kpi-pop__r"><input type="checkbox" ' + (sel.includes(d[0]) ? 'checked' : '') + ' onchange="LeadManagerModule.kpiCfgToggle(\'' + scope + '\',\'' + d[0] + '\',this.checked)"><span>' + d[1] + '</span></label>').join('') +
+      '<button type="button" class="kpi-pop__reset" onclick="LeadManagerModule.kpiCfgReset(\'' + scope + '\')">Restablecer</button>';
+    document.body.appendChild(pop);
+    const r = (ev && (ev.currentTarget || ev.target)).getBoundingClientRect();
+    pop.style.top = Math.min(r.bottom + 6, window.innerHeight - pop.offsetHeight - 10) + 'px';
+    pop.style.left = Math.max(8, Math.min(r.right - pop.offsetWidth, window.innerWidth - pop.offsetWidth - 8)) + 'px';
+    setTimeout(() => document.addEventListener('click', function onDoc(e) { if (!pop.contains(e.target)) { pop.remove(); document.removeEventListener('click', onDoc); } }), 0);
+  }
+  function _kpiRepaint(scope) { if (scope === 'seq') _renderBody(); else _dashPaintBody(); }
+  function kpiCfgToggle(scope, id, on) {
+    let sel = _kpiSel(scope);
+    sel = on ? (sel.includes(id) ? sel : _KPI_DEFS.map(d => d[0]).filter(k => sel.includes(k) || k === id)) : sel.filter(k => k !== id);
+    if (!sel.length) { showBanner('Deja al menos un KPI visible', 'info'); _kpiRepaint(scope); return; }
+    try { localStorage.setItem('nova_kpi_' + scope, JSON.stringify(sel)); } catch (_) {}
+    _kpiRepaint(scope);
+  }
+  function kpiCfgReset(scope) { try { localStorage.removeItem('nova_kpi_' + scope); } catch (_) {} document.getElementById('kpi-cfg-pop')?.remove(); _kpiRepaint(scope); }
   function _dashDelta(cur, prev, pts) {
-    if (prev == null || (!prev && !cur)) return '<span class="dash-d dash-d--0">— vs. período anterior</span>';
+    if (prev == null || (!prev && !cur)) return '<span class="dash-d dash-d--0" title="vs. período anterior">—</span>';
     const diff = pts ? Math.round((cur - prev) * 10) / 10 : (prev ? Math.round((cur - prev) / prev * 100) : 100);
     const cls = diff > 0 ? 'up' : diff < 0 ? 'down' : '0';
-    return `<span class="dash-d dash-d--${cls}">${diff > 0 ? '▲ +' : diff < 0 ? '▼ -' : '• '}${Math.abs(diff)}${pts ? ' pts' : '%'} vs. período anterior</span>`;
+    return `<span class="dash-d dash-d--${cls}" title="vs. período anterior">${diff > 0 ? '▲ +' : diff < 0 ? '▼ -' : '• '}${Math.abs(diff)}${pts ? ' pts' : '%'}</span>`;
   }
   // semáforo: g = bien, a = atención, r = mal, n = sin dato
   function _dashSt(kind, a, b, c2) {
@@ -25657,14 +25719,7 @@ ${foot}
     const gran = _dashGran === 'auto' ? (d.range.days > 60 ? 'week' : 'day') : _dashGran;
     const actLeg = chsUsed.map(k => `<span class="dash-lg"><span class="dash-dot" style="background:${_DASH_CH[k][1]}"></span>${_DASH_CH[k][0]}</span>`).join('');
     return `${_dashLoading ? '<div class="dash-loading">Actualizando…</div>' : ''}
-      <div class="dash-kpis">
-        ${kpi('Contactos alcanzados', c.contacted, _dashDelta(c.contacted, p.contacted))}
-        ${kpi('Tasa de respuesta', rr + '%', _dashDelta(rr, rrp, true))}
-        ${kpi('Aceptación LinkedIn', ar + '%', _dashDelta(ar, arp, true))}
-        ${kpi('Emails enviados', c.emails, _dashDelta(c.emails, p.emails))}
-        ${kpi('Apertura email', c.sent ? or + '%' : '—', '<span class="dash-d dash-d--0">estimada</span>')}
-        ${kpi('Reuniones agendadas', d.deals.agendadas, _dashDelta(d.deals.agendadas, d.deals.agendadas_prev))}
-      </div>
+      ${_kpiRowHtml('dash', c, p, d)}
       <div class="dash-row dash-row--a">
         <div class="cp-card"><div class="dash-card-h"><div class="cp-card__t">Actividad por canal <span class="dash-info" title="Envíos y pasos hechos por canal (no incluye respuestas ni notas)">${_dashIco('info', 14)}</span></div><label class="dash-f dash-f--sm"><select onchange="LeadManagerModule.dashGran(this.value)"><option value="day"${gran === 'day' ? ' selected' : ''}>Diario</option><option value="week"${gran === 'week' ? ' selected' : ''}>Semanal</option></select></label></div><div class="dash-legend">${actLeg}</div><div class="dash-chart"><canvas id="dash-daily"></canvas></div></div>
         <div class="cp-card"><div class="cp-card__t">Embudo (histórico del filtro)</div><div class="dash-funnel">${funnel}</div></div>
@@ -33413,7 +33468,7 @@ ${foot}
     ldRefer, refCampChange, ldReferSave, ldNurture, ldNurtureSave, ldOpenDispoMenu,
     nurtureRetomarMenu, nurtureReinscribir, nurtureOtraSecuencia, nurtureSoloManual,
     waitingContactMenu, activarSiguienteContacto, waitingCerrarAviso,
-    dlSetCli, dlDragStart, dlDragEnd, dlDragOver, dlDragLeave, dlDrop, dlSetView, dlCardMenu, dlPopClose, dlCalNav, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel, taskStat, fixEmailSave, fixShowAll, seqMailSync, stepReplyTo, mtOpen, mtClose, mtSeg, mtTimes, mtProg, mtChips, mtAddCc, mtSave, mtSend, mtCancel,
+    dlSetCli, dlDragStart, dlDragEnd, dlDragOver, dlDragLeave, dlDrop, dlSetView, dlCardMenu, dlPopClose, dlCalNav, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel, kpiCfgOpen, kpiCfgToggle, kpiCfgReset, taskStat, fixEmailSave, fixShowAll, seqMailSync, stepReplyTo, mtOpen, mtClose, mtSeg, mtTimes, mtProg, mtChips, mtAddCc, mtSave, mtSend, mtCancel,
     sqSetCli, sqSetEst, sqSetQ, cmSetCli, cmSetEst, cmSetQ,
     seqRunSetCanal, seqTaskSetDue,
     mbOpen, mbClose, mbSave, mbTest, mbDelete, mbProv, mbOAuthStart, mbManageOpen, mbManageClose,
