@@ -25651,7 +25651,7 @@ ${foot}
       return '<div class="dash-kpi" style="--kc:' + def[3] + '"><div class="dash-kpi__top"><span class="dash-kpi__ic">' + _dashIco(def[2], 18) + '</span><span class="dash-kpi__l" title="' + def[1] + '">' + def[1] + '</span></div><div class="dash-kpi__v">' + x.v + '</div>' + x.dl + (x.s ? '<div class="dash-kpi__s">' + x.s + '</div>' : '') + '</div>';
     }).join('');
     return '<div class="kpi-cfg-bar"><button type="button" class="kpi-cfg" onclick="LeadManagerModule.kpiCfgOpen(\'' + scope + '\',event)" title="Elegir qué KPIs mostrar">⚙ KPIs</button></div>' +
-      '<div class="dash-kpis dash-kpis--row" style="grid-template-columns:repeat(' + Math.max(1, sel.length) + ',minmax(130px,1fr))">' + cards + '</div>';
+      '<div class="dash-kpis dash-kpis--row" style="grid-template-columns:repeat(' + Math.max(1, sel.length) + ',minmax(150px,1fr))">' + cards + '</div>';
   }
   function kpiCfgOpen(scope, ev) {
     if (ev && ev.stopPropagation) ev.stopPropagation();
