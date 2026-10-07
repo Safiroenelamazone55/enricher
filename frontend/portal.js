@@ -12,7 +12,14 @@
     let j = null; try { j = await r.json(); } catch (e) {}
     if (r.status === 401 && S.me) { S.me = null; stop(); renderLogin(); }
     if (!r.ok) throw Object.assign(new Error((j && j.error) || 'Error'), { status: r.status });
-    return j;
+    return _opp(j);
+  }
+  // El servidor etiqueta algunos estados como "Reunión"/"Reunión agendada": en el portal se llaman "Oportunidad".
+  function _opp(v) {
+    if (typeof v === 'string') return (v === 'Reunión' || v === 'Reunión agendada') ? 'Oportunidad' : v;
+    if (Array.isArray(v)) return v.map(_opp);
+    if (v && typeof v === 'object') { for (const k in v) v[k] = _opp(v[k]); }
+    return v;
   }
 
   // ── iconos ──
@@ -31,7 +38,7 @@
     check: '<path d="M20 6L9 17l-5-5"/>',
   };
   const ico = (k, sz) => k === 'in' ? '<b class="dash-in">in</b>' : `<svg width="${sz || 18}" height="${sz || 18}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICO[k] || ''}</svg>`;
-  const CH = { email: ['Email', '#2563EB', 'mail'], linkedin: ['LinkedIn', '#7C5CE0', 'in'], call: ['Llamada', '#F59E0B', 'phone'], wa_msg: ['WhatsApp · mensajes', '#22A06B', 'chat'], wa_call: ['WhatsApp · llamadas', '#0EA5A4', 'phone'], whatsapp: ['WhatsApp', '#22A06B', 'chat'], otros: ['Otros / tareas', '#B8C0CC', 'dots'], reply: ['Respuesta', '#22A06B', 'reply'], meeting: ['Reunión', '#F59E0B', 'cal'], task: ['Seguimiento', '#94A3B8', 'dots'] };
+  const CH = { email: ['Email', '#2563EB', 'mail'], linkedin: ['LinkedIn', '#7C5CE0', 'in'], call: ['Llamada', '#F59E0B', 'phone'], wa_msg: ['WhatsApp · mensajes', '#22A06B', 'chat'], wa_call: ['WhatsApp · llamadas', '#0EA5A4', 'phone'], whatsapp: ['WhatsApp', '#22A06B', 'chat'], otros: ['Otros / tareas', '#B8C0CC', 'dots'], reply: ['Respuesta', '#22A06B', 'reply'], meeting: ['Oportunidad', '#F59E0B', 'cal'], task: ['Seguimiento', '#94A3B8', 'dots'] };
   const pct = (a, b) => b ? Math.round(a / b * 1000) / 10 : 0;
   const fdate = (d, o) => { try { return new Date(d).toLocaleDateString(PT_I18N.locale(), o || { day: '2-digit', month: 'short' }); } catch (e) { return ''; } };
   const ago = d => { const m = Math.round((Date.now() - new Date(d)) / 60000); if (m < 1) return 'ahora'; if (m < 60) return `hace ${m} min`; const h = Math.round(m / 60); if (h < 24) return `hace ${h} h`; return fdate(d); };
@@ -157,7 +164,7 @@
   function tabs() {
     const s = S.me.sections, t = [['inicio', 'Resumen']];
     if (s.setup) t.unshift(['setup', 'Arranque']);
-    if (s.reuniones) t.push(['reuniones', 'Reuniones']);
+    if (s.reuniones) t.push(['reuniones', 'Oportunidades']);
     if (s.empresas) t.push(['empresas', 'Empresas']);
     if (s.contactos) t.push(['contactos', 'Contactos']);
     if (s.secuencias) t.push(['secuencias', 'Secuencias']);
@@ -354,7 +361,7 @@
     wkLineToggle: i => wkLineToggle(i),
   };
 
-  const badge = (t) => { const c = /Reunión/.test(t) ? 'g' : /Interesado|Respondió|Más adelante/.test(t) ? 'b' : /No interesado|No califica|No contactar/.test(t) ? 'r' : /seguimiento|En pausa/i.test(t) ? 'a' : 'n'; return `<span class="pt-badge pt-b--${c}">${esc(t)}</span>`; };
+  const badge = (t) => { const c = /Reunión|Oportunidad/.test(t) ? 'g' : /Interesado|Respondió|Más adelante/.test(t) ? 'b' : /No interesado|No califica|No contactar/.test(t) ? 'r' : /seguimiento|En pausa/i.test(t) ? 'a' : 'n'; return `<span class="pt-badge pt-b--${c}">${esc(t)}</span>`; };
   const person = r => `${esc(r.nombre)}${r.cargo ? ` <span style="color:#64748B;font-weight:500">· ${esc(r.cargo)}</span>` : ''}`;
 
   function highlightsHtml() {
@@ -367,7 +374,7 @@
     const s = S.me.sections;
     return `<div class="pt-hl">
       ${s.respuestas ? `<div class="pt-card"><h3>${ico('reply', 16)} Últimas respuestas</h3>${rep || '<div class="pt-empty">Aún sin respuestas</div>'}</div>` : ''}
-      ${s.reuniones ? `<div class="pt-card"><h3 style="justify-content:space-between"><span style="display:flex;gap:8px;align-items:center">${ico('cal', 16)} Próximas reuniones <span class="pt-badge pt-b--g">${h.counts.reuniones_prog}</span></span><button class="pt-link" onclick="PT.goMeet()">Ver calendario →</button></h3>${mt || '<div class="pt-empty">Ninguna reunión programada todavía</div>'}</div>` : ''}
+      ${s.reuniones ? `<div class="pt-card"><h3 style="justify-content:space-between"><span style="display:flex;gap:8px;align-items:center">${ico('cal', 16)} Próximas oportunidades <span class="pt-badge pt-b--g">${h.counts.reuniones_prog}</span></span><button class="pt-link" onclick="PT.goMeet()">Ver calendario →</button></h3>${mt || '<div class="pt-empty">Ninguna oportunidad programada todavía</div>'}</div>` : ''}
       ${s.respuestas ? `<div class="pt-card"><h3>${ico('handshake', 16)} Señales positivas por convertir <span class="pt-badge pt-b--b">${h.positive_pending.filter(r => !r.neutral).length}</span></h3>${ps || '<div class="pt-empty">Sin señales pendientes</div>'}</div>` : ''}
     </div>`;
   }
@@ -430,7 +437,7 @@
       { id: 'opens', ic: 'mailopen', l: 'Apertura email', v: c.sent ? pct(c.opened, c.sent) + '%' : '—', dl: '<span class="dash-d dash-d--0">estimada</span>', sub: '' },
       { id: 'clicks', ic: 'send', l: 'Clics', v: c.sent ? pct(c.clicked, c.sent) + '%' : '—', dl: '<span class="dash-d dash-d--0">estimado</span>', sub: '' },
     ];
-    const sent = `${c.contacted} contactos alcanzados · ${c.replies} respuestas${mc == null ? '' : ' · ' + mc + (mc === 1 ? ' reunión agendada' : ' reuniones agendadas')}`;
+    const sent = `${c.contacted} contactos alcanzados · ${c.replies} respuestas${mc == null ? '' : ' · ' + mc + (mc === 1 ? ' oportunidad' : ' oportunidades')}`;
     const title = S.per === 'month' ? 'Este mes' : S.per === 'trim' ? 'Este trimestre' : S.per === 'custom' ? 'Rango elegido' : 'Esta semana';
     const customRow = S.per === 'custom' ? `<div class="pt-range" style="margin:10px 0 2px">
       <span class="pt-range__ic">${ico('cal', 16)}</span>
@@ -550,7 +557,7 @@
         ? (r.valor ? `<span style="color:#15803D">${money2(r.valor, r.moneda)}</span>` : '')
         : `<span style="font-weight:500;color:#94A3B8;font-size:12px">${r.n} ${kind === 'replies' ? (r.n === 1 ? 'respuesta' : 'respuestas') : (r.n === 1 ? 'toque' : 'toques')}</span>`;
       const sub = kind === 'meetings'
-        ? `${esc(r.empresa || '')}${r.fecha ? ' · reunión ' + fdate(r.fecha, { day: 'numeric', month: 'short', timeZone: 'UTC' }) : ''}`
+        ? `${esc(r.empresa || '')}${r.fecha ? ' · oportunidad ' + fdate(r.fecha, { day: 'numeric', month: 'short', timeZone: 'UTC' }) : ''}`
         : `${esc(r.empresa || '')}${r.ultima ? ' · ' + ago(r.ultima) : ''}`;
       return `<div class="pt-item pt-click${r.contact_id === selId ? ' pt-wkfull__sel' : ''}" onclick="PT.weekSelect(${r.contact_id})"><div class="pt-item__t"><span>${person(r)}</span>${right}</div><div class="pt-item__s">${sub}</div></div>`;
     }).join(''); };
@@ -607,7 +614,7 @@
       let fun = '';
       if (d.funnel) {
         const fn = d.funnel, base = fn.enrolados || 1;
-        const st = [['Enrolados', fn.enrolados, '#0F172A', 'users'], ['Contactados', fn.contactados, '#2563EB', 'send'], ['Respondieron', fn.respondieron, '#22A06B', 'reply'], ['Reunión', fn.reuniones, '#F59E0B', 'cal']];
+        const st = [['Enrolados', fn.enrolados, '#0F172A', 'users'], ['Contactados', fn.contactados, '#2563EB', 'send'], ['Respondieron', fn.respondieron, '#22A06B', 'reply'], ['Oportunidades', fn.reuniones, '#F59E0B', 'cal']];
         fun = `<div class="cp-card"><div class="cp-card__t">Embudo</div><div class="dash-funnel">${st.map((x, i) => `<div class="dash-fn"><span class="dash-fn__ic">${ico(x[3], 18)}</span><div class="dash-fn__b"><div class="dash-fn__top"><span class="dash-fn__l">${x[0]}</span>${i ? `<span class="dash-fn__c">${pct(x[1], st[i - 1][1])}% ↓</span>` : ''}<span class="dash-fn__n">${x[1]}</span></div><div class="dash-fn__track"><div class="dash-fn__fill" style="width:${Math.max(2, Math.round(x[1] / base * 100))}%;background:${x[2]}"></div></div></div></div>`).join('')}</div></div>`;
       }
       row1 = `<div class="dash-row dash-row--a">${actCard}${fun}</div>`;
@@ -663,7 +670,7 @@
   const meetCls = e => e === 'ganado' ? 'g' : e === 'perdido' ? 'x' : 'b';
   function reuniones() {
     const list = S.meet;
-    if (!list) return '<div class="pt-h"><h2>Reuniones</h2></div><div class="pt-empty">Cargando…</div>';
+    if (!list) return '<div class="pt-h"><h2>Oportunidades</h2></div><div class="pt-empty">Cargando…</div>';
     const { y, m } = S.cal, first = new Date(Date.UTC(y, m, 1)), lead = (first.getUTCDay() + 6) % 7, days = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
     const by = {}; list.forEach(r => { (by[dkey(r.fecha)] = by[dkey(r.fecha)] || []).push(r); });
     const today = dkey(new Date()), monday = new Date(Date.UTC(2024, 0, 1));
@@ -678,10 +685,10 @@
     const now = dkey(new Date()), up = list.filter(r => dkey(r.fecha) >= now), past = list.filter(r => dkey(r.fecha) < now).reverse();
     const row = r => `<div class="pt-mrow" onclick="PT.open(${r.contact_id})"><div class="pt-date"><b>${new Date(r.fecha).toLocaleDateString(PT_I18N.locale(), { month: 'short', timeZone: 'UTC' }).replace('.', '').toUpperCase()}</b><span>${new Date(r.fecha).getUTCDate()}</span></div>
       <div style="min-width:0;flex:1"><div class="pt-item__t"><span>${esc(r.empresa || '')}</span><span class="pt-badge pt-b--${r.etapa === 'ganado' ? 'g' : r.etapa === 'perdido' ? 'r' : 'b'}">${esc(r.etapa_label || '')}</span></div><div class="pt-item__s">${esc(r.nombre)}${r.cargo ? ' · ' + esc(r.cargo) : ''}</div>${r.valor ? `<div class="pt-item__s">${money2(r.valor, r.moneda)}${r.prob != null ? ' · ' + r.prob + '%' : ''}</div>` : ''}</div></div>`;
-    return `<div class="pt-h"><h2>Reuniones</h2></div>
+    return `<div class="pt-h"><h2>Oportunidades</h2></div>
       <div class="pt-two pt-two--cal"><div class="pt-card"><div class="pt-cal__h"><button class="pt-morebtn" onclick="PT.cal(-1)">‹</button><b>${esc(label)}</b><button class="pt-morebtn" onclick="PT.cal(1)">›</button><button class="pt-morebtn" onclick="PT.cal(0)">Hoy</button></div>
         <div class="pt-cal"><div class="pt-cal__w">${wd.map(x => `<span>${esc(x)}</span>`).join('')}</div><div class="pt-cal__g">${cells}</div></div></div>
-        <div class="pt-card"><h3>Próximas</h3>${up.length ? up.map(row).join('') : '<div class="pt-empty">Sin reuniones todavía</div>'}${past.length ? `<h3 style="margin-top:16px">Anteriores</h3>${past.slice(0, 20).map(row).join('')}` : ''}</div></div>`;
+        <div class="pt-card"><h3>Próximas</h3>${up.length ? up.map(row).join('') : '<div class="pt-empty">Sin oportunidades todavía</div>'}${past.length ? `<h3 style="margin-top:16px">Anteriores</h3>${past.slice(0, 20).map(row).join('')}` : ''}</div></div>`;
   }
   const EV_ICO = { linkedin: ['in', '#7C5CE0'], email: ['mail', '#2563EB'], whatsapp: ['chat', '#22A06B'], whatsapp_call: ['phone', '#0EA5A4'], call: ['phone', '#F59E0B'], task: ['dots', '#94A3B8'] };
   // Ficha con dos vistas conectadas: EMPRESA (historial único de todos sus contactos) y CONTACTO
@@ -694,13 +701,13 @@
     else if (e.kind === 'added') { ic = ['users', '#0F172A']; body = `<b>Se agregó a</b> ${withWho ? `<button class="pt-who" onclick="PT.drTab('contacto',${e.contact_id})">${esc(e.contact)}</button>` : ''}${e.cargo ? ' <span class="pt-item__s" style="display:inline">· ' + esc(e.cargo) + '</span>' : ''}${e.por ? `<div class="pt-item__s">Derivado por <button class="pt-who" onclick="PT.drTab('contacto',${e.por_id})">${esc(e.por)}</button></div>` : ''}${e.seq ? `<div class="pt-item__s">${esc(e.seq)}</div>` : ''}`; }
     else if (e.kind === 'reply') { ic = ['reply', '#22A06B']; body = `<b>Respondió</b> ${who}${e.text ? `<div class="pt-item__q">${esc(e.text)}</div>` : ''}`; }
     else if (e.kind === 'status') { ic = ['check', '#2563EB']; body = `<b>Estado</b> <span class="pt-badge pt-b--b">${esc(e.label)}</span> ${who}`; }
-    else if (e.kind === 'booked') { ic = ['cal', '#F59E0B']; body = `<b>Reunión agendada</b> <span>Para el ${dlong(e.date)}</span> ${who}`; }
-    else if (e.kind === 'meeting') { ic = ['cal', '#F59E0B']; body = `<b>Reunión</b> ${who}`; }
+    else if (e.kind === 'booked') { ic = ['cal', '#F59E0B']; body = `<b>Oportunidad creada</b> <span>Para el ${dlong(e.date)}</span> ${who}`; }
+    else if (e.kind === 'meeting') { ic = ['cal', '#F59E0B']; body = `<b>Oportunidad</b> ${who}`; }
     else if (e.kind === 'note') { ic = ['chat', '#2563EB']; body = `<b>Nota de tu equipo</b> ${who}<div class="pt-item__n">${esc(e.text)}</div>`; }
     return `<div class="pt-tl"><span class="pt-tl__i" style="background:${ic[1]}">${ico(ic[0], 14)}</span><div class="pt-tl__b"><div class="pt-tl__t">${body}</div><div class="pt-tl__d">${when}</div></div></div>`;
   }
   function dealBox(dl) {
-    return dl ? `<div class="pt-dr__deal"><div><span>Fecha de la reunión</span><b>${dlong(dl.fecha)}</b></div><div><span>Agendada el</span><b>${dlong(dl.agendada)}</b></div>${dl.valor ? `<div><span>Valor</span><b>${money2(dl.valor, dl.moneda)}</b></div>` : ''}${dl.prob != null ? `<div><span>Probabilidad</span><b>${dl.prob}%</b></div>` : ''}</div>` : '';
+    return dl ? `<div class="pt-dr__deal"><div><span>Fecha de la oportunidad</span><b>${dlong(dl.fecha)}</b></div><div><span>Agendada el</span><b>${dlong(dl.agendada)}</b></div>${dl.valor ? `<div><span>Valor</span><b>${money2(dl.valor, dl.moneda)}</b></div>` : ''}${dl.prob != null ? `<div><span>Probabilidad</span><b>${dl.prob}%</b></div>` : ''}</div>` : '';
   }
   function notesBox(notes, withWho) { return notes.length ? `<h3 class="pt-dr__s">Notas y comentarios del deal</h3>${notes.map(n => `<div class="pt-item__n" style="margin-bottom:6px">${esc(n.texto)}<div class="pt-tl__d">${withWho && n.contact ? esc(n.contact) + ' · ' : ''}${new Date(n.fecha).toLocaleDateString(PT_I18N.locale(), { day: 'numeric', month: 'short' })}</div></div>`).join('')}` : ''; }
   function drBody() {
@@ -708,9 +715,9 @@
     if (D.tab === 'empresa') {
       const d = D.co; if (!d) return '<div class="pt-empty">Cargando…</div>';
       const c = d.company;
-      const rows = d.contacts.map(k => `<div class="pt-mrow" onclick="PT.drTab('contacto',${k.id})"><div style="min-width:0;flex:1"><div class="pt-item__t"><span>${esc(k.nombre)}</span><span>${k.estado ? badge(k.estado) : (k.reunion ? badge('Reunión agendada') : '')}</span></div><div class="pt-item__s">${esc(k.cargo || '')}</div><div class="pt-item__s">Agregado el ${fdate(k.agregado, { day: 'numeric', month: 'short', year: 'numeric' })}${k.secuencia ? ' · ' + esc(k.secuencia) : ''}</div></div></div>`).join('');
+      const rows = d.contacts.map(k => `<div class="pt-mrow" onclick="PT.drTab('contacto',${k.id})"><div style="min-width:0;flex:1"><div class="pt-item__t"><span>${esc(k.nombre)}</span><span>${k.estado ? badge(k.estado) : (k.reunion ? badge('Oportunidad') : '')}</span></div><div class="pt-item__s">${esc(k.cargo || '')}</div><div class="pt-item__s">Agregado el ${fdate(k.agregado, { day: 'numeric', month: 'short', year: 'numeric' })}${k.secuencia ? ' · ' + esc(k.secuencia) : ''}</div></div></div>`).join('');
       return `<div class="pt-dr__info">${c.website ? `<span>${esc(c.website.replace(/^https?:\/\//, ''))}</span>` : ''}${c.industria ? `<span>${esc(c.industria)}</span>` : ''}${c.ciudad ? `<span>${esc(c.ciudad)}</span>` : ''}${c.pais ? `<span>${esc(c.pais)}</span>` : ''}</div>
-        ${dealBox(d.deal)}${d.deal && d.deal.contact ? `<div class="pt-item__s" style="margin:-6px 0 10px">Reunión con <button class="pt-who" onclick="PT.drTab('contacto',${d.deal.contact_id})">${esc(d.deal.contact)}</button></div>` : ''}
+        ${dealBox(d.deal)}${d.deal && d.deal.contact ? `<div class="pt-item__s" style="margin:-6px 0 10px">Oportunidad con <button class="pt-who" onclick="PT.drTab('contacto',${d.deal.contact_id})">${esc(d.deal.contact)}</button></div>` : ''}
         ${notesBox(d.notes, true)}
         <h3 class="pt-dr__s">Contactos en la empresa (${d.contacts.length})</h3>${rows}
         <h3 class="pt-dr__s">Historial de la empresa</h3>${d.timeline.map(e => evHtml(e, true)).join('') || '<div class="pt-empty">Sin historial todavía</div>'}`;
