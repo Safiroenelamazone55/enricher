@@ -24314,12 +24314,25 @@ ${foot}
     const quoted = lines.slice(cut).join('\n').trim();
     return visible ? { visible, quoted } : { visible: raw.trim(), quoted: '' };
   }
+  // Texto del correo → HTML: escapa, respeta saltos de línea y dibuja como TABLA las filas consecutivas "| a | b |".
+  function _ibTextHtml(txt) {
+    const lines = String(txt || '').split('\n'), out = []; let i = 0;
+    const isRow = l => /^\s*\|.*\|\s*$/.test(l);
+    while (i < lines.length) {
+      if (isRow(lines[i])) {
+        const rows = [];
+        while (i < lines.length && isRow(lines[i])) { rows.push(lines[i].trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim())); i++; }
+        out.push('<div class="ibx-tbl"><table><tbody>' + rows.map(r => '<tr>' + r.map(c => '<td>' + esc(c) + '</td>').join('') + '</tr>').join('') + '</tbody></table></div>');
+      } else { out.push(esc(lines[i]) + (i < lines.length - 1 && !isRow(lines[i + 1] || '') ? '<br>' : '')); i++; }
+    }
+    return out.join('');
+  }
   function _ibBodyHtml(cuerpo) {
     const { visible, quoted } = _ibStripQuote(cuerpo);
-    let html = `<div class="ibx-m__body">${esc(visible).replace(/\n/g, '<br>')}</div>`;
+    let html = `<div class="ibx-m__body">${_ibTextHtml(visible)}</div>`;
     if (quoted) {
       html += `<button class="ibx-m__quotetoggle" onclick="const q=this.nextElementSibling;q.classList.toggle('hidden');this.textContent=q.classList.contains('hidden')?'Ver mensaje citado ▾':'Ocultar mensaje citado ▴'">Ver mensaje citado ▾</button>`;
-      html += `<div class="ibx-m__quoted hidden">${esc(quoted).replace(/\n/g, '<br>')}</div>`;
+      html += `<div class="ibx-m__quoted hidden">${_ibTextHtml(quoted)}</div>`;
     }
     return html;
   }

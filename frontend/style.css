@@ -18032,3 +18032,9 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 .kdr__t th{text-align:left;font-size:.72rem;color:#64748B;font-weight:600;padding:6px 8px;border-bottom:1px solid #E2E0DB;position:sticky;top:0;background:#fff}
 .kdr__t td{padding:8px;border-bottom:1px solid #F1EFEA}
 .kdr__t tbody tr{cursor:pointer}.kdr__t tbody tr:hover{background:#F7F8F6}
+
+/* Tablas dentro de los correos del Inbox */
+.ibx-tbl{overflow-x:auto;margin:6px 0;max-width:100%}
+.ibx-tbl table{border-collapse:collapse;font-size:.72rem;background:#fff}
+.ibx-tbl td{border:1px solid #D6D3CC;padding:4px 8px;vertical-align:top;line-height:1.35}
+.ibx-tbl tr:first-child td{background:#F1EFEA;font-weight:600}

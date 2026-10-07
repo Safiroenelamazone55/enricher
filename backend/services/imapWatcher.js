@@ -69,8 +69,30 @@ function classify(parsed) {
 }
 
 // Texto plano del mensaje, sin la cola citada del hilo (líneas "> ..." y "On ... wrote:").
+const _ENT = { nbsp: ' ', amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", times: '×', ndash: '–', mdash: '—', hellip: '…', reg: '®', copy: '©' };
+const _decEnt = s => String(s).replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (m, e) => {
+  if (e[0] === '#') { const n = e[1].toLowerCase() === 'x' ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10); return n ? String.fromCodePoint(n) : m; }
+  return _ENT[e.toLowerCase()] !== undefined ? _ENT[e.toLowerCase()] : m;
+});
+// HTML → texto conservando las tablas de datos como filas "| celda | celda |" (el visor del Inbox las dibuja como tabla).
+// Solo se convierten las tablas más internas (las que no contienen otra tabla): así las tablas de maquetación no aplastan el correo.
+function htmlToTextWithTables(html) {
+  let h = String(html).replace(/<(style|head|script)[\s\S]*?<\/\1>/gi, '');
+  h = h.replace(/<table(?:(?!<table)[\s\S])*?<\/table>/gi, t => {
+    const rows = [];
+    t.replace(/<tr[\s\S]*?<\/tr>/gi, r => {
+      const cells = [];
+      r.replace(/<t[hd][\s\S]*?<\/t[hd]>/gi, c => { cells.push(_decEnt(c.replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim().replace(/\|/g, '/')); return ''; });
+      if (cells.some(Boolean)) rows.push('| ' + cells.join(' | ') + ' |');
+      return '';
+    });
+    return '\n' + rows.join('\n') + '\n';
+  });
+  h = h.replace(/<br\s*\/?>|<\/(p|div|li|h[1-6]|tr)>/gi, '\n').replace(/<[^>]+>/g, '');
+  return _decEnt(h).replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+}
 function cleanBody(parsed) {
-  let txt = parsed.text || '';
+  let txt = (parsed.html && /<table/i.test(parsed.html)) ? htmlToTextWithTables(parsed.html) : (parsed.text || '');
   if (!txt && parsed.html) txt = String(parsed.html).replace(/<style[\s\S]*?<\/style>/gi, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
   const lines = String(txt).split('\n');
   const out = [];
