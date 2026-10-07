@@ -6808,6 +6808,10 @@ const _lmDashHandler = async (req, res) => {
        WHERE m.user_id=$1 AND ${kw}${seqP ? ` AND m.sequence_id=${seqP}` : ''}${(campP && !seqP) ? ` AND m.sequence_id IN (SELECT id FROM sequences WHERE campaign_id=${campP})` : ''}
          AND m.sent_at IS NOT NULL AND m.sent_at::date BETWEEN ${r[0]}::date AND ${r[1]}::date`;
     const cur = [iF, iT], prv = [iPF, iPT];
+    // En la vista de una secuencia/campaña, el resultado cuenta SOLO a quienes fueron clasificados desde que entraron a ella; antes sumaba la disposición histórica que el contacto trae de otras secuencias.
+    const _dispAct = "(a2.tipo IN ('respuesta','disposition_change') OR a2.nota LIKE 'Disposición:%')";
+    const dispScope = seqP ? ` AND EXISTS(SELECT 1 FROM activities a2 WHERE a2.contact_id=k.id AND ${_dispAct} AND a2.fecha >= (SELECT COALESCE((x4.start_date + TIME '12:00')::timestamptz, x4.created_at) FROM lm_contact_sequences x4 WHERE x4.contact_id=k.id AND x4.sequence_id=${seqP} LIMIT 1))`
+      : campP ? ` AND EXISTS(SELECT 1 FROM activities a2 WHERE a2.contact_id=k.id AND ${_dispAct} AND a2.fecha >= (SELECT MIN(COALESCE((x5.start_date + TIME '12:00')::timestamptz, x5.created_at)) FROM lm_contact_sequences x5 JOIN sequences s5 ON s5.id=x5.sequence_id WHERE x5.contact_id=k.id AND s5.campaign_id=${campP}))` : '';
     const REP1 = `(SELECT DISTINCT ON (contact_id) contact_id, fecha FROM activities WHERE user_id=$1 AND (tipo='respuesta' OR (tipo='disposition_change' AND nota ~ '→ (${RTYPES})[[:space:]]*$')) ORDER BY contact_id, fecha)`;
     const [k1, k0, m1, m0, daily, countries, byCh, heat, seqs, clients, funnel, repCh, repDays, recent, heatAuto, deals, dispo] = await Promise.all([
       pool.query(kpiSql(cur), params), pool.query(kpiSql(prv), params),
@@ -6863,7 +6867,7 @@ const _lmDashHandler = async (req, res) => {
       ) t GROUP BY 1,2`, params),
       pool.query(`SELECT COUNT(*)::int AS meetings, COUNT(*) FILTER (WHERE COALESCE(k.reunion_agendada_at,k.updated_at)::date BETWEEN ${iF}::date AND ${iT}::date)::int AS agendadas, COUNT(*) FILTER (WHERE COALESCE(k.reunion_agendada_at,k.updated_at)::date BETWEEN ${iPF}::date AND ${iPT}::date)::int AS agendadas_prev, COUNT(*) FILTER (WHERE k.deal_cierre>=CURRENT_DATE)::int AS programadas, COALESCE(SUM(k.deal_valor),0)::float AS valor, COALESCE(SUM(k.deal_valor*COALESCE(k.deal_prob,0)/100.0),0)::float AS ponderado, MIN(k.deal_cierre) FILTER (WHERE k.deal_cierre>=CURRENT_DATE) AS proximo
                     FROM lm_contacts k WHERE ${kw} AND (k.disposition='reunion' OR k.deal_cierre IS NOT NULL OR k.deal_valor IS NOT NULL OR EXISTS(SELECT 1 FROM activities z WHERE z.contact_id=k.id AND z.tipo='reunion'))`, params),
-      pool.query(`SELECT k.disposition AS d, COUNT(*)::int AS n FROM lm_contacts k WHERE ${kw} AND COALESCE(k.disposition,'')<>'' GROUP BY 1 ORDER BY 2 DESC`, params),
+      pool.query(`SELECT k.disposition AS d, COUNT(*)::int AS n FROM lm_contacts k WHERE ${kw} AND COALESCE(k.disposition,'')<>''${dispScope} GROUP BY 1 ORDER BY 2 DESC`, params),
     ]);
     // normaliza países ("Spain Spain" → "Spain") y agrupa
     const norm = p => { const w = String(p || '').trim().split(/\s+/); const h = w.length / 2; if (w.length % 2 === 0 && w.slice(0, h).join(' ').toLowerCase() === w.slice(h).join(' ').toLowerCase()) return w.slice(0, h).join(' '); return String(p).trim(); };
