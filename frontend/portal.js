@@ -300,6 +300,7 @@
   }
   function paint() {
     const b = document.getElementById('pt-body'); if (!b) return;
+    try { if (window.Chart) Chart.defaults.animation = false; } catch (e) {}
     stopCharts();
     const t = S.tab;
     if (t === 'inicio') b.innerHTML = S.hl ? inicio() : '<div class="pt-empty">Cargando…</div>';
@@ -331,11 +332,12 @@
         reloadDash();
         return;
       }
-      const c = S.wkc[p], apply = w => { if (S.per === p) { S.wk = w; paint(); } };
-      S.wk = c || S.wk; paint();
-      if (!c) { const el = document.querySelector('.pt-week'); if (el) { el.style.opacity = '.5'; el.style.transition = 'opacity .15s'; } }
-      if (!c || Date.now() - c.t > 60000) wkFetch(p).then(apply).catch(() => {});
-      reloadDash();
+      const c = S.wkc[p];
+      document.querySelectorAll('.dash-seg__b').forEach(b => b.classList.toggle('on', (b.getAttribute('onclick') || '').indexOf("'" + p + "'") > -1));   // el botón cambia al instante
+      if (!c) { const el = document.querySelector('.pt-week'); if (el) { el.style.transition = 'opacity .2s'; el.style.opacity = '.6'; } }
+      const wkP = (c && Date.now() - c.t <= 60000) ? Promise.resolve(c) : wkFetch(p);
+      const dP = S.detail ? api('/portal/dashboard?' + rangeQ()).catch(() => S.dash) : Promise.resolve(S.dash);
+      Promise.all([wkP, dP]).then(([w, d]) => { if (S.per !== p) return; S.wk = w; S.dash = d; paint(); }).catch(() => { const el = document.querySelector('.pt-week'); if (el) el.style.opacity = ''; });
     },
     // Pedido explícito del cliente (Tent Softlab, 2026-09-28): "a date selection
     // option in your app" — rango de fechas personalizado para el resumen del
@@ -441,7 +443,7 @@
       { id: 'clicks', ic: 'send', l: 'Clics', v: c.sent ? pct(c.clicked, c.sent) + '%' : '—', dl: '<span class="dash-d dash-d--0">estimado</span>', sub: '' },
     ];
     const sent = `${c.contacted} contactos alcanzados · ${c.replies} respuestas${mc == null ? '' : ' · ' + mc + (mc === 1 ? ' oportunidad' : ' oportunidades')}`;
-    const title = S.per === 'month' ? 'Este mes' : S.per === '30d' ? 'Últimos 30 días' : S.per === 'trim' ? 'Últimos 3 meses' : S.per === 'custom' ? 'Rango elegido' : 'Esta semana';
+    const title = S.per === 'month' ? 'Este mes' : S.per === '30d' ? '30 días' : S.per === 'trim' ? 'Trimestre' : S.per === 'custom' ? 'Rango elegido' : 'Esta semana';
     const customRow = S.per === 'custom' ? `<div class="pt-range" style="margin:10px 0 2px">
       <span class="pt-range__ic">${ico('cal', 16)}</span>
       <input type="date" id="pt-cf1" class="pt-range__in" value="${esc(S.customFrom || '')}" onchange="PT.rangeDirty()">
@@ -450,7 +452,7 @@
       <button id="pt-range-go" class="pt-range__go" onclick="PT.customRange(document.getElementById('pt-cf1').value,document.getElementById('pt-cf2').value)">Aplicar</button>
     </div>` : '';
     return `<div class="pt-week"><div class="pt-week__h"><div><h2>${title}</h2><span class="pt-week__r">${fshort(w.r.from)} – ${fshort(w.r.to)}</span></div>
-      <div class="dash-seg"><button class="dash-seg__b${S.per === 'week' ? ' on' : ''}" onclick="PT.per('week')">Semana</button><button class="dash-seg__b${S.per === 'month' ? ' on' : ''}" onclick="PT.per('month')">Mes</button><button class="dash-seg__b${S.per === '30d' ? ' on' : ''}" onclick="PT.per('30d')">30 días</button><button class="dash-seg__b${S.per === 'trim' ? ' on' : ''}" onclick="PT.per('trim')">3 meses</button><button class="dash-seg__b${S.per === 'custom' ? ' on' : ''}" onclick="PT.per('custom')">Personalizado</button></div></div>
+      <div class="dash-seg"><button class="dash-seg__b${S.per === 'week' ? ' on' : ''}" onclick="PT.per('week')">Semana</button><button class="dash-seg__b${S.per === 'month' ? ' on' : ''}" onclick="PT.per('month')">Mes</button><button class="dash-seg__b${S.per === '30d' ? ' on' : ''}" onclick="PT.per('30d')">30 días</button><button class="dash-seg__b${S.per === 'trim' ? ' on' : ''}" onclick="PT.per('trim')">Trimestre</button><button class="dash-seg__b${S.per === 'custom' ? ' on' : ''}" onclick="PT.per('custom')">Personalizado</button></div></div>
       ${customRow}
       <div class="pt-week__k pt-week__k--7">${tiles.filter(t => keepK(t[5])).map(t => `<div class="pt-tile pt-click" style="--kc:${t[4]}" onclick="PT.weekTile('${t[5]}','${esc(t[0])}')"><span class="pt-tile__i">${ico(t[3], 18)}</span><div><div class="pt-tile__l">${t[0]}</div><div class="pt-tile__v">${t[1]}</div>${dl(t[1], t[2])}</div></div>`).join('')}${extraTiles.filter(t => keepK(t.id)).map(t => `<div class="pt-tile"><span class="pt-tile__i">${ico(t.ic, 18)}</span><div><div class="pt-tile__l">${t.l}</div><div class="pt-tile__v">${t.v}</div>${t.dl}${t.sub ? `<div class="pt-week__s" style="margin-top:2px">${t.sub}</div>` : ''}</div></div>`).join('')}</div>
       <p class="pt-week__s">${sent}</p>

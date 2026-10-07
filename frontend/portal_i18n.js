@@ -124,7 +124,7 @@
     ['Personalizado', 'Custom', 'Benutzerdefiniert', 'Personalizado'], ['Aplicar', 'Apply', 'Anwenden', 'Aplicar'],
     ['Rango elegido', 'Selected range', 'Ausgewählter Zeitraum', 'Período selecionado'],
     ['Este trimestre', 'This quarter', 'Dieses Quartal', 'Este trimestre'],
-    ['Últimos 3 meses', 'Last 3 months', 'Letzte 3 Monate', 'Últimos 3 meses'], ['3 meses', '3 months', '3 Monate', '3 meses'],
+    ['Trimestre', 'Quarter', 'Quartal', 'Trimestre'],
     ['Últimos 30 días', 'Last 30 days', 'Letzte 30 Tage', 'Últimos 30 dias'], ['30 días', '30 days', '30 Tage', '30 dias'],
     ['Tendencia', 'Trend', 'Trend', 'Tendência'],
     ['Evolución diaria del período seleccionado', 'Daily evolution of the selected period', 'Tägliche Entwicklung des ausgewählten Zeitraums', 'Evolução diária do período selecionado'],
