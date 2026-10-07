@@ -18013,3 +18013,5 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 
 .pk-grid{display:flex;flex-wrap:wrap;gap:8px 22px;padding:6px 0 2px}
 .pk-r{display:inline-flex;align-items:center;gap:7px;font-size:.86rem;cursor:pointer;color:#14211B}
+
+.kpi-pop__h{font-size:.72rem;color:#64748B;margin:0 0 8px;max-width:250px;line-height:1.35}

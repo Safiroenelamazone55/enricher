@@ -25658,7 +25658,7 @@ ${foot}
     document.getElementById('kpi-cfg-pop')?.remove();
     const sel = _kpiSel(scope);
     const pop = document.createElement('div'); pop.id = 'kpi-cfg-pop'; pop.className = 'kpi-pop';
-    pop.innerHTML = '<div class="kpi-pop__t">KPIs a mostrar</div>' +
+    pop.innerHTML = '<div class="kpi-pop__t">KPIs a mostrar</div>' + (scope === 'seq' ? '<div class="kpi-pop__h">Estos KPIs también serán los que vea el cliente en su portal por defecto (los puedes ajustar en su pestaña Portal).</div>' : '') +
       _KPI_DEFS.map(d => '<label class="kpi-pop__r"><input type="checkbox" ' + (sel.includes(d[0]) ? 'checked' : '') + ' onchange="LeadManagerModule.kpiCfgToggle(\'' + scope + '\',\'' + d[0] + '\',this.checked)"><span>' + d[1] + '</span></label>').join('') +
       '<button type="button" class="kpi-pop__reset" onclick="LeadManagerModule.kpiCfgReset(\'' + scope + '\')">Restablecer</button>';
     document.body.appendChild(pop);
@@ -25673,9 +25673,16 @@ ${foot}
     sel = on ? (sel.includes(id) ? sel : _KPI_DEFS.map(d => d[0]).filter(k => sel.includes(k) || k === id)) : sel.filter(k => k !== id);
     if (!sel.length) { showBanner('Deja al menos un KPI visible', 'info'); _kpiRepaint(scope); return; }
     try { localStorage.setItem('nova_kpi_' + scope, JSON.stringify(sel)); } catch (_) {}
+    _kpiSyncSeq(scope, sel);
     _kpiRepaint(scope);
   }
-  function kpiCfgReset(scope) { try { localStorage.removeItem('nova_kpi_' + scope); } catch (_) {} document.getElementById('kpi-cfg-pop')?.remove(); _kpiRepaint(scope); }
+  function kpiCfgReset(scope) { try { localStorage.removeItem('nova_kpi_' + scope); } catch (_) {} _kpiSyncSeq(scope, null); document.getElementById('kpi-cfg-pop')?.remove(); _kpiRepaint(scope); }
+  // Lo elegido en las métricas de una SECUENCIA se guarda también en el servidor, a nivel del cliente: es el defecto de su portal.
+  function _kpiSyncSeq(scope, sel) {
+    if (scope !== 'seq') return;
+    const sq = (_sequences || []).find(x => x.id === _activeSeq); if (!sq || !sq.outbound_client_id) return;
+    apiFetch(API + '/lm/portal/seq-kpis', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ client: sq.outbound_client_id, kpis: sel || [], reset: !sel }) }).catch(() => {});
+  }
   function _dashDelta(cur, prev, pts) {
     if (prev == null || (!prev && !cur)) return '<span class="dash-d dash-d--0" title="vs. período anterior">—</span>';
     const diff = pts ? Math.round((cur - prev) * 10) / 10 : (prev ? Math.round((cur - prev) / prev * 100) : 100);
@@ -27017,7 +27024,7 @@ ${foot}
         apiFetch(`${API}/lm/portal/updates?client=${cid}`).then(r => r.json()),
       ]);
       window.__portalUpd = Array.isArray(u) ? u : [];
-      try { window.__portalKpis = (await (await apiFetch(API + '/lm/portal/kpis?client=' + cid)).json()).kpis || null; } catch (_) { window.__portalKpis = null; }
+      try { const kj = await (await apiFetch(API + '/lm/portal/kpis?client=' + cid)).json(); window.__portalKpis = kj.kpis || null; window.__portalKpiOrigen = kj.origen || 'todos'; } catch (_) { window.__portalKpis = null; window.__portalKpiOrigen = 'todos'; }
       window.__portalState = { cid, a, h };
       _portalChat = c.messages || []; _portalChatLast = _portalChat.length ? _portalChat[_portalChat.length - 1].id : 0;
       box.innerHTML = _portalHtml(cid, a, h);
@@ -27060,7 +27067,17 @@ ${foot}
   function _portalKpisCard(cid) {
     const sel = window.__portalKpis;
     const rows = _PORTAL_KPI_OPTS.map(o => '<label class="pk-r"><input type="checkbox" ' + ((!sel || sel.includes(o[0])) ? 'checked' : '') + ' onchange="LeadManagerModule.portalKpiToggle(' + cid + ',\'' + o[0] + '\',this.checked)"><span>' + o[1] + '</span></label>').join('');
-    return '<div class="cp-card" style="margin-bottom:12px"><div class="cp-card__t">KPIs visibles en el portal <span style="font-weight:400;font-size:12px;color:#64748B">— lo que el cliente ve en «Esta semana»; se guarda al marcar</span></div><div class="pk-grid">' + rows + '</div></div>';
+    const org = window.__portalKpiOrigen || 'todos';
+    const note = org === 'manual' ? 'Elegidos por ti para este cliente.' : org === 'secuencias' ? 'Por defecto: los que muestras en las secuencias de este cliente.' : 'Por defecto se muestran todos.';
+    return '<div class="cp-card" id="pk-card" style="margin-bottom:12px"><div class="cp-card__t">KPIs visibles en el portal <span style="font-weight:400;font-size:12px;color:#64748B">— ' + note + ' Se guarda al marcar.</span>' + (org === 'manual' ? ' <button class="btn btn--ghost btn--sm" style="float:right" onclick="LeadManagerModule.portalKpiReset(' + cid + ')">Volver a los de las secuencias</button>' : '') + '</div><div class="pk-grid">' + rows + '</div></div>';
+  }
+  function _portalKpisRepaint(cid) { const el = document.getElementById('pk-card'); if (el) el.outerHTML = _portalKpisCard(cid); }
+  async function portalKpiReset(cid) {
+    try {
+      const r = await _portalApi('/lm/portal/kpis', 'PUT', { client: cid, reset: true });
+      window.__portalKpis = (r && r.kpis) || null; window.__portalKpiOrigen = (r && r.origen) || 'todos';
+      _portalKpisRepaint(cid); showBanner('✓ El portal vuelve a mostrar los KPIs de las secuencias', 'success');
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
   async function portalKpiToggle(cid, id, on) {
     const all = _PORTAL_KPI_OPTS.map(o => o[0]);
@@ -27069,7 +27086,7 @@ ${foot}
     if (!sel.length) { showBanner('Deja al menos un KPI visible', 'info'); const box = _portalBox(); if (box) box.innerHTML = _portalHtml(cid, window.__portalState.a, window.__portalState.h); return; }
     try {
       await _portalApi('/lm/portal/kpis', 'PUT', { client: cid, kpis: sel });
-      window.__portalKpis = sel.length === all.length ? null : sel;
+      window.__portalKpis = sel; window.__portalKpiOrigen = 'manual'; _portalKpisRepaint(cid);
       showBanner('✓ KPIs del portal guardados', 'success');
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
@@ -33488,7 +33505,7 @@ ${foot}
     ldRefer, refCampChange, ldReferSave, ldNurture, ldNurtureSave, ldOpenDispoMenu,
     nurtureRetomarMenu, nurtureReinscribir, nurtureOtraSecuencia, nurtureSoloManual,
     waitingContactMenu, activarSiguienteContacto, waitingCerrarAviso,
-    dlSetCli, dlDragStart, dlDragEnd, dlDragOver, dlDragLeave, dlDrop, dlSetView, dlCardMenu, dlPopClose, dlCalNav, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel, portalKpiToggle, kpiCfgOpen, kpiCfgToggle, kpiCfgReset, taskStat, fixEmailSave, fixShowAll, seqMailSync, stepReplyTo, mtOpen, mtClose, mtSeg, mtTimes, mtProg, mtChips, mtAddCc, mtSave, mtSend, mtCancel,
+    dlSetCli, dlDragStart, dlDragEnd, dlDragOver, dlDragLeave, dlDrop, dlSetView, dlCardMenu, dlPopClose, dlCalNav, dlOpen, dlClose, dlSave, dlNotaAdd, dlNotaDel, portalKpiToggle, portalKpiReset, kpiCfgOpen, kpiCfgToggle, kpiCfgReset, taskStat, fixEmailSave, fixShowAll, seqMailSync, stepReplyTo, mtOpen, mtClose, mtSeg, mtTimes, mtProg, mtChips, mtAddCc, mtSave, mtSend, mtCancel,
     sqSetCli, sqSetEst, sqSetQ, cmSetCli, cmSetEst, cmSetQ,
     seqRunSetCanal, seqTaskSetDue,
     mbOpen, mbClose, mbSave, mbTest, mbDelete, mbProv, mbOAuthStart, mbManageOpen, mbManageClose,

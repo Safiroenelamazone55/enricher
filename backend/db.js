@@ -1154,6 +1154,8 @@ async function initDb() {
     await pool.query(`ALTER TABLE lm_meetings ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`);
     // KPIs visibles en el portal de cada cliente outbound (ids separados por coma; '' = todos)
     await pool.query(`ALTER TABLE outbound_clients ADD COLUMN IF NOT EXISTS portal_kpis TEXT NOT NULL DEFAULT ''`);
+    // KPIs que la agencia muestra en las métricas de las secuencias de este cliente: son el DEFECTO del portal (ver services/kpiDefaults.js)
+    await pool.query(`ALTER TABLE outbound_clients ADD COLUMN IF NOT EXISTS seq_kpis TEXT NOT NULL DEFAULT ''`);
     // Asunto editable de cada aviso ('' = usar el asunto por defecto)
     await pool.query(`ALTER TABLE lm_meetings ADD COLUMN IF NOT EXISTS subj1 TEXT NOT NULL DEFAULT ''`);
     await pool.query(`ALTER TABLE lm_meetings ADD COLUMN IF NOT EXISTS subj2 TEXT NOT NULL DEFAULT ''`);

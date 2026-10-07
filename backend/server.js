@@ -5070,23 +5070,41 @@ app.post('/api/lm/contacts/:id/no-phone', requireAuth, async (req, res) => {
 // Corregir el email de un contacto sin salir de Tareas: lo guarda como "sin verificar", reanuda las secuencias que se pausaron por email
 // (sin email / inválido / rebotado) y cierra sus avisos pendientes.
 const _PORTAL_KPI_IDS = ['contacted', 'replies', 'meetings', 'touches', 'accept', 'opens', 'clicks'];
+// Lo que la agencia muestra en las métricas de las secuencias de un cliente = lo que su portal muestra POR DEFECTO.
+app.put('/api/lm/portal/seq-kpis', requireAuth, async (req, res) => {
+  try {
+    const kd = require('./services/kpiDefaults'), b = req.body || {}, cid = parseInt(b.client) || 0;
+    const l = b.reset === true ? [] : kd.parse((Array.isArray(b.kpis) ? b.kpis : []).join(','), kd.SEQ_KPI_IDS);
+    const r = await pool.query('UPDATE outbound_clients SET seq_kpis=$3 WHERE id=$1 AND user_id=$2', [cid, req.workspaceOwnerId, l.join(',')]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Cliente no encontrado' });
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'No se pudo guardar' }); }
+});
 app.get('/api/lm/portal/kpis', requireAuth, async (req, res) => {
   try {
-    const { rows: [r] } = await pool.query('SELECT portal_kpis FROM outbound_clients WHERE id=$1 AND user_id=$2', [parseInt(req.query.client) || 0, req.workspaceOwnerId]);
+    const { rows: [r] } = await pool.query('SELECT portal_kpis, seq_kpis FROM outbound_clients WHERE id=$1 AND user_id=$2', [parseInt(req.query.client) || 0, req.workspaceOwnerId]);
     if (!r) return res.status(404).json({ error: 'Cliente no encontrado' });
     const l = String(r.portal_kpis || '').split(',').filter(x => _PORTAL_KPI_IDS.includes(x));
-    res.json({ kpis: l.length ? l : null });
+    const ef = require('./services/kpiDefaults').effective(r);
+    res.json({ kpis: ef.kpis, origen: ef.origen });
   } catch (e) { res.status(500).json({ error: 'No se pudo leer' }); }
 });
 app.put('/api/lm/portal/kpis', requireAuth, async (req, res) => {
   try {
     const b = req.body || {}, cid = parseInt(b.client) || 0;
     const l = (Array.isArray(b.kpis) ? b.kpis : []).filter(x => _PORTAL_KPI_IDS.includes(x));
+    if (b.reset === true) {   // vuelve a lo que se muestra en las secuencias
+      await pool.query("UPDATE outbound_clients SET portal_kpis='' WHERE id=$1 AND user_id=$2", [cid, req.workspaceOwnerId]);
+      const { rows: [rr] } = await pool.query('SELECT portal_kpis, seq_kpis FROM outbound_clients WHERE id=$1 AND user_id=$2', [cid, req.workspaceOwnerId]);
+      if (!rr) return res.status(404).json({ error: 'Cliente no encontrado' });
+      const ef0 = require('./services/kpiDefaults').effective(rr);
+      return res.json({ ok: true, kpis: ef0.kpis, origen: ef0.origen });
+    }
     if (!l.length) return res.status(400).json({ error: 'Deja al menos un KPI visible' });
     const all = l.length === _PORTAL_KPI_IDS.length;
-    const r = await pool.query('UPDATE outbound_clients SET portal_kpis=$3 WHERE id=$1 AND user_id=$2', [cid, req.workspaceOwnerId, all ? '' : l.join(',')]);
+    const r = await pool.query('UPDATE outbound_clients SET portal_kpis=$3 WHERE id=$1 AND user_id=$2', [cid, req.workspaceOwnerId, l.join(',')]);
     if (!r.rowCount) return res.status(404).json({ error: 'Cliente no encontrado' });
-    res.json({ ok: true, kpis: all ? null : l });
+    res.json({ ok: true, kpis: l, origen: 'manual' });
   } catch (e) { res.status(500).json({ error: 'No se pudo guardar' }); }
 });
 app.post('/api/lm/contacts/:id/fix-email', requireAuth, async (req, res) => {
