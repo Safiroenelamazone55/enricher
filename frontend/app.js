@@ -24286,7 +24286,7 @@ ${foot}
     // Ojito de apertura — solo tiene sentido para lo que YO mandé (pestaña Enviados):
     // gris = todavía no lo abre, verde = ya lo abrió. Mismo dato que la tabla de
     // tracking (lm_messages.opens), ahora visible fila por fila sin cambiar de vista.
-    const eyeIco = cat === 'env' && t.sent_count ? `<span class="ibx-row__eye" title="${t.abierto ? 'Abrió el correo' : 'Todavía no lo abre'}" style="color:${t.abierto ? '#22C55E' : 'var(--muted,#918C85)'}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></span>` : '';
+    const eyeIco = cat === 'env' && t.sent_count ? `<span class="ibx-row__eye" title="${t.abierto ? 'Abrió el último correo' : 'Todavía no abre el último correo'} (historial de todos: menú ⋮)" style="color:${t.abierto ? '#22C55E' : 'var(--muted,#918C85)'}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></span>` : '';
     return `<div class="ibx-row${_ibActive === t.contact_id ? ' active' : ''}${t.unread > 0 ? ' unread' : ''}" onclick="LeadManagerModule.ibOpen(${t.contact_id})" oncontextmenu="LeadManagerModule.ibRowMenu(event,${t.contact_id})">
       <div class="ibx-row__l1"><span class="ibx-row__nm">${t.unread > 0 ? '<span class="ibx-dot"></span>' : ''}<span class="ibx-row__nm-txt">${esc(nm)}</span>${t.disposition ? _dispoBadge(t.disposition) : ''}</span><span style="display:flex;align-items:center;gap:5px;flex:0 0 auto"><span class="ibx-row__t">${when}</span>${eyeIco}</span></div>
       <div class="ibx-row__sn">${esc(String(snippet).slice(0, 90))}</div>
@@ -24396,6 +24396,26 @@ ${foot}
   // Antes era su propia fila (CTA + badge + "⋮"). Ahora vive junto al header de la
   // conversación: el badge de disposición al lado del nombre, y "⋮" junto a "Ver
   // ficha" — "+ Registrar respuesta" pasó a ser la primera opción del menú.
+  // Historial de TODOS los correos enviados a un contacto: cuál abrió, cuál clicó, cuántas veces y cuándo.
+  async function ibHistory(cid) {
+    document.getElementById('kdr')?.remove();
+    const ov = document.createElement('div'); ov.id = 'kdr'; ov.className = 'kdr';
+    ov.onclick = e => { if (e.target === ov) ov.remove(); };
+    ov.innerHTML = '<div class="kdr__box"><div class="kdr__h"><b>Historial de correos</b><span class="kdr__sub" id="kdr-who"></span><button class="kdr__x" onclick="document.getElementById(\'kdr\').remove()">×</button></div><div class="kdr__b" id="kdr-b">Cargando…</div></div>';
+    document.body.appendChild(ov);
+    let j;
+    try { const r = await apiFetch(API + '/lm/inbox/history/' + cid); j = await r.json(); if (!r.ok) throw new Error(j.error || 'Error'); }
+    catch (e) { const b = document.getElementById('kdr-b'); if (b) b.textContent = 'No se pudo cargar: ' + e.message; return; }
+    const who = document.getElementById('kdr-who'); if (who) who.textContent = j.contacto.nombre || j.contacto.email;
+    const b = document.getElementById('kdr-b'); if (!b) return;
+    const fd = d => d ? new Date(d).toLocaleString('es-PE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+    if (!j.correos.length) { b.innerHTML = '<div class="kdr__e">Todavía no se le ha enviado ningún correo.</div>'; return; }
+    b.innerHTML = '<table class="kdr__t"><thead><tr><th>Enviado</th><th>Asunto</th><th>Secuencia</th><th>Aperturas</th><th>Clics</th></tr></thead><tbody>' + j.correos.map(c => {
+      const ap = c.aperturas ? '<b style="color:#16A34A">' + c.aperturas + '×</b><div class="kdr__d">1ª ' + fd(c.primera_apertura) + (c.aperturas > 1 ? '<br>Última ' + fd(c.ultima_apertura) : '') + '</div>' : '<span style="color:#94A3B8">No abierto</span>';
+      const cl = (c.clics || []).length ? c.clics.map(x => '<div class="kdr__d"><b>' + x.n + '×</b> ' + esc((x.url || '').replace(/^https?:\/\//, '').slice(0, 42)) + '<br>' + fd(x.ultimo) + '</div>').join('') : '<span style="color:#94A3B8">—</span>';
+      return '<tr style="cursor:default"><td>' + fd(c.sent_at) + (c.estado === 'bounced' ? '<div class="kdr__d" style="color:#DC2626">Rebotó</div>' : '') + '</td><td>' + esc(c.asunto || '(sin asunto)') + '</td><td>' + esc(c.secuencia || '—') + '</td><td>' + ap + '</td><td>' + cl + '</td></tr>';
+    }).join('') + '</tbody></table><div class="kdr__d" style="margin-top:8px">Las aperturas son aproximadas (algunos clientes de correo precargan las imágenes).</div>';
+  }
   function ibOpenResolveMenu(ev, cid) {
     if (ev && ev.stopPropagation) ev.stopPropagation();
     document.querySelectorAll('.cp-mark-menu').forEach(m => m.remove());
@@ -24419,7 +24439,7 @@ ${foot}
     html += `<div class="cp-mark-menu__sep"></div>`;
     html += `<div class="cp-mark-menu__list">` + item('Responder', `LeadManagerModule.ibSetMode('reply')`) + item('Reenviar', `LeadManagerModule.ibSetMode('fwd')`) + item('Nota interna', `LeadManagerModule.ibSetMode('note')`) + `</div>`;
     html += `<div class="cp-mark-menu__sep"></div>`;
-    html += `<div class="cp-mark-menu__list">` + item('Copiar conversación', `LeadManagerModule.ibCopyConversation()`) + `</div>`;
+    html += `<div class="cp-mark-menu__list">` + item('Historial de correos', `LeadManagerModule.ibHistory(${cid})`) + item('Copiar conversación', `LeadManagerModule.ibCopyConversation()`) + `</div>`;
     html += `<div class="cp-mark-menu__sep"></div>`;
     // "＋ Crear referido" se sacó de acá: era 100% duplicado de "Derivó a otro" dentro
     // de "Resolver respuesta" (llamaban a la misma ldRefer(cid,'derivado')).
@@ -33548,7 +33568,7 @@ ${foot}
     mbSignatureOpen, mbSignaturePreview, mbSignatureClear, mbSignatureInsertLink, mbSignatureImg, mbSignatureSave,
     mbAdminConsentSync, mbAdminConsentToggleHtml,
     mbAdminConsentSetSigner, mbAdminConsentAddChip, mbAdminConsentRmChip, mbAdminConsentInputKey, mbAdminConsentClearRecipients,
-    ibOpen, ibTab, ibCli, ibDisp, ibSend, ibSaveNote, ibForward, ibSetMode, ibMsgNav, ibSchedToggle, ibSchedPick, ibCancelSched, ibResolveDisp, ibOpenResolveMenu, ibShowLeadActions, ibCopyConversation, _ibFwdSearch, _ibFwdPick,
+    ibOpen, ibTab, ibCli, ibDisp, ibSend, ibSaveNote, ibForward, ibSetMode, ibMsgNav, ibSchedToggle, ibSchedPick, ibCancelSched, ibResolveDisp, ibOpenResolveMenu, ibHistory, ibShowLeadActions, ibCopyConversation, _ibFwdSearch, _ibFwdPick,
     ibAbrirDesdeEnviados, ibToggleEnvVista, ibAbrirFiltros, _ibSetFApertura, _ibSetFLeido, _ibSetFSeq, _ibLimpiarFiltrosExtra,
     ibRowMenu, ibCloseMenu, ibMarkUnread,
     openWaFromList, waCli, waRowMenu, waSetPrioridad, _DISPOS,

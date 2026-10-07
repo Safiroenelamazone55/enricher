@@ -6063,7 +6063,7 @@ app.get('/api/lm/inbox/threads', requireAuth, async (req, res) => {
                COUNT(*) FILTER (WHERE m.estado IN ('sent','replied','bounced'))::int AS sent_count,
                bool_or(m.estado='scheduled') AS tiene_programado,
                MIN(m.scheduled_at) FILTER (WHERE m.estado='scheduled') AS proximo_programado,
-               bool_or(EXISTS(SELECT 1 FROM lm_message_events e WHERE e.message_id=m.id AND e.tipo='open')) AS abierto
+               (ARRAY_AGG(EXISTS(SELECT 1 FROM lm_message_events e WHERE e.message_id=m.id AND e.tipo='open') ORDER BY m.sent_at DESC NULLS LAST, m.id DESC) FILTER (WHERE m.estado IN ('sent','replied','bounced')))[1] AS abierto
           FROM lm_messages m
          WHERE m.user_id=$1 AND m.estado IN ('sent','replied','bounced','scheduled')
          GROUP BY m.contact_id
@@ -6880,6 +6880,22 @@ const _lmDashHandler = async (req, res) => {
   } catch (err) { console.error('[lm-dashboard]', err.message); res.status(500).json({ error: 'Error al cargar dashboard' }); }
 };
 // Detalle de un KPI: QUIÉNES son (contactos / empresas / cargos) detrás del número.
+app.get('/api/lm/inbox/history/:cid', requireAuth, async (req, res) => {
+  try {
+    const cid = parseInt(req.params.cid) || 0;
+    const { rows: [k] } = await pool.query("SELECT id, TRIM(nombre||' '||apellido) AS nombre, email FROM lm_contacts WHERE id=$1 AND user_id=$2", [cid, req.workspaceOwnerId]);
+    if (!k) return res.status(404).json({ error: 'Contacto no encontrado' });
+    const { rows } = await pool.query(
+      "SELECT m.id, m.asunto, m.estado, m.sent_at, s.nombre AS secuencia," +
+      " (SELECT COUNT(*)::int FROM lm_message_events e WHERE e.message_id=m.id AND e.tipo='open') AS aperturas," +
+      " (SELECT MIN(e.created_at) FROM lm_message_events e WHERE e.message_id=m.id AND e.tipo='open') AS primera_apertura," +
+      " (SELECT MAX(e.created_at) FROM lm_message_events e WHERE e.message_id=m.id AND e.tipo='open') AS ultima_apertura," +
+      " (SELECT COALESCE(json_agg(json_build_object('url', c.url, 'n', c.n, 'ultimo', c.ult) ORDER BY c.ult DESC), '[]'::json) FROM (SELECT e.url, COUNT(*)::int AS n, MAX(e.created_at) AS ult FROM lm_message_events e WHERE e.message_id=m.id AND e.tipo='click' GROUP BY e.url) c) AS clics" +
+      " FROM lm_messages m LEFT JOIN sequences s ON s.id=m.sequence_id" +
+      " WHERE m.contact_id=$1 AND m.user_id=$2 AND m.estado IN ('sent','replied','bounced') ORDER BY m.sent_at DESC NULLS LAST, m.id DESC LIMIT 100", [cid, req.workspaceOwnerId]);
+    res.json({ contacto: k, correos: rows });
+  } catch (e) { console.error('[inbox history]', e.message); res.status(500).json({ error: 'No se pudo cargar el historial' }); }
+});
 app.get('/api/lm/dashboard/drill', requireAuth, async (req, res) => {
   try {
     const uid = req.workspaceOwnerId, q = req.query, today = new Date();

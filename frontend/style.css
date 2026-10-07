@@ -18038,3 +18038,5 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 .ibx-tbl table{border-collapse:collapse;font-size:.72rem;background:#fff}
 .ibx-tbl td{border:1px solid #D6D3CC;padding:4px 8px;vertical-align:top;line-height:1.35}
 .ibx-tbl tr:first-child td{background:#F1EFEA;font-weight:600}
+
+.kdr__d{font-size:.72rem;color:#64748B;line-height:1.35;margin-top:2px}
