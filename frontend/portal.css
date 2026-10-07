@@ -433,3 +433,11 @@ button{cursor:pointer}
 .pt-su__ic--y{background:#DCFCE7;color:#15803D}
 .pt-su__ic--n{background:#EEF1F6;color:#B8C0CC}
 .pt-su__find{margin-top:8px;padding:10px 12px;background:#F6F8FB;border-left:3px solid #2563EB;font-size:12.5px;color:#334155;line-height:1.5}
+
+/* KPIs del portal: nunca desbordan (zoom alto / ventanas angostas): envuelven de fila y escalan por contenedor */
+.pt-week__k--7{grid-template-columns:repeat(auto-fit,minmax(min(100%,160px),1fr))}
+.pt-week__k .dash-kpi{min-width:0;container-type:inline-size;overflow:hidden}
+.pt-week__k .dash-kpi__top{min-width:0}
+.pt-week__k .dash-kpi__l{min-width:0;overflow-wrap:anywhere;hyphens:auto}
+.pt-week__k .dash-kpi__v{font-size:clamp(20px,16cqw,30px);overflow-wrap:anywhere}
+.pt-week__k .dash-d,.pt-week__k .dash-kpi__s{overflow-wrap:anywhere}

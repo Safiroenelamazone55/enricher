@@ -140,6 +140,9 @@
     ['Apertura email', 'Email open rate', 'E-Mail-Öffnungsrate', 'Abertura de e-mail'],
     ['Reuniones agendadas', 'Meetings booked', 'Vereinbarte Meetings', 'Reuniões agendadas'],
     ['estimada', 'estimated', 'geschätzt', 'estimada'],
+    ['Oportunidades', 'Opportunities', 'Chancen', 'Oportunidades'],
+    ['Clics', 'Clicks', 'Klicks', 'Cliques'],
+    ['estimado', 'estimated', 'geschätzt', 'estimado'],
     ['sin rebotes', 'no bounces', 'keine Bounces', 'sem devoluções'],
     ['ninguna programada', 'none scheduled', 'keine geplant', 'nenhuma agendada'],
     // gráficos y tablas
