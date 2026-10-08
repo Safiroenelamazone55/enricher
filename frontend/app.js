@@ -9790,7 +9790,9 @@ const DashboardModule = (() => {
       const me = _hrsMe();
       const today = new Date(); today.setHours(0,0,0,0);
       const due = (ds) => { if (!ds) return false; const d = new Date(String(ds).split('T')[0] + 'T00:00:00'); return d <= today; };
-      _tpTasks = tasks.filter(t => (t.estado || 'pendiente') !== 'completado').map(t => {
+      // Las tareas contenedoras de un PERIODO (semana/mes: tienen fecha de inicio y fin) ya terminado no se ofrecen para registrar tiempo.
+      const _periodoPasado = t => !t.parent_task_id && t.fecha_inicio && t.deadline && new Date(String(t.deadline).split('T')[0] + 'T00:00:00') < today;
+      _tpTasks = tasks.filter(t => (t.estado || 'pendiente') !== 'completado' && !_periodoPasado(t)).map(t => {
         const resp = (t.responsables && t.responsables.length) ? t.responsables : (t.responsable ? [t.responsable] : []);
         return { kind:'proyecto', id:t.id, titulo:t.titulo, ctx:t.project_nombre || 'Sin proyecto', cliente:t.client_nombre || '', deadline:t.deadline, prioridad:t.prioridad, mine: resp.some(r => (r||'').toLowerCase() === me), today: due(t.deadline) };
       });
