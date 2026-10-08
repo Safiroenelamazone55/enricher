@@ -12002,6 +12002,37 @@ const TasksModule = (() => {
   // Subtareas activas de una tarea (el tiempo se mide en ellas, no en la tarea madre)
   function getSubtasks(id) { return _tasks.filter(t => t.parent_task_id === id && !t.archivada && t.estado !== 'cancelado'); }
   function getTask(id) { return _tasks.find(t => t.id === id) || null; }
+  // Mover una tarea como subtarea de otra del mismo proyecto (un solo nivel).
+  function moveAsSubtask(tid) {
+    const t = getTask(tid); if (!t) return;
+    if (getSubtasks(tid).length) { showBanner('Esta tarea ya tiene subtareas: no puede convertirse en subtarea.', 'error'); return; }
+    document.getElementById('mvs-modal')?.remove();
+    const m = document.createElement('div'); m.id = 'mvs-modal'; m.className = 'kdr';
+    m.onclick = ev => { if (ev.target === m) m.remove(); };
+    m.innerHTML = '<div class="kdr__box" style="width:min(560px,100%)"><div class="kdr__h"><b>Mover como subtarea</b><span class="kdr__sub">' + esc(t.titulo).slice(0, 60) + '</span><button class="kdr__x" onclick="document.getElementById(\'mvs-modal\').remove()">×</button></div><div class="kdr__b" style="padding:12px 18px 16px"><input class="form-input" id="mvs-q" placeholder="Buscar la tarea principal…" oninput="TasksModule._mvsFilter(' + tid + ')" style="margin-bottom:8px"><div id="mvs-list"></div></div></div>';
+    document.body.appendChild(m); _mvsFilter(tid); setTimeout(() => document.getElementById('mvs-q')?.focus(), 30);
+  }
+  function _mvsFilter(tid) {
+    const t = getTask(tid), q = (document.getElementById('mvs-q')?.value || '').toLowerCase().trim(), box = document.getElementById('mvs-list'); if (!t || !box) return;
+    const fd = d => d ? new Date(String(d).split('T')[0] + 'T00:00:00').toLocaleDateString('es', { day: '2-digit', month: 'short' }) : '';
+    const cands = _tasks.filter(x => x.id !== tid && !x.parent_task_id && x.project_id === t.project_id && !x.archivada && x.estado !== 'cancelado' && (!q || (x.titulo || '').toLowerCase().includes(q)))
+      .sort((a, b) => (a.estado === 'completado') - (b.estado === 'completado') || String(b.fecha_inicio || b.deadline || '').localeCompare(String(a.fecha_inicio || a.deadline || '')));
+    box.innerHTML = cands.length ? cands.map(x => '<div class="ms-i" style="cursor:pointer" onclick="TasksModule.doMoveSubtask(' + tid + ',' + x.id + ')"><div class="ms-t">' + esc(x.titulo) + '</div><div class="ms-s">' + esc(x.estado || '') + (x.deadline ? ' · vence ' + fd(x.deadline) : '') + '</div></div>').join('') : '<div class="kdr__e" style="padding:18px">No hay otras tareas principales en este proyecto.</div>';
+  }
+  async function doMoveSubtask(tid, pid) {
+    try {
+      const r = await apiFetch(API + '/mgmt/tasks/' + tid + '/parent', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ parent_task_id: pid }) });
+      const j = await r.json(); if (!r.ok) throw new Error(j.error || 'Error');
+      document.getElementById('mvs-modal')?.remove(); showBanner('Ahora es subtarea de "' + ((getTask(pid) || {}).titulo || 'la tarea elegida') + '".', 'success'); await load();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  async function convertToTask(tid) {
+    try {
+      const r = await apiFetch(API + '/mgmt/tasks/' + tid + '/parent', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ parent_task_id: null }) });
+      const j = await r.json(); if (!r.ok) throw new Error(j.error || 'Error');
+      showBanner('La subtarea ahora es una tarea principal.', 'success'); await load();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
   async function createSubtask(parentId, titulo) {
     const p = _tasks.find(t => t.id === parentId); if (!p) throw new Error('Tarea no encontrada');
     const d = v => v ? String(v).split('T')[0] : null;
@@ -13191,6 +13222,8 @@ const TasksModule = (() => {
       ${statuses.map(([v,l]) => `<button class="kc-ctx-item kc-ctx-item--sub" onclick="TasksModule.moveTaskToStatus(${tid},'${v}');TasksModule.closeKanbanMenu()">${l}</button>`).join('')}
       <div class="kc-ctx-sep"></div>
       <button class="kc-ctx-item" onclick="TasksModule.openDrawer(null,null,${tid});TasksModule.closeKanbanMenu()">Nueva subtarea</button>
+      <button class="kc-ctx-item" onclick="TasksModule.closeKanbanMenu();TasksModule.moveAsSubtask(${tid})">Mover como subtarea…</button>
+      ${(getTask(tid) || {}).parent_task_id ? `<button class="kc-ctx-item" onclick="TasksModule.closeKanbanMenu();TasksModule.convertToTask(${tid})">Convertir en tarea</button>` : ''}
       <button class="kc-ctx-item" onclick="TasksModule.duplicateTask(${tid});TasksModule.closeKanbanMenu()">Duplicar tarea</button>
       <button class="kc-ctx-item" onclick="TasksModule.archiveTask(${tid});TasksModule.closeKanbanMenu()">Archivar</button>
       <div class="kc-ctx-sep"></div>
@@ -14486,6 +14519,7 @@ const TasksModule = (() => {
   }
 
   return {
+    moveAsSubtask, _mvsFilter, doMoveSubtask, convertToTask,
     copiarSemanaAnterior,
     load, filter, setFilterMember, setFilterFecha, render,
     setProjectFilter, clearProjectFilter, refreshProjectHeader, jumpToTask, getSubtasks, getTask, createSubtask, _sgHover,

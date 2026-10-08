@@ -2166,6 +2166,27 @@ async function _syncParentEstado(uid, parentId) {
 }
 
 // ── PATCH /api/mgmt/tasks/:id/status ─────────────────────────────
+// Mover una tarea DENTRO de otra como subtarea (o sacarla a tarea normal con parent_task_id = null). Un solo nivel de subtareas.
+app.patch('/api/mgmt/tasks/:id/parent', requireAuth, async (req, res) => {
+  try {
+    const uid = req.workspaceOwnerId, id = parseInt(req.params.id) || 0, pid = (req.body || {}).parent_task_id ? parseInt(req.body.parent_task_id) : null;
+    const { rows: [t] } = await pool.query('SELECT id, project_id, parent_task_id FROM tasks WHERE id=$1 AND user_id=$2', [id, uid]);
+    if (!t) return res.status(404).json({ error: 'Tarea no encontrada' });
+    if (pid) {
+      if (pid === id) return res.status(400).json({ error: 'Una tarea no puede ser subtarea de sí misma' });
+      const { rows: [p] } = await pool.query('SELECT id, project_id, parent_task_id FROM tasks WHERE id=$1 AND user_id=$2', [pid, uid]);
+      if (!p) return res.status(404).json({ error: 'La tarea destino no existe' });
+      if (p.parent_task_id) return res.status(400).json({ error: 'Esa tarea ya es una subtarea: elige una tarea principal' });
+      const { rows: hijas } = await pool.query('SELECT 1 FROM tasks WHERE parent_task_id=$1 LIMIT 1', [id]);
+      if (hijas.length) return res.status(400).json({ error: 'Esta tarea ya tiene subtareas: no puede convertirse en subtarea' });
+      await pool.query('UPDATE tasks SET parent_task_id=$1, project_id=$2, updated_at=NOW() WHERE id=$3 AND user_id=$4', [pid, p.project_id, id, uid]);
+    } else {
+      await pool.query('UPDATE tasks SET parent_task_id=NULL, updated_at=NOW() WHERE id=$1 AND user_id=$2', [id, uid]);
+    }
+    const { rows: [out] } = await pool.query('SELECT id, project_id, parent_task_id FROM tasks WHERE id=$1', [id]);
+    res.json(out);
+  } catch (e) { console.error('[task parent]', e.message); res.status(500).json({ error: 'No se pudo mover la tarea' }); }
+});
 app.patch('/api/mgmt/tasks/:id/status', requireAuth, async (req, res) => {
   const { estado } = req.body;
   const VALID = ['pendiente', 'en_progreso', 'bloqueado', 'completado', 'cancelado'];
