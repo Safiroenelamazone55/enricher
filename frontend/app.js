@@ -668,7 +668,7 @@ const TaskTplModule = (() => {
       const r = await apiFetch(API + '/mgmt/' + (_target.type === 'task' ? 'tasks' : 'projects') + '/' + _target.id + '/import-template', { method: 'POST', headers: _json, body: JSON.stringify({ template_id: tplId }) });
       const j = await r.json(); if (!r.ok) throw new Error(j.error || 'Error');
       _close(); showBanner('Se crearon ' + j.creadas + ' elemento(s) desde "' + j.plantilla + '".', 'success');
-      try { if (typeof TasksModule !== 'undefined') await TasksModule.load(); } catch (_) {}
+      try { if (typeof TasksModule !== 'undefined') await (TasksModule.reloadKeep || TasksModule.load)(); } catch (_) {}
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
   async function openManager() {
@@ -716,7 +716,7 @@ const TaskTplModule = (() => {
       const r = await apiFetch(API + '/mgmt/tasks/' + taskId + '/cliente', { method: 'PATCH', headers: _json, body: JSON.stringify({ visible, titulo_cliente }) });
       if (!r.ok) throw new Error((await r.json()).error || 'Error');
       _close(); showBanner(visible ? 'La tarea ahora es visible para el cliente.' : 'La tarea ya no es visible para el cliente.', 'success');
-      try { if (typeof TasksModule !== 'undefined') await TasksModule.load(); } catch (_) {}
+      try { if (typeof TasksModule !== 'undefined') await (TasksModule.reloadKeep || TasksModule.load)(); } catch (_) {}
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
   return { openImport, doImport, openManager, edit, save, remove, openVisible, saveVisible, close: _close, parse, serialize };
@@ -12019,18 +12019,25 @@ const TasksModule = (() => {
       .sort((a, b) => (a.estado === 'completado') - (b.estado === 'completado') || String(b.fecha_inicio || b.deadline || '').localeCompare(String(a.fecha_inicio || a.deadline || '')));
     box.innerHTML = cands.length ? cands.map(x => '<div class="ms-i" style="cursor:pointer" onclick="TasksModule.doMoveSubtask(' + tid + ',' + x.id + ')"><div class="ms-t">' + esc(x.titulo) + '</div><div class="ms-s">' + esc(x.estado || '') + (x.deadline ? ' · vence ' + fd(x.deadline) : '') + '</div></div>').join('') : '<div class="kdr__e" style="padding:18px">No hay otras tareas principales en este proyecto.</div>';
   }
+  // Recarga las tareas SIN perder dónde estabas (proyecto abierto y vista): load() normal siempre vuelve a la vista general.
+  async function reloadKeep() {
+    const pid = _filterProjectId, view = _currentView;
+    await load();
+    if (pid) await setProjectFilter(pid);
+    if (view && view !== _currentView) setView(view);
+  }
   async function doMoveSubtask(tid, pid) {
     try {
       const r = await apiFetch(API + '/mgmt/tasks/' + tid + '/parent', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ parent_task_id: pid }) });
       const j = await r.json(); if (!r.ok) throw new Error(j.error || 'Error');
-      document.getElementById('mvs-modal')?.remove(); showBanner('Ahora es subtarea de "' + ((getTask(pid) || {}).titulo || 'la tarea elegida') + '".', 'success'); await load();
+      document.getElementById('mvs-modal')?.remove(); showBanner('Ahora es subtarea de "' + ((getTask(pid) || {}).titulo || 'la tarea elegida') + '".', 'success'); await reloadKeep();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
   async function convertToTask(tid) {
     try {
       const r = await apiFetch(API + '/mgmt/tasks/' + tid + '/parent', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ parent_task_id: null }) });
       const j = await r.json(); if (!r.ok) throw new Error(j.error || 'Error');
-      showBanner('La subtarea ahora es una tarea principal.', 'success'); await load();
+      showBanner('La subtarea ahora es una tarea principal.', 'success'); await reloadKeep();
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
   async function createSubtask(parentId, titulo) {
@@ -14521,7 +14528,7 @@ const TasksModule = (() => {
   }
 
   return {
-    moveAsSubtask, _mvsFilter, doMoveSubtask, convertToTask,
+    moveAsSubtask, _mvsFilter, doMoveSubtask, convertToTask, reloadKeep,
     copiarSemanaAnterior,
     load, filter, setFilterMember, setFilterFecha, render,
     setProjectFilter, clearProjectFilter, refreshProjectHeader, jumpToTask, getSubtasks, getTask, createSubtask, _sgHover,
