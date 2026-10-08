@@ -11819,7 +11819,7 @@ const TasksModule = (() => {
   let _tlExpanded    = new Set((() => { try { return JSON.parse(localStorage.getItem('nova_tl_expanded') || '[]'); } catch { return []; } })());
   let _tlSubExpanded = new Set();
   let _tlGroupCollapsed = new Set((() => { try { return JSON.parse(localStorage.getItem('nova_tl_groups') || '[]'); } catch { return []; } })());
-  let _kcSubsOpen    = new Set();
+  let _kcSubsOpen    = new Set();   // OJO: ahora guarda las tarjetas CONTRAÍDAS a mano (por defecto todas están desplegadas)
   let _kcSubItemOpen = new Set();   // individual subtask rows expanded in card
   let _kcMenuClose   = null;
   let _kcPopClose    = null;      // cleanup fn for open quick-action popover
@@ -13017,7 +13017,7 @@ const TasksModule = (() => {
 
     const prio      = t.prioridad || 'media';
     const prioLabel = { urgente:'Urgente', alta:'Alta', media:'Media', baja:'Baja' }[prio] || prio;
-    const subsOpen  = _kcSubsOpen.has(t.id);
+    const subsOpen  = !_kcSubsOpen.has(t.id);
     const MAX_S     = 3;
 
     let subsHtml = '';
