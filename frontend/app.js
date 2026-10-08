@@ -736,7 +736,7 @@ const MatchSuggest = (() => {
     if (!el || el.tagName !== 'INPUT') return null;
     if (el.id === 'obc-nombre') return { kind: 'company', hide: 'cliente_outbound', map: el2 => ({ nombre: el2 }), scope: 'obc' };
     const qcf = el.closest('#qc-form');   // alta rápida de cliente (desde Proyectos)
-    if (qcf) { if (el.name === 'nombre') return { kind: 'both', hide: 'operaciones', scope: 'qc', field: 'nombre' }; if (el.name === 'empresa') return { kind: 'company', hide: 'operaciones', scope: 'qc', field: 'empresa' }; if (el.name === 'email') return { kind: 'contact', hide: 'operaciones', scope: 'qc', field: 'email' }; return null; }
+    if (qcf) { if (el.name === 'nombre') return { kind: 'contact', hide: 'operaciones', scope: 'qc', field: 'nombre' }; if (el.name === 'empresa') return { kind: 'company', hide: 'operaciones', scope: 'qc', field: 'empresa' }; if (el.name === 'email') return { kind: 'contact', hide: 'operaciones', scope: 'qc', field: 'email' }; return null; }
     const form = el.closest('#clients-form'); if (!form) return null;
     if (el.name === 'empresa') return { kind: 'company', hide: 'operaciones', scope: 'cli-company' };
     let m = /^mcn-(\d+)-(nombre|email)$/.exec(el.id || '');
@@ -749,7 +749,8 @@ const MatchSuggest = (() => {
     if (ctx.scope === 'qc') {
       const Q = document.getElementById('qc-form'); if (!Q) return; const g = n => Q.elements[n];
       if (type === 'company') { setIf(g('empresa'), d.empresa, true); if (ctx.field === 'nombre') setIf(g('nombre'), d.empresa, true); }
-      else { setIf(g('nombre'), d.nombre, true); setIf(g('email'), d.email); setIf(g('telefono'), d.telefono); setIf(g('empresa'), d.empresa); }
+      else { setIf(g('nombre'), d.nombre, true); setIf(g('email'), d.email); setIf(g('telefono'), d.telefono); setIf(g('empresa'), d.empresa); setIf(g('cargo'), d.cargo); setIf(g('pais'), d.pais); }
+      if (type === 'company' || d.empresa) { setIf(g('sitio_web'), d.sitio_web); setIf(g('linkedin'), d.linkedin); setIf(g('industria'), d.industria); setIf(g('pais_empresa'), d.pais_empresa); setIf(g('ciudad'), d.ciudad); }
       return;
     }
     if (ctx.scope === 'obc') { setIf(document.getElementById('obc-nombre'), d.empresa || d.nombre, true); setIf(document.getElementById('obc-website'), d.sitio_web); return; }
@@ -768,7 +769,7 @@ const MatchSuggest = (() => {
     _close(); _items = items; if (!items.length) return;
     _box = document.createElement('div'); _box.className = 'ms-box';
     const r = el.getBoundingClientRect();
-    _box.style.cssText = 'position:fixed;z-index:10050;left:' + r.left + 'px;top:' + (r.bottom + 2) + 'px;width:' + Math.max(r.width, 280) + 'px';
+    _box.style.cssText = 'position:fixed;z-index:2147483000;left:' + r.left + 'px;top:' + (r.bottom + 2) + 'px;width:' + Math.max(r.width, 280) + 'px';
     _box.innerHTML = '<div class="ms-h">Ya existe en el sistema — elige para completar los datos</div>' + items.map((it, i) => '<div class="ms-i" data-i="' + i + '"><div class="ms-t">' + _e(it.label) + ' <span class="ms-b">' + _e(SRC[it.source] || it.source) + '</span></div>' + (it.sub ? '<div class="ms-s">' + _e(it.sub) + '</div>' : '') + '</div>').join('');
     _box.onmousedown = ev => {
       ev.preventDefault(); const row = ev.target.closest('.ms-i'); if (!row) return;
@@ -792,7 +793,7 @@ const MatchSuggest = (() => {
       } catch (_) {}
     }, 250);
   }, true);
-  document.addEventListener('focusout', () => setTimeout(_close, 150), true);
+  document.addEventListener('pointerdown', ev => { if (_box && !_box.contains(ev.target) && !(ev.target && ev.target.closest && _classify(ev.target))) _close(); }, true);
   document.addEventListener('keydown', ev => { if (ev.key === 'Escape') _close(); }, true);
   return { close: _close };
 })();
@@ -18403,21 +18404,34 @@ const ProjectsModule = (() => {
           <button class="qc-close" onclick="ProjectsModule.closeQuickClientModal()">✕</button>
         </div>
         <form id="qc-form" onsubmit="ProjectsModule.saveQuickClient(event)">
+          <div class="qc-sec">Persona de contacto</div>
           <div class="qc-field">
-            <label class="qc-label">Nombre <span style="color:var(--brand)">*</span></label>
-            <input class="qc-input" name="nombre" required placeholder="Ej. María García" autofocus/>
+            <label class="qc-label">Nombre del contacto <span style="color:var(--brand)">*</span></label>
+            <input class="qc-input" name="nombre" required autocomplete="off" placeholder="Ej. María García" autofocus/>
           </div>
           <div class="qc-field">
-            <label class="qc-label">Empresa</label>
-            <input class="qc-input" name="empresa" placeholder="Ej. Acme Corp"/>
+            <label class="qc-label">Email del contacto</label>
+            <input class="qc-input" name="email" type="email" autocomplete="off" placeholder="correo@empresa.com"/>
           </div>
           <div class="qc-field">
-            <label class="qc-label">Email</label>
-            <input class="qc-input" name="email" type="email" placeholder="correo@empresa.com"/>
-          </div>
-          <div class="qc-field">
-            <label class="qc-label">Teléfono</label>
+            <label class="qc-label">Teléfono del contacto</label>
             <input class="qc-input" name="telefono" placeholder="+52 55 0000 0000"/>
+          </div>
+          <div class="qc-sec">Empresa</div>
+          <div class="qc-field">
+            <label class="qc-label">Nombre de la empresa</label>
+            <input class="qc-input" name="empresa" autocomplete="off" placeholder="Ej. Acme Corp"/>
+            <span class="qc-hint">Si la persona o la empresa ya existe en Outreach, Operaciones o clientes outbound, aparece como sugerencia y se completan los datos.</span>
+          </div>
+          <a href="#" class="qc-more-link" onclick="event.preventDefault();var m=document.getElementById('qc-more');m.classList.toggle('on');this.textContent=m.classList.contains('on')?'Ver menos ▴':'Ver más datos ▾'">Ver más datos ▾</a>
+          <div id="qc-more">
+            <div class="qc-field"><label class="qc-label">Cargo del contacto</label><input class="qc-input" name="cargo" placeholder="Ej. Directora de compras"/></div>
+            <div class="qc-field"><label class="qc-label">País del contacto</label><input class="qc-input" name="pais"/></div>
+            <div class="qc-field"><label class="qc-label">Sitio web de la empresa</label><input class="qc-input" name="sitio_web" placeholder="https://acme.com"/></div>
+            <div class="qc-field"><label class="qc-label">LinkedIn de la empresa</label><input class="qc-input" name="linkedin" placeholder="linkedin.com/company/…"/></div>
+            <div class="qc-field"><label class="qc-label">Industria</label><input class="qc-input" name="industria"/></div>
+            <div class="qc-field"><label class="qc-label">País de la empresa</label><input class="qc-input" name="pais_empresa"/></div>
+            <div class="qc-field"><label class="qc-label">Ciudad</label><input class="qc-input" name="ciudad"/></div>
           </div>
           <div class="qc-actions">
             <button type="button" class="qc-btn qc-btn--cancel" onclick="ProjectsModule.closeQuickClientModal()">Cancelar</button>
@@ -18444,6 +18458,7 @@ const ProjectsModule = (() => {
       telefono: form.telefono.value.trim(),
       estado:   'activo',
     };
+    ['cargo', 'pais', 'sitio_web', 'linkedin', 'industria', 'pais_empresa', 'ciudad'].forEach(k => { const v = form.elements[k] && form.elements[k].value.trim(); if (v) data[k] = v; });
     btn.disabled = true; btn.textContent = 'Creando…';
     try {
       const res = await apiFetch(`${API}/mgmt/clients`, {

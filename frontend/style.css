@@ -18059,3 +18059,11 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 .ms-i{padding:8px 10px;cursor:pointer;border-bottom:1px solid #F4F3EF}.ms-i:hover{background:#F1F8F4}
 .ms-t{font-size:.86rem;font-weight:600;color:#14211B}.ms-s{font-size:.74rem;color:#64748B;margin-top:1px}
 .ms-b{font-size:.62rem;font-weight:600;color:#00804C;background:#E3F5EC;padding:1px 6px;margin-left:6px;vertical-align:1px}
+
+/* Alta rápida de cliente: secciones claras (persona vs empresa) y "Ver más" */
+#qc-modal .qc-box{max-height:90vh;overflow:auto}
+.qc-sec{font-size:.68rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#64748B;margin:14px 0 6px}
+.qc-sec:first-of-type{margin-top:2px}
+.qc-hint{display:block;font-size:.72rem;color:#94A3B8;margin-top:4px;line-height:1.35}
+.qc-more-link{display:inline-block;margin:6px 0 4px;font-size:.8rem;color:#00804C;text-decoration:none;font-weight:600}
+#qc-more{display:none}#qc-more.on{display:block}
