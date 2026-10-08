@@ -11812,6 +11812,7 @@ const TasksModule = (() => {
   let _filterMember    = '';
   let _filterMemberSet = false; // true once default or user interaction applied
   let _filterFecha  = '';
+  let _filterMemberBeforeProj = null;   // filtro de miembro que había antes de entrar a la página de detalle de un proyecto
   let _softPid = null;   // proyecto elegido en el buscador de Tareas: filtra ESTA pestaña, sin abrir la página de detalle del proyecto
   let _filterProjectId = null; // set by setProjectFilter() — Tareas abierta enfocada en un solo proyecto
   let _teamMembers  = [];
@@ -12194,6 +12195,9 @@ const TasksModule = (() => {
     const _sr0 = $('tasks-search'); if (_sr0) _sr0.placeholder = 'Buscar tarea, proyecto o miembro…';
     const t = document.querySelector('#pane-mgmt-tasks .pane-title');
     const s = document.querySelector('#pane-mgmt-tasks .pane-sub');
+    if (t) t.style.display = ''; if (s) s.style.display = '';
+    const _ms0 = $('tasks-member-filter'); if (_ms0) _ms0.style.display = '';
+    if (_filterMemberBeforeProj !== null) { _filterMember = _filterMemberBeforeProj; _filterMemberBeforeProj = null; setTimeout(_populateMemberFilter, 0); }
     if (t) t.textContent = 'Tareas';
     if (s) s.textContent = 'Acciones ejecutables dentro de cada proyecto — ordenadas por urgencia';
   }
@@ -12324,8 +12328,11 @@ const TasksModule = (() => {
       bk.onclick = () => { TasksModule.clearProjectFilter(); document.querySelector('.snav-item[data-tab="mgmt-projects"]')?.click(); };
       t.parentNode.insertBefore(bk, t);
     }
-    if (t) t.textContent = 'Tareas del proyecto';
-    if (s) s.textContent = 'Arrastra las tareas entre columnas o cambia de vista';
+    if (t) t.style.display = 'none';   // el nombre grande del proyecto ya está en la tarjeta blanca: no se repite el título
+    if (s) s.style.display = 'none';
+    const _ms = $('tasks-member-filter');
+    if (_ms) { if (_filterMemberBeforeProj === null) _filterMemberBeforeProj = _filterMember; _filterMember = ''; _ms.value = ''; _ms.style.display = 'none'; }   // los miembros del proyecto ya se ven arriba
+    _rerender();
   }
 
   // ── Pagina de detalle de UNA tarea (pestaña nueva) ──────────────────
