@@ -12066,11 +12066,13 @@ const TasksModule = (() => {
     const q = inp.value.trim().toLowerCase();
     if (!q) { _sgClose(); return; }
     const byId = new Map(_tasks.map(t => [t.id, t]));
-    _sgItems = _sgScope().filter(t => String(t.titulo || '').toLowerCase().includes(q))
+    const _nz = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+    const _toks = _nz(q).split(/\s+/).filter(Boolean), _has = txt => { const n = _nz(txt); return _toks.every(w => n.includes(w)); };
+    _sgItems = _sgScope().filter(t => _has(t.titulo))
       .sort((a, b) => (String(a.titulo).toLowerCase().startsWith(q) ? 0 : 1) - (String(b.titulo).toLowerCase().startsWith(q) ? 0 : 1) || (a.parent_task_id ? 1 : 0) - (b.parent_task_id ? 1 : 0))
       .slice(0, 8);
     // Proyectos que coinciden (por nombre o cliente): al elegir uno, se filtran las tareas SOLO de ese proyecto
-    const _pj = new Map(); _tasks.forEach(t => { if (t.project_id && !t.archivada && (String(t.project_nombre || '') + ' ' + String(t.client_nombre || '')).toLowerCase().includes(q)) _pj.set(t.project_id, { _proj: true, id: t.project_id, titulo: t.project_nombre || 'Proyecto', cliente: t.client_nombre || '' }); });
+    const _pj = new Map(); _tasks.forEach(t => { if (t.project_id && !t.archivada && _has(String(t.project_nombre || '') + ' ' + String(t.client_nombre || ''))) _pj.set(t.project_id, { _proj: true, id: t.project_id, titulo: t.project_nombre || 'Proyecto', cliente: t.client_nombre || '' }); });
     _sgItems = [..._pj.values()].slice(0, 4).concat(_sgItems);
     let box = document.getElementById('tasks-suggest');
     if (!_sgItems.length) {
