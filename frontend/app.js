@@ -734,14 +734,14 @@ const MatchSuggest = (() => {
   // ¿Qué campo es? → { kind, ctx } o null
   function _classify(el) {
     if (!el || el.tagName !== 'INPUT') return null;
-    if (el.id === 'obc-nombre') return { kind: 'company', hide: 'cliente_outbound', map: el2 => ({ nombre: el2 }), scope: 'obc' };
+    if (el.id === 'obc-nombre') return { kind: 'company', own: 'cliente_outbound', scope: 'obc' };
     const qcf = el.closest('#qc-form');   // alta rápida de cliente (desde Proyectos)
-    if (qcf) { if (el.name === 'nombre') return { kind: 'contact', hide: 'operaciones', scope: 'qc', field: 'nombre' }; if (el.name === 'empresa') return { kind: 'company', hide: 'operaciones', scope: 'qc', field: 'empresa' }; if (el.name === 'email') return { kind: 'contact', hide: 'operaciones', scope: 'qc', field: 'email' }; return null; }
+    if (qcf) { if (el.name === 'nombre') return { kind: 'contact', own: 'operaciones', scope: 'qc', field: 'nombre' }; if (el.name === 'empresa') return { kind: 'company', own: 'operaciones', scope: 'qc', field: 'empresa' }; if (el.name === 'email') return { kind: 'contact', own: 'operaciones', scope: 'qc', field: 'email' }; return null; }
     const form = el.closest('#clients-form'); if (!form) return null;
-    if (el.name === 'empresa') return { kind: 'company', hide: 'operaciones', scope: 'cli-company' };
+    if (el.name === 'empresa') return { kind: 'company', own: 'operaciones', scope: 'cli-company' };
     let m = /^mcn-(\d+)-(nombre|email)$/.exec(el.id || '');
-    if (m) return { kind: 'contact', hide: 'operaciones', scope: 'mcn', idx: m[1] };
-    if (el.name === 'nombre' || el.name === 'email') return { kind: 'contact', hide: 'operaciones', scope: 'single' };
+    if (m) return { kind: 'contact', own: 'operaciones', scope: 'mcn', idx: m[1] };
+    if (el.name === 'nombre' || el.name === 'email') return { kind: 'contact', own: 'operaciones', scope: 'single' };
     return null;
   }
   function _fill(ctx, d, type) {
@@ -765,15 +765,25 @@ const MatchSuggest = (() => {
     else { setIf(q('nombre'), d.nombre, true); setIf(q('cargo'), d.cargo); setIf(q('email'), d.email); setIf(q('telefono'), d.telefono); setIf(q('pais'), d.pais); }
     setIf(q('empresa'), d.empresa); setIf(q('sitio_web'), d.sitio_web); setIf(q('linkedin'), d.linkedin); setIf(q('industria'), d.industria); setIf(q('pais_empresa'), d.pais_empresa); setIf(q('ciudad'), d.ciudad);
   }
+  // Ya existe en este módulo: se abre el registro existente en vez de crear uno nuevo.
+  function _openExisting(ctx, it) {
+    try {
+      if (ctx.scope === 'qc') { if (typeof ProjectsModule !== 'undefined') ProjectsModule.useExistingClient(it.data.id); return; }
+      if (ctx.scope === 'obc') { if (typeof LeadManagerModule !== 'undefined') { LeadManagerModule.closeClientDrawer(); LeadManagerModule.openClient(it.data.id); } return; }
+      if (typeof ClientsModule !== 'undefined') { ClientsModule.closeDrawer(); ClientsModule.openPanel(it.data.id); }
+    } catch (_) {}
+    showBanner('Ya existía: se abrió el registro en lugar de crear uno duplicado.', 'info');
+  }
   function _show(el, items) {
     _close(); _items = items; if (!items.length) return;
     _box = document.createElement('div'); _box.className = 'ms-box';
     const r = el.getBoundingClientRect();
     _box.style.cssText = 'position:fixed;z-index:2147483000;left:' + r.left + 'px;top:' + (r.bottom + 2) + 'px;width:' + Math.max(r.width, 280) + 'px';
-    _box.innerHTML = '<div class="ms-h">Coincidencias en tu base — elige una para completar los datos</div>' + items.map((it, i) => '<div class="ms-i" data-i="' + i + '"><div class="ms-t">' + _e(it.label) + ' <span class="ms-b">' + _e(SRC[it.source] || it.source) + '</span></div>' + (it.sub && it.sub !== 'Cliente outbound' ? '<div class="ms-s">' + _e(it.sub) + '</div>' : '') + '</div>').join('');
+    _box.innerHTML = '<div class="ms-h">Coincidencias en tu base — elige una para completar los datos</div>' + items.map((it, i) => '<div class="ms-i" data-i="' + i + '"><div class="ms-t">' + _e(it.label) + (it.source === _ctx.own ? ' <span class="ms-b ms-b--own">Ya existe aquí · abrir</span>' : ' <span class="ms-b">' + _e(SRC[it.source] || it.source) + '</span>') + '</div>' + (it.sub && it.sub !== 'Cliente outbound' ? '<div class="ms-s">' + _e(it.sub) + '</div>' : '') + '</div>').join('');
     _box.onmousedown = ev => {
       ev.preventDefault(); const row = ev.target.closest('.ms-i'); if (!row) return;
       const it = _items[+row.dataset.i]; if (!it) return;
+      if (it.source === _ctx.own && it.data && it.data.id) { _openExisting(_ctx, it); _close(); return; }
       _fill(_ctx, it.data || {}, it.type);
       if (_ctx.scope === 'obc' && it.source === 'operaciones' && it.data && it.data.id) window.__obcLinkClientId = it.data.id;
       _close();
@@ -788,7 +798,7 @@ const MatchSuggest = (() => {
     _t = setTimeout(async () => {
       try {
         const r = await apiFetch(API + '/mgmt/match?kind=' + ctx.kind + '&q=' + encodeURIComponent(q)); if (!r.ok || my !== _seq) return;
-        const seen = new Set(), items = (await r.json()).filter(it => it.source !== ctx.hide).filter(it => { const k = it.source + '|' + it.label + '|' + it.sub; if (seen.has(k)) return false; seen.add(k); return true; });
+        const seen = new Set(), items = (await r.json()).filter(it => !(it.source === 'operaciones' && ctx.scope === 'obc' && false)).sort((x, y) => (y.source === ctx.own) - (x.source === ctx.own)).filter(it => { const k = it.source + '|' + it.label + '|' + it.sub; if (seen.has(k)) return false; seen.add(k); return true; });
         if (document.activeElement === ev.target) _show(ev.target, items);
       } catch (_) {}
     }, 250);
@@ -18467,6 +18477,7 @@ const ProjectsModule = (() => {
     setTimeout(() => modal.querySelector('[name=nombre]')?.focus(), 50);
   }
 
+  async function useExistingClient(id) { closeQuickClientModal(); await _fetchAndPopulateClients(id); showBanner('Se usó el cliente que ya existe.', 'success'); }
   function closeQuickClientModal() {
     $('qc-modal')?.remove();
   }
@@ -18490,6 +18501,7 @@ const ProjectsModule = (() => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
+      if (res.status === 409) { const dj = await res.json().catch(() => ({})); btn.disabled = false; btn.textContent = 'Crear cliente'; if (dj.existing && confirm((dj.error || 'Ya existe.') + '\n\n¿Usar el cliente que ya existe?')) { closeQuickClientModal(); await _fetchAndPopulateClients(dj.existing.id); } return; }
       if (!res.ok) throw new Error((await res.json()).error || `HTTP ${res.status}`);
       const client = await res.json();
       closeQuickClientModal();
@@ -18903,7 +18915,7 @@ const ProjectsModule = (() => {
     }
   }
 
-  return { load, filter, setFilter, setMemberFilter, render, kDragStart, kDragEnd, kDrop, calNav, onTipoChange, openDrawer, closeDrawer, save, confirmDelete, setView, switchTab, toggleVerTodo, toggleTaskCobrado, updateTaskMonto, updateDescripcion, addLink, removeLink, _setLinkField, saveLinks, refreshCard, closeQuickClientModal, saveQuickClient, closeFirstTaskPrompt, goCreateFirstTask, toggleTaskExpand, toggleProjectExpand, openTaskMenu, _onTaskMenuEdit, _onTaskMenuAddSub, _onTaskMenuDelete, openQuickEditPopover, tqpNav, tqpPick, tqpToggleRange, tqpClear, openInlineDate, startInlineSubtask, cancelInlineSubtask, saveInlineSubtask, startEditTask, cancelEditTask, saveEditTask, deleteTaskInline, toggleSubrowExpand, distributeTaskMontos, openLinkForm, cancelLinkForm, saveLinkForm, startLinkEdit, cancelLinkEdit, saveLinkEdit, enterInfoEdit, cancelInfoEdit, saveInfoEdit, toggleInfoExpand,
+  return { load, filter, setFilter, setMemberFilter, render, kDragStart, kDragEnd, kDrop, calNav, onTipoChange, openDrawer, closeDrawer, save, confirmDelete, setView, switchTab, toggleVerTodo, toggleTaskCobrado, updateTaskMonto, updateDescripcion, addLink, removeLink, _setLinkField, saveLinks, refreshCard, closeQuickClientModal, useExistingClient, saveQuickClient, closeFirstTaskPrompt, goCreateFirstTask, toggleTaskExpand, toggleProjectExpand, openTaskMenu, _onTaskMenuEdit, _onTaskMenuAddSub, _onTaskMenuDelete, openQuickEditPopover, tqpNav, tqpPick, tqpToggleRange, tqpClear, openInlineDate, startInlineSubtask, cancelInlineSubtask, saveInlineSubtask, startEditTask, cancelEditTask, saveEditTask, deleteTaskInline, toggleSubrowExpand, distributeTaskMontos, openLinkForm, cancelLinkForm, saveLinkForm, startLinkEdit, cancelLinkEdit, saveLinkEdit, enterInfoEdit, cancelInfoEdit, saveInfoEdit, toggleInfoExpand,
     onRespChange, onRepartoToggle, repartoIgual, repartoHint: _repartoHint, onCobroSemanalToggle, onSemanaAutoToggle,
     togglePlanDia, planHint, onRecurFreqChange,
     onHorasFijasToggle, openProjFechas,

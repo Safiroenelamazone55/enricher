@@ -18081,3 +18081,5 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 .cl-bcard__s{font-size:.76rem;color:#64748B;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cl-bcol__e{font-size:.78rem;color:#94A3B8;padding:12px 4px;text-align:center}
 @media(max-width:1000px){.cl-board{grid-template-columns:repeat(2,1fr)}}
+
+.ms-b--own{color:#92400E;background:#FEF3C7}

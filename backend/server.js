@@ -1554,6 +1554,12 @@ app.post('/api/mgmt/clients', requireAuth, async (req, res) => {
           cargo, sitio_web, linkedin, industria, pais_empresa, ciudad, notas_empresa, tipo } = req.body;
   if (!nombre?.trim()) return res.status(400).json({ error: 'El nombre es requerido' });
   try {
+    // Guardia anti-duplicados: mismo email (sin importar mayúsculas), o mismo nombre + misma empresa.
+    const _em = String(email || '').trim().toLowerCase();
+    const _dup = _em
+      ? (await pool.query("SELECT id, nombre, empresa FROM clients WHERE user_id=$1 AND LOWER(TRIM(email))=$2 LIMIT 1", [req.workspaceOwnerId, _em])).rows[0]
+      : (await pool.query("SELECT id, nombre, empresa FROM clients WHERE user_id=$1 AND LOWER(TRIM(nombre))=LOWER(TRIM($2)) AND LOWER(TRIM(COALESCE(empresa,'')))=LOWER(TRIM($3)) LIMIT 1", [req.workspaceOwnerId, nombre, empresa || ''])).rows[0];
+    if (_dup && !req.body.force) return res.status(409).json({ error: 'Ya existe "' + _dup.nombre + '"' + (_dup.empresa ? ' (' + _dup.empresa + ')' : '') + (_em ? ' con ese email' : '') + '.', existing: { id: _dup.id, nombre: _dup.nombre } });
     const { rows } = await pool.query(
       `INSERT INTO clients
          (user_id, nombre, empresa, email, telefono, pais, estado, notas, comision_default,
@@ -3514,6 +3520,8 @@ app.post('/api/outbound-clients', requireAuth, async (req, res) => {
   if (!b.nombre?.trim()) return res.status(400).json({ error: 'El nombre es requerido' });
   const estado = OBC_ESTADOS.includes(b.estado) ? b.estado : 'preparacion';
   try {
+    const _d = (await pool.query("SELECT id, nombre FROM outbound_clients WHERE user_id=$1 AND LOWER(TRIM(nombre))=LOWER(TRIM($2)) LIMIT 1", [req.workspaceOwnerId, b.nombre])).rows[0];
+    if (_d && !b.force) return res.status(409).json({ error: 'Ya existe el cliente outbound "' + _d.nombre + '".', existing: { id: _d.id, nombre: _d.nombre } });
     const { rows } = await pool.query(`
       INSERT INTO outbound_clients (user_id,nombre,estado,responsable,canal,website,mercado,icp,proxima_accion,notas,from_email,cc_email,li_cargo,li_empresa,li_que_hace)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *
