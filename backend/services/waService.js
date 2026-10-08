@@ -371,7 +371,16 @@ async function _connect(pool, id) {
   // — sin esto la conexión queda "en blanco" aunque el teléfono sí tenga historial.
   // No trae TODO el historial desde siempre: Baileys igual filtra el tipo de sync
   // más pesado (HistorySyncType.FULL) por default.
-  const sock = makeWASocket({ auth: state, syncFullHistory: true, keepAliveIntervalMs: 25000 });
+  // getMessage: cuando el celular del destinatario no logra descifrar un mensaje (pasa tras reconexiones o sesiones desfasadas), pide un REENVÍO.
+  // Sin este callback la librería no puede reenviarlo y al otro lado queda "Esperando el mensaje. Esto puede tardar…" para siempre.
+  const getMessage = async (key) => {
+    try {
+      if (!key || !key.id) return undefined;
+      const { rows: [m] } = await pool.query('SELECT texto FROM wa_messages WHERE connection_id=$1 AND msg_id=$2', [id, key.id]);
+      return (m && m.texto) ? { conversation: m.texto } : undefined;
+    } catch (e) { return undefined; }
+  };
+  const sock = makeWASocket({ auth: state, syncFullHistory: true, keepAliveIntervalMs: 25000, getMessage });
   _socks.set(id, sock);
   sock.__connId = id; sock.__pool = pool;
   await _cargarLidMap(pool, id);
