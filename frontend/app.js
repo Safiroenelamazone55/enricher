@@ -729,7 +729,7 @@ window.TaskTplModule = TaskTplModule;
 const MatchSuggest = (() => {
   const _e = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const SRC = { outreach: 'Prospecto · Outreach', operaciones: 'Cliente · Operaciones', cliente_outbound: 'Cliente · Outreach' };
-  let _box = null, _t = null, _ctx = null, _items = [], _seq = 0;
+  let _box = null, _t = null, _ctx = null, _items = [], _seq = 0, _filling = false;
   function _close() { if (_box) { _box.remove(); _box = null; } _items = []; }
   // ¿Qué campo es? → { kind, ctx } o null
   function _classify(el) {
@@ -784,13 +784,15 @@ const MatchSuggest = (() => {
       ev.preventDefault(); const row = ev.target.closest('.ms-i'); if (!row) return;
       const it = _items[+row.dataset.i]; if (!it) return;
       if (it.source === _ctx.own && it.data && it.data.id) { _openExisting(_ctx, it); _close(); return; }
-      _fill(_ctx, it.data || {}, it.type);
+      clearTimeout(_t); _seq++;   // cancela cualquier búsqueda pendiente
+      _filling = true; try { _fill(_ctx, it.data || {}, it.type); } finally { _filling = false; }
       if (_ctx.scope === 'obc' && it.source === 'operaciones' && it.data && it.data.id) window.__obcLinkClientId = it.data.id;
       _close();
     };
     document.body.appendChild(_box);
   }
   document.addEventListener('input', ev => {
+    if (_filling) return;   // los valores que rellena la propia sugerencia no vuelven a abrirla
     const ctx = _classify(ev.target); if (!ctx) return;
     _ctx = ctx; clearTimeout(_t);
     const q = String(ev.target.value || '').trim(); if (q.length < 2) { _close(); return; }
