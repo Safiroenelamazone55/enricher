@@ -12069,6 +12069,9 @@ const TasksModule = (() => {
     _sgItems = _sgScope().filter(t => String(t.titulo || '').toLowerCase().includes(q))
       .sort((a, b) => (String(a.titulo).toLowerCase().startsWith(q) ? 0 : 1) - (String(b.titulo).toLowerCase().startsWith(q) ? 0 : 1) || (a.parent_task_id ? 1 : 0) - (b.parent_task_id ? 1 : 0))
       .slice(0, 8);
+    // Proyectos que coinciden (por nombre o cliente): al elegir uno, se filtran las tareas SOLO de ese proyecto
+    const _pj = new Map(); _tasks.forEach(t => { if (t.project_id && !t.archivada && (String(t.project_nombre || '') + ' ' + String(t.client_nombre || '')).toLowerCase().includes(q)) _pj.set(t.project_id, { _proj: true, id: t.project_id, titulo: t.project_nombre || 'Proyecto', cliente: t.client_nombre || '' }); });
+    _sgItems = [..._pj.values()].slice(0, 4).concat(_sgItems);
     let box = document.getElementById('tasks-suggest');
     if (!_sgItems.length) {
       if (!box) { box = document.createElement('div'); box.id = 'tasks-suggest'; box.className = 'tk-suggest'; inp.closest('.clients-search-wrap').appendChild(box); }
@@ -12080,12 +12083,17 @@ const TasksModule = (() => {
       ? '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 10 4 15 9 20"/><path d="M20 4v7a4 4 0 0 1-4 4H4"/></svg>'
       : '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><polyline points="8 12 11 15 16 9"/></svg>';
     box.innerHTML = _sgItems.map((t, i) => {
+      if (t._proj) return '<div class="tk-suggest__it' + (i === 0 ? ' on' : '') + '" data-i="' + i + '" onmousedown="event.preventDefault();TasksModule.pickProject(' + t.id + ')" onmouseenter="TasksModule._sgHover(' + i + ')"><span class="tk-suggest__ic"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span><span class="tk-suggest__t">' + esc(t.titulo) + '</span><span class="tk-suggest__m">Proyecto' + (t.cliente ? ' · ' + esc(t.cliente) : '') + '</span></div>';
       const par = t.parent_task_id ? byId.get(t.parent_task_id) : null;
       const hl = esc(t.titulo).replace(new RegExp('(' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'ig'), '<mark>$1</mark>');
       return '<div class="tk-suggest__it' + (i === 0 ? ' on' : '') + '" data-i="' + i + '" onmousedown="event.preventDefault();TasksModule.jumpToTask(' + t.id + ')" onmouseenter="TasksModule._sgHover(' + i + ')">' +
         '<span class="tk-suggest__ic">' + ico(!!par) + '</span><span class="tk-suggest__t">' + hl + '</span>' +
         '<span class="tk-suggest__m">' + (par ? 'Subtarea de ' + esc(par.titulo) : esc((t.estado || '').replace('_', ' '))) + '</span></div>';
     }).join('');
+  }
+  async function pickProject(pid) {
+    _sgClose(); const inp = $('tasks-search'); if (inp) inp.value = '';
+    await setProjectFilter(pid);
   }
   function _sgHover(i) { _sgIdx = i; document.querySelectorAll('#tasks-suggest .tk-suggest__it').forEach((el, k) => el.classList.toggle('on', k === i)); }
   function jumpToTask(id) {
@@ -12120,7 +12128,7 @@ const TasksModule = (() => {
     if (!e.target || e.target.id !== 'tasks-search' || !_sgItems.length) return;
     if (e.key === 'ArrowDown') { e.preventDefault(); _sgHover((_sgIdx + 1) % _sgItems.length); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); _sgHover((_sgIdx - 1 + _sgItems.length) % _sgItems.length); }
-    else if (e.key === 'Enter') { e.preventDefault(); jumpToTask(_sgItems[Math.max(_sgIdx, 0)].id); }
+    else if (e.key === 'Enter') { e.preventDefault(); const _it = _sgItems[Math.max(_sgIdx, 0)]; if (_it._proj) pickProject(_it.id); else jumpToTask(_it.id); }
     else if (e.key === 'Escape') { _sgClose(); }
   });
 
@@ -14528,7 +14536,7 @@ const TasksModule = (() => {
   }
 
   return {
-    moveAsSubtask, _mvsFilter, doMoveSubtask, convertToTask, reloadKeep,
+    moveAsSubtask, _mvsFilter, doMoveSubtask, convertToTask, reloadKeep, pickProject,
     copiarSemanaAnterior,
     load, filter, setFilterMember, setFilterFecha, render,
     setProjectFilter, clearProjectFilter, refreshProjectHeader, jumpToTask, getSubtasks, getTask, createSubtask, _sgHover,
