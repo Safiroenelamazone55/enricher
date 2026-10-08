@@ -18083,3 +18083,8 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 @media(max-width:1000px){.cl-board{grid-template-columns:repeat(2,1fr)}}
 
 .ms-b--own{color:#92400E;background:#FEF3C7}
+
+/* Sugerencias del buscador de Tareas: más anchas y legibles */
+.tk-suggest{min-width:520px;max-width:640px}
+.tk-suggest__it{padding:10px 14px;font-size:.88rem}
+.tk-suggest__m{max-width:50%}

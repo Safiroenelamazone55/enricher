@@ -2018,6 +2018,7 @@ app.get('/api/mgmt/tasks', requireAuth, async (req, res) => {
       `SELECT t.*,
               p.nombre AS project_nombre,
               c.nombre AS client_nombre,
+              c.empresa AS client_empresa,
               COALESCE((
                 SELECT json_agg(json_build_object('id', dt.id, 'titulo', dt.titulo, 'estado', dt.estado) ORDER BY dt.titulo)
                   FROM task_dependencies td JOIN tasks dt ON dt.id = td.depends_on_id

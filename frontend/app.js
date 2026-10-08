@@ -12072,7 +12072,7 @@ const TasksModule = (() => {
       .sort((a, b) => (String(a.titulo).toLowerCase().startsWith(q) ? 0 : 1) - (String(b.titulo).toLowerCase().startsWith(q) ? 0 : 1) || (a.parent_task_id ? 1 : 0) - (b.parent_task_id ? 1 : 0))
       .slice(0, 8);
     // Proyectos que coinciden (por nombre o cliente): al elegir uno, se filtran las tareas SOLO de ese proyecto
-    const _pj = new Map(); _tasks.forEach(t => { if (t.project_id && !t.archivada && _has(String(t.project_nombre || '') + ' ' + String(t.client_nombre || ''))) _pj.set(t.project_id, { _proj: true, id: t.project_id, titulo: t.project_nombre || 'Proyecto', cliente: t.client_nombre || '' }); });
+    const _pj = new Map(); _tasks.forEach(t => { if (t.project_id && !t.archivada && _has(String(t.project_nombre || '') + ' ' + String(t.client_nombre || '') + ' ' + String(t.client_empresa || ''))) _pj.set(t.project_id, { _proj: true, id: t.project_id, titulo: t.project_nombre || 'Proyecto', cliente: [t.client_nombre, t.client_empresa].filter(Boolean).join(' · ') }); });
     _sgItems = [..._pj.values()].slice(0, 4).concat(_sgItems);
     let box = document.getElementById('tasks-suggest');
     if (!_sgItems.length) {
@@ -12163,9 +12163,9 @@ const TasksModule = (() => {
         return true;
       });
     }
-    if (q) list = list.filter(t =>
-      (t.titulo + ' ' + (t.project_nombre || '') + ' ' + (t.client_nombre || '') + ' ' + (t.responsable || '') + ' ' + (t.responsables || []).join(' ')).toLowerCase().includes(q)
-    );
+    // El texto escrito filtra por PROYECTO, CLIENTE (nombre o empresa) y MIEMBRO — no por el título de las tareas (para llegar a una tarea está el desplegable de sugerencias).
+    if (q) { const _n = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(), _tk = _n(q).split(/\s+/).filter(Boolean);
+      list = list.filter(t => { const h = _n((t.project_nombre || '') + ' ' + (t.client_nombre || '') + ' ' + (t.client_empresa || '') + ' ' + (t.responsable || '') + ' ' + (t.responsables || []).join(' ')); return _tk.every(w => h.includes(w)); }); }
     return list;
   }
 
@@ -12876,9 +12876,9 @@ const TasksModule = (() => {
         return true;
       });
     }
-    if (q) list = list.filter(t =>
-      (t.titulo + ' ' + (t.project_nombre || '') + ' ' + (t.client_nombre || '') + ' ' + (t.responsable || '') + ' ' + (t.responsables || []).join(' ')).toLowerCase().includes(q)
-    );
+    // El texto escrito filtra por PROYECTO, CLIENTE (nombre o empresa) y MIEMBRO — no por el título de las tareas (para llegar a una tarea está el desplegable de sugerencias).
+    if (q) { const _n = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(), _tk = _n(q).split(/\s+/).filter(Boolean);
+      list = list.filter(t => { const h = _n((t.project_nombre || '') + ' ' + (t.client_nombre || '') + ' ' + (t.client_empresa || '') + ' ' + (t.responsable || '') + ' ' + (t.responsables || []).join(' ')); return _tk.every(w => h.includes(w)); }); }
 
     // Si una SUBTAREA matchea el filtro pero su PADRE no (p. ej. filtrando por miembro): incluir al
     // padre para anidar la subtarea bajo él (arriba, en su grupo), no suelta al final. El padre
