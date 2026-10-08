@@ -12837,6 +12837,7 @@ const TasksModule = (() => {
     const endOfWeek = new Date(today); endOfWeek.setDate(today.getDate() + (6 - today.getDay()));
 
     let list = _tasks.filter(t => !t.archivada);
+    if (_filterProjectId) list = list.filter(t => t.project_id === _filterProjectId);   // dentro de un proyecto: solo SUS tareas
     if (_filterEstadoSet.size) list = list.filter(t => _filterEstadoSet.has(t.estado));
     if (_filterPrioSet.size)   list = list.filter(t => _filterPrioSet.has(t.prioridad));
     if (_filterMember === '__none__') {
@@ -13718,6 +13719,7 @@ const TasksModule = (() => {
 
     const byDate = {};
     for (const t of _tasks) {
+      if (!fullPage && _filterProjectId && t.project_id !== _filterProjectId) continue;   // dentro de un proyecto: solo SUS tareas
       if (!t.deadline) continue;
       const d = t.deadline.split('T')[0];
       (byDate[d] = byDate[d] || []).push(t);
