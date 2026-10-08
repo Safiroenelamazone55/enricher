@@ -617,6 +617,112 @@ function selectWorkspaceArea(area) {
 
 // ── Doble sidebar: rail de módulos + panel de secciones ──
 let _activeModule = 'management';
+// ════════════════════════════════════════════════════════════════
+// Plantillas de listas de tareas/subtareas (importables a un proyecto o a una tarea semanal)
+// + "Visible para el cliente" (portal). Una línea = una tarea; línea con sangría o "- " = subtarea de la anterior;
+// al final de la línea: [cliente] la hace visible en el portal, [cliente: Título para el cliente] además le pone otro nombre.
+// ════════════════════════════════════════════════════════════════
+const TaskTplModule = (() => {
+  const _e = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const _json = { 'Content-Type': 'application/json' };
+  let _tpls = [], _target = null, _editId = null;
+  const _close = () => { document.getElementById('tpl-modal')?.remove(); };
+  function _shell(title, body) {
+    _close();
+    const m = document.createElement('div'); m.id = 'tpl-modal'; m.className = 'kdr';
+    m.onclick = ev => { if (ev.target === m) _close(); };
+    m.innerHTML = '<div class="kdr__box" style="width:min(640px,100%)"><div class="kdr__h"><b>' + title + '</b><button class="kdr__x" onclick="TaskTplModule.close()">×</button></div><div class="kdr__b" id="tpl-body" style="padding:14px 18px 18px">' + body + '</div></div>';
+    document.body.appendChild(m);
+  }
+  async function _load() { try { const r = await apiFetch(API + '/mgmt/task-templates'); _tpls = r.ok ? await r.json() : []; } catch (_) { _tpls = []; } }
+  const _count = it => (it.titulo ? 1 : 0) + (it.subtareas || []).length;
+  function parse(text) {
+    const items = []; let cur = null;
+    String(text || '').split(/\r?\n/).forEach(raw => {
+      if (!raw.trim()) return;
+      const sub = /^(\s{2,}|\t|-\s)/.test(raw);
+      let line = raw.replace(/^(\s+|-\s+)/, '').trim(), visible = false, tc = '';
+      const m = /\s*\[(?:c|cliente)(?::\s*([^\]]*))?\]\s*$/i.exec(line);
+      if (m) { visible = true; tc = (m[1] || '').trim(); line = line.slice(0, m.index).trim(); }
+      if (!line) return;
+      const node = { titulo: line, visible, titulo_cliente: tc, subtareas: [] };
+      if (sub && cur) cur.subtareas.push(node); else { cur = node; items.push(node); }
+    });
+    return items;
+  }
+  function serialize(items) {
+    const mark = n => n.visible ? (' [cliente' + (n.titulo_cliente ? ': ' + n.titulo_cliente : '') + ']') : '';
+    return (items || []).map(it => it.titulo + mark(it) + (it.subtareas || []).map(st => '\n  ' + st.titulo + mark(st)).join('')).join('\n');
+  }
+  async function openImport(type, id) {
+    _target = { type, id };
+    await _load();
+    const what = type === 'task' ? 'Sus líneas entran como <b>subtareas</b> de esta tarea.' : 'Sus líneas entran como <b>tareas</b> del proyecto (con sus subtareas).';
+    const rows = _tpls.length ? _tpls.map(p => '<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #EEF0EC"><div style="flex:1;min-width:0"><div style="font-weight:600">' + _e(p.nombre) + '</div><div style="font-size:.75rem;color:#64748B">' + (p.items || []).reduce((n, it) => n + _count(it), 0) + ' elementos' + (p.descripcion ? ' · ' + _e(p.descripcion) : '') + '</div></div><button class="btn btn--primary btn--sm" onclick="TaskTplModule.doImport(' + p.id + ')">Importar</button></div>').join('')
+      : '<div class="kdr__e" style="padding:18px">Todavía no tienes plantillas. Crea la primera.</div>';
+    _shell('Importar plantilla', '<div style="font-size:.8rem;color:#64748B;margin-bottom:8px">' + what + '</div>' + rows + '<div style="margin-top:14px"><button class="btn btn--ghost btn--sm" onclick="TaskTplModule.openManager()">＋ Crear / gestionar plantillas</button></div>');
+  }
+  async function doImport(tplId) {
+    if (!_target) return;
+    try {
+      const r = await apiFetch(API + '/mgmt/' + (_target.type === 'task' ? 'tasks' : 'projects') + '/' + _target.id + '/import-template', { method: 'POST', headers: _json, body: JSON.stringify({ template_id: tplId }) });
+      const j = await r.json(); if (!r.ok) throw new Error(j.error || 'Error');
+      _close(); showBanner('Se crearon ' + j.creadas + ' elemento(s) desde "' + j.plantilla + '".', 'success');
+      try { if (typeof TasksModule !== 'undefined') await TasksModule.load(); } catch (_) {}
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  async function openManager() {
+    await _load(); _editId = null;
+    const rows = _tpls.length ? _tpls.map(p => '<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #EEF0EC"><div style="flex:1;font-weight:600">' + _e(p.nombre) + '</div><button class="btn btn--ghost btn--sm" onclick="TaskTplModule.edit(' + p.id + ')">Editar</button><button class="btn btn--ghost btn--sm" style="color:#D94B4B" onclick="TaskTplModule.remove(' + p.id + ')">Eliminar</button></div>').join('') : '<div class="kdr__e" style="padding:14px">Sin plantillas todavía.</div>';
+    _shell('Plantillas de tareas', rows + '<div style="margin-top:12px"><button class="btn btn--primary btn--sm" onclick="TaskTplModule.edit(0)">＋ Nueva plantilla</button></div>');
+  }
+  function edit(id) {
+    _editId = id; const p = _tpls.find(x => x.id === id) || { nombre: '', descripcion: '', items: [] };
+    _shell(id ? 'Editar plantilla' : 'Nueva plantilla',
+      '<input class="form-input" id="tpl-nombre" placeholder="Nombre (ej. Lanzamiento de nueva campaña)" value="' + _e(p.nombre) + '" style="margin-bottom:8px">' +
+      '<textarea class="form-input" id="tpl-text" rows="12" style="font-family:inherit" placeholder="Una línea por tarea.&#10;  Con sangría o &quot;- &quot; = subtarea.&#10;Añade [cliente] al final para mostrarla en el portal del cliente,&#10;o [cliente: Título para el cliente] para darle otro nombre.">' + _e(serialize(p.items)) + '</textarea>' +
+      '<div style="font-size:.75rem;color:#64748B;margin:6px 0 12px">Ejemplo: <code>Preparar lista de prospección [cliente: Preparando tu próxima lista]</code></div>' +
+      '<div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn btn--ghost btn--sm" onclick="TaskTplModule.openManager()">Cancelar</button><button class="btn btn--primary btn--sm" onclick="TaskTplModule.save()">Guardar</button></div>');
+  }
+  async function save() {
+    const nombre = (document.getElementById('tpl-nombre')?.value || '').trim(), items = parse(document.getElementById('tpl-text')?.value || '');
+    if (!nombre) { showBanner('Ponle un nombre a la plantilla', 'error'); return; }
+    if (!items.length) { showBanner('Escribe al menos una tarea', 'error'); return; }
+    try {
+      const r = await apiFetch(API + '/mgmt/task-templates' + (_editId ? '/' + _editId : ''), { method: _editId ? 'PUT' : 'POST', headers: _json, body: JSON.stringify({ nombre, items }) });
+      const j = await r.json(); if (!r.ok) throw new Error(j.error || 'Error');
+      showBanner('Plantilla guardada.', 'success'); await openManager();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  async function remove(id) {
+    if (!confirm('¿Eliminar esta plantilla? Las tareas ya creadas no se tocan.')) return;
+    try { await apiFetch(API + '/mgmt/task-templates/' + id, { method: 'DELETE' }); await openManager(); } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  // Visibilidad de una tarea para el cliente
+  async function openVisible(taskId) {
+    let tk = null;
+    try { const r = await apiFetch(API + '/mgmt/tasks/' + taskId); tk = r.ok ? await r.json() : null; } catch (_) {}
+    if (!tk) { showBanner('No se pudo cargar la tarea', 'error'); return; }
+    _shell('Visible para el cliente',
+      '<div style="font-size:.8rem;color:#64748B;margin-bottom:10px">El cliente verá solo el título y el estado (Planificada, En curso, Hecha) en su portal. Nunca verá horas, costos, notas ni quién la hace. Solo aplica si el proyecto está vinculado a un cliente outbound.</div>' +
+      '<label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;cursor:pointer"><input type="checkbox" id="tpl-vis"' + (tk.visible_cliente ? ' checked' : '') + '> <b>Mostrar esta tarea al cliente</b></label>' +
+      '<input class="form-input" id="tpl-tc" placeholder="Título para el cliente (opcional)" value="' + _e(tk.titulo_cliente || '') + '">' +
+      '<div style="font-size:.72rem;color:#94A3B8;margin:4px 0 12px">Título interno: ' + _e(tk.titulo) + '</div>' +
+      '<div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn btn--ghost btn--sm" onclick="TaskTplModule.close()">Cancelar</button><button class="btn btn--primary btn--sm" onclick="TaskTplModule.saveVisible(' + taskId + ')">Guardar</button></div>');
+  }
+  async function saveVisible(taskId) {
+    const visible = !!document.getElementById('tpl-vis')?.checked, titulo_cliente = (document.getElementById('tpl-tc')?.value || '').trim();
+    try {
+      const r = await apiFetch(API + '/mgmt/tasks/' + taskId + '/cliente', { method: 'PATCH', headers: _json, body: JSON.stringify({ visible, titulo_cliente }) });
+      if (!r.ok) throw new Error((await r.json()).error || 'Error');
+      _close(); showBanner(visible ? 'La tarea ahora es visible para el cliente.' : 'La tarea ya no es visible para el cliente.', 'success');
+      try { if (typeof TasksModule !== 'undefined') await TasksModule.load(); } catch (_) {}
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  return { openImport, doImport, openManager, edit, save, remove, openVisible, saveVisible, close: _close, parse, serialize };
+})();
+window.TaskTplModule = TaskTplModule;
+
 const _MOD_TITLES = { management: 'Operaciones', enricher: 'Datos', leadmanagement: 'Outreach', finance: 'Finanzas', cantera: 'Cantera', config: 'Configuración' };
 function _moduleOf(tab) {
   return document.querySelector(`.snav-item[data-tab="${tab}"]`)?.closest('.snav-group')?.dataset.module || 'management';
@@ -12489,6 +12595,8 @@ const TasksModule = (() => {
             onclick="event.stopPropagation();TasksModule.openDrawer(null,${t.project_id},${t.id})">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           </button>
+          <button class="client-action-btn" title="Importar una plantilla de subtareas a esta tarea" onclick="event.stopPropagation();TaskTplModule.openImport('task',${t.id})"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></button>
+          <button class="client-action-btn" title="${t.visible_cliente ? 'Visible para el cliente' : 'Mostrar al cliente en su portal'}" style="${t.visible_cliente ? 'color:#16A064' : ''}" onclick="event.stopPropagation();TaskTplModule.openVisible(${t.id})"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
           ${_esSemana(t) ? `<button class="client-action-btn" title="Copiar aquí las subtareas de la semana anterior"
             onclick="event.stopPropagation();TasksModule.copiarSemanaAnterior(${t.id})">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
@@ -17269,6 +17377,11 @@ const ProjectsModule = (() => {
       <button type="button" class="pjfin__gofact" onclick="event.stopPropagation();ProjectsModule.openDrawer(${p.id})">Editar →</button>
     </div>
 
+    <div class="pjfin__section-hdr"><span class="pjfin__section-title">LISTAS DE TAREAS (PLANTILLAS)</span></div>
+    <div class="pjrec__summary"><span>Importa de una vez una lista de tareas y subtareas a este proyecto.</span>
+      <button type="button" class="pjfin__gofact" onclick="event.stopPropagation();TaskTplModule.openImport('project',${p.id})">Importar plantilla</button>
+      <button type="button" class="pjfin__gofact" onclick="event.stopPropagation();TaskTplModule.openManager()">Gestionar</button></div>
+
     <div class="pjfin__section-hdr">
       <span class="pjfin__section-title">SUBTAREAS RECURRENTES</span>
       ${_addingRecTplFor === p.id ? '' : `<button type="button" class="pjfin__gofact" onclick="event.stopPropagation();ProjectsModule.recNewTpl(${p.id})">+ Nueva plantilla</button>`}
@@ -17374,7 +17487,7 @@ const ProjectsModule = (() => {
     return `<div class="pjrec__tpl-row${t.activo ? '' : ' pjrec__tpl-row--off'}">
       <button type="button" class="pjrec__tpl-toggle" title="${t.activo ? 'Desactivar' : 'Activar'}" onclick="event.stopPropagation();ProjectsModule.recToggleTpl(${pid},${t.id},${!t.activo})">${t.activo ? '●' : '○'}</button>
       <div class="pjrec__tpl-body">
-        <span class="pjrec__tpl-titulo">${esc(t.titulo)}${t.origen === 'outbound_catalog' ? ' <span class="pjrec__tpl-badge">outbound</span>' : ''}</span>
+        <span class="pjrec__tpl-titulo">${esc(t.titulo)}${t.origen === 'outbound_catalog' ? ' <span class="pjrec__tpl-badge">outbound</span>' : ''}${t.visible_cliente ? ' <span class="pjrec__tpl-badge" style="background:#E3F5EC;color:#16A064">visible al cliente</span>' : ''}</span>
         <span class="pjrec__tpl-meta">${esc(_FREQ_LBL[t.freq] || t.freq)}${t.responsable ? ' · ' + esc(t.responsable) : ''}</span>
       </div>
       <button type="button" class="pjfin__gofact" onclick="event.stopPropagation();ProjectsModule.recGenerarAhora(${pid},${t.id})">Generar ahora</button>
@@ -17402,6 +17515,7 @@ const ProjectsModule = (() => {
         <select class="pjlinks__form-select" id="pjrec-freq-${pid}">${freqOpts}</select>
         <select class="pjlinks__form-select" id="pjrec-resp-${pid}">${respOpts}</select>
       </div>
+      <div class="pjlinks__form-row pjlinks__form-row--sm"><label style="display:flex;align-items:center;gap:6px;font-size:.8rem"><input type="checkbox" id="pjrec-vis-${pid}"${t?.visible_cliente ? ' checked' : ''}> Visible para el cliente</label><input class="pjlinks__form-input" id="pjrec-tc-${pid}" type="text" placeholder="Título para el cliente (opcional)" value="${esc(t?.titulo_cliente || '')}"></div>
       <div class="pjlinks__form-actions">
         <button type="button" class="btn btn--ghost btn--sm" onclick="event.stopPropagation();${cancelFn}">Cancelar</button>
         <button type="button" class="btn btn--primary btn--sm" onclick="event.stopPropagation();${saveFn}">Guardar</button>
@@ -17432,6 +17546,7 @@ const ProjectsModule = (() => {
       const url = tid ? `${API}/mgmt/recur-subtasks/${tid}` : `${API}/mgmt/projects/${pid}/recur-subtasks`;
       const res = await apiFetch(url, { method: tid ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       if (!res.ok) throw new Error((await res.json()).error || 'No se pudo guardar');
+      { const _saved = await res.json().catch(() => null); const _id = tid || (_saved && _saved.id); if (_id) await apiFetch(`${API}/mgmt/recur-subtasks/${_id}/cliente`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ visible: !!$(`pjrec-vis-${pid}`)?.checked, titulo_cliente: ($(`pjrec-tc-${pid}`)?.value || '').trim() }) }).catch(() => {}); }
       _addingRecTplFor = null; _editingRecTplId = null;
       await _rerenderRecurTab(pid);
       showBanner('✓ Plantilla guardada', 'success');

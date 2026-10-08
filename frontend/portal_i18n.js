@@ -125,6 +125,8 @@
     ['Rango elegido', 'Selected range', 'Ausgewählter Zeitraum', 'Período selecionado'],
     ['Este trimestre', 'This quarter', 'Dieses Quartal', 'Este trimestre'],
     ['Trimestre', 'Quarter', 'Quartal', 'Trimestre'],
+    ['Trabajo de la semana', "This week's work", 'Arbeit dieser Woche', 'Trabalho da semana'], ['Planificada', 'Planned', 'Geplant', 'Planejada'], ['En curso', 'In progress', 'In Arbeit', 'Em andamento'], ['Hecha', 'Done', 'Erledigt', 'Concluída'],
+    [/(d+) de (d+) tareas completadas/, '$1 of $2 tasks completed', '$1 von $2 Aufgaben erledigt', '$1 de $2 tarefas concluídas'],
     ['Últimos 30 días', 'Last 30 days', 'Letzte 30 Tage', 'Últimos 30 dias'], ['30 días', '30 days', '30 Tage', '30 dias'],
     ['Tendencia', 'Trend', 'Trend', 'Tendência'],
     ['Evolución diaria del período seleccionado', 'Daily evolution of the selected period', 'Tägliche Entwicklung des ausgewählten Zeitraums', 'Evolução diária do período selecionado'],

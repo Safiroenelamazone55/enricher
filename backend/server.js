@@ -2749,10 +2749,10 @@ async function _ensureRecurSubtasksCore(wid, freq, refDateStr) {
     }
     const ins = await pool.query(
       `INSERT INTO tasks (user_id, project_id, parent_task_id, titulo, descripcion, estado, prioridad,
-                          responsable, responsables, deadline, recur_template_id, recur_anchor)
-       VALUES ($1,$2,$3,$4,$5,'pendiente',$6,$7,$8,$9,$10,$11) RETURNING id, titulo, project_id`,
+                          responsable, responsables, deadline, recur_template_id, recur_anchor, visible_cliente, titulo_cliente)
+       VALUES ($1,$2,$3,$4,$5,'pendiente',$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id, titulo, project_id`,
       [wid, t.project_id, cont.id, t.titulo, t.descripcion || '', t.prioridad || 'media',
-       respArr[0] || '', respArr, cont.deadline, t.id, startStr]);
+       respArr[0] || '', respArr, cont.deadline, t.id, startStr, !!t.visible_cliente, t.titulo_cliente || '']);
     created.push(ins.rows[0]);
   }
   return { created, checked: tpls.length };
@@ -2992,6 +2992,103 @@ app.post('/api/mgmt/projects/:id/recur-subtasks', requireAuth, async (req, res) 
     console.error('[recur-subtasks] POST error:', err.message);
     res.status(500).json({ error: 'Error al crear la plantilla recurrente' });
   }
+});
+
+// ── Visibilidad para el cliente (portal) ──
+app.patch('/api/mgmt/tasks/:id/cliente', requireAuth, async (req, res) => {
+  try {
+    const b = req.body || {};
+    const { rows } = await pool.query('UPDATE tasks SET visible_cliente=$1, titulo_cliente=$2, updated_at=NOW() WHERE id=$3 AND user_id=$4 RETURNING id, visible_cliente, titulo_cliente',
+      [!!b.visible, String(b.titulo_cliente || '').slice(0, 200), req.params.id, req.workspaceOwnerId]);
+    if (!rows[0]) return res.status(404).json({ error: 'Tarea no encontrada' });
+    res.json(rows[0]);
+  } catch (e) { res.status(500).json({ error: 'No se pudo guardar' }); }
+});
+app.patch('/api/mgmt/recur-subtasks/:id/cliente', requireAuth, async (req, res) => {
+  try {
+    const b = req.body || {};
+    const { rows } = await pool.query('UPDATE project_recur_subtasks SET visible_cliente=$1, titulo_cliente=$2 WHERE id=$3 AND user_id=$4 RETURNING *',
+      [!!b.visible, String(b.titulo_cliente || '').slice(0, 200), req.params.id, req.workspaceOwnerId]);
+    if (!rows[0]) return res.status(404).json({ error: 'Plantilla no encontrada' });
+    res.json(rows[0]);
+  } catch (e) { res.status(500).json({ error: 'No se pudo guardar' }); }
+});
+
+// ── Plantillas de listas de tareas (importables a un proyecto o a una tarea semanal) ──
+// items: [{ titulo, descripcion?, visible?, titulo_cliente?, subtareas: [{ titulo, descripcion?, visible?, titulo_cliente? }] }]
+const _cleanTplItems = (arr) => (Array.isArray(arr) ? arr : []).slice(0, 200).map(it => ({
+  titulo: String(it.titulo || '').trim().slice(0, 300), descripcion: String(it.descripcion || '').slice(0, 2000),
+  visible: !!it.visible, titulo_cliente: String(it.titulo_cliente || '').slice(0, 200),
+  subtareas: (Array.isArray(it.subtareas) ? it.subtareas : []).slice(0, 100).map(st => ({
+    titulo: String(st.titulo || '').trim().slice(0, 300), descripcion: String(st.descripcion || '').slice(0, 2000),
+    visible: !!st.visible, titulo_cliente: String(st.titulo_cliente || '').slice(0, 200) })).filter(st => st.titulo),
+})).filter(it => it.titulo);
+app.get('/api/mgmt/task-templates', requireAuth, async (req, res) => {
+  try { res.json((await pool.query('SELECT * FROM task_list_templates WHERE user_id=$1 ORDER BY nombre', [req.workspaceOwnerId])).rows); }
+  catch (e) { res.status(500).json({ error: 'Error al cargar las plantillas' }); }
+});
+app.post('/api/mgmt/task-templates', requireAuth, async (req, res) => {
+  try {
+    const b = req.body || {}, nombre = String(b.nombre || '').trim().slice(0, 120);
+    if (!nombre) return res.status(400).json({ error: 'Ponle un nombre a la plantilla' });
+    const { rows } = await pool.query('INSERT INTO task_list_templates (user_id, nombre, descripcion, items) VALUES ($1,$2,$3,$4) RETURNING *',
+      [req.workspaceOwnerId, nombre, String(b.descripcion || '').slice(0, 500), JSON.stringify(_cleanTplItems(b.items))]);
+    res.status(201).json(rows[0]);
+  } catch (e) { res.status(500).json({ error: 'No se pudo crear la plantilla' }); }
+});
+app.put('/api/mgmt/task-templates/:id', requireAuth, async (req, res) => {
+  try {
+    const b = req.body || {}, nombre = String(b.nombre || '').trim().slice(0, 120);
+    if (!nombre) return res.status(400).json({ error: 'Ponle un nombre a la plantilla' });
+    const { rows } = await pool.query('UPDATE task_list_templates SET nombre=$1, descripcion=$2, items=$3, updated_at=NOW() WHERE id=$4 AND user_id=$5 RETURNING *',
+      [nombre, String(b.descripcion || '').slice(0, 500), JSON.stringify(_cleanTplItems(b.items)), req.params.id, req.workspaceOwnerId]);
+    if (!rows[0]) return res.status(404).json({ error: 'Plantilla no encontrada' });
+    res.json(rows[0]);
+  } catch (e) { res.status(500).json({ error: 'No se pudo guardar la plantilla' }); }
+});
+app.delete('/api/mgmt/task-templates/:id', requireAuth, async (req, res) => {
+  try {
+    const r = await pool.query('DELETE FROM task_list_templates WHERE id=$1 AND user_id=$2', [req.params.id, req.workspaceOwnerId]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Plantilla no encontrada' });
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'No se pudo eliminar' }); }
+});
+// Importar una plantilla: (a) a una TAREA (típicamente la semanal) → sus ítems entran como SUBTAREAS; (b) a un PROYECTO → los ítems entran como TAREAS con sus subtareas.
+async function _importTemplate(uid, tplId, { projectId, parentId }) {
+  const { rows: [tpl] } = await pool.query('SELECT * FROM task_list_templates WHERE id=$1 AND user_id=$2', [tplId, uid]);
+  if (!tpl) return { error: 'Plantilla no encontrada', status: 404 };
+  const items = _cleanTplItems(tpl.items);
+  let parent = null, pid = projectId;
+  if (parentId) {
+    const { rows: [p] } = await pool.query('SELECT id, project_id, deadline, responsable, responsables, parent_task_id FROM tasks WHERE id=$1 AND user_id=$2', [parentId, uid]);
+    if (!p) return { error: 'Tarea no encontrada', status: 404 };
+    parent = p; pid = p.project_id;
+  }
+  const { rows: [pr] } = await pool.query('SELECT id, responsable, responsables FROM projects WHERE id=$1 AND user_id=$2', [pid, uid]);
+  if (!pr) return { error: 'Proyecto no encontrado', status: 404 };
+  const resp = (parent && parent.responsables && parent.responsables.length) ? parent.responsables : ((pr.responsables && pr.responsables.length) ? pr.responsables : (pr.responsable ? [pr.responsable] : []));
+  const ins = async (it, parentTaskId, deadline) => (await pool.query(
+    "INSERT INTO tasks (user_id, project_id, parent_task_id, titulo, descripcion, estado, prioridad, responsable, responsables, deadline, visible_cliente, titulo_cliente) VALUES ($1,$2,$3,$4,$5,'pendiente','media',$6,$7,$8,$9,$10) RETURNING id",
+    [uid, pid, parentTaskId, it.titulo, it.descripcion || '', resp[0] || '', resp, deadline, !!it.visible, it.titulo_cliente || ''])).rows[0].id;
+  let n = 0;
+  for (const it of items) {
+    if (parent) {   // a una tarea: todo entra como subtareas (las subtareas del ítem también, aplanadas)
+      await ins(it, parent.id, parent.deadline); n++;
+      for (const st of it.subtareas) { await ins(st, parent.id, parent.deadline); n++; }
+    } else {        // a un proyecto: ítems = tareas, subtareas = subtareas
+      const tid = await ins(it, null, null); n++;
+      for (const st of it.subtareas) { await ins(st, tid, null); n++; }
+    }
+  }
+  return { ok: true, creadas: n, plantilla: tpl.nombre };
+}
+app.post('/api/mgmt/tasks/:id/import-template', requireAuth, async (req, res) => {
+  try { const r = await _importTemplate(req.workspaceOwnerId, parseInt((req.body || {}).template_id) || 0, { parentId: parseInt(req.params.id) }); if (r.error) return res.status(r.status || 400).json({ error: r.error }); res.json(r); }
+  catch (e) { console.error('[import-template]', e.message); res.status(500).json({ error: 'No se pudo importar' }); }
+});
+app.post('/api/mgmt/projects/:id/import-template', requireAuth, async (req, res) => {
+  try { const r = await _importTemplate(req.workspaceOwnerId, parseInt((req.body || {}).template_id) || 0, { projectId: parseInt(req.params.id) }); if (r.error) return res.status(r.status || 400).json({ error: r.error }); res.json(r); }
+  catch (e) { console.error('[import-template]', e.message); res.status(500).json({ error: 'No se pudo importar' }); }
 });
 
 app.put('/api/mgmt/recur-subtasks/:id', requireAuth, async (req, res) => {

@@ -1156,6 +1156,15 @@ async function initDb() {
     await pool.query(`ALTER TABLE outbound_clients ADD COLUMN IF NOT EXISTS portal_kpis TEXT NOT NULL DEFAULT ''`);
     // KPIs que la agencia muestra en las métricas de las secuencias de este cliente: son el DEFECTO del portal (ver services/kpiDefaults.js)
     await pool.query(`ALTER TABLE outbound_clients ADD COLUMN IF NOT EXISTS seq_kpis TEXT NOT NULL DEFAULT ''`);
+    // Tareas visibles para el cliente en su portal (por defecto NINGUNA lo es) + título opcional redactado para el cliente
+    await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS visible_cliente BOOLEAN NOT NULL DEFAULT FALSE`);
+    await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS titulo_cliente TEXT NOT NULL DEFAULT ''`);
+    await pool.query(`ALTER TABLE project_recur_subtasks ADD COLUMN IF NOT EXISTS visible_cliente BOOLEAN NOT NULL DEFAULT FALSE`);
+    await pool.query(`ALTER TABLE project_recur_subtasks ADD COLUMN IF NOT EXISTS titulo_cliente TEXT NOT NULL DEFAULT ''`);
+    // Plantillas de listas de tareas/subtareas que se importan a mano a un proyecto o a una tarea semanal
+    await pool.query(`CREATE TABLE IF NOT EXISTS task_list_templates (
+      id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL, nombre TEXT NOT NULL, descripcion TEXT NOT NULL DEFAULT '',
+      items JSONB NOT NULL DEFAULT '[]', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
     // Si cambia el nombre de una empresa (p. ej. al limpiar "Pedregal S.A." → "Pedregal"), los correos AÚN NO ENVIADOS que lo mencionan se actualizan solos.
     // Antes los borradores ya redactados conservaban el nombre viejo ("...cocopeat en Pedregal S.a.?") aunque la empresa ya estuviera limpia.
     await pool.query(`

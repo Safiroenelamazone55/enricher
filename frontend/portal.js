@@ -594,12 +594,21 @@
     return `<div class="pt-how"><div class="pt-how__h"><h3>Cómo trabajamos</h3><button class="pt-link" onclick="PT.goSeq()">Ver detalle de las secuencias →</button></div>
       <div class="pt-how__g">${list.map(q => `<div class="pt-card"><div class="pt-item__t"><span>${esc(q.nombre)}</span>${seqBadge(q.estado)}</div><div class="pt-item__s">${q.total} contactos</div>${stepsHtml(q)}</div>`).join('')}</div></div>`;
   }
+  // Trabajo de la semana: lo que el equipo marcó como visible. Solo estado y avance — nunca horas ni costos.
+  function weekWorkHtml() {
+    const w = S.hl && S.hl.week_tasks; if (!w || !w.items || !w.items.length) return '';
+    const done = w.items.filter(x => x.estado === 'done').length, tot = w.items.length, pc = Math.round(done / tot * 100);
+    const lbl = { planned: 'Planificada', doing: 'En curso', done: 'Hecha' };
+    return '<div class="pt-card" style="margin-bottom:14px"><div class="pt-card__h" style="display:flex;justify-content:space-between;align-items:baseline"><h3 style="margin:0">Trabajo de la semana</h3><span class="pt-item__s">' + done + ' de ' + tot + ' tareas completadas</span></div>' +
+      '<div style="height:6px;background:#E9EEF2;margin:10px 0 12px"><div style="height:6px;width:' + pc + '%;background:#16A064;transition:width .3s"></div></div>' +
+      w.items.map(x => '<div class="pt-item" style="display:flex;justify-content:space-between;gap:10px;align-items:center"><span class="pt-item__t" style="' + (x.estado === 'done' ? 'color:#64748B;text-decoration:line-through' : '') + '">' + esc(x.titulo) + '</span><span class="pt-badge pt-b--' + (x.estado === 'done' ? 'g' : x.estado === 'doing' ? 'b' : 'n') + '">' + lbl[x.estado] + '</span></div>').join('') + '</div>';
+  }
   function inicio() {
     const s = S.me.sections;
     const seqSel = S.seqs && s.secuencias ? `<label class="dash-f${S.seq ? ' is-on' : ''}" style="flex:none;min-width:200px"><select onchange="PT.seq(this.value)"><option value="">Todas las secuencias</option>${S.seqs.map(x => `<option value="${x.id}"${String(S.seq) === String(x.id) ? ' selected' : ''}>${esc(x.nombre)}${x.estado === 'activa' ? '' : ' (en pausa)'}</option>`).join('')}</select></label>` : '';
     const filters = seqSel ? `<div class="dash-filters" style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">${seqSel}</div>` : '';
     const detail = S.dash ? `${filters}${dashBody(S.dash)}` : '<div class="pt-empty">Cargando…</div>';
-    return `<div class="pt-dash">${updatesHtml()}${weekHtml()}${highlightsHtml()}${detail}</div>`;
+    return `<div class="pt-dash">${updatesHtml()}${weekHtml()}${weekWorkHtml()}${highlightsHtml()}${detail}</div>`;
   }
 
   function delta(cur, prev, pts) {
