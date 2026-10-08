@@ -723,6 +723,72 @@ const TaskTplModule = (() => {
 })();
 window.TaskTplModule = TaskTplModule;
 
+// ════════════════════════════════════════════════════════════════
+// Coincidencias entre módulos: al escribir una EMPRESA o una PERSONA, se sugiere lo que ya existe en Outreach / Operaciones / clientes outbound.
+// ════════════════════════════════════════════════════════════════
+const MatchSuggest = (() => {
+  const _e = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const SRC = { outreach: 'Outreach', operaciones: 'Operaciones', cliente_outbound: 'Cliente outbound' };
+  let _box = null, _t = null, _ctx = null, _items = [], _seq = 0;
+  function _close() { if (_box) { _box.remove(); _box = null; } _items = []; }
+  // ¿Qué campo es? → { kind, ctx } o null
+  function _classify(el) {
+    if (!el || el.tagName !== 'INPUT') return null;
+    if (el.id === 'obc-nombre') return { kind: 'company', hide: 'cliente_outbound', map: el2 => ({ nombre: el2 }), scope: 'obc' };
+    const form = el.closest('#clients-form'); if (!form) return null;
+    if (el.name === 'empresa') return { kind: 'company', hide: 'operaciones', scope: 'cli-company' };
+    let m = /^mcn-(\d+)-(nombre|email)$/.exec(el.id || '');
+    if (m) return { kind: 'contact', hide: 'operaciones', scope: 'mcn', idx: m[1] };
+    if (el.name === 'nombre' || el.name === 'email') return { kind: 'contact', hide: 'operaciones', scope: 'single' };
+    return null;
+  }
+  function _fill(ctx, d) {
+    const setIf = (el, v, force) => { if (el && v && !/^n\/?a$/i.test(String(v).trim()) && (force || !String(el.value || '').trim())) { el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); } };
+    if (ctx.scope === 'obc') { setIf(document.getElementById('obc-nombre'), d.empresa || d.nombre, true); setIf(document.getElementById('obc-website'), d.sitio_web); return; }
+    const F = document.getElementById('clients-form'); if (!F) return;
+    const q = n => F.querySelector('[name="' + n + '"]');
+    if (ctx.scope === 'cli-company') {
+      setIf(q('empresa'), d.empresa, true); setIf(q('sitio_web'), d.sitio_web); setIf(q('linkedin'), d.linkedin); setIf(q('industria'), d.industria); setIf(q('pais_empresa'), d.pais_empresa); setIf(q('ciudad'), d.ciudad);
+      return;
+    }
+    // contacto: rellena sus datos y, si la empresa está vacía, también la empresa
+    if (ctx.scope === 'mcn') { const g = n => document.getElementById('mcn-' + ctx.idx + '-' + n); setIf(g('nombre'), d.nombre, true); setIf(g('cargo'), d.cargo); setIf(g('email'), d.email); setIf(g('telefono'), d.telefono); setIf(g('pais'), d.pais); }
+    else { setIf(q('nombre'), d.nombre, true); setIf(q('cargo'), d.cargo); setIf(q('email'), d.email); setIf(q('telefono'), d.telefono); setIf(q('pais'), d.pais); }
+    setIf(q('empresa'), d.empresa); setIf(q('sitio_web'), d.sitio_web); setIf(q('linkedin'), d.linkedin); setIf(q('industria'), d.industria); setIf(q('pais_empresa'), d.pais_empresa); setIf(q('ciudad'), d.ciudad);
+  }
+  function _show(el, items) {
+    _close(); _items = items; if (!items.length) return;
+    _box = document.createElement('div'); _box.className = 'ms-box';
+    const r = el.getBoundingClientRect();
+    _box.style.cssText = 'position:fixed;z-index:10050;left:' + r.left + 'px;top:' + (r.bottom + 2) + 'px;width:' + Math.max(r.width, 280) + 'px';
+    _box.innerHTML = '<div class="ms-h">Ya existe en el sistema — elige para completar los datos</div>' + items.map((it, i) => '<div class="ms-i" data-i="' + i + '"><div class="ms-t">' + _e(it.label) + ' <span class="ms-b">' + _e(SRC[it.source] || it.source) + '</span></div>' + (it.sub ? '<div class="ms-s">' + _e(it.sub) + '</div>' : '') + '</div>').join('');
+    _box.onmousedown = ev => {
+      ev.preventDefault(); const row = ev.target.closest('.ms-i'); if (!row) return;
+      const it = _items[+row.dataset.i]; if (!it) return;
+      _fill(_ctx, it.data || {});
+      if (_ctx.scope === 'obc' && it.source === 'operaciones' && it.data && it.data.id) window.__obcLinkClientId = it.data.id;
+      _close();
+    };
+    document.body.appendChild(_box);
+  }
+  document.addEventListener('input', ev => {
+    const ctx = _classify(ev.target); if (!ctx) return;
+    _ctx = ctx; clearTimeout(_t);
+    const q = String(ev.target.value || '').trim(); if (q.length < 2) { _close(); return; }
+    const my = ++_seq;
+    _t = setTimeout(async () => {
+      try {
+        const r = await apiFetch(API + '/mgmt/match?kind=' + ctx.kind + '&q=' + encodeURIComponent(q)); if (!r.ok || my !== _seq) return;
+        const seen = new Set(), items = (await r.json()).filter(it => it.source !== ctx.hide).filter(it => { const k = it.source + '|' + it.label + '|' + it.sub; if (seen.has(k)) return false; seen.add(k); return true; });
+        if (document.activeElement === ev.target) _show(ev.target, items);
+      } catch (_) {}
+    }, 250);
+  }, true);
+  document.addEventListener('focusout', () => setTimeout(_close, 150), true);
+  document.addEventListener('keydown', ev => { if (ev.key === 'Escape') _close(); }, true);
+  return { close: _close };
+})();
+
 const _MOD_TITLES = { management: 'Operaciones', enricher: 'Datos', leadmanagement: 'Outreach', finance: 'Finanzas', cantera: 'Cantera', config: 'Configuración' };
 function _moduleOf(tab) {
   return document.querySelector(`.snav-item[data-tab="${tab}"]`)?.closest('.snav-group')?.dataset.module || 'management';
@@ -29465,6 +29531,7 @@ ${foot}
       <div class="fin-pi-box__hd"><h3>${c ? 'Editar cliente outbound' : 'Nuevo cliente outbound'}</h3><button class="fin-pi-x" onclick="LeadManagerModule.closeClientDrawer()">✕</button></div>
       <div class="fin-pi-form">
         ${fld('obc-nombre', 'Nombre del cliente *', c?.nombre, 'Ej. Tent Softlab', true)}
+        <label class="fin-cfg-field fin-pi-full" style="flex-direction:row;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="obc-ptareas"${c?.portal_tareas ? ' checked' : ''}><span><b>Mostrar al cliente el progreso de tareas en su portal</b><br><span class="seq-drip-hint">Apagado por defecto. Verá «Trabajo de la semana» solo con las tareas que marques como visibles (sin horas ni costos).</span></span></label>
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Estado</span><select class="form-input" id="obc-estado">${_OBC_OPTS.map(([v, l]) => `<option value="${v}"${c?.estado === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Responsable</span><select class="form-input" id="obc-responsable"><option value="">— Sin asignar —</option>${c?.responsable ? `<option value="${esc(c.responsable)}" selected>${esc(c.responsable)}</option>` : ''}</select></label>
         ${fld('obc-website', 'Website', c?.website, '')}
@@ -29529,6 +29596,7 @@ ${foot}
     try {
       const res = await apiFetch(`${API}/outbound-clients${id ? '/' + id : ''}`, { method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       if (!res.ok) throw new Error((await res.json()).error || 'Error');
+      { const _sv = await res.json().catch(() => null), _cid = id || (_sv && _sv.id); if (_cid) { const _x = { portal_tareas: !!$('obc-ptareas')?.checked }; if (window.__obcLinkClientId) _x.client_id = window.__obcLinkClientId; await apiFetch(`${API}/outbound-clients/${_cid}/extra`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_x) }).catch(() => {}); } window.__obcLinkClientId = null; }
       closeClientDrawer();
       await load();
     } catch (e) { if (hint) { hint.textContent = e.message; hint.className = 'fin-cfg-hint fin-cfg-hint--err'; } if (btn) btn.disabled = false; }

@@ -18053,3 +18053,9 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 .nova-toast__msg{font-size:.84rem}
 
 .wa-msg__fail{color:#D94B4B;font-size:.68rem;font-weight:600;margin-left:6px}
+
+.ms-box{background:#fff;border:1px solid #D6D3CC;box-shadow:0 10px 28px rgba(15,23,42,.16);max-height:300px;overflow:auto}
+.ms-h{font-size:.7rem;color:#64748B;padding:7px 10px;border-bottom:1px solid #EEF0EC}
+.ms-i{padding:8px 10px;cursor:pointer;border-bottom:1px solid #F4F3EF}.ms-i:hover{background:#F1F8F4}
+.ms-t{font-size:.86rem;font-weight:600;color:#14211B}.ms-s{font-size:.74rem;color:#64748B;margin-top:1px}
+.ms-b{font-size:.62rem;font-weight:600;color:#00804C;background:#E3F5EC;padding:1px 6px;margin-left:6px;vertical-align:1px}

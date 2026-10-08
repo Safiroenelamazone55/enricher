@@ -1161,6 +1161,9 @@ async function initDb() {
     await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS titulo_cliente TEXT NOT NULL DEFAULT ''`);
     await pool.query(`ALTER TABLE project_recur_subtasks ADD COLUMN IF NOT EXISTS visible_cliente BOOLEAN NOT NULL DEFAULT FALSE`);
     await pool.query(`ALTER TABLE project_recur_subtasks ADD COLUMN IF NOT EXISTS titulo_cliente TEXT NOT NULL DEFAULT ''`);
+    // Vista "Trabajo de la semana" en el portal: APAGADA por defecto, se activa por cliente outbound. client_id = vínculo suave con el cliente de Operaciones.
+    await pool.query(`ALTER TABLE outbound_clients ADD COLUMN IF NOT EXISTS portal_tareas BOOLEAN NOT NULL DEFAULT FALSE`);
+    await pool.query(`ALTER TABLE outbound_clients ADD COLUMN IF NOT EXISTS client_id INTEGER`);
     // Plantillas de listas de tareas/subtareas que se importan a mano a un proyecto o a una tarea semanal
     await pool.query(`CREATE TABLE IF NOT EXISTS task_list_templates (
       id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL, nombre TEXT NOT NULL, descripcion TEXT NOT NULL DEFAULT '',

@@ -3023,6 +3023,41 @@ const _cleanTplItems = (arr) => (Array.isArray(arr) ? arr : []).slice(0, 200).ma
     titulo: String(st.titulo || '').trim().slice(0, 300), descripcion: String(st.descripcion || '').slice(0, 2000),
     visible: !!st.visible, titulo_cliente: String(st.titulo_cliente || '').slice(0, 200) })).filter(st => st.titulo),
 })).filter(it => it.titulo);
+// Ajustes extra del cliente outbound (no pasan por el PUT, que reescribe todo): vista de tareas en el portal y vínculo con el cliente de Operaciones.
+app.patch('/api/outbound-clients/:id/extra', requireAuth, async (req, res) => {
+  try {
+    const b = req.body || {}, sets = [], vals = [];
+    if (b.portal_tareas !== undefined) { vals.push(!!b.portal_tareas); sets.push('portal_tareas=$' + vals.length); }
+    if (b.client_id !== undefined) { vals.push(b.client_id ? parseInt(b.client_id) : null); sets.push('client_id=$' + vals.length); }
+    if (!sets.length) return res.status(400).json({ error: 'Nada que actualizar' });
+    vals.push(req.params.id, req.workspaceOwnerId);
+    const { rows } = await pool.query('UPDATE outbound_clients SET ' + sets.join(',') + ' WHERE id=$' + (vals.length - 1) + ' AND user_id=$' + vals.length + ' RETURNING id, portal_tareas, client_id', vals);
+    if (!rows[0]) return res.status(404).json({ error: 'Cliente no encontrado' });
+    res.json(rows[0]);
+  } catch (e) { res.status(500).json({ error: 'No se pudo guardar' }); }
+});
+// Coincidencias entre módulos mientras se escribe: la misma empresa/persona puede existir en Outreach, en Operaciones o como cliente outbound.
+app.get('/api/mgmt/match', requireAuth, async (req, res) => {
+  try {
+    const uid = req.workspaceOwnerId, q = String(req.query.q || '').trim().slice(0, 80), kind = req.query.kind === 'contact' ? 'contact' : 'company';
+    if (q.length < 2) return res.json([]);
+    const like = '%' + q.replace(/[%_\\]/g, ' ') + '%', out = [];
+    if (kind === 'company') {
+      const a = await pool.query("SELECT id, nombre, website, linkedin, industria, pais, ciudad FROM lm_companies WHERE user_id=$1 AND nombre ILIKE $2 ORDER BY nombre LIMIT 5", [uid, like]);
+      a.rows.forEach(r => out.push({ source: 'outreach', label: r.nombre, sub: [r.pais, r.industria].filter(Boolean).join(' · '), data: { empresa: r.nombre, sitio_web: r.website, linkedin: r.linkedin, industria: r.industria, pais_empresa: r.pais, ciudad: r.ciudad } }));
+      const b = await pool.query("SELECT id, nombre, website FROM outbound_clients WHERE user_id=$1 AND nombre ILIKE $2 ORDER BY nombre LIMIT 4", [uid, like]);
+      b.rows.forEach(r => out.push({ source: 'cliente_outbound', label: r.nombre, sub: 'Cliente outbound', data: { id: r.id, empresa: r.nombre, sitio_web: r.website } }));
+      const c = await pool.query("SELECT id, nombre, empresa, sitio_web, linkedin, industria, pais_empresa, ciudad FROM clients WHERE user_id=$1 AND (empresa ILIKE $2 OR nombre ILIKE $2) ORDER BY empresa, nombre LIMIT 4", [uid, like]);
+      c.rows.forEach(r => out.push({ source: 'operaciones', label: r.empresa || r.nombre, sub: r.empresa ? r.nombre : '', data: { id: r.id, empresa: r.empresa || r.nombre, sitio_web: r.sitio_web, linkedin: r.linkedin, industria: r.industria, pais_empresa: r.pais_empresa, ciudad: r.ciudad } }));
+    } else {
+      const a = await pool.query("SELECT k.id, TRIM(k.nombre||' '||k.apellido) AS nombre, k.cargo, k.email, COALESCE(NULLIF(k.telefono,''), k.movil) AS telefono, k.pais, COALESCE(NULLIF(co.nombre,''), k.empresa_nombre) AS empresa, co.website, co.linkedin AS co_linkedin, co.industria, co.pais AS co_pais, co.ciudad FROM lm_contacts k LEFT JOIN lm_companies co ON co.id=k.company_id WHERE k.user_id=$1 AND (TRIM(k.nombre||' '||k.apellido) ILIKE $2 OR k.email ILIKE $2) ORDER BY 2 LIMIT 6", [uid, like]);
+      a.rows.forEach(r => out.push({ source: 'outreach', label: r.nombre || r.email, sub: [r.cargo, r.empresa, r.email].filter(Boolean).join(' · '), data: { nombre: r.nombre, cargo: r.cargo, email: r.email, telefono: r.telefono, pais: r.pais, empresa: r.empresa, sitio_web: r.website, linkedin: r.co_linkedin, industria: r.industria, pais_empresa: r.co_pais, ciudad: r.ciudad } }));
+      const c = await pool.query("SELECT id, nombre, cargo, email, telefono, pais, empresa, sitio_web, linkedin, industria, pais_empresa, ciudad FROM clients WHERE user_id=$1 AND (nombre ILIKE $2 OR email ILIKE $2) ORDER BY nombre LIMIT 4", [uid, like]);
+      c.rows.forEach(r => out.push({ source: 'operaciones', label: r.nombre, sub: [r.cargo, r.empresa, r.email].filter(Boolean).join(' · '), data: { id: r.id, nombre: r.nombre, cargo: r.cargo, email: r.email, telefono: r.telefono, pais: r.pais, empresa: r.empresa, sitio_web: r.sitio_web, linkedin: r.linkedin, industria: r.industria, pais_empresa: r.pais_empresa, ciudad: r.ciudad } }));
+    }
+    res.json(out);
+  } catch (e) { console.error('[match]', e.message); res.status(500).json([]); }
+});
 app.get('/api/mgmt/task-templates', requireAuth, async (req, res) => {
   try { res.json((await pool.query('SELECT * FROM task_list_templates WHERE user_id=$1 ORDER BY nombre', [req.workspaceOwnerId])).rows); }
   catch (e) { res.status(500).json({ error: 'Error al cargar las plantillas' }); }
