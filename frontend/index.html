@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=2026100565"/>
+  <link rel="stylesheet" href="style.css?v=2026100566"/>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -2048,23 +2048,20 @@
     <!-- ── CLIENTES (sibling of .content-wrap — wider, Clay-style, not
          capped at 1060px; see #pane-mgmt-clients in style.css) ────── -->
     <div class="pane" id="pane-mgmt-clients">
-      <div class="pane-header">
-        <div class="pane-header__row">
-          <div>
-            <h1 class="pane-title">Clientes</h1>
-            <p class="pane-sub">Empresas y personas con las que ya tienes relación de trabajo activa</p>
-          </div>
+      <div class="pv-topbar">
+        <div class="pv-topbar__row">
+          <h1 class="pane-title" style="margin:0">Clientes</h1>
           <button class="btn btn--primary btn--sm" id="clients-new-btn" onclick="ClientsModule.openDrawer()">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             <span id="clients-new-label">Nuevo contacto</span>
           </button>
         </div>
-        <div class="cl-view-tabs">
+        <div class="cl-view-tabs" style="padding:0;border-bottom:none;margin:-6px 0 4px">
           <button class="cl-view-tab active" data-tab="contactos" onclick="ClientsModule.setViewTab('contactos')">Contactos</button>
           <button class="cl-view-tab" data-tab="empresas" onclick="ClientsModule.setViewTab('empresas')">Empresas</button>
         </div>
-        <div class="clients-toolbar">
-          <div class="clients-search-wrap">
+        <div class="pv-toolbar">
+          <div class="clients-search-wrap" style="flex:1;max-width:340px">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             <input type="text" id="clients-search" placeholder="Buscar por nombre, empresa o email…" oninput="ClientsModule.filter()">
           </div>
@@ -2074,6 +2071,14 @@
             <button class="filter-pill" data-estado="__potenciales" onclick="ClientsModule.setFilter('__potenciales')" title="Vienen de una oportunidad y aun no tienen proyecto: todavia no son clientes">Potenciales</button>
             <button class="filter-pill" data-estado="pausado" onclick="ClientsModule.setFilter('pausado')">Pausados</button>
             <button class="filter-pill" data-estado="inactivo" onclick="ClientsModule.setFilter('inactivo')">Archivados</button>
+          </div>
+          <div class="pv-views" id="cl-views">
+            <button class="pv-view pv-view--active" id="cl-view-lista" title="Lista" aria-label="Lista" onclick="ClientsModule.setLayout('lista')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+            </button>
+            <button class="pv-view" id="cl-view-tablero" title="Tablero por estado" aria-label="Tablero" onclick="ClientsModule.setLayout('tablero')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="12" rx="1"/><rect x="17" y="3" width="4" height="8" rx="1"/></svg>
+            </button>
           </div>
         </div>
       </div>
@@ -3309,7 +3314,7 @@
   })();
 </script>
 
-<script src="app.js?v=2026100572"></script>
+<script src="app.js?v=2026100573"></script>
 <div id="task-quick-edit" style="display:none;position:fixed;z-index:9999"></div>
 </body>
 </html>
