@@ -38575,7 +38575,7 @@ Tu historial NO se borra: queda guardado en Nova. Si más adelante vuelves a vin
       const starHtml = m.importante ? `<span class="wa-msg__star" title="Mensaje destacado">⭐</span>` : '';
       const contactoBtn = m.contact_phone ? `<button class="wa-msg__cancel" style="margin-top:6px" onclick="event.stopPropagation();WaChatModule.abrirChat('${esc(m.contact_phone)}@s.whatsapp.net')">Escribirle por WhatsApp ›</button>` : '';
       const textoHtml = m.media_type === 'document' ? '' : `<span class="wa-msg__text" data-mid="${msgIdJs}">${esc(m.texto)}</span>`;
-      const tickHtml = m.from_me ? _tickHtml(m.ack) : '';
+      const tickHtml = m.from_me ? _tickHtml(m.ack, m.ts) : '';
       const bubbleHtml = `${actions}${remitente}${citado}${mediaHtml}${textoHtml}${contactoBtn}<span class="wa-msg__time">${starHtml}${_fmtHora(m.ts)}${tickHtml}</span>${reacHtml}`;
       return `${sep}<div class="wa-msg ${m.from_me ? 'wa-msg--out' : 'wa-msg--in'}"><div class="wa-msg__bubble">${bubbleHtml}</div></div>`;
     }).join('');
@@ -38584,8 +38584,10 @@ Tu historial NO se borra: queda guardado en Nova. Si más adelante vuelves a vin
 
   // Ticks de entrega/leído (estilo WhatsApp/Chatwoot real). ack de Baileys:
   // 1 pendiente, 2 enviado al server (✓), 3 entregado (✓✓ gris), 4 leído (✓✓ azul).
-  function _tickHtml(ack) {
+  function _tickHtml(ack, ts) {
     const a = +ack || 0;
+    // Más de 5 min sin confirmación (y no es historial viejo): se avisa en rojo en vez de dejar el relojito eterno.
+    if (a < 2 && ts) { const age = Date.now() - new Date(ts).getTime(); if (age > 5 * 60 * 1000 && age < 3 * 864e5) return `<span class="wa-msg__fail" title="No se entregó. El sistema reinicia la sesión con este contacto; vuelve a enviarlo.">No entregado</span>`; }
     if (a >= 3) return `<svg class="wa-msg__tick${a >= 4 ? ' wa-msg__tick--read' : ''}" width="15" height="10" viewBox="0 0 16 11" fill="none"><path d="M1 5.5l3 3L9 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 5.5l3 3L15 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
     if (a >= 2) return `<svg class="wa-msg__tick" width="11" height="10" viewBox="0 0 12 11" fill="none"><path d="M1 5.5l3 3L11 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
     return `<svg class="wa-msg__tick" width="11" height="10" viewBox="0 0 12 11" fill="none"><circle cx="6" cy="5.5" r="4.3" stroke="currentColor" stroke-width="1.2"/></svg>`;

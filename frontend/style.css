@@ -18051,3 +18051,5 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 .nova-toast--error{border-left-color:#D94B4B}
 .nova-toast--info{border-left-color:#64748B}
 .nova-toast__msg{font-size:.84rem}
+
+.wa-msg__fail{color:#D94B4B;font-size:.68rem;font-weight:600;margin-left:6px}
