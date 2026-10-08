@@ -12588,8 +12588,8 @@ app.patch('/api/wa/connections/:id/chats/:jid/nombre', requireAuth, async (req, 
     if (!conn) return;
     const nombre = String(req.body?.nombre || '').trim().slice(0, 100);
     await pool.query(
-      `INSERT INTO wa_contacts (connection_id, jid, nombre, nombre_agenda) VALUES ($1,$2,$3,$3)
-       ON CONFLICT (connection_id, jid) DO UPDATE SET nombre=EXCLUDED.nombre, nombre_agenda=EXCLUDED.nombre_agenda, updated_at=NOW()`,
+      `INSERT INTO wa_contacts (connection_id, jid, nombre, nombre_agenda, nombre_manual) VALUES ($1,$2,$3,$3,$3)
+       ON CONFLICT (connection_id, jid) DO UPDATE SET nombre=EXCLUDED.nombre, nombre_agenda=EXCLUDED.nombre_agenda, nombre_manual=EXCLUDED.nombre_manual, updated_at=NOW()`,
       [conn.id, req.params.jid, nombre]);
     res.json({ ok: true });
   } catch (err) { console.error('[wa] nombre', err.message); res.status(500).json({ error: 'No se pudo guardar el nombre' }); }

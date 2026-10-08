@@ -110,14 +110,17 @@ async function _guardarContacto(pool, sock, connId, jid, nombre, agenda = false)
       await pool.query(`
         INSERT INTO wa_contacts (connection_id, jid, nombre, nombre_agenda, updated_at)
         VALUES ($1,$2,$3,$3,NOW())
-        ON CONFLICT (connection_id, jid) DO UPDATE SET nombre=EXCLUDED.nombre, nombre_agenda=EXCLUDED.nombre_agenda, updated_at=NOW()`,
+        ON CONFLICT (connection_id, jid) DO UPDATE SET
+          nombre = CASE WHEN wa_contacts.nombre_manual <> '' THEN wa_contacts.nombre ELSE EXCLUDED.nombre END,
+          nombre_agenda = CASE WHEN wa_contacts.nombre_manual <> '' THEN wa_contacts.nombre_agenda ELSE EXCLUDED.nombre_agenda END,
+          updated_at=NOW()`,
         [connId, jid, nombre]);
     } else {
       await pool.query(`
         INSERT INTO wa_contacts (connection_id, jid, nombre, updated_at)
         VALUES ($1,$2,$3,NOW())
         ON CONFLICT (connection_id, jid) DO UPDATE SET
-          nombre = CASE WHEN wa_contacts.nombre_agenda <> '' THEN wa_contacts.nombre ELSE EXCLUDED.nombre END,
+          nombre = CASE WHEN wa_contacts.nombre_agenda <> '' OR wa_contacts.nombre_manual <> '' THEN wa_contacts.nombre ELSE EXCLUDED.nombre END,
           updated_at=NOW()`,
         [connId, jid, nombre]);
     }
@@ -313,7 +316,12 @@ async function _normalizarLid(pool, sock, connId) {
       await pool.query(`UPDATE wa_messages SET chat_jid=$1 WHERE connection_id=$2 AND chat_jid=$3`, [real, connId, lid]);
       const { rows: [existente] } = await pool.query(
         `SELECT 1 FROM wa_contacts WHERE connection_id=$1 AND jid=$2`, [connId, real]);
-      if (existente) await pool.query(`DELETE FROM wa_contacts WHERE connection_id=$1 AND jid=$2`, [connId, lid]);
+      if (existente) {
+        // Antes de descartar la fila del @lid, se rescata el nombre puesto a mano (o de la agenda) si la del número real no tiene uno propio.
+        await pool.query(`UPDATE wa_contacts r SET nombre = COALESCE(NULLIF(l.nombre_manual,''), NULLIF(l.nombre_agenda,'')), nombre_manual = l.nombre_manual, nombre_agenda = COALESCE(NULLIF(l.nombre_manual,''), NULLIF(l.nombre_agenda,''))
+                           FROM wa_contacts l WHERE l.connection_id=$1 AND l.jid=$3 AND r.connection_id=$1 AND r.jid=$2 AND r.nombre_manual='' AND r.nombre_agenda='' AND (l.nombre_manual<>'' OR l.nombre_agenda<>'')`, [connId, real, lid]);
+        await pool.query(`DELETE FROM wa_contacts WHERE connection_id=$1 AND jid=$2`, [connId, lid]);
+      }
       else await pool.query(`UPDATE wa_contacts SET jid=$1 WHERE connection_id=$2 AND jid=$3`, [real, connId, lid]);
       // Si ya se etiquetó/fijó/asignó/anotó el chat ANTES de que llegara el mapeo (el
       // watchdog reintenta cada 3 min, no es instantáneo), esas filas quedaban huérfanas
