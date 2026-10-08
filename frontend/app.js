@@ -1308,6 +1308,7 @@ const ClientsModule = (() => {
   let _filterEstado = '';
   let _contacts = [];
   let _viewTab = 'contactos';
+  let _layout = 'lista';   // 'lista' | 'tablero' (solo Contactos)
   let _sortKey = 'nombre', _sortDir = 1;   // orden de la tabla de contactos (col + dirección)
   let _mcnCount = 1;
   let _mcnData  = [{ nombre:'', email:'', telefono:'', pais:'', estado:'activo' }];
@@ -1567,7 +1568,29 @@ const ClientsModule = (() => {
     render();
   }
 
+  function setLayout(l) {
+    _layout = l === 'tablero' ? 'tablero' : 'lista';
+    document.querySelectorAll('#cl-views .pv-view').forEach(b => b.classList.toggle('pv-view--active', b.id === 'cl-view-' + _layout));
+    render();
+  }
+  function _renderBoard(list) {
+    const body = document.querySelector('#pane-mgmt-clients .clients-body'); if (!body) return;
+    let bd = $('clients-board'); if (!bd) { bd = document.createElement('div'); bd.id = 'clients-board'; bd.className = 'cl-board'; body.appendChild(bd); }
+    const cols = [['potencial', 'Potenciales'], ['activo', 'Activos'], ['pausado', 'Pausados'], ['inactivo', 'Archivados']];
+    const colOf = c => c.potencial ? 'potencial' : (c.estado === 'activo' ? 'activo' : c.estado === 'pausado' ? 'pausado' : 'inactivo');
+    bd.innerHTML = cols.map(([k, lbl]) => {
+      const items = list.filter(c => colOf(c) === k);
+      return '<div class="cl-bcol"><div class="cl-bcol__h"><span>' + lbl + '</span><span class="cl-bcol__n">' + items.length + '</span></div>' +
+        (items.map(c => '<div class="cl-bcard" onclick="ClientsModule.openPanel(' + c.id + ')"><div class="cl-bcard__t">' + escNom(c.nombre) + '</div>' +
+          (c.empresa ? '<div class="cl-bcard__s">' + escNom(c.empresa) + '</div>' : '') +
+          (c.email ? '<div class="cl-bcard__s">' + esc(c.email) + '</div>' : '') +
+          (c.pais ? '<div class="cl-bcard__s">' + esc(c.pais) + '</div>' : '') + '</div>').join('') || '<div class="cl-bcol__e">Sin contactos</div>') + '</div>';
+    }).join('');
+    bd.style.display = '';
+  }
   function render() {
+    const bd = $('clients-board'); if (bd) bd.style.display = 'none';
+    const vw = $('cl-views'); if (vw) vw.style.display = _viewTab === 'empresas' ? 'none' : '';
     if (_viewTab === 'empresas') { _renderEmpresas(); return; }
     _renderContactos();
   }
@@ -1593,6 +1616,7 @@ const ClientsModule = (() => {
                    : _sortKey === 'estado' ? (c.estado || '')
                    : (c.nombre || '').toLowerCase();
     list = [...list].sort((a, b) => _sv(a).localeCompare(_sv(b), 'es') * _sortDir);
+    if (_layout === 'tablero' && list.length) { tableWrap.style.display = 'none'; empty.style.display = 'none'; _renderBoard(list); return; }
 
     const thead = $('clients-thead');
     if (thead) {
@@ -2056,7 +2080,7 @@ const ClientsModule = (() => {
 
   return {
     load, filter, setFilter, render, sortBy,
-    setViewTab, filterByEmpresa, openDrawerForEmpresa,
+    setViewTab, setLayout, filterByEmpresa, openDrawerForEmpresa,
     openDrawer, closeDrawer, save, confirmDelete, openRowMenu,
     addMcn, removeMcn,
     openAddContact, openEditContact, closeContactForm, saveContact, deleteContact,

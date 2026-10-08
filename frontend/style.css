@@ -18067,3 +18067,17 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 .qc-hint{display:block;font-size:.72rem;color:#94A3B8;margin-top:4px;line-height:1.35}
 .qc-more-link{display:inline-block;margin:6px 0 4px;font-size:.8rem;color:#00804C;text-decoration:none;font-weight:600}
 #qc-more{display:none}#qc-more.on{display:block}
+
+/* Clientes: cabecera igual que Proyectos + vista Tablero */
+#pane-mgmt-clients .pv-topbar{padding:20px 28px 0}
+#pane-mgmt-clients .pv-toolbar{padding-top:6px}
+.cl-board{display:grid;grid-template-columns:repeat(4,minmax(220px,1fr));gap:14px;padding:18px 28px 28px;align-items:start}
+.cl-bcol{background:var(--surface-secondary,#F1EFEA);padding:10px;min-height:120px}
+.cl-bcol__h{display:flex;justify-content:space-between;align-items:center;font-size:.72rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#64748B;margin-bottom:8px}
+.cl-bcol__n{background:#fff;padding:1px 7px;font-weight:600}
+.cl-bcard{background:#fff;border:1px solid var(--border,#E2E0DB);padding:10px 12px;margin-bottom:8px;cursor:pointer;transition:border-color .12s,box-shadow .12s}
+.cl-bcard:hover{border-color:#00804C;box-shadow:0 2px 8px rgba(15,23,42,.08)}
+.cl-bcard__t{font-weight:600;font-size:.88rem;color:#14211B}
+.cl-bcard__s{font-size:.76rem;color:#64748B;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cl-bcol__e{font-size:.78rem;color:#94A3B8;padding:12px 4px;text-align:center}
+@media(max-width:1000px){.cl-board{grid-template-columns:repeat(2,1fr)}}
