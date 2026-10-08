@@ -12976,6 +12976,8 @@ app.post('/api/timer/start', requireAuth, async (req, res) => {
        VALUES ($1,$2,$3,$4,NOW(),0,0,$5,$6,$7) RETURNING id, started_at`,
       [uid, validTaskId, taskTitulo, projectNombre, source, activityType, JSON.stringify(meta)]);
     const e = ins.rows[0];
+    // Empezar a medir tiempo = la tarea ya está en progreso (y su tarea madre/semanal, si es una subtarea). Solo pasa de 'pendiente'; no toca completadas ni bloqueadas.
+    if (validTaskId) { try { await pool.query("UPDATE tasks SET estado='en_progreso', updated_at=NOW() WHERE (id=$1 OR id=(SELECT parent_task_id FROM tasks WHERE id=$1)) AND estado='pendiente'", [validTaskId]); } catch (_) {} }
     res.json({ entryId: e.id, startedAt: e.started_at, taskTitulo, projectNombre });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
