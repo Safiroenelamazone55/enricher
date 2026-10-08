@@ -3039,22 +3039,26 @@ app.patch('/api/outbound-clients/:id/extra', requireAuth, async (req, res) => {
 // Coincidencias entre módulos mientras se escribe: la misma empresa/persona puede existir en Outreach, en Operaciones o como cliente outbound.
 app.get('/api/mgmt/match', requireAuth, async (req, res) => {
   try {
-    const uid = req.workspaceOwnerId, q = String(req.query.q || '').trim().slice(0, 80), kind = req.query.kind === 'contact' ? 'contact' : 'company';
+    const uid = req.workspaceOwnerId, q = String(req.query.q || '').trim().slice(0, 80), kind = req.query.kind === 'contact' ? 'contact' : req.query.kind === 'both' ? 'both' : 'company';
     if (q.length < 2) return res.json([]);
     const like = '%' + q.replace(/[%_\\]/g, ' ') + '%', out = [];
-    if (kind === 'company') {
+    if (kind === 'company' || kind === 'both') {
       const a = await pool.query("SELECT id, nombre, website, linkedin, industria, pais, ciudad FROM lm_companies WHERE user_id=$1 AND nombre ILIKE $2 ORDER BY nombre LIMIT 5", [uid, like]);
       a.rows.forEach(r => out.push({ source: 'outreach', label: r.nombre, sub: [r.pais, r.industria].filter(Boolean).join(' · '), data: { empresa: r.nombre, sitio_web: r.website, linkedin: r.linkedin, industria: r.industria, pais_empresa: r.pais, ciudad: r.ciudad } }));
       const b = await pool.query("SELECT id, nombre, website FROM outbound_clients WHERE user_id=$1 AND nombre ILIKE $2 ORDER BY nombre LIMIT 4", [uid, like]);
       b.rows.forEach(r => out.push({ source: 'cliente_outbound', label: r.nombre, sub: 'Cliente outbound', data: { id: r.id, empresa: r.nombre, sitio_web: r.website } }));
       const c = await pool.query("SELECT id, nombre, empresa, sitio_web, linkedin, industria, pais_empresa, ciudad FROM clients WHERE user_id=$1 AND (empresa ILIKE $2 OR nombre ILIKE $2) ORDER BY empresa, nombre LIMIT 4", [uid, like]);
       c.rows.forEach(r => out.push({ source: 'operaciones', label: r.empresa || r.nombre, sub: r.empresa ? r.nombre : '', data: { id: r.id, empresa: r.empresa || r.nombre, sitio_web: r.sitio_web, linkedin: r.linkedin, industria: r.industria, pais_empresa: r.pais_empresa, ciudad: r.ciudad } }));
-    } else {
+    }
+    out.forEach(it => { it.type = 'company'; });
+    if (kind === 'contact' || kind === 'both') {
+      const n0 = out.length;
       const a = await pool.query("SELECT k.id, TRIM(k.nombre||' '||k.apellido) AS nombre, k.cargo, k.email, COALESCE(NULLIF(k.telefono,''), k.movil) AS telefono, k.pais, COALESCE(NULLIF(co.nombre,''), k.empresa_nombre) AS empresa, co.website, co.linkedin AS co_linkedin, co.industria, co.pais AS co_pais, co.ciudad FROM lm_contacts k LEFT JOIN lm_companies co ON co.id=k.company_id WHERE k.user_id=$1 AND (TRIM(k.nombre||' '||k.apellido) ILIKE $2 OR k.email ILIKE $2) ORDER BY 2 LIMIT 6", [uid, like]);
       a.rows.forEach(r => out.push({ source: 'outreach', label: r.nombre || r.email, sub: [r.cargo, r.empresa, r.email].filter(Boolean).join(' · '), data: { nombre: r.nombre, cargo: r.cargo, email: r.email, telefono: r.telefono, pais: r.pais, empresa: r.empresa, sitio_web: r.website, linkedin: r.co_linkedin, industria: r.industria, pais_empresa: r.co_pais, ciudad: r.ciudad } }));
       const c = await pool.query("SELECT id, nombre, cargo, email, telefono, pais, empresa, sitio_web, linkedin, industria, pais_empresa, ciudad FROM clients WHERE user_id=$1 AND (nombre ILIKE $2 OR email ILIKE $2) ORDER BY nombre LIMIT 4", [uid, like]);
       c.rows.forEach(r => out.push({ source: 'operaciones', label: r.nombre, sub: [r.cargo, r.empresa, r.email].filter(Boolean).join(' · '), data: { id: r.id, nombre: r.nombre, cargo: r.cargo, email: r.email, telefono: r.telefono, pais: r.pais, empresa: r.empresa, sitio_web: r.sitio_web, linkedin: r.linkedin, industria: r.industria, pais_empresa: r.pais_empresa, ciudad: r.ciudad } }));
     }
+    out.forEach((it, i) => { if (!it.type) it.type = 'contact'; });
     res.json(out);
   } catch (e) { console.error('[match]', e.message); res.status(500).json([]); }
 });

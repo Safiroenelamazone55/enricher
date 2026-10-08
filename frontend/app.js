@@ -735,6 +735,8 @@ const MatchSuggest = (() => {
   function _classify(el) {
     if (!el || el.tagName !== 'INPUT') return null;
     if (el.id === 'obc-nombre') return { kind: 'company', hide: 'cliente_outbound', map: el2 => ({ nombre: el2 }), scope: 'obc' };
+    const qcf = el.closest('#qc-form');   // alta rápida de cliente (desde Proyectos)
+    if (qcf) { if (el.name === 'nombre') return { kind: 'both', hide: 'operaciones', scope: 'qc', field: 'nombre' }; if (el.name === 'empresa') return { kind: 'company', hide: 'operaciones', scope: 'qc', field: 'empresa' }; if (el.name === 'email') return { kind: 'contact', hide: 'operaciones', scope: 'qc', field: 'email' }; return null; }
     const form = el.closest('#clients-form'); if (!form) return null;
     if (el.name === 'empresa') return { kind: 'company', hide: 'operaciones', scope: 'cli-company' };
     let m = /^mcn-(\d+)-(nombre|email)$/.exec(el.id || '');
@@ -742,8 +744,14 @@ const MatchSuggest = (() => {
     if (el.name === 'nombre' || el.name === 'email') return { kind: 'contact', hide: 'operaciones', scope: 'single' };
     return null;
   }
-  function _fill(ctx, d) {
+  function _fill(ctx, d, type) {
     const setIf = (el, v, force) => { if (el && v && !/^n\/?a$/i.test(String(v).trim()) && (force || !String(el.value || '').trim())) { el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); } };
+    if (ctx.scope === 'qc') {
+      const Q = document.getElementById('qc-form'); if (!Q) return; const g = n => Q.elements[n];
+      if (type === 'company') { setIf(g('empresa'), d.empresa, true); if (ctx.field === 'nombre') setIf(g('nombre'), d.empresa, true); }
+      else { setIf(g('nombre'), d.nombre, true); setIf(g('email'), d.email); setIf(g('telefono'), d.telefono); setIf(g('empresa'), d.empresa); }
+      return;
+    }
     if (ctx.scope === 'obc') { setIf(document.getElementById('obc-nombre'), d.empresa || d.nombre, true); setIf(document.getElementById('obc-website'), d.sitio_web); return; }
     const F = document.getElementById('clients-form'); if (!F) return;
     const q = n => F.querySelector('[name="' + n + '"]');
@@ -765,7 +773,7 @@ const MatchSuggest = (() => {
     _box.onmousedown = ev => {
       ev.preventDefault(); const row = ev.target.closest('.ms-i'); if (!row) return;
       const it = _items[+row.dataset.i]; if (!it) return;
-      _fill(_ctx, it.data || {});
+      _fill(_ctx, it.data || {}, it.type);
       if (_ctx.scope === 'obc' && it.source === 'operaciones' && it.data && it.data.id) window.__obcLinkClientId = it.data.id;
       _close();
     };
