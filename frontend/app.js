@@ -24407,7 +24407,9 @@ ${foot}
       if (isRow(lines[i])) {
         const rows = [];
         while (i < lines.length && isRow(lines[i])) { rows.push(lines[i].trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim())); i++; }
-        out.push('<div class="ibx-tbl"><table><tbody>' + rows.map(r => '<tr>' + r.map(c => '<td>' + esc(c) + '</td>').join('') + '</tr>').join('') + '</tbody></table></div>');
+        const multi = rows.filter(r => r.filter(Boolean).length >= 2).length;
+        if (rows.length >= 2 && multi >= Math.ceil(rows.length / 2)) out.push('<div class="ibx-tbl"><table><tbody>' + rows.map(r => '<tr>' + r.map(c => '<td>' + esc(c) + '</td>').join('') + '</tr>').join('') + '</tbody></table></div>');
+        else out.push(rows.map(r => esc(r.filter(Boolean).join(' '))).join('<br>') + '<br>');   // firma o maquetación: texto normal, no tabla
       } else { out.push(esc(lines[i]) + (i < lines.length - 1 && !isRow(lines[i + 1] || '') ? '<br>' : '')); i++; }
     }
     return out.join('');

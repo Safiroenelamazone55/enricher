@@ -79,13 +79,17 @@ const _decEnt = s => String(s).replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (m, e) => {
 function htmlToTextWithTables(html) {
   let h = String(html).replace(/<(style|head|script)[\s\S]*?<\/\1>/gi, '');
   h = h.replace(/<table(?:(?!<table)[\s\S])*?<\/table>/gi, t => {
-    const rows = [];
+    const rows = [], raw = [];
     t.replace(/<tr[\s\S]*?<\/tr>/gi, r => {
       const cells = [];
       r.replace(/<t[hd][\s\S]*?<\/t[hd]>/gi, c => { cells.push(_decEnt(c.replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim().replace(/\|/g, '/')); return ''; });
-      if (cells.some(Boolean)) rows.push('| ' + cells.join(' | ') + ' |');
+      if (cells.some(Boolean)) { rows.push('| ' + cells.join(' | ') + ' |'); raw.push(cells); }
       return '';
     });
+    // ¿Tabla de datos o firma/maquetación? Datos = al menos 2 filas y la mayoría de filas con 2+ celdas con texto (ej. Tipo | Detalle).
+    const multi = raw.filter(c => c.filter(Boolean).length >= 2).length;
+    const isData = raw.length >= 2 && multi >= Math.ceil(raw.length / 2);
+    if (!isData) return '\n' + raw.map(c => c.filter(Boolean).join(' ')).join('\n') + '\n';
     return '\n' + rows.join('\n') + '\n';
   });
   h = h.replace(/<br\s*\/?>|<\/(p|div|li|h[1-6]|tr)>/gi, '\n').replace(/<[^>]+>/g, '');
