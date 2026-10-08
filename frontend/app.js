@@ -12151,7 +12151,8 @@ const TasksModule = (() => {
   function _getFilteredTasks() {
     const q = ($('tasks-search')?.value || '').toLowerCase();
     const today = new Date(); today.setHours(0, 0, 0, 0);
-    const endOfWeek = new Date(today); endOfWeek.setDate(today.getDate() + (6 - today.getDay()));
+    const startOfWeek = new Date(today); startOfWeek.setDate(today.getDate() - ((today.getDay() + 6) % 7));
+    const endOfWeek = new Date(startOfWeek); endOfWeek.setDate(startOfWeek.getDate() + 6);
     // Las tareas semanales auto-creadas se archivan solas al pasar la semana
     // (pedido explícito 2026-09-25) — no deben verse en Tareas pendientes,
     // aunque sus horas sigan contando en Finanzas (esa vista no pasa por acá).
@@ -12171,7 +12172,7 @@ const TasksModule = (() => {
       list = list.filter(t => {
         const d = t.deadline ? new Date(String(t.deadline).split('T')[0] + 'T00:00:00') : null;
         if (_filterFecha === 'hoy')       return d && d.getTime() === today.getTime();
-        if (_filterFecha === 'semana')    return d && d >= today && d <= endOfWeek;
+        if (_filterFecha === 'semana')    return d && d >= startOfWeek && d <= endOfWeek;
         if (_filterFecha === 'vencido')   return d && d < today && t.estado !== 'completado';
         if (_filterFecha === 'sin_fecha') return !d;
         return true;
@@ -12871,7 +12872,8 @@ const TasksModule = (() => {
 
     const q = ($('tasks-search')?.value || '').toLowerCase();
     const today = new Date(); today.setHours(0, 0, 0, 0);
-    const endOfWeek = new Date(today); endOfWeek.setDate(today.getDate() + (6 - today.getDay()));
+    const startOfWeek = new Date(today); startOfWeek.setDate(today.getDate() - ((today.getDay() + 6) % 7));
+    const endOfWeek = new Date(startOfWeek); endOfWeek.setDate(startOfWeek.getDate() + 6);
 
     let list = _tasks.filter(t => !t.archivada);
     if (_filterProjectId) list = list.filter(t => t.project_id === _filterProjectId);   // dentro de un proyecto: solo SUS tareas
@@ -12890,7 +12892,7 @@ const TasksModule = (() => {
       list = list.filter(t => {
         const d = t.deadline ? new Date(String(t.deadline).split('T')[0] + 'T00:00:00') : null;
         if (_filterFecha === 'hoy')      return d && d.getTime() === today.getTime();
-        if (_filterFecha === 'semana')   return d && d >= today && d <= endOfWeek;
+        if (_filterFecha === 'semana')   return d && d >= startOfWeek && d <= endOfWeek;
         if (_filterFecha === 'vencido')  return d && d < today && t.estado !== 'completado';
         if (_filterFecha === 'sin_fecha') return !d;
         return true;
