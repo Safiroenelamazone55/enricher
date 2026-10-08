@@ -1765,6 +1765,7 @@ app.post('/api/mgmt/projects', requireAuth, async (req, res) => {
        tarifa_hora || null, horas_estimadas || null, horas_semanales || null, horario_semanal || '',
        comision || null]
     );
+    rows[0].nombre = (await pool.query('UPDATE projects SET nombre=$1 WHERE id=$2 RETURNING nombre', [_conCodigoProyecto(rows[0].id, rows[0].nombre), rows[0].id])).rows[0].nombre;
     // Contacto que consigue su primer proyecto → se promueve a cliente (y vuelve a activo).
     try {
       await pool.query(
@@ -1842,7 +1843,7 @@ app.put('/api/mgmt/projects/:id', requireAuth, async (req, res) => {
               comision=$20, updated_at=NOW()
         WHERE id=$1 AND user_id=$2
         RETURNING *`,
-      [req.params.id, req.workspaceOwnerId, client_id, nombre.trim(),
+      [req.params.id, req.workspaceOwnerId, client_id, _conCodigoProyecto(req.params.id, nombre),
        descripcion || '', estado || 'activo', respFirst, responsable_id || null, respArr,
        fecha_inicio || null, fecha_fin || null, valor_total || null, prioridad || 'media',
        tipo_proyecto || 'fijo', moneda || 'USD',
@@ -2521,8 +2522,13 @@ app.patch('/api/mgmt/tasks/:id/billing', requireAuth, async (req, res) => {
 const _MES_AB = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 const _STOPW = /^(de|del|la|el|los|las|y|para|con|por|the|of|for|and|to|a|an|in)$/i;
 // Abreviatura automática: palabras cortas tal cual (B2B), largas a 3 letras (Adquisicion→ADQ).
+// Código de proyecto: P + número del proyecto (id) a 3 dígitos, antes del nombre: "P009 · Novacentrax". Siempre se re-aplica (no se puede perder al editar).
+function _conCodigoProyecto(id, nombre) {
+  const limpio = String(nombre || '').replace(/^P\d{3,}\s*[·\-—:]?\s*/i, '').trim();
+  return 'P' + String(id).padStart(3, '0') + ' · ' + limpio;
+}
 function _abrevProyecto(nombre) {
-  return String(nombre || '').replace(/[^\wáéíóúñÁÉÍÓÚÑ\s-]/gi, ' ')
+  return String(nombre || '').replace(/^P\d{3,}\s*[·\-—:]?\s*/i, '').replace(/[^\wáéíóúñÁÉÍÓÚÑ\s-]/gi, ' ')
     .split(/[\s-]+/).filter(w => w && !_STOPW.test(w)).slice(0, 3)
     .map(w => (w.length <= 4 ? w : w.slice(0, 3)).toUpperCase()).join(' ') || 'PROY';
 }
