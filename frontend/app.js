@@ -728,7 +728,7 @@ window.TaskTplModule = TaskTplModule;
 // ════════════════════════════════════════════════════════════════
 const MatchSuggest = (() => {
   const _e = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const SRC = { outreach: 'Outreach', operaciones: 'Operaciones', cliente_outbound: 'Cliente outbound' };
+  const SRC = { outreach: 'Prospecto · Outreach', operaciones: 'Cliente · Operaciones', cliente_outbound: 'Cliente · Outreach' };
   let _box = null, _t = null, _ctx = null, _items = [], _seq = 0;
   function _close() { if (_box) { _box.remove(); _box = null; } _items = []; }
   // ¿Qué campo es? → { kind, ctx } o null
@@ -770,7 +770,7 @@ const MatchSuggest = (() => {
     _box = document.createElement('div'); _box.className = 'ms-box';
     const r = el.getBoundingClientRect();
     _box.style.cssText = 'position:fixed;z-index:2147483000;left:' + r.left + 'px;top:' + (r.bottom + 2) + 'px;width:' + Math.max(r.width, 280) + 'px';
-    _box.innerHTML = '<div class="ms-h">Ya existe en el sistema — elige para completar los datos</div>' + items.map((it, i) => '<div class="ms-i" data-i="' + i + '"><div class="ms-t">' + _e(it.label) + ' <span class="ms-b">' + _e(SRC[it.source] || it.source) + '</span></div>' + (it.sub ? '<div class="ms-s">' + _e(it.sub) + '</div>' : '') + '</div>').join('');
+    _box.innerHTML = '<div class="ms-h">Coincidencias en tu base — elige una para completar los datos</div>' + items.map((it, i) => '<div class="ms-i" data-i="' + i + '"><div class="ms-t">' + _e(it.label) + ' <span class="ms-b">' + _e(SRC[it.source] || it.source) + '</span></div>' + (it.sub && it.sub !== 'Cliente outbound' ? '<div class="ms-s">' + _e(it.sub) + '</div>' : '') + '</div>').join('');
     _box.onmousedown = ev => {
       ev.preventDefault(); const row = ev.target.closest('.ms-i'); if (!row) return;
       const it = _items[+row.dataset.i]; if (!it) return;
