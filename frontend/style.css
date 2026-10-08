@@ -18088,3 +18088,8 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 .tk-suggest{min-width:520px;max-width:640px}
 .tk-suggest__it{padding:10px 14px;font-size:.88rem}
 .tk-suggest__m{max-width:50%}
+
+.tk-chip{display:inline-flex;align-items:center;gap:6px;background:#E3F5EC;color:#14211B;font-size:.8rem;padding:6px 6px 6px 10px;white-space:nowrap;max-width:320px;overflow:hidden;text-overflow:ellipsis}
+.tk-chip__l{font-size:.68rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#00804C}
+.tk-chip__x{border:0;background:none;font-size:1.05rem;line-height:1;cursor:pointer;color:#64748B;padding:0 4px}
+.tk-chip__x:hover{color:#D94B4B}

@@ -11812,6 +11812,7 @@ const TasksModule = (() => {
   let _filterMember    = '';
   let _filterMemberSet = false; // true once default or user interaction applied
   let _filterFecha  = '';
+  let _softPid = null;   // proyecto elegido en el buscador de Tareas: filtra ESTA pestaña, sin abrir la página de detalle del proyecto
   let _filterProjectId = null; // set by setProjectFilter() — Tareas abierta enfocada en un solo proyecto
   let _teamMembers  = [];
   let _projectsForDateLimit = [];
@@ -11946,6 +11947,7 @@ const TasksModule = (() => {
     // volver a aplicar el filtro de proyecto cuando corresponde.
     const _lock = (window.__projLock && window.__projLock.until > Date.now()) ? window.__projLock.pid : null;
     _filterProjectId = _lock;
+    _softPid = null; document.getElementById('tasks-proj-chip')?.remove();
     if (!_lock) _projectHeaderHide();
     // Idem para la pagina de detalle de tarea: un load() normal siempre
     // vuelve al Kanban/Lista, nunca se queda una tarjeta vieja tapando todo.
@@ -12021,9 +12023,10 @@ const TasksModule = (() => {
   }
   // Recarga las tareas SIN perder dónde estabas (proyecto abierto y vista): load() normal siempre vuelve a la vista general.
   async function reloadKeep() {
-    const pid = _filterProjectId, view = _currentView;
+    const pid = _filterProjectId, view = _currentView, soft = _softPid;
     await load();
-    if (pid) await setProjectFilter(pid);
+    if (soft) { _softPid = soft; _filterProjectId = soft; _paintProjChip(); _rerender(); }
+    else if (pid) await setProjectFilter(pid);
     if (view && view !== _currentView) setView(view);
   }
   async function doMoveSubtask(tid, pid) {
@@ -12073,7 +12076,7 @@ const TasksModule = (() => {
       .slice(0, 8);
     // Proyectos que coinciden (por nombre o cliente): al elegir uno, se filtran las tareas SOLO de ese proyecto
     const _pj = new Map(); _tasks.forEach(t => { if (t.project_id && !t.archivada && _has(String(t.project_nombre || '') + ' ' + String(t.client_nombre || '') + ' ' + String(t.client_empresa || ''))) _pj.set(t.project_id, { _proj: true, id: t.project_id, titulo: t.project_nombre || 'Proyecto', cliente: [t.client_nombre, t.client_empresa].filter(Boolean).join(' · ') }); });
-    _sgItems = [..._pj.values()].slice(0, 4).concat(_sgItems);
+    if (!(_filterProjectId && !_softPid)) _sgItems = [..._pj.values()].slice(0, 4).concat(_sgItems);
     let box = document.getElementById('tasks-suggest');
     if (!_sgItems.length) {
       if (!box) { box = document.createElement('div'); box.id = 'tasks-suggest'; box.className = 'tk-suggest'; inp.closest('.clients-search-wrap').appendChild(box); }
@@ -12093,10 +12096,20 @@ const TasksModule = (() => {
         '<span class="tk-suggest__m">' + (par ? 'Subtarea de ' + esc(par.titulo) : esc((t.estado || '').replace('_', ' '))) + '</span></div>';
     }).join('');
   }
-  async function pickProject(pid) {
-    _sgClose(); const inp = $('tasks-search'); if (inp) inp.value = '';
-    await setProjectFilter(pid);
+  function _paintProjChip() {
+    document.getElementById('tasks-proj-chip')?.remove();
+    if (!_softPid) return;
+    const wrap = $('tasks-search')?.closest('.clients-search-wrap'); if (!wrap) return;
+    const tk = _tasks.find(x => x.project_id === _softPid), nm = (tk && tk.project_nombre) || 'Proyecto';
+    const chip = document.createElement('span'); chip.id = 'tasks-proj-chip'; chip.className = 'tk-chip';
+    chip.innerHTML = '<span class="tk-chip__l">Proyecto</span> ' + esc(nm) + ' <button type="button" class="tk-chip__x" title="Quitar filtro" onclick="TasksModule.clearPickedProject()">×</button>';
+    wrap.insertAdjacentElement('afterend', chip);
   }
+  function pickProject(pid) {
+    _sgClose(); const inp = $('tasks-search'); if (inp) inp.value = '';
+    _softPid = pid; _filterProjectId = pid; _paintProjChip(); _rerender();
+  }
+  function clearPickedProject() { _softPid = null; _filterProjectId = null; document.getElementById('tasks-proj-chip')?.remove(); _rerender(); }
   function _sgHover(i) { _sgIdx = i; document.querySelectorAll('#tasks-suggest .tk-suggest__it').forEach((el, k) => el.classList.toggle('on', k === i)); }
   function jumpToTask(id) {
     const t = _tasks.find(x => x.id === id); if (!t) return;
@@ -14538,7 +14551,7 @@ const TasksModule = (() => {
   }
 
   return {
-    moveAsSubtask, _mvsFilter, doMoveSubtask, convertToTask, reloadKeep, pickProject,
+    moveAsSubtask, _mvsFilter, doMoveSubtask, convertToTask, reloadKeep, pickProject, clearPickedProject,
     copiarSemanaAnterior,
     load, filter, setFilterMember, setFilterFecha, render,
     setProjectFilter, clearProjectFilter, refreshProjectHeader, jumpToTask, getSubtasks, getTask, createSubtask, _sgHover,
