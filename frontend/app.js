@@ -18416,10 +18416,10 @@ const ProjectsModule = (() => {
       const clients = res.ok ? await res.json() : [];
       sel.innerHTML =
         '<option value="">Seleccionar cliente…</option>' +
+        '<option value="__new__" class="opt-create-new">＋ Crear cliente nuevo…</option>' +
         clients.map(c =>
           `<option value="${c.id}" ${selectedId == c.id ? 'selected' : ''}>${esc(c.nombre)}${c.empresa ? ' · ' + esc(c.empresa) : ''}</option>`
-        ).join('') +
-        '<option value="__new__" class="opt-create-new">＋ Crear nuevo cliente</option>';
+        ).join('');
       sel.onchange = function() {
         if (this.value === '__new__') { this.value = ''; _openQuickClientModal(); }
       };
@@ -19358,8 +19358,8 @@ const OpportunitiesModule = (() => {
     const hasId  = d.client_id != null && _clientsCache.some(c => String(c.id) === String(d.client_id));
     const useNew = !hasId && !!(d.cliente && d.cliente.trim());
     const clientOpts = '<option value="">— Sin cliente —</option>'
-      + _clientsCache.map(c => `<option value="${c.id}"${hasId && String(c.id) === String(d.client_id) ? ' selected' : ''}>${esc(c.nombre)}${c.empresa ? ' — ' + esc(c.empresa) : ''}</option>`).join('')
-      + `<option value="__new__"${useNew ? ' selected' : ''}>+ Crear cliente nuevo…</option>`;
+      + `<option value="__new__"${useNew ? ' selected' : ''}>＋ Crear cliente nuevo…</option>`
+      + _clientsCache.map(c => `<option value="${c.id}"${hasId && String(c.id) === String(d.client_id) ? ' selected' : ''}>${esc(c.nombre)}${c.empresa ? ' — ' + esc(c.empresa) : ''}</option>`).join('');
     const respOpts = '<option value="">— Sin asignar —</option>' + _memberNames(d.responsable).map(n => `<option value="${esc(n)}"${(d.responsable || '') === n ? ' selected' : ''}>${esc(n)}</option>`).join('');
 
     document.getElementById('opp-modal')?.remove();
