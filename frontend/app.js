@@ -20669,9 +20669,57 @@ const LeadManagerModule = (() => {
         <select class="ldh-sel" id="cm-est" onchange="LeadManagerModule.cmSetEst(this.value)"></select>
         <span class="ldh-toolbar__sp"></span>
         <div class="lm-search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" id="cm-q" placeholder="Buscar campaña…" oninput="LeadManagerModule.cmSetQ(this.value)"></div>
+        ${_lmViews('cm', ['lista', 'tablero'])}
       </div>
       <div id="cm-wrap"></div>`;
   }
+  // ── Vistas (Lista / Tablero) de Clientes outbound, Campañas y Secuencias — mismo selector que Proyectos y Clientes de Operaciones; respetan los filtros de cada sección ──
+  const _LAYOUT_DEF = { cm: 'lista', sq: 'lista', cl: 'tarjetas' };
+  const _lmLayout = {};
+  ['cm', 'sq', 'cl'].forEach(k => { let v = null; try { v = localStorage.getItem('lm_layout_' + k); } catch (_) {} _lmLayout[k] = v || _LAYOUT_DEF[k]; });
+  const _VICO = {
+    lista: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>',
+    tarjetas: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
+    tablero: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="12" rx="1"/><rect x="17" y="3" width="4" height="8" rx="1"/></svg>',
+  };
+  const _VLBL = { lista: 'Lista', tarjetas: 'Tarjetas', tablero: 'Tablero por estado' };
+  function _lmViews(key, opts) {
+    return '<div class="pv-views" style="margin-left:6px">' + opts.map(o => '<button class="pv-view' + (_lmLayout[key] === o ? ' pv-view--active' : '') + '" title="' + _VLBL[o] + '" aria-label="' + _VLBL[o] + '" onclick="LeadManagerModule.lmSetLayout(\'' + key + '\',\'' + o + '\')">' + _VICO[o] + '</button>').join('') + '</div>';
+  }
+  function lmSetLayout(key, l) {
+    _lmLayout[key] = l; try { localStorage.setItem('lm_layout_' + key, l); } catch (_) {}
+    if (key === 'cm') _cmPaint(); else if (key === 'sq') _sqPaint(); else _clPaint();
+    document.querySelectorAll('.ldh-toolbar .pv-views .pv-view, .lm-sec-head ~ .ldh-toolbar .pv-view').forEach(b => { const m = /lmSetLayout\('(\w+)','(\w+)'\)/.exec(b.getAttribute('onclick') || ''); if (m && m[1] === key) b.classList.toggle('pv-view--active', m[2] === l); });
+  }
+  // Tablero genérico: columnas por estado; "cols" = [[clave, [etiqueta, fondo, color]], …]
+  function _lmBoard(cols, list, stateOf, cardFn) {
+    return '<div class="cl-board" style="padding:6px 0 24px;grid-template-columns:repeat(' + Math.min(cols.length, 4) + ',minmax(220px,1fr))">' + cols.map(([k, v]) => {
+      const items = list.filter(x => stateOf(x) === k);
+      return '<div class="cl-bcol"><div class="cl-bcol__h"><span>' + esc(v[0]) + '</span><span class="cl-bcol__n">' + items.length + '</span></div>' + (items.map(cardFn).join('') || '<div class="cl-bcol__e">Sin elementos</div>') + '</div>';
+    }).join('') + '</div>';
+  }
+  // Clientes outbound: filtros propios (búsqueda + estado) y tres vistas
+  let _clQ = '', _clEst = '';
+  function clSetQ(v) { _clQ = v; _clPaint(); }
+  function clSetEst(v) { _clEst = v; _clPaint(); }
+  function _clBody() {
+    let list = _clients.slice();
+    if (_clEst) list = list.filter(c => (c.estado || 'preparacion') === _clEst);
+    if (_clQ) { const q = _clQ.toLowerCase(); list = list.filter(c => ((c.nombre || '') + ' ' + (c.responsable || '') + ' ' + (c.website || '')).toLowerCase().includes(q)); }
+    if (!list.length) return '<div class="ldh-empty"><div class="ldh-empty__t">Sin resultados</div><div class="ldh-empty__s">Ningún cliente cumple estos filtros.</div></div>';
+    const nC = c => _campaigns.filter(x => x.outbound_client_id === c.id).length, nS = c => _sequences.filter(x => x.outbound_client_id === c.id).length;
+    const L = _lmLayout.cl;
+    if (L === 'lista') {
+      return '<div class="ldh-table-wrap"><table class="ldh-table"><thead><tr><th>Cliente</th><th>Estado</th><th>Responsable</th><th class="ldh-num">Campañas</th><th class="ldh-num">Secuencias</th><th class="ldh-num">Leads</th></tr></thead><tbody>' +
+        list.map(c => '<tr class="ldh-row" onclick="LeadManagerModule.openClient(' + c.id + ')"><td><div class="ldh-name">' + esc(c.nombre) + '</div><div class="ldh-sub">' + (esc(c.website || '') || '&nbsp;') + '</div></td><td>' + esc((_OBC_OPTS.find(o => o[0] === c.estado) || [0, c.estado || ''])[1]) + '</td><td class="ldh-dim">' + (esc(c.responsable || '') || '—') + '</td><td class="ldh-num">' + nC(c) + '</td><td class="ldh-num">' + nS(c) + '</td><td class="ldh-num">' + _clientLeads(c.id).length + '</td></tr>').join('') + '</tbody></table></div>';
+    }
+    if (L === 'tablero') {
+      const cols = _OBC_OPTS.map(([k, l]) => [k, [l]]);
+      return _lmBoard(cols, list, c => c.estado || 'preparacion', c => '<div class="cl-bcard" onclick="LeadManagerModule.openClient(' + c.id + ')"><div class="cl-bcard__t">' + esc(c.nombre) + '</div>' + (c.responsable ? '<div class="cl-bcard__s">' + esc(c.responsable) + '</div>' : '') + '<div class="cl-bcard__s">' + nC(c) + ' campaña(s) · ' + nS(c) + ' secuencia(s)</div></div>');
+    }
+    return '<div class="lm-obc-grid">' + list.map(_obcCard).join('') + '</div>';
+  }
+  function _clPaint() { const w = $('cl-wrap'); if (w) w.innerHTML = _clBody(); }
   function _cmPaint() {
     const wrap = $('cm-wrap'); if (!wrap) return;
     const selC = $('cm-cli'), selE = $('cm-est');
@@ -20701,6 +20749,10 @@ const LeadManagerModule = (() => {
         ganados: m.ganados + cts.filter(x => x.estado === 'ganado').length,
       };
     };
+    if (_lmLayout.cm === 'tablero') {
+      wrap.innerHTML = _lmBoard(Object.entries(_CMP), list, c => c.estado || 'draft', c => { const m = stats(c), cli = _clientName(c.outbound_client_id), meta = [c.canal, c.mercado].filter(Boolean).join(' · '); return '<div class="cl-bcard" onclick="LeadManagerModule.openCampaignDrawer(' + c.id + ')"><div class="cl-bcard__t">' + esc(c.nombre) + '</div>' + (cli ? '<div class="cl-bcard__s">' + esc(cli) + '</div>' : '') + (meta ? '<div class="cl-bcard__s">' + esc(meta) + '</div>' : '') + '<div class="cl-bcard__s"><b>' + m.seqs + '</b> sec. · <b>' + m.leads + '</b> leads · <b>' + m.contactados + '</b> contactados · <b>' + m.replies + '</b> resp.</div></div>'; });
+      return;
+    }
     const rows = list.map(c => {
       const m = stats(c);
       const cli = _clientName(c.outbound_client_id);
@@ -20783,6 +20835,7 @@ const LeadManagerModule = (() => {
         <select class="ldh-sel" id="sq-est" onchange="LeadManagerModule.sqSetEst(this.value)"></select>
         <span class="ldh-toolbar__sp"></span>
         <div class="lm-search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" id="sq-q" placeholder="Buscar secuencia…" oninput="LeadManagerModule.sqSetQ(this.value)"></div>
+        ${_lmViews('sq', ['lista', 'tablero'])}
       </div>
       <div id="sq-wrap"></div>`;
   }
@@ -20801,6 +20854,10 @@ const LeadManagerModule = (() => {
     if (_sqEst) list = list.filter(s => (s.estado || 'draft') === _sqEst);
     if (_sqQ) { const q = _sqQ.toLowerCase(); list = list.filter(s => ((s.nombre || '') + ' ' + (_clientName(s.outbound_client_id) || '') + ' ' + (_campaignName(s.campaign_id) || '')).toLowerCase().includes(q)); }
     if (!list.length) { wrap.innerHTML = `<div class="ldh-empty"><div class="ldh-empty__t">Sin resultados</div><div class="ldh-empty__s">Ninguna secuencia cumple estos filtros.</div></div>`; return; }
+    if (_lmLayout.sq === 'tablero') {
+      wrap.innerHTML = _lmBoard(Object.entries(_SEQ), list, s => s.estado || 'draft', s => { const cli = _clientName(s.outbound_client_id), cmp = _campaignName(s.campaign_id), n = _seqSteps(s.id).length; return '<div class="cl-bcard" onclick="LeadManagerModule.openSequence(' + s.id + ')"><div class="cl-bcard__t">' + esc(s.nombre) + '</div>' + (cli ? '<div class="cl-bcard__s">' + esc(cli) + '</div>' : '') + (cmp ? '<div class="cl-bcard__s">' + esc(cmp) + '</div>' : '') + '<div class="cl-bcard__s">' + (n ? n + ' paso' + (n !== 1 ? 's' : '') : 'Sin pasos') + ((s.awaiting || 0) > 0 ? ' · <b>' + s.awaiting + '</b> por aprobar' : '') + '</div></div>'; });
+      return;
+    }
     const rows = list.map(s => {
       const steps = _seqSteps(s.id);
       const cli = _clientName(s.outbound_client_id);
@@ -26359,7 +26416,7 @@ ${foot}
         <div><h2 class="lm-sec-title">Clientes outbound</h2></div>
         <button class="btn btn--primary btn--sm" onclick="LeadManagerModule.openClientDrawer()">＋ Nuevo cliente outbound</button>
       </div>
-      ${_clients.length ? `<div class="lm-obc-grid">${_clients.map(_obcCard).join('')}</div>`
+      ${_clients.length ? `<div class="ldh-toolbar"><select class="ldh-sel" onchange="LeadManagerModule.clSetEst(this.value)"><option value="">Estado: todos</option>${_OBC_OPTS.map(([k, l]) => `<option value="${k}"${_clEst === k ? ' selected' : ''}>${l}</option>`).join('')}</select><span class="ldh-toolbar__sp"></span><div class="lm-search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" placeholder="Buscar cliente…" value="${esc(_clQ)}" oninput="LeadManagerModule.clSetQ(this.value)"></div>${_lmViews('cl', ['tarjetas', 'lista', 'tablero'])}</div><div id="cl-wrap">${_clBody()}</div>`
         : _empty('clients', 'Aún no tienes clientes outbound', 'Crea tu primer cliente para organizar campañas, secuencias y leads como un workspace propio.', 'Nuevo cliente outbound', 'LeadManagerModule.openClientDrawer()')}`;
   }
 
@@ -33929,7 +33986,7 @@ ${foot}
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
-  return { load, filter, setFilter, setView, go, openClient, clientTab, _clientGoTab, clientQuickMenu,
+  return { load, filter, setFilter, setView, go, openClient, clientTab, lmSetLayout, clSetQ, clSetEst, _clientGoTab, clientQuickMenu,
     openImportPicker, closeImportPicker, openImport, closeImport, impFile, impToggleHeader, impToggleUpdateExisting, impSetObc, impNewClient, impRun, exportCsv,
     cbxOpen, cbxFilter, cbxPick, cbxBlur,
     _seqPrefHint, mbHealthOpen, mbHealthClose, mbHealthRun, mbhCopy, mbhCopyAdmin, mbRampSave, _cpBack, _cpDelRun, openContact, closeContact, saveContact, deleteContact, filterContacts, ctSetClient, toggleCt, toggleCtAll, clearCtSel, toggleCtSelMode, ctMoreMenu, lmSetValueOp, bulkDeleteContacts, bulkAddOpen, bulkAddDo, _bulkAddAfterCreate, bulkRemoveSeqOpen, bulkRemoveSeqDo, openContactPage, cpTab, cpSave, cpUndo, cpDelete, cpActOpen, cpTouchOpen, cpTouchSave, cpActSave, cpActToggle, cpActDel, ctQFSet, ctQFClear,
