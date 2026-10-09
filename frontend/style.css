@@ -18052,7 +18052,10 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 .nova-toast--info{border-left-color:#64748B}
 .nova-toast__msg{font-size:.84rem}
 
-.wa-msg__fail{color:#D94B4B;font-size:.68rem;font-weight:600;margin-left:6px}
+.wa-msg__fail{background:#D94B4B;color:#fff;border:0;border-radius:10px;padding:2px 8px;cursor:pointer;font-family:inherit;font-size:.68rem;font-weight:600;margin-left:6px}
+.wa-msg__fail:hover{background:#B42318}
+.pane--wa .wa-msg--out.wa-msg--fail .wa-msg__bubble,.wa-msg--out.wa-msg--fail .wa-msg__bubble{background:#FDECEC;color:#7A1F1F;border:1.5px solid #D94B4B}
+.wa-msg--fail .wa-msg__time{color:#B42318}
 
 .ms-box{background:#fff;border:1px solid #D6D3CC;box-shadow:0 10px 28px rgba(15,23,42,.16);max-height:300px;overflow:auto}
 .ms-h{font-size:.7rem;color:#64748B;padding:7px 10px;border-bottom:1px solid #EEF0EC}
