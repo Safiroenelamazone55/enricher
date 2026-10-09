@@ -11326,7 +11326,7 @@ app.get('/api/slack/workspaces', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT id, team_id, team_name, etiqueta, token_tipo, bot_user_id, estado,
-              ultimo_error, created_at, icon_url, visibilidad, connected_by, slack_user_id
+              ultimo_error, created_at, icon_url, visibilidad, connected_by, slack_user_id, es_default_proyectos
          FROM slack_workspaces WHERE user_id=$1 ORDER BY created_at`,
       [req.workspaceOwnerId]);
     // Backfill perezoso: los workspaces conectados antes de tener icon_url o
@@ -11398,6 +11398,19 @@ app.post('/api/slack/workspaces', requireAuth, async (req, res) => {
 });
 
 // Cambiar quién puede ver este espacio conectado — solo quien lo conectó o un admin.
+// Slack de la ORGANIZACIÓN: el único donde Nova crea (y archiva) un canal por proyecto. Los demás son Slacks de terceros donde solo participamos y nunca se les crea ni archiva nada.
+app.patch('/api/slack/workspaces/:id/organizacion', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT connected_by FROM slack_workspaces WHERE id=$1 AND user_id=$2', [req.params.id, req.workspaceOwnerId]);
+    if (!rows.length) return res.status(404).json({ error: 'No encontrado' });
+    const rol = await _resolveRol(req);
+    if (rows[0].connected_by !== req.user.id && rol !== 'admin') return res.status(403).json({ error: 'Solo quien lo conectó o un admin puede cambiar esto' });
+    const on = req.body?.value !== false;
+    await pool.query('UPDATE slack_workspaces SET es_default_proyectos=false WHERE user_id=$1', [req.workspaceOwnerId]);
+    if (on) await pool.query('UPDATE slack_workspaces SET es_default_proyectos=true WHERE id=$1', [req.params.id]);
+    res.json({ ok: true });
+  } catch (err) { console.error('[slack] organizacion:', err.message); res.status(500).json({ error: 'No se pudo actualizar' }); }
+});
 app.patch('/api/slack/workspaces/:id/visibilidad', requireAuth, async (req, res) => {
   const visibilidad = String(req.body?.visibilidad || '');
   if (!['todos', 'admin', 'solo_yo'].includes(visibilidad)) {
@@ -11450,7 +11463,7 @@ async function _slackCrearCanalProyecto(uid, projectId, clientId, nombre) {
 async function _slackArchivarCanalProyecto(uid, projectId) {
   try {
     const { rows: [pj] } = await pool.query('SELECT slack_channel_id, slack_ws_id FROM projects WHERE id=$1 AND user_id=$2', [projectId, uid]);
-    if (pj && pj.slack_channel_id && pj.slack_ws_id) { const w = await _slackWs(uid, pj.slack_ws_id); if (w) await slackSvc.archivarCanal(w, pj.slack_channel_id); }
+    if (pj && pj.slack_channel_id && pj.slack_ws_id) { const w = await _slackWs(uid, pj.slack_ws_id); if (w && w.es_default_proyectos) await slackSvc.archivarCanal(w, pj.slack_channel_id); }
   } catch (e) { console.warn('[slack] no se pudo archivar el canal del proyecto ' + projectId + ':', e.message); }
 }
 async function _slackWs(uid, id) {

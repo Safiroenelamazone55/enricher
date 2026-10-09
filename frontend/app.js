@@ -15883,6 +15883,7 @@ const SlackModule = (() => {
           <div class="slk-row__meta">${esc(w.team_name)}${w.token_tipo === 'user' ? ' · a tu nombre' : ' · como app'}</div>
         </div>
         ${w.ultimo_error ? `<span class="slk-err" title="${esc(w.ultimo_error)}">Con error</span>` : ''}
+        <button class="slk-org${w.es_default_proyectos ? ' slk-org--on' : ''}" ${canEdit ? '' : 'disabled'} title="${w.es_default_proyectos ? 'Aquí se crea un canal por cada proyecto nuevo y se archiva al cerrarlo. Clic para quitarlo.' : 'Es un Slack de terceros: Nova solo participa, no crea ni archiva canales. Clic para marcarlo como el de tu organización.'}" onclick="SlackModule.marcarOrganizacion(${w.id},${w.es_default_proyectos ? 'false' : 'true'})">${w.es_default_proyectos ? '✓ Organización' : 'Tercero'}</button>
         <select class="slk-vis" title="Quién puede ver este Slack conectado"
                 onchange="SlackModule.cambiarVisibilidad(${w.id},this.value)" ${canEdit ? '' : 'disabled'}>
           <option value="todos"${w.visibilidad === 'todos' ? ' selected' : ''}>Todos los miembros</option>
@@ -15894,6 +15895,14 @@ const SlackModule = (() => {
     }).join('');
   }
 
+  async function marcarOrganizacion(id, value) {
+    try {
+      const r = await apiFetch(API + '/slack/workspaces/' + id + '/organizacion', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ value }) });
+      if (!r.ok) throw new Error((await r.json()).error || 'No se pudo cambiar');
+      showBanner(value ? 'Listo: los canales de proyectos se crearán en este Slack' : 'Ya no se crean canales automáticos', 'success');
+      await cargar();
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
   async function cambiarVisibilidad(id, visibilidad) {
     try {
       const r = await apiFetch(`${API}/slack/workspaces/${id}/visibilidad`, {
@@ -15939,7 +15948,7 @@ const SlackModule = (() => {
     } catch (e) { showBanner('Error: ' + e.message, 'error'); }
   }
 
-  return { cargar, conectar, desconectar, cambiarVisibilidad };
+  return { cargar, conectar, desconectar, cambiarVisibilidad, marcarOrganizacion };
 })();
 
 // Fila del WhatsApp de Operaciones en Configuración → Integraciones. Reusa
