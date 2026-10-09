@@ -16,9 +16,9 @@
   }
   // El servidor etiqueta algunos estados como "Reunión"/"Reunión agendada": en el portal se llaman "Oportunidad".
   function _opp(v) {
-    if (typeof v === 'string') return (v === 'Reunión' || v === 'Reunión agendada') ? 'Oportunidad' : v.replace(/^CAM\d{3}(?:-S\d+)?\s*·\s*/, '');
+    if (typeof v === 'string') return (v === 'Reunión' || v === 'Reunión agendada') ? 'Oportunidad' : v.replace(/^(?:CAM\d{3}(?:-S\d+)?\s*·\s*|C\d{4}-[A-Z0-9]+(?:-S\d+)?\s+-\s+)/, '');
     if (Array.isArray(v)) return v.map(_opp);
-    if (v && typeof v === 'object') { if (typeof v.nombre === 'string') { const m = /^(CAM\d{3}(?:-S\d+)?)\s*·\s*/.exec(v.nombre); if (m) v.codigo = m[1]; } for (const k in v) v[k] = _opp(v[k]); }
+    if (v && typeof v === 'object') { if (typeof v.nombre === 'string') { const m = /^(CAM\d{3}(?:-S\d+)?|C\d{4}-[A-Z0-9]+(?:-S\d+)?)\s*(?:·|-)\s*/.exec(v.nombre); if (m) v.codigo = m[1]; } for (const k in v) v[k] = _opp(v[k]); }
     return v;
   }
 

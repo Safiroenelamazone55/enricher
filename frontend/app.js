@@ -29796,6 +29796,7 @@ ${foot}
         <label class="fin-cfg-field fin-pi-full" style="flex-direction:row;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="obc-ptareas"${c?.portal_tareas ? ' checked' : ''}><span><b>Mostrar al cliente el progreso de tareas en su portal</b><br><span class="seq-drip-hint">Apagado por defecto. Verá «Trabajo de la semana» solo con las tareas que marques como visibles (sin horas ni costos).</span></span></label>
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Estado</span><select class="form-input" id="obc-estado">${_OBC_OPTS.map(([v, l]) => `<option value="${v}"${c?.estado === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Responsable</span><select class="form-input" id="obc-responsable"><option value="">— Sin asignar —</option>${c?.responsable ? `<option value="${esc(c.responsable)}" selected>${esc(c.responsable)}</option>` : ''}</select></label>
+        ${fld('obc-abrev', 'Abreviatura (para los códigos de campaña, ej. GRE)', c?.abrev, 'Se genera sola si la dejas vacía')}
         ${fld('obc-website', 'Website', c?.website, '')}
         ${fld('obc-from', 'Buzón de envío (De)', c?.from_email, 'ej. ventas@clientezoho.com')}
         ${fld('obc-cc', 'CC en emails', c?.cc_email, 'ej. gerente@cliente.com')}
@@ -29858,7 +29859,7 @@ ${foot}
     try {
       const res = await apiFetch(`${API}/outbound-clients${id ? '/' + id : ''}`, { method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       if (!res.ok) throw new Error((await res.json()).error || 'Error');
-      { const _sv = await res.json().catch(() => null), _cid = id || (_sv && _sv.id); if (_cid) { const _x = { portal_tareas: !!$('obc-ptareas')?.checked }; if (window.__obcLinkClientId) _x.client_id = window.__obcLinkClientId; await apiFetch(`${API}/outbound-clients/${_cid}/extra`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_x) }).catch(() => {}); } window.__obcLinkClientId = null; }
+      { const _sv = await res.json().catch(() => null), _cid = id || (_sv && _sv.id); if (_cid) { const _x = { portal_tareas: !!$('obc-ptareas')?.checked }; { const _ab = ($('obc-abrev')?.value || '').trim(); if (_ab || c0?.abrev) _x.abrev = _ab; } if (window.__obcLinkClientId) _x.client_id = window.__obcLinkClientId; await apiFetch(`${API}/outbound-clients/${_cid}/extra`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(_x) }).catch(() => {}); } window.__obcLinkClientId = null; }
       closeClientDrawer();
       await load();
     } catch (e) { if (hint) { hint.textContent = e.message; hint.className = 'fin-cfg-hint fin-cfg-hint--err'; } if (btn) btn.disabled = false; }

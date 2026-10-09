@@ -3063,9 +3063,14 @@ app.patch('/api/outbound-clients/:id/extra', requireAuth, async (req, res) => {
     const b = req.body || {}, sets = [], vals = [];
     if (b.portal_tareas !== undefined) { vals.push(!!b.portal_tareas); sets.push('portal_tareas=$' + vals.length); }
     if (b.client_id !== undefined) { vals.push(b.client_id ? parseInt(b.client_id) : null); sets.push('client_id=$' + vals.length); }
+    if (b.abrev !== undefined) {
+      const ab = String(b.abrev || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
+      if (ab) { const { rows: dup } = await pool.query('SELECT 1 FROM outbound_clients WHERE user_id=$1 AND abrev=$2 AND id<>$3', [req.workspaceOwnerId, ab, req.params.id]); if (dup.length) return res.status(409).json({ error: 'Esa abreviatura ya la usa otro cliente' }); }
+      vals.push(ab); sets.push('abrev=$' + vals.length);
+    }
     if (!sets.length) return res.status(400).json({ error: 'Nada que actualizar' });
     vals.push(req.params.id, req.workspaceOwnerId);
-    const { rows } = await pool.query('UPDATE outbound_clients SET ' + sets.join(',') + ' WHERE id=$' + (vals.length - 1) + ' AND user_id=$' + vals.length + ' RETURNING id, portal_tareas, client_id', vals);
+    const { rows } = await pool.query('UPDATE outbound_clients SET ' + sets.join(',') + ' WHERE id=$' + (vals.length - 1) + ' AND user_id=$' + vals.length + ' RETURNING id, portal_tareas, client_id, abrev', vals);
     if (!rows[0]) return res.status(404).json({ error: 'Cliente no encontrado' });
     res.json(rows[0]);
   } catch (e) { res.status(500).json({ error: 'No se pudo guardar' }); }
@@ -9369,19 +9374,45 @@ app.get('/api/campaigns', requireAuth, async (req, res) => {
     res.status(500).json({ error: 'Error al cargar campañas' });
   }
 });
-// Códigos de nombre: campaña "CAM002 · Cliente · Foco"; secuencia "CAM002-S1 · Foco" (el S se numera dentro de su campaña; sin campaña no lleva código).
-const _RE_COD = /^CAM\d{3}(?:-S\d+)?\s*[·\-—:]?\s*/i;
-function _conCodigoCampana(id, nombre) { return 'CAM' + String(id).padStart(3, '0') + ' · ' + String(nombre || '').replace(_RE_COD, '').trim(); }
+// Códigos de nombre POR CLIENTE: campaña "C0001-GRE - Foco" (el número cuenta las campañas de ESE cliente; GRE = abreviatura del cliente);
+// secuencia "C0001-GRE-S1 - Foco" (el S se numera dentro de su campaña; sin campaña no lleva código). Acepta y limpia también el formato anterior CAM###.
+const _RE_COD = /^(?:CAM\d{3}(?:-S\d+)?|C\d{4}-[A-Z0-9]+(?:-S\d+)?)\s*[·\-—:]?\s*/;
+async function _abrevCliente(clientId) {
+  const { rows: [c] } = await pool.query('SELECT id, user_id, nombre, abrev FROM outbound_clients WHERE id=$1', [clientId]);
+  if (!c) return '';
+  if (c.abrev) return c.abrev;
+  const base = String(c.nombre || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 3) || 'CLI';
+  const { rows } = await pool.query("SELECT abrev FROM outbound_clients WHERE user_id=$1 AND id<>$2 AND abrev<>''", [c.user_id, c.id]);
+  const usadas = new Set(rows.map(r => r.abrev)); let ab = base, i = 2; while (usadas.has(ab)) ab = base + (i++);
+  await pool.query('UPDATE outbound_clients SET abrev=$1 WHERE id=$2', [ab, c.id]);
+  return ab;
+}
+async function _conCodigoCampana(id, clientId, nombre) {
+  const limpio = String(nombre || '').replace(_RE_COD, '').trim();
+  if (!clientId) return limpio;
+  const ab = await _abrevCliente(clientId);
+  const { rows } = await pool.query('SELECT nombre FROM campaigns WHERE outbound_client_id=$1 AND id<>$2', [clientId, id || 0]);
+  const num = txt => { const m = /^C(\d{4})-([A-Z0-9]+)/.exec(String(txt || '')); return m && m[2] === ab ? +m[1] : 0; };
+  const usados = new Set(rows.map(r => num(r.nombre)).filter(Boolean));
+  const mine = num(nombre);
+  let n = mine && !usados.has(mine) ? mine : 0;
+  if (!n) { n = 1; while (usados.has(n)) n++; }
+  return 'C' + String(n).padStart(4, '0') + '-' + ab + ' - ' + limpio;
+}
 async function _conCodigoSec(campaignId, nombre, selfId) {
   const limpio = String(nombre || '').replace(_RE_COD, '').trim();
   if (!campaignId) return limpio;
-  const pad = String(campaignId).padStart(3, '0');
-  const { rows } = await pool.query('SELECT id, nombre FROM sequences WHERE campaign_id=$1 AND ($2::int IS NULL OR id <> $2)', [campaignId, selfId || null]);
-  const usados = new Set(rows.map(r => { const m = new RegExp('^CAM' + pad + '-S(\\d+)').exec(r.nombre || ''); return m ? +m[1] : 0; }).filter(Boolean));
-  const own = new RegExp('^CAM' + pad + '-S(\\d+)').exec(String(nombre || '')), mine = own ? +own[1] : 0;
+  const { rows: [c] } = await pool.query('SELECT nombre FROM campaigns WHERE id=$1', [campaignId]);
+  const pm = c && /^(C\d{4}-[A-Z0-9]+)/.exec(c.nombre || '');
+  if (!pm) return limpio;
+  const pre = pm[1];
+  const { rows } = await pool.query('SELECT nombre FROM sequences WHERE campaign_id=$1 AND ($2::int IS NULL OR id <> $2)', [campaignId, selfId || null]);
+  const sn = txt => { const s2 = String(txt || ''); if (!s2.startsWith(pre + '-S')) return 0; const m = /^-S(\d+)/.exec(s2.slice(pre.length)); return m ? +m[1] : 0; };
+  const usados = new Set(rows.map(r => sn(r.nombre)).filter(Boolean));
+  const mine = sn(nombre);
   let n = mine && !usados.has(mine) ? mine : 0;
   if (!n) { n = 1; while (usados.has(n)) n++; }
-  return 'CAM' + pad + '-S' + n + ' · ' + limpio;
+  return pre + '-S' + n + ' - ' + limpio;
 }
 app.post('/api/campaigns', requireAuth, async (req, res) => {
   const b = req.body || {};
@@ -9393,7 +9424,7 @@ app.post('/api/campaigns', requireAuth, async (req, res) => {
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *
     `, [req.workspaceOwnerId, b.outbound_client_id || null, b.nombre.trim(), estado, b.mercado||'', b.icp||'',
         b.canal||'', b.canal_secundario||'', b.objetivo||'', b.fecha_inicio||null, b.notas||'']);
-    rows[0].nombre = (await pool.query('UPDATE campaigns SET nombre=$1 WHERE id=$2 RETURNING nombre', [_conCodigoCampana(rows[0].id, rows[0].nombre), rows[0].id])).rows[0].nombre;
+    { const _cn = await _conCodigoCampana(rows[0].id, rows[0].outbound_client_id, rows[0].nombre); rows[0].nombre = (await pool.query('UPDATE campaigns SET nombre=$1 WHERE id=$2 RETURNING nombre', [_cn, rows[0].id])).rows[0].nombre; }
     res.status(201).json(rows[0]);
   } catch (err) {
     console.error('[cmp] POST error:', err.message);
@@ -9427,7 +9458,7 @@ app.put('/api/campaigns/:id', requireAuth, async (req, res) => {
       UPDATE campaigns SET outbound_client_id=$1,nombre=$2,estado=$3,mercado=$4,icp=$5,canal=$6,
         canal_secundario=$7,objetivo=$8,fecha_inicio=$9,notas=$10,updated_at=NOW()
       WHERE id=$11 AND user_id=$12 RETURNING *
-    `, [b.outbound_client_id || null, _conCodigoCampana(req.params.id, b.nombre), estado, b.mercado||'', b.icp||'', b.canal||'',
+    `, [b.outbound_client_id || null, await _conCodigoCampana(req.params.id, b.outbound_client_id || null, b.nombre), estado, b.mercado||'', b.icp||'', b.canal||'',
         b.canal_secundario||'', b.objetivo||'', b.fecha_inicio||null, b.notas||'', req.params.id, req.workspaceOwnerId]);
     if (!rows.length) return res.status(404).json({ error: 'Campaña no encontrada' });
     res.json(rows[0]);
