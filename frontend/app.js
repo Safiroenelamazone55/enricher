@@ -14154,6 +14154,8 @@ const TasksModule = (() => {
       saveBtn.textContent  = presetParentTaskId ? 'Crear subtarea' : 'Crear tarea';
       if (delBtn) delBtn.style.display = 'none';
       _plReset();
+      // Una subtarea siempre es del MISMO proyecto que su tarea madre: se preselecciona (antes quedaba vacío si no se pasaba el proyecto).
+      if (presetParentTaskId && !presetProjectId) { const _par = (_tasks || []).find(x => x.id === presetParentTaskId); if (_par) presetProjectId = _par.project_id; }
       await _applyParentBadge(presetParentTaskId);
       await _fetchAndPopulateProjects(presetProjectId);
       // Hereda el responsable: de la tarea padre (si es subtarea) o del proyecto — editable.
