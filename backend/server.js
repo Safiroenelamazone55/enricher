@@ -13138,6 +13138,8 @@ app.post('/api/timer/ingest', requireAuthOrToken, async (req, res) => {
       [uid, b.task_id || null, b.task_titulo || '', b.project_nombre || '',
        b.started_at, b.ended_at || null, +b.duration_s || 0, +b.active_s || 0, +b.idle_s || 0,
        source, activityType, JSON.stringify(meta)]);
+    // Tiempo que llega de la extensión / el agente / el calendario sobre una tarea: la tarea (y su madre) pasan a 'en progreso' si estaban pendientes. Pausas e inactividad no cuentan.
+    if (b.task_id && !['idle', 'break'].includes(activityType)) { try { await pool.query("UPDATE tasks SET estado='en_progreso', updated_at=NOW() WHERE (id=$1 OR id=(SELECT parent_task_id FROM tasks WHERE id=$1)) AND estado='pendiente'", [b.task_id]); } catch (_) {} }
     res.status(201).json({ id: rows[0].id, ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
