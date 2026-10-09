@@ -11645,12 +11645,12 @@ app.post('/api/slack/workspaces/:id/canales/:canal/no-leido', requireAuth, async
 app.get('/api/slack/workspaces/:id/vinculos', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT slack_channel_id, id AS project_id, nombre, estado
-         FROM projects
-        WHERE user_id=$1 AND slack_ws_id=$2 AND slack_channel_id IS NOT NULL`,
+      `SELECT p.slack_channel_id, p.id AS project_id, p.nombre, p.estado, c.nombre AS cli_nombre, c.empresa AS cli_empresa
+         FROM projects p LEFT JOIN clients c ON c.id=p.client_id
+        WHERE p.user_id=$1 AND p.slack_ws_id=$2 AND p.slack_channel_id IS NOT NULL`,
       [req.workspaceOwnerId, req.params.id]);
     const mapa = {};
-    rows.forEach(r => { mapa[r.slack_channel_id] = { projectId: r.project_id, nombre: r.nombre, estado: r.estado }; });
+    rows.forEach(r => { mapa[r.slack_channel_id] = { projectId: r.project_id, nombre: r.nombre, estado: r.estado, busca: [r.nombre, r.cli_nombre, r.cli_empresa].filter(Boolean).join(' ') }; });
     res.json(mapa);
   } catch (err) { res.status(400).json({ error: err.message }); }
 });

@@ -35088,7 +35088,9 @@ const SlackChat = (() => {
     const conNombre = _canales.map(c => ({ ...c, _nm: _nombreDe(c) }));
     const dm = _seccion === 'directos';
     const base = conNombre.filter(c => dm ? (c.is_im || c.is_mpim) : (!c.is_im && !c.is_mpim));
-    const filtrada = q ? base.filter(c => c._nm.toLowerCase().includes(q)) : base;
+    const _nrm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+    const nq = _nrm(q);
+    const filtrada = q ? base.filter(c => _nrm(c._nm).includes(nq) || (_vinculos[c.id] && _nrm(_vinculos[c.id].busca).includes(nq))) : base;
     // Favoritos primero, como en Slack real — solo si hay al menos uno marcado.
     const favs  = filtrada.filter(c => _favoritos.has(c.id)).sort(dm ? _ordenCanalConYo : _ordenCanal);
     const resto = filtrada.filter(c => !_favoritos.has(c.id)).sort(dm ? _ordenCanalConYo : _ordenCanal);
