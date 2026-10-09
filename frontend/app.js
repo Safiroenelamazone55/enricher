@@ -39023,7 +39023,7 @@ Tu historial NO se borra: queda guardado en Nova. Si más adelante vuelves a vin
       const textoHtml = m.media_type === 'document' ? '' : `<span class="wa-msg__text" data-mid="${msgIdJs}">${esc(m.texto)}</span>`;
       const tickHtml = m.from_me ? _tickHtml(m.ack, m.ts) : '';
       const bubbleHtml = `${actions}${remitente}${citado}${mediaHtml}${textoHtml}${contactoBtn}<span class="wa-msg__time">${starHtml}${_fmtHora(m.ts)}${tickHtml}</span>${reacHtml}`;
-      return `${sep}<div class="wa-msg ${m.from_me ? 'wa-msg--out' : 'wa-msg--in'}"><div class="wa-msg__bubble">${bubbleHtml}</div></div>`;
+      return `${sep}<div class="wa-msg ${m.from_me ? 'wa-msg--out' : 'wa-msg--in'}${tickHtml.includes('wa-msg__fail') ? ' wa-msg--fail' : ''}"><div class="wa-msg__bubble">${bubbleHtml}</div></div>`;
     }).join('');
     if (atBottom) box.scrollTop = box.scrollHeight;
   }
