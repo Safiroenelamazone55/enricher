@@ -18096,3 +18096,22 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 
 .cl-bcard[draggable=true]{cursor:grab}.cl-bcard[draggable=true]:active{cursor:grabbing;opacity:.7}
 .cl-bcol--over{outline:2px dashed #00804C;outline-offset:-2px;background:#EAF5EF}
+
+/* Diagrama de Gantt */
+.gt-wrap{overflow-x:auto;background:#fff;border:1px solid var(--border,#E2E0DB);margin-bottom:24px}
+.gt-head,.gt-row{display:flex;min-width:max-content}
+.gt-head{border-bottom:1px solid var(--border,#E2E0DB);background:#F7F8F6;position:sticky;top:0}
+.gt-lbl{flex:0 0 260px;width:260px;padding:8px 12px;border-right:1px solid var(--border,#E2E0DB);position:sticky;left:0;background:#fff;z-index:2;cursor:pointer;overflow:hidden}
+.gt-lbl--h{background:#F7F8F6;cursor:default}
+.gt-lbl__t{font-size:.84rem;font-weight:600;color:#14211B;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gt-lbl__s{font-size:.72rem;color:#64748B;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gt-row{border-bottom:1px solid #F1EFEA}.gt-row:hover .gt-lbl,.gt-row:hover .gt-track{background:#F7FBF9}
+.gt-track{position:relative;flex:0 0 auto;height:46px}
+.gt-track--h{height:30px}
+.gt-mo{position:absolute;top:7px;font-size:.7rem;font-weight:700;color:#64748B;text-transform:uppercase;letter-spacing:.04em;padding-left:6px}
+.gt-tk{position:absolute;top:0;bottom:0;width:1px;background:#EEF0EC}
+.gt-bar{position:absolute;top:11px;height:24px;line-height:24px;padding:0 8px;font-size:.7rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;box-shadow:inset 0 0 0 1px rgba(15,23,42,.08)}
+.gt-bar:hover{filter:brightness(.96)}
+.gt-body{position:relative}
+.gt-today{position:absolute;top:0;bottom:0;width:2px;background:#D94B4B;opacity:.7;z-index:1;pointer-events:none}
+.gt-note{font-size:.72rem;color:#94A3B8;padding:8px 12px;position:sticky;left:0}

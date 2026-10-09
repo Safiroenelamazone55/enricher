@@ -20669,7 +20669,7 @@ const LeadManagerModule = (() => {
         <select class="ldh-sel" id="cm-est" onchange="LeadManagerModule.cmSetEst(this.value)"></select>
         <span class="ldh-toolbar__sp"></span>
         <div class="lm-search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" id="cm-q" placeholder="Buscar campaña…" oninput="LeadManagerModule.cmSetQ(this.value)"></div>
-        ${_lmViews('cm', ['lista', 'tablero'])}
+        ${_lmViews('cm', ['lista', 'tablero', 'gantt'])}
       </div>
       <div id="cm-wrap"></div>`;
   }
@@ -20682,7 +20682,8 @@ const LeadManagerModule = (() => {
     tarjetas: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
     tablero: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="12" rx="1"/><rect x="17" y="3" width="4" height="8" rx="1"/></svg>',
   };
-  const _VLBL = { lista: 'Lista', tarjetas: 'Tarjetas', tablero: 'Tablero por estado' };
+  _VICO.gantt = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="13" y2="6"/><line x1="7" y1="12" x2="19" y2="12"/><line x1="11" y1="18" x2="21" y2="18"/></svg>';
+  const _VLBL = { lista: 'Lista', tarjetas: 'Tarjetas', tablero: 'Tablero por estado', gantt: 'Cronograma (Gantt)' };
   function _lmViews(key, opts) {
     return '<div class="pv-views" style="margin-left:6px">' + opts.map(o => '<button class="pv-view' + (_lmLayout[key] === o ? ' pv-view--active' : '') + '" title="' + _VLBL[o] + '" aria-label="' + _VLBL[o] + '" onclick="LeadManagerModule.lmSetLayout(\'' + key + '\',\'' + o + '\')">' + _VICO[o] + '</button>').join('') + '</div>';
   }
@@ -20717,6 +20718,42 @@ const LeadManagerModule = (() => {
       const j = await r.json(); if (!r.ok) throw new Error(j.error || 'Error');
       it.estado = j.estado; if (kind === 'cm') _cmPaint(); else _clPaint();
     } catch (err) { showBanner('Error: ' + err.message, 'error'); }
+  }
+  // ── Diagrama de Gantt (Campañas y Secuencias) ──
+  // Solo hay fecha de INICIO guardada; el FIN se calcula: inicio + días que tarda en entrar la lista (contactos ÷ ritmo diario) + duración de los pasos.
+  // Las que siguen activas llegan hasta hoy como mínimo.
+  const _gD = v => { if (!v) return null; const d = new Date(String(v).slice(0, 10) + 'T12:00:00'); return isNaN(d) ? null : d; };
+  const _gAdd = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + Math.round(n)); return x; };
+  function _seqSpan(s) {
+    const start = _gD(s.starts_on) || _gD(s.created_at); if (!start) return null;
+    const steps = _seqSteps(s.id), last = steps.length ? Math.max.apply(null, steps.map(x => +x.dia || 0)) : 0;
+    const n = _contacts.filter(ct => (ct.sequences || []).some(q => q.id === s.id)).length, drip = Math.max(1, +s.drip_per_day || 20);
+    let end = _gAdd(start, Math.max(1, Math.ceil(n / drip) + last));
+    const today = new Date(); today.setHours(12, 0, 0, 0);
+    if ((s.estado || '') === 'activa' && end < today) end = today;
+    return { start, end };
+  }
+  function _lmGantt(rows) {
+    rows = rows.filter(r => r && r.start && r.end);
+    if (!rows.length) return '<div class="ldh-empty"><div class="ldh-empty__t">Sin fechas</div><div class="ldh-empty__s">No hay elementos con fecha de inicio para dibujar el cronograma.</div></div>';
+    rows.sort((a, b) => a.start - b.start);
+    const today = new Date(); today.setHours(12, 0, 0, 0);
+    let min = rows.reduce((m, r) => r.start < m ? r.start : m, rows[0].start), max = rows.reduce((m, r) => r.end > m ? r.end : m, rows[0].end);
+    if (today > max) max = today;
+    min = _gAdd(min, -3); max = _gAdd(max, 7);
+    const days = Math.max(14, Math.round((max - min) / 864e5)), px = Math.max(5, Math.min(16, Math.floor(1000 / days)));
+    const W = days * px, X = d => Math.round((d - min) / 864e5) * px;
+    let months = '', ticks = '';
+    const MES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    for (let d = new Date(min.getFullYear(), min.getMonth(), 1, 12); d <= max; d = new Date(d.getFullYear(), d.getMonth() + 1, 1, 12)) {
+      const x = Math.max(0, X(d)); months += '<span class="gt-mo" style="left:' + x + 'px">' + MES[d.getMonth()] + ' ' + String(d.getFullYear()).slice(2) + '</span>'; ticks += '<i class="gt-tk" style="left:' + x + 'px"></i>';
+    }
+    const fmt = d => d.toLocaleDateString('es', { day: '2-digit', month: 'short' });
+    const body = rows.map(r => '<div class="gt-row"><div class="gt-lbl" title="' + esc(r.label) + '" onclick="' + r.onclick + '"><div class="gt-lbl__t">' + esc(r.label) + '</div>' + (r.sub ? '<div class="gt-lbl__s">' + esc(r.sub) + '</div>' : '') + '</div>' +
+      '<div class="gt-track" style="width:' + W + 'px">' + ticks + '<div class="gt-bar" style="left:' + X(r.start) + 'px;width:' + Math.max(px * 2, X(r.end) - X(r.start)) + 'px;background:' + r.bg + ';color:' + r.fg + '" title="' + esc(r.label) + ' · ' + fmt(r.start) + ' → ' + fmt(r.end) + (r.tip ? ' · ' + esc(r.tip) : '') + '" onclick="' + r.onclick + '">' + esc(r.tag || '') + '</div></div></div>').join('');
+    return '<div class="gt-wrap"><div class="gt-head"><div class="gt-lbl gt-lbl--h">&nbsp;</div><div class="gt-track gt-track--h" style="width:' + W + 'px">' + months + '</div></div>' +
+      '<div class="gt-body" style="--gt-today:' + X(today) + 'px">' + body + '<div class="gt-today" style="left:calc(260px + ' + X(today) + 'px)" title="Hoy"></div></div>' +
+      '<div class="gt-note">El fin se estima: inicio + días de entrada de la lista + duración de los pasos (las activas llegan hasta hoy).</div></div>';
   }
   // Clientes outbound: filtros propios (búsqueda + estado) y tres vistas
   let _clQ = '', _clEst = '';
@@ -20769,6 +20806,10 @@ const LeadManagerModule = (() => {
         ganados: m.ganados + cts.filter(x => x.estado === 'ganado').length,
       };
     };
+    if (_lmLayout.cm === 'gantt') {
+      wrap.innerHTML = _lmGantt(list.map(c => { const sp = _sequences.filter(s => s.campaign_id === c.id).map(_seqSpan).filter(Boolean), start = _gD(c.fecha_inicio) || _gD(c.created_at), today = new Date(); today.setHours(12, 0, 0, 0); if (!start) return null; let end = sp.length ? sp.reduce((m, x) => x.end > m ? x.end : m, sp[0].end) : _gAdd(start, 7); if ((c.estado || '') === 'activa' && end < today) end = today; if (end <= start) end = _gAdd(start, 1); const v = _CMP[c.estado || 'draft'] || _CMP.draft; return { label: c.nombre, sub: _clientName(c.outbound_client_id) || '', start, end, bg: v[1], fg: v[2], tag: v[0], tip: sp.length + ' secuencia(s)', onclick: 'LeadManagerModule.openCampaignDrawer(' + c.id + ')' }; }));
+      return;
+    }
     if (_lmLayout.cm === 'tablero') {
       wrap.innerHTML = _lmBoard('cm', Object.entries(_CMP), list, c => c.estado || 'draft', c => { const m = stats(c), cli = _clientName(c.outbound_client_id), meta = [c.canal, c.mercado].filter(Boolean).join(' · '); return '<div class="cl-bcard" onclick="LeadManagerModule.openCampaignDrawer(' + c.id + ')"><div class="cl-bcard__t">' + esc(c.nombre) + '</div>' + (cli ? '<div class="cl-bcard__s">' + esc(cli) + '</div>' : '') + (meta ? '<div class="cl-bcard__s">' + esc(meta) + '</div>' : '') + '<div class="cl-bcard__s"><b>' + m.seqs + '</b> sec. · <b>' + m.leads + '</b> leads · <b>' + m.contactados + '</b> contactados · <b>' + m.replies + '</b> resp.</div></div>'; });
       return;
@@ -20855,7 +20896,7 @@ const LeadManagerModule = (() => {
         <select class="ldh-sel" id="sq-est" onchange="LeadManagerModule.sqSetEst(this.value)"></select>
         <span class="ldh-toolbar__sp"></span>
         <div class="lm-search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" id="sq-q" placeholder="Buscar secuencia…" oninput="LeadManagerModule.sqSetQ(this.value)"></div>
-        ${_lmViews('sq', ['lista', 'tablero'])}
+        ${_lmViews('sq', ['lista', 'tablero', 'gantt'])}
       </div>
       <div id="sq-wrap"></div>`;
   }
@@ -20874,6 +20915,10 @@ const LeadManagerModule = (() => {
     if (_sqEst) list = list.filter(s => (s.estado || 'draft') === _sqEst);
     if (_sqQ) { const q = _sqQ.toLowerCase(); list = list.filter(s => ((s.nombre || '') + ' ' + (_clientName(s.outbound_client_id) || '') + ' ' + (_campaignName(s.campaign_id) || '')).toLowerCase().includes(q)); }
     if (!list.length) { wrap.innerHTML = `<div class="ldh-empty"><div class="ldh-empty__t">Sin resultados</div><div class="ldh-empty__s">Ninguna secuencia cumple estos filtros.</div></div>`; return; }
+    if (_lmLayout.sq === 'gantt') {
+      wrap.innerHTML = _lmGantt(list.map(s => { const sp = _seqSpan(s); if (!sp) return null; const v = _SEQ[s.estado || 'draft'] || _SEQ.draft; return { label: s.nombre, sub: [_clientName(s.outbound_client_id), _campaignName(s.campaign_id)].filter(Boolean).join(' · '), start: sp.start, end: sp.end, bg: v[1], fg: v[2], tag: v[0], tip: '', onclick: 'LeadManagerModule.openSequence(' + s.id + ')' }; }));
+      return;
+    }
     if (_lmLayout.sq === 'tablero') {
       wrap.innerHTML = _lmBoard('sq', Object.entries(_SEQ), list, s => s.estado || 'draft', s => { const cli = _clientName(s.outbound_client_id), cmp = _campaignName(s.campaign_id), n = _seqSteps(s.id).length; return '<div class="cl-bcard" onclick="LeadManagerModule.openSequence(' + s.id + ')"><div class="cl-bcard__t">' + esc(s.nombre) + '</div>' + (cli ? '<div class="cl-bcard__s">' + esc(cli) + '</div>' : '') + (cmp ? '<div class="cl-bcard__s">' + esc(cmp) + '</div>' : '') + '<div class="cl-bcard__s">' + (n ? n + ' paso' + (n !== 1 ? 's' : '') : 'Sin pasos') + ((s.awaiting || 0) > 0 ? ' · <b>' + s.awaiting + '</b> por aprobar' : '') + '</div></div>'; });
       return;
