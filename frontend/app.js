@@ -39454,7 +39454,17 @@ Tu historial NO se borra: queda guardado en Nova. Si más adelante vuelves a vin
     abrirChat(`${digits}@s.whatsapp.net`);
   }
 
-  return { load, conectar, desconectar, abrirChat, enviar, detener: _pararSondeos,
+  async function reparar() {
+    if (!_chatAct || !_conn) return;
+    showBanner('Reparando la conexión con este contacto…', 'info');
+    try {
+      const r = await apiFetch(API + '/wa/connections/' + _conn.id + '/chats/' + encodeURIComponent(_chatAct) + '/reparar', { method: 'POST' });
+      const j = await r.json(); if (!r.ok) throw new Error(j.error || 'Error');
+      showBanner(j.reenviados ? 'Listo: se reenviaron ' + j.reenviados + ' mensaje(s).' : 'Conexión reparada. Escribe de nuevo si hace falta.', 'success');
+      setTimeout(() => { try { _cargarMensajes(_chatAct, true); } catch (_) {} }, 1500);
+    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
+  }
+  return { reparar, load, conectar, desconectar, abrirChat, enviar, detener: _pararSondeos,
            responderA, cancelarRespuesta,
            onPasteInput, pickImage, editPendingImg, cancelImg,
            msgMenu, msgCopy, msgSelectText, toggleImportante,
@@ -40215,17 +40225,7 @@ const ObcWaModule = (() => {
     abrirChat(`${digits}@s.whatsapp.net`);
   }
 
-  async function reparar() {
-    if (!_chatAct || !_conn) return;
-    showBanner('Reparando la conexión con este contacto…', 'info');
-    try {
-      const r = await apiFetch(API + '/wa/connections/' + _conn.id + '/chats/' + encodeURIComponent(_chatAct) + '/reparar', { method: 'POST' });
-      const j = await r.json(); if (!r.ok) throw new Error(j.error || 'Error');
-      showBanner(j.reenviados ? 'Listo: se reenviaron ' + j.reenviados + ' mensaje(s).' : 'Conexión reparada. Escribe de nuevo si hace falta.', 'success');
-      setTimeout(() => { try { _cargarMensajes(_chatAct, true); } catch (_) {} }, 1500);
-    } catch (e) { showBanner('Error: ' + e.message, 'error'); }
-  }
-  return { reparar, shellHtml, load, conectar, desconectar, abrirChat, enviar, detener: _pararSondeos,
+  return { shellHtml, load, conectar, desconectar, abrirChat, enviar, detener: _pararSondeos,
            usarExistenteAbrir, usarExistentePick,
            responderA, cancelarRespuesta,
            onPasteInput, pickImage, editPendingImg, cancelImg,
