@@ -9837,7 +9837,8 @@ const DashboardModule = (() => {
     const prio = (it.prioridad && prioMap[it.prioridad]) ? `<span class="tp-prio tp-prio--${it.prioridad}">${prioMap[it.prioridad]}</span>` : '';
     const sub = [];
     if (it.cliente) sub.push(`${isOpp ? 'Prospecto' : 'Cliente'}: ${esc(it.cliente)}`);
-    if (dl) sub.push(`Vence ${dl}`);
+    const _vencida = it.deadline && new Date(String(it.deadline).split('T')[0] + 'T00:00:00') < new Date(new Date().setHours(0,0,0,0));
+    if (dl) sub.push(_vencida ? `<span style="color:#D94B4B;font-weight:600">Vencida el ${dl}</span>` : `Vence ${dl}`);
     return `<button class="tp-card${sel ? ' tp-card--sel' : ''}" data-k="${it.kind}" data-i="${it.id}" onclick="DashboardModule._tpSelect('${it.kind}',${it.id})">
       <span class="tp-radio"></span>
       <span class="tp-card__body">
