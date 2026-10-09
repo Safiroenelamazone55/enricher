@@ -9369,6 +9369,20 @@ app.get('/api/campaigns', requireAuth, async (req, res) => {
     res.status(500).json({ error: 'Error al cargar campañas' });
   }
 });
+// Códigos de nombre: campaña "CAM002 · Cliente · Foco"; secuencia "CAM002-S1 · Foco" (el S se numera dentro de su campaña; sin campaña no lleva código).
+const _RE_COD = /^CAM\d{3}(?:-S\d+)?\s*[·\-—:]?\s*/i;
+function _conCodigoCampana(id, nombre) { return 'CAM' + String(id).padStart(3, '0') + ' · ' + String(nombre || '').replace(_RE_COD, '').trim(); }
+async function _conCodigoSec(campaignId, nombre, selfId) {
+  const limpio = String(nombre || '').replace(_RE_COD, '').trim();
+  if (!campaignId) return limpio;
+  const pad = String(campaignId).padStart(3, '0');
+  const { rows } = await pool.query('SELECT id, nombre FROM sequences WHERE campaign_id=$1 AND ($2::int IS NULL OR id <> $2)', [campaignId, selfId || null]);
+  const usados = new Set(rows.map(r => { const m = new RegExp('^CAM' + pad + '-S(\\d+)').exec(r.nombre || ''); return m ? +m[1] : 0; }).filter(Boolean));
+  const own = new RegExp('^CAM' + pad + '-S(\\d+)').exec(String(nombre || '')), mine = own ? +own[1] : 0;
+  let n = mine && !usados.has(mine) ? mine : 0;
+  if (!n) { n = 1; while (usados.has(n)) n++; }
+  return 'CAM' + pad + '-S' + n + ' · ' + limpio;
+}
 app.post('/api/campaigns', requireAuth, async (req, res) => {
   const b = req.body || {};
   if (!b.nombre?.trim()) return res.status(400).json({ error: 'El nombre es requerido' });
@@ -9379,6 +9393,7 @@ app.post('/api/campaigns', requireAuth, async (req, res) => {
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *
     `, [req.workspaceOwnerId, b.outbound_client_id || null, b.nombre.trim(), estado, b.mercado||'', b.icp||'',
         b.canal||'', b.canal_secundario||'', b.objetivo||'', b.fecha_inicio||null, b.notas||'']);
+    rows[0].nombre = (await pool.query('UPDATE campaigns SET nombre=$1 WHERE id=$2 RETURNING nombre', [_conCodigoCampana(rows[0].id, rows[0].nombre), rows[0].id])).rows[0].nombre;
     res.status(201).json(rows[0]);
   } catch (err) {
     console.error('[cmp] POST error:', err.message);
@@ -9412,7 +9427,7 @@ app.put('/api/campaigns/:id', requireAuth, async (req, res) => {
       UPDATE campaigns SET outbound_client_id=$1,nombre=$2,estado=$3,mercado=$4,icp=$5,canal=$6,
         canal_secundario=$7,objetivo=$8,fecha_inicio=$9,notas=$10,updated_at=NOW()
       WHERE id=$11 AND user_id=$12 RETURNING *
-    `, [b.outbound_client_id || null, b.nombre.trim(), estado, b.mercado||'', b.icp||'', b.canal||'',
+    `, [b.outbound_client_id || null, _conCodigoCampana(req.params.id, b.nombre), estado, b.mercado||'', b.icp||'', b.canal||'',
         b.canal_secundario||'', b.objetivo||'', b.fecha_inicio||null, b.notas||'', req.params.id, req.workspaceOwnerId]);
     if (!rows.length) return res.status(404).json({ error: 'Campaña no encontrada' });
     res.json(rows[0]);
@@ -9480,6 +9495,7 @@ app.post('/api/sequences', requireAuth, async (req, res) => {
       INSERT INTO sequences (user_id,outbound_client_id,campaign_id,nombre,objetivo,estado,timezone,drip_per_day,send_days,starts_on,daily_limit,mercado,icp,notas,send_mode,send_interval_min,auto_activar,preferred_channel,target_role_1,target_role_2,nurture_days,origen_cantera,rotacion_empresa,rotacion_empresa_paso)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24) RETURNING *
     `, [req.workspaceOwnerId, b.outbound_client_id || null, b.campaign_id || null, b.nombre.trim(), b.objetivo || '', estado, b.timezone || '', drip, sendDays, _sanDate(b.starts_on), dLim, b.mercado || '', b.icp || '', b.notas || '', _sanSendMode(b.send_mode), _sanInterval(b.send_interval_min), !!b.auto_activar, _sanPreferredChannel(b.preferred_channel), b.target_role_1 || '', b.target_role_2 || '', _sanNurtureDays(b.nurture_days), !!b.origen_cantera, !!b.rotacion_empresa, Math.max(0, parseInt(b.rotacion_empresa_paso) || 0)]);
+    if (rows[0].campaign_id) { const _nn = await _conCodigoSec(rows[0].campaign_id, rows[0].nombre, rows[0].id); await pool.query('UPDATE sequences SET nombre=$1 WHERE id=$2', [_nn, rows[0].id]); rows[0].nombre = _nn; }
     res.status(201).json(rows[0]);
   } catch (err) { console.error('[seq] POST error:', err.message); res.status(500).json({ error: 'Error al crear secuencia' }); }
 });
@@ -9534,6 +9550,7 @@ app.post('/api/sequences/:id/duplicate', requireAuth, async (req, res) => {
       if (c || r) await cx.query('UPDATE sequence_steps SET cond_step_id=$1, reply_to_step_id=$2 WHERE id=$3', [c || null, r || null, map.get(st.id)]);
     }
     await cx.query('COMMIT');
+    { const _nn = await _conCodigoSec(ns.campaign_id, ns.nombre, ns.id); if (_nn !== ns.nombre) { await pool.query('UPDATE sequences SET nombre=$1 WHERE id=$2', [_nn, ns.id]); ns.nombre = _nn; } }
     res.status(201).json({ sequence: ns, steps_copied: steps.length });
   } catch (err) {
     await cx.query('ROLLBACK').catch(() => {});
@@ -9549,6 +9566,9 @@ app.put('/api/sequences/:id', requireAuth, async (req, res) => {
     const drip = Math.max(0, parseInt(b.drip_per_day) || 0);
     const sendDays = _sanSendDays(b.send_days);
     const dLim = Math.max(0, parseInt(b.daily_limit) || 0);
+    const _nmFinal = await _conCodigoSec(b.campaign_id || null, b.nombre.trim(), req.params.id);
+    const { rows: [_prevNm] } = await pool.query('SELECT nombre FROM sequences WHERE id=$1 AND user_id=$2', [req.params.id, req.workspaceOwnerId]);
+    if (_prevNm && _prevNm.nombre !== _nmFinal) await pool.query("UPDATE activities SET nota = '[' || $1 || ']' || substr(nota, length($2) + 3) WHERE user_id=$3 AND nota LIKE $4", [_nmFinal, _prevNm.nombre, req.workspaceOwnerId, '[' + _prevNm.nombre.replace(/[%_\\]/g, '\\$&') + ']%']).catch(() => {});
     // Estado previo para detectar cambios de cadencia/fecha/drip (→ re-anclar fechas).
     const { rows: [old] } = await pool.query(
       `SELECT send_days, starts_on::text AS starts_on, drip_per_day FROM sequences WHERE id=$1 AND user_id=$2`,
@@ -9556,7 +9576,7 @@ app.put('/api/sequences/:id', requireAuth, async (req, res) => {
     const { rows } = await pool.query(`
       UPDATE sequences SET outbound_client_id=$1,campaign_id=$2,nombre=$3,objetivo=$4,estado=$5,timezone=$6,drip_per_day=$7,send_days=$8,starts_on=$9,daily_limit=$10,mercado=$11,icp=$12,notas=$13,send_mode=$14,send_interval_min=$15,auto_activar=$16,preferred_channel=$17,target_role_1=$18,target_role_2=$19,nurture_days=$20,rotacion_empresa=$21,rotacion_empresa_paso=$22,updated_at=NOW()
       WHERE id=$23 AND user_id=$24 RETURNING *
-    `, [b.outbound_client_id || null, b.campaign_id || null, b.nombre.trim(), b.objetivo || '', estado, b.timezone || '', drip, sendDays, _sanDate(b.starts_on), dLim, b.mercado || '', b.icp || '', b.notas || '', _sanSendMode(b.send_mode), _sanInterval(b.send_interval_min), !!b.auto_activar, _sanPreferredChannel(b.preferred_channel), b.target_role_1 || '', b.target_role_2 || '', _sanNurtureDays(b.nurture_days), !!b.rotacion_empresa, Math.max(0, parseInt(b.rotacion_empresa_paso) || 0), req.params.id, req.workspaceOwnerId]);
+    `, [b.outbound_client_id || null, b.campaign_id || null, _nmFinal, b.objetivo || '', estado, b.timezone || '', drip, sendDays, _sanDate(b.starts_on), dLim, b.mercado || '', b.icp || '', b.notas || '', _sanSendMode(b.send_mode), _sanInterval(b.send_interval_min), !!b.auto_activar, _sanPreferredChannel(b.preferred_channel), b.target_role_1 || '', b.target_role_2 || '', _sanNurtureDays(b.nurture_days), !!b.rotacion_empresa, Math.max(0, parseInt(b.rotacion_empresa_paso) || 0), req.params.id, req.workspaceOwnerId]);
     if (!rows.length) return res.status(404).json({ error: 'Secuencia no encontrada' });
     // Cambió la cadencia, la fecha de inicio o el drip → recalcular las fechas de los
     // que aún no empiezan (paso 1). Sin esto, activar S/D después de enrolar no movía nada.

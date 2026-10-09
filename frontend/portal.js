@@ -16,9 +16,9 @@
   }
   // El servidor etiqueta algunos estados como "Reunión"/"Reunión agendada": en el portal se llaman "Oportunidad".
   function _opp(v) {
-    if (typeof v === 'string') return (v === 'Reunión' || v === 'Reunión agendada') ? 'Oportunidad' : v;
+    if (typeof v === 'string') return (v === 'Reunión' || v === 'Reunión agendada') ? 'Oportunidad' : v.replace(/^CAM\d{3}(?:-S\d+)?\s*·\s*/, '');
     if (Array.isArray(v)) return v.map(_opp);
-    if (v && typeof v === 'object') { for (const k in v) v[k] = _opp(v[k]); }
+    if (v && typeof v === 'object') { if (typeof v.nombre === 'string') { const m = /^(CAM\d{3}(?:-S\d+)?)\s*·\s*/.exec(v.nombre); if (m) v.codigo = m[1]; } for (const k in v) v[k] = _opp(v[k]); }
     return v;
   }
 
@@ -793,7 +793,7 @@
     if (!l) return '<div class="pt-h"><h2>Secuencias</h2></div><div class="pt-empty">Cargando…</div>';
     if (!l.length) return '<div class="pt-h"><h2>Secuencias</h2></div><div class="pt-empty">Sin secuencias</div>';
     const byId = new Map(st.map(q => [q.id, q]));
-    return `<div class="pt-h"><h2>Secuencias</h2></div><div class="pt-how__g pt-how__g--all">${l.map(r => { const q = byId.get(r.id); return `<div class="pt-card"><div class="pt-item__t"><span>${esc(r.nombre)}</span>${seqBadge(r.estado)}</div>
+    return `<div class="pt-h"><h2>Secuencias</h2></div><div class="pt-how__g pt-how__g--all">${l.map(r => { const q = byId.get(r.id); return `<div class="pt-card"><div class="pt-item__t"><span>${esc(r.nombre)}${r.codigo ? ` <span style="color:#94A3B8;font-size:.7rem;font-weight:500;margin-left:4px">${esc(r.codigo)}</span>` : ''}</span>${seqBadge(r.estado)}</div>
       <div class="pt-seqstats"><span><b>${r.enrolados}</b> Contactos</span><span><b>${r.activos}</b> En curso</span><span><b>${r.terminados}</b> Completadas</span><span><b>${r.respondieron}</b> Respondieron</span></div>${q ? stepsHtml(q) : ''}</div>`; }).join('')}</div>`;
   }
   // Cantera: solo indicadores prácticos (nunca texto largo) — pedido explícito
