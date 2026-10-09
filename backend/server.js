@@ -9414,6 +9414,15 @@ async function _conCodigoSec(campaignId, nombre, selfId) {
   if (!n) { n = 1; while (usados.has(n)) n++; }
   return pre + '-S' + n + ' - ' + limpio;
 }
+app.get('/api/naming/preview', requireAuth, async (req, res) => {
+  try {
+    const kind = req.query.kind, self = parseInt(req.query.self_id) || 0;
+    let full = '';
+    if (kind === 'campaign') { const cid = parseInt(req.query.client_id); if (cid) full = await _conCodigoCampana(self, cid, 'x'); }
+    else { const camp = parseInt(req.query.campaign_id); if (camp) full = await _conCodigoSec(camp, 'x', self || null); }
+    res.json({ prefix: full.length > 1 && full !== 'x' ? full.slice(0, -1) : '' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 app.post('/api/campaigns', requireAuth, async (req, res) => {
   const b = req.body || {};
   if (!b.nombre?.trim()) return res.status(400).json({ error: 'El nombre es requerido' });

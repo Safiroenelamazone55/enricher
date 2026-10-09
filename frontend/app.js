@@ -29888,6 +29888,23 @@ ${foot}
 
   // ── Campaña: drawer crear/editar (modal dinámico) ──
   const _CMP_OPTS = [['draft', 'Draft'], ['activa', 'Activa'], ['pausada', 'Pausada'], ['cerrada', 'Cerrada']];
+  // Nombre con código en vista previa: el prefijo (C0001-GRE - / C0001-GRE-S1 - ) va en gris dentro del campo, no se puede borrar; ella solo escribe lo que sigue.
+  const _NM_RE = /^(?:C\d{4}-[A-Z0-9]+(?:-S\d+)?|CAM\d{3}(?:-S\d+)?)\s*[·\-—:]?\s*/;
+  function _nmField(fid, lbl, nombre, ph) {
+    const m = _NM_RE.exec(nombre || '');
+    const pre = m ? m[0].replace(/\s*[·\-—:]?\s*$/, '') + ' - ' : '';
+    const rest = m ? (nombre || '').slice(m[0].length) : (nombre || '');
+    return '<label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">' + lbl + '</span><span class="nm-wrap"><span class="nm-pre" id="' + fid + '-pre" data-own="' + (m ? '1' : '') + '">' + esc(pre) + '</span><input class="nm-in" id="' + fid + '" value="' + esc(rest) + '" placeholder="' + ph + '"></span></label>';
+  }
+  async function _nmRefresh(kind, fid, selfId) {
+    const pre = $(fid + '-pre'); if (!pre || pre.dataset.own) return;
+    const q = kind === 'campaign' ? 'client_id=' + ($('cmp-client')?.value || '') : 'campaign_id=' + ($('seq-campaign')?.value || '');
+    try {
+      const r = await apiFetch(API + '/naming/preview?kind=' + kind + '&' + q + '&self_id=' + (selfId || ''));
+      const j = r.ok ? await r.json() : {}; pre.textContent = j.prefix || '';
+    } catch (_) { pre.textContent = ''; }
+  }
+  function _nmJoin(fid) { return (($(fid + '-pre')?.textContent || '') + ($(fid)?.value || '').trim()).trim(); }
   function openCampaignDrawer(id, presetClient, onCreated) {
     _cmpOnCreated = onCreated || null;
     const c = id ? _campaigns.find(x => x.id === id) : null;
@@ -29907,7 +29924,7 @@ ${foot}
     m.innerHTML = `<div class="fin-pi-box">
       <div class="fin-pi-box__hd"><h3>${c ? 'Editar campaña' : 'Nueva campaña'}</h3><button class="fin-pi-x" onclick="LeadManagerModule.closeCampaignDrawer()">✕</button></div>
       <div class="fin-pi-form">
-        ${fld('cmp-nombre', 'Nombre de campaña *', c?.nombre, 'Ej. US Landscaping Q3', true)}
+        ${_nmField('cmp-nombre', 'Nombre de campaña *', c?.nombre, 'Ej. US Landscaping Q3')}
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Cliente outbound *</span><select class="form-input" id="cmp-client">${clientOpts}</select></label>
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Estado</span><select class="form-input" id="cmp-estado">${_CMP_OPTS.map(([v, l]) => `<option value="${v}"${c?.estado === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
         ${chanSel('cmp-canal', 'Canal principal', c?.canal, '— Selecciona canal —')}
@@ -29929,10 +29946,11 @@ ${foot}
       </div></div>`;
     document.body.appendChild(m);
     setTimeout(() => $('cmp-nombre')?.focus(), 60);
+    { const cl = $('cmp-client'); if (cl) cl.addEventListener('change', () => _nmRefresh('campaign', 'cmp-nombre', id)); _nmRefresh('campaign', 'cmp-nombre', id); }
   }
   function closeCampaignDrawer() { document.getElementById('lm-cmp-modal')?.remove(); _cmpOnCreated = null; }
   async function saveCampaign(id) {
-    const nombre = $('cmp-nombre')?.value.trim();
+    const nombre = ($('cmp-nombre')?.value || '').trim() ? _nmJoin('cmp-nombre') : '';
     const clientId = $('cmp-client')?.value;
     const hint = $('cmp-hint');
     const fail = msg => { if (hint) { hint.textContent = msg; hint.className = 'fin-cfg-hint fin-cfg-hint--err'; } };
@@ -29980,7 +29998,7 @@ ${foot}
     m.innerHTML = `<div class="fin-pi-box">
       <div class="fin-pi-box__hd"><h3>${s ? 'Editar secuencia' : 'Nueva secuencia'}</h3><button class="fin-pi-x" onclick="LeadManagerModule.closeSequenceDrawer()">✕</button></div>
       <div class="fin-pi-form">
-        <label class="fin-cfg-field fin-pi-full"><span class="fin-cfg-lbl">Nombre *</span><input class="form-input" id="seq-nombre" value="${s ? esc(s.nombre) : ''}" placeholder="Ej. QuickBooks field service sequence"></label>
+        ${_nmField('seq-nombre', 'Nombre *', s?.nombre, 'Ej. QuickBooks field service sequence')}
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Cliente outbound *</span><select class="form-input" id="seq-client">${clientOpts}</select></label>
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Campaña (opcional)</span><select class="form-input" id="seq-campaign">${cmpOpts}</select></label>
         <label class="fin-cfg-field"><span class="fin-cfg-lbl">Estado</span><select class="form-input" id="seq-estado">${_SEQ_OPTS.map(([v, l]) => `<option value="${v}"${s?.estado === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
@@ -30026,6 +30044,7 @@ ${foot}
       </div></div></div>`;
     document.body.appendChild(m);
     setTimeout(() => $('seq-nombre')?.focus(), 60);
+    { const cp = $('seq-campaign'); if (cp) cp.addEventListener('change', () => _nmRefresh('sequence', 'seq-nombre', id)); _nmRefresh('sequence', 'seq-nombre', id); }
     if (_mailboxes === null) _mbReload().then(() => seqModeHint()); else seqModeHint();
     const cl = $('seq-client'); if (cl) cl.addEventListener('change', seqModeHint);
     _seqPrefHint();
@@ -30108,7 +30127,7 @@ ${foot}
   function closeSequenceDrawer() { document.getElementById('lm-seq-modal')?.remove(); _seqOnCreated = null; }
   function seqRotEmpresaToggle() { const wrap = $('seq-rotpaso-wrap'); if (wrap) wrap.style.display = $('seq-rotempresa')?.checked ? 'flex' : 'none'; }
   async function saveSequence(id) {
-    const nombre = $('seq-nombre')?.value.trim(); const clientId = $('seq-client')?.value; const hint = $('seq-hint');
+    const nombre = ($('seq-nombre')?.value || '').trim() ? _nmJoin('seq-nombre') : ''; const clientId = $('seq-client')?.value; const hint = $('seq-hint');
     const fail = m => { if (hint) { hint.textContent = m; hint.className = 'fin-cfg-hint fin-cfg-hint--err'; } };
     if (!nombre) return fail('El nombre es requerido');
     if (!clientId) return fail('Selecciona el cliente outbound');

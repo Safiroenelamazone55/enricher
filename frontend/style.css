@@ -18118,3 +18118,8 @@ textarea[id^="noe-body-"], textarea[id^="app-body-"] { display: none !important;
 .gt-body{position:relative}
 .gt-today{position:absolute;top:0;bottom:0;width:2px;background:#D94B4B;opacity:.7;z-index:1;pointer-events:none}
 .gt-note{font-size:.72rem;color:#94A3B8;padding:8px 12px;position:sticky;left:0}
+
+.nm-wrap{display:flex;align-items:center;border:1px solid var(--border);border-radius:var(--radius-sm,8px);background:var(--surface,#fff);padding:0 12px}
+.nm-wrap:focus-within{border-color:var(--primary,#0090FF)}
+.nm-pre{color:var(--text-muted,#98A2B3);white-space:pre;user-select:none;font-size:.9rem}
+.nm-in{flex:1;min-width:0;border:0;outline:0;background:transparent;padding:10px 0;font:inherit;color:var(--text-primary)}
